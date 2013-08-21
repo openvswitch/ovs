@@ -871,12 +871,11 @@ prepare_dump_flows(int argc, char *argv[], bool aggregate,
     char *error;
 
     error = parse_ofp_flow_stats_request_str(&fsr, aggregate,
-                                             argc > 2 ? argv[2] : "");
+                                             argc > 2 ? argv[2] : "",
+                                             &usable_protocols);
     if (error) {
         ovs_fatal(0, "%s", error);
     }
-
-    usable_protocols = ofputil_flow_stats_request_usable_protocols(&fsr);
 
     protocol = open_vconn(argv[1], &vconn);
     protocol = set_protocol_for_flow_dump(vconn, protocol, usable_protocols);
@@ -1031,17 +1030,13 @@ ofctl_queue_stats(int argc, char *argv[])
 }
 
 static enum ofputil_protocol
-open_vconn_for_flow_mod(const char *remote,
-                        const struct ofputil_flow_mod *fms, size_t n_fms,
-                        struct vconn **vconnp)
+open_vconn_for_flow_mod(const char *remote, struct vconn **vconnp,
+                        enum ofputil_protocol usable_protocols)
 {
-    enum ofputil_protocol usable_protocols;
     enum ofputil_protocol cur_protocol;
     char *usable_s;
     int i;
 
-    /* Figure out what flow formats will work. */
-    usable_protocols = ofputil_flow_mod_usable_protocols(fms, n_fms);
     if (!(usable_protocols & allowed_protocols)) {
         char *allowed_s = ofputil_protocols_to_string(allowed_protocols);
         usable_s = ofputil_protocols_to_string(usable_protocols);
@@ -1073,13 +1068,13 @@ open_vconn_for_flow_mod(const char *remote,
 
 static void
 ofctl_flow_mod__(const char *remote, struct ofputil_flow_mod *fms,
-                 size_t n_fms)
+                 size_t n_fms, enum ofputil_protocol usable_protocols)
 {
     enum ofputil_protocol protocol;
     struct vconn *vconn;
     size_t i;
 
-    protocol = open_vconn_for_flow_mod(remote, fms, n_fms, &vconn);
+    protocol = open_vconn_for_flow_mod(remote, &vconn, usable_protocols);
 
     for (i = 0; i < n_fms; i++) {
         struct ofputil_flow_mod *fm = &fms[i];
@@ -1093,32 +1088,37 @@ ofctl_flow_mod__(const char *remote, struct ofputil_flow_mod *fms,
 static void
 ofctl_flow_mod_file(int argc OVS_UNUSED, char *argv[], uint16_t command)
 {
+    enum ofputil_protocol usable_protocols;
     struct ofputil_flow_mod *fms = NULL;
     size_t n_fms = 0;
     char *error;
 
-    error = parse_ofp_flow_mod_file(argv[2], command, &fms, &n_fms);
+    error = parse_ofp_flow_mod_file(argv[2], command, &fms, &n_fms,
+                                    &usable_protocols);
     if (error) {
         ovs_fatal(0, "%s", error);
     }
-    ofctl_flow_mod__(argv[1], fms, n_fms);
+    ofctl_flow_mod__(argv[1], fms, n_fms, usable_protocols);
     free(fms);
 }
 
 static void
 ofctl_flow_mod(int argc, char *argv[], uint16_t command)
 {
+    enum ofputil_protocol usable_protocols;
+
     if (argc > 2 && !strcmp(argv[2], "-")) {
         ofctl_flow_mod_file(argc, argv, command);
     } else {
         struct ofputil_flow_mod fm;
         char *error;
 
-        error = parse_ofp_flow_mod_str(&fm, argc > 2 ? argv[2] : "", command);
+        error = parse_ofp_flow_mod_str(&fm, argc > 2 ? argv[2] : "", command,
+                                       &usable_protocols);
         if (error) {
             ovs_fatal(0, "%s", error);
         }
-        ofctl_flow_mod__(argv[1], &fm, 1);
+        ofctl_flow_mod__(argv[1], &fm, 1, usable_protocols);
     }
 }
 
@@ -1440,6 +1440,7 @@ ofctl_monitor(int argc, char *argv[])
 {
     struct vconn *vconn;
     int i;
+    enum ofputil_protocol usable_protocols;
 
     open_vconn(argv[1], &vconn);
     for (i = 2; i < argc; i++) {
@@ -1458,7 +1459,8 @@ ofctl_monitor(int argc, char *argv[])
             struct ofpbuf *msg;
             char *error;
 
-            error = parse_flow_monitor_request(&fmr, arg + 6);
+            error = parse_flow_monitor_request(&fmr, arg + 6,
+                                               &usable_protocols);
             if (error) {
                 ovs_fatal(0, "%s", error);
             }
@@ -1561,9 +1563,10 @@ ofctl_packet_out(int argc, char *argv[])
     struct vconn *vconn;
     char *error;
     int i;
+    enum ofputil_protocol usable_protocols; /* TODO: Use in proto selection */
 
     ofpbuf_init(&ofpacts, 64);
-    error = parse_ofpacts(argv[3], &ofpacts);
+    error = parse_ofpacts(argv[3], &ofpacts, &usable_protocols);
     if (error) {
         ovs_fatal(0, "%s", error);
     }
@@ -2000,11 +2003,13 @@ read_flows_from_file(const char *filename, struct classifier *cls, int index)
         struct fte_version *version;
         struct ofputil_flow_mod fm;
         char *error;
+        enum ofputil_protocol usable;
 
-        error = parse_ofp_str(&fm, OFPFC_ADD, ds_cstr(&s));
+        error = parse_ofp_str(&fm, OFPFC_ADD, ds_cstr(&s), &usable);
         if (error) {
             ovs_fatal(0, "%s:%d: %s", filename, line_number, error);
         }
+        usable_protocols &= usable;
 
         version = xmalloc(sizeof *version);
         version->cookie = fm.new_cookie;
@@ -2014,8 +2019,6 @@ read_flows_from_file(const char *filename, struct classifier *cls, int index)
                                      | OFPUTIL_FF_EMERG);
         version->ofpacts = fm.ofpacts;
         version->ofpacts_len = fm.ofpacts_len;
-
-        usable_protocols &= ofputil_usable_protocols(&fm.match);
 
         fte_insert(cls, &fm.match, fm.priority, version, index);
     }
@@ -2280,14 +2283,13 @@ ofctl_diff_flows(int argc OVS_UNUSED, char *argv[])
 /* Undocumented commands for unit testing. */
 
 static void
-ofctl_parse_flows__(struct ofputil_flow_mod *fms, size_t n_fms)
+ofctl_parse_flows__(struct ofputil_flow_mod *fms, size_t n_fms,
+                    enum ofputil_protocol usable_protocols)
 {
-    enum ofputil_protocol usable_protocols;
     enum ofputil_protocol protocol = 0;
     char *usable_s;
     size_t i;
 
-    usable_protocols = ofputil_flow_mod_usable_protocols(fms, n_fms);
     usable_s = ofputil_protocols_to_string(usable_protocols);
     printf("usable protocols: %s\n", usable_s);
     free(usable_s);
@@ -2322,14 +2324,15 @@ ofctl_parse_flows__(struct ofputil_flow_mod *fms, size_t n_fms)
 static void
 ofctl_parse_flow(int argc OVS_UNUSED, char *argv[])
 {
+    enum ofputil_protocol usable_protocols;
     struct ofputil_flow_mod fm;
     char *error;
 
-    error = parse_ofp_flow_mod_str(&fm, argv[1], OFPFC_ADD);
+    error = parse_ofp_flow_mod_str(&fm, argv[1], OFPFC_ADD, &usable_protocols);
     if (error) {
         ovs_fatal(0, "%s", error);
     }
-    ofctl_parse_flows__(&fm, 1);
+    ofctl_parse_flows__(&fm, 1, usable_protocols);
 }
 
 /* "parse-flows FILENAME": reads the named file as a sequence of flows (like
@@ -2337,15 +2340,17 @@ ofctl_parse_flow(int argc OVS_UNUSED, char *argv[])
 static void
 ofctl_parse_flows(int argc OVS_UNUSED, char *argv[])
 {
+    enum ofputil_protocol usable_protocols;
     struct ofputil_flow_mod *fms = NULL;
     size_t n_fms = 0;
     char *error;
 
-    error = parse_ofp_flow_mod_file(argv[1], OFPFC_ADD, &fms, &n_fms);
+    error = parse_ofp_flow_mod_file(argv[1], OFPFC_ADD, &fms, &n_fms,
+                                    &usable_protocols);
     if (error) {
         ovs_fatal(0, "%s", error);
     }
-    ofctl_parse_flows__(fms, n_fms);
+    ofctl_parse_flows__(fms, n_fms, usable_protocols);
     free(fms);
 }
 
@@ -2800,6 +2805,8 @@ ofctl_check_vlan(int argc OVS_UNUSED, char *argv[])
     enum ofperr error;
     char *error_s;
 
+    enum ofputil_protocol usable_protocols; /* Unused for now. */
+
     match_init_catchall(&match);
     match.flow.vlan_tci = htons(strtoul(argv[1], NULL, 16));
     match.wc.masks.vlan_tci = htons(strtoul(argv[2], NULL, 16));
@@ -2808,7 +2815,7 @@ ofctl_check_vlan(int argc OVS_UNUSED, char *argv[])
     string_s = match_to_string(&match, OFP_DEFAULT_PRIORITY);
     printf("%s -> ", string_s);
     fflush(stdout);
-    error_s = parse_ofp_str(&fm, -1, string_s);
+    error_s = parse_ofp_str(&fm, -1, string_s, &usable_protocols);
     if (error_s) {
         ovs_fatal(0, "%s", error_s);
     }

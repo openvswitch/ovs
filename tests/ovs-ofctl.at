@@ -9,7 +9,7 @@ for test_case in \
     'tun_flags=0                                 none' \
     'tun_tos=0                                   none' \
     'tun_ttl=0                                   none' \
-    'metadata=0                                  NXM,OXM' \
+    'metadata=0                                  NXM,OXM,OpenFlow11' \
     'in_port=1                                   any' \
     'skb_priority=0                              none' \
     'pkt_mark=1                                  NXM,OXM' \
@@ -22,9 +22,9 @@ for test_case in \
     'reg6=6                                      NXM,OXM' \
     'reg7=7                                      NXM,OXM' \
     'dl_src=00:11:22:33:44:55                    any' \
-    'dl_src=00:11:22:33:44:55/00:ff:ff:ff:ff:ff  NXM,OXM' \
+    'dl_src=00:11:22:33:44:55/00:ff:ff:ff:ff:ff  NXM,OXM,OpenFlow11' \
     'dl_dst=00:11:22:33:44:55                    any' \
-    'dl_dst=00:11:22:33:44:55/00:ff:ff:ff:ff:ff  NXM,OXM' \
+    'dl_dst=00:11:22:33:44:55/00:ff:ff:ff:ff:ff  NXM,OXM,OpenFlow11' \
     'dl_type=0x1234                              any' \
     'dl_type=0x0800                              any' \
     'dl_type=0x0806                              any' \
@@ -35,15 +35,15 @@ for test_case in \
     'vlan_vid=11                                 any' \
     'dl_vlan_pcp=6                               any' \
     'vlan_pcp=5                                  any' \
-    'mpls,mpls_label=5                           NXM,OXM' \
-    'mpls,mpls_tc=1                              NXM,OXM' \
+    'mpls,mpls_label=5                           NXM,OXM,OpenFlow11' \
+    'mpls,mpls_tc=1                              NXM,OXM,OpenFlow11' \
     'mpls,mpls_bos=0                             NXM,OXM' \
     'ip,ip_src=1.2.3.4                           any' \
     'ip,ip_src=192.168.0.0/24                    any' \
-    'ip,ip_src=192.0.168.0/255.0.255.0           NXM,OXM' \
+    'ip,ip_src=192.0.168.0/255.0.255.0           NXM,OXM,OpenFlow11' \
     'ip,ip_dst=1.2.3.4                           any' \
     'ip,ip_dst=192.168.0.0/24                    any' \
-    'ip,ip_dst=192.0.168.0/255.0.255.0           NXM,OXM' \
+    'ip,ip_dst=192.0.168.0/255.0.255.0           NXM,OXM,OpenFlow11' \
     'ipv6,ipv6_src=::1                           NXM,OXM' \
     'ipv6,ipv6_dst=::1                           NXM,OXM' \
     'ipv6,ipv6_label=5                           NXM,OXM' \
@@ -113,8 +113,8 @@ udp,nw_src=192.168.0.3,tp_dst=53 actions=pop_queue,output:1
 cookie=0x123456789abcdef hard_timeout=10 priority=60000 actions=controller
 actions=note:41.42.43,note:00.01.02.03.04.05.06.07,note
 ip,actions=set_field:10.4.3.77->ip_src
-sctp actions=set_field:3334->sctp_src
-sctp actions=set_field:4445->sctp_dst
+sctp actions=drop
+sctp actions=drop
 in_port=0 actions=resubmit:0
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 ]])
@@ -132,8 +132,8 @@ OFPT_FLOW_MOD: ADD udp,nw_src=192.168.0.3,tp_dst=53 actions=pop_queue,output:1
 OFPT_FLOW_MOD: ADD priority=60000 cookie:0x123456789abcdef hard:10 actions=CONTROLLER:65535
 OFPT_FLOW_MOD: ADD actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06.07.00.00.00.00.00.00,note:00.00.00.00.00.00
 OFPT_FLOW_MOD: ADD ip actions=load:0xa04034d->NXM_OF_IP_SRC[]
-OFPT_FLOW_MOD: ADD sctp actions=load:0xd06->OXM_OF_SCTP_SRC[]
-OFPT_FLOW_MOD: ADD sctp actions=load:0x115d->OXM_OF_SCTP_DST[]
+OFPT_FLOW_MOD: ADD sctp actions=drop
+OFPT_FLOW_MOD: ADD sctp actions=drop
 OFPT_FLOW_MOD: ADD in_port=0 actions=resubmit:0
 OFPT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 ]])
@@ -159,7 +159,7 @@ actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_
 AT_CHECK([ovs-ofctl --protocols OpenFlow12 parse-flows flows.txt
 ], [0], [stdout])
 AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0],
-[[usable protocols: any
+[[usable protocols: NXM,OXM
 chosen protocol: OXM-OpenFlow12
 OFPT_FLOW_MOD (OF1.2): ADD table:255 tcp,tp_src=123 actions=FLOOD
 OFPT_FLOW_MOD (OF1.2): ADD table:255 in_port=LOCAL,dl_vlan=9,dl_src=00:0a:e4:25:6b:b0 actions=drop
@@ -2108,7 +2108,7 @@ AT_CHECK([ovs-ofctl -F openflow10 add-flow dummy tun_id=123,actions=drop],
   [1], [], [ovs-ofctl: none of the usable flow formats (NXM,OXM) is among the allowed flow formats (OpenFlow10)
 ])
 AT_CHECK([ovs-ofctl -F openflow10 add-flow dummy metadata=123,actions=drop],
-  [1], [], [ovs-ofctl: none of the usable flow formats (NXM,OXM) is among the allowed flow formats (OpenFlow10)
+  [1], [], [ovs-ofctl: none of the usable flow formats (NXM,OXM,OpenFlow11) is among the allowed flow formats (OpenFlow10)
 ])
 AT_CLEANUP
 

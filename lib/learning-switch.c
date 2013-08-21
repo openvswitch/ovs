@@ -89,6 +89,7 @@ struct lswitch {
      * to set up the flow table. */
     const struct ofputil_flow_mod *default_flows;
     size_t n_default_flows;
+    enum ofputil_protocol usable_protocols;
 };
 
 /* The log messages here could actually be useful in debugging, so keep the
@@ -161,6 +162,7 @@ lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
 
     sw->default_flows = cfg->default_flows;
     sw->n_default_flows = cfg->n_default_flows;
+    sw->usable_protocols = cfg->usable_protocols;
 
     sw->queued = rconn_packet_counter_create();
 
@@ -176,7 +178,6 @@ lswitch_handshake(struct lswitch *sw)
 
     protocol = ofputil_protocol_from_ofp_version(rconn_get_version(sw->rconn));
     if (sw->default_flows) {
-        enum ofputil_protocol usable_protocols;
         struct ofpbuf *msg = NULL;
         int error = 0;
         size_t i;
@@ -188,10 +189,8 @@ lswitch_handshake(struct lswitch *sw)
          * This could be improved by actually negotiating a mutually acceptable
          * flow format with the switch, but that would require an asynchronous
          * state machine.  This version ought to work fine in practice. */
-        usable_protocols = ofputil_flow_mod_usable_protocols(
-            sw->default_flows, sw->n_default_flows);
-        if (!(protocol & usable_protocols)) {
-            enum ofputil_protocol want = rightmost_1bit(usable_protocols);
+        if (!(protocol & sw->usable_protocols)) {
+            enum ofputil_protocol want = rightmost_1bit(sw->usable_protocols);
             while (!error) {
                 msg = ofputil_encode_set_protocol(protocol, want, &protocol);
                 if (!msg) {
@@ -200,7 +199,7 @@ lswitch_handshake(struct lswitch *sw)
                 error = rconn_send(sw->rconn, msg, NULL);
             }
         }
-        if (protocol & usable_protocols) {
+        if (protocol & sw->usable_protocols) {
             for (i = 0; !error && i < sw->n_default_flows; i++) {
                 msg = ofputil_encode_flow_mod(&sw->default_flows[i], protocol);
                 error = rconn_send(sw->rconn, msg, NULL);

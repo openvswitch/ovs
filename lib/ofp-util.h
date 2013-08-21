@@ -101,6 +101,17 @@ enum ofputil_protocol {
     OFPUTIL_P_OF13_OXM      = 1 << 6,
 #define OFPUTIL_P_ANY_OXM (OFPUTIL_P_OF12_OXM | OFPUTIL_P_OF13_OXM)
 
+#define OFPUTIL_P_NXM_OF11_UP (OFPUTIL_P_OF10_NXM_ANY | OFPUTIL_P_OF11_STD | \
+                               OFPUTIL_P_ANY_OXM)
+
+#define OFPUTIL_P_NXM_OXM_ANY (OFPUTIL_P_OF10_NXM_ANY | OFPUTIL_P_ANY_OXM)
+
+#define OFPUTIL_P_OF11_UP (OFPUTIL_P_OF11_STD | OFPUTIL_P_ANY_OXM)
+
+#define OFPUTIL_P_OF12_UP (OFPUTIL_P_ANY_OXM)
+
+#define OFPUTIL_P_OF13_UP (OFPUTIL_P_OF13_OXM)
+
     /* All protocols. */
 #define OFPUTIL_P_ANY ((1 << 7) - 1)
 
@@ -129,7 +140,6 @@ enum ofputil_protocol ofputil_protocol_set_base(
 const char *ofputil_protocol_to_string(enum ofputil_protocol);
 char *ofputil_protocols_to_string(enum ofputil_protocol);
 enum ofputil_protocol ofputil_protocols_from_string(const char *);
-enum ofputil_protocol ofputil_usable_protocols(const struct match *);
 
 void ofputil_format_version(struct ds *, enum ofp_version);
 void ofputil_format_version_name(struct ds *, enum ofp_version);
@@ -270,9 +280,6 @@ enum ofperr ofputil_decode_flow_mod(struct ofputil_flow_mod *,
 struct ofpbuf *ofputil_encode_flow_mod(const struct ofputil_flow_mod *,
                                        enum ofputil_protocol);
 
-enum ofputil_protocol ofputil_flow_mod_usable_protocols(
-    const struct ofputil_flow_mod *fms, size_t n_fms);
-
 /* Flow stats or aggregate stats request, independent of protocol. */
 struct ofputil_flow_stats_request {
     bool aggregate;             /* Aggregate results? */
@@ -287,8 +294,6 @@ enum ofperr ofputil_decode_flow_stats_request(
     struct ofputil_flow_stats_request *, const struct ofp_header *);
 struct ofpbuf *ofputil_encode_flow_stats_request(
     const struct ofputil_flow_stats_request *, enum ofputil_protocol);
-enum ofputil_protocol ofputil_flow_stats_request_usable_protocols(
-    const struct ofputil_flow_stats_request *);
 
 /* Flow stats reply, independent of protocol. */
 struct ofputil_flow_stats {

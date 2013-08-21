@@ -83,6 +83,7 @@ static struct simap port_queues = SIMAP_INITIALIZER(&port_queues);
 /* --with-flows: Flows to send to switch. */
 static struct ofputil_flow_mod *default_flows;
 static size_t n_default_flows;
+static enum ofputil_protocol usable_protocols;
 
 /* --unixctl: Name of unixctl socket, or null to use the default. */
 static char *unixctl_path = NULL;
@@ -216,6 +217,7 @@ new_switch(struct switch_ *sw, struct vconn *vconn)
     cfg.max_idle = set_up_flows ? max_idle : -1;
     cfg.default_flows = default_flows;
     cfg.n_default_flows = n_default_flows;
+    cfg.usable_protocols = usable_protocols;
     cfg.default_queue = default_queue;
     cfg.port_queues = &port_queues;
     cfg.mute = mute;
@@ -329,7 +331,8 @@ parse_options(int argc, char *argv[])
 
         case OPT_WITH_FLOWS:
             error = parse_ofp_flow_mod_file(optarg, OFPFC_ADD, &default_flows,
-                                            &n_default_flows);
+                                            &n_default_flows,
+                                            &usable_protocols);
             if (error) {
                 ovs_fatal(0, "%s", error);
             }

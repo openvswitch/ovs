@@ -22,6 +22,7 @@
 #include <netinet/ip6.h>
 #include "flow.h"
 #include "ofp-errors.h"
+#include "ofp-util.h"
 #include "packets.h"
 
 struct ds;
@@ -280,7 +281,18 @@ struct mf_field {
     uint32_t nxm_header;        /* An NXM_* (or OXM_*) constant. */
     const char *nxm_name;       /* The nxm_header constant's name. */
     uint32_t oxm_header;        /* An OXM_* (or NXM_*) constant. */
-    const char *oxm_name;	    /* The oxm_header constant's name */
+    const char *oxm_name;       /* The oxm_header constant's name */
+
+    /* Usable protocols.
+     * NXM and OXM are extensible, allowing later extensions to be sent in
+     * earlier protocol versions, so this does not necessarily correspond to
+     * the OpenFlow protocol version the field was introduced in.
+     * Also, some field types are tranparently mapped to each other via the
+     * struct flow (like vlan and dscp/tos fields), so each variant supports
+     * all protocols. */
+    enum ofputil_protocol usable_protocols; /* If fully/cidr masked. */
+    /* If partially/non-cidr masked. */
+    enum ofputil_protocol usable_protocols_bitwise;
 };
 
 /* The representation of a field's value. */
@@ -344,9 +356,12 @@ bool mf_is_zero(const struct mf_field *, const struct flow *);
 
 void mf_get(const struct mf_field *, const struct match *,
             union mf_value *value, union mf_value *mask);
-void mf_set(const struct mf_field *,
-            const union mf_value *value, const union mf_value *mask,
-            struct match *);
+
+/* Returns the set of usable protocols. */
+enum ofputil_protocol mf_set(const struct mf_field *,
+                             const union mf_value *value,
+                             const union mf_value *mask,
+                             struct match *);
 
 void mf_set_wild(const struct mf_field *, struct match *);
 

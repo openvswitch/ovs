@@ -30,32 +30,40 @@ struct ofputil_flow_mod;
 struct ofputil_flow_monitor_request;
 struct ofputil_flow_stats_request;
 struct ofputil_meter_mod;
+enum ofputil_protocol;
 
-char *parse_ofp_str(struct ofputil_flow_mod *, int command, const char *str_)
+char *parse_ofp_str(struct ofputil_flow_mod *, int command, const char *str_,
+                    enum ofputil_protocol *usable_protocols)
     WARN_UNUSED_RESULT;
 
 char *parse_ofp_flow_mod_str(struct ofputil_flow_mod *, const char *string,
-                            uint16_t command)
+                             uint16_t command,
+                             enum ofputil_protocol *usable_protocols)
     WARN_UNUSED_RESULT;
 char *parse_ofp_flow_mod_file(const char *file_name, uint16_t command,
-                              struct ofputil_flow_mod **fms, size_t *n_fms)
+                              struct ofputil_flow_mod **fms, size_t *n_fms,
+                              enum ofputil_protocol *usable_protocols)
     WARN_UNUSED_RESULT;
 
 char *parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *,
-                                       bool aggregate, const char *string)
+                                       bool aggregate, const char *string,
+                                       enum ofputil_protocol *usable_protocols)
     WARN_UNUSED_RESULT;
 
-char *parse_ofpacts(const char *, struct ofpbuf *ofpacts)
+char *parse_ofpacts(const char *, struct ofpbuf *ofpacts,
+                    enum ofputil_protocol *usable_protocols)
     WARN_UNUSED_RESULT;
 
 char *parse_ofp_exact_flow(struct flow *, const char *);
 
 char *parse_ofp_meter_mod_str(struct ofputil_meter_mod *, const char *string,
-			      int command)
+                              int command,
+                              enum ofputil_protocol *usable_protocols)
     WARN_UNUSED_RESULT;
 
 char *parse_flow_monitor_request(struct ofputil_flow_monitor_request *,
-                                const char *)
+                                 const char *,
+                                 enum ofputil_protocol *usable_protocols)
     WARN_UNUSED_RESULT;
 
 #endif /* ofp-parse.h */
