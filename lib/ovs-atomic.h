@@ -21,7 +21,7 @@
  *
  * This library implements atomic operations with an API based on the one
  * defined in C11.  It includes multiple implementations for compilers and
- * libraries with varying degrees of built-in support for C11, including an
+ * libraries with varying degrees of built-in support for C11, including a
  * fallback implementation for systems that have pthreads but no other support
  * for atomics.
  *
