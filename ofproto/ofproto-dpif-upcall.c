@@ -554,30 +554,30 @@ recv_upcalls(struct udpif *udpif)
                     }
                 }
             }
-           hash =  mhash_finish(hash, n_bytes);
+            hash =  mhash_finish(hash, n_bytes);
 
-           handler = &udpif->handlers[hash % udpif->n_handlers];
+            handler = &udpif->handlers[hash % udpif->n_handlers];
 
-           ovs_mutex_lock(&handler->mutex);
-           if (handler->n_upcalls < MAX_QUEUE_LENGTH) {
-               list_push_back(&handler->upcalls, &upcall->list_node);
-               handler->n_upcalls++;
-               xpthread_cond_signal(&handler->wake_cond);
-               ovs_mutex_unlock(&handler->mutex);
-               if (!VLOG_DROP_DBG(&rl)) {
-                   struct ds ds = DS_EMPTY_INITIALIZER;
+            ovs_mutex_lock(&handler->mutex);
+            if (handler->n_upcalls < MAX_QUEUE_LENGTH) {
+                list_push_back(&handler->upcalls, &upcall->list_node);
+                handler->n_upcalls++;
+                xpthread_cond_signal(&handler->wake_cond);
+                ovs_mutex_unlock(&handler->mutex);
+                if (!VLOG_DROP_DBG(&rl)) {
+                    struct ds ds = DS_EMPTY_INITIALIZER;
 
-                   odp_flow_key_format(upcall->dpif_upcall.key,
-                                       upcall->dpif_upcall.key_len,
-                                       &ds);
-                   VLOG_DBG("dispatcher: miss enqueue (%s)", ds_cstr(&ds));
-                   ds_destroy(&ds);
-               }
-           } else {
-               ovs_mutex_unlock(&handler->mutex);
-               COVERAGE_INC(miss_queue_overflow);
-               upcall_destroy(upcall);
-           }
+                    odp_flow_key_format(upcall->dpif_upcall.key,
+                                        upcall->dpif_upcall.key_len,
+                                        &ds);
+                    VLOG_DBG("dispatcher: miss enqueue (%s)", ds_cstr(&ds));
+                    ds_destroy(&ds);
+                }
+            } else {
+                ovs_mutex_unlock(&handler->mutex);
+                COVERAGE_INC(miss_queue_overflow);
+                upcall_destroy(upcall);
+            }
         } else {
             ovs_mutex_lock(&udpif->upcall_mutex);
             if (udpif->n_upcalls < MAX_QUEUE_LENGTH) {
