@@ -191,12 +191,19 @@ struct bfd {
     atomic_bool check_tnl_key;    /* Verify tunnel key of inbound packets? */
     atomic_int ref_cnt;
 
+    /* When forward_if_rx is true, bfd_forwarding() will return
+     * true as long as there are incoming packets received.
+     * Note, forwarding_override still has higher priority. */
+    bool forwarding_if_rx;
+    long long int forwarding_if_rx_detect_time;
+
     /* BFD decay related variables. */
     bool in_decay;                /* True when bfd is in decay. */
     int decay_min_rx;             /* min_rx is set to decay_min_rx when */
                                   /* in decay. */
     int decay_rx_ctl;             /* Count bfd packets received within decay */
                                   /* detect interval. */
+    uint64_t decay_rx_packets;    /* Packets received by 'netdev'. */
     long long int decay_detect_time; /* Decay detection time. */
 };
 
@@ -223,6 +230,8 @@ static void bfd_put_details(struct ds *, const struct bfd *)
 static uint64_t bfd_rx_packets(const struct bfd *) OVS_REQUIRES(mutex);
 static void bfd_try_decay(struct bfd *) OVS_REQUIRES(mutex);
 static void bfd_decay_update(struct bfd *) OVS_REQUIRES(mutex);
+static void bfd_check_rx(struct bfd *) OVS_REQUIRES(mutex);
+static void bfd_forwarding_if_rx_update(struct bfd *) OVS_REQUIRES(mutex);
 static void bfd_unixctl_show(struct unixctl_conn *, int argc,
                              const char *argv[], void *aux OVS_UNUSED);
 static void bfd_unixctl_set_forwarding_override(struct unixctl_conn *,
@@ -280,7 +289,7 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
     long long int min_tx, min_rx;
     bool need_poll = false;
     bool cfg_min_rx_changed = false;
-    bool cpath_down;
+    bool cpath_down, forwarding_if_rx;
     const char *hwaddr;
     uint8_t ea[ETH_ADDR_LEN];
 
@@ -311,6 +320,7 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
         bfd->mult = 3;
         atomic_init(&bfd->ref_cnt, 1);
         bfd->netdev = netdev_ref(netdev);
+        bfd->rx_packets = bfd_rx_packets(bfd);
         bfd->in_decay = false;
 
         /* RFC 5881 section 4
@@ -382,6 +392,16 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
     } else if (bfd->eth_dst_set) {
         memcpy(bfd->eth_dst, eth_addr_bfd, ETH_ADDR_LEN);
         bfd->eth_dst_set = false;
+    }
+
+    forwarding_if_rx = smap_get_bool(cfg, "forwarding_if_rx", false);
+    if (bfd->forwarding_if_rx != forwarding_if_rx) {
+        bfd->forwarding_if_rx = forwarding_if_rx;
+        if (bfd->state == STATE_UP && bfd->forwarding_if_rx) {
+            bfd_forwarding_if_rx_update(bfd);
+        } else {
+            bfd->forwarding_if_rx_detect_time = 0;
+        }
     }
 
     if (need_poll) {
@@ -457,6 +477,9 @@ bfd_run(struct bfd *bfd) OVS_EXCLUDED(mutex)
         && now >= bfd->decay_detect_time) {
         bfd_try_decay(bfd);
     }
+
+    /* Always checks the reception of any packet. */
+    bfd_check_rx(bfd);
 
     if (bfd->min_tx != bfd->cfg_min_tx
         || (bfd->min_rx != bfd->cfg_min_rx && bfd->min_rx != bfd->decay_min_rx)
@@ -752,9 +775,13 @@ bfd_set_netdev(struct bfd *bfd, const struct netdev *netdev)
     if (bfd->netdev != netdev) {
         netdev_close(bfd->netdev);
         bfd->netdev = netdev_ref(netdev);
-        if (bfd->decay_min_rx) {
+        if (bfd->decay_min_rx && bfd->state == STATE_UP) {
             bfd_decay_update(bfd);
         }
+        if (bfd->forwarding_if_rx && bfd->state == STATE_UP) {
+            bfd_forwarding_if_rx_update(bfd);
+        }
+        bfd->rx_packets = bfd_rx_packets(bfd);
     }
     ovs_mutex_unlock(&mutex);
 }
@@ -763,14 +790,18 @@ bfd_set_netdev(struct bfd *bfd, const struct netdev *netdev)
 static bool
 bfd_forwarding__(const struct bfd *bfd) OVS_REQUIRES(mutex)
 {
+    long long int time;
+
     if (bfd->forwarding_override != -1) {
         return bfd->forwarding_override == 1;
     }
 
-    return bfd->state == STATE_UP
-        && bfd->rmt_diag != DIAG_PATH_DOWN
-        && bfd->rmt_diag != DIAG_CPATH_DOWN
-        && bfd->rmt_diag != DIAG_RCPATH_DOWN;
+    time = bfd->forwarding_if_rx_detect_time;
+    return (bfd->state == STATE_UP
+            || (bfd->forwarding_if_rx && time > time_msec()))
+           && bfd->rmt_diag != DIAG_PATH_DOWN
+           && bfd->rmt_diag != DIAG_CPATH_DOWN
+           && bfd->rmt_diag != DIAG_RCPATH_DOWN;
 }
 
 /* Helpers. */
@@ -1001,7 +1032,7 @@ bfd_try_decay(struct bfd *bfd) OVS_REQUIRES(mutex)
      * asynchronously to the bfd_rx_packets() function, the 'diff' value
      * can be jittered.  Thusly, we double the decay_rx_ctl to provide
      * more wiggle room. */
-    diff = bfd_rx_packets(bfd) - bfd->rx_packets;
+    diff = bfd_rx_packets(bfd) - bfd->decay_rx_packets;
     expect = 2 * MAX(bfd->decay_rx_ctl, 1);
     bfd->in_decay = diff <= expect ? true : false;
     bfd_decay_update(bfd);
@@ -1011,9 +1042,36 @@ bfd_try_decay(struct bfd *bfd) OVS_REQUIRES(mutex)
 static void
 bfd_decay_update(struct bfd * bfd) OVS_REQUIRES(mutex)
 {
-    bfd->rx_packets = bfd_rx_packets(bfd);
+    bfd->decay_rx_packets = bfd_rx_packets(bfd);
     bfd->decay_rx_ctl = 0;
     bfd->decay_detect_time = MAX(bfd->decay_min_rx, 2000) + time_msec();
+}
+
+/* Checks if there are packets received during the time since last call.
+ * If forwarding_if_rx is enabled and packets are received, updates the
+ * forwarding_if_rx_detect_time. */
+static void
+bfd_check_rx(struct bfd *bfd) OVS_REQUIRES(mutex)
+{
+    uint64_t rx_packets = bfd_rx_packets(bfd);
+    int64_t diff;
+
+    diff = rx_packets - bfd->rx_packets;
+    bfd->rx_packets = rx_packets;
+    if (diff < 0) {
+        VLOG_INFO_RL(&rl, "rx_packets count is smaller than last time.");
+    }
+    if (bfd->forwarding_if_rx && diff > 0) {
+        bfd_forwarding_if_rx_update(bfd);
+    }
+}
+
+/* Updates the forwarding_if_rx_detect_time. */
+static void
+bfd_forwarding_if_rx_update(struct bfd *bfd) OVS_REQUIRES(mutex)
+{
+    int64_t incr = bfd_rx_interval(bfd) * bfd->mult;
+    bfd->forwarding_if_rx_detect_time = MAX(incr, 2000) + time_msec();
 }
 
 static uint32_t

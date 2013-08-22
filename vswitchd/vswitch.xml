@@ -1905,6 +1905,14 @@
           reconfigured.
       </column>
 
+      <column name="bfd" key="forwarding_if_rx" type='{"type": "boolean"}'>
+          When <code>forwarding_if_rx</code> is true the interface will be
+          considered capable of packet I/O as long as there is packet
+          received at interface.  This is important in that when link becomes
+          temporarily conjested, consecutive BFD control packets can be lost.
+          And the <code>forwarding_if_rx</code> can prevent link failover by
+          detecting non-control packets received at interface.
+      </column>
 
       <column name="bfd" key="cpath_down" type='{"type": "boolean"}'>
           Concatenated path down may be used when the local system should not
