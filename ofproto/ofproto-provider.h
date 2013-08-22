@@ -65,8 +65,8 @@ struct ofproto {
     struct shash port_by_name;
     unsigned long *ofp_port_ids;/* Bitmap of used OpenFlow port numbers. */
     struct simap ofp_requests;  /* OpenFlow port number requests. */
-    ofp_port_t alloc_port_no;   /* Last allocated OpenFlow port number. */
-    ofp_port_t max_ports;       /* Max possible OpenFlow port num, plus one. */
+    uint16_t alloc_port_no;     /* Last allocated OpenFlow port number. */
+    uint16_t max_ports;         /* Max possible OpenFlow port num, plus one. */
 
     /* Flow tables. */
     struct oftable *tables;
@@ -114,7 +114,7 @@ struct ofproto {
 };
 
 void ofproto_init_tables(struct ofproto *, int n_tables);
-void ofproto_init_max_ports(struct ofproto *, ofp_port_t max_ports);
+void ofproto_init_max_ports(struct ofproto *, uint16_t max_ports);
 
 struct ofproto *ofproto_lookup(const char *name);
 struct ofport *ofproto_get_port(const struct ofproto *, ofp_port_t ofp_port);

@@ -432,7 +432,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     hmap_init(&ofproto->ports);
     shash_init(&ofproto->port_by_name);
     simap_init(&ofproto->ofp_requests);
-    ofproto->max_ports = OFPP_MAX;
+    ofproto->max_ports = ofp_to_u16(OFPP_MAX);
     ofproto->tables = NULL;
     ofproto->n_tables = 0;
     hindex_init(&ofproto->cookies);
@@ -461,7 +461,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
 
     /* The "max_ports" member should have been set by ->construct(ofproto).
      * Port 0 is not a valid OpenFlow port, so mark that as unavailable. */
-    ofproto->ofp_port_ids = bitmap_allocate(ofp_to_u16(ofproto->max_ports));
+    ofproto->ofp_port_ids = bitmap_allocate(ofproto->max_ports);
     bitmap_set1(ofproto->ofp_port_ids, 0);
 
     /* Check that hidden tables, if any, are at the end. */
@@ -520,9 +520,9 @@ ofproto_init_tables(struct ofproto *ofproto, int n_tables)
  * Reserved ports numbered OFPP_MAX and higher are special and not subject to
  * the 'max_ports' restriction. */
 void
-ofproto_init_max_ports(struct ofproto *ofproto, ofp_port_t max_ports)
+ofproto_init_max_ports(struct ofproto *ofproto, uint16_t max_ports)
 {
-    ovs_assert(ofp_to_u16(max_ports) <= ofp_to_u16(OFPP_MAX));
+    ovs_assert(max_ports <= ofp_to_u16(OFPP_MAX));
     ofproto->max_ports = max_ports;
 }
 
@@ -1742,32 +1742,28 @@ reinit_ports(struct ofproto *p)
 static ofp_port_t
 alloc_ofp_port(struct ofproto *ofproto, const char *netdev_name)
 {
-    uint16_t max_ports = ofp_to_u16(ofproto->max_ports);
     uint16_t port_idx;
 
     port_idx = simap_get(&ofproto->ofp_requests, netdev_name);
-    if (!port_idx) {
-        port_idx = UINT16_MAX;
-    }
+    port_idx = port_idx ? port_idx : UINT16_MAX;
 
-    if (port_idx >= max_ports
+    if (port_idx >= ofproto->max_ports
         || bitmap_is_set(ofproto->ofp_port_ids, port_idx)) {
-        uint16_t end_port_no = ofp_to_u16(ofproto->alloc_port_no);
-        uint16_t alloc_port_no = end_port_no;
+        uint16_t end_port_no = ofproto->alloc_port_no;
 
         /* Search for a free OpenFlow port number.  We try not to
          * immediately reuse them to prevent problems due to old
          * flows. */
         for (;;) {
-            if (++alloc_port_no >= max_ports) {
-                alloc_port_no = 0;
+            if (++ofproto->alloc_port_no >= ofproto->max_ports) {
+                ofproto->alloc_port_no = 0;
             }
-            if (!bitmap_is_set(ofproto->ofp_port_ids, alloc_port_no)) {
-                port_idx = alloc_port_no;
-                ofproto->alloc_port_no = u16_to_ofp(alloc_port_no);
+            if (!bitmap_is_set(ofproto->ofp_port_ids,
+                               ofproto->alloc_port_no)) {
+                port_idx = ofproto->alloc_port_no;
                 break;
             }
-            if (alloc_port_no == end_port_no) {
+            if (ofproto->alloc_port_no == end_port_no) {
                 return OFPP_NONE;
             }
         }
@@ -1779,7 +1775,7 @@ alloc_ofp_port(struct ofproto *ofproto, const char *netdev_name)
 static void
 dealloc_ofp_port(const struct ofproto *ofproto, ofp_port_t ofp_port)
 {
-    if (ofp_to_u16(ofp_port) < ofp_to_u16(ofproto->max_ports)) {
+    if (ofp_to_u16(ofp_port) < ofproto->max_ports) {
         bitmap_set0(ofproto->ofp_port_ids, ofp_to_u16(ofp_port));
     }
 }
@@ -2103,9 +2099,9 @@ init_ports(struct ofproto *p)
             netdev = ofport_open(p, &ofproto_port, &pp);
             if (netdev) {
                 ofport_install(p, netdev, &pp);
-                if (ofproto_port.ofp_port < p->max_ports) {
+                if (ofp_to_u16(ofproto_port.ofp_port) < p->max_ports) {
                     p->alloc_port_no = MAX(p->alloc_port_no,
-                                           ofproto_port.ofp_port);
+                                           ofp_to_u16(ofproto_port.ofp_port));
                 }
             }
         }
@@ -2466,8 +2462,8 @@ ofproto_check_ofpacts(struct ofproto *ofproto,
     enum ofperr error;
     uint32_t mid;
 
-    error = ofpacts_check(ofpacts, ofpacts_len, flow, ofproto->max_ports,
-                          table_id);
+    error = ofpacts_check(ofpacts, ofpacts_len, flow,
+                          u16_to_ofp(ofproto->max_ports), table_id);
     if (error) {
         return error;
     }
@@ -2504,7 +2500,7 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
     if (error) {
         goto exit_free_ofpacts;
     }
-    if (ofp_to_u16(po.in_port) >= ofp_to_u16(p->max_ports)
+    if (ofp_to_u16(po.in_port) >= p->max_ports
         && ofp_to_u16(po.in_port) < ofp_to_u16(OFPP_MAX)) {
         error = OFPERR_OFPBRC_BAD_PORT;
         goto exit_free_ofpacts;
@@ -3558,7 +3554,7 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
 
         /* Verify actions. */
         error = ofpacts_check(fm->ofpacts, fm->ofpacts_len, &fm->match.flow,
-                              ofproto->max_ports, rule->table_id);
+                              u16_to_ofp(ofproto->max_ports), rule->table_id);
         if (error) {
             return error;
         }
