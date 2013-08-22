@@ -146,7 +146,7 @@ struct dpif_class {
 
     /* Returns one greater than the largest port number accepted in flow
      * actions. */
-    odp_port_t (*get_max_ports)(const struct dpif *dpif);
+    uint32_t (*get_max_ports)(const struct dpif *dpif);
 
     /* Returns the Netlink PID value to supply in OVS_ACTION_ATTR_USERSPACE
      * actions as the OVS_USERSPACE_ATTR_PID attribute's value, for use in

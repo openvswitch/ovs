@@ -634,7 +634,7 @@ dpif_port_query_by_name(const struct dpif *dpif, const char *devname,
 
 /* Returns one greater than the maximum port number accepted in flow
  * actions. */
-odp_port_t
+uint32_t
 dpif_get_max_ports(const struct dpif *dpif)
 {
     return dpif->dpif_class->get_max_ports(dpif);

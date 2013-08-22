@@ -415,7 +415,7 @@ int dpif_port_query_by_name(const struct dpif *, const char *devname,
                             struct dpif_port *);
 int dpif_port_get_name(struct dpif *, odp_port_t port_no,
                        char *name, size_t name_size);
-odp_port_t dpif_get_max_ports(const struct dpif *);
+uint32_t dpif_get_max_ports(const struct dpif *);
 uint32_t dpif_port_get_pid(const struct dpif *, odp_port_t port_no);
 
 struct dpif_port_dump {

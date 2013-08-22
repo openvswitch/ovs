@@ -655,10 +655,10 @@ dpif_linux_port_query_by_name(const struct dpif *dpif, const char *devname,
     return dpif_linux_port_query__(dpif, 0, devname, dpif_port);
 }
 
-static odp_port_t
+static uint32_t
 dpif_linux_get_max_ports(const struct dpif *dpif OVS_UNUSED)
 {
-    return u32_to_odp(MAX_PORTS);
+    return MAX_PORTS;
 }
 
 static uint32_t
