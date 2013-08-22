@@ -535,6 +535,11 @@ nxm_put_ip(struct ofpbuf *b, const struct match *match,
                         flow->tp_src, match->wc.masks.tp_src);
             nxm_put_16m(b, oxm ? OXM_OF_UDP_DST : NXM_OF_UDP_DST,
                         flow->tp_dst, match->wc.masks.tp_dst);
+        } else if (flow->nw_proto == IPPROTO_SCTP) {
+            nxm_put_16m(b, OXM_OF_SCTP_SRC, flow->tp_src,
+                        match->wc.masks.tp_src);
+            nxm_put_16m(b, OXM_OF_SCTP_DST, flow->tp_dst,
+                        match->wc.masks.tp_dst);
         } else if (flow->nw_proto == icmp_proto) {
             if (match->wc.masks.tp_src) {
                 nxm_put_8(b, icmp_type, ntohs(flow->tp_src));

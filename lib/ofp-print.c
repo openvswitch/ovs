@@ -74,6 +74,10 @@ ofp_packet_to_string(const void *data, size_t len)
             struct udp_header *uh = buf.l4;
             ds_put_format(&ds, " udp_csum:%"PRIx16,
                           ntohs(uh->udp_csum));
+        } else if (flow.nw_proto == IPPROTO_SCTP) {
+            struct sctp_header *sh = buf.l4;
+            ds_put_format(&ds, " sctp_csum:%"PRIx32,
+                          ntohl(sh->sctp_csum));
         }
     }
 
@@ -649,6 +653,8 @@ ofp10_match_to_string(const struct ofp10_match *om, int verbosity)
                     ds_put_cstr(&f, "tcp,");
                 } else if (om->nw_proto == IPPROTO_UDP) {
                     ds_put_cstr(&f, "udp,");
+                } else if (om->nw_proto == IPPROTO_SCTP) {
+                    ds_put_cstr(&f, "sctp,");
                 } else {
                     ds_put_cstr(&f, "ip,");
                     skip_proto = false;

@@ -825,6 +825,36 @@ OFPT_FLOW_MOD (OF1.2) (xid=0x52334507): ADD priority=255,ip actions=set_field:19
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPT_FLOW_MOD - OF1.2 - set-field sctp_src])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print "\
+03 0e 00 58 52 33 45 07 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ff \
+ff ff ff ff ff ff ff ff ff ff ff ff 00 00 00 00 \
+00 01 00 0f 80 00 0a 02 08 00 80 00 14 01 84 00 \
+00 04 00 18 00 00 00 00 00 19 00 10 80 00 22 02 \
+0d 06 00 00 00 00 00 00                         \
+" 2], [0], [dnl
+OFPT_FLOW_MOD (OF1.2) (xid=0x52334507): ADD priority=255,sctp actions=set_field:3334->sctp_src
+], [dnl
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_FLOW_MOD - OF1.2 - set-field sctp_dst])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print "\
+03 0e 00 58 52 33 45 07 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ff \
+ff ff ff ff ff ff ff ff ff ff ff ff 00 00 00 00 \
+00 01 00 0f 80 00 0a 02 08 00 80 00 14 01 84 00 \
+00 04 00 18 00 00 00 00 00 19 00 10 80 00 24 02 \
+11 5d 00 00 00 00 00 00                         \
+" 2], [0], [dnl
+OFPT_FLOW_MOD (OF1.2) (xid=0x52334507): ADD priority=255,sctp actions=set_field:4445->sctp_dst
+], [dnl
+])
+AT_CLEANUP
+
 AT_SETUP([OFPT_FLOW reply - OF1.2 - set-field ip_src])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print "\
@@ -855,6 +885,40 @@ c0 a8 4a 7a 00 00 00 00                         \
 " 2], [0], [dnl
 OFPST_FLOW reply (OF1.2) (xid=0x52334509):
  cookie=0x0, duration=0s, table=0, n_packets=0, n_bytes=0, priority=255,ip actions=set_field:192.168.74.122->ip_dst
+], [dnl
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_FLOW reply - OF1.2 - set-field sctp_src])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print "\
+03 13 00 68 52 33 45 04 00 01 00 00 00 00 00 00 \
+00 58 00 00 00 00 00 00 00 00 00 00 00 ff 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 01 00 0f 80 00 0a 02 08 00 80 00 14 01 84 00 \
+00 04 00 18 00 00 00 00 00 19 00 10 80 00 22 02 \
+0d 06 00 00 00 00 00 00                         \
+" 2], [0], [dnl
+OFPST_FLOW reply (OF1.2) (xid=0x52334504):
+ cookie=0x0, duration=0s, table=0, n_packets=0, n_bytes=0, priority=255,sctp actions=set_field:3334->sctp_src
+], [dnl
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_FLOW reply - OF1.2 - set-field sctp_dst])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print "\
+03 13 00 68 52 33 45 09 00 01 00 00 00 00 00 00 \
+00 58 00 00 00 00 00 00 00 00 00 00 00 ff 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 01 00 0f 80 00 0a 02 08 00 80 00 14 01 84 00 \
+00 04 00 18 00 00 00 00 00 19 00 10 80 00 24 02 \
+11 5d 00 00 00 00 00 00                         \
+" 2], [0], [dnl
+OFPST_FLOW reply (OF1.2) (xid=0x52334509):
+ cookie=0x0, duration=0s, table=0, n_packets=0, n_bytes=0, priority=255,sctp actions=set_field:4445->sctp_dst
 ], [dnl
 ])
 AT_CLEANUP

@@ -1,5 +1,7 @@
 post-v1.12.0
 ---------------------
+    - OpenFlow:
+      * Support matching, rewriting SCTP ports
 
 
 v1.12.0 - xx xxx xxxx

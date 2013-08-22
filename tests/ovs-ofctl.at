@@ -113,6 +113,8 @@ udp,nw_src=192.168.0.3,tp_dst=53 actions=pop_queue,output:1
 cookie=0x123456789abcdef hard_timeout=10 priority=60000 actions=controller
 actions=note:41.42.43,note:00.01.02.03.04.05.06.07,note
 ip,actions=set_field:10.4.3.77->ip_src
+sctp actions=set_field:3334->sctp_src
+sctp actions=set_field:4445->sctp_dst
 in_port=0 actions=resubmit:0
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 ]])
@@ -130,6 +132,8 @@ OFPT_FLOW_MOD: ADD udp,nw_src=192.168.0.3,tp_dst=53 actions=pop_queue,output:1
 OFPT_FLOW_MOD: ADD priority=60000 cookie:0x123456789abcdef hard:10 actions=CONTROLLER:65535
 OFPT_FLOW_MOD: ADD actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06.07.00.00.00.00.00.00,note:00.00.00.00.00.00
 OFPT_FLOW_MOD: ADD ip actions=load:0xa04034d->NXM_OF_IP_SRC[]
+OFPT_FLOW_MOD: ADD sctp actions=load:0xd06->OXM_OF_SCTP_SRC[]
+OFPT_FLOW_MOD: ADD sctp actions=load:0x115d->OXM_OF_SCTP_DST[]
 OFPT_FLOW_MOD: ADD in_port=0 actions=resubmit:0
 OFPT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 ]])
@@ -146,6 +150,8 @@ udp,nw_src=192.168.0.3,tp_dst=53 actions=pop_queue,output:1
 cookie=0x123456789abcdef hard_timeout=10 priority=60000 actions=controller
 actions=note:41.42.43,note:00.01.02.03.04.05.06.07,note
 ipv6,actions=set_field:fe80:0123:4567:890a:a6ba:dbff:fefe:59fa->ipv6_src
+sctp actions=set_field:3334->sctp_src
+sctp actions=set_field:4445->sctp_dst
 in_port=0 actions=resubmit:0
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 ]])
@@ -163,6 +169,8 @@ OFPT_FLOW_MOD (OF1.2): ADD table:255 udp,nw_src=192.168.0.3,tp_dst=53 actions=po
 OFPT_FLOW_MOD (OF1.2): ADD table:255 priority=60000 cookie:0x123456789abcdef hard:10 actions=CONTROLLER:65535
 OFPT_FLOW_MOD (OF1.2): ADD table:255 actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06.07.00.00.00.00.00.00,note:00.00.00.00.00.00
 OFPT_FLOW_MOD (OF1.2): ADD table:255 ipv6 actions=set_field:fe80:123:4567:890a:a6ba:dbff:fefe:59fa->ipv6_src
+OFPT_FLOW_MOD (OF1.2): ADD table:255 sctp actions=set_field:3334->sctp_src
+OFPT_FLOW_MOD (OF1.2): ADD table:255 sctp actions=set_field:4445->sctp_dst
 OFPT_FLOW_MOD (OF1.2): ADD table:255 in_port=0 actions=resubmit:0
 OFPT_FLOW_MOD (OF1.2): ADD table:255 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 ]])
@@ -340,12 +348,14 @@ ipv6,ipv6_label=0x12345 actions=2
 ipv6,ipv6_src=2001:db8:3c4d:1:2:3:4:5 actions=3
 ipv6,ipv6_src=2001:db8:3c4d:1:2:3:4:5/64 actions=4
 ipv6,ipv6_dst=2001:db8:3c4d:1:2:3:4:5/127 actions=5
-tcp6,ipv6_src=2001:db8:3c4d:1::1,tp_dst=80 actions=drop 
-udp6,ipv6_src=2001:db8:3c4d:1::3,tp_dst=53 actions=drop 
+tcp6,ipv6_src=2001:db8:3c4d:1::1,tp_dst=80 actions=drop
+udp6,ipv6_src=2001:db8:3c4d:1::3,tp_dst=53 actions=drop
+sctp6,ipv6_src=2001:db8:3c4d:1::5,tp_dst=309 actions=drop
 in_port=3 icmp6,ipv6_src=2001:db8:3c4d:1::1,icmp_type=134 actions=drop
 udp dl_vlan_pcp=7 idle_timeout=5 actions=strip_vlan output:0
 tcp,nw_src=192.168.0.3,tp_dst=80 actions=set_queue:37,output:1
 udp,nw_src=192.168.0.3,tp_dst=53 actions=pop_queue,output:1
+sctp,nw_src=192.168.0.3,tp_dst=309 actions=pop_queue,output:1
 icmp6,icmp_type=135,nd_target=FEC0::1234:F045:8FFF:1111:FE4E:0571 actions=drop
 icmp6,icmp_type=135,nd_sll=00:0A:E4:25:6B:B0 actions=drop
 icmp6,icmp_type=136,nd_target=FEC0::1234:F045:8FFF:1111:FE4E:0571,nd_tll=00:0A:E4:25:6B:B1 actions=drop
@@ -372,10 +382,12 @@ NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(86dd), NXM_NX_IPV6_SRC_W(20010db83c4d000100000
 NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(86dd), NXM_NX_IPV6_DST_W(20010db83c4d00010002000300040004/fffffffffffffffffffffffffffffffe) actions=output:5
 NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(86dd), NXM_NX_IPV6_SRC(20010db83c4d00010000000000000001), NXM_OF_IP_PROTO(06), NXM_OF_TCP_DST(0050) actions=drop
 NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(86dd), NXM_NX_IPV6_SRC(20010db83c4d00010000000000000003), NXM_OF_IP_PROTO(11), NXM_OF_UDP_DST(0035) actions=drop
+NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(86dd), NXM_NX_IPV6_SRC(20010db83c4d00010000000000000005), NXM_OF_IP_PROTO(84), OXM_OF_SCTP_DST(0135) actions=drop
 NXT_FLOW_MOD: ADD NXM_OF_IN_PORT(0003), NXM_OF_ETH_TYPE(86dd), NXM_NX_IPV6_SRC(20010db83c4d00010000000000000001), NXM_OF_IP_PROTO(3a), NXM_NX_ICMPV6_TYPE(86) actions=drop
 NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(0800), NXM_OF_VLAN_TCI_W(f000/f000), NXM_OF_IP_PROTO(11) idle:5 actions=strip_vlan,output:0
 NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(0800), NXM_OF_IP_SRC(c0a80003), NXM_OF_IP_PROTO(06), NXM_OF_TCP_DST(0050) actions=set_queue:37,output:1
 NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(0800), NXM_OF_IP_SRC(c0a80003), NXM_OF_IP_PROTO(11), NXM_OF_UDP_DST(0035) actions=pop_queue,output:1
+NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(0800), NXM_OF_IP_SRC(c0a80003), NXM_OF_IP_PROTO(84), OXM_OF_SCTP_DST(0135) actions=pop_queue,output:1
 NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(86dd), NXM_OF_IP_PROTO(3a), NXM_NX_ICMPV6_TYPE(87), NXM_NX_ND_TARGET(fec000001234f0458fff1111fe4e0571) actions=drop
 NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(86dd), NXM_OF_IP_PROTO(3a), NXM_NX_ICMPV6_TYPE(87), NXM_NX_ND_SLL(000ae4256bb0) actions=drop
 NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(86dd), NXM_OF_IP_PROTO(3a), NXM_NX_ICMPV6_TYPE(88), NXM_NX_ND_TARGET(fec000001234f0458fff1111fe4e0571), NXM_NX_ND_TLL(000ae4256bb1) actions=drop
@@ -1145,6 +1157,14 @@ xxxxxxxx xxxxxxxx 01bb xxxx
 0038204f xxxx xxxxxxxxxxxx xxxxxxxxxxxx xxxx xx xx 0800 xx 11 xxxx dnl
 xxxxxxxx xxxxxxxx xxxx 01bb
 
+# sctp,tp_src=443
+0038208f xxxx xxxxxxxxxxxx xxxxxxxxxxxx xxxx xx xx 0800 xx 84 xxxx dnl
+xxxxxxxx xxxxxxxx 01bb xxxx
+
+# sctp,tp_dst=443
+0038204f xxxx xxxxxxxxxxxx xxxxxxxxxxxx xxxx xx xx 0800 xx 84 xxxx dnl
+xxxxxxxx xxxxxxxx xxxx 01bb
+
 # icmp,icmp_type=5
 0038208f xxxx xxxxxxxxxxxx xxxxxxxxxxxx xxxx xx xx 0800 xx 01 xxxx dnl
 xxxxxxxx xxxxxxxx 0005 xxxx
@@ -1153,7 +1173,7 @@ xxxxxxxx xxxxxxxx 0005 xxxx
 0038204f xxxx xxxxxxxxxxxx xxxxxxxxxxxx xxxx xx xx 0800 xx 01 xxxx dnl
 xxxxxxxx xxxxxxxx xxxx 0008
 
-dnl Ignore tp_src if not TCP or UDP:
+dnl Ignore tp_src if not TCP/UDP/SCTP:
 # ip,nw_proto=21,tp_src=443
 # normal:  3: 8f -> cf
 # normal: 36: 01 -> 00
@@ -1164,7 +1184,7 @@ dnl Ignore tp_src if not TCP or UDP:
 0038208f xxxx xxxxxxxxxxxx xxxxxxxxxxxx xxxx xx xx 0800 xx 15 xxxx dnl
 xxxxxxxx xxxxxxxx 01bb xxxx
 
-dnl Ignore tp_dst if not TCP or UDP:
+dnl Ignore tp_dst if not TCP/UDP/SCTP:
 # ip,nw_proto=21,tp_dst=443
 # normal:  3: 4f -> cf
 # normal: 38: 01 -> 00
@@ -1408,28 +1428,25 @@ dnl Try invalid TOS:
 0000 00 00 0800 00 11 00000000ffffffff 00000000ffffffff 0000 01bb dnl
 00000000 00 000000 0000000000000000ffffffffffffffff
 
-dnl SCTP, no ports.
-# ip,nw_proto=132
+# sctp
 0000 0058 00000000 000003d7 dnl
 000000000000ffffffffffff 000000000000ffffffffffff dnl
 0000 00 00 0800 00 84 00000000ffffffff 00000000ffffffff 0000 0000 dnl
 00000000 00 000000 0000000000000000ffffffffffffffff
 
-dnl SCTP tp_src matching not supported:
-# bad ofp11_match: OFPBMC_BAD_FIELD
+# sctp,tp_src=443
 0000 0058 00000000 00000397 dnl
 000000000000ffffffffffff 000000000000ffffffffffff dnl
 0000 00 00 0800 00 84 00000000ffffffff 00000000ffffffff 01bb 0000 dnl
 00000000 00 000000 0000000000000000ffffffffffffffff
 
-dnl SCTP tp_dst matching not supported:
-# bad ofp11_match: OFPBMC_BAD_FIELD
+# sctp,tp_dst=443
 0000 0058 00000000 00000357 dnl
 000000000000ffffffffffff 000000000000ffffffffffff dnl
 0000 00 00 0800 00 84 00000000ffffffff 00000000ffffffff 0000 01bb dnl
 00000000 00 000000 0000000000000000ffffffffffffffff
 
-dnl Ignore tp_src if not TCP or UDP or SCTP:
+dnl Ignore tp_src if not TCP/UDP/SCTP:
 # ip,nw_proto=21
 # 11: 97 -> d7
 # 60: 01 -> 00
@@ -1439,7 +1456,7 @@ dnl Ignore tp_src if not TCP or UDP or SCTP:
 0000 00 00 0800 00 15 00000000ffffffff 00000000ffffffff 01bb 0000 dnl
 00000000 00 000000 0000000000000000ffffffffffffffff
 
-dnl Ignore tp_dst if not TCP or UDP or SCTP:
+dnl Ignore tp_dst if not TCP/UDP/SCTP:
 # ip,nw_proto=22
 # 11: 57 -> d7
 # 62: 01 -> 00
@@ -1639,6 +1656,20 @@ OXM_OF_ETH_TYPE(0800) OXM_OF_IP_PROTO(11) OXM_OF_UDP_DST_W(5005/F00F)
 OXM_OF_ETH_TYPE(0800) OXM_OF_IP_PROTO(11) OXM_OF_UDP_DST_W(5005/FFFF)
 OXM_OF_ETH_TYPE(0800) OXM_OF_IP_PROTO(11) OXM_OF_UDP_DST_W(5005/0000)
 OXM_OF_ETH_TYPE(0800) OXM_OF_IP_PROTO(02) OXM_OF_UDP_DST(1293)
+
+# SCTP source port
+OXM_OF_ETH_TYPE(0800) OXM_OF_IP_PROTO(84) OXM_OF_SCTP_SRC(8732)
+OXM_OF_ETH_TYPE(0800) OXM_OF_IP_PROTO(84) OXM_OF_SCTP_SRC_W(0132/01FF)
+OXM_OF_ETH_TYPE(0800) OXM_OF_IP_PROTO(84) OXM_OF_SCTP_SRC_W(0132/FFFF)
+OXM_OF_ETH_TYPE(0800) OXM_OF_IP_PROTO(84) OXM_OF_SCTP_SRC_W(0132/0000)
+OXM_OF_ETH_TYPE(0800) OXM_OF_IP_PROTO(06) OXM_OF_SCTP_SRC(7823)
+
+# SCTP destination port
+OXM_OF_ETH_TYPE(0800) OXM_OF_IP_PROTO(84) OXM_OF_SCTP_DST(1782)
+OXM_OF_ETH_TYPE(0800) OXM_OF_IP_PROTO(84) OXM_OF_SCTP_DST_W(5005/F00F)
+OXM_OF_ETH_TYPE(0800) OXM_OF_IP_PROTO(84) OXM_OF_SCTP_DST_W(5005/FFFF)
+OXM_OF_ETH_TYPE(0800) OXM_OF_IP_PROTO(84) OXM_OF_SCTP_DST_W(5005/0000)
+OXM_OF_ETH_TYPE(0800) OXM_OF_IP_PROTO(02) OXM_OF_SCTP_DST(1293)
 
 # ICMP type
 OXM_OF_ETH_TYPE(0800) OXM_OF_IP_PROTO(01) OXM_OF_ICMPV4_TYPE(12)
@@ -1840,6 +1871,20 @@ OXM_OF_ETH_TYPE(0800), OXM_OF_IP_PROTO(11), OXM_OF_UDP_DST(1782)
 OXM_OF_ETH_TYPE(0800), OXM_OF_IP_PROTO(11), OXM_OF_UDP_DST_W(5005/f00f)
 OXM_OF_ETH_TYPE(0800), OXM_OF_IP_PROTO(11), OXM_OF_UDP_DST(5005)
 OXM_OF_ETH_TYPE(0800), OXM_OF_IP_PROTO(11)
+nx_pull_match() returned error OFPBMC_BAD_PREREQ
+
+# SCTP source port
+OXM_OF_ETH_TYPE(0800), OXM_OF_IP_PROTO(84), OXM_OF_SCTP_SRC(8732)
+OXM_OF_ETH_TYPE(0800), OXM_OF_IP_PROTO(84), OXM_OF_SCTP_SRC_W(0132/01ff)
+OXM_OF_ETH_TYPE(0800), OXM_OF_IP_PROTO(84), OXM_OF_SCTP_SRC(0132)
+OXM_OF_ETH_TYPE(0800), OXM_OF_IP_PROTO(84)
+nx_pull_match() returned error OFPBMC_BAD_PREREQ
+
+# SCTP destination port
+OXM_OF_ETH_TYPE(0800), OXM_OF_IP_PROTO(84), OXM_OF_SCTP_DST(1782)
+OXM_OF_ETH_TYPE(0800), OXM_OF_IP_PROTO(84), OXM_OF_SCTP_DST_W(5005/f00f)
+OXM_OF_ETH_TYPE(0800), OXM_OF_IP_PROTO(84), OXM_OF_SCTP_DST(5005)
+OXM_OF_ETH_TYPE(0800), OXM_OF_IP_PROTO(84)
 nx_pull_match() returned error OFPBMC_BAD_PREREQ
 
 # ICMP type

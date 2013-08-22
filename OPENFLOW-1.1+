@@ -85,11 +85,6 @@ probably incomplete.
       feature.  This is partially merged.
       [optional for OF1.1+]
 
-    * SCTP.  Joe Stringer maintains a patch series that adds this
-      feature.  It has received review comments that need to be
-      addressed before it is merged.
-      [optional for OF1.1+]
-
     * Match and set double-tagged VLANs (QinQ).  This requires kernel
       work for reasonable performance.
       [optional for OF1.1+]

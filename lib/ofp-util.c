@@ -420,6 +420,7 @@ ofputil_match_from_ofp11_match(const struct ofp11_match *ofmatch,
 
         case IPPROTO_TCP:
         case IPPROTO_UDP:
+        case IPPROTO_SCTP:
             if (!(wc & (OFPFW11_TP_SRC))) {
                 match_set_tp_src(match, ofmatch->tp_src);
             }
@@ -427,11 +428,6 @@ ofputil_match_from_ofp11_match(const struct ofp11_match *ofmatch,
                 match_set_tp_dst(match, ofmatch->tp_dst);
             }
             break;
-
-        case IPPROTO_SCTP:
-            /* We don't support SCTP and it seems that we should tell the
-             * controller, since OF1.1 implementations are supposed to. */
-            return OFPERR_OFPBMC_BAD_FIELD;
 
         default:
             /* OF1.1 says explicitly to ignore this. */
@@ -4835,13 +4831,15 @@ ofputil_normalize_match__(struct match *match, bool may_log)
         may_match = MAY_NW_PROTO | MAY_IPVx | MAY_NW_ADDR;
         if (match->flow.nw_proto == IPPROTO_TCP ||
             match->flow.nw_proto == IPPROTO_UDP ||
+            match->flow.nw_proto == IPPROTO_SCTP ||
             match->flow.nw_proto == IPPROTO_ICMP) {
             may_match |= MAY_TP_ADDR;
         }
     } else if (match->flow.dl_type == htons(ETH_TYPE_IPV6)) {
         may_match = MAY_NW_PROTO | MAY_IPVx | MAY_IPV6;
         if (match->flow.nw_proto == IPPROTO_TCP ||
-            match->flow.nw_proto == IPPROTO_UDP) {
+            match->flow.nw_proto == IPPROTO_UDP ||
+            match->flow.nw_proto == IPPROTO_SCTP) {
             may_match |= MAY_TP_ADDR;
         } else if (match->flow.nw_proto == IPPROTO_ICMPV6) {
             may_match |= MAY_TP_ADDR;

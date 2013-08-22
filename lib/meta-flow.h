@@ -121,6 +121,9 @@ enum mf_field_id {
     MFF_UDP_SRC,                /* be16 (used for IPv4 or IPv6) */
     MFF_UDP_DST,                /* be16 (used for IPv4 or IPv6) */
 
+    MFF_SCTP_SRC,               /* be16 (used for IPv4 or IPv6) */
+    MFF_SCTP_DST,               /* be16 (used for IPv4 or IPv6) */
+
     MFF_ICMPV4_TYPE,            /* u8 */
     MFF_ICMPV4_CODE,            /* u8 */
 
@@ -190,6 +193,7 @@ enum mf_prereqs {
     /* L2+L3 requirements. */
     MFP_TCP,                    /* On IPv4 or IPv6. */
     MFP_UDP,                    /* On IPv4 or IPv6. */
+    MFP_SCTP,                   /* On IPv4 or IPv6. */
     MFP_ICMPV4,
     MFP_ICMPV6,
 

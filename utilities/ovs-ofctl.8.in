@@ -537,8 +537,8 @@ above).
 .
 .IP \fBtp_src=\fIport\fR
 .IQ \fBtp_dst=\fIport\fR
-When \fBdl_type\fR and \fBnw_proto\fR specify TCP or UDP, \fBtp_src\fR
-and \fBtp_dst\fR match the UDP or TCP source or destination port
+When \fBdl_type\fR and \fBnw_proto\fR specify TCP or UDP or SCTP, \fBtp_src\fR
+and \fBtp_dst\fR match the UDP or TCP or SCTP source or destination port
 \fIport\fR, respectively, which is specified as a decimal number
 between 0 and 65535, inclusive (e.g. 80 to match packets originating
 from a HTTP server).
@@ -548,7 +548,7 @@ these settings are ignored (see \fBFlow Syntax\fR above).
 .
 .IP \fBtp_src=\fIport\fB/\fImask\fR
 .IQ \fBtp_dst=\fIport\fB/\fImask\fR
-Bitwise match on TCP (or UDP) source or destination port,
+Bitwise match on TCP (or UDP or SCTP) source or destination port,
 respectively.  The \fIport\fR and \fImask\fR are 16-bit numbers
 written in decimal or in hexadecimal prefixed by \fB0x\fR.  Each 1-bit
 in \fImask\fR requires that the corresponding bit in \fIport\fR must
@@ -606,7 +606,7 @@ ports.
 .IP
 Like the exact-match forms of \fBtp_src\fR and \fBtp_dst\fR described
 above, the bitwise match forms apply only when \fBdl_type\fR and
-\fBnw_proto\fR specify TCP or UDP.
+\fBnw_proto\fR specify TCP or UDP or SCTP.
 .
 .IP \fBicmp_type=\fItype\fR
 .IQ \fBicmp_code=\fIcode\fR
@@ -658,6 +658,9 @@ Same as \fBdl_type=0x0800,nw_proto=6\fR.
 .
 .IP \fBudp\fR
 Same as \fBdl_type=0x0800,nw_proto=17\fR.
+.
+.IP \fBsctp\fR
+Same as \fBdl_type=0x0800,nw_proto=132\fR.
 .
 .IP \fBarp\fR
 Same as \fBdl_type=0x0806\fR.
@@ -827,6 +830,9 @@ Same as \fBdl_type=0x86dd,nw_proto=6\fR.
 .IP \fBudp6\fR
 Same as \fBdl_type=0x86dd,nw_proto=17\fR.
 .
+.IP \fBsctp6\fR
+Same as \fBdl_type=0x86dd,nw_proto=132\fR.
+.
 .IP \fBicmp6\fR
 Same as \fBdl_type=0x86dd,nw_proto=58\fR.
 .
@@ -983,10 +989,10 @@ Sets the IPv4 source address to \fIip\fR.
 Sets the IPv4 destination address to \fIip\fR.
 .
 .IP \fBmod_tp_src\fB:\fIport\fR
-Sets the TCP or UDP source port to \fIport\fR.
+Sets the TCP or UDP or SCTP source port to \fIport\fR.
 .
 .IP \fBmod_tp_dst\fB:\fIport\fR
-Sets the TCP or UDP destination port to \fIport\fR.
+Sets the TCP or UDP or SCTP destination port to \fIport\fR.
 .
 .IP \fBmod_nw_tos\fB:\fItos\fR
 Sets the IPv4 ToS/DSCP field to \fItos\fR, which must be a multiple of
@@ -1545,7 +1551,7 @@ A flow that does not specify any part of a field that is used for sorting is
 sorted after all the flows that do specify the field.  For example,
 \fB\-\-sort=tcp_src\fR will sort all the flows that specify a TCP
 source port in ascending order, followed by the flows that do not
-specify a TCP source port at all.  
+specify a TCP source port at all.
 .IP \(bu
 A flow that only specifies some bits in a field is sorted as if the
 wildcarded bits were zero.  For example, \fB\-\-sort=nw_src\fR would

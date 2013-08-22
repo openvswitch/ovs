@@ -100,6 +100,11 @@ print_netflow(struct ofpbuf *buf)
                    ntohs(rec->src_port), ntohs(rec->dst_port));
             break;
 
+        case IPPROTO_SCTP:
+            printf(", SCTP %"PRIu16" > %"PRIu16,
+                   ntohs(rec->src_port), ntohs(rec->dst_port));
+            break;
+
         case IPPROTO_ICMP:
             printf(", ICMP %"PRIu16":%"PRIu16,
                    ntohs(rec->dst_port) >> 8,
@@ -120,6 +125,7 @@ print_netflow(struct ofpbuf *buf)
 
         if (rec->ip_proto != IPPROTO_TCP &&
             rec->ip_proto != IPPROTO_UDP &&
+            rec->ip_proto != IPPROTO_SCTP &&
             rec->ip_proto != IPPROTO_ICMP) {
             if (rec->src_port != htons(0)) {
                 printf(", src_port %"PRIu16, ntohs(rec->src_port));

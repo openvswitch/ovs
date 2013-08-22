@@ -500,6 +500,26 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     },
 
     {
+        MFF_SCTP_SRC, "sctp_src", NULL,
+        MF_FIELD_SIZES(be16),
+        MFM_FULLY,
+        MFS_DECIMAL,
+        MFP_SCTP,
+        true,
+        OXM_OF_SCTP_SRC, "OXM_OF_SCTP_SRC",
+        OXM_OF_SCTP_SRC, "OXM_OF_SCTP_SRC",
+    }, {
+        MFF_SCTP_DST, "sctp_dst", NULL,
+        MF_FIELD_SIZES(be16),
+        MFM_FULLY,
+        MFS_DECIMAL,
+        MFP_SCTP,
+        true,
+        OXM_OF_SCTP_DST, "OXM_OF_SCTP_DST",
+        OXM_OF_SCTP_DST, "OXM_OF_SCTP_DST",
+    },
+
+    {
         MFF_ICMPV4_TYPE, "icmp_type", NULL,
         MF_FIELD_SIZES(u8),
         MFM_NONE,
@@ -781,11 +801,13 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
 
     case MFF_TCP_SRC:
     case MFF_UDP_SRC:
+    case MFF_SCTP_SRC:
     case MFF_ICMPV4_TYPE:
     case MFF_ICMPV6_TYPE:
         return !wc->masks.tp_src;
     case MFF_TCP_DST:
     case MFF_UDP_DST:
+    case MFF_SCTP_DST:
     case MFF_ICMPV4_CODE:
     case MFF_ICMPV6_CODE:
         return !wc->masks.tp_dst;
@@ -866,6 +888,8 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow)
         return is_ip_any(flow) && flow->nw_proto == IPPROTO_TCP;
     case MFP_UDP:
         return is_ip_any(flow) && flow->nw_proto == IPPROTO_UDP;
+    case MFP_SCTP:
+        return is_ip_any(flow) && flow->nw_proto == IPPROTO_SCTP;
     case MFP_ICMPV4:
         return is_icmpv4(flow);
     case MFP_ICMPV6:
@@ -932,6 +956,8 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_TCP_DST:
     case MFF_UDP_SRC:
     case MFF_UDP_DST:
+    case MFF_SCTP_SRC:
+    case MFF_SCTP_DST:
     case MFF_ICMPV4_TYPE:
     case MFF_ICMPV4_CODE:
     case MFF_ICMPV6_TYPE:
@@ -1142,11 +1168,13 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
 
     case MFF_TCP_SRC:
     case MFF_UDP_SRC:
+    case MFF_SCTP_SRC:
         value->be16 = flow->tp_src;
         break;
 
     case MFF_TCP_DST:
     case MFF_UDP_DST:
+    case MFF_SCTP_DST:
         value->be16 = flow->tp_dst;
         break;
 
@@ -1332,11 +1360,13 @@ mf_set_value(const struct mf_field *mf,
 
     case MFF_TCP_SRC:
     case MFF_UDP_SRC:
+    case MFF_SCTP_SRC:
         match_set_tp_src(match, value->be16);
         break;
 
     case MFF_TCP_DST:
     case MFF_UDP_DST:
+    case MFF_SCTP_DST:
         match_set_tp_dst(match, value->be16);
         break;
 
@@ -1524,11 +1554,13 @@ mf_set_flow_value(const struct mf_field *mf,
 
     case MFF_TCP_SRC:
     case MFF_UDP_SRC:
+    case MFF_SCTP_SRC:
         flow->tp_src = value->be16;
         break;
 
     case MFF_TCP_DST:
     case MFF_UDP_DST:
+    case MFF_SCTP_DST:
         flow->tp_dst = value->be16;
         break;
 
@@ -1727,6 +1759,7 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
 
     case MFF_TCP_SRC:
     case MFF_UDP_SRC:
+    case MFF_SCTP_SRC:
     case MFF_ICMPV4_TYPE:
     case MFF_ICMPV6_TYPE:
         match->wc.masks.tp_src = htons(0);
@@ -1735,6 +1768,7 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
 
     case MFF_TCP_DST:
     case MFF_UDP_DST:
+    case MFF_SCTP_DST:
     case MFF_ICMPV4_CODE:
     case MFF_ICMPV6_CODE:
         match->wc.masks.tp_dst = htons(0);
@@ -1901,11 +1935,13 @@ mf_set(const struct mf_field *mf,
 
     case MFF_TCP_SRC:
     case MFF_UDP_SRC:
+    case MFF_SCTP_SRC:
         match_set_tp_src_masked(match, value->be16, mask->be16);
         break;
 
     case MFF_TCP_DST:
     case MFF_UDP_DST:
+    case MFF_SCTP_DST:
         match_set_tp_dst_masked(match, value->be16, mask->be16);
         break;
 
@@ -2010,6 +2046,8 @@ mf_random_value(const struct mf_field *mf, union mf_value *value)
     case MFF_TCP_DST:
     case MFF_UDP_SRC:
     case MFF_UDP_DST:
+    case MFF_SCTP_SRC:
+    case MFF_SCTP_DST:
     case MFF_ICMPV4_TYPE:
     case MFF_ICMPV4_CODE:
     case MFF_ICMPV6_TYPE:

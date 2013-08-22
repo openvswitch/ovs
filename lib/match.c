@@ -868,6 +868,8 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
                     ds_put_cstr(s, "tcp,");
                 } else if (f->nw_proto == IPPROTO_UDP) {
                     ds_put_cstr(s, "udp,");
+                } else if (f->nw_proto == IPPROTO_SCTP) {
+                    ds_put_cstr(s, "sctp,");
                 } else {
                     ds_put_cstr(s, "ip,");
                     skip_proto = false;
@@ -884,6 +886,8 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
                     ds_put_cstr(s, "tcp6,");
                 } else if (f->nw_proto == IPPROTO_UDP) {
                     ds_put_cstr(s, "udp6,");
+                } else if (f->nw_proto == IPPROTO_SCTP) {
+                    ds_put_cstr(s, "sctp6,");
                 } else {
                     ds_put_cstr(s, "ipv6,");
                     skip_proto = false;
