@@ -3340,7 +3340,6 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
     facet->byte_count += miss->stats.n_bytes;
     facet->prev_byte_count += miss->stats.n_bytes;
 
-    subfacet = subfacet_create(facet, miss);
     want_path = facet->xout.slow ? SF_SLOW_PATH : SF_FAST_PATH;
 
     /* Don't install the flow if it's the result of the "userspace"
