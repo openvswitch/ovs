@@ -5,6 +5,10 @@
 
 #include_next <net/ipv6.h>
 
+#ifndef NEXTHDR_SCTP
+#define NEXTHDR_SCTP    132 /* Stream Control Transport Protocol */
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,3,0)
 #define ipv6_skip_exthdr rpl_ipv6_skip_exthdr
 extern int ipv6_skip_exthdr(const struct sk_buff *skb, int start,

@@ -57,6 +57,7 @@ openvswitch_headers += \
 	linux/compat/include/linux/rcupdate.h \
 	linux/compat/include/linux/reciprocal_div.h \
 	linux/compat/include/linux/rtnetlink.h \
+	linux/compat/include/linux/sctp.h \
 	linux/compat/include/linux/skbuff.h \
 	linux/compat/include/linux/slab.h \
 	linux/compat/include/linux/stddef.h \
@@ -81,4 +82,5 @@ openvswitch_headers += \
 	linux/compat/include/net/route.h \
 	linux/compat/include/net/sock.h \
 	linux/compat/include/net/netns/generic.h \
-	linux/compat/include/net/vxlan.h
+	linux/compat/include/net/vxlan.h \
+	linux/compat/include/net/sctp/checksum.h
