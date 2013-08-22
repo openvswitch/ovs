@@ -1642,7 +1642,6 @@ int ovs_match_from_nlattrs(struct sw_flow_match *match,
 		__be16 tci;
 
 		if (!((key_attrs & (1ULL << OVS_KEY_ATTR_VLAN)) &&
-		      (key_attrs & (1ULL << OVS_KEY_ATTR_ETHERTYPE)) &&
 		      (key_attrs & (1ULL << OVS_KEY_ATTR_ENCAP)))) {
 			OVS_NLERR("Invalid Vlan frame.\n");
 			return -EINVAL;
