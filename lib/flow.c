@@ -81,6 +81,12 @@ pull_udp(struct ofpbuf *packet)
     return ofpbuf_try_pull(packet, UDP_HEADER_LEN);
 }
 
+static struct sctp_header *
+pull_sctp(struct ofpbuf *packet)
+{
+    return ofpbuf_try_pull(packet, SCTP_HEADER_LEN);
+}
+
 static struct icmp_header *
 pull_icmp(struct ofpbuf *packet)
 {
@@ -265,6 +271,17 @@ parse_udp(struct ofpbuf *packet, struct ofpbuf *b, struct flow *flow)
     }
 }
 
+static void
+parse_sctp(struct ofpbuf *packet, struct ofpbuf *b, struct flow *flow)
+{
+    const struct sctp_header *sctp = pull_sctp(b);
+    if (sctp) {
+        flow->tp_src = sctp->sctp_src;
+        flow->tp_dst = sctp->sctp_dst;
+        packet->l7 = b->data;
+    }
+}
+
 static bool
 parse_icmpv6(struct ofpbuf *b, struct flow *flow)
 {
@@ -352,7 +369,7 @@ invalid:
  *    - packet->l4 to just past the IPv4 header, if one is present and has a
  *      correct length, and otherwise NULL.
  *
- *    - packet->l7 to just past the TCP or UDP or ICMP header, if one is
+ *    - packet->l7 to just past the TCP/UDP/SCTP/ICMP header, if one is
  *      present and has a correct length, and otherwise NULL.
  */
 void
@@ -430,6 +447,8 @@ flow_extract(struct ofpbuf *packet, uint32_t skb_priority, uint32_t pkt_mark,
                     parse_tcp(packet, &b, flow);
                 } else if (flow->nw_proto == IPPROTO_UDP) {
                     parse_udp(packet, &b, flow);
+                } else if (flow->nw_proto == IPPROTO_SCTP) {
+                    parse_sctp(packet, &b, flow);
                 } else if (flow->nw_proto == IPPROTO_ICMP) {
                     const struct icmp_header *icmp = pull_icmp(&b);
                     if (icmp) {
@@ -450,6 +469,8 @@ flow_extract(struct ofpbuf *packet, uint32_t skb_priority, uint32_t pkt_mark,
             parse_tcp(packet, &b, flow);
         } else if (flow->nw_proto == IPPROTO_UDP) {
             parse_udp(packet, &b, flow);
+        } else if (flow->nw_proto == IPPROTO_SCTP) {
+            parse_sctp(packet, &b, flow);
         } else if (flow->nw_proto == IPPROTO_ICMPV6) {
             if (parse_icmpv6(&b, flow)) {
                 packet->l7 = b.data;
@@ -761,7 +782,7 @@ flow_hash_symmetric_l4(const struct flow *flow, uint32_t basis)
     if (fields.eth_type == htons(ETH_TYPE_IP)) {
         fields.ipv4_addr = flow->nw_src ^ flow->nw_dst;
         fields.ip_proto = flow->nw_proto;
-        if (fields.ip_proto == IPPROTO_TCP) {
+        if (fields.ip_proto == IPPROTO_TCP || fields.ip_proto == IPPROTO_SCTP) {
             fields.tp_port = flow->tp_src ^ flow->tp_dst;
         }
     } else if (fields.eth_type == htons(ETH_TYPE_IPV6)) {
@@ -773,7 +794,7 @@ flow_hash_symmetric_l4(const struct flow *flow, uint32_t basis)
             ipv6_addr[i] = a[i] ^ b[i];
         }
         fields.ip_proto = flow->nw_proto;
-        if (fields.ip_proto == IPPROTO_TCP) {
+        if (fields.ip_proto == IPPROTO_TCP || fields.ip_proto == IPPROTO_SCTP) {
             fields.tp_port = flow->tp_src ^ flow->tp_dst;
         }
     }
@@ -999,6 +1020,12 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
                 b->l4 = udp = ofpbuf_put_zeros(b, sizeof *udp);
                 udp->udp_src = flow->tp_src;
                 udp->udp_dst = flow->tp_dst;
+            } else if (flow->nw_proto == IPPROTO_SCTP) {
+                struct sctp_header *sctp;
+
+                b->l4 = sctp = ofpbuf_put_zeros(b, sizeof *sctp);
+                sctp->sctp_src = flow->tp_src;
+                sctp->sctp_dst = flow->tp_dst;
             } else if (flow->nw_proto == IPPROTO_ICMP) {
                 struct icmp_header *icmp;
 

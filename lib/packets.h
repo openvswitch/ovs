@@ -471,6 +471,15 @@ struct icmp_header {
 };
 BUILD_ASSERT_DECL(ICMP_HEADER_LEN == sizeof(struct icmp_header));
 
+#define SCTP_HEADER_LEN 12
+struct sctp_header {
+    ovs_be16 sctp_src;
+    ovs_be16 sctp_dst;
+    ovs_be32 sctp_vtag;
+    ovs_be32 sctp_csum;
+};
+BUILD_ASSERT_DECL(SCTP_HEADER_LEN == sizeof(struct sctp_header));
+
 #define UDP_HEADER_LEN 8
 struct udp_header {
     ovs_be16 udp_src;
@@ -601,6 +610,7 @@ void packet_set_ipv6(struct ofpbuf *, uint8_t proto, const ovs_be32 src[4],
                      ovs_be32 fl, uint8_t hlmit);
 void packet_set_tcp_port(struct ofpbuf *, ovs_be16 src, ovs_be16 dst);
 void packet_set_udp_port(struct ofpbuf *, ovs_be16 src, ovs_be16 dst);
+void packet_set_sctp_port(struct ofpbuf *, ovs_be16 src, ovs_be16 dst);
 
 uint8_t packet_get_tcp_flags(const struct ofpbuf *, const struct flow *);
 void packet_format_tcp_flags(struct ds *, uint8_t);

@@ -59,6 +59,7 @@ extern const struct in6_addr in6addr_any;
 #define IPPROTO_ICMPV6 58
 #define IPPROTO_NONE 59
 #define IPPROTO_DSTOPTS 60
+#define IPPROTO_SCTP 132
 
 /* All the IP options documented in Linux ip(7). */
 #define IP_ADD_MEMBERSHIP 0

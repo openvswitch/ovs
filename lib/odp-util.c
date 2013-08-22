@@ -109,6 +109,7 @@ ovs_key_attr_to_string(enum ovs_key_attr attr, char *namebuf, size_t bufsize)
     case OVS_KEY_ATTR_IPV6: return "ipv6";
     case OVS_KEY_ATTR_TCP: return "tcp";
     case OVS_KEY_ATTR_UDP: return "udp";
+    case OVS_KEY_ATTR_SCTP: return "sctp";
     case OVS_KEY_ATTR_ICMP: return "icmp";
     case OVS_KEY_ATTR_ICMPV6: return "icmpv6";
     case OVS_KEY_ATTR_ARP: return "arp";
@@ -746,6 +747,7 @@ odp_flow_key_attr_len(uint16_t type)
     case OVS_KEY_ATTR_IPV6: return sizeof(struct ovs_key_ipv6);
     case OVS_KEY_ATTR_TCP: return sizeof(struct ovs_key_tcp);
     case OVS_KEY_ATTR_UDP: return sizeof(struct ovs_key_udp);
+    case OVS_KEY_ATTR_SCTP: return sizeof(struct ovs_key_sctp);
     case OVS_KEY_ATTR_ICMP: return sizeof(struct ovs_key_icmp);
     case OVS_KEY_ATTR_ICMPV6: return sizeof(struct ovs_key_icmpv6);
     case OVS_KEY_ATTR_ARP: return sizeof(struct ovs_key_arp);
@@ -1203,6 +1205,23 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
 
             ds_put_format(ds, "src=%"PRIu16",dst=%"PRIu16,
                           ntohs(udp_key->udp_src), ntohs(udp_key->udp_dst));
+        }
+        break;
+
+    case OVS_KEY_ATTR_SCTP:
+        if (ma) {
+            const struct ovs_key_sctp *sctp_mask = nl_attr_get(ma);
+            const struct ovs_key_sctp *sctp_key = nl_attr_get(a);
+
+            ds_put_format(ds, "src=%"PRIu16"/%#"PRIx16
+                          ",dst=%"PRIu16"/%#"PRIx16,
+                          ntohs(sctp_key->sctp_src), ntohs(sctp_mask->sctp_src),
+                          ntohs(sctp_key->sctp_dst), ntohs(sctp_mask->sctp_dst));
+        } else {
+            const struct ovs_key_sctp *sctp_key = nl_attr_get(a);
+
+            ds_put_format(ds, "(src=%"PRIu16",dst=%"PRIu16")",
+                          ntohs(sctp_key->sctp_src), ntohs(sctp_key->sctp_dst));
         }
         break;
 
@@ -2029,6 +2048,45 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
     }
 
     {
+        int sctp_src;
+        int sctp_dst;
+        int sctp_src_mask;
+        int sctp_dst_mask;
+        int n = -1;
+
+        if (mask && sscanf(s, "sctp(src=%i/%i,dst=%i/%i)%n",
+                   &sctp_src, &sctp_src_mask,
+                   &sctp_dst, &sctp_dst_mask, &n) > 0 && n > 0) {
+            struct ovs_key_sctp sctp_key;
+            struct ovs_key_sctp sctp_mask;
+
+            sctp_key.sctp_src = htons(sctp_src);
+            sctp_key.sctp_dst = htons(sctp_dst);
+            nl_msg_put_unspec(key, OVS_KEY_ATTR_SCTP, &sctp_key, sizeof sctp_key);
+
+            sctp_mask.sctp_src = htons(sctp_src_mask);
+            sctp_mask.sctp_dst = htons(sctp_dst_mask);
+            nl_msg_put_unspec(mask, OVS_KEY_ATTR_SCTP,
+                              &sctp_mask, sizeof sctp_mask);
+            return n;
+        }
+        if (sscanf(s, "sctp(src=%i,dst=%i)%n", &sctp_src, &sctp_dst, &n) > 0
+            && n > 0) {
+            struct ovs_key_sctp sctp_key;
+
+            sctp_key.sctp_src = htons(sctp_src);
+            sctp_key.sctp_dst = htons(sctp_dst);
+            nl_msg_put_unspec(key, OVS_KEY_ATTR_SCTP, &sctp_key, sizeof sctp_key);
+
+            if (mask) {
+                memset(&sctp_key, 0xff, sizeof sctp_key);
+                nl_msg_put_unspec(mask, OVS_KEY_ATTR_SCTP, &sctp_key, sizeof sctp_key);
+            }
+            return n;
+        }
+    }
+
+    {
         int icmp_type;
         int icmp_code;
         int icmp_type_mask;
@@ -2471,6 +2529,13 @@ odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *data,
                                                sizeof *udp_key);
             udp_key->udp_src = data->tp_src;
             udp_key->udp_dst = data->tp_dst;
+        } else if (flow->nw_proto == IPPROTO_SCTP) {
+            struct ovs_key_sctp *sctp_key;
+
+            sctp_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_SCTP,
+                                               sizeof *sctp_key);
+            sctp_key->sctp_src = data->tp_src;
+            sctp_key->sctp_dst = data->tp_dst;
         } else if (flow->dl_type == htons(ETH_TYPE_IP)
                 && flow->nw_proto == IPPROTO_ICMP) {
             struct ovs_key_icmp *icmp_key;
@@ -2857,6 +2922,21 @@ parse_l2_5_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
             flow->tp_src = udp_key->udp_src;
             flow->tp_dst = udp_key->udp_dst;
             expected_bit = OVS_KEY_ATTR_UDP;
+        }
+    } else if (flow->nw_proto == IPPROTO_SCTP
+               && (flow->dl_type == htons(ETH_TYPE_IP) ||
+                   flow->dl_type == htons(ETH_TYPE_IPV6))
+               && !(flow->nw_frag & FLOW_NW_FRAG_LATER)) {
+        if (!is_mask) {
+            expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_SCTP;
+        }
+        if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_SCTP)) {
+            const struct ovs_key_sctp *sctp_key;
+
+            sctp_key = nl_attr_get(attrs[OVS_KEY_ATTR_SCTP]);
+            flow->tp_src = sctp_key->sctp_src;
+            flow->tp_dst = sctp_key->sctp_dst;
+            expected_bit = OVS_KEY_ATTR_SCTP;
         }
     } else if (src_flow->nw_proto == IPPROTO_ICMP
                && src_flow->dl_type == htons(ETH_TYPE_IP)
@@ -3428,6 +3508,14 @@ commit_set_port_action(const struct flow *flow, struct flow *base,
         port_key.udp_dst = base->tp_dst = flow->tp_dst;
 
         commit_set_action(odp_actions, OVS_KEY_ATTR_UDP,
+                          &port_key, sizeof(port_key));
+    } else if (flow->nw_proto == IPPROTO_SCTP) {
+        struct ovs_key_sctp port_key;
+
+        port_key.sctp_src = base->tp_src = flow->tp_src;
+        port_key.sctp_dst = base->tp_dst = flow->tp_dst;
+
+        commit_set_action(odp_actions, OVS_KEY_ATTR_SCTP,
                           &port_key, sizeof(port_key));
     }
 }

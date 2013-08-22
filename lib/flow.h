@@ -101,8 +101,8 @@ struct flow {
     uint16_t mpls_depth;        /* Depth of MPLS stack. */
     ovs_be16 vlan_tci;          /* If 802.1Q, TCI | VLAN_CFI; otherwise 0. */
     ovs_be16 dl_type;           /* Ethernet frame type. */
-    ovs_be16 tp_src;            /* TCP/UDP source port. */
-    ovs_be16 tp_dst;            /* TCP/UDP destination port. */
+    ovs_be16 tp_src;            /* TCP/UDP/SCTP source port. */
+    ovs_be16 tp_dst;            /* TCP/UDP/SCTP destination port. */
     uint8_t dl_src[6];          /* Ethernet source address. */
     uint8_t dl_dst[6];          /* Ethernet destination address. */
     uint8_t nw_proto;           /* IP protocol or low 8 bits of ARP opcode. */

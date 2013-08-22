@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include "byte-order.h"
 #include "csum.h"
+#include "crc32c.h"
 #include "flow.h"
 #include "hmap.h"
 #include "dynamic-string.h"
@@ -883,6 +884,27 @@ packet_set_udp_port(struct ofpbuf *packet, ovs_be16 src, ovs_be16 dst)
         uh->udp_src = src;
         uh->udp_dst = dst;
     }
+}
+
+/* Sets the SCTP source and destination port ('src' and 'dst' respectively) of
+ * the SCTP header contained in 'packet'.  'packet' must be a valid SCTP packet
+ * with its l4 marker properly populated. */
+void
+packet_set_sctp_port(struct ofpbuf *packet, ovs_be16 src, ovs_be16 dst)
+{
+    struct sctp_header *sh = packet->l4;
+    ovs_be32 old_csum, old_correct_csum, new_csum;
+    uint16_t tp_len = packet->size - ((uint8_t*)sh - (uint8_t*)packet->data);
+
+    old_csum = sh->sctp_csum;
+    sh->sctp_csum = 0;
+    old_correct_csum = crc32c(packet->l4, tp_len);
+
+    sh->sctp_src = src;
+    sh->sctp_dst = dst;
+
+    new_csum = crc32c(packet->l4, tp_len);
+    sh->sctp_csum = old_csum ^ old_correct_csum ^ new_csum;
 }
 
 /* If 'packet' is a TCP packet, returns the TCP flags.  Otherwise, returns 0.

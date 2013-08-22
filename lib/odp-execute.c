@@ -54,6 +54,7 @@ odp_execute_set_action(struct ofpbuf *packet, const struct nlattr *a,
     const struct ovs_key_ipv6 *ipv6_key;
     const struct ovs_key_tcp *tcp_key;
     const struct ovs_key_udp *udp_key;
+    const struct ovs_key_sctp *sctp_key;
 
     switch (type) {
     case OVS_KEY_ATTR_PRIORITY:
@@ -94,6 +95,11 @@ odp_execute_set_action(struct ofpbuf *packet, const struct nlattr *a,
     case OVS_KEY_ATTR_UDP:
         udp_key = nl_attr_get_unspec(a, sizeof(struct ovs_key_udp));
         packet_set_udp_port(packet, udp_key->udp_src, udp_key->udp_dst);
+        break;
+
+    case OVS_KEY_ATTR_SCTP:
+        sctp_key = nl_attr_get_unspec(a, sizeof(struct ovs_key_sctp));
+        packet_set_sctp_port(packet, sctp_key->sctp_src, sctp_key->sctp_dst);
         break;
 
     case OVS_KEY_ATTR_MPLS:
