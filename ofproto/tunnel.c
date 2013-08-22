@@ -457,7 +457,6 @@ tnl_find(struct tnl_match *match_) OVS_REQ_RDLOCK(rwlock)
     }
 
     /* Flow-based everything */
-    match.ip_src = 0;
     match.ip_src_flow = true;
     tnl_port = tnl_find_exact(&match);
     if (tnl_port) {
