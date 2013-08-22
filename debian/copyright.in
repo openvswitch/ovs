@@ -101,6 +101,10 @@ License:
   The full text of each license is also appended to the end of this
   file.
 
+* The following components are licensed for use as desired without restriction:
+
+	lib/crc32c.c
+
 * The following components are licensed under the
   Python Software Foundation License Version 2.
 

@@ -16,6 +16,7 @@
 
 #include <config.h>
 #include "csum.h"
+#include "crc32c.h"
 #include <inttypes.h>
 #include <netinet/in.h>
 #include <stdio.h>
@@ -136,6 +137,44 @@ test_rfc1624(void)
     mark('#');
 }
 
+/* CRC32C checksum tests, based on Intel IPPs, Chapter 13,
+ * ippsCRC32C_8u() example, found at the following location:
+ * http://software.intel.com/sites/products/documentation/hpc/ipp/ipps/ */
+static void
+test_crc32c(void)
+{
+    int i;
+    uint8_t data[48] = {
+        0x01, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00,
+        0x00, 0x00, 0x00, 0x14, 0x00, 0x00, 0x00, 0x18,
+        0x28, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
+
+    /* iSCSI Read PDU */
+    assert(ntohl(crc32c(data, 48)) == 0x563a96d9L);
+
+    /* 32 bytes of all zeroes */
+    for (i = 0; i < 32; i++) data[i] = 0x00;
+    assert(ntohl(crc32c(data, 32)) == 0xaa36918aL);
+
+    /* 32 bytes of all ones */
+    for (i = 0; i < 32; i++) data[i] = 0xff;
+    assert(ntohl(crc32c(data, 32)) == 0x43aba862L);
+
+    /* 32 bytes of incrementing 00..1f */
+    for (i = 0; i < 32; i++) data[i] = i;
+    assert(ntohl(crc32c(data, 32)) == 0x4e79dd46L);
+
+    /* 32 bytes of decrementing 1f..00 */
+    for (i  = 0; i < 32; i++) data[i] = 31 - i;
+    assert(ntohl(crc32c(data, 32)) == 0x5cdb3f11L);
+
+    mark('#');
+}
+
 int
 main(void)
 {
@@ -198,6 +237,7 @@ main(void)
     }
 
     test_rfc1624();
+    test_crc32c();
 
     /* Test recalc_csum16(). */
     for (i = 0; i < 32; i++) {

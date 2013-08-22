@@ -33,6 +33,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/compiler.h \
 	lib/coverage.c \
 	lib/coverage.h \
+	lib/crc32c.c \
+	lib/crc32c.h \
 	lib/csum.c \
 	lib/csum.h \
 	lib/daemon.c \

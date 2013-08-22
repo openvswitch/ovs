@@ -7,7 +7,7 @@ AT_CHECK([test-flows <flows 3<pcap], [0], [checked 247 packets, 0 errors
 AT_CLEANUP
 
 AT_SETUP([test TCP/IP checksumming])
-AT_CHECK([test-csum], [0], [....#....#....##................................#................................#
+AT_CHECK([test-csum], [0], [....#....#....###................................#................................#
 ])
 AT_CLEANUP
 

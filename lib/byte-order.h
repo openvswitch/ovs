@@ -40,6 +40,16 @@ ovs_be64 htonll(uint64_t);
 uint64_t ntohll(ovs_be64);
 #endif
 
+#if defined(WORDS_BIGENDIAN)
+static inline uint32_t
+uint32_byteswap(uint32_t crc) {
+    return (((crc & 0x000000ff) << 24) |
+            ((crc & 0x0000ff00) <<  8) |
+            ((crc & 0x00ff0000) >>  8) |
+            ((crc & 0xff000000) >> 24));
+}
+#endif
+
 /* These macros may substitute for htons(), htonl(), and htonll() in contexts
  * where function calls are not allowed, such as case labels.  They should not
  * be used elsewhere because all of them evaluate their argument many times. */
