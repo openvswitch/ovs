@@ -755,6 +755,7 @@ bond_shift_load(struct bond_entry *hash, struct bond_slave *to)
     to->tx_bytes += delta;
 
     /* Arrange for flows to be revalidated. */
+    hash->slave = to;
     bond->bond_revalidate = true;
 }
 
