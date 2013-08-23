@@ -1664,6 +1664,25 @@ compose_output_action(struct xlate_ctx *ctx, ofp_port_t ofp_port)
 }
 
 static void
+xlate_recursively(struct xlate_ctx *ctx, struct rule_dpif *rule)
+    OVS_RELEASES(rule->up.evict)
+{
+    struct rule_dpif *old_rule = ctx->rule;
+
+    if (ctx->xin->resubmit_stats) {
+        rule_credit_stats(rule, ctx->xin->resubmit_stats);
+    }
+
+    ctx->recurse++;
+    ctx->rule = rule;
+    do_xlate_actions(rule->up.ofpacts, rule->up.ofpacts_len, ctx);
+    ctx->rule = old_rule;
+    ctx->recurse--;
+
+    rule_release(rule);
+}
+
+static void
 xlate_table_action(struct xlate_ctx *ctx,
                    ofp_port_t in_port, uint8_t table_id, bool may_packet_in)
 {
@@ -1671,27 +1690,27 @@ xlate_table_action(struct xlate_ctx *ctx,
         struct rule_dpif *rule;
         ofp_port_t old_in_port = ctx->xin->flow.in_port.ofp_port;
         uint8_t old_table_id = ctx->table_id;
+        bool got_rule;
 
         ctx->table_id = table_id;
 
-        /* Look up a flow with 'in_port' as the input port. */
+        /* Look up a flow with 'in_port' as the input port.  Then restore the
+         * original input port (otherwise OFPP_NORMAL and OFPP_IN_PORT will
+         * have surprising behavior). */
         ctx->xin->flow.in_port.ofp_port = in_port;
-        rule_dpif_lookup_in_table(ctx->xbridge->ofproto, &ctx->xin->flow,
-                                  &ctx->xout->wc, table_id, &rule);
-
-        /* Restore the original input port.  Otherwise OFPP_NORMAL and
-         * OFPP_IN_PORT will have surprising behavior. */
+        got_rule = rule_dpif_lookup_in_table(ctx->xbridge->ofproto,
+                                             &ctx->xin->flow, &ctx->xout->wc,
+                                             table_id, &rule);
         ctx->xin->flow.in_port.ofp_port = old_in_port;
 
         if (ctx->xin->resubmit_hook) {
             ctx->xin->resubmit_hook(ctx->xin, rule, ctx->recurse);
         }
 
-        if (rule == NULL && may_packet_in) {
+        if (got_rule) {
+            xlate_recursively(ctx, rule);
+        } else if (may_packet_in) {
             struct xport *xport;
-
-            /* Makes clang's thread safety analysis happy. */
-            rule_release(rule);
 
             /* XXX
              * check if table configuration flags
@@ -1704,22 +1723,8 @@ xlate_table_action(struct xlate_ctx *ctx,
                                     ctx->xbridge->miss_rule,
                                     ctx->xbridge->no_packet_in_rule);
             ovs_rwlock_rdlock(&rule->up.evict);
+            xlate_recursively(ctx, rule);
         }
-
-        if (rule && ctx->xin->resubmit_stats) {
-            rule_credit_stats(rule, ctx->xin->resubmit_stats);
-        }
-
-        if (rule) {
-            struct rule_dpif *old_rule = ctx->rule;
-
-            ctx->recurse++;
-            ctx->rule = rule;
-            do_xlate_actions(rule->up.ofpacts, rule->up.ofpacts_len, ctx);
-            ctx->rule = old_rule;
-            ctx->recurse--;
-        }
-        rule_release(rule);
 
         ctx->table_id = old_table_id;
     } else {
