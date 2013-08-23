@@ -1957,23 +1957,26 @@ mf_check__(const struct mf_subfield *sf, const struct flow *flow,
 {
     if (!sf->field) {
         VLOG_WARN_RL(&rl, "unknown %s field", type);
+        return OFPERR_OFPBAC_BAD_SET_TYPE;
     } else if (!sf->n_bits) {
         VLOG_WARN_RL(&rl, "zero bit %s field %s", type, sf->field->name);
+        return OFPERR_OFPBAC_BAD_SET_LEN;
     } else if (sf->ofs >= sf->field->n_bits) {
         VLOG_WARN_RL(&rl, "bit offset %d exceeds %d-bit width of %s field %s",
                      sf->ofs, sf->field->n_bits, type, sf->field->name);
+        return OFPERR_OFPBAC_BAD_SET_LEN;
     } else if (sf->ofs + sf->n_bits > sf->field->n_bits) {
         VLOG_WARN_RL(&rl, "bit offset %d and width %d exceeds %d-bit width "
                      "of %s field %s", sf->ofs, sf->n_bits,
                      sf->field->n_bits, type, sf->field->name);
+        return OFPERR_OFPBAC_BAD_SET_LEN;
     } else if (flow && !mf_are_prereqs_ok(sf->field, flow)) {
         VLOG_WARN_RL(&rl, "%s field %s lacks correct prerequisites",
                      type, sf->field->name);
+        return OFPERR_OFPBAC_MATCH_INCONSISTENT;
     } else {
         return 0;
     }
-
-    return OFPERR_OFPBAC_BAD_ARGUMENT;
 }
 
 /* Checks whether 'sf' is valid for reading a subfield out of 'flow'.  Returns
@@ -1995,7 +1998,7 @@ mf_check_dst(const struct mf_subfield *sf, const struct flow *flow)
     if (!error && !sf->field->writable) {
         VLOG_WARN_RL(&rl, "destination field %s is not writable",
                      sf->field->name);
-        return OFPERR_OFPBAC_BAD_ARGUMENT;
+        return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
     }
     return error;
 }

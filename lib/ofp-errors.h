@@ -214,7 +214,8 @@ enum ofperr {
     /* OF1.1+(2,9).  Invalid group id in forward action. */
     OFPERR_OFPBAC_BAD_OUT_GROUP,
 
-    /* OF1.1+(2,10).  Action can't apply for this match. */
+    /* NX1.0(1,522), OF1.1+(2,10).  Action can't apply for this match or a
+     * prerequisite for use of this field is unmet. */
     OFPERR_OFPBAC_MATCH_INCONSISTENT,
 
     /* OF1.1+(2,11).  Action order is unsupported for the action list in an
@@ -224,14 +225,17 @@ enum ofperr {
     /* OF1.1+(2,12).  Actions uses an unsupported tag/encap. */
     OFPERR_OFPBAC_BAD_TAG,
 
-    /* OF1.2+(2,13).  Unsupported type in SET_FIELD action. */
-    OFPERR_OFPBAC_SET_TYPE,
+    /* NX1.0-1.1(1,523), OF1.2+(2,13).  Action uses unknown or unsupported OXM
+     * or NXM field. */
+    OFPERR_OFPBAC_BAD_SET_TYPE,
 
-    /* OF1.2+(2,14).  Length problem in SET_FIELD action. */
-    OFPERR_OFPBAC_SET_LEN,
+    /* NX1.0-1.1(1,524), OF1.2+(2,14).  Action references past the end of an
+     * OXM or NXM field, or uses a length of zero. */
+    OFPERR_OFPBAC_BAD_SET_LEN,
 
-    /* OF1.2+(2,15).  Bad argument in SET_FIELD action. */
-    OFPERR_OFPBAC_ARGUMENT,
+    /* NX1.0-1.1(1,525), OF1.2+(2,15).  Action sets a field to an invalid or
+     * unsupported value, or modifies a read-only field. */
+    OFPERR_OFPBAC_BAD_SET_ARGUMENT,
 
     /* NX1.0-1.1(2,256), NX1.2+(11).  Must-be-zero action argument had nonzero
      * value. */

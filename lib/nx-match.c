@@ -1173,19 +1173,19 @@ nxm_reg_load_from_openflow12_set_field(
 
     /* ofp12_action_set_field is padded to 64 bits by zero */
     if (oasf_len != ROUND_UP(sizeof(*oasf) + oxm_length, 8)) {
-        return OFPERR_OFPBAC_BAD_ARGUMENT;
+        return OFPERR_OFPBAC_BAD_SET_LEN;
     }
     if (!is_all_zeros((const uint8_t *)(oasf) + sizeof *oasf + oxm_length,
                       oasf_len - oxm_length - sizeof *oasf)) {
-        return OFPERR_OFPBAC_BAD_ARGUMENT;
+        return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
     }
 
     if (NXM_HASMASK(oxm_header)) {
-        return OFPERR_OFPBAC_BAD_ARGUMENT;
+        return OFPERR_OFPBAC_BAD_SET_TYPE;
     }
     mf = mf_from_nxm_header(oxm_header);
     if (!mf) {
-        return OFPERR_OFPBAC_BAD_ARGUMENT;
+        return OFPERR_OFPBAC_BAD_SET_TYPE;
     }
     load = ofpact_put_REG_LOAD(ofpacts);
     ofpact_set_field_init(load, mf, oasf + 1);
