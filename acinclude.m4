@@ -260,9 +260,6 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_reset_mac_len])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_unclone])
 
-  OVS_GREP_IFELSE([$KSRC/include/linux/string.h], [kmemdup], [],
-                  [OVS_GREP_IFELSE([$KSRC/include/linux/slab.h], [kmemdup])])
-
   OVS_GREP_IFELSE([$KSRC/include/linux/types.h], [bool],
                   [OVS_DEFINE([HAVE_BOOL_TYPE])])
   OVS_GREP_IFELSE([$KSRC/include/linux/types.h], [__wsum],
