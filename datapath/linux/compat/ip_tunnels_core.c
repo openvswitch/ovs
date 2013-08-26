@@ -31,7 +31,6 @@
 #include <net/route.h>
 #include <net/xfrm.h>
 
-#include "checksum.h"
 #include "compat.h"
 #include "gso.h"
 
@@ -99,9 +98,6 @@ int iptunnel_pull_header(struct sk_buff *skb, int hdr_len, __be16 inner_proto)
 	} else {
 		skb->protocol = inner_proto;
 	}
-
-	if (unlikely(compute_ip_summed(skb, false)))
-		return -EPROTO;
 
 	nf_reset(skb);
 	secpath_reset(skb);

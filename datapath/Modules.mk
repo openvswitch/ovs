@@ -8,7 +8,6 @@ dist_modules = $(both_modules)	# Modules to distribute
 
 openvswitch_sources = \
 	actions.c \
-	checksum.c \
 	datapath.c \
 	dp_notify.c \
 	flow.c \
@@ -21,7 +20,6 @@ openvswitch_sources = \
 	vport-vxlan.c
 
 openvswitch_headers = \
-	checksum.h \
 	compat.h \
 	datapath.h \
 	flow.h \

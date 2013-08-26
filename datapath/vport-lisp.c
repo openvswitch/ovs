@@ -238,11 +238,6 @@ static void ovs_tnl_rcv(struct vport *vport, struct sk_buff *skb,
 	secpath_reset(skb);
 	vlan_set_tci(skb, 0);
 
-	if (unlikely(compute_ip_summed(skb, false))) {
-		kfree_skb(skb);
-		return;
-	}
-
 	ovs_vport_receive(vport, skb, tun_key);
 }
 
@@ -441,9 +436,6 @@ static struct sk_buff *handle_offloads(struct sk_buff *skb)
 {
 	int err;
 
-	forward_ip_summed(skb, true);
-
-
 	if (skb_is_gso(skb)) {
 		struct sk_buff *nskb;
 		char cb[sizeof(skb->cb)];
@@ -462,7 +454,7 @@ static struct sk_buff *handle_offloads(struct sk_buff *skb)
 			memcpy(nskb->cb, cb, sizeof(cb));
 			nskb = nskb->next;
 		}
-	} else if (get_ip_summed(skb) == OVS_CSUM_PARTIAL) {
+	} else if (skb->ip_summed == CHECKSUM_PARTIAL) {
 		/* Pages aren't locked and could change at any time.
 		 * If this happens after we compute the checksum, the
 		 * checksum will be wrong.  We linearize now to avoid
@@ -479,8 +471,7 @@ static struct sk_buff *handle_offloads(struct sk_buff *skb)
 			goto error;
 	}
 
-	set_ip_summed(skb, OVS_CSUM_NONE);
-
+	skb->ip_summed = CHECKSUM_NONE;
 	return skb;
 
 error:

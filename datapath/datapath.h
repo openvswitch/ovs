@@ -26,7 +26,6 @@
 #include <linux/skbuff.h>
 #include <linux/u64_stats_sync.h>
 
-#include "checksum.h"
 #include "compat.h"
 #include "flow.h"
 #include "vlan.h"
@@ -94,11 +93,6 @@ struct datapath {
  * @pkt_key: The flow information extracted from the packet.  Must be nonnull.
  * @tun_key: Key for the tunnel that encapsulated this packet. NULL if the
  * packet is not being tunneled.
- * @ip_summed: Consistently stores L4 checksumming status across different
- * kernel versions.
- * @csum_start: Stores the offset from which to start checksumming independent
- * of the transport header on all kernel versions.
- * packet was not received on a tunnel.
  * @vlan_tci: Provides a substitute for the skb->vlan_tci field on kernels
  * before 2.6.27.
  */
@@ -106,10 +100,6 @@ struct ovs_skb_cb {
 	struct sw_flow		*flow;
 	struct sw_flow_key	*pkt_key;
 	struct ovs_key_ipv4_tunnel  *tun_key;
-#ifdef NEED_CSUM_NORMALIZE
-	enum csum_type		ip_summed;
-	u16			csum_start;
-#endif
 #ifdef NEED_VLAN_FIELD
 	u16			vlan_tci;
 #endif

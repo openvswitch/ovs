@@ -93,10 +93,9 @@ static inline int vlan_deaccel_tag(struct sk_buff *skb)
 	if (unlikely(!skb))
 		return -ENOMEM;
 
-	if (get_ip_summed(skb) == OVS_CSUM_COMPLETE)
-		skb->csum = csum_add(skb->csum,
-				     csum_partial(skb->data + (2 * ETH_ALEN),
-						  VLAN_HLEN, 0));
+	if (skb->ip_summed == CHECKSUM_COMPLETE)
+		skb->csum = csum_add(skb->csum, csum_partial(skb->data
+					+ (2 * ETH_ALEN), VLAN_HLEN, 0));
 
 	vlan_set_tci(skb, 0);
 	return 0;

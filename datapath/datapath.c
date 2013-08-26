@@ -54,7 +54,6 @@
 #include <net/net_namespace.h>
 #include <net/netns/generic.h>
 
-#include "checksum.h"
 #include "datapath.h"
 #include "flow.h"
 #include "vlan.h"
@@ -294,8 +293,6 @@ int ovs_dp_upcall(struct datapath *dp, struct sk_buff *skb,
 		err = -ENODEV;
 		goto err;
 	}
-
-	forward_ip_summed(skb, true);
 
 	if (!skb_is_gso(skb))
 		err = queue_userspace_packet(ovs_dp_get_net(dp), dp_ifindex, skb, upcall_info);

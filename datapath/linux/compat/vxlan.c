@@ -51,7 +51,6 @@
 #include <net/netns/generic.h>
 #include <net/vxlan.h>
 
-#include "checksum.h"
 #include "compat.h"
 #include "gso.h"
 #include "vlan.h"
