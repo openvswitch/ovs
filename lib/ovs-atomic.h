@@ -238,6 +238,8 @@
         #include "ovs-atomic-pthreads.h"
     #elif HAVE_STDATOMIC_H
         #include "ovs-atomic-c11.h"
+    #elif __has_extension(c_atomic)
+        #include "ovs-atomic-clang.h"
     #elif __GNUC__ >= 4 && __GNUC_MINOR__ >= 7
         #include "ovs-atomic-gcc4.7+.h"
     #elif HAVE_GCC4_ATOMICS

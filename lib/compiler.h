@@ -20,6 +20,9 @@
 #ifndef __has_feature
   #define __has_feature(x) 0
 #endif
+#ifndef __has_extension
+  #define __has_extension(x) 0
+#endif
 
 #if __GNUC__ && !__CHECKER__
 #define NO_RETURN __attribute__((__noreturn__))

@@ -127,6 +127,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/ofpbuf.c \
 	lib/ofpbuf.h \
 	lib/ovs-atomic-c11.h \
+	lib/ovs-atomic-clang.h \
+	lib/ovs-atomic-flag-gcc4.7+.h \
 	lib/ovs-atomic-gcc4+.c \
 	lib/ovs-atomic-gcc4+.h \
 	lib/ovs-atomic-gcc4.7+.h \

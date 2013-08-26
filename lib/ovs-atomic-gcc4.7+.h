@@ -107,35 +107,5 @@ typedef enum {
     (*(ORIG) = __atomic_fetch_xor(RMW, OPERAND, ORDER), (void) 0)
 #define atomic_and_explicit(RMW, OPERAND, ORIG, ORDER)  \
     (*(ORIG) = __atomic_fetch_and(RMW, OPERAND, ORDER), (void) 0)
-
-/* atomic_flag */
 
-typedef struct {
-    unsigned char b;
-} atomic_flag;
-#define ATOMIC_FLAG_INIT { .b = false }
-
-static inline bool
-atomic_flag_test_and_set_explicit(volatile atomic_flag *object,
-                                  memory_order order)
-{
-    return __atomic_test_and_set(&object->b, order);
-}
-
-static inline bool
-atomic_flag_test_and_set(volatile atomic_flag *object)
-{
-    return atomic_flag_test_and_set_explicit(object, memory_order_seq_cst);
-}
-
-static inline void
-atomic_flag_clear_explicit(volatile atomic_flag *object, memory_order order)
-{
-    __atomic_clear(object, order);
-}
-
-static inline void
-atomic_flag_clear(volatile atomic_flag *object)
-{
-    atomic_flag_clear_explicit(object, memory_order_seq_cst);
-}
+#include "ovs-atomic-flag-gcc4.7+.h"
