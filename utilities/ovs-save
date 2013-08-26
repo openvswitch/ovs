@@ -33,23 +33,8 @@ This script is meant as a helper for the Open vSwitch init script commands.
 EOF
 }
 
-PATH=/sbin:/bin:/usr/sbin:/usr/bin
-
-missing_program () {
-    save_IFS=$IFS
-    IFS=:
-    for dir in $PATH; do
-        IFS=$save_IFS
-        if test -x $dir/$1; then
-            return 1
-        fi
-    done
-    IFS=$save_IFS
-    return 0
-}
-
 save_interfaces () {
-    if missing_program ip; then
+    if (ip -V) > /dev/null 2>&1; then :; else
         echo "$0: ip not found in $PATH" >&2
         exit 1
     fi
@@ -152,18 +137,18 @@ save_interfaces () {
         echo
     done
 
-    if missing_program iptables-save; then
-        echo "# iptables-save not found in $PATH, not saving iptables state"
-    else
+    if (iptables-save) > /dev/null 2>&1; then
         echo "# global"
         echo "iptables-restore <<'EOF'"
         iptables-save
         echo "EOF"
+    else
+        echo "# iptables-save not found in $PATH, not saving iptables state"
     fi
 }
 
 save_flows () {
-    if missing_program ovs-ofctl; then
+    if (ovs-ofctl --version) > /dev/null 2>&1; then :; else
         echo "$0: ovs-ofctl not found in $PATH" >&2
         exit 1
     fi
@@ -182,7 +167,7 @@ ovs_vsctl () {
 
 save_ofports ()
 {
-    if missing_program ovs-vsctl; then
+    if (ovs-vsctl --version) > /dev/null 2>&1; then :; else
         echo "$0: ovs-vsctl not found in $PATH" >&2
         exit 1
     fi
