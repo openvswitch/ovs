@@ -49,8 +49,6 @@ extern int busted_nlmsg_multicast(struct sock *sk, struct sk_buff *skb,
 #define nlmsg_multicast rpl_nlmsg_multicast
 #endif	/* linux kernel < v2.6.19 */
 
-#include <net/net_namespace.h>
-
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
 
 #include <linux/genetlink.h>
@@ -112,11 +110,6 @@ static inline int genlmsg_multicast_flags(struct sk_buff *skb, u32 portid,
 }
 #endif /* linux kernel < 2.6.19 */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32)
-#define genlmsg_multicast_netns(net, skb, portid, grp, flags) \
-		genlmsg_multicast(skb, portid, grp, flags)
-#endif
-
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
 
 #define genlmsg_put(skb, p, seq, fam, flg, c) \
@@ -174,15 +167,4 @@ int genl_register_family_with_ops(struct genl_family *family,
 extern void genl_notify(struct sk_buff *skb, struct net *net, u32 portid,
 			u32 group, struct nlmsghdr *nlh, gfp_t flags);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,24) && \
-    LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32)
-static inline struct net *genl_info_net(struct genl_info *info)
-{
-	return &init_net;
-}
-#endif
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32)
-#define genlmsg_unicast(ignore_net, skb, portid)   genlmsg_unicast(skb, portid)
-#endif
 #endif /* genetlink.h */
