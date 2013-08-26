@@ -81,6 +81,5 @@ openvswitch_headers += \
 	linux/compat/include/net/protocol.h \
 	linux/compat/include/net/route.h \
 	linux/compat/include/net/sock.h \
-	linux/compat/include/net/netns/generic.h \
 	linux/compat/include/net/vxlan.h \
 	linux/compat/include/net/sctp/checksum.h
