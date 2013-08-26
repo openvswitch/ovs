@@ -32,14 +32,13 @@ static inline void csum_replace2(__sum16 *sum, __be16 from, __be16 to)
 }
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
-#define inet_proto_csum_replace2(sum, skb, from, to, pseudohdr) \
-	inet_proto_csum_replace4(sum, skb, (__force __be32)(from), \
-					   (__force __be32)(to), pseudohdr)
-#endif
-
 #ifndef CSUM_MANGLED_0
 #define CSUM_MANGLED_0 ((__force __sum16)0xffff)
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,7,0)
+void inet_proto_csum_replace16(__sum16 *sum, struct sk_buff *skb,
+			       const __be32 *from, const __be32 *to,
+			       int pseudohdr);
+#endif
 #endif /* checksum.h */

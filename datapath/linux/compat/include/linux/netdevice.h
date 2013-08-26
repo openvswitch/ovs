@@ -82,13 +82,6 @@ extern void unregister_netdevice_many(struct list_head *head);
 extern void dev_disable_lro(struct net_device *dev);
 #endif
 
-#define skb_checksum_help rpl_skb_checksum_help
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
-extern int skb_checksum_help(struct sk_buff *skb, int);
-#else
-extern int skb_checksum_help(struct sk_buff *skb);
-#endif
-
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36) || \
     defined HAVE_RHEL_OVS_HOOK
 static inline int netdev_rx_handler_register(struct net_device *dev,

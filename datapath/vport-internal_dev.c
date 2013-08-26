@@ -29,7 +29,6 @@
 #include <net/dst.h>
 #include <net/xfrm.h>
 
-#include "checksum.h"
 #include "datapath.h"
 #include "vlan.h"
 #include "vport-internal_dev.h"
@@ -80,11 +79,6 @@ static struct net_device_stats *internal_dev_sys_stats(struct net_device *netdev
 /* Called with rcu_read_lock_bh. */
 static int internal_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 {
-	if (unlikely(compute_ip_summed(skb, true))) {
-		kfree_skb(skb);
-		return 0;
-	}
-
 	vlan_copy_skb_tci(skb);
 
 	rcu_read_lock();
@@ -274,7 +268,6 @@ static int internal_dev_recv(struct vport *vport, struct sk_buff *skb)
 	skb->pkt_type = PACKET_HOST;
 	skb->protocol = eth_type_trans(skb, netdev);
 	skb_postpull_rcsum(skb, eth_hdr(skb), ETH_HLEN);
-	forward_ip_summed(skb, false);
 
 	netif_rx(skb);
 

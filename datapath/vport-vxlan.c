@@ -156,8 +156,6 @@ static int vxlan_tnl_send(struct vport *vport, struct sk_buff *skb)
 		goto error;
 	}
 
-	forward_ip_summed(skb, true);
-
 	/* Route lookup */
 	saddr = OVS_CB(skb)->tun_key->ipv4_src;
 	rt = find_route(ovs_dp_get_net(vport->dp),

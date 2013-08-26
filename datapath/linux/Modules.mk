@@ -16,7 +16,8 @@ openvswitch_sources += \
 	linux/compat/skbuff-openvswitch.c \
 	linux/compat/time.c	\
 	linux/compat/vxlan.c	\
-	linux/compat/workqueue.c
+	linux/compat/workqueue.c \
+	linux/compat/utils.c
 openvswitch_headers += \
 	linux/compat/gso.h \
 	linux/compat/include/asm/percpu.h \

@@ -29,7 +29,6 @@
 
 #include <net/llc.h>
 
-#include "checksum.h"
 #include "datapath.h"
 #include "vlan.h"
 #include "vport-internal_dev.h"
@@ -240,9 +239,6 @@ static void netdev_port_receive(struct vport *vport, struct sk_buff *skb)
 	if (unlikely(!skb))
 		return;
 
-	if (unlikely(compute_ip_summed(skb, false)))
-		goto error;
-
 	skb_push(skb, ETH_HLEN);
 	ovs_skb_postpush_rcsum(skb, skb->data, ETH_HLEN);
 
@@ -292,7 +288,6 @@ static int netdev_send(struct vport *vport, struct sk_buff *skb)
 	}
 
 	skb->dev = netdev_vport->dev;
-	forward_ip_summed(skb, true);
 
 	if (vlan_tx_tag_present(skb) && !dev_supports_vlan_tx(skb->dev)) {
 		int features;

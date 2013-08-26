@@ -129,8 +129,6 @@ static int __send(struct vport *vport, struct sk_buff *skb,
 	__be32 saddr;
 	int err;
 
-	forward_ip_summed(skb, true);
-
 	/* Route lookup */
 	saddr = OVS_CB(skb)->tun_key->ipv4_src;
 	rt = find_route(ovs_dp_get_net(vport->dp),

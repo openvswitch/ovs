@@ -34,7 +34,6 @@
 #include <net/dsfield.h>
 #include <net/sctp/checksum.h>
 
-#include "checksum.h"
 #include "datapath.h"
 #include "vlan.h"
 #include "vport.h"
@@ -60,7 +59,7 @@ static int __pop_vlan_tci(struct sk_buff *skb, __be16 *current_tci)
 	if (unlikely(err))
 		return err;
 
-	if (get_ip_summed(skb) == OVS_CSUM_COMPLETE)
+	if (skb->ip_summed == CHECKSUM_COMPLETE)
 		skb->csum = csum_sub(skb->csum, csum_partial(skb->data
 					+ (2 * ETH_ALEN), VLAN_HLEN, 0));
 
@@ -117,7 +116,7 @@ static int push_vlan(struct sk_buff *skb, const struct ovs_action_push_vlan *vla
 		if (!__vlan_put_tag(skb, skb->vlan_proto, current_tag))
 			return -ENOMEM;
 
-		if (get_ip_summed(skb) == OVS_CSUM_COMPLETE)
+		if (skb->ip_summed == CHECKSUM_COMPLETE)
 			skb->csum = csum_add(skb->csum, csum_partial(skb->data
 					+ (2 * ETH_ALEN), VLAN_HLEN, 0));
 
@@ -134,16 +133,12 @@ static int set_eth_addr(struct sk_buff *skb,
 	if (unlikely(err))
 		return err;
 
-	if (get_ip_summed(skb) == OVS_CSUM_COMPLETE)
-		skb->csum = csum_sub(skb->csum, csum_partial(eth_hdr(skb),
-							     ETH_ALEN * 2, 0));
+	skb_postpull_rcsum(skb, eth_hdr(skb), ETH_ALEN * 2);
 
 	memcpy(eth_hdr(skb)->h_source, eth_key->eth_src, ETH_ALEN);
 	memcpy(eth_hdr(skb)->h_dest, eth_key->eth_dst, ETH_ALEN);
 
-	if (get_ip_summed(skb) == OVS_CSUM_COMPLETE)
-		skb->csum = csum_add(skb->csum, csum_partial(eth_hdr(skb),
-							     ETH_ALEN * 2, 0));
+	ovs_skb_postpush_rcsum(skb, eth_hdr(skb), ETH_ALEN * 2);
 
 	return 0;
 }
@@ -161,8 +156,7 @@ static void set_ip_addr(struct sk_buff *skb, struct iphdr *nh,
 		if (likely(transport_len >= sizeof(struct udphdr))) {
 			struct udphdr *uh = udp_hdr(skb);
 
-			if (uh->check ||
-			    get_ip_summed(skb) == OVS_CSUM_PARTIAL) {
+			if (uh->check || skb->ip_summed == CHECKSUM_PARTIAL) {
 				inet_proto_csum_replace4(&uh->check, skb,
 							 *addr, new_addr, 1);
 				if (!uh->check)
@@ -189,8 +183,7 @@ static void update_ipv6_checksum(struct sk_buff *skb, u8 l4_proto,
 		if (likely(transport_len >= sizeof(struct udphdr))) {
 			struct udphdr *uh = udp_hdr(skb);
 
-			if (uh->check ||
-			    get_ip_summed(skb) == OVS_CSUM_PARTIAL) {
+			if (uh->check || skb->ip_summed == CHECKSUM_PARTIAL) {
 				inet_proto_csum_replace16(&uh->check, skb,
 							  addr, new_addr, 1);
 				if (!uh->check)
@@ -311,7 +304,7 @@ static void set_udp_port(struct sk_buff *skb, __be16 *port, __be16 new_port)
 {
 	struct udphdr *uh = udp_hdr(skb);
 
-	if (uh->check && get_ip_summed(skb) != OVS_CSUM_PARTIAL) {
+	if (uh->check && skb->ip_summed != CHECKSUM_PARTIAL) {
 		set_tp_port(skb, port, new_port, &uh->check);
 
 		if (!uh->check)
