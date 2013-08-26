@@ -657,14 +657,8 @@ static int validate_set(const struct nlattr *a,
 	int err;
 
 	case OVS_KEY_ATTR_PRIORITY:
-	case OVS_KEY_ATTR_ETHERNET:
-		break;
-
 	case OVS_KEY_ATTR_SKB_MARK:
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20) && !defined(CONFIG_NETFILTER)
-		if (nla_get_u32(ovs_key) != 0)
-			return -EINVAL;
-#endif
+	case OVS_KEY_ATTR_ETHERNET:
 		break;
 
 	case OVS_KEY_ATTR_TUNNEL:
@@ -927,7 +921,7 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	OVS_CB(packet)->flow = flow;
 	OVS_CB(packet)->pkt_key = &flow->key;
 	packet->priority = flow->key.phy.priority;
-	skb_set_mark(packet, flow->key.phy.skb_mark);
+	packet->mark = flow->key.phy.skb_mark;
 
 	rcu_read_lock();
 	dp = get_dp(sock_net(skb->sk), ovs_header->dp_ifindex);

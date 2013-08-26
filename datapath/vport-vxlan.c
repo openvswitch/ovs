@@ -165,7 +165,7 @@ static int vxlan_tnl_send(struct vport *vport, struct sk_buff *skb)
 			OVS_CB(skb)->tun_key->ipv4_dst,
 			IPPROTO_UDP,
 			OVS_CB(skb)->tun_key->ipv4_tos,
-			skb_get_mark(skb));
+			skb->mark);
 	if (IS_ERR(rt)) {
 		err = PTR_ERR(rt);
 		goto error;

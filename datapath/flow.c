@@ -853,7 +853,7 @@ int ovs_flow_extract(struct sk_buff *skb, u16 in_port, struct sw_flow_key *key)
 	if (OVS_CB(skb)->tun_key)
 		memcpy(&key->tun_key, OVS_CB(skb)->tun_key, sizeof(key->tun_key));
 	key->phy.in_port = in_port;
-	key->phy.skb_mark = skb_get_mark(skb);
+	key->phy.skb_mark = skb->mark;
 
 	skb_reset_mac_header(skb);
 
@@ -1377,12 +1377,7 @@ static int metadata_from_nlattrs(struct sw_flow_match *match,  u64 *attrs,
 
 	if (*attrs & (1ULL << OVS_KEY_ATTR_SKB_MARK)) {
 		uint32_t mark = nla_get_u32(a[OVS_KEY_ATTR_SKB_MARK]);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20) && !defined(CONFIG_NETFILTER)
-		if (!is_mask && mark != 0) {
-			OVS_NLERR("skb->mark must be zero on this kernel (mark=%d).\n", mark);
-			return -EINVAL;
-		}
-#endif
+
 		SW_FLOW_KEY_PUT(match, phy.skb_mark, mark, is_mask);
 		*attrs &= ~(1ULL << OVS_KEY_ATTR_SKB_MARK);
 	}

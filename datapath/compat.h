@@ -72,40 +72,6 @@ static inline void skb_clear_rxhash(struct sk_buff *skb)
 #define SET_PARALLEL_OPS
 #endif
 
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
-#ifdef CONFIG_NETFILTER
-static inline u32 skb_get_mark(struct sk_buff *skb)
-{
-	return skb->nfmark;
-}
-
-static inline void skb_set_mark(struct sk_buff *skb, u32 mark)
-{
-	skb->nfmark = mark;
-}
-#else /* CONFIG_NETFILTER */
-static inline u32 skb_get_mark(struct sk_buff *skb)
-{
-	return 0;
-}
-
-static inline void skb_set_mark(struct sk_buff *skb, u32 mark)
-{
-}
-#endif
-#else /* before 2.6.20 */
-static inline u32 skb_get_mark(struct sk_buff *skb)
-{
-	return skb->mark;
-}
-
-static inline void skb_set_mark(struct sk_buff *skb, u32 mark)
-{
-	skb->mark = mark;
-}
-#endif /* after 2.6.20 */
-
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
 #define rt_dst(rt) (rt->dst)
 #else
@@ -130,13 +96,8 @@ static inline struct rtable *find_route(struct net *net,
 	struct flowi fl = { .nl_u = { .ip4_u = {
 					.daddr = daddr,
 					.saddr = *saddr,
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
-					.fwmark = skb_mark,
-#endif
 					.tos   = RT_TOS(tos) } },
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,20)
 					.mark = skb_mark,
-#endif
 					.proto = ipproto };
 
 	if (unlikely(ip_route_output_key(net, &rt, &fl)))
