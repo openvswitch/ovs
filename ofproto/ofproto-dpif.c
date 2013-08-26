@@ -1437,10 +1437,11 @@ destruct(struct ofproto *ofproto_)
         ovs_rwlock_wrlock(&table->cls.rwlock);
         cls_cursor_init(&cursor, &table->cls, NULL);
         CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, up.cr, &cursor) {
-            ofproto_rule_destroy(&ofproto->up, &table->cls, &rule->up);
+            ofproto_rule_delete(&ofproto->up, &table->cls, &rule->up);
         }
         ovs_rwlock_unlock(&table->cls.rwlock);
     }
+    complete_operations(ofproto);
 
     ovs_mutex_lock(&ofproto->flow_mod_mutex);
     LIST_FOR_EACH_SAFE (fm, next_fm, list_node, &ofproto->flow_mods) {
@@ -3975,12 +3976,8 @@ rule_expire(struct rule_dpif *rule)
         return;
     }
 
-    if (!ovs_rwlock_trywrlock(&rule->up.evict)) {
-        COVERAGE_INC(ofproto_dpif_expired);
-
-        /* Get rid of the rule. */
-        ofproto_rule_expire(&rule->up, reason);
-    }
+    COVERAGE_INC(ofproto_dpif_expired);
+    ofproto_rule_expire(&rule->up, reason);
 }
 
 /* Facets. */
@@ -4892,15 +4889,27 @@ rule_construct(struct rule *rule_)
     rule->packet_count = 0;
     rule->byte_count = 0;
     ovs_mutex_unlock(&rule->stats_mutex);
-    complete_operation(rule);
     return 0;
+}
+
+static void
+rule_insert(struct rule *rule_)
+{
+    struct rule_dpif *rule = rule_dpif_cast(rule_);
+    complete_operation(rule);
+}
+
+static void
+rule_delete(struct rule *rule_)
+{
+    struct rule_dpif *rule = rule_dpif_cast(rule_);
+    complete_operation(rule);
 }
 
 static void
 rule_destruct(struct rule *rule_)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
-    complete_operation(rule);
     ovs_mutex_destroy(&rule->stats_mutex);
 }
 
@@ -6350,6 +6359,8 @@ const struct ofproto_class ofproto_dpif_class = {
     NULL,                       /* rule_choose_table */
     rule_alloc,
     rule_construct,
+    rule_insert,
+    rule_delete,
     rule_destruct,
     rule_dealloc,
     rule_get_stats,

@@ -1074,17 +1074,37 @@ ofproto_get_snoops(const struct ofproto *ofproto, struct sset *snoops)
     connmgr_get_snoops(ofproto->connmgr, snoops);
 }
 
+/* Deletes 'rule' from 'cls' within 'ofproto'.
+ *
+ * The 'cls' argument is redundant (it is &ofproto->tables[rule->table_id].cls)
+ * but it allows Clang to do better checking. */
+static void
+ofproto_delete_rule(struct ofproto *ofproto, struct classifier *cls,
+                    struct rule *rule)
+    OVS_REQ_WRLOCK(cls->rwlock)
+{
+    struct ofopgroup *group;
+
+    ovs_assert(!rule->pending);
+    ovs_assert(cls == &ofproto->tables[rule->table_id].cls);
+
+    group = ofopgroup_create_unattached(ofproto);
+    ofoperation_create(group, rule, OFOPERATION_DELETE, OFPRR_DELETE);
+    ovs_rwlock_wrlock(&rule->evict);
+    oftable_remove_rule__(ofproto, cls, rule);
+    ofproto->ofproto_class->rule_delete(rule);
+    ofopgroup_submit(group);
+}
+
 static void
 ofproto_flush__(struct ofproto *ofproto)
 {
-    struct ofopgroup *group;
     struct oftable *table;
 
     if (ofproto->ofproto_class->flush) {
         ofproto->ofproto_class->flush(ofproto);
     }
 
-    group = ofopgroup_create_unattached(ofproto);
     OFPROTO_FOR_EACH_TABLE (table, ofproto) {
         struct rule *rule, *next_rule;
         struct cls_cursor cursor;
@@ -1097,16 +1117,11 @@ ofproto_flush__(struct ofproto *ofproto)
         cls_cursor_init(&cursor, &table->cls, NULL);
         CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, cr, &cursor) {
             if (!rule->pending) {
-                ofoperation_create(group, rule, OFOPERATION_DELETE,
-                                   OFPRR_DELETE);
-                ovs_rwlock_wrlock(&rule->evict);
-                oftable_remove_rule__(ofproto, &table->cls, rule);
-                ofproto->ofproto_class->rule_destruct(rule);
+                ofproto_delete_rule(ofproto, &table->cls, rule);
             }
         }
         ovs_rwlock_unlock(&table->cls.rwlock);
     }
-    ofopgroup_submit(group);
 }
 
 static void
@@ -1684,12 +1699,13 @@ bool
 ofproto_delete_flow(struct ofproto *ofproto,
                     const struct match *target, unsigned int priority)
 {
+    struct classifier *cls = &ofproto->tables[0].cls;
     struct rule *rule;
 
-    ovs_rwlock_rdlock(&ofproto->tables[0].cls.rwlock);
-    rule = rule_from_cls_rule(classifier_find_match_exactly(
-                                  &ofproto->tables[0].cls, target, priority));
-    ovs_rwlock_unlock(&ofproto->tables[0].cls.rwlock);
+    ovs_rwlock_rdlock(&cls->rwlock);
+    rule = rule_from_cls_rule(classifier_find_match_exactly(cls, target,
+                                                            priority));
+    ovs_rwlock_unlock(&cls->rwlock);
     if (!rule) {
         /* No such rule -> success. */
         return true;
@@ -1699,12 +1715,10 @@ ofproto_delete_flow(struct ofproto *ofproto,
         return false;
     } else {
         /* Initiate deletion -> success. */
-        struct ofopgroup *group = ofopgroup_create_unattached(ofproto);
-        ofoperation_create(group, rule, OFOPERATION_DELETE, OFPRR_DELETE);
-        ovs_rwlock_wrlock(&rule->evict);
-        oftable_remove_rule(rule);
-        ofproto->ofproto_class->rule_destruct(rule);
-        ofopgroup_submit(group);
+        ovs_rwlock_wrlock(&cls->rwlock);
+        ofproto_delete_rule(ofproto, cls, rule);
+        ovs_rwlock_unlock(&cls->rwlock);
+
         return true;
     }
 
@@ -2202,6 +2216,7 @@ static void
 ofproto_rule_destroy__(struct rule *rule)
 {
     if (rule) {
+        rule->ofproto->ofproto_class->rule_destruct(rule);
         cls_rule_destroy(&rule->cr);
         free(rule->ofpacts);
         ovs_mutex_destroy(&rule->timeout_mutex);
@@ -2211,24 +2226,18 @@ ofproto_rule_destroy__(struct rule *rule)
 }
 
 /* This function allows an ofproto implementation to destroy any rules that
- * remain when its ->destruct() function is called.  The caller must have
- * already uninitialized any derived members of 'rule' (step 5 described in the
- * large comment in ofproto/ofproto-provider.h titled "Life Cycle").
- * This function implements steps 6 and 7.
+ * remain when its ->destruct() function is called..  This function implements
+ * steps 4.4 and 4.5 in the section titled "Rule Life Cycle" in
+ * ofproto-provider.h.
  *
  * This function should only be called from an ofproto implementation's
  * ->destruct() function.  It is not suitable elsewhere. */
 void
-ofproto_rule_destroy(struct ofproto *ofproto, struct classifier *cls,
-                     struct rule *rule) OVS_REQ_WRLOCK(cls->rwlock)
+ofproto_rule_delete(struct ofproto *ofproto, struct classifier *cls,
+                    struct rule *rule)
+    OVS_REQ_WRLOCK(cls->rwlock)
 {
-    ovs_assert(!rule->pending);
-    if (!ovs_rwlock_trywrlock(&rule->evict)) {
-        oftable_remove_rule__(ofproto, cls, rule);
-    } else {
-        NOT_REACHED();
-    }
-    ofproto_rule_destroy__(rule);
+    ofproto_delete_rule(ofproto, cls, rule);
 }
 
 /* Returns true if 'rule' has an OpenFlow OFPAT_OUTPUT or OFPAT_ENQUEUE action
@@ -3342,6 +3351,34 @@ is_flow_deletion_pending(const struct ofproto *ofproto,
     return false;
 }
 
+static enum ofperr
+evict_rule_from_table(struct ofproto *ofproto, struct oftable *table)
+{
+    struct rule *rule;
+    size_t n_rules;
+
+    ovs_rwlock_rdlock(&table->cls.rwlock);
+    n_rules = classifier_count(&table->cls);
+    ovs_rwlock_unlock(&table->cls.rwlock);
+
+    if (n_rules < table->max_flows) {
+        return 0;
+    } else if (!choose_rule_to_evict(table, &rule)) {
+        return OFPERR_OFPFMFC_TABLE_FULL;
+    } else if (rule->pending) {
+        ovs_rwlock_unlock(&rule->evict);
+        return OFPROTO_POSTPONE;
+    } else {
+        struct ofopgroup *group;
+
+        group = ofopgroup_create_unattached(ofproto);
+        delete_flow__(rule, group, OFPRR_EVICTION);
+        ofopgroup_submit(group);
+
+        return 0;
+    }
+}
+
 /* Implements OFPFC_ADD and the cases for OFPFC_MODIFY and OFPFC_MODIFY_STRICT
  * in which no matching flow already exists in the flow table.
  *
@@ -3361,10 +3398,8 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
 {
     struct oftable *table;
     struct ofopgroup *group;
-    struct ofoperation *op;
-    struct rule *evict;
+    struct cls_rule cr;
     struct rule *rule;
-    size_t n_rules;
     uint8_t table_id;
     int error;
 
@@ -3398,13 +3433,14 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
         return OFPERR_OFPBRC_EPERM;
     }
 
+    cls_rule_init(&cr, &fm->match, fm->priority);
+
     /* Transform "add" into "modify" if there's an existing identical flow. */
     ovs_rwlock_rdlock(&table->cls.rwlock);
-    rule = rule_from_cls_rule(classifier_find_match_exactly(&table->cls,
-                                                            &fm->match,
-                                                            fm->priority));
+    rule = rule_from_cls_rule(classifier_find_rule_exactly(&table->cls, &cr));
     ovs_rwlock_unlock(&table->cls.rwlock);
     if (rule) {
+        cls_rule_destroy(&cr);
         if (!rule_is_modifiable(rule)) {
             return OFPERR_OFPBRC_EPERM;
         } else if (rule->pending) {
@@ -3426,19 +3462,9 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
         return error;
     }
 
-    /* Allocate new rule and initialize classifier rule. */
-    rule = ofproto->ofproto_class->rule_alloc();
-    if (!rule) {
-        VLOG_WARN_RL(&rl, "%s: failed to create rule (%s)",
-                     ofproto->name, ovs_strerror(error));
-        return ENOMEM;
-    }
-    cls_rule_init(&rule->cr, &fm->match, fm->priority);
-
     /* Serialize against pending deletion. */
-    if (is_flow_deletion_pending(ofproto, &rule->cr, table_id)) {
-        cls_rule_destroy(&rule->cr);
-        ofproto->ofproto_class->rule_dealloc(rule);
+    if (is_flow_deletion_pending(ofproto, &cr, table_id)) {
+        cls_rule_destroy(&cr);
         return OFPROTO_POSTPONE;
     }
 
@@ -3447,19 +3473,34 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
         bool overlaps;
 
         ovs_rwlock_rdlock(&table->cls.rwlock);
-        overlaps = classifier_rule_overlaps(&table->cls, &rule->cr);
+        overlaps = classifier_rule_overlaps(&table->cls, &cr);
         ovs_rwlock_unlock(&table->cls.rwlock);
 
         if (overlaps) {
-            cls_rule_destroy(&rule->cr);
-            ofproto->ofproto_class->rule_dealloc(rule);
+            cls_rule_destroy(&cr);
             return OFPERR_OFPFMFC_OVERLAP;
         }
     }
 
-    /* FIXME: Implement OFPFF12_RESET_COUNTS */
+    /* If necessary, evict an existing rule to clear out space. */
+    error = evict_rule_from_table(ofproto, table);
+    if (error) {
+        cls_rule_destroy(&cr);
+        return error;
+    }
 
+    /* Allocate new rule. */
+    rule = ofproto->ofproto_class->rule_alloc();
+    if (!rule) {
+        cls_rule_destroy(&cr);
+        VLOG_WARN_RL(&rl, "%s: failed to create rule (%s)",
+                     ofproto->name, ovs_strerror(error));
+        return ENOMEM;
+    }
+
+    /* Initialize base state. */
     rule->ofproto = ofproto;
+    cls_rule_move(&rule->cr, &cr);
     rule->pending = NULL;
     rule->flow_cookie = fm->new_cookie;
     rule->created = rule->modified = rule->used = time_msec();
@@ -3483,56 +3524,21 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     rule->modify_seqno = 0;
     ovs_rwlock_init(&rule->evict);
 
-    /* Insert new rule. */
-    oftable_insert_rule(rule);
-
-    ovs_rwlock_rdlock(&table->cls.rwlock);
-    n_rules = classifier_count(&table->cls);
-    ovs_rwlock_unlock(&table->cls.rwlock);
-    if (n_rules > table->max_flows) {
-        ovs_rwlock_rdlock(&rule->evict);
-        if (choose_rule_to_evict(table, &evict)) {
-            ovs_rwlock_unlock(&rule->evict);
-            ovs_rwlock_unlock(&evict->evict);
-            if (evict->pending) {
-                error = OFPROTO_POSTPONE;
-                goto exit;
-            }
-        } else {
-            ovs_rwlock_unlock(&rule->evict);
-            error = OFPERR_OFPFMFC_TABLE_FULL;
-            goto exit;
-        }
-    } else {
-        evict = NULL;
-    }
-
-    group = ofopgroup_create(ofproto, ofconn, request, fm->buffer_id);
-    op = ofoperation_create(group, rule, OFOPERATION_ADD, 0);
-
+    /* Construct rule, initializing derived state. */
     error = ofproto->ofproto_class->rule_construct(rule);
     if (error) {
-        op->group->n_running--;
-        ofoperation_destroy(rule->pending);
-    } else if (evict) {
-        /* It would be better if we maintained the lock we took in
-         * choose_rule_to_evict() earlier, but that confuses the thread
-         * safety analysis, and this code is fragile enough that we really
-         * need it.  In the worst case, we'll have to block a little while
-         * before we perform the eviction, which doesn't seem like a big
-         * problem. */
-        ovs_rwlock_wrlock(&evict->evict);
-        delete_flow__(evict, group, OFPRR_EVICTION);
+        ofproto_rule_destroy__(rule);
+        return error;
     }
+
+    /* Insert rule. */
+    oftable_insert_rule(rule);
+
+    group = ofopgroup_create(ofproto, ofconn, request, fm->buffer_id);
+    ofoperation_create(group, rule, OFOPERATION_ADD, 0);
+    ofproto->ofproto_class->rule_insert(rule);
     ofopgroup_submit(group);
 
-exit:
-    /* Back out if an error occurred. */
-    if (error) {
-        ovs_rwlock_wrlock(&rule->evict);
-        oftable_remove_rule(rule);
-        ofproto_rule_destroy__(rule);
-    }
     return error;
 }
 
@@ -3699,7 +3705,7 @@ delete_flow__(struct rule *rule, struct ofopgroup *group,
 
     ofoperation_create(group, rule, OFOPERATION_DELETE, reason);
     oftable_remove_rule(rule);
-    ofproto->ofproto_class->rule_destruct(rule);
+    ofproto->ofproto_class->rule_delete(rule);
 }
 
 /* Deletes the rules listed in 'rules'.
@@ -3813,17 +3819,14 @@ void
 ofproto_rule_expire(struct rule *rule, uint8_t reason)
 {
     struct ofproto *ofproto = rule->ofproto;
-    struct ofopgroup *group;
+    struct classifier *cls = &ofproto->tables[rule->table_id].cls;
 
     ovs_assert(reason == OFPRR_HARD_TIMEOUT || reason == OFPRR_IDLE_TIMEOUT);
-
     ofproto_rule_send_removed(rule, reason);
 
-    group = ofopgroup_create_unattached(ofproto);
-    ofoperation_create(group, rule, OFOPERATION_DELETE, reason);
-    oftable_remove_rule(rule);
-    ofproto->ofproto_class->rule_destruct(rule);
-    ofopgroup_submit(group);
+    ovs_rwlock_wrlock(&cls->rwlock);
+    ofproto_delete_rule(ofproto, cls, rule);
+    ovs_rwlock_unlock(&cls->rwlock);
 }
 
 /* Reduces '*timeout' to no more than 'max'.  A value of zero in either case
@@ -5269,7 +5272,7 @@ ofproto_evict(struct ofproto *ofproto)
             ofoperation_create(group, rule,
                                OFOPERATION_DELETE, OFPRR_EVICTION);
             oftable_remove_rule(rule);
-            ofproto->ofproto_class->rule_destruct(rule);
+            ofproto->ofproto_class->rule_delete(rule);
         }
     }
     ofopgroup_submit(group);
