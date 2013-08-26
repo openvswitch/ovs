@@ -266,7 +266,7 @@ cookie=0x6 table=4 in_port=83 actions=load:4->NXM_NX_REG3[[]],mod_nw_src:83.83.8
 cookie=0x7 table=5 in_port=84 actions=load:5->NXM_NX_REG4[[]],load:6->NXM_NX_TUN_ID[[]],mod_nw_dst:84.84.84.84,controller,resubmit(85,6)
 cookie=0x8 table=6 in_port=85 actions=mod_tp_src:85,controller,resubmit(86,7)
 cookie=0x9 table=7 in_port=86 actions=mod_tp_dst:86,controller,controller
-cookie=0xa dl_src=40:44:44:44:44:41 actions=push_vlan:0x8100,mod_vlan_vid:99,mod_vlan_pcp:1,controller
+cookie=0xa dl_src=40:44:44:44:44:41 actions=mod_vlan_vid:99,mod_vlan_pcp:1,controller
 cookie=0xa dl_src=40:44:44:44:44:42 actions=push_mpls:0x8847,load:10->OXM_OF_MPLS_LABEL[[]],load:3->OXM_OF_MPLS_TC[[]],controller
 cookie=0xa dl_src=40:44:44:44:44:43 actions=push_mpls:0x8847,load:10->OXM_OF_MPLS_LABEL[[]],load:3->OXM_OF_MPLS_TC[[]],controller
 cookie=0xa dl_src=40:44:44:44:44:44 actions=push_mpls:0x8847,load:10->OXM_OF_MPLS_LABEL[[]],load:3->OXM_OF_MPLS_TC[[]],controller
