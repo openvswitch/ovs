@@ -281,6 +281,9 @@ void ofproto_rule_expire(struct rule *rule, uint8_t reason)
     OVS_RELEASES(rule->evict);
 void ofproto_rule_destroy(struct ofproto *, struct classifier *cls,
                           struct rule *) OVS_REQ_WRLOCK(cls->rwlock);
+void ofproto_rule_reduce_timeouts(struct rule *rule, uint16_t idle_timeout,
+                                  uint16_t hard_timeout)
+    OVS_EXCLUDED(rule->ofproto->expirable_mutex, rule->timeout_mutex);
 
 bool ofproto_rule_has_out_port(const struct rule *, ofp_port_t out_port);
 

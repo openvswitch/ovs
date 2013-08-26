@@ -186,6 +186,7 @@ static bool choose_rule_to_evict(struct oftable *table, struct rule **rulep)
     OVS_TRY_WRLOCK(true, (*rulep)->evict);
 static void ofproto_evict(struct ofproto *);
 static uint32_t rule_eviction_priority(struct rule *);
+static void eviction_group_add_rule(struct rule *rule);
 
 /* ofport. */
 static void ofport_destroy__(struct ofport *);
@@ -3784,6 +3785,46 @@ ofproto_rule_expire(struct rule *rule, uint8_t reason)
     oftable_remove_rule(rule);
     ofproto->ofproto_class->rule_destruct(rule);
     ofopgroup_submit(group);
+}
+
+/* Reduces '*timeout' to no more than 'max'.  A value of zero in either case
+ * means "infinite". */
+static void
+reduce_timeout(uint16_t max, uint16_t *timeout)
+{
+    if (max && (!*timeout || *timeout > max)) {
+        *timeout = max;
+    }
+}
+
+/* If 'idle_timeout' is nonzero, and 'rule' has no idle timeout or an idle
+ * timeout greater than 'idle_timeout', lowers 'rule''s idle timeout to
+ * 'idle_timeout' seconds.  Similarly for 'hard_timeout'.
+ *
+ * Suitable for implementing OFPACT_FIN_TIMEOUT. */
+void
+ofproto_rule_reduce_timeouts(struct rule *rule,
+                             uint16_t idle_timeout, uint16_t hard_timeout)
+    OVS_EXCLUDED(rule->ofproto->expirable_mutex, rule->timeout_mutex)
+{
+    if (!idle_timeout && !hard_timeout) {
+        return;
+    }
+
+    ovs_mutex_lock(&rule->ofproto->expirable_mutex);
+    if (list_is_empty(&rule->expirable)) {
+        list_insert(&rule->ofproto->expirable, &rule->expirable);
+    }
+    ovs_mutex_unlock(&rule->ofproto->expirable_mutex);
+
+    ovs_mutex_lock(&rule->timeout_mutex);
+    reduce_timeout(idle_timeout, &rule->idle_timeout);
+    reduce_timeout(hard_timeout, &rule->hard_timeout);
+    ovs_mutex_unlock(&rule->timeout_mutex);
+
+    if (!rule->eviction_group) {
+        eviction_group_add_rule(rule);
+    }
 }
 
 static enum ofperr
