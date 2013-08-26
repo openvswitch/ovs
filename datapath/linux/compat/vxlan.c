@@ -59,8 +59,6 @@
 #define PORT_HASH_BITS	8
 #define PORT_HASH_SIZE  (1<<PORT_HASH_BITS)
 
-#define VXLAN_N_VID	(1u << 24)
-#define VXLAN_VID_MASK	(VXLAN_N_VID - 1)
 /* IP header + UDP + VXLAN + Ethernet header */
 #define VXLAN_HEADROOM (20 + 8 + 8 + 14)
 #define VXLAN_HLEN (sizeof(struct udphdr) + sizeof(struct vxlanhdr))
@@ -75,10 +73,13 @@ struct vxlanhdr {
 
 static int vxlan_net_id;
 
+static int vxlan_init_module(void);
+static void vxlan_cleanup_module(void);
+
 /* per-network namespace private data for this module */
 struct vxlan_net {
 	struct hlist_head sock_list[PORT_HASH_SIZE];
-	struct mutex	  sock_lock;	/* RTNL lock nests inside this lock. */
+	spinlock_t  sock_lock;
 };
 
 /* Socket hash table head */
@@ -90,7 +91,8 @@ static inline struct hlist_head *vs_head(struct net *net, __be16 port)
 }
 
 /* Find VXLAN socket based on network namespace and UDP port */
-static struct vxlan_sock *vxlan_find_port(struct net *net, __be16 port)
+
+static struct vxlan_sock *vxlan_find_sock(struct net *net, __be16 port)
 {
 	struct vxlan_sock *vs;
 
@@ -104,7 +106,6 @@ static struct vxlan_sock *vxlan_find_port(struct net *net, __be16 port)
 /* Callback from net/ipv4/udp.c to receive packets */
 static int vxlan_udp_encap_recv(struct sock *sk, struct sk_buff *skb)
 {
-	struct vxlan_handler *vh;
 	struct vxlan_sock *vs;
 	struct vxlanhdr *vxh;
 
@@ -124,14 +125,12 @@ static int vxlan_udp_encap_recv(struct sock *sk, struct sk_buff *skb)
 	if (iptunnel_pull_header(skb, VXLAN_HLEN, htons(ETH_P_TEB)))
 		goto drop;
 
-	vs = vxlan_find_port(sock_net(sk), inet_sport(sk));
+	vs = vxlan_find_sock(sock_net(sk), inet_sport(sk));
 	if (!vs)
 		goto drop;
 
-	list_for_each_entry_rcu(vh, &vs->handler_list, node) {
-		if (vh->rcv(vh, skb, vxh->vx_vni) == PACKET_RCVD)
-			return 0;
-	}
+	vs->rcv(vs, skb, vxh->vx_vni);
+	return 0;
 
 drop:
 	/* Consume bad packet */
@@ -211,7 +210,7 @@ static int handle_offloads(struct sk_buff *skb)
 	return 0;
 }
 
-int vxlan_xmit_skb(struct net *net, struct vxlan_handler *vh,
+int vxlan_xmit_skb(struct net *net, struct vxlan_sock *vs,
 		   struct rtable *rt, struct sk_buff *skb,
 		   __be32 src, __be32 dst, __u8 tos, __u8 ttl, __be16 df,
 		   __be16 src_port, __be16 dst_port, __be32 vni)
@@ -249,7 +248,7 @@ int vxlan_xmit_skb(struct net *net, struct vxlan_handler *vh,
 	uh->len = htons(skb->len);
 	uh->check = 0;
 
-	vxlan_set_owner(vh->vs->sock->sk, skb);
+	vxlan_set_owner(vs->sock->sk, skb);
 
 	err = handle_offloads(skb);
 	if (err)
@@ -259,8 +258,26 @@ int vxlan_xmit_skb(struct net *net, struct vxlan_handler *vh,
 			IPPROTO_UDP, tos, ttl, df);
 }
 
-static struct vxlan_sock *vxlan_socket_create(struct net *net, __be16 port)
+static void rcu_free_vs(struct rcu_head *rcu)
 {
+	struct vxlan_sock *vs = container_of(rcu, struct vxlan_sock, rcu);
+
+	kfree(vs);
+}
+
+static void vxlan_del_work(struct work_struct *work)
+{
+	struct vxlan_sock *vs = container_of(work, struct vxlan_sock, del_work);
+
+	sk_release_kernel(vs->sock->sk);
+	call_rcu(&vs->rcu, rcu_free_vs);
+	vxlan_cleanup_module();
+}
+
+static struct vxlan_sock *vxlan_socket_create(struct net *net, __be16 port,
+					      vxlan_rcv_t *rcv, void *data)
+{
+	struct vxlan_net *vn = net_generic(net, vxlan_net_id);
 	struct vxlan_sock *vs;
 	struct sock *sk;
 	struct sockaddr_in vxlan_addr = {
@@ -271,8 +288,12 @@ static struct vxlan_sock *vxlan_socket_create(struct net *net, __be16 port)
 	int rc;
 
 	vs = kmalloc(sizeof(*vs), GFP_KERNEL);
-	if (!vs)
+	if (!vs) {
+		pr_debug("memory alocation failure\n");
 		return ERR_PTR(-ENOMEM);
+	}
+
+	INIT_WORK(&vs->del_work, vxlan_del_work);
 
 	/* Create UDP socket for encapsulation receive. */
 	rc = sock_create_kern(AF_INET, SOCK_DGRAM, IPPROTO_UDP, &vs->sock);
@@ -287,81 +308,36 @@ static struct vxlan_sock *vxlan_socket_create(struct net *net, __be16 port)
 	sk_change_net(sk, net);
 
 	rc = kernel_bind(vs->sock, (struct sockaddr *) &vxlan_addr,
-			 sizeof(vxlan_addr));
+			sizeof(vxlan_addr));
 	if (rc < 0) {
 		pr_debug("bind for UDP socket %pI4:%u (%d)\n",
-			 &vxlan_addr.sin_addr, ntohs(vxlan_addr.sin_port), rc);
+				&vxlan_addr.sin_addr, ntohs(vxlan_addr.sin_port), rc);
 		sk_release_kernel(sk);
 		kfree(vs);
 		return ERR_PTR(rc);
 	}
+	vs->rcv = rcv;
+	vs->data = data;
 
 	/* Disable multicast loopback */
 	inet_sk(sk)->mc_loop = 0;
-	INIT_LIST_HEAD(&vs->handler_list);
+	spin_lock(&vn->sock_lock);
 	hlist_add_head_rcu(&vs->hlist, vs_head(net, port));
+	spin_unlock(&vn->sock_lock);
 
 	/* Mark socket as an encapsulation socket. */
 	udp_sk(sk)->encap_type = 1;
 	udp_sk(sk)->encap_rcv = vxlan_udp_encap_recv;
 	udp_encap_enable();
-
 	return vs;
 }
 
-static void rcu_free_vs_callback(struct rcu_head *rcu)
-{
-	struct vxlan_sock *vs = container_of(rcu, struct vxlan_sock, rcu);
-
-	kfree(vs);
-}
-
-static void vxlan_socket_del(struct vxlan_sock *vs)
-{
-	if (list_empty(&vs->handler_list)) {
-		hlist_del_rcu(&vs->hlist);
-
-		sk_release_kernel(vs->sock->sk);
-		call_rcu(&vs->rcu, rcu_free_vs_callback);
-	}
-}
-
-static int vxlan_init_module(void);
-static void vxlan_cleanup_module(void);
-
-static void rcu_free_vh_callback(struct rcu_head *rcu)
-{
-	struct vxlan_handler *vh = container_of(rcu, struct vxlan_handler, rcu);
-
-	kfree(vh);
-}
-
-static void vh_del_work(struct work_struct *work)
-{
-	struct vxlan_handler *vh = container_of(work, struct vxlan_handler, del_work);
-	struct vxlan_sock *vs = vh->vs;
-	struct net *net = sock_net(vs->sock->sk);
-	struct vxlan_net *vn = net_generic(net, vxlan_net_id);
-
-	mutex_lock(&vn->sock_lock);
-
-	list_del_rcu(&vh->node);
-	call_rcu(&vh->rcu, rcu_free_vh_callback);
-	vxlan_socket_del(vs);
-
-	mutex_unlock(&vn->sock_lock);
-
-	vxlan_cleanup_module();
-}
-
-struct vxlan_handler *vxlan_handler_add(struct net *net,
-					__be16 portno, vxlan_rcv_t *rcv,
-					void *data, int priority, bool create)
+struct vxlan_sock *vxlan_sock_add(struct net *net, __be16 port,
+				  vxlan_rcv_t *rcv, void *data,
+				  bool no_share)
 {
 	struct vxlan_net *vn;
 	struct vxlan_sock *vs;
-	struct vxlan_handler *vh;
-	struct vxlan_handler *new;
 	int err;
 
 	err = vxlan_init_module();
@@ -369,64 +345,19 @@ struct vxlan_handler *vxlan_handler_add(struct net *net,
 		return ERR_PTR(err);
 
 	vn = net_generic(net, vxlan_net_id);
-	mutex_lock(&vn->sock_lock);
-	/* Look to see if can reuse socket */
-	vs = vxlan_find_port(net, portno);
-	if (!vs) {
-		vs = vxlan_socket_create(net, portno);
-		if (IS_ERR(vs)) {
-			new = (void *) vs;
-			goto out;
-		}
-	}
-
-	/* Try existing vxlan hanlders for this socket. */
-	list_for_each_entry(vh, &vs->handler_list, node) {
-		if (vh->rcv == rcv) {
-			if (create) {
-				vxlan_socket_del(vs);
-				new = ERR_PTR(-EEXIST);
-				goto out;
-			}
-			atomic_inc(&vh->refcnt);
-			new = vh;
-			goto out;
-		}
-	}
-
-	new = kzalloc(sizeof(*new), GFP_KERNEL);
-	if (!new) {
-		vxlan_socket_del(vs);
-		new = ERR_PTR(-ENOMEM);
-		goto out;
-	}
-
-	new->rcv = rcv;
-	new->vs = vs;
-	atomic_set(&new->refcnt, 1);
-	INIT_WORK(&new->del_work, vh_del_work);
-	new->data = data;
-	new->priority = priority;
-
-	list_for_each_entry(vh, &vs->handler_list, node) {
-		if (vh->priority > priority) {
-			list_add_tail_rcu(&new->node, &vh->node);
-			goto out;
-		}
-	}
-
-	list_add_tail_rcu(&new->node, &vs->handler_list);
-out:
-	mutex_unlock(&vn->sock_lock);
-	return new;
+	vs = vxlan_socket_create(net, port, rcv, data);
+	return vs;
 }
 
-void vxlan_handler_put(struct vxlan_handler *vh)
+void vxlan_sock_release(struct vxlan_sock *vs)
 {
-	BUG_ON(!vh->vs);
+	struct vxlan_net *vn = net_generic(sock_net(vs->sock->sk), vxlan_net_id);
 
-	if (atomic_dec_and_test(&vh->refcnt))
-		queue_work(&vh->del_work);
+	spin_lock(&vn->sock_lock);
+	hlist_del_rcu(&vs->hlist);
+	spin_unlock(&vn->sock_lock);
+
+	queue_work(&vs->del_work);
 }
 
 static int vxlan_init_net(struct net *net)
@@ -434,7 +365,7 @@ static int vxlan_init_net(struct net *net)
 	struct vxlan_net *vn = net_generic(net, vxlan_net_id);
 	unsigned int h;
 
-	mutex_init(&vn->sock_lock);
+	spin_lock_init(&vn->sock_lock);
 
 	for (h = 0; h < PORT_HASH_SIZE; ++h)
 		INIT_HLIST_HEAD(&vn->sock_list[h]);
