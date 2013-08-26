@@ -478,7 +478,7 @@ static int execute_set_action(struct sk_buff *skb,
 		break;
 
 	case OVS_KEY_ATTR_SKB_MARK:
-		skb_set_mark(skb, nla_get_u32(nested_attr));
+		skb->mark = nla_get_u32(nested_attr);
 		break;
 
 	case OVS_KEY_ATTR_IPV4_TUNNEL:
