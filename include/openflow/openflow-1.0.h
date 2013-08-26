@@ -295,7 +295,7 @@ struct ofp10_match {
 OFP_ASSERT(sizeof(struct ofp10_match) == 40);
 
 enum ofp10_flow_mod_flags {
-    OFPFF10_EMERG       = 1 << 2   /* Ramark this is for emergency. */
+    OFPFF10_EMERG       = 1 << 2 /* Part of "emergency flow cache". */
 };
 
 /* Flow setup and teardown (controller -> datapath). */

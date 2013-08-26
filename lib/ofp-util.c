@@ -1577,7 +1577,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     raw = ofpraw_pull_assert(&b);
     if (raw == OFPRAW_OFPT11_FLOW_MOD) {
-        /* Standard OpenFlow 1.1 flow_mod. */
+        /* Standard OpenFlow 1.1+ flow_mod. */
         const struct ofp11_flow_mod *ofm;
         enum ofperr error;
 
