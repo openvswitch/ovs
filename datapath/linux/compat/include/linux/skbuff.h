@@ -95,12 +95,6 @@ static inline struct rtable *skb_rtable(const struct sk_buff *skb)
 #define CHECKSUM_COMPLETE CHECKSUM_HW
 #endif
 
-#ifdef HAVE_MAC_RAW
-#define mac_header mac.raw
-#define network_header nh.raw
-#define transport_header h.raw
-#endif
-
 #ifndef HAVE_SKBUFF_HEADER_HELPERS
 static inline unsigned char *skb_transport_header(const struct sk_buff *skb)
 {
