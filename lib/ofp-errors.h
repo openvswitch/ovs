@@ -349,7 +349,8 @@ enum ofperr {
     /* OF1.0(3,4), OF1.1+(5,6).  Unsupported or unknown command. */
     OFPERR_OFPFMFC_BAD_COMMAND,
 
-    /* OF1.2+(5,7).  Unsupported or unknown flags. */
+    /* NX1.0(3,258), NX1.1(5,258), OF1.2+(5,7).  Unsupported or unknown
+     * flags. */
     OFPERR_OFPFMFC_BAD_FLAGS,
 
     /* OF1.0(3,5).  Unsupported action list - cannot process in the order

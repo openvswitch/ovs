@@ -97,12 +97,23 @@ learn_from_openflow(const struct nx_action_learn *nal, struct ofpbuf *ofpacts)
     learn->hard_timeout = ntohs(nal->hard_timeout);
     learn->priority = ntohs(nal->priority);
     learn->cookie = ntohll(nal->cookie);
-    learn->flags = ntohs(nal->flags);
     learn->table_id = nal->table_id;
     learn->fin_idle_timeout = ntohs(nal->fin_idle_timeout);
     learn->fin_hard_timeout = ntohs(nal->fin_hard_timeout);
 
-    if (learn->flags & ~OFPFF_SEND_FLOW_REM || learn->table_id == 0xff) {
+    /* We only support "send-flow-removed" for now. */
+    switch (ntohs(nal->flags)) {
+    case 0:
+        learn->flags = 0;
+        break;
+    case OFPFF_SEND_FLOW_REM:
+        learn->flags = OFPUTIL_FF_SEND_FLOW_REM;
+        break;
+    default:
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+
+    if (learn->table_id == 0xff) {
         return OFPERR_OFPBAC_BAD_ARGUMENT;
     }
 

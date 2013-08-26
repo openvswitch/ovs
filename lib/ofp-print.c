@@ -724,29 +724,22 @@ ofp10_match_to_string(const struct ofp10_match *om, int verbosity)
 }
 
 static void
-ofp_print_flow_flags(struct ds *s, uint16_t flags)
+ofp_print_flow_flags(struct ds *s, enum ofputil_flow_mod_flags flags)
 {
-    if (flags & OFPFF_SEND_FLOW_REM) {
+    if (flags & OFPUTIL_FF_SEND_FLOW_REM) {
         ds_put_cstr(s, "send_flow_rem ");
     }
-    if (flags & OFPFF_CHECK_OVERLAP) {
+    if (flags & OFPUTIL_FF_CHECK_OVERLAP) {
         ds_put_cstr(s, "check_overlap ");
     }
-    if (flags & OFPFF12_RESET_COUNTS) {
+    if (flags & OFPUTIL_FF_RESET_COUNTS) {
         ds_put_cstr(s, "reset_counts ");
     }
-    if (flags & OFPFF13_NO_PKT_COUNTS) {
+    if (flags & OFPUTIL_FF_NO_PKT_COUNTS) {
         ds_put_cstr(s, "no_packet_counts ");
     }
-    if (flags & OFPFF13_NO_BYT_COUNTS) {
+    if (flags & OFPUTIL_FF_NO_BYT_COUNTS) {
         ds_put_cstr(s, "no_byte_counts ");
-    }
-
-    flags &= ~(OFPFF_SEND_FLOW_REM | OFPFF_CHECK_OVERLAP
-               | OFPFF12_RESET_COUNTS
-               | OFPFF13_NO_PKT_COUNTS | OFPFF13_NO_BYT_COUNTS);
-    if (flags) {
-        ds_put_format(s, "flags:0x%"PRIx16" ", flags);
     }
 }
 
@@ -848,9 +841,14 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh, int verbosity)
         ofputil_format_port(fm.out_port, s);
         ds_put_char(s, ' ');
     }
-    if (fm.flags != 0) {
-        ofp_print_flow_flags(s, fm.flags);
+
+    if (oh->version == OFP10_VERSION || oh->version == OFP11_VERSION) {
+        /* Don't print the reset_counts flag for OF1.0 and OF1.1 because those
+         * versions don't really have such a flag and printing one is likely to
+         * confuse people. */
+        fm.flags &= ~OFPUTIL_FF_RESET_COUNTS;
     }
+    ofp_print_flow_flags(s, fm.flags);
 
     ofpacts_format(fm.ofpacts, fm.ofpacts_len, s);
     ofpbuf_uninit(&ofpacts);

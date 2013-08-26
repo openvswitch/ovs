@@ -2010,7 +2010,8 @@ read_flows_from_file(const char *filename, struct classifier *cls, int index)
         version->cookie = fm.new_cookie;
         version->idle_timeout = fm.idle_timeout;
         version->hard_timeout = fm.hard_timeout;
-        version->flags = fm.flags & (OFPFF_SEND_FLOW_REM | OFPFF10_EMERG);
+        version->flags = fm.flags & (OFPUTIL_FF_SEND_FLOW_REM
+                                     | OFPUTIL_FF_EMERG);
         version->ofpacts = fm.ofpacts;
         version->ofpacts_len = fm.ofpacts_len;
 

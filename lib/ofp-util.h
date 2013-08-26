@@ -207,6 +207,16 @@ struct ofpbuf *ofputil_make_set_packet_in_format(enum ofp_version,
 /* NXT_FLOW_MOD_TABLE_ID extension. */
 struct ofpbuf *ofputil_make_flow_mod_table_id(bool flow_mod_table_id);
 
+/* Protocol-independent flow_mod flags. */
+enum ofputil_flow_mod_flags {
+    OFPUTIL_FF_SEND_FLOW_REM = 1 << 0, /* All versions. */
+    OFPUTIL_FF_CHECK_OVERLAP = 1 << 1, /* All versions. */
+    OFPUTIL_FF_EMERG         = 1 << 2, /* OpenFlow 1.0 only. */
+    OFPUTIL_FF_RESET_COUNTS  = 1 << 3, /* OpenFlow 1.2+. */
+    OFPUTIL_FF_NO_PKT_COUNTS = 1 << 4, /* OpenFlow 1.3+. */
+    OFPUTIL_FF_NO_BYT_COUNTS = 1 << 5  /* OpenFlow 1.3+. */
+};
+
 /* Protocol-independent flow_mod.
  *
  * The handling of cookies across multiple versions of OpenFlow is a bit
@@ -248,7 +258,7 @@ struct ofputil_flow_mod {
     uint16_t hard_timeout;
     uint32_t buffer_id;
     ofp_port_t out_port;
-    uint16_t flags;
+    enum ofputil_flow_mod_flags flags;
     struct ofpact *ofpacts;     /* Series of "struct ofpact"s. */
     size_t ofpacts_len;         /* Length of ofpacts, in bytes. */
 };
@@ -296,7 +306,7 @@ struct ofputil_flow_stats {
     uint64_t byte_count;        /* Byte count, UINT64_MAX if unknown. */
     struct ofpact *ofpacts;
     size_t ofpacts_len;
-    uint16_t flags;             /* Added for OF 1.3 */
+    enum ofputil_flow_mod_flags flags;
 };
 
 int ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *,

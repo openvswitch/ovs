@@ -1161,15 +1161,15 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string)
                 match_set_nw_proto(&fm->match, p->nw_proto);
             }
         } else if (fields & F_FLAGS && !strcmp(name, "send_flow_rem")) {
-            fm->flags |= OFPFF_SEND_FLOW_REM;
+            fm->flags |= OFPUTIL_FF_SEND_FLOW_REM;
         } else if (fields & F_FLAGS && !strcmp(name, "check_overlap")) {
-            fm->flags |= OFPFF_CHECK_OVERLAP;
+            fm->flags |= OFPUTIL_FF_CHECK_OVERLAP;
         } else if (fields & F_FLAGS && !strcmp(name, "reset_counts")) {
-            fm->flags |= OFPFF12_RESET_COUNTS;
+            fm->flags |= OFPUTIL_FF_RESET_COUNTS;
         } else if (fields & F_FLAGS && !strcmp(name, "no_packet_counts")) {
-            fm->flags |= OFPFF13_NO_PKT_COUNTS;
+            fm->flags |= OFPUTIL_FF_NO_PKT_COUNTS;
         } else if (fields & F_FLAGS && !strcmp(name, "no_byte_counts")) {
-            fm->flags |= OFPFF13_NO_BYT_COUNTS;
+            fm->flags |= OFPUTIL_FF_NO_BYT_COUNTS;
         } else {
             char *value;
 

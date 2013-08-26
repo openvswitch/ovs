@@ -3073,17 +3073,17 @@ handle_flow_stats_request(struct ofconn *ofconn,
                                                &fs.byte_count);
         fs.ofpacts = rule->ofpacts;
         fs.ofpacts_len = rule->ofpacts_len;
-        fs.flags = 0;
 
         ovs_mutex_lock(&rule->timeout_mutex);
         fs.idle_timeout = rule->idle_timeout;
         fs.hard_timeout = rule->hard_timeout;
         ovs_mutex_unlock(&rule->timeout_mutex);
 
+        fs.flags = 0;
         if (rule->send_flow_removed) {
-            fs.flags |= OFPFF_SEND_FLOW_REM;
-            /* FIXME: Implement OF 1.3 flags OFPFF13_NO_PKT_COUNTS
-               and OFPFF13_NO_BYT_COUNTS */
+            fs.flags |= OFPUTIL_FF_SEND_FLOW_REM;
+            /* FIXME: Implement OFPUTIL_FF_NO_PKT_COUNTS and
+               OFPUTIL_FF_NO_BYT_COUNTS. */
         }
         ofputil_append_flow_stats_reply(&fs, &replies);
     }
@@ -3416,7 +3416,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     }
 
     /* Check for overlap, if requested. */
-    if (fm->flags & OFPFF_CHECK_OVERLAP) {
+    if (fm->flags & OFPUTIL_FF_CHECK_OVERLAP) {
         bool overlaps;
 
         ovs_rwlock_rdlock(&table->cls.rwlock);
@@ -3444,9 +3444,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     ovs_mutex_unlock(&rule->timeout_mutex);
 
     rule->table_id = table - ofproto->tables;
-    rule->send_flow_removed = (fm->flags & OFPFF_SEND_FLOW_REM) != 0;
-    /* FIXME: Implement OF 1.3 flags OFPFF13_NO_PKT_COUNTS
-       and OFPFF13_NO_BYT_COUNTS */
+    rule->send_flow_removed = (fm->flags & OFPUTIL_FF_SEND_FLOW_REM) != 0;
     rule->ofpacts = xmemdup(fm->ofpacts, fm->ofpacts_len);
     rule->ofpacts_len = fm->ofpacts_len;
     rule->meter_id = find_meter(rule->ofpacts, rule->ofpacts_len);
@@ -3544,7 +3542,7 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
         struct ofoperation *op;
         bool actions_changed;
 
-        /* FIXME: Implement OFPFF12_RESET_COUNTS */
+        /* FIXME: Implement OFPFUTIL_FF_RESET_COUNTS */
 
         if (rule_is_modifiable(rule)) {
             /* At least one rule is modifiable, don't report EPERM error. */

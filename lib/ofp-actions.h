@@ -414,7 +414,7 @@ struct ofpact_learn {
     uint16_t hard_timeout;      /* Max time before discarding (seconds). */
     uint16_t priority;          /* Priority level of flow entry. */
     uint64_t cookie;            /* Cookie for new flow. */
-    uint16_t flags;             /* Either 0 or OFPFF_SEND_FLOW_REM. */
+    enum ofputil_flow_mod_flags flags;
     uint8_t table_id;           /* Table to insert flow entry. */
     uint16_t fin_idle_timeout;  /* Idle timeout after FIN, if nonzero. */
     uint16_t fin_hard_timeout;  /* Hard timeout after FIN, if nonzero. */
