@@ -21,6 +21,8 @@
 #include "ofpbuf.h"
 #include "ofproto-dpif-mirror.h"
 #include "ofproto-dpif.h"
+#include "ofproto.h"
+#include "stp.h"
 
 struct bfd;
 struct bond;
