@@ -321,6 +321,7 @@ struct miniflow {
 
 void miniflow_init(struct miniflow *, const struct flow *);
 void miniflow_clone(struct miniflow *, const struct miniflow *);
+void miniflow_move(struct miniflow *dst, struct miniflow *);
 void miniflow_destroy(struct miniflow *);
 
 void miniflow_expand(const struct miniflow *, struct flow *);
@@ -350,6 +351,7 @@ struct minimask {
 
 void minimask_init(struct minimask *, const struct flow_wildcards *);
 void minimask_clone(struct minimask *, const struct minimask *);
+void minimask_move(struct minimask *dst, struct minimask *src);
 void minimask_combine(struct minimask *dst,
                       const struct minimask *a, const struct minimask *b,
                       uint32_t storage[FLOW_U32S]);

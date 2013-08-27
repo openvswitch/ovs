@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -146,6 +146,7 @@ struct minimatch {
 
 void minimatch_init(struct minimatch *, const struct match *);
 void minimatch_clone(struct minimatch *, const struct minimatch *);
+void minimatch_move(struct minimatch *dst, struct minimatch *src);
 void minimatch_destroy(struct minimatch *);
 
 void minimatch_expand(const struct minimatch *, struct match *);

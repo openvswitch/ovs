@@ -89,11 +89,21 @@ cls_rule_init_from_minimatch(struct cls_rule *rule,
 
 /* Initializes 'dst' as a copy of 'src'.
  *
- * The caller must eventually destroy 'rule' with cls_rule_destroy(). */
+ * The caller must eventually destroy 'dst' with cls_rule_destroy(). */
 void
 cls_rule_clone(struct cls_rule *dst, const struct cls_rule *src)
 {
     minimatch_clone(&dst->match, &src->match);
+    dst->priority = src->priority;
+}
+
+/* Initializes 'dst' with the data in 'src', destroying 'src'.
+ *
+ * The caller must eventually destroy 'dst' with cls_rule_destroy(). */
+void
+cls_rule_move(struct cls_rule *dst, struct cls_rule *src)
+{
+    minimatch_move(&dst->match, &src->match);
     dst->priority = src->priority;
 }
 

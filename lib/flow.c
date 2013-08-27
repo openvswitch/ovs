@@ -1136,6 +1136,21 @@ miniflow_clone(struct miniflow *dst, const struct miniflow *src)
     memcpy(dst->values, src->values, n * sizeof *dst->values);
 }
 
+/* Initializes 'dst' with the data in 'src', destroying 'src'.
+ * The caller must eventually free 'dst' with miniflow_destroy(). */
+void
+miniflow_move(struct miniflow *dst, struct miniflow *src)
+{
+    int n = miniflow_n_values(src);
+    if (n <= MINI_N_INLINE) {
+        dst->values = dst->inline_values;
+        memcpy(dst->values, src->values, n * sizeof *dst->values);
+    } else {
+        dst->values = src->values;
+    }
+    memcpy(dst->map, src->map, sizeof dst->map);
+}
+
 /* Frees any memory owned by 'flow'.  Does not free the storage in which 'flow'
  * itself resides; the caller is responsible for that. */
 void
@@ -1349,6 +1364,14 @@ minimask_init(struct minimask *mask, const struct flow_wildcards *wc)
  * with minimask_destroy(). */
 void
 minimask_clone(struct minimask *dst, const struct minimask *src)
+{
+    miniflow_clone(&dst->masks, &src->masks);
+}
+
+/* Initializes 'dst' with the data in 'src', destroying 'src'.
+ * The caller must eventually free 'dst' with minimask_destroy(). */
+void
+minimask_move(struct minimask *dst, struct minimask *src)
 {
     miniflow_clone(&dst->masks, &src->masks);
 }

@@ -1104,6 +1104,15 @@ minimatch_clone(struct minimatch *dst, const struct minimatch *src)
     minimask_clone(&dst->mask, &src->mask);
 }
 
+/* Initializes 'dst' with the data in 'src', destroying 'src'.  The caller must
+ * eventually free 'dst' with minimatch_destroy(). */
+void
+minimatch_move(struct minimatch *dst, struct minimatch *src)
+{
+    miniflow_move(&dst->flow, &src->flow);
+    minimask_move(&dst->mask, &src->mask);
+}
+
 /* Frees any memory owned by 'match'.  Does not free the storage in which
  * 'match' itself resides; the caller is responsible for that. */
 void
