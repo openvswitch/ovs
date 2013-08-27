@@ -5,17 +5,6 @@
 
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
-/* In version 2.6.24 the return type of skb_headroom() changed from 'int' to
- * 'unsigned int'.  We use skb_headroom() as one arm of a min(a,b) invocation
- * in make_writable() in actions.c, so we need the correct type. */
-#define skb_headroom rpl_skb_headroom
-static inline unsigned int rpl_skb_headroom(const struct sk_buff *skb)
-{
-	return skb->data - skb->head;
-}
-#endif
-
 #ifndef HAVE_SKB_COPY_FROM_LINEAR_DATA_OFFSET
 static inline void skb_copy_from_linear_data_offset(const struct sk_buff *skb,
 						    const int offset, void *to,
@@ -82,13 +71,6 @@ static inline int skb_cow_head(struct sk_buff *skb, unsigned int headroom)
 }
 #endif	/* !HAVE_SKB_COW_HEAD */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
-static inline int skb_clone_writable(struct sk_buff *skb, int len)
-{
-	return false;
-}
-#endif
-
 #ifndef HAVE_SKB_DST_ACCESSOR_FUNCS
 static inline struct dst_entry *skb_dst(const struct sk_buff *skb)
 {
@@ -105,18 +87,6 @@ static inline struct rtable *skb_rtable(const struct sk_buff *skb)
 	return (struct rtable *)skb->dst;
 }
 #endif
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17)
-/* Emulate Linux 2.6.17 and later behavior, in which kfree_skb silently ignores
- * null pointer arguments. */
-#define kfree_skb(skb) kfree_skb_maybe_null(skb)
-static inline void kfree_skb_maybe_null(struct sk_buff *skb)
-{
-	if (likely(skb != NULL))
-		(kfree_skb)(skb);
-}
-#endif
-
 
 #ifndef CHECKSUM_PARTIAL
 #define CHECKSUM_PARTIAL CHECKSUM_HW
@@ -195,21 +165,6 @@ static inline void skb_copy_to_linear_data(struct sk_buff *skb,
 	memcpy(skb->data, from, len);
 }
 #endif	/* !HAVE_SKBUFF_HEADER_HELPERS */
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18)
-#warning "TSO/UFO not supported on kernels earlier than 2.6.18"
-
-static inline int skb_is_gso(const struct sk_buff *skb)
-{
-	return 0;
-}
-
-static inline struct sk_buff *skb_gso_segment(struct sk_buff *skb,
-					      int features)
-{
-	return NULL;
-}
-#endif	/* before 2.6.18 */
 
 #ifndef HAVE_SKB_WARN_LRO
 #ifndef NETIF_F_LRO
