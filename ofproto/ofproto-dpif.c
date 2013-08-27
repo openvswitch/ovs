@@ -3242,7 +3242,7 @@ flow_miss_should_make_facet(struct flow_miss *miss)
 
     hash = flow_hash_in_wildcards(&miss->flow, &miss->xout.wc, 0);
     return governor_should_install_flow(backer->governor, hash,
-                                        list_size(&miss->packets));
+                                        list_size(&miss->upcalls));
 }
 
 /* Handles 'miss', which matches 'facet'.  May add any required datapath
@@ -3320,7 +3320,7 @@ handle_flow_miss(struct flow_miss *miss, struct flow_miss_op *ops,
 {
     struct facet *facet;
 
-    miss->ofproto->n_missed += list_size(&miss->packets);
+    miss->ofproto->n_missed += list_size(&miss->upcalls);
 
     facet = facet_lookup_valid(miss->ofproto, &miss->flow);
     if (!facet) {

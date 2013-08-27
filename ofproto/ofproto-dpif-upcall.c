@@ -604,14 +604,16 @@ static void
 execute_flow_miss(struct flow_miss *miss, struct dpif_op *ops, size_t *n_ops)
 {
     struct ofproto_dpif *ofproto = miss->ofproto;
+    struct upcall *upcall;
     struct flow_wildcards wc;
     struct rule_dpif *rule;
-    struct ofpbuf *packet;
     struct xlate_in xin;
 
     memset(&miss->stats, 0, sizeof miss->stats);
     miss->stats.used = time_msec();
-    LIST_FOR_EACH (packet, list_node, &miss->packets) {
+    LIST_FOR_EACH (upcall, list_node, &miss->upcalls) {
+        struct ofpbuf *packet = upcall->dpif_upcall.packet;
+
         miss->stats.tcp_flags |= packet_get_tcp_flags(packet, &miss->flow);
         miss->stats.n_bytes += packet->size;
         miss->stats.n_packets++;
@@ -628,7 +630,8 @@ execute_flow_miss(struct flow_miss *miss, struct dpif_op *ops, size_t *n_ops)
     flow_wildcards_or(&miss->xout.wc, &miss->xout.wc, &wc);
 
     if (rule_dpif_fail_open(rule)) {
-        LIST_FOR_EACH (packet, list_node, &miss->packets) {
+        LIST_FOR_EACH (upcall, list_node, &miss->upcalls) {
+            struct ofpbuf *packet = upcall->dpif_upcall.packet;
             struct ofputil_packet_in *pin;
 
             /* Extra-special case for fail-open mode.
@@ -653,7 +656,8 @@ execute_flow_miss(struct flow_miss *miss, struct dpif_op *ops, size_t *n_ops)
     }
 
     if (miss->xout.slow) {
-        LIST_FOR_EACH (packet, list_node, &miss->packets) {
+        LIST_FOR_EACH (upcall, list_node, &miss->upcalls) {
+            struct ofpbuf *packet = upcall->dpif_upcall.packet;
             struct xlate_in xin;
 
             xlate_in_init(&xin, miss->ofproto, &miss->flow, rule, 0, packet);
@@ -663,7 +667,8 @@ execute_flow_miss(struct flow_miss *miss, struct dpif_op *ops, size_t *n_ops)
     rule_dpif_unref(rule);
 
     if (miss->xout.odp_actions.size) {
-        LIST_FOR_EACH (packet, list_node, &miss->packets) {
+        LIST_FOR_EACH (upcall, list_node, &miss->upcalls) {
+            struct ofpbuf *packet = upcall->dpif_upcall.packet;
             struct dpif_op *op = &ops[*n_ops];
             struct dpif_execute *execute = &op->u.execute;
 
@@ -766,15 +771,12 @@ handle_miss_upcalls(struct udpif *udpif, struct list *upcalls)
             miss->key = dupcall->key;
             miss->key_len = dupcall->key_len;
             miss->upcall_type = dupcall->type;
-            list_init(&miss->packets);
             list_init(&miss->upcalls);
 
             n_upcalls++;
         } else {
             miss = existing_miss;
         }
-        list_push_back(&miss->packets, &dupcall->packet->list_node);
-
         list_remove(&upcall->list_node);
         list_push_back(&miss->upcalls, &upcall->list_node);
     }

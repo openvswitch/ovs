@@ -90,13 +90,12 @@ struct flow_miss {
     enum odp_key_fitness key_fitness;
     const struct nlattr *key;
     size_t key_len;
-    struct list packets;
     enum dpif_upcall_type upcall_type;
     struct dpif_flow_stats stats;
 
     struct xlate_out xout;
 
-    struct list upcalls;
+    struct list upcalls;        /* Contains "struct upcall"s. */
 };
 
 struct flow_miss_batch {
