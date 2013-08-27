@@ -1341,8 +1341,6 @@
 	      An Ethernet tunnel over the experimental, UDP-based VXLAN
 	      protocol described at
 	      <code>http://tools.ietf.org/html/draft-mahalingam-dutt-dcops-vxlan-03</code>.
-	      VXLAN is currently supported only with the Linux kernel datapath
-	      with kernel version 2.6.26 or later.
 	    </p>
 	    <p>
 	      Open vSwitch uses UDP destination port 4789.  The source port used for
@@ -1354,8 +1352,7 @@
           <dt><code>lisp</code></dt>
           <dd>
             A layer 3 tunnel over the experimental, UDP-based Locator/ID
-            Separation Protocol (RFC 6830). LISP is currently supported only
-            with the Linux kernel datapath with kernel version 2.6.26 or later.
+            Separation Protocol (RFC 6830).
           </dd>
 
           <dt><code>patch</code></dt>
