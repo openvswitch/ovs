@@ -20,7 +20,6 @@
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/version.h>
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26)
 
 #include <linux/in.h>
 #include <linux/ip.h>
@@ -646,6 +645,3 @@ const struct vport_ops ovs_lisp_vport_ops = {
 	.get_options	= lisp_get_options,
 	.send		= lisp_tnl_send,
 };
-#else
-#warning LISP tunneling will not be available on kernels before 2.6.26
-#endif /* Linux kernel < 2.6.26 */

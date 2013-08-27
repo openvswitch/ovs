@@ -44,10 +44,8 @@ static const struct vport_ops *vport_ops_list[] = {
 	&ovs_gre_vport_ops,
 	&ovs_gre64_vport_ops,
 #endif
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26)
 	&ovs_vxlan_vport_ops,
 	&ovs_lisp_vport_ops,
-#endif
 };
 
 /* Protected by RCU read lock for reading, ovs_mutex for writing. */
