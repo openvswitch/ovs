@@ -925,12 +925,10 @@ do_lookup_genl_family(const char *name, struct nlattr **attrs,
 /* Finds the multicast group called 'group_name' in genl family 'family_name'.
  * When successful, writes its result to 'multicast_group' and returns 0.
  * Otherwise, clears 'multicast_group' and returns a positive error code.
- *
- * Some kernels do not support looking up a multicast group with this function.
- * In this case, 'multicast_group' will be populated with 'fallback'. */
+ */
 int
 nl_lookup_genl_mcgroup(const char *family_name, const char *group_name,
-                       unsigned int *multicast_group, unsigned int fallback)
+                       unsigned int *multicast_group)
 {
     struct nlattr *family_attrs[ARRAY_SIZE(family_policy)];
     const struct nlattr *mc;
@@ -945,10 +943,7 @@ nl_lookup_genl_mcgroup(const char *family_name, const char *group_name,
     }
 
     if (!family_attrs[CTRL_ATTR_MCAST_GROUPS]) {
-        *multicast_group = fallback;
-        VLOG_WARN("%s-%s: has no multicast group, using fallback %d",
-                  family_name, group_name, *multicast_group);
-        error = 0;
+        error = EPROTO;
         goto exit;
     }
 
