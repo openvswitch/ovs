@@ -58,14 +58,6 @@ static inline void skb_clear_rxhash(struct sk_buff *skb)
 #endif
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32)
-#define GENL_SOCK(net) (genl_sock)
-#define SET_NETNSOK
-#else
-#define GENL_SOCK(net) ((net)->genl_sock)
-#define SET_NETNSOK    .netnsok = true,
-#endif
-
 #ifdef HAVE_PARALLEL_OPS
 #define SET_PARALLEL_OPS	.parallel_ops = true,
 #else

@@ -111,7 +111,6 @@ int nl_dump_done(struct nl_dump *);
 /* Miscellaneous */
 int nl_lookup_genl_family(const char *name, int *number);
 int nl_lookup_genl_mcgroup(const char *family_name, const char *group_name,
-                           unsigned int *multicast_group,
-                           unsigned int fallback);
+                           unsigned int *multicast_group);
 
 #endif /* netlink-socket.h */

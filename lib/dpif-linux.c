@@ -46,7 +46,6 @@
 #include "netlink.h"
 #include "odp-util.h"
 #include "ofpbuf.h"
-#include "openvswitch/datapath-compat.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "random.h"
@@ -1566,8 +1565,7 @@ dpif_linux_init(void)
         }
         if (!error) {
             error = nl_lookup_genl_mcgroup(OVS_VPORT_FAMILY, OVS_VPORT_MCGROUP,
-                                           &ovs_vport_mcgroup,
-                                           OVS_VPORT_MCGROUP_FALLBACK_ID);
+                                           &ovs_vport_mcgroup);
         }
 
         ovsthread_once_done(&once);

@@ -272,7 +272,7 @@ static struct genl_family dp_packet_genl_family = {
 	.name = OVS_PACKET_FAMILY,
 	.version = OVS_PACKET_VERSION,
 	.maxattr = OVS_PACKET_ATTR_MAX,
-	 SET_NETNSOK
+	.netnsok = true,
 	 SET_PARALLEL_OPS
 };
 
@@ -1003,7 +1003,7 @@ static struct genl_family dp_flow_genl_family = {
 	.name = OVS_FLOW_FAMILY,
 	.version = OVS_FLOW_VERSION,
 	.maxattr = OVS_FLOW_ATTR_MAX,
-	 SET_NETNSOK
+	.netnsok = true,
 	 SET_PARALLEL_OPS
 };
 
@@ -1387,7 +1387,7 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 	if (!IS_ERR(reply))
 		ovs_notify(reply, info, &ovs_dp_flow_multicast_group);
 	else
-		netlink_set_err(GENL_SOCK(sock_net(skb->sk)), 0,
+		netlink_set_err(sock_net(skb->sk)->genl_sock, 0,
 				ovs_dp_flow_multicast_group.id,	PTR_ERR(reply));
 	return 0;
 
@@ -1583,7 +1583,7 @@ static struct genl_family dp_datapath_genl_family = {
 	.name = OVS_DATAPATH_FAMILY,
 	.version = OVS_DATAPATH_VERSION,
 	.maxattr = OVS_DP_ATTR_MAX,
-	 SET_NETNSOK
+	.netnsok = true,
 	 SET_PARALLEL_OPS
 };
 
@@ -1850,7 +1850,7 @@ static int ovs_dp_cmd_set(struct sk_buff *skb, struct genl_info *info)
 				      info->snd_seq, OVS_DP_CMD_NEW);
 	if (IS_ERR(reply)) {
 		err = PTR_ERR(reply);
-		netlink_set_err(GENL_SOCK(sock_net(skb->sk)), 0,
+		netlink_set_err(sock_net(skb->sk)->genl_sock, 0,
 				ovs_dp_datapath_multicast_group.id, err);
 		err = 0;
 		goto unlock;
@@ -1963,7 +1963,7 @@ static struct genl_family dp_vport_genl_family = {
 	.name = OVS_VPORT_FAMILY,
 	.version = OVS_VPORT_VERSION,
 	.maxattr = OVS_VPORT_ATTR_MAX,
-	 SET_NETNSOK
+	.netnsok = true,
 	 SET_PARALLEL_OPS
 };
 

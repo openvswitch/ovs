@@ -76,7 +76,6 @@ License:
   GNU General Public License version 2 and the Apache License Version 2.0.
 
 	include/linux/openvswitch.h
-	include/openvswitch/datapath-compat.h
 
   On Debian systems, the complete text of the GNU General Public License
   version 2 can be found in `/usr/share/common-licenses/GPL-2'.
