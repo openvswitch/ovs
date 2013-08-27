@@ -4955,9 +4955,16 @@ rule_execute(struct rule *rule, const struct flow *flow,
 }
 
 static void
-rule_modify_actions(struct rule *rule_)
+rule_modify_actions(struct rule *rule_, bool reset_counters)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
+
+    if (reset_counters) {
+        ovs_mutex_lock(&rule->stats_mutex);
+        rule->packet_count = 0;
+        rule->byte_count = 0;
+        ovs_mutex_unlock(&rule->stats_mutex);
+    }
 
     complete_operation(rule);
 }

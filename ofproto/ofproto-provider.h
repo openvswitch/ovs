@@ -288,7 +288,6 @@ void ofproto_rule_reduce_timeouts(struct rule *rule, uint16_t idle_timeout,
 bool ofproto_rule_has_out_port(const struct rule *, ofp_port_t out_port);
 
 void ofoperation_complete(struct ofoperation *, enum ofperr);
-struct rule *ofoperation_get_victim(struct ofoperation *);
 
 bool ofoperation_has_out_port(const struct ofoperation *, ofp_port_t out_port);
 
@@ -890,7 +889,7 @@ struct ofproto_class {
      * An ofproto implementation reports the success or failure of an
      * asynchronous operation on a rule using the rule's 'pending' member,
      * which points to a opaque "struct ofoperation" that represents the
-     * ongoing opreation.  When the operation completes, the ofproto
+     * ongoing operation.  When the operation completes, the ofproto
      * implementation calls ofoperation_complete(), passing the ofoperation and
      * an error indication.
      *
@@ -907,22 +906,22 @@ struct ofproto_class {
      * The ofproto base code updates the flow table optimistically, assuming
      * that the operation will probably succeed:
      *
-     *   - ofproto adds or replaces the rule in the flow table before calling
+     *   - ofproto adds the rule in the flow table before calling
      *     ->rule_construct().
      *
-     *   - ofproto updates the rule's actions before calling
-     *     ->rule_modify_actions().
+     *   - ofproto updates the rule's actions and other properties before
+     *     calling ->rule_modify_actions().
      *
      *   - ofproto removes the rule before calling ->rule_destruct().
      *
      * With one exception, when an asynchronous operation completes with an
      * error, ofoperation_complete() backs out the already applied changes:
      *
-     *   - If adding or replacing a rule in the flow table fails, ofproto
-     *     removes the new rule or restores the original rule.
+     *   - If adding a rule in the flow table fails, ofproto removes the new
+     *     rule.
      *
-     *   - If modifying a rule's actions fails, ofproto restores the original
-     *     actions.
+     *   - If modifying a rule fails, ofproto restores the original actions
+     *     (and other properties).
      *
      *   - Removing a rule is not allowed to fail.  It must always succeed.
      *
@@ -938,17 +937,9 @@ struct ofproto_class {
      * Construction
      * ============
      *
-     * When ->rule_construct() is called, the caller has already inserted
-     * 'rule' into 'rule->ofproto''s flow table numbered 'rule->table_id'.
-     * There are two cases:
-     *
-     *   - 'rule' is a new rule in its flow table.  In this case,
-     *     ofoperation_get_victim(rule) returns NULL.
-     *
-     *   - 'rule' is replacing an existing rule in its flow table that had the
-     *     same matching criteria and priority.  In this case,
-     *     ofoperation_get_victim(rule) returns the rule being replaced (the
-     *     "victim" rule).
+     * When ->rule_construct() is called, 'rule' is a new rule in its flow
+     * table.  The caller has already inserted 'rule' into 'rule->ofproto''s
+     * flow table numbered 'rule->table_id'.
      *
      * ->rule_construct() should set the following in motion:
      *
@@ -959,16 +950,10 @@ struct ofproto_class {
      *
      *   - Validate that the datapath can correctly implement 'rule->ofpacts'.
      *
-     *   - If the rule is valid, update the datapath flow table, adding the new
-     *     rule or replacing the existing one.
-     *
-     *   - If 'rule' is replacing an existing rule, uninitialize any derived
-     *     state for the victim rule, as in step 5 in the "Life Cycle"
-     *     described above.
+     *   - If the rule is valid, add the new rule to the datapath flow table.
      *
      * (On failure, the ofproto code will roll back the insertion from the flow
-     * table, either removing 'rule' or replacing it by the victim rule if
-     * there is one.)
+     * table by removing 'rule'.)
      *
      * ->rule_construct() must act in one of the following ways:
      *
@@ -1044,6 +1029,10 @@ struct ofproto_class {
      *
      *   - Update the datapath flow table with the new actions.
      *
+     *   - Only if 'reset_counters' is true, reset any packet or byte counters
+     *     associated with the rule to zero, so that rule_get_stats() will not
+     *     longer count those packets or bytes.
+     *
      * If the operation synchronously completes, ->rule_modify_actions() may
      * call ofoperation_complete() before it returns.  Otherwise, ->run()
      * should call ofoperation_complete() later, after the operation does
@@ -1054,7 +1043,7 @@ struct ofproto_class {
      *
      * ->rule_modify_actions() should not modify any base members of struct
      * rule. */
-    void (*rule_modify_actions)(struct rule *rule);
+    void (*rule_modify_actions)(struct rule *rule, bool reset_counters);
 
     /* Changes the OpenFlow IP fragment handling policy to 'frag_handling',
      * which takes one of the following values, with the corresponding

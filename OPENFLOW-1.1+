@@ -119,9 +119,6 @@ end of the OF1.2 spec.  I didn't compare the specs carefully yet.)
 
     * OFPT_FLOW_MOD:
 
-        * New flag OFPFF_RESET_COUNTS.
-          [required for OF1.2+]
-
         * Add ability to delete flow in all tables.
           [required for OF1.2+]
 
