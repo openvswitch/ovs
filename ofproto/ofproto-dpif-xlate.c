@@ -1668,21 +1668,24 @@ compose_output_action(struct xlate_ctx *ctx, ofp_port_t ofp_port)
 
 static void
 xlate_recursively(struct xlate_ctx *ctx, struct rule_dpif *rule)
-    OVS_RELEASES(rule->up.evict)
+    OVS_RELEASES(rule)
 {
     struct rule_dpif *old_rule = ctx->rule;
+    const struct ofpact *ofpacts;
+    size_t ofpacts_len;
 
     if (ctx->xin->resubmit_stats) {
-        rule_credit_stats(rule, ctx->xin->resubmit_stats);
+        rule_dpif_credit_stats(rule, ctx->xin->resubmit_stats);
     }
 
     ctx->recurse++;
     ctx->rule = rule;
-    do_xlate_actions(rule->up.ofpacts, rule->up.ofpacts_len, ctx);
+    rule_dpif_get_actions(rule, &ofpacts, &ofpacts_len);
+    do_xlate_actions(ofpacts, ofpacts_len, ctx);
     ctx->rule = old_rule;
     ctx->recurse--;
 
-    rule_release(rule);
+    rule_dpif_release(rule);
 }
 
 static void
@@ -1722,10 +1725,9 @@ xlate_table_action(struct xlate_ctx *ctx,
              * OFPTC_TABLE_MISS_DROP
              * When OF1.0, OFPTC_TABLE_MISS_CONTINUE is used. What to do? */
             xport = get_ofp_port(ctx->xbridge, ctx->xin->flow.in_port.ofp_port);
-            rule = choose_miss_rule(xport ? xport->config : 0,
-                                    ctx->xbridge->miss_rule,
-                                    ctx->xbridge->no_packet_in_rule);
-            ovs_rwlock_rdlock(&rule->up.evict);
+            choose_miss_rule(xport ? xport->config : 0,
+                             ctx->xbridge->miss_rule,
+                             ctx->xbridge->no_packet_in_rule, &rule);
             xlate_recursively(ctx, rule);
         }
 
@@ -1811,7 +1813,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     pin->reason = reason;
     pin->controller_id = controller_id;
     pin->table_id = ctx->table_id;
-    pin->cookie = ctx->rule ? ctx->rule->up.flow_cookie : 0;
+    pin->cookie = ctx->rule ? rule_dpif_get_flow_cookie(ctx->rule) : 0;
 
     pin->send_len = len;
     flow_get_metadata(&ctx->xin->flow, &pin->fmd);
@@ -2119,8 +2121,8 @@ xlate_fin_timeout(struct xlate_ctx *ctx,
                   const struct ofpact_fin_timeout *oft)
 {
     if (ctx->xin->tcp_flags & (TCP_FIN | TCP_RST) && ctx->rule) {
-        ofproto_rule_reduce_timeouts(&ctx->rule->up, oft->fin_idle_timeout,
-                                     oft->fin_hard_timeout);
+        rule_dpif_reduce_timeouts(ctx->rule, oft->fin_idle_timeout,
+                                  oft->fin_hard_timeout);
     }
 }
 
@@ -2602,8 +2604,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         ofpacts = xin->ofpacts;
         ofpacts_len = xin->ofpacts_len;
     } else if (xin->rule) {
-        ofpacts = xin->rule->up.ofpacts;
-        ofpacts_len = xin->rule->up.ofpacts_len;
+        rule_dpif_get_actions(xin->rule, &ofpacts, &ofpacts_len);
     } else {
         NOT_REACHED();
     }

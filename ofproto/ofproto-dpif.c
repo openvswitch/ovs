@@ -83,7 +83,29 @@ BUILD_ASSERT_DECL(N_TABLES >= 2 && N_TABLES <= 255);
 struct flow_miss;
 struct facet;
 
+struct rule_dpif {
+    struct rule up;
+
+    /* These statistics:
+     *
+     *   - Do include packets and bytes from facets that have been deleted or
+     *     whose own statistics have been folded into the rule.
+     *
+     *   - Do include packets and bytes sent "by hand" that were accounted to
+     *     the rule without any facet being involved (this is a rare corner
+     *     case in rule_execute()).
+     *
+     *   - Do not include packet or bytes that can be obtained from any facet's
+     *     packet_count or byte_count member or that can be obtained from the
+     *     datapath by, e.g., dpif_flow_get() for any subfacet.
+     */
+    struct ovs_mutex stats_mutex;
+    uint64_t packet_count OVS_GUARDED;  /* Number of packets received. */
+    uint64_t byte_count OVS_GUARDED;    /* Number of bytes received. */
+};
+
 static void rule_get_stats(struct rule *, uint64_t *packets, uint64_t *bytes);
+static struct rule_dpif *rule_dpif_cast(const struct rule *);
 
 struct ofbundle {
     struct hmap_node hmap_node; /* In struct ofproto's "bundles" hmap. */
@@ -1358,7 +1380,7 @@ add_internal_flow(struct ofproto_dpif *ofproto, int id,
 
     if (rule_dpif_lookup_in_table(ofproto, &fm.match.flow, NULL, TBL_INTERNAL,
                                   rulep)) {
-        ovs_rwlock_unlock(&(*rulep)->up.evict);
+        rule_dpif_release(*rulep);
     } else {
         NOT_REACHED();
     }
@@ -4179,7 +4201,7 @@ facet_is_controller_flow(struct facet *facet)
         is_controller = ofpacts_len > 0
             && ofpacts->type == OFPACT_CONTROLLER
             && ofpact_next(ofpacts) >= ofpact_end(ofpacts, ofpacts_len);
-        rule_release(rule);
+        rule_dpif_release(rule);
         return is_controller;
     }
     return false;
@@ -4273,7 +4295,7 @@ facet_check_consistency(struct facet *facet)
     rule_dpif_lookup(facet->ofproto, &facet->flow, NULL, &rule);
     xlate_in_init(&xin, facet->ofproto, &facet->flow, rule, 0, NULL);
     xlate_actions(&xin, &xout);
-    rule_release(rule);
+    rule_dpif_release(rule);
 
     ok = ofpbuf_equal(&facet->xout.odp_actions, &xout.odp_actions)
         && facet->xout.slow == xout.slow;
@@ -4371,7 +4393,7 @@ facet_revalidate(struct facet *facet)
         || memcmp(&facet->xout.wc, &xout.wc, sizeof xout.wc)) {
         facet_remove(facet);
         xlate_out_uninit(&xout);
-        rule_release(new_rule);
+        rule_dpif_release(new_rule);
         return false;
     }
 
@@ -4403,7 +4425,7 @@ facet_revalidate(struct facet *facet)
     facet->used = MAX(facet->used, new_rule->up.created);
 
     xlate_out_uninit(&xout);
-    rule_release(new_rule);
+    rule_dpif_release(new_rule);
     return true;
 }
 
@@ -4431,12 +4453,12 @@ flow_push_stats(struct ofproto_dpif *ofproto, struct flow *flow,
     }
 
     rule_dpif_lookup(ofproto, flow, NULL, &rule);
-    rule_credit_stats(rule, stats);
+    rule_dpif_credit_stats(rule, stats);
     xlate_in_init(&xin, ofproto, flow, rule, stats->tcp_flags, NULL);
     xin.resubmit_stats = stats;
     xin.may_learn = may_learn;
     xlate_actions_for_side_effects(&xin);
-    rule_release(rule);
+    rule_dpif_release(rule);
 }
 
 static void
@@ -4502,13 +4524,41 @@ push_all_stats(void)
 }
 
 void
-rule_credit_stats(struct rule_dpif *rule, const struct dpif_flow_stats *stats)
+rule_dpif_credit_stats(struct rule_dpif *rule,
+                       const struct dpif_flow_stats *stats)
 {
     ovs_mutex_lock(&rule->stats_mutex);
     rule->packet_count += stats->n_packets;
     rule->byte_count += stats->n_bytes;
     ofproto_rule_update_used(&rule->up, stats->used);
     ovs_mutex_unlock(&rule->stats_mutex);
+}
+
+bool
+rule_dpif_fail_open(const struct rule_dpif *rule)
+{
+    return rule->up.cr.priority == FAIL_OPEN_PRIORITY;
+}
+
+ovs_be64
+rule_dpif_get_flow_cookie(const struct rule_dpif *rule)
+{
+    return rule->up.flow_cookie;
+}
+
+void
+rule_dpif_reduce_timeouts(struct rule_dpif *rule, uint16_t idle_timeout,
+                     uint16_t hard_timeout)
+{
+    ofproto_rule_reduce_timeouts(&rule->up, idle_timeout, hard_timeout);
+}
+
+void
+rule_dpif_get_actions(const struct rule_dpif *rule,
+                      const struct ofpact **ofpacts, size_t *ofpacts_len)
+{
+    *ofpacts = rule->up.ofpacts;
+    *ofpacts_len = rule->up.ofpacts_len;
 }
 
 /* Subfacets. */
@@ -4778,9 +4828,8 @@ rule_dpif_lookup(struct ofproto_dpif *ofproto, const struct flow *flow,
                      flow->in_port.ofp_port);
     }
 
-    *rule = choose_miss_rule(port ? port->up.pp.config : 0, ofproto->miss_rule,
-                             ofproto->no_packet_in_rule);
-    ovs_rwlock_rdlock(&(*rule)->up.evict);
+    choose_miss_rule(port ? port->up.pp.config : 0, ofproto->miss_rule,
+                     ofproto->no_packet_in_rule, rule);
 }
 
 bool
@@ -4835,15 +4884,17 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto,
 /* Given a port configuration (specified as zero if there's no port), chooses
  * which of 'miss_rule' and 'no_packet_in_rule' should be used in case of a
  * flow table miss. */
-struct rule_dpif *
+void
 choose_miss_rule(enum ofputil_port_config config, struct rule_dpif *miss_rule,
-                 struct rule_dpif *no_packet_in_rule)
+                 struct rule_dpif *no_packet_in_rule, struct rule_dpif **rule)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
-    return config & OFPUTIL_PC_NO_PACKET_IN ? no_packet_in_rule : miss_rule;
+    *rule = config & OFPUTIL_PC_NO_PACKET_IN ? no_packet_in_rule : miss_rule;
+    ovs_rwlock_rdlock(&(*rule)->up.evict);
 }
 
 void
-rule_release(struct rule_dpif *rule)
+rule_dpif_release(struct rule_dpif *rule)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     if (rule) {
@@ -4864,6 +4915,11 @@ complete_operation(struct rule_dpif *rule)
     } else {
         ofoperation_complete(rule->up.pending, 0);
     }
+}
+
+static struct rule_dpif *rule_dpif_cast(const struct rule *rule)
+{
+    return rule ? CONTAINER_OF(rule, struct rule_dpif, up) : NULL;
 }
 
 static struct rule *
@@ -4942,7 +4998,7 @@ rule_dpif_execute(struct rule_dpif *rule, const struct flow *flow,
     struct xlate_in xin;
 
     dpif_flow_stats_extract(flow, packet, time_msec(), &stats);
-    rule_credit_stats(rule, &stats);
+    rule_dpif_credit_stats(rule, &stats);
 
     xlate_in_init(&xin, ofproto, flow, rule, stats.tcp_flags, packet);
     xin.resubmit_stats = &stats;
@@ -5563,7 +5619,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
         xlate_out_uninit(&trace.xout);
     }
 
-    rule_release(rule);
+    rule_dpif_release(rule);
 }
 
 static void

@@ -19,16 +19,18 @@
 
 #include "hmapx.h"
 #include "odp-util.h"
-#include "ofproto/ofproto-provider.h"
+#include "ofp-util.h"
 #include "ovs-thread.h"
 #include "timer.h"
 #include "util.h"
 #include "ovs-thread.h"
 
 union user_action_cookie;
+struct dpif_flow_stats;
 struct ofproto_dpif;
 struct ofport_dpif;
 struct dpif_backer;
+struct OVS_LOCKABLE rule_dpif;
 
 /* Ofproto-dpif -- DPIF based ofproto implementation.
  *
@@ -58,48 +60,36 @@ struct dpif_backer;
  *   Ofproto-dpif-xlate is responsible for translating translating OpenFlow
  *   actions into datapath actions. */
 
-struct rule_dpif {
-    struct rule up;
-
-    /* These statistics:
-     *
-     *   - Do include packets and bytes from facets that have been deleted or
-     *     whose own statistics have been folded into the rule.
-     *
-     *   - Do include packets and bytes sent "by hand" that were accounted to
-     *     the rule without any facet being involved (this is a rare corner
-     *     case in rule_execute()).
-     *
-     *   - Do not include packet or bytes that can be obtained from any facet's
-     *     packet_count or byte_count member or that can be obtained from the
-     *     datapath by, e.g., dpif_flow_get() for any subfacet.
-     */
-    struct ovs_mutex stats_mutex;
-    uint64_t packet_count OVS_GUARDED;  /* Number of packets received. */
-    uint64_t byte_count OVS_GUARDED;    /* Number of bytes received. */
-};
-
-static inline struct rule_dpif *rule_dpif_cast(const struct rule *rule)
-{
-    return rule ? CONTAINER_OF(rule, struct rule_dpif, up) : NULL;
-}
-
 void rule_dpif_lookup(struct ofproto_dpif *, const struct flow *,
                       struct flow_wildcards *, struct rule_dpif **rule)
-    OVS_ACQ_RDLOCK((*rule)->up.evict);
+    OVS_ACQ_RDLOCK(*rule);
 
 bool rule_dpif_lookup_in_table(struct ofproto_dpif *, const struct flow *,
                                struct flow_wildcards *, uint8_t table_id,
                                struct rule_dpif **rule)
-    OVS_TRY_RDLOCK(true, (*rule)->up.evict);
+    OVS_TRY_RDLOCK(true, *rule);
 
-void rule_release(struct rule_dpif *rule) OVS_RELEASES(rule->up.evict);
+    void rule_dpif_release(struct rule_dpif *rule) OVS_RELEASES(rule);
 
-void rule_credit_stats(struct rule_dpif *, const struct dpif_flow_stats *);
+    void rule_dpif_credit_stats(struct rule_dpif *rule ,
+                                const struct dpif_flow_stats *);
 
-struct rule_dpif *choose_miss_rule(enum ofputil_port_config,
-                                   struct rule_dpif *miss_rule,
-                                   struct rule_dpif *no_packet_in_rule);
+bool rule_dpif_fail_open(const struct rule_dpif *rule);
+
+void rule_dpif_get_actions(const struct rule_dpif *rule,
+                           const struct ofpact **ofpacts,
+                           size_t *ofpacts_len);
+
+ovs_be64 rule_dpif_get_flow_cookie(const struct rule_dpif *rule);
+
+void rule_dpif_reduce_timeouts(struct rule_dpif *rule, uint16_t idle_timeout,
+                               uint16_t hard_timeout);
+
+void choose_miss_rule(enum ofputil_port_config,
+                      struct rule_dpif *miss_rule,
+                      struct rule_dpif *no_packet_in_rule,
+                      struct rule_dpif **rule)
+    OVS_ACQ_RDLOCK(*rule);
 
 bool ofproto_has_vlan_splinters(const struct ofproto_dpif *);
 ofp_port_t vsp_realdev_to_vlandev(const struct ofproto_dpif *,
