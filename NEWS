@@ -1,4 +1,4 @@
-v1.11.0 - xx xxx xxxx
+v1.11.0 - 28 Aug 2013
 ---------------------
     - Support for megaflows, which allows wildcarding in the kernel (and
       any dpif implementation that supports wildcards).  Depending on
