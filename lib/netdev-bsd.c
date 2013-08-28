@@ -1510,7 +1510,9 @@ const struct netdev_class netdev_bsd_class = {
     NULL, /* set_queue */
     NULL, /* delete_queue */
     NULL, /* get_queue_stats */
-    NULL, /* dump_queue */
+    NULL, /* queue_dump_start */
+    NULL, /* queue_dump_next */
+    NULL, /* queue_dump_done */
     NULL, /* dump_queue_stats */
 
     netdev_bsd_get_in4,
@@ -1573,7 +1575,9 @@ const struct netdev_class netdev_tap_class = {
     NULL, /* set_queue */
     NULL, /* delete_queue */
     NULL, /* get_queue_stats */
-    NULL, /* dump_queue */
+    NULL, /* queue_dump_start */
+    NULL, /* queue_dump_next */
+    NULL, /* queue_dump_done */
     NULL, /* dump_queue_stats */
 
     netdev_bsd_get_in4,
