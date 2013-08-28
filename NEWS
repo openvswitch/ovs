@@ -1,10 +1,4 @@
-post-v1.12.0
----------------------
-    - OpenFlow:
-      * Support matching, rewriting SCTP ports
-
-
-v1.12.0 - xx xxx xxxx
+v2.0.0 - xx xxx xxxx
 ---------------------
     - OpenFlow:
       * Experimental support for OpenFlow 1.1 (in addition to 1.2 and
@@ -15,6 +9,7 @@ v1.12.0 - xx xxx xxxx
       * Support for matching on metadata 'pkt_mark' for interacting with
         other system components. On Linux this corresponds to the skb
         mark.
+      * Support matching, rewriting SCTP ports
     - The Interface table in the database has a new "ifindex" column to
       report the interface's OS-assigned ifindex.
     - New "check-oftest" Makefile target for running OFTest against Open
