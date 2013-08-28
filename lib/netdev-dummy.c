@@ -912,6 +912,9 @@ netdev_dummy_register(bool override)
         sset_init(&types);
         netdev_enumerate_types(&types);
         SSET_FOR_EACH (type, &types) {
+            if (!strcmp(type, "patch")) {
+                continue;
+            }
             if (!netdev_unregister_provider(type)) {
                 struct netdev_class *class;
                 int error;
