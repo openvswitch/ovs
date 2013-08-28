@@ -30,7 +30,7 @@ v1.12.0 - xx xxx xxxx
     - Added configurable flow caching support to IPFIX exporter.
 
 
-v1.11.0 - xx xxx xxxx
+v1.11.0 - 28 Aug 2013
 ---------------------
     - Support for megaflows, which allows wildcarding in the kernel (and
       any dpif implementation that supports wildcards).  Depending on

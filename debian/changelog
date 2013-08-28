@@ -61,7 +61,7 @@ openvswitch (1.11.0-1) unstable; urgency=low
     - New CFM demand mode which uses data traffic to indicate interface
       liveness.
 
- -- Open vSwitch team <dev@openvswitch.org>  Mon, 29 Apr 2013 14:30:34 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Wed, 28 Aug 2013 14:31:44 -0700
 
 openvswitch (1.10.0-1) unstable; urgency=low
    [ Open vSwitch team ]
