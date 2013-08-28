@@ -2525,8 +2525,8 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
             goto exit_free_ofpacts;
         }
     } else {
-        payload = xmalloc(sizeof *payload);
-        ofpbuf_use_const(payload, po.packet, po.packet_len);
+        /* Ensure that the L3 header is 32-bit aligned. */
+        payload = ofpbuf_clone_data_with_headroom(po.packet, po.packet_len, 2);
     }
 
     /* Verify actions against packet, then send packet if successful. */

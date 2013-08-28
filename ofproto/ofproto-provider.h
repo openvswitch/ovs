@@ -1072,6 +1072,7 @@ struct ofproto_class {
      * flow->tunnel and flow->in_port, which are assigned the correct values
      * for the incoming packet.  The register values are zeroed.  'packet''s
      * header pointers (e.g. packet->l3) are appropriately initialized.
+     * packet->l3 is aligned on a 32-bit boundary.
      *
      * The implementation should add the statistics for 'packet' into 'rule'.
      *

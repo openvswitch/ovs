@@ -152,9 +152,9 @@ compose_rarp(struct ofpbuf *b, const uint8_t eth_src[ETH_ADDR_LEN])
     struct arp_eth_header *arp;
 
     ofpbuf_clear(b);
-    ofpbuf_prealloc_tailroom(b, ETH_HEADER_LEN + VLAN_HEADER_LEN
+    ofpbuf_prealloc_tailroom(b, 2 + ETH_HEADER_LEN + VLAN_HEADER_LEN
                              + ARP_ETH_HEADER_LEN);
-    ofpbuf_reserve(b, VLAN_HEADER_LEN);
+    ofpbuf_reserve(b, 2 + VLAN_HEADER_LEN);
     eth = ofpbuf_put_uninit(b, sizeof *eth);
     memcpy(eth->eth_dst, eth_addr_broadcast, ETH_ADDR_LEN);
     memcpy(eth->eth_src, eth_src, ETH_ADDR_LEN);
@@ -396,13 +396,16 @@ pop_mpls(struct ofpbuf *packet, ovs_be16 ethtype)
 
 /* Converts hex digits in 'hex' to an Ethernet packet in '*packetp'.  The
  * caller must free '*packetp'.  On success, returns NULL.  On failure, returns
- * an error message and stores NULL in '*packetp'. */
+ * an error message and stores NULL in '*packetp'.
+ *
+ * Aligns the L3 header of '*packetp' on a 32-bit boundary. */
 const char *
 eth_from_hex(const char *hex, struct ofpbuf **packetp)
 {
     struct ofpbuf *packet;
 
-    packet = *packetp = ofpbuf_new(strlen(hex) / 2);
+    /* Use 2 bytes of headroom to 32-bit align the L3 header. */
+    packet = *packetp = ofpbuf_new_with_headroom(strlen(hex) / 2, 2);
 
     if (ofpbuf_put_hex(packet, hex, NULL)[0] != '\0') {
         ofpbuf_delete(packet);
@@ -603,7 +606,8 @@ ipv6_is_cidr(const struct in6_addr *netmask)
  * 'eth_src' and 'eth_type' parameters.  A payload of 'size' bytes is allocated
  * in 'b' and returned.  This payload may be populated with appropriate
  * information by the caller.  Sets 'b''s 'l2' and 'l3' pointers to the
- * Ethernet header and payload respectively.
+ * Ethernet header and payload respectively.  Aligns b->l3 on a 32-bit
+ * boundary.
  *
  * The returned packet has enough headroom to insert an 802.1Q VLAN header if
  * desired. */
@@ -617,8 +621,10 @@ eth_compose(struct ofpbuf *b, const uint8_t eth_dst[ETH_ADDR_LEN],
 
     ofpbuf_clear(b);
 
-    ofpbuf_prealloc_tailroom(b, ETH_HEADER_LEN + VLAN_HEADER_LEN + size);
-    ofpbuf_reserve(b, VLAN_HEADER_LEN);
+    /* The magic 2 here ensures that the L3 header (when it is added later)
+     * will be 32-bit aligned. */
+    ofpbuf_prealloc_tailroom(b, 2 + ETH_HEADER_LEN + VLAN_HEADER_LEN + size);
+    ofpbuf_reserve(b, 2 + VLAN_HEADER_LEN);
     eth = ofpbuf_put_uninit(b, ETH_HEADER_LEN);
     data = ofpbuf_put_uninit(b, size);
 

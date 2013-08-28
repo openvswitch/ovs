@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -119,9 +119,9 @@ pktbuf_save(struct pktbuf *pb, const void *buffer, size_t buffer_size,
     if (++p->cookie >= COOKIE_MAX) {
         p->cookie = 0;
     }
-    p->buffer = ofpbuf_clone_data_with_headroom(buffer, buffer_size,
-                                                sizeof(struct ofp10_packet_in));
 
+    /* Use 2 bytes of headroom to 32-bit align the L3 header. */
+    p->buffer = ofpbuf_clone_data_with_headroom(buffer, buffer_size, 2);
 
     p->timeout = time_msec() + OVERWRITE_MSECS;
     p->in_port = in_port;
@@ -165,8 +165,7 @@ pktbuf_get_null(void)
  *
  * 'in_port' may be NULL if the input port is not of interest.
  *
- * A returned packet will have at least sizeof(struct ofp10_packet_in) bytes of
- * headroom.
+ * The L3 header of a returned packet will be 32-bit aligned.
  *
  * On failure, stores NULL in in '*bufferp' and UINT16_MAX in '*in_port'. */
 enum ofperr
