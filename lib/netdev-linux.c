@@ -2100,35 +2100,35 @@ start_queue_dump(const struct netdev *netdev, struct nl_dump *dump)
     return true;
 }
 
+struct netdev_linux_queue_state {
+    unsigned int *queues;
+    size_t cur_queue;
+    size_t n_queues;
+};
+
 static int
-netdev_linux_dump_queues(const struct netdev *netdev_,
-                         netdev_dump_queues_cb *cb, void *aux)
+netdev_linux_queue_dump_start(const struct netdev *netdev_, void **statep)
 {
-    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    const struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     int error;
 
     ovs_mutex_lock(&netdev->mutex);
     error = tc_query_qdisc(netdev_);
     if (!error) {
         if (netdev->tc->ops->class_get) {
-            struct tc_queue *queue, *next_queue;
-            struct smap details;
+            struct netdev_linux_queue_state *state;
+            struct tc_queue *queue;
+            size_t i;
 
-            smap_init(&details);
-            HMAP_FOR_EACH_SAFE (queue, next_queue, hmap_node,
-                                &netdev->tc->queues) {
-                int retval;
+            *statep = state = xmalloc(sizeof *state);
+            state->n_queues = hmap_count(&netdev->tc->queues);
+            state->cur_queue = 0;
+            state->queues = xmalloc(state->n_queues * sizeof *state->queues);
 
-                smap_clear(&details);
-
-                retval = netdev->tc->ops->class_get(netdev_, queue, &details);
-                if (!retval) {
-                    (*cb)(queue->queue_id, &details, aux);
-                } else {
-                    error = retval;
-                }
+            i = 0;
+            HMAP_FOR_EACH (queue, hmap_node, &netdev->tc->queues) {
+                state->queues[i++] = queue->queue_id;
             }
-            smap_destroy(&details);
         } else {
             error = EOPNOTSUPP;
         }
@@ -2136,6 +2136,41 @@ netdev_linux_dump_queues(const struct netdev *netdev_,
     ovs_mutex_unlock(&netdev->mutex);
 
     return error;
+}
+
+static int
+netdev_linux_queue_dump_next(const struct netdev *netdev_, void *state_,
+                             unsigned int *queue_idp, struct smap *details)
+{
+    const struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    struct netdev_linux_queue_state *state = state_;
+    int error = EOF;
+
+    ovs_mutex_lock(&netdev->mutex);
+    while (state->cur_queue < state->n_queues) {
+        unsigned int queue_id = state->queues[state->cur_queue++];
+        struct tc_queue *queue = tc_find_queue(netdev_, queue_id);
+
+        if (queue) {
+            *queue_idp = queue_id;
+            error = netdev->tc->ops->class_get(netdev_, queue, details);
+            break;
+        }
+    }
+    ovs_mutex_unlock(&netdev->mutex);
+
+    return error;
+}
+
+static int
+netdev_linux_queue_dump_done(const struct netdev *netdev OVS_UNUSED,
+                             void *state_)
+{
+    struct netdev_linux_queue_state *state = state_;
+
+    free(state->queues);
+    free(state);
+    return 0;
 }
 
 static int
@@ -2580,7 +2615,9 @@ netdev_linux_change_seq(const struct netdev *netdev_)
     netdev_linux_set_queue,                                     \
     netdev_linux_delete_queue,                                  \
     netdev_linux_get_queue_stats,                               \
-    netdev_linux_dump_queues,                                   \
+    netdev_linux_queue_dump_start,                              \
+    netdev_linux_queue_dump_next,                               \
+    netdev_linux_queue_dump_done,                               \
     netdev_linux_dump_queue_stats,                              \
                                                                 \
     netdev_linux_get_in4,                                       \

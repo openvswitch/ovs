@@ -47,7 +47,17 @@ extern "C" {
  *      These functions are conditionally thread-safe: they may be called from
  *      different threads only on different netdev_rx objects.  (The client may
  *      create multiple netdev_rx objects for a single netdev and access each
- *      of those from a different thread.) */
+ *      of those from a different thread.)
+ *
+ *    NETDEV_FOR_EACH_QUEUE
+ *    netdev_queue_dump_next()
+ *    netdev_queue_dump_done()
+ *
+ *      These functions are conditionally thread-safe: they may be called from
+ *      different threads only on different netdev_queue_dump objects.  (The
+ *      client may create multiple netdev_queue_dump objects for a single
+ *      netdev and access each of those from a different thread.)
+ */
 
 struct netdev;
 struct netdev_class;
@@ -271,10 +281,31 @@ int netdev_delete_queue(struct netdev *, unsigned int queue_id);
 int netdev_get_queue_stats(const struct netdev *, unsigned int queue_id,
                            struct netdev_queue_stats *);
 
-typedef void netdev_dump_queues_cb(unsigned int queue_id,
-                                   const struct smap *details, void *aux);
-int netdev_dump_queues(const struct netdev *,
-                       netdev_dump_queues_cb *, void *aux);
+struct netdev_queue_dump {
+    struct netdev *netdev;
+    int error;
+    void *state;
+};
+void netdev_queue_dump_start(struct netdev_queue_dump *,
+                             const struct netdev *);
+bool netdev_queue_dump_next(struct netdev_queue_dump *,
+                            unsigned int *queue_id, struct smap *details);
+int netdev_queue_dump_done(struct netdev_queue_dump *);
+
+/* Iterates through each queue in NETDEV, using DUMP as state.  Fills QUEUE_ID
+ * and DETAILS with information about queues.  The client must initialize and
+ * destroy DETAILS.
+ *
+ * Arguments all have pointer type.
+ *
+ * If you break out of the loop, then you need to free the dump structure by
+ * hand using netdev_queue_dump_done(). */
+#define NETDEV_QUEUE_FOR_EACH(QUEUE_ID, DETAILS, DUMP, NETDEV)  \
+    for (netdev_queue_dump_start(DUMP, NETDEV);                 \
+         (netdev_queue_dump_next(DUMP, QUEUE_ID, DETAILS)       \
+          ? true                                                \
+          : (netdev_queue_dump_done(DUMP), false));             \
+        )
 
 typedef void netdev_dump_queue_stats_cb(unsigned int queue_id,
                                         struct netdev_queue_stats *,

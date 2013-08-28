@@ -727,7 +727,9 @@ get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     NULL,                       /* set_queue */             \
     NULL,                       /* delete_queue */          \
     NULL,                       /* get_queue_stats */       \
-    NULL,                       /* dump_queues */           \
+    NULL,                       /* queue_dump_start */      \
+    NULL,                       /* queue_dump_next */       \
+    NULL,                       /* queue_dump_done */       \
     NULL,                       /* dump_queue_stats */      \
                                                             \
     NULL,                       /* get_in4 */               \

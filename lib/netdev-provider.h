@@ -478,22 +478,39 @@ struct netdev_class {
     int (*get_queue_stats)(const struct netdev *netdev, unsigned int queue_id,
                            struct netdev_queue_stats *stats);
 
-    /* Iterates over all of 'netdev''s queues, calling 'cb' with the queue's
-     * ID, its configuration, and the 'aux' specified by the caller.  The order
-     * of iteration is unspecified, but (when successful) each queue is visited
-     * exactly once.
+    /* Attempts to begin dumping the queues in 'netdev'.  On success, returns 0
+     * and initializes '*statep' with any data needed for iteration.  On
+     * failure, returns a positive errno value.
      *
-     * 'cb' will not modify or free the 'details' argument passed in.  It may
-     * delete or modify the queue passed in as its 'queue_id' argument.  It may
-     * modify but will not delete any other queue within 'netdev'.  If 'cb'
-     * adds new queues, then ->dump_queues is allowed to visit some queues
-     * twice or not at all.
-     */
-    int (*dump_queues)(const struct netdev *netdev,
-                       void (*cb)(unsigned int queue_id,
-                                  const struct smap *details,
-                                  void *aux),
-                       void *aux);
+     * May be NULL if 'netdev' does not support QoS at all. */
+    int (*queue_dump_start)(const struct netdev *netdev, void **statep);
+
+    /* Attempts to retrieve another queue from 'netdev' for 'state', which was
+     * initialized by a successful call to the 'queue_dump_start' function for
+     * 'netdev'.  On success, stores a queue ID into '*queue_id' and fills
+     * 'details' with the configuration of the queue with that ID.  Returns EOF
+     * if the last queue has been dumped, or a positive errno value on error.
+     * This function will not be called again once it returns nonzero once for
+     * a given iteration (but the 'queue_dump_done' function will be called
+     * afterward).
+     *
+     * The caller initializes and clears 'details' before calling this
+     * function.  The caller takes ownership of the string key-values pairs
+     * added to 'details'.
+     *
+     * The returned contents of 'details' should be documented as valid for the
+     * given 'type' in the "other_config" column in the "Queue" table in
+     * vswitchd/vswitch.xml (which is built as ovs-vswitchd.conf.db(8)).
+     *
+     * May be NULL if 'netdev' does not support QoS at all. */
+    int (*queue_dump_next)(const struct netdev *netdev, void *state,
+                           unsigned int *queue_id, struct smap *details);
+
+    /* Releases resources from 'netdev' for 'state', which was initialized by a
+     * successful call to the 'queue_dump_start' function for 'netdev'.
+     *
+     * May be NULL if 'netdev' does not support QoS at all. */
+    int (*queue_dump_done)(const struct netdev *netdev, void *state);
 
     /* Iterates over all of 'netdev''s queues, calling 'cb' with the queue's
      * ID, its statistics, and the 'aux' specified by the caller.  The order of

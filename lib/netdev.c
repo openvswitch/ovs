@@ -1398,30 +1398,78 @@ netdev_get_queue_stats(const struct netdev *netdev, unsigned int queue_id,
     return retval;
 }
 
-/* Iterates over all of 'netdev''s queues, calling 'cb' with the queue's ID,
- * its configuration, and the 'aux' specified by the caller.  The order of
- * iteration is unspecified, but (when successful) each queue is visited
- * exactly once.
+/* Initializes 'dump' to begin dumping the queues in a netdev.
  *
- * Calling this function may be more efficient than calling netdev_get_queue()
- * for every queue.
- *
- * 'cb' must not modify or free the 'details' argument passed in.  It may
- * delete or modify the queue passed in as its 'queue_id' argument.  It may
- * modify but must not delete any other queue within 'netdev'.  'cb' should not
- * add new queues because this may cause some queues to be visited twice or not
- * at all.
- *
- * Returns 0 if successful, otherwise a positive errno value.  On error, some
- * configured queues may not have been included in the iteration. */
-int
-netdev_dump_queues(const struct netdev *netdev,
-                   netdev_dump_queues_cb *cb, void *aux)
+ * This function provides no status indication.  An error status for the entire
+ * dump operation is provided when it is completed by calling
+ * netdev_queue_dump_done().
+ */
+void
+netdev_queue_dump_start(struct netdev_queue_dump *dump,
+                        const struct netdev *netdev)
 {
-    const struct netdev_class *class = netdev->netdev_class;
-    return (class->dump_queues
-            ? class->dump_queues(netdev, cb, aux)
-            : EOPNOTSUPP);
+    dump->netdev = netdev_ref(netdev);
+    if (netdev->netdev_class->queue_dump_start) {
+        dump->error = netdev->netdev_class->queue_dump_start(netdev,
+                                                             &dump->state);
+    } else {
+        dump->error = EOPNOTSUPP;
+    }
+}
+
+/* Attempts to retrieve another queue from 'dump', which must have been
+ * initialized with netdev_queue_dump_start().  On success, stores a new queue
+ * ID into '*queue_id', fills 'details' with configuration details for the
+ * queue, and returns true.  On failure, returns false.
+ *
+ * Queues are not necessarily dumped in increasing order of queue ID (or any
+ * other predictable order).
+ *
+ * Failure might indicate an actual error or merely that the last queue has
+ * been dumped.  An error status for the entire dump operation is provided when
+ * it is completed by calling netdev_queue_dump_done().
+ *
+ * The returned contents of 'details' should be documented as valid for the
+ * given 'type' in the "other_config" column in the "Queue" table in
+ * vswitchd/vswitch.xml (which is built as ovs-vswitchd.conf.db(8)).
+ *
+ * The caller must initialize 'details' (e.g. with smap_init()) before calling
+ * this function.  This function will clear and replace its contents.  The
+ * caller must free 'details' when it is no longer needed (e.g. with
+ * smap_destroy()). */
+bool
+netdev_queue_dump_next(struct netdev_queue_dump *dump,
+                       unsigned int *queue_id, struct smap *details)
+{
+    const struct netdev *netdev = dump->netdev;
+
+    if (dump->error) {
+        return false;
+    }
+
+    dump->error = netdev->netdev_class->queue_dump_next(netdev, dump->state,
+                                                        queue_id, details);
+
+    if (dump->error) {
+        netdev->netdev_class->queue_dump_done(netdev, dump->state);
+        return false;
+    }
+    return true;
+}
+
+/* Completes queue table dump operation 'dump', which must have been
+ * initialized with netdev_queue_dump_start().  Returns 0 if the dump operation
+ * was error-free, otherwise a positive errno value describing the problem. */
+int
+netdev_queue_dump_done(struct netdev_queue_dump *dump)
+{
+    const struct netdev *netdev = dump->netdev;
+    if (!dump->error && netdev->netdev_class->queue_dump_done) {
+        dump->error = netdev->netdev_class->queue_dump_done(netdev,
+                                                            dump->state);
+    }
+    netdev_close(dump->netdev);
+    return dump->error == EOF ? 0 : dump->error;
 }
 
 /* Iterates over all of 'netdev''s queues, calling 'cb' with the queue's ID,

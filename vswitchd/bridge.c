@@ -2557,13 +2557,11 @@ struct qos_unixctl_show_cbdata {
 };
 
 static void
-qos_unixctl_show_cb(unsigned int queue_id,
-                    const struct smap *details,
-                    void *aux)
+qos_unixctl_show_queue(unsigned int queue_id,
+                       const struct smap *details,
+                       struct iface *iface,
+                       struct ds *ds)
 {
-    struct qos_unixctl_show_cbdata *data = aux;
-    struct ds *ds = data->ds;
-    struct iface *iface = data->iface;
     struct netdev_queue_stats stats;
     struct smap_node *node;
     int error;
@@ -2607,8 +2605,6 @@ qos_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
     struct iface *iface;
     const char *type;
     struct smap_node *node;
-    struct qos_unixctl_show_cbdata data;
-    int error;
 
     iface = iface_find(argv[1]);
     if (!iface) {
@@ -2619,20 +2615,22 @@ qos_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
     netdev_get_qos(iface->netdev, &type, &smap);
 
     if (*type != '\0') {
+        struct netdev_queue_dump dump;
+        struct smap details;
+        unsigned int queue_id;
+
         ds_put_format(&ds, "QoS: %s %s\n", iface->name, type);
 
         SMAP_FOR_EACH (node, &smap) {
             ds_put_format(&ds, "%s: %s\n", node->key, node->value);
         }
 
-        data.ds = &ds;
-        data.iface = iface;
-        error = netdev_dump_queues(iface->netdev, qos_unixctl_show_cb, &data);
-
-        if (error) {
-            ds_put_format(&ds, "failed to dump queues: %s",
-                          ovs_strerror(error));
+        smap_init(&details);
+        NETDEV_QUEUE_FOR_EACH (&queue_id, &details, &dump, iface->netdev) {
+            qos_unixctl_show_queue(queue_id, &details, iface, &ds);
         }
+        smap_destroy(&details);
+
         unixctl_command_reply(conn, ds_cstr(&ds));
     } else {
         ds_put_format(&ds, "QoS not configured on %s\n", iface->name);
@@ -3605,11 +3603,6 @@ iface_clear_db_record(const struct ovsrec_interface *if_cfg)
     }
 }
 
-struct iface_delete_queues_cbdata {
-    struct netdev *netdev;
-    const struct ovsdb_datum *queues;
-};
-
 static bool
 queue_ids_include(const struct ovsdb_datum *queues, int64_t target)
 {
@@ -3617,17 +3610,6 @@ queue_ids_include(const struct ovsdb_datum *queues, int64_t target)
 
     atom.integer = target;
     return ovsdb_datum_find_key(queues, &atom, OVSDB_TYPE_INTEGER) != UINT_MAX;
-}
-
-static void
-iface_delete_queues(unsigned int queue_id,
-                    const struct smap *details OVS_UNUSED, void *cbdata_)
-{
-    struct iface_delete_queues_cbdata *cbdata = cbdata_;
-
-    if (!queue_ids_include(cbdata->queues, queue_id)) {
-        netdev_delete_queue(cbdata->netdev, queue_id);
-    }
 }
 
 static void
@@ -3640,7 +3622,10 @@ iface_configure_qos(struct iface *iface, const struct ovsrec_qos *qos)
     if (!qos || qos->type[0] == '\0' || qos->n_queues < 1) {
         netdev_set_qos(iface->netdev, NULL, NULL);
     } else {
-        struct iface_delete_queues_cbdata cbdata;
+        const struct ovsdb_datum *queues;
+        struct netdev_queue_dump dump;
+        unsigned int queue_id;
+        struct smap details;
         bool queue_zero;
         size_t i;
 
@@ -3648,10 +3633,15 @@ iface_configure_qos(struct iface *iface, const struct ovsrec_qos *qos)
         netdev_set_qos(iface->netdev, qos->type, &qos->other_config);
 
         /* Deconfigure queues that were deleted. */
-        cbdata.netdev = iface->netdev;
-        cbdata.queues = ovsrec_qos_get_queues(qos, OVSDB_TYPE_INTEGER,
-                                              OVSDB_TYPE_UUID);
-        netdev_dump_queues(iface->netdev, iface_delete_queues, &cbdata);
+        queues = ovsrec_qos_get_queues(qos, OVSDB_TYPE_INTEGER,
+                                       OVSDB_TYPE_UUID);
+        smap_init(&details);
+        NETDEV_QUEUE_FOR_EACH (&queue_id, &details, &dump, iface->netdev) {
+            if (!queue_ids_include(queues, queue_id)) {
+                netdev_delete_queue(iface->netdev, queue_id);
+            }
+        }
+        smap_destroy(&details);
 
         /* Configure queues for 'iface'. */
         queue_zero = false;
