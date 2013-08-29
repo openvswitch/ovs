@@ -1533,14 +1533,9 @@ run_fast(struct ofproto *ofproto_)
     }
 
     ovs_mutex_lock(&ofproto->flow_mod_mutex);
-    if (ofproto->n_flow_mods) {
-        flow_mods = ofproto->flow_mods;
-        list_moved(&flow_mods);
-        list_init(&ofproto->flow_mods);
-        ofproto->n_flow_mods = 0;
-    } else {
-        list_init(&flow_mods);
-    }
+    list_move(&flow_mods, &ofproto->flow_mods);
+    list_init(&ofproto->flow_mods);
+    ofproto->n_flow_mods = 0;
     ovs_mutex_unlock(&ofproto->flow_mod_mutex);
 
     LIST_FOR_EACH_SAFE (fm, next_fm, list_node, &flow_mods) {
@@ -1556,14 +1551,9 @@ run_fast(struct ofproto *ofproto_)
     }
 
     ovs_mutex_lock(&ofproto->pin_mutex);
-    if (ofproto->n_pins) {
-        pins = ofproto->pins;
-        list_moved(&pins);
-        list_init(&ofproto->pins);
-        ofproto->n_pins = 0;
-    } else {
-        list_init(&pins);
-    }
+    list_move(&pins, &ofproto->pins);
+    list_init(&ofproto->pins);
+    ofproto->n_pins = 0;
     ovs_mutex_unlock(&ofproto->pin_mutex);
 
     LIST_FOR_EACH_SAFE (pin, next_pin, list_node, &pins) {
