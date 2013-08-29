@@ -175,7 +175,6 @@ struct subfacet {
     struct facet *facet;        /* Owning facet. */
     struct dpif_backer *backer; /* Owning backer. */
 
-    enum odp_key_fitness key_fitness;
     struct nlattr *key;
     int key_len;
 
@@ -4500,7 +4499,6 @@ static struct subfacet *
 subfacet_create(struct facet *facet, struct flow_miss *miss)
 {
     struct dpif_backer *backer = miss->ofproto->backer;
-    enum odp_key_fitness key_fitness = miss->key_fitness;
     const struct nlattr *key = miss->key;
     size_t key_len = miss->key_len;
     uint32_t key_hash;
@@ -4528,7 +4526,6 @@ subfacet_create(struct facet *facet, struct flow_miss *miss)
     hmap_insert(&backer->subfacets, &subfacet->hmap_node, key_hash);
     list_push_back(&facet->subfacets, &subfacet->list_node);
     subfacet->facet = facet;
-    subfacet->key_fitness = key_fitness;
     subfacet->key = xmemdup(key, key_len);
     subfacet->key_len = key_len;
     subfacet->used = miss->stats.used;
