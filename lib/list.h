@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@ void list_push_front(struct list *, struct list *);
 void list_push_back(struct list *, struct list *);
 void list_replace(struct list *, const struct list *);
 void list_moved(struct list *);
+void list_move(struct list *dst, struct list *src);
 
 /* List removal. */
 struct list *list_remove(struct list *);

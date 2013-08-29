@@ -101,6 +101,20 @@ list_moved(struct list *list)
     list->prev->next = list->next->prev = list;
 }
 
+/* Initializes 'dst' with the contents of 'src', compensating for moving it
+ * around in memory.  The effect is that, if 'src' was the head of a list, now
+ * 'dst' is the head of a list containing the same elements. */
+void
+list_move(struct list *dst, struct list *src)
+{
+    if (!list_is_empty(src)) {
+        *dst = *src;
+        list_moved(dst);
+    } else {
+        list_init(dst);
+    }
+}
+
 /* Removes 'elem' from its list and returns the element that followed it.
    Undefined behavior if 'elem' is not in a list. */
 struct list *
