@@ -5607,9 +5607,6 @@ oftable_remove_rule__(struct ofproto *ofproto, struct classifier *cls,
     OVS_REQ_WRLOCK(cls->rwlock) OVS_RELEASES(rule->rwlock)
 {
     classifier_remove(cls, &rule->cr);
-    if (rule->meter_id) {
-        list_remove(&rule->meter_list_node);
-    }
     cookies_remove(ofproto, rule);
     eviction_group_remove_rule(rule);
     ovs_mutex_lock(&ofproto->expirable_mutex);
@@ -5619,6 +5616,7 @@ oftable_remove_rule__(struct ofproto *ofproto, struct classifier *cls,
     ovs_mutex_unlock(&ofproto->expirable_mutex);
     if (!list_is_empty(&rule->meter_list_node)) {
         list_remove(&rule->meter_list_node);
+        list_init(&rule->meter_list_node);
     }
     ovs_rwlock_unlock(&rule->rwlock);
 }
