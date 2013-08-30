@@ -56,7 +56,6 @@ openvswitch_headers += \
 	linux/compat/include/linux/poison.h \
 	linux/compat/include/linux/rculist.h \
 	linux/compat/include/linux/rcupdate.h \
-	linux/compat/include/linux/reciprocal_div.h \
 	linux/compat/include/linux/rtnetlink.h \
 	linux/compat/include/linux/sctp.h \
 	linux/compat/include/linux/skbuff.h \
