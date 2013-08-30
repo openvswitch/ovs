@@ -1110,10 +1110,20 @@ ofproto_get_snoops(const struct ofproto *ofproto, struct sset *snoops)
 
 /* Deletes 'rule' from 'cls' within 'ofproto'.
  *
+ * Within an ofproto implementation, this function allows an ofproto
+ * implementation to destroy any rules that remain when its ->destruct()
+ * function is called.  This function is not suitable for use elsewhere in an
+ * ofproto implementation.
+ *
+ * This function is also used internally in ofproto.c.
+ *
+ * This function implements steps 4.4 and 4.5 in the section titled "Rule Life
+ * Cycle" in ofproto-provider.h.
+
  * The 'cls' argument is redundant (it is &ofproto->tables[rule->table_id].cls)
  * but it allows Clang to do better checking. */
-static void
-ofproto_delete_rule(struct ofproto *ofproto, struct classifier *cls,
+void
+ofproto_rule_delete(struct ofproto *ofproto, struct classifier *cls,
                     struct rule *rule)
     OVS_REQ_WRLOCK(cls->rwlock)
 {
@@ -1151,7 +1161,7 @@ ofproto_flush__(struct ofproto *ofproto)
         cls_cursor_init(&cursor, &table->cls, NULL);
         CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, cr, &cursor) {
             if (!rule->pending) {
-                ofproto_delete_rule(ofproto, &table->cls, rule);
+                ofproto_rule_delete(ofproto, &table->cls, rule);
             }
         }
         ovs_rwlock_unlock(&table->cls.rwlock);
@@ -1783,7 +1793,7 @@ ofproto_delete_flow(struct ofproto *ofproto,
     } else {
         /* Initiate deletion -> success. */
         ovs_rwlock_wrlock(&cls->rwlock);
-        ofproto_delete_rule(ofproto, cls, rule);
+        ofproto_rule_delete(ofproto, cls, rule);
         ovs_rwlock_unlock(&cls->rwlock);
 
         return true;
@@ -2296,21 +2306,6 @@ ofproto_rule_destroy__(struct rule *rule)
     ovs_mutex_destroy(&rule->timeout_mutex);
     ovs_rwlock_destroy(&rule->rwlock);
     rule->ofproto->ofproto_class->rule_dealloc(rule);
-}
-
-/* This function allows an ofproto implementation to destroy any rules that
- * remain when its ->destruct() function is called.  This function implements
- * steps 4.4 and 4.5 in the section titled "Rule Life Cycle" in
- * ofproto-provider.h.
- *
- * This function should only be called from an ofproto implementation's
- * ->destruct() function.  It is not suitable elsewhere. */
-void
-ofproto_rule_delete(struct ofproto *ofproto, struct classifier *cls,
-                    struct rule *rule)
-    OVS_REQ_WRLOCK(cls->rwlock)
-{
-    ofproto_delete_rule(ofproto, cls, rule);
 }
 
 /* Returns true if 'rule' has an OpenFlow OFPAT_OUTPUT or OFPAT_ENQUEUE action
@@ -3963,7 +3958,7 @@ ofproto_rule_expire(struct rule *rule, uint8_t reason)
     ofproto_rule_send_removed(rule, reason);
 
     ovs_rwlock_wrlock(&cls->rwlock);
-    ofproto_delete_rule(ofproto, cls, rule);
+    ofproto_rule_delete(ofproto, cls, rule);
     ovs_rwlock_unlock(&cls->rwlock);
 }
 
