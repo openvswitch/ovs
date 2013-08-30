@@ -2311,7 +2311,7 @@ ofproto_rule_destroy__(struct rule *rule)
 }
 
 /* This function allows an ofproto implementation to destroy any rules that
- * remain when its ->destruct() function is called..  This function implements
+ * remain when its ->destruct() function is called.  This function implements
  * steps 4.4 and 4.5 in the section titled "Rule Life Cycle" in
  * ofproto-provider.h.
  *
@@ -3528,8 +3528,7 @@ evict_rule_from_table(struct ofproto *ofproto, struct oftable *table)
  * error code on failure, or OFPROTO_POSTPONE if the operation cannot be
  * initiated now but may be retried later.
  *
- * Upon successful return, takes ownership of 'fm->ofpacts'.  On failure,
- * ownership remains with the caller.
+ * The caller retains ownership of 'fm->ofpacts'.
  *
  * 'ofconn' is used to retrieve the packet buffer specified in ofm->buffer_id,
  * if any. */
