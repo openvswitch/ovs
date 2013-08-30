@@ -2553,8 +2553,12 @@ odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *data,
             icmpv6_key->icmpv6_type = ntohs(data->tp_src);
             icmpv6_key->icmpv6_code = ntohs(data->tp_dst);
 
-            if (icmpv6_key->icmpv6_type == ND_NEIGHBOR_SOLICIT
-                    || icmpv6_key->icmpv6_type == ND_NEIGHBOR_ADVERT) {
+            if (flow->tp_dst == htons(0) &&
+                (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT) ||
+                 flow->tp_src == htons(ND_NEIGHBOR_ADVERT)) &&
+                (!is_mask || (data->tp_src == htons(0xffff) &&
+                              data->tp_dst == htons(0xffff)))) {
+
                 struct ovs_key_nd *nd_key;
 
                 nd_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ND,
@@ -2965,8 +2969,9 @@ parse_l2_5_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
             flow->tp_src = htons(icmpv6_key->icmpv6_type);
             flow->tp_dst = htons(icmpv6_key->icmpv6_code);
             expected_bit = OVS_KEY_ATTR_ICMPV6;
-            if (src_flow->tp_src == htons(ND_NEIGHBOR_SOLICIT) ||
-                src_flow->tp_src == htons(ND_NEIGHBOR_ADVERT)) {
+            if (src_flow->tp_dst == htons(0) &&
+                (src_flow->tp_src == htons(ND_NEIGHBOR_SOLICIT) ||
+                 src_flow->tp_src == htons(ND_NEIGHBOR_ADVERT))) {
                 if (!is_mask) {
                     expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_ND;
                 }
@@ -2981,7 +2986,8 @@ parse_l2_5_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
                     if (is_mask) {
                         if (!is_all_zeros((const uint8_t *) nd_key,
                                           sizeof *nd_key) &&
-                            flow->tp_src != htons(0xffff)) {
+                            (flow->tp_src != htons(0xffff) ||
+                             flow->tp_dst != htons(0xffff))) {
                             return ODP_FIT_ERROR;
                         } else {
                             expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_ND;
