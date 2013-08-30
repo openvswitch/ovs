@@ -3351,7 +3351,7 @@ port_del(struct ofproto *ofproto_, uint16_t ofp_port)
     sset_find_and_delete(&ofproto->ghost_ports,
                          netdev_get_name(ofport->up.netdev));
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
-    if (!ofport->tnl_port) {
+    if (!ofport->tnl_port && !netdev_vport_is_patch(ofport->up.netdev)) {
         error = dpif_port_del(ofproto->backer->dpif, ofport->odp_port);
         if (!error) {
             /* The caller is going to close ofport->up.netdev.  If this is a
