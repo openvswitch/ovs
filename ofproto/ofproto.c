@@ -199,6 +199,7 @@ static int init_ports(struct ofproto *);
 static void reinit_ports(struct ofproto *);
 
 /* rule. */
+static void ofproto_rule_destroy(struct rule *);
 static void ofproto_rule_destroy__(struct rule *);
 static void ofproto_rule_send_removed(struct rule *, uint8_t reason);
 static bool rule_is_modifiable(const struct rule *);
@@ -2247,16 +2248,22 @@ update_mtu(struct ofproto *p, struct ofport *port)
 }
 
 static void
-ofproto_rule_destroy__(struct rule *rule)
+ofproto_rule_destroy(struct rule *rule)
 {
     if (rule) {
         rule->ofproto->ofproto_class->rule_destruct(rule);
-        cls_rule_destroy(&rule->cr);
-        free(rule->ofpacts);
-        ovs_mutex_destroy(&rule->timeout_mutex);
-        ovs_rwlock_destroy(&rule->rwlock);
-        rule->ofproto->ofproto_class->rule_dealloc(rule);
+        ofproto_rule_destroy__(rule);
     }
+}
+
+static void
+ofproto_rule_destroy__(struct rule *rule)
+{
+    cls_rule_destroy(&rule->cr);
+    free(rule->ofpacts);
+    ovs_mutex_destroy(&rule->timeout_mutex);
+    ovs_rwlock_destroy(&rule->rwlock);
+    rule->ofproto->ofproto_class->rule_dealloc(rule);
 }
 
 /* This function allows an ofproto implementation to destroy any rules that
@@ -5028,13 +5035,13 @@ ofopgroup_complete(struct ofopgroup *group)
             } else {
                 ovs_rwlock_wrlock(&rule->rwlock);
                 oftable_remove_rule(rule);
-                ofproto_rule_destroy__(rule);
+                ofproto_rule_destroy(rule);
             }
             break;
 
         case OFOPERATION_DELETE:
             ovs_assert(!op->error);
-            ofproto_rule_destroy__(rule);
+            ofproto_rule_destroy(rule);
             op->rule = NULL;
             break;
 
