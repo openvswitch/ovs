@@ -30,6 +30,9 @@
 #include "coverage.h"
 #include "ovs-thread.h"
 #include "vlog.h"
+#ifdef HAVE_PTHREAD_SET_NAME_NP
+#include <pthread_np.h>
+#endif
 
 VLOG_DEFINE_THIS_MODULE(util);
 
