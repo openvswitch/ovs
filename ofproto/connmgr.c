@@ -693,7 +693,7 @@ update_in_band_remotes(struct connmgr *mgr)
         }
 
         if (stream_parse_target_with_default_port(target,
-                                                  OFP_TCP_PORT,
+                                                  OFP_OLD_PORT,
                                                   sin)) {
             n_addrs++;
         }

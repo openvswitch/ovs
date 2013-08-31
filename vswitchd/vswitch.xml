@@ -2816,18 +2816,27 @@
         <dl>
           <dt><code>ssl:<var>ip</var></code>[<code>:<var>port</var></code>]</dt>
           <dd>
-            <p>The specified SSL <var>port</var> (default: 6633) on the host at
-            the given <var>ip</var>, which must be expressed as an IP address
-            (not a DNS name).  The <ref table="Open_vSwitch" column="ssl"/>
-            column in the <ref table="Open_vSwitch"/> table must point to a
-            valid SSL configuration when this form is used.</p>
+            <p>The specified SSL <var>port</var> on the host at the
+            given <var>ip</var>, which must be expressed as an IP
+            address (not a DNS name).  The <ref table="Open_vSwitch"
+            column="ssl"/> column in the <ref table="Open_vSwitch"/>
+            table must point to a valid SSL configuration when this form
+            is used.</p>
+            <p>If <var>port</var> is not specified, it currently
+            defaults to 6633.  In the future, the default will change to
+            6653, which is the IANA-defined value.</p>
             <p>SSL support is an optional feature that is not always built as
             part of Open vSwitch.</p>
           </dd>
           <dt><code>tcp:<var>ip</var></code>[<code>:<var>port</var></code>]</dt>
-          <dd>The specified TCP <var>port</var> (default: 6633) on the host at
-          the given <var>ip</var>, which must be expressed as an IP address
-          (not a DNS name).</dd>
+          <dd>
+            <p>The specified TCP <var>port</var> on the host at the
+            given <var>ip</var>, which must be expressed as an IP
+            address (not a DNS name).</p>
+            <p>If <var>port</var> is not specified, it currently
+            defaults to 6633.  In the future, the default will change to
+            6653, which is the IANA-defined value.</p>
+          </dd>
         </dl>
         <p>
           The following connection methods are currently supported for service
@@ -2836,26 +2845,29 @@
         <dl>
           <dt><code>pssl:</code>[<var>port</var>][<code>:<var>ip</var></code>]</dt>
           <dd>
-            <p>
-              Listens for SSL connections on the specified TCP <var>port</var>
-              (default: 6633).  If <var>ip</var>, which must be expressed as an
-              IP address (not a DNS name), is specified, then connections are
-              restricted to the specified local IP address.
-            </p>
-            <p>
-              The <ref table="Open_vSwitch" column="ssl"/> column in the <ref
-              table="Open_vSwitch"/> table must point to a valid SSL
-              configuration when this form is used.
-            </p>
+            <p> Listens for SSL connections on the specified TCP
+            <var>port</var>.  If <var>ip</var>, which must be expressed
+            as an IP address (not a DNS name), is specified, then
+            connections are restricted to the specified local IP
+            address.  The <ref table="Open_vSwitch" column="ssl"/>
+            column in the <ref table="Open_vSwitch"/> table must point
+            to a valid SSL configuration when this form is used.</p>
+            <p>If <var>port</var> is not specified, it currently
+            defaults to 6633.  In the future, the default will change to
+            6653, which is the IANA-defined value.</p>
             <p>SSL support is an optional feature that is not always built as
             part of Open vSwitch.</p>
           </dd>
           <dt><code>ptcp:</code>[<var>port</var>][<code>:<var>ip</var></code>]</dt>
           <dd>
-            Listens for connections on the specified TCP <var>port</var>
-            (default: 6633).  If <var>ip</var>, which must be expressed as an
-            IP address (not a DNS name), is specified, then connections are
-            restricted to the specified local IP address.
+            <p>Listens for connections on the specified TCP
+            <var>port</var>.  If <var>ip</var>, which must be expressed
+            as an IP address (not a DNS name), is specified, then
+            connections are restricted to the specified local IP
+            address.</p>
+            <p>If <var>port</var> is not specified, it currently
+            defaults to 6633.  In the future, the default will change to
+            6653, which is the IANA-defined value.</p>
           </dd>
         </dl>
         <p>When multiple controllers are configured for a single bridge, the

@@ -1,13 +1,13 @@
 .IP "\fBssl:\fIip\fR[\fB:\fIport\fR]"
-The specified SSL \fIport\fR (default: 6633) on the host at the given
-\fIip\fR, which must be expressed as an IP address (not a DNS name).
-The \fB\-\-private\-key\fR, \fB\-\-certificate\fR, and
-\fB\-\-ca\-cert\fR options are mandatory when this form is used.
-.
-.IP "\fBtcp:\fIip\fR[\fB:\fIport\fR]"
-The specified TCP \fIport\fR (default: 6633) on the host at the given
-\fIip\fR, which must be expressed as an IP address (not a DNS name).
-.
+.IQ "\fBtcp:\fIip\fR[\fB:\fIport\fR]"
+The specified \fIport\fR on the host at the given \fIip\fR, which must
+be expressed as an IP address (not a DNS name).  For \fBssl\fR, the
+\fB\-\-private\-key\fR, \fB\-\-certificate\fR, and \fB\-\-ca\-cert\fR
+options are mandatory.
+.IP
+If \fIport\fR is not specified, it currently defaults to 6633.  In the
+future, the default will change to 6653, which is the IANA-defined
+value.
 .TP
 \fBunix:\fIfile\fR
 The Unix domain server socket named \fIfile\fR.
