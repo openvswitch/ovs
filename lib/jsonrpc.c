@@ -63,7 +63,7 @@ static void jsonrpc_error(struct jsonrpc *, int error);
 int
 jsonrpc_stream_open(const char *name, struct stream **streamp, uint8_t dscp)
 {
-    return stream_open_with_default_port(name, JSONRPC_TCP_PORT,
+    return stream_open_with_default_port(name, OVSDB_OLD_PORT,
                                          streamp, dscp);
 }
 
@@ -72,7 +72,7 @@ jsonrpc_stream_open(const char *name, struct stream **streamp, uint8_t dscp)
 int
 jsonrpc_pstream_open(const char *name, struct pstream **pstreamp, uint8_t dscp)
 {
-    return pstream_open_with_default_port(name, JSONRPC_TCP_PORT,
+    return pstream_open_with_default_port(name, OVSDB_OLD_PORT,
                                           pstreamp, dscp);
 }
 

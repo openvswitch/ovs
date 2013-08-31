@@ -32,11 +32,14 @@ struct stream;
 
 /* API for a JSON-RPC stream. */
 
-/* Default port number.
+/* Default port numbers.
  *
- * There is nothing standard about this port number.  It is simply what
- * we have chosen. */
-#define JSONRPC_TCP_PORT 6632
+ * OVSDB_OLD_PORT defines the original port number used by OVS.
+ * OVSDB_PORT defines the official port number assigned by IANA.  By
+ * default, we still uses OVSDB_OLD_PORT, but we present a warning that
+ * that will change. */
+#define OVSDB_OLD_PORT 6632
+#define OVSDB_PORT 6640
 
 int jsonrpc_stream_open(const char *name, struct stream **, uint8_t dscp);
 int jsonrpc_pstream_open(const char *name, struct pstream **, uint8_t dscp);

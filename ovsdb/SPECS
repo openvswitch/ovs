@@ -316,7 +316,9 @@ over HTTP, for these reasons:
 
     * The JSON-RPC specification for HTTP transport is incomplete.
 
-We are using TCP port 6632 for the database JSON-RPC connection.
+We are currently using TCP port 6632 for the database JSON-RPC
+connection, but future versions will switch to using IANA-assigned TCP
+port 6640.
 
 The database wire protocol consists of the following JSON-RPC methods:
 
