@@ -485,9 +485,6 @@ struct ofproto_dpif {
     struct classifier facets;     /* Contains 'struct facet's. */
     long long int consistency_rl;
 
-    /* Support for debugging async flow mods. */
-    struct list completions;
-
     struct netdev_stats stats; /* To account packets generated and consumed in
                                 * userspace. */
 
@@ -519,10 +516,6 @@ struct ofproto_dpif {
     struct list pins OVS_GUARDED;
     size_t n_pins OVS_GUARDED;
 };
-
-/* Defer flow mod completion until "ovs-appctl ofproto/unclog"?  (Useful only
- * for debugging the asynchronous flow_mod implementation.) */
-static bool clogged;
 
 /* By default, flows in the datapath are wildcarded (megaflows).  They
  * may be disabled with the "ovs-appctl dpif/disable-megaflows" command. */
@@ -1294,8 +1287,6 @@ construct(struct ofproto *ofproto_)
     classifier_init(&ofproto->facets);
     ofproto->consistency_rl = LLONG_MIN;
 
-    list_init(&ofproto->completions);
-
     ovs_mutex_init(&ofproto->flow_mod_mutex);
     ovs_mutex_lock(&ofproto->flow_mod_mutex);
     list_init(&ofproto->flow_mods);
@@ -1425,18 +1416,6 @@ add_internal_flows(struct ofproto_dpif *ofproto)
 }
 
 static void
-complete_operations(struct ofproto_dpif *ofproto)
-{
-    struct dpif_completion *c, *next;
-
-    LIST_FOR_EACH_SAFE (c, next, list_node, &ofproto->completions) {
-        ofoperation_complete(c->op, 0);
-        list_remove(&c->list_node);
-        free(c);
-    }
-}
-
-static void
 destruct(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
@@ -1462,7 +1441,6 @@ destruct(struct ofproto *ofproto_)
     flow_miss_batch_ofproto_destroyed(ofproto->backer->udpif, ofproto);
 
     hmap_remove(&all_ofproto_dpifs, &ofproto->all_ofproto_dpifs_node);
-    complete_operations(ofproto);
 
     OFPROTO_FOR_EACH_TABLE (table, &ofproto->up) {
         struct cls_cursor cursor;
@@ -1474,7 +1452,6 @@ destruct(struct ofproto *ofproto_)
         }
         ovs_rwlock_unlock(&table->cls.rwlock);
     }
-    complete_operations(ofproto);
 
     ovs_mutex_lock(&ofproto->flow_mod_mutex);
     LIST_FOR_EACH_SAFE (fm, next_fm, list_node, &ofproto->flow_mods) {
@@ -1578,10 +1555,6 @@ run(struct ofproto *ofproto_)
     struct ofbundle *bundle;
     int error;
 
-    if (!clogged) {
-        complete_operations(ofproto);
-    }
-
     if (mbridge_need_revalidate(ofproto->mbridge)) {
         ofproto->backer->need_revalidate = REV_RECONFIGURE;
         ovs_rwlock_wrlock(&ofproto->ml->rwlock);
@@ -1658,10 +1631,6 @@ wait(struct ofproto *ofproto_)
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct ofport_dpif *ofport;
     struct ofbundle *bundle;
-
-    if (!clogged && !list_is_empty(&ofproto->completions)) {
-        poll_immediate_wake();
-    }
 
     if (ofproto_get_flow_restore_wait()) {
         return;
@@ -3983,10 +3952,7 @@ rule_expire(struct rule_dpif *rule)
     long long int now;
     uint8_t reason;
 
-    if (rule->up.pending) {
-        /* We'll have to expire it later. */
-        return;
-    }
+    ovs_assert(!rule->up.pending);
 
     ovs_mutex_lock(&rule->up.timeout_mutex);
     hard_timeout = rule->up.hard_timeout;
@@ -4913,13 +4879,7 @@ complete_operation(struct rule_dpif *rule)
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
 
     ofproto->backer->need_revalidate = REV_FLOW_TABLE;
-    if (clogged) {
-        struct dpif_completion *c = xmalloc(sizeof *c);
-        c->op = rule->up.pending;
-        list_push_back(&ofproto->completions, &c->list_node);
-    } else {
-        ofoperation_complete(rule->up.pending, 0);
-    }
+    ofoperation_complete(rule->up.pending, 0);
 }
 
 static struct rule_dpif *rule_dpif_cast(const struct rule *rule)
@@ -5627,22 +5587,6 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
     rule_dpif_release(rule);
 }
 
-static void
-ofproto_dpif_clog(struct unixctl_conn *conn OVS_UNUSED, int argc OVS_UNUSED,
-                  const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
-{
-    clogged = true;
-    unixctl_command_reply(conn, NULL);
-}
-
-static void
-ofproto_dpif_unclog(struct unixctl_conn *conn OVS_UNUSED, int argc OVS_UNUSED,
-                    const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
-{
-    clogged = false;
-    unixctl_command_reply(conn, NULL);
-}
-
 /* Runs a self-check of flow translations in 'ofproto'.  Appends a message to
  * 'reply' describing the results. */
 static void
@@ -6059,10 +6003,6 @@ ofproto_dpif_unixctl_init(void)
                              ofproto_unixctl_fdb_flush, NULL);
     unixctl_command_register("fdb/show", "bridge", 1, 1,
                              ofproto_unixctl_fdb_show, NULL);
-    unixctl_command_register("ofproto/clog", "", 0, 0,
-                             ofproto_dpif_clog, NULL);
-    unixctl_command_register("ofproto/unclog", "", 0, 0,
-                             ofproto_dpif_unclog, NULL);
     unixctl_command_register("ofproto/self-check", "[bridge]", 0, 1,
                              ofproto_dpif_self_check, NULL);
     unixctl_command_register("dpif/dump-dps", "", 0, 0,
