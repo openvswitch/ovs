@@ -306,7 +306,7 @@ OFP_ASSERT(sizeof(struct ofp_action_vendor_header) == 8);
  * header and any padding used to make the action 64-bit aligned.
  * NB: The length of an action *must* always be a multiple of eight. */
 struct ofp_action_header {
-    ovs_be16 type;                  /* One of OFPAT10_*. */
+    ovs_be16 type;                  /* One of OFPAT*. */
     ovs_be16 len;                   /* Length of action, including this
                                        header.  This is the length of action,
                                        including any padding to make it

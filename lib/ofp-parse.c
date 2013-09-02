@@ -819,6 +819,10 @@ parse_named_action(enum ofputil_action_code code,
         }
         break;
 
+    case OFPUTIL_OFPAT11_GROUP:
+        error = str_to_u32(arg, &ofpact_put_GROUP(ofpacts)->group_id);
+        break;
+
     case OFPUTIL_NXAST_STACK_PUSH:
         error = nxm_parse_stack_action(ofpact_put_STACK_PUSH(ofpacts), arg);
         break;
@@ -1157,6 +1161,7 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
     fm->buffer_id = UINT32_MAX;
     fm->out_port = OFPP_ANY;
     fm->flags = 0;
+    fm->out_group = OFPG11_ANY;
     if (fields & F_ACTIONS) {
         act_str = strstr(string, "action");
         if (!act_str) {
@@ -1794,6 +1799,7 @@ parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *fsr,
     fsr->cookie_mask = fm.cookie_mask;
     fsr->match = fm.match;
     fsr->out_port = fm.out_port;
+    fsr->out_group = fm.out_group;
     fsr->table_id = fm.table_id;
     return NULL;
 }
@@ -1877,4 +1883,288 @@ exit:
         memset(flow, 0, sizeof *flow);
     }
     return error;
+}
+
+static char * WARN_UNUSED_RESULT
+parse_bucket_str(struct ofputil_bucket *bucket, char *str_,
+                  enum ofputil_protocol *usable_protocols)
+{
+    struct ofpbuf ofpacts;
+    char *pos, *act, *arg;
+    int n_actions;
+
+    bucket->weight = 1;
+    bucket->watch_port = OFPP_ANY;
+    bucket->watch_group = OFPG11_ANY;
+
+    pos = str_;
+    n_actions = 0;
+    ofpbuf_init(&ofpacts, 64);
+    while (ofputil_parse_key_value(&pos, &act, &arg)) {
+        char *error = NULL;
+
+        if (!strcasecmp(act, "weight")) {
+            error = str_to_u16(arg, "weight", &bucket->weight);
+        } else if (!strcasecmp(act, "watch_port")) {
+            if (!ofputil_port_from_string(arg, &bucket->watch_port)
+                || (ofp_to_u16(bucket->watch_port) >= ofp_to_u16(OFPP_MAX)
+                    && bucket->watch_port != OFPP_ANY)) {
+                error = xasprintf("%s: invalid watch_port", arg);
+            }
+        } else if (!strcasecmp(act, "watch_group")) {
+            error = str_to_u32(arg, &bucket->watch_group);
+            if (!error && bucket->watch_group > OFPG_MAX) {
+                error = xasprintf("invalid watch_group id %"PRIu32,
+                                  bucket->watch_group);
+            }
+        } else {
+            error = str_to_ofpact__(pos, act, arg, &ofpacts, n_actions,
+                                    usable_protocols);
+            n_actions++;
+        }
+
+        if (error) {
+            ofpbuf_uninit(&ofpacts);
+            return error;
+        }
+    }
+
+    ofpact_pad(&ofpacts);
+    bucket->ofpacts = ofpacts.data;
+    bucket->ofpacts_len = ofpacts.size;
+
+    return NULL;
+}
+
+static char * WARN_UNUSED_RESULT
+parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
+                          char *string,
+                          enum ofputil_protocol *usable_protocols)
+{
+    enum {
+        F_GROUP_TYPE  = 1 << 0,
+        F_BUCKETS     = 1 << 1,
+    } fields;
+    char *save_ptr = NULL;
+    bool had_type = false;
+    char *name;
+    struct ofputil_bucket *bucket;
+    char *error = NULL;
+
+    *usable_protocols = OFPUTIL_P_OF11_UP;
+
+    switch (command) {
+    case OFPGC11_ADD:
+        fields = F_GROUP_TYPE | F_BUCKETS;
+        break;
+
+    case OFPGC11_DELETE:
+        fields = 0;
+        break;
+
+    case OFPGC11_MODIFY:
+        fields = F_GROUP_TYPE | F_BUCKETS;
+        break;
+
+    default:
+        NOT_REACHED();
+    }
+
+    memset(gm, 0, sizeof *gm);
+    gm->command = command;
+    gm->group_id = OFPG_ANY;
+    list_init(&gm->buckets);
+    if (command == OFPGC11_DELETE && string[0] == '\0') {
+        gm->group_id = OFPG_ALL;
+        return NULL;
+    }
+
+    *usable_protocols = OFPUTIL_P_OF11_UP;
+
+    if (fields & F_BUCKETS) {
+        char *bkt_str = strstr(string, "bucket");
+
+        if (bkt_str) {
+            *bkt_str = '\0';
+        }
+
+        while (bkt_str) {
+            char *next_bkt_str;
+
+            bkt_str = strchr(bkt_str + 1, '=');
+            if (!bkt_str) {
+                error = xstrdup("must specify bucket content");
+                goto out;
+            }
+            bkt_str++;
+
+            next_bkt_str = strstr(bkt_str, "bucket");
+            if (next_bkt_str) {
+                *next_bkt_str = '\0';
+            }
+
+            bucket = xzalloc(sizeof(struct ofputil_bucket));
+            error = parse_bucket_str(bucket, bkt_str, usable_protocols);
+            if (error) {
+                free(bucket);
+                goto out;
+            }
+            list_push_back(&gm->buckets, &bucket->list_node);
+
+            bkt_str = next_bkt_str;
+        }
+    }
+
+    for (name = strtok_r(string, "=, \t\r\n", &save_ptr); name;
+         name = strtok_r(NULL, "=, \t\r\n", &save_ptr)) {
+        char *value;
+
+        value = strtok_r(NULL, ", \t\r\n", &save_ptr);
+        if (!value) {
+            error = xasprintf("field %s missing value", name);
+            goto out;
+        }
+
+        if (!strcmp(name, "group_id")) {
+            if(!strcmp(value, "all")) {
+                gm->group_id = OFPG_ALL;
+            } else {
+                char *error = str_to_u32(value, &gm->group_id);
+                if (error) {
+                    goto out;
+                }
+                if (gm->group_id != OFPG_ALL && gm->group_id > OFPG_MAX) {
+                    error = xasprintf("invalid group id %"PRIu32,
+                                      gm->group_id);
+                    goto out;
+                }
+            }
+        } else if (!strcmp(name, "type")){
+            if (!(fields & F_GROUP_TYPE)) {
+                error = xstrdup("type is not needed");
+                goto out;
+            }
+            if (!strcmp(value, "all")) {
+                gm->type = OFPGT11_ALL;
+            } else if (!strcmp(value, "select")) {
+                gm->type = OFPGT11_SELECT;
+            } else if (!strcmp(value, "indirect")) {
+                gm->type = OFPGT11_INDIRECT;
+            } else if (!strcmp(value, "ff") ||
+                       !strcmp(value, "fast_failover")) {
+                gm->type = OFPGT11_FF;
+            } else {
+                error = xasprintf("invalid group type %s", value);
+                goto out;
+            }
+            had_type = true;
+        } else if (!strcmp(name, "bucket")) {
+            error = xstrdup("bucket is not needed");
+            goto out;
+        } else {
+            error = xasprintf("unknown keyword %s", name);
+            goto out;
+        }
+    }
+    if (gm->group_id == OFPG_ANY) {
+        error = xstrdup("must specify a group_id");
+        goto out;
+    }
+    if (fields & F_GROUP_TYPE && !had_type) {
+        error = xstrdup("must specify a type");
+        goto out;
+    }
+
+    /* Validate buckets. */
+    LIST_FOR_EACH (bucket, list_node, &gm->buckets) {
+        if (bucket->weight != 1 && gm->type != OFPGT11_SELECT) {
+            error = xstrdup("Only select groups can have bucket weights.");
+            goto out;
+        }
+    }
+    if (gm->type == OFPGT11_INDIRECT && !list_is_short(&gm->buckets)) {
+        error = xstrdup("Indirect groups can have at most one bucket.");
+        goto out;
+    }
+
+    return NULL;
+ out:
+    ofputil_bucket_list_destroy(&gm->buckets);
+    return error;
+}
+
+char * WARN_UNUSED_RESULT
+parse_ofp_group_mod_str(struct ofputil_group_mod *gm, uint16_t command,
+                        const char *str_,
+                        enum ofputil_protocol *usable_protocols)
+{
+    char *string = xstrdup(str_);
+    char *error = parse_ofp_group_mod_str__(gm, command, string,
+                                            usable_protocols);
+    free(string);
+
+    if (error) {
+        ofputil_bucket_list_destroy(&gm->buckets);
+    }
+    return error;
+}
+
+char * WARN_UNUSED_RESULT
+parse_ofp_group_mod_file(const char *file_name, uint16_t command,
+                         struct ofputil_group_mod **gms, size_t *n_gms,
+                         enum ofputil_protocol *usable_protocols)
+{
+    size_t allocated_gms;
+    int line_number;
+    FILE *stream;
+    struct ds s;
+
+    *gms = NULL;
+    *n_gms = 0;
+
+    stream = !strcmp(file_name, "-") ? stdin : fopen(file_name, "r");
+    if (stream == NULL) {
+        return xasprintf("%s: open failed (%s)",
+                         file_name, ovs_strerror(errno));
+    }
+
+    allocated_gms = *n_gms;
+    ds_init(&s);
+    line_number = 0;
+    *usable_protocols = OFPUTIL_P_OF11_UP;
+    while (!ds_get_preprocessed_line(&s, stream, &line_number)) {
+        enum ofputil_protocol usable;
+        char *error;
+
+        if (*n_gms >= allocated_gms) {
+            *gms = x2nrealloc(*gms, &allocated_gms, sizeof **gms);
+        }
+        error = parse_ofp_group_mod_str(&(*gms)[*n_gms], command, ds_cstr(&s),
+                                        &usable);
+        if (error) {
+            size_t i;
+
+            for (i = 0; i < *n_gms; i++) {
+                ofputil_bucket_list_destroy(&(*gms)[i].buckets);
+            }
+            free(*gms);
+            *gms = NULL;
+            *n_gms = 0;
+
+            ds_destroy(&s);
+            if (stream != stdin) {
+                fclose(stream);
+            }
+
+            return xasprintf("%s:%d: %s", file_name, line_number, error);
+        }
+        *usable_protocols &= usable;
+        *n_gms += 1;
+    }
+
+    ds_destroy(&s);
+    if (stream != stdin) {
+        fclose(stream);
+    }
+    return NULL;
 }

@@ -6384,4 +6384,10 @@ const struct ofproto_class ofproto_dpif_class = {
     NULL,                       /* meter_set */
     NULL,                       /* meter_get */
     NULL,                       /* meter_del */
+    NULL,                       /* group_alloc */
+    NULL,                       /* group_construct */
+    NULL,                       /* group_destruct */
+    NULL,                       /* group_dealloc */
+    NULL,                       /* group_modify */
+    NULL,                       /* group_get_stats */
 };

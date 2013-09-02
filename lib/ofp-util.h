@@ -43,6 +43,14 @@ void ofputil_format_port(ofp_port_t port, struct ds *);
 void ofputil_port_to_string(ofp_port_t, char namebuf[OFP_MAX_PORT_NAME_LEN],
                             size_t bufsize);
 
+/* Group numbers. */
+enum { MAX_GROUP_NAME_LEN = INT_STRLEN(uint32_t) };
+bool ofputil_group_from_string(const char *, uint32_t *group_id);
+void ofputil_format_group(uint32_t group_id, struct ds *);
+void ofputil_group_to_string(uint32_t group_id,
+                             char namebuf[MAX_GROUP_NAME_LEN + 1],
+                             size_t bufsize);
+
 /* Converting OFPFW10_NW_SRC_MASK and OFPFW10_NW_DST_MASK wildcard bit counts
  * to and from IP bitmasks. */
 ovs_be32 ofputil_wcbits_to_netmask(int wcbits);
@@ -268,6 +276,7 @@ struct ofputil_flow_mod {
     uint16_t hard_timeout;
     uint32_t buffer_id;
     ofp_port_t out_port;
+    uint32_t out_group;
     enum ofputil_flow_mod_flags flags;
     struct ofpact *ofpacts;     /* Series of "struct ofpact"s. */
     size_t ofpacts_len;         /* Length of ofpacts, in bytes. */
@@ -287,6 +296,7 @@ struct ofputil_flow_stats_request {
     ovs_be64 cookie;
     ovs_be64 cookie_mask;
     ofp_port_t out_port;
+    uint32_t out_group;
     uint8_t table_id;
 };
 
@@ -866,5 +876,89 @@ size_t ofputil_count_queue_stats(const struct ofp_header *);
 int ofputil_decode_queue_stats(struct ofputil_queue_stats *qs, struct ofpbuf *msg);
 void ofputil_append_queue_stat(struct list *replies,
                                const struct ofputil_queue_stats *oqs);
+
+/* Bucket for use in groups. */
+struct ofputil_bucket {
+    struct list list_node;
+    uint16_t weight;            /* Relative weight, for "select" groups. */
+    ofp_port_t watch_port;      /* Port whose state affects whether this bucket
+                                 * is live. Only required for fast failover
+                                 * groups. */
+    uint32_t watch_group;       /* Group whose state affects whether this
+                                 * bucket is live. Only required for fast
+                                 * failover groups. */
+    struct ofpact *ofpacts;     /* Series of "struct ofpact"s. */
+    size_t ofpacts_len;         /* Length of ofpacts, in bytes. */
+};
+
+/* Protocol-independent group_mod. */
+struct ofputil_group_mod {
+    uint16_t command;             /* One of OFPGC11_*. */
+    uint8_t type;                 /* One of OFPGT11_*. */
+    uint32_t group_id;            /* Group identifier. */
+    struct list buckets;          /* Contains "struct ofputil_bucket"s. */
+};
+
+struct bucket_counter {
+    uint64_t packet_count;   /* Number of packets processed by bucket. */
+    uint64_t byte_count;     /* Number of bytes processed by bucket. */
+};
+
+/* Group stats reply, independent of protocol. */
+struct ofputil_group_stats {
+    uint32_t group_id;    /* Group identifier. */
+    uint32_t ref_count;
+    uint64_t packet_count;      /* Packet count, UINT64_MAX if unknown. */
+    uint64_t byte_count;        /* Byte count, UINT64_MAX if unknown. */
+    uint32_t duration_sec;      /* UINT32_MAX if unknown. */
+    uint32_t duration_nsec;
+    uint32_t n_buckets;
+    struct bucket_counter bucket_stats[16];
+};
+
+/* Group features reply, independent of protocol. */
+struct ofputil_group_features {
+    uint32_t  types;           /* Bitmap of OFPGT_* values supported. */
+    uint32_t  capabilities;    /* Bitmap of OFPGFC12_* capability supported. */
+    uint32_t  max_groups[4];   /* Maximum number of groups for each type. */
+    uint32_t  actions[4];      /* Bitmaps of OFPAT_* that are supported. */
+};
+
+/* Group desc reply, independent of protocol. */
+struct ofputil_group_desc {
+    uint8_t type;               /* One of OFPGT_*. */
+    uint32_t group_id;          /* Group identifier. */
+    struct list buckets;        /* Contains "struct ofputil_bucket"s. */
+};
+
+void ofputil_bucket_list_destroy(struct list *buckets);
+
+struct ofpbuf *ofputil_encode_group_stats_request(enum ofp_version,
+                                                  uint32_t group_id);
+enum ofperr ofputil_decode_group_stats_request(
+    const struct ofp_header *request, uint32_t *group_id);
+void ofputil_append_group_stats(struct list *replies,
+                                const struct ofputil_group_stats *);
+struct ofpbuf *ofputil_encode_group_features_request(enum ofp_version);
+struct ofpbuf *ofputil_encode_group_features_reply(
+    const struct ofputil_group_features *, const struct ofp_header *request);
+void ofputil_decode_group_features_reply(const struct ofp_header *,
+                                         struct ofputil_group_features *);
+struct ofpbuf *ofputil_encode_group_mod(enum ofp_version ofp_version,
+                                        const struct ofputil_group_mod *gm);
+
+enum ofperr ofputil_decode_group_mod(const struct ofp_header *,
+                                     struct ofputil_group_mod *);
+
+int ofputil_decode_group_stats_reply(struct ofpbuf *,
+                                     struct ofputil_group_stats *);
+
+int ofputil_decode_group_desc_reply(struct ofputil_group_desc *,
+                                    struct ofpbuf *);
+
+void ofputil_append_group_desc_reply(const struct ofputil_group_desc *,
+                                     struct list *buckets,
+                                     struct list *replies);
+struct ofpbuf *ofputil_encode_group_desc_request(enum ofp_version);
 
 #endif /* ofp-util.h */

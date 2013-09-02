@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2011, 2012 The Board of Trustees of The Leland Stanford
+/* Copyright (c) 2008, 2011, 2012, 2013 The Board of Trustees of The Leland Stanford
  * Junior University
  *
  * We are making the OpenFlow specification and associated documentation
@@ -150,8 +150,8 @@ OFP_ASSERT(sizeof(struct ofp11_port_mod) == 32);
 
 /* Group setup and teardown (controller -> datapath). */
 struct ofp11_group_mod {
-    ovs_be16 command;             /* One of OFPGC_*. */
-    uint8_t type;                 /* One of OFPGT_*. */
+    ovs_be16 command;             /* One of OFPGC11_*. */
+    uint8_t type;                 /* One of OFPGT11_*. */
     uint8_t pad;                  /* Pad to 64 bits. */
     ovs_be32 group_id;            /* Group identifier. */
     /* struct ofp11_bucket buckets[0]; The bucket length is inferred from the
@@ -725,7 +725,7 @@ OFP_ASSERT(sizeof(struct ofp11_bucket_counter) == 16);
 /* Body of reply to OFPST11_GROUP_DESC request. */
 struct ofp11_group_desc_stats {
     ovs_be16 length;            /* Length of this entry. */
-    uint8_t type;               /* One of OFPGT_*. */
+    uint8_t type;               /* One of OFPGT11_*. */
     uint8_t pad;                /* Pad to 64 bits. */
     ovs_be32 group_id;          /* Group identifier. */
     /* struct ofp11_bucket buckets[0]; */

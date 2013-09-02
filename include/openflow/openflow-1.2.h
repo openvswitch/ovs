@@ -301,7 +301,7 @@ OFP_ASSERT(sizeof(struct ofp12_table_stats) == 128);
 
 /* Body of reply to OFPST12_GROUP_FEATURES request. Group features. */
 struct ofp12_group_features_stats {
-    ovs_be32  types;           /* Bitmap of OFPGT_* values supported. */
+    ovs_be32  types;           /* Bitmap of OFPGT11_* values supported. */
     ovs_be32  capabilities;    /* Bitmap of OFPGFC12_* capability supported. */
     ovs_be32  max_groups[4];   /* Maximum number of groups for each type. */
     ovs_be32  actions[4];      /* Bitmaps of OFPAT_* that are supported. */

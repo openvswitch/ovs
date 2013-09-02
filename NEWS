@@ -7,6 +7,12 @@ v2.0.0 - xx xxx xxxx
     - OpenFlow:
       * Experimental support for OpenFlow 1.1 (in addition to 1.2 and
         1.3, which had experimental support in 1.10).
+      * Experimental protocol support for OpenFlow 1.1+ groups.  This
+        does not yet include an implementation in the Open vSwitch
+        software switch.
+      * Experimental protocol support for OpenFlow 1.2+ meters.  This
+        does not yet include an implementation in the Open vSwitch
+        software switch.
       * New support for matching outer source and destination IP address
         of tunneled packets, for tunnel ports configured with the newly
         added "remote_ip=flow" and "local_ip=flow" options.
@@ -26,6 +32,7 @@ v2.0.0 - xx xxx xxxx
     - Support for Linux kernels up to 3.10
     - ovs-ofctl:
       * New "ofp-parse" for printing OpenFlow messages read from a file.
+      * New commands for OpenFlow 1.1+ groups.
     - Added configurable flow caching support to IPFIX exporter.
 
 

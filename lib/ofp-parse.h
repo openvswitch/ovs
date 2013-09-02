@@ -29,6 +29,7 @@ struct ofpbuf;
 struct ofputil_flow_mod;
 struct ofputil_flow_monitor_request;
 struct ofputil_flow_stats_request;
+struct ofputil_group_mod;
 struct ofputil_meter_mod;
 enum ofputil_protocol;
 
@@ -64,6 +65,16 @@ char *parse_ofp_meter_mod_str(struct ofputil_meter_mod *, const char *string,
 char *parse_flow_monitor_request(struct ofputil_flow_monitor_request *,
                                  const char *,
                                  enum ofputil_protocol *usable_protocols)
+    WARN_UNUSED_RESULT;
+
+char *parse_ofp_group_mod_file(const char *file_name, uint16_t command,
+                               struct ofputil_group_mod **gms, size_t *n_gms,
+                               enum ofputil_protocol *usable_protocols)
+    WARN_UNUSED_RESULT;
+
+char *parse_ofp_group_mod_str(struct ofputil_group_mod *, uint16_t command,
+                              const char *string,
+                              enum ofputil_protocol *usable_protocols)
     WARN_UNUSED_RESULT;
 
 #endif /* ofp-parse.h */

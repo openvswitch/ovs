@@ -51,6 +51,7 @@
 #define OFPACTS                                                     \
     /* Output. */                                                   \
     DEFINE_OFPACT(OUTPUT,          ofpact_output,        ofpact)    \
+    DEFINE_OFPACT(GROUP,           ofpact_group,         ofpact)    \
     DEFINE_OFPACT(CONTROLLER,      ofpact_controller,    ofpact)    \
     DEFINE_OFPACT(ENQUEUE,         ofpact_enqueue,       ofpact)    \
     DEFINE_OFPACT(OUTPUT_REG,      ofpact_output_reg,    ofpact)    \
@@ -490,6 +491,14 @@ struct ofpact_goto_table {
     uint8_t table_id;
 };
 
+/* OFPACT_GROUP.
+ *
+ * Used for OFPAT11_GROUP. */
+struct ofpact_group {
+    struct ofpact ofpact;
+    uint32_t group_id;
+};
+
 /* Converting OpenFlow to ofpacts. */
 enum ofperr ofpacts_pull_openflow10(struct ofpbuf *openflow,
                                     unsigned int actions_len,
@@ -517,6 +526,8 @@ void ofpacts_put_openflow11_instructions(const struct ofpact[],
 /* Working with ofpacts. */
 bool ofpacts_output_to_port(const struct ofpact[], size_t ofpacts_len,
                             ofp_port_t port);
+bool ofpacts_output_to_group(const struct ofpact[], size_t ofpacts_len,
+                             uint32_t group_id);
 bool ofpacts_equal(const struct ofpact a[], size_t a_len,
                    const struct ofpact b[], size_t b_len);
 

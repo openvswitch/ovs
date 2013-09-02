@@ -860,6 +860,12 @@ ofpact_from_openflow11(const union ofp_action *a, struct ofpbuf *out)
         break;
     }
 
+    case OFPUTIL_OFPAT11_GROUP: {
+        struct ofp11_action_group *oag = (struct ofp11_action_group *)a;
+        ofpact_put_GROUP(out)->group_id = ntohl(oag->group_id);
+        break;
+    }
+
 #define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) case OFPUTIL_##ENUM:
 #include "ofp-util.def"
         return ofpact_from_nxast(a, code, out);
@@ -945,6 +951,7 @@ ovs_instruction_type_from_ofpact_type(enum ofpact_type type)
     case OFPACT_GOTO_TABLE:
         return OVSINST_OFPIT11_GOTO_TABLE;
     case OFPACT_OUTPUT:
+    case OFPACT_GROUP:
     case OFPACT_CONTROLLER:
     case OFPACT_ENQUEUE:
     case OFPACT_OUTPUT_REG:
@@ -1302,6 +1309,9 @@ ofpact_check__(const struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
         }
         return 0;
 
+    case OFPACT_GROUP:
+        return 0;
+
     default:
         NOT_REACHED();
     }
@@ -1598,6 +1608,7 @@ ofpact_to_nxast(const struct ofpact *a, struct ofpbuf *out)
         ofpact_sample_to_nxast(ofpact_get_SAMPLE(a), out);
         break;
 
+    case OFPACT_GROUP:
     case OFPACT_OUTPUT:
     case OFPACT_ENQUEUE:
     case OFPACT_SET_VLAN_VID:
@@ -1708,6 +1719,9 @@ ofpact_to_openflow10(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_GOTO_TABLE:
     case OFPACT_METER:
         /* XXX */
+        break;
+
+    case OFPACT_GROUP:
         break;
 
     case OFPACT_CONTROLLER:
@@ -1882,6 +1896,11 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_METER:
         NOT_REACHED();
 
+    case OFPACT_GROUP:
+        ofputil_put_OFPAT11_GROUP(out)->group_id =
+            htonl(ofpact_get_GROUP(a)->group_id);
+        break;
+
     case OFPACT_CONTROLLER:
     case OFPACT_OUTPUT_REG:
     case OFPACT_BUNDLE:
@@ -2051,6 +2070,7 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, ofp_port_t port)
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_GOTO_TABLE:
     case OFPACT_METER:
+    case OFPACT_GROUP:
     default:
         return false;
     }
@@ -2066,6 +2086,24 @@ ofpacts_output_to_port(const struct ofpact *ofpacts, size_t ofpacts_len,
 
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
         if (ofpact_outputs_to_port(a, port)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/* Returns true if any action in the 'ofpacts_len' bytes of 'ofpacts' outputs
+ * to 'group', false otherwise. */
+bool
+ofpacts_output_to_group(const struct ofpact *ofpacts, size_t ofpacts_len,
+                        uint32_t group_id)
+{
+    const struct ofpact *a;
+
+    OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
+        if (a->type == OFPACT_GROUP
+            && ofpact_get_GROUP(a)->group_id == group_id) {
             return true;
         }
     }
@@ -2382,6 +2420,11 @@ ofpact_format(const struct ofpact *a, struct ds *s)
         ds_put_format(s, "%s:%"PRIu32,
                       ovs_instruction_name_from_type(OVSINST_OFPIT13_METER),
                       ofpact_get_METER(a)->meter_id);
+        break;
+
+    case OFPACT_GROUP:
+        ds_put_format(s, "group:%"PRIu32,
+                      ofpact_get_GROUP(a)->group_id);
         break;
     }
 }

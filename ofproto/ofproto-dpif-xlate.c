@@ -2181,6 +2181,10 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
                                 ofpact_get_OUTPUT(a)->max_len, true);
             break;
 
+        case OFPACT_GROUP:
+            /* XXX not yet implemented */
+            break;
+
         case OFPACT_CONTROLLER:
             controller = ofpact_get_CONTROLLER(a);
             execute_controller_action(ctx, controller->max_len,

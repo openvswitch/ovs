@@ -177,6 +177,9 @@ enum ofpraw {
     /* NXT 1.0+ (13): struct nx_flow_mod, uint8_t[8][]. */
     OFPRAW_NXT_FLOW_MOD,
 
+    /* OFPT 1.1+ (15): struct ofp11_group_mod, uint8_t[8][]. */
+    OFPRAW_OFPT11_GROUP_MOD,
+
     /* OFPT 1.0 (15): struct ofp10_port_mod. */
     OFPRAW_OFPT10_PORT_MOD,
     /* OFPT 1.1+ (16): struct ofp11_port_mod. */
@@ -295,15 +298,15 @@ enum ofpraw {
     /* OFPST 1.1+ (6): struct ofp11_group_stats_request. */
     OFPRAW_OFPST11_GROUP_REQUEST,
 
-    /* OFPST 1.1-1.2 (6): struct ofp11_group_stats[]. */
+    /* OFPST 1.1-1.2 (6): uint8_t[8][]. */
     OFPRAW_OFPST11_GROUP_REPLY,
-    /* OFPST 1.3 (6): struct ofp13_group_stats[]. */
+    /* OFPST 1.3 (6): uint8_t[8][]. */
     OFPRAW_OFPST13_GROUP_REPLY,
 
     /* OFPST 1.1+ (7): void. */
     OFPRAW_OFPST11_GROUP_DESC_REQUEST,
 
-    /* OFPST 1.1+ (7): struct ofp11_group_desc_stats[]. */
+    /* OFPST 1.1+ (7): uint8_t[8][]. */
     OFPRAW_OFPST11_GROUP_DESC_REPLY,
 
     /* OFPST 1.2+ (8): void. */
@@ -460,6 +463,7 @@ enum ofptype {
     OFPTYPE_FLOW_MOD,            /* OFPRAW_OFPT10_FLOW_MOD.
                                   * OFPRAW_OFPT11_FLOW_MOD.
                                   * OFPRAW_NXT_FLOW_MOD. */
+    OFPTYPE_GROUP_MOD,           /* OFPRAW_OFPT11_GROUP_MOD. */
     OFPTYPE_PORT_MOD,            /* OFPRAW_OFPT10_PORT_MOD.
                                   * OFPRAW_OFPT11_PORT_MOD. */
 

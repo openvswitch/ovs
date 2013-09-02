@@ -1585,13 +1585,6 @@ OFPST_QUEUE reply (xid=0x1): 6 queues
 ])
 AT_CLEANUP
 
-AT_SETUP([OFPST_PORT_DESC request - OF1.0])
-AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
-AT_CHECK([ovs-ofctl ofp-print "0110000c00000001000d0000"], [0], [dnl
-OFPST_PORT_DESC request (xid=0x1):
-])
-AT_CLEANUP
-
 AT_SETUP([OFPST_QUEUE reply - OF1.1])
 AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
 AT_CHECK([ovs-ofctl ofp-print "\
@@ -1676,6 +1669,120 @@ OFPST_QUEUE reply (OF1.3) (xid=0x1): 6 queues
   port 2 queue 2: bytes=0, pkts=0, errors=0, duration=100.5s
   port 1 queue 1: bytes=0, pkts=0, errors=0, duration=100.5s
   port 1 queue 2: bytes=0, pkts=0, errors=0, duration=?
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_GROUP request])
+AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
+AT_CHECK([ovs-ofctl ofp-print "\
+02 12 00 18 00 00 00 02 00 06 00 00 00 00 00 00 \
+ff ff ff ff 00 00 00 00 \
+"], [0], [OFPST_GROUP request (OF1.1) (xid=0x2): group_id=ANY
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_GROUP reply - OF1.1])
+AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
+AT_CHECK([ovs-ofctl ofp-print "\
+02 13 00 a0 00 00 00 02 00 06 00 00 00 00 00 00 \
+00 50 00 00 87 65 43 21 00 00 00 04 00 00 00 00 \
+00 00 00 00 00 00 88 88 00 00 00 00 00 77 77 77 \
+00 00 00 00 00 00 11 11 00 00 00 00 00 22 22 22 \
+00 00 00 00 00 00 11 11 00 00 00 00 00 22 22 22 \
+00 00 00 00 00 00 66 66 00 00 00 00 00 33 33 33 \
+00 40 00 00 00 00 00 05 00 00 00 02 00 00 00 00 \
+00 00 00 00 00 00 88 88 00 00 00 00 00 77 77 77 \
+00 00 00 00 00 00 11 11 00 00 00 00 00 22 22 22 \
+00 00 00 00 00 00 11 11 00 00 00 00 00 22 22 22 \
+"], [0], [dnl
+OFPST_GROUP reply (OF1.1) (xid=0x2):
+ group_id=2271560481,ref_count=4,packet_count=34952,byte_count=7829367,bucket0:packet_count=4369,byte_count=2236962,bucket1:packet_count=4369,byte_count=2236962,bucket2:packet_count=26214,byte_count=3355443
+ group_id=5,ref_count=2,packet_count=34952,byte_count=7829367,bucket0:packet_count=4369,byte_count=2236962,bucket1:packet_count=4369,byte_count=2236962
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_GROUP reply - OF1.3])
+AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
+AT_CHECK([ovs-ofctl ofp-print "\
+04 13 00 b0 00 00 00 02 00 06 00 00 00 00 00 00 \
+00 58 00 00 87 65 43 21 00 00 00 04 00 00 00 00 \
+00 00 00 00 00 00 88 88 00 00 00 00 00 77 77 77 \
+00 00 00 12 1d cd 65 00 \
+00 00 00 00 00 00 11 11 00 00 00 00 00 22 22 22 \
+00 00 00 00 00 00 11 11 00 00 00 00 00 22 22 22 \
+00 00 00 00 00 00 66 66 00 00 00 00 00 33 33 33 \
+00 48 00 00 00 00 00 05 00 00 00 02 00 00 00 00 \
+00 00 00 00 00 00 88 88 00 00 00 00 00 77 77 77 \
+00 00 00 10 1d cd 65 00 \
+00 00 00 00 00 00 11 11 00 00 00 00 00 22 22 22 \
+00 00 00 00 00 00 11 11 00 00 00 00 00 22 22 22 \
+"], [0], [dnl
+OFPST_GROUP reply (OF1.3) (xid=0x2):
+ group_id=2271560481,duration=18.5s,ref_count=4,packet_count=34952,byte_count=7829367,bucket0:packet_count=4369,byte_count=2236962,bucket1:packet_count=4369,byte_count=2236962,bucket2:packet_count=26214,byte_count=3355443
+ group_id=5,duration=16.5s,ref_count=2,packet_count=34952,byte_count=7829367,bucket0:packet_count=4369,byte_count=2236962,bucket1:packet_count=4369,byte_count=2236962
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_GROUP_DESC request])
+AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
+AT_CHECK([ovs-ofctl ofp-print "\
+02 12 00 10 00 00 00 02 00 07 00 00 00 00 00 00 \
+"], [0], [OFPST_GROUP_DESC request (OF1.1) (xid=0x2):
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_GROUP_DESC reply])
+AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
+AT_CHECK([ovs-ofctl ofp-print "\
+02 13 00 78 00 00 00 02 00 07 00 00 00 00 00 00 \
+00 68 01 00 00 00 20 00 \
+00 20 00 64 00 00 00 01 ff ff ff ff 00 00 00 00 \
+00 00 00 10 00 00 00 01 00 00 00 00 00 00 00 00 \
+00 20 00 c8 00 00 00 02 ff ff ff ff 00 00 00 00 \
+00 00 00 10 00 00 00 02 00 00 00 00 00 00 00 00 \
+00 20 00 c8 00 00 00 03 ff ff ff ff 00 00 00 00 \
+00 00 00 10 00 00 00 03 00 00 00 00 00 00 00 00 \
+"], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.1) (xid=0x2):
+ group_id=8192,type=select,bucket=weight:100,watch_port:1,actions=output:1,bucket=weight:200,watch_port:2,actions=output:2,bucket=weight:200,watch_port:3,actions=output:3
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_GROUP_FEATURES request])
+AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
+AT_CHECK([ovs-ofctl ofp-print "\
+03 12 00 10 00 00 00 02 00 08 00 00 00 00 00 00 \
+"], [0], [OFPST_GROUP_FEATURES request (OF1.2) (xid=0x2):
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_GROUP_FEATURES reply])
+AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
+AT_CHECK([ovs-ofctl ofp-print "\
+03 13 00 38 00 00 00 02 00 08 00 00 00 00 00 00 \
+00 00 00 0f 00 00 00 0f \
+00 00 00 01 00 00 00 02 00 00 00 03 00 00 00 04 \
+00 00 00 01 00 00 00 03 00 00 00 07 00 00 00 0f \
+"], [0], [dnl
+OFPST_GROUP_FEATURES reply (OF1.2) (xid=0x2):
+ Group table:
+    Types:  0xf
+    Capabilities:  0xf
+    All group :
+        max_groups = 0x1 actions=0x00000001
+    Select group :
+        max_groups = 0x2 actions=0x00000003
+    Indirect group :
+        max_groups = 0x3 actions=0x00000007
+    Fast Failover group :
+        max_groups = 0x4 actions=0x0000000f
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_PORT_DESC request - OF1.0])
+AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
+AT_CHECK([ovs-ofctl ofp-print "0110000c00000001000d0000"], [0], [dnl
+OFPST_PORT_DESC request (xid=0x1):
 ])
 AT_CLEANUP
 
@@ -2065,6 +2172,22 @@ ff ff ff ff 01 00 00 00 00 14 00 00 00 00 00 00 \
 00 07 00 1f 00 01 00 04 00 00 00 00 00 00 00 05 \
 " 3], [0], [dnl
 NXT_FLOW_MOD (xid=0x2): ADD NXM_NX_TUN_ID(00000000000001c8), NXM_NX_REG0(0000007b) out_port:256 actions=load:0x5->NXM_NX_REG0[[]]
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_GROUP_MOD])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+02 0f 00 70 11 22 33 44 00 00 01 00 87 65 43 21 \
+00 20 00 64 00 00 00 01 ff ff ff ff 00 00 00 00 \
+00 00 00 10 00 00 00 01 00 00 00 00 00 00 00 00 \
+00 20 00 c8 00 00 00 02 ff ff ff ff 00 00 00 00 \
+00 00 00 10 00 00 00 02 00 00 00 00 00 00 00 00 \
+00 20 00 c8 00 00 00 03 ff ff ff ff 00 00 00 00 \
+00 00 00 10 00 00 00 03 00 00 00 00 00 00 00 00 \
+"], [0], [dnl
+OFPT_GROUP_MOD (OF1.1) (xid=0x11223344):
+ ADD group_id=2271560481,type=select,bucket=weight:100,watch_port:1,actions=output:1,bucket=weight:200,watch_port:2,actions=output:2,bucket=weight:200,watch_port:3,actions=output:3
 ])
 AT_CLEANUP
 

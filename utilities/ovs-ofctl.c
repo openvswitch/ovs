@@ -301,6 +301,13 @@ usage(void)
            "  monitor SWITCH [MISSLEN] [invalid_ttl] [watch:[...]]\n"
            "                              print packets received from SWITCH\n"
            "  snoop SWITCH                snoop on SWITCH and its controller\n"
+           "  add-group SWITCH GROUP      add group described by GROUP\n"
+           "  add-group SWITCH FILE       add group from FILE\n"
+           "  mod-group SWITCH GROUP      modify specific group\n"
+           "  del-groups SWITCH [GROUP]   delete matching GROUPs\n"
+           "  dump-group-features SWITCH  print group features\n"
+           "  dump-groups SWITCH          print group description\n"
+           "  dump-group-stats SWITCH [GROUP]  print group statistics\n"
            "\nFor OpenFlow switches and controllers:\n"
            "  probe TARGET                probe whether TARGET is up\n"
            "  ping TARGET [N]             latency of N-byte echos\n"
@@ -1843,6 +1850,153 @@ ofctl_benchmark(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
+ofctl_group_mod__(const char *remote, struct ofputil_group_mod *gms,
+                 size_t n_gms)
+{
+    struct ofputil_group_mod *gm;
+    struct ofpbuf *request;
+
+    struct vconn *vconn;
+    size_t i;
+
+    open_vconn(remote, &vconn);
+
+    for (i = 0; i < n_gms; i++) {
+        gm = &gms[i];
+        request = ofputil_encode_group_mod(vconn_get_version(vconn), gm);
+        if (request) {
+            transact_noreply(vconn, request);
+        }
+    }
+
+    vconn_close(vconn);
+
+}
+
+
+static void
+ofctl_group_mod_file(int argc OVS_UNUSED, char *argv[], uint16_t command)
+{
+    struct ofputil_group_mod *gms = NULL;
+    enum ofputil_protocol usable_protocols;
+    size_t n_gms = 0;
+    char *error;
+
+    error = parse_ofp_group_mod_file(argv[2], command, &gms, &n_gms,
+                                     &usable_protocols);
+    if (error) {
+        ovs_fatal(0, "%s", error);
+    }
+    ofctl_group_mod__(argv[1], gms, n_gms);
+    free(gms);
+}
+
+static void
+ofctl_group_mod(int argc, char *argv[], uint16_t command)
+{
+    if (argc > 2 && !strcmp(argv[2], "-")) {
+        ofctl_group_mod_file(argc, argv, command);
+    } else {
+        enum ofputil_protocol usable_protocols;
+        struct ofputil_group_mod gm;
+        char *error;
+
+        error = parse_ofp_group_mod_str(&gm, command, argc > 2 ? argv[2] : "",
+                                        &usable_protocols);
+        if (error) {
+            ovs_fatal(0, "%s", error);
+        }
+        ofctl_group_mod__(argv[1], &gm, 1);
+    }
+}
+
+static void
+ofctl_add_group(int argc, char *argv[])
+{
+    ofctl_group_mod(argc, argv, OFPGC11_ADD);
+}
+
+static void
+ofctl_add_groups(int argc, char *argv[])
+{
+    ofctl_group_mod_file(argc, argv, OFPGC11_ADD);
+}
+
+static void
+ofctl_mod_group(int argc, char *argv[])
+{
+    ofctl_group_mod(argc, argv, OFPGC11_MODIFY);
+}
+
+static void
+ofctl_del_groups(int argc, char *argv[])
+{
+    ofctl_group_mod(argc, argv, OFPGC11_DELETE);
+}
+
+static void
+ofctl_dump_group_stats(int argc, char *argv[])
+{
+    enum ofputil_protocol usable_protocols;
+    struct ofputil_group_mod gm;
+    struct ofpbuf *request;
+    struct vconn *vconn;
+    uint32_t group_id;
+    char *error;
+
+    memset(&gm, 0, sizeof gm);
+
+    error = parse_ofp_group_mod_str(&gm, OFPGC11_DELETE,
+                                    argc > 2 ? argv[2] : "",
+                                    &usable_protocols);
+    if (error) {
+        ovs_fatal(0, "%s", error);
+    }
+
+    group_id = gm.group_id;
+
+    open_vconn(argv[1], &vconn);
+    request = ofputil_encode_group_stats_request(vconn_get_version(vconn),
+                                                 group_id);
+    if (request) {
+        dump_stats_transaction(vconn, request);
+    }
+
+    vconn_close(vconn);
+}
+
+static void
+ofctl_dump_group_desc(int argc OVS_UNUSED, char *argv[])
+{
+    struct ofpbuf *request;
+    struct vconn *vconn;
+
+    open_vconn(argv[1], &vconn);
+
+    request = ofputil_encode_group_desc_request(vconn_get_version(vconn));
+    if (request) {
+        dump_stats_transaction(vconn, request);
+    }
+
+    vconn_close(vconn);
+}
+
+static void
+ofctl_dump_group_features(int argc OVS_UNUSED, char *argv[])
+{
+    struct ofpbuf *request;
+    struct vconn *vconn;
+
+    open_vconn(argv[1], &vconn);
+    request = ofputil_encode_group_features_request(vconn_get_version(vconn));
+    if (request) {
+        dump_stats_transaction(vconn, request);
+    }
+
+    vconn_close(vconn);
+}
+
+static void
 ofctl_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     usage();
@@ -3004,6 +3158,14 @@ static const struct command all_commands[] = {
     { "probe", 1, 1, ofctl_probe },
     { "ping", 1, 2, ofctl_ping },
     { "benchmark", 3, 3, ofctl_benchmark },
+
+    { "add-group", 1, 2, ofctl_add_group },
+    { "add-groups", 1, 2, ofctl_add_groups },
+    { "mod-group", 1, 2, ofctl_mod_group },
+    { "del-groups", 1, 2, ofctl_del_groups },
+    { "dump-groups", 1, 1, ofctl_dump_group_desc },
+    { "dump-group-stats", 1, 2, ofctl_dump_group_stats },
+    { "dump-group-features", 1, 1, ofctl_dump_group_features },
     { "help", 0, INT_MAX, ofctl_help },
 
     /* Undocumented commands for testing. */

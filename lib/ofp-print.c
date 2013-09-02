@@ -2141,6 +2141,198 @@ ofp_print_not_implemented(struct ds *string)
 }
 
 static void
+ofp_print_group(struct ds *s, uint32_t group_id, uint8_t type,
+                struct list *p_buckets)
+{
+    static const char *type_str[] = { "all", "select", "indirect",
+                                      "ff", "unknown" };
+    struct ofputil_bucket *bucket;
+
+    ds_put_format(s, "group_id=%"PRIu32",type=%s",
+                  group_id, type_str[type > 4 ? 4 : type]);
+    if (!p_buckets) {
+        return;
+    }
+
+    LIST_FOR_EACH (bucket, list_node, p_buckets) {
+        ds_put_cstr(s, ",bucket=");
+
+        if (bucket->weight != 1) {
+            ds_put_format(s, "weight:%"PRIu16",", bucket->weight);
+        }
+        if (bucket->watch_port != OFPP_NONE) {
+            ds_put_format(s, "watch_port:%"PRIu32",", bucket->watch_port);
+        }
+        if (bucket->watch_group != OFPG11_ANY) {
+            ds_put_format(s, "watch_group:%"PRIu32",", bucket->watch_group);
+        }
+
+        ofpacts_format(bucket->ofpacts, bucket->ofpacts_len, s);
+    }
+}
+
+static void
+ofp_print_group_desc(struct ds *s, const struct ofp_header *oh)
+{
+    struct ofpbuf b;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    for (;;) {
+        struct ofputil_group_desc gd;
+        int retval;
+
+        retval = ofputil_decode_group_desc_reply(&gd, &b);
+        if (retval) {
+            if (retval != EOF) {
+                ds_put_cstr(s, " ***parse error***");
+            }
+            break;
+        }
+
+        ds_put_char(s, '\n');
+        ds_put_char(s, ' ');
+        ofp_print_group(s, gd.group_id, gd.type, &gd.buckets);
+     }
+}
+
+static void
+ofp_print_ofpst_group_request(struct ds *string, const struct ofp_header *oh)
+{
+    enum ofperr error;
+    uint32_t group_id;
+
+    error = ofputil_decode_group_stats_request(oh, &group_id);
+    if (error) {
+        ofp_print_error(string, error);
+        return;
+    }
+
+    ds_put_cstr(string, " group_id=");
+    ofputil_format_group(group_id, string);
+}
+
+static void
+ofp_print_group_stats(struct ds *s, const struct ofp_header *oh)
+{
+    struct ofpbuf b;
+    uint32_t bucket_i;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+
+    for (;;) {
+        struct ofputil_group_stats gs;
+        int retval;
+
+        retval = ofputil_decode_group_stats_reply(&b, &gs);
+        if (retval) {
+            if (retval != EOF) {
+                ds_put_cstr(s, " ***parse error***");
+            }
+            break;
+        }
+
+        ds_put_char(s, '\n');
+
+        ds_put_char(s, ' ');
+        ds_put_format(s, "group_id=%"PRIu32",", gs.group_id);
+
+        if (gs.duration_sec != UINT32_MAX) {
+            ds_put_cstr(s, "duration=");
+            ofp_print_duration(s, gs.duration_sec, gs.duration_nsec);
+            ds_put_char(s, ',');
+        }
+        ds_put_format(s, "ref_count=%"PRIu32",", gs.ref_count);
+        ds_put_format(s, "packet_count=%"PRIu64",", gs.packet_count);
+        ds_put_format(s, "byte_count=%"PRIu64"", gs.byte_count);
+
+        for (bucket_i = 0; bucket_i < gs.n_buckets; bucket_i++) {
+            if (gs.bucket_stats[bucket_i].packet_count != UINT64_MAX) {
+                ds_put_format(s, ",bucket%"PRIu32":", bucket_i);
+                ds_put_format(s, "packet_count=%"PRIu64",", gs.bucket_stats[bucket_i].packet_count);
+                ds_put_format(s, "byte_count=%"PRIu64"", gs.bucket_stats[bucket_i].byte_count);
+            }
+        }
+     }
+}
+
+static void
+ofp_print_group_features(struct ds *string, const struct ofp_header *oh)
+{
+    struct ofputil_group_features features;
+
+    ofputil_decode_group_features_reply(oh, &features);
+
+    ds_put_format(string, "\n Group table:\n");
+    ds_put_format(string, "    Types:  0x%"PRIx32"\n", features.types);
+    ds_put_format(string, "    Capabilities:  0x%"PRIx32"\n",
+                  features.capabilities);
+
+    if (features.types & (1u << OFPGT11_ALL)) {
+        ds_put_format(string, "    All group :\n");
+        ds_put_format(string,
+                      "        max_groups = %#"PRIx32" actions=0x%08"PRIx32"\n",
+                      features.max_groups[0], features.actions[0]);
+    }
+
+    if (features.types & (1u << OFPGT11_SELECT)) {
+        ds_put_format(string, "    Select group :\n");
+        ds_put_format(string, "        max_groups = %#"PRIx32" "
+                      "actions=0x%08"PRIx32"\n",
+                      features.max_groups[1], features.actions[1]);
+    }
+
+    if (features.types & (1u << OFPGT11_INDIRECT)) {
+        ds_put_format(string, "    Indirect group :\n");
+        ds_put_format(string, "        max_groups = %#"PRIx32" "
+                      "actions=0x%08"PRIx32"\n",
+                      features.max_groups[2], features.actions[2]);
+    }
+
+    if (features.types & (1u << OFPGT11_FF)) {
+        ds_put_format(string, "    Fast Failover group :\n");
+        ds_put_format(string, "        max_groups = %#"PRIx32" "
+                      "actions=0x%08"PRIx32"\n",
+                      features.max_groups[3], features.actions[3]);
+    }
+}
+
+static void
+ofp_print_group_mod(struct ds *s, const struct ofp_header *oh)
+{
+    struct ofputil_group_mod gm;
+    int error;
+
+    error = ofputil_decode_group_mod(oh, &gm);
+    if (error) {
+        ofp_print_error(s, error);
+        return;
+    }
+
+    ds_put_char(s, '\n');
+
+    ds_put_char(s, ' ');
+    switch (gm.command) {
+    case OFPGC11_ADD:
+        ds_put_cstr(s, "ADD");
+        break;
+
+    case OFPGC11_MODIFY:
+        ds_put_cstr(s, "MOD");
+        break;
+
+    case OFPGC11_DELETE:
+        ds_put_cstr(s, "DEL");
+        break;
+
+    default:
+        ds_put_format(s, "cmd:%"PRIu16"", gm.command);
+    }
+    ds_put_char(s, ' ');
+
+    ofp_print_group(s, gm.group_id, gm.type, &gm.buckets);
+}
+
+static void
 ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
                 struct ds *string, int verbosity)
 {
@@ -2149,17 +2341,39 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
     ofp_header_to_string__(oh, raw, string);
     switch (ofptype_from_ofpraw(raw)) {
 
-        /* FIXME: Change the following once they are implemented: */
+    case OFPTYPE_GROUP_STATS_REQUEST:
+        ofp_print_stats_request(string, oh);
+        ofp_print_ofpst_group_request(string, oh);
+        break;
+
+    case OFPTYPE_GROUP_STATS_REPLY:
+        ofp_print_group_stats(string, oh);
+        break;
+
+    case OFPTYPE_GROUP_DESC_STATS_REQUEST:
+        ofp_print_stats_request(string, oh);
+        break;
+
+    case OFPTYPE_GROUP_DESC_STATS_REPLY:
+        ofp_print_group_desc(string, oh);
+        break;
+
+    case OFPTYPE_GROUP_FEATURES_STATS_REQUEST:
+        ofp_print_stats_request(string, oh);
+        break;
+
+    case OFPTYPE_GROUP_FEATURES_STATS_REPLY:
+        ofp_print_group_features(string, oh);
+        break;
+
+    case OFPTYPE_GROUP_MOD:
+        ofp_print_group_mod(string, oh);
+        break;
+
     case OFPTYPE_QUEUE_GET_CONFIG_REQUEST:
     case OFPTYPE_QUEUE_GET_CONFIG_REPLY:
     case OFPTYPE_GET_ASYNC_REQUEST:
     case OFPTYPE_GET_ASYNC_REPLY:
-    case OFPTYPE_GROUP_STATS_REQUEST:
-    case OFPTYPE_GROUP_STATS_REPLY:
-    case OFPTYPE_GROUP_DESC_STATS_REQUEST:
-    case OFPTYPE_GROUP_DESC_STATS_REPLY:
-    case OFPTYPE_GROUP_FEATURES_STATS_REQUEST:
-    case OFPTYPE_GROUP_FEATURES_STATS_REPLY:
     case OFPTYPE_TABLE_FEATURES_STATS_REQUEST:
     case OFPTYPE_TABLE_FEATURES_STATS_REPLY:
         ofp_print_not_implemented(string);

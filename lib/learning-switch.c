@@ -346,6 +346,7 @@ lswitch_process_packet(struct lswitch *sw, const struct ofpbuf *msg)
     case OFPTYPE_PORT_STATUS:
     case OFPTYPE_PACKET_OUT:
     case OFPTYPE_FLOW_MOD:
+    case OFPTYPE_GROUP_MOD:
     case OFPTYPE_PORT_MOD:
     case OFPTYPE_BARRIER_REQUEST:
     case OFPTYPE_BARRIER_REPLY:

@@ -111,6 +111,12 @@ struct ofproto {
     unsigned long int *vlan_bitmap; /* 4096-bit bitmap of in-use VLANs. */
     bool vlans_changed;             /* True if new VLANs are in use. */
     int min_mtu;                    /* Current MTU of non-internal ports. */
+
+    /* Groups. */
+    struct ovs_rwlock groups_rwlock;
+    struct hmap groups OVS_GUARDED;   /* Contains "struct ofgroup"s. */
+    uint32_t n_groups[4] OVS_GUARDED; /* # of existing groups of each type. */
+    struct ofputil_group_features ogf;
 };
 
 void ofproto_init_tables(struct ofproto *, int n_tables);
@@ -289,8 +295,42 @@ bool ofproto_rule_has_out_port(const struct rule *, ofp_port_t out_port);
 void ofoperation_complete(struct ofoperation *, enum ofperr);
 
 bool ofoperation_has_out_port(const struct ofoperation *, ofp_port_t out_port);
+bool ofproto_rule_has_out_group(const struct rule *, uint32_t group_id);
 
 bool ofproto_rule_is_hidden(const struct rule *);
+
+/* A group within a "struct ofproto".
+ *
+ * With few exceptions, ofproto implementations may look at these fields but
+ * should not modify them. */
+struct ofgroup {
+    /* The rwlock is used to prevent groups from being deleted while child
+     * threads are using them to xlate flows.  A read lock means the
+     * group is currently being used.  A write lock means the group is
+     * in the process of being deleted or updated.  Note that since
+     * a read lock on the groups container is held while searching, and
+     * a group is ever write locked only while holding a write lock
+     * on the container, the user's of groups will never face a group
+     * in the write locked state. */
+    struct ovs_rwlock rwlock;
+    struct hmap_node hmap_node; /* In struct ofproto's "groups" hmap. */
+    struct ofproto *ofproto;    /* The ofproto that contains this group. */
+    uint32_t group_id;
+    uint8_t type;               /* One of OFPGT_*. */
+
+    long long int created;      /* Creation time. */
+    long long int modified;     /* Time of last modification. */
+
+    struct list buckets;        /* Contains "struct ofputil_bucket"s. */
+    uint32_t n_buckets;
+};
+
+bool ofproto_group_lookup(const struct ofproto *ofproto, uint32_t group_id,
+                          struct ofgroup **group)
+    OVS_TRY_RDLOCK(true, (*group)->rwlock);
+
+void ofproto_group_release(struct ofgroup *group)
+    OVS_RELEASES(group->rwlock);
 
 /* ofproto class structure, to be defined by each ofproto implementation.
  *
@@ -298,7 +338,7 @@ bool ofproto_rule_is_hidden(const struct rule *);
  * Data Structures
  * ===============
  *
- * These functions work primarily with three different kinds of data
+ * These functions work primarily with four different kinds of data
  * structures:
  *
  *   - "struct ofproto", which represents an OpenFlow switch.
@@ -306,6 +346,9 @@ bool ofproto_rule_is_hidden(const struct rule *);
  *   - "struct ofport", which represents a port within an ofproto.
  *
  *   - "struct rule", which represents an OpenFlow flow within an ofproto.
+ *
+ *   - "struct ofgroup", which represents an OpenFlow 1.1+ group within an
+ *     ofproto.
  *
  * Each of these data structures contains all of the implementation-independent
  * generic state for the respective concept, called the "base" state.  None of
@@ -328,9 +371,10 @@ bool ofproto_rule_is_hidden(const struct rule *);
  *   ofproto  ->alloc       ->construct       ->destruct       ->dealloc
  *   ofport   ->port_alloc  ->port_construct  ->port_destruct  ->port_dealloc
  *   rule     ->rule_alloc  ->rule_construct  ->rule_destruct  ->rule_dealloc
+ *   group    ->group_alloc ->group_construct ->group_destruct ->group_dealloc
  *
- * "ofproto" and "ofport" have this exact life cycle.  The "rule" data
- * structure also follow this life cycle with some additional elaborations
+ * "ofproto", "ofport", and "group" have this exact life cycle.  The "rule"
+ * data structure also follow this life cycle with some additional elaborations
  * described under "Rule Life Cycle" below.
  *
  * Any instance of a given data structure goes through the following life
@@ -1451,6 +1495,21 @@ struct ofproto_class {
     /* Deletes a meter, making the 'ofproto_meter_id' invalid for any
      * further calls. */
     void (*meter_del)(struct ofproto *, ofproto_meter_id);
+
+
+/* ## -------------------- ## */
+/* ## OpenFlow 1.1+ groups ## */
+/* ## -------------------- ## */
+
+    struct ofgroup *(*group_alloc)(void);
+    enum ofperr (*group_construct)(struct ofgroup *);
+    void (*group_destruct)(struct ofgroup *);
+    void (*group_dealloc)(struct ofgroup *);
+
+    enum ofperr (*group_modify)(struct ofgroup *, struct ofgroup *victim);
+
+    enum ofperr (*group_get_stats)(const struct ofgroup *,
+                                   struct ofputil_group_stats *);
 };
 
 extern const struct ofproto_class ofproto_dpif_class;
