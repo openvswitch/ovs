@@ -1279,6 +1279,7 @@ For best performance, segregate learned flows into a table (using
 possibly for a lowest-priority ``catch-all'' flow, that is, a flow
 with no match criteria.  (This is why the default \fBtable\fR is 1, to
 keep the learned flows separate from the primary flow table 0.)
+.RE
 .
 .RS
 .IP \fBapply_actions(\fR[\fIaction\fR][\fB,\fIaction\fR...]\fB)
@@ -1298,7 +1299,6 @@ a \fB0x\fR prefix to specify them in hexadecimal.
 .
 .IP \fBgoto_table\fR:\fItable\fR
 Indicates the next table in the process pipeline.
-.RE
 .
 .IP "\fBfin_timeout(\fIargument\fR[\fB,\fIargument\fR]\fB)"
 This action changes the idle timeout or hard timeout, or both, of this
