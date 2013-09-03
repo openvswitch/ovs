@@ -61,11 +61,6 @@
 #include "vport-internal_dev.h"
 #include "vport-netdev.h"
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32) || \
-    LINUX_VERSION_CODE >= KERNEL_VERSION(3,11,0)
-#error Kernels before 2.6.32 or after 3.10 are not supported by this version of Open vSwitch.
-#endif
-
 #define REHASH_FLOW_INTERVAL (10 * 60 * HZ)
 static void rehash_flow_table(struct work_struct *work);
 static DECLARE_DELAYED_WORK(rehash_flow_wq, rehash_flow_table);
