@@ -440,6 +440,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     shash_init(&ofproto->port_by_name);
     simap_init(&ofproto->ofp_requests);
     ofproto->max_ports = ofp_to_u16(OFPP_MAX);
+    ofproto->eviction_group_timer = LLONG_MIN;
     ofproto->tables = NULL;
     ofproto->n_tables = 0;
     hindex_init(&ofproto->cookies);
@@ -1276,6 +1277,39 @@ ofproto_run(struct ofproto *p)
     error = p->ofproto_class->run(p);
     if (error && error != EAGAIN) {
         VLOG_ERR_RL(&rl, "%s: run failed (%s)", p->name, ovs_strerror(error));
+    }
+
+    /* Restore the eviction group heap invariant occasionally. */
+    if (p->eviction_group_timer < time_msec()) {
+        size_t i;
+
+        p->eviction_group_timer = time_msec() + 1000;
+
+        for (i = 0; i < p->n_tables; i++) {
+            struct oftable *table = &p->tables[i];
+            struct eviction_group *evg;
+            struct cls_cursor cursor;
+            struct cls_rule cr;
+            struct rule *rule;
+
+            if (!table->eviction_fields) {
+                continue;
+            }
+
+            HEAP_FOR_EACH (evg, size_node, &table->eviction_groups_by_size) {
+                heap_rebuild(&evg->rules);
+            }
+
+            ovs_rwlock_rdlock(&table->cls.rwlock);
+            cls_cursor_init(&cursor, &table->cls, &cr);
+            CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
+                if (!rule->eviction_group
+                    && (rule->idle_timeout || rule->hard_timeout)) {
+                    eviction_group_add_rule(rule);
+                }
+            }
+            ovs_rwlock_unlock(&table->cls.rwlock);
+        }
     }
 
     if (p->ofproto_class->port_poll) {
@@ -3810,20 +3844,6 @@ ofproto_rule_send_removed(struct rule *rule, uint8_t reason)
     connmgr_send_flow_removed(rule->ofproto->connmgr, &fr);
 }
 
-void
-ofproto_rule_update_used(struct rule *rule, long long int used)
-{
-    if (used > rule->used) {
-        struct eviction_group *evg = rule->eviction_group;
-
-        rule->used = used;
-        if (evg) {
-            heap_change(&evg->rules, &rule->evg_node,
-                        rule_eviction_priority(rule));
-        }
-    }
-}
-
 /* Sends an OpenFlow "flow removed" message with the given 'reason' (either
  * OFPRR_HARD_TIMEOUT or OFPRR_IDLE_TIMEOUT), and then removes 'rule' from its
  * ofproto.
@@ -3882,10 +3902,6 @@ ofproto_rule_reduce_timeouts(struct rule *rule,
     reduce_timeout(idle_timeout, &rule->idle_timeout);
     reduce_timeout(hard_timeout, &rule->hard_timeout);
     ovs_mutex_unlock(&rule->timeout_mutex);
-
-    if (!rule->eviction_group) {
-        eviction_group_add_rule(rule);
-    }
 }
 
 static enum ofperr

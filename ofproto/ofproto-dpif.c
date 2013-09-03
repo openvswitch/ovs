@@ -4530,7 +4530,7 @@ rule_dpif_credit_stats(struct rule_dpif *rule,
     ovs_mutex_lock(&rule->stats_mutex);
     rule->packet_count += stats->n_packets;
     rule->byte_count += stats->n_bytes;
-    ofproto_rule_update_used(&rule->up, stats->used);
+    rule->up.used = MAX(rule->up.used, stats->used);
     ovs_mutex_unlock(&rule->stats_mutex);
 }
 
