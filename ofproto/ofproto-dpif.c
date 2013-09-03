@@ -205,8 +205,7 @@ static void subfacet_uninstall(struct subfacet *);
  * Flow expiration works in terms of subfacets, so a facet must have at
  * least one subfacet or it will never expire, leaking memory. */
 struct facet {
-    /* Owners. */
-    struct hmap_node hmap_node;  /* In owning ofproto's 'facets' hmap. */
+    /* Owner. */
     struct ofproto_dpif *ofproto;
 
     /* Owned data. */
