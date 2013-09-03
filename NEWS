@@ -34,6 +34,7 @@ v2.0.0 - xx xxx xxxx
       * New "ofp-parse" for printing OpenFlow messages read from a file.
       * New commands for OpenFlow 1.1+ groups.
     - Added configurable flow caching support to IPFIX exporter.
+    - Dropped support for Linux pre-2.6.32.
 
 
 v1.11.0 - 28 Aug 2013

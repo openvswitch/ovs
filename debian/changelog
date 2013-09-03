@@ -32,6 +32,7 @@ openvswitch (2.0.0-1) unstable; urgency=low
     - ovs-ofctl:
       * New "ofp-parse" for printing OpenFlow messages read from a file.
     - Added configurable flow caching support to IPFIX exporter.
+    - Dropped support for Linux pre-2.6.32.
 
  -- Open vSwitch team <dev@openvswitch.org>  Wed, 28 Aug 2013 16:11:32 -0700
 

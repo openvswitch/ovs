@@ -32,7 +32,7 @@ Testing is also important:
 
         - A patch that modifies Linux kernel code should be at least
           build-tested on various Linux kernel versions before
-          submission.  I suggest versions 2.6.18, 2.6.27, and whatever
+          submission.  I suggest versions 2.6.32 and whatever
           the current latest release version is at the time.
 
         - A patch that modifies the ofproto or vswitchd code should be
