@@ -68,24 +68,7 @@ RHEL.  On RHEL 5, the default RPM source directory is
    then the kernel-devel package is missing or buggy.  Go back to step
    1 or 2 and fix the problem.
 
-7a. On RHEL 5, to build the Open vSwitch kernel module, copy
-    rhel/kmodtool-openvswitch-el5.sh into the RPM source directory and
-    run:
-
-	rpmbuild -bb --target=i686-unknown-linux \
-		rhel/openvswitch-kmod-rhel5.spec
-
-    You might have to specify a kernel version, e.g.:
-
-	rpmbuild -bb -D "kversion 2.6.18-238.12.1.el5" \
-		--target=i686-unknown-linux \
-		rhel/openvswitch-kmod-rhel5.spec
-
-    This produces a "kmod-openvswitch" RPM for each kernel variant,
-    which is usually: "kmod-openvswitch", "kmod-openvswitch-xen", and
-    "kmod-openvswitch-PAE".
-
-7b. On RHEL 6, to build the Open vSwitch kernel module, copy
+7. On RHEL 6, to build the Open vSwitch kernel module, copy
     rhel/openvswitch-kmod.files into the RPM source directory and run:
 
 	rpmbuild -bb rhel/openvswitch-kmod-rhel6.spec

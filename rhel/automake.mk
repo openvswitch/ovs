@@ -12,9 +12,6 @@ EXTRA_DIST += \
 	rhel/etc_logrotate.d_openvswitch \
 	rhel/etc_sysconfig_network-scripts_ifdown-ovs \
 	rhel/etc_sysconfig_network-scripts_ifup-ovs \
-	rhel/kmodtool-openvswitch-el5.sh \
-	rhel/openvswitch-kmod-rhel5.spec \
-	rhel/openvswitch-kmod-rhel5.spec.in \
 	rhel/openvswitch-kmod-rhel6.spec \
 	rhel/openvswitch-kmod-rhel6.spec.in \
 	rhel/openvswitch-kmod.files \
@@ -31,9 +28,6 @@ update_rhel_spec = \
   ($(ro_shell) && sed -e 's,[@]VERSION[@],$(VERSION),g') \
     < $(srcdir)/rhel/$(@F).in > $(@F).tmp || exit 1; \
   if cmp -s $(@F).tmp $@; then touch $@; rm $(@F).tmp; else mv $(@F).tmp $@; fi
-
-$(srcdir)/rhel/openvswitch-kmod-rhel5.spec: rhel/openvswitch-kmod-rhel5.spec.in $(top_builddir)/config.status
-	$(update_rhel_spec)
 
 $(srcdir)/rhel/openvswitch-kmod-rhel6.spec: rhel/openvswitch-kmod-rhel6.spec.in $(top_builddir)/config.status
 	$(update_rhel_spec)
