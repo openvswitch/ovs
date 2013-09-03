@@ -69,6 +69,7 @@ struct ofproto {
     uint16_t max_ports;         /* Max possible OpenFlow port num, plus one. */
 
     /* Flow tables. */
+    long long int eviction_group_timer; /* For rate limited reheapification. */
     struct oftable *tables;
     int n_tables;
 
@@ -276,7 +277,6 @@ rule_from_cls_rule(const struct cls_rule *cls_rule)
     return cls_rule ? CONTAINER_OF(cls_rule, struct rule, cr) : NULL;
 }
 
-void ofproto_rule_update_used(struct rule *, long long int used);
 void ofproto_rule_expire(struct rule *rule, uint8_t reason);
 void ofproto_rule_delete(struct ofproto *, struct classifier *cls,
                          struct rule *) OVS_REQ_WRLOCK(cls->rwlock);
