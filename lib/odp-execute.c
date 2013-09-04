@@ -182,10 +182,11 @@ odp_execute_actions(void *dp, struct ofpbuf *packet, struct flow *key,
             break;
 
         case OVS_ACTION_ATTR_USERSPACE: {
-            const struct nlattr *userdata;
-
-            userdata = nl_attr_find_nested(a, OVS_USERSPACE_ATTR_USERDATA);
-            userspace(dp, packet, key, userdata);
+            if (userspace) {
+                const struct nlattr *userdata;
+                userdata = nl_attr_find_nested(a, OVS_USERSPACE_ATTR_USERDATA);
+                userspace(dp, packet, key, userdata);
+            }
             break;
         }
 
