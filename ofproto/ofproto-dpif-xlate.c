@@ -1224,6 +1224,7 @@ xlate_normal(struct xlate_ctx *ctx)
     struct xbundle *in_xbundle;
     struct xport *in_port;
     struct mac_entry *mac;
+    void *mac_port;
     uint16_t vlan;
     uint16_t vid;
 
@@ -1286,8 +1287,11 @@ xlate_normal(struct xlate_ctx *ctx)
     /* Determine output bundle. */
     ovs_rwlock_rdlock(&ctx->xbridge->ml->rwlock);
     mac = mac_learning_lookup(ctx->xbridge->ml, flow->dl_dst, vlan);
-    if (mac) {
-        struct xbundle *mac_xbundle = xbundle_lookup(mac->port.p);
+    mac_port = mac ? mac->port.p : NULL;
+    ovs_rwlock_unlock(&ctx->xbridge->ml->rwlock);
+
+    if (mac_port) {
+        struct xbundle *mac_xbundle = xbundle_lookup(mac_port);
         if (mac_xbundle && mac_xbundle != in_xbundle) {
             xlate_report(ctx, "forwarding to learned port");
             output_normal(ctx, mac_xbundle, vlan);
@@ -1310,7 +1314,6 @@ xlate_normal(struct xlate_ctx *ctx)
         }
         ctx->xout->nf_output_iface = NF_OUT_FLOOD;
     }
-    ovs_rwlock_unlock(&ctx->xbridge->ml->rwlock);
 }
 
 /* Compose SAMPLE action for sFlow or IPFIX.  The given probability is
