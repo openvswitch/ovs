@@ -862,7 +862,7 @@ cfm_get_remote_mpids(const struct cfm *cfm, uint64_t **rmps, size_t *n_rmps)
     OVS_EXCLUDED(mutex)
 {
     ovs_mutex_lock(&mutex);
-    *rmps = xmemdup(cfm->rmps_array, cfm->rmps_array_len);
+    *rmps = xmemdup(cfm->rmps_array, cfm->rmps_array_len * sizeof **rmps);
     *n_rmps = cfm->rmps_array_len;
     ovs_mutex_unlock(&mutex);
 }
