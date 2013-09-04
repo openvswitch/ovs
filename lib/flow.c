@@ -1141,10 +1141,10 @@ miniflow_clone(struct miniflow *dst, const struct miniflow *src)
 void
 miniflow_move(struct miniflow *dst, struct miniflow *src)
 {
-    int n = miniflow_n_values(src);
-    if (n <= MINI_N_INLINE) {
+    if (src->values == src->inline_values) {
         dst->values = dst->inline_values;
-        memcpy(dst->values, src->values, n * sizeof *dst->values);
+        memcpy(dst->values, src->values,
+               miniflow_n_values(src) * sizeof *dst->values);
     } else {
         dst->values = src->values;
     }
