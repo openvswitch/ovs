@@ -1421,7 +1421,16 @@ destruct(struct ofproto *ofproto_)
     struct rule_dpif *rule, *next_rule;
     struct ofputil_packet_in *pin, *next_pin;
     struct ofputil_flow_mod *fm, *next_fm;
+    struct facet *facet, *next_facet;
+    struct cls_cursor cursor;
     struct oftable *table;
+
+    ovs_rwlock_rdlock(&ofproto->facets.rwlock);
+    cls_cursor_init(&cursor, &ofproto->facets, NULL);
+    ovs_rwlock_unlock(&ofproto->facets.rwlock);
+    CLS_CURSOR_FOR_EACH_SAFE (facet, next_facet, cr, &cursor) {
+        facet_remove(facet);
+    }
 
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
     ovs_rwlock_wrlock(&xlate_rwlock);
