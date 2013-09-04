@@ -69,18 +69,6 @@ probably incomplete.
       behavior does not change.
       [required for OF1.1 and OF1.2]
 
-    * Flow table stats (OFPST_TABLE).
-
-        * Reference count (active entries)
-          [implemented]
-          [required for OF1.1 and OF1.2]
-
-        * Packet Lookups
-          [required for OF1.1; optional for OF1.2]
-
-        * Packet Matches
-          [required for OF1.1; optional for OF1.2]
-
     * MPLS.  Simon Horman maintains a patch series that adds this
       feature.  This is partially merged.
       [optional for OF1.1+]
@@ -120,9 +108,6 @@ end of the OF1.2 spec.  I didn't compare the specs carefully yet.)
     * OFPT_FLOW_MOD:
 
         * Add ability to delete flow in all tables.
-          [required for OF1.2+]
-
-        * Update DESIGN to describe OF1.2 behavior also.
           [required for OF1.2+]
 
 OpenFlow 1.3
@@ -187,9 +172,6 @@ didn't compare the specs carefully yet.)
       optimization in some cases for the software switch.
       [optional for OF1.3+]
 
-    * Duration Statistics
-      - New for Per Port, Per Queue, Per Group
-      [required for v1.3+]
 
 How to contribute
 -----------------
