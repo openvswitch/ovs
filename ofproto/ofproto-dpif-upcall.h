@@ -109,6 +109,9 @@ struct flow_miss_batch {
 
 struct flow_miss_batch *flow_miss_batch_next(struct udpif *);
 void flow_miss_batch_destroy(struct flow_miss_batch *);
+
+void flow_miss_batch_ofproto_destroyed(struct udpif *,
+                                       const struct ofproto_dpif *);
 
 /* Drop keys are odp flow keys which have drop flows installed in the kernel.
  * These are datapath flows which have no associated ofproto, if they did we
