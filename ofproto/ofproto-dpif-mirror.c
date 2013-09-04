@@ -125,6 +125,7 @@ mbridge_unref(struct mbridge *mbridge)
         mbridge_unregister_bundle(mbridge, mbundle->ofbundle);
     }
 
+    hmap_destroy(&mbridge->mbundles);
     free(mbridge);
 }
 
