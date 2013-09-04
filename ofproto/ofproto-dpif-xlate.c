@@ -121,7 +121,7 @@ struct xport {
     struct xport *peer;              /* Patch port peer or null. */
 
     enum ofputil_port_config config; /* OpenFlow port configuration. */
-    int stp_port_no;                 /* STP port number or 0 if not in use. */
+    int stp_port_no;                 /* STP port number or -1 if not in use. */
 
     struct hmap skb_priorities;      /* Map of 'skb_priority_to_dscp's. */
 
@@ -621,7 +621,7 @@ xport_lookup(const struct ofport_dpif *ofport)
 static struct stp_port *
 xport_get_stp_port(const struct xport *xport)
 {
-    return xport->xbridge->stp && xport->stp_port_no
+    return xport->xbridge->stp && xport->stp_port_no != -1
         ? stp_get_port(xport->xbridge->stp, xport->stp_port_no)
         : NULL;
 }

@@ -821,7 +821,7 @@ type_run(const char *type)
             HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
                 int stp_port = ofport->stp_port
                     ? stp_port_no(ofport->stp_port)
-                    : 0;
+                    : -1;
                 xlate_ofport_set(ofproto, ofport->bundle, ofport,
                                  ofport->up.ofp_port, ofport->odp_port,
                                  ofport->up.netdev, ofport->cfm,
