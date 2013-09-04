@@ -1373,7 +1373,7 @@ minimask_clone(struct minimask *dst, const struct minimask *src)
 void
 minimask_move(struct minimask *dst, struct minimask *src)
 {
-    miniflow_clone(&dst->masks, &src->masks);
+    miniflow_move(&dst->masks, &src->masks);
 }
 
 /* Initializes 'dst_' as the bit-wise "and" of 'a_' and 'b_'.
