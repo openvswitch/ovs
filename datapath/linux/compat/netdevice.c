@@ -49,11 +49,7 @@ static u32 harmonize_features(struct sk_buff *skb, __be16 protocol, u32 features
 
 u32 rpl_netif_skb_features(struct sk_buff *skb)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
-	unsigned long vlan_features = 0;
-#else
 	unsigned long vlan_features = skb->dev->vlan_features;
-#endif /* kernel version < 2.6.26 */
 
 	__be16 protocol = skb->protocol;
 	u32 features = skb->dev->features;

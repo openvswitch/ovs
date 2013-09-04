@@ -93,16 +93,11 @@ struct datapath {
  * @pkt_key: The flow information extracted from the packet.  Must be nonnull.
  * @tun_key: Key for the tunnel that encapsulated this packet. NULL if the
  * packet is not being tunneled.
- * @vlan_tci: Provides a substitute for the skb->vlan_tci field on kernels
- * before 2.6.27.
  */
 struct ovs_skb_cb {
 	struct sw_flow		*flow;
 	struct sw_flow_key	*pkt_key;
 	struct ovs_key_ipv4_tunnel  *tun_key;
-#ifdef NEED_VLAN_FIELD
-	u16			vlan_tci;
-#endif
 };
 #define OVS_CB(skb) ((struct ovs_skb_cb *)(skb)->cb)
 

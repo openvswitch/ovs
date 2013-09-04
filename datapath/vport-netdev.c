@@ -242,8 +242,6 @@ static void netdev_port_receive(struct vport *vport, struct sk_buff *skb)
 	skb_push(skb, ETH_HLEN);
 	ovs_skb_postpush_rcsum(skb, skb->data, ETH_HLEN);
 
-	vlan_copy_skb_tci(skb);
-
 	ovs_vport_receive(vport, skb, NULL);
 	return;
 

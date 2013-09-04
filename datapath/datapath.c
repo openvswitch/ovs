@@ -411,10 +411,12 @@ static int queue_userspace_packet(struct net *net, int dp_ifindex,
 		nskb = skb_clone(skb, GFP_ATOMIC);
 		if (!nskb)
 			return -ENOMEM;
-		
-		err = vlan_deaccel_tag(nskb);
-		if (err)
-			return err;
+
+		nskb = __vlan_put_tag(nskb, nskb->vlan_proto, vlan_tx_tag_get(nskb));
+		if (!nskb)
+			return -ENOMEM;
+
+		vlan_set_tci(nskb, 0);
 
 		skb = nskb;
 	}

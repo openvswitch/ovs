@@ -156,9 +156,14 @@ static int __send(struct vport *vport, struct sk_buff *skb,
 			goto err_free_rt;
 	}
 
-	if (unlikely(vlan_deaccel_tag(skb))) {
-		err = -ENOMEM;
-		goto err_free_rt;
+	if (vlan_tx_tag_present(skb)) {
+		if (unlikely(!__vlan_put_tag(skb,
+					     skb->vlan_proto,
+					     vlan_tx_tag_get(skb)))) {
+			err = -ENOMEM;
+			goto err_free_rt;
+		}
+		vlan_set_tci(skb, 0);
 	}
 
 	/* Push Tunnel header. */

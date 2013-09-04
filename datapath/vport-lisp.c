@@ -542,8 +542,14 @@ static int ovs_tnl_send(struct vport *vport, struct sk_buff *skb,
 
 		skb->next = NULL;
 
-		if (unlikely(vlan_deaccel_tag(skb)))
-			goto next;
+		if (vlan_tx_tag_present(skb)) {
+			if (unlikely(!__vlan_put_tag(skb,
+							skb->vlan_proto,
+							vlan_tx_tag_get(skb))))
+				goto next;
+
+			vlan_set_tci(skb, 0);
+		}
 
 		frag_len = skb->len;
 		skb_push(skb, tunnel_hlen);
