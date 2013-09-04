@@ -223,7 +223,8 @@ struct rule {
 
     struct ofoperation *pending; /* Operation now in progress, if nonnull. */
 
-    ovs_be64 flow_cookie;        /* Controller-issued identifier. */
+    ovs_be64 flow_cookie;        /* Controller-issued identifier. Guarded by
+                                    rwlock. */
     struct hindex_node cookie_node; /* In owning ofproto's 'cookies' index. */
 
     long long int created;       /* Creation time. */
@@ -240,15 +241,18 @@ struct rule {
     struct heap_node evg_node;   /* In eviction_group's "rules" heap. */
     struct eviction_group *eviction_group; /* NULL if not in any group. */
 
-    /* The evict lock is used to prevent rules from being evicted while child
-     * threads are using them to xlate flows.  A read lock means the rule is
-     * currently being used.  A write lock means the rule is in the process of
-     * being evicted and should be considered gone.  A rule will not be evicted
-     * unless both its own and its classifiers write locks are held.
-     * Therefore, while holding a classifier readlock, one can be assured that
-     * even write locked rules are safe. */
-    struct ovs_rwlock evict;
+    /* The rwlock is used to protect those elements in struct rule which are
+     * accessed by multiple threads.  While maintaining a pointer to struct
+     * rule, threads are required to hold a readlock.  The main ofproto code is
+     * guaranteed not to evict the rule, or change any of the elements "Guarded
+     * by rwlock" without holding the writelock.
+     *
+     * A rule will not be evicted unless both its own and its classifier's
+     * write locks are held.  Therefore, while holding a classifier readlock,
+     * one can be assured that write locked rules are safe to reference. */
+    struct ovs_rwlock rwlock;
 
+    /* Guarded by rwlock. */
     struct ofpact *ofpacts;      /* Sequence of "struct ofpacts". */
     unsigned int ofpacts_len;    /* Size of 'ofpacts', in bytes. */
 

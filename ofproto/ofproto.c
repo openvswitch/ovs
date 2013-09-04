@@ -155,10 +155,10 @@ static void oftable_enable_eviction(struct oftable *,
                                     const struct mf_subfield *fields,
                                     size_t n_fields);
 
-static void oftable_remove_rule(struct rule *rule) OVS_RELEASES(rule->evict);
+static void oftable_remove_rule(struct rule *rule) OVS_RELEASES(rule->rwlock);
 static void oftable_remove_rule__(struct ofproto *ofproto,
                                   struct classifier *cls, struct rule *rule)
-    OVS_REQ_WRLOCK(cls->rwlock) OVS_RELEASES(rule->evict);
+    OVS_REQ_WRLOCK(cls->rwlock) OVS_RELEASES(rule->rwlock);
 static void oftable_insert_rule(struct rule *);
 
 /* A set of rules within a single OpenFlow table (oftable) that have the same
@@ -184,7 +184,7 @@ struct eviction_group {
 };
 
 static bool choose_rule_to_evict(struct oftable *table, struct rule **rulep)
-    OVS_TRY_WRLOCK(true, (*rulep)->evict);
+    OVS_TRY_WRLOCK(true, (*rulep)->rwlock);
 static void ofproto_evict(struct ofproto *);
 static uint32_t rule_eviction_priority(struct rule *);
 static void eviction_group_add_rule(struct rule *);
@@ -212,7 +212,7 @@ static enum ofperr modify_flows__(struct ofproto *, struct ofconn *,
                                   const struct ofp_header *, struct list *);
 static void delete_flow__(struct rule *rule, struct ofopgroup *,
                           enum ofp_flow_removed_reason)
-    OVS_RELEASES(rule->evict);
+    OVS_RELEASES(rule->rwlock);
 static enum ofperr add_group(struct ofproto *, struct ofputil_group_mod *);
 static bool handle_openflow(struct ofconn *, const struct ofpbuf *);
 static enum ofperr handle_flow_mod__(struct ofproto *, struct ofconn *,
@@ -1094,7 +1094,7 @@ ofproto_delete_rule(struct ofproto *ofproto, struct classifier *cls,
 
     group = ofopgroup_create_unattached(ofproto);
     ofoperation_create(group, rule, OFOPERATION_DELETE, OFPRR_DELETE);
-    ovs_rwlock_wrlock(&rule->evict);
+    ovs_rwlock_wrlock(&rule->rwlock);
     oftable_remove_rule__(ofproto, cls, rule);
     ofproto->ofproto_class->rule_delete(rule);
     ofopgroup_submit(group);
@@ -2263,7 +2263,7 @@ ofproto_rule_destroy__(struct rule *rule)
         cls_rule_destroy(&rule->cr);
         free(rule->ofpacts);
         ovs_mutex_destroy(&rule->timeout_mutex);
-        ovs_rwlock_destroy(&rule->evict);
+        ovs_rwlock_destroy(&rule->rwlock);
         rule->ofproto->ofproto_class->rule_dealloc(rule);
     }
 }
@@ -2843,7 +2843,9 @@ ofproto_rule_change_cookie(struct ofproto *ofproto, struct rule *rule,
     if (new_cookie != rule->flow_cookie) {
         cookies_remove(ofproto, rule);
 
+        ovs_rwlock_wrlock(&rule->rwlock);
         rule->flow_cookie = new_cookie;
+        ovs_rwlock_unlock(&rule->rwlock);
 
         cookies_insert(ofproto, rule);
     }
@@ -3418,7 +3420,7 @@ evict_rule_from_table(struct ofproto *ofproto, struct oftable *table)
     } else if (!choose_rule_to_evict(table, &rule)) {
         return OFPERR_OFPFMFC_TABLE_FULL;
     } else if (rule->pending) {
-        ovs_rwlock_unlock(&rule->evict);
+        ovs_rwlock_unlock(&rule->rwlock);
         return OFPROTO_POSTPONE;
     } else {
         struct ofopgroup *group;
@@ -3575,7 +3577,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     rule->monitor_flags = 0;
     rule->add_seqno = 0;
     rule->modify_seqno = 0;
-    ovs_rwlock_init(&rule->evict);
+    ovs_rwlock_init(&rule->rwlock);
 
     /* Construct rule, initializing derived state. */
     error = ofproto->ofproto_class->rule_construct(rule);
@@ -3669,8 +3671,12 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
             op->ofpacts = rule->ofpacts;
             op->ofpacts_len = rule->ofpacts_len;
             op->meter_id = rule->meter_id;
+
+            ovs_rwlock_wrlock(&rule->rwlock);
             rule->ofpacts = xmemdup(fm->ofpacts, fm->ofpacts_len);
             rule->ofpacts_len = fm->ofpacts_len;
+            ovs_rwlock_unlock(&rule->rwlock);
+
             rule->meter_id = find_meter(rule->ofpacts, rule->ofpacts_len);
             rule->ofproto->ofproto_class->rule_modify_actions(rule,
                                                               reset_counters);
@@ -3773,7 +3779,7 @@ delete_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
 
     group = ofopgroup_create(ofproto, ofconn, request, UINT32_MAX);
     LIST_FOR_EACH_SAFE (rule, next, ofproto_node, rules) {
-        ovs_rwlock_wrlock(&rule->evict);
+        ovs_rwlock_wrlock(&rule->rwlock);
         delete_flow__(rule, group, reason);
     }
     ofopgroup_submit(group);
@@ -5446,7 +5452,7 @@ ofopgroup_complete(struct ofopgroup *group)
                     }
                 }
             } else {
-                ovs_rwlock_wrlock(&rule->evict);
+                ovs_rwlock_wrlock(&rule->rwlock);
                 oftable_remove_rule(rule);
                 ofproto_rule_destroy__(rule);
             }
@@ -5475,8 +5481,12 @@ ofopgroup_complete(struct ofopgroup *group)
                 ovs_mutex_unlock(&rule->timeout_mutex);
                 if (op->ofpacts) {
                     free(rule->ofpacts);
+
+                    ovs_rwlock_wrlock(&rule->rwlock);
                     rule->ofpacts = op->ofpacts;
                     rule->ofpacts_len = op->ofpacts_len;
+                    ovs_rwlock_unlock(&rule->rwlock);
+
                     op->ofpacts = NULL;
                     op->ofpacts_len = 0;
                 }
@@ -5664,7 +5674,7 @@ choose_rule_to_evict(struct oftable *table, struct rule **rulep)
         struct rule *rule;
 
         HEAP_FOR_EACH (rule, evg_node, &evg->rules) {
-            if (!ovs_rwlock_trywrlock(&rule->evict)) {
+            if (!ovs_rwlock_trywrlock(&rule->rwlock)) {
                 *rulep = rule;
                 return true;
             }
@@ -5705,7 +5715,7 @@ ofproto_evict(struct ofproto *ofproto)
             }
 
             if (rule->pending) {
-                ovs_rwlock_unlock(&rule->evict);
+                ovs_rwlock_unlock(&rule->rwlock);
                 break;
             }
 
@@ -6013,7 +6023,7 @@ oftable_enable_eviction(struct oftable *table,
 static void
 oftable_remove_rule__(struct ofproto *ofproto, struct classifier *cls,
                       struct rule *rule)
-    OVS_REQ_WRLOCK(cls->rwlock) OVS_RELEASES(rule->evict)
+    OVS_REQ_WRLOCK(cls->rwlock) OVS_RELEASES(rule->rwlock)
 {
     classifier_remove(cls, &rule->cr);
     cookies_remove(ofproto, rule);
@@ -6027,7 +6037,7 @@ oftable_remove_rule__(struct ofproto *ofproto, struct classifier *cls,
         list_remove(&rule->meter_list_node);
         list_init(&rule->meter_list_node);
     }
-    ovs_rwlock_unlock(&rule->evict);
+    ovs_rwlock_unlock(&rule->rwlock);
 }
 
 static void

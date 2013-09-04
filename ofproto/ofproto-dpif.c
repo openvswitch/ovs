@@ -4836,7 +4836,7 @@ bool
 rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto,
                           const struct flow *flow, struct flow_wildcards *wc,
                           uint8_t table_id, struct rule_dpif **rule)
-    OVS_TRY_RDLOCK(true, (*rule)->up.evict)
+    OVS_TRY_RDLOCK(true, (*rule)->up.rwlock)
 {
     struct cls_rule *cls_rule;
     struct classifier *cls;
@@ -4871,7 +4871,7 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto,
     }
 
     *rule = rule_dpif_cast(rule_from_cls_rule(cls_rule));
-    if (*rule && ovs_rwlock_tryrdlock(&(*rule)->up.evict)) {
+    if (*rule && ovs_rwlock_tryrdlock(&(*rule)->up.rwlock)) {
         /* The rule is in the process of being removed.  Best we can do is
          * pretend it isn't there. */
         *rule = NULL;
@@ -4890,7 +4890,7 @@ choose_miss_rule(enum ofputil_port_config config, struct rule_dpif *miss_rule,
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     *rule = config & OFPUTIL_PC_NO_PACKET_IN ? no_packet_in_rule : miss_rule;
-    ovs_rwlock_rdlock(&(*rule)->up.evict);
+    ovs_rwlock_rdlock(&(*rule)->up.rwlock);
 }
 
 void
@@ -4898,7 +4898,7 @@ rule_dpif_release(struct rule_dpif *rule)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     if (rule) {
-        ovs_rwlock_unlock(&rule->up.evict);
+        ovs_rwlock_unlock(&rule->up.rwlock);
     }
 }
 
