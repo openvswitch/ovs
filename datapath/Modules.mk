@@ -11,7 +11,6 @@ openvswitch_sources = \
 	datapath.c \
 	dp_notify.c \
 	flow.c \
-	vlan.c \
 	vport.c \
 	vport-gre.c \
 	vport-internal_dev.c \

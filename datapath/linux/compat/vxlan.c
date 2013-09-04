@@ -230,8 +230,14 @@ int vxlan_xmit_skb(struct net *net, struct vxlan_sock *vs,
 	if (unlikely(err))
 		return err;
 
-	if (unlikely(vlan_deaccel_tag(skb)))
-		return -ENOMEM;
+	if (vlan_tx_tag_present(skb)) {
+		if (unlikely(!__vlan_put_tag(skb,
+						skb->vlan_proto,
+						vlan_tx_tag_get(skb))))
+			return -ENOMEM;
+
+		vlan_set_tci(skb, 0);
+	}
 
 	vxh = (struct vxlanhdr *) __skb_push(skb, sizeof(*vxh));
 	vxh->vx_flags = htonl(VXLAN_FLAGS);

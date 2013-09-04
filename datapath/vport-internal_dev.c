@@ -79,8 +79,6 @@ static struct net_device_stats *internal_dev_sys_stats(struct net_device *netdev
 /* Called with rcu_read_lock_bh. */
 static int internal_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 {
-	vlan_copy_skb_tci(skb);
-
 	rcu_read_lock();
 	ovs_vport_receive(internal_dev_priv(netdev)->vport, skb, NULL);
 	rcu_read_unlock();
@@ -254,8 +252,19 @@ static int internal_dev_recv(struct vport *vport, struct sk_buff *skb)
 	int len;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
-	if (unlikely(vlan_deaccel_tag(skb)))
-		return 0;
+	if (vlan_tx_tag_present(skb)) {
+		if (unlikely(!__vlan_put_tag(skb,
+					     skb->vlan_proto,
+					     vlan_tx_tag_get(skb))))
+			return 0;
+
+		if (skb->ip_summed == CHECKSUM_COMPLETE)
+			skb->csum = csum_add(skb->csum,
+					     csum_partial(skb->data + (2 * ETH_ALEN),
+							  VLAN_HLEN, 0));
+
+		vlan_set_tci(skb, 0);
+	}
 #endif
 
 	len = skb->len;
