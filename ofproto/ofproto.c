@@ -3477,6 +3477,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     error = ofproto_check_ofpacts(ofproto, fm->ofpacts, fm->ofpacts_len,
                                   &fm->match.flow, table_id);
     if (error) {
+        cls_rule_destroy(&cr);
         return error;
     }
 
