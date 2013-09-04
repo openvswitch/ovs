@@ -32,7 +32,6 @@ TESTSUITE_AT = \
 	tests/json.at \
 	tests/jsonrpc.at \
 	tests/jsonrpc-py.at \
-	tests/timeval.at \
 	tests/tunnel.at \
 	tests/lockfile.at \
 	tests/reconnect.at \
@@ -122,7 +121,6 @@ valgrind_wrappers = \
 	tests/valgrind/test-reconnect \
 	tests/valgrind/test-sha1 \
 	tests/valgrind/test-stp \
-	tests/valgrind/test-timeval \
 	tests/valgrind/test-type-props \
 	tests/valgrind/test-unix-socket \
 	tests/valgrind/test-uuid \
@@ -292,10 +290,6 @@ tests_test_reconnect_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 noinst_PROGRAMS += tests/test-sha1
 tests_test_sha1_SOURCES = tests/test-sha1.c
 tests_test_sha1_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
-
-noinst_PROGRAMS += tests/test-timeval
-tests_test_timeval_SOURCES = tests/test-timeval.c
-tests_test_timeval_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-strtok_r
 tests_test_strtok_r_SOURCES = tests/test-strtok_r.c

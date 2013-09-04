@@ -289,7 +289,6 @@ fork_and_clean_up(void)
         fatal_signal_fork();
     } else if (!pid) {
         /* Running in child process. */
-        time_postfork();
         lockfile_postfork();
     }
     return pid;

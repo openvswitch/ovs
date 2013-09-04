@@ -96,7 +96,6 @@ do_fork(void)
 {
     switch (fork()) {
     case 0:
-        time_postfork();
         lockfile_postfork();
         return CHILD;
 

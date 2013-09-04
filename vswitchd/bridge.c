@@ -548,7 +548,6 @@ bridge_reconfigure_ofp(void)
     long long int deadline;
     struct bridge *br;
 
-    time_refresh();
     deadline = time_msec() + OFP_PORT_ACTION_WINDOW;
 
     /* The kernel will reject any attempt to add a given port to a datapath if
@@ -567,7 +566,6 @@ bridge_reconfigure_ofp(void)
             list_remove(&garbage->list_node);
             free(garbage);
 
-            time_refresh();
             if (time_msec() >= deadline) {
                 return false;
             }
@@ -580,7 +578,6 @@ bridge_reconfigure_ofp(void)
 
         HMAP_FOR_EACH_SAFE (if_cfg, next, hmap_node, &br->if_cfg_todo) {
             iface_create(br, if_cfg, OFPP_NONE);
-            time_refresh();
             if (time_msec() >= deadline) {
                 return false;
             }

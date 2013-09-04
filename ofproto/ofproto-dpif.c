@@ -3878,7 +3878,7 @@ subfacet_max_idle(const struct dpif_backer *backer)
      * pass made by update_stats(), because the former function never looks at
      * uninstallable subfacets.
      */
-    enum { BUCKET_WIDTH = ROUND_UP(100, TIME_UPDATE_INTERVAL) };
+    enum { BUCKET_WIDTH = 100 };
     enum { N_BUCKETS = 5000 / BUCKET_WIDTH };
     int buckets[N_BUCKETS] = { 0 };
     int total, subtotal, bucket;

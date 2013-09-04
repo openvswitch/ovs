@@ -41,14 +41,12 @@ VLOG_DEFINE_THIS_MODULE(timeval);
 
 struct clock {
     clockid_t id;               /* CLOCK_MONOTONIC or CLOCK_REALTIME. */
-    struct ovs_rwlock rwlock;   /* Mutual exclusion for 'cache'. */
 
     /* Features for use by unit tests.  Protected by 'rwlock'. */
+    struct ovs_rwlock rwlock;
     struct timespec warp;       /* Offset added for unit tests. */
     bool stopped;               /* Disables real-time updates if true.  */
 
-    /* Relevant only if CACHE_TIME is true. */
-    volatile sig_atomic_t tick; /* Has the timer ticked?  Set by signal. */
     struct timespec cache;      /* Last time read from kernel. */
 };
 
@@ -67,11 +65,6 @@ static long long int deadline = LLONG_MAX;
  * up. */
 DEFINE_STATIC_PER_THREAD_DATA(long long int, last_wakeup, 0);
 
-static void set_up_timer(void);
-static void set_up_signal(int flags);
-static void sigalrm_handler(int);
-static void block_sigalrm(sigset_t *);
-static void unblock_sigalrm(const sigset_t *);
 static void log_poll_interval(long long int last_wakeup);
 static struct rusage *get_recent_rusage(void);
 static void refresh_rusage(void);
@@ -83,7 +76,6 @@ init_clock(struct clock *c, clockid_t id)
 {
     memset(c, 0, sizeof *c);
     c->id = id;
-    ovs_rwlock_init(&c->rwlock);
     xclock_gettime(c->id, &c->cache);
 }
 
@@ -99,9 +91,6 @@ do_init_time(void)
                                   : CLOCK_REALTIME));
     init_clock(&wall_clock, CLOCK_REALTIME);
     boot_time = timespec_to_msec(&monotonic_clock.cache);
-
-    set_up_signal(SA_RESTART);
-    set_up_timer();
 }
 
 /* Initializes the timetracking module, if not already initialized. */
@@ -113,85 +102,15 @@ time_init(void)
 }
 
 static void
-set_up_signal(int flags)
-{
-    struct sigaction sa;
-
-    memset(&sa, 0, sizeof sa);
-    sa.sa_handler = sigalrm_handler;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = flags;
-    xsigaction(SIGALRM, &sa, NULL);
-}
-
-static void
-set_up_timer(void)
-{
-    static timer_t timer_id;    /* "static" to avoid apparent memory leak. */
-    struct itimerspec itimer;
-
-    if (!CACHE_TIME) {
-        return;
-    }
-
-    if (timer_create(monotonic_clock.id, NULL, &timer_id)) {
-        VLOG_FATAL("timer_create failed (%s)", ovs_strerror(errno));
-    }
-
-    itimer.it_interval.tv_sec = 0;
-    itimer.it_interval.tv_nsec = TIME_UPDATE_INTERVAL * 1000 * 1000;
-    itimer.it_value = itimer.it_interval;
-
-    if (timer_settime(timer_id, 0, &itimer, NULL)) {
-        VLOG_FATAL("timer_settime failed (%s)", ovs_strerror(errno));
-    }
-}
-
-/* Set up the interval timer, to ensure that time advances even without calling
- * time_refresh().
- *
- * A child created with fork() does not inherit the parent's interval timer, so
- * this function needs to be called from the child after fork(). */
-void
-time_postfork(void)
-{
-    assert_single_threaded();
-    time_init();
-    set_up_timer();
-}
-
-/* Forces a refresh of the current time from the kernel.  It is not usually
- * necessary to call this function, since the time will be refreshed
- * automatically at least every TIME_UPDATE_INTERVAL milliseconds.  If
- * CACHE_TIME is false, we will always refresh the current time so this
- * function has no effect. */
-void
-time_refresh(void)
-{
-    monotonic_clock.tick = wall_clock.tick = true;
-}
-
-static void
 time_timespec__(struct clock *c, struct timespec *ts)
 {
     time_init();
-    for (;;) {
-        /* Use the cached time by preference, but fall through if there's been
-         * a clock tick.  */
-        ovs_rwlock_rdlock(&c->rwlock);
-        if (c->stopped || !c->tick) {
-            timespec_add(ts, &c->cache, &c->warp);
-            ovs_rwlock_unlock(&c->rwlock);
-            return;
-        }
-        ovs_rwlock_unlock(&c->rwlock);
 
-        /* Refresh the cache. */
-        ovs_rwlock_wrlock(&c->rwlock);
-        if (c->tick) {
-            c->tick = false;
-            xclock_gettime(c->id, &c->cache);
-        }
+    if (!c->stopped) {
+        xclock_gettime(c->id, ts);
+    } else {
+        ovs_rwlock_rdlock(&c->rwlock);
+        timespec_add(ts, &c->cache, &c->warp);
         ovs_rwlock_unlock(&c->rwlock);
     }
 }
@@ -268,7 +187,6 @@ time_alarm(unsigned int secs)
 
     assert_single_threaded();
     time_init();
-    time_refresh();
 
     now = time_msec();
     msecs = secs * 1000LL;
@@ -286,8 +204,6 @@ time_alarm(unsigned int secs)
  *        timeout is reached.  (Because of this property, this function will
  *        never return -EINTR.)
  *
- *      - As a side effect, refreshes the current time (like time_refresh()).
- *
  * Stores the number of milliseconds elapsed during poll in '*elapsed'. */
 int
 time_poll(struct pollfd *pollfds, int n_pollfds, long long int timeout_when,
@@ -295,18 +211,14 @@ time_poll(struct pollfd *pollfds, int n_pollfds, long long int timeout_when,
 {
     long long int *last_wakeup = last_wakeup_get();
     long long int start;
-    sigset_t oldsigs;
-    bool blocked;
     int retval;
 
     time_init();
-    time_refresh();
     if (*last_wakeup) {
         log_poll_interval(*last_wakeup);
     }
     coverage_clear();
     start = time_msec();
-    blocked = false;
 
     timeout_when = MIN(timeout_when, deadline);
 
@@ -327,7 +239,6 @@ time_poll(struct pollfd *pollfds, int n_pollfds, long long int timeout_when,
             retval = -errno;
         }
 
-        time_refresh();
         if (deadline <= time_msec()) {
             fatal_signal_handler(SIGALRM);
             if (retval < 0) {
@@ -339,40 +250,11 @@ time_poll(struct pollfd *pollfds, int n_pollfds, long long int timeout_when,
         if (retval != -EINTR) {
             break;
         }
-
-        if (!blocked && CACHE_TIME) {
-            block_sigalrm(&oldsigs);
-            blocked = true;
-        }
-    }
-    if (blocked) {
-        unblock_sigalrm(&oldsigs);
     }
     *last_wakeup = time_msec();
     refresh_rusage();
     *elapsed = *last_wakeup - start;
     return retval;
-}
-
-static void
-sigalrm_handler(int sig_nr OVS_UNUSED)
-{
-    monotonic_clock.tick = wall_clock.tick = true;
-}
-
-static void
-block_sigalrm(sigset_t *oldsigs)
-{
-    sigset_t sigalrm;
-    sigemptyset(&sigalrm);
-    sigaddset(&sigalrm, SIGALRM);
-    xpthread_sigmask(SIG_BLOCK, &sigalrm, oldsigs);
-}
-
-static void
-unblock_sigalrm(const sigset_t *oldsigs)
-{
-    xpthread_sigmask(SIG_SETMASK, oldsigs, NULL);
 }
 
 long long int
@@ -570,6 +452,7 @@ timeval_stop_cb(struct unixctl_conn *conn,
 {
     ovs_rwlock_wrlock(&monotonic_clock.rwlock);
     monotonic_clock.stopped = true;
+    xclock_gettime(monotonic_clock.id, &monotonic_clock.cache);
     ovs_rwlock_unlock(&monotonic_clock.rwlock);
 
     unixctl_command_reply(conn, NULL);
