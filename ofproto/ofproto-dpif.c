@@ -1437,6 +1437,8 @@ destruct(struct ofproto *ofproto_)
     xlate_remove_ofproto(ofproto);
     ovs_rwlock_unlock(&xlate_rwlock);
 
+    flow_miss_batch_ofproto_destroyed(ofproto->backer->udpif, ofproto);
+
     hmap_remove(&all_ofproto_dpifs, &ofproto->all_ofproto_dpifs_node);
     complete_operations(ofproto);
 

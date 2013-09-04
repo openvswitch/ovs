@@ -347,6 +347,37 @@ flow_miss_batch_destroy(struct flow_miss_batch *fmb)
     free(fmb);
 }
 
+/* Discards any flow miss batches queued up in 'udpif' for 'ofproto' (because
+ * 'ofproto' is being destroyed).
+ *
+ * 'ofproto''s xports must already have been removed, otherwise new flow miss
+ * batches could still end up getting queued. */
+void
+flow_miss_batch_ofproto_destroyed(struct udpif *udpif,
+                                  const struct ofproto_dpif *ofproto)
+{
+    struct flow_miss_batch *fmb, *next_fmb;
+
+    ovs_mutex_lock(&udpif->fmb_mutex);
+    LIST_FOR_EACH_SAFE (fmb, next_fmb, list_node, &udpif->fmbs) {
+        struct flow_miss *miss, *next_miss;
+
+        HMAP_FOR_EACH_SAFE (miss, next_miss, hmap_node, &fmb->misses) {
+            if (miss->ofproto == ofproto) {
+                hmap_remove(&fmb->misses, &miss->hmap_node);
+                miss_destroy(miss);
+            }
+        }
+
+        if (hmap_is_empty(&fmb->misses)) {
+            list_remove(&fmb->list_node);
+            flow_miss_batch_destroy(fmb);
+            udpif->n_fmbs--;
+        }
+    }
+    ovs_mutex_unlock(&udpif->fmb_mutex);
+}
+
 /* Retreives the next drop key which ofproto-dpif needs to process.  The caller
  * is responsible for destroying it with drop_key_destroy(). */
 struct drop_key *
