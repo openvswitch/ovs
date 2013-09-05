@@ -101,14 +101,10 @@ probably incomplete.
 OpenFlow 1.2
 ------------
 
-OpenFlow 1.2 support requires OpenFlow 1.1 as a prerequisite, plus the
-following additional work.  (This is based on the change log at the
-end of the OF1.2 spec.  I didn't compare the specs carefully yet.)
-
-    * OFPT_FLOW_MOD:
-
-        * Add ability to delete flow in all tables.
-          [required for OF1.2+]
+OpenFlow 1.2 support requires OpenFlow 1.1 as a prerequisite. All the
+additional work specific to Openflow 1.2 are complete.  (This is based
+on the change log at the end of the OF1.2 spec.  I didn't compare the
+specs carefully yet.)
 
 OpenFlow 1.3
 ------------
