@@ -69,10 +69,10 @@ bool rule_dpif_lookup_in_table(struct ofproto_dpif *, const struct flow *,
                                struct rule_dpif **rule)
     OVS_TRY_RDLOCK(true, *rule);
 
-    void rule_dpif_release(struct rule_dpif *rule) OVS_RELEASES(rule);
+void rule_dpif_release(struct rule_dpif *rule) OVS_RELEASES(rule);
 
-    void rule_dpif_credit_stats(struct rule_dpif *rule ,
-                                const struct dpif_flow_stats *);
+void rule_dpif_credit_stats(struct rule_dpif *rule ,
+                            const struct dpif_flow_stats *);
 
 bool rule_dpif_fail_open(const struct rule_dpif *rule);
 
