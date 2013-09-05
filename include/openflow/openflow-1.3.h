@@ -116,8 +116,7 @@ enum ofp13_table_config {
     OFPTC13_DEPRECATED_MASK = 3  /* Deprecated bits */
 };
 
-/* OpenFlow 1.3 specific flags
- * (struct ofp12_flow_mod, member flags). */
+/* OpenFlow 1.3 specific flags for flow_mod messages. */
 enum ofp13_flow_mod_flags {
     OFPFF13_NO_PKT_COUNTS = 1 << 3, /* Don't keep track of packet count. */
     OFPFF13_NO_BYT_COUNTS = 1 << 4  /* Don't keep track of byte count. */
