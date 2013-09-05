@@ -320,7 +320,7 @@ struct ofgroup {
     struct hmap_node hmap_node; /* In struct ofproto's "groups" hmap. */
     struct ofproto *ofproto;    /* The ofproto that contains this group. */
     uint32_t group_id;
-    uint8_t type;               /* One of OFPGT_*. */
+    enum ofp11_group_type type; /* One of OFPGT_*. */
 
     long long int created;      /* Creation time. */
     long long int modified;     /* Time of last modification. */
