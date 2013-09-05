@@ -913,7 +913,7 @@ struct ofputil_group_stats {
     uint32_t duration_sec;      /* UINT32_MAX if unknown. */
     uint32_t duration_nsec;
     uint32_t n_buckets;
-    struct bucket_counter bucket_stats[16];
+    struct bucket_counter *bucket_stats;
 };
 
 /* Group features reply, independent of protocol. */

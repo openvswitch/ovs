@@ -4786,6 +4786,8 @@ append_group_stats(struct ofgroup *group, struct list *replies)
     long long int now = time_msec();
     int error;
 
+    ogs.bucket_stats = xmalloc(group->n_buckets * sizeof *ogs.bucket_stats);
+
     error = (ofproto->ofproto_class->group_get_stats
              ? ofproto->ofproto_class->group_get_stats(group, &ogs)
              : EOPNOTSUPP);
@@ -4802,6 +4804,8 @@ append_group_stats(struct ofgroup *group, struct list *replies)
     calc_duration(group->created, now, &ogs.duration_sec, &ogs.duration_nsec);
 
     ofputil_append_group_stats(replies, &ogs);
+
+    free(ogs.bucket_stats);
 }
 
 static enum ofperr

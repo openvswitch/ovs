@@ -2252,6 +2252,8 @@ ofp_print_group_stats(struct ds *s, const struct ofp_header *oh)
                 ds_put_format(s, "byte_count=%"PRIu64"", gs.bucket_stats[bucket_i].byte_count);
             }
         }
+
+        free(gs.bucket_stats);
      }
 }
 
