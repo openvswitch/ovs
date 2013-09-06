@@ -2739,34 +2739,38 @@ static void
 bundle_send_learning_packets(struct ofbundle *bundle)
 {
     struct ofproto_dpif *ofproto = bundle->ofproto;
+    struct ofpbuf *learning_packet;
     int error, n_packets, n_errors;
     struct mac_entry *e;
+    struct list packets;
 
-    error = n_packets = n_errors = 0;
+    list_init(&packets);
     ovs_rwlock_rdlock(&ofproto->ml->rwlock);
     LIST_FOR_EACH (e, lru_node, &ofproto->ml->lrus) {
         if (e->port.p != bundle) {
-            struct ofpbuf *learning_packet;
-            struct ofport_dpif *port;
             void *port_void;
-            int ret;
 
-            /* The assignment to "port" is unnecessary but makes "grep"ing for
-             * struct ofport_dpif more effective. */
             learning_packet = bond_compose_learning_packet(bundle->bond,
                                                            e->mac, e->vlan,
                                                            &port_void);
-            port = port_void;
-            ret = send_packet(port, learning_packet);
-            ofpbuf_delete(learning_packet);
-            if (ret) {
-                error = ret;
-                n_errors++;
-            }
-            n_packets++;
+            learning_packet->private_p = port_void;
+            list_push_back(&packets, &learning_packet->list_node);
         }
     }
     ovs_rwlock_unlock(&ofproto->ml->rwlock);
+
+    error = n_packets = n_errors = 0;
+    LIST_FOR_EACH (learning_packet, list_node, &packets) {
+        int ret;
+
+        ret = send_packet(learning_packet->private_p, learning_packet);
+        if (ret) {
+            error = ret;
+            n_errors++;
+        }
+        n_packets++;
+    }
+    ofpbuf_list_delete(&packets);
 
     if (n_errors) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
