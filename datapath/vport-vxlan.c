@@ -142,7 +142,6 @@ static int vxlan_tnl_send(struct vport *vport, struct sk_buff *skb)
 {
 	struct vxlan_port *vxlan_port = vxlan_vport(vport);
 	__be16 dst_port = inet_sport(vxlan_port->vs->sock->sk);
-	struct net *net = ovs_dp_get_net(vport->dp);
 	struct rtable *rt;
 	__be16 src_port;
 	__be32 saddr;
@@ -177,7 +176,7 @@ static int vxlan_tnl_send(struct vport *vport, struct sk_buff *skb)
 	inet_get_local_port_range(&port_min, &port_max);
 	src_port = vxlan_src_port(port_min, port_max, skb);
 
-	err = vxlan_xmit_skb(net, vxlan_port->vs, rt, skb,
+	err = vxlan_xmit_skb(vxlan_port->vs, rt, skb,
 			     saddr, OVS_CB(skb)->tun_key->ipv4_dst,
 			     OVS_CB(skb)->tun_key->ipv4_tos,
 			     OVS_CB(skb)->tun_key->ipv4_ttl, df,
