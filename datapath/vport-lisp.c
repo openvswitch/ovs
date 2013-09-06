@@ -393,7 +393,6 @@ static void handle_offloads(struct sk_buff *skb)
 
 static int lisp_send(struct vport *vport, struct sk_buff *skb)
 {
-	struct net *net = ovs_dp_get_net(vport->dp);
 	int network_offset = skb_network_offset(skb);
 	struct rtable *rt;
 	int min_headroom;
@@ -453,7 +452,7 @@ static int lisp_send(struct vport *vport, struct sk_buff *skb)
 
 	df = OVS_CB(skb)->tun_key->tun_flags &
 				  TUNNEL_DONT_FRAGMENT ?  htons(IP_DF) : 0;
-	sent_len = iptunnel_xmit(net, rt, skb,
+	sent_len = iptunnel_xmit(rt, skb,
 			     saddr, OVS_CB(skb)->tun_key->ipv4_dst,
 			     IPPROTO_UDP, OVS_CB(skb)->tun_key->ipv4_tos,
 			     OVS_CB(skb)->tun_key->ipv4_ttl, df);

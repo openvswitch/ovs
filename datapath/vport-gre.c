@@ -122,7 +122,6 @@ static int __send(struct vport *vport, struct sk_buff *skb,
 		  int tunnel_hlen,
 		  __be32 seq, __be16 gre64_flag)
 {
-	struct net *net = ovs_dp_get_net(vport->dp);
 	struct rtable *rt;
 	int min_headroom;
 	__be16 df;
@@ -178,7 +177,7 @@ static int __send(struct vport *vport, struct sk_buff *skb,
 
 	skb->local_df = 1;
 
-	return iptunnel_xmit(net, rt, skb, saddr,
+	return iptunnel_xmit(rt, skb, saddr,
 			     OVS_CB(skb)->tun_key->ipv4_dst, IPPROTO_GRE,
 			     OVS_CB(skb)->tun_key->ipv4_tos,
 			     OVS_CB(skb)->tun_key->ipv4_ttl, df);

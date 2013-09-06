@@ -31,7 +31,7 @@ struct tnl_ptk_info {
 #define PACKET_RCVD	0
 #define PACKET_REJECT	1
 
-int iptunnel_xmit(struct net *net, struct rtable *rt,
+int iptunnel_xmit(struct rtable *rt,
 		  struct sk_buff *skb,
 		  __be32 src, __be32 dst, __u8 proto,
 		  __u8 tos, __u8 ttl, __be16 df);
