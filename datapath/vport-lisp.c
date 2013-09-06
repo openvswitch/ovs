@@ -205,42 +205,6 @@ static void lisp_build_header(const struct vport *vport,
 	lisph->u2.word2.locator_status_bits = 1;
 }
 
-/**
- *	ovs_tnl_rcv - ingress point for generic tunnel code
- *
- * @vport: port this packet was received on
- * @skb: received packet
- * @tun_key: tunnel that carried packet
- *
- * Must be called with rcu_read_lock.
- *
- * Packets received by this function are in the following state:
- * - skb->data points to the inner Ethernet header.
- * - The inner Ethernet header is in the linear data area.
- * - The layer pointers are undefined.
- */
-static void ovs_tnl_rcv(struct vport *vport, struct sk_buff *skb,
-			struct ovs_key_ipv4_tunnel *tun_key)
-{
-	struct ethhdr *eh;
-
-	skb_reset_mac_header(skb);
-	eh = eth_hdr(skb);
-
-	if (likely(ntohs(eh->h_proto) >= ETH_P_802_3_MIN))
-		skb->protocol = eh->h_proto;
-	else
-		skb->protocol = htons(ETH_P_802_2);
-
-	skb_dst_drop(skb);
-	nf_reset(skb);
-	skb_clear_rxhash(skb);
-	secpath_reset(skb);
-	vlan_set_tci(skb, 0);
-
-	ovs_vport_receive(vport, skb, tun_key);
-}
-
 /* Called with rcu_read_lock and BH disabled. */
 static int lisp_rcv(struct sock *sk, struct sk_buff *skb)
 {
@@ -256,12 +220,10 @@ static int lisp_rcv(struct sock *sk, struct sk_buff *skb)
 	if (unlikely(!lisp_port))
 		goto error;
 
-	if (unlikely(!pskb_may_pull(skb, LISP_HLEN)))
+	if (iptunnel_pull_header(skb, LISP_HLEN, 0))
 		goto error;
 
 	lisph = lisp_hdr(skb);
-
-	skb_pull_rcsum(skb, LISP_HLEN);
 
 	if (lisph->instance_id_present != 1)
 		key = 0;
@@ -284,6 +246,7 @@ static int lisp_rcv(struct sock *sk, struct sk_buff *skb)
 	default:
 		goto error;
 	}
+	skb->protocol = protocol;
 
 	/* Add Ethernet header */
 	ethh = (struct ethhdr *)skb_push(skb, ETH_HLEN);
@@ -294,7 +257,7 @@ static int lisp_rcv(struct sock *sk, struct sk_buff *skb)
 
 	ovs_skb_postpush_rcsum(skb, skb->data, ETH_HLEN);
 
-	ovs_tnl_rcv(vport_from_priv(lisp_port), skb, &tun_key);
+	ovs_vport_receive(vport_from_priv(lisp_port), skb, &tun_key);
 	goto out;
 
 error:
