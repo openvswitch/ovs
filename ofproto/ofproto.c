@@ -2982,7 +2982,8 @@ collect_rules_loose(struct ofproto *ofproto, uint8_t table_id,
                     goto exit;
                 }
                 if (rule->flow_cookie == cookie /* Hash collisions possible. */
-                    && ofproto_rule_has_out_port(rule, out_port)) {
+                    && ofproto_rule_has_out_port(rule, out_port)
+                    && ofproto_rule_has_out_group(rule, out_group)) {
                     list_push_back(rules, &rule->ofproto_node);
                 }
             }
@@ -3064,7 +3065,8 @@ collect_rules_strict(struct ofproto *ofproto, uint8_t table_id,
                     goto exit;
                 }
                 if (rule->flow_cookie == cookie /* Hash collisions possible. */
-                    && ofproto_rule_has_out_port(rule, out_port)) {
+                    && ofproto_rule_has_out_port(rule, out_port)
+                    && ofproto_rule_has_out_group(rule, out_group)) {
                     list_push_back(rules, &rule->ofproto_node);
                 }
             }
