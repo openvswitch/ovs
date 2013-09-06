@@ -2920,6 +2920,25 @@ next_matching_table(const struct ofproto *ofproto,
          (TABLE) != NULL;                                         \
          (TABLE) = next_matching_table(OFPROTO, TABLE, TABLE_ID))
 
+static enum ofperr
+collect_rule(struct rule *rule, uint8_t table_id,
+             ovs_be64 cookie, ovs_be64 cookie_mask,
+             ofp_port_t out_port, struct list *rules)
+{
+    if (ofproto_rule_is_hidden(rule)) {
+        return 0;
+    } else if (rule->pending) {
+        return OFPROTO_POSTPONE;
+    } else {
+        if ((table_id == rule->table_id || table_id == 0xff)
+            && ofproto_rule_has_out_port(rule, out_port)
+            && !((rule->flow_cookie ^ cookie) & cookie_mask)) {
+            list_push_back(rules, &rule->ofproto_node);
+        }
+        return 0;
+    }
+}
+
 /* Searches 'ofproto' for rules in table 'table_id' (or in all tables, if
  * 'table_id' is 0xff) that match 'match' in the "loose" way required for
  * OpenFlow OFPFC_MODIFY and OFPFC_DELETE requests and puts them on list
@@ -2954,48 +2973,32 @@ collect_rules_loose(struct ofproto *ofproto, uint8_t table_id,
 
         HINDEX_FOR_EACH_WITH_HASH (rule, cookie_node, hash_cookie(cookie),
                                    &ofproto->cookies) {
-            if (table_id != rule->table_id && table_id != 0xff) {
-                continue;
-            }
-            if (ofproto_rule_is_hidden(rule)) {
-                continue;
-            }
             if (cls_rule_is_loose_match(&rule->cr, &cr.match)) {
-                if (rule->pending) {
-                    error = OFPROTO_POSTPONE;
-                    goto exit;
-                }
-                if (rule->flow_cookie == cookie /* Hash collisions possible. */
-                    && ofproto_rule_has_out_port(rule, out_port)) {
-                    list_push_back(rules, &rule->ofproto_node);
+                error = collect_rule(rule, table_id, cookie, cookie_mask,
+                                     out_port, rules);
+                if (error) {
+                    break;
                 }
             }
         }
-        goto exit;
-    }
+    } else {
+        FOR_EACH_MATCHING_TABLE (table, table_id, ofproto) {
+            struct cls_cursor cursor;
+            struct rule *rule;
 
-    FOR_EACH_MATCHING_TABLE (table, table_id, ofproto) {
-        struct cls_cursor cursor;
-        struct rule *rule;
-
-        ovs_rwlock_rdlock(&table->cls.rwlock);
-        cls_cursor_init(&cursor, &table->cls, &cr);
-        CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
-            if (rule->pending) {
-                ovs_rwlock_unlock(&table->cls.rwlock);
-                error = OFPROTO_POSTPONE;
-                goto exit;
+            ovs_rwlock_rdlock(&table->cls.rwlock);
+            cls_cursor_init(&cursor, &table->cls, &cr);
+            CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
+                error = collect_rule(rule, table_id, cookie, cookie_mask,
+                                     out_port, rules);
+                if (error) {
+                    break;
+                }
             }
-            if (!ofproto_rule_is_hidden(rule)
-                && ofproto_rule_has_out_port(rule, out_port)
-                    && !((rule->flow_cookie ^ cookie) & cookie_mask)) {
-                list_push_back(rules, &rule->ofproto_node);
-            }
+            ovs_rwlock_unlock(&table->cls.rwlock);
         }
-        ovs_rwlock_unlock(&table->cls.rwlock);
     }
 
-exit:
     cls_rule_destroy(&cr);
     return error;
 }
@@ -3034,49 +3037,34 @@ collect_rules_strict(struct ofproto *ofproto, uint8_t table_id,
 
         HINDEX_FOR_EACH_WITH_HASH (rule, cookie_node, hash_cookie(cookie),
                                    &ofproto->cookies) {
-            if (table_id != rule->table_id && table_id != 0xff) {
-                continue;
-            }
-            if (ofproto_rule_is_hidden(rule)) {
-                continue;
-            }
             if (cls_rule_equal(&rule->cr, &cr)) {
-                if (rule->pending) {
-                    error = OFPROTO_POSTPONE;
-                    goto exit;
-                }
-                if (rule->flow_cookie == cookie /* Hash collisions possible. */
-                    && ofproto_rule_has_out_port(rule, out_port)) {
-                    list_push_back(rules, &rule->ofproto_node);
+                error = collect_rule(rule, table_id, cookie, cookie_mask,
+                                     out_port, rules);
+                if (error) {
+                    break;
                 }
             }
         }
-        goto exit;
-    }
+    } else {
+        FOR_EACH_MATCHING_TABLE (table, table_id, ofproto) {
+            struct rule *rule;
 
-    FOR_EACH_MATCHING_TABLE (table, table_id, ofproto) {
-        struct rule *rule;
-
-        ovs_rwlock_rdlock(&table->cls.rwlock);
-        rule = rule_from_cls_rule(classifier_find_rule_exactly(&table->cls,
-                                                               &cr));
-        ovs_rwlock_unlock(&table->cls.rwlock);
-        if (rule) {
-            if (rule->pending) {
-                error = OFPROTO_POSTPONE;
-                goto exit;
-            }
-            if (!ofproto_rule_is_hidden(rule)
-                && ofproto_rule_has_out_port(rule, out_port)
-                    && !((rule->flow_cookie ^ cookie) & cookie_mask)) {
-                list_push_back(rules, &rule->ofproto_node);
+            ovs_rwlock_rdlock(&table->cls.rwlock);
+            rule = rule_from_cls_rule(classifier_find_rule_exactly(&table->cls,
+                                                                   &cr));
+            ovs_rwlock_unlock(&table->cls.rwlock);
+            if (rule) {
+                error = collect_rule(rule, table_id, cookie, cookie_mask,
+                                     out_port, rules);
+                if (error) {
+                    break;
+                }
             }
         }
     }
 
-exit:
     cls_rule_destroy(&cr);
-    return 0;
+    return error;
 }
 
 /* Returns 'age_ms' (a duration in milliseconds), converted to seconds and
