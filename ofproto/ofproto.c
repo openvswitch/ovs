@@ -2505,30 +2505,6 @@ reject_slave_controller(struct ofconn *ofconn)
     }
 }
 
-/* Finds the OFPACT_METER action, if any, in the 'ofpacts_len' bytes of
- * 'ofpacts'.  If found, returns its meter ID; if not, returns 0.
- *
- * This function relies on the order of 'ofpacts' being correct (as checked by
- * ofpacts_verify()). */
-static uint32_t
-find_meter(const struct ofpact ofpacts[], size_t ofpacts_len)
-{
-    const struct ofpact *a;
-
-    OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
-        enum ovs_instruction_type inst;
-
-        inst = ovs_instruction_type_from_ofpact_type(a->type);
-        if (a->type == OFPACT_METER) {
-            return ofpact_get_METER(a)->meter_id;
-        } else if (inst > OVSINST_OFPIT13_METER) {
-            break;
-        }
-    }
-
-    return 0;
-}
-
 /* Checks that the 'ofpacts_len' bytes of actions in 'ofpacts' are appropriate
  * for a packet with the prerequisites satisfied by 'flow' in table 'table_id'.
  * 'flow' may be temporarily modified, but is restored at return.
@@ -2547,7 +2523,7 @@ ofproto_check_ofpacts(struct ofproto *ofproto,
         return error;
     }
 
-    mid = find_meter(ofpacts, ofpacts_len);
+    mid = ofpacts_get_meter(ofpacts, ofpacts_len);
     if (mid && ofproto_get_provider_meter_id(ofproto, mid) == UINT32_MAX) {
         return OFPERR_OFPMMFC_INVALID_METER;
     }
@@ -3636,7 +3612,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     rule->send_flow_removed = (fm->flags & OFPUTIL_FF_SEND_FLOW_REM) != 0;
     rule->ofpacts = xmemdup(fm->ofpacts, fm->ofpacts_len);
     rule->ofpacts_len = fm->ofpacts_len;
-    rule->meter_id = find_meter(rule->ofpacts, rule->ofpacts_len);
+    rule->meter_id = ofpacts_get_meter(rule->ofpacts, rule->ofpacts_len);
     list_init(&rule->meter_list_node);
     rule->eviction_group = NULL;
     list_init(&rule->expirable);
@@ -3744,7 +3720,8 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
             rule->ofpacts_len = fm->ofpacts_len;
             ovs_rwlock_unlock(&rule->rwlock);
 
-            rule->meter_id = find_meter(rule->ofpacts, rule->ofpacts_len);
+            rule->meter_id = ofpacts_get_meter(rule->ofpacts,
+                                               rule->ofpacts_len);
             rule->ofproto->ofproto_class->rule_modify_actions(rule,
                                                               reset_counters);
         } else {
