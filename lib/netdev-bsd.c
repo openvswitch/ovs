@@ -1428,6 +1428,9 @@ nd_to_iff_flags(enum netdev_flags nd)
         iff |= IFF_PPROMISC;
 #endif
     }
+    if (nd & NETDEV_LOOPBACK) {
+        iff |= IFF_LOOPBACK;
+    }
     return iff;
 }
 
@@ -1440,6 +1443,9 @@ iff_to_nd_flags(int iff)
     }
     if (iff & IFF_PROMISC) {
         nd |= NETDEV_PROMISC;
+    }
+    if (iff & IFF_LOOPBACK) {
+        nd |= NETDEV_LOOPBACK;
     }
     return nd;
 }
