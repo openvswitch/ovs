@@ -1706,6 +1706,47 @@ parse_ofp_flow_mod_str(struct ofputil_flow_mod *fm, const char *string,
     return error;
 }
 
+/* Convert 'table_id' and 'flow_miss_handling' (as described for the
+ * "mod-table" command in the ovs-ofctl man page) into 'tm' for sending the
+ * specified table_mod 'command' to a switch.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+char * WARN_UNUSED_RESULT
+parse_ofp_table_mod(struct ofputil_table_mod *tm, const char *table_id,
+                    const char *flow_miss_handling,
+                    enum ofputil_protocol *usable_protocols)
+{
+    /* Table mod requires at least OF 1.1. */
+    *usable_protocols = OFPUTIL_P_OF11_UP;
+
+    if (!strcasecmp(table_id, "all")) {
+        tm->table_id = 255;
+    } else {
+        char *error = str_to_u8(table_id, "table_id", &tm->table_id);
+        if (error) {
+            return error;
+        }
+    }
+
+    if (strcmp(flow_miss_handling, "controller") == 0) {
+        tm->config = OFPTC11_TABLE_MISS_CONTROLLER;
+    } else if (strcmp(flow_miss_handling, "continue") == 0) {
+        tm->config = OFPTC11_TABLE_MISS_CONTINUE;
+    } else if (strcmp(flow_miss_handling, "drop") == 0) {
+        tm->config = OFPTC11_TABLE_MISS_DROP;
+    } else {
+        return xasprintf("invalid flow_miss_handling %s", flow_miss_handling);
+    }
+
+    if (tm->table_id == 0xfe && tm->config == OFPTC11_TABLE_MISS_CONTINUE) {
+        return xstrdup("last table's flow miss handling can not be continue");
+    }
+
+    return NULL;
+}
+
+
 /* Opens file 'file_name' and reads each line as a flow_mod of the specified
  * type (one of OFPFC_*).  Stores each flow_mod in '*fm', an array allocated
  * on the caller's behalf, and the number of flow_mods in '*n_fms'.

@@ -1156,6 +1156,7 @@ is_admitted_msg(const struct ofpbuf *b)
     case OFPTYPE_FLOW_MOD:
     case OFPTYPE_GROUP_MOD:
     case OFPTYPE_PORT_MOD:
+    case OFPTYPE_TABLE_MOD:
     case OFPTYPE_METER_MOD:
     case OFPTYPE_BARRIER_REQUEST:
     case OFPTYPE_BARRIER_REPLY:

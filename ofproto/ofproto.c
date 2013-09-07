@@ -5145,6 +5145,26 @@ handle_group_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 }
 
 static enum ofperr
+handle_table_mod(struct ofconn *ofconn, const struct ofp_header *oh)
+{
+    struct ofputil_table_mod tm;
+    enum ofperr error;
+
+    error = reject_slave_controller(ofconn);
+    if (error) {
+        return error;
+    }
+
+    error = ofputil_decode_table_mod(oh, &tm);
+    if (error) {
+        return error;
+    }
+
+    /* XXX Actual table mod support is not implemented yet. */
+    return 0;
+}
+
+static enum ofperr
 handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
 {
     const struct ofp_header *oh = msg->data;
@@ -5181,6 +5201,9 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
 
     case OFPTYPE_GROUP_MOD:
         return handle_group_mod(ofconn, oh);
+
+    case OFPTYPE_TABLE_MOD:
+        return handle_table_mod(ofconn, oh);
 
     case OFPTYPE_METER_MOD:
         return handle_meter_mod(ofconn, oh);

@@ -213,6 +213,31 @@ Prints to the console statistics for the specified \fIgroups in the
 groups are printed.  See \fBGroup Syntax\fR, below, for the syntax of
 \fIgroups\fR.
 .
+.IP "\fBmod\-table \fIswitch\fR \fItable_id\fR  \fIflow_miss_handling\fR"
+An OpenFlow 1.0 switch looks up each packet that arrives at the switch
+in table 0, then in table 1 if there is no match in table 0, then in
+table 2, and so on until the packet finds a match in some table.
+Finally, if no match was found, the switch sends the packet to the
+controller
+.IP
+OpenFlow 1.1 and later offer more flexibility.  This command
+configures the flow table miss handling configuration for table
+\fItable_id\fR in \fIswitch\fR.  \fItable_id\fR may be an OpenFlow
+table number between 0 and 254, inclusive, or the keyword \fBALL\fR to
+modify all tables.  \fIflow_miss_handling\fR may be any one of the
+following:
+.RS
+.IP \fBdrop\fR
+Drop the packet.
+.IP \fBcontinue\fR
+Continue to the next table in the pipeline.  (This is how an OpenFlow
+1.0 switch always handles packets that do not match any flow, in
+tables other than the last one.)
+.IP \fBcontroller\fR
+Send to controller.  (This is how an OpenFlow 1.0 switch always
+handles packets that do not match any flow in the last table.)
+.RE
+.
 .SS "OpenFlow Switch Flow Table Commands"
 .
 These commands manage the flow table in an OpenFlow switch.  In each

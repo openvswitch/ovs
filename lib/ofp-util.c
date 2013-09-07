@@ -3660,7 +3660,7 @@ ofputil_encode_port_status(const struct ofputil_port_status *ps,
     ofpmsg_update_length(b);
     return b;
 }
-
+
 /* ofputil_port_mod */
 
 /* Decodes the OpenFlow "port mod" message in '*oh' into an abstract form in
@@ -3742,7 +3742,66 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
         opm->advertise = netdev_port_features_to_ofp11(pm->advertise);
         break;
     }
+    default:
+        NOT_REACHED();
+    }
 
+    return b;
+}
+
+/* ofputil_table_mod */
+
+/* Decodes the OpenFlow "table mod" message in '*oh' into an abstract form in
+ * '*pm'.  Returns 0 if successful, otherwise an OFPERR_* value. */
+enum ofperr
+ofputil_decode_table_mod(const struct ofp_header *oh,
+                         struct ofputil_table_mod *pm)
+{
+    enum ofpraw raw;
+    struct ofpbuf b;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    raw = ofpraw_pull_assert(&b);
+
+    if (raw == OFPRAW_OFPT11_TABLE_MOD) {
+        const struct ofp11_table_mod *otm = b.data;
+
+        pm->table_id = otm->table_id;
+        pm->config = ntohl(otm->config);
+    } else {
+        return OFPERR_OFPBRC_BAD_TYPE;
+    }
+
+    return 0;
+}
+
+/* Converts the abstract form of a "table mod" message in '*pm' into an OpenFlow
+ * message suitable for 'protocol', and returns that encoded form in a buffer
+ * owned by the caller. */
+struct ofpbuf *
+ofputil_encode_table_mod(const struct ofputil_table_mod *pm,
+                        enum ofputil_protocol protocol)
+{
+    enum ofp_version ofp_version = ofputil_protocol_to_ofp_version(protocol);
+    struct ofpbuf *b;
+
+    switch (ofp_version) {
+    case OFP10_VERSION: {
+        ovs_fatal(0, "table mod needs OpenFlow 1.1 or later "
+                     "(\'-O OpenFlow11\')");
+        break;
+    }
+    case OFP11_VERSION:
+    case OFP12_VERSION:
+    case OFP13_VERSION: {
+        struct ofp11_table_mod *otm;
+
+        b = ofpraw_alloc(OFPRAW_OFPT11_TABLE_MOD, ofp_version, 0);
+        otm = ofpbuf_put_zeros(b, sizeof *otm);
+        otm->table_id = pm->table_id;
+        otm->config = htonl(pm->config);
+        break;
+    }
     default:
         NOT_REACHED();
     }

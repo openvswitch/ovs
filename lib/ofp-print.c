@@ -965,6 +965,49 @@ ofp_print_port_mod(struct ds *string, const struct ofp_header *oh)
 }
 
 static void
+ofp_print_table_miss_config(struct ds *string, const uint32_t config)
+{
+    uint32_t table_miss_config = config & OFPTC11_TABLE_MISS_MASK;
+
+    switch (table_miss_config) {
+    case OFPTC11_TABLE_MISS_CONTROLLER:
+        ds_put_cstr(string, "controller\n");
+        break;
+    case OFPTC11_TABLE_MISS_CONTINUE:
+        ds_put_cstr(string, "continue\n");
+        break;
+    case OFPTC11_TABLE_MISS_DROP:
+        ds_put_cstr(string, "drop\n");
+        break;
+    default:
+        ds_put_cstr(string, "Unknown\n");
+        break;
+    }
+}
+
+static void
+ofp_print_table_mod(struct ds *string, const struct ofp_header *oh)
+{
+    struct ofputil_table_mod pm;
+    enum ofperr error;
+
+    error = ofputil_decode_table_mod(oh, &pm);
+    if (error) {
+        ofp_print_error(string, error);
+        return;
+    }
+
+    if (pm.table_id == 0xff) {
+        ds_put_cstr(string, " table_id: ALL_TABLES");
+    } else {
+        ds_put_format(string, " table_id=%"PRIu8, pm.table_id);
+    }
+
+    ds_put_cstr(string, ", flow_miss_config=");
+    ofp_print_table_miss_config(string, pm.config);
+}
+
+static void
 ofp_print_meter_flags(struct ds *s, uint16_t flags)
 {
     if (flags & OFPMF13_KBPS) {
@@ -2429,6 +2472,10 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
 
     case OFPTYPE_PORT_MOD:
         ofp_print_port_mod(string, oh);
+        break;
+
+    case OFPTYPE_TABLE_MOD:
+        ofp_print_table_mod(string, oh);
         break;
 
     case OFPTYPE_METER_MOD:

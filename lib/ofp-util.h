@@ -565,6 +565,17 @@ enum ofperr ofputil_decode_port_mod(const struct ofp_header *,
 struct ofpbuf *ofputil_encode_port_mod(const struct ofputil_port_mod *,
                                        enum ofputil_protocol);
 
+/* Abstract ofp_table_mod. */
+struct ofputil_table_mod {
+    uint8_t table_id;         /* ID of the table, 0xff indicates all tables. */
+    uint32_t config;
+};
+
+enum ofperr ofputil_decode_table_mod(const struct ofp_header *,
+                                    struct ofputil_table_mod *);
+struct ofpbuf *ofputil_encode_table_mod(const struct ofputil_table_mod *,
+                                       enum ofputil_protocol);
+
 /* Meter band configuration for all supported band types. */
 struct ofputil_meter_band {
     uint16_t type;

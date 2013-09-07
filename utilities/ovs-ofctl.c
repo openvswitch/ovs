@@ -281,6 +281,7 @@ usage(void)
            "  dump-desc SWITCH            print switch description\n"
            "  dump-tables SWITCH          print table stats\n"
            "  mod-port SWITCH IFACE ACT   modify port behavior\n"
+           "  mod-table SWITCH MOD        modify flow table behavior\n"
            "  get-frags SWITCH            print fragment handling behavior\n"
            "  set-frags SWITCH FRAG_MODE  set fragment handling behavior\n"
            "  dump-ports SWITCH [PORT]    print port statistics\n"
@@ -1660,6 +1661,42 @@ ofctl_mod_port(int argc OVS_UNUSED, char *argv[])
 found:
     protocol = open_vconn(argv[1], &vconn);
     transact_noreply(vconn, ofputil_encode_port_mod(&pm, protocol));
+    vconn_close(vconn);
+}
+
+static void
+ofctl_mod_table(int argc OVS_UNUSED, char *argv[])
+{
+    enum ofputil_protocol protocol, usable_protocols;
+    struct ofputil_table_mod tm;
+    struct vconn *vconn;
+    char *error;
+    int i;
+
+    error = parse_ofp_table_mod(&tm, argv[2], argv[3], &usable_protocols);
+    if (error) {
+        ovs_fatal(0, "%s", error);
+    }
+
+    protocol = open_vconn(argv[1], &vconn);
+    if (!(protocol & usable_protocols)) {
+        for (i = 0; i < sizeof(enum ofputil_protocol) * CHAR_BIT; i++) {
+            enum ofputil_protocol f = 1 << i;
+            if (f != protocol
+                && f & usable_protocols
+                && try_set_protocol(vconn, f, &protocol)) {
+                protocol = f;
+                break;
+            }
+        }
+    }
+
+    if (!(protocol & usable_protocols)) {
+        char *usable_s = ofputil_protocols_to_string(usable_protocols);
+        ovs_fatal(0, "Switch does not support table mod message(%s)", usable_s);
+    }
+
+    transact_noreply(vconn, ofputil_encode_table_mod(&tm, protocol));
     vconn_close(vconn);
 }
 
@@ -3152,6 +3189,7 @@ static const struct command all_commands[] = {
     { "dump-ports", 1, 2, ofctl_dump_ports },
     { "dump-ports-desc", 1, 1, ofctl_dump_ports_desc },
     { "mod-port", 3, 3, ofctl_mod_port },
+    { "mod-table", 3, 3, ofctl_mod_table },
     { "get-frags", 1, 1, ofctl_get_frags },
     { "set-frags", 2, 2, ofctl_set_frags },
     { "ofp-parse", 1, 1, ofctl_ofp_parse },

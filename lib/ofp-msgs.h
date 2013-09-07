@@ -185,6 +185,9 @@ enum ofpraw {
     /* OFPT 1.1+ (16): struct ofp11_port_mod. */
     OFPRAW_OFPT11_PORT_MOD,
 
+    /* OFPT 1.1+ (17): struct ofp11_table_mod. */
+    OFPRAW_OFPT11_TABLE_MOD,
+
     /* OFPT 1.0 (18): void. */
     OFPRAW_OFPT10_BARRIER_REQUEST,
     /* OFPT 1.1+ (20): void. */
@@ -466,6 +469,7 @@ enum ofptype {
     OFPTYPE_GROUP_MOD,           /* OFPRAW_OFPT11_GROUP_MOD. */
     OFPTYPE_PORT_MOD,            /* OFPRAW_OFPT10_PORT_MOD.
                                   * OFPRAW_OFPT11_PORT_MOD. */
+    OFPTYPE_TABLE_MOD,           /* OFPRAW_OFPT11_TABLE_MOD. */
 
     /* Barrier messages. */
     OFPTYPE_BARRIER_REQUEST,     /* OFPRAW_OFPT10_BARRIER_REQUEST.

@@ -447,11 +447,11 @@ OFP_ASSERT(sizeof(struct ofp11_table_mod) == 8);
    These flags are used in ofp_table_stats messages to describe the current
    configuration and in ofp_table_mod messages to configure table behavior.  */
 enum ofp11_table_config {
-    OFPTC11_TABLE_MISS_CONTROLLER = 0,    /* Send to controller. */
+    OFPTC11_TABLE_MISS_CONTROLLER = 0 << 0, /* Send to controller. */
     OFPTC11_TABLE_MISS_CONTINUE = 1 << 0, /* Continue to the next table in the
                                              pipeline (OpenFlow 1.0
                                              behavior). */
-    OFPTC11_TABLE_MISS_DROP = 1 << 1,     /* Drop the packet. */
+    OFPTC11_TABLE_MISS_DROP = 2 << 0,     /* Drop the packet. */
     OFPTC11_TABLE_MISS_MASK = 3
 };
 

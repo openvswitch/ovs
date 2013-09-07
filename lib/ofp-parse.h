@@ -31,6 +31,7 @@ struct ofputil_flow_monitor_request;
 struct ofputil_flow_stats_request;
 struct ofputil_group_mod;
 struct ofputil_meter_mod;
+struct ofputil_table_mod;
 enum ofputil_protocol;
 
 char *parse_ofp_str(struct ofputil_flow_mod *, int command, const char *str_,
@@ -41,6 +42,12 @@ char *parse_ofp_flow_mod_str(struct ofputil_flow_mod *, const char *string,
                              uint16_t command,
                              enum ofputil_protocol *usable_protocols)
     WARN_UNUSED_RESULT;
+
+char *parse_ofp_table_mod(struct ofputil_table_mod *,
+                          const char *table_id, const char *flow_miss_handling,
+                          enum ofputil_protocol *usable_protocols)
+    WARN_UNUSED_RESULT;
+
 char *parse_ofp_flow_mod_file(const char *file_name, uint16_t command,
                               struct ofputil_flow_mod **fms, size_t *n_fms,
                               enum ofputil_protocol *usable_protocols)
