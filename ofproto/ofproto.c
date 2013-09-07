@@ -4122,6 +4122,31 @@ handle_nxt_set_async_config(struct ofconn *ofconn, const struct ofp_header *oh)
 }
 
 static enum ofperr
+handle_nxt_get_async_request(struct ofconn *ofconn, const struct ofp_header *oh)
+{
+    struct ofpbuf *buf;
+    uint32_t master[OAM_N_TYPES];
+    uint32_t slave[OAM_N_TYPES];
+    struct nx_async_config *msg;
+
+    ofconn_get_async_config(ofconn, master, slave);
+    buf = ofpraw_alloc_reply(OFPRAW_OFPT13_GET_ASYNC_REPLY, oh, 0);
+    msg = ofpbuf_put_zeros(buf, sizeof *msg);
+
+    msg->packet_in_mask[0] = htonl(master[OAM_PACKET_IN]);
+    msg->port_status_mask[0] = htonl(master[OAM_PORT_STATUS]);
+    msg->flow_removed_mask[0] = htonl(master[OAM_FLOW_REMOVED]);
+
+    msg->packet_in_mask[1] = htonl(slave[OAM_PACKET_IN]);
+    msg->port_status_mask[1] = htonl(slave[OAM_PORT_STATUS]);
+    msg->flow_removed_mask[1] = htonl(slave[OAM_FLOW_REMOVED]);
+
+    ofconn_send_reply(ofconn, buf);
+
+    return 0;
+}
+
+static enum ofperr
 handle_nxt_set_controller_id(struct ofconn *ofconn,
                              const struct ofp_header *oh)
 {
@@ -5193,6 +5218,9 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPTYPE_SET_ASYNC_CONFIG:
         return handle_nxt_set_async_config(ofconn, oh);
 
+    case OFPTYPE_GET_ASYNC_REQUEST:
+        return handle_nxt_get_async_request(ofconn, oh);
+
         /* Statistics requests. */
     case OFPTYPE_DESC_STATS_REQUEST:
         return handle_desc_stats_request(ofconn, oh);
@@ -5236,7 +5264,6 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
 
         /* FIXME: Change the following once they are implemented: */
     case OFPTYPE_QUEUE_GET_CONFIG_REQUEST:
-    case OFPTYPE_GET_ASYNC_REQUEST:
     case OFPTYPE_TABLE_FEATURES_STATS_REQUEST:
         return OFPERR_OFPBRC_BAD_TYPE;
 

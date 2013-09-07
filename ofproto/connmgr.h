@@ -118,6 +118,9 @@ void ofconn_set_miss_send_len(struct ofconn *, int miss_send_len);
 void ofconn_set_async_config(struct ofconn *,
                              const uint32_t master_masks[OAM_N_TYPES],
                              const uint32_t slave_masks[OAM_N_TYPES]);
+void ofconn_get_async_config(struct ofconn *,
+                             uint32_t *master_masks,
+                             uint32_t *slave_masks);
 
 void ofconn_send_reply(const struct ofconn *, struct ofpbuf *);
 void ofconn_send_replies(const struct ofconn *, struct list *);

@@ -985,6 +985,15 @@ ofconn_set_async_config(struct ofconn *ofconn,
     memcpy(ofconn->slave_async_config, slave_masks, size);
 }
 
+void
+ofconn_get_async_config(struct ofconn *ofconn,
+                        uint32_t *master_masks, uint32_t *slave_masks)
+{
+    size_t size = sizeof ofconn->master_async_config;
+    memcpy(master_masks, ofconn->master_async_config, size);
+    memcpy(slave_masks, ofconn->slave_async_config, size);
+}
+
 /* Sends 'msg' on 'ofconn', accounting it as a reply.  (If there is a
  * sufficient number of OpenFlow replies in-flight on a single ofconn, then the
  * connmgr will stop accepting new OpenFlow requests on that ofconn until the
