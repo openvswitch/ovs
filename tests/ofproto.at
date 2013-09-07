@@ -1878,3 +1878,37 @@ NXT_FLOW_MONITOR_RESUMED:
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([ofproto - event filtering (OpenFlow 1.3)])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+# Start a monitor, use the required protocol version
+ovs-ofctl -O OpenFlow13 monitor br0 --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+
+# Send an OpenFlow13 message (04), OFPT_GET_ASYNC_REQUEST (1a), length (8), xid (0a)
+ovs-appctl -t ovs-ofctl ofctl/send 041a00080000000a
+ovs-appctl -t ovs-ofctl ofctl/barrier
+
+# Check default setting
+read -r -d '' expected <<'EOF'
+EOF
+
+AT_CHECK([ofctl_strip < monitor.log], [], [dnl
+send: OFPT_GET_ASYNC_REQUEST (OF1.3):
+OFPT_GET_ASYNC_REPLY (OF1.3):
+ master:
+       PACKET_IN: no_match action
+     PORT_STATUS: add delete modify
+    FLOW_REMOVED: idle hard delete
+
+ slave:
+       PACKET_IN: (off)
+     PORT_STATUS: add delete modify
+    FLOW_REMOVED: (off)
+OFPT_BARRIER_REPLY (OF1.3):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
