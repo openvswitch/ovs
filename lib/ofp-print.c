@@ -2374,8 +2374,6 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
 
     case OFPTYPE_QUEUE_GET_CONFIG_REQUEST:
     case OFPTYPE_QUEUE_GET_CONFIG_REPLY:
-    case OFPTYPE_GET_ASYNC_REQUEST:
-    case OFPTYPE_GET_ASYNC_REPLY:
     case OFPTYPE_TABLE_FEATURES_STATS_REQUEST:
     case OFPTYPE_TABLE_FEATURES_STATS_REPLY:
         ofp_print_not_implemented(string);
@@ -2547,10 +2545,12 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
         ofp_print_nxt_set_controller_id(string, ofpmsg_body(oh));
         break;
 
+    case OFPTYPE_GET_ASYNC_REPLY:
     case OFPTYPE_SET_ASYNC_CONFIG:
         ofp_print_nxt_set_async_config(string, ofpmsg_body(oh));
         break;
-
+    case OFPTYPE_GET_ASYNC_REQUEST:
+        break;
     case OFPTYPE_FLOW_MONITOR_CANCEL:
         ofp_print_nxt_flow_monitor_cancel(string, msg);
         break;
