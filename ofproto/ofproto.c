@@ -1752,10 +1752,9 @@ ofproto_add_flow(struct ofproto *ofproto, const struct match *match,
         fm.match = *match;
         fm.priority = priority;
         fm.buffer_id = UINT32_MAX;
-        fm.ofpacts = xmemdup(ofpacts, ofpacts_len);
+        fm.ofpacts = ofpacts;
         fm.ofpacts_len = ofpacts_len;
         add_flow(ofproto, NULL, &fm, NULL);
-        free(fm.ofpacts);
     }
 }
 
