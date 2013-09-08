@@ -1370,7 +1370,7 @@ parse_ofp_meter_mod_str__(struct ofputil_meter_mod *mm, char *string,
     char *name;
 
     /* Meters require at least OF 1.3. */
-    *usable_protocols &= OFPUTIL_P_OF13_UP;
+    *usable_protocols = OFPUTIL_P_OF13_UP;
 
     switch (command) {
     case -1:
