@@ -4632,8 +4632,11 @@ handle_meter_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 
     if (mm.command != OFPMC13_DELETE) {
         /* Fails also when meters are not implemented by the provider. */
-        if (!meter_id || meter_id > ofproto->meter_features.max_meters) {
+        if (meter_id == 0 || meter_id > OFPM13_MAX) {
             error = OFPERR_OFPMMFC_INVALID_METER;
+            goto exit_free_bands;
+        } else if (meter_id > ofproto->meter_features.max_meters) {
+            error = OFPERR_OFPMMFC_OUT_OF_METERS;
             goto exit_free_bands;
         }
         if (mm.meter.n_bands > ofproto->meter_features.max_bands) {
