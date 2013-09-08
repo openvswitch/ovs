@@ -1140,11 +1140,6 @@ ofproto_destroy__(struct ofproto *ofproto)
     ovs_assert(list_is_empty(&ofproto->pending));
     ovs_assert(!ofproto->n_pending);
 
-    if (ofproto->meters) {
-        meter_delete(ofproto, 1, ofproto->meter_features.max_meters);
-        free(ofproto->meters);
-    }
-
     delete_group(ofproto, OFPG_ALL);
     ovs_rwlock_destroy(&ofproto->groups_rwlock);
     hmap_destroy(&ofproto->groups);
@@ -1184,6 +1179,13 @@ ofproto_destroy(struct ofproto *p)
 
     if (!p) {
         return;
+    }
+
+    if (p->meters) {
+        meter_delete(p, 1, p->meter_features.max_meters);
+        p->meter_features.max_meters = 0;
+        free(p->meters);
+        p->meters = NULL;
     }
 
     ofproto_flush__(p);
