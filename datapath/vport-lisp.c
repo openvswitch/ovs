@@ -437,8 +437,11 @@ static int lisp_send(struct vport *vport, struct sk_buff *skb)
 			goto err_free_rt;
 	}
 
+	/* Reset l2 headers. */
 	skb_pull(skb, network_offset);
 	skb_reset_mac_header(skb);
+	vlan_set_tci(skb, 0);
+
 	skb_reset_inner_headers(skb);
 
 	__skb_push(skb, LISP_HLEN);
