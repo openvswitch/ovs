@@ -2977,6 +2977,7 @@ hash_cookie(ovs_be64 cookie)
 
 static void
 cookies_insert(struct ofproto *ofproto, struct rule *rule)
+    OVS_REQUIRES(ofproto_mutex)
 {
     hindex_insert(&ofproto->cookies, &rule->cookie_node,
                   hash_cookie(rule->flow_cookie));
@@ -2984,6 +2985,7 @@ cookies_insert(struct ofproto *ofproto, struct rule *rule)
 
 static void
 cookies_remove(struct ofproto *ofproto, struct rule *rule)
+    OVS_REQUIRES(ofproto_mutex)
 {
     hindex_remove(&ofproto->cookies, &rule->cookie_node);
 }
@@ -2993,6 +2995,7 @@ ofproto_rule_change_cookie(struct ofproto *ofproto, struct rule *rule,
                            ovs_be64 new_cookie)
 {
     if (new_cookie != rule->flow_cookie) {
+        ovs_mutex_lock(&ofproto_mutex);
         cookies_remove(ofproto, rule);
 
         ovs_rwlock_wrlock(&rule->rwlock);
@@ -3000,6 +3003,7 @@ ofproto_rule_change_cookie(struct ofproto *ofproto, struct rule *rule,
         ovs_rwlock_unlock(&rule->rwlock);
 
         cookies_insert(ofproto, rule);
+        ovs_mutex_unlock(&ofproto_mutex);
     }
 }
 
@@ -3187,6 +3191,7 @@ collect_rules_loose(struct ofproto *ofproto,
     if (criteria->cookie_mask == htonll(UINT64_MAX)) {
         struct rule *rule;
 
+        ovs_mutex_lock(&ofproto_mutex);
         HINDEX_FOR_EACH_WITH_HASH (rule, cookie_node,
                                    hash_cookie(criteria->cookie),
                                    &ofproto->cookies) {
@@ -3197,6 +3202,7 @@ collect_rules_loose(struct ofproto *ofproto,
                 }
             }
         }
+        ovs_mutex_unlock(&ofproto_mutex);
     } else {
         FOR_EACH_MATCHING_TABLE (table, criteria->table_id, ofproto) {
             struct cls_cursor cursor;
@@ -3247,6 +3253,7 @@ collect_rules_strict(struct ofproto *ofproto,
     if (criteria->cookie_mask == htonll(UINT64_MAX)) {
         struct rule *rule;
 
+        ovs_mutex_lock(&ofproto_mutex);
         HINDEX_FOR_EACH_WITH_HASH (rule, cookie_node,
                                    hash_cookie(criteria->cookie),
                                    &ofproto->cookies) {
@@ -3257,6 +3264,7 @@ collect_rules_strict(struct ofproto *ofproto,
                 }
             }
         }
+        ovs_mutex_unlock(&ofproto_mutex);
     } else {
         FOR_EACH_MATCHING_TABLE (table, criteria->table_id, ofproto) {
             struct rule *rule;
@@ -6335,7 +6343,11 @@ oftable_remove_rule__(struct ofproto *ofproto, struct classifier *cls,
     OVS_REQ_WRLOCK(cls->rwlock) OVS_RELEASES(rule->rwlock)
 {
     classifier_remove(cls, &rule->cr);
+
+    ovs_mutex_lock(&ofproto_mutex);
     cookies_remove(ofproto, rule);
+    ovs_mutex_unlock(&ofproto_mutex);
+
     eviction_group_remove_rule(rule);
     ovs_mutex_lock(&ofproto_mutex);
     if (!list_is_empty(&rule->expirable)) {
@@ -6378,7 +6390,10 @@ oftable_insert_rule(struct rule *rule)
         list_insert(&ofproto->expirable, &rule->expirable);
         ovs_mutex_unlock(&ofproto_mutex);
     }
+
+    ovs_mutex_lock(&ofproto_mutex);
     cookies_insert(ofproto, rule);
+    ovs_mutex_unlock(&ofproto_mutex);
 
     if (rule->actions->meter_id) {
         struct meter *meter = ofproto->meters[rule->actions->meter_id];

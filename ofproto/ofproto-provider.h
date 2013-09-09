@@ -77,7 +77,8 @@ struct ofproto {
     struct oftable *tables;
     int n_tables;
 
-    struct hindex cookies;      /* Rules indexed on their cookie values. */
+    /* Rules indexed on their cookie values, in all flow tables. */
+    struct hindex cookies OVS_GUARDED_BY(ofproto_mutex);
 
     /* List of expirable flows, in all flow tables. */
     struct list expirable OVS_GUARDED_BY(ofproto_mutex);
@@ -234,7 +235,7 @@ struct rule {
 
     ovs_be64 flow_cookie;        /* Controller-issued identifier. Guarded by
                                     rwlock. */
-    struct hindex_node cookie_node; /* In owning ofproto's 'cookies' index. */
+    struct hindex_node cookie_node OVS_GUARDED_BY(ofproto_mutex);
 
     long long int created;       /* Creation time. */
     long long int modified;      /* Time of last modification. */
