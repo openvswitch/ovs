@@ -124,9 +124,7 @@ struct ofoperation {
 
     /* OFOPERATION_MODIFY, OFOPERATION_REPLACE: The old actions, if the actions
      * are changing. */
-    struct ofpact *ofpacts;
-    size_t ofpacts_len;
-    uint32_t meter_id;
+    struct rule_actions *actions;
 
     /* OFOPERATION_DELETE. */
     enum ofp_flow_removed_reason reason; /* Reason flow was removed. */
@@ -1764,20 +1762,29 @@ ofproto_add_flow(struct ofproto *ofproto, const struct match *match,
                  const struct ofpact *ofpacts, size_t ofpacts_len)
 {
     const struct rule *rule;
+    bool must_add;
 
     /* First do a cheap check whether the rule we're looking for already exists
      * with the actions that we want.  If it does, then we're done. */
     ovs_rwlock_rdlock(&ofproto->tables[0].cls.rwlock);
     rule = rule_from_cls_rule(classifier_find_match_exactly(
                                   &ofproto->tables[0].cls, match, priority));
+    if (rule) {
+        ovs_rwlock_rdlock(&rule->rwlock);
+        must_add = !ofpacts_equal(rule->actions->ofpacts,
+                                  rule->actions->ofpacts_len,
+                                  ofpacts, ofpacts_len);
+        ovs_rwlock_unlock(&rule->rwlock);
+    } else {
+        must_add = true;
+    }
     ovs_rwlock_unlock(&ofproto->tables[0].cls.rwlock);
 
     /* If there's no such rule or the rule doesn't have the actions we want,
      * fall back to a executing a full flow mod.  We can't optimize this at
      * all because we didn't take enough locks above to ensure that the flow
      * table didn't already change beneath us.  */
-    if (!rule || !ofpacts_equal(rule->ofpacts, rule->ofpacts_len,
-                                ofpacts, ofpacts_len)) {
+    if (must_add) {
         simple_flow_mod(ofproto, match, priority, ofpacts, ofpacts_len,
                         OFPFC_MODIFY_STRICT);
     }
@@ -2323,10 +2330,54 @@ static void
 ofproto_rule_destroy__(struct rule *rule)
 {
     cls_rule_destroy(&rule->cr);
-    free(rule->ofpacts);
+    rule_actions_unref(rule->actions);
     ovs_mutex_destroy(&rule->timeout_mutex);
     ovs_rwlock_destroy(&rule->rwlock);
     rule->ofproto->ofproto_class->rule_dealloc(rule);
+}
+
+/* Creates and returns a new 'struct rule_actions', with a ref_count of 1,
+ * whose actions are a copy of from the 'ofpacts_len' bytes of 'ofpacts'. */
+struct rule_actions *
+rule_actions_create(const struct ofpact *ofpacts, size_t ofpacts_len)
+{
+    struct rule_actions *actions;
+
+    actions = xmalloc(sizeof *actions);
+    atomic_init(&actions->ref_count, 1);
+    actions->ofpacts = xmemdup(ofpacts, ofpacts_len);
+    actions->ofpacts_len = ofpacts_len;
+    actions->meter_id = ofpacts_get_meter(ofpacts, ofpacts_len);
+    return actions;
+}
+
+/* Increments 'actions''s ref_count. */
+void
+rule_actions_ref(struct rule_actions *actions)
+{
+    if (actions) {
+        unsigned int orig;
+
+        atomic_add(&actions->ref_count, 1, &orig);
+        ovs_assert(orig != 0);
+    }
+}
+
+/* Decrements 'actions''s ref_count and frees 'actions' if the ref_count
+ * reaches 0. */
+void
+rule_actions_unref(struct rule_actions *actions)
+{
+    if (actions) {
+        unsigned int orig;
+
+        atomic_sub(&actions->ref_count, 1, &orig);
+        if (orig == 1) {
+            free(actions);
+        } else {
+            ovs_assert(orig != 0);
+        }
+    }
 }
 
 /* Returns true if 'rule' has an OpenFlow OFPAT_OUTPUT or OFPAT_ENQUEUE action
@@ -2335,7 +2386,8 @@ bool
 ofproto_rule_has_out_port(const struct rule *rule, ofp_port_t port)
 {
     return (port == OFPP_ANY
-            || ofpacts_output_to_port(rule->ofpacts, rule->ofpacts_len, port));
+            || ofpacts_output_to_port(rule->actions->ofpacts,
+                                      rule->actions->ofpacts_len, port));
 }
 
 /* Returns true if a rule related to 'op' has an OpenFlow OFPAT_OUTPUT or
@@ -2354,7 +2406,8 @@ ofoperation_has_out_port(const struct ofoperation *op, ofp_port_t out_port)
 
     case OFOPERATION_MODIFY:
     case OFOPERATION_REPLACE:
-        return ofpacts_output_to_port(op->ofpacts, op->ofpacts_len, out_port);
+        return ofpacts_output_to_port(op->actions->ofpacts,
+                                      op->actions->ofpacts_len, out_port);
     }
 
     NOT_REACHED();
@@ -3191,8 +3244,8 @@ handle_flow_stats_request(struct ofconn *ofconn,
         fs.hard_age = age_secs(now - rule->modified);
         ofproto->ofproto_class->rule_get_stats(rule, &fs.packet_count,
                                                &fs.byte_count);
-        fs.ofpacts = rule->ofpacts;
-        fs.ofpacts_len = rule->ofpacts_len;
+        fs.ofpacts = rule->actions->ofpacts;
+        fs.ofpacts_len = rule->actions->ofpacts_len;
 
         ovs_mutex_lock(&rule->timeout_mutex);
         fs.idle_timeout = rule->idle_timeout;
@@ -3232,7 +3285,8 @@ flow_stats_ds(struct rule *rule, struct ds *results)
     ds_put_format(results, "n_bytes=%"PRIu64", ", byte_count);
     cls_rule_format(&rule->cr, results);
     ds_put_char(results, ',');
-    ofpacts_format(rule->ofpacts, rule->ofpacts_len, results);
+    ofpacts_format(rule->actions->ofpacts, rule->actions->ofpacts_len,
+                   results);
     ds_put_cstr(results, "\n");
 }
 
@@ -3631,9 +3685,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
 
     rule->table_id = table - ofproto->tables;
     rule->send_flow_removed = (fm->flags & OFPUTIL_FF_SEND_FLOW_REM) != 0;
-    rule->ofpacts = xmemdup(fm->ofpacts, fm->ofpacts_len);
-    rule->ofpacts_len = fm->ofpacts_len;
-    rule->meter_id = ofpacts_get_meter(rule->ofpacts, rule->ofpacts_len);
+    rule->actions = rule_actions_create(fm->ofpacts, fm->ofpacts_len);
     list_init(&rule->meter_list_node);
     rule->eviction_group = NULL;
     list_init(&rule->expirable);
@@ -3705,7 +3757,8 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
         }
 
         actions_changed = !ofpacts_equal(fm->ofpacts, fm->ofpacts_len,
-                                         rule->ofpacts, rule->ofpacts_len);
+                                         rule->actions->ofpacts,
+                                         rule->actions->ofpacts_len);
 
         op = ofoperation_create(group, rule, type, 0);
 
@@ -3732,17 +3785,15 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
 
         reset_counters = (fm->flags & OFPUTIL_FF_RESET_COUNTS) != 0;
         if (actions_changed || reset_counters) {
-            op->ofpacts = rule->ofpacts;
-            op->ofpacts_len = rule->ofpacts_len;
-            op->meter_id = rule->meter_id;
+            struct rule_actions *new_actions;
+
+            op->actions = rule->actions;
+            new_actions = rule_actions_create(fm->ofpacts, fm->ofpacts_len);
 
             ovs_rwlock_wrlock(&rule->rwlock);
-            rule->ofpacts = xmemdup(fm->ofpacts, fm->ofpacts_len);
-            rule->ofpacts_len = fm->ofpacts_len;
+            rule->actions = new_actions;
             ovs_rwlock_unlock(&rule->rwlock);
 
-            rule->meter_id = ofpacts_get_meter(rule->ofpacts,
-                                               rule->ofpacts_len);
             rule->ofproto->ofproto_class->rule_modify_actions(rule,
                                                               reset_counters);
         } else {
@@ -4243,6 +4294,7 @@ ofproto_compose_flow_refresh_update(const struct rule *rule,
                                     struct list *msgs)
 {
     struct ofoperation *op = rule->pending;
+    const struct rule_actions *actions;
     struct ofputil_flow_update fu;
     struct match match;
 
@@ -4264,12 +4316,11 @@ ofproto_compose_flow_refresh_update(const struct rule *rule,
     minimatch_expand(&rule->cr.match, &match);
     fu.match = &match;
     fu.priority = rule->cr.priority;
+
     if (!(flags & NXFMF_ACTIONS)) {
-        fu.ofpacts = NULL;
-        fu.ofpacts_len = 0;
+        actions = NULL;
     } else if (!op) {
-        fu.ofpacts = rule->ofpacts;
-        fu.ofpacts_len = rule->ofpacts_len;
+        actions = rule->actions;
     } else {
         /* An operation is in progress.  Use the previous version of the flow's
          * actions, so that when the operation commits we report the change. */
@@ -4279,24 +4330,19 @@ ofproto_compose_flow_refresh_update(const struct rule *rule,
 
         case OFOPERATION_MODIFY:
         case OFOPERATION_REPLACE:
-            if (op->ofpacts) {
-                fu.ofpacts = op->ofpacts;
-                fu.ofpacts_len = op->ofpacts_len;
-            } else {
-                fu.ofpacts = rule->ofpacts;
-                fu.ofpacts_len = rule->ofpacts_len;
-            }
+            actions = op->actions ? op->actions : rule->actions;
             break;
 
         case OFOPERATION_DELETE:
-            fu.ofpacts = rule->ofpacts;
-            fu.ofpacts_len = rule->ofpacts_len;
+            actions = rule->actions;
             break;
 
         default:
             NOT_REACHED();
         }
     }
+    fu.ofpacts = actions ? actions->ofpacts : NULL;
+    fu.ofpacts_len = actions ? actions->ofpacts_len : 0;
 
     if (list_is_empty(msgs)) {
         ofputil_start_flow_update(msgs);
@@ -5097,7 +5143,7 @@ ofopgroup_complete(struct ofopgroup *group)
         if (!(op->error
               || ofproto_rule_is_hidden(rule)
               || (op->type == OFOPERATION_MODIFY
-                  && op->ofpacts
+                  && op->actions
                   && rule->flow_cookie == op->flow_cookie))) {
             /* Check that we can just cast from ofoperation_type to
              * nx_flow_update_event. */
@@ -5172,16 +5218,16 @@ ofopgroup_complete(struct ofopgroup *group)
                 rule->idle_timeout = op->idle_timeout;
                 rule->hard_timeout = op->hard_timeout;
                 ovs_mutex_unlock(&rule->timeout_mutex);
-                if (op->ofpacts) {
-                    free(rule->ofpacts);
+                if (op->actions) {
+                    struct rule_actions *old_actions;
 
                     ovs_rwlock_wrlock(&rule->rwlock);
-                    rule->ofpacts = op->ofpacts;
-                    rule->ofpacts_len = op->ofpacts_len;
+                    old_actions = rule->actions;
+                    rule->actions = op->actions;
                     ovs_rwlock_unlock(&rule->rwlock);
 
-                    op->ofpacts = NULL;
-                    op->ofpacts_len = 0;
+                    op->actions = NULL;
+                    rule_actions_unref(old_actions);
                 }
                 rule->send_flow_removed = op->send_flow_removed;
             }
@@ -5265,7 +5311,7 @@ ofoperation_destroy(struct ofoperation *op)
         hmap_remove(&group->ofproto->deletions, &op->hmap_node);
     }
     list_remove(&op->group_node);
-    free(op->ofpacts);
+    rule_actions_unref(op->actions);
     free(op);
 }
 
@@ -5763,8 +5809,9 @@ oftable_insert_rule(struct rule *rule)
         ovs_mutex_unlock(&ofproto->expirable_mutex);
     }
     cookies_insert(ofproto, rule);
-    if (rule->meter_id) {
-        struct meter *meter = ofproto->meters[rule->meter_id];
+
+    if (rule->actions->meter_id) {
+        struct meter *meter = ofproto->meters[rule->actions->meter_id];
         list_insert(&meter->rules, &rule->meter_list_node);
     }
     ovs_rwlock_wrlock(&table->cls.rwlock);

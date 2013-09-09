@@ -76,9 +76,7 @@ bool rule_dpif_lookup_in_table(struct ofproto_dpif *, const struct flow *,
 
 bool rule_dpif_fail_open(const struct rule_dpif *rule);
 
-void rule_dpif_get_actions(const struct rule_dpif *rule,
-                           const struct ofpact **ofpacts,
-                           size_t *ofpacts_len);
+struct rule_actions *rule_dpif_get_actions(const struct rule_dpif *);
 
 ovs_be64 rule_dpif_get_flow_cookie(const struct rule_dpif *rule);
 

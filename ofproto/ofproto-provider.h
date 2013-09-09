@@ -246,10 +246,8 @@ struct rule {
     struct ovs_rwlock rwlock;
 
     /* Guarded by rwlock. */
-    struct ofpact *ofpacts;      /* Sequence of "struct ofpacts". */
-    unsigned int ofpacts_len;    /* Size of 'ofpacts', in bytes. */
+    struct rule_actions *actions;
 
-    uint32_t meter_id;           /* Non-zero OF meter_id, or zero. */
     struct list meter_list_node; /* In owning meter's 'rules' list. */
 
     /* Flow monitors. */
@@ -261,6 +259,30 @@ struct rule {
     struct list expirable;      /* In ofproto's 'expirable' list if this rule
                                  * is expirable, otherwise empty. */
 };
+
+/* A set of actions within a "struct rule".
+ *
+ *
+ * Thread-safety
+ * =============
+ *
+ * A struct rule_actions 'actions' may be accessed without a risk of being
+ * freed by code that holds a read-lock or write-lock on 'rule->rwlock' (where
+ * 'rule' is the rule for which 'rule->actions == actions') or that owns a
+ * reference to 'actions->ref_count' (or both). */
+struct rule_actions {
+    atomic_uint ref_count;
+
+    /* These members are immutable: they do not change during the struct's
+     * lifetime.  */
+    struct ofpact *ofpacts;     /* Sequence of "struct ofpacts". */
+    unsigned int ofpacts_len;   /* Size of 'ofpacts', in bytes. */
+    uint32_t meter_id;          /* Non-zero OF meter_id, or zero. */
+};
+
+struct rule_actions *rule_actions_create(const struct ofpact *, size_t);
+void rule_actions_ref(struct rule_actions *);
+void rule_actions_unref(struct rule_actions *);
 
 /* A set of rules to which an OpenFlow operation applies. */
 struct rule_collection {
