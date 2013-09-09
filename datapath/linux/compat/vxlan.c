@@ -361,7 +361,7 @@ void vxlan_sock_release(struct vxlan_sock *vs)
 	hlist_del_rcu(&vs->hlist);
 	spin_unlock(&vn->sock_lock);
 
-	queue_work(&vs->del_work);
+	queue_work(system_wq, &vs->del_work);
 }
 
 static int vxlan_init_net(struct net *net)

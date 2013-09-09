@@ -12,7 +12,6 @@ openvswitch_sources += \
 	linux/compat/reciprocal_div.c \
 	linux/compat/skbuff-openvswitch.c \
 	linux/compat/vxlan.c	\
-	linux/compat/workqueue.c \
 	linux/compat/utils.c
 openvswitch_headers += \
 	linux/compat/gso.h \
