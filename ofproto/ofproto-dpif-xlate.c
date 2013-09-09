@@ -44,6 +44,7 @@
 #include "ofproto/ofproto-dpif-mirror.h"
 #include "ofproto/ofproto-dpif-sflow.h"
 #include "ofproto/ofproto-dpif.h"
+#include "ofproto/ofproto-provider.h"
 #include "tunnel.h"
 #include "vlog.h"
 
@@ -1671,8 +1672,7 @@ xlate_recursively(struct xlate_ctx *ctx, struct rule_dpif *rule)
     OVS_RELEASES(rule)
 {
     struct rule_dpif *old_rule = ctx->rule;
-    const struct ofpact *ofpacts;
-    size_t ofpacts_len;
+    struct rule_actions *actions;
 
     if (ctx->xin->resubmit_stats) {
         rule_dpif_credit_stats(rule, ctx->xin->resubmit_stats);
@@ -1680,8 +1680,9 @@ xlate_recursively(struct xlate_ctx *ctx, struct rule_dpif *rule)
 
     ctx->recurse++;
     ctx->rule = rule;
-    rule_dpif_get_actions(rule, &ofpacts, &ofpacts_len);
-    do_xlate_actions(ofpacts, ofpacts_len, ctx);
+    actions = rule_dpif_get_actions(rule);
+    do_xlate_actions(actions->ofpacts, actions->ofpacts_len, ctx);
+    rule_actions_unref(actions);
     ctx->rule = old_rule;
     ctx->recurse--;
 
@@ -2528,6 +2529,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     struct flow_wildcards *wc = &xout->wc;
     struct flow *flow = &xin->flow;
 
+    struct rule_actions *actions = NULL;
     enum slow_path_reason special;
     const struct ofpact *ofpacts;
     struct xport *in_port;
@@ -2604,7 +2606,9 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         ofpacts = xin->ofpacts;
         ofpacts_len = xin->ofpacts_len;
     } else if (xin->rule) {
-        rule_dpif_get_actions(xin->rule, &ofpacts, &ofpacts_len);
+        actions = rule_dpif_get_actions(xin->rule);
+        ofpacts = actions->ofpacts;
+        ofpacts_len = actions->ofpacts_len;
     } else {
         NOT_REACHED();
     }
@@ -2690,4 +2694,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
 out:
     ovs_rwlock_unlock(&xlate_rwlock);
+
+    rule_actions_unref(actions);
 }

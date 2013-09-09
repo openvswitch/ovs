@@ -4166,12 +4166,13 @@ facet_is_controller_flow(struct facet *facet)
         bool is_controller;
 
         rule_dpif_lookup(ofproto, &facet->flow, NULL, &rule);
-        ofpacts_len = rule->up.ofpacts_len;
-        ofpacts = rule->up.ofpacts;
+        ofpacts_len = rule->up.actions->ofpacts_len;
+        ofpacts = rule->up.actions->ofpacts;
         is_controller = ofpacts_len > 0
             && ofpacts->type == OFPACT_CONTROLLER
             && ofpact_next(ofpacts) >= ofpact_end(ofpacts, ofpacts_len);
         rule_dpif_release(rule);
+
         return is_controller;
     }
     return false;
@@ -4523,12 +4524,20 @@ rule_dpif_reduce_timeouts(struct rule_dpif *rule, uint16_t idle_timeout,
     ofproto_rule_reduce_timeouts(&rule->up, idle_timeout, hard_timeout);
 }
 
-void
-rule_dpif_get_actions(const struct rule_dpif *rule,
-                      const struct ofpact **ofpacts, size_t *ofpacts_len)
+/* Returns 'rule''s actions.  The caller owns a reference on the returned
+ * actions and must eventually release it (with rule_actions_unref()) to avoid
+ * a memory leak. */
+struct rule_actions *
+rule_dpif_get_actions(const struct rule_dpif *rule)
 {
-    *ofpacts = rule->up.ofpacts;
-    *ofpacts_len = rule->up.ofpacts_len;
+    struct rule_actions *actions;
+
+    ovs_rwlock_rdlock(&rule->up.rwlock);
+    actions = rule->up.actions;
+    rule_actions_ref(actions);
+    ovs_rwlock_unlock(&rule->up.rwlock);
+
+    return actions;
 }
 
 /* Subfacets. */
@@ -5312,7 +5321,8 @@ trace_format_rule(struct ds *result, int level, const struct rule_dpif *rule)
 
     ds_put_char_multiple(result, '\t', level);
     ds_put_cstr(result, "OpenFlow ");
-    ofpacts_format(rule->up.ofpacts, rule->up.ofpacts_len, result);
+    ofpacts_format(rule->up.actions->ofpacts, rule->up.actions->ofpacts_len,
+                   result);
     ds_put_char(result, '\n');
 }
 

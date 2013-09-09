@@ -1903,8 +1903,8 @@ ofmonitor_report(struct connmgr *mgr, struct rule *rule,
                 ovs_mutex_unlock(&rule->timeout_mutex);
 
                 if (flags & NXFMF_ACTIONS) {
-                    fu.ofpacts = rule->ofpacts;
-                    fu.ofpacts_len = rule->ofpacts_len;
+                    fu.ofpacts = rule->actions->ofpacts;
+                    fu.ofpacts_len = rule->actions->ofpacts_len;
                 } else {
                     fu.ofpacts = NULL;
                     fu.ofpacts_len = 0;
