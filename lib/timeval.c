@@ -76,6 +76,7 @@ init_clock(struct clock *c, clockid_t id)
 {
     memset(c, 0, sizeof *c);
     c->id = id;
+    ovs_rwlock_init(&c->rwlock);
     xclock_gettime(c->id, &c->cache);
 }
 
