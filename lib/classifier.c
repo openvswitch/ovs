@@ -500,8 +500,9 @@ cls_cursor_first(struct cls_cursor *cursor)
 /* Returns the next matching cls_rule in 'cursor''s iteration, or a null
  * pointer if there are no more matches. */
 struct cls_rule *
-cls_cursor_next(struct cls_cursor *cursor, struct cls_rule *rule)
+cls_cursor_next(struct cls_cursor *cursor, const struct cls_rule *rule_)
 {
+    struct cls_rule *rule = CONST_CAST(struct cls_rule *, rule_);
     const struct cls_table *table;
     struct cls_rule *next;
 
