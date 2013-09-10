@@ -1424,7 +1424,7 @@ destruct(struct ofproto *ofproto_)
         cls_cursor_init(&cursor, &table->cls, NULL);
         ovs_rwlock_unlock(&table->cls.rwlock);
         CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, up.cr, &cursor) {
-            ofproto_rule_delete(&ofproto->up, &table->cls, &rule->up);
+            ofproto_rule_delete(&ofproto->up, &rule->up);
         }
     }
 

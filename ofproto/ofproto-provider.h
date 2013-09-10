@@ -451,8 +451,7 @@ rule_from_cls_rule(const struct cls_rule *cls_rule)
 
 void ofproto_rule_expire(struct rule *rule, uint8_t reason)
     OVS_REQUIRES(ofproto_mutex);
-void ofproto_rule_delete(struct ofproto *, struct classifier *cls,
-                         struct rule *)
+void ofproto_rule_delete(struct ofproto *, struct rule *)
     OVS_EXCLUDED(ofproto_mutex);
 void ofproto_rule_reduce_timeouts(struct rule *rule, uint16_t idle_timeout,
                                   uint16_t hard_timeout)
