@@ -163,7 +163,7 @@
               type='{"type": "integer", "minInteger": 1}'>
         <p>
           Specifies the number of threads for software datapaths to use for
-          handling new flows.  The default is one less than the number of
+          handling new flows.  The default is two less than the number of
           online CPU cores (but at least 1).
         </p>
         <p>
