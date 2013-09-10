@@ -642,14 +642,15 @@ ofproto_set_mac_table_config(struct ofproto *ofproto, unsigned idle_time,
 }
 
 /* Sets number of upcall handler threads.  The default is
- * (number of online cores - 1). */
+ * (number of online cores - 2). */
 void
 ofproto_set_n_handler_threads(unsigned limit)
 {
     if (limit) {
         n_handler_threads = limit;
     } else {
-        n_handler_threads = MAX(1, sysconf(_SC_NPROCESSORS_ONLN) - 1);
+        int n_proc = sysconf(_SC_NPROCESSORS_ONLN);
+        n_handler_threads = n_proc > 2 ? n_proc - 2 : 1;
     }
 }
 
