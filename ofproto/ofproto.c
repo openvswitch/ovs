@@ -154,8 +154,7 @@ static void oftable_enable_eviction(struct oftable *,
                                     size_t n_fields);
 
 static void oftable_remove_rule(struct rule *rule) OVS_REQUIRES(ofproto_mutex);
-static void oftable_remove_rule__(struct ofproto *ofproto,
-                                  struct classifier *cls, struct rule *rule)
+static void oftable_remove_rule__(struct ofproto *, struct rule *)
     OVS_REQUIRES(ofproto_mutex);
 static void oftable_insert_rule(struct rule *);
 
@@ -1130,14 +1129,12 @@ ofproto_get_snoops(const struct ofproto *ofproto, struct sset *snoops)
 }
 
 static void
-ofproto_rule_delete__(struct ofproto *ofproto, struct classifier *cls,
-                      struct rule *rule)
+ofproto_rule_delete__(struct ofproto *ofproto, struct rule *rule)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct ofopgroup *group;
 
     ovs_assert(!rule->pending);
-    ovs_assert(cls == &ofproto->tables[rule->table_id].cls);
 
     group = ofopgroup_create_unattached(ofproto);
     delete_flow__(rule, group, OFPRR_DELETE);
@@ -1152,24 +1149,19 @@ ofproto_rule_delete__(struct ofproto *ofproto, struct classifier *cls,
  * ofproto implementation.
  *
  * This function implements steps 4.4 and 4.5 in the section titled "Rule Life
- * Cycle" in ofproto-provider.h.
-
- * The 'cls' argument is redundant (it is &ofproto->tables[rule->table_id].cls)
- * but it allows Clang to do better checking. */
+ * Cycle" in ofproto-provider.h. */
 void
-ofproto_rule_delete(struct ofproto *ofproto, struct classifier *cls,
-                    struct rule *rule)
+ofproto_rule_delete(struct ofproto *ofproto, struct rule *rule)
     OVS_EXCLUDED(ofproto_mutex)
 {
     struct ofopgroup *group;
 
     ovs_mutex_lock(&ofproto_mutex);
     ovs_assert(!rule->pending);
-    ovs_assert(cls == &ofproto->tables[rule->table_id].cls);
 
     group = ofopgroup_create_unattached(ofproto);
     ofoperation_create(group, rule, OFOPERATION_DELETE, OFPRR_DELETE);
-    oftable_remove_rule__(ofproto, cls, rule);
+    oftable_remove_rule__(ofproto, rule);
     ofproto->ofproto_class->rule_delete(rule);
     ofopgroup_submit(group);
 
@@ -1200,7 +1192,7 @@ ofproto_flush__(struct ofproto *ofproto)
         ovs_rwlock_unlock(&table->cls.rwlock);
         CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, cr, &cursor) {
             if (!rule->pending) {
-                ofproto_rule_delete__(ofproto, &table->cls, rule);
+                ofproto_rule_delete__(ofproto, rule);
             }
         }
     }
@@ -4228,13 +4220,12 @@ ofproto_rule_expire(struct rule *rule, uint8_t reason)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct ofproto *ofproto = rule->ofproto;
-    struct classifier *cls = &ofproto->tables[rule->table_id].cls;
 
     ovs_assert(reason == OFPRR_HARD_TIMEOUT || reason == OFPRR_IDLE_TIMEOUT
                || reason == OFPRR_DELETE || reason == OFPRR_GROUP_DELETE);
 
     ofproto_rule_send_removed(rule, reason);
-    ofproto_rule_delete__(ofproto, cls, rule);
+    ofproto_rule_delete__(ofproto, rule);
 }
 
 /* Reduces '*timeout' to no more than 'max'.  A value of zero in either case
@@ -6493,10 +6484,11 @@ oftable_enable_eviction(struct oftable *table,
 
 /* Removes 'rule' from the oftable that contains it. */
 static void
-oftable_remove_rule__(struct ofproto *ofproto, struct classifier *cls,
-                      struct rule *rule)
+oftable_remove_rule__(struct ofproto *ofproto, struct rule *rule)
     OVS_REQUIRES(ofproto_mutex)
 {
+    struct classifier *cls = &ofproto->tables[rule->table_id].cls;
+
     ovs_rwlock_wrlock(&cls->rwlock);
     classifier_remove(cls, CONST_CAST(struct cls_rule *, &rule->cr));
     ovs_rwlock_unlock(&cls->rwlock);
@@ -6517,10 +6509,7 @@ static void
 oftable_remove_rule(struct rule *rule)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct ofproto *ofproto = rule->ofproto;
-    struct oftable *table = &ofproto->tables[rule->table_id];
-
-    oftable_remove_rule__(ofproto, &table->cls, rule);
+    oftable_remove_rule__(rule->ofproto, rule);
 }
 
 /* Inserts 'rule' into its oftable, which must not already contain any rule for
