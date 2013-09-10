@@ -1281,7 +1281,6 @@ ofproto_run(struct ofproto *p)
             struct oftable *table = &p->tables[i];
             struct eviction_group *evg;
             struct cls_cursor cursor;
-            struct cls_rule cr;
             struct rule *rule;
 
             if (!table->eviction_fields) {
@@ -1293,7 +1292,7 @@ ofproto_run(struct ofproto *p)
             }
 
             ovs_rwlock_rdlock(&table->cls.rwlock);
-            cls_cursor_init(&cursor, &table->cls, &cr);
+            cls_cursor_init(&cursor, &table->cls, NULL);
             CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
                 if (!rule->eviction_group
                     && (rule->idle_timeout || rule->hard_timeout)) {
