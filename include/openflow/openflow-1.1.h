@@ -452,7 +452,7 @@ enum ofp11_table_config {
                                              pipeline (OpenFlow 1.0
                                              behavior). */
     OFPTC11_TABLE_MISS_DROP = 2 << 0,     /* Drop the packet. */
-    OFPTC11_TABLE_MISS_MASK = 3
+#define OFPTC11_TABLE_MISS_MASK (3 << 0)
 };
 
 /* Flow setup and teardown (controller -> datapath). */
