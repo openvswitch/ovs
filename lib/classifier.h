@@ -140,7 +140,7 @@ struct cls_cursor {
 void cls_cursor_init(struct cls_cursor *cursor, const struct classifier *cls,
                      const struct cls_rule *match) OVS_REQ_RDLOCK(cls->rwlock);
 struct cls_rule *cls_cursor_first(struct cls_cursor *cursor);
-struct cls_rule *cls_cursor_next(struct cls_cursor *cursor, struct cls_rule *);
+struct cls_rule *cls_cursor_next(struct cls_cursor *cursor, const struct cls_rule *);
 
 #define CLS_CURSOR_FOR_EACH(RULE, MEMBER, CURSOR)                       \
     for (ASSIGN_CONTAINER(RULE, cls_cursor_first(CURSOR), MEMBER);      \
