@@ -1318,6 +1318,12 @@ ofproto_type_wait(const char *datapath_type)
     }
 }
 
+static bool
+any_pending_ops(const struct ofproto *p)
+{
+    return !list_is_empty(&p->pending);
+}
+
 int
 ofproto_run(struct ofproto *p)
 {
@@ -1400,7 +1406,7 @@ ofproto_run(struct ofproto *p)
     case S_EVICT:
         connmgr_run(p->connmgr, NULL);
         ofproto_evict(p);
-        if (list_is_empty(&p->pending) && hmap_is_empty(&p->deletions)) {
+        if (!any_pending_ops(p)) {
             p->state = S_OPENFLOW;
         }
         break;
@@ -1408,7 +1414,7 @@ ofproto_run(struct ofproto *p)
     case S_FLUSH:
         connmgr_run(p->connmgr, NULL);
         ofproto_flush__(p);
-        if (list_is_empty(&p->pending) && hmap_is_empty(&p->deletions)) {
+        if (!any_pending_ops(p)) {
             connmgr_flushed(p->connmgr);
             p->state = S_OPENFLOW;
         }
@@ -1501,7 +1507,7 @@ ofproto_wait(struct ofproto *p)
     case S_EVICT:
     case S_FLUSH:
         connmgr_wait(p->connmgr, false);
-        if (list_is_empty(&p->pending) && hmap_is_empty(&p->deletions)) {
+        if (!any_pending_ops(p)) {
             poll_immediate_wake();
         }
         break;
