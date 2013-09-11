@@ -237,7 +237,6 @@ struct rule {
     uint8_t table_id;            /* Index in ofproto's 'tables' array. */
     bool send_flow_removed;      /* Send a flow removed message? */
 
-    struct ovs_mutex timeout_mutex;
     uint16_t hard_timeout OVS_GUARDED; /* In seconds from ->modified. */
     uint16_t idle_timeout OVS_GUARDED; /* In seconds from ->used. */
 
@@ -336,7 +335,7 @@ void ofproto_rule_delete(struct ofproto *, struct classifier *cls,
                          struct rule *) OVS_REQ_WRLOCK(cls->rwlock);
 void ofproto_rule_reduce_timeouts(struct rule *rule, uint16_t idle_timeout,
                                   uint16_t hard_timeout)
-    OVS_EXCLUDED(ofproto_mutex, rule->timeout_mutex);
+    OVS_EXCLUDED(ofproto_mutex, rule->mutex);
 
 bool ofproto_rule_has_out_port(const struct rule *, ofp_port_t out_port);
 

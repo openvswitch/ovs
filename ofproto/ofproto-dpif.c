@@ -3915,10 +3915,10 @@ rule_expire(struct rule_dpif *rule)
 
     ovs_assert(!rule->up.pending);
 
-    ovs_mutex_lock(&rule->up.timeout_mutex);
+    ovs_mutex_lock(&rule->up.mutex);
     hard_timeout = rule->up.hard_timeout;
     idle_timeout = rule->up.idle_timeout;
-    ovs_mutex_unlock(&rule->up.timeout_mutex);
+    ovs_mutex_unlock(&rule->up.mutex);
 
     /* Has 'rule' expired? */
     now = time_msec();
