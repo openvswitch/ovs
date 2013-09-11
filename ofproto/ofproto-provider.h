@@ -231,7 +231,7 @@ struct rule {
     long long int modified;      /* Time of last modification. */
     long long int used;          /* Last use; time created if never used. */
     uint8_t table_id;            /* Index in ofproto's 'tables' array. */
-    bool send_flow_removed;      /* Send a flow removed message? */
+    enum ofputil_flow_mod_flags flags;
 
     struct ovs_mutex timeout_mutex;
     uint16_t hard_timeout OVS_GUARDED; /* In seconds from ->modified. */

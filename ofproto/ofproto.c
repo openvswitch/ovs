@@ -131,11 +131,11 @@ struct ofoperation {
     /* OFOPERATION_DELETE. */
     enum ofp_flow_removed_reason reason; /* Reason flow was removed. */
 
-    ovs_be64 flow_cookie;       /* Rule's old flow cookie. */
-    uint16_t idle_timeout;      /* Rule's old idle timeout. */
-    uint16_t hard_timeout;      /* Rule's old hard timeout. */
-    bool send_flow_removed;     /* Rule's old 'send_flow_removed'. */
-    enum ofperr error;          /* 0 if no error. */
+    ovs_be64 flow_cookie;               /* Rule's old flow cookie. */
+    uint16_t idle_timeout;              /* Rule's old idle timeout. */
+    uint16_t hard_timeout;              /* Rule's old hard timeout. */
+    enum ofputil_flow_mod_flags flags;  /* Rule's old flags. */
+    enum ofperr error;                  /* 0 if no error. */
 };
 
 static struct ofoperation *ofoperation_create(struct ofopgroup *,
@@ -3155,12 +3155,8 @@ handle_flow_stats_request(struct ofconn *ofconn,
         fs.hard_timeout = rule->hard_timeout;
         ovs_mutex_unlock(&rule->timeout_mutex);
 
-        fs.flags = 0;
-        if (rule->send_flow_removed) {
-            fs.flags |= OFPUTIL_FF_SEND_FLOW_REM;
-            /* FIXME: Implement OFPUTIL_FF_NO_PKT_COUNTS and
-               OFPUTIL_FF_NO_BYT_COUNTS. */
-        }
+        fs.flags = rule->flags;
+
         ofputil_append_flow_stats_reply(&fs, &replies);
     }
     ofconn_send_replies(ofconn, &replies);
@@ -3576,7 +3572,8 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     ovs_mutex_unlock(&rule->timeout_mutex);
 
     rule->table_id = table - ofproto->tables;
-    rule->send_flow_removed = (fm->flags & OFPUTIL_FF_SEND_FLOW_REM) != 0;
+    rule->flags = fm->flags & OFPUTIL_FF_STATE;
+
     rule->ofpacts = xmemdup(fm->ofpacts, fm->ofpacts_len);
     rule->ofpacts_len = fm->ofpacts_len;
     rule->meter_id = find_meter(rule->ofpacts, rule->ofpacts_len);
@@ -3663,9 +3660,7 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
             rule->hard_timeout = fm->hard_timeout;
             ovs_mutex_unlock(&rule->timeout_mutex);
 
-            rule->send_flow_removed = (fm->flags
-                                       & OFPUTIL_FF_SEND_FLOW_REM) != 0;
-
+            rule->flags = fm->flags & OFPUTIL_FF_STATE;
             if (fm->idle_timeout || fm->hard_timeout) {
                 if (!rule->eviction_group) {
                     eviction_group_add_rule(rule);
@@ -3838,7 +3833,8 @@ ofproto_rule_send_removed(struct rule *rule, uint8_t reason)
 {
     struct ofputil_flow_removed fr;
 
-    if (ofproto_rule_is_hidden(rule) || !rule->send_flow_removed) {
+    if (ofproto_rule_is_hidden(rule) ||
+        !(rule->flags & OFPUTIL_FF_SEND_FLOW_REM)) {
         return;
     }
 
@@ -5553,7 +5549,7 @@ ofopgroup_complete(struct ofopgroup *group)
                     op->ofpacts = NULL;
                     op->ofpacts_len = 0;
                 }
-                rule->send_flow_removed = op->send_flow_removed;
+                rule->flags = op->flags;
             }
             break;
 
@@ -5611,7 +5607,7 @@ ofoperation_create(struct ofopgroup *group, struct rule *rule,
     op->idle_timeout = rule->idle_timeout;
     op->hard_timeout = rule->hard_timeout;
     ovs_mutex_unlock(&rule->timeout_mutex);
-    op->send_flow_removed = rule->send_flow_removed;
+    op->flags = rule->flags;
 
     group->n_running++;
 
