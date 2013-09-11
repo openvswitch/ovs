@@ -211,7 +211,6 @@ struct oftable {
  * With few exceptions, ofproto implementations may look at these fields but
  * should not modify them. */
 struct rule {
-    struct list ofproto_node;    /* Owned by ofproto base code. */
     struct ofproto *ofproto;     /* The ofproto that contains this rule. */
     struct cls_rule cr;          /* In owning ofproto's classifier. */
 
@@ -262,6 +261,19 @@ struct rule {
     struct list expirable;      /* In ofproto's 'expirable' list if this rule
                                  * is expirable, otherwise empty. */
 };
+
+/* A set of rules to which an OpenFlow operation applies. */
+struct rule_collection {
+    struct rule **rules;        /* The rules. */
+    size_t n;                   /* Number of rules collected. */
+
+    size_t capacity;            /* Number of rules that will fit in 'rules'. */
+    struct rule *stub[64];      /* Preallocated rules to avoid malloc(). */
+};
+
+void rule_collection_init(struct rule_collection *);
+void rule_collection_add(struct rule_collection *, struct rule *);
+void rule_collection_destroy(struct rule_collection *);
 
 /* Threshold at which to begin flow table eviction. Only affects the
  * ofproto-dpif implementation */
