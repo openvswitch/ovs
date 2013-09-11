@@ -1951,12 +1951,12 @@ ofmonitor_flush(struct connmgr *mgr)
 static void
 ofmonitor_resume(struct ofconn *ofconn)
 {
+    struct rule_collection rules;
     struct ofpbuf *resumed;
     struct ofmonitor *m;
-    struct list rules;
     struct list msgs;
 
-    list_init(&rules);
+    rule_collection_init(&rules);
     HMAP_FOR_EACH (m, ofconn_node, &ofconn->monitors) {
         ofmonitor_collect_resume_rules(m, ofconn->monitor_paused, &rules);
     }

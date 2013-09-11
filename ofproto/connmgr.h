@@ -190,8 +190,11 @@ void ofmonitor_report(struct connmgr *, struct rule *,
                       const struct ofconn *abbrev_ofconn, ovs_be32 abbrev_xid);
 void ofmonitor_flush(struct connmgr *);
 
+
+struct rule_collection;
 void ofmonitor_collect_resume_rules(struct ofmonitor *, uint64_t seqno,
-                                    struct list *rules);
-void ofmonitor_compose_refresh_updates(struct list *rules, struct list *msgs);
+                                    struct rule_collection *);
+void ofmonitor_compose_refresh_updates(struct rule_collection *rules,
+                                       struct list *msgs);
 
 #endif /* connmgr.h */
