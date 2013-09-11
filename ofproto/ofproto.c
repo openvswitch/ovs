@@ -2419,7 +2419,7 @@ rule_actions_unref(struct rule_actions *actions)
 
 /* Returns true if 'rule' has an OpenFlow OFPAT_OUTPUT or OFPAT_ENQUEUE action
  * that outputs to 'port' (output to OFPP_FLOOD and OFPP_ALL doesn't count). */
-bool
+static bool
 ofproto_rule_has_out_port(const struct rule *rule, ofp_port_t port)
 {
     return (port == OFPP_ANY
@@ -2499,7 +2499,7 @@ destroy_rule_executes(struct ofproto *ofproto)
  * Rules with priority higher than UINT16_MAX are set up by ofproto itself
  * (e.g. by in-band control) and are intentionally hidden from the
  * controller. */
-bool
+static bool
 ofproto_rule_is_hidden(const struct rule *rule)
 {
     return rule->cr.priority > UINT16_MAX;

@@ -337,13 +337,9 @@ void ofproto_rule_reduce_timeouts(struct rule *rule, uint16_t idle_timeout,
                                   uint16_t hard_timeout)
     OVS_EXCLUDED(ofproto_mutex, rule->mutex);
 
-bool ofproto_rule_has_out_port(const struct rule *, ofp_port_t out_port);
-
 void ofoperation_complete(struct ofoperation *, enum ofperr);
 
 bool ofoperation_has_out_port(const struct ofoperation *, ofp_port_t out_port);
-
-bool ofproto_rule_is_hidden(const struct rule *);
 
 /* ofproto class structure, to be defined by each ofproto implementation.
  *
