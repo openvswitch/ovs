@@ -190,6 +190,38 @@ static uint32_t rule_eviction_priority(struct rule *);
 static void eviction_group_add_rule(struct rule *);
 static void eviction_group_remove_rule(struct rule *);
 
+/* Criteria that flow_mod and other operations use for selecting rules on
+ * which to operate. */
+struct rule_criteria {
+    /* An OpenFlow table or 255 for all tables. */
+    uint8_t table_id;
+
+    /* OpenFlow matching criteria.  Interpreted different in "loose" way by
+     * collect_rules_loose() and "strict" way by collect_rules_strict(), as
+     * defined in the OpenFlow spec. */
+    struct cls_rule cr;
+
+    /* Matching criteria for the OpenFlow cookie.  Consider a bit B in a rule's
+     * cookie and the corresponding bits C in 'cookie' and M in 'cookie_mask'.
+     * The rule will not be selected if M is 1 and B != C.  */
+    ovs_be64 cookie;
+    ovs_be64 cookie_mask;
+
+    /* Selection based on actions within a rule:
+     *
+     * If out_port != OFPP_ANY, selects only rules that output to out_port.
+     * If out_group != OFPG_ALL, select only rules that output to out_group. */
+    ofp_port_t out_port;
+    uint32_t out_group;
+};
+
+static void rule_criteria_init(struct rule_criteria *, uint8_t table_id,
+                               const struct match *match,
+                               unsigned int priority,
+                               ovs_be64 cookie, ovs_be64 cookie_mask,
+                               ofp_port_t out_port, uint32_t out_group);
+static void rule_criteria_destroy(struct rule_criteria *);
+
 /* ofport. */
 static void ofport_destroy__(struct ofport *);
 static void ofport_destroy(struct ofport *);
@@ -2937,79 +2969,94 @@ next_matching_table(const struct ofproto *ofproto,
          (TABLE) != NULL;                                         \
          (TABLE) = next_matching_table(OFPROTO, TABLE, TABLE_ID))
 
+/* Initializes 'criteria' in a straightforward way based on the other
+ * parameters.
+ *
+ * For "loose" matching, the 'priority' parameter is unimportant and may be
+ * supplied as 0. */
+static void
+rule_criteria_init(struct rule_criteria *criteria, uint8_t table_id,
+                   const struct match *match, unsigned int priority,
+                   ovs_be64 cookie, ovs_be64 cookie_mask,
+                   ofp_port_t out_port, uint32_t out_group)
+{
+    criteria->table_id = table_id;
+    cls_rule_init(&criteria->cr, match, priority);
+    criteria->cookie = cookie;
+    criteria->cookie_mask = cookie_mask;
+    criteria->out_port = out_port;
+    criteria->out_group = out_group;
+}
+
+static void
+rule_criteria_destroy(struct rule_criteria *criteria)
+{
+    cls_rule_destroy(&criteria->cr);
+}
+
 static enum ofperr
-collect_rule(struct rule *rule, uint8_t table_id,
-             ovs_be64 cookie, ovs_be64 cookie_mask,
-             ofp_port_t out_port, uint32_t out_group, struct list *rules)
+collect_rule(struct rule *rule, const struct rule_criteria *c,
+             struct list *rules)
 {
     if (ofproto_rule_is_hidden(rule)) {
         return 0;
     } else if (rule->pending) {
         return OFPROTO_POSTPONE;
     } else {
-        if ((table_id == rule->table_id || table_id == 0xff)
-            && ofproto_rule_has_out_port(rule, out_port)
-            && ofproto_rule_has_out_group(rule, out_group)
-            && !((rule->flow_cookie ^ cookie) & cookie_mask)) {
+        if ((c->table_id == rule->table_id || c->table_id == 0xff)
+            && ofproto_rule_has_out_port(rule, c->out_port)
+            && ofproto_rule_has_out_group(rule, c->out_group)
+            && !((rule->flow_cookie ^ c->cookie) & c->cookie_mask)) {
             list_push_back(rules, &rule->ofproto_node);
         }
         return 0;
     }
 }
 
-/* Searches 'ofproto' for rules in table 'table_id' (or in all tables, if
- * 'table_id' is 0xff) that match 'match' in the "loose" way required for
- * OpenFlow OFPFC_MODIFY and OFPFC_DELETE requests and puts them on list
+/* Searches 'ofproto' for rules that match the criteria in 'criteria'.  Matches
+ * on classifiers rules are done in the "loose" way required for OpenFlow
+ * OFPFC_MODIFY and OFPFC_DELETE requests.  Puts the selected rules on list
  * 'rules'.
- *
- * If 'out_port' is anything other than OFPP_ANY, then only rules that output
- * to 'out_port' are included.
  *
  * Hidden rules are always omitted.
  *
  * Returns 0 on success, otherwise an OpenFlow error code. */
 static enum ofperr
-collect_rules_loose(struct ofproto *ofproto, uint8_t table_id,
-                    const struct match *match,
-                    ovs_be64 cookie, ovs_be64 cookie_mask,
-                    ofp_port_t out_port, uint32_t out_group,
-                    struct list *rules)
+collect_rules_loose(struct ofproto *ofproto,
+                    const struct rule_criteria *criteria, struct list *rules)
 {
     struct oftable *table;
-    struct cls_rule cr;
     enum ofperr error;
 
-    error = check_table_id(ofproto, table_id);
+    error = check_table_id(ofproto, criteria->table_id);
     if (error) {
         return error;
     }
 
     list_init(rules);
-    cls_rule_init(&cr, match, 0);
 
-    if (cookie_mask == htonll(UINT64_MAX)) {
+    if (criteria->cookie_mask == htonll(UINT64_MAX)) {
         struct rule *rule;
 
-        HINDEX_FOR_EACH_WITH_HASH (rule, cookie_node, hash_cookie(cookie),
+        HINDEX_FOR_EACH_WITH_HASH (rule, cookie_node,
+                                   hash_cookie(criteria->cookie),
                                    &ofproto->cookies) {
-            if (cls_rule_is_loose_match(&rule->cr, &cr.match)) {
-                error = collect_rule(rule, table_id, cookie, cookie_mask,
-                                     out_port, out_group, rules);
+            if (cls_rule_is_loose_match(&rule->cr, &criteria->cr.match)) {
+                error = collect_rule(rule, criteria, rules);
                 if (error) {
                     break;
                 }
             }
         }
     } else {
-        FOR_EACH_MATCHING_TABLE (table, table_id, ofproto) {
+        FOR_EACH_MATCHING_TABLE (table, criteria->table_id, ofproto) {
             struct cls_cursor cursor;
             struct rule *rule;
 
             ovs_rwlock_rdlock(&table->cls.rwlock);
-            cls_cursor_init(&cursor, &table->cls, &cr);
+            cls_cursor_init(&cursor, &table->cls, &criteria->cr);
             CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
-                error = collect_rule(rule, table_id, cookie, cookie_mask,
-                                     out_port, out_group, rules);
+                error = collect_rule(rule, criteria, rules);
                 if (error) {
                     break;
                 }
@@ -3018,64 +3065,54 @@ collect_rules_loose(struct ofproto *ofproto, uint8_t table_id,
         }
     }
 
-    cls_rule_destroy(&cr);
     return error;
 }
 
-/* Searches 'ofproto' for rules in table 'table_id' (or in all tables, if
- * 'table_id' is 0xff) that match 'match' in the "strict" way required for
- * OpenFlow OFPFC_MODIFY_STRICT and OFPFC_DELETE_STRICT requests and puts them
- * on list 'rules'.
- *
- * If 'out_port' is anything other than OFPP_ANY, then only rules that output
- * to 'out_port' are included.
+/* Searches 'ofproto' for rules that match the criteria in 'criteria'.  Matches
+ * on classifiers rules are done in the "strict" way required for OpenFlow
+ * OFPFC_MODIFY_STRICT and OFPFC_DELETE_STRICT requests.  Puts the selected
+ * rules on list 'rules'.
  *
  * Hidden rules are always omitted.
  *
  * Returns 0 on success, otherwise an OpenFlow error code. */
 static enum ofperr
-collect_rules_strict(struct ofproto *ofproto, uint8_t table_id,
-                     const struct match *match, unsigned int priority,
-                     ovs_be64 cookie, ovs_be64 cookie_mask,
-                     ofp_port_t out_port, uint32_t out_group,
-                     struct list *rules)
+collect_rules_strict(struct ofproto *ofproto,
+                     const struct rule_criteria *criteria, struct list *rules)
 {
     struct oftable *table;
-    struct cls_rule cr;
     int error;
 
-    error = check_table_id(ofproto, table_id);
+    error = check_table_id(ofproto, criteria->table_id);
     if (error) {
         return error;
     }
 
     list_init(rules);
-    cls_rule_init(&cr, match, priority);
 
-    if (cookie_mask == htonll(UINT64_MAX)) {
+    if (criteria->cookie_mask == htonll(UINT64_MAX)) {
         struct rule *rule;
 
-        HINDEX_FOR_EACH_WITH_HASH (rule, cookie_node, hash_cookie(cookie),
+        HINDEX_FOR_EACH_WITH_HASH (rule, cookie_node,
+                                   hash_cookie(criteria->cookie),
                                    &ofproto->cookies) {
-            if (cls_rule_equal(&rule->cr, &cr)) {
-                error = collect_rule(rule, table_id, cookie, cookie_mask,
-                                     out_port, out_group, rules);
+            if (cls_rule_equal(&rule->cr, &criteria->cr)) {
+                error = collect_rule(rule, criteria, rules);
                 if (error) {
                     break;
                 }
             }
         }
     } else {
-        FOR_EACH_MATCHING_TABLE (table, table_id, ofproto) {
+        FOR_EACH_MATCHING_TABLE (table, criteria->table_id, ofproto) {
             struct rule *rule;
 
             ovs_rwlock_rdlock(&table->cls.rwlock);
-            rule = rule_from_cls_rule(classifier_find_rule_exactly(&table->cls,
-                                                                   &cr));
+            rule = rule_from_cls_rule(classifier_find_rule_exactly(
+                                          &table->cls, &criteria->cr));
             ovs_rwlock_unlock(&table->cls.rwlock);
             if (rule) {
-                error = collect_rule(rule, table_id, cookie, cookie_mask,
-                                     out_port, out_group, rules);
+                error = collect_rule(rule, criteria, rules);
                 if (error) {
                     break;
                 }
@@ -3083,7 +3120,6 @@ collect_rules_strict(struct ofproto *ofproto, uint8_t table_id,
         }
     }
 
-    cls_rule_destroy(&cr);
     return error;
 }
 
@@ -3103,6 +3139,7 @@ handle_flow_stats_request(struct ofconn *ofconn,
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct ofputil_flow_stats_request fsr;
+    struct rule_criteria criteria;
     struct list replies;
     struct list rules;
     struct rule *rule;
@@ -3113,9 +3150,10 @@ handle_flow_stats_request(struct ofconn *ofconn,
         return error;
     }
 
-    error = collect_rules_loose(ofproto, fsr.table_id, &fsr.match,
-                                fsr.cookie, fsr.cookie_mask,
-                                fsr.out_port, fsr.out_group, &rules);
+    rule_criteria_init(&criteria, fsr.table_id, &fsr.match, 0, fsr.cookie,
+                       fsr.cookie_mask, fsr.out_port, fsr.out_group);
+    error = collect_rules_loose(ofproto, &criteria, &rules);
+    rule_criteria_destroy(&criteria);
     if (error) {
         return error;
     }
@@ -3226,6 +3264,7 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
     struct ofputil_flow_stats_request request;
     struct ofputil_aggregate_stats stats;
     bool unknown_packets, unknown_bytes;
+    struct rule_criteria criteria;
     struct ofpbuf *reply;
     struct list rules;
     struct rule *rule;
@@ -3236,9 +3275,11 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
         return error;
     }
 
-    error = collect_rules_loose(ofproto, request.table_id, &request.match,
-                                request.cookie, request.cookie_mask,
-                                request.out_port, request.out_group, &rules);
+    rule_criteria_init(&criteria, request.table_id, &request.match, 0,
+                       request.cookie, request.cookie_mask,
+                       request.out_port, request.out_group);
+    error = collect_rules_loose(ofproto, &criteria, &rules);
+    rule_criteria_destroy(&criteria);
     if (error) {
         return error;
     }
@@ -3700,12 +3741,15 @@ modify_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
                    struct ofputil_flow_mod *fm,
                    const struct ofp_header *request)
 {
+    struct rule_criteria criteria;
     struct list rules;
     int error;
 
-    error = collect_rules_loose(ofproto, fm->table_id, &fm->match,
-                                fm->cookie, fm->cookie_mask,
-                                OFPP_ANY, OFPG11_ANY, &rules);
+    rule_criteria_init(&criteria, fm->table_id, &fm->match, 0,
+                       fm->cookie, fm->cookie_mask, OFPP_ANY, OFPG11_ANY);
+    error = collect_rules_loose(ofproto, &criteria, &rules);
+    rule_criteria_destroy(&criteria);
+
     if (error) {
         return error;
     } else if (list_is_empty(&rules)) {
@@ -3725,12 +3769,15 @@ modify_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
                    struct ofputil_flow_mod *fm,
                    const struct ofp_header *request)
 {
+    struct rule_criteria criteria;
     struct list rules;
     int error;
 
-    error = collect_rules_strict(ofproto, fm->table_id, &fm->match,
-                                 fm->priority, fm->cookie, fm->cookie_mask,
-                                 OFPP_ANY, OFPG11_ANY, &rules);
+    rule_criteria_init(&criteria, fm->table_id, &fm->match, fm->priority,
+                       fm->cookie, fm->cookie_mask, OFPP_ANY, OFPG11_ANY);
+    error = collect_rules_strict(ofproto, &criteria, &rules);
+    rule_criteria_destroy(&criteria);
+
     if (error) {
         return error;
     } else if (list_is_empty(&rules)) {
@@ -3784,12 +3831,16 @@ delete_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
                    const struct ofputil_flow_mod *fm,
                    const struct ofp_header *request)
 {
+    struct rule_criteria criteria;
     struct list rules;
     enum ofperr error;
 
-    error = collect_rules_loose(ofproto, fm->table_id, &fm->match,
-                                fm->cookie, fm->cookie_mask,
-                                fm->out_port, fm->out_group, &rules);
+    rule_criteria_init(&criteria, fm->table_id, &fm->match, 0,
+                       fm->cookie, fm->cookie_mask,
+                       fm->out_port, fm->out_group);
+    error = collect_rules_loose(ofproto, &criteria, &rules);
+    rule_criteria_destroy(&criteria);
+
     return (error ? error
             : !list_is_empty(&rules) ? delete_flows__(ofproto, ofconn, request,
                                                       &rules, OFPRR_DELETE)
@@ -3802,12 +3853,16 @@ delete_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
                    const struct ofputil_flow_mod *fm,
                    const struct ofp_header *request)
 {
+    struct rule_criteria criteria;
     struct list rules;
     enum ofperr error;
 
-    error = collect_rules_strict(ofproto, fm->table_id, &fm->match,
-                                 fm->priority, fm->cookie, fm->cookie_mask,
-                                 fm->out_port, fm->out_group, &rules);
+    rule_criteria_init(&criteria, fm->table_id, &fm->match, fm->priority,
+                       fm->cookie, fm->cookie_mask,
+                       fm->out_port, fm->out_group);
+    error = collect_rules_strict(ofproto, &criteria, &rules);
+    rule_criteria_destroy(&criteria);
+
     return (error ? error
             : list_is_singleton(&rules) ? delete_flows__(ofproto, ofconn,
                                                          request, &rules,
