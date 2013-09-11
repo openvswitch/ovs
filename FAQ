@@ -1249,6 +1249,56 @@ A: An empty set of actions causes a packet to be dropped.  You can
 
        ovs-ofctl add-flow br0 priority=65535,actions=drop
 
+Q: I added a flow to send packets out the ingress port, like this:
+
+       ovs-ofctl add-flow br0 in_port=2,actions=2
+
+   but OVS drops the packets instead.
+
+A: Yes, OpenFlow requires a switch to ignore attempts to send a packet
+   out its ingress port.  The rationale is that dropping these packets
+   makes it harder to loop the network.  Sometimes this behavior can
+   even be convenient, e.g. it is often the desired behavior in a flow
+   that forwards a packet to several ports ("floods" the packet).
+
+   Sometimes one really needs to send a packet out its ingress port.
+   In this case, output to OFPP_IN_PORT, which in ovs-ofctl syntax is
+   expressed as just "in_port", e.g.:
+
+       ovs-ofctl add-flow br0 in_port=2,actions=in_port
+
+   This also works in some circumstances where the flow doesn't match
+   on the input port.  For example, if you know that your switch has
+   five ports numbered 2 through 6, then the following will send every
+   received packet out every port, even its ingress port:
+
+       ovs-ofctl add-flow br0 actions=2,3,4,5,6,in_port
+
+   or, equivalently:
+
+       ovs-ofctl add-flow br0 actions=all,in_port
+
+   Sometimes, in complicated flow tables with multiple levels of
+   "resubmit" actions, a flow needs to output to a particular port
+   that may or may not be the ingress port.  It's difficult to take
+   advantage of OFPP_IN_PORT in this situation.  To help, Open vSwitch
+   provides, as an OpenFlow extension, the ability to modify the
+   in_port field.  Whatever value is currently in the in_port field is
+   the port to which outputs will be dropped, as well as the
+   destination for OFPP_IN_PORT.  This means that the following will
+   reliably output to port 2 or to ports 2 through 6, respectively:
+
+       ovs-ofctl add-flow br0 in_port=2,actions=load:0->NXM_OF_IN_PORT[],2
+       ovs-ofctl add-flow br0 actions=load:0->NXM_OF_IN_PORT[],2,3,4,5,6
+
+   If the input port is important, then one may save and restore it on
+   the stack:
+
+        ovs-ofctl add-flow br0 actions=push:NXM_OF_IN_PORT[],\
+                                       load:0->NXM_OF_IN_PORT[],\
+                                       2,3,4,5,6,\
+                                       pop:NXM_OF_IN_PORT[]
+
 
 Contact 
 -------
