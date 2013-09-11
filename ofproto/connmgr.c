@@ -1897,10 +1897,10 @@ ofmonitor_report(struct connmgr *mgr, struct rule *rule,
                 fu.match = &match;
                 fu.priority = rule->cr.priority;
 
-                ovs_mutex_lock(&rule->timeout_mutex);
+                ovs_mutex_lock(&rule->mutex);
                 fu.idle_timeout = rule->idle_timeout;
                 fu.hard_timeout = rule->hard_timeout;
-                ovs_mutex_unlock(&rule->timeout_mutex);
+                ovs_mutex_unlock(&rule->mutex);
 
                 if (flags & NXFMF_ACTIONS) {
                     fu.ofpacts = rule->actions->ofpacts;
