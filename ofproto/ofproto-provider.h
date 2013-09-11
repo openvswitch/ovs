@@ -227,8 +227,13 @@ struct oftable {
  * With few exceptions, ofproto implementations may look at these fields but
  * should not modify them. */
 struct rule {
-    struct ofproto *ofproto;     /* The ofproto that contains this rule. */
-    struct cls_rule cr;          /* In owning ofproto's classifier. */
+    /* Where this rule resides in an OpenFlow switch.
+     *
+     * These are immutable once the rule is constructed, hence 'const'. */
+    struct ofproto *const ofproto; /* The ofproto that contains this rule. */
+    const struct cls_rule cr;      /* In owning ofproto's classifier. */
+    const uint8_t table_id;        /* Index in ofproto's 'tables' array. */
+
     atomic_uint ref_count;
 
     struct ofoperation *pending; /* Operation now in progress, if nonnull. */
@@ -240,7 +245,6 @@ struct rule {
     long long int created;       /* Creation time. */
     long long int modified;      /* Time of last modification. */
     long long int used;          /* Last use; time created if never used. */
-    uint8_t table_id;            /* Index in ofproto's 'tables' array. */
     enum ofputil_flow_mod_flags flags;
 
     uint16_t hard_timeout OVS_GUARDED; /* In seconds from ->modified. */

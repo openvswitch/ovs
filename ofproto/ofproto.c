@@ -2379,7 +2379,7 @@ ofproto_rule_unref(struct rule *rule)
 static void
 ofproto_rule_destroy__(struct rule *rule)
 {
-    cls_rule_destroy(&rule->cr);
+    cls_rule_destroy(CONST_CAST(struct cls_rule *, &rule->cr));
     rule_actions_unref(rule->actions);
     ovs_mutex_destroy(&rule->mutex);
     rule->ofproto->ofproto_class->rule_dealloc(rule);
@@ -3761,8 +3761,8 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     }
 
     /* Initialize base state. */
-    rule->ofproto = ofproto;
-    cls_rule_move(&rule->cr, &cr);
+    *CONST_CAST(struct ofproto **, &rule->ofproto) = ofproto;
+    cls_rule_move(CONST_CAST(struct cls_rule *, &rule->cr), &cr);
     atomic_init(&rule->ref_count, 1);
     rule->pending = NULL;
     rule->flow_cookie = fm->new_cookie;
@@ -3774,7 +3774,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     rule->hard_timeout = fm->hard_timeout;
     ovs_mutex_unlock(&rule->mutex);
 
-    rule->table_id = table - ofproto->tables;
+    *CONST_CAST(uint8_t *, &rule->table_id) = table - ofproto->tables;
     rule->flags = fm->flags & OFPUTIL_FF_STATE;
     rule->actions = rule_actions_create(fm->ofpacts, fm->ofpacts_len);
     list_init(&rule->meter_list_node);
@@ -6340,7 +6340,7 @@ oftable_remove_rule__(struct ofproto *ofproto, struct classifier *cls,
                       struct rule *rule)
     OVS_REQ_WRLOCK(cls->rwlock) OVS_RELEASES(rule->mutex)
 {
-    classifier_remove(cls, &rule->cr);
+    classifier_remove(cls, CONST_CAST(struct cls_rule *, &rule->cr));
 
     ovs_mutex_lock(&ofproto_mutex);
     cookies_remove(ofproto, rule);
@@ -6398,7 +6398,7 @@ oftable_insert_rule(struct rule *rule)
         list_insert(&meter->rules, &rule->meter_list_node);
     }
     ovs_rwlock_wrlock(&table->cls.rwlock);
-    classifier_insert(&table->cls, &rule->cr);
+    classifier_insert(&table->cls, CONST_CAST(struct cls_rule *, &rule->cr));
     ovs_rwlock_unlock(&table->cls.rwlock);
     eviction_group_add_rule(rule);
 }
