@@ -227,7 +227,6 @@ static int init_ports(struct ofproto *);
 static void reinit_ports(struct ofproto *);
 
 /* rule. */
-static void ofproto_rule_destroy(struct rule *);
 static void ofproto_rule_destroy__(struct rule *);
 static void ofproto_rule_send_removed(struct rule *, uint8_t reason);
 static bool rule_is_modifiable(const struct rule *);
@@ -2317,12 +2316,30 @@ update_mtu(struct ofproto *p, struct ofport *port)
     }
 }
 
-static void
-ofproto_rule_destroy(struct rule *rule)
+void
+ofproto_rule_ref(struct rule *rule)
 {
     if (rule) {
-        rule->ofproto->ofproto_class->rule_destruct(rule);
-        ofproto_rule_destroy__(rule);
+        unsigned int orig;
+
+        atomic_add(&rule->ref_count, 1, &orig);
+        ovs_assert(orig != 0);
+    }
+}
+
+void
+ofproto_rule_unref(struct rule *rule)
+{
+    if (rule) {
+        unsigned int orig;
+
+        atomic_sub(&rule->ref_count, 1, &orig);
+        if (orig == 1) {
+            rule->ofproto->ofproto_class->rule_destruct(rule);
+            ofproto_rule_destroy__(rule);
+        } else {
+            ovs_assert(orig != 0);
+        }
     }
 }
 
@@ -3673,6 +3690,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     /* Initialize base state. */
     rule->ofproto = ofproto;
     cls_rule_move(&rule->cr, &cr);
+    atomic_init(&rule->ref_count, 1);
     rule->pending = NULL;
     rule->flow_cookie = fm->new_cookie;
     rule->created = rule->modified = rule->used = time_msec();
@@ -5193,13 +5211,13 @@ ofopgroup_complete(struct ofopgroup *group)
             } else {
                 ovs_rwlock_wrlock(&rule->rwlock);
                 oftable_remove_rule(rule);
-                ofproto_rule_destroy(rule);
+                ofproto_rule_unref(rule);
             }
             break;
 
         case OFOPERATION_DELETE:
             ovs_assert(!op->error);
-            ofproto_rule_destroy(rule);
+            ofproto_rule_unref(rule);
             op->rule = NULL;
             break;
 

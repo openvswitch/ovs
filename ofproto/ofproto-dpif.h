@@ -61,18 +61,17 @@ struct OVS_LOCKABLE rule_dpif;
  *   actions into datapath actions. */
 
 void rule_dpif_lookup(struct ofproto_dpif *, const struct flow *,
-                      struct flow_wildcards *, struct rule_dpif **rule)
-    OVS_ACQ_RDLOCK(*rule);
+                      struct flow_wildcards *, struct rule_dpif **rule);
 
 bool rule_dpif_lookup_in_table(struct ofproto_dpif *, const struct flow *,
                                struct flow_wildcards *, uint8_t table_id,
-                               struct rule_dpif **rule)
-    OVS_TRY_RDLOCK(true, *rule);
+                               struct rule_dpif **rule);
 
-    void rule_dpif_release(struct rule_dpif *rule) OVS_RELEASES(rule);
+void rule_dpif_ref(struct rule_dpif *);
+void rule_dpif_unref(struct rule_dpif *);
 
-    void rule_dpif_credit_stats(struct rule_dpif *rule ,
-                                const struct dpif_flow_stats *);
+void rule_dpif_credit_stats(struct rule_dpif *rule ,
+                            const struct dpif_flow_stats *);
 
 bool rule_dpif_fail_open(const struct rule_dpif *rule);
 
@@ -86,8 +85,7 @@ void rule_dpif_reduce_timeouts(struct rule_dpif *rule, uint16_t idle_timeout,
 void choose_miss_rule(enum ofputil_port_config,
                       struct rule_dpif *miss_rule,
                       struct rule_dpif *no_packet_in_rule,
-                      struct rule_dpif **rule)
-    OVS_ACQ_RDLOCK(*rule);
+                      struct rule_dpif **rule);
 
 bool ofproto_has_vlan_splinters(const struct ofproto_dpif *);
 ofp_port_t vsp_realdev_to_vlandev(const struct ofproto_dpif *,

@@ -27,6 +27,7 @@
 #include "ofp-errors.h"
 #include "ofp-util.h"
 #include "ofproto/ofproto.h"
+#include "ovs-atomic.h"
 #include "ovs-thread.h"
 #include "shash.h"
 #include "simap.h"
@@ -213,6 +214,7 @@ struct oftable {
 struct rule {
     struct ofproto *ofproto;     /* The ofproto that contains this rule. */
     struct cls_rule cr;          /* In owning ofproto's classifier. */
+    atomic_uint ref_count;
 
     struct ofoperation *pending; /* Operation now in progress, if nonnull. */
 
@@ -235,14 +237,16 @@ struct rule {
     struct eviction_group *eviction_group; /* NULL if not in any group. */
 
     /* The rwlock is used to protect those elements in struct rule which are
-     * accessed by multiple threads.  While maintaining a pointer to struct
-     * rule, threads are required to hold a readlock.  The main ofproto code is
-     * guaranteed not to evict the rule, or change any of the elements "Guarded
-     * by rwlock" without holding the writelock.
+     * accessed by multiple threads.  The main ofproto code is guaranteed not
+     * to change any of the elements "Guarded by rwlock" without holding the
+     * writelock.
      *
-     * A rule will not be evicted unless both its own and its classifier's
-     * write locks are held.  Therefore, while holding a classifier readlock,
-     * one can be assured that write locked rules are safe to reference. */
+     * While maintaining a pointer to struct rule, threads are required to hold
+     * a readlock on the classifier that holds the rule or increment the rule's
+     * ref_count.
+     *
+     * A rule will not be evicted unless its classifier's write lock is
+     * held. */
     struct ovs_rwlock rwlock;
 
     /* Guarded by rwlock. */
@@ -259,6 +263,9 @@ struct rule {
     struct list expirable;      /* In ofproto's 'expirable' list if this rule
                                  * is expirable, otherwise empty. */
 };
+
+void ofproto_rule_ref(struct rule *);
+void ofproto_rule_unref(struct rule *);
 
 /* A set of actions within a "struct rule".
  *

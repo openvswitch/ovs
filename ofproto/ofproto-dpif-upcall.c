@@ -725,7 +725,7 @@ execute_flow_miss(struct flow_miss *miss, struct dpif_op *ops, size_t *n_ops)
             xlate_actions_for_side_effects(&xin);
         }
     }
-    rule_dpif_release(rule);
+    rule_dpif_unref(rule);
 
     if (miss->xout.odp_actions.size) {
         LIST_FOR_EACH (packet, list_node, &miss->packets) {
