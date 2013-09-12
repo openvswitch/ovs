@@ -1371,7 +1371,7 @@ add_internal_flow(struct ofproto_dpif *ofproto, int id,
 
     if (rule_dpif_lookup_in_table(ofproto, &fm.match.flow, NULL, TBL_INTERNAL,
                                   rulep)) {
-        rule_dpif_release(*rulep);
+        rule_dpif_unref(*rulep);
     } else {
         NOT_REACHED();
     }
@@ -4171,7 +4171,7 @@ facet_is_controller_flow(struct facet *facet)
         is_controller = ofpacts_len > 0
             && ofpacts->type == OFPACT_CONTROLLER
             && ofpact_next(ofpacts) >= ofpact_end(ofpacts, ofpacts_len);
-        rule_dpif_release(rule);
+        rule_dpif_unref(rule);
 
         return is_controller;
     }
@@ -4266,7 +4266,7 @@ facet_check_consistency(struct facet *facet)
     rule_dpif_lookup(facet->ofproto, &facet->flow, NULL, &rule);
     xlate_in_init(&xin, facet->ofproto, &facet->flow, rule, 0, NULL);
     xlate_actions(&xin, &xout);
-    rule_dpif_release(rule);
+    rule_dpif_unref(rule);
 
     ok = ofpbuf_equal(&facet->xout.odp_actions, &xout.odp_actions)
         && facet->xout.slow == xout.slow;
@@ -4364,7 +4364,7 @@ facet_revalidate(struct facet *facet)
         || memcmp(&facet->xout.wc, &xout.wc, sizeof xout.wc)) {
         facet_remove(facet);
         xlate_out_uninit(&xout);
-        rule_dpif_release(new_rule);
+        rule_dpif_unref(new_rule);
         return false;
     }
 
@@ -4396,7 +4396,7 @@ facet_revalidate(struct facet *facet)
     facet->used = MAX(facet->used, new_rule->up.created);
 
     xlate_out_uninit(&xout);
-    rule_dpif_release(new_rule);
+    rule_dpif_unref(new_rule);
     return true;
 }
 
@@ -4429,7 +4429,7 @@ flow_push_stats(struct ofproto_dpif *ofproto, struct flow *flow,
     xin.resubmit_stats = stats;
     xin.may_learn = may_learn;
     xlate_actions_for_side_effects(&xin);
-    rule_dpif_release(rule);
+    rule_dpif_unref(rule);
 }
 
 static void
@@ -4815,7 +4815,6 @@ bool
 rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto,
                           const struct flow *flow, struct flow_wildcards *wc,
                           uint8_t table_id, struct rule_dpif **rule)
-    OVS_TRY_RDLOCK(true, (*rule)->up.rwlock)
 {
     struct cls_rule *cls_rule;
     struct classifier *cls;
@@ -4850,11 +4849,7 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto,
     }
 
     *rule = rule_dpif_cast(rule_from_cls_rule(cls_rule));
-    if (*rule && ovs_rwlock_tryrdlock(&(*rule)->up.rwlock)) {
-        /* The rule is in the process of being removed.  Best we can do is
-         * pretend it isn't there. */
-        *rule = NULL;
-    }
+    rule_dpif_ref(*rule);
     ovs_rwlock_unlock(&cls->rwlock);
 
     return *rule != NULL;
@@ -4866,18 +4861,24 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto,
 void
 choose_miss_rule(enum ofputil_port_config config, struct rule_dpif *miss_rule,
                  struct rule_dpif *no_packet_in_rule, struct rule_dpif **rule)
-    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     *rule = config & OFPUTIL_PC_NO_PACKET_IN ? no_packet_in_rule : miss_rule;
-    ovs_rwlock_rdlock(&(*rule)->up.rwlock);
+    rule_dpif_ref(*rule);
 }
 
 void
-rule_dpif_release(struct rule_dpif *rule)
-    OVS_NO_THREAD_SAFETY_ANALYSIS
+rule_dpif_ref(struct rule_dpif *rule)
 {
     if (rule) {
-        ovs_rwlock_unlock(&rule->up.rwlock);
+        ofproto_rule_ref(&rule->up);
+    }
+}
+
+void
+rule_dpif_unref(struct rule_dpif *rule)
+{
+    if (rule) {
+        ofproto_rule_unref(&rule->up);
     }
 }
 
@@ -5593,7 +5594,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
         xlate_out_uninit(&trace.xout);
     }
 
-    rule_dpif_release(rule);
+    rule_dpif_unref(rule);
 }
 
 /* Runs a self-check of flow translations in 'ofproto'.  Appends a message to

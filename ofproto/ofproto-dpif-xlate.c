@@ -1669,7 +1669,6 @@ compose_output_action(struct xlate_ctx *ctx, ofp_port_t ofp_port)
 
 static void
 xlate_recursively(struct xlate_ctx *ctx, struct rule_dpif *rule)
-    OVS_RELEASES(rule)
 {
     struct rule_dpif *old_rule = ctx->rule;
     struct rule_actions *actions;
@@ -1685,8 +1684,6 @@ xlate_recursively(struct xlate_ctx *ctx, struct rule_dpif *rule)
     rule_actions_unref(actions);
     ctx->rule = old_rule;
     ctx->recurse--;
-
-    rule_dpif_release(rule);
 }
 
 static void
@@ -1697,7 +1694,6 @@ xlate_table_action(struct xlate_ctx *ctx,
         struct rule_dpif *rule;
         ofp_port_t old_in_port = ctx->xin->flow.in_port.ofp_port;
         uint8_t old_table_id = ctx->table_id;
-        bool got_rule;
 
         ctx->table_id = table_id;
 
@@ -1705,18 +1701,16 @@ xlate_table_action(struct xlate_ctx *ctx,
          * original input port (otherwise OFPP_NORMAL and OFPP_IN_PORT will
          * have surprising behavior). */
         ctx->xin->flow.in_port.ofp_port = in_port;
-        got_rule = rule_dpif_lookup_in_table(ctx->xbridge->ofproto,
-                                             &ctx->xin->flow, &ctx->xout->wc,
-                                             table_id, &rule);
+        rule_dpif_lookup_in_table(ctx->xbridge->ofproto,
+                                  &ctx->xin->flow, &ctx->xout->wc,
+                                  table_id, &rule);
         ctx->xin->flow.in_port.ofp_port = old_in_port;
 
         if (ctx->xin->resubmit_hook) {
             ctx->xin->resubmit_hook(ctx->xin, rule, ctx->recurse);
         }
 
-        if (got_rule) {
-            xlate_recursively(ctx, rule);
-        } else if (may_packet_in) {
+        if (!rule && may_packet_in) {
             struct xport *xport;
 
             /* XXX
@@ -1729,7 +1723,10 @@ xlate_table_action(struct xlate_ctx *ctx,
             choose_miss_rule(xport ? xport->config : 0,
                              ctx->xbridge->miss_rule,
                              ctx->xbridge->no_packet_in_rule, &rule);
+        }
+        if (rule) {
             xlate_recursively(ctx, rule);
+            rule_dpif_unref(rule);
         }
 
         ctx->table_id = old_table_id;
