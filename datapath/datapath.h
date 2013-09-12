@@ -28,6 +28,7 @@
 
 #include "compat.h"
 #include "flow.h"
+#include "flow_table.h"
 #include "vlan.h"
 #include "vport.h"
 
