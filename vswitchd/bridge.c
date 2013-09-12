@@ -2259,10 +2259,9 @@ instant_stats_run(void)
                 iface_refresh_cfm_stats(iface);
 
                 smap_init(&smap);
-                if (!ofproto_port_get_bfd_status(br->ofproto, iface->ofp_port,
-                                                 &smap)) {
-                    ovsrec_interface_set_bfd_status(iface->cfg, &smap);
-                }
+                ofproto_port_get_bfd_status(br->ofproto, iface->ofp_port,
+                                            &smap);
+                ovsrec_interface_set_bfd_status(iface->cfg, &smap);
                 smap_destroy(&smap);
             }
         }
