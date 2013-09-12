@@ -40,6 +40,8 @@ struct ofputil_flow_mod;
 struct bfd_cfg;
 struct meter;
 
+extern struct ovs_mutex ofproto_mutex;
+
 /* An OpenFlow switch.
  *
  * With few exceptions, ofproto implementations may look at these fields but
@@ -77,11 +79,8 @@ struct ofproto {
 
     struct hindex cookies;      /* Rules indexed on their cookie values. */
 
-    /* Optimisation for flow expiry.
-     * These flows should all be present in tables. */
-    struct ovs_mutex expirable_mutex;
-    struct list expirable OVS_GUARDED; /* Expirable 'struct rule"s in all
-                                          tables. */
+    /* List of expirable flows, in all flow tables. */
+    struct list expirable OVS_GUARDED_BY(ofproto_mutex);
 
     /* Meter table.
      * OpenFlow meters start at 1.  To avoid confusion we leave the first
@@ -274,9 +273,9 @@ struct rule {
     uint64_t add_seqno;         /* Sequence number when added. */
     uint64_t modify_seqno;      /* Sequence number when changed. */
 
-    /* Optimisation for flow expiry. */
-    struct list expirable;      /* In ofproto's 'expirable' list if this rule
-                                 * is expirable, otherwise empty. */
+    /* Optimisation for flow expiry.  In ofproto's 'expirable' list if this
+     * rule is expirable, otherwise empty. */
+    struct list expirable OVS_GUARDED_BY(ofproto_mutex);
 };
 
 void ofproto_rule_ref(struct rule *);
@@ -342,7 +341,7 @@ void ofproto_rule_delete(struct ofproto *, struct classifier *cls,
                          struct rule *) OVS_REQ_WRLOCK(cls->rwlock);
 void ofproto_rule_reduce_timeouts(struct rule *rule, uint16_t idle_timeout,
                                   uint16_t hard_timeout)
-    OVS_EXCLUDED(rule->ofproto->expirable_mutex, rule->timeout_mutex);
+    OVS_EXCLUDED(ofproto_mutex, rule->timeout_mutex);
 
 bool ofproto_rule_has_out_port(const struct rule *, ofp_port_t out_port);
 
