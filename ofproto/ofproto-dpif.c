@@ -4493,10 +4493,10 @@ rule_dpif_get_actions(const struct rule_dpif *rule)
 {
     struct rule_actions *actions;
 
-    ovs_rwlock_rdlock(&rule->up.rwlock);
+    ovs_mutex_lock(&rule->up.mutex);
     actions = rule->up.actions;
     rule_actions_ref(actions);
-    ovs_rwlock_unlock(&rule->up.rwlock);
+    ovs_mutex_unlock(&rule->up.mutex);
 
     return actions;
 }
