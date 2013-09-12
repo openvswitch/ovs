@@ -228,7 +228,7 @@ struct rule {
     struct ofoperation *pending; /* Operation now in progress, if nonnull. */
 
     ovs_be64 flow_cookie;        /* Controller-issued identifier. Guarded by
-                                    rwlock. */
+                                    mutex. */
     struct hindex_node cookie_node OVS_GUARDED_BY(ofproto_mutex);
 
     long long int created;       /* Creation time. */
@@ -245,10 +245,10 @@ struct rule {
     struct heap_node evg_node;   /* In eviction_group's "rules" heap. */
     struct eviction_group *eviction_group; /* NULL if not in any group. */
 
-    /* The rwlock is used to protect those elements in struct rule which are
+    /* The mutex is used to protect those elements in struct rule which are
      * accessed by multiple threads.  The main ofproto code is guaranteed not
-     * to change any of the elements "Guarded by rwlock" without holding the
-     * writelock.
+     * to change any of the elements "Guarded by mutex" without holding the
+     * lock.
      *
      * While maintaining a pointer to struct rule, threads are required to hold
      * a readlock on the classifier that holds the rule or increment the rule's
@@ -256,9 +256,9 @@ struct rule {
      *
      * A rule will not be evicted unless its classifier's write lock is
      * held. */
-    struct ovs_rwlock rwlock;
+    struct ovs_mutex mutex;
 
-    /* Guarded by rwlock. */
+    /* Guarded by mutex. */
     struct rule_actions *actions;
 
     struct list meter_list_node; /* In owning meter's 'rules' list. */
@@ -283,7 +283,7 @@ void ofproto_rule_unref(struct rule *);
  * =============
  *
  * A struct rule_actions 'actions' may be accessed without a risk of being
- * freed by code that holds a read-lock or write-lock on 'rule->rwlock' (where
+ * freed by code that holds a read-lock or write-lock on 'rule->mutex' (where
  * 'rule' is the rule for which 'rule->actions == actions') or that owns a
  * reference to 'actions->ref_count' (or both). */
 struct rule_actions {
