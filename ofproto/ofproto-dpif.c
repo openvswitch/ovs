@@ -3642,12 +3642,12 @@ expire(struct dpif_backer *backer)
 
         /* Expire OpenFlow flows whose idle_timeout or hard_timeout
          * has passed. */
-        ovs_mutex_lock(&ofproto->up.expirable_mutex);
+        ovs_mutex_lock(&ofproto_mutex);
         LIST_FOR_EACH_SAFE (rule, next_rule, expirable,
                             &ofproto->up.expirable) {
             rule_expire(rule_dpif_cast(rule));
         }
-        ovs_mutex_unlock(&ofproto->up.expirable_mutex);
+        ovs_mutex_unlock(&ofproto_mutex);
 
         /* All outstanding data in existing flows has been accounted, so it's a
          * good time to do bond rebalancing. */

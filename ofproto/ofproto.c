@@ -275,6 +275,8 @@ static const struct ofproto_class **ofproto_classes;
 static size_t n_ofproto_classes;
 static size_t allocated_ofproto_classes;
 
+struct ovs_mutex ofproto_mutex;
+
 unsigned flow_eviction_threshold = OFPROTO_FLOW_EVICTION_THRESHOLD_DEFAULT;
 unsigned n_handler_threads;
 enum ofproto_flow_miss_model flow_miss_model = OFPROTO_HANDLE_MISS_AUTO;
@@ -304,6 +306,8 @@ ofproto_init(const struct shash *iface_hints)
 {
     struct shash_node *node;
     size_t i;
+
+    ovs_mutex_init_recursive(&ofproto_mutex);
 
     ofproto_class_register(&ofproto_dpif_class);
 
@@ -460,6 +464,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     }
 
     /* Initialize. */
+    ovs_mutex_lock(&ofproto_mutex);
     memset(ofproto, 0, sizeof *ofproto);
     ofproto->ofproto_class = class;
     ofproto->name = xstrdup(datapath_name);
@@ -484,7 +489,6 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ofproto->n_tables = 0;
     hindex_init(&ofproto->cookies);
     list_init(&ofproto->expirable);
-    ovs_mutex_init_recursive(&ofproto->expirable_mutex);
     ofproto->connmgr = connmgr_create(ofproto, datapath_name, datapath_name);
     ofproto->state = S_OPENFLOW;
     list_init(&ofproto->pending);
@@ -498,6 +502,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ofproto->vlan_bitmap = NULL;
     ofproto->vlans_changed = false;
     ofproto->min_mtu = INT_MAX;
+    ovs_mutex_unlock(&ofproto_mutex);
 
     error = ofproto->ofproto_class->construct(ofproto);
     if (error) {
@@ -1212,7 +1217,6 @@ ofproto_destroy__(struct ofproto *ofproto)
 
     free(ofproto->vlan_bitmap);
 
-    ovs_mutex_destroy(&ofproto->expirable_mutex);
     ofproto->ofproto_class->dealloc(ofproto);
 }
 
@@ -4090,17 +4094,17 @@ reduce_timeout(uint16_t max, uint16_t *timeout)
 void
 ofproto_rule_reduce_timeouts(struct rule *rule,
                              uint16_t idle_timeout, uint16_t hard_timeout)
-    OVS_EXCLUDED(rule->ofproto->expirable_mutex, rule->timeout_mutex)
+    OVS_EXCLUDED(ofproto_mutex, rule->timeout_mutex)
 {
     if (!idle_timeout && !hard_timeout) {
         return;
     }
 
-    ovs_mutex_lock(&rule->ofproto->expirable_mutex);
+    ovs_mutex_lock(&ofproto_mutex);
     if (list_is_empty(&rule->expirable)) {
         list_insert(&rule->ofproto->expirable, &rule->expirable);
     }
-    ovs_mutex_unlock(&rule->ofproto->expirable_mutex);
+    ovs_mutex_unlock(&ofproto_mutex);
 
     ovs_mutex_lock(&rule->timeout_mutex);
     reduce_timeout(idle_timeout, &rule->idle_timeout);
@@ -5854,11 +5858,11 @@ oftable_remove_rule__(struct ofproto *ofproto, struct classifier *cls,
     classifier_remove(cls, &rule->cr);
     cookies_remove(ofproto, rule);
     eviction_group_remove_rule(rule);
-    ovs_mutex_lock(&ofproto->expirable_mutex);
+    ovs_mutex_lock(&ofproto_mutex);
     if (!list_is_empty(&rule->expirable)) {
         list_remove(&rule->expirable);
     }
-    ovs_mutex_unlock(&ofproto->expirable_mutex);
+    ovs_mutex_unlock(&ofproto_mutex);
     if (!list_is_empty(&rule->meter_list_node)) {
         list_remove(&rule->meter_list_node);
         list_init(&rule->meter_list_node);
@@ -5891,9 +5895,9 @@ oftable_insert_rule(struct rule *rule)
     ovs_mutex_unlock(&rule->timeout_mutex);
 
     if (may_expire) {
-        ovs_mutex_lock(&ofproto->expirable_mutex);
+        ovs_mutex_lock(&ofproto_mutex);
         list_insert(&ofproto->expirable, &rule->expirable);
-        ovs_mutex_unlock(&ofproto->expirable_mutex);
+        ovs_mutex_unlock(&ofproto_mutex);
     }
     cookies_insert(ofproto, rule);
 
