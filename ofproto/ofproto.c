@@ -220,6 +220,17 @@ static void rule_criteria_init(struct rule_criteria *, uint8_t table_id,
                                ofp_port_t out_port, uint32_t out_group);
 static void rule_criteria_destroy(struct rule_criteria *);
 
+/* A packet that needs to be passed to rule_execute(). */
+struct rule_execute {
+    struct list list_node;      /* In struct ofproto's "rule_executes" list. */
+    struct rule *rule;          /* Owns a reference to the rule. */
+    ofp_port_t in_port;
+    struct ofpbuf *packet;      /* Owns the packet. */
+};
+
+static void run_rule_executes(struct ofproto *);
+static void destroy_rule_executes(struct ofproto *);
+
 /* ofport. */
 static void ofport_destroy__(struct ofport *);
 static void ofport_destroy(struct ofport *);
@@ -482,6 +493,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     list_init(&ofproto->pending);
     ofproto->n_pending = 0;
     hmap_init(&ofproto->deletions);
+    guarded_list_init(&ofproto->rule_executes);
     ofproto->n_add = ofproto->n_delete = ofproto->n_modify = 0;
     ofproto->first_op = ofproto->last_op = LLONG_MIN;
     ofproto->next_op_report = LLONG_MAX;
@@ -1180,6 +1192,9 @@ ofproto_destroy__(struct ofproto *ofproto)
     ovs_assert(list_is_empty(&ofproto->pending));
     ovs_assert(!ofproto->n_pending);
 
+    destroy_rule_executes(ofproto);
+    guarded_list_destroy(&ofproto->rule_executes);
+
     delete_group(ofproto, OFPG_ALL);
     ovs_rwlock_destroy(&ofproto->groups_rwlock);
     hmap_destroy(&ofproto->groups);
@@ -1322,6 +1337,8 @@ ofproto_run(struct ofproto *p)
     if (error && error != EAGAIN) {
         VLOG_ERR_RL(&rl, "%s: run failed (%s)", p->name, ovs_strerror(error));
     }
+
+    run_rule_executes(p);
 
     /* Restore the eviction group heap invariant occasionally. */
     if (p->eviction_group_timer < time_msec()) {
@@ -2451,22 +2468,48 @@ ofoperation_has_out_port(const struct ofoperation *op, ofp_port_t out_port)
     NOT_REACHED();
 }
 
-/* Executes the actions indicated by 'rule' on 'packet' and credits 'rule''s
- * statistics appropriately.
- *
- * 'packet' doesn't necessarily have to match 'rule'.  'rule' will be credited
- * with statistics for 'packet' either way.
- *
- * Takes ownership of 'packet'. */
-static int
-rule_execute(struct rule *rule, ofp_port_t in_port, struct ofpbuf *packet)
+static void
+rule_execute_destroy(struct rule_execute *e)
 {
-    struct flow flow;
-    union flow_in_port in_port_;
+    ofproto_rule_unref(e->rule);
+    list_remove(&e->list_node);
+    free(e);
+}
 
-    in_port_.ofp_port = in_port;
-    flow_extract(packet, 0, 0, NULL, &in_port_, &flow);
-    return rule->ofproto->ofproto_class->rule_execute(rule, &flow, packet);
+/* Executes all "rule_execute" operations queued up in ofproto->rule_executes,
+ * by passing them to the ofproto provider. */
+static void
+run_rule_executes(struct ofproto *ofproto)
+{
+    struct rule_execute *e, *next;
+    struct list executes;
+
+    guarded_list_pop_all(&ofproto->rule_executes, &executes);
+    LIST_FOR_EACH_SAFE (e, next, list_node, &executes) {
+        union flow_in_port in_port_;
+        struct flow flow;
+
+        in_port_.ofp_port = e->in_port;
+        flow_extract(e->packet, 0, 0, NULL, &in_port_, &flow);
+        ofproto->ofproto_class->rule_execute(e->rule, &flow, e->packet);
+
+        rule_execute_destroy(e);
+    }
+}
+
+/* Destroys and discards all "rule_execute" operations queued up in
+ * ofproto->rule_executes. */
+static void
+destroy_rule_executes(struct ofproto *ofproto)
+{
+    struct rule_execute *e, *next;
+    struct list executes;
+
+    guarded_list_pop_all(&ofproto->rule_executes, &executes);
+    LIST_FOR_EACH_SAFE (e, next, list_node, &executes) {
+        ofpbuf_delete(e->packet);
+        rule_execute_destroy(e);
+    }
 }
 
 /* Returns true if 'rule' should be hidden from the controller.
@@ -4146,35 +4189,46 @@ static enum ofperr
 handle_flow_mod__(struct ofproto *ofproto, struct ofconn *ofconn,
                   struct ofputil_flow_mod *fm, const struct ofp_header *oh)
 {
-    if (ofproto->n_pending >= 50) {
-        ovs_assert(!list_is_empty(&ofproto->pending));
-        return OFPROTO_POSTPONE;
-    }
+    enum ofperr error;
 
-    switch (fm->command) {
-    case OFPFC_ADD:
-        return add_flow(ofproto, ofconn, fm, oh);
+    if (ofproto->n_pending < 50) {
+        switch (fm->command) {
+        case OFPFC_ADD:
+            error = add_flow(ofproto, ofconn, fm, oh);
+            break;
 
-    case OFPFC_MODIFY:
-        return modify_flows_loose(ofproto, ofconn, fm, oh);
+        case OFPFC_MODIFY:
+            error = modify_flows_loose(ofproto, ofconn, fm, oh);
+            break;
 
-    case OFPFC_MODIFY_STRICT:
-        return modify_flow_strict(ofproto, ofconn, fm, oh);
+        case OFPFC_MODIFY_STRICT:
+            error = modify_flow_strict(ofproto, ofconn, fm, oh);
+            break;
 
-    case OFPFC_DELETE:
-        return delete_flows_loose(ofproto, ofconn, fm, oh);
+        case OFPFC_DELETE:
+            error = delete_flows_loose(ofproto, ofconn, fm, oh);
+            break;
 
-    case OFPFC_DELETE_STRICT:
-        return delete_flow_strict(ofproto, ofconn, fm, oh);
+        case OFPFC_DELETE_STRICT:
+            error = delete_flow_strict(ofproto, ofconn, fm, oh);
+            break;
 
-    default:
-        if (fm->command > 0xff) {
-            VLOG_WARN_RL(&rl, "%s: flow_mod has explicit table_id but "
-                         "flow_mod_table_id extension is not enabled",
-                         ofproto->name);
+        default:
+            if (fm->command > 0xff) {
+                VLOG_WARN_RL(&rl, "%s: flow_mod has explicit table_id but "
+                             "flow_mod_table_id extension is not enabled",
+                             ofproto->name);
+            }
+            error = OFPERR_OFPFMFC_BAD_COMMAND;
+            break;
         }
-        return OFPERR_OFPFMFC_BAD_COMMAND;
+    } else {
+        ovs_assert(!list_is_empty(&ofproto->pending));
+        error = OFPROTO_POSTPONE;
     }
+
+    run_rule_executes(ofproto);
+    return error;
 }
 
 static enum ofperr
@@ -5611,8 +5665,23 @@ ofopgroup_complete(struct ofopgroup *group)
                 error = ofconn_pktbuf_retrieve(group->ofconn, group->buffer_id,
                                                &packet, &in_port);
                 if (packet) {
+                    struct rule_execute *re;
+
                     ovs_assert(!error);
-                    error = rule_execute(op->rule, in_port, packet);
+
+                    ofproto_rule_ref(op->rule);
+
+                    re = xmalloc(sizeof *re);
+                    re->rule = op->rule;
+                    re->in_port = in_port;
+                    re->packet = packet;
+
+                    if (!guarded_list_push_back(&ofproto->rule_executes,
+                                                &re->list_node, 1024)) {
+                        ofproto_rule_unref(op->rule);
+                        ofpbuf_delete(re->packet);
+                        free(re);
+                    }
                 }
                 break;
             }

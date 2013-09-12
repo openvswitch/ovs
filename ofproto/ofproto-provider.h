@@ -21,6 +21,7 @@
 
 #include "cfm.h"
 #include "classifier.h"
+#include "guarded-list.h"
 #include "heap.h"
 #include "hindex.h"
 #include "list.h"
@@ -97,6 +98,14 @@ struct ofproto {
     struct list pending;        /* List of "struct ofopgroup"s. */
     unsigned int n_pending;     /* list_size(&pending). */
     struct hmap deletions;      /* All OFOPERATION_DELETE "ofoperation"s. */
+
+    /* Delayed rule executions.
+     *
+     * We delay calls to ->ofproto_class->rule_execute() past releasing
+     * ofproto_mutex during a flow_mod, because otherwise a "learn" action
+     * triggered by the executing the packet would try to recursively modify
+     * the flow table and reacquire the global lock. */
+    struct guarded_list rule_executes;
 
     /* Flow table operation logging. */
     int n_add, n_delete, n_modify; /* Number of unreported ops of each kind. */
