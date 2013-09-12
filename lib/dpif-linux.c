@@ -706,7 +706,7 @@ dpif_linux_port_dump_start(const struct dpif *dpif_, void **statep)
     *statep = state = xmalloc(sizeof *state);
 
     dpif_linux_vport_init(&request);
-    request.cmd = OVS_DP_CMD_GET;
+    request.cmd = OVS_VPORT_CMD_GET;
     request.dp_ifindex = dpif->dp_ifindex;
 
     buf = ofpbuf_new(1024);
@@ -963,7 +963,7 @@ dpif_linux_flow_dump_start(const struct dpif *dpif_, void **statep)
     *statep = state = xmalloc(sizeof *state);
 
     dpif_linux_flow_init(&request);
-    request.cmd = OVS_DP_CMD_GET;
+    request.cmd = OVS_FLOW_CMD_GET;
     request.dp_ifindex = dpif->dp_ifindex;
 
     buf = ofpbuf_new(1024);
