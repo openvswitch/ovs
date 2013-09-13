@@ -508,7 +508,6 @@ struct ofproto_dpif {
     uint64_t n_missed;
 
     /* Work queues. */
-    struct guarded_list flow_mods; /* Contains "struct flow_mod"s. */
     struct guarded_list pins;      /* Contains "struct ofputil_packet_in"s. */
 };
 
@@ -551,16 +550,13 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 /* Initial mappings of port to bridge mappings. */
 static struct shash init_ofp_ports = SHASH_INITIALIZER(&init_ofp_ports);
 
-/* Executes and takes ownership of 'fm'. */
+/* Executes 'fm'.  The caller retains ownership of 'fm' and everything in
+ * it. */
 void
 ofproto_dpif_flow_mod(struct ofproto_dpif *ofproto,
                       struct ofputil_flow_mod *fm)
 {
-    if (!guarded_list_push_back(&ofproto->flow_mods, &fm->list_node, 1024)) {
-        COVERAGE_INC(flow_mod_overflow);
-        free(fm->ofpacts);
-        free(fm);
-    }
+    ofproto_flow_mod(&ofproto->up, fm);
 }
 
 /* Appends 'pin' to the queue of "packet ins" to be sent to the controller.
@@ -1267,7 +1263,6 @@ construct(struct ofproto *ofproto_)
     classifier_init(&ofproto->facets);
     ofproto->consistency_rl = LLONG_MIN;
 
-    guarded_list_init(&ofproto->flow_mods);
     guarded_list_init(&ofproto->pins);
 
     ofproto_dpif_unixctl_init();
@@ -1392,11 +1387,10 @@ destruct(struct ofproto *ofproto_)
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct rule_dpif *rule, *next_rule;
     struct ofputil_packet_in *pin, *next_pin;
-    struct ofputil_flow_mod *fm, *next_fm;
     struct facet *facet, *next_facet;
-    struct list flow_mods, pins;
     struct cls_cursor cursor;
     struct oftable *table;
+    struct list pins;
 
     ovs_rwlock_rdlock(&ofproto->facets.rwlock);
     cls_cursor_init(&cursor, &ofproto->facets, NULL);
@@ -1426,14 +1420,6 @@ destruct(struct ofproto *ofproto_)
             ofproto_rule_delete(&ofproto->up, &rule->up);
         }
     }
-
-    guarded_list_pop_all(&ofproto->flow_mods, &flow_mods);
-    LIST_FOR_EACH_SAFE (fm, next_fm, list_node, &flow_mods) {
-        list_remove(&fm->list_node);
-        free(fm->ofpacts);
-        free(fm);
-    }
-    guarded_list_destroy(&ofproto->flow_mods);
 
     guarded_list_pop_all(&ofproto->pins, &pins);
     LIST_FOR_EACH_SAFE (pin, next_pin, list_node, &pins) {
@@ -1469,27 +1455,13 @@ run_fast(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct ofputil_packet_in *pin, *next_pin;
-    struct ofputil_flow_mod *fm, *next_fm;
-    struct list flow_mods, pins;
     struct ofport_dpif *ofport;
+    struct list pins;
 
     /* Do not perform any periodic activity required by 'ofproto' while
      * waiting for flow restore to complete. */
     if (ofproto_get_flow_restore_wait()) {
         return 0;
-    }
-
-    guarded_list_pop_all(&ofproto->flow_mods, &flow_mods);
-    LIST_FOR_EACH_SAFE (fm, next_fm, list_node, &flow_mods) {
-        int error = ofproto_flow_mod(&ofproto->up, fm);
-        if (error && !VLOG_DROP_WARN(&rl)) {
-            VLOG_WARN("learning action failed to modify flow table (%s)",
-                      ofperr_get_name(error));
-        }
-
-        list_remove(&fm->list_node);
-        free(fm->ofpacts);
-        free(fm);
     }
 
     guarded_list_pop_all(&ofproto->pins, &pins);
