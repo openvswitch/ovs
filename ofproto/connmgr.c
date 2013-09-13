@@ -271,6 +271,7 @@ void
 connmgr_run(struct connmgr *mgr,
             bool (*handle_openflow)(struct ofconn *,
                                     const struct ofpbuf *ofp_msg))
+    OVS_EXCLUDED(ofproto_mutex)
 {
     struct ofconn *ofconn, *next_ofconn;
     struct ofservice *ofservice;
@@ -1658,6 +1659,7 @@ connmgr_has_in_band(struct connmgr *mgr)
  * In-band control has more sophisticated code that manages flows itself. */
 void
 connmgr_flushed(struct connmgr *mgr)
+    OVS_EXCLUDED(ofproto_mutex)
 {
     if (mgr->fail_open) {
         fail_open_flushed(mgr->fail_open);
@@ -1824,6 +1826,7 @@ ofmonitor_report(struct connmgr *mgr, struct rule *rule,
                  enum nx_flow_update_event event,
                  enum ofp_flow_removed_reason reason,
                  const struct ofconn *abbrev_ofconn, ovs_be32 abbrev_xid)
+    OVS_REQUIRES(ofproto_mutex)
 {
     enum nx_flow_monitor_flags update;
     struct ofconn *ofconn;

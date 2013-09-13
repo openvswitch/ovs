@@ -46,12 +46,15 @@
 extern "C" {
 #endif
 
+/* Needed only for the lock annotation in struct classifier. */
+extern struct ovs_mutex ofproto_mutex;
+
 /* A flow classifier. */
 struct classifier {
     int n_rules;                /* Total number of rules. */
     struct hmap tables;         /* Contains "struct cls_table"s.  */
     struct list tables_priority; /* Tables in descending priority order */
-    struct ovs_rwlock rwlock;
+    struct ovs_rwlock rwlock OVS_ACQ_AFTER(ofproto_mutex);
 };
 
 /* A set of rules that all have the same fields wildcarded. */

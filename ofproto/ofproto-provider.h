@@ -17,7 +17,21 @@
 #ifndef OFPROTO_OFPROTO_PROVIDER_H
 #define OFPROTO_OFPROTO_PROVIDER_H 1
 
-/* Definitions for use within ofproto. */
+/* Definitions for use within ofproto.
+ *
+ *
+ * Thread-safety
+ * =============
+ *
+ * Lots of ofproto data structures are only accessed from a single thread.
+ * Those data structures are generally not thread-safe.
+ *
+ * The ofproto-dpif ofproto implementation accesses the flow table from
+ * multiple threads, including modifying the flow table from multiple threads
+ * via the "learn" action, so the flow table and various structures that index
+ * it have been made thread-safe.  Refer to comments on individual data
+ * structures for details.
+ */
 
 #include "cfm.h"
 #include "classifier.h"
@@ -93,11 +107,21 @@ struct ofproto {
     /* OpenFlow connections. */
     struct connmgr *connmgr;
 
-    /* Flow table operation tracking. */
-    int state;                  /* Internal state. */
-    struct list pending;        /* List of "struct ofopgroup"s. */
-    unsigned int n_pending;     /* list_size(&pending). */
-    struct hmap deletions;      /* All OFOPERATION_DELETE "ofoperation"s. */
+    /* Flow table operation tracking.
+     *
+     * 'state' is meaningful only within ofproto.c, one of the enum
+     * ofproto_state constants defined there.
+     *
+     * 'pending' is the list of "struct ofopgroup"s currently pending.
+     *
+     * 'n_pending' is the number of elements in 'pending'.
+     *
+     * 'deletions' contains pending ofoperations of type OFOPERATION_DELETE,
+     * indexed on its rule's flow.*/
+    int state;
+    struct list pending OVS_GUARDED_BY(ofproto_mutex);
+    unsigned int n_pending OVS_GUARDED_BY(ofproto_mutex);
+    struct hmap deletions OVS_GUARDED_BY(ofproto_mutex);
 
     /* Delayed rule executions.
      *
@@ -105,7 +129,7 @@ struct ofproto {
      * ofproto_mutex during a flow_mod, because otherwise a "learn" action
      * triggered by the executing the packet would try to recursively modify
      * the flow table and reacquire the global lock. */
-    struct guarded_list rule_executes;
+    struct guarded_list rule_executes; /* Contains "struct rule_execute"s. */
 
     /* Flow table operation logging. */
     int n_add, n_delete, n_modify; /* Number of unreported ops of each kind. */
@@ -175,7 +199,29 @@ enum oftable_flags {
     OFTABLE_READONLY = 1 << 1  /* Don't allow OpenFlow to change this table. */
 };
 
-/* A flow table within a "struct ofproto". */
+/* A flow table within a "struct ofproto".
+ *
+ *
+ * Thread-safety
+ * =============
+ *
+ * A cls->rwlock read-lock holder prevents rules from being added or deleted.
+ *
+ * Adding or removing rules requires holding ofproto_mutex AND the cls->rwlock
+ * write-lock.
+ *
+ * cls->rwlock should be held only briefly.  For extended access to a rule,
+ * increment its ref_count with ofproto_rule_ref().  A rule will not be freed
+ * until its ref_count reaches zero.
+ *
+ * Modifying a rule requires the rule's own mutex.  Holding cls->rwlock (for
+ * read or write) does not allow the holder to modify the rule.
+ *
+ * Freeing a rule requires ofproto_mutex and the cls->rwlock write-lock.  After
+ * removing the rule from the classifier, release a ref_count from the rule
+ * ('cls''s reference to the rule).
+ *
+ * Refer to the thread-safety notes on struct rule for more information.*/
 struct oftable {
     enum oftable_flags flags;
     struct classifier cls;      /* Contains "struct rule"s. */
@@ -219,7 +265,59 @@ struct oftable {
 /* An OpenFlow flow within a "struct ofproto".
  *
  * With few exceptions, ofproto implementations may look at these fields but
- * should not modify them. */
+ * should not modify them.
+ *
+ *
+ * Thread-safety
+ * =============
+ *
+ * Except near the beginning or ending of its lifespan, rule 'rule' belongs to
+ * the classifier rule->ofproto->tables[rule->table_id].cls.  The text below
+ * calls this classifier 'cls'.
+ *
+ * Motivation
+ * ----------
+ *
+ * The thread safety rules described here for "struct rule" are motivated by
+ * two goals:
+ *
+ *    - Prevent threads that read members of "struct rule" from reading bad
+ *      data due to changes by some thread concurrently modifying those
+ *      members.
+ *
+ *    - Prevent two threads making changes to members of a given "struct rule"
+ *      from interfering with each other.
+ *
+ *
+ * Rules
+ * -----
+ *
+ * A rule 'rule' may be accessed without a risk of being freed by code that
+ * holds a read-lock or write-lock on 'cls->rwlock' or that owns a reference to
+ * 'rule->ref_count' (or both).  Code that needs to hold onto a rule for a
+ * while should take 'cls->rwlock', find the rule it needs, increment
+ * 'rule->ref_count' with ofproto_rule_ref(), and drop 'cls->rwlock'.
+ *
+ * 'rule->ref_count' protects 'rule' from being freed.  It doesn't protect the
+ * rule from being deleted from 'cls' (that's 'cls->rwlock') and it doesn't
+ * protect members of 'rule' from modification (that's 'rule->rwlock').
+ *
+ * 'rule->mutex' protects the members of 'rule' from modification.  It doesn't
+ * protect the rule from being deleted from 'cls' (that's 'cls->rwlock') and it
+ * doesn't prevent the rule from being freed (that's 'rule->ref_count').
+ *
+ * Regarding thread safety, the members of a rule fall into the following
+ * categories:
+ *
+ *    - Immutable.  These members are marked 'const'.
+ *
+ *    - Members that may be safely read or written only by code holding
+ *      ofproto_mutex.  These are marked OVS_GUARDED_BY(ofproto_mutex).
+ *
+ *    - Members that may be safely read only by code holding ofproto_mutex or
+ *      'rule->mutex', and safely written only by coding holding ofproto_mutex
+ *      AND 'rule->mutex'.  These are marked OVS_GUARDED.
+ */
 struct rule {
     /* Where this rule resides in an OpenFlow switch.
      *
@@ -228,48 +326,58 @@ struct rule {
     const struct cls_rule cr;      /* In owning ofproto's classifier. */
     const uint8_t table_id;        /* Index in ofproto's 'tables' array. */
 
+    /* Protects members marked OVS_GUARDED.
+     * Readers only need to hold this mutex.
+     * Writers must hold both this mutex AND ofproto_mutex. */
+    struct ovs_mutex mutex OVS_ACQ_AFTER(ofproto_mutex);
+
+    /* Number of references.
+     * The classifier owns one reference.
+     * Any thread trying to keep a rule from being freed should hold its own
+     * reference. */
     atomic_uint ref_count;
 
-    struct ofoperation *pending; /* Operation now in progress, if nonnull. */
+    /* Operation now in progress, if nonnull. */
+    struct ofoperation *pending OVS_GUARDED_BY(ofproto_mutex);
 
-    ovs_be64 flow_cookie;        /* Controller-issued identifier. Guarded by
-                                    mutex. */
+    /* A "flow cookie" is the OpenFlow name for a 64-bit value associated with
+     * a flow.. */
+    ovs_be64 flow_cookie OVS_GUARDED;
     struct hindex_node cookie_node OVS_GUARDED_BY(ofproto_mutex);
 
-    long long int created;       /* Creation time. */
-    long long int modified;      /* Time of last modification. */
-    long long int used;          /* Last use; time created if never used. */
+    /* Times. */
+    long long int created OVS_GUARDED; /* Creation time. */
+    long long int modified OVS_GUARDED; /* Time of last modification. */
+    long long int used OVS_GUARDED; /* Last use; time created if never used. */
     bool send_flow_removed;      /* Send a flow removed message? */
 
+    /* Timeouts. */
     uint16_t hard_timeout OVS_GUARDED; /* In seconds from ->modified. */
     uint16_t idle_timeout OVS_GUARDED; /* In seconds from ->used. */
 
-    /* Eviction groups. */
-    struct heap_node evg_node;   /* In eviction_group's "rules" heap. */
-    struct eviction_group *eviction_group; /* NULL if not in any group. */
-
-    /* The mutex is used to protect those elements in struct rule which are
-     * accessed by multiple threads.  The main ofproto code is guaranteed not
-     * to change any of the elements "Guarded by mutex" without holding the
-     * lock.
+    /* Eviction groups (see comment on struct eviction_group for explanation) .
      *
-     * While maintaining a pointer to struct rule, threads are required to hold
-     * a readlock on the classifier that holds the rule or increment the rule's
-     * ref_count.
+     * 'eviction_group' is this rule's eviction group, or NULL if it is not in
+     * any eviction group.  When 'eviction_group' is nonnull, 'evg_node' is in
+     * the ->eviction_group->rules hmap. */
+    struct eviction_group *eviction_group OVS_GUARDED_BY(ofproto_mutex);
+    struct heap_node evg_node OVS_GUARDED_BY(ofproto_mutex);
+
+    /* OpenFlow actions.  See struct rule_actions for more thread-safety
+     * notes. */
+    struct rule_actions *actions OVS_GUARDED;
+
+    /* In owning meter's 'rules' list.  An empty list if there is no meter. */
+    struct list meter_list_node OVS_GUARDED_BY(ofproto_mutex);
+
+    /* Flow monitors (e.g. for NXST_FLOW_MONITOR, related to struct ofmonitor).
      *
-     * A rule will not be evicted unless its classifier's write lock is
-     * held. */
-    struct ovs_mutex mutex;
-
-    /* Guarded by mutex. */
-    struct rule_actions *actions;
-
-    struct list meter_list_node; /* In owning meter's 'rules' list. */
-
-    /* Flow monitors. */
-    enum nx_flow_monitor_flags monitor_flags;
-    uint64_t add_seqno;         /* Sequence number when added. */
-    uint64_t modify_seqno;      /* Sequence number when changed. */
+     * 'add_seqno' is the sequence number when this rule was created.
+     * 'modify_seqno' is the sequence number when this rule was last modified.
+     * See 'monitor_seqno' in connmgr.c for more information. */
+    enum nx_flow_monitor_flags monitor_flags OVS_GUARDED_BY(ofproto_mutex);
+    uint64_t add_seqno OVS_GUARDED_BY(ofproto_mutex);
+    uint64_t modify_seqno OVS_GUARDED_BY(ofproto_mutex);
 
     /* Optimisation for flow expiry.  In ofproto's 'expirable' list if this
      * rule is expirable, otherwise empty. */
@@ -278,6 +386,11 @@ struct rule {
 
 void ofproto_rule_ref(struct rule *);
 void ofproto_rule_unref(struct rule *);
+
+struct rule_actions *rule_get_actions(const struct rule *rule)
+    OVS_EXCLUDED(rule->mutex);
+struct rule_actions *rule_get_actions__(const struct rule *rule)
+    OVS_REQUIRES(rule->mutex);
 
 /* A set of actions within a "struct rule".
  *
@@ -314,6 +427,8 @@ struct rule_collection {
 
 void rule_collection_init(struct rule_collection *);
 void rule_collection_add(struct rule_collection *, struct rule *);
+void rule_collection_ref(struct rule_collection *) OVS_REQUIRES(ofproto_mutex);
+void rule_collection_unref(struct rule_collection *);
 void rule_collection_destroy(struct rule_collection *);
 
 /* Threshold at which to begin flow table eviction. Only affects the
@@ -334,16 +449,19 @@ rule_from_cls_rule(const struct cls_rule *cls_rule)
     return cls_rule ? CONTAINER_OF(cls_rule, struct rule, cr) : NULL;
 }
 
-void ofproto_rule_expire(struct rule *rule, uint8_t reason);
+void ofproto_rule_expire(struct rule *rule, uint8_t reason)
+    OVS_REQUIRES(ofproto_mutex);
 void ofproto_rule_delete(struct ofproto *, struct classifier *cls,
-                         struct rule *) OVS_REQ_WRLOCK(cls->rwlock);
+                         struct rule *)
+    OVS_EXCLUDED(ofproto_mutex);
 void ofproto_rule_reduce_timeouts(struct rule *rule, uint16_t idle_timeout,
                                   uint16_t hard_timeout)
-    OVS_EXCLUDED(ofproto_mutex, rule->mutex);
+    OVS_EXCLUDED(ofproto_mutex);
 
 void ofoperation_complete(struct ofoperation *, enum ofperr);
 
-bool ofoperation_has_out_port(const struct ofoperation *, ofp_port_t out_port);
+bool ofoperation_has_out_port(const struct ofoperation *, ofp_port_t out_port)
+    OVS_REQUIRES(ofproto_mutex);
 
 /* ofproto class structure, to be defined by each ofproto implementation.
  *
@@ -1101,9 +1219,10 @@ struct ofproto_class {
      *
      * Rule destruction must not fail. */
     struct rule *(*rule_alloc)(void);
-    enum ofperr (*rule_construct)(struct rule *rule);
-    void (*rule_insert)(struct rule *rule);
-    void (*rule_delete)(struct rule *rule);
+    enum ofperr (*rule_construct)(struct rule *rule)
+        /* OVS_REQUIRES(ofproto_mutex) */;
+    void (*rule_insert)(struct rule *rule) /* OVS_REQUIRES(ofproto_mutex) */;
+    void (*rule_delete)(struct rule *rule) /* OVS_REQUIRES(ofproto_mutex) */;
     void (*rule_destruct)(struct rule *rule);
     void (*rule_dealloc)(struct rule *rule);
 
@@ -1112,7 +1231,8 @@ struct ofproto_class {
      * in '*byte_count'.  UINT64_MAX indicates that the packet count or byte
      * count is unknown. */
     void (*rule_get_stats)(struct rule *rule, uint64_t *packet_count,
-                           uint64_t *byte_count);
+                           uint64_t *byte_count)
+        /* OVS_EXCLUDED(ofproto_mutex) */;
 
     /* Applies the actions in 'rule' to 'packet'.  (This implements sending
      * buffered packets for OpenFlow OFPT_FLOW_MOD commands.)
@@ -1158,7 +1278,8 @@ struct ofproto_class {
      *
      * ->rule_modify_actions() should not modify any base members of struct
      * rule. */
-    void (*rule_modify_actions)(struct rule *rule, bool reset_counters);
+    void (*rule_modify_actions)(struct rule *rule, bool reset_counters)
+        /* OVS_REQUIRES(ofproto_mutex) */;
 
     /* Changes the OpenFlow IP fragment handling policy to 'frag_handling',
      * which takes one of the following values, with the corresponding
@@ -1523,12 +1644,15 @@ int ofproto_class_unregister(const struct ofproto_class *);
 enum { OFPROTO_POSTPONE = 1 << 16 };
 BUILD_ASSERT_DECL(OFPROTO_POSTPONE < OFPERR_OFS);
 
-int ofproto_flow_mod(struct ofproto *, struct ofputil_flow_mod *);
+int ofproto_flow_mod(struct ofproto *, struct ofputil_flow_mod *)
+    OVS_EXCLUDED(ofproto_mutex);
 void ofproto_add_flow(struct ofproto *, const struct match *,
                       unsigned int priority,
-                      const struct ofpact *ofpacts, size_t ofpacts_len);
+                      const struct ofpact *ofpacts, size_t ofpacts_len)
+    OVS_EXCLUDED(ofproto_mutex);
 bool ofproto_delete_flow(struct ofproto *,
-                         const struct match *, unsigned int priority);
+                         const struct match *, unsigned int priority)
+    OVS_EXCLUDED(ofproto_mutex);
 void ofproto_flush_flows(struct ofproto *);
 
 #endif /* ofproto/ofproto-provider.h */

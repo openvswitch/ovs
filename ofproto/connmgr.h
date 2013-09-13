@@ -184,7 +184,8 @@ void ofmonitor_destroy(struct ofmonitor *);
 
 void ofmonitor_report(struct connmgr *, struct rule *,
                       enum nx_flow_update_event, enum ofp_flow_removed_reason,
-                      const struct ofconn *abbrev_ofconn, ovs_be32 abbrev_xid);
+                      const struct ofconn *abbrev_ofconn, ovs_be32 abbrev_xid)
+    OVS_REQUIRES(ofproto_mutex);
 void ofmonitor_flush(struct connmgr *);
 
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -211,6 +211,7 @@ fail_open_wait(struct fail_open *fo)
 
 void
 fail_open_flushed(struct fail_open *fo)
+    OVS_EXCLUDED(ofproto_mutex)
 {
     int disconn_secs = connmgr_failure_duration(fo->connmgr);
     bool open = disconn_secs >= trigger_duration(fo);

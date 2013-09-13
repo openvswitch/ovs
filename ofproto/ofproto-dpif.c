@@ -1420,12 +1420,12 @@ destruct(struct ofproto *ofproto_)
     OFPROTO_FOR_EACH_TABLE (table, &ofproto->up) {
         struct cls_cursor cursor;
 
-        ovs_rwlock_wrlock(&table->cls.rwlock);
+        ovs_rwlock_rdlock(&table->cls.rwlock);
         cls_cursor_init(&cursor, &table->cls, NULL);
+        ovs_rwlock_unlock(&table->cls.rwlock);
         CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, up.cr, &cursor) {
             ofproto_rule_delete(&ofproto->up, &table->cls, &rule->up);
         }
-        ovs_rwlock_unlock(&table->cls.rwlock);
     }
 
     guarded_list_pop_all(&ofproto->flow_mods, &flow_mods);
@@ -3588,7 +3588,7 @@ handle_upcalls(struct dpif_backer *backer)
 
 static int subfacet_max_idle(const struct dpif_backer *);
 static void update_stats(struct dpif_backer *);
-static void rule_expire(struct rule_dpif *);
+static void rule_expire(struct rule_dpif *) OVS_REQUIRES(ofproto_mutex);
 static void expire_subfacets(struct dpif_backer *, int dp_max_idle);
 
 /* This function is called periodically by run().  Its job is to collect
@@ -3908,30 +3908,31 @@ expire_subfacets(struct dpif_backer *backer, int dp_max_idle)
  * then delete it entirely. */
 static void
 rule_expire(struct rule_dpif *rule)
+    OVS_REQUIRES(ofproto_mutex)
 {
     uint16_t idle_timeout, hard_timeout;
-    long long int now;
-    uint8_t reason;
+    long long int now = time_msec();
+    int reason;
 
     ovs_assert(!rule->up.pending);
 
+    /* Has 'rule' expired? */
     ovs_mutex_lock(&rule->up.mutex);
     hard_timeout = rule->up.hard_timeout;
     idle_timeout = rule->up.idle_timeout;
-    ovs_mutex_unlock(&rule->up.mutex);
-
-    /* Has 'rule' expired? */
-    now = time_msec();
     if (hard_timeout && now > rule->up.modified + hard_timeout * 1000) {
         reason = OFPRR_HARD_TIMEOUT;
     } else if (idle_timeout && now > rule->up.used + idle_timeout * 1000) {
         reason = OFPRR_IDLE_TIMEOUT;
     } else {
-        return;
+        reason = -1;
     }
+    ovs_mutex_unlock(&rule->up.mutex);
 
-    COVERAGE_INC(ofproto_dpif_expired);
-    ofproto_rule_expire(&rule->up, reason);
+    if (reason >= 0) {
+        COVERAGE_INC(ofproto_dpif_expired);
+        ofproto_rule_expire(&rule->up, reason);
+    }
 }
 
 /* Facets. */
@@ -4123,17 +4124,21 @@ facet_is_controller_flow(struct facet *facet)
     if (facet) {
         struct ofproto_dpif *ofproto = facet->ofproto;
         const struct ofpact *ofpacts;
+        struct rule_actions *actions;
         struct rule_dpif *rule;
         size_t ofpacts_len;
         bool is_controller;
 
         rule_dpif_lookup(ofproto, &facet->flow, NULL, &rule);
-        ofpacts_len = rule->up.actions->ofpacts_len;
-        ofpacts = rule->up.actions->ofpacts;
+        actions = rule_dpif_get_actions(rule);
+        rule_dpif_unref(rule);
+
+        ofpacts_len = actions->ofpacts_len;
+        ofpacts = actions->ofpacts;
         is_controller = ofpacts_len > 0
             && ofpacts->type == OFPACT_CONTROLLER
             && ofpact_next(ofpacts) >= ofpact_end(ofpacts, ofpacts_len);
-        rule_dpif_unref(rule);
+        rule_actions_unref(actions);
 
         return is_controller;
     }
@@ -4355,7 +4360,10 @@ facet_revalidate(struct facet *facet)
     facet->xout.nf_output_iface = xout.nf_output_iface;
     facet->xout.mirrors = xout.mirrors;
     facet->nf_flow.output_iface = facet->xout.nf_output_iface;
+
+    ovs_mutex_lock(&new_rule->up.mutex);
     facet->used = MAX(facet->used, new_rule->up.created);
+    ovs_mutex_unlock(&new_rule->up.mutex);
 
     xlate_out_uninit(&xout);
     rule_dpif_unref(new_rule);
@@ -4475,6 +4483,7 @@ rule_dpif_fail_open(const struct rule_dpif *rule)
 
 ovs_be64
 rule_dpif_get_flow_cookie(const struct rule_dpif *rule)
+    OVS_REQUIRES(rule->up.mutex)
 {
     return rule->up.flow_cookie;
 }
@@ -4492,14 +4501,7 @@ rule_dpif_reduce_timeouts(struct rule_dpif *rule, uint16_t idle_timeout,
 struct rule_actions *
 rule_dpif_get_actions(const struct rule_dpif *rule)
 {
-    struct rule_actions *actions;
-
-    ovs_mutex_lock(&rule->up.mutex);
-    actions = rule->up.actions;
-    rule_actions_ref(actions);
-    ovs_mutex_unlock(&rule->up.mutex);
-
-    return actions;
+    return rule_get_actions(&rule->up);
 }
 
 /* Subfacets. */
@@ -4846,6 +4848,7 @@ rule_dpif_unref(struct rule_dpif *rule)
 
 static void
 complete_operation(struct rule_dpif *rule)
+    OVS_REQUIRES(ofproto_mutex)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
 
@@ -4886,6 +4889,7 @@ rule_construct(struct rule *rule_)
 
 static void
 rule_insert(struct rule *rule_)
+    OVS_REQUIRES(ofproto_mutex)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
     complete_operation(rule);
@@ -4893,6 +4897,7 @@ rule_insert(struct rule *rule_)
 
 static void
 rule_delete(struct rule *rule_)
+    OVS_REQUIRES(ofproto_mutex)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
     complete_operation(rule);
@@ -4957,6 +4962,7 @@ rule_execute(struct rule *rule, const struct flow *flow,
 
 static void
 rule_modify_actions(struct rule *rule_, bool reset_counters)
+    OVS_REQUIRES(ofproto_mutex)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
 
@@ -5271,22 +5277,32 @@ struct trace_ctx {
 static void
 trace_format_rule(struct ds *result, int level, const struct rule_dpif *rule)
 {
+    struct rule_actions *actions;
+    ovs_be64 cookie;
+
     ds_put_char_multiple(result, '\t', level);
     if (!rule) {
         ds_put_cstr(result, "No match\n");
         return;
     }
 
+    ovs_mutex_lock(&rule->up.mutex);
+    cookie = rule->up.flow_cookie;
+    ovs_mutex_unlock(&rule->up.mutex);
+
     ds_put_format(result, "Rule: table=%"PRIu8" cookie=%#"PRIx64" ",
-                  rule ? rule->up.table_id : 0, ntohll(rule->up.flow_cookie));
+                  rule ? rule->up.table_id : 0, ntohll(cookie));
     cls_rule_format(&rule->up.cr, result);
     ds_put_char(result, '\n');
 
+    actions = rule_dpif_get_actions(rule);
+
     ds_put_char_multiple(result, '\t', level);
     ds_put_cstr(result, "OpenFlow ");
-    ofpacts_format(rule->up.actions->ofpacts, rule->up.actions->ofpacts_len,
-                   result);
+    ofpacts_format(actions->ofpacts, actions->ofpacts_len, result);
     ds_put_char(result, '\n');
+
+    rule_actions_unref(actions);
 }
 
 static void
