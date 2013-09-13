@@ -519,7 +519,8 @@ do_show_log(int argc, char *argv[])
             date = shash_find_data(json_object(json), "_date");
             if (date && date->type == JSON_INTEGER) {
                 time_t t = json_integer(date);
-                char *s = xastrftime(" %Y-%m-%d %H:%M:%S", t, true);
+                char *s = xastrftime_msec(" %Y-%m-%d %H:%M:%S",
+                                          t * 1000LL, true);
                 fputs(s, stdout);
                 free(s);
             }

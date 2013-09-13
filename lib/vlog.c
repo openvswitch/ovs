@@ -583,7 +583,7 @@ static void
 vlog_init__(void)
 {
     static char *program_name_copy;
-    time_t now;
+    long long int now;
 
     /* openlog() is allowed to keep the pointer passed in, without making a
      * copy.  The daemonize code sometimes frees and replaces 'program_name',
@@ -593,10 +593,10 @@ vlog_init__(void)
     program_name_copy = program_name ? xstrdup(program_name) : NULL;
     openlog(program_name_copy, LOG_NDELAY, LOG_DAEMON);
 
-    now = time_wall();
+    now = time_wall_msec();
     if (now < 0) {
-        char *s = xastrftime("%a, %d %b %Y %H:%M:%S", now, true);
-        VLOG_ERR("current time is negative: %s (%ld)", s, (long int) now);
+        char *s = xastrftime_msec("%a, %d %b %Y %H:%M:%S", now, true);
+        VLOG_ERR("current time is negative: %s (%lld)", s, now);
         free(s);
     }
 
@@ -746,12 +746,12 @@ format_log_message(const struct vlog_module *module, enum vlog_level level,
             ds_put_cstr(s, vlog_get_module_name(module));
             break;
         case 'd':
-            p = fetch_braces(p, "%Y-%m-%d %H:%M:%S", tmp, sizeof tmp);
-            ds_put_strftime(s, tmp, time_wall(), false);
+            p = fetch_braces(p, "%Y-%m-%d %H:%M:%S.###", tmp, sizeof tmp);
+            ds_put_strftime_msec(s, tmp, time_wall_msec(), false);
             break;
         case 'D':
-            p = fetch_braces(p, "%Y-%m-%d %H:%M:%S", tmp, sizeof tmp);
-            ds_put_strftime(s, tmp, time_wall(), true);
+            p = fetch_braces(p, "%Y-%m-%d %H:%M:%S.###", tmp, sizeof tmp);
+            ds_put_strftime_msec(s, tmp, time_wall_msec(), true);
             break;
         case 'm':
             /* Format user-supplied log message and trim trailing new-lines. */

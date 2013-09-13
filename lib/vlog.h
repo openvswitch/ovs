@@ -64,7 +64,7 @@ enum vlog_level vlog_get_level_val(const char *name);
 #define VLOG_FACILITIES                                                 \
     VLOG_FACILITY(SYSLOG, "ovs|%05N|%c%T|%p|%m")                            \
     VLOG_FACILITY(CONSOLE, "%D{%Y-%m-%dT%H:%M:%SZ}|%05N|%c%T|%p|%m")    \
-    VLOG_FACILITY(FILE, "%D{%Y-%m-%dT%H:%M:%SZ}|%05N|%c%T|%p|%m")
+    VLOG_FACILITY(FILE, "%D{%Y-%m-%dT%H:%M:%S.###Z}|%05N|%c%T|%p|%m")
 enum vlog_facility {
 #define VLOG_FACILITY(NAME, PATTERN) VLF_##NAME,
     VLOG_FACILITIES

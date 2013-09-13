@@ -183,21 +183,24 @@ ds_put_printable(struct ds *ds, const char *s, size_t n)
     }
 }
 
-/* Writes time 'when' to 'string' based on 'template', in local time or UTC
- * based on 'utc'. */
+/* Writes the current time with optional millisecond resolution to 'string'
+ * based on 'template'.
+ * The current time is either localtime or UTC based on 'utc'. */
 void
-ds_put_strftime(struct ds *ds, const char *template, time_t when, bool utc)
+ds_put_strftime_msec(struct ds *ds, const char *template, long long int when,
+                     bool utc)
 {
-    struct tm tm;
+    struct tm_msec tm;
     if (utc) {
-        gmtime_r(&when, &tm);
+        gmtime_msec(when, &tm);
     } else {
-        localtime_r(&when, &tm);
+        localtime_msec(when, &tm);
     }
 
     for (;;) {
         size_t avail = ds->string ? ds->allocated - ds->length + 1 : 0;
-        size_t used = strftime(&ds->string[ds->length], avail, template, &tm);
+        size_t used = strftime_msec(&ds->string[ds->length], avail, template,
+                                    &tm);
         if (used) {
             ds->length += used;
             return;
@@ -209,12 +212,12 @@ ds_put_strftime(struct ds *ds, const char *template, time_t when, bool utc)
 /* Returns a malloc()'d string for time 'when' based on 'template', in local
  * time or UTC based on 'utc'. */
 char *
-xastrftime(const char *template, time_t when, bool utc)
+xastrftime_msec(const char *template, long long int when, bool utc)
 {
     struct ds s;
 
     ds_init(&s);
-    ds_put_strftime(&s, template, when, utc);
+    ds_put_strftime_msec(&s, template, when, utc);
     return s.string;
 }
 

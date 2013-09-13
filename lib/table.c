@@ -221,7 +221,7 @@ table_print_table_line__(struct ds *line)
 static char *
 table_format_timestamp__(void)
 {
-    return xastrftime("%Y-%m-%d %H:%M:%S", time_wall(), true);
+    return xastrftime_msec("%Y-%m-%d %H:%M:%S.###", time_wall_msec(), true);
 }
 
 static void

@@ -1,5 +1,7 @@
 Post-v2.0.0
 ---------------------
+    - Log files now report times with millisecond resolution.  (Previous
+      versions only reported whole seconds.)
 
 
 v2.0.0 - xx xxx xxxx

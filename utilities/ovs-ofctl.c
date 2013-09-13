@@ -1396,7 +1396,8 @@ monitor_vconn(struct vconn *vconn, bool reply_to_echo_requests)
             run(retval, "vconn_recv");
 
             if (timestamp) {
-                char *s = xastrftime("%Y-%m-%d %H:%M:%S: ", time_wall(), true);
+                char *s = xastrftime_msec("%Y-%m-%d %H:%M:%S.###: ",
+                                          time_wall_msec(), true);
                 fputs(s, stderr);
                 free(s);
             }

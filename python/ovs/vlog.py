@@ -60,7 +60,8 @@ class Vlog:
         if not Vlog.__inited:
             return
 
-        now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        dt = datetime.datetime.utcnow();
+        now = dt.strftime("%Y-%m-%dT%H:%M:%S.%%iZ") % (dt.microsecond/1000)
         syslog_message = ("%s|%s|%s|%s"
                            % (Vlog.__msg_num, self.name, level, message))
 

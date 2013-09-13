@@ -494,3 +494,49 @@ timeval_dummy_register(void)
     unixctl_command_register("time/warp", "MSECS", 1, 1,
                              timeval_warp_cb, NULL);
 }
+
+
+
+/* strftime() with an extension for high-resolution timestamps.  Any '#'s in
+ * 'format' will be replaced by subseconds, e.g. use "%S.###" to obtain results
+ * like "01.123".  */
+size_t
+strftime_msec(char *s, size_t max, const char *format,
+              const struct tm_msec *tm)
+{
+    size_t n;
+
+    n = strftime(s, max, format, &tm->tm);
+    if (n) {
+        char decimals[4];
+        char *p;
+
+        sprintf(decimals, "%03d", tm->msec);
+        for (p = strchr(s, '#'); p; p = strchr(p, '#')) {
+            char *d = decimals;
+            while (*p == '#')  {
+                *p++ = *d ? *d++ : '0';
+            }
+        }
+    }
+
+    return n;
+}
+
+struct tm_msec *
+localtime_msec(long long int now, struct tm_msec *result)
+{
+  time_t now_sec = now / 1000;
+  localtime_r(&now_sec, &result->tm);
+  result->msec = now % 1000;
+  return result;
+}
+
+struct tm_msec *
+gmtime_msec(long long int now, struct tm_msec *result)
+{
+  time_t now_sec = now / 1000;
+  gmtime_r(&now_sec, &result->tm);
+  result->msec = now % 1000;
+  return result;
+}

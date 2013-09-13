@@ -61,10 +61,9 @@ int ds_get_line(struct ds *, FILE *);
 int ds_get_preprocessed_line(struct ds *, FILE *, int *line_number);
 int ds_get_test_line(struct ds *, FILE *);
 
-void ds_put_strftime(struct ds *, const char *template, time_t when, bool utc)
-    STRFTIME_FORMAT(2);
-char *xastrftime(const char *template, time_t when, bool utc)
-    STRFTIME_FORMAT(1);
+void ds_put_strftime_msec(struct ds *, const char *template, long long int when,
+			  bool utc);
+char *xastrftime_msec(const char *template, long long int when, bool utc);
 
 char *ds_cstr(struct ds *);
 const char *ds_cstr_ro(const struct ds *);
