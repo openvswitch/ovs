@@ -664,7 +664,7 @@ int
 rconn_send_with_limit(struct rconn *rc, struct ofpbuf *b,
                       struct rconn_packet_counter *counter, int queue_limit)
 {
-    if (counter->n_packets < queue_limit) {
+    if (rconn_packet_counter_n_packets(counter) < queue_limit) {
         return rconn_send(rc, b, counter);
     } else {
         COVERAGE_INC(rconn_overflow);
@@ -863,7 +863,10 @@ struct rconn_packet_counter *
 rconn_packet_counter_create(void)
 {
     struct rconn_packet_counter *c = xzalloc(sizeof *c);
+    ovs_mutex_init(&c->mutex);
+    ovs_mutex_lock(&c->mutex);
     c->ref_cnt = 1;
+    ovs_mutex_unlock(&c->mutex);
     return c;
 }
 
@@ -871,8 +874,15 @@ void
 rconn_packet_counter_destroy(struct rconn_packet_counter *c)
 {
     if (c) {
+        bool dead;
+
+        ovs_mutex_lock(&c->mutex);
         ovs_assert(c->ref_cnt > 0);
-        if (!--c->ref_cnt && !c->n_packets) {
+        dead = !--c->ref_cnt && !c->n_packets;
+        ovs_mutex_unlock(&c->mutex);
+
+        if (dead) {
+            ovs_mutex_destroy(&c->mutex);
             free(c);
         }
     }
@@ -881,24 +891,55 @@ rconn_packet_counter_destroy(struct rconn_packet_counter *c)
 void
 rconn_packet_counter_inc(struct rconn_packet_counter *c, unsigned int n_bytes)
 {
+    ovs_mutex_lock(&c->mutex);
     c->n_packets++;
     c->n_bytes += n_bytes;
+    ovs_mutex_unlock(&c->mutex);
 }
 
 void
 rconn_packet_counter_dec(struct rconn_packet_counter *c, unsigned int n_bytes)
 {
-    ovs_assert(c->n_packets > 0);
-    ovs_assert(c->n_bytes >= n_bytes);
+    bool dead = false;
 
-    c->n_bytes -= n_bytes;
+    ovs_mutex_lock(&c->mutex);
+    ovs_assert(c->n_packets > 0);
+    ovs_assert(c->n_packets == 1
+               ? c->n_bytes == n_bytes
+               : c->n_bytes > n_bytes);
     c->n_packets--;
-    if (!c->n_packets) {
-        ovs_assert(!c->n_bytes);
-        if (!c->ref_cnt) {
-            free(c);
-        }
+    c->n_bytes -= n_bytes;
+    dead = !c->n_packets && !c->ref_cnt;
+    ovs_mutex_unlock(&c->mutex);
+
+    if (dead) {
+        ovs_mutex_destroy(&c->mutex);
+        free(c);
     }
+}
+
+unsigned int
+rconn_packet_counter_n_packets(const struct rconn_packet_counter *c)
+{
+    unsigned int n;
+
+    ovs_mutex_lock(&c->mutex);
+    n = c->n_packets;
+    ovs_mutex_unlock(&c->mutex);
+
+    return n;
+}
+
+unsigned int
+rconn_packet_counter_n_bytes(const struct rconn_packet_counter *c)
+{
+    unsigned int n;
+
+    ovs_mutex_lock(&c->mutex);
+    n = c->n_bytes;
+    ovs_mutex_unlock(&c->mutex);
+
+    return n;
 }
 
 /* Set rc->target and rc->name to 'target' and 'name', respectively.  If 'name'
