@@ -44,10 +44,9 @@ struct clock {
 
     /* Features for use by unit tests.  Protected by 'rwlock'. */
     struct ovs_rwlock rwlock;
-    struct timespec warp;       /* Offset added for unit tests. */
-    bool stopped;               /* Disables real-time updates if true.  */
-
-    struct timespec cache;      /* Last time read from kernel. */
+    struct timespec warp OVS_GUARDED;  /* Offset added for unit tests. */
+    bool stopped OVS_GUARDED;          /* Disable real-time updates if true. */
+    struct timespec cache OVS_GUARDED; /* Last time read from kernel. */
 };
 
 /* Our clocks. */
@@ -320,14 +319,24 @@ timespec_add(struct timespec *sum,
     *sum = tmp;
 }
 
+static bool
+is_warped(const struct clock *c)
+{
+    bool warped;
+
+    ovs_rwlock_rdlock(&c->rwlock);
+    warped = monotonic_clock.warp.tv_sec || monotonic_clock.warp.tv_nsec;
+    ovs_rwlock_unlock(&c->rwlock);
+
+    return warped;
+}
+
 static void
 log_poll_interval(long long int last_wakeup)
 {
     long long int interval = time_msec() - last_wakeup;
 
-    if (interval >= 1000
-        && !monotonic_clock.warp.tv_sec
-        && !monotonic_clock.warp.tv_nsec) {
+    if (interval >= 1000 && !is_warped(&monotonic_clock)) {
         const struct rusage *last_rusage = get_recent_rusage();
         struct rusage rusage;
 
