@@ -158,13 +158,20 @@ The current date and time in ISO 8601 format (YYYY\-MM\-DD HH:MM:SS).
 .IP \fB%d{\fIformat\fB}\fR
 The current date and time in the specified \fIformat\fR, which takes
 the same format as the \fItemplate\fR argument to \fBstrftime\fR(3).
+As an extension, any \fB#\fR characters in \fIformat\fR will be
+replaced by fractional seconds, e.g. use \fB%H:%M:%S.###\fR for the
+time to the nearest millisecond.  Sub-second times are only
+approximate and currently decimal places after the third will always
+be reported as zero.
 .
 .IP \fB%D\fR
 The current UTC date and time in ISO 8601 format (YYYY\-MM\-DD HH:MM:SS).
 .
 .IP \fB%D{\fIformat\fB}\fR
-The current UTC date and time in the specified \fIformat\fR, which takes
-the same format as the \fItemplate\fR argument to \fBstrftime\fR(3).
+The current UTC date and time in the specified \fIformat\fR, which
+takes the same format as the \fItemplate\fR argument to
+\fBstrftime\fR(3).  Supports the same extension for sub-second
+resolution as \fB%d{\fR...\fB}\fR.
 .
 .IP \fB%m\fR
 The message being logged.

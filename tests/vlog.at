@@ -9,7 +9,7 @@ AT_CHECK([$PYTHON $srcdir/test-vlog.py --log-file log_file \
 
 AT_CHECK([diff log_file stderr_log])
 
-AT_CHECK([sed -e 's/.*-.*-.*T..:..:..Z|//' \
+AT_CHECK([sed -e 's/.*-.*-.*T..:..:..\....Z|//' \
 -e 's/File ".*", line [[0-9]][[0-9]]*,/File <name>, line <number>,/' \
 stderr_log], [0], [dnl
 0|module_0|EMER|emergency

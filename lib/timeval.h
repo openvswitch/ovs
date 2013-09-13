@@ -57,8 +57,14 @@ BUILD_ASSERT_DECL(TYPE_IS_SIGNED(time_t));
 #endif
 #endif /* ifndef CACHE_TIME */
 
+struct tm_msec {
+  struct tm tm;
+  int msec;
+};
+
 void time_postfork(void);
 void time_refresh(void);
+
 time_t time_now(void);
 time_t time_wall(void);
 long long int time_msec(void);
@@ -72,6 +78,10 @@ int time_poll(struct pollfd *, int n_pollfds, long long int timeout_when,
 long long int timespec_to_msec(const struct timespec *);
 long long int timeval_to_msec(const struct timeval *);
 
+struct tm_msec *localtime_msec(long long int now, struct tm_msec *result);
+struct tm_msec *gmtime_msec(long long int now, struct tm_msec *result);
+size_t strftime_msec(char *s, size_t max, const char *format,
+                     const struct tm_msec *);
 void xgettimeofday(struct timeval *);
 void xclock_gettime(clock_t, struct timespec *);
 
