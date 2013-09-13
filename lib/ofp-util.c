@@ -4011,6 +4011,19 @@ ofputil_put_ofp11_table_stats(const struct ofp12_table_stats *in,
 }
 
 static void
+ofputil_put_ofp12_table_stats(const struct ofp12_table_stats *in,
+                              struct ofpbuf *buf)
+{
+    struct ofp12_table_stats *out = ofpbuf_put(buf, in, sizeof *in);
+
+    /* Trim off OF1.3-only capabilities. */
+    out->match &= htonll(OFPXMT12_MASK);
+    out->wildcards &= htonll(OFPXMT12_MASK);
+    out->write_setfields &= htonll(OFPXMT12_MASK);
+    out->apply_setfields &= htonll(OFPXMT12_MASK);
+}
+
+static void
 ofputil_put_ofp13_table_stats(const struct ofp12_table_stats *in,
                               struct ofpbuf *buf)
 {
@@ -4035,31 +4048,27 @@ ofputil_encode_table_stats_reply(const struct ofp12_table_stats stats[], int n,
 
     reply = ofpraw_alloc_stats_reply(request, n * sizeof *stats);
 
-    switch ((enum ofp_version) request->version) {
-    case OFP10_VERSION:
-        for (i = 0; i < n; i++) {
+    for (i = 0; i < n; i++) {
+        switch ((enum ofp_version) request->version) {
+        case OFP10_VERSION:
             ofputil_put_ofp10_table_stats(&stats[i], reply);
-        }
-        break;
+            break;
 
-    case OFP11_VERSION:
-        for (i = 0; i < n; i++) {
+        case OFP11_VERSION:
             ofputil_put_ofp11_table_stats(&stats[i], reply);
-        }
-        break;
+            break;
 
-    case OFP12_VERSION:
-        ofpbuf_put(reply, stats, n * sizeof *stats);
-        break;
+        case OFP12_VERSION:
+            ofputil_put_ofp12_table_stats(&stats[i], reply);
+            break;
 
-    case OFP13_VERSION:
-        for (i = 0; i < n; i++) {
+        case OFP13_VERSION:
             ofputil_put_ofp13_table_stats(&stats[i], reply);
-        }
-        break;
+            break;
 
-    default:
-        NOT_REACHED();
+        default:
+            NOT_REACHED();
+        }
     }
 
     return reply;

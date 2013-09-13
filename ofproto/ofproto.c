@@ -2917,12 +2917,12 @@ handle_table_stats_request(struct ofconn *ofconn,
     for (i = 0; i < p->n_tables; i++) {
         ots[i].table_id = i;
         sprintf(ots[i].name, "table%zu", i);
-        ots[i].match = htonll(OFPXMT12_MASK);
-        ots[i].wildcards = htonll(OFPXMT12_MASK);
+        ots[i].match = htonll(OFPXMT13_MASK);
+        ots[i].wildcards = htonll(OFPXMT13_MASK);
         ots[i].write_actions = htonl(OFPAT11_OUTPUT);
         ots[i].apply_actions = htonl(OFPAT11_OUTPUT);
-        ots[i].write_setfields = htonll(OFPXMT12_MASK);
-        ots[i].apply_setfields = htonll(OFPXMT12_MASK);
+        ots[i].write_setfields = htonll(OFPXMT13_MASK);
+        ots[i].apply_setfields = htonll(OFPXMT13_MASK);
         ots[i].metadata_match = htonll(UINT64_MAX);
         ots[i].metadata_write = htonll(UINT64_MAX);
         ots[i].instructions = htonl(OFPIT11_ALL);

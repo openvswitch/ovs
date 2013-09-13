@@ -732,13 +732,13 @@ AT_CLEANUP
 AT_SETUP([ofproto - flow table configuration (OpenFlow 1.2)])
 OVS_VSWITCHD_START
 # Check the default configuration.
-(mid="wild=0xffffffffff, max=1000000,"
+(mid="wild=0xfffffffff, max=1000000,"
  tail="
                lookup=0, matched=0
-               match=0xffffffffff, instructions=0x00000007, config=0x00000003
+               match=0xfffffffff, instructions=0x00000007, config=0x00000003
                write_actions=0x00000000, apply_actions=0x00000000
-               write_setfields=0x000000ffffffffff
-               apply_setfields=0x000000ffffffffff
+               write_setfields=0x0000000fffffffff
+               apply_setfields=0x0000000fffffffff
                metadata_match=0xffffffffffffffff
                metadata_write=0xffffffffffffffff"
  echo "OFPST_TABLE reply (OF1.2) (xid=0x2): 254 tables
@@ -763,9 +763,9 @@ AT_CHECK(
 # Check that the configuration was updated.
 mv expout orig-expout
 (echo "OFPST_TABLE reply (OF1.2) (xid=0x2): 254 tables
-  0: main    : wild=0xffffffffff, max=1000000, active=0"
+  0: main    : wild=0xfffffffff, max=1000000, active=0"
  tail -n +3 orig-expout | head -7
- echo "  1: table1  : wild=0xffffffffff, max=  1024, active=0"
+ echo "  1: table1  : wild=0xfffffffff, max=  1024, active=0"
  tail -n +11 orig-expout) > expout
 AT_CHECK([ovs-ofctl -O OpenFlow12 dump-tables br0], [0], [expout])
 OVS_VSWITCHD_STOP

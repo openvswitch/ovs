@@ -109,17 +109,15 @@ enum oxm12_ofb_match_fields {
     OFPXMT12_OFB_IPV6_ND_TLL,    /* Target link-layer for ND. */
     OFPXMT12_OFB_MPLS_LABEL,     /* MPLS label. */
     OFPXMT12_OFB_MPLS_TC,        /* MPLS TC. */
+#define OFPXMT12_MASK ((1ULL << (OFPXMT12_OFB_MPLS_TC + 1)) - 1)
+
     /* Following added in OpenFlow 1.3 */
-    OFPXMT12_OFB_MPLS_BOS,       /* MPLS BoS bit. */
-    OFPXMT12_OFB_PBB_ISID,       /* PBB I-SID. */
-    OFPXMT12_OFB_TUNNEL_ID,      /* Logical Port Metadata */
-    OFPXMT12_OFB_IPV6_EXTHDR,    /* IPv6 Extension Header pseudo-field */
-
-    /* End Marker */
-    OFPXMT12_OFB_MAX,
+    OFPXMT13_OFB_MPLS_BOS,       /* MPLS BoS bit. */
+    OFPXMT13_OFB_PBB_ISID,       /* PBB I-SID. */
+    OFPXMT13_OFB_TUNNEL_ID,      /* Logical Port Metadata */
+    OFPXMT13_OFB_IPV6_EXTHDR,    /* IPv6 Extension Header pseudo-field */
+#define OFPXMT13_MASK ((1ULL << (OFPXMT13_OFB_IPV6_EXTHDR + 1)) - 1)
 };
-
-#define OFPXMT12_MASK ((1ULL << OFPXMT12_OFB_MAX) - 1)
 
 /* OXM implementation makes use of NXM as they are the same format
  * with different field definitions
@@ -180,13 +178,13 @@ enum oxm12_ofb_match_fields {
 #define OXM_OF_IPV6_ND_TLL    OXM_HEADER   (OFPXMT12_OFB_IPV6_ND_TLL, 6)
 #define OXM_OF_MPLS_LABEL     OXM_HEADER   (OFPXMT12_OFB_MPLS_LABEL, 4)
 #define OXM_OF_MPLS_TC        OXM_HEADER   (OFPXMT12_OFB_MPLS_TC, 1)
-#define OXM_OF_MPLS_BOS       OXM_HEADER   (OFPXMT12_OFB_MPLS_BOS, 1)
+#define OXM_OF_MPLS_BOS       OXM_HEADER   (OFPXMT13_OFB_MPLS_BOS, 1)
 #define OXM_OF_PBB_ISID       OXM_HEADER   (OFPXMT12_OFB_PBB_ISID, 4)
 #define OXM_OF_PBB_ISID_W     OXM_HEADER_W (OFPXMT12_OFB_PBB_ISID, 4)
-#define OXM_OF_TUNNEL_ID      OXM_HEADER   (OFPXMT12_OFB_TUNNEL_ID, 8)
-#define OXM_OF_TUNNEL_ID_W    OXM_HEADER_W (OFPXMT12_OFB_TUNNEL_ID, 8)
-#define OXM_OF_IPV6_EXTHDR    OXM_HEADER   (OFPXMT12_OFB_IPV6_EXTHDR, 2)
-#define OXM_OF_IPV6_EXTHDR_W  OXM_HEADER_W (OFPXMT12_OFB_IPV6_EXTHDR, 2)
+#define OXM_OF_TUNNEL_ID      OXM_HEADER   (OFPXMT13_OFB_TUNNEL_ID, 8)
+#define OXM_OF_TUNNEL_ID_W    OXM_HEADER_W (OFPXMT13_OFB_TUNNEL_ID, 8)
+#define OXM_OF_IPV6_EXTHDR    OXM_HEADER   (OFPXMT13_OFB_IPV6_EXTHDR, 2)
+#define OXM_OF_IPV6_EXTHDR_W  OXM_HEADER_W (OFPXMT13_OFB_IPV6_EXTHDR, 2)
 
 /* The VLAN id is 12-bits, so we can use the entire 16 bits to indicate
  * special conditions.
