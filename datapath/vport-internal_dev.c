@@ -34,10 +34,6 @@
 #include "vport-internal_dev.h"
 #include "vport-netdev.h"
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,1,0)
-#define HAVE_NET_DEVICE_OPS
-#endif
-
 struct internal_dev {
 	struct vport *vport;
 };
@@ -133,7 +129,6 @@ static void internal_dev_destructor(struct net_device *dev)
 	free_netdev(dev);
 }
 
-#ifdef HAVE_NET_DEVICE_OPS
 static const struct net_device_ops internal_dev_netdev_ops = {
 	.ndo_open = internal_dev_open,
 	.ndo_stop = internal_dev_stop,
@@ -146,22 +141,12 @@ static const struct net_device_ops internal_dev_netdev_ops = {
 	.ndo_get_stats = internal_dev_sys_stats,
 #endif
 };
-#endif
 
 static void do_setup(struct net_device *netdev)
 {
 	ether_setup(netdev);
 
-#ifdef HAVE_NET_DEVICE_OPS
 	netdev->netdev_ops = &internal_dev_netdev_ops;
-#else
-	netdev->get_stats = internal_dev_sys_stats;
-	netdev->hard_start_xmit = internal_dev_xmit;
-	netdev->open = internal_dev_open;
-	netdev->stop = internal_dev_stop;
-	netdev->set_mac_address = eth_mac_addr;
-	netdev->change_mtu = internal_dev_change_mtu;
-#endif
 
 	netdev->priv_flags &= ~IFF_TX_SKB_SHARING;
 	netdev->priv_flags |= IFF_LIVE_ADDR_CHANGE;
@@ -293,11 +278,7 @@ const struct vport_ops ovs_internal_vport_ops = {
 
 int ovs_is_internal_dev(const struct net_device *netdev)
 {
-#ifdef HAVE_NET_DEVICE_OPS
 	return netdev->netdev_ops == &internal_dev_netdev_ops;
-#else
-	return netdev->open == internal_dev_open;
-#endif
 }
 
 struct vport *ovs_internal_dev_get_vport(struct net_device *netdev)
