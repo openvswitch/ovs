@@ -4920,7 +4920,7 @@ handle_add_meter(struct ofproto *ofproto, struct ofputil_meter_mod *mm)
         ovs_assert(provider_meter_id.uint32 != UINT32_MAX);
         *meterp = meter_create(&mm->meter, provider_meter_id);
     }
-    return 0;
+    return error;
 }
 
 static enum ofperr
