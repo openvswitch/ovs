@@ -42,8 +42,8 @@ VLOG_DEFINE_THIS_MODULE(timeval);
 struct clock {
     clockid_t id;               /* CLOCK_MONOTONIC or CLOCK_REALTIME. */
 
-    /* Features for use by unit tests.  Protected by 'rwlock'. */
-    struct ovs_rwlock rwlock;
+    /* Features for use by unit tests.  Protected by 'mutex'. */
+    struct ovs_mutex mutex;
     atomic_bool slow_path;             /* True if warped or stopped. */
     struct timespec warp OVS_GUARDED;  /* Offset added for unit tests. */
     bool stopped OVS_GUARDED;          /* Disable real-time updates if true. */
@@ -76,7 +76,7 @@ init_clock(struct clock *c, clockid_t id)
 {
     memset(c, 0, sizeof *c);
     c->id = id;
-    ovs_rwlock_init(&c->rwlock);
+    ovs_mutex_init(&c->mutex);
     atomic_init(&c->slow_path, false);
     xclock_gettime(c->id, &c->cache);
 }
@@ -118,11 +118,11 @@ time_timespec__(struct clock *c, struct timespec *ts)
         struct timespec cache;
         bool stopped;
 
-        ovs_rwlock_rdlock(&c->rwlock);
+        ovs_mutex_lock(&c->mutex);
         stopped = c->stopped;
         warp = c->warp;
         cache = c->cache;
-        ovs_rwlock_unlock(&c->rwlock);
+        ovs_mutex_unlock(&c->mutex);
 
         if (!stopped) {
             xclock_gettime(c->id, &cache);
@@ -340,9 +340,9 @@ is_warped(const struct clock *c)
 {
     bool warped;
 
-    ovs_rwlock_rdlock(&c->rwlock);
+    ovs_mutex_lock(&c->mutex);
     warped = monotonic_clock.warp.tv_sec || monotonic_clock.warp.tv_nsec;
-    ovs_rwlock_unlock(&c->rwlock);
+    ovs_mutex_unlock(&c->mutex);
 
     return warped;
 }
@@ -476,11 +476,11 @@ timeval_stop_cb(struct unixctl_conn *conn,
                  int argc OVS_UNUSED, const char *argv[] OVS_UNUSED,
                  void *aux OVS_UNUSED)
 {
-    ovs_rwlock_wrlock(&monotonic_clock.rwlock);
+    ovs_mutex_lock(&monotonic_clock.mutex);
     atomic_store(&monotonic_clock.slow_path, true);
     monotonic_clock.stopped = true;
     xclock_gettime(monotonic_clock.id, &monotonic_clock.cache);
-    ovs_rwlock_unlock(&monotonic_clock.rwlock);
+    ovs_mutex_unlock(&monotonic_clock.mutex);
 
     unixctl_command_reply(conn, NULL);
 }
@@ -506,10 +506,10 @@ timeval_warp_cb(struct unixctl_conn *conn,
     ts.tv_sec = msecs / 1000;
     ts.tv_nsec = (msecs % 1000) * 1000 * 1000;
 
-    ovs_rwlock_wrlock(&monotonic_clock.rwlock);
+    ovs_mutex_lock(&monotonic_clock.mutex);
     atomic_store(&monotonic_clock.slow_path, true);
     timespec_add(&monotonic_clock.warp, &monotonic_clock.warp, &ts);
-    ovs_rwlock_unlock(&monotonic_clock.rwlock);
+    ovs_mutex_unlock(&monotonic_clock.mutex);
 
     unixctl_command_reply(conn, "warped");
 }
