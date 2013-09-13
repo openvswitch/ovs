@@ -1721,6 +1721,32 @@ ofproto_port_del(struct ofproto *ofproto, ofp_port_t ofp_port)
     return error;
 }
 
+static int
+simple_flow_mod(struct ofproto *ofproto,
+                const struct match *match, unsigned int priority,
+                const struct ofpact *ofpacts, size_t ofpacts_len,
+                enum ofp_flow_mod_command command)
+{
+    struct ofputil_flow_mod fm;
+
+    memset(&fm, 0, sizeof fm);
+    fm.match = *match;
+    fm.priority = priority;
+    fm.cookie = 0;
+    fm.new_cookie = 0;
+    fm.modify_cookie = false;
+    fm.table_id = 0;
+    fm.command = command;
+    fm.idle_timeout = 0;
+    fm.hard_timeout = 0;
+    fm.buffer_id = UINT32_MAX;
+    fm.out_port = OFPP_ANY;
+    fm.flags = 0;
+    fm.ofpacts = CONST_CAST(struct ofpact *, ofpacts);
+    fm.ofpacts_len = ofpacts_len;
+    return handle_flow_mod__(ofproto, NULL, &fm, NULL);
+}
+
 /* Adds a flow to OpenFlow flow table 0 in 'p' that matches 'cls_rule' and
  * performs the 'n_actions' actions in 'actions'.  The new flow will not
  * timeout.
@@ -1739,21 +1765,21 @@ ofproto_add_flow(struct ofproto *ofproto, const struct match *match,
 {
     const struct rule *rule;
 
+    /* First do a cheap check whether the rule we're looking for already exists
+     * with the actions that we want.  If it does, then we're done. */
     ovs_rwlock_rdlock(&ofproto->tables[0].cls.rwlock);
     rule = rule_from_cls_rule(classifier_find_match_exactly(
                                   &ofproto->tables[0].cls, match, priority));
     ovs_rwlock_unlock(&ofproto->tables[0].cls.rwlock);
+
+    /* If there's no such rule or the rule doesn't have the actions we want,
+     * fall back to a executing a full flow mod.  We can't optimize this at
+     * all because we didn't take enough locks above to ensure that the flow
+     * table didn't already change beneath us.  */
     if (!rule || !ofpacts_equal(rule->ofpacts, rule->ofpacts_len,
                                 ofpacts, ofpacts_len)) {
-        struct ofputil_flow_mod fm;
-
-        memset(&fm, 0, sizeof fm);
-        fm.match = *match;
-        fm.priority = priority;
-        fm.buffer_id = UINT32_MAX;
-        fm.ofpacts = CONST_CAST(struct ofpact *, ofpacts);
-        fm.ofpacts_len = ofpacts_len;
-        add_flow(ofproto, NULL, &fm, NULL);
+        simple_flow_mod(ofproto, match, priority, ofpacts, ofpacts_len,
+                        OFPFC_MODIFY_STRICT);
     }
 }
 
@@ -1779,26 +1805,21 @@ ofproto_delete_flow(struct ofproto *ofproto,
     struct classifier *cls = &ofproto->tables[0].cls;
     struct rule *rule;
 
+    /* First do a cheap check whether the rule we're looking for has already
+     * been deleted.  If so, then we're done. */
     ovs_rwlock_rdlock(&cls->rwlock);
     rule = rule_from_cls_rule(classifier_find_match_exactly(cls, target,
                                                             priority));
     ovs_rwlock_unlock(&cls->rwlock);
     if (!rule) {
-        /* No such rule -> success. */
-        return true;
-    } else if (rule->pending) {
-        /* An operation on the rule is already pending -> failure.
-         * Caller must retry later if it's important. */
-        return false;
-    } else {
-        /* Initiate deletion -> success. */
-        ovs_rwlock_wrlock(&cls->rwlock);
-        ofproto_rule_delete(ofproto, cls, rule);
-        ovs_rwlock_unlock(&cls->rwlock);
-
         return true;
     }
 
+    /* Fall back to a executing a full flow mod.  We can't optimize this at all
+     * because we didn't take enough locks above to ensure that the flow table
+     * didn't already change beneath us.  */
+    return simple_flow_mod(ofproto, target, priority, NULL, 0,
+                           OFPFC_DELETE_STRICT) != OFPROTO_POSTPONE;
 }
 
 /* Starts the process of deleting all of the flows from all of ofproto's flow
