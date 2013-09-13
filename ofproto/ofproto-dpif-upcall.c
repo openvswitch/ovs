@@ -23,6 +23,7 @@
 #include "dynamic-string.h"
 #include "dpif.h"
 #include "fail-open.h"
+#include "guarded-list.h"
 #include "latch.h"
 #include "seq.h"
 #include "list.h"
@@ -41,6 +42,7 @@ COVERAGE_DEFINE(upcall_queue_overflow);
 COVERAGE_DEFINE(drop_queue_overflow);
 COVERAGE_DEFINE(miss_queue_overflow);
 COVERAGE_DEFINE(fmb_queue_overflow);
+COVERAGE_DEFINE(fmb_queue_revalidated);
 
 /* A thread that processes each upcall handed to it by the dispatcher thread,
  * forwards the upcall's packet, and then queues it to the main ofproto_dpif
@@ -79,26 +81,15 @@ struct udpif {
     struct handler *handlers;          /* Miss handlers. */
     size_t n_handlers;
 
-    /* Atomic queue of unprocessed drop keys. */
-    struct ovs_mutex drop_key_mutex;
-    struct list drop_keys OVS_GUARDED;
-    size_t n_drop_keys OVS_GUARDED;
-
-    /* Atomic queue of special upcalls for ofproto-dpif to process. */
-    struct ovs_mutex upcall_mutex;
-    struct list upcalls OVS_GUARDED;
-    size_t n_upcalls OVS_GUARDED;
-
-    /* Atomic queue of flow_miss_batches. */
-    struct ovs_mutex fmb_mutex;
-    struct list fmbs OVS_GUARDED;
-    size_t n_fmbs OVS_GUARDED;
+    /* Queues to pass up to ofproto-dpif. */
+    struct guarded_list drop_keys; /* "struct drop key"s. */
+    struct guarded_list upcalls;   /* "struct upcall"s. */
+    struct guarded_list fmbs;      /* "struct flow_miss_batch"es. */
 
     /* Number of times udpif_revalidate() has been called. */
     atomic_uint reval_seq;
 
     struct seq *wait_seq;
-    uint64_t last_seq;
 
     struct latch exit_latch; /* Tells child threads to exit. */
 };
@@ -121,13 +112,10 @@ udpif_create(struct dpif_backer *backer, struct dpif *dpif)
     udpif->secret = random_uint32();
     udpif->wait_seq = seq_create();
     latch_init(&udpif->exit_latch);
-    list_init(&udpif->drop_keys);
-    list_init(&udpif->upcalls);
-    list_init(&udpif->fmbs);
+    guarded_list_init(&udpif->drop_keys);
+    guarded_list_init(&udpif->upcalls);
+    guarded_list_init(&udpif->fmbs);
     atomic_init(&udpif->reval_seq, 0);
-    ovs_mutex_init(&udpif->drop_key_mutex);
-    ovs_mutex_init(&udpif->upcall_mutex);
-    ovs_mutex_init(&udpif->fmb_mutex);
 
     return udpif;
 }
@@ -153,9 +141,9 @@ udpif_destroy(struct udpif *udpif)
         flow_miss_batch_destroy(fmb);
     }
 
-    ovs_mutex_destroy(&udpif->drop_key_mutex);
-    ovs_mutex_destroy(&udpif->upcall_mutex);
-    ovs_mutex_destroy(&udpif->fmb_mutex);
+    guarded_list_destroy(&udpif->drop_keys);
+    guarded_list_destroy(&udpif->upcalls);
+    guarded_list_destroy(&udpif->fmbs);
     latch_destroy(&udpif->exit_latch);
     seq_destroy(udpif->wait_seq);
     free(udpif);
@@ -229,33 +217,16 @@ udpif_recv_set(struct udpif *udpif, size_t n_handlers, bool enable)
 }
 
 void
-udpif_run(struct udpif *udpif)
-{
-    udpif->last_seq = seq_read(udpif->wait_seq);
-}
-
-void
 udpif_wait(struct udpif *udpif)
 {
-    ovs_mutex_lock(&udpif->drop_key_mutex);
-    if (udpif->n_drop_keys) {
+    uint64_t seq = seq_read(udpif->wait_seq);
+    if (!guarded_list_is_empty(&udpif->drop_keys) ||
+        !guarded_list_is_empty(&udpif->upcalls) ||
+        !guarded_list_is_empty(&udpif->fmbs)) {
         poll_immediate_wake();
+    } else {
+        seq_wait(udpif->wait_seq, seq);
     }
-    ovs_mutex_unlock(&udpif->drop_key_mutex);
-
-    ovs_mutex_lock(&udpif->upcall_mutex);
-    if (udpif->n_upcalls) {
-        poll_immediate_wake();
-    }
-    ovs_mutex_unlock(&udpif->upcall_mutex);
-
-    ovs_mutex_lock(&udpif->fmb_mutex);
-    if (udpif->n_fmbs) {
-        poll_immediate_wake();
-    }
-    ovs_mutex_unlock(&udpif->fmb_mutex);
-
-    seq_wait(udpif->wait_seq, udpif->last_seq);
 }
 
 /* Notifies 'udpif' that something changed which may render previous
@@ -265,20 +236,21 @@ udpif_revalidate(struct udpif *udpif)
 {
     struct flow_miss_batch *fmb, *next_fmb;
     unsigned int junk;
+    struct list fmbs;
 
     /* Since we remove each miss on revalidation, their statistics won't be
      * accounted to the appropriate 'facet's in the upper layer.  In most
      * cases, this is alright because we've already pushed the stats to the
      * relevant rules.  However, NetFlow requires absolute packet counts on
      * 'facet's which could now be incorrect. */
-    ovs_mutex_lock(&udpif->fmb_mutex);
     atomic_add(&udpif->reval_seq, 1, &junk);
-    LIST_FOR_EACH_SAFE (fmb, next_fmb, list_node, &udpif->fmbs) {
+
+    guarded_list_pop_all(&udpif->fmbs, &fmbs);
+    LIST_FOR_EACH_SAFE (fmb, next_fmb, list_node, &fmbs) {
         list_remove(&fmb->list_node);
         flow_miss_batch_destroy(fmb);
-        udpif->n_fmbs--;
     }
-    ovs_mutex_unlock(&udpif->fmb_mutex);
+
     udpif_drop_key_clear(udpif);
 }
 
@@ -288,16 +260,8 @@ udpif_revalidate(struct udpif *udpif)
 struct upcall *
 upcall_next(struct udpif *udpif)
 {
-    struct upcall *next = NULL;
-
-    ovs_mutex_lock(&udpif->upcall_mutex);
-    if (udpif->n_upcalls) {
-        udpif->n_upcalls--;
-        next = CONTAINER_OF(list_pop_front(&udpif->upcalls), struct upcall,
-                            list_node);
-    }
-    ovs_mutex_unlock(&udpif->upcall_mutex);
-    return next;
+    struct list *next = guarded_list_pop_front(&udpif->upcalls);
+    return next ? CONTAINER_OF(next, struct upcall, list_node) : NULL;
 }
 
 /* Destroys and deallocates 'upcall'. */
@@ -316,16 +280,28 @@ upcall_destroy(struct upcall *upcall)
 struct flow_miss_batch *
 flow_miss_batch_next(struct udpif *udpif)
 {
-    struct flow_miss_batch *next = NULL;
+    int i;
 
-    ovs_mutex_lock(&udpif->fmb_mutex);
-    if (udpif->n_fmbs) {
-        udpif->n_fmbs--;
-        next = CONTAINER_OF(list_pop_front(&udpif->fmbs),
-                            struct flow_miss_batch, list_node);
+    for (i = 0; i < 50; i++) {
+        struct flow_miss_batch *next;
+        unsigned int reval_seq;
+        struct list *next_node;
+
+        next_node = guarded_list_pop_front(&udpif->fmbs);
+        if (!next_node) {
+            break;
+        }
+
+        next = CONTAINER_OF(next_node, struct flow_miss_batch, list_node);
+        atomic_read(&udpif->reval_seq, &reval_seq);
+        if (next->reval_seq == reval_seq) {
+            return next;
+        }
+
+        flow_miss_batch_destroy(next);
     }
-    ovs_mutex_unlock(&udpif->fmb_mutex);
-    return next;
+
+    return NULL;
 }
 
 /* Destroys and deallocates 'fmb'. */
@@ -347,52 +323,13 @@ flow_miss_batch_destroy(struct flow_miss_batch *fmb)
     free(fmb);
 }
 
-/* Discards any flow miss batches queued up in 'udpif' for 'ofproto' (because
- * 'ofproto' is being destroyed).
- *
- * 'ofproto''s xports must already have been removed, otherwise new flow miss
- * batches could still end up getting queued. */
-void
-flow_miss_batch_ofproto_destroyed(struct udpif *udpif,
-                                  const struct ofproto_dpif *ofproto)
-{
-    struct flow_miss_batch *fmb, *next_fmb;
-
-    ovs_mutex_lock(&udpif->fmb_mutex);
-    LIST_FOR_EACH_SAFE (fmb, next_fmb, list_node, &udpif->fmbs) {
-        struct flow_miss *miss, *next_miss;
-
-        HMAP_FOR_EACH_SAFE (miss, next_miss, hmap_node, &fmb->misses) {
-            if (miss->ofproto == ofproto) {
-                hmap_remove(&fmb->misses, &miss->hmap_node);
-                miss_destroy(miss);
-            }
-        }
-
-        if (hmap_is_empty(&fmb->misses)) {
-            list_remove(&fmb->list_node);
-            flow_miss_batch_destroy(fmb);
-            udpif->n_fmbs--;
-        }
-    }
-    ovs_mutex_unlock(&udpif->fmb_mutex);
-}
-
 /* Retreives the next drop key which ofproto-dpif needs to process.  The caller
  * is responsible for destroying it with drop_key_destroy(). */
 struct drop_key *
 drop_key_next(struct udpif *udpif)
 {
-    struct drop_key *next = NULL;
-
-    ovs_mutex_lock(&udpif->drop_key_mutex);
-    if (udpif->n_drop_keys) {
-        udpif->n_drop_keys--;
-        next = CONTAINER_OF(list_pop_front(&udpif->drop_keys), struct drop_key,
-                            list_node);
-    }
-    ovs_mutex_unlock(&udpif->drop_key_mutex);
-    return next;
+    struct list *next = guarded_list_pop_front(&udpif->drop_keys);
+    return next ? CONTAINER_OF(next, struct drop_key, list_node) : NULL;
 }
 
 /* Destorys and deallocates 'drop_key'. */
@@ -410,14 +347,13 @@ void
 udpif_drop_key_clear(struct udpif *udpif)
 {
     struct drop_key *drop_key, *next;
+    struct list list;
 
-    ovs_mutex_lock(&udpif->drop_key_mutex);
-    LIST_FOR_EACH_SAFE (drop_key, next, list_node, &udpif->drop_keys) {
+    guarded_list_pop_all(&udpif->drop_keys, &list);
+    LIST_FOR_EACH_SAFE (drop_key, next, list_node, &list) {
         list_remove(&drop_key->list_node);
         drop_key_destroy(drop_key);
-        udpif->n_drop_keys--;
     }
-    ovs_mutex_unlock(&udpif->drop_key_mutex);
 }
 
 /* The dispatcher thread is responsible for receving upcalls from the kernel,
@@ -618,17 +554,16 @@ recv_upcalls(struct udpif *udpif)
                 upcall_destroy(upcall);
             }
         } else {
-            ovs_mutex_lock(&udpif->upcall_mutex);
-            if (udpif->n_upcalls < MAX_QUEUE_LENGTH) {
-                n_udpif_new_upcalls = ++udpif->n_upcalls;
-                list_push_back(&udpif->upcalls, &upcall->list_node);
-                ovs_mutex_unlock(&udpif->upcall_mutex);
+            size_t len;
 
+            len = guarded_list_push_back(&udpif->upcalls, &upcall->list_node,
+                                         MAX_QUEUE_LENGTH);
+            if (len > 0) {
+                n_udpif_new_upcalls = len;
                 if (n_udpif_new_upcalls >= FLOW_MISS_MAX_BATCH) {
                     seq_change(udpif->wait_seq);
                 }
             } else {
-                ovs_mutex_unlock(&udpif->upcall_mutex);
                 COVERAGE_INC(upcall_queue_overflow);
                 upcall_destroy(upcall);
             }
@@ -762,13 +697,11 @@ handle_miss_upcalls(struct udpif *udpif, struct list *upcalls)
 {
     struct dpif_op *opsp[FLOW_MISS_MAX_BATCH];
     struct dpif_op ops[FLOW_MISS_MAX_BATCH];
-    unsigned int old_reval_seq, new_reval_seq;
     struct upcall *upcall, *next;
     struct flow_miss_batch *fmb;
     size_t n_upcalls, n_ops, i;
     struct flow_miss *miss;
-
-    atomic_read(&udpif->reval_seq, &old_reval_seq);
+    unsigned int reval_seq;
 
     /* Construct the to-do list.
      *
@@ -776,6 +709,7 @@ handle_miss_upcalls(struct udpif *udpif, struct list *upcalls)
      * the packets that have the same flow in the same "flow_miss" structure so
      * that we can process them together. */
     fmb = xmalloc(sizeof *fmb);
+    atomic_read(&udpif->reval_seq, &fmb->reval_seq);
     hmap_init(&fmb->misses);
     n_upcalls = 0;
     LIST_FOR_EACH_SAFE (upcall, next, list_node, upcalls) {
@@ -808,14 +742,10 @@ handle_miss_upcalls(struct udpif *udpif, struct list *upcalls)
             drop_key->key = xmemdup(dupcall->key, dupcall->key_len);
             drop_key->key_len = dupcall->key_len;
 
-            ovs_mutex_lock(&udpif->drop_key_mutex);
-            if (udpif->n_drop_keys < MAX_QUEUE_LENGTH) {
-                udpif->n_drop_keys++;
-                list_push_back(&udpif->drop_keys, &drop_key->list_node);
-                ovs_mutex_unlock(&udpif->drop_key_mutex);
+            if (guarded_list_push_back(&udpif->drop_keys, &drop_key->list_node,
+                                       MAX_QUEUE_LENGTH)) {
                 seq_change(udpif->wait_seq);
             } else {
-                ovs_mutex_unlock(&udpif->drop_key_mutex);
                 COVERAGE_INC(drop_queue_overflow);
                 drop_key_destroy(drop_key);
             }
@@ -868,21 +798,15 @@ handle_miss_upcalls(struct udpif *udpif, struct list *upcalls)
     }
     dpif_operate(udpif->dpif, opsp, n_ops);
 
-    ovs_mutex_lock(&udpif->fmb_mutex);
-    atomic_read(&udpif->reval_seq, &new_reval_seq);
-    if (old_reval_seq != new_reval_seq) {
-        /* udpif_revalidate() was called as we were calculating the actions.
-         * To be safe, we need to assume all the misses need revalidation. */
-        ovs_mutex_unlock(&udpif->fmb_mutex);
+    atomic_read(&udpif->reval_seq, &reval_seq);
+    if (reval_seq != fmb->reval_seq) {
+        COVERAGE_INC(fmb_queue_revalidated);
         flow_miss_batch_destroy(fmb);
-    } else if (udpif->n_fmbs < MAX_QUEUE_LENGTH) {
-        udpif->n_fmbs++;
-        list_push_back(&udpif->fmbs, &fmb->list_node);
-        ovs_mutex_unlock(&udpif->fmb_mutex);
-        seq_change(udpif->wait_seq);
-    } else {
+    } else if (!guarded_list_push_back(&udpif->fmbs, &fmb->list_node,
+                                       MAX_QUEUE_LENGTH)) {
         COVERAGE_INC(fmb_queue_overflow);
-        ovs_mutex_unlock(&udpif->fmb_mutex);
         flow_miss_batch_destroy(fmb);
+    } else {
+        seq_change(udpif->wait_seq);
     }
 }

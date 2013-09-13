@@ -31,6 +31,7 @@
 #include "dpif.h"
 #include "dynamic-string.h"
 #include "fail-open.h"
+#include "guarded-list.h"
 #include "hmapx.h"
 #include "lacp.h"
 #include "learn.h"
@@ -507,13 +508,8 @@ struct ofproto_dpif {
     uint64_t n_missed;
 
     /* Work queues. */
-    struct ovs_mutex flow_mod_mutex;
-    struct list flow_mods OVS_GUARDED;
-    size_t n_flow_mods OVS_GUARDED;
-
-    struct ovs_mutex pin_mutex;
-    struct list pins OVS_GUARDED;
-    size_t n_pins OVS_GUARDED;
+    struct guarded_list flow_mods; /* Contains "struct flow_mod"s. */
+    struct guarded_list pins;      /* Contains "struct ofputil_packet_in"s. */
 };
 
 /* By default, flows in the datapath are wildcarded (megaflows).  They
@@ -560,18 +556,11 @@ void
 ofproto_dpif_flow_mod(struct ofproto_dpif *ofproto,
                       struct ofputil_flow_mod *fm)
 {
-    ovs_mutex_lock(&ofproto->flow_mod_mutex);
-    if (ofproto->n_flow_mods > 1024) {
-        ovs_mutex_unlock(&ofproto->flow_mod_mutex);
+    if (!guarded_list_push_back(&ofproto->flow_mods, &fm->list_node, 1024)) {
         COVERAGE_INC(flow_mod_overflow);
         free(fm->ofpacts);
         free(fm);
-        return;
     }
-
-    list_push_back(&ofproto->flow_mods, &fm->list_node);
-    ofproto->n_flow_mods++;
-    ovs_mutex_unlock(&ofproto->flow_mod_mutex);
 }
 
 /* Appends 'pin' to the queue of "packet ins" to be sent to the controller.
@@ -580,18 +569,11 @@ void
 ofproto_dpif_send_packet_in(struct ofproto_dpif *ofproto,
                             struct ofputil_packet_in *pin)
 {
-    ovs_mutex_lock(&ofproto->pin_mutex);
-    if (ofproto->n_pins > 1024) {
-        ovs_mutex_unlock(&ofproto->pin_mutex);
+    if (!guarded_list_push_back(&ofproto->pins, &pin->list_node, 1024)) {
         COVERAGE_INC(packet_in_overflow);
         free(CONST_CAST(void *, pin->packet));
         free(pin);
-        return;
     }
-
-    list_push_back(&ofproto->pins, &pin->list_node);
-    ofproto->n_pins++;
-    ovs_mutex_unlock(&ofproto->pin_mutex);
 }
 
 /* Factory functions. */
@@ -1024,7 +1006,6 @@ process_dpif_port_error(struct dpif_backer *backer, int error)
 static int
 dpif_backer_run_fast(struct dpif_backer *backer)
 {
-    udpif_run(backer->udpif);
     handle_upcalls(backer);
 
     return 0;
@@ -1286,17 +1267,8 @@ construct(struct ofproto *ofproto_)
     classifier_init(&ofproto->facets);
     ofproto->consistency_rl = LLONG_MIN;
 
-    ovs_mutex_init(&ofproto->flow_mod_mutex);
-    ovs_mutex_lock(&ofproto->flow_mod_mutex);
-    list_init(&ofproto->flow_mods);
-    ofproto->n_flow_mods = 0;
-    ovs_mutex_unlock(&ofproto->flow_mod_mutex);
-
-    ovs_mutex_init(&ofproto->pin_mutex);
-    ovs_mutex_lock(&ofproto->pin_mutex);
-    list_init(&ofproto->pins);
-    ofproto->n_pins = 0;
-    ovs_mutex_unlock(&ofproto->pin_mutex);
+    guarded_list_init(&ofproto->flow_mods);
+    guarded_list_init(&ofproto->pins);
 
     ofproto_dpif_unixctl_init();
 
@@ -1422,6 +1394,7 @@ destruct(struct ofproto *ofproto_)
     struct ofputil_packet_in *pin, *next_pin;
     struct ofputil_flow_mod *fm, *next_fm;
     struct facet *facet, *next_facet;
+    struct list flow_mods, pins;
     struct cls_cursor cursor;
     struct oftable *table;
 
@@ -1437,7 +1410,9 @@ destruct(struct ofproto *ofproto_)
     xlate_remove_ofproto(ofproto);
     ovs_rwlock_unlock(&xlate_rwlock);
 
-    flow_miss_batch_ofproto_destroyed(ofproto->backer->udpif, ofproto);
+    /* Discard any flow_miss_batches queued up for 'ofproto', avoiding a
+     * use-after-free error. */
+    udpif_revalidate(ofproto->backer->udpif);
 
     hmap_remove(&all_ofproto_dpifs, &ofproto->all_ofproto_dpifs_node);
 
@@ -1452,25 +1427,21 @@ destruct(struct ofproto *ofproto_)
         ovs_rwlock_unlock(&table->cls.rwlock);
     }
 
-    ovs_mutex_lock(&ofproto->flow_mod_mutex);
-    LIST_FOR_EACH_SAFE (fm, next_fm, list_node, &ofproto->flow_mods) {
+    guarded_list_pop_all(&ofproto->flow_mods, &flow_mods);
+    LIST_FOR_EACH_SAFE (fm, next_fm, list_node, &flow_mods) {
         list_remove(&fm->list_node);
-        ofproto->n_flow_mods--;
         free(fm->ofpacts);
         free(fm);
     }
-    ovs_mutex_unlock(&ofproto->flow_mod_mutex);
-    ovs_mutex_destroy(&ofproto->flow_mod_mutex);
+    guarded_list_destroy(&ofproto->flow_mods);
 
-    ovs_mutex_lock(&ofproto->pin_mutex);
-    LIST_FOR_EACH_SAFE (pin, next_pin, list_node, &ofproto->pins) {
+    guarded_list_pop_all(&ofproto->pins, &pins);
+    LIST_FOR_EACH_SAFE (pin, next_pin, list_node, &pins) {
         list_remove(&pin->list_node);
-        ofproto->n_pins--;
         free(CONST_CAST(void *, pin->packet));
         free(pin);
     }
-    ovs_mutex_unlock(&ofproto->pin_mutex);
-    ovs_mutex_destroy(&ofproto->pin_mutex);
+    guarded_list_destroy(&ofproto->pins);
 
     mbridge_unref(ofproto->mbridge);
 
@@ -1508,12 +1479,7 @@ run_fast(struct ofproto *ofproto_)
         return 0;
     }
 
-    ovs_mutex_lock(&ofproto->flow_mod_mutex);
-    list_move(&flow_mods, &ofproto->flow_mods);
-    list_init(&ofproto->flow_mods);
-    ofproto->n_flow_mods = 0;
-    ovs_mutex_unlock(&ofproto->flow_mod_mutex);
-
+    guarded_list_pop_all(&ofproto->flow_mods, &flow_mods);
     LIST_FOR_EACH_SAFE (fm, next_fm, list_node, &flow_mods) {
         int error = ofproto_flow_mod(&ofproto->up, fm);
         if (error && !VLOG_DROP_WARN(&rl)) {
@@ -1526,12 +1492,7 @@ run_fast(struct ofproto *ofproto_)
         free(fm);
     }
 
-    ovs_mutex_lock(&ofproto->pin_mutex);
-    list_move(&pins, &ofproto->pins);
-    list_init(&ofproto->pins);
-    ofproto->n_pins = 0;
-    ovs_mutex_unlock(&ofproto->pin_mutex);
-
+    guarded_list_pop_all(&ofproto->pins, &pins);
     LIST_FOR_EACH_SAFE (pin, next_pin, list_node, &pins) {
         connmgr_send_packet_in(ofproto->up.connmgr, pin);
         list_remove(&pin->list_node);

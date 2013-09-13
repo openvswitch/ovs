@@ -36,7 +36,6 @@ struct udpif *udpif_create(struct dpif_backer *, struct dpif *);
 void udpif_recv_set(struct udpif *, size_t n_workers, bool enable);
 void udpif_destroy(struct udpif *);
 
-void udpif_run(struct udpif *);
 void udpif_wait(struct udpif *);
 
 void udpif_revalidate(struct udpif *);
@@ -105,13 +104,12 @@ struct flow_miss_batch {
 
     struct flow_miss miss_buf[FLOW_MISS_MAX_BATCH];
     struct hmap misses;
+
+    unsigned int reval_seq;
 };
 
 struct flow_miss_batch *flow_miss_batch_next(struct udpif *);
 void flow_miss_batch_destroy(struct flow_miss_batch *);
-
-void flow_miss_batch_ofproto_destroyed(struct udpif *,
-                                       const struct ofproto_dpif *);
 
 /* Drop keys are odp flow keys which have drop flows installed in the kernel.
  * These are datapath flows which have no associated ofproto, if they did we

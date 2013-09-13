@@ -58,6 +58,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/fatal-signal.h \
 	lib/flow.c \
 	lib/flow.h \
+	lib/guarded-list.c \
+	lib/guarded-list.h \
 	lib/hash.c \
 	lib/hash.h \
 	lib/hindex.c \
