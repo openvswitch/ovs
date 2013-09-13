@@ -1230,7 +1230,7 @@ ofconn_reconfigure(struct ofconn *ofconn, const struct ofproto_controller *c)
 static bool
 ofconn_may_recv(const struct ofconn *ofconn)
 {
-    int count = ofconn->reply_counter->n_packets;
+    int count = rconn_packet_counter_n_packets(ofconn->reply_counter);
     return (!ofconn->blocked || ofconn->retry) && count < OFCONN_REPLY_MAX;
 }
 
@@ -1926,10 +1926,12 @@ ofmonitor_flush(struct connmgr *mgr)
         struct ofpbuf *msg, *next;
 
         LIST_FOR_EACH_SAFE (msg, next, list_node, &ofconn->updates) {
+            unsigned int n_bytes;
+
             list_remove(&msg->list_node);
             ofconn_send(ofconn, msg, ofconn->monitor_counter);
-            if (!ofconn->monitor_paused
-                && ofconn->monitor_counter->n_bytes > 128 * 1024) {
+            n_bytes = rconn_packet_counter_n_bytes(ofconn->monitor_counter);
+            if (!ofconn->monitor_paused && n_bytes > 128 * 1024) {
                 struct ofpbuf *pause;
 
                 COVERAGE_INC(ofmonitor_pause);
@@ -1972,7 +1974,8 @@ ofmonitor_run(struct connmgr *mgr)
     struct ofconn *ofconn;
 
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
-        if (ofconn->monitor_paused && !ofconn->monitor_counter->n_packets) {
+        if (ofconn->monitor_paused
+            && !rconn_packet_counter_n_packets(ofconn->monitor_counter)) {
             COVERAGE_INC(ofmonitor_resume);
             ofmonitor_resume(ofconn);
         }
@@ -1985,7 +1988,8 @@ ofmonitor_wait(struct connmgr *mgr)
     struct ofconn *ofconn;
 
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
-        if (ofconn->monitor_paused && !ofconn->monitor_counter->n_packets) {
+        if (ofconn->monitor_paused
+            && !rconn_packet_counter_n_packets(ofconn->monitor_counter)) {
             poll_immediate_wake();
         }
     }

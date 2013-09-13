@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <stdint.h>
 #include <time.h>
 #include "openvswitch/types.h"
+#include "ovs-thread.h"
 
 /* A wrapper around vconn that provides queuing and optionally reliability.
  *
@@ -91,14 +92,19 @@ unsigned int rconn_count_txqlen(const struct rconn *);
 
 /* Counts packets and bytes queued into an rconn by a given source. */
 struct rconn_packet_counter {
-    unsigned int n_packets;     /* Number of packets queued. */
-    unsigned int n_bytes;       /* Number of bytes queued. */
-    int ref_cnt;                /* Number of owners. */
+    struct ovs_mutex mutex;
+    unsigned int n_packets OVS_GUARDED; /* Number of packets queued. */
+    unsigned int n_bytes OVS_GUARDED;   /* Number of bytes queued. */
+    int ref_cnt OVS_GUARDED;            /* Number of owners. */
 };
 
 struct rconn_packet_counter *rconn_packet_counter_create(void);
 void rconn_packet_counter_destroy(struct rconn_packet_counter *);
 void rconn_packet_counter_inc(struct rconn_packet_counter *, unsigned n_bytes);
 void rconn_packet_counter_dec(struct rconn_packet_counter *, unsigned n_bytes);
+
+unsigned int rconn_packet_counter_n_packets(
+    const struct rconn_packet_counter *);
+unsigned int rconn_packet_counter_n_bytes(const struct rconn_packet_counter *);
 
 #endif /* rconn.h */
