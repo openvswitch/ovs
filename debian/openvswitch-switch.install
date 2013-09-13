@@ -1,4 +1,5 @@
 usr/bin/ovs-dpctl
+usr/bin/ovs-dpctl-top
 usr/bin/ovs-pcap
 usr/bin/ovs-tcpundump
 usr/bin/ovs-vlan-test

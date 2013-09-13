@@ -1,5 +1,6 @@
 _debian/ovsdb/ovsdb-server.1
 _debian/utilities/ovs-dpctl.8
+_debian/utilities/ovs-dpctl-top.8
 _debian/utilities/ovs-pcap.1
 _debian/utilities/ovs-tcpundump.1
 _debian/utilities/ovs-vlan-test.8
