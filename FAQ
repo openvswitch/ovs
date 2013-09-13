@@ -148,7 +148,7 @@ A: The following table lists the Linux kernel versions against which the
        1.9.x      2.6.18 to 3.8
        1.10.x     2.6.18 to 3.8
        1.11.x     2.6.18 to 3.8
-       2.x        2.6.32 to 3.10
+       2.0.x      2.6.32 to 3.10
 
    Open vSwitch userspace should also work with the Linux kernel module
    built into Linux 3.3 and later.
