@@ -17,12 +17,27 @@ Before you begin, note the RPM source directory on your version of
 RHEL.  On RHEL 5, the default RPM source directory is
 /usr/src/redhat/SOURCES.  On RHEL 6, it is $HOME/rpmbuild/SOURCES.
 
-1. Install build prerequisites:
+1. If you are building from a distribution tarball, proceed to step 2.
+   Otherwise, if you are building from an Open vSwitch Git tree,
+   determine the version of Autoconf available in the RHEL version you
+   are using.  If it is not at least version 2.64, then you have two
+   choices:
+
+     a. Install Autoconf 2.64 or later, one way or another.
+
+     b. Create a distribution tarball on some other machine, by
+        running "./boot.sh; ./configure; make dist" in the Git tree.
+        You must run this on a machine that has the tools listed in
+        INSTALL as prerequisites for building from a Git tree.
+        Afterward, proceed with the rest of the instructions using the
+        distribution tarball.
+
+2. Install build prerequisites:
 
    yum install gcc make python-devel openssl-devel kernel-devel \
-       kernel-debug-devel
+       kernel-debug-devel autoconf automake rpm-build redhat-rpm-config
 
-2. Some versions of the RHEL 6 kernel-devel package contain a broken
+3. Some versions of the RHEL 6 kernel-devel package contain a broken
    "build" symlink.  If you are using such a version, you must fix
    the problem before continuing.
 
@@ -48,16 +63,16 @@ RHEL.  On RHEL 5, the default RPM source directory is
    contain some extra parts.  Once you have done this, verify the fix with
    the same procedure you used above to check for the problem.
 
-3. If you are building from an Open vSwitch Git tree, then you will
+4. If you are building from an Open vSwitch Git tree, then you will
    need to first create a distribution tarball by running "./boot.sh;
    ./configure; make dist" in the Git tree.
 
-4. Copy the distribution tarball into the RPM source directory.
+5. Copy the distribution tarball into the RPM source directory.
 
-5. Unpack the distribution tarball into a temporary directory and "cd"
+6. Unpack the distribution tarball into a temporary directory and "cd"
    into the root of the distribution tarball.
 
-6. To build Open vSwitch userspace, run:
+7. To build Open vSwitch userspace, run:
 
        rpmbuild -bb rhel/openvswitch.spec
 
@@ -68,7 +83,7 @@ RHEL.  On RHEL 5, the default RPM source directory is
    then the kernel-devel package is missing or buggy.  Go back to step
    1 or 2 and fix the problem.
 
-7. On RHEL 6, to build the Open vSwitch kernel module, copy
+8. On RHEL 6, to build the Open vSwitch kernel module, copy
     rhel/openvswitch-kmod.files into the RPM source directory and run:
 
 	rpmbuild -bb rhel/openvswitch-kmod-rhel6.spec
