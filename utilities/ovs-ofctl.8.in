@@ -190,7 +190,7 @@ statistics are printed for all queues on \fIport\fR; if only
 \fIport\fR is omitted, then statistics are printed for \fIqueue\fR on
 every port where it exists.
 .
-.SS "OpenFlow 1.1+ Switch Management Commands"
+.SS "OpenFlow 1.1+ Group Table Commands"
 .
 The following commands work only with switches that support OpenFlow
 1.1 or later.  Because support for OpenFlow 1.1 and later is still
@@ -237,6 +237,42 @@ tables other than the last one.)
 Send to controller.  (This is how an OpenFlow 1.0 switch always
 handles packets that do not match any flow in the last table.)
 .RE
+.
+.SS "OpenFlow 1.3+ Switch Meter Table Commands"
+.
+These commands manage the meter table in an OpenFlow switch.  In each
+case, \fImeter\fR specifies a meter entry in the format described in
+\fBMeter Syntax\fR, below.
+.
+.PP
+OpenFlow 1.3 introduced support for meters, so these commands only
+work with switches that support OpenFlow 1.3 or later.  The caveats
+described for groups in the previous section also apply to meters.
+.
+.IP "\fBadd\-meter \fIswitch meter\fR"
+Add a meter entry to \fIswitch\fR's tables. The \fImeter\fR syntax is
+described in section \fBMeter Syntax\fR, below.
+.
+.IP "\fBmod\-meter \fIswitch meter\fR"
+Modify an existing meter.
+.
+.IP "\fBdel\-meters \fIswitch\fR"
+.IQ "\fBdel\-meter \fIswitch\fR [\fImeter\fR]"
+Delete entries from \fIswitch\fR's meter table.  \fImeter\fR can specify
+a single meter with syntax \fBmeter=\fIid\fR, or all meters with syntax
+\fBmeter=all\fR.
+.
+.IP "\fBdump\-meters \fIswitch\fR"
+.IQ "\fBdump\-meter \fIswitch\fR [\fImeter\fR]"
+Print meter configuration.  \fImeter\fR can specify a single meter with
+syntax \fBmeter=\fIid\fR, or all meters with syntax \fBmeter=all\fR.
+.
+.IP "\fBmeter\-stats \fIswitch\fR [\fImeter\fR]"
+Print meter statistics.  \fImeter\fR can specify a single meter with
+syntax \fBmeter=\fIid\fR, or all meters with syntax \fBmeter=all\fR.
+.
+.IP "\fBmeter\-features \fIswitch\fR"
+Print meter features.
 .
 .SS "OpenFlow Switch Flow Table Commands"
 .
@@ -1322,6 +1358,12 @@ field will be replaced with the corresponding bit from \fIvalue\fR. Both
 \fIvalue\fR and \fImask\fR are 64-bit values that are decimal by default; use
 a \fB0x\fR prefix to specify them in hexadecimal.
 .
+.IP \fBmeter\fR:\fImeter_id\fR
+Apply the \fImeter_id\fR before any other actions. If a meter band rate is
+exceeded, the packet may be dropped, or modified, depending on the meter
+band type. See the description of the \fBMeter Table Commands\fR, above,
+for more details.
+.
 .IP \fBgoto_table\fR:\fItable\fR
 Indicates the next table in the process pipeline.
 .
@@ -1578,6 +1620,62 @@ for groups whose \fBtype\fR is \fBff\fR or \fBfast_failover\fR.
 Group identifier of group used to determine liveness of group.
 This or the \fBwatch_port\fR field is required
 for groups whose \fBtype\fR is \fBff\fR or \fBfast_failover\fR.
+.RE
+.
+.SS "Meter Syntax"
+.PP
+The meter table commands accept an argument that describes a meter.
+Such meter descriptions comprise a series \fIfield\fB=\fIvalue\fR
+assignments, separated by commas or white space.
+(Embedding spaces into a group description normally requires
+quoting to prevent the shell from breaking the description into
+multiple arguments.). Unless noted otherwise only the last instance
+of each field is honoured.
+.PP
+.IP \fBmeter=\fIid\fR
+The integer meter id of the meter.
+When this field is specified in \fBdel-meter\fR, \fBdump-meter\fR, or
+\fBmeter-stats\fR, the keyword "all" may be used to designate all meters.
+.
+This field is required, exept for \fBmeter-stats\fR, which dumps all stats
+when this field is not specified.
+
+.IP \fBkbps\fR
+.IQ \fBpktps\fR
+The unit for the meter band rate parameters, either kilobits per second, or
+packets per second, respectively.  One of these must be specified.  The burst
+size unit corresponds to the rate unit by dropping the "per second", i.e.,
+burst is in units of kilobits or packets, respectively.
+
+.IP \fBburst\fR
+Specify burst size for all bands, or none of them, if this flag is not given.
+
+.IP \fBstats\fR
+Collect meter and band statistics.
+
+.IP \fBbands\fR=\fIband_parameters\fR
+The \fBadd-meter\fR and \fBmod-meter\fR commands require at least one
+band specification. Bands must appear after all other fields.
+.RS
+.IP \fBtype=\fItype\fR
+The type of the meter band.  This keyword starts a new band specification.
+Each band specifies a rate above which the band is to take some action. The
+action depends on the band type.  If multiple bands' rate is exceeded, then
+the band with the highest rate among the exceeded bands is selected.
+The following keywords designate the allowed
+meter band types:
+.RS
+.IP \fBdrop\fR
+Drop packets exceeding the band's rate limit.
+.RE
+.
+.IP "The other \fIband_parameters\fR are:"
+.IP \fBrate=\fIvalue\fR
+The relative rate limit for this band, in kilobits per second or packets per
+second, depending on the meter flags defined above.
+.IP \fBburst_size=\fIport\fR
+The maximum burst allowed for the band.  If unspecified, the switch is free to
+select some reasonable value depending on it's configuration.
 .RE
 .
 .SH OPTIONS

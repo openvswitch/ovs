@@ -309,6 +309,14 @@ usage(void)
            "  dump-group-features SWITCH  print group features\n"
            "  dump-groups SWITCH          print group description\n"
            "  dump-group-stats SWITCH [GROUP]  print group statistics\n"
+           "  add-meter SWITCH METER      add meter described by METER\n"
+           "  mod-meter SWITCH METER      modify specific METER\n"
+           "  del-meter SWITCH METER      delete METER\n"
+           "  del-meters SWITCH           delete all meters\n"
+           "  dump-meter SWITCH METER     print METER configuration\n"
+           "  dump-meters SWITCH          print all meter configuration\n"
+           "  meter-stats SWITCH [METER]  print meter statistics\n"
+           "  meter-features SWITCH       print meter features\n"
            "\nFor OpenFlow switches and controllers:\n"
            "  probe TARGET                probe whether TARGET is up\n"
            "  ping TARGET [N]             latency of N-byte echos\n"
@@ -1113,13 +1121,12 @@ ofctl_flow_mod_file(int argc OVS_UNUSED, char *argv[], uint16_t command)
 static void
 ofctl_flow_mod(int argc, char *argv[], uint16_t command)
 {
-    enum ofputil_protocol usable_protocols;
-
     if (argc > 2 && !strcmp(argv[2], "-")) {
         ofctl_flow_mod_file(argc, argv, command);
     } else {
         struct ofputil_flow_mod fm;
         char *error;
+        enum ofputil_protocol usable_protocols;
 
         error = parse_ofp_flow_mod_str(&fm, argc > 2 ? argv[2] : "", command,
                                        &usable_protocols);
@@ -2471,6 +2478,102 @@ ofctl_diff_flows(int argc OVS_UNUSED, char *argv[])
         exit(2);
     }
 }
+
+static void
+ofctl_meter_mod__(const char *bridge, const char *str, int command)
+{
+    struct ofputil_meter_mod mm;
+    struct vconn *vconn;
+    enum ofputil_protocol protocol;
+    enum ofputil_protocol usable_protocols;
+    enum ofp_version version;
+
+    if (str) {
+        char *error;
+        error = parse_ofp_meter_mod_str(&mm, str, command, &usable_protocols);
+        if (error) {
+            ovs_fatal(0, "%s", error);
+        }
+    } else {
+        usable_protocols = OFPUTIL_P_OF13_UP;
+        mm.command = command;
+        mm.meter.meter_id = OFPM13_ALL;
+    }
+
+    protocol = open_vconn_for_flow_mod(bridge, &vconn, usable_protocols);
+    version = ofputil_protocol_to_ofp_version(protocol);
+    transact_noreply(vconn, ofputil_encode_meter_mod(version, &mm));
+    vconn_close(vconn);
+}
+
+static void
+ofctl_meter_request__(const char *bridge, const char *str,
+                      enum ofputil_meter_request_type type)
+{
+    struct ofputil_meter_mod mm;
+    struct vconn *vconn;
+    enum ofputil_protocol usable_protocols;
+    enum ofputil_protocol protocol;
+    enum ofp_version version;
+
+    if (str) {
+        char *error;
+        error = parse_ofp_meter_mod_str(&mm, str, -1, &usable_protocols);
+        if (error) {
+            ovs_fatal(0, "%s", error);
+        }
+    } else {
+        usable_protocols = OFPUTIL_P_OF13_UP;
+        mm.meter.meter_id = OFPM13_ALL;
+    }
+
+    protocol = open_vconn_for_flow_mod(bridge, &vconn, usable_protocols);
+    version = ofputil_protocol_to_ofp_version(protocol);
+    transact_noreply(vconn, ofputil_encode_meter_request(version,
+                                                         type,
+                                                         mm.meter.meter_id));
+    vconn_close(vconn);
+}
+
+
+static void
+ofctl_add_meter(int argc OVS_UNUSED, char *argv[])
+{
+    ofctl_meter_mod__(argv[1], argv[2], OFPMC13_ADD);
+}
+
+static void
+ofctl_mod_meter(int argc OVS_UNUSED, char *argv[])
+{
+    ofctl_meter_mod__(argv[1], argv[2], OFPMC13_MODIFY);
+}
+
+static void
+ofctl_del_meters(int argc, char *argv[])
+{
+    ofctl_meter_mod__(argv[1], argc > 2 ? argv[2] : NULL, OFPMC13_DELETE);
+}
+
+static void
+ofctl_dump_meters(int argc, char *argv[])
+{
+    ofctl_meter_request__(argv[1], argc > 2 ? argv[2] : NULL,
+                          OFPUTIL_METER_CONFIG);
+}
+
+static void
+ofctl_meter_stats(int argc, char *argv[])
+{
+    ofctl_meter_request__(argv[1], argc > 2 ? argv[2] : NULL,
+                          OFPUTIL_METER_STATS);
+}
+
+static void
+ofctl_meter_features(int argc OVS_UNUSED, char *argv[])
+{
+    ofctl_meter_request__(argv[1], NULL, OFPUTIL_METER_FEATURES);
+}
+
 
 /* Undocumented commands for unit testing. */
 
@@ -3186,6 +3289,14 @@ static const struct command all_commands[] = {
     { "del-flows", 1, 2, ofctl_del_flows },
     { "replace-flows", 2, 2, ofctl_replace_flows },
     { "diff-flows", 2, 2, ofctl_diff_flows },
+    { "add-meter", 2, 2, ofctl_add_meter },
+    { "mod-meter", 2, 2, ofctl_mod_meter },
+    { "del-meter", 2, 2, ofctl_del_meters },
+    { "del-meters", 1, 1, ofctl_del_meters },
+    { "dump-meter", 2, 2, ofctl_dump_meters },
+    { "dump-meters", 1, 1, ofctl_dump_meters },
+    { "meter-stats", 1, 2, ofctl_meter_stats },
+    { "meter-features", 1, 1, ofctl_meter_features },
     { "packet-out", 4, INT_MAX, ofctl_packet_out },
     { "dump-ports", 1, 2, ofctl_dump_ports },
     { "dump-ports-desc", 1, 1, ofctl_dump_ports_desc },
