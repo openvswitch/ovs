@@ -1648,10 +1648,9 @@ struct ofproto_class {
      * implementation.
      *
      * If '*id' is a value other than UINT32_MAX, modifies the existing meter
-     * with that meter provider ID to have configuration 'config'.  On failure,
-     * the existing meter configuration is left intact.  Regardless of success,
-     * any change to '*id' updates the provider meter id used for this
-     * meter. */
+     * with that meter provider ID to have configuration 'config', while
+     * leaving '*id' unchanged.  On failure, the existing meter configuration
+     * is left intact. */
     enum ofperr (*meter_set)(struct ofproto *ofproto, ofproto_meter_id *id,
                              const struct ofputil_meter_config *config);
 
