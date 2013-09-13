@@ -1,0 +1,140 @@
+.de IQ
+.  br
+.  ns
+.  IP "\\$1"
+..
+.TH ovs\-dpctl\-top "8" "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
+.
+.SH NAME
+\fBovs\-dpctl\-top\fR \- Top like behavior for ovs\-dpctl dump\-flows
+.
+.SH SYNOPSIS
+\fBovs\-dpctl\-top\fR [\-h] [\-v] [\-f FLOWFILES] [\-V] [\-s] [\-\-host HOST]
+[\-a | \-\-accumulate] [\-\-accumulate\-decay ACCUMULATEDECAY] [\-d DELAY]
+.
+.SH DESCRIPTION
+.PP
+This program summarizes \fBovs\-dpctl\fR flow content by aggregating the number
+of packets, total bytes and occurrence of the following fields:
+.IP
+\- Datapath in_port
+.IP
+\- Ethernet type
+.IP
+\- Source and destination MAC addresses
+.IP
+\- IP protocol
+.IP
+\- Source and destination IPv4 addresses
+.IP
+\- Source and destination IPv6 addresses
+.IP
+\- UDP and TCP destination port
+.IP
+\- Tunnel source and destination addresses
+.
+.SS "Output shows four values:"
+.IP
+\- FIELDS: the flow fields for example in_port(1).
+.IP
+\- COUNT: the number of lines in the dump\-flow output contain the flow field.
+.IP
+\- PACKETS: the total number of packets containing the flow field.
+.IP
+\- BYTES: the total number of bytes containing the flow field.  If units are
+not present then values are in bytes.
+.IP
+\- AVERAGE: the average packets size (BYTES/PACKET).
+.PP
+.SS "Top Behavior"
+.PP
+While in top mode, the default behavior, the following single character commands
+are supported:
+.IP
+a \- toggles top in accumulate and live mode.  Accumulate mode is described
+below.
+.IP
+s \- toggles which column is used to sort content in decreasing order.  A
+DESC title is placed over the column.
+.IP
+_ \- a space indicating to collect dump\-flow content again
+.IP
+h \- halt output.  Any character will restart sampling
+.IP
+f \- cycle through flow fields
+.IP
+q \- q for quit.
+.PP
+.SS "Accumulate Mode"
+.PP
+There are two supported modes: live and accumulate.  The default is live.
+The parameter \fB\-\-accumulate\fR  or the 'a' character in top mode enables the
+latter.  In live mode, recent dump\-flow content is presented.
+Where as accumulate mode keeps track of the prior historical
+information until the flow is reset not when the flow is purged.  Reset
+flows are determined when the packet count for a flow has decreased from
+its previous sample.  There is one caveat, eventually the system will
+run out of memory if, after the accumulate\-decay period any flows that
+have not been refreshed are purged.  The goal here is to free memory
+of flows that are not active.  Statistics are not decremented.  Their purpose
+is to reflect the overall history of the flow fields.
+.PP
+.SS "Debugging Errors"
+.PP
+Parsing errors are counted and displayed in the status line at the beginning
+of the output.  Use the \fB\-\-verbose\fR option with \fB\-\-script to see
+what output was not parsed, like this:
+.PP
+$ ovs\-dpctl dump\-flows | ovs\-dpctl\-top \fB\-\-script\fR \fB\-\-verbose\fR
+.PP
+Error messages will identify content that failed to parse.
+.PP
+.SS "Access Remote Hosts"
+.PP
+The \fB\-\-host\fR must follow the format user@hostname.  This script simply
+calls \&'ssh user@Hostname' without checking for login credentials therefore
+public keys should be installed on the system identified by hostname, such as:
+.PP
+$ ssh\-copy\-id user@hostname
+.PP
+Consult ssh\-copy\-id man pages for more details.
+.PP
+.SS "Expected usage"
+.PP
+$ ovs\-dpctl\-top
+.PP
+or to run as a script:
+.PP
+$ ovs\-dpctl dump\-flows > dump\-flows.log
+.PP
+$ ovs\-dpctl\-top \fB\-\-script\fR \fB\-\-flow\-file\fR dump\-flows.log
+.SS "OPTIONS"
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+show this help message and exit.
+.TP
+\fB\-v\fR, \fB\-\-version\fR
+show program's version number and exit.
+.TP
+\fB\-f\fR FLOWFILES, \fB\-\-flow\-file\fR FLOWFILES
+file containing flows from ovs\-dpctl dump\-flow.
+.TP
+\fB\-V\fR, \fB\-\-verbose\fR
+enable debug level verbosity.
+.TP
+\fB\-s\fR, \fB\-\-script\fR
+Run from a script (no user interface).
+.TP
+\fB\-\-host\fR HOST
+Specify a user@host for retrieving flows see Accessing
+Remote Hosts for more information.
+.TP
+\fB\-a\fR, \fB\-\-accumulate\fR
+Accumulate dump\-flow content.
+.TP
+\fB\-\-accumulate\-decay\fR ACCUMULATEDECAY
+Decay old accumulated flows.  The default is 5 minutes. A value of 0 disables
+decay.
+.TP
+\fB\-d\fR DELAY, \fB\-\-delay\fR DELAY
+Delay in milliseconds to collect dump\-flow content (sample rate).

@@ -124,6 +124,10 @@ utilities/ovs-dpctl.8.in:
 lib/common.man:
 lib/vlog.man:
 
+utilities/ovs-dpctl-top.8: \
+	utilities/ovs-dpctl-top.8.in
+utilities/ovs-dpctl-top.8.in:
+
 utilities/ovs-l3ping.8: \
 	utilities/ovs-l3ping.8.in \
 	lib/common-syn.man \
