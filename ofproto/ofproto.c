@@ -1847,7 +1847,8 @@ ofproto_add_flow(struct ofproto *ofproto, const struct match *match,
  * OFPERR_* OpenFlow error code on failure, or OFPROTO_POSTPONE if the
  * operation cannot be initiated now but may be retried later.
  *
- * This is a helper function for in-band control and fail-open. */
+ * This is a helper function for in-band control and fail-open and the "learn"
+ * action. */
 int
 ofproto_flow_mod(struct ofproto *ofproto, struct ofputil_flow_mod *fm)
     OVS_EXCLUDED(ofproto_mutex)

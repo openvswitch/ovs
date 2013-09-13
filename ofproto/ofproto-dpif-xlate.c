@@ -2096,7 +2096,8 @@ static void
 xlate_learn_action(struct xlate_ctx *ctx,
                    const struct ofpact_learn *learn)
 {
-    struct ofputil_flow_mod *fm;
+    uint64_t ofpacts_stub[1024 / 8];
+    struct ofputil_flow_mod fm;
     struct ofpbuf ofpacts;
 
     ctx->xout->has_learn = true;
@@ -2107,11 +2108,10 @@ xlate_learn_action(struct xlate_ctx *ctx,
         return;
     }
 
-    fm = xmalloc(sizeof *fm);
-    ofpbuf_init(&ofpacts, 0);
-    learn_execute(learn, &ctx->xin->flow, fm, &ofpacts);
-
-    ofproto_dpif_flow_mod(ctx->xbridge->ofproto, fm);
+    ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
+    learn_execute(learn, &ctx->xin->flow, &fm, &ofpacts);
+    ofproto_dpif_flow_mod(ctx->xbridge->ofproto, &fm);
+    ofpbuf_uninit(&ofpacts);
 }
 
 static void
