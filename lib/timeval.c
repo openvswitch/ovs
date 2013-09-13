@@ -44,6 +44,7 @@ struct clock {
 
     /* Features for use by unit tests.  Protected by 'rwlock'. */
     struct ovs_rwlock rwlock;
+    atomic_bool slow_path;             /* True if warped or stopped. */
     struct timespec warp OVS_GUARDED;  /* Offset added for unit tests. */
     bool stopped OVS_GUARDED;          /* Disable real-time updates if true. */
     struct timespec cache OVS_GUARDED; /* Last time read from kernel. */
@@ -76,6 +77,7 @@ init_clock(struct clock *c, clockid_t id)
     memset(c, 0, sizeof *c);
     c->id = id;
     ovs_rwlock_init(&c->rwlock);
+    atomic_init(&c->slow_path, false);
     xclock_gettime(c->id, &c->cache);
 }
 
@@ -104,14 +106,28 @@ time_init(void)
 static void
 time_timespec__(struct clock *c, struct timespec *ts)
 {
+    bool slow_path;
+
     time_init();
 
-    if (!c->stopped) {
+    atomic_read_explicit(&c->slow_path, &slow_path, memory_order_relaxed);
+    if (!slow_path) {
         xclock_gettime(c->id, ts);
     } else {
+        struct timespec warp;
+        struct timespec cache;
+        bool stopped;
+
         ovs_rwlock_rdlock(&c->rwlock);
-        timespec_add(ts, &c->cache, &c->warp);
+        stopped = c->stopped;
+        warp = c->warp;
+        cache = c->cache;
         ovs_rwlock_unlock(&c->rwlock);
+
+        if (!stopped) {
+            xclock_gettime(c->id, &cache);
+        }
+        timespec_add(ts, &cache, &warp);
     }
 }
 
@@ -461,6 +477,7 @@ timeval_stop_cb(struct unixctl_conn *conn,
                  void *aux OVS_UNUSED)
 {
     ovs_rwlock_wrlock(&monotonic_clock.rwlock);
+    atomic_store(&monotonic_clock.slow_path, true);
     monotonic_clock.stopped = true;
     xclock_gettime(monotonic_clock.id, &monotonic_clock.cache);
     ovs_rwlock_unlock(&monotonic_clock.rwlock);
@@ -490,6 +507,7 @@ timeval_warp_cb(struct unixctl_conn *conn,
     ts.tv_nsec = (msecs % 1000) * 1000 * 1000;
 
     ovs_rwlock_wrlock(&monotonic_clock.rwlock);
+    atomic_store(&monotonic_clock.slow_path, true);
     timespec_add(&monotonic_clock.warp, &monotonic_clock.warp, &ts);
     ovs_rwlock_unlock(&monotonic_clock.rwlock);
 
