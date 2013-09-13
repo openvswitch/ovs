@@ -434,9 +434,6 @@ bool ofproto_has_vlan_usage_changed(const struct ofproto *);
 int ofproto_port_set_realdev(struct ofproto *, ofp_port_t vlandev_ofp_port,
                              ofp_port_t realdev_ofp_port, int vid);
 
-uint32_t ofproto_get_provider_meter_id(const struct ofproto *,
-                                       uint32_t of_meter_id);
-
 #ifdef  __cplusplus
 }
 #endif

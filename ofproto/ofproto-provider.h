@@ -415,10 +415,11 @@ struct rule_actions {
      * lifetime.  */
     struct ofpact *ofpacts;     /* Sequence of "struct ofpacts". */
     unsigned int ofpacts_len;   /* Size of 'ofpacts', in bytes. */
-    uint32_t meter_id;          /* Non-zero OF meter_id, or zero. */
+    uint32_t provider_meter_id; /* Datapath meter_id, or UINT32_MAX. */
 };
 
-struct rule_actions *rule_actions_create(const struct ofpact *, size_t);
+struct rule_actions *rule_actions_create(const struct ofproto *,
+                                         const struct ofpact *, size_t);
 void rule_actions_ref(struct rule_actions *);
 void rule_actions_unref(struct rule_actions *);
 

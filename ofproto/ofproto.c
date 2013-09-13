@@ -2443,10 +2443,14 @@ ofproto_rule_destroy__(struct rule *rule)
     rule->ofproto->ofproto_class->rule_dealloc(rule);
 }
 
+static uint32_t get_provider_meter_id(const struct ofproto *,
+                                      uint32_t of_meter_id);
+
 /* Creates and returns a new 'struct rule_actions', with a ref_count of 1,
  * whose actions are a copy of from the 'ofpacts_len' bytes of 'ofpacts'. */
 struct rule_actions *
-rule_actions_create(const struct ofpact *ofpacts, size_t ofpacts_len)
+rule_actions_create(const struct ofproto *ofproto,
+                    const struct ofpact *ofpacts, size_t ofpacts_len)
 {
     struct rule_actions *actions;
 
@@ -2454,7 +2458,10 @@ rule_actions_create(const struct ofpact *ofpacts, size_t ofpacts_len)
     atomic_init(&actions->ref_count, 1);
     actions->ofpacts = xmemdup(ofpacts, ofpacts_len);
     actions->ofpacts_len = ofpacts_len;
-    actions->meter_id = ofpacts_get_meter(ofpacts, ofpacts_len);
+    actions->provider_meter_id
+        = get_provider_meter_id(ofproto,
+                                ofpacts_get_meter(ofpacts, ofpacts_len));
+
     return actions;
 }
 
@@ -2744,7 +2751,7 @@ ofproto_check_ofpacts(struct ofproto *ofproto,
     }
 
     mid = ofpacts_get_meter(ofpacts, ofpacts_len);
-    if (mid && ofproto_get_provider_meter_id(ofproto, mid) == UINT32_MAX) {
+    if (mid && get_provider_meter_id(ofproto, mid) == UINT32_MAX) {
         return OFPERR_OFPMMFC_INVALID_METER;
     }
     return 0;
@@ -3898,7 +3905,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
 
     *CONST_CAST(uint8_t *, &rule->table_id) = table - ofproto->tables;
     rule->flags = fm->flags & OFPUTIL_FF_STATE;
-    rule->actions = rule_actions_create(fm->ofpacts, fm->ofpacts_len);
+    rule->actions = rule_actions_create(ofproto, fm->ofpacts, fm->ofpacts_len);
     list_init(&rule->meter_list_node);
     rule->eviction_group = NULL;
     list_init(&rule->expirable);
@@ -3999,7 +4006,8 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
             struct rule_actions *new_actions;
 
             op->actions = rule->actions;
-            new_actions = rule_actions_create(fm->ofpacts, fm->ofpacts_len);
+            new_actions = rule_actions_create(ofproto,
+                                              fm->ofpacts, fm->ofpacts_len);
 
             ovs_mutex_lock(&rule->mutex);
             rule->actions = new_actions;
@@ -4842,13 +4850,10 @@ struct meter {
 /*
  * This is used in instruction validation at flow set-up time,
  * as flows may not use non-existing meters.
- * This is also used by ofproto-providers to translate OpenFlow meter_ids
- * in METER instructions to the corresponding provider meter IDs.
  * Return value of UINT32_MAX signifies an invalid meter.
  */
-uint32_t
-ofproto_get_provider_meter_id(const struct ofproto * ofproto,
-                              uint32_t of_meter_id)
+static uint32_t
+get_provider_meter_id(const struct ofproto *ofproto, uint32_t of_meter_id)
 {
     if (of_meter_id && of_meter_id <= ofproto->meter_features.max_meters) {
         const struct meter *meter = ofproto->meters[of_meter_id];
@@ -6535,8 +6540,10 @@ oftable_insert_rule(struct rule *rule)
 
     cookies_insert(ofproto, rule);
 
-    if (rule->actions->meter_id) {
-        struct meter *meter = ofproto->meters[rule->actions->meter_id];
+    if (rule->actions->provider_meter_id != UINT32_MAX) {
+        uint32_t meter_id = ofpacts_get_meter(rule->actions->ofpacts,
+                                              rule->actions->ofpacts_len);
+        struct meter *meter = ofproto->meters[meter_id];
         list_insert(&meter->rules, &rule->meter_list_node);
     }
     ovs_rwlock_wrlock(&table->cls.rwlock);
