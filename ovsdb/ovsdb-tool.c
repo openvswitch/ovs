@@ -518,9 +518,15 @@ do_show_log(int argc, char *argv[])
 
             date = shash_find_data(json_object(json), "_date");
             if (date && date->type == JSON_INTEGER) {
-                time_t t = json_integer(date);
-                char *s = xastrftime_msec(" %Y-%m-%d %H:%M:%S",
-                                          t * 1000LL, true);
+                long long int t = json_integer(date);
+                char *s;
+
+                if (t < INT32_MAX) {
+                    /* Older versions of ovsdb wrote timestamps in seconds. */
+                    t *= 1000;
+                }
+
+		s = xastrftime_msec(" %Y-%m-%d %H:%M:%S.###", t, true);
                 fputs(s, stdout);
                 free(s);
             }
