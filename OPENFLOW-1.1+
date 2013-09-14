@@ -243,6 +243,12 @@ OpenFlow 1.4
       [EXT-235]
       [optional for OF1.4+]
 
+General
+-----
+
+    * ovs-ofctl(8) often lists as Nicira extensions features that
+      later OpenFlow versions support in standard ways.
+
 How to contribute
 -----------------
 
