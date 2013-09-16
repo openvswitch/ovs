@@ -306,7 +306,7 @@ struct oftable {
  *
  * 'rule->ref_count' protects 'rule' from being freed.  It doesn't protect the
  * rule from being deleted from 'cls' (that's 'cls->rwlock') and it doesn't
- * protect members of 'rule' from modification (that's 'rule->rwlock').
+ * protect members of 'rule' from modification (that's 'rule->mutex').
  *
  * 'rule->mutex' protects the members of 'rule' from modification.  It doesn't
  * protect the rule from being deleted from 'cls' (that's 'cls->rwlock') and it
