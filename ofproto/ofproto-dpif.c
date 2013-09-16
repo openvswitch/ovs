@@ -1079,8 +1079,6 @@ dealloc(struct ofproto *ofproto_)
 static void
 close_dpif_backer(struct dpif_backer *backer)
 {
-    struct shash_node *node;
-
     ovs_assert(backer->refcount > 0);
 
     if (--backer->refcount) {
@@ -1095,9 +1093,8 @@ close_dpif_backer(struct dpif_backer *backer)
     simap_destroy(&backer->tnl_backers);
     ovs_rwlock_destroy(&backer->odp_to_ofport_lock);
     hmap_destroy(&backer->odp_to_ofport_map);
-    node = shash_find(&all_dpif_backers, backer->type);
+    shash_find_and_delete(&all_dpif_backers, backer->type);
     free(backer->type);
-    shash_delete(&all_dpif_backers, node);
     dpif_close(backer->dpif);
 
     ovs_assert(hmap_is_empty(&backer->subfacets));
