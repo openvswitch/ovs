@@ -1090,13 +1090,14 @@ close_dpif_backer(struct dpif_backer *backer)
     drop_key_clear(backer);
     hmap_destroy(&backer->drop_keys);
 
+    udpif_destroy(backer->udpif);
+
     simap_destroy(&backer->tnl_backers);
     ovs_rwlock_destroy(&backer->odp_to_ofport_lock);
     hmap_destroy(&backer->odp_to_ofport_map);
     node = shash_find(&all_dpif_backers, backer->type);
     free(backer->type);
     shash_delete(&all_dpif_backers, node);
-    udpif_destroy(backer->udpif);
     dpif_close(backer->dpif);
 
     ovs_assert(hmap_is_empty(&backer->subfacets));
