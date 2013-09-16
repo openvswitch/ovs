@@ -243,7 +243,7 @@ AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
 AT_CHECK([ovsdb-client list-tables unix:socket constraints], [0], [ignore], [ignore])
 AT_CLEANUP
 
-AT_SETUP([ovsdb-server/add-db and remove-db with --monitor])
+AT_SETUP([ovsdb-server/add-db with --monitor])
 AT_KEYWORDS([ovsdb server positive])
 # Start ovsdb-server, initially with one db.
 OVS_RUNDIR=`pwd`; export OVS_RUNDIR
@@ -273,8 +273,21 @@ AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
   [0], [constraints
 ordinals
 ])
+AT_CLEANUP
 
-# Remove the recently added database.
+AT_SETUP([ovsdb-server/add-db and remove-db with --monitor])
+AT_KEYWORDS([ovsdb server positive])
+# Start ovsdb-server, initially with one db.
+OVS_RUNDIR=`pwd`; export OVS_RUNDIR
+OVS_LOGDIR=`pwd`; export OVS_LOGDIR
+ordinal_schema > schema
+AT_CHECK([ovsdb-tool create db1 schema], [0], [ignore], [ignore])
+constraint_schema > schema2
+AT_CHECK([ovsdb-tool create db2 schema2], [0], [ignore], [ignore])
+ON_EXIT([kill `cat *.pid`])
+AT_CHECK([ovsdb-server -v -vvlog:off --monitor --detach --no-chdir --pidfile --log-file db1 db2])
+
+# Remove the second database.
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/remove-db constraints])
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
   [0], [ordinals
