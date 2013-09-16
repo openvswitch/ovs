@@ -1,5 +1,5 @@
 
-# Copyright (c) 2011, 2012 Nicira, Inc.
+# Copyright (c) 2011, 2012, 2013 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -61,7 +61,7 @@ class Vlog:
             return
 
         dt = datetime.datetime.utcnow();
-        now = dt.strftime("%Y-%m-%dT%H:%M:%S.%%iZ") % (dt.microsecond/1000)
+        now = dt.strftime("%Y-%m-%dT%H:%M:%S.%%03iZ") % (dt.microsecond/1000)
         syslog_message = ("%s|%s|%s|%s"
                            % (Vlog.__msg_num, self.name, level, message))
 
