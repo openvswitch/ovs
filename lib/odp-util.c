@@ -1407,7 +1407,7 @@ odp_flow_format(const struct nlattr *key, size_t key_len,
 
         if (left) {
             int i;
-            
+
             if (left == key_len) {
                 ds_put_cstr(ds, "<empty>");
             }
