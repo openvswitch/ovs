@@ -86,10 +86,8 @@ struct udpif {
     struct guarded_list drop_keys; /* "struct drop key"s. */
     struct guarded_list fmbs;      /* "struct flow_miss_batch"es. */
 
-    /* Number of times udpif_revalidate() has been called. */
-    atomic_uint reval_seq;
-
     struct seq *wait_seq;
+    struct seq *reval_seq;
 
     struct latch exit_latch; /* Tells child threads to exit. */
 };
@@ -131,10 +129,10 @@ udpif_create(struct dpif_backer *backer, struct dpif *dpif)
     udpif->backer = backer;
     udpif->secret = random_uint32();
     udpif->wait_seq = seq_create();
+    udpif->reval_seq = seq_create();
     latch_init(&udpif->exit_latch);
     guarded_list_init(&udpif->drop_keys);
     guarded_list_init(&udpif->fmbs);
-    atomic_init(&udpif->reval_seq, 0);
 
     return udpif;
 }
@@ -159,6 +157,7 @@ udpif_destroy(struct udpif *udpif)
     guarded_list_destroy(&udpif->fmbs);
     latch_destroy(&udpif->exit_latch);
     seq_destroy(udpif->wait_seq);
+    seq_destroy(udpif->reval_seq);
     free(udpif);
 }
 
@@ -249,14 +248,13 @@ void
 udpif_revalidate(struct udpif *udpif)
 {
     struct flow_miss_batch *fmb, *next_fmb;
-    unsigned int junk;
     struct list fmbs;
 
     /* Since we remove each miss on revalidation, their statistics won't be
      * accounted to the appropriate 'facet's in the upper layer.  In most
      * cases, this is alright because we've already pushed the stats to the
      * relevant rules. */
-    atomic_add(&udpif->reval_seq, 1, &junk);
+    seq_change(udpif->reval_seq);
 
     guarded_list_pop_all(&udpif->fmbs, &fmbs);
     LIST_FOR_EACH_SAFE (fmb, next_fmb, list_node, &fmbs) {
@@ -287,7 +285,6 @@ flow_miss_batch_next(struct udpif *udpif)
 
     for (i = 0; i < 50; i++) {
         struct flow_miss_batch *next;
-        unsigned int reval_seq;
         struct list *next_node;
 
         next_node = guarded_list_pop_front(&udpif->fmbs);
@@ -296,8 +293,7 @@ flow_miss_batch_next(struct udpif *udpif)
         }
 
         next = CONTAINER_OF(next_node, struct flow_miss_batch, list_node);
-        atomic_read(&udpif->reval_seq, &reval_seq);
-        if (next->reval_seq == reval_seq) {
+        if (next->reval_seq == seq_read(udpif->reval_seq)) {
             return next;
         }
 
@@ -592,7 +588,6 @@ handle_upcalls(struct udpif *udpif, struct list *upcalls)
     struct flow_miss_batch *fmb;
     size_t n_misses, n_ops, i;
     struct flow_miss *miss;
-    unsigned int reval_seq;
     enum upcall_type type;
     bool fail_open;
 
@@ -616,7 +611,7 @@ handle_upcalls(struct udpif *udpif, struct list *upcalls)
      *     datapath flow.)
      */
     fmb = xmalloc(sizeof *fmb);
-    atomic_read(&udpif->reval_seq, &fmb->reval_seq);
+    fmb->reval_seq = seq_read(udpif->reval_seq);
     hmap_init(&fmb->misses);
     list_init(&fmb->upcalls);
     n_misses = 0;
@@ -850,8 +845,7 @@ handle_upcalls(struct udpif *udpif, struct list *upcalls)
 
     list_move(&fmb->upcalls, upcalls);
 
-    atomic_read(&udpif->reval_seq, &reval_seq);
-    if (reval_seq != fmb->reval_seq) {
+    if (fmb->reval_seq != seq_read(udpif->reval_seq)) {
         COVERAGE_INC(fmb_queue_revalidated);
         flow_miss_batch_destroy(fmb);
     } else if (!guarded_list_push_back(&udpif->fmbs, &fmb->list_node,
