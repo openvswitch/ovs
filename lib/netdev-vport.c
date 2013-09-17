@@ -603,7 +603,7 @@ netdev_vport_patch_peer(const struct netdev *netdev_)
 
 void
 netdev_vport_inc_rx(const struct netdev *netdev,
-                          const struct dpif_flow_stats *stats)
+                    const struct dpif_flow_stats *stats)
 {
     if (is_vport_class(netdev_get_class(netdev))) {
         struct netdev_vport *dev = netdev_vport_cast(netdev);
