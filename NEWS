@@ -1,3 +1,7 @@
+v1.11.1 - 18 Sep 2013
+---------------------
+    - Bug fixes
+
 v1.11.0 - 28 Aug 2013
 ---------------------
     - Support for megaflows, which allows wildcarding in the kernel (and
