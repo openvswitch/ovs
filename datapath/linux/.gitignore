@@ -34,6 +34,7 @@
 /time.c
 /tmp
 /tunnel.c
+/utils.c
 /vlan.c
 /vport-generic.c
 /vport-gre.c
