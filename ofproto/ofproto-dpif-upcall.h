@@ -59,6 +59,7 @@ enum upcall_type {
 /* An upcall. */
 struct upcall {
     struct list list_node;          /* For queuing upcalls. */
+    struct flow_miss *flow_miss;    /* This upcall's flow_miss. */
 
     enum upcall_type type;          /* Classification. */
 
@@ -94,8 +95,6 @@ struct flow_miss {
     struct dpif_flow_stats stats;
 
     struct xlate_out xout;
-
-    struct list upcalls;        /* Contains "struct upcall"s. */
 };
 
 struct flow_miss_batch {
