@@ -3804,19 +3804,45 @@ facet_free(struct facet *facet)
 /* Executes, within 'ofproto', the 'n_actions' actions in 'actions' on
  * 'packet', which arrived on 'in_port'. */
 static int
-execute_odp_actions(struct ofproto_dpif *ofproto, const struct flow *flow,
-                    const struct nlattr *odp_actions, size_t actions_len,
-                    struct ofpbuf *packet)
+execute_actions(struct ofproto *ofproto_, const struct flow *flow,
+                struct rule_dpif *rule,
+                const struct ofpact *ofpacts, size_t ofpacts_len,
+                struct ofpbuf *packet)
 {
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct odputil_keybuf keybuf;
+    struct dpif_flow_stats stats;
+    struct xlate_out xout;
+    struct xlate_in xin;
+    ofp_port_t in_port;
     struct ofpbuf key;
+    int error;
+
+    ovs_assert((rule != NULL) != (ofpacts != NULL));
+
+    dpif_flow_stats_extract(flow, packet, time_msec(), &stats);
+    if (rule) {
+        rule_dpif_credit_stats(rule, &stats);
+    }
+
+    xlate_in_init(&xin, ofproto, flow, rule, stats.tcp_flags, packet);
+    xin.ofpacts = ofpacts;
+    xin.ofpacts_len = ofpacts_len;
+    xin.resubmit_stats = &stats;
+    xlate_actions(&xin, &xout);
 
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
-    odp_flow_key_from_flow(&key, flow,
-                           ofp_port_to_odp_port(ofproto, flow->in_port.ofp_port));
+    in_port = flow->in_port.ofp_port;
+    if (in_port == OFPP_NONE) {
+        in_port = OFPP_LOCAL;
+    }
+    odp_flow_key_from_flow(&key, flow, ofp_port_to_odp_port(ofproto, in_port));
 
-    return dpif_execute(ofproto->backer->dpif, key.data, key.size,
-                        odp_actions, actions_len, packet);
+    error = dpif_execute(ofproto->backer->dpif, key.data, key.size,
+                         xout.odp_actions.data, xout.odp_actions.size, packet);
+    xlate_out_uninit(&xout);
+
+    return error;
 }
 
 /* Remove 'facet' from its ofproto and free up the associated memory:
@@ -4734,22 +4760,7 @@ static void
 rule_dpif_execute(struct rule_dpif *rule, const struct flow *flow,
                   struct ofpbuf *packet)
 {
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
-    struct dpif_flow_stats stats;
-    struct xlate_out xout;
-    struct xlate_in xin;
-
-    dpif_flow_stats_extract(flow, packet, time_msec(), &stats);
-    rule_dpif_credit_stats(rule, &stats);
-
-    xlate_in_init(&xin, ofproto, flow, rule, stats.tcp_flags, packet);
-    xin.resubmit_stats = &stats;
-    xlate_actions(&xin, &xout);
-
-    execute_odp_actions(ofproto, flow, xout.odp_actions.data,
-                        xout.odp_actions.size, packet);
-
-    xlate_out_uninit(&xout);
+    execute_actions(rule->up.ofproto, flow, rule, NULL, 0, packet);
 }
 
 static enum ofperr
@@ -4849,27 +4860,11 @@ set_frag_handling(struct ofproto *ofproto_,
 }
 
 static enum ofperr
-packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
+packet_out(struct ofproto *ofproto, struct ofpbuf *packet,
            const struct flow *flow,
            const struct ofpact *ofpacts, size_t ofpacts_len)
 {
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    struct dpif_flow_stats stats;
-    struct xlate_out xout;
-    struct xlate_in xin;
-
-    dpif_flow_stats_extract(flow, packet, time_msec(), &stats);
-
-    xlate_in_init(&xin, ofproto, flow, NULL, stats.tcp_flags, packet);
-    xin.resubmit_stats = &stats;
-    xin.ofpacts_len = ofpacts_len;
-    xin.ofpacts = ofpacts;
-
-    xlate_actions(&xin, &xout);
-    execute_odp_actions(ofproto, flow,
-                        xout.odp_actions.data, xout.odp_actions.size, packet);
-    xlate_out_uninit(&xout);
-
+    execute_actions(ofproto, flow, NULL, ofpacts, ofpacts_len, packet);
     return 0;
 }
 
