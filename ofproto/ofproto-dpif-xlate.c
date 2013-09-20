@@ -1582,7 +1582,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         special = process_special(ctx, &ctx->xin->flow, peer,
                                   ctx->xin->packet);
         if (special) {
-            ctx->xout->slow = special;
+            ctx->xout->slow |= special;
         } else if (may_receive(peer, ctx)) {
             if (xport_stp_forward_state(peer)) {
                 xlate_table_action(ctx, flow->in_port.ofp_port, 0, true);
@@ -1814,8 +1814,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     struct ofpbuf *packet;
     struct flow key;
 
-    ovs_assert(!ctx->xout->slow || ctx->xout->slow == SLOW_CONTROLLER);
-    ctx->xout->slow = SLOW_CONTROLLER;
+    ctx->xout->slow |= SLOW_CONTROLLER;
     if (!ctx->xin->packet) {
         return;
     }
@@ -2790,7 +2789,7 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
     in_port = get_ofp_port(ctx.xbridge, flow->in_port.ofp_port);
     special = process_special(&ctx, flow, in_port, ctx.xin->packet);
     if (special) {
-        ctx.xout->slow = special;
+        ctx.xout->slow |= special;
     } else {
         size_t sample_actions_len;
 

@@ -5304,27 +5304,19 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
                            trace.xout.odp_actions.size);
 
         if (trace.xout.slow) {
+            enum slow_path_reason slow;
+
             ds_put_cstr(ds, "\nThis flow is handled by the userspace "
                         "slow path because it:");
-            switch (trace.xout.slow) {
-            case SLOW_CFM:
-                ds_put_cstr(ds, "\n\t- Consists of CFM packets.");
-                break;
-            case SLOW_LACP:
-                ds_put_cstr(ds, "\n\t- Consists of LACP packets.");
-                break;
-            case SLOW_STP:
-                ds_put_cstr(ds, "\n\t- Consists of STP packets.");
-                break;
-            case SLOW_BFD:
-                ds_put_cstr(ds, "\n\t- Consists of BFD packets.");
-                break;
-            case SLOW_CONTROLLER:
-                ds_put_cstr(ds, "\n\t- Sends \"packet-in\" messages "
-                            "to the OpenFlow controller.");
-                break;
-            case __SLOW_MAX:
-                NOT_REACHED();
+
+            slow = trace.xout.slow;
+            while (slow) {
+                enum slow_path_reason bit = rightmost_1bit(slow);
+
+                ds_put_format(ds, "\n\t- %s.",
+                              slow_path_reason_to_explanation(bit));
+
+                slow &= ~bit;
             }
         }
 
