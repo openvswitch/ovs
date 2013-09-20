@@ -34,8 +34,7 @@ struct flow_wildcards;
     CFM_FAULT_REASON(MAID, maid)           \
     CFM_FAULT_REASON(LOOPBACK, loopback)   \
     CFM_FAULT_REASON(OVERFLOW, overflow)   \
-    CFM_FAULT_REASON(OVERRIDE, override)   \
-    CFM_FAULT_REASON(INTERVAL, interval)
+    CFM_FAULT_REASON(OVERRIDE, override)
 
 enum cfm_fault_bit_index {
 #define CFM_FAULT_REASON(NAME, STR) CFM_FAULT_INDEX_##NAME,

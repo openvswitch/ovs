@@ -661,7 +661,6 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
         ccm_seq = ntohl(ccm->seq);
 
         if (ccm_interval != cfm->ccm_interval) {
-            cfm_fault |= CFM_FAULT_INTERVAL;
             VLOG_WARN_RL(&rl, "%s: received a CCM with an unexpected interval"
                          " (%"PRIu8") from RMP %"PRIu64, cfm->name,
                          ccm_interval, ccm_mpid);
@@ -669,7 +668,6 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
 
         if (cfm->extended && ccm_interval == 0
             && ccm_interval_ms_x != cfm->ccm_interval_ms) {
-            cfm_fault |= CFM_FAULT_INTERVAL;
             VLOG_WARN_RL(&rl, "%s: received a CCM with an unexpected extended"
                          " interval (%"PRIu16"ms) from RMP %"PRIu64, cfm->name,
                          ccm_interval_ms_x, ccm_mpid);
