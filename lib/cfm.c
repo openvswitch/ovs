@@ -255,9 +255,13 @@ cfm_fault_interval(struct cfm *cfm) OVS_REQUIRES(mutex)
      * as a fault (likely due to a configuration error).  Thus we can check all
      * MPs at once making this quite a bit simpler.
      *
-     * According to the specification we should check when (ccm_interval_ms *
-     * 3.5)ms have passed. */
-    return (cfm->ccm_interval_ms * 7) / 2;
+     * When cfm is not in demand mode, we check when (ccm_interval_ms * 3.5) ms
+     * have passed.  When cfm is in demand mode, we check when
+     * (MAX(ccm_interval_ms, 500) * 3.5) ms have passed.  This ensures that
+     * ovs-vswitchd has enough time to pull statistics from the datapath. */
+
+    return (MAX(cfm->ccm_interval_ms, cfm->demand ? 500 : cfm->ccm_interval_ms)
+            * 7) / 2;
 }
 
 static uint8_t
@@ -611,7 +615,6 @@ cfm_configure(struct cfm *cfm, const struct cfm_settings *s)
     }
 
     if (s->extended && s->demand) {
-        interval_ms = MAX(interval_ms, 500);
         if (!cfm->demand) {
             cfm->demand = true;
             cfm->rx_packets = cfm_rx_packets(cfm);
