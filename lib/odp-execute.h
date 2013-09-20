@@ -20,6 +20,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "openvswitch/types.h"
 
 struct flow;
 struct nlattr;
@@ -29,8 +30,9 @@ void
 odp_execute_actions(void *dp, struct ofpbuf *packet, struct flow *key,
                     const struct nlattr *actions, size_t actions_len,
                     void (*output)(void *dp, struct ofpbuf *packet,
-                                   uint32_t out_port),
+                                   const struct flow *key,
+                                   odp_port_t out_port),
                     void (*userspace)(void *dp, struct ofpbuf *packet,
                                       const struct flow *key,
-                                      const struct nlattr *a));
+                                      const struct nlattr *action));
 #endif

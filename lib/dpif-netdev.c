@@ -1226,10 +1226,11 @@ dpif_netdev_wait(struct dpif *dpif)
 }
 
 static void
-dp_netdev_output_port(void *dp_, struct ofpbuf *packet, uint32_t out_port)
+dp_netdev_output_port(void *dp_, struct ofpbuf *packet,
+                      const struct flow *flow OVS_UNUSED, odp_port_t out_port)
 {
     struct dp_netdev *dp = dp_;
-    struct dp_netdev_port *p = dp->ports[out_port];
+    struct dp_netdev_port *p = dp->ports[odp_to_u32(out_port)];
     if (p) {
         netdev_send(p->netdev, packet);
     }
@@ -1289,8 +1290,11 @@ dp_netdev_output_userspace(struct dp_netdev *dp, const struct ofpbuf *packet,
 static void
 dp_netdev_action_userspace(void *dp, struct ofpbuf *packet,
                            const struct flow *key,
-                           const struct nlattr *userdata)
+                           const struct nlattr *a)
 {
+    const struct nlattr *userdata;
+
+    userdata = nl_attr_find_nested(a, OVS_USERSPACE_ATTR_USERDATA);
     dp_netdev_output_userspace(dp, packet, DPIF_UC_ACTION, key, userdata);
 }
 

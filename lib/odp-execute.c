@@ -125,10 +125,11 @@ static void
 odp_execute_sample(void *dp, struct ofpbuf *packet, struct flow *key,
                    const struct nlattr *action,
                    void (*output)(void *dp, struct ofpbuf *packet,
-                                  uint32_t out_port),
+                                  const struct flow *key,
+                                  odp_port_t out_port),
                    void (*userspace)(void *dp, struct ofpbuf *packet,
                                      const struct flow *key,
-                                     const struct nlattr *a))
+                                     const struct nlattr *action))
 {
     const struct nlattr *subactions = NULL;
     const struct nlattr *a;
@@ -163,10 +164,11 @@ void
 odp_execute_actions(void *dp, struct ofpbuf *packet, struct flow *key,
                     const struct nlattr *actions, size_t actions_len,
                     void (*output)(void *dp, struct ofpbuf *packet,
-                                   uint32_t out_port),
+                                   const struct flow *key,
+                                   odp_port_t out_port),
                     void (*userspace)(void *dp, struct ofpbuf *packet,
                                       const struct flow *key,
-                                      const struct nlattr *a))
+                                      const struct nlattr *action))
 {
     const struct nlattr *a;
     unsigned int left;
@@ -177,16 +179,12 @@ odp_execute_actions(void *dp, struct ofpbuf *packet, struct flow *key,
         switch ((enum ovs_action_attr) type) {
         case OVS_ACTION_ATTR_OUTPUT:
             if (output) {
-                output(dp, packet, nl_attr_get_u32(a));
+                output(dp, packet, key, u32_to_odp(nl_attr_get_u32(a)));
             }
             break;
 
         case OVS_ACTION_ATTR_USERSPACE: {
-            if (userspace) {
-                const struct nlattr *userdata;
-                userdata = nl_attr_find_nested(a, OVS_USERSPACE_ATTR_USERDATA);
-                userspace(dp, packet, key, userdata);
-            }
+            userspace(dp, packet, key, a);
             break;
         }
 
