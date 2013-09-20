@@ -22,6 +22,7 @@ TESTSUITE_AT = \
 	tests/odp.at \
 	tests/multipath.at \
 	tests/bfd.at \
+	tests/cfm.at \
 	tests/lacp.at \
 	tests/learn.at \
 	tests/vconn.at \

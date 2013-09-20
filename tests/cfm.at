@@ -1,0 +1,57 @@
+AT_BANNER([cfm])
+
+m4_define([CFM_CHECK_EXTENDED], [
+AT_CHECK([ovs-appctl cfm/show $1 | sed -e '/next CCM tx:/d' | sed -e '/next fault check:/d' | sed -e  '/recv since check:/d'],[0],
+[dnl
+---- $1 ----
+MPID $2: extended
+	average health: $3
+	opstate: $4
+	remote_opstate: $5
+	interval: $6
+Remote MPID $7
+	opstate: $8
+])
+])
+
+# test cfm under demand mode.
+AT_SETUP([cfm - demand mode])
+#Create 2 bridges connected by patch ports and enable BFD
+OVS_VSWITCHD_START([add-br br1 -- \
+                    set bridge br1 datapath-type=dummy \
+                    other-config:hwaddr=aa:55:aa:56:00:00 -- \
+                    add-port br1 p1 -- set Interface p1 type=patch \
+                    options:peer=p0 -- \
+                    add-port br0 p0 -- set Interface p0 type=patch \
+                    options:peer=p1 -- \
+                    set Interface p0 cfm_mpid=1 other_config:cfm_interval=300 other_config:cfm_extended=true -- \
+                    set Interface p1 cfm_mpid=2 other_config:cfm_interval=300 other_config:cfm_extended=true ])
+
+ovs-appctl time/stop
+# wait for a while to stablize cfm.
+for i in `seq 0 100`; do ovs-appctl time/warp 100; done
+CFM_CHECK_EXTENDED([p0], [1], [100], [up], [up], [300ms], [2], [up])
+CFM_CHECK_EXTENDED([p1], [2], [100], [up], [up], [300ms], [1], [up])
+
+# turn on demand mode on one end.
+AT_CHECK([ovs-vsctl set interface p0 other_config:cfm_demand=true])
+
+# cfm should never go down.
+for i in `seq 0 100`
+do
+    ovs-appctl time/warp 100
+    CFM_CHECK_EXTENDED([p0], [1], [100], [up], [up], [300ms], [2], [up])
+    CFM_CHECK_EXTENDED([p1], [2], [100], [up], [up], [300ms], [1], [up])
+done
+
+# turn on demand mode on the other end.
+AT_CHECK([ovs-vsctl set interface p1 other_config:cfm_demand=true])
+for i in `seq 0 100`
+do
+    ovs-appctl time/warp 100
+    CFM_CHECK_EXTENDED([p0], [1], [100], [up], [up], [300ms], [2], [up])
+    CFM_CHECK_EXTENDED([p1], [2], [100], [up], [up], [300ms], [1], [up])
+done
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
