@@ -1921,8 +1921,9 @@
           <ul>
             <li>
               To ensure that ovs-vswitchd has enough time to pull statistics
-              from the datapath, the minimum
-              <ref column="other_config" key="cfm_interval"/> is 500ms.
+              from the datapath, the fault detection interval is set to
+              3.5 * MAX(<ref column="other_config" key="cfm_interval"/>, 500)
+              ms.
             </li>
 
             <li>
