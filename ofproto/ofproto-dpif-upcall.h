@@ -104,6 +104,11 @@ struct flow_miss_batch {
     struct hmap misses;
 
     unsigned int reval_seq;
+
+    /* Flow misses refer to the memory held by "struct upcall"s,
+     * so we need to keep track of the upcalls to be able to
+     * free them when done. */
+    struct list upcalls;        /* Contains "struct upcall"s. */
 };
 
 struct flow_miss_batch *flow_miss_batch_next(struct udpif *);

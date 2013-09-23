@@ -309,6 +309,7 @@ void
 flow_miss_batch_destroy(struct flow_miss_batch *fmb)
 {
     struct flow_miss *miss, *next;
+    struct upcall *upcall, *next_upcall;
 
     if (!fmb) {
         return;
@@ -317,6 +318,11 @@ flow_miss_batch_destroy(struct flow_miss_batch *fmb)
     HMAP_FOR_EACH_SAFE (miss, next, hmap_node, &fmb->misses) {
         hmap_remove(&fmb->misses, &miss->hmap_node);
         miss_destroy(miss);
+    }
+
+    LIST_FOR_EACH_SAFE (upcall, next_upcall, list_node, &fmb->upcalls) {
+        list_remove(&upcall->list_node);
+        upcall_destroy(upcall);
     }
 
     hmap_destroy(&fmb->misses);
@@ -599,7 +605,7 @@ handle_miss_upcalls(struct udpif *udpif, struct list *upcalls)
     struct dpif_op ops[FLOW_MISS_MAX_BATCH];
     struct upcall *upcall, *next;
     struct flow_miss_batch *fmb;
-    size_t n_upcalls, n_ops, i;
+    size_t n_misses, n_ops, i;
     struct flow_miss *miss;
     unsigned int reval_seq;
     bool fail_open;
@@ -626,11 +632,12 @@ handle_miss_upcalls(struct udpif *udpif, struct list *upcalls)
     fmb = xmalloc(sizeof *fmb);
     atomic_read(&udpif->reval_seq, &fmb->reval_seq);
     hmap_init(&fmb->misses);
-    n_upcalls = 0;
+    list_init(&fmb->upcalls);
+    n_misses = 0;
     LIST_FOR_EACH_SAFE (upcall, next, list_node, upcalls) {
         struct dpif_upcall *dupcall = &upcall->dpif_upcall;
         struct ofpbuf *packet = dupcall->packet;
-        struct flow_miss *miss = &fmb->miss_buf[n_upcalls];
+        struct flow_miss *miss = &fmb->miss_buf[n_misses];
         struct flow_miss *existing_miss;
         struct ofproto_dpif *ofproto;
         odp_port_t odp_in_port;
@@ -661,7 +668,7 @@ handle_miss_upcalls(struct udpif *udpif, struct list *upcalls)
                 miss->stats.used = time_msec();
                 miss->stats.tcp_flags = 0;
 
-                n_upcalls++;
+                n_misses++;
             } else {
                 miss = existing_miss;
             }
@@ -813,6 +820,8 @@ handle_miss_upcalls(struct udpif *udpif, struct list *upcalls)
             ofproto_dpif_send_packet_in(miss->ofproto, pin);
         }
     }
+
+    list_move(&fmb->upcalls, upcalls);
 
     atomic_read(&udpif->reval_seq, &reval_seq);
     if (reval_seq != fmb->reval_seq) {
