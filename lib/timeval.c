@@ -240,11 +240,11 @@ time_poll(struct pollfd *pollfds, int n_pollfds, long long int timeout_when,
     int retval;
 
     time_init();
+    coverage_clear();
+    coverage_run();
     if (*last_wakeup) {
         log_poll_interval(*last_wakeup);
     }
-    coverage_clear();
-    coverage_run();
     start = time_msec();
 
     timeout_when = MIN(timeout_when, deadline);
