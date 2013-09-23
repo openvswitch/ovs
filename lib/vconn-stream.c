@@ -82,8 +82,7 @@ vconn_stream_open(const char *name, uint32_t allowed_versions,
     struct stream *stream;
     int error;
 
-    error = stream_open_with_default_ports(name, OFP_TCP_PORT, OFP_SSL_PORT,
-                                           &stream, dscp);
+    error = stream_open_with_default_port(name, OFP_TCP_PORT, &stream, dscp);
     if (!error) {
         error = stream_connect(stream);
         if (!error || error == EAGAIN) {
@@ -316,8 +315,8 @@ pvconn_pstream_listen(const char *name, uint32_t allowed_versions,
     struct pstream *pstream;
     int error;
 
-    error = pstream_open_with_default_ports(name, OFP_TCP_PORT, OFP_SSL_PORT,
-                                            &pstream, dscp);
+    error = pstream_open_with_default_port(name, OFP_TCP_PORT,
+                                           &pstream, dscp);
     if (error) {
         return error;
     }

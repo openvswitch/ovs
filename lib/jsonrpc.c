@@ -59,22 +59,21 @@ static void jsonrpc_cleanup(struct jsonrpc *);
 static void jsonrpc_error(struct jsonrpc *, int error);
 
 /* This is just the same as stream_open() except that it uses the default
- * JSONRPC ports if none is specified. */
+ * JSONRPC port if none is specified. */
 int
 jsonrpc_stream_open(const char *name, struct stream **streamp, uint8_t dscp)
 {
-    return stream_open_with_default_ports(name, JSONRPC_TCP_PORT,
-                                          JSONRPC_SSL_PORT, streamp,
-                                          dscp);
+    return stream_open_with_default_port(name, JSONRPC_TCP_PORT,
+                                         streamp, dscp);
 }
 
 /* This is just the same as pstream_open() except that it uses the default
- * JSONRPC ports if none is specified. */
+ * JSONRPC port if none is specified. */
 int
 jsonrpc_pstream_open(const char *name, struct pstream **pstreamp, uint8_t dscp)
 {
-    return pstream_open_with_default_ports(name, JSONRPC_TCP_PORT,
-                                           JSONRPC_SSL_PORT, pstreamp, dscp);
+    return pstream_open_with_default_port(name, JSONRPC_TCP_PORT,
+                                          pstreamp, dscp);
 }
 
 /* Returns a new JSON-RPC stream that uses 'stream' for input and output.  The

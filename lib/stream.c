@@ -714,23 +714,20 @@ count_fields(const char *s_)
     return n;
 }
 
-/* Like stream_open(), but for tcp streams the port defaults to
- * 'default_tcp_port' if no port number is given and for SSL streams the port
- * defaults to 'default_ssl_port' if no port number is given. */
+/* Like stream_open(), but the port defaults to 'default_port' if no port
+ * number is given. */
 int
-stream_open_with_default_ports(const char *name_,
-                               uint16_t default_tcp_port,
-                               uint16_t default_ssl_port,
-                               struct stream **streamp,
-                               uint8_t dscp)
+stream_open_with_default_port(const char *name_,
+                              uint16_t default_port,
+                              struct stream **streamp,
+                              uint8_t dscp)
 {
     char *name;
     int error;
 
-    if (!strncmp(name_, "tcp:", 4) && count_fields(name_) < 3) {
-        name = xasprintf("%s:%d", name_, default_tcp_port);
-    } else if (!strncmp(name_, "ssl:", 4) && count_fields(name_) < 3) {
-        name = xasprintf("%s:%d", name_, default_ssl_port);
+    if ((!strncmp(name_, "tcp:", 4) || !strncmp(name_, "ssl:", 4))
+        && count_fields(name_) < 3) {
+        name = xasprintf("%s:%d", name_, default_port);
     } else {
         name = xstrdup(name_);
     }
@@ -740,23 +737,20 @@ stream_open_with_default_ports(const char *name_,
     return error;
 }
 
-/* Like pstream_open(), but for ptcp streams the port defaults to
- * 'default_ptcp_port' if no port number is given and for passive SSL streams
- * the port defaults to 'default_pssl_port' if no port number is given. */
+/* Like pstream_open(), but port defaults to 'default_port' if no port
+ * number is given. */
 int
-pstream_open_with_default_ports(const char *name_,
-                                uint16_t default_ptcp_port,
-                                uint16_t default_pssl_port,
-                                struct pstream **pstreamp,
-                                uint8_t dscp)
+pstream_open_with_default_port(const char *name_,
+                               uint16_t default_port,
+                               struct pstream **pstreamp,
+                               uint8_t dscp)
 {
     char *name;
     int error;
 
-    if (!strncmp(name_, "ptcp:", 5) && count_fields(name_) < 2) {
-        name = xasprintf("%s%d", name_, default_ptcp_port);
-    } else if (!strncmp(name_, "pssl:", 5) && count_fields(name_) < 2) {
-        name = xasprintf("%s%d", name_, default_pssl_port);
+    if ((!strncmp(name_, "ptcp:", 5) || !strncmp(name_, "pssl:", 5))
+        && count_fields(name_) < 2) {
+        name = xasprintf("%s%d", name_, default_port);
     } else {
         name = xstrdup(name_);
     }
@@ -775,15 +769,12 @@ pstream_open_with_default_ports(const char *name_,
  *     - On error, function returns false and *sin contains garbage.
  */
 bool
-stream_parse_target_with_default_ports(const char *target,
-                                       uint16_t default_tcp_port,
-                                       uint16_t default_ssl_port,
-                                       struct sockaddr_in *sin)
+stream_parse_target_with_default_port(const char *target,
+                                      uint16_t default_port,
+                                      struct sockaddr_in *sin)
 {
-    return (!strncmp(target, "tcp:", 4)
-             && inet_parse_active(target + 4, default_tcp_port, sin)) ||
-            (!strncmp(target, "ssl:", 4)
-             && inet_parse_active(target + 4, default_ssl_port, sin));
+    return ((!strncmp(target, "tcp:", 4) || !strncmp(target, "ssl:", 4))
+             && inet_parse_active(target + 4, default_port, sin));
 }
 
 /* Attempts to guess the content type of a stream whose first few bytes were

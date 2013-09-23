@@ -473,10 +473,9 @@ collect_in_band_managers(const struct ovsrec_open_vswitch *ovs_cfg,
         SSET_FOR_EACH (target, &targets) {
             struct sockaddr_in *sin = &managers[n_managers];
 
-            if (stream_parse_target_with_default_ports(target,
-                                                       JSONRPC_TCP_PORT,
-                                                       JSONRPC_SSL_PORT,
-                                                       sin)) {
+            if (stream_parse_target_with_default_port(target,
+                                                      JSONRPC_TCP_PORT,
+                                                      sin)) {
                 n_managers++;
             }
         }

@@ -317,7 +317,7 @@ ssl_open(const char *name, char *suffix, struct stream **streamp, uint8_t dscp)
         return error;
     }
 
-    error = inet_open_active(SOCK_STREAM, suffix, OFP_SSL_PORT, &sin, &fd,
+    error = inet_open_active(SOCK_STREAM, suffix, OFP_TCP_PORT, &sin, &fd,
                              dscp);
     if (fd >= 0) {
         int state = error ? STATE_TCP_CONNECTING : STATE_SSL_CONNECTING;
@@ -797,7 +797,7 @@ pssl_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp,
         return retval;
     }
 
-    fd = inet_open_passive(SOCK_STREAM, suffix, OFP_SSL_PORT, &sin, dscp);
+    fd = inet_open_passive(SOCK_STREAM, suffix, OFP_TCP_PORT, &sin, dscp);
     if (fd < 0) {
         return -fd;
     }
@@ -846,7 +846,7 @@ pssl_accept(struct pstream *pstream, struct stream **new_streamp)
     }
 
     sprintf(name, "ssl:"IP_FMT, IP_ARGS(sin.sin_addr.s_addr));
-    if (sin.sin_port != htons(OFP_SSL_PORT)) {
+    if (sin.sin_port != htons(OFP_TCP_PORT)) {
         sprintf(strchr(name, '\0'), ":%"PRIu16, ntohs(sin.sin_port));
     }
     return new_ssl_stream(name, new_fd, SERVER, STATE_SSL_CONNECTING, &sin,

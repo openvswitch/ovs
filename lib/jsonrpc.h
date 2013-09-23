@@ -32,12 +32,11 @@ struct stream;
 
 /* API for a JSON-RPC stream. */
 
-/* Default port numbers.
+/* Default port number.
  *
- * There is nothing standard about these port numbers.  They are simply what
+ * There is nothing standard about this port number.  It is simply what
  * we have chosen. */
 #define JSONRPC_TCP_PORT 6632
-#define JSONRPC_SSL_PORT 6632
 
 int jsonrpc_stream_open(const char *name, struct stream **, uint8_t dscp);
 int jsonrpc_pstream_open(const char *name, struct pstream **, uint8_t dscp);

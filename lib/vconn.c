@@ -141,7 +141,7 @@ vconn_usage(bool active, bool passive, bool bootstrap OVS_UNUSED)
                "PORT (default: %d) at remote IP\n", OFP_TCP_PORT);
 #ifdef HAVE_OPENSSL
         printf("  ssl:IP[:PORT]           "
-               "SSL PORT (default: %d) at remote IP\n", OFP_SSL_PORT);
+               "SSL PORT (default: %d) at remote IP\n", OFP_TCP_PORT);
 #endif
         printf("  unix:FILE               Unix domain socket named FILE\n");
     }
@@ -154,7 +154,7 @@ vconn_usage(bool active, bool passive, bool bootstrap OVS_UNUSED)
 #ifdef HAVE_OPENSSL
         printf("  pssl:[PORT][:IP]        "
                "listen for SSL on PORT (default: %d) on IP\n",
-               OFP_SSL_PORT);
+               OFP_TCP_PORT);
 #endif
         printf("  punix:FILE              "
                "listen on Unix domain socket FILE\n");
