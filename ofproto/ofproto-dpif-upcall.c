@@ -420,6 +420,8 @@ udpif_upcall_handler(void *arg)
         ovs_mutex_unlock(&handler->mutex);
 
         handle_upcalls(handler->udpif, &misses);
+
+        coverage_clear();
     }
 }
 
