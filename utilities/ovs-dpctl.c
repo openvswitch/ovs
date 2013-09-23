@@ -60,10 +60,7 @@ static bool zero_statistics;
 /* --may-create: Allow mod-flows command to create a new flow? */
 static bool may_create;
 
-/* -m, --more: Output verbosity.
- *
- * So far only undocumented commands honor this option, so we don't document
- * the option itself. */
+/* -m, --more: Increase output verbosity. */
 static int verbosity;
 
 static const struct command *get_all_commands(void);
