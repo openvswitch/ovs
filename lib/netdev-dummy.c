@@ -28,11 +28,13 @@
 #include "ofp-print.h"
 #include "ofpbuf.h"
 #include "packets.h"
+#include "pcap-file.h"
 #include "poll-loop.h"
 #include "shash.h"
 #include "sset.h"
 #include "stream.h"
 #include "unaligned.h"
+#include "timeval.h"
 #include "unixctl.h"
 #include "vlog.h"
 
@@ -70,6 +72,8 @@ struct netdev_dummy {
     struct pstream *pstream OVS_GUARDED;
     struct dummy_stream *streams OVS_GUARDED;
     size_t n_streams OVS_GUARDED;
+
+    FILE *tx_pcap, *rx_pcap OVS_GUARDED;
 
     struct list rxes OVS_GUARDED; /* List of child "netdev_rx_dummy"s. */
 };
@@ -332,14 +336,16 @@ netdev_dummy_get_config(const struct netdev *netdev_, struct smap *args)
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
 
     ovs_mutex_lock(&netdev->mutex);
+
     if (netdev->ifindex >= 0) {
         smap_add_format(args, "ifindex", "%d", netdev->ifindex);
     }
+
     if (netdev->pstream) {
         smap_add(args, "pstream", pstream_get_name(netdev->pstream));
     }
-    ovs_mutex_unlock(&netdev->mutex);
 
+    ovs_mutex_unlock(&netdev->mutex);
     return 0;
 }
 
@@ -348,6 +354,7 @@ netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args)
 {
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
     const char *pstream;
+    const char *pcap;
 
     ovs_mutex_lock(&netdev->mutex);
     netdev->ifindex = smap_get_int(args, "ifindex", -EOPNOTSUPP);
@@ -369,6 +376,29 @@ netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args)
             }
         }
     }
+
+    if (netdev->rx_pcap) {
+        fclose(netdev->rx_pcap);
+    }
+    if (netdev->tx_pcap && netdev->tx_pcap != netdev->rx_pcap) {
+        fclose(netdev->tx_pcap);
+    }
+    netdev->rx_pcap = netdev->tx_pcap = NULL;
+    pcap = smap_get(args, "pcap");
+    if (pcap) {
+        netdev->rx_pcap = netdev->tx_pcap = pcap_open(pcap, "ab");
+    } else {
+        const char *rx_pcap = smap_get(args, "rx_pcap");
+        const char *tx_pcap = smap_get(args, "tx_pcap");
+
+        if (rx_pcap) {
+            netdev->rx_pcap = pcap_open(rx_pcap, "ab");
+        }
+        if (tx_pcap) {
+            netdev->tx_pcap = pcap_open(tx_pcap, "ab");
+        }
+    }
+
     ovs_mutex_unlock(&netdev->mutex);
 
     return 0;
@@ -502,6 +532,14 @@ netdev_dummy_send(struct netdev *netdev, const void *buffer, size_t size)
     ovs_mutex_lock(&dev->mutex);
     dev->stats.tx_packets++;
     dev->stats.tx_bytes += size;
+
+    if (dev->tx_pcap) {
+        struct ofpbuf packet;
+
+        ofpbuf_use_const(&packet, buffer, size);
+        pcap_write(dev->tx_pcap, &packet);
+        fflush(dev->tx_pcap);
+    }
 
     for (i = 0; i < dev->n_streams; i++) {
         struct dummy_stream *s = &dev->streams[i];
@@ -783,9 +821,14 @@ netdev_dummy_queue_packet__(struct netdev_rx_dummy *rx, struct ofpbuf *packet)
 
 static void
 netdev_dummy_queue_packet(struct netdev_dummy *dummy, struct ofpbuf *packet)
+    OVS_REQUIRES(dummy->mutex)
 {
     struct netdev_rx_dummy *rx, *prev;
 
+    if (dummy->rx_pcap) {
+        pcap_write(dummy->rx_pcap, packet);
+        fflush(dummy->rx_pcap);
+    }
     prev = NULL;
     LIST_FOR_EACH (rx, node, &dummy->rxes) {
         if (rx->recv_queue_len < NETDEV_DUMMY_MAX_QUEUE) {
