@@ -1060,6 +1060,7 @@ dpctl_normalize_actions(int argc, char *argv[])
     ofpbuf_init(&odp_actions, 0);
     run(odp_actions_from_string(argv[2], &port_names, &odp_actions),
         "odp_actions_from_string");
+    simap_destroy(&port_names);
 
     if (verbosity) {
         ds_clear(&s);
