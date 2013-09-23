@@ -114,10 +114,14 @@ pcap_read(FILE *file, struct ofpbuf **bufp)
 
     /* Read header. */
     if (fread(&prh, sizeof prh, 1, file) != 1) {
-        int error = ferror(file) ? errno : EOF;
-        VLOG_WARN("failed to read pcap record header: %s",
-                  ovs_retval_to_string(error));
-        return error;
+        if (ferror(file)) {
+            int error = errno;
+            VLOG_WARN("failed to read pcap record header: %s",
+                      ovs_retval_to_string(error));
+            return error;
+        } else {
+            return EOF;
+        }
     }
 
     /* Calculate length. */
