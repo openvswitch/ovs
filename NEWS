@@ -1,5 +1,9 @@
 Post-v2.0.0
 ---------------------
+   - The default OpenFlow and OVSDB ports will change to
+     IANA-assigned numbers in a future release.  Consider updating
+     your installations to specify port numbers instead of using the
+     defaults.
 
 
 v2.0.0 - xx xxx xxxx

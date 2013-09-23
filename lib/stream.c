@@ -26,6 +26,7 @@
 #include "dynamic-string.h"
 #include "fatal-signal.h"
 #include "flow.h"
+#include "jsonrpc.h"
 #include "ofp-print.h"
 #include "ofpbuf.h"
 #include "openflow/nicira-ext.h"
@@ -34,6 +35,9 @@
 #include "poll-loop.h"
 #include "random.h"
 #include "util.h"
+#include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(stream);
 
 COVERAGE_DEFINE(pstream_open);
 COVERAGE_DEFINE(stream_open);
@@ -727,6 +731,15 @@ stream_open_with_default_port(const char *name_,
 
     if ((!strncmp(name_, "tcp:", 4) || !strncmp(name_, "ssl:", 4))
         && count_fields(name_) < 3) {
+        if (default_port == OFP_OLD_PORT) {
+            VLOG_WARN_ONCE("The default OpenFlow port number will change "
+                           "from %d to %d in a future release",
+                           OFP_OLD_PORT, OFP_PORT);
+        } else if (default_port == OVSDB_OLD_PORT) {
+            VLOG_WARN_ONCE("The default OVSDB port number will change "
+                           "from %d to %d in a future release",
+                           OVSDB_OLD_PORT, OVSDB_PORT);
+        }
         name = xasprintf("%s:%d", name_, default_port);
     } else {
         name = xstrdup(name_);
