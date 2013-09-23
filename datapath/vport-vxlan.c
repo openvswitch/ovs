@@ -31,7 +31,6 @@
 #include <net/ip.h>
 #include <net/udp.h>
 #include <net/ip_tunnels.h>
-#include <net/udp.h>
 #include <net/rtnetlink.h>
 #include <net/route.h>
 #include <net/dsfield.h>
