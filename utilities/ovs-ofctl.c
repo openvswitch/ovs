@@ -50,6 +50,7 @@
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
 #include "packets.h"
+#include "pcap-file.h"
 #include "poll-loop.h"
 #include "random.h"
 #include "stream-ssl.h"
@@ -3076,6 +3077,36 @@ ofctl_parse_ofp11_instructions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     ds_destroy(&in);
 }
 
+/* "parse-pcap PCAP": read packets from PCAP and print their flows. */
+static void
+ofctl_parse_pcap(int argc OVS_UNUSED, char *argv[])
+{
+    FILE *pcap;
+
+    pcap = pcap_open(argv[1], "rb");
+    if (!pcap) {
+        ovs_fatal(errno, "%s: open failed", argv[1]);
+    }
+
+    for (;;) {
+        struct ofpbuf *packet;
+        struct flow flow;
+        int error;
+
+        error = pcap_read(pcap, &packet);
+        if (error == EOF) {
+            break;
+        } else if (error) {
+            ovs_fatal(error, "%s: read failed", argv[1]);
+        }
+
+        flow_extract(packet, 0, 0, NULL, NULL, &flow);
+        flow_print(stdout, &flow);
+        putchar('\n');
+        ofpbuf_delete(packet);
+    }
+}
+
 /* "check-vlan VLAN_TCI VLAN_TCI_MASK": converts the specified vlan_tci and
  * mask values to and from various formats and prints the results. */
 static void
@@ -3329,6 +3360,7 @@ static const struct command all_commands[] = {
     { "parse-ofp11-match", 0, 0, ofctl_parse_ofp11_match },
     { "parse-ofp11-actions", 0, 0, ofctl_parse_ofp11_actions },
     { "parse-ofp11-instructions", 0, 0, ofctl_parse_ofp11_instructions },
+    { "parse-pcap", 1, 1, ofctl_parse_pcap },
     { "check-vlan", 2, 2, ofctl_check_vlan },
     { "print-error", 1, 1, ofctl_print_error },
     { "encode-error-reply", 2, 2, ofctl_encode_error_reply },
