@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,9 @@
 #include "pcap-file.h"
 #include <errno.h>
 #include <inttypes.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include "compiler.h"
 #include "ofpbuf.h"
 #include "vlog.h"
@@ -47,24 +49,46 @@ BUILD_ASSERT_DECL(sizeof(struct pcaprec_hdr) == 16);
 FILE *
 pcap_open(const char *file_name, const char *mode)
 {
+    struct stat s;
     FILE *file;
+    int error;
 
-    ovs_assert(!strcmp(mode, "rb") || !strcmp(mode, "wb"));
+    ovs_assert(!strcmp(mode, "rb") ||
+               !strcmp(mode, "wb") ||
+               !strcmp(mode, "ab"));
 
     file = fopen(file_name, mode);
     if (file == NULL) {
-        VLOG_WARN("%s: failed to open pcap file for %s",
-                  file_name, mode[0] == 'r' ? "reading" : "writing");
+        VLOG_WARN("%s: failed to open pcap file for %s (%s)", file_name,
+                  (mode[0] == 'r' ? "reading"
+                   : mode[0] == 'w' ? "writing"
+                   : "appending"),
+                  ovs_strerror(errno));
         return NULL;
     }
 
-    if (mode[0] == 'r') {
-        if (!pcap_read_header(file)) {
+    switch (mode[0]) {
+    case 'r':
+        error = pcap_read_header(file);
+        if (error) {
+            errno = error;
             fclose(file);
             return NULL;
         }
-    } else {
+        break;
+
+    case 'w':
         pcap_write_header(file);
+        break;
+
+    case 'a':
+        if (!fstat(fileno(file), &s) && !s.st_size) {
+            pcap_write_header(file);
+        }
+        break;
+
+    default:
+        NOT_REACHED();
     }
     return file;
 }
