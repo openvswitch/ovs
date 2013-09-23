@@ -1665,7 +1665,7 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
         int name_len;
 
         name = s + 8;
-        name_len = strcspn(s, ")");
+        name_len = strcspn(name, ")");
         node = simap_find_len(port_names, name, name_len);
         if (node) {
             nl_msg_put_u32(key, OVS_KEY_ATTR_IN_PORT, node->data);
