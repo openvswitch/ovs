@@ -855,7 +855,7 @@ dpctl_del_flow(int argc, char *argv[])
     ofpbuf_init(&mask, 0);
     run(odp_flow_from_string(key_s, NULL, &key, &mask), "parsing flow key");
 
-    dp_name = argc == 2 ? xstrdup(argv[1]) : get_one_dp();
+    dp_name = argc == 3 ? xstrdup(argv[1]) : get_one_dp();
     run(parsed_dpif_open(dp_name, false, &dpif), "opening datapath");
     free(dp_name);
 
