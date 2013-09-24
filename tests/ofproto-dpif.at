@@ -1161,8 +1161,15 @@ in_port=2 actions=output:1
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
-odp_flow="in_port(1)"
+odp_flow="in_port(p1)"
 br_flow="in_port=1"
+# Test command: ofproto/trace odp_flow with in_port as a name.
+AT_CHECK([ovs-appctl ofproto/trace "$odp_flow"], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: 2
+])
+
+odp_flow="in_port(1)"
 # Test command: ofproto/trace odp_flow
 AT_CHECK([ovs-appctl ofproto/trace "$odp_flow"], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0], [dnl
@@ -1307,7 +1314,7 @@ m4_foreach(
 [AT_CHECK([ovs-appctl ofproto/trace wrong_name "$odp_flow" option],
   [2], [], [stderr])
 AT_CHECK([tail -2 stderr], [0], [dnl
-Cannot find datapath of this name
+Cannot find the datapath
 ovs-appctl: ovs-vswitchd: server returned an error
 ])])
 
@@ -1320,7 +1327,7 @@ m4_foreach(
 [AT_CHECK([ovs-appctl ofproto/trace "" "$odp_flow" option],
   [2], [], [stderr])
 AT_CHECK([tail -2 stderr], [0], [dnl
-Cannot find datapath of this name
+Cannot find the datapath
 ovs-appctl: ovs-vswitchd: server returned an error
 ])])
 
@@ -1333,7 +1340,7 @@ m4_foreach(
 [AT_CHECK([ovs-appctl ofproto/trace ovs-system "$odp_flow" option],
   [2], [], [stderr])
 AT_CHECK([tail -2 stderr], [0], [dnl
-Cannot find datapath of this name
+Cannot find the datapath
 ovs-appctl: ovs-vswitchd: server returned an error
 ])])
 
@@ -1346,7 +1353,7 @@ m4_foreach(
 [AT_CHECK([ovs-appctl ofproto/trace br0 "$odp_flow" option],
   [2], [], [stderr])
 AT_CHECK([tail -2 stderr], [0], [dnl
-Cannot find datapath of this name
+Cannot find the datapath
 ovs-appctl: ovs-vswitchd: server returned an error
 ])])
 

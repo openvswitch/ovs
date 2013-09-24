@@ -1349,7 +1349,7 @@ log_flow_message(const struct dpif *dpif, int error, const char *operation,
     if (error) {
         ds_put_format(&ds, "(%s) ", ovs_strerror(error));
     }
-    odp_flow_format(key, key_len, mask, mask_len, &ds, true);
+    odp_flow_format(key, key_len, mask, mask_len, NULL, &ds, true);
     if (stats) {
         ds_put_cstr(&ds, ", ");
         dpif_flow_stats_format(stats, &ds);

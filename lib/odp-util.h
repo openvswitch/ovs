@@ -23,6 +23,7 @@
 #include <string.h>
 #include <linux/openvswitch.h>
 #include "hash.h"
+#include "hmap.h"
 #include "openflow/openflow.h"
 #include "util.h"
 
@@ -42,6 +43,16 @@ void format_odp_actions(struct ds *, const struct nlattr *odp_actions,
 int odp_actions_from_string(const char *, const struct simap *port_names,
                             struct ofpbuf *odp_actions);
 
+/* A map from odp port number to its name. */
+struct odp_portno_names {
+    struct hmap_node hmap_node; /* A node in a port number to name hmap. */
+    odp_port_t port_no;         /* Port number in the datapath. */
+    char *name;                 /* Name associated with the above 'port_no'. */
+};
+
+void odp_portno_names_set(struct hmap *portno_names, odp_port_t port_no,
+                          char *port_name);
+void odp_portno_names_destroy(struct hmap *portno_names);
 /* The maximum number of bytes that odp_flow_key_from_flow() appends to a
  * buffer.  This is the upper bound on the length of a nlattr-formatted flow
  * key that ovs-vswitchd fully understands.
@@ -94,7 +105,8 @@ enum odp_key_fitness odp_tun_key_from_attr(const struct nlattr *,
 
 void odp_flow_format(const struct nlattr *key, size_t key_len,
                      const struct nlattr *mask, size_t mask_len,
-                     struct ds *, bool verbose);
+                     const struct hmap *portno_names, struct ds *,
+                     bool verbose);
 void odp_flow_key_format(const struct nlattr *, size_t, struct ds *);
 int odp_flow_from_string(const char *s,
                          const struct simap *port_names,

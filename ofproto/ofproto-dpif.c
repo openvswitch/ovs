@@ -5220,12 +5220,13 @@ static void
 ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
                       void *aux OVS_UNUSED)
 {
-    const struct dpif_backer *backer;
+    const struct dpif_backer *backer = NULL;
     struct ofproto_dpif *ofproto;
     struct ofpbuf odp_key, odp_mask;
     struct ofpbuf *packet;
     struct ds result;
     struct flow flow;
+    struct simap port_names;
     char *s;
 
     packet = NULL;
@@ -5233,6 +5234,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
     ds_init(&result);
     ofpbuf_init(&odp_key, 0);
     ofpbuf_init(&odp_mask, 0);
+    simap_init(&port_names);
 
     /* Handle "-generate" or a hex string as the last argument. */
     if (!strcmp(argv[argc - 1], "-generate")) {
@@ -5249,37 +5251,42 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
         }
     }
 
+    /* odp_flow can have its in_port specified as a name instead of port no.
+     * We do not yet know whether a given flow is a odp_flow or a br_flow.
+     * But, to know whether a flow is odp_flow through odp_flow_from_string(),
+     * we need to create a simap of name to port no. */
+    if (argc == 3) {
+        const char *dp_type;
+        if (!strncmp(argv[1], "ovs-", 4)) {
+            dp_type = argv[1] + 4;
+        } else {
+            dp_type = argv[1];
+        }
+        backer = shash_find_data(&all_dpif_backers, dp_type);
+    } else {
+        struct shash_node *node;
+        if (shash_count(&all_dpif_backers) == 1) {
+            node = shash_first(&all_dpif_backers);
+            backer = node->data;
+        }
+    }
+    if (backer && backer->dpif) {
+        struct dpif_port dpif_port;
+        struct dpif_port_dump port_dump;
+        DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, backer->dpif) {
+            simap_put(&port_names, dpif_port.name,
+                      odp_to_u32(dpif_port.port_no));
+        }
+    }
+
     /* Parse the flow and determine whether a datapath or
      * bridge is specified. If function odp_flow_key_from_string()
      * returns 0, the flow is a odp_flow. If function
      * parse_ofp_exact_flow() returns 0, the flow is a br_flow. */
-    if (!odp_flow_from_string(argv[argc - 1], NULL, &odp_key, &odp_mask)) {
-        /* If the odp_flow is the second argument,
-         * the datapath name is the first argument. */
-        if (argc == 3) {
-            const char *dp_type;
-            if (!strncmp(argv[1], "ovs-", 4)) {
-                dp_type = argv[1] + 4;
-            } else {
-                dp_type = argv[1];
-            }
-            backer = shash_find_data(&all_dpif_backers, dp_type);
-            if (!backer) {
-                unixctl_command_reply_error(conn, "Cannot find datapath "
-                               "of this name");
-                goto exit;
-            }
-        } else {
-            /* No datapath name specified, so there should be only one
-             * datapath. */
-            struct shash_node *node;
-            if (shash_count(&all_dpif_backers) != 1) {
-                unixctl_command_reply_error(conn, "Must specify datapath "
-                         "name, there is more than one type of datapath");
-                goto exit;
-            }
-            node = shash_first(&all_dpif_backers);
-            backer = node->data;
+    if (!odp_flow_from_string(argv[argc - 1], &port_names, &odp_key, &odp_mask)) {
+        if (!backer) {
+            unixctl_command_reply_error(conn, "Cannot find the datapath");
+            goto exit;
         }
 
         if (xlate_receive(backer, NULL, odp_key.data, odp_key.size, &flow,
@@ -5332,6 +5339,7 @@ exit:
     ofpbuf_delete(packet);
     ofpbuf_uninit(&odp_key);
     ofpbuf_uninit(&odp_mask);
+    simap_destroy(&port_names);
 }
 
 static void
@@ -5746,7 +5754,7 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
         }
 
         odp_flow_format(subfacet->key, subfacet->key_len,
-                        mask.data, mask.size, &ds, false);
+                        mask.data, mask.size, NULL, &ds, false);
 
         ds_put_format(&ds, ", packets:%"PRIu64", bytes:%"PRIu64", used:",
                       subfacet->dp_packet_count, subfacet->dp_byte_count);
