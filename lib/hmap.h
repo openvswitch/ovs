@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,14 +78,24 @@ static inline size_t hmap_count(const struct hmap *);
 static inline bool hmap_is_empty(const struct hmap *);
 
 /* Adjusting capacity. */
-void hmap_expand(struct hmap *);
-void hmap_shrink(struct hmap *);
-void hmap_reserve(struct hmap *, size_t capacity);
+void hmap_expand_at(struct hmap *, const char *where);
+#define hmap_expand(HMAP) hmap_expand_at(HMAP, SOURCE_LOCATOR)
+
+void hmap_shrink_at(struct hmap *, const char *where);
+#define hmap_shrink(HMAP) hmap_shrink_at(HMAP, SOURCE_LOCATOR)
+
+void hmap_reserve_at(struct hmap *, size_t capacity, const char *where);
+#define hmap_reserve(HMAP, CAPACITY) \
+    hmap_reserve_at(HMAP, CAPACITY, SOURCE_LOCATOR)
 
 /* Insertion and deletion. */
+static inline void hmap_insert_at(struct hmap *, struct hmap_node *,
+                                  size_t hash, const char *where);
+#define hmap_insert(HMAP, NODE, HASH) \
+    hmap_insert_at(HMAP, NODE, HASH, SOURCE_LOCATOR)
+
 static inline void hmap_insert_fast(struct hmap *,
                                     struct hmap_node *, size_t hash);
-static inline void hmap_insert(struct hmap *, struct hmap_node *, size_t hash);
 static inline void hmap_remove(struct hmap *, struct hmap_node *);
 
 void hmap_node_moved(struct hmap *, struct hmap_node *, struct hmap_node *);
@@ -199,13 +209,18 @@ hmap_insert_fast(struct hmap *hmap, struct hmap_node *node, size_t hash)
 }
 
 /* Inserts 'node', with the given 'hash', into 'hmap', and expands 'hmap' if
- * necessary to optimize search performance. */
+ * necessary to optimize search performance.
+ *
+ * ('where' is used in debug logging.  Commonly one would use hmap_insert() to
+ * automatically provide the caller's source file and line number for
+ * 'where'.) */
 static inline void
-hmap_insert(struct hmap *hmap, struct hmap_node *node, size_t hash)
+hmap_insert_at(struct hmap *hmap, struct hmap_node *node, size_t hash,
+               const char *where)
 {
     hmap_insert_fast(hmap, node, hash);
     if (hmap->n / 2 > hmap->mask) {
-        hmap_expand(hmap);
+        hmap_expand_at(hmap, where);
     }
 }
 
