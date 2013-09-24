@@ -3239,7 +3239,13 @@ collect_rule(struct rule *rule, const struct rule_criteria *c,
              struct rule_collection *rules)
     OVS_REQUIRES(ofproto_mutex)
 {
-    if (ofproto_rule_is_hidden(rule)) {
+    /* We ordinarily want to skip hidden rules, but there has to be a way for
+     * code internal to OVS to modify and delete them, so if the criteria
+     * specify a priority that can only be for a hidden flow, then allow hidden
+     * rules to be selected.  (This doesn't allow OpenFlow clients to meddle
+     * with hidden flows because OpenFlow uses only a 16-bit field to specify
+     * priority.) */
+    if (ofproto_rule_is_hidden(rule) && c->cr.priority <= UINT16_MAX) {
         return 0;
     } else if (rule->pending) {
         return OFPROTO_POSTPONE;
