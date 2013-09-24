@@ -167,14 +167,16 @@ usage(void)
            "  dump-dps                 display names of all datapaths\n"
            "  show                     show basic info on all datapaths\n"
            "  show DP...               show basic info on each DP\n"
-           "  dump-flows DP            display flows in DP\n"
-           "  add-flow DP FLOW ACTIONS add FLOW with ACTIONS to DP\n"
-           "  mod-flow DP FLOW ACTIONS change FLOW actions to ACTIONS in DP\n"
-           "  del-flow DP FLOW         delete FLOW from DP\n"
-           "  del-flows DP             delete all flows from DP\n"
+           "  dump-flows [DP]          display flows in DP\n"
+           "  add-flow [DP] FLOW ACTIONS add FLOW with ACTIONS to DP\n"
+           "  mod-flow [DP] FLOW ACTIONS change FLOW actions to ACTIONS in DP\n"
+           "  del-flow [DP] FLOW         delete FLOW from DP\n"
+           "  del-flows [DP]             delete all flows from DP\n"
            "Each IFACE on add-dp, add-if, and set-if may be followed by\n"
            "comma-separated options.  See ovs-dpctl(8) for syntax, or the\n"
-           "Interface table in ovs-vswitchd.conf.db(5) for an options list.\n",
+           "Interface table in ovs-vswitchd.conf.db(5) for an options list.\n"
+           "For COMMAND dump-flows, add-flow, mod-flow, del-flow and\n"
+           "del-flows, DP is optional if there is only one datapath.\n",
            program_name, program_name);
     vlog_usage();
     printf("\nOptions for show and mod-flow:\n"
