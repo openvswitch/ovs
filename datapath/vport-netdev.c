@@ -296,6 +296,11 @@ static int netdev_send(struct vport *vport, struct sk_buff *skb)
 			features &= ~(NETIF_F_TSO | NETIF_F_TSO6 |
 				      NETIF_F_UFO | NETIF_F_FSO);
 
+		skb = __vlan_put_tag(skb, skb->vlan_proto, vlan_tx_tag_get(skb));
+		if (unlikely(!skb))
+			return 0;
+		vlan_set_tci(skb, 0);
+
 		if (netif_needs_gso(skb, features)) {
 			struct sk_buff *nskb;
 
@@ -306,7 +311,7 @@ static int netdev_send(struct vport *vport, struct sk_buff *skb)
 					goto drop;
 
 				skb_shinfo(skb)->gso_type &= ~SKB_GSO_DODGY;
-				goto tag;
+				goto xmit;
 			}
 
 			if (IS_ERR(nskb))
@@ -318,27 +323,16 @@ static int netdev_send(struct vport *vport, struct sk_buff *skb)
 			do {
 				nskb = skb->next;
 				skb->next = NULL;
-
-				skb = __vlan_put_tag(skb, skb->vlan_proto, vlan_tx_tag_get(skb));
-				if (likely(skb)) {
-					len += skb->len;
-					vlan_set_tci(skb, 0);
-					dev_queue_xmit(skb);
-				}
-
+				len += skb->len;
+				dev_queue_xmit(skb);
 				skb = nskb;
 			} while (skb);
 
 			return len;
 		}
-
-tag:
-		skb = __vlan_put_tag(skb, skb->vlan_proto, vlan_tx_tag_get(skb));
-		if (unlikely(!skb))
-			return 0;
-		vlan_set_tci(skb, 0);
 	}
 
+xmit:
 	len = skb->len;
 	dev_queue_xmit(skb);
 
