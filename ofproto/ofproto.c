@@ -2468,6 +2468,7 @@ rule_actions_unref(struct rule_actions *actions)
 
         atomic_sub(&actions->ref_count, 1, &orig);
         if (orig == 1) {
+            free(actions->ofpacts);
             free(actions);
         } else {
             ovs_assert(orig != 0);
