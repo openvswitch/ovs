@@ -254,7 +254,7 @@ udpif_revalidate(struct udpif *udpif)
     udpif_drop_key_clear(udpif);
 }
 
-/* Retreives the next upcall which ofproto-dpif is responsible for handling.
+/* Retrieves the next upcall which ofproto-dpif is responsible for handling.
  * The caller is responsible for destroying the returned upcall with
  * upcall_destroy(). */
 struct upcall *
@@ -274,7 +274,7 @@ upcall_destroy(struct upcall *upcall)
     }
 }
 
-/* Retreives the next batch of processed flow misses for 'udpif' to install.
+/* Retrieves the next batch of processed flow misses for 'udpif' to install.
  * The caller is responsible for destroying it with flow_miss_batch_destroy().
  */
 struct flow_miss_batch *
@@ -323,7 +323,7 @@ flow_miss_batch_destroy(struct flow_miss_batch *fmb)
     free(fmb);
 }
 
-/* Retreives the next drop key which ofproto-dpif needs to process.  The caller
+/* Retrieves the next drop key which ofproto-dpif needs to process.  The caller
  * is responsible for destroying it with drop_key_destroy(). */
 struct drop_key *
 drop_key_next(struct udpif *udpif)
@@ -332,7 +332,7 @@ drop_key_next(struct udpif *udpif)
     return next ? CONTAINER_OF(next, struct drop_key, list_node) : NULL;
 }
 
-/* Destorys and deallocates 'drop_key'. */
+/* Destroys and deallocates 'drop_key'. */
 void
 drop_key_destroy(struct drop_key *drop_key)
 {
@@ -375,7 +375,7 @@ udpif_dispatcher(void *arg)
     return NULL;
 }
 
-/* The miss handler thread is responsible for processing miss upcalls retreived
+/* The miss handler thread is responsible for processing miss upcalls retrieved
  * by the dispatcher thread.  Once finished it passes the processed miss
  * upcalls to ofproto-dpif where they're installed in the datapath. */
 static void *
