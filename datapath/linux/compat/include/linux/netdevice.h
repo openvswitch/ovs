@@ -120,4 +120,9 @@ static inline void netdev_upper_dev_unlink(struct net_device *dev,
 }
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
+#define dev_queue_xmit rpl_dev_queue_xmit
+int dev_queue_xmit(struct sk_buff *skb);
+#endif
+
 #endif
