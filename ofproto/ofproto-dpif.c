@@ -3425,105 +3425,10 @@ handle_flow_misses(struct dpif_backer *backer, struct flow_miss_batch *fmb)
 }
 
 static void
-handle_sflow_upcall(struct dpif_backer *backer,
-                    const struct dpif_upcall *upcall)
-{
-    struct ofproto_dpif *ofproto;
-    union user_action_cookie cookie;
-    struct flow flow;
-    odp_port_t odp_in_port;
-
-    if (xlate_receive(backer, upcall->packet, upcall->key, upcall->key_len,
-                      &flow, NULL, &ofproto, &odp_in_port)
-        || !ofproto->sflow) {
-        return;
-    }
-
-    memset(&cookie, 0, sizeof cookie);
-    memcpy(&cookie, nl_attr_get(upcall->userdata), sizeof cookie.sflow);
-    dpif_sflow_received(ofproto->sflow, upcall->packet, &flow,
-                        odp_in_port, &cookie);
-}
-
-static void
-handle_flow_sample_upcall(struct dpif_backer *backer,
-                          const struct dpif_upcall *upcall)
-{
-    struct ofproto_dpif *ofproto;
-    union user_action_cookie cookie;
-    struct flow flow;
-
-    if (xlate_receive(backer, upcall->packet, upcall->key, upcall->key_len,
-                      &flow, NULL, &ofproto, NULL)
-        || !ofproto->ipfix) {
-        return;
-    }
-
-    memset(&cookie, 0, sizeof cookie);
-    memcpy(&cookie, nl_attr_get(upcall->userdata), sizeof cookie.flow_sample);
-
-    /* The flow reflects exactly the contents of the packet.  Sample
-     * the packet using it. */
-    dpif_ipfix_flow_sample(ofproto->ipfix, upcall->packet, &flow,
-                           cookie.flow_sample.collector_set_id,
-                           cookie.flow_sample.probability,
-                           cookie.flow_sample.obs_domain_id,
-                           cookie.flow_sample.obs_point_id);
-}
-
-static void
-handle_ipfix_upcall(struct dpif_backer *backer,
-                    const struct dpif_upcall *upcall)
-{
-    struct ofproto_dpif *ofproto;
-    struct flow flow;
-
-    if (xlate_receive(backer, upcall->packet, upcall->key, upcall->key_len,
-                      &flow, NULL, &ofproto, NULL)
-        || !ofproto->ipfix) {
-        return;
-    }
-
-    /* The flow reflects exactly the contents of the packet.  Sample
-     * the packet using it. */
-    dpif_ipfix_bridge_sample(ofproto->ipfix, upcall->packet, &flow);
-}
-
-static void
 handle_upcalls(struct dpif_backer *backer)
 {
     struct flow_miss_batch *fmb;
     int n_processed;
-
-    for (n_processed = 0; n_processed < FLOW_MISS_MAX_BATCH; n_processed++) {
-        struct upcall *upcall = upcall_next(backer->udpif);
-
-        if (!upcall) {
-            break;
-        }
-
-        switch (upcall->type) {
-        case SFLOW_UPCALL:
-            handle_sflow_upcall(backer, &upcall->dpif_upcall);
-            break;
-
-        case FLOW_SAMPLE_UPCALL:
-            handle_flow_sample_upcall(backer, &upcall->dpif_upcall);
-            break;
-
-        case IPFIX_UPCALL:
-            handle_ipfix_upcall(backer, &upcall->dpif_upcall);
-            break;
-
-        case BAD_UPCALL:
-            break;
-
-        case MISS_UPCALL:
-            NOT_REACHED();
-        }
-
-        upcall_destroy(upcall);
-    }
 
     for (n_processed = 0; n_processed < FLOW_MISS_MAX_BATCH; n_processed++) {
         struct drop_key *drop_key = drop_key_next(backer->udpif);

@@ -154,4 +154,10 @@ void xlate_in_init(struct xlate_in *, struct ofproto_dpif *,
 void xlate_out_uninit(struct xlate_out *);
 void xlate_actions_for_side_effects(struct xlate_in *);
 void xlate_out_copy(struct xlate_out *dst, const struct xlate_out *src);
+
+struct dpif_sflow *xlate_get_sflow(const struct ofproto_dpif *)
+    OVS_EXCLUDED(xlate_rwlock);
+struct dpif_ipfix *xlate_get_ipfix(const struct ofproto_dpif *)
+    OVS_EXCLUDED(xlate_rwlock);
+
 #endif /* ofproto-dpif-xlate.h */

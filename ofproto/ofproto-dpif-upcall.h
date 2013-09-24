@@ -40,38 +40,6 @@ void udpif_wait(struct udpif *);
 
 void udpif_revalidate(struct udpif *);
 
-/* udpif can handle some upcalls on its own.  Others need the main ofproto_dpif
- * code to handle them.  This interface passes upcalls not handled by udpif up
- * to the ofproto_dpif main thread. */
-
-/* Type of an upcall. */
-enum upcall_type {
-    /* Handled internally by udpif code.  Not returned by upcall_next().*/
-    BAD_UPCALL,                 /* Some kind of bug somewhere. */
-    MISS_UPCALL,                /* A flow miss.  */
-
-    /* Require main thread's involvement.  May be returned by upcall_next(). */
-    SFLOW_UPCALL,               /* sFlow sample. */
-    FLOW_SAMPLE_UPCALL,         /* Per-flow sampling. */
-    IPFIX_UPCALL                /* Per-bridge sampling. */
-};
-
-/* An upcall. */
-struct upcall {
-    struct list list_node;          /* For queuing upcalls. */
-    struct flow_miss *flow_miss;    /* This upcall's flow_miss. */
-
-    enum upcall_type type;          /* Classification. */
-
-    /* Raw upcall plus data for keeping track of the memory backing it. */
-    struct dpif_upcall dpif_upcall; /* As returned by dpif_recv() */
-    struct ofpbuf upcall_buf;       /* Owns some data in 'dpif_upcall'. */
-    uint64_t upcall_stub[512 / 8];  /* Buffer to reduce need for malloc(). */
-};
-
-struct upcall *upcall_next(struct udpif *);
-void upcall_destroy(struct upcall *);
-
 /* udpif figures out how to forward packets, and does forward them, but it
  * can't set up datapath flows on its own.  This interface passes packet
  * forwarding data from udpif to the higher level ofproto_dpif to allow the

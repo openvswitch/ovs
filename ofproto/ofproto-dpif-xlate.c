@@ -2531,6 +2531,44 @@ xlate_out_copy(struct xlate_out *dst, const struct xlate_out *src)
     ofpbuf_put(&dst->odp_actions, src->odp_actions.data,
                src->odp_actions.size);
 }
+
+/* Returns a reference to the sflow handled associated with ofproto, or NULL if
+ * there is none.  The caller is responsible for decrementing the results ref
+ * count with dpif_sflow_unref(). */
+struct dpif_sflow *
+xlate_get_sflow(const struct ofproto_dpif *ofproto)
+{
+    struct dpif_sflow *sflow = NULL;
+    struct xbridge *xbridge;
+
+    ovs_rwlock_rdlock(&xlate_rwlock);
+    xbridge = xbridge_lookup(ofproto);
+    if (xbridge) {
+        sflow = dpif_sflow_ref(xbridge->sflow);
+    }
+    ovs_rwlock_unlock(&xlate_rwlock);
+
+    return sflow;
+}
+
+/* Returns a reference to the ipfix handled associated with ofproto, or NULL if
+ * there is none.  The caller is responsible for decrementing the results ref
+ * count with dpif_ipfix_unref(). */
+struct dpif_ipfix *
+xlate_get_ipfix(const struct ofproto_dpif *ofproto)
+{
+    struct dpif_ipfix *ipfix = NULL;
+    struct xbridge *xbridge;
+
+    ovs_rwlock_rdlock(&xlate_rwlock);
+    xbridge = xbridge_lookup(ofproto);
+    if (xbridge) {
+        ipfix = dpif_ipfix_ref(xbridge->ipfix);
+    }
+    ovs_rwlock_unlock(&xlate_rwlock);
+
+    return ipfix;
+}
 
 static struct skb_priority_to_dscp *
 get_skb_priority(const struct xport *xport, uint32_t skb_priority)

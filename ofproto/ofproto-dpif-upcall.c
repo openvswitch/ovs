@@ -29,6 +29,8 @@
 #include "list.h"
 #include "netlink.h"
 #include "ofpbuf.h"
+#include "ofproto-dpif-ipfix.h"
+#include "ofproto-dpif-sflow.h"
 #include "ofproto-dpif.h"
 #include "packets.h"
 #include "poll-loop.h"
@@ -38,9 +40,8 @@
 
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif_upcall);
 
-COVERAGE_DEFINE(upcall_queue_overflow);
 COVERAGE_DEFINE(drop_queue_overflow);
-COVERAGE_DEFINE(miss_queue_overflow);
+COVERAGE_DEFINE(upcall_queue_overflow);
 COVERAGE_DEFINE(fmb_queue_overflow);
 COVERAGE_DEFINE(fmb_queue_revalidated);
 
@@ -53,7 +54,7 @@ struct handler {
 
     struct ovs_mutex mutex;            /* Mutex guarding the following. */
 
-    /* Atomic queue of unprocessed miss upcalls. */
+    /* Atomic queue of unprocessed upcalls. */
     struct list upcalls OVS_GUARDED;
     size_t n_upcalls OVS_GUARDED;
 
@@ -78,12 +79,11 @@ struct udpif {
 
     pthread_t dispatcher;              /* Dispatcher thread ID. */
 
-    struct handler *handlers;          /* Miss handlers. */
+    struct handler *handlers;          /* Upcall handlers. */
     size_t n_handlers;
 
     /* Queues to pass up to ofproto-dpif. */
     struct guarded_list drop_keys; /* "struct drop key"s. */
-    struct guarded_list upcalls;   /* "struct upcall"s. */
     struct guarded_list fmbs;      /* "struct flow_miss_batch"es. */
 
     /* Number of times udpif_revalidate() has been called. */
@@ -94,13 +94,33 @@ struct udpif {
     struct latch exit_latch; /* Tells child threads to exit. */
 };
 
+enum upcall_type {
+    BAD_UPCALL,                 /* Some kind of bug somewhere. */
+    MISS_UPCALL,                /* A flow miss.  */
+    SFLOW_UPCALL,               /* sFlow sample. */
+    FLOW_SAMPLE_UPCALL,         /* Per-flow sampling. */
+    IPFIX_UPCALL                /* Per-bridge sampling. */
+};
+
+struct upcall {
+    struct list list_node;          /* For queuing upcalls. */
+    struct flow_miss *flow_miss;    /* This upcall's flow_miss. */
+
+    /* Raw upcall plus data for keeping track of the memory backing it. */
+    struct dpif_upcall dpif_upcall; /* As returned by dpif_recv() */
+    struct ofpbuf upcall_buf;       /* Owns some data in 'dpif_upcall'. */
+    uint64_t upcall_stub[512 / 8];  /* Buffer to reduce need for malloc(). */
+};
+
+static void upcall_destroy(struct upcall *);
+
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 static void recv_upcalls(struct udpif *);
-static void handle_miss_upcalls(struct udpif *, struct list *upcalls);
+static void handle_upcalls(struct udpif *, struct list *upcalls);
 static void miss_destroy(struct flow_miss *);
 static void *udpif_dispatcher(void *);
-static void *udpif_miss_handler(void *);
+static void *udpif_upcall_handler(void *);
 
 struct udpif *
 udpif_create(struct dpif_backer *backer, struct dpif *dpif)
@@ -113,7 +133,6 @@ udpif_create(struct dpif_backer *backer, struct dpif *dpif)
     udpif->wait_seq = seq_create();
     latch_init(&udpif->exit_latch);
     guarded_list_init(&udpif->drop_keys);
-    guarded_list_init(&udpif->upcalls);
     guarded_list_init(&udpif->fmbs);
     atomic_init(&udpif->reval_seq, 0);
 
@@ -125,7 +144,6 @@ udpif_destroy(struct udpif *udpif)
 {
     struct flow_miss_batch *fmb;
     struct drop_key *drop_key;
-    struct upcall *upcall;
 
     udpif_recv_set(udpif, 0, false);
 
@@ -133,16 +151,11 @@ udpif_destroy(struct udpif *udpif)
         drop_key_destroy(drop_key);
     }
 
-    while ((upcall = upcall_next(udpif))) {
-        upcall_destroy(upcall);
-    }
-
     while ((fmb = flow_miss_batch_next(udpif))) {
         flow_miss_batch_destroy(fmb);
     }
 
     guarded_list_destroy(&udpif->drop_keys);
-    guarded_list_destroy(&udpif->upcalls);
     guarded_list_destroy(&udpif->fmbs);
     latch_destroy(&udpif->exit_latch);
     seq_destroy(udpif->wait_seq);
@@ -150,8 +163,9 @@ udpif_destroy(struct udpif *udpif)
 }
 
 /* Tells 'udpif' to begin or stop handling flow misses depending on the value
- * of 'enable'.  'n_handlers' is the number of miss_handler threads to create.
- * Passing 'n_handlers' as zero is equivalent to passing 'enable' as false. */
+ * of 'enable'.  'n_handlers' is the number of upcall_handler threads to
+ * create.  Passing 'n_handlers' as zero is equivalent to passing 'enable' as
+ * false. */
 void
 udpif_recv_set(struct udpif *udpif, size_t n_handlers, bool enable)
 {
@@ -210,7 +224,8 @@ udpif_recv_set(struct udpif *udpif, size_t n_handlers, bool enable)
             list_init(&handler->upcalls);
             xpthread_cond_init(&handler->wake_cond, NULL);
             ovs_mutex_init(&handler->mutex);
-            xpthread_create(&handler->thread, NULL, udpif_miss_handler, handler);
+            xpthread_create(&handler->thread, NULL, udpif_upcall_handler,
+                            handler);
         }
         xpthread_create(&udpif->dispatcher, NULL, udpif_dispatcher, udpif);
     }
@@ -221,7 +236,6 @@ udpif_wait(struct udpif *udpif)
 {
     uint64_t seq = seq_read(udpif->wait_seq);
     if (!guarded_list_is_empty(&udpif->drop_keys) ||
-        !guarded_list_is_empty(&udpif->upcalls) ||
         !guarded_list_is_empty(&udpif->fmbs)) {
         poll_immediate_wake();
     } else {
@@ -254,18 +268,8 @@ udpif_revalidate(struct udpif *udpif)
     udpif_drop_key_clear(udpif);
 }
 
-/* Retrieves the next upcall which ofproto-dpif is responsible for handling.
- * The caller is responsible for destroying the returned upcall with
- * upcall_destroy(). */
-struct upcall *
-upcall_next(struct udpif *udpif)
-{
-    struct list *next = guarded_list_pop_front(&udpif->upcalls);
-    return next ? CONTAINER_OF(next, struct upcall, list_node) : NULL;
-}
-
 /* Destroys and deallocates 'upcall'. */
-void
+static void
 upcall_destroy(struct upcall *upcall)
 {
     if (upcall) {
@@ -362,9 +366,8 @@ udpif_drop_key_clear(struct udpif *udpif)
     }
 }
 
-/* The dispatcher thread is responsible for receving upcalls from the kernel,
- * assigning the miss upcalls to a miss_handler thread, and assigning the more
- * complex ones to ofproto-dpif directly. */
+/* The dispatcher thread is responsible for receiving upcalls from the kernel,
+ * assigning them to a upcall_handler thread. */
 static void *
 udpif_dispatcher(void *arg)
 {
@@ -385,11 +388,11 @@ udpif_dispatcher(void *arg)
  * by the dispatcher thread.  Once finished it passes the processed miss
  * upcalls to ofproto-dpif where they're installed in the datapath. */
 static void *
-udpif_miss_handler(void *arg)
+udpif_upcall_handler(void *arg)
 {
     struct handler *handler = arg;
 
-    set_subprogram_name("miss_handler");
+    set_subprogram_name("upcall_handler");
     for (;;) {
         struct list misses = LIST_INITIALIZER(&misses);
         size_t i;
@@ -415,7 +418,7 @@ udpif_miss_handler(void *arg)
         }
         ovs_mutex_unlock(&handler->mutex);
 
-        handle_miss_upcalls(handler->udpif, &misses);
+        handle_upcalls(handler->udpif, &misses);
     }
 }
 
@@ -483,13 +486,15 @@ classify_upcall(const struct upcall *upcall)
 static void
 recv_upcalls(struct udpif *udpif)
 {
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 60);
     size_t n_udpif_new_upcalls = 0;
-    struct handler *handler;
     int n;
 
     for (;;) {
+        uint32_t hash = udpif->secret;
+        struct handler *handler;
         struct upcall *upcall;
+        size_t n_bytes, left;
+        struct nlattr *nla;
         int error;
 
         upcall = xmalloc(sizeof *upcall);
@@ -502,75 +507,54 @@ recv_upcalls(struct udpif *udpif)
             break;
         }
 
-        upcall->type = classify_upcall(upcall);
-        if (upcall->type == BAD_UPCALL) {
-            upcall_destroy(upcall);
-        } else if (upcall->type == MISS_UPCALL) {
-            struct dpif_upcall *dupcall = &upcall->dpif_upcall;
-            uint32_t hash = udpif->secret;
-            struct nlattr *nla;
-            size_t n_bytes, left;
-
-            n_bytes = 0;
-            NL_ATTR_FOR_EACH (nla, left, dupcall->key, dupcall->key_len) {
-                enum ovs_key_attr type = nl_attr_type(nla);
-                if (type == OVS_KEY_ATTR_IN_PORT
-                    || type == OVS_KEY_ATTR_TCP
-                    || type == OVS_KEY_ATTR_UDP) {
-                    if (nl_attr_get_size(nla) == 4) {
-                        ovs_be32 attr = nl_attr_get_be32(nla);
-                        hash = mhash_add(hash, (OVS_FORCE uint32_t) attr);
-                        n_bytes += 4;
-                    } else {
-                        VLOG_WARN("Netlink attribute with incorrect size.");
-                    }
+        n_bytes = 0;
+        NL_ATTR_FOR_EACH (nla, left, upcall->dpif_upcall.key,
+                          upcall->dpif_upcall.key_len) {
+            enum ovs_key_attr type = nl_attr_type(nla);
+            if (type == OVS_KEY_ATTR_IN_PORT
+                || type == OVS_KEY_ATTR_TCP
+                || type == OVS_KEY_ATTR_UDP) {
+                if (nl_attr_get_size(nla) == 4) {
+                    hash = mhash_add(hash, nl_attr_get_be32(nla));
+                    n_bytes += 4;
+                } else {
+                    VLOG_WARN_RL(&rl,
+                                 "Netlink attribute with incorrect size.");
                 }
-            }
-            hash =  mhash_finish(hash, n_bytes);
-
-            handler = &udpif->handlers[hash % udpif->n_handlers];
-
-            ovs_mutex_lock(&handler->mutex);
-            if (handler->n_upcalls < MAX_QUEUE_LENGTH) {
-                list_push_back(&handler->upcalls, &upcall->list_node);
-                handler->n_new_upcalls = ++handler->n_upcalls;
-
-                if (handler->n_new_upcalls >= FLOW_MISS_MAX_BATCH) {
-                    xpthread_cond_signal(&handler->wake_cond);
-                }
-                ovs_mutex_unlock(&handler->mutex);
-                if (!VLOG_DROP_DBG(&rl)) {
-                    struct ds ds = DS_EMPTY_INITIALIZER;
-
-                    odp_flow_key_format(upcall->dpif_upcall.key,
-                                        upcall->dpif_upcall.key_len,
-                                        &ds);
-                    VLOG_DBG("dispatcher: miss enqueue (%s)", ds_cstr(&ds));
-                    ds_destroy(&ds);
-                }
-            } else {
-                ovs_mutex_unlock(&handler->mutex);
-                COVERAGE_INC(miss_queue_overflow);
-                upcall_destroy(upcall);
-            }
-        } else {
-            size_t len;
-
-            len = guarded_list_push_back(&udpif->upcalls, &upcall->list_node,
-                                         MAX_QUEUE_LENGTH);
-            if (len > 0) {
-                n_udpif_new_upcalls = len;
-                if (n_udpif_new_upcalls >= FLOW_MISS_MAX_BATCH) {
-                    seq_change(udpif->wait_seq);
-                }
-            } else {
-                COVERAGE_INC(upcall_queue_overflow);
-                upcall_destroy(upcall);
             }
         }
+        hash =  mhash_finish(hash, n_bytes);
+
+        handler = &udpif->handlers[hash % udpif->n_handlers];
+
+        ovs_mutex_lock(&handler->mutex);
+        if (handler->n_upcalls < MAX_QUEUE_LENGTH) {
+            list_push_back(&handler->upcalls, &upcall->list_node);
+            handler->n_new_upcalls = ++handler->n_upcalls;
+
+            if (handler->n_new_upcalls >= FLOW_MISS_MAX_BATCH) {
+                xpthread_cond_signal(&handler->wake_cond);
+            }
+            ovs_mutex_unlock(&handler->mutex);
+            if (!VLOG_DROP_DBG(&rl)) {
+                struct ds ds = DS_EMPTY_INITIALIZER;
+
+                odp_flow_key_format(upcall->dpif_upcall.key,
+                                    upcall->dpif_upcall.key_len,
+                                    &ds);
+                VLOG_DBG("dispatcher: enqueue (%s)", ds_cstr(&ds));
+                ds_destroy(&ds);
+            }
+        } else {
+            ovs_mutex_unlock(&handler->mutex);
+            COVERAGE_INC(upcall_queue_overflow);
+            upcall_destroy(upcall);
+        }
     }
+
     for (n = 0; n < udpif->n_handlers; ++n) {
-        handler = &udpif->handlers[n];
+        struct handler *handler = &udpif->handlers[n];
+
         if (handler->n_new_upcalls) {
             handler->n_new_upcalls = 0;
             ovs_mutex_lock(&handler->mutex);
@@ -599,7 +583,7 @@ flow_miss_find(struct hmap *todo, const struct ofproto_dpif *ofproto,
 }
 
 static void
-handle_miss_upcalls(struct udpif *udpif, struct list *upcalls)
+handle_upcalls(struct udpif *udpif, struct list *upcalls)
 {
     struct dpif_op *opsp[FLOW_MISS_MAX_BATCH];
     struct dpif_op ops[FLOW_MISS_MAX_BATCH];
@@ -608,6 +592,7 @@ handle_miss_upcalls(struct udpif *udpif, struct list *upcalls)
     size_t n_misses, n_ops, i;
     struct flow_miss *miss;
     unsigned int reval_seq;
+    enum upcall_type type;
     bool fail_open;
 
     /* Extract the flow from each upcall.  Construct in fmb->misses a hash
@@ -640,6 +625,8 @@ handle_miss_upcalls(struct udpif *udpif, struct list *upcalls)
         struct flow_miss *miss = &fmb->miss_buf[n_misses];
         struct flow_miss *existing_miss;
         struct ofproto_dpif *ofproto;
+        struct dpif_sflow *sflow;
+        struct dpif_ipfix *ipfix;
         odp_port_t odp_in_port;
         struct flow flow;
         int error;
@@ -647,8 +634,39 @@ handle_miss_upcalls(struct udpif *udpif, struct list *upcalls)
         error = xlate_receive(udpif->backer, packet, dupcall->key,
                               dupcall->key_len, &flow, &miss->key_fitness,
                               &ofproto, &odp_in_port);
+        if (error) {
+            if (error == ENODEV) {
+                struct drop_key *drop_key;
 
-        if (!error) {
+                /* Received packet on datapath port for which we couldn't
+                 * associate an ofproto.  This can happen if a port is removed
+                 * while traffic is being received.  Print a rate-limited
+                 * message in case it happens frequently.  Install a drop flow
+                 * so that future packets of the flow are inexpensively dropped
+                 * in the kernel. */
+                VLOG_INFO_RL(&rl, "received packet on unassociated datapath "
+                             "port %"PRIu32, odp_in_port);
+
+                drop_key = xmalloc(sizeof *drop_key);
+                drop_key->key = xmemdup(dupcall->key, dupcall->key_len);
+                drop_key->key_len = dupcall->key_len;
+
+                if (guarded_list_push_back(&udpif->drop_keys,
+                                           &drop_key->list_node,
+                                           MAX_QUEUE_LENGTH)) {
+                    seq_change(udpif->wait_seq);
+                } else {
+                    COVERAGE_INC(drop_queue_overflow);
+                    drop_key_destroy(drop_key);
+                }
+            }
+            list_remove(&upcall->list_node);
+            upcall_destroy(upcall);
+            continue;
+        }
+
+        type = classify_upcall(upcall);
+        if (type == MISS_UPCALL) {
             uint32_t hash;
 
             flow_extract(packet, flow.skb_priority, flow.pkt_mark,
@@ -677,35 +695,57 @@ handle_miss_upcalls(struct udpif *udpif, struct list *upcalls)
             miss->stats.n_packets++;
 
             upcall->flow_miss = miss;
-        } else {
-            if (error == ENODEV) {
-                struct drop_key *drop_key;
-
-                /* Received packet on datapath port for which we couldn't
-                 * associate an ofproto.  This can happen if a port is removed
-                 * while traffic is being received.  Print a rate-limited
-                 * message in case it happens frequently.  Install a drop flow
-                 * so that future packets of the flow are inexpensively dropped
-                 * in the kernel. */
-                VLOG_INFO_RL(&rl, "received packet on unassociated datapath "
-                             "port %"PRIu32, odp_in_port);
-
-                drop_key = xmalloc(sizeof *drop_key);
-                drop_key->key = xmemdup(dupcall->key, dupcall->key_len);
-                drop_key->key_len = dupcall->key_len;
-
-                if (guarded_list_push_back(&udpif->drop_keys,
-                                           &drop_key->list_node,
-                                           MAX_QUEUE_LENGTH)) {
-                    seq_change(udpif->wait_seq);
-                } else {
-                    COVERAGE_INC(drop_queue_overflow);
-                    drop_key_destroy(drop_key);
-                }
-            }
-            list_remove(&upcall->list_node);
-            upcall_destroy(upcall);
+            continue;
         }
+
+        switch (type) {
+        case SFLOW_UPCALL:
+            sflow = xlate_get_sflow(ofproto);
+            if (sflow) {
+                union user_action_cookie cookie;
+
+                memset(&cookie, 0, sizeof cookie);
+                memcpy(&cookie, nl_attr_get(dupcall->userdata),
+                       sizeof cookie.sflow);
+                dpif_sflow_received(sflow, dupcall->packet, &flow, odp_in_port,
+                                    &cookie);
+                dpif_sflow_unref(sflow);
+            }
+            break;
+        case IPFIX_UPCALL:
+            ipfix = xlate_get_ipfix(ofproto);
+            if (ipfix) {
+                dpif_ipfix_bridge_sample(ipfix, dupcall->packet, &flow);
+                dpif_ipfix_unref(ipfix);
+            }
+            break;
+        case FLOW_SAMPLE_UPCALL:
+            ipfix = xlate_get_ipfix(ofproto);
+            if (ipfix) {
+                union user_action_cookie cookie;
+
+                memset(&cookie, 0, sizeof cookie);
+                memcpy(&cookie, nl_attr_get(dupcall->userdata),
+                       sizeof cookie.flow_sample);
+
+                /* The flow reflects exactly the contents of the packet.
+                 * Sample the packet using it. */
+                dpif_ipfix_flow_sample(ipfix, dupcall->packet, &flow,
+                                       cookie.flow_sample.collector_set_id,
+                                       cookie.flow_sample.probability,
+                                       cookie.flow_sample.obs_domain_id,
+                                       cookie.flow_sample.obs_point_id);
+                dpif_ipfix_unref(ipfix);
+            }
+            break;
+        case BAD_UPCALL:
+            break;
+        case MISS_UPCALL:
+            NOT_REACHED();
+        }
+
+        list_remove(&upcall->list_node);
+        upcall_destroy(upcall);
     }
 
     /* Initialize each 'struct flow_miss's ->xout.
