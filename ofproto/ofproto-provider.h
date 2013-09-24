@@ -455,13 +455,13 @@ void rule_collection_ref(struct rule_collection *) OVS_REQUIRES(ofproto_mutex);
 void rule_collection_unref(struct rule_collection *);
 void rule_collection_destroy(struct rule_collection *);
 
-/* Threshold at which to begin flow table eviction. Only affects the
- * ofproto-dpif implementation */
-extern unsigned flow_eviction_threshold;
+/* Limits the number of flows allowed in the datapath. Only affects the
+ * ofproto-dpif implementation. */
+extern unsigned ofproto_flow_limit;
 
-/* Number of upcall handler threads. Only affects the ofproto-dpif
- * implementation. */
-extern size_t n_handlers;
+/* Number of upcall handler and revalidator threads. Only affects the
+ * ofproto-dpif implementation. */
+extern size_t n_handlers, n_revalidators;
 
 /* Determines which model to use for handling misses in the ofproto-dpif
  * implementation */

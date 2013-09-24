@@ -306,10 +306,10 @@ static size_t allocated_ofproto_classes;
 /* Global lock that protects all flow table operations. */
 struct ovs_mutex ofproto_mutex = OVS_MUTEX_INITIALIZER;
 
-unsigned flow_eviction_threshold = OFPROTO_FLOW_EVICTION_THRESHOLD_DEFAULT;
+unsigned ofproto_flow_limit = OFPROTO_FLOW_LIMIT_DEFAULT;
 enum ofproto_flow_miss_model flow_miss_model = OFPROTO_HANDLE_MISS_AUTO;
 
-size_t n_handlers;
+size_t n_handlers, n_revalidators;
 
 /* Map from datapath name to struct ofproto, for use by unixctl commands. */
 static struct hmap all_ofprotos = HMAP_INITIALIZER(&all_ofprotos);
@@ -693,10 +693,9 @@ ofproto_set_in_band_queue(struct ofproto *ofproto, int queue_id)
 /* Sets the number of flows at which eviction from the kernel flow table
  * will occur. */
 void
-ofproto_set_flow_eviction_threshold(unsigned threshold)
+ofproto_set_flow_limit(unsigned limit)
 {
-    flow_eviction_threshold = MAX(OFPROTO_FLOW_EVICTION_THRESHOLD_MIN,
-                                  threshold);
+    ofproto_flow_limit = limit;
 }
 
 /* Sets the path for handling flow misses. */
@@ -734,13 +733,23 @@ ofproto_set_mac_table_config(struct ofproto *ofproto, unsigned idle_time,
     }
 }
 
-/* Sets number of upcall handler threads.  The default is
- * (number of online cores - 2). */
 void
-ofproto_set_threads(size_t n_handlers_)
+ofproto_set_threads(size_t n_handlers_, size_t n_revalidators_)
 {
-    int threads = MAX(count_cpu_cores() - 2, 1);
-    n_handlers = n_handlers_ ? n_handlers_ : threads;
+    int threads = MAX(count_cpu_cores(), 2);
+
+    n_revalidators = n_revalidators_;
+    n_handlers = n_handlers_;
+
+    if (!n_revalidators) {
+        n_revalidators = n_handlers
+            ? MAX(threads - (int) n_handlers, 1)
+            : threads / 4 + 1;
+    }
+
+    if (!n_handlers) {
+        n_handlers = MAX(threads - (int) n_revalidators, 1);
+    }
 }
 
 void

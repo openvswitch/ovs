@@ -54,6 +54,10 @@ Post-v2.0.0
    - ovsdb-client:
      * The "monitor" command can now monitor all tables in a database,
        instead of being limited to a single table.
+   - The flow-eviction-threshold has been replaced by the flow-limit which is a
+     hard limit on the number of flows in the datapath.  It defaults to 200,000
+     flows.  OVS automatically adjusts this number depending on network
+     conditions.
 
 
 v2.0.0 - 15 Oct 2013

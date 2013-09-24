@@ -493,12 +493,12 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
     COVERAGE_INC(bridge_reconfigure);
 
-    ofproto_set_flow_eviction_threshold(
-        smap_get_int(&ovs_cfg->other_config, "flow-eviction-threshold",
-                     OFPROTO_FLOW_EVICTION_THRESHOLD_DEFAULT));
+    ofproto_set_flow_limit(smap_get_int(&ovs_cfg->other_config, "flow-limit",
+                                        OFPROTO_FLOW_LIMIT_DEFAULT));
 
     ofproto_set_threads(
-        smap_get_int(&ovs_cfg->other_config, "n-handler-threads", 0));
+        smap_get_int(&ovs_cfg->other_config, "n-handler-threads", 0),
+        smap_get_int(&ovs_cfg->other_config, "n-revalidator-threads", 0));
 
     bridge_configure_flow_miss_model(smap_get(&ovs_cfg->other_config,
                                               "force-miss-model"));

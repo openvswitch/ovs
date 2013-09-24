@@ -2485,7 +2485,7 @@ AT_CHECK([ovs-ofctl add-flow br0 "tcp,tcp_flags=+ack-ack,action="], [1], [],
   [ovs-ofctl: ack: Each TCP flag can be specified only once
 ])
 
-AT_CHECK([ovs-appctl dpif/show | tail -n +5], [0], [dnl
+AT_CHECK([ovs-appctl dpif/show | tail -n +4], [0], [dnl
 		p1 1/1: (dummy)
 		p2 2/2: (dummy)
 ])

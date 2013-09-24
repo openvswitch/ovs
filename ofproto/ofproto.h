@@ -213,8 +213,7 @@ int ofproto_port_dump_done(struct ofproto_port_dump *);
           : (ofproto_port_dump_done(DUMP), false));         \
         )
 
-#define OFPROTO_FLOW_EVICTION_THRESHOLD_DEFAULT  2500
-#define OFPROTO_FLOW_EVICTION_THRESHOLD_MIN 100
+#define OFPROTO_FLOW_LIMIT_DEFAULT 200000
 
 /* How flow misses should be handled in ofproto-dpif */
 enum ofproto_flow_miss_model {
@@ -243,12 +242,12 @@ void ofproto_reconnect_controllers(struct ofproto *);
 void ofproto_set_extra_in_band_remotes(struct ofproto *,
                                        const struct sockaddr_in *, size_t n);
 void ofproto_set_in_band_queue(struct ofproto *, int queue_id);
-void ofproto_set_flow_eviction_threshold(unsigned threshold);
+void ofproto_set_flow_limit(unsigned limit);
 void ofproto_set_flow_miss_model(unsigned model);
 void ofproto_set_forward_bpdu(struct ofproto *, bool forward_bpdu);
 void ofproto_set_mac_table_config(struct ofproto *, unsigned idle_time,
                                   size_t max_entries);
-void ofproto_set_threads(size_t n_handlers);
+void ofproto_set_threads(size_t n_handlers, size_t n_revalidators);
 void ofproto_set_dp_desc(struct ofproto *, const char *dp_desc);
 int ofproto_set_snoops(struct ofproto *, const struct sset *snoops);
 int ofproto_set_netflow(struct ofproto *,

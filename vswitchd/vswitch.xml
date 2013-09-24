@@ -123,17 +123,16 @@
         </p>
       </column>
 
-      <column name="other_config" key="flow-eviction-threshold"
+      <column name="other_config" key="flow-limit"
               type='{"type": "integer", "minInteger": 0}'>
         <p>
-          A number of flows as a nonnegative integer.  This sets number of
-          flows at which eviction from the datapath flow table will be
-          triggered.  If there are a large number of flows then increasing this
-          value to around the number of flows present can result in reduced CPU
-          usage and packet loss.
+          The maximum
+          number of flows allowed in the datapath flow table.  Internally OVS
+          will choose a flow limit which will likely be lower than this number,
+          based on real time network conditions.
         </p>
         <p>
-          The default is 2500.  Values below 100 will be rounded up to 100.
+          The default is 200000.
         </p>
       </column>
 
@@ -163,8 +162,28 @@
               type='{"type": "integer", "minInteger": 1}'>
         <p>
           Specifies the number of threads for software datapaths to use for
-          handling new flows.  The default is two less than the number of
-          online CPU cores (but at least 1).
+          handling new flows.  The default the number of online CPU cores minus
+          the number of revalidators.
+        </p>
+        <p>
+          This configuration is per datapath.  If you have more than one
+          software datapath (e.g. some <code>system</code> bridges and some
+          <code>netdev</code> bridges), then the total number of threads is
+          <code>n-handler-threads</code> times the number of software
+          datapaths.
+        </p>
+      </column>
+
+      <column name="other_config" key="n-revalidator-threads"
+              type='{"type": "integer", "minInteger": 1}'>
+        <p>
+          Specifies the number of threads for software datapaths to use for
+          revalidating flows in the datapath.  Typically, there is a direct
+          correlation between the number of revalidator threads, and the number
+          of flows allowed in the datapath.  The default is the number of cpu
+          cores divided by four plus one.  If <code>n-handler-threads</code> is
+          set, the default changes to the number of cpu cores minus the number
+          of handler threads.
         </p>
         <p>
           This configuration is per datapath.  If you have more than one
