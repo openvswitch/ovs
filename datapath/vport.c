@@ -239,7 +239,7 @@ void ovs_vport_del(struct vport *vport)
  * @stats: stats to set
  *
  * Provides a set of transmit, receive, and error stats to be added as an
- * offset to the collect data when stats are retreived.  Some devices may not
+ * offset to the collected data when stats are retrieved.  Some devices may not
  * support setting the stats, in which case the result will always be
  * -EOPNOTSUPP.
  *
