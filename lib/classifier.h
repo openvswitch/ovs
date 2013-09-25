@@ -98,10 +98,8 @@
  * Thread-safety
  * =============
  *
- * When locked properly, the classifier is thread safe as long as the following
- * conditions are satisfied.
- * - Only the main thread calls functions requiring a write lock.
- * - Only the main thread is allowed to iterate over rules. */
+ * The classifier may safely be accessed by many reader threads concurrently or
+ * by a single writer. */
 
 #include "flow.h"
 #include "hmap.h"
