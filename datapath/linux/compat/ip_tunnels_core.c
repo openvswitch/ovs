@@ -70,7 +70,12 @@ int iptunnel_xmit(struct rtable *rt,
 	iph->daddr	=	dst;
 	iph->saddr	=	src;
 	iph->ttl	=	ttl;
+
+#ifdef HAVE_IP_SELECT_IDENT_USING_DST_ENTRY
 	__ip_select_ident(iph, &rt_dst(rt), (skb_shinfo(skb)->gso_segs ?: 1) - 1);
+#else
+	__ip_select_ident(iph, skb_shinfo(skb)->gso_segs ?: 1);
+#endif
 
 	err = ip_local_out(skb);
 	if (unlikely(net_xmit_eval(err)))
