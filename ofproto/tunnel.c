@@ -67,7 +67,7 @@ static struct hmap *ofport_map OVS_GUARDED_BY(rwlock) = &ofport_map__;
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 static struct vlog_rate_limit dbg_rl = VLOG_RATE_LIMIT_INIT(60, 60);
 
-static struct tnl_port *tnl_find(struct tnl_match *) OVS_REQ_RDLOCK(rwlock);
+static struct tnl_port *tnl_find(const struct flow *) OVS_REQ_RDLOCK(rwlock);
 static struct tnl_port *tnl_find_exact(struct tnl_match *)
     OVS_REQ_RDLOCK(rwlock);
 static struct tnl_port *tnl_find_ofport(const struct ofport_dpif *)
@@ -209,24 +209,15 @@ tnl_port_receive(const struct flow *flow) OVS_EXCLUDED(rwlock)
     char *pre_flow_str = NULL;
     const struct ofport_dpif *ofport;
     struct tnl_port *tnl_port;
-    struct tnl_match match;
-
-    memset(&match, 0, sizeof match);
-    match.odp_port = flow->in_port.odp_port;
-    match.ip_src = flow->tunnel.ip_dst;
-    match.ip_dst = flow->tunnel.ip_src;
-    match.in_key = flow->tunnel.tun_id;
-    match.pkt_mark = flow->pkt_mark;
 
     ovs_rwlock_rdlock(&rwlock);
-    tnl_port = tnl_find(&match);
+    tnl_port = tnl_find(flow);
     ofport = tnl_port ? tnl_port->ofport : NULL;
     if (!tnl_port) {
-        struct ds ds = DS_EMPTY_INITIALIZER;
+        char *flow_str = flow_to_string(flow);
 
-        tnl_match_fmt(&match, &ds);
-        VLOG_WARN_RL(&rl, "receive tunnel port not found (%s)", ds_cstr(&ds));
-        ds_destroy(&ds);
+        VLOG_WARN_RL(&rl, "receive tunnel port not found (%s)", flow_str);
+        free(flow_str);
         goto out;
     }
 
@@ -413,54 +404,55 @@ tnl_find_exact(struct tnl_match *match) OVS_REQ_RDLOCK(rwlock)
     return NULL;
 }
 
+/* Returns the tnl_port that is the best match for the tunnel data in 'flow',
+ * or NULL if no tnl_port matches 'flow'. */
 static struct tnl_port *
-tnl_find(struct tnl_match *match_) OVS_REQ_RDLOCK(rwlock)
+tnl_find(const struct flow *flow) OVS_REQ_RDLOCK(rwlock)
 {
-    struct tnl_match match = *match_;
-    struct tnl_port *tnl_port;
+    enum ip_src_type {
+        IP_SRC_CFG,             /* ip_src must equal configured address. */
+        IP_SRC_ANY,             /* Any ip_src is acceptable. */
+        IP_SRC_FLOW             /* ip_src is handled in flow table. */
+    };
 
-    /* remote_ip, local_ip, in_key */
-    tnl_port = tnl_find_exact(&match);
-    if (tnl_port) {
-        return tnl_port;
-    }
+    struct tnl_match_pattern {
+        bool in_key_flow;
+        bool ip_dst_flow;
+        enum ip_src_type ip_src;
+    };
 
-    /* remote_ip, in_key */
-    match.ip_src = 0;
-    tnl_port = tnl_find_exact(&match);
-    if (tnl_port) {
-        return tnl_port;
-    }
-    match.ip_src = match_->ip_src;
+    static const struct tnl_match_pattern patterns[] = {
+        { false, false, IP_SRC_CFG },  /* remote_ip, local_ip, in_key. */
+        { false, false, IP_SRC_ANY },  /* remote_ip, in_key. */
+        { true,  false, IP_SRC_CFG },  /* remote_ip, local_ip. */
+        { true,  false, IP_SRC_ANY },  /* remote_ip. */
+        { true,  true,  IP_SRC_ANY },  /* Flow-based remote. */
+        { true,  true,  IP_SRC_FLOW }, /* Flow-based everything. */
+    };
 
-    /* remote_ip, local_ip */
-    match.in_key = 0;
-    match.in_key_flow = true;
-    tnl_port = tnl_find_exact(&match);
-    if (tnl_port) {
-        return tnl_port;
-    }
+    const struct tnl_match_pattern *p;
+    struct tnl_match match;
 
-    /* remote_ip */
-    match.ip_src = 0;
-    tnl_port = tnl_find_exact(&match);
-    if (tnl_port) {
-        return tnl_port;
-    }
+    memset(&match, 0, sizeof match);
+    match.odp_port = flow->in_port.odp_port;
+    match.pkt_mark = flow->pkt_mark;
 
-    /* Flow-based remote */
-    match.ip_dst = 0;
-    match.ip_dst_flow = true;
-    tnl_port = tnl_find_exact(&match);
-    if (tnl_port) {
-        return tnl_port;
-    }
+    for (p = patterns; p < &patterns[ARRAY_SIZE(patterns)]; p++) {
+        struct tnl_port *tnl_port;
 
-    /* Flow-based everything */
-    match.ip_src_flow = true;
-    tnl_port = tnl_find_exact(&match);
-    if (tnl_port) {
-        return tnl_port;
+        match.in_key_flow = p->in_key_flow;
+        match.in_key = p->in_key_flow ? 0 : flow->tunnel.tun_id;
+
+        match.ip_dst_flow = p->ip_dst_flow;
+        match.ip_dst = p->ip_dst_flow ? 0 : flow->tunnel.ip_src;
+
+        match.ip_src_flow = p->ip_src == IP_SRC_FLOW;
+        match.ip_src = p->ip_src == IP_SRC_CFG ? flow->tunnel.ip_dst : 0;
+
+        tnl_port = tnl_find_exact(&match);
+        if (tnl_port) {
+            return tnl_port;
+        }
     }
 
     return NULL;
