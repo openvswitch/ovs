@@ -240,6 +240,22 @@ static void update_port(struct ofproto *, const char *devname);
 static int init_ports(struct ofproto *);
 static void reinit_ports(struct ofproto *);
 
+static long long int ofport_get_usage(const struct ofproto *,
+                                      ofp_port_t ofp_port);
+static void ofport_set_usage(struct ofproto *, ofp_port_t ofp_port,
+                             long long int last_used);
+
+/* Ofport usage.
+ *
+ * Keeps track of the currently used and recently used ofport values and is
+ * used to prevent immediate recycling of ofport values. */
+struct ofport_usage {
+    struct hmap_node hmap_node; /* In struct ofproto's "ofport_usage" hmap. */
+    ofp_port_t ofp_port;        /* OpenFlow port number. */
+    long long int last_used;    /* Last time the 'ofp_port' was used. LLONG_MAX
+                                   represents in-use ofports. */
+};
+
 /* rule. */
 static void ofproto_rule_destroy__(struct rule *);
 static void ofproto_rule_send_removed(struct rule *, uint8_t reason);
@@ -485,6 +501,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ofproto->dp_desc = NULL;
     ofproto->frag_handling = OFPC_FRAG_NORMAL;
     hmap_init(&ofproto->ports);
+    hmap_init(&ofproto->ofport_usage);
     shash_init(&ofproto->port_by_name);
     simap_init(&ofproto->ofp_requests);
     ofproto->max_ports = ofp_to_u16(OFPP_MAX);
@@ -517,11 +534,6 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
         ofproto_destroy__(ofproto);
         return error;
     }
-
-    /* The "max_ports" member should have been set by ->construct(ofproto).
-     * Port 0 is not a valid OpenFlow port, so mark that as unavailable. */
-    ofproto->ofp_port_ids = bitmap_allocate(ofproto->max_ports);
-    bitmap_set1(ofproto->ofp_port_ids, 0);
 
     /* Check that hidden tables, if any, are at the end. */
     ovs_assert(ofproto->n_tables);
@@ -1227,8 +1239,8 @@ ofproto_destroy__(struct ofproto *ofproto)
     free(ofproto->serial_desc);
     free(ofproto->dp_desc);
     hmap_destroy(&ofproto->ports);
+    hmap_destroy(&ofproto->ofport_usage);
     shash_destroy(&ofproto->port_by_name);
-    bitmap_free(ofproto->ofp_port_ids);
     simap_destroy(&ofproto->ofp_requests);
 
     OFPROTO_FOR_EACH_TABLE (table, ofproto) {
@@ -1248,6 +1260,7 @@ ofproto_destroy(struct ofproto *p)
     OVS_EXCLUDED(ofproto_mutex)
 {
     struct ofport *ofport, *next_ofport;
+    struct ofport_usage *usage, *next_usage;
 
     if (!p) {
         return;
@@ -1263,6 +1276,11 @@ ofproto_destroy(struct ofproto *p)
     ofproto_flush__(p);
     HMAP_FOR_EACH_SAFE (ofport, next_ofport, hmap_node, &p->ports) {
         ofport_destroy(ofport);
+    }
+
+    HMAP_FOR_EACH_SAFE (usage, next_usage, hmap_node, &p->ofport_usage) {
+        hmap_remove(&p->ofport_usage, &usage->hmap_node);
+        free(usage);
     }
 
     p->ofproto_class->destruct(p);
@@ -1941,35 +1959,45 @@ alloc_ofp_port(struct ofproto *ofproto, const char *netdev_name)
     port_idx = port_idx ? port_idx : UINT16_MAX;
 
     if (port_idx >= ofproto->max_ports
-        || bitmap_is_set(ofproto->ofp_port_ids, port_idx)) {
-        uint16_t end_port_no = ofproto->alloc_port_no;
+        || ofport_get_usage(ofproto, u16_to_ofp(port_idx)) == LLONG_MAX) {
+        uint16_t lru_ofport = 0, end_port_no = ofproto->alloc_port_no;
+        long long int last_used_at, lru = LLONG_MAX;
 
         /* Search for a free OpenFlow port number.  We try not to
          * immediately reuse them to prevent problems due to old
          * flows. */
         for (;;) {
             if (++ofproto->alloc_port_no >= ofproto->max_ports) {
-                ofproto->alloc_port_no = 0;
+                ofproto->alloc_port_no = 1;
             }
-            if (!bitmap_is_set(ofproto->ofp_port_ids,
-                               ofproto->alloc_port_no)) {
+            last_used_at = ofport_get_usage(ofproto,
+                                         u16_to_ofp(ofproto->alloc_port_no));
+            if (!last_used_at) {
                 port_idx = ofproto->alloc_port_no;
                 break;
+            } else if (last_used_at < lru) {
+                lru = last_used_at;
+                lru_ofport = ofproto->alloc_port_no;
             }
+
             if (ofproto->alloc_port_no == end_port_no) {
+                if (lru_ofport) {
+                    port_idx = lru_ofport;
+                    break;
+                }
                 return OFPP_NONE;
             }
         }
     }
-    bitmap_set1(ofproto->ofp_port_ids, port_idx);
+    ofport_set_usage(ofproto, u16_to_ofp(port_idx), LLONG_MAX);
     return u16_to_ofp(port_idx);
 }
 
 static void
-dealloc_ofp_port(const struct ofproto *ofproto, ofp_port_t ofp_port)
+dealloc_ofp_port(struct ofproto *ofproto, ofp_port_t ofp_port)
 {
     if (ofp_to_u16(ofp_port) < ofproto->max_ports) {
-        bitmap_set0(ofproto->ofp_port_ids, ofp_to_u16(ofp_port));
+        ofport_set_usage(ofproto, ofp_port, time_msec());
     }
 }
 
@@ -2192,6 +2220,41 @@ ofproto_get_port(const struct ofproto *ofproto, ofp_port_t ofp_port)
         }
     }
     return NULL;
+}
+
+static long long int
+ofport_get_usage(const struct ofproto *ofproto, ofp_port_t ofp_port)
+{
+    struct ofport_usage *usage;
+
+    HMAP_FOR_EACH_IN_BUCKET (usage, hmap_node, hash_ofp_port(ofp_port),
+                             &ofproto->ofport_usage) {
+        if (usage->ofp_port == ofp_port) {
+            return usage->last_used;
+        }
+    }
+    return 0;
+}
+
+static void
+ofport_set_usage(struct ofproto *ofproto, ofp_port_t ofp_port,
+                 long long int last_used)
+{
+    struct ofport_usage *usage;
+    HMAP_FOR_EACH_IN_BUCKET (usage, hmap_node, hash_ofp_port(ofp_port),
+                             &ofproto->ofport_usage) {
+        if (usage->ofp_port == ofp_port) {
+            usage->last_used = last_used;
+            return;
+        }
+    }
+    ovs_assert(last_used == LLONG_MAX);
+
+    usage = xmalloc(sizeof *usage);
+    usage->ofp_port = ofp_port;
+    usage->last_used = last_used;
+    hmap_insert(&ofproto->ofport_usage, &usage->hmap_node,
+                hash_ofp_port(ofp_port));
 }
 
 int
