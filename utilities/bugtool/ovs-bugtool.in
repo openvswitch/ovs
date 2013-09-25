@@ -207,7 +207,7 @@ CAP_MULTIPATH            = 'multipath'
 CAP_NETWORK_CONFIG       = 'network-config'
 CAP_NETWORK_INFO         = 'network-info'
 CAP_NETWORK_STATUS       = 'network-status'
-CAP_OPENVSWITCH_LOGS	 = 'ovs-system-logs'
+CAP_OPENVSWITCH_LOGS     = 'ovs-system-logs'
 CAP_PROCESS_LIST         = 'process-list'
 CAP_SYSTEM_LOGS          = 'system-logs'
 CAP_SYSTEM_SERVICES      = 'system-services'
@@ -222,6 +222,7 @@ unlimited_data = False
 dbg = False
 # Default value for the number of rotated logs.
 log_days = 20
+free_disk_space = None
 
 def cap(key, pii=PII_MAYBE, min_size=-1, max_size=-1, min_time=-1,
         max_time=-1, mime=MIME_TEXT, checked=True, hidden=False):
@@ -284,6 +285,7 @@ def cmd_output(cap, args, label=None, filter=None, binary=False):
         data[label] = {'cap': cap, 'cmd_args': args, 'filter': filter,
                        'binary': binary}
 
+
 def file_output(cap, path_list, newest_first=False):
     """
     If newest_first is True, the list of files in path_list is sorted
@@ -302,12 +304,9 @@ def file_output(cap, path_list, newest_first=False):
         mtime = lambda(path, stat): stat.st_mtime
         path_entries.sort(key=mtime, reverse=newest_first)
         for p in path_entries:
-            if unlimited_data or caps[cap][MAX_SIZE] == -1 or \
-                    cap_sizes[cap] < caps[cap][MAX_SIZE]:
+            if check_space(cap, p[0], p[1].st_size):
                 data[p] = {'cap': cap, 'filename': p[0]}
-                cap_sizes[cap] += p[1].st_size
-            else:
-                output("Omitting %s, size constraint of %s exceeded" % (p[0], cap))
+
 
 def tree_output(cap, path, pattern=None, negate=False, newest_first=False):
     """
@@ -354,12 +353,8 @@ def collect_data():
                 f = open(v['filename'], 'r')
                 s = f.read()
                 f.close()
-                if unlimited_data or caps[cap][MAX_SIZE] == -1 or \
-                        cap_sizes[cap] < caps[cap][MAX_SIZE]:
+                if check_space(cap, v['filename'], len(s)):
                     v['output'] = StringIOmtime(s)
-                    cap_sizes[cap] += len(s)
-                else:
-                    output("Omitting %s, size constraint of %s exceeded" % (v['filename'], cap))
             except:
                 pass
         elif v.has_key('func'):
@@ -367,19 +362,15 @@ def collect_data():
                 s = v['func'](cap)
             except Exception, e:
                 s = str(e)
-            if unlimited_data or caps[cap][MAX_SIZE] == -1 or \
-                    cap_sizes[cap] < caps[cap][MAX_SIZE]:
+            if check_space(cap, k, len(s)):
                 v['output'] = StringIOmtime(s)
-                cap_sizes[cap] += len(s)
-            else:
-                output("Omitting %s, size constraint of %s exceeded" % (k, cap))
 
     run_procs(process_lists.values())
 
 
 def main(argv=None):
     global ANSWER_YES_TO_ALL, SILENT_MODE
-    global entries, data, dbg, unlimited_data, log_days
+    global entries, data, dbg, unlimited_data, log_days, free_disk_space
 
     # Filter flags
     only_ovs_info = False
@@ -466,6 +457,7 @@ def main(argv=None):
         if k == '--log-days':
             log_days = int(v)
 
+
     if len(params) != 1:
         print >>sys.stderr, "Invalid additional arguments", str(params)
         return 2
@@ -477,6 +469,9 @@ def main(argv=None):
     if output_fd != -1 and output_file is not None:
         print >>sys.stderr, "Cannot set both '--outfd' and '--outfile'"
         return 2
+
+    if output_file is not None and not unlimited_data:
+        free_disk_space = get_free_disk_space(output_file) * 90 / 100
 
     if ANSWER_YES_TO_ALL:
         output("Warning: '--yestoall' argument provided, will not prompt for individual files.")
@@ -1246,6 +1241,31 @@ def pidof(name):
             pass
 
     return pids
+
+
+def check_space(cap, name, size):
+    global free_disk_space
+    if free_disk_space is not None and size > free_disk_space:
+        output("Omitting %s, out of disk space (requested: %u, allowed: %u)" %
+               (name, size, free_disk_space))
+        return False
+    elif unlimited_data or caps[cap][MAX_SIZE] == -1 or \
+             cap_sizes[cap] < caps[cap][MAX_SIZE]:
+        cap_sizes[cap] += size
+        if free_disk_space is not None:
+            free_disk_space -= size
+        return True
+    else:
+        output("Omitting %s, size constraint of %s exceeded" % (name, cap))
+        return False
+
+
+def get_free_disk_space(path):
+    path = os.path.abspath(path)
+    while not os.path.exists(path):
+        path = os.path.dirname(path)
+    s = os.statvfs(path)
+    return s.f_frsize * s.f_bfree
 
 
 class StringIOmtime(StringIO.StringIO):

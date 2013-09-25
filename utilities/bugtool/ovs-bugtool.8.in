@@ -48,7 +48,8 @@ Use only Open vSwitch relevant capabilities.
 Suppress output.
 .
 .IP "\fB\-\-unlimited\fR"
-Do not exclude files which are too large.
+Do not exclude files which are too large. Also skip checking free disk space.
+By default up to 90 percent of the free disk space can be used.
 .
 .IP "\fB\-\-yestoall\fR"
 Answer yes to all prompts.
