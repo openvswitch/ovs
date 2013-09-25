@@ -21,6 +21,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+#include "byte-order.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
 #include "hash.h"
@@ -330,6 +331,7 @@ void miniflow_expand(const struct miniflow *, struct flow *);
 
 uint32_t miniflow_get(const struct miniflow *, unsigned int u32_ofs);
 uint16_t miniflow_get_vid(const struct miniflow *);
+static inline ovs_be64 miniflow_get_metadata(const struct miniflow *);
 
 bool miniflow_equal(const struct miniflow *a, const struct miniflow *b);
 bool miniflow_equal_in_minimask(const struct miniflow *a,
@@ -363,11 +365,36 @@ void minimask_expand(const struct minimask *, struct flow_wildcards *);
 
 uint32_t minimask_get(const struct minimask *, unsigned int u32_ofs);
 uint16_t minimask_get_vid_mask(const struct minimask *);
+static inline ovs_be64 minimask_get_metadata_mask(const struct minimask *);
 
 bool minimask_equal(const struct minimask *a, const struct minimask *b);
 uint32_t minimask_hash(const struct minimask *, uint32_t basis);
 
 bool minimask_has_extra(const struct minimask *, const struct minimask *);
 bool minimask_is_catchall(const struct minimask *);
+
+/* Returns the value of the OpenFlow 1.1+ "metadata" field in 'flow'. */
+static inline ovs_be64
+miniflow_get_metadata(const struct miniflow *flow)
+{
+    enum { MD_OFS = offsetof(struct flow, metadata) };
+    BUILD_ASSERT_DECL(MD_OFS % sizeof(uint32_t) == 0);
+    ovs_be32 hi = (OVS_FORCE ovs_be32) miniflow_get(flow, MD_OFS / 4);
+    ovs_be32 lo = (OVS_FORCE ovs_be32) miniflow_get(flow, MD_OFS / 4 + 1);
+
+    return htonll(((uint64_t) ntohl(hi) << 32) | ntohl(lo));
+}
+
+/* Returns the mask for the OpenFlow 1.1+ "metadata" field in 'mask'.
+ *
+ * The return value is all-1-bits if 'mask' matches on the whole value of the
+ * metadata field, all-0-bits if 'mask' entirely wildcards the metadata field,
+ * or some other value if the metadata field is partially matched, partially
+ * wildcarded. */
+static inline ovs_be64
+minimask_get_metadata_mask(const struct minimask *mask)
+{
+    return miniflow_get_metadata(&mask->masks);
+}
 
 #endif /* flow.h */

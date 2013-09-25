@@ -154,6 +154,7 @@ classifier_init(struct classifier *cls)
     cls->n_rules = 0;
     hmap_init(&cls->tables);
     list_init(&cls->tables_priority);
+    hmap_init(&cls->partitions);
     ovs_rwlock_init(&cls->rwlock);
 }
 
@@ -163,12 +164,20 @@ void
 classifier_destroy(struct classifier *cls)
 {
     if (cls) {
+        struct cls_table *partition, *next_partition;
         struct cls_table *table, *next_table;
 
         HMAP_FOR_EACH_SAFE (table, next_table, hmap_node, &cls->tables) {
             destroy_table(cls, table);
         }
         hmap_destroy(&cls->tables);
+
+        HMAP_FOR_EACH_SAFE (partition, next_partition, hmap_node,
+                            &cls->partitions) {
+            hmap_remove(&cls->partitions, &partition->hmap_node);
+            free(partition);
+        }
+        hmap_destroy(&cls->partitions);
         ovs_rwlock_destroy(&cls->rwlock);
     }
 }
@@ -185,6 +194,45 @@ int
 classifier_count(const struct classifier *cls)
 {
     return cls->n_rules;
+}
+
+static uint32_t
+hash_metadata(ovs_be64 metadata_)
+{
+    uint64_t metadata = (OVS_FORCE uint64_t) metadata_;
+    return hash_2words(metadata, metadata >> 32);
+}
+
+static struct cls_partition *
+find_partition(const struct classifier *cls, ovs_be64 metadata, uint32_t hash)
+{
+    struct cls_partition *partition;
+
+    HMAP_FOR_EACH_IN_BUCKET (partition, hmap_node, hash, &cls->partitions) {
+        if (partition->metadata == metadata) {
+            return partition;
+        }
+    }
+
+    return NULL;
+}
+
+static struct cls_partition *
+create_partition(struct classifier *cls, struct cls_table *table,
+                 ovs_be64 metadata)
+{
+    uint32_t hash = hash_metadata(metadata);
+    struct cls_partition *partition = find_partition(cls, metadata, hash);
+    if (!partition) {
+        partition = xmalloc(sizeof *partition);
+        partition->metadata = metadata;
+        partition->tags = 0;
+        partition->n_refs = 0;
+        hmap_insert(&cls->partitions, &partition->hmap_node, hash);
+    }
+    partition->tags |= table->tag;
+    partition->n_refs++;
+    return partition;
 }
 
 /* Inserts 'rule' into 'cls'.  Until 'rule' is removed from 'cls', the caller
@@ -213,8 +261,17 @@ classifier_replace(struct classifier *cls, struct cls_rule *rule)
 
     old_rule = insert_rule(cls, table, rule);
     if (!old_rule) {
+        if (minimask_get_metadata_mask(&rule->match.mask) == OVS_BE64_MAX) {
+            ovs_be64 metadata = miniflow_get_metadata(&rule->match.flow);
+            rule->partition = create_partition(cls, table, metadata);
+        } else {
+            rule->partition = NULL;
+        }
+
         table->n_table_rules++;
         cls->n_rules++;
+    } else {
+        rule->partition = old_rule->partition;
     }
     return old_rule;
 }
@@ -238,6 +295,7 @@ classifier_insert(struct classifier *cls, struct cls_rule *rule)
 void
 classifier_remove(struct classifier *cls, struct cls_rule *rule)
 {
+    struct cls_partition *partition;
     struct cls_rule *head;
     struct cls_table *table;
 
@@ -253,6 +311,12 @@ classifier_remove(struct classifier *cls, struct cls_rule *rule)
 
         list_remove(&rule->list);
         hmap_replace(&table->rules, &rule->hmap_node, &next->hmap_node);
+    }
+
+    partition = rule->partition;
+    if (partition && --partition->n_refs == 0) {
+        hmap_remove(&cls->partitions, &partition->hmap_node);
+        free(partition);
     }
 
     if (--table->n_table_rules == 0) {
@@ -275,13 +339,44 @@ struct cls_rule *
 classifier_lookup(const struct classifier *cls, const struct flow *flow,
                   struct flow_wildcards *wc)
 {
+    const struct cls_partition *partition;
     struct cls_table *table;
     struct cls_rule *best;
+    tag_type tags;
+
+    /* Determine 'tags' such that, if 'table->tag' doesn't intersect them, then
+     * 'flow' cannot possibly match in 'table':
+     *
+     *     - If flow->metadata maps to a given 'partition', then we can use
+     *       'tags' for 'partition->tags'.
+     *
+     *     - If flow->metadata has no partition, then no rule in 'cls' has an
+     *       exact-match for flow->metadata.  That means that we don't need to
+     *       search any table that includes flow->metadata in its mask.
+     *
+     * In either case, we always need to search any cls_tables that do not
+     * include flow->metadata in its mask.  One way to do that would be to
+     * check the "cls_table"s explicitly for that, but that would require an
+     * extra branch per table.  Instead, we mark such a cls_table's 'tags' as
+     * TAG_ALL and make sure that 'tags' is never empty.  This means that
+     * 'tags' always intersects such a cls_table's 'tags', so we don't need a
+     * special case.
+     */
+    partition = (hmap_is_empty(&cls->partitions)
+                 ? NULL
+                 : find_partition(cls, flow->metadata,
+                                  hash_metadata(flow->metadata)));
+    tags = partition ? partition->tags : TAG_ARBITRARY;
 
     best = NULL;
     LIST_FOR_EACH (table, list_node, &cls->tables_priority) {
-        struct cls_rule *rule = find_match(table, flow);
+        struct cls_rule *rule;
 
+        if (!tag_intersects(tags, table->tag)) {
+            continue;
+        }
+
+        rule = find_match(table, flow);
         if (wc) {
             flow_wildcards_fold_minimask(wc, &table->mask);
         }
@@ -293,6 +388,10 @@ classifier_lookup(const struct classifier *cls, const struct flow *flow,
                      * can not find anything better. */
                     return best;
                 }
+                if (!tag_intersects(tags, table->tag)) {
+                    continue;
+                }
+
                 rule = find_match(table, flow);
                 if (wc) {
                     flow_wildcards_fold_minimask(wc, &table->mask);
@@ -550,6 +649,7 @@ find_table(const struct classifier *cls, const struct minimask *mask)
 static struct cls_table *
 insert_table(struct classifier *cls, const struct minimask *mask)
 {
+    uint32_t hash = minimask_hash(mask, 0);
     struct cls_table *table;
 
     table = xzalloc(sizeof *table);
@@ -557,6 +657,9 @@ insert_table(struct classifier *cls, const struct minimask *mask)
     minimask_clone(&table->mask, mask);
     hmap_insert(&cls->tables, &table->hmap_node, minimask_hash(mask, 0));
     list_push_back(&cls->tables_priority, &table->list_node);
+    table->tag = (minimask_get_metadata_mask(mask) == OVS_BE64_MAX
+                  ? tag_create_deterministic(hash)
+                  : TAG_ALL);
 
     return table;
 }
