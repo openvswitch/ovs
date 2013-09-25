@@ -164,7 +164,7 @@ struct cls_partition {
     struct hmap_node hmap_node; /* In struct classifier's 'partitions' hmap. */
     ovs_be64 metadata;          /* metadata value for this partition. */
     tag_type tags;              /* OR of each included flow's cls_table tag. */
-    unsigned int n_refs;        /* # of flows that refer to this partition. */
+    struct tag_tracker tracker; /* Tracks the bits in 'tags'. */
 };
 
 void cls_rule_init(struct cls_rule *, const struct match *,

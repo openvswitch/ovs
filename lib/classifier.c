@@ -227,11 +227,10 @@ create_partition(struct classifier *cls, struct cls_table *table,
         partition = xmalloc(sizeof *partition);
         partition->metadata = metadata;
         partition->tags = 0;
-        partition->n_refs = 0;
+        tag_tracker_init(&partition->tracker);
         hmap_insert(&cls->partitions, &partition->hmap_node, hash);
     }
-    partition->tags |= table->tag;
-    partition->n_refs++;
+    tag_tracker_add(&partition->tracker, &partition->tags, table->tag);
     return partition;
 }
 
@@ -314,9 +313,13 @@ classifier_remove(struct classifier *cls, struct cls_rule *rule)
     }
 
     partition = rule->partition;
-    if (partition && --partition->n_refs == 0) {
-        hmap_remove(&cls->partitions, &partition->hmap_node);
-        free(partition);
+    if (partition) {
+        tag_tracker_subtract(&partition->tracker, &partition->tags,
+                             table->tag);
+        if (!partition->tags) {
+            hmap_remove(&cls->partitions, &partition->hmap_node);
+            free(partition);
+        }
     }
 
     if (--table->n_table_rules == 0) {

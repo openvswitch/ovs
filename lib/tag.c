@@ -16,10 +16,6 @@
 
 #include <config.h>
 #include "tag.h"
-#include <limits.h>
-
-#define N_TAG_BITS (CHAR_BIT * sizeof(tag_type))
-BUILD_ASSERT_DECL(IS_POW2(N_TAG_BITS));
 
 #define LOG2_N_TAG_BITS (N_TAG_BITS == 32 ? 5 : N_TAG_BITS == 64 ? 6 : 0)
 BUILD_ASSERT_DECL(LOG2_N_TAG_BITS > 0);
@@ -36,4 +32,33 @@ tag_create_deterministic(uint32_t seed)
     int y = (seed >> LOG2_N_TAG_BITS) % (N_TAG_BITS - 1);
     y += y >= x;
     return (1u << x) | (1u << y);
+}
+
+/* Initializes 'tracker'. */
+void
+tag_tracker_init(struct tag_tracker *tracker)
+{
+    memset(tracker, 0, sizeof *tracker);
+}
+
+/* Adds 'add' to '*tags' and records the bits added in 'tracker'. */
+void
+tag_tracker_add(struct tag_tracker *tracker, tag_type *tags, tag_type add)
+{
+    *tags |= add;
+    for (; add; add = zero_rightmost_1bit(add)) {
+        tracker->counts[rightmost_1bit_idx(add)]++;
+    }
+}
+
+/* Removes 'sub' from 'tracker' and unsets any bits in '*tags' that no
+ * remaining tag includes. */
+void
+tag_tracker_subtract(struct tag_tracker *tracker, tag_type *tags, tag_type sub)
+{
+    for (; sub; sub = zero_rightmost_1bit(sub)) {
+        if (!--tracker->counts[rightmost_1bit_idx(sub)]) {
+            *tags &= ~rightmost_1bit(sub);
+        }
+    }
 }

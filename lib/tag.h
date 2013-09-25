@@ -19,6 +19,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <limits.h>
 #include "util.h"
 
 /*
@@ -63,6 +64,9 @@
 /* Represents a tag, or the combination of 0 or more tags. */
 typedef uint32_t tag_type;
 
+#define N_TAG_BITS (CHAR_BIT * sizeof(tag_type))
+BUILD_ASSERT_DECL(IS_POW2(N_TAG_BITS));
+
 /* A 'tag_type' value that intersects every tag. */
 #define TAG_ALL UINT32_MAX
 
@@ -80,5 +84,17 @@ tag_intersects(tag_type a, tag_type b)
     tag_type x = a & b;
     return (x & (x - 1)) != 0;
 }
+
+/* Adding tags is easy, but subtracting is hard because you can't tell whether
+ * a bit was set only by the tag you're removing or by multiple tags.  The
+ * tag_tracker data structure counts the number of tags that set each bit,
+ * which allows for efficient subtraction. */
+struct tag_tracker {
+    unsigned int counts[N_TAG_BITS];
+};
+
+void tag_tracker_init(struct tag_tracker *);
+void tag_tracker_add(struct tag_tracker *, tag_type *, tag_type);
+void tag_tracker_subtract(struct tag_tracker *, tag_type *, tag_type);
 
 #endif /* tag.h */
