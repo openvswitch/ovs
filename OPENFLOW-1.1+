@@ -168,6 +168,95 @@ didn't compare the specs carefully yet.)
       optimization in some cases for the software switch.
       [optional for OF1.3+]
 
+ONF OpenFlow Exensions for 1.3.X Pack1
+--------------------------------------
+
+OpenFlow 1.3 has a bunch of ONF extentions.
+Many of them are necessary for OpenFlow 1.4 as well.
+
+    * Flow entry notifications
+      This seems to be modelled after OVS's NXST_FLOW_MONITOR.
+      [EXT-187]
+      [required for OF1.4+]
+
+    * Role Status
+      [EXT-191]
+      [required for OF1.4+]
+
+    * Flow entry eviction
+      OVS has flow eviction functionality.
+      table_mod OFPTC_EVICTION, flow_mod 'importance', and
+      table_desc ofp_table_mod_prop_eviction need to be implemented.
+      [EXT-192-e]
+      [optional for OF1.4+]
+
+    * Vacancy events
+      [EXT-192-v]
+      [optional for OF1.4+]
+
+    * Bundle
+      Transactional modification.  OpenFlow 1.4 requires to support
+      flow_mods and port_mods in a bundle.
+      (Not related to OVS's 'ofbundle' stuff.)
+      [EXT-230]
+      [required for OF1.4+]
+
+    * Table synchronisation
+      [EXT-232]
+      [optional for OF1.4+]
+
+    * Group notifications
+      [EXT-235]
+      [optional for OF1.4+]
+
+    * Bad flow entry priority error
+      Probably not so useful to the software switch.
+      [EXT-236]
+      [optional for OF1.4+]
+
+    * Set async config error
+      [EXT-237]
+      [optional for OF1.4+]
+
+    * PBB UCA header field
+      [EXT-256]
+      [optional for OF1.4+]
+
+    * Duplicate instruction error
+      We already have ONFBIC_DUP_INSTRUCTION.
+      [EXT-260]
+      [required for OF1.4+]
+
+    * Multipart timeout error
+      [EXT-264]
+      [required for OF1.4+]
+
+OpenFlow 1.4
+------------
+
+    * More extensible wire protocol
+      Many on-wire structures got TLVs.
+      [EXT-262]
+      [required for OF1.4+]
+
+    * More descriptive reasons for packet-in
+      Distinguish OFPR_APPLY_ACTION, OFPR_ACTION_SET, OFPR_GROUP,
+      OFPR_PACKET_OUT.  NO_MATCH was renamed to OFPR_TABLE_MISS.
+      [EXT-136]
+      [required for OF1.4+]
+
+    * Optical port properties
+      [EXT-154]
+      [optional for OF1.4+]
+
+    * Flow-removed reason for meter delete
+      Report flow removal due to meter deletion with OFPRR_METER_DELETE.
+      [EXT-261]
+      [optional for OF1.4+]
+
+    * Meter notifications
+      [EXT-235]
+      [optional for OF1.4+]
 
 How to contribute
 -----------------
