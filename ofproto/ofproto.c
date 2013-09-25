@@ -3490,7 +3490,6 @@ flow_stats_ds(struct rule *rule, struct ds *results)
         ds_put_format(results, "table_id=%"PRIu8", ", rule->table_id);
     }
     ds_put_format(results, "duration=%llds, ", (time_msec() - created) / 1000);
-    ds_put_format(results, "priority=%u, ", rule->cr.priority);
     ds_put_format(results, "n_packets=%"PRIu64", ", packet_count);
     ds_put_format(results, "n_bytes=%"PRIu64", ", byte_count);
     cls_rule_format(&rule->cr, results);
