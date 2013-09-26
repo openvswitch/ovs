@@ -34,9 +34,6 @@
 #include "poll-loop.h"
 #include "random.h"
 #include "util.h"
-#include "vlog.h"
-
-VLOG_DEFINE_THIS_MODULE(stream);
 
 COVERAGE_DEFINE(pstream_open);
 COVERAGE_DEFINE(stream_open);

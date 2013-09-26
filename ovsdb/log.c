@@ -32,9 +32,6 @@
 #include "socket-util.h"
 #include "transaction.h"
 #include "util.h"
-#include "vlog.h"
-
-VLOG_DEFINE_THIS_MODULE(ovsdb_log);
 
 enum ovsdb_log_mode {
     OVSDB_LOG_READ,

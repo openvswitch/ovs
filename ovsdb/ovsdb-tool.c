@@ -40,8 +40,6 @@
 #include "util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(ovsdb_tool);
-
 /* -m, --more: Verbosity level for "show-log" command output. */
 static int show_log_verbosity;
 

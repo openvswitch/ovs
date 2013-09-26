@@ -29,9 +29,6 @@
 #include "unaligned.h"
 #include "util.h"
 #include "vlan-bitmap.h"
-#include "vlog.h"
-
-VLOG_DEFINE_THIS_MODULE(mac_learning);
 
 COVERAGE_DEFINE(mac_learning_learned);
 COVERAGE_DEFINE(mac_learning_expired);

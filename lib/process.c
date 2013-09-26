@@ -37,7 +37,6 @@
 
 VLOG_DEFINE_THIS_MODULE(process);
 
-COVERAGE_DEFINE(process_sigchld);
 COVERAGE_DEFINE(process_start);
 
 struct process {

@@ -36,9 +36,6 @@
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "unaligned.h"
-#include "vlog.h"
-
-VLOG_DEFINE_THIS_MODULE(flow);
 
 COVERAGE_DEFINE(flow_extract);
 COVERAGE_DEFINE(miniflow_malloc);

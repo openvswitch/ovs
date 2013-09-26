@@ -49,8 +49,6 @@
 #include "util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(dpctl);
-
 /* -s, --statistics: Print port/flow statistics? */
 static bool print_statistics;
 

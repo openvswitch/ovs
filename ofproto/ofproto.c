@@ -57,14 +57,11 @@
 
 VLOG_DEFINE_THIS_MODULE(ofproto);
 
-COVERAGE_DEFINE(ofproto_error);
 COVERAGE_DEFINE(ofproto_flush);
-COVERAGE_DEFINE(ofproto_no_packet_in);
 COVERAGE_DEFINE(ofproto_packet_out);
 COVERAGE_DEFINE(ofproto_queue_req);
 COVERAGE_DEFINE(ofproto_recv_openflow);
 COVERAGE_DEFINE(ofproto_reinit_ports);
-COVERAGE_DEFINE(ofproto_uninstallable);
 COVERAGE_DEFINE(ofproto_update_port);
 
 enum ofproto_state {

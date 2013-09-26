@@ -51,8 +51,6 @@ COVERAGE_DEFINE(dpif_flow_flush);
 COVERAGE_DEFINE(dpif_flow_get);
 COVERAGE_DEFINE(dpif_flow_put);
 COVERAGE_DEFINE(dpif_flow_del);
-COVERAGE_DEFINE(dpif_flow_query_list);
-COVERAGE_DEFINE(dpif_flow_query_list_n);
 COVERAGE_DEFINE(dpif_execute);
 COVERAGE_DEFINE(dpif_purge);
 

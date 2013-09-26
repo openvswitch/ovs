@@ -38,9 +38,6 @@
 #include "packets.h"
 #include "socket-util.h"
 #include "vconn.h"
-#include "vlog.h"
-
-VLOG_DEFINE_THIS_MODULE(ofp_parse);
 
 /* Parses 'str' as an 8-bit unsigned integer into '*valuep'.
  *

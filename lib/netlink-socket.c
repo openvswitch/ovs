@@ -40,7 +40,6 @@ VLOG_DEFINE_THIS_MODULE(netlink_socket);
 COVERAGE_DEFINE(netlink_overflow);
 COVERAGE_DEFINE(netlink_received);
 COVERAGE_DEFINE(netlink_recv_jumbo);
-COVERAGE_DEFINE(netlink_send);
 COVERAGE_DEFINE(netlink_sent);
 
 /* Linux header file confusion causes this to be undefined. */

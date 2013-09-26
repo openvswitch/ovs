@@ -68,13 +68,10 @@
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif);
 
 COVERAGE_DEFINE(ofproto_dpif_expired);
-COVERAGE_DEFINE(facet_changed_rule);
 COVERAGE_DEFINE(facet_revalidate);
 COVERAGE_DEFINE(facet_unexpected);
-COVERAGE_DEFINE(facet_suppress);
 COVERAGE_DEFINE(subfacet_install_fail);
 COVERAGE_DEFINE(packet_in_overflow);
-COVERAGE_DEFINE(flow_mod_overflow);
 
 /* Number of implemented OpenFlow tables. */
 enum { N_TABLES = 255 };

@@ -21,10 +21,6 @@
 #include "dynamic-string.h"
 #include "ofp-util.h"
 #include "packets.h"
-#include "vlog.h"
-
-VLOG_DEFINE_THIS_MODULE(match);
-
 
 /* Converts the flow in 'flow' into a match in 'match', with the given
  * 'wildcards'. */

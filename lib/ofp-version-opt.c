@@ -1,11 +1,8 @@
 #include <config.h>
+#include "dynamic-string.h"
 #include "ofp-util.h"
 #include "ofp-version-opt.h"
 #include "ovs-thread.h"
-#include "vlog.h"
-#include "dynamic-string.h"
-
-VLOG_DEFINE_THIS_MODULE(ofp_version);
 
 static uint32_t allowed_versions = 0;
 
