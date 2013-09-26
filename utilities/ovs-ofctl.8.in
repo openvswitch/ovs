@@ -1514,7 +1514,7 @@ and \fBdel\-flows\fR commands support one additional optional field:
 .TP
 \fBout_port=\fIport\fR
 If set, a matching flow must include an output action to \fIport\fR,
-which must an OpenFlow port number or name (e.g. \fBlocal\fR).
+which must be an OpenFlow port number or name (e.g. \fBlocal\fR).
 .
 .SS "Table Entry Output"
 .
