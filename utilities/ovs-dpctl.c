@@ -1112,7 +1112,7 @@ dpctl_normalize_actions(int argc, char *argv[])
             printf("no vlan: ");
         }
 
-        if (af->flow.mpls_depth) {
+        if (eth_type_mpls(af->flow.dl_type)) {
             printf("mpls(label=%"PRIu32",tc=%d,ttl=%d): ",
                    mpls_lse_to_label(af->flow.mpls_lse),
                    mpls_lse_to_tc(af->flow.mpls_lse),

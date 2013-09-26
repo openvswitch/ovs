@@ -2503,9 +2503,7 @@ odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *data,
         arp_key->arp_op = htons(data->nw_proto);
         memcpy(arp_key->arp_sha, data->arp_sha, ETH_ADDR_LEN);
         memcpy(arp_key->arp_tha, data->arp_tha, ETH_ADDR_LEN);
-    }
-
-    if (flow->mpls_depth) {
+    } else if (eth_type_mpls(flow->dl_type)) {
         struct ovs_key_mpls *mpls_key;
 
         mpls_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_MPLS,
@@ -2798,7 +2796,6 @@ parse_l2_5_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
 	        return ODP_FIT_TOO_LITTLE;
 	    }
 	    flow->mpls_lse = nl_attr_get_be32(attrs[OVS_KEY_ATTR_MPLS]);
-	    flow->mpls_depth++;
         } else if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_MPLS)) {
             flow->mpls_lse = nl_attr_get_be32(attrs[OVS_KEY_ATTR_MPLS]);
 
@@ -2806,10 +2803,6 @@ parse_l2_5_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
                 return ODP_FIT_ERROR;
             }
             expected_attrs |= (UINT64_C(1) << OVS_KEY_ATTR_MPLS);
-            if (flow->mpls_lse) {
-                /* XXX Is this needed? */
-                flow->mpls_depth = 0xffff;
-            }
         }
         goto done;
     } else if (src_flow->dl_type == htons(ETH_TYPE_IP)) {
@@ -3351,48 +3344,44 @@ commit_vlan_action(const struct flow *flow, struct flow *base,
 
 static void
 commit_mpls_action(const struct flow *flow, struct flow *base,
-                   struct ofpbuf *odp_actions, struct flow_wildcards *wc)
+                   struct ofpbuf *odp_actions, struct flow_wildcards *wc,
+                   int *mpls_depth_delta)
 {
-    if (flow->mpls_lse == base->mpls_lse &&
-        flow->mpls_depth == base->mpls_depth) {
+    if (flow->mpls_lse == base->mpls_lse && !*mpls_depth_delta) {
         return;
     }
 
     memset(&wc->masks.mpls_lse, 0xff, sizeof wc->masks.mpls_lse);
 
-    if (flow->mpls_depth < base->mpls_depth) {
-        if (base->mpls_depth - flow->mpls_depth > 1) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 10);
-            VLOG_WARN_RL(&rl, "Multiple mpls_pop actions reduced to "
-                         " a single mpls_pop action");
-        }
-
+    switch (*mpls_depth_delta) {
+    case -1:
         nl_msg_put_be16(odp_actions, OVS_ACTION_ATTR_POP_MPLS, flow->dl_type);
-    } else if (flow->mpls_depth > base->mpls_depth) {
+        break;
+    case 1: {
         struct ovs_action_push_mpls *mpls;
-
-        if (flow->mpls_depth - base->mpls_depth > 1) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 10);
-            VLOG_WARN_RL(&rl, "Multiple mpls_push actions reduced to "
-                         " a single mpls_push action");
-        }
 
         mpls = nl_msg_put_unspec_uninit(odp_actions, OVS_ACTION_ATTR_PUSH_MPLS,
                                         sizeof *mpls);
         memset(mpls, 0, sizeof *mpls);
         mpls->mpls_ethertype = flow->dl_type;
         mpls->mpls_lse = flow->mpls_lse;
-    } else {
+        break;
+    }
+    case 0: {
         struct ovs_key_mpls mpls_key;
 
         mpls_key.mpls_lse = flow->mpls_lse;
         commit_set_action(odp_actions, OVS_KEY_ATTR_MPLS,
                           &mpls_key, sizeof(mpls_key));
+        break;
+    }
+    default:
+        NOT_REACHED();
     }
 
     base->dl_type = flow->dl_type;
     base->mpls_lse = flow->mpls_lse;
-    base->mpls_depth = flow->mpls_depth;
+    *mpls_depth_delta = 0;
 }
 
 static void
@@ -3563,7 +3552,8 @@ commit_set_pkt_mark_action(const struct flow *flow, struct flow *base,
  * used as part of the action. */
 void
 commit_odp_actions(const struct flow *flow, struct flow *base,
-                   struct ofpbuf *odp_actions, struct flow_wildcards *wc)
+                   struct ofpbuf *odp_actions, struct flow_wildcards *wc,
+                   int *mpls_depth_delta)
 {
     commit_set_ether_addr_action(flow, base, odp_actions, wc);
     commit_vlan_action(flow, base, odp_actions, wc);
@@ -3573,7 +3563,7 @@ commit_odp_actions(const struct flow *flow, struct flow *base,
      * actions. This is because committing MPLS actions may alter a packet so
      * that it is no longer IP and thus nw and port actions are no longer valid.
      */
-    commit_mpls_action(flow, base, odp_actions, wc);
+    commit_mpls_action(flow, base, odp_actions, wc, mpls_depth_delta);
     commit_set_priority_action(flow, base, odp_actions, wc);
     commit_set_pkt_mark_action(flow, base, odp_actions, wc);
 }
