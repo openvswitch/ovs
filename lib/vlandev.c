@@ -303,7 +303,7 @@ vlandev_stub_del(const char *vlan_dev OVS_UNUSED)
     return EOPNOTSUPP;
 }
 
-static const struct vlandev_class vlandev_stub_class = {
+static const struct vlandev_class OVS_UNUSED vlandev_stub_class = {
     NULL,                       /* vd_refresh */
     vlandev_stub_add,
     vlandev_stub_del

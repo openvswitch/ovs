@@ -884,14 +884,14 @@ ofpacts_from_openflow11(const union ofp_action *in, size_t n_in,
 /* OpenFlow 1.1 instructions. */
 
 #define DEFINE_INST(ENUM, STRUCT, EXTENSIBLE, NAME)             \
-    static inline const struct STRUCT *                         \
+    static inline const struct STRUCT * OVS_UNUSED              \
     instruction_get_##ENUM(const struct ofp11_instruction *inst)\
     {                                                           \
         ovs_assert(inst->type == htons(ENUM));                  \
         return ALIGNED_CAST(struct STRUCT *, inst);             \
     }                                                           \
                                                                 \
-    static inline void                                          \
+    static inline void OVS_UNUSED                               \
     instruction_init_##ENUM(struct STRUCT *s)                   \
     {                                                           \
         memset(s, 0, sizeof *s);                                \
@@ -899,7 +899,7 @@ ofpacts_from_openflow11(const union ofp_action *in, size_t n_in,
         s->len = htons(sizeof *s);                              \
     }                                                           \
                                                                 \
-    static inline struct STRUCT *                               \
+    static inline struct STRUCT * OVS_UNUSED                    \
     instruction_put_##ENUM(struct ofpbuf *buf)                  \
     {                                                           \
         struct STRUCT *s = ofpbuf_put_uninit(buf, sizeof *s);   \
