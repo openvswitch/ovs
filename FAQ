@@ -1299,6 +1299,39 @@ A: Yes, OpenFlow requires a switch to ignore attempts to send a packet
                                        2,3,4,5,6,\
                                        pop:NXM_OF_IN_PORT[]
 
+Q: My bridge br0 has host 192.168.0.1 on port 1 and host 192.168.0.2
+   on port 2.  I set up flows to forward only traffic destined to the
+   other host and drop other traffic, like this:
+
+      priority=5,in_port=1,ip,nw_dst=192.168.0.2,actions=2
+      priority=5,in_port=2,ip,nw_dst=192.168.0.1,actions=1
+      priority=0,actions=drop
+
+   But it doesn't work--I don't get any connectivity when I do this.
+   Why?
+
+A: These flows drop the ARP packets that IP hosts use to establish IP
+   connectivity over Ethernet.  To solve the problem, add flows to
+   allow ARP to pass between the hosts:
+
+      priority=5,in_port=1,arp,actions=2
+      priority=5,in_port=2,arp,actions=1
+
+   This issue can manifest other ways, too.  The following flows that
+   match on Ethernet addresses instead of IP addresses will also drop
+   ARP packets, because ARP requests are broadcast instead of being
+   directed to a specific host:
+
+      priority=5,in_port=1,dl_dst=54:00:00:00:00:02,actions=2
+      priority=5,in_port=2,dl_dst=54:00:00:00:00:01,actions=1
+      priority=0,actions=drop
+
+   The solution already described above will also work in this case.
+   It may be better to add flows to allow all multicast and broadcast
+   traffic:
+
+      priority=5,in_port=1,dl_dst=01:00:00:00:00:00/01:00:00:00:00:00,actions=2
+      priority=5,in_port=2,dl_dst=01:00:00:00:00:00/01:00:00:00:00:00,actions=1
 
 Contact 
 -------
