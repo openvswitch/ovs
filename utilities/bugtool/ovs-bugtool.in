@@ -220,8 +220,9 @@ caps = {}
 cap_sizes = {}
 unlimited_data = False
 dbg = False
-# Default value for the number of rotated logs.
+# Default value for the number of days to collect logs.
 log_days = 20
+log_last_mod_time = None
 free_disk_space = None
 
 def cap(key, pii=PII_MAYBE, min_size=-1, max_size=-1, min_time=-1,
@@ -286,7 +287,7 @@ def cmd_output(cap, args, label=None, filter=None, binary=False):
                        'binary': binary}
 
 
-def file_output(cap, path_list, newest_first=False):
+def file_output(cap, path_list, newest_first=False, last_mod_time=None):
     """
     If newest_first is True, the list of files in path_list is sorted
     by file modification time in descending order, else its sorted
@@ -299,7 +300,8 @@ def file_output(cap, path_list, newest_first=False):
                 s = os.stat(path)
             except OSError, e:
                 continue
-            path_entries.append((path, s))
+            if last_mod_time is None or s.st_mtime >= last_mod_time:
+                path_entries.append((path, s))
 
         mtime = lambda(path, stat): stat.st_mtime
         path_entries.sort(key=mtime, reverse=newest_first)
@@ -308,7 +310,8 @@ def file_output(cap, path_list, newest_first=False):
                 data[p] = {'cap': cap, 'filename': p[0]}
 
 
-def tree_output(cap, path, pattern=None, negate=False, newest_first=False):
+def tree_output(cap, path, pattern=None, negate=False, newest_first=False,
+                last_mod_time=None):
     """
     Walks the directory tree rooted at path. Files in current dir are processed
     before files in sub-dirs.
@@ -318,22 +321,26 @@ def tree_output(cap, path, pattern=None, negate=False, newest_first=False):
             for root, dirs, files in os.walk(path):
                 fns = [fn for fn in [os.path.join(root, f) for f in files]
                        if os.path.isfile(fn) and matches(fn, pattern, negate)]
-                file_output(cap, fns, newest_first=newest_first)
+                file_output(cap, fns, newest_first=newest_first,
+                            last_mod_time=last_mod_time)
+
+
+def prefix_output(cap, prefix, newest_first=False, last_mod_time=None):
+    """
+    Output files with the same prefix.
+    """
+    fns = []
+    for root, dirs, files in os.walk(os.path.dirname(prefix)):
+        fns += [fn for fn in [os.path.join(root, f) for f in files]
+                if fn.startswith(prefix)]
+    file_output(cap, fns, newest_first=newest_first,
+                last_mod_time=last_mod_time)
+
 
 def func_output(cap, label, func):
     if cap in entries:
         t = str(func).split()
         data[label] = {'cap': cap, 'func': func}
-
-def log_output(cap, logs, newest_first=False):
-    global log_days
-    file_output(cap, logs)
-    file_output(cap,
-        ['%s.%d' % (f, n) for n in range(1, log_days+1) for f in logs], \
-        newest_first=newest_first)
-    file_output(cap,
-        ['%s.%d.gz' % (f, n) for n in range(1, log_days+1) for f in logs], \
-        newest_first=newest_first)
 
 def collect_data():
     process_lists = {}
@@ -370,7 +377,8 @@ def collect_data():
 
 def main(argv=None):
     global ANSWER_YES_TO_ALL, SILENT_MODE
-    global entries, data, dbg, unlimited_data, log_days, free_disk_space
+    global entries, data, dbg, unlimited_data, free_disk_space
+    global log_days, log_last_mod_time
 
     # Filter flags
     only_ovs_info = False
@@ -472,6 +480,8 @@ def main(argv=None):
 
     if output_file is not None and not unlimited_data:
         free_disk_space = get_free_disk_space(output_file) * 90 / 100
+
+    log_last_mod_time = int(time.time()) - log_days * 86400
 
     if ANSWER_YES_TO_ALL:
         output("Warning: '--yestoall' argument provided, will not prompt for individual files.")
@@ -585,11 +595,14 @@ exclude those logs from the archive.
     system_logs = ([ VAR_LOG_DIR + x for x in
         ['crit.log', 'kern.log', 'daemon.log', 'user.log',
         'syslog', 'messages', 'secure', 'debug', 'dmesg', 'boot']])
+    for log in system_logs:
+        prefix_output(CAP_SYSTEM_LOGS, log, last_mod_time=log_last_mod_time)
+
     ovs_logs = ([ OPENVSWITCH_LOG_DIR + x for x in
         ['ovs-vswitchd.log', 'ovsdb-server.log',
         'ovs-xapi-sync.log', 'ovs-monitor-ipsec.log', 'ovs-ctl.log']])
-    log_output(CAP_SYSTEM_LOGS, system_logs)
-    log_output(CAP_OPENVSWITCH_LOGS, ovs_logs)
+    for log in ovs_logs:
+        prefix_output(CAP_OPENVSWITCH_LOGS, log, last_mod_time=log_last_mod_time)
 
     if not os.path.exists('/var/log/dmesg') and not os.path.exists('/var/log/boot'):
         cmd_output(CAP_SYSTEM_LOGS, [DMESG])
@@ -808,6 +821,7 @@ def dump_rdac_groups(cap):
                 cmd_output(cap, [MPPUTIL, '-g', group])
 
 def load_plugins(just_capabilities=False, filter=None):
+    global log_last_mod_time
     def getText(nodelist):
         rc = ""
         for node in nodelist:
@@ -868,8 +882,9 @@ def load_plugins(just_capabilities=False, filter=None):
                 if el.tagName == "files":
                     newest_first = getBoolAttr(el, 'newest_first')
                     if el.getAttribute("type") == "logs":
-                        log_output(dir, getText(el.childNodes).split(),
-                                    newest_first=newest_first)
+                        for fn in getText(el.childNodes).split():
+                            prefix_output(dir, fn, newest_first=newest_first,
+                                          last_mod_time=log_last_mod_time)
                     else:
                         file_output(dir, getText(el.childNodes).split(),
                                     newest_first=newest_first)
@@ -878,9 +893,15 @@ def load_plugins(just_capabilities=False, filter=None):
                     if pattern == '': pattern = None
                     negate = getBoolAttr(el, 'negate')
                     newest_first = getBoolAttr(el, 'newest_first')
-                    tree_output(dir, getText(el.childNodes),
-                                pattern and re.compile(pattern) or None,
-                                negate=negate, newest_first=newest_first)
+                    if el.getAttribute("type") == "logs":
+                        tree_output(dir, getText(el.childNodes),
+                                    pattern and re.compile(pattern) or None,
+                                    negate=negate, newest_first=newest_first,
+                                    last_mod_time=log_last_mod_time)
+                    else:
+                        tree_output(dir, getText(el.childNodes),
+                                    pattern and re.compile(pattern) or None,
+                                    negate=negate, newest_first=newest_first)
                 elif el.tagName == "command":
                     label = el.getAttribute("label")
                     if label == '': label = None
