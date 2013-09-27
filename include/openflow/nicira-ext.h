@@ -1717,8 +1717,9 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
  *
  * Format: 20-bit IPv6 flow label in least-significant bits.
  *
- * Masking: Not maskable. */
-#define NXM_NX_IPV6_LABEL  NXM_HEADER  (0x0001, 27, 4)
+ * Masking: Fully maskable. */
+#define NXM_NX_IPV6_LABEL   NXM_HEADER  (0x0001, 27, 4)
+#define NXM_NX_IPV6_LABEL_W NXM_HEADER_W(0x0001, 27, 4)
 
 /* The ECN of the IP header.
  *
