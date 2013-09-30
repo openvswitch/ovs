@@ -639,8 +639,10 @@ bfd_process_packet(struct bfd *bfd, const struct flow *flow,
 
     msg = ofpbuf_at(p, (uint8_t *)p->l7 - (uint8_t *)p->data, BFD_PACKET_LEN);
     if (!msg) {
-        VLOG_INFO_RL(&rl, "%s: Received unparseable BFD control message.",
-                     bfd->name);
+        VLOG_INFO_RL(&rl, "%s: Received too-short BFD control message (only "
+                     "%td bytes long, at least %d required).",
+                     bfd->name, (uint8_t *) ofpbuf_tail(p) - (uint8_t *) p->l7,
+                     BFD_PACKET_LEN);
         goto out;
     }
 
