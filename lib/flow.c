@@ -1066,6 +1066,7 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
                 icmp->icmp_code = ntohs(flow->tp_dst);
                 icmp->icmp_csum = csum(icmp, ICMP_HEADER_LEN);
             }
+            b->l7 = ofpbuf_tail(b);
         }
 
         ip = b->l3;
