@@ -176,6 +176,7 @@ static long long int iface_stats_timer = LLONG_MIN;
 #define OFP_PORT_ACTION_WINDOW 10
 
 static void add_del_bridges(const struct ovsrec_open_vswitch *);
+static void bridge_run__(void);
 static void bridge_create(const struct ovsrec_bridge *);
 static void bridge_destroy(struct bridge *);
 static struct bridge *bridge_lookup(const char *name);
@@ -601,6 +602,13 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         }
     }
     free(managers);
+
+    /* The ofproto-dpif provider does some final reconfiguration in its
+     * ->type_run() function.  We have to call it before notifying the database
+     * client that reconfiguration is complete, otherwise there is a very
+     * narrow race window in which e.g. ofproto/trace will not recognize the
+     * new configuration (sometimes this causes unit test failures). */
+    bridge_run__();
 }
 
 /* Delete ofprotos which aren't configured or have the wrong type.  Create
@@ -2252,13 +2260,32 @@ instant_stats_wait(void)
     }
 }
 
+static void
+bridge_run__(void)
+{
+    struct bridge *br;
+    struct sset types;
+    const char *type;
+
+    /* Let each datapath type do the work that it needs to do. */
+    sset_init(&types);
+    ofproto_enumerate_types(&types);
+    SSET_FOR_EACH (type, &types) {
+        ofproto_type_run(type);
+    }
+    sset_destroy(&types);
+
+    /* Let each bridge do the work that it needs to do. */
+    HMAP_FOR_EACH (br, node, &all_bridges) {
+        ofproto_run(br->ofproto);
+    }
+}
+
 void
 bridge_run(void)
 {
     static struct ovsrec_open_vswitch null_cfg;
     const struct ovsrec_open_vswitch *cfg;
-    struct sset types;
-    const char *type;
 
     bool vlan_splinters_changed;
     struct bridge *br;
@@ -2301,18 +2328,7 @@ bridge_run(void)
                                         "flow-restore-wait", false));
     }
 
-    /* Let each datapath type do the work that it needs to do. */
-    sset_init(&types);
-    ofproto_enumerate_types(&types);
-    SSET_FOR_EACH (type, &types) {
-        ofproto_type_run(type);
-    }
-    sset_destroy(&types);
-
-    /* Let each bridge do the work that it needs to do. */
-    HMAP_FOR_EACH (br, node, &all_bridges) {
-        ofproto_run(br->ofproto);
-    }
+    bridge_run__();
 
     /* Re-configure SSL.  We do this on every trip through the main loop,
      * instead of just when the database changes, because the contents of the
