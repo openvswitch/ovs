@@ -5,7 +5,7 @@
 # chkconfig: 2345 09 91
 # description: Manage Open vSwitch kernel modules and user-space daemons
 
-# Copyright (C) 2009, 2010, 2011 Nicira, Inc.
+# Copyright (C) 2009, 2010, 2011, 2013 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -78,6 +78,7 @@ case $1 in
         ;;
     status)
         $ovs_ctl status
+        exit $?
         ;;
     version)
         $ovs_ctl version
