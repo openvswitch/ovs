@@ -515,7 +515,7 @@ recv_upcalls(struct udpif *udpif)
                 || type == OVS_KEY_ATTR_TCP
                 || type == OVS_KEY_ATTR_UDP) {
                 if (nl_attr_get_size(nla) == 4) {
-                    hash = mhash_add(hash, nl_attr_get_be32(nla));
+                    hash = mhash_add(hash, nl_attr_get_u32(nla));
                     n_bytes += 4;
                 } else {
                     VLOG_WARN_RL(&rl,
