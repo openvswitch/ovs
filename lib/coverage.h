@@ -30,11 +30,25 @@
 #include "ovs-thread.h"
 #include "vlog.h"
 
+/* Makes coverage_run run every 5000 ms (5 seconds).
+ * If this value is redefined, the new value must
+ * divide 60000 (1 minute). */
+#define COVERAGE_RUN_INTERVAL    5000
+BUILD_ASSERT_DECL(60000 % COVERAGE_RUN_INTERVAL == 0);
+
+/* Defines the moving average array length. */
+#define MIN_AVG_LEN (60000/COVERAGE_RUN_INTERVAL)
+#define HR_AVG_LEN  60
+
 /* A coverage counter. */
 struct coverage_counter {
     const char *const name;            /* Textual name. */
     unsigned int (*const count)(void); /* Gets, zeros this thread's count. */
     unsigned long long int total;      /* Total count. */
+    unsigned long long int last_total;
+    /* The moving average arrays. */
+    unsigned int min[MIN_AVG_LEN];
+    unsigned int hr[HR_AVG_LEN];
 };
 
 /* Defines COUNTER.  There must be exactly one such definition at file scope
@@ -56,7 +70,7 @@ struct coverage_counter {
         }                                                               \
         extern struct coverage_counter counter_##COUNTER;               \
         struct coverage_counter counter_##COUNTER                       \
-            = { #COUNTER, COUNTER##_count, 0 };                         \
+            = { #COUNTER, COUNTER##_count, 0, 0, {0}, {0} };            \
         extern struct coverage_counter *counter_ptr_##COUNTER;          \
         struct coverage_counter *counter_ptr_##COUNTER                  \
             __attribute__((section("coverage"))) = &counter_##COUNTER
@@ -80,6 +94,7 @@ struct coverage_counter {
 void coverage_init(void);
 void coverage_log(void);
 void coverage_clear(void);
+void coverage_run(void);
 
 /* Implementation detail. */
 #define COVERAGE_DEFINE__(COUNTER)                              \

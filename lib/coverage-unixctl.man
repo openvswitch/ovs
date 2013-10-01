@@ -8,4 +8,6 @@ main loop takes unusually long to run.
 Coverage counters are useful mainly for performance analysis and
 debugging.
 .IP "\fBcoverage/show\fR"
-Displays the values of all of the coverage counters.
+Displays the averaged per-second rates for the last few seconds, the
+last minute and the last hour, and the total counts of all of the
+coverage counters.

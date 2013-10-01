@@ -2838,3 +2838,37 @@ AT_CHECK([ovs-appctl bond/show | sed -n '/^.*may_enable:.*/p'], [0], [dnl
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+# Unit test for appctl coverage/show command
+AT_SETUP([ofproto-dpif - coverage/show])
+OVS_VSWITCHD_START
+
+ovs-appctl time/stop
+# before the first 5 seconds, nothing can be calculated but the total count.
+# there should be two unixctl commands received, but the count of the "appctl
+# coverage/show" command is not updated to the total. so there show only 1.
+AT_CHECK([ovs-appctl coverage/show | sed -n '/^unixctl_received.*/p'], [], [dnl
+unixctl_received           0.0/sec     0.000/sec        0.0000/sec   total: 1
+])
+
+ovs-appctl time/warp 5000
+# at first 5 second time instant, should have stats.
+AT_CHECK([ovs-appctl coverage/show | sed -n '/^unixctl_received.*/p'], [], [dnl
+unixctl_received           0.6/sec     0.050/sec        0.0008/sec   total: 3
+])
+
+for i in `seq 0 10`; do ovs-appctl time/warp 5000; done
+# advance to first 1 minute time instant.
+AT_CHECK([ovs-appctl coverage/show | sed -n '/^unixctl_received.*/p'], [], [dnl
+unixctl_received           0.2/sec     0.250/sec        0.0042/sec   total: 15
+])
+
+ovs-appctl time/warp 60000
+# advance to next 1 minute time instant directly, should observe the per-minute
+# rate drop.
+AT_CHECK([ovs-appctl coverage/show | sed -n '/^unixctl_received.*/p'], [], [dnl
+unixctl_received           0.4/sec     0.033/sec        0.0047/sec   total: 17
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP

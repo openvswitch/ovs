@@ -234,6 +234,7 @@ time_poll(struct pollfd *pollfds, int n_pollfds, long long int timeout_when,
         log_poll_interval(*last_wakeup);
     }
     coverage_clear();
+    coverage_run();
     start = time_msec();
 
     timeout_when = MIN(timeout_when, deadline);
