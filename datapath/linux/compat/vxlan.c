@@ -219,8 +219,6 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 	int min_headroom;
 	int err;
 
-	skb_reset_inner_headers(skb);
-
 	min_headroom = LL_RESERVED_SPACE(rt_dst(rt).dev) + rt_dst(rt).header_len
 			+ VXLAN_HLEN + sizeof(struct iphdr)
 			+ (vlan_tx_tag_present(skb) ? VLAN_HLEN : 0);
@@ -238,6 +236,8 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 
 		vlan_set_tci(skb, 0);
 	}
+
+	skb_reset_inner_headers(skb);
 
 	vxh = (struct vxlanhdr *) __skb_push(skb, sizeof(*vxh));
 	vxh->vx_flags = htonl(VXLAN_FLAGS);
