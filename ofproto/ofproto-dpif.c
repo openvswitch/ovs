@@ -70,6 +70,10 @@ VLOG_DEFINE_THIS_MODULE(ofproto_dpif);
 COVERAGE_DEFINE(ofproto_dpif_expired);
 COVERAGE_DEFINE(facet_revalidate);
 COVERAGE_DEFINE(facet_unexpected);
+COVERAGE_DEFINE(facet_create);
+COVERAGE_DEFINE(facet_remove);
+COVERAGE_DEFINE(subfacet_create);
+COVERAGE_DEFINE(subfacet_destroy);
 COVERAGE_DEFINE(subfacet_install_fail);
 COVERAGE_DEFINE(packet_in_overflow);
 
@@ -434,20 +438,6 @@ struct dpif_backer {
     unsigned avg_n_subfacet;         /* Average number of flows. */
     long long int avg_subfacet_life; /* Average life span of subfacets. */
 
-    /* The average number of subfacets... */
-    struct avg_subfacet_rates hourly;   /* ...over the last hour. */
-    struct avg_subfacet_rates daily;    /* ...over the last day. */
-    struct avg_subfacet_rates lifetime; /* ...over the switch lifetime. */
-    long long int last_minute;          /* Last time 'hourly' was updated. */
-
-    /* Number of subfacets added or deleted since 'last_minute'. */
-    unsigned subfacet_add_count;
-    unsigned subfacet_del_count;
-
-    /* Number of subfacets added or deleted from 'created' to 'last_minute.' */
-    unsigned long long int total_subfacet_add_count;
-    unsigned long long int total_subfacet_del_count;
-
     /* Number of upcall handling threads. */
     unsigned int n_handler_threads;
 };
@@ -456,7 +446,6 @@ struct dpif_backer {
 static struct shash all_dpif_backers = SHASH_INITIALIZER(&all_dpif_backers);
 
 static void drop_key_clear(struct dpif_backer *);
-static void update_moving_averages(struct dpif_backer *backer);
 
 struct ofproto_dpif {
     struct hmap_node all_ofproto_dpifs_node; /* In 'all_ofproto_dpifs'. */
@@ -1214,14 +1203,6 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
 
     backer->max_n_subfacet = 0;
     backer->created = time_msec();
-    backer->last_minute = backer->created;
-    memset(&backer->hourly, 0, sizeof backer->hourly);
-    memset(&backer->daily, 0, sizeof backer->daily);
-    memset(&backer->lifetime, 0, sizeof backer->lifetime);
-    backer->subfacet_add_count = 0;
-    backer->subfacet_del_count = 0;
-    backer->total_subfacet_add_count = 0;
-    backer->total_subfacet_del_count = 0;
     backer->avg_n_subfacet = 0;
     backer->avg_subfacet_life = 0;
 
@@ -3641,8 +3622,6 @@ update_stats(struct dpif_backer *backer)
         run_fast_rl();
     }
     dpif_flow_dump_done(&dump);
-
-    update_moving_averages(backer);
 }
 
 /* Calculates and returns the number of milliseconds of idle time after which
@@ -3825,6 +3804,7 @@ facet_create(const struct flow_miss *miss)
     struct facet *facet;
     struct match match;
 
+    COVERAGE_INC(facet_create);
     facet = xzalloc(sizeof *facet);
     facet->ofproto = miss->ofproto;
     facet->used = miss->stats.used;
@@ -3888,6 +3868,7 @@ facet_remove(struct facet *facet)
 {
     struct subfacet *subfacet, *next_subfacet;
 
+    COVERAGE_INC(facet_remove);
     ovs_assert(!list_is_empty(&facet->subfacets));
 
     /* First uninstall all of the subfacets to get final statistics. */
@@ -4425,6 +4406,7 @@ subfacet_create(struct facet *facet, struct flow_miss *miss)
         subfacet = xmalloc(sizeof *subfacet);
     }
 
+    COVERAGE_INC(subfacet_create);
     hmap_insert(&backer->subfacets, &subfacet->hmap_node, key_hash);
     list_push_back(&facet->subfacets, &subfacet->list_node);
     subfacet->facet = facet;
@@ -4437,7 +4419,6 @@ subfacet_create(struct facet *facet, struct flow_miss *miss)
     subfacet->path = SF_NOT_INSTALLED;
     subfacet->backer = backer;
 
-    backer->subfacet_add_count++;
     return subfacet;
 }
 
@@ -4447,11 +4428,8 @@ static void
 subfacet_destroy__(struct subfacet *subfacet)
 {
     struct facet *facet = subfacet->facet;
-    struct ofproto_dpif *ofproto = facet->ofproto;
 
-    /* Update ofproto stats before uninstall the subfacet. */
-    ofproto->backer->subfacet_del_count++;
-
+    COVERAGE_INC(subfacet_destroy);
     subfacet_uninstall(subfacet);
     hmap_remove(&subfacet->backer->subfacets, &subfacet->hmap_node);
     list_remove(&subfacet->list_node);
@@ -5539,21 +5517,12 @@ ofproto_unixctl_dpif_dump_dps(struct unixctl_conn *conn, int argc OVS_UNUSED,
 }
 
 static void
-show_dp_rates(struct ds *ds, const char *heading,
-              const struct avg_subfacet_rates *rates)
-{
-    ds_put_format(ds, "%s add rate: %5.3f/min, del rate: %5.3f/min\n",
-                  heading, rates->add_rate, rates->del_rate);
-}
-
-static void
 dpif_show_backer(const struct dpif_backer *backer, struct ds *ds)
 {
     const struct shash_node **ofprotos;
     struct ofproto_dpif *ofproto;
     struct shash ofproto_shash;
     uint64_t n_hit, n_missed;
-    long long int minutes;
     size_t i;
 
     n_hit = n_missed = 0;
@@ -5570,15 +5539,6 @@ dpif_show_backer(const struct dpif_backer *backer, struct ds *ds)
                   " life span: %lldms\n", hmap_count(&backer->subfacets),
                   backer->avg_n_subfacet, backer->max_n_subfacet,
                   backer->avg_subfacet_life);
-
-    minutes = (time_msec() - backer->created) / (1000 * 60);
-    if (minutes >= 60) {
-        show_dp_rates(ds, "\thourly avg:", &backer->hourly);
-    }
-    if (minutes >= 60 * 24) {
-        show_dp_rates(ds, "\tdaily avg:",  &backer->daily);
-    }
-    show_dp_rates(ds, "\toverall avg:",  &backer->lifetime);
 
     shash_init(&ofproto_shash);
     ofprotos = get_ofprotos(&ofproto_shash);
@@ -6129,51 +6089,6 @@ odp_port_to_ofp_port(const struct ofproto_dpif *ofproto, odp_port_t odp_port)
         return port->up.ofp_port;
     } else {
         return OFPP_NONE;
-    }
-}
-
-/* Compute exponentially weighted moving average, adding 'new' as the newest,
- * most heavily weighted element.  'base' designates the rate of decay: after
- * 'base' further updates, 'new''s weight in the EWMA decays to about 1/e
- * (about .37). */
-static void
-exp_mavg(double *avg, int base, double new)
-{
-    *avg = (*avg * (base - 1) + new) / base;
-}
-
-static void
-update_moving_averages(struct dpif_backer *backer)
-{
-    const int min_ms = 60 * 1000; /* milliseconds in one minute. */
-    long long int minutes = (time_msec() - backer->created) / min_ms;
-
-    if (minutes > 0) {
-        backer->lifetime.add_rate = (double) backer->total_subfacet_add_count
-            / minutes;
-        backer->lifetime.del_rate = (double) backer->total_subfacet_del_count
-            / minutes;
-    } else {
-        backer->lifetime.add_rate = 0.0;
-        backer->lifetime.del_rate = 0.0;
-    }
-
-    /* Update hourly averages on the minute boundaries. */
-    if (time_msec() - backer->last_minute >= min_ms) {
-        exp_mavg(&backer->hourly.add_rate, 60, backer->subfacet_add_count);
-        exp_mavg(&backer->hourly.del_rate, 60, backer->subfacet_del_count);
-
-        /* Update daily averages on the hour boundaries. */
-        if ((backer->last_minute - backer->created) / min_ms % 60 == 59) {
-            exp_mavg(&backer->daily.add_rate, 24, backer->hourly.add_rate);
-            exp_mavg(&backer->daily.del_rate, 24, backer->hourly.del_rate);
-        }
-
-        backer->total_subfacet_add_count += backer->subfacet_add_count;
-        backer->total_subfacet_del_count += backer->subfacet_del_count;
-        backer->subfacet_add_count = 0;
-        backer->subfacet_del_count = 0;
-        backer->last_minute += min_ms;
     }
 }
 

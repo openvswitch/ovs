@@ -2130,7 +2130,6 @@ ADD_OF_PORTS([br1], [3])
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
 	flows: cur: 0, avg: 0, max: 0, life span: 0ms
-	overall avg: add rate: 0.000/min, del rate: 0.000/min
 	br0: hit:0 missed:0
 		br0 65534/100: (dummy)
 		p1 1/1: (dummy)
@@ -2223,7 +2222,6 @@ warped
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 dummy@ovs-dummy: hit:13 missed:2
 	flows: cur: 2, avg: 1, max: 2, life span: 1250ms
-	overall avg: add rate: 0.000/min, del rate: 0.000/min
 	br0: hit:9 missed:1
 		br0 65534/100: (dummy)
 		p2 2/2: (dummy)
@@ -2275,8 +2273,6 @@ AT_CHECK([ovs-appctl time/warp 10000], [0], [warped
 AT_CHECK([ovs-appctl dpif/show | sed 's/ 10[[0-9]]\{3\}(ms)$/ 10000(ms)/'], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:61
 	flows: cur: 0, avg: 0, max: 1, life span: 1666ms
-	hourly avg: add rate: 0.641/min, del rate: 0.641/min
-	overall avg: add rate: 1.000/min, del rate: 1.000/min
 	br0: hit:0 missed:61
 		br0 65534/100: (dummy)
 		p1 1/1: (dummy)
