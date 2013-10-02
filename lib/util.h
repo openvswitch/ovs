@@ -87,8 +87,23 @@ void ovs_assert_failure(const char *, const char *, const char *) NO_RETURN;
 
 extern const char *program_name;
 
+#define __ARRAY_SIZE_NOCHECK(ARRAY) (sizeof(ARRAY) / sizeof((ARRAY)[0]))
+#ifdef __GNUC__
+/* return 0 for array types, 1 otherwise */
+#define __ARRAY_CHECK(ARRAY) 					\
+    !__builtin_types_compatible_p(typeof(ARRAY), typeof(&ARRAY[0]))
+
+/* compile-time fail if not array */
+#define __ARRAY_FAIL(ARRAY) (sizeof(char[-2*!__ARRAY_CHECK(ARRAY)]))
+#define __ARRAY_SIZE(ARRAY)					\
+    __builtin_choose_expr(__ARRAY_CHECK(ARRAY),			\
+        __ARRAY_SIZE_NOCHECK(ARRAY), __ARRAY_FAIL(ARRAY))
+#else
+#define __ARRAY_SIZE(ARRAY) __ARRAY_SIZE_NOCHECK(ARRAY)
+#endif
+
 /* Returns the number of elements in ARRAY. */
-#define ARRAY_SIZE(ARRAY) (sizeof ARRAY / sizeof *ARRAY)
+#define ARRAY_SIZE(ARRAY) __ARRAY_SIZE(ARRAY)
 
 /* Returns X / Y, rounding up.  X must be nonnegative to round correctly. */
 #define DIV_ROUND_UP(X, Y) (((X) + ((Y) - 1)) / (Y))
