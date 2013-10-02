@@ -59,6 +59,7 @@ struct handler {
     size_t n_upcalls OVS_GUARDED;
 
     size_t n_new_upcalls;              /* Only changed by the dispatcher. */
+    bool need_signal;                  /* Only changed by the dispatcher. */
 
     pthread_cond_t wake_cond;          /* Wakes 'thread' while holding
                                           'mutex'. */
@@ -222,6 +223,7 @@ udpif_recv_set(struct udpif *udpif, size_t n_handlers, bool enable)
 
             handler->udpif = udpif;
             list_init(&handler->upcalls);
+            handler->need_signal = false;
             xpthread_cond_init(&handler->wake_cond, NULL);
             ovs_mutex_init(&handler->mutex);
             xpthread_create(&handler->thread, NULL, udpif_upcall_handler,
@@ -530,9 +532,13 @@ recv_upcalls(struct udpif *udpif)
         ovs_mutex_lock(&handler->mutex);
         if (handler->n_upcalls < MAX_QUEUE_LENGTH) {
             list_push_back(&handler->upcalls, &upcall->list_node);
-            handler->n_new_upcalls = ++handler->n_upcalls;
-
-            if (handler->n_new_upcalls >= FLOW_MISS_MAX_BATCH) {
+            if (handler->n_upcalls == 0) {
+                handler->need_signal = true;
+            }
+            handler->n_upcalls++;
+            if (handler->need_signal &&
+                handler->n_upcalls >= FLOW_MISS_MAX_BATCH) {
+                handler->need_signal = false;
                 xpthread_cond_signal(&handler->wake_cond);
             }
             ovs_mutex_unlock(&handler->mutex);
@@ -555,8 +561,8 @@ recv_upcalls(struct udpif *udpif)
     for (n = 0; n < udpif->n_handlers; ++n) {
         struct handler *handler = &udpif->handlers[n];
 
-        if (handler->n_new_upcalls) {
-            handler->n_new_upcalls = 0;
+        if (handler->need_signal) {
+            handler->need_signal = false;
             ovs_mutex_lock(&handler->mutex);
             xpthread_cond_signal(&handler->wake_cond);
             ovs_mutex_unlock(&handler->mutex);
