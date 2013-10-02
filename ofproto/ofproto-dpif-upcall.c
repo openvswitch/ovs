@@ -488,7 +488,6 @@ classify_upcall(const struct upcall *upcall)
 static void
 recv_upcalls(struct udpif *udpif)
 {
-    size_t n_udpif_new_upcalls = 0;
     int n;
 
     for (;;) {
@@ -567,9 +566,6 @@ recv_upcalls(struct udpif *udpif)
             xpthread_cond_signal(&handler->wake_cond);
             ovs_mutex_unlock(&handler->mutex);
         }
-    }
-    if (n_udpif_new_upcalls) {
-        seq_change(udpif->wait_seq);
     }
 }
 
