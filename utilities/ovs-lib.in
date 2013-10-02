@@ -41,6 +41,11 @@ ovs_ctl_log () {
     echo "$@" >> "${logdir}/ovs-ctl.log"
 }
 
+stdintoexitstatus () {
+    read exitstatus
+    return $exitstatus
+}
+
 ovs_ctl () {
     case "$@" in
         *"=strace"*)
@@ -50,8 +55,14 @@ ovs_ctl () {
             "${datadir}/scripts/ovs-ctl" "$@"
         ;;
         *)
+            # Tee ovs-ctl output to ovs-ctl.log and yield ovs-ctl's exit
+            # status. See (line wrapped)
+            # http://unix.stackexchange.com/questions/14270/\
+            # get-exit-status-of-process-thats-piped-to-another/70675#70675
             echo "`date -u`:$@" >> "${logdir}/ovs-ctl.log"
-            "${datadir}/scripts/ovs-ctl" "$@" 2>&1 | tee -a "${logdir}/ovs-ctl.log"
+            ( ( ( ( ("${datadir}/scripts/ovs-ctl" "$@"  2>&1 ; echo $? >&3) \
+            | tee -a "${logdir}/ovs-ctl.log") >&4) 3>&1) | stdintoexitstatus) \
+            4>&1
         ;;
     esac
 }
