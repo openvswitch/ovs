@@ -110,7 +110,7 @@ const char *
 signal_name(int signum, char *namebuf, size_t bufsize)
 {
 #if HAVE_DECL_SYS_SIGLIST
-    if (signum >= 0 && signum < ARRAY_SIZE(sys_siglist)) {
+    if (signum >= 0 && signum < N_SIGNALS) {
         const char *name = sys_siglist[signum];
         if (name) {
             return name;
