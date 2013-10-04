@@ -2808,6 +2808,15 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         }
     }
 
+    if (nl_attr_oversized(ctx.xout->odp_actions.size)) {
+        /* These datapath actions are too big for a Netlink attribute, so we
+         * can't execute them. */
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+
+        VLOG_ERR_RL(&rl, "discarding oversize datapath actions");
+        ofpbuf_clear(&ctx.xout->odp_actions);
+    }
+
     ofpbuf_uninit(&ctx.stack);
 
     /* Clear the metadata and register wildcard masks, because we won't

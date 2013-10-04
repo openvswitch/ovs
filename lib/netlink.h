@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -103,6 +103,8 @@ struct nlmsghdr *nl_msg_next(struct ofpbuf *buffer, struct ofpbuf *msg);
 #define NL_A_BE32_SIZE NL_ATTR_SIZE(sizeof(ovs_be32))
 #define NL_A_BE64_SIZE NL_ATTR_SIZE(sizeof(ovs_be64))
 #define NL_A_FLAG_SIZE NL_ATTR_SIZE(0)
+
+bool nl_attr_oversized(size_t payload_size);
 
 /* Netlink attribute types. */
 enum nl_attr_type

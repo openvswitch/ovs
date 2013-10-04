@@ -2914,11 +2914,14 @@ ADD_OF_PORTS([br0], 1)
      echo "in_port=$i, actions=resubmit:$j, resubmit:$j, local"
  done
  echo "in_port=13, actions=local,local,local,local,local,local,local,local") > flows
- AT_CHECK([ovs-ofctl add-flows br0 flows])
+AT_CHECK([ovs-ofctl add-flows br0 flows])
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1'], [0], [stdout])
 AT_CHECK([grep -c 'resubmits yielded over 64 kB of actions' ovs-vswitchd.log], [0], [1
 ])
-OVS_VSWITCHD_STOP(["/resubmits yielded over 64 kB of actions/d"])
+AT_CHECK([grep -c 'discarding oversize datapath actions' ovs-vswitchd.log], [0], [1
+])
+OVS_VSWITCHD_STOP(["/resubmits yielded over 64 kB of actions/d
+/discarding oversize datapath actions/d"])
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - stack too deep])

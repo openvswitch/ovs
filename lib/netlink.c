@@ -322,7 +322,7 @@ nl_msg_push_unspec_uninit(struct ofpbuf *msg, uint16_t type, size_t size)
 {
     size_t total_size = NLA_HDRLEN + size;
     struct nlattr* nla = nl_msg_push_uninit(msg, total_size);
-    ovs_assert(NLA_ALIGN(total_size) <= UINT16_MAX);
+    ovs_assert(!nl_attr_oversized(size));
     nla->nla_len = total_size;
     nla->nla_type = type;
     return nla + 1;
@@ -467,6 +467,16 @@ nl_msg_next(struct ofpbuf *buffer, struct ofpbuf *msg)
     msg->data = NULL;
     msg->size = 0;
     return NULL;
+}
+
+/* Returns true if a Netlink attribute with a payload that is 'payload_size'
+ * bytes long would be oversized, that is, if it's not possible to create an
+ * nlattr of that size because its size wouldn't fit in the 16-bit nla_len
+ * field. */
+bool
+nl_attr_oversized(size_t payload_size)
+{
+    return NL_ATTR_SIZE(payload_size) > UINT16_MAX;
 }
 
 /* Attributes. */
