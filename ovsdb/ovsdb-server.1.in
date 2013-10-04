@@ -73,6 +73,10 @@ client before sending an inactivity probe message.
 It is an error for \fIcolumn\fR to have another type.
 .RE
 .
+.IP
+To connect or listen on multiple connection methods, use multiple
+\fB\-\-remote\fR options.
+.
 .IP "\fB\-\-run=\fIcommand\fR]"
 Ordinarily \fBovsdb\-server\fR runs forever, or until it is told to
 exit (see \fBRUNTIME MANAGEMENT COMMANDS\fR below).  With this option,
