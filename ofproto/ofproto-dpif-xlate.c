@@ -56,6 +56,10 @@ VLOG_DEFINE_THIS_MODULE(ofproto_dpif_xlate);
  * flow translation. */
 #define MAX_RESUBMIT_RECURSION 64
 
+/* Maximum number of resubmit actions in a flow translation, whether they are
+ * recursive or not. */
+#define MAX_RESUBMITS (MAX_RESUBMIT_RECURSION * MAX_RESUBMIT_RECURSION)
+
 struct ovs_rwlock xlate_rwlock = OVS_RWLOCK_INITIALIZER;
 
 struct xbridge {
@@ -165,7 +169,10 @@ struct xlate_ctx {
                                  * prior to an mpls_push so that it may be
                                  * used for a subsequent mpls_pop. */
 
-    int recurse;                /* Recursion level, via xlate_table_action. */
+    /* Resubmit statistics, via xlate_table_action(). */
+    int recurse;                /* Current resubmit nesting depth. */
+    int resubmits;              /* Total number of resubmits. */
+
     uint32_t orig_skb_priority; /* Priority when packet arrived. */
     uint8_t table_id;           /* OpenFlow table ID where flow was found. */
     uint32_t sflow_n_outputs;   /* Number of output ports. */
@@ -1685,6 +1692,7 @@ xlate_recursively(struct xlate_ctx *ctx, struct rule_dpif *rule)
         rule_dpif_credit_stats(rule, ctx->xin->resubmit_stats);
     }
 
+    ctx->resubmits++;
     ctx->recurse++;
     ctx->rule = rule;
     actions = rule_dpif_get_actions(rule);
@@ -1698,7 +1706,18 @@ static void
 xlate_table_action(struct xlate_ctx *ctx,
                    ofp_port_t in_port, uint8_t table_id, bool may_packet_in)
 {
-    if (ctx->recurse < MAX_RESUBMIT_RECURSION) {
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+
+    if (ctx->recurse >= MAX_RESUBMIT_RECURSION) {
+        VLOG_ERR_RL(&rl, "resubmit actions recursed over %d times",
+                    MAX_RESUBMIT_RECURSION);
+    } else if (ctx->resubmits >= MAX_RESUBMITS) {
+        VLOG_ERR_RL(&rl, "over %d resubmit actions", MAX_RESUBMITS);
+    } else if (ctx->xout->odp_actions.size > UINT16_MAX) {
+        VLOG_ERR_RL(&rl, "resubmits yielded over 64 kB of actions");
+    } else if (ctx->stack.size >= 65536) {
+        VLOG_ERR_RL(&rl, "resubmits yielded over 64 kB of stack");
+    } else {
         struct rule_dpif *rule;
         ofp_port_t old_in_port = ctx->xin->flow.in_port.ofp_port;
         uint8_t old_table_id = ctx->table_id;
@@ -1738,12 +1757,10 @@ xlate_table_action(struct xlate_ctx *ctx,
         }
 
         ctx->table_id = old_table_id;
-    } else {
-        static struct vlog_rate_limit recurse_rl = VLOG_RATE_LIMIT_INIT(1, 1);
-
-        VLOG_ERR_RL(&recurse_rl, "resubmit actions recursed over %d times",
-                    MAX_RESUBMIT_RECURSION);
+        return;
     }
+
+    ctx->exit = true;
 }
 
 static void
@@ -2702,6 +2719,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     }
 
     ctx.recurse = 0;
+    ctx.resubmits = 0;
     ctx.orig_skb_priority = flow->skb_priority;
     ctx.table_id = 0;
     ctx.exit = false;
