@@ -2819,7 +2819,7 @@ parse_l2_5_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
                   uint64_t present_attrs, int out_of_range_attr,
                   uint64_t expected_attrs, struct flow *flow,
                   const struct nlattr *key, size_t key_len,
-		  const struct flow *src_flow)
+                  const struct flow *src_flow)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
     bool is_mask = src_flow != flow;
@@ -2828,13 +2828,13 @@ parse_l2_5_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
     enum ovs_key_attr expected_bit = 0xff;
 
     if (eth_type_mpls(src_flow->dl_type)) {
-	if (!is_mask) {
-	    expected_attrs |= (UINT64_C(1) << OVS_KEY_ATTR_MPLS);
+        if (!is_mask) {
+            expected_attrs |= (UINT64_C(1) << OVS_KEY_ATTR_MPLS);
 
-	    if (!(present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_MPLS))) {
-	        return ODP_FIT_TOO_LITTLE;
-	    }
-	    flow->mpls_lse = nl_attr_get_be32(attrs[OVS_KEY_ATTR_MPLS]);
+            if (!(present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_MPLS))) {
+                return ODP_FIT_TOO_LITTLE;
+            }
+            flow->mpls_lse = nl_attr_get_be32(attrs[OVS_KEY_ATTR_MPLS]);
         } else if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_MPLS)) {
             flow->mpls_lse = nl_attr_get_be32(attrs[OVS_KEY_ATTR_MPLS]);
 
@@ -2858,7 +2858,7 @@ parse_l2_5_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
             flow->nw_tos = ipv4_key->ipv4_tos;
             flow->nw_ttl = ipv4_key->ipv4_ttl;
             if (is_mask) {
-	        flow->nw_frag = ipv4_key->ipv4_frag;
+                flow->nw_frag = ipv4_key->ipv4_frag;
                 check_start = ipv4_key;
                 check_len = sizeof *ipv4_key;
                 expected_bit = OVS_KEY_ATTR_IPV4;
@@ -2881,7 +2881,7 @@ parse_l2_5_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
             flow->nw_tos = ipv6_key->ipv6_tclass;
             flow->nw_ttl = ipv6_key->ipv6_hlimit;
             if (is_mask) {
-	        flow->nw_frag = ipv6_key->ipv6_frag;
+                flow->nw_frag = ipv6_key->ipv6_frag;
                 check_start = ipv6_key;
                 check_len = sizeof *ipv6_key;
                 expected_bit = OVS_KEY_ATTR_IPV6;
@@ -3080,17 +3080,17 @@ parse_8021q_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
     } else {
         tci = nl_attr_get_be16(attrs[OVS_KEY_ATTR_VLAN]);
         if (!is_mask) {
-	    if (tci == htons(0)) {
+            if (tci == htons(0)) {
                 /* Corner case for a truncated 802.1Q header. */
-	        if (fitness == ODP_FIT_PERFECT && nl_attr_get_size(encap)) {
-		    return ODP_FIT_TOO_MUCH;
-	        }
-	        return fitness;
-	    } else if (!(tci & htons(VLAN_CFI))) {
-	        VLOG_ERR_RL(&rl, "OVS_KEY_ATTR_VLAN 0x%04"PRIx16" is nonzero "
-	                    "but CFI bit is not set", ntohs(tci));
-	        return ODP_FIT_ERROR;
-	    }
+                if (fitness == ODP_FIT_PERFECT && nl_attr_get_size(encap)) {
+                    return ODP_FIT_TOO_MUCH;
+                }
+                return fitness;
+            } else if (!(tci & htons(VLAN_CFI))) {
+                VLOG_ERR_RL(&rl, "OVS_KEY_ATTR_VLAN 0x%04"PRIx16" is nonzero "
+                            "but CFI bit is not set", ntohs(tci));
+                return ODP_FIT_ERROR;
+            }
         }
         /* Set vlan_tci.
          * Remove the TPID from dl_type since it's not the real Ethertype.  */
