@@ -219,6 +219,18 @@ nl_msg_put_unspec_uninit(struct ofpbuf *msg, uint16_t type, size_t size)
     return nla + 1;
 }
 
+/* Appends a Netlink attribute of the given 'type' and room for 'size' bytes of
+ * data as its payload, plus Netlink padding if needed, to the tail end of
+ * 'msg', reallocating and copying its data if necessary.  Returns a pointer to
+ * the first byte of data in the attribute, which is zeroed. */
+void *
+nl_msg_put_unspec_zero(struct ofpbuf *msg, uint16_t type, size_t size)
+{
+    void *data = nl_msg_put_unspec_uninit(msg, type, size);
+    memset(data, 0, size);
+    return data;
+}
+
 /* Appends a Netlink attribute of the given 'type' and the 'size' bytes of
  * 'data' as its payload, to the tail end of 'msg', reallocating and copying
  * its data if necessary.  Returns a pointer to the first byte of data in the
