@@ -3309,8 +3309,20 @@ odp_put_userspace_action(uint32_t pid,
     nl_msg_put_u32(odp_actions, OVS_USERSPACE_ATTR_PID, pid);
     if (userdata) {
         userdata_ofs = odp_actions->size + NLA_HDRLEN;
-        nl_msg_put_unspec(odp_actions, OVS_USERSPACE_ATTR_USERDATA,
-                          userdata, userdata_size);
+
+        /* The OVS kernel module before OVS 1.11 and the upstream Linux kernel
+         * module before Linux 3.10 required the userdata to be exactly 8 bytes
+         * long:
+         *
+         *   - The kernel rejected shorter userdata with -ERANGE.
+         *
+         *   - The kernel silently dropped userdata beyond the first 8 bytes.
+         *
+         * Thus, for maximum compatibility, always put at least 8 bytes.  (We
+         * separately disable features that required more than 8 bytes.) */
+        memcpy(nl_msg_put_unspec_zero(odp_actions, OVS_USERSPACE_ATTR_USERDATA,
+                                      MAX(8, userdata_size)),
+               userdata, userdata_size);
     } else {
         userdata_ofs = 0;
     }
