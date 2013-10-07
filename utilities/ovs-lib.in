@@ -45,6 +45,14 @@ ovs_ctl () {
             # pipe). So, do not log the o/p to ovs-ctl.log.
             "${datadir}/scripts/ovs-ctl" "$@"
         ;;
+        "status")
+            # In case of the command 'status', we should return the exit status
+            # of ovs-ctl. It is also useful to document the o/p in ovs-ctl.log.
+            display=`"${datadir}/scripts/ovs-ctl" "$@" 2>&1`
+            rc=$?
+            echo "${display}" | tee -a "${logdir}/ovs-ctl.log"
+            return ${rc}
+        ;;
         *)
             echo "`date -u`:$@" >> "${logdir}/ovs-ctl.log"
             "${datadir}/scripts/ovs-ctl" "$@" 2>&1 | tee -a "${logdir}/ovs-ctl.log"
