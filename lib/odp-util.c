@@ -1392,7 +1392,7 @@ generate_all_wildcard_mask(struct ofpbuf *ofp, const struct nlattr *key)
     int size = nl_attr_get_size(key);
 
     if (odp_flow_key_attr_len(type) >=0) {
-        memset(nl_msg_put_unspec_uninit(ofp, type, size), 0, size);
+        nl_msg_put_unspec_zero(ofp, type, size);
     } else {
         size_t nested_mask;
 
@@ -2563,9 +2563,8 @@ odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *data,
                flow->dl_type == htons(ETH_TYPE_RARP)) {
         struct ovs_key_arp *arp_key;
 
-        arp_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ARP,
-                                           sizeof *arp_key);
-        memset(arp_key, 0, sizeof *arp_key);
+        arp_key = nl_msg_put_unspec_zero(buf, OVS_KEY_ATTR_ARP,
+                                         sizeof *arp_key);
         arp_key->arp_sip = data->nw_src;
         arp_key->arp_tip = data->nw_dst;
         arp_key->arp_op = htons(data->nw_proto);
@@ -3436,9 +3435,8 @@ commit_mpls_action(const struct flow *flow, struct flow *base,
     case 1: {
         struct ovs_action_push_mpls *mpls;
 
-        mpls = nl_msg_put_unspec_uninit(odp_actions, OVS_ACTION_ATTR_PUSH_MPLS,
-                                        sizeof *mpls);
-        memset(mpls, 0, sizeof *mpls);
+        mpls = nl_msg_put_unspec_zero(odp_actions, OVS_ACTION_ATTR_PUSH_MPLS,
+                                      sizeof *mpls);
         mpls->mpls_ethertype = flow->dl_type;
         mpls->mpls_lse = flow->mpls_lse;
         break;
