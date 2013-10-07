@@ -59,6 +59,7 @@ void *nl_msg_push_uninit(struct ofpbuf *, size_t);
 
 /* Appending attributes. */
 void *nl_msg_put_unspec_uninit(struct ofpbuf *, uint16_t type, size_t);
+void *nl_msg_put_unspec_zero(struct ofpbuf *, uint16_t type, size_t);
 void nl_msg_put_unspec(struct ofpbuf *, uint16_t type, const void *, size_t);
 void nl_msg_put_flag(struct ofpbuf *, uint16_t type);
 void nl_msg_put_u8(struct ofpbuf *, uint16_t type, uint8_t value);
