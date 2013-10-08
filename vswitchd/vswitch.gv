@@ -1,4 +1,5 @@
 digraph Open_vSwitch {
+	rankdir=LR;
 	size="6.5,4";
 	margin="0";
 	node [shape=box];

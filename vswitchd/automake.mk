@@ -48,7 +48,7 @@ if HAVE_DOT
 	  echo "regenerating vswitch.pic";				\
 	  (echo ".\\\" Generated from vswitch.gv with cksum \"$$sum\"";	\
 	   dot -T plain < $(srcdir)/vswitchd/vswitch.gv			\
-	    | $(srcdir)/ovsdb/dot2pic) > $@;				\
+	    | $(srcdir)/ovsdb/dot2pic -f 3) > $@;			\
 	fi
 else
 	touch $@

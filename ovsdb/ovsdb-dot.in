@@ -41,6 +41,7 @@ def schemaToDot(schemaFile):
     schema = ovs.db.schema.DbSchema.from_json(ovs.json.from_file(schemaFile))
 
     print "digraph %s {" % schema.name
+    print '\trankdir=LR;'
     print '\tsize="6.5,4";'
     print '\tmargin="0";'
     print "\tnode [shape=box];"
