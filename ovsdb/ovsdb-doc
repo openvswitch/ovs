@@ -212,6 +212,8 @@ def columnGroupToNroff(table, groupXml):
             else:
                 nameNroff = name
                 typeNroff = typeAndConstraintsToNroff(column)
+            if not column.mutable:
+                typeNroff = "immutable %s" % typeNroff
             body += '.IP "\\fB%s\\fR: %s"\n' % (nameNroff, typeNroff)
             body += blockXmlToNroff(node.childNodes, '.IP') + "\n"
             summary += [('column', nameNroff, typeNroff)]
