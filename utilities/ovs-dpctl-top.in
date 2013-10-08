@@ -72,7 +72,7 @@ commands are supported:
 
   h - halt output. Any character will restart sampling
 
-  f - cycle through flow fields
+  f - cycle through flow fields. The initial field is in_port
 
   q - q for quit.
 
@@ -295,16 +295,32 @@ class OutputFormat:
         self.field_type = field_type
         self.generator = generator
 
+##
+# The order below is important. The initial flow field depends on whether
+# --script or top mode is used. In top mode, the expected behavior, in_port
+# flow fields are shown first. A future feature will allow users to
+# filter output by selecting a row. Filtering by in_port is a natural
+# filtering starting point.
+#
+# In script mode, all fields are shown. The expectation is that users could
+# filter output by piping through grep.
+#
+# In top mode, the default flow field is in_port. In --script mode,
+# the default flow field is all.
+#
+# All is added to the end of the OUTPUT_FORMAT list.
+##
 OUTPUT_FORMAT = [
+    OutputFormat("in_port", element_passthrough_get),
     OutputFormat("eth", element_eth_get),
+    OutputFormat("eth_type", element_passthrough_get),
     OutputFormat("ipv4", element_ipv4_get),
     OutputFormat("ipv6", element_ipv6_get),
-    OutputFormat("tunnel", element_tunnel_get),
     OutputFormat("udp", element_dst_port_get),
     OutputFormat("tcp", element_dst_port_get),
-    OutputFormat("eth_type", element_passthrough_get),
-    OutputFormat("in_port", element_passthrough_get)
+    OutputFormat("tunnel", element_tunnel_get),
     ]
+##
 
 
 ELEMENT_KEY = {
@@ -713,8 +729,18 @@ def column_picker(order, obj):
 
 
 class Render:
-    """ Renders flow data. """
-    def __init__(self, console_width):
+    """ Renders flow data.
+
+    The two FIELD_SELECT variables should be set to the actual field minus
+    1. During construction, an internal method increments and initializes
+    this object.
+    """
+    FLOW_FIELDS = [_field.field_type for _field in OUTPUT_FORMAT] + ["all"]
+
+    FIELD_SELECT_SCRIPT = 7
+    FIELD_SELECT_TOP = -1
+
+    def __init__(self, console_width, field_select):
         """ Calculate column widths taking into account changes in format."""
 
         self._start_time = datetime.datetime.now()
@@ -759,12 +785,12 @@ class Render:
         # _field_types hold which fields are displayed in the field
         # column, with the keyword all implying all fields.
         ##
-        self._field_types = ["all"] + [ii.field_type for ii in OUTPUT_FORMAT]
+        self._field_types = Render.FLOW_FIELDS
 
         ##
         # The default is to show all field types.
         ##
-        self._field_type_select = -1
+        self._field_type_select = field_select
         self.field_type_toggle()
 
     def _field_type_select_get(self):
@@ -1144,7 +1170,7 @@ def flows_top(args):
     """ handles top like behavior when --script is not specified. """
 
     flow_db = FlowDB(args.accumulate)
-    render = Render(0)
+    render = Render(0, Render.FIELD_SELECT_TOP)
 
     decay_timer = decay_timer_start(flow_db, args.accumulateDecay)
     lines = []
@@ -1219,7 +1245,7 @@ def flows_script(args):
                 ihdl.close()
 
     (_, console_width) = get_terminal_size()
-    render = Render(console_width)
+    render = Render(console_width, Render.FIELD_SELECT_SCRIPT)
 
     for line in render.format(flow_db):
         print line
@@ -1685,3 +1711,12 @@ elif __name__ == 'ovs-dpctl-top':
 
             for (ipv6_test, ipv6_check) in ipv6s:
                 self.assertEqual(ipv6_to_network(ipv6_test), ipv6_check)
+
+        def test_ui(self):
+            """ test_ui: test expected ui behavior. """
+            #pylint: disable=W0212
+            top_render = Render(80, Render.FIELD_SELECT_TOP)
+            script_render = Render(80, Render.FIELD_SELECT_SCRIPT)
+            self.assertEqual(top_render._field_type_select_get(), "in_port")
+            self.assertEqual(script_render._field_type_select_get(), "all")
+            #pylint: enable=W0212
