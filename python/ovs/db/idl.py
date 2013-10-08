@@ -733,7 +733,6 @@ class Transaction(object):
         self._status = Transaction.UNCOMMITTED
         self._error = None
         self._comments = []
-        self._commit_seqno = self.idl.change_seqno
 
         self._inc_row = None
         self._inc_column = None

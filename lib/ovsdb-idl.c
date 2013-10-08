@@ -91,7 +91,6 @@ struct ovsdb_idl_txn {
     char *error;
     bool dry_run;
     struct ds comment;
-    unsigned int commit_seqno;
 
     /* Increments. */
     const char *inc_table;
@@ -1242,7 +1241,6 @@ ovsdb_idl_txn_create(struct ovsdb_idl *idl)
     txn->error = NULL;
     txn->dry_run = false;
     ds_init(&txn->comment);
-    txn->commit_seqno = txn->idl->change_seqno;
 
     txn->inc_table = NULL;
     txn->inc_column = NULL;
