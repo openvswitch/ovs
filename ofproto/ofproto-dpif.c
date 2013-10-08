@@ -3803,22 +3803,20 @@ facet_free(struct facet *facet)
 
 /* Executes, within 'ofproto', the 'n_actions' actions in 'actions' on
  * 'packet', which arrived on 'in_port'. */
-static bool
+static int
 execute_odp_actions(struct ofproto_dpif *ofproto, const struct flow *flow,
                     const struct nlattr *odp_actions, size_t actions_len,
                     struct ofpbuf *packet)
 {
     struct odputil_keybuf keybuf;
     struct ofpbuf key;
-    int error;
 
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
     odp_flow_key_from_flow(&key, flow,
                            ofp_port_to_odp_port(ofproto, flow->in_port.ofp_port));
 
-    error = dpif_execute(ofproto->backer->dpif, key.data, key.size,
-                         odp_actions, actions_len, packet);
-    return !error;
+    return dpif_execute(ofproto->backer->dpif, key.data, key.size,
+                        odp_actions, actions_len, packet);
 }
 
 /* Remove 'facet' from its ofproto and free up the associated memory:
@@ -4856,17 +4854,9 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
            const struct ofpact *ofpacts, size_t ofpacts_len)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    struct odputil_keybuf keybuf;
     struct dpif_flow_stats stats;
     struct xlate_out xout;
     struct xlate_in xin;
-    struct ofpbuf key;
-
-
-    ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
-    odp_flow_key_from_flow(&key, flow,
-                           ofp_port_to_odp_port(ofproto,
-                                      flow->in_port.ofp_port));
 
     dpif_flow_stats_extract(flow, packet, time_msec(), &stats);
 
@@ -4876,8 +4866,8 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
     xin.ofpacts = ofpacts;
 
     xlate_actions(&xin, &xout);
-    dpif_execute(ofproto->backer->dpif, key.data, key.size,
-                 xout.odp_actions.data, xout.odp_actions.size, packet);
+    execute_odp_actions(ofproto, flow,
+                        xout.odp_actions.data, xout.odp_actions.size, packet);
     xlate_out_uninit(&xout);
 
     return 0;
