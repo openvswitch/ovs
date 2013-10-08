@@ -1,0 +1,889 @@
+dnl VTEP_OVSDB_INIT([$1])
+dnl
+dnl Creates an empty database named $1.
+m4_define([VTEP_OVSDB_INIT],
+  [OVS_RUNDIR=`pwd`; export OVS_RUNDIR
+   AT_CHECK(
+     [ovsdb-tool create $1 $abs_top_srcdir/vtep/vtep.ovsschema],
+     [0], [stdout], [ignore])
+   AT_CHECK(
+     [[ovsdb-tool transact $1 \
+        '["hardware_vtep",
+          {"op": "insert",
+           "table": "Global",
+           "row": {}}]']],
+     [0], [ignore], [ignore])])
+
+dnl VTEP_CTL_SETUP
+dnl
+dnl Creates an empty database in the current directory and then starts
+dnl an ovsdb-server on it for vtep-ctl to connect to.
+m4_define([VTEP_CTL_SETUP],
+  [VTEP_OVSDB_INIT([db])
+   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db >/dev/null 2>&1], [0], [ignore], [ignore])])
+
+dnl VTEP_CTL_CLEANUP
+dnl
+dnl Kills off the database server.
+m4_define([VTEP_CTL_CLEANUP], [OVSDB_SERVER_SHUTDOWN])
+
+dnl RUN_VTEP_CTL(COMMAND, ...)
+dnl
+dnl Executes each vtep-ctl COMMAND.
+m4_define([RUN_VTEP_CTL],
+  [m4_foreach([command], [$@], [vtep-ctl --timeout=5 -vreconnect:emer --db=unix:socket command
+])])
+m4_define([RUN_VTEP_CTL_ONELINE],
+  [m4_foreach([command], [$@], [vtep-ctl --timeout=5 -vreconnect:emer --db=unix:socket --oneline -- command
+])])
+
+dnl RUN_VTEP_CTL_TOGETHER(COMMAND, ...)
+dnl
+dnl Executes each vtep-ctl COMMAND in a single run of vtep-ctl.
+m4_define([RUN_VTEP_CTL_TOGETHER],
+  [vtep-ctl --timeout=5 -vreconnect:emer --db=unix:socket --oneline dnl
+m4_foreach([command], [$@], [ -- command])])
+
+dnl CHECK_PSWITCHES([PSWITCH], ...)
+dnl
+dnl Verifies that "vtep-ctl list-ps" prints the specified list of
+dnl physical switches, which must be in alphabetical order.
+m4_define([CHECK_PSWITCHES],
+  [dnl Check that the pswitches appear on list-ps, without --oneline.
+   AT_CHECK(
+     [RUN_VTEP_CTL([list-ps])],
+     [0],
+     [m4_foreach([psinfo], [$@], [m4_car(psinfo)
+])],
+     [],
+     [VTEP_CTL_CLEANUP])
+
+   dnl Check that the pswitches appear on list-ps, with --oneline.
+   AT_CHECK(
+     [RUN_VTEP_CTL_ONELINE([list-ps])],
+     [0],
+     [m4_join([\n], m4_foreach([psinfo], [$@], [m4_car(psinfo),]))
+],
+     [],
+     [VTEP_CTL_CLEANUP])
+
+   dnl Check that each pswitch exists according to ps-exists and that
+   dnl a pswitch that should not exist does not.
+   m4_foreach([psinfo], [$@],
+              [AT_CHECK([RUN_VTEP_CTL([ps-exists m4_car(psinfo)])], [0], [],
+                        [], [VTEP_CTL_CLEANUP])])
+   AT_CHECK([RUN_VTEP_CTL([ps-exists nonexistent])], [2], [], [],
+            [VTEP_CTL_CLEANUP])])
+
+dnl CHECK_PORTS(PSWITCH, PORT[, PORT...])
+dnl
+dnl Verifies that "vtep-ctl list-ports PSWITCH" prints the specified
+dnl list of ports, which must be in alphabetical order.
+m4_define([CHECK_PORTS],
+  [dnl Check ports without --oneline.
+   AT_CHECK(
+     [RUN_VTEP_CTL([list-ports $1])],
+     [0],
+     [m4_foreach([port], m4_cdr($@), [port
+])],
+     [],
+     [VTEP_CTL_CLEANUP])
+
+   dnl Check ports with --oneline.
+   AT_CHECK(
+     [RUN_VTEP_CTL_ONELINE([list-ports $1])],
+     [0],
+     [m4_join([\n], m4_shift($@))
+],
+     [],
+     [VTEP_CTL_CLEANUP])])
+
+
+dnl CHECK_LSWITCHES([LSWITCH], ...)
+dnl
+dnl Verifies that "vtep-ctl list-ls" prints the specified list of
+dnl logical switches, which must be in alphabetical order.
+m4_define([CHECK_LSWITCHES],
+  [dnl Check that the lswitches appear on list-ls, without --oneline.
+   AT_CHECK(
+     [RUN_VTEP_CTL([list-ls])],
+     [0],
+     [m4_foreach([lsinfo], [$@], [m4_car(lsinfo)
+])],
+     [],
+     [VTEP_CTL_CLEANUP])
+
+   dnl Check that the lswitches appear on list-ls, with --oneline.
+   AT_CHECK(
+     [RUN_VTEP_CTL_ONELINE([list-ls])],
+     [0],
+     [m4_join([\n], m4_foreach([lsinfo], [$@], [m4_car(lsinfo),]))
+],
+     [],
+     [VTEP_CTL_CLEANUP])
+
+   dnl Check that each lswitch exists according to ls-exists and that
+   dnl a pswitch that should not exist does not.
+   m4_foreach([lsinfo], [$@],
+              [AT_CHECK([RUN_VTEP_CTL([ls-exists m4_car(lsinfo)])], [0], [],
+                        [], [VTEP_CTL_CLEANUP])])
+   AT_CHECK([RUN_VTEP_CTL([ls-exists nonexistent])], [2], [], [],
+            [VTEP_CTL_CLEANUP])])
+
+dnl ----------------------------------------------------------------------
+AT_BANNER([vtep-ctl unit tests -- physical switch tests])
+
+AT_SETUP([add-ps a])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL([add-ps a])], [0], [], [], [VTEP_CTL_CLEANUP])
+CHECK_PSWITCHES([a])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-ps a, add-ps a])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL([add-ps a])], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([add-ps a])], [1], [],
+  [vtep-ctl: cannot create physical switch a because it already exists
+], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-ps a, add-ps b])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL([add-ps a], [add-ps b])], [0], [], [],
+         [VTEP_CTL_CLEANUP])
+CHECK_PSWITCHES([a], [b])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-ps a, add-ps b, del-ps a])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL([add-ps a], [add-ps b], [del-ps a])], [0], [], [],
+         [VTEP_CTL_CLEANUP])
+CHECK_PSWITCHES([b])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-ps a, del-ps a, add-ps a])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL_TOGETHER(
+  [add-ps a],
+  [del-ps a],
+  [add-ps a])], [0], [
+
+
+], [], [VTEP_CTL_CLEANUP])
+CHECK_PSWITCHES([a])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-ps a, add-port a a1, add-port a a2])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ps a],
+   [--if-exists del-ps b],
+   [add-port a a1],
+   [add-port a a2])], [0], [], [], [VTEP_CTL_CLEANUP])
+CHECK_PSWITCHES([a])
+CHECK_PORTS([a], [a1], [a2])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-ps a, add-port a a1, add-port a a1])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ps a],
+   [add-port a a1])], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([add-port a a1])], [1], [],
+  [vtep-ctl: cannot create a port named a1 on a because a port with that name already exists
+], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-ps a b, add-port a a1, add-port b b1, del-ps a])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL_TOGETHER(
+   [add-ps a],
+   [add-ps b],
+   [add-port a a1],
+   [add-port b b1],
+   [--if-exists del-port b b2],
+   [del-ps a])], [0], [
+
+
+
+
+
+], [], [VTEP_CTL_CLEANUP])
+CHECK_PSWITCHES([b])
+CHECK_PORTS([b], [b1])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-ps a b, add-port a a1, add-port b b1, del-port a a1])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL(
+  [add-ps a],
+  [add-ps b],
+  [add-port a a1],
+  [--may-exist add-port b b1],
+  [del-port a a1])], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([--may-exist add-port b b1])], [0], [], [],
+  [VTEP_CTL_CLEANUP])
+CHECK_PSWITCHES([a], [b])
+CHECK_PORTS([a])
+CHECK_PORTS([b], [b1])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-ps a b, add-port a p1, add-port b p1, del-port a p1])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL(
+  [add-ps a],
+  [add-ps b],
+  [add-port a p1],
+  [add-port b p1])], [0], [], [], [VTEP_CTL_CLEANUP])
+CHECK_PSWITCHES([a], [b])
+CHECK_PORTS([a], [p1])
+CHECK_PORTS([b], [p1])
+AT_CHECK([RUN_VTEP_CTL([del-port a p1])], [0], [], [],
+  [VTEP_CTL_CLEANUP])
+CHECK_PSWITCHES([a], [b])
+CHECK_PORTS([a])
+CHECK_PORTS([b], [p1])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+
+dnl ----------------------------------------------------------------------
+AT_BANNER([vtep-ctl unit tests -- logical switch tests])
+
+AT_SETUP([add-ls a])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL([add-ls a])], [0], [], [], [VTEP_CTL_CLEANUP])
+CHECK_LSWITCHES([a])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-ls a, add-ls a])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL([add-ls a])], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([add-ls a])], [1], [],
+  [vtep-ctl: cannot create logical switch a because it already exists
+], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-ls a, add-ls b])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL([add-ls a], [add-ls b])], [0], [], [],
+         [VTEP_CTL_CLEANUP])
+CHECK_LSWITCHES([a], [b])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-ls a, add-ls b, del-ls a])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL([add-ls a], [add-ls b], [del-ls a])], [0], [], [],
+         [VTEP_CTL_CLEANUP])
+CHECK_LSWITCHES([b])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-ls a, del-ls a, add-ls a])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL_TOGETHER(
+  [add-ls a],
+  [del-ls a],
+  [add-ls a])], [0], [
+
+
+], [], [VTEP_CTL_CLEANUP])
+CHECK_LSWITCHES([a])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+
+dnl ----------------------------------------------------------------------
+AT_BANNER([vtep-ctl unit tests -- logical binding tests])
+
+AT_SETUP([bind-ls ps1 pp1 300 ls1])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ps ps1],
+   [add-port ps1 pp1],
+   [add-ls ls1])], [0], [], [], [VTEP_CTL_CLEANUP])
+CHECK_PSWITCHES([ps1])
+CHECK_PORTS([ps1], [pp1])
+CHECK_LSWITCHES([ls1])
+AT_CHECK([RUN_VTEP_CTL(
+   [bind-ls ps1 pp1 300 ls1])], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-bindings ps1 pp1])], [0],
+   [0300 ls1
+], [], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([bind-ls ps1 pp1 300 ls1, bind-ls ps1 pp1 400 ls2])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ps ps1],
+   [add-port ps1 pp1],
+   [add-ls ls1],
+   [add-ls ls2])], [0], [], [], [VTEP_CTL_CLEANUP])
+CHECK_PSWITCHES([ps1])
+CHECK_PORTS([ps1], [pp1])
+CHECK_LSWITCHES([ls1], [ls2])
+AT_CHECK([RUN_VTEP_CTL(
+   [bind-ls ps1 pp1 300 ls1])], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL(
+   [bind-ls ps1 pp1 400 ls2])], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-bindings ps1 pp1])], [0],
+   [0300 ls1
+0400 ls2
+], [], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([bind-ls ps1 pp1 300, bind-ls ps2 pp2 300 ls2])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ps ps1],
+   [add-ps ps2],
+   [add-port ps1 pp1],
+   [add-port ps2 pp2],
+   [add-ls ls1],
+   [add-ls ls2])], [0], [], [], [VTEP_CTL_CLEANUP])
+CHECK_PSWITCHES([ps1], [ps2])
+CHECK_PORTS([ps1], [pp1])
+CHECK_PORTS([ps2], [pp2])
+CHECK_LSWITCHES([ls1], [ls2])
+AT_CHECK([RUN_VTEP_CTL(
+   [bind-ls ps1 pp1 300 ls1])], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL(
+   [bind-ls ps2 pp2 300 ls2])], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-bindings ps1 pp1])], [0],
+   [0300 ls1
+], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-bindings ps2 pp2])], [0],
+   [0300 ls2
+], [], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+
+dnl ----------------------------------------------------------------------
+AT_BANNER([vtep-ctl unit tests -- MAC binding tests])
+
+AT_SETUP([add-ucast-local ls1])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ls ls1])], [0], [], [], [VTEP_CTL_CLEANUP])
+CHECK_LSWITCHES([ls1])
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ucast-local ls1 00:11:22:33:44:55 10.0.0.10],
+   [add-ucast-local ls1 00:11:22:33:44:66 vxlan_over_ipv4 10.0.0.11])
+], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-local-macs ls1])], [0],
+   [ucast-mac-local
+  00:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+  00:11:22:33:44:66 -> vxlan_over_ipv4/10.0.0.11
+
+mcast-mac-local
+
+], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-remote-macs ls1])], [0],
+   [ucast-mac-remote
+
+mcast-mac-remote
+
+], [], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-ucast-local ls1, overwrite])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ls ls1])], [0], [], [], [VTEP_CTL_CLEANUP])
+CHECK_LSWITCHES([ls1])
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ucast-local ls1 00:11:22:33:44:55 10.0.0.10],
+   [add-ucast-local ls1 00:11:22:33:44:55 10.0.0.11])
+], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-local-macs ls1])], [0],
+   [ucast-mac-local
+  00:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.11
+
+mcast-mac-local
+
+], [], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-ucast-local ls1, del-ucast-local ls1])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ls ls1])], [0], [], [], [VTEP_CTL_CLEANUP])
+CHECK_LSWITCHES([ls1])
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ucast-local ls1 00:11:22:33:44:55 10.0.0.10],
+   [add-ucast-local ls1 00:11:22:33:44:66 vxlan_over_ipv4 10.0.0.11])
+], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-local-macs ls1])], [0],
+   [ucast-mac-local
+  00:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+  00:11:22:33:44:66 -> vxlan_over_ipv4/10.0.0.11
+
+mcast-mac-local
+
+], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL(
+   [del-ucast-local ls1 00:11:22:33:44:55])
+], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-local-macs ls1])], [0],
+   [ucast-mac-local
+  00:11:22:33:44:66 -> vxlan_over_ipv4/10.0.0.11
+
+mcast-mac-local
+
+], [], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-ucast-remote ls1])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ls ls1])], [0], [], [], [VTEP_CTL_CLEANUP])
+CHECK_LSWITCHES([ls1])
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ucast-remote ls1 00:11:22:33:44:55 10.0.0.10],
+   [add-ucast-remote ls1 00:11:22:33:44:66 vxlan_over_ipv4 10.0.0.11])
+], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-remote-macs ls1])], [0],
+   [ucast-mac-remote
+  00:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+  00:11:22:33:44:66 -> vxlan_over_ipv4/10.0.0.11
+
+mcast-mac-remote
+
+], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-local-macs ls1])], [0],
+   [ucast-mac-local
+
+mcast-mac-local
+
+], [], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-ucast-remote ls1, overwrite])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ls ls1])], [0], [], [], [VTEP_CTL_CLEANUP])
+CHECK_LSWITCHES([ls1])
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ucast-remote ls1 00:11:22:33:44:55 10.0.0.10],
+   [add-ucast-remote ls1 00:11:22:33:44:55 10.0.0.11])
+], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-remote-macs ls1])], [0],
+   [ucast-mac-remote
+  00:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.11
+
+mcast-mac-remote
+
+], [], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-ucast-remote ls1, del-ucast-remote ls1])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ls ls1])], [0], [], [], [VTEP_CTL_CLEANUP])
+CHECK_LSWITCHES([ls1])
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ucast-remote ls1 00:11:22:33:44:55 10.0.0.10],
+   [add-ucast-remote ls1 00:11:22:33:44:66 vxlan_over_ipv4 10.0.0.11])
+], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-remote-macs ls1])], [0],
+   [ucast-mac-remote
+  00:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+  00:11:22:33:44:66 -> vxlan_over_ipv4/10.0.0.11
+
+mcast-mac-remote
+
+], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL(
+   [del-ucast-remote ls1 00:11:22:33:44:55])
+], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-remote-macs ls1])], [0],
+   [ucast-mac-remote
+  00:11:22:33:44:66 -> vxlan_over_ipv4/10.0.0.11
+
+mcast-mac-remote
+
+], [], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-ucast-local ls1, add-ucast-remote ls1])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ls ls1])], [0], [], [], [VTEP_CTL_CLEANUP])
+CHECK_LSWITCHES([ls1])
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ucast-local ls1 00:11:22:33:44:55 10.0.0.10],
+   [add-ucast-local ls1 00:11:22:33:44:66 10.0.0.11],
+   [add-ucast-remote ls1 02:11:22:33:44:55 10.0.0.10],
+   [add-ucast-remote ls1 02:11:22:33:44:66 vxlan_over_ipv4 10.0.0.11])
+], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-local-macs ls1])], [0],
+   [ucast-mac-local
+  00:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+  00:11:22:33:44:66 -> vxlan_over_ipv4/10.0.0.11
+
+mcast-mac-local
+
+], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-remote-macs ls1])], [0],
+   [ucast-mac-remote
+  02:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+  02:11:22:33:44:66 -> vxlan_over_ipv4/10.0.0.11
+
+mcast-mac-remote
+
+], [], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-mcast-local ls1])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ls ls1])], [0], [], [], [VTEP_CTL_CLEANUP])
+CHECK_LSWITCHES([ls1])
+AT_CHECK([RUN_VTEP_CTL(
+   [add-mcast-local ls1 01:11:22:33:44:55 10.0.0.10],
+   [add-mcast-local ls1 01:11:22:33:44:66 vxlan_over_ipv4 10.0.0.11],
+   [add-mcast-local ls1 01:11:22:33:44:55 10.0.0.12])
+], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-local-macs ls1])], [0],
+   [ucast-mac-local
+
+mcast-mac-local
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.12
+  01:11:22:33:44:66 -> vxlan_over_ipv4/10.0.0.11
+
+], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-remote-macs ls1])], [0],
+   [ucast-mac-remote
+
+mcast-mac-remote
+
+], [], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-mcast-local ls1, del-mcast-local ls1])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ls ls1])], [0], [], [], [VTEP_CTL_CLEANUP])
+CHECK_LSWITCHES([ls1])
+AT_CHECK([RUN_VTEP_CTL(
+   [add-mcast-local ls1 01:11:22:33:44:55 10.0.0.10],
+   [add-mcast-local ls1 01:11:22:33:44:66 vxlan_over_ipv4 10.0.0.11],
+   [add-mcast-local ls1 01:11:22:33:44:55 10.0.0.12],
+   [add-mcast-local ls1 01:11:22:33:44:55 10.0.0.13])
+], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-local-macs ls1])], [0],
+   [ucast-mac-local
+
+mcast-mac-local
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.12
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.13
+  01:11:22:33:44:66 -> vxlan_over_ipv4/10.0.0.11
+
+], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL(
+   [del-mcast-local ls1 01:11:22:33:44:55 10.0.0.12])
+], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-local-macs ls1])], [0],
+   [ucast-mac-local
+
+mcast-mac-local
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.13
+  01:11:22:33:44:66 -> vxlan_over_ipv4/10.0.0.11
+
+], [], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-mcast-remote ls1])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ls ls1])], [0], [], [], [VTEP_CTL_CLEANUP])
+CHECK_LSWITCHES([ls1])
+AT_CHECK([RUN_VTEP_CTL(
+   [add-mcast-remote ls1 01:11:22:33:44:55 10.0.0.10],
+   [add-mcast-remote ls1 01:11:22:33:44:66 vxlan_over_ipv4 10.0.0.11],
+   [add-mcast-remote ls1 01:11:22:33:44:55 10.0.0.12])
+], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-remote-macs ls1])], [0],
+   [ucast-mac-remote
+
+mcast-mac-remote
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.12
+  01:11:22:33:44:66 -> vxlan_over_ipv4/10.0.0.11
+
+], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-local-macs ls1])], [0],
+   [ucast-mac-local
+
+mcast-mac-local
+
+], [], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-mcast-remote ls1, del-mcast-remote ls1])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ls ls1])], [0], [], [], [VTEP_CTL_CLEANUP])
+CHECK_LSWITCHES([ls1])
+AT_CHECK([RUN_VTEP_CTL(
+   [add-mcast-remote ls1 01:11:22:33:44:55 10.0.0.10],
+   [add-mcast-remote ls1 01:11:22:33:44:66 vxlan_over_ipv4 10.0.0.11],
+   [add-mcast-remote ls1 01:11:22:33:44:55 10.0.0.12],
+   [add-mcast-remote ls1 01:11:22:33:44:55 10.0.0.13])
+], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-remote-macs ls1])], [0],
+   [ucast-mac-remote
+
+mcast-mac-remote
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.12
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.13
+  01:11:22:33:44:66 -> vxlan_over_ipv4/10.0.0.11
+
+], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL(
+   [del-mcast-remote ls1 01:11:22:33:44:55 10.0.0.12])
+], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-remote-macs ls1])], [0],
+   [ucast-mac-remote
+
+mcast-mac-remote
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.13
+  01:11:22:33:44:66 -> vxlan_over_ipv4/10.0.0.11
+
+], [], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-mcast-local ls1, add-mcast-remote ls1])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ls ls1])], [0], [], [], [VTEP_CTL_CLEANUP])
+CHECK_LSWITCHES([ls1])
+AT_CHECK([RUN_VTEP_CTL(
+   [add-mcast-local ls1 01:11:22:33:44:55 10.0.0.10],
+   [add-mcast-local ls1 01:11:22:33:44:66 10.0.0.11],
+   [add-mcast-local ls1 01:11:22:33:44:55 10.0.0.12],
+   [add-mcast-remote ls1 03:11:22:33:44:55 10.0.0.10],
+   [add-mcast-remote ls1 03:11:22:33:44:66 vxlan_over_ipv4 10.0.0.11],
+   [add-mcast-remote ls1 03:11:22:33:44:55 10.0.0.12])
+], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-local-macs ls1])], [0],
+   [ucast-mac-local
+
+mcast-mac-local
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.12
+  01:11:22:33:44:66 -> vxlan_over_ipv4/10.0.0.11
+
+], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-remote-macs ls1])], [0],
+   [ucast-mac-remote
+
+mcast-mac-remote
+  03:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+  03:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.12
+  03:11:22:33:44:66 -> vxlan_over_ipv4/10.0.0.11
+
+], [], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add local and remote macs, clear-local-macs])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ls ls1])], [0], [], [], [VTEP_CTL_CLEANUP])
+CHECK_LSWITCHES([ls1])
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ucast-local ls1 00:11:22:33:44:55 10.0.0.10],
+   [add-mcast-local ls1 01:11:22:33:44:55 10.0.0.10],
+   [add-mcast-local ls1 01:11:22:33:44:66 vxlan_over_ipv4 10.0.0.11],
+   [add-mcast-local ls1 01:11:22:33:44:55 10.0.0.12],
+   [add-ucast-remote ls1 00:11:22:33:44:55 10.0.0.10],
+   [add-mcast-remote ls1 01:11:22:33:44:55 10.0.0.10],
+   [add-mcast-remote ls1 01:11:22:33:44:66 vxlan_over_ipv4 10.0.0.11],
+   [add-mcast-remote ls1 01:11:22:33:44:55 10.0.0.12])
+], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-local-macs ls1])], [0],
+   [ucast-mac-local
+  00:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+
+mcast-mac-local
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.12
+  01:11:22:33:44:66 -> vxlan_over_ipv4/10.0.0.11
+
+], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-remote-macs ls1])], [0],
+   [ucast-mac-remote
+  00:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+
+mcast-mac-remote
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.12
+  01:11:22:33:44:66 -> vxlan_over_ipv4/10.0.0.11
+
+], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL(
+   [clear-local-macs ls1])], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-local-macs ls1])], [0],
+   [ucast-mac-local
+
+mcast-mac-local
+
+], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-remote-macs ls1])], [0],
+   [ucast-mac-remote
+  00:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+
+mcast-mac-remote
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.12
+  01:11:22:33:44:66 -> vxlan_over_ipv4/10.0.0.11
+
+], [], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add local and remote macs, clear-remote-macs])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ls ls1])], [0], [], [], [VTEP_CTL_CLEANUP])
+CHECK_LSWITCHES([ls1])
+AT_CHECK([RUN_VTEP_CTL(
+   [add-ucast-local ls1 00:11:22:33:44:55 10.0.0.10],
+   [add-mcast-local ls1 01:11:22:33:44:55 10.0.0.10],
+   [add-mcast-local ls1 01:11:22:33:44:66 vxlan_over_ipv4 10.0.0.11],
+   [add-mcast-local ls1 01:11:22:33:44:55 10.0.0.12],
+   [add-ucast-remote ls1 00:11:22:33:44:55 10.0.0.10],
+   [add-mcast-remote ls1 01:11:22:33:44:55 10.0.0.10],
+   [add-mcast-remote ls1 01:11:22:33:44:66 vxlan_over_ipv4 10.0.0.11],
+   [add-mcast-remote ls1 01:11:22:33:44:55 10.0.0.12])
+], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-local-macs ls1])], [0],
+   [ucast-mac-local
+  00:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+
+mcast-mac-local
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.12
+  01:11:22:33:44:66 -> vxlan_over_ipv4/10.0.0.11
+
+], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-remote-macs ls1])], [0],
+   [ucast-mac-remote
+  00:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+
+mcast-mac-remote
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.12
+  01:11:22:33:44:66 -> vxlan_over_ipv4/10.0.0.11
+
+], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL(
+   [clear-remote-macs ls1])], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-local-macs ls1])], [0],
+   [ucast-mac-local
+  00:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+
+mcast-mac-local
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.10
+  01:11:22:33:44:55 -> vxlan_over_ipv4/10.0.0.12
+  01:11:22:33:44:66 -> vxlan_over_ipv4/10.0.0.11
+
+], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([list-remote-macs ls1])], [0],
+   [ucast-mac-remote
+
+mcast-mac-remote
+
+], [], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+dnl ----------------------------------------------------------------------
+AT_BANNER([vtep-ctl unit tests -- manager commands])
+
+AT_SETUP([managers])
+AT_KEYWORDS([manager vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL_TOGETHER(
+  [del-manager],
+  [get-manager],
+  [set-manager tcp:4.5.6.7],
+  [get-manager],
+  [set-manager tcp:8.9.10.11 tcp:5.4.3.2],
+  [get-manager],
+  [del-manager],
+  [get-manager])], [0], [
+
+
+tcp:4.5.6.7
+
+tcp:5.4.3.2\ntcp:8.9.10.11
+
+
+], [], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP

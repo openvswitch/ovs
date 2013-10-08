@@ -253,3 +253,25 @@ ofproto/ofproto-dpif-unixctl.man:
 ofproto/ofproto-unixctl.man:
 ovsdb/remote-active.man:
 ovsdb/remote-passive.man:
+
+vtep/vtep-ctl.8: \
+	vtep/vtep-ctl.8.in \
+	lib/ssl-bootstrap.man \
+	lib/ssl-peer-ca-cert.man \
+	lib/ssl.man \
+	lib/table.man \
+	lib/vlog.man \
+	ovsdb/remote-active.man \
+	ovsdb/remote-active.man \
+	ovsdb/remote-passive.man \
+	ovsdb/remote-passive.man
+vtep/vtep-ctl.8.in:
+lib/ssl-bootstrap.man:
+lib/ssl-peer-ca-cert.man:
+lib/ssl.man:
+lib/table.man:
+lib/vlog.man:
+ovsdb/remote-active.man:
+ovsdb/remote-active.man:
+ovsdb/remote-passive.man:
+ovsdb/remote-passive.man:

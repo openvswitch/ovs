@@ -64,11 +64,12 @@ TESTSUITE_AT = \
 	tests/ovs-xapi-sync.at \
 	tests/stp.at \
 	tests/interface-reconfigure.at \
-	tests/vlog.at
+	tests/vlog.at \
+	tests/vtep-ctl.at
 TESTSUITE = $(srcdir)/tests/testsuite
 DISTCLEANFILES += tests/atconfig tests/atlocal
 
-AUTOTEST_PATH = utilities:vswitchd:ovsdb:tests
+AUTOTEST_PATH = utilities:vswitchd:ovsdb:vtep:tests
 
 check-local: tests/atconfig tests/atlocal $(TESTSUITE)
 	$(SHELL) '$(TESTSUITE)' -C tests AUTOTEST_PATH=$(AUTOTEST_PATH) $(TESTSUITEFLAGS)

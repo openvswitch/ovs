@@ -1,3 +1,18 @@
+bin_PROGRAMS += \
+   vtep/vtep-ctl
+
+MAN_ROOTS += \
+   vtep/vtep-ctl.8.in
+
+DISTCLEANFILES += \
+   vtep/vtep-ctl.8
+
+man_MANS += \
+   vtep/vtep-ctl.8
+
+vtep_vtep_ctl_SOURCES = vtep/vtep-ctl.c
+vtep_vtep_ctl_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
+
 # VTEP schema and IDL
 EXTRA_DIST += vtep/vtep.ovsschema
 pkgdata_DATA += vtep/vtep.ovsschema
