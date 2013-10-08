@@ -477,19 +477,23 @@ lswitch_choose_destination(struct lswitch *sw, const struct flow *flow)
     ofp_port_t out_port;
 
     /* Learn the source MAC. */
-    ovs_rwlock_wrlock(&sw->ml->rwlock);
-    if (mac_learning_may_learn(sw->ml, flow->dl_src, 0)) {
-        struct mac_entry *mac = mac_learning_insert(sw->ml, flow->dl_src, 0);
-        if (mac->port.ofp_port != flow->in_port.ofp_port) {
-            VLOG_DBG_RL(&rl, "%016llx: learned that "ETH_ADDR_FMT" is on "
-                        "port %"PRIu16, sw->datapath_id,
-                        ETH_ADDR_ARGS(flow->dl_src), flow->in_port.ofp_port);
+    if (sw->ml) {
+        ovs_rwlock_wrlock(&sw->ml->rwlock);
+        if (mac_learning_may_learn(sw->ml, flow->dl_src, 0)) {
+            struct mac_entry *mac = mac_learning_insert(sw->ml, flow->dl_src,
+                                                        0);
+            if (mac->port.ofp_port != flow->in_port.ofp_port) {
+                VLOG_DBG_RL(&rl, "%016llx: learned that "ETH_ADDR_FMT" is on "
+                            "port %"PRIu16, sw->datapath_id,
+                            ETH_ADDR_ARGS(flow->dl_src),
+                            flow->in_port.ofp_port);
 
-            mac->port.ofp_port = flow->in_port.ofp_port;
-            mac_learning_changed(sw->ml);
+                mac->port.ofp_port = flow->in_port.ofp_port;
+                mac_learning_changed(sw->ml);
+            }
         }
+        ovs_rwlock_unlock(&sw->ml->rwlock);
     }
-    ovs_rwlock_unlock(&sw->ml->rwlock);
 
     /* Drop frames for reserved multicast addresses. */
     if (eth_addr_is_reserved(flow->dl_dst)) {
