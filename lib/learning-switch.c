@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -449,7 +449,7 @@ lswitch_choose_destination(struct lswitch *sw, const struct flow *flow)
     uint16_t out_port;
 
     /* Learn the source MAC. */
-    if (mac_learning_may_learn(sw->ml, flow->dl_src, 0)) {
+    if (sw->ml && mac_learning_may_learn(sw->ml, flow->dl_src, 0)) {
         struct mac_entry *mac = mac_learning_insert(sw->ml, flow->dl_src, 0);
         if (mac_entry_is_new(mac) || mac->port.i != flow->in_port) {
             VLOG_DBG_RL(&rl, "%016llx: learned that "ETH_ADDR_FMT" is on "
