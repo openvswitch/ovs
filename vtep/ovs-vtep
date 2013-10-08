@@ -1,0 +1,511 @@
+#!/usr/bin/python
+# Copyright (C) 2013 Nicira, Inc. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Limitations:
+#     - Doesn't support multicast other than "unknown-dst"
+
+import argparse
+import re
+import subprocess
+import sys
+import time
+import types
+
+import ovs.dirs
+import ovs.util
+import ovs.daemon
+import ovs.unixctl.server
+import ovs.vlog
+
+
+VERSION = "0.99"
+
+root_prefix = ""
+
+__pychecker__ = 'no-reuseattr'  # Remove in pychecker >= 0.8.19.
+vlog = ovs.vlog.Vlog("ovs-vtep")
+exiting = False
+
+Tunnel_Ip = ""
+Lswitches = {}
+Bindings = {}
+ls_count = 0
+tun_id = 0
+
+def call_prog(prog, args_list):
+    cmd = [prog, "-vconsole:off"] + args_list
+    output = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()
+    if len(output) == 0 or output[0] == None:
+        output = ""
+    else:
+        output = output[0].strip()
+    return output
+
+def ovs_vsctl(args):
+    return call_prog("ovs-vsctl", args.split())
+
+def ovs_ofctl(args):
+    return call_prog("ovs-ofctl", args.split())
+
+def vtep_ctl(args):
+    return call_prog("vtep-ctl", args.split())
+
+
+def unixctl_exit(conn, unused_argv, unused_aux):
+    global exiting
+    exiting = True
+    conn.reply(None)
+
+
+class Logical_Switch(object):
+    def __init__(self, ls_name):
+        global ls_count
+        self.name = ls_name
+        ls_count += 1
+        self.short_name = "vtep_ls" + str(ls_count)
+        vlog.info("creating lswitch %s (%s)" % (self.name, self.short_name))
+        self.ports = {}
+        self.tunnels = {}
+        self.local_macs = set()
+        self.remote_macs = {}
+        self.unknown_dsts = set()
+        self.tunnel_key = 0
+        self.setup_ls()
+
+    def __del__(self):
+        vlog.info("destroying lswitch %s" % self.name)
+
+    def setup_ls(self):
+        column = vtep_ctl("--columns=tunnel_key find logical_switch "
+                              "name=%s" % self.name)
+        tunnel_key = column.partition(":")[2].strip()
+        if (tunnel_key and type(eval(tunnel_key)) == types.IntType):
+            self.tunnel_key = tunnel_key
+            vlog.info("using tunnel key %s in %s"
+                      % (self.tunnel_key, self.name))
+        else:
+            self.tunnel_key = 0
+            vlog.warn("invalid tunnel key for %s, using 0" % self.name)
+
+        ovs_vsctl("--may-exist add-br %s" % self.short_name)
+        ovs_vsctl("br-set-external-id %s vtep_logical_switch true"
+                  % self.short_name)
+        ovs_vsctl("br-set-external-id %s logical_switch_name %s"
+                  % (self.short_name, self.name))
+
+        vtep_ctl("clear-local-macs %s" % self.name)
+        vtep_ctl("add-mcast-local %s unknown-dst %s" % (self.name, Tunnel_Ip))
+
+        ovs_ofctl("del-flows %s" % self.short_name)
+        ovs_ofctl("add-flow %s priority=0,action=drop" % self.short_name)
+
+    def update_flood(self):
+        flood_ports = self.ports.values()
+
+        for tunnel in self.unknown_dsts:
+            port_no = self.tunnels[tunnel][0]
+            flood_ports.append(port_no)
+
+        ovs_ofctl("add-flow %s table=1,priority=0,action=%s"
+                  % (self.short_name, ",".join(flood_ports)))
+
+    def add_lbinding(self, lbinding):
+        vlog.info("adding %s binding to %s" % (lbinding, self.name))
+        port_no = ovs_vsctl("get Interface %s ofport" % lbinding)
+        self.ports[lbinding] = port_no
+        ovs_ofctl("add-flow %s in_port=%s,action=learn(table=1,"
+                  "priority=1000,idle_timeout=15,cookie=0x5000,"
+                  "NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],"
+                  "output:NXM_OF_IN_PORT[]),resubmit(,1)"
+                  % (self.short_name, port_no))
+
+        self.update_flood()
+
+    def del_lbinding(self, lbinding):
+        vlog.info("removing %s binding from %s" % (lbinding, self.name))
+        port_no = self.ports[lbinding]
+        ovs_ofctl("del-flows %s in_port=%s" % (self.short_name, port_no));
+        del self.ports[lbinding]
+        self.update_flood()
+
+    def add_tunnel(self, tunnel):
+        global tun_id
+        vlog.info("adding tunnel %s" % tunnel)
+        encap, ip = tunnel.split("/")
+
+        if encap != "vxlan_over_ipv4":
+            vlog.warn("unsupported tunnel format %s" % encap)
+            return
+
+        tun_id += 1
+        tun_name = "vx" + str(tun_id)
+
+        ovs_vsctl("add-port %s %s -- set Interface %s type=vxlan "
+                  "options:key=%s options:remote_ip=%s"
+                  % (self.short_name, tun_name, tun_name, self.tunnel_key, ip))
+
+        for i in range(10):
+            port_no = ovs_vsctl("get Interface %s ofport" % tun_name)
+            if port_no != "-1":
+                break
+            elif i == 9:
+                vlog.warn("couldn't create tunnel %s" % tunnel)
+                ovs_vsctl("del-port %s %s" % (self.short_name, tun_name))
+                return
+
+            # Give the system a moment to allocate the port number
+            time.sleep(0.5)
+
+        self.tunnels[tunnel] = (port_no, tun_name)
+
+        ovs_ofctl("add-flow %s table=0,priority=1000,in_port=%s,"
+                  "actions=resubmit(,1)"
+                  % (self.short_name, port_no))
+
+    def del_tunnel(self, tunnel):
+        vlog.info("removing tunnel %s" % tunnel)
+
+        port_no, tun_name = self.tunnels[tunnel]
+        ovs_ofctl("del-flows %s table=0,in_port=%s"
+                    % (self.short_name, port_no))
+        ovs_vsctl("del-port %s %s" % (self.short_name, tun_name))
+
+        del self.tunnels[tunnel]
+
+    def update_local_macs(self):
+        flows = ovs_ofctl("dump-flows %s cookie=0x5000/-1,table=1"
+                          % self.short_name).splitlines()
+        macs = set()
+        for f in flows:
+            mac = re.split(r'.*dl_dst=(.*) .*', f)
+            if len(mac) == 3:
+                macs.add(mac[1])
+
+        for mac in macs.difference(self.local_macs):
+            vlog.info("adding local ucast %s to %s" % (mac, self.name))
+            vtep_ctl("add-ucast-local %s %s %s" % (self.name, mac, Tunnel_Ip))
+
+        for mac in self.local_macs.difference(macs):
+            vlog.info("removing local ucast %s from %s" % (mac, self.name))
+            vtep_ctl("del-ucast-local %s %s" % (self.name, mac))
+
+        self.local_macs = macs
+
+    def add_remote_mac(self, mac, tunnel):
+        port_no = self.tunnels.get(tunnel, (0,""))[0]
+        if not port_no:
+            return
+
+        ovs_ofctl("add-flow %s table=1,priority=1000,dl_dst=%s,action=%s"
+                  % (self.short_name, mac, port_no))
+
+    def del_remote_mac(self, mac):
+        ovs_ofctl("del-flows %s table=1,dl_dst=%s" % (self.short_name, mac))
+
+    def update_remote_macs(self):
+        remote_macs = {}
+        unknown_dsts = set()
+        tunnels = set()
+        parse_ucast = True
+
+        mac_list = vtep_ctl("list-remote-macs %s" % self.name).splitlines()
+        for line in mac_list:
+            if (line.find("mcast-mac-remote") != -1):
+                parse_ucast = False
+                continue
+
+            entry = re.split(r'  (.*) -> (.*)', line)
+            if len(entry) != 4:
+                continue
+
+            if parse_ucast:
+                remote_macs[entry[1]] = entry[2]
+            else:
+                if entry[1] != "unknown-dst":
+                    continue
+
+                unknown_dsts.add(entry[2])
+
+            tunnels.add(entry[2])
+
+        old_tunnels = set(self.tunnels.keys())
+
+        for tunnel in tunnels.difference(old_tunnels):
+            self.add_tunnel(tunnel)
+
+        for tunnel in old_tunnels.difference(tunnels):
+            self.del_tunnel(tunnel)
+
+        for mac in remote_macs.keys():
+            if (self.remote_macs.get(mac) != remote_macs[mac]):
+                self.add_remote_mac(mac, remote_macs[mac])
+
+        for mac in self.remote_macs.keys():
+            if not remote_macs.has_key(mac):
+                self.del_remote_mac(mac)
+
+        self.remote_macs = remote_macs
+
+        if (self.unknown_dsts != unknown_dsts):
+            self.unknown_dsts = unknown_dsts
+            self.update_flood()
+
+    def update_stats(self):
+        # Map Open_vSwitch's "interface:statistics" to columns of
+        # vtep's logical_binding_stats. Since we are using the 'interface' from
+        # the logical switch to collect stats, packets transmitted from it
+        # is received in the physical switch and vice versa.
+        stats_map = {'tx_packets':'packets_to_local',
+                    'tx_bytes':'bytes_to_local',
+                    'rx_packets':'packets_from_local',
+                     'rx_bytes':'bytes_from_local'}
+
+        # Go through all the logical switch's interfaces that end with "-l"
+        # and copy the statistics to logical_binding_stats.
+        for interface in self.ports.iterkeys():
+            if not interface.endswith("-l"):
+                continue
+            vlan, pp_name, logical = interface.split("-")
+            uuid = vtep_ctl("get physical_port %s vlan_stats:%s"
+                            % (pp_name, vlan))
+            if not uuid:
+                continue
+
+            for (mapfrom, mapto) in stats_map.iteritems():
+                value = ovs_vsctl("get interface %s statistics:%s"
+                                % (interface, mapfrom)).strip('"')
+                vtep_ctl("set logical_binding_stats %s %s=%s"
+                        % (uuid, mapto, value))
+
+    def run(self):
+        self.update_local_macs()
+        self.update_remote_macs()
+        self.update_stats()
+
+def add_binding(ps_name, binding, ls):
+    vlog.info("adding binding %s" % binding)
+
+    vlan, pp_name = binding.split("-")
+    pbinding = binding+"-p"
+    lbinding = binding+"-l"
+
+    # Create a patch port that connects the VLAN+port to the lswitch.
+    # Do them as two separate calls so if one side already exists, the
+    # other side is created.
+    ovs_vsctl("add-port %s %s "
+              " -- set Interface %s type=patch options:peer=%s"
+              % (ps_name, pbinding, pbinding, lbinding))
+    ovs_vsctl("add-port %s %s "
+              " -- set Interface %s type=patch options:peer=%s"
+              % (ls.short_name, lbinding, lbinding, pbinding))
+
+    port_no = ovs_vsctl("get Interface %s ofport" % pp_name)
+    patch_no = ovs_vsctl("get Interface %s ofport" % pbinding)
+    vlan_ = vlan.lstrip('0')
+    if vlan_:
+        ovs_ofctl("add-flow %s in_port=%s,dl_vlan=%s,action=strip_vlan,%s"
+                  % (ps_name, port_no, vlan_, patch_no))
+        ovs_ofctl("add-flow %s in_port=%s,action=mod_vlan_vid:%s,%s"
+                  % (ps_name, patch_no, vlan_, port_no))
+    else:
+        ovs_ofctl("add-flow %s in_port=%s,action=%s"
+                  % (ps_name, port_no, patch_no))
+        ovs_ofctl("add-flow %s in_port=%s,action=%s"
+                  % (ps_name, patch_no, port_no))
+
+    # Create a logical_bindings_stats record.
+    if not vlan_:
+        vlan_ = "0"
+    vtep_ctl("set physical_port %s vlan_stats:%s=@stats --\
+            --id=@stats create logical_binding_stats packets_from_local=0"\
+            % (pp_name, vlan_))
+
+    ls.add_lbinding(lbinding)
+    Bindings[binding] = ls.name
+
+def del_binding(ps_name, binding, ls):
+    vlog.info("removing binding %s" % binding)
+
+    vlan, pp_name = binding.split("-")
+    pbinding = binding+"-p"
+    lbinding = binding+"-l"
+
+    port_no = ovs_vsctl("get Interface %s ofport" % pp_name)
+    patch_no = ovs_vsctl("get Interface %s ofport" % pbinding)
+    vlan_ = vlan.lstrip('0')
+    if vlan_:
+        ovs_ofctl("del-flows %s in_port=%s,dl_vlan=%s"
+                  % (ps_name, port_no, vlan_))
+        ovs_ofctl("del-flows %s in_port=%s" % (ps_name, patch_no))
+    else:
+        ovs_ofctl("del-flows %s in_port=%s" % (ps_name, port_no))
+        ovs_ofctl("del-flows %s in_port=%s" % (ps_name, patch_no))
+
+    ls.del_lbinding(lbinding)
+
+    # Destroy the patch port that connects the VLAN+port to the lswitch
+    ovs_vsctl("del-port %s %s -- del-port %s %s"
+              % (ps_name, pbinding, ls.short_name, lbinding))
+
+    # Remove the record that links vlan with stats in logical_binding_stats.
+    vtep_ctl("remove physical_port %s vlan_stats %s" % (pp_name, vlan))
+
+    del Bindings[binding]
+
+def handle_physical(ps_name):
+    # Gather physical ports except the patch ports we created
+    ovs_ports = ovs_vsctl("list-ports %s" % ps_name).split()
+    ovs_port_set = set([port for port in ovs_ports if port[-2:] != "-p"])
+
+    vtep_pp_set = set(vtep_ctl("list-ports %s" % ps_name).split())
+
+    for pp_name in ovs_port_set.difference(vtep_pp_set):
+        vlog.info("adding %s to %s" % (pp_name, ps_name))
+        vtep_ctl("add-port %s %s" % (ps_name, pp_name))
+
+    for pp_name in vtep_pp_set.difference(ovs_port_set):
+        vlog.info("deleting %s from %s" % (pp_name, ps_name))
+        vtep_ctl("del-port %s %s" % (ps_name, pp_name))
+
+    new_bindings = set()
+    for pp_name in vtep_pp_set:
+        binding_set = set(vtep_ctl("list-bindings %s %s"
+                                   % (ps_name, pp_name)).splitlines())
+
+        for b in binding_set:
+            vlan, ls_name = b.split()
+            if ls_name not in Lswitches:
+                Lswitches[ls_name] = Logical_Switch(ls_name)
+
+            binding = "%s-%s" % (vlan, pp_name)
+            ls = Lswitches[ls_name]
+            new_bindings.add(binding)
+
+            if Bindings.has_key(binding):
+                if Bindings[binding] == ls_name:
+                    continue
+                else:
+                    del_binding(ps_name, binding, Lswitches[Bindings[binding]])
+
+            add_binding(ps_name, binding, ls)
+
+
+    dead_bindings = set(Bindings.keys()).difference(new_bindings)
+    for binding in dead_bindings:
+        ls_name = Bindings[binding]
+        ls = Lswitches[ls_name]
+
+        del_binding(ps_name, binding, ls)
+
+        if not len(ls.ports):
+            ovs_vsctl("del-br %s" % Lswitches[ls_name].short_name)
+            del Lswitches[ls_name]
+
+def setup(ps_name):
+    br_list = ovs_vsctl("list-br").split()
+    if (ps_name not in br_list):
+        ovs.util.ovs_fatal(0, "couldn't find OVS bridge %s" % ps_name, vlog)
+
+    call_prog("vtep-ctl", ["set", "physical_switch", ps_name,
+                           'description="OVS VTEP Emulator"'])
+
+    tunnel_ips = vtep_ctl("get physical_switch %s tunnel_ips"
+                          % ps_name).strip('[]"').split(", ")
+    if len(tunnel_ips) != 1 or not tunnel_ips[0]:
+        ovs.util.ovs_fatal(0, "exactly one 'tunnel_ips' should be set", vlog)
+
+    global Tunnel_Ip
+    Tunnel_Ip = tunnel_ips[0]
+
+    ovs_ofctl("del-flows %s" % ps_name)
+
+    # Remove any logical bridges from the previous run
+    for br in br_list:
+        if ovs_vsctl("br-get-external-id %s vtep_logical_switch"
+                     % br) == "true":
+            # Remove the remote side of any logical switch
+            ovs_ports = ovs_vsctl("list-ports %s" % br).split()
+            for port in ovs_ports:
+                port_type = ovs_vsctl("get Interface %s type"
+                                      % port).strip('"')
+                if port_type != "patch":
+                    continue
+
+                peer = ovs_vsctl("get Interface %s options:peer"
+                                 % port).strip('"')
+                if (peer):
+                    ovs_vsctl("del-port %s" % peer)
+
+            ovs_vsctl("del-br %s" % br)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("ps_name", metavar="PS-NAME",
+                        help="Name of physical switch.")
+    parser.add_argument("--root-prefix", metavar="DIR",
+                        help="Use DIR as alternate root directory"
+                        " (for testing).")
+    parser.add_argument("--version", action="version",
+                        version="%s %s" % (ovs.util.PROGRAM_NAME, VERSION))
+
+    ovs.vlog.add_args(parser)
+    ovs.daemon.add_args(parser)
+    args = parser.parse_args()
+    ovs.vlog.handle_args(args)
+    ovs.daemon.handle_args(args)
+
+    global root_prefix
+    if args.root_prefix:
+        root_prefix = args.root_prefix
+
+    ps_name = args.ps_name
+
+    ovs.daemon.daemonize()
+
+    ovs.unixctl.command_register("exit", "", 0, 0, unixctl_exit, None)
+    error, unixctl = ovs.unixctl.server.UnixctlServer.create(None,
+                                                             version=VERSION)
+    if error:
+        ovs.util.ovs_fatal(error, "could not create unixctl server", vlog)
+
+    setup(ps_name)
+
+    while True:
+        unixctl.run()
+        if exiting:
+            break
+
+        handle_physical(ps_name)
+
+        for ls_name, ls in Lswitches.items():
+            ls.run()
+
+        poller = ovs.poller.Poller()
+        unixctl.wait(poller)
+        poller.timer_wait(1000)
+        poller.block()
+
+    unixctl.close()
+
+if __name__ == '__main__':
+    try:
+        main()
+    except SystemExit:
+        # Let system.exit() calls complete normally
+        raise
+    except:
+        vlog.exception("traceback")
+        sys.exit(ovs.daemon.RESTART_EXIT_CODE)

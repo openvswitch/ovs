@@ -13,6 +13,14 @@ man_MANS += \
 vtep_vtep_ctl_SOURCES = vtep/vtep-ctl.c
 vtep_vtep_ctl_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
+# ovs-vtep
+scripts_SCRIPTS += \
+    vtep/ovs-vtep
+
+EXTRA_DIST += \
+    vtep/ovs-vtep \
+    vtep/README.ovs-vtep
+
 # VTEP schema and IDL
 EXTRA_DIST += vtep/vtep.ovsschema
 pkgdata_DATA += vtep/vtep.ovsschema

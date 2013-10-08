@@ -1,0 +1,82 @@
+                       How to Use the VTEP Emulator
+                       ============================
+
+This document explains how to use ovs-vtep, a VTEP emulator that uses
+Open vSwitch for forwarding.  The emulator is a Python script that
+invokes calls to vtep-ctl and various OVS commands, so these commands
+will need to be available in the emulator's path.
+
+Startup
+=======
+
+These instructions describe how to run with a single ovsdb-server
+instance that handles both the OVS and VTEP schema.
+
+1. Create the initial OVS and VTEP schemas:
+
+    ovsdb-tool create /etc/openvswitch/ovs.db vswitchd/vswitch.ovsschema
+    ovsdb-tool create /etc/openvswitch/vtep.db vtep/vtep.ovsschema
+
+2. Start ovsdb-server and have it handle both databases:
+
+    ovsdb-server --pidfile --detach --log-file \
+      --remote punix:/var/run/openvswitch/db.sock \
+      /etc/openvswitch/ovs.db /etc/openvswitch/vtep.db
+
+3. Start OVS as normal:
+
+    ovs-vswitchd --log-file --detach --pidfile \
+      unix:/var/run/openvswitch/db.sock
+
+4. Create a "physical" switch in OVS:
+
+    ovs-vsctl add-br br0
+    ovs-vsctl add-port br0 eth0
+
+5. Configure the physical switch in the VTEP database:
+
+    vtep-ctl add-ps br0
+    vtep-ctl add-port br0 eth0
+    vtep-ctl set Physical_Switch br0 tunnel_ips=192.168.0.3
+
+6. Start the VTEP emulator:
+
+    ovs-vtep --log-file=/var/log/openvswitch/ovs-vtep.log \
+      --pidfile=/var/run/openvswitch/ovs-vtep.pid \
+      --detach br0
+
+7. Configure the VTEP database's manager to point at a NVC:
+
+    vtep-ctl set-manager tcp:192.168.0.99:6632
+
+The example provided creates a physical switch with a single physical
+port attached to it.  If more than one physical port is needed, it would
+be added to "br0" to both the OVS and VTEP databases:
+
+    ovs-vsctl add-port br0 eth1
+    vtep-ctl add-port br0 eth1
+
+
+Simulating a NVC
+================
+
+A VTEP implementation expects to be driven by a Network Virtualization
+Controller (NVC), such as NSX.  If one does not exist, it's possible to
+use vtep-ctl to simulate one:
+
+1. Create a logical switch:
+
+    vtep-ctl add-ls ls0
+
+2. Bind the logical switch to a port:
+
+    vtep-ctl bind-ls br0 eth0 0 ls0
+    vtep-ctl set Logical_Switch ls0 tunnel_key=33
+
+3. Direct unknown destinations out a tunnel:
+
+    vtep-ctl add-mcast-remote ls0 unknown-dst 192.168.1.34
+
+4. Direct unicast destinations out a different tunnel:
+
+    vtep-ctl add-ucast-remote ls0 11:22:33:44:55:66 192.168.1.33
