@@ -229,7 +229,9 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/vlog.c \
 	lib/vlog.h \
 	lib/vswitch-idl.c \
-	lib/vswitch-idl.h
+	lib/vswitch-idl.h \
+	lib/vtep-idl.c \
+	lib/vtep-idl.h
 
 nodist_lib_libopenvswitch_a_SOURCES = \
 	lib/dirs.c
@@ -334,7 +336,10 @@ MAN_FRAGMENTS += \
 OVSIDL_BUILT += \
 	$(srcdir)/lib/vswitch-idl.c \
 	$(srcdir)/lib/vswitch-idl.h \
-	$(srcdir)/lib/vswitch-idl.ovsidl
+	$(srcdir)/lib/vswitch-idl.ovsidl \
+	$(srcdir)/lib/vtep-idl.c \
+	$(srcdir)/lib/vtep-idl.h \
+	$(srcdir)/lib/vtep-idl.ovsidl
 
 EXTRA_DIST += $(srcdir)/lib/vswitch-idl.ann
 VSWITCH_IDL_FILES = \
@@ -342,6 +347,14 @@ VSWITCH_IDL_FILES = \
 	$(srcdir)/lib/vswitch-idl.ann
 $(srcdir)/lib/vswitch-idl.ovsidl: $(VSWITCH_IDL_FILES)
 	$(OVSDB_IDLC) annotate $(VSWITCH_IDL_FILES) > $@.tmp
+	mv $@.tmp $@
+
+EXTRA_DIST += $(srcdir)/lib/vtep-idl.ann
+VTEP_IDL_FILES = \
+	$(srcdir)/vtep/vtep.ovsschema \
+	$(srcdir)/lib/vtep-idl.ann
+$(srcdir)/lib/vtep-idl.ovsidl: $(VTEP_IDL_FILES)
+	$(OVSDB_IDLC) annotate $(VTEP_IDL_FILES) > $@.tmp
 	mv $@.tmp $@
 
 lib/dirs.c: lib/dirs.c.in Makefile

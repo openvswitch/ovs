@@ -274,3 +274,4 @@ include xenserver/automake.mk
 include python/automake.mk
 include python/compat/automake.mk
 include tutorial/automake.mk
+include vtep/automake.mk

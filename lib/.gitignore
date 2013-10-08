@@ -8,3 +8,6 @@
 /vswitch-idl.c
 /vswitch-idl.h
 /vswitch-idl.ovsidl
+/vtep-idl.c
+/vtep-idl.h
+/vtep-idl.ovsidl
