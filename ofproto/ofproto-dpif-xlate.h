@@ -43,6 +43,7 @@ struct xlate_out {
     struct flow_wildcards wc;
 
     enum slow_path_reason slow; /* 0 if fast path may be used. */
+    bool fail_open;             /* Initial rule is fail open? */
     bool has_learn;             /* Actions include NXAST_LEARN? */
     bool has_normal;            /* Actions output to OFPP_NORMAL? */
     bool has_fin_timeout;       /* Actions include NXAST_FIN_TIMEOUT? */
@@ -72,7 +73,8 @@ struct xlate_in {
      * not if we are just revalidating. */
     bool may_learn;
 
-    /* The rule initiating translation or NULL. */
+    /* The rule initiating translation or NULL. If both 'rule' and 'ofpacts'
+     * are NULL, xlate_actions() will do the initial rule lookup itself. */
     struct rule_dpif *rule;
 
     /* The actions to translate.  If 'rule' is not NULL, these may be NULL. */

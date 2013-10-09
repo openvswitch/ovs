@@ -4198,15 +4198,11 @@ facet_check_consistency(struct facet *facet)
 
     struct xlate_out xout;
     struct xlate_in xin;
-
-    struct rule_dpif *rule;
     bool ok;
 
     /* Check the datapath actions for consistency. */
-    rule_dpif_lookup(facet->ofproto, &facet->flow, NULL, &rule);
-    xlate_in_init(&xin, facet->ofproto, &facet->flow, rule, 0, NULL);
+    xlate_in_init(&xin, facet->ofproto, &facet->flow, NULL, 0, NULL);
     xlate_actions(&xin, &xout);
-    rule_dpif_unref(rule);
 
     ok = ofpbuf_equal(&facet->xout.odp_actions, &xout.odp_actions)
         && facet->xout.slow == xout.slow;
@@ -4358,7 +4354,6 @@ flow_push_stats(struct ofproto_dpif *ofproto, struct flow *flow,
                 struct dpif_flow_stats *stats, bool may_learn)
 {
     struct ofport_dpif *in_port;
-    struct rule_dpif *rule;
     struct xlate_in xin;
 
     in_port = get_ofp_port(ofproto, flow->in_port.ofp_port);
@@ -4366,13 +4361,10 @@ flow_push_stats(struct ofproto_dpif *ofproto, struct flow *flow,
         netdev_vport_inc_rx(in_port->up.netdev, stats);
     }
 
-    rule_dpif_lookup(ofproto, flow, NULL, &rule);
-    rule_dpif_credit_stats(rule, stats);
-    xlate_in_init(&xin, ofproto, flow, rule, stats->tcp_flags, NULL);
+    xlate_in_init(&xin, ofproto, flow, NULL, stats->tcp_flags, NULL);
     xin.resubmit_stats = stats;
     xin.may_learn = may_learn;
     xlate_actions_for_side_effects(&xin);
-    rule_dpif_unref(rule);
 }
 
 static void

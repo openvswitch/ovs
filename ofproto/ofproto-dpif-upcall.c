@@ -604,8 +604,6 @@ static void
 execute_flow_miss(struct flow_miss *miss, struct dpif_op *ops, size_t *n_ops)
 {
     struct ofproto_dpif *ofproto = miss->ofproto;
-    struct flow_wildcards wc;
-    struct rule_dpif *rule;
     struct ofpbuf *packet;
     struct xlate_in xin;
 
@@ -617,17 +615,13 @@ execute_flow_miss(struct flow_miss *miss, struct dpif_op *ops, size_t *n_ops)
         miss->stats.n_packets++;
     }
 
-    flow_wildcards_init_catchall(&wc);
-    rule_dpif_lookup(ofproto, &miss->flow, &wc, &rule);
-    rule_dpif_credit_stats(rule, &miss->stats);
-    xlate_in_init(&xin, ofproto, &miss->flow, rule, miss->stats.tcp_flags,
+    xlate_in_init(&xin, ofproto, &miss->flow, NULL, miss->stats.tcp_flags,
                   NULL);
     xin.may_learn = true;
     xin.resubmit_stats = &miss->stats;
     xlate_actions(&xin, &miss->xout);
-    flow_wildcards_or(&miss->xout.wc, &miss->xout.wc, &wc);
 
-    if (rule_dpif_fail_open(rule)) {
+    if (miss->xout.fail_open) {
         LIST_FOR_EACH (packet, list_node, &miss->packets) {
             struct ofputil_packet_in *pin;
 
@@ -656,11 +650,10 @@ execute_flow_miss(struct flow_miss *miss, struct dpif_op *ops, size_t *n_ops)
         LIST_FOR_EACH (packet, list_node, &miss->packets) {
             struct xlate_in xin;
 
-            xlate_in_init(&xin, miss->ofproto, &miss->flow, rule, 0, packet);
+            xlate_in_init(&xin, miss->ofproto, &miss->flow, NULL, 0, packet);
             xlate_actions_for_side_effects(&xin);
         }
     }
-    rule_dpif_unref(rule);
 
     if (miss->xout.odp_actions.size) {
         LIST_FOR_EACH (packet, list_node, &miss->packets) {
