@@ -2175,7 +2175,7 @@ mf_random_value(const struct mf_field *mf, union mf_value *value)
         break;
 
     case MFF_IPV6_LABEL:
-        value->be32 &= ~htonl(IPV6_LABEL_MASK);
+        value->be32 &= htonl(IPV6_LABEL_MASK);
         break;
 
     case MFF_IP_DSCP:
