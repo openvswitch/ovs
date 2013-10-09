@@ -160,4 +160,6 @@ struct dpif_sflow *xlate_get_sflow(const struct ofproto_dpif *)
 struct dpif_ipfix *xlate_get_ipfix(const struct ofproto_dpif *)
     OVS_EXCLUDED(xlate_rwlock);
 
+int xlate_send_packet(const struct ofport_dpif *, struct ofpbuf *);
+
 #endif /* ofproto-dpif-xlate.h */

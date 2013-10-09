@@ -206,6 +206,8 @@ static struct hmap xports = HMAP_INITIALIZER(&xports);
 static bool may_receive(const struct xport *, struct xlate_ctx *);
 static void do_xlate_actions(const struct ofpact *, size_t ofpacts_len,
                              struct xlate_ctx *);
+static void xlate_actions__(struct xlate_in *, struct xlate_out *)
+    OVS_REQ_RDLOCK(xlate_rwlock);
 static void xlate_normal(struct xlate_ctx *);
 static void xlate_report(struct xlate_ctx *, const char *);
 static void xlate_table_action(struct xlate_ctx *, ofp_port_t in_port,
@@ -2639,13 +2641,23 @@ actions_output_to_local_port(const struct xlate_ctx *ctx)
     return false;
 }
 
+/* Thread safe call to xlate_actions__(). */
+void
+xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
+{
+    ovs_rwlock_rdlock(&xlate_rwlock);
+    xlate_actions__(xin, xout);
+    ovs_rwlock_unlock(&xlate_rwlock);
+}
+
 /* Translates the 'ofpacts_len' bytes of "struct ofpacts" starting at 'ofpacts'
  * into datapath actions in 'odp_actions', using 'ctx'.
  *
  * The caller must take responsibility for eventually freeing 'xout', with
  * xlate_out_uninit(). */
-void
-xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
+static void
+xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
+    OVS_REQ_RDLOCK(xlate_rwlock)
 {
     struct flow_wildcards *wc = &xout->wc;
     struct flow *flow = &xin->flow;
@@ -2660,8 +2672,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     bool tnl_may_send;
 
     COVERAGE_INC(xlate_actions);
-
-    ovs_rwlock_rdlock(&xlate_rwlock);
 
     /* Flow initialization rules:
      * - 'base_flow' must match the kernel's view of the packet at the
@@ -2825,7 +2835,59 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     memset(&wc->masks.regs, 0, sizeof wc->masks.regs);
 
 out:
+    rule_actions_unref(actions);
+}
+
+/* Sends 'packet' out 'ofport'.
+ * May modify 'packet'.
+ * Returns 0 if successful, otherwise a positive errno value. */
+int
+xlate_send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
+{
+    uint64_t odp_actions_stub[1024 / 8];
+    struct xport *xport;
+    struct ofpbuf key, odp_actions;
+    struct dpif_flow_stats stats;
+    struct odputil_keybuf keybuf;
+    struct ofpact_output output;
+    struct xlate_out xout;
+    struct xlate_in xin;
+    struct flow flow;
+    union flow_in_port in_port_;
+    int error;
+
+    ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof odp_actions_stub);
+    ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
+    ofpact_init(&output.ofpact, OFPACT_OUTPUT, sizeof output);
+    /* Use OFPP_NONE as the in_port to avoid special packet processing. */
+    in_port_.ofp_port = OFPP_NONE;
+    flow_extract(packet, 0, 0, NULL, &in_port_, &flow);
+
+    ovs_rwlock_rdlock(&xlate_rwlock);
+    xport = xport_lookup(ofport);
+    if (!xport) {
+        error = EINVAL;
+        ovs_rwlock_unlock(&xlate_rwlock);
+        goto out;
+    }
+
+    odp_flow_key_from_flow(&key, &flow, ofp_port_to_odp_port(xport->xbridge, OFPP_LOCAL));
+    dpif_flow_stats_extract(&flow, packet, time_msec(), &stats);
+    output.port = xport->ofp_port;
+    output.max_len = 0;
+    xlate_in_init(&xin, xport->xbridge->ofproto, &flow, NULL, 0, packet);
+    xin.ofpacts_len = sizeof output;
+    xin.ofpacts = &output.ofpact;
+    xin.resubmit_stats = &stats;
+    /* Calls xlate_actions__ directly, since the rdlock is acquired. */
+    xlate_actions__(&xin, &xout);
+    error = dpif_execute(xport->xbridge->dpif,
+                         key.data, key.size,
+                         xout.odp_actions.data, xout.odp_actions.size,
+                         packet);
     ovs_rwlock_unlock(&xlate_rwlock);
 
-    rule_actions_unref(actions);
+out:
+    xlate_out_uninit(&xout);
+    return error;
 }
