@@ -226,6 +226,7 @@ poll_block(void)
         COVERAGE_INC(poll_zero_timeout);
     }
 
+    timewarp_wait();
     retval = time_poll(loop->pollfds, loop->n_waiters,
                        loop->timeout_when, &elapsed);
     if (retval < 0) {

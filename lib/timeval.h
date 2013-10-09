@@ -69,6 +69,8 @@ int get_cpu_usage(void);
 
 long long int time_boot_msec(void);
 
+void timewarp_wait(void);
+
 #ifdef  __cplusplus
 }
 #endif

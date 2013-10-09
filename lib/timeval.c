@@ -33,6 +33,7 @@
 #include "hmap.h"
 #include "ovs-thread.h"
 #include "signals.h"
+#include "seq.h"
 #include "unixctl.h"
 #include "util.h"
 #include "vlog.h"
@@ -57,6 +58,14 @@ static struct clock wall_clock;      /* CLOCK_REALTIME. */
 /* The monotonic time at which the time module was initialized. */
 static long long int boot_time;
 
+/* True only when timeval_dummy_register() is called. */
+static bool timewarp_enabled;
+/* Reference to the seq struct.  Threads other than main thread can
+ * wait on timewarp_seq and be waken up when time is warped. */
+static struct seq *timewarp_seq;
+/* Last value of 'timewarp_seq'. */
+DEFINE_STATIC_PER_THREAD_DATA(uint64_t, last_seq, 0);
+
 /* Monotonic time in milliseconds at which to die with SIGALRM (if not
  * LLONG_MAX). */
 static long long int deadline = LLONG_MAX;
@@ -79,6 +88,7 @@ init_clock(struct clock *c, clockid_t id)
     ovs_mutex_init(&c->mutex);
     atomic_init(&c->slow_path, false);
     xclock_gettime(c->id, &c->cache);
+    timewarp_seq = seq_create();
 }
 
 static void
@@ -313,6 +323,19 @@ xclock_gettime(clock_t id, struct timespec *ts)
     }
 }
 
+/* Makes threads wait on timewarp_seq and be waken up when time is warped.
+ * This function will be no-op unless timeval_dummy_register() is called. */
+void
+timewarp_wait(void)
+{
+    if (timewarp_enabled) {
+        uint64_t *last_seq = last_seq_get();
+
+        *last_seq = seq_read(timewarp_seq);
+        seq_wait(timewarp_seq, *last_seq);
+    }
+}
+
 static long long int
 timeval_diff_msec(const struct timeval *a, const struct timeval *b)
 {
@@ -511,13 +534,14 @@ timeval_warp_cb(struct unixctl_conn *conn,
     atomic_store(&monotonic_clock.slow_path, true);
     timespec_add(&monotonic_clock.warp, &monotonic_clock.warp, &ts);
     ovs_mutex_unlock(&monotonic_clock.mutex);
-
+    seq_change(timewarp_seq);
     unixctl_command_reply(conn, "warped");
 }
 
 void
 timeval_dummy_register(void)
 {
+    timewarp_enabled = true;
     unixctl_command_register("time/stop", "", 0, 0, timeval_stop_cb, NULL);
     unixctl_command_register("time/warp", "MSECS", 1, 1,
                              timeval_warp_cb, NULL);
