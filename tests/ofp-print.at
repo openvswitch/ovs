@@ -996,6 +996,7 @@ OFPT_TABLE_MOD (OF1.2) (xid=0x2): table_id=2, flow_miss_config=continue
 ])
 AT_CLEANUP
 
+# ofp_table_mod.config is actually "reserved for future use" in OF1.3.
 AT_SETUP([OFPT_TABLE_MOD - OF1.3])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
