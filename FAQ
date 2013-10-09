@@ -1255,9 +1255,11 @@ A: To debug network behavior problems, trace the path of a packet,
 
 Q: How do I make a flow drop packets?
 
-A: An empty set of actions causes a packet to be dropped.  You can
-   specify an empty set of actions with "actions=" on the ovs-ofctl
-   command line.  For example:
+A: To drop a packet is to receive it without forwarding it.  OpenFlow
+   explicitly specifies forwarding actions.  Thus, a flow with an
+   empty set of actions does not forward packets anywhere, causing
+   them to be dropped.  You can specify an empty set of actions with
+   "actions=" on the ovs-ofctl command line.  For example:
 
        ovs-ofctl add-flow br0 priority=65535,actions=
 
@@ -1268,6 +1270,9 @@ A: An empty set of actions causes a packet to be dropped.  You can
    entering switch br0 to be dropped:
 
        ovs-ofctl add-flow br0 priority=65535,actions=drop
+
+   "drop" is not an action, either in OpenFlow or Open vSwitch.
+   Rather, it is only a way to say that there are no actions.
 
 Q: I added a flow to send packets out the ingress port, like this:
 
