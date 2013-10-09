@@ -470,8 +470,9 @@ struct ofproto_dpif {
     struct classifier facets;     /* Contains 'struct facet's. */
     long long int consistency_rl;
 
-    struct netdev_stats stats; /* To account packets generated and consumed in
-                                * userspace. */
+    struct ovs_mutex stats_mutex;
+    struct netdev_stats stats OVS_GUARDED; /* To account packets generated and
+                                            * consumed in userspace. */
 
     /* Spanning tree. */
     struct stp *stp;
@@ -1230,6 +1231,7 @@ construct(struct ofproto *ofproto_)
     ofproto->ml = mac_learning_create(MAC_ENTRY_DEFAULT_IDLE_TIME);
     ofproto->mbridge = mbridge_create();
     ofproto->has_bonded_bundles = false;
+    ovs_mutex_init(&ofproto->stats_mutex);
     ovs_mutex_init(&ofproto->vsp_mutex);
 
     classifier_init(&ofproto->facets);
@@ -1417,6 +1419,7 @@ destruct(struct ofproto *ofproto_)
     sset_destroy(&ofproto->ghost_ports);
     sset_destroy(&ofproto->port_poll_set);
 
+    ovs_mutex_destroy(&ofproto->stats_mutex);
     ovs_mutex_destroy(&ofproto->vsp_mutex);
 
     close_dpif_backer(ofproto->backer);
@@ -3035,6 +3038,7 @@ port_get_stats(const struct ofport *ofport_, struct netdev_stats *stats)
     if (!error && ofport_->ofp_port == OFPP_LOCAL) {
         struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
 
+        ovs_mutex_lock(&ofproto->stats_mutex);
         /* ofproto->stats.tx_packets represents packets that we created
          * internally and sent to some port (e.g. packets sent with
          * ofproto_dpif_send_packet()).  Account for them as if they had
@@ -3059,6 +3063,7 @@ port_get_stats(const struct ofport *ofport_, struct netdev_stats *stats)
         if (stats->tx_bytes != UINT64_MAX) {
             stats->tx_bytes += ofproto->stats.rx_bytes;
         }
+        ovs_mutex_unlock(&ofproto->stats_mutex);
     }
 
     return error;
@@ -4830,8 +4835,10 @@ ofproto_dpif_send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet
 
     error = xlate_send_packet(ofport, packet);
 
+    ovs_mutex_lock(&ofproto->stats_mutex);
     ofproto->stats.tx_packets++;
     ofproto->stats.tx_bytes += packet->size;
+    ovs_mutex_unlock(&ofproto->stats_mutex);
     return error;
 }
 
