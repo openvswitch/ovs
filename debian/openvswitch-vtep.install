@@ -1,0 +1,3 @@
+_debian/vtep/vtep-ctl usr/bin
+usr/share/openvswitch/vtep.ovsschema
+usr/share/openvswitch/scripts/ovs-vtep
