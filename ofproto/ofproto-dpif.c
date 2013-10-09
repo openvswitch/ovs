@@ -52,6 +52,7 @@
 #include "ofproto-dpif-governor.h"
 #include "ofproto-dpif-ipfix.h"
 #include "ofproto-dpif-mirror.h"
+#include "ofproto-dpif-monitor.h"
 #include "ofproto-dpif-sflow.h"
 #include "ofproto-dpif-upcall.h"
 #include "ofproto-dpif-xlate.h"
@@ -361,8 +362,6 @@ ofport_dpif_cast(const struct ofport *ofport)
 }
 
 static void port_run(struct ofport_dpif *);
-static void port_run_fast(struct ofport_dpif *);
-static void port_wait(struct ofport_dpif *);
 static int set_bfd(struct ofport *, const struct smap *);
 static int set_cfm(struct ofport *, const struct cfm_settings *);
 static void ofport_update_peer(struct ofport_dpif *);
@@ -1430,7 +1429,6 @@ run_fast(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct ofputil_packet_in *pin, *next_pin;
-    struct ofport_dpif *ofport;
     struct list pins;
 
     /* Do not perform any periodic activity required by 'ofproto' while
@@ -1447,10 +1445,7 @@ run_fast(struct ofproto *ofproto_)
         free(pin);
     }
 
-    HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
-        port_run_fast(ofport);
-    }
-
+    ofproto_dpif_monitor_run_fast();
     return 0;
 }
 
@@ -1491,6 +1486,9 @@ run(struct ofproto *ofproto_)
     if (ofproto->ipfix) {
         dpif_ipfix_run(ofproto->ipfix);
     }
+
+    ofproto_dpif_monitor_run_fast();
+    ofproto_dpif_monitor_run();
 
     HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
         port_run(ofport);
@@ -1536,7 +1534,6 @@ static void
 wait(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    struct ofport_dpif *ofport;
     struct ofbundle *bundle;
 
     if (ofproto_get_flow_restore_wait()) {
@@ -1549,9 +1546,7 @@ wait(struct ofproto *ofproto_)
     if (ofproto->ipfix) {
         dpif_ipfix_wait(ofproto->ipfix);
     }
-    HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
-        port_wait(ofport);
-    }
+    ofproto_dpif_monitor_wait();
     HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
         bundle_wait(bundle);
     }
@@ -1814,6 +1809,9 @@ port_modified(struct ofport *port_)
         bfd_set_netdev(port->bfd, port->up.netdev);
     }
 
+    ofproto_dpif_monitor_port_update(port, port->bfd, port->cfm,
+                                     port->up.pp.hw_addr);
+
     if (port->is_tunnel && tnl_port_reconfigure(port, port->up.netdev,
                                                 port->odp_port)) {
         ofproto_dpif_cast(port->up.ofproto)->backer->need_revalidate =
@@ -1904,11 +1902,9 @@ static int
 set_cfm(struct ofport *ofport_, const struct cfm_settings *s)
 {
     struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
-    int error;
+    int error = 0;
 
-    if (!s) {
-        error = 0;
-    } else {
+    if (s) {
         if (!ofport->cfm) {
             struct ofproto_dpif *ofproto;
 
@@ -1918,13 +1914,17 @@ set_cfm(struct ofport *ofport_, const struct cfm_settings *s)
         }
 
         if (cfm_configure(ofport->cfm, s)) {
-            return 0;
+            error = 0;
+            goto out;
         }
 
         error = EINVAL;
     }
     cfm_unref(ofport->cfm);
     ofport->cfm = NULL;
+out:
+    ofproto_dpif_monitor_port_update(ofport, ofport->bfd, ofport->cfm,
+                                     ofport->up.pp.hw_addr);
     return error;
 }
 
@@ -1958,7 +1958,8 @@ set_bfd(struct ofport *ofport_, const struct smap *cfg)
     if (ofport->bfd != old) {
         ofproto->backer->need_revalidate = REV_RECONFIGURE;
     }
-
+    ofproto_dpif_monitor_port_update(ofport, ofport->bfd, ofport->cfm,
+                                     ofport->up.pp.hw_addr);
     return 0;
 }
 
@@ -2844,28 +2845,6 @@ ofport_update_peer(struct ofport_dpif *ofport)
 }
 
 static void
-port_run_fast(struct ofport_dpif *ofport)
-{
-    if (ofport->cfm && cfm_should_send_ccm(ofport->cfm)) {
-        struct ofpbuf packet;
-
-        ofpbuf_init(&packet, 0);
-        cfm_compose_ccm(ofport->cfm, &packet, ofport->up.pp.hw_addr);
-        ofproto_dpif_send_packet(ofport, &packet);
-        ofpbuf_uninit(&packet);
-    }
-
-    if (ofport->bfd && bfd_should_send_packet(ofport->bfd)) {
-        struct ofpbuf packet;
-
-        ofpbuf_init(&packet, 0);
-        bfd_put_packet(ofport->bfd, &packet, ofport->up.pp.hw_addr);
-        ofproto_dpif_send_packet(ofport, &packet);
-        ofpbuf_uninit(&packet);
-    }
-}
-
-static void
 port_run(struct ofport_dpif *ofport)
 {
     long long int carrier_seq = netdev_get_carrier_resets(ofport->up.netdev);
@@ -2876,12 +2855,9 @@ port_run(struct ofport_dpif *ofport)
 
     ofport->carrier_seq = carrier_seq;
 
-    port_run_fast(ofport);
-
     if (ofport->cfm) {
         int cfm_opup = cfm_get_opup(ofport->cfm);
 
-        cfm_run(ofport->cfm);
         cfm_enable = !cfm_get_fault(ofport->cfm);
 
         if (cfm_opup >= 0) {
@@ -2890,7 +2866,6 @@ port_run(struct ofport_dpif *ofport)
     }
 
     if (ofport->bfd) {
-        bfd_run(ofport->bfd);
         bfd_enable = bfd_forwarding(ofport->bfd);
     }
 
@@ -2911,18 +2886,6 @@ port_run(struct ofport_dpif *ofport)
     }
 
     ofport->may_enable = enable;
-}
-
-static void
-port_wait(struct ofport_dpif *ofport)
-{
-    if (ofport->cfm) {
-        cfm_wait(ofport->cfm);
-    }
-
-    if (ofport->bfd) {
-        bfd_wait(ofport->bfd);
-    }
 }
 
 static int
