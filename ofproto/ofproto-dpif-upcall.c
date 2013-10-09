@@ -31,7 +31,6 @@
 #include "ofpbuf.h"
 #include "ofproto-dpif-ipfix.h"
 #include "ofproto-dpif-sflow.h"
-#include "ofproto-dpif.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "vlog.h"
@@ -759,23 +758,14 @@ handle_upcalls(struct udpif *udpif, struct list *upcalls)
      * all the packets in each miss. */
     fail_open = false;
     HMAP_FOR_EACH (miss, hmap_node, &fmb->misses) {
-        struct flow_wildcards wc;
-        struct rule_dpif *rule;
         struct xlate_in xin;
 
-        flow_wildcards_init_catchall(&wc);
-        rule_dpif_lookup(miss->ofproto, &miss->flow, &wc, &rule);
-        if (rule_dpif_fail_open(rule)) {
-            fail_open = true;
-        }
-        rule_dpif_credit_stats(rule, &miss->stats);
-        xlate_in_init(&xin, miss->ofproto, &miss->flow, rule,
+        xlate_in_init(&xin, miss->ofproto, &miss->flow, NULL,
                       miss->stats.tcp_flags, NULL);
         xin.may_learn = true;
         xin.resubmit_stats = &miss->stats;
         xlate_actions(&xin, &miss->xout);
-        flow_wildcards_or(&miss->xout.wc, &miss->xout.wc, &wc);
-        rule_dpif_unref(rule);
+        fail_open = fail_open || miss->xout.fail_open;
     }
 
     /* Now handle the packets individually in order of arrival.  In the common
@@ -796,13 +786,10 @@ handle_upcalls(struct udpif *udpif, struct list *upcalls)
         struct ofpbuf *packet = upcall->dpif_upcall.packet;
 
         if (miss->xout.slow) {
-            struct rule_dpif *rule;
             struct xlate_in xin;
 
-            rule_dpif_lookup(miss->ofproto, &miss->flow, NULL, &rule);
-            xlate_in_init(&xin, miss->ofproto, &miss->flow, rule, 0, packet);
+            xlate_in_init(&xin, miss->ofproto, &miss->flow, NULL, 0, packet);
             xlate_actions_for_side_effects(&xin);
-            rule_dpif_unref(rule);
         }
 
         if (miss->xout.odp_actions.size) {

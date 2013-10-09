@@ -2661,6 +2661,7 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
 {
     struct flow_wildcards *wc = &xout->wc;
     struct flow *flow = &xin->flow;
+    struct rule_dpif *rule = NULL;
 
     struct rule_actions *actions = NULL;
     enum slow_path_reason special;
@@ -2735,11 +2736,20 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
     ctx.exit = false;
     ctx.mpls_depth_delta = 0;
 
+    if (!xin->ofpacts && !ctx.rule) {
+        rule_dpif_lookup(ctx.xbridge->ofproto, flow, wc, &rule);
+        if (ctx.xin->resubmit_stats) {
+            rule_dpif_credit_stats(rule, ctx.xin->resubmit_stats);
+        }
+        ctx.rule = rule;
+    }
+    xout->fail_open = ctx.rule && rule_dpif_fail_open(ctx.rule);
+
     if (xin->ofpacts) {
         ofpacts = xin->ofpacts;
         ofpacts_len = xin->ofpacts_len;
-    } else if (xin->rule) {
-        actions = rule_dpif_get_actions(xin->rule);
+    } else if (ctx.rule) {
+        actions = rule_dpif_get_actions(ctx.rule);
         ofpacts = actions->ofpacts;
         ofpacts_len = actions->ofpacts_len;
     } else {
@@ -2836,6 +2846,7 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
 
 out:
     rule_actions_unref(actions);
+    rule_dpif_unref(rule);
 }
 
 /* Sends 'packet' out 'ofport'.
