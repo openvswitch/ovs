@@ -817,6 +817,7 @@ handle_upcalls(struct udpif *udpif, struct list *upcalls)
             op->u.execute.packet = packet;
             op->u.execute.actions = miss->xout.odp_actions.data;
             op->u.execute.actions_len = miss->xout.odp_actions.size;
+            op->u.execute.needs_help = (miss->xout.slow & SLOW_ACTION) != 0;
         }
     }
 

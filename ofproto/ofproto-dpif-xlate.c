@@ -1660,9 +1660,10 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     }
 
     if (out_port != ODPP_NONE) {
-        commit_odp_actions(flow, &ctx->base_flow,
-                           &ctx->xout->odp_actions, &ctx->xout->wc,
-                           &ctx->mpls_depth_delta);
+        ctx->xout->slow |= commit_odp_actions(flow, &ctx->base_flow,
+                                              &ctx->xout->odp_actions,
+                                              &ctx->xout->wc,
+                                              &ctx->mpls_depth_delta);
         nl_msg_put_odp_port(&ctx->xout->odp_actions, OVS_ACTION_ATTR_OUTPUT,
                             out_port);
 
@@ -1825,9 +1826,10 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     key.pkt_mark = 0;
     memset(&key.tunnel, 0, sizeof key.tunnel);
 
-    commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
-                       &ctx->xout->odp_actions, &ctx->xout->wc,
-                       &ctx->mpls_depth_delta);
+    ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
+                                          &ctx->xout->odp_actions,
+                                          &ctx->xout->wc,
+                                          &ctx->mpls_depth_delta);
 
     odp_execute_actions(NULL, packet, &key, ctx->xout->odp_actions.data,
                         ctx->xout->odp_actions.size, NULL, NULL);
@@ -2213,9 +2215,10 @@ xlate_sample_action(struct xlate_ctx *ctx,
    * the same percentage. */
   uint32_t probability = (os->probability << 16) | os->probability;
 
-  commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
-                     &ctx->xout->odp_actions, &ctx->xout->wc,
-                     &ctx->mpls_depth_delta);
+  ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
+                                        &ctx->xout->odp_actions,
+                                        &ctx->xout->wc,
+                                        &ctx->mpls_depth_delta);
 
   compose_flow_sample_cookie(os->probability, os->collector_set_id,
                              os->obs_domain_id, os->obs_point_id, &cookie);
@@ -2894,7 +2897,7 @@ xlate_send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
     error = dpif_execute(xport->xbridge->dpif,
                          key.data, key.size,
                          xout.odp_actions.data, xout.odp_actions.size,
-                         packet);
+                         packet, (xout.slow & SLOW_ACTION) != 0);
     ovs_rwlock_unlock(&xlate_rwlock);
 
 out:

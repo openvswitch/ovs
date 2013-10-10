@@ -3839,7 +3839,8 @@ execute_actions(struct ofproto *ofproto_, const struct flow *flow,
     odp_flow_key_from_flow(&key, flow, ofp_port_to_odp_port(ofproto, in_port));
 
     error = dpif_execute(ofproto->backer->dpif, key.data, key.size,
-                         xout.odp_actions.data, xout.odp_actions.size, packet);
+                         xout.odp_actions.data, xout.odp_actions.size, packet,
+                         (xout.slow & SLOW_ACTION) != 0);
     xlate_out_uninit(&xout);
 
     return error;

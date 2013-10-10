@@ -493,7 +493,8 @@ int dpif_flow_dump_done(struct dpif_flow_dump *);
 int dpif_execute(struct dpif *,
                  const struct nlattr *key, size_t key_len,
                  const struct nlattr *actions, size_t actions_len,
-                 const struct ofpbuf *);
+                 const struct ofpbuf *,
+                 bool needs_help);
 
 /* Operation batching interface.
  *
@@ -531,11 +532,21 @@ struct dpif_flow_del {
 };
 
 struct dpif_execute {
+    /* Raw support for execute passed along to the provider. */
     const struct nlattr *key;       /* Partial flow key (only for metadata). */
     size_t key_len;                 /* Length of 'key' in bytes. */
     const struct nlattr *actions;   /* Actions to execute on packet. */
     size_t actions_len;             /* Length of 'actions' in bytes. */
     const struct ofpbuf *packet;    /* Packet to execute. */
+
+    /* Some dpif providers do not implement every action.  The Linux kernel
+     * datapath, in particular, does not implement ARP field modification.
+     *
+     * If this member is set to true, the dpif layer executes in userspace all
+     * of the actions that it can, and for OVS_ACTION_ATTR_OUTPUT and
+     * OVS_ACTION_ATTR_USERSPACE actions it passes the packet through to the
+     * dpif implementation. */
+    bool needs_help;
 };
 
 struct dpif_op {

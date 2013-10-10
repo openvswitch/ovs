@@ -35,6 +35,36 @@ struct nlattr;
 struct ofpbuf;
 struct simap;
 
+#define SLOW_PATH_REASONS                                               \
+    /* These reasons are mutually exclusive. */                         \
+    SPR(SLOW_CFM,        "cfm",        "Consists of CFM packets")       \
+    SPR(SLOW_BFD,        "bfd",        "Consists of BFD packets")       \
+    SPR(SLOW_LACP,       "lacp",       "Consists of LACP packets")      \
+    SPR(SLOW_STP,        "stp",        "Consists of STP packets")       \
+    SPR(SLOW_CONTROLLER, "controller",                                  \
+        "Sends \"packet-in\" messages to the OpenFlow controller")      \
+    SPR(SLOW_ACTION,     "action",                                      \
+        "Uses action(s) not supported by datapath")
+
+/* Indexes for slow-path reasons.  Client code uses "enum slow_path_reason"
+ * values instead of these, these are just a way to construct those. */
+enum {
+#define SPR(ENUM, STRING, EXPLANATION) ENUM##_INDEX,
+    SLOW_PATH_REASONS
+#undef SPR
+};
+
+/* Reasons why a subfacet might not be fast-pathable.
+ *
+ * Each reason is a separate bit to allow reasons to be combined. */
+enum slow_path_reason {
+#define SPR(ENUM, STRING, EXPLANATION) ENUM = 1 << ENUM##_INDEX,
+    SLOW_PATH_REASONS
+#undef SPR
+};
+
+const char *slow_path_reason_to_explanation(enum slow_path_reason);
+
 #define ODPP_LOCAL ODP_PORT_C(OVSP_LOCAL)
 #define ODPP_NONE  ODP_PORT_C(UINT32_MAX)
 
@@ -141,9 +171,11 @@ const char *odp_key_fitness_to_string(enum odp_key_fitness);
 
 void commit_odp_tunnel_action(const struct flow *, struct flow *base,
                               struct ofpbuf *odp_actions);
-void commit_odp_actions(const struct flow *, struct flow *base,
-                        struct ofpbuf *odp_actions, struct flow_wildcards *wc,
-                        int *mpls_depth_delta);
+enum slow_path_reason commit_odp_actions(const struct flow *,
+                                         struct flow *base,
+                                         struct ofpbuf *odp_actions,
+                                         struct flow_wildcards *wc,
+                                         int *mpls_depth_delta);
 
 /* ofproto-dpif interface.
  *
@@ -198,33 +230,5 @@ void odp_put_tunnel_action(const struct flow_tnl *tunnel,
                            struct ofpbuf *odp_actions);
 void odp_put_pkt_mark_action(const uint32_t pkt_mark,
                              struct ofpbuf *odp_actions);
-
-#define SLOW_PATH_REASONS                                               \
-    /* These reasons are mutually exclusive. */                         \
-    SPR(SLOW_CFM,        "cfm",        "Consists of CFM packets")       \
-    SPR(SLOW_BFD,        "bfd",        "Consists of BFD packets")       \
-    SPR(SLOW_LACP,       "lacp",       "Consists of LACP packets")      \
-    SPR(SLOW_STP,        "stp",        "Consists of STP packets")       \
-    SPR(SLOW_CONTROLLER, "controller",                                  \
-        "Sends \"packet-in\" messages to the OpenFlow controller")
-
-/* Indexes for slow-path reasons.  Client code uses "enum slow_path_reason"
- * values instead of these, these are just a way to construct those. */
-enum {
-#define SPR(ENUM, STRING, EXPLANATION) ENUM##_INDEX,
-    SLOW_PATH_REASONS
-#undef SPR
-};
-
-/* Reasons why a subfacet might not be fast-pathable.
- *
- * Each reason is a separate bit to allow reasons to be combined. */
-enum slow_path_reason {
-#define SPR(ENUM, STRING, EXPLANATION) ENUM = 1 << ENUM##_INDEX,
-    SLOW_PATH_REASONS
-#undef SPR
-};
-
-const char *slow_path_reason_to_explanation(enum slow_path_reason);
 
 #endif /* odp-util.h */

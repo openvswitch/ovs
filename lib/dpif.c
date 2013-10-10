@@ -28,6 +28,7 @@
 #include "flow.h"
 #include "netdev.h"
 #include "netlink.h"
+#include "odp-execute.h"
 #include "odp-util.h"
 #include "ofp-errors.h"
 #include "ofp-print.h"
@@ -53,6 +54,7 @@ COVERAGE_DEFINE(dpif_flow_put);
 COVERAGE_DEFINE(dpif_flow_del);
 COVERAGE_DEFINE(dpif_execute);
 COVERAGE_DEFINE(dpif_purge);
+COVERAGE_DEFINE(dpif_execute_with_help);
 
 static const struct dpif_class *base_dpif_classes[] = {
 #ifdef LINUX_DATAPATH
@@ -1061,6 +1063,94 @@ dpif_flow_dump_done(struct dpif_flow_dump *dump)
     return dump->error == EOF ? 0 : dump->error;
 }
 
+struct dpif_execute_helper_aux {
+    struct dpif *dpif;
+    int error;
+};
+
+static void
+dpif_execute_helper_execute__(void *aux_, struct ofpbuf *packet,
+                              const struct flow *flow,
+                              const struct nlattr *actions, size_t actions_len)
+{
+    struct dpif_execute_helper_aux *aux = aux_;
+    struct dpif_execute execute;
+    struct odputil_keybuf key_stub;
+    struct ofpbuf key;
+    int error;
+
+    ofpbuf_use_stub(&key, &key_stub, sizeof key_stub);
+    odp_flow_key_from_flow(&key, flow, flow->in_port.odp_port);
+
+    execute.key = key.data;
+    execute.key_len = key.size;
+    execute.actions = actions;
+    execute.actions_len = actions_len;
+    execute.packet = packet;
+    execute.needs_help = false;
+
+    error = aux->dpif->dpif_class->execute(aux->dpif, &execute);
+    if (error) {
+        aux->error = error;
+    }
+}
+
+static void
+dpif_execute_helper_output_cb(void *aux, struct ofpbuf *packet,
+                              const struct flow *flow, odp_port_t out_port)
+{
+    uint64_t actions_stub[DIV_ROUND_UP(NL_A_U32_SIZE, 8)];
+    struct ofpbuf actions;
+
+    ofpbuf_use_stack(&actions, actions_stub, sizeof actions_stub);
+    nl_msg_put_u32(&actions, OVS_ACTION_ATTR_OUTPUT, odp_to_u32(out_port));
+
+    dpif_execute_helper_execute__(aux, packet, flow,
+                                  actions.data, actions.size);
+}
+
+static void
+dpif_execute_helper_userspace_cb(void *aux, struct ofpbuf *packet,
+                                 const struct flow *flow,
+                                 const struct nlattr *action)
+{
+    dpif_execute_helper_execute__(aux, packet, flow,
+                                  action, NLA_ALIGN(action->nla_len));
+}
+
+/* Executes 'execute' by performing most of the actions in userspace and
+ * passing the fully constructed packets to 'dpif' for output and userspace
+ * actions.
+ *
+ * This helps with actions that a given 'dpif' doesn't implement directly. */
+static int
+dpif_execute_with_help(struct dpif *dpif, const struct dpif_execute *execute)
+{
+    struct dpif_execute_helper_aux aux;
+    enum odp_key_fitness fit;
+    struct ofpbuf *packet;
+    struct flow flow;
+
+    COVERAGE_INC(dpif_execute_with_help);
+
+    fit = odp_flow_key_to_flow(execute->key, execute->key_len, &flow);
+    if (fit == ODP_FIT_ERROR) {
+        return EINVAL;
+    }
+
+    aux.dpif = dpif;
+    aux.error = 0;
+
+    packet = ofpbuf_clone_with_headroom(execute->packet, VLAN_HEADER_LEN);
+    odp_execute_actions(&aux, packet, &flow,
+                        execute->actions, execute->actions_len,
+                        dpif_execute_helper_output_cb,
+                        dpif_execute_helper_userspace_cb);
+    ofpbuf_delete(packet);
+
+    return aux.error;
+}
+
 static int
 dpif_execute__(struct dpif *dpif, const struct dpif_execute *execute)
 {
@@ -1068,7 +1158,9 @@ dpif_execute__(struct dpif *dpif, const struct dpif_execute *execute)
 
     COVERAGE_INC(dpif_execute);
     if (execute->actions_len > 0) {
-        error = dpif->dpif_class->execute(dpif, execute);
+        error = (execute->needs_help
+                 ? dpif_execute_with_help(dpif, execute)
+                 : dpif->dpif_class->execute(dpif, execute));
     } else {
         error = 0;
     }
@@ -1084,12 +1176,20 @@ dpif_execute__(struct dpif *dpif, const struct dpif_execute *execute)
  * it contains some metadata that cannot be recovered from 'packet', such as
  * tunnel and in_port.)
  *
+ * Some dpif providers do not implement every action.  The Linux kernel
+ * datapath, in particular, does not implement ARP field modification.  If
+ * 'needs_help' is true, the dpif layer executes in userspace all of the
+ * actions that it can, and for OVS_ACTION_ATTR_OUTPUT and
+ * OVS_ACTION_ATTR_USERSPACE actions it passes the packet through to the dpif
+ * implementation.
+ *
  * Returns 0 if successful, otherwise a positive errno value. */
 int
 dpif_execute(struct dpif *dpif,
              const struct nlattr *key, size_t key_len,
              const struct nlattr *actions, size_t actions_len,
-             const struct ofpbuf *buf)
+             const struct ofpbuf *buf,
+             bool needs_help)
 {
     struct dpif_execute execute;
 
@@ -1098,6 +1198,7 @@ dpif_execute(struct dpif *dpif,
     execute.actions = actions;
     execute.actions_len = actions_len;
     execute.packet = buf;
+    execute.needs_help = needs_help;
     return dpif_execute__(dpif, &execute);
 }
 
@@ -1110,53 +1211,82 @@ dpif_execute(struct dpif *dpif,
 void
 dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
 {
-    size_t i;
-
     if (dpif->dpif_class->operate) {
-        dpif->dpif_class->operate(dpif, ops, n_ops);
+        while (n_ops > 0) {
+            size_t chunk;
+
+            /* Count 'chunk', the number of ops that can be executed without
+             * needing any help.  Ops that need help should be rare, so we
+             * expect this to ordinarily be 'n_ops', that is, all the ops. */
+            for (chunk = 0; chunk < n_ops; chunk++) {
+                struct dpif_op *op = ops[chunk];
+
+                if (op->type == DPIF_OP_EXECUTE && op->u.execute.needs_help) {
+                    break;
+                }
+            }
+
+            if (chunk) {
+                /* Execute a chunk full of ops that the dpif provider can
+                 * handle itself, without help. */
+                size_t i;
+
+                dpif->dpif_class->operate(dpif, ops, chunk);
+
+                for (i = 0; i < chunk; i++) {
+                    struct dpif_op *op = ops[i];
+
+                    switch (op->type) {
+                    case DPIF_OP_FLOW_PUT:
+                        log_flow_put_message(dpif, &op->u.flow_put, op->error);
+                        break;
+
+                    case DPIF_OP_FLOW_DEL:
+                        log_flow_del_message(dpif, &op->u.flow_del, op->error);
+                        break;
+
+                    case DPIF_OP_EXECUTE:
+                        log_execute_message(dpif, &op->u.execute, op->error);
+                        break;
+                    }
+                }
+
+                ops += chunk;
+                n_ops -= chunk;
+            } else {
+                /* Help the dpif provider to execute one op. */
+                struct dpif_op *op = ops[0];
+
+                op->error = dpif_execute__(dpif, &op->u.execute);
+                ops++;
+                n_ops--;
+            }
+        }
+    } else {
+        size_t i;
 
         for (i = 0; i < n_ops; i++) {
             struct dpif_op *op = ops[i];
 
             switch (op->type) {
             case DPIF_OP_FLOW_PUT:
-                log_flow_put_message(dpif, &op->u.flow_put, op->error);
+                op->error = dpif_flow_put__(dpif, &op->u.flow_put);
                 break;
 
             case DPIF_OP_FLOW_DEL:
-                log_flow_del_message(dpif, &op->u.flow_del, op->error);
+                op->error = dpif_flow_del__(dpif, &op->u.flow_del);
                 break;
 
             case DPIF_OP_EXECUTE:
-                log_execute_message(dpif, &op->u.execute, op->error);
+                op->error = dpif_execute__(dpif, &op->u.execute);
                 break;
+
+            default:
+                NOT_REACHED();
             }
-        }
-        return;
-    }
-
-    for (i = 0; i < n_ops; i++) {
-        struct dpif_op *op = ops[i];
-
-        switch (op->type) {
-        case DPIF_OP_FLOW_PUT:
-            op->error = dpif_flow_put__(dpif, &op->u.flow_put);
-            break;
-
-        case DPIF_OP_FLOW_DEL:
-            op->error = dpif_flow_del__(dpif, &op->u.flow_del);
-            break;
-
-        case DPIF_OP_EXECUTE:
-            op->error = dpif_execute__(dpif, &op->u.execute);
-            break;
-
-        default:
-            NOT_REACHED();
         }
     }
 }
-
 
 /* Returns a string that represents 'type', for use in log messages. */
 const char *

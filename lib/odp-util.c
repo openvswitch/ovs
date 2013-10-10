@@ -3583,13 +3583,17 @@ commit_set_pkt_mark_action(const struct flow *flow, struct flow *base,
 
     odp_put_pkt_mark_action(base->pkt_mark, odp_actions);
 }
+
 /* If any of the flow key data that ODP actions can modify are different in
  * 'base' and 'flow', appends ODP actions to 'odp_actions' that change the flow
  * key from 'base' into 'flow', and then changes 'base' the same way.  Does not
  * commit set_tunnel actions.  Users should call commit_odp_tunnel_action()
  * in addition to this function if needed.  Sets fields in 'wc' that are
- * used as part of the action. */
-void
+ * used as part of the action.
+ *
+ * Returns a reason to force processing the flow's packets into the userspace
+ * slow path, if there is one, otherwise 0. */
+enum slow_path_reason
 commit_odp_actions(const struct flow *flow, struct flow *base,
                    struct ofpbuf *odp_actions, struct flow_wildcards *wc,
                    int *mpls_depth_delta)
@@ -3605,4 +3609,6 @@ commit_odp_actions(const struct flow *flow, struct flow *base,
     commit_mpls_action(flow, base, odp_actions, wc, mpls_depth_delta);
     commit_set_priority_action(flow, base, odp_actions, wc);
     commit_set_pkt_mark_action(flow, base, odp_actions, wc);
+
+    return 0;
 }
