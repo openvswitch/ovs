@@ -25,6 +25,7 @@
 #include "ofpbuf.h"
 #include "odp-util.h"
 #include "packets.h"
+#include "unaligned.h"
 #include "util.h"
 
 static void
@@ -43,6 +44,18 @@ odp_set_tunnel_action(const struct nlattr *a, struct flow_tnl *tun_key)
 
     fitness = odp_tun_key_from_attr(a, tun_key);
     ovs_assert(fitness != ODP_FIT_ERROR);
+}
+
+static void
+set_arp(struct ofpbuf *packet, const struct ovs_key_arp *arp_key)
+{
+    struct arp_eth_header *arp = packet->l3;
+
+    arp->ar_op = arp_key->arp_op;
+    memcpy(arp->ar_sha, arp_key->arp_sha, ETH_ADDR_LEN);
+    put_16aligned_be32(&arp->ar_spa, arp_key->arp_sip);
+    memcpy(arp->ar_tha, arp_key->arp_tha, ETH_ADDR_LEN);
+    put_16aligned_be32(&arp->ar_tpa, arp_key->arp_tip);
 }
 
 static void
@@ -106,6 +119,10 @@ odp_execute_set_action(struct ofpbuf *packet, const struct nlattr *a,
          set_mpls_lse(packet, nl_attr_get_be32(a));
          break;
 
+    case OVS_KEY_ATTR_ARP:
+        set_arp(packet, nl_attr_get_unspec(a, sizeof(struct ovs_key_arp)));
+        break;
+
     case OVS_KEY_ATTR_UNSPEC:
     case OVS_KEY_ATTR_ENCAP:
     case OVS_KEY_ATTR_ETHERTYPE:
@@ -113,7 +130,6 @@ odp_execute_set_action(struct ofpbuf *packet, const struct nlattr *a,
     case OVS_KEY_ATTR_VLAN:
     case OVS_KEY_ATTR_ICMP:
     case OVS_KEY_ATTR_ICMPV6:
-    case OVS_KEY_ATTR_ARP:
     case OVS_KEY_ATTR_ND:
     case __OVS_KEY_ATTR_MAX:
     default:

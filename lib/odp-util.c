@@ -3493,20 +3493,66 @@ commit_set_ipv6_action(const struct flow *flow, struct flow *base,
                       &ipv6_key, sizeof(ipv6_key));
 }
 
-static void
+static enum slow_path_reason
+commit_set_arp_action(const struct flow *flow, struct flow *base,
+                      struct ofpbuf *odp_actions, struct flow_wildcards *wc)
+{
+    struct ovs_key_arp arp_key;
+
+    if (base->nw_src == flow->nw_src &&
+        base->nw_dst == flow->nw_dst &&
+        base->nw_proto == flow->nw_proto &&
+        eth_addr_equals(base->arp_sha, flow->arp_sha) &&
+        eth_addr_equals(base->arp_tha, flow->arp_tha)) {
+        return 0;
+    }
+
+    memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
+    memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
+    memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
+    memset(&wc->masks.arp_sha, 0xff, sizeof wc->masks.arp_sha);
+    memset(&wc->masks.arp_tha, 0xff, sizeof wc->masks.arp_tha);
+
+    base->nw_src = flow->nw_src;
+    base->nw_dst = flow->nw_dst;
+    base->nw_proto = flow->nw_proto;
+    memcpy(base->arp_sha, flow->arp_sha, ETH_ADDR_LEN);
+    memcpy(base->arp_tha, flow->arp_tha, ETH_ADDR_LEN);
+
+    arp_key.arp_sip = base->nw_src;
+    arp_key.arp_tip = base->nw_dst;
+    arp_key.arp_op = htons(base->nw_proto);
+    memcpy(arp_key.arp_sha, flow->arp_sha, ETH_ADDR_LEN);
+    memcpy(arp_key.arp_tha, flow->arp_tha, ETH_ADDR_LEN);
+
+    commit_set_action(odp_actions, OVS_KEY_ATTR_ARP, &arp_key, sizeof arp_key);
+
+    return SLOW_ACTION;
+}
+
+static enum slow_path_reason
 commit_set_nw_action(const struct flow *flow, struct flow *base,
                      struct ofpbuf *odp_actions, struct flow_wildcards *wc)
 {
-    /* Check if flow really have an IP header. */
+    /* Check if 'flow' really has an L3 header. */
     if (!flow->nw_proto) {
-        return;
+        return 0;
     }
 
-    if (base->dl_type == htons(ETH_TYPE_IP)) {
+    switch (ntohs(base->dl_type)) {
+    case ETH_TYPE_IP:
         commit_set_ipv4_action(flow, base, odp_actions, wc);
-    } else if (base->dl_type == htons(ETH_TYPE_IPV6)) {
+        break;
+
+    case ETH_TYPE_IPV6:
         commit_set_ipv6_action(flow, base, odp_actions, wc);
+        break;
+
+    case ETH_TYPE_ARP:
+        return commit_set_arp_action(flow, base, odp_actions, wc);
     }
+
+    return 0;
 }
 
 static void
@@ -3598,9 +3644,11 @@ commit_odp_actions(const struct flow *flow, struct flow *base,
                    struct ofpbuf *odp_actions, struct flow_wildcards *wc,
                    int *mpls_depth_delta)
 {
+    enum slow_path_reason slow;
+
     commit_set_ether_addr_action(flow, base, odp_actions, wc);
     commit_vlan_action(flow->vlan_tci, base, odp_actions, wc);
-    commit_set_nw_action(flow, base, odp_actions, wc);
+    slow = commit_set_nw_action(flow, base, odp_actions, wc);
     commit_set_port_action(flow, base, odp_actions, wc);
     /* Committing MPLS actions should occur after committing nw and port
      * actions. This is because committing MPLS actions may alter a packet so
@@ -3610,5 +3658,5 @@ commit_odp_actions(const struct flow *flow, struct flow *base,
     commit_set_priority_action(flow, base, odp_actions, wc);
     commit_set_pkt_mark_action(flow, base, odp_actions, wc);
 
-    return 0;
+    return slow;
 }
