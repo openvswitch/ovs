@@ -3803,13 +3803,13 @@ facet_free(struct facet *facet)
 
 /* Executes, within 'ofproto', the actions in 'rule' or 'ofpacts' on 'packet'.
  * 'flow' must reflect the data in 'packet'. */
-static int
-execute_actions(struct ofproto *ofproto_, const struct flow *flow,
-                struct rule_dpif *rule,
-                const struct ofpact *ofpacts, size_t ofpacts_len,
-                struct ofpbuf *packet)
+int
+ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
+                             const struct flow *flow,
+                             struct rule_dpif *rule,
+                             const struct ofpact *ofpacts, size_t ofpacts_len,
+                             struct ofpbuf *packet)
 {
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct odputil_keybuf keybuf;
     struct dpif_flow_stats stats;
     struct xlate_out xout;
@@ -4761,7 +4761,9 @@ static void
 rule_dpif_execute(struct rule_dpif *rule, const struct flow *flow,
                   struct ofpbuf *packet)
 {
-    execute_actions(rule->up.ofproto, flow, rule, NULL, 0, packet);
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
+
+    ofproto_dpif_execute_actions(ofproto, flow, rule, NULL, 0, packet);
 }
 
 static enum ofperr
@@ -4861,11 +4863,14 @@ set_frag_handling(struct ofproto *ofproto_,
 }
 
 static enum ofperr
-packet_out(struct ofproto *ofproto, struct ofpbuf *packet,
+packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
            const struct flow *flow,
            const struct ofpact *ofpacts, size_t ofpacts_len)
 {
-    execute_actions(ofproto, flow, NULL, ofpacts, ofpacts_len, packet);
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+
+    ofproto_dpif_execute_actions(ofproto, flow, NULL, ofpacts,
+                                 ofpacts_len, packet);
     return 0;
 }
 

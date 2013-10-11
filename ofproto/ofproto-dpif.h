@@ -93,6 +93,9 @@ ofp_port_t vsp_realdev_to_vlandev(const struct ofproto_dpif *,
                                   ovs_be16 vlan_tci);
 bool vsp_adjust_flow(const struct ofproto_dpif *, struct flow *);
 
+int ofproto_dpif_execute_actions(struct ofproto_dpif *, const struct flow *,
+                                 struct rule_dpif *, const struct ofpact *,
+                                 size_t ofpacts_len, struct ofpbuf *);
 void ofproto_dpif_send_packet_in(struct ofproto_dpif *,
                                  struct ofputil_packet_in *pin);
 int ofproto_dpif_send_packet(const struct ofport_dpif *, struct ofpbuf *);
