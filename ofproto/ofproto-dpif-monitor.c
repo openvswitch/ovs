@@ -142,24 +142,26 @@ ofproto_dpif_monitor_port_update(const struct ofport_dpif *ofport,
 void
 ofproto_dpif_monitor_run_fast(void)
 {
-    struct mport *mport;
-    static uint32_t buf_stub[128 / 4];
+    uint32_t stub[512 / 4];
     struct ofpbuf packet;
+    struct mport *mport;
 
+    ofpbuf_use_stub(&packet, stub, sizeof stub);
     ovs_rwlock_rdlock(&monitor_rwlock);
     HMAP_FOR_EACH (mport, hmap_node, &monitor_hmap) {
         if (mport->cfm && cfm_should_send_ccm(mport->cfm)) {
-            ofpbuf_use_stub(&packet, buf_stub, sizeof buf_stub);
+            ofpbuf_clear(&packet);
             cfm_compose_ccm(mport->cfm, &packet, mport->hw_addr);
             ofproto_dpif_send_packet(mport->ofport, &packet);
         }
         if (mport->bfd && bfd_should_send_packet(mport->bfd)) {
-            ofpbuf_use_stub(&packet, buf_stub, sizeof buf_stub);
+            ofpbuf_clear(&packet);
             bfd_put_packet(mport->bfd, &packet, mport->hw_addr);
             ofproto_dpif_send_packet(mport->ofport, &packet);
         }
     }
     ovs_rwlock_unlock(&monitor_rwlock);
+    ofpbuf_uninit(&packet);
 }
 
 /* Executes bfd_run(), cfm_run() on all mports. */
