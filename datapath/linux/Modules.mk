@@ -64,5 +64,6 @@ openvswitch_headers += \
 	linux/compat/include/net/ipv6.h \
 	linux/compat/include/net/net_namespace.h \
 	linux/compat/include/net/netlink.h \
+	linux/compat/include/net/sock.h \
 	linux/compat/include/net/vxlan.h \
 	linux/compat/include/net/sctp/checksum.h
