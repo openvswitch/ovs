@@ -52,14 +52,10 @@
 #include <net/vxlan.h>
 
 #include "compat.h"
+#include "datapath.h"
 #include "gso.h"
 #include "vlan.h"
 
-#define PORT_HASH_BITS	8
-#define PORT_HASH_SIZE  (1<<PORT_HASH_BITS)
-
-/* IP header + UDP + VXLAN + Ethernet header */
-#define VXLAN_HEADROOM (20 + 8 + 8 + 14)
 #define VXLAN_HLEN (sizeof(struct udphdr) + sizeof(struct vxlanhdr))
 
 #define VXLAN_FLAGS 0x08000000	/* struct vxlanhdr.vx_flags required value. */
@@ -69,38 +65,6 @@ struct vxlanhdr {
 	__be32 vx_flags;
 	__be32 vx_vni;
 };
-
-static int vxlan_net_id;
-
-static int vxlan_init_module(void);
-static void vxlan_cleanup_module(void);
-
-/* per-network namespace private data for this module */
-struct vxlan_net {
-	struct hlist_head sock_list[PORT_HASH_SIZE];
-	spinlock_t  sock_lock;
-};
-
-/* Socket hash table head */
-static inline struct hlist_head *vs_head(struct net *net, __be16 port)
-{
-	struct vxlan_net *vn = net_generic(net, vxlan_net_id);
-
-	return &vn->sock_list[hash_32(ntohs(port), PORT_HASH_BITS)];
-}
-
-/* Find VXLAN socket based on network namespace and UDP port */
-
-static struct vxlan_sock *vxlan_find_sock(struct net *net, __be16 port)
-{
-	struct vxlan_sock *vs;
-
-	hlist_for_each_entry_rcu(vs, vs_head(net, port), hlist) {
-		if (inet_sport(vs->sock->sk) == port)
-			return vs;
-	}
-	return NULL;
-}
 
 /* Callback from net/ipv4/udp.c to receive packets */
 static int vxlan_udp_encap_recv(struct sock *sk, struct sk_buff *skb)
@@ -124,7 +88,7 @@ static int vxlan_udp_encap_recv(struct sock *sk, struct sk_buff *skb)
 	if (iptunnel_pull_header(skb, VXLAN_HLEN, htons(ETH_P_TEB)))
 		goto drop;
 
-	vs = vxlan_find_sock(sock_net(sk), inet_sport(sk));
+	vs = rcu_dereference_sk_user_data(sk);
 	if (!vs)
 		goto drop;
 
@@ -276,13 +240,11 @@ static void vxlan_del_work(struct work_struct *work)
 
 	sk_release_kernel(vs->sock->sk);
 	call_rcu(&vs->rcu, rcu_free_vs);
-	vxlan_cleanup_module();
 }
 
 static struct vxlan_sock *vxlan_socket_create(struct net *net, __be16 port,
 					      vxlan_rcv_t *rcv, void *data)
 {
-	struct vxlan_net *vn = net_generic(net, vxlan_net_id);
 	struct vxlan_sock *vs;
 	struct sock *sk;
 	struct sockaddr_in vxlan_addr = {
@@ -326,9 +288,7 @@ static struct vxlan_sock *vxlan_socket_create(struct net *net, __be16 port,
 
 	/* Disable multicast loopback */
 	inet_sk(sk)->mc_loop = 0;
-	spin_lock(&vn->sock_lock);
-	hlist_add_head_rcu(&vs->hlist, vs_head(net, port));
-	spin_unlock(&vn->sock_lock);
+	rcu_assign_sk_user_data(vs->sock->sk, vs);
 
 	/* Mark socket as an encapsulation socket. */
 	udp_sk(sk)->encap_type = 1;
@@ -341,75 +301,13 @@ struct vxlan_sock *vxlan_sock_add(struct net *net, __be16 port,
 				  vxlan_rcv_t *rcv, void *data,
 				  bool no_share)
 {
-	struct vxlan_net *vn;
-	struct vxlan_sock *vs;
-	int err;
-
-	err = vxlan_init_module();
-	if (err)
-		return ERR_PTR(err);
-
-	vn = net_generic(net, vxlan_net_id);
-	vs = vxlan_socket_create(net, port, rcv, data);
-	return vs;
+	return vxlan_socket_create(net, port, rcv, data);
 }
 
 void vxlan_sock_release(struct vxlan_sock *vs)
 {
-	struct vxlan_net *vn = net_generic(sock_net(vs->sock->sk), vxlan_net_id);
-
-	spin_lock(&vn->sock_lock);
-	hlist_del_rcu(&vs->hlist);
-	spin_unlock(&vn->sock_lock);
+	ASSERT_OVSL();
+	rcu_assign_sk_user_data(vs->sock->sk, NULL);
 
 	queue_work(&vs->del_work);
-}
-
-static int vxlan_init_net(struct net *net)
-{
-	struct vxlan_net *vn = net_generic(net, vxlan_net_id);
-	unsigned int h;
-
-	spin_lock_init(&vn->sock_lock);
-
-	for (h = 0; h < PORT_HASH_SIZE; ++h)
-		INIT_HLIST_HEAD(&vn->sock_list[h]);
-
-	return 0;
-}
-
-static struct pernet_operations vxlan_net_ops = {
-	.init = vxlan_init_net,
-	.id   = &vxlan_net_id,
-	.size = sizeof(struct vxlan_net),
-};
-
-static int refcnt;
-static DEFINE_MUTEX(init_lock);
-DEFINE_COMPAT_PNET_REG_FUNC(device);
-
-static int vxlan_init_module(void)
-{
-	int err = 0;
-
-	mutex_lock(&init_lock);
-	if (refcnt)
-		goto out;
-	err = register_pernet_device(&vxlan_net_ops);
-out:
-	if (!err)
-		refcnt++;
-	mutex_unlock(&init_lock);
-	return err;
-}
-
-static void vxlan_cleanup_module(void)
-{
-	mutex_lock(&init_lock);
-	refcnt--;
-	if (refcnt)
-		goto out;
-	unregister_pernet_device(&vxlan_net_ops);
-out:
-	mutex_unlock(&init_lock);
 }
