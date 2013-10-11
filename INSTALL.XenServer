@@ -167,7 +167,7 @@ controller on XenServer and, as a consequence of the step above that
 deletes all of the bridges at boot time, controller configuration only
 persists until XenServer reboot.  The configuration database manager
 can, however, configure controllers for bridges.  See the BUGS section
-of ovs-controller(8) for more information on this topic.
+of test-controller(8) for more information on this topic.
 
 * The Open vSwitch startup script automatically adds a firewall rule
 to allow GRE traffic. This rule is needed for the XenServer feature

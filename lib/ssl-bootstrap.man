@@ -14,9 +14,7 @@ for bootstrapping.
 .IP
 This option is only useful if the SSL peer sends its CA certificate as
 part of the SSL certificate chain.  The SSL protocol does not require
-the server to send the CA certificate, but
-\fB\*(SN\fR(8) can be configured to do so with the
-\fB\-\-peer\-ca\-cert\fR option.
+the server to send the CA certificate.
 .IP
 This option is mutually exclusive with \fB\-C\fR and
 \fB\-\-ca\-cert\fR.

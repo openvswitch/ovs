@@ -1,6 +1,5 @@
 bin_PROGRAMS += \
 	utilities/ovs-appctl \
-	utilities/ovs-controller \
 	utilities/ovs-dpctl \
 	utilities/ovs-ofctl \
 	utilities/ovs-vsctl
@@ -38,7 +37,6 @@ EXTRA_DIST += \
 MAN_ROOTS += \
 	utilities/ovs-appctl.8.in \
 	utilities/ovs-benchmark.1.in \
-	utilities/ovs-controller.8.in \
 	utilities/ovs-ctl.8 \
 	utilities/ovs-dpctl.8.in \
 	utilities/ovs-dpctl-top.8.in \
@@ -58,7 +56,6 @@ DISTCLEANFILES += \
 	utilities/ovs-ctl \
 	utilities/ovs-benchmark.1 \
 	utilities/ovs-check-dead-ifs \
-	utilities/ovs-controller.8 \
 	utilities/ovs-dpctl.8 \
 	utilities/ovs-dpctl-top \
 	utilities/ovs-dpctl-top.8 \
@@ -83,7 +80,6 @@ DISTCLEANFILES += \
 man_MANS += \
 	utilities/ovs-appctl.8 \
 	utilities/ovs-benchmark.1 \
-	utilities/ovs-controller.8 \
 	utilities/ovs-dpctl.8 \
 	utilities/ovs-dpctl-top.8 \
 	utilities/ovs-l3ping.8 \
@@ -100,9 +96,6 @@ dist_man_MANS += utilities/ovs-ctl.8
 
 utilities_ovs_appctl_SOURCES = utilities/ovs-appctl.c
 utilities_ovs_appctl_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
-
-utilities_ovs_controller_SOURCES = utilities/ovs-controller.c
-utilities_ovs_controller_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 utilities_ovs_dpctl_SOURCES = utilities/ovs-dpctl.c
 utilities_ovs_dpctl_LDADD = lib/libopenvswitch.a $(SSL_LIBS)

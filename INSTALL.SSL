@@ -115,7 +115,7 @@ that contains the PKI structure:
       % ovs-pki req+sign ctl controller
 
 ctl-privkey.pem and ctl-cert.pem would need to be copied to the
-controller for its use at runtime.  If you were to use ovs-controller,
+controller for its use at runtime.  If you were to use test-controller,
 the simple OpenFlow controller included with Open vSwitch, then the
 --private-key and --certificate options, respectively, would point to
 these files.

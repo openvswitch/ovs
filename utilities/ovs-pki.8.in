@@ -236,7 +236,3 @@ Sets the log file to \fIfile\fR.  Default:
 .IP "\fB\-h\fR"
 .IQ "\fB\-\^\-help\fR"
 Prints a help usage message and exits.
-
-.SH "SEE ALSO"
-
-.BR ovs\-controller (8).

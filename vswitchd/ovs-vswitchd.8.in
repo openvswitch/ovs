@@ -7,8 +7,6 @@
 .TH ovs\-vswitchd 8 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 .\" This program's name:
 .ds PN ovs\-vswitchd
-.\" SSL peer program's name:
-.ds SN ovs\-controller
 .
 .SH NAME
 ovs\-vswitchd \- Open vSwitch daemon

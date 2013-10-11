@@ -8,8 +8,6 @@
 .TH ovsdb\-client 1 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 .\" This program's name:
 .ds PN ovsdb\-client
-.\" SSL peer program's name:
-.ds SN ovsdb\-server
 .
 .SH NAME
 ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)

@@ -69,8 +69,6 @@ The main components of this distribution are:
 
 Open vSwitch also provides some tools:
 
-    * ovs-controller, a simple OpenFlow controller.
-
     * ovs-ofctl, a utility for querying and controlling OpenFlow
       switches and controllers.
 

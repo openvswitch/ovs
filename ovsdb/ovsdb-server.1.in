@@ -7,8 +7,6 @@
 .TH ovsdb\-server 1 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 .\" This program's name:
 .ds PN ovsdb\-server
-.\" SSL peer program's name:
-.ds SN ovsdb\-client
 .
 .SH NAME
 ovsdb\-server \- Open vSwitch database server

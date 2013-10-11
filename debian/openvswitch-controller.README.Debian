@@ -1,7 +1,0 @@
-README.Debian for openvswitch-controller
--------------------------------------
-
-* To (re)configure the controller, edit /etc/default/openvswitch-controller
-  and run "/etc/init.d/openvswitch-controller restart".
-
- -- Ben Pfaff <blp@nicira.com>, Fri,  4 Mar 2011 14:28:53 -0800

@@ -1,25 +1,38 @@
-.\" -*- nroff -*-
+			  .\" -*- nroff -*-
 .de IQ
 .  br
 .  ns
 .  IP "\\$1"
 ..
-.TH ovs\-controller 8 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
-.ds PN ovs\-controller
+.TH test\-controller 8 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
+.ds PN test\-controller
 .
 .SH NAME
-ovs\-controller \- simple OpenFlow controller reference implementation
+test\-controller \- simple OpenFlow controller for testing
 .
 .SH SYNOPSIS
-.B ovs\-controller
+.B test\-controller
 [\fIoptions\fR] \fImethod\fR \fB[\fImethod\fR]\&...
 .
 .SH DESCRIPTION
-\fBovs\-controller\fR manages any number of remote switches over OpenFlow
-protocol, causing them to function as L2 MAC-learning switches or hub.
 .PP
-\fBovs\-controller\fR controls one or more OpenFlow switches, specified as
-one or more of the following OpenFlow connection methods:
+\fBtest\-controller\fR is a simple OpenFlow controller.  It is very
+easy to set up, so it may be suitable for initial testing of
+connectivity between an OpenFlow switch and a controller.  It may also
+be useful for developer testing and debugging of some Open vSwitch
+features.
+.PP
+\fBtest\-controller\fR is not a general-purpose OpenFlow controller.
+It does not make sense to deploy it routinely or in production.
+\fBtest\-controller\fR does not provide any features that are not
+built into Open vSwitch, and lacks many that are built in to Open
+vSwitch, so adding it to an Open vSwitch deployment actually reduces
+functionality and performance while increasing latency.
+.PP
+\fBtest\-controller\fR manages any number of remote switches over
+OpenFlow protocol, causing them to function as L2 MAC-learning
+switches or hub.  The switches it controls are specified as one or
+more of the following OpenFlow connection methods:
 .
 .RS
 .so lib/vconn-passive.man
@@ -29,7 +42,7 @@ one or more of the following OpenFlow connection methods:
 .SH OPTIONS
 .IP "\fB\-n\fR"
 .IQ "\fB\-\-noflow\fR"
-By default, \fBovs\-controller\fR sets up a flow in each OpenFlow switch
+By default, \fBtest\-controller\fR sets up a flow in each OpenFlow switch
 whenever it receives a packet whose destination is known due through
 MAC learning.  This option disables flow setup, so that every packet
 in the network passes through the controller.
@@ -62,7 +75,7 @@ performance, so it should not be used in production.
 .
 .IP "\fB\-w\fR[\fIwildcard_mask\fR]"
 .IQ "\fB\-\-wildcards\fR[\fB=\fIwildcard_mask\fR]\fR"
-By default, \fBovs\-controller\fR sets up exact-match flows.  This
+By default, \fBtest\-controller\fR sets up exact-match flows.  This
 option allows it to set up wildcarded flows, which may reduce
 flow setup latency by causing less traffic to be sent up to the
 controller.
@@ -79,7 +92,7 @@ This option has no effect when \fB\-n\fR (or \fB\-\-noflow\fR) is in use
 .
 .IP "\fB\-N\fR"
 .IQ "\fB\-\-normal\fR"
-By default, \fBovs\-controller\fR directs packets to a particular port
+By default, \fBtest\-controller\fR directs packets to a particular port
 or floods them.  This option causes it to direct non-flooded packets
 to the OpenFlow \fBOFPP_NORMAL\fR port.  This allows the switch itself
 to make decisions about packet destinations.  Support for
@@ -87,7 +100,7 @@ to make decisions about packet destinations.  Support for
 with some non-Open vSwitch switches.
 .
 .IP "\fB\-\-mute\fR"
-Prevents ovs\-controller from replying to any OpenFlow messages sent
+Prevents test\-controller from replying to any OpenFlow messages sent
 to it by switches.
 .IP
 This option is only for debugging the Open vSwitch implementation of
@@ -95,7 +108,7 @@ This option is only for debugging the Open vSwitch implementation of
 .
 .IP "\fB\-q \fIid\fR"
 .IQ "\fB\-\-queue=\fIid\fR"
-By default, \fBovs\-controller\fR uses the default OpenFlow queue for
+By default, \fBtest\-controller\fR uses the default OpenFlow queue for
 sending packets and setting up flows.  Use one of these options,
 supplying \fIid\fR as an OpenFlow queue ID as a decimal number, to
 instead use that specific queue.
@@ -147,7 +160,7 @@ Use this option more than once to add flows from multiple files.
 To bind locally to port 6633 (the default) and wait for incoming
 connections from OpenFlow switches:
 .IP
-\fB% ovs\-controller ptcp:\fR
+\fB% test\-controller ptcp:\fR
 .PP
 In the future, the default port number will change to 6653, which is the
 IANA-defined value.
@@ -157,7 +170,7 @@ Configuring a Citrix XenServer to connect to a particular controller
 only points the remote OVSDB management connection to that controller.
 It does not also configure OpenFlow connections, because the manager
 is expected to do that over the management protocol.
-\fBovs\-controller\fR is not an Open vSwitch manager and does not know
+\fBtest\-controller\fR is not an Open vSwitch manager and does not know
 how to do that.
 .PP
 As a stopgap workaround, \fBovs\-vsctl\fR can wait for an OVSDB

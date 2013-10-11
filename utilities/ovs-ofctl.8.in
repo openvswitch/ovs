@@ -2029,6 +2029,5 @@ Prints the flow entries in the switch.
 .SH "SEE ALSO"
 .
 .BR ovs\-appctl (8),
-.BR ovs\-controller (8),
 .BR ovs\-vswitchd (8)
 .BR ovs\-vswitchd.conf.db (8)

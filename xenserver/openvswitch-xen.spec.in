@@ -123,12 +123,10 @@ cp -rf $RPM_BUILD_ROOT/usr/share/openvswitch/bugtool-plugins/* $RPM_BUILD_ROOT/e
 # Get rid of stuff we don't want to make RPM happy.
 rm \
     $RPM_BUILD_ROOT/usr/bin/ovs-benchmark \
-    $RPM_BUILD_ROOT/usr/bin/ovs-controller \
     $RPM_BUILD_ROOT/usr/bin/ovs-l3ping \
     $RPM_BUILD_ROOT/usr/bin/ovs-pki \
     $RPM_BUILD_ROOT/usr/bin/ovs-test \
     $RPM_BUILD_ROOT/usr/share/man/man1/ovs-benchmark.1 \
-    $RPM_BUILD_ROOT/usr/share/man/man8/ovs-controller.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-l3ping.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-pki.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-test.8

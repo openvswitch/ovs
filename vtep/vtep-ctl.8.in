@@ -13,8 +13,6 @@
 .TH vtep\-ctl 8 "March 2013" "Open vSwitch" "Open vSwitch Manual"
 .\" This program's name:
 .ds PN vtep\-ctl
-.\" SSL peer program's name:
-.ds SN ovsdb\-server
 .
 .SH NAME
 vtep\-ctl \- utility for querying and configuring a VTEP database

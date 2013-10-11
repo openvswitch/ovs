@@ -1,7 +1,10 @@
 openvswitch (2.0.90-1) unstable; urgency=low
    [ Open vSwitch team ]
+   * The openvswitch-controller package has been removed, because too many
+     users assumed incorrectly that ovs-controller was a necessary or
+     desirable part of an Open vSwitch deployment.
    * New upstream version
-    - Nothing yet!  Try NEWS...
+    - Try NEWS for more details...
 
  -- Open vSwitch team <dev@openvswitch.org>  Wed, 28 Aug 2013 16:17:38 -0700
 

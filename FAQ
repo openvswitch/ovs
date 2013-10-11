@@ -89,10 +89,9 @@ A: Distributed vswitch applications (e.g., VMware vNetwork distributed
    environments: OpenFlow, which exposes flow-based forwarding state,
    and the OVSDB management protocol, which exposes switch port state.
    In addition to the switch implementation itself, Open vSwitch
-   includes tools (ovs-controller, ovs-ofctl, ovs-vsctl) that developers
-   can script and extend to provide distributed vswitch capabilities
-   that are closely integrated with their virtualization management
-   platform.
+   includes tools (ovs-ofctl, ovs-vsctl) that developers can script and
+   extend to provide distributed vswitch capabilities that are closely
+   integrated with their virtualization management platform.
 
 Q: Why doesn't Open vSwitch support distribution?
 

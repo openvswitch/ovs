@@ -11,6 +11,10 @@ Post-v2.0.0
    - Support for Linux kernels up to 3.11
    - ovs-dpctl:
      The "show" command also displays mega flow mask stats.
+   - ovs-controller has been renamed test-controller.  It is no longer
+     packaged or installed by default, because too many users assumed
+     incorrectly that ovs-controller was a necessary or desirable part
+     of an Open vSwitch deployment.
 
 
 v2.0.0 - 15 Oct 2013

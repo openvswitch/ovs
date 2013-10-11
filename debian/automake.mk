@@ -11,14 +11,6 @@ EXTRA_DIST += \
 	debian/openvswitch-common.docs \
 	debian/openvswitch-common.install \
 	debian/openvswitch-common.manpages \
-	debian/openvswitch-controller.README.Debian \
-	debian/openvswitch-controller.default \
-	debian/openvswitch-controller.dirs \
-	debian/openvswitch-controller.init \
-	debian/openvswitch-controller.install \
-	debian/openvswitch-controller.manpages \
-	debian/openvswitch-controller.postinst \
-	debian/openvswitch-controller.postrm \
 	debian/openvswitch-datapath-module-_KVERS_.postinst.modules.in \
 	debian/openvswitch-datapath-dkms.postinst \
 	debian/openvswitch-datapath-dkms.prerm \

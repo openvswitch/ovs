@@ -157,12 +157,10 @@ systemctl start openvswitch.service
 /usr/bin/ovs-vsctl
 /usr/bin/ovsdb-client
 /usr/bin/ovsdb-tool
-/usr/bin/ovs-controller
 /usr/bin/ovs-pki
 /usr/bin/ovs-test
 /usr/bin/ovs-l3ping
 /usr/bin/vtep-ctl
-%doc /usr/share/man/man8/ovs-controller.8.gz
 %doc /usr/share/man/man8/ovs-pki.8.gz
 %doc /usr/share/man/man1/ovsdb-client.1.gz
 %doc /usr/share/man/man1/ovsdb-server.1.gz

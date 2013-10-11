@@ -190,6 +190,13 @@ noinst_PROGRAMS += tests/test-classifier
 tests_test_classifier_SOURCES = tests/test-classifier.c
 tests_test_classifier_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
+noinst_PROGRAMS += tests/test-controller
+MAN_ROOTS += tests/test-controller.8.in
+DISTCLEANFILES += utilities/test-controller.8
+noinst_man_MANS += tests/test-controller.8
+tests_test_controller_SOURCES = tests/test-controller.c
+tests_test_controller_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
+
 noinst_PROGRAMS += tests/test-csum
 tests_test_csum_SOURCES = tests/test-csum.c
 tests_test_csum_LDADD = lib/libopenvswitch.a $(SSL_LIBS)

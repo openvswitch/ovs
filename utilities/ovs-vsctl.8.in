@@ -13,8 +13,6 @@
 .TH ovs\-vsctl 8 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 .\" This program's name:
 .ds PN ovs\-vsctl
-.\" SSL peer program's name:
-.ds SN ovsdb\-server
 .
 .SH NAME
 ovs\-vsctl \- utility for querying and configuring \fBovs\-vswitchd\fR
@@ -468,9 +466,7 @@ for bootstrapping.
 .PP
 This option is only useful if the controller sends its CA certificate
 as part of the SSL certificate chain.  The SSL protocol does not
-require the controller to send the CA certificate, but
-\fBovs\-controller\fR(8) can be configured to do so with the
-\fB\-\-peer\-ca\-cert\fR option.
+require the controller to send the CA certificate.
 .
 .SS "Database Commands"
 .
