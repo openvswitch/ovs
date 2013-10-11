@@ -4862,12 +4862,12 @@ handle_flow_monitor_request(struct ofconn *ofconn, const struct ofp_header *oh)
     return 0;
 
 error:
-    ovs_mutex_unlock(&ofproto_mutex);
-
     for (i = 0; i < n_monitors; i++) {
         ofmonitor_destroy(monitors[i]);
     }
     free(monitors);
+    ovs_mutex_unlock(&ofproto_mutex);
+
     return error;
 }
 

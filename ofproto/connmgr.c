@@ -52,7 +52,8 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
  *
  * 'ofproto_mutex' must be held whenever an ofconn is created or destroyed or,
  * more or less equivalently, whenever an ofconn is added to or removed from a
- * connmgr.  'ofproto_mutex' doesn't protect the data inside the ofconn. */
+ * connmgr.  'ofproto_mutex' doesn't protect the data inside the ofconn, except
+ * as specifically noted below. */
 struct ofconn {
 /* Configuration that persists from one connection to the next. */
 
@@ -98,12 +99,36 @@ struct ofconn {
     uint32_t master_async_config[OAM_N_TYPES]; /* master, other */
     uint32_t slave_async_config[OAM_N_TYPES];  /* slave */
 
-    /* Flow monitors. */
-    struct hmap monitors;       /* Contains "struct ofmonitor"s. */
-    struct list updates;        /* List of "struct ofpbuf"s. */
-    bool sent_abbrev_update;    /* Does 'updates' contain NXFME_ABBREV? */
-    struct rconn_packet_counter *monitor_counter;
-    uint64_t monitor_paused;
+/* Flow monitors (e.g. NXST_FLOW_MONITOR). */
+
+    /* Configuration.  Contains "struct ofmonitor"s. */
+    struct hmap monitors OVS_GUARDED_BY(ofproto_mutex);
+
+    /* Flow control.
+     *
+     * When too many flow monitor notifications back up in the transmit buffer,
+     * we pause the transmission of further notifications.  These members track
+     * the flow control state.
+     *
+     * When notifications are flowing, 'monitor_paused' is 0.  When
+     * notifications are paused, 'monitor_paused' is the value of
+     * 'monitor_seqno' at the point we paused.
+     *
+     * 'monitor_counter' counts the OpenFlow messages and bytes currently in
+     * flight.  This value growing too large triggers pausing. */
+    uint64_t monitor_paused OVS_GUARDED_BY(ofproto_mutex);
+    struct rconn_packet_counter *monitor_counter OVS_GUARDED_BY(ofproto_mutex);
+
+    /* State of monitors for a single ongoing flow_mod.
+     *
+     * 'updates' is a list of "struct ofpbuf"s that contain
+     * NXST_FLOW_MONITOR_REPLY messages representing the changes made by the
+     * current flow_mod.
+     *
+     * When 'updates' is nonempty, 'sent_abbrev_update' is true if 'updates'
+     * contains an update event of type NXFME_ABBREV and false otherwise.. */
+    struct list updates OVS_GUARDED_BY(ofproto_mutex);
+    bool sent_abbrev_update OVS_GUARDED_BY(ofproto_mutex);
 };
 
 static struct ofconn *ofconn_create(struct connmgr *, struct rconn *,
@@ -1809,6 +1834,7 @@ COVERAGE_DEFINE(ofmonitor_resume);
 enum ofperr
 ofmonitor_create(const struct ofputil_flow_monitor_request *request,
                  struct ofconn *ofconn, struct ofmonitor **monitorp)
+    OVS_REQUIRES(ofproto_mutex)
 {
     struct ofmonitor *m;
 
@@ -1834,6 +1860,7 @@ ofmonitor_create(const struct ofputil_flow_monitor_request *request,
 
 struct ofmonitor *
 ofmonitor_lookup(struct ofconn *ofconn, uint32_t id)
+    OVS_REQUIRES(ofproto_mutex)
 {
     struct ofmonitor *m;
 
@@ -1848,6 +1875,7 @@ ofmonitor_lookup(struct ofconn *ofconn, uint32_t id)
 
 void
 ofmonitor_destroy(struct ofmonitor *m)
+    OVS_REQUIRES(ofproto_mutex)
 {
     if (m) {
         minimatch_destroy(&m->match);
@@ -1954,6 +1982,7 @@ ofmonitor_report(struct connmgr *mgr, struct rule *rule,
 
 void
 ofmonitor_flush(struct connmgr *mgr)
+    OVS_REQUIRES(ofproto_mutex)
 {
     struct ofconn *ofconn;
 
@@ -1981,6 +2010,7 @@ ofmonitor_flush(struct connmgr *mgr)
 
 static void
 ofmonitor_resume(struct ofconn *ofconn)
+    OVS_REQUIRES(ofproto_mutex)
 {
     struct rule_collection rules;
     struct ofpbuf *resumed;
@@ -2003,18 +2033,27 @@ ofmonitor_resume(struct ofconn *ofconn)
     ofconn->monitor_paused = 0;
 }
 
+static bool
+ofmonitor_may_resume(const struct ofconn *ofconn)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    return (ofconn->monitor_paused != 0
+            && !rconn_packet_counter_n_packets(ofconn->monitor_counter));
+}
+
 static void
 ofmonitor_run(struct connmgr *mgr)
 {
     struct ofconn *ofconn;
 
+    ovs_mutex_lock(&ofproto_mutex);
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
-        if (ofconn->monitor_paused
-            && !rconn_packet_counter_n_packets(ofconn->monitor_counter)) {
+        if (ofmonitor_may_resume(ofconn)) {
             COVERAGE_INC(ofmonitor_resume);
             ofmonitor_resume(ofconn);
         }
     }
+    ovs_mutex_unlock(&ofproto_mutex);
 }
 
 static void
@@ -2022,10 +2061,11 @@ ofmonitor_wait(struct connmgr *mgr)
 {
     struct ofconn *ofconn;
 
+    ovs_mutex_lock(&ofproto_mutex);
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
-        if (ofconn->monitor_paused
-            && !rconn_packet_counter_n_packets(ofconn->monitor_counter)) {
+        if (ofmonitor_may_resume(ofconn)) {
             poll_immediate_wake();
         }
     }
+    ovs_mutex_unlock(&ofproto_mutex);
 }
