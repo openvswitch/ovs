@@ -26,9 +26,10 @@ run as a background process. \*(DD
 \fB\-\-monitor\fR
 Creates an additional process to monitor the \fB\*(PN\fR daemon.  If
 the daemon dies due to a signal that indicates a programming error
-(e.g. \fBSIGSEGV\fR, \fBSIGABRT\fR), then the monitor process starts a
-new copy of it.  If the daemon die or exits for another reason, the
-monitor process exits.
+(\fBSIGABRT\fR, \fBSIGALRM\fR, \fBSIGBUS\fR, \fBSIGFPE\fR,
+\fBSIGILL\fR, \fBSIGPIPE\fR, \fBSIGSEGV\fR, \fBSIGXCPU\fR, or
+\fBSIGXFSZ\fR) then the monitor process starts a new copy of it.  If
+the daemon dies or exits for another reason, the monitor process exits.
 .IP
 This option is normally used with \fB\-\-detach\fR, but it also
 functions without it.

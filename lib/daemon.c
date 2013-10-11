@@ -376,6 +376,8 @@ should_restart(int status)
 {
     if (WIFSIGNALED(status)) {
         static const int error_signals[] = {
+            /* This list of signals is documented in daemon.man.  If you
+             * change the list, update the documentation too. */
             SIGABRT, SIGALRM, SIGBUS, SIGFPE, SIGILL, SIGPIPE, SIGSEGV,
             SIGXCPU, SIGXFSZ
         };
