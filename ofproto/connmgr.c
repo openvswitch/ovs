@@ -44,7 +44,15 @@
 VLOG_DEFINE_THIS_MODULE(connmgr);
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
-/* An OpenFlow connection. */
+/* An OpenFlow connection.
+ *
+ *
+ * Thread-safety
+ * =============
+ *
+ * 'ofproto_mutex' must be held whenever an ofconn is created or destroyed or,
+ * more or less equivalently, whenever an ofconn is added to or removed from a
+ * connmgr.  'ofproto_mutex' doesn't protect the data inside the ofconn. */
 struct ofconn {
 /* Configuration that persists from one connection to the next. */
 
@@ -99,9 +107,10 @@ struct ofconn {
 };
 
 static struct ofconn *ofconn_create(struct connmgr *, struct rconn *,
-                                    enum ofconn_type, bool enable_async_msgs);
-static void ofconn_destroy(struct ofconn *);
-static void ofconn_flush(struct ofconn *);
+                                    enum ofconn_type, bool enable_async_msgs)
+    OVS_REQUIRES(ofproto_mutex);
+static void ofconn_destroy(struct ofconn *) OVS_REQUIRES(ofproto_mutex);
+static void ofconn_flush(struct ofconn *) OVS_REQUIRES(ofproto_mutex);
 
 static void ofconn_reconfigure(struct ofconn *,
                                const struct ofproto_controller *);
@@ -226,9 +235,12 @@ connmgr_destroy(struct connmgr *mgr)
         return;
     }
 
+    ovs_mutex_lock(&ofproto_mutex);
     LIST_FOR_EACH_SAFE (ofconn, next_ofconn, node, &mgr->all_conns) {
         ofconn_destroy(ofconn);
     }
+    ovs_mutex_unlock(&ofproto_mutex);
+
     hmap_destroy(&mgr->controllers);
 
     HMAP_FOR_EACH_SAFE (ofservice, next_ofservice, node, &mgr->services) {
@@ -311,8 +323,11 @@ connmgr_run(struct connmgr *mgr,
             rconn_connect_unreliably(rconn, vconn, name);
             free(name);
 
+            ovs_mutex_lock(&ofproto_mutex);
             ofconn = ofconn_create(mgr, rconn, OFCONN_SERVICE,
                                    ofservice->enable_async_msgs);
+            ovs_mutex_unlock(&ofproto_mutex);
+
             ofconn_set_rate_limit(ofconn, ofservice->rate_limit,
                                   ofservice->burst_limit);
         } else if (retval != EAGAIN) {
@@ -410,7 +425,8 @@ connmgr_retry(struct connmgr *mgr)
 /* OpenFlow configuration. */
 
 static void add_controller(struct connmgr *, const char *target, uint8_t dscp,
-                           uint32_t allowed_versions);
+                           uint32_t allowed_versions)
+    OVS_REQUIRES(ofproto_mutex);
 static struct ofconn *find_controller_by_target(struct connmgr *,
                                                 const char *target);
 static void update_fail_open(struct connmgr *);
@@ -502,12 +518,17 @@ void
 connmgr_set_controllers(struct connmgr *mgr,
                         const struct ofproto_controller *controllers,
                         size_t n_controllers, uint32_t allowed_versions)
+    OVS_EXCLUDED(ofproto_mutex)
 {
     bool had_controllers = connmgr_has_controllers(mgr);
     struct shash new_controllers;
     struct ofconn *ofconn, *next_ofconn;
     struct ofservice *ofservice, *next_ofservice;
     size_t i;
+
+    /* Required to add and remove ofconns.  This could probably be narrowed to
+     * cover a smaller amount of code, if that yielded some benefit. */
+    ovs_mutex_lock(&ofproto_mutex);
 
     /* Create newly configured controllers and services.
      * Create a name to ofproto_controller mapping in 'new_controllers'. */
@@ -596,6 +617,7 @@ connmgr_set_controllers(struct connmgr *mgr,
     if (had_controllers != connmgr_has_controllers(mgr)) {
         ofproto_flush_flows(mgr->ofproto);
     }
+    ovs_mutex_unlock(&ofproto_mutex);
 }
 
 /* Drops the connections between 'mgr' and all of its primary and secondary
@@ -643,6 +665,7 @@ connmgr_has_snoops(const struct connmgr *mgr)
 static void
 add_controller(struct connmgr *mgr, const char *target, uint8_t dscp,
                uint32_t allowed_versions)
+    OVS_REQUIRES(ofproto_mutex)
 {
     char *name = ofconn_make_name(mgr, target);
     struct ofconn *ofconn;
@@ -1110,6 +1133,7 @@ ofconn_create(struct connmgr *mgr, struct rconn *rconn, enum ofconn_type type,
  * connection to the next. */
 static void
 ofconn_flush(struct ofconn *ofconn)
+    OVS_REQUIRES(ofproto_mutex)
 {
     struct ofmonitor *monitor, *next_monitor;
     int i;
@@ -1192,6 +1216,7 @@ ofconn_flush(struct ofconn *ofconn)
 
 static void
 ofconn_destroy(struct ofconn *ofconn)
+    OVS_REQUIRES(ofproto_mutex)
 {
     ofconn_flush(ofconn);
 
@@ -1281,11 +1306,13 @@ ofconn_run(struct ofconn *ofconn,
         }
     }
 
+    ovs_mutex_lock(&ofproto_mutex);
     if (!rconn_is_alive(ofconn->rconn)) {
         ofconn_destroy(ofconn);
     } else if (!rconn_is_connected(ofconn->rconn)) {
         ofconn_flush(ofconn);
     }
+    ovs_mutex_unlock(&ofproto_mutex);
 }
 
 static void
