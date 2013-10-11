@@ -3801,8 +3801,8 @@ facet_free(struct facet *facet)
     }
 }
 
-/* Executes, within 'ofproto', the 'n_actions' actions in 'actions' on
- * 'packet', which arrived on 'in_port'. */
+/* Executes, within 'ofproto', the actions in 'rule' or 'ofpacts' on 'packet'.
+ * 'flow' must reflect the data in 'packet'. */
 static int
 execute_actions(struct ofproto *ofproto_, const struct flow *flow,
                 struct rule_dpif *rule,
