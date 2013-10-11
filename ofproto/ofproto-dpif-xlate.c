@@ -2857,20 +2857,12 @@ out:
 int
 xlate_send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
 {
-    uint64_t odp_actions_stub[1024 / 8];
     struct xport *xport;
-    struct ofpbuf key, odp_actions;
-    struct dpif_flow_stats stats;
-    struct odputil_keybuf keybuf;
     struct ofpact_output output;
-    struct xlate_out xout;
-    struct xlate_in xin;
     struct flow flow;
     union flow_in_port in_port_;
     int error;
 
-    ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof odp_actions_stub);
-    ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
     ofpact_init(&output.ofpact, OFPACT_OUTPUT, sizeof output);
     /* Use OFPP_NONE as the in_port to avoid special packet processing. */
     in_port_.ofp_port = OFPP_NONE;
@@ -2882,22 +2874,11 @@ xlate_send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
         ovs_rwlock_unlock(&xlate_rwlock);
         return EINVAL;
     }
-
-    odp_flow_key_from_flow(&key, &flow, ofp_port_to_odp_port(xport->xbridge, OFPP_LOCAL));
-    dpif_flow_stats_extract(&flow, packet, time_msec(), &stats);
     output.port = xport->ofp_port;
     output.max_len = 0;
-    xlate_in_init(&xin, xport->xbridge->ofproto, &flow, NULL, 0, packet);
-    xin.ofpacts_len = sizeof output;
-    xin.ofpacts = &output.ofpact;
-    xin.resubmit_stats = &stats;
-    /* Calls xlate_actions__ directly, since the rdlock is acquired. */
-    xlate_actions__(&xin, &xout);
-    error = dpif_execute(xport->xbridge->dpif,
-                         key.data, key.size,
-                         xout.odp_actions.data, xout.odp_actions.size,
-                         packet, (xout.slow & SLOW_ACTION) != 0);
+    error =  ofproto_dpif_execute_actions(xport->xbridge->ofproto, &flow, NULL,
+                                          &output.ofpact, sizeof output,
+                                          packet);
     ovs_rwlock_unlock(&xlate_rwlock);
-    xlate_out_uninit(&xout);
     return error;
 }
