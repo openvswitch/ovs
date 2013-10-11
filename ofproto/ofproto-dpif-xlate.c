@@ -2879,9 +2879,8 @@ xlate_send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
     ovs_rwlock_rdlock(&xlate_rwlock);
     xport = xport_lookup(ofport);
     if (!xport) {
-        error = EINVAL;
         ovs_rwlock_unlock(&xlate_rwlock);
-        goto out;
+        return EINVAL;
     }
 
     odp_flow_key_from_flow(&key, &flow, ofp_port_to_odp_port(xport->xbridge, OFPP_LOCAL));
@@ -2899,8 +2898,6 @@ xlate_send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
                          xout.odp_actions.data, xout.odp_actions.size,
                          packet, (xout.slow & SLOW_ACTION) != 0);
     ovs_rwlock_unlock(&xlate_rwlock);
-
-out:
     xlate_out_uninit(&xout);
     return error;
 }
