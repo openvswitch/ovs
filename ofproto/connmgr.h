@@ -178,21 +178,26 @@ struct ofmonitor {
 struct ofputil_flow_monitor_request;
 
 enum ofperr ofmonitor_create(const struct ofputil_flow_monitor_request *,
-                             struct ofconn *, struct ofmonitor **);
-struct ofmonitor *ofmonitor_lookup(struct ofconn *, uint32_t id);
-void ofmonitor_destroy(struct ofmonitor *);
+                             struct ofconn *, struct ofmonitor **)
+    OVS_REQUIRES(ofproto_mutex);
+struct ofmonitor *ofmonitor_lookup(struct ofconn *, uint32_t id)
+    OVS_REQUIRES(ofproto_mutex);
+void ofmonitor_destroy(struct ofmonitor *)
+    OVS_REQUIRES(ofproto_mutex);
 
 void ofmonitor_report(struct connmgr *, struct rule *,
                       enum nx_flow_update_event, enum ofp_flow_removed_reason,
                       const struct ofconn *abbrev_ofconn, ovs_be32 abbrev_xid)
     OVS_REQUIRES(ofproto_mutex);
-void ofmonitor_flush(struct connmgr *);
+void ofmonitor_flush(struct connmgr *) OVS_REQUIRES(ofproto_mutex);
 
 
 struct rule_collection;
 void ofmonitor_collect_resume_rules(struct ofmonitor *, uint64_t seqno,
-                                    struct rule_collection *);
+                                    struct rule_collection *)
+    OVS_REQUIRES(ofproto_mutex);
 void ofmonitor_compose_refresh_updates(struct rule_collection *rules,
-                                       struct list *msgs);
+                                       struct list *msgs)
+    OVS_REQUIRES(ofproto_mutex);
 
 #endif /* connmgr.h */
