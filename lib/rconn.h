@@ -33,6 +33,12 @@
  * An rconn optionally provides reliable communication, in this sense: the
  * rconn will re-connect, with exponential backoff, when the underlying vconn
  * disconnects.
+ *
+ *
+ * Thread-safety
+ * =============
+ *
+ * Fully thread-safe.
  */
 
 struct vconn;
