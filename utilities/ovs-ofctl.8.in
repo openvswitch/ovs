@@ -1346,6 +1346,87 @@ to \fBactions=\fR field.
 .IP \fBclear_actions\fR
 Clears all the actions in the action set immediately.
 .
+.IP \fBwrite_actions(\fR[\fIaction\fR][\fB,\fIaction\fR...]\fB)
+Add the specific actions to the action set.  The syntax of
+\fIactions\fR is the same as in the \fBactions=\fR field.  The action
+set is carried between flow tables and then executed at the end of the
+pipeline.
+.
+.IP
+The actions in the action set are applied in the following order, as
+required by the OpenFlow specification, regardless of the order in
+which they were added to the action set.  Except as specified
+otherwise below, the action set only holds at most a single action of
+each type.  When more than one action of a single type is written to
+the action set, the one written later replaces the earlier action:
+.
+.RS
+.IP 1.
+\fBstrip_vlan\fR
+.IQ
+\fBpop_mpls\fR
+.
+.IP 2.
+\fBpush_mpls\fR
+.
+.IP 3.
+\fBpush_vlan\fR
+.
+.IP 4.
+\fBdec_ttl\fR
+.IQ
+\fBdec_mpls_ttl\fR
+.
+.IP 5.
+\fBload\fR
+.IQ
+\fBmod_dl_dst\fR
+.IQ
+\fBmod_dl_src\fR
+.IQ
+\fBmod_nw_dst\fR
+.IQ
+\fBmod_nw_src\fR
+.IQ
+\fBmod_nw_tos\fR
+.IQ
+\fBmod_tp_dst\fR
+.IQ
+\fBmod_tp_src\fR
+.IQ
+\fBmod_vlan_pcp\fR
+.IQ
+\fBmod_vlan_vid\fR
+.IQ
+\fBset_field\fR
+.IQ
+\fBset_tunnel\fR
+.IQ
+\fBset_tunnel64\fR
+.IQ
+The action set can contain any number of these actions, with
+cumulative effect.  That is, when multiple actions modify the same
+part of a field, the later modification takes effect, and when they
+modify different parts of a field (or different fields), then both
+modifications are applied.
+.
+.IP 6.
+\fBset_queue\fR
+.
+.IP 7.
+\fBgroup\fR
+.IQ
+\fBoutput\fR
+.IQ
+If both actions are present, then \fBgroup\fR is executed and
+\fBoutput\fR is ignored, regardless of the order in which they were
+added to the action set.  (If neither action is present, the action
+set has no real effect, because the modified packet is not sent
+anywhere and thus the modifications are not visible.)
+.RE
+.IP
+Only the actions listed above may be written to the action set.
+.
 .IP \fBwrite_metadata\fB:\fIvalue\fR[/\fImask\fR]
 Updates the metadata field for the flow. If \fImask\fR is omitted, the
 metadata field is set exactly to \fIvalue\fR; if \fImask\fR is specified, then
@@ -1409,10 +1490,12 @@ configuring sample collector sets.
 This action was added in Open vSwitch 1.10.90.
 .
 .IP "\fBexit\fR"
-This action causes Open vSwitch to immediately halt execution of further
-actions.  Those actions which have already been executed are unaffected.  Any
-further actions, including those which may be in other tables, or different
-levels of the \fBresubmit\fR call stack, are ignored.
+This action causes Open vSwitch to immediately halt execution of
+further actions.  Those actions which have already been executed are
+unaffected.  Any further actions, including those which may be in
+other tables, or different levels of the \fBresubmit\fR call stack,
+are ignored.  Actions in the action set is still executed (specify
+\fBclear_actions\fR before \fBexit\fR to discard them).
 .RE
 .
 .PP

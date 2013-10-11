@@ -416,9 +416,29 @@ dnl and OVS reorders it to the canonical order)
 # 31: ff -> 00
 0001 0008 01 000000 0002 0018 00000000 fedcba9876543210 ffffffffffffffff
 
-dnl Write-Actions not supported yet.
-# bad OF1.1 instructions: OFPBIC_UNSUP_INST
-0003 0008 01 000000
+dnl empty Write-Actions non-zero padding
+# actions=write_actions(drop)
+#  0: 00 -> (none)
+#  1: 03 -> (none)
+#  2: 00 -> (none)
+#  3: 08 -> (none)
+#  4: 00 -> (none)
+#  5: 00 -> (none)
+#  6: 00 -> (none)
+#  7: 01 -> (none)
+0003 0008 00000001
+
+dnl Check that an empty Write-Actions instruction gets dropped.
+# actions=write_actions(drop)
+#  0: 00 -> (none)
+#  1: 03 -> (none)
+#  2: 00 -> (none)
+#  3: 08 -> (none)
+#  4: 00 -> (none)
+#  5: 00 -> (none)
+#  6: 00 -> (none)
+#  7: 00 -> (none)
+0003 0008 00000000
 
 dnl Clear-Actions too-long
 # bad OF1.1 instructions: OFPBIC_BAD_LEN

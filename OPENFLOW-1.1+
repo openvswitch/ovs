@@ -54,9 +54,6 @@ OpenFlow 1.1
 The list of remaining work items for OpenFlow 1.1 is below.  It is
 probably incomplete.
 
-    * Implement Write-Actions instruction.
-      [required for 1.1+]
-
     * The new in_phy_port field in OFPT_PACKET_IN needs some kind of
       implementation.  It has a sensible interpretation for tunnels
       but in general the physical port is not in the datapath for OVS

@@ -4,6 +4,8 @@ Post-v2.0.0
      IANA-assigned numbers in a future release.  Consider updating
      your installations to specify port numbers instead of using the
      defaults.
+   - OpenFlow:
+     * The OpenFlow 1.1+ "Write-Actions" instruction is now supported.
 
 
 v2.0.0 - xx xxx xxxx

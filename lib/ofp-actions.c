@@ -880,6 +880,233 @@ ofpacts_from_openflow11(const union ofp_action *in, size_t n_in,
 {
     return ofpacts_from_openflow(in, n_in, out, ofpact_from_openflow11);
 }
+
+/* True if an action sets the value of a field
+ * in a way that is compatibile with the action set.
+ * False otherwise. */
+static bool
+ofpact_is_set_action(const struct ofpact *a)
+{
+    switch (a->type) {
+    case OFPACT_REG_LOAD:
+    case OFPACT_SET_ETH_DST:
+    case OFPACT_SET_ETH_SRC:
+    case OFPACT_SET_IPV4_DSCP:
+    case OFPACT_SET_IPV4_DST:
+    case OFPACT_SET_IPV4_SRC:
+    case OFPACT_SET_L4_DST_PORT:
+    case OFPACT_SET_L4_SRC_PORT:
+    case OFPACT_SET_MPLS_TTL:
+    case OFPACT_SET_QUEUE:
+    case OFPACT_SET_TUNNEL:
+    case OFPACT_SET_VLAN_PCP:
+    case OFPACT_SET_VLAN_VID:
+        return true;
+    case OFPACT_BUNDLE:
+    case OFPACT_CLEAR_ACTIONS:
+    case OFPACT_CONTROLLER:
+    case OFPACT_DEC_MPLS_TTL:
+    case OFPACT_DEC_TTL:
+    case OFPACT_ENQUEUE:
+    case OFPACT_EXIT:
+    case OFPACT_FIN_TIMEOUT:
+    case OFPACT_GOTO_TABLE:
+    case OFPACT_GROUP:
+    case OFPACT_LEARN:
+    case OFPACT_METER:
+    case OFPACT_MULTIPATH:
+    case OFPACT_NOTE:
+    case OFPACT_OUTPUT:
+    case OFPACT_OUTPUT_REG:
+    case OFPACT_POP_MPLS:
+    case OFPACT_POP_QUEUE:
+    case OFPACT_PUSH_MPLS:
+    case OFPACT_PUSH_VLAN:
+    case OFPACT_REG_MOVE:
+    case OFPACT_RESUBMIT:
+    case OFPACT_SAMPLE:
+    case OFPACT_STACK_POP:
+    case OFPACT_STACK_PUSH:
+    case OFPACT_STRIP_VLAN:
+    case OFPACT_WRITE_ACTIONS:
+    case OFPACT_WRITE_METADATA:
+        return false;
+    default:
+        NOT_REACHED();
+    }
+}
+
+/* True if an action is allowed in the action set.
+ * False otherwise. */
+static bool
+ofpact_is_allowed_in_actions_set(const struct ofpact *a)
+{
+    switch (a->type) {
+    case OFPACT_DEC_MPLS_TTL:
+    case OFPACT_DEC_TTL:
+    case OFPACT_GROUP:
+    case OFPACT_OUTPUT:
+    case OFPACT_POP_MPLS:
+    case OFPACT_PUSH_MPLS:
+    case OFPACT_PUSH_VLAN:
+    case OFPACT_REG_LOAD:
+    case OFPACT_SET_ETH_DST:
+    case OFPACT_SET_ETH_SRC:
+    case OFPACT_SET_IPV4_DSCP:
+    case OFPACT_SET_IPV4_DST:
+    case OFPACT_SET_IPV4_SRC:
+    case OFPACT_SET_L4_DST_PORT:
+    case OFPACT_SET_L4_SRC_PORT:
+    case OFPACT_SET_MPLS_TTL:
+    case OFPACT_SET_QUEUE:
+    case OFPACT_SET_TUNNEL:
+    case OFPACT_SET_VLAN_PCP:
+    case OFPACT_SET_VLAN_VID:
+    case OFPACT_STRIP_VLAN:
+        return true;
+
+    /* In general these actions are excluded because they are not part of
+     * the OpenFlow specification nor map to actions that are defined in
+     * the specification.  Thus the order in which they should be applied
+     * in the action set is undefined. */
+    case OFPACT_BUNDLE:
+    case OFPACT_CONTROLLER:
+    case OFPACT_ENQUEUE:
+    case OFPACT_EXIT:
+    case OFPACT_FIN_TIMEOUT:
+    case OFPACT_LEARN:
+    case OFPACT_MULTIPATH:
+    case OFPACT_NOTE:
+    case OFPACT_OUTPUT_REG:
+    case OFPACT_POP_QUEUE:
+    case OFPACT_REG_MOVE:
+    case OFPACT_RESUBMIT:
+    case OFPACT_SAMPLE:
+    case OFPACT_STACK_POP:
+    case OFPACT_STACK_PUSH:
+
+    /* The action set may only include actions and thus
+     * may not include any instructions */
+    case OFPACT_CLEAR_ACTIONS:
+    case OFPACT_GOTO_TABLE:
+    case OFPACT_METER:
+    case OFPACT_WRITE_ACTIONS:
+    case OFPACT_WRITE_METADATA:
+        return false;
+    default:
+        NOT_REACHED();
+    }
+}
+
+/* Append ofpact 'a' onto the tail of 'out' */
+static void
+ofpact_copy(struct ofpbuf *out, const struct ofpact *a)
+{
+    ofpbuf_put(out, a, OFPACT_ALIGN(a->len));
+}
+
+/* Copies the last ofpact whose type is 'filter' from 'in' to 'out'. */
+static bool
+ofpacts_copy_last(struct ofpbuf *out, const struct ofpbuf *in,
+                  enum ofpact_type filter)
+{
+    const struct ofpact *target;
+    const struct ofpact *a;
+
+    target = NULL;
+    OFPACT_FOR_EACH (a, in->data, in->size) {
+        if (a->type == filter) {
+            target = a;
+        }
+    }
+    if (target) {
+        ofpact_copy(out, target);
+    }
+    return target != NULL;
+}
+
+/* Append all ofpacts, for which 'filter' returns true, from 'in' to 'out'.
+ * The order of appended ofpacts is preserved between 'in' and 'out' */
+static void
+ofpacts_copy_all(struct ofpbuf *out, const struct ofpbuf *in,
+                 bool (*filter)(const struct ofpact *))
+{
+    const struct ofpact *a;
+
+    OFPACT_FOR_EACH (a, in->data, in->size) {
+        if (filter(a)) {
+            ofpact_copy(out, a);
+        }
+    }
+}
+
+/* Reads 'action_set', which contains ofpacts accumulated by
+ * OFPACT_WRITE_ACTIONS instructions, and writes equivalent actions to be
+ * executed directly into 'action_list'.  (These names correspond to the
+ * "Action Set" and "Action List" terms used in OpenFlow 1.1+.)
+ *
+ * In general this involves appending the last instance of each action that is
+ * adimissible in the action set in the order described in the OpenFlow
+ * specification.
+ *
+ * Exceptions:
+ * + output action is only appended if no group action was present in 'in'.
+ * + As a simplification all set actions are copied in the order the are
+ *   provided in 'in' as many set actions applied to a field has the same
+ *   affect as only applying the last action that sets a field and
+ *   duplicates are removed by do_xlate_actions().
+ *   This has an unwanted side-effect of compsoting multiple
+ *   LOAD_REG actions that touch different regions of the same field. */
+void
+ofpacts_execute_action_set(struct ofpbuf *action_list,
+                           const struct ofpbuf *action_set)
+{
+    /* The OpenFlow spec "Action Set" section specifies this order. */
+    ofpacts_copy_last(action_list, action_set, OFPACT_STRIP_VLAN);
+    ofpacts_copy_last(action_list, action_set, OFPACT_POP_MPLS);
+    ofpacts_copy_last(action_list, action_set, OFPACT_PUSH_MPLS);
+    ofpacts_copy_last(action_list, action_set, OFPACT_PUSH_VLAN);
+    ofpacts_copy_last(action_list, action_set, OFPACT_DEC_TTL);
+    ofpacts_copy_last(action_list, action_set, OFPACT_DEC_MPLS_TTL);
+    ofpacts_copy_all(action_list, action_set, ofpact_is_set_action);
+    ofpacts_copy_last(action_list, action_set, OFPACT_SET_QUEUE);
+
+    /* If both OFPACT_GROUP and OFPACT_OUTPUT are present, OpenFlow says that
+     * we should execute only OFPACT_GROUP.
+     *
+     * If neither OFPACT_GROUP nor OFPACT_OUTPUT is present, then we can drop
+     * all the actions because there's no point in modifying a packet that will
+     * not be sent anywhere. */
+    if (!ofpacts_copy_last(action_list, action_set, OFPACT_GROUP) &&
+        !ofpacts_copy_last(action_list, action_set, OFPACT_OUTPUT)) {
+        ofpbuf_clear(action_list);
+    }
+}
+
+
+static enum ofperr
+ofpacts_from_openflow11_for_action_set(const union ofp_action *in,
+                                       size_t n_in, struct ofpbuf *out)
+{
+    enum ofperr error;
+    struct ofpact *a;
+    size_t start = out->size;
+
+    error = ofpacts_from_openflow(in, n_in, out, ofpact_from_openflow11);
+    if (error) {
+        return error;
+    }
+
+    OFPACT_FOR_EACH (a, ofpact_end(out->data, start), out->size - start) {
+        if (!ofpact_is_allowed_in_actions_set(a)) {
+            VLOG_WARN_RL(&rl, "disallowed action in action set");
+            return OFPERR_OFPBAC_BAD_TYPE;
+        }
+    }
+
+    return 0;
+}
+
 
 /* OpenFlow 1.1 instructions. */
 
@@ -946,6 +1173,8 @@ ovs_instruction_type_from_ofpact_type(enum ofpact_type type)
         return OVSINST_OFPIT13_METER;
     case OFPACT_CLEAR_ACTIONS:
         return OVSINST_OFPIT11_CLEAR_ACTIONS;
+    case OFPACT_WRITE_ACTIONS:
+        return OVSINST_OFPIT11_WRITE_ACTIONS;
     case OFPACT_WRITE_METADATA:
         return OVSINST_OFPIT11_WRITE_METADATA;
     case OFPACT_GOTO_TABLE:
@@ -1170,7 +1399,23 @@ ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
             insts[OVSINST_OFPIT11_CLEAR_ACTIONS]);
         ofpact_put_CLEAR_ACTIONS(ofpacts);
     }
-    /* XXX Write-Actions */
+    if (insts[OVSINST_OFPIT11_WRITE_ACTIONS]) {
+        struct ofpact_nest *on;
+        const union ofp_action *actions;
+        size_t n_actions;
+        size_t start = ofpacts->size;
+
+        on = ofpact_put(ofpacts, OFPACT_WRITE_ACTIONS,
+                        offsetof(struct ofpact_nest, actions));
+        get_actions_from_instruction(insts[OVSINST_OFPIT11_WRITE_ACTIONS],
+                                     &actions, &n_actions);
+        error = ofpacts_from_openflow11_for_action_set(actions, n_actions,
+                                                       ofpacts);
+        if (error) {
+            goto exit;
+        }
+        on->ofpact.len = ofpacts->size - start;
+    }
     if (insts[OVSINST_OFPIT11_WRITE_METADATA]) {
         const struct ofp11_instruction_write_metadata *oiwm;
         struct ofpact_metadata *om;
@@ -1190,11 +1435,6 @@ ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
             insts[OVSINST_OFPIT11_GOTO_TABLE]);
         ogt = ofpact_put_GOTO_TABLE(ofpacts);
         ogt->table_id = oigt->table_id;
-    }
-
-    if (insts[OVSINST_OFPIT11_WRITE_ACTIONS]) {
-        error = OFPERR_OFPBIC_UNSUP_INST;
-        goto exit;
     }
 
     error = ofpacts_verify(ofpacts->data, ofpacts->size);
@@ -1292,6 +1532,14 @@ ofpact_check__(const struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
         return 0;
 
     case OFPACT_CLEAR_ACTIONS:
+        return 0;
+
+    case OFPACT_WRITE_ACTIONS: {
+        struct ofpact_nest *on = ofpact_get_WRITE_ACTIONS(a);
+        return ofpacts_check(on->actions, ofpact_nest_get_action_len(on),
+                             flow, max_ports, table_id);
+    }
+
     case OFPACT_WRITE_METADATA:
         return 0;
 
@@ -1353,7 +1601,9 @@ ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len)
         enum ovs_instruction_type next;
 
         next = ovs_instruction_type_from_ofpact_type(a->type);
-        if (inst != OVSINST_OFPIT11_APPLY_ACTIONS && next <= inst) {
+        if (inst == OVSINST_OFPIT11_APPLY_ACTIONS
+            ? next < inst
+            : next <= inst) {
             const char *name = ovs_instruction_name_from_type(inst);
             const char *next_name = ovs_instruction_name_from_type(next);
 
@@ -1622,6 +1872,7 @@ ofpact_to_nxast(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_SET_IPV4_DSCP:
     case OFPACT_SET_L4_SRC_PORT:
     case OFPACT_SET_L4_DST_PORT:
+    case OFPACT_WRITE_ACTIONS:
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_GOTO_TABLE:
     case OFPACT_METER:
@@ -1716,6 +1967,7 @@ ofpact_to_openflow10(const struct ofpact *a, struct ofpbuf *out)
 
     case OFPACT_PUSH_VLAN:
     case OFPACT_CLEAR_ACTIONS:
+    case OFPACT_WRITE_ACTIONS:
     case OFPACT_GOTO_TABLE:
     case OFPACT_METER:
         /* XXX */
@@ -1892,6 +2144,7 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
         break;
 
     case OFPACT_CLEAR_ACTIONS:
+    case OFPACT_WRITE_ACTIONS:
     case OFPACT_GOTO_TABLE:
     case OFPACT_METER:
         NOT_REACHED();
@@ -2016,8 +2269,19 @@ ofpacts_put_openflow11_instructions(const struct ofpact ofpacts[],
             break;
         }
 
-        case OVSINST_OFPIT11_WRITE_ACTIONS:
-            NOT_REACHED();
+        case OVSINST_OFPIT11_WRITE_ACTIONS: {
+            const size_t ofs = openflow->size;
+            const struct ofpact_nest *on;
+
+            on = ofpact_get_WRITE_ACTIONS(a);
+            instruction_put_OFPIT11_WRITE_ACTIONS(openflow);
+            ofpacts_put_openflow11_actions(on->actions,
+                                           ofpact_nest_get_action_len(on),
+                                           openflow);
+            ofpacts_update_instruction_actions(openflow, ofs);
+
+            break;
+        }
         }
     }
 }
@@ -2068,6 +2332,7 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, ofp_port_t port)
     case OFPACT_POP_MPLS:
     case OFPACT_SAMPLE:
     case OFPACT_CLEAR_ACTIONS:
+    case OFPACT_WRITE_ACTIONS:
     case OFPACT_GOTO_TABLE:
     case OFPACT_METER:
     case OFPACT_GROUP:
@@ -2415,6 +2680,16 @@ ofpact_format(const struct ofpact *a, struct ds *s)
             sample->probability, sample->collector_set_id,
             sample->obs_domain_id, sample->obs_point_id);
         break;
+
+    case OFPACT_WRITE_ACTIONS: {
+        struct ofpact_nest *on = ofpact_get_WRITE_ACTIONS(a);
+        ds_put_format(s, "%s(",
+                      ovs_instruction_name_from_type(
+                          OVSINST_OFPIT11_WRITE_ACTIONS));
+        ofpacts_format(on->actions, ofpact_nest_get_action_len(on), s);
+        ds_put_char(s, ')');
+        break;
+    }
 
     case OFPACT_CLEAR_ACTIONS:
         ds_put_format(s, "%s",

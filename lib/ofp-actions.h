@@ -17,6 +17,7 @@
 #ifndef OFP_ACTIONS_H
 #define OFP_ACTIONS_H 1
 
+#include <stddef.h>
 #include <stdint.h>
 #include "meta-flow.h"
 #include "ofp-errors.h"
@@ -99,8 +100,8 @@
                                                                     \
     /* Instructions */                                              \
     DEFINE_OFPACT(METER,           ofpact_meter,         ofpact)    \
-    /* XXX Write-Actions */                                         \
     DEFINE_OFPACT(CLEAR_ACTIONS,   ofpact_null,          ofpact)    \
+    DEFINE_OFPACT(WRITE_ACTIONS,   ofpact_nest,          ofpact)    \
     DEFINE_OFPACT(WRITE_METADATA,  ofpact_metadata,      ofpact)    \
     DEFINE_OFPACT(GOTO_TABLE,      ofpact_goto_table,    ofpact)
 
@@ -384,6 +385,25 @@ struct ofpact_meter {
     uint32_t meter_id;
 };
 
+/* OFPACT_WRITE_ACTIONS.
+ *
+ * Used for OFPIT11_WRITE_ACTIONS. */
+struct ofpact_nest {
+    struct ofpact ofpact;
+    uint8_t pad[OFPACT_ALIGN(sizeof(struct ofpact)) - sizeof(struct ofpact)];
+    struct ofpact actions[];
+};
+BUILD_ASSERT_DECL(offsetof(struct ofpact_nest, actions) == OFPACT_ALIGNTO);
+
+static inline size_t
+ofpact_nest_get_action_len(const struct ofpact_nest *on)
+{
+    return on->ofpact.len - offsetof(struct ofpact_nest, actions);
+}
+
+void ofpacts_execute_action_set(struct ofpbuf *action_list,
+                                const struct ofpbuf *action_set);
+
 /* OFPACT_RESUBMIT.
  *
  * Used for NXAST_RESUBMIT, NXAST_RESUBMIT_TABLE. */
@@ -665,5 +685,4 @@ enum ovs_instruction_type ovs_instruction_type_from_ofpact_type(
 
 void ofpact_set_field_init(struct ofpact_reg_load *load,
                            const struct mf_field *mf, const void *src);
-
 #endif /* ofp-actions.h */

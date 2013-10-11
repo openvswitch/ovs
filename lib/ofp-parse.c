@@ -879,12 +879,11 @@ str_to_ofpact__(char *pos, char *act, char *arg,
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
 static char * WARN_UNUSED_RESULT
-str_to_ofpacts(char *str, struct ofpbuf *ofpacts,
-               enum ofputil_protocol *usable_protocols)
+str_to_ofpacts__(char *str, struct ofpbuf *ofpacts,
+                 enum ofputil_protocol *usable_protocols)
 {
     size_t orig_size = ofpacts->size;
     char *pos, *act, *arg;
-    enum ofperr error;
     int n_actions;
 
     pos = str;
@@ -899,13 +898,34 @@ str_to_ofpacts(char *str, struct ofpbuf *ofpacts,
         n_actions++;
     }
 
+    ofpact_pad(ofpacts);
+    return NULL;
+}
+
+
+/* Parses 'str' as a series of actions, and appends them to 'ofpacts'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
+str_to_ofpacts(char *str, struct ofpbuf *ofpacts,
+               enum ofputil_protocol *usable_protocols)
+{
+    size_t orig_size = ofpacts->size;
+    char *error_s;
+    enum ofperr error;
+
+    error_s = str_to_ofpacts__(str, ofpacts, usable_protocols);
+    if (error_s) {
+        return error_s;
+    }
+
     error = ofpacts_verify(ofpacts->data, ofpacts->size);
     if (error) {
         ofpacts->size = orig_size;
         return xstrdup("Incorrect action ordering");
     }
 
-    ofpact_pad(ofpacts);
     return NULL;
 }
 
@@ -929,10 +949,22 @@ parse_named_instruction(enum ovs_instruction_type type,
         NOT_REACHED();  /* This case is handled by str_to_inst_ofpacts() */
         break;
 
-    case OVSINST_OFPIT11_WRITE_ACTIONS:
-        /* XXX */
-        error_s = xstrdup("instruction write-actions is not supported yet");
+    case OVSINST_OFPIT11_WRITE_ACTIONS: {
+        struct ofpact_nest *on;
+        size_t ofs = ofpacts->size;
+
+        on = ofpact_put(ofpacts, OFPACT_WRITE_ACTIONS,
+                        offsetof(struct ofpact_nest, actions));
+        error_s = str_to_ofpacts__(arg, ofpacts, usable_protocols);
+
+        on = ofpbuf_at_assert(ofpacts, ofs, sizeof *on);
+        on->ofpact.len = ofpacts->size - ofs;
+
+        if (error_s) {
+            ofpacts->size = ofs;
+        }
         break;
+    }
 
     case OVSINST_OFPIT11_CLEAR_ACTIONS:
         ofpact_put_CLEAR_ACTIONS(ofpacts);

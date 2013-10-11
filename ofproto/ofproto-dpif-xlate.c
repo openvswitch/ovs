@@ -179,6 +179,15 @@ struct xlate_ctx {
     odp_port_t sflow_odp_port;  /* Output port for composing sFlow action. */
     uint16_t user_cookie_offset;/* Used for user_action_cookie fixup. */
     bool exit;                  /* No further actions should be processed. */
+
+    /* OpenFlow 1.1+ action set.
+     *
+     * 'action_set' accumulates "struct ofpact"s added by OFPACT_WRITE_ACTIONS.
+     * When translation is otherwise complete, ofpacts_execute_action_set()
+     * converts it to a set of "struct ofpact"s that can be translated into
+     * datapath actions.   */
+    struct ofpbuf action_set;   /* Action set. */
+    uint64_t action_set_stub[1024 / 8];
 };
 
 /* A controller may use OFPP_NONE as the ingress port to indicate that
@@ -2247,6 +2256,26 @@ may_receive(const struct xport *xport, struct xlate_ctx *ctx)
 }
 
 static void
+xlate_write_actions(struct xlate_ctx *ctx, const struct ofpact *a)
+{
+    struct ofpact_nest *on = ofpact_get_WRITE_ACTIONS(a);
+    ofpbuf_put(&ctx->action_set, on->actions, ofpact_nest_get_action_len(on));
+    ofpact_pad(&ctx->action_set);
+}
+
+static void
+xlate_action_set(struct xlate_ctx *ctx)
+{
+    uint64_t action_list_stub[1024 / 64];
+    struct ofpbuf action_list;
+
+    ofpbuf_use_stub(&action_list, action_list_stub, sizeof action_list_stub);
+    ofpacts_execute_action_set(&action_list, &ctx->action_set);
+    do_xlate_actions(action_list.data, action_list.size, ctx);
+    ofpbuf_uninit(&action_list);
+}
+
+static void
 do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
                  struct xlate_ctx *ctx)
 {
@@ -2457,11 +2486,11 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_CLEAR_ACTIONS:
-            /* XXX
-             * Nothing to do because writa-actions is not supported for now.
-             * When writa-actions is supported, clear-actions also must
-             * be supported at the same time.
-             */
+            ofpbuf_clear(&ctx->action_set);
+            break;
+
+        case OFPACT_WRITE_ACTIONS:
+            xlate_write_actions(ctx, a);
             break;
 
         case OFPACT_WRITE_METADATA:
@@ -2759,6 +2788,8 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
     }
 
     ofpbuf_use_stub(&ctx.stack, ctx.init_stack, sizeof ctx.init_stack);
+    ofpbuf_use_stub(&ctx.action_set,
+                    ctx.action_set_stub, sizeof ctx.action_set_stub);
 
     if (mbridge_has_mirrors(ctx.xbridge->mbridge)) {
         /* Do this conditionally because the copy is expensive enough that it
@@ -2817,6 +2848,10 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
             }
         }
 
+        if (ctx.action_set.size) {
+            xlate_action_set(&ctx);
+        }
+
         if (ctx.xbridge->has_in_band
             && in_band_must_output_to_local_port(flow)
             && !actions_output_to_local_port(&ctx)) {
@@ -2840,6 +2875,7 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
     }
 
     ofpbuf_uninit(&ctx.stack);
+    ofpbuf_uninit(&ctx.action_set);
 
     /* Clear the metadata and register wildcard masks, because we won't
      * use non-header fields as part of the cache. */

@@ -34,6 +34,37 @@ AT_CHECK([tail -1 stdout], [0],
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - write actions])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [10], [11], [12], [13])
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1,ip actions=output(10),write_actions(set_field:192.168.3.90->ip_src,output(12)),goto_table(1)
+table=1 ip actions=write_actions(output(13)),goto_table(2)
+table=2 ip actions=set_field:192.168.3.91->ip_src,output(11)
+])
+AT_CHECK([ovs-ofctl -O OpenFlow12 add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=1,nw_tos=0,nw_ttl=128,icmp_type=8,icmp_code=0'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: 10,set(ipv4(src=192.168.3.91,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no)),11,set(ipv4(src=192.168.3.90,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no)),13
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - clear actions])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [10], [11], [12])
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1,ip actions=output(10),write_actions(set_field:192.168.3.90->ip_src,output(12)),goto_table(1)
+table=1 ip actions=set_field:192.168.3.91->ip_src,output(11),clear_actions
+])
+AT_CHECK([ovs-ofctl -O OpenFlow12 add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=1,nw_tos=0,nw_ttl=128,icmp_type=8,icmp_code=0'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: 10,set(ipv4(src=192.168.3.91,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no)),11
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - registers])
 OVS_VSWITCHD_START
 ADD_OF_PORTS([br0], [20], [21], [22], [33], [90])
