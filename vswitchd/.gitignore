@@ -4,3 +4,5 @@
 /ovs-vswitchd.8
 /ovs-vswitchd.conf.db.5
 /vswitch.ovsschema.stamp
+/vswitch.gv
+/vswitch.pic

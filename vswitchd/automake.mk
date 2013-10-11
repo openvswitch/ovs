@@ -25,46 +25,30 @@ pkgdata_DATA += vswitchd/vswitch.ovsschema
 
 # vswitch E-R diagram
 #
-# There are two complications here.  First, if "python" or "dot" is not
-# available, then we have to just use the existing diagram.  Second, different
-# "dot" versions produce slightly different output for the same input, but we
-# don't want to gratuitously change vswitch.pic if someone tweaks the schema in
-# some minor way that doesn't affect the table structure.  To avoid that we
-# store a checksum of vswitch.gv in vswitch.pic and only regenerate vswitch.pic
-# if vswitch.gv actually changes.
-$(srcdir)/vswitchd/vswitch.gv: ovsdb/ovsdb-dot.in vswitchd/vswitch.ovsschema
+# If "python" or "dot" is not available, then we do not add graphical diagram
+# to the documentation.
 if HAVE_PYTHON
-	$(OVSDB_DOT) $(srcdir)/vswitchd/vswitch.ovsschema > $@
-else
-	touch $@
-endif
-$(srcdir)/vswitchd/vswitch.pic: $(srcdir)/vswitchd/vswitch.gv ovsdb/dot2pic
 if HAVE_DOT
-	sum=`cksum < $(srcdir)/vswitchd/vswitch.gv`;			\
-	if grep "$$sum" $@ >/dev/null 2>&1; then			\
-	  echo "vswitch.gv unchanged, not regenerating vswitch.pic";	\
-	  touch $@;							\
-	else								\
-	  echo "regenerating vswitch.pic";				\
-	  (echo ".\\\" Generated from vswitch.gv with cksum \"$$sum\"";	\
-	   dot -T plain < $(srcdir)/vswitchd/vswitch.gv			\
-	    | $(srcdir)/ovsdb/dot2pic -f 3) > $@;			\
-	fi
-else
-	touch $@
+vswitchd/vswitch.gv: ovsdb/ovsdb-dot.in vswitchd/vswitch.ovsschema
+	$(OVSDB_DOT) $(srcdir)/vswitchd/vswitch.ovsschema > $@
+vswitchd/vswitch.pic: vswitchd/vswitch.gv ovsdb/dot2pic
+	(dot -T plain < vswitchd/vswitch.gv | $(srcdir)/ovsdb/dot2pic -f 3) > $@;
+VSWITCH_PIC = vswitchd/vswitch.pic
+OVSDB_DOT_DIAGRAM_ARG = --er-diagram=$(VSWITCH_PIC)
+DISTCLEANFILES += vswitchd/vswitch.gv vswitchd/vswitch.pic
 endif
-EXTRA_DIST += vswitchd/vswitch.gv vswitchd/vswitch.pic
+endif
 
 # vswitch schema documentation
 EXTRA_DIST += vswitchd/vswitch.xml
-DISTCLEANFILES += $(srcdir)/vswitchd/ovs-vswitchd.conf.db.5
-dist_man_MANS += vswitchd/ovs-vswitchd.conf.db.5
-$(srcdir)/vswitchd/ovs-vswitchd.conf.db.5: \
+DISTCLEANFILES += vswitchd/ovs-vswitchd.conf.db.5
+man_MANS += vswitchd/ovs-vswitchd.conf.db.5
+vswitchd/ovs-vswitchd.conf.db.5: \
 	ovsdb/ovsdb-doc vswitchd/vswitch.xml vswitchd/vswitch.ovsschema \
-	$(srcdir)/vswitchd/vswitch.pic
+	$(VSWITCH_PIC)
 	$(OVSDB_DOC) \
 		--title="ovs-vswitchd.conf.db" \
-		--er-diagram=$(srcdir)/vswitchd/vswitch.pic \
+		$(OVSDB_DOT_DIAGRAM_ARG) \
 		--version=$(VERSION) \
 		$(srcdir)/vswitchd/vswitch.ovsschema \
 		$(srcdir)/vswitchd/vswitch.xml > $@.tmp
