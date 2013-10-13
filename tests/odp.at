@@ -151,6 +151,71 @@ AT_CHECK_UNQUOTED([test-odp parse-wc-keys < odp.txt], [0], [`cat odp.txt`
 ])
 AT_CLEANUP
 
+AT_SETUP([OVS datapath wildcarded key filtering.])
+dnl We could add a test for invalid forms, but that's less important.
+AT_DATA([odp-base.txt], [dnl
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x1234/0xfff0)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41/255.255.255.0,dst=172.16.0.20/255.255.255.0,proto=5/0xf0,tos=0x80/0xf0,ttl=128/0xf0,frag=no/0xf0)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=6,tos=0,ttl=128,frag=no),tcp(src=80/0xff00,dst=8080/0xff)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=17,tos=0,ttl=128,frag=no),udp(src=81/0xff00,dst=6632/0xff)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=17,tos=0,ttl=128,frag=no),udp(src=81/0xff,dst=6632/0xff00)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=1,tos=0,ttl=128,frag=no),icmp(type=1/0xf0,code=2/0xff)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1/::255,dst=::2/::255,label=0/0xf0,proto=10/0xf0,tclass=0x70/0xf0,hlimit=128/0xf0,frag=no/0xf0)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1,dst=::2,label=0,proto=6,tclass=0,hlimit=128,frag=no),tcp(src=80/0xff00,dst=8080/0xff)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0806),arp(sip=1.2.3.4/255.255.255.250,tip=5.6.7.8/255.255.255.250,op=1/0xf0,sha=00:0f:10:11:12:13/ff:ff:ff:ff:ff:00,tha=00:14:15:16:17:18/ff:ff:ff:ff:ff:00)
+])
+AT_DATA([odp-vlan-base.txt], [dnl
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=6,tos=0,ttl=128,frag=no),tcp(src=80/0xff00,dst=8080/0xff))
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x8100),vlan(vid=100,pcp=7),encap(eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=6,tos=0,ttl=128,frag=no),tcp(src=80/0xff00,dst=8080/0xff))
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=17,tos=0,ttl=128,frag=no),udp(src=81/0xff00,dst=6632/0xff))
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x8100),vlan(vid=100,pcp=7),encap(eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=17,tos=0,ttl=128,frag=no),udp(src=81/0xff00,dst=6632/0xff))
+])
+AT_DATA([odp-eth-type.txt], [dnl
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x1234/0xfff0)
+])
+AT_DATA([odp-vlan.txt], [dnl
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=6,tos=0,ttl=128,frag=no),tcp(src=80/0xff00,dst=8080/0xff))
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=17,tos=0,ttl=128,frag=no),udp(src=81/0xff00,dst=6632/0xff))
+])
+AT_DATA([odp-ipv4.txt], [dnl
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41/255.255.255.0,dst=172.16.0.20/255.255.255.0,proto=5/0xf0,tos=0x80/0xf0,ttl=128/0xf0,frag=no/0xf0)
+])
+AT_DATA([odp-icmp.txt], [dnl
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41/255.255.255.0,dst=172.16.0.20/255.255.255.0,proto=5/0xf0,tos=0x80/0xf0,ttl=128/0xf0,frag=no/0xf0)
+])
+AT_DATA([odp-arp.txt], [dnl
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0806),arp(sip=1.2.3.4/255.255.255.250,tip=5.6.7.8/255.255.255.250,op=1/0xf0,sha=00:0f:10:11:12:13/ff:ff:ff:ff:ff:00,tha=00:14:15:16:17:18/ff:ff:ff:ff:ff:00)
+])
+AT_DATA([odp-tcp.txt], [dnl
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41/255.255.255.0,dst=172.16.0.20/255.255.255.0,proto=5/0xf0,tos=0x80/0xf0,ttl=128/0xf0,frag=no/0xf0)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=6,tos=0,ttl=128,frag=no),tcp(src=80/0xff00,dst=8080/0xff)
+])
+AT_DATA([odp-tcp6.txt], [dnl
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1/::255,dst=::2/::255,label=0/0xf0,proto=10/0xf0,tclass=0x70/0xf0,hlimit=128/0xf0,frag=no/0xf0)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1,dst=::2,label=0,proto=6,tclass=0,hlimit=128,frag=no),tcp(src=80/0xff00,dst=8080/0xff)
+])
+AT_CHECK_UNQUOTED([test-odp parse-filter filter='dl_type=0x1235' < odp-base.txt], [0], [`cat odp-eth-type.txt`
+])
+AT_CHECK_UNQUOTED([test-odp parse-filter filter='dl_vlan=99' < odp-vlan-base.txt], [0], [`cat odp-vlan.txt`
+])
+AT_CHECK_UNQUOTED([test-odp parse-filter filter='dl_vlan=99,ip' < odp-vlan-base.txt], [0], [`cat odp-vlan.txt`
+])
+AT_CHECK_UNQUOTED([test-odp parse-filter filter='ip,nw_src=35.8.2.199' < odp-base.txt], [0], [`cat odp-ipv4.txt`
+])
+AT_CHECK_UNQUOTED([test-odp parse-filter filter='ip,nw_dst=172.16.0.199' < odp-base.txt], [0], [`cat odp-ipv4.txt`
+])
+AT_CHECK_UNQUOTED([test-odp parse-filter filter='dl_type=0x0800,nw_src=35.8.2.199,nw_dst=172.16.0.199' < odp-base.txt], [0], [`cat odp-ipv4.txt`
+])
+AT_CHECK_UNQUOTED([test-odp parse-filter filter='icmp,nw_src=35.8.2.199' < odp-base.txt], [0], [`cat odp-icmp.txt`
+])
+AT_CHECK_UNQUOTED([test-odp parse-filter filter='arp,arp_spa=1.2.3.5' < odp-base.txt], [0], [`cat odp-arp.txt`
+])
+AT_CHECK_UNQUOTED([test-odp parse-filter filter='tcp,tp_src=90' < odp-base.txt], [0], [`cat odp-tcp.txt`
+])
+AT_CHECK_UNQUOTED([test-odp parse-filter filter='tcp6,tp_src=90' < odp-base.txt], [0], [`cat odp-tcp6.txt`
+])
+AT_CLEANUP
+
 AT_SETUP([OVS datapath actions parsing and formatting - valid forms])
 AT_DATA([actions.txt], [dnl
 1,2,3

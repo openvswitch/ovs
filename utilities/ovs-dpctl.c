@@ -36,9 +36,11 @@
 #include "dpif.h"
 #include "dynamic-string.h"
 #include "flow.h"
+#include "match.h"
 #include "netdev.h"
 #include "netlink.h"
 #include "odp-util.h"
+#include "ofp-parse.h"
 #include "ofpbuf.h"
 #include "packets.h"
 #include "shash.h"
@@ -746,20 +748,38 @@ dpctl_dump_flows(int argc, char *argv[])
     struct dpif_port dpif_port;
     struct dpif_port_dump port_dump;
     struct hmap portno_names;
+    struct simap names_portno;
     size_t actions_len;
     struct dpif *dpif;
     size_t key_len;
     size_t mask_len;
     struct ds ds;
-    char *name;
+    char *name, *error, *filter = NULL;
+    struct flow flow_filter;
+    struct flow_wildcards wc_filter;
 
+    if (argc > 1 && !strncmp(argv[argc - 1], "filter=", 7)) {
+        filter = xstrdup(argv[--argc] + 7);
+    }
     name = (argc == 2) ? xstrdup(argv[1]) : get_one_dp();
+
     run(parsed_dpif_open(name, false, &dpif), "opening datapath");
     free(name);
 
     hmap_init(&portno_names);
+    simap_init(&names_portno);
     DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, dpif) {
         odp_portno_names_set(&portno_names, dpif_port.port_no, dpif_port.name);
+        simap_put(&names_portno, dpif_port.name,
+                  odp_to_u32(dpif_port.port_no));
+    }
+
+    if (filter) {
+        error = parse_ofp_exact_flow(&flow_filter, &wc_filter.masks, filter,
+                                     &names_portno);
+        if (error) {
+            ovs_fatal(0, "Failed to parse filter (%s)", error);
+        }
     }
 
     ds_init(&ds);
@@ -767,6 +787,26 @@ dpctl_dump_flows(int argc, char *argv[])
     while (dpif_flow_dump_next(&flow_dump, &key, &key_len,
                                &mask, &mask_len,
                                &actions, &actions_len, &stats)) {
+        if (filter) {
+            struct flow flow;
+            struct flow_wildcards wc;
+            struct match match, match_filter;
+            struct minimatch minimatch;
+
+            odp_flow_key_to_flow(key, key_len, &flow);
+            odp_flow_key_to_mask(mask, mask_len, &wc.masks, &flow);
+            match_init(&match, &flow, &wc);
+
+            match_init(&match_filter, &flow_filter, &wc);
+            match_init(&match_filter, &match_filter.flow, &wc_filter);
+            minimatch_init(&minimatch, &match_filter);
+
+            if (!minimatch_matches_flow(&minimatch, &match.flow)) {
+                minimatch_destroy(&minimatch);
+                continue;
+            }
+            minimatch_destroy(&minimatch);
+        }
         ds_clear(&ds);
         odp_flow_format(key, key_len, mask, mask_len, &portno_names, &ds,
                         verbosity);
@@ -778,8 +818,11 @@ dpctl_dump_flows(int argc, char *argv[])
         printf("%s\n", ds_cstr(&ds));
     }
     dpif_flow_dump_done(&flow_dump);
+
+    free(filter);
     odp_portno_names_destroy(&portno_names);
     hmap_destroy(&portno_names);
+    simap_destroy(&names_portno);
     ds_destroy(&ds);
     dpif_close(dpif);
 }
@@ -1166,7 +1209,7 @@ static const struct command all_commands[] = {
     { "set-if", 2, INT_MAX, dpctl_set_if },
     { "dump-dps", 0, 0, dpctl_dump_dps },
     { "show", 0, INT_MAX, dpctl_show },
-    { "dump-flows", 0, 1, dpctl_dump_flows },
+    { "dump-flows", 0, 2, dpctl_dump_flows },
     { "add-flow", 2, 3, dpctl_add_flow },
     { "mod-flow", 2, 3, dpctl_mod_flow },
     { "del-flow", 1, 2, dpctl_del_flow },

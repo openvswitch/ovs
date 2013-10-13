@@ -1538,6 +1538,24 @@ mf_set_value(const struct mf_field *mf,
     }
 }
 
+/* Unwildcard 'mask' member field described by 'mf'.  The caller is
+ * responsible for ensuring that 'mask' meets 'mf''s prerequisites. */
+void
+mf_mask_field(const struct mf_field *mf, struct flow *mask)
+{
+    static const union mf_value exact_match_mask = MF_EXACT_MASK_INITIALIZER;
+
+    /* For MFF_DL_VLAN, we cannot send a all 1's to flow_set_dl_vlan()
+     * as that will be considered as OFP10_VLAN_NONE. So consider it as a
+     * special case. For the rest, calling mf_set_flow_value() is good
+     * enough. */
+    if (mf->id == MFF_DL_VLAN) {
+        flow_set_dl_vlan(mask, htons(VLAN_VID_MASK));
+    } else {
+        mf_set_flow_value(mf, &exact_match_mask, mask);
+    }
+}
+
 /* Sets 'flow' member field described by 'mf' to 'value'.  The caller is
  * responsible for ensuring that 'flow' meets 'mf''s prerequisites.*/
 void

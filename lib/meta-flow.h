@@ -355,6 +355,7 @@ void mf_set_value(const struct mf_field *, const union mf_value *value,
 void mf_set_flow_value(const struct mf_field *, const union mf_value *value,
                        struct flow *);
 bool mf_is_zero(const struct mf_field *, const struct flow *);
+void mf_mask_field(const struct mf_field *, struct flow *);
 
 void mf_get(const struct mf_field *, const struct match *,
             union mf_value *value, union mf_value *mask);

@@ -36,6 +36,7 @@
 #include "openflow/openflow.h"
 #include "ovs-thread.h"
 #include "packets.h"
+#include "simap.h"
 #include "socket-util.h"
 #include "vconn.h"
 
@@ -1879,18 +1880,24 @@ parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *fsr,
 /* Parses a specification of a flow from 's' into 'flow'.  's' must take the
  * form FIELD=VALUE[,FIELD=VALUE]... where each FIELD is the name of a
  * mf_field.  Fields must be specified in a natural order for satisfying
- * prerequisites.
+ * prerequisites. If 'mask' is specified, fills the mask field for each of the
+ * field specified in flow. If the map, 'names_portno' is specfied, converts
+ * the in_port name into port no while setting the 'flow'.
  *
  * Returns NULL on success, otherwise a malloc()'d string that explains the
  * problem. */
 char *
-parse_ofp_exact_flow(struct flow *flow, const char *s)
+parse_ofp_exact_flow(struct flow *flow, struct flow *mask, const char *s,
+                     const struct simap *portno_names)
 {
     char *pos, *key, *value_s;
     char *error = NULL;
     char *copy;
 
     memset(flow, 0, sizeof *flow);
+    if (mask) {
+        memset(mask, 0, sizeof *mask);
+    }
 
     pos = copy = xstrdup(s);
     while (ofputil_parse_key_value(&pos, &key, &value_s)) {
@@ -1901,6 +1908,9 @@ parse_ofp_exact_flow(struct flow *flow, const char *s)
                 goto exit;
             }
             flow->dl_type = htons(p->dl_type);
+            if (mask) {
+                mask->dl_type = OVS_BE16_MAX;
+            }
 
             if (p->nw_proto) {
                 if (flow->nw_proto) {
@@ -1909,6 +1919,9 @@ parse_ofp_exact_flow(struct flow *flow, const char *s)
                     goto exit;
                 }
                 flow->nw_proto = p->nw_proto;
+                if (mask) {
+                    mask->nw_proto = UINT8_MAX;
+                }
             }
         } else {
             const struct mf_field *mf;
@@ -1932,15 +1945,28 @@ parse_ofp_exact_flow(struct flow *flow, const char *s)
                 goto exit;
             }
 
-            field_error = mf_parse_value(mf, value_s, &value);
-            if (field_error) {
-                error = xasprintf("%s: bad value for %s (%s)",
-                                  s, key, field_error);
-                free(field_error);
-                goto exit;
-            }
+            if (!strcmp(key, "in_port")
+                && portno_names
+                && simap_contains(portno_names, value_s)) {
+                flow->in_port.ofp_port = u16_to_ofp(
+                    simap_get(portno_names, value_s));
+                if (mask) {
+                    mask->in_port.ofp_port = u16_to_ofp(ntohs(OVS_BE16_MAX));
+                }
+            } else {
+                field_error = mf_parse_value(mf, value_s, &value);
+                if (field_error) {
+                    error = xasprintf("%s: bad value for %s (%s)",
+                                      s, key, field_error);
+                    free(field_error);
+                    goto exit;
+                }
 
-            mf_set_flow_value(mf, &value, flow);
+                mf_set_flow_value(mf, &value, flow);
+                if (mask) {
+                    mf_mask_field(mf, mask);
+                }
+            }
         }
     }
 
@@ -1953,6 +1979,9 @@ exit:
 
     if (error) {
         memset(flow, 0, sizeof *flow);
+        if (mask) {
+            memset(mask, 0, sizeof *mask);
+        }
     }
     return error;
 }

@@ -5201,7 +5201,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
             goto exit;
         }
         ds_put_format(&result, "Bridge: %s\n", ofproto->up.name);
-    } else if (!parse_ofp_exact_flow(&flow, argv[argc - 1])) {
+    } else if (!parse_ofp_exact_flow(&flow, NULL, argv[argc - 1], NULL)) {
         if (argc != 3) {
             unixctl_command_reply_error(conn, "Must specify bridge name");
             goto exit;
