@@ -134,10 +134,10 @@ AC_DEFUN([OVS_CHECK_LINUX], [
     AC_MSG_RESULT([$kversion])
 
     if test "$version" -ge 3; then
-       if test "$version" = 3 && test "$patchlevel" -le 10; then
+       if test "$version" = 3 && test "$patchlevel" -le 11; then
           : # Linux 3.x
        else
-         AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 3.10.x is not supported])
+         AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 3.11.x is not supported])
        fi
     else
        if test "$version" -le 1 || test "$patchlevel" -le 5 || test "$sublevel" -le 31; then

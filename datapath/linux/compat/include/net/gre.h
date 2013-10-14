@@ -74,12 +74,17 @@ static inline __be16 tnl_flags_to_gre_flags(__be16 tflags)
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0) */
 
 #define MAX_GRE_PROTO_PRIORITY 255
+#define gre_cisco_protocol rpl_gre_cisco_protocol
+
 struct gre_cisco_protocol {
 	int (*handler)(struct sk_buff *skb, const struct tnl_ptk_info *tpi);
 	u8 priority;
 };
 
+#define gre_cisco_register rpl_gre_cisco_register
 int gre_cisco_register(struct gre_cisco_protocol *proto);
+
+#define gre_cisco_unregister rpl_gre_cisco_unregister
 int gre_cisco_unregister(struct gre_cisco_protocol *proto);
 
 #define gre_build_header rpl_gre_build_header
@@ -89,6 +94,7 @@ void gre_build_header(struct sk_buff *skb, const struct tnl_ptk_info *tpi,
 #define gre_handle_offloads rpl_gre_handle_offloads
 struct sk_buff *gre_handle_offloads(struct sk_buff *skb, bool gre_csum);
 
+#define ip_gre_calc_hlen rpl_ip_gre_calc_hlen
 static inline int ip_gre_calc_hlen(__be16 o_flags)
 {
 	int addend = 4;

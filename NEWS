@@ -8,6 +8,7 @@ Post-v2.0.0
      * The OpenFlow 1.1+ "Write-Actions" instruction is now supported.
    - ovs-vswitchd.conf.db.5 man page will contain graphviz/dot
      diagram only if graphviz package was installed at the build time.
+   - Support for Linux kernels up to 3.11
 
 
 v2.0.0 - 15 Oct 2013

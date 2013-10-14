@@ -130,4 +130,11 @@ static inline struct net_device *netdev_master_upper_dev_get(struct net_device *
 int dev_queue_xmit(struct sk_buff *skb);
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,11,0)
+static inline struct net_device *netdev_notifier_info_to_dev(void *info)
+{
+	return info;
+}
+#endif
+
 #endif
