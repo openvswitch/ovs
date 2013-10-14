@@ -2459,7 +2459,6 @@ void
 ofpacts_format(const struct ofpact *ofpacts, size_t ofpacts_len,
                struct ds *string)
 {
-    ds_put_cstr(string, "actions=");
     if (!ofpacts_len) {
         ds_put_cstr(string, "drop");
     } else {

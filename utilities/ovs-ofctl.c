@@ -2113,7 +2113,7 @@ fte_version_format(const struct fte *fte, int index, struct ds *s)
         ds_put_format(s, " hard_timeout=%"PRIu16, version->hard_timeout);
     }
 
-    ds_put_char(s, ' ');
+    ds_put_cstr(s, " actions=");
     ofpacts_format(version->ofpacts, version->ofpacts_len, s);
 
     ds_put_char(s, '\n');
@@ -2795,6 +2795,7 @@ ofctl_parse_ofp10_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
         /* Print cls_rule. */
         ds_init(&s);
+        ds_put_cstr(&s, "actions=");
         ofpacts_format(ofpacts.data, ofpacts.size, &s);
         puts(ds_cstr(&s));
         ds_destroy(&s);
@@ -2981,6 +2982,7 @@ ofctl_parse_ofp11_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
         /* Print cls_rule. */
         ds_init(&s);
+        ds_put_cstr(&s, "actions=");
         ofpacts_format(ofpacts.data, ofpacts.size, &s);
         puts(ds_cstr(&s));
         ds_destroy(&s);
@@ -3056,6 +3058,7 @@ ofctl_parse_ofp11_instructions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
         /* Print cls_rule. */
         ds_init(&s);
+        ds_put_cstr(&s, "actions=");
         ofpacts_format(ofpacts.data, ofpacts.size, &s);
         puts(ds_cstr(&s));
         ds_destroy(&s);

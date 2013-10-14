@@ -185,7 +185,7 @@ ofp_print_packet_out(struct ds *string, const struct ofp_header *oh,
     ds_put_cstr(string, " in_port=");
     ofputil_format_port(po.in_port, string);
 
-    ds_put_char(string, ' ');
+    ds_put_cstr(string, " actions=");
     ofpacts_format(po.ofpacts, po.ofpacts_len, string);
 
     if (po.buffer_id == UINT32_MAX) {
@@ -850,6 +850,7 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh, int verbosity)
     }
     ofp_print_flow_flags(s, fm.flags);
 
+    ds_put_cstr(s, "actions=");
     ofpacts_format(fm.ofpacts, fm.ofpacts_len, s);
     ofpbuf_uninit(&ofpacts);
 }
@@ -1382,6 +1383,7 @@ ofp_print_flow_stats(struct ds *string, struct ofputil_flow_stats *fs)
         ds_put_char(string, ' ');
     }
 
+    ds_put_cstr(string, "actions=");
     ofpacts_format(fs->ofpacts, fs->ofpacts_len, string);
 }
 
@@ -2141,6 +2143,7 @@ ofp_print_nxst_flow_monitor_reply(struct ds *string,
             if (string->string[string->length - 1] != ' ') {
                 ds_put_char(string, ' ');
             }
+            ds_put_cstr(string, "actions=");
             ofpacts_format(update.ofpacts, update.ofpacts_len, string);
         }
     }
@@ -2210,6 +2213,7 @@ ofp_print_group(struct ds *s, uint32_t group_id, uint8_t type,
             ds_put_format(s, "watch_group:%"PRIu32",", bucket->watch_group);
         }
 
+        ds_put_cstr(s, "actions=");
         ofpacts_format(bucket->ofpacts, bucket->ofpacts_len, s);
     }
 }

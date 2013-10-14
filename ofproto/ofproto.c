@@ -3555,6 +3555,7 @@ flow_stats_ds(struct rule *rule, struct ds *results)
     cls_rule_format(&rule->cr, results);
     ds_put_char(results, ',');
 
+    ds_put_cstr(results, "actions=");
     ofpacts_format(actions->ofpacts, actions->ofpacts_len, results);
 
     ds_put_cstr(results, "\n");

@@ -5055,7 +5055,7 @@ trace_format_rule(struct ds *result, int level, const struct rule_dpif *rule)
     actions = rule_dpif_get_actions(rule);
 
     ds_put_char_multiple(result, '\t', level);
-    ds_put_cstr(result, "OpenFlow ");
+    ds_put_cstr(result, "OpenFlow actions=");
     ofpacts_format(actions->ofpacts, actions->ofpacts_len, result);
     ds_put_char(result, '\n');
 
