@@ -241,6 +241,7 @@ static long long int ofport_get_usage(const struct ofproto *,
                                       ofp_port_t ofp_port);
 static void ofport_set_usage(struct ofproto *, ofp_port_t ofp_port,
                              long long int last_used);
+static void ofport_remove_usage(struct ofproto *, ofp_port_t ofp_port);
 
 /* Ofport usage.
  *
@@ -1972,6 +1973,13 @@ alloc_ofp_port(struct ofproto *ofproto, const char *netdev_name)
             if (!last_used_at) {
                 port_idx = ofproto->alloc_port_no;
                 break;
+            } else if ( last_used_at < time_msec() - 60*60*1000) {
+                /* If the port with ofport 'ofproto->alloc_port_no' was deleted
+                 * more than an hour ago, consider it usable. */
+                ofport_remove_usage(ofproto,
+                    u16_to_ofp(ofproto->alloc_port_no));
+                port_idx = ofproto->alloc_port_no;
+                break;
             } else if (last_used_at < lru) {
                 lru = last_used_at;
                 lru_ofport = ofproto->alloc_port_no;
@@ -2252,6 +2260,20 @@ ofport_set_usage(struct ofproto *ofproto, ofp_port_t ofp_port,
     usage->last_used = last_used;
     hmap_insert(&ofproto->ofport_usage, &usage->hmap_node,
                 hash_ofp_port(ofp_port));
+}
+
+static void
+ofport_remove_usage(struct ofproto *ofproto, ofp_port_t ofp_port)
+{
+    struct ofport_usage *usage;
+    HMAP_FOR_EACH_IN_BUCKET (usage, hmap_node, hash_ofp_port(ofp_port),
+                             &ofproto->ofport_usage) {
+        if (usage->ofp_port == ofp_port) {
+            hmap_remove(&ofproto->ofport_usage, &usage->hmap_node);
+            free(usage);
+            break;
+        }
+    }
 }
 
 int
