@@ -42,7 +42,7 @@ case "$TYPE" in
 		retval=$?
 		ovs-vsctl -t ${TIMEOUT} -- --if-exists del-br "$DEVICE"
 		;;
-	OVSPort|OVSIntPort|OVSBond)
+	OVSPort|OVSIntPort|OVSBond|OVSTunnel)
 		${OTHERSCRIPT} ${CONFIG} $2
 		retval=$?
 		ovs-vsctl -t ${TIMEOUT} -- --if-exists del-port "$OVS_BRIDGE" "$DEVICE"

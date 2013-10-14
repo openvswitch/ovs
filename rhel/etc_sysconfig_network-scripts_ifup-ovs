@@ -117,6 +117,11 @@ case "$TYPE" in
 		${OTHERSCRIPT} ${CONFIG} ${2}
 		OVSINTF=${DEVICE} /sbin/ifup "$OVS_BRIDGE"
 		;;
+	OVSTunnel)
+		ifup_ovs_bridge
+		ovs-vsctl -t ${TIMEOUT} -- --may-exist add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS -- set Interface "$DEVICE" type=$OVS_TUNNEL_TYPE $OVS_TUNNEL_OPTIONS ${OVS_EXTRA+-- $OVS_EXTRA}
+		${OTHERSCRIPT} ${CONFIG} ${2}
+		;;
 	*)
 		echo $"Invalid OVS interface type $TYPE"
 		exit 1

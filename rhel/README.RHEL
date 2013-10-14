@@ -23,6 +23,8 @@ assignments.  The following OVS-specific variable names are supported:
 
         * "OVSBond", if <name> is an OVS bond.
 
+        * "OVSTunnel", if <name> is an OVS tunnel.
+
     - OVS_BRIDGE: If TYPE is anything other than "OVSBridge", set to
       the name of the OVS bridge to which the port should be attached.
 
@@ -38,6 +40,12 @@ assignments.  The following OVS-specific variable names are supported:
 
     - BOND_IFACES: For "OVSBond" interfaces, a list of physical
       interfaces to bond together.
+
+    - OVS_TUNNEL_TYPE: For "OVSTunnel" interfaces, the type of the tunnel.
+      For example, "gre", "vxlan", etc.
+
+    - OVS_TUNNEL_OPTIONS: For "OVSTunnel" interfaces, this field should be
+      used to specify the tunnel options like remote_ip, key, etc.
 
 Note
 ----
@@ -124,6 +132,17 @@ HOTPLUG=no
 DEVICE=gige-*
 ONBOOT=yes
 HOTPLUG=no
+
+An Open vSwitch Tunnel:
+
+==> ifcfg-gre0 <==
+DEVICE=ovs-gre0
+ONBOOT=yes
+DEVICETYPE=ovs
+TYPE=OVSTunnel
+OVS_BRIDGE=ovsbridge0
+OVS_TUNNEL_TYPE=gre
+OVS_TUNNEL_OPTIONS="options:remote_ip=A.B.C.D"
 
 Reporting Bugs
 --------------
