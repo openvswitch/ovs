@@ -1399,7 +1399,8 @@ generate_all_wildcard_mask(struct ofpbuf *ofp, const struct nlattr *key)
 
 /* Appends to 'ds' a string representation of the 'key_len' bytes of
  * OVS_KEY_ATTR_* attributes in 'key'. If non-null, additionally formats the
- * 'mask_len' bytes of 'mask' which apply to 'key'. */
+ * 'mask_len' bytes of 'mask' which apply to 'key'. If 'portno_names' is
+ * non-null and 'verbose' is true, translates odp port number to its name. */
 void
 odp_flow_format(const struct nlattr *key, size_t key_len,
                 const struct nlattr *mask, size_t mask_len,
