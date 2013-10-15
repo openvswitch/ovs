@@ -1021,6 +1021,46 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow)
     NOT_REACHED();
 }
 
+/* Set field and it's prerequisities in the mask.
+ * This is only ever called for writeable 'mf's, but we do not make the
+ * distinction here. */
+void
+mf_mask_field_and_prereqs(const struct mf_field *mf, struct flow *mask)
+{
+    static const union mf_value exact_match_mask = MF_EXACT_MASK_INITIALIZER;
+
+    mf_set_flow_value(mf, &exact_match_mask, mask);
+
+    switch (mf->prereqs) {
+    case MFP_ND:
+    case MFP_ND_SOLICIT:
+    case MFP_ND_ADVERT:
+        mask->tp_src = OVS_BE16_MAX;
+        mask->tp_dst = OVS_BE16_MAX;
+        /* Fall through. */
+    case MFP_TCP:
+    case MFP_UDP:
+    case MFP_SCTP:
+    case MFP_ICMPV4:
+    case MFP_ICMPV6:
+        mask->nw_proto = 0xff;
+        /* Fall through. */
+    case MFP_ARP:
+    case MFP_IPV4:
+    case MFP_IPV6:
+    case MFP_MPLS:
+    case MFP_IP_ANY:
+        mask->dl_type = OVS_BE16_MAX;
+        break;
+    case MFP_VLAN_VID:
+        mask->vlan_tci |= htons(VLAN_CFI);
+        break;
+    case MFP_NONE:
+        break;
+    }
+}
+
+
 /* Returns true if 'value' may be a valid value *as part of a masked match*,
  * false otherwise.
  *

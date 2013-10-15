@@ -297,14 +297,16 @@ struct mf_field {
 
 /* The representation of a field's value. */
 union mf_value {
-    uint8_t u8;
-    ovs_be16 be16;
-    ovs_be32 be32;
-    ovs_be64 be64;
-    uint8_t mac[ETH_ADDR_LEN];
     struct in6_addr ipv6;
+    uint8_t mac[ETH_ADDR_LEN];
+    ovs_be64 be64;
+    ovs_be32 be32;
+    ovs_be16 be16;
+    uint8_t u8;
 };
 BUILD_ASSERT_DECL(sizeof(union mf_value) == 16);
+
+#define MF_EXACT_MASK_INITIALIZER { IN6ADDR_EXACT_INIT }
 
 /* Part of a field. */
 struct mf_subfield {
@@ -341,7 +343,7 @@ void mf_get_mask(const struct mf_field *, const struct flow_wildcards *,
 
 /* Prerequisites. */
 bool mf_are_prereqs_ok(const struct mf_field *, const struct flow *);
-void mf_force_prereqs(const struct mf_field *, struct match *);
+void mf_mask_field_and_prereqs(const struct mf_field *, struct flow *mask);
 
 /* Field values. */
 bool mf_is_value_valid(const struct mf_field *, const union mf_value *value);
