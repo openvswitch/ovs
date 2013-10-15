@@ -272,7 +272,7 @@ AT_CHECK(
   [0], [stdout], [ignore], [test ! -e pid || kill `cat pid`])
 cat stdout >> output
 AT_CHECK_UNQUOTED(
-  [perl $srcdir/uuidfilt.pl output], [0], 
+  [cat output], [0],
   [[[{"rows":[{"private_key":"$PKIDIR/testpki-privkey2.pem"}]}]
 ]], [ignore], [test ! -e pid || kill `cat pid`])
 OVSDB_SERVER_SHUTDOWN
