@@ -33,6 +33,7 @@
 #include "shash.h"
 #include "socket-util.h"
 #include "unaligned.h"
+#include "util.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(meta_flow);
