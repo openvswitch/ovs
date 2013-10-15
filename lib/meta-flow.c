@@ -82,7 +82,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
         0, NULL,
         0, NULL,
     }, {
-        MFF_TUN_TOS, "tun_tos", NULL,
+        MFF_TUN_TTL, "tun_ttl", NULL,
         MF_FIELD_SIZES(u8),
         MFM_NONE,
         MFS_DECIMAL,
@@ -91,7 +91,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
         0, NULL,
         0, NULL,
     }, {
-        MFF_TUN_TTL, "tun_ttl", NULL,
+        MFF_TUN_TOS, "tun_tos", NULL,
         MF_FIELD_SIZES(u8),
         MFM_NONE,
         MFS_DECIMAL,
@@ -637,6 +637,7 @@ nxm_init(void)
     const struct mf_field *mf;
 
     for (mf = mf_fields; mf < &mf_fields[MFF_N_IDS]; mf++) {
+        ovs_assert(mf->id == mf - mf_fields);
         nxm_init_add_field(mf, mf->nxm_header);
         if (mf->oxm_header != mf->nxm_header) {
             nxm_init_add_field(mf, mf->oxm_header);
