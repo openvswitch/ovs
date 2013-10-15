@@ -412,7 +412,7 @@ AT_CHECK([test ! -e socket1])
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-remotes])
 AT_CLEANUP
 
-AT_SETUP([ovsdb-server/add-remote and remove-remote with --monitor])
+AT_SETUP([ovsdb-server/add-remote with --monitor])
 AT_KEYWORDS([ovsdb server positive])
 # Start ovsdb-server, initially with no remotes.
 OVS_RUNDIR=`pwd`; export OVS_RUNDIR
@@ -440,6 +440,25 @@ OVS_WAIT_WHILE([kill -0 `cat old.pid`])
 OVS_WAIT_UNTIL(
   [test -s ovsdb-server.pid && test `cat ovsdb-server.pid` != `cat old.pid`])
 OVS_WAIT_UNTIL([test -S socket1])
+AT_CLEANUP
+
+AT_SETUP([ovsdb-server/add-remote and remove-remote with --monitor])
+AT_KEYWORDS([ovsdb server positive])
+# Start ovsdb-server, initially with no remotes.
+OVS_RUNDIR=`pwd`; export OVS_RUNDIR
+OVS_LOGDIR=`pwd`; export OVS_LOGDIR
+ordinal_schema > schema
+AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
+ON_EXIT([kill `cat *.pid`])
+AT_CHECK([ovsdb-server -v -vvlog:off --monitor --detach --no-chdir --pidfile --log-file db])
+
+# Add a remote.
+AT_CHECK([test ! -e socket1])
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/add-remote punix:socket1])
+OVS_WAIT_UNTIL([test -S socket1])
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-remotes],
+  [0], [punix:socket1
+])
 
 # Remove the remote.
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/remove-remote punix:socket1])
