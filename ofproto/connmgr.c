@@ -1516,11 +1516,20 @@ static void
 schedule_packet_in(struct ofconn *ofconn, struct ofputil_packet_in pin)
 {
     struct connmgr *mgr = ofconn->connmgr;
+    uint16_t controller_max_len;
 
     pin.total_len = pin.packet_len;
 
-    /* Get OpenFlow buffer_id. */
     if (pin.reason == OFPR_ACTION) {
+        controller_max_len = pin.send_len;  /* max_len */
+    } else {
+        controller_max_len = ofconn->miss_send_len;
+    }
+
+    /* Get OpenFlow buffer_id.
+     * For OpenFlow 1.2+, OFPCML_NO_BUFFER (== UINT16_MAX) specifies
+     * unbuffered.  This behaviour doesn't violate prior versions, too. */
+    if (controller_max_len == UINT16_MAX) {
         pin.buffer_id = UINT32_MAX;
     } else if (mgr->fail_open && fail_open_is_active(mgr->fail_open)) {
         pin.buffer_id = pktbuf_get_null();
@@ -1531,15 +1540,13 @@ schedule_packet_in(struct ofconn *ofconn, struct ofputil_packet_in pin)
                                     pin.fmd.in_port);
     }
 
-    /* Figure out how much of the packet to send. */
-    if (pin.reason == OFPR_NO_MATCH) {
+    /* Figure out how much of the packet to send.
+     * If not buffered, send the entire packet.  Otherwise, depending on
+     * the reason of packet-in, send what requested by the controller. */
+    if (pin.buffer_id == UINT32_MAX) {
         pin.send_len = pin.packet_len;
     } else {
-        /* Caller should have initialized 'send_len' to 'max_len' specified in
-         * output action. */
-    }
-    if (pin.buffer_id != UINT32_MAX) {
-        pin.send_len = MIN(pin.send_len, ofconn->miss_send_len);
+        pin.send_len = MIN(pin.packet_len, controller_max_len);
     }
 
     /* Make OFPT_PACKET_IN and hand over to packet scheduler.  It might
