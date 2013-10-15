@@ -25,8 +25,11 @@ openvswitch (2.0.0-1) unstable; urgency=low
       * New "ofp-parse" for printing OpenFlow messages read from a file.
     - Added configurable flow caching support to IPFIX exporter.
     - Dropped support for Linux pre-2.6.32.
+    - Log file timestamps and ovsdb commit timestamps are now reported
+      with millisecond resolution.  (Previous versions only reported
+      whole seconds.)
 
- -- Open vSwitch team <dev@openvswitch.org>  Wed, 28 Aug 2013 16:11:32 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Tue, 15 Oct 2013 15:03:42 -0700
 
 openvswitch (1.11.0-1) unstable; urgency=low
    [ Open vSwitch team ]
