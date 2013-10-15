@@ -40,6 +40,7 @@ def main(argv):
     if error:
         sys.stderr.write("%s: bind failed (%s)" % (sockname1,
                                                    os.strerror(error)))
+        sys.exit(1)
     sock1.listen(1)
 
     # Connect to 'sockname2' (which should be the same file, perhaps under a
@@ -49,6 +50,7 @@ def main(argv):
     if error:
         sys.stderr.write("%s: connect failed (%s)" % (sockname2,
                                                       os.strerror(error)))
+        sys.exit(1)
 
 if __name__ == '__main__':
     main(sys.argv)
