@@ -8,7 +8,7 @@ Post-v2.0.0
      * The OpenFlow 1.1+ "Write-Actions" instruction is now supported.
 
 
-v2.0.0 - xx xxx xxxx
+v2.0.0 - 15 Oct 2013
 ---------------------
     - OpenFlow:
       * Experimental support for OpenFlow 1.1 (in addition to 1.2 and
