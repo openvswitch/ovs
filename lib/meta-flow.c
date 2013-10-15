@@ -91,7 +91,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
         OFPUTIL_P_NONE,
         OFPUTIL_P_NONE,
     }, {
-        MFF_TUN_TOS, "tun_tos", NULL,
+        MFF_TUN_TTL, "tun_ttl", NULL,
         MF_FIELD_SIZES(u8),
         MFM_NONE,
         MFS_DECIMAL,
@@ -102,7 +102,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
         OFPUTIL_P_NONE,
         OFPUTIL_P_NONE,
     }, {
-        MFF_TUN_TTL, "tun_ttl", NULL,
+        MFF_TUN_TOS, "tun_tos", NULL,
         MF_FIELD_SIZES(u8),
         MFM_NONE,
         MFS_DECIMAL,
@@ -760,11 +760,15 @@ nxm_init_add_field(const struct mf_field *mf, uint32_t header)
 static void
 nxm_do_init(void)
 {
-    const struct mf_field *mf;
+    int i;
 
     hmap_init(&all_fields);
     shash_init(&mf_by_name);
-    for (mf = mf_fields; mf < &mf_fields[MFF_N_IDS]; mf++) {
+    for (i = 0; i < MFF_N_IDS; i++) {
+        const struct mf_field *mf = &mf_fields[i];
+
+        ovs_assert(mf->id == i); /* Fields must be in the enum order. */
+
         nxm_init_add_field(mf, mf->nxm_header);
         if (mf->oxm_header != mf->nxm_header) {
             nxm_init_add_field(mf, mf->oxm_header);
