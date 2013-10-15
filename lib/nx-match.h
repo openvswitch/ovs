@@ -85,7 +85,8 @@ void nxm_reg_load_to_nxast(const struct ofpact_reg_load *,
 
 void nxm_execute_reg_move(const struct ofpact_reg_move *, struct flow *,
                           struct flow_wildcards *);
-void nxm_execute_reg_load(const struct ofpact_reg_load *, struct flow *);
+void nxm_execute_reg_load(const struct ofpact_reg_load *, struct flow *,
+                          struct flow_wildcards *);
 void nxm_reg_load(const struct mf_subfield *, uint64_t src_data,
                   struct flow *, struct flow_wildcards *);
 

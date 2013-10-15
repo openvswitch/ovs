@@ -2283,6 +2283,8 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
     struct flow *flow = &ctx->xin->flow;
     const struct ofpact *a;
 
+    /* dl_type already in the mask, not set below. */
+
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
         struct ofpact_controller *controller;
         const struct ofpact_metadata *metadata;
@@ -2349,40 +2351,40 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_SET_IPV4_SRC:
-            memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
             if (flow->dl_type == htons(ETH_TYPE_IP)) {
+                memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
                 flow->nw_src = ofpact_get_SET_IPV4_SRC(a)->ipv4;
             }
             break;
 
         case OFPACT_SET_IPV4_DST:
-            memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
             if (flow->dl_type == htons(ETH_TYPE_IP)) {
+                memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
                 flow->nw_dst = ofpact_get_SET_IPV4_DST(a)->ipv4;
             }
             break;
 
         case OFPACT_SET_IPV4_DSCP:
-            wc->masks.nw_tos |= IP_DSCP_MASK;
             /* OpenFlow 1.0 only supports IPv4. */
             if (flow->dl_type == htons(ETH_TYPE_IP)) {
+                wc->masks.nw_tos |= IP_DSCP_MASK;
                 flow->nw_tos &= ~IP_DSCP_MASK;
                 flow->nw_tos |= ofpact_get_SET_IPV4_DSCP(a)->dscp;
             }
             break;
 
         case OFPACT_SET_L4_SRC_PORT:
-            memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
-            memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
             if (is_ip_any(flow)) {
+                memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
+                memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
                 flow->tp_src = htons(ofpact_get_SET_L4_SRC_PORT(a)->port);
             }
             break;
 
         case OFPACT_SET_L4_DST_PORT:
-            memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
-            memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
             if (is_ip_any(flow)) {
+                memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
+                memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
                 flow->tp_dst = htons(ofpact_get_SET_L4_DST_PORT(a)->port);
             }
             break;
@@ -2408,7 +2410,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_REG_LOAD:
-            nxm_execute_reg_load(ofpact_get_REG_LOAD(a), flow);
+            nxm_execute_reg_load(ofpact_get_REG_LOAD(a), flow, wc);
             break;
 
         case OFPACT_STACK_PUSH:

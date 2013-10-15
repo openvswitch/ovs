@@ -1308,13 +1308,11 @@ void
 nxm_execute_reg_move(const struct ofpact_reg_move *move,
                      struct flow *flow, struct flow_wildcards *wc)
 {
-    union mf_subvalue mask_value;
     union mf_value src_value;
     union mf_value dst_value;
 
-    memset(&mask_value, 0xff, sizeof mask_value);
-    mf_write_subfield_flow(&move->dst, &mask_value, &wc->masks);
-    mf_write_subfield_flow(&move->src, &mask_value, &wc->masks);
+    mf_mask_field_and_prereqs(move->dst.field, &wc->masks);
+    mf_mask_field_and_prereqs(move->src.field, &wc->masks);
 
     mf_get_value(move->dst.field, flow, &dst_value);
     mf_get_value(move->src.field, flow, &src_value);
@@ -1325,8 +1323,33 @@ nxm_execute_reg_move(const struct ofpact_reg_move *move,
 }
 
 void
-nxm_execute_reg_load(const struct ofpact_reg_load *load, struct flow *flow)
+nxm_execute_reg_load(const struct ofpact_reg_load *load, struct flow *flow,
+                     struct flow_wildcards *wc)
 {
+    /* Since at the datapath interface we do not have set actions for
+     * individual fields, but larger sets of fields for a given protocol
+     * layer, the set action will in practice only ever apply to exactly
+     * matched flows for the given protocol layer.  For example, if the
+     * reg_load changes the IP TTL, the corresponding datapath action will
+     * rewrite also the IP addresses and TOS byte.  Since these other field
+     * values may not be explicitly set, they depend on the incoming flow field
+     * values, and are hence all of them are set in the wildcards masks, when
+     * the action is committed to the datapath.  For the rare case, where the
+     * reg_load action does not actually change the value, and no other flow
+     * field values are set (or loaded), the datapath action is skipped, and
+     * no mask bits are set.  Such a datapath flow should, however, be
+     * dependent on the specific field value, so the corresponding wildcard
+     * mask bits must be set, lest the datapath flow be applied to packets
+     * containing some other value in the field and the field value remain
+     * unchanged regardless of the incoming value.
+     *
+     * We set the masks here for the whole fields, and their prerequisities.
+     * Even if only the lower byte of a TCP destination port is set,
+     * we set the mask for the whole field, and also the ip_proto in the IP
+     * header, so that the kernel flow would not be applied on, e.g., a UDP
+     * packet, or any other IP protocol in addition to TCP packets.
+     */
+    mf_mask_field_and_prereqs(load->dst.field, &wc->masks);
     mf_write_subfield_flow(&load->dst, &load->subvalue, flow);
 }
 
