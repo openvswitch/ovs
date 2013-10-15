@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,6 @@
 #include "shash.h"
 #include "socket-util.h"
 #include "unaligned.h"
-#include "util.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(meta_flow);
@@ -598,7 +597,7 @@ nxm_init(void)
     const struct mf_field *mf;
 
     for (mf = mf_fields; mf < &mf_fields[MFF_N_IDS]; mf++) {
-        ovs_assert(mf->id == mf - mf_fields);
+        assert(mf->id == mf - mf_fields);
         nxm_init_add_field(mf, mf->nxm_header);
         if (mf->oxm_header != mf->nxm_header) {
             nxm_init_add_field(mf, mf->oxm_header);
