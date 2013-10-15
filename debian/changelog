@@ -1,6 +1,9 @@
 openvswitch (2.0.0-1) unstable; urgency=low
    [ Open vSwitch team ]
    * New upstream version
+    - The ovs-vswitchd process is no longer single-threaded.  Multiple
+      threads are now used to handle flow set up and asynchronous
+      logging.
     - OpenFlow:
       * Experimental support for OpenFlow 1.1 (in addition to 1.2 and
         1.3, which had experimental support in 1.10).
