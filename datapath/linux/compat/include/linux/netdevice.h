@@ -118,6 +118,11 @@ static inline void netdev_upper_dev_unlink(struct net_device *dev,
 					   struct net_device *upper_dev)
 {
 }
+
+static inline struct net_device *netdev_master_upper_dev_get(struct net_device *dev)
+{
+	return NULL;
+}
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
