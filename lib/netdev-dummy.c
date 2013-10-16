@@ -470,6 +470,11 @@ netdev_dummy_rx_recv(struct netdev_rx *rx_, void *buffer, size_t size)
     if (packet->size <= size) {
         memcpy(buffer, packet->data, packet->size);
         retval = packet->size;
+
+        ovs_mutex_lock(&netdev->mutex);
+        netdev->stats.rx_packets++;
+        netdev->stats.rx_bytes += packet->size;
+        ovs_mutex_unlock(&netdev->mutex);
     } else {
         retval = -EMSGSIZE;
     }
@@ -870,8 +875,6 @@ netdev_dummy_receive(struct unixctl_conn *conn,
         }
 
         ovs_mutex_lock(&dummy_dev->mutex);
-        dummy_dev->stats.rx_packets++;
-        dummy_dev->stats.rx_bytes += packet->size;
         netdev_dummy_queue_packet(dummy_dev, packet);
         ovs_mutex_unlock(&dummy_dev->mutex);
     }
