@@ -23,10 +23,6 @@ struct bfd;
 struct cfm;
 struct ofport_dpif;
 
-void ofproto_dpif_monitor_run(void);
-void ofproto_dpif_monitor_run_fast(void);
-void ofproto_dpif_monitor_wait(void);
-
 void ofproto_dpif_monitor_port_update(const struct ofport_dpif *,
                                       struct bfd *, struct cfm *,
                                       uint8_t[OFP_ETH_ALEN]);

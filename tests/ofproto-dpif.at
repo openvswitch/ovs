@@ -2937,6 +2937,76 @@ AT_CHECK([ovs-appctl bond/show | sed -n '/^.*may_enable:.*/p'], [0], [dnl
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - ofproto-dpif-monitor 1])
+OVS_VSWITCHD_START([add-port br0 p0 -- set interface p0 type=gre options:remote_ip=1.2.3.4])
+
+# enable bfd on p0.
+AT_CHECK([ovs-vsctl set interface p0 bfd:enable=true])
+# check log.
+AT_CHECK([sed -n "s/^.*|ofproto_dpif_monitor(monitor)|INFO|\(.* created\)$/\1/p" ovs-vswitchd.log], [0], [dnl
+monitor thread created
+])
+# disable bfd on p0.
+AT_CHECK([ovs-vsctl set interface p0 bfd:enable=false])
+# check log.
+AT_CHECK([sed -n "s/^.*|ofproto_dpif_monitor(monitor)|INFO|\(.* terminated\)$/\1/p" ovs-vswitchd.log], [0], [dnl
+monitor thread terminated
+])
+AT_CHECK([cat ovs-vswitchd.log | sed -e '/^.*ofproto_dpif_monitor.*$/d' > ovs-vswitchd.log])
+
+# enable cfm on p0.
+AT_CHECK([ovs-vsctl set interface p0 cfm_mpid=10])
+# check log.
+AT_CHECK([sed -n "s/^.*|ofproto_dpif_monitor(monitor)|INFO|\(.* created\)$/\1/p" ovs-vswitchd.log], [0], [dnl
+monitor thread created
+])
+# disable cfm on p0.
+AT_CHECK([ovs-vsctl remove interface p0 cfm_mpid 10])
+# check log.
+AT_CHECK([sed -n "s/^.*|ofproto_dpif_monitor(monitor)|INFO|\(.* terminated\)$/\1/p" ovs-vswitchd.log], [0], [dnl
+monitor thread terminated
+])
+AT_CHECK([cat ovs-vswitchd.log | sed -e '/^.*ofproto_dpif_monitor.*$/d' > ovs-vswitchd.log])
+
+# enable both bfd and cfm on p0.
+AT_CHECK([ovs-vsctl set interface p0 bfd:enable=true cfm_mpid=10])
+# check log.
+AT_CHECK([sed -n "s/^.*|ofproto_dpif_monitor(monitor)|INFO|\(.* created\)$/\1/p" ovs-vswitchd.log], [0], [dnl
+monitor thread created
+])
+# disable bfd on p0.
+AT_CHECK([ovs-vsctl set interface p0 bfd:enable=false])
+# check log, there should not be the log of thread terminated.
+AT_CHECK([sed -n "s/^.*|ofproto_dpif_monitor(monitor)|INFO|\(.* terminated\)$/\1/p" ovs-vswitchd.log], [0], [dnl
+])
+# reenable bfd on p0.
+AT_CHECK([ovs-vsctl set interface p0 bfd:enable=true])
+# check log, should still be on log of thread created.
+AT_CHECK([sed -n "s/^.*|ofproto_dpif_monitor(monitor)|INFO|\(.* created\)$/\1/p" ovs-vswitchd.log], [0], [dnl
+monitor thread created
+])
+# disable bfd and cfm together.
+AT_CHECK([ovs-vsctl set interface p0 bfd:enable=false -- remove interface p0 cfm_mpid 10])
+# check log.
+AT_CHECK([sed -n "s/^.*|ofproto_dpif_monitor(monitor)|INFO|\(.* terminated\)$/\1/p" ovs-vswitchd.log], [0], [dnl
+monitor thread terminated
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+# this test helps avoid the deadlock between the main thread and monitor thread.
+AT_SETUP([ofproto-dpif - ofproto-dpif-monitor 2])
+OVS_VSWITCHD_START
+
+for i in `seq 1 199`
+do
+    AT_CHECK([ovs-vsctl add-port br0 p$i -- set interface p$i type=gre options:remote_ip=1.2.3.4 options:key=$i bfd:enable=true])
+done
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
 
 AT_BANNER([ofproto-dpif - flow translation resource limits])
 

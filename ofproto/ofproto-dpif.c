@@ -1445,7 +1445,6 @@ run_fast(struct ofproto *ofproto_)
         free(pin);
     }
 
-    ofproto_dpif_monitor_run_fast();
     return 0;
 }
 
@@ -1486,9 +1485,6 @@ run(struct ofproto *ofproto_)
     if (ofproto->ipfix) {
         dpif_ipfix_run(ofproto->ipfix);
     }
-
-    ofproto_dpif_monitor_run_fast();
-    ofproto_dpif_monitor_run();
 
     HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
         port_run(ofport);
@@ -1546,7 +1542,6 @@ wait(struct ofproto *ofproto_)
     if (ofproto->ipfix) {
         dpif_ipfix_wait(ofproto->ipfix);
     }
-    ofproto_dpif_monitor_wait();
     HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
         bundle_wait(bundle);
     }
