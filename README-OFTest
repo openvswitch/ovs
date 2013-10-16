@@ -50,6 +50,13 @@ default) and enable verbose logging:
 
     make check-oftest OFT=<oft-binary> OFTFLAGS='--verbose -T basic.Echo'
 
+If you use OFTest that does not include commit 4d1f3eb2c792 (oft:
+change default port to 6653), merged into the OFTest repository in
+October 2013, then you need to add an option to use the IETF-assigned
+controller port:
+
+    make check-oftest OFT=<oft-binary> OFTFLAGS='--port=6653'
+
 Interpreting OFTest Results
 ---------------------------
 

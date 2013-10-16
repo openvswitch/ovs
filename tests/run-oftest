@@ -74,7 +74,7 @@ for port in p1 p2 p3 p4; do
                                options:pstream=punix:$OVS_RUNDIR/$port
 done
 run ovs-vsctl \
-    -- set-controller br0 tcp:127.0.0.1 \
+    -- set-controller br0 tcp:127.0.0.1:6653 \
     -- set controller br0 connection-mode=out-of-band max-backoff=1000
 
 # Run OFTest.
