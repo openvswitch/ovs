@@ -1092,7 +1092,7 @@ ofpacts_from_openflow11_for_action_set(const union ofp_action *in,
     struct ofpact *a;
     size_t start = out->size;
 
-    error = ofpacts_from_openflow(in, n_in, out, ofpact_from_openflow11);
+    error = ofpacts_from_openflow11(in, n_in, out);
     if (error) {
         return error;
     }
