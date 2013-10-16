@@ -35,6 +35,19 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 /* Converting OpenFlow 1.0 to ofpacts. */
 
+union ofp_action {
+    ovs_be16 type;
+    struct ofp_action_header header;
+    struct ofp_action_vendor_header vendor;
+    struct ofp10_action_output output10;
+    struct ofp_action_vlan_vid vlan_vid;
+    struct ofp_action_vlan_pcp vlan_pcp;
+    struct ofp_action_nw_addr nw_addr;
+    struct ofp_action_nw_tos nw_tos;
+    struct ofp_action_tp_port tp_port;
+};
+OFP_ASSERT(sizeof(union ofp_action) == 8);
+
 static enum ofperr
 output_from_openflow10(const struct ofp10_action_output *oao,
                        struct ofpbuf *out)

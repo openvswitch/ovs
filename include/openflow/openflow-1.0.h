@@ -201,19 +201,6 @@ struct ofp10_action_enqueue {
 };
 OFP_ASSERT(sizeof(struct ofp10_action_enqueue) == 16);
 
-union ofp_action {
-    ovs_be16 type;
-    struct ofp_action_header header;
-    struct ofp_action_vendor_header vendor;
-    struct ofp10_action_output output10;
-    struct ofp_action_vlan_vid vlan_vid;
-    struct ofp_action_vlan_pcp vlan_pcp;
-    struct ofp_action_nw_addr nw_addr;
-    struct ofp_action_nw_tos nw_tos;
-    struct ofp_action_tp_port tp_port;
-};
-OFP_ASSERT(sizeof(union ofp_action) == 8);
-
 /* Send packet (controller -> datapath). */
 struct ofp10_packet_out {
     ovs_be32 buffer_id;           /* ID assigned by datapath or UINT32_MAX. */

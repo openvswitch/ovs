@@ -30,6 +30,7 @@
 #include "type-props.h"
 
 struct ofpbuf;
+union ofp_action;
 
 /* Port numbers. */
 enum ofperr ofputil_port_from_ofp11(ovs_be32 ofp11_port,
