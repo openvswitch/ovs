@@ -296,8 +296,8 @@ ofputil_pull_ofp11_match(struct ofpbuf *buf, struct match *match,
     }
 }
 
-/* Converts the ofp11_match in 'match' into a struct match in 'match.  Returns
- * 0 if successful, otherwise an OFPERR_* value. */
+/* Converts the ofp11_match in 'ofmatch' into a struct match in 'match'.
+ * Returns 0 if successful, otherwise an OFPERR_* value. */
 enum ofperr
 ofputil_match_from_ofp11_match(const struct ofp11_match *ofmatch,
                                struct match *match)
