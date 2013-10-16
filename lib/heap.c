@@ -65,7 +65,7 @@ heap_swap(struct heap *a, struct heap *b)
  *
  * This takes time O(lg n). */
 void
-heap_insert(struct heap *heap, struct heap_node *node, uint32_t priority)
+heap_insert(struct heap *heap, struct heap_node *node, uint64_t priority)
 {
     heap_raw_insert(heap, node, priority);
     float_up(heap, node->idx);
@@ -89,7 +89,7 @@ heap_remove(struct heap *heap, struct heap_node *node)
  *
  * This takes time O(lg n). */
 void
-heap_change(struct heap *heap, struct heap_node *node, uint32_t priority)
+heap_change(struct heap *heap, struct heap_node *node, uint64_t priority)
 {
     heap_raw_change(node, priority);
     float_up_or_down(heap, node->idx);
@@ -104,7 +104,7 @@ heap_change(struct heap *heap, struct heap_node *node, uint32_t priority)
  *
  * This takes time O(1). */
 void
-heap_raw_insert(struct heap *heap, struct heap_node *node, uint32_t priority)
+heap_raw_insert(struct heap *heap, struct heap_node *node, uint64_t priority)
 {
     if (heap->n >= heap->allocated) {
         heap->allocated = heap->n == 0 ? 1 : 2 * heap->n;
