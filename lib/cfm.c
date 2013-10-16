@@ -580,11 +580,26 @@ cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
 void
 cfm_wait(struct cfm *cfm) OVS_EXCLUDED(mutex)
 {
-    ovs_mutex_lock(&mutex);
-    timer_wait(&cfm->tx_timer);
-    timer_wait(&cfm->fault_timer);
-    ovs_mutex_unlock(&mutex);
+    poll_timer_wait_until(cfm_wake_time(cfm));
 }
+
+
+/* Returns the next cfm wakeup time. */
+long long int
+cfm_wake_time(struct cfm *cfm) OVS_EXCLUDED(mutex)
+{
+    long long int retval;
+
+    if (!cfm) {
+        return LLONG_MAX;
+    }
+
+    ovs_mutex_lock(&mutex);
+    retval = MIN(cfm->tx_timer.t, cfm->fault_timer.t);
+    ovs_mutex_unlock(&mutex);
+    return retval;
+}
+
 
 /* Configures 'cfm' with settings from 's'. */
 bool
