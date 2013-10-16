@@ -446,16 +446,30 @@ bfd_unref(struct bfd *bfd) OVS_EXCLUDED(mutex)
 void
 bfd_wait(const struct bfd *bfd) OVS_EXCLUDED(mutex)
 {
-    ovs_mutex_lock(&mutex);
-    if (bfd->flags & FLAG_FINAL) {
-        poll_immediate_wake();
+    poll_timer_wait_until(bfd_wake_time(bfd));
+}
+
+/* Returns the next wake up time. */
+long long int
+bfd_wake_time(const struct bfd *bfd) OVS_EXCLUDED(mutex)
+{
+    long long int retval;
+
+    if (!bfd) {
+        return LLONG_MAX;
     }
 
-    poll_timer_wait_until(bfd->next_tx);
-    if (bfd->state > STATE_DOWN) {
-        poll_timer_wait_until(bfd->detect_time);
+    ovs_mutex_lock(&mutex);
+    if (bfd->flags & FLAG_FINAL) {
+        retval = 0;
+    } else {
+        retval = bfd->next_tx;
+        if (bfd->state > STATE_DOWN) {
+            retval = MIN(bfd->detect_time, retval);
+        }
     }
     ovs_mutex_unlock(&mutex);
+    return retval;
 }
 
 void
