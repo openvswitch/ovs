@@ -34,7 +34,7 @@ vswitchd/vswitch.gv: ovsdb/ovsdb-dot.in vswitchd/vswitch.ovsschema
 vswitchd/vswitch.pic: vswitchd/vswitch.gv ovsdb/dot2pic
 	(dot -T plain < vswitchd/vswitch.gv | $(srcdir)/ovsdb/dot2pic -f 3) > $@;
 VSWITCH_PIC = vswitchd/vswitch.pic
-OVSDB_DOT_DIAGRAM_ARG = --er-diagram=$(VSWITCH_PIC)
+VSWITCH_DOT_DIAGRAM_ARG = --er-diagram=$(VSWITCH_PIC)
 DISTCLEANFILES += vswitchd/vswitch.gv vswitchd/vswitch.pic
 endif
 endif
@@ -48,7 +48,7 @@ vswitchd/ovs-vswitchd.conf.db.5: \
 	$(VSWITCH_PIC)
 	$(OVSDB_DOC) \
 		--title="ovs-vswitchd.conf.db" \
-		$(OVSDB_DOT_DIAGRAM_ARG) \
+		$(VSWITCH_DOT_DIAGRAM_ARG) \
 		--version=$(VERSION) \
 		$(srcdir)/vswitchd/vswitch.ovsschema \
 		$(srcdir)/vswitchd/vswitch.xml > $@.tmp
