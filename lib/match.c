@@ -110,6 +110,10 @@ match_wc_init(struct match *match, const struct flow *flow)
 
         if (flow->nw_frag) {
             memset(&wc->masks.nw_frag, 0xff, sizeof wc->masks.nw_frag);
+            if (flow->nw_frag & FLOW_NW_FRAG_LATER) {
+                /* No transport layer header in later fragments. */
+                return;
+            }
         }
 
         if (flow->nw_proto == IPPROTO_ICMP ||
@@ -126,15 +130,6 @@ match_wc_init(struct match *match, const struct flow *flow)
     }
 
     return;
-}
-
-/* Converts the flow in 'flow' into an exact-match match in 'match'. */
-void
-match_init_exact(struct match *match, const struct flow *flow)
-{
-    match->flow = *flow;
-    match->flow.skb_priority = 0;
-    flow_wildcards_init_exact(&match->wc);
 }
 
 /* Initializes 'match' as a "catch-all" match that matches every packet. */

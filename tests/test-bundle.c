@@ -23,7 +23,6 @@
 #include "flow.h"
 #include "ofp-actions.h"
 #include "ofpbuf.h"
-#include "random.h"
 
 #include "util.h"
 
@@ -116,7 +115,6 @@ main(int argc, char *argv[])
     int old_active;
 
     set_program_name(argv[0]);
-    random_init();
 
     if (argc != 2) {
         ovs_fatal(0, "usage: %s bundle_action", program_name);
@@ -140,7 +138,7 @@ main(int argc, char *argv[])
     /* Generate flows. */
     flows = xmalloc(N_FLOWS * sizeof *flows);
     for (i = 0; i < N_FLOWS; i++) {
-        random_bytes(&flows[i], sizeof flows[i]);
+        flow_random_hash_fields(&flows[i]);
         flows[i].regs[0] = ofp_to_u16(OFPP_NONE);
     }
 

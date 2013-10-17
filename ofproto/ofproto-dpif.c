@@ -4628,9 +4628,7 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto,
         cls_rule = classifier_lookup(cls, &ofpc_normal_flow, wc);
     } else if (frag && ofproto->up.frag_handling == OFPC_FRAG_DROP) {
         cls_rule = &ofproto->drop_frags_rule->up.cr;
-        if (wc) {
-            flow_wildcards_init_exact(wc);
-        }
+        /* Frag mask in wc already set above. */
     } else {
         cls_rule = classifier_lookup(cls, flow, wc);
     }

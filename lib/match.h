@@ -38,7 +38,6 @@ void match_init(struct match *,
                 const struct flow *, const struct flow_wildcards *);
 void match_wc_init(struct match *match, const struct flow *flow);
 void match_init_catchall(struct match *);
-void match_init_exact(struct match *, const struct flow *);
 
 void match_zero_wildcarded_fields(struct match *);
 

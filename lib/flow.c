@@ -35,6 +35,7 @@
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "packets.h"
+#include "random.h"
 #include "unaligned.h"
 
 COVERAGE_DEFINE(flow_extract);
@@ -602,14 +603,6 @@ flow_wildcards_init_catchall(struct flow_wildcards *wc)
     memset(&wc->masks, 0, sizeof wc->masks);
 }
 
-/* Initializes 'wc' as an exact-match set of wildcards; that is, 'wc' does not
- * wildcard any bits or fields. */
-void
-flow_wildcards_init_exact(struct flow_wildcards *wc)
-{
-    memset(&wc->masks, 0xff, sizeof wc->masks);
-}
-
 /* Returns true if 'wc' matches every packet, false if 'wc' fixes any bits or
  * fields. */
 bool
@@ -797,6 +790,46 @@ flow_hash_symmetric_l4(const struct flow *flow, uint32_t basis)
         }
     }
     return jhash_bytes(&fields, sizeof fields, basis);
+}
+
+/* Initialize a flow with random fields that matter for nx_hash_fields. */
+void
+flow_random_hash_fields(struct flow *flow)
+{
+    uint16_t rnd = random_uint16();
+
+    /* Initialize to all zeros. */
+    memset(flow, 0, sizeof *flow);
+
+    eth_addr_random(flow->dl_src);
+    eth_addr_random(flow->dl_dst);
+
+    flow->vlan_tci = (OVS_FORCE ovs_be16) (random_uint16() & VLAN_VID_MASK);
+
+    /* Make most of the random flows IPv4, some IPv6, and rest random. */
+    flow->dl_type = rnd < 0x8000 ? htons(ETH_TYPE_IP) :
+        rnd < 0xc000 ? htons(ETH_TYPE_IPV6) : (OVS_FORCE ovs_be16)rnd;
+
+    if (dl_type_is_ip_any(flow->dl_type)) {
+        if (flow->dl_type == htons(ETH_TYPE_IP)) {
+            flow->nw_src = (OVS_FORCE ovs_be32)random_uint32();
+            flow->nw_dst = (OVS_FORCE ovs_be32)random_uint32();
+        } else {
+            random_bytes(&flow->ipv6_src, sizeof flow->ipv6_src);
+            random_bytes(&flow->ipv6_dst, sizeof flow->ipv6_dst);
+        }
+        /* Make most of IP flows TCP, some UDP or SCTP, and rest random. */
+        rnd = random_uint16();
+        flow->nw_proto = rnd < 0x8000 ? IPPROTO_TCP :
+            rnd < 0xc000 ? IPPROTO_UDP :
+            rnd < 0xd000 ? IPPROTO_SCTP : (uint8_t)rnd;
+        if (flow->nw_proto == IPPROTO_TCP ||
+            flow->nw_proto == IPPROTO_UDP ||
+            flow->nw_proto == IPPROTO_SCTP) {
+            flow->tp_src = (OVS_FORCE ovs_be16)random_uint16();
+            flow->tp_dst = (OVS_FORCE ovs_be16)random_uint16();
+        }
+    }
 }
 
 /* Masks the fields in 'wc' that are used by the flow hash 'fields'. */

@@ -109,7 +109,8 @@ sub output {
 
     # Compose packet.
     my $packet = '';
-    my $wildcards = 0;
+    my $wildcards = 1 << 5 | 1 << 6 | 1 << 7 | 32 << 8 | 32 << 14 | 1 << 21;
+
     $packet .= pack_ethaddr($flow{DL_DST});
     $packet .= pack_ethaddr($flow{DL_SRC});
     if ($flow{DL_VLAN} != 0xffff) {
@@ -139,6 +140,7 @@ sub output {
                           0,               # checksum
                           0x0a00020f,      # source
                           0xc0a80114);     # dest
+            $wildcards &= ~( 1 << 5 | 63 << 8 | 63 << 14 | 1 << 21);
             if ($attrs{IP_OPTIONS} eq 'yes') {
                 substr($ip, 0, 1) = pack('C', (4 << 4) | 8);
                 $ip .= pack('CCnnnCCCx',
@@ -151,6 +153,7 @@ sub output {
                             2,
                             3);
             }
+
             if ($attrs{IP_FRAGMENT} ne 'no') {
                 my (%frag_map) = ('first' => 0x2000, # more frags, ofs 0
                                   'middle' => 0x2111, # more frags, ofs 0x888
@@ -158,39 +161,43 @@ sub output {
                 substr($ip, 6, 2)
                   = pack('n', $frag_map{$attrs{IP_FRAGMENT}});
             }
-
-            if ($attrs{TP_PROTO} =~ '^TCP') {
-                my $tcp = pack('nnNNnnnn',
-                               $flow{TP_SRC},     # source port
-                               $flow{TP_DST},     # dest port
-                               87123455,          # seqno
-                               712378912,         # ackno
-                               (5 << 12) | 0x02 | 0x10, # hdrlen, SYN, ACK
-                               5823,                    # window size
-                               18923,                   # checksum
-                               12893); # urgent pointer
-                if ($attrs{TP_PROTO} eq 'TCP+options') {
-                    substr($tcp, 12, 2) = pack('n', (6 << 12) | 0x02 | 0x10);
-                    $tcp .= pack('CCn', 2, 4, 1975); # MSS option
+            if ($attrs{IP_FRAGMENT} eq 'no' || $attrs{IP_FRAGMENT} eq 'first') {
+                if ($attrs{TP_PROTO} =~ '^TCP') {
+                    my $tcp = pack('nnNNnnnn',
+                                   $flow{TP_SRC},     # source port
+                                   $flow{TP_DST},     # dest port
+                                   87123455,          # seqno
+                                   712378912,         # ackno
+                                   (5 << 12) | 0x02 | 0x10, # hdrlen, SYN, ACK
+                                   5823,                    # window size
+                                   18923,                   # checksum
+                                   12893); # urgent pointer
+                    if ($attrs{TP_PROTO} eq 'TCP+options') {
+                        substr($tcp, 12, 2) = pack('n', (6 << 12) | 0x02 | 0x10);
+                        $tcp .= pack('CCn', 2, 4, 1975); # MSS option
+                    }
+                    $tcp .= 'payload';
+                    $ip .= $tcp;
+                    $wildcards &= ~(1 << 6 | 1 << 7);
+                } elsif ($attrs{TP_PROTO} eq 'UDP') {
+                    my $len = 15;
+                    my $udp = pack('nnnn', $flow{TP_SRC}, $flow{TP_DST}, $len, 0);
+                    $udp .= chr($len) while length($udp) < $len;
+                    $ip .= $udp;
+                    $wildcards &= ~(1 << 6 | 1 << 7);
+                } elsif ($attrs{TP_PROTO} eq 'ICMP') {
+                    $ip .= pack('CCnnn',
+                                8,        # echo request
+                                0,        # code
+                                0,        # checksum
+                                736,      # identifier
+                                931);     # sequence number
+                    $wildcards &= ~(1 << 6 | 1 << 7);
+                } elsif ($attrs{TP_PROTO} eq 'other') {
+                    $ip .= 'other header';
+                } else {
+                    die;
                 }
-                $tcp .= 'payload';
-                $ip .= $tcp;
-            } elsif ($attrs{TP_PROTO} eq 'UDP') {
-                my $len = 15;
-                my $udp = pack('nnnn', $flow{TP_SRC}, $flow{TP_DST}, $len, 0);
-                $udp .= chr($len) while length($udp) < $len;
-                $ip .= $udp;
-            } elsif ($attrs{TP_PROTO} eq 'ICMP') {
-                $ip .= pack('CCnnn',
-                            8,        # echo request
-                            0,        # code
-                            0,        # checksum
-                            736,      # identifier
-                            931);     # sequence number
-            } elsif ($attrs{TP_PROTO} eq 'other') {
-                $ip .= 'other header';
-            } else {
-                die;
             }
             substr($ip, 2, 2) = pack('n', length($ip));
             $packet .= $ip;

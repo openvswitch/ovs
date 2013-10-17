@@ -78,13 +78,17 @@ union flow_in_port {
 };
 
 /*
-* A flow in the network.
-*
-* The meaning of 'in_port' is context-dependent.  In most cases, it is a
-* 16-bit OpenFlow 1.0 port number.  In the software datapath interface (dpif)
-* layer and its implementations (e.g. dpif-linux, dpif-netdev), it is instead
-* a 32-bit datapath port number.
-*/
+ * A flow in the network.
+ *
+ * Must be initialized to all zeros to make any compiler-induced padding
+ * zeroed.  Helps also in keeping unused fields (such as mutually exclusive
+ * IPv4 and IPv6 addresses) zeroed out.
+ *
+ * The meaning of 'in_port' is context-dependent.  In most cases, it is a
+ * 16-bit OpenFlow 1.0 port number.  In the software datapath interface (dpif)
+ * layer and its implementations (e.g. dpif-linux, dpif-netdev), it is instead
+ * a 32-bit datapath port number.
+ */
 struct flow {
     struct flow_tnl tunnel;     /* Encapsulating tunnel parameters. */
     ovs_be64 metadata;          /* OpenFlow Metadata. */
@@ -110,15 +114,17 @@ struct flow {
     uint8_t arp_sha[6];         /* ARP/ND source hardware address. */
     uint8_t arp_tha[6];         /* ARP/ND target hardware address. */
     uint8_t nw_ttl;             /* IP TTL/Hop Limit. */
-    uint8_t nw_frag;            /* FLOW_FRAG_* flags. */
+    uint8_t nw_frag;            /* FLOW_FRAG_* flags. Keep last for the
+                                   BUILD_ASSERT_DECL below */
 };
 BUILD_ASSERT_DECL(sizeof(struct flow) % 4 == 0);
 
 #define FLOW_U32S (sizeof(struct flow) / 4)
 
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
-BUILD_ASSERT_DECL(sizeof(struct flow) == sizeof(struct flow_tnl) + 152 &&
-                  FLOW_WC_SEQ == 21);
+BUILD_ASSERT_DECL(offsetof(struct flow, nw_frag) + 1
+                  == sizeof(struct flow_tnl) + 152
+                  && FLOW_WC_SEQ == 21);
 
 /* Represents the metadata fields of struct flow. */
 struct flow_metadata {
@@ -238,7 +244,6 @@ struct flow_wildcards {
 };
 
 void flow_wildcards_init_catchall(struct flow_wildcards *);
-void flow_wildcards_init_exact(struct flow_wildcards *);
 
 bool flow_wildcards_is_catchall(const struct flow_wildcards *);
 
@@ -262,6 +267,8 @@ bool flow_wildcards_equal(const struct flow_wildcards *,
                           const struct flow_wildcards *);
 uint32_t flow_hash_symmetric_l4(const struct flow *flow, uint32_t basis);
 
+/* Initialize a flow with random fields that matter for nx_hash_fields. */
+void flow_random_hash_fields(struct flow *);
 void flow_mask_hash_fields(const struct flow *, struct flow_wildcards *,
                            enum nx_hash_fields);
 uint32_t flow_hash_fields(const struct flow *, enum nx_hash_fields,

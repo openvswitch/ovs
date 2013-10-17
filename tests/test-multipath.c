@@ -26,7 +26,6 @@
 
 #include "flow.h"
 #include "ofp-actions.h"
-#include "random.h"
 #include "util.h"
 
 int
@@ -39,7 +38,6 @@ main(int argc, char *argv[])
     int n;
 
     set_program_name(argv[0]);
-    random_init();
 
     if (argc != 2) {
         ovs_fatal(0, "usage: %s multipath_action", program_name);
@@ -65,7 +63,7 @@ main(int argc, char *argv[])
             struct flow_wildcards wc;
             struct flow flow;
 
-            random_bytes(&flow, sizeof flow);
+            flow_random_hash_fields(&flow);
 
             mp.max_link = n - 1;
             multipath_execute(&mp, &flow, &wc);

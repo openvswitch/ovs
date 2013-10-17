@@ -70,7 +70,7 @@ main(int argc OVS_UNUSED, char *argv[])
 
         in_port_.ofp_port = u16_to_ofp(1);
         flow_extract(packet, 0, 0, NULL, &in_port_, &flow);
-        match_init_exact(&match, &flow);
+        match_wc_init(&match, &flow);
         ofputil_match_to_ofp10_match(&match, &extracted_match);
 
         if (memcmp(&expected_match, &extracted_match, sizeof expected_match)) {
