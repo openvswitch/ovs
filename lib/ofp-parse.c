@@ -951,8 +951,10 @@ parse_named_instruction(enum ovs_instruction_type type,
 
     case OVSINST_OFPIT11_WRITE_ACTIONS: {
         struct ofpact_nest *on;
-        size_t ofs = ofpacts->size;
+        size_t ofs;
 
+        ofpact_pad(ofpacts);
+        ofs = ofpacts->size;
         on = ofpact_put(ofpacts, OFPACT_WRITE_ACTIONS,
                         offsetof(struct ofpact_nest, actions));
         error_s = str_to_ofpacts__(arg, ofpacts, usable_protocols);
