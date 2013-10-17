@@ -14,6 +14,8 @@
 
 import errno
 import os
+import os.path
+import random
 import select
 import socket
 import sys
@@ -25,7 +27,33 @@ import ovs.vlog
 vlog = ovs.vlog.Vlog("socket_util")
 
 
-def make_unix_socket(style, nonblock, bind_path, connect_path):
+def make_short_name(long_name):
+    if long_name is None:
+        return None
+    long_name = os.path.abspath(long_name)
+    long_dirname = os.path.dirname(long_name)
+    tmpdir = os.getenv('TMPDIR', '/tmp')
+    for x in xrange(0, 1000):
+        link_name = \
+            '%s/ovs-un-py-%d-%d' % (tmpdir, random.randint(0, 10000), x)
+        try:
+            os.symlink(long_dirname, link_name)
+            ovs.fatal_signal.add_file_to_unlink(link_name)
+            return os.path.join(link_name, os.path.basename(long_name))
+        except OSError, e:
+            if e.errno != errno.EEXIST:
+                break
+    raise Exception("Failed to create temporary symlink")
+
+
+def free_short_name(short_name):
+    if short_name is None:
+        return
+    link_name = os.path.dirname(short_name)
+    ovs.fatal_signal.unlink_file_now(link_name)
+
+
+def make_unix_socket(style, nonblock, bind_path, connect_path, short=False):
     """Creates a Unix domain socket in the given 'style' (either
     socket.SOCK_DGRAM or socket.SOCK_STREAM) that is bound to 'bind_path' (if
     'bind_path' is not None) and connected to 'connect_path' (if 'connect_path'
@@ -106,6 +134,22 @@ def make_unix_socket(style, nonblock, bind_path, connect_path):
                     os.close(connect_dirfd)
                 if bind_dirfd is not None:
                     os.close(bind_dirfd)
+        elif (eno == "AF_UNIX path too long"):
+            if short:
+                return get_exception_errno(e), None
+            short_bind_path = None
+            try:
+                short_bind_path = make_short_name(bind_path)
+                short_connect_path = make_short_name(connect_path)
+            except:
+                free_short_name(short_bind_path)
+                return errno.ENAMETOOLONG, None
+            try:
+                return make_unix_socket(style, nonblock, short_bind_path,
+                                        short_connect_path, short=True)
+            finally:
+                free_short_name(short_bind_path)
+                free_short_name(short_connect_path)
         else:
             return get_exception_errno(e), None
 

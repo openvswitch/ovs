@@ -135,7 +135,6 @@ dnl is about 100 bytes.  On Linux, we work around this by indirecting through
 dnl a directory fd using /proc/self/fd/<dirfd>.  We do not have a workaround
 dnl for other platforms, so we skip the test there.
 AT_SETUP([test unix socket, long pathname - C])
-AT_SKIP_IF([test ! -d /proc/self/fd])
 dnl Linux has a 108 byte limit; this is 150 bytes long.
 longname=012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789
 mkdir $longname
@@ -155,7 +154,6 @@ dnl a directory fd using /proc/self/fd/<dirfd>.  We do not have a workaround
 dnl for other platforms, so we skip the test there.
 AT_SETUP([test unix socket, long pathname - Python])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
-AT_SKIP_IF([test ! -d /proc/self/fd])
 dnl Linux has a 108 byte limit; this is 150 bytes long.
 longname=012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789
 mkdir $longname

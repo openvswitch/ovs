@@ -60,6 +60,10 @@ VLOG_DEFINE_THIS_MODULE(socket_util);
 #define O_DIRECTORY 0
 #endif
 
+/* Maximum length of the sun_path member in a struct sockaddr_un, excluding
+ * space for a null terminator. */
+#define MAX_UN_LEN (sizeof(((struct sockaddr_un *) 0)->sun_path) - 1)
+
 static int getsockopt_int(int fd, int level, int option, const char *optname,
                           int *valuep);
 
@@ -337,78 +341,161 @@ drain_fd(int fd, size_t n_packets)
     }
 }
 
-/* Stores in '*un' a sockaddr_un that refers to file 'name'.  Stores in
- * '*un_len' the size of the sockaddr_un. */
-static void
-make_sockaddr_un__(const char *name, struct sockaddr_un *un, socklen_t *un_len)
+/* Attempts to shorten 'name' by opening a file descriptor for the directory
+ * part of the name and indirecting through /proc/self/fd/<dirfd>/<basename>.
+ * On systems with Linux-like /proc, this works as long as <basename> isn't too
+ * long.
+ *
+ * On success, returns 0 and stores the short name in 'short_name' and a
+ * directory file descriptor to eventually be closed in '*dirfpd'. */
+static int
+shorten_name_via_proc(const char *name, char short_name[MAX_UN_LEN + 1],
+                      int *dirfdp)
 {
-    un->sun_family = AF_UNIX;
-    ovs_strzcpy(un->sun_path, name, sizeof un->sun_path);
-    *un_len = (offsetof(struct sockaddr_un, sun_path)
-                + strlen (un->sun_path) + 1);
+    char *dir, *base;
+    int dirfd;
+    int len;
+
+    if (!LINUX_DATAPATH) {
+        return ENAMETOOLONG;
+    }
+
+    dir = dir_name(name);
+    dirfd = open(dir, O_DIRECTORY | O_RDONLY);
+    if (dirfd < 0) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+        int error = errno;
+
+        VLOG_WARN_RL(&rl, "%s: open failed (%s)", dir, ovs_strerror(error));
+        free(dir);
+
+        return error;
+    }
+    free(dir);
+
+    base = base_name(name);
+    len = snprintf(short_name, MAX_UN_LEN + 1,
+                   "/proc/self/fd/%d/%s", dirfd, base);
+    free(base);
+
+    if (len >= 0 && len <= MAX_UN_LEN) {
+        *dirfdp = dirfd;
+        return 0;
+    } else {
+        close(dirfd);
+        return ENAMETOOLONG;
+    }
+}
+
+/* Attempts to shorten 'name' by creating a symlink for the directory part of
+ * the name and indirecting through <symlink>/<basename>.  This works on
+ * systems that support symlinks, as long as <basename> isn't too long.
+ *
+ * On success, returns 0 and stores the short name in 'short_name' and the
+ * symbolic link to eventually delete in 'linkname'. */
+static int
+shorten_name_via_symlink(const char *name, char short_name[MAX_UN_LEN + 1],
+                         char linkname[MAX_UN_LEN + 1])
+{
+    char *abs, *dir, *base;
+    const char *tmpdir;
+    int error;
+    int i;
+
+    abs = abs_file_name(NULL, name);
+    dir = dir_name(abs);
+    base = base_name(abs);
+    free(abs);
+
+    tmpdir = getenv("TMPDIR");
+    if (tmpdir == NULL) {
+        tmpdir = "/tmp";
+    }
+
+    for (i = 0; i < 1000; i++) {
+        int len;
+
+        len = snprintf(linkname, MAX_UN_LEN + 1,
+                       "%s/ovs-un-c-%"PRIu32, tmpdir, random_uint32());
+        error = (len < 0 || len > MAX_UN_LEN ? ENAMETOOLONG
+                 : symlink(dir, linkname) ? errno
+                 : 0);
+        if (error != EEXIST) {
+            break;
+        }
+    }
+
+    if (!error) {
+        int len;
+
+        fatal_signal_add_file_to_unlink(linkname);
+
+        len = snprintf(short_name, MAX_UN_LEN + 1, "%s/%s", linkname, base);
+        if (len < 0 || len > MAX_UN_LEN) {
+            fatal_signal_unlink_file_now(linkname);
+            error = ENAMETOOLONG;
+        }
+    }
+
+    if (error) {
+        linkname[0] = '\0';
+    }
+    free(dir);
+    free(base);
+
+    return error;
 }
 
 /* Stores in '*un' a sockaddr_un that refers to file 'name'.  Stores in
  * '*un_len' the size of the sockaddr_un.
  *
- * Returns 0 on success, otherwise a positive errno value.  On success,
- * '*dirfdp' is either -1 or a nonnegative file descriptor that the caller
- * should close after using '*un' to bind or connect.  On failure, '*dirfdp' is
- * -1. */
+ * Returns 0 on success, otherwise a positive errno value.
+ *
+ * Uses '*dirfdp' and 'linkname' to store references to data when the caller no
+ * longer needs to use 'un'.  On success, freeing these references with
+ * free_sockaddr_un() is mandatory to avoid a leak; on failure, freeing them is
+ * unnecessary but harmless. */
 static int
 make_sockaddr_un(const char *name, struct sockaddr_un *un, socklen_t *un_len,
-                 int *dirfdp)
+                 int *dirfdp, char linkname[MAX_UN_LEN + 1])
 {
-    enum { MAX_UN_LEN = sizeof un->sun_path - 1 };
+    char short_name[MAX_UN_LEN + 1];
 
     *dirfdp = -1;
+    linkname[0] = '\0';
     if (strlen(name) > MAX_UN_LEN) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-
-        if (LINUX_DATAPATH) {
-            /* 'name' is too long to fit in a sockaddr_un, but we have a
-             * workaround for that on Linux: shorten it by opening a file
-             * descriptor for the directory part of the name and indirecting
-             * through /proc/self/fd/<dirfd>/<basename>. */
-            char *dir, *base;
-            char *short_name;
-            int dirfd;
-
-            dir = dir_name(name);
-            base = base_name(name);
-
-            dirfd = open(dir, O_DIRECTORY | O_RDONLY);
-            if (dirfd < 0) {
-                free(base);
-                free(dir);
-                return errno;
-            }
-
-            short_name = xasprintf("/proc/self/fd/%d/%s", dirfd, base);
-            free(dir);
-            free(base);
-
-            if (strlen(short_name) <= MAX_UN_LEN) {
-                make_sockaddr_un__(short_name, un, un_len);
-                free(short_name);
-                *dirfdp = dirfd;
-                return 0;
-            }
-            free(short_name);
-            close(dirfd);
+        /* 'name' is too long to fit in a sockaddr_un.  Try a workaround. */
+        int error = shorten_name_via_proc(name, short_name, dirfdp);
+        if (error == ENAMETOOLONG) {
+            error = shorten_name_via_symlink(name, short_name, linkname);
+        }
+        if (error) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
 
             VLOG_WARN_RL(&rl, "Unix socket name %s is longer than maximum "
-                         "%d bytes (even shortened)", name, MAX_UN_LEN);
-        } else {
-            /* 'name' is too long and we have no workaround. */
-            VLOG_WARN_RL(&rl, "Unix socket name %s is longer than maximum "
-                         "%d bytes", name, MAX_UN_LEN);
+                         "%zu bytes", name, MAX_UN_LEN);
+            return error;
         }
 
-        return ENAMETOOLONG;
-    } else {
-        make_sockaddr_un__(name, un, un_len);
-        return 0;
+        name = short_name;
+    }
+
+    un->sun_family = AF_UNIX;
+    ovs_strzcpy(un->sun_path, name, sizeof un->sun_path);
+    *un_len = (offsetof(struct sockaddr_un, sun_path)
+                + strlen (un->sun_path) + 1);
+    return 0;
+}
+
+/* Clean up after make_sockaddr_un(). */
+static void
+free_sockaddr_un(int dirfd, const char *linkname)
+{
+    if (dirfd >= 0) {
+        close(dirfd);
+    }
+    if (linkname[0]) {
+        fatal_signal_unlink_file_now(linkname);
     }
 }
 
@@ -453,6 +540,7 @@ make_unix_socket(int style, bool nonblock,
     }
 
     if (bind_path) {
+        char linkname[MAX_UN_LEN + 1];
         struct sockaddr_un un;
         socklen_t un_len;
         int dirfd;
@@ -463,32 +551,31 @@ make_unix_socket(int style, bool nonblock,
         }
         fatal_signal_add_file_to_unlink(bind_path);
 
-        error = make_sockaddr_un(bind_path, &un, &un_len, &dirfd);
+        error = make_sockaddr_un(bind_path, &un, &un_len, &dirfd, linkname);
         if (!error) {
             error = bind_unix_socket(fd, (struct sockaddr *) &un, un_len);
         }
-        if (dirfd >= 0) {
-            close(dirfd);
-        }
+        free_sockaddr_un(dirfd, linkname);
+
         if (error) {
             goto error;
         }
     }
 
     if (connect_path) {
+        char linkname[MAX_UN_LEN + 1];
         struct sockaddr_un un;
         socklen_t un_len;
         int dirfd;
 
-        error = make_sockaddr_un(connect_path, &un, &un_len, &dirfd);
+        error = make_sockaddr_un(connect_path, &un, &un_len, &dirfd, linkname);
         if (!error
             && connect(fd, (struct sockaddr*) &un, un_len)
             && errno != EINPROGRESS) {
             error = errno;
         }
-        if (dirfd >= 0) {
-            close(dirfd);
-        }
+        free_sockaddr_un(dirfd, linkname);
+
         if (error) {
             goto error;
         }
