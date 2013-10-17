@@ -2970,8 +2970,8 @@ ofctl_parse_ofp11_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         /* Convert to ofpacts. */
         ofpbuf_init(&ofpacts, 0);
         size = of11_in.size;
-        error = ofpacts_pull_openflow11_actions(&of11_in, of11_in.size,
-                                                &ofpacts);
+        error = ofpacts_pull_openflow11_actions(&of11_in, OFP11_VERSION,
+                                                of11_in.size, &ofpacts);
         if (error) {
             printf("bad OF1.1 actions: %s\n\n", ofperr_get_name(error));
             ofpbuf_uninit(&ofpacts);
@@ -3039,8 +3039,8 @@ ofctl_parse_ofp11_instructions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         /* Convert to ofpacts. */
         ofpbuf_init(&ofpacts, 0);
         size = of11_in.size;
-        error = ofpacts_pull_openflow11_instructions(&of11_in, of11_in.size,
-                                                     &ofpacts);
+        error = ofpacts_pull_openflow11_instructions(&of11_in, OFP11_VERSION,
+                                                     of11_in.size, &ofpacts);
         if (!error) {
             /* Verify actions. */
             struct flow flow;

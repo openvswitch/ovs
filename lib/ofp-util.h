@@ -974,7 +974,7 @@ int ofputil_decode_group_stats_reply(struct ofpbuf *,
                                      struct ofputil_group_stats *);
 
 int ofputil_decode_group_desc_reply(struct ofputil_group_desc *,
-                                    struct ofpbuf *);
+                                    struct ofpbuf *, enum ofp_version);
 
 void ofputil_append_group_desc_reply(const struct ofputil_group_desc *,
                                      struct list *buckets,

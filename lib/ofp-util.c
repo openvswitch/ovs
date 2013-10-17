@@ -1504,7 +1504,8 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             return error;
         }
 
-        error = ofpacts_pull_openflow11_instructions(&b, b.size, ofpacts);
+        error = ofpacts_pull_openflow11_instructions(&b, oh->version,
+                                                     b.size, ofpacts);
         if (error) {
             return error;
         }
@@ -2360,7 +2361,8 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
             return EINVAL;
         }
 
-        if (ofpacts_pull_openflow11_instructions(msg, length - sizeof *ofs -
+        if (ofpacts_pull_openflow11_instructions(msg, oh->version,
+                                                 length - sizeof *ofs -
                                                  padded_match_len, ofpacts)) {
             VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_FLOW reply bad instructions");
             return EINVAL;
@@ -3092,7 +3094,8 @@ ofputil_decode_packet_out(struct ofputil_packet_out *po,
             return error;
         }
 
-        error = ofpacts_pull_openflow11_actions(&b, ntohs(opo->actions_len),
+        error = ofpacts_pull_openflow11_actions(&b, oh->version,
+                                                ntohs(opo->actions_len),
                                                 ofpacts);
         if (error) {
             return error;
@@ -5674,8 +5677,8 @@ ofputil_append_group_desc_reply(const struct ofputil_group_desc *gds,
 }
 
 static enum ofperr
-ofputil_pull_buckets(struct ofpbuf *msg, size_t buckets_length,
-                     struct list *buckets)
+ofputil_pull_buckets(struct ofpbuf *msg, enum ofp_version version,
+                     size_t buckets_length, struct list *buckets)
 {
     struct ofp11_bucket *ob;
 
@@ -5708,8 +5711,8 @@ ofputil_pull_buckets(struct ofpbuf *msg, size_t buckets_length,
         buckets_length -= ob_len;
 
         ofpbuf_init(&ofpacts, 0);
-        error = ofpacts_pull_openflow11_actions(msg, ob_len - sizeof *ob,
-                                                &ofpacts);
+        error = ofpacts_pull_openflow11_actions(msg, version,
+                                                ob_len - sizeof *ob, &ofpacts);
         if (error) {
             ofpbuf_uninit(&ofpacts);
             ofputil_bucket_list_destroy(buckets);
@@ -5745,7 +5748,7 @@ ofputil_pull_buckets(struct ofpbuf *msg, size_t buckets_length,
  * otherwise a positive errno value. */
 int
 ofputil_decode_group_desc_reply(struct ofputil_group_desc *gd,
-                                struct ofpbuf *msg)
+                                struct ofpbuf *msg, enum ofp_version version)
 {
     struct ofp11_group_desc_stats *ogds;
     size_t length;
@@ -5774,7 +5777,8 @@ ofputil_decode_group_desc_reply(struct ofputil_group_desc *gd,
         return OFPERR_OFPBRC_BAD_LEN;
     }
 
-    return ofputil_pull_buckets(msg, length - sizeof *ogds, &gd->buckets);
+    return ofputil_pull_buckets(msg, version, length - sizeof *ogds,
+                                &gd->buckets);
 }
 
 /* Converts abstract group mod 'gm' into a message for OpenFlow version
@@ -5857,7 +5861,7 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
     gm->type = ogm->type;
     gm->group_id = ntohl(ogm->group_id);
 
-    return ofputil_pull_buckets(&msg, msg.size, &gm->buckets);
+    return ofputil_pull_buckets(&msg, oh->version, msg.size, &gm->buckets);
 }
 
 /* Parse a queue status request message into 'oqsr'.

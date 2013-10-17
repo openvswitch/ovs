@@ -327,12 +327,26 @@ struct ofpact_reg_load {
     union mf_subvalue subvalue; /* Least-significant bits are used. */
 };
 
+/* The position in the packet at which to insert an MPLS header.
+ *
+ * Used NXAST_PUSH_MPLS, OFPAT11_PUSH_MPLS. */
+enum ofpact_mpls_position {
+    /* Add the MPLS LSE after the Ethernet header but before any VLAN tags.
+     * OpenFlow 1.3+ requires this behavior. */
+   OFPACT_MPLS_BEFORE_VLAN,
+
+   /* Add the MPLS LSE after the Ethernet header and any VLAN tags.
+    * OpenFlow 1.1 and 1.2 require this behavior. */
+   OFPACT_MPLS_AFTER_VLAN
+};
+
 /* OFPACT_PUSH_VLAN/MPLS/PBB
  *
  * Used for NXAST_PUSH_MPLS, OFPAT11_PUSH_MPLS. */
 struct ofpact_push_mpls {
     struct ofpact ofpact;
     ovs_be16 ethertype;
+    enum ofpact_mpls_position position;
 };
 
 /* OFPACT_POP_MPLS
@@ -524,9 +538,11 @@ enum ofperr ofpacts_pull_openflow10(struct ofpbuf *openflow,
                                     unsigned int actions_len,
                                     struct ofpbuf *ofpacts);
 enum ofperr ofpacts_pull_openflow11_actions(struct ofpbuf *openflow,
+                                            enum ofp_version version,
                                             unsigned int actions_len,
                                             struct ofpbuf *ofpacts);
 enum ofperr ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
+                                                 enum ofp_version version,
                                                  unsigned int instructions_len,
                                                  struct ofpbuf *ofpacts);
 enum ofperr ofpacts_check(const struct ofpact[], size_t ofpacts_len,

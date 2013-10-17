@@ -2228,7 +2228,7 @@ ofp_print_group_desc(struct ds *s, const struct ofp_header *oh)
         struct ofputil_group_desc gd;
         int retval;
 
-        retval = ofputil_decode_group_desc_reply(&gd, &b);
+        retval = ofputil_decode_group_desc_reply(&gd, &b, oh->version);
         if (retval) {
             if (retval != EOF) {
                 ds_put_cstr(s, " ***parse error***");
