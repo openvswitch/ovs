@@ -1403,8 +1403,10 @@ ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
         struct ofpact_nest *on;
         const union ofp_action *actions;
         size_t n_actions;
-        size_t start = ofpacts->size;
+        size_t start;
 
+        ofpact_pad(ofpacts);
+        start = ofpacts->size;
         on = ofpact_put(ofpacts, OFPACT_WRITE_ACTIONS,
                         offsetof(struct ofpact_nest, actions));
         get_actions_from_instruction(insts[OVSINST_OFPIT11_WRITE_ACTIONS],
@@ -1414,6 +1416,7 @@ ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
         if (error) {
             goto exit;
         }
+        on = ofpbuf_at_assert(ofpacts, start, sizeof *on);
         on->ofpact.len = ofpacts->size - start;
     }
     if (insts[OVSINST_OFPIT11_WRITE_METADATA]) {
