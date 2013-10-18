@@ -198,6 +198,25 @@ A: Tunnel virtual ports are not supported, as described in the
    actions.  On Linux kernels before 2.6.39, maximum-sized VLAN packets
    may not be transmitted.
 
+Q: What happened to the bridge compatibility feature?
+
+A: Bridge compatibility was a feature of Open vSwitch 1.9 and earlier.
+   When it was enabled, Open vSwitch imitated the interface of the
+   Linux kernel "bridge" module.  This allowed users to drop Open
+   vSwitch into environments designed to use the Linux kernel bridge
+   module without adapting the environment to use Open vSwitch.
+
+   Open vSwitch 1.10 and later do not support bridge compatibility.
+   The feature was dropped because version 1.10 adopted a new internal
+   architecture that made bridge compatibility difficult to maintain.
+   Now that many environments use OVS directly, it would be rarely
+   useful in any case.
+
+   To use bridge compatibility, install OVS 1.9 or earlier, including
+   the accompanying kernel modules (both the main and bridge
+   compatibility modules), following the instructions that come with
+   the release.  Be sure to start the ovs-brcompatd daemon.
+
 
 Terminology
 -----------
