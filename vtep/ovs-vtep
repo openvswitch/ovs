@@ -114,9 +114,20 @@ class Logical_Switch(object):
     def update_flood(self):
         flood_ports = self.ports.values()
 
+        # Traffic flowing from one 'unknown-dst' should not be flooded to
+        # port belonging to another 'unknown-dst'.
+        for tunnel in self.unknown_dsts:
+            port_no = self.tunnels[tunnel][0]
+            ovs_ofctl("add-flow %s table=1,priority=1,in_port=%s,action=%s"
+                        % (self.short_name, port_no, ",".join(flood_ports)))
+
+        # Traffic coming from a VTEP physical port should only be flooded to
+        # one 'unknown-dst' and to all other physical ports that belong to that
+        # VTEP device and this logical switch.
         for tunnel in self.unknown_dsts:
             port_no = self.tunnels[tunnel][0]
             flood_ports.append(port_no)
+            break
 
         ovs_ofctl("add-flow %s table=1,priority=0,action=%s"
                   % (self.short_name, ",".join(flood_ports)))
