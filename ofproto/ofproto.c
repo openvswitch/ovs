@@ -1124,7 +1124,8 @@ ofproto_get_snoops(const struct ofproto *ofproto, struct sset *snoops)
 }
 
 static void
-ofproto_rule_delete__(struct ofproto *ofproto, struct rule *rule)
+ofproto_rule_delete__(struct ofproto *ofproto, struct rule *rule,
+                      uint8_t reason)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct ofopgroup *group;
@@ -1132,7 +1133,7 @@ ofproto_rule_delete__(struct ofproto *ofproto, struct rule *rule)
     ovs_assert(!rule->pending);
 
     group = ofopgroup_create_unattached(ofproto);
-    delete_flow__(rule, group, OFPRR_DELETE);
+    delete_flow__(rule, group, reason);
     ofopgroup_submit(group);
 }
 
@@ -1187,7 +1188,7 @@ ofproto_flush__(struct ofproto *ofproto)
         ovs_rwlock_unlock(&table->cls.rwlock);
         CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, cr, &cursor) {
             if (!rule->pending) {
-                ofproto_rule_delete__(ofproto, rule);
+                ofproto_rule_delete__(ofproto, rule, OFPRR_DELETE);
             }
         }
     }
@@ -4213,8 +4214,7 @@ ofproto_rule_expire(struct rule *rule, uint8_t reason)
     ovs_assert(reason == OFPRR_HARD_TIMEOUT || reason == OFPRR_IDLE_TIMEOUT
                || reason == OFPRR_DELETE);
 
-    ofproto_rule_send_removed(rule, reason);
-    ofproto_rule_delete__(ofproto, rule);
+    ofproto_rule_delete__(ofproto, rule, reason);
 }
 
 /* Reduces '*timeout' to no more than 'max'.  A value of zero in either case
