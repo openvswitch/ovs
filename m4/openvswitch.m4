@@ -286,6 +286,18 @@ AC_DEFUN([OVS_CHECK_OVSDBMONITOR],
    AC_MSG_RESULT([$BUILD_OVSDBMONITOR])
    AM_CONDITIONAL([BUILD_OVSDBMONITOR], [test $BUILD_OVSDBMONITOR = yes])])
 
+dnl Checks for missing python modules at build time
+AC_DEFUN([OVS_CHECK_PYTHON_COMPAT],
+  [OVS_CHECK_PYTHON_MODULE([uuid])
+   if test $ovs_cv_py_uuid = yes; then
+     INCLUDE_PYTHON_COMPAT=no
+   else
+     INCLUDE_PYTHON_COMPAT=yes
+   fi
+   AC_MSG_CHECKING([whether to add python/compat to PYTHONPATH])
+   AC_MSG_RESULT([$INCLUDE_PYTHON_COMPAT])
+   AM_CONDITIONAL([INCLUDE_PYTHON_COMPAT], [test $INCLUDE_PYTHON_COMPAT = yes])])
+
 # OVS_LINK2_IFELSE(SOURCE1, SOURCE2, [ACTION-IF-TRUE], [ACTION-IF-FALSE])
 # -------------------------------------------------------------
 # Based on AC_LINK_IFELSE, but tries to link both SOURCE1 and SOURCE2

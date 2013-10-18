@@ -27,10 +27,13 @@ endif
 # vSwitch, but it causes trouble if you switch from a version with
 # foo/__init__.py into an (older) version with plain foo.py, since
 # foo/__init__.pyc will cause Python to ignore foo.py.
-run_python = \
-	PYTHONDONTWRITEBYTECODE=yes \
-	PYTHONPATH=$(top_srcdir)/python:$$PYTHONPATH \
-	$(PYTHON)
+if INCLUDE_PYTHON_COMPAT
+run_python = PYTHONPATH=$(top_srcdir)/python:$(top_srcdir)/python/compat:$$PYTHONPATH
+else
+run_python = PYTHONPATH=$(top_srcdir)/python:$$PYTHONPATH
+endif
+run_python += PYTHONDONTWRITEBYTECODE=yes $(PYTHON)
+
 
 ALL_LOCAL =
 BUILT_SOURCES =
