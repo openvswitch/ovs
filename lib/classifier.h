@@ -148,7 +148,7 @@ cls_table_is_catchall(const struct cls_table *table)
     return minimask_is_catchall(&table->mask);
 }
 
-/* A rule in a "struct classifier". */
+/* A rule in a "struct cls_table". */
 struct cls_rule {
     struct hmap_node hmap_node; /* Within struct cls_table 'rules'. */
     struct list list;           /* List of identical, lower-priority rules. */
