@@ -200,7 +200,9 @@ odp_execute_actions(void *dp, struct ofpbuf *packet, struct flow *key,
             break;
 
         case OVS_ACTION_ATTR_USERSPACE: {
-            userspace(dp, packet, key, a);
+            if (userspace) {
+                userspace(dp, packet, key, a);
+            }
             break;
         }
 
