@@ -9,6 +9,8 @@ Post-v2.0.0
    - ovs-vswitchd.conf.db.5 man page will contain graphviz/dot
      diagram only if graphviz package was installed at the build time.
    - Support for Linux kernels up to 3.11
+   - ovs-dpctl:
+     The "show" command also displays mega flow mask stats.
 
 
 v2.0.0 - 15 Oct 2013

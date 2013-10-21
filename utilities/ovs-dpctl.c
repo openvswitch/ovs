@@ -563,7 +563,15 @@ show_dpif(struct dpif *dpif)
         printf("\tlookups: hit:%"PRIu64" missed:%"PRIu64" lost:%"PRIu64"\n"
                "\tflows: %"PRIu64"\n",
                stats.n_hit, stats.n_missed, stats.n_lost, stats.n_flows);
+        if (stats.n_masks != UINT64_MAX) {
+            uint64_t n_pkts = stats.n_hit + stats.n_missed;
+            double avg = n_pkts ? (double) stats.n_mask_hit / n_pkts : 0.0;
+
+            printf("\tmasks: hit:%"PRIu64" total:%"PRIu64" hit/pkt:%.2f\n",
+                   stats.n_mask_hit, stats.n_masks, avg);
+        }
     }
+
     DPIF_PORT_FOR_EACH (&dpif_port, &dump, dpif) {
         printf("\tport %u: %s", dpif_port.port_no, dpif_port.name);
 

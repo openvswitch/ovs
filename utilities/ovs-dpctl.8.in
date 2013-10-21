@@ -101,6 +101,25 @@ port is identified as port 0.)  If \fB\-s\fR or \fB\-\-statistics\fR
 is specified, then packet and byte counters are also printed for each
 port.
 .IP
+The datapath numbers consists of flow stats and mega flow mask stats.
+.IP
+The "lookups" row displays three stats related to flow lookup triggered
+by processing incoming packets in the datapath. "hit" displays number
+of packets matches existing flows. "missed" displays the number of
+packets not matching any existing flow and require user space processing.
+"lost" displays number of packets destined for user space process but
+subsequently dropped before reaching userspace. The sum of "hit" and "miss"
+equals to the total number of packets datapath processed.
+.IP
+The "flows" row displays the number of flows in datapath.
+.IP
+The "masks" row displays the mega flow mask stats. This row is omitted
+for datapath not implementing mega flow. "hit" displays the total number
+of masks visited for matching incoming packets. "total" displays number of
+masks in the datapath. "hit/pkt" displays the average number of masks
+visited per packet; the ratio between "hit" and total number of
+packets processed by the datapath".
+.IP
 If one or more datapaths are specified, information on only those
 datapaths are displayed.  Otherwise, \fBovs\-dpctl\fR displays information
 about all configured datapaths.

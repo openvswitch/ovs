@@ -74,6 +74,8 @@ struct dpif_linux_dp {
     const char *name;                  /* OVS_DP_ATTR_NAME. */
     const uint32_t *upcall_pid;        /* OVS_DP_UPCALL_PID. */
     struct ovs_dp_stats stats;         /* OVS_DP_ATTR_STATS. */
+    struct ovs_dp_megaflow_stats megaflow_stats;
+                                       /* OVS_DP_ATTR_MEGAFLOW_STATS.*/
 };
 
 static void dpif_linux_dp_init(struct dpif_linux_dp *);
@@ -411,6 +413,8 @@ dpif_linux_get_stats(const struct dpif *dpif_, struct dpif_dp_stats *stats)
         stats->n_missed = dp.stats.n_missed;
         stats->n_lost   = dp.stats.n_lost;
         stats->n_flows  = dp.stats.n_flows;
+        stats->n_masks  = dp.megaflow_stats.n_masks;
+        stats->n_mask_hit  = dp.megaflow_stats.n_mask_hit;
         ofpbuf_delete(buf);
     }
     return error;
@@ -1770,6 +1774,9 @@ dpif_linux_dp_from_ofpbuf(struct dpif_linux_dp *dp, const struct ofpbuf *buf)
         [OVS_DP_ATTR_NAME] = { .type = NL_A_STRING, .max_len = IFNAMSIZ },
         [OVS_DP_ATTR_STATS] = { NL_POLICY_FOR(struct ovs_dp_stats),
                                 .optional = true },
+        [OVS_DP_ATTR_MEGAFLOW_STATS] = {
+                        NL_POLICY_FOR(struct ovs_dp_megaflow_stats),
+                        .optional = true },
     };
 
     struct nlattr *a[ARRAY_SIZE(ovs_datapath_policy)];
@@ -1799,6 +1806,13 @@ dpif_linux_dp_from_ofpbuf(struct dpif_linux_dp *dp, const struct ofpbuf *buf)
          * sufficient alignment for 64-bit members. */
         memcpy(&dp->stats, nl_attr_get(a[OVS_DP_ATTR_STATS]),
                sizeof dp->stats);
+    }
+
+    if (a[OVS_DP_ATTR_MEGAFLOW_STATS]) {
+        /* Can't use structure assignment because Netlink doesn't ensure
+         * sufficient alignment for 64-bit members. */
+        memcpy(&dp->megaflow_stats, nl_attr_get(a[OVS_DP_ATTR_MEGAFLOW_STATS]),
+               sizeof dp->megaflow_stats);
     }
 
     return 0;
@@ -1833,6 +1847,8 @@ static void
 dpif_linux_dp_init(struct dpif_linux_dp *dp)
 {
     memset(dp, 0, sizeof *dp);
+    dp->megaflow_stats.n_masks = UINT32_MAX;
+    dp->megaflow_stats.n_mask_hit = UINT64_MAX;
 }
 
 static void
@@ -1871,11 +1887,11 @@ dpif_linux_dp_transact(const struct dpif_linux_dp *request,
     ofpbuf_delete(request_buf);
 
     if (reply) {
+        dpif_linux_dp_init(reply);
         if (!error) {
             error = dpif_linux_dp_from_ofpbuf(reply, *bufp);
         }
         if (error) {
-            dpif_linux_dp_init(reply);
             ofpbuf_delete(*bufp);
             *bufp = NULL;
         }
