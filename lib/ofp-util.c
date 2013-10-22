@@ -2822,6 +2822,7 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
     struct ofpbuf b;
 
     memset(pin, 0, sizeof *pin);
+    pin->cookie = OVS_BE64_MAX;
 
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     raw = ofpraw_pull_assert(&b);

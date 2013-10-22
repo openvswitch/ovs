@@ -199,8 +199,8 @@ OFP_ASSERT(sizeof(struct nx_set_packet_in_format) == 4);
  * might support fields (new registers, new protocols, etc.) that the
  * controller does not.  The controller must prepared to tolerate these.
  *
- * The 'cookie' and 'table_id' fields have no meaning when 'reason' is
- * OFPR_NO_MATCH.  In this case they should be set to 0. */
+ * The 'cookie' field has no meaning when 'reason' is OFPR_NO_MATCH.  In this
+ * case it should be UINT64_MAX. */
 struct nx_packet_in {
     ovs_be32 buffer_id;       /* ID assigned by datapath. */
     ovs_be16 total_len;       /* Full length of frame. */

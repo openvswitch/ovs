@@ -1848,7 +1848,9 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     pin->up.packet = ofpbuf_steal_data(packet);
     pin->up.reason = reason;
     pin->up.table_id = ctx->table_id;
-    pin->up.cookie = ctx->rule ? rule_dpif_get_flow_cookie(ctx->rule) : 0;
+    pin->up.cookie = (ctx->rule
+                      ? rule_dpif_get_flow_cookie(ctx->rule)
+                      : OVS_BE64_MAX);
 
     flow_get_metadata(&ctx->xin->flow, &pin->up.fmd);
 

@@ -105,7 +105,7 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
         ds_put_format(string, " table_id=%"PRIu8, pin.table_id);
     }
 
-    if (pin.cookie) {
+    if (pin.cookie != OVS_BE64_MAX) {
         ds_put_format(string, " cookie=0x%"PRIx64, ntohll(pin.cookie));
     }
 

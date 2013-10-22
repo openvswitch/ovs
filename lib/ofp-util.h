@@ -400,7 +400,7 @@ struct ofputil_packet_in {
     /* Information about the OpenFlow flow that triggered the packet-in.
      *
      * A packet-in triggered by a flow table miss has no associated flow.  In
-     * that case, 'cookie' is 0. */
+     * that case, 'cookie' is UINT64_MAX. */
     uint8_t table_id;                    /* OpenFlow table ID. */
     ovs_be64 cookie;                     /* Flow's cookie. */
 };
