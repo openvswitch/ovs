@@ -1435,7 +1435,7 @@ ofconn_send(const struct ofconn *ofconn, struct ofpbuf *msg,
 
 /* Sending asynchronous messages. */
 
-static void schedule_packet_in(struct ofconn *, struct ofputil_packet_in);
+static void schedule_packet_in(struct ofconn *, struct ofproto_packet_in);
 
 /* Sends an OFPT_PORT_STATUS message with 'opp' and 'reason' to appropriate
  * controllers managed by 'mgr'. */
@@ -1488,13 +1488,13 @@ connmgr_send_flow_removed(struct connmgr *mgr,
  * The caller doesn't need to fill in pin->buffer_id or pin->total_len. */
 void
 connmgr_send_packet_in(struct connmgr *mgr,
-                       const struct ofputil_packet_in *pin)
+                       const struct ofproto_packet_in *pin)
 {
     struct ofconn *ofconn;
 
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
-        if (ofconn_receives_async_msg(ofconn, OAM_PACKET_IN, pin->reason)
-            && ofconn->controller_id == pin->controller_id) {
+        if (ofconn_receives_async_msg(ofconn, OAM_PACKET_IN, pin->up.reason)
+            && ofconn->controller_id == pin->up.controller_id) {
             schedule_packet_in(ofconn, *pin);
         }
     }
@@ -1513,15 +1513,15 @@ do_send_packet_in(struct ofpbuf *ofp_packet_in, void *ofconn_)
 /* Takes 'pin', composes an OpenFlow packet-in message from it, and passes it
  * to 'ofconn''s packet scheduler for sending. */
 static void
-schedule_packet_in(struct ofconn *ofconn, struct ofputil_packet_in pin)
+schedule_packet_in(struct ofconn *ofconn, struct ofproto_packet_in pin)
 {
     struct connmgr *mgr = ofconn->connmgr;
     uint16_t controller_max_len;
 
-    pin.total_len = pin.packet_len;
+    pin.up.total_len = pin.up.packet_len;
 
-    if (pin.reason == OFPR_ACTION) {
-        controller_max_len = pin.send_len;  /* max_len */
+    if (pin.up.reason == OFPR_ACTION) {
+        controller_max_len = pin.up.send_len;  /* max_len */
     } else {
         controller_max_len = ofconn->miss_send_len;
     }
@@ -1530,31 +1530,33 @@ schedule_packet_in(struct ofconn *ofconn, struct ofputil_packet_in pin)
      * For OpenFlow 1.2+, OFPCML_NO_BUFFER (== UINT16_MAX) specifies
      * unbuffered.  This behaviour doesn't violate prior versions, too. */
     if (controller_max_len == UINT16_MAX) {
-        pin.buffer_id = UINT32_MAX;
+        pin.up.buffer_id = UINT32_MAX;
     } else if (mgr->fail_open && fail_open_is_active(mgr->fail_open)) {
-        pin.buffer_id = pktbuf_get_null();
+        pin.up.buffer_id = pktbuf_get_null();
     } else if (!ofconn->pktbuf) {
-        pin.buffer_id = UINT32_MAX;
+        pin.up.buffer_id = UINT32_MAX;
     } else {
-        pin.buffer_id = pktbuf_save(ofconn->pktbuf, pin.packet, pin.packet_len,
-                                    pin.fmd.in_port);
+        pin.up.buffer_id = pktbuf_save(ofconn->pktbuf,
+                                       pin.up.packet, pin.up.packet_len,
+                                       pin.up.fmd.in_port);
     }
 
     /* Figure out how much of the packet to send.
      * If not buffered, send the entire packet.  Otherwise, depending on
      * the reason of packet-in, send what requested by the controller. */
-    if (pin.buffer_id == UINT32_MAX) {
-        pin.send_len = pin.packet_len;
+    if (pin.up.buffer_id == UINT32_MAX) {
+        pin.up.send_len = pin.up.packet_len;
     } else {
-        pin.send_len = MIN(pin.packet_len, controller_max_len);
+        pin.up.send_len = MIN(pin.up.packet_len, controller_max_len);
     }
 
     /* Make OFPT_PACKET_IN and hand over to packet scheduler.  It might
      * immediately call into do_send_packet_in() or it might buffer it for a
      * while (until a later call to pinsched_run()). */
-    pinsched_send(ofconn->schedulers[pin.reason == OFPR_NO_MATCH ? 0 : 1],
-                  pin.fmd.in_port,
-                  ofputil_encode_packet_in(&pin, ofconn_get_protocol(ofconn),
+    pinsched_send(ofconn->schedulers[pin.up.reason == OFPR_NO_MATCH ? 0 : 1],
+                  pin.up.fmd.in_port,
+                  ofputil_encode_packet_in(&pin.up,
+                                           ofconn_get_protocol(ofconn),
                                            ofconn->packet_in_format),
                   do_send_packet_in, ofconn);
 }

@@ -116,7 +116,7 @@ fail_open_is_active(const struct fail_open *fo)
 static void
 send_bogus_packet_ins(struct fail_open *fo)
 {
-    struct ofputil_packet_in pin;
+    struct ofproto_packet_in pin;
     uint8_t mac[ETH_ADDR_LEN];
     struct ofpbuf b;
 
@@ -125,11 +125,11 @@ send_bogus_packet_ins(struct fail_open *fo)
     compose_rarp(&b, mac);
 
     memset(&pin, 0, sizeof pin);
-    pin.packet = b.data;
-    pin.packet_len = b.size;
-    pin.reason = OFPR_NO_MATCH;
-    pin.send_len = b.size;
-    pin.fmd.in_port = OFPP_LOCAL;
+    pin.up.packet = b.data;
+    pin.up.packet_len = b.size;
+    pin.up.reason = OFPR_NO_MATCH;
+    pin.up.send_len = b.size;
+    pin.up.fmd.in_port = OFPP_LOCAL;
     connmgr_send_packet_in(fo->connmgr, &pin);
 
     ofpbuf_uninit(&b);

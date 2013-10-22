@@ -19,6 +19,7 @@
 #include <stdbool.h>
 #include <inttypes.h>
 
+#include "connmgr.h"
 #include "coverage.h"
 #include "dynamic-string.h"
 #include "dpif.h"
@@ -838,17 +839,17 @@ handle_upcalls(struct udpif *udpif, struct list *upcalls)
         LIST_FOR_EACH (upcall, list_node, upcalls) {
             struct flow_miss *miss = upcall->flow_miss;
             struct ofpbuf *packet = upcall->dpif_upcall.packet;
-            struct ofputil_packet_in *pin;
+            struct ofproto_packet_in *pin;
 
             pin = xmalloc(sizeof *pin);
-            pin->packet = xmemdup(packet->data, packet->size);
-            pin->packet_len = packet->size;
-            pin->reason = OFPR_NO_MATCH;
-            pin->controller_id = 0;
-            pin->table_id = 0;
-            pin->cookie = 0;
-            pin->send_len = 0; /* Not used for flow table misses. */
-            flow_get_metadata(&miss->flow, &pin->fmd);
+            pin->up.packet = xmemdup(packet->data, packet->size);
+            pin->up.packet_len = packet->size;
+            pin->up.reason = OFPR_NO_MATCH;
+            pin->up.controller_id = 0;
+            pin->up.table_id = 0;
+            pin->up.cookie = 0;
+            pin->up.send_len = 0; /* Not used for flow table misses. */
+            flow_get_metadata(&miss->flow, &pin->up.fmd);
             ofproto_dpif_send_packet_in(miss->ofproto, pin);
         }
     }

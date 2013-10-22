@@ -545,11 +545,11 @@ ofproto_dpif_flow_mod(struct ofproto_dpif *ofproto,
  * Takes ownership of 'pin' and pin->packet. */
 void
 ofproto_dpif_send_packet_in(struct ofproto_dpif *ofproto,
-                            struct ofputil_packet_in *pin)
+                            struct ofproto_packet_in *pin)
 {
     if (!guarded_list_push_back(&ofproto->pins, &pin->list_node, 1024)) {
         COVERAGE_INC(packet_in_overflow);
-        free(CONST_CAST(void *, pin->packet));
+        free(CONST_CAST(void *, pin->up.packet));
         free(pin);
     }
 }
@@ -1359,7 +1359,7 @@ destruct(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct rule_dpif *rule, *next_rule;
-    struct ofputil_packet_in *pin, *next_pin;
+    struct ofproto_packet_in *pin, *next_pin;
     struct facet *facet, *next_facet;
     struct cls_cursor cursor;
     struct oftable *table;
@@ -1397,7 +1397,7 @@ destruct(struct ofproto *ofproto_)
     guarded_list_pop_all(&ofproto->pins, &pins);
     LIST_FOR_EACH_SAFE (pin, next_pin, list_node, &pins) {
         list_remove(&pin->list_node);
-        free(CONST_CAST(void *, pin->packet));
+        free(CONST_CAST(void *, pin->up.packet));
         free(pin);
     }
     guarded_list_destroy(&ofproto->pins);
@@ -1428,7 +1428,7 @@ static int
 run_fast(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    struct ofputil_packet_in *pin, *next_pin;
+    struct ofproto_packet_in *pin, *next_pin;
     struct list pins;
 
     /* Do not perform any periodic activity required by 'ofproto' while
@@ -1441,7 +1441,7 @@ run_fast(struct ofproto *ofproto_)
     LIST_FOR_EACH_SAFE (pin, next_pin, list_node, &pins) {
         connmgr_send_packet_in(ofproto->up.connmgr, pin);
         list_remove(&pin->list_node);
-        free(CONST_CAST(void *, pin->packet));
+        free(CONST_CAST(void *, pin->up.packet));
         free(pin);
     }
 

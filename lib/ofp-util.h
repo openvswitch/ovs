@@ -376,8 +376,6 @@ struct ofpbuf *ofputil_encode_flow_removed(const struct ofputil_flow_removed *,
 
 /* Abstract packet-in message. */
 struct ofputil_packet_in {
-    struct list list_node; /* For queueing packet_ins. */
-
     const void *packet;
     size_t packet_len;
 
