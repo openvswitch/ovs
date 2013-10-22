@@ -1521,7 +1521,7 @@ schedule_packet_in(struct ofconn *ofconn, struct ofproto_packet_in pin)
     pin.up.total_len = pin.up.packet_len;
 
     if (pin.up.reason == OFPR_ACTION) {
-        controller_max_len = pin.up.send_len;  /* max_len */
+        controller_max_len = pin.send_len;  /* max_len */
     } else {
         controller_max_len = ofconn->miss_send_len;
     }
@@ -1544,10 +1544,9 @@ schedule_packet_in(struct ofconn *ofconn, struct ofproto_packet_in pin)
     /* Figure out how much of the packet to send.
      * If not buffered, send the entire packet.  Otherwise, depending on
      * the reason of packet-in, send what requested by the controller. */
-    if (pin.up.buffer_id == UINT32_MAX) {
-        pin.up.send_len = pin.up.packet_len;
-    } else {
-        pin.up.send_len = MIN(pin.up.packet_len, controller_max_len);
+    if (pin.up.buffer_id != UINT32_MAX
+        && controller_max_len < pin.up.packet_len) {
+        pin.up.packet_len = controller_max_len;
     }
 
     /* Make OFPT_PACKET_IN and hand over to packet scheduler.  It might

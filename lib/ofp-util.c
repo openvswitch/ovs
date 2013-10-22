@@ -2940,7 +2940,6 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
                          enum ofputil_protocol protocol,
                          enum nx_packet_in_format packet_in_format)
 {
-    size_t send_len = MIN(pin->send_len, pin->packet_len);
     struct ofpbuf *packet;
 
     /* Add OFPT_PACKET_IN. */
@@ -2966,11 +2965,11 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
         /* The final argument is just an estimate of the space required. */
         packet = ofpraw_alloc_xid(packet_in_raw, packet_in_version,
                                   htonl(0), (sizeof(struct flow_metadata) * 2
-                                             + 2 + send_len));
+                                             + 2 + pin->packet_len));
         ofpbuf_put_zeros(packet, packet_in_size);
         oxm_put_match(packet, &match);
         ofpbuf_put_zeros(packet, 2);
-        ofpbuf_put(packet, pin->packet, send_len);
+        ofpbuf_put(packet, pin->packet, pin->packet_len);
 
         opi = packet->l3;
         opi->pi.buffer_id = htonl(pin->buffer_id);
@@ -2984,14 +2983,14 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
         struct ofp10_packet_in *opi;
 
         packet = ofpraw_alloc_xid(OFPRAW_OFPT10_PACKET_IN, OFP10_VERSION,
-                                  htonl(0), send_len);
+                                  htonl(0), pin->packet_len);
         opi = ofpbuf_put_zeros(packet, offsetof(struct ofp10_packet_in, data));
         opi->total_len = htons(pin->total_len);
         opi->in_port = htons(ofp_to_u16(pin->fmd.in_port));
         opi->reason = pin->reason;
         opi->buffer_id = htonl(pin->buffer_id);
 
-        ofpbuf_put(packet, pin->packet, send_len);
+        ofpbuf_put(packet, pin->packet, pin->packet_len);
     } else if (packet_in_format == NXPIF_NXM) {
         struct nx_packet_in *npi;
         struct match match;
@@ -3002,11 +3001,11 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
         /* The final argument is just an estimate of the space required. */
         packet = ofpraw_alloc_xid(OFPRAW_NXT_PACKET_IN, OFP10_VERSION,
                                   htonl(0), (sizeof(struct flow_metadata) * 2
-                                             + 2 + send_len));
+                                             + 2 + pin->packet_len));
         ofpbuf_put_zeros(packet, sizeof *npi);
         match_len = nx_put_match(packet, &match, 0, 0);
         ofpbuf_put_zeros(packet, 2);
-        ofpbuf_put(packet, pin->packet, send_len);
+        ofpbuf_put(packet, pin->packet, pin->packet_len);
 
         npi = packet->l3;
         npi->buffer_id = htonl(pin->buffer_id);

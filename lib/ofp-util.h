@@ -384,7 +384,6 @@ struct ofputil_packet_in {
     ovs_be64 cookie;
 
     uint32_t buffer_id;
-    int send_len;
     uint16_t total_len;         /* Full length of frame. */
 
     struct flow_metadata fmd;   /* Metadata at creation time. */
