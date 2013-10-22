@@ -376,17 +376,33 @@ struct ofpbuf *ofputil_encode_flow_removed(const struct ofputil_flow_removed *,
 
 /* Abstract packet-in message. */
 struct ofputil_packet_in {
+    /* Packet data and metadata.
+     *
+     * To save bandwidth, in some cases a switch may send only the first
+     * several bytes of a packet, indicated by 'packet_len < total_len'.  When
+     * the full packet is included, 'packet_len == total_len'. */
     const void *packet;
-    size_t packet_len;
+    size_t packet_len;          /* Number of bytes in 'packet'. */
+    size_t total_len;           /* Size of packet, pre-truncation. */
+    struct flow_metadata fmd;
 
-    enum ofp_packet_in_reason reason;    /* One of OFPR_*. */
-    uint8_t table_id;
-    ovs_be64 cookie;
-
+    /* Identifies a buffer in the switch that contains the full packet, to
+     * allow the controller to reference it later without having to send the
+     * entire packet back to the switch.
+     *
+     * UINT32_MAX indicates that the packet is not buffered in the switch.  A
+     * switch should only use UINT32_MAX when it sends the entire packet. */
     uint32_t buffer_id;
-    uint16_t total_len;         /* Full length of frame. */
 
-    struct flow_metadata fmd;   /* Metadata at creation time. */
+    /* Reason that the packet-in is being sent. */
+    enum ofp_packet_in_reason reason;    /* One of OFPR_*. */
+
+    /* Information about the OpenFlow flow that triggered the packet-in.
+     *
+     * A packet-in triggered by a flow table miss has no associated flow.  In
+     * that case, 'cookie' is 0. */
+    uint8_t table_id;                    /* OpenFlow table ID. */
+    ovs_be64 cookie;                     /* Flow's cookie. */
 };
 
 enum ofperr ofputil_decode_packet_in(struct ofputil_packet_in *,
