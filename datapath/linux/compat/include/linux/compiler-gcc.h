@@ -7,3 +7,7 @@
 #ifndef __packed
 #define __packed __attribute__((packed))
 #endif
+
+#ifndef __always_unused
+#define __always_unused __attribute__((unused))
+#endif
