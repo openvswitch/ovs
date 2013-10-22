@@ -153,6 +153,8 @@ void connmgr_send_flow_removed(struct connmgr *,
                                const struct ofputil_flow_removed *);
 void connmgr_send_packet_in(struct connmgr *,
                             const struct ofproto_packet_in *);
+void ofconn_send_role_status(struct ofconn *ofconn, uint32_t role,
+                             uint8_t reason);
 
 /* Fail-open settings. */
 enum ofproto_fail_mode connmgr_get_fail_mode(const struct connmgr *);

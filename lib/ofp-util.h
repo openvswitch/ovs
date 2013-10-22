@@ -692,11 +692,23 @@ struct ofputil_role_request {
     uint64_t generation_id;
 };
 
+struct ofputil_role_status {
+    enum ofp12_controller_role role;
+    enum ofp14_controller_role_reason reason;
+    uint64_t generation_id;
+};
+
 enum ofperr ofputil_decode_role_message(const struct ofp_header *,
                                         struct ofputil_role_request *);
 struct ofpbuf *ofputil_encode_role_reply(const struct ofp_header *,
                                          const struct ofputil_role_request *);
 
+struct ofpbuf *ofputil_encode_role_status(
+                                const struct ofputil_role_status *status,
+                                enum ofputil_protocol protocol);
+
+enum ofperr ofputil_decode_role_status(const struct ofp_header *oh,
+                                       struct ofputil_role_status *rs);
 /* Abstract table stats.
  *
  * For now we use ofp12_table_stats as a superset of the other protocol

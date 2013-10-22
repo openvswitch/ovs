@@ -116,7 +116,6 @@ OFP_ASSERT(sizeof(struct ofp14_role_prop_header) == 4);
 
 /* Role status event message. */
 struct ofp14_role_status {
-    struct ofp_header header;   /* Type OFPT_ROLE_REQUEST/OFPT_ROLE_REPLY. */
     ovs_be32 role;              /* One of OFPCR_ROLE_*. */
     uint8_t  reason;            /* One of OFPCRR_*. */
     uint8_t  pad[3];            /* Align to 64 bits. */
@@ -124,7 +123,7 @@ struct ofp14_role_status {
 
     /* Followed by a list of struct ofp14_role_prop_header */
 };
-OFP_ASSERT(sizeof(struct ofp14_role_status) == 24);
+OFP_ASSERT(sizeof(struct ofp14_role_status) == 16);
 
 /* What changed about the controller role */
 enum ofp14_controller_role_reason {

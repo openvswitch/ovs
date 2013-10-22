@@ -1917,20 +1917,12 @@ ofp_print_echo(struct ds *string, const struct ofp_header *oh, int verbosity)
 }
 
 static void
-ofp_print_role_message(struct ds *string, const struct ofp_header *oh)
+ofp_print_role_generic(struct ds *string, enum ofp12_controller_role role,
+                       uint64_t generation_id)
 {
-    struct ofputil_role_request rr;
-    enum ofperr error;
-
-    error = ofputil_decode_role_message(oh, &rr);
-    if (error) {
-        ofp_print_error(string, error);
-        return;
-    }
-
     ds_put_cstr(string, " role=");
 
-    switch (rr.role) {
+    switch (role) {
     case OFPCR12_ROLE_NOCHANGE:
         ds_put_cstr(string, "nochange");
         break;
@@ -1947,8 +1939,54 @@ ofp_print_role_message(struct ds *string, const struct ofp_header *oh)
         NOT_REACHED();
     }
 
-    if (rr.have_generation_id) {
-        ds_put_format(string, " generation_id=%"PRIu64, rr.generation_id);
+    if (generation_id != UINT64_MAX) {
+        ds_put_format(string, " generation_id=%"PRIu64, generation_id);
+    }
+}
+
+static void
+ofp_print_role_message(struct ds *string, const struct ofp_header *oh)
+{
+    struct ofputil_role_request rr;
+    enum ofperr error;
+
+    error = ofputil_decode_role_message(oh, &rr);
+    if (error) {
+        ofp_print_error(string, error);
+        return;
+    }
+
+    ofp_print_role_generic(string, rr.role, rr.have_generation_id ? rr.generation_id : UINT64_MAX);
+}
+
+static void
+ofp_print_role_status_message(struct ds *string, const struct ofp_header *oh)
+{
+    struct ofputil_role_status rs;
+    enum ofperr error;
+
+    error = ofputil_decode_role_status(oh, &rs);
+    if (error) {
+        ofp_print_error(string, error);
+        return;
+    }
+
+    ofp_print_role_generic(string, rs.role, rs.generation_id);
+
+    ds_put_cstr(string, " reason=");
+
+    switch (rs.reason) {
+    case OFPCRR_MASTER_REQUEST:
+        ds_put_cstr(string, "master_request");
+        break;
+    case OFPCRR_CONFIG:
+        ds_put_cstr(string, "configuration_changed");
+        break;
+    case OFPCRR_EXPERIMENTER:
+        ds_put_cstr(string, "experimenter_data_changed");
+        break;
+    default:
+        NOT_REACHED();
     }
 }
 
@@ -2566,6 +2604,7 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
         ofp_print_role_message(string, oh);
         break;
     case OFPTYPE_ROLE_STATUS:
+        ofp_print_role_status_message(string, oh);
         break;
 
     case OFPTYPE_METER_STATS_REQUEST:

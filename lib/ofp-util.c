@@ -4186,6 +4186,51 @@ ofputil_encode_role_reply(const struct ofp_header *request,
     return buf;
 }
 
+struct ofpbuf *
+ofputil_encode_role_status(const struct ofputil_role_status *status,
+                           enum ofputil_protocol protocol)
+{
+    struct ofpbuf *buf;
+    enum ofp_version version;
+    struct ofp14_role_status *rstatus;
+
+    version = ofputil_protocol_to_ofp_version(protocol);
+    buf = ofpraw_alloc_xid(OFPRAW_OFPT14_ROLE_STATUS, version, htonl(0), 0);
+    rstatus = ofpbuf_put_zeros(buf, sizeof *rstatus);
+    rstatus->role = htonl(status->role);
+    rstatus->reason = status->reason;
+    rstatus->generation_id = htonll(status->generation_id);
+
+    return buf;
+}
+
+enum ofperr
+ofputil_decode_role_status(const struct ofp_header *oh,
+                           struct ofputil_role_status *rs)
+{
+    struct ofpbuf b;
+    enum ofpraw raw;
+    const struct ofp14_role_status *r;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    raw = ofpraw_pull_assert(&b);
+    ovs_assert(raw == OFPRAW_OFPT14_ROLE_STATUS);
+
+    r = b.l3;
+    if (r->role != htonl(OFPCR12_ROLE_NOCHANGE) &&
+        r->role != htonl(OFPCR12_ROLE_EQUAL) &&
+        r->role != htonl(OFPCR12_ROLE_MASTER) &&
+        r->role != htonl(OFPCR12_ROLE_SLAVE)) {
+        return OFPERR_OFPRRFC_BAD_ROLE;
+    }
+
+    rs->role = ntohl(r->role);
+    rs->generation_id = ntohll(r->generation_id);
+    rs->reason = r->reason;
+
+    return 0;
+}
+
 /* Table stats. */
 
 static void

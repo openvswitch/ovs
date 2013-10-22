@@ -912,17 +912,33 @@ ofconn_get_role(const struct ofconn *ofconn)
     return ofconn->role;
 }
 
+void
+ofconn_send_role_status(struct ofconn *ofconn, uint32_t role, uint8_t reason)
+{
+    struct ofputil_role_status status;
+    struct ofpbuf *buf;
+
+    status.reason = reason;
+    status.role = role;
+    ofconn_get_master_election_id(ofconn, &status.generation_id);
+
+    buf = ofputil_encode_role_status(&status, ofconn_get_protocol(ofconn));
+
+    ofconn_send(ofconn, buf, NULL);
+}
+
 /* Changes 'ofconn''s role to 'role'.  If 'role' is OFPCR12_ROLE_MASTER then
  * any existing master is demoted to a slave. */
 void
 ofconn_set_role(struct ofconn *ofconn, enum ofp12_controller_role role)
 {
-    if (role == OFPCR12_ROLE_MASTER) {
+    if (role != ofconn->role && role == OFPCR12_ROLE_MASTER) {
         struct ofconn *other;
 
         HMAP_FOR_EACH (other, hmap_node, &ofconn->connmgr->controllers) {
             if (other->role == OFPCR12_ROLE_MASTER) {
                 other->role = OFPCR12_ROLE_SLAVE;
+                ofconn_send_role_status(other, OFPCR12_ROLE_SLAVE, OFPCRR_MASTER_REQUEST);
             }
         }
     }
