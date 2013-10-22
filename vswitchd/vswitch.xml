@@ -2009,6 +2009,11 @@
         CFM on this <ref table="Interface"/>.
       </column>
 
+      <column name="cfm_flap_count">
+        Counts the number of cfm fault flapps since boot.  A flap is
+        considered to be a change of the <ref column="cfm_fault"/> value.
+      </column>
+
       <column name="cfm_fault">
         <p>
           Indicates a connectivity fault triggered by an inability to receive

@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
  "version": "7.3.0",
- "cksum": "2483452374 20182",
+ "cksum": "2811681289 20311",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -224,6 +224,11 @@
            "min": 0,
            "max": "unlimited"},
          "ephemeral": true},
+       "cfm_flap_count": {
+         "type": {
+           "key": {"type": "integer"},
+           "min": 0,
+           "max": 1}},
        "cfm_fault": {
          "type": {
            "key": { "type": "boolean"},

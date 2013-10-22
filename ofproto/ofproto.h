@@ -408,6 +408,8 @@ struct ofproto_cfm_status {
      * mode. */
     int remote_opstate;
 
+    uint64_t flap_count;
+
     /* Ordinarily a "health status" in the range 0...100 inclusive, with 0
      * being worst and 100 being best, or -1 if the health status is not
      * well-defined. */

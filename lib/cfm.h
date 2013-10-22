@@ -77,6 +77,7 @@ bool cfm_should_process_flow(const struct cfm *cfm, const struct flow *,
                              struct flow_wildcards *);
 void cfm_process_heartbeat(struct cfm *, const struct ofpbuf *packet);
 int cfm_get_fault(const struct cfm *);
+uint64_t cfm_get_flap_count(const struct cfm *);
 int cfm_get_health(const struct cfm *);
 int cfm_get_opup(const struct cfm *);
 void cfm_get_remote_mpids(const struct cfm *, uint64_t **rmps, size_t *n_rmps);

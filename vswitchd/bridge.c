@@ -376,6 +376,7 @@ bridge_init(const char *remote)
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_cfm_fault);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_cfm_fault_status);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_cfm_remote_mpids);
+    ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_cfm_flap_count);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_cfm_health);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_cfm_remote_opstate);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_bfd_status);
@@ -1890,11 +1891,13 @@ iface_refresh_cfm_stats(struct iface *iface)
         ovsrec_interface_set_cfm_fault(cfg, NULL, 0);
         ovsrec_interface_set_cfm_fault_status(cfg, NULL, 0);
         ovsrec_interface_set_cfm_remote_opstate(cfg, NULL);
+        ovsrec_interface_set_cfm_flap_count(cfg, NULL, 0);
         ovsrec_interface_set_cfm_health(cfg, NULL, 0);
         ovsrec_interface_set_cfm_remote_mpids(cfg, NULL, 0);
     } else {
         const char *reasons[CFM_FAULT_N_REASONS];
         int64_t cfm_health = status.health;
+        int64_t cfm_flap_count = status.flap_count;
         bool faulted = status.faults != 0;
         size_t i, j;
 
@@ -1908,6 +1911,8 @@ iface_refresh_cfm_stats(struct iface *iface)
             }
         }
         ovsrec_interface_set_cfm_fault_status(cfg, (char **) reasons, j);
+
+        ovsrec_interface_set_cfm_flap_count(cfg, &cfm_flap_count, 1);
 
         if (status.remote_opstate >= 0) {
             const char *remote_opstate = status.remote_opstate ? "up" : "down";

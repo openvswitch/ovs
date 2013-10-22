@@ -1953,6 +1953,7 @@ get_cfm_status(const struct ofport *ofport_,
 
     if (ofport->cfm) {
         status->faults = cfm_get_fault(ofport->cfm);
+        status->flap_count = cfm_get_flap_count(ofport->cfm);
         status->remote_opstate = cfm_get_opup(ofport->cfm);
         status->health = cfm_get_health(ofport->cfm);
         cfm_get_remote_mpids(ofport->cfm, &status->rmps, &status->n_rmps);

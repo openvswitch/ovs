@@ -129,6 +129,8 @@ struct cfm {
     atomic_bool check_tnl_key; /* Verify the tunnel key of inbound packets? */
     atomic_bool extended;      /* Extended mode. */
     atomic_int ref_cnt;
+
+    uint64_t flap_count;       /* Count the flaps since boot. */
 };
 
 /* Remote MPs represent foreign network entities that are configured to have
@@ -330,6 +332,7 @@ cfm_create(const struct netdev *netdev) OVS_EXCLUDED(mutex)
     cfm->fault_override = -1;
     cfm->health = -1;
     cfm->last_tx = 0;
+    cfm->flap_count = 0;
     atomic_init(&cfm->extended, false);
     atomic_init(&cfm->check_tnl_key, false);
     atomic_init(&cfm->ref_cnt, 1);
@@ -487,6 +490,11 @@ cfm_run(struct cfm *cfm) OVS_EXCLUDED(mutex)
             ds_put_char(&ds, ']');
             VLOG_INFO("%s: CFM faults changed %s.", cfm->name, ds_cstr(&ds));
             ds_destroy(&ds);
+
+            /* If there is a flap, increments the counter. */
+            if (old_cfm_fault == false || cfm->fault == false) {
+                cfm->flap_count++;
+            }
         }
 
         cfm->booted = true;
@@ -832,6 +840,17 @@ cfm_get_fault(const struct cfm *cfm) OVS_EXCLUDED(mutex)
     fault = cfm_get_fault__(cfm);
     ovs_mutex_unlock(&mutex);
     return fault;
+}
+
+/* Gets the number of cfm fault flapping since start. */
+uint64_t
+cfm_get_flap_count(const struct cfm *cfm) OVS_EXCLUDED(mutex)
+{
+    uint64_t flap_count;
+    ovs_mutex_lock(&mutex);
+    flap_count = cfm->flap_count;
+    ovs_mutex_unlock(&mutex);
+    return flap_count;
 }
 
 /* Gets the health of 'cfm'.  Returns an integer between 0 and 100 indicating
