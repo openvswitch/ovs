@@ -332,9 +332,6 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
                    && !strcmp(msg->method, "stolen")) {
             /* Someone else stole our lock. */
             ovsdb_idl_parse_lock_notify(idl, msg->params, false);
-        } else if (msg->type == JSONRPC_REPLY && msg->id->type == JSON_STRING
-                   && !strcmp(msg->id->u.string, "echo")) {
-            /* Reply to our echo request.  Ignore it. */
         } else if ((msg->type == JSONRPC_ERROR
                     || msg->type == JSONRPC_REPLY)
                    && ovsdb_idl_txn_process_reply(idl, msg)) {
