@@ -2565,6 +2565,8 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
     case OFPTYPE_ROLE_REPLY:
         ofp_print_role_message(string, oh);
         break;
+    case OFPTYPE_ROLE_STATUS:
+        break;
 
     case OFPTYPE_METER_STATS_REQUEST:
     case OFPTYPE_METER_CONFIG_STATS_REQUEST:

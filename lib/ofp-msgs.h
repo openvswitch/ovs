@@ -230,6 +230,9 @@ enum ofpraw {
     /* OFPT 1.3+ (29): struct ofp13_meter_mod, uint8_t[8][]. */
     OFPRAW_OFPT13_METER_MOD,
 
+    /* OFPT 1.4+ (30): struct ofp14_role_status, uint8_t[8][]. */
+    OFPRAW_OFPT14_ROLE_STATUS,
+
 /* Standard statistics. */
 
     /* OFPST 1.0+ (0): void. */
@@ -501,6 +504,9 @@ enum ofptype {
 
     /* Meters and rate limiters configuration messages. */
     OFPTYPE_METER_MOD,            /* OFPRAW_OFPT13_METER_MOD. */
+
+    /* Controller role change event messages. */
+    OFPTYPE_ROLE_STATUS,          /* OFPRAW_OFPT14_ROLE_STATUS. */
 
     /* Statistics. */
     OFPTYPE_DESC_STATS_REQUEST,      /* OFPRAW_OFPST_DESC_REQUEST. */

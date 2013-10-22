@@ -1418,6 +1418,7 @@ is_admitted_msg(const struct ofpbuf *b)
     case OFPTYPE_METER_FEATURES_STATS_REPLY:
     case OFPTYPE_ROLE_REQUEST:
     case OFPTYPE_ROLE_REPLY:
+    case OFPTYPE_ROLE_STATUS:
     case OFPTYPE_SET_FLOW_FORMAT:
     case OFPTYPE_FLOW_MOD_TABLE_ID:
     case OFPTYPE_SET_PACKET_IN_FORMAT:

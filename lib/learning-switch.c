@@ -369,6 +369,7 @@ lswitch_process_packet(struct lswitch *sw, const struct ofpbuf *msg)
     case OFPTYPE_PORT_DESC_STATS_REPLY:
     case OFPTYPE_ROLE_REQUEST:
     case OFPTYPE_ROLE_REPLY:
+    case OFPTYPE_ROLE_STATUS:
     case OFPTYPE_SET_FLOW_FORMAT:
     case OFPTYPE_FLOW_MOD_TABLE_ID:
     case OFPTYPE_SET_PACKET_IN_FORMAT:
