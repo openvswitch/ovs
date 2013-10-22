@@ -1494,7 +1494,7 @@ connmgr_send_packet_in(struct connmgr *mgr,
 
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
         if (ofconn_receives_async_msg(ofconn, OAM_PACKET_IN, pin->up.reason)
-            && ofconn->controller_id == pin->up.controller_id) {
+            && ofconn->controller_id == pin->controller_id) {
             schedule_packet_in(ofconn, *pin);
         }
     }

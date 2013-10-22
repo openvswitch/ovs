@@ -66,6 +66,7 @@ enum ofconn_async_msg_type {
 struct ofproto_packet_in {
     struct ofputil_packet_in up;
     struct list list_node;      /* For queuing. */
+    uint16_t controller_id;     /* Controller ID to send to. */
 };
 
 /* Basics. */

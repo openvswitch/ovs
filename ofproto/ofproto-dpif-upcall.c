@@ -845,11 +845,11 @@ handle_upcalls(struct udpif *udpif, struct list *upcalls)
             pin->up.packet = xmemdup(packet->data, packet->size);
             pin->up.packet_len = packet->size;
             pin->up.reason = OFPR_NO_MATCH;
-            pin->up.controller_id = 0;
             pin->up.table_id = 0;
             pin->up.cookie = 0;
             pin->up.send_len = 0; /* Not used for flow table misses. */
             flow_get_metadata(&miss->flow, &pin->up.fmd);
+            pin->controller_id = 0;
             ofproto_dpif_send_packet_in(miss->ofproto, pin);
         }
     }

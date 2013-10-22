@@ -1847,13 +1847,13 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     pin->up.packet_len = packet->size;
     pin->up.packet = ofpbuf_steal_data(packet);
     pin->up.reason = reason;
-    pin->up.controller_id = controller_id;
     pin->up.table_id = ctx->table_id;
     pin->up.cookie = ctx->rule ? rule_dpif_get_flow_cookie(ctx->rule) : 0;
 
     pin->up.send_len = len;
     flow_get_metadata(&ctx->xin->flow, &pin->up.fmd);
 
+    pin->controller_id = controller_id;
     ofproto_dpif_send_packet_in(ctx->xbridge->ofproto, pin);
     ofpbuf_delete(packet);
 }
