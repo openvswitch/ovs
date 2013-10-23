@@ -35,6 +35,7 @@
 #include <linux/ip.h>
 #include <linux/ipv6.h>
 #include <linux/sctp.h>
+#include <linux/smp.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
 #include <linux/icmp.h>
@@ -62,8 +63,9 @@ u64 ovs_flow_used_time(unsigned long flow_jiffies)
 #define TCP_FLAGS_OFFSET 13
 #define TCP_FLAG_MASK 0x3f
 
-void ovs_flow_used(struct sw_flow *flow, struct sk_buff *skb)
+void ovs_flow_stats_update(struct sw_flow *flow, struct sk_buff *skb)
 {
+	struct sw_flow_stats *stats = &flow->stats[smp_processor_id()];
 	u8 tcp_flags = 0;
 
 	if ((flow->key.eth.type == htons(ETH_P_IP) ||
@@ -74,12 +76,64 @@ void ovs_flow_used(struct sw_flow *flow, struct sk_buff *skb)
 		tcp_flags = *(tcp + TCP_FLAGS_OFFSET) & TCP_FLAG_MASK;
 	}
 
-	spin_lock(&flow->lock);
-	flow->used = jiffies;
-	flow->packet_count++;
-	flow->byte_count += skb->len;
-	flow->tcp_flags |= tcp_flags;
-	spin_unlock(&flow->lock);
+	spin_lock(&stats->lock);
+	stats->used = jiffies;
+	stats->packet_count++;
+	stats->byte_count += skb->len;
+	stats->tcp_flags |= tcp_flags;
+	spin_unlock(&stats->lock);
+}
+
+void ovs_flow_stats_get(struct sw_flow *flow, struct sw_flow_stats *res)
+{
+	int cpu, cur_cpu;
+
+	memset(res, 0, sizeof(*res));
+
+	cur_cpu = get_cpu();
+	for_each_possible_cpu(cpu) {
+		struct sw_flow_stats *stats = &flow->stats[cpu];
+
+		if (cpu == cur_cpu)
+			local_bh_disable();
+
+		spin_lock(&stats->lock);
+		if (time_after(stats->used, res->used))
+			res->used = stats->used;
+		res->packet_count += stats->packet_count;
+		res->byte_count += stats->byte_count;
+		res->tcp_flags |= stats->tcp_flags;
+		spin_unlock(&stats->lock);
+
+		if (cpu == cur_cpu)
+			local_bh_enable();
+
+	}
+	put_cpu();
+}
+
+void ovs_flow_stats_clear(struct sw_flow *flow)
+{
+	int cpu, cur_cpu;
+
+	cur_cpu = get_cpu();
+	for_each_possible_cpu(cpu) {
+		struct sw_flow_stats *stats = &flow->stats[cpu];
+
+		if (cpu == cur_cpu)
+			local_bh_disable();
+
+		spin_lock(&stats->lock);
+		stats->used = 0;
+		stats->packet_count = 0;
+		stats->byte_count = 0;
+		stats->tcp_flags = 0;
+		spin_unlock(&stats->lock);
+
+		if (cpu == cur_cpu)
+			local_bh_enable();
+	}
+	put_cpu();
 }
 
 static int check_header(struct sk_buff *skb, int len)
