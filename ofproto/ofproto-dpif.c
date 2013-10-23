@@ -4308,6 +4308,11 @@ rule_dpif_is_fail_open(const struct rule_dpif *rule)
 {
     return is_fail_open_rule(&rule->up);
 }
+
+bool
+rule_dpif_is_table_miss(const struct rule_dpif *rule)
+{
+    return rule_is_table_miss(&rule->up);
 }
 
 ovs_be64

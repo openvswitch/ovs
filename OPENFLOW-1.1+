@@ -130,9 +130,6 @@ didn't compare the specs carefully yet.)
       - Change the default table-miss action (in the absense of table-miss
         entry) from packet_in to drop for OF1.3+.  Decide what to do if
         a switch is configured to support multiple OF versions.
-      - Distinguish table-miss flow entry and make its packet_in reason
-        OFPR_NO_MATCH.  (OFPR_TABLE_MISS for OF1.4)
-        Also, make it use the appropriate pin scheduler.
       [required for OF1.3+]
 
     * IPv6 extension header handling support.  Fully implementing this

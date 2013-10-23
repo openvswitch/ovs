@@ -75,6 +75,7 @@ void rule_dpif_credit_stats(struct rule_dpif *rule ,
                             const struct dpif_flow_stats *);
 
 bool rule_dpif_is_fail_open(const struct rule_dpif *);
+bool rule_dpif_is_table_miss(const struct rule_dpif *);
 
 struct rule_actions *rule_dpif_get_actions(const struct rule_dpif *);
 

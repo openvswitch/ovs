@@ -68,6 +68,11 @@ struct ofproto_packet_in {
     struct list list_node;      /* For queuing. */
     uint16_t controller_id;     /* Controller ID to send to. */
     int send_len;               /* Length that the action requested sending. */
+
+    /* True if the packet_in was generated directly by a table-miss flow, that
+     * is, a flow with priority 0 that wildcards all fields.  (Our
+     * interpretation of "directly" is "not via groups".) */
+    bool generated_by_table_miss;
 };
 
 /* Basics. */
