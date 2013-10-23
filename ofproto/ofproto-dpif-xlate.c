@@ -2368,12 +2368,11 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             }
             break;
 
-        case OFPACT_SET_IPV4_DSCP:
-            /* OpenFlow 1.0 only supports IPv4. */
-            if (flow->dl_type == htons(ETH_TYPE_IP)) {
+        case OFPACT_SET_IP_DSCP:
+            if (is_ip_any(flow)) {
                 wc->masks.nw_tos |= IP_DSCP_MASK;
                 flow->nw_tos &= ~IP_DSCP_MASK;
-                flow->nw_tos |= ofpact_get_SET_IPV4_DSCP(a)->dscp;
+                flow->nw_tos |= ofpact_get_SET_IP_DSCP(a)->dscp;
             }
             break;
 

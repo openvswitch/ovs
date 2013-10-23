@@ -1099,9 +1099,9 @@ Sets the TCP or UDP or SCTP source port to \fIport\fR.
 Sets the TCP or UDP or SCTP destination port to \fIport\fR.
 .
 .IP \fBmod_nw_tos\fB:\fItos\fR
-Sets the IPv4 ToS/DSCP field to \fItos\fR, which must be a multiple of
-4 between 0 and 255.  This action does not modify the two least
-significant bits of the ToS field (the ECN bits).
+Sets the DSCP bits in the IPv4 ToS/DSCP or IPv6 traffic class field to
+\fItos\fR, which must be a multiple of 4 between 0 and 255.  This action
+does not modify the two least significant bits of the ToS field (the ECN bits).
 .RE
 .IP
 The following actions are Nicira vendor extensions that, as of this writing, are

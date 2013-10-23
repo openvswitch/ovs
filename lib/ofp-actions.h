@@ -67,7 +67,7 @@
     DEFINE_OFPACT(SET_ETH_DST,     ofpact_mac,           ofpact)    \
     DEFINE_OFPACT(SET_IPV4_SRC,    ofpact_ipv4,          ofpact)    \
     DEFINE_OFPACT(SET_IPV4_DST,    ofpact_ipv4,          ofpact)    \
-    DEFINE_OFPACT(SET_IPV4_DSCP,   ofpact_dscp,          ofpact)    \
+    DEFINE_OFPACT(SET_IP_DSCP,     ofpact_dscp,          ofpact)    \
     DEFINE_OFPACT(SET_L4_SRC_PORT, ofpact_l4_port,       ofpact)    \
     DEFINE_OFPACT(SET_L4_DST_PORT, ofpact_l4_port,       ofpact)    \
     DEFINE_OFPACT(REG_MOVE,        ofpact_reg_move,      ofpact)    \
@@ -285,7 +285,7 @@ struct ofpact_ipv4 {
     ovs_be32 ipv4;
 };
 
-/* OFPACT_SET_IPV4_DSCP.
+/* OFPACT_SET_IP_DSCP.
  *
  * Used for OFPAT10_SET_NW_TOS. */
 struct ofpact_dscp {

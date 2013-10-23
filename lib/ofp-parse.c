@@ -697,7 +697,7 @@ parse_named_action(enum ofputil_action_code code,
         if (tos & ~IP_DSCP_MASK) {
             return xasprintf("%s: not a valid TOS", arg);
         }
-        ofpact_put_SET_IPV4_DSCP(ofpacts)->dscp = tos;
+        ofpact_put_SET_IP_DSCP(ofpacts)->dscp = tos;
         break;
 
     case OFPUTIL_OFPAT11_DEC_NW_TTL:

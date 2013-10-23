@@ -552,7 +552,7 @@ ofpact_from_openflow10(const union ofp_action *a, struct ofpbuf *out)
         if (a->nw_tos.nw_tos & ~IP_DSCP_MASK) {
             return OFPERR_OFPBAC_BAD_ARGUMENT;
         }
-        ofpact_put_SET_IPV4_DSCP(out)->dscp = a->nw_tos.nw_tos;
+        ofpact_put_SET_IP_DSCP(out)->dscp = a->nw_tos.nw_tos;
         break;
 
     case OFPUTIL_OFPAT10_SET_TP_SRC:
@@ -844,7 +844,7 @@ ofpact_from_openflow11(const union ofp_action *a, struct ofpbuf *out)
         if (a->nw_tos.nw_tos & ~IP_DSCP_MASK) {
             return OFPERR_OFPBAC_BAD_ARGUMENT;
         }
-        ofpact_put_SET_IPV4_DSCP(out)->dscp = a->nw_tos.nw_tos;
+        ofpact_put_SET_IP_DSCP(out)->dscp = a->nw_tos.nw_tos;
         break;
 
     case OFPUTIL_OFPAT11_SET_TP_SRC:
@@ -916,7 +916,7 @@ ofpact_is_set_action(const struct ofpact *a)
     case OFPACT_REG_LOAD:
     case OFPACT_SET_ETH_DST:
     case OFPACT_SET_ETH_SRC:
-    case OFPACT_SET_IPV4_DSCP:
+    case OFPACT_SET_IP_DSCP:
     case OFPACT_SET_IPV4_DST:
     case OFPACT_SET_IPV4_SRC:
     case OFPACT_SET_L4_DST_PORT:
@@ -977,7 +977,7 @@ ofpact_is_allowed_in_actions_set(const struct ofpact *a)
     case OFPACT_REG_LOAD:
     case OFPACT_SET_ETH_DST:
     case OFPACT_SET_ETH_SRC:
-    case OFPACT_SET_IPV4_DSCP:
+    case OFPACT_SET_IP_DSCP:
     case OFPACT_SET_IPV4_DST:
     case OFPACT_SET_IPV4_SRC:
     case OFPACT_SET_L4_DST_PORT:
@@ -1247,7 +1247,7 @@ ovs_instruction_type_from_ofpact_type(enum ofpact_type type)
     case OFPACT_SET_ETH_DST:
     case OFPACT_SET_IPV4_SRC:
     case OFPACT_SET_IPV4_DST:
-    case OFPACT_SET_IPV4_DSCP:
+    case OFPACT_SET_IP_DSCP:
     case OFPACT_SET_L4_SRC_PORT:
     case OFPACT_SET_L4_DST_PORT:
     case OFPACT_REG_MOVE:
@@ -1566,7 +1566,7 @@ ofpact_check__(const struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
     case OFPACT_SET_ETH_DST:
     case OFPACT_SET_IPV4_SRC:
     case OFPACT_SET_IPV4_DST:
-    case OFPACT_SET_IPV4_DSCP:
+    case OFPACT_SET_IP_DSCP:
     case OFPACT_SET_L4_SRC_PORT:
     case OFPACT_SET_L4_DST_PORT:
         return 0;
@@ -1952,7 +1952,7 @@ ofpact_to_nxast(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_SET_ETH_DST:
     case OFPACT_SET_IPV4_SRC:
     case OFPACT_SET_IPV4_DST:
-    case OFPACT_SET_IPV4_DSCP:
+    case OFPACT_SET_IP_DSCP:
     case OFPACT_SET_L4_SRC_PORT:
     case OFPACT_SET_L4_DST_PORT:
     case OFPACT_WRITE_ACTIONS:
@@ -2033,9 +2033,9 @@ ofpact_to_openflow10(const struct ofpact *a, struct ofpbuf *out)
             = ofpact_get_SET_IPV4_DST(a)->ipv4;
         break;
 
-    case OFPACT_SET_IPV4_DSCP:
+    case OFPACT_SET_IP_DSCP:
         ofputil_put_OFPAT10_SET_NW_TOS(out)->nw_tos
-            = ofpact_get_SET_IPV4_DSCP(a)->dscp;
+            = ofpact_get_SET_IP_DSCP(a)->dscp;
         break;
 
     case OFPACT_SET_L4_SRC_PORT:
@@ -2183,9 +2183,9 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
             = ofpact_get_SET_IPV4_DST(a)->ipv4;
         break;
 
-    case OFPACT_SET_IPV4_DSCP:
+    case OFPACT_SET_IP_DSCP:
         ofputil_put_OFPAT11_SET_NW_TOS(out)->nw_tos
-            = ofpact_get_SET_IPV4_DSCP(a)->dscp;
+            = ofpact_get_SET_IP_DSCP(a)->dscp;
         break;
 
     case OFPACT_SET_L4_SRC_PORT:
@@ -2391,7 +2391,7 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, ofp_port_t port)
     case OFPACT_SET_ETH_DST:
     case OFPACT_SET_IPV4_SRC:
     case OFPACT_SET_IPV4_DST:
-    case OFPACT_SET_IPV4_DSCP:
+    case OFPACT_SET_IP_DSCP:
     case OFPACT_SET_L4_SRC_PORT:
     case OFPACT_SET_L4_DST_PORT:
     case OFPACT_REG_MOVE:
@@ -2649,8 +2649,8 @@ ofpact_format(const struct ofpact *a, struct ds *s)
                       IP_ARGS(ofpact_get_SET_IPV4_DST(a)->ipv4));
         break;
 
-    case OFPACT_SET_IPV4_DSCP:
-        ds_put_format(s, "mod_nw_tos:%d", ofpact_get_SET_IPV4_DSCP(a)->dscp);
+    case OFPACT_SET_IP_DSCP:
+        ds_put_format(s, "mod_nw_tos:%d", ofpact_get_SET_IP_DSCP(a)->dscp);
         break;
 
     case OFPACT_SET_L4_SRC_PORT:
