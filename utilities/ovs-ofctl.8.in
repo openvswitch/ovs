@@ -1109,6 +1109,13 @@ which must be a value between 0 and 3, inclusive.  This action does not modify
 the six most significant bits of the field (the DSCP bits).
 .IP
 Requires OpenFlow 1.1 or later.
+.
+.IP \fBmod_nw_ttl\fB:\fIttl\fR
+Sets the IPv4 TTL or IPv6 hop limit field to \fIttl\fR, which is specified as
+a decimal number between 0 and 255, inclusive.  Switch behavior when setting
+\fIttl\fR to zero is not well specified, though.
+.IP
+Requires OpenFlow 1.1 or later.
 .RE
 .IP
 The following actions are Nicira vendor extensions that, as of this writing, are
@@ -1399,6 +1406,8 @@ the action set, the one written later replaces the earlier action:
 \fBmod_nw_tos\fR
 .IQ
 \fBmod_nw_ecn\fR
+.IQ
+\fBmod_nw_ttl\fR
 .IQ
 \fBmod_tp_dst\fR
 .IQ

@@ -602,7 +602,7 @@ parse_named_action(enum ofputil_action_code code,
     char *error = NULL;
     uint16_t ethertype = 0;
     uint16_t vid = 0;
-    uint8_t tos = 0, ecn;
+    uint8_t tos = 0, ecn, ttl;
     uint8_t pcp = 0;
 
     switch (code) {
@@ -710,6 +710,15 @@ parse_named_action(enum ofputil_action_code code,
             return xasprintf("%s: not a valid ECN", arg);
         }
         ofpact_put_SET_IP_ECN(ofpacts)->ecn = ecn;
+        break;
+
+    case OFPUTIL_OFPAT11_SET_NW_TTL:
+        error = str_to_u8(arg, "TTL", &ttl);
+        if (error) {
+            return error;
+        }
+
+        ofpact_put_SET_IP_TTL(ofpacts)->ttl = ttl;
         break;
 
     case OFPUTIL_OFPAT11_DEC_NW_TTL:
