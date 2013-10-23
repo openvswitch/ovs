@@ -255,8 +255,7 @@ udpif_revalidate(struct udpif *udpif)
     /* Since we remove each miss on revalidation, their statistics won't be
      * accounted to the appropriate 'facet's in the upper layer.  In most
      * cases, this is alright because we've already pushed the stats to the
-     * relevant rules.  However, NetFlow requires absolute packet counts on
-     * 'facet's which could now be incorrect. */
+     * relevant rules. */
     atomic_add(&udpif->reval_seq, 1, &junk);
 
     guarded_list_pop_all(&udpif->fmbs, &fmbs);

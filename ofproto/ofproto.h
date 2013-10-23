@@ -55,13 +55,6 @@ struct ofproto_controller_info {
     } pairs;
 };
 
-struct ofexpired {
-    struct flow flow;
-    uint64_t packet_count;      /* Packets from subrules. */
-    uint64_t byte_count;        /* Bytes from subrules. */
-    long long int used;         /* Last-used time (0 if never used). */
-};
-
 struct ofproto_sflow_options {
     struct sset targets;
     uint32_t sampling_rate;
@@ -71,7 +64,6 @@ struct ofproto_sflow_options {
     char *agent_device;
     char *control_ip;
 };
-
 
 struct ofproto_ipfix_bridge_exporter_options {
     struct sset targets;

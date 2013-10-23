@@ -28,8 +28,6 @@
  * accounted.) */
 #define NF_ACTIVE_TIMEOUT_DEFAULT 600
 
-struct ofexpired;
-
 struct netflow_options {
     struct sset collectors;
     uint8_t engine_type;
@@ -42,33 +40,20 @@ struct netflow_options {
 #define NF_OUT_MULTI OFP_PORT_C(UINT16_MAX - 1)
 #define NF_OUT_DROP  OFP_PORT_C(UINT16_MAX - 2)
 
-struct netflow_flow {
-    long long int last_expired;   /* Time this flow last timed out. */
-    long long int created;        /* Time flow was created since time out. */
-
-    uint64_t packet_count_off;    /* Packet count at last time out. */
-    uint64_t byte_count_off;      /* Byte count at last time out. */
-
-    ofp_port_t output_iface;      /* Output interface index. */
-    uint16_t tcp_flags;           /* Bitwise-OR of all TCP flags seen. */
-};
-
 struct netflow *netflow_create(void);
 void netflow_destroy(struct netflow *);
 int netflow_set_options(struct netflow *, const struct netflow_options *);
-void netflow_expire(struct netflow *, struct netflow_flow *,
-                    struct ofexpired *);
+void netflow_expire(struct netflow *, struct flow *);
 
-bool netflow_run(struct netflow *);
+void netflow_run(struct netflow *);
 void netflow_wait(struct netflow *);
 
 void netflow_mask_wc(struct flow *, struct flow_wildcards *);
 
-void netflow_flow_init(struct netflow_flow *);
-void netflow_flow_clear(struct netflow_flow *);
-void netflow_flow_update_time(struct netflow *, struct netflow_flow *,
-                              long long int used);
-void netflow_flow_update_flags(struct netflow_flow *, uint16_t tcp_flags);
-bool netflow_active_timeout_expired(struct netflow *, struct netflow_flow *);
+void netflow_flow_clear(struct netflow *netflow, struct flow *flow);
+
+void netflow_flow_update(struct netflow *nf, struct flow *flow,
+                         ofp_port_t output_iface,
+                         const struct dpif_flow_stats *);
 
 #endif /* netflow.h */

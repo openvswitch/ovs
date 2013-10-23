@@ -287,7 +287,6 @@ struct facet {
 
     /* Accounting. */
     uint64_t accounted_bytes;    /* Bytes processed by facet_account(). */
-    struct netflow_flow nf_flow; /* Per-flow NetFlow tracking data. */
     uint16_t tcp_flags;          /* TCP flags seen for this 'rule'. */
 
     struct xlate_out xout;
@@ -546,9 +545,6 @@ static void handle_upcalls(struct dpif_backer *);
 
 /* Flow expiration. */
 static int expire(struct dpif_backer *);
-
-/* NetFlow. */
-static void send_netflow_active_timeouts(struct ofproto_dpif *);
 
 /* Global variables. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -1495,9 +1491,7 @@ run(struct ofproto *ofproto_)
     }
 
     if (ofproto->netflow) {
-        if (netflow_run(ofproto->netflow)) {
-            send_netflow_active_timeouts(ofproto);
-        }
+        netflow_run(ofproto->netflow);
     }
     if (ofproto->sflow) {
         dpif_sflow_run(ofproto->sflow);
@@ -3854,8 +3848,6 @@ facet_create(const struct flow_miss *miss)
     facet->learn_rl = time_msec() + 500;
 
     list_init(&facet->subfacets);
-    netflow_flow_init(&facet->nf_flow);
-    netflow_flow_update_time(ofproto->netflow, &facet->nf_flow, facet->used);
 
     xlate_out_copy(&facet->xout, &miss->xout);
 
@@ -3865,7 +3857,11 @@ facet_create(const struct flow_miss *miss)
     classifier_insert(&ofproto->facets, &facet->cr);
     ovs_rwlock_unlock(&ofproto->facets.rwlock);
 
-    facet->nf_flow.output_iface = facet->xout.nf_output_iface;
+    if (ofproto->netflow && !facet_is_controller_flow(facet)) {
+        netflow_flow_update(ofproto->netflow, &facet->flow,
+                            facet->xout.nf_output_iface, &miss->stats);
+    }
+
     return facet;
 }
 
@@ -4085,19 +4081,13 @@ facet_flush_stats(struct facet *facet)
     }
 
     if (ofproto->netflow && !facet_is_controller_flow(facet)) {
-        struct ofexpired expired;
-        expired.flow = facet->flow;
-        expired.packet_count = facet->packet_count;
-        expired.byte_count = facet->byte_count;
-        expired.used = facet->used;
-        netflow_expire(ofproto->netflow, &facet->nf_flow, &expired);
+        netflow_expire(ofproto->netflow, &facet->flow);
+        netflow_flow_clear(ofproto->netflow, &facet->flow);
     }
 
     /* Reset counters to prevent double counting if 'facet' ever gets
      * reinstalled. */
     facet_reset_counters(facet);
-
-    netflow_flow_clear(&facet->nf_flow);
     facet->tcp_flags = 0;
 }
 
@@ -4277,7 +4267,6 @@ facet_revalidate(struct facet *facet)
     facet->xout.has_fin_timeout = xout.has_fin_timeout;
     facet->xout.nf_output_iface = xout.nf_output_iface;
     facet->xout.mirrors = xout.mirrors;
-    facet->nf_flow.output_iface = facet->xout.nf_output_iface;
 
     ovs_mutex_lock(&new_rule->up.mutex);
     facet->used = MAX(facet->used, new_rule->up.created);
@@ -4338,9 +4327,10 @@ facet_push_stats(struct facet *facet, bool may_learn)
         facet->prev_byte_count = facet->byte_count;
         facet->prev_used = facet->used;
 
-        netflow_flow_update_time(facet->ofproto->netflow, &facet->nf_flow,
-                                 facet->used);
-        netflow_flow_update_flags(&facet->nf_flow, facet->tcp_flags);
+        if (facet->ofproto->netflow && !facet_is_controller_flow(facet)) {
+            netflow_flow_update(facet->ofproto->netflow, &facet->flow,
+                                facet->xout.nf_output_iface, &stats);
+        }
         mirror_update_stats(facet->ofproto->mbridge, facet->xout.mirrors,
                             stats.n_packets, stats.n_bytes);
         flow_push_stats(facet->ofproto, &facet->flow, &stats, may_learn);
@@ -5106,46 +5096,6 @@ get_netflow_ids(const struct ofproto *ofproto_,
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
 
     dpif_get_netflow_ids(ofproto->backer->dpif, engine_type, engine_id);
-}
-
-static void
-send_active_timeout(struct ofproto_dpif *ofproto, struct facet *facet)
-{
-    if (!facet_is_controller_flow(facet) &&
-        netflow_active_timeout_expired(ofproto->netflow, &facet->nf_flow)) {
-        struct subfacet *subfacet;
-        struct ofexpired expired;
-
-        LIST_FOR_EACH (subfacet, list_node, &facet->subfacets) {
-            if (subfacet->path == SF_FAST_PATH) {
-                struct dpif_flow_stats stats;
-
-                subfacet_install(subfacet, &facet->xout.odp_actions,
-                                 &stats);
-                subfacet_update_stats(subfacet, &stats);
-            }
-        }
-
-        expired.flow = facet->flow;
-        expired.packet_count = facet->packet_count;
-        expired.byte_count = facet->byte_count;
-        expired.used = facet->used;
-        netflow_expire(ofproto->netflow, &facet->nf_flow, &expired);
-    }
-}
-
-static void
-send_netflow_active_timeouts(struct ofproto_dpif *ofproto)
-{
-    struct cls_cursor cursor;
-    struct facet *facet;
-
-    ovs_rwlock_rdlock(&ofproto->facets.rwlock);
-    cls_cursor_init(&cursor, &ofproto->facets, NULL);
-    CLS_CURSOR_FOR_EACH (facet, cr, &cursor) {
-        send_active_timeout(ofproto, facet);
-    }
-    ovs_rwlock_unlock(&ofproto->facets.rwlock);
 }
 
 static struct ofproto_dpif *
