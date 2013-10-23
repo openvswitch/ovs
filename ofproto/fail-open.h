@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include "flow.h"
+#include "ofproto-provider.h"
 
 struct connmgr;
 struct fail_open;
@@ -30,6 +30,14 @@ struct ofproto;
  * (OpenFlow priorities max out at 65535 and nothing else in Open vSwitch
  * creates flows with this priority).  And "f0" is mnemonic for "fail open"! */
 #define FAIL_OPEN_PRIORITY 0xf0f0f0
+
+/* Returns true if 'rule' is one created by the "fail open" logic, false
+ * otherwise. */
+static inline bool
+is_fail_open_rule(const struct rule *rule)
+{
+    return rule->cr.priority == FAIL_OPEN_PRIORITY;
+}
 
 struct fail_open *fail_open_create(struct ofproto *, struct connmgr *);
 void fail_open_destroy(struct fail_open *);

@@ -4304,9 +4304,10 @@ rule_dpif_credit_stats(struct rule_dpif *rule,
 }
 
 bool
-rule_dpif_fail_open(const struct rule_dpif *rule)
+rule_dpif_is_fail_open(const struct rule_dpif *rule)
 {
-    return rule->up.cr.priority == FAIL_OPEN_PRIORITY;
+    return is_fail_open_rule(&rule->up);
+}
 }
 
 ovs_be64

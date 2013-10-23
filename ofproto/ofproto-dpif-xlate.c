@@ -2778,7 +2778,7 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
         }
         ctx.rule = rule;
     }
-    xout->fail_open = ctx.rule && rule_dpif_fail_open(ctx.rule);
+    xout->fail_open = ctx.rule && rule_dpif_is_fail_open(ctx.rule);
 
     if (xin->ofpacts) {
         ofpacts = xin->ofpacts;
