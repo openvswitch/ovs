@@ -153,7 +153,7 @@ static void ofconn_set_rate_limit(struct ofconn *, int rate, int burst);
 static void ofconn_send(const struct ofconn *, struct ofpbuf *,
                         struct rconn_packet_counter *);
 
-static void do_send_packet_in(struct ofpbuf *, void *ofconn_);
+static void do_send_packet_ins(struct ofconn *, struct list *txq);
 
 /* A listener for incoming OpenFlow "service" connections. */
 struct ofservice {
@@ -1301,7 +1301,10 @@ ofconn_run(struct ofconn *ofconn,
     size_t i;
 
     for (i = 0; i < N_SCHEDULERS; i++) {
-        pinsched_run(ofconn->schedulers[i], do_send_packet_in, ofconn);
+        struct list txq;
+
+        pinsched_run(ofconn->schedulers[i], &txq);
+        do_send_packet_ins(ofconn, &txq);
     }
 
     rconn_run(ofconn->rconn);
@@ -1522,14 +1525,17 @@ connmgr_send_packet_in(struct connmgr *mgr,
     }
 }
 
-/* pinsched callback for sending 'ofp_packet_in' on 'ofconn'. */
 static void
-do_send_packet_in(struct ofpbuf *ofp_packet_in, void *ofconn_)
+do_send_packet_ins(struct ofconn *ofconn, struct list *txq)
 {
-    struct ofconn *ofconn = ofconn_;
+    struct ofpbuf *pin, *next_pin;
 
-    rconn_send_with_limit(ofconn->rconn, ofp_packet_in,
-                          ofconn->packet_in_counter, 100);
+    LIST_FOR_EACH_SAFE (pin, next_pin, list_node, txq) {
+        list_remove(&pin->list_node);
+
+        rconn_send_with_limit(ofconn->rconn, pin,
+                              ofconn->packet_in_counter, 100);
+    }
 }
 
 /* Takes 'pin', composes an OpenFlow packet-in message from it, and passes it
@@ -1540,6 +1546,7 @@ schedule_packet_in(struct ofconn *ofconn, struct ofproto_packet_in pin,
 {
     struct connmgr *mgr = ofconn->connmgr;
     uint16_t controller_max_len;
+    struct list txq;
 
     pin.up.total_len = pin.up.packet_len;
 
@@ -1573,15 +1580,14 @@ schedule_packet_in(struct ofconn *ofconn, struct ofproto_packet_in pin,
         pin.up.packet_len = controller_max_len;
     }
 
-    /* Make OFPT_PACKET_IN and hand over to packet scheduler.  It might
-     * immediately call into do_send_packet_in() or it might buffer it for a
-     * while (until a later call to pinsched_run()). */
+    /* Make OFPT_PACKET_IN and hand over to packet scheduler. */
     pinsched_send(ofconn->schedulers[pin.up.reason == OFPR_NO_MATCH ? 0 : 1],
                   pin.up.fmd.in_port,
                   ofputil_encode_packet_in(&pin.up,
                                            ofconn_get_protocol(ofconn),
                                            ofconn->packet_in_format),
-                  do_send_packet_in, ofconn);
+                  &txq);
+    do_send_packet_ins(ofconn, &txq);
 }
 
 /* Fail-open settings. */
