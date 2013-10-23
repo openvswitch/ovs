@@ -2823,13 +2823,15 @@ reject_slave_controller(struct ofconn *ofconn)
 static enum ofperr
 ofproto_check_ofpacts(struct ofproto *ofproto,
                       const struct ofpact ofpacts[], size_t ofpacts_len,
-                      struct flow *flow, uint8_t table_id)
+                      struct flow *flow, uint8_t table_id,
+                      bool enforce_consistency)
 {
     enum ofperr error;
     uint32_t mid;
 
     error = ofpacts_check(ofpacts, ofpacts_len, flow,
-                          u16_to_ofp(ofproto->max_ports), table_id);
+                          u16_to_ofp(ofproto->max_ports), table_id,
+                          enforce_consistency);
     if (error) {
         return error;
     }
@@ -2887,7 +2889,8 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
     /* Verify actions against packet, then send packet if successful. */
     in_port_.ofp_port = po.in_port;
     flow_extract(payload, 0, 0, NULL, &in_port_, &flow);
-    error = ofproto_check_ofpacts(p, po.ofpacts, po.ofpacts_len, &flow, 0);
+    error = ofproto_check_ofpacts(p, po.ofpacts, po.ofpacts_len, &flow, 0,
+                                  oh->version > OFP10_VERSION);
     if (!error) {
         error = p->ofproto_class->packet_out(p, payload, &flow,
                                              po.ofpacts, po.ofpacts_len);
@@ -3937,7 +3940,8 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
 
     /* Verify actions. */
     error = ofproto_check_ofpacts(ofproto, fm->ofpacts, fm->ofpacts_len,
-                                  &fm->match.flow, table_id);
+                                  &fm->match.flow, table_id,
+                                  request && request->version > OFP10_VERSION);
     if (error) {
         cls_rule_destroy(&cr);
         return error;
@@ -4059,9 +4063,10 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
             continue;
         }
 
-        /* Verify actions. */
+        /* Verify actions, enforce consistency check on OF1.1+. */
         error = ofpacts_check(fm->ofpacts, fm->ofpacts_len, &fm->match.flow,
-                              u16_to_ofp(ofproto->max_ports), rule->table_id);
+                              u16_to_ofp(ofproto->max_ports), rule->table_id,
+                              request && request->version > OFP10_VERSION);
         if (error) {
             return error;
         }

@@ -213,6 +213,12 @@ OFPT_FLOW_MOD (OF1.2): ADD table:255 actions=sample(probability=12345,collector_
 ]])
 AT_CLEANUP
 
+AT_SETUP([ovs-ofctl action inconsistency (OpenFlow 1.1)])
+AT_CHECK([ovs-ofctl --protocols OpenFlow11 add-flow br0 'ip actions=mod_tp_dst:1234'
+], [1], [stdout], [ovs-ofctl: actions are invalid with specified match (OFPBAC_MATCH_INCONSISTENT)
+])
+AT_CLEANUP
+
 AT_SETUP([ovs-ofctl parse-flows (With Tunnel-Parameters)])
 AT_DATA([flows.txt], [[
 tun_id=0x1234000056780000/0xffff0000ffff0000,tun_src=1.1.1.1,tun_dst=2.2.2.2,tun_tos=0x3,tun_ttl=20,tun_flags=key|csum actions=drop
@@ -266,7 +272,7 @@ actions=output:1,bundle_load(eth_src,0,hrw,ofport,NXM_NX_REG0[16..31],slaves:1),
 actions=resubmit:1,resubmit(2),resubmit(,3),resubmit(2,3)
 send_flow_rem,actions=output:1,output:NXM_NX_REG0[],output:2,output:NXM_NX_REG1[16..31],output:3
 check_overlap,actions=output:1,exit,output:2
-actions=fin_timeout(idle_timeout=5,hard_timeout=15)
+tcp,actions=fin_timeout(idle_timeout=5,hard_timeout=15)
 actions=controller(max_len=123,reason=invalid_ttl,id=555)
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 ]])
@@ -302,7 +308,7 @@ NXT_FLOW_MOD: ADD table:255 actions=output:1,bundle_load(eth_src,0,hrw,ofport,NX
 NXT_FLOW_MOD: ADD table:255 actions=resubmit:1,resubmit:2,resubmit(,3),resubmit(2,3)
 NXT_FLOW_MOD: ADD table:255 send_flow_rem actions=output:1,output:NXM_NX_REG0[],output:2,output:NXM_NX_REG1[16..31],output:3
 NXT_FLOW_MOD: ADD table:255 check_overlap actions=output:1,exit,output:2
-NXT_FLOW_MOD: ADD table:255 actions=fin_timeout(idle_timeout=5,hard_timeout=15)
+NXT_FLOW_MOD: ADD table:255 tcp actions=fin_timeout(idle_timeout=5,hard_timeout=15)
 NXT_FLOW_MOD: ADD table:255 actions=controller(reason=invalid_ttl,max_len=123,id=555)
 NXT_FLOW_MOD: ADD table:255 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 ]])

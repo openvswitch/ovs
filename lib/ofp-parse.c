@@ -1152,7 +1152,8 @@ parse_field(const struct mf_field *mf, const char *s, struct match *match,
 
 static char * WARN_UNUSED_RESULT
 parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
-                enum ofputil_protocol *usable_protocols)
+                enum ofputil_protocol *usable_protocols,
+                bool enforce_consistency)
 {
     enum {
         F_OUT_PORT = 1 << 0,
@@ -1360,10 +1361,21 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
             enum ofperr err;
 
             err = ofpacts_check(ofpacts.data, ofpacts.size, &fm->match.flow,
-                                OFPP_MAX, 0);
+                                OFPP_MAX, 0, true);
             if (err) {
-                error = xasprintf("actions are invalid with specified match "
-                                  "(%s)", ofperr_to_string(err));
+                if (!enforce_consistency &&
+                    err == OFPERR_OFPBAC_MATCH_INCONSISTENT) {
+                    /* Allow inconsistent actions to be used with OF 1.0. */
+                    *usable_protocols &= OFPUTIL_P_OF10_ANY;
+                    /* Try again, allowing for inconsistency.
+                     * XXX: As a side effect, logging may be duplicated. */
+                    err = ofpacts_check(ofpacts.data, ofpacts.size,
+                                        &fm->match.flow, OFPP_MAX, 0, false);
+                }
+                if (err) {
+                    error = xasprintf("actions are invalid with specified match "
+                                      "(%s)", ofperr_to_string(err));
+                }
             }
         }
         if (error) {
@@ -1393,12 +1405,14 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
  * error.  The caller is responsible for freeing the returned string. */
 char * WARN_UNUSED_RESULT
 parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
-              enum ofputil_protocol *usable_protocols)
+              enum ofputil_protocol *usable_protocols,
+              bool enforce_consistency)
 {
     char *string = xstrdup(str_);
     char *error;
 
-    error = parse_ofp_str__(fm, command, string, usable_protocols);
+    error = parse_ofp_str__(fm, command, string, usable_protocols,
+                            enforce_consistency);
     if (error) {
         fm->ofpacts = NULL;
         fm->ofpacts_len = 0;
@@ -1745,9 +1759,11 @@ parse_ofpacts(const char *s_, struct ofpbuf *ofpacts,
 char * WARN_UNUSED_RESULT
 parse_ofp_flow_mod_str(struct ofputil_flow_mod *fm, const char *string,
                        uint16_t command,
-                       enum ofputil_protocol *usable_protocols)
+                       enum ofputil_protocol *usable_protocols,
+                       bool enforce_consistency)
 {
-    char *error = parse_ofp_str(fm, command, string, usable_protocols);
+    char *error = parse_ofp_str(fm, command, string, usable_protocols,
+                                enforce_consistency);
     if (!error) {
         /* Normalize a copy of the match.  This ensures that non-normalized
          * flows get logged but doesn't affect what gets sent to the switch, so
@@ -1809,7 +1825,8 @@ parse_ofp_table_mod(struct ofputil_table_mod *tm, const char *table_id,
 char * WARN_UNUSED_RESULT
 parse_ofp_flow_mod_file(const char *file_name, uint16_t command,
                         struct ofputil_flow_mod **fms, size_t *n_fms,
-                        enum ofputil_protocol *usable_protocols)
+                        enum ofputil_protocol *usable_protocols,
+                        bool enforce_consistency)
 {
     size_t allocated_fms;
     int line_number;
@@ -1838,7 +1855,7 @@ parse_ofp_flow_mod_file(const char *file_name, uint16_t command,
             *fms = x2nrealloc(*fms, &allocated_fms, sizeof **fms);
         }
         error = parse_ofp_flow_mod_str(&(*fms)[*n_fms], ds_cstr(&s), command,
-                                       &usable);
+                                       &usable, enforce_consistency);
         if (error) {
             size_t i;
 
@@ -1870,12 +1887,14 @@ parse_ofp_flow_mod_file(const char *file_name, uint16_t command,
 char * WARN_UNUSED_RESULT
 parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *fsr,
                                  bool aggregate, const char *string,
-                                 enum ofputil_protocol *usable_protocols)
+                                 enum ofputil_protocol *usable_protocols,
+                                 bool enforce_consistency)
 {
     struct ofputil_flow_mod fm;
     char *error;
 
-    error = parse_ofp_str(&fm, -1, string, usable_protocols);
+    error = parse_ofp_str(&fm, -1, string, usable_protocols,
+                          enforce_consistency);
     if (error) {
         return error;
     }

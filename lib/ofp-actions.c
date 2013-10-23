@@ -1541,7 +1541,7 @@ exit:
 /* May modify flow->dl_type, caller must restore it. */
 static enum ofperr
 ofpact_check__(const struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
-               uint8_t table_id)
+               uint8_t table_id, bool enforce_consistency)
 {
     const struct ofpact_enqueue *enqueue;
 
@@ -1570,17 +1570,48 @@ ofpact_check__(const struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
 
     case OFPACT_SET_VLAN_VID:
     case OFPACT_SET_VLAN_PCP:
+        return 0;
+
     case OFPACT_STRIP_VLAN:
+        if (!(flow->vlan_tci & htons(VLAN_CFI))) {
+            goto inconsistent;
+        }
+        return 0;
+
     case OFPACT_PUSH_VLAN:
+        if (flow->vlan_tci & htons(VLAN_CFI)) {
+            /* Multiple VLAN headers not supported. */
+            return OFPERR_OFPBAC_BAD_TAG;
+        }
+        return 0;
+
     case OFPACT_SET_ETH_SRC:
     case OFPACT_SET_ETH_DST:
+        return 0;
+
     case OFPACT_SET_IPV4_SRC:
     case OFPACT_SET_IPV4_DST:
+        if (flow->dl_type != htons(ETH_TYPE_IP)) {
+            goto inconsistent;
+        }
+        return 0;
+
     case OFPACT_SET_IP_DSCP:
     case OFPACT_SET_IP_ECN:
     case OFPACT_SET_IP_TTL:
+    case OFPACT_DEC_TTL:
+        if (!is_ip_any(flow)) {
+            goto inconsistent;
+        }
+        return 0;
+
     case OFPACT_SET_L4_SRC_PORT:
     case OFPACT_SET_L4_DST_PORT:
+        if (!is_ip_any(flow) ||
+            (flow->nw_proto != IPPROTO_TCP && flow->nw_proto != IPPROTO_UDP
+             && flow->nw_proto != IPPROTO_SCTP)) {
+            goto inconsistent;
+        }
         return 0;
 
     case OFPACT_REG_MOVE:
@@ -1595,14 +1626,23 @@ ofpact_check__(const struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
     case OFPACT_STACK_POP:
         return nxm_stack_pop_check(ofpact_get_STACK_POP(a), flow);
 
-    case OFPACT_DEC_TTL:
     case OFPACT_SET_MPLS_TTL:
     case OFPACT_DEC_MPLS_TTL:
+        if (!eth_type_mpls(flow->dl_type)) {
+            goto inconsistent;
+        }
+        return 0;
+
     case OFPACT_SET_TUNNEL:
     case OFPACT_SET_QUEUE:
     case OFPACT_POP_QUEUE:
-    case OFPACT_FIN_TIMEOUT:
     case OFPACT_RESUBMIT:
+        return 0;
+
+    case OFPACT_FIN_TIMEOUT:
+        if (flow->nw_proto != IPPROTO_TCP) {
+            goto inconsistent;
+        }
         return 0;
 
     case OFPACT_LEARN:
@@ -1621,6 +1661,9 @@ ofpact_check__(const struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
 
     case OFPACT_POP_MPLS:
         flow->dl_type = ofpact_get_POP_MPLS(a)->ethertype;
+        if (!eth_type_mpls(flow->dl_type)) {
+            goto inconsistent;
+        }
         return 0;
 
     case OFPACT_SAMPLE:
@@ -1632,7 +1675,7 @@ ofpact_check__(const struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
     case OFPACT_WRITE_ACTIONS: {
         struct ofpact_nest *on = ofpact_get_WRITE_ACTIONS(a);
         return ofpacts_check(on->actions, ofpact_nest_get_action_len(on),
-                             flow, max_ports, table_id);
+                             flow, max_ports, table_id, false);
     }
 
     case OFPACT_WRITE_METADATA:
@@ -1658,6 +1701,12 @@ ofpact_check__(const struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
     default:
         NOT_REACHED();
     }
+
+ inconsistent:
+    if (enforce_consistency) {
+        return OFPERR_OFPBAC_MATCH_INCONSISTENT;
+    }
+    return 0;
 }
 
 /* Checks that the 'ofpacts_len' bytes of actions in 'ofpacts' are
@@ -1667,14 +1716,16 @@ ofpact_check__(const struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
  * May temporarily modify 'flow', but restores the changes before returning. */
 enum ofperr
 ofpacts_check(const struct ofpact ofpacts[], size_t ofpacts_len,
-              struct flow *flow, ofp_port_t max_ports, uint8_t table_id)
+              struct flow *flow, ofp_port_t max_ports, uint8_t table_id,
+              bool enforce_consistency)
 {
     const struct ofpact *a;
     ovs_be16 dl_type = flow->dl_type;
     enum ofperr error = 0;
 
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
-        error = ofpact_check__(a, flow, max_ports, table_id);
+        error = ofpact_check__(a, flow, max_ports, table_id,
+                               enforce_consistency);
         if (error) {
             break;
         }
