@@ -1142,7 +1142,8 @@ actions were applied.
 .IP \fBdec_ttl\fR
 .IQ \fBdec_ttl\fB[\fR(\fIid1,id2\fI)\fR]\fR
 Decrement TTL of IPv4 packet or hop limit of IPv6 packet.  If the
-TTL or hop limit is initially zero, no decrement occurs.  Instead,
+TTL or hop limit is initially zero or decrementing would make it so, no
+decrement occurs, as packets reaching TTL zero must be rejected.  Instead,
 a ``packet-in'' message with reason code \fBOFPR_INVALID_TTL\fR is
 sent to each connected controller that has enabled receiving them,
 if any.  Processing the current set of actions then stops.  However,
@@ -1161,9 +1162,9 @@ Set the TTL of the outer MPLS label stack entry of a packet.
 .
 .IP \fBdec_mpls_ttl\fR
 Decrement TTL of the outer MPLS label stack entry of a packet.  If the TTL
-is initially zero, no decrement occurs.  Instead, a ``packet-in'' message
-with reason code \fBOFPR_INVALID_TTL\fR is sent to each connected
-controller with controller id zer that has enabled receiving them.
+is initially zero or decrementing would make it so, no decrement occurs.
+Instead, a ``packet-in'' message with reason code \fBOFPR_INVALID_TTL\fR
+is sent to the main controller (id zero), if it has enabled receiving them.
 Processing the current set of actions then stops.  However, if the current
 set of actions was reached through ``resubmit'' then remaining actions in
 outer levels resume processing.
