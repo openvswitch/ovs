@@ -68,6 +68,7 @@
     DEFINE_OFPACT(SET_IPV4_SRC,    ofpact_ipv4,          ofpact)    \
     DEFINE_OFPACT(SET_IPV4_DST,    ofpact_ipv4,          ofpact)    \
     DEFINE_OFPACT(SET_IP_DSCP,     ofpact_dscp,          ofpact)    \
+    DEFINE_OFPACT(SET_IP_ECN,      ofpact_ecn,           ofpact)    \
     DEFINE_OFPACT(SET_L4_SRC_PORT, ofpact_l4_port,       ofpact)    \
     DEFINE_OFPACT(SET_L4_DST_PORT, ofpact_l4_port,       ofpact)    \
     DEFINE_OFPACT(REG_MOVE,        ofpact_reg_move,      ofpact)    \
@@ -291,6 +292,14 @@ struct ofpact_ipv4 {
 struct ofpact_dscp {
     struct ofpact ofpact;
     uint8_t dscp;               /* DSCP in high 6 bits, rest ignored. */
+};
+
+/* OFPACT_SET_IP_ECN.
+ *
+ * Used for OFPAT11_SET_NW_ECN. */
+struct ofpact_ecn {
+    struct ofpact ofpact;
+    uint8_t ecn;               /* ECN in low 2 bits, rest ignored. */
 };
 
 /* OFPACT_SET_L4_SRC_PORT, OFPACT_SET_L4_DST_PORT.

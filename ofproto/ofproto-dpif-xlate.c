@@ -2376,6 +2376,14 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             }
             break;
 
+        case OFPACT_SET_IP_ECN:
+            if (is_ip_any(flow)) {
+                wc->masks.nw_tos |= IP_ECN_MASK;
+                flow->nw_tos &= ~IP_ECN_MASK;
+                flow->nw_tos |= ofpact_get_SET_IP_ECN(a)->ecn;
+            }
+            break;
+
         case OFPACT_SET_L4_SRC_PORT:
             if (is_ip_any(flow)) {
                 memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);

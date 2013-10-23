@@ -1102,6 +1102,13 @@ Sets the TCP or UDP or SCTP destination port to \fIport\fR.
 Sets the DSCP bits in the IPv4 ToS/DSCP or IPv6 traffic class field to
 \fItos\fR, which must be a multiple of 4 between 0 and 255.  This action
 does not modify the two least significant bits of the ToS field (the ECN bits).
+.
+.IP \fBmod_nw_ecn\fB:\fIecn\fR
+Sets the ECN bits in the IPv4 ToS or IPv6 traffic class field to \fIecn\fR,
+which must be a value between 0 and 3, inclusive.  This action does not modify
+the six most significant bits of the field (the DSCP bits).
+.IP
+Requires OpenFlow 1.1 or later.
 .RE
 .IP
 The following actions are Nicira vendor extensions that, as of this writing, are
@@ -1390,6 +1397,8 @@ the action set, the one written later replaces the earlier action:
 \fBmod_nw_src\fR
 .IQ
 \fBmod_nw_tos\fR
+.IQ
+\fBmod_nw_ecn\fR
 .IQ
 \fBmod_tp_dst\fR
 .IQ
