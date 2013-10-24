@@ -1496,9 +1496,9 @@ wire_reason(struct ofconn *ofconn, const struct ofproto_packet_in *pin)
 {
     if (pin->generated_by_table_miss && pin->up.reason == OFPR_ACTION) {
         enum ofputil_protocol protocol = ofconn_get_protocol(ofconn);
-        enum ofp_version version = ofputil_protocol_to_ofp_version(protocol);
 
-        if (version >= OFP13_VERSION) {
+        if (protocol != OFPUTIL_P_NONE
+            && ofputil_protocol_to_ofp_version(protocol) >= OFP13_VERSION) {
             return OFPR_NO_MATCH;
         }
     }
