@@ -857,6 +857,203 @@ set_field_to_nxast(const struct ofpact_set_field *sf, struct ofpbuf *openflow)
     }
 }
 
+/* Convert 'sf' to standard OpenFlow 1.1 actions, if we can, falling back
+ * to Nicira extensions if we must.
+ *
+ * We check only meta-flow types that can appear within set field actions and
+ * that have a mapping to compatible action types.  These struct mf_field
+ * definitions have a defined OXM or NXM header value and specify the field as
+ * writable. */
+static void
+set_field_to_openflow11(const struct ofpact_set_field *sf,
+                        struct ofpbuf *openflow)
+{
+    switch ((int) sf->field->id) {
+    case MFF_VLAN_TCI:
+        /* NXM_OF_VLAN_TCI to OpenFlow 1.1 mapping:
+         *
+         * If CFI=1, Add or modify VLAN VID & PCP.
+         *    OpenFlow 1.1 set actions only apply if the packet
+         *    already has VLAN tags.  To be sure that is the case
+         *    we have to push a VLAN header.  As we do not support
+         *    multiple layers of VLANs, this is a no-op, if a VLAN
+         *    header already exists.  This may backfire, however,
+         *    when we start supporting multiple layers of VLANs.
+         * If CFI=0, strip VLAN header, if any.
+         */
+        if (sf->value.be16 & htons(VLAN_CFI)) {
+            /* Push a VLAN tag, if one was not seen at action validation
+             * time. */
+            if (!sf->flow_has_vlan) {
+                ofputil_put_OFPAT11_PUSH_VLAN(openflow)->ethertype
+                    = htons(ETH_TYPE_VLAN_8021Q);
+            }
+            ofputil_put_OFPAT11_SET_VLAN_VID(openflow)->vlan_vid
+                = sf->value.be16 & htons(VLAN_VID_MASK);
+            ofputil_put_OFPAT11_SET_VLAN_PCP(openflow)->vlan_pcp
+                = vlan_tci_to_pcp(sf->value.be16);
+        } else {
+            /* If the flow did not match on vlan, we have no way of
+             * knowing if the vlan tag exists, so we must POP just to be
+             * sure. */
+            ofputil_put_OFPAT11_POP_VLAN(openflow);
+        }
+        break;
+
+    case MFF_VLAN_VID:
+        /* OXM VLAN_PCP to OpenFlow 1.1.
+         * Set field on OXM_OF_VLAN_VID onlyapplies to an existing vlan
+         * tag.  Clear the OFPVID_PRESENT bit.
+         */
+        ofputil_put_OFPAT11_SET_VLAN_VID(openflow)->vlan_vid
+            = sf->value.be16 & htons(VLAN_VID_MASK);
+        break;
+
+    case MFF_VLAN_PCP:
+        /* OXM VLAN_PCP to OpenFlow 1.1.
+         * OXM_OF_VLAN_PCP only applies to existing vlan tag. */
+        ofputil_put_OFPAT11_SET_VLAN_PCP(openflow)->vlan_pcp = sf->value.u8;
+        break;
+
+    case MFF_ETH_SRC:
+        memcpy(ofputil_put_OFPAT11_SET_DL_SRC(openflow)->dl_addr,
+               sf->value.mac, ETH_ADDR_LEN);
+        break;
+
+    case MFF_ETH_DST:
+        memcpy(ofputil_put_OFPAT11_SET_DL_DST(openflow)->dl_addr,
+               sf->value.mac, ETH_ADDR_LEN);
+        break;
+
+    case MFF_IPV4_SRC:
+        ofputil_put_OFPAT11_SET_NW_SRC(openflow)->nw_addr = sf->value.be32;
+        break;
+
+    case MFF_IPV4_DST:
+        ofputil_put_OFPAT11_SET_NW_DST(openflow)->nw_addr = sf->value.be32;
+        break;
+
+    case MFF_IP_DSCP:
+        ofputil_put_OFPAT11_SET_NW_TOS(openflow)->nw_tos = sf->value.u8;
+        break;
+
+    case MFF_IP_DSCP_SHIFTED:
+        ofputil_put_OFPAT11_SET_NW_TOS(openflow)->nw_tos = sf->value.u8 << 2;
+        break;
+
+    case MFF_IP_ECN:
+        ofputil_put_OFPAT11_SET_NW_ECN(openflow)->nw_ecn = sf->value.u8;
+        break;
+
+    case MFF_IP_TTL:
+        ofputil_put_OFPAT11_SET_NW_TTL(openflow)->nw_ttl = sf->value.u8;
+        break;
+
+    case MFF_TCP_SRC:
+    case MFF_UDP_SRC:
+    case MFF_SCTP_SRC:
+        ofputil_put_OFPAT11_SET_TP_SRC(openflow)->tp_port = sf->value.be16;
+        break;
+
+    case MFF_TCP_DST:
+    case MFF_UDP_DST:
+    case MFF_SCTP_DST:
+        ofputil_put_OFPAT11_SET_TP_DST(openflow)->tp_port = sf->value.be16;
+        break;
+
+    case MFF_MPLS_TC:           /* XXX */
+    case MFF_MPLS_LABEL:        /* XXX */
+    default:
+        set_field_to_nxast(sf, openflow);
+        break;
+    }
+}
+
+/* Convert 'sf' to standard OpenFlow 1.0 actions, if we can, falling back
+ * to Nicira extensions if we must.
+ *
+ * We check only meta-flow types that can appear within set field actions and
+ * that have a mapping to compatible action types.  These struct mf_field
+ * definitions have a defined OXM or NXM header value and specify the field as
+ * writable. */
+static void
+set_field_to_openflow10(const struct ofpact_set_field *sf,
+                        struct ofpbuf *openflow)
+{
+    switch ((int) sf->field->id) {
+    case MFF_VLAN_TCI:
+        /* NXM_OF_VLAN_TCI to OpenFlow 1.0 mapping:
+         *
+         * If CFI=1, Add or modify VLAN VID & PCP.
+         * If CFI=0, strip VLAN header, if any.
+         */
+        if (sf->value.be16 & htons(VLAN_CFI)) {
+            ofputil_put_OFPAT10_SET_VLAN_VID(openflow)->vlan_vid
+                = sf->value.be16 & htons(VLAN_VID_MASK);
+            ofputil_put_OFPAT10_SET_VLAN_PCP(openflow)->vlan_pcp
+                = vlan_tci_to_pcp(sf->value.be16);
+        } else {
+            ofputil_put_OFPAT10_STRIP_VLAN(openflow);
+        }
+        break;
+
+    case MFF_VLAN_VID:
+        /* OXM VLAN_VID to OpenFlow 1.0.
+         * Set field on OXM_OF_VLAN_VID onlyapplies to an existing vlan
+         * tag.  Clear the OFPVID_PRESENT bit.
+         */
+        ofputil_put_OFPAT10_SET_VLAN_VID(openflow)->vlan_vid
+            = sf->value.be16 & htons(VLAN_VID_MASK);
+        break;
+
+    case MFF_VLAN_PCP:
+        /* OXM VLAN_PCP to OpenFlow 1.0.
+         * OXM_OF_VLAN_PCP only applies to existing vlan tag. */
+        ofputil_put_OFPAT10_SET_VLAN_PCP(openflow)->vlan_pcp = sf->value.u8;
+        break;
+
+    case MFF_ETH_SRC:
+        memcpy(ofputil_put_OFPAT10_SET_DL_SRC(openflow)->dl_addr,
+               sf->value.mac, ETH_ADDR_LEN);
+        break;
+
+    case MFF_ETH_DST:
+        memcpy(ofputil_put_OFPAT10_SET_DL_DST(openflow)->dl_addr,
+               sf->value.mac, ETH_ADDR_LEN);
+        break;
+
+    case MFF_IPV4_SRC:
+        ofputil_put_OFPAT10_SET_NW_SRC(openflow)->nw_addr = sf->value.be32;
+        break;
+
+    case MFF_IPV4_DST:
+        ofputil_put_OFPAT10_SET_NW_DST(openflow)->nw_addr = sf->value.be32;
+        break;
+
+    case MFF_IP_DSCP:
+        ofputil_put_OFPAT10_SET_NW_TOS(openflow)->nw_tos = sf->value.u8;
+        break;
+
+    case MFF_IP_DSCP_SHIFTED:
+        ofputil_put_OFPAT10_SET_NW_TOS(openflow)->nw_tos = sf->value.u8 << 2;
+        break;
+
+    case MFF_TCP_SRC:
+    case MFF_UDP_SRC:
+        ofputil_put_OFPAT10_SET_TP_SRC(openflow)->tp_port = sf->value.be16;
+        break;
+
+    case MFF_TCP_DST:
+    case MFF_UDP_DST:
+        ofputil_put_OFPAT10_SET_TP_DST(openflow)->tp_port = sf->value.be16;
+        break;
+
+    default:
+        set_field_to_nxast(sf, openflow);
+        break;
+    }
+}
+
 static void
 set_field_to_openflow(const struct ofpact_set_field *sf,
                       struct ofpbuf *openflow)
@@ -865,8 +1062,12 @@ set_field_to_openflow(const struct ofpact_set_field *sf,
 
     if (oh->version >= OFP12_VERSION) {
         set_field_to_openflow12(sf, openflow);
+    } else if (oh->version == OFP11_VERSION) {
+        set_field_to_openflow11(sf, openflow);
+    } else if (oh->version == OFP10_VERSION) {
+        set_field_to_openflow10(sf, openflow);
     } else {
-        set_field_to_nxast(sf, openflow);
+        NOT_REACHED();
     }
 }
 
@@ -1788,6 +1989,15 @@ ofpact_check__(struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
             VLOG_WARN_RL(&rl, "set_field %s lacks correct prerequisities",
                          mf->name);
             return OFPERR_OFPBAC_MATCH_INCONSISTENT;
+        }
+        /* Remember if we saw a vlan tag in the flow to aid translating to
+         * OpenFlow 1.1 if need be. */
+        ofpact_get_SET_FIELD(a)->flow_has_vlan =
+            (flow->vlan_tci & htons(VLAN_CFI)) == htons(VLAN_CFI);
+        if (mf->id == MFF_VLAN_TCI) {
+            /* The set field may add or remove the vlan tag,
+             * Mark the status temporarily. */
+            flow->vlan_tci = ofpact_get_SET_FIELD(a)->value.be16;
         }
         return 0;
 

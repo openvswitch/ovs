@@ -379,6 +379,7 @@ enum ofpact_mpls_position {
 struct ofpact_set_field {
     struct ofpact ofpact;
     const struct mf_field *field;
+    bool flow_has_vlan;   /* VLAN present at action validation time. */
     union mf_value value;
 };
 
