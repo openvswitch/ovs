@@ -438,6 +438,42 @@ parse_dec_ttl(struct ofpbuf *b, char *arg)
     return NULL;
 }
 
+/* Parses 'arg' as the argument to a "set_mpls_label" action, and appends such
+ * an action to 'b'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
+parse_set_mpls_label(struct ofpbuf *b, const char *arg)
+{
+    struct ofpact_mpls_label *mpls_label = ofpact_put_SET_MPLS_LABEL(b);
+
+    if (*arg == '\0') {
+        return xstrdup("parse_set_mpls_label: expected label.");
+    }
+
+    mpls_label->label = htonl(atoi(arg));
+    return NULL;
+}
+
+/* Parses 'arg' as the argument to a "set_mpls_tc" action, and appends such an
+ * action to 'b'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
+parse_set_mpls_tc(struct ofpbuf *b, const char *arg)
+{
+    struct ofpact_mpls_tc *mpls_tc = ofpact_put_SET_MPLS_TC(b);
+
+    if (*arg == '\0') {
+        return xstrdup("parse_set_mpls_tc: expected tc.");
+    }
+
+    mpls_tc->tc = atoi(arg);
+    return NULL;
+}
+
 /* Parses 'arg' as the argument to a "set_mpls_ttl" action, and appends such an
  * action to 'ofpacts'.
  *
@@ -809,6 +845,16 @@ parse_named_action(enum ofputil_action_code code,
 
     case OFPUTIL_NXAST_DEC_TTL:
         error = parse_dec_ttl(ofpacts, arg);
+        break;
+
+    case OFPUTIL_NXAST_SET_MPLS_LABEL:
+    case OFPUTIL_OFPAT11_SET_MPLS_LABEL:
+        error = parse_set_mpls_label(ofpacts, arg);
+        break;
+
+    case OFPUTIL_NXAST_SET_MPLS_TC:
+    case OFPUTIL_OFPAT11_SET_MPLS_TC:
+        error = parse_set_mpls_tc(ofpacts, arg);
         break;
 
     case OFPUTIL_NXAST_SET_MPLS_TTL:

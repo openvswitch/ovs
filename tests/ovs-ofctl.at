@@ -1593,15 +1593,16 @@ dnl Ignore tp_dst if not TCP/UDP/SCTP:
 0000 00 00 0800 00 16 00000000ffffffff 00000000ffffffff 0000 01bb dnl
 00000000 00 000000 0000000000000000ffffffffffffffff
 
-dnl mpls_label not yet supported:
-# bad ofp11_match: OFPBMC_BAD_TAG
+# mpls,mpls_label=284280
+# 64: 12 -> 00
+# 65: 34 -> 04
 0000 0058 00000000 000002f7 dnl
 000000000000ffffffffffff 000000000000ffffffffffff dnl
 0000 00 00 8847 00 00 00000000ffffffff 00000000ffffffff 0000 0000 dnl
 12345678 00 000000 0000000000000000ffffffffffffffff
 
-dnl mpls_tc not yet supported:
-# bad ofp11_match: OFPBMC_BAD_TAG
+# mplsm,mpls_tc=2
+# 68: 5a -> 02
 0000 0058 00000000 000001f7 dnl
 000000000000ffffffffffff 000000000000ffffffffffff dnl
 0000 00 00 8848 00 00 00000000ffffffff 00000000ffffffff 0000 0000 dnl

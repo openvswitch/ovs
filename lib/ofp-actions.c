@@ -53,6 +53,8 @@ union ofp_action {
     struct ofp11_action_push push;
     struct ofp11_action_pop_mpls ofp11_pop_mpls;
     struct ofp11_action_set_queue ofp11_set_queue;
+    struct ofp11_action_mpls_label ofp11_mpls_label;
+    struct ofp11_action_mpls_tc ofp11_mpls_tc;
     struct ofp11_action_mpls_ttl ofp11_mpls_ttl;
     struct ofp11_action_group group;
     struct ofp12_action_set_field set_field;
@@ -77,6 +79,8 @@ union ofp_action {
     struct nx_action_pop_mpls pop_mpls;
     struct nx_action_sample sample;
     struct nx_action_learn learn;
+    struct nx_action_mpls_label mpls_label;
+    struct nx_action_mpls_tc mpls_tc;
 };
 
 static enum ofperr
@@ -471,6 +475,14 @@ ofpact_from_nxast(const union ofp_action *a, enum ofputil_action_code code,
     case OFPUTIL_NXAST_PUSH_MPLS:
         error = push_mpls_from_openflow(a->push_mpls.ethertype,
                                         OFPACT_MPLS_AFTER_VLAN, out);
+        break;
+
+    case OFPUTIL_NXAST_SET_MPLS_LABEL:
+        ofpact_put_SET_MPLS_LABEL(out)->label = a->mpls_label.label;
+        break;
+
+    case OFPUTIL_NXAST_SET_MPLS_TC:
+        ofpact_put_SET_MPLS_TC(out)->tc = a->mpls_tc.tc;
         break;
 
     case OFPUTIL_NXAST_SET_MPLS_TTL:
@@ -927,6 +939,15 @@ set_field_to_openflow11(const struct ofpact_set_field *sf,
                sf->value.mac, ETH_ADDR_LEN);
         break;
 
+    case MFF_MPLS_LABEL:
+        ofputil_put_OFPAT11_SET_MPLS_LABEL(openflow)->mpls_label =
+            sf->value.be32;
+        break;
+
+    case MFF_MPLS_TC:
+        ofputil_put_OFPAT11_SET_MPLS_TC(openflow)->mpls_tc = sf->value.u8;
+        break;
+
     case MFF_IPV4_SRC:
         ofputil_put_OFPAT11_SET_NW_SRC(openflow)->nw_addr = sf->value.be32;
         break;
@@ -963,8 +984,6 @@ set_field_to_openflow11(const struct ofpact_set_field *sf,
         ofputil_put_OFPAT11_SET_TP_DST(openflow)->tp_port = sf->value.be16;
         break;
 
-    case MFF_MPLS_TC:           /* XXX */
-    case MFF_MPLS_LABEL:        /* XXX */
     default:
         set_field_to_nxast(sf, openflow);
         break;
@@ -1220,6 +1239,14 @@ ofpact_from_openflow11(const union ofp_action *a, enum ofp_version version,
     case OFPUTIL_OFPAT12_SET_FIELD:
         return set_field_from_openflow(&a->set_field, out);
 
+    case OFPUTIL_OFPAT11_SET_MPLS_LABEL:
+        ofpact_put_SET_MPLS_LABEL(out)->label = a->ofp11_mpls_label.mpls_label;
+        break;
+
+    case OFPUTIL_OFPAT11_SET_MPLS_TC:
+        ofpact_put_SET_MPLS_TC(out)->tc = a->ofp11_mpls_tc.mpls_tc;
+        break;
+
     case OFPUTIL_OFPAT11_SET_MPLS_TTL:
         ofpact_put_SET_MPLS_TTL(out)->ttl = a->ofp11_mpls_ttl.mpls_ttl;
         break;
@@ -1273,6 +1300,8 @@ ofpact_is_set_action(const struct ofpact *a)
     case OFPACT_SET_IPV4_SRC:
     case OFPACT_SET_L4_DST_PORT:
     case OFPACT_SET_L4_SRC_PORT:
+    case OFPACT_SET_MPLS_LABEL:
+    case OFPACT_SET_MPLS_TC:
     case OFPACT_SET_MPLS_TTL:
     case OFPACT_SET_QUEUE:
     case OFPACT_SET_TUNNEL:
@@ -1337,6 +1366,8 @@ ofpact_is_allowed_in_actions_set(const struct ofpact *a)
     case OFPACT_SET_IPV4_SRC:
     case OFPACT_SET_L4_DST_PORT:
     case OFPACT_SET_L4_SRC_PORT:
+    case OFPACT_SET_MPLS_LABEL:
+    case OFPACT_SET_MPLS_TC:
     case OFPACT_SET_MPLS_TTL:
     case OFPACT_SET_QUEUE:
     case OFPACT_SET_TUNNEL:
@@ -1586,6 +1617,8 @@ ovs_instruction_type_from_ofpact_type(enum ofpact_type type)
     case OFPACT_STACK_PUSH:
     case OFPACT_STACK_POP:
     case OFPACT_DEC_TTL:
+    case OFPACT_SET_MPLS_LABEL:
+    case OFPACT_SET_MPLS_TC:
     case OFPACT_SET_MPLS_TTL:
     case OFPACT_DEC_MPLS_TTL:
     case OFPACT_PUSH_MPLS:
@@ -1990,6 +2023,8 @@ ofpact_check__(struct ofpact *a, struct flow *flow,
     case OFPACT_STACK_POP:
         return nxm_stack_pop_check(ofpact_get_STACK_POP(a), flow);
 
+    case OFPACT_SET_MPLS_LABEL:
+    case OFPACT_SET_MPLS_TC:
     case OFPACT_SET_MPLS_TTL:
     case OFPACT_DEC_MPLS_TTL:
         if (!eth_type_mpls(flow->dl_type)) {
@@ -2313,6 +2348,16 @@ ofpact_to_nxast(const struct ofpact *a, struct ofpbuf *out)
         ofpact_dec_ttl_to_nxast(ofpact_get_DEC_TTL(a), out);
         break;
 
+    case OFPACT_SET_MPLS_LABEL:
+        ofputil_put_NXAST_SET_MPLS_LABEL(out)->label
+            = ofpact_get_SET_MPLS_LABEL(a)->label;
+        break;
+
+    case OFPACT_SET_MPLS_TC:
+        ofputil_put_NXAST_SET_MPLS_TC(out)->tc
+            = ofpact_get_SET_MPLS_TC(a)->tc;
+        break;
+
     case OFPACT_SET_MPLS_TTL:
         ofputil_put_NXAST_SET_MPLS_TTL(out)->ttl
             = ofpact_get_SET_MPLS_TTL(a)->ttl;
@@ -2516,6 +2561,8 @@ ofpact_to_openflow10(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_DEC_TTL:
     case OFPACT_SET_IP_ECN:
     case OFPACT_SET_IP_TTL:
+    case OFPACT_SET_MPLS_LABEL:
+    case OFPACT_SET_MPLS_TC:
     case OFPACT_SET_MPLS_TTL:
     case OFPACT_DEC_MPLS_TTL:
     case OFPACT_SET_TUNNEL:
@@ -2659,6 +2706,16 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
         ofpact_dec_ttl_to_openflow11(ofpact_get_DEC_TTL(a), out);
         break;
 
+    case OFPACT_SET_MPLS_LABEL:
+        ofputil_put_OFPAT11_SET_MPLS_LABEL(out)->mpls_label
+            = ofpact_get_SET_MPLS_LABEL(a)->label;
+        break;
+
+    case OFPACT_SET_MPLS_TC:
+        ofputil_put_OFPAT11_SET_MPLS_TC(out)->mpls_tc
+            = ofpact_get_SET_MPLS_TC(a)->tc;
+        break;
+
     case OFPACT_SET_MPLS_TTL:
         ofputil_put_OFPAT11_SET_MPLS_TTL(out)->mpls_ttl
             = ofpact_get_SET_MPLS_TTL(a)->ttl;
@@ -2743,6 +2800,8 @@ ofpact_to_openflow12(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_SET_IP_ECN:
     case OFPACT_SET_L4_SRC_PORT:
     case OFPACT_SET_L4_DST_PORT:
+    case OFPACT_SET_MPLS_LABEL:
+    case OFPACT_SET_MPLS_TC:
     case OFPACT_SET_TUNNEL:  /* Convert to a set_field, too. */
 
         switch ((int)a->type) {
@@ -2822,6 +2881,16 @@ ofpact_to_openflow12(const struct ofpact *a, struct ofpbuf *out)
                 : proto == IPPROTO_SCTP ? MFF_SCTP_DST
                 : MFF_N_IDS; /* RFC: Unknown IP proto, do not translate. */
             value.be16 = htons(l4port->port);
+            break;
+
+        case OFPACT_SET_MPLS_LABEL:
+            field = MFF_MPLS_LABEL;
+            value.be32 = ofpact_get_SET_MPLS_LABEL(a)->label;
+            break;
+
+        case OFPACT_SET_MPLS_TC:
+            field = MFF_MPLS_TC;
+            value.u8 = ofpact_get_SET_MPLS_TC(a)->tc;
             break;
 
         case OFPACT_SET_TUNNEL:
@@ -3008,6 +3077,8 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, ofp_port_t port)
     case OFPACT_STACK_PUSH:
     case OFPACT_STACK_POP:
     case OFPACT_DEC_TTL:
+    case OFPACT_SET_MPLS_LABEL:
+    case OFPACT_SET_MPLS_TC:
     case OFPACT_SET_MPLS_TTL:
     case OFPACT_DEC_MPLS_TTL:
     case OFPACT_SET_TUNNEL:
@@ -3313,6 +3384,16 @@ ofpact_format(const struct ofpact *a, struct ds *s)
 
     case OFPACT_DEC_TTL:
         print_dec_ttl(ofpact_get_DEC_TTL(a), s);
+        break;
+
+    case OFPACT_SET_MPLS_LABEL:
+        ds_put_format(s, "set_mpls_label(%"PRIu32")",
+                      ntohl(ofpact_get_SET_MPLS_LABEL(a)->label));
+        break;
+
+    case OFPACT_SET_MPLS_TC:
+        ds_put_format(s, "set_mpls_ttl(%"PRIu8")",
+                      ofpact_get_SET_MPLS_TC(a)->tc);
         break;
 
     case OFPACT_SET_MPLS_TTL:

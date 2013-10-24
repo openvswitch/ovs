@@ -436,11 +436,11 @@ ofputil_match_from_ofp11_match(const struct ofp11_match *ofmatch,
     }
 
     if (eth_type_mpls(match->flow.dl_type)) {
-        enum { OFPFW11_MPLS_ALL = OFPFW11_MPLS_LABEL | OFPFW11_MPLS_TC };
-
-        if ((wc & OFPFW11_MPLS_ALL) != OFPFW11_MPLS_ALL) {
-            /* MPLS not supported. */
-            return OFPERR_OFPBMC_BAD_TAG;
+        if (!(wc & OFPFW11_MPLS_LABEL)) {
+            match_set_mpls_label(match, ofmatch->mpls_label);
+        }
+        if (!(wc & OFPFW11_MPLS_TC)) {
+            match_set_mpls_tc(match, ofmatch->mpls_tc);
         }
     }
 
@@ -533,9 +533,17 @@ ofputil_match_to_ofp11_match(const struct match *match,
         ofmatch->tp_dst = match->flow.tp_dst;
     }
 
-    /* MPLS not supported. */
-    wc |= OFPFW11_MPLS_LABEL;
-    wc |= OFPFW11_MPLS_TC;
+    if (!(match->wc.masks.mpls_lse & htonl(MPLS_LABEL_MASK))) {
+        wc |= OFPFW11_MPLS_LABEL;
+    } else {
+        ofmatch->mpls_label = htonl(mpls_lse_to_label(match->flow.mpls_lse));
+    }
+
+    if (!(match->wc.masks.mpls_lse & htonl(MPLS_TC_MASK))) {
+        wc |= OFPFW11_MPLS_TC;
+    } else {
+        ofmatch->mpls_tc = mpls_lse_to_tc(match->flow.mpls_lse);
+    }
 
     ofmatch->metadata = match->flow.metadata;
     ofmatch->metadata_mask = ~match->wc.masks.metadata;

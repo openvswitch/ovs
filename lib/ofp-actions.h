@@ -78,6 +78,8 @@
     DEFINE_OFPACT(STACK_PUSH,      ofpact_stack,         ofpact)    \
     DEFINE_OFPACT(STACK_POP,       ofpact_stack,         ofpact)    \
     DEFINE_OFPACT(DEC_TTL,         ofpact_cnt_ids,       cnt_ids)   \
+    DEFINE_OFPACT(SET_MPLS_LABEL,  ofpact_mpls_label,    ofpact)    \
+    DEFINE_OFPACT(SET_MPLS_TC,     ofpact_mpls_tc,       ofpact)    \
     DEFINE_OFPACT(SET_MPLS_TTL,    ofpact_mpls_ttl,      ofpact)    \
     DEFINE_OFPACT(DEC_MPLS_TTL,    ofpact_null,          ofpact)    \
     DEFINE_OFPACT(PUSH_MPLS,       ofpact_push_mpls,     ofpact)    \
@@ -552,9 +554,27 @@ struct ofpact_cnt_ids {
     uint16_t cnt_ids[];
 };
 
+/* OFPACT_SET_MPLS_LABEL.
+ *
+ * Used for OFPAT11_SET_MPLS_LABEL and NXAST_SET_MPLS_LABEL */
+struct ofpact_mpls_label {
+    struct ofpact ofpact;
+
+    ovs_be32 label;
+};
+
+/* OFPACT_SET_MPLS_TC.
+ *
+ * Used for OFPAT11_SET_MPLS_TC and NXAST_SET_MPLS_TC */
+struct ofpact_mpls_tc {
+    struct ofpact ofpact;
+
+    uint8_t tc;
+};
+
 /* OFPACT_SET_MPLS_TTL.
  *
- * Used for NXAST_SET_MPLS_TTL */
+ * Used for OFPAT11_SET_MPLS_TTL and NXAST_SET_MPLS_TTL */
 struct ofpact_mpls_ttl {
     struct ofpact ofpact;
 

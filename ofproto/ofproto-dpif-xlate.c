@@ -1984,6 +1984,54 @@ compose_dec_ttl(struct xlate_ctx *ctx, struct ofpact_cnt_ids *ids)
 }
 
 static bool
+compose_set_mpls_label_action(struct xlate_ctx *ctx, ovs_be32 label)
+{
+    if (!eth_type_mpls(ctx->xin->flow.dl_type)) {
+        return true;
+    }
+
+    /* If mpls_depth_delta is negative then an MPLS POP action has been
+     * executed and the resulting MPLS label stack is unknown.  This means
+     * a SET MPLS LABEL action can't be executed as it needs to manipulate
+     * the top-most MPLS LSE. Thus, stop processing.
+     *
+     * It is planned that in the future this case will be handled
+     * by recirculation.
+     */
+    if (ctx->mpls_depth_delta < 0) {
+        return true;
+    }
+
+    ctx->xout->wc.masks.mpls_lse |= htonl(MPLS_LABEL_MASK);
+    set_mpls_lse_label(&ctx->xin->flow.mpls_lse, label);
+    return false;
+}
+
+static bool
+compose_set_mpls_tc_action(struct xlate_ctx *ctx, uint8_t tc)
+{
+    if (!eth_type_mpls(ctx->xin->flow.dl_type)) {
+        return true;
+    }
+
+    /* If mpls_depth_delta is negative then an MPLS POP action has been
+     * executed and the resulting MPLS label stack is unknown.  This means
+     * a SET MPLS TC action can't be executed as it needs to manipulate
+     * the top-most MPLS LSE. Thus, stop processing.
+     *
+     * It is planned that in the future this case will be handled
+     * by recirculation.
+     */
+    if (ctx->mpls_depth_delta < 0) {
+        return true;
+    }
+
+    ctx->xout->wc.masks.mpls_lse |= htonl(MPLS_TC_MASK);
+    set_mpls_lse_tc(&ctx->xin->flow.mpls_lse, tc);
+    return false;
+}
+
+static bool
 compose_set_mpls_ttl_action(struct xlate_ctx *ctx, uint8_t ttl)
 {
     if (!eth_type_mpls(ctx->xin->flow.dl_type)) {
@@ -2472,6 +2520,20 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_POP_MPLS:
             if (compose_mpls_pop_action(ctx,
                                         ofpact_get_POP_MPLS(a)->ethertype)) {
+                return;
+            }
+            break;
+
+        case OFPACT_SET_MPLS_LABEL:
+            if (compose_set_mpls_label_action(ctx,
+                                              ofpact_get_SET_MPLS_LABEL(a)->label)) {
+                return;
+            }
+            break;
+
+        case OFPACT_SET_MPLS_TC:
+            if (compose_set_mpls_tc_action(ctx,
+                                           ofpact_get_SET_MPLS_TC(a)->tc)) {
                 return;
             }
             break;

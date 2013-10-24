@@ -312,6 +312,8 @@ enum nx_action_subtype {
     NXAST_STACK_PUSH,           /* struct nx_action_stack */
     NXAST_STACK_POP,            /* struct nx_action_stack */
     NXAST_SAMPLE,               /* struct nx_action_sample */
+    NXAST_SET_MPLS_LABEL,       /* struct nx_action_ttl */
+    NXAST_SET_MPLS_TC,          /* struct nx_action_ttl */
 };
 
 /* Header for Nicira-defined actions. */
@@ -2272,6 +2274,28 @@ struct nx_action_pop_mpls {
     uint8_t  pad[4];
 };
 OFP_ASSERT(sizeof(struct nx_action_pop_mpls) == 16);
+
+/* Action structure for NXAST_SET_MPLS_LABEL. */
+struct nx_action_mpls_label {
+    ovs_be16 type;                  /* OFPAT_VENDOR. */
+    ovs_be16 len;                   /* Length is 8. */
+    ovs_be32 vendor;                /* NX_VENDOR_ID. */
+    ovs_be16 subtype;               /* NXAST_SET_MPLS_LABEL. */
+    uint8_t  zeros[2];               /* Must be zero. */
+    ovs_be32 label;                 /* LABEL */
+};
+OFP_ASSERT(sizeof(struct nx_action_mpls_label) == 16);
+
+/* Action structure for NXAST_SET_MPLS_TC. */
+struct nx_action_mpls_tc {
+    ovs_be16 type;                  /* OFPAT_VENDOR. */
+    ovs_be16 len;                   /* Length is 8. */
+    ovs_be32 vendor;                /* NX_VENDOR_ID. */
+    ovs_be16 subtype;               /* NXAST_SET_MPLS_TC. */
+    uint8_t  tc;                    /* TC */
+    uint8_t  pad[5];
+};
+OFP_ASSERT(sizeof(struct nx_action_mpls_tc) == 16);
 
 /* Action structure for NXAST_SET_MPLS_TTL. */
 struct nx_action_mpls_ttl {
