@@ -109,7 +109,7 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
         ds_put_format(string, " cookie=0x%"PRIx64, ntohll(pin.cookie));
     }
 
-    ds_put_format(string, " total_len=%"PRIu16" in_port=", pin.total_len);
+    ds_put_format(string, " total_len=%zu in_port=", pin.total_len);
     ofputil_format_port(pin.fmd.in_port, string);
 
     if (pin.fmd.tun_id != htonll(0)) {
