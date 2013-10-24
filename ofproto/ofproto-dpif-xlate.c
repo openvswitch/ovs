@@ -2292,6 +2292,8 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
         struct ofpact_controller *controller;
         const struct ofpact_metadata *metadata;
+        const struct ofpact_set_field *set_field;
+        const struct mf_field *mf;
 
         if (ctx->exit) {
             break;
@@ -2434,6 +2436,20 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         case OFPACT_REG_LOAD:
             nxm_execute_reg_load(ofpact_get_REG_LOAD(a), flow, wc);
+            break;
+
+        case OFPACT_SET_FIELD:
+            set_field = ofpact_get_SET_FIELD(a);
+            mf = set_field->field;
+            mf_mask_field_and_prereqs(mf, &wc->masks);
+
+            /* Set field action only ever overwrites packet's outermost
+             * applicable header fields.  Do nothing if no header exists. */
+            if ((mf->id != MFF_VLAN_VID || flow->vlan_tci & htons(VLAN_CFI))
+                && ((mf->id != MFF_MPLS_LABEL && mf->id != MFF_MPLS_TC)
+                    || flow->mpls_lse)) {
+                mf_set_flow_value(mf, &set_field->value, flow);
+            }
             break;
 
         case OFPACT_STACK_PUSH:

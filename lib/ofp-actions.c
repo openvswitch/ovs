@@ -760,6 +760,117 @@ decode_openflow11_action(const union ofp_action *a,
 }
 
 static enum ofperr
+set_field_from_openflow(const struct ofp12_action_set_field *oasf,
+                        struct ofpbuf *ofpacts)
+{
+    uint16_t oasf_len = ntohs(oasf->len);
+    uint32_t oxm_header = ntohl(oasf->dst);
+    uint8_t oxm_length = NXM_LENGTH(oxm_header);
+    struct ofpact_set_field *sf;
+    const struct mf_field *mf;
+
+    /* ofp12_action_set_field is padded to 64 bits by zero */
+    if (oasf_len != ROUND_UP(sizeof *oasf + oxm_length, 8)) {
+        return OFPERR_OFPBAC_BAD_SET_LEN;
+    }
+    if (!is_all_zeros((const uint8_t *)oasf + sizeof *oasf + oxm_length,
+                      oasf_len - oxm_length - sizeof *oasf)) {
+        return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
+    }
+
+    if (NXM_HASMASK(oxm_header)) {
+        return OFPERR_OFPBAC_BAD_SET_TYPE;
+    }
+    mf = mf_from_nxm_header(oxm_header);
+    if (!mf) {
+        return OFPERR_OFPBAC_BAD_SET_TYPE;
+    }
+    ovs_assert(mf->n_bytes == oxm_length);
+    /* oxm_length is now validated to be compatible with mf_value. */
+    if (!mf->writable) {
+        VLOG_WARN_RL(&rl, "destination field %s is not writable", mf->name);
+        return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
+    }
+    sf = ofpact_put_SET_FIELD(ofpacts);
+    sf->field = mf;
+    memcpy(&sf->value, oasf + 1, mf->n_bytes);
+
+    /* The value must be valid for match and must have the OFPVID_PRESENT bit
+     * on for OXM_OF_VLAN_VID. */
+    if (!mf_is_value_valid(mf, &sf->value)
+        || (mf->id == MFF_VLAN_VID
+            && !(sf->value.be16 & htons(OFPVID12_PRESENT)))) {
+        struct ds ds = DS_EMPTY_INITIALIZER;
+        mf_format(mf, &sf->value, NULL, &ds);
+        VLOG_WARN_RL(&rl, "Invalid value for set field %s: %s",
+                     mf->name, ds_cstr(&ds));
+        ds_destroy(&ds);
+
+        return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
+    }
+    return 0;
+}
+
+static void
+set_field_to_openflow12(const struct ofpact_set_field *sf,
+                        struct ofpbuf *openflow)
+{
+    uint16_t padded_value_len = ROUND_UP(sf->field->n_bytes, 8);
+    struct ofp12_action_set_field *oasf;
+    char *value;
+
+    oasf = ofputil_put_OFPAT12_SET_FIELD(openflow);
+    oasf->dst = htonl(sf->field->oxm_header);
+    oasf->len = htons(sizeof *oasf + padded_value_len);
+
+    value = ofpbuf_put_zeros(openflow, padded_value_len);
+    memcpy(value, &sf->value, sf->field->n_bytes);
+}
+
+/* Convert 'sf' to one or two REG_LOADs. */
+static void
+set_field_to_nxast(const struct ofpact_set_field *sf, struct ofpbuf *openflow)
+{
+    const struct mf_field *mf = sf->field;
+    struct nx_action_reg_load *narl;
+
+    if (mf->n_bits > 64) {
+        ovs_assert(mf->n_bytes == 16); /* IPv6 addr. */
+        /* Split into 64bit chunks */
+        /* Lower bits first. */
+        narl = ofputil_put_NXAST_REG_LOAD(openflow);
+        narl->ofs_nbits = nxm_encode_ofs_nbits(0, 64);
+        narl->dst = htonl(mf->nxm_header);
+        memcpy(&narl->value, &sf->value.ipv6.s6_addr[8], sizeof narl->value);
+        /* Higher bits next. */
+        narl = ofputil_put_NXAST_REG_LOAD(openflow);
+        narl->ofs_nbits = nxm_encode_ofs_nbits(64, mf->n_bits - 64);
+        narl->dst = htonl(mf->nxm_header);
+        memcpy(&narl->value, &sf->value.ipv6.s6_addr[0], sizeof narl->value);
+    } else {
+        narl = ofputil_put_NXAST_REG_LOAD(openflow);
+        narl->ofs_nbits = nxm_encode_ofs_nbits(0, mf->n_bits);
+        narl->dst = htonl(mf->nxm_header);
+        memset(&narl->value, 0, 8 - mf->n_bytes);
+        memcpy((char*)&narl->value + (8 - mf->n_bytes),
+               &sf->value, mf->n_bytes);
+    }
+}
+
+static void
+set_field_to_openflow(const struct ofpact_set_field *sf,
+                      struct ofpbuf *openflow)
+{
+    struct ofp_header *oh = (struct ofp_header *)openflow->l2;
+
+    if (oh->version >= OFP12_VERSION) {
+        set_field_to_openflow12(sf, openflow);
+    } else {
+        set_field_to_nxast(sf, openflow);
+    }
+}
+
+static enum ofperr
 output_from_openflow11(const struct ofp11_action_output *oao,
                        struct ofpbuf *out)
 {
@@ -885,7 +996,7 @@ ofpact_from_openflow11(const union ofp_action *a, struct ofpbuf *out)
         break;
 
     case OFPUTIL_OFPAT12_SET_FIELD:
-        return nxm_reg_load_from_openflow12_set_field(&a->set_field, out);
+        return set_field_from_openflow(&a->set_field, out);
 
     case OFPUTIL_OFPAT11_SET_MPLS_TTL:
         ofpact_put_SET_MPLS_TTL(out)->ttl = a->ofp11_mpls_ttl.mpls_ttl;
@@ -933,6 +1044,7 @@ static bool
 ofpact_is_set_action(const struct ofpact *a)
 {
     switch (a->type) {
+    case OFPACT_SET_FIELD:
     case OFPACT_REG_LOAD:
     case OFPACT_SET_ETH_DST:
     case OFPACT_SET_ETH_SRC:
@@ -997,6 +1109,7 @@ ofpact_is_allowed_in_actions_set(const struct ofpact *a)
     case OFPACT_PUSH_MPLS:
     case OFPACT_PUSH_VLAN:
     case OFPACT_REG_LOAD:
+    case OFPACT_SET_FIELD:
     case OFPACT_SET_ETH_DST:
     case OFPACT_SET_ETH_SRC:
     case OFPACT_SET_IP_DSCP:
@@ -1278,6 +1391,7 @@ ovs_instruction_type_from_ofpact_type(enum ofpact_type type)
     case OFPACT_SET_L4_DST_PORT:
     case OFPACT_REG_MOVE:
     case OFPACT_REG_LOAD:
+    case OFPACT_SET_FIELD:
     case OFPACT_STACK_PUSH:
     case OFPACT_STACK_POP:
     case OFPACT_DEC_TTL:
@@ -1563,6 +1677,7 @@ ofpact_check__(struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
                uint8_t table_id, bool enforce_consistency)
 {
     const struct ofpact_enqueue *enqueue;
+    const struct mf_field *mf;
 
     switch (a->type) {
     case OFPACT_OUTPUT:
@@ -1664,6 +1779,17 @@ ofpact_check__(struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
 
     case OFPACT_REG_LOAD:
         return nxm_reg_load_check(ofpact_get_REG_LOAD(a), flow);
+
+    case OFPACT_SET_FIELD:
+        mf = ofpact_get_SET_FIELD(a)->field;
+        /* Require OXM_OF_VLAN_VID to have an existing VLAN header. */
+        if (!mf_are_prereqs_ok(mf, flow) ||
+            (mf->id == MFF_VLAN_VID && !(flow->vlan_tci & htons(VLAN_CFI)))) {
+            VLOG_WARN_RL(&rl, "set_field %s lacks correct prerequisities",
+                         mf->name);
+            return OFPERR_OFPBAC_MATCH_INCONSISTENT;
+        }
+        return 0;
 
     case OFPACT_STACK_PUSH:
         return nxm_stack_push_check(ofpact_get_STACK_PUSH(a), flow);
@@ -1978,6 +2104,10 @@ ofpact_to_nxast(const struct ofpact *a, struct ofpbuf *out)
         nxm_reg_load_to_nxast(ofpact_get_REG_LOAD(a), out);
         break;
 
+    case OFPACT_SET_FIELD:
+        set_field_to_openflow(ofpact_get_SET_FIELD(a), out);
+        break;
+
     case OFPACT_STACK_PUSH:
         nxm_stack_push_to_nxast(ofpact_get_STACK_PUSH(a), out);
         break;
@@ -2183,6 +2313,7 @@ ofpact_to_openflow10(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_BUNDLE:
     case OFPACT_REG_MOVE:
     case OFPACT_REG_LOAD:
+    case OFPACT_SET_FIELD:
     case OFPACT_STACK_PUSH:
     case OFPACT_STACK_POP:
     case OFPACT_DEC_TTL:
@@ -2385,6 +2516,7 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_BUNDLE:
     case OFPACT_REG_MOVE:
     case OFPACT_REG_LOAD:
+    case OFPACT_SET_FIELD:
     case OFPACT_STACK_PUSH:
     case OFPACT_STACK_POP:
     case OFPACT_SET_TUNNEL:
@@ -2541,6 +2673,7 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, ofp_port_t port)
     case OFPACT_SET_L4_DST_PORT:
     case OFPACT_REG_MOVE:
     case OFPACT_REG_LOAD:
+    case OFPACT_SET_FIELD:
     case OFPACT_STACK_PUSH:
     case OFPACT_STACK_POP:
     case OFPACT_DEC_TTL:
@@ -2696,6 +2829,8 @@ ofpact_format(const struct ofpact *a, struct ds *s)
     const struct ofpact_metadata *metadata;
     const struct ofpact_tunnel *tunnel;
     const struct ofpact_sample *sample;
+    const struct ofpact_set_field *set_field;
+    const struct mf_field *mf;
     ofp_port_t port;
 
     switch (a->type) {
@@ -2827,6 +2962,14 @@ ofpact_format(const struct ofpact *a, struct ds *s)
 
     case OFPACT_REG_LOAD:
         nxm_format_reg_load(ofpact_get_REG_LOAD(a), s);
+        break;
+
+    case OFPACT_SET_FIELD:
+        set_field = ofpact_get_SET_FIELD(a);
+        mf = set_field->field;
+        ds_put_format(s, "set_field:");
+        mf_format(mf, &set_field->value, NULL, s);
+        ds_put_format(s, "->%s", mf->name);
         break;
 
     case OFPACT_STACK_PUSH:
@@ -3045,16 +3188,4 @@ ofpact_pad(struct ofpbuf *ofpacts)
     if (rem) {
         ofpbuf_put_zeros(ofpacts, OFPACT_ALIGNTO - rem);
     }
-}
-
-void
-ofpact_set_field_init(struct ofpact_reg_load *load, const struct mf_field *mf,
-                      const void *src)
-{
-    load->ofpact.compat = OFPUTIL_OFPAT12_SET_FIELD;
-    load->dst.field = mf;
-    load->dst.ofs = 0;
-    load->dst.n_bits = mf->n_bits;
-    bitwise_copy(src, mf->n_bytes, load->dst.ofs,
-                 &load->subvalue, sizeof load->subvalue, 0, mf->n_bits);
 }

@@ -59,6 +59,7 @@
     DEFINE_OFPACT(BUNDLE,          ofpact_bundle,        slaves)    \
                                                                     \
     /* Header changes. */                                           \
+    DEFINE_OFPACT(SET_FIELD,       ofpact_set_field,     ofpact)    \
     DEFINE_OFPACT(SET_VLAN_VID,    ofpact_vlan_vid,      ofpact)    \
     DEFINE_OFPACT(SET_VLAN_PCP,    ofpact_vlan_pcp,      ofpact)    \
     DEFINE_OFPACT(STRIP_VLAN,      ofpact_null,          ofpact)    \
@@ -352,7 +353,7 @@ struct ofpact_stack {
 
 /* OFPACT_REG_LOAD.
  *
- * Used for NXAST_REG_LOAD, OFPAT12_SET_FIELD. */
+ * Used for NXAST_REG_LOAD. */
 struct ofpact_reg_load {
     struct ofpact ofpact;
     struct mf_subfield dst;
@@ -370,6 +371,15 @@ enum ofpact_mpls_position {
    /* Add the MPLS LSE after the Ethernet header and any VLAN tags.
     * OpenFlow 1.1 and 1.2 require this behavior. */
    OFPACT_MPLS_AFTER_VLAN
+};
+
+/* OFPACT_SET_FIELD.
+ *
+ * Used for OFPAT12_SET_FIELD. */
+struct ofpact_set_field {
+    struct ofpact ofpact;
+    const struct mf_field *field;
+    union mf_value value;
 };
 
 /* OFPACT_PUSH_VLAN/MPLS/PBB
@@ -730,7 +740,4 @@ const char *ovs_instruction_name_from_type(enum ovs_instruction_type type);
 int ovs_instruction_type_from_name(const char *name);
 enum ovs_instruction_type ovs_instruction_type_from_ofpact_type(
     enum ofpact_type);
-
-void ofpact_set_field_init(struct ofpact_reg_load *load,
-                           const struct mf_field *mf, const void *src);
 #endif /* ofp-actions.h */

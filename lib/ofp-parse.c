@@ -465,13 +465,12 @@ static char * WARN_UNUSED_RESULT
 set_field_parse__(char *arg, struct ofpbuf *ofpacts,
                   enum ofputil_protocol *usable_protocols)
 {
-    struct ofpact_reg_load *load = ofpact_put_REG_LOAD(ofpacts);
+    struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
     char *value;
     char *delim;
     char *key;
     const struct mf_field *mf;
     char *error;
-    union mf_value mf_value;
 
     value = arg;
     delim = strstr(arg, "->");
@@ -490,16 +489,16 @@ set_field_parse__(char *arg, struct ofpbuf *ofpacts,
     if (!mf->writable) {
         return xasprintf("%s is read-only", key);
     }
-
+    sf->field = mf;
     delim[0] = '\0';
-    error = mf_parse_value(mf, value, &mf_value);
+    error = mf_parse_value(mf, value, &sf->value);
     if (error) {
         return error;
     }
-    if (!mf_is_value_valid(mf, &mf_value)) {
+
+    if (!mf_is_value_valid(mf, &sf->value)) {
         return xasprintf("%s is not a valid value for field %s", value, key);
     }
-    ofpact_set_field_init(load, mf, &mf_value);
 
     *usable_protocols &= mf->usable_protocols;
     return NULL;

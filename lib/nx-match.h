@@ -70,8 +70,6 @@ enum ofperr nxm_reg_move_from_openflow(const struct nx_action_reg_move *,
                                        struct ofpbuf *ofpacts);
 enum ofperr nxm_reg_load_from_openflow(const struct nx_action_reg_load *,
                                        struct ofpbuf *ofpacts);
-enum ofperr nxm_reg_load_from_openflow12_set_field(
-    const struct ofp12_action_set_field * oasf, struct ofpbuf *ofpacts);
 
 enum ofperr nxm_reg_move_check(const struct ofpact_reg_move *,
                                const struct flow *);
