@@ -1105,6 +1105,24 @@ ofpact_from_openflow11(const union ofp_action *a, enum ofp_version version,
         return error;
     }
 
+    if (version >= OFP12_VERSION) {
+        switch ((int)code) {
+        case OFPUTIL_OFPAT11_SET_VLAN_VID:
+        case OFPUTIL_OFPAT11_SET_VLAN_PCP:
+        case OFPUTIL_OFPAT11_SET_DL_SRC:
+        case OFPUTIL_OFPAT11_SET_DL_DST:
+        case OFPUTIL_OFPAT11_SET_NW_SRC:
+        case OFPUTIL_OFPAT11_SET_NW_DST:
+        case OFPUTIL_OFPAT11_SET_NW_TOS:
+        case OFPUTIL_OFPAT11_SET_NW_ECN:
+        case OFPUTIL_OFPAT11_SET_TP_SRC:
+        case OFPUTIL_OFPAT11_SET_TP_DST:
+            VLOG_WARN_RL(&rl, "Deprecated action %s received over %s",
+                         ofputil_action_name_from_code(code),
+                         ofputil_version_to_string(version));
+        }
+    }
+
     switch (code) {
     case OFPUTIL_ACTION_INVALID:
 #define OFPAT10_ACTION(ENUM, STRUCT, NAME) case OFPUTIL_##ENUM:
