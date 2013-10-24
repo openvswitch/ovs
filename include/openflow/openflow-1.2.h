@@ -251,13 +251,16 @@ enum ofp12_capabilities {
     OFPC12_PORT_BLOCKED   = 1 << 8   /* Switch will block looping ports. */
 };
 
-/* OpenFlow 1.2 specific properties
- * (struct ofp_queue_prop_header member property). */
-enum ofp12_queue_properties {
-    OFPQT12_MIN_RATE = 1,         /* Minimum datarate guaranteed. */
-    OFPQT12_MAX_RATE = 2,         /* Maximum datarate. */
-    OFPQT12_EXPERIMENTER = 0xffff /* Experimenter defined property. */
+/* Full description for a queue. */
+struct ofp12_packet_queue {
+    ovs_be32 queue_id;     /* id for the specific queue. */
+    ovs_be32 port;         /* Port this queue is attached to. */
+    ovs_be16 len;          /* Length in bytes of this queue desc. */
+    uint8_t pad[6];        /* 64-bit alignment. */
+    /* Followed by any number of queue properties expressed using
+     * ofp_queue_prop_header, to fill out a total of 'len' bytes. */
 };
+OFP_ASSERT(sizeof(struct ofp12_packet_queue) == 16);
 
 /* Body of reply to OFPST_TABLE request. */
 struct ofp12_table_stats {

@@ -310,6 +310,7 @@ usage(void)
            "  dump-group-features SWITCH  print group features\n"
            "  dump-groups SWITCH          print group description\n"
            "  dump-group-stats SWITCH [GROUP]  print group statistics\n"
+           "  queue-get-config SWITCH PORT  print queue information for port\n"
            "  add-meter SWITCH METER      add meter described by METER\n"
            "  mod-meter SWITCH METER      modify specific METER\n"
            "  del-meter SWITCH METER      delete METER\n"
@@ -1045,6 +1046,26 @@ ofctl_queue_stats(int argc, char *argv[])
 
     request = ofputil_encode_queue_stats_request(vconn_get_version(vconn), &oqs);
     dump_stats_transaction(vconn, request);
+    vconn_close(vconn);
+}
+
+static void
+ofctl_queue_get_config(int argc OVS_UNUSED, char *argv[])
+{
+    const char *vconn_name = argv[1];
+    const char *port_name = argv[2];
+    enum ofputil_protocol protocol;
+    enum ofp_version version;
+    struct ofpbuf *request;
+    struct vconn *vconn;
+    ofp_port_t port;
+
+    port = str_to_port_no(vconn_name, port_name);
+
+    protocol = open_vconn(vconn_name, &vconn);
+    version = ofputil_protocol_to_ofp_version(protocol);
+    request = ofputil_encode_queue_get_config_request(version, port);
+    dump_transaction(vconn, request);
     vconn_close(vconn);
 }
 
@@ -3326,6 +3347,7 @@ static const struct command all_commands[] = {
     { "dump-flows", 1, 2, ofctl_dump_flows },
     { "dump-aggregate", 1, 2, ofctl_dump_aggregate },
     { "queue-stats", 1, 3, ofctl_queue_stats },
+    { "queue-get-config", 2, 2, ofctl_queue_get_config },
     { "add-flow", 2, 2, ofctl_add_flow },
     { "add-flows", 2, 2, ofctl_add_flows },
     { "mod-flows", 2, 2, ofctl_mod_flows },

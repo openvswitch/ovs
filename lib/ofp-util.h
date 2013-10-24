@@ -706,6 +706,34 @@ struct ofpbuf *ofputil_encode_table_stats_reply(
     const struct ofp12_table_stats[], int n,
     const struct ofp_header *request);
 
+/* Queue configuration request. */
+struct ofpbuf *ofputil_encode_queue_get_config_request(enum ofp_version,
+                                                       ofp_port_t port);
+enum ofperr ofputil_decode_queue_get_config_request(const struct ofp_header *,
+                                                    ofp_port_t *port);
+
+/* Queue configuration reply. */
+struct ofputil_queue_config {
+    uint32_t queue_id;
+
+    /* Each of these optional values is expressed in tenths of a percent.
+     * Values greater than 1000 indicate that the feature is disabled.
+     * UINT16_MAX indicates that the value is omitted. */
+    uint16_t min_rate;
+    uint16_t max_rate;
+};
+
+struct ofpbuf *ofputil_encode_queue_get_config_reply(
+    const struct ofp_header *request);
+void ofputil_append_queue_get_config_reply(
+    struct ofpbuf *reply, const struct ofputil_queue_config *);
+
+enum ofperr ofputil_decode_queue_get_config_reply(struct ofpbuf *reply,
+                                                  ofp_port_t *);
+int ofputil_pull_queue_get_config_reply(struct ofpbuf *reply,
+                                        struct ofputil_queue_config *);
+
+
 /* Abstract nx_flow_monitor_request. */
 struct ofputil_flow_monitor_request {
     uint32_t id;

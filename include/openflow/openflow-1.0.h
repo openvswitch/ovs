@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -127,6 +127,15 @@ struct ofp10_port_mod {
     uint8_t pad[4];         /* Pad to 64-bits. */
 };
 OFP_ASSERT(sizeof(struct ofp10_port_mod) == 24);
+
+struct ofp10_packet_queue {
+    ovs_be32 queue_id;          /* id for the specific queue. */
+    ovs_be16 len;               /* Length in bytes of this queue desc. */
+    uint8_t pad[2];             /* 64-bit alignment. */
+    /* Followed by any number of queue properties expressed using
+     * ofp_queue_prop_header, to fill out a total of 'len' bytes. */
+};
+OFP_ASSERT(sizeof(struct ofp10_packet_queue) == 8);
 
 /* Query for port queue configuration. */
 struct ofp10_queue_get_config_request {

@@ -49,6 +49,7 @@
 #include "random.h"
 #include "shash.h"
 #include "simap.h"
+#include "smap.h"
 #include "sset.h"
 #include "timeval.h"
 #include "unaligned.h"
@@ -5413,6 +5414,49 @@ handle_group_features_stats_request(struct ofconn *ofconn,
     return 0;
 }
 
+static enum ofperr
+handle_queue_get_config_request(struct ofconn *ofconn,
+                                const struct ofp_header *oh)
+{
+   struct ofproto *p = ofconn_get_ofproto(ofconn);
+   struct netdev_queue_dump queue_dump;
+   struct ofport *ofport;
+   unsigned int queue_id;
+   struct ofpbuf *reply;
+   struct smap details;
+   ofp_port_t request;
+   enum ofperr error;
+
+   error = ofputil_decode_queue_get_config_request(oh, &request);
+   if (error) {
+       return error;
+   }
+
+   ofport = ofproto_get_port(p, request);
+   if (!ofport) {
+      return OFPERR_OFPQOFC_BAD_PORT;
+   }
+
+   reply = ofputil_encode_queue_get_config_reply(oh);
+
+   smap_init(&details);
+   NETDEV_QUEUE_FOR_EACH (&queue_id, &details, &queue_dump, ofport->netdev) {
+       struct ofputil_queue_config queue;
+
+       /* None of the existing queues have compatible properties, so we
+        * hard-code omitting min_rate and max_rate. */
+       queue.queue_id = queue_id;
+       queue.min_rate = UINT16_MAX;
+       queue.max_rate = UINT16_MAX;
+       ofputil_append_queue_get_config_reply(reply, &queue);
+   }
+   smap_destroy(&details);
+
+   ofconn_send_reply(ofconn, reply);
+
+   return 0;
+}
+
 /* Implements OFPGC11_ADD
  * in which no matching flow already exists in the flow table.
  *
@@ -5797,10 +5841,8 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPTYPE_GROUP_FEATURES_STATS_REQUEST:
         return handle_group_features_stats_request(ofconn, oh);
 
-        /* FIXME: Change the following once they are implemented: */
     case OFPTYPE_QUEUE_GET_CONFIG_REQUEST:
-    case OFPTYPE_TABLE_FEATURES_STATS_REQUEST:
-        /* fallthrough */
+        return handle_queue_get_config_request(ofconn, oh);
 
     case OFPTYPE_HELLO:
     case OFPTYPE_ERROR:
@@ -5829,6 +5871,7 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPTYPE_METER_STATS_REPLY:
     case OFPTYPE_METER_CONFIG_STATS_REPLY:
     case OFPTYPE_METER_FEATURES_STATS_REPLY:
+    case OFPTYPE_TABLE_FEATURES_STATS_REQUEST:
     case OFPTYPE_TABLE_FEATURES_STATS_REPLY:
     default:
         if (ofpmsg_is_stat_request(oh)) {

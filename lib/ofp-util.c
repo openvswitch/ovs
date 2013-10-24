@@ -2186,6 +2186,283 @@ ofputil_decode_nxst_flow_request(struct ofputil_flow_stats_request *fsr,
     return 0;
 }
 
+/* Constructs and returns an OFPT_QUEUE_GET_CONFIG request for the specified
+ * 'port', suitable for OpenFlow version 'version'. */
+struct ofpbuf *
+ofputil_encode_queue_get_config_request(enum ofp_version version,
+                                        ofp_port_t port)
+{
+    struct ofpbuf *request;
+
+    if (version == OFP10_VERSION) {
+        struct ofp10_queue_get_config_request *qgcr10;
+
+        request = ofpraw_alloc(OFPRAW_OFPT10_QUEUE_GET_CONFIG_REQUEST,
+                               version, 0);
+        qgcr10 = ofpbuf_put_zeros(request, sizeof *qgcr10);
+        qgcr10->port = htons(ofp_to_u16(port));
+    } else {
+        struct ofp11_queue_get_config_request *qgcr11;
+
+        request = ofpraw_alloc(OFPRAW_OFPT11_QUEUE_GET_CONFIG_REQUEST,
+                               version, 0);
+        qgcr11 = ofpbuf_put_zeros(request, sizeof *qgcr11);
+        qgcr11->port = ofputil_port_to_ofp11(port);
+    }
+
+    return request;
+}
+
+/* Parses OFPT_QUEUE_GET_CONFIG request 'oh', storing the port specified by the
+ * request into '*port'.  Returns 0 if successful, otherwise an OpenFlow error
+ * code. */
+enum ofperr
+ofputil_decode_queue_get_config_request(const struct ofp_header *oh,
+                                        ofp_port_t *port)
+{
+    const struct ofp10_queue_get_config_request *qgcr10;
+    const struct ofp11_queue_get_config_request *qgcr11;
+    enum ofpraw raw;
+    struct ofpbuf b;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    raw = ofpraw_pull_assert(&b);
+
+    switch ((int) raw) {
+    case OFPRAW_OFPT10_QUEUE_GET_CONFIG_REQUEST:
+        qgcr10 = b.data;
+        *port = u16_to_ofp(ntohs(qgcr10->port));
+        return 0;
+
+    case OFPRAW_OFPT11_QUEUE_GET_CONFIG_REQUEST:
+        qgcr11 = b.data;
+        return ofputil_port_from_ofp11(qgcr11->port, port);
+    }
+
+    NOT_REACHED();
+}
+
+/* Constructs and returns the beginning of a reply to
+ * OFPT_QUEUE_GET_CONFIG_REQUEST 'oh'.  The caller may append information about
+ * individual queues with ofputil_append_queue_get_config_reply(). */
+struct ofpbuf *
+ofputil_encode_queue_get_config_reply(const struct ofp_header *oh)
+{
+    struct ofp10_queue_get_config_reply *qgcr10;
+    struct ofp11_queue_get_config_reply *qgcr11;
+    struct ofpbuf *reply;
+    enum ofperr error;
+    struct ofpbuf b;
+    enum ofpraw raw;
+    ofp_port_t port;
+
+    error = ofputil_decode_queue_get_config_request(oh, &port);
+    ovs_assert(!error);
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    raw = ofpraw_pull_assert(&b);
+
+    switch ((int) raw) {
+    case OFPRAW_OFPT10_QUEUE_GET_CONFIG_REQUEST:
+        reply = ofpraw_alloc_reply(OFPRAW_OFPT10_QUEUE_GET_CONFIG_REPLY,
+                                   oh, 0);
+        qgcr10 = ofpbuf_put_zeros(reply, sizeof *qgcr10);
+        qgcr10->port = htons(ofp_to_u16(port));
+        break;
+
+    case OFPRAW_OFPT11_QUEUE_GET_CONFIG_REQUEST:
+        reply = ofpraw_alloc_reply(OFPRAW_OFPT11_QUEUE_GET_CONFIG_REPLY,
+                                   oh, 0);
+        qgcr11 = ofpbuf_put_zeros(reply, sizeof *qgcr11);
+        qgcr11->port = ofputil_port_to_ofp11(port);
+        break;
+
+    default:
+        NOT_REACHED();
+    }
+
+    return reply;
+}
+
+static void
+put_queue_rate(struct ofpbuf *reply, enum ofp_queue_properties property,
+               uint16_t rate)
+{
+    if (rate != UINT16_MAX) {
+        struct ofp_queue_prop_rate *oqpr;
+
+        oqpr = ofpbuf_put_zeros(reply, sizeof *oqpr);
+        oqpr->prop_header.property = htons(property);
+        oqpr->prop_header.len = htons(sizeof *oqpr);
+        oqpr->rate = htons(rate);
+    }
+}
+
+/* Appends a queue description for 'queue_id' to the
+ * OFPT_QUEUE_GET_CONFIG_REPLY already in 'oh'. */
+void
+ofputil_append_queue_get_config_reply(struct ofpbuf *reply,
+                                      const struct ofputil_queue_config *oqc)
+{
+    const struct ofp_header *oh = reply->data;
+    size_t start_ofs, len_ofs;
+    ovs_be16 *len;
+
+    start_ofs = reply->size;
+    if (oh->version < OFP12_VERSION) {
+        struct ofp10_packet_queue *opq10;
+
+        opq10 = ofpbuf_put_zeros(reply, sizeof *opq10);
+        opq10->queue_id = htonl(oqc->queue_id);
+        len_ofs = (char *) &opq10->len - (char *) reply->data;
+    } else {
+        struct ofp11_queue_get_config_reply *qgcr11;
+        struct ofp12_packet_queue *opq12;
+        ovs_be32 port;
+
+        qgcr11 = reply->l3;
+        port = qgcr11->port;
+
+        opq12 = ofpbuf_put_zeros(reply, sizeof *opq12);
+        opq12->port = port;
+        opq12->queue_id = htonl(oqc->queue_id);
+        len_ofs = (char *) &opq12->len - (char *) reply->data;
+    }
+
+    put_queue_rate(reply, OFPQT_MIN_RATE, oqc->min_rate);
+    put_queue_rate(reply, OFPQT_MAX_RATE, oqc->max_rate);
+
+    len = ofpbuf_at(reply, len_ofs, sizeof *len);
+    *len = htons(reply->size - start_ofs);
+}
+
+/* Decodes the initial part of an OFPT_QUEUE_GET_CONFIG_REPLY from 'reply' and
+ * stores in '*port' the port that the reply is about.  The caller may call
+ * ofputil_pull_queue_get_config_reply() to obtain information about individual
+ * queues included in the reply.  Returns 0 if successful, otherwise an
+ * ofperr.*/
+enum ofperr
+ofputil_decode_queue_get_config_reply(struct ofpbuf *reply, ofp_port_t *port)
+{
+    const struct ofp10_queue_get_config_reply *qgcr10;
+    const struct ofp11_queue_get_config_reply *qgcr11;
+    enum ofpraw raw;
+
+    raw = ofpraw_pull_assert(reply);
+    switch ((int) raw) {
+    case OFPRAW_OFPT10_QUEUE_GET_CONFIG_REPLY:
+        qgcr10 = ofpbuf_pull(reply, sizeof *qgcr10);
+        *port = u16_to_ofp(ntohs(qgcr10->port));
+        return 0;
+
+    case OFPRAW_OFPT11_QUEUE_GET_CONFIG_REPLY:
+        qgcr11 = ofpbuf_pull(reply, sizeof *qgcr11);
+        return ofputil_port_from_ofp11(qgcr11->port, port);
+    }
+
+    NOT_REACHED();
+}
+
+static enum ofperr
+parse_queue_rate(const struct ofp_queue_prop_header *hdr, uint16_t *rate)
+{
+    const struct ofp_queue_prop_rate *oqpr;
+
+    if (hdr->len == htons(sizeof *oqpr)) {
+        oqpr = (const struct ofp_queue_prop_rate *) hdr;
+        *rate = ntohs(oqpr->rate);
+        return 0;
+    } else {
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+}
+
+/* Decodes information about a queue from the OFPT_QUEUE_GET_CONFIG_REPLY in
+ * 'reply' and stores it in '*queue'.  ofputil_decode_queue_get_config_reply()
+ * must already have pulled off the main header.
+ *
+ * This function returns EOF if the last queue has already been decoded, 0 if a
+ * queue was successfully decoded into '*queue', or an ofperr if there was a
+ * problem decoding 'reply'. */
+int
+ofputil_pull_queue_get_config_reply(struct ofpbuf *reply,
+                                    struct ofputil_queue_config *queue)
+{
+    const struct ofp_header *oh;
+    unsigned int opq_len;
+    unsigned int len;
+
+    if (!reply->size) {
+        return EOF;
+    }
+
+    queue->min_rate = UINT16_MAX;
+    queue->max_rate = UINT16_MAX;
+
+    oh = reply->l2;
+    if (oh->version < OFP12_VERSION) {
+        const struct ofp10_packet_queue *opq10;
+
+        opq10 = ofpbuf_try_pull(reply, sizeof *opq10);
+        if (!opq10) {
+            return OFPERR_OFPBRC_BAD_LEN;
+        }
+        queue->queue_id = ntohl(opq10->queue_id);
+        len = ntohs(opq10->len);
+        opq_len = sizeof *opq10;
+    } else {
+        const struct ofp12_packet_queue *opq12;
+
+        opq12 = ofpbuf_try_pull(reply, sizeof *opq12);
+        if (!opq12) {
+            return OFPERR_OFPBRC_BAD_LEN;
+        }
+        queue->queue_id = ntohl(opq12->queue_id);
+        len = ntohs(opq12->len);
+        opq_len = sizeof *opq12;
+    }
+
+    if (len < opq_len || len > reply->size + opq_len || len % 8) {
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+    len -= opq_len;
+
+    while (len > 0) {
+        const struct ofp_queue_prop_header *hdr;
+        unsigned int property;
+        unsigned int prop_len;
+        enum ofperr error = 0;
+
+        hdr = ofpbuf_at_assert(reply, 0, sizeof *hdr);
+        prop_len = ntohs(hdr->len);
+        if (prop_len < sizeof *hdr || prop_len > reply->size || prop_len % 8) {
+            return OFPERR_OFPBRC_BAD_LEN;
+        }
+
+        property = ntohs(hdr->property);
+        switch (property) {
+        case OFPQT_MIN_RATE:
+            error = parse_queue_rate(hdr, &queue->min_rate);
+            break;
+
+        case OFPQT_MAX_RATE:
+            error = parse_queue_rate(hdr, &queue->max_rate);
+            break;
+
+        default:
+            VLOG_INFO_RL(&bad_ofmsg_rl, "unknown queue property %u", property);
+            break;
+        }
+        if (error) {
+            return error;
+        }
+
+        ofpbuf_pull(reply, prop_len);
+        len -= prop_len;
+    }
+    return 0;
+}
+
 /* Converts an OFPST_FLOW, OFPST_AGGREGATE, NXST_FLOW, or NXST_AGGREGATE
  * request 'oh', into an abstract flow_stats_request in 'fsr'.  Returns 0 if
  * successful, otherwise an OpenFlow error code. */

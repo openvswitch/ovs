@@ -204,19 +204,10 @@ enum ofp_port_features {
     OFPPF_10GB_FD    = 1 << 6,  /* 10 Gb full-duplex rate support. */
 };
 
-struct ofp_packet_queue {
-    ovs_be32 queue_id;          /* id for the specific queue. */
-    ovs_be16 len;               /* Length in bytes of this queue desc. */
-    uint8_t pad[2];             /* 64-bit alignment. */
-    /* struct ofp_queue_prop_header properties[0]; List of properties.  */
-};
-OFP_ASSERT(sizeof(struct ofp_packet_queue) == 8);
-
 enum ofp_queue_properties {
-    OFPQT_NONE = 0,       /* No property defined for queue (default). */
-    OFPQT_MIN_RATE,       /* Minimum datarate guaranteed. */
-                          /* Other types should be added here
-                           * (i.e. max rate, precedence, etc). */
+    OFPQT_MIN_RATE = 1,          /* Minimum datarate guaranteed. */
+    OFPQT_MAX_RATE = 2,          /* Maximum guaranteed rate. */
+    OFPQT_EXPERIMENTER = 0xffff, /* Experimenter defined property. */
 };
 
 /* Common description for a queue. */
@@ -227,13 +218,14 @@ struct ofp_queue_prop_header {
 };
 OFP_ASSERT(sizeof(struct ofp_queue_prop_header) == 8);
 
-/* Min-Rate queue property description. */
-struct ofp_queue_prop_min_rate {
-    struct ofp_queue_prop_header prop_header; /* prop: OFPQT_MIN, len: 16. */
+/* Min-Rate and Max-Rate queue property description (OFPQT_MIN and
+ * OFPQT_MAX). */
+struct ofp_queue_prop_rate {
+    struct ofp_queue_prop_header prop_header;
     ovs_be16 rate;        /* In 1/10 of a percent; >1000 -> disabled. */
     uint8_t pad[6];       /* 64-bit alignment */
 };
-OFP_ASSERT(sizeof(struct ofp_queue_prop_min_rate) == 16);
+OFP_ASSERT(sizeof(struct ofp_queue_prop_rate) == 16);
 
 /* Switch features. */
 struct ofp_switch_features {
