@@ -116,9 +116,6 @@ following additional work.  (This is based on the change log at the
 end of the OF1.3 spec, reusing most of the section titles directly.  I
 didn't compare the specs carefully yet.)
 
-    * Send errors for unsupported multipart requests.
-      [required for OF1.3+]
-
     * Add support for multipart requests.
       [optional for OF1.3+]
 

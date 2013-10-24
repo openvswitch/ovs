@@ -584,6 +584,7 @@ enum ofptype ofptype_from_ofpraw(enum ofpraw);
 /* OpenFlow message properties. */
 void ofpmsg_update_length(struct ofpbuf *);
 const void *ofpmsg_body(const struct ofp_header *);
+bool ofpmsg_is_stat_request(const struct ofp_header *);
 
 /* Multipart messages (aka "statistics").
  *

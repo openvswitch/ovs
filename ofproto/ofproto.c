@@ -5790,7 +5790,7 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
         /* FIXME: Change the following once they are implemented: */
     case OFPTYPE_QUEUE_GET_CONFIG_REQUEST:
     case OFPTYPE_TABLE_FEATURES_STATS_REQUEST:
-        return OFPERR_OFPBRC_BAD_TYPE;
+        /* fallthrough */
 
     case OFPTYPE_HELLO:
     case OFPTYPE_ERROR:
@@ -5821,7 +5821,11 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPTYPE_METER_FEATURES_STATS_REPLY:
     case OFPTYPE_TABLE_FEATURES_STATS_REPLY:
     default:
-        return OFPERR_OFPBRC_BAD_TYPE;
+        if (ofpmsg_is_stat_request(oh)) {
+            return OFPERR_OFPBRC_BAD_STAT;
+        } else {
+            return OFPERR_OFPBRC_BAD_TYPE;
+        }
     }
 }
 
