@@ -599,6 +599,8 @@ parse_named_action(enum ofputil_action_code code,
 {
     size_t orig_size = ofpacts->size;
     struct ofpact_tunnel *tunnel;
+    struct ofpact_vlan_vid *vlan_vid;
+    struct ofpact_vlan_pcp *vlan_pcp;
     char *error = NULL;
     uint16_t ethertype = 0;
     uint16_t vid = 0;
@@ -624,7 +626,10 @@ parse_named_action(enum ofputil_action_code code,
         if (vid & ~VLAN_VID_MASK) {
             return xasprintf("%s: not a valid VLAN VID", arg);
         }
-        ofpact_put_SET_VLAN_VID(ofpacts)->vlan_vid = vid;
+        vlan_vid = ofpact_put_SET_VLAN_VID(ofpacts);
+        vlan_vid->vlan_vid = vid;
+        vlan_vid->ofpact.compat = code;
+        vlan_vid->push_vlan_if_needed = code == OFPUTIL_OFPAT10_SET_VLAN_VID;
         break;
 
     case OFPUTIL_OFPAT10_SET_VLAN_PCP:
@@ -637,7 +642,10 @@ parse_named_action(enum ofputil_action_code code,
         if (pcp & ~7) {
             return xasprintf("%s: not a valid VLAN PCP", arg);
         }
-        ofpact_put_SET_VLAN_PCP(ofpacts)->vlan_pcp = pcp;
+        vlan_pcp = ofpact_put_SET_VLAN_PCP(ofpacts);
+        vlan_pcp->vlan_pcp = pcp;
+        vlan_pcp->ofpact.compat = code;
+        vlan_pcp->push_vlan_if_needed = code == OFPUTIL_OFPAT10_SET_VLAN_PCP;
         break;
 
     case OFPUTIL_OFPAT12_SET_FIELD:

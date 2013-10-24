@@ -2835,7 +2835,7 @@ reject_slave_controller(struct ofconn *ofconn)
  */
 static enum ofperr
 ofproto_check_ofpacts(struct ofproto *ofproto,
-                      const struct ofpact ofpacts[], size_t ofpacts_len,
+                      struct ofpact ofpacts[], size_t ofpacts_len,
                       struct flow *flow, uint8_t table_id,
                       const struct ofp_header *oh)
 {

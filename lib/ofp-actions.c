@@ -501,6 +501,8 @@ ofpact_from_openflow10(const union ofp_action *a, struct ofpbuf *out)
 {
     enum ofputil_action_code code;
     enum ofperr error;
+    struct ofpact_vlan_vid *vlan_vid;
+    struct ofpact_vlan_pcp *vlan_pcp;
 
     error = decode_openflow10_action(a, &code);
     if (error) {
@@ -520,14 +522,20 @@ ofpact_from_openflow10(const union ofp_action *a, struct ofpbuf *out)
         if (a->vlan_vid.vlan_vid & ~htons(0xfff)) {
             return OFPERR_OFPBAC_BAD_ARGUMENT;
         }
-        ofpact_put_SET_VLAN_VID(out)->vlan_vid = ntohs(a->vlan_vid.vlan_vid);
+        vlan_vid = ofpact_put_SET_VLAN_VID(out);
+        vlan_vid->vlan_vid = ntohs(a->vlan_vid.vlan_vid);
+        vlan_vid->push_vlan_if_needed = true;
+        vlan_vid->ofpact.compat = code;
         break;
 
     case OFPUTIL_OFPAT10_SET_VLAN_PCP:
         if (a->vlan_pcp.vlan_pcp & ~7) {
             return OFPERR_OFPBAC_BAD_ARGUMENT;
         }
-        ofpact_put_SET_VLAN_PCP(out)->vlan_pcp = a->vlan_pcp.vlan_pcp;
+        vlan_pcp = ofpact_put_SET_VLAN_PCP(out);
+        vlan_pcp->vlan_pcp = a->vlan_pcp.vlan_pcp;
+        vlan_pcp->push_vlan_if_needed = true;
+        vlan_pcp->ofpact.compat = code;
         break;
 
     case OFPUTIL_OFPAT10_STRIP_VLAN:
@@ -774,6 +782,8 @@ ofpact_from_openflow11(const union ofp_action *a, struct ofpbuf *out)
 {
     enum ofputil_action_code code;
     enum ofperr error;
+    struct ofpact_vlan_vid *vlan_vid;
+    struct ofpact_vlan_pcp *vlan_pcp;
 
     error = decode_openflow11_action(a, &code);
     if (error) {
@@ -793,14 +803,20 @@ ofpact_from_openflow11(const union ofp_action *a, struct ofpbuf *out)
         if (a->vlan_vid.vlan_vid & ~htons(0xfff)) {
             return OFPERR_OFPBAC_BAD_ARGUMENT;
         }
-        ofpact_put_SET_VLAN_VID(out)->vlan_vid = ntohs(a->vlan_vid.vlan_vid);
+        vlan_vid = ofpact_put_SET_VLAN_VID(out);
+        vlan_vid->vlan_vid = ntohs(a->vlan_vid.vlan_vid);
+        vlan_vid->push_vlan_if_needed = false;
+        vlan_vid->ofpact.compat = code;
         break;
 
     case OFPUTIL_OFPAT11_SET_VLAN_PCP:
         if (a->vlan_pcp.vlan_pcp & ~7) {
             return OFPERR_OFPBAC_BAD_ARGUMENT;
         }
-        ofpact_put_SET_VLAN_PCP(out)->vlan_pcp = a->vlan_pcp.vlan_pcp;
+        vlan_pcp = ofpact_put_SET_VLAN_PCP(out);
+        vlan_pcp->vlan_pcp = a->vlan_pcp.vlan_pcp;
+        vlan_pcp->push_vlan_if_needed = false;
+        vlan_pcp->ofpact.compat = code;
         break;
 
     case OFPUTIL_OFPAT11_PUSH_VLAN:
@@ -1538,9 +1554,12 @@ exit:
     return error;
 }
 
-/* May modify flow->dl_type, caller must restore it. */
+/* May modify flow->dl_type and flow->vlan_tci, caller must restore them.
+ *
+ * Modifies some actions, filling in fields that could not be properly set
+ * without context. */
 static enum ofperr
-ofpact_check__(const struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
+ofpact_check__(struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
                uint8_t table_id, bool enforce_consistency)
 {
     const struct ofpact_enqueue *enqueue;
@@ -1569,13 +1588,37 @@ ofpact_check__(const struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
         return bundle_check(ofpact_get_BUNDLE(a), max_ports, flow);
 
     case OFPACT_SET_VLAN_VID:
+        /* Remember if we saw a vlan tag in the flow to aid translating to
+         * OpenFlow 1.1+ if need be. */
+        ofpact_get_SET_VLAN_VID(a)->flow_has_vlan =
+            (flow->vlan_tci & htons(VLAN_CFI)) == htons(VLAN_CFI);
+        if (!(flow->vlan_tci & htons(VLAN_CFI)) &&
+            !ofpact_get_SET_VLAN_VID(a)->push_vlan_if_needed) {
+            goto inconsistent;
+        }
+        /* Temporary mark that we have a vlan tag. */
+        flow->vlan_tci |= htons(VLAN_CFI);
+        return 0;
+
     case OFPACT_SET_VLAN_PCP:
+        /* Remember if we saw a vlan tag in the flow to aid translating to
+         * OpenFlow 1.1+ if need be. */
+        ofpact_get_SET_VLAN_PCP(a)->flow_has_vlan =
+            (flow->vlan_tci & htons(VLAN_CFI)) == htons(VLAN_CFI);
+        if (!(flow->vlan_tci & htons(VLAN_CFI)) &&
+            !ofpact_get_SET_VLAN_PCP(a)->push_vlan_if_needed) {
+            goto inconsistent;
+        }
+        /* Temporary mark that we have a vlan tag. */
+        flow->vlan_tci |= htons(VLAN_CFI);
         return 0;
 
     case OFPACT_STRIP_VLAN:
         if (!(flow->vlan_tci & htons(VLAN_CFI))) {
             goto inconsistent;
         }
+        /* Temporary mark that we have no vlan tag. */
+        flow->vlan_tci = htons(0);
         return 0;
 
     case OFPACT_PUSH_VLAN:
@@ -1583,6 +1626,8 @@ ofpact_check__(const struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
             /* Multiple VLAN headers not supported. */
             return OFPERR_OFPBAC_BAD_TAG;
         }
+        /* Temporary mark that we have a vlan tag. */
+        flow->vlan_tci |= htons(VLAN_CFI);
         return 0;
 
     case OFPACT_SET_ETH_SRC:
@@ -1713,14 +1758,17 @@ ofpact_check__(const struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
  * appropriate for a packet with the prerequisites satisfied by 'flow' in a
  * switch with no more than 'max_ports' ports.
  *
+ * May annotate ofpacts with information gathered from the 'flow'.
+ *
  * May temporarily modify 'flow', but restores the changes before returning. */
 enum ofperr
-ofpacts_check(const struct ofpact ofpacts[], size_t ofpacts_len,
+ofpacts_check(struct ofpact ofpacts[], size_t ofpacts_len,
               struct flow *flow, ofp_port_t max_ports, uint8_t table_id,
               bool enforce_consistency)
 {
-    const struct ofpact *a;
+    struct ofpact *a;
     ovs_be16 dl_type = flow->dl_type;
+    ovs_be16 vlan_tci = flow->vlan_tci;
     enum ofperr error = 0;
 
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
@@ -1730,7 +1778,9 @@ ofpacts_check(const struct ofpact ofpacts[], size_t ofpacts_len,
             break;
         }
     }
-    flow->dl_type = dl_type; /* Restore. */
+    /* Restore fields that may have been modified. */
+    flow->dl_type = dl_type;
+    flow->vlan_tci = vlan_tci;
     return error;
 }
 
@@ -2114,6 +2164,10 @@ ofpact_to_openflow10(const struct ofpact *a, struct ofpbuf *out)
         break;
 
     case OFPACT_PUSH_VLAN:
+        /* PUSH is a side effect of a SET_VLAN_VID/PCP, which should
+         * follow this action. */
+        break;
+
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_WRITE_ACTIONS:
     case OFPACT_GOTO_TABLE:
@@ -2206,11 +2260,23 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
         break;
 
     case OFPACT_SET_VLAN_VID:
+        /* Push a VLAN tag, if one was not seen at action validation time. */
+        if (!ofpact_get_SET_VLAN_VID(a)->flow_has_vlan
+            && ofpact_get_SET_VLAN_VID(a)->push_vlan_if_needed) {
+            ofputil_put_OFPAT11_PUSH_VLAN(out)->ethertype
+                = htons(ETH_TYPE_VLAN_8021Q);
+        }
         ofputil_put_OFPAT11_SET_VLAN_VID(out)->vlan_vid
             = htons(ofpact_get_SET_VLAN_VID(a)->vlan_vid);
         break;
 
     case OFPACT_SET_VLAN_PCP:
+        /* Push a VLAN tag, if one was not seen at action validation time. */
+        if (!ofpact_get_SET_VLAN_PCP(a)->flow_has_vlan
+            && ofpact_get_SET_VLAN_PCP(a)->push_vlan_if_needed) {
+            ofputil_put_OFPAT11_PUSH_VLAN(out)->ethertype
+                = htons(ETH_TYPE_VLAN_8021Q);
+        }
         ofputil_put_OFPAT11_SET_VLAN_PCP(out)->vlan_pcp
             = ofpact_get_SET_VLAN_PCP(a)->vlan_pcp;
         break;
@@ -2690,12 +2756,18 @@ ofpact_format(const struct ofpact *a, struct ds *s)
         break;
 
     case OFPACT_SET_VLAN_VID:
-        ds_put_format(s, "mod_vlan_vid:%"PRIu16,
+        ds_put_format(s, "%s:%"PRIu16,
+                      (a->compat == OFPUTIL_OFPAT11_SET_VLAN_VID
+                       ? "set_vlan_vid"
+                       : "mod_vlan_vid"),
                       ofpact_get_SET_VLAN_VID(a)->vlan_vid);
         break;
 
     case OFPACT_SET_VLAN_PCP:
-        ds_put_format(s, "mod_vlan_pcp:%"PRIu8,
+        ds_put_format(s, "%s:%"PRIu8,
+                      (a->compat == OFPUTIL_OFPAT11_SET_VLAN_PCP
+                       ? "set_vlan_pcp"
+                       : "mod_vlan_pcp"),
                       ofpact_get_SET_VLAN_PCP(a)->vlan_pcp);
         break;
 

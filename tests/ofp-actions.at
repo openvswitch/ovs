@@ -138,10 +138,10 @@ AT_DATA([test-data], [dnl
 # actions=CONTROLLER:1234
 0000 0010 fffffffd 04d2 000000000000
 
-# actions=mod_vlan_vid:9
+# actions=set_vlan_vid:9
 0001 0008 0009 0000
 
-# actions=mod_vlan_pcp:6
+# actions=set_vlan_pcp:6
 0002 0008 06 000000
 
 # actions=mod_dl_src:00:11:22:33:44:55

@@ -2320,17 +2320,22 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         case OFPACT_SET_VLAN_VID:
             wc->masks.vlan_tci |= htons(VLAN_VID_MASK | VLAN_CFI);
-            flow->vlan_tci &= ~htons(VLAN_VID_MASK);
-            flow->vlan_tci |= (htons(ofpact_get_SET_VLAN_VID(a)->vlan_vid)
-                               | htons(VLAN_CFI));
+            if (flow->vlan_tci & htons(VLAN_CFI) ||
+                ofpact_get_SET_VLAN_VID(a)->push_vlan_if_needed) {
+                flow->vlan_tci &= ~htons(VLAN_VID_MASK);
+                flow->vlan_tci |= (htons(ofpact_get_SET_VLAN_VID(a)->vlan_vid)
+                                   | htons(VLAN_CFI));
+            }
             break;
 
         case OFPACT_SET_VLAN_PCP:
             wc->masks.vlan_tci |= htons(VLAN_PCP_MASK | VLAN_CFI);
-            flow->vlan_tci &= ~htons(VLAN_PCP_MASK);
-            flow->vlan_tci |=
-                htons((ofpact_get_SET_VLAN_PCP(a)->vlan_pcp << VLAN_PCP_SHIFT)
-                      | VLAN_CFI);
+            if (flow->vlan_tci & htons(VLAN_CFI) ||
+                ofpact_get_SET_VLAN_PCP(a)->push_vlan_if_needed) {
+                flow->vlan_tci &= ~htons(VLAN_PCP_MASK);
+                flow->vlan_tci |= htons((ofpact_get_SET_VLAN_PCP(a)->vlan_pcp
+                                         << VLAN_PCP_SHIFT) | VLAN_CFI);
+            }
             break;
 
         case OFPACT_STRIP_VLAN:

@@ -257,18 +257,32 @@ struct ofpact_bundle {
 
 /* OFPACT_SET_VLAN_VID.
  *
- * Used for OFPAT10_SET_VLAN_VID. */
+ * We keep track if vlan was present at action validation time to avoid a
+ * PUSH_VLAN when translating to OpenFlow 1.1+.
+ *
+ * We also keep the originating OFPUTIL action code in ofpact.compat.
+ *
+ * Used for OFPAT10_SET_VLAN_VID and OFPAT11_SET_VLAN_VID. */
 struct ofpact_vlan_vid {
     struct ofpact ofpact;
     uint16_t vlan_vid;          /* VLAN VID in low 12 bits, 0 in other bits. */
+    bool push_vlan_if_needed;   /* OF 1.0 semantics if true. */
+    bool flow_has_vlan;         /* VLAN present at action validation time? */
 };
 
 /* OFPACT_SET_VLAN_PCP.
  *
- * Used for OFPAT10_SET_VLAN_PCP. */
+ * We keep track if vlan was present at action validation time to avoid a
+ * PUSH_VLAN when translating to OpenFlow 1.1+.
+ *
+ * We also keep the originating OFPUTIL action code in ofpact.compat.
+ *
+ * Used for OFPAT10_SET_VLAN_PCP and OFPAT11_SET_VLAN_PCP. */
 struct ofpact_vlan_pcp {
     struct ofpact ofpact;
     uint8_t vlan_pcp;           /* VLAN PCP in low 3 bits, 0 in other bits. */
+    bool push_vlan_if_needed;   /* OF 1.0 semantics if true. */
+    bool flow_has_vlan;         /* VLAN present at action validation time? */
 };
 
 /* OFPACT_SET_ETH_SRC, OFPACT_SET_ETH_DST.
@@ -563,7 +577,7 @@ enum ofperr ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
                                                  enum ofp_version version,
                                                  unsigned int instructions_len,
                                                  struct ofpbuf *ofpacts);
-enum ofperr ofpacts_check(const struct ofpact[], size_t ofpacts_len,
+enum ofperr ofpacts_check(struct ofpact[], size_t ofpacts_len,
                           struct flow *, ofp_port_t max_ports,
                           uint8_t table_id, bool enforce_consistency);
 enum ofperr ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len);
