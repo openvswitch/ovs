@@ -5677,6 +5677,13 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     if (error) {
         return error;
     }
+    if (oh->version >= OFP13_VERSION && ofpmsg_is_stat_request(oh)
+        && ofpmp_more(oh)) {
+        /* We have no buffer implementation for multipart requests.
+         * Report overflow for requests which consists of multiple
+         * messages. */
+        return OFPERR_OFPBRC_MULTIPART_BUFFER_OVERFLOW;
+    }
 
     switch (type) {
         /* OpenFlow requests. */

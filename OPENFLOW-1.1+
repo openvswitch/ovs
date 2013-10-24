@@ -117,6 +117,7 @@ end of the OF1.3 spec, reusing most of the section titles directly.  I
 didn't compare the specs carefully yet.)
 
     * Add support for multipart requests.
+      Currently we always report OFPBRC_MULTIPART_BUFFER_OVERFLOW.
       [optional for OF1.3+]
 
     * Add OFPMP_TABLE_FEATURES statistics.
