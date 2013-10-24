@@ -1891,12 +1891,27 @@ ofpact_check__(struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
         return 0;
 
     case OFPACT_SET_L4_SRC_PORT:
+        if (!is_ip_any(flow) ||
+            (flow->nw_proto != IPPROTO_TCP && flow->nw_proto != IPPROTO_UDP
+             && flow->nw_proto != IPPROTO_SCTP)) {
+            goto inconsistent;
+        }
+        /* Note on which transport protocol the port numbers are set.
+         * This allows this set action to be converted to an OF1.2 set field
+         * action. */
+        ofpact_get_SET_L4_SRC_PORT(a)->flow_ip_proto = flow->nw_proto;
+        return 0;
+
     case OFPACT_SET_L4_DST_PORT:
         if (!is_ip_any(flow) ||
             (flow->nw_proto != IPPROTO_TCP && flow->nw_proto != IPPROTO_UDP
              && flow->nw_proto != IPPROTO_SCTP)) {
             goto inconsistent;
         }
+        /* Note on which transport protocol the port numbers are set.
+         * This allows this set action to be converted to an OF1.2 set field
+         * action. */
+        ofpact_get_SET_L4_DST_PORT(a)->flow_ip_proto = flow->nw_proto;
         return 0;
 
     case OFPACT_REG_MOVE:
@@ -2656,9 +2671,135 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
     }
 }
 
+/* Output deprecated set actions as set_field actions. */
 static void
 ofpact_to_openflow12(const struct ofpact *a, struct ofpbuf *out)
 {
+    enum mf_field_id field;
+    union mf_value value;
+    struct ofpact_l4_port *l4port;
+    uint8_t proto;
+
+    /*
+     * Convert actions deprecated in OpenFlow 1.2 to Set Field actions,
+     * if possible.
+     */
+    switch ((int)a->type) {
+    case OFPACT_SET_VLAN_VID:
+    case OFPACT_SET_VLAN_PCP:
+    case OFPACT_SET_ETH_SRC:
+    case OFPACT_SET_ETH_DST:
+    case OFPACT_SET_IPV4_SRC:
+    case OFPACT_SET_IPV4_DST:
+    case OFPACT_SET_IP_DSCP:
+    case OFPACT_SET_IP_ECN:
+    case OFPACT_SET_L4_SRC_PORT:
+    case OFPACT_SET_L4_DST_PORT:
+    case OFPACT_SET_TUNNEL:  /* Convert to a set_field, too. */
+
+        switch ((int)a->type) {
+
+        case OFPACT_SET_VLAN_VID:
+            if (!ofpact_get_SET_VLAN_VID(a)->flow_has_vlan &&
+                ofpact_get_SET_VLAN_VID(a)->push_vlan_if_needed) {
+                ofputil_put_OFPAT11_PUSH_VLAN(out)->ethertype
+                    = htons(ETH_TYPE_VLAN_8021Q);
+            }
+            field = MFF_VLAN_VID;
+            /* Set-Field on OXM_OF_VLAN_VID must have OFPVID_PRESENT set. */
+            value.be16 = htons(ofpact_get_SET_VLAN_VID(a)->vlan_vid
+                               | OFPVID12_PRESENT);
+            break;
+
+        case OFPACT_SET_VLAN_PCP:
+            if (!ofpact_get_SET_VLAN_PCP(a)->flow_has_vlan &&
+                ofpact_get_SET_VLAN_PCP(a)->push_vlan_if_needed) {
+                ofputil_put_OFPAT11_PUSH_VLAN(out)->ethertype
+                    = htons(ETH_TYPE_VLAN_8021Q);
+            }
+            field = MFF_VLAN_PCP;
+            value.u8 = ofpact_get_SET_VLAN_PCP(a)->vlan_pcp;
+            break;
+
+        case OFPACT_SET_ETH_SRC:
+            field = MFF_ETH_SRC;
+            memcpy(value.mac, ofpact_get_SET_ETH_SRC(a)->mac, ETH_ADDR_LEN);
+            break;
+
+        case OFPACT_SET_ETH_DST:
+            field = MFF_ETH_DST;
+            memcpy(value.mac, ofpact_get_SET_ETH_DST(a)->mac, ETH_ADDR_LEN);
+            break;
+
+        case OFPACT_SET_IPV4_SRC:
+            field = MFF_IPV4_SRC;
+            value.be32 = ofpact_get_SET_IPV4_SRC(a)->ipv4;
+            break;
+
+        case OFPACT_SET_IPV4_DST:
+            field = MFF_IPV4_DST;
+            value.be32 = ofpact_get_SET_IPV4_DST(a)->ipv4;
+            break;
+
+        case OFPACT_SET_IP_DSCP:
+            field = MFF_IP_DSCP_SHIFTED; /* OXM_OF_IP_DSCP */
+            value.u8 = ofpact_get_SET_IP_DSCP(a)->dscp >> 2;
+            break;
+
+        case OFPACT_SET_IP_ECN:
+            field = MFF_IP_ECN;
+            value.u8 = ofpact_get_SET_IP_ECN(a)->ecn;
+            break;
+
+        case OFPACT_SET_L4_SRC_PORT:
+            /* We keep track of IP protocol while translating actions to be
+             * able to translate to the proper OXM type.
+             * If the IP protocol type is unknown, the translation cannot
+             * be performed and we will send the action using the original
+             * action type. */
+            l4port = ofpact_get_SET_L4_SRC_PORT(a);
+            proto = l4port->flow_ip_proto;
+            field = proto == IPPROTO_TCP ? MFF_TCP_SRC
+                : proto == IPPROTO_UDP ? MFF_UDP_SRC
+                : proto == IPPROTO_SCTP ? MFF_SCTP_SRC
+                : MFF_N_IDS; /* RFC: Unknown IP proto, do not translate. */
+            value.be16 = htons(l4port->port);
+            break;
+
+        case OFPACT_SET_L4_DST_PORT:
+            l4port = ofpact_get_SET_L4_DST_PORT(a);
+            proto = l4port->flow_ip_proto;
+            field = proto == IPPROTO_TCP ? MFF_TCP_DST
+                : proto == IPPROTO_UDP ? MFF_UDP_DST
+                : proto == IPPROTO_SCTP ? MFF_SCTP_DST
+                : MFF_N_IDS; /* RFC: Unknown IP proto, do not translate. */
+            value.be16 = htons(l4port->port);
+            break;
+
+        case OFPACT_SET_TUNNEL:
+            field = MFF_TUN_ID;
+            value.be64 = htonll(ofpact_get_SET_TUNNEL(a)->tun_id);
+            break;
+
+        default:
+            field = MFF_N_IDS;
+        }
+
+        /* Put the action out as a set field action, if possible. */
+        if (field < MFF_N_IDS) {
+            uint64_t ofpacts_stub[128 / 8];
+            struct ofpbuf sf_act;
+            struct ofpact_set_field *sf;
+
+            ofpbuf_use_stub(&sf_act, ofpacts_stub, sizeof ofpacts_stub);
+            sf = ofpact_put_SET_FIELD(&sf_act);
+            sf->field = mf_from_id(field);
+            memcpy(&sf->value, &value, sf->field->n_bytes);
+            set_field_to_openflow(sf, out);
+            return;
+        }
+    }
+
     ofpact_to_openflow11(a, out);
 }
 

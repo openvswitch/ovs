@@ -331,7 +331,8 @@ struct ofpact_ip_ttl {
  * Used for OFPAT10_SET_TP_SRC, OFPAT10_SET_TP_DST. */
 struct ofpact_l4_port {
     struct ofpact ofpact;
-    uint16_t port;              /* TCP or UDP port number. */
+    uint16_t port;              /* TCP, UDP or SCTP port number. */
+    uint8_t  flow_ip_proto;     /* IP proto from corresponding match, or 0 */
 };
 
 /* OFPACT_REG_MOVE.
