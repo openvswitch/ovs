@@ -594,6 +594,7 @@ When \fBdl_type\fR is wildcarded or set to a value other than 0x0800,
 (see \fBFlow Syntax\fR above).
 .
 .IP \fBnw_proto=\fIproto\fR
+.IQ \fBip_proto=\fIproto\fR
 When \fBip\fR or \fBdl_type=0x0800\fR is specified, matches IP
 protocol type \fIproto\fR, which is specified as a decimal number
 between 0 and 255, inclusive (e.g. 1 to match ICMP packets or 6 to match
@@ -626,7 +627,16 @@ When \fBdl_type\fR is wildcarded or set to a value other than 0x0800 or
 0x86dd, the value of \fBnw_tos\fR is ignored (see \fBFlow Syntax\fR
 above).
 .
+.IP \fBip_dscp=\fIdscp\fR
+Matches IP ToS/DSCP or IPv6 traffic class field \fIdscp\fR, which is
+specified as a decimal number between 0 and 63, inclusive.
+.IP
+When \fBdl_type\fR is wildcarded or set to a value other than 0x0800 or
+0x86dd, the value of \fBip_dscp\fR is ignored (see \fBFlow Syntax\fR
+above).
+.
 .IP \fBnw_ecn=\fIecn\fR
+.IQ \fBip_ecn=\fIecn\fR
 Matches \fIecn\fR bits in IP ToS or IPv6 traffic class fields, which is
 specified as a decimal number between 0 and 3, inclusive.
 .IP
@@ -920,6 +930,7 @@ address option.  An address is specified as 6 pairs of hexadecimal
 digits delimited by colons.
 .
 .IP \fBtun_id=\fItunnel-id\fR[\fB/\fImask\fR]
+.IQ \fBtunnel_id=\fItunnel-id\fR[\fB/\fImask\fR]
 Matches tunnel identifier \fItunnel-id\fR.  Only packets that arrive
 over a tunnel that carries a key (e.g. GRE with the RFC 2890 key
 extension and a nonzero key value) will have a nonzero tunnel ID.

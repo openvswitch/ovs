@@ -70,8 +70,8 @@ for test_case in \
     'ipv6,nw_proto=1                             NXM,OXM' \
     'ip,nw_tos=0xf0                              any' \
     'ipv6,nw_tos=0xf0                            NXM,OXM' \
-    'ip,nw_tos_shifted=0x3c                      any' \
-    'ipv6,nw_tos_shifted=0x3c                    NXM,OXM' \
+    'ip,ip_dscp=0x3c                             any' \
+    'ipv6,ip_dscp=0x3c                           NXM,OXM' \
     'ip,nw_ecn=1                                 NXM,OXM' \
     'ipv6,nw_ecn=1                               NXM,OXM' \
     'ip,nw_ttl=5                                 NXM,OXM' \
@@ -252,8 +252,8 @@ for test_case in \
     'ipv6 nw_proto 1/1' \
     'ip nw_tos 0xf0/0xf0' \
     'ipv6 nw_tos 0xf0/0xf0' \
-    'ip nw_tos_shifted 0x3c/0xf0' \
-    'ipv6 nw_tos_shifted 0x3c/0xf0' \
+    'ip ip_dscp 0x3c/0xf0' \
+    'ipv6 ip_dscp 0x3c/0xf0' \
     'ip nw_ecn 1/1' \
     'ipv6 nw_ecn 1/1' \
     'ip nw_ttl 5/1' \

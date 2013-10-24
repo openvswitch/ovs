@@ -49,7 +49,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
     /* ## -------- ## */
 
     {
-        MFF_TUN_ID, "tun_id", NULL,
+        MFF_TUN_ID, "tun_id", "tunnel_id",
         MF_FIELD_SIZES(be64),
         MFM_FULLY,
         MFS_HEXADECIMAL,
@@ -411,7 +411,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
     },
 
     {
-        MFF_IP_PROTO, "nw_proto", NULL,
+        MFF_IP_PROTO, "nw_proto", "ip_proto",
         MF_FIELD_SIZES(u8),
         MFM_NONE,
         MFS_DECIMAL,
@@ -433,8 +433,8 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OFPUTIL_P_ANY,   /* Will be shifted for OXM. */
         OFPUTIL_P_NONE,
     }, {
-        MFF_IP_DSCP_SHIFTED, "nw_tos_shifted", NULL,
-        MF_FIELD_SIZES(u8),
+        MFF_IP_DSCP_SHIFTED, "ip_dscp", NULL,
+        1, 6,
         MFM_NONE,
         MFS_DECIMAL,
         MFP_IP_ANY,
@@ -444,7 +444,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OFPUTIL_P_ANY,   /* Will be shifted for non-OXM. */
         OFPUTIL_P_NONE,
     }, {
-        MFF_IP_ECN, "nw_ecn", NULL,
+        MFF_IP_ECN, "nw_ecn", "ip_ecn",
         1, 2,
         MFM_NONE,
         MFS_DECIMAL,
