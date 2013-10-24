@@ -24,13 +24,14 @@
 #include "ofp-errors.h"
 #include "ofp-util.h"
 #include "packets.h"
+#include "util.h"
 
 struct ds;
 struct match;
 
 /* The comment on each of these indicates the member in "union mf_value" used
  * to represent its value. */
-enum mf_field_id {
+enum OVS_PACKED_ENUM mf_field_id {
     /* Metadata. */
     MFF_TUN_ID,                 /* be64 */
     MFF_TUN_SRC,                /* be32 */
@@ -180,7 +181,7 @@ enum mf_field_id {
  * A field may only be matched if the correct lower-level protocols are also
  * matched.  For example, the TCP port may be matched only if the Ethernet type
  * matches ETH_TYPE_IP and the IP protocol matches IPPROTO_TCP. */
-enum mf_prereqs {
+enum OVS_PACKED_ENUM mf_prereqs {
     MFP_NONE,
 
     /* L2 requirements. */
@@ -209,13 +210,13 @@ enum mf_prereqs {
 /* Forms of partial-field masking allowed for a field.
  *
  * Every field may be masked as a whole. */
-enum mf_maskable {
+enum OVS_PACKED_ENUM mf_maskable {
     MFM_NONE,                   /* No sub-field masking. */
     MFM_FULLY,                  /* Every bit is individually maskable. */
 };
 
 /* How to format or parse a field's value. */
-enum mf_string {
+enum OVS_PACKED_ENUM mf_string {
     /* Integer formats.
      *
      * The particular MFS_* constant sets the output format.  On input, either
@@ -331,10 +332,17 @@ union mf_subvalue {
 BUILD_ASSERT_DECL(sizeof(union mf_value) == sizeof (union mf_subvalue));
 
 /* Finding mf_fields. */
-const struct mf_field *mf_from_id(enum mf_field_id);
 const struct mf_field *mf_from_name(const char *name);
 const struct mf_field *mf_from_nxm_header(uint32_t nxm_header);
 const struct mf_field *mf_from_nxm_name(const char *nxm_name);
+
+static inline const struct mf_field *
+mf_from_id(enum mf_field_id id)
+{
+    extern const struct mf_field mf_fields[MFF_N_IDS];
+    ovs_assert((unsigned int) id < MFF_N_IDS);
+    return &mf_fields[id];
+}
 
 /* Inspecting wildcarded bits. */
 bool mf_is_all_wild(const struct mf_field *, const struct flow_wildcards *);

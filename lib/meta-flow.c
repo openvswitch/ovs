@@ -41,7 +41,9 @@ VLOG_DEFINE_THIS_MODULE(meta_flow);
     sizeof ((union mf_value *)0)->MEMBER,       \
     8 * sizeof ((union mf_value *)0)->MEMBER
 
-static const struct mf_field mf_fields[MFF_N_IDS] = {
+extern const struct mf_field mf_fields[MFF_N_IDS]; /* Silence a warning. */
+
+const struct mf_field mf_fields[MFF_N_IDS] = {
     /* ## -------- ## */
     /* ## metadata ## */
     /* ## -------- ## */
@@ -727,14 +729,6 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 const struct mf_field *mf_from_nxm_header__(uint32_t header);
 static void nxm_init(void);
-
-/* Returns the field with the given 'id'. */
-const struct mf_field *
-mf_from_id(enum mf_field_id id)
-{
-    ovs_assert((unsigned int) id < MFF_N_IDS);
-    return &mf_fields[id];
-}
 
 /* Returns the field with the given 'name', or a null pointer if no field has
  * that name. */
