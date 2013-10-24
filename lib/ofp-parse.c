@@ -653,7 +653,7 @@ parse_named_action(enum ofputil_action_code code,
 
     case OFPUTIL_OFPAT10_STRIP_VLAN:
     case OFPUTIL_OFPAT11_POP_VLAN:
-        ofpact_put_STRIP_VLAN(ofpacts);
+        ofpact_put_STRIP_VLAN(ofpacts)->ofpact.compat = code;
         break;
 
     case OFPUTIL_OFPAT11_PUSH_VLAN:

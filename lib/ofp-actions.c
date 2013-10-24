@@ -539,7 +539,7 @@ ofpact_from_openflow10(const union ofp_action *a, struct ofpbuf *out)
         break;
 
     case OFPUTIL_OFPAT10_STRIP_VLAN:
-        ofpact_put_STRIP_VLAN(out);
+        ofpact_put_STRIP_VLAN(out)->ofpact.compat = code;
         break;
 
     case OFPUTIL_OFPAT10_SET_DL_SRC:
@@ -828,7 +828,7 @@ ofpact_from_openflow11(const union ofp_action *a, struct ofpbuf *out)
         break;
 
     case OFPUTIL_OFPAT11_POP_VLAN:
-        ofpact_put_STRIP_VLAN(out);
+        ofpact_put_STRIP_VLAN(out)->ofpact.compat = code;
         break;
 
     case OFPUTIL_OFPAT11_SET_QUEUE:
@@ -2772,7 +2772,8 @@ ofpact_format(const struct ofpact *a, struct ds *s)
         break;
 
     case OFPACT_STRIP_VLAN:
-        ds_put_cstr(s, "strip_vlan");
+        ds_put_cstr(s, a->compat == OFPUTIL_OFPAT11_POP_VLAN
+                    ? "pop_vlan" : "strip_vlan");
         break;
 
     case OFPACT_PUSH_VLAN:
