@@ -251,15 +251,6 @@ enum ofp12_capabilities {
     OFPC12_PORT_BLOCKED   = 1 << 8   /* Switch will block looping ports. */
 };
 
-/* OpenFlow 1.2 specific types
- * (struct ofp11_stats_request/reply, member type). */
-enum ofp12_stats_types {
-    /* Group features.
-     * The request body is empty.
-     * The reply body is struct ofp12_group_features_stats. */
-    OFPST12_GROUP_FEATURES = 8
-};
-
 /* OpenFlow 1.2 specific properties
  * (struct ofp_queue_prop_header member property). */
 enum ofp12_queue_properties {
