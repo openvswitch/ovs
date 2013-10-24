@@ -2813,7 +2813,8 @@ ofctl_parse_ofp10_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         /* Convert to ofpacts. */
         ofpbuf_init(&ofpacts, 0);
         size = of10_in.size;
-        error = ofpacts_pull_openflow10(&of10_in, of10_in.size, &ofpacts);
+        error = ofpacts_pull_openflow_actions(&of10_in, of10_in.size,
+                                              OFP10_VERSION, &ofpacts);
         if (error) {
             printf("bad OF1.1 actions: %s\n\n", ofperr_get_name(error));
             ofpbuf_uninit(&ofpacts);
@@ -2831,7 +2832,8 @@ ofctl_parse_ofp10_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
         /* Convert back to ofp10 actions and print differences from input. */
         ofpbuf_init(&of10_out, 0);
-        ofpacts_put_openflow10(ofpacts.data, ofpacts.size, &of10_out);
+        ofpacts_put_openflow_actions(ofpacts.data, ofpacts.size, &of10_out,
+                                     OFP10_VERSION);
 
         print_differences("", of10_in.data, of10_in.size,
                           of10_out.data, of10_out.size);
@@ -2999,8 +3001,8 @@ ofctl_parse_ofp11_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         /* Convert to ofpacts. */
         ofpbuf_init(&ofpacts, 0);
         size = of11_in.size;
-        error = ofpacts_pull_openflow11_actions(&of11_in, OFP11_VERSION,
-                                                of11_in.size, &ofpacts);
+        error = ofpacts_pull_openflow_actions(&of11_in, of11_in.size,
+                                              OFP11_VERSION, &ofpacts);
         if (error) {
             printf("bad OF1.1 actions: %s\n\n", ofperr_get_name(error));
             ofpbuf_uninit(&ofpacts);
@@ -3018,7 +3020,8 @@ ofctl_parse_ofp11_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
         /* Convert back to ofp11 actions and print differences from input. */
         ofpbuf_init(&of11_out, 0);
-        ofpacts_put_openflow11_actions(ofpacts.data, ofpacts.size, &of11_out);
+        ofpacts_put_openflow_actions(ofpacts.data, ofpacts.size, &of11_out,
+                                     OFP11_VERSION);
 
         print_differences("", of11_in.data, of11_in.size,
                           of11_out.data, of11_out.size);
@@ -3068,8 +3071,8 @@ ofctl_parse_ofp11_instructions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         /* Convert to ofpacts. */
         ofpbuf_init(&ofpacts, 0);
         size = of11_in.size;
-        error = ofpacts_pull_openflow11_instructions(&of11_in, OFP11_VERSION,
-                                                     of11_in.size, &ofpacts);
+        error = ofpacts_pull_openflow_instructions(&of11_in, of11_in.size,
+                                                   OFP11_VERSION, &ofpacts);
         if (!error) {
             /* Verify actions, enforce consistency. */
             struct flow flow;
@@ -3095,8 +3098,8 @@ ofctl_parse_ofp11_instructions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         /* Convert back to ofp11 instructions and print differences from
          * input. */
         ofpbuf_init(&of11_out, 0);
-        ofpacts_put_openflow11_instructions(ofpacts.data, ofpacts.size,
-                                            &of11_out);
+        ofpacts_put_openflow_instructions(ofpacts.data, ofpacts.size,
+                                          &of11_out, OFP13_VERSION);
 
         print_differences("", of11_in.data, of11_in.size,
                           of11_out.data, of11_out.size);

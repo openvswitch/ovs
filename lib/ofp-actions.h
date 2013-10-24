@@ -577,30 +577,26 @@ struct ofpact_group {
 };
 
 /* Converting OpenFlow to ofpacts. */
-enum ofperr ofpacts_pull_openflow10(struct ofpbuf *openflow,
-                                    unsigned int actions_len,
-                                    struct ofpbuf *ofpacts);
-enum ofperr ofpacts_pull_openflow11_actions(struct ofpbuf *openflow,
-                                            enum ofp_version version,
-                                            unsigned int actions_len,
-                                            struct ofpbuf *ofpacts);
-enum ofperr ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
-                                                 enum ofp_version version,
-                                                 unsigned int instructions_len,
-                                                 struct ofpbuf *ofpacts);
+enum ofperr ofpacts_pull_openflow_actions(struct ofpbuf *openflow,
+                                          unsigned int actions_len,
+                                          enum ofp_version version,
+                                          struct ofpbuf *ofpacts);
+enum ofperr ofpacts_pull_openflow_instructions(struct ofpbuf *openflow,
+                                               unsigned int instructions_len,
+                                               enum ofp_version version,
+                                               struct ofpbuf *ofpacts);
 enum ofperr ofpacts_check(struct ofpact[], size_t ofpacts_len,
                           struct flow *, ofp_port_t max_ports,
                           uint8_t table_id, bool enforce_consistency);
 enum ofperr ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len);
 
 /* Converting ofpacts to OpenFlow. */
-void ofpacts_put_openflow10(const struct ofpact[], size_t ofpacts_len,
-                            struct ofpbuf *openflow);
-size_t ofpacts_put_openflow11_actions(const struct ofpact[], size_t ofpacts_len,
-                                      struct ofpbuf *openflow);
-void ofpacts_put_openflow11_instructions(const struct ofpact[],
-                                         size_t ofpacts_len,
-                                         struct ofpbuf *openflow);
+size_t ofpacts_put_openflow_actions(const struct ofpact[], size_t ofpacts_len,
+                                    struct ofpbuf *openflow, enum ofp_version);
+void ofpacts_put_openflow_instructions(const struct ofpact[],
+                                       size_t ofpacts_len,
+                                       struct ofpbuf *openflow,
+                                       enum ofp_version ofp_version);
 
 /* Working with ofpacts. */
 bool ofpacts_output_to_port(const struct ofpact[], size_t ofpacts_len,

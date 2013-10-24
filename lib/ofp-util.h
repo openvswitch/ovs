@@ -862,6 +862,7 @@ enum {
 };
 
 int ofputil_action_code_from_name(const char *);
+const char * ofputil_action_name_from_code(enum ofputil_action_code code);
 
 void *ofputil_put_action(enum ofputil_action_code, struct ofpbuf *buf);
 

@@ -228,7 +228,7 @@ dec_ttl_from_openflow(struct ofpbuf *out, enum ofputil_action_code compat)
 
 static enum ofperr
 dec_ttl_cnt_ids_from_openflow(const struct nx_action_cnt_ids *nac_ids,
-                      struct ofpbuf *out)
+                              struct ofpbuf *out)
 {
     struct ofpact_cnt_ids *ids;
     size_t ids_size;
@@ -497,7 +497,9 @@ ofpact_from_nxast(const union ofp_action *a, enum ofputil_action_code code,
 }
 
 static enum ofperr
-ofpact_from_openflow10(const union ofp_action *a, struct ofpbuf *out)
+ofpact_from_openflow10(const union ofp_action *a,
+                       enum ofp_version version OVS_UNUSED,
+                       struct ofpbuf *out)
 {
     enum ofputil_action_code code;
     enum ofperr error;
@@ -588,6 +590,10 @@ ofpact_from_openflow10(const union ofp_action *a, struct ofpbuf *out)
     return error;
 }
 
+static enum ofperr ofpact_from_openflow11(const union ofp_action *,
+                                          enum ofp_version,
+                                          struct ofpbuf *out);
+
 static inline union ofp_action *
 action_next(const union ofp_action *a)
 {
@@ -629,15 +635,19 @@ log_bad_action(const union ofp_action *actions, size_t max_actions,
 
 static enum ofperr
 ofpacts_from_openflow(const union ofp_action *in, size_t n_in,
-                      struct ofpbuf *out,
-                      enum ofperr (*ofpact_from_openflow)(
-                          const union ofp_action *a, struct ofpbuf *out))
+                      enum ofp_version version, struct ofpbuf *out)
 {
     const union ofp_action *a;
     size_t left;
 
+    enum ofperr (*ofpact_from_openflow)(const union ofp_action *a,
+                                        enum ofp_version,
+                                        struct ofpbuf *out) =
+        (version == OFP10_VERSION) ?
+        ofpact_from_openflow10 : ofpact_from_openflow11;
+
     ACTION_FOR_EACH (a, left, in, n_in) {
-        enum ofperr error = ofpact_from_openflow(a, out);
+        enum ofperr error = ofpact_from_openflow(a, version, out);
         if (error) {
             log_bad_action(in, n_in, a, error);
             return error;
@@ -653,20 +663,28 @@ ofpacts_from_openflow(const union ofp_action *in, size_t n_in,
     return 0;
 }
 
-static enum ofperr
-ofpacts_from_openflow10(const union ofp_action *in, size_t n_in,
-                        struct ofpbuf *out)
-{
-    return ofpacts_from_openflow(in, n_in, out, ofpact_from_openflow10);
-}
-
-static enum ofperr
-ofpacts_pull_actions(struct ofpbuf *openflow, unsigned int actions_len,
-                     struct ofpbuf *ofpacts,
-                     enum ofperr (*translate)(const union ofp_action *actions,
-                                              size_t max_actions,
-                                              struct ofpbuf *ofpacts))
-{
+/* Attempts to convert 'actions_len' bytes of OpenFlow actions from the
+ * front of 'openflow' into ofpacts.  On success, replaces any existing content
+ * in 'ofpacts' by the converted ofpacts; on failure, clears 'ofpacts'.
+ * Returns 0 if successful, otherwise an OpenFlow error.
+ *
+ * Actions are processed according to their OpenFlow version which
+ * is provided in the 'version' parameter.
+ *
+ * In most places in OpenFlow 1.1 and 1.2, actions appear encapsulated in
+ * instructions, so you should call ofpacts_pull_openflow_instructions()
+ * instead of this function.
+ *
+ * The parsed actions are valid generically, but they may not be valid in a
+ * specific context.  For example, port numbers up to OFPP_MAX are valid
+ * generically, but specific datapaths may only support port numbers in a
+ * smaller range.  Use ofpacts_check() to additional check whether actions are
+ * valid in a specific context. */
+enum ofperr
+ofpacts_pull_openflow_actions(struct ofpbuf *openflow,
+                              unsigned int actions_len,
+                              enum ofp_version version,
+                              struct ofpbuf *ofpacts) {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
     const union ofp_action *actions;
     enum ofperr error;
@@ -687,7 +705,8 @@ ofpacts_pull_actions(struct ofpbuf *openflow, unsigned int actions_len,
         return OFPERR_OFPBRC_BAD_LEN;
     }
 
-    error = translate(actions, actions_len / OFP_ACTION_ALIGN, ofpacts);
+    error = ofpacts_from_openflow(actions, actions_len / OFP_ACTION_ALIGN,
+                                  version, ofpacts);
     if (error) {
         ofpbuf_clear(ofpacts);
         return error;
@@ -700,23 +719,6 @@ ofpacts_pull_actions(struct ofpbuf *openflow, unsigned int actions_len,
     return error;
 }
 
-/* Attempts to convert 'actions_len' bytes of OpenFlow 1.0 actions from the
- * front of 'openflow' into ofpacts.  On success, replaces any existing content
- * in 'ofpacts' by the converted ofpacts; on failure, clears 'ofpacts'.
- * Returns 0 if successful, otherwise an OpenFlow error.
- *
- * The parsed actions are valid generically, but they may not be valid in a
- * specific context.  For example, port numbers up to OFPP_MAX are valid
- * generically, but specific datapaths may only support port numbers in a
- * smaller range.  Use ofpacts_check() to additional check whether actions are
- * valid in a specific context. */
-enum ofperr
-ofpacts_pull_openflow10(struct ofpbuf *openflow, unsigned int actions_len,
-                        struct ofpbuf *ofpacts)
-{
-    return ofpacts_pull_actions(openflow, actions_len, ofpacts,
-                                ofpacts_from_openflow10);
-}
 
 /* OpenFlow 1.1 actions. */
 
@@ -1090,7 +1092,8 @@ output_from_openflow11(const struct ofp11_action_output *oao,
 }
 
 static enum ofperr
-ofpact_from_openflow11(const union ofp_action *a, struct ofpbuf *out)
+ofpact_from_openflow11(const union ofp_action *a, enum ofp_version version,
+                       struct ofpbuf *out)
 {
     enum ofputil_action_code code;
     enum ofperr error;
@@ -1208,7 +1211,10 @@ ofpact_from_openflow11(const union ofp_action *a, struct ofpbuf *out)
         break;
 
     case OFPUTIL_OFPAT11_PUSH_MPLS:
+        /* OpenFlow 1.3 has different semantics. */
         error = push_mpls_from_openflow(a->push.ethertype,
+                                        version >= OFP13_VERSION ?
+                                        OFPACT_MPLS_BEFORE_VLAN :
                                         OFPACT_MPLS_AFTER_VLAN, out);
         break;
 
@@ -1229,13 +1235,6 @@ ofpact_from_openflow11(const union ofp_action *a, struct ofpbuf *out)
     }
 
     return error;
-}
-
-static enum ofperr
-ofpacts_from_openflow11(const union ofp_action *in, size_t n_in,
-                        struct ofpbuf *out)
-{
-    return ofpacts_from_openflow(in, n_in, out, ofpact_from_openflow11);
 }
 
 /* True if an action sets the value of a field
@@ -1449,13 +1448,15 @@ ofpacts_execute_action_set(struct ofpbuf *action_list,
 
 static enum ofperr
 ofpacts_from_openflow11_for_action_set(const union ofp_action *in,
-                                       size_t n_in, struct ofpbuf *out)
+                                       size_t n_in, enum ofp_version version,
+                                       struct ofpbuf *out)
 {
     enum ofperr error;
     struct ofpact *a;
     size_t start = out->size;
 
-    error = ofpacts_from_openflow11(in, n_in, out);
+    error = ofpacts_from_openflow(in, n_in, version, out);
+
     if (error) {
         return error;
     }
@@ -1470,35 +1471,6 @@ ofpacts_from_openflow11_for_action_set(const union ofp_action *in,
     return 0;
 }
 
-
-static enum ofperr
-ofpact_from_openflow13(const union ofp_action *a, struct ofpbuf *out)
-{
-    enum ofputil_action_code code;
-    enum ofperr error;
-
-    error = decode_openflow11_action(a, &code);
-    if (error) {
-        return error;
-    }
-
-    if (code == OFPUTIL_OFPAT11_PUSH_MPLS) {
-        struct ofp11_action_push *oap = (struct ofp11_action_push *)a;
-        error = push_mpls_from_openflow(oap->ethertype,
-                                        OFPACT_MPLS_BEFORE_VLAN, out);
-    } else {
-        error = ofpact_from_openflow11(a, out);
-    }
-
-    return error;
-}
-
-static enum ofperr
-ofpacts_from_openflow13(const union ofp_action *in, size_t n_in,
-                        struct ofpbuf *out)
-{
-    return ofpacts_from_openflow(in, n_in, out, ofpact_from_openflow13);
-}
 
 /* OpenFlow 1.1 instructions. */
 
@@ -1709,48 +1681,11 @@ get_actions_from_instruction(const struct ofp11_instruction *inst,
     *max_actions = (ntohs(inst->len) - sizeof *inst) / OFP11_INSTRUCTION_ALIGN;
 }
 
-/* Attempts to convert 'actions_len' bytes of OpenFlow actions from the
- * front of 'openflow' into ofpacts.  On success, replaces any existing content
- * in 'ofpacts' by the converted ofpacts; on failure, clears 'ofpacts'.
- * Returns 0 if successful, otherwise an OpenFlow error.
- *
- * Actions are processed according to their OpenFlow version which
- * is provided in the 'version' parameter.
- *
- * In most places in OpenFlow 1.1 and 1.2, actions appear encapsulated in
- * instructions, so you should call ofpacts_pull_openflow11_instructions()
- * instead of this function.
- *
- * The parsed actions are valid generically, but they may not be valid in a
- * specific context.  For example, port numbers up to OFPP_MAX are valid
- * generically, but specific datapaths may only support port numbers in a
- * smaller range.  Use ofpacts_check() to additional check whether actions are
- * valid in a specific context. */
 enum ofperr
-ofpacts_pull_openflow11_actions(struct ofpbuf *openflow,
-                                enum ofp_version version,
-                                unsigned int actions_len,
-                                struct ofpbuf *ofpacts)
-{
-    switch (version) {
-    case OFP10_VERSION:
-    case OFP11_VERSION:
-    case OFP12_VERSION:
-        return ofpacts_pull_actions(openflow, actions_len, ofpacts,
-                                    ofpacts_from_openflow11);
-    case OFP13_VERSION:
-        return ofpacts_pull_actions(openflow, actions_len, ofpacts,
-                                    ofpacts_from_openflow13);
-    default:
-        NOT_REACHED();
-    }
-}
-
-enum ofperr
-ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
-                                     enum ofp_version version,
-                                     unsigned int instructions_len,
-                                     struct ofpbuf *ofpacts)
+ofpacts_pull_openflow_instructions(struct ofpbuf *openflow,
+                                   unsigned int instructions_len,
+                                   enum ofp_version version,
+                                   struct ofpbuf *ofpacts)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
     const struct ofp11_instruction *instructions;
@@ -1799,18 +1734,7 @@ ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
 
         get_actions_from_instruction(insts[OVSINST_OFPIT11_APPLY_ACTIONS],
                                      &actions, &max_actions);
-        switch (version) {
-        case OFP10_VERSION:
-        case OFP11_VERSION:
-        case OFP12_VERSION:
-            error = ofpacts_from_openflow11(actions, max_actions, ofpacts);
-            break;
-        case OFP13_VERSION:
-            error = ofpacts_from_openflow13(actions, max_actions, ofpacts);
-            break;
-        default:
-            NOT_REACHED();
-        }
+        error = ofpacts_from_openflow(actions, max_actions, version, ofpacts);
         if (error) {
             goto exit;
         }
@@ -1833,7 +1757,7 @@ ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
         get_actions_from_instruction(insts[OVSINST_OFPIT11_WRITE_ACTIONS],
                                      &actions, &max_actions);
         error = ofpacts_from_openflow11_for_action_set(actions, max_actions,
-                                                       ofpacts);
+                                                       version, ofpacts);
         if (error) {
             goto exit;
         }
@@ -2314,10 +2238,6 @@ ofpact_to_nxast(const struct ofpact *a, struct ofpbuf *out)
         nxm_reg_load_to_nxast(ofpact_get_REG_LOAD(a), out);
         break;
 
-    case OFPACT_SET_FIELD:
-        set_field_to_openflow(ofpact_get_SET_FIELD(a), out);
-        break;
-
     case OFPACT_STACK_PUSH:
         nxm_stack_push_to_nxast(ofpact_get_STACK_PUSH(a), out);
         break;
@@ -2414,6 +2334,7 @@ ofpact_to_nxast(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_GOTO_TABLE:
     case OFPACT_METER:
+    case OFPACT_SET_FIELD:
         NOT_REACHED();
     }
 }
@@ -2518,12 +2439,15 @@ ofpact_to_openflow10(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_GROUP:
         break;
 
+    case OFPACT_SET_FIELD:
+        set_field_to_openflow(ofpact_get_SET_FIELD(a), out);
+        break;
+
     case OFPACT_CONTROLLER:
     case OFPACT_OUTPUT_REG:
     case OFPACT_BUNDLE:
     case OFPACT_REG_MOVE:
     case OFPACT_REG_LOAD:
-    case OFPACT_SET_FIELD:
     case OFPACT_STACK_PUSH:
     case OFPACT_STACK_POP:
     case OFPACT_DEC_TTL:
@@ -2546,20 +2470,6 @@ ofpact_to_openflow10(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_SAMPLE:
         ofpact_to_nxast(a, out);
         break;
-    }
-}
-
-/* Converts the 'ofpacts_len' bytes of ofpacts in 'ofpacts' into OpenFlow 1.0
- * actions in 'openflow', appending the actions to any existing data in
- * 'openflow'. */
-void
-ofpacts_put_openflow10(const struct ofpact ofpacts[], size_t ofpacts_len,
-                       struct ofpbuf *openflow)
-{
-    const struct ofpact *a;
-
-    OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
-        ofpact_to_openflow10(a, openflow);
     }
 }
 
@@ -2721,12 +2631,15 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
             htonl(ofpact_get_GROUP(a)->group_id);
         break;
 
+    case OFPACT_SET_FIELD:
+        set_field_to_openflow(ofpact_get_SET_FIELD(a), out);
+        break;
+
     case OFPACT_CONTROLLER:
     case OFPACT_OUTPUT_REG:
     case OFPACT_BUNDLE:
     case OFPACT_REG_MOVE:
     case OFPACT_REG_LOAD:
-    case OFPACT_SET_FIELD:
     case OFPACT_STACK_PUSH:
     case OFPACT_STACK_POP:
     case OFPACT_SET_TUNNEL:
@@ -2743,20 +2656,31 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
     }
 }
 
-/* Converts the ofpacts in 'ofpacts' (terminated by OFPACT_END) into OpenFlow
- * 1.1 actions in 'openflow', appending the actions to any existing data in
+static void
+ofpact_to_openflow12(const struct ofpact *a, struct ofpbuf *out)
+{
+    ofpact_to_openflow11(a, out);
+}
+
+/* Converts the 'ofpacts_len' bytes of ofpacts in 'ofpacts' into OpenFlow
+ * actions in 'openflow', appending the actions to any existing data in
  * 'openflow'. */
 size_t
-ofpacts_put_openflow11_actions(const struct ofpact ofpacts[],
-                               size_t ofpacts_len, struct ofpbuf *openflow)
+ofpacts_put_openflow_actions(const struct ofpact ofpacts[], size_t ofpacts_len,
+                             struct ofpbuf *openflow,
+                             enum ofp_version ofp_version)
 {
     const struct ofpact *a;
     size_t start_size = openflow->size;
 
-    OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
-        ofpact_to_openflow11(a, openflow);
-    }
+    void (*translate)(const struct ofpact *a, struct ofpbuf *out) =
+        (ofp_version == OFP10_VERSION) ? ofpact_to_openflow10 :
+        (ofp_version == OFP11_VERSION) ? ofpact_to_openflow11 :
+        ofpact_to_openflow12;
 
+    OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
+        translate(a, openflow);
+    }
     return openflow->size - start_size;
 }
 
@@ -2775,11 +2699,14 @@ ofpacts_update_instruction_actions(struct ofpbuf *openflow, size_t ofs)
 }
 
 void
-ofpacts_put_openflow11_instructions(const struct ofpact ofpacts[],
-                                    size_t ofpacts_len,
-                                    struct ofpbuf *openflow)
+ofpacts_put_openflow_instructions(const struct ofpact ofpacts[],
+                                  size_t ofpacts_len,
+                                  struct ofpbuf *openflow,
+                                  enum ofp_version ofp_version)
 {
     const struct ofpact *a;
+
+    ovs_assert(ofp_version >= OFP11_VERSION);
 
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
         switch (ovs_instruction_type_from_ofpact_type(a->type)) {
@@ -2806,15 +2733,16 @@ ofpacts_put_openflow11_instructions(const struct ofpact ofpacts[],
             break;
         }
 
-        case OVSINST_OFPIT13_METER: {
-            const struct ofpact_meter *om;
-            struct ofp13_instruction_meter *oim;
+        case OVSINST_OFPIT13_METER:
+            if (ofp_version >= OFP13_VERSION) {
+                const struct ofpact_meter *om;
+                struct ofp13_instruction_meter *oim;
 
-            om = ofpact_get_METER(a);
-            oim = instruction_put_OFPIT13_METER(openflow);
-            oim->meter_id = htonl(om->meter_id);
+                om = ofpact_get_METER(a);
+                oim = instruction_put_OFPIT13_METER(openflow);
+                oim->meter_id = htonl(om->meter_id);
+            }
             break;
-        }
 
         case OVSINST_OFPIT11_APPLY_ACTIONS: {
             const size_t ofs = openflow->size;
@@ -2829,7 +2757,11 @@ ofpacts_put_openflow11_instructions(const struct ofpact ofpacts[],
                     != OVSINST_OFPIT11_APPLY_ACTIONS) {
                     break;
                 }
-                ofpact_to_openflow11(action, openflow);
+                if (ofp_version == OFP11_VERSION) {
+                    ofpact_to_openflow11(action, openflow);
+                } else {
+                    ofpact_to_openflow12(action, openflow);
+                }
                 processed = action;
             }
             ofpacts_update_instruction_actions(openflow, ofs);
@@ -2843,9 +2775,9 @@ ofpacts_put_openflow11_instructions(const struct ofpact ofpacts[],
 
             on = ofpact_get_WRITE_ACTIONS(a);
             instruction_put_OFPIT11_WRITE_ACTIONS(openflow);
-            ofpacts_put_openflow11_actions(on->actions,
-                                           ofpact_nest_get_action_len(on),
-                                           openflow);
+            ofpacts_put_openflow_actions(on->actions,
+                                         ofpact_nest_get_action_len(on),
+                                         openflow, ofp_version);
             ofpacts_update_instruction_actions(openflow, ofs);
 
             break;
