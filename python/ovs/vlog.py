@@ -87,6 +87,29 @@ class Vlog:
     def dbg(self, message, **kwargs):
         self.__log("DBG", message, **kwargs)
 
+    def __is_enabled(self, level):
+        level = LEVELS.get(level.lower(), logging.DEBUG)
+        for f, f_level in Vlog.__mfl[self.name].iteritems():
+            f_level = LEVELS.get(f_level, logging.CRITICAL)
+            if level >= f_level:
+                return True
+        return False
+
+    def emer_is_enabled(self):
+        return self.__is_enabled("EMER")
+
+    def err_is_enabled(self):
+        return self.__is_enabled("ERR")
+
+    def warn_is_enabled(self):
+        return self.__is_enabled("WARN")
+
+    def info_is_enabled(self):
+        return self.__is_enabled("INFO")
+
+    def dbg_is_enabled(self):
+        return self.__is_enabled("DBG")
+
     def exception(self, message):
         """Logs 'message' at ERR log level.  Includes a backtrace when in
         exception context."""
