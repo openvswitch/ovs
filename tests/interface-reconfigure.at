@@ -696,6 +696,7 @@ AT_BANNER([interface-reconfigure])
 
 AT_SETUP([non-VLAN, non-bond])
 AT_KEYWORDS([interface-reconfigure])
+AT_SKIP_IF([$non_ascii_cwd])
 ifr_setup
 
 AT_CHECK([ifr_run --force xenbr2 up], [0], [], [stderr])
@@ -771,6 +772,7 @@ AT_CLEANUP
 
 AT_SETUP([VLAN, non-bond])
 AT_KEYWORDS([interface-reconfigure])
+AT_SKIP_IF([$non_ascii_cwd])
 ifr_setup
 
 AT_CHECK([ifr_run --force xapi3 up], [0], [], [stderr])
@@ -844,6 +846,7 @@ AT_CLEANUP
 
 AT_SETUP([Bond, non-VLAN])
 AT_KEYWORDS([interface-reconfigure])
+AT_SKIP_IF([$non_ascii_cwd])
 ifr_setup
 
 # Pretend that bond0 exists, even though it would really be created by
@@ -932,6 +935,7 @@ AT_CLEANUP
 
 AT_SETUP([VLAN on bond])
 AT_KEYWORDS([interface-reconfigure])
+AT_SKIP_IF([$non_ascii_cwd])
 ifr_setup
 
 # Pretend that bond0 exists, even though it would really be created by

@@ -24,6 +24,21 @@ export PYTHONIOENCODING
 PYTHONDONTWRITEBYTECODE=yes
 export PYTHONDONTWRITEBYTECODE
 
+# Test whether the current working directory name is all ASCII
+# characters.  Some Python code doesn't tolerate non-ASCII characters
+# in filenames very well, so if the current working directory is
+# non-ASCII then we skip the tests that run those programs.
+#
+# This would be just papering over a real problem, except that the
+# tests that we skip are launched from initscripts and thus normally
+# run in system directories with ASCII names.  (This problem only came
+# up at all because the Debian autobuilders do build in a top-level
+# directory named /«BUILDDIR».)
+case `pwd | tr -d ' -~'` in
+    '') non_ascii_cwd=false ;;
+    *) non_ascii_cwd=true
+esac
+
 if test $HAVE_PYTHON = yes; then
     if python -m argparse 2>/dev/null; then
         :
