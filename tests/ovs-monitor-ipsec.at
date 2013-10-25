@@ -2,6 +2,7 @@ AT_BANNER([ovs-monitor-ipsec])
 
 AT_SETUP([ovs-monitor-ipsec])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
+AT_SKIP_IF([$non_ascii_cwd])
 
 OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 OVS_DBDIR=`pwd`; export OVS_DBDIR
