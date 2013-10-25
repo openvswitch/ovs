@@ -1,4 +1,4 @@
-# Copyright (c) 2010, 2011, 2012 Nicira, Inc.
+# Copyright (c) 2010, 2011, 2012, 2013 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -226,7 +226,8 @@ class Connection(object):
         return self.received_bytes
 
     def __log_msg(self, title, msg):
-        vlog.dbg("%s: %s %s" % (self.name, title, msg))
+        if vlog.dbg_is_enabled():
+            vlog.dbg("%s: %s %s" % (self.name, title, msg))
 
     def send(self, msg):
         if self.status:
