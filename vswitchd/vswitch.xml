@@ -2060,11 +2060,18 @@
       </p>
 
       <column name="cfm_mpid">
-        A Maintenance Point ID (MPID) uniquely identifies each endpoint within
-        a Maintenance Association.  The MPID is used to identify this endpoint
-        to other Maintenance Points in the MA.  Each end of a link being
-        monitored should have a different MPID.  Must be configured to enable
-        CFM on this <ref table="Interface"/>.
+        <p>
+          A Maintenance Point ID (MPID) uniquely identifies each endpoint
+          within a Maintenance Association.  The MPID is used to identify this
+          endpoint to other Maintenance Points in the MA.  Each end of a link
+          being monitored should have a different MPID.  Must be configured to
+          enable CFM on this <ref table="Interface"/>.
+        </p>
+        <p>
+          According to the 802.1ag specification, MPIDs can only range between
+          [1, 8191].  However, extended mode (see <ref column="other_config"
+          key="cfm_extended"/>) supports eight byte MPIDs.
+        </p>
       </column>
 
       <column name="cfm_flap_count">
@@ -2194,8 +2201,8 @@
         with compliant implementations which may be running concurrently on the
         network. Furthermore, extended mode increases the accuracy of the
         <code>cfm_interval</code> configuration parameter by breaking wire
-        compatibility with 802.1ag compliant implementations.  Defaults to
-        <code>false</code>.
+        compatibility with 802.1ag compliant implementations.  And extended
+        mode allows eight byte MPIDs.  Defaults to <code>false</code>.
       </column>
 
       <column name="other_config" key="cfm_demand" type='{"type": "boolean"}'>
