@@ -2543,7 +2543,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 void
 xlate_in_init(struct xlate_in *xin, struct ofproto_dpif *ofproto,
               const struct flow *flow, struct rule_dpif *rule,
-              uint8_t tcp_flags, const struct ofpbuf *packet)
+              uint16_t tcp_flags, const struct ofpbuf *packet)
 {
     xin->ofproto = ofproto;
     xin->flow = *flow;

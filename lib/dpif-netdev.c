@@ -125,7 +125,7 @@ struct dp_netdev_flow {
     long long int used;         /* Last used time, in monotonic msecs. */
     long long int packet_count; /* Number of packets matched. */
     long long int byte_count;   /* Number of bytes matched. */
-    uint8_t tcp_flags;          /* Bitwise-OR of seen tcp_flags values. */
+    uint16_t tcp_flags;         /* Bitwise-OR of seen tcp_flags values. */
 
     /* Actions. */
     struct nlattr *actions;

@@ -676,8 +676,9 @@ static int ovs_flow_cmd_fill_info(struct sw_flow *flow, struct datapath *dp,
 			goto nla_put_failure;
 	}
 
-	if (flow_stats.tcp_flags &&
-	    nla_put_u8(skb, OVS_FLOW_ATTR_TCP_FLAGS, flow_stats.tcp_flags))
+	if ((u8)ntohs(flow_stats.tcp_flags) &&
+	    nla_put_u8(skb, OVS_FLOW_ATTR_TCP_FLAGS,
+		       (u8)ntohs(flow_stats.tcp_flags)))
 		goto nla_put_failure;
 
 	/* If OVS_FLOW_ATTR_ACTIONS doesn't fit, skip dumping the actions if

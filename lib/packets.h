@@ -487,15 +487,18 @@ struct udp_header {
 };
 BUILD_ASSERT_DECL(UDP_HEADER_LEN == sizeof(struct udp_header));
 
-#define TCP_FIN 0x01
-#define TCP_SYN 0x02
-#define TCP_RST 0x04
-#define TCP_PSH 0x08
-#define TCP_ACK 0x10
-#define TCP_URG 0x20
+#define TCP_FIN 0x001
+#define TCP_SYN 0x002
+#define TCP_RST 0x004
+#define TCP_PSH 0x008
+#define TCP_ACK 0x010
+#define TCP_URG 0x020
+#define TCP_ECE 0x040
+#define TCP_CWR 0x080
+#define TCP_NS  0x100
 
 #define TCP_CTL(flags, offset) (htons((flags) | ((offset) << 12)))
-#define TCP_FLAGS(tcp_ctl) (ntohs(tcp_ctl) & 0x003f)
+#define TCP_FLAGS(tcp_ctl) (ntohs(tcp_ctl) & 0x0fff)
 #define TCP_OFFSET(tcp_ctl) (ntohs(tcp_ctl) >> 12)
 
 #define TCP_HEADER_LEN 20
@@ -641,7 +644,7 @@ void packet_set_tcp_port(struct ofpbuf *, ovs_be16 src, ovs_be16 dst);
 void packet_set_udp_port(struct ofpbuf *, ovs_be16 src, ovs_be16 dst);
 void packet_set_sctp_port(struct ofpbuf *, ovs_be16 src, ovs_be16 dst);
 
-uint8_t packet_get_tcp_flags(const struct ofpbuf *, const struct flow *);
-void packet_format_tcp_flags(struct ds *, uint8_t);
+uint16_t packet_get_tcp_flags(const struct ofpbuf *, const struct flow *);
+void packet_format_tcp_flags(struct ds *, uint16_t);
 
 #endif /* packets.h */

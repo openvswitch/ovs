@@ -452,7 +452,7 @@ struct dpif_flow_stats {
     uint64_t n_packets;
     uint64_t n_bytes;
     long long int used;
-    uint8_t tcp_flags;
+    uint16_t tcp_flags;
 };
 
 void dpif_flow_stats_extract(const struct flow *, const struct ofpbuf *packet,

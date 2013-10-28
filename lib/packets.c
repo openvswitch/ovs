@@ -898,7 +898,7 @@ packet_set_sctp_port(struct ofpbuf *packet, ovs_be16 src, ovs_be16 dst)
  *
  * 'flow' must be the flow corresponding to 'packet' and 'packet''s header
  * pointers must be properly initialized (e.g. with flow_extract()). */
-uint8_t
+uint16_t
 packet_get_tcp_flags(const struct ofpbuf *packet, const struct flow *flow)
 {
     if (dl_type_is_ip_any(flow->dl_type) &&
@@ -914,7 +914,7 @@ packet_get_tcp_flags(const struct ofpbuf *packet, const struct flow *flow)
  * (e.g. obtained via packet_get_tcp_flags() or TCP_FLAGS) to 's', in the
  * format used by tcpdump. */
 void
-packet_format_tcp_flags(struct ds *s, uint8_t tcp_flags)
+packet_format_tcp_flags(struct ds *s, uint16_t tcp_flags)
 {
     if (!tcp_flags) {
         ds_put_cstr(s, "none");
@@ -939,10 +939,22 @@ packet_format_tcp_flags(struct ds *s, uint8_t tcp_flags)
     if (tcp_flags & TCP_ACK) {
         ds_put_char(s, '.');
     }
-    if (tcp_flags & 0x40) {
-        ds_put_cstr(s, "[40]");
+    if (tcp_flags & TCP_ECE) {
+        ds_put_cstr(s, "E");
     }
-    if (tcp_flags & 0x80) {
-        ds_put_cstr(s, "[80]");
+    if (tcp_flags & TCP_CWR) {
+        ds_put_cstr(s, "C");
+    }
+    if (tcp_flags & TCP_NS) {
+        ds_put_cstr(s, "N");
+    }
+    if (tcp_flags & 0x200) {
+        ds_put_cstr(s, "[200]");
+    }
+    if (tcp_flags & 0x400) {
+        ds_put_cstr(s, "[400]");
+    }
+    if (tcp_flags & 0x800) {
+        ds_put_cstr(s, "[800]");
     }
 }

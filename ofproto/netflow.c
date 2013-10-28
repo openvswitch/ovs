@@ -123,7 +123,7 @@ gen_netflow_rec(struct netflow *nf, struct netflow_flow *nf_flow,
         nf_rec->src_port = expired->flow.tp_src;
         nf_rec->dst_port = expired->flow.tp_dst;
     }
-    nf_rec->tcp_flags = nf_flow->tcp_flags;
+    nf_rec->tcp_flags = (uint8_t)nf_flow->tcp_flags;
     nf_rec->ip_proto = expired->flow.nw_proto;
     nf_rec->ip_tos = expired->flow.nw_tos & IP_DSCP_MASK;
 
@@ -302,7 +302,7 @@ netflow_flow_update_time(struct netflow *nf, struct netflow_flow *nf_flow,
 }
 
 void
-netflow_flow_update_flags(struct netflow_flow *nf_flow, uint8_t tcp_flags)
+netflow_flow_update_flags(struct netflow_flow *nf_flow, uint16_t tcp_flags)
 {
     nf_flow->tcp_flags |= tcp_flags;
 }

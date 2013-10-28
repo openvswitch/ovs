@@ -84,7 +84,7 @@ struct xlate_in {
     /* Union of the set of TCP flags seen so far in this flow.  (Used only by
      * NXAST_FIN_TIMEOUT.  Set to zero to avoid updating updating rules'
      * timeouts.) */
-    uint8_t tcp_flags;
+    uint16_t tcp_flags;
 
     /* If nonnull, flow translation calls this function just before executing a
      * resubmit or OFPP_TABLE action.  In addition, disables logging of traces
@@ -152,7 +152,7 @@ void xlate_actions(struct xlate_in *, struct xlate_out *)
     OVS_EXCLUDED(xlate_rwlock);
 void xlate_in_init(struct xlate_in *, struct ofproto_dpif *,
                    const struct flow *, struct rule_dpif *,
-                   uint8_t tcp_flags, const struct ofpbuf *packet);
+                   uint16_t tcp_flags, const struct ofpbuf *packet);
 void xlate_out_uninit(struct xlate_out *);
 void xlate_actions_for_side_effects(struct xlate_in *);
 void xlate_out_copy(struct xlate_out *dst, const struct xlate_out *src);

@@ -263,7 +263,7 @@ struct facet {
     /* Accounting. */
     uint64_t accounted_bytes;    /* Bytes processed by facet_account(). */
     struct netflow_flow nf_flow; /* Per-flow NetFlow tracking data. */
-    uint8_t tcp_flags;           /* TCP flags seen for this 'rule'. */
+    uint16_t tcp_flags;          /* TCP flags seen for this 'rule'. */
 
     struct xlate_out xout;
 
@@ -5282,7 +5282,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
         struct ofpbuf odp_actions;
         struct trace_ctx trace;
         struct match match;
-        uint8_t tcp_flags;
+        uint16_t tcp_flags;
 
         tcp_flags = packet ? packet_get_tcp_flags(packet, flow) : 0;
         trace.result = ds;

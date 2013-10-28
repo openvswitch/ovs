@@ -152,7 +152,7 @@ struct sw_flow_stats {
 	u64 byte_count;			/* Number of bytes matched. */
 	unsigned long used;		/* Last used time (in jiffies). */
 	spinlock_t lock;		/* Lock for atomic stats update. */
-	u8 tcp_flags;			/* Union of seen TCP flags. */
+	__be16 tcp_flags;		/* Union of seen TCP flags. */
 } ____cacheline_aligned_in_smp;
 
 struct sw_flow {
