@@ -1784,6 +1784,18 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
 #define NXM_NX_PKT_MARK   NXM_HEADER  (0x0001, 33, 4)
 #define NXM_NX_PKT_MARK_W NXM_HEADER_W(0x0001, 33, 4)
 
+/* The flags in the TCP header.
+*
+* Prereqs:
+*   NXM_OF_ETH_TYPE must be either 0x0800 or 0x86dd.
+*   NXM_OF_IP_PROTO must match 6 exactly.
+*
+* Format: 16-bit integer with 4 most-significant bits forced to 0.
+*
+* Masking: Bits 0-11 fully maskable. */
+#define NXM_NX_TCP_FLAGS   NXM_HEADER  (0x0001, 34, 2)
+#define NXM_NX_TCP_FLAGS_W NXM_HEADER_W(0x0001, 34, 2)
+
 /* ## --------------------- ## */
 /* ## Requests and replies. ## */
 /* ## --------------------- ## */

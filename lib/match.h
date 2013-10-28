@@ -88,6 +88,8 @@ void match_set_tp_src(struct match *, ovs_be16);
 void match_set_tp_src_masked(struct match *, ovs_be16 port, ovs_be16 mask);
 void match_set_tp_dst(struct match *, ovs_be16);
 void match_set_tp_dst_masked(struct match *, ovs_be16 port, ovs_be16 mask);
+void match_set_tcp_flags(struct match *, ovs_be16);
+void match_set_tcp_flags_masked(struct match *, ovs_be16 flags, ovs_be16 mask);
 void match_set_nw_proto(struct match *, uint8_t);
 void match_set_nw_src(struct match *, ovs_be32);
 void match_set_nw_src_masked(struct match *, ovs_be32 ip, ovs_be32 mask);

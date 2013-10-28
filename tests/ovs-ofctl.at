@@ -539,6 +539,13 @@ NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(06) NXM_OF_TCP_DST_W(FDE0/ffff)
 NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(06) NXM_OF_TCP_DST_W(FDE0/0000)
 NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(07) NXM_OF_TCP_DST(4231)
 
+# TCP flags
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(06) NXM_NX_TCP_FLAGS(0131)
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(06) NXM_NX_TCP_FLAGS_W(00F0/0FF0)
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(06) NXM_NX_TCP_FLAGS_W(01E2/ffff)
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(06) NXM_NX_TCP_FLAGS_W(00E1/0000)
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(07) NXM_NX_TCP_FLAGS(4321)
+
 # UDP source port
 NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(11) NXM_OF_UDP_SRC(8732)
 NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(11) NXM_OF_UDP_SRC_W(0132/01FF)
@@ -823,6 +830,13 @@ nx_pull_match() returned error OFPBMC_BAD_PREREQ
 NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(06), NXM_OF_TCP_DST(4231)
 NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(06), NXM_OF_TCP_DST_W(fde0/fff0)
 NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(06), NXM_OF_TCP_DST(fde0)
+NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(06)
+nx_pull_match() returned error OFPBMC_BAD_PREREQ
+
+# TCP flags
+NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(06), NXM_NX_TCP_FLAGS(0131)
+NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(06), NXM_NX_TCP_FLAGS_W(00f0/0ff0)
+NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(06), NXM_NX_TCP_FLAGS(01e2)
 NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(06)
 nx_pull_match() returned error OFPBMC_BAD_PREREQ
 
@@ -2379,4 +2393,63 @@ OFPT_HELLO (xid=0x1):
  unknown data in hello:
 00000000  01 00 00 0b 00 00 00 01-41 42 43                |........ABC     |
 ])
+AT_CLEANUP
+
+AT_SETUP([tcp flags - filtering])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 \
+                    -- add-port br0 p2 -- set Interface p2 type=dummy ofport_request=2])
+AT_DATA([flows.txt], [dnl
+	in_port=1,tcp,tp_dst=80,tcp_flags=0x02/0x17,action=2  # Allow outbound web traffic bare-SYN
+	in_port=1,tcp,tp_dst=80,tcp_flags=0x10/0x10,action=2  # Allow outbound web traffic with ACK bit
+	in_port=1,tcp,tp_dst=80,tcp_flags=0x04/0x04,action=2  # Allow outbound web traffic with RST bit
+	in_port=2,tcp,tp_src=80,tcp_flags=0x10/0x10,action=1  # Allow inbound web traffic with ACK bit
+	in_port=2,tcp,tp_src=80,tcp_flags=0x04/0x04,action=1  # Allow inbound web traffic with RST bit
+	priority=0,in_port=1,action=drop  # Default drop outbound
+	priority=0,in_port=2,action=drop  # Default drop inbound
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ovs-appctl dpif/show | tail -n +5], [0], [dnl
+		p1 1/1: (dummy)
+		p2 2/2: (dummy)
+])
+
+dnl Outbound web traffic with base-SYN
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=80),tcp_flags(0x002)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: 2
+])
+
+dnl Outbopund web traffic with ACK bit
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=80),tcp_flags(0x110)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: 2
+])
+
+dnl Outbound web traffic with RST bit
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=80),tcp_flags(0x104)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: 2
+])
+
+dnl Inbound web traffic with ACK bit
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=6,tos=0,ttl=64,frag=no),tcp(src=80,dst=8),tcp_flags(0x010)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: 1
+])
+
+dnl Inbound web traffic with RST bit
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=6,tos=0,ttl=64,frag=no),tcp(src=80,dst=8),tcp_flags(0x014)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: 1
+])
+
+dnl Inbound web traffic with SYN bit without ACK or RST bits
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=6,tos=0,ttl=64,frag=no),tcp(src=80,dst=8),tcp_flags(0xfeb)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: drop
+])
+
+OVS_VSWITCHD_STOP
 AT_CLEANUP

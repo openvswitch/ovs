@@ -559,6 +559,17 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_TCP_DST, "OXM_OF_TCP_DST",
         OFPUTIL_P_ANY,
         OFPUTIL_P_NXM_OXM_ANY,
+    }, {
+        MFF_TCP_FLAGS, "tcp_flags", NULL,
+        2, 12,
+        MFM_FULLY,
+        MFS_HEXADECIMAL,
+        MFP_TCP,
+        false,
+        NXM_NX_TCP_FLAGS, "NXM_NX_TCP_FLAGS",
+        NXM_NX_TCP_FLAGS, "NXM_NX_TCP_FLAGS",
+        OFPUTIL_P_NXM_OXM_ANY,
+        OFPUTIL_P_NXM_OXM_ANY,
     },
 
     {
@@ -919,6 +930,8 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_ICMPV4_CODE:
     case MFF_ICMPV6_CODE:
         return !wc->masks.tp_dst;
+    case MFF_TCP_FLAGS:
+        return !wc->masks.tcp_flags;
 
     case MFF_N_IDS:
     default:
@@ -1128,6 +1141,8 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
         return !(value->u8 & ~IP_ECN_MASK);
     case MFF_IP_FRAG:
         return !(value->u8 & ~FLOW_NW_FRAG_MASK);
+    case MFF_TCP_FLAGS:
+        return !(value->be16 & ~htons(0x0fff));
 
     case MFF_ARP_OP:
         return !(value->be16 & htons(0xff00));
@@ -1326,6 +1341,10 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         value->be16 = flow->tp_dst;
         break;
 
+    case MFF_TCP_FLAGS:
+        value->be16 = flow->tcp_flags;
+        break;
+
     case MFF_ICMPV4_TYPE:
     case MFF_ICMPV6_TYPE:
         value->u8 = ntohs(flow->tp_src);
@@ -1516,6 +1535,10 @@ mf_set_value(const struct mf_field *mf,
     case MFF_UDP_DST:
     case MFF_SCTP_DST:
         match_set_tp_dst(match, value->be16);
+        break;
+
+    case MFF_TCP_FLAGS:
+        match_set_tcp_flags(match, value->be16);
         break;
 
     case MFF_ICMPV4_TYPE:
@@ -1730,6 +1753,10 @@ mf_set_flow_value(const struct mf_field *mf,
         flow->tp_dst = value->be16;
         break;
 
+    case MFF_TCP_FLAGS:
+        flow->tcp_flags = value->be16;
+        break;
+
     case MFF_ICMPV4_TYPE:
     case MFF_ICMPV6_TYPE:
         flow->tp_src = htons(value->u8);
@@ -1941,6 +1968,11 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
         match->flow.tp_dst = htons(0);
         break;
 
+    case MFF_TCP_FLAGS:
+        match->wc.masks.tcp_flags = htons(0);
+        match->flow.tcp_flags = htons(0);
+        break;
+
     case MFF_ND_TARGET:
         memset(&match->wc.masks.nd_target, 0,
                sizeof match->wc.masks.nd_target);
@@ -2111,6 +2143,10 @@ mf_set(const struct mf_field *mf,
         match_set_tp_dst_masked(match, value->be16, mask->be16);
         break;
 
+    case MFF_TCP_FLAGS:
+        match_set_tcp_flags_masked(match, value->be16, mask->be16);
+        break;
+
     case MFF_N_IDS:
     default:
         NOT_REACHED();
@@ -2230,6 +2266,10 @@ mf_random_value(const struct mf_field *mf, union mf_value *value)
     case MFF_ND_TARGET:
     case MFF_ND_SLL:
     case MFF_ND_TLL:
+        break;
+
+    case MFF_TCP_FLAGS:
+        value->be16 &= htons(0x0fff);
         break;
 
     case MFF_IN_PORT_OXM:

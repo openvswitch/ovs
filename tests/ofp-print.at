@@ -444,10 +444,10 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 00 50 54 00 00 00 06 50 54 00 00 00 05 08 00 \
 45 00 00 28 bd 12 00 00 40 06 3c 6a c0 a8 00 01 \
 c0 a8 00 02 27 2f 00 00 78 50 cc 5b 57 af 42 1e \
-50 00 02 00 26 e8 00 00 00 00 00 00 00 00 \
+50 02 02 00 26 e8 00 00 00 00 00 00 00 00 \
 "], [0], [dnl
 OFPT_PACKET_IN (xid=0x0): total_len=60 in_port=3 (via no_match) data_len=60 buffer=0x00000111
-tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:06,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=10031,tp_dst=0 tcp_csum:26e8
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:06,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=10031,tp_dst=0,tcp_flags=0x002 tcp_csum:26e8
 ])
 AT_CLEANUP
 
@@ -458,13 +458,13 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 00 50 54 00 00 00 06 50 54 00 00 00 05 08 00 \
 45 00 00 28 bd 12 00 00 40 06 3c 6a c0 a8 00 01 \
 c0 a8 00 02 27 2f 00 00 78 50 cc 5b 57 af 42 1e \
-50 00 02 00 26 e8 00 00 00 00 00 00 00 00 \
+50 10 02 00 26 e8 00 00 00 00 00 00 00 00 \
 " 3], [0], [dnl
 OFPT_PACKET_IN (xid=0x0): total_len=60 in_port=3 (via no_match) data_len=60 buffer=0x00000111
-tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:06,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=10031,tp_dst=0 tcp_csum:26e8
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:06,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=10031,tp_dst=0,tcp_flags=0x010 tcp_csum:26e8
 00000000  50 54 00 00 00 06 50 54-00 00 00 05 08 00 45 00
 00000010  00 28 bd 12 00 00 40 06-3c 6a c0 a8 00 01 c0 a8
-00000020  00 02 27 2f 00 00 78 50-cc 5b 57 af 42 1e 50 00
+00000020  00 02 27 2f 00 00 78 50-cc 5b 57 af 42 1e 50 10
 00000030  02 00 26 e8 00 00 00 00-00 00 00 00
 ])
 AT_CLEANUP
@@ -631,7 +631,7 @@ b9 7c c0 a8 00 02 c0 a8 00 01 00 00 2b 60 00 00 \
 00 00 00 00 \
 "], [0], [dnl
 OFPT_PACKET_OUT (xid=0x0): in_port=1 actions=output:3 data_len=60
-tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=0,tp_dst=11104 tcp_csum:6d75
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=0,tp_dst=11104,tcp_flags=0x014 tcp_csum:6d75
 ])
 AT_CLEANUP
 
@@ -646,7 +646,7 @@ b9 7c c0 a8 00 02 c0 a8 00 01 00 00 2b 60 00 00 \
 00 00 00 00 \
 " 3], [0], [dnl
 OFPT_PACKET_OUT (xid=0x0): in_port=1 actions=output:3 data_len=60
-tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=0,tp_dst=11104 tcp_csum:6d75
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=0,tp_dst=11104,tcp_flags=0x014 tcp_csum:6d75
 00000000  50 54 00 00 00 05 50 54-00 00 00 06 08 00 45 00
 00000010  00 28 00 00 40 00 40 06-b9 7c c0 a8 00 02 c0 a8
 00000020  00 01 00 00 2b 60 00 00-00 00 6a 4f 2b 58 50 14
@@ -677,7 +677,7 @@ b9 7c c0 a8 00 02 c0 a8 00 01 00 00 2b 60 00 00 \
 00 00 00 00 \
 "], [0], [dnl
 OFPT_PACKET_OUT (OF1.2) (xid=0x8858dfc5): in_port=LOCAL actions=FLOOD data_len=60
-tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=0,tp_dst=11104 tcp_csum:6d75
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=0,tp_dst=11104,tcp_flags=0x014 tcp_csum:6d75
 ])
 AT_CLEANUP
 
@@ -2071,11 +2071,11 @@ ff ff ff ff 00 40 01 07 00 00 00 00 00 00 00 09 \
 ff ff ff ff ff ff 00 00 00 00 82 82 82 82 82 82 \
 80 81 81 81 81 81 81 00 00 50 08 00 45 00 00 28 \
 00 00 00 00 00 06 32 05 53 53 53 53 54 54 54 54 \
-00 55 00 56 00 00 00 00 00 00 00 00 50 00 00 00 \
+00 55 00 56 00 00 00 00 00 00 00 00 50 02 00 00 \
 31 6d 00 00 00 00 00 00 00 00 \
 "], [0], [dnl
 NXT_PACKET_IN (xid=0x0): table_id=7 cookie=0x9 total_len=64 in_port=1 tun_id=0x6 metadata=0x5a5a5a5a5a5a5a5a reg0=0x1 reg1=0x2 reg2=0x3 reg3=0x4 reg4=0x5 (via action) data_len=64 (unbuffered)
-tcp,metadata=0,in_port=0,dl_vlan=80,dl_vlan_pcp=0,dl_src=80:81:81:81:81:81,dl_dst=82:82:82:82:82:82,nw_src=83.83.83.83,nw_dst=84.84.84.84,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=85,tp_dst=86 tcp_csum:316d
+tcp,metadata=0,in_port=0,dl_vlan=80,dl_vlan_pcp=0,dl_src=80:81:81:81:81:81,dl_dst=82:82:82:82:82:82,nw_src=83.83.83.83,nw_dst=84.84.84.84,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=85,tp_dst=86,tcp_flags=0x002 tcp_csum:316d
 ])
 AT_CLEANUP
 
@@ -2092,15 +2092,15 @@ ff ff ff ff 00 40 01 07 00 00 00 00 00 00 00 09 \
 ff ff ff ff ff ff 00 00 00 00 82 82 82 82 82 82 \
 80 81 81 81 81 81 81 00 00 50 08 00 45 00 00 28 \
 00 00 00 00 00 06 32 05 53 53 53 53 54 54 54 54 \
-00 55 00 56 00 00 00 00 00 00 00 00 50 00 00 00 \
+00 55 00 56 00 00 00 00 00 00 00 00 50 01 00 00 \
 31 6d 00 00 00 00 00 00 00 00 \
 " 3], [0], [dnl
 NXT_PACKET_IN (xid=0x0): table_id=7 cookie=0x9 total_len=64 in_port=1 tun_id=0x6 metadata=0x5a5a5a5a5a5a5a5a reg0=0x1 reg1=0x2 reg2=0x3 reg3=0x4 reg4=0x5 (via action) data_len=64 (unbuffered)
-tcp,metadata=0,in_port=0,dl_vlan=80,dl_vlan_pcp=0,dl_src=80:81:81:81:81:81,dl_dst=82:82:82:82:82:82,nw_src=83.83.83.83,nw_dst=84.84.84.84,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=85,tp_dst=86 tcp_csum:316d
+tcp,metadata=0,in_port=0,dl_vlan=80,dl_vlan_pcp=0,dl_src=80:81:81:81:81:81,dl_dst=82:82:82:82:82:82,nw_src=83.83.83.83,nw_dst=84.84.84.84,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=85,tp_dst=86,tcp_flags=0x001 tcp_csum:316d
 00000000  82 82 82 82 82 82 80 81-81 81 81 81 81 00 00 50
 00000010  08 00 45 00 00 28 00 00-00 00 00 06 32 05 53 53
 00000020  53 53 54 54 54 54 00 55-00 56 00 00 00 00 00 00
-00000030  00 00 50 00 00 00 31 6d-00 00 00 00 00 00 00 00
+00000030  00 00 50 01 00 00 31 6d-00 00 00 00 00 00 00 00
 ])
 AT_CLEANUP
 

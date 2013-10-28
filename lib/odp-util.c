@@ -109,6 +109,7 @@ ovs_key_attr_to_string(enum ovs_key_attr attr, char *namebuf, size_t bufsize)
     case OVS_KEY_ATTR_IPV4: return "ipv4";
     case OVS_KEY_ATTR_IPV6: return "ipv6";
     case OVS_KEY_ATTR_TCP: return "tcp";
+    case OVS_KEY_ATTR_TCP_FLAGS: return "tcp_flags";
     case OVS_KEY_ATTR_UDP: return "udp";
     case OVS_KEY_ATTR_SCTP: return "sctp";
     case OVS_KEY_ATTR_ICMP: return "icmp";
@@ -735,6 +736,7 @@ odp_flow_key_attr_len(uint16_t type)
     case OVS_KEY_ATTR_IPV4: return sizeof(struct ovs_key_ipv4);
     case OVS_KEY_ATTR_IPV6: return sizeof(struct ovs_key_ipv6);
     case OVS_KEY_ATTR_TCP: return sizeof(struct ovs_key_tcp);
+    case OVS_KEY_ATTR_TCP_FLAGS: return 2;
     case OVS_KEY_ATTR_UDP: return sizeof(struct ovs_key_udp);
     case OVS_KEY_ATTR_SCTP: return sizeof(struct ovs_key_sctp);
     case OVS_KEY_ATTR_ICMP: return sizeof(struct ovs_key_icmp);
@@ -1227,6 +1229,13 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
 
             ds_put_format(ds, "src=%"PRIu16",dst=%"PRIu16,
                           ntohs(tcp_key->tcp_src), ntohs(tcp_key->tcp_dst));
+        }
+        break;
+
+    case OVS_KEY_ATTR_TCP_FLAGS:
+        ds_put_format(ds, "0x%03"PRIx16, ntohs(nl_attr_get_be16(a)));
+        if (!is_exact) {
+            ds_put_format(ds, "/0x%03"PRIx16, ntohs(nl_attr_get_be16(ma)));
         }
         break;
 
@@ -2048,6 +2057,25 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
     }
 
     {
+        uint16_t tcp_flags, tcp_flags_mask;
+        int n = -1;
+
+        if (mask && sscanf(s, "tcp_flags(%"SCNi16"/%"SCNi16")%n",
+                   &tcp_flags, &tcp_flags_mask, &n) > 0 && n > 0) {
+            nl_msg_put_be16(key, OVS_KEY_ATTR_TCP_FLAGS, htons(tcp_flags));
+            nl_msg_put_be16(mask, OVS_KEY_ATTR_TCP_FLAGS, htons(tcp_flags_mask));
+            return n;
+        } else if (sscanf(s, "tcp_flags(%"SCNi16")%n", &tcp_flags, &n) > 0 && n > 0) {
+            nl_msg_put_be16(key, OVS_KEY_ATTR_TCP_FLAGS, htons(tcp_flags));
+            if (mask) {
+                nl_msg_put_be16(mask, OVS_KEY_ATTR_TCP_FLAGS,
+                                htons(UINT16_MAX));
+            }
+            return n;
+        }
+    }
+
+    {
         int udp_src;
         int udp_dst;
         int udp_src_mask;
@@ -2559,6 +2587,10 @@ odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *data,
                                                sizeof *tcp_key);
             tcp_key->tcp_src = data->tp_src;
             tcp_key->tcp_dst = data->tp_dst;
+
+            if (data->tcp_flags) {
+                nl_msg_put_be16(buf, OVS_KEY_ATTR_TCP_FLAGS, data->tcp_flags);
+            }
         } else if (flow->nw_proto == IPPROTO_UDP) {
             struct ovs_key_udp *udp_key;
 
@@ -2943,6 +2975,10 @@ parse_l2_5_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
             flow->tp_src = tcp_key->tcp_src;
             flow->tp_dst = tcp_key->tcp_dst;
             expected_bit = OVS_KEY_ATTR_TCP;
+        }
+        if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_TCP_FLAGS)) {
+            expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_TCP_FLAGS;
+            flow->tcp_flags = nl_attr_get_be16(attrs[OVS_KEY_ATTR_TCP_FLAGS]);
         }
     } else if (src_flow->nw_proto == IPPROTO_UDP
                && (src_flow->dl_type == htons(ETH_TYPE_IP) ||

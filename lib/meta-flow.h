@@ -118,6 +118,8 @@ enum mf_field_id {
     /* L4. */
     MFF_TCP_SRC,                /* be16 (used for IPv4 or IPv6) */
     MFF_TCP_DST,                /* be16 (used for IPv4 or IPv6) */
+    MFF_TCP_FLAGS,              /* be16, 12 bits (4 MSB zeroed,
+                                 * used for IPv4 or IPv6) */
 
     MFF_UDP_SRC,                /* be16 (used for IPv4 or IPv6) */
     MFF_UDP_DST,                /* be16 (used for IPv4 or IPv6) */

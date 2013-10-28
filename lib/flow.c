@@ -256,6 +256,7 @@ parse_tcp(struct ofpbuf *packet, struct ofpbuf *b, struct flow *flow)
     if (tcp) {
         flow->tp_src = tcp->tcp_src;
         flow->tp_dst = tcp->tcp_dst;
+        flow->tcp_flags = tcp->tcp_ctl & htons(0x0fff);
         packet->l7 = b->data;
     }
 }
@@ -514,7 +515,7 @@ flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
 void
 flow_get_metadata(const struct flow *flow, struct flow_metadata *fmd)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 21);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 22);
 
     fmd->tun_id = flow->tunnel.tun_id;
     fmd->tun_src = flow->tunnel.ip_src;
@@ -1044,7 +1045,7 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
                 b->l4 = tcp = ofpbuf_put_zeros(b, sizeof *tcp);
                 tcp->tcp_src = flow->tp_src;
                 tcp->tcp_dst = flow->tp_dst;
-                tcp->tcp_ctl = TCP_CTL(0, 5);
+                tcp->tcp_ctl = TCP_CTL(ntohs(flow->tcp_flags), 5);
             } else if (flow->nw_proto == IPPROTO_UDP) {
                 struct udp_header *udp;
 

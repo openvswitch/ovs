@@ -530,6 +530,8 @@ nxm_put_ip(struct ofpbuf *b, const struct match *match,
                         flow->tp_src, match->wc.masks.tp_src);
             nxm_put_16m(b, oxm ? OXM_OF_TCP_DST : NXM_OF_TCP_DST,
                         flow->tp_dst, match->wc.masks.tp_dst);
+            nxm_put_16m(b, NXM_NX_TCP_FLAGS,
+                        flow->tcp_flags, match->wc.masks.tcp_flags);
         } else if (flow->nw_proto == IPPROTO_UDP) {
             nxm_put_16m(b, oxm ? OXM_OF_UDP_SRC : NXM_OF_UDP_SRC,
                         flow->tp_src, match->wc.masks.tp_src);
@@ -570,7 +572,7 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct match *match,
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 21);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 22);
 
     /* Metadata. */
     if (match->wc.masks.in_port.ofp_port) {

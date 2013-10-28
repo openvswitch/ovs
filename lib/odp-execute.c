@@ -131,6 +131,7 @@ odp_execute_set_action(struct ofpbuf *packet, const struct nlattr *a,
     case OVS_KEY_ATTR_ICMP:
     case OVS_KEY_ATTR_ICMPV6:
     case OVS_KEY_ATTR_ND:
+    case OVS_KEY_ATTR_TCP_FLAGS:
     case __OVS_KEY_ATTR_MAX:
     default:
         NOT_REACHED();
