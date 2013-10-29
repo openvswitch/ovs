@@ -1505,14 +1505,14 @@ run(struct ofproto *ofproto_)
     if (time_msec() >= ofproto->consistency_rl
         && !classifier_is_empty(&ofproto->facets)
         && !ofproto->backer->need_revalidate) {
-        struct cls_table *table;
+        struct cls_subtable *table;
         struct cls_rule *cr;
         struct facet *facet;
 
         ofproto->consistency_rl = time_msec() + 250;
 
-        table = CONTAINER_OF(hmap_random_node(&ofproto->facets.tables),
-                             struct cls_table, hmap_node);
+        table = CONTAINER_OF(hmap_random_node(&ofproto->facets.subtables),
+                             struct cls_subtable, hmap_node);
         cr = CONTAINER_OF(hmap_random_node(&table->rules), struct cls_rule,
                           hmap_node);
         facet = CONTAINER_OF(cr, struct facet, cr);

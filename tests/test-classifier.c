@@ -459,7 +459,7 @@ static void
 check_tables(const struct classifier *cls, int n_tables, int n_rules,
              int n_dups) OVS_REQ_RDLOCK(cls->rwlock)
 {
-    const struct cls_table *table;
+    const struct cls_subtable *table;
     struct test_rule *test_rule;
     struct cls_cursor cursor;
     int found_tables = 0;
@@ -467,7 +467,7 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
     int found_dups = 0;
     int found_rules2 = 0;
 
-    HMAP_FOR_EACH (table, hmap_node, &cls->tables) {
+    HMAP_FOR_EACH (table, hmap_node, &cls->subtables) {
         const struct cls_rule *head;
         unsigned int max_priority = 0;
         unsigned int max_count = 0;
@@ -501,8 +501,8 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
         assert(table->max_count == max_count);
     }
 
-    assert(found_tables == hmap_count(&cls->tables));
-    assert(n_tables == -1 || n_tables == hmap_count(&cls->tables));
+    assert(found_tables == hmap_count(&cls->subtables));
+    assert(n_tables == -1 || n_tables == hmap_count(&cls->subtables));
     assert(n_rules == -1 || found_rules == n_rules);
     assert(n_dups == -1 || found_dups == n_dups);
 
