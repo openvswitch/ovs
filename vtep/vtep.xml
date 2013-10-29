@@ -644,11 +644,12 @@
         encapsulations to be introduced later.
       </p>
     </column>
+
     <group title="Bidirectional Forwarding Detection (BFD)">
       <p>
 	BFD, defined in RFC 5880, allows point to point detection of
 	connectivity failures by occasional transmission of BFD control
-	messages.
+	messages. VTEPs are expected to implement BFD.
       </p>
       
       <p>
@@ -657,60 +658,135 @@
 	specifies the rate at which it expects to receive control messages,
 	and the rate at which it's willing to transmit them.  An endpoint
 	which fails to receive BFD control messages for a period of three
-	times the expected reception rate, will signal a connectivity
+	times the expected reception rate will signal a connectivity
 	fault.  In the case of a unidirectional connectivity issue, the
 	system not receiving BFD control messages will signal the problem
-	to its peer in the messages is transmists.
+	to its peer in the messages it transmits.
       </p>
       
-      <column name="bfd" key="min_rx">
-	The minimum rate, in milliseconds, at which this BFD session is
-	willing to receive BFD control messages.  The actual rate may slower
-	if the remote endpoint isn't willing to transmit as quickly as
-	specified.  Defaults to <code>1000</code>.
-      </column>
-      
-      <column name="bfd" key="min_tx">
-	The minimum rate, in milliseconds, at which this BFD session is
-	willing to transmit BFD control messages.  The actual rate may be
-	slower if the remote endpoint isn't willing to receive as quickly as
-	specified.  Defaults to <code>100</code>.
-      </column>
-      
-      <column name="bfd" key="cpath_down">
-	Concatenated path down may be used when the local system should not
-	have traffic forwarded to it for some reason other than a connectivty
-	failure on the interface being monitored.  The local BFD session will
-	notify the remote session of the connectivity problem, at which time
-	the remote session may choose not to forward traffic.  Defaults to
-	<code>false</code>.
-      </column>
-      
-      <column name="bfd_status" key="state">
-	State of the BFD session.  One of <code>ADMIN_DOWN</code>,
-	<code>DOWN</code>, <code>INIT</code>, or <code>UP</code>.
-      </column>
-      
-      <column name="bfd_status" key="forwarding">
-	True if the BFD session believes this <ref table="Physical_Locator"/> may be
-	used to forward traffic.  Typically this means the local session is
-	up, and the remote system isn't signalling a problem such as
-	concatenated path down.
-      </column>
-      
-      <column name="bfd_status" key="diagnostic">
-	A short message indicating what the BFD session thinks is wrong in
-	case of a problem.
-      </column>
-      
-      <column name="bfd_status" key="remote state">
-	State of the remote endpoint's BFD session.
-      </column>
-      
-      <column name="bfd_status" key="remote diagnostic">
-	A short message indicating what the remote endpoint's BFD session
-	thinks is wrong in case of a problem.
-      </column>
+      <p>
+	A hardware VTEP is expected to use BFD to determine reachability of
+	devices at the end of the tunnels with which it exchanges data. This
+	can enable the VTEP to choose a functioning service node among a set of
+	service nodes providing high availability. It also enables the NVC to
+	report the health status of tunnels.
+      </p>
+
+      <p>
+	In most cases the BFD peer of a hardware VTEP will be an Open vSwitch
+	instance. The Open vSwitch implementation of BFD aims to comply
+	faithfully with the requirements put forth in RFC 5880.  Open vSwitch
+	does not implement the optional Authentication or ``Echo Mode''
+	features.
+      </p>
+
+      <group title="BFD Configuration">
+	<p>
+	  A controller sets up key-value pairs in the <ref column="bfd"/>
+	  column to enable and configure BFD.
+        </p>
+
+        <column name="bfd" key="enable" type='{"type": "boolean"}'>
+          True to enable BFD on this <ref table="Physical_Locator"/>.
+        </column>
+        
+        <column name="bfd" key="min_rx"
+                type='{"type": "integer", "minInteger": 1}'>
+          The shortest interval, in milliseconds, at which this BFD session
+          offers to receive BFD control messages.  The remote endpoint may
+          choose to send messages at a slower rate.  Defaults to
+          <code>1000</code>.
+        </column>
+
+        <column name="bfd" key="min_tx"
+                type='{"type": "integer", "minInteger": 1}'>
+          The shortest interval, in milliseconds, at which this BFD session is
+          willing to transmit BFD control messages.  Messages will actually be
+          transmitted at a slower rate if the remote endpoint is not willing to
+          receive as quickly as specified.  Defaults to <code>100</code>.
+        </column>
+
+        <column name="bfd" key="decay_min_rx" type='{"type": "integer"}'>
+          An alternate receive interval, in milliseconds, that must be greater
+          than or equal to <ref column="bfd" key="min_rx"/>.  The
+          implementation switches from <ref column="bfd" key="min_rx"/> to <ref
+          column="bfd" key="decay_min_rx"/> when there is no obvious incoming
+          data traffic at the interface, to reduce the CPU and bandwidth cost
+          of monitoring an idle interface.  This feature may be disabled by
+          setting a value of 0.  This feature is reset whenever <ref
+          column="bfd" key="decay_min_rx"/> or <ref column="bfd" key="min_rx"/>
+          changes.
+        </column>
+
+        <column name="bfd" key="forwarding_if_rx" type='{"type": "boolean"}'>
+          True to consider the interface capable of packet I/O as long as it
+          continues to receive any packets (not just BFD packets).  This
+          prevents link congestion that causes consecutive BFD control packets
+          to be lost from marking the interface down.
+        </column>
+
+        <column name="bfd" key="cpath_down" type='{"type": "boolean"}'>
+          Set to true to notify the remote endpoint that traffic should not be
+          forwarded to this system for some reason other than a connectivty
+          failure on the interface being monitored.  The typical underlying
+          reason is ``concatenated path down,'' that is, that connectivity
+          beyond the local system is down.  Defaults to false.
+        </column>
+
+        <column name="bfd" key="check_tnl_key" type='{"type": "boolean"}'>
+          Set to true to make BFD accept only control messages with a tunnel
+          key of zero.  By default, BFD accepts control messages with any
+          tunnel key.
+        </column>
+
+        <column name="bfd" key="bfd_dst_mac">
+          Set to an Ethernet address in the form
+          <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
+          to set the MAC used as destination for transmitted BFD packets and
+          expected as destination for received BFD packets.  The default is
+          <code>00:23:20:00:00:01</code>.
+        </column>
+      </group>
+
+      <group title="BFD Status">
+	<p>
+	  The VTEP sets key-value pairs in the <ref column="bfd_status"/>
+	  column to report the status of BFD on this interface.  When BFD is
+	  not enabled, with <ref column="bfd" key="enable"/>, the switch clears
+	  all key-value pairs from <ref column="bfd_status"/>.
+	</p>
+
+	<column name="bfd_status" key="state"
+		type='{"type": "string",
+		      "enum": ["set", ["admin_down", "down", "init", "up"]]}'>
+	  Reports the state of the BFD session.  The BFD session is fully
+	  healthy and negotiated if <code>UP</code>.
+	</column>
+
+	<column name="bfd_status" key="forwarding" type='{"type": "boolean"}'>
+	  Reports whether the BFD session believes this <ref
+	  table="Physical_Locator"/> may be used to forward traffic.  Typically
+	  this means the local session is signaling <code>UP</code>, and the
+	  remote system isn't signaling a problem such as concatenated path
+	  down.
+	</column>
+
+	<column name="bfd_status" key="diagnostic">
+	  In case of a problem, set to a short message that reports what the
+	  local BFD session thinks is wrong.
+	</column>
+
+	<column name="bfd_status" key="remote_state"
+		type='{"type": "string",
+		      "enum": ["set", ["admin_down", "down", "init", "up"]]}'>
+	  Reports the state of the remote endpoint's BFD session.
+	</column>
+
+	<column name="bfd_status" key="remote_diagnostic">
+	  In case of a problem, set to a short message that reports what the
+	  remote endpoint's BFD session thinks is wrong.
+	</column>
+      </group>
     </group>
   </table>
 
