@@ -84,36 +84,6 @@ static struct sk_buff *netdev_frame_hook(struct net_bridge_port *p,
 #error
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36) || \
-    defined HAVE_RHEL_OVS_HOOK
-static int netdev_init(void) { return 0; }
-static void netdev_exit(void) { }
-#else
-static int port_count;
-
-static void netdev_init(void)
-{
-	port_count++;
-	if (port_count > 1)
-		return;
-
-	/* Hook into callback used by the bridge to intercept packets.
-	 * Parasites we are. */
-	br_handle_frame_hook = netdev_frame_hook;
-
-	return;
-}
-
-static void netdev_exit(void)
-{
-	port_count--;
-	if (port_count > 0)
-		return;
-
-	br_handle_frame_hook = NULL;
-}
-#endif
-
 static struct net_device *get_dpdev(struct datapath *dp)
 {
 	struct vport *local;
@@ -166,7 +136,6 @@ static struct vport *netdev_create(const struct vport_parms *parms)
 	netdev_vport->dev->priv_flags |= IFF_OVS_DATAPATH;
 	rtnl_unlock();
 
-	netdev_init();
 	return vport;
 
 error_master_upper_dev_unlink:
@@ -205,8 +174,6 @@ void ovs_netdev_detach_dev(struct vport *vport)
 static void netdev_destroy(struct vport *vport)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
-
-	netdev_exit();
 
 	rtnl_lock();
 	if (ovs_netdev_get_vport(netdev_vport->dev))

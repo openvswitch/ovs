@@ -2,6 +2,7 @@
 #define __LINUX_NETDEVICE_WRAPPER_H 1
 
 #include_next <linux/netdevice.h>
+#include <linux/if_bridge.h>
 
 struct net;
 
@@ -9,11 +10,6 @@ struct net;
 
 #ifndef to_net_dev
 #define to_net_dev(class) container_of(class, struct net_device, NETDEV_DEV_MEMBER)
-#endif
-
-#ifdef HAVE_RHEL_OVS_HOOK
-extern struct sk_buff *(*openvswitch_handle_frame_hook)(struct sk_buff *skb);
-extern int nr_bridges;
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,33)
@@ -28,32 +24,23 @@ extern void dev_disable_lro(struct net_device *dev);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36) || \
     defined HAVE_RHEL_OVS_HOOK
-static inline int netdev_rx_handler_register(struct net_device *dev,
-					     void *rx_handler,
-					     void *rx_handler_data)
-{
-#ifdef HAVE_RHEL_OVS_HOOK
-	rcu_assign_pointer(dev->ax25_ptr, rx_handler_data);
-	nr_bridges++;
-	rcu_assign_pointer(openvswitch_handle_frame_hook, rx_handler);
-#else
-	if (dev->br_port)
-		return -EBUSY;
-	rcu_assign_pointer(dev->br_port, rx_handler_data);
-#endif
-	return 0;
-}
-static inline void netdev_rx_handler_unregister(struct net_device *dev)
-{
-#ifdef HAVE_RHEL_OVS_HOOK
-	rcu_assign_pointer(dev->ax25_ptr, NULL);
 
-	if (--nr_bridges <= 0)
-		rcu_assign_pointer(openvswitch_handle_frame_hook, NULL);
+#ifdef HAVE_RHEL_OVS_HOOK
+typedef struct sk_buff *(openvswitch_handle_frame_hook_t)(struct sk_buff *skb);
+extern openvswitch_handle_frame_hook_t *openvswitch_handle_frame_hook;
+
+int netdev_rx_handler_register(struct net_device *dev,
+			       openvswitch_handle_frame_hook_t *hook,
+			       void *rx_handler_data);
 #else
-	rcu_assign_pointer(dev->br_port, NULL);
+
+int netdev_rx_handler_register(struct net_device *dev,
+			       struct sk_buff *(*netdev_hook)(struct net_bridge_port *p,
+							     struct sk_buff *skb),
+			       void *rx_handler_data);
 #endif
-}
+
+void netdev_rx_handler_unregister(struct net_device *dev);
 #endif
 
 #ifndef HAVE_DEV_GET_BY_INDEX_RCU

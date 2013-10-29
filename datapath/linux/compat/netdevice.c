@@ -1,10 +1,6 @@
 #include <linux/netdevice.h>
 #include <linux/if_vlan.h>
 
-#ifdef HAVE_RHEL_OVS_HOOK
-int nr_bridges = 0;
-#endif
-
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38)
 #ifndef HAVE_CAN_CHECKSUM_PROTOCOL
 static bool can_checksum_protocol(unsigned long features, __be16 protocol)
