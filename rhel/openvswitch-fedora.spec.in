@@ -150,6 +150,7 @@ systemctl start openvswitch.service
 /usr/sbin/ovsdb-server
 /usr/bin/ovs-appctl
 /usr/bin/ovs-dpctl
+/usr/bin/ovs-dpctl-top
 /usr/bin/ovs-ofctl
 /usr/bin/ovs-vsctl
 /usr/bin/ovsdb-client
@@ -167,6 +168,7 @@ systemctl start openvswitch.service
 %doc /usr/share/man/man8/ovs-appctl.8.gz
 %doc /usr/share/man/man8/ovs-bugtool.8.gz
 %doc /usr/share/man/man8/ovs-dpctl.8.gz
+%doc /usr/share/man/man8/ovs-dpctl-top.8.gz
 %doc /usr/share/man/man8/ovs-ofctl.8.gz
 %doc /usr/share/man/man8/ovs-parse-backtrace.8.gz
 %doc /usr/share/man/man8/ovs-vsctl.8.gz
