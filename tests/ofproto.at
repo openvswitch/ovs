@@ -174,6 +174,20 @@ OFPT_QUEUE_GET_CONFIG_REQUEST (OF1.2) (xid=0x2): port=10
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+dnl This is really bare-bones.
+dnl It at least checks request and reply serialization and deserialization.
+AT_SETUP([ofproto - group features])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl -O OpenFlow12 -vwarn dump-group-features br0], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+OFPST_GROUP_FEATURES reply (OF1.2):
+ Group table:
+    Types:  0x0
+    Capabilities:  0x0
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto - mod-port (OpenFlow 1.0)])
 OVS_VSWITCHD_START
 for command_config_state in \
