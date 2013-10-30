@@ -2332,7 +2332,12 @@ parse_ofp_group_mod_file(const char *file_name, uint16_t command,
         char *error;
 
         if (*n_gms >= allocated_gms) {
+            size_t i;
+
             *gms = x2nrealloc(*gms, &allocated_gms, sizeof **gms);
+            for (i = 0; i < *n_gms; i++) {
+                list_moved(&(*gms)[i].buckets);
+            }
         }
         error = parse_ofp_group_mod_str(&(*gms)[*n_gms], command, ds_cstr(&s),
                                         &usable);

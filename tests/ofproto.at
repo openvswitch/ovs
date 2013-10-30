@@ -176,6 +176,19 @@ AT_CLEANUP
 
 dnl This is really bare-bones.
 dnl It at least checks request and reply serialization and deserialization.
+AT_SETUP([ofproto - group description])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-group br0 group_id=1234,type=all,bucket=output:10])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.1):
+ group_id=1234,type=all,bucket=actions=output:10
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl This is really bare-bones.
+dnl It at least checks request and reply serialization and deserialization.
 AT_SETUP([ofproto - group features])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -O OpenFlow12 -vwarn dump-group-features br0], [0], [stdout])
@@ -184,6 +197,30 @@ OFPST_GROUP_FEATURES reply (OF1.2):
  Group table:
     Types:  0x0
     Capabilities:  0x4
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl This is really bare-bones.
+dnl It at least checks request and reply serialization and deserialization.
+AT_SETUP([ofproto - group stats])
+OVS_VSWITCHD_START
+AT_DATA([groups.txt], [dnl
+group_id=1234,type=all,bucket=output:10
+group_id=1235,type=all,bucket=output:10
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-groups br0 groups.txt])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-flow br0 'tcp actions=group:1234'])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-group-stats br0 group_id=1234], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout | sort], [0], [dnl
+ group_id=1234,ref_count=1,packet_count=0,byte_count=0,bucket0:packet_count=0,byte_count=0
+OFPST_GROUP reply (OF1.1):
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-group-stats br0], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout | sort], [0], [dnl
+ group_id=1234,ref_count=1,packet_count=0,byte_count=0,bucket0:packet_count=0,byte_count=0
+ group_id=1235,ref_count=0,packet_count=0,byte_count=0,bucket0:packet_count=0,byte_count=0
+OFPST_GROUP reply (OF1.1):
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

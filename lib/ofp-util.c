@@ -6162,11 +6162,11 @@ ofputil_encode_group_mod(enum ofp_version ofp_version,
     case OFP13_VERSION: {
         b = ofpraw_alloc(OFPRAW_OFPT11_GROUP_MOD, ofp_version, 0);
         start_ogm = b->size;
-        ofpbuf_put_uninit(b, sizeof *ogm);
+        ofpbuf_put_zeros(b, sizeof *ogm);
 
         LIST_FOR_EACH (bucket, list_node, &gm->buckets) {
             start_bucket = b->size;
-            ofpbuf_put_uninit(b, sizeof *ob);
+            ofpbuf_put_zeros(b, sizeof *ob);
             if (bucket->ofpacts && bucket->ofpacts_len) {
                 ofpacts_put_openflow_actions(bucket->ofpacts,
                                              bucket->ofpacts_len, b,
@@ -6181,7 +6181,6 @@ ofputil_encode_group_mod(enum ofp_version ofp_version,
         ogm = ofpbuf_at_assert(b, start_ogm, sizeof *ogm);
         ogm->command = htons(gm->command);
         ogm->type = gm->type;
-        ogm->pad = 0;
         ogm->group_id = htonl(gm->group_id);
 
         break;
