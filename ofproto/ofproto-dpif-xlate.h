@@ -138,7 +138,8 @@ void xlate_ofport_set(struct ofproto_dpif *, struct ofbundle *,
                       const struct netdev *, const struct cfm *,
                       const struct bfd *, struct ofport_dpif *peer,
                       int stp_port_no, const struct ofproto_port_queue *qdscp,
-                      size_t n_qdscp, enum ofputil_port_config, bool is_tunnel,
+                      size_t n_qdscp, enum ofputil_port_config,
+                      enum ofputil_port_state, bool is_tunnel,
                       bool may_enable) OVS_REQ_WRLOCK(xlate_rwlock);
 void xlate_ofport_remove(struct ofport_dpif *) OVS_REQ_WRLOCK(xlate_rwlock);
 

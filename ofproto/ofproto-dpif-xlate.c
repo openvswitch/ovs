@@ -127,6 +127,7 @@ struct xport {
     struct xport *peer;              /* Patch port peer or null. */
 
     enum ofputil_port_config config; /* OpenFlow port configuration. */
+    enum ofputil_port_state state;   /* OpenFlow port state. */
     int stp_port_no;                 /* STP port number or -1 if not in use. */
 
     struct hmap skb_priorities;      /* Map of 'skb_priority_to_dscp's. */
@@ -397,7 +398,8 @@ xlate_ofport_set(struct ofproto_dpif *ofproto, struct ofbundle *ofbundle,
                  const struct cfm *cfm, const struct bfd *bfd,
                  struct ofport_dpif *peer, int stp_port_no,
                  const struct ofproto_port_queue *qdscp_list, size_t n_qdscp,
-                 enum ofputil_port_config config, bool is_tunnel,
+                 enum ofputil_port_config config,
+                 enum ofputil_port_state state, bool is_tunnel,
                  bool may_enable)
 {
     struct xport *xport = xport_lookup(ofport);
@@ -418,6 +420,7 @@ xlate_ofport_set(struct ofproto_dpif *ofproto, struct ofbundle *ofbundle,
     ovs_assert(xport->ofp_port == ofp_port);
 
     xport->config = config;
+    xport->state = state;
     xport->stp_port_no = stp_port_no;
     xport->is_tunnel = is_tunnel;
     xport->may_enable = may_enable;
@@ -718,6 +721,78 @@ ofp_port_to_odp_port(const struct xbridge *xbridge, ofp_port_t ofp_port)
 {
     const struct xport *xport = get_ofp_port(xbridge, ofp_port);
     return xport ? xport->odp_port : ODPP_NONE;
+}
+
+static bool
+odp_port_is_alive(const struct xlate_ctx *ctx, ofp_port_t ofp_port)
+{
+    struct xport *xport;
+
+    xport = get_ofp_port(ctx->xbridge, ofp_port);
+    if (!xport || xport->config & OFPUTIL_PC_PORT_DOWN ||
+        xport->state & OFPUTIL_PS_LINK_DOWN) {
+        return false;
+    }
+
+    return true;
+}
+
+static const struct ofputil_bucket *
+group_first_live_bucket(const struct xlate_ctx *, const struct group_dpif *,
+                        int depth);
+
+static bool
+group_is_alive(const struct xlate_ctx *ctx, uint32_t group_id, int depth)
+{
+    struct group_dpif *group;
+    bool hit;
+
+    hit = group_dpif_lookup(ctx->xbridge->ofproto, group_id, &group);
+    if (!hit) {
+        return false;
+    }
+
+    hit = group_first_live_bucket(ctx, group, depth) != NULL;
+
+    group_dpif_release(group);
+    return hit;
+}
+
+#define MAX_LIVENESS_RECURSION 128 /* Arbitrary limit */
+
+static bool
+bucket_is_alive(const struct xlate_ctx *ctx,
+                const struct ofputil_bucket *bucket, int depth)
+{
+    if (depth >= MAX_LIVENESS_RECURSION) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+
+        VLOG_WARN_RL(&rl, "bucket chaining exceeded %d links",
+                     MAX_LIVENESS_RECURSION);
+        return false;
+    }
+
+    return (bucket->watch_port != OFPP_ANY &&
+            odp_port_is_alive(ctx, bucket->watch_port)) ||
+           (bucket->watch_group != OFPG_ANY &&
+            group_is_alive(ctx, bucket->watch_group, depth + 1));
+}
+
+static const struct ofputil_bucket *
+group_first_live_bucket(const struct xlate_ctx *ctx,
+                        const struct group_dpif *group, int depth)
+{
+    struct ofputil_bucket *bucket;
+    const struct list *buckets;
+
+    group_dpif_get_buckets(group, &buckets);
+    LIST_FOR_EACH (bucket, list_node, buckets) {
+        if (bucket_is_alive(ctx, bucket, depth)) {
+            return bucket;
+        }
+    }
+
+    return NULL;
 }
 
 static bool
@@ -1826,6 +1901,17 @@ xlate_all_group(struct xlate_ctx *ctx, struct group_dpif *group)
 }
 
 static void
+xlate_ff_group(struct xlate_ctx *ctx, struct group_dpif *group)
+{
+    const struct ofputil_bucket *bucket;
+
+    bucket = group_first_live_bucket(ctx, group, 0);
+    if (bucket) {
+        xlate_group_bucket(ctx, bucket);
+    }
+}
+
+static void
 xlate_group_action__(struct xlate_ctx *ctx, struct group_dpif *group)
 {
     switch (group_dpif_get_type(group)) {
@@ -1834,8 +1920,10 @@ xlate_group_action__(struct xlate_ctx *ctx, struct group_dpif *group)
         xlate_all_group(ctx, group);
         break;
     case OFPGT11_SELECT:
-    case OFPGT11_FF:
         /* XXX not yet implemented */
+        break;
+    case OFPGT11_FF:
+        xlate_ff_group(ctx, group);
         break;
     default:
         NOT_REACHED();
