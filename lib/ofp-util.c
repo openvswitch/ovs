@@ -6202,6 +6202,8 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
 {
     const struct ofp11_group_mod *ogm;
     struct ofpbuf msg;
+    struct ofputil_bucket *bucket;
+    enum ofperr err;
 
     ofpbuf_use_const(&msg, oh, ntohs(oh->length));
     ofpraw_pull_assert(&msg);
@@ -6211,7 +6213,32 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
     gm->type = ogm->type;
     gm->group_id = ntohl(ogm->group_id);
 
-    return ofputil_pull_buckets(&msg, msg.size, oh->version, &gm->buckets);
+    err = ofputil_pull_buckets(&msg, msg.size, oh->version, &gm->buckets);
+    if (err) {
+        return err;
+    }
+
+    LIST_FOR_EACH (bucket, list_node, &gm->buckets) {
+        switch (gm->type) {
+        case OFPGT11_ALL:
+        case OFPGT11_INDIRECT:
+            if (ofputil_bucket_has_liveness(bucket)) {
+                return OFPERR_OFPGMFC_WATCH_UNSUPPORTED;
+            }
+            break;
+        case OFPGT11_SELECT:
+            break;
+        case OFPGT11_FF:
+            if (!ofputil_bucket_has_liveness(bucket)) {
+                return OFPERR_OFPGMFC_INVALID_GROUP;
+            }
+            break;
+        default:
+            NOT_REACHED();
+        }
+    }
+
+    return 0;
 }
 
 /* Parse a queue status request message into 'oqsr'.

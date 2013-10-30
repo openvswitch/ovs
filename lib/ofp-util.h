@@ -1008,6 +1008,13 @@ struct ofputil_group_desc {
 
 void ofputil_bucket_list_destroy(struct list *buckets);
 
+static inline bool
+ofputil_bucket_has_liveness(const struct ofputil_bucket *bucket)
+{
+    return (bucket->watch_port != OFPP_ANY ||
+            bucket->watch_group != OFPG_ANY);
+}
+
 struct ofpbuf *ofputil_encode_group_stats_request(enum ofp_version,
                                                   uint32_t group_id);
 enum ofperr ofputil_decode_group_stats_request(
