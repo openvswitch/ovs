@@ -2927,10 +2927,10 @@ parse_l2_5_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
             flow->tp_dst = udp_key->udp_dst;
             expected_bit = OVS_KEY_ATTR_UDP;
         }
-    } else if (flow->nw_proto == IPPROTO_SCTP
-               && (flow->dl_type == htons(ETH_TYPE_IP) ||
-                   flow->dl_type == htons(ETH_TYPE_IPV6))
-               && !(flow->nw_frag & FLOW_NW_FRAG_LATER)) {
+    } else if (src_flow->nw_proto == IPPROTO_SCTP
+               && (src_flow->dl_type == htons(ETH_TYPE_IP) ||
+                   src_flow->dl_type == htons(ETH_TYPE_IPV6))
+               && !(src_flow->nw_frag & FLOW_NW_FRAG_LATER)) {
         if (!is_mask) {
             expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_SCTP;
         }
