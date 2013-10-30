@@ -531,8 +531,9 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ovs_rwlock_init(&ofproto->groups_rwlock);
     hmap_init(&ofproto->groups);
     ovs_mutex_unlock(&ofproto_mutex);
-    ofproto->ogf.capabilities = OFPGFC_CHAINING;
+    ofproto->ogf.capabilities = OFPGFC_CHAINING | OFPGFC_SELECT_LIVENESS;
     ofproto->ogf.max_groups[OFPGT11_ALL] = OFPG_MAX;
+    ofproto->ogf.max_groups[OFPGT11_SELECT] = OFPG_MAX;
     ofproto->ogf.max_groups[OFPGT11_INDIRECT] = OFPG_MAX;
     ofproto->ogf.max_groups[OFPGT11_FF] = OFPG_MAX;
     ofproto->ogf.actions[0] =
@@ -2900,7 +2901,6 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
         error = OFPERR_OFPBRC_BAD_PORT;
         goto exit_free_ofpacts;
     }
-
 
     /* Get payload. */
     if (po.buffer_id != UINT32_MAX) {
