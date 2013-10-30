@@ -271,6 +271,9 @@ static enum ofperr modify_flows__(struct ofproto *, struct ofconn *,
 static void delete_flow__(struct rule *rule, struct ofopgroup *,
                           enum ofp_flow_removed_reason)
     OVS_REQUIRES(ofproto_mutex);
+static bool ofproto_group_exists(const struct ofproto *ofproto,
+                                 uint32_t group_id)
+    OVS_REQ_RDLOCK(ofproto->groups_rwlock);
 static enum ofperr add_group(struct ofproto *, struct ofputil_group_mod *);
 static bool handle_openflow(struct ofconn *, const struct ofpbuf *);
 static enum ofperr handle_flow_mod__(struct ofproto *, struct ofconn *,
@@ -2837,6 +2840,7 @@ ofproto_check_ofpacts(struct ofproto *ofproto,
                       const struct ofp_header *oh)
 {
     enum ofperr error;
+    const struct ofpact *a;
     uint32_t mid;
 
     error = ofpacts_check(ofpacts, ofpacts_len, flow,
@@ -2844,6 +2848,21 @@ ofproto_check_ofpacts(struct ofproto *ofproto,
                           oh && oh->version > OFP10_VERSION);
     if (error) {
         return error;
+    }
+
+    OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
+        if (a->type == OFPACT_GROUP) {
+            bool exists;
+
+            ovs_rwlock_rdlock(&ofproto->groups_rwlock);
+            exists = ofproto_group_exists(ofproto,
+                                          ofpact_get_GROUP(a)->group_id);
+            ovs_rwlock_unlock(&ofproto->groups_rwlock);
+
+            if (!exists) {
+                return OFPERR_OFPBAC_BAD_OUT_GROUP;
+            }
+        }
     }
 
     mid = ofpacts_get_meter(ofpacts, ofpacts_len);
