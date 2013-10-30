@@ -41,7 +41,9 @@ struct netflow_options {
 #define NF_OUT_DROP  OFP_PORT_C(UINT16_MAX - 2)
 
 struct netflow *netflow_create(void);
-void netflow_destroy(struct netflow *);
+struct netflow *netflow_ref(const struct netflow *);
+void netflow_unref(struct netflow *);
+
 int netflow_set_options(struct netflow *, const struct netflow_options *);
 void netflow_expire(struct netflow *, struct flow *);
 
