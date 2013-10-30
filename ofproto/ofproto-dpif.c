@@ -110,6 +110,28 @@ struct rule_dpif {
 static void rule_get_stats(struct rule *, uint64_t *packets, uint64_t *bytes);
 static struct rule_dpif *rule_dpif_cast(const struct rule *);
 
+struct group_dpif {
+    struct ofgroup up;
+
+    /* These statistics:
+     *
+     *   - Do include packets and bytes from facets that have been deleted or
+     *     whose own statistics have been folded into the rule.
+     *
+     *   - Do include packets and bytes sent "by hand" that were accounted to
+     *     the rule without any facet being involved (this is a rare corner
+     *     case in rule_execute()).
+     *
+     *   - Do not include packet or bytes that can be obtained from any facet's
+     *     packet_count or byte_count member or that can be obtained from the
+     *     datapath by, e.g., dpif_flow_get() for any subfacet.
+     */
+    struct ovs_mutex stats_mutex;
+    uint64_t packet_count OVS_GUARDED;  /* Number of packets received. */
+    uint64_t byte_count OVS_GUARDED;    /* Number of bytes received. */
+    struct bucket_counter *bucket_stats OVS_GUARDED;  /* Bucket statistics. */
+};
+
 struct ofbundle {
     struct hmap_node hmap_node; /* In struct ofproto's "bundles" hmap. */
     struct ofproto_dpif *ofproto; /* Owning ofproto. */
@@ -4789,6 +4811,102 @@ rule_modify_actions(struct rule *rule_, bool reset_counters)
 
     complete_operation(rule);
 }
+
+static struct group_dpif *group_dpif_cast(const struct ofgroup *group)
+{
+    return group ? CONTAINER_OF(group, struct group_dpif, up) : NULL;
+}
+
+static struct ofgroup *
+group_alloc(void)
+{
+    struct group_dpif *group = xzalloc(sizeof *group);
+    return &group->up;
+}
+
+static void
+group_dealloc(struct ofgroup *group_)
+{
+    struct group_dpif *group = group_dpif_cast(group_);
+    free(group);
+}
+
+static void
+group_construct_stats(struct group_dpif *group)
+    OVS_REQUIRES(group->stats_mutex)
+{
+    group->packet_count = 0;
+    group->byte_count = 0;
+    if (!group->bucket_stats) {
+        group->bucket_stats = xcalloc(group->up.n_buckets,
+                                      sizeof *group->bucket_stats);
+    } else {
+        memset(group->bucket_stats, 0, group->up.n_buckets *
+               sizeof *group->bucket_stats);
+    }
+}
+
+static enum ofperr
+group_construct(struct ofgroup *group_)
+{
+    struct group_dpif *group = group_dpif_cast(group_);
+    ovs_mutex_init(&group->stats_mutex);
+    ovs_mutex_lock(&group->stats_mutex);
+    group_construct_stats(group);
+    ovs_mutex_unlock(&group->stats_mutex);
+    return 0;
+}
+
+static void
+group_destruct__(struct group_dpif *group)
+    OVS_REQUIRES(group->stats_mutex)
+{
+    free(group->bucket_stats);
+    group->bucket_stats = NULL;
+}
+
+static void
+group_destruct(struct ofgroup *group_)
+{
+    struct group_dpif *group = group_dpif_cast(group_);
+    ovs_mutex_lock(&group->stats_mutex);
+    group_destruct__(group);
+    ovs_mutex_unlock(&group->stats_mutex);
+    ovs_mutex_destroy(&group->stats_mutex);
+}
+
+static enum ofperr
+group_modify(struct ofgroup *group_, struct ofgroup *victim_)
+{
+    struct group_dpif *group = group_dpif_cast(group_);
+    struct group_dpif *victim = group_dpif_cast(victim_);
+
+    ovs_mutex_lock(&group->stats_mutex);
+    if (victim->up.n_buckets < group->up.n_buckets) {
+        group_destruct__(group);
+    }
+    group_construct_stats(group);
+    ovs_mutex_unlock(&group->stats_mutex);
+
+    return 0;
+}
+
+static enum ofperr
+group_get_stats(const struct ofgroup *group_, struct ofputil_group_stats *ogs)
+{
+    struct group_dpif *group = group_dpif_cast(group_);
+
+    /* Start from historical data for 'group' itself that are no longer tracked
+     * in facets.  This counts, for example, facets that have expired. */
+    ovs_mutex_lock(&group->stats_mutex);
+    ogs->packet_count = group->packet_count;
+    ogs->byte_count = group->byte_count;
+    memcpy(ogs->bucket_stats, group->bucket_stats,
+           group->up.n_buckets * sizeof *group->bucket_stats);
+    ovs_mutex_unlock(&group->stats_mutex);
+
+    return 0;
+}
 
 /* Sends 'packet' out 'ofport'.
  * May modify 'packet'.
@@ -6076,10 +6194,10 @@ const struct ofproto_class ofproto_dpif_class = {
     NULL,                       /* meter_set */
     NULL,                       /* meter_get */
     NULL,                       /* meter_del */
-    NULL,                       /* group_alloc */
-    NULL,                       /* group_construct */
-    NULL,                       /* group_destruct */
-    NULL,                       /* group_dealloc */
-    NULL,                       /* group_modify */
-    NULL,                       /* group_get_stats */
+    group_alloc,                /* group_alloc */
+    group_construct,            /* group_construct */
+    group_destruct,             /* group_destruct */
+    group_dealloc,              /* group_dealloc */
+    group_modify,               /* group_modify */
+    group_get_stats,            /* group_get_stats */
 };
