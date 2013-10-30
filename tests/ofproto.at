@@ -306,7 +306,7 @@ AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_GROUP_FEATURES reply (OF1.2):
  Group table:
     Types:  0x0
-    Capabilities:  0x6
+    Capabilities:  0x7
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

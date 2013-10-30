@@ -811,7 +811,7 @@ group_best_live_bucket(const struct xlate_ctx *ctx,
     group_dpif_get_buckets(group, &buckets);
     LIST_FOR_EACH (bucket, list_node, buckets) {
         if (bucket_is_alive(ctx, bucket, 0)) {
-            uint32_t score = hash_int(i, basis);
+            uint32_t score = (hash_int(i, basis) & 0xffff) * bucket->weight;
             if (score >= best_score) {
                 best_bucket = bucket;
                 best_score = score;
