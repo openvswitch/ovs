@@ -800,10 +800,9 @@ type_run(const char *type)
                               ofproto->no_packet_in_rule, ofproto->ml,
                               ofproto->stp, ofproto->mbridge,
                               ofproto->sflow, ofproto->ipfix,
-                              ofproto->up.frag_handling,
+                              ofproto->netflow, ofproto->up.frag_handling,
                               ofproto->up.forward_bpdu,
-                              connmgr_has_in_band(ofproto->up.connmgr),
-                              ofproto->netflow != NULL);
+                              connmgr_has_in_band(ofproto->up.connmgr));
 
             HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
                 xlate_bundle_set(ofproto, bundle, bundle->name,

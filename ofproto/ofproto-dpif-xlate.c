@@ -76,6 +76,7 @@ struct xbridge {
     struct mbridge *mbridge;      /* Mirroring. */
     struct dpif_sflow *sflow;     /* SFlow handle, or null. */
     struct dpif_ipfix *ipfix;     /* Ipfix handle, or null. */
+    struct netflow *netflow;      /* Netflow handle, or null. */
     struct stp *stp;              /* STP or null if disabled. */
 
     /* Special rules installed by ofproto-dpif. */
@@ -83,7 +84,6 @@ struct xbridge {
     struct rule_dpif *no_packet_in_rule;
 
     enum ofp_config_flags frag;   /* Fragmentation handling. */
-    bool has_netflow;             /* Bridge runs netflow? */
     bool has_in_band;             /* Bridge has in band control? */
     bool forward_bpdu;            /* Bridge forwards STP BPDUs? */
 };
@@ -246,8 +246,9 @@ xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
                   const struct mac_learning *ml, struct stp *stp,
                   const struct mbridge *mbridge,
                   const struct dpif_sflow *sflow,
-                  const struct dpif_ipfix *ipfix, enum ofp_config_flags frag,
-                  bool forward_bpdu, bool has_in_band, bool has_netflow)
+                  const struct dpif_ipfix *ipfix,
+                  const struct netflow *netflow, enum ofp_config_flags frag,
+                  bool forward_bpdu, bool has_in_band)
 {
     struct xbridge *xbridge = xbridge_lookup(ofproto);
 
@@ -285,13 +286,17 @@ xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
         xbridge->stp = stp_ref(stp);
     }
 
+    if (xbridge->netflow != netflow) {
+        netflow_unref(xbridge->netflow);
+        xbridge->netflow = netflow_ref(netflow);
+    }
+
     free(xbridge->name);
     xbridge->name = xstrdup(name);
 
     xbridge->dpif = dpif;
     xbridge->forward_bpdu = forward_bpdu;
     xbridge->has_in_band = has_in_band;
-    xbridge->has_netflow = has_netflow;
     xbridge->frag = frag;
     xbridge->miss_rule = miss_rule;
     xbridge->no_packet_in_rule = no_packet_in_rule;
@@ -3080,7 +3085,7 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
     wc->masks.nw_frag |= FLOW_NW_FRAG_MASK;
 
     tnl_may_send = tnl_xlate_init(&ctx.base_flow, flow, wc);
-    if (ctx.xbridge->has_netflow) {
+    if (ctx.xbridge->netflow) {
         netflow_mask_wc(flow, wc);
     }
 
