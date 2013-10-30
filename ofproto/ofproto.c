@@ -5335,6 +5335,31 @@ ofproto_group_exists(const struct ofproto *ofproto, uint32_t group_id)
     return false;
 }
 
+static uint32_t
+group_get_ref_count(struct ofgroup *group)
+    OVS_EXCLUDED(ofproto_mutex)
+{
+    struct ofproto *ofproto = group->ofproto;
+    struct rule_criteria criteria;
+    struct rule_collection rules;
+    struct match match;
+    enum ofperr error;
+    uint32_t count;
+
+    match_init_catchall(&match);
+    rule_criteria_init(&criteria, 0xff, &match, 0, htonll(0), htonll(0),
+                       OFPP_ANY, group->group_id);
+    ovs_mutex_lock(&ofproto_mutex);
+    error = collect_rules_loose(ofproto, &criteria, &rules);
+    ovs_mutex_unlock(&ofproto_mutex);
+    rule_criteria_destroy(&criteria);
+
+    count = !error && rules.n < UINT32_MAX ? rules.n : UINT32_MAX;
+
+    rule_collection_destroy(&rules);
+    return count;
+}
+
 static void
 append_group_stats(struct ofgroup *group, struct list *replies)
     OVS_REQ_RDLOCK(group->rwlock)
@@ -5346,14 +5371,16 @@ append_group_stats(struct ofgroup *group, struct list *replies)
 
     ogs.bucket_stats = xmalloc(group->n_buckets * sizeof *ogs.bucket_stats);
 
+    /* Provider sets the packet and byte counts, we do the rest. */
+    ogs.ref_count = group_get_ref_count(group);
+    ogs.n_buckets = group->n_buckets;
+
     error = (ofproto->ofproto_class->group_get_stats
              ? ofproto->ofproto_class->group_get_stats(group, &ogs)
              : EOPNOTSUPP);
     if (error) {
-        ogs.ref_count = UINT32_MAX;
         ogs.packet_count = UINT64_MAX;
         ogs.byte_count = UINT64_MAX;
-        ogs.n_buckets = group->n_buckets;
         memset(ogs.bucket_stats, 0xff,
                ogs.n_buckets * sizeof *ogs.bucket_stats);
     }
