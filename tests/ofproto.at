@@ -245,6 +245,34 @@ AT_CLEANUP
 
 dnl This is really bare-bones.
 dnl It at least checks request and reply serialization and deserialization.
+AT_SETUP([ofproto - flow mod checks group availability])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-group br0 group_id=1234,type=all,bucket=output:10])
+AT_DATA([flows.txt], [dnl
+tcp actions=group:1234
+udp actions=group:1235
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-flow br0 'tcp actions=group:1234'])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-flow br0 'tcp actions=group:1235'], [1], [], [stderr])
+
+# The output should look like this:
+#
+# 00000000  02 0e 00 98 00 00 00 02-00 00 00 00 00 00 00 00 |................|
+# 00000010  00 00 00 00 00 00 00 00-ff 00 00 00 00 00 80 00 |................|
+# 00000020  ff ff ff ff ff ff ff ff-ff ff ff ff 00 00 00 00 |................|
+# 00000030  00 00 00 58 00 00 00 00-00 00 03 d7 00 00 00 00 |...X............|
+#
+# This 'sed' command captures the error message but drops details.
+AT_CHECK([sed '/truncated/d
+/^000000.0/d' stderr | STRIP_XIDS], [0],
+  [OFPT_ERROR (OF1.1): OFPBAC_BAD_OUT_GROUP
+OFPT_FLOW_MOD (OF1.1):
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl This is really bare-bones.
+dnl It at least checks request and reply serialization and deserialization.
 AT_SETUP([ofproto - group description])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-group br0 group_id=1234,type=all,bucket=output:10], [0], [stdout])
