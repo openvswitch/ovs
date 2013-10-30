@@ -1799,6 +1799,30 @@ ofproto_port_del(struct ofproto *ofproto, ofp_port_t ofp_port)
     return error;
 }
 
+static void
+flow_mod_init(struct ofputil_flow_mod *fm,
+              const struct match *match, unsigned int priority,
+              const struct ofpact *ofpacts, size_t ofpacts_len,
+              enum ofp_flow_mod_command command)
+{
+    memset(fm, 0, sizeof *fm);
+    fm->match = *match;
+    fm->priority = priority;
+    fm->cookie = 0;
+    fm->new_cookie = 0;
+    fm->modify_cookie = false;
+    fm->table_id = 0;
+    fm->command = command;
+    fm->idle_timeout = 0;
+    fm->hard_timeout = 0;
+    fm->buffer_id = UINT32_MAX;
+    fm->out_port = OFPP_ANY;
+    fm->out_group = OFPG_ANY;
+    fm->flags = 0;
+    fm->ofpacts = CONST_CAST(struct ofpact *, ofpacts);
+    fm->ofpacts_len = ofpacts_len;
+}
+
 static int
 simple_flow_mod(struct ofproto *ofproto,
                 const struct match *match, unsigned int priority,
@@ -1807,22 +1831,7 @@ simple_flow_mod(struct ofproto *ofproto,
 {
     struct ofputil_flow_mod fm;
 
-    memset(&fm, 0, sizeof fm);
-    fm.match = *match;
-    fm.priority = priority;
-    fm.cookie = 0;
-    fm.new_cookie = 0;
-    fm.modify_cookie = false;
-    fm.table_id = 0;
-    fm.command = command;
-    fm.idle_timeout = 0;
-    fm.hard_timeout = 0;
-    fm.buffer_id = UINT32_MAX;
-    fm.out_port = OFPP_ANY;
-    fm.out_group = OFPG_ANY;
-    fm.flags = 0;
-    fm.ofpacts = CONST_CAST(struct ofpact *, ofpacts);
-    fm.ofpacts_len = ofpacts_len;
+    flow_mod_init(&fm, match, priority, ofpacts, ofpacts_len, command);
 
     return handle_flow_mod__(ofproto, NULL, &fm, NULL);
 }
@@ -5609,6 +5618,15 @@ static void
 delete_group__(struct ofproto *ofproto, struct ofgroup *ofgroup)
     OVS_RELEASES(ofproto->groups_rwlock)
 {
+    struct match match;
+    struct ofputil_flow_mod fm;
+
+    /* Delete all flow entries containing this group in a group action */
+    match_init_catchall(&match);
+    flow_mod_init(&fm, &match, 0, NULL, 0, OFPFC_DELETE);
+    fm.out_group = ofgroup->group_id;
+    handle_flow_mod__(ofproto, NULL, &fm, NULL);
+
     /* Must wait until existing readers are done,
      * while holding the container's write lock at the same time. */
     ovs_rwlock_wrlock(&ofgroup->rwlock);
