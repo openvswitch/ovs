@@ -435,6 +435,14 @@ enum ofp_group {
     OFPG_ANY        = 0xffffffff   /* Wildcard, for flow stats requests. */
 };
 
+/* Group configuration flags */
+enum ofp_group_capabilities {
+    OFPGFC_SELECT_WEIGHT   = 1 << 0, /* Support weight for select groups */
+    OFPGFC_SELECT_LIVENESS = 1 << 1, /* Support liveness for select groups */
+    OFPGFC_CHAINING        = 1 << 2, /* Support chaining groups */
+    OFPGFC_CHAINING_CHECKS = 1 << 3, /* Check chaining for loops and delete */
+};
+
 enum ofp_hello_elem_type {
     OFPHET_VERSIONBITMAP          = 1, /* Bitmap of version supported. */
 };
