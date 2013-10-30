@@ -531,6 +531,9 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ovs_rwlock_init(&ofproto->groups_rwlock);
     hmap_init(&ofproto->groups);
     ovs_mutex_unlock(&ofproto_mutex);
+    ofproto->ogf.capabilities = OFPGFC_CHAINING;
+    ofproto->ogf.max_groups[OFPGT11_ALL] = OFPG_MAX;
+    ofproto->ogf.max_groups[OFPGT11_INDIRECT] = OFPG_MAX;
     ofproto->ogf.actions[0] =
 #define OFPAT11_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) (1 << ENUM) |
 #include "ofp-util.def"

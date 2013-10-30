@@ -1787,6 +1787,81 @@ xlate_table_action(struct xlate_ctx *ctx,
 }
 
 static void
+xlate_group_bucket(struct xlate_ctx *ctx, const struct ofputil_bucket *bucket)
+{
+    uint64_t action_list_stub[1024 / 8];
+    struct ofpbuf action_list, action_set;
+
+    ofpbuf_use_const(&action_set, bucket->ofpacts, bucket->ofpacts_len);
+    ofpbuf_use_stub(&action_list, action_list_stub, sizeof action_list_stub);
+
+    ofpacts_execute_action_set(&action_list, &action_set);
+    ctx->recurse++;
+    do_xlate_actions(action_list.data, action_list.size, ctx);
+    ctx->recurse--;
+
+    ofpbuf_uninit(&action_set);
+    ofpbuf_uninit(&action_list);
+}
+
+static void
+xlate_all_group(struct xlate_ctx *ctx, struct group_dpif *group)
+{
+    const struct ofputil_bucket *bucket;
+    const struct list *buckets;
+    struct flow old_flow = ctx->xin->flow;
+
+    group_dpif_get_buckets(group, &buckets);
+
+    LIST_FOR_EACH (bucket, list_node, buckets) {
+        xlate_group_bucket(ctx, bucket);
+        /* Roll back flow to previous state.
+         * This is equivalent to cloning the packet for each bucket.
+         *
+         * As a side effect any subsequently applied actions will
+         * also effectively be applied to a clone of the packet taken
+         * just before applying the all or indirect group. */
+        ctx->xin->flow = old_flow;
+    }
+}
+
+static void
+xlate_group_action__(struct xlate_ctx *ctx, struct group_dpif *group)
+{
+    switch (group_dpif_get_type(group)) {
+    case OFPGT11_ALL:
+    case OFPGT11_INDIRECT:
+        xlate_all_group(ctx, group);
+        break;
+    case OFPGT11_SELECT:
+    case OFPGT11_FF:
+        /* XXX not yet implemented */
+        break;
+    default:
+        NOT_REACHED();
+    }
+    group_dpif_release(group);
+}
+
+static bool
+xlate_group_action(struct xlate_ctx *ctx, uint32_t group_id)
+{
+    if (xlate_resubmit_resource_check(ctx)) {
+        struct group_dpif *group;
+        bool got_group;
+
+        got_group = group_dpif_lookup(ctx->xbridge->ofproto, group_id, &group);
+        if (got_group) {
+            xlate_group_action__(ctx, group);
+        } else {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void
 xlate_ofpact_resubmit(struct xlate_ctx *ctx,
                       const struct ofpact_resubmit *resubmit)
 {
@@ -2365,7 +2440,9 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_GROUP:
-            /* XXX not yet implemented */
+            if (xlate_group_action(ctx, ofpact_get_GROUP(a)->group_id)) {
+                return;
+            }
             break;
 
         case OFPACT_CONTROLLER:

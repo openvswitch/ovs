@@ -32,6 +32,7 @@ struct ofproto_packet_in;
 struct ofport_dpif;
 struct dpif_backer;
 struct OVS_LOCKABLE rule_dpif;
+struct OVS_LOCKABLE group_dpif;
 
 /* Ofproto-dpif -- DPIF based ofproto implementation.
  *
@@ -88,6 +89,15 @@ void choose_miss_rule(enum ofputil_port_config,
                       struct rule_dpif *miss_rule,
                       struct rule_dpif *no_packet_in_rule,
                       struct rule_dpif **rule);
+
+bool group_dpif_lookup(struct ofproto_dpif *ofproto, uint32_t group_id,
+                       struct group_dpif **group);
+
+void group_dpif_release(struct group_dpif *group);
+
+void group_dpif_get_buckets(const struct group_dpif *group,
+                            const struct list **buckets);
+enum ofp11_group_type group_dpif_get_type(const struct group_dpif *group);
 
 bool ofproto_has_vlan_splinters(const struct ofproto_dpif *);
 ofp_port_t vsp_realdev_to_vlandev(const struct ofproto_dpif *,
