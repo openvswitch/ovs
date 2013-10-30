@@ -5898,7 +5898,7 @@ ofproto_dpif_unixctl_init(void)
 
     unixctl_command_register(
         "ofproto/trace",
-        "[dp_name]|bridge odp_flow|br_flow [-generate|packet]",
+        "{[dp_name] odp_flow | bridge br_flow} [-generate|packet]",
         1, 3, ofproto_unixctl_trace, NULL);
     unixctl_command_register("fdb/flush", "[bridge]", 0, 1,
                              ofproto_unixctl_fdb_flush, NULL);
