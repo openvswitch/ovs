@@ -590,6 +590,7 @@ enum ofperr ofpacts_check(struct ofpact[], size_t ofpacts_len,
                           struct flow *, ofp_port_t max_ports,
                           uint8_t table_id, bool enforce_consistency);
 enum ofperr ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len);
+enum ofperr ofpact_check_output_port(ofp_port_t port, ofp_port_t max_ports);
 
 /* Converting ofpacts to OpenFlow. */
 size_t ofpacts_put_openflow_actions(const struct ofpact[], size_t ofpacts_len,

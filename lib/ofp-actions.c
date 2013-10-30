@@ -89,7 +89,7 @@ output_from_openflow10(const struct ofp10_action_output *oao,
     output->port = u16_to_ofp(ntohs(oao->port));
     output->max_len = ntohs(oao->max_len);
 
-    return ofputil_check_output_port(output->port, OFPP_MAX);
+    return ofpact_check_output_port(output->port, OFPP_MAX);
 }
 
 static enum ofperr
@@ -1088,7 +1088,7 @@ output_from_openflow11(const struct ofp11_action_output *oao,
         return error;
     }
 
-    return ofputil_check_output_port(output->port, OFPP_MAX);
+    return ofpact_check_output_port(output->port, OFPP_MAX);
 }
 
 static enum ofperr
@@ -1793,6 +1793,31 @@ exit:
     return error;
 }
 
+/* Checks that 'port' is a valid output port for OFPACT_OUTPUT, given that the
+ * switch will never have more than 'max_ports' ports.  Returns 0 if 'port' is
+ * valid, otherwise an OpenFlow error code. */
+enum ofperr
+ofpact_check_output_port(ofp_port_t port, ofp_port_t max_ports)
+{
+    switch (port) {
+    case OFPP_IN_PORT:
+    case OFPP_TABLE:
+    case OFPP_NORMAL:
+    case OFPP_FLOOD:
+    case OFPP_ALL:
+    case OFPP_CONTROLLER:
+    case OFPP_NONE:
+    case OFPP_LOCAL:
+        return 0;
+
+    default:
+        if (ofp_to_u16(port) < ofp_to_u16(max_ports)) {
+            return 0;
+        }
+        return OFPERR_OFPBAC_BAD_OUT_PORT;
+    }
+}
+
 /* May modify flow->dl_type and flow->vlan_tci, caller must restore them.
  *
  * Modifies some actions, filling in fields that could not be properly set
@@ -1806,8 +1831,8 @@ ofpact_check__(struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
 
     switch (a->type) {
     case OFPACT_OUTPUT:
-        return ofputil_check_output_port(ofpact_get_OUTPUT(a)->port,
-                                         max_ports);
+        return ofpact_check_output_port(ofpact_get_OUTPUT(a)->port,
+                                        max_ports);
 
     case OFPACT_CONTROLLER:
         return 0;

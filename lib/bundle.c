@@ -204,7 +204,7 @@ bundle_check(const struct ofpact_bundle *bundle, ofp_port_t max_ports,
         ofp_port_t ofp_port = bundle->slaves[i];
         enum ofperr error;
 
-        error = ofputil_check_output_port(ofp_port, max_ports);
+        error = ofpact_check_output_port(ofp_port, max_ports);
         if (error) {
             VLOG_WARN_RL(&rl, "invalid slave %"PRIu16, ofp_port);
             return error;

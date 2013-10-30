@@ -38,8 +38,6 @@ enum ofperr ofputil_port_from_ofp11(ovs_be32 ofp11_port,
                                     ofp_port_t *ofp10_port);
 ovs_be32 ofputil_port_to_ofp11(ofp_port_t ofp10_port);
 
-enum ofperr ofputil_check_output_port(ofp_port_t ofp_port,
-                                      ofp_port_t max_ports);
 bool ofputil_port_from_string(const char *, ofp_port_t *portp);
 void ofputil_format_port(ofp_port_t port, struct ds *);
 void ofputil_port_to_string(ofp_port_t, char namebuf[OFP_MAX_PORT_NAME_LEN],
