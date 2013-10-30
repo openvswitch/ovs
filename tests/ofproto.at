@@ -176,6 +176,88 @@ AT_CLEANUP
 
 dnl This is really bare-bones.
 dnl It at least checks request and reply serialization and deserialization.
+AT_SETUP([ofproto - del group])
+OVS_VSWITCHD_START
+AT_DATA([groups.txt], [dnl
+group_id=1234,type=all,bucket=output:10
+group_id=1235,type=all,bucket=output:10
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-groups br0 groups.txt])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn del-groups br0 group_id=1234])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.1):
+ group_id=1235,type=all,bucket=actions=output:10
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn del-groups br0 group_id=1234])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.1):
+ group_id=1235,type=all,bucket=actions=output:10
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn del-groups br0], [0])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.1):
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl This is really bare-bones.
+dnl It at least checks request and reply serialization and deserialization.
+AT_SETUP([ofproto - del group deletes flows])
+OVS_VSWITCHD_START
+AT_DATA([groups.txt], [dnl
+group_id=1234,type=all,bucket=output:10
+group_id=1235,type=all,bucket=output:10
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-groups br0 groups.txt])
+AT_DATA([flows.txt], [dnl
+tcp actions=group:1234
+udp actions=group:1235
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-flows br0 | ofctl_strip | sort],
+[0], [dnl
+ tcp actions=group:1234
+ udp actions=group:1235
+OFPST_FLOW reply (OF1.1):
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn del-groups br0 group_id=1234])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-flows br0 | ofctl_strip | sort],
+[0], [dnl
+ udp actions=group:1235
+OFPST_FLOW reply (OF1.1):
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn del-groups br0 group_id=1234])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-flows br0 | ofctl_strip | sort],
+[0], [dnl
+ udp actions=group:1235
+OFPST_FLOW reply (OF1.1):
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn del-groups br0])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-flows br0 | ofctl_strip | sort],
+[0], [dnl
+OFPST_FLOW reply (OF1.1):
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl This is really bare-bones.
+dnl It at least checks request and reply serialization and deserialization.
+AT_SETUP([ofproto - group description])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-group br0 group_id=1234,type=all,bucket=output:10], [0], [stdout])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.1):
+ group_id=1234,type=all,bucket=actions=output:10
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl This is really bare-bones.
+dnl It at least checks request and reply serialization and deserialization.
 AT_SETUP([ofproto - group description])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-group br0 group_id=1234,type=all,bucket=output:10])
