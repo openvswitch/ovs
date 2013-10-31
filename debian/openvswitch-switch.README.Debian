@@ -27,9 +27,9 @@ allow-br0 eth0
 
 The following OVS specific "command" options are supported:
 
-    - ovs_type: This can either be OVSBridge, OVSPort, OVSIntPort or OVSBond
-      depending on whether you configure a bridge, port, an internal port or
-      a bond. This is a required option.
+    - ovs_type: This can either be OVSBridge, OVSPort, OVSIntPort, OVSBond or
+      OVSTunnel depending on whether you configure a bridge, port, an internal
+      port, a bond or a tunnel. This is a required option.
 
     - ovs_ports: This option specifies all the ports that belong to a bridge.
 
@@ -38,6 +38,12 @@ The following OVS specific "command" options are supported:
 
     - ovs_bonds: This option specifies the list of physical interfaces to be
       bonded together.
+
+    - ovs_tunnel_type: For "OVSTunnel" interfaces, the type of the tunnel.
+      For example, "gre", "vxlan", etc.
+
+    - ovs_tunnel_options: For "OVSTunnel" interfaces, this field should be
+      used to specify the tunnel options like remote_ip, key, etc.
 
     - ovs_options: This option lets you add extra arguments to a ovs-vsctl
       command. See examples.
@@ -121,7 +127,23 @@ iface bond0 inet manual
     ovs_bonds eth2 eth3
     ovs_options bond_mode=balance-tcp lacp=active
 
-ex 6: Create and destroy bridges.
+ex 6: Tunnel.
+
+allow-ovs br1
+iface br1 inet static
+    address 192.168.1.1
+    netmask 255.255.255.0
+    ovs_type OVSBridge
+    ovs_ports gre1
+
+allow-br1 gre1
+iface gre1 inet manual
+    ovs_bridge br1
+    ovs_type OVSTunnel
+    ovs_tunnel_type gre
+    ovs_tunnel_options options:remote_ip=182.168.1.2 options:key=1
+
+ex 7: Create and destroy bridges.
 
 ifup --allow=ovs $list_of_bridges
 ifdown --allow=ovs $list_of_bridges
