@@ -81,7 +81,7 @@ for test_case in \
     'udp6,udp_dst=80                             NXM,OXM' \
     'udp6,udp_dst=0x1000/0x1000                  NXM,OXM' \
     'icmp,icmp_type=1                            any' \
-    'icmp,icmp_type=1                            any' \
+    'icmp,icmp_code=2                            any' \
     'icmp6,icmpv6_type=1                         NXM,OXM' \
     'icmp6,icmpv6_code=2                         NXM,OXM'
 do
