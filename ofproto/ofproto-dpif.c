@@ -4201,7 +4201,7 @@ facet_revalidate(struct facet *facet)
 
         error = xlate_receive(ofproto->backer, NULL, subfacet->key,
                               subfacet->key_len, &recv_flow, NULL,
-                              &recv_ofproto, NULL);
+                              &recv_ofproto, NULL, NULL, NULL, NULL);
         if (error
             || recv_ofproto != ofproto
             || facet != facet_find(ofproto, &recv_flow)) {
@@ -5358,7 +5358,7 @@ parse_flow_and_packet(int argc, const char *argv[],
         }
 
         if (xlate_receive(backer, NULL, odp_key.data, odp_key.size, flow,
-                          NULL, ofprotop, NULL)) {
+                          NULL, ofprotop, NULL, NULL, NULL, NULL)) {
             error = "Invalid datapath flow";
             goto exit;
         }

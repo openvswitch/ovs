@@ -147,7 +147,9 @@ void xlate_ofport_remove(struct ofport_dpif *) OVS_REQ_WRLOCK(xlate_rwlock);
 int xlate_receive(const struct dpif_backer *, struct ofpbuf *packet,
                   const struct nlattr *key, size_t key_len,
                   struct flow *, enum odp_key_fitness *,
-                  struct ofproto_dpif **, odp_port_t *odp_in_port)
+                  struct ofproto_dpif **, struct dpif_ipfix **,
+                  struct dpif_sflow **, struct netflow **,
+                  odp_port_t *odp_in_port)
     OVS_EXCLUDED(xlate_rwlock);
 
 void xlate_actions(struct xlate_in *, struct xlate_out *)
@@ -158,11 +160,6 @@ void xlate_in_init(struct xlate_in *, struct ofproto_dpif *,
 void xlate_out_uninit(struct xlate_out *);
 void xlate_actions_for_side_effects(struct xlate_in *);
 void xlate_out_copy(struct xlate_out *dst, const struct xlate_out *src);
-
-struct dpif_sflow *xlate_get_sflow(const struct ofproto_dpif *)
-    OVS_EXCLUDED(xlate_rwlock);
-struct dpif_ipfix *xlate_get_ipfix(const struct ofproto_dpif *)
-    OVS_EXCLUDED(xlate_rwlock);
 
 int xlate_send_packet(const struct ofport_dpif *, struct ofpbuf *);
 

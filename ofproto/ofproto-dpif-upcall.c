@@ -634,7 +634,7 @@ handle_upcalls(struct udpif *udpif, struct list *upcalls)
 
         error = xlate_receive(udpif->backer, packet, dupcall->key,
                               dupcall->key_len, &flow, &miss->key_fitness,
-                              &ofproto, &odp_in_port);
+                              &ofproto, &ipfix, &sflow, NULL, &odp_in_port);
         if (error) {
             if (error == ENODEV) {
                 struct drop_key *drop_key;
@@ -701,7 +701,6 @@ handle_upcalls(struct udpif *udpif, struct list *upcalls)
 
         switch (type) {
         case SFLOW_UPCALL:
-            sflow = xlate_get_sflow(ofproto);
             if (sflow) {
                 union user_action_cookie cookie;
 
@@ -710,18 +709,14 @@ handle_upcalls(struct udpif *udpif, struct list *upcalls)
                        sizeof cookie.sflow);
                 dpif_sflow_received(sflow, dupcall->packet, &flow, odp_in_port,
                                     &cookie);
-                dpif_sflow_unref(sflow);
             }
             break;
         case IPFIX_UPCALL:
-            ipfix = xlate_get_ipfix(ofproto);
             if (ipfix) {
                 dpif_ipfix_bridge_sample(ipfix, dupcall->packet, &flow);
-                dpif_ipfix_unref(ipfix);
             }
             break;
         case FLOW_SAMPLE_UPCALL:
-            ipfix = xlate_get_ipfix(ofproto);
             if (ipfix) {
                 union user_action_cookie cookie;
 
@@ -736,7 +731,6 @@ handle_upcalls(struct udpif *udpif, struct list *upcalls)
                                        cookie.flow_sample.probability,
                                        cookie.flow_sample.obs_domain_id,
                                        cookie.flow_sample.obs_point_id);
-                dpif_ipfix_unref(ipfix);
             }
             break;
         case BAD_UPCALL:
@@ -744,6 +738,9 @@ handle_upcalls(struct udpif *udpif, struct list *upcalls)
         case MISS_UPCALL:
             NOT_REACHED();
         }
+
+        dpif_ipfix_unref(ipfix);
+        dpif_sflow_unref(sflow);
 
         list_remove(&upcall->list_node);
         upcall_destroy(upcall);

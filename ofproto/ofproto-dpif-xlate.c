@@ -514,8 +514,10 @@ xlate_ofport_remove(struct ofport_dpif *ofport)
  * respectively), populates 'flow' with the result of odp_flow_key_to_flow().
  * Optionally, if nonnull, populates 'fitnessp' with the fitness of 'flow' as
  * returned by odp_flow_key_to_flow().  Also, optionally populates 'ofproto'
- * with the ofproto_dpif, and 'odp_in_port' with the datapath in_port, that
- * 'packet' ingressed.
+ * with the ofproto_dpif, 'odp_in_port' with the datapath in_port, that
+ * 'packet' ingressed, and 'ipfix', 'sflow', and 'netflow' with the appropriate
+ * handles for those protocols if they're enabled.  Caller is responsible for
+ * unrefing them.
  *
  * If 'ofproto' is nonnull, requires 'flow''s in_port to exist.  Otherwise sets
  * 'flow''s in_port to OFPP_NONE.
@@ -537,7 +539,9 @@ int
 xlate_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
               const struct nlattr *key, size_t key_len,
               struct flow *flow, enum odp_key_fitness *fitnessp,
-              struct ofproto_dpif **ofproto, odp_port_t *odp_in_port)
+              struct ofproto_dpif **ofproto, struct dpif_ipfix **ipfix,
+              struct dpif_sflow **sflow, struct netflow **netflow,
+              odp_port_t *odp_in_port)
 {
     enum odp_key_fitness fitness;
     const struct xport *xport;
@@ -589,6 +593,18 @@ xlate_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
 
     if (ofproto) {
         *ofproto = xport->xbridge->ofproto;
+    }
+
+    if (ipfix) {
+        *ipfix = dpif_ipfix_ref(xport->xbridge->ipfix);
+    }
+
+    if (sflow) {
+        *sflow = dpif_sflow_ref(xport->xbridge->sflow);
+    }
+
+    if (netflow) {
+        *netflow = netflow_ref(xport->xbridge->netflow);
     }
 
 exit:
@@ -2909,44 +2925,6 @@ xlate_out_copy(struct xlate_out *dst, const struct xlate_out *src)
                     sizeof dst->odp_actions_stub);
     ofpbuf_put(&dst->odp_actions, src->odp_actions.data,
                src->odp_actions.size);
-}
-
-/* Returns a reference to the sflow handled associated with ofproto, or NULL if
- * there is none.  The caller is responsible for decrementing the results ref
- * count with dpif_sflow_unref(). */
-struct dpif_sflow *
-xlate_get_sflow(const struct ofproto_dpif *ofproto)
-{
-    struct dpif_sflow *sflow = NULL;
-    struct xbridge *xbridge;
-
-    ovs_rwlock_rdlock(&xlate_rwlock);
-    xbridge = xbridge_lookup(ofproto);
-    if (xbridge) {
-        sflow = dpif_sflow_ref(xbridge->sflow);
-    }
-    ovs_rwlock_unlock(&xlate_rwlock);
-
-    return sflow;
-}
-
-/* Returns a reference to the ipfix handled associated with ofproto, or NULL if
- * there is none.  The caller is responsible for decrementing the results ref
- * count with dpif_ipfix_unref(). */
-struct dpif_ipfix *
-xlate_get_ipfix(const struct ofproto_dpif *ofproto)
-{
-    struct dpif_ipfix *ipfix = NULL;
-    struct xbridge *xbridge;
-
-    ovs_rwlock_rdlock(&xlate_rwlock);
-    xbridge = xbridge_lookup(ofproto);
-    if (xbridge) {
-        ipfix = dpif_ipfix_ref(xbridge->ipfix);
-    }
-    ovs_rwlock_unlock(&xlate_rwlock);
-
-    return ipfix;
 }
 
 static struct skb_priority_to_dscp *
