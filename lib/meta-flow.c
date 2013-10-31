@@ -2030,7 +2030,7 @@ mf_set(const struct mf_field *mf,
     case MFF_ICMPV4_CODE:
     case MFF_ICMPV6_TYPE:
     case MFF_ICMPV6_CODE:
-        NOT_REACHED();
+        return OFPUTIL_P_NONE;
 
     case MFF_TUN_ID:
         match_set_tun_id_masked(match, value->be64, mask->be64);
