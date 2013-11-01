@@ -983,6 +983,7 @@ ovsdb_server_compact(struct unixctl_conn *conn, int argc,
                 char *s = ovsdb_error_to_string(error);
                 ds_put_format(&reply, "%s\n", s);
                 free(s);
+                ovsdb_error_destroy(error);
             }
 
             n++;
