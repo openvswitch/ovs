@@ -1,6 +1,6 @@
 {
   "name": "hardware_vtep",
-  "cksum": "825115144 5318",
+  "cksum": "1365749839 5604",
   "tables": {
     "Global": {
       "columns": {
@@ -24,7 +24,11 @@
         "management_ips": {
 	  "type": {"key": {"type": "string"}, "min": 0, "max": "unlimited"}},
         "tunnel_ips": {
-	  "type": {"key": {"type": "string"}, "min": 0, "max": "unlimited"}}},
+	  "type": {"key": {"type": "string"}, "min": 0, "max": "unlimited"}},
+        "switch_fault_status": {
+          "type": {
+            "key": "string", "min": 0, "max": "unlimited"},
+           "ephemeral": true}},
       "indexes": [["name"]]},
     "Physical_Port": {
       "columns": {
@@ -40,7 +44,11 @@
 			   "minInteger": 0, "maxInteger": 4095},
 		   "value": {"type": "uuid",
 		             "refTable": "Logical_Binding_Stats"},
-		   "min": 0, "max": "unlimited"}}}},
+		   "min": 0, "max": "unlimited"}},
+        "port_fault_status": {
+          "type": {
+            "key": "string", "min": 0, "max": "unlimited"},
+           "ephemeral": true}}},
     "Logical_Binding_Stats": {
       "columns": {
         "bytes_from_local": {"type": "integer"},
@@ -154,4 +162,4 @@
           "ephemeral": true}},
       "indexes": [["target"]],
       "isRoot": false}},
-  "version": "1.0.0"}
+  "version": "1.1.0"}

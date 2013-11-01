@@ -274,6 +274,29 @@
 	banner.
       </column>
     </group>
+    <group title="Error Notification">
+      <p>
+	An entry in this column indicates to the NVC that this switch
+	has encountered a fault. The switch must clear this column
+	when the fault has been cleared.
+      </p>
+
+      <column name="switch_fault_status" key="mac_table_exhaustion">
+        Indicates that the switch has been unable to process MAC
+        entries requested by the NVC due to lack of table resources.
+      </column>
+
+      <column name="switch_fault_status" key="tunnel_exhaustion">
+        Indicates that the switch has been unable to create tunnels
+        requested by the NVC due to lack of resources.
+      </column>
+
+      <column name="switch_fault_status" key="unspecified_fault">
+        Indicates that an error has occurred in the switch but that no
+        more specific information is available.
+      </column>
+
+    </group>
   </table>
 
   <table name="Physical_Port" title="A port within a physical switch.">
@@ -306,6 +329,27 @@
 	An extended description for the port.
       </column>
     </group>
+    <group title="Error Notification">
+      <p>
+	An entry in this column indicates to the NVC that the physical port has
+	encountered a fault. The switch must clear this column when the errror
+	has been cleared.
+      </p>
+      <column name="port_fault_status" key="invalid_vlan_map">
+	<p>
+	  Indicates that a VLAN-to-logical-switch mapping requested by
+	  the controller could not be instantiated by the switch
+	  because of a conflict with local configuration.
+	</p>
+      </column>
+      <column name="port_fault_status" key="unspecified_fault">
+	<p>
+	  Indicates that an error has occurred on the port but that no
+	  more specific information is available.
+	</p>
+      </column>
+    </group>
+
   </table>
 
   <table name="Logical_Binding_Stats" title="Statistics for a VLAN on a physical port bound to a logical network.">
@@ -453,7 +497,7 @@
     </p>
 
     <column name="MAC">
-      A MAC address that has been learned by the NSC.
+      A MAC address that has been learned by the NVC.
     </column>
 
     <column name="logical_switch">
@@ -526,7 +570,7 @@
 
     <column name="MAC">
       <p>
-	A MAC address that has been learned by the NSC.
+	A MAC address that has been learned by the NVC.
       </p>
       <p>
 	The keyword <code>unknown-dst</code> is used as a special
