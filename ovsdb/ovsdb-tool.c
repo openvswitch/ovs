@@ -524,7 +524,7 @@ do_show_log(int argc, char *argv[])
                     t *= 1000;
                 }
 
-		s = xastrftime_msec(" %Y-%m-%d %H:%M:%S.###", t, true);
+                s = xastrftime_msec(" %Y-%m-%d %H:%M:%S.###", t, true);
                 fputs(s, stdout);
                 free(s);
             }
