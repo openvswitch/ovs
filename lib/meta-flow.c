@@ -2609,6 +2609,8 @@ char *
 mf_parse(const struct mf_field *mf, const char *s,
          union mf_value *value, union mf_value *mask)
 {
+    char *error;
+
     if (!strcmp(s, "*")) {
         memset(value, 0, mf->n_bytes);
         memset(mask, 0, mf->n_bytes);
@@ -2618,32 +2620,47 @@ mf_parse(const struct mf_field *mf, const char *s,
     switch (mf->string) {
     case MFS_DECIMAL:
     case MFS_HEXADECIMAL:
-        return mf_from_integer_string(mf, s,
-                                      (uint8_t *) value, (uint8_t *) mask);
+        error = mf_from_integer_string(mf, s,
+                                       (uint8_t *) value, (uint8_t *) mask);
+        break;
 
     case MFS_ETHERNET:
-        return mf_from_ethernet_string(mf, s, value->mac, mask->mac);
+        error = mf_from_ethernet_string(mf, s, value->mac, mask->mac);
+        break;
 
     case MFS_IPV4:
-        return mf_from_ipv4_string(mf, s, &value->be32, &mask->be32);
+        error = mf_from_ipv4_string(mf, s, &value->be32, &mask->be32);
+        break;
 
     case MFS_IPV6:
-        return mf_from_ipv6_string(mf, s, &value->ipv6, &mask->ipv6);
+        error = mf_from_ipv6_string(mf, s, &value->ipv6, &mask->ipv6);
+        break;
 
     case MFS_OFP_PORT:
-        return mf_from_ofp_port_string(mf, s, &value->be16, &mask->be16);
+        error = mf_from_ofp_port_string(mf, s, &value->be16, &mask->be16);
+        break;
 
     case MFS_OFP_PORT_OXM:
-        return mf_from_ofp_port_string32(mf, s, &value->be32, &mask->be32);
+        error = mf_from_ofp_port_string32(mf, s, &value->be32, &mask->be32);
+        break;
 
     case MFS_FRAG:
-        return mf_from_frag_string(s, &value->u8, &mask->u8);
+        error = mf_from_frag_string(s, &value->u8, &mask->u8);
+        break;
 
     case MFS_TNL_FLAGS:
         ovs_assert(mf->n_bytes == sizeof(ovs_be16));
-        return mf_from_tun_flags_string(s, &value->be16, &mask->be16);
+        error = mf_from_tun_flags_string(s, &value->be16, &mask->be16);
+        break;
+
+    default:
+        NOT_REACHED();
     }
-    NOT_REACHED();
+
+    if (!error && !mf_is_mask_valid(mf, mask)) {
+        error = xasprintf("%s: invalid mask for field %s", s, mf->name);
+    }
+    return error;
 }
 
 /* Parses 's', a string value for field 'mf', into 'value'.  Returns NULL if

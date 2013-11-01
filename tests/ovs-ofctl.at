@@ -12,14 +12,11 @@ for test_case in \
     'tun_flags=0                                 none' \
     'tun_flags=1/1                               none' \
     'tun_tos=0                                   none' \
-    'tun_tos=1/1                                 none' \
     'tun_ttl=0                                   none' \
-    'tun_ttl=1/1                                 none' \
     'metadata=0                                  NXM,OXM,OpenFlow11' \
     'metadata=1/1                                NXM,OXM,OpenFlow11' \
     'in_port=1                                   any' \
     'skb_priority=0                              none' \
-    'skb_priority=1/1                            none' \
     'pkt_mark=1                                  NXM,OXM' \
     'pkt_mark=1/1                                NXM,OXM' \
     'reg0=0                                      NXM,OXM' \
@@ -43,7 +40,6 @@ for test_case in \
     'dl_dst=00:11:22:33:44:55                    any' \
     'dl_dst=00:11:22:33:44:55/00:ff:ff:ff:ff:ff  NXM,OXM,OpenFlow11' \
     'dl_type=0x1234                              any' \
-    'dl_type=0x1234/0x1                          none' \
     'dl_type=0x0800                              any' \
     'dl_type=0x0806                              any' \
     'dl_type=0x86dd                              any' \
@@ -51,19 +47,13 @@ for test_case in \
     'vlan_tci=0x1009                             any' \
     'vlan_tci=0x1009/0x1                         NXM,OXM' \
     'dl_vlan=9                                   any' \
-    'dl_vlan=9/0x1                               none' \
     'vlan_vid=11                                 any' \
     'vlan_vid=11/0x1                             NXM,OXM' \
     'dl_vlan_pcp=6                               any' \
-    'dl_vlan_pcp=6/0x1                           none' \
     'vlan_pcp=5                                  any' \
-    'vlan_pcp=5/0x1                              none' \
     'mpls,mpls_label=5                           NXM,OXM,OpenFlow11' \
-    'mpls,mpls_label=5/0x1                       none' \
     'mpls,mpls_tc=1                              NXM,OXM,OpenFlow11' \
-    'mpls,mpls_tc=1/0x1                          none' \
     'mpls,mpls_bos=0                             NXM,OXM' \
-    'mpls,mpls_bos=1/0x1                         none' \
     'ip,ip_src=1.2.3.4                           any' \
     'ip,ip_src=192.168.0.0/24                    any' \
     'ip,ip_src=192.0.168.0/255.0.255.0           NXM,OXM,OpenFlow11' \
@@ -77,29 +67,18 @@ for test_case in \
     'ipv6,ipv6_label=5                           NXM,OXM' \
     'ipv6,ipv6_label=5/1                         NXM,OXM' \
     'ip,nw_proto=1                               any' \
-    'ip,nw_proto=1/1                             none' \
     'ipv6,nw_proto=1                             NXM,OXM' \
-    'ipv6,nw_proto=1/1                           none' \
     'ip,nw_tos=0xf0                              any' \
-    'ip,nw_tos=0xf0/0xf0                         none' \
     'ipv6,nw_tos=0xf0                            NXM,OXM' \
-    'ipv6,nw_tos=0xf0/0xf0                       none' \
     'ip,nw_tos_shifted=0x3c                      any' \
-    'ip,nw_tos_shifted=0x3c/0xf0                 none' \
     'ipv6,nw_tos_shifted=0x3c                    NXM,OXM' \
-    'ipv6,nw_tos_shifted=0x3c/0xf0               none' \
     'ip,nw_ecn=1                                 NXM,OXM' \
-    'ip,nw_ecn=1/1                               none' \
     'ipv6,nw_ecn=1                               NXM,OXM' \
-    'ipv6,nw_ecn=1/1                             none' \
     'ip,nw_ttl=5                                 NXM,OXM' \
-    'ip,nw_ttl=5/1                               none' \
     'ipv6,nw_ttl=5                               NXM,OXM' \
-    'ipv6,nw_ttl=5/1                             none' \
     'ip,ip_frag=no                               NXM,OXM' \
     'ipv6,ip_frag=no                             NXM,OXM' \
     'arp,arp_op=0                                any' \
-    'arp,arp_op=0/1                              none' \
     'arp,arp_spa=1.2.3.4                         any' \
     'arp,arp_spa=1.2.3.4/0.0.0.1                 NXM,OXM,OpenFlow11' \
     'arp,arp_tpa=1.2.3.4                         any' \
@@ -125,12 +104,9 @@ for test_case in \
     'udp6,udp_dst=80                             NXM,OXM' \
     'udp6,udp_dst=0x1000/0x1000                  NXM,OXM' \
     'icmp,icmp_type=1                            any' \
-    'icmp,icmp_type=1/1                          none' \
     'icmp,icmp_code=2                            any' \
-    'icmp,icmp_code=2/1                          none' \
     'icmp6,icmpv6_type=1                         NXM,OXM' \
-    'icmp6,icmpv6_code=2                         NXM,OXM' \
-    'icmp6,icmpv6_code=2/1                       none'
+    'icmp6,icmpv6_code=2                         NXM,OXM'
 do
     set $test_case
     echo
@@ -258,6 +234,45 @@ OFPT_FLOW_MOD (OF1.2): ADD table:255 sctp actions=set_field:4445->sctp_dst
 OFPT_FLOW_MOD (OF1.2): ADD table:255 in_port=0 actions=resubmit:0
 OFPT_FLOW_MOD (OF1.2): ADD table:255 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 ]])
+AT_CLEANUP
+
+AT_SETUP([ovs-ofctl parse-flow with invalid mask])
+for test_case in \
+    'tun_tos 1/1' \
+    'tun_ttl 1/1' \
+    'skb_priority 1/1' \
+    'eth_type 0x1234/0x1' \
+    'dl_vlan 9/0x1' \
+    'dl_vlan_pcp 6/0x1' \
+    'vlan_pcp 5/0x1' \
+    'mpls mpls_label 5/0x1' \
+    'mpls mpls_tc 1/0x1' \
+    'mpls mpls_bos 1/0x1' \
+    'ip nw_proto 1/1' \
+    'ipv6 nw_proto 1/1' \
+    'ip nw_tos 0xf0/0xf0' \
+    'ipv6 nw_tos 0xf0/0xf0' \
+    'ip nw_tos_shifted 0x3c/0xf0' \
+    'ipv6 nw_tos_shifted 0x3c/0xf0' \
+    'ip nw_ecn 1/1' \
+    'ipv6 nw_ecn 1/1' \
+    'ip nw_ttl 5/1' \
+    'ipv6 nw_ttl 5/1' \
+    'arp arp_op 0/1' \
+    'icmp icmp_type 1/1' \
+    'icmp icmp_code 2/1' \
+    'icmp6 icmpv6_code 2/1'
+do
+    set $test_case
+    if test $# = 3; then
+        prereq=$1, field=$2 value=$3
+    else
+        prereq= field=$1 value=$2
+    fi
+    AT_CHECK_UNQUOTED([ovs-ofctl parse-flow "$prereq$field=$value,actions=drop"], [1], [],
+[ovs-ofctl: $value: invalid mask for field $field
+])
+done
 AT_CLEANUP
 
 AT_SETUP([ovs-ofctl action inconsistency (OpenFlow 1.1)])
