@@ -61,6 +61,7 @@
 #include "netlink.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
+#include "ovs-atomic.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "rtnetlink-link.h"
@@ -402,6 +403,11 @@ struct netdev_rx_linux {
  * additional log messages. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
+/* Polling miimon status for all ports causes performance degradation when
+ * handling a large number of ports. If there are no devices using miimon, then
+ * we skip netdev_linux_miimon_run() and netdev_linux_miimon_wait(). */
+static atomic_int miimon_cnt = ATOMIC_VAR_INIT(0);
+
 static void netdev_linux_run(void);
 
 static int netdev_linux_do_ethtool(const char *name, struct ethtool_cmd *,
@@ -423,6 +429,7 @@ static int set_etheraddr(const char *netdev_name, const uint8_t[ETH_ADDR_LEN]);
 static int get_stats_via_netlink(int ifindex, struct netdev_stats *stats);
 static int get_stats_via_proc(const char *netdev_name, struct netdev_stats *stats);
 static int af_packet_sock(void);
+static bool netdev_linux_miimon_enabled(void);
 static void netdev_linux_miimon_run(void);
 static void netdev_linux_miimon_wait(void);
 
@@ -485,13 +492,24 @@ netdev_linux_notify_sock(void)
     return sock;
 }
 
+static bool
+netdev_linux_miimon_enabled(void)
+{
+    int miimon;
+
+    atomic_read(&miimon_cnt, &miimon);
+    return miimon > 0;
+}
+
 static void
 netdev_linux_run(void)
 {
     struct nl_sock *sock;
     int error;
 
-    netdev_linux_miimon_run();
+    if (netdev_linux_miimon_enabled()) {
+        netdev_linux_miimon_run();
+    }
 
     sock = netdev_linux_notify_sock();
     if (!sock) {
@@ -553,7 +571,9 @@ netdev_linux_wait(void)
 {
     struct nl_sock *sock;
 
-    netdev_linux_miimon_wait();
+    if (netdev_linux_miimon_enabled()) {
+        netdev_linux_miimon_wait();
+    }
     sock = netdev_linux_notify_sock();
     if (sock) {
         nl_sock_wait(sock, POLLIN);
@@ -709,6 +729,11 @@ netdev_linux_destruct(struct netdev *netdev_)
         && netdev->tap_fd >= 0)
     {
         close(netdev->tap_fd);
+    }
+
+    if (netdev->miimon_interval > 0) {
+        int junk;
+        atomic_sub(&miimon_cnt, 1, &junk);
     }
 
     ovs_mutex_destroy(&netdev->mutex);
@@ -1222,6 +1247,14 @@ netdev_linux_set_miimon_interval(struct netdev *netdev_,
     ovs_mutex_lock(&netdev->mutex);
     interval = interval > 0 ? MAX(interval, 100) : 0;
     if (netdev->miimon_interval != interval) {
+        int junk;
+
+        if (interval && !netdev->miimon_interval) {
+            atomic_add(&miimon_cnt, 1, &junk);
+        } else if (!interval && netdev->miimon_interval) {
+            atomic_sub(&miimon_cnt, 1, &junk);
+        }
+
         netdev->miimon_interval = interval;
         timer_set_expired(&netdev->miimon_timer);
     }
