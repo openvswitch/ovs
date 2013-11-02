@@ -49,6 +49,7 @@
 #include "vlog.h"
 
 COVERAGE_DEFINE(xlate_actions);
+COVERAGE_DEFINE(xlate_actions_oversize);
 
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif_xlate);
 
@@ -2969,11 +2970,11 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
 
     if (nl_attr_oversized(ctx.xout->odp_actions.size)) {
         /* These datapath actions are too big for a Netlink attribute, so we
-         * can't execute them. */
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-
-        VLOG_ERR_RL(&rl, "discarding oversize datapath actions");
-        ofpbuf_clear(&ctx.xout->odp_actions);
+         * can't hand them to the kernel directly.  dpif_execute() can execute
+         * them one by one with help, so just mark the result as SLOW_ACTION to
+         * prevent the flow from being installed. */
+        COVERAGE_INC(xlate_actions_oversize);
+        ctx.xout->slow |= SLOW_ACTION;
     }
 
     ofpbuf_uninit(&ctx.stack);

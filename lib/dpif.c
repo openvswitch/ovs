@@ -1183,6 +1183,8 @@ dpif_execute__(struct dpif *dpif, const struct dpif_execute *execute)
  * OVS_ACTION_ATTR_USERSPACE actions it passes the packet through to the dpif
  * implementation.
  *
+ * This works even if 'actions_len' is too long for a Netlink attribute.
+ *
  * Returns 0 if successful, otherwise a positive errno value. */
 int
 dpif_execute(struct dpif *dpif,
@@ -1198,7 +1200,7 @@ dpif_execute(struct dpif *dpif,
     execute.actions = actions;
     execute.actions_len = actions_len;
     execute.packet = buf;
-    execute.needs_help = needs_help;
+    execute.needs_help = needs_help || nl_attr_oversized(actions_len);
     return dpif_execute__(dpif, &execute);
 }
 
