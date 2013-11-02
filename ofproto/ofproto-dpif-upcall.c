@@ -394,7 +394,7 @@ udpif_upcall_handler(void *arg)
 {
     struct handler *handler = arg;
 
-    set_subprogram_name("upcall_handler");
+    set_subprogram_name("upcall_%u", ovsthread_id_self());
     for (;;) {
         struct list misses = LIST_INITIALIZER(&misses);
         size_t i;
