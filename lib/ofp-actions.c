@@ -1823,8 +1823,9 @@ ofpact_check_output_port(ofp_port_t port, ofp_port_t max_ports)
  * Modifies some actions, filling in fields that could not be properly set
  * without context. */
 static enum ofperr
-ofpact_check__(struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
-               uint8_t table_id, bool enforce_consistency)
+ofpact_check__(struct ofpact *a, struct flow *flow,
+               bool enforce_consistency, ofp_port_t max_ports,
+               uint8_t table_id, uint8_t n_tables)
 {
     const struct ofpact_enqueue *enqueue;
     const struct mf_field *mf;
@@ -2020,7 +2021,7 @@ ofpact_check__(struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
     case OFPACT_WRITE_ACTIONS: {
         struct ofpact_nest *on = ofpact_get_WRITE_ACTIONS(a);
         return ofpacts_check(on->actions, ofpact_nest_get_action_len(on),
-                             flow, max_ports, table_id, false);
+                             flow, false, max_ports, table_id, n_tables);
     }
 
     case OFPACT_WRITE_METADATA:
@@ -2034,11 +2035,14 @@ ofpact_check__(struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
         return 0;
     }
 
-    case OFPACT_GOTO_TABLE:
-        if (ofpact_get_GOTO_TABLE(a)->table_id <= table_id) {
+    case OFPACT_GOTO_TABLE: {
+        uint8_t goto_table = ofpact_get_GOTO_TABLE(a)->table_id;
+        if ((table_id != 255 && goto_table <= table_id)
+            || (n_tables != 255 && goto_table >= n_tables)) {
             return OFPERR_OFPBRC_BAD_TABLE_ID;
         }
         return 0;
+    }
 
     case OFPACT_GROUP:
         return 0;
@@ -2063,8 +2067,9 @@ ofpact_check__(struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
  * May temporarily modify 'flow', but restores the changes before returning. */
 enum ofperr
 ofpacts_check(struct ofpact ofpacts[], size_t ofpacts_len,
-              struct flow *flow, ofp_port_t max_ports, uint8_t table_id,
-              bool enforce_consistency)
+              struct flow *flow, bool enforce_consistency,
+              ofp_port_t max_ports,
+              uint8_t table_id, uint8_t n_tables)
 {
     struct ofpact *a;
     ovs_be16 dl_type = flow->dl_type;
@@ -2072,8 +2077,8 @@ ofpacts_check(struct ofpact ofpacts[], size_t ofpacts_len,
     enum ofperr error = 0;
 
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
-        error = ofpact_check__(a, flow, max_ports, table_id,
-                               enforce_consistency);
+        error = ofpact_check__(a, flow, enforce_consistency,
+                               max_ports, table_id, n_tables);
         if (error) {
             break;
         }

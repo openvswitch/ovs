@@ -757,7 +757,8 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh, int verbosity)
     protocol = ofputil_protocol_set_tid(protocol, true);
 
     ofpbuf_init(&ofpacts, 64);
-    error = ofputil_decode_flow_mod(&fm, oh, protocol, &ofpacts);
+    error = ofputil_decode_flow_mod(&fm, oh, protocol, &ofpacts,
+                                    OFPP_MAX, 255);
     if (error) {
         ofpbuf_uninit(&ofpacts);
         ofp_print_error(s, error);

@@ -1484,7 +1484,8 @@ enum ofperr
 ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
                         const struct ofp_header *oh,
                         enum ofputil_protocol protocol,
-                        struct ofpbuf *ofpacts)
+                        struct ofpbuf *ofpacts,
+                        ofp_port_t max_port, uint8_t max_table)
 {
     ovs_be16 raw_flags;
     enum ofperr error;
@@ -1663,7 +1664,9 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
                 : OFPERR_OFPFMFC_TABLE_FULL);
     }
 
-    return 0;
+    return ofpacts_check(fm->ofpacts, fm->ofpacts_len, &fm->match.flow,
+                         oh->version > OFP10_VERSION, max_port,
+                         fm->table_id, max_table);
 }
 
 static enum ofperr

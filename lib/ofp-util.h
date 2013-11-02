@@ -294,7 +294,9 @@ struct ofputil_flow_mod {
 enum ofperr ofputil_decode_flow_mod(struct ofputil_flow_mod *,
                                     const struct ofp_header *,
                                     enum ofputil_protocol,
-                                    struct ofpbuf *ofpacts);
+                                    struct ofpbuf *ofpacts,
+                                    ofp_port_t max_port,
+                                    uint8_t max_table);
 struct ofpbuf *ofputil_encode_flow_mod(const struct ofputil_flow_mod *,
                                        enum ofputil_protocol);
 

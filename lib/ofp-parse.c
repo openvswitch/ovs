@@ -1368,7 +1368,7 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
             enum ofperr err;
 
             err = ofpacts_check(ofpacts.data, ofpacts.size, &fm->match.flow,
-                                OFPP_MAX, 0, true);
+                                true, OFPP_MAX, fm->table_id, 255);
             if (err) {
                 if (!enforce_consistency &&
                     err == OFPERR_OFPBAC_MATCH_INCONSISTENT) {
@@ -1377,7 +1377,8 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
                     /* Try again, allowing for inconsistency.
                      * XXX: As a side effect, logging may be duplicated. */
                     err = ofpacts_check(ofpacts.data, ofpacts.size,
-                                        &fm->match.flow, OFPP_MAX, 0, false);
+                                        &fm->match.flow, false,
+                                        OFPP_MAX, fm->table_id, 255);
                 }
                 if (err) {
                     error = xasprintf("actions are invalid with specified match "

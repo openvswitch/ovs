@@ -271,9 +271,12 @@ static enum ofperr modify_flows__(struct ofproto *, struct ofconn *,
 static void delete_flow__(struct rule *rule, struct ofopgroup *,
                           enum ofp_flow_removed_reason)
     OVS_REQUIRES(ofproto_mutex);
+static bool ofproto_group_exists__(const struct ofproto *ofproto,
+                                   uint32_t group_id)
+    OVS_REQ_RDLOCK(ofproto->groups_rwlock);
 static bool ofproto_group_exists(const struct ofproto *ofproto,
                                  uint32_t group_id)
-    OVS_REQ_RDLOCK(ofproto->groups_rwlock);
+    OVS_EXCLUDED(ofproto->groups_rwlock);
 static enum ofperr add_group(struct ofproto *, struct ofputil_group_mod *);
 static bool handle_openflow(struct ofconn *, const struct ofpbuf *);
 static enum ofperr handle_flow_mod__(struct ofproto *, struct ofconn *,
@@ -2829,46 +2832,33 @@ reject_slave_controller(struct ofconn *ofconn)
     }
 }
 
-/* Checks that the 'ofpacts_len' bytes of actions in 'ofpacts' are appropriate
- * for a packet with the prerequisites satisfied by 'flow' in table 'table_id'.
- * 'flow' may be temporarily modified, but is restored at return.
- */
+/* Checks that the 'ofpacts_len' bytes of action in 'ofpacts' are appropriate
+ * for 'ofproto':
+ *
+ *    - If they use a meter, then 'ofproto' has that meter configured.
+ *
+ *    - If they use any groups, then 'ofproto' has that group configured.
+ *
+ * Returns 0 if successful, otherwise an OpenFlow error. */
 static enum ofperr
 ofproto_check_ofpacts(struct ofproto *ofproto,
-                      struct ofpact ofpacts[], size_t ofpacts_len,
-                      struct flow *flow, uint8_t table_id,
-                      const struct ofp_header *oh)
+                      const struct ofpact ofpacts[], size_t ofpacts_len)
 {
-    enum ofperr error;
     const struct ofpact *a;
     uint32_t mid;
-
-    error = ofpacts_check(ofpacts, ofpacts_len, flow,
-                          u16_to_ofp(ofproto->max_ports), table_id,
-                          oh && oh->version > OFP10_VERSION);
-    if (error) {
-        return error;
-    }
-
-    OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
-        if (a->type == OFPACT_GROUP) {
-            bool exists;
-
-            ovs_rwlock_rdlock(&ofproto->groups_rwlock);
-            exists = ofproto_group_exists(ofproto,
-                                          ofpact_get_GROUP(a)->group_id);
-            ovs_rwlock_unlock(&ofproto->groups_rwlock);
-
-            if (!exists) {
-                return OFPERR_OFPBAC_BAD_OUT_GROUP;
-            }
-        }
-    }
 
     mid = ofpacts_get_meter(ofpacts, ofpacts_len);
     if (mid && get_provider_meter_id(ofproto, mid) == UINT32_MAX) {
         return OFPERR_OFPMMFC_INVALID_METER;
     }
+
+    OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
+        if (a->type == OFPACT_GROUP
+            && !ofproto_group_exists(ofproto, ofpact_get_GROUP(a)->group_id)) {
+            return OFPERR_OFPBAC_BAD_OUT_GROUP;
+        }
+    }
+
     return 0;
 }
 
@@ -2918,7 +2908,7 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
     /* Verify actions against packet, then send packet if successful. */
     in_port_.ofp_port = po.in_port;
     flow_extract(payload, 0, 0, NULL, &in_port_, &flow);
-    error = ofproto_check_ofpacts(p, po.ofpacts, po.ofpacts_len, &flow, 0, oh);
+    error = ofproto_check_ofpacts(p, po.ofpacts, po.ofpacts_len);
     if (!error) {
         error = p->ofproto_class->packet_out(p, payload, &flow,
                                              po.ofpacts, po.ofpacts_len);
@@ -3966,14 +3956,6 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
         }
     }
 
-    /* Verify actions. */
-    error = ofproto_check_ofpacts(ofproto, fm->ofpacts, fm->ofpacts_len,
-                                  &fm->match.flow, table_id, request);
-    if (error) {
-        cls_rule_destroy(&cr);
-        return error;
-    }
-
     /* Serialize against pending deletion. */
     if (is_flow_deletion_pending(ofproto, &cr, table_id)) {
         cls_rule_destroy(&cr);
@@ -4071,19 +4053,6 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
     struct ofopgroup *group;
     enum ofperr error;
     size_t i;
-
-    /* Verify actions before we start to modify any rules, to avoid partial
-     * flow table modifications. */
-    for (i = 0; i < rules->n; i++) {
-        struct rule *rule = rules->rules[i];
-
-        error = ofproto_check_ofpacts(ofproto, fm->ofpacts, fm->ofpacts_len,
-                                      &fm->match.flow, rule->table_id,
-                                      request);
-        if (error) {
-            return error;
-        }
-    }
 
     type = fm->command == OFPFC_ADD ? OFOPERATION_REPLACE : OFOPERATION_MODIFY;
     group = ofopgroup_create(ofproto, ofconn, request, fm->buffer_id);
@@ -4417,7 +4386,12 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 
     ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
     error = ofputil_decode_flow_mod(&fm, oh, ofconn_get_protocol(ofconn),
-                                    &ofpacts);
+                                    &ofpacts,
+                                    u16_to_ofp(ofproto->max_ports),
+                                    ofproto->n_tables);
+    if (!error) {
+        error = ofproto_check_ofpacts(ofproto, fm.ofpacts, fm.ofpacts_len);
+    }
     if (!error) {
         error = handle_flow_mod__(ofproto, ofconn, &fm, oh);
     }
@@ -5321,7 +5295,7 @@ ofproto_group_write_lookup(const struct ofproto *ofproto, uint32_t group_id,
 }
 
 static bool
-ofproto_group_exists(const struct ofproto *ofproto, uint32_t group_id)
+ofproto_group_exists__(const struct ofproto *ofproto, uint32_t group_id)
     OVS_REQ_RDLOCK(ofproto->groups_rwlock)
 {
     struct ofgroup *grp;
@@ -5333,6 +5307,19 @@ ofproto_group_exists(const struct ofproto *ofproto, uint32_t group_id)
         }
     }
     return false;
+}
+
+static bool
+ofproto_group_exists(const struct ofproto *ofproto, uint32_t group_id)
+    OVS_EXCLUDED(ofproto->groups_rwlock)
+{
+    bool exists;
+
+    ovs_rwlock_rdlock(&ofproto->groups_rwlock);
+    exists = ofproto_group_exists__(ofproto, group_id);
+    ovs_rwlock_unlock(&ofproto->groups_rwlock);
+
+    return exists;
 }
 
 static uint32_t
@@ -5569,7 +5556,7 @@ add_group(struct ofproto *ofproto, struct ofputil_group_mod *gm)
         goto unlock_out;
     }
 
-    if (ofproto_group_exists(ofproto, gm->group_id)) {
+    if (ofproto_group_exists__(ofproto, gm->group_id)) {
         error = OFPERR_OFPGMFC_GROUP_EXISTS;
         goto unlock_out;
     }
