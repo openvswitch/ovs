@@ -222,7 +222,7 @@ void set_program_name__(const char *name, const char *version,
         set_program_name__(name, VERSION, __DATE__, __TIME__)
 
 const char *get_subprogram_name(void);
-void set_subprogram_name(const char *name);
+void set_subprogram_name(const char *format, ...) PRINTF_FORMAT(1, 2);
 
 const char *get_program_version(void);
 void ovs_print_version(uint8_t min_ofp, uint8_t max_ofp);
