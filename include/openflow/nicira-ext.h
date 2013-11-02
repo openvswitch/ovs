@@ -494,6 +494,11 @@ OFP_ASSERT(sizeof(struct nx_action_pop_queue) == 16);
  *   - NXM_OF_TCP_DST
  *   - NXM_OF_UDP_SRC
  *   - NXM_OF_UDP_DST
+ *   - NXM_NX_ARP_SHA
+ *   - NXM_NX_ARP_THA
+ *   - NXM_OF_ARP_OP
+ *   - NXM_OF_ARP_SPA
+ *   - NXM_OF_ARP_TPA
  *     Modifying any of the above fields changes the corresponding packet
  *     header.
  *
