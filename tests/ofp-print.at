@@ -724,7 +724,7 @@ AT_SETUP([OFPT_FLOW_MOD - OF1.2 - low verbosity])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print "\
 03 0e 00 90 00 00 00 02 00 00 00 00 00 00 00 00 \
-00 00 00 00 00 00 00 00 ff 00 00 00 00 00 ff ff \
+00 00 00 00 00 00 00 00 01 00 00 00 00 00 ff ff \
 ff ff ff ff ff ff ff ff ff ff ff ff 00 00 00 00 \
 00 01 00 42 80 00 00 04 00 00 00 01 80 00 08 06 \
 50 54 00 00 00 06 80 00 06 06 50 54 00 00 00 05 \
@@ -733,7 +733,7 @@ ff ff ff ff ff ff ff ff ff ff ff ff 00 00 00 00 \
 00 01 00 00 00 00 00 00 00 04 00 18 00 00 00 00 \
 00 00 00 10 00 00 00 03 00 00 00 00 00 00 00 00 \
 " 2], [0], [dnl
-OFPT_FLOW_MOD (OF1.2) (xid=0x2): ADD table:255 priority=65535,arp,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,arp_spa=192.168.0.2,arp_tpa=192.168.0.1,arp_op=2 actions=output:3
+OFPT_FLOW_MOD (OF1.2) (xid=0x2): ADD table:1 priority=65535,arp,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,arp_spa=192.168.0.2,arp_tpa=192.168.0.1,arp_op=2 actions=output:3
 ], [dnl
 ])
 AT_CLEANUP
@@ -762,7 +762,7 @@ AT_SETUP([OFPT_FLOW_MOD - OF1.2 - low verbosity])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print "\
 03 0e 00 90 00 00 00 02 00 00 00 00 00 00 00 00 \
-00 00 00 00 00 00 00 00 ff 00 00 00 00 00 ff ff \
+00 00 00 00 00 00 00 00 01 00 00 00 00 00 ff ff \
 ff ff ff ff ff ff ff ff ff ff ff ff 00 00 00 00 \
 00 01 00 42 80 00 00 04 00 00 00 01 80 00 08 06 \
 50 54 00 00 00 06 80 00 06 06 50 54 00 00 00 05 \
@@ -771,7 +771,7 @@ ff ff ff ff ff ff ff ff ff ff ff ff 00 00 00 00 \
 00 01 00 00 00 00 00 00 00 04 00 18 00 00 00 00 \
 00 00 00 10 00 00 00 03 00 00 00 00 00 00 00 00 \
 " 2], [0], [dnl
-OFPT_FLOW_MOD (OF1.2) (xid=0x2): ADD table:255 priority=65535,arp,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,arp_spa=192.168.0.2,arp_tpa=192.168.0.1,arp_op=2 actions=output:3
+OFPT_FLOW_MOD (OF1.2) (xid=0x2): ADD table:1 priority=65535,arp,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,arp_spa=192.168.0.2,arp_tpa=192.168.0.1,arp_op=2 actions=output:3
 ], [dnl
 ])
 AT_CLEANUP
@@ -781,7 +781,7 @@ AT_SETUP([OFPT_FLOW_MOD - OF1.3 - flags - low verbosity])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print "\
 04 0e 00 90 00 00 00 02 00 00 00 00 00 00 00 00 \
-00 00 00 00 00 00 00 00 ff 00 00 00 00 00 ff ff \
+00 00 00 00 00 00 00 00 01 00 00 00 00 00 ff ff \
 ff ff ff ff ff ff ff ff ff ff ff ff 00 1f 00 00 \
 00 01 00 42 80 00 00 04 00 00 00 01 80 00 08 06 \
 50 54 00 00 00 06 80 00 06 06 50 54 00 00 00 05 \
@@ -790,7 +790,7 @@ ff ff ff ff ff ff ff ff ff ff ff ff 00 1f 00 00 \
 00 01 00 00 00 00 00 00 00 04 00 18 00 00 00 00 \
 00 00 00 10 00 00 00 03 00 00 00 00 00 00 00 00 \
 " 2], [0], [dnl
-OFPT_FLOW_MOD (OF1.3) (xid=0x2): ADD table:255 priority=65535,arp,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,arp_spa=192.168.0.2,arp_tpa=192.168.0.1,arp_op=2 send_flow_rem check_overlap reset_counts no_packet_counts no_byte_counts actions=output:3
+OFPT_FLOW_MOD (OF1.3) (xid=0x2): ADD table:1 priority=65535,arp,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,arp_spa=192.168.0.2,arp_tpa=192.168.0.1,arp_op=2 send_flow_rem check_overlap reset_counts no_packet_counts no_byte_counts actions=output:3
 ], [dnl
 ])
 AT_CLEANUP

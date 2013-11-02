@@ -32,8 +32,8 @@ actions=learn(table=1, in_port=1, load:OXM_OF_IN_PORT[]->NXM_NX_REG1[], load:0xf
 AT_CHECK([ovs-ofctl -O OpenFlow12 parse-flows flows.txt], [0],
 [[usable protocols: any
 chosen protocol: OXM-OpenFlow12
-OFPT_FLOW_MOD (OF1.2) (xid=0x1): ADD table:255 actions=learn(table=1,output:OXM_OF_IN_PORT[])
-OFPT_FLOW_MOD (OF1.2) (xid=0x2): ADD table:255 actions=learn(table=1,in_port=1,load:OXM_OF_IN_PORT[]->NXM_NX_REG1[],load:0xfffffffe->OXM_OF_IN_PORT[])
+OFPT_FLOW_MOD (OF1.2) (xid=0x1): ADD actions=learn(table=1,output:OXM_OF_IN_PORT[])
+OFPT_FLOW_MOD (OF1.2) (xid=0x2): ADD actions=learn(table=1,in_port=1,load:OXM_OF_IN_PORT[]->NXM_NX_REG1[],load:0xfffffffe->OXM_OF_IN_PORT[])
 ]])
 AT_CLEANUP
 

@@ -184,18 +184,18 @@ AT_CHECK([ovs-ofctl --protocols OpenFlow11 parse-flows flows.txt
 AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0],
 [[usable protocols: any
 chosen protocol: OpenFlow11
-OFPT_FLOW_MOD (OF1.1): ADD table:255 tcp,tp_src=123 out_port:5 actions=FLOOD
-OFPT_FLOW_MOD (OF1.1): ADD table:255 in_port=LOCAL,dl_vlan=9,dl_src=00:0a:e4:25:6b:b0 actions=drop
-OFPT_FLOW_MOD (OF1.1): ADD table:255 udp,dl_vlan_pcp=7 idle:5 actions=pop_vlan,output:0
-OFPT_FLOW_MOD (OF1.1): ADD table:255 tcp,nw_src=192.168.0.3,tp_dst=80 actions=set_queue:37,output:1
-OFPT_FLOW_MOD (OF1.1): ADD table:255 udp,nw_src=192.168.0.3,tp_dst=53 actions=mod_nw_ecn:2,output:1
-OFPT_FLOW_MOD (OF1.1): ADD table:255 priority=60000 cookie:0x123456789abcdef hard:10 actions=CONTROLLER:65535
-OFPT_FLOW_MOD (OF1.1): ADD table:255 actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06.07.00.00.00.00.00.00,note:00.00.00.00.00.00
-OFPT_FLOW_MOD (OF1.1): ADD table:255 ip actions=mod_nw_ttl:1,mod_nw_src:10.4.3.77
-OFPT_FLOW_MOD (OF1.1): ADD table:255 sctp actions=drop
-OFPT_FLOW_MOD (OF1.1): ADD table:255 sctp actions=drop
-OFPT_FLOW_MOD (OF1.1): ADD table:255 in_port=0 actions=resubmit:0
-OFPT_FLOW_MOD (OF1.1): ADD table:255 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
+OFPT_FLOW_MOD (OF1.1): ADD tcp,tp_src=123 out_port:5 actions=FLOOD
+OFPT_FLOW_MOD (OF1.1): ADD in_port=LOCAL,dl_vlan=9,dl_src=00:0a:e4:25:6b:b0 actions=drop
+OFPT_FLOW_MOD (OF1.1): ADD udp,dl_vlan_pcp=7 idle:5 actions=pop_vlan,output:0
+OFPT_FLOW_MOD (OF1.1): ADD tcp,nw_src=192.168.0.3,tp_dst=80 actions=set_queue:37,output:1
+OFPT_FLOW_MOD (OF1.1): ADD udp,nw_src=192.168.0.3,tp_dst=53 actions=mod_nw_ecn:2,output:1
+OFPT_FLOW_MOD (OF1.1): ADD priority=60000 cookie:0x123456789abcdef hard:10 actions=CONTROLLER:65535
+OFPT_FLOW_MOD (OF1.1): ADD actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06.07.00.00.00.00.00.00,note:00.00.00.00.00.00
+OFPT_FLOW_MOD (OF1.1): ADD ip actions=mod_nw_ttl:1,mod_nw_src:10.4.3.77
+OFPT_FLOW_MOD (OF1.1): ADD sctp actions=drop
+OFPT_FLOW_MOD (OF1.1): ADD sctp actions=drop
+OFPT_FLOW_MOD (OF1.1): ADD in_port=0 actions=resubmit:0
+OFPT_FLOW_MOD (OF1.1): ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 ]])
 AT_CLEANUP
 
@@ -225,22 +225,22 @@ AT_CHECK([ovs-ofctl --protocols OpenFlow12 parse-flows flows.txt
 AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0],
 [[usable protocols: NXM,OXM
 chosen protocol: OXM-OpenFlow12
-OFPT_FLOW_MOD (OF1.2): ADD table:255 tcp,tp_src=123 actions=FLOOD
-OFPT_FLOW_MOD (OF1.2): ADD table:255 in_port=LOCAL,dl_vlan=9,dl_src=00:0a:e4:25:6b:b0 actions=set_field:4103->vlan_vid,set_field:2->vlan_pcp
-OFPT_FLOW_MOD (OF1.2): ADD table:255 udp,dl_vlan_pcp=7 idle:5 actions=pop_vlan,output:0
-OFPT_FLOW_MOD (OF1.2): ADD table:255 tcp,nw_src=192.168.0.3,tp_dst=80 actions=set_queue:37,output:1
-OFPT_FLOW_MOD (OF1.2): ADD table:255 udp,nw_src=192.168.0.3,tp_dst=53 actions=pop_queue,output:1
-OFPT_FLOW_MOD (OF1.2): ADD table:255 priority=60000 cookie:0x123456789abcdef hard:10 actions=CONTROLLER:65535
-OFPT_FLOW_MOD (OF1.2): ADD table:255 actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06.07.00.00.00.00.00.00,note:00.00.00.00.00.00
-OFPT_FLOW_MOD (OF1.2): ADD table:255 ipv6 actions=set_field:fe80:123:4567:890a:a6ba:dbff:fefe:59fa->ipv6_src
-OFPT_FLOW_MOD (OF1.2): ADD table:255 sctp actions=set_field:3334->sctp_src
-OFPT_FLOW_MOD (OF1.2): ADD table:255 sctp actions=set_field:4445->sctp_dst
-OFPT_FLOW_MOD (OF1.2): ADD table:255 tcp actions=set_field:1234->tcp_dst
-OFPT_FLOW_MOD (OF1.2): ADD table:255 udp actions=set_field:1111->udp_src
-OFPT_FLOW_MOD (OF1.2): ADD table:255 ip actions=set_field:10.1.1.2->ip_src,set_field:192.168.10.1->ip_dst,mod_nw_ttl:1,set_field:4->ip_dscp,set_field:2->nw_ecn
-OFPT_FLOW_MOD (OF1.2): ADD table:255 in_port=0 actions=set_field:11:22:33:44:55:66->eth_src,set_field:10:20:30:40:50:60->eth_dst
-OFPT_FLOW_MOD (OF1.2): ADD table:255 in_port=0 actions=resubmit:0
-OFPT_FLOW_MOD (OF1.2): ADD table:255 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
+OFPT_FLOW_MOD (OF1.2): ADD tcp,tp_src=123 actions=FLOOD
+OFPT_FLOW_MOD (OF1.2): ADD in_port=LOCAL,dl_vlan=9,dl_src=00:0a:e4:25:6b:b0 actions=set_field:4103->vlan_vid,set_field:2->vlan_pcp
+OFPT_FLOW_MOD (OF1.2): ADD udp,dl_vlan_pcp=7 idle:5 actions=pop_vlan,output:0
+OFPT_FLOW_MOD (OF1.2): ADD tcp,nw_src=192.168.0.3,tp_dst=80 actions=set_queue:37,output:1
+OFPT_FLOW_MOD (OF1.2): ADD udp,nw_src=192.168.0.3,tp_dst=53 actions=pop_queue,output:1
+OFPT_FLOW_MOD (OF1.2): ADD priority=60000 cookie:0x123456789abcdef hard:10 actions=CONTROLLER:65535
+OFPT_FLOW_MOD (OF1.2): ADD actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06.07.00.00.00.00.00.00,note:00.00.00.00.00.00
+OFPT_FLOW_MOD (OF1.2): ADD ipv6 actions=set_field:fe80:123:4567:890a:a6ba:dbff:fefe:59fa->ipv6_src
+OFPT_FLOW_MOD (OF1.2): ADD sctp actions=set_field:3334->sctp_src
+OFPT_FLOW_MOD (OF1.2): ADD sctp actions=set_field:4445->sctp_dst
+OFPT_FLOW_MOD (OF1.2): ADD tcp actions=set_field:1234->tcp_dst
+OFPT_FLOW_MOD (OF1.2): ADD udp actions=set_field:1111->udp_src
+OFPT_FLOW_MOD (OF1.2): ADD ip actions=set_field:10.1.1.2->ip_src,set_field:192.168.10.1->ip_dst,mod_nw_ttl:1,set_field:4->ip_dscp,set_field:2->nw_ecn
+OFPT_FLOW_MOD (OF1.2): ADD in_port=0 actions=set_field:11:22:33:44:55:66->eth_src,set_field:10:20:30:40:50:60->eth_dst
+OFPT_FLOW_MOD (OF1.2): ADD in_port=0 actions=resubmit:0
+OFPT_FLOW_MOD (OF1.2): ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 ]])
 AT_CLEANUP
 

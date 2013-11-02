@@ -315,6 +315,7 @@ OFPST_AGGREGATE reply (OF1.1): packet_count=0 byte_count=0 flow_count=2
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow11 del-flows br0])
 AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip], [0], [OFPST_FLOW reply (OF1.1):
+ table=1, in_port=4 actions=output:3
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -323,24 +324,12 @@ AT_SETUP([ofproto - flow_mod negative test (OpenFlow 1.1)])
 OVS_VSWITCHD_START(
   [set bridge br0 protocols=OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13])
 AT_CHECK([ovs-ofctl add-flow -O OpenFlow11 br0 table=1,action=goto_table:2])
-AT_CHECK([ovs-ofctl add-flow -O OpenFlow11 br0 table=1,action=goto_table:1],
-  [1], [], [stderr])
 
-# The output should look like this:
-#
-# OFPT_ERROR (OF1.1) (xid=0x2): OFPBRC_BAD_TABLE_ID
-# OFPT_FLOW_MOD (OF1.1) (xid=0x2):
-# (***truncated to 64 bytes from 160***)
-# 00000000  02 0e 00 a0 00 00 00 02-00 00 00 00 00 00 00 00 |................|
-# 00000010  00 00 00 00 00 00 00 00-01 00 00 00 00 00 80 00 |................|
-# 00000020  ff ff ff ff ff ff ff ff-ff ff ff ff 00 00 00 00 |................|
-# 00000030  00 00 00 58 00 00 00 00-00 00 03 ff 00 00 00 00 |...X............|
-#
-# This 'sed' command captures the error message but drops details.
-AT_CHECK([sed '/truncated/d
-/^000000.0/d' stderr | STRIP_XIDS], [0],
-  [OFPT_ERROR (OF1.1): OFPBRC_BAD_TABLE_ID
-OFPT_FLOW_MOD (OF1.1):
+# The error message here actually comes from ovs-ofctl, not from ovs-vswitchd,
+# but at least it's the same code in ofpacts_check() that issues the error.
+AT_CHECK([ovs-ofctl add-flow -O OpenFlow11 br0 table=1,action=goto_table:1],
+  [1], [],
+  [ovs-ofctl: actions are invalid with specified match (OFPBRC_BAD_TABLE_ID)
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -725,8 +714,9 @@ AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip | sort], [0], [dn
 OFPST_FLOW reply (OF1.1):
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow11 del-flows br0])
-AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip | sort], [0], [dnl
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip], [0], [dnl
 OFPST_FLOW reply (OF1.1):
+ cookie=0x2, table=1, in_port=2 actions=output:1
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

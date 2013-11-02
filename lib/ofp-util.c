@@ -1530,7 +1530,19 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
         }
         fm->modify_cookie = false;
         fm->command = ofm->command;
+
+        /* Get table ID.
+         *
+         * OF1.1 entirely forbids table_id == 255.
+         * OF1.2+ allows table_id == 255 only for deletes. */
         fm->table_id = ofm->table_id;
+        if (fm->table_id == 255
+            && (oh->version == OFP11_VERSION
+                || (ofm->command != OFPFC_DELETE &&
+                    ofm->command != OFPFC_DELETE_STRICT))) {
+            return OFPERR_OFPFMFC_BAD_TABLE_ID;
+        }
+
         fm->idle_timeout = ntohs(ofm->idle_timeout);
         fm->hard_timeout = ntohs(ofm->hard_timeout);
         fm->buffer_id = ntohl(ofm->buffer_id);
@@ -2058,7 +2070,14 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
             ofm->cookie = fm->cookie;
         }
         ofm->cookie_mask = fm->cookie_mask;
-        ofm->table_id = fm->table_id;
+        if (fm->table_id != 255
+            || (protocol != OFPUTIL_P_OF11_STD
+                && (fm->command == OFPFC_DELETE ||
+                    fm->command == OFPFC_DELETE_STRICT))) {
+            ofm->table_id = fm->table_id;
+        } else {
+            ofm->table_id = 0;
+        }
         ofm->command = fm->command;
         ofm->idle_timeout = htons(fm->idle_timeout);
         ofm->hard_timeout = htons(fm->hard_timeout);

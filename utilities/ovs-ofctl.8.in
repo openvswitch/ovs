@@ -770,23 +770,60 @@ When \fBdl_type\fR and \fBnw_proto\fR take other values, the values of
 these settings are ignored (see \fBFlow Syntax\fR above).
 .
 .IP \fBtable=\fInumber\fR
-If specified, limits the flow manipulation and flow dump commands to
-only apply to the table with the given \fInumber\fR between 0 and 254.
+For flow dump commands, limits the flows dumped to those in the table
+with the given \fInumber\fR between 0 and 254.  If not specified (or if
+255 is specified as \fInumber\fR), then flows in all tables are
+dumped.
 .
-Behavior varies if \fBtable\fR is not specified (equivalent to
-specifying 255 as \fInumber\fR).  For flow table
-modification commands without \fB\-\-strict\fR, the switch will choose
-the table for these commands to operate on.  For flow table
-modification commands with \fB\-\-strict\fR, the command will operate
-on any single matching flow in any table; it will do nothing if there
-are matches in more than one table.  The \fBdump-flows\fR and
-\fBdump-aggregate\fR commands will gather statistics about flows from
-all tables.
 .IP
-When this field is specified in \fBadd-flow\fR, \fBadd-flows\fR,
-\fBmod-flows\fR and \fBdel-flows\fR commands, it activates a Nicira
-extension to OpenFlow, which as of this writing is only known to be
-implemented by Open vSwitch.
+For flow table modification commands, behavior varies based on the
+OpenFlow version used to connect to the switch:
+.
+.RS
+.IP "OpenFlow 1.0"
+OpenFlow 1.0 does not support \fBtable\fR for modifying flows.
+\fBovs\-ofctl\fR will exit with an error if \fBtable\fR (other than
+\fBtable=255\fR) is specified for a switch that only supports OpenFlow
+1.0.
+.IP
+In OpenFlow 1.0, the switch chooses the table into which to insert a
+new flow.  The Open vSwitch software switch always chooses table 0.
+Other Open vSwitch datapaths and other OpenFlow implementations may
+choose different tables.
+.IP
+The OpenFlow 1.0 behavior in Open vSwitch for modifying or removing
+flows depends on whether \fB\-\-strict\fR is used.  Without
+\fB\-\-strict\fR, the command applies to matching flows in all tables.
+With \fB\-\-strict\fR, the command will operate on any single matching
+flow in any table; it will do nothing if there are matches in more
+than one table.  (The distinction between these behaviors only matters
+if non-OpenFlow 1.0 commands were also used, because OpenFlow 1.0
+alone cannot add flows with the same matching criteria to multiple
+tables.)
+.
+.IP "OpenFlow 1.0 with table_id extension"
+Open vSwitch implements an OpenFlow extension that allows the
+controller to specify the table on which to operate.  \fBovs\-ofctl\fR
+automatically enables the extension when \fBtable\fR is specified and
+OpenFlow 1.0 is used.  \fBovs\-ofctl\fR automatically detects whether
+the switch supports the extension.  As of this writing, this extension
+is only known to be implemented by Open vSwitch.
+.
+.IP
+With this extension, \fBovs\-ofctl\fR operates on the requested table
+when \fBtable\fR is specified, and acts as described for OpenFlow 1.0
+above when no \fBtable\fR is specified (or for \fBtable=255\fR).
+.
+.IP "OpenFlow 1.1"
+OpenFlow 1.1 requires flow table modification commands to specify a
+table.  When \fBtable\fR is not specified (or \fBtable=255\fR is
+specified), \fBovs\-ofctl\fR defaults to table 0.
+.
+.IP "OpenFlow 1.2 and later"
+OpenFlow 1.2 and later allow flow deletion commands, but not other
+flow table modification commands, to operate on all flow tables, with
+the behavior described above for OpenFlow 1.0.
+.RE
 .
 .IP \fBmetadata=\fIvalue\fR[\fB/\fImask\fR]
 Matches \fIvalue\fR either exactly or with optional \fImask\fR in the metadata
