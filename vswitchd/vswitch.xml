@@ -941,7 +941,9 @@
 
       <p>
         The following modes require the upstream switch to support 802.3ad with
-        successful LACP negotiation:
+        successful LACP negotiation. If LACP negotiation fails and
+        other-config:lacp-fallback-ab is true, then <code>active-backup</code>
+        mode is used:
       </p>
 
       <dl>
@@ -1031,7 +1033,8 @@
           in LACP negotiations initiated by a remote switch, but not allowed to
           initiate such negotiations themselves.  If LACP is enabled on a port
           whose partner switch does not support LACP, the bond will be
-          disabled.  Defaults to <code>off</code> if unset.
+          disabled, unless other-config:lacp-fallback-ab is set to true.
+          Defaults to <code>off</code> if unset.
         </column>
 
         <column name="other_config" key="lacp-system-id">
@@ -1057,6 +1060,18 @@
             per second causing connectivity problems to be detected more
             quickly.  In <code>slow</code> mode, heartbeats are requested at a
             rate of once every 30 seconds.
+          </p>
+        </column>
+
+        <column name="other_config" key="lacp-fallback-ab"
+          type='{"type": "boolean"}'>
+          <p>
+            Determines the behavior of openvswitch bond in LACP mode. If
+            the partner switch does not support LACP, setting this option
+            to <code>true</code> allows openvswitch to fallback to
+            active-backup. If the option is set to <code>false</code>, the
+            bond will be disabled. In both the cases, once the partner switch
+            is configured to LACP mode, the bond will use LACP.
           </p>
         </column>
       </group>

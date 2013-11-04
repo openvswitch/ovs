@@ -102,6 +102,7 @@ struct lacp {
     bool fast;               /* True if using fast probe interval. */
     bool negotiated;         /* True if LACP negotiations were successful. */
     bool update;             /* True if lacp_update() needs to be called. */
+    bool fallback_ab; /* True if fallback to active-backup on LACP failure. */
 
     atomic_int ref_cnt;
 };
@@ -283,6 +284,12 @@ lacp_configure(struct lacp *lacp, const struct lacp_settings *s)
 
     lacp->active = s->active;
     lacp->fast = s->fast;
+
+    if (lacp->fallback_ab != s->fallback_ab_cfg) {
+        lacp->fallback_ab = s->fallback_ab_cfg;
+        lacp->update = true;
+    }
+
     ovs_mutex_unlock(&mutex);
 }
 
@@ -450,7 +457,9 @@ slave_may_enable__(struct slave *slave) OVS_REQUIRES(mutex)
 {
     /* The slave may be enabled if it's attached to an aggregator and its
      * partner is synchronized.*/
-    return slave->attached && (slave->partner.state & LACP_STATE_SYNC);
+    return slave->attached && (slave->partner.state & LACP_STATE_SYNC
+            || (slave->lacp && slave->lacp->fallback_ab
+                && slave->status == LACP_DEFAULTED));
 }
 
 /* This function should be called before enabling 'slave_' to send or receive
@@ -587,6 +596,9 @@ lacp_update_attached(struct lacp *lacp) OVS_REQUIRES(mutex)
         }
 
         if (slave->status == LACP_DEFAULTED) {
+            if (lacp->fallback_ab) {
+                slave->attached = true;
+            }
             continue;
         }
 
@@ -603,7 +615,8 @@ lacp_update_attached(struct lacp *lacp) OVS_REQUIRES(mutex)
 
     if (lead) {
         HMAP_FOR_EACH (slave, node, &lacp->slaves) {
-            if (lead->partner.key != slave->partner.key
+            if ((lacp->fallback_ab && slave->status == LACP_DEFAULTED)
+                || lead->partner.key != slave->partner.key
                 || !eth_addr_equals(lead->partner.sys_id,
                                     slave->partner.sys_id)) {
                 slave->attached = false;

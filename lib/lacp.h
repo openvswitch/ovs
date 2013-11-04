@@ -35,6 +35,7 @@ struct lacp_settings {
     uint16_t priority;                /* System priority. */
     bool active;                      /* Active or passive mode? */
     bool fast;                        /* Fast or slow probe interval. */
+    bool fallback_ab_cfg;             /* Fallback to BM_SLB on LACP failure. */
 };
 
 void lacp_init(void);

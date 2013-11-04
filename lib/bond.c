@@ -99,6 +99,7 @@ struct bond {
 
     /* Legacy compatibility. */
     long long int next_fake_iface_update; /* LLONG_MAX if disabled. */
+    bool lacp_fallback_ab; /* Fallback to active-backup on LACP failure. */
 
     atomic_int ref_cnt;
 };
@@ -257,6 +258,11 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
 
     bond->updelay = s->up_delay;
     bond->downdelay = s->down_delay;
+
+    if (bond->lacp_fallback_ab != s->lacp_fallback_ab_cfg) {
+        bond->lacp_fallback_ab = s->lacp_fallback_ab_cfg;
+        revalidate = true;
+    }
 
     if (bond->rebalance_interval != s->rebalance_interval) {
         bond->rebalance_interval = s->rebalance_interval;
@@ -491,8 +497,9 @@ bond_wait(struct bond *bond)
 static bool
 may_send_learning_packets(const struct bond *bond)
 {
-    return bond->lacp_status == LACP_DISABLED
-        && (bond->balance == BM_SLB || bond->balance == BM_AB)
+    return ((bond->lacp_status == LACP_DISABLED
+        && (bond->balance == BM_SLB || bond->balance == BM_AB))
+        || (bond->lacp_fallback_ab && bond->lacp_status == LACP_CONFIGURED))
         && bond->active_slave;
 }
 
@@ -585,13 +592,15 @@ bond_check_admissibility(struct bond *bond, const void *slave_,
      * packets to them.
      *
      * If LACP is configured, but LACP negotiations have been unsuccessful, we
-     * drop all incoming traffic. */
+     * drop all incoming traffic except if lacp_fallback_ab is enabled. */
     switch (bond->lacp_status) {
     case LACP_NEGOTIATED:
         verdict = slave->enabled ? BV_ACCEPT : BV_DROP;
         goto out;
     case LACP_CONFIGURED:
-        goto out;
+        if (!bond->lacp_fallback_ab) {
+            goto out;
+        }
     case LACP_DISABLED:
         break;
     }
@@ -604,6 +613,15 @@ bond_check_admissibility(struct bond *bond, const void *slave_,
     }
 
     switch (bond->balance) {
+    case BM_TCP:
+        /* TCP balanced bonds require successful LACP negotiations. Based on the
+         * above check, LACP is off or lacp_fallback_ab is true on this bond.
+         * If lacp_fallback_ab is true fall through to BM_AB case else, we
+         * drop all incoming traffic. */
+        if (!bond->lacp_fallback_ab) {
+            goto out;
+        }
+
     case BM_AB:
         /* Drop all packets which arrive on backup slaves.  This is similar to
          * how Linux bonding handles active-backup bonds. */
@@ -616,12 +634,6 @@ bond_check_admissibility(struct bond *bond, const void *slave_,
             goto out;
         }
         verdict = BV_ACCEPT;
-        goto out;
-
-    case BM_TCP:
-        /* TCP balanced bonds require successful LACP negotiated. Based on the
-         * above check, LACP is off on this bond.  Therfore, we drop all
-         * incoming traffic. */
         goto out;
 
     case BM_SLB:
@@ -1416,14 +1428,20 @@ choose_output_slave(const struct bond *bond, const struct flow *flow,
                     struct flow_wildcards *wc, uint16_t vlan)
 {
     struct bond_entry *e;
+    int balance;
 
+    balance = bond->balance;
     if (bond->lacp_status == LACP_CONFIGURED) {
         /* LACP has been configured on this bond but negotiations were
-         * unsuccussful.  Drop all traffic. */
-        return NULL;
+         * unsuccussful. If lacp_fallback_ab is enabled use active-
+         * backup mode else drop all traffic. */
+        if (!bond->lacp_fallback_ab) {
+            return NULL;
+        }
+        balance = BM_AB;
     }
 
-    switch (bond->balance) {
+    switch (balance) {
     case BM_AB:
         return bond->active_slave;
 
