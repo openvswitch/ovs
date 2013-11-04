@@ -78,23 +78,6 @@ probably incomplete.
       reasonable performance.
       [required for OF1.1+]
 
-    * Groups.
-
-        * Type all
-          [required for OF1.1+]
-
-        * Type select
-          [optional for OF1.1+]
-
-        * Type indirect
-          [required for OF1.1+]
-
-        * Type fast failover
-          [optional for OF1.1+]
-
-        * Statistics
-          [optional for OF1.1+]
-
 OpenFlow 1.2
 ------------
 
