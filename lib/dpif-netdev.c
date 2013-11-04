@@ -31,6 +31,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "classifier.h"
 #include "csum.h"
 #include "dpif.h"
 #include "dpif-provider.h"
@@ -58,6 +59,9 @@
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(dpif_netdev);
+
+/* By default, choose a priority in the middle. */
+#define NETDEV_RULE_PRIORITY 0x8000
 
 /* Configuration parameters. */
 enum { MAX_PORTS = 256 };       /* Maximum number of ports. */
@@ -92,6 +96,7 @@ struct dp_netdev {
     int max_mtu;                /* Maximum MTU of any port added so far. */
 
     struct dp_netdev_queue queues[N_QUEUES];
+    struct classifier cls;      /* Classifier. */
     struct hmap flow_table;     /* Flow table. */
     struct seq *queue_seq;      /* Incremented whenever a packet is queued. */
 
@@ -118,8 +123,12 @@ struct dp_netdev_port {
 
 /* A flow in dp_netdev's 'flow_table'. */
 struct dp_netdev_flow {
-    struct hmap_node node;      /* Element in dp_netdev's 'flow_table'. */
-    struct flow key;
+    /* Packet classification. */
+    struct cls_rule cr;         /* In owning dp_netdev's 'cls'. */
+
+    /* Hash table index by unmasked flow.*/
+    struct hmap_node node;      /* In owning dp_netdev's 'flow_table'. */
+    struct flow flow;           /* The flow that created this entry. */
 
     /* Statistics. */
     long long int used;         /* Last used time, in monotonic msecs. */
@@ -283,6 +292,7 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
         dp->queues[i].head = dp->queues[i].tail = 0;
     }
     dp->queue_seq = seq_create();
+    classifier_init(&dp->cls);
     hmap_init(&dp->flow_table);
     list_init(&dp->port_list);
     dp->port_seq = seq_create();
@@ -349,6 +359,7 @@ dp_netdev_free(struct dp_netdev *dp)
     }
     dp_netdev_purge_queues(dp);
     seq_destroy(dp->queue_seq);
+    classifier_destroy(&dp->cls);
     hmap_destroy(&dp->flow_table);
     seq_destroy(dp->port_seq);
     free(dp->name);
@@ -626,6 +637,11 @@ dpif_netdev_get_max_ports(const struct dpif *dpif OVS_UNUSED)
 static void
 dp_netdev_free_flow(struct dp_netdev *dp, struct dp_netdev_flow *netdev_flow)
 {
+    ovs_rwlock_wrlock(&dp->cls.rwlock);
+    classifier_remove(&dp->cls, &netdev_flow->cr);
+    ovs_rwlock_unlock(&dp->cls.rwlock);
+    cls_rule_destroy(&netdev_flow->cr);
+
     hmap_remove(&dp->flow_table, &netdev_flow->node);
     free(netdev_flow->actions);
     free(netdev_flow);
@@ -734,13 +750,27 @@ dpif_netdev_port_poll_wait(const struct dpif *dpif_)
 }
 
 static struct dp_netdev_flow *
-dp_netdev_lookup_flow(const struct dp_netdev *dp, const struct flow *key)
+dp_netdev_lookup_flow(const struct dp_netdev *dp, const struct flow *flow)
+{
+    struct cls_rule *cr;
+
+    ovs_rwlock_wrlock(&dp->cls.rwlock);
+    cr = classifier_lookup(&dp->cls, flow, NULL);
+    ovs_rwlock_unlock(&dp->cls.rwlock);
+
+    return (cr
+            ? CONTAINER_OF(cr, struct dp_netdev_flow, cr)
+            : NULL);
+}
+
+static struct dp_netdev_flow *
+dp_netdev_find_flow(const struct dp_netdev *dp, const struct flow *flow)
 {
     struct dp_netdev_flow *netdev_flow;
 
-    HMAP_FOR_EACH_WITH_HASH (netdev_flow, node, flow_hash(key, 0),
+    HMAP_FOR_EACH_WITH_HASH (netdev_flow, node, flow_hash(flow, 0),
                              &dp->flow_table) {
-        if (flow_equal(&netdev_flow->key, key)) {
+        if (flow_equal(&netdev_flow->flow, flow)) {
             return netdev_flow;
         }
     }
@@ -758,28 +788,39 @@ get_dpif_flow_stats(struct dp_netdev_flow *netdev_flow,
 }
 
 static int
-dpif_netdev_flow_from_nlattrs(const struct nlattr *key, uint32_t key_len,
-                              struct flow *flow)
+dpif_netdev_flow_mask_from_nlattrs(const struct nlattr *key, uint32_t key_len,
+                                   const struct nlattr *mask_key,
+                                   uint32_t mask_key_len, struct flow *flow,
+                                   struct flow *mask)
 {
     odp_port_t in_port;
 
-    if (odp_flow_key_to_flow(key, key_len, flow) != ODP_FIT_PERFECT) {
+    if (odp_flow_key_to_flow(key, key_len, flow)
+        || (mask_key
+            && odp_flow_key_to_mask(mask_key, mask_key_len, mask, flow))) {
         /* This should not happen: it indicates that odp_flow_key_from_flow()
-         * and odp_flow_key_to_flow() disagree on the acceptable form of a
-         * flow.  Log the problem as an error, with enough details to enable
-         * debugging. */
+         * and odp_flow_key_to_flow() disagree on the acceptable form of a flow
+         * or odp_flow_key_from_mask() and odp_flow_key_to_mask() disagree on
+         * the acceptable form of a mask.  Log the problem as an error, with
+         * enough details to enable debugging. */
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
         if (!VLOG_DROP_ERR(&rl)) {
             struct ds s;
 
             ds_init(&s);
-            odp_flow_key_format(key, key_len, &s);
+            odp_flow_format(key, key_len, mask_key, mask_key_len, NULL, &s,
+                            true);
             VLOG_ERR("internal error parsing flow key %s", ds_cstr(&s));
             ds_destroy(&s);
         }
 
         return EINVAL;
+    }
+
+    if (mask_key) {
+        /* Force unwildcard the in_port. */
+        mask->in_port.odp_port = u32_to_odp(UINT32_MAX);
     }
 
     in_port = flow->in_port.odp_port;
@@ -788,6 +829,14 @@ dpif_netdev_flow_from_nlattrs(const struct nlattr *key, uint32_t key_len,
     }
 
     return 0;
+}
+
+static int
+dpif_netdev_flow_from_nlattrs(const struct nlattr *key, uint32_t key_len,
+                              struct flow *flow)
+{
+    return dpif_netdev_flow_mask_from_nlattrs(key, key_len, NULL, 0, flow,
+                                              NULL);
 }
 
 static int
@@ -806,7 +855,7 @@ dpif_netdev_flow_get(const struct dpif *dpif,
     }
 
     ovs_mutex_lock(&dp_netdev_mutex);
-    netdev_flow = dp_netdev_lookup_flow(dp, &key);
+    netdev_flow = dp_netdev_find_flow(dp, &key);
     if (netdev_flow) {
         if (stats) {
             get_dpif_flow_stats(netdev_flow, stats);
@@ -834,23 +883,36 @@ set_flow_actions(struct dp_netdev_flow *netdev_flow,
 }
 
 static int
-dp_netdev_flow_add(struct dp_netdev *dp, const struct flow *key,
-                   const struct nlattr *actions, size_t actions_len)
+dp_netdev_flow_add(struct dp_netdev *dp, const struct flow *flow,
+                   const struct flow_wildcards *wc,
+                   const struct nlattr *actions,
+                   size_t actions_len)
 {
     struct dp_netdev_flow *netdev_flow;
+    struct match match;
     int error;
 
     netdev_flow = xzalloc(sizeof *netdev_flow);
-    netdev_flow->key = *key;
+    netdev_flow->flow = *flow;
+
+    match_init(&match, flow, wc);
+    cls_rule_init(&netdev_flow->cr, &match, NETDEV_RULE_PRIORITY);
+    ovs_rwlock_wrlock(&dp->cls.rwlock);
+    classifier_insert(&dp->cls, &netdev_flow->cr);
+    ovs_rwlock_unlock(&dp->cls.rwlock);
 
     error = set_flow_actions(netdev_flow, actions, actions_len);
     if (error) {
+        ovs_rwlock_wrlock(&dp->cls.rwlock);
+        classifier_remove(&dp->cls, &netdev_flow->cr);
+        ovs_rwlock_unlock(&dp->cls.rwlock);
+        cls_rule_destroy(&netdev_flow->cr);
+
         free(netdev_flow);
         return error;
     }
 
-    hmap_insert(&dp->flow_table, &netdev_flow->node,
-                flow_hash(&netdev_flow->key, 0));
+    hmap_insert(&dp->flow_table, &netdev_flow->node, flow_hash(flow, 0));
     return 0;
 }
 
@@ -868,23 +930,25 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *netdev_flow;
-    struct flow key;
+    struct flow flow;
+    struct flow_wildcards wc;
     int error;
 
-    error = dpif_netdev_flow_from_nlattrs(put->key, put->key_len, &key);
+    error = dpif_netdev_flow_mask_from_nlattrs(put->key, put->key_len,
+                put->mask, put->mask_len, &flow, &wc.masks);
     if (error) {
         return error;
     }
 
     ovs_mutex_lock(&dp_netdev_mutex);
-    netdev_flow = dp_netdev_lookup_flow(dp, &key);
+    netdev_flow = dp_netdev_lookup_flow(dp, &flow);
     if (!netdev_flow) {
         if (put->flags & DPIF_FP_CREATE) {
             if (hmap_count(&dp->flow_table) < MAX_FLOWS) {
                 if (put->stats) {
                     memset(put->stats, 0, sizeof *put->stats);
                 }
-                error = dp_netdev_flow_add(dp, &key, put->actions,
+                error = dp_netdev_flow_add(dp, &flow, &wc, put->actions,
                                            put->actions_len);
             } else {
                 error = EFBIG;
@@ -893,7 +957,8 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
             error = ENOENT;
         }
     } else {
-        if (put->flags & DPIF_FP_MODIFY) {
+        if (put->flags & DPIF_FP_MODIFY
+            && flow_equal(&flow, &netdev_flow->flow)) {
             error = set_flow_actions(netdev_flow, put->actions,
                                      put->actions_len);
             if (!error) {
@@ -904,8 +969,11 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
                     clear_stats(netdev_flow);
                 }
             }
-        } else {
+        } else if (put->flags & DPIF_FP_CREATE) {
             error = EEXIST;
+        } else {
+            /* Overlapping flow. */
+            error = EINVAL;
         }
     }
     ovs_mutex_unlock(&dp_netdev_mutex);
@@ -927,7 +995,7 @@ dpif_netdev_flow_del(struct dpif *dpif, const struct dpif_flow_del *del)
     }
 
     ovs_mutex_lock(&dp_netdev_mutex);
-    netdev_flow = dp_netdev_lookup_flow(dp, &key);
+    netdev_flow = dp_netdev_find_flow(dp, &key);
     if (netdev_flow) {
         if (del->stats) {
             get_dpif_flow_stats(netdev_flow, del->stats);
@@ -946,6 +1014,7 @@ struct dp_netdev_flow_state {
     uint32_t offset;
     struct nlattr *actions;
     struct odputil_keybuf keybuf;
+    struct odputil_keybuf maskbuf;
     struct dpif_flow_stats stats;
 };
 
@@ -986,16 +1055,24 @@ dpif_netdev_flow_dump_next(const struct dpif *dpif, void *state_,
         struct ofpbuf buf;
 
         ofpbuf_use_stack(&buf, &state->keybuf, sizeof state->keybuf);
-        odp_flow_key_from_flow(&buf, &netdev_flow->key,
-                               netdev_flow->key.in_port.odp_port);
+        odp_flow_key_from_flow(&buf, &netdev_flow->flow,
+                               netdev_flow->flow.in_port.odp_port);
 
         *key = buf.data;
         *key_len = buf.size;
     }
 
-    if (mask) {
-        *mask = NULL;
-        *mask_len = 0;
+    if (key && mask) {
+        struct ofpbuf buf;
+        struct flow_wildcards wc;
+
+        ofpbuf_use_stack(&buf, &state->maskbuf, sizeof state->maskbuf);
+        minimask_expand(&netdev_flow->cr.match.mask, &wc);
+        odp_flow_key_from_mask(&buf, &wc.masks, &netdev_flow->flow,
+                               odp_to_u32(wc.masks.in_port.odp_port));
+
+        *mask = buf.data;
+        *mask_len = buf.size;
     }
 
     if (actions) {
@@ -1146,7 +1223,7 @@ dp_netdev_flow_used(struct dp_netdev_flow *netdev_flow,
     netdev_flow->used = time_msec();
     netdev_flow->packet_count++;
     netdev_flow->byte_count += packet->size;
-    netdev_flow->tcp_flags |= packet_get_tcp_flags(packet, &netdev_flow->key);
+    netdev_flow->tcp_flags |= packet_get_tcp_flags(packet, &netdev_flow->flow);
 }
 
 static void
