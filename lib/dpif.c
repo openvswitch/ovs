@@ -632,14 +632,6 @@ dpif_port_query_by_name(const struct dpif *dpif, const char *devname,
     return error;
 }
 
-/* Returns one greater than the maximum port number accepted in flow
- * actions. */
-uint32_t
-dpif_get_max_ports(const struct dpif *dpif)
-{
-    return dpif->dpif_class->get_max_ports(dpif);
-}
-
 /* Returns the Netlink PID value to supply in OVS_ACTION_ATTR_USERSPACE actions
  * as the OVS_USERSPACE_ATTR_PID attribute's value, for use in flows whose
  * packets arrived on port 'port_no'.

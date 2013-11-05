@@ -1233,16 +1233,12 @@ construct(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct shash_node *node, *next;
-    uint32_t max_ports;
     int error;
 
     error = open_dpif_backer(ofproto->up.type, &ofproto->backer);
     if (error) {
         return error;
     }
-
-    max_ports = dpif_get_max_ports(ofproto->backer->dpif);
-    ofproto_init_max_ports(ofproto_, MIN(max_ports, ofp_to_u16(OFPP_MAX)));
 
     ofproto->netflow = NULL;
     ofproto->sflow = NULL;
