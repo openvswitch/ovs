@@ -1866,6 +1866,15 @@ OFPT_METER_MOD (OF1.3) (xid=0x8501d738): ***decode error: OFPMMFC_BAD_BAND***
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPT_METER_MOD request - bad command - OF1.3])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+04 1d 00 10 28 a6 26 52 00 08 00 00 00 00 00 01
+"], [0], [dnl
+OFPT_METER_MOD (OF1.3) (xid=0x28a62652): ***decode error: OFPMMFC_BAD_COMMAND***
+])
+AT_CLEANUP
+
 AT_SETUP([OFPST_METER request - OF1.3])
 AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
 AT_CHECK([ovs-ofctl ofp-print "041200180000000200090000000000000000000100000000"], [0], [dnl

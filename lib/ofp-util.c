@@ -1731,6 +1731,11 @@ ofputil_decode_meter_mod(const struct ofp_header *oh,
 
     /* Translate the message. */
     mm->command = ntohs(omm->command);
+    if (mm->command != OFPMC13_ADD &&
+        mm->command != OFPMC13_MODIFY &&
+        mm->command != OFPMC13_DELETE) {
+        return OFPERR_OFPMMFC_BAD_COMMAND;
+    }
     mm->meter.meter_id = ntohl(omm->meter_id);
 
     if (mm->command == OFPMC13_DELETE) {
