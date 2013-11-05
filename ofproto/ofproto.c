@@ -538,9 +538,23 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ofproto->ogf.max_groups[OFPGT11_INDIRECT] = OFPG_MAX;
     ofproto->ogf.max_groups[OFPGT11_FF] = OFPG_MAX;
     ofproto->ogf.actions[0] =
-#define OFPAT11_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) (1 << ENUM) |
-#include "ofp-util.def"
-    0;
+        (1 << OFPAT11_OUTPUT) |
+        (1 << OFPAT11_COPY_TTL_OUT) |
+        (1 << OFPAT11_COPY_TTL_IN) |
+        (1 << OFPAT11_SET_MPLS_TTL) |
+        (1 << OFPAT11_DEC_MPLS_TTL) |
+        (1 << OFPAT11_PUSH_VLAN) |
+        (1 << OFPAT11_POP_VLAN) |
+        (1 << OFPAT11_PUSH_MPLS) |
+        (1 << OFPAT11_POP_MPLS) |
+        (1 << OFPAT11_SET_QUEUE) |
+        (1 << OFPAT11_GROUP) |
+        (1 << OFPAT11_SET_NW_TTL) |
+        (1 << OFPAT11_DEC_NW_TTL) |
+        (1 << OFPAT12_SET_FIELD);
+/* not supported:
+ *      (1 << OFPAT13_PUSH_PBB) |
+ *      (1 << OFPAT13_POP_PBB) */
 
     error = ofproto->ofproto_class->construct(ofproto);
     if (error) {

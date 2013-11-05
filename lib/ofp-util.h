@@ -991,12 +991,16 @@ struct ofputil_group_stats {
     struct bucket_counter *bucket_stats;
 };
 
-/* Group features reply, independent of protocol. */
+/* Group features reply, independent of protocol.
+ *
+ * Only OF1.2 and later support group features replies. */
 struct ofputil_group_features {
     uint32_t  types;           /* Bitmap of OFPGT_* values supported. */
     uint32_t  capabilities;    /* Bitmap of OFPGFC12_* capability supported. */
     uint32_t  max_groups[4];   /* Maximum number of groups for each type. */
-    uint32_t  actions[4];      /* Bitmaps of OFPAT_* that are supported. */
+
+    /* Bitmaps of OFPAT_* that are supported.  OF1.2+ actions only. */
+    uint32_t  actions[4];
 };
 
 /* Group desc reply, independent of protocol. */
