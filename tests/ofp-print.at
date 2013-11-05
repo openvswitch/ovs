@@ -855,6 +855,18 @@ OFPT_FLOW_MOD (OF1.2) (xid=0x52334507): ADD priority=255,sctp actions=set_field:
 ])
 AT_CLEANUP
 
+dnl This triggered a buggy "instructions out of order" message earlier.
+AT_SETUP([OFPT_FLOW_MOD - OF1.3 - meter])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+04 0e 00 40 cf fe 6b 86 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 03 e8 \
+ff ff ff ff ff ff ff ff ff ff ff ff 00 00 00 00 \
+00 01 00 04 00 00 00 00 00 06 00 08 00 00 00 01"], [0], [dnl
+OFPT_FLOW_MOD (OF1.3) (xid=0xcffe6b86): ADD priority=1000 actions=meter:1
+])
+AT_CLEANUP
+
 AT_SETUP([OFPT_FLOW reply - OF1.2 - set-field ip_src])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print "\

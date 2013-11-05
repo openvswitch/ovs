@@ -2150,14 +2150,15 @@ ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len)
     const struct ofpact *a;
     enum ovs_instruction_type inst;
 
-    inst = OVSINST_OFPIT11_APPLY_ACTIONS;
+    inst = OVSINST_OFPIT13_METER;
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
         enum ovs_instruction_type next;
 
         next = ovs_instruction_type_from_ofpact_type(a->type);
-        if (inst == OVSINST_OFPIT11_APPLY_ACTIONS
-            ? next < inst
-            : next <= inst) {
+        if (a > ofpacts
+            && (inst == OVSINST_OFPIT11_APPLY_ACTIONS
+                ? next < inst
+                : next <= inst)) {
             const char *name = ovs_instruction_name_from_type(inst);
             const char *next_name = ovs_instruction_name_from_type(next);
 
