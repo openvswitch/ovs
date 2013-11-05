@@ -407,7 +407,7 @@ ofpbuf_put_hex(struct ofpbuf *b, const char *s, size_t *n)
         uint8_t byte;
         bool ok;
 
-        s += strspn(s, " ");
+        s += strspn(s, " \t\r\n");
         byte = hexits_value(s, 2, &ok);
         if (!ok) {
             if (n) {
