@@ -119,11 +119,9 @@ didn't compare the specs carefully yet.)
       that is all done, is probably 2 or 3 days work.
       [optional for OF1.3+]
 
-    * Per-flow meters.  Similar to IPv6 extension headers in kernel
-      and design requirements.  Might be politically difficult to add
-      directly to the kernel module, since its functionality overlaps
-      with tc.  Ideally, therefore, we could implement these somehow
-      with tc, but I haven't investigated whether that makes sense.
+    * Per-flow meters.  OpenFlow protocol support is now implemented.
+      Support for the special OFPM_SLOWPATH and OFPM_CONTROLLER meters
+      is missing.  Support for the software switch is under review.
       [optional for OF1.3+]
 
     * Per-connection event filtering.  OF1.3 adopted Open vSwitch's
