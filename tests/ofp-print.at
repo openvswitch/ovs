@@ -1856,6 +1856,16 @@ type=drop rate=1024 burst_size=128
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPT_METER_MOD request - bad band - OF1.3])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+04 1d 00 20 85 01 d7 38 00 00 00 00 00 00 00 01
+00 05 00 10 00 00 00 02 00 00 00 02 00 00 00 00
+"], [0], [dnl
+OFPT_METER_MOD (OF1.3) (xid=0x8501d738): ***decode error: OFPMMFC_BAD_BAND***
+])
+AT_CLEANUP
+
 AT_SETUP([OFPST_METER request - OF1.3])
 AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
 AT_CHECK([ovs-ofctl ofp-print "041200180000000200090000000000000000000100000000"], [0], [dnl

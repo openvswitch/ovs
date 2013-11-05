@@ -1698,6 +1698,9 @@ ofputil_pull_bands(struct ofpbuf *msg, size_t len, uint16_t *n_bands,
         }
         mb = ofpbuf_put_uninit(bands, sizeof *mb);
         mb->type = ntohs(ombh->type);
+        if (mb->type != OFPMBT13_DROP && mb->type != OFPMBT13_DSCP_REMARK) {
+            return OFPERR_OFPMMFC_BAD_BAND;
+        }
         mb->rate = ntohl(ombh->rate);
         mb->burst_size = ntohl(ombh->burst_size);
         mb->prec_level = (mb->type == OFPMBT13_DSCP_REMARK) ?
