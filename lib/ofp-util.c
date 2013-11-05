@@ -1746,6 +1746,10 @@ ofputil_decode_meter_mod(const struct ofp_header *oh,
         enum ofperr error;
 
         mm->meter.flags = ntohs(omm->flags);
+        if (mm->meter.flags & OFPMF13_KBPS &&
+            mm->meter.flags & OFPMF13_PKTPS) {
+            return OFPERR_OFPMMFC_BAD_FLAGS;
+        }
         mm->meter.bands = bands->data;
 
         error = ofputil_pull_bands(&b, b.size, &mm->meter.n_bands, bands);
