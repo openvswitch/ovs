@@ -480,16 +480,18 @@ cfm_run(struct cfm *cfm) OVS_EXCLUDED(mutex)
             cfm->fault |= CFM_FAULT_RECV;
         }
 
-        if (old_cfm_fault != cfm->fault && !VLOG_DROP_INFO(&rl)) {
-            struct ds ds = DS_EMPTY_INITIALIZER;
+        if (old_cfm_fault != cfm->fault) {
+            if (!VLOG_DROP_INFO(&rl)) {
+                struct ds ds = DS_EMPTY_INITIALIZER;
 
-            ds_put_cstr(&ds, "from [");
-            ds_put_cfm_fault(&ds, old_cfm_fault);
-            ds_put_cstr(&ds, "] to [");
-            ds_put_cfm_fault(&ds, cfm->fault);
-            ds_put_char(&ds, ']');
-            VLOG_INFO("%s: CFM faults changed %s.", cfm->name, ds_cstr(&ds));
-            ds_destroy(&ds);
+                ds_put_cstr(&ds, "from [");
+                ds_put_cfm_fault(&ds, old_cfm_fault);
+                ds_put_cstr(&ds, "] to [");
+                ds_put_cfm_fault(&ds, cfm->fault);
+                ds_put_char(&ds, ']');
+                VLOG_INFO("%s: CFM faults changed %s.", cfm->name, ds_cstr(&ds));
+                ds_destroy(&ds);
+            }
 
             /* If there is a flap, increments the counter. */
             if (old_cfm_fault == false || cfm->fault == false) {
