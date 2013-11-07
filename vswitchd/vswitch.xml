@@ -1254,33 +1254,54 @@
         address.</p>
       </column>
 
-      <column name="ofport">
-        <p>OpenFlow port number for this interface.  Unlike most columns, this
-        column's value should be set only by Open vSwitch itself.  Other
-        clients should set this column to an empty set (the default) when
-        creating an <ref table="Interface"/>.</p>
-        <p>Open vSwitch populates this column when the port number becomes
-        known.  If the interface is successfully added,
-        <ref column="ofport"/> will be set to a number between 1 and 65535
-        (generally either in the range 1 to 65279, inclusive, or 65534, the
-        port number for the OpenFlow ``local port'').  If the interface
-        cannot be added then Open vSwitch sets this column
-        to -1.</p>
-        <p>When <ref column="ofport_request"/> is not set, Open vSwitch picks
-        an appropriate value for this column and then tries to keep the value
-        constant across restarts.</p>
-      </column>
+      <group title="OpenFlow Port Number">
+	<p>
+	  When a client adds a new interface, Open vSwitch chooses an OpenFlow
+	  port number for the new port.  If the client that adds the port fills
+	  in <ref column="ofport_request"/>, then Open vSwitch tries to use its
+	  value as the OpenFlow port number.  Otherwise, or if the requested
+	  port number is already in use or cannot be used for another reason,
+	  Open vSwitch automatically assigns a free port number.  Regardless of
+	  how the port number was obtained, Open vSwitch then reports in <ref
+	  column="ofport"/> the port number actually assigned.
+	</p>
 
-      <column name="ofport_request">
-        <p>Requested OpenFlow port number for this interface.  The port
-        number must be between 1 and 65279, inclusive.  Some datapaths
-        cannot satisfy all requests for particular port numbers.  When
-        this column is empty or the request cannot be fulfilled, the
-        system will choose a free port.  The <ref column="ofport"/>
-        column reports the assigned OpenFlow port number.</p>
-        <p>The port number must be requested in the same transaction
-        that creates the port.</p>
-      </column>
+	<p>
+	  Open vSwitch limits the port numbers that it automatically assigns to
+	  the range 1 through 32,767, inclusive.  Controllers therefore have
+	  free use of ports 32,768 and up.
+	</p>
+
+	<column name="ofport">
+	  <p>
+	    OpenFlow port number for this interface.  Open vSwitch sets this
+	    column's value, so other clients should treat it as read-only.
+	  </p>
+	  <p>
+	    The OpenFlow ``local'' port (<code>OFPP_LOCAL</code>) is 65,534.
+	    The other valid port numbers are in the range 1 to 65,279,
+	    inclusive.  Value -1 indicates an error adding the interface.
+	  </p>
+	</column>
+
+	<column name="ofport_request"
+		type='{"type": "integer", "minInteger": 1, "maxInteger": 65279}'>
+	  <p>
+	    Requested OpenFlow port number for this interface.
+	  </p>
+
+	  <p>
+	    Open vSwitch currently assigns the OpenFlow port number for an
+	    interface once, when the client first adds the interface.  It does
+	    not change the port number later if the client sets or changes or
+	    clears <ref column="ofport_request"/>.  Therefore, to ensure that
+	    <ref column="ofport_request"/> takes effect, the client should set
+	    it in the same database transaction that creates the interface.
+	    (Future versions of Open vSwitch might honor changes to <ref
+	    column="ofport_request"/>.)
+	  </p>
+	</column>
+      </group>
     </group>
 
     <group title="System-Specific Details">

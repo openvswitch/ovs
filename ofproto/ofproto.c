@@ -2004,9 +2004,13 @@ alloc_ofp_port(struct ofproto *ofproto, const char *netdev_name)
 
         /* Search for a free OpenFlow port number.  We try not to
          * immediately reuse them to prevent problems due to old
-         * flows. */
+         * flows.
+         *
+         * We limit the automatically assigned port numbers to the lower half
+         * of the port range, to reserve the upper half for assignment by
+         * controllers. */
         for (;;) {
-            if (++ofproto->alloc_port_no >= ofproto->max_ports) {
+            if (++ofproto->alloc_port_no >= MIN(ofproto->max_ports, 32768)) {
                 ofproto->alloc_port_no = 1;
             }
             last_used_at = ofport_get_usage(ofproto,
