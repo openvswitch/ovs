@@ -6,6 +6,29 @@ AT_CHECK([ovs-ofctl -vwarn probe br0])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto - handling messages with bad version])
+OVS_VSWITCHD_START
+
+# Start a monitor running OpenFlow 1.0, then send the switch an OF1.1 features
+# request
+AT_CHECK([ovs-ofctl -P openflow10 monitor br0 --detach --no-chdir --pidfile])
+ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+AT_CAPTURE_FILE([monitor.log])
+ovs-appctl -t ovs-ofctl ofctl/send 0205000801234567
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl exit
+
+AT_CHECK([sed 's/ (xid=0x[[0-9a-fA-F]]*)//
+/ECHO/d' monitor.log], [0], [dnl
+send: OFPT_FEATURES_REQUEST (OF1.1):
+OFPT_ERROR (OF1.1): OFPBRC_BAD_VERSION
+OFPT_FEATURES_REQUEST (OF1.1):
+OFPT_BARRIER_REPLY:
+])
+
+OVS_VSWITCHD_STOP(["/received OpenFlow version 0x02 != expected 01/d"])
+AT_CLEANUP
+
 AT_SETUP([ofproto - feature request, config request])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -vwarn show br0], [0], [stdout])

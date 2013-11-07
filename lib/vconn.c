@@ -631,11 +631,25 @@ vconn_recv(struct vconn *vconn, struct ofpbuf **msgp)
                     type != OFPTYPE_ERROR &&
                     type != OFPTYPE_ECHO_REQUEST &&
                     type != OFPTYPE_ECHO_REPLY)) {
+                struct ofpbuf *reply;
+
                 VLOG_ERR_RL(&bad_ofmsg_rl, "%s: received OpenFlow version "
                             "0x%02"PRIx8" != expected %02x",
                             vconn->name, oh->version, vconn->version);
+
+                /* Send a "bad version" reply, if we can. */
+                reply = ofperr_encode_reply(OFPERR_OFPBRC_BAD_VERSION, oh);
+                retval = vconn_send(vconn, reply);
+                if (retval) {
+                    VLOG_INFO_RL(&bad_ofmsg_rl,
+                                 "%s: failed to queue error reply (%s)",
+                                 vconn->name, ovs_strerror(retval));
+                    ofpbuf_delete(reply);
+                }
+
+                /* Suppress the received message, as if it had not arrived. */
+                retval = EAGAIN;
                 ofpbuf_delete(msg);
-                retval = EPROTO;
             }
         }
     }
