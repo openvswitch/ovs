@@ -450,9 +450,6 @@ struct dpif_backer {
      * performance in new situations.  */
     unsigned max_n_subfacet;         /* Maximum number of flows */
     unsigned avg_n_subfacet;         /* Average number of flows. */
-
-    /* Number of upcall handling threads. */
-    unsigned int n_handler_threads;
 };
 
 /* All existing ofproto_backer instances, indexed by ofproto->up.type. */
@@ -690,22 +687,15 @@ type_run(const char *type)
 
         error = dpif_recv_set(backer->dpif, backer->recv_set_enable);
         if (error) {
-            udpif_recv_set(backer->udpif, 0, false);
             VLOG_ERR("Failed to enable receiving packets in dpif.");
             return error;
         }
-        udpif_recv_set(backer->udpif, n_handler_threads,
-                       backer->recv_set_enable);
         dpif_flow_flush(backer->dpif);
         backer->need_revalidate = REV_RECONFIGURE;
     }
 
-    /* If the n_handler_threads is reconfigured, call udpif_recv_set()
-     * to reset the handler threads. */
-    if (backer->n_handler_threads != n_handler_threads) {
-        udpif_recv_set(backer->udpif, n_handler_threads,
-                       backer->recv_set_enable);
-        backer->n_handler_threads = n_handler_threads;
+    if (backer->recv_set_enable) {
+        udpif_set_threads(backer->udpif, n_handlers);
     }
 
     if (backer->need_revalidate) {
@@ -1171,9 +1161,10 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
         close_dpif_backer(backer);
         return error;
     }
-    udpif_recv_set(backer->udpif, n_handler_threads,
-                   backer->recv_set_enable);
-    backer->n_handler_threads = n_handler_threads;
+
+    if (backer->recv_set_enable) {
+        udpif_set_threads(backer->udpif, n_handlers);
+    }
 
     backer->max_n_subfacet = 0;
     backer->avg_n_subfacet = 0;

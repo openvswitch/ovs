@@ -33,7 +33,7 @@ struct dpif_backer;
  * module. */
 
 struct udpif *udpif_create(struct dpif_backer *, struct dpif *);
-void udpif_recv_set(struct udpif *, size_t n_workers, bool enable);
+void udpif_set_threads(struct udpif *, size_t n_handlers);
 void udpif_destroy(struct udpif *);
 
 void udpif_wait(struct udpif *);

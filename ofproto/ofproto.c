@@ -307,8 +307,9 @@ static size_t allocated_ofproto_classes;
 struct ovs_mutex ofproto_mutex = OVS_MUTEX_INITIALIZER;
 
 unsigned flow_eviction_threshold = OFPROTO_FLOW_EVICTION_THRESHOLD_DEFAULT;
-unsigned n_handler_threads;
 enum ofproto_flow_miss_model flow_miss_model = OFPROTO_HANDLE_MISS_AUTO;
+
+size_t n_handlers;
 
 /* Map from datapath name to struct ofproto, for use by unixctl commands. */
 static struct hmap all_ofprotos = HMAP_INITIALIZER(&all_ofprotos);
@@ -736,14 +737,10 @@ ofproto_set_mac_table_config(struct ofproto *ofproto, unsigned idle_time,
 /* Sets number of upcall handler threads.  The default is
  * (number of online cores - 2). */
 void
-ofproto_set_n_handler_threads(unsigned limit)
+ofproto_set_threads(size_t n_handlers_)
 {
-    if (limit) {
-        n_handler_threads = limit;
-    } else {
-        int n_proc = count_cpu_cores();
-        n_handler_threads = n_proc > 2 ? n_proc - 2 : 1;
-    }
+    int threads = MAX(count_cpu_cores() - 2, 1);
+    n_handlers = n_handlers_ ? n_handlers_ : threads;
 }
 
 void

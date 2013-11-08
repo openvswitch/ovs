@@ -158,7 +158,7 @@ udpif_destroy(struct udpif *udpif)
     struct flow_miss_batch *fmb;
     struct drop_key *drop_key;
 
-    udpif_recv_set(udpif, 0, false);
+    udpif_set_threads(udpif, 0);
     list_remove(&udpif->list_node);
 
     while ((drop_key = drop_key_next(udpif))) {
@@ -177,15 +177,12 @@ udpif_destroy(struct udpif *udpif)
     free(udpif);
 }
 
-/* Tells 'udpif' to begin or stop handling flow misses depending on the value
- * of 'enable'.  'n_handlers' is the number of upcall_handler threads to
- * create.  Passing 'n_handlers' as zero is equivalent to passing 'enable' as
- * false. */
+/* Tells 'udpif' how many threads it should use to handle upcalls.  Disables
+ * all threads if 'n_handlers' is zero.  'udpif''s datapath handle must have
+ * packet reception enabled before starting threads. */
 void
-udpif_recv_set(struct udpif *udpif, size_t n_handlers, bool enable)
+udpif_set_threads(struct udpif *udpif, size_t n_handlers)
 {
-    n_handlers = enable ? n_handlers : 0;
-
     /* Stop the old threads (if any). */
     if (udpif->handlers && udpif->n_handlers != n_handlers) {
         size_t i;
