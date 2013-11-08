@@ -71,7 +71,7 @@ struct vport_class {
 static int netdev_vport_construct(struct netdev *);
 static int get_patch_config(const struct netdev *netdev, struct smap *args);
 static int get_tunnel_config(const struct netdev *, struct smap *args);
-static void netdev_vport_poll_notify(struct netdev_vport *netdev)
+static void netdev_vport_changed(struct netdev_vport *netdev)
     OVS_REQUIRES(netdev->mutex);
 
 static bool
@@ -205,7 +205,7 @@ netdev_vport_set_etheraddr(struct netdev *netdev_,
 
     ovs_mutex_lock(&netdev->mutex);
     memcpy(netdev->etheraddr, mac, ETH_ADDR_LEN);
-    netdev_vport_poll_notify(netdev);
+    netdev_vport_changed(netdev);
     ovs_mutex_unlock(&netdev->mutex);
 
     return 0;
@@ -285,7 +285,7 @@ netdev_vport_wait(void)
 /* Helper functions. */
 
 static void
-netdev_vport_poll_notify(struct netdev_vport *ndv)
+netdev_vport_changed(struct netdev_vport *ndv)
 {
     ndv->change_seq++;
     if (!ndv->change_seq) {
@@ -495,7 +495,7 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
 
     ovs_mutex_lock(&dev->mutex);
     dev->tnl_cfg = tnl_cfg;
-    netdev_vport_poll_notify(dev);
+    netdev_vport_changed(dev);
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
@@ -669,7 +669,7 @@ set_patch_config(struct netdev *dev_, const struct smap *args)
     ovs_mutex_lock(&dev->mutex);
     free(dev->peer);
     dev->peer = xstrdup(peer);
-    netdev_vport_poll_notify(dev);
+    netdev_vport_changed(dev);
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;

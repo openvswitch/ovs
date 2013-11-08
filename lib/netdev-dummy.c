@@ -91,7 +91,7 @@ struct netdev_rx_dummy {
 
 static unixctl_cb_func netdev_dummy_set_admin_state;
 static int netdev_dummy_construct(struct netdev *);
-static void netdev_dummy_poll_notify(struct netdev_dummy *netdev)
+static void netdev_dummy_changed(struct netdev_dummy *netdev)
     OVS_REQUIRES(netdev->mutex);
 static void netdev_dummy_queue_packet(struct netdev_dummy *, struct ofpbuf *);
 
@@ -571,7 +571,7 @@ netdev_dummy_set_etheraddr(struct netdev *netdev,
     ovs_mutex_lock(&dev->mutex);
     if (!eth_addr_equals(dev->hwaddr, mac)) {
         memcpy(dev->hwaddr, mac, ETH_ADDR_LEN);
-        netdev_dummy_poll_notify(dev);
+        netdev_dummy_changed(dev);
     }
     ovs_mutex_unlock(&dev->mutex);
 
@@ -666,7 +666,7 @@ netdev_dummy_update_flags__(struct netdev_dummy *netdev,
     netdev->flags |= on;
     netdev->flags &= ~off;
     if (*old_flagsp != netdev->flags) {
-        netdev_dummy_poll_notify(netdev);
+        netdev_dummy_changed(netdev);
     }
 
     return 0;
@@ -703,7 +703,7 @@ netdev_dummy_change_seq(const struct netdev *netdev_)
 /* Helper functions. */
 
 static void
-netdev_dummy_poll_notify(struct netdev_dummy *dev)
+netdev_dummy_changed(struct netdev_dummy *dev)
 {
     dev->change_seq++;
     if (!dev->change_seq) {
