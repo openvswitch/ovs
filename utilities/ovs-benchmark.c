@@ -101,11 +101,11 @@ parse_target(const char *s_, struct in_addr *addr,
     *min = *max = 0;
     if (colon && colon[1] != '\0') {
         const char *ports = colon + 1;
-        if (sscanf(ports, "%hu-%hu", min, max) == 2) {
+        if (ovs_scan(ports, "%hu-%hu", min, max)) {
             if (*min > *max) {
                 ovs_fatal(0, "%s: minimum is greater than maximum", s_);
             }
-        } else if (sscanf(ports, "%hu", min) == 1) {
+        } else if (ovs_scan(ports, "%hu", min)) {
             *max = *min;
         } else {
             ovs_fatal(0, "%s: number or range expected", s_);

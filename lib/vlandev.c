@@ -221,8 +221,7 @@ vlandev_linux_refresh(void)
         char vlan_dev[16], real_dev[16];
         int vid;
 
-        if (sscanf(line, "%15[^ |] | %d | %15s",
-                   vlan_dev, &vid, real_dev) == 3) {
+        if (ovs_scan(line, "%15[^ |] | %d | %15s", vlan_dev, &vid, real_dev)) {
             vlandev_add__(vlan_dev, real_dev, vid);
         }
     }

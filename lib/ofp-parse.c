@@ -147,8 +147,7 @@ str_to_be64(const char *str, ovs_be64 *valuep)
 static char * WARN_UNUSED_RESULT
 str_to_mac(const char *str, uint8_t mac[6])
 {
-    if (sscanf(str, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))
-        != ETH_ADDR_SCAN_COUNT) {
+    if (!ovs_scan(str, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))) {
         return xasprintf("invalid mac address %s", str);
     }
     return NULL;

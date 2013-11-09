@@ -181,15 +181,14 @@ ovs_be32 set_mpls_lse_values(uint8_t ttl, uint8_t tc, uint8_t bos,
  * uint8_t mac[ETH_ADDR_LEN];
  * int a, b;
  *
- * if (sscanf(string, "%d"ETH_ADDR_SCAN_FMT"%d",
- *     &a, ETH_ADDR_SCAN_ARGS(mac), &b) == 1 + ETH_ADDR_SCAN_COUNT + 1) {
+ * if (ovs_scan(string, "%d"ETH_ADDR_SCAN_FMT"%d",
+ *              &a, ETH_ADDR_SCAN_ARGS(mac), &b)) {
  *     ...
  * }
  */
 #define ETH_ADDR_SCAN_FMT "%"SCNx8":%"SCNx8":%"SCNx8":%"SCNx8":%"SCNx8":%"SCNx8
 #define ETH_ADDR_SCAN_ARGS(ea) \
         &(ea)[0], &(ea)[1], &(ea)[2], &(ea)[3], &(ea)[4], &(ea)[5]
-#define ETH_ADDR_SCAN_COUNT 6
 
 #define ETH_TYPE_IP            0x0800
 #define ETH_TYPE_ARP           0x0806
@@ -381,8 +380,7 @@ mpls_lse_to_bos(ovs_be32 mpls_lse)
  * ovs_be32 ip;
  * int a, b;
  *
- * if (sscanf(string, "%d"IP_SCAN_FMT"%d",
- *     &a, IP_SCAN_ARGS(&ip), &b) == 1 + IP_SCAN_COUNT + 1) {
+ * if (ovs_scan(string, "%d"IP_SCAN_FMT"%d", &a, IP_SCAN_ARGS(&ip), &b)) {
  *     ...
  * }
  */
@@ -392,7 +390,6 @@ mpls_lse_to_bos(ovs_be32 mpls_lse)
         &((uint8_t *) ip)[1],                               \
         &((uint8_t *) ip)[2],                               \
         &((uint8_t *) ip)[3]
-#define IP_SCAN_COUNT 4
 
 /* Returns true if 'netmask' is a CIDR netmask, that is, if it consists of N
  * high-order 1-bits and 32-N low-order 0-bits. */
@@ -578,7 +575,7 @@ struct ovs_16aligned_ip6_frag {
  * char ipv6_s[IPV6_SCAN_LEN + 1];
  * struct in6_addr ipv6;
  *
- * if (sscanf(string, "%d"IPV6_SCAN_FMT"%d", &a, ipv6_s, &b) == 3
+ * if (ovs_scan(string, "%d"IPV6_SCAN_FMT"%d", &a, ipv6_s, &b)
  *     && inet_pton(AF_INET6, ipv6_s, &ipv6) == 1) {
  *     ...
  * }

@@ -3302,8 +3302,8 @@ port_configure_lacp(struct port *port, struct lacp_settings *s)
 
     system_id = smap_get(&port->cfg->other_config, "lacp-system-id");
     if (system_id) {
-        if (sscanf(system_id, ETH_ADDR_SCAN_FMT,
-                   ETH_ADDR_SCAN_ARGS(s->id)) != ETH_ADDR_SCAN_COUNT) {
+        if (!ovs_scan(system_id, ETH_ADDR_SCAN_FMT,
+                      ETH_ADDR_SCAN_ARGS(s->id))) {
             VLOG_WARN("port %s: LACP system ID (%s) must be an Ethernet"
                       " address.", port->name, system_id);
             return NULL;

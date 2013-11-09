@@ -2373,15 +2373,15 @@ mf_from_ethernet_string(const struct mf_field *mf, const char *s,
     ovs_assert(mf->n_bytes == ETH_ADDR_LEN);
 
     n = -1;
-    if (sscanf(s, ETH_ADDR_SCAN_FMT"%n", ETH_ADDR_SCAN_ARGS(mac), &n) > 0
+    if (ovs_scan(s, ETH_ADDR_SCAN_FMT"%n", ETH_ADDR_SCAN_ARGS(mac), &n)
         && n == strlen(s)) {
         memset(mask, 0xff, ETH_ADDR_LEN);
         return NULL;
     }
 
     n = -1;
-    if (sscanf(s, ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT"%n",
-               ETH_ADDR_SCAN_ARGS(mac), ETH_ADDR_SCAN_ARGS(mask), &n) > 0
+    if (ovs_scan(s, ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT"%n",
+                 ETH_ADDR_SCAN_ARGS(mac), ETH_ADDR_SCAN_ARGS(mask), &n)
         && n == strlen(s)) {
         return NULL;
     }
@@ -2397,11 +2397,10 @@ mf_from_ipv4_string(const struct mf_field *mf, const char *s,
 
     ovs_assert(mf->n_bytes == sizeof *ip);
 
-    if (sscanf(s, IP_SCAN_FMT"/"IP_SCAN_FMT,
-               IP_SCAN_ARGS(ip), IP_SCAN_ARGS(mask)) == IP_SCAN_COUNT * 2) {
+    if (ovs_scan(s, IP_SCAN_FMT"/"IP_SCAN_FMT,
+                 IP_SCAN_ARGS(ip), IP_SCAN_ARGS(mask))) {
         /* OK. */
-    } else if (sscanf(s, IP_SCAN_FMT"/%d",
-                      IP_SCAN_ARGS(ip), &prefix) == IP_SCAN_COUNT + 1) {
+    } else if (ovs_scan(s, IP_SCAN_FMT"/%d", IP_SCAN_ARGS(ip), &prefix)) {
         if (prefix <= 0 || prefix > 32) {
             return xasprintf("%s: network prefix bits not between 1 and "
                              "32", s);
@@ -2410,7 +2409,7 @@ mf_from_ipv4_string(const struct mf_field *mf, const char *s,
         } else {
             *mask = htonl(((1u << prefix) - 1) << (32 - prefix));
         }
-    } else if (sscanf(s, IP_SCAN_FMT, IP_SCAN_ARGS(ip)) == IP_SCAN_COUNT) {
+    } else if (ovs_scan(s, IP_SCAN_FMT, IP_SCAN_ARGS(ip))) {
         *mask = OVS_BE32_MAX;
     } else {
         return xasprintf("%s: invalid IP address", s);
@@ -2548,9 +2547,8 @@ parse_flow_tun_flags(const char *s_, const char *(*bit_to_string)(uint32_t),
         int name_len;
         unsigned long long int flags;
         uint32_t bit;
-        int n0;
 
-        if (sscanf(name, "%lli%n", &flags, &n0) > 0 && n0 > 0) {
+        if (ovs_scan(name, "%lli", &flags)) {
             result |= flags;
             continue;
         }
@@ -2941,9 +2939,9 @@ mf_parse_subfield__(struct mf_subfield *sf, const char **sp)
     }
 
     s += name_len;
-    if (sscanf(s, "[%d..%d]", &start, &end) == 2) {
+    if (ovs_scan(s, "[%d..%d]", &start, &end)) {
         /* Nothing to do. */
-    } else if (sscanf(s, "[%d]", &start) == 1) {
+    } else if (ovs_scan(s, "[%d]", &start)) {
         end = start;
     } else if (!strncmp(s, "[]", 2)) {
         start = 0;

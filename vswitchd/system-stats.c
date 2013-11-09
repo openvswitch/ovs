@@ -148,7 +148,7 @@ get_memory_stats(struct smap *stats)
             char key[16];
             int value;
 
-            if (sscanf(line, "%15[^:]: %u", key, &value) == 2) {
+            if (ovs_scan(line, "%15[^:]: %u", key, &value)) {
                 int *valuep = shash_find_data(&dict, key);
                 if (valuep) {
                     *valuep = value;
@@ -192,7 +192,7 @@ get_boot_time(void)
 
         while (fgets(line, sizeof line, stream)) {
             long long int btime;
-            if (sscanf(line, "btime %lld", &btime) == 1) {
+            if (ovs_scan(line, "btime %lld", &btime)) {
                 boot_time = btime * 1000;
                 goto done;
             }
@@ -344,7 +344,7 @@ count_crashes(pid_t pid)
     paren = strchr(line, '(');
     if (paren) {
         int x;
-        if (sscanf(paren + 1, "%d", &x) == 1) {
+        if (ovs_scan(paren + 1, "%d", &x)) {
             crashes = x;
         }
     }

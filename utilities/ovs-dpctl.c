@@ -1116,9 +1116,8 @@ dpctl_normalize_actions(int argc, char *argv[])
     for (i = 3; i < argc; i++) {
         char name[16];
         int number;
-        int n = -1;
 
-        if (sscanf(argv[i], "%15[^=]=%d%n", name, &number, &n) > 0 && n > 0) {
+        if (ovs_scan(argv[i], "%15[^=]=%d", name, &number)) {
             uintptr_t n = number;
             simap_put(&port_names, name, n);
         } else {

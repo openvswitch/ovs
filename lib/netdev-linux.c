@@ -2309,14 +2309,14 @@ parse_if_inet6_line(const char *line,
 {
     uint8_t *s6 = in6->s6_addr;
 #define X8 "%2"SCNx8
-    return sscanf(line,
-                  " "X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8
-                  "%*x %*x %*x %*x %16s\n",
-                  &s6[0], &s6[1], &s6[2], &s6[3],
-                  &s6[4], &s6[5], &s6[6], &s6[7],
-                  &s6[8], &s6[9], &s6[10], &s6[11],
-                  &s6[12], &s6[13], &s6[14], &s6[15],
-                  ifname) == 17;
+    return ovs_scan(line,
+                    " "X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8
+                    "%*x %*x %*x %*x %16s\n",
+                    &s6[0], &s6[1], &s6[2], &s6[3],
+                    &s6[4], &s6[5], &s6[6], &s6[7],
+                    &s6[8], &s6[9], &s6[10], &s6[11],
+                    &s6[12], &s6[13], &s6[14], &s6[15],
+                    ifname);
 }
 
 /* If 'netdev' has an assigned IPv6 address, sets '*in6' to that address (if
@@ -2424,12 +2424,11 @@ netdev_linux_get_next_hop(const struct in_addr *host, struct in_addr *next_hop,
             int refcnt, metric, mtu;
             unsigned int flags, use, window, irtt;
 
-            if (sscanf(line,
-                       "%16s %"SCNx32" %"SCNx32" %04X %d %u %d %"SCNx32
-                       " %d %u %u\n",
-                       iface, &dest, &gateway, &flags, &refcnt,
-                       &use, &metric, &mask, &mtu, &window, &irtt) != 11) {
-
+            if (!ovs_scan(line,
+                          "%16s %"SCNx32" %"SCNx32" %04X %d %u %d %"SCNx32
+                          " %d %u %u\n",
+                          iface, &dest, &gateway, &flags, &refcnt,
+                          &use, &metric, &mask, &mtu, &window, &irtt)) {
                 VLOG_WARN_RL(&rl, "%s: could not parse line %d: %s",
                         fn, ln, line);
                 continue;
@@ -4560,25 +4559,25 @@ get_stats_via_proc(const char *netdev_name, struct netdev_stats *stats)
         if (++ln >= 3) {
             char devname[16];
 #define X64 "%"SCNu64
-            if (sscanf(line,
-                       " %15[^:]:"
-                       X64 X64 X64 X64 X64 X64 X64 "%*u"
-                       X64 X64 X64 X64 X64 X64 X64 "%*u",
-                       devname,
-                       &stats->rx_bytes,
-                       &stats->rx_packets,
-                       &stats->rx_errors,
-                       &stats->rx_dropped,
-                       &stats->rx_fifo_errors,
-                       &stats->rx_frame_errors,
-                       &stats->multicast,
-                       &stats->tx_bytes,
-                       &stats->tx_packets,
-                       &stats->tx_errors,
-                       &stats->tx_dropped,
-                       &stats->tx_fifo_errors,
-                       &stats->collisions,
-                       &stats->tx_carrier_errors) != 15) {
+            if (!ovs_scan(line,
+                          " %15[^:]:"
+                          X64 X64 X64 X64 X64 X64 X64 "%*u"
+                          X64 X64 X64 X64 X64 X64 X64 "%*u",
+                          devname,
+                          &stats->rx_bytes,
+                          &stats->rx_packets,
+                          &stats->rx_errors,
+                          &stats->rx_dropped,
+                          &stats->rx_fifo_errors,
+                          &stats->rx_frame_errors,
+                          &stats->multicast,
+                          &stats->tx_bytes,
+                          &stats->tx_packets,
+                          &stats->tx_errors,
+                          &stats->tx_dropped,
+                          &stats->tx_fifo_errors,
+                          &stats->collisions,
+                          &stats->tx_carrier_errors)) {
                 VLOG_WARN_RL(&rl, "%s:%d: parse error", fn, ln);
             } else if (!strcmp(devname, netdev_name)) {
                 stats->rx_length_errors = UINT64_MAX;

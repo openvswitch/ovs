@@ -130,8 +130,7 @@ eth_addr_is_reserved(const uint8_t ea[ETH_ADDR_LEN])
 bool
 eth_addr_from_string(const char *s, uint8_t ea[ETH_ADDR_LEN])
 {
-    if (sscanf(s, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(ea))
-        == ETH_ADDR_SCAN_COUNT) {
+    if (ovs_scan(s, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(ea))) {
         return true;
     } else {
         memset(ea, 0, ETH_ADDR_LEN);

@@ -217,7 +217,7 @@ parse_flags(const char *s, const char *(*bit_to_string)(uint32_t),
         uint32_t bit;
         int n0;
 
-        if (sscanf(&s[n], "%lli%n", &flags, &n0) > 0 && n0 > 0) {
+        if (ovs_scan(&s[n], "%lli%n", &flags, &n0)) {
             n += n0 + (s[n + n0] == ',');
             result |= flags;
             continue;
@@ -466,21 +466,11 @@ static int
 parse_odp_action(const char *s, const struct simap *port_names,
                  struct ofpbuf *actions)
 {
-    /* Many of the sscanf calls in this function use oversized destination
-     * fields because some sscanf() implementations truncate the range of %i
-     * directives, so that e.g. "%"SCNi16 interprets input of "0xfedc" as a
-     * value of 0x7fff.  The other alternatives are to allow only a single
-     * radix (e.g. decimal or hexadecimal) or to write more sophisticated
-     * parsers.
-     *
-     * The tun_id parser has to use an alternative approach because there is no
-     * type larger than 64 bits. */
-
     {
-        unsigned long long int port;
-        int n = -1;
+        uint32_t port;
+        int n;
 
-        if (sscanf(s, "%lli%n", &port, &n) > 0 && n > 0) {
+        if (ovs_scan(s, "%"SCNi32"%n", &port, &n)) {
             nl_msg_put_u32(actions, OVS_ACTION_ATTR_OUTPUT, port);
             return n;
         }
@@ -498,21 +488,21 @@ parse_odp_action(const char *s, const struct simap *port_names,
     }
 
     {
-        unsigned long long int pid;
-        unsigned long long int output;
-        unsigned long long int probability;
-        unsigned long long int collector_set_id;
-        unsigned long long int obs_domain_id;
-        unsigned long long int obs_point_id;
+        uint32_t pid;
+        uint32_t output;
+        uint32_t probability;
+        uint32_t collector_set_id;
+        uint32_t obs_domain_id;
+        uint32_t obs_point_id;
         int vid, pcp;
         int n = -1;
 
-        if (sscanf(s, "userspace(pid=%lli)%n", &pid, &n) > 0 && n > 0) {
+        if (ovs_scan(s, "userspace(pid=%"SCNi32")%n", &pid, &n)) {
             odp_put_userspace_action(pid, NULL, 0, actions);
             return n;
-        } else if (sscanf(s, "userspace(pid=%lli,sFlow(vid=%i,"
-                          "pcp=%i,output=%lli))%n",
-                          &pid, &vid, &pcp, &output, &n) > 0 && n > 0) {
+        } else if (ovs_scan(s, "userspace(pid=%"SCNi32",sFlow(vid=%i,"
+                            "pcp=%i,output=%"SCNi32"))%n",
+                            &pid, &vid, &pcp, &output, &n)) {
             union user_action_cookie cookie;
             uint16_t tci;
 
@@ -527,8 +517,8 @@ parse_odp_action(const char *s, const struct simap *port_names,
             odp_put_userspace_action(pid, &cookie, sizeof cookie.sflow,
                                      actions);
             return n;
-        } else if (sscanf(s, "userspace(pid=%lli,slow_path%n", &pid, &n) > 0
-                   && n > 0) {
+        } else if (ovs_scan(s, "userspace(pid=%"SCNi32",slow_path%n",
+                            &pid, &n)) {
             union user_action_cookie cookie;
             int res;
 
@@ -550,11 +540,13 @@ parse_odp_action(const char *s, const struct simap *port_names,
             odp_put_userspace_action(pid, &cookie, sizeof cookie.slow_path,
                                      actions);
             return n;
-        } else if (sscanf(s, "userspace(pid=%lli,flow_sample(probability=%lli,"
-                          "collector_set_id=%lli,obs_domain_id=%lli,"
-                          "obs_point_id=%lli))%n",
-                          &pid, &probability, &collector_set_id,
-                          &obs_domain_id, &obs_point_id, &n) > 0 && n > 0) {
+        } else if (ovs_scan(s, "userspace(pid=%"SCNi32","
+                            "flow_sample(probability=%"SCNi32","
+                            "collector_set_id=%"SCNi32","
+                            "obs_domain_id=%"SCNi32","
+                            "obs_point_id=%"SCNi32"))%n",
+                            &pid, &probability, &collector_set_id,
+                            &obs_domain_id, &obs_point_id, &n)) {
             union user_action_cookie cookie;
 
             cookie.type = USER_ACTION_COOKIE_FLOW_SAMPLE;
@@ -565,16 +557,15 @@ parse_odp_action(const char *s, const struct simap *port_names,
             odp_put_userspace_action(pid, &cookie, sizeof cookie.flow_sample,
                                      actions);
             return n;
-        } else if (sscanf(s, "userspace(pid=%lli,ipfix)%n", &pid, &n) > 0
-                   && n > 0) {
+        } else if (ovs_scan(s, "userspace(pid=%"SCNi32",ipfix)%n", &pid, &n)) {
             union user_action_cookie cookie;
 
             cookie.type = USER_ACTION_COOKIE_IPFIX;
             odp_put_userspace_action(pid, &cookie, sizeof cookie.ipfix,
                                      actions);
             return n;
-        } else if (sscanf(s, "userspace(pid=%lli,userdata(%n", &pid, &n) > 0
-                   && n > 0) {
+        } else if (ovs_scan(s, "userspace(pid=%"SCNi32",userdata(%n",
+                            &pid, &n)) {
             struct ofpbuf buf;
             char *end;
 
@@ -611,14 +602,13 @@ parse_odp_action(const char *s, const struct simap *port_names,
         int cfi = 1;
         int n = -1;
 
-        if ((sscanf(s, "push_vlan(vid=%i,pcp=%i)%n", &vid, &pcp, &n) > 0
-             && n > 0)
-            || (sscanf(s, "push_vlan(vid=%i,pcp=%i,cfi=%i)%n",
-                       &vid, &pcp, &cfi, &n) > 0 && n > 0)
-            || (sscanf(s, "push_vlan(tpid=%i,vid=%i,pcp=%i)%n",
-                       &tpid, &vid, &pcp, &n) > 0 && n > 0)
-            || (sscanf(s, "push_vlan(tpid=%i,vid=%i,pcp=%i,cfi=%i)%n",
-                       &tpid, &vid, &pcp, &cfi, &n) > 0 && n > 0)) {
+        if (ovs_scan(s, "push_vlan(vid=%i,pcp=%i)%n", &vid, &pcp, &n)
+            || ovs_scan(s, "push_vlan(vid=%i,pcp=%i,cfi=%i)%n",
+                        &vid, &pcp, &cfi, &n)
+            || ovs_scan(s, "push_vlan(tpid=%i,vid=%i,pcp=%i)%n",
+                        &tpid, &vid, &pcp, &n)
+            || ovs_scan(s, "push_vlan(tpid=%i,vid=%i,pcp=%i,cfi=%i)%n",
+                        &tpid, &vid, &pcp, &cfi, &n)) {
             push.vlan_tpid = htons(tpid);
             push.vlan_tci = htons((vid << VLAN_VID_SHIFT)
                                   | (pcp << VLAN_PCP_SHIFT)
@@ -639,9 +629,8 @@ parse_odp_action(const char *s, const struct simap *port_names,
         double percentage;
         int n = -1;
 
-        if (sscanf(s, "sample(sample=%lf%%,actions(%n", &percentage, &n) > 0
-            && percentage >= 0. && percentage <= 100.0
-            && n > 0) {
+        if (ovs_scan(s, "sample(sample=%lf%%,actions(%n", &percentage, &n)
+            && percentage >= 0. && percentage <= 100.0) {
             size_t sample_ofs, actions_ofs;
             double probability;
 
@@ -1563,28 +1552,17 @@ static int
 parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
                         struct ofpbuf *key, struct ofpbuf *mask)
 {
-    /* Many of the sscanf calls in this function use oversized destination
-     * fields because some sscanf() implementations truncate the range of %i
-     * directives, so that e.g. "%"SCNi16 interprets input of "0xfedc" as a
-     * value of 0x7fff.  The other alternatives are to allow only a single
-     * radix (e.g. decimal or hexadecimal) or to write more sophisticated
-     * parsers.
-     *
-     * The tun_id parser has to use an alternative approach because there is no
-     * type larger than 64 bits. */
-
     {
-        unsigned long long int priority;
-        unsigned long long int priority_mask;
+        uint32_t priority;
+        uint32_t priority_mask;
         int n = -1;
 
-        if (mask && sscanf(s, "skb_priority(%lli/%lli)%n", &priority,
-                   &priority_mask, &n) > 0 && n > 0) {
+        if (mask && ovs_scan(s, "skb_priority(%"SCNi32"/%"SCNi32")%n",
+                             &priority, &priority_mask, &n)) {
             nl_msg_put_u32(key, OVS_KEY_ATTR_PRIORITY, priority);
             nl_msg_put_u32(mask, OVS_KEY_ATTR_PRIORITY, priority_mask);
             return n;
-        } else if (sscanf(s, "skb_priority(%lli)%n",
-                          &priority, &n) > 0 && n > 0) {
+        } else if (ovs_scan(s, "skb_priority(%"SCNi32")%n", &priority, &n)) {
             nl_msg_put_u32(key, OVS_KEY_ATTR_PRIORITY, priority);
             if (mask) {
                 nl_msg_put_u32(mask, OVS_KEY_ATTR_PRIORITY, UINT32_MAX);
@@ -1594,16 +1572,16 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
     }
 
     {
-        unsigned long long int mark;
-        unsigned long long int mark_mask;
+        uint32_t mark;
+        uint32_t mark_mask;
         int n = -1;
 
-        if (mask && sscanf(s, "skb_mark(%lli/%lli)%n", &mark,
-                   &mark_mask, &n) > 0 && n > 0) {
+        if (mask && ovs_scan(s, "skb_mark(%"SCNi32"/%"SCNi32")%n", &mark,
+                             &mark_mask, &n)) {
             nl_msg_put_u32(key, OVS_KEY_ATTR_SKB_MARK, mark);
             nl_msg_put_u32(mask, OVS_KEY_ATTR_SKB_MARK, mark_mask);
             return n;
-        } else if (sscanf(s, "skb_mark(%lli)%n", &mark, &n) > 0 && n > 0) {
+        } else if (ovs_scan(s, "skb_mark(%"SCNi32")%n", &mark, &n)) {
             nl_msg_put_u32(key, OVS_KEY_ATTR_SKB_MARK, mark);
             if (mask) {
                 nl_msg_put_u32(mask, OVS_KEY_ATTR_SKB_MARK, UINT32_MAX);
@@ -1613,31 +1591,26 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
     }
 
     {
-        char tun_id_s[32];
-        int tos, tos_mask, ttl, ttl_mask;
+        uint64_t tun_id, tun_id_mask;
         struct flow_tnl tun_key, tun_key_mask;
-        unsigned long long tun_id_mask;
         int n = -1;
 
-        if (mask && sscanf(s, "tunnel(tun_id=%31[x0123456789abcdefABCDEF]/%llx,"
-                   "src="IP_SCAN_FMT"/"IP_SCAN_FMT",dst="IP_SCAN_FMT
-                   "/"IP_SCAN_FMT",tos=%i/%i,ttl=%i/%i,flags%n",
-                   tun_id_s, &tun_id_mask,
-                   IP_SCAN_ARGS(&tun_key.ip_src),
-                   IP_SCAN_ARGS(&tun_key_mask.ip_src),
-                   IP_SCAN_ARGS(&tun_key.ip_dst),
-                   IP_SCAN_ARGS(&tun_key_mask.ip_dst),
-                   &tos, &tos_mask, &ttl, &ttl_mask,
-                   &n) > 0 && n > 0) {
+        if (mask && ovs_scan(s, "tunnel(tun_id=%"SCNi64"/%"SCNi64","
+                             "src="IP_SCAN_FMT"/"IP_SCAN_FMT",dst="IP_SCAN_FMT
+                             "/"IP_SCAN_FMT",tos=%"SCNi8"/%"SCNi8","
+                             "ttl=%"SCNi8"/%"SCNi8",flags%n",
+                             &tun_id, &tun_id_mask,
+                             IP_SCAN_ARGS(&tun_key.ip_src),
+                             IP_SCAN_ARGS(&tun_key_mask.ip_src),
+                             IP_SCAN_ARGS(&tun_key.ip_dst),
+                             IP_SCAN_ARGS(&tun_key_mask.ip_dst),
+                             &tun_key.ip_tos, &tun_key_mask.ip_tos,
+                             &tun_key.ip_ttl, &tun_key_mask.ip_ttl, &n)) {
             int res;
             uint32_t flags;
 
-            tun_key.tun_id = htonll(strtoull(tun_id_s, NULL, 0));
+            tun_key.tun_id = htonll(tun_id);
             tun_key_mask.tun_id = htonll(tun_id_mask);
-            tun_key.ip_tos = tos;
-            tun_key_mask.ip_tos = tos_mask;
-            tun_key.ip_ttl = ttl;
-            tun_key_mask.ip_ttl = ttl_mask;
             res = parse_flags(&s[n], flow_tun_flag_to_string, &flags);
             tun_key.flags = flags;
             tun_key_mask.flags = UINT16_MAX;
@@ -1655,18 +1628,16 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
                 tun_key_to_attr(mask, &tun_key_mask);
             }
             return n;
-        } else if (sscanf(s, "tunnel(tun_id=%31[x0123456789abcdefABCDEF],"
-                   "src="IP_SCAN_FMT",dst="IP_SCAN_FMT
-                   ",tos=%i,ttl=%i,flags%n", tun_id_s,
-                    IP_SCAN_ARGS(&tun_key.ip_src),
-                    IP_SCAN_ARGS(&tun_key.ip_dst), &tos, &ttl,
-                    &n) > 0 && n > 0) {
+        } else if (ovs_scan(s, "tunnel(tun_id=%"SCNi64","
+                            "src="IP_SCAN_FMT",dst="IP_SCAN_FMT
+                            ",tos=%"SCNi8",ttl=%"SCNi8",flags%n", &tun_id,
+                            IP_SCAN_ARGS(&tun_key.ip_src),
+                            IP_SCAN_ARGS(&tun_key.ip_dst),
+                            &tun_key.ip_tos, &tun_key.ip_ttl, &n)) {
             int res;
             uint32_t flags;
 
-            tun_key.tun_id = htonll(strtoull(tun_id_s, NULL, 0));
-            tun_key.ip_tos = tos;
-            tun_key.ip_ttl = ttl;
+            tun_key.tun_id = htonll(tun_id);
             res = parse_flags(&s[n], flow_tun_flag_to_string, &flags);
             tun_key.flags = flags;
 
@@ -1689,16 +1660,16 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
     }
 
     {
-        unsigned long long int in_port;
-        unsigned long long int in_port_mask;
+        uint32_t in_port;
+        uint32_t in_port_mask;
         int n = -1;
 
-        if (mask && sscanf(s, "in_port(%lli/%lli)%n", &in_port,
-                   &in_port_mask, &n) > 0 && n > 0) {
+        if (mask && ovs_scan(s, "in_port(%"SCNi32"/%"SCNi32")%n",
+                             &in_port, &in_port_mask, &n)) {
             nl_msg_put_u32(key, OVS_KEY_ATTR_IN_PORT, in_port);
             nl_msg_put_u32(mask, OVS_KEY_ATTR_IN_PORT, in_port_mask);
             return n;
-        } else if (sscanf(s, "in_port(%lli)%n", &in_port, &n) > 0 && n > 0) {
+        } else if (ovs_scan(s, "in_port(%"SCNi32")%n", &in_port, &n)) {
             nl_msg_put_u32(key, OVS_KEY_ATTR_IN_PORT, in_port);
             if (mask) {
                 nl_msg_put_u32(mask, OVS_KEY_ATTR_IN_PORT, UINT32_MAX);
@@ -1731,23 +1702,22 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
         struct ovs_key_ethernet eth_key_mask;
         int n = -1;
 
-        if (mask && sscanf(s,
-                   "eth(src="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT","
-                        "dst="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT")%n",
-                ETH_ADDR_SCAN_ARGS(eth_key.eth_src),
-                ETH_ADDR_SCAN_ARGS(eth_key_mask.eth_src),
-                ETH_ADDR_SCAN_ARGS(eth_key.eth_dst),
-                ETH_ADDR_SCAN_ARGS(eth_key_mask.eth_dst), &n) > 0 && n > 0) {
-
+        if (mask && ovs_scan(s,
+                             "eth(src="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT","
+                             "dst="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT")%n",
+                             ETH_ADDR_SCAN_ARGS(eth_key.eth_src),
+                             ETH_ADDR_SCAN_ARGS(eth_key_mask.eth_src),
+                             ETH_ADDR_SCAN_ARGS(eth_key.eth_dst),
+                             ETH_ADDR_SCAN_ARGS(eth_key_mask.eth_dst), &n)) {
             nl_msg_put_unspec(key, OVS_KEY_ATTR_ETHERNET,
                               &eth_key, sizeof eth_key);
             nl_msg_put_unspec(mask, OVS_KEY_ATTR_ETHERNET,
                               &eth_key_mask, sizeof eth_key_mask);
             return n;
-        } else if (sscanf(s,
-                   "eth(src="ETH_ADDR_SCAN_FMT",dst="ETH_ADDR_SCAN_FMT")%n",
-                   ETH_ADDR_SCAN_ARGS(eth_key.eth_src),
-                   ETH_ADDR_SCAN_ARGS(eth_key.eth_dst), &n) > 0 && n > 0) {
+        } else if (ovs_scan(s, "eth(src="ETH_ADDR_SCAN_FMT","
+                            "dst="ETH_ADDR_SCAN_FMT")%n",
+                            ETH_ADDR_SCAN_ARGS(eth_key.eth_src),
+                            ETH_ADDR_SCAN_ARGS(eth_key.eth_dst), &n)) {
             nl_msg_put_unspec(key, OVS_KEY_ATTR_ETHERNET,
                               &eth_key, sizeof eth_key);
 
@@ -1761,13 +1731,13 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
     }
 
     {
-        uint16_t vid, vid_mask;
+        int vid, vid_mask;
         int pcp, pcp_mask;
         int cfi, cfi_mask;
         int n = -1;
 
-        if (mask && (sscanf(s, "vlan(vid=%"SCNi16"/%"SCNi16",pcp=%i/%i)%n",
-                            &vid, &vid_mask, &pcp, &pcp_mask, &n) > 0 && n > 0)) {
+        if (mask && ovs_scan(s, "vlan(vid=%i/%i,pcp=%i/%i)%n",
+                            &vid, &vid_mask, &pcp, &pcp_mask, &n)) {
             nl_msg_put_be16(key, OVS_KEY_ATTR_VLAN,
                             htons((vid << VLAN_VID_SHIFT) |
                                   (pcp << VLAN_PCP_SHIFT) |
@@ -1777,8 +1747,7 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
                                   (pcp_mask << VLAN_PCP_SHIFT) |
                                   (1 << VLAN_CFI_SHIFT)));
             return n;
-        } else if ((sscanf(s, "vlan(vid=%"SCNi16",pcp=%i)%n",
-                           &vid, &pcp, &n) > 0 && n > 0)) {
+        } else if (ovs_scan(s, "vlan(vid=%i,pcp=%i)%n", &vid, &pcp, &n)) {
             nl_msg_put_be16(key, OVS_KEY_ATTR_VLAN,
                             htons((vid << VLAN_VID_SHIFT) |
                                   (pcp << VLAN_PCP_SHIFT) |
@@ -1787,8 +1756,10 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
                 nl_msg_put_be16(mask, OVS_KEY_ATTR_VLAN, OVS_BE16_MAX);
             }
             return n;
-        } else if (mask && (sscanf(s, "vlan(vid=%"SCNi16"/%"SCNi16",pcp=%i/%i,cfi=%i/%i)%n",
-                                   &vid, &vid_mask, &pcp, &pcp_mask, &cfi, &cfi_mask, &n) > 0 && n > 0)) {
+        } else if (mask
+                   && ovs_scan(s, "vlan(vid=%i/%i,pcp=%i/%i,cfi=%i/%i)%n",
+                               &vid, &vid_mask, &pcp, &pcp_mask,
+                               &cfi, &cfi_mask, &n)) {
             nl_msg_put_be16(key, OVS_KEY_ATTR_VLAN,
                             htons((vid << VLAN_VID_SHIFT) |
                                   (pcp << VLAN_PCP_SHIFT) |
@@ -1798,8 +1769,8 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
                                   (pcp_mask << VLAN_PCP_SHIFT) |
                                   (cfi_mask << VLAN_CFI_SHIFT)));
             return n;
-        } else if ((sscanf(s, "vlan(vid=%"SCNi16",pcp=%i,cfi=%i)%n",
-                           &vid, &pcp, &cfi, &n) > 0 && n > 0)) {
+        } else if (ovs_scan(s, "vlan(vid=%i,pcp=%i,cfi=%i)%n",
+                            &vid, &pcp, &cfi, &n)) {
             nl_msg_put_be16(key, OVS_KEY_ATTR_VLAN,
                             htons((vid << VLAN_VID_SHIFT) |
                                   (pcp << VLAN_PCP_SHIFT) |
@@ -1816,14 +1787,14 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
         int eth_type_mask;
         int n = -1;
 
-        if (mask && sscanf(s, "eth_type(%i/%i)%n",
-                   &eth_type, &eth_type_mask, &n) > 0 && n > 0) {
+        if (mask && ovs_scan(s, "eth_type(%i/%i)%n",
+                             &eth_type, &eth_type_mask, &n)) {
             if (eth_type != 0) {
                 nl_msg_put_be16(key, OVS_KEY_ATTR_ETHERTYPE, htons(eth_type));
             }
             nl_msg_put_be16(mask, OVS_KEY_ATTR_ETHERTYPE, htons(eth_type_mask));
             return n;
-        } else if (sscanf(s, "eth_type(%i)%n", &eth_type, &n) > 0 && n > 0) {
+        } else if (ovs_scan(s, "eth_type(%i)%n", &eth_type, &n)) {
             nl_msg_put_be16(key, OVS_KEY_ATTR_ETHERTYPE, htons(eth_type));
             if (mask) {
                 nl_msg_put_be16(mask, OVS_KEY_ATTR_ETHERTYPE, OVS_BE16_MAX);
@@ -1837,8 +1808,10 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
         int label_mask, tc_mask, ttl_mask, bos_mask;
         int n = -1;
 
-        if (mask && sscanf(s, "mpls(label=%"SCNi32"/%"SCNi32",tc=%i/%i,ttl=%i/%i,bos=%i/%i)%n",
-                    &label, &label_mask, &tc, &tc_mask, &ttl, &ttl_mask, &bos, &bos_mask, &n) > 0 && n > 0) {
+        if (mask && ovs_scan(s, "mpls(label=%i/%i,tc=%i/%i,"
+                             "ttl=%i/%i,bos=%i/%i)%n",
+                             &label, &label_mask, &tc, &tc_mask,
+                             &ttl, &ttl_mask, &bos, &bos_mask, &n)) {
             struct ovs_key_mpls *mpls, *mpls_mask;
 
             mpls = nl_msg_put_unspec_uninit(key, OVS_KEY_ATTR_MPLS,
@@ -1850,9 +1823,8 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
             mpls_mask->mpls_lse = mpls_lse_from_components(
                                   label_mask, tc_mask, ttl_mask, bos_mask);
             return n;
-        } else if (sscanf(s, "mpls(label=%"SCNi32",tc=%i,ttl=%i,bos=%i)%n",
-                    &label, &tc, &ttl, &bos, &n) > 0 &&
-                    n > 0) {
+        } else if (ovs_scan(s, "mpls(label=%i,tc=%i,ttl=%i,bos=%i)%n",
+                            &label, &tc, &ttl, &bos, &n)) {
             struct ovs_key_mpls *mpls;
 
             mpls = nl_msg_put_unspec_uninit(key, OVS_KEY_ATTR_MPLS,
@@ -1869,61 +1841,46 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
 
 
     {
-        ovs_be32 ipv4_src, ipv4_src_mask;
-        ovs_be32 ipv4_dst, ipv4_dst_mask;
-        int ipv4_proto, ipv4_proto_mask;
-        int ipv4_tos, ipv4_tos_mask;
-        int ipv4_ttl, ipv4_ttl_mask;
+        struct ovs_key_ipv4 ipv4_key;
+        struct ovs_key_ipv4 ipv4_mask;
+
         char frag[8];
-        int  ipv4_frag_mask;
         enum ovs_frag_type ipv4_frag;
         int n = -1;
 
-        if (mask && sscanf(s, "ipv4(src="IP_SCAN_FMT"/"IP_SCAN_FMT","
-                      "dst="IP_SCAN_FMT"/"IP_SCAN_FMT","
-                      "proto=%i/%i,tos=%i/%i,ttl=%i/%i,"
-                      "frag=%7[a-z]/%i)%n",
-                      IP_SCAN_ARGS(&ipv4_src), IP_SCAN_ARGS(&ipv4_src_mask),
-                      IP_SCAN_ARGS(&ipv4_dst), IP_SCAN_ARGS(&ipv4_dst_mask),
-                      &ipv4_proto, &ipv4_proto_mask,
-                      &ipv4_tos, &ipv4_tos_mask, &ipv4_ttl, &ipv4_ttl_mask,
-                      frag, &ipv4_frag_mask, &n) > 0
-            && n > 0
+        if (mask
+            && ovs_scan(s, "ipv4(src="IP_SCAN_FMT"/"IP_SCAN_FMT","
+                        "dst="IP_SCAN_FMT"/"IP_SCAN_FMT","
+                        "proto=%"SCNi8"/%"SCNi8","
+                        "tos=%"SCNi8"/%"SCNi8","
+                        "ttl=%"SCNi8"/%"SCNi8","
+                        "frag=%7[a-z]/%"SCNi8")%n",
+                        IP_SCAN_ARGS(&ipv4_key.ipv4_src),
+                        IP_SCAN_ARGS(&ipv4_mask.ipv4_src),
+                        IP_SCAN_ARGS(&ipv4_key.ipv4_dst),
+                        IP_SCAN_ARGS(&ipv4_mask.ipv4_dst),
+                        &ipv4_key.ipv4_proto, &ipv4_mask.ipv4_proto,
+                        &ipv4_key.ipv4_tos, &ipv4_mask.ipv4_tos,
+                        &ipv4_key.ipv4_ttl, &ipv4_mask.ipv4_ttl,
+                        frag, &ipv4_mask.ipv4_frag, &n)
             && ovs_frag_type_from_string(frag, &ipv4_frag)) {
-            struct ovs_key_ipv4 ipv4_key;
-            struct ovs_key_ipv4 ipv4_mask;
-
-            ipv4_key.ipv4_src = ipv4_src;
-            ipv4_key.ipv4_dst = ipv4_dst;
-            ipv4_key.ipv4_proto = ipv4_proto;
-            ipv4_key.ipv4_tos = ipv4_tos;
-            ipv4_key.ipv4_ttl = ipv4_ttl;
             ipv4_key.ipv4_frag = ipv4_frag;
             nl_msg_put_unspec(key, OVS_KEY_ATTR_IPV4,
                               &ipv4_key, sizeof ipv4_key);
 
-            ipv4_mask.ipv4_src = ipv4_src_mask;
-            ipv4_mask.ipv4_dst = ipv4_dst_mask;
-            ipv4_mask.ipv4_proto = ipv4_proto_mask;
-            ipv4_mask.ipv4_tos = ipv4_tos_mask;
-            ipv4_mask.ipv4_ttl = ipv4_ttl_mask;
-            ipv4_mask.ipv4_frag = ipv4_frag_mask;
             nl_msg_put_unspec(mask, OVS_KEY_ATTR_IPV4,
                               &ipv4_mask, sizeof ipv4_mask);
             return n;
-        } else if (sscanf(s, "ipv4(src="IP_SCAN_FMT",dst="IP_SCAN_FMT","
-                   "proto=%i,tos=%i,ttl=%i,frag=%7[a-z])%n",
-                   IP_SCAN_ARGS(&ipv4_src), IP_SCAN_ARGS(&ipv4_dst),
-                   &ipv4_proto, &ipv4_tos, &ipv4_ttl, frag, &n) > 0
-            && n > 0
-            && ovs_frag_type_from_string(frag, &ipv4_frag)) {
-            struct ovs_key_ipv4 ipv4_key;
-
-            ipv4_key.ipv4_src = ipv4_src;
-            ipv4_key.ipv4_dst = ipv4_dst;
-            ipv4_key.ipv4_proto = ipv4_proto;
-            ipv4_key.ipv4_tos = ipv4_tos;
-            ipv4_key.ipv4_ttl = ipv4_ttl;
+        } else if (ovs_scan(s, "ipv4(src="IP_SCAN_FMT",dst="IP_SCAN_FMT","
+                            "proto=%"SCNi8",tos=%"SCNi8",ttl=%"SCNi8","
+                            "frag=%7[a-z])%n",
+                            IP_SCAN_ARGS(&ipv4_key.ipv4_src),
+                            IP_SCAN_ARGS(&ipv4_key.ipv4_dst),
+                            &ipv4_key.ipv4_proto,
+                            &ipv4_key.ipv4_tos,
+                            &ipv4_key.ipv4_ttl,
+                            frag, &n) > 0
+                   && ovs_frag_type_from_string(frag, &ipv4_frag)) {
             ipv4_key.ipv4_frag = ipv4_frag;
             nl_msg_put_unspec(key, OVS_KEY_ATTR_IPV4,
                               &ipv4_key, sizeof ipv4_key);
@@ -1951,16 +1908,16 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
         int ipv6_frag_mask;
         int n = -1;
 
-        if (mask && sscanf(s, "ipv6(src="IPV6_SCAN_FMT"/"IPV6_SCAN_FMT",dst="
-                   IPV6_SCAN_FMT"/"IPV6_SCAN_FMT","
-                   "label=%i/%i,proto=%i/%i,tclass=%i/%i,"
-                   "hlimit=%i/%i,frag=%7[a-z]/%i)%n",
-                   ipv6_src_s, ipv6_src_mask_s, ipv6_dst_s, ipv6_dst_mask_s,
-                   &ipv6_label, &ipv6_label_mask, &ipv6_proto,
-                   &ipv6_proto_mask, &ipv6_tclass, &ipv6_tclass_mask,
-                   &ipv6_hlimit, &ipv6_hlimit_mask, frag,
-                   &ipv6_frag_mask, &n) > 0
-            && n > 0
+        if (mask && ovs_scan(s, "ipv6(src="IPV6_SCAN_FMT"/"IPV6_SCAN_FMT",dst="
+                             IPV6_SCAN_FMT"/"IPV6_SCAN_FMT","
+                             "label=%i/%i,proto=%i/%i,tclass=%i/%i,"
+                             "hlimit=%i/%i,frag=%7[a-z]/%i)%n",
+                             ipv6_src_s, ipv6_src_mask_s,
+                             ipv6_dst_s, ipv6_dst_mask_s,
+                             &ipv6_label, &ipv6_label_mask, &ipv6_proto,
+                             &ipv6_proto_mask, &ipv6_tclass, &ipv6_tclass_mask,
+                             &ipv6_hlimit, &ipv6_hlimit_mask, frag,
+                             &ipv6_frag_mask, &n)
             && ovs_frag_type_from_string(frag, &ipv6_frag)) {
             struct ovs_key_ipv6 ipv6_key;
             struct ovs_key_ipv6 ipv6_mask;
@@ -1988,12 +1945,12 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
             nl_msg_put_unspec(mask, OVS_KEY_ATTR_IPV6,
                               &ipv6_mask, sizeof ipv6_mask);
             return n;
-        } else if (sscanf(s, "ipv6(src="IPV6_SCAN_FMT",dst="IPV6_SCAN_FMT","
-                   "label=%i,proto=%i,tclass=%i,hlimit=%i,frag=%7[a-z])%n",
-                   ipv6_src_s, ipv6_dst_s, &ipv6_label,
-                   &ipv6_proto, &ipv6_tclass, &ipv6_hlimit, frag, &n) > 0
-            && n > 0
-            && ovs_frag_type_from_string(frag, &ipv6_frag)) {
+        } else if (ovs_scan(s, "ipv6(src="IPV6_SCAN_FMT",dst="IPV6_SCAN_FMT","
+                            "label=%i,proto=%i,tclass=%i,hlimit=%i,"
+                            "frag=%7[a-z])%n",
+                            ipv6_src_s, ipv6_dst_s, &ipv6_label,
+                            &ipv6_proto, &ipv6_tclass, &ipv6_hlimit, frag, &n)
+                   && ovs_frag_type_from_string(frag, &ipv6_frag)) {
             struct ovs_key_ipv6 ipv6_key;
 
             if (inet_pton(AF_INET6, ipv6_src_s, &ipv6_key.ipv6_src) != 1 ||
@@ -2024,9 +1981,9 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
         int tcp_dst_mask;
         int n = -1;
 
-        if (mask && sscanf(s, "tcp(src=%i/%i,dst=%i/%i)%n",
-                   &tcp_src, &tcp_src_mask, &tcp_dst, &tcp_dst_mask, &n) > 0
-            && n > 0) {
+        if (mask && ovs_scan(s, "tcp(src=%i/%i,dst=%i/%i)%n",
+                             &tcp_src, &tcp_src_mask, &tcp_dst,
+                             &tcp_dst_mask, &n)) {
             struct ovs_key_tcp tcp_key;
             struct ovs_key_tcp tcp_mask;
 
@@ -2039,8 +1996,8 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
             nl_msg_put_unspec(mask, OVS_KEY_ATTR_TCP,
                               &tcp_mask, sizeof tcp_mask);
             return n;
-        } else if (sscanf(s, "tcp(src=%i,dst=%i)%n",&tcp_src, &tcp_dst, &n) > 0
-            && n > 0) {
+        } else if (ovs_scan(s, "tcp(src=%i,dst=%i)%n",
+                            &tcp_src, &tcp_dst, &n)) {
             struct ovs_key_tcp tcp_key;
 
             tcp_key.tcp_src = htons(tcp_src);
@@ -2060,12 +2017,12 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
         uint16_t tcp_flags, tcp_flags_mask;
         int n = -1;
 
-        if (mask && sscanf(s, "tcp_flags(%"SCNi16"/%"SCNi16")%n",
-                   &tcp_flags, &tcp_flags_mask, &n) > 0 && n > 0) {
+        if (mask && ovs_scan(s, "tcp_flags(%"SCNi16"/%"SCNi16")%n",
+                             &tcp_flags, &tcp_flags_mask, &n) > 0 && n > 0) {
             nl_msg_put_be16(key, OVS_KEY_ATTR_TCP_FLAGS, htons(tcp_flags));
             nl_msg_put_be16(mask, OVS_KEY_ATTR_TCP_FLAGS, htons(tcp_flags_mask));
             return n;
-        } else if (sscanf(s, "tcp_flags(%"SCNi16")%n", &tcp_flags, &n) > 0 && n > 0) {
+        } else if (ovs_scan(s, "tcp_flags(%"SCNi16")%n", &tcp_flags, &n)) {
             nl_msg_put_be16(key, OVS_KEY_ATTR_TCP_FLAGS, htons(tcp_flags));
             if (mask) {
                 nl_msg_put_be16(mask, OVS_KEY_ATTR_TCP_FLAGS,
@@ -2082,9 +2039,9 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
         int udp_dst_mask;
         int n = -1;
 
-        if (mask && sscanf(s, "udp(src=%i/%i,dst=%i/%i)%n",
-                   &udp_src, &udp_src_mask,
-                   &udp_dst, &udp_dst_mask, &n) > 0 && n > 0) {
+        if (mask && ovs_scan(s, "udp(src=%i/%i,dst=%i/%i)%n",
+                             &udp_src, &udp_src_mask,
+                             &udp_dst, &udp_dst_mask, &n)) {
             struct ovs_key_udp udp_key;
             struct ovs_key_udp udp_mask;
 
@@ -2098,8 +2055,7 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
                               &udp_mask, sizeof udp_mask);
             return n;
         }
-        if (sscanf(s, "udp(src=%i,dst=%i)%n", &udp_src, &udp_dst, &n) > 0
-            && n > 0) {
+        if (ovs_scan(s, "udp(src=%i,dst=%i)%n", &udp_src, &udp_dst, &n)) {
             struct ovs_key_udp udp_key;
 
             udp_key.udp_src = htons(udp_src);
@@ -2121,9 +2077,9 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
         int sctp_dst_mask;
         int n = -1;
 
-        if (mask && sscanf(s, "sctp(src=%i/%i,dst=%i/%i)%n",
-                   &sctp_src, &sctp_src_mask,
-                   &sctp_dst, &sctp_dst_mask, &n) > 0 && n > 0) {
+        if (mask && ovs_scan(s, "sctp(src=%i/%i,dst=%i/%i)%n",
+                             &sctp_src, &sctp_src_mask,
+                             &sctp_dst, &sctp_dst_mask, &n)) {
             struct ovs_key_sctp sctp_key;
             struct ovs_key_sctp sctp_mask;
 
@@ -2137,8 +2093,7 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
                               &sctp_mask, sizeof sctp_mask);
             return n;
         }
-        if (sscanf(s, "sctp(src=%i,dst=%i)%n", &sctp_src, &sctp_dst, &n) > 0
-            && n > 0) {
+        if (ovs_scan(s, "sctp(src=%i,dst=%i)%n", &sctp_src, &sctp_dst, &n)) {
             struct ovs_key_sctp sctp_key;
 
             sctp_key.sctp_src = htons(sctp_src);
@@ -2154,35 +2109,21 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
     }
 
     {
-        int icmp_type;
-        int icmp_code;
-        int icmp_type_mask;
-        int icmp_code_mask;
+        struct ovs_key_icmp icmp_key;
+        struct ovs_key_icmp icmp_mask;
         int n = -1;
 
-        if (mask && sscanf(s, "icmp(type=%i/%i,code=%i/%i)%n",
-                   &icmp_type, &icmp_type_mask,
-                   &icmp_code, &icmp_code_mask, &n) > 0 && n > 0) {
-            struct ovs_key_icmp icmp_key;
-            struct ovs_key_icmp icmp_mask;
-
-            icmp_key.icmp_type = icmp_type;
-            icmp_key.icmp_code = icmp_code;
+        if (mask && ovs_scan(s, "icmp(type=%"SCNi8"/%"SCNi8","
+                             "code=%"SCNi8"/%"SCNi8")%n",
+                   &icmp_key.icmp_type, &icmp_mask.icmp_type,
+                   &icmp_key.icmp_code, &icmp_mask.icmp_code, &n)) {
             nl_msg_put_unspec(key, OVS_KEY_ATTR_ICMP,
                               &icmp_key, sizeof icmp_key);
-
-            icmp_mask.icmp_type = icmp_type_mask;
-            icmp_mask.icmp_code = icmp_code_mask;
             nl_msg_put_unspec(mask, OVS_KEY_ATTR_ICMP,
                               &icmp_mask, sizeof icmp_mask);
             return n;
-        } else if (sscanf(s, "icmp(type=%i,code=%i)%n",
-                   &icmp_type, &icmp_code, &n) > 0
-            && n > 0) {
-            struct ovs_key_icmp icmp_key;
-
-            icmp_key.icmp_type = icmp_type;
-            icmp_key.icmp_code = icmp_code;
+        } else if (ovs_scan(s, "icmp(type=%"SCNi8",code=%"SCNi8")%n",
+                            &icmp_key.icmp_type, &icmp_key.icmp_code, &n)) {
             nl_msg_put_unspec(key, OVS_KEY_ATTR_ICMP,
                               &icmp_key, sizeof icmp_key);
             if (mask) {
@@ -2197,25 +2138,21 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
     {
         struct ovs_key_icmpv6 icmpv6_key;
         struct ovs_key_icmpv6 icmpv6_mask;
-        int icmpv6_type_mask;
-        int icmpv6_code_mask;
         int n = -1;
 
-        if (mask && sscanf(s, "icmpv6(type=%"SCNi8"/%i,code=%"SCNi8"/%i)%n",
-                   &icmpv6_key.icmpv6_type, &icmpv6_type_mask,
-                   &icmpv6_key.icmpv6_code, &icmpv6_code_mask, &n) > 0
-            && n > 0) {
+        if (mask && ovs_scan(s, "icmpv6(type=%"SCNi8"/%"SCNi8","
+                             "code=%"SCNi8"/%"SCNi8")%n",
+                             &icmpv6_key.icmpv6_type, &icmpv6_mask.icmpv6_type,
+                             &icmpv6_key.icmpv6_code, &icmpv6_mask.icmpv6_code,
+                             &n)) {
             nl_msg_put_unspec(key, OVS_KEY_ATTR_ICMPV6,
                               &icmpv6_key, sizeof icmpv6_key);
-
-            icmpv6_mask.icmpv6_type = icmpv6_type_mask;
-            icmpv6_mask.icmpv6_code = icmpv6_code_mask;
             nl_msg_put_unspec(mask, OVS_KEY_ATTR_ICMPV6, &icmpv6_mask,
                               sizeof icmpv6_mask);
             return n;
-        } else if (sscanf(s, "icmpv6(type=%"SCNi8",code=%"SCNi8")%n",
-                   &icmpv6_key.icmpv6_type, &icmpv6_key.icmpv6_code,&n) > 0
-            && n > 0) {
+        } else if (ovs_scan(s, "icmpv6(type=%"SCNi8",code=%"SCNi8")%n",
+                            &icmpv6_key.icmpv6_type, &icmpv6_key.icmpv6_code,
+                            &n)) {
             nl_msg_put_unspec(key, OVS_KEY_ATTR_ICMPV6,
                               &icmpv6_key, sizeof icmpv6_key);
 
@@ -2229,60 +2166,40 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
     }
 
     {
-        ovs_be32 arp_sip, arp_sip_mask;
-        ovs_be32 arp_tip, arp_tip_mask;
-        int arp_op, arp_op_mask;
-        uint8_t arp_sha[ETH_ADDR_LEN];
-        uint8_t arp_sha_mask[ETH_ADDR_LEN];
-        uint8_t arp_tha[ETH_ADDR_LEN];
-        uint8_t arp_tha_mask[ETH_ADDR_LEN];
+        struct ovs_key_arp arp_key;
+        struct ovs_key_arp arp_mask;
+        uint16_t arp_op, arp_op_mask;
         int n = -1;
 
-        if (mask && sscanf(s, "arp(sip="IP_SCAN_FMT"/"IP_SCAN_FMT","
-                   "tip="IP_SCAN_FMT"/"IP_SCAN_FMT","
-                   "op=%i/%i,sha="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT","
-                   "tha="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT")%n",
-                   IP_SCAN_ARGS(&arp_sip), IP_SCAN_ARGS(&arp_sip_mask),
-                   IP_SCAN_ARGS(&arp_tip), IP_SCAN_ARGS(&arp_tip_mask),
-                   &arp_op, &arp_op_mask,
-                   ETH_ADDR_SCAN_ARGS(arp_sha),
-                   ETH_ADDR_SCAN_ARGS(arp_sha_mask),
-                   ETH_ADDR_SCAN_ARGS(arp_tha),
-                   ETH_ADDR_SCAN_ARGS(arp_tha_mask), &n) > 0 && n > 0) {
-            struct ovs_key_arp arp_key;
-            struct ovs_key_arp arp_mask;
-
-            memset(&arp_key, 0, sizeof arp_key);
-            arp_key.arp_sip = arp_sip;
-            arp_key.arp_tip = arp_tip;
+        if (mask && ovs_scan(s, "arp(sip="IP_SCAN_FMT"/"IP_SCAN_FMT","
+                             "tip="IP_SCAN_FMT"/"IP_SCAN_FMT","
+                             "op=%"SCNi16"/%"SCNi16","
+                             "sha="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT","
+                             "tha="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT")%n",
+                             IP_SCAN_ARGS(&arp_key.arp_sip),
+                             IP_SCAN_ARGS(&arp_mask.arp_sip),
+                             IP_SCAN_ARGS(&arp_key.arp_tip),
+                             IP_SCAN_ARGS(&arp_mask.arp_tip),
+                             &arp_op, &arp_op_mask,
+                             ETH_ADDR_SCAN_ARGS(arp_key.arp_sha),
+                             ETH_ADDR_SCAN_ARGS(arp_mask.arp_sha),
+                             ETH_ADDR_SCAN_ARGS(arp_key.arp_tha),
+                             ETH_ADDR_SCAN_ARGS(arp_mask.arp_tha), &n)) {
             arp_key.arp_op = htons(arp_op);
-            memcpy(arp_key.arp_sha, arp_sha, ETH_ADDR_LEN);
-            memcpy(arp_key.arp_tha, arp_tha, ETH_ADDR_LEN);
             nl_msg_put_unspec(key, OVS_KEY_ATTR_ARP, &arp_key, sizeof arp_key);
-
-            arp_mask.arp_sip = arp_sip_mask;
-            arp_mask.arp_tip = arp_tip_mask;
             arp_mask.arp_op = htons(arp_op_mask);
-            memcpy(arp_mask.arp_sha, arp_sha_mask, ETH_ADDR_LEN);
-            memcpy(arp_mask.arp_tha, arp_tha_mask, ETH_ADDR_LEN);
             nl_msg_put_unspec(mask, OVS_KEY_ATTR_ARP,
                               &arp_mask, sizeof arp_mask);
             return n;
-        } else if (sscanf(s, "arp(sip="IP_SCAN_FMT",tip="IP_SCAN_FMT","
-                   "op=%i,sha="ETH_ADDR_SCAN_FMT",tha="ETH_ADDR_SCAN_FMT")%n",
-                   IP_SCAN_ARGS(&arp_sip),
-                   IP_SCAN_ARGS(&arp_tip),
-                   &arp_op,
-                   ETH_ADDR_SCAN_ARGS(arp_sha),
-                   ETH_ADDR_SCAN_ARGS(arp_tha), &n) > 0 && n > 0) {
-            struct ovs_key_arp arp_key;
-
-            memset(&arp_key, 0, sizeof arp_key);
-            arp_key.arp_sip = arp_sip;
-            arp_key.arp_tip = arp_tip;
+        } else if (ovs_scan(s, "arp(sip="IP_SCAN_FMT",tip="IP_SCAN_FMT","
+                            "op=%"SCNi16",sha="ETH_ADDR_SCAN_FMT","
+                            "tha="ETH_ADDR_SCAN_FMT")%n",
+                            IP_SCAN_ARGS(&arp_key.arp_sip),
+                            IP_SCAN_ARGS(&arp_key.arp_tip),
+                            &arp_op,
+                            ETH_ADDR_SCAN_ARGS(arp_key.arp_sha),
+                            ETH_ADDR_SCAN_ARGS(arp_key.arp_tha), &n)) {
             arp_key.arp_op = htons(arp_op);
-            memcpy(arp_key.arp_sha, arp_sha, ETH_ADDR_LEN);
-            memcpy(arp_key.arp_tha, arp_tha, ETH_ADDR_LEN);
             nl_msg_put_unspec(key, OVS_KEY_ATTR_ARP, &arp_key, sizeof arp_key);
 
             if (mask) {
@@ -2307,59 +2224,63 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
         memset(nd_sll_mask, 0xff, sizeof nd_sll_mask);
         memset(nd_tll_mask, 0xff, sizeof nd_tll_mask);
 
-        if (mask && sscanf(s, "nd(target="IPV6_SCAN_FMT"/"IPV6_SCAN_FMT")%n",
-                   nd_target_s, nd_target_mask_s, &n) > 0 && n > 0) {
+        if (mask && ovs_scan(s, "nd(target="IPV6_SCAN_FMT"/"IPV6_SCAN_FMT")%n",
+                             nd_target_s, nd_target_mask_s, &n)) {
                 put_nd_key(n, nd_target_s, NULL, NULL, key);
                 put_nd_mask(n, nd_target_mask_s, NULL, NULL, mask);
-        } else if (sscanf(s, "nd(target="IPV6_SCAN_FMT")%n",
-                   nd_target_s, &n) > 0 && n > 0) {
+        } else if (ovs_scan(s, "nd(target="IPV6_SCAN_FMT")%n",
+                            nd_target_s, &n)) {
                 put_nd_key(n, nd_target_s, NULL, NULL, key);
                 if (mask) {
                     put_nd_mask(n, nd_target_mask_s, NULL, NULL, mask);
                 }
-        } else if (mask && sscanf(s, "nd(target="IPV6_SCAN_FMT"/"IPV6_SCAN_FMT
-                         ",sll="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT")%n",
-                   nd_target_s, nd_target_mask_s,
-                   ETH_ADDR_SCAN_ARGS(nd_sll),
-                   ETH_ADDR_SCAN_ARGS(nd_sll_mask), &n) > 0 && n > 0) {
+        } else if (mask &&
+                   ovs_scan(s, "nd(target="IPV6_SCAN_FMT"/"IPV6_SCAN_FMT
+                            ",sll="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT")%n",
+                            nd_target_s, nd_target_mask_s,
+                            ETH_ADDR_SCAN_ARGS(nd_sll),
+                            ETH_ADDR_SCAN_ARGS(nd_sll_mask), &n)) {
             put_nd_key(n, nd_target_s, nd_sll, NULL, key);
             put_nd_mask(n, nd_target_mask_s, nd_sll_mask, NULL, mask);
-        } else if (sscanf(s, "nd(target="IPV6_SCAN_FMT",sll="ETH_ADDR_SCAN_FMT")%n",
-                   nd_target_s, ETH_ADDR_SCAN_ARGS(nd_sll), &n) > 0
-            && n > 0) {
+        } else if (ovs_scan(s, "nd(target="IPV6_SCAN_FMT","
+                            "sll="ETH_ADDR_SCAN_FMT")%n",
+                            nd_target_s, ETH_ADDR_SCAN_ARGS(nd_sll), &n)) {
             put_nd_key(n, nd_target_s, nd_sll, NULL, key);
             if (mask) {
                 put_nd_mask(n, nd_target_mask_s, nd_sll_mask, NULL, mask);
             }
-        } else if (mask && sscanf(s, "nd(target="IPV6_SCAN_FMT"/"IPV6_SCAN_FMT
-                         ",tll="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT")%n",
-                   nd_target_s, nd_target_mask_s,
-                   ETH_ADDR_SCAN_ARGS(nd_tll),
-                   ETH_ADDR_SCAN_ARGS(nd_tll_mask), &n) > 0 && n > 0) {
+        } else if (mask &&
+                   ovs_scan(s, "nd(target="IPV6_SCAN_FMT"/"IPV6_SCAN_FMT
+                            ",tll="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT")%n",
+                            nd_target_s, nd_target_mask_s,
+                            ETH_ADDR_SCAN_ARGS(nd_tll),
+                            ETH_ADDR_SCAN_ARGS(nd_tll_mask), &n)) {
             put_nd_key(n, nd_target_s, NULL, nd_tll, key);
             put_nd_mask(n, nd_target_mask_s, NULL, nd_tll_mask, mask);
-        } else if (sscanf(s, "nd(target="IPV6_SCAN_FMT",tll="ETH_ADDR_SCAN_FMT")%n",
-                   nd_target_s, ETH_ADDR_SCAN_ARGS(nd_tll), &n) > 0
-            && n > 0) {
+        } else if (ovs_scan(s, "nd(target="IPV6_SCAN_FMT","
+                            "tll="ETH_ADDR_SCAN_FMT")%n",
+                            nd_target_s, ETH_ADDR_SCAN_ARGS(nd_tll), &n)) {
             put_nd_key(n, nd_target_s, NULL, nd_tll, key);
             if (mask) {
                 put_nd_mask(n, nd_target_mask_s, NULL, nd_tll_mask, mask);
             }
-        } else if (mask && sscanf(s, "nd(target="IPV6_SCAN_FMT"/"IPV6_SCAN_FMT
-                   ",sll="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT","
-                   "tll="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT")%n",
-                   nd_target_s, nd_target_mask_s,
-                   ETH_ADDR_SCAN_ARGS(nd_sll), ETH_ADDR_SCAN_ARGS(nd_sll_mask),
-                   ETH_ADDR_SCAN_ARGS(nd_tll), ETH_ADDR_SCAN_ARGS(nd_tll_mask),
-                   &n) > 0
-            && n > 0) {
+        } else if (mask &&
+                   ovs_scan(s, "nd(target="IPV6_SCAN_FMT"/"IPV6_SCAN_FMT
+                            ",sll="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT","
+                            "tll="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT")%n",
+                            nd_target_s, nd_target_mask_s,
+                            ETH_ADDR_SCAN_ARGS(nd_sll),
+                            ETH_ADDR_SCAN_ARGS(nd_sll_mask),
+                            ETH_ADDR_SCAN_ARGS(nd_tll),
+                            ETH_ADDR_SCAN_ARGS(nd_tll_mask),
+                   &n)) {
             put_nd_key(n, nd_target_s, nd_sll, nd_tll, key);
             put_nd_mask(n, nd_target_mask_s, nd_sll_mask, nd_tll_mask, mask);
-        } else if (sscanf(s, "nd(target="IPV6_SCAN_FMT",sll="ETH_ADDR_SCAN_FMT","
-                   "tll="ETH_ADDR_SCAN_FMT")%n",
-                   nd_target_s, ETH_ADDR_SCAN_ARGS(nd_sll),
-                   ETH_ADDR_SCAN_ARGS(nd_tll), &n) > 0
-            && n > 0) {
+        } else if (ovs_scan(s, "nd(target="IPV6_SCAN_FMT","
+                            "sll="ETH_ADDR_SCAN_FMT","
+                            "tll="ETH_ADDR_SCAN_FMT")%n",
+                            nd_target_s, ETH_ADDR_SCAN_ARGS(nd_sll),
+                            ETH_ADDR_SCAN_ARGS(nd_tll), &n)) {
             put_nd_key(n, nd_target_s, nd_sll, nd_tll, key);
             if (mask) {
                 put_nd_mask(n, nd_target_mask_s,

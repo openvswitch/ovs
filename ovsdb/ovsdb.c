@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -140,7 +140,7 @@ static bool
 is_valid_version(const char *s)
 {
     int n = -1;
-    ignore(sscanf(s, "%*[0-9].%*[0-9].%*[0-9]%n", &n));
+    ignore(ovs_scan(s, "%*[0-9].%*[0-9].%*[0-9]%n", &n));
     return n != -1 && s[n] == '\0';
 }
 

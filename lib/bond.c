@@ -1261,7 +1261,7 @@ bond_unixctl_hash(struct unixctl_conn *conn, int argc, const char *argv[],
     uint32_t basis;
 
     if (vlan_s) {
-        if (sscanf(vlan_s, "%u", &vlan) != 1) {
+        if (!ovs_scan(vlan_s, "%u", &vlan)) {
             unixctl_command_reply_error(conn, "invalid vlan");
             return;
         }
@@ -1270,7 +1270,7 @@ bond_unixctl_hash(struct unixctl_conn *conn, int argc, const char *argv[],
     }
 
     if (basis_s) {
-        if (sscanf(basis_s, "%"PRIu32, &basis) != 1) {
+        if (!ovs_scan(basis_s, "%"SCNu32, &basis)) {
             unixctl_command_reply_error(conn, "invalid basis");
             return;
         }
@@ -1278,8 +1278,7 @@ bond_unixctl_hash(struct unixctl_conn *conn, int argc, const char *argv[],
         basis = 0;
     }
 
-    if (sscanf(mac_s, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))
-        == ETH_ADDR_SCAN_COUNT) {
+    if (ovs_scan(mac_s, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))) {
         hash = bond_hash_src(mac, vlan, basis) & BOND_MASK;
 
         hash_cstr = xasprintf("%u", hash);
