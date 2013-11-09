@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,10 +35,12 @@ bitmap_bit__(size_t offset)
     return 1UL << (offset % BITMAP_ULONG_BITS);
 }
 
+#define BITMAP_N_LONGS(N_BITS) DIV_ROUND_UP(N_BITS, BITMAP_ULONG_BITS)
+
 static inline size_t
 bitmap_n_longs(size_t n_bits)
 {
-    return DIV_ROUND_UP(n_bits, BITMAP_ULONG_BITS);
+    return BITMAP_N_LONGS(n_bits);
 }
 
 static inline size_t
