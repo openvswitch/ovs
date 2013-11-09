@@ -2594,7 +2594,7 @@ mf_from_tun_flags_string(const char *s, ovs_be16 *valuep, ovs_be16 *maskp)
     }
 
     return xasprintf("%s: unknown tunnel flags (valid flags are \"df\", "
-                     "\"csum\", \"key\"", s);
+                     "\"csum\", \"key\")", s);
 }
 
 /* Parses 's', a string value for field 'mf', into 'value' and 'mask'.  Returns
