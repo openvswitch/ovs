@@ -226,7 +226,7 @@ Basic Configuration:
 
     # First install the basic requirements needed to build Open vSwitch.
     sudo apt-get install git build-essential libtool autoconf pkg-config \\
-            libssl-dev pkg-config gdb linux-headers-`uname -r`
+            libssl-dev gdb linux-headers-`uname -r`
 
     # Next clone the Open vSwitch source.
     git clone git://git.openvswitch.org/openvswitch %(ovs)s
