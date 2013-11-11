@@ -308,7 +308,7 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
                               cookie.flow_sample.collector_set_id,
                               cookie.flow_sample.obs_domain_id,
                               cookie.flow_sample.obs_point_id);
-            } else if (userdata_len == sizeof cookie.ipfix
+            } else if (userdata_len >= sizeof cookie.ipfix
                        && cookie.type == USER_ACTION_COOKIE_IPFIX) {
                 ds_put_format(ds, ",ipfix");
             } else {
