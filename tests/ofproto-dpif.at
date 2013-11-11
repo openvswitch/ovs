@@ -1608,6 +1608,25 @@ ovs-appctl: ovs-vswitchd: server returned an error
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - ofproto/trace-packet-out])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], 1, 2, 3)
+
+AT_DATA([flows.txt], [dnl
+in_port=1 actions=output:2
+in_port=2 actions=output:1
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ovs-appctl ofproto/trace-packet-out br0 in_port=1 'mod_vlan_vid:123,resubmit(,0)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: push_vlan(vid=123,pcp=0),2
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
 m4_define([OFPROTO_TRACE],
   [flow="$2"
    AT_CHECK([ovs-appctl ofproto/trace $1 "$flow" $3], [0], [stdout])

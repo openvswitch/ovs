@@ -6,15 +6,30 @@ These commands manage the core OpenFlow switch implementation (called
 Lists the names of the running ofproto instances.  These are the names
 that may be used on \fBofproto/trace\fR.
 .
-.IP "\fBofproto/trace\fR [\fIdpname\fR] \fIodp_flow\fR [\fB\-generate \fR| \
-\fIpacket\fR]"
-.IQ "\fBofproto/trace\fR \fIbridge\fR \fIbr_flow\fR \
-[\fB\-generate \fR| \fIpacket\fR]"
+.IP "\fBofproto/trace\fR [\fIdpname\fR] \fIodp_flow\fR [\fB\-generate \fR| \fIpacket\fR]"
+.IQ "\fBofproto/trace\fR \fIbridge\fR \fIbr_flow\fR [\fB\-generate \fR| \fIpacket\fR]"
+.IQ "\fBofproto/trace\-packet\-out\fR [\fB\-consistent\fR] [\fIdpname\fR] \fIodp_flow\fR [\fB\-generate \fR| \fIpacket\fR] \fIactions\fR"
+.IQ "\fBofproto/trace\-packet\-out\fR [\fB\-consistent\fR] \fIbridge\fR \fIbr_flow\fR [\fB\-generate \fR| \fIpacket\fR] \fIactions\fR"
 Traces the path of an imaginary packet through \fIswitch\fR and
-reports the path that it took.  The packet's headers (e.g. source and
-destination) and metadata (e.g. input port), together called its
-``flow,'' are usually all that matter for this purpose.  You can
-specify the flow in the following ways:
+reports the path that it took.  The initial treatment of the packet
+varies based on the command:
+.
+.RS
+.IP \(bu
+\fBofproto/trace\fR looks the packet up in the OpenFlow flow table, as
+if the packet had arrived on an OpenFlow port.
+.
+.IP \(bu
+\fBofproto/trace\-packet\-out\fR applies the specified OpenFlow
+\fIactions\fR, as if the packet, flow, and actions had been specified
+in an OpenFlow ``packet-out'' request.
+.RE
+.
+.IP
+The packet's headers (e.g. source and destination) and metadata
+(e.g. input port), together called its ``flow,'' are usually all that
+matter for the purpose of tracing a packet.  You can specify the flow
+in the following ways:
 .
 .RS
 .IP "\fIdpname\fR \fIodp_flow\fR"
@@ -41,13 +56,13 @@ instead of just a flow:
 .IP "Side effects."
 Some actions have side effects.  For example, the \fBnormal\fR action
 can update the MAC learning table, and the \fBlearn\fR action can
-change OpenFlow tables.  \fBofproto/trace\fR only performs side
+change OpenFlow tables.  The trace commands only perform side
 effects when a packet is specified.  If you want side effects to take
 place, then you must supply a packet.
 .
 .IP
 (Output actions are obviously side effects too, but
-\fBofproto/trace\fR never executes them, even when one specifies a
+the trace commands never execute them, even when one specifies a
 packet.)
 .
 .IP "Incomplete information."
@@ -55,12 +70,12 @@ Most of the time, Open vSwitch can figure out everything about the
 path of a packet using just the flow, but in some special
 circumstances it needs to look at parts of the packet that are not
 included in the flow.  When this is the case, and you do not supply a
-packet, then \fBofproto/trace\fR will tell you it needs a packet.
+packet, then a trace command will tell you it needs a packet.
 .RE
 .
 .IP
-If you wish to include a packet as part of the \fBofproto/trace\fR
-operation, there are two ways to do it:
+If you wish to include a packet as part of a trace operation, there
+are two ways to do it:
 .
 .RS
 .IP \fB\-generate\fR
@@ -93,11 +108,25 @@ The tunnel ID on which the packet arrived.
 .IP \fIin_port\fR
 The port on which the packet arrived.
 .RE
+.RE
 .
+.IP
 The in_port value is kernel datapath port number for the first format
 and OpenFlow port number for the second format. The numbering of these
 two types of port usually differs and there is no relationship.
-.RE
+.
+.IP
+\fBofproto\-trace\-packet\-out\fR accepts an additional
+\fB\-consistent\fR option.  With this option specified, the command
+rejects \fIactions\fR that are inconsistent with the specified packet.
+(An example of an inconsistency is attempting to strip the VLAN tag
+from a packet that does not have a VLAN tag.)  Open vSwitch ignores
+most forms of inconsistency in OpenFlow 1.0 and rejects
+inconsistencies in later versions of OpenFlow.  The option is
+necessary because the command does not ordinarily imply a particular
+OpenFlow version.  One exception is that, when \fIactions\fR includes
+an action that only OpenFlow 1.1 and later supports (such as
+\fBpush_vlan\fR), \fB\-consistent\fR is automatically enabled.
 .IP "\fBofproto/self\-check\fR [\fIswitch\fR]"
 Runs an internal consistency check on \fIswitch\fR, if specified,
 otherwise on all ofproto instances, and responds with a brief summary
