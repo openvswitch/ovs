@@ -697,7 +697,6 @@ ofpacts_pull_openflow_actions(struct ofpbuf *openflow,
                               unsigned int actions_len,
                               enum ofp_version version,
                               struct ofpbuf *ofpacts) {
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
     const union ofp_action *actions;
     enum ofperr error;
 
@@ -1738,7 +1737,6 @@ ofpacts_pull_openflow_instructions(struct ofpbuf *openflow,
                                    enum ofp_version version,
                                    struct ofpbuf *ofpacts)
 {
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
     const struct ofp11_instruction *instructions;
     const struct ofp11_instruction *insts[N_OVS_INSTRUCTIONS];
     enum ofperr error;
