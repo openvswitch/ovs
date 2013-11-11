@@ -1461,9 +1461,8 @@ AT_CHECK([ovs-appctl ofproto/trace \
 AT_CHECK([tail -1 stdout], [0], [dnl
 Datapath actions: 2
 ])
-AT_CHECK([head -n 3 stdout], [0], [dnl
+AT_CHECK([head -n 2 stdout], [0], [dnl
 Bridge: br0
-Packet: arp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:01,dl_dst=50:54:00:00:00:02,arp_spa=0.0.0.0,arp_tpa=0.0.0.0,arp_sha=00:00:00:00:00:00,arp_tha=00:00:00:00:00:00
 Flow: pkt_mark=0x2,skb_priority=0x1,arp,metadata=0,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:01,dl_dst=50:54:00:00:00:02,arp_spa=0.0.0.0,arp_tpa=0.0.0.0,arp_sha=00:00:00:00:00:00,arp_tha=00:00:00:00:00:00
 ])
 
@@ -1473,9 +1472,8 @@ AT_CHECK([ovs-appctl ofproto/trace ovs-dummy \
 AT_CHECK([tail -1 stdout], [0], [dnl
 Datapath actions: 2
 ])
-AT_CHECK([head -n 3 stdout], [0], [dnl
+AT_CHECK([head -n 2 stdout], [0], [dnl
 Bridge: br0
-Packet: arp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:01,dl_dst=50:54:00:00:00:02,arp_spa=0.0.0.0,arp_tpa=0.0.0.0,arp_sha=00:00:00:00:00:00,arp_tha=00:00:00:00:00:00
 Flow: pkt_mark=0x2,skb_priority=0x1,arp,metadata=0,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:01,dl_dst=50:54:00:00:00:02,arp_spa=0.0.0.0,arp_tpa=0.0.0.0,arp_sha=00:00:00:00:00:00,arp_tha=00:00:00:00:00:00
 ])
 
@@ -1486,7 +1484,7 @@ AT_CHECK([tail -1 stdout], [0], [dnl
 Datapath actions: 1
 ])
 AT_CHECK([head -n 2 stdout], [0], [dnl
-Packet: arp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:02,dl_dst=50:54:00:00:00:01,arp_spa=0.0.0.0,arp_tpa=0.0.0.0,arp_sha=00:00:00:00:00:00,arp_tha=00:00:00:00:00:00
+Bridge: br0
 Flow: pkt_mark=0x1,skb_priority=0x2,arp,metadata=0,in_port=2,vlan_tci=0x0000,dl_src=50:54:00:00:00:02,dl_dst=50:54:00:00:00:01,arp_spa=0.0.0.0,arp_tpa=0.0.0.0,arp_sha=00:00:00:00:00:00,arp_tha=00:00:00:00:00:00
 ])
 

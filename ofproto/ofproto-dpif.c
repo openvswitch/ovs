@@ -5276,37 +5276,39 @@ trace_report(struct xlate_in *xin, const char *s, int recurse)
     ds_put_char(result, '\n');
 }
 
-static void
-ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
-                      void *aux OVS_UNUSED)
+/* Parses the 'argc' elements of 'argv', ignoring argv[0].  The following
+ * forms are supported:
+ *
+ *     - [dpname] odp_flow [-generate | packet]
+ *     - bridge br_flow [-generate | packet]
+ *
+ * On success, initializes '*ofprotop' and 'flow' and returns NULL.  On failure
+ * returns a nonnull error message. */
+static const char *
+parse_flow_and_packet(int argc, const char *argv[],
+                      struct ofproto_dpif **ofprotop, struct flow *flow,
+                      struct ofpbuf **packetp)
 {
     const struct dpif_backer *backer = NULL;
-    struct ofproto_dpif *ofproto;
-    struct ofpbuf odp_key, odp_mask;
+    const char *error = NULL;
+    struct simap port_names = SIMAP_INITIALIZER(&port_names);
     struct ofpbuf *packet;
-    struct ds result;
-    struct flow flow;
-    struct simap port_names;
-    char *s;
+    struct ofpbuf odp_key;
+    struct ofpbuf odp_mask;
 
-    packet = NULL;
-    backer = NULL;
-    ds_init(&result);
     ofpbuf_init(&odp_key, 0);
     ofpbuf_init(&odp_mask, 0);
-    simap_init(&port_names);
 
     /* Handle "-generate" or a hex string as the last argument. */
     if (!strcmp(argv[argc - 1], "-generate")) {
         packet = ofpbuf_new(0);
         argc--;
     } else {
-        const char *error = eth_from_hex(argv[argc - 1], &packet);
+        error = eth_from_hex(argv[argc - 1], &packet);
         if (!error) {
             argc--;
         } else if (argc == 4) {
             /* The 3-argument form must end in "-generate' or a hex string. */
-            unixctl_command_reply_error(conn, error);
             goto exit;
         }
     }
@@ -5323,12 +5325,15 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
             dp_type = argv[1];
         }
         backer = shash_find_data(&all_dpif_backers, dp_type);
-    } else {
+    } else if (argc == 2) {
         struct shash_node *node;
         if (shash_count(&all_dpif_backers) == 1) {
             node = shash_first(&all_dpif_backers);
             backer = node->data;
         }
+    } else {
+        error = "Syntax error";
+        goto exit;
     }
     if (backer && backer->dpif) {
         struct dpif_port dpif_port;
@@ -5343,63 +5348,83 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
      * bridge is specified. If function odp_flow_key_from_string()
      * returns 0, the flow is a odp_flow. If function
      * parse_ofp_exact_flow() returns 0, the flow is a br_flow. */
-    if (!odp_flow_from_string(argv[argc - 1], &port_names, &odp_key, &odp_mask)) {
+    if (!odp_flow_from_string(argv[argc - 1], &port_names,
+                              &odp_key, &odp_mask)) {
         if (!backer) {
-            unixctl_command_reply_error(conn, "Cannot find the datapath");
+            error = "Cannot find the datapath";
             goto exit;
         }
 
-        if (xlate_receive(backer, NULL, odp_key.data, odp_key.size, &flow,
-                          NULL, &ofproto, NULL)) {
-            unixctl_command_reply_error(conn, "Invalid datapath flow");
+        if (xlate_receive(backer, NULL, odp_key.data, odp_key.size, flow,
+                          NULL, ofprotop, NULL)) {
+            error = "Invalid datapath flow";
             goto exit;
         }
-        ds_put_format(&result, "Bridge: %s\n", ofproto->up.name);
-    } else if (!parse_ofp_exact_flow(&flow, NULL, argv[argc - 1], NULL)) {
+    } else if (!parse_ofp_exact_flow(flow, NULL, argv[argc - 1], NULL)) {
         if (argc != 3) {
-            unixctl_command_reply_error(conn, "Must specify bridge name");
+            error = "Must specify bridge name";
             goto exit;
         }
 
-        ofproto = ofproto_dpif_lookup(argv[1]);
-        if (!ofproto) {
-            unixctl_command_reply_error(conn, "Unknown bridge name");
+        *ofprotop = ofproto_dpif_lookup(argv[1]);
+        if (!*ofprotop) {
+            error = "Unknown bridge name";
             goto exit;
         }
     } else {
-        unixctl_command_reply_error(conn, "Bad flow syntax");
+        error = "Bad flow syntax";
         goto exit;
     }
 
     /* Generate a packet, if requested. */
     if (packet) {
         if (!packet->size) {
-            flow_compose(packet, &flow);
+            flow_compose(packet, flow);
         } else {
-            union flow_in_port in_port_;
-
-            in_port_ = flow.in_port;
-            ds_put_cstr(&result, "Packet: ");
-            s = ofp_packet_to_string(packet->data, packet->size);
-            ds_put_cstr(&result, s);
-            free(s);
+            union flow_in_port in_port = flow->in_port;
 
             /* Use the metadata from the flow and the packet argument
              * to reconstruct the flow. */
-            flow_extract(packet, flow.skb_priority, flow.pkt_mark, NULL,
-                         &in_port_, &flow);
+            flow_extract(packet, flow->skb_priority, flow->pkt_mark, NULL,
+                         &in_port, flow);
         }
     }
 
-    ofproto_trace(ofproto, &flow, packet, &result);
-    unixctl_command_reply(conn, ds_cstr(&result));
+    error = NULL;
 
 exit:
-    ds_destroy(&result);
-    ofpbuf_delete(packet);
+    if (error) {
+        ofpbuf_delete(packet);
+        packet = NULL;
+    }
+    *packetp = packet;
     ofpbuf_uninit(&odp_key);
     ofpbuf_uninit(&odp_mask);
     simap_destroy(&port_names);
+    return error;
+}
+
+static void
+ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
+                      void *aux OVS_UNUSED)
+{
+    struct ofproto_dpif *ofproto;
+    struct ofpbuf *packet;
+    const char *error;
+    struct flow flow;
+
+    error = parse_flow_and_packet(argc, argv, &ofproto, &flow, &packet);
+    if (!error) {
+        struct ds result;
+
+        ds_init(&result);
+        ofproto_trace(ofproto, &flow, packet, &result);
+        unixctl_command_reply(conn, ds_cstr(&result));
+        ds_destroy(&result);
+        ofpbuf_delete(packet);
+    } else {
+        unixctl_command_reply_error(conn, error);
+    }
 }
 
 static void
