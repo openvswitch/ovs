@@ -137,14 +137,22 @@ nl_attr_is_valid(const struct nlattr *nla, size_t maxlen)
 {
     return (maxlen >= sizeof *nla
             && nla->nla_len >= sizeof *nla
-            && NLA_ALIGN(nla->nla_len) <= maxlen);
+            && nla->nla_len <= maxlen);
+}
+
+static inline size_t
+nl_attr_len_pad(const struct nlattr *nla, size_t maxlen)
+{
+    size_t len = NLA_ALIGN(nla->nla_len);
+
+    return len <= maxlen ? len : nla->nla_len;
 }
 
 /* This macro is careful to check for attributes with bad lengths. */
 #define NL_ATTR_FOR_EACH(ITER, LEFT, ATTRS, ATTRS_LEN)                  \
     for ((ITER) = (ATTRS), (LEFT) = (ATTRS_LEN);                        \
          nl_attr_is_valid(ITER, LEFT);                                  \
-         (LEFT) -= NLA_ALIGN((ITER)->nla_len), (ITER) = nl_attr_next(ITER))
+         (LEFT) -= nl_attr_len_pad(ITER, LEFT), (ITER) = nl_attr_next(ITER))
 
 
 /* This macro does not check for attributes with bad lengths.  It should only
@@ -153,7 +161,7 @@ nl_attr_is_valid(const struct nlattr *nla, size_t maxlen)
 #define NL_ATTR_FOR_EACH_UNSAFE(ITER, LEFT, ATTRS, ATTRS_LEN)           \
     for ((ITER) = (ATTRS), (LEFT) = (ATTRS_LEN);                        \
          (LEFT) > 0;                                                    \
-         (LEFT) -= NLA_ALIGN((ITER)->nla_len), (ITER) = nl_attr_next(ITER))
+         (LEFT) -= nl_attr_len_pad(ITER, LEFT), (ITER) = nl_attr_next(ITER))
 
 /* These variants are convenient for iterating nested attributes. */
 #define NL_NESTED_FOR_EACH(ITER, LEFT, A)                               \
