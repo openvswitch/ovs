@@ -170,7 +170,6 @@ void
 udpif_recv_set(struct udpif *udpif, size_t n_handlers, bool enable)
 {
     n_handlers = enable ? n_handlers : 0;
-    n_handlers = MIN(n_handlers, 64);
 
     /* Stop the old threads (if any). */
     if (udpif->handlers && udpif->n_handlers != n_handlers) {
