@@ -465,4 +465,14 @@ struct ofp_vendor_header {
 };
 OFP_ASSERT(sizeof(struct ofp_vendor_header) == 12);
 
+/* Table numbering. Tables can use any number up to OFPT_MAX. */
+enum ofp_table {
+    /* Last usable table number. */
+    OFPTT_MAX = 0xfe,
+
+    /* Fake tables. */
+    OFPTT_ALL = 0xff         /* Wildcard table used for table config,
+                                flow stats and flow deletes. */
+};
+
 #endif /* openflow/openflow-common.h */

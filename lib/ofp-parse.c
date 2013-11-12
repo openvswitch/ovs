@@ -1845,7 +1845,7 @@ parse_ofp_table_mod(struct ofputil_table_mod *tm, const char *table_id,
     *usable_protocols = OFPUTIL_P_OF11_UP;
 
     if (!strcasecmp(table_id, "all")) {
-        tm->table_id = 255;
+        tm->table_id = OFPTT_ALL;
     } else {
         char *error = str_to_u8(table_id, "table_id", &tm->table_id);
         if (error) {

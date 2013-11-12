@@ -1542,10 +1542,10 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
 
         /* Get table ID.
          *
-         * OF1.1 entirely forbids table_id == 255.
-         * OF1.2+ allows table_id == 255 only for deletes. */
+         * OF1.1 entirely forbids table_id == OFPTT_ALL.
+         * OF1.2+ allows table_id == OFPTT_ALL only for deletes. */
         fm->table_id = ofm->table_id;
-        if (fm->table_id == 255
+        if (fm->table_id == OFPTT_ALL
             && (oh->version == OFP11_VERSION
                 || (ofm->command != OFPFC_DELETE &&
                     ofm->command != OFPFC_DELETE_STRICT))) {
@@ -2093,7 +2093,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
             ofm->cookie = fm->cookie;
         }
         ofm->cookie_mask = fm->cookie_mask;
-        if (fm->table_id != 255
+        if (fm->table_id != OFPTT_ALL
             || (protocol != OFPUTIL_P_OF11_STD
                 && (fm->command == OFPFC_DELETE ||
                     fm->command == OFPFC_DELETE_STRICT))) {
