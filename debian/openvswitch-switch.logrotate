@@ -7,8 +7,10 @@
     rotate 30
     postrotate
     # Tell Open vSwitch daemons to reopen their log files
-    for pidfile in `cd /var/run/openvswitch && echo *.pid`; do
-        ovs-appctl -t "${pidfile%%.pid}" vlog/reopen
-    done
+    if [ -d /var/run/openvswitch ]; then
+        for pidfile in `cd /var/run/openvswitch && echo *.pid`; do
+            ovs-appctl -t "${pidfile%%.pid}" vlog/reopen
+        done
+    fi
     endscript
 }
