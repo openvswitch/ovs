@@ -475,4 +475,12 @@ enum ofp_table {
                                 flow stats and flow deletes. */
 };
 
+enum ofp_table_config {
+    OFPTC_TABLE_MISS_CONTROLLER = 0 << 0, /* Send to controller. */
+    OFPTC_TABLE_MISS_CONTINUE = 1 << 0, /* Continue to the next table in the
+                                           pipeline (OpenFlow 1.0 behavior). */
+    OFPTC_TABLE_MISS_DROP = 2 << 0, /* Drop the packet. */
+    OFPTC_TABLE_MISS_MASK = 3 << 0
+};
+
 #endif /* openflow/openflow-common.h */
