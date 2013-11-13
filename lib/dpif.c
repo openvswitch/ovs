@@ -883,14 +883,18 @@ dpif_flow_put__(struct dpif *dpif, const struct dpif_flow_put *put)
 
 /* Adds or modifies a flow in 'dpif'.  The flow is specified by the Netlink
  * attribute OVS_FLOW_ATTR_KEY with types OVS_KEY_ATTR_* in the 'key_len' bytes
- * starting at 'key', and OVS_FLOW_ATTR_MASK with types of OVS_KEY_ATTR_* in the
- * 'mask_len' bytes starting at 'mask'. The associated actions are specified by
- * the Netlink attributes with types OVS_ACTION_ATTR_* in the 'actions_len'
- * bytes starting at 'actions'.
+ * starting at 'key', and OVS_FLOW_ATTR_MASK with types of OVS_KEY_ATTR_* in
+ * the 'mask_len' bytes starting at 'mask'. The associated actions are
+ * specified by the Netlink attributes with types OVS_ACTION_ATTR_* in the
+ * 'actions_len' bytes starting at 'actions'.
  *
  * - If the flow's key does not exist in 'dpif', then the flow will be added if
  *   'flags' includes DPIF_FP_CREATE.  Otherwise the operation will fail with
  *   ENOENT.
+ *
+ *   The datapath may reject attempts to insert overlapping flows with EINVAL
+ *   or EEXIST, but clients should not rely on this: avoiding overlapping flows
+ *   is primarily the client's responsibility.
  *
  *   If the operation succeeds, then 'stats', if nonnull, will be zeroed.
  *

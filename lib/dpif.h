@@ -103,12 +103,12 @@
  * Flow Table
  * ==========
  *
- * The flow table is a hash table of "flow entries".  Each flow entry contains:
+ * The flow table is a collection of "flow entries".  Each flow entry contains:
  *
  *    - A "flow", that is, a summary of the headers in an Ethernet packet.  The
- *      flow is the hash key and thus must be unique within the flow table.
- *      Flows are fine-grained entities that include L2, L3, and L4 headers.  A
- *      single TCP connection consists of two flows, one in each direction.
+ *      flow must be unique within the flow table.  Flows are fine-grained
+ *      entities that include L2, L3, and L4 headers.  A single TCP connection
+ *      consists of two flows, one in each direction.
  *
  *      In Open vSwitch userspace, "struct flow" is the typical way to describe
  *      a flow, but the datapath interface uses a different data format to
@@ -117,11 +117,37 @@
  *      "struct ovs_key_*" in include/linux/openvswitch.h for details.
  *      lib/odp-util.h defines several functions for working with these flows.
  *
- *      (In case you are familiar with OpenFlow, datapath flows are analogous
- *      to OpenFlow flow matches.  The most important difference is that
- *      OpenFlow allows fields to be wildcarded and prioritized, whereas a
- *      datapath's flow table is a hash table so every flow must be
- *      exact-match, thus without priorities.)
+ *    - A "mask" that, for each bit in the flow, specifies whether the datapath
+ *      should consider the corresponding flow bit when deciding whether a
+ *      given packet matches the flow entry.  The original datapath design did
+ *      not support matching: every flow entry was exact match.  With the
+ *      addition of a mask, the interface supports datapaths with a spectrum of
+ *      wildcard matching capabilities, from those that only support exact
+ *      matches to those that support bitwise wildcarding on the entire flow
+ *      key, as well as datapaths with capabilities somewhere in between.
+ *
+ *      Datapaths do not provide a way to query their wildcarding capabilities,
+ *      nor is it expected that the client should attempt to probe for the
+ *      details of their support.  Instead, a client installs flows with masks
+ *      that wildcard as many bits as acceptable.  The datapath then actually
+ *      wildcards as many of those bits as it can and changes the wildcard bits
+ *      that it does not support into exact match bits.  A datapath that can
+ *      wildcard any bit, for example, would install the supplied mask, an
+ *      exact-match only datapath would install an exact-match mask regardless
+ *      of what mask the client supplied, and a datapath in the middle of the
+ *      spectrum would selectively change some wildcard bits into exact match
+ *      bits.
+ *
+ *      Regardless of the requested or installed mask, the datapath retains the
+ *      original flow supplied by the client.  (It does not, for example, "zero
+ *      out" the wildcarded bits.)  This allows the client to unambiguously
+ *      identify the flow entry in later flow table operations.
+ *
+ *      The flow table does not have priorities; that is, all flow entries have
+ *      equal priority.  Detecting overlapping flow entries is expensive in
+ *      general, so the datapath is not required to do it.  It is primarily the
+ *      client's responsibility not to install flow entries whose flow and mask
+ *      combinations overlap.
  *
  *    - A list of "actions" that tell the datapath what to do with packets
  *      within a flow.  Some examples of actions are OVS_ACTION_ATTR_OUTPUT,
