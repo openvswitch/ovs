@@ -1,5 +1,10 @@
 Post-v2.0.0
 ---------------------
+   - TCP flags matching: OVS now supports matching of TCP flags.  This
+     has an adverse performance impact when using OVS userspace 1.10
+     or older (no megaflows support) together with the new OVS kernel
+     module.  It is recommended that the kernel and userspace modules
+     both are upgraded at the same time.
    - The default OpenFlow and OVSDB ports will change to
      IANA-assigned numbers in a future release.  Consider updating
      your installations to specify port numbers instead of using the

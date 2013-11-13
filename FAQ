@@ -468,6 +468,27 @@ A: Open vSwitch uses different kinds of flows for different purposes:
         regardless of the type.
 
 
+Performance
+-----------
+
+Q: I just upgraded and I see a performance drop.  Why?
+
+A: The OVS kernel datapath may have been updated to a newer version than
+   the OVS userspace components.  Sometimes new versions of OVS kernel
+   module add functionality that is backwards compatible with older
+   userspace components but may cause a drop in performance with them.
+   Especially, if a kernel module from OVS 2.1 or newer is paired with
+   OVS userspace 1.10 or older, there will be a performance drop for
+   TCP traffic.
+
+   Updating the OVS userspace components to the latest released
+   version should fix the performance degradation.
+
+   To get the best possible performance and functionality, it is
+   recommended to pair the same versions of the kernel module and OVS
+   userspace.
+
+
 Configuration Problems
 ----------------------
 
