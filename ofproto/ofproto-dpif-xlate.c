@@ -219,10 +219,10 @@ static void do_xlate_actions(const struct ofpact *, size_t ofpacts_len,
                              struct xlate_ctx *);
 static void xlate_actions__(struct xlate_in *, struct xlate_out *)
     OVS_REQ_RDLOCK(xlate_rwlock);
-static void xlate_normal(struct xlate_ctx *);
-static void xlate_report(struct xlate_ctx *, const char *);
-static void xlate_table_action(struct xlate_ctx *, ofp_port_t in_port,
-                               uint8_t table_id, bool may_packet_in);
+    static void xlate_normal(struct xlate_ctx *);
+    static void xlate_report(struct xlate_ctx *, const char *);
+    static void xlate_table_action(struct xlate_ctx *, ofp_port_t in_port,
+                                   uint8_t table_id, bool may_packet_in);
 static bool input_vid_is_valid(uint16_t vid, struct xbundle *, bool warn);
 static uint16_t input_vid_to_vlan(const struct xbundle *, uint16_t vid);
 static void output_normal(struct xlate_ctx *, const struct xbundle *,
@@ -559,8 +559,8 @@ xlate_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
     }
 
     xport = xport_lookup(tnl_port_should_receive(flow)
-            ? tnl_port_receive(flow)
-            : odp_port_to_ofport(backer, flow->in_port.odp_port));
+                         ? tnl_port_receive(flow)
+                         : odp_port_to_ofport(backer, flow->in_port.odp_port));
 
     flow->in_port.ofp_port = xport ? xport->ofp_port : OFPP_NONE;
     if (!xport) {
@@ -794,10 +794,10 @@ bucket_is_alive(const struct xlate_ctx *ctx,
     }
 
     return !ofputil_bucket_has_liveness(bucket) ||
-           (bucket->watch_port != OFPP_ANY &&
-            odp_port_is_alive(ctx, bucket->watch_port)) ||
-           (bucket->watch_group != OFPG_ANY &&
-            group_is_alive(ctx, bucket->watch_group, depth + 1));
+        (bucket->watch_port != OFPP_ANY &&
+         odp_port_is_alive(ctx, bucket->watch_port)) ||
+        (bucket->watch_group != OFPG_ANY &&
+         group_is_alive(ctx, bucket->watch_group, depth + 1));
 }
 
 static const struct ofputil_bucket *
@@ -1148,6 +1148,11 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
             /* No slaves enabled, so drop packet. */
             return;
         }
+
+        if (ctx->xin->resubmit_stats) {
+            bond_account(out_xbundle->bond, &ctx->xin->flow, vid,
+                         ctx->xin->resubmit_stats->n_bytes);
+        }
     }
 
     old_tci = *flow_tci;
@@ -1207,7 +1212,7 @@ is_mac_learning_update_needed(const struct mac_learning *ml,
                               const struct flow *flow,
                               struct flow_wildcards *wc,
                               int vlan, struct xbundle *in_xbundle)
-    OVS_REQ_RDLOCK(ml->rwlock)
+OVS_REQ_RDLOCK(ml->rwlock)
 {
     struct mac_entry *mac;
 
@@ -1247,7 +1252,7 @@ static void
 update_learning_table__(const struct xbridge *xbridge,
                         const struct flow *flow, struct flow_wildcards *wc,
                         int vlan, struct xbundle *in_xbundle)
-    OVS_REQ_WRLOCK(xbridge->ml->rwlock)
+OVS_REQ_WRLOCK(xbridge->ml->rwlock)
 {
     struct mac_entry *mac;
 
@@ -1356,7 +1361,7 @@ is_admissible(struct xlate_ctx *ctx, struct xport *in_port,
                  || mac_entry_is_grat_arp_locked(mac))) {
                 ovs_rwlock_unlock(&xbridge->ml->rwlock);
                 xlate_report(ctx, "SLB bond thinks this packet looped back, "
-                            "dropping");
+                             "dropping");
                 return false;
             }
             ovs_rwlock_unlock(&xbridge->ml->rwlock);
@@ -3128,6 +3133,13 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
     }
 
     in_port = get_ofp_port(ctx.xbridge, flow->in_port.ofp_port);
+    if (in_port && in_port->is_tunnel && ctx.xin->resubmit_stats) {
+        netdev_vport_inc_rx(in_port->netdev, ctx.xin->resubmit_stats);
+        if (in_port->bfd) {
+            bfd_account_rx(in_port->bfd, ctx.xin->resubmit_stats);
+        }
+    }
+
     special = process_special(&ctx, flow, in_port, ctx.xin->packet);
     if (special) {
         ctx.xout->slow |= special;
@@ -3179,6 +3191,31 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
          * prevent the flow from being installed. */
         COVERAGE_INC(xlate_actions_oversize);
         ctx.xout->slow |= SLOW_ACTION;
+    }
+
+    if (ctx.xin->resubmit_stats) {
+        mirror_update_stats(ctx.xbridge->mbridge, xout->mirrors,
+                            ctx.xin->resubmit_stats->n_packets,
+                            ctx.xin->resubmit_stats->n_bytes);
+
+        if (ctx.xbridge->netflow) {
+            const struct ofpact *ofpacts;
+            size_t ofpacts_len;
+
+            ofpacts_len = actions->ofpacts_len;
+            ofpacts = actions->ofpacts;
+            if (ofpacts_len == 0
+                || ofpacts->type != OFPACT_CONTROLLER
+                || ofpact_next(ofpacts) < ofpact_end(ofpacts, ofpacts_len)) {
+                /* Only update netflow if we don't have controller flow.  We don't
+                 * report NetFlow expiration messages for such facets because they
+                 * are just part of the control logic for the network, not real
+                 * traffic. */
+                netflow_flow_update(ctx.xbridge->netflow, flow,
+                                    xout->nf_output_iface,
+                                    ctx.xin->resubmit_stats);
+            }
+        }
     }
 
     ofpbuf_uninit(&ctx.stack);

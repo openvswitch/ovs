@@ -286,7 +286,6 @@ struct facet {
     long long int prev_used;     /* Used time from last stats push. */
 
     /* Accounting. */
-    uint64_t accounted_bytes;    /* Bytes processed by facet_account(). */
     uint16_t tcp_flags;          /* TCP flags seen for this 'rule'. */
 
     struct xlate_out xout;
@@ -318,7 +317,6 @@ static void flow_push_stats(struct ofproto_dpif *, struct flow *,
                             struct dpif_flow_stats *, bool may_learn);
 static void facet_push_stats(struct facet *, bool may_learn);
 static void facet_learn(struct facet *);
-static void facet_account(struct facet *);
 static void push_all_stats(void);
 
 static bool facet_is_controller_flow(struct facet *);
@@ -2820,13 +2818,6 @@ get_ofp_port(const struct ofproto_dpif *ofproto, ofp_port_t ofp_port)
     return ofport ? ofport_dpif_cast(ofport) : NULL;
 }
 
-static struct ofport_dpif *
-get_odp_port(const struct ofproto_dpif *ofproto, odp_port_t odp_port)
-{
-    struct ofport_dpif *port = odp_port_to_ofport(ofproto->backer, odp_port);
-    return port && &ofproto->up == port->up.ofproto ? port : NULL;
-}
-
 static void
 ofproto_port_from_dpif_port(struct ofproto_dpif *ofproto,
                             struct ofproto_port *ofproto_port,
@@ -3582,10 +3573,8 @@ update_subfacet_stats(struct subfacet *subfacet,
     subfacet->dp_byte_count = stats->n_bytes;
     subfacet_update_stats(subfacet, &diff);
 
-    if (facet->accounted_bytes < facet->byte_count) {
+    if (diff.n_packets) {
         facet_learn(facet);
-        facet_account(facet);
-        facet->accounted_bytes = facet->byte_count;
     }
 }
 
@@ -3856,11 +3845,6 @@ facet_create(const struct flow_miss *miss)
     classifier_insert(&ofproto->facets, &facet->cr);
     ovs_rwlock_unlock(&ofproto->facets.rwlock);
 
-    if (ofproto->netflow && !facet_is_controller_flow(facet)) {
-        netflow_flow_update(ofproto->netflow, &facet->flow,
-                            facet->xout.nf_output_iface, &miss->stats);
-    }
-
     return facet;
 }
 
@@ -3980,54 +3964,6 @@ facet_learn(struct facet *facet)
     facet_push_stats(facet, true);
 }
 
-static void
-facet_account(struct facet *facet)
-{
-    const struct nlattr *a;
-    unsigned int left;
-    ovs_be16 vlan_tci;
-    uint64_t n_bytes;
-
-    if (!facet->xout.has_normal || !facet->ofproto->has_bonded_bundles) {
-        return;
-    }
-    n_bytes = facet->byte_count - facet->accounted_bytes;
-
-    /* This loop feeds byte counters to bond_account() for rebalancing to use
-     * as a basis.  We also need to track the actual VLAN on which the packet
-     * is going to be sent to ensure that it matches the one passed to
-     * bond_choose_output_slave().  (Otherwise, we will account to the wrong
-     * hash bucket.)
-     *
-     * We use the actions from an arbitrary subfacet because they should all
-     * be equally valid for our purpose. */
-    vlan_tci = facet->flow.vlan_tci;
-    NL_ATTR_FOR_EACH_UNSAFE (a, left, facet->xout.odp_actions.data,
-                             facet->xout.odp_actions.size) {
-        const struct ovs_action_push_vlan *vlan;
-        struct ofport_dpif *port;
-
-        switch (nl_attr_type(a)) {
-        case OVS_ACTION_ATTR_OUTPUT:
-            port = get_odp_port(facet->ofproto, nl_attr_get_odp_port(a));
-            if (port && port->bundle && port->bundle->bond) {
-                bond_account(port->bundle->bond, &facet->flow,
-                             vlan_tci_to_vid(vlan_tci), n_bytes);
-            }
-            break;
-
-        case OVS_ACTION_ATTR_POP_VLAN:
-            vlan_tci = htons(0);
-            break;
-
-        case OVS_ACTION_ATTR_PUSH_VLAN:
-            vlan = nl_attr_get(a);
-            vlan_tci = vlan->vlan_tci;
-            break;
-        }
-    }
-}
-
 /* Returns true if the only action for 'facet' is to send to the controller.
  * (We don't report NetFlow expiration messages for such facets because they
  * are just part of the control logic for the network, not real traffic). */
@@ -4074,10 +4010,6 @@ facet_flush_stats(struct facet *facet)
     }
 
     facet_push_stats(facet, false);
-    if (facet->accounted_bytes < facet->byte_count) {
-        facet_account(facet);
-        facet->accounted_bytes = facet->byte_count;
-    }
 
     if (ofproto->netflow && !facet_is_controller_flow(facet)) {
         netflow_expire(ofproto->netflow, &facet->flow);
@@ -4283,23 +4215,13 @@ facet_reset_counters(struct facet *facet)
     facet->byte_count = 0;
     facet->prev_packet_count = 0;
     facet->prev_byte_count = 0;
-    facet->accounted_bytes = 0;
 }
 
 static void
 flow_push_stats(struct ofproto_dpif *ofproto, struct flow *flow,
                 struct dpif_flow_stats *stats, bool may_learn)
 {
-    struct ofport_dpif *in_port;
     struct xlate_in xin;
-
-    in_port = get_ofp_port(ofproto, flow->in_port.ofp_port);
-    if (in_port && in_port->is_tunnel) {
-        netdev_vport_inc_rx(in_port->up.netdev, stats);
-        if (in_port->bfd) {
-            bfd_account_rx(in_port->bfd, stats);
-        }
-    }
 
     xlate_in_init(&xin, ofproto, flow, NULL, stats->tcp_flags, NULL);
     xin.resubmit_stats = stats;
@@ -4325,13 +4247,6 @@ facet_push_stats(struct facet *facet, bool may_learn)
         facet->prev_packet_count = facet->packet_count;
         facet->prev_byte_count = facet->byte_count;
         facet->prev_used = facet->used;
-
-        if (facet->ofproto->netflow && !facet_is_controller_flow(facet)) {
-            netflow_flow_update(facet->ofproto->netflow, &facet->flow,
-                                facet->xout.nf_output_iface, &stats);
-        }
-        mirror_update_stats(facet->ofproto->mbridge, facet->xout.mirrors,
-                            stats.n_packets, stats.n_bytes);
         flow_push_stats(facet->ofproto, &facet->flow, &stats, may_learn);
     }
 }
