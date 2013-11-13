@@ -976,6 +976,30 @@ Neighbor Advertisement (ICMPv6 type 136), matches the target link\-layer
 address option.  An address is specified as 6 pairs of hexadecimal
 digits delimited by colons.
 .
+.IP \fBmpls_bos=\fIbos\fR
+When \fBdl_type\fR is 0x8847 or 0x8848 (possibly via shorthand e.g.,
+\fBmpls\fR or \fBmplsm\fR), matches the bottom-of-stack bit of the
+outer-most MPLS label stack entry. Valid values are 0 and 1.
+.IP
+If 1 then for a packet with a well-formed MPLS label stack the
+bottom-of-stack bit indicates that the outer label stack entry is also
+the inner-most label stack entry and thus that is that there is only one
+label stack entry present.  Conversely, if 0 then for a packet with a
+well-formed MPLS label stack the bottom-of-stack bit indicates that the
+outer label stack entry is not the inner-most label stack entry and
+thus there is more than one label stack entry present.
+.
+.IP \fBmpls_label=\fIlabel\fR
+When \fBdl_type\fR is 0x8847 or 0x8848 (possibly via shorthand e.g.,
+\fBmpls\fR or \fBmplsm\fR), matches the label of the outer
+MPLS label stack entry. The label is a 20-bit value that is decimal by default;
+use a \fB0x\fR prefix to specify them in hexadecimal.
+.
+.IP \fBmpls_tc=\fItc\fR
+When \fBdl_type\fR is 0x8847 or 0x8848 (possibly via shorthand e.g.,
+\fBmpls\fR or \fBmplsm\fR), matches the traffic-class of the outer
+MPLS label stack entry. Valid values are between 0 (lowest) and 7 (highest).
+.
 .IP \fBtun_id=\fItunnel-id\fR[\fB/\fImask\fR]
 .IQ \fBtunnel_id=\fItunnel-id\fR[\fB/\fImask\fR]
 Matches tunnel identifier \fItunnel-id\fR.  Only packets that arrive
