@@ -168,8 +168,8 @@ static int dpif_netdev_open(const struct dpif_class *, const char *name,
 static int dp_netdev_output_userspace(struct dp_netdev *, const struct ofpbuf *,
                                     int queue_no, const struct flow *,
                                     const struct nlattr *userdata);
-static void dp_netdev_execute_actions(struct dp_netdev *,
-                                      struct ofpbuf *, struct flow *,
+static void dp_netdev_execute_actions(struct dp_netdev *, const struct flow *,
+                                      struct ofpbuf *,
                                       const struct nlattr *actions,
                                       size_t actions_len);
 static void dp_netdev_port_input(struct dp_netdev *dp,
@@ -1128,7 +1128,7 @@ dpif_netdev_execute(struct dpif *dpif, const struct dpif_execute *execute)
         flow_extract(copy, md.skb_priority, md.pkt_mark, &md.tunnel,
                      &md.in_port, &key);
         ovs_mutex_lock(&dp_netdev_mutex);
-        dp_netdev_execute_actions(dp, copy, &key,
+        dp_netdev_execute_actions(dp, &key, copy,
                                   execute->actions, execute->actions_len);
         ovs_mutex_unlock(&dp_netdev_mutex);
         ofpbuf_delete(copy);
@@ -1244,7 +1244,7 @@ dp_netdev_port_input(struct dp_netdev *dp, struct dp_netdev_port *port,
     netdev_flow = dp_netdev_lookup_flow(dp, &key);
     if (netdev_flow) {
         dp_netdev_flow_used(netdev_flow, packet);
-        dp_netdev_execute_actions(dp, packet, &key,
+        dp_netdev_execute_actions(dp, &key, packet,
                                   netdev_flow->actions,
                                   netdev_flow->actions_len);
         dp->n_hit++;
@@ -1314,17 +1314,6 @@ dpif_netdev_wait(struct dpif *dpif)
     ovs_mutex_unlock(&dp_netdev_mutex);
 }
 
-static void
-dp_netdev_output_port(void *dp_, struct ofpbuf *packet,
-                      const struct flow *flow OVS_UNUSED, odp_port_t out_port)
-{
-    struct dp_netdev *dp = dp_;
-    struct dp_netdev_port *p = dp->ports[odp_to_u32(out_port)];
-    if (p) {
-        netdev_send(p->netdev, packet);
-    }
-}
-
 static int
 dp_netdev_output_userspace(struct dp_netdev *dp, const struct ofpbuf *packet,
                            int queue_no, const struct flow *flow,
@@ -1376,25 +1365,46 @@ dp_netdev_output_userspace(struct dp_netdev *dp, const struct ofpbuf *packet,
     }
 }
 
-static void
-dp_netdev_action_userspace(void *dp, struct ofpbuf *packet,
-                           const struct flow *key,
-                           const struct nlattr *a)
-{
-    const struct nlattr *userdata;
+struct dp_netdev_execute_aux {
+    struct dp_netdev *dp;
+    const struct flow *key;
+};
 
-    userdata = nl_attr_find_nested(a, OVS_USERSPACE_ATTR_USERDATA);
-    dp_netdev_output_userspace(dp, packet, DPIF_UC_ACTION, key, userdata);
+static void
+dp_netdev_action_output(void *aux_, struct ofpbuf *packet,
+                        const struct flow *flow OVS_UNUSED,
+                        odp_port_t out_port)
+{
+    struct dp_netdev_execute_aux *aux = aux_;
+    struct dp_netdev_port *p = aux->dp->ports[odp_to_u32(out_port)];
+    if (p) {
+        netdev_send(p->netdev, packet);
+    }
 }
 
 static void
-dp_netdev_execute_actions(struct dp_netdev *dp,
-                          struct ofpbuf *packet, struct flow *key,
-                          const struct nlattr *actions,
-                          size_t actions_len)
+dp_netdev_action_userspace(void *aux_, struct ofpbuf *packet,
+                           const struct flow *flow OVS_UNUSED,
+                           const struct nlattr *a)
 {
-    odp_execute_actions(dp, packet, key, actions, actions_len,
-                        dp_netdev_output_port, dp_netdev_action_userspace);
+    struct dp_netdev_execute_aux *aux = aux_;
+    const struct nlattr *userdata;
+
+    userdata = nl_attr_find_nested(a, OVS_USERSPACE_ATTR_USERDATA);
+    dp_netdev_output_userspace(aux->dp, packet, DPIF_UC_ACTION, aux->key,
+                               userdata);
+}
+
+static void
+dp_netdev_execute_actions(struct dp_netdev *dp, const struct flow *key,
+                          struct ofpbuf *packet,
+                          const struct nlattr *actions, size_t actions_len)
+{
+    struct dp_netdev_execute_aux aux = {dp, key};
+    struct flow md = *key;   /* Packet metadata, may be modified by actions. */
+
+    odp_execute_actions(&aux, packet, &md, actions, actions_len,
+                        dp_netdev_action_output, dp_netdev_action_userspace);
 }
 
 const struct dpif_class dpif_netdev_class = {
