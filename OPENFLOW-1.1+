@@ -138,15 +138,16 @@ didn't compare the specs carefully yet.)
       some kind of "hardware" support, if we judged it useful enough.)
       [optional for OF1.3+]
 
-    * MPLS BoS matching.  (Included in Simon's MPLS series?)
+    * MPLS BoS matching.
+      Part of MPLS patchset by Simon Horman.
       [optional for OF1.3+]
 
     * Provider Backbone Bridge tagging.  I don't plan to implement
       this (but we'd accept an implementation).
       [optional for OF1.3+]
 
-    * Rework tag order.  I'm not sure whether we need to do anything
-      for this. Part of MPLS patchset by Simon Horman.
+    * Rework tag order.
+      Part of MPLS patchset by Simon Horman.
       [required for v1.3+]
 
     * On-demand flow counters.  I think this might be a real
