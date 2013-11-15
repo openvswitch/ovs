@@ -1497,7 +1497,7 @@ scan_set(const char *s, const struct scan_spec *spec, const char **pp,
 static const char *
 scan_chars(const char *s, const struct scan_spec *spec, va_list *args)
 {
-    unsigned int n = spec->width == SIZE_MAX ? 1 : spec->width;
+    unsigned int n = spec->width == UINT_MAX ? 1 : spec->width;
 
     if (strlen(s) < n) {
         return NULL;
