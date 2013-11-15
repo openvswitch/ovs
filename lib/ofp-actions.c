@@ -1867,7 +1867,8 @@ ofpact_check_output_port(ofp_port_t port, ofp_port_t max_ports)
     }
 }
 
-/* May modify flow->dl_type and flow->vlan_tci, caller must restore them.
+/* May modify flow->dl_type, flow->nw_proto and flow->vlan_tci,
+ * caller must restore them.
  *
  * Modifies some actions, filling in fields that could not be properly set
  * without context. */
@@ -2054,6 +2055,10 @@ ofpact_check__(struct ofpact *a, struct flow *flow,
 
     case OFPACT_PUSH_MPLS:
         flow->dl_type = ofpact_get_PUSH_MPLS(a)->ethertype;
+        /* The packet is now MPLS and the MPLS payload is opaque.
+         * Thus nothing can be assumed about the network protocol.
+         * Temporarily mark that we have no nw_proto. */
+        flow->nw_proto = 0;
         return 0;
 
     case OFPACT_POP_MPLS:
@@ -2125,6 +2130,7 @@ ofpacts_check(struct ofpact ofpacts[], size_t ofpacts_len,
     struct ofpact *a;
     ovs_be16 dl_type = flow->dl_type;
     ovs_be16 vlan_tci = flow->vlan_tci;
+    uint8_t nw_proto = flow->nw_proto;
     enum ofperr error = 0;
 
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
@@ -2137,6 +2143,7 @@ ofpacts_check(struct ofpact ofpacts[], size_t ofpacts_len,
     /* Restore fields that may have been modified. */
     flow->dl_type = dl_type;
     flow->vlan_tci = vlan_tci;
+    flow->nw_proto = nw_proto;
     return error;
 }
 

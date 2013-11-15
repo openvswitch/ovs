@@ -477,3 +477,15 @@ AT_CHECK(
   [ovs-ofctl '-vPATTERN:console:%c|%p|%m' parse-ofp11-instructions < input.txt],
   [0], [expout], [experr])
 AT_CLEANUP
+
+AT_SETUP([ofp-actions - inconsistent MPLS actions])
+OVS_VSWITCHD_START
+dnl OK: Use fin_timeout action on TCP flow
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-flow br0 'tcp actions=fin_timeout(idle_timeout=1)'])
+dnl Bad: Use fin_timeout action on TCP flow that has been converted to MPLS
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-flow br0 'tcp actions=push_mpls:0x8847,fin_timeout(idle_timeout=1)'],
+         [1], [], [dnl
+ovs-ofctl: actions are invalid with specified match (OFPBAC_MATCH_INCONSISTENT)
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
