@@ -1867,14 +1867,26 @@ ofpact_check_output_port(ofp_port_t port, ofp_port_t max_ports)
     }
 }
 
+/* Removes the protocols that require consistency between match and actions
+ * (that's everything but OpenFlow 1.0) from '*usable_protocols'.
+ *
+ * (An example of an inconsistency between match and actions is a flow that
+ * does not match on an MPLS Ethertype but has an action that pops an MPLS
+ * label.) */
+static void
+inconsistent_match(enum ofputil_protocol *usable_protocols)
+{
+    *usable_protocols &= OFPUTIL_P_OF10_ANY;
+}
+
 /* May modify flow->dl_type, flow->nw_proto and flow->vlan_tci,
  * caller must restore them.
  *
  * Modifies some actions, filling in fields that could not be properly set
  * without context. */
 static enum ofperr
-ofpact_check__(struct ofpact *a, struct flow *flow,
-               bool enforce_consistency, ofp_port_t max_ports,
+ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
+               struct flow *flow, ofp_port_t max_ports,
                uint8_t table_id, uint8_t n_tables)
 {
     const struct ofpact_enqueue *enqueue;
@@ -1910,7 +1922,7 @@ ofpact_check__(struct ofpact *a, struct flow *flow,
             (flow->vlan_tci & htons(VLAN_CFI)) == htons(VLAN_CFI);
         if (!(flow->vlan_tci & htons(VLAN_CFI)) &&
             !ofpact_get_SET_VLAN_VID(a)->push_vlan_if_needed) {
-            goto inconsistent;
+            inconsistent_match(usable_protocols);
         }
         /* Temporary mark that we have a vlan tag. */
         flow->vlan_tci |= htons(VLAN_CFI);
@@ -1923,7 +1935,7 @@ ofpact_check__(struct ofpact *a, struct flow *flow,
             (flow->vlan_tci & htons(VLAN_CFI)) == htons(VLAN_CFI);
         if (!(flow->vlan_tci & htons(VLAN_CFI)) &&
             !ofpact_get_SET_VLAN_PCP(a)->push_vlan_if_needed) {
-            goto inconsistent;
+            inconsistent_match(usable_protocols);
         }
         /* Temporary mark that we have a vlan tag. */
         flow->vlan_tci |= htons(VLAN_CFI);
@@ -1931,7 +1943,7 @@ ofpact_check__(struct ofpact *a, struct flow *flow,
 
     case OFPACT_STRIP_VLAN:
         if (!(flow->vlan_tci & htons(VLAN_CFI))) {
-            goto inconsistent;
+            inconsistent_match(usable_protocols);
         }
         /* Temporary mark that we have no vlan tag. */
         flow->vlan_tci = htons(0);
@@ -1953,7 +1965,7 @@ ofpact_check__(struct ofpact *a, struct flow *flow,
     case OFPACT_SET_IPV4_SRC:
     case OFPACT_SET_IPV4_DST:
         if (flow->dl_type != htons(ETH_TYPE_IP)) {
-            goto inconsistent;
+            inconsistent_match(usable_protocols);
         }
         return 0;
 
@@ -1962,7 +1974,7 @@ ofpact_check__(struct ofpact *a, struct flow *flow,
     case OFPACT_SET_IP_TTL:
     case OFPACT_DEC_TTL:
         if (!is_ip_any(flow)) {
-            goto inconsistent;
+            inconsistent_match(usable_protocols);
         }
         return 0;
 
@@ -1970,7 +1982,7 @@ ofpact_check__(struct ofpact *a, struct flow *flow,
         if (!is_ip_any(flow) ||
             (flow->nw_proto != IPPROTO_TCP && flow->nw_proto != IPPROTO_UDP
              && flow->nw_proto != IPPROTO_SCTP)) {
-            goto inconsistent;
+            inconsistent_match(usable_protocols);
         }
         /* Note on which transport protocol the port numbers are set.
          * This allows this set action to be converted to an OF1.2 set field
@@ -1982,7 +1994,7 @@ ofpact_check__(struct ofpact *a, struct flow *flow,
         if (!is_ip_any(flow) ||
             (flow->nw_proto != IPPROTO_TCP && flow->nw_proto != IPPROTO_UDP
              && flow->nw_proto != IPPROTO_SCTP)) {
-            goto inconsistent;
+            inconsistent_match(usable_protocols);
         }
         /* Note on which transport protocol the port numbers are set.
          * This allows this set action to be converted to an OF1.2 set field
@@ -2027,7 +2039,7 @@ ofpact_check__(struct ofpact *a, struct flow *flow,
     case OFPACT_SET_MPLS_TTL:
     case OFPACT_DEC_MPLS_TTL:
         if (!eth_type_mpls(flow->dl_type)) {
-            goto inconsistent;
+            inconsistent_match(usable_protocols);
         }
         return 0;
 
@@ -2039,7 +2051,7 @@ ofpact_check__(struct ofpact *a, struct flow *flow,
 
     case OFPACT_FIN_TIMEOUT:
         if (flow->nw_proto != IPPROTO_TCP) {
-            goto inconsistent;
+            inconsistent_match(usable_protocols);
         }
         return 0;
 
@@ -2064,7 +2076,7 @@ ofpact_check__(struct ofpact *a, struct flow *flow,
     case OFPACT_POP_MPLS:
         flow->dl_type = ofpact_get_POP_MPLS(a)->ethertype;
         if (!eth_type_mpls(flow->dl_type)) {
-            goto inconsistent;
+            inconsistent_match(usable_protocols);
         }
         return 0;
 
@@ -2075,9 +2087,12 @@ ofpact_check__(struct ofpact *a, struct flow *flow,
         return 0;
 
     case OFPACT_WRITE_ACTIONS: {
+        /* Use a temporary copy of 'usable_protocols' because we can't check
+         * consistency of an action set. */
         struct ofpact_nest *on = ofpact_get_WRITE_ACTIONS(a);
+        enum ofputil_protocol p = *usable_protocols;
         return ofpacts_check(on->actions, ofpact_nest_get_action_len(on),
-                             flow, false, max_ports, table_id, n_tables);
+                             flow, max_ports, table_id, n_tables, &p);
     }
 
     case OFPACT_WRITE_METADATA:
@@ -2106,26 +2121,25 @@ ofpact_check__(struct ofpact *a, struct flow *flow,
     default:
         NOT_REACHED();
     }
-
- inconsistent:
-    if (enforce_consistency) {
-        return OFPERR_OFPBAC_MATCH_INCONSISTENT;
-    }
-    return 0;
 }
 
 /* Checks that the 'ofpacts_len' bytes of actions in 'ofpacts' are
  * appropriate for a packet with the prerequisites satisfied by 'flow' in a
  * switch with no more than 'max_ports' ports.
  *
+ * If 'ofpacts' and 'flow' are inconsistent with one another, un-sets in
+ * '*usable_protocols' the protocols that forbid the inconsistency.  (An
+ * example of an inconsistency between match and actions is a flow that does
+ * not match on an MPLS Ethertype but has an action that pops an MPLS label.)
+ *
  * May annotate ofpacts with information gathered from the 'flow'.
  *
  * May temporarily modify 'flow', but restores the changes before returning. */
 enum ofperr
 ofpacts_check(struct ofpact ofpacts[], size_t ofpacts_len,
-              struct flow *flow, bool enforce_consistency,
-              ofp_port_t max_ports,
-              uint8_t table_id, uint8_t n_tables)
+              struct flow *flow, ofp_port_t max_ports,
+              uint8_t table_id, uint8_t n_tables,
+              enum ofputil_protocol *usable_protocols)
 {
     struct ofpact *a;
     ovs_be16 dl_type = flow->dl_type;
@@ -2134,7 +2148,7 @@ ofpacts_check(struct ofpact ofpacts[], size_t ofpacts_len,
     enum ofperr error = 0;
 
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
-        error = ofpact_check__(a, flow, enforce_consistency,
+        error = ofpact_check__(usable_protocols, a, flow,
                                max_ports, table_id, n_tables);
         if (error) {
             break;
@@ -2145,6 +2159,24 @@ ofpacts_check(struct ofpact ofpacts[], size_t ofpacts_len,
     flow->vlan_tci = vlan_tci;
     flow->nw_proto = nw_proto;
     return error;
+}
+
+/* Like ofpacts_check(), but reports inconsistencies as
+ * OFPERR_OFPBAC_MATCH_INCONSISTENT rather than clearing bits. */
+enum ofperr
+ofpacts_check_consistency(struct ofpact ofpacts[], size_t ofpacts_len,
+                          struct flow *flow, ofp_port_t max_ports,
+                          uint8_t table_id, uint8_t n_tables,
+                          enum ofputil_protocol usable_protocols)
+{
+    enum ofputil_protocol p = usable_protocols;
+    enum ofperr error;
+
+    error = ofpacts_check(ofpacts, ofpacts_len, flow, max_ports,
+                          table_id, n_tables, &p);
+    return (error ? error
+            : p != usable_protocols ? OFPERR_OFPBAC_MATCH_INCONSISTENT
+            : 0);
 }
 
 /* Verifies that the 'ofpacts_len' bytes of actions in 'ofpacts' are

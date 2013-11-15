@@ -332,7 +332,7 @@ parse_options(int argc, char *argv[])
         case OPT_WITH_FLOWS:
             error = parse_ofp_flow_mod_file(optarg, OFPFC_ADD, &default_flows,
                                             &n_default_flows,
-                                            &usable_protocols, false);
+                                            &usable_protocols);
             if (error) {
                 ovs_fatal(0, "%s", error);
             }

@@ -890,9 +890,7 @@ prepare_dump_flows(int argc, char *argv[], bool aggregate,
 
     error = parse_ofp_flow_stats_request_str(&fsr, aggregate,
                                              argc > 2 ? argv[2] : "",
-                                             &usable_protocols,
-                                             !(allowed_protocols
-                                               & OFPUTIL_P_OF10_ANY));
+                                             &usable_protocols);
     if (error) {
         ovs_fatal(0, "%s", error);
     }
@@ -1134,8 +1132,7 @@ ofctl_flow_mod_file(int argc OVS_UNUSED, char *argv[], uint16_t command)
     char *error;
 
     error = parse_ofp_flow_mod_file(argv[2], command, &fms, &n_fms,
-                                    &usable_protocols,
-                                    !(allowed_protocols & OFPUTIL_P_OF10_ANY));
+                                    &usable_protocols);
     if (error) {
         ovs_fatal(0, "%s", error);
     }
@@ -1154,9 +1151,7 @@ ofctl_flow_mod(int argc, char *argv[], uint16_t command)
         enum ofputil_protocol usable_protocols;
 
         error = parse_ofp_flow_mod_str(&fm, argc > 2 ? argv[2] : "", command,
-                                       &usable_protocols,
-                                       !(allowed_protocols
-                                         & OFPUTIL_P_OF10_ANY));
+                                       &usable_protocols);
         if (error) {
             ovs_fatal(0, "%s", error);
         }
@@ -2231,8 +2226,7 @@ read_flows_from_file(const char *filename, struct classifier *cls, int index)
         char *error;
         enum ofputil_protocol usable;
 
-        error = parse_ofp_str(&fm, OFPFC_ADD, ds_cstr(&s), &usable,
-                              !(allowed_protocols & OFPUTIL_P_OF10_ANY));
+        error = parse_ofp_str(&fm, OFPFC_ADD, ds_cstr(&s), &usable);
         if (error) {
             ovs_fatal(0, "%s:%d: %s", filename, line_number, error);
         }
@@ -2651,8 +2645,7 @@ ofctl_parse_flow(int argc OVS_UNUSED, char *argv[])
     struct ofputil_flow_mod fm;
     char *error;
 
-    error = parse_ofp_flow_mod_str(&fm, argv[1], OFPFC_ADD, &usable_protocols,
-                                   !(allowed_protocols & OFPUTIL_P_OF10_ANY));
+    error = parse_ofp_flow_mod_str(&fm, argv[1], OFPFC_ADD, &usable_protocols);
     if (error) {
         ovs_fatal(0, "%s", error);
     }
@@ -2670,8 +2663,7 @@ ofctl_parse_flows(int argc OVS_UNUSED, char *argv[])
     char *error;
 
     error = parse_ofp_flow_mod_file(argv[1], OFPFC_ADD, &fms, &n_fms,
-                                    &usable_protocols,
-                                    !(allowed_protocols & OFPUTIL_P_OF10_ANY));
+                                    &usable_protocols);
     if (error) {
         ovs_fatal(0, "%s", error);
     }
@@ -3077,9 +3069,10 @@ ofctl_parse_ofp11_instructions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
             /* Verify actions, enforce consistency. */
             struct flow flow;
             memset(&flow, 0, sizeof flow);
-            error = ofpacts_check(ofpacts.data, ofpacts.size, &flow,
-                                  true, OFPP_MAX,
-                                  table_id ? atoi(table_id) : 0, 255);
+            error = ofpacts_check_consistency(ofpacts.data, ofpacts.size,
+                                              &flow, OFPP_MAX,
+                                              table_id ? atoi(table_id) : 0,
+                                              255, OFPUTIL_P_OF11_STD);
         }
         if (error) {
             printf("bad OF1.1 instructions: %s\n\n", ofperr_get_name(error));
@@ -3177,8 +3170,7 @@ ofctl_check_vlan(int argc OVS_UNUSED, char *argv[])
     string_s = match_to_string(&match, OFP_DEFAULT_PRIORITY);
     printf("%s -> ", string_s);
     fflush(stdout);
-    error_s = parse_ofp_str(&fm, -1, string_s, &usable_protocols,
-                            !(allowed_protocols & OFPUTIL_P_OF10_ANY));
+    error_s = parse_ofp_str(&fm, -1, string_s, &usable_protocols);
     if (error_s) {
         ovs_fatal(0, "%s", error_s);
     }

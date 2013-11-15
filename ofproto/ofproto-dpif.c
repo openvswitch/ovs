@@ -5464,13 +5464,14 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
     }
 
     /* OpenFlow 1.1 and later suggest that the switch enforces certain forms of
-     * consistency between the flow and the actions, so enforce these by
-     * default if the actions can only work in OF1.1 or later. */
-    enforce_consistency = !(usable_protocols & OFPUTIL_P_OF10_ANY);
+     * consistency between the flow and the actions.  With -consistent, we
+     * enforce consistency even for a flow supported in OpenFlow 1.0. */
     if (!strcmp(argv[1], "-consistent")) {
         enforce_consistency = true;
         argv++;
         argc--;
+    } else {
+        enforce_consistency = false;
     }
 
     error = parse_flow_and_packet(argc, argv, &ofproto, &flow, &packet);
@@ -5494,9 +5495,16 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
         unixctl_command_reply_error(conn, "invalid in_port");
         goto exit;
     }
-    retval = ofpacts_check(ofpacts.data, ofpacts.size, &flow,
-                           enforce_consistency,
-                           u16_to_ofp(ofproto->up.max_ports), 0, 0);
+    if (enforce_consistency) {
+        retval = ofpacts_check_consistency(ofpacts.data, ofpacts.size, &flow,
+                                           u16_to_ofp(ofproto->up.max_ports),
+                                           0, 0, usable_protocols);
+    } else {
+        retval = ofpacts_check(ofpacts.data, ofpacts.size, &flow,
+                               u16_to_ofp(ofproto->up.max_ports), 0, 0,
+                               &usable_protocols);
+    }
+
     if (retval) {
         ds_clear(&result);
         ds_put_format(&result, "Bad actions: %s", ofperr_to_string(retval));
