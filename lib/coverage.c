@@ -63,6 +63,7 @@ struct coverage_counter *coverage_counters[] = {
 
 static struct ovs_mutex coverage_mutex = OVS_MUTEX_INITIALIZER;
 
+DEFINE_STATIC_PER_THREAD_DATA(long long int, coverage_clear_time, LLONG_MIN);
 static long long int coverage_run_time = LLONG_MIN;
 
 /* Index counter used to compute the moving average array's index. */
@@ -258,17 +259,33 @@ coverage_read(struct svec *lines)
     free(totals);
 }
 
+/* Runs approximately every COVERAGE_CLEAR_INTERVAL amount of time to
+ * synchronize per-thread counters with global counters. Every thread maintains
+ * a separate timer to ensure all counters are periodically aggregated. */
 void
 coverage_clear(void)
 {
-    size_t i;
+    long long int now, *thread_time;
 
-    ovs_mutex_lock(&coverage_mutex);
-    for (i = 0; i < n_coverage_counters; i++) {
-        struct coverage_counter *c = coverage_counters[i];
-        c->total += c->count();
+    now = time_msec();
+    thread_time = coverage_clear_time_get();
+
+    /* Initialize the coverage_clear_time. */
+    if (*thread_time == LLONG_MIN) {
+        *thread_time = now + COVERAGE_CLEAR_INTERVAL;
     }
-    ovs_mutex_unlock(&coverage_mutex);
+
+    if (now >= *thread_time) {
+        size_t i;
+
+        ovs_mutex_lock(&coverage_mutex);
+        for (i = 0; i < n_coverage_counters; i++) {
+            struct coverage_counter *c = coverage_counters[i];
+            c->total += c->count();
+        }
+        ovs_mutex_unlock(&coverage_mutex);
+        *thread_time = now + COVERAGE_CLEAR_INTERVAL;
+    }
 }
 
 /* Runs approximately every COVERAGE_RUN_INTERVAL amount of time to update the

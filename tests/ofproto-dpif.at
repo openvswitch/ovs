@@ -926,12 +926,6 @@ arp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:f
 arp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.128.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=40:44:44:44:44:41
 ])
 
-# Check that each of the packets actually passed through the slow-path.
-AT_CHECK([ovs-appctl coverage/show], [0], [stdout])
-AT_CHECK([sed -n 's/[[ 	]]\{2,\}/ /g
-s/^dpif_execute_with_help.*total: //p' stdout], [0], [3
-])
-
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
