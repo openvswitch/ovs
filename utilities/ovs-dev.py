@@ -24,7 +24,9 @@ ENV = os.environ
 HOME = ENV["HOME"]
 OVS_SRC = HOME + "/ovs"
 ROOT = HOME + "/root"
-PATH = "%(ovs)s/utilities:%(ovs)s/ovsdb:%(ovs)s/vswitchd" % {"ovs": OVS_SRC}
+BUILD_GCC = OVS_SRC + "/_build-gcc"
+BUILD_CLANG = OVS_SRC + "/_build-clang"
+PATH = "%(ovs)s/utilities:%(ovs)s/ovsdb:%(ovs)s/vswitchd" % {"ovs": BUILD_GCC}
 
 ENV["CFLAGS"] = "-g -O0"
 ENV["PATH"] = PATH + ":" + ENV["PATH"]
@@ -52,10 +54,13 @@ def uname():
 
 def conf():
     tag()
-    if options.clang:
-        ENV["CC"] = "clang"
 
-    configure = ["./configure", "--prefix=" + ROOT, "--localstatedir=" + ROOT,
+    try:
+        os.remove(OVS_SRC + "/Makefile")
+    except OSError:
+        pass
+
+    configure = ["../configure", "--prefix=" + ROOT, "--localstatedir=" + ROOT,
                  "--with-logdir=%s/log" % ROOT, "--with-rundir=%s/run" % ROOT,
                  "--with-linux=/lib/modules/%s/build" % uname(),
                  "--with-dbdir=" + ROOT]
@@ -70,21 +75,59 @@ def conf():
         configure.append("--mandir=" + options.mandir)
 
     _sh("./boot.sh")
+
+    try:
+        os.mkdir(BUILD_GCC)
+    except OSError:
+        pass # Directory exists.
+
+    os.chdir(BUILD_GCC)
     _sh(*configure)
+
+    try:
+        _sh("clang --version", check=True)
+        clang = True
+    except subprocess.CalledProcessError:
+        clang = False
+
+    try:
+        _sh("sparse --version", check=True)
+        sparse = True
+    except subprocess.CalledProcessError:
+        sparse = False
+
+    if clang:
+        try:
+            os.mkdir(BUILD_CLANG)
+        except OSError:
+            pass # Directory exists.
+
+        ENV["CC"] = "clang"
+        os.chdir(BUILD_CLANG)
+        _sh(*configure)
+
+    if sparse:
+        c1 = "C=1"
+    else:
+        c1 = ""
+
+    os.chdir(OVS_SRC)
+
+    make_str = "\t$(MAKE) -C %s $@\n"
+
+    mf = open(OVS_SRC + "/Makefile", "w")
+    mf.write("all:\n%:\n")
+    if clang:
+        mf.write(make_str % BUILD_CLANG)
+    mf.write("\t$(MAKE) -C %s %s $@\n" % (BUILD_GCC, c1))
+    mf.write("\ncheck:\n")
+    mf.write(make_str % BUILD_GCC)
+    mf.close()
 commands.append(conf)
 
 
 def make(args=""):
     make = "make -s -j 8 " + args
-    try:
-        _sh("cgcc", "--version", capture=True)
-        # XXX: For some reason the clang build doesn't place nicely with
-        # sparse.  At some point this needs to be figured out and this check
-        # removed.
-        if not options.clang:
-            make += " C=1"
-    except OSError:
-        pass
     _sh(make)
 commands.append(make)
 
@@ -169,7 +212,7 @@ def run():
     _sh("ovs-vsctl --no-wait set Open_vSwitch %s ovs_version=%s"
         % (root_uuid, version))
 
-    cmd = [OVS_SRC + "/vswitchd/ovs-vswitchd"]
+    cmd = [BUILD_GCC + "/vswitchd/ovs-vswitchd"]
     if options.gdb:
         cmd = ["gdb", "--args"] + cmd
     elif options.valgrind:
@@ -284,8 +327,6 @@ def main():
                      help="run ovs-vswitchd under gdb")
     group.add_option("--valgrind", dest="valgrind", action="store_true",
                      help="run ovs-vswitchd under valgrind")
-    group.add_option("--clang", dest="clang", action="store_true",
-                     help="build ovs-vswitchd with clang")
     parser.add_option_group(group)
 
     options, args = parser.parse_args()
