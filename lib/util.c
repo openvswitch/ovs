@@ -16,6 +16,7 @@
 
 #include <config.h>
 #include "util.h"
+#include <ctype.h>
 #include <errno.h>
 #include <limits.h>
 #include <pthread.h>
@@ -26,6 +27,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include "bitmap.h"
 #include "byte-order.h"
 #include "coverage.h"
 #include "ovs-thread.h"
@@ -1245,3 +1247,444 @@ bitwise_get(const void *src, unsigned int src_len,
                  n_bits);
     return ntohll(value);
 }
+
+/* ovs_scan */
+
+struct scan_spec {
+    unsigned int width;
+    enum {
+        SCAN_DISCARD,
+        SCAN_CHAR,
+        SCAN_SHORT,
+        SCAN_INT,
+        SCAN_LONG,
+        SCAN_LLONG,
+        SCAN_INTMAX_T,
+        SCAN_PTRDIFF_T,
+        SCAN_SIZE_T
+    } type;
+};
+
+static const char *
+skip_spaces(const char *s)
+{
+    while (isspace((unsigned char) *s)) {
+        s++;
+    }
+    return s;
+}
+
+static const char *
+scan_int(const char *s, const struct scan_spec *spec, int base, va_list *args)
+{
+    const char *start = s;
+    uintmax_t value;
+    bool negative;
+    int n_digits;
+
+    negative = *s == '-';
+    s += *s == '-' || *s == '+';
+
+    if ((!base || base == 16) && *s == '0' && (s[1] == 'x' || s[1] == 'X')) {
+        base = 16;
+        s += 2;
+    } else if (!base) {
+        base = *s == '0' ? 8 : 10;
+    }
+
+    if (s - start >= spec->width) {
+        return NULL;
+    }
+
+    value = 0;
+    n_digits = 0;
+    while (s - start < spec->width) {
+        int digit = hexit_value(*s);
+
+        if (digit < 0 || digit >= base) {
+            break;
+        }
+        value = value * base + digit;
+        n_digits++;
+        s++;
+    }
+    if (!n_digits) {
+        return NULL;
+    }
+
+    if (negative) {
+        value = -value;
+    }
+
+    switch (spec->type) {
+    case SCAN_DISCARD:
+        break;
+    case SCAN_CHAR:
+        *va_arg(*args, char *) = value;
+        break;
+    case SCAN_SHORT:
+        *va_arg(*args, short int *) = value;
+        break;
+    case SCAN_INT:
+        *va_arg(*args, int *) = value;
+        break;
+    case SCAN_LONG:
+        *va_arg(*args, long int *) = value;
+        break;
+    case SCAN_LLONG:
+        *va_arg(*args, long long int *) = value;
+        break;
+    case SCAN_INTMAX_T:
+        *va_arg(*args, intmax_t *) = value;
+        break;
+    case SCAN_PTRDIFF_T:
+        *va_arg(*args, ptrdiff_t *) = value;
+        break;
+    case SCAN_SIZE_T:
+        *va_arg(*args, size_t *) = value;
+        break;
+    }
+    return s;
+}
+
+static const char *
+skip_digits(const char *s)
+{
+    while (*s >= '0' && *s <= '9') {
+        s++;
+    }
+    return s;
+}
+
+static const char *
+scan_float(const char *s, const struct scan_spec *spec, va_list *args)
+{
+    const char *start = s;
+    long double value;
+    char *tail;
+    char *copy;
+    bool ok;
+
+    s += *s == '+' || *s == '-';
+    s = skip_digits(s);
+    if (*s == '.') {
+        s = skip_digits(s + 1);
+    }
+    if (*s == 'e' || *s == 'E') {
+        s++;
+        s += *s == '+' || *s == '-';
+        s = skip_digits(s);
+    }
+
+    if (s - start > spec->width) {
+        s = start + spec->width;
+    }
+
+    copy = xmemdup0(start, s - start);
+    value = strtold(copy, &tail);
+    ok = *tail == '\0';
+    free(copy);
+    if (!ok) {
+        return NULL;
+    }
+
+    switch (spec->type) {
+    case SCAN_DISCARD:
+        break;
+    case SCAN_INT:
+        *va_arg(*args, float *) = value;
+        break;
+    case SCAN_LONG:
+        *va_arg(*args, double *) = value;
+        break;
+    case SCAN_LLONG:
+        *va_arg(*args, long double *) = value;
+        break;
+
+    case SCAN_CHAR:
+    case SCAN_SHORT:
+    case SCAN_INTMAX_T:
+    case SCAN_PTRDIFF_T:
+    case SCAN_SIZE_T:
+        NOT_REACHED();
+    }
+    return s;
+}
+
+static void
+scan_output_string(const struct scan_spec *spec,
+                   const char *s, size_t n,
+                   va_list *args)
+{
+    if (spec->type != SCAN_DISCARD) {
+        char *out = va_arg(*args, char *);
+        memcpy(out, s, n);
+        out[n] = '\0';
+    }
+}
+
+static const char *
+scan_string(const char *s, const struct scan_spec *spec, va_list *args)
+{
+    size_t n;
+
+    for (n = 0; n < spec->width; n++) {
+        if (!s[n] || isspace((unsigned char) s[n])) {
+            break;
+        }
+    }
+    if (!n) {
+        return NULL;
+    }
+
+    scan_output_string(spec, s, n, args);
+    return s + n;
+}
+
+static const char *
+parse_scanset(const char *p_, unsigned long *set, bool *complemented)
+{
+    const uint8_t *p = (const uint8_t *) p_;
+
+    *complemented = *p == '^';
+    p += *complemented;
+
+    if (*p == ']') {
+        bitmap_set1(set, ']');
+        p++;
+    }
+
+    while (*p && *p != ']') {
+        if (p[1] == '-' && p[2] != ']' && p[2] > *p) {
+            bitmap_set_multiple(set, *p, p[2] - *p + 1, true);
+            p += 3;
+        } else {
+            bitmap_set1(set, *p++);
+        }
+    }
+    if (*p == ']') {
+        p++;
+    }
+    return (const char *) p;
+}
+
+static const char *
+scan_set(const char *s, const struct scan_spec *spec, const char **pp,
+         va_list *args)
+{
+    unsigned long set[BITMAP_N_LONGS(UCHAR_MAX + 1)];
+    bool complemented;
+    unsigned int n;
+
+    /* Parse the scan set. */
+    memset(set, 0, sizeof set);
+    *pp = parse_scanset(*pp, set, &complemented);
+
+    /* Parse the data. */
+    n = 0;
+    while (s[n]
+           && bitmap_is_set(set, (unsigned char) s[n]) == !complemented
+           && n < spec->width) {
+        n++;
+    }
+    if (!n) {
+        return NULL;
+    }
+    scan_output_string(spec, s, n, args);
+    return s + n;
+}
+
+static const char *
+scan_chars(const char *s, const struct scan_spec *spec, va_list *args)
+{
+    unsigned int n = spec->width == SIZE_MAX ? 1 : spec->width;
+
+    if (strlen(s) < n) {
+        return NULL;
+    }
+    if (spec->type != SCAN_DISCARD) {
+        memcpy(va_arg(*args, char *), s, n);
+    }
+    return s + n;
+}
+
+/* This is an implementation of the standard sscanf() function, with the
+ * following exceptions:
+ *
+ *   - It returns true if the entire template was successfully scanned and
+ *     converted, false if any conversion failed.
+ *
+ *   - The standard doesn't define sscanf() behavior when an out-of-range value
+ *     is scanned, e.g. if a "%"PRIi8 conversion scans "-1" or "0x1ff".  Some
+ *     implementations consider this an error and stop scanning.  This
+ *     implementation never considers an out-of-range value an error; instead,
+ *     it stores the least-significant bits of the converted value in the
+ *     destination, e.g. the value 255 for both examples earlier.
+ *
+ *   - Only single-byte characters are supported, that is, the 'l' modifier
+ *     on %s, %[, and %c is not supported.  The GNU extension 'a' modifier is
+ *     also not supported.
+ *
+ *   - %p is not supported.
+ */
+bool
+ovs_scan(const char *s, const char *template, ...)
+{
+    const char *const start = s;
+    bool ok = false;
+    const char *p;
+    va_list args;
+
+    va_start(args, template);
+    p = template;
+    while (*p != '\0') {
+        struct scan_spec spec;
+        unsigned char c = *p++;
+        bool discard;
+
+        if (isspace(c)) {
+            s = skip_spaces(s);
+            continue;
+        } else if (c != '%') {
+            if (*s != c) {
+                goto exit;
+            }
+            s++;
+            continue;
+        } else if (*p == '%') {
+            if (*s++ != '%') {
+                goto exit;
+            }
+            p++;
+            continue;
+        }
+
+        /* Parse '*' flag. */
+        discard = *p == '*';
+        p += discard;
+
+        /* Parse field width. */
+        spec.width = 0;
+        while (*p >= '0' && *p <= '9') {
+            spec.width = spec.width * 10 + (*p++ - '0');
+        }
+        if (spec.width == 0) {
+            spec.width = UINT_MAX;
+        }
+
+        /* Parse type modifier. */
+        switch (*p) {
+        case 'h':
+            if (p[1] == 'h') {
+                spec.type = SCAN_CHAR;
+                p += 2;
+            } else {
+                spec.type = SCAN_SHORT;
+                p++;
+            }
+            break;
+
+        case 'j':
+            spec.type = SCAN_INTMAX_T;
+            p++;
+            break;
+
+        case 'l':
+            if (p[1] == 'l') {
+                spec.type = SCAN_LLONG;
+                p += 2;
+            } else {
+                spec.type = SCAN_LONG;
+                p++;
+            }
+            break;
+
+        case 'L':
+        case 'q':
+            spec.type = SCAN_LLONG;
+            p++;
+            break;
+
+        case 't':
+            spec.type = SCAN_PTRDIFF_T;
+            p++;
+            break;
+
+        case 'z':
+            spec.type = SCAN_SIZE_T;
+            p++;
+            break;
+
+        default:
+            spec.type = SCAN_INT;
+            break;
+        }
+
+        if (discard) {
+            spec.type = SCAN_DISCARD;
+        }
+
+        c = *p++;
+        if (c != 'c' && c != 'n' && c != '[') {
+            s = skip_spaces(s);
+        }
+        switch (c) {
+        case 'd':
+            s = scan_int(s, &spec, 10, &args);
+            break;
+
+        case 'i':
+            s = scan_int(s, &spec, 0, &args);
+            break;
+
+        case 'o':
+            s = scan_int(s, &spec, 8, &args);
+            break;
+
+        case 'u':
+            s = scan_int(s, &spec, 10, &args);
+            break;
+
+        case 'x':
+        case 'X':
+            s = scan_int(s, &spec, 16, &args);
+            break;
+
+        case 'e':
+        case 'f':
+        case 'g':
+        case 'E':
+        case 'G':
+            s = scan_float(s, &spec, &args);
+            break;
+
+        case 's':
+            s = scan_string(s, &spec, &args);
+            break;
+
+        case '[':
+            s = scan_set(s, &spec, &p, &args);
+            break;
+
+        case 'c':
+            s = scan_chars(s, &spec, &args);
+            break;
+
+        case 'n':
+            if (spec.type != SCAN_DISCARD) {
+                *va_arg(args, int *) = s - start;
+            }
+            break;
+        }
+
+        if (!s) {
+            goto exit;
+        }
+    }
+    ok = true;
+
+exit:
+    va_end(args);
+    return ok;
+}
+

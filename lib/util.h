@@ -264,6 +264,8 @@ bool str_to_uint(const char *, int base, unsigned int *);
 bool str_to_ulong(const char *, int base, unsigned long *);
 bool str_to_ullong(const char *, int base, unsigned long long *);
 
+bool ovs_scan(const char *s, const char *template, ...) SCANF_FORMAT(2, 3);
+
 bool str_to_double(const char *, double *);
 
 int hexit_value(int c);
