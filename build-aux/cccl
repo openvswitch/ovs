@@ -39,7 +39,7 @@ PATH=`echo $PATH | sed -e "s#/usr/bin:##" | sed -e "s#/bin:##"`:/usr/bin
 
 case $MACHTYPE in
     *-msys)
-        slash="//"
+        slash="-"
         ;;
     *)
         slash="/"
@@ -196,6 +196,6 @@ else
     opts=$linkopt
 fi
 
-#echo "$prog $opts"
+echo "$prog $opts"
 exec $prog $opts
 exit 0
