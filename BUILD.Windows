@@ -1,0 +1,38 @@
+Open vSwitch support on Windows is a work in progress.  This file describes
+the planned build system to compile Open vSwitch on Windows.  Once the work
+is complete, this file will be replaced by a INSTALL.Windows file.
+
+Autoconf, Automake and Visual C++:
+---------------------------------
+Open vSwitch on Linux uses autoconf and automake for generating Makefiles.
+It will be useful to maintain the same build system while compiling on Windows
+too.  One approach is to compile Open vSwitch in a MinGW environment that
+contains autoconf and automake utilities and then use Visual C++ as a compiler
+and linker.
+
+The following explains the steps in some detail.
+* Install Mingw on a Windows machine by following the instructions at:
+http://www.mingw.org/wiki/Getting_Started
+
+This should install mingw at C:\Mingw and msys at C:\Mingw\msys.
+Add "C:\MinGW\bin" and "C:\Mingw\msys\1.0\bin" to PATH environment variable
+of Windows.
+
+You can either use the MinGW installer or the command line utility 'mingw-get'
+to install both the base packages and additional packages like automake and
+autoconf(version 2.68).
+
+* Install the latest Python 2.x from python.org and verify that its path is
+part of Windows' PATH environment variable.
+
+* It is important to get the Visual Studio related environment variables and
+to have the $PATH inside the bash to point to the proper compiler and linker.
+One easy way to achieve this is to get into the "Developer Command prompt for
+visual studio" and through it enter into the bash shell available from msys.
+
+* Get the Open vSwitch sources from either cloning the repo using git
+or from a distribution tar ball.
+
+* Run ./boot.sh; ./configure CC=./build-aux/cccl; make
+(cccl is a wrapper script that provides the right options to Visual c++
+'cl' compiler.)
