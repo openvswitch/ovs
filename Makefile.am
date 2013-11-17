@@ -70,6 +70,7 @@ EXTRA_DIST = \
 	SubmittingPatches \
 	WHY-OVS \
 	boot.sh \
+	build-aux/cccl \
 	build-aux/sodepends.pl \
 	build-aux/soexpand.pl \
 	$(MAN_FRAGMENTS) \

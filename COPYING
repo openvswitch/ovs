@@ -19,6 +19,9 @@ Most files are licensed under the Apache License, Version 2.0:
 Files under the datapath directory are licensed under the GNU General
 Public License, version 2.
 
+File build-aux/cccl is licensed under the GNU General Public
+License, version 2.
+
 Files under the xenserver directory are licensed on a file-by-file
 basis.  Refer to each file for details.
 

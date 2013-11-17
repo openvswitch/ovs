@@ -1,0 +1,201 @@
+#!/bin/sh
+
+# cccl
+# Wrapper around MS's cl.exe and link.exe to make them act more like
+# Unix cc and ld
+#
+# Copyright (C) 2000-2003 Geoffrey Wossum (gwossum@acm.org)
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.    See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+#
+
+usage()
+{
+    cat <<EOF
+Usage: cccl [OPTIONS]
+
+cccl is a wrapper around Microsoft's cl.exe and link.exe.  It translates
+parameters that Unix cc's and ld's understand to parameters that cl and link
+understand.
+EOF
+    exit $1
+}
+
+# Put /usr/bin last in the path, to avoid clashes with MSVC's link
+# Ugly workaround, but should work
+PATH=`echo $PATH | sed -e "s#/usr/bin:##" | sed -e "s#/bin:##"`:/usr/bin
+
+case $MACHTYPE in
+    *-msys)
+        slash="//"
+        ;;
+    *)
+        slash="/"
+        ;;
+esac
+# prog specifies the program that should be run (cl.exe or link.exe)
+# We'll assume cl to start out
+prog=cl
+# opts specifies the command line to pass to the MSVC program
+clopt="${slash}nologo"
+linkopt="${slash}nologo"
+# gotparam is 0 if we didn't ever see a param, in which case we show usage()
+gotparam=
+
+# We want exceptions
+clopt="$clopt ${slash}EHsc"
+
+### Run through every option and convert it to the proper MS one
+while test $# -gt 0; do
+    case "$1" in
+    -D*) optarg= ;;
+    -*=*) optarg=`echo "$1" | sed 's/[-_a-zA-Z0-9]*=//'` ;;
+    *) optarg= ;;
+    esac
+    gotparam=1
+
+    case "$1" in
+    --version)
+        cat <<EOF
+cccl 0.03
+
+Copyright 2000-2003 Geoffrey Wossum
+This is free software; see the source for copying conditions.  There is NO
+waranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+EOF
+        exit 1;
+        ;;
+
+    -ansi)
+        clopt="$clopt ${slash}Za"
+        ;;
+
+    -c)
+        # -c (compile only) is actually the same, but for clarity...
+        clopt="$clopt ${slash}c"
+        ;;
+
+    -g[0-9] | -g)
+        # cl only supports one debugging level
+        clopt="$clopt ${slash}Zi"
+        ;;
+
+    -L*)
+        path=`echo "$1" | sed 's/-L//'`
+        linkopt="$linkopt /LIBPATH:$path"
+        ;;
+
+    -l*)
+        lib=`echo "$1" | sed 's/-l//'`
+    if [ $lib != "dnsapi" -a $lib != "ws2_32" -a $lib != "wsock32" ]; then
+      lib="lib$lib.lib"
+    else
+      lib="$lib.lib"
+    fi
+
+        clopt="$clopt $lib"
+        linkopt="$linkopt $lib"
+        ;;
+
+    -m386)
+        clopt="$clopt ${slash}G3"
+        ;;
+
+    -m486)
+        clopt="$clopt ${slash}G4"
+        ;;
+
+    -mpentium)
+        clopt="$clopt ${slash}G5"
+        ;;
+
+    -mpentiumpro)
+        clopt="$clopt ${slash}G6"
+        ;;
+
+    -o)
+        # specifying output file, is it an object or an executable
+        shift
+        case "$1" in
+        *.o | *.obj)
+            clopt="$clopt ${slash}Fo$1"
+        ;;
+        *)
+            clopt="$clopt ${slash}Fe$1";
+            linkopt="$linkopt ${slash}out:$1"
+        ;;
+        esac;;
+
+    -pedantic)
+        #ignore pedantic
+        ;;
+
+    -W*)
+        #ignore warnings
+        ;;
+
+    -isystem)
+        shift
+        clopt="$clopt -I$1"
+        ;;
+
+    -MT)
+        exit 0
+        ;;
+
+    -mno-cygwin)
+        ;;
+
+    *.cc | *.cxx | *.C)
+        # C++ source file with non .cpp extension, make sure cl understand
+        # that it is C++
+        clopt="$clopt ${slash}Tp$1"
+        ;;
+
+    *.o | *.obj | *.a | *.lib)
+        # Object files/libraries seen, this command will require link
+        # Switch the prog to link
+        linkopt="$linkopt $1"
+        prog="link"
+        ;;
+
+    *)
+        clopt="$clopt $1"
+        linkopt="$linkopt $1"
+        if test x$optarg != x ; then
+            clopt="$clopt=$optarg"
+            linkopt="$linkopt=$optarg"
+        fi
+        ;;
+
+    esac
+    shift
+done
+
+if test x$gotparam = x ; then
+    usage
+    exit 1
+fi
+
+# choose which opts we built up based on which program will actually run
+if test x$prog = xcl ; then
+    opts=$clopt
+else
+    opts=$linkopt
+fi
+
+#echo "$prog $opts"
+exec $prog $opts
+exit 0
