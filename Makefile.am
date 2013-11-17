@@ -22,15 +22,20 @@ AM_CPPFLAGS += -DNDEBUG
 AM_CFLAGS += -fomit-frame-pointer
 endif
 
+if WIN32
+psep=";"
+else
+psep=":"
+endif
 # PYTHONDONTWRITEBYTECODE=yes keeps Python from creating .pyc and .pyo
 # files.  Creating .py[co] works OK for any given version of Open
 # vSwitch, but it causes trouble if you switch from a version with
 # foo/__init__.py into an (older) version with plain foo.py, since
 # foo/__init__.pyc will cause Python to ignore foo.py.
 if INCLUDE_PYTHON_COMPAT
-run_python = PYTHONPATH=$(top_srcdir)/python:$(top_srcdir)/python/compat:$$PYTHONPATH
+run_python = PYTHONPATH=$(top_srcdir)/python$(psep)$(top_srcdir)/python/compat$(psep)$$PYTHONPATH
 else
-run_python = PYTHONPATH=$(top_srcdir)/python:$$PYTHONPATH
+run_python = PYTHONPATH=$(top_srcdir)/python$(psep)$$PYTHONPATH
 endif
 run_python += PYTHONDONTWRITEBYTECODE=yes $(PYTHON)
 
