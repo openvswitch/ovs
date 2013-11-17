@@ -205,7 +205,7 @@ AC_DEFUN([OVS_CHECK_PYTHON],
           for dir in $PATH; do
             IFS=$ovs_save_IFS
             test -z "$dir" && dir=.
-            if test -x $dir/$binary && $dir/$binary -c 'import sys
+            if test -x "$dir"/"$binary" && "$dir"/"$binary" -c 'import sys
 if sys.hexversion >= 0x02040000 and sys.hexversion < 0x03000000:
     sys.exit(0)
 else:
