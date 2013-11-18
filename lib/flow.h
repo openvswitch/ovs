@@ -287,7 +287,7 @@ bool flow_equal_except(const struct flow *a, const struct flow *b,
 /* Compressed flow. */
 
 #define MINI_N_INLINE (sizeof(void *) == 4 ? 7 : 8)
-#define MINI_N_MAPS DIV_ROUND_UP(FLOW_U32S, 32)
+BUILD_ASSERT_DECL(FLOW_U32S <= 64);
 
 /* A sparse representation of a "struct flow".
  *
@@ -321,9 +321,9 @@ bool flow_equal_except(const struct flow *a, const struct flow *b,
  * same 'map' allows optimization .
  */
 struct miniflow {
+    uint64_t map;
     uint32_t *values;
     uint32_t inline_values[MINI_N_INLINE];
-    uint32_t map[MINI_N_MAPS];
 };
 
 void miniflow_init(struct miniflow *, const struct flow *);
