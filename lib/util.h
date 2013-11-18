@@ -287,7 +287,7 @@ void ignore(bool x OVS_UNUSED);
 
 int log_2_floor(uint32_t);
 int log_2_ceil(uint32_t);
-unsigned int popcount(uint32_t);
+unsigned int popcount(uint64_t);
 
 /* Returns the number of trailing 0-bits in 'n'.  Undefined if 'n' == 0. */
 #if __GNUC__ >= 4
@@ -304,21 +304,6 @@ raw_ctz(uint64_t n)
 #else
 /* Defined in util.c. */
 int raw_ctz(uint64_t n);
-#endif
-
-#if __GNUC__ >= 4
-static inline int
-popcount64(uint64_t n)
-{
-    return __builtin_popcountll(n);
-}
-#else
-/* Defined using the 32-bit counterparts. */
-static inline int
-popcount64(uint64_t n)
-{
-    return popcount(n) + popcount(n >> 32);
-}
 #endif
 
 /* Returns the number of trailing 0-bits in 'n', or 32 if 'n' is 0. */

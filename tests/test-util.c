@@ -188,21 +188,11 @@ shuffle(uint64_t *p, size_t n)
 }
 
 static void
-check_popcount(uint32_t x, int n)
+check_popcount(uint64_t x, int n)
 {
     if (popcount(x) != n) {
-        fprintf(stderr, "popcount(%#"PRIx32") is %d but should be %d\n",
+        fprintf(stderr, "popcount(%#"PRIx64") is %d but should be %d\n",
                 x, popcount(x), n);
-        abort();
-    }
-}
-
-static void
-check_popcount64(uint64_t x, int n)
-{
-    if (popcount64(x) != n) {
-        fprintf(stderr, "popcount64(%#"PRIx64") is %d but should be %d\n",
-                x, popcount64(x), n);
         abort();
     }
 }
@@ -218,26 +208,6 @@ test_popcount(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     }
 
     check_popcount(0, 0);
-    check_popcount64(0, 0);
-
-    for (i = 0; i < 1000; i++) {
-        uint32_t x = 0;
-        int j;
-
-        shuffle(bits, ARRAY_SIZE(bits)/2);
-        for (j = 0; j < 32; j++) {
-            x |= bits[j];
-            check_popcount(x, j + 1);
-        }
-        assert(x == UINT32_MAX);
-
-        shuffle(bits, ARRAY_SIZE(bits)/2);
-        for (j = 31; j >= 0; j--) {
-            x &= ~bits[j];
-            check_popcount(x, j);
-        }
-        assert(x == 0);
-    }
 
     for (i = 0; i < 1000; i++) {
         uint64_t x = 0;
@@ -246,14 +216,14 @@ test_popcount(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         shuffle(bits, ARRAY_SIZE(bits));
         for (j = 0; j < 64; j++) {
             x |= bits[j];
-            check_popcount64(x, j + 1);
+            check_popcount(x, j + 1);
         }
         assert(x == UINT64_MAX);
 
         shuffle(bits, ARRAY_SIZE(bits));
         for (j = 63; j >= 0; j--) {
             x &= ~bits[j];
-            check_popcount64(x, j);
+            check_popcount(x, j);
         }
         assert(x == 0);
     }

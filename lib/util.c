@@ -917,8 +917,8 @@ raw_ctz(uint64_t n)
 #endif
 
 /* Returns the number of 1-bits in 'x', between 0 and 32 inclusive. */
-unsigned int
-popcount(uint32_t x)
+static unsigned int
+popcount32(uint32_t x)
 {
     /* In my testing, this implementation is over twice as fast as any other
      * portable implementation that I tried, including GCC 4.4
@@ -948,6 +948,13 @@ popcount(uint32_t x)
             popcount8[(x >> 8) & 0xff] +
             popcount8[(x >> 16) & 0xff] +
             popcount8[x >> 24]);
+}
+
+/* Returns the number of 1-bits in 'x', between 0 and 64 inclusive. */
+unsigned int
+popcount(uint64_t x)
+{
+    return popcount32(x) + popcount32(x >> 32);
 }
 
 /* Returns true if the 'n' bytes starting at 'p' are zeros. */
