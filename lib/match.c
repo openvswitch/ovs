@@ -1176,7 +1176,7 @@ minimatch_matches_flow(const struct minimatch *match,
     uint64_t map;
 
     for (map = match->flow.map; map; map = zero_rightmost_1bit(map)) {
-        if ((*flowp++ ^ target_u32[raw_ctz64(map)]) & *maskp++) {
+        if ((*flowp++ ^ target_u32[raw_ctz(map)]) & *maskp++) {
             return false;
         }
     }

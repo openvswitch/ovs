@@ -889,16 +889,14 @@ log_2_ceil(uint32_t n)
 }
 
 /* Returns the number of trailing 0-bits in 'n'.  Undefined if 'n' == 0. */
-#if !defined(UINT_MAX) || !defined(UINT32_MAX)
-#error "Someone screwed up the #includes."
-#elif __GNUC__ >= 4 && UINT_MAX == UINT32_MAX
+#if __GNUC__ >= 4
 /* Defined inline in util.h. */
 #else
 int
-raw_ctz(uint32_t n)
+raw_ctz(uint64_t n)
 {
-    unsigned int k;
-    int count = 31;
+    uint64_t k;
+    int count = 63;
 
 #define CTZ_STEP(X)                             \
     k = n << (X);                               \
@@ -906,6 +904,7 @@ raw_ctz(uint32_t n)
         count -= X;                             \
         n = k;                                  \
     }
+    CTZ_STEP(32);
     CTZ_STEP(16);
     CTZ_STEP(8);
     CTZ_STEP(4);

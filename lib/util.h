@@ -289,28 +289,24 @@ int log_2_floor(uint32_t);
 int log_2_ceil(uint32_t);
 unsigned int popcount(uint32_t);
 
-/* Returns the number of trailing 0-bits in 'n'.  Undefined if 'n' == 0.
- *
- * This compiles to a single machine instruction ("bsf") with GCC on x86. */
-#if !defined(UINT_MAX) || !defined(UINT32_MAX)
-#error "Someone screwed up the #includes."
-#elif __GNUC__ >= 4 && UINT_MAX == UINT32_MAX
+/* Returns the number of trailing 0-bits in 'n'.  Undefined if 'n' == 0. */
+#if __GNUC__ >= 4
 static inline int
-raw_ctz(uint32_t n)
+raw_ctz(uint64_t n)
 {
-    return __builtin_ctz(n);
+    /* With GCC 4.7 on 32-bit x86, if a 32-bit integer is passed as 'n', using
+     * a plain __builtin_ctzll() here always generates an out-of-line function
+     * call.  The test below helps it to emit a single 'bsf' instruction. */
+    return (__builtin_constant_p(n <= UINT32_MAX) && n <= UINT32_MAX
+            ? __builtin_ctz(n)
+            : __builtin_ctzll(n));
 }
 #else
 /* Defined in util.c. */
-int raw_ctz(uint32_t n);
+int raw_ctz(uint64_t n);
 #endif
 
 #if __GNUC__ >= 4
-static inline int
-raw_ctz64(uint64_t n)
-{
-    return __builtin_ctzll(n);
-}
 static inline int
 popcount64(uint64_t n)
 {
@@ -318,11 +314,6 @@ popcount64(uint64_t n)
 }
 #else
 /* Defined using the 32-bit counterparts. */
-static inline int
-raw_ctz64(uint64_t n)
-{
-    return (uint32_t)n ? raw_ctz(n) : 32 + raw_ctz(n >> 32);
-}
 static inline int
 popcount64(uint64_t n)
 {
@@ -341,7 +332,7 @@ ctz(uint32_t n)
 static inline int
 ctz64(uint64_t n)
 {
-    return n ? raw_ctz64(n) : 64;
+    return n ? raw_ctz(n) : 64;
 }
 
 /* Returns the rightmost 1-bit in 'x' (e.g. 01011000 => 00001000), or 0 if 'x'
