@@ -285,6 +285,10 @@ void ignore(bool x OVS_UNUSED);
 
 /* Bitwise tests. */
 
+int log_2_floor(uint32_t);
+int log_2_ceil(uint32_t);
+unsigned int popcount(uint32_t);
+
 /* Returns the number of trailing 0-bits in 'n'.  Undefined if 'n' == 0.
  *
  * This compiles to a single machine instruction ("bsf") with GCC on x86. */
@@ -301,6 +305,31 @@ raw_ctz(uint32_t n)
 int raw_ctz(uint32_t n);
 #endif
 
+#if __GNUC__ >= 4
+static inline int
+raw_ctz64(uint64_t n)
+{
+    return __builtin_ctzll(n);
+}
+static inline int
+popcount64(uint64_t n)
+{
+    return __builtin_popcountll(n);
+}
+#else
+/* Defined using the 32-bit counterparts. */
+static inline int
+raw_ctz64(uint64_t n)
+{
+    return (uint32_t)n ? raw_ctz(n) : 32 + raw_ctz(n >> 32);
+}
+static inline int
+popcount64(uint64_t n)
+{
+    return popcount(n) + popcount(n >> 32);
+}
+#endif
+
 /* Returns the number of trailing 0-bits in 'n', or 32 if 'n' is 0. */
 static inline int
 ctz(uint32_t n)
@@ -308,9 +337,12 @@ ctz(uint32_t n)
     return n ? raw_ctz(n) : 32;
 }
 
-int log_2_floor(uint32_t);
-int log_2_ceil(uint32_t);
-unsigned int popcount(uint32_t);
+/* Returns the number of trailing 0-bits in 'n', or 64 if 'n' is 0. */
+static inline int
+ctz64(uint64_t n)
+{
+    return n ? raw_ctz64(n) : 64;
+}
 
 /* Returns the rightmost 1-bit in 'x' (e.g. 01011000 => 00001000), or 0 if 'x'
  * is 0. */

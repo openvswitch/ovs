@@ -71,6 +71,16 @@ check_ctz(uint32_t x, int n)
 }
 
 static void
+check_ctz64(uint64_t x, int n)
+{
+    if (ctz64(x) != n) {
+        fprintf(stderr, "ctz64(%"PRIu64") is %d but should be %d\n",
+                x, ctz64(x), n);
+        abort();
+    }
+}
+
+static void
 test_ctz(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     int n;
@@ -86,8 +96,21 @@ test_ctz(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         check_ctz((random_uint32() | 1) << n, n);
     }
 
+
+    for (n = 0; n < 64; n++) {
+        /* Check minimum x such that f(x) == n. */
+        check_ctz64(UINT64_C(1) << n, n);
+
+        /* Check maximum x such that f(x) == n. */
+        check_ctz64(UINT64_MAX << n, n);
+
+        /* Check a random value in the middle. */
+        check_ctz64((random_uint64() | UINT64_C(1)) << n, n);
+    }
+
     /* Check ctz(0). */
     check_ctz(0, 32);
+    check_ctz64(0, 64);
 }
 
 /* Returns a random number in the range 'min'...'max' inclusive. */
@@ -154,11 +177,11 @@ test_round_down_pow2(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 }
 
 static void
-shuffle(unsigned int *p, size_t n)
+shuffle(uint64_t *p, size_t n)
 {
     for (; n > 1; n--, p++) {
-        unsigned int *q = &p[random_range(n)];
-        unsigned int tmp = *p;
+        uint64_t *q = &p[random_range(n)];
+        uint64_t tmp = *p;
         *p = *q;
         *q = tmp;
     }
@@ -175,32 +198,62 @@ check_popcount(uint32_t x, int n)
 }
 
 static void
+check_popcount64(uint64_t x, int n)
+{
+    if (popcount64(x) != n) {
+        fprintf(stderr, "popcount64(%#"PRIx64") is %d but should be %d\n",
+                x, popcount64(x), n);
+        abort();
+    }
+}
+
+static void
 test_popcount(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
-    unsigned int bits[32];
+    uint64_t bits[64];
     int i;
 
     for (i = 0; i < ARRAY_SIZE(bits); i++) {
-        bits[i] = 1u << i;
+        bits[i] = UINT64_C(1) << i;
     }
 
     check_popcount(0, 0);
+    check_popcount64(0, 0);
 
     for (i = 0; i < 1000; i++) {
         uint32_t x = 0;
         int j;
 
-        shuffle(bits, ARRAY_SIZE(bits));
+        shuffle(bits, ARRAY_SIZE(bits)/2);
         for (j = 0; j < 32; j++) {
             x |= bits[j];
             check_popcount(x, j + 1);
         }
         assert(x == UINT32_MAX);
 
-        shuffle(bits, ARRAY_SIZE(bits));
+        shuffle(bits, ARRAY_SIZE(bits)/2);
         for (j = 31; j >= 0; j--) {
             x &= ~bits[j];
             check_popcount(x, j);
+        }
+        assert(x == 0);
+    }
+
+    for (i = 0; i < 1000; i++) {
+        uint64_t x = 0;
+        int j;
+
+        shuffle(bits, ARRAY_SIZE(bits));
+        for (j = 0; j < 64; j++) {
+            x |= bits[j];
+            check_popcount64(x, j + 1);
+        }
+        assert(x == UINT64_MAX);
+
+        shuffle(bits, ARRAY_SIZE(bits));
+        for (j = 63; j >= 0; j--) {
+            x &= ~bits[j];
+            check_popcount64(x, j);
         }
         assert(x == 0);
     }
