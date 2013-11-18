@@ -72,7 +72,7 @@ struct dpif_linux_dp {
 
     /* Attributes. */
     const char *name;                  /* OVS_DP_ATTR_NAME. */
-    const uint32_t *upcall_pid;        /* OVS_DP_UPCALL_PID. */
+    const uint32_t *upcall_pid;        /* OVS_DP_ATTR_UPCALL_PID. */
     struct ovs_dp_stats stats;         /* OVS_DP_ATTR_STATS. */
     struct ovs_dp_megaflow_stats megaflow_stats;
                                        /* OVS_DP_ATTR_MEGAFLOW_STATS.*/
