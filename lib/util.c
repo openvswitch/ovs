@@ -894,7 +894,7 @@ log_2_ceil(uint32_t n)
 #elif __GNUC__ >= 4 && UINT_MAX == UINT32_MAX
 /* Defined inline in util.h. */
 #else
-static int
+int
 raw_ctz(uint32_t n)
 {
     unsigned int k;
