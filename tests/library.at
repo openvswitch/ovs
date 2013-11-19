@@ -114,7 +114,7 @@ m4_foreach(
   [[ctz],
    [round_up_pow2],
    [round_down_pow2],
-   [popcount],
+   [count_1bits],
    [log_2_floor],
    [bitwise_copy],
    [bitwise_zero],

@@ -287,7 +287,7 @@ void ignore(bool x OVS_UNUSED);
 
 int log_2_floor(uint32_t);
 int log_2_ceil(uint32_t);
-unsigned int popcount(uint64_t);
+unsigned int count_1bits(uint64_t);
 
 /* Returns the number of trailing 0-bits in 'n'.  Undefined if 'n' == 0. */
 #if __GNUC__ >= 4

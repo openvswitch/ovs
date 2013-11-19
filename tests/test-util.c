@@ -188,17 +188,17 @@ shuffle(uint64_t *p, size_t n)
 }
 
 static void
-check_popcount(uint64_t x, int n)
+check_count_1bits(uint64_t x, int n)
 {
-    if (popcount(x) != n) {
-        fprintf(stderr, "popcount(%#"PRIx64") is %d but should be %d\n",
-                x, popcount(x), n);
+    if (count_1bits(x) != n) {
+        fprintf(stderr, "count_1bits(%#"PRIx64") is %d but should be %d\n",
+                x, count_1bits(x), n);
         abort();
     }
 }
 
 static void
-test_popcount(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+test_count_1bits(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     uint64_t bits[64];
     int i;
@@ -207,7 +207,7 @@ test_popcount(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         bits[i] = UINT64_C(1) << i;
     }
 
-    check_popcount(0, 0);
+    check_count_1bits(0, 0);
 
     for (i = 0; i < 1000; i++) {
         uint64_t x = 0;
@@ -216,14 +216,14 @@ test_popcount(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         shuffle(bits, ARRAY_SIZE(bits));
         for (j = 0; j < 64; j++) {
             x |= bits[j];
-            check_popcount(x, j + 1);
+            check_count_1bits(x, j + 1);
         }
         assert(x == UINT64_MAX);
 
         shuffle(bits, ARRAY_SIZE(bits));
         for (j = 63; j >= 0; j--) {
             x &= ~bits[j];
-            check_popcount(x, j);
+            check_count_1bits(x, j);
         }
         assert(x == 0);
     }
@@ -966,7 +966,7 @@ static const struct command commands[] = {
     {"ctz", 0, 0, test_ctz},
     {"round_up_pow2", 0, 0, test_round_up_pow2},
     {"round_down_pow2", 0, 0, test_round_down_pow2},
-    {"popcount", 0, 0, test_popcount},
+    {"count_1bits", 0, 0, test_count_1bits},
     {"log_2_floor", 0, 0, test_log_2_floor},
     {"bitwise_copy", 0, 0, test_bitwise_copy},
     {"bitwise_zero", 0, 0, test_bitwise_zero},

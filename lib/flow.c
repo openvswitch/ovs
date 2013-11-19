@@ -1101,7 +1101,7 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
 static int
 miniflow_n_values(const struct miniflow *flow)
 {
-    return popcount(flow->map);
+    return count_1bits(flow->map);
 }
 
 static uint32_t *
@@ -1221,7 +1221,8 @@ miniflow_get__(const struct miniflow *flow, unsigned int u32_ofs)
         static const uint32_t zero = 0;
         return &zero;
     }
-    return flow->values + popcount(flow->map & ((UINT64_C(1) << u32_ofs) - 1));
+    return flow->values +
+           count_1bits(flow->map & ((UINT64_C(1) << u32_ofs) - 1));
 }
 
 /* Returns the uint32_t that would be at byte offset '4 * u32_ofs' if 'flow'
