@@ -20,6 +20,8 @@ scripts_SCRIPTS += \
 	utilities/ovs-save
 scripts_DATA += utilities/ovs-lib
 
+utilities/ovs-lib: $(top_builddir)/config.status
+
 EXTRA_DIST += \
 	utilities/ovs-check-dead-ifs.in \
 	utilities/ovs-ctl.in \
