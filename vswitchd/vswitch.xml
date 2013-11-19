@@ -1387,8 +1387,18 @@
 
           <dt><code>lisp</code></dt>
           <dd>
-            A layer 3 tunnel over the experimental, UDP-based Locator/ID
-            Separation Protocol (RFC 6830).
+            <p>
+              A layer 3 tunnel over the experimental, UDP-based Locator/ID
+              Separation Protocol (RFC 6830).
+            </p>
+            <p>
+              Only IPv4 and IPv6 packets are supported by the protocol, and
+              they are sent and received without an Ethernet header.  Traffic
+              to/from LISP ports is expected to be configured explicitly, and
+              the ports are not intended to participate in learning based
+              switching.  As such, they are always excluded from packet
+              flooding.
+            </p>
           </dd>
 
           <dt><code>patch</code></dt>

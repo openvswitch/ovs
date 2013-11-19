@@ -332,6 +332,7 @@ struct ofport_dpif {
     struct bfd *bfd;            /* BFD, if any. */
     bool may_enable;            /* May be enabled in bonds. */
     bool is_tunnel;             /* This port is a tunnel. */
+    bool is_layer3;             /* This is a layer 3 port. */
     long long int carrier_seq;  /* Carrier status changes. */
     struct ofport_dpif *peer;   /* Peer if patch port. */
 
@@ -1708,6 +1709,7 @@ port_construct(struct ofport *port_)
     port->realdev_ofp_port = 0;
     port->vlandev_vid = 0;
     port->carrier_seq = netdev_get_carrier_resets(netdev);
+    port->is_layer3 = netdev_vport_is_layer3(netdev);
 
     if (netdev_vport_is_patch(netdev)) {
         /* By bailing out here, we don't submit the port to the sFlow module
@@ -2305,6 +2307,7 @@ bundle_update(struct ofbundle *bundle)
     bundle->floodable = true;
     LIST_FOR_EACH (port, bundle_node, &bundle->ports) {
         if (port->up.pp.config & OFPUTIL_PC_NO_FLOOD
+            || port->is_layer3
             || !stp_forward_in_state(port->stp_state)) {
             bundle->floodable = false;
             break;
@@ -2352,6 +2355,7 @@ bundle_add_port(struct ofbundle *bundle, ofp_port_t ofp_port,
         port->bundle = bundle;
         list_push_back(&bundle->ports, &port->bundle_node);
         if (port->up.pp.config & OFPUTIL_PC_NO_FLOOD
+            || port->is_layer3
             || !stp_forward_in_state(port->stp_state)) {
             bundle->floodable = false;
         }
