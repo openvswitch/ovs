@@ -39,8 +39,6 @@
 
 #include "gso.h"
 
-static struct gre_cisco_protocol __rcu *gre_cisco_proto;
-
 static void gre_csum_fix(struct sk_buff *skb)
 {
 	struct gre_base_hdr *greh;
@@ -113,6 +111,8 @@ void gre_build_header(struct sk_buff *skb, const struct tnl_ptk_info *tpi,
 		}
 	}
 }
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,11,0)
 
 static __sum16 check_checksum(struct sk_buff *skb)
 {
@@ -196,6 +196,8 @@ static int parse_gre_header(struct sk_buff *skb, struct tnl_ptk_info *tpi,
 
 	return iptunnel_pull_header(skb, hdr_len, tpi->proto);
 }
+
+static struct gre_cisco_protocol __rcu *gre_cisco_proto;
 
 static int gre_cisco_rcv(struct sk_buff *skb)
 {
@@ -353,5 +355,7 @@ int gre_cisco_unregister(struct gre_cisco_protocol *proto)
 	ret = gre_compat_exit();
 	return ret;
 }
+
+#endif /* 3.11 */
 
 #endif /* CONFIG_NET_IPGRE_DEMUX */
