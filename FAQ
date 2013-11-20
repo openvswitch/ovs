@@ -418,7 +418,11 @@ A: First, why do you want to do this?  Two connected bridges are not
    ports will not work with the userspace datapath, only with the
    kernel module.
 
-Q: Why are there so many different ways to dump flows?
+
+Implementation Details
+----------------------
+
+Q: I hear OVS has a couple of kinds of flows.  Can you tell me about them?
 
 A: Open vSwitch uses different kinds of flows for different purposes:
 
@@ -446,7 +450,15 @@ A: Open vSwitch uses different kinds of flows for different purposes:
         current version of Open vSwitch, hardware switch
         implementations do not necessarily use this architecture.
 
-  Each of the commands for dumping flows has a different purpose:
+   Users and controllers directly control only the OpenFlow flow
+   table.  Open vSwitch manages the datapath flow table itself, so
+   users should not normally be concerned with it.
+
+Q: Why are there so many different ways to dump flows?
+
+A: Open vSwitch has two kinds of flows (see the previous question), so
+   it has commands with different purposes for dumping each kind of
+   flow:
 
       - "ovs-ofctl dump-flows <br>" dumps OpenFlow flows, excluding
         hidden flows.  This is the most commonly useful form of flow
