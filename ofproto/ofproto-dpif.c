@@ -5744,14 +5744,34 @@ ofproto_unixctl_dpif_enable_megaflows(struct unixctl_conn *conn,
     unixctl_command_reply(conn, "megaflows enabled");
 }
 
+static bool
+ofproto_dpif_contains_flow(const struct ofproto_dpif *ofproto,
+                           const struct nlattr *key, size_t key_len)
+{
+    enum odp_key_fitness fitness;
+    struct ofproto_dpif *ofp;
+    struct flow flow;
+
+    xlate_receive(ofproto->backer, NULL, key, key_len, &flow, &fitness, &ofp,
+                  NULL, NULL, NULL, NULL);
+    return ofp == ofproto;
+}
+
 static void
 ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
                                 int argc OVS_UNUSED, const char *argv[],
                                 void *aux OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
+    const struct dpif_flow_stats *stats;
     const struct ofproto_dpif *ofproto;
-    struct subfacet *subfacet;
+    struct dpif_flow_dump flow_dump;
+    const struct nlattr *actions;
+    const struct nlattr *mask;
+    const struct nlattr *key;
+    size_t actions_len;
+    size_t mask_len;
+    size_t key_len;
 
     ofproto = ofproto_dpif_lookup(argv[1]);
     if (!ofproto) {
@@ -5759,57 +5779,29 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
         return;
     }
 
-    update_stats(ofproto->backer);
-
-    HMAP_FOR_EACH (subfacet, hmap_node, &ofproto->backer->subfacets) {
-        struct facet *facet = subfacet->facet;
-        struct odputil_keybuf maskbuf;
-        struct ofpbuf mask;
-
-        if (facet->ofproto != ofproto) {
+    ds_init(&ds);
+    dpif_flow_dump_start(&flow_dump, ofproto->backer->dpif);
+    while (dpif_flow_dump_next(&flow_dump, &key, &key_len, &mask, &mask_len,
+                               &actions, &actions_len, &stats)) {
+        if (!ofproto_dpif_contains_flow(ofproto, key, key_len)) {
             continue;
         }
 
-        ofpbuf_use_stack(&mask, &maskbuf, sizeof maskbuf);
-        if (enable_megaflows) {
-            odp_flow_key_from_mask(&mask, &facet->xout.wc.masks,
-                                   &facet->flow, UINT32_MAX);
-        }
-
-        odp_flow_format(subfacet->key, subfacet->key_len,
-                        mask.data, mask.size, NULL, &ds, false);
-
-        ds_put_format(&ds, ", packets:%"PRIu64", bytes:%"PRIu64", used:",
-                      subfacet->dp_packet_count, subfacet->dp_byte_count);
-        if (subfacet->used) {
-            ds_put_format(&ds, "%.3fs",
-                          (time_msec() - subfacet->used) / 1000.0);
-        } else {
-            ds_put_format(&ds, "never");
-        }
-        if (subfacet->facet->tcp_flags) {
-            ds_put_cstr(&ds, ", flags:");
-            packet_format_tcp_flags(&ds, subfacet->facet->tcp_flags);
-        }
-
+        odp_flow_format(key, key_len, mask, mask_len, NULL, &ds, false);
+        ds_put_cstr(&ds, ", ");
+        dpif_flow_stats_format(stats, &ds);
         ds_put_cstr(&ds, ", actions:");
-        if (facet->xout.slow) {
-            uint64_t slow_path_stub[128 / 8];
-            const struct nlattr *actions;
-            size_t actions_len;
-
-            compose_slow_path(ofproto, &facet->flow, facet->xout.slow,
-                              slow_path_stub, sizeof slow_path_stub,
-                              &actions, &actions_len);
-            format_odp_actions(&ds, actions, actions_len);
-        } else {
-            format_odp_actions(&ds, facet->xout.odp_actions.data,
-                               facet->xout.odp_actions.size);
-        }
+        format_odp_actions(&ds, actions, actions_len);
         ds_put_char(&ds, '\n');
     }
 
-    unixctl_command_reply(conn, ds_cstr(&ds));
+    if (dpif_flow_dump_done(&flow_dump)) {
+        ds_clear(&ds);
+        ds_put_format(&ds, "dpif/dump_flows failed: %s", ovs_strerror(errno));
+        unixctl_command_reply_error(conn, ds_cstr(&ds));
+    } else {
+        unixctl_command_reply(conn, ds_cstr(&ds));
+    }
     ds_destroy(&ds);
 }
 
