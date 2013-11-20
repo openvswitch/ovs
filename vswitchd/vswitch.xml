@@ -2019,6 +2019,13 @@
 	  In case of a problem, set to a short message that reports what the
 	  remote endpoint's BFD session thinks is wrong.
 	</column>
+
+        <column name="bfd_status" key="flap_count"
+          type='{"type": "integer", "minInteger": 0}'>
+          Counts the number of <ref column="bfd_status" key="forwarding" />
+          flaps since start.  A flap is considered as a change of the
+          <ref column="bfd_status" key="forwarding" /> value.
+        </column>
       </group>
     </group>
 

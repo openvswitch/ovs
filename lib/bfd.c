@@ -207,6 +207,8 @@ struct bfd {
                                   /* detect interval. */
     uint64_t decay_rx_packets;    /* Packets received by 'netdev'. */
     long long int decay_detect_time; /* Decay detection time. */
+
+    uint64_t flap_count;          /* Counts bfd forwarding flaps. */
 };
 
 static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
@@ -267,6 +269,7 @@ bfd_get_status(const struct bfd *bfd, struct smap *smap)
     smap_add(smap, "forwarding", bfd->forwarding ? "true" : "false");
     smap_add(smap, "state", bfd_state_str(bfd->state));
     smap_add(smap, "diagnostic", bfd_diag_str(bfd->diag));
+    smap_add_format(smap, "flap_count", "%"PRIu64, bfd->flap_count);
 
     if (bfd->state != STATE_DOWN) {
         smap_add(smap, "remote_state", bfd_state_str(bfd->rmt_state));
@@ -325,6 +328,7 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
         bfd->netdev = netdev_ref(netdev);
         bfd->rx_packets = bfd_rx_packets(bfd);
         bfd->in_decay = false;
+        bfd->flap_count = 0;
 
         /* RFC 5881 section 4
          * The source port MUST be in the range 49152 through 65535.  The same
@@ -807,11 +811,13 @@ bfd_set_netdev(struct bfd *bfd, const struct netdev *netdev)
 }
 
 
-/* Updates the forwarding flag. */
+/* Updates the forwarding flag.  If override is not configured and
+ * the forwarding flag value changes, increments the flap count. */
 static bool
 bfd_forwarding__(struct bfd *bfd) OVS_REQUIRES(mutex)
 {
     long long int time;
+    bool forwarding_old = bfd->forwarding;
 
     if (bfd->forwarding_override != -1) {
         return bfd->forwarding_override == 1;
@@ -823,6 +829,9 @@ bfd_forwarding__(struct bfd *bfd) OVS_REQUIRES(mutex)
                        && bfd->rmt_diag != DIAG_PATH_DOWN
                        && bfd->rmt_diag != DIAG_CPATH_DOWN
                        && bfd->rmt_diag != DIAG_RCPATH_DOWN;
+    if (bfd->forwarding != forwarding_old) {
+        bfd->flap_count++;
+    }
     return bfd->forwarding;
 }
 

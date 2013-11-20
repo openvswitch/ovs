@@ -34,6 +34,14 @@ AT_CHECK([ovs-appctl bfd/show $1 | sed -n '/RX Interval/p'],[0],
 	Remote Minimum RX Interval: $4
 ])
 ])
+
+m4_define([BFD_VSCTL_LIST_IFACE], [
+AT_CHECK([ovs-vsctl list interface $1 | sed -n $2],[0],
+[dnl
+$3
+])
+])
+
 AT_SETUP([bfd - basic config on different bridges])
 #Create 2 bridges connected by patch ports and enable BFD
 OVS_VSWITCHD_START(
@@ -699,4 +707,127 @@ BFD_CHECK_TX([p0], [300ms], [300ms], [300ms])
 BFD_CHECK_RX([p0], [1000ms], [1000ms], [300ms])
 
 AT_CHECK([ovs-vsctl del-br br1], [0], [ignore])
+AT_CLEANUP
+
+# test bfd:flap_count.
+AT_SETUP([bfd - flap_count])
+#Create 2 bridges connected by patch ports and enable bfd
+OVS_VSWITCHD_START([add-br br1 -- \
+                    set bridge br1 datapath-type=dummy \
+                    other-config:hwaddr=aa:55:aa:56:00:00 -- \
+                    add-port br1 p1 -- set Interface p1 type=patch \
+                    options:peer=p0 ofport_request=2 -- \
+                    add-port br0 p0 -- set Interface p0 type=patch \
+                    options:peer=p1 ofport_request=1 -- \
+                    set Interface p0 bfd:enable=true bfd:min_tx=100 bfd:min_rx=100 -- \
+                    set Interface p1 bfd:enable=true bfd:min_tx=100 bfd:min_rx=100])
+
+ovs-appctl time/stop
+
+# Part-1 wait for a while to stablize bfd.
+for i in `seq 0 100`; do ovs-appctl time/warp 100; done
+BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+BFD_CHECK_TX([p0], [100ms], [100ms], [100ms])
+BFD_CHECK_RX([p0], [100ms], [100ms], [100ms])
+# both p0 and p1 should have flap_count = "1". since down->up.
+BFD_VSCTL_LIST_IFACE([p0], ["s/^.*flap_count=\(.*\), forwarding.*$/\1/p"], ["1"])
+BFD_VSCTL_LIST_IFACE([p1], ["s/^.*flap_count=\(.*\), forwarding.*$/\1/p"], ["1"])
+
+# turn bfd on p1 off, should increment the bfd:flap_count on p0.
+AT_CHECK([ovs-vsctl set interface p1 bfd:enable=false])
+for i in `seq 0 10`; do ovs-appctl time/warp 100; done
+BFD_CHECK([p0], [false], [false], [none], [down], [Control Detection Time Expired], [none], [down], [No Diagnostic])
+BFD_VSCTL_LIST_IFACE([p0], ["s/^.*flap_count=\(.*\), forwarding.*$/\1/p"], ["2"])
+AT_CHECK([ovs-vsctl list interface p1 | sed -n "s/^.*flap_count=\(.*\), forwarding.*$/\1/p"])
+
+# turn bfd on p1 on again, should increment the bfd:flap_count on p0.
+# p1 should still have flap_count = "1", since it is reset.
+AT_CHECK([ovs-vsctl set interface p1 bfd:enable=true])
+for i in `seq 0 10`; do ovs-appctl time/warp 100; done
+BFD_VSCTL_LIST_IFACE([p0], ["s/^.*flap_count=\(.*\), forwarding.*$/\1/p"], ["3"])
+BFD_VSCTL_LIST_IFACE([p1], ["s/^.*flap_count=\(.*\), forwarding.*$/\1/p"], ["1"])
+
+
+# Part-2 now turn on the forwarding_override.
+AT_CHECK([ovs-appctl bfd/set-forwarding p0 true], [0], [dnl
+OK
+])
+
+# turn bfd on p1 off, should not increment the bfd:flap_count on p0, since forwarding_override is on.
+AT_CHECK([ovs-vsctl set interface p1 bfd:enable=false])
+for i in `seq 0 10`; do ovs-appctl time/warp 100; done
+BFD_CHECK([p0], [true], [false], [none], [down], [Control Detection Time Expired], [none], [down], [No Diagnostic])
+BFD_VSCTL_LIST_IFACE([p0], ["s/^.*flap_count=\(.*\), forwarding.*$/\1/p"], ["3"])
+AT_CHECK([ovs-vsctl list interface p1 | sed -n "s/^.*flap_count=\(.*\), forwarding.*$/\1/p"])
+
+# turn bfd on p1 on again, should not increment the bfd:flap_count on p0, since forwarding override is on.
+# p1 should still have flap_count = "1", since it is reset.
+AT_CHECK([ovs-vsctl set interface p1 bfd:enable=true])
+for i in `seq 0 10`; do ovs-appctl time/warp 100; done
+BFD_VSCTL_LIST_IFACE([p0], ["s/^.*flap_count=\(.*\), forwarding.*$/\1/p"], ["3"])
+BFD_VSCTL_LIST_IFACE([p1], ["s/^.*flap_count=\(.*\), forwarding.*$/\1/p"], ["1"])
+
+# turn the forwarding_override back to normal.
+AT_CHECK([ovs-appctl bfd/set-forwarding p0 normal], [0], [dnl
+OK
+])
+
+# turn bfd on p1 off and on, should increment the bfd:flap_count on p0.
+AT_CHECK([ovs-vsctl set interface p1 bfd:enable=false])
+for i in `seq 0 10`; do ovs-appctl time/warp 100; done
+AT_CHECK([ovs-vsctl set interface p1 bfd:enable=true])
+for i in `seq 0 10`; do ovs-appctl time/warp 100; done
+BFD_VSCTL_LIST_IFACE([p0], ["s/^.*flap_count=\(.*\), forwarding.*$/\1/p"], ["5"])
+BFD_VSCTL_LIST_IFACE([p1], ["s/^.*flap_count=\(.*\), forwarding.*$/\1/p"], ["1"])
+
+# Part-3 now turn on forwarding_if_rx.
+AT_CHECK([ovs-vsctl set Interface p0 bfd:forwarding_if_rx=true], [0])
+# disable the bfd on p1.
+AT_CHECK([ovs-vsctl set Interface p1 bfd:enable=false], [0])
+
+# advance clock by 4000ms, while receiving packets.
+# the STATE should go DOWN, due to Control Detection Time Expired.
+# but forwarding flag should be true.
+for i in `seq 0 39`
+do
+    ovs-appctl time/warp 100
+    AT_CHECK([ovs-ofctl packet-out br1 3 2 "90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202"],
+             [0], [stdout], [])
+done
+BFD_CHECK([p0], [true], [false], [none], [down], [Control Detection Time Expired], [none], [down], [No Diagnostic])
+# flap_count should remain unchanged.
+BFD_VSCTL_LIST_IFACE([p0], ["s/^.*flap_count=\(.*\), forwarding.*$/\1/p"], ["5"])
+
+# stop the traffic for 4000ms, the forwarding flag of p0 should turn false.
+# and there should be the increment of flap_count.
+for i in `seq 0 7`; do ovs-appctl time/warp 500; done
+BFD_CHECK([p0], [false], [false], [none], [down], [Control Detection Time Expired], [none], [down], [No Diagnostic])
+BFD_VSCTL_LIST_IFACE([p0], ["s/^.*flap_count=\(.*\), forwarding.*$/\1/p"], ["6"])
+
+# advance clock by 4000ms, and resume the traffic.
+for i in `seq 0 39`
+do
+    ovs-appctl time/warp 100
+    AT_CHECK([ovs-ofctl packet-out br1 3 2 "90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202"],
+             [0], [stdout], [])
+done
+BFD_CHECK([p0], [true], [false], [none], [down], [Control Detection Time Expired], [none], [down], [No Diagnostic])
+# flap_count should be incremented again.
+BFD_VSCTL_LIST_IFACE([p0], ["s/^.*flap_count=\(.*\), forwarding.*$/\1/p"], ["7"])
+
+# stop the traffic for 4000ms, the forwarding flag of p0 should turn false.
+# and there should be the increment of flap_count.
+for i in `seq 0 7`; do ovs-appctl time/warp 500; done
+BFD_CHECK([p0], [false], [false], [none], [down], [Control Detection Time Expired], [none], [down], [No Diagnostic])
+BFD_VSCTL_LIST_IFACE([p0], ["s/^.*flap_count=\(.*\), forwarding.*$/\1/p"], ["8"])
+
+# turn on the bfd on p1.
+AT_CHECK([ovs-vsctl set interface p1 bfd:enable=true])
+for i in `seq 0 10`; do ovs-appctl time/warp 100; done
+# even though there is no data traffic, since p1 bfd is on again, should increment the flap_count.
+BFD_VSCTL_LIST_IFACE([p0], ["s/^.*flap_count=\(.*\), forwarding.*$/\1/p"], ["9"])
+BFD_VSCTL_LIST_IFACE([p1], ["s/^.*flap_count=\(.*\), forwarding.*$/\1/p"], ["1"])
+
+OVS_VSWITCHD_STOP
 AT_CLEANUP
