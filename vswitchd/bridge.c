@@ -947,6 +947,14 @@ bridge_configure_sflow(struct bridge *br, int *sflow_bridge_number)
     sset_destroy(&oso.targets);
 }
 
+/* Returns whether a Flow_Sample_Collector_Set row is valid. */
+static bool
+ovsrec_fscs_is_valid(const struct ovsrec_flow_sample_collector_set *fscs,
+                     const struct bridge *br)
+{
+    return fscs->ipfix && fscs->bridge == br->cfg;
+}
+
 /* Set IPFIX configuration on 'br'. */
 static void
 bridge_configure_ipfix(struct bridge *br)
@@ -958,7 +966,7 @@ bridge_configure_ipfix(struct bridge *br)
     size_t n_fe_opts = 0;
 
     OVSREC_FLOW_SAMPLE_COLLECTOR_SET_FOR_EACH(fe_cfg, idl) {
-        if (fe_cfg->bridge == br->cfg) {
+        if (ovsrec_fscs_is_valid(fe_cfg, br)) {
             n_fe_opts++;
         }
     }
@@ -992,7 +1000,7 @@ bridge_configure_ipfix(struct bridge *br)
         fe_opts = xcalloc(n_fe_opts, sizeof *fe_opts);
         opts = fe_opts;
         OVSREC_FLOW_SAMPLE_COLLECTOR_SET_FOR_EACH(fe_cfg, idl) {
-            if (fe_cfg->bridge == br->cfg) {
+            if (ovsrec_fscs_is_valid(fe_cfg, br)) {
                 opts->collector_set_id = fe_cfg->id;
                 sset_init(&opts->targets);
                 sset_add_array(&opts->targets, fe_cfg->ipfix->targets,
