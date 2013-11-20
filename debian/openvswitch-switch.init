@@ -31,6 +31,7 @@
 test -e /etc/default/openvswitch-switch && . /etc/default/openvswitch-switch
 
 network_interfaces () {
+    [ -z "${RUNLEVEL}" ] && return
     INTERFACES="/etc/network/interfaces"
     [ -e "${INTERFACES}" ] || return
     bridges=`awk '{ if ($1 == "allow-ovs") { print $2; } }' "${INTERFACES}"`
