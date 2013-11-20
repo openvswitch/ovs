@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
  "version": "7.3.0",
- "cksum": "2811681289 20311",
+ "cksum": "2495231516 20311",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -412,7 +412,7 @@
    "IPFIX": {
      "columns": {
        "targets": {
-         "type": {"key": "string", "min": 1, "max": "unlimited"}},
+         "type": {"key": "string", "min": 0, "max": "unlimited"}},
        "sampling": {
          "type": {"key": {"type": "integer",
                           "minInteger": 1,
