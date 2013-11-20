@@ -187,6 +187,7 @@ struct bfd {
     long long int next_tx;        /* Next TX time. */
     long long int detect_time;    /* RFC 5880 6.8.4 Detection time. */
 
+    bool forwarding;              /* Interface capability of packet I/O. */
     int forwarding_override;      /* Manual override of 'forwarding' status. */
 
     atomic_bool check_tnl_key;    /* Verify tunnel key of inbound packets? */
@@ -212,7 +213,7 @@ static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
 static struct hmap all_bfds__ = HMAP_INITIALIZER(&all_bfds__);
 static struct hmap *const all_bfds OVS_GUARDED_BY(mutex) = &all_bfds__;
 
-static bool bfd_forwarding__(const struct bfd *) OVS_REQUIRES(mutex);
+static bool bfd_forwarding__(struct bfd *) OVS_REQUIRES(mutex);
 static bool bfd_in_poll(const struct bfd *) OVS_REQUIRES(mutex);
 static void bfd_poll(struct bfd *bfd) OVS_REQUIRES(mutex);
 static const char *bfd_diag_str(enum diag) OVS_REQUIRES(mutex);
@@ -246,7 +247,7 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(20, 20);
 /* Returns true if the interface on which 'bfd' is running may be used to
  * forward traffic according to the BFD session state. */
 bool
-bfd_forwarding(const struct bfd *bfd) OVS_EXCLUDED(mutex)
+bfd_forwarding(struct bfd *bfd) OVS_EXCLUDED(mutex)
 {
     bool ret;
 
@@ -263,7 +264,7 @@ bfd_get_status(const struct bfd *bfd, struct smap *smap)
     OVS_EXCLUDED(mutex)
 {
     ovs_mutex_lock(&mutex);
-    smap_add(smap, "forwarding", bfd_forwarding__(bfd)? "true" : "false");
+    smap_add(smap, "forwarding", bfd->forwarding ? "true" : "false");
     smap_add(smap, "state", bfd_state_str(bfd->state));
     smap_add(smap, "diagnostic", bfd_diag_str(bfd->diag));
 
@@ -312,6 +313,7 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
     if (!bfd) {
         bfd = xzalloc(sizeof *bfd);
         bfd->name = xstrdup(name);
+        bfd->forwarding = false;
         bfd->forwarding_override = -1;
         bfd->disc = generate_discriminator();
         hmap_insert(all_bfds, &bfd->node, bfd->disc);
@@ -805,8 +807,9 @@ bfd_set_netdev(struct bfd *bfd, const struct netdev *netdev)
 }
 
 
+/* Updates the forwarding flag. */
 static bool
-bfd_forwarding__(const struct bfd *bfd) OVS_REQUIRES(mutex)
+bfd_forwarding__(struct bfd *bfd) OVS_REQUIRES(mutex)
 {
     long long int time;
 
@@ -815,11 +818,12 @@ bfd_forwarding__(const struct bfd *bfd) OVS_REQUIRES(mutex)
     }
 
     time = bfd->forwarding_if_rx_detect_time;
-    return (bfd->state == STATE_UP
-            || (bfd->forwarding_if_rx && time > time_msec()))
-           && bfd->rmt_diag != DIAG_PATH_DOWN
-           && bfd->rmt_diag != DIAG_CPATH_DOWN
-           && bfd->rmt_diag != DIAG_RCPATH_DOWN;
+    bfd->forwarding = (bfd->state == STATE_UP
+                       || (bfd->forwarding_if_rx && time > time_msec()))
+                       && bfd->rmt_diag != DIAG_PATH_DOWN
+                       && bfd->rmt_diag != DIAG_CPATH_DOWN
+                       && bfd->rmt_diag != DIAG_RCPATH_DOWN;
+    return bfd->forwarding;
 }
 
 /* Helpers. */
@@ -1020,6 +1024,9 @@ bfd_set_state(struct bfd *bfd, enum state state, enum diag diag)
             bfd_decay_update(bfd);
         }
     }
+
+    /* Updates the forwarding flag. */
+    bfd_forwarding__(bfd);
 }
 
 static uint64_t
@@ -1084,12 +1091,13 @@ bfd_check_rx(struct bfd *bfd) OVS_REQUIRES(mutex)
     }
 }
 
-/* Updates the forwarding_if_rx_detect_time. */
+/* Updates the forwarding_if_rx_detect_time and the forwarding flag. */
 static void
 bfd_forwarding_if_rx_update(struct bfd *bfd) OVS_REQUIRES(mutex)
 {
     int64_t incr = bfd_rx_interval(bfd) * bfd->mult;
     bfd->forwarding_if_rx_detect_time = MAX(incr, 2000) + time_msec();
+    bfd_forwarding__(bfd);
 }
 
 static uint32_t
@@ -1135,8 +1143,7 @@ bfd_find_by_name(const char *name) OVS_REQUIRES(mutex)
 static void
 bfd_put_details(struct ds *ds, const struct bfd *bfd) OVS_REQUIRES(mutex)
 {
-    ds_put_format(ds, "\tForwarding: %s\n",
-                  bfd_forwarding__(bfd) ? "true" : "false");
+    ds_put_format(ds, "\tForwarding: %s\n", bfd->forwarding ? "true" : "false");
     ds_put_format(ds, "\tDetect Multiplier: %d\n", bfd->mult);
     ds_put_format(ds, "\tConcatenated Path Down: %s\n",
                   bfd->cpath_down ? "true" : "false");

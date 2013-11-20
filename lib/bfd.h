@@ -46,7 +46,7 @@ struct bfd *bfd_configure(struct bfd *, const char *name,
 struct bfd *bfd_ref(const struct bfd *);
 void bfd_unref(struct bfd *);
 
-bool bfd_forwarding(const struct bfd *);
+bool bfd_forwarding(struct bfd *);
 void bfd_get_status(const struct bfd *, struct smap *);
 void bfd_set_netdev(struct bfd *, const struct netdev *);
 long long int bfd_wake_time(const struct bfd *);
