@@ -6624,7 +6624,7 @@ static void
 oftable_init(struct oftable *table)
 {
     memset(table, 0, sizeof *table);
-    classifier_init(&table->cls);
+    classifier_init(&table->cls, flow_segment_u32s);
     table->max_flows = UINT_MAX;
 }
 

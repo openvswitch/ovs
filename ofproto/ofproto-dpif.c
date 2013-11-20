@@ -1254,7 +1254,7 @@ construct(struct ofproto *ofproto_)
     ovs_mutex_init(&ofproto->stats_mutex);
     ovs_mutex_init(&ofproto->vsp_mutex);
 
-    classifier_init(&ofproto->facets);
+    classifier_init(&ofproto->facets, NULL);
     ofproto->consistency_rl = LLONG_MIN;
 
     guarded_list_init(&ofproto->pins);

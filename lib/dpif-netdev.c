@@ -292,7 +292,7 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
         dp->queues[i].head = dp->queues[i].tail = 0;
     }
     dp->queue_seq = seq_create();
-    classifier_init(&dp->cls);
+    classifier_init(&dp->cls, NULL);
     hmap_init(&dp->flow_table);
     list_init(&dp->port_list);
     dp->port_seq = seq_create();

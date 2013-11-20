@@ -22,3 +22,41 @@ m4_foreach(
   [AT_SETUP([miniflow - m4_bpatsubst(testname, [-], [ ])])
    AT_CHECK([test-classifier testname], [0], [], [])
    AT_CLEANUP])])
+
+AT_BANNER([flow classifier lookup segmentation])
+AT_SETUP([flow classifier - lookup segmentation])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [2], [3])
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1 priority=16,tcp,nw_dst=10.1.0.0/255.255.0.0,action=output(3)
+table=0 in_port=1 priority=32,tcp,nw_dst=10.1.2.15,action=output(2)
+table=0 in_port=1 priority=33,tcp,nw_dst=10.1.2.15,tp_dst=80,action=drop
+table=0 in_port=1 priority=0,ip,action=drop
+table=0 in_port=2 priority=16,tcp,nw_dst=192.168.0.0/255.255.0.0,action=output(1)
+table=0 in_port=2 priority=0,ip,action=drop
+table=0 in_port=3 priority=16,tcp,nw_src=10.1.0.0/255.255.0.0,action=output(1)
+table=0 in_port=3 priority=0,ip,action=drop
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=2,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=6,nw_tos=0,nw_ttl=128,tp_src=8,tp_dst=80'], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Relevant fields: skb_priority=0,tcp,in_port=2,nw_dst=192.168.0.0/16,nw_frag=no
+Datapath actions: 1
+])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=6,nw_tos=0,nw_ttl=128,tp_src=8,tp_dst=80'], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Relevant fields: skb_priority=0,tcp,in_port=1,nw_dst=192.168.0.2,nw_frag=no
+Datapath actions: drop
+])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=10.1.2.15,nw_proto=6,nw_tos=0,nw_ttl=128,tp_src=8,tp_dst=80'], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Relevant fields: skb_priority=0,tcp,in_port=1,nw_dst=10.1.2.15,nw_frag=no,tp_dst=80
+Datapath actions: drop
+])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=10.1.2.15,nw_proto=6,nw_tos=0,nw_ttl=128,tp_src=8,tp_dst=79'], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Relevant fields: skb_priority=0,tcp,in_port=1,nw_dst=10.1.2.15,nw_frag=no,tp_dst=79
+Datapath actions: 2
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP

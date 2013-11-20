@@ -1663,7 +1663,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
 
     /* If 'struct flow' gets additional metadata, we'll need to zero it out
      * before traversing a patch port. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 22);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 23);
 
     if (!xport) {
         xlate_report(ctx, "Nonexistent output port");

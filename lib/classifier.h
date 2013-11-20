@@ -61,6 +61,16 @@
  * list inside that highest-priority rule.
  *
  *
+ * Staged Lookup
+ * =============
+ *
+ * Subtable lookup is performed in ranges defined for struct flow, starting
+ * from metadata (registers, in_port, etc.), then L2 header, L3, and finally
+ * L4 ports.  Whenever it is found that there are no matches in the current
+ * subtable, the rest of the subtable can be skipped.  The rationale of this
+ * logic is that as many fields as possible can remain wildcarded.
+ *
+ *
  * Partitioning
  * ============
  *
@@ -102,6 +112,7 @@
  * by a single writer. */
 
 #include "flow.h"
+#include "hindex.h"
 #include "hmap.h"
 #include "list.h"
 #include "match.h"
@@ -118,9 +129,15 @@ extern "C" {
 /* Needed only for the lock annotation in struct classifier. */
 extern struct ovs_mutex ofproto_mutex;
 
+/* Maximum number of staged lookup indices for each subtable. */
+enum { CLS_MAX_INDICES = 3 };
+
 /* A flow classifier. */
 struct classifier {
     int n_rules;                /* Total number of rules. */
+    uint8_t n_flow_segments;
+    uint8_t flow_segments[CLS_MAX_INDICES]; /* Flow segment boundaries to use
+                                             * for staged lookup. */
     struct hmap subtables;      /* Contains "struct cls_subtable"s.  */
     struct list subtables_priority; /* Subtables in descending priority order.
                                      */
@@ -140,6 +157,9 @@ struct cls_subtable {
     unsigned int max_priority;  /* Max priority of any rule in the subtable. */
     unsigned int max_count;     /* Count of max_priority rules. */
     tag_type tag;               /* Tag generated from mask for partitioning. */
+    uint8_t n_indices;           /* How many indices to use. */
+    uint8_t index_ofs[CLS_MAX_INDICES]; /* u32 flow segment boundaries. */
+    struct hindex indices[CLS_MAX_INDICES]; /* Staged lookup indices. */
 };
 
 /* Returns true if 'table' is a "catch-all" subtable that will match every
@@ -157,6 +177,8 @@ struct cls_rule {
     struct minimatch match;     /* Matching rule. */
     unsigned int priority;      /* Larger numbers are higher priorities. */
     struct cls_partition *partition;
+    struct hindex_node index_nodes[CLS_MAX_INDICES]; /* Within subtable's
+                                                      * 'indices'. */
 };
 
 /* Associates a metadata value (that is, a value of the OpenFlow 1.1+ metadata
@@ -187,7 +209,7 @@ bool cls_rule_is_catchall(const struct cls_rule *);
 bool cls_rule_is_loose_match(const struct cls_rule *rule,
                              const struct minimatch *criteria);
 
-void classifier_init(struct classifier *cls);
+void classifier_init(struct classifier *cls, const uint8_t *flow_segments);
 void classifier_destroy(struct classifier *);
 bool classifier_is_empty(const struct classifier *cls)
     OVS_REQ_RDLOCK(cls->rwlock);

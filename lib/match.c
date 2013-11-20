@@ -842,7 +842,7 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 22);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 23);
 
     if (priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%u,", priority);
@@ -1182,6 +1182,31 @@ minimatch_matches_flow(const struct minimatch *match,
     }
 
     return true;
+}
+
+/* Returns a hash value for the bits of range [start, end) in 'minimatch',
+ * given 'basis'.
+ *
+ * The hash values returned by this function are the same as those returned by
+ * flow_hash_in_minimask_range(), only the form of the arguments differ. */
+uint32_t
+minimatch_hash_range(const struct minimatch *match, uint8_t start, uint8_t end,
+                     uint32_t *basis)
+{
+    const uint32_t *p;
+    uint64_t map = miniflow_get_map_in_range(&match->mask.masks, start, end,
+                                             &p);
+    const ptrdiff_t df = match->mask.masks.values - match->flow.values;
+    uint32_t hash = *basis;
+
+    for (; map; map = zero_rightmost_1bit(map)) {
+        if (*p) {
+            hash = mhash_add(hash, *(p - df) & *p);
+        }
+        p++;
+    }
+    *basis = hash; /* Allow continuation from the unfinished value. */
+    return mhash_finish(hash, (p - match->mask.masks.values) * 4);
 }
 
 /* Appends a string representation of 'match' to 's'.  If 'priority' is

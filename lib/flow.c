@@ -41,6 +41,14 @@
 COVERAGE_DEFINE(flow_extract);
 COVERAGE_DEFINE(miniflow_malloc);
 
+/* U32 indices for segmented flow classification. */
+const uint8_t flow_segment_u32s[4] = {
+    FLOW_SEGMENT_1_ENDS_AT / 4,
+    FLOW_SEGMENT_2_ENDS_AT / 4,
+    FLOW_SEGMENT_3_ENDS_AT / 4,
+    FLOW_U32S
+};
+
 static struct arp_eth_header *
 pull_arp(struct ofpbuf *packet)
 {
@@ -515,7 +523,7 @@ flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
 void
 flow_get_metadata(const struct flow *flow, struct flow_metadata *fmd)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 22);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 23);
 
     fmd->tun_id = flow->tunnel.tun_id;
     fmd->tun_src = flow->tunnel.ip_src;
@@ -662,11 +670,11 @@ static void
 flow_union_with_miniflow(struct flow *dst, const struct miniflow *src)
 {
     uint32_t *dst_u32 = (uint32_t *) dst;
-    int ofs = 0;
+    const uint32_t *p = src->values;
     uint64_t map;
 
     for (map = src->map; map; map = zero_rightmost_1bit(map)) {
-        dst_u32[raw_ctz(map)] |= src->values[ofs++];
+        dst_u32[raw_ctz(map)] |= *p++;
     }
 }
 
@@ -676,6 +684,43 @@ flow_wildcards_fold_minimask(struct flow_wildcards *wc,
                              const struct minimask *mask)
 {
     flow_union_with_miniflow(&wc->masks, &mask->masks);
+}
+
+inline uint64_t
+miniflow_get_map_in_range(const struct miniflow *miniflow,
+                          uint8_t start, uint8_t end, const uint32_t **data)
+{
+    uint64_t map = miniflow->map;
+    uint32_t *p = miniflow->values;
+
+    if (start > 0) {
+        uint64_t msk = (UINT64_C(1) << start) - 1; /* 'start' LSBs set */
+        p += count_1bits(map & msk);  /* Skip to start. */
+        map &= ~msk;
+    }
+    if (end < FLOW_U32S) {
+        uint64_t msk = (UINT64_C(1) << end) - 1; /* 'end' LSBs set */
+        map &= msk;
+    }
+
+    *data = p;
+    return map;
+}
+
+/* Fold minimask 'mask''s wildcard mask into 'wc's wildcard mask
+ * in range [start, end). */
+void
+flow_wildcards_fold_minimask_range(struct flow_wildcards *wc,
+                                   const struct minimask *mask,
+                                   uint8_t start, uint8_t end)
+{
+    uint32_t *dst_u32 = (uint32_t *)&wc->masks;
+    const uint32_t *p;
+    uint64_t map = miniflow_get_map_in_range(&mask->masks, start, end, &p);
+
+    for (; map; map = zero_rightmost_1bit(map)) {
+        dst_u32[raw_ctz(map)] |= *p++;
+    }
 }
 
 /* Returns a hash of the wildcards in 'wc'. */
@@ -1402,6 +1447,33 @@ flow_hash_in_minimask(const struct flow *flow, const struct minimask *mask,
 
     return mhash_finish(hash, (p - mask->masks.values) * 4);
 }
+
+/* Returns a hash value for the bits of range [start, end) in 'flow',
+ * where there are 1-bits in 'mask', given 'hash'.
+ *
+ * The hash values returned by this function are the same as those returned by
+ * minimatch_hash_range(), only the form of the arguments differ. */
+uint32_t
+flow_hash_in_minimask_range(const struct flow *flow,
+                            const struct minimask *mask,
+                            uint8_t start, uint8_t end, uint32_t *basis)
+{
+    const uint32_t *flow_u32 = (const uint32_t *)flow;
+    const uint32_t *p;
+    uint64_t map = miniflow_get_map_in_range(&mask->masks, start, end, &p);
+    uint32_t hash = *basis;
+
+    for (; map; map = zero_rightmost_1bit(map)) {
+        if (*p) {
+            hash = mhash_add(hash, flow_u32[raw_ctz(map)] & *p);
+        }
+        p++;
+    }
+
+    *basis = hash; /* Allow continuation from the unfinished value. */
+    return mhash_finish(hash, (p - mask->masks.values) * 4);
+}
+
 
 /* Initializes 'dst' as a copy of 'src'.  The caller must eventually free 'dst'
  * with minimask_destroy(). */

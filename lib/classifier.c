@@ -41,8 +41,9 @@ static void update_subtables_after_removal(struct classifier *,
                                            struct cls_subtable *,
                                            unsigned int del_priority);
 
-static struct cls_rule *find_match(const struct cls_subtable *,
-                                   const struct flow *);
+static struct cls_rule *find_match_wc(const struct cls_subtable *,
+                                      const struct flow *,
+                                      struct flow_wildcards *);
 static struct cls_rule *find_equal(struct cls_subtable *,
                                    const struct miniflow *, uint32_t hash);
 static struct cls_rule *insert_rule(struct classifier *,
@@ -149,13 +150,20 @@ cls_rule_is_catchall(const struct cls_rule *rule)
 /* Initializes 'cls' as a classifier that initially contains no classification
  * rules. */
 void
-classifier_init(struct classifier *cls)
+classifier_init(struct classifier *cls, const uint8_t *flow_segments)
 {
     cls->n_rules = 0;
     hmap_init(&cls->subtables);
     list_init(&cls->subtables_priority);
     hmap_init(&cls->partitions);
     ovs_rwlock_init(&cls->rwlock);
+    cls->n_flow_segments = 0;
+    if (flow_segments) {
+        while (cls->n_flow_segments < CLS_MAX_INDICES
+               && *flow_segments < FLOW_U32S) {
+            cls->flow_segments[cls->n_flow_segments++] = *flow_segments++;
+        }
+    }
 }
 
 /* Destroys 'cls'.  Rules within 'cls', if any, are not freed; this is the
@@ -298,8 +306,15 @@ classifier_remove(struct classifier *cls, struct cls_rule *rule)
     struct cls_partition *partition;
     struct cls_rule *head;
     struct cls_subtable *subtable;
+    int i;
 
     subtable = find_subtable(cls, &rule->match.mask);
+
+    /* Remove rule node from indices. */
+    for (i = 0; i < subtable->n_indices; i++) {
+        hindex_remove(&subtable->indices[i], &rule->index_nodes[i]);
+    }
+
     head = find_equal(subtable, &rule->match.flow, rule->hmap_node.hash);
     if (head != rule) {
         list_remove(&rule->list);
@@ -380,10 +395,7 @@ classifier_lookup(const struct classifier *cls, const struct flow *flow,
             continue;
         }
 
-        rule = find_match(subtable, flow);
-        if (wc) {
-            flow_wildcards_fold_minimask(wc, &subtable->mask);
-        }
+        rule = find_match_wc(subtable, flow, wc);
         if (rule) {
             best = rule;
             LIST_FOR_EACH_CONTINUE (subtable, list_node,
@@ -397,10 +409,7 @@ classifier_lookup(const struct classifier *cls, const struct flow *flow,
                     continue;
                 }
 
-                rule = find_match(subtable, flow);
-                if (wc) {
-                    flow_wildcards_fold_minimask(wc, &subtable->mask);
-                }
+                rule = find_match_wc(subtable, flow, wc);
                 if (rule && rule->priority > best->priority) {
                     best = rule;
                 }
@@ -657,11 +666,43 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
 {
     uint32_t hash = minimask_hash(mask, 0);
     struct cls_subtable *subtable;
+    int i, index = 0;
+    struct flow_wildcards old, new;
+    uint8_t prev;
 
     subtable = xzalloc(sizeof *subtable);
     hmap_init(&subtable->rules);
     minimask_clone(&subtable->mask, mask);
-    hmap_insert(&cls->subtables, &subtable->hmap_node, minimask_hash(mask, 0));
+
+    /* Init indices for segmented lookup, if any. */
+    flow_wildcards_init_catchall(&new);
+    old = new;
+    prev = 0;
+    for (i = 0; i < cls->n_flow_segments; i++) {
+        flow_wildcards_fold_minimask_range(&new, mask, prev,
+                                           cls->flow_segments[i]);
+        /* Add an index if it adds mask bits. */
+        if (!flow_wildcards_equal(&new, &old)) {
+            hindex_init(&subtable->indices[index]);
+            subtable->index_ofs[index] = cls->flow_segments[i];
+            index++;
+            old = new;
+        }
+        prev = cls->flow_segments[i];
+    }
+    /* Check if the rest of the subtable's mask adds any bits,
+     * and remove the last index if it doesn't. */
+    if (index > 0) {
+        flow_wildcards_fold_minimask_range(&new, mask, prev, FLOW_U32S);
+        if (flow_wildcards_equal(&new, &old)) {
+            --index;
+            subtable->index_ofs[index] = 0;
+            hindex_destroy(&subtable->indices[index]);
+        }
+    }
+    subtable->n_indices = index;
+
+    hmap_insert(&cls->subtables, &subtable->hmap_node, hash);
     list_push_back(&cls->subtables_priority, &subtable->list_node);
     subtable->tag = (minimask_get_metadata_mask(mask) == OVS_BE64_MAX
                      ? tag_create_deterministic(hash)
@@ -673,6 +714,11 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
 static void
 destroy_subtable(struct classifier *cls, struct cls_subtable *subtable)
 {
+    int i;
+
+    for (i = 0; i < subtable->n_indices; i++) {
+        hindex_destroy(&subtable->indices[i]);
+    }
     minimask_destroy(&subtable->mask);
     hmap_remove(&cls->subtables, &subtable->hmap_node);
     hmap_destroy(&subtable->rules);
@@ -774,10 +820,10 @@ update_subtables_after_removal(struct classifier *cls,
     }
 }
 
-static struct cls_rule *
-find_match(const struct cls_subtable *subtable, const struct flow *flow)
+static inline struct cls_rule *
+find_match(const struct cls_subtable *subtable, const struct flow *flow,
+           uint32_t hash)
 {
-    uint32_t hash = flow_hash_in_minimask(flow, &subtable->mask, 0);
     struct cls_rule *rule;
 
     HMAP_FOR_EACH_WITH_HASH (rule, hmap_node, hash, &subtable->rules) {
@@ -787,6 +833,71 @@ find_match(const struct cls_subtable *subtable, const struct flow *flow)
     }
 
     return NULL;
+}
+
+static struct cls_rule *
+find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
+              struct flow_wildcards * wc)
+{
+    uint32_t basis = 0, hash;
+    struct cls_rule *rule = NULL;
+    uint8_t prev_u32ofs = 0;
+    int i;
+
+    if (!wc) {
+        return find_match(subtable, flow,
+                          flow_hash_in_minimask(flow, &subtable->mask, 0));
+    }
+
+    /* Try to finish early by checking fields in segments. */
+    for (i = 0; i < subtable->n_indices; i++) {
+        struct hindex_node *inode;
+
+        hash = flow_hash_in_minimask_range(flow, &subtable->mask, prev_u32ofs,
+                                           subtable->index_ofs[i], &basis);
+        prev_u32ofs = subtable->index_ofs[i];
+        inode = hindex_node_with_hash(&subtable->indices[i], hash);
+        if (!inode) {
+            /* No match, can stop immediately, but must fold in the mask
+             * covered so far. */
+            flow_wildcards_fold_minimask_range(wc, &subtable->mask, 0,
+                                               prev_u32ofs);
+            return NULL;
+        }
+
+        /* If we have narrowed down to a single rule already, check whether
+         * that rule matches.  If it does match, then we're done.  If it does
+         * not match, then we know that we will never get a match, but we do
+         * not yet know how many wildcards we need to fold into 'wc' so we
+         * continue iterating through indices to find that out.  (We won't
+         * waste time calling minimatch_matches_flow() again because we've set
+         * 'rule' nonnull.)
+         *
+         * This check shows a measurable benefit with non-trivial flow tables.
+         *
+         * (Rare) hash collisions may cause us to miss the opportunity for this
+         * optimization. */
+        if (!inode->s && !rule) {
+            ASSIGN_CONTAINER(rule, inode - i, index_nodes);
+            if (minimatch_matches_flow(&rule->match, flow)) {
+                goto out;
+            }
+        }
+    }
+
+    if (!rule) {
+        /* Multiple potential matches exist, look for one. */
+        hash = flow_hash_in_minimask_range(flow, &subtable->mask, prev_u32ofs,
+                                           FLOW_U32S, &basis);
+        rule = find_match(subtable, flow, hash);
+    } else {
+        /* We already narrowed the matching candidates down to just 'rule',
+         * but it didn't match. */
+        rule = NULL;
+    }
+ out:
+    flow_wildcards_fold_minimask(wc, &subtable->mask);
+    return rule;
 }
 
 static struct cls_rule *
@@ -809,19 +920,30 @@ insert_rule(struct classifier *cls, struct cls_subtable *subtable,
 {
     struct cls_rule *head;
     struct cls_rule *old = NULL;
+    int i;
+    uint32_t basis = 0, hash;
+    uint8_t prev_u32ofs = 0;
 
-    new->hmap_node.hash = miniflow_hash_in_minimask(&new->match.flow,
-                                                    &new->match.mask, 0);
-
-    head = find_equal(subtable, &new->match.flow, new->hmap_node.hash);
+    /* Add new node to segment indices. */
+    for (i = 0; i < subtable->n_indices; i++) {
+        hash = minimatch_hash_range(&new->match, prev_u32ofs,
+                                    subtable->index_ofs[i], &basis);
+        hindex_insert(&subtable->indices[i], &new->index_nodes[i], hash);
+        prev_u32ofs = subtable->index_ofs[i];
+    }
+    hash = minimatch_hash_range(&new->match, prev_u32ofs, FLOW_U32S, &basis);
+    head = find_equal(subtable, &new->match.flow, hash);
     if (!head) {
-        hmap_insert(&subtable->rules, &new->hmap_node, new->hmap_node.hash);
+        hmap_insert(&subtable->rules, &new->hmap_node, hash);
         list_init(&new->list);
         goto out;
     } else {
         /* Scan the list for the insertion point that will keep the list in
          * order of decreasing priority. */
         struct cls_rule *rule;
+
+        new->hmap_node.hash = hash; /* Otherwise done by hmap_insert. */
+
         FOR_EACH_RULE_IN_LIST (rule, head) {
             if (new->priority >= rule->priority) {
                 if (rule == head) {
@@ -848,6 +970,11 @@ insert_rule(struct classifier *cls, struct cls_subtable *subtable,
  out:
     if (!old) {
         update_subtables_after_insertion(cls, subtable, new->priority);
+    } else {
+        /* Remove old node from indices. */
+        for (i = 0; i < subtable->n_indices; i++) {
+            hindex_remove(&subtable->indices[i], &old->index_nodes[i]);
+        }
     }
     return old;
 }

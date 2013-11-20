@@ -403,10 +403,12 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
 
     assert(classifier_count(cls) == tcls->n_rules);
     for (i = 0; i < confidence; i++) {
-        struct cls_rule *cr0, *cr1;
+        struct cls_rule *cr0, *cr1, *cr2;
         struct flow flow;
+        struct flow_wildcards wc;
         unsigned int x;
 
+        flow_wildcards_init_catchall(&wc);
         x = random_range(N_FLOW_VALUES);
         memset(&flow, 0, sizeof flow);
         flow.nw_src = nw_src_values[get_value(&x, N_NW_SRC_VALUES)];
@@ -426,7 +428,7 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
         flow.nw_proto = nw_proto_values[get_value(&x, N_NW_PROTO_VALUES)];
         flow.nw_tos = nw_dscp_values[get_value(&x, N_NW_DSCP_VALUES)];
 
-        cr0 = classifier_lookup(cls, &flow, NULL);
+        cr0 = classifier_lookup(cls, &flow, &wc);
         cr1 = tcls_lookup(tcls, &flow);
         assert((cr0 == NULL) == (cr1 == NULL));
         if (cr0 != NULL) {
@@ -436,6 +438,8 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
             assert(cls_rule_equal(cr0, cr1));
             assert(tr0->aux == tr1->aux);
         }
+        cr2 = classifier_lookup(cls, &flow, NULL);
+        assert(cr2 == cr0);
     }
 }
 
@@ -612,7 +616,7 @@ test_empty(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     struct classifier cls;
     struct tcls tcls;
 
-    classifier_init(&cls);
+    classifier_init(&cls, flow_segment_u32s);
     ovs_rwlock_rdlock(&cls.rwlock);
     tcls_init(&tcls);
     assert(classifier_is_empty(&cls));
@@ -644,7 +648,7 @@ test_single_rule(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         rule = make_rule(wc_fields,
                          hash_bytes(&wc_fields, sizeof wc_fields, 0), 0);
 
-        classifier_init(&cls);
+        classifier_init(&cls, flow_segment_u32s);
         ovs_rwlock_wrlock(&cls.rwlock);
         tcls_init(&tcls);
 
@@ -683,7 +687,7 @@ test_rule_replacement(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         rule2->aux += 5;
         rule2->aux += 5;
 
-        classifier_init(&cls);
+        classifier_init(&cls, flow_segment_u32s);
         ovs_rwlock_wrlock(&cls.rwlock);
         tcls_init(&tcls);
         tcls_insert(&tcls, rule1);
@@ -795,7 +799,7 @@ test_many_rules_in_one_list (int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
                 pri_rules[i] = -1;
             }
 
-            classifier_init(&cls);
+            classifier_init(&cls, flow_segment_u32s);
             ovs_rwlock_wrlock(&cls.rwlock);
             tcls_init(&tcls);
 
@@ -897,7 +901,7 @@ test_many_rules_in_one_table(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
             value_mask = ~wcf & ((1u << CLS_N_FIELDS) - 1);
         } while ((1 << count_ones(value_mask)) < N_RULES);
 
-        classifier_init(&cls);
+        classifier_init(&cls, flow_segment_u32s);
         ovs_rwlock_wrlock(&cls.rwlock);
         tcls_init(&tcls);
 
@@ -959,7 +963,7 @@ test_many_rules_in_n_tables(int n_tables)
         }
         shuffle(priorities, ARRAY_SIZE(priorities));
 
-        classifier_init(&cls);
+        classifier_init(&cls, flow_segment_u32s);
         ovs_rwlock_wrlock(&cls.rwlock);
         tcls_init(&tcls);
 

@@ -2398,7 +2398,7 @@ ofctl_replace_flows(int argc OVS_UNUSED, char *argv[])
     struct vconn *vconn;
     struct fte *fte;
 
-    classifier_init(&cls);
+    classifier_init(&cls, NULL);
     usable_protocols = read_flows_from_file(argv[2], &cls, FILE_IDX);
 
     protocol = open_vconn(argv[1], &vconn);
@@ -2468,7 +2468,7 @@ ofctl_diff_flows(int argc OVS_UNUSED, char *argv[])
     struct ds a_s, b_s;
     struct fte *fte;
 
-    classifier_init(&cls);
+    classifier_init(&cls, NULL);
     read_flows_from_source(argv[1], &cls, 0);
     read_flows_from_source(argv[2], &cls, 1);
 

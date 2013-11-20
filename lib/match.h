@@ -159,6 +159,9 @@ uint32_t minimatch_hash(const struct minimatch *, uint32_t basis);
 
 bool minimatch_matches_flow(const struct minimatch *, const struct flow *);
 
+uint32_t minimatch_hash_range(const struct minimatch *,
+                              uint8_t start, uint8_t end, uint32_t *basis);
+
 void minimatch_format(const struct minimatch *, struct ds *,
                       unsigned int priority);
 char *minimatch_to_string(const struct minimatch *, unsigned int priority);

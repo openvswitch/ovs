@@ -30,14 +30,13 @@
 struct dpif_flow_stats;
 struct ds;
 struct flow_wildcards;
-struct miniflow;
 struct minimask;
 struct ofpbuf;
 
 /* This sequence number should be incremented whenever anything involving flows
  * or the wildcarding of flows changes.  This will cause build assertion
  * failures in places which likely need to be updated. */
-#define FLOW_WC_SEQ 22
+#define FLOW_WC_SEQ 23
 
 #define FLOW_N_REGS 8
 BUILD_ASSERT_DECL(FLOW_N_REGS <= NXM_NX_MAX_REGS);
@@ -88,44 +87,76 @@ union flow_in_port {
  * 16-bit OpenFlow 1.0 port number.  In the software datapath interface (dpif)
  * layer and its implementations (e.g. dpif-linux, dpif-netdev), it is instead
  * a 32-bit datapath port number.
+ *
+ * The fields are organized in four segments to facilitate staged lookup, where
+ * lower layer fields are first used to determine if the later fields need to
+ * be looked at.  This enables better wildcarding for datapath flows.
  */
 struct flow {
+    /* L1 */
     struct flow_tnl tunnel;     /* Encapsulating tunnel parameters. */
     ovs_be64 metadata;          /* OpenFlow Metadata. */
+    uint32_t regs[FLOW_N_REGS]; /* Registers. */
+    uint32_t skb_priority;      /* Packet priority for QoS. */
+    uint32_t pkt_mark;          /* Packet mark. */
+    union flow_in_port in_port; /* Input port.*/
+
+    /* L2 */
+    uint8_t dl_src[6];          /* Ethernet source address. */
+    uint8_t dl_dst[6];          /* Ethernet destination address. */
+    ovs_be16 dl_type;           /* Ethernet frame type. */
+    ovs_be16 vlan_tci;          /* If 802.1Q, TCI | VLAN_CFI; otherwise 0. */
+
+    /* L3 */
+    ovs_be32 mpls_lse;          /* MPLS label stack entry. */
     struct in6_addr ipv6_src;   /* IPv6 source address. */
     struct in6_addr ipv6_dst;   /* IPv6 destination address. */
     struct in6_addr nd_target;  /* IPv6 neighbor discovery (ND) target. */
-    uint32_t skb_priority;      /* Packet priority for QoS. */
-    uint32_t regs[FLOW_N_REGS]; /* Registers. */
+    ovs_be32 ipv6_label;        /* IPv6 flow label. */
     ovs_be32 nw_src;            /* IPv4 source address. */
     ovs_be32 nw_dst;            /* IPv4 destination address. */
-    ovs_be32 ipv6_label;        /* IPv6 flow label. */
-    union flow_in_port in_port; /* Input port.*/
-    uint32_t pkt_mark;          /* Packet mark. */
-    ovs_be32 mpls_lse;          /* MPLS label stack entry. */
-    ovs_be16 vlan_tci;          /* If 802.1Q, TCI | VLAN_CFI; otherwise 0. */
-    ovs_be16 dl_type;           /* Ethernet frame type. */
-    ovs_be16 tp_src;            /* TCP/UDP/SCTP source port. */
-    ovs_be16 tp_dst;            /* TCP/UDP/SCTP destination port. */
-    ovs_be16 tcp_flags;         /* TCP flags. */
-    uint8_t dl_src[6];          /* Ethernet source address. */
-    uint8_t dl_dst[6];          /* Ethernet destination address. */
-    uint8_t nw_proto;           /* IP protocol or low 8 bits of ARP opcode. */
+    uint8_t nw_frag;            /* FLOW_FRAG_* flags. */
     uint8_t nw_tos;             /* IP ToS (including DSCP and ECN). */
+    uint8_t nw_ttl;             /* IP TTL/Hop Limit. */
+    uint8_t nw_proto;           /* IP protocol or low 8 bits of ARP opcode. */
     uint8_t arp_sha[6];         /* ARP/ND source hardware address. */
     uint8_t arp_tha[6];         /* ARP/ND target hardware address. */
-    uint8_t nw_ttl;             /* IP TTL/Hop Limit. */
-    uint8_t nw_frag;            /* FLOW_FRAG_* flags. Keep last for the
-                                   BUILD_ASSERT_DECL below */
+    ovs_be16 tcp_flags;         /* TCP flags. With L3 to avoid matching L4. */
+    ovs_be16 pad;               /* Padding. */
+    /* L4 */
+    ovs_be16 tp_src;            /* TCP/UDP/SCTP source port. */
+    ovs_be16 tp_dst;            /* TCP/UDP/SCTP destination port.
+                                 * Keep last for the BUILD_ASSERT_DECL below */
 };
 BUILD_ASSERT_DECL(sizeof(struct flow) % 4 == 0);
 
 #define FLOW_U32S (sizeof(struct flow) / 4)
 
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
-BUILD_ASSERT_DECL(offsetof(struct flow, nw_frag) + 1
-                  == sizeof(struct flow_tnl) + 154
-                  && FLOW_WC_SEQ == 22);
+BUILD_ASSERT_DECL(offsetof(struct flow, tp_dst) + 2
+                  == sizeof(struct flow_tnl) + 156
+                  && FLOW_WC_SEQ == 23);
+
+/* Incremental points at which flow classification may be performed in
+ * segments.
+ * This is located here since this is dependent on the structure of the
+ * struct flow defined above:
+ * Each offset must be on a distint, successive U32 boundary srtictly
+ * within the struct flow. */
+enum {
+    FLOW_SEGMENT_1_ENDS_AT = offsetof(struct flow, dl_src),
+    FLOW_SEGMENT_2_ENDS_AT = offsetof(struct flow, mpls_lse),
+    FLOW_SEGMENT_3_ENDS_AT = offsetof(struct flow, tp_src),
+};
+BUILD_ASSERT_DECL(FLOW_SEGMENT_1_ENDS_AT % 4 == 0);
+BUILD_ASSERT_DECL(FLOW_SEGMENT_2_ENDS_AT % 4 == 0);
+BUILD_ASSERT_DECL(FLOW_SEGMENT_3_ENDS_AT % 4 == 0);
+BUILD_ASSERT_DECL(                     0 < FLOW_SEGMENT_1_ENDS_AT);
+BUILD_ASSERT_DECL(FLOW_SEGMENT_1_ENDS_AT < FLOW_SEGMENT_2_ENDS_AT);
+BUILD_ASSERT_DECL(FLOW_SEGMENT_2_ENDS_AT < FLOW_SEGMENT_3_ENDS_AT);
+BUILD_ASSERT_DECL(FLOW_SEGMENT_3_ENDS_AT < sizeof(struct flow));
+
+extern const uint8_t flow_segment_u32s[];
 
 /* Represents the metadata fields of struct flow. */
 struct flow_metadata {
@@ -234,6 +265,10 @@ hash_odp_port(odp_port_t odp_port)
 
 uint32_t flow_hash_in_minimask(const struct flow *, const struct minimask *,
                                uint32_t basis);
+uint32_t flow_hash_in_minimask_range(const struct flow *,
+                                     const struct minimask *,
+                                     uint8_t start, uint8_t end,
+                                     uint32_t *basis);
 
 /* Wildcards for a flow.
  *
@@ -262,6 +297,9 @@ bool flow_wildcards_has_extra(const struct flow_wildcards *,
 
 void flow_wildcards_fold_minimask(struct flow_wildcards *,
                                   const struct minimask *);
+void flow_wildcards_fold_minimask_range(struct flow_wildcards *,
+                                        const struct minimask *,
+                                        uint8_t start, uint8_t end);
 
 uint32_t flow_wildcards_hash(const struct flow_wildcards *, uint32_t basis);
 bool flow_wildcards_equal(const struct flow_wildcards *,
@@ -349,6 +387,8 @@ bool miniflow_equal_flow_in_minimask(const struct miniflow *a,
 uint32_t miniflow_hash(const struct miniflow *, uint32_t basis);
 uint32_t miniflow_hash_in_minimask(const struct miniflow *,
                                    const struct minimask *, uint32_t basis);
+uint64_t miniflow_get_map_in_range(const struct miniflow *, uint8_t start,
+                                   uint8_t end, const uint32_t **data);
 
 /* Compressed flow wildcards. */
 
