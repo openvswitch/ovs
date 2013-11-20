@@ -434,16 +434,17 @@ A: Open vSwitch uses different kinds of flows for different purposes:
         about hidden flows.)
 
       - The Open vSwitch software switch implementation uses a second
-        kind of flow internally.  These flows, called "exact-match"
-        or "datapath" or "kernel" flows, do not support wildcards or
-        priorities and comprise only a single table, which makes them
-        suitable for caching.   OpenFlow flows and exact-match flows
+        kind of flow internally.  These flows, called "datapath" or
+        "kernel" flows, do not support priorities and comprise only a
+        single table, which makes them suitable for caching.  (Like
+        OpenFlow flows, datapath flows do support wildcarding, in Open
+        vSwitch 1.11 and later.)  OpenFlow flows and datapath flows
         also support different actions and number ports differently.
 
-        Exact-match flows are an implementation detail that is
-        subject to change in future versions of Open vSwitch.  Even
-        with the current version of Open vSwitch, hardware switch
-        implementations do not necessarily use exact-match flows.
+        Datapath flows are an implementation detail that is subject to
+        change in future versions of Open vSwitch.  Even with the
+        current version of Open vSwitch, hardware switch
+        implementations do not necessarily use this architecture.
 
   Each of the commands for dumping flows has a different purpose:
 
@@ -456,7 +457,7 @@ A: Open vSwitch uses different kinds of flows for different purposes:
         including hidden flows.  This is occasionally useful for
         troubleshooting suspected issues with in-band control.
 
-      - "ovs-dpctl dump-flows [dp]" dumps the exact-match flow table
+      - "ovs-dpctl dump-flows [dp]" dumps the datapath flow table
         entries for a Linux kernel-based datapath.  In Open vSwitch
         1.10 and later, ovs-vswitchd merges multiple switches into a
         single datapath, so it will show all the flows on all your
@@ -464,8 +465,8 @@ A: Open vSwitch uses different kinds of flows for different purposes:
         useful for debugging.
 
       - "ovs-appctl dpif/dump-flows <br>", new in Open vSwitch 1.10,
-        dumps exact-match flows for only the specified bridge,
-        regardless of the type.
+        dumps datapath flows for only the specified bridge, regardless
+        of the type.
 
 
 Performance
