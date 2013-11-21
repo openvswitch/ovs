@@ -2453,6 +2453,15 @@ void
 bridge_get_memory_usage(struct simap *usage)
 {
     struct bridge *br;
+    struct sset types;
+    const char *type;
+
+    sset_init(&types);
+    ofproto_enumerate_types(&types);
+    SSET_FOR_EACH (type, &types) {
+        ofproto_type_get_memory_usage(type, usage);
+    }
+    sset_destroy(&types);
 
     HMAP_FOR_EACH (br, node, &all_bridges) {
         ofproto_get_memory_usage(br->ofproto, usage);

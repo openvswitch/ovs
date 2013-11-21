@@ -783,6 +783,12 @@ struct ofproto_class {
     void (*get_memory_usage)(const struct ofproto *ofproto,
                              struct simap *usage);
 
+    /* Adds some memory usage statistics for the implementation of 'type'
+     * into 'usage', for use with memory_report().
+     *
+     * This function is optional. */
+    void (*type_get_memory_usage)(const char *type, struct simap *usage);
+
     /* Every "struct rule" in 'ofproto' is about to be deleted, one by one.
      * This function may prepare for that, for example by clearing state in
      * advance.  It should *not* actually delete any "struct rule"s from

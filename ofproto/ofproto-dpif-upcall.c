@@ -265,6 +265,23 @@ udpif_revalidate(struct udpif *udpif)
     udpif_drop_key_clear(udpif);
 }
 
+void
+udpif_get_memory_usage(struct udpif *udpif, struct simap *usage)
+{
+    size_t i;
+
+    simap_increase(usage, "dispatchers", 1);
+    simap_increase(usage, "flow_dumpers", 1);
+
+    simap_increase(usage, "handlers", udpif->n_handlers);
+    for (i = 0; i < udpif->n_handlers; i++) {
+        struct handler *handler = &udpif->handlers[i];
+        ovs_mutex_lock(&handler->mutex);
+        simap_increase(usage, "handler upcalls",  handler->n_upcalls);
+        ovs_mutex_unlock(&handler->mutex);
+    }
+}
+
 /* Destroys and deallocates 'upcall'. */
 static void
 upcall_destroy(struct upcall *upcall)

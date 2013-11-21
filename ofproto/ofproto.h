@@ -177,6 +177,7 @@ void ofproto_wait(struct ofproto *);
 bool ofproto_is_alive(const struct ofproto *);
 
 void ofproto_get_memory_usage(const struct ofproto *, struct simap *);
+void ofproto_type_get_memory_usage(const char *datapath_type, struct simap *);
 
 /* A port within an OpenFlow switch.
  *

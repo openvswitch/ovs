@@ -1546,6 +1546,17 @@ get_memory_usage(const struct ofproto *ofproto_, struct simap *usage)
 }
 
 static void
+type_get_memory_usage(const char *type, struct simap *usage)
+{
+    struct dpif_backer *backer;
+
+    backer = shash_find_data(&all_dpif_backers, type);
+    if (backer) {
+        udpif_get_memory_usage(backer->udpif, usage);
+    }
+}
+
+static void
 flush(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
@@ -6146,6 +6157,7 @@ const struct ofproto_class ofproto_dpif_class = {
     run,
     wait,
     get_memory_usage,
+    type_get_memory_usage,
     flush,
     get_features,
     get_tables,

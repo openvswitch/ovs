@@ -39,6 +39,8 @@ void udpif_destroy(struct udpif *);
 void udpif_wait(struct udpif *);
 
 void udpif_revalidate(struct udpif *);
+
+void udpif_get_memory_usage(struct udpif *, struct simap *usage);
 
 /* udpif figures out how to forward packets, and does forward them, but it
  * can't set up datapath flows on its own.  This interface passes packet
