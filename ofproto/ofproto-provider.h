@@ -688,16 +688,6 @@ struct ofproto_class {
      * Returns 0 if successful, otherwise a positive errno value. */
     int (*type_run)(const char *type);
 
-    /* Performs periodic activity required on ofprotos of type 'type'
-     * that needs to be done with the least possible latency.
-     *
-     * This is run multiple times per main loop.  An ofproto provider may
-     * implement it or not, according to whether it provides a performance
-     * boost for that ofproto implementation.
-     *
-     * Returns 0 if successful, otherwise a positive errno value. */
-    int (*type_run_fast)(const char *type);
-
     /* Causes the poll loop to wake up when a type 'type''s 'run'
      * function needs to be called, e.g. by calling the timer or fd
      * waiting functions in poll-loop.h.
@@ -780,14 +770,6 @@ struct ofproto_class {
      *
      * Returns 0 if successful, otherwise a positive errno value. */
     int (*run)(struct ofproto *ofproto);
-
-    /* Performs periodic activity required by 'ofproto' that needs to be done
-     * with the least possible latency.
-     *
-     * This is run multiple times per main loop.  An ofproto provider may
-     * implement it or not, according to whether it provides a performance
-     * boost for that ofproto implementation. */
-    int (*run_fast)(struct ofproto *ofproto);
 
     /* Causes the poll loop to wake up when 'ofproto''s 'run' function needs to
      * be called, e.g. by calling the timer or fd waiting functions in

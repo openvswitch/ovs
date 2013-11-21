@@ -1469,15 +1469,9 @@ iface_create(struct bridge *br, const struct ovsrec_interface *iface_cfg,
     struct port *port;
     int error;
 
-    /* Do the bits that can fail up front.
-     *
-     * It's a bit dangerous to call bridge_run_fast() here as ofproto's
-     * internal datastructures may not be consistent.  Eventually, when port
-     * additions and deletions are cheaper, these calls should be removed. */
-    bridge_run_fast();
+    /* Do the bits that can fail up front. */
     ovs_assert(!iface_lookup(br, iface_cfg->name));
     error = iface_do_create(br, iface_cfg, port_cfg, &ofp_port, &netdev);
-    bridge_run_fast();
     if (error) {
         iface_set_ofport(iface_cfg, OFPP_NONE);
         iface_clear_db_record(iface_cfg);
@@ -2258,31 +2252,6 @@ instant_stats_wait(void)
     }
 }
 
-/* Performs periodic activity required by bridges that needs to be done with
- * the least possible latency.
- *
- * It makes sense to call this function a couple of times per poll loop, to
- * provide a significant performance boost on some benchmarks with ofprotos
- * that use the ofproto-dpif implementation. */
-void
-bridge_run_fast(void)
-{
-    struct sset types;
-    const char *type;
-    struct bridge *br;
-
-    sset_init(&types);
-    ofproto_enumerate_types(&types);
-    SSET_FOR_EACH (type, &types) {
-        ofproto_type_run_fast(type);
-    }
-    sset_destroy(&types);
-
-    HMAP_FOR_EACH (br, node, &all_bridges) {
-        ofproto_run_fast(br->ofproto);
-    }
-}
-
 void
 bridge_run(void)
 {

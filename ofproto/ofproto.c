@@ -1388,23 +1388,6 @@ ofproto_type_run(const char *datapath_type)
     return error;
 }
 
-int
-ofproto_type_run_fast(const char *datapath_type)
-{
-    const struct ofproto_class *class;
-    int error;
-
-    datapath_type = ofproto_normalize_type(datapath_type);
-    class = ofproto_class_find__(datapath_type);
-
-    error = class->type_run_fast ? class->type_run_fast(datapath_type) : 0;
-    if (error && error != EAGAIN) {
-        VLOG_ERR_RL(&rl, "%s: type_run_fast failed (%s)",
-                    datapath_type, ovs_strerror(error));
-    }
-    return error;
-}
-
 void
 ofproto_type_wait(const char *datapath_type)
 {
@@ -1573,25 +1556,6 @@ ofproto_run(struct ofproto *p)
         p->next_op_report = LLONG_MAX;
     }
 
-    return error;
-}
-
-/* Performs periodic activity required by 'ofproto' that needs to be done
- * with the least possible latency.
- *
- * It makes sense to call this function a couple of times per poll loop, to
- * provide a significant performance boost on some benchmarks with the
- * ofproto-dpif implementation. */
-int
-ofproto_run_fast(struct ofproto *p)
-{
-    int error;
-
-    error = p->ofproto_class->run_fast ? p->ofproto_class->run_fast(p) : 0;
-    if (error && error != EAGAIN) {
-        VLOG_ERR_RL(&rl, "%s: fastpath run failed (%s)",
-                    p->name, ovs_strerror(error));
-    }
     return error;
 }
 

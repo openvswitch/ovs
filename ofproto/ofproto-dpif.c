@@ -388,8 +388,6 @@ static void port_run(struct ofport_dpif *);
 static int set_bfd(struct ofport *, const struct smap *);
 static int set_cfm(struct ofport *, const struct cfm_settings *);
 static void ofport_update_peer(struct ofport_dpif *);
-static void run_fast_rl(void);
-static int run_fast(struct ofproto *);
 
 struct dpif_completion {
     struct list list_node;
@@ -671,6 +669,8 @@ type_run(const char *type)
 
     dpif_run(backer->dpif);
 
+    handle_upcalls(backer);
+
     /* The most natural place to push facet statistics is when they're pulled
      * from the datapath.  However, when there are many flows in the datapath,
      * this expensive operation can occur so frequently, that it reduces our
@@ -831,7 +831,6 @@ type_run(const char *type)
             ovs_rwlock_unlock(&ofproto->facets.rwlock);
             CLS_CURSOR_FOR_EACH_SAFE (facet, next, cr, &cursor) {
                 facet_revalidate(facet);
-                run_fast_rl();
             }
         }
 
@@ -995,44 +994,6 @@ process_dpif_port_error(struct dpif_backer *backer, int error)
             sset_clear(&ofproto->port_poll_set);
             ofproto->port_poll_errno = error;
         }
-    }
-}
-
-static int
-dpif_backer_run_fast(struct dpif_backer *backer)
-{
-    handle_upcalls(backer);
-
-    return 0;
-}
-
-static int
-type_run_fast(const char *type)
-{
-    struct dpif_backer *backer;
-
-    backer = shash_find_data(&all_dpif_backers, type);
-    if (!backer) {
-        /* This is not necessarily a problem, since backers are only
-         * created on demand. */
-        return 0;
-    }
-
-    return dpif_backer_run_fast(backer);
-}
-
-static void
-run_fast_rl(void)
-{
-    static long long int port_rl = LLONG_MIN;
-
-    if (time_msec() >= port_rl) {
-        struct ofproto_dpif *ofproto;
-
-        HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
-            run_fast(&ofproto->up);
-        }
-        port_rl = time_msec() + 200;
     }
 }
 
@@ -1439,35 +1400,10 @@ destruct(struct ofproto *ofproto_)
 }
 
 static int
-run_fast(struct ofproto *ofproto_)
-{
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    struct ofproto_packet_in *pin, *next_pin;
-    struct list pins;
-
-    /* Do not perform any periodic activity required by 'ofproto' while
-     * waiting for flow restore to complete. */
-    if (ofproto_get_flow_restore_wait()) {
-        return 0;
-    }
-
-    guarded_list_pop_all(&ofproto->pins, &pins);
-    LIST_FOR_EACH_SAFE (pin, next_pin, list_node, &pins) {
-        connmgr_send_packet_in(ofproto->up.connmgr, pin);
-        list_remove(&pin->list_node);
-        free(CONST_CAST(void *, pin->up.packet));
-        free(pin);
-    }
-
-    return 0;
-}
-
-static int
 run(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     uint64_t new_seq;
-    int error;
 
     if (mbridge_need_revalidate(ofproto->mbridge)) {
         ofproto->backer->need_revalidate = REV_RECONFIGURE;
@@ -1476,15 +1412,19 @@ run(struct ofproto *ofproto_)
         ovs_rwlock_unlock(&ofproto->ml->rwlock);
     }
 
-    /* Do not perform any periodic activity below required by 'ofproto' while
+    /* Do not perform any periodic activity required by 'ofproto' while
      * waiting for flow restore to complete. */
-    if (ofproto_get_flow_restore_wait()) {
-        return 0;
-    }
+    if (!ofproto_get_flow_restore_wait()) {
+        struct ofproto_packet_in *pin, *next_pin;
+        struct list pins;
 
-    error = run_fast(ofproto_);
-    if (error) {
-        return error;
+        guarded_list_pop_all(&ofproto->pins, &pins);
+        LIST_FOR_EACH_SAFE (pin, next_pin, list_node, &pins) {
+            connmgr_send_packet_in(ofproto->up.connmgr, pin);
+            list_remove(&pin->list_node);
+            free(CONST_CAST(void *, pin->up.packet));
+            free(pin);
+        }
     }
 
     if (ofproto->netflow) {
@@ -3643,7 +3583,6 @@ update_stats(struct dpif_backer *backer)
             delete_unexpected_flow(backer, key, key_len);
             break;
         }
-        run_fast_rl();
     }
     dpif_flow_dump_done(&dump);
 }
@@ -4252,7 +4191,7 @@ facet_push_stats(struct facet *facet, bool may_learn)
 }
 
 static void
-push_all_stats__(bool run_fast)
+push_all_stats(void)
 {
     static long long int rl = LLONG_MIN;
     struct ofproto_dpif *ofproto;
@@ -4269,20 +4208,11 @@ push_all_stats__(bool run_fast)
         cls_cursor_init(&cursor, &ofproto->facets, NULL);
         CLS_CURSOR_FOR_EACH (facet, cr, &cursor) {
             facet_push_stats(facet, false);
-            if (run_fast) {
-                run_fast_rl();
-            }
         }
         ovs_rwlock_unlock(&ofproto->facets.rwlock);
     }
 
     rl = time_msec() + 100;
-}
-
-static void
-push_all_stats(void)
-{
-    push_all_stats__(true);
 }
 
 void
@@ -4435,7 +4365,6 @@ subfacet_destroy_batch(struct dpif_backer *backer,
         subfacet_reset_dp_stats(subfacets[i], &stats[i]);
         subfacets[i]->path = SF_NOT_INSTALLED;
         subfacet_destroy(subfacets[i]);
-        run_fast_rl();
     }
 }
 
@@ -4718,11 +4647,7 @@ rule_get_stats(struct rule *rule_, uint64_t *packets, uint64_t *bytes)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
 
-    /* push_all_stats() can handle flow misses which, when using the learn
-     * action, can cause rules to be added and deleted.  This can corrupt our
-     * caller's datastructures which assume that rule_get_stats() doesn't have
-     * an impact on the flow table. To be safe, we disable miss handling. */
-    push_all_stats__(false);
+    push_all_stats();
 
     /* Start from historical data for 'rule' itself that are no longer tracked
      * in facets.  This counts, for example, facets that have expired. */
@@ -6213,14 +6138,12 @@ const struct ofproto_class ofproto_dpif_class = {
     del,
     port_open_type,
     type_run,
-    type_run_fast,
     type_wait,
     alloc,
     construct,
     destruct,
     dealloc,
     run,
-    run_fast,
     wait,
     get_memory_usage,
     flush,

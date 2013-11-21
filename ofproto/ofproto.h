@@ -165,7 +165,6 @@ struct iface_hint {
 void ofproto_init(const struct shash *iface_hints);
 
 int ofproto_type_run(const char *datapath_type);
-int ofproto_type_run_fast(const char *datapath_type);
 void ofproto_type_wait(const char *datapath_type);
 
 int ofproto_create(const char *datapath, const char *datapath_type,
@@ -174,7 +173,6 @@ void ofproto_destroy(struct ofproto *);
 int ofproto_delete(const char *name, const char *type);
 
 int ofproto_run(struct ofproto *);
-int ofproto_run_fast(struct ofproto *);
 void ofproto_wait(struct ofproto *);
 bool ofproto_is_alive(const struct ofproto *);
 
