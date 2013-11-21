@@ -1349,6 +1349,17 @@ is_connected_state(enum state state)
     return (state & (S_ACTIVE | S_IDLE)) != 0;
 }
 
+/* When a switch initially connects to a controller, the controller may spend a
+ * little time examining the switch, looking at, for example, its datapath ID,
+ * before it decides whether it is willing to control that switch.  At that
+ * point, it either disconnects or starts controlling the switch.
+ *
+ * This function returns a guess to its caller about whether 'b' is OpenFlow
+ * message that indicates that the controller has decided to control the
+ * switch.  It returns false if the message is one that a controller typically
+ * uses to determine whether a switch is admissible, true if the message is one
+ * that would typically be used only after the controller has admitted the
+ * switch. */
 static bool
 is_admitted_msg(const struct ofpbuf *b)
 {
@@ -1370,7 +1381,6 @@ is_admitted_msg(const struct ofpbuf *b)
     case OFPTYPE_GET_CONFIG_REQUEST:
     case OFPTYPE_GET_CONFIG_REPLY:
     case OFPTYPE_SET_CONFIG:
-        /* FIXME: Change the following once they are implemented: */
     case OFPTYPE_QUEUE_GET_CONFIG_REQUEST:
     case OFPTYPE_QUEUE_GET_CONFIG_REPLY:
     case OFPTYPE_GET_ASYNC_REQUEST:
