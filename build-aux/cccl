@@ -90,6 +90,7 @@ EOF
     -g[0-9] | -g)
         # cl only supports one debugging level
         clopt="$clopt ${slash}Zi"
+        linkopt="$linkopt ${slash}DEBUG"
         ;;
 
     -L*)
