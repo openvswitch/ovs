@@ -21,12 +21,11 @@
 
 #include "connmgr.h"
 #include "coverage.h"
-#include "dynamic-string.h"
 #include "dpif.h"
+#include "dynamic-string.h"
 #include "fail-open.h"
 #include "guarded-list.h"
 #include "latch.h"
-#include "seq.h"
 #include "list.h"
 #include "netlink.h"
 #include "ofpbuf.h"
@@ -34,6 +33,8 @@
 #include "ofproto-dpif-sflow.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "seq.h"
+#include "unixctl.h"
 #include "vlog.h"
 
 #define MAX_QUEUE_LENGTH 512
@@ -51,6 +52,7 @@ COVERAGE_DEFINE(fmb_queue_revalidated);
 struct handler {
     struct udpif *udpif;               /* Parent udpif. */
     pthread_t thread;                  /* Thread ID. */
+    char *name;                        /* Thread name. */
 
     struct ovs_mutex mutex;            /* Mutex guarding the following. */
 
@@ -72,6 +74,8 @@ struct handler {
  * "handler" threads (see struct handler).  Other upcalls are queued to the
  * main ofproto_dpif. */
 struct udpif {
+    struct list list_node;             /* In all_udpifs list. */
+
     struct dpif *dpif;                 /* Datapath handle. */
     struct dpif_backer *backer;        /* Opaque dpif_backer pointer. */
 
@@ -113,17 +117,27 @@ struct upcall {
 static void upcall_destroy(struct upcall *);
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+static struct list all_udpifs = LIST_INITIALIZER(&all_udpifs);
 
 static void recv_upcalls(struct udpif *);
 static void handle_upcalls(struct udpif *, struct list *upcalls);
 static void miss_destroy(struct flow_miss *);
 static void *udpif_dispatcher(void *);
 static void *udpif_upcall_handler(void *);
+static void upcall_unixctl_show(struct unixctl_conn *conn, int argc,
+                                const char *argv[], void *aux);
 
 struct udpif *
 udpif_create(struct dpif_backer *backer, struct dpif *dpif)
 {
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
     struct udpif *udpif = xzalloc(sizeof *udpif);
+
+    if (ovsthread_once_start(&once)) {
+        unixctl_command_register("upcall/show", "", 0, 0, upcall_unixctl_show,
+                                 NULL);
+        ovsthread_once_done(&once);
+    }
 
     udpif->dpif = dpif;
     udpif->backer = backer;
@@ -133,6 +147,7 @@ udpif_create(struct dpif_backer *backer, struct dpif *dpif)
     latch_init(&udpif->exit_latch);
     guarded_list_init(&udpif->drop_keys);
     guarded_list_init(&udpif->fmbs);
+    list_push_back(&all_udpifs, &udpif->list_node);
 
     return udpif;
 }
@@ -144,6 +159,7 @@ udpif_destroy(struct udpif *udpif)
     struct drop_key *drop_key;
 
     udpif_recv_set(udpif, 0, false);
+    list_remove(&udpif->list_node);
 
     while ((drop_key = drop_key_next(udpif))) {
         drop_key_destroy(drop_key);
@@ -201,6 +217,7 @@ udpif_recv_set(struct udpif *udpif, size_t n_handlers, bool enable)
             ovs_mutex_destroy(&handler->mutex);
 
             xpthread_cond_destroy(&handler->wake_cond);
+            free(handler->name);
         }
         latch_poll(&udpif->exit_latch);
 
@@ -404,7 +421,9 @@ udpif_upcall_handler(void *arg)
 {
     struct handler *handler = arg;
 
-    set_subprogram_name("upcall_%u", ovsthread_id_self());
+    handler->name = xasprintf("handler_%u", ovsthread_id_self());
+    set_subprogram_name("%s", handler->name);
+
     for (;;) {
         struct list misses = LIST_INITIALIZER(&misses);
         size_t i;
@@ -872,4 +891,29 @@ handle_upcalls(struct udpif *udpif, struct list *upcalls)
     } else {
         seq_change(udpif->wait_seq);
     }
+}
+
+static void
+upcall_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                    const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    struct udpif *udpif;
+
+    LIST_FOR_EACH (udpif, list_node, &all_udpifs) {
+        size_t i;
+
+        ds_put_format(&ds, "%s:\n", dpif_name(udpif->dpif));
+        for (i = 0; i < udpif->n_handlers; i++) {
+            struct handler *handler = &udpif->handlers[i];
+
+            ovs_mutex_lock(&handler->mutex);
+            ds_put_format(&ds, "\t%s: (upcall queue %"PRIuSIZE")\n",
+                          handler->name, handler->n_upcalls);
+            ovs_mutex_unlock(&handler->mutex);
+        }
+    }
+
+    unixctl_command_reply(conn, ds_cstr(&ds));
+    ds_destroy(&ds);
 }
