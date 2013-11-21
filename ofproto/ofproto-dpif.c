@@ -450,7 +450,6 @@ struct dpif_backer {
      * performance in new situations.  */
     unsigned max_n_subfacet;         /* Maximum number of flows */
     unsigned avg_n_subfacet;         /* Average number of flows. */
-    long long int avg_subfacet_life; /* Average life span of subfacets. */
 
     /* Number of upcall handling threads. */
     unsigned int n_handler_threads;
@@ -1178,7 +1177,6 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
 
     backer->max_n_subfacet = 0;
     backer->avg_n_subfacet = 0;
-    backer->avg_subfacet_life = 0;
 
     return error;
 }
@@ -3440,19 +3438,6 @@ expire(struct dpif_backer *backer)
     update_stats(backer);
 
     n_subfacets = hmap_count(&backer->subfacets);
-    if (n_subfacets) {
-        struct subfacet *subfacet;
-        long long int total, now;
-
-        total = 0;
-        now = time_msec();
-        HMAP_FOR_EACH (subfacet, hmap_node, &backer->subfacets) {
-            total += now - subfacet->created;
-        }
-        backer->avg_subfacet_life += total / n_subfacets;
-    }
-    backer->avg_subfacet_life /= 2;
-
     backer->avg_n_subfacet += n_subfacets;
     backer->avg_n_subfacet /= 2;
 
@@ -5581,10 +5566,10 @@ dpif_show_backer(const struct dpif_backer *backer, struct ds *ds)
 
     ds_put_format(ds, "%s: hit:%"PRIu64" missed:%"PRIu64"\n",
                   dpif_name(backer->dpif), n_hit, n_missed);
-    ds_put_format(ds, "\tflows: cur: %"PRIuSIZE", avg: %u, max: %u,"
-                  " life span: %lldms\n", hmap_count(&backer->subfacets),
-                  backer->avg_n_subfacet, backer->max_n_subfacet,
-                  backer->avg_subfacet_life);
+
+    ds_put_format(ds, "\tflows: cur: %"PRIuSIZE", avg: %u, max: %u\n",
+                  hmap_count(&backer->subfacets), backer->avg_n_subfacet,
+                  backer->max_n_subfacet);
 
     shash_init(&ofproto_shash);
     ofprotos = get_ofprotos(&ofproto_shash);

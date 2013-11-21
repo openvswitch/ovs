@@ -2347,7 +2347,7 @@ ADD_OF_PORTS([br1], [3])
 
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
-	flows: cur: 0, avg: 0, max: 0, life span: 0ms
+	flows: cur: 0, avg: 0, max: 0
 	br0: hit:0 missed:0
 		br0 65534/100: (dummy)
 		p1 1/1: (dummy)
@@ -2420,7 +2420,7 @@ OVS_VSWITCHD_START([add-br br1 \
 ADD_OF_PORTS([br0], [2])
 ADD_OF_PORTS([br1], [3])
 
-AT_CHECK([ovs-appctl time/stop]) dnl Make life span averages consistent.
+AT_CHECK([ovs-appctl time/stop])
 
 AT_CHECK([ovs-ofctl add-flow br0 actions=LOCAL,output:1,output:2])
 AT_CHECK([ovs-ofctl add-flow br1 actions=LOCAL,output:1,output:3])
@@ -2439,7 +2439,7 @@ warped
 
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 dummy@ovs-dummy: hit:13 missed:2
-	flows: cur: 2, avg: 1, max: 2, life span: 1250ms
+	flows: cur: 2, avg: 1, max: 2
 	br0: hit:9 missed:1
 		br0 65534/100: (dummy)
 		p2 2/2: (dummy)
@@ -2476,7 +2476,7 @@ AT_SETUP([ofproto-dpif - ovs-appctl dpif/show rates])
 OVS_VSWITCHD_START([set Bridge br0 fail-mode=secure])
 ADD_OF_PORTS([br0], 1, 2)
 
-AT_CHECK([ovs-appctl time/stop]) dnl Make life span averages consistent.
+AT_CHECK([ovs-appctl time/stop])
 AT_CHECK([ovs-ofctl add-flow br0 actions=LOCAL,output:1,output:2])
 
 for i in $(seq 1 61); do
@@ -2490,7 +2490,7 @@ AT_CHECK([ovs-appctl time/warp 10000], [0], [warped
 
 AT_CHECK([ovs-appctl dpif/show | sed 's/ 10[[0-9]]\{3\}(ms)$/ 10000(ms)/'], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:61
-	flows: cur: 0, avg: 0, max: 1, life span: 1666ms
+	flows: cur: 0, avg: 0, max: 1
 	br0: hit:0 missed:61
 		br0 65534/100: (dummy)
 		p1 1/1: (dummy)
