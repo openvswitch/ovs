@@ -343,10 +343,10 @@ enum ofpraw {
     /* OFPST 1.3+ (11): struct ofp13_meter_features. */
     OFPRAW_OFPST13_METER_FEATURES_REPLY,
 
-    /* OFPST 1.3+ (12): struct ofp13_table_features[]. */
+    /* OFPST 1.3+ (12): void. */
     OFPRAW_OFPST13_TABLE_FEATURES_REQUEST,
 
-    /* OFPST 1.3+ (12): struct ofp13_table_features[]. */
+    /* OFPST 1.3+ (12): struct ofp13_table_features, uint8_t[8][]. */
     OFPRAW_OFPST13_TABLE_FEATURES_REPLY,
 
     /* OFPST 1.0+ (13): void. */
