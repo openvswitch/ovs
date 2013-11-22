@@ -723,6 +723,19 @@ A: Did you install OpenFlow flows that use your queues?  This is the
 
    Refer to the previous question for an example.
 
+Q: I'd like to take advantage of some QoS feature that Open vSwitch
+   doesn't yet support.  How do I do that?
+
+A: Open vSwitch does not implement QoS itself.  Instead, it can
+   configure some, but not all, of the QoS features built into the
+   Linux kernel.  If you need some QoS feature that OVS cannot
+   configure itself, then the first step is to figure out whether
+   Linux QoS supports that feature.  If it does, then you can submit a
+   patch to support Open vSwitch configuration for that feature, or
+   you can use "tc" directly to configure the feature in Linux.  (If
+   Linux QoS doesn't support the feature you want, then first you have
+   to add that support to Linux.)
+
 Q: I configured QoS, correctly, but my measurements show that it isn't
    working as well as I expect.
 
