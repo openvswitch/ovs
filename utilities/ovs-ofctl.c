@@ -3122,7 +3122,7 @@ ofctl_parse_pcap(int argc OVS_UNUSED, char *argv[])
         struct flow flow;
         int error;
 
-        error = pcap_read(pcap, &packet);
+        error = pcap_read(pcap, &packet, NULL);
         if (error == EOF) {
             break;
         } else if (error) {

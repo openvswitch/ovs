@@ -24,7 +24,7 @@ struct ofpbuf;
 FILE *pcap_open(const char *file_name, const char *mode);
 int pcap_read_header(FILE *);
 void pcap_write_header(FILE *);
-int pcap_read(FILE *, struct ofpbuf **);
+int pcap_read(FILE *, struct ofpbuf **, long long int *when);
 void pcap_write(FILE *, struct ofpbuf *);
 
 #endif /* pcap-file.h */

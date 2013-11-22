@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,7 +61,7 @@ main(int argc OVS_UNUSED, char *argv[])
         union flow_in_port in_port_;
         n++;
 
-        retval = pcap_read(pcap, &packet);
+        retval = pcap_read(pcap, &packet, NULL);
         if (retval == EOF) {
             ovs_fatal(0, "unexpected end of file reading pcap file");
         } else if (retval) {

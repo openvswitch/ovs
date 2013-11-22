@@ -24,6 +24,7 @@
 #include "byte-order.h"
 #include "compiler.h"
 #include "ofpbuf.h"
+#include "timeval.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(pcap);
@@ -128,12 +129,13 @@ pcap_write_header(FILE *file)
 }
 
 int
-pcap_read(FILE *file, struct ofpbuf **bufp)
+pcap_read(FILE *file, struct ofpbuf **bufp, long long int *when)
 {
     struct pcaprec_hdr prh;
     struct ofpbuf *buf;
     void *data;
     size_t len;
+    bool swap;
 
     *bufp = NULL;
 
@@ -151,15 +153,22 @@ pcap_read(FILE *file, struct ofpbuf **bufp)
 
     /* Calculate length. */
     len = prh.incl_len;
-    if (len > 0xffff) {
-        uint32_t swapped_len = uint32_byteswap(len);
-        if (swapped_len > 0xffff) {
-            VLOG_WARN("bad packet length %"PRIuSIZE" or %"PRIu32" "
+    swap = len > 0xffff;
+    if (swap) {
+        len = uint32_byteswap(len);
+        if (len > 0xffff) {
+            VLOG_WARN("bad packet length %"PRIuSIZE" or %"PRIu32
                       "reading pcap file",
-                      len, swapped_len);
+                      len, uint32_byteswap(len));
             return EPROTO;
         }
-        len = swapped_len;
+    }
+
+    /* Calculate time. */
+    if (when) {
+        uint32_t ts_sec = swap ? uint32_byteswap(prh.ts_sec) : prh.ts_sec;
+        uint32_t ts_usec = swap ? uint32_byteswap(prh.ts_usec) : prh.ts_usec;
+        *when = ts_sec * 1000LL + ts_usec / 1000;
     }
 
     /* Read packet. */
@@ -180,8 +189,11 @@ void
 pcap_write(FILE *file, struct ofpbuf *buf)
 {
     struct pcaprec_hdr prh;
-    prh.ts_sec = 0;
-    prh.ts_usec = 0;
+    struct timeval tv;
+
+    xgettimeofday(&tv);
+    prh.ts_sec = tv.tv_sec;
+    prh.ts_usec = tv.tv_usec;
     prh.incl_len = buf->size;
     prh.orig_len = buf->size;
     ignore(fwrite(&prh, sizeof prh, 1, file));
