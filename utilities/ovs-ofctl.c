@@ -325,7 +325,8 @@ usage(void)
            "  benchmark TARGET N COUNT    bandwidth of COUNT N-byte echos\n"
            "SWITCH or TARGET is an active OpenFlow connection method.\n"
            "\nOther commands:\n"
-           "  ofp-parse FILE              print messages read from FILE\n",
+           "  ofp-parse FILE              print messages read from FILE\n"
+           "  ofp-parse-pcap PCAP         print OpenFlow read from PCAP\n",
            program_name, program_name);
     vconn_usage(true, false, false);
     daemon_usage();
@@ -1823,6 +1824,92 @@ ofctl_ofp_parse(int argc OVS_UNUSED, char *argv[])
     if (file != stdin) {
         fclose(file);
     }
+}
+
+static bool
+is_openflow_port(ovs_be16 port_, char *ports[])
+{
+    uint16_t port = ntohs(port_);
+    if (ports[0]) {
+        int i;
+
+        for (i = 0; ports[i]; i++) {
+            if (port == atoi(ports[i])) {
+                return true;
+            }
+        }
+        return false;
+    } else {
+        return port == OFP_PORT || port == OFP_OLD_PORT;
+    }
+}
+
+static void
+ofctl_ofp_parse_pcap(int argc OVS_UNUSED, char *argv[])
+{
+    struct tcp_reader *reader;
+    FILE *file;
+    int error;
+    bool first;
+
+    file = pcap_open(argv[1], "rb");
+    if (!file) {
+        ovs_fatal(errno, "%s: open failed", argv[1]);
+    }
+
+    reader = tcp_reader_open();
+    first = true;
+    for (;;) {
+        struct ofpbuf *packet;
+        long long int when;
+        struct flow flow;
+
+        error = pcap_read(file, &packet, &when);
+        if (error) {
+            break;
+        }
+        flow_extract(packet, 0, 0, NULL, NULL, &flow);
+        if (flow.dl_type == htons(ETH_TYPE_IP)
+            && flow.nw_proto == IPPROTO_TCP
+            && (is_openflow_port(flow.tp_src, argv + 2) ||
+                is_openflow_port(flow.tp_dst, argv + 2))) {
+            struct ofpbuf *payload = tcp_reader_run(reader, &flow, packet);
+            if (payload) {
+                while (payload->size >= sizeof(struct ofp_header)) {
+                    const struct ofp_header *oh;
+                    int length;
+
+                    /* Align OpenFlow on 8-byte boundary for safe access. */
+                    ofpbuf_shift(payload, -((intptr_t) payload->data & 7));
+
+                    oh = payload->data;
+                    length = ntohs(oh->length);
+                    if (payload->size < length) {
+                        break;
+                    }
+
+                    if (!first) {
+                        putchar('\n');
+                    }
+                    first = false;
+
+                    if (timestamp) {
+                        char *s = xastrftime_msec("%H:%M:%S.### ", when, true);
+                        fputs(s, stdout);
+                        free(s);
+                    }
+
+                    printf(IP_FMT".%"PRIu16" > "IP_FMT".%"PRIu16":\n",
+                           IP_ARGS(flow.nw_src), ntohs(flow.tp_src),
+                           IP_ARGS(flow.nw_dst), ntohs(flow.tp_dst));
+                    ofp_print(stdout, payload->data, length, verbosity + 1);
+                    ofpbuf_pull(payload, length);
+                }
+            }
+        }
+        ofpbuf_delete(packet);
+    }
+    tcp_reader_close(reader);
 }
 
 static void
@@ -3365,10 +3452,12 @@ static const struct command all_commands[] = {
     { "mod-table", 3, 3, ofctl_mod_table },
     { "get-frags", 1, 1, ofctl_get_frags },
     { "set-frags", 2, 2, ofctl_set_frags },
-    { "ofp-parse", 1, 1, ofctl_ofp_parse },
     { "probe", 1, 1, ofctl_probe },
     { "ping", 1, 2, ofctl_ping },
     { "benchmark", 3, 3, ofctl_benchmark },
+
+    { "ofp-parse", 1, 1, ofctl_ofp_parse },
+    { "ofp-parse-pcap", 1, INT_MAX, ofctl_ofp_parse_pcap },
 
     { "add-group", 1, 2, ofctl_add_group },
     { "add-groups", 1, 2, ofctl_add_groups },
