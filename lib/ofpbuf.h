@@ -94,6 +94,7 @@ void ofpbuf_prealloc_headroom(struct ofpbuf *, size_t);
 void ofpbuf_prealloc_tailroom(struct ofpbuf *, size_t);
 void ofpbuf_trim(struct ofpbuf *);
 void ofpbuf_padto(struct ofpbuf *, size_t);
+void ofpbuf_shift(struct ofpbuf *, int);
 
 void ofpbuf_clear(struct ofpbuf *);
 void *ofpbuf_pull(struct ofpbuf *, size_t);

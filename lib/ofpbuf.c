@@ -359,6 +359,24 @@ ofpbuf_padto(struct ofpbuf *b, size_t length)
     }
 }
 
+/* Shifts all of the data within the allocated space in 'b' by 'delta' bytes.
+ * For example, a 'delta' of 1 would cause each byte of data to move one byte
+ * forward (from address 'p' to 'p+1'), and a 'delta' of -1 would cause each
+ * byte to move one byte backward (from 'p' to 'p-1'). */
+void
+ofpbuf_shift(struct ofpbuf *b, int delta)
+{
+    ovs_assert(delta > 0 ? delta <= ofpbuf_tailroom(b)
+               : delta < 0 ? -delta <= ofpbuf_headroom(b)
+               : true);
+
+    if (delta != 0) {
+        char *dst = (char *) b->data + delta;
+        memmove(dst, b->data, b->size);
+        b->data = dst;
+    }
+}
+
 /* Appends 'size' bytes of data to the tail end of 'b', reallocating and
  * copying its data if necessary.  Returns a pointer to the first byte of the
  * new data, which is left uninitialized. */
