@@ -213,7 +213,8 @@ struct subfacet {
 
 #define SUBFACET_DESTROY_MAX_BATCH 50
 
-static struct subfacet *subfacet_create(struct facet *, struct flow_miss *);
+static struct subfacet *subfacet_create(struct facet *, struct flow_miss *,
+                                        uint32_t key_hash);
 static struct subfacet *subfacet_find(struct dpif_backer *,
                                       const struct nlattr *key, size_t key_len,
                                       uint32_t key_hash);
@@ -3222,13 +3223,32 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
 {
     enum subfacet_path want_path;
     struct subfacet *subfacet;
+    uint32_t key_hash;
 
+    /* Update facet stats. */
     facet->packet_count += miss->stats.n_packets;
     facet->prev_packet_count += miss->stats.n_packets;
     facet->byte_count += miss->stats.n_bytes;
     facet->prev_byte_count += miss->stats.n_bytes;
 
-    want_path = facet->xout.slow ? SF_SLOW_PATH : SF_FAST_PATH;
+    /* Look for an existing subfacet.  If we find one, update its used time. */
+    key_hash = odp_flow_key_hash(miss->key, miss->key_len);
+    if (!list_is_empty(&facet->subfacets)) {
+        subfacet = subfacet_find(miss->ofproto->backer,
+                                 miss->key, miss->key_len, key_hash);
+        if (subfacet) {
+            if (subfacet->facet == facet) {
+                subfacet->used = MAX(subfacet->used, miss->stats.used);
+            } else {
+                /* This shouldn't happen. */
+                VLOG_ERR_RL(&rl, "subfacet with wrong facet");
+                subfacet_destroy(subfacet);
+                subfacet = NULL;
+            }
+        }
+    } else {
+        subfacet = NULL;
+    }
 
     /* Don't install the flow if it's the result of the "userspace"
      * action for an already installed facet.  This can occur when a
@@ -3240,7 +3260,13 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
         return;
     }
 
-    subfacet = subfacet_create(facet, miss);
+    /* Create a subfacet, if we don't already have one. */
+    if (!subfacet) {
+        subfacet = subfacet_create(facet, miss, key_hash);
+    }
+
+    /* Install the subfacet, if it's not already installed. */
+    want_path = facet->xout.slow ? SF_SLOW_PATH : SF_FAST_PATH;
     if (subfacet->path != want_path) {
         struct flow_miss_op *op = &ops[(*n_ops)++];
         struct dpif_flow_put *put = &op->dpif_op.u.flow_put;
@@ -4382,37 +4408,20 @@ subfacet_find(struct dpif_backer *backer, const struct nlattr *key,
     return NULL;
 }
 
-/* Searches 'facet' (within 'ofproto') for a subfacet with the specified
- * 'key_fitness', 'key', and 'key_len' members in 'miss'.  Returns the
- * existing subfacet if there is one, otherwise creates and returns a
- * new subfacet. */
+/* Creates and returns a new subfacet within 'facet' for the flow in 'miss'.
+ * 'key_hash' must be a hash over miss->key.  The caller must have already
+ * ensured that no subfacet subfacet already exists. */
 static struct subfacet *
-subfacet_create(struct facet *facet, struct flow_miss *miss)
+subfacet_create(struct facet *facet, struct flow_miss *miss, uint32_t key_hash)
 {
     struct dpif_backer *backer = miss->ofproto->backer;
     const struct nlattr *key = miss->key;
     size_t key_len = miss->key_len;
-    uint32_t key_hash;
     struct subfacet *subfacet;
 
-    key_hash = odp_flow_key_hash(key, key_len);
-
-    if (list_is_empty(&facet->subfacets)) {
-        subfacet = &facet->one_subfacet;
-    } else {
-        subfacet = subfacet_find(backer, key, key_len, key_hash);
-        if (subfacet) {
-            if (subfacet->facet == facet) {
-                return subfacet;
-            }
-
-            /* This shouldn't happen. */
-            VLOG_ERR_RL(&rl, "subfacet with wrong facet");
-            subfacet_destroy(subfacet);
-        }
-
-        subfacet = xmalloc(sizeof *subfacet);
-    }
+    subfacet = (list_is_empty(&facet->subfacets)
+                ? &facet->one_subfacet
+                : xmalloc(sizeof *subfacet));
 
     COVERAGE_INC(subfacet_create);
     hmap_insert(&backer->subfacets, &subfacet->hmap_node, key_hash);
