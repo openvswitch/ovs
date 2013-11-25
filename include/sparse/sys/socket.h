@@ -23,6 +23,7 @@
 
 #include "openvswitch/types.h"
 #include <sys/uio.h>
+#include <stddef.h>
 
 typedef unsigned short int sa_family_t;
 typedef __socklen_t socklen_t;
