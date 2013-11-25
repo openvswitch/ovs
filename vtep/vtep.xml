@@ -632,6 +632,58 @@
     </group>
   </table>
 
+  <table name="Arp_Sources_Local" title="ARP source addresses for logical routers">
+    <p>
+      MAC address to be used when a VTEP issues ARP requests on behalf
+      of a logical router.
+    </p>
+
+    <p>
+      A distributed logical router is implemented by a set of VTEPs
+      (both hardware VTEPs and vswitches). In order for a given VTEP
+      to populate the local ARP cache for a logical router, it issues
+      ARP requests with a source MAC address that is unique to the VTEP. A
+      single per-VTEP MAC can be re-used across all logical
+      networks. This table contains the MACs that are used by the
+      VTEPs of a given HSC. The table provides the mapping from MAC to
+      physical locator for each VTEP so that replies to the ARP
+      requests can be sent back to the correct VTEP using the
+      appropriate physical locator.
+    </p>
+
+    <column name="src_mac">
+      The source MAC to be used by a given VTEP.
+    </column>
+
+    <column name="locator">
+      The <ref table="Physical_Locator"/> to use for replies to ARP
+      requests from this MAC address.
+    </column>
+  </table>
+
+  <table name="Arp_Sources_Remote" title="ARP source addresses for logical routers">
+    <p>
+      MAC address to be used when a remote VTEP issues ARP requests on behalf
+      of a logical router.
+    </p>
+
+    <p>
+      This table is the remote counterpart of <ref
+      table="Arp_sources_local"/>. The NVC writes this table to notify
+      the HSC of the MACs that will be used by remote VTEPs when they
+      issue ARP requests on behalf of a distributed logical router.
+    </p>
+
+    <column name="src_mac">
+      The source MAC to be used by a given VTEP.
+    </column>
+
+    <column name="locator">
+      The <ref table="Physical_Locator"/> to use for replies to ARP
+      requests from this MAC address.
+    </column>
+  </table>
+
   <table name="Physical_Locator_Set">
     <p>
       A set of one or more <ref table="Physical_Locator"/>s.

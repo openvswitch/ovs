@@ -1,6 +1,6 @@
 {
   "name": "hardware_vtep",
-  "cksum": "1365749839 5604",
+  "cksum": "3096797177 6063",
   "tables": {
     "Global": {
       "columns": {
@@ -121,6 +121,20 @@
 	  	   "min": 0, "max": "unlimited"}}},
       "isRoot": true,
       "indexes": [["name"]]},
+    "Arp_Sources_Local": {
+      "columns": {
+        "src_mac": {"type": "string"},
+      "locator": {
+        "type": {"key": {"type": "uuid",
+                         "refTable": "Physical_Locator"}}}},
+      "isRoot": true},
+    "Arp_Sources_Remote": {
+      "columns": {
+        "src_mac": {"type": "string"},
+      "locator": {
+        "type": {"key": {"type": "uuid",
+                         "refTable": "Physical_Locator"}}}},
+      "isRoot": true},
     "Physical_Locator_Set": {
       "columns": {
         "locators": {
@@ -162,4 +176,4 @@
           "ephemeral": true}},
       "indexes": [["target"]],
       "isRoot": false}},
-  "version": "1.1.0"}
+  "version": "1.2.0"}
