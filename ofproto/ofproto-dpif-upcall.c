@@ -462,7 +462,7 @@ classify_upcall(const struct upcall *upcall)
     userdata_len = nl_attr_get_size(dpif_upcall->userdata);
     if (userdata_len < sizeof cookie.type
         || userdata_len > sizeof cookie) {
-        VLOG_WARN_RL(&rl, "action upcall cookie has unexpected size %zu",
+        VLOG_WARN_RL(&rl, "action upcall cookie has unexpected size %"PRIuSIZE,
                      userdata_len);
         return BAD_UPCALL;
     }
@@ -482,7 +482,7 @@ classify_upcall(const struct upcall *upcall)
         return IPFIX_UPCALL;
     } else {
         VLOG_WARN_RL(&rl, "invalid user cookie of type %"PRIu16
-                     " and size %zu", cookie.type, userdata_len);
+                     " and size %"PRIuSIZE, cookie.type, userdata_len);
         return BAD_UPCALL;
     }
 }

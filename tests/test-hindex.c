@@ -137,7 +137,7 @@ print_hindex(const char *name, struct hindex *hindex)
 
     printf("%s:", name);
     HINDEX_FOR_EACH (e, node, hindex) {
-        printf(" %d(%zu)", e->value, e->node.hash & hindex->mask);
+        printf(" %d(%"PRIuSIZE")", e->value, e->node.hash & hindex->mask);
     }
     printf("\n");
 }

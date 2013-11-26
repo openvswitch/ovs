@@ -3061,7 +3061,7 @@ handle_table_stats_request(struct ofconn *ofconn,
     ots = xcalloc(p->n_tables, sizeof *ots);
     for (i = 0; i < p->n_tables; i++) {
         ots[i].table_id = i;
-        sprintf(ots[i].name, "table%zu", i);
+        sprintf(ots[i].name, "table%"PRIuSIZE, i);
         ots[i].match = htonll(OFPXMT13_MASK);
         ots[i].wildcards = htonll(OFPXMT13_MASK);
         ots[i].write_actions = htonl(OFPAT11_OUTPUT);

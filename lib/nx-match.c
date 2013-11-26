@@ -215,7 +215,7 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
         if (!p) {
             VLOG_DBG_RL(&rl, "nx_match length %u, rounded up to a "
                         "multiple of 8, is longer than space in message (max "
-                        "length %zu)", match_len, b->size);
+                        "length %"PRIuSIZE")", match_len, b->size);
             return OFPERR_OFPBMC_BAD_LEN;
         }
     }
@@ -272,7 +272,7 @@ oxm_pull_match__(struct ofpbuf *b, bool strict, struct match *match)
     if (!p) {
         VLOG_DBG_RL(&rl, "oxm length %u, rounded up to a "
                     "multiple of 8, is longer than space in message (max "
-                    "length %zu)", match_len, b->size);
+                    "length %"PRIuSIZE")", match_len, b->size);
         return OFPERR_OFPBMC_BAD_LEN;
     }
 

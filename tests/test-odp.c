@@ -78,7 +78,7 @@ parse_keys(bool wc_keys)
             odp_flow_key_from_flow(&odp_key, &flow, flow.in_port.odp_port);
 
             if (odp_key.size > ODPUTIL_FLOW_KEY_BYTES) {
-                printf ("too long: %zu > %d\n",
+                printf ("too long: %"PRIuSIZE" > %d\n",
                         odp_key.size, ODPUTIL_FLOW_KEY_BYTES);
                 exit_code = 1;
             }

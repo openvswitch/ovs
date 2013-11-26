@@ -482,8 +482,8 @@ ovsdb_jsonrpc_session_run(struct ovsdb_jsonrpc_session *s)
 
         monitor_length = ovsdb_jsonrpc_monitor_json_length_all(s);
         if (backlog > s->reply_backlog + monitor_length * 2) {
-            VLOG_INFO("%s: %zu bytes backlogged but a complete replica "
-                      "would only take %zu bytes, disconnecting",
+            VLOG_INFO("%s: %"PRIuSIZE" bytes backlogged but a complete replica "
+                      "would only take %"PRIuSIZE" bytes, disconnecting",
                       jsonrpc_session_get_name(s->js),
                       backlog - s->reply_backlog, monitor_length);
             jsonrpc_session_force_reconnect(s->js);

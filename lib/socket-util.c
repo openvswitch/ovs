@@ -473,7 +473,7 @@ make_sockaddr_un(const char *name, struct sockaddr_un *un, socklen_t *un_len,
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
 
             VLOG_WARN_RL(&rl, "Unix socket name %s is longer than maximum "
-                         "%zu bytes", name, MAX_UN_LEN);
+                         "%"PRIuSIZE" bytes", name, MAX_UN_LEN);
             return error;
         }
 
@@ -1050,7 +1050,7 @@ getsockopt_int(int fd, int level, int option, const char *optname, int *valuep)
         VLOG_ERR_RL(&rl, "getsockopt(%s): %s", optname, ovs_strerror(error));
     } else if (len != sizeof value) {
         error = EINVAL;
-        VLOG_ERR_RL(&rl, "getsockopt(%s): value is %u bytes (expected %zu)",
+        VLOG_ERR_RL(&rl, "getsockopt(%s): value is %u bytes (expected %"PRIuSIZE")",
                     optname, (unsigned int) len, sizeof value);
     } else {
         error = 0;
@@ -1419,7 +1419,7 @@ recv_data_and_fds(int sock,
 
             ovs_assert(n_fds > 0);
             if (n_fds > SOUTIL_MAX_FDS) {
-                VLOG_ERR("%zu fds received but only %d supported",
+                VLOG_ERR("%"PRIuSIZE" fds received but only %d supported",
                          n_fds, SOUTIL_MAX_FDS);
                 for (i = 0; i < n_fds; i++) {
                     close(fds_data[i]);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ hex_to_uint8(const char *input, uint8_t *output, size_t n)
     return;
 
 error:
-    ovs_fatal(0, "\"%s\" is not exactly %zu hex digits", input, n * 2);
+    ovs_fatal(0, "\"%s\" is not exactly %"PRIuSIZE" hex digits", input, n * 2);
 }
 
 int

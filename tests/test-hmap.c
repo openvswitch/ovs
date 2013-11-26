@@ -125,7 +125,7 @@ print_hmap(const char *name, struct hmap *hmap)
 
     printf("%s:", name);
     HMAP_FOR_EACH (e, node, hmap) {
-        printf(" %d(%zu)", e->value, e->node.hash & hmap->mask);
+        printf(" %d(%"PRIuSIZE")", e->value, e->node.hash & hmap->mask);
     }
     printf("\n");
 }

@@ -1212,7 +1212,7 @@ log_ca_cert(const char *file_name, X509 *cert)
             if (i) {
                 ds_put_char(&fp, ':');
             }
-            ds_put_format(&fp, "%02hhx", digest[i]);
+            ds_put_format(&fp, "%02x", digest[i]);
         }
     }
     subject = X509_NAME_oneline(X509_get_subject_name(cert), NULL, 0);
@@ -1247,7 +1247,7 @@ stream_ssl_set_ca_cert_file__(const char *file_name,
         for (i = 0; i < n_certs; i++) {
             /* SSL_CTX_add_client_CA makes a copy of the relevant data. */
             if (SSL_CTX_add_client_CA(ctx, certs[i]) != 1) {
-                VLOG_ERR("failed to add client certificate %zu from %s: %s",
+                VLOG_ERR("failed to add client certificate %"PRIuSIZE" from %s: %s",
                          i, file_name,
                          ERR_error_string(ERR_get_error(), NULL));
             } else {
@@ -1369,7 +1369,7 @@ ssl_protocol_cb(int write_p, int version OVS_UNUSED, int content_type,
         ds_put_format(&details, "type %d", content_type);
     }
 
-    VLOG_DBG("%s%u%s%s %s (%zu bytes)",
+    VLOG_DBG("%s%u%s%s %s (%"PRIuSIZE" bytes)",
              sslv->type == CLIENT ? "client" : "server",
              sslv->session_nr, write_p ? "-->" : "<--",
              stream_get_name(&sslv->stream), ds_cstr(&details), len);

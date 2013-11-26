@@ -212,6 +212,23 @@ is_pow2(uintmax_t x)
  * (void *). This is to suppress the alignment warning issued by clang. */
 #define ALIGNED_CAST(TYPE, ATTR) ((TYPE) (void *) (ATTR))
 
+/* Use "%"PRIuSIZE to format size_t with printf(). */
+#ifdef _WIN32
+#define PRIdSIZE "Id"
+#define PRIiSIZE "Ii"
+#define PRIoSIZE "Io"
+#define PRIuSIZE "Iu"
+#define PRIxSIZE "Ix"
+#define PRIXSIZE "IX"
+#else
+#define PRIdSIZE "zd"
+#define PRIiSIZE "zi"
+#define PRIoSIZE "zo"
+#define PRIuSIZE "zu"
+#define PRIxSIZE "zx"
+#define PRIXSIZE "zX"
+#endif
+
 #ifdef  __cplusplus
 extern "C" {
 #endif

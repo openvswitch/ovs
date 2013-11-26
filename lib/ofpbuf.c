@@ -553,7 +553,7 @@ ofpbuf_to_string(const struct ofpbuf *b, size_t maxbytes)
     struct ds s;
 
     ds_init(&s);
-    ds_put_format(&s, "size=%zu, allocated=%zu, head=%zu, tail=%zu\n",
+    ds_put_format(&s, "size=%"PRIuSIZE", allocated=%"PRIuSIZE", head=%"PRIuSIZE", tail=%"PRIuSIZE"\n",
                   b->size, b->allocated,
                   ofpbuf_headroom(b), ofpbuf_tailroom(b));
     ds_put_hex_dump(&s, b->data, MIN(b->size, maxbytes), 0, false);

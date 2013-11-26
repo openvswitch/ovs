@@ -735,7 +735,7 @@ log_bals(struct bond *bond, const struct list *bals)
                     if (&e->list_node != list_front(&slave->entries)) {
                         ds_put_cstr(&ds, " + ");
                     }
-                    ds_put_format(&ds, "h%td: %"PRIu64"kB",
+                    ds_put_format(&ds, "h%"PRIdPTR": %"PRIu64"kB",
                                   e - bond->hash, e->tx_bytes / 1024);
                 }
                 ds_put_cstr(&ds, ")");
@@ -754,7 +754,7 @@ bond_shift_load(struct bond_entry *hash, struct bond_slave *to)
     struct bond *bond = from->bond;
     uint64_t delta = hash->tx_bytes;
 
-    VLOG_INFO("bond %s: shift %"PRIu64"kB of load (with hash %td) "
+    VLOG_INFO("bond %s: shift %"PRIu64"kB of load (with hash %"PRIdPTR") "
               "from %s to %s (now carrying %"PRIu64"kB and "
               "%"PRIu64"kB load, respectively)",
               bond->name, delta / 1024, hash - bond->hash,

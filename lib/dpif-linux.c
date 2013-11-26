@@ -2097,7 +2097,7 @@ report_loss(struct dpif *dpif_, struct dpif_channel *ch)
                       time_msec() - ch->last_poll);
     }
 
-    VLOG_WARN("%s: lost packet on channel %td%s",
+    VLOG_WARN("%s: lost packet on channel %"PRIdPTR"%s",
               dpif_name(dpif_), ch - dpif->channels, ds_cstr(&s));
     ds_destroy(&s);
 }

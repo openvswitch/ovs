@@ -114,7 +114,7 @@ resize(struct hmap *hmap, size_t new_mask, const char *where)
         if (count > 5) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 10);
             COVERAGE_INC(hmap_pathological);
-            VLOG_DBG_RL(&rl, "%s: %d nodes in bucket (%zu nodes, %zu buckets)",
+            VLOG_DBG_RL(&rl, "%s: %d nodes in bucket (%"PRIuSIZE" nodes, %"PRIuSIZE" buckets)",
                         where, count, hmap->n, hmap->mask + 1);
         }
     }

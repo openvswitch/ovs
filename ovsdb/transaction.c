@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -295,7 +295,7 @@ check_ref_count(struct ovsdb_txn *txn OVS_UNUSED, struct ovsdb_txn_row *r)
     } else {
         return ovsdb_error("referential integrity violation",
                            "cannot delete %s row "UUID_FMT" because "
-                           "of %zu remaining reference(s)",
+                           "of %"PRIuSIZE" remaining reference(s)",
                            r->table->schema->name, UUID_ARGS(&r->uuid),
                            r->n_refs);
     }
@@ -614,7 +614,7 @@ check_max_rows(struct ovsdb_txn *txn)
         if (n_rows > max_rows) {
             return ovsdb_error("constraint violation",
                                "transaction causes \"%s\" table to contain "
-                               "%zu rows, greater than the schema-defined "
+                               "%"PRIuSIZE" rows, greater than the schema-defined "
                                "limit of %u row(s)",
                                t->table->schema->name, n_rows, max_rows);
         }

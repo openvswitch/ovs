@@ -702,8 +702,8 @@ netdev_bsd_send(struct netdev *netdev_, const void *data, size_t size)
                 }
             }
         } else if (retval != size) {
-            VLOG_WARN_RL(&rl, "sent partial Ethernet packet (%zd bytes of "
-                         "%zu) on %s", retval, size, name);
+            VLOG_WARN_RL(&rl, "sent partial Ethernet packet (%"PRIuSIZE"d bytes of "
+                         "%"PRIuSIZE") on %s", retval, size, name);
             error = EMSGSIZE;
         } else {
             break;

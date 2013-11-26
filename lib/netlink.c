@@ -66,7 +66,7 @@ nl_msg_nlmsgerr(const struct ofpbuf *msg, int *errorp)
         struct nlmsgerr *err = ofpbuf_at(msg, NLMSG_HDRLEN, sizeof *err);
         int code = EPROTO;
         if (!err) {
-            VLOG_ERR_RL(&rl, "received invalid nlmsgerr (%zd bytes < %zd)",
+            VLOG_ERR_RL(&rl, "received invalid nlmsgerr (%"PRIuSIZE"d bytes < %"PRIuSIZE"d)",
                         msg->size, NLMSG_HDRLEN + sizeof *err);
         } else if (err->error <= 0 && err->error > INT_MIN) {
             code = -err->error;
@@ -690,8 +690,8 @@ nl_attr_validate(const struct nlattr *nla, const struct nl_policy *policy)
     /* Verify length. */
     len = nl_attr_get_size(nla);
     if (len < min_len || len > max_len) {
-        VLOG_DBG_RL(&rl, "attr %"PRIu16" length %zu not in "
-                    "allowed range %zu...%zu", type, len, min_len, max_len);
+        VLOG_DBG_RL(&rl, "attr %"PRIu16" length %"PRIuSIZE" not in "
+                    "allowed range %"PRIuSIZE"...%"PRIuSIZE, type, len, min_len, max_len);
         return false;
     }
 
@@ -756,7 +756,7 @@ nl_policy_parse(const struct ofpbuf *msg, size_t nla_offset,
     for (i = 0; i < n_attrs; i++) {
         const struct nl_policy *e = &policy[i];
         if (!e->optional && e->type != NL_A_NO_ATTR && !attrs[i]) {
-            VLOG_DBG_RL(&rl, "required attr %zu missing", i);
+            VLOG_DBG_RL(&rl, "required attr %"PRIuSIZE" missing", i);
             return false;
         }
     }

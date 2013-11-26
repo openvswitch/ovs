@@ -165,8 +165,8 @@ bundle_from_openflow(const struct nx_action_bundle *nab,
     }
 
     if (slaves_size < bundle->n_slaves * sizeof(ovs_be16)) {
-        VLOG_WARN_RL(&rl, "Nicira action %"PRIu16" only has %zu bytes "
-                     "allocated for slaves.  %zu bytes are required for "
+        VLOG_WARN_RL(&rl, "Nicira action %"PRIu16" only has %"PRIuSIZE" bytes "
+                     "allocated for slaves.  %"PRIuSIZE" bytes are required for "
                      "%"PRIu16" slaves.", subtype, slaves_size,
                      bundle->n_slaves * sizeof(ovs_be16), bundle->n_slaves);
         error = OFPERR_OFPBAC_BAD_LEN;

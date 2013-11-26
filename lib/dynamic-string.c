@@ -16,6 +16,7 @@
 
 #include <config.h>
 #include "dynamic-string.h"
+#include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -383,12 +384,13 @@ ds_put_hex_dump(struct ds *ds, const void *buf_, size_t size,
         n = end - start;
 
         /* Print line. */
-        ds_put_format(ds, "%08jx  ", (uintmax_t) ROUND_DOWN(ofs, per_line));
+        ds_put_format(ds, "%08"PRIxMAX"  ",
+                      (uintmax_t) ROUND_DOWN(ofs, per_line));
         for (i = 0; i < start; i++) {
             ds_put_format(ds, "   ");
         }
         for (; i < end; i++) {
-            ds_put_format(ds, "%02hhx%c",
+            ds_put_format(ds, "%02x%c",
                           buf[i - start], i == per_line / 2 - 1? '-' : ' ');
         }
         if (ascii) {

@@ -5241,7 +5241,7 @@ trace_format_regs(struct ds *result, int level, const char *title,
     ds_put_char_multiple(result, '\t', level);
     ds_put_format(result, "%s:", title);
     for (i = 0; i < FLOW_N_REGS; i++) {
-        ds_put_format(result, " reg%zu=0x%"PRIx32, i, trace->flow.regs[i]);
+        ds_put_format(result, " reg%"PRIuSIZE"=0x%"PRIx32, i, trace->flow.regs[i]);
     }
     ds_put_char(result, '\n');
 }
@@ -5734,7 +5734,7 @@ dpif_show_backer(const struct dpif_backer *backer, struct ds *ds)
 
     ds_put_format(ds, "%s: hit:%"PRIu64" missed:%"PRIu64"\n",
                   dpif_name(backer->dpif), n_hit, n_missed);
-    ds_put_format(ds, "\tflows: cur: %zu, avg: %u, max: %u,"
+    ds_put_format(ds, "\tflows: cur: %"PRIuSIZE", avg: %u, max: %u,"
                   " life span: %lldms\n", hmap_count(&backer->subfacets),
                   backer->avg_n_subfacet, backer->max_n_subfacet,
                   backer->avg_subfacet_life);
@@ -5845,7 +5845,7 @@ ofproto_unixctl_dpif_dump_megaflows(struct unixctl_conn *conn,
     CLS_CURSOR_FOR_EACH (facet, cr, &cursor) {
         cls_rule_format(&facet->cr, &ds);
         ds_put_cstr(&ds, ", ");
-        ds_put_format(&ds, "n_subfacets:%zu, ", list_size(&facet->subfacets));
+        ds_put_format(&ds, "n_subfacets:%"PRIuSIZE", ", list_size(&facet->subfacets));
         ds_put_format(&ds, "used:%.3fs, ", (now - facet->used) / 1000.0);
         ds_put_cstr(&ds, "Datapath actions: ");
         if (facet->xout.slow) {

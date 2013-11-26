@@ -1805,7 +1805,7 @@ ofctl_ofp_parse(int argc OVS_UNUSED, char *argv[])
 
         length = ntohs(oh->length);
         if (length < sizeof *oh) {
-            ovs_fatal(0, "%s: %zu-byte message is too short for OpenFlow",
+            ovs_fatal(0, "%s: %"PRIuSIZE"-byte message is too short for OpenFlow",
                       filename, length);
         }
 
@@ -1835,7 +1835,7 @@ ofctl_ping(int argc, char *argv[])
 
     payload = argc > 2 ? atoi(argv[2]) : 64;
     if (payload > max_payload) {
-        ovs_fatal(0, "payload must be between 0 and %zu bytes", max_payload);
+        ovs_fatal(0, "payload must be between 0 and %"PRIuSIZE" bytes", max_payload);
     }
 
     open_vconn(argv[1], &vconn);
@@ -1863,7 +1863,7 @@ ofctl_ping(int argc, char *argv[])
             printf("Reply:\n");
             ofp_print(stdout, reply, reply->size, verbosity + 2);
         }
-        printf("%zu bytes from %s: xid=%08"PRIx32" time=%.1f ms\n",
+        printf("%"PRIuSIZE" bytes from %s: xid=%08"PRIx32" time=%.1f ms\n",
                reply->size, argv[1], ntohl(rpy_hdr->xid),
                    (1000*(double)(end.tv_sec - start.tv_sec))
                    + (.001*(end.tv_usec - start.tv_usec)));
@@ -1886,7 +1886,7 @@ ofctl_benchmark(int argc OVS_UNUSED, char *argv[])
 
     payload_size = atoi(argv[2]);
     if (payload_size > max_payload) {
-        ovs_fatal(0, "payload must be between 0 and %zu bytes", max_payload);
+        ovs_fatal(0, "payload must be between 0 and %"PRIuSIZE" bytes", max_payload);
     }
     message_size = sizeof(struct ofp_header) + payload_size;
 
@@ -2766,15 +2766,15 @@ print_differences(const char *prefix,
 
     for (i = 0; i < MIN(a_len, b_len); i++) {
         if (a[i] != b[i]) {
-            printf("%s%2zu: %02"PRIx8" -> %02"PRIx8"\n",
+            printf("%s%2"PRIuSIZE": %02"PRIx8" -> %02"PRIx8"\n",
                    prefix, i, a[i], b[i]);
         }
     }
     for (i = a_len; i < b_len; i++) {
-        printf("%s%2zu: (none) -> %02"PRIx8"\n", prefix, i, b[i]);
+        printf("%s%2"PRIuSIZE": (none) -> %02"PRIx8"\n", prefix, i, b[i]);
     }
     for (i = b_len; i < a_len; i++) {
-        printf("%s%2zu: %02"PRIx8" -> (none)\n", prefix, i, a[i]);
+        printf("%s%2"PRIuSIZE": %02"PRIx8" -> (none)\n", prefix, i, a[i]);
     }
 }
 
@@ -2875,7 +2875,7 @@ ofctl_parse_ofp10_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
             ovs_fatal(0, "Trailing garbage in hex data");
         }
         if (match_expout.size != sizeof(struct ofp10_match)) {
-            ovs_fatal(0, "Input is %zu bytes, expected %zu",
+            ovs_fatal(0, "Input is %"PRIuSIZE" bytes, expected %"PRIuSIZE,
                       match_expout.size, sizeof(struct ofp10_match));
         }
 
@@ -2890,7 +2890,7 @@ ofctl_parse_ofp10_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
             ovs_fatal(0, "Trailing garbage in hex data");
         }
         if (match_in.size != sizeof(struct ofp10_match)) {
-            ovs_fatal(0, "Input is %zu bytes, expected %zu",
+            ovs_fatal(0, "Input is %"PRIuSIZE" bytes, expected %"PRIuSIZE,
                       match_in.size, sizeof(struct ofp10_match));
         }
 
@@ -2939,7 +2939,7 @@ ofctl_parse_ofp11_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
             ovs_fatal(0, "Trailing garbage in hex data");
         }
         if (match_in.size != sizeof(struct ofp11_match)) {
-            ovs_fatal(0, "Input is %zu bytes, expected %zu",
+            ovs_fatal(0, "Input is %"PRIuSIZE" bytes, expected %"PRIuSIZE,
                       match_in.size, sizeof(struct ofp11_match));
         }
 

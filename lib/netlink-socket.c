@@ -337,7 +337,7 @@ nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, bool wait)
     }
 
     if (msg.msg_flags & MSG_TRUNC) {
-        VLOG_ERR_RL(&rl, "truncated message (longer than %zu bytes)",
+        VLOG_ERR_RL(&rl, "truncated message (longer than %"PRIuSIZE" bytes)",
                     sizeof tail);
         return E2BIG;
     }
@@ -346,7 +346,7 @@ nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, bool wait)
     if (retval < sizeof *nlmsghdr
         || nlmsghdr->nlmsg_len < sizeof *nlmsghdr
         || nlmsghdr->nlmsg_len > retval) {
-        VLOG_ERR_RL(&rl, "received invalid nlmsg (%zd bytes < %zu)",
+        VLOG_ERR_RL(&rl, "received invalid nlmsg (%"PRIuSIZE"d bytes < %"PRIuSIZE")",
                     retval, sizeof *nlmsghdr);
         return EPROTO;
     }

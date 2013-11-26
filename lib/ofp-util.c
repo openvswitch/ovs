@@ -1901,7 +1901,7 @@ ofputil_decode_meter_config(struct ofpbuf *msg,
     omc = ofpbuf_try_pull(msg, sizeof *omc);
     if (!omc) {
         VLOG_WARN_RL(&bad_ofmsg_rl,
-                     "OFPMP_METER_CONFIG reply has %zu leftover bytes at end",
+                     "OFPMP_METER_CONFIG reply has %"PRIuSIZE" leftover bytes at end",
                      msg->size);
         return OFPERR_OFPBRC_BAD_LEN;
     }
@@ -1977,7 +1977,7 @@ ofputil_decode_meter_stats(struct ofpbuf *msg,
     oms = ofpbuf_try_pull(msg, sizeof *oms);
     if (!oms) {
         VLOG_WARN_RL(&bad_ofmsg_rl,
-                     "OFPMP_METER reply has %zu leftover bytes at end",
+                     "OFPMP_METER reply has %"PRIuSIZE" leftover bytes at end",
                      msg->size);
         return OFPERR_OFPBRC_BAD_LEN;
     }
@@ -2668,7 +2668,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
 
         ofs = ofpbuf_try_pull(msg, sizeof *ofs);
         if (!ofs) {
-            VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_FLOW reply has %zu leftover "
+            VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_FLOW reply has %"PRIuSIZE" leftover "
                          "bytes at end", msg->size);
             return EINVAL;
         }
@@ -2676,7 +2676,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
         length = ntohs(ofs->length);
         if (length < sizeof *ofs) {
             VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_FLOW reply claims invalid "
-                         "length %zu", length);
+                         "length %"PRIuSIZE, length);
             return EINVAL;
         }
 
@@ -2718,7 +2718,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
 
         ofs = ofpbuf_try_pull(msg, sizeof *ofs);
         if (!ofs) {
-            VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_FLOW reply has %zu leftover "
+            VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_FLOW reply has %"PRIuSIZE" leftover "
                          "bytes at end", msg->size);
             return EINVAL;
         }
@@ -2726,7 +2726,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
         length = ntohs(ofs->length);
         if (length < sizeof *ofs) {
             VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_FLOW reply claims invalid "
-                         "length %zu", length);
+                         "length %"PRIuSIZE, length);
             return EINVAL;
         }
 
@@ -2754,7 +2754,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
 
         nfs = ofpbuf_try_pull(msg, sizeof *nfs);
         if (!nfs) {
-            VLOG_WARN_RL(&bad_ofmsg_rl, "NXST_FLOW reply has %zu leftover "
+            VLOG_WARN_RL(&bad_ofmsg_rl, "NXST_FLOW reply has %"PRIuSIZE" leftover "
                          "bytes at end", msg->size);
             return EINVAL;
         }
@@ -2762,8 +2762,8 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
         length = ntohs(nfs->length);
         match_len = ntohs(nfs->match_len);
         if (length < sizeof *nfs + ROUND_UP(match_len, 8)) {
-            VLOG_WARN_RL(&bad_ofmsg_rl, "NXST_FLOW reply with match_len=%zu "
-                         "claims invalid length %zu", match_len, length);
+            VLOG_WARN_RL(&bad_ofmsg_rl, "NXST_FLOW reply with match_len=%"PRIuSIZE" "
+                         "claims invalid length %"PRIuSIZE, match_len, length);
             return EINVAL;
         }
         if (nx_pull_match(msg, match_len, &fs->match, NULL, NULL)) {
@@ -4478,7 +4478,7 @@ ofputil_decode_flow_monitor_request(struct ofputil_flow_monitor_request *rq,
 
     nfmr = ofpbuf_try_pull(msg, sizeof *nfmr);
     if (!nfmr) {
-        VLOG_WARN_RL(&bad_ofmsg_rl, "NXST_FLOW_MONITOR request has %zu "
+        VLOG_WARN_RL(&bad_ofmsg_rl, "NXST_FLOW_MONITOR request has %"PRIuSIZE" "
                      "leftover bytes at end", msg->size);
         return OFPERR_OFPBRC_BAD_LEN;
     }
@@ -4632,7 +4632,7 @@ ofputil_decode_flow_update(struct ofputil_flow_update *update,
     }
 
 bad_len:
-    VLOG_WARN_RL(&bad_ofmsg_rl, "NXST_FLOW_MONITOR reply has %zu "
+    VLOG_WARN_RL(&bad_ofmsg_rl, "NXST_FLOW_MONITOR reply has %"PRIuSIZE" "
                  "leftover bytes at end", msg->size);
     return OFPERR_OFPBRC_BAD_LEN;
 }
@@ -5656,7 +5656,7 @@ ofputil_decode_port_stats(struct ofputil_port_stats *ps, struct ofpbuf *msg)
     }
 
  bad_len:
-    VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_PORT reply has %zu leftover "
+    VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_PORT reply has %"PRIuSIZE" leftover "
                  "bytes at end", msg->size);
     return OFPERR_OFPBRC_BAD_LEN;
 }
@@ -5966,13 +5966,13 @@ ofputil_decode_group_stats_reply(struct ofpbuf *msg,
     }
 
     if (!ogs11) {
-        VLOG_WARN_RL(&bad_ofmsg_rl, "%s reply has %zu leftover bytes at end",
+        VLOG_WARN_RL(&bad_ofmsg_rl, "%s reply has %"PRIuSIZE" leftover bytes at end",
                      ofpraw_get_name(raw), msg->size);
         return OFPERR_OFPBRC_BAD_LEN;
     }
     length = ntohs(ogs11->length);
     if (length < sizeof base_len) {
-        VLOG_WARN_RL(&bad_ofmsg_rl, "%s reply claims invalid length %zu",
+        VLOG_WARN_RL(&bad_ofmsg_rl, "%s reply claims invalid length %"PRIuSIZE,
                      ofpraw_get_name(raw), length);
         return OFPERR_OFPBRC_BAD_LEN;
     }
@@ -5985,7 +5985,7 @@ ofputil_decode_group_stats_reply(struct ofpbuf *msg,
     gs->n_buckets = (length - base_len) / sizeof *obc;
     obc = ofpbuf_try_pull(msg, gs->n_buckets * sizeof *obc);
     if (!obc) {
-        VLOG_WARN_RL(&bad_ofmsg_rl, "%s reply has %zu leftover bytes at end",
+        VLOG_WARN_RL(&bad_ofmsg_rl, "%s reply has %"PRIuSIZE" leftover bytes at end",
                      ofpraw_get_name(raw), msg->size);
         return OFPERR_OFPBRC_BAD_LEN;
     }
@@ -6054,18 +6054,18 @@ ofputil_pull_buckets(struct ofpbuf *msg, size_t buckets_length,
               ? ofpbuf_try_pull(msg, sizeof *ob)
               : NULL);
         if (!ob) {
-            VLOG_WARN_RL(&bad_ofmsg_rl, "buckets end with %zu leftover bytes",
+            VLOG_WARN_RL(&bad_ofmsg_rl, "buckets end with %"PRIuSIZE" leftover bytes",
                          buckets_length);
         }
 
         ob_len = ntohs(ob->len);
         if (ob_len < sizeof *ob) {
             VLOG_WARN_RL(&bad_ofmsg_rl, "OpenFlow message bucket length "
-                         "%zu is not valid", ob_len);
+                         "%"PRIuSIZE" is not valid", ob_len);
             return OFPERR_OFPGMFC_BAD_BUCKET;
         } else if (ob_len > buckets_length) {
             VLOG_WARN_RL(&bad_ofmsg_rl, "OpenFlow message bucket length "
-                         "%zu exceeds remaining buckets data size %zu",
+                         "%"PRIuSIZE" exceeds remaining buckets data size %"PRIuSIZE,
                          ob_len, buckets_length);
             return OFPERR_OFPGMFC_BAD_BUCKET;
         }
@@ -6124,7 +6124,7 @@ ofputil_decode_group_desc_reply(struct ofputil_group_desc *gd,
 
     ogds = ofpbuf_try_pull(msg, sizeof *ogds);
     if (!ogds) {
-        VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST11_GROUP_DESC reply has %zu "
+        VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST11_GROUP_DESC reply has %"PRIuSIZE" "
                      "leftover bytes at end", msg->size);
         return OFPERR_OFPBRC_BAD_LEN;
     }
@@ -6134,7 +6134,7 @@ ofputil_decode_group_desc_reply(struct ofputil_group_desc *gd,
     length = ntohs(ogds->length);
     if (length < sizeof *ogds || length - sizeof *ogds > msg->size) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST11_GROUP_DESC reply claims invalid "
-                     "length %zu", length);
+                     "length %"PRIuSIZE, length);
         return OFPERR_OFPBRC_BAD_LEN;
     }
 
@@ -6450,7 +6450,7 @@ ofputil_decode_queue_stats(struct ofputil_queue_stats *qs, struct ofpbuf *msg)
     }
 
  bad_len:
-    VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_QUEUE reply has %zu leftover "
+    VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_QUEUE reply has %"PRIuSIZE" leftover "
                  "bytes at end", msg->size);
     return OFPERR_OFPBRC_BAD_LEN;
 }

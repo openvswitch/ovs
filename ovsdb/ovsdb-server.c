@@ -530,7 +530,7 @@ get_datum(struct ovsdb_row *row, const char *column_name,
         if (!VLOG_DROP_DBG(&rl)) {
             char *type_name = ovsdb_type_to_english(&column->type);
             VLOG_DBG("Table `%s' column `%s' has type %s, not expected "
-                     "key type %s, value type %s, max elements %zd.",
+                     "key type %s, value type %s, max elements %"PRIuSIZE".",
                      schema->name, column_name, type_name,
                      ovsdb_atomic_type_to_string(key_type),
                      ovsdb_atomic_type_to_string(value_type),

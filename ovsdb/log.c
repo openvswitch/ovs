@@ -356,7 +356,7 @@ ovsdb_log_write(struct ovsdb_log *file, struct json *json)
 
     /* Compose header. */
     sha1_bytes(json_string, length, sha1);
-    snprintf(header, sizeof header, "%s%zu "SHA1_FMT"\n",
+    snprintf(header, sizeof header, "%s%"PRIuSIZE" "SHA1_FMT"\n",
              magic, length, SHA1_ARGS(sha1));
 
     /* Write. */

@@ -346,7 +346,7 @@ ovs_strerror(int error)
          * is too short).  We don't check the actual failure reason because
          * POSIX requires strerror_r() to return the error but old glibc
          * (before 2.13) returns -1 and sets errno. */
-        snprintf(buffer, BUFSIZE, "Unknown error %d", error);
+        snprintf(buffer, BUFSIZE, "Unknown error %"PRIuSIZE, error);
     }
 #endif
 
@@ -473,11 +473,11 @@ ovs_hex_dump(FILE *stream, const void *buf_, size_t size,
       n = end - start;
 
       /* Print line. */
-      fprintf(stream, "%08jx  ", (uintmax_t) ROUND_DOWN(ofs, per_line));
+      fprintf(stream, "%08"PRIxMAX"  ", (uintmax_t) ROUND_DOWN(ofs, per_line));
       for (i = 0; i < start; i++)
         fprintf(stream, "   ");
       for (; i < end; i++)
-        fprintf(stream, "%02hhx%c",
+        fprintf(stream, "%02x%c",
                 buf[i - start], i == per_line / 2 - 1? '-' : ' ');
       if (ascii)
         {

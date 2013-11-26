@@ -394,7 +394,21 @@ from <stdint.h>.
 integer types.  Use the PRId<N>, PRIu<N>, and PRIx<N> macros from
 <inttypes.h> for formatting them with printf() and related functions.
 
-  Use %zu to format size_t with printf().
+  For compatibility with antique printf() implementations:
+
+    - Instead of "%zu", use "%"PRIuSIZE.
+
+    - Instead of "%td", use "%"PRIdPTR.
+
+    - Instead of "%ju", use "%"PRIuMAX.
+
+Other variants exist for different radixes.  For example, use
+"%"PRIxSIZE instead of "%zx" or "%x" instead of "%hhx".
+
+  Also, instead of "%hhd", use "%d".  Be cautious substituting "%u",
+"%x", and "%o" for the corresponding versions with "hh": cast the
+argument to unsigned char if necessary, because printf("%hhu", -1)
+prints 255 but printf("%u", -1) prints 4294967295.
 
   Use bit-fields sparingly.  Do not use bit-fields for layout of
 network protocol fields or in other circumstances where the exact

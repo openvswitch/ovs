@@ -195,6 +195,19 @@ config-h-check:
 	fi
 .PHONY: config-h-check
 
+# Check for printf() type modifiers that MSVC doesn't support.
+ALL_LOCAL += printf-check
+printf-check:
+	@if test -e $(srcdir)/.git && (git --version) >/dev/null 2>&1 && \
+	   git --no-pager grep -n -E -e '%[-+ #0-9.*]*([ztj]|hh)' --and --not -e 'ovs_scan' `git ls-files $(srcdir) | grep '\.[ch]$$'`; \
+	then \
+	    echo "See above for list of violations of the rule that"; \
+	    echo "'z', 't', 'j', 'hh' printf() type modifiers are"; \
+	    echo "forbidden.  See CodingStyle for replacements."; \
+	    exit 1; \
+	fi
+.PHONY: printf-check
+
 # Check that certain data structures are always declared "static".
 ALL_LOCAL += static-check
 static-check:

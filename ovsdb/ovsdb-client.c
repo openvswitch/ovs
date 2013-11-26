@@ -387,7 +387,7 @@ fetch_dbs(struct jsonrpc *rpc, struct svec *dbs)
         const struct json *name = reply->result->u.array.elems[i];
 
         if (name->type != JSON_STRING) {
-            ovs_fatal(0, "list_dbs response %zu is not string", i);
+            ovs_fatal(0, "list_dbs response %"PRIuSIZE" is not string", i);
         }
         svec_add(dbs, name->u.string);
     }
@@ -847,7 +847,7 @@ dump_table(const struct ovsdb_table_schema *ts, struct json_array *rows)
         struct shash *row;
 
         if (rows->elems[y]->type != JSON_OBJECT) {
-            ovs_fatal(0,  "row %zu in table %s response is not a JSON object: "
+            ovs_fatal(0,  "row %"PRIuSIZE" in table %s response is not a JSON object: "
                       "%s", y, ts->name, json_to_string(rows->elems[y], 0));
         }
         row = json_object(rows->elems[y]);
@@ -856,7 +856,7 @@ dump_table(const struct ovsdb_table_schema *ts, struct json_array *rows)
         for (x = 0; x < n_columns; x++) {
             const struct json *json = shash_find_data(row, columns[x]->name);
             if (!json) {
-                ovs_fatal(0, "row %zu in table %s response lacks %s column",
+                ovs_fatal(0, "row %"PRIuSIZE" in table %s response lacks %s column",
                           y, ts->name, columns[x]->name);
             }
 
@@ -945,7 +945,7 @@ do_dump(struct jsonrpc *rpc, const char *database,
     /* Print database contents. */
     if (reply->result->type != JSON_ARRAY
         || reply->result->u.array.n != n_tables) {
-        ovs_fatal(0, "reply is not array of %zu elements: %s",
+        ovs_fatal(0, "reply is not array of %"PRIuSIZE" elements: %s",
                   n_tables, json_to_string(reply->result, 0));
     }
     for (i = 0; i < n_tables; i++) {
