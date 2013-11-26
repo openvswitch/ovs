@@ -115,6 +115,10 @@ struct ofproto_port_stp_status {
     enum stp_state state;
     unsigned int sec_in_state;
     enum stp_role role;
+};
+
+struct ofproto_port_stp_stats {
+    bool enabled;               /* If false, ignore other members. */
     int tx_count;               /* Number of BPDUs transmitted. */
     int rx_count;               /* Number of valid BPDUs received. */
     int error_count;            /* Number of bad BPDUs received. */
@@ -281,6 +285,8 @@ int ofproto_port_set_stp(struct ofproto *, ofp_port_t ofp_port,
                          const struct ofproto_port_stp_settings *);
 int ofproto_port_get_stp_status(struct ofproto *, ofp_port_t ofp_port,
                                 struct ofproto_port_stp_status *);
+int ofproto_port_get_stp_stats(struct ofproto *, ofp_port_t ofp_port,
+                               struct ofproto_port_stp_stats *);
 int ofproto_port_set_queues(struct ofproto *, ofp_port_t ofp_port,
                             const struct ofproto_port_queue *,
                             size_t n_queues);

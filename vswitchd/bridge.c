@@ -2032,8 +2032,6 @@ port_refresh_stp_status(struct port *port)
     struct ofproto *ofproto = port->bridge->ofproto;
     struct iface *iface;
     struct ofproto_port_stp_status status;
-    char *keys[3];
-    int64_t int_values[3];
     struct smap smap;
 
     if (port_is_synthetic(port)) {
@@ -2047,14 +2045,12 @@ port_refresh_stp_status(struct port *port)
     }
 
     iface = CONTAINER_OF(list_front(&port->ifaces), struct iface, port_elem);
-
     if (ofproto_port_get_stp_status(ofproto, iface->ofp_port, &status)) {
         return;
     }
 
     if (!status.enabled) {
         ovsrec_port_set_status(port->cfg, NULL);
-        ovsrec_port_set_statistics(port->cfg, NULL, NULL, 0);
         return;
     }
 
@@ -2066,14 +2062,43 @@ port_refresh_stp_status(struct port *port)
     smap_add(&smap, "stp_role", stp_role_name(status.role));
     ovsrec_port_set_status(port->cfg, &smap);
     smap_destroy(&smap);
+}
+
+static void
+port_refresh_stp_stats(struct port *port)
+{
+    struct ofproto *ofproto = port->bridge->ofproto;
+    struct iface *iface;
+    struct ofproto_port_stp_stats stats;
+    char *keys[3];
+    int64_t int_values[3];
+
+    if (port_is_synthetic(port)) {
+        return;
+    }
+
+    /* STP doesn't currently support bonds. */
+    if (!list_is_singleton(&port->ifaces)) {
+        return;
+    }
+
+    iface = CONTAINER_OF(list_front(&port->ifaces), struct iface, port_elem);
+    if (ofproto_port_get_stp_stats(ofproto, iface->ofp_port, &stats)) {
+        return;
+    }
+
+    if (!stats.enabled) {
+        ovsrec_port_set_statistics(port->cfg, NULL, NULL, 0);
+        return;
+    }
 
     /* Set Statistics column. */
     keys[0] = "stp_tx_count";
-    int_values[0] = status.tx_count;
+    int_values[0] = stats.tx_count;
     keys[1] = "stp_rx_count";
-    int_values[1] = status.rx_count;
+    int_values[1] = stats.rx_count;
     keys[2] = "stp_error_count";
-    int_values[2] = status.error_count;
+    int_values[2] = stats.error_count;
 
     ovsrec_port_set_statistics(port->cfg, keys, int_values,
                                ARRAY_SIZE(int_values));
@@ -2499,6 +2524,8 @@ bridge_run(void)
                         iface_refresh_stats(iface);
                         iface_refresh_status(iface);
                     }
+
+                    port_refresh_stp_stats(port);
                 }
 
                 HMAP_FOR_EACH (m, hmap_node, &br->mirrors) {

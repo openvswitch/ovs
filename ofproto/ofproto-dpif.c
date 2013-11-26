@@ -2179,6 +2179,24 @@ get_stp_port_status(struct ofport *ofport_,
     s->state = stp_port_get_state(sp);
     s->sec_in_state = (time_msec() - ofport->stp_state_entered) / 1000;
     s->role = stp_port_get_role(sp);
+
+    return 0;
+}
+
+static int
+get_stp_port_stats(struct ofport *ofport_,
+                   struct ofproto_port_stp_stats *s)
+{
+    struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
+    struct stp_port *sp = ofport->stp_port;
+
+    if (!ofproto->stp || !sp) {
+        s->enabled = false;
+        return 0;
+    }
+
+    s->enabled = true;
     stp_port_get_counts(sp, &s->tx_count, &s->rx_count, &s->error_count);
 
     return 0;
@@ -6367,6 +6385,7 @@ const struct ofproto_class ofproto_dpif_class = {
     get_stp_status,
     set_stp_port,
     get_stp_port_status,
+    get_stp_port_stats,
     set_queues,
     bundle_set,
     bundle_remove,

@@ -884,6 +884,27 @@ ofproto_port_get_stp_status(struct ofproto *ofproto, ofp_port_t ofp_port,
             ? ofproto->ofproto_class->get_stp_port_status(ofport, s)
             : EOPNOTSUPP);
 }
+
+/* Retrieves STP port statistics of 'ofp_port' on 'ofproto' and stores it in
+ * 's'.  If the 'enabled' member in 's' is false, then the other members
+ * are not meaningful.
+ *
+ * Returns 0 if successful, otherwise a positive errno value.*/
+int
+ofproto_port_get_stp_stats(struct ofproto *ofproto, ofp_port_t ofp_port,
+                           struct ofproto_port_stp_stats *s)
+{
+    struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
+    if (!ofport) {
+        VLOG_WARN_RL(&rl, "%s: cannot get STP stats on nonexistent "
+                     "port %"PRIu16, ofproto->name, ofp_port);
+        return ENODEV;
+    }
+
+    return (ofproto->ofproto_class->get_stp_port_stats
+            ? ofproto->ofproto_class->get_stp_port_stats(ofport, s)
+            : EOPNOTSUPP);
+}
 
 /* Queue DSCP configuration. */
 

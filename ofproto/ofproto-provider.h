@@ -1530,6 +1530,16 @@ struct ofproto_class {
     int (*get_stp_port_status)(struct ofport *ofport,
                                struct ofproto_port_stp_status *s);
 
+    /* Retrieves spanning tree protocol (STP) port statistics of 'ofport'.
+     *
+     * Stores STP state for 'ofport' in 's'.  If the 'enabled' member is
+     * false, the other member values are not meaningful.
+     *
+     * EOPNOTSUPP as a return value indicates that this ofproto_class does not
+     * support STP, as does a null pointer. */
+    int (*get_stp_port_stats)(struct ofport *ofport,
+                              struct ofproto_port_stp_stats *s);
+
     /* Registers meta-data associated with the 'n_qdscp' Qualities of Service
      * 'queues' attached to 'ofport'.  This data is not intended to be
      * sufficient to implement QoS.  Instead, providers may use this
