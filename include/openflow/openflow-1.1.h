@@ -443,18 +443,6 @@ struct ofp11_table_mod {
 };
 OFP_ASSERT(sizeof(struct ofp11_table_mod) == 8);
 
-/* Flags to indicate behavior of the flow table for unmatched packets.
-   These flags are used in ofp_table_stats messages to describe the current
-   configuration and in ofp_table_mod messages to configure table behavior.  */
-enum ofp11_table_config {
-    OFPTC11_TABLE_MISS_CONTROLLER = 0 << 0, /* Send to controller. */
-    OFPTC11_TABLE_MISS_CONTINUE = 1 << 0, /* Continue to the next table in the
-                                             pipeline (OpenFlow 1.0
-                                             behavior). */
-    OFPTC11_TABLE_MISS_DROP = 2 << 0,     /* Drop the packet. */
-#define OFPTC11_TABLE_MISS_MASK (3 << 0)
-};
-
 /* Flow setup and teardown (controller -> datapath). */
 struct ofp11_flow_mod {
     ovs_be64 cookie;             /* Opaque controller-issued identifier. */

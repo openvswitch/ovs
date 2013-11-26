@@ -476,11 +476,17 @@ enum ofp_table {
 };
 
 enum ofp_table_config {
-    OFPTC_TABLE_MISS_CONTROLLER = 0 << 0, /* Send to controller. */
-    OFPTC_TABLE_MISS_CONTINUE = 1 << 0, /* Continue to the next table in the
-                                           pipeline (OpenFlow 1.0 behavior). */
-    OFPTC_TABLE_MISS_DROP = 2 << 0, /* Drop the packet. */
-    OFPTC_TABLE_MISS_MASK = 3 << 0
+    /* OpenFlow 1.1 and 1.2 defined this field as shown.
+     * OpenFlow 1.3 and later mark this field as deprecated, but have not
+     * reused it for any new purpose. */
+    OFPTC11_TABLE_MISS_CONTROLLER = 0 << 0, /* Send to controller. */
+    OFPTC11_TABLE_MISS_CONTINUE   = 1 << 0, /* Go to next table, like OF1.0. */
+    OFPTC11_TABLE_MISS_DROP       = 2 << 0, /* Drop the packet. */
+    OFPTC11_TABLE_MISS_MASK       = 3 << 0,
+
+    /* OpenFlow 1.4. */
+    OFPTC14_EVICTION              = 1 << 2, /* Allow table to evict flows. */
+    OFPTC14_VACANCY_EVENTS        = 1 << 3, /* Enable vacancy events. */
 };
 
 #endif /* openflow/openflow-common.h */

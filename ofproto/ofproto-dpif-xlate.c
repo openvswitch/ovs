@@ -1868,10 +1868,10 @@ xlate_table_action(struct xlate_ctx *ctx,
 
             /* XXX
              * check if table configuration flags
-             * OFPTC_TABLE_MISS_CONTROLLER, default.
-             * OFPTC_TABLE_MISS_CONTINUE,
-             * OFPTC_TABLE_MISS_DROP
-             * When OF1.0, OFPTC_TABLE_MISS_CONTINUE is used. What to do? */
+             * OFPTC11_TABLE_MISS_CONTROLLER, default.
+             * OFPTC11_TABLE_MISS_CONTINUE,
+             * OFPTC11_TABLE_MISS_DROP
+             * When OF1.0, OFPTC11_TABLE_MISS_CONTINUE is used. What to do? */
             xport = get_ofp_port(ctx->xbridge, ctx->xin->flow.in_port.ofp_port);
             choose_miss_rule(xport ? xport->config : 0,
                              ctx->xbridge->miss_rule,
