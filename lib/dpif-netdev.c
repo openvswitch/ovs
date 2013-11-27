@@ -175,8 +175,7 @@ static void dp_netdev_execute_actions(struct dp_netdev *, const struct flow *,
                                       size_t actions_len);
 static void dp_netdev_port_input(struct dp_netdev *dp,
                                  struct dp_netdev_port *port,
-                                 struct ofpbuf *packet, uint32_t skb_priority,
-                                 uint32_t pkt_mark, const struct flow_tnl *tnl);
+                                 struct ofpbuf *packet);
 
 static struct dpif_netdev *
 dpif_netdev_cast(const struct dpif *dpif)
@@ -1260,8 +1259,7 @@ dp_netdev_flow_used(struct dp_netdev_flow *netdev_flow,
 
 static void
 dp_netdev_port_input(struct dp_netdev *dp, struct dp_netdev_port *port,
-                     struct ofpbuf *packet, uint32_t skb_priority,
-                     uint32_t pkt_mark, const struct flow_tnl *tnl)
+                     struct ofpbuf *packet)
 {
     struct dp_netdev_flow *netdev_flow;
     struct flow key;
@@ -1271,7 +1269,7 @@ dp_netdev_port_input(struct dp_netdev *dp, struct dp_netdev_port *port,
         return;
     }
     in_port_.odp_port = port->port_no;
-    flow_extract(packet, skb_priority, pkt_mark, tnl, &in_port_, &key);
+    flow_extract(packet, 0, 0, NULL, &in_port_, &key);
     netdev_flow = dp_netdev_lookup_flow(dp, &key);
     if (netdev_flow) {
         dp_netdev_flow_used(netdev_flow, packet);
@@ -1308,7 +1306,7 @@ dpif_netdev_run(struct dpif *dpif)
 
         error = port->rx ? netdev_rx_recv(port->rx, &packet) : EOPNOTSUPP;
         if (!error) {
-            dp_netdev_port_input(dp, port, &packet, 0, 0, NULL);
+            dp_netdev_port_input(dp, port, &packet);
         } else if (error != EAGAIN && error != EOPNOTSUPP) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
