@@ -346,7 +346,7 @@ ovs_strerror(int error)
          * is too short).  We don't check the actual failure reason because
          * POSIX requires strerror_r() to return the error but old glibc
          * (before 2.13) returns -1 and sets errno. */
-        snprintf(buffer, BUFSIZE, "Unknown error %"PRIuSIZE, error);
+        snprintf(buffer, BUFSIZE, "Unknown error %d", error);
     }
 #endif
 
