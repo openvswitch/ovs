@@ -901,14 +901,7 @@ raw_clz64(uint64_t n)
 }
 #endif
 
-/* Returns the number of 1-bits in 'x', between 0 and 32 inclusive. */
-static unsigned int
-count_1bits_32(uint32_t x)
-{
-    /* In my testing, this implementation is over twice as fast as any other
-     * portable implementation that I tried, including GCC 4.4
-     * __builtin_popcount(), although nonportable asm("popcnt") was over 50%
-     * faster. */
+#if !(__GNUC__ >= 4 && defined(__corei7))
 #define INIT1(X)                                \
     ((((X) & (1 << 0)) != 0) +                  \
      (((X) & (1 << 1)) != 0) +                  \
@@ -925,22 +918,10 @@ count_1bits_32(uint32_t x)
 #define INIT32(X) INIT16(X), INIT16((X) + 16)
 #define INIT64(X) INIT32(X), INIT32((X) + 32)
 
-    static const uint8_t count_1bits_8[256] = {
-        INIT64(0), INIT64(64), INIT64(128), INIT64(192)
-    };
-
-    return (count_1bits_8[x & 0xff] +
-            count_1bits_8[(x >> 8) & 0xff] +
-            count_1bits_8[(x >> 16) & 0xff] +
-            count_1bits_8[x >> 24]);
-}
-
-/* Returns the number of 1-bits in 'x', between 0 and 64 inclusive. */
-unsigned int
-count_1bits(uint64_t x)
-{
-    return count_1bits_32(x) + count_1bits_32(x >> 32);
-}
+const uint8_t count_1bits_8[256] = {
+    INIT64(0), INIT64(64), INIT64(128), INIT64(192)
+};
+#endif
 
 /* Returns true if the 'n' bytes starting at 'p' are zeros. */
 bool
