@@ -728,33 +728,41 @@ above, the bitwise match forms apply only when \fBdl_type\fR and
 \fBnw_proto\fR specify TCP or UDP or SCTP.
 .
 .IP \fBtcp_flags=\fIflags\fB/\fImask\fR
+.IQ \fBtcp_flags=\fR[\fB+\fIflag\fR...][\fB-\fIflag\fR...]
 Bitwise match on TCP flags.  The \fIflags\fR and \fImask\fR are 16-bit
 numbers written in decimal or in hexadecimal prefixed by \fB0x\fR.
 Each 1-bit in \fImask\fR requires that the corresponding bit in
 \fIflags\fR must match.  Each 0-bit in \fImask\fR causes the corresponding
 bit to be ignored.
 .IP
+Alternatively, the flags can be specified by their symbolic names
+(listed below), each preceded by either \fB+\fR for a flag that must
+be set, or \fB\-\fR for a flag that must be unset, without any other
+delimiters between the flags.  Flags not mentioned are wildcarded.
+For example, \fBtcp,tcp_flags=+syn\-ack\fR matches TCP SYNs that are
+not ACKs.
+.IP
 TCP protocol currently defines 9 flag bits, and additional 3 bits are
 reserved (must be transmitted as zero), see RFCs 793, 3168, and 3540.
 The flag bits are, numbering from the least significant bit:
 .RS
-.IP "\fB0: FIN\fR"
+.IP "\fB0: fin\fR"
 No more data from sender.
-.IP "\fB1: SYN\fR"
+.IP "\fB1: syn\fR"
 Synchronize sequence numbers.
-.IP "\fB2: RST\fR"
+.IP "\fB2: rst\fR"
 Reset the connection.
-.IP "\fB3: PSH\fR"
+.IP "\fB3: psh\fR"
 Push function.
-.IP "\fB4: ACK\fR"
+.IP "\fB4: ack\fR"
 Acknowledgement field significant.
-.IP "\fB5: URG\fR"
+.IP "\fB5: urg\fR"
 Urgent pointer field significant.
-.IP "\fB6: ECE\fR"
+.IP "\fB6: ece\fR"
 ECN Echo.
-.IP "\fB7: CWR\fR"
+.IP "\fB7: cwr\fR"
 Congestion Windows Reduced.
-.IP "\fB8: NS\fR"
+.IP "\fB8: ns\fR"
 Nonce Sum.
 .IP "\fB9-11:\fR"
 Reserved.

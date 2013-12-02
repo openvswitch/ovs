@@ -1069,11 +1069,12 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
         format_be16_masked(s, "tp_dst", f->tp_dst, wc->masks.tp_dst);
     }
     if (is_ip_any(f) && f->nw_proto == IPPROTO_TCP && wc->masks.tcp_flags) {
-        if (wc->masks.tcp_flags == htons(UINT16_MAX)) {
+        uint16_t mask = TCP_FLAGS(wc->masks.tcp_flags);
+        if (mask == TCP_FLAGS(OVS_BE16_MAX)) {
             ds_put_format(s, "tcp_flags=0x%03"PRIx16",", ntohs(f->tcp_flags));
         } else {
-            ds_put_format(s, "tcp_flags=0x%03"PRIx16"/0x%03"PRIx16",",
-                          ntohs(f->tcp_flags), ntohs(wc->masks.tcp_flags));
+            format_flags_masked(s, "tcp_flags", packet_tcp_flag_to_string,
+                                ntohs(f->tcp_flags), mask);
         }
     }
 

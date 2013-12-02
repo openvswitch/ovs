@@ -643,5 +643,6 @@ void packet_set_sctp_port(struct ofpbuf *, ovs_be16 src, ovs_be16 dst);
 
 uint16_t packet_get_tcp_flags(const struct ofpbuf *, const struct flow *);
 void packet_format_tcp_flags(struct ds *, uint16_t);
+const char *packet_tcp_flag_to_string(uint32_t flag);
 
 #endif /* packets.h */

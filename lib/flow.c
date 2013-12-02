@@ -587,6 +587,24 @@ format_flags(struct ds *ds, const char *(*bit_to_string)(uint32_t),
 }
 
 void
+format_flags_masked(struct ds *ds, const char *name,
+                    const char *(*bit_to_string)(uint32_t), uint32_t flags,
+                    uint32_t mask)
+{
+    if (name) {
+        ds_put_format(ds, "%s=", name);
+    }
+    while (mask) {
+        uint32_t bit = rightmost_1bit(mask);
+        const char *s = bit_to_string(bit);
+
+        ds_put_format(ds, "%s%s", (flags & bit) ? "+" : "-",
+                      s ? s : "[Unknown]");
+        mask &= ~bit;
+    }
+}
+
+void
 flow_format(struct ds *ds, const struct flow *flow)
 {
     struct match match;

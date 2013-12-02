@@ -2470,23 +2470,27 @@ AT_SETUP([tcp flags - filtering])
 OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 \
                     -- add-port br0 p2 -- set Interface p2 type=dummy ofport_request=2])
 AT_DATA([flows.txt], [dnl
-	in_port=1,tcp,tp_dst=80,tcp_flags=0x02/0x17,action=2  # Allow outbound web traffic bare-SYN
-	in_port=1,tcp,tp_dst=80,tcp_flags=0x10/0x10,action=2  # Allow outbound web traffic with ACK bit
-	in_port=1,tcp,tp_dst=80,tcp_flags=0x04/0x04,action=2  # Allow outbound web traffic with RST bit
-	in_port=2,tcp,tp_src=80,tcp_flags=0x10/0x10,action=1  # Allow inbound web traffic with ACK bit
-	in_port=2,tcp,tp_src=80,tcp_flags=0x04/0x04,action=1  # Allow inbound web traffic with RST bit
+	in_port=1,tcp,tp_dst=80,tcp_flags=+syn-rst-ack-fin,action=2  # Allow outbound web traffic bare-SYN
+	in_port=1,tcp,tp_dst=80,tcp_flags=+ack,action=2  # Allow outbound web traffic with ACK bit
+	in_port=1,tcp,tp_dst=80,tcp_flags=+rst,action=2  # Allow outbound web traffic with RST bit
+	in_port=2,tcp,tp_src=80,tcp_flags=+ack,action=1  # Allow inbound web traffic with ACK bit
+	in_port=2,tcp,tp_src=80,tcp_flags=+rst,action=1  # Allow inbound web traffic with RST bit
 	priority=0,in_port=1,action=drop  # Default drop outbound
 	priority=0,in_port=2,action=drop  # Default drop inbound
 ])
 
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
+AT_CHECK([ovs-ofctl add-flow br0 "tcp,tcp_flags=+ack-ack,action="], [1], [],
+  [ovs-ofctl: ack: Each TCP flag can be specified only once
+])
+
 AT_CHECK([ovs-appctl dpif/show | tail -n +5], [0], [dnl
 		p1 1/1: (dummy)
 		p2 2/2: (dummy)
 ])
 
-dnl Outbound web traffic with base-SYN
+dnl Outbound web traffic with bare-SYN
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=80),tcp_flags(0x002)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: 2

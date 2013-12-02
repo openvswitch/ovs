@@ -909,6 +909,39 @@ packet_get_tcp_flags(const struct ofpbuf *packet, const struct flow *flow)
     }
 }
 
+const char *
+packet_tcp_flag_to_string(uint32_t flag)
+{
+    switch (flag) {
+    case TCP_FIN:
+        return "fin";
+    case TCP_SYN:
+        return "syn";
+    case TCP_RST:
+        return "rst";
+    case TCP_PSH:
+        return "psh";
+    case TCP_ACK:
+        return "ack";
+    case TCP_URG:
+        return "urg";
+    case TCP_ECE:
+        return "ece";
+    case TCP_CWR:
+        return "cwr";
+    case TCP_NS:
+        return "ns";
+    case 0x200:
+        return "[200]";
+    case 0x400:
+        return "[400]";
+    case 0x800:
+        return "[800]";
+    default:
+        return NULL;
+    }
+}
+
 /* Appends a string representation of the TCP flags value 'tcp_flags'
  * (e.g. obtained via packet_get_tcp_flags() or TCP_FLAGS) to 's', in the
  * format used by tcpdump. */

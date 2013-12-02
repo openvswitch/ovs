@@ -179,6 +179,9 @@ void flow_get_metadata(const struct flow *, struct flow_metadata *);
 char *flow_to_string(const struct flow *);
 void format_flags(struct ds *ds, const char *(*bit_to_string)(uint32_t),
                   uint32_t flags, char del);
+void format_flags_masked(struct ds *ds, const char *name,
+                         const char *(*bit_to_string)(uint32_t),
+                         uint32_t flags, uint32_t mask);
 
 void flow_format(struct ds *, const struct flow *);
 void flow_print(FILE *, const struct flow *);
