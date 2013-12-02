@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include "byte-order.h"
 #include "compiler.h"
 #include "ofpbuf.h"
 #include "vlog.h"
@@ -151,10 +152,7 @@ pcap_read(FILE *file, struct ofpbuf **bufp)
     /* Calculate length. */
     len = prh.incl_len;
     if (len > 0xffff) {
-        uint32_t swapped_len = (((len & 0xff000000) >> 24) |
-                                ((len & 0x00ff0000) >>  8) |
-                                ((len & 0x0000ff00) <<  8) |
-                                ((len & 0x000000ff) << 24));
+        uint32_t swapped_len = uint32_byteswap(len);
         if (swapped_len > 0xffff) {
             VLOG_WARN("bad packet length %"PRIuSIZE" or %"PRIu32" "
                       "reading pcap file",
