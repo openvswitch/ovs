@@ -119,11 +119,6 @@ didn't compare the specs carefully yet.)
       is missing.  Support for the software switch is under review.
       [optional for OF1.3+]
 
-    * Per-connection event filtering.  OF1.3 adopted Open vSwitch's
-      existing design for this feature so implementation should be
-      easy.
-      [required for OF1.3+]
-
     * Auxiliary connections.  An implementation in generic code might
       be a week's worth of work.  The value of an implementation in
       generic code is questionable, though, since much of the benefit
