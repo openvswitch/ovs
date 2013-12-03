@@ -2,6 +2,7 @@
 #define __LINUX_NET_WRAPPER_H 1
 
 #include_next <linux/net.h>
+#include <linux/atomic.h>
 
 #ifndef net_ratelimited_function
 #define net_ratelimited_function(function, ...)			\
@@ -26,6 +27,28 @@ do {								\
 	net_ratelimited_function(pr_info, fmt, ##__VA_ARGS__)
 #define net_dbg_ratelimited(fmt, ...)				\
 	net_ratelimited_function(pr_debug, fmt, ##__VA_ARGS__)
+#endif
+
+#ifndef net_get_random_once
+bool __net_get_random_once(void *buf, int nbytes, bool *done,
+			   atomic_t *done_key);
+
+#define ___NET_RANDOM_STATIC_KEY_INIT	ATOMIC_INIT(0)
+
+
+#define net_get_random_once(buf, nbytes)			\
+({								\
+	bool ___ret = false;					\
+	static bool ___done = false;				\
+	static atomic_t ___done_key =				\
+			___NET_RANDOM_STATIC_KEY_INIT;		\
+	if (!atomic_read(&___done_key))				\
+	        ___ret = __net_get_random_once(buf,		\
+					       nbytes,		\
+					       &___done,	\
+					       &___done_key);	\
+	___ret;							\
+})
 #endif
 
 #endif

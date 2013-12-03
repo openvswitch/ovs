@@ -213,7 +213,10 @@ static inline int skb_unclone(struct sk_buff *skb, gfp_t pri)
 }
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0)
+#define __skb_get_rxhash rpl__skb_get_rxhash
+#define skb_get_rxhash rpl_skb_get_rxhash
+
 extern u32 __skb_get_rxhash(struct sk_buff *skb);
 static inline __u32 skb_get_rxhash(struct sk_buff *skb)
 {

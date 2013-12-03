@@ -37,3 +37,24 @@ void inet_proto_csum_replace16(__sum16 *sum, struct sk_buff *skb,
 					csum_unfold(*sum)));
 }
 #endif
+
+bool __net_get_random_once(void *buf, int nbytes, bool *done,
+			   atomic_t *done_key)
+{
+	static DEFINE_SPINLOCK(lock);
+	unsigned long flags;
+
+	spin_lock_irqsave(&lock, flags);
+	if (*done) {
+		spin_unlock_irqrestore(&lock, flags);
+		return false;
+	}
+
+	get_random_bytes(buf, nbytes);
+	*done = true;
+	spin_unlock_irqrestore(&lock, flags);
+
+	atomic_set(done_key, 1);
+
+	return true;
+}
