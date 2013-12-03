@@ -302,10 +302,6 @@ void ignore(bool x OVS_UNUSED);
 
 /* Bitwise tests. */
 
-int log_2_floor(uint32_t);
-int log_2_ceil(uint32_t);
-unsigned int count_1bits(uint64_t);
-
 /* Returns the number of trailing 0-bits in 'n'.  Undefined if 'n' == 0. */
 #if __GNUC__ >= 4
 static inline int
@@ -318,9 +314,16 @@ raw_ctz(uint64_t n)
             ? __builtin_ctz(n)
             : __builtin_ctzll(n));
 }
+
+static inline int
+raw_clz64(uint64_t n)
+{
+    return __builtin_clzll(n);
+}
 #else
 /* Defined in util.c. */
 int raw_ctz(uint64_t n);
+int raw_clz64(uint64_t n);
 #endif
 
 /* Returns the number of trailing 0-bits in 'n', or 32 if 'n' is 0. */
@@ -336,6 +339,39 @@ ctz64(uint64_t n)
 {
     return n ? raw_ctz(n) : 64;
 }
+
+/* Returns the number of leading 0-bits in 'n', or 32 if 'n' is 0. */
+static inline int
+clz32(uint32_t n)
+{
+    return n ? raw_clz64(n) - 32 : 32;
+}
+
+/* Returns the number of leading 0-bits in 'n', or 64 if 'n' is 0. */
+static inline int
+clz64(uint64_t n)
+{
+    return n ? raw_clz64(n) : 64;
+}
+
+/* Given a word 'n', calculates floor(log_2('n')).  This is equivalent
+ * to finding the bit position of the most significant one bit in 'n'.  It is
+ * an error to call this function with 'n' == 0. */
+static inline int
+log_2_floor(uint64_t n)
+{
+    return 63 - raw_clz64(n);
+}
+
+/* Given a word 'n', calculates ceil(log_2('n')).  It is an error to
+ * call this function with 'n' == 0. */
+static inline int
+log_2_ceil(uint64_t n)
+{
+    return log_2_floor(n) + !is_pow2(n);
+}
+
+unsigned int count_1bits(uint64_t);
 
 /* Returns the rightmost 1-bit in 'x' (e.g. 01011000 => 00001000), or 0 if 'x'
  * is 0. */

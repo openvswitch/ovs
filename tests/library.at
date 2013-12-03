@@ -112,6 +112,7 @@ AT_CLEANUP
 m4_foreach(
   [testname],
   [[ctz],
+   [clz],
    [round_up_pow2],
    [round_down_pow2],
    [count_1bits],
