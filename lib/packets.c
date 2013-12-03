@@ -425,7 +425,7 @@ eth_addr_bitand(const uint8_t src[ETH_ADDR_LEN],
 int
 ip_count_cidr_bits(ovs_be32 netmask)
 {
-    return 32 - ctz(ntohl(netmask));
+    return 32 - ctz32(ntohl(netmask));
 }
 
 void

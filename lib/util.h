@@ -325,7 +325,7 @@ int raw_ctz(uint64_t n);
 
 /* Returns the number of trailing 0-bits in 'n', or 32 if 'n' is 0. */
 static inline int
-ctz(uint32_t n)
+ctz32(uint32_t n)
 {
     return n ? raw_ctz(n) : 32;
 }
@@ -361,10 +361,10 @@ zero_rightmost_1bit(uintmax_t x)
 static inline uint32_t
 rightmost_1bit_idx(uint32_t x)
 {
-    return x ? ctz(x) : 32;
+    return ctz32(x);
 }
 
-/* Returns the index of the rightmost 1-bit in 'x' (e.g. 01011000 => 6), or 32
+/* Returns the index of the leftmost 1-bit in 'x' (e.g. 01011000 => 6), or 32
  * if 'x' is 0.
  *
  * This function only works with 32-bit integers. */

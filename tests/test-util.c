@@ -61,11 +61,11 @@ test_log_2_floor(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 }
 
 static void
-check_ctz(uint32_t x, int n)
+check_ctz32(uint32_t x, int n)
 {
-    if (ctz(x) != n) {
-        fprintf(stderr, "ctz(%"PRIu32") is %d but should be %d\n",
-                x, ctz(x), n);
+    if (ctz32(x) != n) {
+        fprintf(stderr, "ctz32(%"PRIu32") is %d but should be %d\n",
+                x, ctz32(x), n);
         abort();
     }
 }
@@ -87,13 +87,13 @@ test_ctz(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
     for (n = 0; n < 32; n++) {
         /* Check minimum x such that f(x) == n. */
-        check_ctz(1 << n, n);
+        check_ctz32(1 << n, n);
 
         /* Check maximum x such that f(x) == n. */
-        check_ctz(UINT32_MAX << n, n);
+        check_ctz32(UINT32_MAX << n, n);
 
         /* Check a random value in the middle. */
-        check_ctz((random_uint32() | 1) << n, n);
+        check_ctz32((random_uint32() | 1) << n, n);
     }
 
 
@@ -109,7 +109,7 @@ test_ctz(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     }
 
     /* Check ctz(0). */
-    check_ctz(0, 32);
+    check_ctz32(0, 32);
     check_ctz64(0, 64);
 }
 
