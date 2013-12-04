@@ -469,6 +469,21 @@ tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:0
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPT_PACKET_IN - OF1.1])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+02 0a 00 54 00 00 00 00 00 00 01 11 00 00 00 03 \
+00 00 00 03 00 3c 00 00 \
+50 54 00 00 00 06 50 54 00 00 00 05 08 00 \
+45 00 00 28 bd 12 00 00 40 06 3c 6a c0 a8 00 01 \
+c0 a8 00 02 27 2f 00 00 78 50 cc 5b 57 af 42 1e \
+50 02 02 00 26 e8 00 00 00 00 00 00 00 00 \
+"], [0], [dnl
+OFPT_PACKET_IN (OF1.1) (xid=0x0): total_len=60 in_port=3 (via no_match) data_len=60 buffer=0x00000111
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:06,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=10031,tp_dst=0,tcp_flags=0x002 tcp_csum:26e8
+])
+AT_CLEANUP
+
 AT_SETUP([OFPT_PACKET_IN - OF1.2])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\

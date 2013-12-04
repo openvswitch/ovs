@@ -266,6 +266,53 @@ OpenFlow 1.3 makes these changes:
 The table for 1.3 is the same as the one shown above for 1.2.
 
 
+OFPT_PACKET_IN
+==============
+
+The OpenFlow 1.1 specification for OFPT_PACKET_IN is confusing.  The
+definition in OF1.1 openflow.h is[*]:
+
+  /* Packet received on port (datapath -> controller). */
+  struct ofp_packet_in {
+      struct ofp_header header;
+      uint32_t buffer_id;     /* ID assigned by datapath. */
+      uint32_t in_port;       /* Port on which frame was received. */
+      uint32_t in_phy_port;   /* Physical Port on which frame was received. */
+      uint16_t total_len;     /* Full length of frame. */
+      uint8_t reason;         /* Reason packet is being sent (one of OFPR_*) */
+      uint8_t table_id;       /* ID of the table that was looked up */
+      uint8_t data[0];        /* Ethernet frame, halfway through 32-bit word,
+                                 so the IP header is 32-bit aligned.  The
+                                 amount of data is inferred from the length
+                                 field in the header.  Because of padding,
+                                 offsetof(struct ofp_packet_in, data) ==
+                                 sizeof(struct ofp_packet_in) - 2. */
+  };
+  OFP_ASSERT(sizeof(struct ofp_packet_in) == 24);
+
+The confusing part is the comment on the data[] member.  This comment
+is a leftover from OF1.0 openflow.h, in which the comment was correct:
+sizeof(struct ofp_packet_in) is 20 in OF1.0 and offsetof(struct
+ofp_packet_in, data) is 18.  When OF1.1 was written, the structure
+members were changed but the comment was carelessly not updated, and
+the comment became wrong: sizeof(struct ofp_packet_in) and
+offsetof(struct ofp_packet_in, data) are both 24 in OF1.1.
+
+That leaves the question of how to implement ofp_packet_in in OF1.1.
+The OpenFlow reference implementation for OF1.1 does not include any
+padding, that is, the first byte of the encapsulated frame immediately
+follows the 'table_id' member without a gap.  Open vSwitch therefore
+implements it the same way for compatibility.
+
+For an earlier discussion, please see the thread archived at:
+https://mailman.stanford.edu/pipermail/openflow-discuss/2011-August/002604.html
+
+[*] The quoted definition is directly from OF1.1.  Definitions used
+    inside OVS omit the 8-byte ofp_header members, so the sizes in
+    this discussion are 8 bytes larger than those declared in OVS
+    header files.
+
+
 VLAN Matching
 =============
 

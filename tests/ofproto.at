@@ -1757,6 +1757,39 @@ OFPT_BARRIER_REPLY (OF1.2):
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+dnl This test checks that OFPT_PACKET_OUT accepts both OFPP_NONE (as
+dnl specified by OpenFlow 1.1) and OFPP_CONTROLLER (used by some
+dnl controllers despite the spec) as meaning a packet that was generated
+dnl by the controller.
+AT_SETUP([ofproto - packet-out from controller (OpenFlow 1.1)])
+OVS_VSWITCHD_START
+
+# Start a monitor listening for packet-ins.
+AT_CHECK([ovs-ofctl -O OpenFlow11 monitor br0 --detach --no-chdir --pidfile])
+ovs-appctl -t ovs-ofctl ofctl/send 0209000c0123456700000080
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+AT_CAPTURE_FILE([monitor.log])
+
+# Send some packet-outs with OFPP_NONE and OFPP_CONTROLLER (65533) as in_port.
+AT_CHECK([ovs-ofctl -O OpenFlow11 packet-out br0 none controller '0001020304050010203040501234'])
+AT_CHECK([ovs-ofctl -O OpenFlow11 packet-out br0 4294967293 controller '0001020304050010203040505678'])
+
+# Stop the monitor and check its output.
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl exit
+
+AT_CHECK([sed 's/ (xid=0x[[0-9a-fA-F]]*)//' monitor.log], [0], [dnl
+OFPT_PACKET_IN (OF1.1): total_len=14 in_port=ANY (via action) data_len=14 (unbuffered)
+metadata=0,in_port=0,vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234
+OFPT_PACKET_IN (OF1.1): total_len=14 in_port=CONTROLLER (via action) data_len=14 (unbuffered)
+metadata=0,in_port=0,vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x5678
+OFPT_BARRIER_REPLY (OF1.1):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 dnl This test checks that metadata is encoded in packet_in structures,
 dnl supported by NXAST.
 AT_SETUP([ofproto - packet-out with metadata (NXM)])

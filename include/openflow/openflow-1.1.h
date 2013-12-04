@@ -741,12 +741,7 @@ struct ofp11_packet_in {
     ovs_be16 total_len;     /* Full length of frame. */
     uint8_t reason;         /* Reason packet is being sent (one of OFPR_*) */
     uint8_t table_id;       /* ID of the table that was looked up */
-    /* uint8_t data[0];        Ethernet frame, halfway through 32-bit word,
-                               so the IP header is 32-bit aligned. The
-                               amount of data is inferred from the length
-                               field in the header. Because of padding,
-                               offsetof(struct ofp_packet_in, data) ==
-                               sizeof(struct ofp_packet_in) - 2. */
+    /* Followed by Ethernet frame. */
 };
 OFP_ASSERT(sizeof(struct ofp11_packet_in) == 16);
 

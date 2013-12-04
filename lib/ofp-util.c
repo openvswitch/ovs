@@ -3196,6 +3196,23 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
         pin->reason = opi->reason;
         pin->buffer_id = ntohl(opi->buffer_id);
         pin->total_len = ntohs(opi->total_len);
+    } else if (raw == OFPRAW_OFPT11_PACKET_IN) {
+        const struct ofp11_packet_in *opi;
+        enum ofperr error;
+
+        opi = ofpbuf_pull(&b, sizeof *opi);
+
+        pin->packet = b.data;
+        pin->packet_len = b.size;
+
+        pin->buffer_id = ntohl(opi->buffer_id);
+        error = ofputil_port_from_ofp11(opi->in_port, &pin->fmd.in_port);
+        if (error) {
+            return error;
+        }
+        pin->total_len = ntohs(opi->total_len);
+        pin->reason = opi->reason;
+        pin->table_id = opi->table_id;
     } else if (raw == OFPRAW_NXT_PACKET_IN) {
         const struct nx_packet_in *npi;
         struct match match;
@@ -3310,6 +3327,27 @@ ofputil_encode_nx_packet_in(const struct ofputil_packet_in *pin)
 }
 
 static struct ofpbuf *
+ofputil_encode_ofp11_packet_in(const struct ofputil_packet_in *pin)
+{
+    struct ofp11_packet_in *opi;
+    struct ofpbuf *packet;
+
+    packet = ofpraw_alloc_xid(OFPRAW_OFPT11_PACKET_IN, OFP11_VERSION,
+                              htonl(0), pin->packet_len);
+    opi = ofpbuf_put_zeros(packet, sizeof *opi);
+    opi->buffer_id = htonl(pin->buffer_id);
+    opi->in_port = ofputil_port_to_ofp11(pin->fmd.in_port);
+    opi->in_phy_port = opi->in_port;
+    opi->total_len = htons(pin->total_len);
+    opi->reason = pin->reason;
+    opi->table_id = pin->table_id;
+
+    ofpbuf_put(packet, pin->packet, pin->packet_len);
+
+    return packet;
+}
+
+static struct ofpbuf *
 ofputil_encode_ofp12_packet_in(const struct ofputil_packet_in *pin,
                                enum ofputil_protocol protocol)
 {
@@ -3373,7 +3411,8 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
         break;
 
     case OFPUTIL_P_OF11_STD:
-        NOT_REACHED();
+        packet = ofputil_encode_ofp11_packet_in(pin);
+        break;
 
     case OFPUTIL_P_OF12_OXM:
     case OFPUTIL_P_OF13_OXM:
