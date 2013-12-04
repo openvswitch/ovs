@@ -20,4 +20,13 @@
 extern void genl_notify(struct sk_buff *skb, struct net *net, u32 portid,
 			u32 group, struct nlmsghdr *nlh, gfp_t flags);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
+static inline struct sk_buff *genlmsg_new_unicast(size_t payload,
+						  struct genl_info *info,
+						  gfp_t flags)
+{
+	return genlmsg_new(payload, flags);
+}
+#endif
+
 #endif /* genetlink.h */
