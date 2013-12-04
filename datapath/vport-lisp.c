@@ -165,12 +165,17 @@ static __be64 instance_id_to_tunnel_id(__u8 *iid)
  */
 static u16 get_src_port(struct sk_buff *skb)
 {
-	int low;
-	int high;
+	u32 hash = skb_get_rxhash(skb);
 	unsigned int range;
-	struct sw_flow_key *pkt_key = OVS_CB(skb)->pkt_key;
-	u32 hash = jhash2((const u32 *)pkt_key,
-			  sizeof(*pkt_key) / sizeof(u32), 0);
+	int high;
+	int low;
+
+	if (!hash) {
+		struct sw_flow_key *pkt_key = OVS_CB(skb)->pkt_key;
+
+		hash = jhash2((const u32 *)pkt_key,
+			    sizeof(*pkt_key) / sizeof(u32), 0);
+	}
 
 	inet_get_local_port_range(&low, &high);
 	range = (high - low) + 1;
