@@ -779,7 +779,6 @@ format_ipv6_netmask(struct ds *s, const char *name,
     }
 }
 
-
 static void
 format_be16_masked(struct ds *s, const char *name,
                    ovs_be16 value, ovs_be16 mask)
@@ -797,23 +796,38 @@ format_be16_masked(struct ds *s, const char *name,
 }
 
 static void
+format_uint32_masked(struct ds *s, const char *name,
+                   uint32_t value, uint32_t mask)
+{
+    if (mask) {
+        ds_put_format(s, "%s=%#"PRIx32, name, value);
+        if (mask != UINT32_MAX) {
+            ds_put_format(s, "/%#"PRIx32, mask);
+        }
+        ds_put_char(s, ',');
+    }
+}
+
+static void
+format_be64_masked(struct ds *s, const char *name,
+                   ovs_be64 value, ovs_be64 mask)
+{
+    if (mask != htonll(0)) {
+        ds_put_format(s, "%s=%#"PRIx64, name, ntohll(value));
+        if (mask != OVS_BE64_MAX) {
+            ds_put_format(s, "/%#"PRIx64, ntohll(mask));
+        }
+        ds_put_char(s, ',');
+    }
+}
+
+static void
 format_flow_tunnel(struct ds *s, const struct match *match)
 {
     const struct flow_wildcards *wc = &match->wc;
     const struct flow_tnl *tnl = &match->flow.tunnel;
 
-    switch (wc->masks.tunnel.tun_id) {
-    case 0:
-        break;
-    case OVS_BE64_MAX:
-        ds_put_format(s, "tun_id=%#"PRIx64",", ntohll(tnl->tun_id));
-        break;
-    default:
-        ds_put_format(s, "tun_id=%#"PRIx64"/%#"PRIx64",",
-                      ntohll(tnl->tun_id),
-                      ntohll(wc->masks.tunnel.tun_id));
-        break;
-    }
+    format_be64_masked(s, "tun_id", tnl->tun_id, wc->masks.tunnel.tun_id);
     format_ip_netmask(s, "tun_src", tnl->ip_src, wc->masks.tunnel.ip_src);
     format_ip_netmask(s, "tun_dst", tnl->ip_dst, wc->masks.tunnel.ip_dst);
 
@@ -848,17 +862,7 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
         ds_put_format(s, "priority=%u,", priority);
     }
 
-    switch (wc->masks.pkt_mark) {
-    case 0:
-        break;
-    case UINT32_MAX:
-        ds_put_format(s, "pkt_mark=%#"PRIx32",", f->pkt_mark);
-        break;
-    default:
-        ds_put_format(s, "pkt_mark=%#"PRIx32"/%#"PRIx32",",
-                      f->pkt_mark, wc->masks.pkt_mark);
-        break;
-    }
+    format_uint32_masked(s, "pkt_mark", f->pkt_mark, wc->masks.pkt_mark);
 
     if (wc->masks.skb_priority) {
         ds_put_format(s, "skb_priority=%#"PRIx32",", f->skb_priority);
@@ -915,32 +919,18 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
         }
     }
     for (i = 0; i < FLOW_N_REGS; i++) {
-        switch (wc->masks.regs[i]) {
-        case 0:
-            break;
-        case UINT32_MAX:
-            ds_put_format(s, "reg%d=0x%"PRIx32",", i, f->regs[i]);
-            break;
-        default:
-            ds_put_format(s, "reg%d=0x%"PRIx32"/0x%"PRIx32",",
-                          i, f->regs[i], wc->masks.regs[i]);
-            break;
+        #define REGNAME_LEN 20
+        char regname[REGNAME_LEN];
+        if (snprintf(regname, REGNAME_LEN, "reg%d", i) >= REGNAME_LEN) {
+            strcpy(regname, "reg?");
         }
+        format_uint32_masked(s, regname, f->regs[i], wc->masks.regs[i]);
     }
 
     format_flow_tunnel(s, match);
 
-    switch (wc->masks.metadata) {
-    case 0:
-        break;
-    case OVS_BE64_MAX:
-        ds_put_format(s, "metadata=%#"PRIx64",", ntohll(f->metadata));
-        break;
-    default:
-        ds_put_format(s, "metadata=%#"PRIx64"/%#"PRIx64",",
-                      ntohll(f->metadata), ntohll(wc->masks.metadata));
-        break;
-    }
+    format_be64_masked(s, "metadata", f->metadata, wc->masks.metadata);
+
     if (wc->masks.in_port.ofp_port) {
         ds_put_cstr(s, "in_port=");
         ofputil_format_port(f->in_port.ofp_port, s);
