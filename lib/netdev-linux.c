@@ -4414,57 +4414,38 @@ netdev_stats_from_rtnl_link_stats(struct netdev_stats *dst,
 static int
 get_stats_via_netlink(const struct netdev *netdev_, struct netdev_stats *stats)
 {
-    /* Policy for RTNLGRP_LINK messages.
-     *
-     * There are *many* more fields in these messages, but currently we only
-     * care about these fields. */
-    static const struct nl_policy rtnlgrp_link_policy[] = {
-        [IFLA_IFNAME] = { .type = NL_A_STRING, .optional = false },
-        [IFLA_STATS] = { .type = NL_A_UNSPEC, .optional = true,
-                         .min_len = sizeof(struct rtnl_link_stats) },
-    };
-
     struct ofpbuf request;
     struct ofpbuf *reply;
-    struct ifinfomsg *ifi;
-    struct nlattr *attrs[ARRAY_SIZE(rtnlgrp_link_policy)];
-    int ifindex;
     int error;
 
-    error = get_ifindex(netdev_, &ifindex);
-    if (error) {
-        return error;
-    }
-
     ofpbuf_init(&request, 0);
-    nl_msg_put_nlmsghdr(&request, sizeof *ifi, RTM_GETLINK, NLM_F_REQUEST);
-    ifi = ofpbuf_put_zeros(&request, sizeof *ifi);
-    ifi->ifi_family = PF_UNSPEC;
-    ifi->ifi_index = ifindex;
+    nl_msg_put_nlmsghdr(&request,
+                        sizeof(struct ifinfomsg) + NL_ATTR_SIZE(IFNAMSIZ),
+                        RTM_GETLINK, NLM_F_REQUEST);
+    ofpbuf_put_zeros(&request, sizeof(struct ifinfomsg));
+    nl_msg_put_string(&request, IFLA_IFNAME, netdev_get_name(netdev_));
     error = nl_transact(NETLINK_ROUTE, &request, &reply);
     ofpbuf_uninit(&request);
     if (error) {
         return error;
     }
 
-    if (!nl_policy_parse(reply, NLMSG_HDRLEN + sizeof(struct ifinfomsg),
-                         rtnlgrp_link_policy,
-                         attrs, ARRAY_SIZE(rtnlgrp_link_policy))) {
-        ofpbuf_delete(reply);
-        return EPROTO;
+    if (ofpbuf_try_pull(reply, NLMSG_HDRLEN + sizeof(struct ifinfomsg))) {
+        const struct nlattr *a = nl_attr_find(reply, 0, IFLA_STATS);
+        if (a && nl_attr_get_size(a) >= sizeof(struct rtnl_link_stats)) {
+            netdev_stats_from_rtnl_link_stats(stats, nl_attr_get(a));
+            error = 0;
+        } else {
+            VLOG_WARN_RL(&rl, "RTM_GETLINK reply lacks stats");
+            error = EPROTO;
+        }
+    } else {
+        VLOG_WARN_RL(&rl, "short RTM_GETLINK reply");
+        error = EPROTO;
     }
 
-    if (!attrs[IFLA_STATS]) {
-        VLOG_WARN_RL(&rl, "RTM_GETLINK reply lacks stats");
-        ofpbuf_delete(reply);
-        return EPROTO;
-    }
-
-    netdev_stats_from_rtnl_link_stats(stats, nl_attr_get(attrs[IFLA_STATS]));
 
     ofpbuf_delete(reply);
-
-    return 0;
     return error;
 }
 
