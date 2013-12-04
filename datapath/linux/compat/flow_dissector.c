@@ -226,7 +226,7 @@ u32 __skb_get_rxhash(struct sk_buff *skb)
 	if (!hash)
 		hash = 1;
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,34)
+#ifdef HAVE_RXHASH
 	skb->rxhash = hash;
 #endif
 	return hash;
