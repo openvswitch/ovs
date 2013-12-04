@@ -1257,45 +1257,59 @@ dpif_linux_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
     }
 }
 
+/* Synchronizes 'dpif->channels' with the set of vports currently in 'dpif' in
+ * the kernel, by adding a new channel for any kernel vport that lacks one and
+ * deleting any channels that have no backing kernel vports. */
 static int
-dpif_linux_recv_set__(struct dpif *dpif_, bool enable)
+dpif_linux_refresh_channels(struct dpif *dpif_)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    unsigned long int *keep_channels;
+    struct dpif_linux_vport vport;
+    size_t keep_channels_nbits;
+    struct nl_dump dump;
+    int retval = 0;
+    size_t i;
 
-    if ((dpif->epoll_fd >= 0) == enable) {
-        return 0;
+    /* To start with, we need an epoll fd. */
+    if (dpif->epoll_fd < 0) {
+        dpif->epoll_fd = epoll_create(10);
+        if (dpif->epoll_fd < 0) {
+            return errno;
+        }
     }
 
-    if (!enable) {
-        destroy_channels(dpif);
-    } else {
-        struct dpif_port_dump port_dump;
-        struct dpif_port port;
+    keep_channels_nbits = dpif->uc_array_size;
+    keep_channels = bitmap_allocate(keep_channels_nbits);
 
-        if (dpif->epoll_fd < 0) {
-            dpif->epoll_fd = epoll_create(10);
-            if (dpif->epoll_fd < 0) {
-                return errno;
+    dpif->n_events = dpif->event_offset = 0;
+
+    dpif_linux_port_dump_start__(dpif_, &dump);
+    while (dpif_linux_port_dump_next__(dpif_, &dump, &vport)) {
+        uint32_t port_no = odp_to_u32(vport.port_no);
+        struct nl_sock *sock = (port_no < dpif->uc_array_size
+                                ? dpif->channels[port_no].sock
+                                : NULL);
+        bool new_sock = !sock;
+        int error;
+
+        if (new_sock) {
+            error = nl_sock_create(NETLINK_GENERIC, &sock);
+            if (error) {
+                retval = error;
+                goto error;
             }
         }
 
-        DPIF_PORT_FOR_EACH (&port, &port_dump, &dpif->dpif) {
+        /* Configure the vport to deliver misses to 'sock'. */
+        if (!vport.upcall_pid || *vport.upcall_pid != nl_sock_pid(sock)) {
+            uint32_t upcall_pid = nl_sock_pid(sock);
             struct dpif_linux_vport vport_request;
-            struct nl_sock *sock;
-            uint32_t upcall_pid;
-            int error;
-
-            error = nl_sock_create(NETLINK_GENERIC, &sock);
-            if (error) {
-                return error;
-            }
-
-            upcall_pid = nl_sock_pid(sock);
 
             dpif_linux_vport_init(&vport_request);
             vport_request.cmd = OVS_VPORT_CMD_SET;
             vport_request.dp_ifindex = dpif->dp_ifindex;
-            vport_request.port_no = port.port_no;
+            vport_request.port_no = vport.port_no;
             vport_request.upcall_pid = &upcall_pid;
             error = dpif_linux_vport_transact(&vport_request, NULL, NULL);
             if (!error) {
@@ -1306,27 +1320,63 @@ dpif_linux_recv_set__(struct dpif *dpif_, bool enable)
                 VLOG_WARN_RL(&error_rl,
                              "%s: failed to set upcall pid on port: %s",
                              dpif_name(&dpif->dpif), ovs_strerror(error));
-                nl_sock_destroy(sock);
 
-                if (error == ENODEV || error == ENOENT) {
-                    /* This device isn't there, but keep trying the others. */
-                    continue;
+                if (error != ENODEV && error != ENOENT) {
+                    retval = error;
                 } else {
-                    return error;
+                    /* The vport isn't really there, even though the dump says
+                     * it is.  Probably we just hit a race after a port
+                     * disappeared. */
                 }
-            }
-
-            error = add_channel(dpif, port.port_no, sock);
-            if (error) {
-                VLOG_INFO("%s: could not add channel for port %s",
-                          dpif_name(dpif_), port.name);
-                nl_sock_destroy(sock);
-                return error;
+                goto error;
             }
         }
-    }
 
-    return 0;
+        if (new_sock) {
+            error = add_channel(dpif, vport.port_no, sock);
+            if (error) {
+                VLOG_INFO("%s: could not add channel for port %s",
+                          dpif_name(dpif_), vport.name);
+                retval = error;
+                goto error;
+            }
+        }
+
+        if (port_no < keep_channels_nbits) {
+            bitmap_set1(keep_channels, port_no);
+        }
+        continue;
+
+    error:
+        nl_sock_destroy(sock);
+    }
+    nl_dump_done(&dump);
+
+    /* Discard any saved channels that we didn't reuse. */
+    for (i = 0; i < keep_channels_nbits; i++) {
+        if (!bitmap_is_set(keep_channels, i)) {
+            nl_sock_destroy(dpif->channels[i].sock);
+            dpif->channels[i].sock = NULL;
+        }
+    }
+    free(keep_channels);
+
+    return retval;
+}
+
+static int
+dpif_linux_recv_set__(struct dpif *dpif_, bool enable)
+{
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+
+    if ((dpif->epoll_fd >= 0) == enable) {
+        return 0;
+    } else if (!enable) {
+        destroy_channels(dpif);
+        return 0;
+    } else {
+        return dpif_linux_refresh_channels(dpif_);
+    }
 }
 
 static int
