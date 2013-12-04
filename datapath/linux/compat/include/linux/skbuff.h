@@ -228,4 +228,10 @@ static inline __u32 skb_get_rxhash(struct sk_buff *skb)
 }
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
+unsigned int skb_zerocopy_headlen(const struct sk_buff *from);
+void skb_zerocopy(struct sk_buff *to, const struct sk_buff *from, int len, 
+		  int hlen);
+#endif
+
 #endif
