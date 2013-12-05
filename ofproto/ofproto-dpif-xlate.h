@@ -73,6 +73,12 @@ struct xlate_in {
      * not if we are just revalidating. */
     bool may_learn;
 
+    /* If the caller of xlate_actions() doesn't need the flow_wildcards
+     * contained in struct xlate_out.  'skip_wildcards' can be set to true
+     * disabling the expensive wildcard computation.  When true, 'wc' in struct
+     * xlate_out is undefined and should not be read. */
+    bool skip_wildcards;
+
     /* The rule initiating translation or NULL. If both 'rule' and 'ofpacts'
      * are NULL, xlate_actions() will do the initial rule lookup itself. */
     struct rule_dpif *rule;

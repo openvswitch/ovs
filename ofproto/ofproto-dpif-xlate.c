@@ -1873,9 +1873,10 @@ xlate_table_action(struct xlate_ctx *ctx,
                    ofp_port_t in_port, uint8_t table_id, bool may_packet_in)
 {
     if (xlate_resubmit_resource_check(ctx)) {
-        struct rule_dpif *rule;
         ofp_port_t old_in_port = ctx->xin->flow.in_port.ofp_port;
+        bool skip_wildcards = ctx->xin->skip_wildcards;
         uint8_t old_table_id = ctx->table_id;
+        struct rule_dpif *rule;
 
         ctx->table_id = table_id;
 
@@ -1883,8 +1884,8 @@ xlate_table_action(struct xlate_ctx *ctx,
          * original input port (otherwise OFPP_NORMAL and OFPP_IN_PORT will
          * have surprising behavior). */
         ctx->xin->flow.in_port.ofp_port = in_port;
-        rule_dpif_lookup_in_table(ctx->xbridge->ofproto,
-                                  &ctx->xin->flow, &ctx->xout->wc,
+        rule_dpif_lookup_in_table(ctx->xbridge->ofproto, &ctx->xin->flow,
+                                  !skip_wildcards ? &ctx->xout->wc : NULL,
                                   table_id, &rule);
         ctx->xin->flow.in_port.ofp_port = old_in_port;
 
@@ -2886,6 +2887,7 @@ xlate_in_init(struct xlate_in *xin, struct ofproto_dpif *ofproto,
     xin->resubmit_hook = NULL;
     xin->report_hook = NULL;
     xin->resubmit_stats = NULL;
+    xin->skip_wildcards = false;
 }
 
 void
@@ -3080,7 +3082,8 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
     ctx.mpls_depth_delta = 0;
 
     if (!xin->ofpacts && !ctx.rule) {
-        rule_dpif_lookup(ctx.xbridge->ofproto, flow, wc, &rule);
+        rule_dpif_lookup(ctx.xbridge->ofproto, flow,
+                         !xin->skip_wildcards ? wc : NULL, &rule);
         if (ctx.xin->resubmit_stats) {
             rule_dpif_credit_stats(rule, ctx.xin->resubmit_stats);
         }
