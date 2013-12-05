@@ -118,7 +118,7 @@ OpenFlow connections over SSL will not be supported.
 dnl Checks for libraries needed by lib/socket-util.c.
 AC_DEFUN([OVS_CHECK_SOCKET_LIBS],
   [AC_CHECK_LIB([socket], [connect])
-   AC_SEARCH_LIBS([gethostbyname], [resolv], [RESOLVER_LIBS=-lresolv])])
+   AC_SEARCH_LIBS([gethostbyname], [resolv])])
 
 dnl Checks for the directory in which to store the PKI.
 AC_DEFUN([OVS_CHECK_PKIDIR],
