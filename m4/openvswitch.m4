@@ -432,6 +432,12 @@ static thread_local int var;], [return var;])],
      fi
    fi])
 
+dnl OVS_CHECK_ATOMIC_LIBS
+dnl
+dnl Check to see if -latomic is need for GCC atomic built-ins.
+AC_DEFUN([OVS_CHECK_ATOMIC_LIBS],
+   [AC_SEARCH_LIBS([__atomic_load_8], [atomic])])
+
 dnl OVS_CHECK_GCC4_ATOMICS
 dnl
 dnl Checks whether the compiler and linker support GCC 4.0+ atomic built-ins.
