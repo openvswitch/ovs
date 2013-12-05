@@ -149,13 +149,21 @@ struct sw_flow_actions {
 	struct nlattr actions[];
 };
 
-struct sw_flow_stats {
+struct flow_stats {
 	u64 packet_count;		/* Number of packets matched. */
 	u64 byte_count;			/* Number of bytes matched. */
 	unsigned long used;		/* Last used time (in jiffies). */
 	spinlock_t lock;		/* Lock for atomic stats update. */
 	__be16 tcp_flags;		/* Union of seen TCP flags. */
-} ____cacheline_aligned_in_smp;
+};
+
+struct sw_flow_stats {
+	bool is_percpu;
+	union {
+		struct flow_stats *stat;
+		struct flow_stats __percpu *cpu_stats;
+	};
+};
 
 struct sw_flow {
 	struct rcu_head rcu;
@@ -166,7 +174,7 @@ struct sw_flow {
 	struct sw_flow_key unmasked_key;
 	struct sw_flow_mask *mask;
 	struct sw_flow_actions __rcu *sf_acts;
-	struct sw_flow_stats stats[];
+	struct sw_flow_stats stats;
 };
 
 struct arp_eth_header {
@@ -184,7 +192,8 @@ struct arp_eth_header {
 } __packed;
 
 void ovs_flow_stats_update(struct sw_flow *flow, struct sk_buff *skb);
-void ovs_flow_stats_get(struct sw_flow *flow, struct sw_flow_stats *res);
+void ovs_flow_stats_get(struct sw_flow *flow, struct ovs_flow_stats *stats,
+			unsigned long *used, __be16 *tcp_flags);
 void ovs_flow_stats_clear(struct sw_flow *flow);
 u64 ovs_flow_used_time(unsigned long flow_jiffies);
 
