@@ -422,11 +422,6 @@ COVERAGE_DEFINE(rev_flow_table);
 COVERAGE_DEFINE(rev_mac_learning);
 COVERAGE_DEFINE(rev_inconsistency);
 
-struct avg_subfacet_rates {
-    double add_rate;   /* Moving average of new flows created per minute. */
-    double del_rate;   /* Moving average of flows deleted per minute. */
-};
-
 /* All datapaths of a given type share a single dpif backer instance. */
 struct dpif_backer {
     char *type;
@@ -456,7 +451,6 @@ struct dpif_backer {
      * exposed via "ovs-appctl dpif/show".  The goal is to learn about
      * traffic patterns in ways that we can use later to improve Open vSwitch
      * performance in new situations.  */
-    long long int created;           /* Time when it is created. */
     unsigned max_n_subfacet;         /* Maximum number of flows */
     unsigned avg_n_subfacet;         /* Average number of flows. */
     long long int avg_subfacet_life; /* Average life span of subfacets. */
@@ -1225,7 +1219,6 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     backer->n_handler_threads = n_handler_threads;
 
     backer->max_n_subfacet = 0;
-    backer->created = time_msec();
     backer->avg_n_subfacet = 0;
     backer->avg_subfacet_life = 0;
 

@@ -58,7 +58,6 @@ struct handler {
     struct list upcalls OVS_GUARDED;
     size_t n_upcalls OVS_GUARDED;
 
-    size_t n_new_upcalls;              /* Only changed by the dispatcher. */
     bool need_signal;                  /* Only changed by the dispatcher. */
 
     pthread_cond_t wake_cond;          /* Wakes 'thread' while holding
