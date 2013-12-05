@@ -224,7 +224,8 @@ extern u32 __skb_get_rxhash(struct sk_buff *skb);
 static inline __u32 skb_get_rxhash(struct sk_buff *skb)
 {
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,34)
-	if (!skb->rxhash)
+	if (skb->rxhash)
+		return skb->rxhash;
 #endif
 	return __skb_get_rxhash(skb);
 }
