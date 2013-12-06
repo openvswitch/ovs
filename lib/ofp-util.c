@@ -1559,13 +1559,11 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
         if (error) {
             return error;
         }
-        fm->out_group = ntohl(ofm->out_group);
 
-        if ((ofm->command == OFPFC_DELETE
-             || ofm->command == OFPFC_DELETE_STRICT)
-            && ofm->out_group != htonl(OFPG_ANY)) {
-            return OFPERR_OFPFMFC_UNKNOWN;
-        }
+        fm->out_group = (ofm->command == OFPFC_DELETE ||
+                         ofm->command == OFPFC_DELETE_STRICT
+                         ? ntohl(ofm->out_group)
+                         : OFPG11_ANY);
         raw_flags = ofm->flags;
     } else {
         uint16_t command;
