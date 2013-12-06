@@ -17,8 +17,6 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/bfd.h \
 	lib/bitmap.c \
 	lib/bitmap.h \
-	lib/bond.c \
-	lib/bond.h \
 	lib/bundle.c \
 	lib/bundle.h \
 	lib/byte-order.h \

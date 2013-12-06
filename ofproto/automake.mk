@@ -7,6 +7,8 @@
 
 noinst_LIBRARIES += ofproto/libofproto.a
 ofproto_libofproto_a_SOURCES = \
+	ofproto/bond.c \
+	ofproto/bond.h \
 	ofproto/collectors.c \
 	ofproto/collectors.h \
 	ofproto/connmgr.c \

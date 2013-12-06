@@ -18,7 +18,7 @@ is a concordance, indexed by the area of the source tree:
         datapath/       vport           ---
         vswitchd/       iface           port
         ofproto/        port            bundle
-        lib/bond.c      slave           bond
+        ofproto/bond.c  slave           bond
         lib/lacp.c      slave           lacp
         lib/netdev.c    netdev          ---
         database        Interface       Port
