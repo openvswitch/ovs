@@ -2871,7 +2871,7 @@ parse_l2_5_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
     } else {
         goto done;
     }
-    if (is_mask) {
+    if (check_len > 0) { /* Happens only when 'is_mask'. */
         if (!is_all_zeros(check_start, check_len) &&
             flow->dl_type != htons(0xffff)) {
             return ODP_FIT_ERROR;
