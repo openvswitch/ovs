@@ -606,15 +606,11 @@ int ovs_flow_tbl_insert(struct flow_table *table, struct sw_flow *flow,
  * Returns zero if successful or a negative error code. */
 int ovs_flow_init(void)
 {
-	int flow_size;
-
 	BUILD_BUG_ON(__alignof__(struct sw_flow_key) % __alignof__(long));
 	BUILD_BUG_ON(sizeof(struct sw_flow_key) % sizeof(long));
 
-	flow_size = sizeof(struct sw_flow) +
-		    (num_possible_cpus() * sizeof(struct sw_flow_stats));
-
-	flow_cache = kmem_cache_create("sw_flow", flow_size, 0, 0, NULL);
+	flow_cache = kmem_cache_create("sw_flow", sizeof(struct sw_flow), 0,
+					0, NULL);
 	if (flow_cache == NULL)
 		return -ENOMEM;
 
