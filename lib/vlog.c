@@ -35,6 +35,7 @@
 #include "ofpbuf.h"
 #include "ovs-thread.h"
 #include "sat-math.h"
+#include "socket-util.h"
 #include "svec.h"
 #include "timeval.h"
 #include "unixctl.h"
@@ -49,17 +50,29 @@ VLOG_DEFINE_THIS_MODULE(vlog);
 
 /* Name for each logging level. */
 static const char *const level_names[VLL_N_LEVELS] = {
-#define VLOG_LEVEL(NAME, SYSLOG_LEVEL) #NAME,
+#define VLOG_LEVEL(NAME, SYSLOG_LEVEL, RFC5424) #NAME,
     VLOG_LEVELS
 #undef VLOG_LEVEL
 };
 
 /* Syslog value for each logging level. */
 static const int syslog_levels[VLL_N_LEVELS] = {
-#define VLOG_LEVEL(NAME, SYSLOG_LEVEL) SYSLOG_LEVEL,
+#define VLOG_LEVEL(NAME, SYSLOG_LEVEL, RFC5424) SYSLOG_LEVEL,
     VLOG_LEVELS
 #undef VLOG_LEVEL
 };
+
+/* RFC 5424 defines specific values for each syslog level.  Normally LOG_* use
+ * the same values.  Verify that in fact they're the same.  If we get assertion
+ * failures here then we need to define a separate rfc5424_levels[] array. */
+#define VLOG_LEVEL(NAME, SYSLOG_LEVEL, RFC5424) \
+    BUILD_ASSERT_DECL(SYSLOG_LEVEL == RFC5424);
+VLOG_LEVELS
+#undef VLOG_LEVELS
+
+/* Similarly, RFC 5424 defines the local0 facility with the value ordinarily
+ * used for LOG_LOCAL0. */
+BUILD_ASSERT_DECL(LOG_LOCAL0 == (16 << 3));
 
 /* The log modules. */
 #if USE_LINKER_SECTIONS
@@ -111,10 +124,13 @@ static int log_fd OVS_GUARDED_BY(log_file_mutex) = -1;
 static struct async_append *log_writer OVS_GUARDED_BY(log_file_mutex);
 static bool log_async OVS_GUARDED_BY(log_file_mutex);
 
+/* Syslog export configuration. */
+static int syslog_fd OVS_GUARDED_BY(pattern_rwlock) = -1;
+
 static void format_log_message(const struct vlog_module *, enum vlog_level,
-                               enum vlog_facility,
+                               const char *pattern,
                                const char *message, va_list, struct ds *)
-    PRINTF_FORMAT(4, 0) OVS_REQ_RDLOCK(&pattern_rwlock);
+    PRINTF_FORMAT(4, 0);
 
 /* Searches the 'n_names' in 'names'.  Returns the index of a match for
  * 'target', or 'n_names' if no name matches. */
@@ -480,6 +496,22 @@ vlog_set_verbosity(const char *arg)
     }
 }
 
+/* Set the vlog udp syslog target. */
+void
+vlog_set_syslog_target(const char *target)
+{
+    int new_fd;
+
+    inet_open_active(SOCK_DGRAM, target, 0, NULL, &new_fd, 0);
+
+    ovs_rwlock_wrlock(&pattern_rwlock);
+    if (syslog_fd >= 0) {
+        close(syslog_fd);
+    }
+    syslog_fd = new_fd;
+    ovs_rwlock_unlock(&pattern_rwlock);
+}
+
 static void
 vlog_unixctl_set(struct unixctl_conn *conn, int argc, const char *argv[],
                  void *aux OVS_UNUSED)
@@ -700,15 +732,15 @@ fetch_braces(const char *p, const char *def, char *out, size_t out_size)
 
 static void
 format_log_message(const struct vlog_module *module, enum vlog_level level,
-                   enum vlog_facility facility,
-                   const char *message, va_list args_, struct ds *s)
+                   const char *pattern, const char *message,
+                   va_list args_, struct ds *s)
 {
     char tmp[128];
     va_list args;
     const char *p;
 
     ds_clear(s);
-    for (p = facilities[facility].pattern; *p != '\0'; ) {
+    for (p = pattern; *p != '\0'; ) {
         const char *subprogram_name;
         enum { LEFT, RIGHT } justify = RIGHT;
         int pad = '0';
@@ -739,6 +771,9 @@ format_log_message(const struct vlog_module *module, enum vlog_level level,
         case 'A':
             ds_put_cstr(s, program_name);
             break;
+        case 'B':
+            ds_put_format(s, "%d", LOG_LOCAL0 + syslog_levels[level]);
+            break;
         case 'c':
             p = fetch_braces(p, "", tmp, sizeof tmp);
             ds_put_cstr(s, vlog_get_module_name(module));
@@ -750,6 +785,11 @@ format_log_message(const struct vlog_module *module, enum vlog_level level,
         case 'D':
             p = fetch_braces(p, "%Y-%m-%d %H:%M:%S.###", tmp, sizeof tmp);
             ds_put_strftime_msec(s, tmp, time_wall_msec(), true);
+            break;
+        case 'E':
+            gethostname(tmp, sizeof tmp);
+            tmp[sizeof tmp - 1] = '\0';
+            ds_put_cstr(s, tmp);
             break;
         case 'm':
             /* Format user-supplied log message and trim trailing new-lines. */
@@ -804,6 +844,20 @@ format_log_message(const struct vlog_module *module, enum vlog_level level,
     }
 }
 
+/* Exports the given 'syslog_message' to the configured udp syslog sink. */
+static void
+send_to_syslog_fd(const char *s, size_t length)
+    OVS_REQ_RDLOCK(pattern_rwlock)
+{
+    static size_t max_length = SIZE_MAX;
+    size_t send_len = MIN(length, max_length);
+
+    while (write(syslog_fd, s, send_len) < 0 && errno == EMSGSIZE) {
+        send_len -= send_len / 20;
+        max_length = send_len;
+    }
+}
+
 /* Writes 'message' to the log at the given 'level' and as coming from the
  * given 'module'.
  *
@@ -831,7 +885,8 @@ vlog_valist(const struct vlog_module *module, enum vlog_level level,
 
         ovs_rwlock_rdlock(&pattern_rwlock);
         if (log_to_console) {
-            format_log_message(module, level, VLF_CONSOLE, message, args, &s);
+            format_log_message(module, level, facilities[VLF_CONSOLE].pattern,
+                               message, args, &s);
             ds_put_char(&s, '\n');
             fputs(ds_cstr(&s), stderr);
         }
@@ -841,15 +896,25 @@ vlog_valist(const struct vlog_module *module, enum vlog_level level,
             char *save_ptr = NULL;
             char *line;
 
-            format_log_message(module, level, VLF_SYSLOG, message, args, &s);
+            format_log_message(module, level, facilities[VLF_SYSLOG].pattern,
+                               message, args, &s);
             for (line = strtok_r(s.string, "\n", &save_ptr); line;
                  line = strtok_r(NULL, "\n", &save_ptr)) {
                 syslog(syslog_level, "%s", line);
             }
+
+            if (syslog_fd >= 0) {
+                format_log_message(module, level,
+                                   "<%B>1 %D{%Y-%m-%dT%H:%M:%S.###Z} "
+                                   "%E %A %P %c - \xef\xbb\xbf%m",
+                                   message, args, &s);
+                send_to_syslog_fd(ds_cstr(&s), s.length);
+            }
         }
 
         if (log_to_file) {
-            format_log_message(module, level, VLF_FILE, message, args, &s);
+            format_log_message(module, level, facilities[VLF_FILE].pattern,
+                               message, args, &s);
             ds_put_char(&s, '\n');
 
             ovs_mutex_lock(&log_file_mutex);
@@ -1012,10 +1077,12 @@ vlog_rate_limit(const struct vlog_module *module, enum vlog_level level,
 void
 vlog_usage(void)
 {
-    printf("\nLogging options:\n"
-           "  -v, --verbose=[SPEC]    set logging levels\n"
-           "  -v, --verbose           set maximum verbosity level\n"
-           "  --log-file[=FILE]       enable logging to specified FILE\n"
-           "                          (default: %s/%s.log)\n",
+    printf("\n\
+Logging options:\n\
+  -vSPEC, --verbose=SPEC   set logging levels\n\
+  -v, --verbose            set maximum verbosity level\n\
+  --log-file[=FILE]        enable logging to specified FILE\n\
+                           (default: %s/%s.log)\n\
+  --syslog-target=HOST:PORT  also send syslog msgs to HOST:PORT via UDP\n",
            ovs_logdir(), program_name);
 }

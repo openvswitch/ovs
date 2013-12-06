@@ -60,3 +60,8 @@ Sets the log pattern for \fIfacility\fR to \fIpattern\fR.  Refer to
 Enables logging to a file.  If \fIfile\fR is specified, then it is
 used as the exact name for the log file.  The default log file name
 used if \fIfile\fR is omitted is \fB@LOGDIR@/\*(PN.log\fR.
+.
+.IP "\fB\-\-syslog\-target=\fIhost\fB:\fIport\fR"
+Send syslog messages to UDP \fIport\fR on \fIhost\fR, in addition to
+the system syslog.  The \fIhost\fR must be a numerical IP address, not
+a hostname.

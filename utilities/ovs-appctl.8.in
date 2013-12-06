@@ -148,6 +148,9 @@ expanded as follows:
 .IP \fB%A\fR
 The name of the application logging the message, e.g. \fBovs\-vswitchd\fR.
 .
+.IP \fB%B\fR
+The RFC5424 syslog PRI of the message.
+.
 .IP \fB%c\fR
 The name of the module (as shown by \fBovs\-appctl \-\-list\fR) logging
 the message.
@@ -172,6 +175,9 @@ The current UTC date and time in the specified \fIformat\fR, which
 takes the same format as the \fItemplate\fR argument to
 \fBstrftime\fR(3).  Supports the same extension for sub-second
 resolution as \fB%d{\fR...\fB}\fR.
+.
+.IP \fB%E\fR
+The hostname of the node running the application.
 .
 .IP \fB%m\fR
 The message being logged.

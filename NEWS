@@ -23,6 +23,7 @@ Post-v2.0.0
      packaged or installed by default, because too many users assumed
      incorrectly that ovs-controller was a necessary or desirable part
      of an Open vSwitch deployment.
+   - Added vlog option to export to a UDP syslog sink.
 
 
 v2.0.0 - 15 Oct 2013
