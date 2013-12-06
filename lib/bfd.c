@@ -760,7 +760,9 @@ bfd_process_packet(struct bfd *bfd, const struct flow *flow,
     rmt_min_rx = MAX(ntohl(msg->min_rx) / 1000, 1);
     if (bfd->rmt_min_rx != rmt_min_rx) {
         bfd->rmt_min_rx = rmt_min_rx;
-        bfd_set_next_tx(bfd);
+        if (bfd->next_tx) {
+            bfd_set_next_tx(bfd);
+        }
         log_msg(VLL_INFO, msg, "New remote min_rx", bfd);
     }
 
