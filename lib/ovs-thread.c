@@ -310,12 +310,80 @@ may_fork(void)
     return !must_not_fork;
 }
 
+/* Parses /proc/cpuinfo for the total number of physical cores on this system
+ * across all CPU packages, not counting hyper-threads.
+ *
+ * Sets *n_cores to the total number of cores on this system, or 0 if the
+ * number cannot be determined. */
+static void
+parse_cpuinfo(long int *n_cores)
+{
+    static const char file_name[] = "/proc/cpuinfo";
+    char line[128];
+    uint64_t cpu = 0; /* Support up to 64 CPU packages on a single system. */
+    long int cores = 0;
+    FILE *stream;
+
+    stream = fopen(file_name, "r");
+    if (!stream) {
+        VLOG_WARN("%s: open failed (%s)", file_name, ovs_strerror(errno));
+        return;
+    }
+
+    while (fgets(line, sizeof line, stream)) {
+        unsigned int id;
+
+        /* Find the next CPU package. */
+        if (ovs_scan(line, "physical id%*[^:]: %u", &id)) {
+            if (id > 63) {
+                VLOG_WARN("Counted over 64 CPU packages on this system. "
+                          "Parsing %s for core count may be inaccurate.",
+                          file_name);
+                cores = 0;
+                break;
+            }
+
+            if (cpu & (1 << id)) {
+                /* We've already counted this package's cores. */
+                continue;
+            }
+            cpu |= 1 << id;
+
+            /* Find the number of cores for this package. */
+            while (fgets(line, sizeof line, stream)) {
+                int count;
+
+                if (ovs_scan(line, "cpu cores%*[^:]: %u", &count)) {
+                    cores += count;
+                    break;
+                }
+            }
+        }
+    }
+    fclose(stream);
+
+    *n_cores = cores;
+}
+
 /* Returns the total number of cores on this system, or 0 if the number cannot
- * be determined. */
+ * be determined.
+ *
+ * Tries not to count hyper-threads, but may be inaccurate - particularly on
+ * platforms that do not provide /proc/cpuinfo, but also if /proc/cpuinfo is
+ * formatted different to the layout that parse_cpuinfo() expects. */
 unsigned int
 count_cpu_cores(void)
 {
-    long int n_cores = sysconf(_SC_NPROCESSORS_ONLN);
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+    static long int n_cores;
+
+    if (ovsthread_once_start(&once)) {
+        parse_cpuinfo(&n_cores);
+        if (!n_cores) {
+            n_cores = sysconf(_SC_NPROCESSORS_ONLN);
+        }
+        ovsthread_once_done(&once);
+    }
 
     return n_cores > 0 ? n_cores : 0;
 }
