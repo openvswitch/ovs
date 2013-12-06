@@ -2,7 +2,7 @@
 #define __LINUX_NET_WRAPPER_H 1
 
 #include_next <linux/net.h>
-#include <linux/atomic.h>
+#include <linux/types.h>
 
 #ifndef net_ratelimited_function
 #define net_ratelimited_function(function, ...)			\
