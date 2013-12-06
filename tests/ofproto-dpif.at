@@ -689,13 +689,13 @@ ovs-appctl -t ovs-ofctl exit
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): cookie=0xc total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
-mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=70:77:77:77:77:77,dl_dst=50:54:00:00:00:07,mpls_label=1000,mpls_tc=7,mpls_ttl=64,mpls_bos=1
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=70:77:77:77:77:77,dl_dst=50:54:00:00:00:07,mpls_label=1000,mpls_tc=7,mpls_ttl=128,mpls_bos=1
 dnl
 NXT_PACKET_IN (xid=0x0): cookie=0xc total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
-mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=70:77:77:77:77:77,dl_dst=50:54:00:00:00:07,mpls_label=1000,mpls_tc=7,mpls_ttl=64,mpls_bos=1
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=70:77:77:77:77:77,dl_dst=50:54:00:00:00:07,mpls_label=1000,mpls_tc=7,mpls_ttl=128,mpls_bos=1
 dnl
 NXT_PACKET_IN (xid=0x0): cookie=0xc total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
-mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=70:77:77:77:77:77,dl_dst=50:54:00:00:00:07,mpls_label=1000,mpls_tc=7,mpls_ttl=64,mpls_bos=1
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=70:77:77:77:77:77,dl_dst=50:54:00:00:00:07,mpls_label=1000,mpls_tc=7,mpls_ttl=128,mpls_bos=1
 ])
 
 
@@ -1924,7 +1924,7 @@ HEADER
 	pkt_len=64
 	stripped=4
 	hdr_len=60
-	hdr=50-54-00-00-00-05-50-54-00-00-00-07-86-DD-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
+	hdr=50-54-00-00-00-05-50-54-00-00-00-07-86-DD-67-00-00-00-00-00-0A-80-FE-80-00-00-00-00-00-00-00-00-00-00-00-00-00-01-FE-80-00-00-00-00-00-00-00-00-00-00-00-00-00-02-00-00-00-00-00-00
 ])
 
 AT_CHECK([[sort sflow.log | $EGREP 'IFCOUNTERS|ERROR' | head -6 | sed 's/ /\
@@ -1961,7 +1961,7 @@ IFCOUNTERS
 	ifspeed=100000000
 	direction=0
 	status=0
-	in_octets=98
+	in_octets=138
 	in_unicasts=3
 	in_multicasts=0
 	in_broadcasts=4294967295
@@ -2030,7 +2030,7 @@ IFCOUNTERS
 	ifspeed=100000000
 	direction=0
 	status=0
-	in_octets=98
+	in_octets=138
 	in_unicasts=3
 	in_multicasts=0
 	in_broadcasts=4294967295
