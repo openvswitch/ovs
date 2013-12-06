@@ -252,7 +252,7 @@ static struct iface *iface_lookup(const struct bridge *, const char *name);
 static struct iface *iface_find(const char *name);
 static struct iface *iface_from_ofp_port(const struct bridge *,
                                          ofp_port_t ofp_port);
-static void iface_set_mac(struct iface *);
+static void iface_set_mac(struct iface *, const uint8_t *);
 static void iface_set_ofport(const struct ovsrec_interface *, ofp_port_t ofport);
 static void iface_clear_db_record(const struct ovsrec_interface *if_cfg);
 static void iface_configure_qos(struct iface *, const struct ovsrec_qos *);
@@ -355,7 +355,6 @@ bridge_init(const char *remote)
     ovsdb_idl_omit_alert(idl, &ovsrec_port_col_status);
     ovsdb_idl_omit_alert(idl, &ovsrec_port_col_statistics);
     ovsdb_idl_omit(idl, &ovsrec_port_col_external_ids);
-    ovsdb_idl_omit(idl, &ovsrec_port_col_fake_bridge);
 
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_admin_state);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_duplex);
@@ -578,7 +577,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
             LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
                 iface_configure_cfm(iface);
                 iface_configure_qos(iface, port->cfg->qos);
-                iface_set_mac(iface);
+                iface_set_mac(iface, port->cfg->fake_bridge ? br->ea : NULL);
                 ofproto_port_set_bfd(br->ofproto, iface->ofp_port,
                                      &iface->cfg->bfd);
             }
@@ -3491,21 +3490,28 @@ iface_from_ofp_port(const struct bridge *br, ofp_port_t ofp_port)
 /* Set Ethernet address of 'iface', if one is specified in the configuration
  * file. */
 static void
-iface_set_mac(struct iface *iface)
+iface_set_mac(struct iface *iface, const uint8_t *mac)
 {
     uint8_t ea[ETH_ADDR_LEN];
 
-    if (!strcmp(iface->type, "internal")
-        && iface->cfg->mac && eth_addr_from_string(iface->cfg->mac, ea)) {
+    if (strcmp(iface->type, "internal")) {
+        return;
+    }
+
+    if (iface->cfg->mac && eth_addr_from_string(iface->cfg->mac, ea)) {
+        mac = ea;
+    }
+
+    if (mac) {
         if (iface->ofp_port == OFPP_LOCAL) {
             VLOG_ERR("interface %s: ignoring mac in Interface record "
                      "(use Bridge record to set local port's mac)",
                      iface->name);
-        } else if (eth_addr_is_multicast(ea)) {
+        } else if (eth_addr_is_multicast(mac)) {
             VLOG_ERR("interface %s: cannot set MAC to multicast address",
                      iface->name);
         } else {
-            int error = netdev_set_etheraddr(iface->netdev, ea);
+            int error = netdev_set_etheraddr(iface->netdev, mac);
             if (error) {
                 VLOG_ERR("interface %s: setting MAC failed (%s)",
                          iface->name, ovs_strerror(error));
