@@ -59,7 +59,7 @@ VLOG_DEFINE_THIS_MODULE(system_stats);
 static void
 get_cpu_cores(struct smap *stats)
 {
-    long int n_cores = sysconf(_SC_NPROCESSORS_ONLN);
+    long int n_cores = count_cpu_cores();
     if (n_cores > 0) {
         smap_add_format(stats, "cpu", "%ld", n_cores);
     }

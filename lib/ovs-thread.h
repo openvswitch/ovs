@@ -496,5 +496,9 @@ pid_t xfork_at(const char *where);
 
 void forbid_forking(const char *reason);
 bool may_fork(void);
+
+/* Useful functions related to threading. */
+
+unsigned int count_cpu_cores(void);
 
 #endif /* ovs-thread.h */

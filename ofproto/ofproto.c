@@ -738,7 +738,7 @@ ofproto_set_n_handler_threads(unsigned limit)
     if (limit) {
         n_handler_threads = limit;
     } else {
-        int n_proc = sysconf(_SC_NPROCESSORS_ONLN);
+        int n_proc = count_cpu_cores();
         n_handler_threads = n_proc > 2 ? n_proc - 2 : 1;
     }
 }

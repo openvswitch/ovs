@@ -309,4 +309,14 @@ may_fork(void)
 {
     return !must_not_fork;
 }
+
+/* Returns the total number of cores on this system, or 0 if the number cannot
+ * be determined. */
+unsigned int
+count_cpu_cores(void)
+{
+    long int n_cores = sysconf(_SC_NPROCESSORS_ONLN);
+
+    return n_cores > 0 ? n_cores : 0;
+}
 #endif
