@@ -592,46 +592,52 @@ vlog_disable_rate_limit(struct unixctl_conn *conn, int argc,
     set_rate_limits(conn, argc, argv, false);
 }
 
-static void
-vlog_init__(void)
-{
-    static char *program_name_copy;
-    long long int now;
-
-    /* openlog() is allowed to keep the pointer passed in, without making a
-     * copy.  The daemonize code sometimes frees and replaces 'program_name',
-     * so make a private copy just for openlog().  (We keep a pointer to the
-     * private copy to suppress memory leak warnings in case openlog() does
-     * make its own copy.) */
-    program_name_copy = program_name ? xstrdup(program_name) : NULL;
-    openlog(program_name_copy, LOG_NDELAY, LOG_DAEMON);
-
-    now = time_wall_msec();
-    if (now < 0) {
-        char *s = xastrftime_msec("%a, %d %b %Y %H:%M:%S", now, true);
-        VLOG_ERR("current time is negative: %s (%lld)", s, now);
-        free(s);
-    }
-
-    unixctl_command_register(
-        "vlog/set", "{spec | PATTERN:facility:pattern}",
-        1, INT_MAX, vlog_unixctl_set, NULL);
-    unixctl_command_register("vlog/list", "", 0, 0, vlog_unixctl_list, NULL);
-    unixctl_command_register("vlog/enable-rate-limit", "[module]...",
-                             0, INT_MAX, vlog_enable_rate_limit, NULL);
-    unixctl_command_register("vlog/disable-rate-limit", "[module]...",
-                             0, INT_MAX, vlog_disable_rate_limit, NULL);
-    unixctl_command_register("vlog/reopen", "", 0, 0,
-                             vlog_unixctl_reopen, NULL);
-}
-
 /* Initializes the logging subsystem and registers its unixctl server
  * commands. */
 void
 vlog_init(void)
 {
-    static pthread_once_t once = PTHREAD_ONCE_INIT;
-    pthread_once(&once, vlog_init__);
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+
+    if (ovsthread_once_start(&once)) {
+        static char *program_name_copy;
+        long long int now;
+
+        /* Do initialization work that needs to be done before any logging
+         * occurs.  We want to keep this really minimal because any attempt to
+         * log anything before calling ovsthread_once_done() will deadlock. */
+
+        /* openlog() is allowed to keep the pointer passed in, without making a
+         * copy.  The daemonize code sometimes frees and replaces
+         * 'program_name', so make a private copy just for openlog().  (We keep
+         * a pointer to the private copy to suppress memory leak warnings in
+         * case openlog() does make its own copy.) */
+        program_name_copy = program_name ? xstrdup(program_name) : NULL;
+        openlog(program_name_copy, LOG_NDELAY, LOG_DAEMON);
+        ovsthread_once_done(&once);
+
+        /* Now do anything that we want to happen only once but doesn't have to
+         * finish before we start logging. */
+
+        now = time_wall_msec();
+        if (now < 0) {
+            char *s = xastrftime_msec("%a, %d %b %Y %H:%M:%S", now, true);
+            VLOG_ERR("current time is negative: %s (%lld)", s, now);
+            free(s);
+        }
+
+        unixctl_command_register(
+            "vlog/set", "{spec | PATTERN:facility:pattern}",
+            1, INT_MAX, vlog_unixctl_set, NULL);
+        unixctl_command_register("vlog/list", "", 0, 0, vlog_unixctl_list,
+                                 NULL);
+        unixctl_command_register("vlog/enable-rate-limit", "[module]...",
+                                 0, INT_MAX, vlog_enable_rate_limit, NULL);
+        unixctl_command_register("vlog/disable-rate-limit", "[module]...",
+                                 0, INT_MAX, vlog_disable_rate_limit, NULL);
+        unixctl_command_register("vlog/reopen", "", 0, 0,
+                                 vlog_unixctl_reopen, NULL);
+    }
 }
 
 /* Enables VLF_FILE log output to be written asynchronously to disk.
