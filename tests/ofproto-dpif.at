@@ -2381,36 +2381,6 @@ skb_priority(0),in_port(3),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto-dpif - ovs-appctl dpif/del-flows])
-OVS_VSWITCHD_START([add-br br1 -- \
-                    set bridge br1 datapath-type=dummy fail-mode=secure])
-ADD_OF_PORTS([br0], [1], [2])
-ADD_OF_PORTS([br1], [3])
-
-AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
-AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=0,code=0)'])
-AT_CHECK([ovs-appctl netdev-dummy/receive p3 'in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
-
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | sort | STRIP_USED], [0], [dnl
-skb_priority(0),in_port(1),eth_type(0x0800),ipv4(src=192.168.0.1/0.0.0.0,dst=192.168.0.2/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:0.0s, actions:userspace(pid=0,slow_path(controller))
-skb_priority(0),in_port(2),eth_type(0x0800),ipv4(src=192.168.0.2/0.0.0.0,dst=192.168.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:0.0s, actions:userspace(pid=0,slow_path(controller))
-])
-
-AT_CHECK([ovs-appctl dpif/dump-flows br1 | sort | STRIP_USED], [0], [dnl
-skb_priority(0),in_port(3),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:0.0s, actions:userspace(pid=0,slow_path(controller))
-])
-
-AT_CHECK([ovs-appctl dpif/del-flows br0])
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | sort | STRIP_USED], [0], [dnl
-])
-
-AT_CHECK([ovs-appctl dpif/dump-flows br1 | sort | STRIP_USED], [0], [dnl
-skb_priority(0),in_port(3),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:0.0s, actions:userspace(pid=0,slow_path(controller))
-])
-
-OVS_VSWITCHD_STOP
-AT_CLEANUP
-
 AT_SETUP([ofproto-dpif - patch ports])
 OVS_VSWITCHD_START([add-br br1 \
 -- set bridge br1 datapath-type=dummy fail-mode=secure \

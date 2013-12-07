@@ -5814,26 +5814,6 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
 }
 
 static void
-ofproto_unixctl_dpif_del_flows(struct unixctl_conn *conn,
-                               int argc OVS_UNUSED, const char *argv[],
-                               void *aux OVS_UNUSED)
-{
-    struct ds ds = DS_EMPTY_INITIALIZER;
-    struct ofproto_dpif *ofproto;
-
-    ofproto = ofproto_dpif_lookup(argv[1]);
-    if (!ofproto) {
-        unixctl_command_reply_error(conn, "no such bridge");
-        return;
-    }
-
-    flush(&ofproto->up);
-
-    unixctl_command_reply(conn, ds_cstr(&ds));
-    ds_destroy(&ds);
-}
-
-static void
 ofproto_dpif_unixctl_init(void)
 {
     static bool registered;
@@ -5862,8 +5842,6 @@ ofproto_dpif_unixctl_init(void)
                              NULL);
     unixctl_command_register("dpif/dump-flows", "bridge", 1, 1,
                              ofproto_unixctl_dpif_dump_flows, NULL);
-    unixctl_command_register("dpif/del-flows", "bridge", 1, 1,
-                             ofproto_unixctl_dpif_del_flows, NULL);
     unixctl_command_register("dpif/dump-megaflows", "bridge", 1, 1,
                              ofproto_unixctl_dpif_dump_megaflows, NULL);
     unixctl_command_register("dpif/disable-megaflows", "", 0, 0,
