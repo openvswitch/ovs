@@ -48,7 +48,7 @@ extern struct coverage_counter *__stop_coverage[];
         }                                                               \
         extern struct coverage_counter counter_##COUNTER;               \
         struct coverage_counter counter_##COUNTER                       \
-            = { #COUNTER, COUNTER##_count, 0 };
+            = { #COUNTER, COUNTER##_count, 0, 0, {0}, {0} };
 #include "coverage.def"
 #undef COVERAGE_COUNTER
 
