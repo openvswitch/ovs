@@ -1601,7 +1601,7 @@ ofctl_packet_out(int argc, char *argv[])
     struct vconn *vconn;
     char *error;
     int i;
-    enum ofputil_protocol usable_protocols; /* TODO: Use in proto selection */
+    enum ofputil_protocol usable_protocols; /* XXX: Use in proto selection */
 
     ofpbuf_init(&ofpacts, 64);
     error = parse_ofpacts(argv[3], &ofpacts, &usable_protocols);
