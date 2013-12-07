@@ -98,8 +98,7 @@ netflow_mask_wc(struct flow *flow, struct flow_wildcards *wc)
     memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
     memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
     memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
-    memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
-    memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
+    flow_unwildcard_tp_ports(flow, wc);
     wc->masks.nw_tos |= IP_DSCP_MASK;
 }
 

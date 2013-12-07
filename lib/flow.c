@@ -519,6 +519,18 @@ flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
     }
 }
 
+void
+flow_unwildcard_tp_ports(const struct flow *flow, struct flow_wildcards *wc)
+{
+    if (flow->nw_proto != IPPROTO_ICMP) {
+        memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
+        memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
+    } else {
+        wc->masks.tp_src = htons(0xff);
+        wc->masks.tp_dst = htons(0xff);
+    }
+}
+
 /* Initializes 'fmd' with the metadata found in 'flow'. */
 void
 flow_get_metadata(const struct flow *flow, struct flow_metadata *fmd)
@@ -922,8 +934,7 @@ flow_mask_hash_fields(const struct flow *flow, struct flow_wildcards *wc,
         }
         if (is_ip_any(flow)) {
             memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
-            memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
-            memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
+            flow_unwildcard_tp_ports(flow, wc);
         }
         wc->masks.vlan_tci |= htons(VLAN_VID_MASK | VLAN_CFI);
         break;
