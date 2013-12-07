@@ -43,6 +43,7 @@ struct netflow_options {
 struct netflow *netflow_create(void);
 struct netflow *netflow_ref(const struct netflow *);
 void netflow_unref(struct netflow *);
+bool netflow_exists(void);
 
 int netflow_set_options(struct netflow *, const struct netflow_options *);
 void netflow_expire(struct netflow *, struct flow *);

@@ -79,6 +79,7 @@ struct netflow_flow {
 };
 
 static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
+static atomic_uint netflow_count = ATOMIC_VAR_INIT(0);
 
 static struct netflow_flow *netflow_flow_lookup(const struct netflow *,
                                                 const struct flow *)
@@ -396,6 +397,8 @@ struct netflow *
 netflow_create(void)
 {
     struct netflow *nf = xzalloc(sizeof *nf);
+    int junk;
+
     nf->engine_type = 0;
     nf->engine_id = 0;
     nf->boot_time = time_msec();
@@ -405,6 +408,7 @@ netflow_create(void)
     hmap_init(&nf->flows);
     atomic_init(&nf->ref_cnt, 1);
     ofpbuf_init(&nf->packet, 1500);
+    atomic_add(&netflow_count, 1, &junk);
     return nf;
 }
 
@@ -432,10 +436,21 @@ netflow_unref(struct netflow *nf)
     atomic_sub(&nf->ref_cnt, 1, &orig);
     ovs_assert(orig > 0);
     if (orig == 1) {
-        ofpbuf_uninit(&nf->packet);
+        atomic_sub(&netflow_count, 1, &orig);
         collectors_destroy(nf->collectors);
+        ofpbuf_uninit(&nf->packet);
         free(nf);
     }
+}
+
+/* Returns true if there exist any netflow objects, false otherwise. */
+bool
+netflow_exists(void)
+{
+    int n;
+
+    atomic_read(&netflow_count, &n);
+    return n > 0;
 }
 
 /* Helpers. */
