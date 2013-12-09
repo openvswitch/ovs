@@ -436,7 +436,7 @@ struct dpif_backer {
     struct timer next_expiration;
 
     struct ovs_rwlock odp_to_ofport_lock;
-    struct hmap odp_to_ofport_map OVS_GUARDED; /* ODP port to ofport map. */
+    struct hmap odp_to_ofport_map OVS_GUARDED; /* Contains "struct ofport"s. */
 
     struct simap tnl_backers;      /* Set of dpif ports backing tunnels. */
 
