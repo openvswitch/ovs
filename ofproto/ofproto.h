@@ -38,12 +38,12 @@ struct bfd_cfg;
 struct cfm_settings;
 struct cls_rule;
 struct netdev;
-struct ofproto;
+struct netdev_stats;
 struct ofport;
+struct ofproto;
 struct shash;
 struct simap;
 struct smap;
-struct netdev_stats;
 
 struct ofproto_controller_info {
     bool is_connected;
