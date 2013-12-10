@@ -371,6 +371,8 @@ log_2_ceil(uint64_t n)
     return log_2_floor(n) + !is_pow2(n);
 }
 
+extern const uint8_t count_1bits_8[256];
+
 /* Returns the number of 1-bits in 'x', between 0 and 32 inclusive. */
 static inline unsigned int
 count_1bits_32(uint32_t x)
@@ -379,7 +381,6 @@ count_1bits_32(uint32_t x)
     /* __builtin_popcount() is fast only when supported by the CPU. */
     return __builtin_popcount(x);
 #else
-    extern const uint8_t count_1bits_8[256];
     /* This portable implementation is the fastest one we know of for 32 bits,
      * and faster than GCC __builtin_popcount(). */
     return (count_1bits_8[x & 0xff] +
