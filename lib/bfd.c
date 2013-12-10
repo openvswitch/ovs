@@ -187,7 +187,7 @@ struct bfd {
     long long int next_tx;        /* Next TX time. */
     long long int detect_time;    /* RFC 5880 6.8.4 Detection time. */
 
-    bool forwarding;              /* Interface capability of packet I/O. */
+    bool last_forwarding;         /* Last calculation of forwarding flag. */
     int forwarding_override;      /* Manual override of 'forwarding' status. */
 
     atomic_bool check_tnl_key;    /* Verify tunnel key of inbound packets? */
@@ -234,7 +234,7 @@ static void bfd_put_details(struct ds *, const struct bfd *)
 static uint64_t bfd_rx_packets(const struct bfd *) OVS_REQUIRES(mutex);
 static void bfd_try_decay(struct bfd *) OVS_REQUIRES(mutex);
 static void bfd_decay_update(struct bfd *) OVS_REQUIRES(mutex);
-static void bfd_check_rx(struct bfd *) OVS_REQUIRES(mutex);
+
 static void bfd_forwarding_if_rx_update(struct bfd *) OVS_REQUIRES(mutex);
 static void bfd_unixctl_show(struct unixctl_conn *, int argc,
                              const char *argv[], void *aux OVS_UNUSED);
@@ -259,6 +259,20 @@ bfd_forwarding(struct bfd *bfd) OVS_EXCLUDED(mutex)
     return ret;
 }
 
+/* When forwarding_if_rx is enabled, if there are packets received,
+ * updates forwarding_if_rx_detect_time. */
+void
+bfd_account_rx(struct bfd *bfd, const struct dpif_flow_stats *stats)
+{
+    if (stats->n_packets && bfd->forwarding_if_rx) {
+        ovs_mutex_lock(&mutex);
+        bfd_forwarding__(bfd);
+        bfd_forwarding_if_rx_update(bfd);
+        bfd_forwarding__(bfd);
+        ovs_mutex_unlock(&mutex);
+    }
+}
+
 /* Returns a 'smap' of key value pairs representing the status of 'bfd'
  * intended for the OVS database. */
 void
@@ -266,7 +280,9 @@ bfd_get_status(const struct bfd *bfd, struct smap *smap)
     OVS_EXCLUDED(mutex)
 {
     ovs_mutex_lock(&mutex);
-    smap_add(smap, "forwarding", bfd->forwarding ? "true" : "false");
+    smap_add(smap, "forwarding",
+             bfd_forwarding__(CONST_CAST(struct bfd *, bfd))
+             ? "true" : "false");
     smap_add(smap, "state", bfd_state_str(bfd->state));
     smap_add(smap, "diagnostic", bfd_diag_str(bfd->diag));
     smap_add_format(smap, "flap_count", "%"PRIu64, bfd->flap_count);
@@ -316,7 +332,6 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
     if (!bfd) {
         bfd = xzalloc(sizeof *bfd);
         bfd->name = xstrdup(name);
-        bfd->forwarding = false;
         bfd->forwarding_override = -1;
         bfd->disc = generate_discriminator();
         hmap_insert(all_bfds, &bfd->node, bfd->disc);
@@ -490,6 +505,7 @@ bfd_run(struct bfd *bfd) OVS_EXCLUDED(mutex)
 
     if (bfd->state > STATE_DOWN && now >= bfd->detect_time) {
         bfd_set_state(bfd, STATE_DOWN, DIAG_EXPIRED);
+        bfd_forwarding__(bfd);
     }
 
     /* Decay may only happen when state is STATE_UP, bfd->decay_min_rx is
@@ -498,9 +514,6 @@ bfd_run(struct bfd *bfd) OVS_EXCLUDED(mutex)
         && now >= bfd->decay_detect_time) {
         bfd_try_decay(bfd);
     }
-
-    /* Always checks the reception of any packet. */
-    bfd_check_rx(bfd);
 
     if (bfd->min_tx != bfd->cfg_min_tx
         || (bfd->min_rx != bfd->cfg_min_rx && bfd->min_rx != bfd->decay_min_rx)
@@ -637,6 +650,8 @@ bfd_process_packet(struct bfd *bfd, const struct flow *flow,
     ovs_mutex_lock(&mutex);
     /* Increments the decay rx counter. */
     bfd->decay_rx_ctl++;
+
+    bfd_forwarding__(bfd);
 
     if (flow->nw_ttl != 255) {
         /* XXX Should drop in the kernel to prevent DOS. */
@@ -787,6 +802,7 @@ bfd_process_packet(struct bfd *bfd, const struct flow *flow,
     /* XXX: RFC 5880 Section 6.8.6 Demand mode related calculations here. */
 
 out:
+    bfd_forwarding__(bfd);
     ovs_mutex_unlock(&mutex);
 }
 
@@ -812,27 +828,31 @@ bfd_set_netdev(struct bfd *bfd, const struct netdev *netdev)
 
 
 /* Updates the forwarding flag.  If override is not configured and
- * the forwarding flag value changes, increments the flap count. */
+ * the forwarding flag value changes, increments the flap count.
+ *
+ * Note this function may be called multiple times in a function
+ * (e.g. bfd_account_rx) before and after the bfd state or status
+ * change.  This is to capture any forwarding flag flap. */
 static bool
 bfd_forwarding__(struct bfd *bfd) OVS_REQUIRES(mutex)
 {
     long long int time;
-    bool forwarding_old = bfd->forwarding;
+    bool last_forwarding = bfd->last_forwarding;
 
     if (bfd->forwarding_override != -1) {
         return bfd->forwarding_override == 1;
     }
 
     time = bfd->forwarding_if_rx_detect_time;
-    bfd->forwarding = (bfd->state == STATE_UP
-                       || (bfd->forwarding_if_rx && time > time_msec()))
-                       && bfd->rmt_diag != DIAG_PATH_DOWN
-                       && bfd->rmt_diag != DIAG_CPATH_DOWN
-                       && bfd->rmt_diag != DIAG_RCPATH_DOWN;
-    if (bfd->forwarding != forwarding_old) {
+    bfd->last_forwarding = (bfd->state == STATE_UP
+                            || (bfd->forwarding_if_rx && time > time_msec()))
+                            && bfd->rmt_diag != DIAG_PATH_DOWN
+                            && bfd->rmt_diag != DIAG_CPATH_DOWN
+                            && bfd->rmt_diag != DIAG_RCPATH_DOWN;
+    if (bfd->last_forwarding != last_forwarding) {
         bfd->flap_count++;
     }
-    return bfd->forwarding;
+    return bfd->last_forwarding;
 }
 
 /* Helpers. */
@@ -1033,9 +1053,6 @@ bfd_set_state(struct bfd *bfd, enum state state, enum diag diag)
             bfd_decay_update(bfd);
         }
     }
-
-    /* Updates the forwarding flag. */
-    bfd_forwarding__(bfd);
 }
 
 static uint64_t
@@ -1081,32 +1098,11 @@ bfd_decay_update(struct bfd * bfd) OVS_REQUIRES(mutex)
     bfd->decay_detect_time = MAX(bfd->decay_min_rx, 2000) + time_msec();
 }
 
-/* Checks if there are packets received during the time since last call.
- * If forwarding_if_rx is enabled and packets are received, updates the
- * forwarding_if_rx_detect_time. */
-static void
-bfd_check_rx(struct bfd *bfd) OVS_REQUIRES(mutex)
-{
-    uint64_t rx_packets = bfd_rx_packets(bfd);
-    int64_t diff;
-
-    diff = rx_packets - bfd->rx_packets;
-    bfd->rx_packets = rx_packets;
-    if (diff < 0) {
-        VLOG_INFO_RL(&rl, "rx_packets count is smaller than last time.");
-    }
-    if (bfd->forwarding_if_rx && diff > 0) {
-        bfd_forwarding_if_rx_update(bfd);
-    }
-}
-
-/* Updates the forwarding_if_rx_detect_time and the forwarding flag. */
 static void
 bfd_forwarding_if_rx_update(struct bfd *bfd) OVS_REQUIRES(mutex)
 {
     int64_t incr = bfd_rx_interval(bfd) * bfd->mult;
     bfd->forwarding_if_rx_detect_time = MAX(incr, 2000) + time_msec();
-    bfd_forwarding__(bfd);
 }
 
 static uint32_t
@@ -1152,7 +1148,9 @@ bfd_find_by_name(const char *name) OVS_REQUIRES(mutex)
 static void
 bfd_put_details(struct ds *ds, const struct bfd *bfd) OVS_REQUIRES(mutex)
 {
-    ds_put_format(ds, "\tForwarding: %s\n", bfd->forwarding ? "true" : "false");
+    ds_put_format(ds, "\tForwarding: %s\n",
+                  bfd_forwarding__(CONST_CAST(struct bfd *, bfd))
+                  ? "true" : "false");
     ds_put_format(ds, "\tDetect Multiplier: %d\n", bfd->mult);
     ds_put_format(ds, "\tConcatenated Path Down: %s\n",
                   bfd->cpath_down ? "true" : "false");

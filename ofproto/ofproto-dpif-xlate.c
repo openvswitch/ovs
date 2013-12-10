@@ -1718,6 +1718,9 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         if (ctx->xin->resubmit_stats) {
             netdev_vport_inc_tx(xport->netdev, ctx->xin->resubmit_stats);
             netdev_vport_inc_rx(peer->netdev, ctx->xin->resubmit_stats);
+            if (peer->bfd) {
+                bfd_account_rx(peer->bfd, ctx->xin->resubmit_stats);
+            }
         }
 
         return;

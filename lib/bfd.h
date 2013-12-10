@@ -22,6 +22,7 @@
 #include <inttypes.h>
 
 struct bfd;
+struct dpif_flow_stats;
 struct flow;
 struct flow_wildcards;
 struct netdev;
@@ -46,6 +47,7 @@ struct bfd *bfd_configure(struct bfd *, const char *name,
 struct bfd *bfd_ref(const struct bfd *);
 void bfd_unref(struct bfd *);
 
+void bfd_account_rx(struct bfd *, const struct dpif_flow_stats *);
 bool bfd_forwarding(struct bfd *);
 void bfd_get_status(const struct bfd *, struct smap *);
 void bfd_set_netdev(struct bfd *, const struct netdev *);

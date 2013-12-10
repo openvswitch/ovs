@@ -4273,6 +4273,9 @@ flow_push_stats(struct ofproto_dpif *ofproto, struct flow *flow,
     in_port = get_ofp_port(ofproto, flow->in_port.ofp_port);
     if (in_port && in_port->is_tunnel) {
         netdev_vport_inc_rx(in_port->up.netdev, stats);
+        if (in_port->bfd) {
+            bfd_account_rx(in_port->bfd, stats);
+        }
     }
 
     xlate_in_init(&xin, ofproto, flow, NULL, stats->tcp_flags, NULL);
