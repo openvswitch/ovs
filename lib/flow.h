@@ -284,6 +284,8 @@ struct flow_wildcards {
 
 void flow_wildcards_init_catchall(struct flow_wildcards *);
 
+void flow_wildcards_clear_non_packet_fields(struct flow_wildcards *);
+
 bool flow_wildcards_is_catchall(const struct flow_wildcards *);
 
 void flow_wildcards_set_reg_mask(struct flow_wildcards *,

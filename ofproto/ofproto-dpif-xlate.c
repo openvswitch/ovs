@@ -3203,8 +3203,7 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
 
     /* Clear the metadata and register wildcard masks, because we won't
      * use non-header fields as part of the cache. */
-    memset(&wc->masks.metadata, 0, sizeof wc->masks.metadata);
-    memset(&wc->masks.regs, 0, sizeof wc->masks.regs);
+    flow_wildcards_clear_non_packet_fields(wc);
 
 out:
     rule_actions_unref(actions);
