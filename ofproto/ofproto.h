@@ -23,7 +23,9 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "cfm.h"
+#include "classifier.h"
 #include "flow.h"
+#include "meta-flow.h"
 #include "netflow.h"
 #include "sset.h"
 #include "stp.h"
@@ -387,6 +389,12 @@ struct ofproto_table_settings {
      * distinguished by different values for the subfields within 'groups'. */
     struct mf_subfield *groups;
     size_t n_groups;
+
+    /*
+     * Fields for which prefix trie lookup is maintained.
+     */
+    unsigned int n_prefix_fields;
+    enum mf_field_id prefix_fields[CLS_MAX_TRIES];
 };
 
 int ofproto_get_n_tables(const struct ofproto *);

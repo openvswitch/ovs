@@ -2534,6 +2534,68 @@
         column has no effect.
       </p>
     </column>
+
+    <column name="prefixes">
+      <p>
+        This string set specifies which fields should be used for
+        address prefix tracking.  Prefix tracking allows the
+        classifier to skip rules with longer than necessary prefixes,
+        resulting in better wildcarding for datapath flows.
+      </p>
+      <p>
+        Prefix tracking may be beneficial when a flow table contains
+        matches on IP address fields with different prefix lengths.
+        For example, when a flow table contains IP address matches on
+        both full addresses and proper prefixes, the full address
+        matches will typically cause the datapath flow to un-wildcard
+        the whole address field (depending on flow entry priorities).
+        In this case each packet with a different address gets handed
+        to the userspace for flow processing and generates its own
+        datapath flow.  With prefix tracking enabled for the address
+        field in question packets with addresses matching shorter
+        prefixes would generate datapath flows where the irrelevant
+        address bits are wildcarded, allowing the same datapath flow
+        to handle all the packets within the prefix in question.  In
+        this case many userspace upcalls can be avoided and the
+        overall performance can be better.
+      </p>
+      <p>
+        This is a performance optimization only, so packets will
+        receive the same treatment with or without prefix tracking.
+      </p>
+      <p>
+        The supported fields are: <code>tun_id</code>,
+        <code>tun_src</code>, <code>tun_dst</code>,
+        <code>nw_src</code>, <code>nw_dst</code> (or aliases
+        <code>ip_src</code> and <code>ip_dst</code>),
+        <code>ipv6_src</code>, and <code>ipv6_dst</code>.  (Using this
+        feature for <code>tun_id</code> would only make sense if the
+        tunnel IDs have prefix structure similar to IP addresses.)
+      </p>
+      <p>
+        For example, <code>prefixes=ip_dst,ip_src</code> instructs the
+        flow classifier to track the IP destination and source
+        addresses used by the rules in this specific flow table.  To
+        set the prefix fields, the flow table record needs to exist:
+      </p>
+      <dl>
+        <dt><code>ovs-vsctl set Bridge br0 flow_tables:0=@N1 -- --id=@N1 create Flow_Table name=table0</code></dt>
+        <dd>
+          Creates a flow table record for the OpenFlow table number 0.
+        </dd>
+
+        <dt><code>ovs-vsctl set Flow_Table table0 prefixes=ip_dst,ip_src</code></dt>
+        <dd>
+          Enables prefix tracking for IP source and destination
+          address fields.
+        </dd>
+      </dl>
+
+      <p>
+        There is a maximum number of fields that can be enabled for any
+        one flow table.  Currently this limit is 3.
+      </p>
+    </column>
   </table>
 
   <table name="QoS" title="Quality of Service configuration">

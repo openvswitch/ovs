@@ -3167,7 +3167,7 @@ bridge_configure_tables(struct bridge *br)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
     int n_tables;
-    int i, j;
+    int i, j, k;
 
     n_tables = ofproto_get_n_tables(br->ofproto);
     j = 0;
@@ -3178,6 +3178,8 @@ bridge_configure_tables(struct bridge *br)
         s.max_flows = UINT_MAX;
         s.groups = NULL;
         s.n_groups = 0;
+        s.n_prefix_fields = 0;
+        memset(s.prefix_fields, ~0, sizeof(s.prefix_fields));
 
         if (j < br->cfg->n_flow_tables && i == br->cfg->key_flow_tables[j]) {
             struct ovsrec_flow_table *cfg = br->cfg->value_flow_tables[j++];
@@ -3188,7 +3190,6 @@ bridge_configure_tables(struct bridge *br)
             }
             if (cfg->overflow_policy
                 && !strcmp(cfg->overflow_policy, "evict")) {
-                size_t k;
 
                 s.groups = xmalloc(cfg->n_groups * sizeof *s.groups);
                 for (k = 0; k < cfg->n_groups; k++) {
@@ -3208,6 +3209,41 @@ bridge_configure_tables(struct bridge *br)
                         s.n_groups++;
                     }
                 }
+            }
+            /* Prefix lookup fields. */
+            s.n_prefix_fields = 0;
+            for (k = 0; k < cfg->n_prefixes; k++) {
+                const char *name = cfg->prefixes[k];
+                const struct mf_field *mf = mf_from_name(name);
+                if (!mf) {
+                    VLOG_WARN("bridge %s: 'prefixes' with unknown field: %s",
+                              br->name, name);
+                    continue;
+                }
+                if (mf->flow_be32ofs < 0 || mf->n_bits % 32) {
+                    VLOG_WARN("bridge %s: 'prefixes' with incompatible field: "
+                              "%s", br->name, name);
+                    continue;
+                }
+                if (s.n_prefix_fields >= ARRAY_SIZE(s.prefix_fields)) {
+                    VLOG_WARN("bridge %s: 'prefixes' with too many fields, "
+                              "field not used: %s", br->name, name);
+                    continue;
+                }
+                s.prefix_fields[s.n_prefix_fields++] = mf->id;
+            }
+            if (s.n_prefix_fields > 0) {
+                int k;
+                struct ds ds = DS_EMPTY_INITIALIZER;
+                for (k = 0; k < s.n_prefix_fields; k++) {
+                    if (k) {
+                        ds_put_char(&ds, ',');
+                    }
+                    ds_put_cstr(&ds, mf_from_id(s.prefix_fields[k])->name);
+                }
+                VLOG_INFO("bridge %s table %d: Prefix lookup with: %s.",
+                          br->name, i, ds_cstr(&ds));
+                ds_destroy(&ds);
             }
         }
 

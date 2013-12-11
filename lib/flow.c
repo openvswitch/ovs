@@ -1241,12 +1241,16 @@ miniflow_alloc_values(struct miniflow *flow, int n)
 
 /* Completes an initialization of 'dst' as a miniflow copy of 'src' begun by
  * the caller.  The caller must have already initialized 'dst->map' properly
- * to indicate the nonzero uint32_t elements of 'src'.  'n' must be the number
- * of 1-bits in 'dst->map'.
+ * to indicate the significant uint32_t elements of 'src'.  'n' must be the
+ * number of 1-bits in 'dst->map'.
+ *
+ * Normally the significant elements are the ones that are non-zero.  However,
+ * when a miniflow is initialized from a (mini)mask, the values can be zeroes,
+ * so that the flow and mask always have the same maps.
  *
  * This function initializes 'dst->values' (either inline if possible or with
- * malloc() otherwise) and copies the nonzero uint32_t elements of 'src' into
- * it. */
+ * malloc() otherwise) and copies the uint32_t elements of 'src' indicated by
+ * 'dst->map' into it. */
 static void
 miniflow_init__(struct miniflow *dst, const struct flow *src, int n)
 {

@@ -24,9 +24,13 @@
 #include "hash.h"
 #include "odp-util.h"
 #include "ofp-util.h"
-#include "packets.h"
 #include "ovs-thread.h"
+#include "packets.h"
+#include "vlog.h"
 
+VLOG_DEFINE_THIS_MODULE(classifier);
+
+struct trie_ctx;
 static struct cls_subtable *find_subtable(const struct classifier *,
                                           const struct minimask *);
 static struct cls_subtable *insert_subtable(struct classifier *,
@@ -42,7 +46,8 @@ static void update_subtables_after_removal(struct classifier *,
                                            unsigned int del_priority);
 
 static struct cls_rule *find_match_wc(const struct cls_subtable *,
-                                      const struct flow *,
+                                      const struct flow *, struct trie_ctx *,
+                                      unsigned int n_tries,
                                       struct flow_wildcards *);
 static struct cls_rule *find_equal(struct cls_subtable *,
                                    const struct miniflow *, uint32_t hash);
@@ -59,6 +64,21 @@ static struct cls_rule *insert_rule(struct classifier *,
 
 static struct cls_rule *next_rule_in_list__(struct cls_rule *);
 static struct cls_rule *next_rule_in_list(struct cls_rule *);
+
+static unsigned int minimask_get_prefix_len(const struct minimask *,
+                                            const struct mf_field *);
+static void trie_init(struct classifier *, int trie_idx,
+                      const struct mf_field *);
+static unsigned int trie_lookup(const struct cls_trie *, const struct flow *,
+                                unsigned int *checkbits);
+
+static void trie_destroy(struct trie_node *);
+static void trie_insert(struct cls_trie *, const struct cls_rule *, int mlen);
+static void trie_remove(struct cls_trie *, const struct cls_rule *, int mlen);
+static void mask_set_prefix_bits(struct flow_wildcards *, uint8_t be32ofs,
+                                 unsigned int nbits);
+static bool mask_prefix_bits_set(const struct flow_wildcards *,
+                                 uint8_t be32ofs, unsigned int nbits);
 
 /* cls_rule. */
 
@@ -164,6 +184,7 @@ classifier_init(struct classifier *cls, const uint8_t *flow_segments)
             cls->flow_segments[cls->n_flow_segments++] = *flow_segments++;
         }
     }
+    cls->n_tries = 0;
 }
 
 /* Destroys 'cls'.  Rules within 'cls', if any, are not freed; this is the
@@ -174,6 +195,11 @@ classifier_destroy(struct classifier *cls)
     if (cls) {
         struct cls_subtable *partition, *next_partition;
         struct cls_subtable *subtable, *next_subtable;
+        int i;
+
+        for (i = 0; i < cls->n_tries; i++) {
+            trie_destroy(cls->tries[i].root);
+        }
 
         HMAP_FOR_EACH_SAFE (subtable, next_subtable, hmap_node,
                             &cls->subtables) {
@@ -188,6 +214,83 @@ classifier_destroy(struct classifier *cls)
         }
         hmap_destroy(&cls->partitions);
         ovs_rwlock_destroy(&cls->rwlock);
+    }
+}
+
+/* We use uint64_t as a set for the fields below. */
+BUILD_ASSERT_DECL(MFF_N_IDS <= 64);
+
+/* Set the fields for which prefix lookup should be performed. */
+void
+classifier_set_prefix_fields(struct classifier *cls,
+                             const enum mf_field_id *trie_fields,
+                             unsigned int n_fields)
+{
+    uint64_t fields = 0;
+    int i, trie;
+
+    for (i = 0, trie = 0; i < n_fields && trie < CLS_MAX_TRIES; i++) {
+        const struct mf_field *field = mf_from_id(trie_fields[i]);
+        if (field->flow_be32ofs < 0 || field->n_bits % 32) {
+            /* Incompatible field.  This is the only place where we
+             * enforce these requirements, but the rest of the trie code
+             * depends on the flow_be32ofs to be non-negative and the
+             * field length to be a multiple of 32 bits. */
+            continue;
+        }
+
+        if (fields & (UINT64_C(1) << trie_fields[i])) {
+            /* Duplicate field, there is no need to build more than
+             * one index for any one field. */
+            continue;
+        }
+        fields |= UINT64_C(1) << trie_fields[i];
+
+        if (trie >= cls->n_tries || field != cls->tries[trie].field) {
+            trie_init(cls, trie, field);
+        }
+        trie++;
+    }
+
+    /* Destroy the rest. */
+    for (i = trie; i < cls->n_tries; i++) {
+        trie_init(cls, i, NULL);
+    }
+    cls->n_tries = trie;
+}
+
+static void
+trie_init(struct classifier *cls, int trie_idx,
+          const struct mf_field *field)
+{
+    struct cls_trie *trie = &cls->tries[trie_idx];
+    struct cls_subtable *subtable;
+
+    if (trie_idx < cls->n_tries) {
+        trie_destroy(trie->root);
+    }
+    trie->root = NULL;
+    trie->field = field;
+
+    /* Add existing rules to the trie. */
+    LIST_FOR_EACH (subtable, list_node, &cls->subtables_priority) {
+        unsigned int plen;
+
+        plen = field ? minimask_get_prefix_len(&subtable->mask, field) : 0;
+        /* Initialize subtable's prefix length on this field. */
+        subtable->trie_plen[trie_idx] = plen;
+
+        if (plen) {
+            struct cls_rule *head;
+
+            HMAP_FOR_EACH (head, hmap_node, &subtable->rules) {
+                struct cls_rule *rule;
+
+                FOR_EACH_RULE_IN_LIST (rule, head) {
+                    trie_insert(trie, rule, plen);
+                }
+            }
+        }
     }
 }
 
@@ -269,6 +372,8 @@ classifier_replace(struct classifier *cls, struct cls_rule *rule)
 
     old_rule = insert_rule(cls, subtable, rule);
     if (!old_rule) {
+        int i;
+
         if (minimask_get_metadata_mask(&rule->match.mask) == OVS_BE64_MAX) {
             ovs_be64 metadata = miniflow_get_metadata(&rule->match.flow);
             rule->partition = create_partition(cls, subtable, metadata);
@@ -278,6 +383,12 @@ classifier_replace(struct classifier *cls, struct cls_rule *rule)
 
         subtable->n_rules++;
         cls->n_rules++;
+
+        for (i = 0; i < cls->n_tries; i++) {
+            if (subtable->trie_plen[i]) {
+                trie_insert(&cls->tries[i], rule, subtable->trie_plen[i]);
+            }
+        }
     } else {
         rule->partition = old_rule->partition;
     }
@@ -309,6 +420,12 @@ classifier_remove(struct classifier *cls, struct cls_rule *rule)
     int i;
 
     subtable = find_subtable(cls, &rule->match.mask);
+
+    for (i = 0; i < cls->n_tries; i++) {
+        if (subtable->trie_plen[i]) {
+            trie_remove(&cls->tries[i], rule, subtable->trie_plen[i]);
+        }
+    }
 
     /* Remove rule node from indices. */
     for (i = 0; i < subtable->n_indices; i++) {
@@ -343,7 +460,28 @@ classifier_remove(struct classifier *cls, struct cls_rule *rule)
     } else {
         update_subtables_after_removal(cls, subtable, rule->priority);
     }
+
     cls->n_rules--;
+}
+
+/* Prefix tree context.  Valid when 'lookup_done' is true.  Can skip all
+ * subtables which have more than 'match_plen' bits in their corresponding
+ * field at offset 'be32ofs'.  If skipped, 'maskbits' prefix bits should be
+ * unwildcarded to quarantee datapath flow matches only packets it should. */
+struct trie_ctx {
+    const struct cls_trie *trie;
+    bool lookup_done;        /* Status of the lookup. */
+    uint8_t be32ofs;         /* U32 offset of the field in question. */
+    unsigned int match_plen; /* Longest prefix than could possibly match. */
+    unsigned int maskbits;   /* Prefix length needed to avoid false matches. */
+};
+
+static void
+trie_ctx_init(struct trie_ctx *ctx, const struct cls_trie *trie)
+{
+    ctx->trie = trie;
+    ctx->be32ofs = trie->field->flow_be32ofs;
+    ctx->lookup_done = false;
 }
 
 /* Finds and returns the highest-priority rule in 'cls' that matches 'flow'.
@@ -362,6 +500,8 @@ classifier_lookup(const struct classifier *cls, const struct flow *flow,
     struct cls_subtable *subtable;
     struct cls_rule *best;
     tag_type tags;
+    struct trie_ctx trie_ctx[CLS_MAX_TRIES];
+    int i;
 
     /* Determine 'tags' such that, if 'subtable->tag' doesn't intersect them,
      * then 'flow' cannot possibly match in 'subtable':
@@ -387,6 +527,10 @@ classifier_lookup(const struct classifier *cls, const struct flow *flow,
                                   hash_metadata(flow->metadata)));
     tags = partition ? partition->tags : TAG_ARBITRARY;
 
+    /* Initialize trie contexts for match_find_wc(). */
+    for (i = 0; i < cls->n_tries; i++) {
+        trie_ctx_init(&trie_ctx[i], &cls->tries[i]);
+    }
     best = NULL;
     LIST_FOR_EACH (subtable, list_node, &cls->subtables_priority) {
         struct cls_rule *rule;
@@ -395,7 +539,7 @@ classifier_lookup(const struct classifier *cls, const struct flow *flow,
             continue;
         }
 
-        rule = find_match_wc(subtable, flow, wc);
+        rule = find_match_wc(subtable, flow, trie_ctx, cls->n_tries, wc);
         if (rule) {
             best = rule;
             LIST_FOR_EACH_CONTINUE (subtable, list_node,
@@ -409,7 +553,8 @@ classifier_lookup(const struct classifier *cls, const struct flow *flow,
                     continue;
                 }
 
-                rule = find_match_wc(subtable, flow, wc);
+                rule = find_match_wc(subtable, flow, trie_ctx, cls->n_tries,
+                                     wc);
                 if (rule && rule->priority > best->priority) {
                     best = rule;
                 }
@@ -417,6 +562,7 @@ classifier_lookup(const struct classifier *cls, const struct flow *flow,
             break;
         }
     }
+
     return best;
 }
 
@@ -708,6 +854,11 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
                      ? tag_create_deterministic(hash)
                      : TAG_ALL);
 
+    for (i = 0; i < cls->n_tries; i++) {
+        subtable->trie_plen[i] = minimask_get_prefix_len(mask,
+                                                         cls->tries[i].field);
+    }
+
     return subtable;
 }
 
@@ -820,6 +971,72 @@ update_subtables_after_removal(struct classifier *cls,
     }
 }
 
+struct range {
+    uint8_t start;
+    uint8_t end;
+};
+
+/* Return 'true' if can skip rest of the subtable based on the prefix trie
+ * lookup results. */
+static inline bool
+check_tries(struct trie_ctx trie_ctx[CLS_MAX_TRIES], unsigned int n_tries,
+            const unsigned int field_plen[CLS_MAX_TRIES],
+            const struct range ofs, const struct flow *flow,
+            struct flow_wildcards *wc)
+{
+    int j;
+
+    /* Check if we could avoid fully unwildcarding the next level of
+     * fields using the prefix tries.  The trie checks are done only as
+     * needed to avoid folding in additional bits to the wildcards mask. */
+    for (j = 0; j < n_tries; j++) {
+        /* Is the trie field relevant for this subtable? */
+        if (field_plen[j]) {
+            struct trie_ctx *ctx = &trie_ctx[j];
+            uint8_t be32ofs = ctx->be32ofs;
+
+            /* Is the trie field within the current range of fields? */
+            if (be32ofs >= ofs.start && be32ofs < ofs.end) {
+                /* On-demand trie lookup. */
+                if (!ctx->lookup_done) {
+                    ctx->match_plen = trie_lookup(ctx->trie, flow,
+                                                  &ctx->maskbits);
+                    ctx->lookup_done = true;
+                }
+                /* Possible to skip the rest of the subtable if subtable's
+                 * prefix on the field is longer than what is known to match
+                 * based on the trie lookup. */
+                if (field_plen[j] > ctx->match_plen) {
+                    /* RFC: We want the trie lookup to never result in
+                     * unwildcarding any bits that would not be unwildcarded
+                     * otherwise.  Since the trie is shared by the whole
+                     * classifier, it is possible that the 'maskbits' contain
+                     * bits that are irrelevant for the partition of the
+                     * classifier relevant for the current flow. */
+
+                    /* Can skip if the field is already unwildcarded. */
+                    if (mask_prefix_bits_set(wc, be32ofs, ctx->maskbits)) {
+                        return true;
+                    }
+                    /* Check that the trie result will not unwildcard more bits
+                     * than this stage will. */
+                    if (ctx->maskbits <= field_plen[j]) {
+                        /* Unwildcard the bits and skip the rest. */
+                        mask_set_prefix_bits(wc, be32ofs, ctx->maskbits);
+                        /* Note: Prerequisite already unwildcarded, as the only
+                         * prerequisite of the supported trie lookup fields is
+                         * the ethertype, which is currently always
+                         * unwildcarded.
+                         */
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
 static inline struct cls_rule *
 find_match(const struct cls_subtable *subtable, const struct flow *flow,
            uint32_t hash)
@@ -837,32 +1054,37 @@ find_match(const struct cls_subtable *subtable, const struct flow *flow,
 
 static struct cls_rule *
 find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
-              struct flow_wildcards * wc)
+              struct trie_ctx trie_ctx[CLS_MAX_TRIES], unsigned int n_tries,
+              struct flow_wildcards *wc)
 {
     uint32_t basis = 0, hash;
     struct cls_rule *rule = NULL;
-    uint8_t prev_u32ofs = 0;
     int i;
+    struct range ofs;
 
     if (!wc) {
         return find_match(subtable, flow,
                           flow_hash_in_minimask(flow, &subtable->mask, 0));
     }
 
+    ofs.start = 0;
     /* Try to finish early by checking fields in segments. */
     for (i = 0; i < subtable->n_indices; i++) {
         struct hindex_node *inode;
+        ofs.end = subtable->index_ofs[i];
 
-        hash = flow_hash_in_minimask_range(flow, &subtable->mask, prev_u32ofs,
-                                           subtable->index_ofs[i], &basis);
-        prev_u32ofs = subtable->index_ofs[i];
+        if (check_tries(trie_ctx, n_tries, subtable->trie_plen, ofs, flow,
+                        wc)) {
+            goto range_out;
+        }
+        hash = flow_hash_in_minimask_range(flow, &subtable->mask, ofs.start,
+                                           ofs.end, &basis);
+        ofs.start = ofs.end;
         inode = hindex_node_with_hash(&subtable->indices[i], hash);
         if (!inode) {
             /* No match, can stop immediately, but must fold in the mask
              * covered so far. */
-            flow_wildcards_fold_minimask_range(wc, &subtable->mask, 0,
-                                               prev_u32ofs);
-            return NULL;
+            goto range_out;
         }
 
         /* If we have narrowed down to a single rule already, check whether
@@ -884,11 +1106,15 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
             }
         }
     }
-
+    ofs.end = FLOW_U32S;
+    /* Trie check for the final range. */
+    if (check_tries(trie_ctx, n_tries, subtable->trie_plen, ofs, flow, wc)) {
+        goto range_out;
+    }
     if (!rule) {
         /* Multiple potential matches exist, look for one. */
-        hash = flow_hash_in_minimask_range(flow, &subtable->mask, prev_u32ofs,
-                                           FLOW_U32S, &basis);
+        hash = flow_hash_in_minimask_range(flow, &subtable->mask, ofs.start,
+                                           ofs.end, &basis);
         rule = find_match(subtable, flow, hash);
     } else {
         /* We already narrowed the matching candidates down to just 'rule',
@@ -896,8 +1122,16 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
         rule = NULL;
     }
  out:
+    /* Must unwildcard all the fields, as they were looked at. */
     flow_wildcards_fold_minimask(wc, &subtable->mask);
     return rule;
+
+ range_out:
+    /* Must unwildcard the fields looked up so far, if any. */
+    if (ofs.start) {
+        flow_wildcards_fold_minimask_range(wc, &subtable->mask, 0, ofs.start);
+    }
+    return NULL;
 }
 
 static struct cls_rule *
@@ -922,16 +1156,16 @@ insert_rule(struct classifier *cls, struct cls_subtable *subtable,
     struct cls_rule *old = NULL;
     int i;
     uint32_t basis = 0, hash;
-    uint8_t prev_u32ofs = 0;
+    uint8_t prev_be32ofs = 0;
 
     /* Add new node to segment indices. */
     for (i = 0; i < subtable->n_indices; i++) {
-        hash = minimatch_hash_range(&new->match, prev_u32ofs,
+        hash = minimatch_hash_range(&new->match, prev_be32ofs,
                                     subtable->index_ofs[i], &basis);
         hindex_insert(&subtable->indices[i], &new->index_nodes[i], hash);
-        prev_u32ofs = subtable->index_ofs[i];
+        prev_be32ofs = subtable->index_ofs[i];
     }
-    hash = minimatch_hash_range(&new->match, prev_u32ofs, FLOW_U32S, &basis);
+    hash = minimatch_hash_range(&new->match, prev_be32ofs, FLOW_U32S, &basis);
     head = find_equal(subtable, &new->match.flow, hash);
     if (!head) {
         hmap_insert(&subtable->rules, &new->hmap_node, hash);
@@ -991,4 +1225,394 @@ next_rule_in_list(struct cls_rule *rule)
 {
     struct cls_rule *next = next_rule_in_list__(rule);
     return next->priority < rule->priority ? next : NULL;
+}
+
+/* A longest-prefix match tree. */
+struct trie_node {
+    uint32_t prefix;           /* Prefix bits for this node, MSB first. */
+    uint8_t  nbits;            /* Never zero, except for the root node. */
+    unsigned int n_rules;      /* Number of rules that have this prefix. */
+    struct trie_node *edges[2]; /* Both NULL if leaf. */
+};
+
+/* Max bits per node.  Must fit in struct trie_node's 'prefix'.
+ * Also tested with 16, 8, and 5 to stress the implementation. */
+#define TRIE_PREFIX_BITS 32
+
+/* Return at least 'plen' bits of the 'prefix', starting at bit offset 'ofs'.
+ * Prefixes are in the network byte order, and the offset 0 corresponds to
+ * the most significant bit of the first byte.  The offset can be read as
+ * "how many bits to skip from the start of the prefix starting at 'pr'". */
+static uint32_t
+raw_get_prefix(const ovs_be32 pr[], unsigned int ofs, unsigned int plen)
+{
+    uint32_t prefix;
+
+    pr += ofs / 32; /* Where to start. */
+    ofs %= 32;      /* How many bits to skip at 'pr'. */
+
+    prefix = ntohl(*pr) << ofs; /* Get the first 32 - ofs bits. */
+    if (plen > 32 - ofs) {      /* Need more than we have already? */
+        prefix |= ntohl(*++pr) >> (32 - ofs);
+    }
+    /* Return with possible unwanted bits at the end. */
+    return prefix;
+}
+
+/* Return min(TRIE_PREFIX_BITS, plen) bits of the 'prefix', starting at bit
+ * offset 'ofs'.  Prefixes are in the network byte order, and the offset 0
+ * corresponds to the most significant bit of the first byte.  The offset can
+ * be read as "how many bits to skip from the start of the prefix starting at
+ * 'pr'". */
+static uint32_t
+trie_get_prefix(const ovs_be32 pr[], unsigned int ofs, unsigned int plen)
+{
+    if (!plen) {
+        return 0;
+    }
+    if (plen > TRIE_PREFIX_BITS) {
+        plen = TRIE_PREFIX_BITS; /* Get at most TRIE_PREFIX_BITS. */
+    }
+    /* Return with unwanted bits cleared. */
+    return raw_get_prefix(pr, ofs, plen) & ~0u << (32 - plen);
+}
+
+/* Return the number of equal bits in 'nbits' of 'prefix's MSBs and a 'value'
+ * starting at "MSB 0"-based offset 'ofs'. */
+static unsigned int
+prefix_equal_bits(uint32_t prefix, unsigned int nbits, const ovs_be32 value[],
+                  unsigned int ofs)
+{
+    uint64_t diff = prefix ^ raw_get_prefix(value, ofs, nbits);
+    /* Set the bit after the relevant bits to limit the result. */
+    return raw_clz64(diff << 32 | UINT64_C(1) << (63 - nbits));
+}
+
+/* Return the number of equal bits in 'node' prefix and a 'prefix' of length
+ * 'plen', starting at "MSB 0"-based offset 'ofs'. */
+static unsigned int
+trie_prefix_equal_bits(const struct trie_node *node, const ovs_be32 prefix[],
+                       unsigned int ofs, unsigned int plen)
+{
+    return prefix_equal_bits(node->prefix, MIN(node->nbits, plen - ofs),
+                             prefix, ofs);
+}
+
+/* Return the bit at ("MSB 0"-based) offset 'ofs' as an int.  'ofs' can
+ * be greater than 31. */
+static unsigned int
+be_get_bit_at(const ovs_be32 value[], unsigned int ofs)
+{
+    return (((const uint8_t *)value)[ofs / 8] >> (7 - ofs % 8)) & 1u;
+}
+
+/* Return the bit at ("MSB 0"-based) offset 'ofs' as an int.  'ofs' must
+ * be between 0 and 31, inclusive. */
+static unsigned int
+get_bit_at(const uint32_t prefix, unsigned int ofs)
+{
+    return (prefix >> (31 - ofs)) & 1u;
+}
+
+/* Create new branch. */
+static struct trie_node *
+trie_branch_create(const ovs_be32 *prefix, unsigned int ofs, unsigned int plen,
+                   unsigned int n_rules)
+{
+    struct trie_node *node = xmalloc(sizeof *node);
+
+    node->prefix = trie_get_prefix(prefix, ofs, plen);
+
+    if (plen <= TRIE_PREFIX_BITS) {
+        node->nbits = plen;
+        node->edges[0] = NULL;
+        node->edges[1] = NULL;
+        node->n_rules = n_rules;
+    } else { /* Need intermediate nodes. */
+        struct trie_node *subnode = trie_branch_create(prefix,
+                                                       ofs + TRIE_PREFIX_BITS,
+                                                       plen - TRIE_PREFIX_BITS,
+                                                       n_rules);
+        int bit = get_bit_at(subnode->prefix, 0);
+        node->nbits = TRIE_PREFIX_BITS;
+        node->edges[bit] = subnode;
+        node->edges[!bit] = NULL;
+        node->n_rules = 0;
+    }
+    return node;
+}
+
+static void
+trie_node_destroy(struct trie_node *node)
+{
+    free(node);
+}
+
+static void
+trie_destroy(struct trie_node *node)
+{
+    if (node) {
+        trie_destroy(node->edges[0]);
+        trie_destroy(node->edges[1]);
+        free(node);
+    }
+}
+
+static bool
+trie_is_leaf(const struct trie_node *trie)
+{
+    return !trie->edges[0] && !trie->edges[1]; /* No children. */
+}
+
+static void
+mask_set_prefix_bits(struct flow_wildcards *wc, uint8_t be32ofs,
+                     unsigned int nbits)
+{
+    ovs_be32 *mask = &((ovs_be32 *)&wc->masks)[be32ofs];
+    unsigned int i;
+
+    for (i = 0; i < nbits / 32; i++) {
+        mask[i] = OVS_BE32_MAX;
+    }
+    if (nbits % 32) {
+        mask[i] |= htonl(~0u << (32 - nbits % 32));
+    }
+}
+
+static bool
+mask_prefix_bits_set(const struct flow_wildcards *wc, uint8_t be32ofs,
+                     unsigned int nbits)
+{
+    ovs_be32 *mask = &((ovs_be32 *)&wc->masks)[be32ofs];
+    unsigned int i;
+    ovs_be32 zeroes = 0;
+
+    for (i = 0; i < nbits / 32; i++) {
+        zeroes |= ~mask[i];
+    }
+    if (nbits % 32) {
+        zeroes |= ~mask[i] & htonl(~0u << (32 - nbits % 32));
+    }
+
+    return !zeroes; /* All 'nbits' bits set. */
+}
+
+static struct trie_node **
+trie_next_edge(struct trie_node *node, const ovs_be32 value[],
+               unsigned int ofs)
+{
+    return node->edges + be_get_bit_at(value, ofs);
+}
+
+static const struct trie_node *
+trie_next_node(const struct trie_node *node, const ovs_be32 value[],
+               unsigned int ofs)
+{
+    return node->edges[be_get_bit_at(value, ofs)];
+}
+
+/* Return the prefix mask length necessary to find the longest-prefix match for
+ * the '*value' in the prefix tree 'node'.
+ * '*checkbits' is set to the number of bits in the prefix mask necessary to
+ * determine a mismatch, in case there are longer prefixes in the tree below
+ * the one that matched.
+ */
+static unsigned int
+trie_lookup_value(const struct trie_node *node, const ovs_be32 value[],
+                  unsigned int *checkbits)
+{
+    unsigned int plen = 0, match_len = 0;
+    const struct trie_node *prev = NULL;
+
+    for (; node; prev = node, node = trie_next_node(node, value, plen)) {
+        unsigned int eqbits;
+        /* Check if this edge can be followed. */
+        eqbits = prefix_equal_bits(node->prefix, node->nbits, value, plen);
+        plen += eqbits;
+        if (eqbits < node->nbits) { /* Mismatch, nothing more to be found. */
+            /* Bit at offset 'plen' differed. */
+            *checkbits = plen + 1; /* Includes the first mismatching bit. */
+            return match_len;
+        }
+        /* Full match, check if rules exist at this prefix length. */
+        if (node->n_rules > 0) {
+            match_len = plen;
+        }
+    }
+    /* Dead end, exclude the other branch if it exists. */
+    *checkbits = !prev || trie_is_leaf(prev) ? plen : plen + 1;
+    return match_len;
+}
+
+static unsigned int
+trie_lookup(const struct cls_trie *trie, const struct flow *flow,
+            unsigned int *checkbits)
+{
+    const struct mf_field *mf = trie->field;
+
+    /* Check that current flow matches the prerequisites for the trie
+     * field.  Some match fields are used for multiple purposes, so we
+     * must check that the trie is relevant for this flow. */
+    if (mf_are_prereqs_ok(mf, flow)) {
+        return trie_lookup_value(trie->root,
+                                 &((ovs_be32 *)flow)[mf->flow_be32ofs],
+                                 checkbits);
+    }
+    *checkbits = 0; /* Value not used in this case. */
+    return UINT_MAX;
+}
+
+/* Returns the length of a prefix match mask for the field 'mf' in 'minimask'.
+ * Returns the u32 offset to the miniflow data in '*miniflow_index', if
+ * 'miniflow_index' is not NULL. */
+static unsigned int
+minimask_get_prefix_len(const struct minimask *minimask,
+                        const struct mf_field *mf)
+{
+    unsigned int nbits = 0, mask_tz = 0; /* Non-zero when end of mask seen. */
+    uint8_t u32_ofs = mf->flow_be32ofs;
+    uint8_t u32_end = u32_ofs + mf->n_bytes / 4;
+
+    for (; u32_ofs < u32_end; ++u32_ofs) {
+        uint32_t mask;
+        mask = ntohl((OVS_FORCE ovs_be32)minimask_get(minimask, u32_ofs));
+
+        /* Validate mask, count the mask length. */
+        if (mask_tz) {
+            if (mask) {
+                return 0; /* No bits allowed after mask ended. */
+            }
+        } else {
+            if (~mask & (~mask + 1)) {
+                return 0; /* Mask not contiguous. */
+            }
+            mask_tz = ctz32(mask);
+            nbits += 32 - mask_tz;
+        }
+    }
+
+    return nbits;
+}
+
+/*
+ * This is called only when mask prefix is known to be CIDR and non-zero.
+ * Relies on the fact that the flow and mask have the same map, and since
+ * the mask is CIDR, the storage for the flow field exists even if it
+ * happened to be zeros.
+ */
+static const ovs_be32 *
+minimatch_get_prefix(const struct minimatch *match, const struct mf_field *mf)
+{
+    return (OVS_FORCE const ovs_be32 *)match->flow.values +
+        count_1bits(match->flow.map & ((UINT64_C(1) << mf->flow_be32ofs) - 1));
+}
+
+/* Insert rule in to the prefix tree.
+ * 'mlen' must be the (non-zero) CIDR prefix length of the 'trie->field' mask
+ * in 'rule'. */
+static void
+trie_insert(struct cls_trie *trie, const struct cls_rule *rule, int mlen)
+{
+    const ovs_be32 *prefix = minimatch_get_prefix(&rule->match, trie->field);
+    struct trie_node *node;
+    struct trie_node **edge;
+    int ofs = 0;
+
+    /* Walk the tree. */
+    for (edge = &trie->root;
+         (node = *edge) != NULL;
+         edge = trie_next_edge(node, prefix, ofs)) {
+        unsigned int eqbits = trie_prefix_equal_bits(node, prefix, ofs, mlen);
+        ofs += eqbits;
+        if (eqbits < node->nbits) {
+            /* Mismatch, new node needs to be inserted above. */
+            int old_branch = get_bit_at(node->prefix, eqbits);
+
+            /* New parent node. */
+            *edge = trie_branch_create(prefix, ofs - eqbits, eqbits,
+                                       ofs == mlen ? 1 : 0);
+
+            /* Adjust old node for its new position in the tree. */
+            node->prefix <<= eqbits;
+            node->nbits -= eqbits;
+            (*edge)->edges[old_branch] = node;
+
+            /* Check if need a new branch for the new rule. */
+            if (ofs < mlen) {
+                (*edge)->edges[!old_branch]
+                    = trie_branch_create(prefix, ofs, mlen - ofs, 1);
+            }
+            return;
+        }
+        /* Full match so far. */
+
+        if (ofs == mlen) {
+            /* Full match at the current node, rule needs to be added here. */
+            node->n_rules++;
+            return;
+        }
+    }
+    /* Must insert a new tree branch for the new rule. */
+    *edge = trie_branch_create(prefix, ofs, mlen - ofs, 1);
+}
+
+/* 'mlen' must be the (non-zero) CIDR prefix length of the 'trie->field' mask
+ * in 'rule'. */
+static void
+trie_remove(struct cls_trie *trie, const struct cls_rule *rule, int mlen)
+{
+    const ovs_be32 *prefix = minimatch_get_prefix(&rule->match, trie->field);
+    struct trie_node *node;
+    struct trie_node **edges[sizeof(union mf_value) * 8];
+    int depth = 0, ofs = 0;
+
+    /* Walk the tree. */
+    for (edges[depth] = &trie->root;
+         (node = *edges[depth]) != NULL;
+         edges[++depth] = trie_next_edge(node, prefix, ofs)) {
+        unsigned int eqbits = trie_prefix_equal_bits(node, prefix, ofs, mlen);
+        if (eqbits < node->nbits) {
+            /* Mismatch, nothing to be removed.  This should never happen, as
+             * only rules in the classifier are ever removed. */
+            break; /* Log a warning. */
+        }
+        /* Full match so far. */
+        ofs += eqbits;
+
+        if (ofs == mlen) {
+            /* Full prefix match at the current node, remove rule here. */
+            if (!node->n_rules) {
+                break; /* Log a warning. */
+            }
+            node->n_rules--;
+
+            /* Check if can prune the tree. */
+            while (!node->n_rules && !(node->edges[0] && node->edges[1])) {
+                /* No rules and at most one child node, remove this node. */
+                struct trie_node *next;
+                next = node->edges[0] ? node->edges[0] : node->edges[1];
+
+                if (next) {
+                    if (node->nbits + next->nbits > TRIE_PREFIX_BITS) {
+                        break;   /* Cannot combine. */
+                    }
+                    /* Combine node with next. */
+                    next->prefix = node->prefix | next->prefix >> node->nbits;
+                    next->nbits += node->nbits;
+                }
+                trie_node_destroy(node);
+                /* Update the parent's edge. */
+                *edges[depth] = next;
+                if (next || !depth) {
+                    /* Branch not pruned or at root, nothing more to do. */
+                    break;
+                }
+                node = *edges[--depth];
+            }
+            return;
+        }
+    }
+    /* Cannot go deeper. This should never happen, since only rules
+     * that actually exist in the classifier are ever removed. */
+    VLOG_WARN("Trying to remove non-existing rule from a prefix trie.");
 }

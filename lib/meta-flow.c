@@ -37,6 +37,9 @@
 
 VLOG_DEFINE_THIS_MODULE(meta_flow);
 
+#define FLOW_U32OFS(FIELD)                                              \
+    offsetof(struct flow, FIELD) % 4 ? -1 : offsetof(struct flow, FIELD) / 4
+
 #define MF_FIELD_SIZES(MEMBER)                  \
     sizeof ((union mf_value *)0)->MEMBER,       \
     8 * sizeof ((union mf_value *)0)->MEMBER
@@ -59,6 +62,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_TUNNEL_ID, "OXM_OF_TUNNEL_ID",
         OFPUTIL_P_NXM_OXM_ANY,
         OFPUTIL_P_NXM_OXM_ANY,
+        FLOW_U32OFS(tunnel.tun_id),
     }, {
         MFF_TUN_SRC, "tun_src", NULL,
         MF_FIELD_SIZES(be32),
@@ -70,6 +74,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         NXM_NX_TUN_IPV4_SRC, "NXM_NX_TUN_IPV4_SRC",
         OFPUTIL_P_NXM_OXM_ANY,
         OFPUTIL_P_NXM_OXM_ANY,
+        FLOW_U32OFS(tunnel.ip_src),
     }, {
         MFF_TUN_DST, "tun_dst", NULL,
         MF_FIELD_SIZES(be32),
@@ -81,6 +86,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         NXM_NX_TUN_IPV4_DST, "NXM_NX_TUN_IPV4_DST",
         OFPUTIL_P_NXM_OXM_ANY,
         OFPUTIL_P_NXM_OXM_ANY,
+        FLOW_U32OFS(tunnel.ip_dst),
     }, {
         MFF_TUN_FLAGS, "tun_flags", NULL,
         MF_FIELD_SIZES(be16),
@@ -92,6 +98,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         0, NULL,
         OFPUTIL_P_NONE,
         OFPUTIL_P_NONE,
+        -1,
     }, {
         MFF_TUN_TTL, "tun_ttl", NULL,
         MF_FIELD_SIZES(u8),
@@ -103,6 +110,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         0, NULL,
         OFPUTIL_P_NONE,
         OFPUTIL_P_NONE,
+        -1,
     }, {
         MFF_TUN_TOS, "tun_tos", NULL,
         MF_FIELD_SIZES(u8),
@@ -114,6 +122,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         0, NULL,
         OFPUTIL_P_NONE,
         OFPUTIL_P_NONE,
+        -1,
     }, {
         MFF_METADATA, "metadata", NULL,
         MF_FIELD_SIZES(be64),
@@ -125,6 +134,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_METADATA, "OXM_OF_METADATA",
         OFPUTIL_P_NXM_OF11_UP,
         OFPUTIL_P_NXM_OF11_UP,
+        -1,
     }, {
         MFF_IN_PORT, "in_port", NULL,
         MF_FIELD_SIZES(be16),
@@ -136,6 +146,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         NXM_OF_IN_PORT, "NXM_OF_IN_PORT",
         OFPUTIL_P_ANY,   /* OF11+ via mapping to 32 bits. */
         OFPUTIL_P_NONE,
+        -1,
     }, {
         MFF_IN_PORT_OXM, "in_port_oxm", NULL,
         MF_FIELD_SIZES(be32),
@@ -147,6 +158,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_IN_PORT, "OXM_OF_IN_PORT",
         OFPUTIL_P_OF11_UP,
         OFPUTIL_P_NONE,
+        -1,
     }, {
         MFF_SKB_PRIORITY, "skb_priority", NULL,
         MF_FIELD_SIZES(be32),
@@ -158,6 +170,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         0, NULL,
         OFPUTIL_P_NONE,
         OFPUTIL_P_NONE,
+        -1,
     }, {
         MFF_PKT_MARK, "pkt_mark", NULL,
         MF_FIELD_SIZES(be32),
@@ -169,6 +182,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         NXM_NX_PKT_MARK, "NXM_NX_PKT_MARK",
         OFPUTIL_P_NXM_OXM_ANY,
         OFPUTIL_P_NXM_OXM_ANY,
+        -1,
     },
 
 #define REGISTER(IDX)                           \
@@ -183,6 +197,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         NXM_NX_REG(IDX), "NXM_NX_REG" #IDX,     \
         OFPUTIL_P_NXM_OXM_ANY,                  \
         OFPUTIL_P_NXM_OXM_ANY,                  \
+        -1,                                     \
     }
 #if FLOW_N_REGS > 0
     REGISTER(0),
@@ -227,6 +242,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_ETH_SRC, "OXM_OF_ETH_SRC",
         OFPUTIL_P_ANY,
         OFPUTIL_P_NXM_OF11_UP,   /* Bitwise masking only with NXM and OF11+! */
+        -1,
     }, {
         MFF_ETH_DST, "eth_dst", "dl_dst",
         MF_FIELD_SIZES(mac),
@@ -238,6 +254,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_ETH_DST, "OXM_OF_ETH_DST",
         OFPUTIL_P_ANY,
         OFPUTIL_P_NXM_OF11_UP,   /* Bitwise masking only with NXM and OF11+! */
+        -1,
     }, {
         MFF_ETH_TYPE, "eth_type", "dl_type",
         MF_FIELD_SIZES(be16),
@@ -249,6 +266,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_ETH_TYPE, "OXM_OF_ETH_TYPE",
         OFPUTIL_P_ANY,
         OFPUTIL_P_NONE,
+        -1,
     },
 
     {
@@ -262,6 +280,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         NXM_OF_VLAN_TCI, "NXM_OF_VLAN_TCI",
         OFPUTIL_P_ANY,
         OFPUTIL_P_NXM_OXM_ANY,
+        -1,
     }, {
         MFF_DL_VLAN, "dl_vlan", NULL,
         sizeof(ovs_be16), 12,
@@ -273,6 +292,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         0, NULL,
         OFPUTIL_P_ANY,
         OFPUTIL_P_NXM_OXM_ANY,
+        -1,
     }, {
         MFF_VLAN_VID, "vlan_vid", NULL,
         sizeof(ovs_be16), 12,
@@ -284,6 +304,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_VLAN_VID, "OXM_OF_VLAN_VID",
         OFPUTIL_P_ANY,
         OFPUTIL_P_NXM_OXM_ANY,
+        -1,
     }, {
         MFF_DL_VLAN_PCP, "dl_vlan_pcp", NULL,
         1, 3,
@@ -295,6 +316,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         0, NULL,
         OFPUTIL_P_ANY,   /* Will be mapped to NXM and OXM. */
         OFPUTIL_P_NONE,
+        -1,
     }, {
         MFF_VLAN_PCP, "vlan_pcp", NULL,
         1, 3,
@@ -306,6 +328,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_VLAN_PCP, "OXM_OF_VLAN_PCP",
         OFPUTIL_P_ANY,   /* Will be mapped to OF10 and NXM. */
         OFPUTIL_P_NONE,
+        -1,
     },
 
     /* ## ---- ## */
@@ -322,6 +345,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_MPLS_LABEL, "OXM_OF_MPLS_LABEL",
         OFPUTIL_P_NXM_OF11_UP,
         OFPUTIL_P_NONE,
+        -1,
     }, {
         MFF_MPLS_TC, "mpls_tc", NULL,
         1, 3,
@@ -333,6 +357,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_MPLS_TC, "OXM_OF_MPLS_TC",
         OFPUTIL_P_NXM_OF11_UP,
         OFPUTIL_P_NONE,
+        -1,
     }, {
         MFF_MPLS_BOS, "mpls_bos", NULL,
         1, 1,
@@ -344,6 +369,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_MPLS_BOS, "OXM_OF_MPLS_BOS",
         OFPUTIL_P_NXM_OXM_ANY,
         OFPUTIL_P_NONE,
+        -1,
     },
 
     /* ## -- ## */
@@ -361,6 +387,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_IPV4_SRC, "OXM_OF_IPV4_SRC",
         OFPUTIL_P_ANY,
         OFPUTIL_P_NXM_OF11_UP,
+        FLOW_U32OFS(nw_src),
     }, {
         MFF_IPV4_DST, "ip_dst", "nw_dst",
         MF_FIELD_SIZES(be32),
@@ -372,6 +399,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_IPV4_DST, "OXM_OF_IPV4_DST",
         OFPUTIL_P_ANY,
         OFPUTIL_P_NXM_OF11_UP,
+        FLOW_U32OFS(nw_dst),
     },
 
     {
@@ -385,6 +413,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_IPV6_SRC, "OXM_OF_IPV6_SRC",
         OFPUTIL_P_NXM_OXM_ANY,
         OFPUTIL_P_NXM_OXM_ANY,
+        FLOW_U32OFS(ipv6_src),
     }, {
         MFF_IPV6_DST, "ipv6_dst", NULL,
         MF_FIELD_SIZES(ipv6),
@@ -396,6 +425,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_IPV6_DST, "OXM_OF_IPV6_DST",
         OFPUTIL_P_NXM_OXM_ANY,
         OFPUTIL_P_NXM_OXM_ANY,
+        FLOW_U32OFS(ipv6_dst),
     },
     {
         MFF_IPV6_LABEL, "ipv6_label", NULL,
@@ -408,6 +438,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_IPV6_FLABEL, "OXM_OF_IPV6_FLABEL",
         OFPUTIL_P_NXM_OXM_ANY,
         OFPUTIL_P_NXM_OXM_ANY,
+        -1,
     },
 
     {
@@ -421,6 +452,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_IP_PROTO, "OXM_OF_IP_PROTO",
         OFPUTIL_P_ANY,
         OFPUTIL_P_NONE,
+        -1,
     }, {
         MFF_IP_DSCP, "nw_tos", NULL,
         MF_FIELD_SIZES(u8),
@@ -432,6 +464,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         NXM_OF_IP_TOS, "NXM_OF_IP_TOS",
         OFPUTIL_P_ANY,   /* Will be shifted for OXM. */
         OFPUTIL_P_NONE,
+        -1,
     }, {
         MFF_IP_DSCP_SHIFTED, "ip_dscp", NULL,
         1, 6,
@@ -443,6 +476,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_IP_DSCP, "OXM_OF_IP_DSCP",
         OFPUTIL_P_ANY,   /* Will be shifted for non-OXM. */
         OFPUTIL_P_NONE,
+        -1,
     }, {
         MFF_IP_ECN, "nw_ecn", "ip_ecn",
         1, 2,
@@ -454,6 +488,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_IP_ECN, "OXM_OF_IP_ECN",
         OFPUTIL_P_NXM_OXM_ANY,
         OFPUTIL_P_NONE,
+        -1,
     }, {
         MFF_IP_TTL, "nw_ttl", NULL,
         MF_FIELD_SIZES(u8),
@@ -465,6 +500,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         NXM_NX_IP_TTL, "NXM_NX_IP_TTL",
         OFPUTIL_P_NXM_OXM_ANY,
         OFPUTIL_P_NONE,
+        -1,
     }, {
         MFF_IP_FRAG, "ip_frag", NULL,
         1, 2,
@@ -476,6 +512,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         NXM_NX_IP_FRAG, "NXM_NX_IP_FRAG",
         OFPUTIL_P_NXM_OXM_ANY,
         OFPUTIL_P_NXM_OXM_ANY,
+        -1,
     },
 
     {
@@ -489,6 +526,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_ARP_OP, "OXM_OF_ARP_OP",
         OFPUTIL_P_ANY,
         OFPUTIL_P_NONE,
+        -1,
     }, {
         MFF_ARP_SPA, "arp_spa", NULL,
         MF_FIELD_SIZES(be32),
@@ -500,6 +538,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_ARP_SPA, "OXM_OF_ARP_SPA",
         OFPUTIL_P_ANY,
         OFPUTIL_P_NXM_OF11_UP,
+        -1,
     }, {
         MFF_ARP_TPA, "arp_tpa", NULL,
         MF_FIELD_SIZES(be32),
@@ -511,6 +550,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_ARP_TPA, "OXM_OF_ARP_TPA",
         OFPUTIL_P_ANY,
         OFPUTIL_P_NXM_OF11_UP,
+        -1,
     }, {
         MFF_ARP_SHA, "arp_sha", NULL,
         MF_FIELD_SIZES(mac),
@@ -522,6 +562,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_ARP_SHA, "OXM_OF_ARP_SHA",
         OFPUTIL_P_NXM_OXM_ANY,
         OFPUTIL_P_NXM_OXM_ANY,
+        -1,
     }, {
         MFF_ARP_THA, "arp_tha", NULL,
         MF_FIELD_SIZES(mac),
@@ -533,6 +574,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_ARP_THA, "OXM_OF_ARP_THA",
         OFPUTIL_P_NXM_OXM_ANY,
         OFPUTIL_P_NXM_OXM_ANY,
+        -1,
     },
 
     /* ## -- ## */
@@ -550,6 +592,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_TCP_SRC, "OXM_OF_TCP_SRC",
         OFPUTIL_P_ANY,
         OFPUTIL_P_NXM_OXM_ANY,
+        -1,
     }, {
         MFF_TCP_DST, "tcp_dst", "tp_dst",
         MF_FIELD_SIZES(be16),
@@ -561,6 +604,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_TCP_DST, "OXM_OF_TCP_DST",
         OFPUTIL_P_ANY,
         OFPUTIL_P_NXM_OXM_ANY,
+        -1,
     }, {
         MFF_TCP_FLAGS, "tcp_flags", NULL,
         2, 12,
@@ -572,6 +616,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         NXM_NX_TCP_FLAGS, "NXM_NX_TCP_FLAGS",
         OFPUTIL_P_NXM_OXM_ANY,
         OFPUTIL_P_NXM_OXM_ANY,
+        -1,
     },
 
     {
@@ -585,6 +630,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_UDP_SRC, "OXM_OF_UDP_SRC",
         OFPUTIL_P_ANY,
         OFPUTIL_P_NXM_OXM_ANY,
+        -1,
     }, {
         MFF_UDP_DST, "udp_dst", NULL,
         MF_FIELD_SIZES(be16),
@@ -596,6 +642,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_UDP_DST, "OXM_OF_UDP_DST",
         OFPUTIL_P_ANY,
         OFPUTIL_P_NXM_OXM_ANY,
+        -1,
     },
 
     {
@@ -609,6 +656,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_SCTP_SRC, "OXM_OF_SCTP_SRC",
         OFPUTIL_P_NXM_OF11_UP,
         OFPUTIL_P_NXM_OXM_ANY,
+        -1,
     }, {
         MFF_SCTP_DST, "sctp_dst", NULL,
         MF_FIELD_SIZES(be16),
@@ -620,6 +668,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_SCTP_DST, "OXM_OF_SCTP_DST",
         OFPUTIL_P_NXM_OF11_UP,
         OFPUTIL_P_NXM_OXM_ANY,
+        -1,
     },
 
     {
@@ -633,6 +682,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_ICMPV4_TYPE, "OXM_OF_ICMPV4_TYPE",
         OFPUTIL_P_ANY,
         OFPUTIL_P_NONE,
+        -1,
     }, {
         MFF_ICMPV4_CODE, "icmp_code", NULL,
         MF_FIELD_SIZES(u8),
@@ -644,6 +694,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_ICMPV4_CODE, "OXM_OF_ICMPV4_CODE",
         OFPUTIL_P_ANY,
         OFPUTIL_P_NONE,
+        -1,
     },
 
     {
@@ -657,6 +708,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_ICMPV6_TYPE, "OXM_OF_ICMPV6_TYPE",
         OFPUTIL_P_NXM_OXM_ANY,
         OFPUTIL_P_NONE,
+        -1,
     }, {
         MFF_ICMPV6_CODE, "icmpv6_code", NULL,
         MF_FIELD_SIZES(u8),
@@ -668,6 +720,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_ICMPV6_CODE, "OXM_OF_ICMPV6_CODE",
         OFPUTIL_P_NXM_OXM_ANY,
         OFPUTIL_P_NONE,
+        -1,
     },
 
     /* ## ---- ## */
@@ -685,6 +738,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_IPV6_ND_TARGET, "OXM_OF_IPV6_ND_TARGET",
         OFPUTIL_P_NXM_OXM_ANY,
         OFPUTIL_P_NXM_OXM_ANY,
+        -1,
     }, {
         MFF_ND_SLL, "nd_sll", NULL,
         MF_FIELD_SIZES(mac),
@@ -696,6 +750,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_IPV6_ND_SLL, "OXM_OF_IPV6_ND_SLL",
         OFPUTIL_P_NXM_OXM_ANY,
         OFPUTIL_P_NXM_OXM_ANY,
+        -1,
     }, {
         MFF_ND_TLL, "nd_tll", NULL,
         MF_FIELD_SIZES(mac),
@@ -707,6 +762,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_IPV6_ND_TLL, "OXM_OF_IPV6_ND_TLL",
         OFPUTIL_P_NXM_OXM_ANY,
         OFPUTIL_P_NXM_OXM_ANY,
+        -1,
     }
 };
 

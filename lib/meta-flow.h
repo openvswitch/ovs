@@ -297,6 +297,9 @@ struct mf_field {
     enum ofputil_protocol usable_protocols; /* If fully/cidr masked. */
     /* If partially/non-cidr masked. */
     enum ofputil_protocol usable_protocols_bitwise;
+
+    int flow_be32ofs;  /* Field's be32 offset in "struct flow", if prefix tree
+                        * lookup is supported for the field, or -1. */
 };
 
 /* The representation of a field's value. */

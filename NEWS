@@ -1,5 +1,29 @@
 Post-v2.0.0
 ---------------------
+
+   - Address prefix tracking support for flow tables.  New columns
+     "prefixes" in OVS-DB table "Flow_Table" controls which packet
+     header fields are used for address prefix tracking.  Prefix
+     tracking allows the classifier to skip rules with longer than
+     necessary prefixes, resulting in better wildcarding for datapath
+     flows.  Default configuration is to not use any fields for prefix
+     tracking.  However, if any flow tables contain both exact matches
+     and masked matches for IP address fields, OVS performance may be
+     increased by using this feature.
+     * As of now, the fields for which prefix lookup can be enabled
+       are: 'tun_id', 'tun_src', 'tun_dst', 'nw_src', 'nw_dst' (or
+       aliases 'ip_src' and 'ip_dst'), 'ipv6_src', and 'ipv6_dst'.
+       (Using this feature for 'tun_id' would only make sense if the
+       tunnel IDs have prefix structure similar to IP addresses.)
+     * There is a maximum number of fields that can be enabled for any
+       one flow table.  Currently this limit is 3.
+     * Examples:
+       $ ovs-vsctl set Bridge br0 flow_tables:0=@N1 -- \
+         --id=@N1 create Flow_Table name=table0
+       $ ovs-vsctl set Bridge br0 flow_tables:1=@N1 -- \
+         --id=@N1 create Flow_Table name=table1
+       $ ovs-vsctl set Flow_Table table0 prefixes=ip_dst,ip_src
+       $ ovs-vsctl set Flow_Table table1 prefixes=[]
    - TCP flags matching: OVS now supports matching of TCP flags.  This
      has an adverse performance impact when using OVS userspace 1.10
      or older (no megaflows support) together with the new OVS kernel

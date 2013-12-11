@@ -20,9 +20,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "classifier.h"
 #include "compiler.h"
 #include "flow.h"
+#include "list.h"
 #include "match.h"
 #include "netdev.h"
 #include "openflow/nicira-ext.h"

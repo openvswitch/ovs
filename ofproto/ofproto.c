@@ -1159,7 +1159,7 @@ ofproto_configure_table(struct ofproto *ofproto, int table_id,
     }
 
     table->max_flows = s->max_flows;
-    ovs_rwlock_rdlock(&table->cls.rwlock);
+    ovs_rwlock_wrlock(&table->cls.rwlock);
     if (classifier_count(&table->cls) > table->max_flows
         && table->eviction_fields) {
         /* 'table' contains more flows than allowed.  We might not be able to
@@ -1175,6 +1175,10 @@ ofproto_configure_table(struct ofproto *ofproto, int table_id,
             break;
         }
     }
+
+    classifier_set_prefix_fields(&table->cls,
+                                 s->prefix_fields, s->n_prefix_fields);
+
     ovs_rwlock_unlock(&table->cls.rwlock);
 }
 
