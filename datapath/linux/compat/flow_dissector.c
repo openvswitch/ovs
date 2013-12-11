@@ -46,7 +46,7 @@ static void iph_to_flow_copy_addrs(struct flow_keys *flow, const struct iphdr *i
 	memcpy(&flow->src, &iph->saddr, sizeof(flow->src) + sizeof(flow->dst));
 }
 
-__be32 skb_flow_get_ports(const struct sk_buff *skb, int thoff, u8 ip_proto)
+static __be32 skb_flow_get_ports(const struct sk_buff *skb, int thoff, u8 ip_proto)
 {
 	int poff = proto_ports_offset(ip_proto);
 
