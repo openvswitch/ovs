@@ -126,8 +126,10 @@ OVS_VSWITCHD_START(
   [add-bond br0 bond0 p0 p1 bond_mode=balance-tcp lacp=active \
                             other-config:lacp-time=fast \
                             other-config:bond-rebalance-interval=0 -- \
-   set interface p0 type=patch options:peer=p2 ofport_request=1 -- \
-   set interface p1 type=patch options:peer=p3 ofport_request=2 -- \
+   set interface p0 type=patch options:peer=p2 ofport_request=1 \
+                    other-config:lacp-aggregation-key=2 -- \
+   set interface p1 type=patch options:peer=p3 ofport_request=2 \
+                    other-config:lacp-aggregation-key=2 -- \
    add-br br1 -- \
    set bridge br1 other-config:hwaddr=aa:66:aa:66:00:00 -- \
    set bridge br1 datapath-type=dummy other-config:datapath-id=1234 \
@@ -135,8 +137,10 @@ OVS_VSWITCHD_START(
    add-bond br1 bond1 p2 p3 bond_mode=balance-tcp lacp=active \
                             other-config:lacp-time=fast \
                             other-config:bond-rebalance-interval=0 -- \
-   set interface p2 type=patch options:peer=p0 ofport_request=3 -- \
-   set interface p3 type=patch options:peer=p1 ofport_request=4 --])
+   set interface p2 type=patch options:peer=p0 ofport_request=3 \
+                    other-config:lacp-aggregation-key=4 -- \
+   set interface p3 type=patch options:peer=p1 ofport_request=4 \
+                    other-config:lacp-aggregation-key=4 --])
 
 AT_CHECK([ovs-appctl netdev-dummy/set-admin-state up], 0, [OK
 ])
