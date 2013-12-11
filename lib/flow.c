@@ -612,6 +612,15 @@ flow_wildcards_init_exact(struct flow_wildcards *wc)
     memset(wc->masks.zeros, 0, sizeof wc->masks.zeros);
 }
 
+/* Clear the metadata and register wildcard masks. They are not packet
+ * header fields. */
+void
+flow_wildcards_clear_non_packet_fields(struct flow_wildcards *wc)
+{
+    memset(&wc->masks.metadata, 0, sizeof wc->masks.metadata);
+    memset(&wc->masks.regs, 0, sizeof wc->masks.regs);
+}
+
 /* Returns true if 'wc' matches every packet, false if 'wc' fixes any bits or
  * fields. */
 bool

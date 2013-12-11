@@ -4287,6 +4287,10 @@ facet_revalidate(struct facet *facet)
     xlate_in_init(&xin, ofproto, &facet->flow, new_rule, 0, NULL);
     xlate_actions(&xin, &xout);
     flow_wildcards_or(&xout.wc, &xout.wc, &wc);
+    /* Make sure non -packet fields are not masked. If not cleared,
+     * the memcmp() below may fail, causing an otherwise valid facet
+     * to be removed. */
+    flow_wildcards_clear_non_packet_fields(&xout.wc);
 
     /* A facet's slow path reason should only change under dramatic
      * circumstances.  Rather than try to update everything, it's simpler to
