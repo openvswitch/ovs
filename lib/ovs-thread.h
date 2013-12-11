@@ -276,7 +276,10 @@ void xpthread_join(pthread_t, void **);
         if (!value) {                                                   \
             static const NAME##_type initial_value = __VA_ARGS__;       \
                                                                         \
-            value = xmalloc(sizeof *value);                             \
+            value = malloc(sizeof *value);                              \
+            if (value == NULL) {                                        \
+                out_of_memory();                                        \
+            }                                                           \
             *value = initial_value;                                     \
             xpthread_setspecific(NAME##_key, value);                    \
         }                                                               \
@@ -313,7 +316,10 @@ void xpthread_join(pthread_t, void **);
         if (!value) {                                                   \
             static const NAME##_type initial_value = __VA_ARGS__;       \
                                                                         \
-            value = xmalloc(sizeof *value);                             \
+            value = malloc(sizeof *value);                              \
+            if (value == NULL) {                                        \
+                out_of_memory();                                        \
+            }                                                           \
             *value = initial_value;                                     \
             xpthread_setspecific(NAME##_key, value);                    \
         }                                                               \
