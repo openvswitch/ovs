@@ -91,7 +91,7 @@ jhash_words(const uint32_t *p, size_t n, uint32_t basis)
 
 /* Returns the Jenkins hash of the 'n' bytes at 'p', starting from 'basis'.
  *
- * Use jhash_bytes() instead, unless you're computing a hash function whose
+ * Use hash_bytes() instead, unless you're computing a hash function whose
  * value is exposed "on the wire" so we don't want to change it. */
 uint32_t
 jhash_bytes(const void *p_, size_t n, uint32_t basis)
