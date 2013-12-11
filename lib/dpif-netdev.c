@@ -40,6 +40,7 @@
 #include "flow.h"
 #include "hmap.h"
 #include "list.h"
+#include "meta-flow.h"
 #include "netdev.h"
 #include "netdev-vport.h"
 #include "netlink.h"
@@ -788,44 +789,49 @@ get_dpif_flow_stats(struct dp_netdev_flow *netdev_flow,
 }
 
 static int
-dpif_netdev_flow_mask_from_nlattrs(const struct nlattr *key, uint32_t key_len,
-                                   const struct nlattr *mask_key,
-                                   uint32_t mask_key_len, struct flow *flow,
-                                   struct flow *mask)
+dpif_netdev_mask_from_nlattrs(const struct nlattr *key, uint32_t key_len,
+                              const struct nlattr *mask_key,
+                              uint32_t mask_key_len, const struct flow *flow,
+                              struct flow *mask)
 {
-    odp_port_t in_port;
+    if (mask_key_len) {
+        if (odp_flow_key_to_mask(mask_key, mask_key_len, mask, flow)) {
+            /* This should not happen: it indicates that
+             * odp_flow_key_from_mask() and odp_flow_key_to_mask()
+             * disagree on the acceptable form of a mask.  Log the problem
+             * as an error, with enough details to enable debugging. */
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
-    if (odp_flow_key_to_flow(key, key_len, flow)
-        || (mask_key
-            && odp_flow_key_to_mask(mask_key, mask_key_len, mask, flow))) {
-        /* This should not happen: it indicates that odp_flow_key_from_flow()
-         * and odp_flow_key_to_flow() disagree on the acceptable form of a flow
-         * or odp_flow_key_from_mask() and odp_flow_key_to_mask() disagree on
-         * the acceptable form of a mask.  Log the problem as an error, with
-         * enough details to enable debugging. */
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+            if (!VLOG_DROP_ERR(&rl)) {
+                struct ds s;
 
-        if (!VLOG_DROP_ERR(&rl)) {
-            struct ds s;
+                ds_init(&s);
+                odp_flow_format(key, key_len, mask_key, mask_key_len, NULL, &s,
+                                true);
+                VLOG_ERR("internal error parsing flow mask %s", ds_cstr(&s));
+                ds_destroy(&s);
+            }
 
-            ds_init(&s);
-            odp_flow_format(key, key_len, mask_key, mask_key_len, NULL, &s,
-                            true);
-            VLOG_ERR("internal error parsing flow key %s", ds_cstr(&s));
-            ds_destroy(&s);
+            return EINVAL;
         }
-
-        return EINVAL;
-    }
-
-    if (mask_key) {
         /* Force unwildcard the in_port. */
         mask->in_port.odp_port = u32_to_odp(UINT32_MAX);
-    }
+    } else {
+        enum mf_field_id id;
+        /* No mask key, unwildcard everything except fields whose
+         * prerequisities are not met. */
+        memset(mask, 0x0, sizeof *mask);
 
-    in_port = flow->in_port.odp_port;
-    if (!is_valid_port_number(in_port) && in_port != ODPP_NONE) {
-        return EINVAL;
+        for (id = 0; id < MFF_N_IDS; ++id) {
+            /* Skip registers and metadata. */
+            if (!(id >= MFF_REG0 && id < MFF_REG0 + FLOW_N_REGS)
+                && id != MFF_METADATA) {
+                const struct mf_field *mf = mf_from_id(id);
+                if (mf_are_prereqs_ok(mf, flow)) {
+                    mf_mask_field(mf, mask);
+                }
+            }
+        }
     }
 
     return 0;
@@ -835,8 +841,33 @@ static int
 dpif_netdev_flow_from_nlattrs(const struct nlattr *key, uint32_t key_len,
                               struct flow *flow)
 {
-    return dpif_netdev_flow_mask_from_nlattrs(key, key_len, NULL, 0, flow,
-                                              NULL);
+    odp_port_t in_port;
+
+    if (odp_flow_key_to_flow(key, key_len, flow)) {
+        /* This should not happen: it indicates that odp_flow_key_from_flow()
+         * and odp_flow_key_to_flow() disagree on the acceptable form of a
+         * flow.  Log the problem as an error, with enough details to enable
+         * debugging. */
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+        if (!VLOG_DROP_ERR(&rl)) {
+            struct ds s;
+
+            ds_init(&s);
+            odp_flow_format(key, key_len, NULL, 0, NULL, &s, true);
+            VLOG_ERR("internal error parsing flow key %s", ds_cstr(&s));
+            ds_destroy(&s);
+        }
+
+        return EINVAL;
+    }
+
+    in_port = flow->in_port.odp_port;
+    if (!is_valid_port_number(in_port) && in_port != ODPP_NONE) {
+        return EINVAL;
+    }
+
+    return 0;
 }
 
 static int
@@ -934,8 +965,13 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
     struct flow_wildcards wc;
     int error;
 
-    error = dpif_netdev_flow_mask_from_nlattrs(put->key, put->key_len,
-                put->mask, put->mask_len, &flow, &wc.masks);
+    error = dpif_netdev_flow_from_nlattrs(put->key, put->key_len, &flow);
+    if (error) {
+        return error;
+    }
+    error = dpif_netdev_mask_from_nlattrs(put->key, put->key_len,
+                                          put->mask, put->mask_len,
+                                          &flow, &wc.masks);
     if (error) {
         return error;
     }
