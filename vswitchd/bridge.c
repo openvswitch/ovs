@@ -255,6 +255,8 @@ static void iface_refresh_cfm_stats(struct iface *);
 static void iface_refresh_stats(struct iface *);
 static void iface_refresh_status(struct iface *);
 static bool iface_is_synthetic(const struct iface *);
+static ofp_port_t iface_get_requested_ofp_port(
+    const struct ovsrec_interface *);
 static ofp_port_t iface_pick_ofport(const struct ovsrec_interface *);
 
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
@@ -652,6 +654,7 @@ bridge_delete_or_reconfigure_ports(struct bridge *br)
     n = allocated = 0;
 
     OFPROTO_PORT_FOR_EACH (&ofproto_port, &dump, br->ofproto) {
+        ofp_port_t requested_ofp_port;
         struct iface *iface;
 
         iface = iface_lookup(br, ofproto_port.name);
@@ -675,6 +678,43 @@ bridge_delete_or_reconfigure_ports(struct bridge *br)
             goto delete;
         }
 
+        /* If the requested OpenFlow port for 'iface' changed, and it's not
+         * already the correct port, then we might want to temporarily delete
+         * this interface, so we can add it back again with the new OpenFlow
+         * port number. */
+        requested_ofp_port = iface_get_requested_ofp_port(iface->cfg);
+        if (iface->ofp_port != OFPP_LOCAL &&
+            requested_ofp_port != OFPP_NONE &&
+            requested_ofp_port != iface->ofp_port) {
+            ofp_port_t victim_request;
+            struct iface *victim;
+
+            /* Check for an existing OpenFlow port currently occupying
+             * 'iface''s requested port number.  If there isn't one, then
+             * delete this port.  Otherwise we need to consider further. */
+            victim = iface_from_ofp_port(br, requested_ofp_port);
+            if (!victim) {
+                goto delete;
+            }
+
+            /* 'victim' is a port currently using 'iface''s requested port
+             * number.  Unless 'victim' specifically requested that port
+             * number, too, then we can delete both 'iface' and 'victim'
+             * temporarily.  (We'll add both of them back again later with new
+             * OpenFlow port numbers.)
+             *
+             * If 'victim' did request port number 'requested_ofp_port', just
+             * like 'iface', then that's a configuration inconsistency that we
+             * can't resolve.  We might as well let it keep its current port
+             * number. */
+            victim_request = iface_get_requested_ofp_port(victim->cfg);
+            if (victim_request != requested_ofp_port) {
+                del = add_ofp_port(victim->ofp_port, del, &n, &allocated);
+                iface_destroy(victim);
+                goto delete;
+            }
+        }
+
         /* Keep it. */
         continue;
 
@@ -690,7 +730,8 @@ bridge_delete_or_reconfigure_ports(struct bridge *br)
 }
 
 static void
-bridge_add_ports(struct bridge *br, const struct shash *wanted_ports)
+bridge_add_ports__(struct bridge *br, const struct shash *wanted_ports,
+                   bool with_requested_port)
 {
     struct shash_node *port_node;
 
@@ -700,13 +741,30 @@ bridge_add_ports(struct bridge *br, const struct shash *wanted_ports)
 
         for (i = 0; i < port_cfg->n_interfaces; i++) {
             const struct ovsrec_interface *iface_cfg = port_cfg->interfaces[i];
-            struct iface *iface = iface_lookup(br, iface_cfg->name);
+            ofp_port_t requested_ofp_port;
 
-            if (!iface) {
-                iface_create(br, iface_cfg, port_cfg);
+            requested_ofp_port = iface_get_requested_ofp_port(iface_cfg);
+            if ((requested_ofp_port != OFPP_NONE) == with_requested_port) {
+                struct iface *iface = iface_lookup(br, iface_cfg->name);
+
+                if (!iface) {
+                    iface_create(br, iface_cfg, port_cfg);
+                }
             }
         }
     }
+}
+
+static void
+bridge_add_ports(struct bridge *br, const struct shash *wanted_ports)
+{
+    /* First add interfaces that request a particular port number. */
+    bridge_add_ports__(br, wanted_ports, true);
+
+    /* Then add interfaces that want automatic port number assignment.
+     * We add these afterward to avoid accidentally taking a specifically
+     * requested port number. */
+    bridge_add_ports__(br, wanted_ports, false);
 }
 
 static void
@@ -1458,7 +1516,7 @@ iface_create(struct bridge *br, const struct ovsrec_interface *iface_cfg,
 
             error = netdev_open(port->name, "internal", &netdev);
             if (!error) {
-                ofp_port_t fake_ofp_port = iface_pick_ofport(iface_cfg);
+                ofp_port_t fake_ofp_port = OFPP_NONE;
                 ofproto_port_add(br->ofproto, netdev, &fake_ofp_port);
                 netdev_close(netdev);
             } else {
@@ -3636,14 +3694,27 @@ iface_is_synthetic(const struct iface *iface)
 }
 
 static ofp_port_t
-iface_pick_ofport(const struct ovsrec_interface *cfg)
+iface_validate_ofport__(size_t n, int64_t *ofport)
 {
-    ofp_port_t ofport = cfg->n_ofport ? u16_to_ofp(*cfg->ofport)
-                                      : OFPP_NONE;
-    return cfg->n_ofport_request ? u16_to_ofp(*cfg->ofport_request)
-                                 : ofport;
+    return (n && *ofport >= 1 && *ofport < ofp_to_u16(OFPP_MAX)
+            ? u16_to_ofp(*ofport)
+            : OFPP_NONE);
 }
 
+static ofp_port_t
+iface_get_requested_ofp_port(const struct ovsrec_interface *cfg)
+{
+    return iface_validate_ofport__(cfg->n_ofport_request, cfg->ofport_request);
+}
+
+static ofp_port_t
+iface_pick_ofport(const struct ovsrec_interface *cfg)
+{
+    ofp_port_t requested_ofport = iface_get_requested_ofp_port(cfg);
+    return (requested_ofport != OFPP_NONE
+            ? requested_ofport
+            : iface_validate_ofport__(cfg->n_ofport, cfg->ofport));
+}
 
 /* Port mirroring. */
 

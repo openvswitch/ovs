@@ -1306,14 +1306,19 @@
 	  </p>
 
 	  <p>
-	    Open vSwitch currently assigns the OpenFlow port number for an
-	    interface once, when the client first adds the interface.  It does
-	    not change the port number later if the client sets or changes or
-	    clears <ref column="ofport_request"/>.  Therefore, to ensure that
-	    <ref column="ofport_request"/> takes effect, the client should set
-	    it in the same database transaction that creates the interface.
-	    (Future versions of Open vSwitch might honor changes to <ref
-	    column="ofport_request"/>.)
+	    A client should ideally set this column's value in the same
+	    database transaction that it uses to create the interface.  Open
+	    vSwitch version 2.1 and later will honor a later request for a
+	    specific port number, althuogh it might confuse some controllers:
+	    OpenFlow does not have a way to announce a port number change, so
+	    Open vSwitch represents it over OpenFlow as a port deletion
+	    followed immediately by a port addition.
+	  </p>
+
+	  <p>
+	    If <ref column="ofport_request"/> is set or changed to some other
+	    port's automatically assigned port number, Open vSwitch chooses a
+	    new port number for the latter port.
 	  </p>
 	</column>
       </group>

@@ -38,6 +38,9 @@ Post-v2.0.0
      * OVS limits the OpenFlow port numbers it assigns to port 32767 and
        below, leaving port numbers above that range free for assignment
        by the controller.
+     * ovs-vswitchd now honors changes to the "ofport_request" column
+       in the Interface table by changing the port's OpenFlow port
+       number.
    - ovs-vswitchd.conf.db.5 man page will contain graphviz/dot
      diagram only if graphviz package was installed at the build time.
    - Support for Linux kernels up to 3.11
