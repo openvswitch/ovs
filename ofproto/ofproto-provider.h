@@ -162,6 +162,8 @@ struct ofport *ofproto_get_port(const struct ofproto *, ofp_port_t ofp_port);
 
 /* An OpenFlow port within a "struct ofproto".
  *
+ * The port's name is netdev_get_name(port->netdev).
+ *
  * With few exceptions, ofproto implementations may look at these fields but
  * should not modify them. */
 struct ofport {
