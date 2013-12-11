@@ -1195,14 +1195,14 @@ allows isn't supported at the moment.)
 A priority of zero and the tag of zero are used for the new tag.
 .
 .IP \fBpush_mpls\fR:\fIethertype\fR
-If the packet does not already contain any MPLS labels, changes the
-packet's Ethertype to \fIethertype\fR, which must be either the MPLS
-unicast Ethertype \fB0x8847\fR or the MPLS multicast Ethertype
-\fB0x8848\fR, and then pushes an initial label stack entry.  The label
-stack entry's default label is 2 if the packet contains IPv6 and 0
-otherwise, its default traffic control value is the low 3 bits of the
-packet's DSCP value (0 if the packet is not IP), and its TTL is copied
-from the IP TTL (64 if the packet is not IP).
+Changes the packet's Ethertype to \fIethertype\fR, which must be either
+\fB0x8847\fR or \fB0x8848\fR, and pushes an MPLS LSE.
+.IP
+If the packet does not already contain any MPLS labels then an initial
+label stack entry is pushed.  The label stack entry's label is 2 if the
+packet contains IPv6 and 0 otherwise, its default traffic control value is
+the low 3 bits of the packet's DSCP value (0 if the packet is not IP), and
+its TTL is copied from the IP TTL (64 if the packet is not IP).
 .IP
 If the packet does already contain an MPLS label, pushes a new
 outermost label as a copy of the existing outermost label.
