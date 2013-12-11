@@ -386,13 +386,19 @@ netdev_set_config(struct netdev *netdev, const struct smap *args)
 {
     if (netdev->netdev_class->set_config) {
         const struct smap no_args = SMAP_INITIALIZER(&no_args);
-        return netdev->netdev_class->set_config(netdev,
-                                                args ? args : &no_args);
+        int error;
+
+        error = netdev->netdev_class->set_config(netdev,
+                                                 args ? args : &no_args);
+        if (error) {
+            VLOG_WARN("%s: could not set configuration (%s)",
+                      netdev_get_name(netdev), ovs_strerror(error));
+        }
+        return error;
     } else if (args && !smap_is_empty(args)) {
         VLOG_WARN("%s: arguments provided to device that is not configurable",
                   netdev_get_name(netdev));
     }
-
     return 0;
 }
 

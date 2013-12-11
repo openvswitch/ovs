@@ -350,7 +350,6 @@ dpctl_add_if(int argc OVS_UNUSED, char *argv[])
 
         error = netdev_set_config(netdev, &args);
         if (error) {
-            ovs_error(error, "%s: failed to configure network device", name);
             goto next;
         }
 
@@ -459,7 +458,6 @@ dpctl_set_if(int argc, char *argv[])
         error = netdev_set_config(netdev, &args);
         smap_destroy(&args);
         if (error) {
-            ovs_error(error, "%s: failed to configure network device", name);
             goto next;
         }
 

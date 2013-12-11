@@ -1343,14 +1343,7 @@ static int
 iface_set_netdev_config(const struct ovsrec_interface *iface_cfg,
                         struct netdev *netdev)
 {
-    int error;
-
-    error = netdev_set_config(netdev, &iface_cfg->options);
-    if (error) {
-        VLOG_WARN("could not configure network device %s (%s)",
-                  iface_cfg->name, ovs_strerror(error));
-    }
-    return error;
+    return netdev_set_config(netdev, &iface_cfg->options);
 }
 
 /* This function determines whether 'ofproto_port', which is attached to
