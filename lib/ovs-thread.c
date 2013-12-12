@@ -326,7 +326,7 @@ parse_cpuinfo(long int *n_cores)
 
     stream = fopen(file_name, "r");
     if (!stream) {
-        VLOG_WARN("%s: open failed (%s)", file_name, ovs_strerror(errno));
+        VLOG_DBG("%s: open failed (%s)", file_name, ovs_strerror(errno));
         return;
     }
 
