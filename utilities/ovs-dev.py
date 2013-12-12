@@ -216,7 +216,7 @@ def run():
     if options.gdb:
         cmd = ["gdb", "--args"] + cmd
     elif options.valgrind:
-        cmd = ["valgrind", "--track-origins=yes",
+        cmd = ["valgrind", "--track-origins=yes", "--leak-check=full",
                "--suppressions=%s/tests/glibc.supp" % OVS_SRC,
                "--suppressions=%s/tests/openssl.supp" % OVS_SRC] + cmd
     else:
