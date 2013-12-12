@@ -901,7 +901,7 @@ raw_clz64(uint64_t n)
 }
 #endif
 
-#if !(__GNUC__ >= 4 && defined(__corei7))
+#if NEED_COUNT_1BITS_8
 #define INIT1(X)                                \
     ((((X) & (1 << 0)) != 0) +                  \
      (((X) & (1 << 1)) != 0) +                  \
