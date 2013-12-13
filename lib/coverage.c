@@ -30,8 +30,8 @@ VLOG_DEFINE_THIS_MODULE(coverage);
 
 /* The coverage counters. */
 static struct coverage_counter **coverage_counters = NULL;
-static unsigned int n_coverage_counters = 0;
-static unsigned int allocated_coverage_counters = 0;
+static size_t n_coverage_counters = 0;
+static size_t allocated_coverage_counters = 0;
 
 static struct ovs_mutex coverage_mutex = OVS_MUTEX_INITIALIZER;
 
