@@ -85,6 +85,7 @@ struct ofproto {
     uint16_t alloc_port_no;     /* Last allocated OpenFlow port number. */
     uint16_t max_ports;         /* Max possible OpenFlow port num, plus one. */
     struct hmap ofport_usage;   /* Map ofport to last used time. */
+    uint64_t change_seq;        /* Change sequence for netdev status. */
 
     /* Flow tables. */
     long long int eviction_group_timer; /* For rate limited reheapification. */
@@ -172,7 +173,6 @@ struct ofport {
     struct netdev *netdev;
     struct ofputil_phy_port pp;
     ofp_port_t ofp_port;        /* OpenFlow port number. */
-    unsigned int change_seq;
     long long int created;      /* Time created, in msec. */
     int mtu;
 };

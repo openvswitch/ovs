@@ -48,6 +48,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "connectivity.h"
 #include "coverage.h"
 #include "dpif-linux.h"
 #include "dynamic-string.h"
@@ -65,6 +66,7 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "rtnetlink-link.h"
+#include "seq.h"
 #include "shash.h"
 #include "socket-util.h"
 #include "sset.h"
@@ -357,7 +359,6 @@ struct netdev_linux {
     struct ovs_mutex mutex;
 
     unsigned int cache_valid;
-    unsigned int change_seq;
 
     bool miimon;                    /* Link status of last poll. */
     long long int miimon_interval;  /* Miimon Poll rate. Disabled if <= 0. */
@@ -585,10 +586,7 @@ netdev_linux_changed(struct netdev_linux *dev,
                      unsigned int ifi_flags, unsigned int mask)
     OVS_REQUIRES(dev->mutex)
 {
-    dev->change_seq++;
-    if (!dev->change_seq) {
-        dev->change_seq++;
-    }
+    seq_change(connectivity_seq_get());
 
     if ((dev->ifi_flags ^ ifi_flags) & IFF_RUNNING) {
         dev->carrier_resets++;
@@ -640,7 +638,6 @@ static void
 netdev_linux_common_construct(struct netdev_linux *netdev)
 {
     ovs_mutex_init(&netdev->mutex);
-    netdev->change_seq = 1;
 }
 
 /* Creates system and internal devices. */
@@ -2597,19 +2594,6 @@ netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
     return error;
 }
 
-static unsigned int
-netdev_linux_change_seq(const struct netdev *netdev_)
-{
-    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-    unsigned int change_seq;
-
-    ovs_mutex_lock(&netdev->mutex);
-    change_seq = netdev->change_seq;
-    ovs_mutex_unlock(&netdev->mutex);
-
-    return change_seq;
-}
-
 #define NETDEV_LINUX_CLASS(NAME, CONSTRUCT, GET_STATS, SET_STATS,  \
                            GET_FEATURES, GET_STATUS)            \
 {                                                               \
@@ -2667,8 +2651,6 @@ netdev_linux_change_seq(const struct netdev *netdev_)
     netdev_linux_arp_lookup,                                    \
                                                                 \
     netdev_linux_update_flags,                                  \
-                                                                \
-    netdev_linux_change_seq,                                    \
                                                                 \
     netdev_linux_rx_alloc,                                      \
     netdev_linux_rx_construct,                                  \

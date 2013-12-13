@@ -29,6 +29,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/command-line.c \
 	lib/command-line.h \
 	lib/compiler.h \
+	lib/connectivity.c \
+	lib/connectivity.h \
 	lib/coverage.c \
 	lib/coverage.h \
 	lib/crc32c.c \

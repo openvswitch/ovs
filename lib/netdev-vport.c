@@ -25,6 +25,7 @@
 #include <sys/ioctl.h>
 
 #include "byte-order.h"
+#include "connectivity.h"
 #include "daemon.h"
 #include "dirs.h"
 #include "dpif.h"
@@ -35,6 +36,7 @@
 #include "ofpbuf.h"
 #include "packets.h"
 #include "route-table.h"
+#include "seq.h"
 #include "shash.h"
 #include "socket-util.h"
 #include "vlog.h"
@@ -52,7 +54,6 @@ struct netdev_vport {
     /* Protects all members below. */
     struct ovs_mutex mutex;
 
-    unsigned int change_seq;
     uint8_t etheraddr[ETH_ADDR_LEN];
     struct netdev_stats stats;
 
@@ -71,8 +72,6 @@ struct vport_class {
 static int netdev_vport_construct(struct netdev *);
 static int get_patch_config(const struct netdev *netdev, struct smap *args);
 static int get_tunnel_config(const struct netdev *, struct smap *args);
-static void netdev_vport_changed(struct netdev_vport *netdev)
-    OVS_REQUIRES(netdev->mutex);
 
 static bool
 is_vport_class(const struct netdev_class *class)
@@ -180,7 +179,6 @@ netdev_vport_construct(struct netdev *netdev_)
     struct netdev_vport *netdev = netdev_vport_cast(netdev_);
 
     ovs_mutex_init(&netdev->mutex);
-    netdev->change_seq = 1;
     eth_addr_random(netdev->etheraddr);
 
     route_table_register();
@@ -213,8 +211,8 @@ netdev_vport_set_etheraddr(struct netdev *netdev_,
 
     ovs_mutex_lock(&netdev->mutex);
     memcpy(netdev->etheraddr, mac, ETH_ADDR_LEN);
-    netdev_vport_changed(netdev);
     ovs_mutex_unlock(&netdev->mutex);
+    seq_change(connectivity_seq_get());
 
     return 0;
 }
@@ -272,12 +270,6 @@ netdev_vport_update_flags(struct netdev *netdev OVS_UNUSED,
     return 0;
 }
 
-static unsigned int
-netdev_vport_change_seq(const struct netdev *netdev)
-{
-    return netdev_vport_cast(netdev)->change_seq;
-}
-
 static void
 netdev_vport_run(void)
 {
@@ -288,17 +280,6 @@ static void
 netdev_vport_wait(void)
 {
     route_table_wait();
-}
-
-/* Helper functions. */
-
-static void
-netdev_vport_changed(struct netdev_vport *ndv)
-{
-    ndv->change_seq++;
-    if (!ndv->change_seq) {
-        ndv->change_seq++;
-    }
 }
 
 /* Code specific to tunnel types. */
@@ -503,7 +484,7 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
 
     ovs_mutex_lock(&dev->mutex);
     dev->tnl_cfg = tnl_cfg;
-    netdev_vport_changed(dev);
+    seq_change(connectivity_seq_get());
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
@@ -677,7 +658,7 @@ set_patch_config(struct netdev *dev_, const struct smap *args)
     ovs_mutex_lock(&dev->mutex);
     free(dev->peer);
     dev->peer = xstrdup(peer);
-    netdev_vport_changed(dev);
+    seq_change(connectivity_seq_get());
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
@@ -749,8 +730,6 @@ get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     NULL,                       /* arp_lookup */            \
                                                             \
     netdev_vport_update_flags,                              \
-                                                            \
-    netdev_vport_change_seq,                                \
                                                             \
     NULL,                   /* rx_alloc */                  \
     NULL,                   /* rx_construct */              \

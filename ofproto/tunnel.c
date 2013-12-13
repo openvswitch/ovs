@@ -18,12 +18,14 @@
 #include <errno.h>
 
 #include "byte-order.h"
+#include "connectivity.h"
 #include "dynamic-string.h"
 #include "hash.h"
 #include "hmap.h"
 #include "netdev.h"
 #include "odp-util.h"
 #include "packets.h"
+#include "seq.h"
 #include "smap.h"
 #include "socket-util.h"
 #include "tunnel.h"
@@ -50,7 +52,7 @@ struct tnl_port {
     struct hmap_node match_node;
 
     const struct ofport_dpif *ofport;
-    unsigned int netdev_seq;
+    unsigned int change_seq;
     struct netdev *netdev;
 
     struct tnl_match match;
@@ -97,7 +99,7 @@ tnl_port_add__(const struct ofport_dpif *ofport, const struct netdev *netdev,
     tnl_port = xzalloc(sizeof *tnl_port);
     tnl_port->ofport = ofport;
     tnl_port->netdev = netdev_ref(netdev);
-    tnl_port->netdev_seq = netdev_change_seq(tnl_port->netdev);
+    tnl_port->change_seq = seq_read(connectivity_seq_get());
 
     tnl_port->match.in_key = cfg->in_key;
     tnl_port->match.ip_src = cfg->ip_src;
@@ -159,7 +161,7 @@ tnl_port_reconfigure(const struct ofport_dpif *ofport,
         changed = tnl_port_add__(ofport, netdev, odp_port, false);
     } else if (tnl_port->netdev != netdev
                || tnl_port->match.odp_port != odp_port
-               || tnl_port->netdev_seq != netdev_change_seq(netdev)) {
+               || tnl_port->change_seq != seq_read(connectivity_seq_get())) {
         VLOG_DBG("reconfiguring %s", tnl_port_get_name(tnl_port));
         tnl_port_del__(ofport);
         tnl_port_add__(ofport, netdev, odp_port, true);

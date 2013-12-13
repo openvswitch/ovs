@@ -24,6 +24,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "connectivity.h"
 #include "coverage.h"
 #include "dpif.h"
 #include "dynamic-string.h"
@@ -36,6 +37,7 @@
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "seq.h"
 #include "shash.h"
 #include "smap.h"
 #include "sset.h"
@@ -331,6 +333,7 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
                     int old_ref_cnt;
 
                     atomic_add(&rc->ref_cnt, 1, &old_ref_cnt);
+                    seq_change(connectivity_seq_get());
                 } else {
                     free(netdev->name);
                     ovs_assert(list_is_empty(&netdev->saved_flags_list));
@@ -1500,18 +1503,6 @@ netdev_dump_queue_stats(const struct netdev *netdev,
             : EOPNOTSUPP);
 }
 
-/* Returns a sequence number which indicates changes in one of 'netdev''s
- * properties.  The returned sequence will be nonzero so that callers have a
- * value which they may use as a reset when tracking 'netdev'.
- *
- * The returned sequence number will change whenever 'netdev''s flags,
- * features, ethernet address, or carrier changes.  It may change for other
- * reasons as well, or no reason at all. */
-unsigned int
-netdev_change_seq(const struct netdev *netdev)
-{
-    return netdev->netdev_class->change_seq(netdev);
-}
 
 /* Returns the class type of 'netdev'.
  *

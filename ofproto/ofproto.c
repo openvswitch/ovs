@@ -25,6 +25,7 @@
 #include "bitmap.h"
 #include "byte-order.h"
 #include "classifier.h"
+#include "connectivity.h"
 #include "connmgr.h"
 #include "coverage.h"
 #include "dynamic-string.h"
@@ -47,6 +48,7 @@
 #include "pktbuf.h"
 #include "poll-loop.h"
 #include "random.h"
+#include "seq.h"
 #include "shash.h"
 #include "simap.h"
 #include "smap.h"
@@ -1432,10 +1434,8 @@ any_pending_ops(const struct ofproto *p)
 int
 ofproto_run(struct ofproto *p)
 {
-    struct sset changed_netdevs;
-    const char *changed_netdev;
-    struct ofport *ofport;
     int error;
+    uint64_t new_seq;
 
     error = p->ofproto_class->run(p);
     if (error && error != EAGAIN) {
@@ -1486,24 +1486,29 @@ ofproto_run(struct ofproto *p)
         }
     }
 
-    /* Update OpenFlow port status for any port whose netdev has changed.
-     *
-     * Refreshing a given 'ofport' can cause an arbitrary ofport to be
-     * destroyed, so it's not safe to update ports directly from the
-     * HMAP_FOR_EACH loop, or even to use HMAP_FOR_EACH_SAFE.  Instead, we
-     * need this two-phase approach. */
-    sset_init(&changed_netdevs);
-    HMAP_FOR_EACH (ofport, hmap_node, &p->ports) {
-        unsigned int change_seq = netdev_change_seq(ofport->netdev);
-        if (ofport->change_seq != change_seq) {
-            ofport->change_seq = change_seq;
-            sset_add(&changed_netdevs, netdev_get_name(ofport->netdev));
+    new_seq = seq_read(connectivity_seq_get());
+    if (new_seq != p->change_seq) {
+        struct sset devnames;
+        const char *devname;
+        struct ofport *ofport;
+
+        /* Update OpenFlow port status for any port whose netdev has changed.
+         *
+         * Refreshing a given 'ofport' can cause an arbitrary ofport to be
+         * destroyed, so it's not safe to update ports directly from the
+         * HMAP_FOR_EACH loop, or even to use HMAP_FOR_EACH_SAFE.  Instead, we
+         * need this two-phase approach. */
+        sset_init(&devnames);
+        HMAP_FOR_EACH (ofport, hmap_node, &p->ports) {
+            sset_add(&devnames, netdev_get_name(ofport->netdev));
         }
+        SSET_FOR_EACH (devname, &devnames) {
+            update_port(p, devname);
+        }
+        sset_destroy(&devnames);
+
+        p->change_seq = new_seq;
     }
-    SSET_FOR_EACH (changed_netdev, &changed_netdevs) {
-        update_port(p, changed_netdev);
-    }
-    sset_destroy(&changed_netdevs);
 
     switch (p->state) {
     case S_OPENFLOW:
@@ -1593,18 +1598,11 @@ ofproto_run_fast(struct ofproto *p)
 void
 ofproto_wait(struct ofproto *p)
 {
-    struct ofport *ofport;
-
     p->ofproto_class->wait(p);
     if (p->ofproto_class->port_poll_wait) {
         p->ofproto_class->port_poll_wait(p);
     }
-
-    HMAP_FOR_EACH (ofport, hmap_node, &p->ports) {
-        if (ofport->change_seq != netdev_change_seq(ofport->netdev)) {
-            poll_immediate_wake();
-        }
-    }
+    seq_wait(connectivity_seq_get(), p->change_seq);
 
     switch (p->state) {
     case S_OPENFLOW:
@@ -2164,7 +2162,6 @@ ofport_install(struct ofproto *p,
     }
     ofport->ofproto = p;
     ofport->netdev = netdev;
-    ofport->change_seq = netdev_change_seq(netdev);
     ofport->pp = *pp;
     ofport->ofp_port = pp->port_no;
     ofport->created = time_msec();
@@ -2399,7 +2396,6 @@ update_port(struct ofproto *ofproto, const char *name)
              * Don't close the old netdev yet in case port_modified has to
              * remove a retained reference to it.*/
             port->netdev = netdev;
-            port->change_seq = netdev_change_seq(netdev);
 
             if (port->ofproto->ofproto_class->port_modified) {
                 port->ofproto->ofproto_class->port_modified(port);
