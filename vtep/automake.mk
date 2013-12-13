@@ -11,7 +11,7 @@ man_MANS += \
    vtep/vtep-ctl.8
 
 vtep_vtep_ctl_SOURCES = vtep/vtep-ctl.c
-vtep_vtep_ctl_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
+vtep_vtep_ctl_LDADD = lib/libopenvswitch.la $(SSL_LIBS)
 
 # ovs-vtep
 scripts_SCRIPTS += \

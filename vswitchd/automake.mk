@@ -12,9 +12,9 @@ vswitchd_ovs_vswitchd_SOURCES = \
 	vswitchd/xenserver.c \
 	vswitchd/xenserver.h
 vswitchd_ovs_vswitchd_LDADD = \
-	ofproto/libofproto.a \
-	lib/libsflow.a \
-	lib/libopenvswitch.a \
+	ofproto/libofproto.la \
+	lib/libsflow.la \
+	lib/libopenvswitch.la \
 	$(SSL_LIBS)
 EXTRA_DIST += vswitchd/INTERNALS
 MAN_ROOTS += vswitchd/ovs-vswitchd.8.in

@@ -5,8 +5,9 @@
 # notice and this notice are preserved.  This file is offered as-is,
 # without warranty of any kind.
 
-noinst_LIBRARIES += ofproto/libofproto.a
-ofproto_libofproto_a_SOURCES = \
+lib_LTLIBRARIES += ofproto/libofproto.la
+ofproto_libofproto_la_LDFLAGS = -release $(VERSION)
+ofproto_libofproto_la_SOURCES = \
 	ofproto/bond.c \
 	ofproto/bond.h \
 	ofproto/collectors.c \
@@ -45,10 +46,13 @@ ofproto_libofproto_a_SOURCES = \
 	ofproto/pinsched.h \
 	ofproto/tunnel.c \
 	ofproto/tunnel.h
+ofproto_libofproto_la_CPPFLAGS = $(AM_CPPFLAGS)
+ofproto_libofproto_la_CFLAGS = $(AM_CFLAGS)
+ofproto_libofproto_la_LIBADD = lib/libsflow.la
 
 # Distribute this generated file in order not to require Python at
 # build time if ofproto/ipfix.xml is not modified.
-ofproto_libofproto_a_SOURCES += ofproto/ipfix-entities.def
+ofproto_libofproto_la_SOURCES += ofproto/ipfix-entities.def
 
 BUILT_SOURCES += ofproto/ipfix-entities.def
 

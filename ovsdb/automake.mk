@@ -1,6 +1,7 @@
 # libovsdb
-noinst_LIBRARIES += ovsdb/libovsdb.a
-ovsdb_libovsdb_a_SOURCES = \
+lib_LTLIBRARIES += ovsdb/libovsdb.la
+ovsdb_libovsdb_la_LDFLAGS = -release $(VERSION)
+ovsdb_libovsdb_la_SOURCES = \
 	ovsdb/column.c \
 	ovsdb/column.h \
 	ovsdb/condition.c \
@@ -29,6 +30,9 @@ ovsdb_libovsdb_a_SOURCES = \
 	ovsdb/trigger.h \
 	ovsdb/transaction.c \
 	ovsdb/transaction.h
+ovsdb_libovsdb_la_CFLAGS = $(AM_CFLAGS)
+ovsdb_libovsdb_la_CPPFLAGS = $(AM_CPPFLAGS)
+
 MAN_FRAGMENTS += \
 	ovsdb/remote-active.man \
 	ovsdb/remote-passive.man
@@ -36,7 +40,7 @@ MAN_FRAGMENTS += \
 # ovsdb-tool
 bin_PROGRAMS += ovsdb/ovsdb-tool
 ovsdb_ovsdb_tool_SOURCES = ovsdb/ovsdb-tool.c
-ovsdb_ovsdb_tool_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a $(SSL_LIBS)
+ovsdb_ovsdb_tool_LDADD = ovsdb/libovsdb.la lib/libopenvswitch.la $(SSL_LIBS)
 # ovsdb-tool.1
 man_MANS += ovsdb/ovsdb-tool.1
 DISTCLEANFILES += ovsdb/ovsdb-tool.1
@@ -45,7 +49,7 @@ MAN_ROOTS += ovsdb/ovsdb-tool.1.in
 # ovsdb-client
 bin_PROGRAMS += ovsdb/ovsdb-client
 ovsdb_ovsdb_client_SOURCES = ovsdb/ovsdb-client.c
-ovsdb_ovsdb_client_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a $(SSL_LIBS)
+ovsdb_ovsdb_client_LDADD = ovsdb/libovsdb.la lib/libopenvswitch.la $(SSL_LIBS)
 # ovsdb-client.1
 man_MANS += ovsdb/ovsdb-client.1
 DISTCLEANFILES += ovsdb/ovsdb-client.1
@@ -54,7 +58,7 @@ MAN_ROOTS += ovsdb/ovsdb-client.1.in
 # ovsdb-server
 sbin_PROGRAMS += ovsdb/ovsdb-server
 ovsdb_ovsdb_server_SOURCES = ovsdb/ovsdb-server.c
-ovsdb_ovsdb_server_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a $(SSL_LIBS)
+ovsdb_ovsdb_server_LDADD = ovsdb/libovsdb.la lib/libopenvswitch.la $(SSL_LIBS)
 # ovsdb-server.1
 man_MANS += ovsdb/ovsdb-server.1
 DISTCLEANFILES += ovsdb/ovsdb-server.1
