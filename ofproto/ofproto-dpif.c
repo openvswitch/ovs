@@ -483,6 +483,7 @@ struct ofproto_dpif {
     struct hmap bundles;        /* Contains "struct ofbundle"s. */
     struct mac_learning *ml;
     bool has_bonded_bundles;
+    bool lacp_enabled;
     struct mbridge *mbridge;
 
     /* Facets. */
@@ -1248,6 +1249,7 @@ construct(struct ofproto *ofproto_)
     ofproto->ml = mac_learning_create(MAC_ENTRY_DEFAULT_IDLE_TIME);
     ofproto->mbridge = mbridge_create();
     ofproto->has_bonded_bundles = false;
+    ofproto->lacp_enabled = false;
     ovs_mutex_init(&ofproto->stats_mutex);
     ovs_mutex_init(&ofproto->vsp_mutex);
 
@@ -1471,7 +1473,6 @@ static int
 run(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    struct ofbundle *bundle;
     uint64_t new_seq;
     int error;
 
@@ -1515,8 +1516,12 @@ run(struct ofproto *ofproto_)
 
         ofproto->change_seq = new_seq;
     }
-    HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
-        bundle_run(bundle);
+    if (ofproto->lacp_enabled || ofproto->has_bonded_bundles) {
+        struct ofbundle *bundle;
+
+        HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
+            bundle_run(bundle);
+        }
     }
 
     stp_run(ofproto);
@@ -1556,7 +1561,6 @@ static void
 wait(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    struct ofbundle *bundle;
 
     if (ofproto_get_flow_restore_wait()) {
         return;
@@ -1568,8 +1572,12 @@ wait(struct ofproto *ofproto_)
     if (ofproto->ipfix) {
         dpif_ipfix_wait(ofproto->ipfix);
     }
-    HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
-        bundle_wait(bundle);
+    if (ofproto->lacp_enabled || ofproto->has_bonded_bundles) {
+        struct ofbundle *bundle;
+
+        HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
+            bundle_wait(bundle);
+        }
     }
     if (ofproto->netflow) {
         netflow_wait(ofproto->netflow);
@@ -2471,6 +2479,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
 
     /* LACP. */
     if (s->lacp) {
+        ofproto->lacp_enabled = true;
         if (!bundle->lacp) {
             ofproto->backer->need_revalidate = REV_RECONFIGURE;
             bundle->lacp = lacp_create();
