@@ -86,17 +86,6 @@ random_bytes(void *p_, size_t n)
     }
 }
 
-uint8_t
-random_uint8(void)
-{
-    return random_uint32();
-}
-
-uint16_t
-random_uint16(void)
-{
-    return random_uint32();
-}
 
 uint32_t
 random_uint32(void)
@@ -115,12 +104,6 @@ random_uint64(void)
     x = random_next();
     x |= (uint64_t) random_next() << 32;
     return x;
-}
-
-int
-random_range(int max)
-{
-    return random_uint32() % max;
 }
 
 static uint32_t
