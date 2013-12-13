@@ -75,24 +75,7 @@ VLOG_LEVELS
 BUILD_ASSERT_DECL(LOG_LOCAL0 == (16 << 3));
 
 /* The log modules. */
-#if USE_LINKER_SECTIONS
-extern struct vlog_module *__start_vlog_modules[];
-extern struct vlog_module *__stop_vlog_modules[];
-#define vlog_modules __start_vlog_modules
-#define n_vlog_modules (__stop_vlog_modules - __start_vlog_modules)
-#else
-#define VLOG_MODULE VLOG_DEFINE_MODULE__
-#include "vlog-modules.def"
-#undef VLOG_MODULE
-
-extern struct vlog_module *vlog_modules[];
-struct vlog_module *vlog_modules[] = {
-#define VLOG_MODULE(NAME) &VLM_##NAME,
-#include "vlog-modules.def"
-#undef VLOG_MODULE
-};
-#define n_vlog_modules ARRAY_SIZE(vlog_modules)
-#endif
+struct list vlog_modules = LIST_INITIALIZER(&vlog_modules);
 
 /* Protects the 'pattern' in all "struct facility"s, so that a race between
  * changing and reading the pattern does not cause an access to freed
@@ -199,13 +182,14 @@ vlog_get_module_name(const struct vlog_module *module)
 struct vlog_module *
 vlog_module_from_name(const char *name)
 {
-    struct vlog_module **mp;
+    struct vlog_module *mp;
 
-    for (mp = vlog_modules; mp < &vlog_modules[n_vlog_modules]; mp++) {
-        if (!strcasecmp(name, (*mp)->name)) {
-            return *mp;
+    LIST_FOR_EACH (mp, list, &vlog_modules) {
+        if (!strcasecmp(name, mp->name)) {
+            return mp;
         }
     }
+
     return NULL;
 }
 
@@ -242,11 +226,10 @@ set_facility_level(enum vlog_facility facility, struct vlog_module *module,
 
     ovs_mutex_lock(&log_file_mutex);
     if (!module) {
-        struct vlog_module **mp;
-
-        for (mp = vlog_modules; mp < &vlog_modules[n_vlog_modules]; mp++) {
-            (*mp)->levels[facility] = level;
-            update_min_level(*mp);
+        struct vlog_module *mp;
+        LIST_FOR_EACH (mp, list, &vlog_modules) {
+            mp->levels[facility] = level;
+            update_min_level(mp);
         }
     } else {
         module->levels[facility] = level;
@@ -308,7 +291,7 @@ int
 vlog_set_log_file(const char *file_name)
 {
     char *new_log_file_name;
-    struct vlog_module **mp;
+    struct vlog_module *mp;
     struct stat old_stat;
     struct stat new_stat;
     int new_log_fd;
@@ -364,8 +347,8 @@ vlog_set_log_file(const char *file_name)
         log_writer = async_append_create(new_log_fd);
     }
 
-    for (mp = vlog_modules; mp < &vlog_modules[n_vlog_modules]; mp++) {
-        update_min_level(*mp);
+    LIST_FOR_EACH (mp, list, &vlog_modules) {
+        update_min_level(mp);
     }
     ovs_mutex_unlock(&log_file_mutex);
 
@@ -563,10 +546,10 @@ vlog_unixctl_reopen(struct unixctl_conn *conn, int argc OVS_UNUSED,
 static void
 set_all_rate_limits(bool enable)
 {
-    struct vlog_module **mp;
+    struct vlog_module *mp;
 
-    for (mp = vlog_modules; mp < &vlog_modules[n_vlog_modules]; mp++) {
-        (*mp)->honor_rate_limits = enable;
+    LIST_FOR_EACH (mp, list, &vlog_modules) {
+        mp->honor_rate_limits = enable;
     }
 }
 
@@ -672,7 +655,7 @@ char *
 vlog_get_levels(void)
 {
     struct ds s = DS_EMPTY_INITIALIZER;
-    struct vlog_module **mp;
+    struct vlog_module *mp;
     struct svec lines = SVEC_EMPTY_INITIALIZER;
     char *line;
     size_t i;
@@ -680,16 +663,16 @@ vlog_get_levels(void)
     ds_put_format(&s, "                 console    syslog    file\n");
     ds_put_format(&s, "                 -------    ------    ------\n");
 
-    for (mp = vlog_modules; mp < &vlog_modules[n_vlog_modules]; mp++) {
+    LIST_FOR_EACH (mp, list, &vlog_modules) {
         struct ds line;
 
         ds_init(&line);
         ds_put_format(&line, "%-16s  %4s       %4s       %4s",
-                      vlog_get_module_name(*mp),
-                      vlog_get_level_name(vlog_get_level(*mp, VLF_CONSOLE)),
-                      vlog_get_level_name(vlog_get_level(*mp, VLF_SYSLOG)),
-                      vlog_get_level_name(vlog_get_level(*mp, VLF_FILE)));
-        if (!(*mp)->honor_rate_limits) {
+                      vlog_get_module_name(mp),
+                      vlog_get_level_name(vlog_get_level(mp, VLF_CONSOLE)),
+                      vlog_get_level_name(vlog_get_level(mp, VLF_SYSLOG)),
+                      vlog_get_level_name(vlog_get_level(mp, VLF_FILE)));
+        if (!mp->honor_rate_limits) {
             ds_put_cstr(&line, "    (rate limiting disabled)");
         }
         ds_put_char(&line, '\n');

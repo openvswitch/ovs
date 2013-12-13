@@ -35,6 +35,7 @@
 #include "sat-math.h"
 #include "token-bucket.h"
 #include "util.h"
+#include "list.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -78,22 +79,22 @@ enum vlog_facility vlog_get_facility_val(const char *name);
 
 /* A log module. */
 struct vlog_module {
+    struct list list;
     const char *name;             /* User-visible name. */
     int levels[VLF_N_FACILITIES]; /* Minimum log level for each facility. */
     int min_level;                /* Minimum log level for any facility. */
     bool honor_rate_limits;       /* Set false to ignore rate limits. */
 };
 
+/* Global list of all logging modules */
+extern struct list vlog_modules;
+
 /* Creates and initializes a global instance of a module named MODULE. */
-#if USE_LINKER_SECTIONS
 #define VLOG_DEFINE_MODULE(MODULE)                                      \
         VLOG_DEFINE_MODULE__(MODULE)                                    \
-        extern struct vlog_module *const vlog_module_ptr_##MODULE;      \
-        struct vlog_module *const vlog_module_ptr_##MODULE              \
-            __attribute__((section("vlog_modules"))) = &VLM_##MODULE
-#else
-#define VLOG_DEFINE_MODULE(MODULE) extern struct vlog_module VLM_##MODULE
-#endif
+        OVS_CONSTRUCTOR(init_##MODULE) {                                \
+                list_insert(&vlog_modules, &VLM_##MODULE.list);         \
+        }                                                               \
 
 const char *vlog_get_module_name(const struct vlog_module *);
 struct vlog_module *vlog_module_from_name(const char *name);
@@ -266,6 +267,7 @@ void vlog_usage(void);
         extern struct vlog_module VLM_##MODULE;                         \
         struct vlog_module VLM_##MODULE =                               \
         {                                                               \
+            LIST_INITIALIZER(&VLM_##MODULE.list),                       \
             #MODULE,                                        /* name */  \
             { [ 0 ... VLF_N_FACILITIES - 1] = VLL_INFO }, /* levels */  \
             VLL_INFO,                                  /* min_level */  \
