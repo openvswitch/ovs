@@ -22,6 +22,7 @@
 #include "bfd.h"
 #include "bitmap.h"
 #include "cfm.h"
+#include "connectivity.h"
 #include "coverage.h"
 #include "daemon.h"
 #include "dirs.h"
@@ -41,6 +42,7 @@
 #include "ofproto/bond.h"
 #include "ofproto/ofproto.h"
 #include "poll-loop.h"
+#include "seq.h"
 #include "sha1.h"
 #include "shash.h"
 #include "smap.h"
@@ -154,6 +156,9 @@ static struct ovsdb_idl_txn *daemonize_txn;
 
 /* Most recently processed IDL sequence number. */
 static unsigned int idl_seqno;
+
+/* Track changes to port connectivity. */
+static uint64_t connectivity_seqno = LLONG_MIN;
 
 /* Each time this timer expires, the bridge fetches interface and mirror
  * statistics and pushes them into the database. */
@@ -2164,11 +2169,18 @@ instant_stats_run(void)
 
     if (!instant_txn) {
         struct bridge *br;
+        uint64_t seq;
 
         if (time_msec() < instant_next_txn) {
             return;
         }
         instant_next_txn = time_msec() + INSTANT_INTERVAL_MSEC;
+
+        seq = seq_read(connectivity_seq_get());
+        if (seq == connectivity_seqno) {
+            return;
+        }
+        connectivity_seqno = seq;
 
         instant_txn = ovsdb_idl_txn_create(idl);
         HMAP_FOR_EACH (br, node, &all_bridges) {
