@@ -29,37 +29,9 @@
 VLOG_DEFINE_THIS_MODULE(coverage);
 
 /* The coverage counters. */
-#if USE_LINKER_SECTIONS
-extern struct coverage_counter *__start_coverage[];
-extern struct coverage_counter *__stop_coverage[];
-#define coverage_counters __start_coverage
-#define n_coverage_counters  (__stop_coverage - __start_coverage)
-#else  /* !USE_LINKER_SECTIONS */
-#define COVERAGE_COUNTER(COUNTER)                                       \
-        DECLARE_EXTERN_PER_THREAD_DATA(unsigned int,                    \
-                                       counter_##COUNTER);              \
-        DEFINE_EXTERN_PER_THREAD_DATA(counter_##COUNTER, 0);            \
-        static unsigned int COUNTER##_count(void)                       \
-        {                                                               \
-            unsigned int *countp = counter_##COUNTER##_get();           \
-            unsigned int count = *countp;                               \
-            *countp = 0;                                                \
-            return count;                                               \
-        }                                                               \
-        extern struct coverage_counter counter_##COUNTER;               \
-        struct coverage_counter counter_##COUNTER                       \
-            = { #COUNTER, COUNTER##_count, 0, 0, {0}, {0} };
-#include "coverage.def"
-#undef COVERAGE_COUNTER
-
-extern struct coverage_counter *coverage_counters[];
-struct coverage_counter *coverage_counters[] = {
-#define COVERAGE_COUNTER(NAME) &counter_##NAME,
-#include "coverage.def"
-#undef COVERAGE_COUNTER
-};
-#define n_coverage_counters ARRAY_SIZE(coverage_counters)
-#endif  /* !USE_LINKER_SECTIONS */
+static struct coverage_counter **coverage_counters = NULL;
+static unsigned int n_coverage_counters = 0;
+static unsigned int allocated_coverage_counters = 0;
 
 static struct ovs_mutex coverage_mutex = OVS_MUTEX_INITIALIZER;
 
@@ -72,6 +44,18 @@ static unsigned int idx_count = 0;
 static void coverage_read(struct svec *);
 static unsigned int coverage_array_sum(const unsigned int *arr,
                                        const unsigned int len);
+
+/* Registers a coverage counter with the coverage core */
+void
+coverage_counter_register(struct coverage_counter* counter)
+{
+    if (n_coverage_counters >= allocated_coverage_counters) {
+        coverage_counters = x2nrealloc(coverage_counters,
+                                       &allocated_coverage_counters,
+                                       sizeof(struct coverage_counter*));
+    }
+    coverage_counters[n_coverage_counters++] = counter;
+}
 
 static void
 coverage_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,

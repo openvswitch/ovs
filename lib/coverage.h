@@ -29,6 +29,7 @@
 
 #include "ovs-thread.h"
 #include "vlog.h"
+#include "compiler.h"
 
 /* Makes coverage_run run every 5000 ms (5 seconds).
  * If this value is redefined, the new value must
@@ -54,9 +55,10 @@ struct coverage_counter {
     unsigned int hr[HR_AVG_LEN];
 };
 
+void coverage_counter_register(struct coverage_counter*);
+
 /* Defines COUNTER.  There must be exactly one such definition at file scope
  * within a program. */
-#if USE_LINKER_SECTIONS
 #define COVERAGE_DEFINE(COUNTER)                                        \
         DEFINE_STATIC_PER_THREAD_DATA(unsigned int,                     \
                                       counter_##COUNTER, 0);            \
@@ -74,19 +76,9 @@ struct coverage_counter {
         extern struct coverage_counter counter_##COUNTER;               \
         struct coverage_counter counter_##COUNTER                       \
             = { #COUNTER, COUNTER##_count, 0, 0, {0}, {0} };            \
-        extern struct coverage_counter *counter_ptr_##COUNTER;          \
-        struct coverage_counter *counter_ptr_##COUNTER                  \
-            __attribute__((section("coverage"))) = &counter_##COUNTER
-#else
-#define COVERAGE_DEFINE(COUNTER)                                        \
-        DECLARE_EXTERN_PER_THREAD_DATA(unsigned int,                    \
-                                       counter_##COUNTER);              \
-        static inline void COUNTER##_add(unsigned int n)                \
-        {                                                               \
-            *counter_##COUNTER##_get() += n;                            \
-        }                                                               \
-        extern struct coverage_counter counter_##COUNTER
-#endif
+        OVS_CONSTRUCTOR(COUNTER##_init) {                               \
+            coverage_counter_register(&counter_##COUNTER);              \
+        }
 
 /* Adds 1 to COUNTER. */
 #define COVERAGE_INC(COUNTER) COVERAGE_ADD(COUNTER, 1)
