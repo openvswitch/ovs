@@ -18,12 +18,14 @@
 
 #include <stdlib.h>
 
+#include "connectivity.h"
 #include "dynamic-string.h"
 #include "hash.h"
 #include "hmap.h"
 #include "ofpbuf.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "seq.h"
 #include "shash.h"
 #include "timer.h"
 #include "timeval.h"
@@ -509,10 +511,15 @@ lacp_run(struct lacp *lacp, lacp_send_pdu *send_pdu) OVS_EXCLUDED(mutex)
     ovs_mutex_lock(&mutex);
     HMAP_FOR_EACH (slave, node, &lacp->slaves) {
         if (timer_expired(&slave->rx)) {
+            enum slave_status old_status = slave->status;
+
             if (slave->status == LACP_CURRENT) {
                 slave_set_expired(slave);
             } else if (slave->status == LACP_EXPIRED) {
                 slave_set_defaulted(slave);
+            }
+            if (slave->status != old_status) {
+                seq_change(connectivity_seq_get());
             }
         }
     }
@@ -544,6 +551,7 @@ lacp_run(struct lacp *lacp, lacp_send_pdu *send_pdu) OVS_EXCLUDED(mutex)
                         : LACP_SLOW_TIME_TX);
 
             timer_set_duration(&slave->tx, duration);
+            seq_change(connectivity_seq_get());
         }
     }
     ovs_mutex_unlock(&mutex);

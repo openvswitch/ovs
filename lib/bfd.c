@@ -21,6 +21,7 @@
 #include <netinet/ip.h>
 
 #include "byte-order.h"
+#include "connectivity.h"
 #include "csum.h"
 #include "dpif.h"
 #include "dynamic-string.h"
@@ -37,6 +38,7 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "random.h"
+#include "seq.h"
 #include "smap.h"
 #include "timeval.h"
 #include "unaligned.h"
@@ -505,8 +507,8 @@ bfd_run(struct bfd *bfd) OVS_EXCLUDED(mutex)
 
     if (bfd->state > STATE_DOWN && now >= bfd->detect_time) {
         bfd_set_state(bfd, STATE_DOWN, DIAG_EXPIRED);
-        bfd_forwarding__(bfd);
     }
+    bfd_forwarding__(bfd);
 
     /* Decay may only happen when state is STATE_UP, bfd->decay_min_rx is
      * configured, and decay_detect_time is reached. */
@@ -851,6 +853,7 @@ bfd_forwarding__(struct bfd *bfd) OVS_REQUIRES(mutex)
                             && bfd->rmt_diag != DIAG_RCPATH_DOWN;
     if (bfd->last_forwarding != last_forwarding) {
         bfd->flap_count++;
+        seq_change(connectivity_seq_get());
     }
     return bfd->last_forwarding;
 }
@@ -1052,6 +1055,8 @@ bfd_set_state(struct bfd *bfd, enum state state, enum diag diag)
         if (bfd->state == STATE_UP && bfd->decay_min_rx) {
             bfd_decay_update(bfd);
         }
+
+        seq_change(connectivity_seq_get());
     }
 }
 

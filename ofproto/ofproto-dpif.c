@@ -25,6 +25,7 @@
 #include "bond.h"
 #include "bundle.h"
 #include "byte-order.h"
+#include "connectivity.h"
 #include "connmgr.h"
 #include "coverage.h"
 #include "cfm.h"
@@ -57,6 +58,7 @@
 #include "ofproto-dpif-upcall.h"
 #include "ofproto-dpif-xlate.h"
 #include "poll-loop.h"
+#include "seq.h"
 #include "simap.h"
 #include "smap.h"
 #include "timer.h"
@@ -505,6 +507,7 @@ struct ofproto_dpif {
     struct sset ghost_ports;       /* Ports with no datapath port. */
     struct sset port_poll_set;     /* Queued names for port_poll() reply. */
     int port_poll_errno;           /* Last errno for port_poll() reply. */
+    uint64_t change_seq;           /* Connectivity status changes. */
 
     /* Per ofproto's dpif stats. */
     uint64_t n_hit;
@@ -1262,6 +1265,7 @@ construct(struct ofproto *ofproto_)
     sset_init(&ofproto->ghost_ports);
     sset_init(&ofproto->port_poll_set);
     ofproto->port_poll_errno = 0;
+    ofproto->change_seq = 0;
 
     SHASH_FOR_EACH_SAFE (node, next, &init_ofp_ports) {
         struct iface_hint *iface_hint = node->data;
@@ -1467,8 +1471,8 @@ static int
 run(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    struct ofport_dpif *ofport;
     struct ofbundle *bundle;
+    uint64_t new_seq;
     int error;
 
     if (mbridge_need_revalidate(ofproto->mbridge)) {
@@ -1501,8 +1505,15 @@ run(struct ofproto *ofproto_)
         dpif_ipfix_run(ofproto->ipfix);
     }
 
-    HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
-        port_run(ofport);
+    new_seq = seq_read(connectivity_seq_get());
+    if (ofproto->change_seq != new_seq) {
+        struct ofport_dpif *ofport;
+
+        HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
+            port_run(ofport);
+        }
+
+        ofproto->change_seq = new_seq;
     }
     HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
         bundle_run(bundle);

@@ -26,8 +26,10 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include "byte-order.h"
+#include "connectivity.h"
 #include "ofpbuf.h"
 #include "packets.h"
+#include "seq.h"
 #include "unixctl.h"
 #include "util.h"
 #include "vlog.h"
@@ -1127,6 +1129,7 @@ stp_configuration_update(struct stp *stp) OVS_REQUIRES(mutex)
 {
     stp_root_selection(stp);
     stp_designated_port_selection(stp);
+    seq_change(connectivity_seq_get());
 }
 
 static bool
@@ -1257,6 +1260,7 @@ stp_set_port_state(struct stp_port *p, enum stp_state state)
         if (p < p->stp->first_changed_port) {
             p->stp->first_changed_port = p;
         }
+        seq_change(connectivity_seq_get());
     }
     p->state = state;
 }
@@ -1275,6 +1279,7 @@ stp_topology_change_detection(struct stp *stp) OVS_REQUIRES(mutex)
     }
     stp->fdb_needs_flush = true;
     stp->topology_change_detected = true;
+    seq_change(connectivity_seq_get());
     VLOG_INFO_RL(&rl, "%s: detected topology change.", stp->name);
 }
 

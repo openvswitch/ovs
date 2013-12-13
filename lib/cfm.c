@@ -22,6 +22,7 @@
 #include <string.h>
 
 #include "byte-order.h"
+#include "connectivity.h"
 #include "dynamic-string.h"
 #include "flow.h"
 #include "hash.h"
@@ -31,6 +32,7 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "random.h"
+#include "seq.h"
 #include "timer.h"
 #include "timeval.h"
 #include "unixctl.h"
@@ -396,6 +398,7 @@ cfm_run(struct cfm *cfm) OVS_EXCLUDED(mutex)
         long long int interval = cfm_fault_interval(cfm);
         struct remote_mp *rmp, *rmp_next;
         bool old_cfm_fault = cfm->fault;
+        bool old_rmp_opup = cfm->remote_opup;
         bool demand_override;
         bool rmp_set_opup = false;
         bool rmp_set_opdown = false;
@@ -420,6 +423,7 @@ cfm_run(struct cfm *cfm) OVS_EXCLUDED(mutex)
                 cfm->health = 0;
             } else {
                 int exp_ccm_recvd;
+                int old_health = cfm->health;
 
                 rmp = CONTAINER_OF(hmap_first(&cfm->remote_mps),
                                    struct remote_mp, node);
@@ -434,6 +438,10 @@ cfm_run(struct cfm *cfm) OVS_EXCLUDED(mutex)
                 cfm->health = MIN(cfm->health, 100);
                 rmp->num_health_ccm = 0;
                 ovs_assert(cfm->health >= 0 && cfm->health <= 100);
+
+                if (cfm->health != old_health) {
+                    seq_change(connectivity_seq_get());
+                }
             }
             cfm->health_interval = 0;
         }
@@ -476,6 +484,10 @@ cfm_run(struct cfm *cfm) OVS_EXCLUDED(mutex)
             cfm->remote_opup = true;
         }
 
+        if (old_rmp_opup != cfm->remote_opup) {
+            seq_change(connectivity_seq_get());
+        }
+
         if (hmap_is_empty(&cfm->remote_mps)) {
             cfm->fault |= CFM_FAULT_RECV;
         }
@@ -497,6 +509,8 @@ cfm_run(struct cfm *cfm) OVS_EXCLUDED(mutex)
             if (old_cfm_fault == false || cfm->fault == false) {
                 cfm->flap_count++;
             }
+
+            seq_change(connectivity_seq_get());
         }
 
         cfm->booted = true;
