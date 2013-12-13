@@ -2,7 +2,7 @@ This file is included in compliance with the Apache 2.0 license,
 available at http://www.apache.org/licenses/LICENSE-2.0.html
 
 Open vSwitch
-Copyright (c) 2007, 2008, 2009, 2010, 2011 Nicira, Inc.
+Copyright (c) 2007, 2008, 2009, 2010, 2011, 2013 Nicira, Inc.
 
 Open vSwitch BSD port
 Copyright (c) 2011 Gaetano Catalli
@@ -19,3 +19,6 @@ Illinois at Urbana-Champaign.
 
 lib/ovs.tmac includes troff macros written by Eric S. Raymond
 and Werner Lemberg.
+
+m4/include_next.m4 and m4/absolute-header.m4
+Copyright (C) 2006-2013 Free Software Foundation, Inc.

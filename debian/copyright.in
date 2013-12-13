@@ -8,7 +8,7 @@ Upstream Authors (from AUTHORS):
 
 Upstream Copyright Holders:
 
-	Copyright (c) 2007, 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+	Copyright (c) 2007, 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
 	Copyright (c) 2010 Jean Tourrilhes - HP-Labs.
 	Copyright (c) 2008,2009,2010 Citrix Systems, Inc.
 	and authors listed above.
@@ -181,6 +181,14 @@ License:
     .\"
     .\" Copyright (C) 2007, 2009, 2011 Free Software Foundation, Inc.
     .\" You may freely use, modify and/or distribute this file.
+
+* m4/absolute-header.m4, by Derek Price, and m4/include_next.m4, by
+  Paul Eggert and Derek Price bear the following notices:
+
+    Copyright (C) 2006-2013 Free Software Foundation, Inc.
+    This file is free software; the Free Software Foundation
+    gives unlimited permission to copy and/or distribute it,
+    with or without modifications, as long as this notice is preserved.
 
 * All other components of this package are licensed under
   The Apache License Version 2.0.

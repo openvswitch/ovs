@@ -283,6 +283,7 @@ if LINUX_ENABLED
 	cd datapath/linux && $(MAKE) modules_install
 endif
 
+include m4/automake.mk
 include lib/automake.mk
 include ofproto/automake.mk
 include utilities/automake.mk
