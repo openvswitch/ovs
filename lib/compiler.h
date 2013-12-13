@@ -179,4 +179,17 @@
 #define OVS_PACKED(DECL) __pragma(pack(push, 1)) DECL __pragma(pack(pop))
 #endif
 
+#ifdef _MSC_VER
+#define CCALL __cdecl
+#pragma section(".CRT$XCU",read)
+#define OVS_CONSTRUCTOR(f) \
+    static void __cdecl f(void); \
+    __declspec(allocate(".CRT$XCU")) void (__cdecl*f##_)(void) = f; \
+    static void __cdecl f(void)
+#else
+#define OVS_CONSTRUCTOR(f) \
+    static void f(void) __attribute__((constructor)); \
+    static void f(void)
+#endif
+
 #endif /* compiler.h */
