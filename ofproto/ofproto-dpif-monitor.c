@@ -197,7 +197,7 @@ monitor_run(void)
     struct ofpbuf packet;
 
     ofpbuf_use_stub(&packet, stub, sizeof stub);
-    ovs_rwlock_rdlock(&monitor_rwlock);
+    ovs_rwlock_wrlock(&monitor_rwlock);
     prio_now = MSEC_TO_PRIO(time_msec());
     /* Peeks the top of heap and checks if we should run this mport. */
     while (!heap_is_empty(&monitor_heap)
