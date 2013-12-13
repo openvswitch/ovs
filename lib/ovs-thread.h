@@ -505,6 +505,6 @@ bool may_fork(void);
 
 /* Useful functions related to threading. */
 
-unsigned int count_cpu_cores(void);
+int count_cpu_cores(void);
 
 #endif /* ovs-thread.h */

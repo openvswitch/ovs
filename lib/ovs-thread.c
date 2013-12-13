@@ -371,7 +371,7 @@ parse_cpuinfo(long int *n_cores)
  * Tries not to count hyper-threads, but may be inaccurate - particularly on
  * platforms that do not provide /proc/cpuinfo, but also if /proc/cpuinfo is
  * formatted different to the layout that parse_cpuinfo() expects. */
-unsigned int
+int
 count_cpu_cores(void)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
