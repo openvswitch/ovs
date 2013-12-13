@@ -321,11 +321,11 @@ struct ofputil_flow_stats {
     struct match match;
     ovs_be64 cookie;
     uint8_t table_id;
-    uint32_t duration_sec;
-    uint32_t duration_nsec;
     uint16_t priority;
     uint16_t idle_timeout;
     uint16_t hard_timeout;
+    uint32_t duration_sec;
+    uint32_t duration_nsec;
     int idle_age;               /* Seconds since last packet, -1 if unknown. */
     int hard_age;               /* Seconds since last change, -1 if unknown. */
     uint64_t packet_count;      /* Packet count, UINT64_MAX if unknown. */
@@ -359,8 +359,8 @@ enum ofperr ofputil_decode_aggregate_stats_reply(
 /* Flow removed message, independent of protocol. */
 struct ofputil_flow_removed {
     struct match match;
-    uint16_t priority;
     ovs_be64 cookie;
+    uint16_t priority;
     uint8_t reason;             /* One of OFPRR_*. */
     uint8_t table_id;           /* 255 if message didn't include table ID. */
     uint32_t duration_sec;
@@ -770,9 +770,9 @@ struct ofputil_flow_update {
     uint16_t idle_timeout;
     uint16_t hard_timeout;
     uint8_t table_id;
+    uint16_t priority;
     ovs_be64 cookie;
     struct match *match;
-    uint16_t priority;
     struct ofpact *ofpacts;
     size_t ofpacts_len;
 
