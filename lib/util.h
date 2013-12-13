@@ -277,9 +277,24 @@ void ovs_hex_dump(FILE *, const void *, size_t, uintptr_t offset, bool ascii);
 bool str_to_int(const char *, int base, int *);
 bool str_to_long(const char *, int base, long *);
 bool str_to_llong(const char *, int base, long long *);
-bool str_to_uint(const char *, int base, unsigned int *);
-bool str_to_ulong(const char *, int base, unsigned long *);
-bool str_to_ullong(const char *, int base, unsigned long long *);
+
+static inline bool
+str_to_uint(const char *s, int base, unsigned int *u)
+{
+    return str_to_int(s, base, (int *) u);
+}
+
+static inline bool
+str_to_ulong(const char *s, int base, unsigned long *ul)
+{
+    return str_to_long(s, base, (long *) ul);
+}
+
+static inline bool
+str_to_ullong(const char *s, int base, unsigned long long *ull)
+{
+    return str_to_llong(s, base, (long long *) ull);
+}
 
 bool ovs_scan(const char *s, const char *template, ...) SCANF_FORMAT(2, 3);
 

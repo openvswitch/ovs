@@ -537,24 +537,6 @@ str_to_llong(const char *s, int base, long long *x)
     }
 }
 
-bool
-str_to_uint(const char *s, int base, unsigned int *u)
-{
-    return str_to_int(s, base, (int *) u);
-}
-
-bool
-str_to_ulong(const char *s, int base, unsigned long *ul)
-{
-    return str_to_long(s, base, (long *) ul);
-}
-
-bool
-str_to_ullong(const char *s, int base, unsigned long long *ull)
-{
-    return str_to_llong(s, base, (long long *) ull);
-}
-
 /* Converts floating-point string 's' into a double.  If successful, stores
  * the double in '*d' and returns true; on failure, stores 0 in '*d' and
  * returns false.
