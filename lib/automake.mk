@@ -393,25 +393,3 @@ lib-install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(LOGDIR)
 	$(MKDIR_P) $(DESTDIR)$(DBDIR)
 
-if !USE_LINKER_SECTIONS
-# All distributed sources, with names adjust properly for referencing
-# from $(builddir).
-all_sources = \
-	`for file in $(DIST_SOURCES); do \
-		if test -f $$file; then \
-			echo $$file; \
-		else \
-			echo $(VPATH)/$$file; \
-		fi; \
-	 done`
-
-lib/coverage.$(OBJEXT): lib/coverage.def
-lib/coverage.def: $(DIST_SOURCES)
-	sed -n 's|^COVERAGE_DEFINE(\([_a-zA-Z0-9]\{1,\}\)).*$$|COVERAGE_COUNTER(\1)|p' $(all_sources) | LC_ALL=C sort -u > $@
-CLEANFILES += lib/coverage.def
-
-lib/vlog.$(OBJEXT): lib/vlog-modules.def
-lib/vlog-modules.def: $(DIST_SOURCES)
-	sed -n 's|^VLOG_DEFINE_\(THIS_\)\{0,1\}MODULE(\([_a-zA-Z0-9]\{1,\}\)).*$$|VLOG_MODULE(\2)|p' $(all_sources) | LC_ALL=C sort -u > $@
-CLEANFILES += lib/vlog-modules.def
-endif
