@@ -1,3 +1,7 @@
+v2.0.1 - 13 Dec 2013
+---------------------
+    - Bug fixes
+
 v2.0.0 - 15 Oct 2013
 ---------------------
     - The ovs-vswitchd process is no longer single-threaded.  Multiple
