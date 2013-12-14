@@ -34,7 +34,7 @@ traffic. This package contains the kernel modules.
 %setup -q -n openvswitch-%{version}
 
 %build
-./configure --prefix=/usr --sysconfdir=/etc --localstatedir=%{_localstatedir} --with-linux=/lib/modules/%{kernel}/build --enable-ssl %{build_number}
+./configure --prefix=/usr --sysconfdir=/etc --localstatedir=%{_localstatedir} --with-linux=/lib/modules/%{kernel}/build --enable-ssl
 make %{_smp_mflags} -C datapath/linux
 
 %install

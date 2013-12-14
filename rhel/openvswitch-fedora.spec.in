@@ -35,7 +35,7 @@ traffic.
 %setup -q -n openvswitch-%{version}
 
 %build
-./configure --prefix=/usr --sysconfdir=/etc --localstatedir=%{_localstatedir} --enable-ssl %{build_number}
+./configure --prefix=/usr --sysconfdir=/etc --localstatedir=%{_localstatedir} --enable-ssl
 make %{_smp_mflags}
 
 %install
