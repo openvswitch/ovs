@@ -1034,6 +1034,7 @@ cfm_unixctl_set_fault(struct unixctl_conn *conn, int argc, const char *argv[],
         }
     }
 
+    seq_change(connectivity_seq_get());
     unixctl_command_reply(conn, "OK");
 
 out:
