@@ -334,6 +334,7 @@ BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [none], [up], [N
 # for decay_min_rx < 2000ms, the decay detection time is set to 2000ms.
 # this should reset the min_rx.
 AT_CHECK([ovs-vsctl set Interface p0 bfd:decay_min_rx=1000])
+ovs-appctl time/warp 100
 BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
 BFD_CHECK_RX([p0], [500ms], [300ms], [500ms])
 
@@ -360,8 +361,7 @@ for i in `seq 0 9`; do ovs-appctl time/warp 500; done
 # Test-4 BFD decay: set min_rx to 800ms.
 # this should firstly reset the min_rx and then re-decay to 1000ms.
 AT_CHECK([ovs-vsctl set Interface p0 bfd:min_rx=800])
-BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
-BFD_CHECK_RX([p0], [800ms], [800ms], [500ms])
+ovs-appctl time/warp 100
 
 # for the following 1600ms, there should be no decay,
 # since the decay detection time is set to 2000ms.
@@ -385,8 +385,7 @@ for i in `seq 0 9`; do ovs-appctl time/warp 500; done
 
 # Test-5 BFD decay: set min_rx to 300ms and decay_min_rx to 5000ms together.
 AT_CHECK([ovs-vsctl set Interface p0 bfd:min_rx=300 bfd:decay_min_rx=5000])
-BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
-BFD_CHECK_RX([p0], [500ms], [300ms], [500ms])
+ovs-appctl time/warp 100
 
 # for decay_min_rx > 2000ms, the decay detection time is set to
 # decay_min_rx (5000ms).
@@ -412,9 +411,8 @@ for i in `seq 0 9`; do ovs-appctl time/warp 500; done
 
 # Test-6 BFD decay: set decay_min_rx to 0 to disable bfd decay.
 AT_CHECK([ovs-vsctl set Interface p0 bfd:decay_min_rx=0])
-# min_rx is reset.
-BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
-BFD_CHECK_RX([p0], [500ms], [300ms], [500ms])
+ovs-appctl time/warp 100
+
 for i in `seq 0 20`
 do
     ovs-appctl time/warp 500
@@ -444,6 +442,8 @@ do
 done
 # reset the p1's min_tx to 500ms.
 AT_CHECK([ovs-vsctl set Interface p1 bfd:min_tx=500])
+ovs-appctl time/warp 100
+
 # since p0 has been in decay, now the RX will show 3000ms.
 BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
 BFD_CHECK_RX([p0], [3000ms], [3000ms], [500ms])
@@ -629,8 +629,6 @@ done
 
 # reconfigure the decay_min_rx to 1000ms.
 AT_CHECK([ovs-vsctl set interface p0 bfd:decay_min_rx=1000])
-BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
-BFD_CHECK_RX([p0], [500ms], [300ms], [500ms])
 
 # wait for 5000ms to decay.
 for i in `seq 0 9`; do ovs-appctl time/warp 500; done

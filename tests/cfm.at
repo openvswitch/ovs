@@ -83,17 +83,16 @@ for i in `seq 0 100`; do ovs-appctl time/warp 100; done
 CFM_CHECK_EXTENDED([p0], [1], [100], [up], [up], [100ms], [2], [up])
 CFM_CHECK_EXTENDED([p1], [2], [100], [up], [up], [100ms], [1], [up])
 
-# turn cfm on p1 off, should increment the cfm_flap_count on p1.
+# turn cfm on p1 off, should increment the cfm_flap_count on p0.
 AT_CHECK([ovs-vsctl remove interface p1 cfm_mpid 2])
 for i in `seq 0 10`; do ovs-appctl time/warp 100; done
 CFM_VSCTL_LIST_IFACE([p0], [cfm_flap_count], [cfm_flap_count      : 1])
 CFM_VSCTL_LIST_IFACE([p1], [cfm_flap_count], [cfm_flap_count      : [[]]])
 
-# turn cfm on p1 on again, should increment the cfm_flap_count on p1.
+# turn cfm on p1 on again, should increment the cfm_flap_count on p0.
 AT_CHECK([ovs-vsctl set interface p1 cfm_mpid=2])
 for i in `seq 0 10`; do ovs-appctl time/warp 100; done
 CFM_VSCTL_LIST_IFACE([p0], [cfm_flap_count], [cfm_flap_count      : 2])
-CFM_VSCTL_LIST_IFACE([p1], [cfm_flap_count], [cfm_flap_count      : 0])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP

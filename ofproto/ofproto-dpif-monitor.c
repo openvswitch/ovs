@@ -63,7 +63,6 @@ static pthread_t monitor_tid;
 /* True if the monitor thread is running. */
 static bool monitor_running;
 
-static struct seq *monitor_seq;
 static struct latch monitor_exit_latch;
 static struct ovs_rwlock monitor_rwlock = OVS_RWLOCK_INITIALIZER;
 
@@ -149,10 +148,9 @@ mport_update(struct mport *mport, struct bfd *bfd, struct cfm *cfm,
         memcpy(mport->hw_addr, hw_addr, ETH_ADDR_LEN);
     }
     /* If bfd/cfm is added or reconfigured, move the mport on top of the heap
-     * and wakes up the monitor thread. */
+     * so that the monitor thread can run the mport next time it wakes up. */
     if (mport->bfd || mport->cfm) {
         heap_change(&monitor_heap, &mport->heap_node, LLONG_MAX);
-        seq_change(monitor_seq);
     }
 }
 
@@ -165,7 +163,6 @@ monitor_init(void)
 
     if (ovsthread_once_start(&once)) {
         hmap_init(&monitor_hmap);
-        monitor_seq = seq_create();
         ovsthread_once_done(&once);
     }
 }
@@ -177,16 +174,17 @@ monitor_main(void * args OVS_UNUSED)
     set_subprogram_name("monitor");
     VLOG_INFO("monitor thread created");
     while (!latch_is_set(&monitor_exit_latch)) {
-        uint64_t seq = seq_read(monitor_seq);
-
         monitor_run();
         latch_wait(&monitor_exit_latch);
-        seq_wait(monitor_seq, seq);
         poll_block();
     }
     VLOG_INFO("monitor thread terminated");
     return NULL;
 }
+
+/* The monitor thread should wake up this often to ensure that newly added or
+ * reconfigured monitoring ports are run in a timely manner. */
+#define MONITOR_INTERVAL_MSEC 100
 
 /* Checks the sending of control packets on mports that have timed out.
  * Sends the control packets if needed.  Executes bfd and cfm periodic
@@ -234,7 +232,11 @@ monitor_run(void)
 
     /* Waits on the earliest next wakeup time. */
     if (!heap_is_empty(&monitor_heap)) {
-        poll_timer_wait_until(PRIO_TO_MSEC(heap_max(&monitor_heap)->priority));
+        long long int next_timeout, next_mport_wakeup;
+
+        next_timeout = time_msec() + MONITOR_INTERVAL_MSEC;
+        next_mport_wakeup = PRIO_TO_MSEC(heap_max(&monitor_heap)->priority);
+        poll_timer_wait_until(MIN(next_timeout, next_mport_wakeup));
     }
     ovs_rwlock_unlock(&monitor_rwlock);
     ofpbuf_uninit(&packet);
