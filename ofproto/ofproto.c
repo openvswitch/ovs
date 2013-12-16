@@ -5773,8 +5773,31 @@ handle_group_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 }
 
 static enum ofperr
+table_mod(struct ofproto *ofproto, const struct ofputil_table_mod *tm)
+{
+    /* XXX Reject all configurations because none are currently supported */
+    return OFPERR_OFPTMFC_BAD_CONFIG;
+
+    if (tm->table_id == OFPTT_ALL) {
+        int i;
+        for (i = 0; i < ofproto->n_tables; i++) {
+            atomic_store(&ofproto->tables[i].config,
+                         (unsigned int)tm->config);
+        }
+    } else if (!check_table_id(ofproto, tm->table_id)) {
+        return OFPERR_OFPTMFC_BAD_TABLE;
+    } else {
+        atomic_store(&ofproto->tables[tm->table_id].config,
+                     (unsigned int)tm->config);
+    }
+
+    return 0;
+}
+
+static enum ofperr
 handle_table_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 {
+    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct ofputil_table_mod tm;
     enum ofperr error;
 
@@ -5788,8 +5811,7 @@ handle_table_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         return error;
     }
 
-    /* XXX Actual table mod support is not implemented yet. */
-    return 0;
+    return table_mod(ofproto, &tm);
 }
 
 static enum ofperr
@@ -6622,6 +6644,7 @@ oftable_init(struct oftable *table)
     memset(table, 0, sizeof *table);
     classifier_init(&table->cls, flow_segment_u32s);
     table->max_flows = UINT_MAX;
+    atomic_init(&table->config, (unsigned int)OFPTC11_TABLE_MISS_CONTROLLER);
 }
 
 /* Destroys 'table', including its classifier and eviction groups.
