@@ -5112,14 +5112,15 @@ trace_report(struct xlate_in *xin, const char *s, int recurse)
  *     - bridge br_flow [-generate | packet]
  *
  * On success, initializes '*ofprotop' and 'flow' and returns NULL.  On failure
- * returns a nonnull error message. */
-static const char *
+ * returns a nonnull malloced error message. */
+static char * WARN_UNUSED_RESULT
 parse_flow_and_packet(int argc, const char *argv[],
                       struct ofproto_dpif **ofprotop, struct flow *flow,
                       struct ofpbuf **packetp)
 {
     const struct dpif_backer *backer = NULL;
     const char *error = NULL;
+    char *m_err = NULL;
     struct simap port_names = SIMAP_INITIALIZER(&port_names);
     struct ofpbuf *packet;
     struct ofpbuf odp_key;
@@ -5140,6 +5141,7 @@ parse_flow_and_packet(int argc, const char *argv[],
             /* The 3-argument form must end in "-generate' or a hex string. */
             goto exit;
         }
+        error = NULL;
     }
 
     /* odp_flow can have its in_port specified as a name instead of port no.
@@ -5176,7 +5178,7 @@ parse_flow_and_packet(int argc, const char *argv[],
     /* Parse the flow and determine whether a datapath or
      * bridge is specified. If function odp_flow_key_from_string()
      * returns 0, the flow is a odp_flow. If function
-     * parse_ofp_exact_flow() returns 0, the flow is a br_flow. */
+     * parse_ofp_exact_flow() returns NULL, the flow is a br_flow. */
     if (!odp_flow_from_string(argv[argc - 1], &port_names,
                               &odp_key, &odp_mask)) {
         if (!backer) {
@@ -5189,20 +5191,25 @@ parse_flow_and_packet(int argc, const char *argv[],
             error = "Invalid datapath flow";
             goto exit;
         }
-    } else if (!parse_ofp_exact_flow(flow, NULL, argv[argc - 1], NULL)) {
-        if (argc != 3) {
-            error = "Must specify bridge name";
-            goto exit;
-        }
-
-        *ofprotop = ofproto_dpif_lookup(argv[1]);
-        if (!*ofprotop) {
-            error = "Unknown bridge name";
-            goto exit;
-        }
     } else {
-        error = "Bad flow syntax";
-        goto exit;
+        char *err = parse_ofp_exact_flow(flow, NULL, argv[argc - 1], NULL);
+
+        if (err) {
+            m_err = xasprintf("Bad flow syntax: %s", err);
+            free(err);
+            goto exit;
+        } else {
+            if (argc != 3) {
+                error = "Must specify bridge name";
+                goto exit;
+            }
+
+            *ofprotop = ofproto_dpif_lookup(argv[1]);
+            if (!*ofprotop) {
+                error = "Unknown bridge name";
+                goto exit;
+            }
+        }
     }
 
     /* Generate a packet, if requested. */
@@ -5219,10 +5226,11 @@ parse_flow_and_packet(int argc, const char *argv[],
         }
     }
 
-    error = NULL;
-
 exit:
-    if (error) {
+    if (error && !m_err) {
+        m_err = xstrdup(error);
+    }
+    if (m_err) {
         ofpbuf_delete(packet);
         packet = NULL;
     }
@@ -5230,7 +5238,7 @@ exit:
     ofpbuf_uninit(&odp_key);
     ofpbuf_uninit(&odp_mask);
     simap_destroy(&port_names);
-    return error;
+    return m_err;
 }
 
 static void
@@ -5239,7 +5247,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
 {
     struct ofproto_dpif *ofproto;
     struct ofpbuf *packet;
-    const char *error;
+    char *error;
     struct flow flow;
 
     error = parse_flow_and_packet(argc, argv, &ofproto, &flow, &packet);
@@ -5253,6 +5261,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
         ofpbuf_delete(packet);
     } else {
         unixctl_command_reply_error(conn, error);
+        free(error);
     }
 }
 
@@ -5271,18 +5280,17 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
 
     /* Three kinds of error return values! */
     enum ofperr retval;
-    const char *error;
-    char *rw_error;
+    char *error;
 
     packet = NULL;
     ds_init(&result);
     ofpbuf_init(&ofpacts, 0);
 
     /* Parse actions. */
-    rw_error = parse_ofpacts(argv[--argc], &ofpacts, &usable_protocols);
-    if (rw_error) {
-        unixctl_command_reply_error(conn, rw_error);
-        free(rw_error);
+    error = parse_ofpacts(argv[--argc], &ofpacts, &usable_protocols);
+    if (error) {
+        unixctl_command_reply_error(conn, error);
+        free(error);
         goto exit;
     }
 
@@ -5300,6 +5308,7 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
     error = parse_flow_and_packet(argc, argv, &ofproto, &flow, &packet);
     if (error) {
         unixctl_command_reply_error(conn, error);
+        free(error);
         goto exit;
     }
 
