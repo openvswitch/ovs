@@ -301,6 +301,7 @@ static void
 upcall_destroy(struct upcall *upcall)
 {
     if (upcall) {
+        ofpbuf_uninit(&upcall->dpif_upcall.packet);
         ofpbuf_uninit(&upcall->upcall_buf);
         free(upcall);
     }
@@ -650,7 +651,7 @@ handle_upcalls(struct udpif *udpif, struct list *upcalls)
     n_misses = 0;
     LIST_FOR_EACH_SAFE (upcall, next, list_node, upcalls) {
         struct dpif_upcall *dupcall = &upcall->dpif_upcall;
-        struct ofpbuf *packet = dupcall->packet;
+        struct ofpbuf *packet = &dupcall->packet;
         struct flow_miss *miss = &fmb->miss_buf[n_misses];
         struct flow_miss *existing_miss;
         struct ofproto_dpif *ofproto;
@@ -735,13 +736,13 @@ handle_upcalls(struct udpif *udpif, struct list *upcalls)
                 memset(&cookie, 0, sizeof cookie);
                 memcpy(&cookie, nl_attr_get(dupcall->userdata),
                        sizeof cookie.sflow);
-                dpif_sflow_received(sflow, dupcall->packet, &flow, odp_in_port,
+                dpif_sflow_received(sflow, packet, &flow, odp_in_port,
                                     &cookie);
             }
             break;
         case IPFIX_UPCALL:
             if (ipfix) {
-                dpif_ipfix_bridge_sample(ipfix, dupcall->packet, &flow);
+                dpif_ipfix_bridge_sample(ipfix, packet, &flow);
             }
             break;
         case FLOW_SAMPLE_UPCALL:
@@ -754,7 +755,7 @@ handle_upcalls(struct udpif *udpif, struct list *upcalls)
 
                 /* The flow reflects exactly the contents of the packet.
                  * Sample the packet using it. */
-                dpif_ipfix_flow_sample(ipfix, dupcall->packet, &flow,
+                dpif_ipfix_flow_sample(ipfix, packet, &flow,
                                        cookie.flow_sample.collector_set_id,
                                        cookie.flow_sample.probability,
                                        cookie.flow_sample.obs_domain_id,
@@ -808,7 +809,7 @@ handle_upcalls(struct udpif *udpif, struct list *upcalls)
     n_ops = 0;
     LIST_FOR_EACH (upcall, list_node, upcalls) {
         struct flow_miss *miss = upcall->flow_miss;
-        struct ofpbuf *packet = upcall->dpif_upcall.packet;
+        struct ofpbuf *packet = &upcall->dpif_upcall.packet;
 
         if (miss->xout.slow) {
             struct xlate_in xin;
@@ -844,23 +845,19 @@ handle_upcalls(struct udpif *udpif, struct list *upcalls)
         }
     }
 
-    /* Execute batch. */
-    for (i = 0; i < n_ops; i++) {
-        opsp[i] = &ops[i];
-    }
-    dpif_operate(udpif->dpif, opsp, n_ops);
-
     /* Special case for fail-open mode.
      *
      * If we are in fail-open mode, but we are connected to a controller too,
      * then we should send the packet up to the controller in the hope that it
      * will try to set up a flow and thereby allow us to exit fail-open.
      *
-     * See the top-level comment in fail-open.c for more information. */
+     * See the top-level comment in fail-open.c for more information.
+     *
+     * Copy packets before they are modified by execution. */
     if (fail_open) {
         LIST_FOR_EACH (upcall, list_node, upcalls) {
             struct flow_miss *miss = upcall->flow_miss;
-            struct ofpbuf *packet = upcall->dpif_upcall.packet;
+            struct ofpbuf *packet = &upcall->dpif_upcall.packet;
             struct ofproto_packet_in *pin;
 
             pin = xmalloc(sizeof *pin);
@@ -875,6 +872,12 @@ handle_upcalls(struct udpif *udpif, struct list *upcalls)
             ofproto_dpif_send_packet_in(miss->ofproto, pin);
         }
     }
+
+    /* Execute batch. */
+    for (i = 0; i < n_ops; i++) {
+        opsp[i] = &ops[i];
+    }
+    dpif_operate(udpif->dpif, opsp, n_ops);
 
     list_move(&fmb->upcalls, upcalls);
 

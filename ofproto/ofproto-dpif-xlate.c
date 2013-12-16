@@ -572,18 +572,7 @@ xlate_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
             /* Make the packet resemble the flow, so that it gets sent to
              * an OpenFlow controller properly, so that it looks correct
              * for sFlow, and so that flow_extract() will get the correct
-             * vlan_tci if it is called on 'packet'.
-             *
-             * The allocated space inside 'packet' probably also contains
-             * 'key', that is, both 'packet' and 'key' are probably part of
-             * a struct dpif_upcall (see the large comment on that
-             * structure definition), so pushing data on 'packet' is in
-             * general not a good idea since it could overwrite 'key' or
-             * free it as a side effect.  However, it's OK in this special
-             * case because we know that 'packet' is inside a Netlink
-             * attribute: pushing 4 bytes will just overwrite the 4-byte
-             * "struct nlattr", which is fine since we don't need that
-             * header anymore. */
+             * vlan_tci if it is called on 'packet'. */
             eth_push_vlan(packet, flow->vlan_tci);
         }
         /* We can't reproduce 'key' from 'flow'. */

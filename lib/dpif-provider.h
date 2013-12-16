@@ -341,11 +341,15 @@ struct dpif_class {
      * '*upcall', using 'buf' for storage.  Should only be called if 'recv_set'
      * has been used to enable receiving packets from 'dpif'.
      *
-     * The implementation should point 'upcall->packet' and 'upcall->key' into
-     * data in the caller-provided 'buf'.  If necessary to make room, the
-     * implementation may expand the data in 'buf'.  (This is hardly a great
-     * way to do things but it works out OK for the dpif providers that exist
-     * so far.)
+     * The implementation should point 'upcall->key' and 'upcall->userdata'
+     * (if any) into data in the caller-provided 'buf'.  The implementation may
+     * also use 'buf' for storing the data of 'upcall->packet'.  If necessary
+     * to make room, the implementation may reallocate the data in 'buf'.
+     *
+     * The caller owns the data of 'upcall->packet' and may modify it.  If
+     * packet's headroom is exhausted as it is manipulated, 'upcall->packet'
+     * will be reallocated.  This requires the data of 'upcall->packet' to be
+     * released with ofpbuf_uninit() before 'upcall' is destroyed.
      *
      * This function must not block.  If no upcall is pending when it is
      * called, it should return EAGAIN without blocking. */

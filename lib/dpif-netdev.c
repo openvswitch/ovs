@@ -166,7 +166,7 @@ static int do_add_port(struct dp_netdev *, const char *devname,
 static int do_del_port(struct dp_netdev *, odp_port_t port_no);
 static int dpif_netdev_open(const struct dpif_class *, const char *name,
                             bool create, struct dpif **);
-static int dp_netdev_output_userspace(struct dp_netdev *, const struct ofpbuf *,
+static int dp_netdev_output_userspace(struct dp_netdev *, struct ofpbuf *,
                                     int queue_no, const struct flow *,
                                     const struct nlattr *userdata);
 static void dp_netdev_execute_actions(struct dp_netdev *, const struct flow *,
@@ -344,6 +344,7 @@ dp_netdev_purge_queues(struct dp_netdev *dp)
 
         while (q->tail != q->head) {
             struct dp_netdev_upcall *u = &q->upcalls[q->tail++ & QUEUE_MASK];
+            ofpbuf_uninit(&u->upcall.packet);
             ofpbuf_uninit(&u->buf);
         }
     }
@@ -1154,20 +1155,15 @@ dpif_netdev_execute(struct dpif *dpif, const struct dpif_execute *execute)
     /* Get packet metadata. */
     error = dpif_netdev_flow_from_nlattrs(execute->key, execute->key_len, &md);
     if (!error) {
-        struct ofpbuf *copy;
         struct flow key;
 
-        /* Make a deep copy of 'packet', because we might modify its data. */
-        copy = ofpbuf_clone_with_headroom(execute->packet, DP_NETDEV_HEADROOM);
-
         /* Extract flow key. */
-        flow_extract(copy, md.skb_priority, md.pkt_mark, &md.tunnel,
+        flow_extract(execute->packet, md.skb_priority, md.pkt_mark, &md.tunnel,
                      &md.in_port, &key);
         ovs_mutex_lock(&dp_netdev_mutex);
-        dp_netdev_execute_actions(dp, &key, copy,
+        dp_netdev_execute_actions(dp, &key, execute->packet,
                                   execute->actions, execute->actions_len);
         ovs_mutex_unlock(&dp_netdev_mutex);
-        ofpbuf_delete(copy);
     }
     return error;
 }
@@ -1214,7 +1210,6 @@ dpif_netdev_recv(struct dpif *dpif, struct dpif_upcall *upcall,
         struct dp_netdev_upcall *u = &q->upcalls[q->tail++ & QUEUE_MASK];
 
         *upcall = u->upcall;
-        upcall->packet = buf;
 
         ofpbuf_uninit(buf);
         *buf = u->buf;
@@ -1296,18 +1291,20 @@ dpif_netdev_run(struct dpif *dpif)
     struct dp_netdev_port *port;
     struct dp_netdev *dp;
     struct ofpbuf packet;
+    size_t buf_size;
 
     ovs_mutex_lock(&dp_netdev_mutex);
     dp = get_dp_netdev(dpif);
-    ofpbuf_init(&packet,
-                DP_NETDEV_HEADROOM + VLAN_ETH_HEADER_LEN + dp->max_mtu);
+    ofpbuf_init(&packet, 0);
+
+    buf_size = DP_NETDEV_HEADROOM + VLAN_ETH_HEADER_LEN + dp->max_mtu;
 
     LIST_FOR_EACH (port, node, &dp->port_list) {
         int error;
 
-        /* Reset packet contents. */
+        /* Reset packet contents. Packet data may have been stolen. */
         ofpbuf_clear(&packet);
-        ofpbuf_reserve(&packet, DP_NETDEV_HEADROOM);
+        ofpbuf_reserve_with_tailroom(&packet, DP_NETDEV_HEADROOM, buf_size);
 
         error = port->rx ? netdev_rx_recv(port->rx, &packet) : EOPNOTSUPP;
         if (!error) {
@@ -1351,7 +1348,7 @@ dpif_netdev_wait(struct dpif *dpif)
 }
 
 static int
-dp_netdev_output_userspace(struct dp_netdev *dp, const struct ofpbuf *packet,
+dp_netdev_output_userspace(struct dp_netdev *dp, struct ofpbuf *packet,
                            int queue_no, const struct flow *flow,
                            const struct nlattr *userdata)
 {
@@ -1365,7 +1362,7 @@ dp_netdev_output_userspace(struct dp_netdev *dp, const struct ofpbuf *packet,
         upcall->type = queue_no;
 
         /* Allocate buffer big enough for everything. */
-        buf_size = ODPUTIL_FLOW_KEY_BYTES + 2 + packet->size;
+        buf_size = ODPUTIL_FLOW_KEY_BYTES;
         if (userdata) {
             buf_size += NLA_ALIGN(userdata->nla_len);
         }
@@ -1382,15 +1379,10 @@ dp_netdev_output_userspace(struct dp_netdev *dp, const struct ofpbuf *packet,
                                           NLA_ALIGN(userdata->nla_len));
         }
 
-        /* Put packet.
-         *
-         * We adjust 'data' and 'size' in 'buf' so that only the packet itself
-         * is visible in 'upcall->packet'.  The ODP flow and (if present)
-         * userdata become part of the headroom. */
-        ofpbuf_put_zeros(buf, 2);
-        buf->data = ofpbuf_put(buf, packet->data, packet->size);
-        buf->size = packet->size;
-        upcall->packet = buf;
+        /* Steal packet data. */
+        ovs_assert(packet->source == OFPBUF_MALLOC);
+        upcall->packet = *packet;
+        ofpbuf_use(packet, NULL, 0);
 
         seq_change(dp->queue_seq);
 
@@ -1421,14 +1413,22 @@ dp_netdev_action_output(void *aux_, struct ofpbuf *packet,
 static void
 dp_netdev_action_userspace(void *aux_, struct ofpbuf *packet,
                            const struct flow *flow OVS_UNUSED,
-                           const struct nlattr *a)
+                           const struct nlattr *a, bool may_steal)
 {
     struct dp_netdev_execute_aux *aux = aux_;
     const struct nlattr *userdata;
 
     userdata = nl_attr_find_nested(a, OVS_USERSPACE_ATTR_USERDATA);
+
+    /* Make a copy if we are not allowed to steal the packet's data. */
+    if (!may_steal) {
+        packet = ofpbuf_clone_with_headroom(packet, DP_NETDEV_HEADROOM);
+    }
     dp_netdev_output_userspace(aux->dp, packet, DPIF_UC_ACTION, aux->key,
                                userdata);
+    if (!may_steal) {
+        ofpbuf_uninit(packet);
+    }
 }
 
 static void

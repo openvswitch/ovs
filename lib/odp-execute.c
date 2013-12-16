@@ -139,14 +139,15 @@ odp_execute_set_action(struct ofpbuf *packet, const struct nlattr *a,
 }
 
 static void
+odp_execute_actions__(void *dp, struct ofpbuf *packet, struct flow *key,
+                      const struct nlattr *actions, size_t actions_len,
+                      odp_output_cb output, odp_userspace_cb userspace,
+                      bool more_actions);
+
+static void
 odp_execute_sample(void *dp, struct ofpbuf *packet, struct flow *key,
-                   const struct nlattr *action,
-                   void (*output)(void *dp, struct ofpbuf *packet,
-                                  const struct flow *key,
-                                  odp_port_t out_port),
-                   void (*userspace)(void *dp, struct ofpbuf *packet,
-                                     const struct flow *key,
-                                     const struct nlattr *action))
+                   const struct nlattr *action, odp_output_cb output,
+                   odp_userspace_cb userspace, bool more_actions)
 {
     const struct nlattr *subactions = NULL;
     const struct nlattr *a;
@@ -173,19 +174,16 @@ odp_execute_sample(void *dp, struct ofpbuf *packet, struct flow *key,
         }
     }
 
-    odp_execute_actions(dp, packet, key, nl_attr_get(subactions),
-                        nl_attr_get_size(subactions), output, userspace);
+    odp_execute_actions__(dp, packet, key, nl_attr_get(subactions),
+                          nl_attr_get_size(subactions), output, userspace,
+                          more_actions);
 }
 
-void
-odp_execute_actions(void *dp, struct ofpbuf *packet, struct flow *key,
-                    const struct nlattr *actions, size_t actions_len,
-                    void (*output)(void *dp, struct ofpbuf *packet,
-                                   const struct flow *key,
-                                   odp_port_t out_port),
-                    void (*userspace)(void *dp, struct ofpbuf *packet,
-                                      const struct flow *key,
-                                      const struct nlattr *action))
+static void
+odp_execute_actions__(void *dp, struct ofpbuf *packet, struct flow *key,
+                      const struct nlattr *actions, size_t actions_len,
+                      odp_output_cb output, odp_userspace_cb userspace,
+                      bool more_actions)
 {
     const struct nlattr *a;
     unsigned int left;
@@ -202,7 +200,10 @@ odp_execute_actions(void *dp, struct ofpbuf *packet, struct flow *key,
 
         case OVS_ACTION_ATTR_USERSPACE: {
             if (userspace) {
-                userspace(dp, packet, key, a);
+                /* Allow 'userspace' to steal the packet data if we do not
+                 * need it any more. */
+                bool steal = !more_actions && left <= NLA_ALIGN(a->nla_len);
+                userspace(dp, packet, key, a, steal);
             }
             break;
         }
@@ -232,7 +233,8 @@ odp_execute_actions(void *dp, struct ofpbuf *packet, struct flow *key,
             break;
 
         case OVS_ACTION_ATTR_SAMPLE:
-            odp_execute_sample(dp, packet, key, a, output, userspace);
+            odp_execute_sample(dp, packet, key, a, output, userspace,
+                               more_actions || left > NLA_ALIGN(a->nla_len));
             break;
 
         case OVS_ACTION_ATTR_UNSPEC:
@@ -240,4 +242,13 @@ odp_execute_actions(void *dp, struct ofpbuf *packet, struct flow *key,
             NOT_REACHED();
         }
     }
+}
+
+void
+odp_execute_actions(void *dp, struct ofpbuf *packet, struct flow *key,
+                    const struct nlattr *actions, size_t actions_len,
+                    odp_output_cb output, odp_userspace_cb userspace)
+{
+    odp_execute_actions__(dp, packet, key, actions, actions_len, output,
+                          userspace, false);
 }

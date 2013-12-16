@@ -1108,7 +1108,8 @@ dpif_execute_helper_output_cb(void *aux, struct ofpbuf *packet,
 static void
 dpif_execute_helper_userspace_cb(void *aux, struct ofpbuf *packet,
                                  const struct flow *flow,
-                                 const struct nlattr *action)
+                                 const struct nlattr *action,
+                                 bool may_steal OVS_UNUSED)
 {
     dpif_execute_helper_execute__(aux, packet, flow,
                                   action, NLA_ALIGN(action->nla_len));
@@ -1124,7 +1125,6 @@ dpif_execute_with_help(struct dpif *dpif, const struct dpif_execute *execute)
 {
     struct dpif_execute_helper_aux aux;
     enum odp_key_fitness fit;
-    struct ofpbuf *packet;
     struct flow flow;
 
     COVERAGE_INC(dpif_execute_with_help);
@@ -1137,13 +1137,10 @@ dpif_execute_with_help(struct dpif *dpif, const struct dpif_execute *execute)
     aux.dpif = dpif;
     aux.error = 0;
 
-    packet = ofpbuf_clone_with_headroom(execute->packet, VLAN_HEADER_LEN);
-    odp_execute_actions(&aux, packet, &flow,
+    odp_execute_actions(&aux, execute->packet, &flow,
                         execute->actions, execute->actions_len,
                         dpif_execute_helper_output_cb,
                         dpif_execute_helper_userspace_cb);
-    ofpbuf_delete(packet);
-
     return aux.error;
 }
 
@@ -1186,8 +1183,7 @@ int
 dpif_execute(struct dpif *dpif,
              const struct nlattr *key, size_t key_len,
              const struct nlattr *actions, size_t actions_len,
-             const struct ofpbuf *buf,
-             bool needs_help)
+             struct ofpbuf *buf, bool needs_help)
 {
     struct dpif_execute execute;
 
@@ -1316,10 +1312,8 @@ dpif_recv_set(struct dpif *dpif, bool enable)
  * '*upcall', using 'buf' for storage.  Should only be called if
  * dpif_recv_set() has been used to enable receiving packets on 'dpif'.
  *
- * 'upcall->packet' and 'upcall->key' point into data in the caller-provided
- * 'buf', so their memory cannot be freed separately from 'buf'.  (This is
- * hardly a great way to do things but it works out OK for the dpif providers
- * and clients that exist so far.)
+ * 'upcall->key' and 'upcall->userdata' point into data in the caller-provided
+ * 'buf', so their memory cannot be freed separately from 'buf'.
  *
  * Returns 0 if successful, otherwise a positive errno value.  Returns EAGAIN
  * if no upcall is immediately available. */
@@ -1331,8 +1325,8 @@ dpif_recv(struct dpif *dpif, struct dpif_upcall *upcall, struct ofpbuf *buf)
         struct ds flow;
         char *packet;
 
-        packet = ofp_packet_to_string(upcall->packet->data,
-                                      upcall->packet->size);
+        packet = ofp_packet_to_string(upcall->packet.data,
+                                      upcall->packet.size);
 
         ds_init(&flow);
         odp_flow_key_format(upcall->key, upcall->key_len, &flow);

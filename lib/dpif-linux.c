@@ -1461,14 +1461,20 @@ parse_odp_packet(struct ofpbuf *buf, struct dpif_upcall *upcall,
 
     memset(upcall, 0, sizeof *upcall);
     upcall->type = type;
-    upcall->packet = buf;
-    upcall->packet->data = CONST_CAST(struct nlattr *,
-                                      nl_attr_get(a[OVS_PACKET_ATTR_PACKET]));
-    upcall->packet->size = nl_attr_get_size(a[OVS_PACKET_ATTR_PACKET]);
     upcall->key = CONST_CAST(struct nlattr *,
                              nl_attr_get(a[OVS_PACKET_ATTR_KEY]));
     upcall->key_len = nl_attr_get_size(a[OVS_PACKET_ATTR_KEY]);
     upcall->userdata = a[OVS_PACKET_ATTR_USERDATA];
+
+    /* Allow overwriting the netlink attribute header without reallocating. */
+    ofpbuf_use_stub(&upcall->packet,
+                    CONST_CAST(struct nlattr *,
+                               nl_attr_get(a[OVS_PACKET_ATTR_PACKET])) - 1,
+                    nl_attr_get_size(a[OVS_PACKET_ATTR_PACKET]) +
+                    sizeof(struct nlattr));
+    upcall->packet.data = (char *)upcall->packet.data + sizeof(struct nlattr);
+    upcall->packet.size -= sizeof(struct nlattr);
+
     *dp_ifindex = ovs_header->dp_ifindex;
 
     return 0;

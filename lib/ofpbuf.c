@@ -431,6 +431,17 @@ ofpbuf_reserve(struct ofpbuf *b, size_t size)
     b->data = (char*)b->data + size;
 }
 
+/* Reserves 'size' bytes of headroom so that they can be later allocated with
+ * ofpbuf_push_uninit() without reallocating the ofpbuf. */
+void
+ofpbuf_reserve_with_tailroom(struct ofpbuf *b, size_t headroom,
+                             size_t tailroom)
+{
+    ovs_assert(!b->size);
+    ofpbuf_prealloc_tailroom(b, headroom + tailroom);
+    b->data = (char*)b->data + headroom;
+}
+
 /* Prefixes 'size' bytes to the head end of 'b', reallocating and copying its
  * data if necessary.  Returns a pointer to the first byte of the data's
  * location in the ofpbuf.  The new data is left uninitialized. */
