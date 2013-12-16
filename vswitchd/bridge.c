@@ -2056,7 +2056,7 @@ run_system_stats(void)
     }
 }
 
-static inline const char *
+static const char *
 ofp12_controller_role_to_str(enum ofp12_controller_role role)
 {
     switch (role) {
