@@ -6,6 +6,8 @@ openvswitch_sources += \
 	linux/compat/gre.c \
 	linux/compat/gso.c \
 	linux/compat/genetlink-openvswitch.c \
+	linux/compat/hash.c \
+	linux/compat/hash-x86.c \
 	linux/compat/ip_tunnels_core.c \
 	linux/compat/netdevice.c \
 	linux/compat/net_namespace.c \
@@ -15,6 +17,7 @@ openvswitch_sources += \
 	linux/compat/utils.c
 openvswitch_headers += \
 	linux/compat/gso.h \
+	linux/compat/include/asm/hash.h \
 	linux/compat/include/asm/percpu.h \
 	linux/compat/include/linux/compiler.h \
 	linux/compat/include/linux/compiler-gcc.h \
@@ -22,6 +25,7 @@ openvswitch_headers += \
 	linux/compat/include/linux/err.h \
 	linux/compat/include/linux/etherdevice.h \
 	linux/compat/include/linux/flex_array.h \
+	linux/compat/include/linux/hash.h \
 	linux/compat/include/linux/icmp.h \
 	linux/compat/include/linux/icmpv6.h \
 	linux/compat/include/linux/if.h \
