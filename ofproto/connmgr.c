@@ -637,12 +637,13 @@ connmgr_set_controllers(struct connmgr *mgr,
 
     shash_destroy(&new_controllers);
 
+    ovs_mutex_unlock(&ofproto_mutex);
+
     update_in_band_remotes(mgr);
     update_fail_open(mgr);
     if (had_controllers != connmgr_has_controllers(mgr)) {
         ofproto_flush_flows(mgr->ofproto);
     }
-    ovs_mutex_unlock(&ofproto_mutex);
 }
 
 /* Drops the connections between 'mgr' and all of its primary and secondary
