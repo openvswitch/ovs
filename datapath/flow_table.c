@@ -44,7 +44,6 @@
 #include <net/ipv6.h>
 #include <net/ndisc.h>
 
-#include "datapath.h"
 #include "vlan.h"
 
 #define TBL_MIN_BUCKETS		1024
