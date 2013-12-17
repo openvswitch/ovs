@@ -1276,7 +1276,7 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
                 break;
 
             default:
-                NOT_REACHED();
+                OVS_NOT_REACHED();
             }
         }
     }

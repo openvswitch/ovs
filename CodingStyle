@@ -224,7 +224,7 @@ statement, that is, write "return 0;" and not "return(0);"
         break;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
   "switch" statements with very short, uniform cases may use an

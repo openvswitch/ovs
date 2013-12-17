@@ -668,7 +668,7 @@ stp_state_name(enum stp_state state)
     case STP_BLOCKING:
         return "blocking";
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -709,7 +709,7 @@ stp_role_name(enum stp_role role)
     case STP_ROLE_DISABLED:
         return "disabled";
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 

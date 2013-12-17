@@ -532,7 +532,7 @@ reconnect_deadline__(const struct reconnect *fsm)
         return fsm->state_entered;
     }
 
-    NOT_REACHED();
+    OVS_NOT_REACHED();
 }
 
 /* Assesses whether any action should be taken on 'fsm'.  The return value is
@@ -604,7 +604,7 @@ reconnect_run(struct reconnect *fsm, long long int now)
             return 0;
         }
 
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     } else {
         return 0;
     }

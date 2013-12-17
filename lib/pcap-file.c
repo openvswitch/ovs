@@ -89,7 +89,7 @@ pcap_open(const char *file_name, const char *mode)
         break;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
     return file;
 }

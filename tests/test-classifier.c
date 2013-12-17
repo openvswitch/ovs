@@ -191,7 +191,7 @@ tcls_remove(struct tcls *cls, const struct test_rule *rule)
             return;
         }
     }
-    NOT_REACHED();
+    OVS_NOT_REACHED();
 }
 
 static bool
@@ -245,7 +245,7 @@ match(const struct cls_rule *wild_, const struct flow *fixed)
                     ^ wild.flow.in_port.ofp_port)
                    & wild.wc.masks.in_port.ofp_port);
         } else {
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
 
         if (!eq) {
@@ -558,7 +558,7 @@ make_rule(int wc_fields, unsigned int priority, int value_pat)
         } else if (f_idx == CLS_F_IDX_IN_PORT) {
             match.wc.masks.in_port.ofp_port = u16_to_ofp(UINT16_MAX);
         } else {
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
     }
 
@@ -1113,7 +1113,7 @@ next_random_flow(struct flow *flow, unsigned int idx)
                 }
             }
         }
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     /* 16 randomly chosen flows with N >= 3 nonzero values. */

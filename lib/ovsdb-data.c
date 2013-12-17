@@ -58,7 +58,7 @@ ovsdb_atom_init_default(union ovsdb_atom *atom, enum ovsdb_atomic_type type)
 {
     switch (type) {
     case OVSDB_TYPE_VOID:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case OVSDB_TYPE_INTEGER:
         atom->integer = 0;
@@ -82,7 +82,7 @@ ovsdb_atom_init_default(union ovsdb_atom *atom, enum ovsdb_atomic_type type)
 
     case OVSDB_N_TYPES:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -123,7 +123,7 @@ ovsdb_atom_is_default(const union ovsdb_atom *atom,
 {
     switch (type) {
     case OVSDB_TYPE_VOID:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case OVSDB_TYPE_INTEGER:
         return atom->integer == 0;
@@ -142,7 +142,7 @@ ovsdb_atom_is_default(const union ovsdb_atom *atom,
 
     case OVSDB_N_TYPES:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -156,7 +156,7 @@ ovsdb_atom_clone(union ovsdb_atom *new, const union ovsdb_atom *old,
 {
     switch (type) {
     case OVSDB_TYPE_VOID:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case OVSDB_TYPE_INTEGER:
         new->integer = old->integer;
@@ -180,7 +180,7 @@ ovsdb_atom_clone(union ovsdb_atom *new, const union ovsdb_atom *old,
 
     case OVSDB_N_TYPES:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -201,7 +201,7 @@ ovsdb_atom_hash(const union ovsdb_atom *atom, enum ovsdb_atomic_type type,
 {
     switch (type) {
     case OVSDB_TYPE_VOID:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case OVSDB_TYPE_INTEGER:
         return hash_int(atom->integer, basis);
@@ -220,7 +220,7 @@ ovsdb_atom_hash(const union ovsdb_atom *atom, enum ovsdb_atomic_type type,
 
     case OVSDB_N_TYPES:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -233,7 +233,7 @@ ovsdb_atom_compare_3way(const union ovsdb_atom *a,
 {
     switch (type) {
     case OVSDB_TYPE_VOID:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case OVSDB_TYPE_INTEGER:
         return a->integer < b->integer ? -1 : a->integer > b->integer;
@@ -252,7 +252,7 @@ ovsdb_atom_compare_3way(const union ovsdb_atom *a,
 
     case OVSDB_N_TYPES:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -353,7 +353,7 @@ ovsdb_atom_from_json__(union ovsdb_atom *atom,
 
     switch (type) {
     case OVSDB_TYPE_VOID:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case OVSDB_TYPE_INTEGER:
         if (json->type == JSON_INTEGER) {
@@ -394,7 +394,7 @@ ovsdb_atom_from_json__(union ovsdb_atom *atom,
 
     case OVSDB_N_TYPES:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     return ovsdb_syntax_error(json, NULL, "expected %s",
@@ -443,7 +443,7 @@ ovsdb_atom_to_json(const union ovsdb_atom *atom, enum ovsdb_atomic_type type)
 {
     switch (type) {
     case OVSDB_TYPE_VOID:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case OVSDB_TYPE_INTEGER:
         return json_integer_create(atom->integer);
@@ -463,7 +463,7 @@ ovsdb_atom_to_json(const union ovsdb_atom *atom, enum ovsdb_atomic_type type)
 
     case OVSDB_N_TYPES:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -476,7 +476,7 @@ ovsdb_atom_json_length(const union ovsdb_atom *atom,
 
     switch (type) {
     case OVSDB_TYPE_VOID:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case OVSDB_TYPE_INTEGER:
         json.type = JSON_INTEGER;
@@ -502,7 +502,7 @@ ovsdb_atom_json_length(const union ovsdb_atom *atom,
 
     case OVSDB_N_TYPES:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     return json_serialized_length(&json);
@@ -517,7 +517,7 @@ ovsdb_atom_from_string__(union ovsdb_atom *atom,
 
     switch (type) {
     case OVSDB_TYPE_VOID:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case OVSDB_TYPE_INTEGER: {
         long long int integer;
@@ -585,7 +585,7 @@ ovsdb_atom_from_string__(union ovsdb_atom *atom,
 
     case OVSDB_N_TYPES:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     return NULL;
@@ -671,7 +671,7 @@ ovsdb_atom_to_string(const union ovsdb_atom *atom, enum ovsdb_atomic_type type,
 {
     switch (type) {
     case OVSDB_TYPE_VOID:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case OVSDB_TYPE_INTEGER:
         ds_put_format(out, "%"PRId64, atom->integer);
@@ -703,7 +703,7 @@ ovsdb_atom_to_string(const union ovsdb_atom *atom, enum ovsdb_atomic_type type,
 
     case OVSDB_N_TYPES:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -784,7 +784,7 @@ ovsdb_atom_check_constraints(const union ovsdb_atom *atom,
 
     switch (base->type) {
     case OVSDB_TYPE_VOID:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case OVSDB_TYPE_INTEGER:
         if (atom->integer >= base->u.integer.min
@@ -809,7 +809,7 @@ ovsdb_atom_check_constraints(const union ovsdb_atom *atom,
                                "value %"PRId64,
                                atom->integer, base->u.integer.max);
         }
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case OVSDB_TYPE_REAL:
         if (atom->real >= base->u.real.min && atom->real <= base->u.real.max) {
@@ -836,7 +836,7 @@ ovsdb_atom_check_constraints(const union ovsdb_atom *atom,
                                DBL_DIG, atom->real,
                                DBL_DIG, base->u.real.max);
         }
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case OVSDB_TYPE_BOOLEAN:
         return NULL;
@@ -849,7 +849,7 @@ ovsdb_atom_check_constraints(const union ovsdb_atom *atom,
 
     case OVSDB_N_TYPES:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -933,7 +933,7 @@ ovsdb_datum_default(const struct ovsdb_type *type)
         }
         return d;
     } else {
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -1119,7 +1119,7 @@ ovsdb_datum_sort_assert(struct ovsdb_datum *datum,
 {
     struct ovsdb_error *error = ovsdb_datum_sort(datum, key_type);
     if (error) {
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 

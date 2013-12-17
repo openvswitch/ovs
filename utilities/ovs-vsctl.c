@@ -3630,7 +3630,7 @@ post_create(struct vsctl_context *ctx)
     struct uuid dummy;
 
     if (!uuid_from_string(&dummy, ds_cstr(&ctx->output))) {
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
     real = ovsdb_idl_txn_get_insert_uuid(ctx->txn, &dummy);
     if (real) {
@@ -3748,7 +3748,7 @@ evaluate_relop(const struct ovsdb_datum *a, const struct ovsdb_datum *b,
         return ovsdb_datum_includes_all(b, a, type);
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -4058,7 +4058,7 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
     switch (status) {
     case TXN_UNCOMMITTED:
     case TXN_INCOMPLETE:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case TXN_ABORTED:
         /* Should not happen--we never call ovsdb_idl_txn_abort(). */
@@ -4079,7 +4079,7 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
         vsctl_fatal("database not locked");
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
     free(error);
 

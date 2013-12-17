@@ -258,11 +258,11 @@ ovsdb_clause_evaluate(const struct ovsdb_row *row,
         case OVSDB_F_LE:
         case OVSDB_F_GE:
         case OVSDB_F_GT:
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
     }
 
-    NOT_REACHED();
+    OVS_NOT_REACHED();
 }
 
 bool

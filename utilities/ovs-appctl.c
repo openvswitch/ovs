@@ -69,7 +69,7 @@ main(int argc, char *argv[])
     } else if (cmd_result) {
         fputs(cmd_result, stdout);
     } else {
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     jsonrpc_close(client);
@@ -161,7 +161,7 @@ parse_command_line(int argc, char *argv[])
             exit(EXIT_FAILURE);
 
         default:
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
     }
 

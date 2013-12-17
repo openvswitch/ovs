@@ -798,7 +798,7 @@ bfd_process_packet(struct bfd *bfd, const struct flow *flow,
             break;
         case STATE_ADMIN_DOWN:
         default:
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
     }
     /* XXX: RFC 5880 Section 6.8.6 Demand mode related calculations here. */

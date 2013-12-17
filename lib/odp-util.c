@@ -3383,7 +3383,7 @@ commit_mpls_action(const struct flow *flow, struct flow *base,
         break;
     }
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     base->dl_type = flow->dl_type;

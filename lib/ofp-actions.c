@@ -324,7 +324,7 @@ decode_nxast_action(const union ofp_action *a, enum ofputil_action_code *code)
             } else {                                    \
                 return OFPERR_OFPBAC_BAD_LEN;           \
             }                                           \
-            NOT_REACHED();
+            OVS_NOT_REACHED();
 #include "ofp-util.def"
 
     case CONSTANT_HTONS(NXAST_SNAT__OBSOLETE):
@@ -380,7 +380,7 @@ ofpact_from_nxast(const union ofp_action *a, enum ofputil_action_code code,
 #define OFPAT10_ACTION(ENUM, STRUCT, NAME) case OFPUTIL_##ENUM:
 #define OFPAT11_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) case OFPUTIL_##ENUM:
 #include "ofp-util.def"
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case OFPUTIL_NXAST_RESUBMIT:
         resubmit_from_openflow(&a->resubmit, out);
@@ -527,7 +527,7 @@ ofpact_from_openflow10(const union ofp_action *a,
     case OFPUTIL_ACTION_INVALID:
 #define OFPAT11_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) case OFPUTIL_##ENUM:
 #include "ofp-util.def"
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case OFPUTIL_OFPAT10_OUTPUT:
         return output_from_openflow10(&a->output10, out);
@@ -764,7 +764,7 @@ decode_openflow11_action(const union ofp_action *a,
             } else {                                    \
                 return OFPERR_OFPBAC_BAD_LEN;           \
             }                                           \
-            NOT_REACHED();
+            OVS_NOT_REACHED();
 #include "ofp-util.def"
 
     default:
@@ -1087,7 +1087,7 @@ set_field_to_openflow(const struct ofpact_set_field *sf,
     } else if (oh->version == OFP10_VERSION) {
         set_field_to_openflow10(sf, openflow);
     } else {
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -1145,7 +1145,7 @@ ofpact_from_openflow11(const union ofp_action *a, enum ofp_version version,
     case OFPUTIL_ACTION_INVALID:
 #define OFPAT10_ACTION(ENUM, STRUCT, NAME) case OFPUTIL_##ENUM:
 #include "ofp-util.def"
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case OFPUTIL_OFPAT11_OUTPUT:
         return output_from_openflow11(&a->ofp11_output, out);
@@ -1337,7 +1337,7 @@ ofpact_is_set_action(const struct ofpact *a)
     case OFPACT_WRITE_METADATA:
         return false;
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -1404,7 +1404,7 @@ ofpact_is_allowed_in_actions_set(const struct ofpact *a)
     case OFPACT_WRITE_METADATA:
         return false;
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -2119,7 +2119,7 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
         return 0;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -2481,7 +2481,7 @@ ofpact_to_nxast(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_GOTO_TABLE:
     case OFPACT_METER:
     case OFPACT_SET_FIELD:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -2782,7 +2782,7 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_WRITE_ACTIONS:
     case OFPACT_GOTO_TABLE:
     case OFPACT_METER:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case OFPACT_GROUP:
         ofputil_put_OFPAT11_GROUP(out)->group_id =

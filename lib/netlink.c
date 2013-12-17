@@ -643,7 +643,7 @@ min_attr_len(enum nl_attr_type type)
     case NL_A_STRING: return 1;
     case NL_A_FLAG: return 0;
     case NL_A_NESTED: return 0;
-    case N_NL_ATTR_TYPES: default: NOT_REACHED();
+    case N_NL_ATTR_TYPES: default: OVS_NOT_REACHED();
     }
 }
 
@@ -661,7 +661,7 @@ max_attr_len(enum nl_attr_type type)
     case NL_A_STRING: return SIZE_MAX;
     case NL_A_FLAG: return SIZE_MAX;
     case NL_A_NESTED: return SIZE_MAX;
-    case N_NL_ATTR_TYPES: default: NOT_REACHED();
+    case N_NL_ATTR_TYPES: default: OVS_NOT_REACHED();
     }
 }
 

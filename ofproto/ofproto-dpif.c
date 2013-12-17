@@ -1277,7 +1277,7 @@ add_internal_flow(struct ofproto_dpif *ofproto, int id,
                                   rulep)) {
         rule_dpif_unref(*rulep);
     } else {
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     return 0;
@@ -2496,7 +2496,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         break;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
     if (!vlan_bitmap_equal(trunks, bundle->trunks)) {
         free(bundle->trunks);

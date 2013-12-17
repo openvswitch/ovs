@@ -940,7 +940,7 @@ flow_mask_hash_fields(const struct flow *flow, struct flow_wildcards *wc,
         break;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -958,7 +958,7 @@ flow_hash_fields(const struct flow *flow, enum nx_hash_fields fields,
         return flow_hash_symmetric_l4(flow, basis);
     }
 
-    NOT_REACHED();
+    OVS_NOT_REACHED();
 }
 
 /* Returns a string representation of 'fields'. */

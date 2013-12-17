@@ -573,7 +573,7 @@ ofputil_match_typical_len(enum ofputil_protocol protocol)
         return NXM_TYPICAL_LEN;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -595,7 +595,7 @@ ofputil_put_ofp11_match(struct ofpbuf *b, const struct match *match,
     case OFPUTIL_P_OF10_STD_TID:
     case OFPUTIL_P_OF10_NXM:
     case OFPUTIL_P_OF10_NXM_TID:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case OFPUTIL_P_OF11_STD: {
         struct ofp11_match *om;
@@ -613,7 +613,7 @@ ofputil_put_ofp11_match(struct ofpbuf *b, const struct match *match,
         return oxm_put_match(b, match);
     }
 
-    NOT_REACHED();
+    OVS_NOT_REACHED();
 }
 
 /* Given a 'dl_type' value in the format used in struct flow, returns the
@@ -715,7 +715,7 @@ ofputil_protocol_to_ofp_version(enum ofputil_protocol protocol)
         return OFP13_VERSION;
     }
 
-    NOT_REACHED();
+    OVS_NOT_REACHED();
 }
 
 /* Returns a bitmap of OpenFlow versions that are supported by at
@@ -790,7 +790,7 @@ ofputil_protocol_set_tid(enum ofputil_protocol protocol, bool enable)
         return OFPUTIL_P_OF13_OXM;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -830,7 +830,7 @@ ofputil_protocol_set_base(enum ofputil_protocol cur,
         return ofputil_protocol_set_tid(OFPUTIL_P_OF13_OXM, tid);
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -918,7 +918,7 @@ ofputil_protocols_to_string(enum ofputil_protocol protocols)
                 goto match;
             }
         }
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     match: ;
     }
@@ -1071,7 +1071,7 @@ ofputil_version_to_string(enum ofp_version ofp_version)
     case OFP13_VERSION:
         return "OpenFlow13";
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -1096,7 +1096,7 @@ ofputil_packet_in_format_to_string(enum nx_packet_in_format packet_in_format)
     case NXPIF_NXM:
         return "nxm";
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -1305,11 +1305,11 @@ ofputil_encode_set_protocol(enum ofputil_protocol current,
         case OFPUTIL_P_OF13_OXM:
             /* There is only one variant of each OpenFlow 1.1+ protocol, and we
              * verified above that we're not trying to change versions. */
-            NOT_REACHED();
+            OVS_NOT_REACHED();
 
         case OFPUTIL_P_OF10_STD_TID:
         case OFPUTIL_P_OF10_NXM_TID:
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
     }
 
@@ -1378,7 +1378,7 @@ ofputil_nx_flow_format_to_string(enum nx_flow_format flow_format)
     case NXFF_NXM:
         return "nxm";
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -1638,7 +1638,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             fm->out_group = OFPG11_ANY;
             raw_flags = nfm->flags;
         } else {
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
 
         fm->modify_cookie = fm->new_cookie != OVS_BE64_MAX;
@@ -2161,7 +2161,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
     }
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     ofpmsg_update_length(msg);
@@ -2286,7 +2286,7 @@ ofputil_decode_queue_get_config_request(const struct ofp_header *oh,
         return ofputil_port_from_ofp11(qgcr11->port, port);
     }
 
-    NOT_REACHED();
+    OVS_NOT_REACHED();
 }
 
 /* Constructs and returns the beginning of a reply to
@@ -2325,7 +2325,7 @@ ofputil_encode_queue_get_config_reply(const struct ofp_header *oh)
         break;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     return reply;
@@ -2407,7 +2407,7 @@ ofputil_decode_queue_get_config_reply(struct ofpbuf *reply, ofp_port_t *port)
         return ofputil_port_from_ofp11(qgcr11->port, port);
     }
 
-    NOT_REACHED();
+    OVS_NOT_REACHED();
 }
 
 static enum ofperr
@@ -2543,7 +2543,7 @@ ofputil_decode_flow_stats_request(struct ofputil_flow_stats_request *fsr,
 
     default:
         /* Hey, the caller lied. */
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -2614,7 +2614,7 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
     }
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     return msg;
@@ -2797,7 +2797,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
         fs->byte_count = ntohll(nfs->byte_count);
         fs->flags = 0;
     } else {
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     fs->ofpacts = ofpacts->data;
@@ -2905,7 +2905,7 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
         nfs->packet_count = htonll(fs->packet_count);
         nfs->byte_count = htonll(fs->byte_count);
     } else {
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     ofpmp_postappend(replies, start_ofs);
@@ -3034,7 +3034,7 @@ ofputil_decode_flow_removed(struct ofputil_flow_removed *fr,
         fr->packet_count = ntohll(nfr->packet_count);
         fr->byte_count = ntohll(nfr->byte_count);
     } else {
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     return 0;
@@ -3118,7 +3118,7 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
     }
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     return msg;
@@ -3238,7 +3238,7 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
 
         ofputil_decode_packet_in_finish(pin, &match, &b);
     } else {
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     return 0;
@@ -3420,7 +3420,7 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
         break;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     ofpmsg_update_length(packet);
@@ -3516,7 +3516,7 @@ ofputil_decode_packet_out(struct ofputil_packet_out *po,
             return error;
         }
     } else {
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     if (ofp_to_u16(po->in_port) >= ofp_to_u16(OFPP_MAX)
@@ -3665,7 +3665,7 @@ ofputil_get_phy_port_size(enum ofp_version ofp_version)
     case OFP13_VERSION:
         return sizeof(struct ofp11_port);
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -3736,7 +3736,7 @@ ofputil_put_phy_port(enum ofp_version ofp_version,
     }
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -3765,7 +3765,7 @@ ofputil_append_port_desc_stats_reply(enum ofp_version ofp_version,
     }
 
     default:
-      NOT_REACHED();
+      OVS_NOT_REACHED();
     }
 }
 
@@ -3956,7 +3956,7 @@ ofputil_encode_switch_features(const struct ofputil_switch_features *features,
         raw = OFPRAW_OFPT13_FEATURES_REPLY;
         break;
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
     b = ofpraw_alloc_xid(raw, version, xid, 0);
     osf = ofpbuf_put_zeros(b, sizeof *osf);
@@ -3984,7 +3984,7 @@ ofputil_encode_switch_features(const struct ofputil_switch_features *features,
         }
         break;
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     return b;
@@ -4057,7 +4057,7 @@ ofputil_encode_port_status(const struct ofputil_port_status *ps,
         break;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     b = ofpraw_alloc_xid(raw, version, htonl(0), 0);
@@ -4150,7 +4150,7 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
         break;
     }
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     return b;
@@ -4210,7 +4210,7 @@ ofputil_encode_table_mod(const struct ofputil_table_mod *pm,
         break;
     }
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     return b;
@@ -4270,7 +4270,7 @@ ofputil_decode_role_message(const struct ofp_header *oh,
         rr->have_generation_id = false;
         rr->generation_id = 0;
     } else {
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     return 0;
@@ -4307,7 +4307,7 @@ ofputil_encode_role_reply(const struct ofp_header *request,
         nrr = ofpbuf_put_zeros(buf, sizeof *nrr);
         nrr->role = htonl(rr->role - 1);
     } else {
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     return buf;
@@ -4519,7 +4519,7 @@ ofputil_encode_table_stats_reply(const struct ofp12_table_stats stats[], int n,
             break;
 
         default:
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
     }
 
@@ -4839,7 +4839,7 @@ ofputil_encode_packet_out(const struct ofputil_packet_out *po,
     }
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     if (po->buffer_id == UINT32_MAX) {
@@ -4892,7 +4892,7 @@ ofputil_encode_barrier_request(enum ofp_version ofp_version)
         break;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     return ofpraw_alloc(type, ofp_version, 0);
@@ -4908,7 +4908,7 @@ ofputil_frag_handling_to_string(enum ofp_config_flags flags)
     case OFPC_FRAG_NX_MATCH: return "nx-match";
     }
 
-    NOT_REACHED();
+    OVS_NOT_REACHED();
 }
 
 bool
@@ -5162,7 +5162,7 @@ ofputil_pull_phy_port(enum ofp_version ofp_version, struct ofpbuf *b,
         return op ? ofputil_decode_ofp11_port(pp, op) : EOF;
     }
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -5217,7 +5217,7 @@ ofputil_put_action(enum ofputil_action_code code, struct ofpbuf *buf)
 {
     switch (code) {
     case OFPUTIL_ACTION_INVALID:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
 #define OFPAT10_ACTION(ENUM, STRUCT, NAME)                  \
     case OFPUTIL_##ENUM: return ofputil_put_##ENUM(buf);
@@ -5227,7 +5227,7 @@ ofputil_put_action(enum ofputil_action_code code, struct ofpbuf *buf)
     case OFPUTIL_##ENUM: return ofputil_put_##ENUM(buf);
 #include "ofp-util.def"
     }
-    NOT_REACHED();
+    OVS_NOT_REACHED();
 }
 
 #define OFPAT10_ACTION(ENUM, STRUCT, NAME)                        \
@@ -5497,7 +5497,7 @@ ofputil_encode_dump_ports_request(enum ofp_version ofp_version, ofp_port_t port)
         break;
     }
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     return request;
@@ -5581,7 +5581,7 @@ ofputil_append_port_stat(struct list *replies,
     }
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -5663,7 +5663,7 @@ ofputil_get_port_stats_size(enum ofp_version ofp_version)
     case OFP13_VERSION:
         return sizeof(struct ofp13_port_stats);
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -5730,7 +5730,7 @@ ofputil_decode_port_stats(struct ofputil_port_stats *ps, struct ofpbuf *msg)
         }
         return ofputil_port_stats_from_ofp10(ps, ps10);
     } else {
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
  bad_len:
@@ -5761,7 +5761,7 @@ ofputil_decode_port_stats_request(const struct ofp_header *request,
     }
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -5803,7 +5803,7 @@ ofputil_encode_group_stats_request(enum ofp_version ofp_version,
         break;
     }
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     return request;
@@ -5831,7 +5831,7 @@ ofputil_encode_group_desc_request(enum ofp_version ofp_version)
         break;
     }
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     return request;
@@ -5901,7 +5901,7 @@ ofputil_append_group_stats(struct list *replies,
 
     case OFP10_VERSION:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -5924,7 +5924,7 @@ ofputil_encode_group_features_request(enum ofp_version ofp_version)
         break;
     }
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     return request;
@@ -6040,7 +6040,7 @@ ofputil_decode_group_stats_reply(struct ofpbuf *msg,
             ogs11 = NULL;
         }
     } else {
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     if (!ogs11) {
@@ -6277,7 +6277,7 @@ ofputil_encode_group_mod(enum ofp_version ofp_version,
     }
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     return b;
@@ -6323,7 +6323,7 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
             }
             break;
         default:
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
     }
 
@@ -6357,7 +6357,7 @@ ofputil_decode_queue_stats_request(const struct ofp_header *request,
     }
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -6392,7 +6392,7 @@ ofputil_encode_queue_stats_request(enum ofp_version ofp_version,
         break;
     }
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     return request;
@@ -6410,7 +6410,7 @@ ofputil_get_queue_stats_size(enum ofp_version ofp_version)
     case OFP13_VERSION:
         return sizeof(struct ofp13_queue_stats);
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -6524,7 +6524,7 @@ ofputil_decode_queue_stats(struct ofputil_queue_stats *qs, struct ofpbuf *msg)
         }
         return ofputil_queue_stats_from_ofp10(qs, qs10);
     } else {
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
  bad_len:
@@ -6599,6 +6599,6 @@ ofputil_append_queue_stat(struct list *replies,
     }
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }

@@ -765,7 +765,7 @@ handle_upcalls(struct udpif *udpif, struct list *upcalls)
         case BAD_UPCALL:
             break;
         case MISS_UPCALL:
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
 
         dpif_ipfix_unref(ipfix);

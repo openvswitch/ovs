@@ -99,7 +99,7 @@ bundle_execute(const struct ofpact_bundle *bundle,
         return execute_ab(bundle, slave_enabled, aux);
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 

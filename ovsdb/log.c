@@ -102,7 +102,7 @@ ovsdb_log_open(const char *name, enum ovsdb_log_open_mode open_mode,
             flags = O_RDWR | O_CREAT | O_EXCL;
         }
     } else {
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
     fd = open(name, flags, 0666);
     if (fd < 0) {

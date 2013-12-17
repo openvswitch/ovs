@@ -164,7 +164,7 @@ bond_mode_to_string(enum bond_mode balance) {
     case BM_AB:
         return "active-backup";
     }
-    NOT_REACHED();
+    OVS_NOT_REACHED();
 }
 
 
@@ -647,7 +647,7 @@ bond_check_admissibility(struct bond *bond, const void *slave_,
         goto out;
     }
 
-    NOT_REACHED();
+    OVS_NOT_REACHED();
 out:
     ovs_rwlock_unlock(&rwlock);
     return verdict;
@@ -1468,7 +1468,7 @@ choose_output_slave(const struct bond *bond, const struct flow *flow,
         return e->slave;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 

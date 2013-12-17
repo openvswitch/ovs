@@ -221,7 +221,7 @@ test_insert_delete__(struct element *elements,
                 goto found;
             }
         }
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     found:
         heap_remove(&heap, &element->heap_node);
@@ -260,7 +260,7 @@ test_insert_delete_raw__(struct element *elements,
                 goto found;
             }
         }
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     found:
         heap_raw_remove(&heap, &element->heap_node);

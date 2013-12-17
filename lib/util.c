@@ -67,7 +67,7 @@ ovs_assert_failure(const char *where, const char *function,
     case 0:
         VLOG_ABORT("%s: assertion %s failed in %s()",
                    where, condition, function);
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case 1:
         fprintf(stderr, "%s: assertion %s failed in %s()",
@@ -1360,7 +1360,7 @@ scan_float(const char *s, const struct scan_spec *spec, va_list *args)
     case SCAN_INTMAX_T:
     case SCAN_PTRDIFF_T:
     case SCAN_SIZE_T:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
     return s;
 }

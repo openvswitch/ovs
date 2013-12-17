@@ -632,7 +632,7 @@ rconn_run(struct rconn *rc)
             STATES
 #undef STATE
         default:
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
     } while (rc->state != old_state);
     ovs_mutex_unlock(&rc->mutex);
@@ -1280,7 +1280,7 @@ timeout(const struct rconn *rc)
         STATES
 #undef STATE
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 

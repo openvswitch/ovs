@@ -150,7 +150,7 @@ ovsdb_mutation_from_json(const struct ovsdb_table_schema *ts,
         break;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
 exit:
@@ -306,7 +306,7 @@ mutate_scalar(const struct ovsdb_type *dst_type, struct ovsdb_datum *dst,
             }
         }
     } else {
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     for (i = 0; i < dst->n; i++) {
@@ -387,7 +387,7 @@ ovsdb_mutation_set_execute(struct ovsdb_row *row,
             break;
 
         default:
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
         if (error) {
             return error;

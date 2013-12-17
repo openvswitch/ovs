@@ -281,7 +281,7 @@ vconn_stream_wait(struct vconn *vconn, enum vconn_wait_type wait)
         break;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 

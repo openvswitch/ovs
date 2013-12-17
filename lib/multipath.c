@@ -189,7 +189,7 @@ multipath_algorithm(uint32_t hash, enum nx_mp_algorithm algorithm,
         return algorithm_iter_hash(hash, n_links, arg);
     }
 
-    NOT_REACHED();
+    OVS_NOT_REACHED();
 }
 
 /* Parses 's_' as a set of arguments to the "multipath" action and initializes

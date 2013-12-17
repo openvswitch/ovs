@@ -128,7 +128,7 @@ main(int argc, char *argv[])
             break;
 
         default:
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
     }
 

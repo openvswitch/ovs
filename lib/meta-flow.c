@@ -985,7 +985,7 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
 
     case MFF_N_IDS:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -1016,7 +1016,7 @@ mf_is_mask_valid(const struct mf_field *mf, const union mf_value *mask)
         return true;
     }
 
-    NOT_REACHED();
+    OVS_NOT_REACHED();
 }
 
 static bool
@@ -1081,7 +1081,7 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow)
                 && (flow->tp_src == htons(ND_NEIGHBOR_ADVERT)));
     }
 
-    NOT_REACHED();
+    OVS_NOT_REACHED();
 }
 
 /* Set field and it's prerequisities in the mask.
@@ -1220,7 +1220,7 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
 
     case MFF_N_IDS:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -1411,7 +1411,7 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
 
     case MFF_N_IDS:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -1607,7 +1607,7 @@ mf_set_value(const struct mf_field *mf,
 
     case MFF_N_IDS:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -1823,7 +1823,7 @@ mf_set_flow_value(const struct mf_field *mf,
 
     case MFF_N_IDS:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -2031,7 +2031,7 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
 
     case MFF_N_IDS:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -2199,7 +2199,7 @@ mf_set(const struct mf_field *mf,
 
     case MFF_N_IDS:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     return mf->usable_protocols_bitwise;
@@ -2673,7 +2673,7 @@ mf_parse(const struct mf_field *mf, const char *s,
         break;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     if (!error && !mf_is_mask_valid(mf, mask)) {
@@ -2827,7 +2827,7 @@ mf_format(const struct mf_field *mf,
         break;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 

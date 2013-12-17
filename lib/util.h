@@ -150,7 +150,7 @@ is_pow2(uintmax_t x)
 #define MAX(X, Y) ((X) > (Y) ? (X) : (Y))
 #endif
 
-#define NOT_REACHED() abort()
+#define OVS_NOT_REACHED() abort()
 
 /* Expands to a string that looks like "<file>:<line>", e.g. "tmp.c:10".
  *

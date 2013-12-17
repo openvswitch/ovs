@@ -166,7 +166,7 @@ do_run(int argc, char *argv[])
     switch (action) {
     default:
         if (action != 0) {
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
         break;
 

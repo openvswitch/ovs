@@ -441,7 +441,7 @@ ovsdb_idl_get_mode(struct ovsdb_idl *idl,
         }
     }
 
-    NOT_REACHED();
+    OVS_NOT_REACHED();
 }
 
 static void
@@ -505,7 +505,7 @@ ovsdb_idl_add_table(struct ovsdb_idl *idl,
         }
     }
 
-    NOT_REACHED();
+    OVS_NOT_REACHED();
 }
 
 /* Turns off OVSDB_IDL_ALERT for 'column' in 'idl'.

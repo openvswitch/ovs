@@ -644,7 +644,7 @@ parse_named_action(enum ofputil_action_code code,
 
     switch (code) {
     case OFPUTIL_ACTION_INVALID:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case OFPUTIL_OFPAT10_OUTPUT:
     case OFPUTIL_OFPAT11_OUTPUT:
@@ -765,7 +765,7 @@ parse_named_action(enum ofputil_action_code code,
         break;
 
     case OFPUTIL_OFPAT11_DEC_NW_TTL:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case OFPUTIL_OFPAT10_SET_TP_SRC:
     case OFPUTIL_OFPAT11_SET_TP_SRC:
@@ -833,7 +833,7 @@ parse_named_action(enum ofputil_action_code code,
     case OFPUTIL_NXAST_RESUBMIT_TABLE:
     case OFPUTIL_NXAST_OUTPUT_REG:
     case OFPUTIL_NXAST_DEC_TTL_CNT_IDS:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case OFPUTIL_NXAST_LEARN:
         error = learn_parse(arg, ofpacts);
@@ -1021,7 +1021,7 @@ parse_named_instruction(enum ovs_instruction_type type,
 
     switch (type) {
     case OVSINST_OFPIT11_APPLY_ACTIONS:
-        NOT_REACHED();  /* This case is handled by str_to_inst_ofpacts() */
+        OVS_NOT_REACHED();  /* This case is handled by str_to_inst_ofpacts() */
         break;
 
     case OVSINST_OFPIT11_WRITE_ACTIONS: {
@@ -1246,7 +1246,7 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
         break;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     match_init_catchall(&fm->match);
@@ -1500,7 +1500,7 @@ parse_ofp_meter_mod_str__(struct ofputil_meter_mod *mm, char *string,
         break;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     mm->command = command;
@@ -2146,7 +2146,7 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
         break;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     memset(gm, 0, sizeof *gm);

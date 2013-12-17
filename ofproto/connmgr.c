@@ -1966,7 +1966,7 @@ ofmonitor_report(struct connmgr *mgr, struct rule *rule,
 
     default:
     case NXFME_ABBREV:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {

@@ -1026,7 +1026,7 @@ input_vid_to_vlan(const struct xbundle *in_xbundle, uint16_t vid)
         return vid ? vid : in_xbundle->vlan;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -1079,7 +1079,7 @@ input_vid_is_valid(uint16_t vid, struct xbundle *in_xbundle, bool warn)
         return true;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
 }
@@ -1106,7 +1106,7 @@ output_vlan_to_vid(const struct xbundle *out_xbundle, uint16_t vlan)
         return vlan == out_xbundle->vlan ? 0 : vlan;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -1988,7 +1988,7 @@ xlate_group_action__(struct xlate_ctx *ctx, struct group_dpif *group)
         xlate_ff_group(ctx, group);
         break;
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
     group_dpif_release(group);
 }
@@ -3088,7 +3088,7 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
         ofpacts = actions->ofpacts;
         ofpacts_len = actions->ofpacts_len;
     } else {
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     ofpbuf_use_stub(&ctx.stack, ctx.init_stack, sizeof ctx.init_stack);
@@ -3113,14 +3113,14 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
             goto out;
 
         case OFPC_FRAG_REASM:
-            NOT_REACHED();
+            OVS_NOT_REACHED();
 
         case OFPC_FRAG_NX_MATCH:
             /* Nothing to do. */
             break;
 
         case OFPC_INVALID_TTL_TO_CONTROLLER:
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
     }
 

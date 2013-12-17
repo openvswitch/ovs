@@ -341,7 +341,7 @@ fork_and_wait_for_startup(int *fdp)
             } else if (retval < 0) {
                 VLOG_FATAL("waitpid failed (%s)", ovs_strerror(errno));
             } else {
-                NOT_REACHED();
+                OVS_NOT_REACHED();
             }
         }
         close(fds[0]);

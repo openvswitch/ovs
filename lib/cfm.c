@@ -236,7 +236,7 @@ static int
 ccm_interval_to_ms(uint8_t interval)
 {
     switch (interval) {
-    case 0:  NOT_REACHED(); /* Explicitly not supported by 802.1ag. */
+    case 0:  OVS_NOT_REACHED(); /* Explicitly not supported by 802.1ag. */
     case 1:  return 3;      /* Not recommended due to timer resolution. */
     case 2:  return 10;     /* Not recommended due to timer resolution. */
     case 3:  return 100;
@@ -244,10 +244,10 @@ ccm_interval_to_ms(uint8_t interval)
     case 5:  return 10000;
     case 6:  return 60000;
     case 7:  return 600000;
-    default: NOT_REACHED(); /* Explicitly not supported by 802.1ag. */
+    default: OVS_NOT_REACHED(); /* Explicitly not supported by 802.1ag. */
     }
 
-    NOT_REACHED();
+    OVS_NOT_REACHED();
 }
 
 static long long int

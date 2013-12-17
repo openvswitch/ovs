@@ -905,7 +905,7 @@ lacp_print_details(struct ds *ds, struct lacp *lacp) OVS_REQUIRES(mutex)
             status = "defaulted";
             break;
         default:
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
 
         ds_put_format(ds, "\nslave: %s: %s %s\n", slave->name, status,

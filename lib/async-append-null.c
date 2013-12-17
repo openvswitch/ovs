@@ -41,11 +41,11 @@ void
 async_append_write(struct async_append *ap OVS_UNUSED,
                    const void *data OVS_UNUSED, size_t size OVS_UNUSED)
 {
-    NOT_REACHED();
+    OVS_NOT_REACHED();
 }
 
 void
 async_append_flush(struct async_append *ap OVS_UNUSED)
 {
-    NOT_REACHED();
+    OVS_NOT_REACHED();
 }

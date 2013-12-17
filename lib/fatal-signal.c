@@ -174,7 +174,7 @@ fatal_signal_run(void)
         raise(sig_nr);
 
         ovs_mutex_unlock(&mutex);
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 

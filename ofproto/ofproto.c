@@ -1513,7 +1513,7 @@ ofproto_run(struct ofproto *p)
         break;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     if (time_msec() >= p->next_op_report) {
@@ -2666,7 +2666,7 @@ ofoperation_has_out_port(const struct ofoperation *op, ofp_port_t out_port)
                                       op->actions->ofpacts_len, out_port);
     }
 
-    NOT_REACHED();
+    OVS_NOT_REACHED();
 }
 
 static void
@@ -4722,7 +4722,7 @@ ofproto_compose_flow_refresh_update(const struct rule *rule,
          * actions, so that when the operation commits we report the change. */
         switch (op->type) {
         case OFOPERATION_ADD:
-            NOT_REACHED();
+            OVS_NOT_REACHED();
 
         case OFOPERATION_MODIFY:
         case OFOPERATION_REPLACE:
@@ -4734,7 +4734,7 @@ ofproto_compose_flow_refresh_update(const struct rule *rule,
             break;
 
         default:
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
     }
     fu.ofpacts = actions ? actions->ofpacts : NULL;
@@ -6139,7 +6139,7 @@ ofopgroup_complete(struct ofopgroup *group)
                 break;
 
             default:
-                NOT_REACHED();
+                OVS_NOT_REACHED();
             }
 
             ofmonitor_report(ofproto->connmgr, rule, event_type,
@@ -6208,7 +6208,7 @@ ofopgroup_complete(struct ofopgroup *group)
             break;
 
         default:
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
 
         ofoperation_destroy(op);

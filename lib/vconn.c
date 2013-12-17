@@ -596,7 +596,7 @@ vconn_connect(struct vconn *vconn)
             return vconn->error;
 
         default:
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
     } while (vconn->state != last_state);
 

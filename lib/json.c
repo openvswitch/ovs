@@ -355,7 +355,7 @@ json_destroy(struct json *json)
             break;
 
         case JSON_N_TYPES:
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
         free(json);
     }
@@ -417,7 +417,7 @@ json_clone(const struct json *json)
 
     case JSON_N_TYPES:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -502,7 +502,7 @@ json_hash(const struct json *json, size_t basis)
 
     case JSON_N_TYPES:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -573,7 +573,7 @@ json_equal(const struct json *a, const struct json *b)
 
     case JSON_N_TYPES:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -1175,7 +1175,7 @@ json_parser_put_value(struct json_parser *p, struct json *value)
     } else if (node->json->type == JSON_ARRAY) {
         json_array_add(node->json, value);
     } else {
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -1295,7 +1295,7 @@ json_parser_pop(struct json_parser *p)
         } else if (node->json->type == JSON_OBJECT) {
             p->parse_state = JSON_PARSE_OBJECT_NEXT;
         } else {
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
     }
 }
@@ -1502,7 +1502,7 @@ json_serialize(const struct json *json, struct json_serializer *s)
 
     case JSON_N_TYPES:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -1750,6 +1750,6 @@ json_serialized_length(const struct json *json)
 
     case JSON_N_TYPES:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }

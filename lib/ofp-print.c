@@ -540,7 +540,7 @@ ofp_print_switch_features(struct ds *string, const struct ofp_header *oh)
     case OFP13_VERSION:
         return; /* no ports in ofp13_switch_features */
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     ofp_print_phy_ports(string, oh->version, &b);
@@ -1789,7 +1789,7 @@ ofp_print_ofpst_table_reply(struct ds *string, const struct ofp_header *oh,
         break;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -1937,7 +1937,7 @@ ofp_print_role_generic(struct ds *string, enum ofp12_controller_role role,
         ds_put_cstr(string, "slave");
         break;
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     if (generation_id != UINT64_MAX) {
@@ -1987,7 +1987,7 @@ ofp_print_role_status_message(struct ds *string, const struct ofp_header *oh)
         ds_put_cstr(string, "experimenter_data_changed");
         break;
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 

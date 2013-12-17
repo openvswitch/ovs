@@ -134,7 +134,7 @@ odp_execute_set_action(struct ofpbuf *packet, const struct nlattr *a,
     case OVS_KEY_ATTR_TCP_FLAGS:
     case __OVS_KEY_ATTR_MAX:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -170,7 +170,7 @@ odp_execute_sample(void *dp, struct ofpbuf *packet, struct flow *key,
         case OVS_SAMPLE_ATTR_UNSPEC:
         case __OVS_SAMPLE_ATTR_MAX:
         default:
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
     }
 
@@ -239,7 +239,7 @@ odp_execute_actions__(void *dp, struct ofpbuf *packet, struct flow *key,
 
         case OVS_ACTION_ATTR_UNSPEC:
         case __OVS_ACTION_ATTR_MAX:
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
     }
 }

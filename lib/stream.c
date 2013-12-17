@@ -349,7 +349,7 @@ stream_connect(struct stream *stream)
             return stream->error;
 
         default:
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
     } while (stream->state != last_state);
 

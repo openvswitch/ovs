@@ -147,10 +147,10 @@ ovsdb_base_type_init(struct ovsdb_base_type *base, enum ovsdb_atomic_type type)
         break;
 
     case OVSDB_N_TYPES:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -210,7 +210,7 @@ ovsdb_base_type_clone(struct ovsdb_base_type *dst,
 
     case OVSDB_N_TYPES:
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -239,10 +239,10 @@ ovsdb_base_type_destroy(struct ovsdb_base_type *base)
             break;
 
         case OVSDB_N_TYPES:
-            NOT_REACHED();
+            OVS_NOT_REACHED();
 
         default:
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
     }
 }
@@ -284,7 +284,7 @@ ovsdb_base_type_has_constraints(const struct ovsdb_base_type *base)
 
     switch (base->type) {
     case OVSDB_TYPE_VOID:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case OVSDB_TYPE_INTEGER:
         return (base->u.integer.min != INT64_MIN
@@ -304,10 +304,10 @@ ovsdb_base_type_has_constraints(const struct ovsdb_base_type *base)
         return base->u.uuid.refTableName != NULL;
 
     case OVSDB_N_TYPES:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -481,7 +481,7 @@ ovsdb_base_type_to_json(const struct ovsdb_base_type *base)
 
     switch (base->type) {
     case OVSDB_TYPE_VOID:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case OVSDB_TYPE_INTEGER:
         if (base->u.integer.min != INT64_MIN) {
@@ -530,10 +530,10 @@ ovsdb_base_type_to_json(const struct ovsdb_base_type *base)
         break;
 
     case OVSDB_N_TYPES:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     return json;

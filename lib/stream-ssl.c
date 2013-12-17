@@ -189,7 +189,7 @@ want_to_poll_events(int want)
 {
     switch (want) {
     case SSL_NOTHING:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case SSL_READING:
         return POLLIN;
@@ -198,7 +198,7 @@ want_to_poll_events(int want)
         return POLLOUT;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
@@ -484,7 +484,7 @@ ssl_connect(struct stream *stream)
         }
     }
 
-    NOT_REACHED();
+    OVS_NOT_REACHED();
 }
 
 static void
@@ -724,7 +724,7 @@ ssl_wait(struct stream *stream, enum stream_wait_type wait)
                 break;
 
             default:
-                NOT_REACHED();
+                OVS_NOT_REACHED();
             }
         }
         break;
@@ -748,7 +748,7 @@ ssl_wait(struct stream *stream, enum stream_wait_type wait)
         break;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 

@@ -276,7 +276,7 @@ ofpbuf_resize__(struct ofpbuf *b, size_t new_headroom, size_t new_tailroom)
         break;
 
     case OFPBUF_STACK:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
 
     case OFPBUF_STUB:
         b->source = OFPBUF_MALLOC;
@@ -285,7 +285,7 @@ ofpbuf_resize__(struct ofpbuf *b, size_t new_headroom, size_t new_tailroom)
         break;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     b->allocated = new_allocated;

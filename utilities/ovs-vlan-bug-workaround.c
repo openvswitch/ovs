@@ -138,7 +138,7 @@ parse_options(int argc, char *argv[])
             exit(EXIT_FAILURE);
 
         default:
-            NOT_REACHED();
+            OVS_NOT_REACHED();
         }
     }
     free(short_options);

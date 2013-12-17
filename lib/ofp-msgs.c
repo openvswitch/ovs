@@ -693,7 +693,7 @@ ofpraw_put__(enum ofpraw raw, uint8_t version, ovs_be32 xid,
                 nsm->subtype = htonl(hdrs->subtype);
                 memset(nsm->pad, 0, sizeof nsm->pad);
             } else {
-                NOT_REACHED();
+                OVS_NOT_REACHED();
             }
         }
     } else if (version != OFP10_VERSION
@@ -714,7 +714,7 @@ ofpraw_put__(enum ofpraw raw, uint8_t version, ovs_be32 xid,
 
                 nsm->subtype = htonl(hdrs->subtype);
             } else {
-                NOT_REACHED();
+                OVS_NOT_REACHED();
             }
         }
     }
@@ -757,7 +757,7 @@ ofpraw_stats_request_to_reply(enum ofpraw raw, uint8_t version)
         hdrs.type = OFPT11_STATS_REPLY;
         break;
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 
     error = ofpraw_from_ofphdrs(&reply_raw, &hdrs);
@@ -941,7 +941,7 @@ ofpmp_flags__(const struct ofp_header *oh)
     case OFP13_VERSION:
         return &((struct ofp11_stats_msg *) oh)->flags;
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
