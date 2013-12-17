@@ -6,6 +6,11 @@ OVS_VSWITCHD_START([\
         set Port p1 lacp=active --\
         set Interface p1 type=dummy ])
 
+ovs-appctl time/stop
+ovs-appctl time/warp 100
+ovs-appctl time/warp 100
+ovs-appctl time/warp 100
+
 AT_CHECK([ovs-appctl lacp/show], [0], [dnl
 ---- p1 ----
 	status: active negotiated
@@ -52,6 +57,11 @@ OVS_VSWITCHD_START([dnl
             other_config:lacp-port-id=22 \
             other_config:lacp-port-priority=222 \
             other_config:lacp-aggregation-key=3333 ])
+
+ovs-appctl time/stop
+ovs-appctl time/warp 100
+ovs-appctl time/warp 100
+ovs-appctl time/warp 100
 
 AT_CHECK([ovs-appctl lacp/show], [0], [stdout])
 AT_CHECK([sed -e 's/aggregation key:.*/aggregation key: <omitted>/' < stdout], [0], [dnl
