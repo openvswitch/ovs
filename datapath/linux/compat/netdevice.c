@@ -7,7 +7,7 @@ int nr_bridges = 0;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38)
 #ifndef HAVE_CAN_CHECKSUM_PROTOCOL
-static bool can_checksum_protocol(unsigned long features, __be16 protocol)
+static bool can_checksum_protocol(netdev_features_t features, __be16 protocol)
 {
 	return  ((features & NETIF_F_GEN_CSUM) ||
 		((features & NETIF_F_V4_CSUM) &&
@@ -35,7 +35,9 @@ static inline int illegal_highdma(struct net_device *dev, struct sk_buff *skb)
 	return 0;
 }
 
-static u32 harmonize_features(struct sk_buff *skb, __be16 protocol, u32 features)
+static netdev_features_t harmonize_features(struct sk_buff *skb,
+					    __be16 protocol,
+					    netdev_features_t features)
 {
 	if (!can_checksum_protocol(features, protocol)) {
 		features &= ~NETIF_F_ALL_CSUM;
@@ -47,12 +49,12 @@ static u32 harmonize_features(struct sk_buff *skb, __be16 protocol, u32 features
 	return features;
 }
 
-u32 rpl_netif_skb_features(struct sk_buff *skb)
+netdev_features_t rpl_netif_skb_features(struct sk_buff *skb)
 {
 	unsigned long vlan_features = skb->dev->vlan_features;
 
 	__be16 protocol = skb->protocol;
-	u32 features = skb->dev->features;
+	netdev_features_t features = skb->dev->features;
 
 	if (protocol == htons(ETH_P_8021Q)) {
 		struct vlan_ethhdr *veh = (struct vlan_ethhdr *)skb->data;
@@ -72,7 +74,8 @@ u32 rpl_netif_skb_features(struct sk_buff *skb)
 	}
 }
 
-struct sk_buff *rpl_skb_gso_segment(struct sk_buff *skb, u32 features)
+struct sk_buff *rpl_skb_gso_segment(struct sk_buff *skb,
+				    netdev_features_t features)
 {
 	int vlan_depth = ETH_HLEN;
 	__be16 type = skb->protocol;
