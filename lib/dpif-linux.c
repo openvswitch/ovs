@@ -688,7 +688,8 @@ dpif_linux_port_get_pid(const struct dpif *dpif_, odp_port_t port_no)
         /* The ODPP_NONE "reserved" port number uses the "ovs-system"'s
          * channel, since it is not heavily loaded. */
         uint32_t idx = port_idx >= dpif->uc_array_size ? 0 : port_idx;
-        pid = nl_sock_pid(dpif->channels[idx].sock);
+        const struct nl_sock *sock = dpif->channels[idx].sock;
+        pid = sock ? nl_sock_pid(sock) : 0;
     }
     ovs_mutex_unlock(&dpif->upcall_lock);
 
