@@ -739,7 +739,7 @@ dpif_linux_port_dump_start(const struct dpif *dpif, void **statep)
     return 0;
 }
 
-static bool
+static int
 dpif_linux_port_dump_next__(const struct dpif *dpif_, struct nl_dump *dump,
                             struct dpif_linux_vport *vport)
 {
@@ -1300,7 +1300,7 @@ dpif_linux_refresh_channels(struct dpif *dpif_)
     dpif->n_events = dpif->event_offset = 0;
 
     dpif_linux_port_dump_start__(dpif_, &dump);
-    while (dpif_linux_port_dump_next__(dpif_, &dump, &vport)) {
+    while (!dpif_linux_port_dump_next__(dpif_, &dump, &vport)) {
         uint32_t port_no = odp_to_u32(vport.port_no);
         struct nl_sock *sock = (port_no < dpif->uc_array_size
                                 ? dpif->channels[port_no].sock
