@@ -1082,7 +1082,7 @@ A: Open vSwitch 1.9 and earlier support only OpenFlow 1.0 (plus
 
        ovs-vsctl set bridge br0 protocols=OpenFlow10,OpenFlow12,OpenFlow13
 
-   Open vSwitch version 1.12 and later will have experimental support
+   Open vSwitch version 2.0 and later will have experimental support
    for OpenFlow 1.1, 1.2, and 1.3.  On these versions of Open vSwitch,
    the following command enables OpenFlow 1.0, 1.1, 1.2, and 1.3 on
    bridge br0:
