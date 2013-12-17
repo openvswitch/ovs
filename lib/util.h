@@ -296,7 +296,7 @@ str_to_ullong(const char *s, int base, unsigned long long *ull)
     return str_to_llong(s, base, (long long *) ull);
 }
 
-bool ovs_scan(const char *s, const char *template, ...) SCANF_FORMAT(2, 3);
+bool ovs_scan(const char *s, const char *format, ...) SCANF_FORMAT(2, 3);
 
 bool str_to_double(const char *, double *);
 

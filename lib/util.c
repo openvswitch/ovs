@@ -1465,7 +1465,7 @@ scan_chars(const char *s, const struct scan_spec *spec, va_list *args)
 /* This is an implementation of the standard sscanf() function, with the
  * following exceptions:
  *
- *   - It returns true if the entire template was successfully scanned and
+ *   - It returns true if the entire format was successfully scanned and
  *     converted, false if any conversion failed.
  *
  *   - The standard doesn't define sscanf() behavior when an out-of-range value
@@ -1482,15 +1482,15 @@ scan_chars(const char *s, const struct scan_spec *spec, va_list *args)
  *   - %p is not supported.
  */
 bool
-ovs_scan(const char *s, const char *template, ...)
+ovs_scan(const char *s, const char *format, ...)
 {
     const char *const start = s;
     bool ok = false;
     const char *p;
     va_list args;
 
-    va_start(args, template);
-    p = template;
+    va_start(args, format);
+    p = format;
     while (*p != '\0') {
         struct scan_spec spec;
         unsigned char c = *p++;
