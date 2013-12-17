@@ -21,6 +21,8 @@
 /genl_exec.c
 /gre.c
 /gso.c
+/hash.c
+/hash-x86.c
 /ip_output-openvswitch.c
 /ip_tunnels_core.c
 /kcompat.h
