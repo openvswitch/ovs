@@ -60,12 +60,17 @@ static inline struct net_device *dev_get_by_index_rcu(struct net *net, int ifind
 #define NETIF_F_FSO 0
 #endif
 
+#ifndef HAVE_NETDEV_FEATURES_T
+typedef u32 netdev_features_t;
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38)
 #define skb_gso_segment rpl_skb_gso_segment
-struct sk_buff *rpl_skb_gso_segment(struct sk_buff *skb, u32 features);
+struct sk_buff *rpl_skb_gso_segment(struct sk_buff *skb,
+                                    netdev_features_t features);
 
 #define netif_skb_features rpl_netif_skb_features
-u32 rpl_netif_skb_features(struct sk_buff *skb);
+netdev_features_t rpl_netif_skb_features(struct sk_buff *skb);
 
 #define netif_needs_gso rpl_netif_needs_gso
 static inline int rpl_netif_needs_gso(struct sk_buff *skb, int features)
@@ -73,10 +78,6 @@ static inline int rpl_netif_needs_gso(struct sk_buff *skb, int features)
 	return skb_is_gso(skb) && (!skb_gso_ok(skb, features) ||
 		unlikely(skb->ip_summed != CHECKSUM_PARTIAL));
 }
-#endif
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,3,0)
-typedef u32 netdev_features_t;
 #endif
 
 #ifndef HAVE___SKB_GSO_SEGMENT
