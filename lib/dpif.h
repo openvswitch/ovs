@@ -413,9 +413,9 @@ struct dpif_dp_stats {
     uint64_t n_missed;          /* Number of flow table misses. */
     uint64_t n_lost;            /* Number of misses not sent to userspace. */
     uint64_t n_flows;           /* Number of flows present. */
-    uint64_t n_masks;           /* Number of mega flow masks. */
     uint64_t n_mask_hit;        /* Number of mega flow masks visited for
                                    flow table matches. */
+    uint32_t n_masks;           /* Number of mega flow masks. */
 };
 int dpif_get_dp_stats(const struct dpif *, struct dpif_dp_stats *);
 

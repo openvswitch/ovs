@@ -407,7 +407,7 @@ dpif_netdev_get_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
     stats->n_hit = dp->n_hit;
     stats->n_missed = dp->n_missed;
     stats->n_lost = dp->n_lost;
-    stats->n_masks = UINT64_MAX;
+    stats->n_masks = UINT32_MAX;
     stats->n_mask_hit = UINT64_MAX;
     ovs_mutex_unlock(&dp_netdev_mutex);
 
