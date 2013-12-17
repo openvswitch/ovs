@@ -1460,7 +1460,7 @@ parse_odp_packet(struct ofpbuf *buf, struct dpif_upcall *upcall,
         return EINVAL;
     }
 
-    memset(upcall, 0, sizeof *upcall);
+    /* (Re)set ALL fields of '*upcall' on successful return. */
     upcall->type = type;
     upcall->key = CONST_CAST(struct nlattr *,
                              nl_attr_get(a[OVS_PACKET_ATTR_KEY]));
