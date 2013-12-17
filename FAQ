@@ -173,22 +173,17 @@ Q: Should userspace or kernel be upgraded first to minimize downtime?
 Q: What features are not available in the Open vSwitch kernel datapath
    that ships as part of the upstream Linux kernel?
 
-A: The kernel module in upstream Linux 3.3 and later does not include
-   tunnel virtual ports, that is, interfaces with type "gre",
-   "ipsec_gre", "gre64", "ipsec_gre64", "vxlan", or "lisp".  It is
-   possible to create tunnels in Linux and attach them to Open vSwitch
-   as system devices.  However, they cannot be dynamically created
-   through the OVSDB protocol or set the tunnel ids as a flow action.
-
-   Work is in progress in adding tunnel virtual ports to the upstream
-   Linux version of the Open vSwitch kernel module.  For now, if you
-   need these features, use the kernel module from the Open vSwitch
+A: The kernel module in upstream Linux does not include support for
+   LISP. Work is in progress to add support for LISP to the upstream
+   Linux version of the Open vSwitch kernel module. For now, if you
+   need this feature, use the kernel module from the Open vSwitch
    distribution instead of the upstream Linux kernel module.
 
-   The upstream kernel module does not include patch ports, but this
-   only matters for Open vSwitch 1.9 and earlier, because Open vSwitch
-   1.10 and later implement patch ports without using this kernel
-   feature.
+   Certain features require kernel support to function or to have
+   reasonable performance. If the ovs-vswitchd log file indicates that
+   a feature is not supported, consider upgrading to a newer upstream
+   Linux release or using the kernel module paired with the userspace
+   distribution.
 
 Q: What features are not available when using the userspace datapath?
 
