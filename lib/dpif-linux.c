@@ -1473,7 +1473,7 @@ parse_odp_packet(struct ofpbuf *buf, struct dpif_upcall *upcall,
                     nl_attr_get_size(a[OVS_PACKET_ATTR_PACKET]) +
                     sizeof(struct nlattr));
     upcall->packet.data = (char *)upcall->packet.data + sizeof(struct nlattr);
-    upcall->packet.size -= sizeof(struct nlattr);
+    upcall->packet.size = nl_attr_get_size(a[OVS_PACKET_ATTR_PACKET]);
 
     *dp_ifindex = ovs_header->dp_ifindex;
 
