@@ -40,21 +40,12 @@ struct vconn {
     enum ofp_version version;   /* Negotiated version (or 0). */
     bool recv_any_version;      /* True to receive a message of any version. */
 
-    ovs_be32 remote_ip;
-    ovs_be16 remote_port;
-    ovs_be32 local_ip;
-    ovs_be16 local_port;
-
     char *name;
 };
 
 void vconn_init(struct vconn *, const struct vconn_class *, int connect_status,
                 const char *name, uint32_t allowed_versions);
 void vconn_free_data(struct vconn *vconn);
-void vconn_set_remote_ip(struct vconn *, ovs_be32 remote_ip);
-void vconn_set_remote_port(struct vconn *, ovs_be16 remote_port);
-void vconn_set_local_ip(struct vconn *, ovs_be32 local_ip);
-void vconn_set_local_port(struct vconn *, ovs_be16 local_port);
 static inline void vconn_assert_class(const struct vconn *vconn,
                                       const struct vconn_class *class)
 {

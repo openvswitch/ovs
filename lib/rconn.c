@@ -115,17 +115,6 @@ struct rconn {
     int probe_interval;         /* Secs of inactivity before sending probe. */
     time_t last_activity;       /* Last time we saw some activity. */
 
-    /* When we create a vconn we obtain these values, to save them past the end
-     * of the vconn's lifetime.  Otherwise, in-band control will only allow
-     * traffic when a vconn is actually open, but it is nice to allow ARP to
-     * complete even between connection attempts, and it is also polite to
-     * allow traffic from other switches to go through to the controller
-     * whether or not we are connected.
-     *
-     * We don't cache the local port, because that changes from one connection
-     * attempt to the next. */
-    ovs_be32 local_ip, remote_ip;
-    ovs_be16 remote_port;
     uint8_t dscp;
 
     /* Messages sent or received are copied to the monitor connections. */
@@ -456,9 +445,6 @@ reconnect(struct rconn *rc)
     retval = vconn_open(rc->target, rc->allowed_versions, rc->dscp,
                         &rc->vconn);
     if (!retval) {
-        rc->remote_ip = vconn_get_remote_ip(rc->vconn);
-        rc->local_ip = vconn_get_local_ip(rc->vconn);
-        rc->remote_port = vconn_get_remote_port(rc->vconn);
         rc->backoff_deadline = time_now() + rc->backoff;
         state_transition(rc, S_CONNECTING);
     } else {
@@ -911,46 +897,6 @@ rconn_failure_duration(const struct rconn *rconn)
     return duration;
 }
 
-/* Returns the IP address of the peer, or 0 if the peer's IP address is not
- * known. */
-ovs_be32
-rconn_get_remote_ip(const struct rconn *rconn)
-{
-    return rconn->remote_ip;
-}
-
-/* Returns the transport port of the peer, or 0 if the peer's port is not
- * known. */
-ovs_be16
-rconn_get_remote_port(const struct rconn *rconn)
-{
-    return rconn->remote_port;
-}
-
-/* Returns the IP address used to connect to the peer, or 0 if the
- * connection is not an IP-based protocol or if its IP address is not
- * known. */
-ovs_be32
-rconn_get_local_ip(const struct rconn *rconn)
-{
-    return rconn->local_ip;
-}
-
-/* Returns the transport port used to connect to the peer, or 0 if the
- * connection does not contain a port or if the port is not known. */
-ovs_be16
-rconn_get_local_port(const struct rconn *rconn)
-    OVS_EXCLUDED(rconn->mutex)
-{
-    ovs_be16 port;
-
-    ovs_mutex_lock(&rconn->mutex);
-    port = rconn->vconn ? vconn_get_local_port(rconn->vconn) : 0;
-    ovs_mutex_unlock(&rconn->mutex);
-
-    return port;
-}
-
 static int
 rconn_get_version__(const struct rconn *rconn)
     OVS_REQUIRES(rconn->mutex)
@@ -1139,9 +1085,6 @@ rconn_set_target__(struct rconn *rc, const char *target, const char *name)
     rc->name = xstrdup(name ? name : target);
     free(rc->target);
     rc->target = xstrdup(target);
-    rc->local_ip = 0;
-    rc->remote_ip = 0;
-    rc->remote_port = 0;
 }
 
 /* Tries to send a packet from 'rc''s send buffer.  Returns 0 if successful,

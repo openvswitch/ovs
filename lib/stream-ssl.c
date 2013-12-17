@@ -204,8 +204,7 @@ want_to_poll_events(int want)
 
 static int
 new_ssl_stream(const char *name, int fd, enum session_type type,
-               enum ssl_state state, const struct sockaddr_in *remote,
-               struct stream **streamp)
+               enum ssl_state state, struct stream **streamp)
 {
     struct sockaddr_in local;
     socklen_t local_len = sizeof local;
@@ -270,10 +269,6 @@ new_ssl_stream(const char *name, int fd, enum session_type type,
     /* Create and return the ssl_stream. */
     sslv = xmalloc(sizeof *sslv);
     stream_init(&sslv->stream, &ssl_stream_class, EAGAIN, name);
-    stream_set_remote_ip(&sslv->stream, remote->sin_addr.s_addr);
-    stream_set_remote_port(&sslv->stream, remote->sin_port);
-    stream_set_local_ip(&sslv->stream, local.sin_addr.s_addr);
-    stream_set_local_port(&sslv->stream, local.sin_port);
     sslv->state = state;
     sslv->type = type;
     sslv->fd = fd;
@@ -309,7 +304,6 @@ ssl_stream_cast(struct stream *stream)
 static int
 ssl_open(const char *name, char *suffix, struct stream **streamp, uint8_t dscp)
 {
-    struct sockaddr_in sin;
     int error, fd;
 
     error = ssl_init();
@@ -317,11 +311,11 @@ ssl_open(const char *name, char *suffix, struct stream **streamp, uint8_t dscp)
         return error;
     }
 
-    error = inet_open_active(SOCK_STREAM, suffix, OFP_OLD_PORT, &sin, &fd,
+    error = inet_open_active(SOCK_STREAM, suffix, OFP_OLD_PORT, NULL, &fd,
                              dscp);
     if (fd >= 0) {
         int state = error ? STATE_TCP_CONNECTING : STATE_SSL_CONNECTING;
-        return new_ssl_stream(name, fd, CLIENT, state, &sin, streamp);
+        return new_ssl_stream(name, fd, CLIENT, state, streamp);
     } else {
         VLOG_ERR("%s: connect: %s", name, ovs_strerror(error));
         return error;
@@ -849,7 +843,7 @@ pssl_accept(struct pstream *pstream, struct stream **new_streamp)
     if (sin.sin_port != htons(OFP_OLD_PORT)) {
         sprintf(strchr(name, '\0'), ":%"PRIu16, ntohs(sin.sin_port));
     }
-    return new_ssl_stream(name, new_fd, SERVER, STATE_SSL_CONNECTING, &sin,
+    return new_ssl_stream(name, new_fd, SERVER, STATE_SSL_CONNECTING,
                           new_streamp);
 }
 

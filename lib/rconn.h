@@ -83,10 +83,6 @@ bool rconn_is_connected(const struct rconn *);
 bool rconn_is_admitted(const struct rconn *);
 int rconn_failure_duration(const struct rconn *);
 
-ovs_be32 rconn_get_remote_ip(const struct rconn *);
-ovs_be16 rconn_get_remote_port(const struct rconn *);
-ovs_be32 rconn_get_local_ip(const struct rconn *);
-ovs_be16 rconn_get_local_port(const struct rconn *);
 int rconn_get_version(const struct rconn *);
 
 const char *rconn_get_state(const struct rconn *);

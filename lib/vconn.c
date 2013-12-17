@@ -350,39 +350,6 @@ vconn_set_allowed_versions(struct vconn *vconn, uint32_t allowed_versions)
     vconn->allowed_versions = allowed_versions;
 }
 
-/* Returns the IP address of the peer, or 0 if the peer is not connected over
- * an IP-based protocol or if its IP address is not yet known. */
-ovs_be32
-vconn_get_remote_ip(const struct vconn *vconn)
-{
-    return vconn->remote_ip;
-}
-
-/* Returns the transport port of the peer, or 0 if the connection does not
- * contain a port or if the port is not yet known. */
-ovs_be16
-vconn_get_remote_port(const struct vconn *vconn)
-{
-    return vconn->remote_port;
-}
-
-/* Returns the IP address used to connect to the peer, or 0 if the
- * connection is not an IP-based protocol or if its IP address is not
- * yet known. */
-ovs_be32
-vconn_get_local_ip(const struct vconn *vconn)
-{
-    return vconn->local_ip;
-}
-
-/* Returns the transport port used to connect to the peer, or 0 if the
- * connection does not contain a port or if the port is not yet known. */
-ovs_be16
-vconn_get_local_port(const struct vconn *vconn)
-{
-    return vconn->local_port;
-}
-
 /* Returns the OpenFlow version negotiated with the peer, or -1 if version
  * negotiation is not yet complete.
  *
@@ -1135,30 +1102,6 @@ vconn_init(struct vconn *vconn, const struct vconn_class *class,
     vconn->allowed_versions = allowed_versions;
     vconn->name = xstrdup(name);
     ovs_assert(vconn->state != VCS_CONNECTING || class->connect);
-}
-
-void
-vconn_set_remote_ip(struct vconn *vconn, ovs_be32 ip)
-{
-    vconn->remote_ip = ip;
-}
-
-void
-vconn_set_remote_port(struct vconn *vconn, ovs_be16 port)
-{
-    vconn->remote_port = port;
-}
-
-void
-vconn_set_local_ip(struct vconn *vconn, ovs_be32 ip)
-{
-    vconn->local_ip = ip;
-}
-
-void
-vconn_set_local_port(struct vconn *vconn, ovs_be16 port)
-{
-    vconn->local_port = port;
 }
 
 void

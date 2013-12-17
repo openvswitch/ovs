@@ -38,7 +38,7 @@ VLOG_DEFINE_THIS_MODULE(stream_tcp);
 
 static int
 new_tcp_stream(const char *name, int fd, int connect_status,
-               const struct sockaddr_in *remote, struct stream **streamp)
+               struct stream **streamp)
 {
     struct sockaddr_in local;
     socklen_t local_len = sizeof local;
@@ -58,26 +58,17 @@ new_tcp_stream(const char *name, int fd, int connect_status,
         return errno;
     }
 
-    retval = new_fd_stream(name, fd, connect_status, streamp);
-    if (!retval) {
-        struct stream *stream = *streamp;
-        stream_set_remote_ip(stream, remote->sin_addr.s_addr);
-        stream_set_remote_port(stream, remote->sin_port);
-        stream_set_local_ip(stream, local.sin_addr.s_addr);
-        stream_set_local_port(stream, local.sin_port);
-    }
-    return retval;
+    return new_fd_stream(name, fd, connect_status, streamp);
 }
 
 static int
 tcp_open(const char *name, char *suffix, struct stream **streamp, uint8_t dscp)
 {
-    struct sockaddr_in sin;
     int fd, error;
 
-    error = inet_open_active(SOCK_STREAM, suffix, 0, &sin, &fd, dscp);
+    error = inet_open_active(SOCK_STREAM, suffix, 0, NULL, &fd, dscp);
     if (fd >= 0) {
-        return new_tcp_stream(name, fd, error, &sin, streamp);
+        return new_tcp_stream(name, fd, error, streamp);
     } else {
         VLOG_ERR("%s: connect: %s", name, ovs_strerror(error));
         return error;
@@ -140,7 +131,7 @@ ptcp_accept(int fd, const struct sockaddr *sa, size_t sa_len,
     } else {
         strcpy(name, "tcp");
     }
-    return new_tcp_stream(name, fd, 0, sin, streamp);
+    return new_tcp_stream(name, fd, 0, streamp);
 }
 
 const struct pstream_class ptcp_pstream_class = {

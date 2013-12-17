@@ -281,38 +281,6 @@ stream_get_name(const struct stream *stream)
     return stream ? stream->name : "(null)";
 }
 
-/* Returns the IP address of the peer, or 0 if the peer is not connected over
- * an IP-based protocol or if its IP address is not yet known. */
-ovs_be32
-stream_get_remote_ip(const struct stream *stream)
-{
-    return stream->remote_ip;
-}
-
-/* Returns the transport port of the peer, or 0 if the connection does not
- * contain a port or if the port is not yet known. */
-ovs_be16
-stream_get_remote_port(const struct stream *stream)
-{
-    return stream->remote_port;
-}
-
-/* Returns the IP address used to connect to the peer, or 0 if the connection
- * is not an IP-based protocol or if its IP address is not yet known. */
-ovs_be32
-stream_get_local_ip(const struct stream *stream)
-{
-    return stream->local_ip;
-}
-
-/* Returns the transport port used to connect to the peer, or 0 if the
- * connection does not contain a port or if the port is not yet known. */
-ovs_be16
-stream_get_local_port(const struct stream *stream)
-{
-    return stream->local_port;
-}
-
 static void
 scs_connecting(struct stream *stream)
 {
@@ -660,30 +628,6 @@ stream_init(struct stream *stream, const struct stream_class *class,
     stream->error = connect_status;
     stream->name = xstrdup(name);
     ovs_assert(stream->state != SCS_CONNECTING || class->connect);
-}
-
-void
-stream_set_remote_ip(struct stream *stream, ovs_be32 ip)
-{
-    stream->remote_ip = ip;
-}
-
-void
-stream_set_remote_port(struct stream *stream, ovs_be16 port)
-{
-    stream->remote_port = port;
-}
-
-void
-stream_set_local_ip(struct stream *stream, ovs_be32 ip)
-{
-    stream->local_ip = ip;
-}
-
-void
-stream_set_local_port(struct stream *stream, ovs_be16 port)
-{
-    stream->local_port = port;
 }
 
 void
