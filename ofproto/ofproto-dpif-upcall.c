@@ -533,7 +533,10 @@ recv_upcalls(struct udpif *udpif)
         error = dpif_recv(udpif->dpif, &upcall->dpif_upcall,
                           &upcall->upcall_buf);
         if (error) {
-            upcall_destroy(upcall);
+            /* upcall_destroy() can only be called on successfully received
+             * upcalls. */
+            ofpbuf_uninit(&upcall->upcall_buf);
+            free(upcall);
             break;
         }
 

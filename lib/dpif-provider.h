@@ -349,7 +349,9 @@ struct dpif_class {
      * The caller owns the data of 'upcall->packet' and may modify it.  If
      * packet's headroom is exhausted as it is manipulated, 'upcall->packet'
      * will be reallocated.  This requires the data of 'upcall->packet' to be
-     * released with ofpbuf_uninit() before 'upcall' is destroyed.
+     * released with ofpbuf_uninit() before 'upcall' is destroyed.  However,
+     * when an error is returned, the 'upcall->packet' may be uninitialized
+     * and should not be released.
      *
      * This function must not block.  If no upcall is pending when it is
      * called, it should return EAGAIN without blocking. */

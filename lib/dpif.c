@@ -1315,6 +1315,13 @@ dpif_recv_set(struct dpif *dpif, bool enable)
  * 'upcall->key' and 'upcall->userdata' point into data in the caller-provided
  * 'buf', so their memory cannot be freed separately from 'buf'.
  *
+ * The caller owns the data of 'upcall->packet' and may modify it.  If
+ * packet's headroom is exhausted as it is manipulated, 'upcall->packet'
+ * will be reallocated.  This requires the data of 'upcall->packet' to be
+ * released with ofpbuf_uninit() before 'upcall' is destroyed.  However,
+ * when an error is returned, the 'upcall->packet' may be uninitialized
+ * and should not be released.
+ *
  * Returns 0 if successful, otherwise a positive errno value.  Returns EAGAIN
  * if no upcall is immediately available. */
 int
