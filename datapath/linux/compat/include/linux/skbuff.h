@@ -264,4 +264,9 @@ void skb_zerocopy(struct sk_buff *to, const struct sk_buff *from, int len,
 		  int hlen);
 #endif
 
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
+#define skb_has_frag_list skb_has_frags
+#endif
+
 #endif
