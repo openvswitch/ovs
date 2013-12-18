@@ -52,6 +52,15 @@
  
  LIBNETDISSECT_SRC=print-isakmp.c
  LIBNETDISSECT_OBJ=$(LIBNETDISSECT_SRC:.c=.o)
+@@ -363,7 +364,7 @@ all: $(PROG)
+ 
+ $(PROG): $(OBJ) 
+ 	@rm -f $@
+-	$(CC) $(FULL_CFLAGS) $(LDFLAGS) -o $@ $(OBJ) $(LIBS)
++	libtool --mode=link $(CC) $(FULL_CFLAGS) $(LDFLAGS) -o $@ $(OBJ) $(LIBS)
+ 
+ $(LIBNETDISSECT): $(LIBNETDISSECT_OBJ)
+ 	@rm -f $@
 --- tcpdump/print-openflow.c	1969-12-31 16:00:00.000000000 -0800
 +++ tcpdump/print-openflow.c	2009-05-11 15:38:41.000000000 -0700
 @@ -0,0 +1,45 @@
