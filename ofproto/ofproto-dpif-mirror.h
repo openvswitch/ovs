@@ -52,10 +52,4 @@ bool mirror_get(struct mbridge *, int index, unsigned long **vlans,
                 mirror_mask_t *dup_mirrors, struct ofbundle **out,
                 int *out_vlan);
 
-static inline int
-mirror_mask_ffs(mirror_mask_t mask)
-{
-    BUILD_ASSERT_DECL(sizeof(unsigned int) >= sizeof(mask));
-    return ffs(mask);
-}
 #endif /* ofproto-dpif-mirror.h */

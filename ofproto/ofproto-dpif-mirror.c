@@ -75,7 +75,6 @@ static void mbundle_lookup_multiple(const struct mbridge *, struct ofbundle **,
                                   size_t n_bundles, struct hmapx *mbundles);
 static int mirror_scan(struct mbridge *);
 static void mirror_update_dups(struct mbridge *);
-static int mirror_mask_ffs(mirror_mask_t);
 
 struct mbridge *
 mbridge_create(void)
@@ -363,7 +362,7 @@ mirror_update_stats(struct mbridge *mbridge, mirror_mask_t mirrors,
     for (; mirrors; mirrors = zero_rightmost_1bit(mirrors)) {
         struct mirror *m;
 
-        m = mbridge->mirrors[mirror_mask_ffs(mirrors) - 1];
+        m = mbridge->mirrors[raw_ctz(mirrors)];
 
         if (!m) {
             /* In normal circumstances 'm' will not be NULL.  However,

@@ -968,7 +968,7 @@ add_mirror_actions(struct xlate_ctx *ctx, const struct flow *orig_flow)
         bool has_mirror;
         int out_vlan;
 
-        has_mirror = mirror_get(xbridge->mbridge, mirror_mask_ffs(mirrors) - 1,
+        has_mirror = mirror_get(xbridge->mbridge, raw_ctz(mirrors),
                                 &vlans, &dup_mirrors, &out, &out_vlan);
         ovs_assert(has_mirror);
 
