@@ -1441,7 +1441,6 @@ static int
 netdev_bsd_update_flags(struct netdev *netdev_, enum netdev_flags off,
                         enum netdev_flags on, enum netdev_flags *old_flagsp)
 {
-    struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
     int old_flags, new_flags;
     int error;
 
