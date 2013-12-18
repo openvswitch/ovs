@@ -38,14 +38,42 @@
 #include "unaligned.h"
 #include "timeval.h"
 #include "unixctl.h"
+#include "reconnect.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_dummy);
 
-struct dummy_stream {
+struct reconnect;
+
+struct dummy_packet_stream {
     struct stream *stream;
     struct ofpbuf rxbuf;
     struct list txq;
+};
+
+enum dummy_packet_conn_type {
+    NONE,       /* No connection is configured. */
+    PASSIVE,    /* Listener. */
+    ACTIVE      /* Connect to listener. */
+};
+
+struct dummy_packet_pconn {
+    struct pstream *pstream;
+    struct dummy_packet_stream *streams;
+    size_t n_streams;
+};
+
+struct dummy_packet_rconn {
+    struct dummy_packet_stream *rstream;
+    struct reconnect *reconnect;
+};
+
+struct dummy_packet_conn {
+    enum dummy_packet_conn_type type;
+    union {
+        struct dummy_packet_pconn pconn;
+        struct dummy_packet_rconn rconn;
+    } u;
 };
 
 /* Protects 'dummy_list'. */
@@ -70,9 +98,7 @@ struct netdev_dummy {
     enum netdev_flags flags OVS_GUARDED;
     int ifindex OVS_GUARDED;
 
-    struct pstream *pstream OVS_GUARDED;
-    struct dummy_stream *streams OVS_GUARDED;
-    size_t n_streams OVS_GUARDED;
+    struct dummy_packet_conn conn OVS_GUARDED;
 
     FILE *tx_pcap, *rx_pcap OVS_GUARDED;
 
@@ -94,7 +120,7 @@ static unixctl_cb_func netdev_dummy_set_admin_state;
 static int netdev_dummy_construct(struct netdev *);
 static void netdev_dummy_queue_packet(struct netdev_dummy *, struct ofpbuf *);
 
-static void dummy_stream_close(struct dummy_stream *);
+static void dummy_packet_stream_close(struct dummy_packet_stream *);
 
 static bool
 is_dummy_class(const struct netdev_class *class)
@@ -117,118 +143,421 @@ netdev_rx_dummy_cast(const struct netdev_rx *rx)
 }
 
 static void
+dummy_packet_stream_init(struct dummy_packet_stream *s, struct stream *stream)
+{
+    int rxbuf_size = stream ? 2048 : 0;
+    s->stream = stream;
+    ofpbuf_init(&s->rxbuf, rxbuf_size);
+    list_init(&s->txq);
+}
+
+static struct dummy_packet_stream *
+dummy_packet_stream_create(struct stream *stream)
+{
+    struct dummy_packet_stream *s;
+
+    s = xzalloc(sizeof *s);
+    dummy_packet_stream_init(s, stream);
+
+    return s;
+}
+
+static void
+dummy_packet_stream_wait(struct dummy_packet_stream *s)
+{
+    stream_run_wait(s->stream);
+    if (!list_is_empty(&s->txq)) {
+        stream_send_wait(s->stream);
+    }
+    stream_recv_wait(s->stream);
+}
+
+static void
+dummy_packet_stream_send(struct dummy_packet_stream *s, const void *buffer, size_t size)
+{
+    if (list_size(&s->txq) < NETDEV_DUMMY_MAX_QUEUE) {
+        struct ofpbuf *b;
+
+        b = ofpbuf_clone_data_with_headroom(buffer, size, 2);
+        put_unaligned_be16(ofpbuf_push_uninit(b, 2), htons(size));
+        list_push_back(&s->txq, &b->list_node);
+    }
+}
+
+static int
+dummy_packet_stream_run(struct netdev_dummy *dev, struct dummy_packet_stream *s)
+{
+    int error = 0;
+    size_t n;
+
+    stream_run(s->stream);
+
+    if (!list_is_empty(&s->txq)) {
+        struct ofpbuf *txbuf;
+        int retval;
+
+        txbuf = ofpbuf_from_list(list_front(&s->txq));
+        retval = stream_send(s->stream, txbuf->data, txbuf->size);
+        if (retval > 0) {
+            ofpbuf_pull(txbuf, retval);
+            if (!txbuf->size) {
+                list_remove(&txbuf->list_node);
+                ofpbuf_delete(txbuf);
+            }
+        } else if (retval != -EAGAIN) {
+            error = -retval;
+        }
+    }
+
+    if (!error) {
+        if (s->rxbuf.size < 2) {
+            n = 2 - s->rxbuf.size;
+        } else {
+            uint16_t frame_len;
+
+            frame_len = ntohs(get_unaligned_be16(s->rxbuf.data));
+            if (frame_len < ETH_HEADER_LEN) {
+                error = EPROTO;
+                n = 0;
+            } else {
+                n = (2 + frame_len) - s->rxbuf.size;
+            }
+        }
+    }
+    if (!error) {
+        int retval;
+
+        ofpbuf_prealloc_tailroom(&s->rxbuf, n);
+        retval = stream_recv(s->stream, ofpbuf_tail(&s->rxbuf), n);
+        if (retval > 0) {
+            s->rxbuf.size += retval;
+            if (retval == n && s->rxbuf.size > 2) {
+                ofpbuf_pull(&s->rxbuf, 2);
+                netdev_dummy_queue_packet(dev,
+                                          ofpbuf_clone(&s->rxbuf));
+                ofpbuf_clear(&s->rxbuf);
+            }
+        } else if (retval != -EAGAIN) {
+            error = (retval < 0 ? -retval
+                     : s->rxbuf.size ? EPROTO
+                     : EOF);
+        }
+    }
+
+    return error;
+}
+
+static void
+dummy_packet_stream_close(struct dummy_packet_stream *s)
+{
+    stream_close(s->stream);
+    ofpbuf_uninit(&s->rxbuf);
+    ofpbuf_list_delete(&s->txq);
+}
+
+static void
+dummy_packet_conn_init(struct dummy_packet_conn *conn)
+{
+    memset(conn, 0, sizeof *conn);
+    conn->type = NONE;
+}
+
+static void
+dummy_packet_conn_get_config(struct dummy_packet_conn *conn, struct smap *args)
+{
+
+    switch (conn->type) {
+    case PASSIVE:
+        smap_add(args, "pstream", pstream_get_name(conn->u.pconn.pstream));
+        break;
+
+    case ACTIVE:
+        smap_add(args, "stream", stream_get_name(conn->u.rconn.rstream->stream));
+        break;
+
+    case NONE:
+    default:
+        break;
+    }
+}
+
+static void
+dummy_packet_conn_close(struct dummy_packet_conn *conn)
+{
+    int i;
+    struct dummy_packet_pconn *pconn = &conn->u.pconn;
+    struct dummy_packet_rconn *rconn = &conn->u.rconn;
+
+    switch (conn->type) {
+    case PASSIVE:
+        pstream_close(pconn->pstream);
+        for (i = 0; i < pconn->n_streams; i++) {
+            dummy_packet_stream_close(&pconn->streams[i]);
+        }
+        free(pconn->streams);
+        pconn->pstream = NULL;
+        pconn->streams = NULL;
+        break;
+
+    case ACTIVE:
+        dummy_packet_stream_close(rconn->rstream);
+        free(rconn->rstream);
+        rconn->rstream = NULL;
+        reconnect_destroy(rconn->reconnect);
+        rconn->reconnect = NULL;
+        break;
+
+    case NONE:
+    default:
+        break;
+    }
+
+    conn->type = NONE;
+    memset(conn, 0, sizeof *conn);
+}
+
+static void
+dummy_packet_conn_set_config(struct dummy_packet_conn *conn,
+                             const struct smap *args)
+{
+    const char *pstream = smap_get(args, "pstream");
+    const char *stream = smap_get(args, "stream");
+
+    if (pstream && stream) {
+         VLOG_WARN("Open failed: both %s and %s are configured",
+                   pstream, stream);
+         return;
+    }
+
+    switch (conn->type) {
+    case PASSIVE:
+        if (!strcmp(pstream_get_name(conn->u.pconn.pstream), pstream)) {
+            return;
+        }
+        dummy_packet_conn_close(conn);
+        break;
+    case ACTIVE:
+        if (!strcmp(stream_get_name(conn->u.rconn.rstream->stream), stream)) {
+            return;
+        }
+        dummy_packet_conn_close(conn);
+        break;
+    case NONE:
+    default:
+        break;
+    }
+
+    if (pstream) {
+        int error;
+
+        error = pstream_open(pstream, &conn->u.pconn.pstream, DSCP_DEFAULT);
+        if (error) {
+            VLOG_WARN("%s: open failed (%s)", pstream, ovs_strerror(error));
+        } else {
+            conn->type = PASSIVE;
+        }
+    }
+
+    if (stream) {
+        int error;
+        struct stream *active_stream;
+        struct reconnect *reconnect;;
+
+        reconnect = reconnect_create(time_msec());
+        reconnect_set_name(reconnect, stream);
+        reconnect_set_passive(reconnect, false, time_msec());
+        reconnect_enable(reconnect, time_msec());
+        reconnect_set_backoff(reconnect, 1000, INT_MAX);
+        conn->u.rconn.reconnect = reconnect;
+
+        error = stream_open(stream, &active_stream, DSCP_DEFAULT);
+        conn->u.rconn.rstream = dummy_packet_stream_create(active_stream);
+
+        switch (error) {
+        case 0:
+            reconnect_connected(conn->u.rconn.reconnect, time_msec());
+            conn->type = ACTIVE;
+            break;
+
+        case EAGAIN:
+            reconnect_connecting(conn->u.rconn.reconnect, time_msec());
+            break;
+
+        default:
+            reconnect_connecting(conn->u.rconn.reconnect, time_msec());
+            stream_close(active_stream);
+            break;
+        }
+    }
+}
+
+static void
+dummy_pconn_run(struct netdev_dummy *dev)
+    OVS_REQUIRES(dev->mutex)
+{
+    struct stream *new_stream;
+    struct dummy_packet_pconn *pconn = &dev->conn.u.pconn;
+    int error;
+    size_t i;
+
+    error = pstream_accept(pconn->pstream, &new_stream);
+    if (!error) {
+        struct dummy_packet_stream *s;
+
+        pconn->streams = xrealloc(pconn->streams,
+                                ((pconn->n_streams + 1)
+                                 * sizeof *s));
+        s = &pconn->streams[pconn->n_streams++];
+        dummy_packet_stream_init(s, new_stream);
+    } else if (error != EAGAIN) {
+        VLOG_WARN("%s: accept failed (%s)",
+                  pstream_get_name(pconn->pstream), ovs_strerror(error));
+        pstream_close(pconn->pstream);
+        pconn->pstream = NULL;
+        dev->conn.type = NONE;
+    }
+
+    for (i = 0; i < pconn->n_streams; i++) {
+        struct dummy_packet_stream *s = &pconn->streams[i];
+
+        error = dummy_packet_stream_run(dev, s);
+        if (error) {
+            VLOG_DBG("%s: closing connection (%s)",
+                     stream_get_name(s->stream),
+                     ovs_retval_to_string(error));
+            dummy_packet_stream_close(s);
+            pconn->streams[i] = pconn->streams[--pconn->n_streams];
+        }
+    }
+}
+
+static void
+dummy_rconn_run(struct netdev_dummy *dev)
+OVS_REQUIRES(dev->mutex)
+{
+    struct dummy_packet_rconn *rconn = &dev->conn.u.rconn;
+
+    switch (reconnect_run(rconn->reconnect, time_msec())) {
+    case RECONNECT_CONNECT:
+        {
+            int err = stream_connect(rconn->rstream->stream);
+
+            switch (err) {
+            case 0: /* Connected. */
+                reconnect_connected(rconn->reconnect, time_msec());
+                dev->conn.type = ACTIVE;
+                break;
+
+            case EAGAIN:
+                reconnect_connecting(rconn->reconnect, time_msec());
+                return;
+
+            default:
+                reconnect_connect_failed(rconn->reconnect, time_msec(), err);
+                stream_close(rconn->rstream->stream);
+                return;
+            }
+        }
+        break;
+
+    case RECONNECT_DISCONNECT:
+    case RECONNECT_PROBE:
+    default:
+        break;
+    }
+
+    if (reconnect_is_connected(rconn->reconnect)) {
+        int err;
+
+        err = dummy_packet_stream_run(dev, rconn->rstream);
+
+        if (err) {
+            reconnect_disconnected(rconn->reconnect, time_msec(), err);
+            stream_close(rconn->rstream->stream);
+        }
+    }
+}
+
+static void
+dummy_packet_conn_run(struct netdev_dummy *dev)
+    OVS_REQUIRES(dev->mutex)
+{
+    switch (dev->conn.type) {
+    case PASSIVE:
+        dummy_pconn_run(dev);
+        break;
+
+    case ACTIVE:
+        dummy_rconn_run(dev);
+        break;
+
+    case NONE:
+    default:
+        break;
+    }
+}
+
+static void
+dummy_packet_conn_wait(struct dummy_packet_conn *conn)
+{
+    int i;
+    switch (conn->type) {
+    case PASSIVE:
+        pstream_wait(conn->u.pconn.pstream);
+        for (i = 0; i < conn->u.pconn.n_streams; i++) {
+            struct dummy_packet_stream *s = &conn->u.pconn.streams[i];
+            dummy_packet_stream_wait(s);
+        }
+        break;
+    case ACTIVE:
+        dummy_packet_stream_wait(conn->u.rconn.rstream);
+        break;
+
+    case NONE:
+    default:
+        break;
+    }
+}
+
+static void
+dummy_packet_conn_send(struct dummy_packet_conn *conn,
+                       const void *buffer, size_t size)
+{
+    int i;
+
+    switch (conn->type) {
+    case PASSIVE:
+        for (i = 0; i < conn->u.pconn.n_streams; i++) {
+            struct dummy_packet_stream *s = &conn->u.pconn.streams[i];
+
+            dummy_packet_stream_send(s, buffer, size);
+            pstream_wait(conn->u.pconn.pstream);
+        }
+        break;
+
+    case ACTIVE:
+        dummy_packet_stream_send(conn->u.rconn.rstream, buffer, size);
+        dummy_packet_stream_wait(conn->u.rconn.rstream);
+        break;
+
+    case NONE:
+    default:
+        break;
+    }
+}
+
+static void
 netdev_dummy_run(void)
 {
     struct netdev_dummy *dev;
 
     ovs_mutex_lock(&dummy_list_mutex);
     LIST_FOR_EACH (dev, list_node, &dummy_list) {
-        size_t i;
-
         ovs_mutex_lock(&dev->mutex);
-
-        if (dev->pstream) {
-            struct stream *new_stream;
-            int error;
-
-            error = pstream_accept(dev->pstream, &new_stream);
-            if (!error) {
-                struct dummy_stream *s;
-
-                dev->streams = xrealloc(dev->streams,
-                                        ((dev->n_streams + 1)
-                                         * sizeof *dev->streams));
-                s = &dev->streams[dev->n_streams++];
-                s->stream = new_stream;
-                ofpbuf_init(&s->rxbuf, 2048);
-                list_init(&s->txq);
-            } else if (error != EAGAIN) {
-                VLOG_WARN("%s: accept failed (%s)",
-                          pstream_get_name(dev->pstream), ovs_strerror(error));
-                pstream_close(dev->pstream);
-                dev->pstream = NULL;
-            }
-        }
-
-        for (i = 0; i < dev->n_streams; i++) {
-            struct dummy_stream *s = &dev->streams[i];
-            int error = 0;
-            size_t n;
-
-            stream_run(s->stream);
-
-            if (!list_is_empty(&s->txq)) {
-                struct ofpbuf *txbuf;
-                int retval;
-
-                txbuf = ofpbuf_from_list(list_front(&s->txq));
-                retval = stream_send(s->stream, txbuf->data, txbuf->size);
-                if (retval > 0) {
-                    ofpbuf_pull(txbuf, retval);
-                    if (!txbuf->size) {
-                        list_remove(&txbuf->list_node);
-                        ofpbuf_delete(txbuf);
-                    }
-                } else if (retval != -EAGAIN) {
-                    error = -retval;
-                }
-            }
-
-            if (!error) {
-                if (s->rxbuf.size < 2) {
-                    n = 2 - s->rxbuf.size;
-                } else {
-                    uint16_t frame_len;
-
-                    frame_len = ntohs(get_unaligned_be16(s->rxbuf.data));
-                    if (frame_len < ETH_HEADER_LEN) {
-                        error = EPROTO;
-                        n = 0;
-                    } else {
-                        n = (2 + frame_len) - s->rxbuf.size;
-                    }
-                }
-            }
-            if (!error) {
-                int retval;
-
-                ofpbuf_prealloc_tailroom(&s->rxbuf, n);
-                retval = stream_recv(s->stream, ofpbuf_tail(&s->rxbuf), n);
-                if (retval > 0) {
-                    s->rxbuf.size += retval;
-                    if (retval == n && s->rxbuf.size > 2) {
-                        ofpbuf_pull(&s->rxbuf, 2);
-                        netdev_dummy_queue_packet(dev,
-                                                  ofpbuf_clone(&s->rxbuf));
-                        ofpbuf_clear(&s->rxbuf);
-                    }
-                } else if (retval != -EAGAIN) {
-                    error = (retval < 0 ? -retval
-                             : s->rxbuf.size ? EPROTO
-                             : EOF);
-                }
-            }
-
-            if (error) {
-                VLOG_DBG("%s: closing connection (%s)",
-                         stream_get_name(s->stream),
-                         ovs_retval_to_string(error));
-                dummy_stream_close(&dev->streams[i]);
-                dev->streams[i] = dev->streams[--dev->n_streams];
-            }
-        }
-
+        dummy_packet_conn_run(dev);
         ovs_mutex_unlock(&dev->mutex);
     }
     ovs_mutex_unlock(&dummy_list_mutex);
-}
-
-static void
-dummy_stream_close(struct dummy_stream *s)
-{
-    stream_close(s->stream);
-    ofpbuf_uninit(&s->rxbuf);
-    ofpbuf_list_delete(&s->txq);
 }
 
 static void
@@ -238,21 +567,8 @@ netdev_dummy_wait(void)
 
     ovs_mutex_lock(&dummy_list_mutex);
     LIST_FOR_EACH (dev, list_node, &dummy_list) {
-        size_t i;
-
         ovs_mutex_lock(&dev->mutex);
-        if (dev->pstream) {
-            pstream_wait(dev->pstream);
-        }
-        for (i = 0; i < dev->n_streams; i++) {
-            struct dummy_stream *s = &dev->streams[i];
-
-            stream_run_wait(s->stream);
-            if (!list_is_empty(&s->txq)) {
-                stream_send_wait(s->stream);
-            }
-            stream_recv_wait(s->stream);
-        }
+        dummy_packet_conn_wait(&dev->conn);
         ovs_mutex_unlock(&dev->mutex);
     }
     ovs_mutex_unlock(&dummy_list_mutex);
@@ -286,9 +602,7 @@ netdev_dummy_construct(struct netdev *netdev_)
     netdev->flags = 0;
     netdev->ifindex = -EOPNOTSUPP;
 
-    netdev->pstream = NULL;
-    netdev->streams = NULL;
-    netdev->n_streams = 0;
+    dummy_packet_conn_init(&netdev->conn);
 
     list_init(&netdev->rxes);
     ovs_mutex_unlock(&netdev->mutex);
@@ -304,18 +618,15 @@ static void
 netdev_dummy_destruct(struct netdev *netdev_)
 {
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
-    size_t i;
 
     ovs_mutex_lock(&dummy_list_mutex);
     list_remove(&netdev->list_node);
     ovs_mutex_unlock(&dummy_list_mutex);
 
     ovs_mutex_lock(&netdev->mutex);
-    pstream_close(netdev->pstream);
-    for (i = 0; i < netdev->n_streams; i++) {
-        dummy_stream_close(&netdev->streams[i]);
-    }
-    free(netdev->streams);
+    dummy_packet_conn_close(&netdev->conn);
+    netdev->conn.type = NONE;
+
     ovs_mutex_unlock(&netdev->mutex);
     ovs_mutex_destroy(&netdev->mutex);
 }
@@ -339,9 +650,7 @@ netdev_dummy_get_config(const struct netdev *netdev_, struct smap *args)
         smap_add_format(args, "ifindex", "%d", netdev->ifindex);
     }
 
-    if (netdev->pstream) {
-        smap_add(args, "pstream", pstream_get_name(netdev->pstream));
-    }
+    dummy_packet_conn_get_config(&netdev->conn, args);
 
     ovs_mutex_unlock(&netdev->mutex);
     return 0;
@@ -351,29 +660,12 @@ static int
 netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args)
 {
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
-    const char *pstream;
     const char *pcap;
 
     ovs_mutex_lock(&netdev->mutex);
     netdev->ifindex = smap_get_int(args, "ifindex", -EOPNOTSUPP);
 
-    pstream = smap_get(args, "pstream");
-    if (!pstream
-        || !netdev->pstream
-        || strcmp(pstream_get_name(netdev->pstream), pstream)) {
-        pstream_close(netdev->pstream);
-        netdev->pstream = NULL;
-
-        if (pstream) {
-            int error;
-
-            error = pstream_open(pstream, &netdev->pstream, DSCP_DEFAULT);
-            if (error) {
-                VLOG_WARN("%s: open failed (%s)",
-                          pstream, ovs_strerror(error));
-            }
-        }
-    }
+    dummy_packet_conn_set_config(&netdev->conn, args);
 
     if (netdev->rx_pcap) {
         fclose(netdev->rx_pcap);
@@ -520,7 +812,6 @@ static int
 netdev_dummy_send(struct netdev *netdev, const void *buffer, size_t size)
 {
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
-    size_t i;
 
     if (size < ETH_HEADER_LEN) {
         return EMSGSIZE;
@@ -544,6 +835,8 @@ netdev_dummy_send(struct netdev *netdev, const void *buffer, size_t size)
     dev->stats.tx_packets++;
     dev->stats.tx_bytes += size;
 
+    dummy_packet_conn_send(&dev->conn, buffer, size);
+
     if (dev->tx_pcap) {
         struct ofpbuf packet;
 
@@ -552,17 +845,6 @@ netdev_dummy_send(struct netdev *netdev, const void *buffer, size_t size)
         fflush(dev->tx_pcap);
     }
 
-    for (i = 0; i < dev->n_streams; i++) {
-        struct dummy_stream *s = &dev->streams[i];
-
-        if (list_size(&s->txq) < NETDEV_DUMMY_MAX_QUEUE) {
-            struct ofpbuf *b;
-
-            b = ofpbuf_clone_data_with_headroom(buffer, size, 2);
-            put_unaligned_be16(ofpbuf_push_uninit(b, 2), htons(size));
-            list_push_back(&s->txq, &b->list_node);
-        }
-    }
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
