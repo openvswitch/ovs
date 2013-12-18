@@ -269,7 +269,7 @@ void skb_zerocopy(struct sk_buff *to, const struct sk_buff *from, int len,
 #define skb_has_frag_list skb_has_frags
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,2,0)
+#ifndef HAVE___SKB_FILL_PAGE_DESC
 static inline void __skb_fill_page_desc(struct sk_buff *skb, int i,
 					struct page *page, int off, int size)
 {
