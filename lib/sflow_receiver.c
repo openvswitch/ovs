@@ -198,6 +198,10 @@ inline static void putString(SFLReceiver *receiver, SFLString *s)
     putNet32(receiver, s->len);
     memcpy(receiver->sampleCollector.datap, s->str, s->len);
     receiver->sampleCollector.datap += (s->len + 3) / 4; /* pad to 4-byte boundary */
+    if ((s->len % 4) != 0){
+        u_int8_t padding = 4 - (s->len % 4);
+        memset(((u_int8_t*)receiver->sampleCollector.datap)-padding, 0, padding);
+    }
 }
 
 inline static u_int32_t stringEncodingLength(SFLString *s) {
