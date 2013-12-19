@@ -73,6 +73,7 @@ struct dpif_linux_dp {
     /* Attributes. */
     const char *name;                  /* OVS_DP_ATTR_NAME. */
     const uint32_t *upcall_pid;        /* OVS_DP_ATTR_UPCALL_PID. */
+    uint32_t user_features;            /* OVS_DP_ATTR_USER_FEATURES */
     struct ovs_dp_stats stats;         /* OVS_DP_ATTR_STATS. */
     struct ovs_dp_megaflow_stats megaflow_stats;
                                        /* OVS_DP_ATTR_MEGAFLOW_STATS.*/
@@ -231,9 +232,11 @@ dpif_linux_open(const struct dpif_class *class OVS_UNUSED, const char *name,
         upcall_pid = 0;
         dp_request.upcall_pid = &upcall_pid;
     } else {
-        dp_request.cmd = OVS_DP_CMD_GET;
+        /* Use OVS_DP_CMD_SET to report user features */
+        dp_request.cmd = OVS_DP_CMD_SET;
     }
     dp_request.name = name;
+    dp_request.user_features |= OVS_DP_F_UNALIGNED;
     error = dpif_linux_dp_transact(&dp_request, &dp, &buf);
     if (error) {
         return error;
@@ -1929,6 +1932,10 @@ dpif_linux_dp_to_ofpbuf(const struct dpif_linux_dp *dp, struct ofpbuf *buf)
 
     if (dp->upcall_pid) {
         nl_msg_put_u32(buf, OVS_DP_ATTR_UPCALL_PID, *dp->upcall_pid);
+    }
+
+    if (dp->user_features) {
+        nl_msg_put_u32(buf, OVS_DP_ATTR_USER_FEATURES, dp->user_features);
     }
 
     /* Skip OVS_DP_ATTR_STATS since we never have a reason to serialize it. */
