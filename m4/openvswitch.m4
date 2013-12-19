@@ -64,6 +64,9 @@ AC_DEFUN([OVS_CHECK_WIN32],
    AM_CONDITIONAL([WIN32], [test "$WIN32" = yes])
    if test "$WIN32" = yes; then
       AC_DEFINE([WIN32], [1], [Define to 1 if building on WIN32.])
+      AH_BOTTOM([#ifdef WIN32
+#include "include/windows/windefs.h"
+#endif])
    fi])
 
 dnl Checks for Netlink support.

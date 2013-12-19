@@ -31,6 +31,12 @@
 #undef strtok_r
 #endif
 
+#ifdef _WIN32
+#define strtok_r strtok_s
+#define strcasecmp _stricmp
+#define strncasecmp _strnicmp
+#endif
+
 #ifndef HAVE_STRNLEN
 #undef strnlen
 #define strnlen rpl_strnlen

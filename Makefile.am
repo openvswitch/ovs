@@ -10,6 +10,11 @@ ACLOCAL_AMFLAGS = -I m4
 SUBDIRS = datapath
 
 AM_CPPFLAGS = $(SSL_CFLAGS)
+
+if WIN32
+AM_CPPFLAGS += -I $(top_srcdir)/include/windows
+endif
+
 AM_CPPFLAGS += -I $(top_srcdir)/include
 AM_CPPFLAGS += -I $(top_srcdir)/lib
 AM_CPPFLAGS += -I $(top_builddir)/lib
