@@ -98,4 +98,5 @@ if bad_pids:
     print """
 The following processes are listening for packets to arrive on network devices
 that no longer exist. You may want to restart them."""
+    sys.stdout.flush()
     os.execvp("ps", ["ps"] + ["%s" % pid for pid in bad_pids])
