@@ -208,6 +208,7 @@ fi
 AT_CLEANUP
 
 AT_SETUP([daemon --detach --monitor closes standard fds])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
 AT_CAPTURE_FILE([pid])
 AT_CAPTURE_FILE([status])
 AT_CAPTURE_FILE([stderr])
