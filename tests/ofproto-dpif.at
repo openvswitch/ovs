@@ -2105,13 +2105,9 @@ sleep 1
 OVS_VSWITCHD_STOP
 ovs-appctl -t test-netflow exit
 
-AT_CHECK([grep "192.168.0.1 > 192.168.0.2, if 1 > 65535, 1 pkts, 60 bytes, ICMP 8:0" netflow.log | wc -l], [0], [dnl
-1
-], [ignore])
+AT_CHECK([test `grep "192.168.0.1 > 192.168.0.2, if 1 > 65535, 1 pkts, 60 bytes, ICMP 8:0" netflow.log | wc -l` -eq 1])
 
-AT_CHECK([grep "192.168.0.1 > 192.168.0.2, if 1 > 2, 1 pkts, 60 bytes, ICMP 8:0" netflow.log | wc -l], [0], [dnl
-1
-], [ignore])
+AT_CHECK([test `grep "192.168.0.1 > 192.168.0.2, if 1 > 2, 1 pkts, 60 bytes, ICMP 8:0" netflow.log | wc -l` -eq 1])
 
 combined=`grep "192.168.0.2 > 192.168.0.1, if 2 > 1, 2 pkts, 120 bytes, ICMP 0:0" netflow.log | wc -l`
 separate=`grep "192.168.0.2 > 192.168.0.1, if 2 > 1, 1 pkts, 60 bytes, ICMP 0:0" netflow.log | wc -l`
