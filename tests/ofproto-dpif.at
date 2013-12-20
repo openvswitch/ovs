@@ -2387,10 +2387,16 @@ AT_CHECK([ovs-ofctl add-flow br1 actions=LOCAL,output:1,output:3])
 
 for i in $(seq 1 10); do
     ovs-appctl netdev-dummy/receive br0 'in_port(100),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'
+    if [[ $i -eq 1 ]]; then
+        sleep 1
+    fi
 done
 
 for i in $(seq 1 5); do
     ovs-appctl netdev-dummy/receive br1 'in_port(101),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'
+    if [[ $i -eq 1 ]]; then
+        sleep 1
+    fi
 done
 
 AT_CHECK([ovs-appctl time/warp 1000 && ovs-appctl time/warp 1000], [0], [warped
