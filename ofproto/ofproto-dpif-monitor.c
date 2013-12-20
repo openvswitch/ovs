@@ -53,7 +53,7 @@ struct mport {
 };
 
 /* hmap that contains "struct mport"s. */
-static struct hmap monitor_hmap;
+static struct hmap monitor_hmap = HMAP_INITIALIZER(&monitor_hmap);
 
 /* heap for ordering mport based on bfd/cfm wakeup time. */
 static struct heap monitor_heap;
@@ -66,7 +66,6 @@ static bool monitor_running;
 static struct latch monitor_exit_latch;
 static struct ovs_rwlock monitor_rwlock = OVS_RWLOCK_INITIALIZER;
 
-static void monitor_init(void);
 static void *monitor_main(void *);
 static void monitor_run(void);
 
@@ -155,18 +154,6 @@ mport_update(struct mport *mport, struct bfd *bfd, struct cfm *cfm,
 }
 
 
-/* Initializes the global variables.  This will only run once. */
-static void
-monitor_init(void)
-{
-    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
-
-    if (ovsthread_once_start(&once)) {
-        hmap_init(&monitor_hmap);
-        ovsthread_once_done(&once);
-    }
-}
-
 /* The 'main' function for the monitor thread. */
 static void *
 monitor_main(void * args OVS_UNUSED)
@@ -253,7 +240,6 @@ ofproto_dpif_monitor_port_update(const struct ofport_dpif *ofport,
                                  struct bfd *bfd, struct cfm *cfm,
                                  uint8_t hw_addr[ETH_ADDR_LEN])
 {
-    monitor_init();
     ovs_rwlock_wrlock(&monitor_rwlock);
     if (!cfm && !bfd) {
         mport_unregister(ofport);
@@ -294,7 +280,6 @@ ofproto_dpif_monitor_port_send_soon(const struct ofport_dpif *ofport)
 {
     struct mport *mport;
 
-    monitor_init();
     mport = mport_find(ofport);
     if (mport) {
         heap_change(&monitor_heap, &mport->heap_node, LLONG_MAX);
