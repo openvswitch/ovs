@@ -601,7 +601,7 @@ udpif_flow_dumper(void *arg)
         atomic_store(&udpif->flow_limit, flow_limit);
 
         if (duration > 2000) {
-            VLOG_WARN("Spent an unreasonably long %lldms dumping flows",
+            VLOG_INFO("Spent an unreasonably long %lldms dumping flows",
                       duration);
         }
 
