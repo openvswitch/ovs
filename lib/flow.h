@@ -362,7 +362,9 @@ BUILD_ASSERT_DECL(FLOW_U32S <= 64);
  *
  * Elements in 'values' are allowed to be zero.  This is useful for "struct
  * minimatch", for which ensuring that the miniflow and minimask members have
- * same 'map' allows optimization .
+ * same 'map' allows optimization.  This allowance applies only to a miniflow
+ * that is not a mask.  That is, a minimask may NOT have zero elements in
+ * its 'values'.
  */
 struct miniflow {
     uint64_t map;
@@ -393,14 +395,19 @@ bool miniflow_equal_flow_in_minimask(const struct miniflow *a,
 uint32_t miniflow_hash(const struct miniflow *, uint32_t basis);
 uint32_t miniflow_hash_in_minimask(const struct miniflow *,
                                    const struct minimask *, uint32_t basis);
-uint64_t miniflow_get_map_in_range(const struct miniflow *, uint8_t start,
-                                   uint8_t end, const uint32_t **data);
+uint64_t miniflow_get_map_in_range(const struct miniflow *miniflow,
+                                   uint8_t start, uint8_t end,
+                                   unsigned int *offset);
+
 
 /* Compressed flow wildcards. */
 
 /* A sparse representation of a "struct flow_wildcards".
  *
- * See the large comment on struct miniflow for details. */
+ * See the large comment on struct miniflow for details.
+ *
+ * Note: While miniflow can have zero data for a 1-bit in the map,
+ * a minimask may not!  We rely on this in the implementation. */
 struct minimask {
     struct miniflow masks;
 };

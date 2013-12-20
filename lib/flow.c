@@ -725,24 +725,22 @@ flow_wildcards_fold_minimask(struct flow_wildcards *wc,
     flow_union_with_miniflow(&wc->masks, &mask->masks);
 }
 
-inline uint64_t
+uint64_t
 miniflow_get_map_in_range(const struct miniflow *miniflow,
-                          uint8_t start, uint8_t end, const uint32_t **data)
+                          uint8_t start, uint8_t end, unsigned int *offset)
 {
     uint64_t map = miniflow->map;
-    uint32_t *p = miniflow->values;
+    *offset = 0;
 
     if (start > 0) {
         uint64_t msk = (UINT64_C(1) << start) - 1; /* 'start' LSBs set */
-        p += count_1bits(map & msk);  /* Skip to start. */
+        *offset = count_1bits(map & msk);
         map &= ~msk;
     }
     if (end < FLOW_U32S) {
         uint64_t msk = (UINT64_C(1) << end) - 1; /* 'end' LSBs set */
         map &= msk;
     }
-
-    *data = p;
     return map;
 }
 
@@ -754,8 +752,10 @@ flow_wildcards_fold_minimask_range(struct flow_wildcards *wc,
                                    uint8_t start, uint8_t end)
 {
     uint32_t *dst_u32 = (uint32_t *)&wc->masks;
-    const uint32_t *p;
-    uint64_t map = miniflow_get_map_in_range(&mask->masks, start, end, &p);
+    unsigned int offset;
+    uint64_t map = miniflow_get_map_in_range(&mask->masks, start, end,
+                                             &offset);
+    const uint32_t *p = mask->masks.values + offset;
 
     for (; map; map = zero_rightmost_1bit(map)) {
         dst_u32[raw_ctz(map)] |= *p++;
@@ -1516,11 +1516,7 @@ miniflow_hash_in_minimask(const struct miniflow *flow,
     hash = basis;
 
     for (map = mask->masks.map; map; map = zero_rightmost_1bit(map)) {
-        if (*p) {
-            int ofs = raw_ctz(map);
-            hash = mhash_add(hash, miniflow_get(flow, ofs) & *p);
-        }
-        p++;
+        hash = mhash_add(hash, miniflow_get(flow, raw_ctz(map)) & *p++);
     }
 
     return mhash_finish(hash, (p - mask->masks.values) * 4);
@@ -1542,10 +1538,7 @@ flow_hash_in_minimask(const struct flow *flow, const struct minimask *mask,
 
     hash = basis;
     for (map = mask->masks.map; map; map = zero_rightmost_1bit(map)) {
-        if (*p) {
-            hash = mhash_add(hash, flow_u32[raw_ctz(map)] & *p);
-        }
-        p++;
+        hash = mhash_add(hash, flow_u32[raw_ctz(map)] & *p++);
     }
 
     return mhash_finish(hash, (p - mask->masks.values) * 4);
@@ -1562,15 +1555,14 @@ flow_hash_in_minimask_range(const struct flow *flow,
                             uint8_t start, uint8_t end, uint32_t *basis)
 {
     const uint32_t *flow_u32 = (const uint32_t *)flow;
-    const uint32_t *p;
-    uint64_t map = miniflow_get_map_in_range(&mask->masks, start, end, &p);
+    unsigned int offset;
+    uint64_t map = miniflow_get_map_in_range(&mask->masks, start, end,
+                                             &offset);
+    const uint32_t *p = mask->masks.values + offset;
     uint32_t hash = *basis;
 
     for (; map; map = zero_rightmost_1bit(map)) {
-        if (*p) {
-            hash = mhash_add(hash, flow_u32[raw_ctz(map)] & *p);
-        }
-        p++;
+        hash = mhash_add(hash, flow_u32[raw_ctz(map)] & *p++);
     }
 
     *basis = hash; /* Allow continuation from the unfinished value. */

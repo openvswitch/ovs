@@ -1184,20 +1184,21 @@ uint32_t
 minimatch_hash_range(const struct minimatch *match, uint8_t start, uint8_t end,
                      uint32_t *basis)
 {
-    const uint32_t *p;
-    uint64_t map = miniflow_get_map_in_range(&match->mask.masks, start, end,
-                                             &p);
-    const ptrdiff_t df = match->mask.masks.values - match->flow.values;
+    unsigned int offset;
+    const uint32_t *p, *q;
     uint32_t hash = *basis;
+    int n, i;
 
-    for (; map; map = zero_rightmost_1bit(map)) {
-        if (*p) {
-            hash = mhash_add(hash, *(p - df) & *p);
-        }
-        p++;
+    n = count_1bits(miniflow_get_map_in_range(&match->mask.masks, start, end,
+                                              &offset));
+    q = match->mask.masks.values + offset;
+    p = match->flow.values + offset;
+
+    for (i = 0; i < n; i++) {
+        hash = mhash_add(hash, p[i] & q[i]);
     }
     *basis = hash; /* Allow continuation from the unfinished value. */
-    return mhash_finish(hash, (p - match->mask.masks.values) * 4);
+    return mhash_finish(hash, (offset + n) * 4);
 }
 
 /* Appends a string representation of 'match' to 's'.  If 'priority' is
