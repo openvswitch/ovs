@@ -293,6 +293,9 @@ AT_CHECK([[ovs-ofctl add-flow br0 'actions=load:3->NXM_NX_REG0[0..15],learn(tabl
 for i in 1 2 3 4 5 6 7 8 9 10; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'
     ovs-appctl time/warp 10
+    if [[ $i -eq 1 ]]; then
+        sleep 1
+    fi
 done
 
 # Check for the learning entry.
