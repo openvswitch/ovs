@@ -1681,31 +1681,34 @@ AT_CHECK([ovs-ofctl -O OpenFlow12 monitor br0 --detach --no-chdir --pidfile])
 ovs-appctl -t ovs-ofctl ofctl/barrier
 ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
 : > expout
+: > experr
 
 # find out current role
 ovs-appctl -t ovs-ofctl ofctl/send 031800180000000200000000000000000000000000000000
-echo >>expout "send: OFPT_ROLE_REQUEST (OF1.2) (xid=0x2): role=nochange"
+echo >>experr "send: OFPT_ROLE_REQUEST (OF1.2) (xid=0x2): role=nochange"
 echo >>expout "OFPT_ROLE_REPLY (OF1.2) (xid=0x2): role=equal"
 
 # Become slave (generation_id is initially undefined, so 2^63+2 should not be stale)
 ovs-appctl -t ovs-ofctl ofctl/send 031800180000000300000003000000008000000000000002
-echo >>expout "send: OFPT_ROLE_REQUEST (OF1.2) (xid=0x3): role=slave generation_id=9223372036854775810"
+echo >>experr "send: OFPT_ROLE_REQUEST (OF1.2) (xid=0x3): role=slave generation_id=9223372036854775810"
 echo >>expout "OFPT_ROLE_REPLY (OF1.2) (xid=0x3): role=slave generation_id=9223372036854775810"
 
 # Try to become the master using a stale generation ID
 ovs-appctl -t ovs-ofctl ofctl/send 031800180000000400000002000000000000000000000002
-echo >>expout "send: OFPT_ROLE_REQUEST (OF1.2) (xid=0x4): role=master generation_id=2"
+echo >>experr "send: OFPT_ROLE_REQUEST (OF1.2) (xid=0x4): role=master generation_id=2"
 echo >>expout "OFPT_ERROR (OF1.2) (xid=0x4): OFPRRFC_STALE"
 echo >>expout "OFPT_ROLE_REQUEST (OF1.2) (xid=0x4): role=master generation_id=2"
 
 # Become master using a valid generation ID
 ovs-appctl -t ovs-ofctl ofctl/send 031800180000000500000002000000000000000000000001
-echo >>expout "send: OFPT_ROLE_REQUEST (OF1.2) (xid=0x5): role=master generation_id=1"
+echo >>experr "send: OFPT_ROLE_REQUEST (OF1.2) (xid=0x5): role=master generation_id=1"
 echo >>expout "OFPT_ROLE_REPLY (OF1.2) (xid=0x5): role=master generation_id=1"
 ovs-appctl -t ovs-ofctl ofctl/barrier
 echo >>expout "OFPT_BARRIER_REPLY (OF1.2) (xid=0x3):"
 
-AT_CHECK([cat monitor.log], [0], [expout])
+AT_CHECK([grep -v '^send:' monitor.log], [0], [expout])
+mv experr expout
+AT_CHECK([grep '^send:' monitor.log], [0], [expout])
 
 ovs-appctl -t ovs-ofctl exit
 OVS_VSWITCHD_STOP
