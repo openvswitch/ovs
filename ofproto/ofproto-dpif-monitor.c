@@ -225,8 +225,9 @@ monitor_run(void)
             bfd_wait(mport->bfd);
         }
         /* Computes the next wakeup time for this mport. */
-        next_wake_time = MIN(bfd_wake_time(mport->bfd), cfm_wake_time(mport->cfm));
-        heap_change(&monitor_heap, heap_max(&monitor_heap),
+        next_wake_time = MIN(bfd_wake_time(mport->bfd),
+                             cfm_wake_time(mport->cfm));
+        heap_change(&monitor_heap, &mport->heap_node,
                     MSEC_TO_PRIO(next_wake_time));
     }
 
@@ -273,5 +274,29 @@ ofproto_dpif_monitor_port_update(const struct ofport_dpif *ofport,
         xpthread_join(monitor_tid, NULL);
         latch_destroy(&monitor_exit_latch);
         monitor_running = false;
+    }
+}
+
+/* Moves the mport on top of the heap.  This is necessary when
+ * for example, bfd POLL is received and the mport should
+ * immediately send FINAL back. */
+void
+ofproto_dpif_monitor_port_send_soon_safe(const struct ofport_dpif *ofport)
+{
+    ovs_rwlock_wrlock(&monitor_rwlock);
+    ofproto_dpif_monitor_port_send_soon(ofport);
+    ovs_rwlock_unlock(&monitor_rwlock);
+}
+
+void
+ofproto_dpif_monitor_port_send_soon(const struct ofport_dpif *ofport)
+    OVS_REQ_WRLOCK(monitor_rwlock)
+{
+    struct mport *mport;
+
+    monitor_init();
+    mport = mport_find(ofport);
+    if (mport) {
+        heap_change(&monitor_heap, &mport->heap_node, LLONG_MAX);
     }
 }
