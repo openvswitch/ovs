@@ -860,10 +860,26 @@ static void
 ofp_print_duration(struct ds *string, unsigned int sec, unsigned int nsec)
 {
     ds_put_format(string, "%u", sec);
+
+    /* If there are no fractional seconds, don't print any decimals.
+     *
+     * If the fractional seconds can be expressed exactly as milliseconds,
+     * print 3 decimals.  Open vSwitch provides millisecond precision for most
+     * time measurements, so printing 3 decimals every time makes it easier to
+     * spot real changes in flow dumps that refresh themselves quickly.
+     *
+     * If the fractional seconds are more precise than milliseconds, print the
+     * number of decimals needed to express them exactly.
+     */
     if (nsec > 0) {
-        ds_put_format(string, ".%09u", nsec);
-        while (string->string[string->length - 1] == '0') {
-            string->length--;
+        unsigned int msec = nsec / 1000000;
+        if (msec * 1000000 == nsec) {
+            ds_put_format(string, ".%03u", msec);
+        } else {
+            ds_put_format(string, ".%09u", nsec);
+            while (string->string[string->length - 1] == '0') {
+                string->length--;
+            }
         }
     }
     ds_put_char(string, 's');
