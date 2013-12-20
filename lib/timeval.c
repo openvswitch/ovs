@@ -535,6 +535,7 @@ timeval_warp_cb(struct unixctl_conn *conn,
     timespec_add(&monotonic_clock.warp, &monotonic_clock.warp, &ts);
     ovs_mutex_unlock(&monotonic_clock.mutex);
     seq_change(timewarp_seq);
+    poll(NULL, 0, 10); /* give threads (eg. monitor) some chances to run */
     unixctl_command_reply(conn, "warped");
 }
 
