@@ -96,8 +96,8 @@
  *    - OVS_REQUIRES(MUTEX) indicate that the function may only be called with
  *      MUTEX held and that the function does not release MUTEX.
  *
- *    - OVS_LOCKS_EXCLUDED(MUTEX) indicates that the function may only be
- *      called when MUTEX is not held.
+ *    - OVS_EXCLUDED(MUTEX) indicates that the function may only be called when
+ *      MUTEX is not held.
  *
  *
  * The following variants, with the same syntax, apply to reader-writer locks:
@@ -108,7 +108,7 @@
  *    OVS_RELEASES         OVS_RELEASES         OVS_RELEASES
  *    OVS_TRY_LOCK         OVS_TRY_RDLOCK       OVS_TRY_WRLOCK
  *    OVS_REQUIRES         OVS_REQ_RDLOCK       OVS_REQ_WRLOCK
- *    OVS_LOCKS_EXCLUDED   OVS_LOCKS_EXCLUDED   OVS_LOCKS_EXCLUDED
+ *    OVS_EXCLUDED         OVS_EXCLUDED         OVS_EXCLUDED
  */
 #define OVS_LOCKABLE __attribute__((lockable))
 #define OVS_REQ_RDLOCK(...) __attribute__((shared_locks_required(__VA_ARGS__)))
