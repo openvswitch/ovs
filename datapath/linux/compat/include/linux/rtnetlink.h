@@ -3,7 +3,7 @@
 
 #include_next <linux/rtnetlink.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,34)
+#ifndef HAVE_LOCKDEP_RTNL_IS_HELD
 #ifdef CONFIG_PROVE_LOCKING
 static inline int lockdep_rtnl_is_held(void)
 {
