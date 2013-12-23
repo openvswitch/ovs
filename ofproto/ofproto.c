@@ -3227,14 +3227,11 @@ calc_duration(long long int start, long long int now,
 }
 
 /* Checks whether 'table_id' is 0xff or a valid table ID in 'ofproto'.  Returns
- * 0 if 'table_id' is OK, otherwise an OpenFlow error code.  */
-static enum ofperr
+ * true if 'table_id' is OK, false otherwise.  */
+static bool
 check_table_id(const struct ofproto *ofproto, uint8_t table_id)
 {
-    return (table_id == 0xff || table_id < ofproto->n_tables
-            ? 0
-            : OFPERR_OFPBRC_BAD_TABLE_ID);
-
+    return table_id == OFPTT_ALL || table_id < ofproto->n_tables;
 }
 
 static struct oftable *
@@ -3418,12 +3415,12 @@ collect_rules_loose(struct ofproto *ofproto,
     OVS_REQUIRES(ofproto_mutex)
 {
     struct oftable *table;
-    enum ofperr error;
+    enum ofperr error = 0;
 
     rule_collection_init(rules);
 
-    error = check_table_id(ofproto, criteria->table_id);
-    if (error) {
+    if (!check_table_id(ofproto, criteria->table_id)) {
+        error = OFPERR_OFPBRC_BAD_TABLE_ID;
         goto exit;
     }
 
@@ -3479,12 +3476,12 @@ collect_rules_strict(struct ofproto *ofproto,
     OVS_REQUIRES(ofproto_mutex)
 {
     struct oftable *table;
-    int error;
+    int error = 0;
 
     rule_collection_init(rules);
 
-    error = check_table_id(ofproto, criteria->table_id);
-    if (error) {
+    if (!check_table_id(ofproto, criteria->table_id)) {
+        error = OFPERR_OFPBRC_BAD_TABLE_ID;
         goto exit;
     }
 
@@ -3937,10 +3934,10 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     struct cls_rule cr;
     struct rule *rule;
     uint8_t table_id;
-    int error;
+    int error = 0;
 
-    error = check_table_id(ofproto, fm->table_id);
-    if (error) {
+    if (!check_table_id(ofproto, fm->table_id)) {
+        error = OFPERR_OFPBRC_BAD_TABLE_ID;
         return error;
     }
 
