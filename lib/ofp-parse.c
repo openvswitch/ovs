@@ -212,10 +212,10 @@ parse_output(const char *arg, struct ofpbuf *ofpacts)
         struct ofpact_output *output;
 
         output = ofpact_put_OUTPUT(ofpacts);
-        output->max_len = output->port == OFPP_CONTROLLER ? UINT16_MAX : 0;
         if (!ofputil_port_from_string(arg, &output->port)) {
             return xasprintf("%s: output to unknown port", arg);
         }
+        output->max_len = output->port == OFPP_CONTROLLER ? UINT16_MAX : 0;
         return NULL;
     }
 }
