@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include "compiler.h"
+#include "hash.h"
 #include "poll-loop.h"
 #include "socket-util.h"
 #include "util.h"
@@ -308,6 +309,84 @@ bool
 may_fork(void)
 {
     return !must_not_fork;
+}
+
+/* ovsthread_counter.
+ *
+ * We implement the counter as an array of N_COUNTERS individual counters, each
+ * with its own lock.  Each thread uses one of the counters chosen based on a
+ * hash of the thread's ID, the idea being that, statistically, different
+ * threads will tend to use different counters and therefore avoid
+ * interfering with each other.
+ *
+ * Undoubtedly, better implementations are possible. */
+
+/* Basic counter structure. */
+struct ovsthread_counter__ {
+    struct ovs_mutex mutex;
+    unsigned long long int value;
+};
+
+/* Pad the basic counter structure to 64 bytes to avoid cache line
+ * interference. */
+struct ovsthread_counter {
+    struct ovsthread_counter__ c;
+    char pad[ROUND_UP(sizeof(struct ovsthread_counter__), 64)
+             - sizeof(struct ovsthread_counter__)];
+};
+
+#define N_COUNTERS 16
+
+struct ovsthread_counter *
+ovsthread_counter_create(void)
+{
+    struct ovsthread_counter *c;
+    int i;
+
+    c = xmalloc(N_COUNTERS * sizeof *c);
+    for (i = 0; i < N_COUNTERS; i++) {
+        ovs_mutex_init(&c[i].c.mutex);
+        c[i].c.value = 0;
+    }
+    return c;
+}
+
+void
+ovsthread_counter_destroy(struct ovsthread_counter *c)
+{
+    if (c) {
+        int i;
+
+        for (i = 0; i < N_COUNTERS; i++) {
+            ovs_mutex_destroy(&c[i].c.mutex);
+        }
+        free(c);
+    }
+}
+
+void
+ovsthread_counter_inc(struct ovsthread_counter *c, unsigned long long int n)
+{
+    c = &c[hash_int(ovsthread_id_self(), 0) % N_COUNTERS];
+
+    ovs_mutex_lock(&c->c.mutex);
+    c->c.value += n;
+    ovs_mutex_unlock(&c->c.mutex);
+}
+
+unsigned long long int
+ovsthread_counter_read(const struct ovsthread_counter *c)
+{
+    unsigned long long int sum;
+    int i;
+
+    sum = 0;
+    for (i = 0; i < N_COUNTERS; i++) {
+        ovs_mutex_lock(&c[i].c.mutex);
+        sum += c[i].c.value;
+        ovs_mutex_unlock(&c[i].c.mutex);
+    }
+    return sum;
 }
 
 /* Parses /proc/cpuinfo for the total number of physical cores on this system

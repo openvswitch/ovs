@@ -102,9 +102,9 @@ struct dp_netdev {
     struct seq *queue_seq;      /* Incremented whenever a packet is queued. */
 
     /* Statistics. */
-    long long int n_hit;        /* Number of flow table matches. */
-    long long int n_missed;     /* Number of flow table misses. */
-    long long int n_lost;       /* Number of misses not passed to client. */
+    struct ovsthread_counter *n_hit;    /* Number of flow table matches. */
+    struct ovsthread_counter *n_missed; /* Number of flow table misses. */
+    struct ovsthread_counter *n_lost;   /* Number of misses not passed up. */
 
     /* Ports. */
     struct dp_netdev_port *ports[MAX_PORTS];
@@ -293,6 +293,11 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     dp->queue_seq = seq_create();
     classifier_init(&dp->cls, NULL);
     hmap_init(&dp->flow_table);
+
+    dp->n_hit = ovsthread_counter_create();
+    dp->n_missed = ovsthread_counter_create();
+    dp->n_lost = ovsthread_counter_create();
+
     list_init(&dp->port_list);
     dp->port_seq = seq_create();
 
@@ -357,6 +362,9 @@ dp_netdev_free(struct dp_netdev *dp)
     LIST_FOR_EACH_SAFE (port, next, node, &dp->port_list) {
         do_del_port(dp, port->port_no);
     }
+    ovsthread_counter_destroy(dp->n_hit);
+    ovsthread_counter_destroy(dp->n_missed);
+    ovsthread_counter_destroy(dp->n_lost);
     dp_netdev_purge_queues(dp);
     seq_destroy(dp->queue_seq);
     classifier_destroy(&dp->cls);
@@ -402,9 +410,9 @@ dpif_netdev_get_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
 
     ovs_mutex_lock(&dp_netdev_mutex);
     stats->n_flows = hmap_count(&dp->flow_table);
-    stats->n_hit = dp->n_hit;
-    stats->n_missed = dp->n_missed;
-    stats->n_lost = dp->n_lost;
+    stats->n_hit = ovsthread_counter_read(dp->n_hit);
+    stats->n_missed = ovsthread_counter_read(dp->n_missed);
+    stats->n_lost = ovsthread_counter_read(dp->n_lost);
     stats->n_masks = UINT32_MAX;
     stats->n_mask_hit = UINT64_MAX;
     ovs_mutex_unlock(&dp_netdev_mutex);
@@ -1262,9 +1270,9 @@ dp_netdev_port_input(struct dp_netdev *dp, struct ofpbuf *packet,
         dp_netdev_execute_actions(dp, &key, packet, md,
                                   netdev_flow->actions,
                                   netdev_flow->actions_len);
-        dp->n_hit++;
+        ovsthread_counter_inc(dp->n_hit, 1);
     } else {
-        dp->n_missed++;
+        ovsthread_counter_inc(dp->n_missed, 1);
         dp_netdev_output_userspace(dp, packet, DPIF_UC_MISS, &key, NULL);
     }
 }
@@ -1383,7 +1391,7 @@ dp_netdev_output_userspace(struct dp_netdev *dp, struct ofpbuf *packet,
 
         return 0;
     } else {
-        dp->n_lost++;
+        ovsthread_counter_inc(dp->n_lost, 1);
         return ENOBUFS;
     }
 }

@@ -494,6 +494,25 @@ ovsthread_id_self(void)
     return *ovsthread_id_get();
 }
 
+/* Simulated global counter.
+ *
+ * Incrementing such a counter is meant to be cheaper than incrementing a
+ * global counter protected by a lock.  It is probably more expensive than
+ * incrementing a truly thread-local variable, but such a variable has no
+ * straightforward way to get the sum.
+ *
+ *
+ * Thread-safety
+ * =============
+ *
+ * Fully thread-safe. */
+
+struct ovsthread_counter *ovsthread_counter_create(void);
+void ovsthread_counter_destroy(struct ovsthread_counter *);
+void ovsthread_counter_inc(struct ovsthread_counter *, unsigned long long int);
+unsigned long long int ovsthread_counter_read(
+    const struct ovsthread_counter *);
+
 void assert_single_threaded_at(const char *where);
 #define assert_single_threaded() assert_single_threaded_at(SOURCE_LOCATOR)
 
