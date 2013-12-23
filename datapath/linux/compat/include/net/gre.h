@@ -4,22 +4,26 @@
 #include <linux/skbuff.h>
 #include <net/ip_tunnels.h>
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37) || \
+   defined(HAVE_GRE_CISCO_REGISTER)
 #include_next <net/gre.h>
+#endif
 
-#else /* LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37) */
+#ifndef HAVE_GRE_CISCO_REGISTER
 
-#define GREPROTO_CISCO		0
-#define GREPROTO_MAX		2
+/* GRE demux not available, implement our own demux. */
+#define MAX_GRE_PROTO_PRIORITY 255
 
-struct gre_protocol {
-	int  (*handler)(struct sk_buff *skb);
+struct gre_cisco_protocol {
+	int (*handler)(struct sk_buff *skb, const struct tnl_ptk_info *tpi);
+	u8 priority;
 };
 
-int gre_add_protocol(const struct gre_protocol *proto, u8 version);
-int gre_del_protocol(const struct gre_protocol *proto, u8 version);
+#define gre_cisco_register rpl_gre_cisco_register
+int gre_cisco_register(struct gre_cisco_protocol *proto);
 
-#endif
+#define gre_cisco_unregister rpl_gre_cisco_unregister
+int gre_cisco_unregister(struct gre_cisco_protocol *proto);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0)
 struct gre_base_hdr {
@@ -72,24 +76,7 @@ static inline __be16 tnl_flags_to_gre_flags(__be16 tflags)
 	return flags;
 }
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0) */
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,11,0)
-/* GRE demux not available, implement our own demux. */
-#define MAX_GRE_PROTO_PRIORITY 255
-#define gre_cisco_protocol rpl_gre_cisco_protocol
-
-struct gre_cisco_protocol {
-	int (*handler)(struct sk_buff *skb, const struct tnl_ptk_info *tpi);
-	u8 priority;
-};
-
-#define gre_cisco_register rpl_gre_cisco_register
-int gre_cisco_register(struct gre_cisco_protocol *proto);
-
-#define gre_cisco_unregister rpl_gre_cisco_unregister
-int gre_cisco_unregister(struct gre_cisco_protocol *proto);
-
-#endif
+#endif /* HAVE_GRE_CISCO_REGISTER */
 
 #define gre_build_header rpl_gre_build_header
 void gre_build_header(struct sk_buff *skb, const struct tnl_ptk_info *tpi,
@@ -111,6 +98,5 @@ static inline int ip_gre_calc_hlen(__be16 o_flags)
 		addend += 4;
 	return addend;
 }
-
 
 #endif
