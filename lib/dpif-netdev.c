@@ -93,7 +93,6 @@ struct dp_netdev {
     char *name;
     int open_cnt;
     bool destroyed;
-    int max_mtu;                /* Maximum MTU of any port added so far. */
 
     struct dp_netdev_queue queues[N_QUEUES];
     struct classifier cls;      /* Classifier. */
@@ -287,7 +286,6 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     dp->class = class;
     dp->name = xstrdup(name);
     dp->open_cnt = 0;
-    dp->max_mtu = ETH_PAYLOAD_MAX;
     for (i = 0; i < N_QUEUES; i++) {
         dp->queues[i].head = dp->queues[i].tail = 0;
     }
@@ -432,7 +430,6 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     struct netdev_rx *rx;
     enum netdev_flags flags;
     const char *open_type;
-    int mtu;
     int error;
 
     /* XXX reject devices already in some dp_netdev. */
@@ -474,11 +471,6 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     port->sf = sf;
     port->rx = rx;
     port->type = xstrdup(type);
-
-    error = netdev_get_mtu(netdev, &mtu);
-    if (!error && mtu > dp->max_mtu) {
-        dp->max_mtu = mtu;
-    }
 
     hmap_insert(&dp->ports, &port->node, hash_int(odp_to_u32(port_no), 0));
     seq_change(dp->port_seq);
@@ -1293,18 +1285,22 @@ dpif_netdev_run(struct dpif *dpif)
     struct dp_netdev_port *port;
     struct dp_netdev *dp;
     struct ofpbuf packet;
-    size_t buf_size;
 
     ovs_mutex_lock(&dp_netdev_mutex);
     dp = get_dp_netdev(dpif);
     ofpbuf_init(&packet, 0);
 
-    buf_size = DP_NETDEV_HEADROOM + VLAN_ETH_HEADER_LEN + dp->max_mtu;
-
     HMAP_FOR_EACH (port, node, &dp->ports) {
+        int buf_size;
         int error;
+        int mtu;
 
-        /* Reset packet contents. Packet data may have been stolen. */
+        error = netdev_get_mtu(port->netdev, &mtu);
+        if (error) {
+            mtu = ETH_PAYLOAD_MAX;
+        }
+        buf_size = DP_NETDEV_HEADROOM + VLAN_ETH_HEADER_LEN + mtu;
+
         ofpbuf_clear(&packet);
         ofpbuf_reserve_with_tailroom(&packet, DP_NETDEV_HEADROOM, buf_size);
 
