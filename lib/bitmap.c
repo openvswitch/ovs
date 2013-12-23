@@ -17,6 +17,7 @@
 #include <config.h>
 #include "bitmap.h"
 #include <string.h>
+#include "util.h"
 
 /* Allocates and returns a bitmap initialized to all-1-bits. */
 unsigned long *
@@ -91,4 +92,19 @@ bitmap_scan(const unsigned long int *bitmap, size_t start, size_t end)
         }
     }
     return i;
+}
+
+/* Returns the number of 1-bits in the 'n'-bit bitmap at 'bitmap'. */
+size_t
+bitmap_count1(const unsigned long int *bitmap, size_t n)
+{
+    size_t i;
+    size_t count = 0;
+
+    BUILD_ASSERT(ULONG_MAX <= UINT64_MAX);
+    for (i = 0; i < BITMAP_N_LONGS(n); i++) {
+        count += count_1bits(bitmap[i]);
+    }
+
+    return count;
 }

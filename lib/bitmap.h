@@ -101,6 +101,7 @@ void bitmap_set_multiple(unsigned long *, size_t start, size_t count,
                          bool value);
 bool bitmap_equal(const unsigned long *, const unsigned long *, size_t n);
 size_t bitmap_scan(const unsigned long int *, size_t start, size_t end);
+size_t bitmap_count1(const unsigned long *, size_t n);
 
 #define BITMAP_FOR_EACH_1(IDX, SIZE, BITMAP) \
     for ((IDX) = bitmap_scan(BITMAP, 0, SIZE); (IDX) < (SIZE); \
