@@ -674,12 +674,6 @@ dpif_linux_port_query_by_name(const struct dpif *dpif, const char *devname,
 }
 
 static uint32_t
-dpif_linux_get_max_ports(const struct dpif *dpif OVS_UNUSED)
-{
-    return MAX_PORTS;
-}
-
-static uint32_t
 dpif_linux_port_get_pid(const struct dpif *dpif_, odp_port_t port_no)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
@@ -1620,7 +1614,6 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_port_del,
     dpif_linux_port_query_by_number,
     dpif_linux_port_query_by_name,
-    dpif_linux_get_max_ports,
     dpif_linux_port_get_pid,
     dpif_linux_port_dump_start,
     dpif_linux_port_dump_next,

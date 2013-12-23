@@ -628,12 +628,6 @@ dpif_netdev_port_query_by_name(const struct dpif *dpif, const char *devname,
     return error;
 }
 
-static uint32_t
-dpif_netdev_get_max_ports(const struct dpif *dpif OVS_UNUSED)
-{
-    return MAX_PORTS;
-}
-
 static void
 dp_netdev_free_flow(struct dp_netdev *dp, struct dp_netdev_flow *netdev_flow)
 {
@@ -1464,7 +1458,6 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_port_del,
     dpif_netdev_port_query_by_number,
     dpif_netdev_port_query_by_name,
-    dpif_netdev_get_max_ports,
     NULL,                       /* port_get_pid */
     dpif_netdev_port_dump_start,
     dpif_netdev_port_dump_next,
