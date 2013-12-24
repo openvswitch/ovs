@@ -164,10 +164,10 @@ dist-hook-git: distfiles
 	@if test -e $(srcdir)/.git && (git --version) >/dev/null 2>&1; then \
 	  (cd datapath && $(MAKE) distfiles);				    \
 	  (cat distfiles; sed 's|^|datapath/|' datapath/distfiles) |	    \
-	    sort -u > all-distfiles;					    \
+	    LC_ALL=C sort -u > all-distfiles;				    \
 	  (cd $(srcdir) && git ls-files) | grep -v '\.gitignore$$' |	    \
-	    sort -u > all-gitfiles;					    \
-	  comm -1 -3 all-distfiles all-gitfiles > missing-distfiles;	    \
+	    LC_ALL=C sort -u > all-gitfiles;				    \
+	  LC_ALL=C comm -1 -3 all-distfiles all-gitfiles > missing-distfiles; \
 	  if test -s missing-distfiles; then				    \
 	    echo "The distribution is missing the following files:";	    \
 	    cat missing-distfiles;					    \
@@ -182,7 +182,8 @@ distfiles: Makefile
 	list='$(DISTFILES)'; \
 	for file in $$list; do echo $$file; done | \
 	  sed -e "s|^$$srcdirstrip/||;t" \
-	      -e "s|^$$topsrcdirstrip/|$(top_builddir)/|;t" | sort -u > $@
+	      -e "s|^$$topsrcdirstrip/|$(top_builddir)/|;t" | \
+          LC_ALL=C sort -u > $@
 CLEANFILES += distfiles
 endif
 .PHONY: dist-hook-git
