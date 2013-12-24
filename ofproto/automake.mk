@@ -62,4 +62,5 @@ MAN_FRAGMENTS += ofproto/ofproto-unixctl.man ofproto/ofproto-dpif-unixctl.man
 EXTRA_DIST += ofproto/ipfix.xml
 dist_noinst_SCRIPTS = ofproto/ipfix-gen-entities
 ofproto/ipfix-entities.def: ofproto/ipfix.xml ofproto/ipfix-gen-entities
-	$(run_python) $(srcdir)/ofproto/ipfix-gen-entities $< > $@
+	$(run_python) $(srcdir)/ofproto/ipfix-gen-entities $< > $@.tmp
+	mv $@.tmp $@
