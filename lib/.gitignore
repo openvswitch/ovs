@@ -5,6 +5,7 @@
 /coverage-counters.c
 /ofp-errors.inc
 /ofp-msgs.inc
+/stdio.h
 /string.h
 /vswitch-idl.c
 /vswitch-idl.h

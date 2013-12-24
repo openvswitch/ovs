@@ -1013,6 +1013,23 @@ test_ovs_scan(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     ovs_assert(sscanf("0x12-3]xyz", "%[^-a-f]", str));
     ovs_assert(!strcmp(str, "0x12"));
 }
+
+static void
+test_snprintf(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    char s[16];
+
+    ovs_assert(snprintf(s, 4, "abcde") == 5);
+    ovs_assert(!strcmp(s, "abc"));
+
+    ovs_assert(snprintf(s, 5, "abcde") == 5);
+    ovs_assert(!strcmp(s, "abcd"));
+
+    ovs_assert(snprintf(s, 6, "abcde") == 5);
+    ovs_assert(!strcmp(s, "abcde"));
+
+    ovs_assert(snprintf(NULL, 0, "abcde") == 5);
+}
 
 static const struct command commands[] = {
     {"ctz", 0, 0, test_ctz},
@@ -1028,6 +1045,7 @@ static const struct command commands[] = {
     {"follow-symlinks", 1, INT_MAX, test_follow_symlinks},
     {"assert", 0, 0, test_assert},
     {"ovs_scan", 0, 0, test_ovs_scan},
+    {"snprintf", 0, 0, test_snprintf},
     {NULL, 0, 0, NULL},
 };
 

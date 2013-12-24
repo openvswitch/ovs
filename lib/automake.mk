@@ -196,6 +196,7 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/stream-unix.c \
 	lib/stream.c \
 	lib/stream.h \
+	lib/stdio.c \
 	lib/string.c \
 	lib/svec.c \
 	lib/svec.h \
@@ -234,7 +235,9 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/vswitch-idl.h \
 	lib/vtep-idl.c \
 	lib/vtep-idl.h
-EXTRA_DIST += lib/string.h.in
+EXTRA_DIST += \
+	lib/stdio.h.in \
+	lib/string.h.in
 
 nodist_lib_libopenvswitch_la_SOURCES = \
 	lib/dirs.c

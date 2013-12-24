@@ -181,3 +181,7 @@ AT_CHECK([sed 's/.*: //
 ])
 
 AT_CLEANUP
+
+AT_SETUP([snprintf])
+AT_CHECK([test-util snprintf])
+AT_CLEANUP
