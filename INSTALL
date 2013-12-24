@@ -9,6 +9,7 @@ on a specific platform, please see one of these files:
     - INSTALL.Fedora
     - INSTALL.RHEL
     - INSTALL.XenServer
+    - INSTALL.NetBSD
 
 Build Requirements
 ------------------
