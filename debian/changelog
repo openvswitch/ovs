@@ -1,13 +1,70 @@
-openvswitch (2.0.90-1) unstable; urgency=low
+openvswitch (2.1.0-1) unstable; urgency=low
    [ Open vSwitch team ]
+   * New upstream version
+   - Address prefix tracking support for flow tables.  New columns
+     "prefixes" in OVS-DB table "Flow_Table" controls which packet
+     header fields are used for address prefix tracking.  Prefix
+     tracking allows the classifier to skip rules with longer than
+     necessary prefixes, resulting in better wildcarding for datapath
+     flows.  Default configuration is to not use any fields for prefix
+     tracking.  However, if any flow tables contain both exact matches
+     and masked matches for IP address fields, OVS performance may be
+     increased by using this feature.
+     * As of now, the fields for which prefix lookup can be enabled
+       are: 'tun_id', 'tun_src', 'tun_dst', 'nw_src', 'nw_dst' (or
+       aliases 'ip_src' and 'ip_dst'), 'ipv6_src', and 'ipv6_dst'.
+       (Using this feature for 'tun_id' would only make sense if the
+       tunnel IDs have prefix structure similar to IP addresses.)
+     * There is a maximum number of fields that can be enabled for any
+       one flow table.  Currently this limit is 3.
+     * Examples:
+       $ ovs-vsctl set Bridge br0 flow_tables:0=@N1 -- \
+         --id=@N1 create Flow_Table name=table0
+       $ ovs-vsctl set Bridge br0 flow_tables:1=@N1 -- \
+         --id=@N1 create Flow_Table name=table1
+       $ ovs-vsctl set Flow_Table table0 prefixes=ip_dst,ip_src
+       $ ovs-vsctl set Flow_Table table1 prefixes=[]
+   - TCP flags matching: OVS now supports matching of TCP flags.  This
+     has an adverse performance impact when using OVS userspace 1.10
+     or older (no megaflows support) together with the new OVS kernel
+     module.  It is recommended that the kernel and userspace modules
+     both are upgraded at the same time.
+   - The default OpenFlow and OVSDB ports will change to
+     IANA-assigned numbers in a future release.  Consider updating
+     your installations to specify port numbers instead of using the
+     defaults.
+   - OpenFlow:
+     * The OpenFlow 1.1+ "Write-Actions" instruction is now supported.
+     * OVS limits the OpenFlow port numbers it assigns to port 32767 and
+       below, leaving port numbers above that range free for assignment
+       by the controller.
+     * ovs-vswitchd now honors changes to the "ofport_request" column
+       in the Interface table by changing the port's OpenFlow port
+       number.
+   - ovs-vswitchd.conf.db.5 man page will contain graphviz/dot
+     diagram only if graphviz package was installed at the build time.
+   - Support for Linux kernels up to 3.11
+   - ovs-dpctl:
+     The "show" command also displays mega flow mask stats.
+   - ovs-ofctl:
+     * New command "ofp-parse-pcap" to dump OpenFlow from PCAP files.
+   - ovs-controller has been renamed test-controller.  It is no longer
+     packaged or installed by default, because too many users assumed
+     incorrectly that ovs-controller was a necessary or desirable part
+     of an Open vSwitch deployment.
+   - Added vlog option to export to a UDP syslog sink.
+   - ovsdb-client:
+     * The "monitor" command can now monitor all tables in a database,
+       instead of being limited to a single table.
+   - The flow-eviction-threshold has been replaced by the flow-limit which is a
+     hard limit on the number of flows in the datapath.  It defaults to 200,000
+     flows.  OVS automatically adjusts this number depending on network
+     conditions.
    * The openvswitch-controller package has been removed, because too many
      users assumed incorrectly that ovs-controller was a necessary or
      desirable part of an Open vSwitch deployment.
-   * New upstream version
-    - Try NEWS for more details...
 
- -- Open vSwitch team <dev@openvswitch.org>  Wed, 28 Aug 2013 16:17:38 -0700
-
+ -- Open vSwitch team <dev@openvswitch.org>  Mon, 23 Dec 2013 18:07:18 -0700
 
 openvswitch (2.0.0-1) unstable; urgency=low
    [ Open vSwitch team ]

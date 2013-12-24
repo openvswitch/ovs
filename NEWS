@@ -1,6 +1,5 @@
-Post-v2.0.0
+v2.1.0 - xx xxx xxxx
 ---------------------
-
    - Address prefix tracking support for flow tables.  New columns
      "prefixes" in OVS-DB table "Flow_Table" controls which packet
      header fields are used for address prefix tracking.  Prefix
