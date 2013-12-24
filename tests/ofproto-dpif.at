@@ -2368,6 +2368,15 @@ AT_CHECK([ovs-appctl dpif/dump-flows br1 | sort | STRIP_USED], [0], [dnl
 skb_priority(0),in_port(3),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions:userspace(pid=0,slow_path(controller))
 ])
 
+AT_CHECK([ovs-appctl dpif/dump-flows -m br0 | sort | STRIP_USED], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(p1),eth(src=50:54:00:00:00:05/00:00:00:00:00:00,dst=50:54:00:00:00:07/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=192.168.0.1/0.0.0.0,dst=192.168.0.2/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), packets:0, bytes:0, used:never, actions:userspace(pid=0,slow_path(controller))
+skb_priority(0),skb_mark(0/0),in_port(p2),eth(src=50:54:00:00:00:07/00:00:00:00:00:00,dst=50:54:00:00:00:05/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=192.168.0.2/0.0.0.0,dst=192.168.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=0/0,code=0/0), packets:0, bytes:0, used:never, actions:userspace(pid=0,slow_path(controller))
+])
+
+AT_CHECK([ovs-appctl dpif/dump-flows -m br1 | sort | STRIP_USED], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(p3),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), packets:0, bytes:0, used:never, actions:userspace(pid=0,slow_path(controller))
+])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 

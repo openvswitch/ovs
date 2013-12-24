@@ -3968,11 +3968,24 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
     size_t actions_len;
     size_t mask_len;
     size_t key_len;
+    bool verbosity = false;
+    struct dpif_port dpif_port;
+    struct dpif_port_dump port_dump;
+    struct hmap portno_names;
 
-    ofproto = ofproto_dpif_lookup(argv[1]);
+    ofproto = ofproto_dpif_lookup(argv[argc - 1]);
     if (!ofproto) {
         unixctl_command_reply_error(conn, "no such bridge");
         return;
+    }
+
+    if (argc > 2 && !strcmp(argv[1], "-m")) {
+        verbosity = true;
+    }
+
+    hmap_init(&portno_names);
+    DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, ofproto->backer->dpif) {
+        odp_portno_names_set(&portno_names, dpif_port.port_no, dpif_port.name);
     }
 
     ds_init(&ds);
@@ -3983,7 +3996,8 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
             continue;
         }
 
-        odp_flow_format(key, key_len, mask, mask_len, NULL, &ds, false);
+        odp_flow_format(key, key_len, mask, mask_len, &portno_names, &ds,
+                        verbosity);
         ds_put_cstr(&ds, ", ");
         dpif_flow_stats_format(stats, &ds);
         ds_put_cstr(&ds, ", actions:");
@@ -3998,6 +4012,8 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
     } else {
         unixctl_command_reply(conn, ds_cstr(&ds));
     }
+    odp_portno_names_destroy(&portno_names);
+    hmap_destroy(&portno_names);
     ds_destroy(&ds);
 }
 
@@ -4026,7 +4042,7 @@ ofproto_dpif_unixctl_init(void)
                              ofproto_unixctl_dpif_dump_dps, NULL);
     unixctl_command_register("dpif/show", "", 0, 0, ofproto_unixctl_dpif_show,
                              NULL);
-    unixctl_command_register("dpif/dump-flows", "bridge", 1, 1,
+    unixctl_command_register("dpif/dump-flows", "[-m] bridge", 1, 2,
                              ofproto_unixctl_dpif_dump_flows, NULL);
 }
 

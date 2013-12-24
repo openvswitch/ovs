@@ -11,9 +11,10 @@ list of connected ports.  The port information includes the OpenFlow
 port number, datapath port number, and the type.  (The local port is
 identified as OpenFlow port 65534.)
 .
-.IP "\fBdpif/dump\-flows \fIdp\fR"
+.IP "\fBdpif/dump\-flows\fR [\fB\-m\fR] \fIdp\fR"
 Prints to the console all flow entries in datapath \fIdp\fR's
-flow table.
+flow table. Without \fB\-m\fR, output omits match fields that a flow
+wildcards entirely; with \fB\-m\fR output includes all wildcarded fields.
 .IP
 This command is primarily useful for debugging Open vSwitch.  The flow
 table entries that it displays are not OpenFlow flow entries.  Instead,
