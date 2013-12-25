@@ -735,6 +735,10 @@ bfd_process_packet(struct bfd *bfd, const struct flow *flow,
         goto out;
     }
 
+    if (bfd->rmt_state != rmt_state) {
+        seq_change(connectivity_seq_get());
+    }
+
     bfd->rmt_disc = ntohl(msg->my_disc);
     bfd->rmt_state = rmt_state;
     bfd->rmt_flags = flags;
