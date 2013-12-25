@@ -312,7 +312,7 @@ OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=vxlan \
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
 		br0 65534/100: (dummy)
-		p1 1/1: (vxlan: remote_ip=1.1.1.1)
+		p1 1/4789: (vxlan: remote_ip=1.1.1.1)
 ])
 
 OVS_VSWITCHD_STOP
@@ -324,7 +324,7 @@ OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=lisp \
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
 		br0 65534/100: (dummy)
-		p1 1/1: (lisp: remote_ip=1.1.1.1)
+		p1 1/4341: (lisp: remote_ip=1.1.1.1)
 ])
 
 OVS_VSWITCHD_STOP
@@ -336,7 +336,7 @@ OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=vxlan \
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
 		br0 65534/100: (dummy)
-		p1 1/1: (vxlan: dst_port=4341, remote_ip=1.1.1.1)
+		p1 1/4341: (vxlan: dst_port=4341, remote_ip=1.1.1.1)
 ])
 
 dnl change UDP port
@@ -345,7 +345,7 @@ AT_CHECK([ovs-vsctl -- set Interface p1 options:dst_port=5000])
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
 		br0 65534/100: (dummy)
-		p1 1/2: (vxlan: dst_port=5000, remote_ip=1.1.1.1)
+		p1 1/5000: (vxlan: dst_port=5000, remote_ip=1.1.1.1)
 ])
 
 dnl change UDP port to default
@@ -354,7 +354,7 @@ AT_CHECK([ovs-vsctl -- set Interface p1 options:dst_port=4789])
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
 		br0 65534/100: (dummy)
-		p1 1/1: (vxlan: remote_ip=1.1.1.1)
+		p1 1/4789: (vxlan: remote_ip=1.1.1.1)
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

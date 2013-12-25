@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,7 +65,6 @@ VLOG_DEFINE_THIS_MODULE(dpif_netdev);
 #define NETDEV_RULE_PRIORITY 0x8000
 
 /* Configuration parameters. */
-enum { MAX_PORTS = 256 };       /* Maximum number of ports. */
 enum { MAX_FLOWS = 65536 };     /* Maximum number of flows in flow table. */
 
 /* Enough headroom to add a vlan tag, plus an extra 2 bytes to allow IP
@@ -107,15 +106,17 @@ struct dp_netdev {
     struct ovsthread_counter *n_lost;   /* Number of misses not passed up. */
 
     /* Ports. */
-    struct dp_netdev_port *ports[MAX_PORTS];
-    struct list port_list;
+    struct hmap ports;
     struct seq *port_seq;       /* Incremented whenever a port changes. */
 };
 
+static struct dp_netdev_port *dp_netdev_lookup_port(const struct dp_netdev *,
+                                                    odp_port_t);
+
 /* A port in a netdev-based datapath. */
 struct dp_netdev_port {
-    odp_port_t port_no;         /* Index into dp_netdev's 'ports'. */
-    struct list node;           /* Element in dp_netdev's 'port_list'. */
+    struct hmap_node node;      /* Node in dp_netdev's 'ports'. */
+    odp_port_t port_no;
     struct netdev *netdev;
     struct netdev_saved_flags *sf;
     struct netdev_rx *rx;
@@ -256,8 +257,8 @@ choose_port(struct dp_netdev *dp, const char *name)
         for (p = name; *p != '\0'; p++) {
             if (isdigit((unsigned char) *p)) {
                 port_no = start_no + strtol(p, NULL, 10);
-                if (port_no > 0 && port_no < MAX_PORTS
-                    && !dp->ports[port_no]) {
+                if (port_no > 0 && port_no != odp_to_u32(ODPP_NONE)
+                    && !dp_netdev_lookup_port(dp, u32_to_odp(port_no))) {
                     return u32_to_odp(port_no);
                 }
                 break;
@@ -265,8 +266,8 @@ choose_port(struct dp_netdev *dp, const char *name)
         }
     }
 
-    for (port_no = 1; port_no < MAX_PORTS; port_no++) {
-        if (!dp->ports[port_no]) {
+    for (port_no = 1; port_no <= UINT16_MAX; port_no++) {
+        if (!dp_netdev_lookup_port(dp, u32_to_odp(port_no))) {
             return u32_to_odp(port_no);
         }
     }
@@ -298,7 +299,7 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     dp->n_missed = ovsthread_counter_create();
     dp->n_lost = ovsthread_counter_create();
 
-    list_init(&dp->port_list);
+    hmap_init(&dp->ports);
     dp->port_seq = seq_create();
 
     error = do_add_port(dp, name, "internal", ODPP_LOCAL);
@@ -359,7 +360,7 @@ dp_netdev_free(struct dp_netdev *dp)
     struct dp_netdev_port *port, *next;
 
     dp_netdev_flow_flush(dp);
-    LIST_FOR_EACH_SAFE (port, next, node, &dp->port_list) {
+    HMAP_FOR_EACH_SAFE (port, next, node, &dp->ports) {
         do_del_port(dp, port->port_no);
     }
     ovsthread_counter_destroy(dp->n_hit);
@@ -370,6 +371,7 @@ dp_netdev_free(struct dp_netdev *dp)
     classifier_destroy(&dp->cls);
     hmap_destroy(&dp->flow_table);
     seq_destroy(dp->port_seq);
+    hmap_destroy(&dp->ports);
     free(dp->name);
     free(dp);
 }
@@ -478,8 +480,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
         dp->max_mtu = mtu;
     }
 
-    list_push_back(&dp->port_list, &port->node);
-    dp->ports[odp_to_u32(port_no)] = port;
+    hmap_insert(&dp->ports, &port->node, hash_int(odp_to_u32(port_no), 0));
     seq_change(dp->port_seq);
 
     return 0;
@@ -498,15 +499,8 @@ dpif_netdev_port_add(struct dpif *dpif, struct netdev *netdev,
     ovs_mutex_lock(&dp_netdev_mutex);
     dpif_port = netdev_vport_get_dpif_port(netdev, namebuf, sizeof namebuf);
     if (*port_nop != ODPP_NONE) {
-        uint32_t port_idx = odp_to_u32(*port_nop);
-        if (port_idx >= MAX_PORTS) {
-            error = EFBIG;
-        } else if (dp->ports[port_idx]) {
-            error = EBUSY;
-        } else {
-            error = 0;
-            port_no = *port_nop;
-        }
+        port_no = *port_nop;
+        error = dp_netdev_lookup_port(dp, *port_nop) ? EBUSY : 0;
     } else {
         port_no = choose_port(dp, dpif_port);
         error = port_no == ODPP_NONE ? EFBIG : 0;
@@ -536,7 +530,21 @@ dpif_netdev_port_del(struct dpif *dpif, odp_port_t port_no)
 static bool
 is_valid_port_number(odp_port_t port_no)
 {
-    return odp_to_u32(port_no) < MAX_PORTS;
+    return port_no != ODPP_NONE;
+}
+
+static struct dp_netdev_port *
+dp_netdev_lookup_port(const struct dp_netdev *dp, odp_port_t port_no)
+{
+    struct dp_netdev_port *port;
+
+    HMAP_FOR_EACH_IN_BUCKET (port, node, hash_int(odp_to_u32(port_no), 0),
+                             &dp->ports) {
+        if (port->port_no == port_no) {
+            return port;
+        }
+    }
+    return NULL;
 }
 
 static int
@@ -547,7 +555,7 @@ get_port_by_number(struct dp_netdev *dp,
         *portp = NULL;
         return EINVAL;
     } else {
-        *portp = dp->ports[odp_to_u32(port_no)];
+        *portp = dp_netdev_lookup_port(dp, port_no);
         return *portp ? 0 : ENOENT;
     }
 }
@@ -558,7 +566,7 @@ get_port_by_name(struct dp_netdev *dp,
 {
     struct dp_netdev_port *port;
 
-    LIST_FOR_EACH (port, node, &dp->port_list) {
+    HMAP_FOR_EACH (port, node, &dp->ports) {
         if (!strcmp(netdev_get_name(port->netdev), devname)) {
             *portp = port;
             return 0;
@@ -578,8 +586,7 @@ do_del_port(struct dp_netdev *dp, odp_port_t port_no)
         return error;
     }
 
-    list_remove(&port->node);
-    dp->ports[odp_to_u32(port_no)] = NULL;
+    hmap_remove(&dp->ports, &port->node);
     seq_change(dp->port_seq);
 
     netdev_close(port->netdev);
@@ -672,7 +679,8 @@ dpif_netdev_flow_flush(struct dpif *dpif)
 }
 
 struct dp_netdev_port_state {
-    odp_port_t port_no;
+    uint32_t bucket;
+    uint32_t offset;
     char *name;
 };
 
@@ -689,27 +697,29 @@ dpif_netdev_port_dump_next(const struct dpif *dpif, void *state_,
 {
     struct dp_netdev_port_state *state = state_;
     struct dp_netdev *dp = get_dp_netdev(dpif);
-    uint32_t port_idx;
+    struct hmap_node *node;
+    int retval;
 
     ovs_mutex_lock(&dp_netdev_mutex);
-    for (port_idx = odp_to_u32(state->port_no);
-         port_idx < MAX_PORTS; port_idx++) {
-        struct dp_netdev_port *port = dp->ports[port_idx];
-        if (port) {
-            free(state->name);
-            state->name = xstrdup(netdev_get_name(port->netdev));
-            dpif_port->name = state->name;
-            dpif_port->type = port->type;
-            dpif_port->port_no = port->port_no;
-            state->port_no = u32_to_odp(port_idx + 1);
-            ovs_mutex_unlock(&dp_netdev_mutex);
+    node = hmap_at_position(&dp->ports, &state->bucket, &state->offset);
+    if (node) {
+        struct dp_netdev_port *port;
 
-            return 0;
-        }
+        port = CONTAINER_OF(node, struct dp_netdev_port, node);
+
+        free(state->name);
+        state->name = xstrdup(netdev_get_name(port->netdev));
+        dpif_port->name = state->name;
+        dpif_port->type = port->type;
+        dpif_port->port_no = port->port_no;
+
+        retval = 0;
+    } else {
+        retval = EOF;
     }
     ovs_mutex_unlock(&dp_netdev_mutex);
 
-    return EOF;
+    return retval;
 }
 
 static int
@@ -1291,7 +1301,7 @@ dpif_netdev_run(struct dpif *dpif)
 
     buf_size = DP_NETDEV_HEADROOM + VLAN_ETH_HEADER_LEN + dp->max_mtu;
 
-    LIST_FOR_EACH (port, node, &dp->port_list) {
+    HMAP_FOR_EACH (port, node, &dp->ports) {
         int error;
 
         /* Reset packet contents. Packet data may have been stolen. */
@@ -1332,7 +1342,7 @@ dpif_netdev_wait(struct dpif *dpif)
      *       that is harmless. */
 
     ovs_mutex_lock(&dp_netdev_mutex);
-    LIST_FOR_EACH (port, node, &get_dp_netdev(dpif)->port_list) {
+    HMAP_FOR_EACH (port, node, &get_dp_netdev(dpif)->ports) {
         if (port->rx) {
             netdev_rx_wait(port->rx);
         }
@@ -1344,7 +1354,7 @@ static void
 dp_netdev_output_port(struct dp_netdev *dp, struct ofpbuf *packet,
                       odp_port_t out_port)
 {
-    struct dp_netdev_port *p = dp->ports[odp_to_u32(out_port)];
+    struct dp_netdev_port *p = dp_netdev_lookup_port(dp, out_port);
     if (p) {
         netdev_send(p->netdev, packet);
     }
@@ -1494,7 +1504,7 @@ dpif_dummy_change_port_number(struct unixctl_conn *conn, int argc OVS_UNUSED,
 {
     struct dp_netdev_port *port;
     struct dp_netdev *dp;
-    int port_no;
+    odp_port_t port_no;
 
     dp = shash_find_data(&dp_netdevs, argv[1]);
     if (!dp || !dpif_netdev_class_is_dummy(dp->class)) {
@@ -1507,18 +1517,18 @@ dpif_dummy_change_port_number(struct unixctl_conn *conn, int argc OVS_UNUSED,
         return;
     }
 
-    port_no = atoi(argv[3]);
-    if (port_no <= 0 || port_no >= MAX_PORTS) {
+    port_no = u32_to_odp(atoi(argv[3]));
+    if (!port_no || port_no == ODPP_NONE) {
         unixctl_command_reply_error(conn, "bad port number");
         return;
     }
-    if (dp->ports[port_no]) {
+    if (dp_netdev_lookup_port(dp, port_no)) {
         unixctl_command_reply_error(conn, "port number already in use");
         return;
     }
-    dp->ports[odp_to_u32(port->port_no)] = NULL;
-    dp->ports[port_no] = port;
-    port->port_no = u32_to_odp(port_no);
+    hmap_remove(&dp->ports, &port->node);
+    port->port_no = port_no;
+    hmap_insert(&dp->ports, &port->node, hash_int(odp_to_u32(port_no), 0));
     seq_change(dp->port_seq);
     unixctl_command_reply(conn, NULL);
 }
