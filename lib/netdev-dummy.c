@@ -87,7 +87,6 @@ struct netdev_rx_dummy {
     struct list node;           /* In netdev_dummy's "rxes" list. */
     struct list recv_queue;
     int recv_queue_len;         /* list_size(&recv_queue). */
-    bool listening;
 };
 
 static unixctl_cb_func netdev_dummy_set_admin_state;
