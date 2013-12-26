@@ -87,6 +87,7 @@ struct netdev_rx_dummy {
     struct list node;           /* In netdev_dummy's "rxes" list. */
     struct list recv_queue;
     int recv_queue_len;         /* list_size(&recv_queue). */
+    struct seq *seq;            /* Reports newly queued packets. */
 };
 
 static unixctl_cb_func netdev_dummy_set_admin_state;
@@ -418,6 +419,7 @@ netdev_dummy_rx_construct(struct netdev_rx *rx_)
     list_push_back(&netdev->rxes, &rx->node);
     list_init(&rx->recv_queue);
     rx->recv_queue_len = 0;
+    rx->seq = seq_create();
     ovs_mutex_unlock(&netdev->mutex);
 
     return 0;
@@ -433,6 +435,7 @@ netdev_dummy_rx_destruct(struct netdev_rx *rx_)
     list_remove(&rx->node);
     ofpbuf_list_delete(&rx->recv_queue);
     ovs_mutex_unlock(&netdev->mutex);
+    seq_destroy(rx->seq);
 }
 
 static void
@@ -485,10 +488,13 @@ netdev_dummy_rx_wait(struct netdev_rx *rx_)
 {
     struct netdev_rx_dummy *rx = netdev_rx_dummy_cast(rx_);
     struct netdev_dummy *netdev = netdev_dummy_cast(rx->up.netdev);
+    uint64_t seq = seq_read(rx->seq);
 
     ovs_mutex_lock(&netdev->mutex);
     if (!list_is_empty(&rx->recv_queue)) {
         poll_immediate_wake();
+    } else {
+        seq_wait(rx->seq, seq);
     }
     ovs_mutex_unlock(&netdev->mutex);
 }
@@ -503,6 +509,8 @@ netdev_dummy_rx_drain(struct netdev_rx *rx_)
     ofpbuf_list_delete(&rx->recv_queue);
     rx->recv_queue_len = 0;
     ovs_mutex_unlock(&netdev->mutex);
+
+    seq_change(rx->seq);
 
     return 0;
 }
@@ -795,6 +803,7 @@ netdev_dummy_queue_packet__(struct netdev_rx_dummy *rx, struct ofpbuf *packet)
 {
     list_push_back(&rx->recv_queue, &packet->list_node);
     rx->recv_queue_len++;
+    seq_change(rx->seq);
 }
 
 static void
