@@ -2527,26 +2527,16 @@ void
 ofproto_rule_ref(struct rule *rule)
 {
     if (rule) {
-        unsigned int orig;
-
-        atomic_add(&rule->ref_count, 1, &orig);
-        ovs_assert(orig != 0);
+        ovs_refcount_ref(&rule->ref_count);
     }
 }
 
 void
 ofproto_rule_unref(struct rule *rule)
 {
-    if (rule) {
-        unsigned int orig;
-
-        atomic_sub(&rule->ref_count, 1, &orig);
-        if (orig == 1) {
-            rule->ofproto->ofproto_class->rule_destruct(rule);
-            ofproto_rule_destroy__(rule);
-        } else {
-            ovs_assert(orig != 0);
-        }
+    if (rule && ovs_refcount_unref(&rule->ref_count) == 1) {
+        rule->ofproto->ofproto_class->rule_destruct(rule);
+        ofproto_rule_destroy__(rule);
     }
 }
 
@@ -2578,7 +2568,7 @@ ofproto_rule_destroy__(struct rule *rule)
     cls_rule_destroy(CONST_CAST(struct cls_rule *, &rule->cr));
     rule_actions_unref(rule->actions);
     ovs_mutex_destroy(&rule->mutex);
-    atomic_destroy(&rule->ref_count);
+    ovs_refcount_destroy(&rule->ref_count);
     rule->ofproto->ofproto_class->rule_dealloc(rule);
 }
 
@@ -2594,7 +2584,7 @@ rule_actions_create(const struct ofproto *ofproto,
     struct rule_actions *actions;
 
     actions = xmalloc(sizeof *actions);
-    atomic_init(&actions->ref_count, 1);
+    ovs_refcount_init(&actions->ref_count);
     actions->ofpacts = xmemdup(ofpacts, ofpacts_len);
     actions->ofpacts_len = ofpacts_len;
     actions->provider_meter_id
@@ -2609,10 +2599,7 @@ void
 rule_actions_ref(struct rule_actions *actions)
 {
     if (actions) {
-        unsigned int orig;
-
-        atomic_add(&actions->ref_count, 1, &orig);
-        ovs_assert(orig != 0);
+        ovs_refcount_ref(&actions->ref_count);
     }
 }
 
@@ -2621,17 +2608,10 @@ rule_actions_ref(struct rule_actions *actions)
 void
 rule_actions_unref(struct rule_actions *actions)
 {
-    if (actions) {
-        unsigned int orig;
-
-        atomic_sub(&actions->ref_count, 1, &orig);
-        if (orig == 1) {
-            atomic_destroy(&actions->ref_count);
-            free(actions->ofpacts);
-            free(actions);
-        } else {
-            ovs_assert(orig != 0);
-        }
+    if (actions && ovs_refcount_unref(&actions->ref_count) == 1) {
+        ovs_refcount_destroy(&actions->ref_count);
+        free(actions->ofpacts);
+        free(actions);
     }
 }
 
@@ -4032,7 +4012,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     /* Initialize base state. */
     *CONST_CAST(struct ofproto **, &rule->ofproto) = ofproto;
     cls_rule_move(CONST_CAST(struct cls_rule *, &rule->cr), &cr);
-    atomic_init(&rule->ref_count, 1);
+    ovs_refcount_init(&rule->ref_count);
     rule->pending = NULL;
     rule->flow_cookie = fm->new_cookie;
     rule->created = rule->modified = rule->used = time_msec();

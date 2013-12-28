@@ -280,4 +280,65 @@
     #endif
 #undef IN_OVS_ATOMIC_H
 
+/* Reference count. */
+struct ovs_refcount {
+    atomic_uint count;
+};
+
+/* Initializes 'refcount'.  The reference count is initially 1. */
+static inline void
+ovs_refcount_init(struct ovs_refcount *refcount)
+{
+    atomic_init(&refcount->count, 1);
+}
+
+/* Destroys 'refcount'. */
+static inline void
+ovs_refcount_destroy(struct ovs_refcount *refcount)
+{
+    atomic_destroy(&refcount->count);
+}
+
+/* Increments 'refcount'. */
+static inline void
+ovs_refcount_ref(struct ovs_refcount *refcount)
+{
+    unsigned int old_refcount;
+
+    atomic_add(&refcount->count, 1, &old_refcount);
+    ovs_assert(old_refcount > 0);
+}
+
+/* Decrements 'refcount' and returns the previous reference count.  Often used
+ * in this form:
+ *
+ * if (ovs_refcount_unref(&object->ref_cnt) == 1) {
+ *     // ...uninitialize object...
+ *     free(object);
+ * }
+ */
+static inline unsigned int
+ovs_refcount_unref(struct ovs_refcount *refcount)
+{
+    unsigned int old_refcount;
+
+    atomic_sub(&refcount->count, 1, &old_refcount);
+    ovs_assert(old_refcount > 0);
+    return old_refcount;
+}
+
+/* Reads and returns 'ref_count_''s current reference count.
+ *
+ * Rarely useful. */
+static inline unsigned int
+ovs_refcount_read(const struct ovs_refcount *refcount_)
+{
+    struct ovs_refcount *refcount
+        = CONST_CAST(struct ovs_refcount *, refcount_);
+    unsigned int count;
+
+    atomic_read(&refcount->count, &count);
+    return count;
+}
+
 #endif /* ovs-atomic.h */

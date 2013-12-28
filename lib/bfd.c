@@ -193,7 +193,7 @@ struct bfd {
     int forwarding_override;      /* Manual override of 'forwarding' status. */
 
     atomic_bool check_tnl_key;    /* Verify tunnel key of inbound packets? */
-    atomic_int ref_cnt;
+    struct ovs_refcount ref_cnt;
 
     /* When forward_if_rx is true, bfd_forwarding() will return
      * true as long as there are incoming packets received.
@@ -341,7 +341,7 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
         bfd->diag = DIAG_NONE;
         bfd->min_tx = 1000;
         bfd->mult = 3;
-        atomic_init(&bfd->ref_cnt, 1);
+        ovs_refcount_init(&bfd->ref_cnt);
         bfd->netdev = netdev_ref(netdev);
         bfd->rx_packets = bfd_rx_packets(bfd);
         bfd->in_decay = false;
@@ -440,9 +440,7 @@ bfd_ref(const struct bfd *bfd_)
 {
     struct bfd *bfd = CONST_CAST(struct bfd *, bfd_);
     if (bfd) {
-        int orig;
-        atomic_add(&bfd->ref_cnt, 1, &orig);
-        ovs_assert(orig > 0);
+        ovs_refcount_ref(&bfd->ref_cnt);
     }
     return bfd;
 }
@@ -450,20 +448,14 @@ bfd_ref(const struct bfd *bfd_)
 void
 bfd_unref(struct bfd *bfd) OVS_EXCLUDED(mutex)
 {
-    if (bfd) {
-        int orig;
-
-        atomic_sub(&bfd->ref_cnt, 1, &orig);
-        ovs_assert(orig > 0);
-        if (orig == 1) {
-            ovs_mutex_lock(&mutex);
-            hmap_remove(all_bfds, &bfd->node);
-            netdev_close(bfd->netdev);
-            free(bfd->name);
-            atomic_destroy(&bfd->ref_cnt);
-            free(bfd);
-            ovs_mutex_unlock(&mutex);
-        }
+    if (bfd && ovs_refcount_unref(&bfd->ref_cnt) == 1) {
+        ovs_mutex_lock(&mutex);
+        hmap_remove(all_bfds, &bfd->node);
+        netdev_close(bfd->netdev);
+        ovs_refcount_destroy(&bfd->ref_cnt);
+        free(bfd->name);
+        free(bfd);
+        ovs_mutex_unlock(&mutex);
     }
 }
 

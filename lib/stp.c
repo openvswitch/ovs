@@ -143,7 +143,7 @@ struct stp {
     void (*send_bpdu)(struct ofpbuf *bpdu, int port_no, void *aux);
     void *aux;
 
-    atomic_int ref_cnt;
+    struct ovs_refcount ref_cnt;
 };
 
 static struct ovs_mutex mutex;
@@ -306,7 +306,7 @@ stp_create(const char *name, stp_identifier bridge_id,
         p->path_cost = 19;      /* Recommended default for 100 Mb/s link. */
         stp_initialize_port(p, STP_DISABLED);
     }
-    atomic_init(&stp->ref_cnt, 1);
+    ovs_refcount_init(&stp->ref_cnt);
 
     list_push_back(all_stps, &stp->node);
     ovs_mutex_unlock(&mutex);
@@ -318,9 +318,7 @@ stp_ref(const struct stp *stp_)
 {
     struct stp *stp = CONST_CAST(struct stp *, stp_);
     if (stp) {
-        int orig;
-        atomic_add(&stp->ref_cnt, 1, &orig);
-        ovs_assert(orig > 0);
+        ovs_refcount_ref(&stp->ref_cnt);
     }
     return stp;
 }
@@ -329,20 +327,12 @@ stp_ref(const struct stp *stp_)
 void
 stp_unref(struct stp *stp)
 {
-    int orig;
-
-    if (!stp) {
-        return;
-    }
-
-    atomic_sub(&stp->ref_cnt, 1, &orig);
-    ovs_assert(orig > 0);
-    if (orig == 1) {
+    if (stp && ovs_refcount_unref(&stp->ref_cnt) == 1) {
         ovs_mutex_lock(&mutex);
         list_remove(&stp->node);
         ovs_mutex_unlock(&mutex);
         free(stp->name);
-        atomic_destroy(&stp->ref_cnt);
+        ovs_refcount_destroy(&stp->ref_cnt);
         free(stp);
     }
 }

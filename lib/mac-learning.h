@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,7 +80,7 @@ struct mac_learning {
     unsigned long *flood_vlans; /* Bitmap of learning disabled VLANs. */
     unsigned int idle_time;     /* Max age before deleting an entry. */
     size_t max_entries;         /* Max number of learned MACs. */
-    atomic_int ref_cnt;
+    struct ovs_refcount ref_cnt;
     struct ovs_rwlock rwlock;
     bool need_revalidate;
 };

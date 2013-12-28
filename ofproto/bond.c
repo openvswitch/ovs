@@ -103,7 +103,7 @@ struct bond {
     long long int next_fake_iface_update; /* LLONG_MAX if disabled. */
     bool lacp_fallback_ab; /* Fallback to active-backup on LACP failure. */
 
-    atomic_int ref_cnt;
+    struct ovs_refcount ref_cnt;
 };
 
 static struct ovs_rwlock rwlock = OVS_RWLOCK_INITIALIZER;
@@ -181,7 +181,7 @@ bond_create(const struct bond_settings *s)
     bond = xzalloc(sizeof *bond);
     hmap_init(&bond->slaves);
     bond->next_fake_iface_update = LLONG_MAX;
-    atomic_init(&bond->ref_cnt, 1);
+    ovs_refcount_init(&bond->ref_cnt);
 
     bond_reconfigure(bond, s);
     return bond;
@@ -193,9 +193,7 @@ bond_ref(const struct bond *bond_)
     struct bond *bond = CONST_CAST(struct bond *, bond_);
 
     if (bond) {
-        int orig;
-        atomic_add(&bond->ref_cnt, 1, &orig);
-        ovs_assert(orig > 0);
+        ovs_refcount_ref(&bond->ref_cnt);
     }
     return bond;
 }
@@ -205,15 +203,8 @@ void
 bond_unref(struct bond *bond)
 {
     struct bond_slave *slave, *next_slave;
-    int orig;
 
-    if (!bond) {
-        return;
-    }
-
-    atomic_sub(&bond->ref_cnt, 1, &orig);
-    ovs_assert(orig > 0);
-    if (orig != 1) {
+    if (!bond || ovs_refcount_unref(&bond->ref_cnt) != 1) {
         return;
     }
 
@@ -231,7 +222,7 @@ bond_unref(struct bond *bond)
 
     free(bond->hash);
     free(bond->name);
-    atomic_destroy(&bond->ref_cnt);
+    ovs_refcount_destroy(&bond->ref_cnt);
     free(bond);
 }
 

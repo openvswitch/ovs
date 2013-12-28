@@ -346,7 +346,7 @@ struct rule {
      * The classifier owns one reference.
      * Any thread trying to keep a rule from being freed should hold its own
      * reference. */
-    atomic_uint ref_count;
+    struct ovs_refcount ref_count;
 
     /* Operation now in progress, if nonnull. */
     struct ofoperation *pending OVS_GUARDED_BY(ofproto_mutex);
@@ -426,7 +426,7 @@ rule_is_table_miss(const struct rule *rule)
  * 'rule' is the rule for which 'rule->actions == actions') or that owns a
  * reference to 'actions->ref_count' (or both). */
 struct rule_actions {
-    atomic_uint ref_count;
+    struct ovs_refcount ref_count;
 
     /* These members are immutable: they do not change during the struct's
      * lifetime.  */

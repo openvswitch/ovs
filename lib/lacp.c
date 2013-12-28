@@ -106,7 +106,7 @@ struct lacp {
     bool update;             /* True if lacp_update() needs to be called. */
     bool fallback_ab; /* True if fallback to active-backup on LACP failure. */
 
-    atomic_int ref_cnt;
+    struct ovs_refcount ref_cnt;
 };
 
 struct slave {
@@ -216,7 +216,7 @@ lacp_create(void) OVS_EXCLUDED(mutex)
 
     lacp = xzalloc(sizeof *lacp);
     hmap_init(&lacp->slaves);
-    atomic_init(&lacp->ref_cnt, 1);
+    ovs_refcount_init(&lacp->ref_cnt);
 
     ovs_mutex_lock(&mutex);
     list_push_back(all_lacps, &lacp->node);
@@ -229,9 +229,7 @@ lacp_ref(const struct lacp *lacp_)
 {
     struct lacp *lacp = CONST_CAST(struct lacp *, lacp_);
     if (lacp) {
-        int orig;
-        atomic_add(&lacp->ref_cnt, 1, &orig);
-        ovs_assert(orig > 0);
+        ovs_refcount_ref(&lacp->ref_cnt);
     }
     return lacp;
 }
@@ -240,15 +238,7 @@ lacp_ref(const struct lacp *lacp_)
 void
 lacp_unref(struct lacp *lacp) OVS_EXCLUDED(mutex)
 {
-    int orig;
-
-    if (!lacp) {
-        return;
-    }
-
-    atomic_sub(&lacp->ref_cnt, 1, &orig);
-    ovs_assert(orig > 0);
-    if (orig == 1) {
+    if (lacp && ovs_refcount_unref(&lacp->ref_cnt) == 1) {
         struct slave *slave, *next;
 
         ovs_mutex_lock(&mutex);
@@ -259,7 +249,7 @@ lacp_unref(struct lacp *lacp) OVS_EXCLUDED(mutex)
         hmap_destroy(&lacp->slaves);
         list_remove(&lacp->node);
         free(lacp->name);
-        atomic_destroy(&lacp->ref_cnt);
+        ovs_refcount_destroy(&lacp->ref_cnt);
         free(lacp);
         ovs_mutex_unlock(&mutex);
     }

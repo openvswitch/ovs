@@ -53,7 +53,7 @@ struct netflow {
 
     struct hmap flows;            /* Contains 'netflow_flows'. */
 
-    atomic_int ref_cnt;
+    struct ovs_refcount ref_cnt;
 };
 
 struct netflow_flow {
@@ -405,7 +405,7 @@ netflow_create(void)
     nf->add_id_to_iface = false;
     nf->netflow_cnt = 0;
     hmap_init(&nf->flows);
-    atomic_init(&nf->ref_cnt, 1);
+    ovs_refcount_init(&nf->ref_cnt);
     ofpbuf_init(&nf->packet, 1500);
     atomic_add(&netflow_count, 1, &junk);
     return nf;
@@ -416,9 +416,7 @@ netflow_ref(const struct netflow *nf_)
 {
     struct netflow *nf = CONST_CAST(struct netflow *, nf_);
     if (nf) {
-        int orig;
-        atomic_add(&nf->ref_cnt, 1, &orig);
-        ovs_assert(orig > 0);
+        ovs_refcount_ref(&nf->ref_cnt);
     }
     return nf;
 }
@@ -426,19 +424,13 @@ netflow_ref(const struct netflow *nf_)
 void
 netflow_unref(struct netflow *nf)
 {
-    int orig;
+    if (nf && ovs_refcount_unref(&nf->ref_cnt) == 1) {
+        int orig;
 
-    if (!nf) {
-        return;
-    }
-
-    atomic_sub(&nf->ref_cnt, 1, &orig);
-    ovs_assert(orig > 0);
-    if (orig == 1) {
         atomic_sub(&netflow_count, 1, &orig);
         collectors_destroy(nf->collectors);
         ofpbuf_uninit(&nf->packet);
-        atomic_destroy(&nf->ref_cnt);
+        ovs_refcount_destroy(&nf->ref_cnt);
         free(nf);
     }
 }

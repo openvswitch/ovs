@@ -70,7 +70,7 @@ struct dpif_ipfix_flow_exporter_map_node {
 struct dpif_ipfix {
     struct dpif_ipfix_bridge_exporter bridge_exporter;
     struct hmap flow_exporter_map;  /* dpif_ipfix_flow_exporter_map_node. */
-    atomic_int ref_cnt;
+    struct ovs_refcount ref_cnt;
 };
 
 #define IPFIX_VERSION 0x000a
@@ -639,7 +639,7 @@ dpif_ipfix_create(void)
     di = xzalloc(sizeof *di);
     dpif_ipfix_bridge_exporter_init(&di->bridge_exporter);
     hmap_init(&di->flow_exporter_map);
-    atomic_init(&di->ref_cnt, 1);
+    ovs_refcount_init(&di->ref_cnt);
     return di;
 }
 
@@ -648,9 +648,7 @@ dpif_ipfix_ref(const struct dpif_ipfix *di_)
 {
     struct dpif_ipfix *di = CONST_CAST(struct dpif_ipfix *, di_);
     if (di) {
-        int orig;
-        atomic_add(&di->ref_cnt, 1, &orig);
-        ovs_assert(orig > 0);
+        ovs_refcount_ref(&di->ref_cnt);
     }
     return di;
 }
@@ -683,20 +681,12 @@ dpif_ipfix_clear(struct dpif_ipfix *di) OVS_REQUIRES(mutex)
 void
 dpif_ipfix_unref(struct dpif_ipfix *di) OVS_EXCLUDED(mutex)
 {
-    int orig;
-
-    if (!di) {
-        return;
-    }
-
-    atomic_sub(&di->ref_cnt, 1, &orig);
-    ovs_assert(orig > 0);
-    if (orig == 1) {
+    if (di && ovs_refcount_unref(&di->ref_cnt) == 1) {
         ovs_mutex_lock(&mutex);
         dpif_ipfix_clear(di);
         dpif_ipfix_bridge_exporter_destroy(&di->bridge_exporter);
         hmap_destroy(&di->flow_exporter_map);
-        atomic_destroy(&di->ref_cnt);
+        ovs_refcount_destroy(&di->ref_cnt);
         free(di);
         ovs_mutex_unlock(&mutex);
     }

@@ -130,7 +130,7 @@ struct cfm {
 
     atomic_bool check_tnl_key; /* Verify the tunnel key of inbound packets? */
     atomic_bool extended;      /* Extended mode. */
-    atomic_int ref_cnt;
+    struct ovs_refcount ref_cnt;
 
     uint64_t flap_count;       /* Count the flaps since boot. */
 };
@@ -337,7 +337,7 @@ cfm_create(const struct netdev *netdev) OVS_EXCLUDED(mutex)
     cfm->flap_count = 0;
     atomic_init(&cfm->extended, false);
     atomic_init(&cfm->check_tnl_key, false);
-    atomic_init(&cfm->ref_cnt, 1);
+    ovs_refcount_init(&cfm->ref_cnt);
 
     ovs_mutex_lock(&mutex);
     cfm_generate_maid(cfm);
@@ -350,15 +350,12 @@ void
 cfm_unref(struct cfm *cfm) OVS_EXCLUDED(mutex)
 {
     struct remote_mp *rmp, *rmp_next;
-    int orig;
 
     if (!cfm) {
         return;
     }
 
-    atomic_sub(&cfm->ref_cnt, 1, &orig);
-    ovs_assert(orig > 0);
-    if (orig != 1) {
+    if (ovs_refcount_unref(&cfm->ref_cnt) != 1) {
         return;
     }
 
@@ -377,7 +374,7 @@ cfm_unref(struct cfm *cfm) OVS_EXCLUDED(mutex)
 
     atomic_destroy(&cfm->extended);
     atomic_destroy(&cfm->check_tnl_key);
-    atomic_destroy(&cfm->ref_cnt);
+    ovs_refcount_destroy(&cfm->ref_cnt);
 
     free(cfm);
 }
@@ -387,9 +384,7 @@ cfm_ref(const struct cfm *cfm_)
 {
     struct cfm *cfm = CONST_CAST(struct cfm *, cfm_);
     if (cfm) {
-        int orig;
-        atomic_add(&cfm->ref_cnt, 1, &orig);
-        ovs_assert(orig > 0);
+        ovs_refcount_ref(&cfm->ref_cnt);
     }
     return cfm;
 }

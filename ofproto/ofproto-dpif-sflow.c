@@ -59,7 +59,7 @@ struct dpif_sflow {
     size_t n_flood, n_all;
     struct hmap ports;          /* Contains "struct dpif_sflow_port"s. */
     uint32_t probability;
-    atomic_int ref_cnt;
+    struct ovs_refcount ref_cnt;
 };
 
 static void dpif_sflow_del_port__(struct dpif_sflow *,
@@ -327,7 +327,7 @@ dpif_sflow_create(void)
     hmap_init(&ds->ports);
     ds->probability = 0;
     route_table_register();
-    atomic_init(&ds->ref_cnt, 1);
+    ovs_refcount_init(&ds->ref_cnt);
 
     return ds;
 }
@@ -337,9 +337,7 @@ dpif_sflow_ref(const struct dpif_sflow *ds_)
 {
     struct dpif_sflow *ds = CONST_CAST(struct dpif_sflow *, ds_);
     if (ds) {
-        int orig;
-        atomic_add(&ds->ref_cnt, 1, &orig);
-        ovs_assert(orig > 0);
+        ovs_refcount_ref(&ds->ref_cnt);
     }
     return ds;
 }
@@ -360,15 +358,7 @@ dpif_sflow_get_probability(const struct dpif_sflow *ds) OVS_EXCLUDED(mutex)
 void
 dpif_sflow_unref(struct dpif_sflow *ds) OVS_EXCLUDED(mutex)
 {
-    int orig;
-
-    if (!ds) {
-        return;
-    }
-
-    atomic_sub(&ds->ref_cnt, 1, &orig);
-    ovs_assert(orig > 0);
-    if (orig == 1) {
+    if (ds && ovs_refcount_unref(&ds->ref_cnt) == 1) {
         struct dpif_sflow_port *dsp, *next;
 
         route_table_unregister();
@@ -377,7 +367,7 @@ dpif_sflow_unref(struct dpif_sflow *ds) OVS_EXCLUDED(mutex)
             dpif_sflow_del_port__(ds, dsp);
         }
         hmap_destroy(&ds->ports);
-        atomic_destroy(&ds->ref_cnt);
+        ovs_refcount_destroy(&ds->ref_cnt);
         free(ds);
     }
 }
