@@ -91,8 +91,8 @@ struct dp_netdev_queue {
 struct dp_netdev {
     const struct dpif_class *class;
     char *name;
-    int open_cnt;
-    bool destroyed;
+    struct ovs_refcount ref_cnt;
+    atomic_flag destroyed;
 
     struct dp_netdev_queue queues[N_QUEUES];
     struct classifier cls;      /* Classifier. */
@@ -223,7 +223,7 @@ create_dpif_netdev(struct dp_netdev *dp)
     uint16_t netflow_id = hash_string(dp->name, 0);
     struct dpif_netdev *dpif;
 
-    dp->open_cnt++;
+    ovs_refcount_ref(&dp->ref_cnt);
 
     dpif = xmalloc(sizeof *dpif);
     dpif_init(&dpif->dpif, dp->class, dp->name, netflow_id >> 8, netflow_id);
@@ -285,7 +285,8 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     dp = xzalloc(sizeof *dp);
     dp->class = class;
     dp->name = xstrdup(name);
-    dp->open_cnt = 0;
+    ovs_refcount_init(&dp->ref_cnt);
+    atomic_flag_init(&dp->destroyed);
     for (i = 0; i < N_QUEUES; i++) {
         dp->queues[i].head = dp->queues[i].tail = 0;
     }
@@ -370,6 +371,8 @@ dp_netdev_free(struct dp_netdev *dp)
     hmap_destroy(&dp->flow_table);
     seq_destroy(dp->port_seq);
     hmap_destroy(&dp->ports);
+    atomic_flag_destroy(&dp->destroyed);
+    ovs_refcount_destroy(&dp->ref_cnt);
     free(dp->name);
     free(dp);
 }
@@ -381,8 +384,7 @@ dpif_netdev_close(struct dpif *dpif)
 
     ovs_mutex_lock(&dp_netdev_mutex);
 
-    ovs_assert(dp->open_cnt > 0);
-    if (--dp->open_cnt == 0 && dp->destroyed) {
+    if (ovs_refcount_unref(&dp->ref_cnt) == 1) {
         shash_find_and_delete(&dp_netdevs, dp->name);
         dp_netdev_free(dp);
     }
@@ -396,9 +398,12 @@ dpif_netdev_destroy(struct dpif *dpif)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
 
-    ovs_mutex_lock(&dp_netdev_mutex);
-    dp->destroyed = true;
-    ovs_mutex_unlock(&dp_netdev_mutex);
+    if (!atomic_flag_test_and_set(&dp->destroyed)) {
+        if (ovs_refcount_unref(&dp->ref_cnt) == 1) {
+            /* Can't happen: 'dpif' still owns a reference to 'dp'. */
+            OVS_NOT_REACHED();
+        }
+    }
 
     return 0;
 }
