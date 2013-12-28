@@ -625,17 +625,11 @@ udpif_upcall_handler(void *arg)
     handler->name = xasprintf("handler_%u", ovsthread_id_self());
     set_subprogram_name("%s", handler->name);
 
-    for (;;) {
+    while (!latch_is_set(&handler->udpif->exit_latch)) {
         struct list misses = LIST_INITIALIZER(&misses);
         size_t i;
 
         ovs_mutex_lock(&handler->mutex);
-
-        if (latch_is_set(&handler->udpif->exit_latch)) {
-            ovs_mutex_unlock(&handler->mutex);
-            return NULL;
-        }
-
         if (!handler->n_upcalls) {
             ovs_mutex_cond_wait(&handler->wake_cond, &handler->mutex);
         }
@@ -654,6 +648,8 @@ udpif_upcall_handler(void *arg)
 
         coverage_clear();
     }
+
+    return NULL;
 }
 
 static void *
