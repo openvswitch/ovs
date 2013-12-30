@@ -884,9 +884,9 @@ bridge_configure_flow_miss_model(const char *opt)
     enum ofproto_flow_miss_model model = OFPROTO_HANDLE_MISS_AUTO;
 
     if (opt) {
-        if (strcmp(opt, "with-facets")) {
+        if (!strcmp(opt, "with-facets")) {
             model = OFPROTO_HANDLE_MISS_WITH_FACETS;
-        } else if (strcmp(opt, "without-facets")) {
+        } else if (!strcmp(opt, "without-facets")) {
             model = OFPROTO_HANDLE_MISS_WITHOUT_FACETS;
         }
     }
