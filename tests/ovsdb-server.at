@@ -483,7 +483,7 @@ AT_KEYWORDS([ovsdb server positive ssl $5])
 AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
 PKIDIR=$abs_top_builddir/tests
 AT_SKIP_IF([expr "$PKIDIR" : ".*[ 	'\"
-\\]"])
+\\]"])
 AT_DATA([schema],
   [[{"name": "mydb",
      "tables": {
