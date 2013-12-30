@@ -1345,6 +1345,16 @@ dpif_netdev_wait(struct dpif *dpif)
     ovs_mutex_unlock(&dp_netdev_mutex);
 }
 
+static void
+dp_netdev_output_port(struct dp_netdev *dp, struct ofpbuf *packet,
+                      odp_port_t out_port)
+{
+    struct dp_netdev_port *p = dp->ports[odp_to_u32(out_port)];
+    if (p) {
+        netdev_send(p->netdev, packet);
+    }
+}
+
 static int
 dp_netdev_output_userspace(struct dp_netdev *dp, struct ofpbuf *packet,
                            int queue_no, const struct flow *flow,
@@ -1397,35 +1407,42 @@ struct dp_netdev_execute_aux {
 };
 
 static void
-dp_netdev_action_output(void *aux_, struct ofpbuf *packet,
-                        const struct flow *flow OVS_UNUSED,
-                        odp_port_t out_port)
+dp_execute_cb(void *aux_, struct ofpbuf *packet, struct flow *flow OVS_UNUSED,
+              const struct nlattr *a, bool may_steal)
 {
     struct dp_netdev_execute_aux *aux = aux_;
-    struct dp_netdev_port *p = aux->dp->ports[odp_to_u32(out_port)];
-    if (p) {
-        netdev_send(p->netdev, packet);
+    int type = nl_attr_type(a);
+
+    switch ((enum ovs_action_attr)type) {
+    case OVS_ACTION_ATTR_OUTPUT:
+        dp_netdev_output_port(aux->dp, packet, u32_to_odp(nl_attr_get_u32(a)));
+        break;
+
+    case OVS_ACTION_ATTR_USERSPACE: {
+        const struct nlattr *userdata;
+
+        userdata = nl_attr_find_nested(a, OVS_USERSPACE_ATTR_USERDATA);
+
+        /* Make a copy if we are not allowed to steal the packet's data. */
+        if (!may_steal) {
+            packet = ofpbuf_clone_with_headroom(packet, DP_NETDEV_HEADROOM);
+        }
+        dp_netdev_output_userspace(aux->dp, packet, DPIF_UC_ACTION, aux->key,
+                                   userdata);
+        if (!may_steal) {
+            ofpbuf_uninit(packet);
+        }
+        break;
     }
-}
-
-static void
-dp_netdev_action_userspace(void *aux_, struct ofpbuf *packet,
-                           const struct flow *flow OVS_UNUSED,
-                           const struct nlattr *a, bool may_steal)
-{
-    struct dp_netdev_execute_aux *aux = aux_;
-    const struct nlattr *userdata;
-
-    userdata = nl_attr_find_nested(a, OVS_USERSPACE_ATTR_USERDATA);
-
-    /* Make a copy if we are not allowed to steal the packet's data. */
-    if (!may_steal) {
-        packet = ofpbuf_clone_with_headroom(packet, DP_NETDEV_HEADROOM);
-    }
-    dp_netdev_output_userspace(aux->dp, packet, DPIF_UC_ACTION, aux->key,
-                               userdata);
-    if (!may_steal) {
-        ofpbuf_uninit(packet);
+    case OVS_ACTION_ATTR_PUSH_VLAN:
+    case OVS_ACTION_ATTR_POP_VLAN:
+    case OVS_ACTION_ATTR_PUSH_MPLS:
+    case OVS_ACTION_ATTR_POP_MPLS:
+    case OVS_ACTION_ATTR_SET:
+    case OVS_ACTION_ATTR_SAMPLE:
+    case OVS_ACTION_ATTR_UNSPEC:
+    case __OVS_ACTION_ATTR_MAX:
+        OVS_NOT_REACHED();
     }
 }
 
@@ -1438,7 +1455,7 @@ dp_netdev_execute_actions(struct dp_netdev *dp, const struct flow *key,
     struct flow md = *key;   /* Packet metadata, may be modified by actions. */
 
     odp_execute_actions(&aux, packet, &md, actions, actions_len,
-                        dp_netdev_action_output, dp_netdev_action_userspace);
+                        dp_execute_cb);
 }
 
 const struct dpif_class dpif_netdev_class = {

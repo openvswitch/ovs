@@ -1091,28 +1091,29 @@ dpif_execute_helper_execute__(void *aux_, struct ofpbuf *packet,
     }
 }
 
+/* This is called for actions that need the context of the datapath to be
+ * meaningful. */
 static void
-dpif_execute_helper_output_cb(void *aux, struct ofpbuf *packet,
-                              const struct flow *flow, odp_port_t out_port)
+dpif_execute_helper_cb(void *aux, struct ofpbuf *packet, struct flow *flow,
+                       const struct nlattr *action, bool may_steal OVS_UNUSED)
 {
-    uint64_t actions_stub[DIV_ROUND_UP(NL_A_U32_SIZE, 8)];
-    struct ofpbuf actions;
-
-    ofpbuf_use_stack(&actions, actions_stub, sizeof actions_stub);
-    nl_msg_put_u32(&actions, OVS_ACTION_ATTR_OUTPUT, odp_to_u32(out_port));
-
-    dpif_execute_helper_execute__(aux, packet, flow,
-                                  actions.data, actions.size);
-}
-
-static void
-dpif_execute_helper_userspace_cb(void *aux, struct ofpbuf *packet,
-                                 const struct flow *flow,
-                                 const struct nlattr *action,
-                                 bool may_steal OVS_UNUSED)
-{
-    dpif_execute_helper_execute__(aux, packet, flow,
-                                  action, NLA_ALIGN(action->nla_len));
+    int type = nl_attr_type(action);
+    switch ((enum ovs_action_attr)type) {
+    case OVS_ACTION_ATTR_OUTPUT:
+    case OVS_ACTION_ATTR_USERSPACE:
+        dpif_execute_helper_execute__(aux, packet, flow,
+                                      action, NLA_ALIGN(action->nla_len));
+        break;
+    case OVS_ACTION_ATTR_PUSH_VLAN:
+    case OVS_ACTION_ATTR_POP_VLAN:
+    case OVS_ACTION_ATTR_PUSH_MPLS:
+    case OVS_ACTION_ATTR_POP_MPLS:
+    case OVS_ACTION_ATTR_SET:
+    case OVS_ACTION_ATTR_SAMPLE:
+    case OVS_ACTION_ATTR_UNSPEC:
+    case __OVS_ACTION_ATTR_MAX:
+        OVS_NOT_REACHED();
+    }
 }
 
 /* Executes 'execute' by performing most of the actions in userspace and
@@ -1139,8 +1140,7 @@ dpif_execute_with_help(struct dpif *dpif, const struct dpif_execute *execute)
 
     odp_execute_actions(&aux, execute->packet, &flow,
                         execute->actions, execute->actions_len,
-                        dpif_execute_helper_output_cb,
-                        dpif_execute_helper_userspace_cb);
+                        dpif_execute_helper_cb);
     return aux.error;
 }
 

@@ -27,14 +27,16 @@ struct flow;
 struct nlattr;
 struct ofpbuf;
 
-typedef void (*odp_output_cb)(void *dp, struct ofpbuf *packet,
-                              const struct flow *key, odp_port_t out_port);
-typedef void (*odp_userspace_cb)(void *dp, struct ofpbuf *packet,
-                                 const struct flow *key,
-                                 const struct nlattr *action, bool may_steal);
+typedef void (*odp_execute_cb)(void *dp, struct ofpbuf *packet,
+                               struct flow *metadata,
+                               const struct nlattr *action, bool may_steal);
 
+/* Actions that need to be executed in the context of a datapath are handed
+ * to 'dp_execute_action', if non-NULL.  Currently this is called only for
+ * actions OVS_ACTION_ATTR_OUTPUT and OVS_ACTION_ATTR_USERSPACE so
+ * 'dp_execute_action' needs to handle only these. */
 void
-odp_execute_actions(void *dp, struct ofpbuf *packet, struct flow *key,
+odp_execute_actions(void *dp, struct ofpbuf *packet, struct flow *metadata,
                     const struct nlattr *actions, size_t actions_len,
-                    odp_output_cb output, odp_userspace_cb userspace);
+                    odp_execute_cb dp_execute_action);
 #endif
