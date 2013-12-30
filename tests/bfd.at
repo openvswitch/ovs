@@ -101,9 +101,9 @@ OVS_VSWITCHD_START(
        set bridge br-sw datapath-type=dummy \
        other-config:hwaddr=aa:55:aa:58:00:00 -- \
     add-port br-sw p1-sw -- set Interface p1-sw type=patch \
-       options:peer=p1 -- \
+       options:peer=p1 ofport_request=2 -- \
     add-port br-sw p0-sw -- set Interface p0-sw type=patch \
-       options:peer=p0 -- \
+       options:peer=p0 ofport_request=1 -- \
     add-port br-bfd1 p1 -- set Interface p1 type=patch \
        options:peer=p1-sw bfd:enable=true -- \
     add-port br-bfd0 p0 -- set Interface p0 type=patch \
