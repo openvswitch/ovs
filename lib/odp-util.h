@@ -34,6 +34,7 @@ struct flow_wildcards;
 struct nlattr;
 struct ofpbuf;
 struct simap;
+struct pkt_metadata;
 
 #define SLOW_PATH_REASONS                                               \
     /* These reasons are mutually exclusive. */                         \
@@ -148,6 +149,12 @@ void odp_flow_key_from_mask(struct ofpbuf *, const struct flow *mask,
                             const struct flow *flow, uint32_t odp_in_port);
 
 uint32_t odp_flow_key_hash(const struct nlattr *, size_t);
+
+/* Estimated space needed for metadata. */
+enum { ODP_KEY_METADATA_SIZE = 9 * 8 };
+void odp_key_from_pkt_metadata(struct ofpbuf *, const struct pkt_metadata *);
+void odp_key_to_pkt_metadata(const struct nlattr *key, size_t key_len,
+                              struct pkt_metadata *md);
 
 /* How well a kernel-provided flow key (a sequence of OVS_KEY_ATTR_*
  * attributes) matches OVS userspace expectations.

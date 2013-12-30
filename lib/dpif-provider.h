@@ -311,12 +311,10 @@ struct dpif_class {
     int (*flow_dump_done)(const struct dpif *dpif, void *state);
 
     /* Performs the 'execute->actions_len' bytes of actions in
-     * 'execute->actions' on the Ethernet frame specified in 'execute->packet'
-     * taken from the flow specified in the 'execute->key_len' bytes of
-     * 'execute->key'.  ('execute->key' is mostly redundant with
-     * 'execute->packet', but it contains some metadata that cannot be
-     * recovered from 'execute->packet', such as tunnel and in_port.) */
-    int (*execute)(struct dpif *dpif, const struct dpif_execute *execute);
+     * 'execute->actions' on the Ethernet frame in 'execute->packet'
+     * and on the packet metadata in 'execute->md'.
+     * May modify both packet and metadata. */
+    int (*execute)(struct dpif *dpif, struct dpif_execute *execute);
 
     /* Executes each of the 'n_ops' operations in 'ops' on 'dpif', in the order
      * in which they are specified, placing each operation's results in the

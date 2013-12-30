@@ -2074,7 +2074,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
 {
     struct ofproto_packet_in *pin;
     struct ofpbuf *packet;
-    struct flow key;
+    struct pkt_metadata md = PKT_METADATA_INITIALIZER(0);
 
     ctx->xout->slow |= SLOW_CONTROLLER;
     if (!ctx->xin->packet) {
@@ -2083,16 +2083,12 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
 
     packet = ofpbuf_clone(ctx->xin->packet);
 
-    key.skb_priority = 0;
-    key.pkt_mark = 0;
-    memset(&key.tunnel, 0, sizeof key.tunnel);
-
     ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
                                           &ctx->xout->odp_actions,
                                           &ctx->xout->wc,
                                           &ctx->mpls_depth_delta);
 
-    odp_execute_actions(NULL, packet, &key, ctx->xout->odp_actions.data,
+    odp_execute_actions(NULL, packet, &md, ctx->xout->odp_actions.data,
                         ctx->xout->odp_actions.size, NULL);
 
     pin = xmalloc(sizeof *pin);

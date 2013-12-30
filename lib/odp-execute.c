@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "dpif.h"
 #include "netlink.h"
 #include "ofpbuf.h"
 #include "odp-util.h"
@@ -61,7 +62,7 @@ set_arp(struct ofpbuf *packet, const struct ovs_key_arp *arp_key)
 
 static void
 odp_execute_set_action(struct ofpbuf *packet, const struct nlattr *a,
-                       struct flow *md)
+                       struct pkt_metadata *md)
 {
     enum ovs_key_attr type = nl_attr_type(a);
     const struct ovs_key_ipv4 *ipv4_key;
@@ -140,12 +141,12 @@ odp_execute_set_action(struct ofpbuf *packet, const struct nlattr *a,
 }
 
 static void
-odp_execute_actions__(void *dp, struct ofpbuf *packet, struct flow *key,
+odp_execute_actions__(void *dp, struct ofpbuf *packet, struct pkt_metadata *,
                       const struct nlattr *actions, size_t actions_len,
                       odp_execute_cb dp_execute_action, bool more_actions);
 
 static void
-odp_execute_sample(void *dp, struct ofpbuf *packet, struct flow *md,
+odp_execute_sample(void *dp, struct ofpbuf *packet, struct pkt_metadata *md,
                    const struct nlattr *action,
                    odp_execute_cb dp_execute_action, bool more_actions)
 {
@@ -180,7 +181,7 @@ odp_execute_sample(void *dp, struct ofpbuf *packet, struct flow *md,
 }
 
 static void
-odp_execute_actions__(void *dp, struct ofpbuf *packet, struct flow *md,
+odp_execute_actions__(void *dp, struct ofpbuf *packet, struct pkt_metadata *md,
                       const struct nlattr *actions, size_t actions_len,
                       odp_execute_cb dp_execute_action, bool more_actions)
 {
@@ -239,7 +240,7 @@ odp_execute_actions__(void *dp, struct ofpbuf *packet, struct flow *md,
 }
 
 void
-odp_execute_actions(void *dp, struct ofpbuf *packet, struct flow *md,
+odp_execute_actions(void *dp, struct ofpbuf *packet, struct pkt_metadata *md,
                     const struct nlattr *actions, size_t actions_len,
                     odp_execute_cb dp_execute_action)
 {

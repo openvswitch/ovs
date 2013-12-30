@@ -1090,10 +1090,11 @@ dpif_linux_encode_execute(int dp_ifindex, const struct dpif_execute *d_exec,
                           struct ofpbuf *buf)
 {
     struct ovs_header *k_exec;
+    size_t key_ofs;
 
     ofpbuf_prealloc_tailroom(buf, (64
                                    + d_exec->packet->size
-                                   + d_exec->key_len
+                                   + ODP_KEY_METADATA_SIZE
                                    + d_exec->actions_len));
 
     nl_msg_put_genlmsghdr(buf, 0, ovs_packet_family, NLM_F_REQUEST,
@@ -1104,7 +1105,11 @@ dpif_linux_encode_execute(int dp_ifindex, const struct dpif_execute *d_exec,
 
     nl_msg_put_unspec(buf, OVS_PACKET_ATTR_PACKET,
                       d_exec->packet->data, d_exec->packet->size);
-    nl_msg_put_unspec(buf, OVS_PACKET_ATTR_KEY, d_exec->key, d_exec->key_len);
+
+    key_ofs = nl_msg_start_nested(buf, OVS_PACKET_ATTR_KEY);
+    odp_key_from_pkt_metadata(buf, &d_exec->md);
+    nl_msg_end_nested(buf, key_ofs);
+
     nl_msg_put_unspec(buf, OVS_PACKET_ATTR_ACTIONS,
                       d_exec->actions, d_exec->actions_len);
 }
@@ -1125,7 +1130,7 @@ dpif_linux_execute__(int dp_ifindex, const struct dpif_execute *execute)
 }
 
 static int
-dpif_linux_execute(struct dpif *dpif_, const struct dpif_execute *execute)
+dpif_linux_execute(struct dpif *dpif_, struct dpif_execute *execute)
 {
     const struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 

@@ -1134,9 +1134,9 @@ handle_upcalls(struct handler *handler, struct list *upcalls)
 
             op = &ops[n_ops++];
             op->type = DPIF_OP_EXECUTE;
-            op->u.execute.key = miss->key;
-            op->u.execute.key_len = miss->key_len;
             op->u.execute.packet = packet;
+            odp_key_to_pkt_metadata(miss->key, miss->key_len,
+                                    &op->u.execute.md);
             op->u.execute.actions = miss->xout.odp_actions.data;
             op->u.execute.actions_len = miss->xout.odp_actions.size;
             op->u.execute.needs_help = (miss->xout.slow & SLOW_ACTION) != 0;

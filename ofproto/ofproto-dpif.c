@@ -903,7 +903,7 @@ check_variable_length_userdata(struct dpif_backer *backer)
 {
     struct eth_header *eth;
     struct ofpbuf actions;
-    struct ofpbuf key;
+    struct dpif_execute execute;
     struct ofpbuf packet;
     size_t start;
     int error;
@@ -922,26 +922,22 @@ check_variable_length_userdata(struct dpif_backer *backer)
     nl_msg_put_unspec_zero(&actions, OVS_USERSPACE_ATTR_USERDATA, 4);
     nl_msg_end_nested(&actions, start);
 
-    /* Compose an ODP flow key.  The key is arbitrary but it must match the
-     * packet that we compose later. */
-    ofpbuf_init(&key, 64);
-    nl_msg_put_u32(&key, OVS_KEY_ATTR_IN_PORT, 0);
-    nl_msg_put_unspec_zero(&key, OVS_KEY_ATTR_ETHERNET,
-                           sizeof(struct ovs_key_ethernet));
-    nl_msg_put_be16(&key, OVS_KEY_ATTR_ETHERTYPE, htons(0x1234));
-
-    /* Compose a packet that matches the key. */
+    /* Compose a dummy ethernet packet. */
     ofpbuf_init(&packet, ETH_HEADER_LEN);
     eth = ofpbuf_put_zeros(&packet, ETH_HEADER_LEN);
     eth->eth_type = htons(0x1234);
 
-    /* Execute the actions.  On older datapaths this fails with -ERANGE, on
+    /* Execute the actions.  On older datapaths this fails with ERANGE, on
      * newer datapaths it succeeds. */
-    error = dpif_execute(backer->dpif, key.data, key.size,
-                         actions.data, actions.size, &packet, false);
+    execute.actions = actions.data;
+    execute.actions_len = actions.size;
+    execute.packet = &packet;
+    execute.md = PKT_METADATA_INITIALIZER(0);
+    execute.needs_help = false;
+
+    error = dpif_execute(backer->dpif, &execute);
 
     ofpbuf_uninit(&packet);
-    ofpbuf_uninit(&key);
     ofpbuf_uninit(&actions);
 
     switch (error) {
@@ -2890,12 +2886,11 @@ ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
                              const struct ofpact *ofpacts, size_t ofpacts_len,
                              struct ofpbuf *packet)
 {
-    struct odputil_keybuf keybuf;
     struct dpif_flow_stats stats;
     struct xlate_out xout;
     struct xlate_in xin;
     ofp_port_t in_port;
-    struct ofpbuf key;
+    struct dpif_execute execute;
     int error;
 
     ovs_assert((rule != NULL) != (ofpacts != NULL));
@@ -2911,16 +2906,21 @@ ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
     xin.resubmit_stats = &stats;
     xlate_actions(&xin, &xout);
 
-    ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
     in_port = flow->in_port.ofp_port;
     if (in_port == OFPP_NONE) {
         in_port = OFPP_LOCAL;
     }
-    odp_flow_key_from_flow(&key, flow, ofp_port_to_odp_port(ofproto, in_port));
+    execute.actions = xout.odp_actions.data;
+    execute.actions_len = xout.odp_actions.size;
+    execute.packet = packet;
+    execute.md.tunnel = flow->tunnel;
+    execute.md.skb_priority = flow->skb_priority;
+    execute.md.pkt_mark = flow->pkt_mark;
+    execute.md.in_port = ofp_port_to_odp_port(ofproto, in_port);
+    execute.needs_help = (xout.slow & SLOW_ACTION) != 0;
 
-    error = dpif_execute(ofproto->backer->dpif, key.data, key.size,
-                         xout.odp_actions.data, xout.odp_actions.size, packet,
-                         (xout.slow & SLOW_ACTION) != 0);
+    error = dpif_execute(ofproto->backer->dpif, &execute);
+
     xlate_out_uninit(&xout);
 
     return error;

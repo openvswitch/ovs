@@ -368,9 +368,10 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "netdev.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
-#include "netdev.h"
+#include "packets.h"
 #include "util.h"
 
 #ifdef  __cplusplus
@@ -516,13 +517,6 @@ bool dpif_flow_dump_next(struct dpif_flow_dump *,
                          const struct dpif_flow_stats **);
 int dpif_flow_dump_done(struct dpif_flow_dump *);
 
-/* Packet operations. */
-
-int dpif_execute(struct dpif *,
-                 const struct nlattr *key, size_t key_len,
-                 const struct nlattr *actions, size_t actions_len,
-                 struct ofpbuf *, bool needs_help);
-
 /* Operation batching interface.
  *
  * Some datapaths are faster at performing N operations together than the same
@@ -560,11 +554,10 @@ struct dpif_flow_del {
 
 struct dpif_execute {
     /* Raw support for execute passed along to the provider. */
-    const struct nlattr *key;       /* Partial flow key (only for metadata). */
-    size_t key_len;                 /* Length of 'key' in bytes. */
     const struct nlattr *actions;   /* Actions to execute on packet. */
     size_t actions_len;             /* Length of 'actions' in bytes. */
     struct ofpbuf *packet;          /* Packet to execute. */
+    struct pkt_metadata md;         /* Packet metadata. */
 
     /* Some dpif providers do not implement every action.  The Linux kernel
      * datapath, in particular, does not implement ARP field modification.
@@ -575,6 +568,8 @@ struct dpif_execute {
      * dpif implementation. */
     bool needs_help;
 };
+
+int dpif_execute(struct dpif *, struct dpif_execute *);
 
 struct dpif_op {
     enum dpif_op_type type;
