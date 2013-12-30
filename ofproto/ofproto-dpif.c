@@ -42,6 +42,7 @@
 #include "netdev-vport.h"
 #include "netdev.h"
 #include "netlink.h"
+#include "netlink-socket.h"
 #include "nx-match.h"
 #include "odp-util.h"
 #include "odp-execute.h"
@@ -251,6 +252,11 @@ struct dpif_backer {
     enum revalidate_reason need_revalidate; /* Revalidate all flows. */
 
     bool recv_set_enable; /* Enables or disables receiving packets. */
+
+    /* True if the datapath supports variable-length
+     * OVS_USERSPACE_ATTR_USERDATA in OVS_ACTION_ATTR_USERSPACE actions.
+     * False if the datapath supports only 8-byte (or shorter) userdata. */
+    bool variable_length_userdata;
 };
 
 /* All existing ofproto_backer instances, indexed by ofproto->up.type. */
@@ -552,7 +558,8 @@ type_run(const char *type)
                               ofproto->sflow, ofproto->ipfix,
                               ofproto->netflow, ofproto->up.frag_handling,
                               ofproto->up.forward_bpdu,
-                              connmgr_has_in_band(ofproto->up.connmgr));
+                              connmgr_has_in_band(ofproto->up.connmgr),
+                              ofproto->backer->variable_length_userdata);
 
             HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
                 xlate_bundle_set(ofproto, bundle, bundle->name,
@@ -774,6 +781,8 @@ struct odp_garbage {
     odp_port_t odp_port;
 };
 
+static bool check_variable_length_userdata(struct dpif_backer *backer);
+
 static int
 open_dpif_backer(const char *type, struct dpif_backer **backerp)
 {
@@ -872,12 +881,93 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
         close_dpif_backer(backer);
         return error;
     }
+    backer->variable_length_userdata = check_variable_length_userdata(backer);
 
     if (backer->recv_set_enable) {
         udpif_set_threads(backer->udpif, n_handlers, n_revalidators);
     }
 
     return error;
+}
+
+/* Tests whether 'backer''s datapath supports variable-length
+ * OVS_USERSPACE_ATTR_USERDATA in OVS_ACTION_ATTR_USERSPACE actions.  We need
+ * to disable some features on older datapaths that don't support this
+ * feature.
+ *
+ * Returns false if 'backer' definitely does not support variable-length
+ * userdata, true if it seems to support them or if at least the error we get
+ * is ambiguous. */
+static bool
+check_variable_length_userdata(struct dpif_backer *backer)
+{
+    struct eth_header *eth;
+    struct ofpbuf actions;
+    struct ofpbuf key;
+    struct ofpbuf packet;
+    size_t start;
+    int error;
+
+    /* Compose a userspace action that will cause an ERANGE error on older
+     * datapaths that don't support variable-length userdata.
+     *
+     * We really test for using userdata longer than 8 bytes, but older
+     * datapaths accepted these, silently truncating the userdata to 8 bytes.
+     * The same older datapaths rejected userdata shorter than 8 bytes, so we
+     * test for that instead as a proxy for longer userdata support. */
+    ofpbuf_init(&actions, 64);
+    start = nl_msg_start_nested(&actions, OVS_ACTION_ATTR_USERSPACE);
+    nl_msg_put_u32(&actions, OVS_USERSPACE_ATTR_PID,
+                   dpif_port_get_pid(backer->dpif, ODPP_NONE));
+    nl_msg_put_unspec_zero(&actions, OVS_USERSPACE_ATTR_USERDATA, 4);
+    nl_msg_end_nested(&actions, start);
+
+    /* Compose an ODP flow key.  The key is arbitrary but it must match the
+     * packet that we compose later. */
+    ofpbuf_init(&key, 64);
+    nl_msg_put_u32(&key, OVS_KEY_ATTR_IN_PORT, 0);
+    nl_msg_put_unspec_zero(&key, OVS_KEY_ATTR_ETHERNET,
+                           sizeof(struct ovs_key_ethernet));
+    nl_msg_put_be16(&key, OVS_KEY_ATTR_ETHERTYPE, htons(0x1234));
+
+    /* Compose a packet that matches the key. */
+    ofpbuf_init(&packet, ETH_HEADER_LEN);
+    eth = ofpbuf_put_zeros(&packet, ETH_HEADER_LEN);
+    eth->eth_type = htons(0x1234);
+
+    /* Execute the actions.  On older datapaths this fails with -ERANGE, on
+     * newer datapaths it succeeds. */
+    error = dpif_execute(backer->dpif, key.data, key.size,
+                         actions.data, actions.size, &packet, false);
+
+    ofpbuf_uninit(&packet);
+    ofpbuf_uninit(&key);
+    ofpbuf_uninit(&actions);
+
+    switch (error) {
+    case 0:
+        /* Variable-length userdata is supported.
+         *
+         * Purge received packets to avoid processing the nonsense packet we
+         * sent to userspace, then report success. */
+        dpif_recv_purge(backer->dpif);
+        return true;
+
+    case ERANGE:
+        /* Variable-length userdata is not supported. */
+        VLOG_WARN("%s: datapath does not support variable-length userdata "
+                  "feature (needs Linux 3.10+ or kernel module from OVS "
+                  "1..11+).  The NXAST_SAMPLE action will be ignored.",
+                  dpif_name(backer->dpif));
+        return false;
+
+    default:
+        /* Something odd happened.  We're not sure whether variable-length
+         * userdata is supported.  Default to "yes". */
+        VLOG_WARN("%s: variable-length userdata feature probe failed (%s)",
+                  dpif_name(backer->dpif), ovs_strerror(error));
+        return true;
+    }
 }
 
 static int

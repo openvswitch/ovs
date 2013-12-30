@@ -87,6 +87,11 @@ struct xbridge {
     enum ofp_config_flags frag;   /* Fragmentation handling. */
     bool has_in_band;             /* Bridge has in band control? */
     bool forward_bpdu;            /* Bridge forwards STP BPDUs? */
+
+    /* True if the datapath supports variable-length
+     * OVS_USERSPACE_ATTR_USERDATA in OVS_ACTION_ATTR_USERSPACE actions.
+     * False if the datapath supports only 8-byte (or shorter) userdata. */
+    bool variable_length_userdata;
 };
 
 struct xbundle {
@@ -249,7 +254,8 @@ xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
                   const struct dpif_sflow *sflow,
                   const struct dpif_ipfix *ipfix,
                   const struct netflow *netflow, enum ofp_config_flags frag,
-                  bool forward_bpdu, bool has_in_band)
+                  bool forward_bpdu, bool has_in_band,
+                  bool variable_length_userdata)
 {
     struct xbridge *xbridge = xbridge_lookup(ofproto);
 
@@ -301,6 +307,7 @@ xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
     xbridge->frag = frag;
     xbridge->miss_rule = miss_rule;
     xbridge->no_packet_in_rule = no_packet_in_rule;
+    xbridge->variable_length_userdata = variable_length_userdata;
 }
 
 void
@@ -2520,6 +2527,15 @@ xlate_sample_action(struct xlate_ctx *ctx,
   /* Scale the probability from 16-bit to 32-bit while representing
    * the same percentage. */
   uint32_t probability = (os->probability << 16) | os->probability;
+
+  if (!ctx->xbridge->variable_length_userdata) {
+      static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+
+      VLOG_ERR_RL(&rl, "ignoring NXAST_SAMPLE action because datapath "
+                  "lacks support (needs Linux 3.10+ or kernel module from "
+                  "OVS 1.11+)");
+      return;
+  }
 
   ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
                                         &ctx->xout->odp_actions,
