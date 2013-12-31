@@ -3217,8 +3217,9 @@ odp_flow_key_to_flow__(const struct nlattr *key, size_t key_len,
         return ODP_FIT_ERROR;
     }
 
-    if ((is_mask && (src_flow->vlan_tci & htons(VLAN_CFI))) ||
-        (!is_mask && src_flow->dl_type == htons(ETH_TYPE_VLAN))) {
+    if (is_mask
+        ? (src_flow->vlan_tci & htons(VLAN_CFI)) != 0
+        : src_flow->dl_type == htons(ETH_TYPE_VLAN)) {
         return parse_8021q_onward(attrs, present_attrs, out_of_range_attr,
                                   expected_attrs, flow, key, key_len, src_flow);
     }
