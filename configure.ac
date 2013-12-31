@@ -41,6 +41,8 @@ AC_C_BIGENDIAN
 AC_SYS_LARGEFILE
 
 LT_INIT([disable-shared])
+m4_pattern_forbid([LT_INIT]) dnl Make autoconf fail if libtool is missing.
+
 AC_SEARCH_LIBS([pow], [m])
 AC_SEARCH_LIBS([clock_gettime], [rt])
 AC_SEARCH_LIBS([timer_create], [rt])
