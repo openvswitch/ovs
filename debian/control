@@ -7,7 +7,7 @@ Build-Depends:
  debhelper (>= 8), autoconf (>= 2.64), automake (>= 1.10) | automake1.10, 
  libssl-dev, bzip2, openssl, graphviz,
  python-all (>= 2.6.6-3~), procps, python-qt4,
- python-zopeinterface, python-twisted-conch
+ python-zopeinterface, python-twisted-conch, libtool
 Standards-Version: 3.9.3
 Homepage: http://openvswitch.org/
 
