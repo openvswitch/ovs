@@ -3146,7 +3146,6 @@ parse_8021q_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
            ? attrs[OVS_KEY_ATTR_ENCAP] : NULL);
     enum odp_key_fitness encap_fitness;
     enum odp_key_fitness fitness;
-    ovs_be16 tci;
 
     /* Calculate fitness of outer attributes. */
     if (!is_mask) {
@@ -3163,35 +3162,32 @@ parse_8021q_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
     fitness = check_expectations(present_attrs, out_of_range_attr,
                                  expected_attrs, key, key_len);
 
-    /* Get the VLAN TCI value. */
-    if (!is_mask && !(present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_VLAN))) {
-        return ODP_FIT_TOO_LITTLE;
-    } else {
-        tci = (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_VLAN)
-               ? nl_attr_get_be16(attrs[OVS_KEY_ATTR_VLAN])
-               : htons(0));
-        if (!is_mask) {
-            if (tci == htons(0)) {
-                /* Corner case for a truncated 802.1Q header. */
-                if (fitness == ODP_FIT_PERFECT && nl_attr_get_size(encap)) {
-                    return ODP_FIT_TOO_MUCH;
-                }
-                return fitness;
-            } else if (!(tci & htons(VLAN_CFI))) {
-                VLOG_ERR_RL(&rl, "OVS_KEY_ATTR_VLAN 0x%04"PRIx16" is nonzero "
-                            "but CFI bit is not set", ntohs(tci));
-                return ODP_FIT_ERROR;
+    /* Set vlan_tci.
+     * Remove the TPID from dl_type since it's not the real Ethertype.  */
+    flow->dl_type = htons(0);
+    flow->vlan_tci = (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_VLAN)
+                      ? nl_attr_get_be16(attrs[OVS_KEY_ATTR_VLAN])
+                      : htons(0));
+    if (!is_mask) {
+        if (!(present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_VLAN))) {
+            return ODP_FIT_TOO_LITTLE;
+        } else if (flow->vlan_tci == htons(0)) {
+            /* Corner case for a truncated 802.1Q header. */
+            if (fitness == ODP_FIT_PERFECT && nl_attr_get_size(encap)) {
+                return ODP_FIT_TOO_MUCH;
             }
+            return fitness;
+        } else if (!(flow->vlan_tci & htons(VLAN_CFI))) {
+            VLOG_ERR_RL(&rl, "OVS_KEY_ATTR_VLAN 0x%04"PRIx16" is nonzero "
+                        "but CFI bit is not set", ntohs(flow->vlan_tci));
+            return ODP_FIT_ERROR;
         }
-        /* Set vlan_tci.
-         * Remove the TPID from dl_type since it's not the real Ethertype.  */
-        flow->dl_type = htons(0);
-        flow->vlan_tci = tci;
+    } else {
+        if (!(present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_ENCAP))) {
+            return fitness;
+        }
     }
 
-    if (is_mask && !(present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_ENCAP))) {
-        return fitness;
-    }
     /* Now parse the encapsulated attributes. */
     if (!parse_flow_nlattrs(nl_attr_get(encap), nl_attr_get_size(encap),
                             attrs, &present_attrs, &out_of_range_attr)) {
