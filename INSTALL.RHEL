@@ -34,8 +34,9 @@ RHEL.  On RHEL 5, the default RPM source directory is
 
 2. Install build prerequisites:
 
-   yum install gcc make python-devel openssl-devel kernel-devel, graphviz \
-       kernel-debug-devel autoconf automake rpm-build redhat-rpm-config
+   yum install gcc make python-devel openssl-devel kernel-devel graphviz \
+       kernel-debug-devel autoconf automake rpm-build redhat-rpm-config \
+       libtool
 
 3. Some versions of the RHEL 6 kernel-devel package contain a broken
    "build" symlink.  If you are using such a version, you must fix

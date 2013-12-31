@@ -33,6 +33,8 @@ you will need the following software:
       libssl is installed, then Open vSwitch will automatically build
       with support for it.
 
+    - Python 2.x, for x >= 4.
+
 To compile the kernel module on Linux, you must also install the
 following.  If you cannot build or install the kernel module, you may
 use the userspace-only implementation, at a cost in performance.  The
@@ -81,7 +83,7 @@ or the database schema, you will also need the following software:
 
     - Automake version 1.10 or later.
 
-    - Python 2.x, for x >= 4.
+    - libtool version 2.4 or later.  (Older versions might work too.)
 
 If you modify the ovsdbmonitor tool, then you will also need the
 following:
