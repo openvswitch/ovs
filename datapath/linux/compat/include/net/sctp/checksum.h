@@ -1,10 +1,9 @@
 #ifndef __SCTP_CHECKSUM_WRAPPER_H
 #define __SCTP_CHECKSUM_WRAPPER_H 1
 
-#include <linux/version.h>
 #include_next <net/sctp/checksum.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0)
+#ifndef HAVE_SCTP_COMPUTE_CKSUM
 static inline __le32 sctp_compute_cksum(const struct sk_buff *skb,
 					unsigned int offset)
 {
