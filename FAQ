@@ -641,6 +641,17 @@ A: In version 1.9.0, OVS switched to using a single datapath that is
    shared by all bridges of that type.  The "ovs-appctl dpif/*"
    commands provide similar functionality that is scoped by the bridge.
 
+Q: I created a GRE port using ovs-vsctl so why can't I send traffic or
+   see the port in the datapath?
+
+A: On Linux kernels before 3.11, the OVS GRE module and Linux GRE module
+   cannot be loaded at the same time. It is likely that on your system the
+   Linux GRE module is already loaded and blocking OVS (to confirm, check
+   dmesg for errors regarding GRE registration). To fix this, unload all
+   GRE modules that appear in lsmod as well as the OVS kernel module. You
+   can then reload the OVS module following the directions in INSTALL,
+   which will ensure that dependencies are satisfied.
+
 
 Quality of Service (QoS)
 ------------------------
