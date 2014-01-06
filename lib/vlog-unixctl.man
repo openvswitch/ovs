@@ -21,6 +21,10 @@ module.
 \fBsyslog\fR, \fBconsole\fR, or \fBfile\fR, to limit the log level
 change to only to the system log, to the console, or to a file,
 respectively.
+.IP
+On Windows platform, \fBsyslog\fR is accepted as a word and is only
+useful along with the \fB\-\-syslog\-target\fR option (the word has no
+effect otherwise).
 .
 .IP \(bu 
 \fBoff\fR, \fBemer\fR, \fBerr\fR, \fBwarn\fR, \fBinfo\fR, or
