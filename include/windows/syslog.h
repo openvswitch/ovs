@@ -28,4 +28,13 @@
 #define LOG_NDELAY      8       /* don't delay open */
 #define LOG_DAEMON      24      /* system daemons */
 
+#define LOG_LOCAL0      (16<<3) /* reserved for local use */
+#define LOG_LOCAL1      (17<<3) /* reserved for local use */
+#define LOG_LOCAL2      (18<<3) /* reserved for local use */
+#define LOG_LOCAL3      (19<<3) /* reserved for local use */
+#define LOG_LOCAL4      (20<<3) /* reserved for local use */
+#define LOG_LOCAL5      (21<<3) /* reserved for local use */
+#define LOG_LOCAL6      (22<<3) /* reserved for local use */
+#define LOG_LOCAL7      (23<<3) /* reserved for local use */
+
 #endif /* syslog.h */
