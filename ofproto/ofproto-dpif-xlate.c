@@ -2754,7 +2754,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
              * applicable header fields.  Do nothing if no header exists. */
             if ((mf->id != MFF_VLAN_VID || flow->vlan_tci & htons(VLAN_CFI))
                 && ((mf->id != MFF_MPLS_LABEL && mf->id != MFF_MPLS_TC)
-                    || flow->mpls_lse)) {
+                    || eth_type_mpls(flow->dl_type))) {
                 mf_set_flow_value(mf, &set_field->value, flow);
             }
             break;
