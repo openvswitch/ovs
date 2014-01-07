@@ -3825,8 +3825,17 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
 
         ofpbuf_use_stack(&op->mask, &op->maskbuf, sizeof op->maskbuf);
         if (enable_megaflows) {
+            ovs_be16 flow_vlan_tci;
+
+            /* Use the original flow vlan_tci vlaue to generate megaflow
+             * masks, in case the flow has been modified by vlan splinter.*/
+            flow_vlan_tci = miss->flow.vlan_tci;
+            miss->flow.vlan_tci = miss->initial_vals.vlan_tci;
+
             odp_flow_key_from_mask(&op->mask, &facet->xout.wc.masks,
                                    &miss->flow, UINT32_MAX);
+
+            miss->flow.vlan_tci = flow_vlan_tci;
         }
 
         op->xout_garbage = false;
@@ -5467,8 +5476,20 @@ subfacet_install(struct subfacet *subfacet, const struct ofpbuf *odp_actions,
 
     ofpbuf_use_stack(&mask, &maskbuf, sizeof maskbuf);
     if (enable_megaflows) {
+        struct flow *flow = &facet->flow;
+        struct flow orig_flow;
+
+        /* If the flow was updated by vlan splinter, restore
+         * vlan_tci that matches the datapath flow for generating
+         * proper flow masks. */
+        if (facet->initial_vals.vlan_tci != facet->flow.vlan_tci) {
+            orig_flow = facet->flow;
+            orig_flow.vlan_tci = facet->initial_vals.vlan_tci;
+            flow = &orig_flow;
+        }
+
         odp_flow_key_from_mask(&mask, &facet->xout.wc.masks,
-                               &facet->flow, UINT32_MAX);
+                               flow, UINT32_MAX);
     }
 
     ret = dpif_flow_put(ofproto->backer->dpif, flags, subfacet->key,
