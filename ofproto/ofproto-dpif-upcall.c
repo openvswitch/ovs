@@ -1076,9 +1076,12 @@ handle_upcalls(struct handler *handler, struct list *upcalls)
     LIST_FOR_EACH (upcall, list_node, upcalls) {
         struct flow_miss *miss = upcall->flow_miss;
         struct ofpbuf *packet = &upcall->dpif_upcall.packet;
-        struct ofpbuf mask;
         struct dpif_op *op;
-        bool megaflow;
+        ovs_be16 flow_vlan_tci;
+
+        /* Save a copy of flow.vlan_tci in case it is changed to
+         * generate proper mega flow masks for VLAN splinter flows. */
+        flow_vlan_tci = miss->flow.vlan_tci;
 
         if (miss->xout.slow) {
             struct xlate_in xin;
@@ -1087,14 +1090,36 @@ handle_upcalls(struct handler *handler, struct list *upcalls)
             xlate_actions_for_side_effects(&xin);
         }
 
-        atomic_read(&enable_megaflows, &megaflow);
-        ofpbuf_use_stack(&mask, &miss->mask_buf, sizeof miss->mask_buf);
-        if (megaflow) {
-            odp_flow_key_from_mask(&mask, &miss->xout.wc.masks, &miss->flow,
-                                   UINT32_MAX);
+        if (miss->flow.in_port.ofp_port
+            != vsp_realdev_to_vlandev(miss->ofproto,
+                                      miss->flow.in_port.ofp_port,
+                                      miss->flow.vlan_tci)) {
+            /* This packet was received on a VLAN splinter port.  We
+             * added a VLAN to the packet to make the packet resemble
+             * the flow, but the actions were composed assuming that
+             * the packet contained no VLAN.  So, we must remove the
+             * VLAN header from the packet before trying to execute the
+             * actions. */
+            if (miss->xout.odp_actions.size) {
+                eth_pop_vlan(packet);
+            }
+
+            /* Remove the flow vlan tags inserted by vlan splinter logic
+             * to ensure megaflow masks generated match the data path flow. */
+            miss->flow.vlan_tci = 0;
         }
 
         if (may_put) {
+            struct ofpbuf mask;
+            bool megaflow;
+
+            atomic_read(&enable_megaflows, &megaflow);
+            ofpbuf_use_stack(&mask, &miss->mask_buf, sizeof miss->mask_buf);
+            if (megaflow) {
+                odp_flow_key_from_mask(&mask, &miss->xout.wc.masks,
+                                       &miss->flow, UINT32_MAX);
+            }
+
             op = &ops[n_ops++];
             op->type = DPIF_OP_FLOW_PUT;
             op->u.flow_put.flags = DPIF_FP_CREATE | DPIF_FP_MODIFY;
@@ -1118,19 +1143,13 @@ handle_upcalls(struct handler *handler, struct list *upcalls)
             }
         }
 
+        /*
+         * The 'miss' may be shared by multiple upcalls. Restore
+         * the saved flow vlan_tci field before processing the next
+         * upcall. */
+        miss->flow.vlan_tci = flow_vlan_tci;
+
         if (miss->xout.odp_actions.size) {
-            if (miss->flow.in_port.ofp_port
-                != vsp_realdev_to_vlandev(miss->ofproto,
-                                          miss->flow.in_port.ofp_port,
-                                          miss->flow.vlan_tci)) {
-                /* This packet was received on a VLAN splinter port.  We
-                 * added a VLAN to the packet to make the packet resemble
-                 * the flow, but the actions were composed assuming that
-                 * the packet contained no VLAN.  So, we must remove the
-                 * VLAN header from the packet before trying to execute the
-                 * actions. */
-                eth_pop_vlan(packet);
-            }
 
             op = &ops[n_ops++];
             op->type = DPIF_OP_EXECUTE;
