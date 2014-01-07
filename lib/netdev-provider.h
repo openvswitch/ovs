@@ -642,7 +642,8 @@ struct netdev_class {
      * Must return -EMSGSIZE, and discard the packet, if the received packet
      * is longer than 'size' bytes.
      *
-     * Specify NULL if this */
+     * This function may be set to null if it would always return EOPNOTSUPP
+     * anyhow. */
     int (*rx_recv)(struct netdev_rx *rx, void *buffer, size_t size);
 
     /* Registers with the poll loop to wake up from the next call to
