@@ -460,6 +460,7 @@ bfd_unref(struct bfd *bfd) OVS_EXCLUDED(mutex)
             hmap_remove(all_bfds, &bfd->node);
             netdev_close(bfd->netdev);
             free(bfd->name);
+            atomic_destroy(&bfd->ref_cnt);
             free(bfd);
             ovs_mutex_unlock(&mutex);
         }

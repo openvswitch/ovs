@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -438,6 +438,7 @@ netflow_unref(struct netflow *nf)
         atomic_sub(&netflow_count, 1, &orig);
         collectors_destroy(nf->collectors);
         ofpbuf_uninit(&nf->packet);
+        atomic_destroy(&nf->ref_cnt);
         free(nf);
     }
 }

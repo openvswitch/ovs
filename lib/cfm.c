@@ -374,6 +374,11 @@ cfm_unref(struct cfm *cfm) OVS_EXCLUDED(mutex)
     hmap_destroy(&cfm->remote_mps);
     netdev_close(cfm->netdev);
     free(cfm->rmps_array);
+
+    atomic_destroy(&cfm->extended);
+    atomic_destroy(&cfm->check_tnl_key);
+    atomic_destroy(&cfm->ref_cnt);
+
     free(cfm);
 }
 

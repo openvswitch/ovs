@@ -71,6 +71,7 @@ typedef enum {
 
 #define ATOMIC_VAR_INIT(VALUE) (VALUE)
 #define atomic_init(OBJECT, VALUE) (*(OBJECT) = (VALUE), (void) 0)
+#define atomic_destroy(OBJECT) ((void) (OBJECT))
 
 #define atomic_thread_fence __atomic_thread_fence
 #define atomic_signal_fence __atomic_signal_fence

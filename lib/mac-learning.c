@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -151,6 +151,7 @@ mac_learning_unref(struct mac_learning *ml)
 
         bitmap_free(ml->flood_vlans);
         ovs_rwlock_destroy(&ml->rwlock);
+        atomic_destroy(&ml->ref_cnt);
         free(ml);
     }
 }

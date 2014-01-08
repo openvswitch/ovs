@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 Nicira, Inc.
+ * Copyright (c) 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -696,6 +696,7 @@ dpif_ipfix_unref(struct dpif_ipfix *di) OVS_EXCLUDED(mutex)
         dpif_ipfix_clear(di);
         dpif_ipfix_bridge_exporter_destroy(&di->bridge_exporter);
         hmap_destroy(&di->flow_exporter_map);
+        atomic_destroy(&di->ref_cnt);
         free(di);
         ovs_mutex_unlock(&mutex);
     }

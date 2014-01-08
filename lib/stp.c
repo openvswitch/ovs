@@ -342,6 +342,7 @@ stp_unref(struct stp *stp)
         list_remove(&stp->node);
         ovs_mutex_unlock(&mutex);
         free(stp->name);
+        atomic_destroy(&stp->ref_cnt);
         free(stp);
     }
 }

@@ -377,6 +377,7 @@ dpif_sflow_unref(struct dpif_sflow *ds) OVS_EXCLUDED(mutex)
             dpif_sflow_del_port__(ds, dsp);
         }
         hmap_destroy(&ds->ports);
+        atomic_destroy(&ds->ref_cnt);
         free(ds);
     }
 }

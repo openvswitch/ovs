@@ -84,8 +84,8 @@
  * that.
  *
  *
- * Initialization
- * ==============
+ * Life Cycle
+ * ==========
  *
  * To initialize an atomic variable at its point of definition, use
  * ATOMIC_VAR_INIT:
@@ -97,6 +97,15 @@
  *     static atomic_int ai;
  * ...
  *     atomic_init(&ai, 123);
+ *
+ * C11 does not hav an destruction function for atomic types, but some
+ * implementations of the OVS atomics do need them.  Thus, the following
+ * function is provided for destroying non-static atomic objects (A is any
+ * atomic type):
+ *
+ *     void atomic_destroy(A *object);
+ *
+ *         Destroys 'object'.
  *
  *
  * Barriers

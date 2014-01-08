@@ -59,6 +59,8 @@
         ovs_assert(orig == 2);                          \
         atomic_read(&x, &value);                        \
         ovs_assert(value == 8);                         \
+                                                        \
+        atomic_destroy(&x);                             \
     }
 
 static void

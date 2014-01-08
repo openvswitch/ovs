@@ -224,6 +224,7 @@ netdev_unregister_provider(const char *type)
         atomic_read(&rc->ref_cnt, &ref_cnt);
         if (!ref_cnt) {
             hmap_remove(&netdev_classes, &rc->hmap_node);
+            atomic_destroy(&rc->ref_cnt);
             free(rc);
             error = 0;
         } else {

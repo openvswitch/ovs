@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  * Copyright (c) 2010 Jean Tourrilhes - HP-Labs.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -2578,6 +2578,7 @@ ofproto_rule_destroy__(struct rule *rule)
     cls_rule_destroy(CONST_CAST(struct cls_rule *, &rule->cr));
     rule_actions_unref(rule->actions);
     ovs_mutex_destroy(&rule->mutex);
+    atomic_destroy(&rule->ref_count);
     rule->ofproto->ofproto_class->rule_dealloc(rule);
 }
 
@@ -2625,6 +2626,7 @@ rule_actions_unref(struct rule_actions *actions)
 
         atomic_sub(&actions->ref_count, 1, &orig);
         if (orig == 1) {
+            atomic_destroy(&actions->ref_count);
             free(actions->ofpacts);
             free(actions);
         } else {
@@ -6665,6 +6667,7 @@ oftable_destroy(struct oftable *table)
     oftable_disable_eviction(table);
     classifier_destroy(&table->cls);
     free(table->name);
+    atomic_destroy(&table->config);
 }
 
 /* Changes the name of 'table' to 'name'.  If 'name' is NULL or the empty

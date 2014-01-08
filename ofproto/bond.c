@@ -231,6 +231,7 @@ bond_unref(struct bond *bond)
 
     free(bond->hash);
     free(bond->name);
+    atomic_destroy(&bond->ref_cnt);
     free(bond);
 }
 

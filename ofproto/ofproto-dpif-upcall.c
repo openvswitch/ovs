@@ -273,6 +273,8 @@ udpif_destroy(struct udpif *udpif)
     latch_destroy(&udpif->exit_latch);
     seq_destroy(udpif->reval_seq);
     seq_destroy(udpif->dump_seq);
+    atomic_destroy(&udpif->max_idle);
+    atomic_destroy(&udpif->flow_limit);
     free(udpif);
 }
 

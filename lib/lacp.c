@@ -259,6 +259,7 @@ lacp_unref(struct lacp *lacp) OVS_EXCLUDED(mutex)
         hmap_destroy(&lacp->slaves);
         list_remove(&lacp->node);
         free(lacp->name);
+        atomic_destroy(&lacp->ref_cnt);
         free(lacp);
         ovs_mutex_unlock(&mutex);
     }
