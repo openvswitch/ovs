@@ -3291,8 +3291,8 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
 
         ofpbuf_use_stack(&op->mask, &op->maskbuf, sizeof op->maskbuf);
         if (enable_megaflows) {
-            odp_flow_key_from_mask(&op->mask, &facet->xout.wc.masks,
-                                   &miss->flow, UINT32_MAX);
+            mask_to_netlink_attr(&op->mask, facet->ofproto,
+                                 &facet->xout.wc.masks, &miss->flow);
         }
 
         op->xout_garbage = false;
@@ -4638,8 +4638,8 @@ subfacet_install(struct subfacet *subfacet, const struct ofpbuf *odp_actions,
 
     ofpbuf_use_stack(&mask, &maskbuf, sizeof maskbuf);
     if (enable_megaflows) {
-        odp_flow_key_from_mask(&mask, &facet->xout.wc.masks,
-                               &facet->flow, UINT32_MAX);
+        mask_to_netlink_attr(&mask, facet->ofproto,
+                             &facet->xout.wc.masks, &facet->flow);
     }
 
     ret = dpif_flow_put(subfacet->backer->dpif, flags, subfacet->key,
@@ -5882,8 +5882,8 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
 
         ofpbuf_use_stack(&mask, &maskbuf, sizeof maskbuf);
         if (enable_megaflows) {
-            odp_flow_key_from_mask(&mask, &facet->xout.wc.masks,
-                                   &facet->flow, UINT32_MAX);
+            mask_to_netlink_attr(&mask, facet->ofproto,
+                                 &facet->xout.wc.masks, &facet->flow);
         }
 
         odp_flow_format(subfacet->key, subfacet->key_len,
@@ -6276,6 +6276,29 @@ update_moving_averages(struct dpif_backer *backer)
         backer->subfacet_del_count = 0;
         backer->last_minute += min_ms;
     }
+}
+
+/* Appends a representation of 'mask' as OVS_KEY_ATTR_* attributes to 'buf'.
+ * Ommit vlan mask if the flow's vlan was added by VLAN splinter. */
+void
+mask_to_netlink_attr(struct ofpbuf *buf, const struct ofproto_dpif *ofproto,
+                     const struct flow *mask, const struct flow *flow)
+{
+    ofp_port_t vlandev_port;
+    struct flow orig_flow;
+
+    vlandev_port = vsp_realdev_to_vlandev(ofproto, flow->in_port.ofp_port,
+                                          flow->vlan_tci);
+
+    if (vlandev_port != flow->in_port.ofp_port) {
+        /* This flow was received from the VLAN port, do not
+         * generate vlan masks. */
+        orig_flow = *flow;
+        orig_flow.vlan_tci = 0;
+        flow = &orig_flow;
+    }
+
+    odp_flow_key_from_mask(buf, mask, flow, UINT32_MAX);
 }
 
 const struct ofproto_class ofproto_dpif_class = {

@@ -97,6 +97,9 @@ void ofproto_dpif_send_packet_in(struct ofproto_dpif *,
                                  struct ofputil_packet_in *pin);
 void ofproto_dpif_flow_mod(struct ofproto_dpif *, struct ofputil_flow_mod *);
 
+void mask_to_netlink_attr(struct ofpbuf *buf, const struct ofproto_dpif *,
+                          const struct flow *mask, const struct flow *flow);
+
 struct ofport_dpif *odp_port_to_ofport(const struct dpif_backer *, odp_port_t);
 
 #endif /* ofproto-dpif.h */
