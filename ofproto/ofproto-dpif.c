@@ -42,7 +42,6 @@
 #include "netdev-vport.h"
 #include "netdev.h"
 #include "netlink.h"
-#include "netlink-socket.h"
 #include "nx-match.h"
 #include "odp-util.h"
 #include "odp-execute.h"
