@@ -3456,6 +3456,7 @@ struct trace_ctx {
     struct xlate_out xout;
     struct xlate_in xin;
     struct flow flow;
+    struct flow_wildcards wc;
     struct ds *result;
 };
 
@@ -3532,6 +3533,20 @@ trace_format_odp(struct ds *result, int level, const char *title,
 }
 
 static void
+trace_format_megaflow(struct ds *result, int level, const char *title,
+                      struct trace_ctx *trace)
+{
+    struct match match;
+
+    ds_put_char_multiple(result, '\t', level);
+    ds_put_format(result, "%s: ", title);
+    flow_wildcards_or(&trace->wc, &trace->xout.wc, &trace->wc);
+    match_init(&match, &trace->flow, &trace->wc);
+    match_format(&match, result, OFP_DEFAULT_PRIORITY);
+    ds_put_char(result, '\n');
+}
+
+static void
 trace_resubmit(struct xlate_in *xin, struct rule_dpif *rule, int recurse)
 {
     struct trace_ctx *trace = CONTAINER_OF(xin, struct trace_ctx, xin);
@@ -3541,6 +3556,7 @@ trace_resubmit(struct xlate_in *xin, struct rule_dpif *rule, int recurse)
     trace_format_flow(result, recurse + 1, "Resubmitted flow", trace);
     trace_format_regs(result, recurse + 1, "Resubmitted regs", trace);
     trace_format_odp(result,  recurse + 1, "Resubmitted  odp", trace);
+    trace_format_megaflow(result, recurse + 1, "Resubmitted megaflow", trace);
     trace_format_rule(result, recurse + 1, rule);
 }
 
@@ -3819,18 +3835,18 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
               struct ds *ds)
 {
     struct rule_dpif *rule;
-    struct flow_wildcards wc;
+    struct trace_ctx trace;
 
     ds_put_format(ds, "Bridge: %s\n", ofproto->up.name);
     ds_put_cstr(ds, "Flow: ");
     flow_format(ds, flow);
     ds_put_char(ds, '\n');
 
-    flow_wildcards_init_catchall(&wc);
+    flow_wildcards_init_catchall(&trace.wc);
     if (ofpacts) {
         rule = NULL;
     } else {
-        rule_dpif_lookup(ofproto, flow, &wc, &rule);
+        rule_dpif_lookup(ofproto, flow, &trace.wc, &rule);
 
         trace_format_rule(ds, 0, rule);
         if (rule == ofproto->miss_rule) {
@@ -3845,8 +3861,6 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
     }
 
     if (rule || ofpacts) {
-        struct trace_ctx trace;
-        struct match match;
         uint16_t tcp_flags;
 
         tcp_flags = packet ? packet_get_tcp_flags(packet, flow) : 0;
@@ -3861,15 +3875,10 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
         trace.xin.report_hook = trace_report;
 
         xlate_actions(&trace.xin, &trace.xout);
-        flow_wildcards_or(&trace.xout.wc, &trace.xout.wc, &wc);
 
         ds_put_char(ds, '\n');
         trace_format_flow(ds, 0, "Final flow", &trace);
-
-        match_init(&match, &trace.flow, &trace.xout.wc);
-        ds_put_cstr(ds, "Megaflow: ");
-        match_format(&match, ds, OFP_DEFAULT_PRIORITY);
-        ds_put_char(ds, '\n');
+        trace_format_megaflow(ds, 0, "Megaflow", &trace);
 
         ds_put_cstr(ds, "Datapath actions: ");
         format_odp_actions(ds, trace.xout.odp_actions.data,
