@@ -3870,7 +3870,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
         ds_put_char(ds, '\n');
         trace_format_flow(ds, 0, "Final flow", &trace);
 
-        match_init(&match, flow, &trace.xout.wc);
+        match_init(&match, &trace.flow, &trace.xout.wc);
         ds_put_cstr(ds, "Relevant fields: ");
         match_format(&match, ds, OFP_DEFAULT_PRIORITY);
         ds_put_char(ds, '\n');
