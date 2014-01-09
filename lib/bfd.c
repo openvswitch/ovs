@@ -403,9 +403,7 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
     cpath_down = smap_get_bool(cfg, "cpath_down", false);
     if (bfd->cpath_down != cpath_down) {
         bfd->cpath_down = cpath_down;
-        if (bfd->diag == DIAG_NONE || bfd->diag == DIAG_CPATH_DOWN) {
-            bfd_set_state(bfd, bfd->state, DIAG_NONE);
-        }
+        bfd_set_state(bfd, bfd->state, DIAG_NONE);
         need_poll = true;
     }
 
@@ -1015,7 +1013,7 @@ static void
 bfd_set_state(struct bfd *bfd, enum state state, enum diag diag)
     OVS_REQUIRES(mutex)
 {
-    if (diag == DIAG_NONE && bfd->cpath_down) {
+    if (bfd->cpath_down) {
         diag = DIAG_CPATH_DOWN;
     }
 
