@@ -3845,8 +3845,6 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
     }
 
     if (rule || ofpacts) {
-        uint64_t odp_actions_stub[1024 / 8];
-        struct ofpbuf odp_actions;
         struct trace_ctx trace;
         struct match match;
         uint16_t tcp_flags;
@@ -3854,8 +3852,6 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
         tcp_flags = packet ? packet_get_tcp_flags(packet, flow) : 0;
         trace.result = ds;
         trace.flow = *flow;
-        ofpbuf_use_stub(&odp_actions,
-                        odp_actions_stub, sizeof odp_actions_stub);
         xlate_in_init(&trace.xin, ofproto, flow, rule, tcp_flags, packet);
         if (ofpacts) {
             trace.xin.ofpacts = ofpacts;
