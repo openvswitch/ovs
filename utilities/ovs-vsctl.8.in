@@ -965,7 +965,7 @@ Set the path cost of port \fBeth0\fR to 10:
 .PP
 Deconfigure STP from above:
 .IP
-.B "ovs\-vsctl clear Bridge br0 stp_enable"
+.B "ovs\-vsctl set Bridge br0 stp_enable=false"
 .PP
 .SS "OpenFlow Version"
 .PP
