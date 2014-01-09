@@ -1,0 +1,23 @@
+### Configuration options for openvswitch
+#
+# Enable core files:
+# --force-corefiles=yes
+#
+# Set "nice" priority at which to run ovsdb-server:
+# --ovsdb-server-priority=-10
+#
+# Set "nice" priority at which to run ovsdb-vswitchd:
+# --ovs-vswitchd-priority=-10
+#
+# Pass or not --mlockall option to ovs-vswitchd.
+# This option should be set to "yes" or "no".  The default is "yes".
+# Enabling this option can avoid networking interruptions due to
+# system memory pressure in extraordinary situations, such as multiple
+# concurrent VM import operations.
+# --mlockall=yes
+#
+# Use valgrind:
+#   --ovs-vswitchd-wrapper=valgrind
+#   --ovsdb-server-wrapper=valgrind
+#
+OPTIONS=""

@@ -22,7 +22,9 @@ EXTRA_DIST += \
 	rhel/openvswitch-fedora.spec \
 	rhel/openvswitch-fedora.spec.in \
 	rhel/usr_share_openvswitch_scripts_sysconfig.template \
-	rhel/usr_lib_systemd_system_openvswitch.service
+	rhel/usr_share_openvswitch_scripts_systemd_sysconfig.template \
+	rhel/usr_lib_systemd_system_openvswitch.service \
+	rhel/usr_lib_systemd_system_openvswitch-nonetwork.service
 
 update_rhel_spec = \
   ($(ro_shell) && sed -e 's,[@]VERSION[@],$(VERSION),g') \

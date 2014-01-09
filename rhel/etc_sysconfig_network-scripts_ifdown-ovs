@@ -34,7 +34,16 @@ if [ ! -x ${OTHERSCRIPT} ]; then
     OTHERSCRIPT="/etc/sysconfig/network-scripts/ifdown-eth"
 fi
 
-[ -f /var/lock/subsys/openvswitch ] || /sbin/service openvswitch start
+SERVICE_UNIT=/usr/lib/systemd/system/openvswitch-nonetwork.service
+if [ -f $SERVICE_UNIT ] && [ -x /usr/bin/systemctl ]; then
+	if ! systemctl --quiet is-active openvswitch-nonetwork.service; then
+		systemctl start openvswitch-nonetwork.service
+	fi
+else
+	if [ ! -f /var/lock/subsys/openvswitch ]; then
+		/sbin/service openvswitch start
+	fi
+fi
 
 case "$TYPE" in
 	OVSBridge)

@@ -1,0 +1,13 @@
+[Unit]
+Description=Open vSwitch Internal Unit
+After=syslog.target
+PartOf=openvswitch.service
+Wants=openvswitch.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+EnvironmentFile=-/etc/sysconfig/openvswitch
+ExecStart=/usr/share/openvswitch/scripts/ovs-ctl start \
+          --system-id=random $OPTIONS
+ExecStop=/usr/share/openvswitch/scripts/ovs-ctl stop
