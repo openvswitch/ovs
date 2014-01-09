@@ -238,6 +238,18 @@ typedef struct {
 } atomic_flag;
 #define ATOMIC_FLAG_INIT { false }
 
+static inline void
+atomic_flag_init(volatile atomic_flag *object OVS_UNUSED)
+{
+    /* Nothing to do. */
+}
+
+static inline void
+atomic_flag_destroy(volatile atomic_flag *object OVS_UNUSED)
+{
+    /* Nothing to do. */
+}
+
 static inline bool
 atomic_flag_test_and_set(volatile atomic_flag *object)
 {

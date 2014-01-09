@@ -204,8 +204,30 @@
  * atomic_flag is a typedef for a type with two states, set and clear, that
  * provides atomic test-and-set functionality.
  *
+ *
+ * Life Cycle
+ * ----------
+ *
  * ATOMIC_FLAG_INIT is an initializer for atomic_flag.  The initial state is
  * "clear".
+ *
+ * C11 does not have an initialization or destruction function for atomic_flag,
+ * because implementations should not need one (one may simply
+ * atomic_flag_clear() an uninitialized atomic_flag), but some implementations
+ * of the OVS atomics do need them.  Thus, the following two functions are
+ * provided for initializing and destroying non-static atomic_flags:
+ *
+ *     void atomic_flag_init(volatile atomic_flag *object);
+ *
+ *         Initializes 'object'.  The initial state is "clear".
+ *
+ *     void atomic_flag_destroy(volatile atomic_flag *object);
+ *
+ *         Destroys 'object'.
+ *
+ *
+ * Operations
+ * ----------
  *
  * The following functions are available.
  *

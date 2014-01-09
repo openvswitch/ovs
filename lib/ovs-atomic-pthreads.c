@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Nicira, Inc.
+ * Copyright (c) 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,23 @@
 #include "ovs-thread.h"
 
 #if OVS_ATOMIC_PTHREADS_IMPL
+void
+atomic_flag_init(volatile atomic_flag *flag_)
+{
+    atomic_flag *flag = CONST_CAST(atomic_flag *, flag_);
+
+    pthread_mutex_init(&flag->mutex, NULL);
+    atomic_flag_clear(flag_);
+}
+
+void
+atomic_flag_destroy(volatile atomic_flag *flag_)
+{
+    atomic_flag *flag = CONST_CAST(atomic_flag *, flag_);
+
+    pthread_mutex_destroy(&flag->mutex);
+}
+
 bool
 atomic_flag_test_and_set(volatile atomic_flag *flag_)
 {

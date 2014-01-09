@@ -148,6 +148,9 @@ typedef struct {
 } atomic_flag;
 #define ATOMIC_FLAG_INIT { false, PTHREAD_MUTEX_INITIALIZER }
 
+void atomic_flag_init(volatile atomic_flag *);
+void atomic_flag_destroy(volatile atomic_flag *);
+
 bool atomic_flag_test_and_set(volatile atomic_flag *);
 bool atomic_flag_test_and_set_explicit(volatile atomic_flag *, memory_order);
 
