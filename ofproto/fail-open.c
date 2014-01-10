@@ -182,6 +182,7 @@ fail_open_run(struct fail_open *fo)
  * controller, exits fail open mode. */
 void
 fail_open_maybe_recover(struct fail_open *fo)
+    OVS_EXCLUDED(ofproto_mutex)
 {
     if (fail_open_is_active(fo)
         && connmgr_is_any_controller_admitted(fo->connmgr)) {
@@ -191,6 +192,7 @@ fail_open_maybe_recover(struct fail_open *fo)
 
 static void
 fail_open_recover(struct fail_open *fo)
+    OVS_EXCLUDED(ofproto_mutex)
 {
     struct match match;
 
@@ -250,6 +252,7 @@ fail_open_create(struct ofproto *ofproto, struct connmgr *mgr)
 /* Destroys 'fo'. */
 void
 fail_open_destroy(struct fail_open *fo)
+    OVS_EXCLUDED(ofproto_mutex)
 {
     if (fo) {
         if (fail_open_is_active(fo)) {

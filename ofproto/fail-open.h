@@ -40,11 +40,11 @@ is_fail_open_rule(const struct rule *rule)
 }
 
 struct fail_open *fail_open_create(struct ofproto *, struct connmgr *);
-void fail_open_destroy(struct fail_open *);
+void fail_open_destroy(struct fail_open *) OVS_EXCLUDED(ofproto_mutex);
 void fail_open_wait(struct fail_open *);
 bool fail_open_is_active(const struct fail_open *);
 void fail_open_run(struct fail_open *);
-void fail_open_maybe_recover(struct fail_open *);
-void fail_open_flushed(struct fail_open *);
+void fail_open_maybe_recover(struct fail_open *) OVS_EXCLUDED(ofproto_mutex);
+void fail_open_flushed(struct fail_open *) OVS_EXCLUDED(ofproto_mutex);
 
 #endif /* fail-open.h */

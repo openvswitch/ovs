@@ -454,7 +454,7 @@ static void add_controller(struct connmgr *, const char *target, uint8_t dscp,
     OVS_REQUIRES(ofproto_mutex);
 static struct ofconn *find_controller_by_target(struct connmgr *,
                                                 const char *target);
-static void update_fail_open(struct connmgr *);
+static void update_fail_open(struct connmgr *) OVS_EXCLUDED(ofproto_mutex);
 static int set_pvconns(struct pvconn ***pvconnsp, size_t *n_pvconnsp,
                        const struct sset *);
 
@@ -771,6 +771,7 @@ update_in_band_remotes(struct connmgr *mgr)
 
 static void
 update_fail_open(struct connmgr *mgr)
+    OVS_EXCLUDED(ofproto_mutex)
 {
     if (connmgr_has_controllers(mgr)
         && mgr->fail_mode == OFPROTO_FAIL_STANDALONE) {
