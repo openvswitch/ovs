@@ -78,21 +78,10 @@ def set_pidfile(name):
     _pidfile = make_pidfile_name(name)
 
 
-def get_pidfile():
-    """Returns an absolute path to the configured pidfile, or None if no
-    pidfile is configured."""
-    return _pidfile
-
-
 def set_no_chdir():
     """Sets that we do not chdir to "/"."""
     global _chdir
     _chdir = False
-
-
-def is_chdir_enabled():
-    """Will we chdir to "/" as part of daemonizing?"""
-    return _chdir
 
 
 def ignore_existing_pidfile():

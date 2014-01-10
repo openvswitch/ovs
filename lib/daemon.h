@@ -56,26 +56,17 @@
             daemon_set_monitor();               \
             break;
 
-char *make_pidfile_name(const char *name);
 void set_pidfile(const char *name);
-const char *get_pidfile(void);
 void set_no_chdir(void);
-bool is_chdir_enabled(void);
 void set_detach(void);
 bool get_detach(void);
 void daemon_set_monitor(void);
 void daemon_save_fd(int fd);
-void remove_pidfile_from_unlink(void);
-void add_pidfile_to_unlink(void);
 void daemonize(void);
 void daemonize_start(void);
 void daemonize_complete(void);
 void ignore_existing_pidfile(void);
 void daemon_usage(void);
 pid_t read_pidfile(const char *name);
-pid_t read_pidfile_if_exists(const char *name);
-
-pid_t fork_and_clean_up(void);
-void daemonize_post_detach(void);
 
 #endif /* daemon.h */

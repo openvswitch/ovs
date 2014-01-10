@@ -69,10 +69,13 @@ static bool save_fds[3];
 
 static void check_already_running(void);
 static int lock_pidfile(FILE *, int command);
+static char *make_pidfile_name(const char *name);
+static pid_t fork_and_clean_up(void);
+static void daemonize_post_detach(void);
 
 /* Returns the file name that would be used for a pidfile if 'name' were
  * provided to set_pidfile().  The caller must free the returned string. */
-char *
+static char *
 make_pidfile_name(const char *name)
 {
     return (!name
@@ -94,27 +97,11 @@ set_pidfile(const char *name)
     pidfile = make_pidfile_name(name);
 }
 
-/* Returns an absolute path to the configured pidfile, or a null pointer if no
- * pidfile is configured.  The caller must not modify or free the returned
- * string. */
-const char *
-get_pidfile(void)
-{
-    return pidfile;
-}
-
 /* Sets that we do not chdir to "/". */
 void
 set_no_chdir(void)
 {
     chdir_ = false;
-}
-
-/* Will we chdir to "/" as part of daemonizing? */
-bool
-is_chdir_enabled(void)
-{
-    return chdir_;
 }
 
 /* Normally, daemonize() or damonize_start() will terminate the program with a
@@ -163,26 +150,6 @@ daemon_save_fd(int fd)
                fd == STDOUT_FILENO ||
                fd == STDERR_FILENO);
     save_fds[fd] = true;
-}
-
-/* Unregisters pidfile from being unlinked when the program terminates via
-* exit() or a fatal signal. */
-void
-remove_pidfile_from_unlink(void)
-{
-    if (pidfile) {
-        fatal_signal_remove_file_to_unlink(pidfile);
-    }
-}
-
-/* Registers pidfile to be unlinked when the program terminates via exit() or a
- * fatal signal. */
-void
-add_pidfile_to_unlink(void)
-{
-    if (pidfile) {
-        fatal_signal_add_file_to_unlink(pidfile);
-    }
 }
 
 /* If a pidfile has been configured, creates it and stores the running
@@ -280,7 +247,7 @@ daemonize(void)
  * Post-fork, but before returning, this function calls a few other functions
  * that are generally useful if the child isn't planning to exec a new
  * process. */
-pid_t
+static pid_t
 fork_and_clean_up(void)
 {
     pid_t pid = xfork();
@@ -570,7 +537,7 @@ daemonize_complete(void)
  * It only makes sense to call this function as part of an implementation of a
  * special daemon subprocess.  A normal daemon should just call
  * daemonize_complete(). */
-void
+static void
 daemonize_post_detach(void)
 {
     if (detach) {
