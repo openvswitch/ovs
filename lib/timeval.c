@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -232,12 +232,12 @@ time_alarm(unsigned int secs)
  *
  * Stores the number of milliseconds elapsed during poll in '*elapsed'. */
 int
-time_poll(struct pollfd *pollfds, int n_pollfds, long long int timeout_when,
-          int *elapsed)
+time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
+          long long int timeout_when, int *elapsed)
 {
     long long int *last_wakeup = last_wakeup_get();
     long long int start;
-    int retval;
+    int retval = 0;
 
     time_init();
     coverage_clear();
@@ -261,10 +261,25 @@ time_poll(struct pollfd *pollfds, int n_pollfds, long long int timeout_when,
             time_left = timeout_when - now;
         }
 
+#ifndef _WIN32
         retval = poll(pollfds, n_pollfds, time_left);
         if (retval < 0) {
             retval = -errno;
         }
+#else
+        if (n_pollfds > MAXIMUM_WAIT_OBJECTS) {
+            VLOG_ERR("Cannot handle more than maximum wait objects\n");
+        } else if (n_pollfds != 0) {
+            retval = WaitForMultipleObjects(n_pollfds, handles, FALSE,
+                                            time_left);
+        }
+        if (retval < 0) {
+            /* XXX This will be replace by a win error to errno
+               conversion function */
+            retval = -WSAGetLastError();
+            retval = -EINVAL;
+        }
+#endif
 
         if (deadline <= time_msec()) {
             fatal_signal_handler(SIGALRM);

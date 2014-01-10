@@ -55,4 +55,8 @@ typedef uint32_t __bitwise__ __be32;
 typedef uint64_t __bitwise__ __be64;
 #endif	/* no <linux/types.h> */
 
+#ifndef _WIN32
+typedef __u32 HANDLE;
+#endif
+
 #endif /* <linux/types.h> */

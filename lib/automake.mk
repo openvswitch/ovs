@@ -81,7 +81,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/jsonrpc.h \
 	lib/lacp.c \
 	lib/lacp.h \
-	lib/latch.c \
 	lib/latch.h \
 	lib/learn.c \
 	lib/learn.h \
@@ -237,6 +236,12 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/vswitch-idl.h \
 	lib/vtep-idl.c \
 	lib/vtep-idl.h
+if WIN32
+lib_libopenvswitch_la_SOURCES += lib/latch-windows.c
+else
+lib_libopenvswitch_la_SOURCES += lib/latch.c
+endif
+
 EXTRA_DIST += \
 	lib/stdio.h.in \
 	lib/string.h.in

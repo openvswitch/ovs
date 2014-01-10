@@ -27,15 +27,16 @@
 void
 latch_init(struct latch *latch)
 {
-    xpipe_nonblocking(latch->fds);
+    latch->is_set = FALSE;
+    latch->wevent = CreateEvent(NULL, TRUE, FALSE, NULL);
 }
 
 /* Destroys 'latch'. */
 void
 latch_destroy(struct latch *latch)
 {
-    close(latch->fds[0]);
-    close(latch->fds[1]);
+    latch->is_set = FALSE;
+    CloseHandle(latch->wevent);
 }
 
 /* Resets 'latch' to the unset state.  Returns true if 'latch' was previously
@@ -43,9 +44,12 @@ latch_destroy(struct latch *latch)
 bool
 latch_poll(struct latch *latch)
 {
-    char buffer[_POSIX_PIPE_BUF];
+    bool is_set;
 
-    return read(latch->fds[0], buffer, sizeof buffer) > 0;
+    is_set = latch->is_set;
+    latch->is_set = FALSE;
+    ResetEvent(latch->wevent);
+    return is_set;
 }
 
 /* Sets 'latch'.
@@ -55,7 +59,8 @@ latch_poll(struct latch *latch)
 void
 latch_set(struct latch *latch)
 {
-    ignore(write(latch->fds[1], "", 1));
+    latch->is_set = TRUE;
+    SetEvent(latch->wevent);
 }
 
 /* Returns true if 'latch' is set, false otherwise.  Does not reset 'latch'
@@ -63,16 +68,7 @@ latch_set(struct latch *latch)
 bool
 latch_is_set(const struct latch *latch)
 {
-    struct pollfd pfd;
-    int retval;
-
-    pfd.fd = latch->fds[0];
-    pfd.events = POLLIN;
-    do {
-        retval = poll(&pfd, 1, 0);
-    } while (retval < 0 && errno == EINTR);
-
-    return pfd.revents & POLLIN;
+    return latch->is_set;
 }
 
 /* Causes the next poll_block() to wake up when 'latch' is set.
@@ -83,5 +79,5 @@ latch_is_set(const struct latch *latch)
 void
 latch_wait_at(const struct latch *latch, const char *where)
 {
-    poll_fd_wait_at(latch->fds[0], 0, POLLIN, where);
+    poll_fd_wait_at(0, latch->wevent, POLLIN, where);
 }

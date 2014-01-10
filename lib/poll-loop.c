@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,18 +30,24 @@
 #include "socket-util.h"
 #include "timeval.h"
 #include "vlog.h"
+#include "hmap.h"
+#include "hash.h"
 
 VLOG_DEFINE_THIS_MODULE(poll_loop);
 
 COVERAGE_DEFINE(poll_fd_wait);
 COVERAGE_DEFINE(poll_zero_timeout);
 
+struct poll_node {
+    struct hmap_node hmap_node;
+    struct pollfd pollfd;       /* Events to pass to time_poll(). */
+    HANDLE wevent;              /* Events for WaitForMultipleObjects(). */
+    const char *where;          /* Where poll_node was created. */
+};
+
 struct poll_loop {
     /* All active poll waiters. */
-    struct pollfd *pollfds;     /* Events to pass to poll(). */
-    const char **where;         /* Where each pollfd was created. */
-    size_t n_waiters;           /* Number of elems in 'where' and 'pollfds'. */
-    size_t allocated_waiters;   /* Allocated elems in 'where' and 'pollfds'. */
+    struct hmap poll_nodes;
 
     /* Time at which to wake up the next call to poll_block(), LLONG_MIN to
      * wake up immediately, or LLONG_MAX to wait forever. */
@@ -51,35 +57,68 @@ struct poll_loop {
 
 static struct poll_loop *poll_loop(void);
 
-/* Registers 'fd' as waiting for the specified 'events' (which should be POLLIN
- * or POLLOUT or POLLIN | POLLOUT).  The following call to poll_block() will
- * wake up when 'fd' becomes ready for one or more of the requested events.
+/* Look up the node with same fd and wevent. */
+static struct poll_node *
+find_poll_node(struct poll_loop *loop, int fd, uint32_t wevent)
+{
+    struct poll_node *node;
+
+    HMAP_FOR_EACH_WITH_HASH (node, hmap_node, hash_2words(fd, wevent),
+                             &loop->poll_nodes) {
+        if (node->pollfd.fd == fd && node->wevent == wevent) {
+            return node;
+        }
+    }
+    return NULL;
+}
+
+/* On Unix based systems:
  *
- * The event registration is one-shot: only the following call to poll_block()
- * is affected.  The event will need to be re-registered after poll_block() is
- * called if it is to persist.
+ *     Registers 'fd' as waiting for the specified 'events' (which should be
+ *     POLLIN or POLLOUT or POLLIN | POLLOUT).  The following call to
+ *     poll_block() will wake up when 'fd' becomes ready for one or more of the
+ *     requested events.  the 'fd's are given to poll() function later.
+ *
+ * On Windows system:
+ *
+ *     Register 'wevent' handle for the specified 'events'.  These wevents are
+ *     given to the handleMultipleObjects() to be polled.  The event
+ *     registration is one-shot: only the following call to poll_block() is
+ *     affected.  The event will need to be re-registered after poll_block() is
+ *     called if it is to persist.
  *
  * ('where' is used in debug logging.  Commonly one would use poll_fd_wait() to
  * automatically provide the caller's source file and line number for
  * 'where'.) */
 void
-poll_fd_wait_at(int fd, short int events, const char *where)
+poll_fd_wait_at(int fd, HANDLE wevent, short int events, const char *where)
 {
     struct poll_loop *loop = poll_loop();
+    struct poll_node *node;
 
     COVERAGE_INC(poll_fd_wait);
-    if (loop->n_waiters >= loop->allocated_waiters) {
-        loop->where = x2nrealloc(loop->where, &loop->allocated_waiters,
-                                 sizeof *loop->where);
-        loop->pollfds = xrealloc(loop->pollfds,
-                                 (loop->allocated_waiters
-                                  * sizeof *loop->pollfds));
-    }
 
-    loop->where[loop->n_waiters] = where;
-    loop->pollfds[loop->n_waiters].fd = fd;
-    loop->pollfds[loop->n_waiters].events = events;
-    loop->n_waiters++;
+#ifdef _WIN32
+    /* Null event cannot be polled. */
+    if (wevent == 0) {
+        VLOG_ERR("No event to wait fd %d", fd);
+        return;
+    }
+#endif
+
+    /* Check for duplicate.  If found, "or" the event. */
+    node = find_poll_node(loop, fd, wevent);
+    if (node) {
+        node->pollfd.events |= events;
+    } else {
+        node = xzalloc(sizeof *node);
+        hmap_insert(&loop->poll_nodes, &node->hmap_node,
+                    hash_2words(fd, wevent));
+        node->pollfd.fd = fd;
+        node->pollfd.events = events;
+        node->wevent = wevent;
+        node->where = where;
+    }
 }
 
 /* Causes the following call to poll_block() to block for no more than 'msec'
@@ -208,6 +247,17 @@ log_wakeup(const char *where, const struct pollfd *pollfd, int timeout)
     ds_destroy(&s);
 }
 
+static void
+free_poll_nodes(struct poll_loop *loop)
+{
+    struct poll_node *node, *next;
+
+    HMAP_FOR_EACH_SAFE (node, next, hmap_node, &loop->poll_nodes) {
+        hmap_remove(&loop->poll_nodes, &node->hmap_node);
+        free(node);
+    }
+}
+
 /* Blocks until one or more of the events registered with poll_fd_wait()
  * occurs, or until the minimum duration registered with poll_timer_wait()
  * elapses, or not at all if poll_immediate_wake() has been called. */
@@ -215,8 +265,12 @@ void
 poll_block(void)
 {
     struct poll_loop *loop = poll_loop();
+    struct poll_node *node;
+    struct pollfd *pollfds;
+    HANDLE *wevents = NULL;
     int elapsed;
     int retval;
+    int i;
 
     /* Register fatal signal events before actually doing any real work for
      * poll_block. */
@@ -227,7 +281,23 @@ poll_block(void)
     }
 
     timewarp_wait();
-    retval = time_poll(loop->pollfds, loop->n_waiters,
+    pollfds = xmalloc(hmap_count(&loop->poll_nodes) * sizeof *pollfds);
+
+#ifdef _WIN32
+    wevents = xmalloc(hmap_count(&loop->poll_nodes) * sizeof *wevents);
+#endif
+
+    /* Populate with all the fds and events. */
+    i = 0;
+    HMAP_FOR_EACH (node, hmap_node, &loop->poll_nodes) {
+        pollfds[i] = node->pollfd;
+#ifdef _WIN32
+        wevents[i] = node->wevent;
+#endif
+        i++;
+    }
+
+    retval = time_poll(pollfds, hmap_count(&loop->poll_nodes), wevents,
                        loop->timeout_when, &elapsed);
     if (retval < 0) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -235,18 +305,20 @@ poll_block(void)
     } else if (!retval) {
         log_wakeup(loop->timeout_where, NULL, elapsed);
     } else if (get_cpu_usage() > 50 || VLOG_IS_DBG_ENABLED()) {
-        size_t i;
-
-        for (i = 0; i < loop->n_waiters; i++) {
-            if (loop->pollfds[i].revents) {
-                log_wakeup(loop->where[i], &loop->pollfds[i], 0);
+        i = 0;
+        HMAP_FOR_EACH (node, hmap_node, &loop->poll_nodes) {
+            if (pollfds[i].revents) {
+                log_wakeup(node->where, &pollfds[i], 0);
             }
+            i++;
         }
     }
 
+    free_poll_nodes(loop);
     loop->timeout_when = LLONG_MAX;
     loop->timeout_where = NULL;
-    loop->n_waiters = 0;
+    free(pollfds);
+    free(wevents);
 
     /* Handle any pending signals before doing anything else. */
     fatal_signal_run();
@@ -259,8 +331,8 @@ free_poll_loop(void *loop_)
 {
     struct poll_loop *loop = loop_;
 
-    free(loop->pollfds);
-    free(loop->where);
+    free_poll_nodes(loop);
+    hmap_destroy(&loop->poll_nodes);
     free(loop);
 }
 
@@ -279,6 +351,7 @@ poll_loop(void)
     loop = pthread_getspecific(key);
     if (!loop) {
         loop = xzalloc(sizeof *loop);
+        hmap_init(&loop->poll_nodes);
         xpthread_setspecific(key, loop);
     }
     return loop;
