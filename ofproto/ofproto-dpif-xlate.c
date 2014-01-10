@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -3065,7 +3065,9 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
     memset(&wc->masks.in_port, 0xff, sizeof wc->masks.in_port);
     memset(&wc->masks.skb_priority, 0xff, sizeof wc->masks.skb_priority);
     memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
-    wc->masks.nw_frag |= FLOW_NW_FRAG_MASK;
+    if (is_ip_any(flow)) {
+        wc->masks.nw_frag |= FLOW_NW_FRAG_MASK;
+    }
 
     tnl_may_send = tnl_xlate_init(&ctx.base_flow, flow, wc);
     if (ctx.xbridge->netflow) {
