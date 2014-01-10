@@ -85,11 +85,6 @@ or the database schema, you will also need the following software:
 
     - libtool version 2.4 or later.  (Older versions might work too.)
 
-If you modify the ovsdbmonitor tool, then you will also need the
-following:
-
-    - pyuic4 from PyQt4 (http://www.riverbankcomputing.co.uk).
-
 To run the unit tests, you also need:
 
     - Perl.  Version 5.10.1 is known to work.  Earlier versions should
@@ -136,22 +131,6 @@ following software:
 
 On Linux you should ensure that /dev/urandom exists.  To support TAP
 devices, you must also ensure that /dev/net/tun exists.
-
-To run the ovsdbmonitor tool, the machine must also have the following
-software:
-
-    - Python 2.x, for x >= 4.
-
-    - Python Twisted Conch.
-
-    - Python JSON.
-
-    - PySide or PyQt4.
-
-    - Python Zope interface module.
-
-(On Debian "lenny" the above can be installed with "apt-get install
-python-json python-qt4 python-zopeinterface python-twisted-conch".)
 
 Building and Installing Open vSwitch for Linux, FreeBSD or NetBSD
 =================================================================

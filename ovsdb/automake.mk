@@ -101,5 +101,3 @@ EXTRA_DIST += ovsdb/ovsdb-dot.in ovsdb/dot2pic
 noinst_SCRIPTS += ovsdb/ovsdb-dot
 DISTCLEANFILES += ovsdb/ovsdb-dot
 OVSDB_DOT = $(run_python) $(srcdir)/ovsdb/ovsdb-dot.in
-
-include ovsdb/ovsdbmonitor/automake.mk

@@ -1,4 +1,4 @@
-# Copyright (C) 2007, 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+# Copyright (C) 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -133,7 +133,6 @@ SUFFIXES += .in
                 -e 's,[@]bindir[@],$(bindir),g' \
                 -e 's,[@]sbindir[@],$(sbindir),g' \
                 -e 's,[@]abs_top_srcdir[@],$(abs_top_srcdir),g' \
-                -e 's,[@]ovsdbmonitordir[@],$(ovsdbmonitordir),g' \
             > $@.tmp
 	@if head -n 1 $@.tmp | grep '#!' > /dev/null; then \
 	    echo chmod +x $@.tmp; \

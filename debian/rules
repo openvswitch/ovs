@@ -107,7 +107,6 @@ install-indep: build-indep
 	# And we should also clean useless license files, which are already
 	# descriped in our debian/copyright anyway.
 	rm -f debian/$(pdkms)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/COPYING \
-		debian/$(pdkms)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/ovsdb/ovsdbmonitor/COPYING \
 		debian/$(pdkms)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/xenserver/LICENSE
 
 install-arch: build-arch

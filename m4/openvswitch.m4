@@ -1,6 +1,6 @@
 # -*- autoconf -*-
 
-# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -239,21 +239,6 @@ AC_DEFUN([OVS_CHECK_DOT],
      fi])
    AM_CONDITIONAL([HAVE_DOT], [test "$ovs_cv_dot" = yes])])
 
-dnl Checks for pyuic4.
-AC_DEFUN([OVS_CHECK_PYUIC4],
-  [AC_CACHE_CHECK(
-    [for pyuic4],
-    [ovs_cv_pyuic4],
-    [if (pyuic4 --version) >/dev/null 2>&1; then
-       ovs_cv_pyuic4=pyuic4
-     else
-       ovs_cv_pyuic4=no
-     fi])
-   AM_MISSING_PROG([PYUIC4], [pyuic4])
-   if test $ovs_cv_pyuic4 != no; then
-     PYUIC4=$ovs_cv_pyuic4
-   fi])
-
 dnl Checks whether $PYTHON supports the module given as $1
 AC_DEFUN([OVS_CHECK_PYTHON_MODULE],
   [AC_REQUIRE([OVS_CHECK_PYTHON])
@@ -271,30 +256,6 @@ sys.exit(0)' >&AS_MESSAGE_LOG_FD 2>&1; then
           ovs_cv_py_[]AS_TR_SH([$1])=yes
         fi
       fi])])
-
-dnl Checks for Python modules needed by ovsdbmonitor.
-AC_DEFUN([OVS_CHECK_OVSDBMONITOR],
-  [OVS_CHECK_PYTHON_MODULE([PySide.QtCore])
-   OVS_CHECK_PYTHON_MODULE([PyQt4.QtCore])
-   OVS_CHECK_PYTHON_MODULE([twisted.conch.ssh])
-   OVS_CHECK_PYTHON_MODULE([twisted.internet])
-   OVS_CHECK_PYTHON_MODULE([twisted.application])
-   OVS_CHECK_PYTHON_MODULE([json])
-   OVS_CHECK_PYTHON_MODULE([zope.interface])
-   if (test $ovs_cv_py_PySide_QtCore = yes \
-       || test $ovs_cv_py_PyQt4_QtCore = yes) \
-      && test $ovs_cv_py_twisted_conch_ssh = yes \
-      && test $ovs_cv_py_twisted_internet = yes \
-      && test $ovs_cv_py_twisted_application = yes \
-      && test $ovs_cv_py_json = yes \
-      && test $ovs_cv_py_zope_interface = yes; then
-     BUILD_OVSDBMONITOR=yes
-   else
-     BUILD_OVSDBMONITOR=no
-   fi
-   AC_MSG_CHECKING([whether to build ovsdbmonitor])
-   AC_MSG_RESULT([$BUILD_OVSDBMONITOR])
-   AM_CONDITIONAL([BUILD_OVSDBMONITOR], [test $BUILD_OVSDBMONITOR = yes])])
 
 dnl Checks for missing python modules at build time
 AC_DEFUN([OVS_CHECK_PYTHON_COMPAT],

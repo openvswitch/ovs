@@ -1,4 +1,4 @@
-# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -55,8 +55,6 @@ OVS_CHECK_NETLINK
 OVS_CHECK_OPENSSL
 OVS_CHECK_LOGDIR
 OVS_CHECK_PYTHON
-OVS_CHECK_PYUIC4
-OVS_CHECK_OVSDBMONITOR
 OVS_CHECK_PYTHON_COMPAT
 OVS_CHECK_DOT
 OVS_CHECK_IF_PACKET
@@ -130,7 +128,6 @@ AC_CONFIG_FILES(tests/atlocal)
 dnl This makes sure that include/openflow gets created in the build directory.
 AC_CONFIG_COMMANDS([include/openflow/openflow.h.stamp])
 
-AC_CONFIG_COMMANDS([ovsdb/ovsdbmonitor/dummy], [:])
 AC_CONFIG_COMMANDS([utilities/bugtool/dummy], [:])
 
 AM_CONDITIONAL([LINUX_DATAPATH], [test "$HAVE_NETLINK" = yes && test "$ESX" = no])
