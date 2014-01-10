@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 Nicira, Inc.
+/* Copyright (c) 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -273,6 +273,9 @@ tnl_xlate_init(const struct flow *base_flow, struct flow *flow,
 {
     if (tnl_port_should_receive(flow)) {
         memset(&wc->masks.tunnel, 0xff, sizeof wc->masks.tunnel);
+        wc->masks.tunnel.flags = (FLOW_TNL_F_DONT_FRAGMENT |
+                                  FLOW_TNL_F_CSUM |
+                                  FLOW_TNL_F_KEY);
         memset(&wc->masks.pkt_mark, 0xff, sizeof wc->masks.pkt_mark);
 
         if (!tnl_ecn_ok(base_flow, flow)) {
