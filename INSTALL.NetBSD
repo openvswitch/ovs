@@ -11,8 +11,7 @@ In that case, you need at least the following packages.
 	py27-xml
 	pkg_alternatives
 
-Some components (eg. ovsdbmonitor) have additional requirements.
-(See INSTALL)
+Some components have additional requirements.  (See INSTALL)
 
 Assuming you are running NetBSD/amd64 6.1.2, you can download and
 install pre-built binary packages as the following.

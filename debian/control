@@ -152,25 +152,6 @@ Description: Python bindings for Open vSwitch
  .
  This package contains the full Python bindings for Open vSwitch database.
 
-Package: ovsdbmonitor
-Architecture: all
-Section: utils
-Depends: ${python:Depends}, python-openvswitch, ${misc:Depends}
-Description: Open vSwitch graphical monitoring tool
- Open vSwitch is a production quality, multilayer, software-based,
- Ethernet virtual switch. It is designed to enable massive network
- automation through programmatic extension, while still supporting
- standard management interfaces and protocols (e.g. NetFlow, IPFIX,
- sFlow, SPAN, RSPAN, CLI, LACP, 802.1ag). In addition, it is designed
- to support distribution across multiple physical servers similar to
- VMware's vNetwork distributed vswitch or Cisco's Nexus 1000V.
- .
- This package is a GUI tool for monitoring and troubleshooting local
- or remote Open vSwitch installations.  It presents GUI tables that
- graphically represent an Open vSwitch kernel flow table (similar to
- "ovs-dpctl dump-flows") and Open vSwitch database contents (similar
- to "ovs-vsctl list <table>").
-
 Package: openvswitch-test
 Architecture: all
 Depends: ${misc:Depends}, ${python:Depends}, python-twisted-web, python (>= 2.7) | python-argparse

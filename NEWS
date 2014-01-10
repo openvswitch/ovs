@@ -1,6 +1,7 @@
 Post-v2.1.0
 ---------------------
-
+   - The "ovsdbmonitor" graphical tool has been removed, because it was
+     poorly maintained and not widely used.
 
 v2.1.0 - xx xxx xxxx
 ---------------------
