@@ -56,6 +56,7 @@
 
 #include "datapath.h"
 #include "flow.h"
+#include "flow_table.h"
 #include "flow_netlink.h"
 #include "vlan.h"
 #include "vport-internal_dev.h"
@@ -162,7 +163,6 @@ static void destroy_dp_rcu(struct rcu_head *rcu)
 {
 	struct datapath *dp = container_of(rcu, struct datapath, rcu);
 
-	ovs_flow_tbl_destroy(&dp->table);
 	free_percpu(dp->stats_percpu);
 	release_net(ovs_dp_get_net(dp));
 	kfree(dp->ports);
@@ -1283,7 +1283,7 @@ err_destroy_ports_array:
 err_destroy_percpu:
 	free_percpu(dp->stats_percpu);
 err_destroy_table:
-	ovs_flow_tbl_destroy(&dp->table);
+	ovs_flow_tbl_destroy(&dp->table, false);
 err_free_dp:
 	release_net(ovs_dp_get_net(dp));
 	kfree(dp);
@@ -1310,9 +1310,12 @@ static void __dp_destroy(struct datapath *dp)
 	list_del_rcu(&dp->list_node);
 
 	/* OVSP_LOCAL is datapath internal port. We need to make sure that
- 	 * all port in datapath are destroyed first before freeing datapath.
- 	 */
+	 * all ports in datapath are destroyed first before freeing datapath.
+	 */
 	ovs_dp_detach_port(ovs_vport_ovsl(dp, OVSP_LOCAL));
+
+	/* RCU destroy the flow table */
+	ovs_flow_tbl_destroy(&dp->table, true);
 
 	call_rcu(&dp->rcu, destroy_dp_rcu);
 }
