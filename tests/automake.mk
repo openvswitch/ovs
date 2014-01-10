@@ -192,7 +192,7 @@ tests_test_classifier_LDADD = lib/libopenvswitch.la $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-controller
 MAN_ROOTS += tests/test-controller.8.in
-DISTCLEANFILES += utilities/test-controller.8
+DISTCLEANFILES += tests/test-controller.8
 noinst_man_MANS += tests/test-controller.8
 tests_test_controller_SOURCES = tests/test-controller.c
 tests_test_controller_LDADD = lib/libopenvswitch.la $(SSL_LIBS)
