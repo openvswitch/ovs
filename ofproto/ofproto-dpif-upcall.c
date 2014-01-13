@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -208,6 +208,8 @@ struct flow_miss {
     struct odputil_keybuf mask_buf;
 
     struct xlate_out xout;
+
+    bool put;
 };
 
 static void upcall_destroy(struct upcall *);
@@ -971,6 +973,7 @@ handle_upcalls(struct handler *handler, struct list *upcalls)
                 miss->stats.used = time_msec();
                 miss->stats.tcp_flags = 0;
                 miss->odp_in_port = odp_in_port;
+                miss->put = false;
 
                 n_misses++;
             } else {
@@ -1107,9 +1110,21 @@ handle_upcalls(struct handler *handler, struct list *upcalls)
             miss->flow.vlan_tci = 0;
         }
 
-        if (may_put) {
+        /* Do not install a flow into the datapath if:
+         *
+         *    - The datapath already has too many flows.
+         *
+         *    - An earlier iteration of this loop already put the same flow.
+         *
+         *    - We received this packet via some flow installed in the kernel
+         *      already. */
+        if (may_put
+            && !miss->put
+            && upcall->dpif_upcall.type == DPIF_UC_MISS) {
             struct ofpbuf mask;
             bool megaflow;
+
+            miss->put = true;
 
             atomic_read(&enable_megaflows, &megaflow);
             ofpbuf_use_stack(&mask, &miss->mask_buf, sizeof miss->mask_buf);
