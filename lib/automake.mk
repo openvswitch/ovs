@@ -1,4 +1,4 @@
-# Copyright (C) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -57,6 +57,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/dynamic-string.h \
 	lib/entropy.c \
 	lib/entropy.h \
+	lib/fat-rwlock.c \
+	lib/fat-rwlock.h \
 	lib/fatal-signal.c \
 	lib/fatal-signal.h \
 	lib/flow.c \
