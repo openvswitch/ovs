@@ -2252,13 +2252,13 @@ fte_free_all(struct classifier *cls)
     struct cls_cursor cursor;
     struct fte *fte, *next;
 
-    ovs_rwlock_wrlock(&cls->rwlock);
+    fat_rwlock_wrlock(&cls->rwlock);
     cls_cursor_init(&cursor, cls, NULL);
     CLS_CURSOR_FOR_EACH_SAFE (fte, next, rule, &cursor) {
         classifier_remove(cls, &fte->rule);
         fte_free(fte);
     }
-    ovs_rwlock_unlock(&cls->rwlock);
+    fat_rwlock_unlock(&cls->rwlock);
     classifier_destroy(cls);
 }
 
@@ -2277,9 +2277,9 @@ fte_insert(struct classifier *cls, const struct match *match,
     cls_rule_init(&fte->rule, match, priority);
     fte->versions[index] = version;
 
-    ovs_rwlock_wrlock(&cls->rwlock);
+    fat_rwlock_wrlock(&cls->rwlock);
     old = fte_from_cls_rule(classifier_replace(cls, &fte->rule));
-    ovs_rwlock_unlock(&cls->rwlock);
+    fat_rwlock_unlock(&cls->rwlock);
     if (old) {
         fte_version_free(old->versions[index]);
         fte->versions[!index] = old->versions[!index];
@@ -2490,7 +2490,7 @@ ofctl_replace_flows(int argc OVS_UNUSED, char *argv[])
     list_init(&requests);
 
     /* Delete flows that exist on the switch but not in the file. */
-    ovs_rwlock_rdlock(&cls.rwlock);
+    fat_rwlock_rdlock(&cls.rwlock);
     cls_cursor_init(&cursor, &cls, NULL);
     CLS_CURSOR_FOR_EACH (fte, rule, &cursor) {
         struct fte_version *file_ver = fte->versions[FILE_IDX];
@@ -2514,7 +2514,7 @@ ofctl_replace_flows(int argc OVS_UNUSED, char *argv[])
             fte_make_flow_mod(fte, FILE_IDX, OFPFC_ADD, protocol, &requests);
         }
     }
-    ovs_rwlock_unlock(&cls.rwlock);
+    fat_rwlock_unlock(&cls.rwlock);
     transact_multiple_noreply(vconn, &requests);
     vconn_close(vconn);
 
@@ -2556,7 +2556,7 @@ ofctl_diff_flows(int argc OVS_UNUSED, char *argv[])
     ds_init(&a_s);
     ds_init(&b_s);
 
-    ovs_rwlock_rdlock(&cls.rwlock);
+    fat_rwlock_rdlock(&cls.rwlock);
     cls_cursor_init(&cursor, &cls, NULL);
     CLS_CURSOR_FOR_EACH (fte, rule, &cursor) {
         struct fte_version *a = fte->versions[0];
@@ -2576,7 +2576,7 @@ ofctl_diff_flows(int argc OVS_UNUSED, char *argv[])
             }
         }
     }
-    ovs_rwlock_unlock(&cls.rwlock);
+    fat_rwlock_unlock(&cls.rwlock);
 
     ds_destroy(&a_s);
     ds_destroy(&b_s);

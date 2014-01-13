@@ -449,13 +449,13 @@ destroy_classifier(struct classifier *cls)
     struct test_rule *rule, *next_rule;
     struct cls_cursor cursor;
 
-    ovs_rwlock_wrlock(&cls->rwlock);
+    fat_rwlock_wrlock(&cls->rwlock);
     cls_cursor_init(&cursor, cls, NULL);
     CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, cls_rule, &cursor) {
         classifier_remove(cls, &rule->cls_rule);
         free_rule(rule);
     }
-    ovs_rwlock_unlock(&cls->rwlock);
+    fat_rwlock_unlock(&cls->rwlock);
     classifier_destroy(cls);
 }
 
@@ -621,13 +621,13 @@ test_empty(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     struct tcls tcls;
 
     classifier_init(&cls, flow_segment_u32s);
-    ovs_rwlock_wrlock(&cls.rwlock);
+    fat_rwlock_wrlock(&cls.rwlock);
     classifier_set_prefix_fields(&cls, trie_fields, ARRAY_SIZE(trie_fields));
     tcls_init(&tcls);
     assert(classifier_is_empty(&cls));
     assert(tcls_is_empty(&tcls));
     compare_classifiers(&cls, &tcls);
-    ovs_rwlock_unlock(&cls.rwlock);
+    fat_rwlock_unlock(&cls.rwlock);
     classifier_destroy(&cls);
     tcls_destroy(&tcls);
 }
@@ -654,7 +654,7 @@ test_single_rule(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
                          hash_bytes(&wc_fields, sizeof wc_fields, 0), 0);
 
         classifier_init(&cls, flow_segment_u32s);
-        ovs_rwlock_wrlock(&cls.rwlock);
+        fat_rwlock_wrlock(&cls.rwlock);
         classifier_set_prefix_fields(&cls, trie_fields,
                                      ARRAY_SIZE(trie_fields));
         tcls_init(&tcls);
@@ -671,7 +671,7 @@ test_single_rule(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         compare_classifiers(&cls, &tcls);
 
         free_rule(rule);
-        ovs_rwlock_unlock(&cls.rwlock);
+        fat_rwlock_unlock(&cls.rwlock);
         classifier_destroy(&cls);
         tcls_destroy(&tcls);
     }
@@ -695,7 +695,7 @@ test_rule_replacement(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         rule2->aux += 5;
 
         classifier_init(&cls, flow_segment_u32s);
-        ovs_rwlock_wrlock(&cls.rwlock);
+        fat_rwlock_wrlock(&cls.rwlock);
         classifier_set_prefix_fields(&cls, trie_fields,
                                      ARRAY_SIZE(trie_fields));
         tcls_init(&tcls);
@@ -713,7 +713,7 @@ test_rule_replacement(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         check_tables(&cls, 1, 1, 0);
         compare_classifiers(&cls, &tcls);
         tcls_destroy(&tcls);
-        ovs_rwlock_unlock(&cls.rwlock);
+        fat_rwlock_unlock(&cls.rwlock);
         destroy_classifier(&cls);
     }
 }
@@ -809,7 +809,7 @@ test_many_rules_in_one_list (int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
             }
 
             classifier_init(&cls, flow_segment_u32s);
-            ovs_rwlock_wrlock(&cls.rwlock);
+            fat_rwlock_wrlock(&cls.rwlock);
             classifier_set_prefix_fields(&cls, trie_fields,
                                          ARRAY_SIZE(trie_fields));
             tcls_init(&tcls);
@@ -850,7 +850,7 @@ test_many_rules_in_one_list (int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
                 compare_classifiers(&cls, &tcls);
             }
 
-            ovs_rwlock_unlock(&cls.rwlock);
+            fat_rwlock_unlock(&cls.rwlock);
             classifier_destroy(&cls);
             tcls_destroy(&tcls);
 
@@ -913,7 +913,7 @@ test_many_rules_in_one_table(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         } while ((1 << count_ones(value_mask)) < N_RULES);
 
         classifier_init(&cls, flow_segment_u32s);
-        ovs_rwlock_wrlock(&cls.rwlock);
+        fat_rwlock_wrlock(&cls.rwlock);
         classifier_set_prefix_fields(&cls, trie_fields,
                                      ARRAY_SIZE(trie_fields));
         tcls_init(&tcls);
@@ -942,7 +942,7 @@ test_many_rules_in_one_table(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
             compare_classifiers(&cls, &tcls);
         }
 
-        ovs_rwlock_unlock(&cls.rwlock);
+        fat_rwlock_unlock(&cls.rwlock);
         classifier_destroy(&cls);
         tcls_destroy(&tcls);
     }
@@ -977,7 +977,7 @@ test_many_rules_in_n_tables(int n_tables)
         shuffle(priorities, ARRAY_SIZE(priorities));
 
         classifier_init(&cls, flow_segment_u32s);
-        ovs_rwlock_wrlock(&cls.rwlock);
+        fat_rwlock_wrlock(&cls.rwlock);
         classifier_set_prefix_fields(&cls, trie_fields,
                                      ARRAY_SIZE(trie_fields));
         tcls_init(&tcls);
@@ -1012,7 +1012,7 @@ test_many_rules_in_n_tables(int n_tables)
             free_rule(target);
         }
 
-        ovs_rwlock_unlock(&cls.rwlock);
+        fat_rwlock_unlock(&cls.rwlock);
         destroy_classifier(&cls);
         tcls_destroy(&tcls);
     }

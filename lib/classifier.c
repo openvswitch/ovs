@@ -176,7 +176,7 @@ classifier_init(struct classifier *cls, const uint8_t *flow_segments)
     hmap_init(&cls->subtables);
     list_init(&cls->subtables_priority);
     hmap_init(&cls->partitions);
-    ovs_rwlock_init(&cls->rwlock);
+    fat_rwlock_init(&cls->rwlock);
     cls->n_flow_segments = 0;
     if (flow_segments) {
         while (cls->n_flow_segments < CLS_MAX_INDICES
@@ -213,7 +213,7 @@ classifier_destroy(struct classifier *cls)
             free(partition);
         }
         hmap_destroy(&cls->partitions);
-        ovs_rwlock_destroy(&cls->rwlock);
+        fat_rwlock_destroy(&cls->rwlock);
     }
 }
 

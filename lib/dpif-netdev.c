@@ -638,9 +638,9 @@ dpif_netdev_get_max_ports(const struct dpif *dpif OVS_UNUSED)
 static void
 dp_netdev_free_flow(struct dp_netdev *dp, struct dp_netdev_flow *netdev_flow)
 {
-    ovs_rwlock_wrlock(&dp->cls.rwlock);
+    fat_rwlock_wrlock(&dp->cls.rwlock);
     classifier_remove(&dp->cls, &netdev_flow->cr);
-    ovs_rwlock_unlock(&dp->cls.rwlock);
+    fat_rwlock_unlock(&dp->cls.rwlock);
     cls_rule_destroy(&netdev_flow->cr);
 
     hmap_remove(&dp->flow_table, &netdev_flow->node);
@@ -755,9 +755,9 @@ dp_netdev_lookup_flow(const struct dp_netdev *dp, const struct flow *flow)
 {
     struct cls_rule *cr;
 
-    ovs_rwlock_wrlock(&dp->cls.rwlock);
+    fat_rwlock_wrlock(&dp->cls.rwlock);
     cr = classifier_lookup(&dp->cls, flow, NULL);
-    ovs_rwlock_unlock(&dp->cls.rwlock);
+    fat_rwlock_unlock(&dp->cls.rwlock);
 
     return (cr
             ? CONTAINER_OF(cr, struct dp_netdev_flow, cr)
@@ -928,15 +928,15 @@ dp_netdev_flow_add(struct dp_netdev *dp, const struct flow *flow,
 
     match_init(&match, flow, wc);
     cls_rule_init(&netdev_flow->cr, &match, NETDEV_RULE_PRIORITY);
-    ovs_rwlock_wrlock(&dp->cls.rwlock);
+    fat_rwlock_wrlock(&dp->cls.rwlock);
     classifier_insert(&dp->cls, &netdev_flow->cr);
-    ovs_rwlock_unlock(&dp->cls.rwlock);
+    fat_rwlock_unlock(&dp->cls.rwlock);
 
     error = set_flow_actions(netdev_flow, actions, actions_len);
     if (error) {
-        ovs_rwlock_wrlock(&dp->cls.rwlock);
+        fat_rwlock_wrlock(&dp->cls.rwlock);
         classifier_remove(&dp->cls, &netdev_flow->cr);
-        ovs_rwlock_unlock(&dp->cls.rwlock);
+        fat_rwlock_unlock(&dp->cls.rwlock);
         cls_rule_destroy(&netdev_flow->cr);
 
         free(netdev_flow);

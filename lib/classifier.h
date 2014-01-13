@@ -213,6 +213,7 @@
  * The classifier may safely be accessed by many reader threads concurrently or
  * by a single writer. */
 
+#include "fat-rwlock.h"
 #include "flow.h"
 #include "hindex.h"
 #include "hmap.h"
@@ -254,7 +255,7 @@ struct classifier {
     struct list subtables_priority; /* Subtables in descending priority order.
                                      */
     struct hmap partitions;     /* Contains "struct cls_partition"s. */
-    struct ovs_rwlock rwlock OVS_ACQ_AFTER(ofproto_mutex);
+    struct fat_rwlock rwlock OVS_ACQ_AFTER(ofproto_mutex);
     struct cls_trie tries[CLS_MAX_TRIES]; /* Prefix tries. */
     unsigned int n_tries;
 };
