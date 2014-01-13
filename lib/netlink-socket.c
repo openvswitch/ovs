@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -675,16 +675,17 @@ nl_sock_drain(struct nl_sock *sock)
  * Netlink socket created with the given 'protocol', and initializes 'dump' to
  * reflect the state of the operation.
  *
- * nlmsg_len in 'msg' will be finalized to match msg->size, and nlmsg_pid will
- * be set to the Netlink socket's pid, before the message is sent.  NLM_F_DUMP
- * and NLM_F_ACK will be set in nlmsg_flags.
+ * 'request' must contain a Netlink message.  Before sending the message,
+ * nlmsg_len will be finalized to match request->size, and nlmsg_pid will be
+ * set to the Netlink socket's pid.  NLM_F_DUMP and NLM_F_ACK will be set in
+ * nlmsg_flags.
  *
  * The design of this Netlink socket library ensures that the dump is reliable.
  *
- * This function provides no status indication.  An error status for the entire
- * dump operation is provided when it is completed by calling nl_dump_done().
+ * This function provides no status indication.  nl_dump_done() provides an
+ * error status for the entire dump operation.
  *
- * The caller is responsible for destroying 'request'.
+ * The caller must eventually destroy 'request'.
  */
 void
 nl_dump_start(struct nl_dump *dump, int protocol, const struct ofpbuf *request)
