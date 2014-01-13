@@ -1129,9 +1129,9 @@ destruct(struct ofproto *ofproto_)
     OFPROTO_FOR_EACH_TABLE (table, &ofproto->up) {
         struct cls_cursor cursor;
 
-        ovs_rwlock_rdlock(&table->cls.rwlock);
+        fat_rwlock_rdlock(&table->cls.rwlock);
         cls_cursor_init(&cursor, &table->cls, NULL);
-        ovs_rwlock_unlock(&table->cls.rwlock);
+        fat_rwlock_unlock(&table->cls.rwlock);
         CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, up.cr, &cursor) {
             ofproto_rule_delete(&ofproto->up, &rule->up);
         }
@@ -3014,7 +3014,7 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto,
     }
 
     cls = &ofproto->up.tables[table_id].cls;
-    ovs_rwlock_rdlock(&cls->rwlock);
+    fat_rwlock_rdlock(&cls->rwlock);
     frag = (flow->nw_frag & FLOW_NW_FRAG_ANY) != 0;
     if (frag && ofproto->up.frag_handling == OFPC_FRAG_NORMAL) {
         /* We must pretend that transport ports are unavailable. */
@@ -3031,7 +3031,7 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto,
 
     *rule = rule_dpif_cast(rule_from_cls_rule(cls_rule));
     rule_dpif_ref(*rule);
-    ovs_rwlock_unlock(&cls->rwlock);
+    fat_rwlock_unlock(&cls->rwlock);
 
     return *rule != NULL;
 }
