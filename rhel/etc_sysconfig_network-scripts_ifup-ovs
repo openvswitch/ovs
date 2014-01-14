@@ -106,7 +106,12 @@ case "$TYPE" in
 	OVSIntPort)
 		ifup_ovs_bridge
 		ovs-vsctl -t ${TIMEOUT} -- --may-exist add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS -- set Interface "$DEVICE" type=internal ${OVS_EXTRA+-- $OVS_EXTRA}
-		${OTHERSCRIPT} ${CONFIG} ${2}
+		if [ -n "${OVSDHCPINTERFACES}" ]; then
+			for _iface in ${OVSDHCPINTERFACES}; do
+				/sbin/ifup ${_iface}
+			done
+		fi
+		BOOTPROTO="${OVSBOOTPROTO}" ${OTHERSCRIPT} ${CONFIG} ${2}
 		;;
 	OVSBond)
 		ifup_ovs_bridge

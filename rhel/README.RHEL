@@ -87,6 +87,44 @@ OVSBOOTPROTO="dhcp"
 OVSDHCPINTERFACES="eth0"
 HOTPLUG=no
 
+
+Adding Internal Port to ovsbridge0:
+
+==> ifcfg-intbr0 <==
+DEVICE=intbr0
+ONBOOT=yes
+DEVICETYPE=ovs
+TYPE=OVSIntPort
+OVS_BRIDGE=ovsbridge0
+HOTPLUG=no
+
+
+Internal Port with fixed IP address:
+
+DEVICE=intbr0
+ONBOOT=yes
+DEVICETYPE=ovs
+TYPE=OVSIntPort
+OVS_BRIDGE=ovsbridge0
+BOOTPROTO=static
+IPADDR=A.B.C.D
+NETMASK=X.Y.Z.0
+HOTPLUG=no
+
+Internal Port with DHCP:
+* Needs OVSBOOTPROTO or BOOTPROTO.
+* All the interfaces that can reach the DHCP server
+as a space separated list in OVSDHCPINTERFACES.
+
+DEVICE=intbr0
+ONBOOT=yes
+DEVICETYPE=ovs
+TYPE=OVSIntPort
+OVS_BRIDGE=ovsbridge0
+OVSBOOTPROTO="dhcp"
+OVSDHCPINTERFACES="eth0"
+HOTPLUG=no
+
 Adding physical eth0 to ovsbridge0 described above:
 
 ==> ifcfg-eth0 <==
