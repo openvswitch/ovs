@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Nicira, Inc.
+ * Copyright (c) 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -127,6 +127,7 @@ void xpthread_cond_broadcast(pthread_cond_t *);
 #endif
 
 void xpthread_key_create(pthread_key_t *, void (*destructor)(void *));
+void xpthread_key_delete(pthread_key_t);
 void xpthread_setspecific(pthread_key_t, const void *);
 
 void xpthread_create(pthread_t *, pthread_attr_t *, void *(*)(void *), void *);
@@ -134,14 +135,21 @@ void xpthread_join(pthread_t, void **);
 
 /* Per-thread data.
  *
- * Multiple forms of per-thread data exist, each with its own pluses and
- * minuses:
+ *
+ * Standard Forms
+ * ==============
+ *
+ * Multiple forms of standard per-thread data exist, each with its own pluses
+ * and minuses.  In general, if one of these forms is appropriate, then it's a
+ * good idea to use it:
  *
  *     - POSIX per-thread data via pthread_key_t is portable to any pthreads
  *       implementation, and allows a destructor function to be defined.  It
  *       only (directly) supports per-thread pointers, which are always
  *       initialized to NULL.  It requires once-only allocation of a
- *       pthread_key_t value.  It is relatively slow.
+ *       pthread_key_t value.  It is relatively slow.  Typically few
+ *       "pthread_key_t"s are available (POSIX requires only at least 128,
+ *       glibc supplies only 1024).
  *
  *     - The thread_local feature newly defined in C11 <threads.h> works with
  *       any data type and initializer, and it is fast.  thread_local does not
@@ -149,7 +157,8 @@ void xpthread_join(pthread_t, void **);
  *       define what happens if one attempts to access a thread_local object
  *       from a thread other than the one to which that object belongs.  There
  *       is no provision to call a user-specified destructor when a thread
- *       ends.
+ *       ends.  Typical implementations allow for an arbitrary amount of
+ *       thread_local storage, but statically allocated only.
  *
  *     - The __thread keyword is a GCC extension similar to thread_local but
  *       with a longer history.  __thread is not portable to every GCC version
@@ -166,6 +175,25 @@ void xpthread_join(pthread_t, void **);
  * needs key allocation?    yes                no                 no
  * arbitrary initializer?    no               yes                yes
  * cross-thread access?     yes                no                yes
+ * amount available?        few            arbitrary         arbitrary
+ * dynamically allocated?   yes                no                 no
+ *
+ *
+ * Extensions
+ * ==========
+ *
+ * OVS provides some extensions and wrappers:
+ *
+ *     - In a situation where the performance of thread_local or __thread is
+ *       desirable, but portability is required, DEFINE_STATIC_PER_THREAD_DATA
+ *       and DECLARE_EXTERN_PER_THREAD_DATA/DEFINE_EXTERN_PER_THREAD_DATA may
+ *       be appropriate (see below).
+ *
+ *     - DEFINE_PER_THREAD_MALLOCED_DATA can be convenient for simple
+ *       per-thread malloc()'d buffers.
+ *
+ *     - struct ovs_tsd provides an alternative to pthread_key_t that isn't
+ *       limited to a small number of keys.
  */
 
 /* For static data, use this macro in a source file:
@@ -402,6 +430,31 @@ void xpthread_join(pthread_t, void **);
         NAME##_init();                                  \
         return NAME##_set_unsafe(value);                \
     }
+
+/* Dynamically allocated thread-specific data with lots of slots.
+ *
+ * pthread_key_t can provide as few as 128 pieces of thread-specific data (even
+ * glibc is limited to 1,024).  Thus, one must be careful to allocate only a
+ * few keys globally.  One cannot, for example, allocate a key for every
+ * instance of a data structure if there might be an arbitrary number of those
+ * data structures.
+ *
+ * This API is similar to the pthread one (simply search and replace pthread_
+ * by ovsthread_) but it a much larger limit that can be raised if necessary
+ * (by recompiling).  Thus, one may more freely use this form of
+ * thread-specific data.
+ *
+ * Compared to pthread_key_t, ovsthread_key_t has the follow limitations:
+ *
+ *    - Destructors must not access thread-specific data (via ovsthread_key).
+ */
+typedef struct ovsthread_key *ovsthread_key_t;
+
+void ovsthread_key_create(ovsthread_key_t *, void (*destructor)(void *));
+void ovsthread_key_delete(ovsthread_key_t);
+
+void ovsthread_setspecific(ovsthread_key_t, const void *);
+void *ovsthread_getspecific(ovsthread_key_t);
 
 /* Convenient once-only execution.
  *

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Nicira, Inc.
+ * Copyright (c) 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -134,6 +134,7 @@ XPTHREAD_FUNC2(pthread_join, pthread_t, void **);
 
 typedef void destructor_func(void *);
 XPTHREAD_FUNC2(pthread_key_create, pthread_key_t *, destructor_func *);
+XPTHREAD_FUNC1(pthread_key_delete, pthread_key_t);
 XPTHREAD_FUNC2(pthread_setspecific, pthread_key_t, const void *);
 
 static void
@@ -465,5 +466,195 @@ count_cpu_cores(void)
     }
 
     return n_cores > 0 ? n_cores : 0;
+}
+
+/* ovsthread_key. */
+
+#define L1_SIZE 1024
+#define L2_SIZE 1024
+#define MAX_KEYS (L1_SIZE * L2_SIZE)
+
+/* A piece of thread-specific data. */
+struct ovsthread_key {
+    struct list list_node;      /* In 'inuse_keys' or 'free_keys'. */
+    void (*destructor)(void *); /* Called at thread exit. */
+
+    /* Indexes into the per-thread array in struct ovsthread_key_slots.
+     * This key's data is stored in p1[index / L2_SIZE][index % L2_SIZE]. */
+    unsigned int index;
+};
+
+/* Per-thread data structure. */
+struct ovsthread_key_slots {
+    struct list list_node;      /* In 'slots_list'. */
+    void **p1[L1_SIZE];
+};
+
+/* Contains "struct ovsthread_key_slots *". */
+static pthread_key_t tsd_key;
+
+/* Guards data structures below. */
+static struct ovs_mutex key_mutex = OVS_MUTEX_INITIALIZER;
+
+/* 'inuse_keys' holds "struct ovsthread_key"s that have been created and not
+ * yet destroyed.
+ *
+ * 'free_keys' holds "struct ovsthread_key"s that have been deleted and are
+ * ready for reuse.  (We keep them around only to be able to easily locate
+ * free indexes.)
+ *
+ * Together, 'inuse_keys' and 'free_keys' hold an ovsthread_key for every index
+ * from 0 to n_keys - 1, inclusive. */
+static struct list inuse_keys OVS_GUARDED_BY(key_mutex)
+    = LIST_INITIALIZER(&inuse_keys);
+static struct list free_keys OVS_GUARDED_BY(key_mutex)
+    = LIST_INITIALIZER(&free_keys);
+static unsigned int n_keys OVS_GUARDED_BY(key_mutex);
+
+/* All existing struct ovsthread_key_slots. */
+static struct list slots_list OVS_GUARDED_BY(key_mutex)
+    = LIST_INITIALIZER(&slots_list);
+
+static void *
+clear_slot(struct ovsthread_key_slots *slots, unsigned int index)
+{
+    void **p2 = slots->p1[index / L2_SIZE];
+    if (p2) {
+        void **valuep = &p2[index % L2_SIZE];
+        void *value = *valuep;
+        *valuep = NULL;
+        return value;
+    } else {
+        return NULL;
+    }
+}
+
+static void
+ovsthread_key_destruct__(void *slots_)
+{
+    struct ovsthread_key_slots *slots = slots_;
+    struct ovsthread_key *key;
+    unsigned int n;
+    int i;
+
+    ovs_mutex_lock(&key_mutex);
+    list_remove(&slots->list_node);
+    LIST_FOR_EACH (key, list_node, &inuse_keys) {
+        void *value = clear_slot(slots, key->index);
+        if (value && key->destructor) {
+            key->destructor(value);
+        }
+    }
+    n = n_keys;
+    ovs_mutex_unlock(&key_mutex);
+
+    for (i = 0; i < n / L2_SIZE; i++) {
+        free(slots->p1[i]);
+    }
+    free(slots);
+}
+
+/* Initializes '*keyp' as a thread-specific data key.  The data items are
+ * initially null in all threads.
+ *
+ * If a thread exits with non-null data, then 'destructor', if nonnull, will be
+ * called passing the final data value as its argument.  'destructor' must not
+ * call any thread-specific data functions in this API.
+ *
+ * This function is similar to xpthread_key_create(). */
+void
+ovsthread_key_create(ovsthread_key_t *keyp, void (*destructor)(void *))
+{
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+    struct ovsthread_key *key;
+
+    if (ovsthread_once_start(&once)) {
+        xpthread_key_create(&tsd_key, ovsthread_key_destruct__);
+        ovsthread_once_done(&once);
+    }
+
+    ovs_mutex_lock(&key_mutex);
+    if (list_is_empty(&free_keys)) {
+        key = xmalloc(sizeof *key);
+        key->index = n_keys++;
+        if (key->index >= MAX_KEYS) {
+            abort();
+        }
+    } else {
+        key = CONTAINER_OF(list_pop_back(&free_keys),
+                            struct ovsthread_key, list_node);
+    }
+    list_push_back(&inuse_keys, &key->list_node);
+    key->destructor = destructor;
+    ovs_mutex_unlock(&key_mutex);
+
+    *keyp = key;
+}
+
+/* Frees 'key'.  The destructor supplied to ovsthread_key_create(), if any, is
+ * not called.
+ *
+ * This function is similar to xpthread_key_delete(). */
+void
+ovsthread_key_delete(ovsthread_key_t key)
+{
+    struct ovsthread_key_slots *slots;
+
+    ovs_mutex_lock(&key_mutex);
+
+    /* Move 'key' from 'inuse_keys' to 'free_keys'. */
+    list_remove(&key->list_node);
+    list_push_back(&free_keys, &key->list_node);
+
+    /* Clear this slot in all threads. */
+    LIST_FOR_EACH (slots, list_node, &slots_list) {
+        clear_slot(slots, key->index);
+    }
+
+    ovs_mutex_unlock(&key_mutex);
+}
+
+static void **
+ovsthread_key_lookup__(const struct ovsthread_key *key)
+{
+    struct ovsthread_key_slots *slots;
+    void **p2;
+
+    slots = pthread_getspecific(tsd_key);
+    if (!slots) {
+        slots = xzalloc(sizeof *slots);
+
+        ovs_mutex_lock(&key_mutex);
+        pthread_setspecific(tsd_key, slots);
+        list_push_back(&slots_list, &slots->list_node);
+        ovs_mutex_unlock(&key_mutex);
+    }
+
+    p2 = slots->p1[key->index / L2_SIZE];
+    if (!p2) {
+        p2 = xzalloc(L2_SIZE * sizeof *p2);
+        slots->p1[key->index / L2_SIZE] = p2;
+    }
+
+    return &p2[key->index % L2_SIZE];
+}
+
+/* Sets the value of thread-specific data item 'key', in the current thread, to
+ * 'value'.
+ *
+ * This function is similar to pthread_setspecific(). */
+void
+ovsthread_setspecific(ovsthread_key_t key, const void *value)
+{
+    *ovsthread_key_lookup__(key) = CONST_CAST(void *, value);
+}
+
+/* Returns the value of thread-specific data item 'key' in the current thread.
+ *
+ * This function is similar to pthread_getspecific(). */
+void *
+ovsthread_getspecific(ovsthread_key_t key)
+{
+    return *ovsthread_key_lookup__(key);
 }
 #endif
