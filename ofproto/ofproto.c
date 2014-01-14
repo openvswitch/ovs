@@ -3952,8 +3952,8 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
         }
 
         /* Verify actions. */
-        error = ofpacts_check(fm->ofpacts, fm->ofpacts_len, &fm->match.flow,
-                              u16_to_ofp(ofproto->max_ports), rule->table_id);
+        error = ofproto_check_ofpacts(ofproto, fm->ofpacts, fm->ofpacts_len,
+                                      &fm->match.flow, rule->table_id);
         if (error) {
             return error;
         }
