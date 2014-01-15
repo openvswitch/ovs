@@ -3270,9 +3270,9 @@ xlate_send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
     }
     output.port = xport->ofp_port;
     output.max_len = 0;
-    error =  ofproto_dpif_execute_actions(xport->xbridge->ofproto, &flow, NULL,
-                                          &output.ofpact, sizeof output,
-                                          packet);
+    error = ofproto_dpif_execute_actions(xport->xbridge->ofproto, &flow, NULL,
+                                         &output.ofpact, sizeof output,
+                                         packet);
     ovs_rwlock_unlock(&xlate_rwlock);
     return error;
 }
