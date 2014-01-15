@@ -3243,7 +3243,6 @@ xlate_send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
     struct ofpact_output output;
     struct flow flow;
     union flow_in_port in_port_;
-    int error;
 
     ofpact_init(&output.ofpact, OFPACT_OUTPUT, sizeof output);
     /* Use OFPP_NONE as the in_port to avoid special packet processing. */
@@ -3258,9 +3257,9 @@ xlate_send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
     }
     output.port = xport->ofp_port;
     output.max_len = 0;
-    error = ofproto_dpif_execute_actions(xport->xbridge->ofproto, &flow, NULL,
-                                         &output.ofpact, sizeof output,
-                                         packet);
     ovs_rwlock_unlock(&xlate_rwlock);
-    return error;
+
+    return ofproto_dpif_execute_actions(xport->xbridge->ofproto, &flow, NULL,
+                                        &output.ofpact, sizeof output,
+                                        packet);
 }
