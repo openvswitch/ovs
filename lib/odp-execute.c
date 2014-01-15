@@ -205,7 +205,7 @@ odp_execute_actions__(void *dp, struct ofpbuf *packet, struct pkt_metadata *md,
 
         case OVS_ACTION_ATTR_PUSH_VLAN: {
             const struct ovs_action_push_vlan *vlan = nl_attr_get(a);
-            eth_push_vlan(packet, vlan->vlan_tci);
+            eth_push_vlan(packet, htons(ETH_TYPE_VLAN), vlan->vlan_tci);
             break;
         }
 

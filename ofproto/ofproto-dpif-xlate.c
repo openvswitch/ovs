@@ -581,7 +581,7 @@ xlate_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
              * an OpenFlow controller properly, so that it looks correct
              * for sFlow, and so that flow_extract() will get the correct
              * vlan_tci if it is called on 'packet'. */
-            eth_push_vlan(packet, flow->vlan_tci);
+            eth_push_vlan(packet, htons(ETH_TYPE_VLAN), flow->vlan_tci);
         }
         /* We can't reproduce 'key' from 'flow'. */
         fitness = fitness == ODP_FIT_PERFECT ? ODP_FIT_TOO_MUCH : fitness;

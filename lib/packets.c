@@ -176,7 +176,7 @@ compose_rarp(struct ofpbuf *b, const uint8_t eth_src[ETH_ADDR_LEN])
  *
  * Also sets 'packet->l2' to point to the new Ethernet header. */
 void
-eth_push_vlan(struct ofpbuf *packet, ovs_be16 tci)
+eth_push_vlan(struct ofpbuf *packet, ovs_be16 tpid, ovs_be16 tci)
 {
     struct eth_header *eh = packet->data;
     struct vlan_eth_header *veh;
@@ -185,7 +185,7 @@ eth_push_vlan(struct ofpbuf *packet, ovs_be16 tci)
     struct vlan_eth_header tmp;
     memcpy(tmp.veth_dst, eh->eth_dst, ETH_ADDR_LEN);
     memcpy(tmp.veth_src, eh->eth_src, ETH_ADDR_LEN);
-    tmp.veth_type = htons(ETH_TYPE_VLAN);
+    tmp.veth_type = tpid;
     tmp.veth_tci = tci & htons(~VLAN_CFI);
     tmp.veth_next_type = eh->eth_type;
 

@@ -554,7 +554,7 @@ cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
 
     if (ccm_vlan || cfm->ccm_pcp) {
         uint16_t tci = ccm_vlan | (cfm->ccm_pcp << VLAN_PCP_SHIFT);
-        eth_push_vlan(packet, htons(tci));
+        eth_push_vlan(packet, htons(ETH_TYPE_VLAN), htons(tci));
     }
 
     ccm = packet->l3;
