@@ -2999,6 +2999,7 @@ actions_output_to_local_port(const struct xlate_ctx *ctx)
 /* Thread safe call to xlate_actions__(). */
 void
 xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
+    OVS_EXCLUDED(xlate_rwlock)
 {
     ovs_rwlock_rdlock(&xlate_rwlock);
     xlate_actions__(xin, xout);

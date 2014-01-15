@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,9 @@ struct ofport_dpif;
 struct dpif_backer;
 struct OVS_LOCKABLE rule_dpif;
 struct OVS_LOCKABLE group_dpif;
+
+/* For lock annotation below only. */
+extern struct ovs_rwlock xlate_rwlock;
 
 /* Ofproto-dpif -- DPIF based ofproto implementation.
  *
@@ -107,7 +110,8 @@ bool vsp_adjust_flow(const struct ofproto_dpif *, struct flow *);
 
 int ofproto_dpif_execute_actions(struct ofproto_dpif *, const struct flow *,
                                  struct rule_dpif *, const struct ofpact *,
-                                 size_t ofpacts_len, struct ofpbuf *);
+                                 size_t ofpacts_len, struct ofpbuf *)
+    OVS_EXCLUDED(xlate_rwlock);
 void ofproto_dpif_send_packet_in(struct ofproto_dpif *,
                                  struct ofproto_packet_in *);
 int ofproto_dpif_send_packet(const struct ofport_dpif *, struct ofpbuf *);
