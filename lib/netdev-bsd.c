@@ -568,20 +568,21 @@ proc_pkt(u_char *args_, const struct pcap_pkthdr *hdr, const u_char *packet)
  * from rx->pcap.
  */
 static int
-netdev_rx_bsd_recv_pcap(struct netdev_rx_bsd *rx, void *data, size_t size)
+netdev_rx_bsd_recv_pcap(struct netdev_rx_bsd *rx, struct ofpbuf *buffer)
 {
     struct pcap_arg arg;
     int ret;
 
     /* prepare the pcap argument to store the packet */
-    arg.size = size;
-    arg.data = data;
+    arg.size = ofpbuf_tailroom(buffer);
+    arg.data = buffer->data;
 
     for (;;) {
         ret = pcap_dispatch(rx->pcap_handle, 1, proc_pkt, (u_char *) &arg);
 
         if (ret > 0) {
-            return arg.retval;	/* arg.retval < 0 is handled in the caller */
+            buffer->size += arg.retval;
+            return 0;
         }
         if (ret == -1) {
             if (errno == EINTR) {
@@ -589,7 +590,7 @@ netdev_rx_bsd_recv_pcap(struct netdev_rx_bsd *rx, void *data, size_t size)
             }
         }
 
-        return -EAGAIN;
+        return EAGAIN;
     }
 }
 
@@ -599,30 +600,33 @@ netdev_rx_bsd_recv_pcap(struct netdev_rx_bsd *rx, void *data, size_t size)
  * 'rx->fd' is initialized with the tap file descriptor.
  */
 static int
-netdev_rx_bsd_recv_tap(struct netdev_rx_bsd *rx, void *data, size_t size)
+netdev_rx_bsd_recv_tap(struct netdev_rx_bsd *rx, struct ofpbuf *buffer)
 {
+    size_t size = ofpbuf_tailroom(buffer);
+
     for (;;) {
-        ssize_t retval = read(rx->fd, data, size);
+        ssize_t retval = read(rx->fd, buffer->data, size);
         if (retval >= 0) {
-            return retval;
+            buffer->size += retval;
+            return 0;
         } else if (errno != EINTR) {
             if (errno != EAGAIN) {
                 VLOG_WARN_RL(&rl, "error receiving Ethernet packet on %s: %s",
                              ovs_strerror(errno), netdev_rx_get_name(&rx->up));
             }
-            return -errno;
+            return errno;
         }
     }
 }
 
 static int
-netdev_bsd_rx_recv(struct netdev_rx *rx_, void *data, size_t size)
+netdev_bsd_rx_recv(struct netdev_rx *rx_, struct ofpbuf *buffer)
 {
     struct netdev_rx_bsd *rx = netdev_rx_bsd_cast(rx_);
 
     return (rx->pcap_handle
-            ? netdev_rx_bsd_recv_pcap(rx, data, size)
-            : netdev_rx_bsd_recv_tap(rx, data, size));
+            ? netdev_rx_bsd_recv_pcap(rx, buffer)
+            : netdev_rx_bsd_recv_tap(rx, buffer));
 }
 
 /*

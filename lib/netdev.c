@@ -551,17 +551,15 @@ netdev_rx_recv(struct netdev_rx *rx, struct ofpbuf *buffer)
     ovs_assert(buffer->size == 0);
     ovs_assert(ofpbuf_tailroom(buffer) >= ETH_TOTAL_MIN);
 
-    retval = rx->netdev->netdev_class->rx_recv(rx, buffer->data,
-                                               ofpbuf_tailroom(buffer));
-    if (retval >= 0) {
+    retval = rx->netdev->netdev_class->rx_recv(rx, buffer);
+    if (!retval) {
         COVERAGE_INC(netdev_received);
-        buffer->size += retval;
         if (buffer->size < ETH_TOTAL_MIN) {
             ofpbuf_put_zeros(buffer, ETH_TOTAL_MIN - buffer->size);
         }
         return 0;
     } else {
-        return -retval;
+        return retval;
     }
 }
 

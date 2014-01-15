@@ -848,25 +848,29 @@ netdev_linux_rx_dealloc(struct netdev_rx *rx_)
 }
 
 static int
-netdev_linux_rx_recv(struct netdev_rx *rx_, void *data, size_t size)
+netdev_linux_rx_recv(struct netdev_rx *rx_, struct ofpbuf *buffer)
 {
     struct netdev_rx_linux *rx = netdev_rx_linux_cast(rx_);
     ssize_t retval;
+    size_t size = ofpbuf_tailroom(buffer);
 
     do {
         retval = (rx->is_tap
-                  ? read(rx->fd, data, size)
-                  : recv(rx->fd, data, size, MSG_TRUNC));
+                  ? read(rx->fd, buffer->data, size)
+                  : recv(rx->fd, buffer->data, size, MSG_TRUNC));
     } while (retval < 0 && errno == EINTR);
 
-    if (retval >= 0) {
-        return retval > size ? -EMSGSIZE : retval;
-    } else {
+    if (retval < 0) {
         if (errno != EAGAIN) {
             VLOG_WARN_RL(&rl, "error receiving Ethernet packet on %s: %s",
                          ovs_strerror(errno), netdev_rx_get_name(rx_));
         }
-        return -errno;
+        return errno;
+    } else if (retval > size) {
+        return EMSGSIZE;
+    } else {
+        buffer->size += retval;
+        return 0;
     }
 }
 
