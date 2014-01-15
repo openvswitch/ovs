@@ -122,6 +122,7 @@ fat_rwlock_destroy(struct fat_rwlock *rwlock)
     LIST_FOR_EACH_SAFE (slot, next, list_node, &rwlock->threads) {
         free_slot(slot);
     }
+    ovs_mutex_destroy(&rwlock->mutex);
 }
 
 static struct fat_rwlock_slot *
