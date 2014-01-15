@@ -500,6 +500,13 @@ netdev_parse_name(const char *netdev_name_, char **name, char **type)
     }
 }
 
+/* Attempts to open a netdev_rx handle for obtaining packets received on
+ * 'netdev'.  On success, returns 0 and stores a nonnull 'netdev_rx *' into
+ * '*rxp'.  On failure, returns a positive errno value and stores NULL into
+ * '*rxp'.
+ *
+ * Some kinds of network devices might not support receiving packets.  This
+ * function returns EOPNOTSUPP in that case.*/
 int
 netdev_rx_open(struct netdev *netdev, struct netdev_rx **rxp)
     OVS_EXCLUDED(netdev_mutex)
@@ -531,6 +538,7 @@ netdev_rx_open(struct netdev *netdev, struct netdev_rx **rxp)
     return error;
 }
 
+/* Closes 'rx'. */
 void
 netdev_rx_close(struct netdev_rx *rx)
     OVS_EXCLUDED(netdev_mutex)
@@ -543,6 +551,29 @@ netdev_rx_close(struct netdev_rx *rx)
     }
 }
 
+/* Attempts to receive a packet from 'rx' into the tailroom of 'buffer', which
+ * must initially be empty.  If successful, returns 0 and increments
+ * 'buffer->size' by the number of bytes in the received packet, otherwise a
+ * positive errno value.
+ *
+ * Returns EAGAIN immediately if no packet is ready to be received.
+ *
+ * Returns EMSGSIZE, and discards the packet, if the received packet is longer
+ * than 'ofpbuf_tailroom(buffer)'.
+ *
+ * Implementations may make use of VLAN_HEADER_LEN bytes of tailroom to
+ * add a VLAN header which is obtained out-of-band to the packet. If
+ * this occurs then VLAN_HEADER_LEN bytes of tailroom will no longer be
+ * available for the packet, otherwise it may be used for the packet
+ * itself.
+ *
+ * It is advised that the tailroom of 'buffer' should be
+ * VLAN_HEADER_LEN bytes longer than the MTU to allow space for an
+ * out-of-band VLAN header to be added to the packet.  At the very least,
+ * 'buffer' must have at least ETH_TOTAL_MIN bytes of tailroom.
+ *
+ * This function may be set to null if it would always return EOPNOTSUPP
+ * anyhow. */
 int
 netdev_rx_recv(struct netdev_rx *rx, struct ofpbuf *buffer)
 {
@@ -563,12 +594,15 @@ netdev_rx_recv(struct netdev_rx *rx, struct ofpbuf *buffer)
     }
 }
 
+/* Arranges for poll_block() to wake up when a packet is ready to be received
+ * on 'rx'. */
 void
 netdev_rx_wait(struct netdev_rx *rx)
 {
     rx->netdev->netdev_class->rx_wait(rx);
 }
 
+/* Discards any packets ready to be received on 'rx'. */
 int
 netdev_rx_drain(struct netdev_rx *rx)
 {

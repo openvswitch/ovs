@@ -87,6 +87,7 @@ enum {
 };
 
 enum {
+    SOL_PACKET,
     SOL_SOCKET
 };
 

@@ -643,6 +643,16 @@ struct netdev_class {
      * Must return EMSGSIZE, and discard the packet, if the received packet
      * is longer than 'ofpbuf_tailroom(buffer)'.
      *
+     * Implementations may make use of VLAN_HEADER_LEN bytes of tailroom to
+     * add a VLAN header which is obtained out-of-band to the packet. If
+     * this occurs then VLAN_HEADER_LEN bytes of tailroom will no longer be
+     * available for the packet, otherwise it may be used for the packet
+     * itself.
+     *
+     * It is advised that the tailroom of 'buffer' should be
+     * VLAN_HEADER_LEN bytes longer than the MTU to allow space for an
+     * out-of-band VLAN header to be added to the packet.
+     *
      * This function may be set to null if it would always return EOPNOTSUPP
      * anyhow. */
     int (*rx_recv)(struct netdev_rx *rx, struct ofpbuf *buffer);

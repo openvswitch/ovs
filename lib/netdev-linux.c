@@ -20,11 +20,11 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <arpa/inet.h>
 #include <inttypes.h>
 #include <linux/filter.h>
 #include <linux/gen_stats.h>
 #include <linux/if_ether.h>
+#include <linux/if_packet.h>
 #include <linux/if_tun.h>
 #include <linux/types.h>
 #include <linux/ethtool.h>
@@ -37,10 +37,8 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
-#include <netpacket/packet.h>
 #include <net/if.h>
 #include <net/if_arp.h>
-#include <net/if_packet.h>
 #include <net/route.h>
 #include <netinet/in.h>
 #include <poll.h>
@@ -108,6 +106,33 @@ COVERAGE_DEFINE(netdev_set_ethtool);
 #ifndef TC_RTAB_SIZE
 #define TC_RTAB_SIZE 1024
 #endif
+
+/* Linux 2.6.21 introduced struct tpacket_auxdata.
+ * Linux 2.6.27 added the tp_vlan_tci member.
+ * Linux 3.0 defined TP_STATUS_VLAN_VALID.
+ * Linux 3.13 repurposed a padding member for tp_vlan_tpid and defined
+ * TP_STATUS_VLAN_TPID_VALID.
+ *
+ * With all this churn it's easiest to unconditionally define a replacement
+ * structure that has everything we want.
+ */
+#ifndef TP_STATUS_VLAN_VALID
+#define TP_STATUS_VLAN_VALID            (1 << 4)
+#endif
+#ifndef TP_STATUS_VLAN_TPID_VALID
+#define TP_STATUS_VLAN_TPID_VALID       (1 << 6)
+#endif
+#undef tpacket_auxdata
+#define tpacket_auxdata rpl_tpacket_auxdata
+struct tpacket_auxdata {
+    uint32_t tp_status;
+    uint32_t tp_len;
+    uint32_t tp_snaplen;
+    uint16_t tp_mac;
+    uint16_t tp_net;
+    uint16_t tp_vlan_tci;
+    uint16_t tp_vlan_tpid;
+};
 
 enum {
     VALID_IFINDEX           = 1 << 0,
@@ -763,7 +788,7 @@ netdev_linux_rx_construct(struct netdev_rx *rx_)
         rx->fd = netdev->tap_fd;
     } else {
         struct sockaddr_ll sll;
-        int ifindex;
+        int ifindex, val;
         /* Result of tcpdump -dd inbound */
         static const struct sock_filter filt[] = {
             { 0x28, 0, 0, 0xfffff004 }, /* ldh [0] */
@@ -783,6 +808,14 @@ netdev_linux_rx_construct(struct netdev_rx *rx_)
             goto error;
         }
 
+        val = 1;
+        if (setsockopt(rx->fd, SOL_PACKET, PACKET_AUXDATA, &val, sizeof val)) {
+            error = errno;
+            VLOG_ERR("%s: failed to mark socket for auxdata (%s)",
+                     netdev_get_name(netdev_), ovs_strerror(error));
+            goto error;
+        }
+
         /* Set non-blocking mode. */
         error = set_nonblocking(rx->fd);
         if (error) {
@@ -799,7 +832,7 @@ netdev_linux_rx_construct(struct netdev_rx *rx_)
         memset(&sll, 0, sizeof sll);
         sll.sll_family = AF_PACKET;
         sll.sll_ifindex = ifindex;
-        sll.sll_protocol = (OVS_FORCE unsigned short int) htons(ETH_P_ALL);
+        sll.sll_protocol = htons(ETH_P_ALL);
         if (bind(rx->fd, (struct sockaddr *) &sll, sizeof sll) < 0) {
             error = errno;
             VLOG_ERR("%s: failed to bind raw socket (%s)",
@@ -847,31 +880,120 @@ netdev_linux_rx_dealloc(struct netdev_rx *rx_)
     free(rx);
 }
 
-static int
-netdev_linux_rx_recv(struct netdev_rx *rx_, struct ofpbuf *buffer)
+static ovs_be16
+auxdata_to_vlan_tpid(const struct tpacket_auxdata *aux)
 {
-    struct netdev_rx_linux *rx = netdev_rx_linux_cast(rx_);
+    if (aux->tp_status & TP_STATUS_VLAN_TPID_VALID) {
+        return htons(aux->tp_vlan_tpid);
+    } else {
+        return htons(ETH_TYPE_VLAN);
+    }
+}
+
+static bool
+auxdata_has_vlan_tci(const struct tpacket_auxdata *aux)
+{
+    return aux->tp_vlan_tci || aux->tp_status & TP_STATUS_VLAN_VALID;
+}
+
+static int
+netdev_linux_rx_recv_sock(int fd, struct ofpbuf *buffer)
+{
+    size_t size;
+    ssize_t retval;
+    struct iovec iov;
+    struct cmsghdr *cmsg;
+    union {
+        struct cmsghdr cmsg;
+        char buffer[CMSG_SPACE(sizeof(struct tpacket_auxdata))];
+    } cmsg_buffer;
+    struct msghdr msgh;
+
+    /* Reserve headroom for a single VLAN tag */
+    ofpbuf_reserve(buffer, VLAN_HEADER_LEN);
+    size = ofpbuf_tailroom(buffer);
+
+    iov.iov_base = buffer->data;
+    iov.iov_len = size;
+    msgh.msg_name = NULL;
+    msgh.msg_namelen = 0;
+    msgh.msg_iov = &iov;
+    msgh.msg_iovlen = 1;
+    msgh.msg_control = &cmsg_buffer;
+    msgh.msg_controllen = sizeof cmsg_buffer;
+    msgh.msg_flags = 0;
+
+    do {
+        retval = recvmsg(fd, &msgh, MSG_TRUNC);
+    } while (retval < 0 && errno == EINTR);
+
+    if (retval < 0) {
+        return errno;
+    } else if (retval > size) {
+        return EMSGSIZE;
+    }
+
+    buffer->size += retval;
+
+    for (cmsg = CMSG_FIRSTHDR(&msgh); cmsg; cmsg = CMSG_NXTHDR(&msgh, cmsg)) {
+        const struct tpacket_auxdata *aux;
+
+        if (cmsg->cmsg_level != SOL_PACKET
+            || cmsg->cmsg_type != PACKET_AUXDATA
+            || cmsg->cmsg_len < CMSG_LEN(sizeof(struct tpacket_auxdata))) {
+            continue;
+        }
+
+        aux = ALIGNED_CAST(struct tpacket_auxdata *, CMSG_DATA(cmsg));
+        if (auxdata_has_vlan_tci(aux)) {
+            if (retval < ETH_HEADER_LEN) {
+                return EINVAL;
+            }
+
+            eth_push_vlan(buffer, auxdata_to_vlan_tpid(aux),
+                          htons(aux->tp_vlan_tci));
+            break;
+        }
+    }
+
+    return 0;
+}
+
+static int
+netdev_linux_rx_recv_tap(int fd, struct ofpbuf *buffer)
+{
     ssize_t retval;
     size_t size = ofpbuf_tailroom(buffer);
 
     do {
-        retval = (rx->is_tap
-                  ? read(rx->fd, buffer->data, size)
-                  : recv(rx->fd, buffer->data, size, MSG_TRUNC));
+        retval = read(fd, buffer->data, size);
     } while (retval < 0 && errno == EINTR);
 
     if (retval < 0) {
-        if (errno != EAGAIN) {
-            VLOG_WARN_RL(&rl, "error receiving Ethernet packet on %s: %s",
-                         ovs_strerror(errno), netdev_rx_get_name(rx_));
-        }
         return errno;
     } else if (retval > size) {
         return EMSGSIZE;
-    } else {
-        buffer->size += retval;
-        return 0;
     }
+
+    buffer->size += retval;
+    return 0;
+}
+
+static int
+netdev_linux_rx_recv(struct netdev_rx *rx_, struct ofpbuf *buffer)
+{
+    struct netdev_rx_linux *rx = netdev_rx_linux_cast(rx_);
+    int retval;
+
+    retval = (rx->is_tap
+              ? netdev_linux_rx_recv_tap(rx->fd, buffer)
+              : netdev_linux_rx_recv_sock(rx->fd, buffer));
+    if (retval && retval != EAGAIN && retval != EMSGSIZE) {
+        VLOG_WARN_RL(&rl, "error receiving Ethernet packet on %s: %s",
+                     ovs_strerror(errno), netdev_rx_get_name(rx_));
+    }
+
+    return retval;
 }
 
 static void
