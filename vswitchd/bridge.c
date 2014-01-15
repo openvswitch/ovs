@@ -1402,10 +1402,8 @@ iface_set_netdev_config(const struct ovsrec_interface *iface_cfg,
     return netdev_set_config(netdev, &iface_cfg->options);
 }
 
-/* Opens a network device for 'if_cfg' and configures it.  If '*ofp_portp'
- * is OFPP_NONE, adds the network device to br->ofproto and stores the OpenFlow
- * port number in '*ofp_portp'; otherwise leaves br->ofproto and '*ofp_portp'
- * untouched.
+/* Opens a network device for 'if_cfg' and configures it.  Adds the network
+ * device to br->ofproto and stores the OpenFlow port number in '*ofp_portp'.
  *
  * If successful, returns 0 and stores the network device in '*netdevp'.  On
  * failure, returns a positive errno value and stores NULL in '*netdevp'. */
