@@ -490,6 +490,11 @@ void bitwise_put(uint64_t value,
 uint64_t bitwise_get(const void *src, unsigned int src_len,
                      unsigned int src_ofs, unsigned int n_bits);
 
+#ifdef _WIN32
+
+char *ovs_lasterror_to_string(void);
+#endif
+
 #ifdef  __cplusplus
 }
 #endif

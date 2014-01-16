@@ -1649,3 +1649,19 @@ exit:
     return ok;
 }
 
+#ifdef _WIN32
+
+/* Calls FormatMessage() with GetLastError() as an argument. Returns
+ * pointer to a buffer that receives the null-terminated string that specifies
+ * the formatted message and that has to be freed by the caller with
+ * LocalFree(). */
+char *
+ovs_lasterror_to_string(void)
+{
+    char *buffer;
+    FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM
+                  | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, GetLastError(), 0,
+                  (char *)&buffer, 0, NULL);
+    return buffer;
+}
+#endif

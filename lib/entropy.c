@@ -56,22 +56,12 @@ get_entropy(void *buffer, size_t n)
 #else
     int error = 0;
     HCRYPTPROV   crypt_prov = 0;
-    LPVOID msg_buf;
 
     CryptAcquireContext(&crypt_prov, NULL, NULL,
                         PROV_RSA_FULL, CRYPT_VERIFYCONTEXT);
     if (!CryptGenRandom(crypt_prov, n, buffer)) {
+        char *msg_buf = ovs_lasterror_to_string();
         error = EINVAL;
-        FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER
-                      | FORMAT_MESSAGE_FROM_SYSTEM
-                      | FORMAT_MESSAGE_IGNORE_INSERTS,
-                      NULL,
-                      GetLastError(),
-                      0,
-                      (LPTSTR)&msg_buf,
-                      0,
-                      NULL
-            );
         VLOG_ERR("CryptGenRandom: read error (%s)", msg_buf);
         LocalFree(msg_buf);
     }
