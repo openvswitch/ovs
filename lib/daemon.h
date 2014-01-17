@@ -21,6 +21,22 @@
 #include <stdbool.h>
 #include <sys/types.h>
 
+/* This file provides an interface for utilities to run in the background
+ * as daemons on POSIX platforms like Linux or as services on Windows platform.
+ * Some of the functionalities defined in this file are only applicable to
+ * POSIX platforms and some are applicable only on Windows. As such, the
+ * function definitions unique to each platform are separated out with
+ * ifdef macros. More descriptive comments on individual functions are provided
+ * in daemon.c (for Linux) and daemon-windows.c (for Windows).
+
+ * The DAEMON_OPTION_ENUMS, DAEMON_LONG_OPTIONS and DAEMON_OPTION_HANDLERS
+ * macros are useful for parsing command-line options in individual utilities.
+ * For e.g., the command-line option "--detach" is recognized on Linux
+ * and results in calling the set_detach() function. The same option is not
+ * recognized on Windows platform.
+ */
+
+#ifndef _WIN32
 #define DAEMON_OPTION_ENUMS                     \
     OPT_DETACH,                                 \
     OPT_NO_CHDIR,                               \
@@ -56,17 +72,39 @@
             daemon_set_monitor();               \
             break;
 
+void set_detach(void);
+void daemon_set_monitor(void);
 void set_pidfile(const char *name);
 void set_no_chdir(void);
-void set_detach(void);
+void ignore_existing_pidfile(void);
+pid_t read_pidfile(const char *name);
+#else
+#define DAEMON_OPTION_ENUMS                     \
+    OPT_SERVICE,                                \
+    OPT_SERVICE_MONITOR
+
+#define DAEMON_LONG_OPTIONS                                             \
+        {"service",            no_argument, NULL, OPT_SERVICE},         \
+        {"service-monitor",    no_argument, NULL, OPT_SERVICE_MONITOR}
+
+#define DAEMON_OPTION_HANDLERS                  \
+        case OPT_SERVICE:                       \
+            break;                              \
+                                                \
+        case OPT_SERVICE_MONITOR:               \
+            break;
+
+void control_handler(DWORD request);
+#endif /* _WIN32 */
+
 bool get_detach(void);
-void daemon_set_monitor(void);
 void daemon_save_fd(int fd);
 void daemonize(void);
 void daemonize_start(void);
 void daemonize_complete(void);
-void ignore_existing_pidfile(void);
 void daemon_usage(void);
-pid_t read_pidfile(const char *name);
+void service_start(int *argcp, char **argvp[]);
+void service_stop(void);
+bool should_service_stop(void);
 
 #endif /* daemon.h */

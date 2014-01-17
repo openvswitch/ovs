@@ -1,3 +1,4 @@
+The following options are valid on POSIX based platforms.
 .TP
 \fB\-\-pidfile\fR[\fB=\fIpidfile\fR]
 Causes a file (by default, \fB\*(PN.pid\fR) to be created indicating
