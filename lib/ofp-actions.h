@@ -750,4 +750,7 @@ const char *ovs_instruction_name_from_type(enum ovs_instruction_type type);
 int ovs_instruction_type_from_name(const char *name);
 enum ovs_instruction_type ovs_instruction_type_from_ofpact_type(
     enum ofpact_type);
+enum ofperr ovs_instruction_type_from_inst_type(
+    enum ovs_instruction_type *instruction_type, const uint16_t inst_type);
+
 #endif /* ofp-actions.h */
