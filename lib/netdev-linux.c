@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,11 +20,11 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <arpa/inet.h>
 #include <inttypes.h>
 #include <linux/filter.h>
 #include <linux/gen_stats.h>
 #include <linux/if_ether.h>
-#include <linux/if_packet.h>
 #include <linux/if_tun.h>
 #include <linux/types.h>
 #include <linux/ethtool.h>
@@ -37,8 +37,10 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <netpacket/packet.h>
 #include <net/if.h>
 #include <net/if_arp.h>
+#include <net/if_packet.h>
 #include <net/route.h>
 #include <netinet/in.h>
 #include <poll.h>
@@ -116,6 +118,9 @@ COVERAGE_DEFINE(netdev_set_ethtool);
  * With all this churn it's easiest to unconditionally define a replacement
  * structure that has everything we want.
  */
+#ifndef PACKET_AUXDATA
+#define PACKET_AUXDATA                  8
+#endif
 #ifndef TP_STATUS_VLAN_VALID
 #define TP_STATUS_VLAN_VALID            (1 << 4)
 #endif
