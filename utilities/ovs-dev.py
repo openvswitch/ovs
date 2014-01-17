@@ -28,7 +28,7 @@ BUILD_GCC = OVS_SRC + "/_build-gcc"
 BUILD_CLANG = OVS_SRC + "/_build-clang"
 PATH = "%(ovs)s/utilities:%(ovs)s/ovsdb:%(ovs)s/vswitchd" % {"ovs": BUILD_GCC}
 
-ENV["CFLAGS"] = "-g -fno-omit-frame-pointer -O0"
+ENV["CFLAGS"] = "-g -fno-omit-frame-pointer"
 ENV["PATH"] = PATH + ":" + ENV["PATH"]
 
 options = None
@@ -73,6 +73,10 @@ def conf():
 
     if options.mandir:
         configure.append("--mandir=" + options.mandir)
+
+    if options.optimize is None:
+        options.optimize = 0
+    ENV["CFLAGS"] = "%s -O%d" % (ENV["CFLAGS"], options.optimize)
 
     _sh("./boot.sh")
 
@@ -320,6 +324,10 @@ def main():
                      action="store_true", help="configure with cached timing")
     group.add_option("--mandir", dest="mandir", metavar="MANDIR",
                      help="configure the man documentation install directory")
+
+    for i in range(4):
+        group.add_option("--O%d" % i, dest="optimize", action="store_const",
+                         const=i, help="compile with -O%d" % i)
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser, "run")
