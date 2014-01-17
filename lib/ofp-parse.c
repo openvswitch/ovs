@@ -639,7 +639,9 @@ parse_named_action(enum ofputil_action_code code,
     char *error = NULL;
     uint16_t ethertype = 0;
     uint16_t vid = 0;
-    uint8_t tos = 0, ecn, ttl;
+    uint8_t tos = 0;
+    uint8_t ecn = 0;
+    uint8_t ttl = 0;
     uint8_t pcp = 0;
 
     switch (code) {
