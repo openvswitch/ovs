@@ -28,7 +28,7 @@ BUILD_GCC = OVS_SRC + "/_build-gcc"
 BUILD_CLANG = OVS_SRC + "/_build-clang"
 PATH = "%(ovs)s/utilities:%(ovs)s/ovsdb:%(ovs)s/vswitchd" % {"ovs": BUILD_GCC}
 
-ENV["CFLAGS"] = "-g -O0"
+ENV["CFLAGS"] = "-g -fno-omit-frame-pointer -O0"
 ENV["PATH"] = PATH + ":" + ENV["PATH"]
 
 options = None
