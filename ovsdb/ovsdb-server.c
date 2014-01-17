@@ -136,6 +136,7 @@ main(int argc, char *argv[])
 
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
+    service_start(&argc, &argv);
     signal(SIGPIPE, SIG_IGN);
     process_init();
 
@@ -302,6 +303,9 @@ main(int argc, char *argv[])
         }
         poll_timer_wait_until(status_timer);
         poll_block();
+        if (should_service_stop()) {
+            exiting = true;
+        }
     }
     ovsdb_jsonrpc_server_destroy(jsonrpc);
     SHASH_FOR_EACH(node, &all_dbs) {
@@ -319,6 +323,7 @@ main(int argc, char *argv[])
         }
     }
 
+    service_stop();
     return 0;
 }
 

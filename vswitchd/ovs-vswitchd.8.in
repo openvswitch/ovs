@@ -86,11 +86,14 @@ only allow privileged users, such as the superuser, to use it.
 \fBovs\-vswitchd\fR emits a log message if \fBmlockall()\fR is
 unavailable or unsuccessful.
 .
+.SS "Daemon Options"
 .ds DD \
 \fBovs\-vswitchd\fR detaches only after it has connected to the \
 database, retrieved the initial configuration, and set up that \
 configuration.
 .so lib/daemon.man
+.SS "Service Options"
+.so lib/service.man
 .SS "Public Key Infrastructure Options"
 .so lib/ssl.man
 .so lib/ssl-bootstrap.man

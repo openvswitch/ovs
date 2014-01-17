@@ -38,6 +38,8 @@ ovsdb/ovsdb-server.1: \
 	lib/daemon-syn.man \
 	lib/daemon.man \
 	lib/memory-unixctl.man \
+	lib/service-syn.man \
+	lib/service.man \
 	lib/ssl-bootstrap-syn.man \
 	lib/ssl-bootstrap.man \
 	lib/ssl-syn.man \
@@ -56,6 +58,8 @@ lib/coverage-unixctl.man:
 lib/daemon-syn.man:
 lib/daemon.man:
 lib/memory-unixctl.man:
+lib/service-syn.man:
+lib/service.man:
 lib/ssl-bootstrap-syn.man:
 lib/ssl-bootstrap.man:
 lib/ssl-syn.man:
@@ -232,6 +236,7 @@ vswitchd/ovs-vswitchd.8: \
 	lib/coverage-unixctl.man \
 	lib/daemon.man \
 	lib/memory-unixctl.man \
+	lib/service.man \
 	lib/ssl-bootstrap.man \
 	lib/ssl.man \
 	lib/vlog-unixctl.man \
@@ -245,6 +250,7 @@ lib/common.man:
 lib/coverage-unixctl.man:
 lib/daemon.man:
 lib/memory-unixctl.man:
+lib/service.man:
 lib/ssl-bootstrap.man:
 lib/ssl.man:
 lib/vlog-unixctl.man:

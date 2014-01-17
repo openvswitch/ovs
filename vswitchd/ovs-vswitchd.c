@@ -73,6 +73,7 @@ main(int argc, char *argv[])
 
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
+    service_start(&argc, &argv);
     remote = parse_options(argc, argv, &unixctl_path);
     signal(SIGPIPE, SIG_IGN);
     sighup = signal_register(SIGHUP);
@@ -127,9 +128,13 @@ main(int argc, char *argv[])
             poll_immediate_wake();
         }
         poll_block();
+        if (should_service_stop()) {
+            exiting = true;
+        }
     }
     bridge_exit();
     unixctl_server_destroy(unixctl);
+    service_stop();
 
     return 0;
 }

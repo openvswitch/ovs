@@ -17,6 +17,7 @@ ovsdb\-server \- Open vSwitch database server
 [\fB\-\-remote=\fIremote\fR]\&...
 [\fB\-\-run=\fIcommand\fR]
 .so lib/daemon-syn.man
+.so lib/service-syn.man
 .so lib/vlog-syn.man
 .so lib/ssl-syn.man
 .so lib/ssl-bootstrap-syn.man
@@ -92,6 +93,8 @@ run a single command, e.g.:
 \fBovsdb\-server\fR detaches only after it starts listening on all \
 configured remotes.
 .so lib/daemon.man
+.SS "Service Options"
+.so lib/service.man
 .SS "Logging Options"
 .so lib/vlog.man
 .SS "Public Key Infrastructure Options"
