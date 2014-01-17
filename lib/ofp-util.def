@@ -44,6 +44,26 @@ OFPAT11_ACTION(OFPAT11_DEC_NW_TTL,   ofp_action_header,   0, NULL)
 OFPAT11_ACTION(OFPAT12_SET_FIELD,    ofp12_action_set_field, 1, "set_field")
 OFPAT11_ACTION(OFPAT11_GROUP,        ofp11_action_group,   0, "group")
 
+#ifndef OFPAT13_ACTION
+#define OFPAT13_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME)
+#endif
+OFPAT13_ACTION(OFPAT13_OUTPUT,       ofp11_action_output,    0, "output")
+OFPAT13_ACTION(OFPAT13_COPY_TTL_OUT, ofp_action_header,      0, "copy_ttl_out")
+OFPAT13_ACTION(OFPAT13_COPY_TTL_IN,  ofp_action_header,      0, "copy_ttl_in")
+OFPAT13_ACTION(OFPAT13_SET_MPLS_TTL, ofp11_action_mpls_ttl,  0, "set_mpls_ttl")
+OFPAT13_ACTION(OFPAT13_DEC_MPLS_TTL, ofp_action_header,      0, "dec_mpls_ttl")
+OFPAT13_ACTION(OFPAT13_PUSH_VLAN,    ofp11_action_push,      0, "push_vlan")
+OFPAT13_ACTION(OFPAT13_POP_VLAN,     ofp_action_header,      0, "pop_vlan")
+OFPAT13_ACTION(OFPAT13_PUSH_MPLS,    ofp11_action_push,      0, "push_mpls")
+OFPAT13_ACTION(OFPAT13_POP_MPLS,     ofp11_action_pop_mpls,  0, "pop_mpls")
+OFPAT13_ACTION(OFPAT13_SET_QUEUE,    ofp11_action_set_queue, 0, "set_queue")
+OFPAT13_ACTION(OFPAT13_GROUP,        ofp11_action_group,     0, "group")
+OFPAT13_ACTION(OFPAT13_SET_NW_TTL,   ofp11_action_nw_ttl,    0, "set_nw_ttl")
+OFPAT13_ACTION(OFPAT13_DEC_NW_TTL,   ofp_action_header,      0, "dec_nw_ttl")
+OFPAT13_ACTION(OFPAT13_SET_FIELD,    ofp12_action_set_field, 1, "set_field")
+OFPAT13_ACTION(OFPAT13_PUSH_PBB,     ofp11_action_push,      0, "push_pbb")
+OFPAT13_ACTION(OFPAT13_POP_PBB,      ofp_action_header,      0, "pop_pbb")
+
 #ifndef NXAST_ACTION
 #define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME)
 #endif
@@ -80,4 +100,5 @@ NXAST_ACTION(NXAST_SAMPLE,          nx_action_sample,       0, "sample")
 
 #undef OFPAT10_ACTION
 #undef OFPAT11_ACTION
+#undef OFPAT13_ACTION
 #undef NXAST_ACTION

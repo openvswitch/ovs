@@ -5236,6 +5236,7 @@ static const char *const names[OFPUTIL_N_ACTIONS] = {
     NULL,
 #define OFPAT10_ACTION(ENUM, STRUCT, NAME)             NAME,
 #define OFPAT11_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) NAME,
+#define OFPAT13_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) NAME,
 #define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME)   NAME,
 #include "ofp-util.def"
 };
@@ -5275,6 +5276,8 @@ ofputil_put_action(enum ofputil_action_code code, struct ofpbuf *buf)
 {
     switch (code) {
     case OFPUTIL_ACTION_INVALID:
+#define OFPAT13_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) case OFPUTIL_##ENUM:
+#include "ofp-util.def"
         OVS_NOT_REACHED();
 
 #define OFPAT10_ACTION(ENUM, STRUCT, NAME)                  \
@@ -5305,6 +5308,8 @@ ofputil_put_action(enum ofputil_action_code code, struct ofpbuf *buf)
         return s;                                               \
     }
 #define OFPAT11_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) \
+    OFPAT10_ACTION(ENUM, STRUCT, NAME)
+#define OFPAT13_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) \
     OFPAT10_ACTION(ENUM, STRUCT, NAME)
 #define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME)            \
     void                                                        \

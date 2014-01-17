@@ -650,6 +650,7 @@ parse_named_action(enum ofputil_action_code code,
 
     case OFPUTIL_OFPAT10_OUTPUT:
     case OFPUTIL_OFPAT11_OUTPUT:
+    case OFPUTIL_OFPAT13_OUTPUT:
         error = parse_output(arg, ofpacts);
         break;
 
@@ -686,14 +687,17 @@ parse_named_action(enum ofputil_action_code code,
         break;
 
     case OFPUTIL_OFPAT12_SET_FIELD:
+    case OFPUTIL_OFPAT13_SET_FIELD:
         return set_field_parse(arg, ofpacts, usable_protocols);
 
     case OFPUTIL_OFPAT10_STRIP_VLAN:
     case OFPUTIL_OFPAT11_POP_VLAN:
+    case OFPUTIL_OFPAT13_POP_VLAN:
         ofpact_put_STRIP_VLAN(ofpacts)->ofpact.compat = code;
         break;
 
     case OFPUTIL_OFPAT11_PUSH_VLAN:
+    case OFPUTIL_OFPAT13_PUSH_VLAN:
         *usable_protocols &= OFPUTIL_P_OF11_UP;
         error = str_to_u16(arg, "ethertype", &ethertype);
         if (error) {
@@ -709,6 +713,7 @@ parse_named_action(enum ofputil_action_code code,
         break;
 
     case OFPUTIL_OFPAT11_SET_QUEUE:
+    case OFPUTIL_OFPAT13_SET_QUEUE:
         error = str_to_u32(arg, &ofpact_put_SET_QUEUE(ofpacts)->queue_id);
         break;
 
@@ -758,6 +763,7 @@ parse_named_action(enum ofputil_action_code code,
         break;
 
     case OFPUTIL_OFPAT11_SET_NW_TTL:
+    case OFPUTIL_OFPAT13_SET_NW_TTL:
         error = str_to_u8(arg, "TTL", &ttl);
         if (error) {
             return error;
@@ -767,6 +773,7 @@ parse_named_action(enum ofputil_action_code code,
         break;
 
     case OFPUTIL_OFPAT11_DEC_NW_TTL:
+    case OFPUTIL_OFPAT13_DEC_NW_TTL:
         OVS_NOT_REACHED();
 
     case OFPUTIL_OFPAT10_SET_TP_SRC:
@@ -861,10 +868,12 @@ parse_named_action(enum ofputil_action_code code,
 
     case OFPUTIL_NXAST_SET_MPLS_TTL:
     case OFPUTIL_OFPAT11_SET_MPLS_TTL:
+    case OFPUTIL_OFPAT13_SET_MPLS_TTL:
         error = parse_set_mpls_ttl(ofpacts, arg);
         break;
 
     case OFPUTIL_OFPAT11_DEC_MPLS_TTL:
+    case OFPUTIL_OFPAT13_DEC_MPLS_TTL:
     case OFPUTIL_NXAST_DEC_MPLS_TTL:
         ofpact_put_DEC_MPLS_TTL(ofpacts);
         break;
@@ -878,6 +887,7 @@ parse_named_action(enum ofputil_action_code code,
         break;
 
     case OFPUTIL_OFPAT11_PUSH_MPLS:
+    case OFPUTIL_OFPAT13_PUSH_MPLS:
     case OFPUTIL_NXAST_PUSH_MPLS:
         error = str_to_u16(arg, "push_mpls", &ethertype);
         if (!error) {
@@ -886,6 +896,7 @@ parse_named_action(enum ofputil_action_code code,
         break;
 
     case OFPUTIL_OFPAT11_POP_MPLS:
+    case OFPUTIL_OFPAT13_POP_MPLS:
     case OFPUTIL_NXAST_POP_MPLS:
         error = str_to_u16(arg, "pop_mpls", &ethertype);
         if (!error) {
@@ -894,8 +905,16 @@ parse_named_action(enum ofputil_action_code code,
         break;
 
     case OFPUTIL_OFPAT11_GROUP:
+    case OFPUTIL_OFPAT13_GROUP:
         error = str_to_u32(arg, &ofpact_put_GROUP(ofpacts)->group_id);
         break;
+
+    /* FIXME when implement OFPAT13_* */
+    case OFPUTIL_OFPAT13_COPY_TTL_OUT:
+    case OFPUTIL_OFPAT13_COPY_TTL_IN:
+    case OFPUTIL_OFPAT13_PUSH_PBB:
+    case OFPUTIL_OFPAT13_POP_PBB:
+        OVS_NOT_REACHED();
 
     case OFPUTIL_NXAST_STACK_PUSH:
         error = nxm_parse_stack_action(ofpact_put_STACK_PUSH(ofpacts), arg);
