@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,7 +98,7 @@ void nl_transact_multiple(int protocol, struct nl_transaction **, size_t n);
 /* Table dumping. */
 struct nl_dump {
     struct nl_sock *sock;       /* Socket being dumped. */
-    uint32_t seq;               /* Expected nlmsg_seq for replies. */
+    uint32_t nl_seq;            /* Expected nlmsg_seq for replies. */
     struct ofpbuf buffer;       /* Receive buffer currently being iterated. */
     int status;                 /* 0=OK, EOF=done, or positive errno value. */
 };

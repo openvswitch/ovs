@@ -699,7 +699,7 @@ nl_dump_start(struct nl_dump *dump, int protocol, const struct ofpbuf *request)
     nl_msg_nlmsghdr(request)->nlmsg_flags |= NLM_F_DUMP | NLM_F_ACK;
     dump->status = nl_sock_send__(dump->sock, request,
                                   nl_sock_allocate_seq(dump->sock, 1), true);
-    dump->seq = nl_msg_nlmsghdr(request)->nlmsg_seq;
+    dump->nl_seq = nl_msg_nlmsghdr(request)->nlmsg_seq;
 }
 
 /* Helper function for nl_dump_next(). */
@@ -715,9 +715,9 @@ nl_dump_recv(struct nl_dump *dump)
     }
 
     nlmsghdr = nl_msg_nlmsghdr(&dump->buffer);
-    if (dump->seq != nlmsghdr->nlmsg_seq) {
+    if (dump->nl_seq != nlmsghdr->nlmsg_seq) {
         VLOG_DBG_RL(&rl, "ignoring seq %#"PRIx32" != expected %#"PRIx32,
-                    nlmsghdr->nlmsg_seq, dump->seq);
+                    nlmsghdr->nlmsg_seq, dump->nl_seq);
         return EAGAIN;
     }
 
