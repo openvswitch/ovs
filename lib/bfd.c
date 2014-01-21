@@ -172,6 +172,9 @@ struct bfd {
     uint8_t eth_dst[ETH_ADDR_LEN];/* Ethernet destination address. */
     bool eth_dst_set;             /* 'eth_dst' set through database. */
 
+    ovs_be32 ip_src;              /* IPv4 source address. */
+    ovs_be32 ip_dst;              /* IPv4 destination address. */
+
     uint16_t udp_src;             /* UDP source port. */
 
     /* All timers in milliseconds. */
@@ -217,6 +220,8 @@ static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
 static struct hmap all_bfds__ = HMAP_INITIALIZER(&all_bfds__);
 static struct hmap *const all_bfds OVS_GUARDED_BY(mutex) = &all_bfds__;
 
+static bool bfd_lookup_ip(const char *host_name, struct in_addr *)
+    OVS_REQUIRES(mutex);
 static bool bfd_forwarding__(struct bfd *) OVS_REQUIRES(mutex);
 static bool bfd_in_poll(const struct bfd *) OVS_REQUIRES(mutex);
 static void bfd_poll(struct bfd *bfd) OVS_REQUIRES(mutex);
@@ -313,7 +318,8 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
     bool need_poll = false;
     bool cfg_min_rx_changed = false;
     bool cpath_down, forwarding_if_rx;
-    const char *hwaddr;
+    const char *hwaddr, *ip_src, *ip_dst;
+    struct in_addr in_addr;
     uint8_t ea[ETH_ADDR_LEN];
 
     if (ovsthread_once_start(&once)) {
@@ -414,6 +420,20 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
     } else if (bfd->eth_dst_set) {
         memcpy(bfd->eth_dst, eth_addr_bfd, ETH_ADDR_LEN);
         bfd->eth_dst_set = false;
+    }
+
+    ip_src = smap_get(cfg, "bfd_src_ip");
+    if (ip_src && bfd_lookup_ip(ip_src, &in_addr)) {
+        memcpy(&bfd->ip_src, &in_addr, sizeof in_addr);
+    } else {
+        bfd->ip_src = htonl(0xA9FE0100); /* 169.254.1.0. */
+    }
+
+    ip_dst = smap_get(cfg, "bfd_dst_ip");
+    if (ip_dst && bfd_lookup_ip(ip_dst, &in_addr)) {
+        memcpy(&bfd->ip_dst, &in_addr, sizeof in_addr);
+    } else {
+        bfd->ip_dst = htonl(0xA9FE0101); /* 169.254.1.1. */
     }
 
     forwarding_if_rx = smap_get_bool(cfg, "forwarding_if_rx", false);
@@ -570,9 +590,8 @@ bfd_put_packet(struct bfd *bfd, struct ofpbuf *p,
     ip->ip_ttl = MAXTTL;
     ip->ip_tos = IPTOS_LOWDELAY | IPTOS_THROUGHPUT;
     ip->ip_proto = IPPROTO_UDP;
-    /* Use link local addresses: */
-    put_16aligned_be32(&ip->ip_src, htonl(0xA9FE0100)); /* 169.254.1.0. */
-    put_16aligned_be32(&ip->ip_dst, htonl(0xA9FE0101)); /* 169.254.1.1. */
+    put_16aligned_be32(&ip->ip_src, bfd->ip_src);
+    put_16aligned_be32(&ip->ip_dst, bfd->ip_dst);
     ip->ip_csum = csum(ip, sizeof *ip);
 
     udp = ofpbuf_put_zeros(p, sizeof *udp);
@@ -863,6 +882,16 @@ bfd_forwarding__(struct bfd *bfd) OVS_REQUIRES(mutex)
 }
 
 /* Helpers. */
+static bool
+bfd_lookup_ip(const char *host_name, struct in_addr *addr)
+{
+    if (!inet_aton(host_name, addr)) {
+        VLOG_ERR_RL(&rl, "\"%s\" is not a valid IP address", host_name);
+        return false;
+    }
+    return true;
+}
+
 static bool
 bfd_in_poll(const struct bfd *bfd) OVS_REQUIRES(mutex)
 {

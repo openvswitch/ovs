@@ -2004,6 +2004,16 @@
 	  expected as destination for received BFD packets.  The default is
 	  <code>00:23:20:00:00:01</code>.
 	</column>
+
+	<column name="bfd" key="bfd_src_ip">
+          Set to an IPv4 address to set the IP address used as source for
+          transmitted BFD packets.  The default is <code>169.254.1.0</code>.
+	</column>
+
+	<column name="bfd" key="bfd_dst_ip">
+          Set to an IPv4 address to set the IP address used as destination
+          for transmitted BFD packets.  The default is <code>169.254.1.1</code>.
+	</column>
       </group>
 
       <group title="BFD Status">
