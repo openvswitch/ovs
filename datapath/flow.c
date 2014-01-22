@@ -476,27 +476,8 @@ static struct flow_table *__flow_tbl_alloc(int new_size)
 
 static void __flow_tbl_destroy(struct flow_table *table)
 {
-	int i;
-
-	if (table->keep_flows)
-		goto skip_flows;
-
-	for (i = 0; i < table->n_buckets; i++) {
-		struct sw_flow *flow;
-		struct hlist_head *head = flex_array_get(table->buckets, i);
-		struct hlist_node *n;
-		int ver = table->node_ver;
-
-		hlist_for_each_entry_safe(flow, n, head, hash_node[ver]) {
-			hlist_del_rcu(&flow->hash_node[ver]);
-			ovs_flow_free(flow, false);
-		}
-	}
-
 	BUG_ON(!list_empty(table->mask_list));
 	kfree(table->mask_list);
-
-skip_flows:
 	free_buckets(table->buckets);
 	kfree(table);
 }
@@ -528,9 +509,27 @@ static void flow_tbl_destroy_rcu_cb(struct rcu_head *rcu)
 
 void ovs_flow_tbl_destroy(struct flow_table *table, bool deferred)
 {
+	int i;
+
 	if (!table)
 		return;
 
+	if (table->keep_flows)
+		goto skip_flows;
+
+	for (i = 0; i < table->n_buckets; i++) {
+		struct sw_flow *flow;
+		struct hlist_head *head = flex_array_get(table->buckets, i);
+		struct hlist_node *n;
+		int ver = table->node_ver;
+
+		hlist_for_each_entry_safe(flow, n, head, hash_node[ver]) {
+			hlist_del_rcu(&flow->hash_node[ver]);
+			ovs_flow_free(flow, deferred);
+		}
+	}
+
+skip_flows:
 	if (deferred)
 		call_rcu(&table->rcu, flow_tbl_destroy_rcu_cb);
 	else
