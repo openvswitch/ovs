@@ -141,10 +141,9 @@ SUFFIXES += .in
                 -e 's,[@]abs_top_srcdir[@],$(abs_top_srcdir),g' \
             > $@.tmp
 	@if head -n 1 $@.tmp | grep '#!' > /dev/null; then \
-	    echo chmod +x $@.tmp; \
 	    chmod +x $@.tmp; \
 	fi
-	mv $@.tmp $@
+	$(AM_V_GEN) mv $@.tmp $@
 
 .PHONY: clean-pycov
 clean-pycov:
@@ -262,7 +261,8 @@ manpage-check: $(man_MANS) $(dist_man_MANS) $(noinst_man_MANS)
 		if grep warning: $@.tmp; then error=:; fi; \
 		rm -f $@.tmp; \
 	done; \
-	if $$error; then exit 1; else echo touch $@; touch $@; fi
+	if $$error; then exit 1; else touch $@; fi
+	$(AM_V_GEN) touch -c $@
 CLEANFILES += manpage-check
 endif
 
