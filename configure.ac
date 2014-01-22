@@ -137,4 +137,6 @@ if test "$HAVE_NETLINK" = yes && test "$ESX" = no; then
     AC_DEFINE([LINUX_DATAPATH], [1], [System uses the linux datapath module.])
 fi
 
+m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES])
+
 AC_OUTPUT
