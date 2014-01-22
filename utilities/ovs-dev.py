@@ -63,7 +63,7 @@ def conf():
     configure = ["../configure", "--prefix=" + ROOT, "--localstatedir=" + ROOT,
                  "--with-logdir=%s/log" % ROOT, "--with-rundir=%s/run" % ROOT,
                  "--with-linux=/lib/modules/%s/build" % uname(),
-                 "--with-dbdir=" + ROOT]
+                 "--with-dbdir=" + ROOT, "--silent"]
 
     if options.werror:
         configure.append("--enable-Werror")
