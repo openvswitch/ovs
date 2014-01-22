@@ -127,6 +127,11 @@ struct udpif {
     /* Following fields are accessed and modified by different threads. */
     atomic_llong max_idle;             /* Maximum datapath flow idle time. */
     atomic_uint flow_limit;            /* Datapath flow hard limit. */
+
+    /* n_flows_mutex prevents multiple threads updating these concurrently. */
+    atomic_uint64_t n_flows;           /* Number of flows in the datapath. */
+    atomic_llong n_flows_timestamp;    /* Last time n_flows was updated. */
+    struct ovs_mutex n_flows_mutex;
 };
 
 enum upcall_type {
@@ -223,7 +228,7 @@ static void *udpif_flow_dumper(void *);
 static void *udpif_dispatcher(void *);
 static void *udpif_upcall_handler(void *);
 static void *udpif_revalidator(void *);
-static uint64_t udpif_get_n_flows(const struct udpif *);
+static uint64_t udpif_get_n_flows(struct udpif *);
 static void revalidate_udumps(struct revalidator *, struct list *udumps);
 static void revalidator_sweep(struct revalidator *);
 static void upcall_unixctl_show(struct unixctl_conn *conn, int argc,
@@ -261,6 +266,9 @@ udpif_create(struct dpif_backer *backer, struct dpif *dpif)
     udpif->dump_seq = seq_create();
     latch_init(&udpif->exit_latch);
     list_push_back(&all_udpifs, &udpif->list_node);
+    atomic_init(&udpif->n_flows, 0);
+    atomic_init(&udpif->n_flows_timestamp, LLONG_MIN);
+    ovs_mutex_init(&udpif->n_flows_mutex);
 
     return udpif;
 }
@@ -277,6 +285,9 @@ udpif_destroy(struct udpif *udpif)
     seq_destroy(udpif->dump_seq);
     atomic_destroy(&udpif->max_idle);
     atomic_destroy(&udpif->flow_limit);
+    atomic_destroy(&udpif->n_flows);
+    atomic_destroy(&udpif->n_flows_timestamp);
+    ovs_mutex_destroy(&udpif->n_flows_mutex);
     free(udpif);
 }
 
@@ -470,12 +481,25 @@ upcall_destroy(struct upcall *upcall)
 }
 
 static uint64_t
-udpif_get_n_flows(const struct udpif *udpif)
+udpif_get_n_flows(struct udpif *udpif)
 {
-    struct dpif_dp_stats stats;
+    long long int time, now;
+    uint64_t flow_count;
 
-    dpif_get_dp_stats(udpif->dpif, &stats);
-    return stats.n_flows;
+    now = time_msec();
+    atomic_read(&udpif->n_flows_timestamp, &time);
+    if (time < now - 100 && !ovs_mutex_trylock(&udpif->n_flows_mutex)) {
+        struct dpif_dp_stats stats;
+
+        atomic_store(&udpif->n_flows_timestamp, now);
+        dpif_get_dp_stats(udpif->dpif, &stats);
+        flow_count = stats.n_flows;
+        atomic_store(&udpif->n_flows, flow_count);
+        ovs_mutex_unlock(&udpif->n_flows_mutex);
+    } else {
+        atomic_read(&udpif->n_flows, &flow_count);
+    }
+    return flow_count;
 }
 
 /* The dispatcher thread is responsible for receiving upcalls from the kernel,
