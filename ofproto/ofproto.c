@@ -734,12 +734,12 @@ ofproto_set_mac_table_config(struct ofproto *ofproto, unsigned idle_time,
 }
 
 void
-ofproto_set_threads(size_t n_handlers_, size_t n_revalidators_)
+ofproto_set_threads(int n_handlers_, int n_revalidators_)
 {
     int threads = MAX(count_cpu_cores(), 2);
 
-    n_revalidators = n_revalidators_;
-    n_handlers = n_handlers_;
+    n_revalidators = MAX(n_revalidators_, 0);
+    n_handlers = MAX(n_handlers_, 0);
 
     if (!n_revalidators) {
         n_revalidators = n_handlers

@@ -247,7 +247,7 @@ void ofproto_set_flow_miss_model(unsigned model);
 void ofproto_set_forward_bpdu(struct ofproto *, bool forward_bpdu);
 void ofproto_set_mac_table_config(struct ofproto *, unsigned idle_time,
                                   size_t max_entries);
-void ofproto_set_threads(size_t n_handlers, size_t n_revalidators);
+void ofproto_set_threads(int n_handlers, int n_revalidators);
 void ofproto_set_dp_desc(struct ofproto *, const char *dp_desc);
 int ofproto_set_snoops(struct ofproto *, const struct sset *snoops);
 int ofproto_set_netflow(struct ofproto *,
