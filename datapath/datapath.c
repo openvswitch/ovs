@@ -166,7 +166,6 @@ static void destroy_dp_rcu(struct rcu_head *rcu)
 {
 	struct datapath *dp = container_of(rcu, struct datapath, rcu);
 
-	ovs_flow_tbl_destroy((__force struct flow_table *)dp->table, false);
 	free_percpu(dp->stats_percpu);
 	release_net(ovs_dp_get_net(dp));
 	kfree(dp->ports);
@@ -1778,6 +1777,8 @@ static void __dp_destroy(struct datapath *dp)
  	 * all port in datapath are destroyed first before freeing datapath.
  	 */
 	ovs_dp_detach_port(ovs_vport_ovsl(dp, OVSP_LOCAL));
+
+	ovs_flow_tbl_destroy((__force struct flow_table *)dp->table, true);
 
 	call_rcu(&dp->rcu, destroy_dp_rcu);
 }
