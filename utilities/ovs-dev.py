@@ -62,7 +62,6 @@ def conf():
 
     configure = ["../configure", "--prefix=" + ROOT, "--localstatedir=" + ROOT,
                  "--with-logdir=%s/log" % ROOT, "--with-rundir=%s/run" % ROOT,
-                 "--with-linux=/lib/modules/%s/build" % uname(),
                  "--enable-silent-rules", "--with-dbdir=" + ROOT, "--silent"]
 
     if options.werror:
@@ -86,7 +85,7 @@ def conf():
         pass # Directory exists.
 
     os.chdir(BUILD_GCC)
-    _sh(*configure)
+    _sh(*(configure + ["--with-linux=/lib/modules/%s/build" % uname()]))
 
     try:
         _sh("clang --version", check=True)
