@@ -39,7 +39,7 @@
 #include "poll-loop.h"
 #include "util.h"
 #include "vlog.h"
-#if AF_PACKET && LINUX_DATAPATH
+#ifdef __linux__
 #include <linux/if_packet.h>
 #endif
 #ifdef HAVE_NETLINK
@@ -51,9 +51,11 @@ VLOG_DEFINE_THIS_MODULE(socket_util);
 
 /* #ifdefs make it a pain to maintain code: you have to try to build both ways.
  * Thus, this file compiles all of the code regardless of the target, by
- * writing "if (LINUX_DATAPATH)" instead of "#ifdef __linux__". */
-#ifndef LINUX_DATAPATH
-#define LINUX_DATAPATH 0
+ * writing "if (LINUX)" instead of "#ifdef __linux__". */
+#ifdef __linux__
+#define LINUX 0
+#else
+#define LINUX 1
 #endif
 
 #ifndef O_DIRECTORY
@@ -292,7 +294,7 @@ drain_rcvbuf(int fd)
          *
          * On other Unix-like OSes, MSG_TRUNC has no effect in the flags
          * argument. */
-        char buffer[LINUX_DATAPATH ? 1 : 2048];
+        char buffer[LINUX ? 1 : 2048];
         ssize_t n_bytes = recv(fd, buffer, sizeof buffer,
                                MSG_TRUNC | MSG_DONTWAIT);
         if (n_bytes <= 0 || n_bytes >= rcvbuf) {
@@ -350,7 +352,7 @@ shorten_name_via_proc(const char *name, char short_name[MAX_UN_LEN + 1],
     int dirfd;
     int len;
 
-    if (!LINUX_DATAPATH) {
+    if (LINUX) {
         return ENAMETOOLONG;
     }
 
@@ -1146,7 +1148,7 @@ describe_sockaddr(struct ds *string, int fd,
             }
         }
 #endif
-#if AF_PACKET && LINUX_DATAPATH
+#if __linux__
         else if (ss.ss_family == AF_PACKET) {
             struct sockaddr_ll sll;
 
@@ -1176,7 +1178,7 @@ describe_sockaddr(struct ds *string, int fd,
 }
 
 
-#ifdef LINUX_DATAPATH
+#ifdef __linux__
 static void
 put_fd_filename(struct ds *string, int fd)
 {
@@ -1221,7 +1223,7 @@ describe_fd(int fd)
                               : S_ISFIFO(s.st_mode) ? "FIFO"
                               : S_ISLNK(s.st_mode) ? "symbolic link"
                               : "unknown"));
-#ifdef LINUX_DATAPATH
+#ifdef __linux__
         put_fd_filename(&string, fd);
 #endif
     }

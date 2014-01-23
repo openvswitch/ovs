@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -93,7 +93,7 @@ run_command(int argc, char *argv[], const struct command commands[])
 
 /* Process title. */
 
-#ifdef LINUX_DATAPATH
+#ifdef __linux__
 static struct ovs_mutex proctitle_mutex = OVS_MUTEX_INITIALIZER;
 
 /* Start of command-line arguments in memory. */
@@ -199,7 +199,7 @@ proctitle_restore(void)
     }
     ovs_mutex_unlock(&proctitle_mutex);
 }
-#else  /* !LINUX_DATAPATH*/
+#else  /* !__linux__ */
 /* Stubs that don't do anything on non-Linux systems. */
 
 void
@@ -219,4 +219,4 @@ void
 proctitle_restore(void)
 {
 }
-#endif  /* !LINUX_DATAPATH */
+#endif  /* !__linux__ */

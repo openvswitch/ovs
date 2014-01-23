@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2013 Nicira, Inc.
+ * Copyright (c) 2011, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ struct vlandev_class {
     int (*vd_del)(const char *vlan_dev);
 };
 
-#ifdef LINUX_DATAPATH
+#ifdef __linux__
 static const struct vlandev_class vlandev_linux_class;
 #endif
 static const struct vlandev_class vlandev_stub_class;
@@ -61,7 +61,7 @@ static const struct vlandev_class *
 vlandev_get_class(void)
 {
     if (!vd_class) {
-#ifdef LINUX_DATAPATH
+#if __linux__
         vd_class = &vlandev_linux_class;
 #else
         vd_class = &vlandev_stub_class;
@@ -161,7 +161,7 @@ vlandev_get_name(const char *real_dev_name, int vid)
 
 /* The Linux vlandev implementation. */
 
-#ifdef LINUX_DATAPATH
+#ifdef __linux__
 #include "rtnetlink-link.h"
 #include <linux/if_vlan.h>
 #include <linux/sockios.h>

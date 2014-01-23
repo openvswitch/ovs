@@ -102,7 +102,7 @@ netdev_initialize(void)
         fatal_signal_add_hook(restore_all_flags, NULL, NULL, true);
         netdev_vport_patch_register();
 
-#ifdef LINUX_DATAPATH
+#ifdef __linux__
         netdev_register_provider(&netdev_linux_class);
         netdev_register_provider(&netdev_internal_class);
         netdev_register_provider(&netdev_tap_class);
