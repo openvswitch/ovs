@@ -90,6 +90,7 @@ OVS_CHECK_ATOMIC_ALWAYS_LOCK_FREE(4)
 OVS_CHECK_ATOMIC_ALWAYS_LOCK_FREE(8)
 OVS_CHECK_POSIX_AIO
 OVS_CHECK_PTHREAD_SET_NAME
+OVS_CHECK_LINUX_HOST
 
 OVS_CHECK_INCLUDE_NEXT([stdio.h string.h])
 AC_CONFIG_FILES([lib/stdio.h lib/string.h])
@@ -131,11 +132,6 @@ dnl This makes sure that include/openflow gets created in the build directory.
 AC_CONFIG_COMMANDS([include/openflow/openflow.h.stamp])
 
 AC_CONFIG_COMMANDS([utilities/bugtool/dummy], [:])
-
-AM_CONDITIONAL([LINUX_DATAPATH], [test "$HAVE_NETLINK" = yes && test "$ESX" = no])
-if test "$HAVE_NETLINK" = yes && test "$ESX" = no; then
-    AC_DEFINE([LINUX_DATAPATH], [1], [System uses the linux datapath module.])
-fi
 
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES])
 

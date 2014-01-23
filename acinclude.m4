@@ -1,6 +1,6 @@
 # -*- autoconf -*-
 
-# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -579,3 +579,18 @@ AC_DEFUN([OVS_CHECK_PTHREAD_SET_NAME],
 	  ;;
      esac
    fi])
+
+dnl OVS_CHECK_LINUX_HOST.
+dnl
+dnl Checks whether we're building for a Linux host, based on the presence of
+dnl the __linux__ preprocessor symbol, and sets up an Automake conditional
+dnl LINUX based on the result.
+AC_DEFUN([OVS_CHECK_LINUX_HOST],
+  [AC_CACHE_CHECK(
+     [whether __linux__ is defined],
+     [ovs_cv_linux],
+     [AC_COMPILE_IFELSE(
+        [AC_LANG_PROGRAM([enum { LINUX = __linux__};], [])],
+        [ovs_cv_linux=true],
+        [ovs_cv_linux=false])])
+   AM_CONDITIONAL([LINUX], [$ovs_cv_linux])])

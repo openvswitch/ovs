@@ -274,7 +274,7 @@ if HAVE_WNO_UNUSED_PARAMETER
 lib_libsflow_la_CFLAGS += -Wno-unused-parameter
 endif
 
-if LINUX_DATAPATH
+if LINUX
 lib_libopenvswitch_la_SOURCES += \
 	lib/dpif-linux.c \
 	lib/dpif-linux.h \
