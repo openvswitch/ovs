@@ -1460,132 +1460,85 @@ netdev_bsd_update_flags(struct netdev *netdev_, enum netdev_flags off,
     return error;
 }
 
+/* Linux has also different GET_STATS, SET_STATS,
+ * GET_STATUS)
+ */
+#define NETDEV_BSD_CLASS(NAME, CONSTRUCT,            \
+                         GET_FEATURES)               \
+{                                                    \
+    NAME,                                            \
+                                                     \
+    NULL, /* init */                                 \
+    netdev_bsd_run,                                  \
+    netdev_bsd_wait,                                 \
+    netdev_bsd_alloc,                                \
+    CONSTRUCT,                                       \
+    netdev_bsd_destruct,                             \
+    netdev_bsd_dealloc,                              \
+    NULL, /* get_config */                           \
+    NULL, /* set_config */                           \
+    NULL, /* get_tunnel_config */                    \
+                                                     \
+    netdev_bsd_send,                                 \
+    netdev_bsd_send_wait,                            \
+                                                     \
+    netdev_bsd_set_etheraddr,                        \
+    netdev_bsd_get_etheraddr,                        \
+    netdev_bsd_get_mtu,                              \
+    NULL, /* set_mtu */                              \
+    netdev_bsd_get_ifindex,                          \
+    netdev_bsd_get_carrier,                          \
+    NULL, /* get_carrier_resets */                   \
+    NULL, /* set_miimon_interval */                  \
+    netdev_bsd_get_stats,                            \
+    NULL, /* set_stats */                            \
+                                                     \
+    GET_FEATURES,                                    \
+    NULL, /* set_advertisement */                    \
+    NULL, /* set_policing */                         \
+    NULL, /* get_qos_type */                         \
+    NULL, /* get_qos_capabilities */                 \
+    NULL, /* get_qos */                              \
+    NULL, /* set_qos */                              \
+    NULL, /* get_queue */                            \
+    NULL, /* set_queue */                            \
+    NULL, /* delete_queue */                         \
+    NULL, /* get_queue_stats */                      \
+    NULL, /* queue_dump_start */                     \
+    NULL, /* queue_dump_next */                      \
+    NULL, /* queue_dump_done */                      \
+    NULL, /* dump_queue_stats */                     \
+                                                     \
+    netdev_bsd_get_in4,                              \
+    netdev_bsd_set_in4,                              \
+    netdev_bsd_get_in6,                              \
+    NULL, /* add_router */                           \
+    netdev_bsd_get_next_hop,                         \
+    NULL, /* get_status */                           \
+    netdev_bsd_arp_lookup, /* arp_lookup */          \
+                                                     \
+    netdev_bsd_update_flags,                         \
+                                                     \
+    netdev_bsd_rx_alloc,                             \
+    netdev_bsd_rx_construct,                         \
+    netdev_bsd_rx_destruct,                          \
+    netdev_bsd_rx_dealloc,                           \
+    netdev_bsd_rx_recv,                              \
+    netdev_bsd_rx_wait,                              \
+    netdev_bsd_rx_drain,                             \
+}
 
-const struct netdev_class netdev_bsd_class = {
-    "system",
+const struct netdev_class netdev_bsd_class =
+    NETDEV_BSD_CLASS(
+        "system",
+        netdev_bsd_construct_system,
+        netdev_bsd_get_features);
 
-    NULL, /* init */
-    netdev_bsd_run,
-    netdev_bsd_wait,
-    netdev_bsd_alloc,
-    netdev_bsd_construct_system,
-    netdev_bsd_destruct,
-    netdev_bsd_dealloc,
-    NULL, /* get_config */
-    NULL, /* set_config */
-    NULL, /* get_tunnel_config */
-
-    netdev_bsd_send,
-    netdev_bsd_send_wait,
-
-    netdev_bsd_set_etheraddr,
-    netdev_bsd_get_etheraddr,
-    netdev_bsd_get_mtu,
-    NULL, /* set_mtu */
-    netdev_bsd_get_ifindex,
-    netdev_bsd_get_carrier,
-    NULL, /* get_carrier_resets */
-    NULL, /* set_miimon_interval */
-    netdev_bsd_get_stats,
-    NULL, /* set_stats */
-
-    netdev_bsd_get_features,
-    NULL, /* set_advertisement */
-    NULL, /* set_policing */
-    NULL, /* get_qos_type */
-    NULL, /* get_qos_capabilities */
-    NULL, /* get_qos */
-    NULL, /* set_qos */
-    NULL, /* get_queue */
-    NULL, /* set_queue */
-    NULL, /* delete_queue */
-    NULL, /* get_queue_stats */
-    NULL, /* queue_dump_start */
-    NULL, /* queue_dump_next */
-    NULL, /* queue_dump_done */
-    NULL, /* dump_queue_stats */
-
-    netdev_bsd_get_in4,
-    netdev_bsd_set_in4,
-    netdev_bsd_get_in6,
-    NULL, /* add_router */
-    netdev_bsd_get_next_hop,
-    NULL, /* get_status */
-    netdev_bsd_arp_lookup, /* arp_lookup */
-
-    netdev_bsd_update_flags,
-
-    netdev_bsd_rx_alloc,
-    netdev_bsd_rx_construct,
-    netdev_bsd_rx_destruct,
-    netdev_bsd_rx_dealloc,
-    netdev_bsd_rx_recv,
-    netdev_bsd_rx_wait,
-    netdev_bsd_rx_drain,
-};
-
-const struct netdev_class netdev_tap_class = {
-    "tap",
-
-    NULL, /* init */
-    netdev_bsd_run,
-    netdev_bsd_wait,
-    netdev_bsd_alloc,
-    netdev_bsd_construct_tap,
-    netdev_bsd_destruct,
-    netdev_bsd_dealloc,
-    NULL, /* get_config */
-    NULL, /* set_config */
-    NULL, /* get_tunnel_config */
-
-    netdev_bsd_send,
-    netdev_bsd_send_wait,
-
-    netdev_bsd_set_etheraddr,
-    netdev_bsd_get_etheraddr,
-    netdev_bsd_get_mtu,
-    NULL, /* set_mtu */
-    netdev_bsd_get_ifindex,
-    netdev_bsd_get_carrier,
-    NULL, /* get_carrier_resets */
-    NULL, /* set_miimon_interval */
-    netdev_bsd_get_stats,
-    NULL, /* set_stats */
-
-    netdev_bsd_get_features,
-    NULL, /* set_advertisement */
-    NULL, /* set_policing */
-    NULL, /* get_qos_type */
-    NULL, /* get_qos_capabilities */
-    NULL, /* get_qos */
-    NULL, /* set_qos */
-    NULL, /* get_queue */
-    NULL, /* set_queue */
-    NULL, /* delete_queue */
-    NULL, /* get_queue_stats */
-    NULL, /* queue_dump_start */
-    NULL, /* queue_dump_next */
-    NULL, /* queue_dump_done */
-    NULL, /* dump_queue_stats */
-
-    netdev_bsd_get_in4,
-    netdev_bsd_set_in4,
-    netdev_bsd_get_in6,
-    NULL, /* add_router */
-    netdev_bsd_get_next_hop,
-    NULL, /* get_status */
-    netdev_bsd_arp_lookup, /* arp_lookup */
-
-    netdev_bsd_update_flags,
-
-    netdev_bsd_rx_alloc,
-    netdev_bsd_rx_construct,
-    netdev_bsd_rx_destruct,
-    netdev_bsd_rx_dealloc,
-    netdev_bsd_rx_recv,
-    netdev_bsd_rx_wait,
-    netdev_bsd_rx_drain,
-};
+const struct netdev_class netdev_tap_class =
+    NETDEV_BSD_CLASS(
+        "tap",
+        netdev_bsd_construct_tap,
+        netdev_bsd_get_features);
 
 
 static void
