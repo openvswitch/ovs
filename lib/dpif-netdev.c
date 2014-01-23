@@ -259,10 +259,7 @@ struct dp_netdev_flow {
     /* Statistics.
      *
      * Reading or writing these members requires 'mutex'. */
-    long long int used OVS_GUARDED; /* Last used time, in monotonic msecs. */
-    long long int packet_count OVS_GUARDED; /* Number of packets matched. */
-    long long int byte_count OVS_GUARDED;   /* Number of bytes matched. */
-    uint16_t tcp_flags OVS_GUARDED; /* Bitwise-OR of seen tcp_flags values. */
+    struct ovsthread_stats stats; /* Contains "struct dp_netdev_flow_stats". */
 
     /* Actions.
      *
@@ -275,6 +272,16 @@ struct dp_netdev_flow {
 static struct dp_netdev_flow *dp_netdev_flow_ref(
     const struct dp_netdev_flow *);
 static void dp_netdev_flow_unref(struct dp_netdev_flow *);
+
+/* Contained by struct dp_netdev_flow's 'stats' member.  */
+struct dp_netdev_flow_stats {
+    struct ovs_mutex mutex;         /* Guards all the other members. */
+
+    long long int used OVS_GUARDED; /* Last used time, in monotonic msecs. */
+    long long int packet_count OVS_GUARDED; /* Number of packets matched. */
+    long long int byte_count OVS_GUARDED;   /* Number of bytes matched. */
+    uint16_t tcp_flags OVS_GUARDED; /* Bitwise-OR of seen tcp_flags values. */
+};
 
 /* A set of datapath actions within a "struct dp_netdev_flow".
  *
@@ -890,6 +897,15 @@ static void
 dp_netdev_flow_unref(struct dp_netdev_flow *flow)
 {
     if (flow && ovs_refcount_unref(&flow->ref_cnt) == 1) {
+        struct dp_netdev_flow_stats *bucket;
+        size_t i;
+
+        OVSTHREAD_STATS_FOR_EACH_BUCKET (bucket, i, &flow->stats) {
+            ovs_mutex_destroy(&bucket->mutex);
+            free_cacheline(bucket);
+        }
+        ovsthread_stats_destroy(&flow->stats);
+
         cls_rule_destroy(CONST_CAST(struct cls_rule *, &flow->cr));
         ovs_mutex_lock(&flow->mutex);
         dp_netdev_actions_unref(flow->actions);
@@ -1040,12 +1056,19 @@ dp_netdev_find_flow(const struct dp_netdev *dp, const struct flow *flow)
 static void
 get_dpif_flow_stats(struct dp_netdev_flow *netdev_flow,
                     struct dpif_flow_stats *stats)
-    OVS_REQ_RDLOCK(netdev_flow->mutex)
 {
-    stats->n_packets = netdev_flow->packet_count;
-    stats->n_bytes = netdev_flow->byte_count;
-    stats->used = netdev_flow->used;
-    stats->tcp_flags = netdev_flow->tcp_flags;
+    struct dp_netdev_flow_stats *bucket;
+    size_t i;
+
+    memset(stats, 0, sizeof *stats);
+    OVSTHREAD_STATS_FOR_EACH_BUCKET (bucket, i, &netdev_flow->stats) {
+        ovs_mutex_lock(&bucket->mutex);
+        stats->n_packets += bucket->packet_count;
+        stats->n_bytes += bucket->byte_count;
+        stats->used = MAX(stats->used, bucket->used);
+        stats->tcp_flags |= bucket->tcp_flags;
+        ovs_mutex_unlock(&bucket->mutex);
+    }
 }
 
 static int
@@ -1156,10 +1179,11 @@ dpif_netdev_flow_get(const struct dpif *dpif,
     if (netdev_flow) {
         struct dp_netdev_actions *actions = NULL;
 
-        ovs_mutex_lock(&netdev_flow->mutex);
         if (stats) {
             get_dpif_flow_stats(netdev_flow, stats);
         }
+
+        ovs_mutex_lock(&netdev_flow->mutex);
         if (actionsp) {
             actions = dp_netdev_actions_ref(netdev_flow->actions);
         }
@@ -1195,6 +1219,8 @@ dp_netdev_flow_add(struct dp_netdev *dp, const struct flow *flow,
     ovs_mutex_init(&netdev_flow->mutex);
     ovs_mutex_lock(&netdev_flow->mutex);
 
+    ovsthread_stats_init(&netdev_flow->stats);
+
     netdev_flow->actions = dp_netdev_actions_create(actions, actions_len);
 
     match_init(&match, flow, wc);
@@ -1215,12 +1241,18 @@ dp_netdev_flow_add(struct dp_netdev *dp, const struct flow *flow,
 
 static void
 clear_stats(struct dp_netdev_flow *netdev_flow)
-    OVS_REQUIRES(netdev_flow->mutex)
 {
-    netdev_flow->used = 0;
-    netdev_flow->packet_count = 0;
-    netdev_flow->byte_count = 0;
-    netdev_flow->tcp_flags = 0;
+    struct dp_netdev_flow_stats *bucket;
+    size_t i;
+
+    OVSTHREAD_STATS_FOR_EACH_BUCKET (bucket, i, &netdev_flow->stats) {
+        ovs_mutex_lock(&bucket->mutex);
+        bucket->used = 0;
+        bucket->packet_count = 0;
+        bucket->byte_count = 0;
+        bucket->tcp_flags = 0;
+        ovs_mutex_unlock(&bucket->mutex);
+    }
 }
 
 static int
@@ -1271,13 +1303,14 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
             ovs_mutex_lock(&netdev_flow->mutex);
             old_actions = netdev_flow->actions;
             netdev_flow->actions = new_actions;
+            ovs_mutex_unlock(&netdev_flow->mutex);
+
             if (put->stats) {
                 get_dpif_flow_stats(netdev_flow, put->stats);
             }
             if (put->flags & DPIF_FP_ZERO_STATS) {
                 clear_stats(netdev_flow);
             }
-            ovs_mutex_unlock(&netdev_flow->mutex);
 
             dp_netdev_actions_unref(old_actions);
         } else if (put->flags & DPIF_FP_CREATE) {
@@ -1311,9 +1344,7 @@ dpif_netdev_flow_del(struct dpif *dpif, const struct dpif_flow_del *del)
     netdev_flow = dp_netdev_find_flow(dp, &key);
     if (netdev_flow) {
         if (del->stats) {
-            ovs_mutex_lock(&netdev_flow->mutex);
             get_dpif_flow_stats(netdev_flow, del->stats);
-            ovs_mutex_unlock(&netdev_flow->mutex);
         }
         dp_netdev_remove_flow(dp, netdev_flow);
         dp_netdev_flow_unref(netdev_flow);
@@ -1440,11 +1471,12 @@ dpif_netdev_flow_dump_next(const struct dpif *dpif, void *iter_, void *state_,
             *actions = state->actions->actions;
             *actions_len = state->actions->size;
         }
+        ovs_mutex_unlock(&netdev_flow->mutex);
+
         if (stats) {
             get_dpif_flow_stats(netdev_flow, &state->stats);
             *stats = &state->stats;
         }
-        ovs_mutex_unlock(&netdev_flow->mutex);
     }
 
     dp_netdev_flow_unref(netdev_flow);
@@ -1725,15 +1757,31 @@ dp_netdev_set_threads(struct dp_netdev *dp, int n)
     }
 }
 
+static void *
+dp_netdev_flow_stats_new_cb(void)
+{
+    struct dp_netdev_flow_stats *bucket = xzalloc_cacheline(sizeof *bucket);
+    ovs_mutex_init(&bucket->mutex);
+    return bucket;
+}
+
 static void
 dp_netdev_flow_used(struct dp_netdev_flow *netdev_flow,
                     const struct ofpbuf *packet)
-    OVS_REQUIRES(netdev_flow->mutex)
 {
-    netdev_flow->used = time_msec();
-    netdev_flow->packet_count++;
-    netdev_flow->byte_count += packet->size;
-    netdev_flow->tcp_flags |= packet_get_tcp_flags(packet, &netdev_flow->flow);
+    uint16_t tcp_flags = packet_get_tcp_flags(packet, &netdev_flow->flow);
+    long long int now = time_msec();
+    struct dp_netdev_flow_stats *bucket;
+
+    bucket = ovsthread_stats_bucket_get(&netdev_flow->stats,
+                                        dp_netdev_flow_stats_new_cb);
+
+    ovs_mutex_lock(&bucket->mutex);
+    bucket->used = MAX(now, bucket->used);
+    bucket->packet_count++;
+    bucket->byte_count += packet->size;
+    bucket->tcp_flags |= tcp_flags;
+    ovs_mutex_unlock(&bucket->mutex);
 }
 
 static void *
@@ -1771,8 +1819,9 @@ dp_netdev_port_input(struct dp_netdev *dp, struct ofpbuf *packet,
     if (netdev_flow) {
         struct dp_netdev_actions *actions;
 
-        ovs_mutex_lock(&netdev_flow->mutex);
         dp_netdev_flow_used(netdev_flow, packet);
+
+        ovs_mutex_lock(&netdev_flow->mutex);
         actions = dp_netdev_actions_ref(netdev_flow->actions);
         ovs_mutex_unlock(&netdev_flow->mutex);
 
