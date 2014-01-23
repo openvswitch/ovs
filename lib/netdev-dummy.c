@@ -384,16 +384,16 @@ netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args)
     netdev->rx_pcap = netdev->tx_pcap = NULL;
     pcap = smap_get(args, "pcap");
     if (pcap) {
-        netdev->rx_pcap = netdev->tx_pcap = pcap_open(pcap, "ab");
+        netdev->rx_pcap = netdev->tx_pcap = ovs_pcap_open(pcap, "ab");
     } else {
         const char *rx_pcap = smap_get(args, "rx_pcap");
         const char *tx_pcap = smap_get(args, "tx_pcap");
 
         if (rx_pcap) {
-            netdev->rx_pcap = pcap_open(rx_pcap, "ab");
+            netdev->rx_pcap = ovs_pcap_open(rx_pcap, "ab");
         }
         if (tx_pcap) {
-            netdev->tx_pcap = pcap_open(tx_pcap, "ab");
+            netdev->tx_pcap = ovs_pcap_open(tx_pcap, "ab");
         }
     }
 
@@ -548,7 +548,7 @@ netdev_dummy_send(struct netdev *netdev, const void *buffer, size_t size)
         struct ofpbuf packet;
 
         ofpbuf_use_const(&packet, buffer, size);
-        pcap_write(dev->tx_pcap, &packet);
+        ovs_pcap_write(dev->tx_pcap, &packet);
         fflush(dev->tx_pcap);
     }
 
@@ -814,7 +814,7 @@ netdev_dummy_queue_packet(struct netdev_dummy *dummy, struct ofpbuf *packet)
     struct netdev_rx_dummy *rx, *prev;
 
     if (dummy->rx_pcap) {
-        pcap_write(dummy->rx_pcap, packet);
+        ovs_pcap_write(dummy->rx_pcap, packet);
         fflush(dummy->rx_pcap);
     }
     prev = NULL;

@@ -48,7 +48,7 @@ main(int argc OVS_UNUSED, char *argv[])
         ovs_fatal(errno, "failed to open fd 3 for reading");
     }
 
-    retval = pcap_read_header(pcap);
+    retval = ovs_pcap_read_header(pcap);
     if (retval) {
         ovs_fatal(retval > 0 ? retval : 0, "reading pcap header failed");
     }
@@ -61,7 +61,7 @@ main(int argc OVS_UNUSED, char *argv[])
         union flow_in_port in_port_;
         n++;
 
-        retval = pcap_read(pcap, &packet, NULL);
+        retval = ovs_pcap_read(pcap, &packet, NULL);
         if (retval == EOF) {
             ovs_fatal(0, "unexpected end of file reading pcap file");
         } else if (retval) {

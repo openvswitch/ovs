@@ -1852,7 +1852,7 @@ ofctl_ofp_parse_pcap(int argc OVS_UNUSED, char *argv[])
     int error;
     bool first;
 
-    file = pcap_open(argv[1], "rb");
+    file = ovs_pcap_open(argv[1], "rb");
     if (!file) {
         ovs_fatal(errno, "%s: open failed", argv[1]);
     }
@@ -1864,7 +1864,7 @@ ofctl_ofp_parse_pcap(int argc OVS_UNUSED, char *argv[])
         long long int when;
         struct flow flow;
 
-        error = pcap_read(file, &packet, &when);
+        error = ovs_pcap_read(file, &packet, &when);
         if (error) {
             break;
         }
@@ -3199,7 +3199,7 @@ ofctl_parse_pcap(int argc OVS_UNUSED, char *argv[])
 {
     FILE *pcap;
 
-    pcap = pcap_open(argv[1], "rb");
+    pcap = ovs_pcap_open(argv[1], "rb");
     if (!pcap) {
         ovs_fatal(errno, "%s: open failed", argv[1]);
     }
@@ -3209,7 +3209,7 @@ ofctl_parse_pcap(int argc OVS_UNUSED, char *argv[])
         struct flow flow;
         int error;
 
-        error = pcap_read(pcap, &packet, NULL);
+        error = ovs_pcap_read(pcap, &packet, NULL);
         if (error == EOF) {
             break;
         } else if (error) {

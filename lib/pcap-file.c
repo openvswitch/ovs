@@ -53,7 +53,7 @@ struct pcaprec_hdr {
 BUILD_ASSERT_DECL(sizeof(struct pcaprec_hdr) == 16);
 
 FILE *
-pcap_open(const char *file_name, const char *mode)
+ovs_pcap_open(const char *file_name, const char *mode)
 {
     struct stat s;
     FILE *file;
@@ -75,7 +75,7 @@ pcap_open(const char *file_name, const char *mode)
 
     switch (mode[0]) {
     case 'r':
-        error = pcap_read_header(file);
+        error = ovs_pcap_read_header(file);
         if (error) {
             errno = error;
             fclose(file);
@@ -84,12 +84,12 @@ pcap_open(const char *file_name, const char *mode)
         break;
 
     case 'w':
-        pcap_write_header(file);
+        ovs_pcap_write_header(file);
         break;
 
     case 'a':
         if (!fstat(fileno(file), &s) && !s.st_size) {
-            pcap_write_header(file);
+            ovs_pcap_write_header(file);
         }
         break;
 
@@ -100,7 +100,7 @@ pcap_open(const char *file_name, const char *mode)
 }
 
 int
-pcap_read_header(FILE *file)
+ovs_pcap_read_header(FILE *file)
 {
     struct pcap_hdr ph;
     if (fread(&ph, sizeof ph, 1, file) != 1) {
@@ -117,7 +117,7 @@ pcap_read_header(FILE *file)
 }
 
 void
-pcap_write_header(FILE *file)
+ovs_pcap_write_header(FILE *file)
 {
     /* The pcap reader is responsible for figuring out endianness based on the
      * magic number, so the lack of htonX calls here is intentional. */
@@ -133,7 +133,7 @@ pcap_write_header(FILE *file)
 }
 
 int
-pcap_read(FILE *file, struct ofpbuf **bufp, long long int *when)
+ovs_pcap_read(FILE *file, struct ofpbuf **bufp, long long int *when)
 {
     struct pcaprec_hdr prh;
     struct ofpbuf *buf;
@@ -190,7 +190,7 @@ pcap_read(FILE *file, struct ofpbuf **bufp, long long int *when)
 }
 
 void
-pcap_write(FILE *file, struct ofpbuf *buf)
+ovs_pcap_write(FILE *file, struct ofpbuf *buf)
 {
     struct pcaprec_hdr prh;
     struct timeval tv;
