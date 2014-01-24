@@ -75,7 +75,6 @@ AC_DEFUN([OVS_CHECK_NETLINK],
                    [HAVE_NETLINK=yes],
                    [HAVE_NETLINK=no],
                    [#include <sys/socket.h>
-   #include <linux/types.h>
    ])
    AM_CONDITIONAL([HAVE_NETLINK], [test "$HAVE_NETLINK" = yes])
    if test "$HAVE_NETLINK" = yes; then
