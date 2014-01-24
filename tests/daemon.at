@@ -6,7 +6,7 @@ AT_CAPTURE_FILE([pid])
 AT_CAPTURE_FILE([expected])
 # Start the daemon and wait for the pidfile to get created
 # and that its contents are the correct pid.
-AT_CHECK([ovsdb-server --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db& echo $! > expected], [0])
+AT_CHECK([ovsdb-server --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db 2>/dev/null & echo $! > expected], [0])
 OVS_WAIT_UNTIL([test -s pid], [kill `cat expected`])
 AT_CHECK(
   [pid=`cat pid` && expected=`cat expected` && test "$pid" = "$expected"],
@@ -25,7 +25,7 @@ AT_CAPTURE_FILE([parent])
 AT_CAPTURE_FILE([parentpid])
 AT_CAPTURE_FILE([newpid])
 # Start the daemon and wait for the pidfile to get created.
-AT_CHECK([ovsdb-server --monitor --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db& echo $! > parent], [0])
+AT_CHECK([ovsdb-server --monitor --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db 2>/dev/null & echo $! > parent], [0])
 OVS_WAIT_UNTIL([test -s pid], [kill `cat parent`])
 # Check that the pidfile names a running process,
 # and that the parent process of that process is our child process.
