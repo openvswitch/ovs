@@ -743,13 +743,13 @@ packet_update_csum128(struct ofpbuf *packet, uint8_t proto,
 
 static void
 packet_set_ipv6_addr(struct ofpbuf *packet, uint8_t proto,
-                     ovs_16aligned_be32 *addr, const ovs_be32 new_addr[4],
+                     ovs_16aligned_be32 addr[4], const ovs_be32 new_addr[4],
                      bool recalculate_csum)
 {
     if (recalculate_csum) {
         packet_update_csum128(packet, proto, addr, new_addr);
     }
-    memcpy(addr, new_addr, sizeof(*addr));
+    memcpy(addr, new_addr, sizeof(ovs_be32[4]));
 }
 
 static void
