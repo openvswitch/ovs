@@ -25,8 +25,6 @@
 #include <net/if.h>
 #include <linux/types.h>
 #include <linux/pkt_sched.h>
-#include <linux/rtnetlink.h>
-#include <linux/sockios.h>
 #include <poll.h>
 #include <stdlib.h>
 #include <strings.h>
