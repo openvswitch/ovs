@@ -14,6 +14,7 @@ Upstream Copyright Holders:
 	and authors listed above.
 	Copyright (c) 2011 Gaetano Catalli
 	Copyright (C) 2000-2003 Geoffrey Wossum (gwossum@acm.org)
+	Copyright (C) 2000 The NetBSD Foundation, Inc.
 
 License:
 
@@ -77,6 +78,11 @@ License:
   version 2.
 
 	build-aux/cccl
+
+* The following files are licensed under the 2-clause BSD license.
+
+	lib/getopt_long.c
+	include/windows/getopt.h
 
 * The following components are dual-licensed under the
   GNU General Public License version 2 and the Apache License Version 2.0.

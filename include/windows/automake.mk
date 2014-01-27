@@ -6,5 +6,6 @@
 # without warranty of any kind.
 
 noinst_HEADERS += \
-	include/windows/windefs.h \
-	include/windows/syslog.h
+	include/windows/getopt.h \
+	include/windows/syslog.h \
+	include/windows/windefs.h

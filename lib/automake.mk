@@ -236,10 +236,14 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/vswitch-idl.h \
 	lib/vtep-idl.c \
 	lib/vtep-idl.h
+
 if WIN32
-lib_libopenvswitch_la_SOURCES += lib/latch-windows.c
+lib_libopenvswitch_la_SOURCES += \
+	lib/getopt_long.c \
+	lib/latch-windows.c
 else
-lib_libopenvswitch_la_SOURCES += lib/latch.c
+lib_libopenvswitch_la_SOURCES += \
+	lib/latch.c
 endif
 
 EXTRA_DIST += \
