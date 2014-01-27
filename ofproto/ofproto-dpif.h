@@ -27,6 +27,7 @@
 
 union user_action_cookie;
 struct dpif_flow_stats;
+struct ofproto;
 struct ofproto_dpif;
 struct ofproto_packet_in;
 struct ofport_dpif;
@@ -134,4 +135,6 @@ void ofproto_dpif_flow_mod(struct ofproto_dpif *, struct ofputil_flow_mod *);
 
 struct ofport_dpif *odp_port_to_ofport(const struct dpif_backer *, odp_port_t);
 
+uint32_t ofproto_dpif_alloc_recirc_id(struct ofproto_dpif *ofproto);
+void ofproto_dpif_free_recirc_id(struct ofproto_dpif *ofproto, uint32_t recirc_id);
 #endif /* ofproto-dpif.h */

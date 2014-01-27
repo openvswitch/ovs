@@ -31,6 +31,8 @@ ofproto_libofproto_la_SOURCES = \
 	ofproto/ofproto-dpif-mirror.h \
 	ofproto/ofproto-dpif-monitor.c \
 	ofproto/ofproto-dpif-monitor.h \
+	ofproto/ofproto-dpif-rid.c \
+	ofproto/ofproto-dpif-rid.h \
 	ofproto/ofproto-dpif-sflow.c \
 	ofproto/ofproto-dpif-sflow.h \
 	ofproto/ofproto-dpif-upcall.c \

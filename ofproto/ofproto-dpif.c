@@ -53,6 +53,7 @@
 #include "ofproto-dpif-ipfix.h"
 #include "ofproto-dpif-mirror.h"
 #include "ofproto-dpif-monitor.h"
+#include "ofproto-dpif-rid.h"
 #include "ofproto-dpif-sflow.h"
 #include "ofproto-dpif-upcall.h"
 #include "ofproto-dpif-xlate.h"
@@ -251,6 +252,8 @@ struct dpif_backer {
     enum revalidate_reason need_revalidate; /* Revalidate all flows. */
 
     bool recv_set_enable; /* Enables or disables receiving packets. */
+
+    struct recirc_id_pool *rid_pool;       /* Recirculation ID pool. */
 
     /* True if the datapath supports variable-length
      * OVS_USERSPACE_ATTR_USERDATA in OVS_ACTION_ATTR_USERSPACE actions.
@@ -779,9 +782,9 @@ close_dpif_backer(struct dpif_backer *backer)
     ovs_rwlock_destroy(&backer->odp_to_ofport_lock);
     hmap_destroy(&backer->odp_to_ofport_map);
     shash_find_and_delete(&all_dpif_backers, backer->type);
+    recirc_id_pool_destroy(backer->rid_pool);
     free(backer->type);
     dpif_close(backer->dpif);
-
     free(backer);
 }
 
@@ -803,6 +806,7 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     struct shash_node *node;
     struct list garbage_list;
     struct odp_garbage *garbage, *next;
+
     struct sset names;
     char *backer_name;
     const char *name;
@@ -894,6 +898,7 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     }
     backer->variable_length_userdata = check_variable_length_userdata(backer);
     backer->max_mpls_depth = check_max_mpls_depth(backer);
+    backer->rid_pool = recirc_id_pool_create();
 
     if (backer->recv_set_enable) {
         udpif_set_threads(backer->udpif, n_handlers, n_revalidators);
@@ -4400,6 +4405,7 @@ ofproto_has_vlan_splinters(const struct ofproto_dpif *ofproto)
     return !hmap_is_empty(&ofproto->realdev_vid_map);
 }
 
+
 static ofp_port_t
 vsp_realdev_to_vlandev__(const struct ofproto_dpif *ofproto,
                          ofp_port_t realdev_ofp_port, ovs_be16 vlan_tci)
@@ -4605,6 +4611,22 @@ odp_port_to_ofp_port(const struct ofproto_dpif *ofproto, odp_port_t odp_port)
     } else {
         return OFPP_NONE;
     }
+}
+
+uint32_t
+ofproto_dpif_alloc_recirc_id(struct ofproto_dpif *ofproto)
+{
+    struct dpif_backer *backer = ofproto->backer;
+
+    return  recirc_id_alloc(backer->rid_pool);
+}
+
+void
+ofproto_dpif_free_recirc_id(struct ofproto_dpif *ofproto, uint32_t recirc_id)
+{
+    struct dpif_backer *backer = ofproto->backer;
+
+    recirc_id_free(backer->rid_pool, recirc_id);
 }
 
 const struct ofproto_class ofproto_dpif_class = {
