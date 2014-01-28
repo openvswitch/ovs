@@ -615,7 +615,7 @@ udpif_flow_dumper(void *arg)
             ovs_mutex_unlock(&revalidator->mutex);
         }
 
-        duration = time_msec() - start_time;
+        duration = MAX(time_msec() - start_time, 1);
         udpif->dump_duration = duration;
         if (duration > 2000) {
             flow_limit /= duration / 1000;
