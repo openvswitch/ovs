@@ -3423,7 +3423,7 @@ handle_flow_stats_request(struct ofconn *ofconn,
         fs.idle_age = age_secs(now - used);
         fs.hard_age = age_secs(now - modified);
         ofproto->ofproto_class->rule_get_stats(rule, &fs.packet_count,
-                                               &fs.byte_count);
+                                               &fs.byte_count, true);
         fs.ofpacts = actions->ofpacts;
         fs.ofpacts_len = actions->ofpacts_len;
 
@@ -3453,8 +3453,8 @@ flow_stats_ds(struct rule *rule, struct ds *results)
     struct rule_actions *actions;
     long long int created;
 
-    rule->ofproto->ofproto_class->rule_get_stats(rule,
-                                                 &packet_count, &byte_count);
+    rule->ofproto->ofproto_class->rule_get_stats(rule, &packet_count,
+                                                 &byte_count, true);
 
     ovs_mutex_lock(&rule->mutex);
     actions = rule_get_actions__(rule);
@@ -3567,7 +3567,7 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
         uint64_t byte_count;
 
         ofproto->ofproto_class->rule_get_stats(rule, &packet_count,
-                                               &byte_count);
+                                               &byte_count, true);
 
         if (packet_count == UINT64_MAX) {
             unknown_packets = true;
@@ -4191,7 +4191,7 @@ ofproto_rule_send_removed(struct rule *rule, uint8_t reason)
     fr.hard_timeout = rule->hard_timeout;
     ovs_mutex_unlock(&rule->mutex);
     rule->ofproto->ofproto_class->rule_get_stats(rule, &fr.packet_count,
-                                                 &fr.byte_count);
+                                                 &fr.byte_count, false);
 
     connmgr_send_flow_removed(rule->ofproto->connmgr, &fr);
 }

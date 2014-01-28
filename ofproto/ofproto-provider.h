@@ -1228,9 +1228,10 @@ struct ofproto_class {
     /* Obtains statistics for 'rule', storing the number of packets that have
      * matched it in '*packet_count' and the number of bytes in those packets
      * in '*byte_count'.  UINT64_MAX indicates that the packet count or byte
-     * count is unknown. */
+     * count is unknown.  If 'push' is true, the provider may try to update
+     * statistics for 'rule', possibly taking the 'ofproto_mutex'.*/
     void (*rule_get_stats)(struct rule *rule, uint64_t *packet_count,
-                           uint64_t *byte_count)
+                           uint64_t *byte_count, bool push)
         /* OVS_EXCLUDED(ofproto_mutex) */;
 
     /* Applies the actions in 'rule' to 'packet'.  (This implements sending

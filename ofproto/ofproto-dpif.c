@@ -105,7 +105,8 @@ struct rule_dpif {
     uint64_t byte_count OVS_GUARDED;    /* Number of bytes received. */
 };
 
-static void rule_get_stats(struct rule *, uint64_t *packets, uint64_t *bytes);
+static void rule_get_stats(struct rule *, uint64_t *packets, uint64_t *bytes,
+                           bool push);
 static struct rule_dpif *rule_dpif_cast(const struct rule *);
 
 struct ofbundle {
@@ -1678,9 +1679,11 @@ get_tables(struct ofproto *ofproto_, struct ofp12_table_stats *ots)
     strcpy(ots->name, "classifier");
 
     dpif_get_dp_stats(ofproto->backer->dpif, &s);
-    rule_get_stats(&ofproto->miss_rule->up, &n_miss, &n_bytes);
-    rule_get_stats(&ofproto->no_packet_in_rule->up, &n_no_pkt_in, &n_bytes);
-    rule_get_stats(&ofproto->drop_frags_rule->up, &n_dropped_frags, &n_bytes);
+    rule_get_stats(&ofproto->miss_rule->up, &n_miss, &n_bytes, true);
+    rule_get_stats(&ofproto->no_packet_in_rule->up, &n_no_pkt_in, &n_bytes,
+                   true);
+    rule_get_stats(&ofproto->drop_frags_rule->up, &n_dropped_frags, &n_bytes,
+                   true);
 
     n_lookup = s.n_hit + s.n_missed - n_dropped_frags;
     ots->lookup_count = htonll(n_lookup);
@@ -4880,7 +4883,8 @@ rule_destruct(struct rule *rule_)
 }
 
 static void
-rule_get_stats(struct rule *rule_, uint64_t *packets, uint64_t *bytes)
+rule_get_stats(struct rule *rule_, uint64_t *packets, uint64_t *bytes,
+               bool push)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
 
@@ -4888,7 +4892,9 @@ rule_get_stats(struct rule *rule_, uint64_t *packets, uint64_t *bytes)
      * action, can cause rules to be added and deleted.  This can corrupt our
      * caller's datastructures which assume that rule_get_stats() doesn't have
      * an impact on the flow table. To be safe, we disable miss handling. */
-    push_all_stats__(false);
+    if (push) {
+        push_all_stats__(false);
+    }
 
     /* Start from historical data for 'rule' itself that are no longer tracked
      * in facets.  This counts, for example, facets that have expired. */
