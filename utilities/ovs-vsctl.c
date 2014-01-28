@@ -3179,6 +3179,7 @@ set_column(const struct vsctl_table_class *table,
 
         ovsdb_datum_union(&datum, ovsdb_idl_read(row, column),
                           &column->type, false);
+        ovsdb_idl_txn_verify(row, column);
         ovsdb_idl_txn_write(row, column, &datum);
     } else {
         struct ovsdb_datum datum;
