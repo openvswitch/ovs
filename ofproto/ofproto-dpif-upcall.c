@@ -41,6 +41,7 @@
 #define MAX_QUEUE_LENGTH 512
 #define FLOW_MISS_MAX_BATCH 50
 #define REVALIDATE_MAX_BATCH 50
+#define MAX_IDLE 1500
 
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif_upcall);
 
@@ -124,8 +125,6 @@ struct udpif {
     unsigned int max_n_flows;
     unsigned int avg_n_flows;
 
-    /* Following fields are accessed and modified by different threads. */
-    atomic_llong max_idle;             /* Maximum datapath flow idle time. */
     atomic_uint flow_limit;            /* Datapath flow hard limit. */
 
     /* n_flows_mutex prevents multiple threads updating these concurrently. */
@@ -259,7 +258,6 @@ udpif_create(struct dpif_backer *backer, struct dpif *dpif)
 
     udpif->dpif = dpif;
     udpif->backer = backer;
-    atomic_init(&udpif->max_idle, 5000);
     atomic_init(&udpif->flow_limit, MIN(ofproto_flow_limit, 10000));
     udpif->secret = random_uint32();
     udpif->reval_seq = seq_create();
@@ -529,7 +527,6 @@ udpif_flow_dumper(void *arg)
         struct dpif_flow_dump dump;
         size_t key_len, mask_len;
         unsigned int flow_limit;
-        long long int max_idle;
         bool need_revalidate;
         uint64_t reval_seq;
         size_t n_flows, i;
@@ -541,18 +538,6 @@ udpif_flow_dumper(void *arg)
         n_flows = udpif_get_n_flows(udpif);
         udpif->max_n_flows = MAX(n_flows, udpif->max_n_flows);
         udpif->avg_n_flows = (udpif->avg_n_flows + n_flows) / 2;
-
-        atomic_read(&udpif->flow_limit, &flow_limit);
-        if (n_flows < flow_limit / 8) {
-            max_idle = 5000;
-        } else if (n_flows < flow_limit / 4) {
-            max_idle = 2000;
-        } else if (n_flows < flow_limit / 2) {
-            max_idle = 1000;
-        } else {
-            max_idle = 500;
-        }
-        atomic_store(&udpif->max_idle, max_idle);
 
         start_time = time_msec();
         dpif_flow_dump_start(&dump, udpif->dpif);
@@ -613,6 +598,7 @@ udpif_flow_dumper(void *arg)
 
         duration = time_msec() - start_time;
         udpif->dump_duration = duration;
+        atomic_read(&udpif->flow_limit, &flow_limit);
         if (duration > 2000) {
             flow_limit /= duration / 1000;
         } else if (duration > 1300) {
@@ -629,7 +615,7 @@ udpif_flow_dumper(void *arg)
                       duration);
         }
 
-        poll_timer_wait_until(start_time + MIN(max_idle, 500));
+        poll_timer_wait_until(start_time + MIN(MAX_IDLE, 500));
         seq_wait(udpif->reval_seq, udpif->last_reval_seq);
         latch_wait(&udpif->exit_latch);
         poll_block();
@@ -1386,12 +1372,12 @@ revalidate_udumps(struct revalidator *revalidator, struct list *udumps)
     long long int max_idle;
     bool must_del;
 
-    atomic_read(&udpif->max_idle, &max_idle);
     atomic_read(&udpif->flow_limit, &flow_limit);
 
     n_flows = udpif_get_n_flows(udpif);
 
     must_del = false;
+    max_idle = MAX_IDLE;
     if (n_flows > flow_limit) {
         must_del = n_flows > 2 * flow_limit;
         max_idle = 100;
@@ -1526,17 +1512,14 @@ upcall_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
     LIST_FOR_EACH (udpif, list_node, &all_udpifs) {
         unsigned int flow_limit;
-        long long int max_idle;
         size_t i;
 
         atomic_read(&udpif->flow_limit, &flow_limit);
-        atomic_read(&udpif->max_idle, &max_idle);
 
         ds_put_format(&ds, "%s:\n", dpif_name(udpif->dpif));
         ds_put_format(&ds, "\tflows         : (current %"PRIu64")"
             " (avg %u) (max %u) (limit %u)\n", udpif_get_n_flows(udpif),
             udpif->avg_n_flows, udpif->max_n_flows, flow_limit);
-        ds_put_format(&ds, "\tmax idle      : %lldms\n", max_idle);
         ds_put_format(&ds, "\tdump duration : %lldms\n", udpif->dump_duration);
 
         ds_put_char(&ds, '\n');
