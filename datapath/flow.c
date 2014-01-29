@@ -502,8 +502,10 @@ static struct flow_table *__flow_tbl_alloc(int new_size)
 
 static void __flow_tbl_destroy(struct flow_table *table)
 {
-	BUG_ON(!list_empty(table->mask_list));
-	kfree(table->mask_list);
+	if (!table->keep_flows) {
+		BUG_ON(!list_empty(table->mask_list));
+		kfree(table->mask_list);
+	}
 
 	free_buckets(table->buckets);
 	kfree(table);
