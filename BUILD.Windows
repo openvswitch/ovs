@@ -30,6 +30,10 @@ to have the $PATH inside the bash to point to the proper compiler and linker.
 One easy way to achieve this is to get into the "Developer Command prompt for
 visual studio" and through it enter into the bash shell available from msys.
 
+If after the above step, a 'which link' inside MSYS's bash says,
+"/bin/link.exe", rename /bin/link.exe to something else so that the
+Visual studio's linker is used.
+
 * Get the Open vSwitch sources from either cloning the repo using git
 or from a distribution tar ball.
 

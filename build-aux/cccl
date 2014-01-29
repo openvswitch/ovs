@@ -33,10 +33,6 @@ EOF
     exit $1
 }
 
-# Put /usr/bin last in the path, to avoid clashes with MSVC's link
-# Ugly workaround, but should work
-PATH=`echo $PATH | sed -e "s#/usr/bin:##" | sed -e "s#/bin:##"`:/usr/bin
-
 case $MACHTYPE in
     *-msys)
         slash="-"
