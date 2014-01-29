@@ -37,6 +37,20 @@ Visual studio's linker is used.
 * Get the Open vSwitch sources from either cloning the repo using git
 or from a distribution tar ball.
 
-* Run ./boot.sh; ./configure CC=./build-aux/cccl; make
-(cccl is a wrapper script that provides the right options to Visual c++
-'cl' compiler.)
+* If you pulled the sources directly from an Open vSwitch Git tree,
+  run boot.sh in the top source directory:
+
+  % ./boot.sh
+
+* In the top source directory, configure the package by running the
+  configure script.  You should provide some configure options to choose
+  the right compiler, linker, libraries, Open vSwitch component installation
+  directories, etc. For example,
+
+  % ./configure CC=./build-aux/cccl LD="`which link`" LIBS="-lws2_32 ..." \
+    --prefix="C:/openvswitch/usr" --localstatedir="C:/openvswitch/var" \
+    --sysconfdir="C:/openvswitch/etc"
+
+* Run make for the ported executables in the top source directory, e.g.:
+
+  % make utilities/ovs-vsctl.exe ovsdb/ovsdb-server.exe
