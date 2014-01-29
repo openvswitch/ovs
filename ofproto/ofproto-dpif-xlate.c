@@ -520,12 +520,10 @@ xlate_ofport_remove(struct ofport_dpif *ofport)
 
 /* Given a datpath, packet, and flow metadata ('backer', 'packet', and 'key'
  * respectively), populates 'flow' with the result of odp_flow_key_to_flow().
- * Optionally, if nonnull, populates 'fitnessp' with the fitness of 'flow' as
- * returned by odp_flow_key_to_flow().  Also, optionally populates 'ofproto'
- * with the ofproto_dpif, 'odp_in_port' with the datapath in_port, that
- * 'packet' ingressed, and 'ipfix', 'sflow', and 'netflow' with the appropriate
- * handles for those protocols if they're enabled.  Caller is responsible for
- * unrefing them.
+ * Optionally populates 'ofproto' with the ofproto_dpif, 'odp_in_port' with
+ * the datapath in_port, that 'packet' ingressed, and 'ipfix', 'sflow', and
+ * 'netflow' with the appropriate handles for those protocols if they're
+ * enabled.  Caller is responsible for unrefing them.
  *
  * If 'ofproto' is nonnull, requires 'flow''s in_port to exist.  Otherwise sets
  * 'flow''s in_port to OFPP_NONE.
@@ -545,19 +543,16 @@ xlate_ofport_remove(struct ofport_dpif *ofport)
  * or some other positive errno if there are other problems. */
 int
 xlate_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
-              const struct nlattr *key, size_t key_len,
-              struct flow *flow, enum odp_key_fitness *fitnessp,
+              const struct nlattr *key, size_t key_len, struct flow *flow,
               struct ofproto_dpif **ofproto, struct dpif_ipfix **ipfix,
               struct dpif_sflow **sflow, struct netflow **netflow,
               odp_port_t *odp_in_port)
 {
-    enum odp_key_fitness fitness;
     const struct xport *xport;
     int error = ENODEV;
 
     ovs_rwlock_rdlock(&xlate_rwlock);
-    fitness = odp_flow_key_to_flow(key, key_len, flow);
-    if (fitness == ODP_FIT_ERROR) {
+    if (odp_flow_key_to_flow(key, key_len, flow) == ODP_FIT_ERROR) {
         error = EINVAL;
         goto exit;
     }
@@ -583,8 +578,6 @@ xlate_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
              * vlan_tci if it is called on 'packet'. */
             eth_push_vlan(packet, htons(ETH_TYPE_VLAN), flow->vlan_tci);
         }
-        /* We can't reproduce 'key' from 'flow'. */
-        fitness = fitness == ODP_FIT_PERFECT ? ODP_FIT_TOO_MUCH : fitness;
     }
     error = 0;
 
@@ -605,9 +598,6 @@ xlate_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
     }
 
 exit:
-    if (fitnessp) {
-        *fitnessp = fitness;
-    }
     ovs_rwlock_unlock(&xlate_rwlock);
     return error;
 }

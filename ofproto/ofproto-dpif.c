@@ -3655,7 +3655,7 @@ parse_flow_and_packet(int argc, const char *argv[],
         }
 
         if (xlate_receive(backer, NULL, odp_key.data, odp_key.size, flow,
-                          NULL, ofprotop, NULL, NULL, NULL, NULL)) {
+                          ofprotop, NULL, NULL, NULL, NULL)) {
             error = "Invalid datapath flow";
             goto exit;
         }
@@ -4040,11 +4040,10 @@ static bool
 ofproto_dpif_contains_flow(const struct ofproto_dpif *ofproto,
                            const struct nlattr *key, size_t key_len)
 {
-    enum odp_key_fitness fitness;
     struct ofproto_dpif *ofp;
     struct flow flow;
 
-    xlate_receive(ofproto->backer, NULL, key, key_len, &flow, &fitness, &ofp,
+    xlate_receive(ofproto->backer, NULL, key, key_len, &flow, &ofp,
                   NULL, NULL, NULL, NULL);
     return ofp == ofproto;
 }

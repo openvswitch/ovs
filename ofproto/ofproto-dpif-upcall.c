@@ -202,7 +202,6 @@ struct flow_miss {
     struct ofproto_dpif *ofproto;
 
     struct flow flow;
-    enum odp_key_fitness key_fitness;
     const struct nlattr *key;
     size_t key_len;
     enum dpif_upcall_type upcall_type;
@@ -941,7 +940,7 @@ handle_upcalls(struct handler *handler, struct list *upcalls)
         int error;
 
         error = xlate_receive(udpif->backer, packet, dupcall->key,
-                              dupcall->key_len, &flow, &miss->key_fitness,
+                              dupcall->key_len, &flow,
                               &ofproto, &ipfix, &sflow, NULL, &odp_in_port);
         if (error) {
             if (error == ENODEV) {
@@ -1300,7 +1299,7 @@ revalidate_ukey(struct udpif *udpif, struct udpif_flow_dump *udump,
     }
 
     error = xlate_receive(udpif->backer, NULL, ukey->key, ukey->key_len, &flow,
-                          NULL, &ofproto, NULL, NULL, NULL, &odp_in_port);
+                          &ofproto, NULL, NULL, NULL, &odp_in_port);
     if (error) {
         goto exit;
     }
@@ -1463,7 +1462,7 @@ revalidate_udumps(struct revalidator *revalidator, struct list *udumps)
             struct flow flow;
 
             if (!xlate_receive(udpif->backer, NULL, ops[i].op.u.flow_del.key,
-                               ops[i].op.u.flow_del.key_len, &flow, NULL,
+                               ops[i].op.u.flow_del.key_len, &flow,
                                &ofproto, NULL, NULL, &netflow, NULL)) {
                 struct xlate_in xin;
 
