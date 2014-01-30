@@ -91,7 +91,8 @@ EOF
 
     -L*)
         path=`echo "$1" | sed 's/-L//'`
-        linkopt="$linkopt /LIBPATH:$path"
+        linkopt="$linkopt ${slash}LIBPATH:\"$path\""
+        cl_linkopt="${slash}link ${slash}LIBPATH:\"$path\""
         ;;
 
     -l*)
@@ -188,7 +189,7 @@ fi
 
 # choose which opts we built up based on which program will actually run
 if test x$prog = xcl ; then
-    opts=$clopt
+    opts="$clopt $cl_linkopt"
 else
     opts=$linkopt
 fi
