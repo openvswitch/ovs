@@ -54,3 +54,25 @@ or from a distribution tar ball.
 * Run make for the ported executables in the top source directory, e.g.:
 
   % make utilities/ovs-vsctl.exe ovsdb/ovsdb-server.exe
+
+OpenSSL, Open vSwitch and Visual C++
+------------------------------------
+To get SSL support for Open vSwitch on Windows, do the following:
+
+* Install OpenSSL for Windows as suggested at
+http://www.openssl.org/related/binaries.html.
+The link as of this writing suggests to download it from
+http://slproweb.com/products/Win32OpenSSL.html and the latest version is
+"Win32 OpenSSL v1.0.1f".
+
+Note down the directory where OpenSSL is installed (e.g.: C:/OpenSSL-Win32).
+
+* While configuring the package, specify the OpenSSL directory path.
+For example,
+
+  % ./configure CC=./build-aux/cccl LD="`which link`" LIBS="-lws2_32 ..." \
+  --prefix="C:/openvswitch/usr" --localstatedir="C:/openvswitch/var" \
+  --sysconfdir="C:/openvswitch/etc" --enable-ssl \
+  --with-openssl="C:/OpenSSL-Win32"
+
+* Run make for the ported executables.

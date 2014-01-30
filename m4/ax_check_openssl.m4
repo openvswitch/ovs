@@ -79,7 +79,11 @@ AC_DEFUN([AX_CHECK_OPENSSL], [
             if test -f "$ssldir/include/openssl/ssl.h"; then
                 SSL_INCLUDES="-I$ssldir/include"
                 SSL_LDFLAGS="-L$ssldir/lib"
-                SSL_LIBS="-lssl -lcrypto"
+                if test "$WIN32" = "yes"; then
+                    SSL_LIBS="-lssleay32 -llibeay32"
+                else
+                    SSL_LIBS="-lssl -lcrypto"
+                fi
                 found=true
                 AC_MSG_RESULT([yes])
                 break
@@ -106,7 +110,8 @@ AC_DEFUN([AX_CHECK_OPENSSL], [
     LIBS="$SSL_LIBS $LIBS"
     CPPFLAGS="$SSL_INCLUDES $CPPFLAGS"
     AC_LINK_IFELSE(
-        [AC_LANG_PROGRAM([#include <openssl/ssl.h>], [SSL_new(NULL)])],
+        [AC_LANG_PROGRAM([#include <openssl/ssl.h>],
+            [SSL_CTX *ctx=NULL;SSL_new(ctx)])],
         [
             AC_MSG_RESULT([yes])
             $1
