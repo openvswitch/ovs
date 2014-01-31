@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+/* Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -575,6 +575,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
             port_configure(port);
 
             LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
+                iface_set_ofport(iface->cfg, iface->ofp_port);
                 iface_configure_cfm(iface);
                 iface_configure_qos(iface, port->cfg->qos);
                 iface_set_mac(iface, port->cfg->fake_bridge ? br->ea : NULL);
@@ -1478,7 +1479,6 @@ iface_create(struct bridge *br, const struct ovsrec_interface *iface_cfg,
     ovs_assert(!iface_lookup(br, iface_cfg->name));
     error = iface_do_create(br, iface_cfg, port_cfg, &ofp_port, &netdev);
     if (error) {
-        iface_set_ofport(iface_cfg, OFPP_NONE);
         iface_clear_db_record(iface_cfg);
         return false;
     }
@@ -1502,8 +1502,6 @@ iface_create(struct bridge *br, const struct ovsrec_interface *iface_cfg,
     iface->cfg = iface_cfg;
     hmap_insert(&br->ifaces, &iface->ofp_port_node,
                 hash_ofp_port(ofp_port));
-
-    iface_set_ofport(iface->cfg, ofp_port);
 
     /* Populate initial status in database. */
     iface_refresh_stats(iface);
@@ -3539,6 +3537,7 @@ static void
 iface_clear_db_record(const struct ovsrec_interface *if_cfg)
 {
     if (!ovsdb_idl_row_is_synthetic(&if_cfg->header_)) {
+        iface_set_ofport(if_cfg, OFPP_NONE);
         ovsrec_interface_set_status(if_cfg, NULL);
         ovsrec_interface_set_admin_state(if_cfg, NULL);
         ovsrec_interface_set_duplex(if_cfg, NULL);
