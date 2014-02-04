@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -254,28 +254,27 @@ tcp_reader_close(struct tcp_reader *r)
 }
 
 static struct tcp_stream *
-tcp_stream_lookup(struct tcp_reader *r, const struct flow *flow)
+tcp_stream_lookup(struct tcp_reader *r,
+                  const struct tcp_key *key, uint32_t hash)
 {
     struct tcp_stream *stream;
-    struct tcp_key key;
-    uint32_t hash;
-
-    memset(&key, 0, sizeof key);
-    key.nw_src = flow->nw_src;
-    key.nw_dst = flow->nw_dst;
-    key.tp_src = flow->tp_src;
-    key.tp_dst = flow->tp_dst;
-    hash = hash_bytes(&key, sizeof key, 0);
 
     HMAP_FOR_EACH_WITH_HASH (stream, hmap_node, hash, &r->streams) {
-        if (!memcmp(&stream->key, &key, sizeof key)) {
+        if (!memcmp(&stream->key, key, sizeof *key)) {
             return stream;
         }
     }
+    return NULL;
+}
+
+static struct tcp_stream *
+tcp_stream_new(struct tcp_reader *r, const struct tcp_key *key, uint32_t hash)
+{
+    struct tcp_stream *stream;
 
     stream = xmalloc(sizeof *stream);
     hmap_insert(&r->streams, &stream->hmap_node, hash);
-    memcpy(&stream->key, &key, sizeof key);
+    memcpy(&stream->key, key, sizeof *key);
     stream->seq_no = 0;
     ofpbuf_init(&stream->payload, 2048);
     return stream;
@@ -299,6 +298,9 @@ tcp_reader_run(struct tcp_reader *r, const struct flow *flow,
     struct tcp_stream *stream;
     struct tcp_header *tcp;
     struct ofpbuf *payload;
+    unsigned int l7_length;
+    struct tcp_key key;
+    uint32_t hash;
     uint32_t seq;
     uint8_t flags;
 
@@ -307,14 +309,32 @@ tcp_reader_run(struct tcp_reader *r, const struct flow *flow,
         || !packet->l7) {
         return NULL;
     }
-
-    stream = tcp_stream_lookup(r, flow);
-    payload = &stream->payload;
-
     tcp = packet->l4;
     flags = TCP_FLAGS(tcp->tcp_ctl);
+    l7_length = (char *) ofpbuf_end(packet) - (char *) packet->l7;
     seq = ntohl(get_16aligned_be32(&tcp->tcp_seq));
-    if (flags & TCP_SYN) {
+
+    /* Construct key. */
+    memset(&key, 0, sizeof key);
+    key.nw_src = flow->nw_src;
+    key.nw_dst = flow->nw_dst;
+    key.tp_src = flow->tp_src;
+    key.tp_dst = flow->tp_dst;
+    hash = hash_bytes(&key, sizeof key, 0);
+
+    /* Find existing stream or start a new one for a SYN or if there's data. */
+    stream = tcp_stream_lookup(r, &key, hash);
+    if (!stream) {
+        if (flags & TCP_SYN || l7_length) {
+            stream = tcp_stream_new(r, &key, hash);
+            stream->seq_no = flags & TCP_SYN ? seq + 1 : seq;
+        } else {
+            return NULL;
+        }
+    }
+
+    payload = &stream->payload;
+    if (flags & TCP_SYN || !stream->seq_no) {
         ofpbuf_clear(payload);
         stream->seq_no = seq + 1;
         return NULL;
@@ -322,16 +342,13 @@ tcp_reader_run(struct tcp_reader *r, const struct flow *flow,
         tcp_stream_destroy(r, stream);
         return NULL;
     } else if (seq == stream->seq_no) {
-        size_t length;
-
         /* Shift all of the existing payload to the very beginning of the
          * allocated space, so that we reuse allocated space instead of
          * continually expanding it. */
         ofpbuf_shift(payload, (char *) payload->base - (char *) payload->data);
 
-        length = (char *) ofpbuf_end(packet) - (char *) packet->l7;
-        ofpbuf_put(payload, packet->l7, length);
-        stream->seq_no += length;
+        ofpbuf_put(payload, packet->l7, l7_length);
+        stream->seq_no += l7_length;
         return payload;
     } else {
         return NULL;
