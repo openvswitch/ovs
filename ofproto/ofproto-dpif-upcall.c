@@ -1138,8 +1138,11 @@ handle_upcalls(struct handler *handler, struct list *upcalls)
             atomic_read(&enable_megaflows, &megaflow);
             ofpbuf_use_stack(&mask, &miss->mask_buf, sizeof miss->mask_buf);
             if (megaflow) {
+                size_t max_mpls;
+
+                max_mpls = ofproto_dpif_get_max_mpls_depth(miss->ofproto);
                 odp_flow_key_from_mask(&mask, &miss->xout.wc.masks,
-                                       &miss->flow, UINT32_MAX);
+                                       &miss->flow, UINT32_MAX, max_mpls);
             }
 
             op = &ops[n_ops++];

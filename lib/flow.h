@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ struct ofpbuf;
 /* This sequence number should be incremented whenever anything involving flows
  * or the wildcarding of flows changes.  This will cause build assertion
  * failures in places which likely need to be updated. */
-#define FLOW_WC_SEQ 23
+#define FLOW_WC_SEQ 24
 
 #define FLOW_N_REGS 8
 BUILD_ASSERT_DECL(FLOW_N_REGS <= NXM_NX_MAX_REGS);
@@ -76,6 +76,9 @@ union flow_in_port {
     odp_port_t odp_port;
 };
 
+/* Maximum number of supported MPLS labels. */
+#define FLOW_MAX_MPLS_LABELS 3
+
 /*
  * A flow in the network.
  *
@@ -106,9 +109,9 @@ struct flow {
     uint8_t dl_dst[6];          /* Ethernet destination address. */
     ovs_be16 dl_type;           /* Ethernet frame type. */
     ovs_be16 vlan_tci;          /* If 802.1Q, TCI | VLAN_CFI; otherwise 0. */
+    ovs_be32 mpls_lse[FLOW_MAX_MPLS_LABELS]; /* MPLS label stack entry. */
 
     /* L3 */
-    ovs_be32 mpls_lse;          /* MPLS label stack entry. */
     struct in6_addr ipv6_src;   /* IPv6 source address. */
     struct in6_addr ipv6_dst;   /* IPv6 destination address. */
     struct in6_addr nd_target;  /* IPv6 neighbor discovery (ND) target. */
@@ -123,6 +126,7 @@ struct flow {
     uint8_t arp_tha[6];         /* ARP/ND target hardware address. */
     ovs_be16 tcp_flags;         /* TCP flags. With L3 to avoid matching L4. */
     ovs_be16 pad;               /* Padding. */
+
     /* L4 */
     ovs_be16 tp_src;            /* TCP/UDP/SCTP source port. */
     ovs_be16 tp_dst;            /* TCP/UDP/SCTP destination port.
@@ -134,8 +138,8 @@ BUILD_ASSERT_DECL(sizeof(struct flow) % 4 == 0);
 
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
 BUILD_ASSERT_DECL(offsetof(struct flow, tp_dst) + 2
-                  == sizeof(struct flow_tnl) + 156
-                  && FLOW_WC_SEQ == 23);
+                  == sizeof(struct flow_tnl) + 164
+                  && FLOW_WC_SEQ == 24);
 
 /* Incremental points at which flow classification may be performed in
  * segments.
@@ -145,7 +149,7 @@ BUILD_ASSERT_DECL(offsetof(struct flow, tp_dst) + 2
  * within the struct flow. */
 enum {
     FLOW_SEGMENT_1_ENDS_AT = offsetof(struct flow, dl_src),
-    FLOW_SEGMENT_2_ENDS_AT = offsetof(struct flow, mpls_lse),
+    FLOW_SEGMENT_2_ENDS_AT = offsetof(struct flow, ipv6_src),
     FLOW_SEGMENT_3_ENDS_AT = offsetof(struct flow, tp_src),
 };
 BUILD_ASSERT_DECL(FLOW_SEGMENT_1_ENDS_AT % 4 == 0);
@@ -194,10 +198,19 @@ void flow_set_dl_vlan(struct flow *, ovs_be16 vid);
 void flow_set_vlan_vid(struct flow *, ovs_be16 vid);
 void flow_set_vlan_pcp(struct flow *, uint8_t pcp);
 
-void flow_set_mpls_label(struct flow *flow, ovs_be32 label);
-void flow_set_mpls_ttl(struct flow *flow, uint8_t ttl);
-void flow_set_mpls_tc(struct flow *flow, uint8_t tc);
-void flow_set_mpls_bos(struct flow *flow, uint8_t stack);
+int flow_count_mpls_labels(const struct flow *, struct flow_wildcards *);
+int flow_count_common_mpls_labels(const struct flow *a, int an,
+                                  const struct flow *b, int bn,
+                                  struct flow_wildcards *wc);
+void flow_push_mpls(struct flow *, int n, ovs_be16 mpls_eth_type,
+                    struct flow_wildcards *);
+bool flow_pop_mpls(struct flow *, int n, ovs_be16 eth_type,
+                   struct flow_wildcards *);
+void flow_set_mpls_label(struct flow *, int idx, ovs_be32 label);
+void flow_set_mpls_ttl(struct flow *, int idx, uint8_t ttl);
+void flow_set_mpls_tc(struct flow *, int idx, uint8_t tc);
+void flow_set_mpls_bos(struct flow *, int idx, uint8_t stack);
+void flow_set_mpls_lse(struct flow *, int idx, ovs_be32 lse);
 
 void flow_compose(struct ofpbuf *, const struct flow *);
 

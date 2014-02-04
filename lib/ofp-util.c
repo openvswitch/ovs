@@ -84,7 +84,7 @@ ofputil_netmask_to_wcbits(ovs_be32 netmask)
 void
 ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 23);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 24);
 
     /* Initialize most of wc. */
     flow_wildcards_init_catchall(wc);
@@ -437,10 +437,10 @@ ofputil_match_from_ofp11_match(const struct ofp11_match *ofmatch,
 
     if (eth_type_mpls(match->flow.dl_type)) {
         if (!(wc & OFPFW11_MPLS_LABEL)) {
-            match_set_mpls_label(match, ofmatch->mpls_label);
+            match_set_mpls_label(match, 0, ofmatch->mpls_label);
         }
         if (!(wc & OFPFW11_MPLS_TC)) {
-            match_set_mpls_tc(match, ofmatch->mpls_tc);
+            match_set_mpls_tc(match, 0, ofmatch->mpls_tc);
         }
     }
 
@@ -533,16 +533,17 @@ ofputil_match_to_ofp11_match(const struct match *match,
         ofmatch->tp_dst = match->flow.tp_dst;
     }
 
-    if (!(match->wc.masks.mpls_lse & htonl(MPLS_LABEL_MASK))) {
+    if (!(match->wc.masks.mpls_lse[0] & htonl(MPLS_LABEL_MASK))) {
         wc |= OFPFW11_MPLS_LABEL;
     } else {
-        ofmatch->mpls_label = htonl(mpls_lse_to_label(match->flow.mpls_lse));
+        ofmatch->mpls_label = htonl(mpls_lse_to_label(
+                                        match->flow.mpls_lse[0]));
     }
 
-    if (!(match->wc.masks.mpls_lse & htonl(MPLS_TC_MASK))) {
+    if (!(match->wc.masks.mpls_lse[0] & htonl(MPLS_TC_MASK))) {
         wc |= OFPFW11_MPLS_TC;
     } else {
-        ofmatch->mpls_tc = mpls_lse_to_tc(match->flow.mpls_lse);
+        ofmatch->mpls_tc = mpls_lse_to_tc(match->flow.mpls_lse[0]);
     }
 
     ofmatch->metadata = match->flow.metadata;
@@ -5344,7 +5345,7 @@ ofputil_normalize_match__(struct match *match, bool may_log)
         wc.masks.nd_target = in6addr_any;
     }
     if (!(may_match & MAY_MPLS)) {
-        wc.masks.mpls_lse = htonl(0);
+        memset(wc.masks.mpls_lse, 0, sizeof wc.masks.mpls_lse);
     }
 
     /* Log any changes. */

@@ -256,6 +256,10 @@ struct dpif_backer {
      * OVS_USERSPACE_ATTR_USERDATA in OVS_ACTION_ATTR_USERSPACE actions.
      * False if the datapath supports only 8-byte (or shorter) userdata. */
     bool variable_length_userdata;
+
+    /* Maximum number of MPLS label stack entries that the datapath supports
+     * in a match */
+    size_t max_mpls_depth;
 };
 
 /* All existing ofproto_backer instances, indexed by ofproto->up.type. */
@@ -317,6 +321,12 @@ ofproto_dpif_cast(const struct ofproto *ofproto)
 {
     ovs_assert(ofproto->ofproto_class == &ofproto_dpif_class);
     return CONTAINER_OF(ofproto, struct ofproto_dpif, up);
+}
+
+size_t
+ofproto_dpif_get_max_mpls_depth(const struct ofproto_dpif *ofproto)
+{
+    return ofproto->backer->max_mpls_depth;
 }
 
 static struct ofport_dpif *get_ofp_port(const struct ofproto_dpif *ofproto,
@@ -558,7 +568,8 @@ type_run(const char *type)
                               ofproto->netflow, ofproto->up.frag_handling,
                               ofproto->up.forward_bpdu,
                               connmgr_has_in_band(ofproto->up.connmgr),
-                              ofproto->backer->variable_length_userdata);
+                              ofproto->backer->variable_length_userdata,
+                              ofproto->backer->max_mpls_depth);
 
             HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
                 xlate_bundle_set(ofproto, bundle, bundle->name,
@@ -781,6 +792,7 @@ struct odp_garbage {
 };
 
 static bool check_variable_length_userdata(struct dpif_backer *backer);
+static size_t check_max_mpls_depth(struct dpif_backer *backer);
 
 static int
 open_dpif_backer(const char *type, struct dpif_backer **backerp)
@@ -881,6 +893,7 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
         return error;
     }
     backer->variable_length_userdata = check_variable_length_userdata(backer);
+    backer->max_mpls_depth = check_max_mpls_depth(backer);
 
     if (backer->recv_set_enable) {
         udpif_set_threads(backer->udpif, n_handlers, n_revalidators);
@@ -963,6 +976,53 @@ check_variable_length_userdata(struct dpif_backer *backer)
                   dpif_name(backer->dpif), ovs_strerror(error));
         return true;
     }
+}
+
+/* Tests the MPLS label stack depth supported by 'backer''s datapath.
+ *
+ * Returns the number of elements in a struct flow's mpls_lse field
+ * if the datapath supports at least that many entries in an
+ * MPLS label stack.
+ * Otherwise returns the number of MPLS push actions supported by
+ * the datapath. */
+static size_t
+check_max_mpls_depth(struct dpif_backer *backer)
+{
+    struct flow flow;
+    int n;
+
+    for (n = 0; n < FLOW_MAX_MPLS_LABELS; n++) {
+        struct odputil_keybuf keybuf;
+        struct ofpbuf key;
+        int error;
+
+        memset(&flow, 0, sizeof flow);
+        flow.dl_type = htons(ETH_TYPE_MPLS);
+        flow_set_mpls_bos(&flow, n, 1);
+
+        ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
+        odp_flow_key_from_flow(&key, &flow, 0);
+
+        error = dpif_flow_put(backer->dpif, DPIF_FP_CREATE | DPIF_FP_MODIFY,
+                              key.data, key.size, NULL, 0, NULL, 0, NULL);
+        if (error && error != EEXIST) {
+            if (error != EINVAL) {
+                VLOG_WARN("%s: MPLS stack length feature probe failed (%s)",
+                          dpif_name(backer->dpif), ovs_strerror(error));
+            }
+            break;
+        }
+
+        error = dpif_flow_del(backer->dpif, key.data, key.size, NULL);
+        if (error) {
+            VLOG_WARN("%s: failed to delete MPLS feature probe flow",
+                      dpif_name(backer->dpif));
+        }
+    }
+
+    VLOG_INFO("%s: MPLS label stack length probed as %d",
+              dpif_name(backer->dpif), n);
+    return n;
 }
 
 static int

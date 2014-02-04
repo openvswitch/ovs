@@ -1192,9 +1192,9 @@ dpctl_normalize_actions(int argc, char *argv[])
 
         if (eth_type_mpls(af->flow.dl_type)) {
             printf("mpls(label=%"PRIu32",tc=%d,ttl=%d): ",
-                   mpls_lse_to_label(af->flow.mpls_lse),
-                   mpls_lse_to_tc(af->flow.mpls_lse),
-                   mpls_lse_to_ttl(af->flow.mpls_lse));
+                   mpls_lse_to_label(af->flow.mpls_lse[0]),
+                   mpls_lse_to_tc(af->flow.mpls_lse[0]),
+                   mpls_lse_to_ttl(af->flow.mpls_lse[0]));
         } else {
             printf("no mpls: ");
         }

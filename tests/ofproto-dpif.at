@@ -595,13 +595,13 @@ done
 OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
-mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=40:44:44:44:44:43,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=64,mpls_bos=0
+mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=40:44:44:44:44:43,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=64,mpls_bos=0,mpls_lse1=46912
 dnl
 NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
-mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=40:44:44:44:44:43,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=64,mpls_bos=0
+mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=40:44:44:44:44:43,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=64,mpls_bos=0,mpls_lse1=46912
 dnl
 NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
-mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=40:44:44:44:44:43,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=64,mpls_bos=0
+mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=40:44:44:44:44:43,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=64,mpls_bos=0,mpls_lse1=46912
 ])
 
 dnl Modified MPLS controller action.
@@ -2421,6 +2421,76 @@ skb_priority(0),skb_mark(0/0),in_port(p2),eth(src=50:54:00:00:00:07/00:00:00:00:
 
 AT_CHECK([ovs-appctl dpif/dump-flows -m br1 | sort | STRIP_USED], [0], [dnl
 skb_priority(0),skb_mark(0/0),in_port(p3),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), packets:0, bytes:0, used:never, actions:userspace(pid=0,slow_path(controller))
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - ovs-appctl dpif/dump-flows - MPLS actions that result in a userspace action])
+OVS_VSWITCHD_START([dnl
+   add-port br0 p1 -- set Interface p1 type=dummy
+])
+ON_EXIT([kill `cat ovs-ofctl.pid`])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_DATA([flows.txt], [dnl
+dl_src=60:66:66:66:66:00 actions=push_mpls:0x8847,controller
+dl_src=60:66:66:66:66:01 actions=pop_mpls:0x8849,controller
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl Packet is sent to userspace because a MPLS push or pop action is applied to
+dnl a packet with 4 MPLS LSEs but userspace and the datapath can only handle up
+dnl to 3 labels.
+dnl
+dnl The input is a frame with four MPLS labels which tcpdump -vve shows as:
+dnl 60:66:66:66:66:00 > 50:54:00:00:00:07, ethertype MPLS unicast (0x8847), length 74: MPLS (label 20, exp 0, ttl 32)
+dnl         (label 20, exp 0, ttl 32)
+dnl         (label 20, exp 0, ttl 32)
+dnl         (label 20, exp 0, [S], ttl 32)
+dnl         (tos 0x0, ttl 64, id 0, offset 0, flags [none], proto TCP (6), length 44, bad cksum 3b78 (->f978)!)
+dnl     192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x7744 (correct), seq 42:46, win 10000, length 4
+
+for dl_src in 00 01; do
+    AT_CHECK([ovs-appctl netdev-dummy/receive p1 "505400000007 6066666666$dl_src 8847 00014020 00014020 00014020 00014120 45 00 00 2c 00 00 00 00 40 06 3b 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45"])
+
+    AT_CHECK_UNQUOTED([ovs-appctl dpif/dump-flows br0 | grep ":$dl_src/" | STRIP_USED], [0], [dnl
+skb_priority(0),in_port(1),eth(src=60:66:66:66:66:$dl_src/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:07/00:00:00:00:00:00),eth_type(0x8847),mpls(lse0=0x14020/0x100,lse1=0x14020/0x100,lse2=0x14020/0x100), packets:0, bytes:0, used:never, actions:drop
+])
+done
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
+AT_SETUP([ofproto-dpif - ovs-appctl dpif/dump-flows - MPLS actions that result in a drop])
+OVS_VSWITCHD_START([dnl
+   add-port br0 p1 -- set Interface p1 type=dummy
+])
+ON_EXIT([kill `cat ovs-ofctl.pid`])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_DATA([flows.txt], [dnl
+dl_src=60:66:66:66:66:00 actions=push_mpls:0x8847,controller
+dl_src=60:66:66:66:66:01 actions=pop_mpls:0x8849,controller
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl Packet is dropped because an MPLS PUSH action is applied to a packet with
+dnl 4 MPLS LSEs but ovs-vswtichd can only handle up to 3 MPLS LSEs and thus
+dnl can't determine the resulting MPLS label after an MPLS PUSH action.
+dnl
+dnl The input is a frame with two MPLS headers which tcpdump -vve shows as:
+dnl 60:66:66:66:66:01 > 50:54:00:00:00:07, ethertype MPLS unicast (0x8847), length 74: MPLS (label 20, exp 0, ttl 32)
+dnl         (label 20, exp 0, ttl 32)
+dnl         (label 20, exp 0, ttl 32)
+dnl         (label 20, exp 0, [S], ttl 32)
+dnl         (tos 0x0, ttl 64, id 0, offset 0, flags [none], proto TCP (6), length 44, bad cksum 3b78 (->f978)!)
+dnl     192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x7744 (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 66 01 88 47 00 01 40 20 00 01 40 20 00 01 40 20 00 01 41 20 45 00 00 2c 00 00 00 00 40 06 3b 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'])
+
+AT_CHECK([ovs-appctl dpif/dump-flows br0 | sort | STRIP_USED], [0], [dnl
+skb_priority(0),in_port(1),eth(src=60:66:66:66:66:01/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:07/00:00:00:00:00:00),eth_type(0x8847),mpls(lse0=0x14020/0x100,lse1=0x14020/0x100,lse2=0x14020/0x100), packets:0, bytes:0, used:never, actions:drop
 ])
 
 OVS_VSWITCHD_STOP

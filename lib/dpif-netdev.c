@@ -1365,7 +1365,8 @@ dpif_netdev_flow_dump_next(const struct dpif *dpif, void *state_,
         ofpbuf_use_stack(&buf, &state->maskbuf, sizeof state->maskbuf);
         minimask_expand(&netdev_flow->cr.match.mask, &wc);
         odp_flow_key_from_mask(&buf, &wc.masks, &netdev_flow->flow,
-                               odp_to_u32(wc.masks.in_port.odp_port));
+                               odp_to_u32(wc.masks.in_port.odp_port),
+                               SIZE_MAX);
 
         *mask = buf.data;
         *mask_len = buf.size;

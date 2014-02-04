@@ -572,7 +572,7 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct match *match,
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 23);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 24);
 
     /* Metadata. */
     if (match->wc.masks.in_port.ofp_port) {
@@ -616,17 +616,17 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct match *match,
 
     /* MPLS. */
     if (eth_type_mpls(flow->dl_type)) {
-        if (match->wc.masks.mpls_lse & htonl(MPLS_TC_MASK)) {
-            nxm_put_8(b, OXM_OF_MPLS_TC, mpls_lse_to_tc(flow->mpls_lse));
+        if (match->wc.masks.mpls_lse[0] & htonl(MPLS_TC_MASK)) {
+            nxm_put_8(b, OXM_OF_MPLS_TC, mpls_lse_to_tc(flow->mpls_lse[0]));
         }
 
-        if (match->wc.masks.mpls_lse & htonl(MPLS_BOS_MASK)) {
-            nxm_put_8(b, OXM_OF_MPLS_BOS, mpls_lse_to_bos(flow->mpls_lse));
+        if (match->wc.masks.mpls_lse[0] & htonl(MPLS_BOS_MASK)) {
+            nxm_put_8(b, OXM_OF_MPLS_BOS, mpls_lse_to_bos(flow->mpls_lse[0]));
         }
 
-        if (match->wc.masks.mpls_lse & htonl(MPLS_LABEL_MASK)) {
+        if (match->wc.masks.mpls_lse[0] & htonl(MPLS_LABEL_MASK)) {
             nxm_put_32(b, OXM_OF_MPLS_LABEL,
-                       htonl(mpls_lse_to_label(flow->mpls_lse)));
+                       htonl(mpls_lse_to_label(flow->mpls_lse[0])));
         }
     }
 

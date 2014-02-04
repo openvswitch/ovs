@@ -146,7 +146,8 @@ int odp_flow_from_string(const char *s,
 void odp_flow_key_from_flow(struct ofpbuf *, const struct flow *,
                             odp_port_t odp_in_port);
 void odp_flow_key_from_mask(struct ofpbuf *, const struct flow *mask,
-                            const struct flow *flow, uint32_t odp_in_port);
+                            const struct flow *flow, uint32_t odp_in_port,
+                            size_t max_mpls_depth);
 
 uint32_t odp_flow_key_hash(const struct nlattr *, size_t);
 
@@ -181,8 +182,7 @@ void commit_odp_tunnel_action(const struct flow *, struct flow *base,
 enum slow_path_reason commit_odp_actions(const struct flow *,
                                          struct flow *base,
                                          struct ofpbuf *odp_actions,
-                                         struct flow_wildcards *wc,
-                                         int *mpls_depth_delta);
+                                         struct flow_wildcards *wc);
 
 /* ofproto-dpif interface.
  *

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -109,12 +109,11 @@ static void
 parse_mpls(struct ofpbuf *b, struct flow *flow)
 {
     struct mpls_hdr *mh;
-    bool top = true;
+    int idx = 0;
 
     while ((mh = ofpbuf_try_pull(b, sizeof *mh))) {
-        if (top) {
-            top = false;
-            flow->mpls_lse = mh->mpls_lse;
+        if (idx < FLOW_MAX_MPLS_LABELS) {
+            flow->mpls_lse[idx++] = mh->mpls_lse;
         }
         if (mh->mpls_lse & htonl(MPLS_BOS_MASK)) {
             break;
@@ -535,7 +534,7 @@ flow_unwildcard_tp_ports(const struct flow *flow, struct flow_wildcards *wc)
 void
 flow_get_metadata(const struct flow *flow, struct flow_metadata *fmd)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 23);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 24);
 
     fmd->tun_id = flow->tunnel.tun_id;
     fmd->tun_src = flow->tunnel.ip_src;
@@ -1047,37 +1046,212 @@ flow_set_vlan_pcp(struct flow *flow, uint8_t pcp)
     flow->vlan_tci |= htons((pcp << VLAN_PCP_SHIFT) | VLAN_CFI);
 }
 
+/* Returns the number of MPLS LSEs present in 'flow'
+ *
+ * Returns 0 if the 'dl_type' of 'flow' is not an MPLS ethernet type.
+ * Otherwise traverses 'flow''s MPLS label stack stopping at the
+ * first entry that has the BoS bit set. If no such entry exists then
+ * the maximum number of LSEs that can be stored in 'flow' is returned.
+ */
+int
+flow_count_mpls_labels(const struct flow *flow, struct flow_wildcards *wc)
+{
+    if (wc) {
+        wc->masks.dl_type = OVS_BE16_MAX;
+    }
+    if (eth_type_mpls(flow->dl_type)) {
+        int i;
+        int len = FLOW_MAX_MPLS_LABELS;
+
+        for (i = 0; i < len; i++) {
+            if (wc) {
+                wc->masks.mpls_lse[i] |= htonl(MPLS_BOS_MASK);
+            }
+            if (flow->mpls_lse[i] & htonl(MPLS_BOS_MASK)) {
+                return i + 1;
+            }
+        }
+
+        return len;
+    } else {
+        return 0;
+    }
+}
+
+/* Returns the number consecutive of MPLS LSEs, starting at the
+ * innermost LSE, that are common in 'a' and 'b'.
+ *
+ * 'an' must be flow_count_mpls_labels(a).
+ * 'bn' must be flow_count_mpls_labels(b).
+ */
+int
+flow_count_common_mpls_labels(const struct flow *a, int an,
+                              const struct flow *b, int bn,
+                              struct flow_wildcards *wc)
+{
+    int min_n = MIN(an, bn);
+    if (min_n == 0) {
+        return 0;
+    } else {
+        int common_n = 0;
+        int a_last = an - 1;
+        int b_last = bn - 1;
+        int i;
+
+        for (i = 0; i < min_n; i++) {
+            if (wc) {
+                wc->masks.mpls_lse[a_last - i] = OVS_BE32_MAX;
+                wc->masks.mpls_lse[b_last - i] = OVS_BE32_MAX;
+            }
+            if (a->mpls_lse[a_last - i] != b->mpls_lse[b_last - i]) {
+                break;
+            } else {
+                common_n++;
+            }
+        }
+
+        return common_n;
+    }
+}
+
+/* Adds a new outermost MPLS label to 'flow' and changes 'flow''s Ethernet type
+ * to 'mpls_eth_type', which must be an MPLS Ethertype.
+ *
+ * If the new label is the first MPLS label in 'flow', it is generated as;
+ *
+ *     - label: 2, if 'flow' is IPv6, otherwise 0.
+ *
+ *     - TTL: IPv4 or IPv6 TTL, if present and nonzero, otherwise 64.
+ *
+ *     - TC: IPv4 or IPv6 TOS, if present, otherwise 0.
+ *
+ *     - BoS: 1.
+ *
+ * If the new label is the second or label MPLS label in 'flow', it is
+ * generated as;
+ *
+ *     - label: 0.
+ *
+ *     - TTL: Copied from outer label.
+ *
+ *     - TC: Copied from outer label.
+ *
+ *     - BoS: 0.
+ *
+ * 'n' must be flow_count_mpls_labels(flow).  'n' must be less than
+ * FLOW_MAX_MPLS_LABELS (because otherwise flow->mpls_lse[] would overflow).
+ */
+void
+flow_push_mpls(struct flow *flow, int n, ovs_be16 mpls_eth_type,
+               struct flow_wildcards *wc)
+{
+    ovs_assert(eth_type_mpls(mpls_eth_type));
+    ovs_assert(n < FLOW_MAX_MPLS_LABELS);
+
+    memset(wc->masks.mpls_lse, 0xff, sizeof wc->masks.mpls_lse);
+    if (n) {
+        int i;
+
+        for (i = n; i >= 1; i--) {
+            flow->mpls_lse[i] = flow->mpls_lse[i - 1];
+        }
+        flow->mpls_lse[0] = (flow->mpls_lse[1]
+                             & htonl(MPLS_TTL_MASK | MPLS_TC_MASK));
+    } else {
+        int label = 0;          /* IPv4 Explicit Null. */
+        int tc = 0;
+        int ttl = 64;
+
+        if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
+            label = 2;
+        }
+
+        if (is_ip_any(flow)) {
+            tc = (flow->nw_tos & IP_DSCP_MASK) >> 2;
+            wc->masks.nw_tos |= IP_DSCP_MASK;
+
+            if (flow->nw_ttl) {
+                ttl = flow->nw_ttl;
+            }
+            wc->masks.nw_ttl = 0xff;
+        }
+
+        flow->mpls_lse[0] = set_mpls_lse_values(ttl, tc, 1, htonl(label));
+
+        /* Clear all L3 and L4 fields. */
+        BUILD_ASSERT(FLOW_WC_SEQ == 24);
+        memset((char *) flow + FLOW_SEGMENT_2_ENDS_AT, 0,
+               sizeof(struct flow) - FLOW_SEGMENT_2_ENDS_AT);
+    }
+    flow->dl_type = mpls_eth_type;
+}
+
+/* Tries to remove the outermost MPLS label from 'flow'.  Returns true if
+ * successful, false otherwise.  On success, sets 'flow''s Ethernet type to
+ * 'eth_type'.
+ *
+ * 'n' must be flow_count_mpls_labels(flow). */
+bool
+flow_pop_mpls(struct flow *flow, int n, ovs_be16 eth_type,
+              struct flow_wildcards *wc)
+{
+    int i;
+
+    if (n == 0) {
+        /* Nothing to pop. */
+        return false;
+    } else if (n == FLOW_MAX_MPLS_LABELS
+               && !(flow->mpls_lse[n - 1] & htonl(MPLS_BOS_MASK))) {
+        /* Can't pop because we don't know what to fill in mpls_lse[n - 1]. */
+        return false;
+    }
+
+    memset(wc->masks.mpls_lse, 0xff, sizeof wc->masks.mpls_lse);
+    for (i = 1; i < n; i++) {
+        flow->mpls_lse[i - 1] = flow->mpls_lse[i];
+    }
+    flow->mpls_lse[n - 1] = 0;
+    flow->dl_type = eth_type;
+    return true;
+}
+
 /* Sets the MPLS Label that 'flow' matches to 'label', which is interpreted
  * as an OpenFlow 1.1 "mpls_label" value. */
 void
-flow_set_mpls_label(struct flow *flow, ovs_be32 label)
+flow_set_mpls_label(struct flow *flow, int idx, ovs_be32 label)
 {
-    set_mpls_lse_label(&flow->mpls_lse, label);
+    set_mpls_lse_label(&flow->mpls_lse[idx], label);
 }
 
 /* Sets the MPLS TTL that 'flow' matches to 'ttl', which should be in the
  * range 0...255. */
 void
-flow_set_mpls_ttl(struct flow *flow, uint8_t ttl)
+flow_set_mpls_ttl(struct flow *flow, int idx, uint8_t ttl)
 {
-    set_mpls_lse_ttl(&flow->mpls_lse, ttl);
+    set_mpls_lse_ttl(&flow->mpls_lse[idx], ttl);
 }
 
 /* Sets the MPLS TC that 'flow' matches to 'tc', which should be in the
  * range 0...7. */
 void
-flow_set_mpls_tc(struct flow *flow, uint8_t tc)
+flow_set_mpls_tc(struct flow *flow, int idx, uint8_t tc)
 {
-    set_mpls_lse_tc(&flow->mpls_lse, tc);
+    set_mpls_lse_tc(&flow->mpls_lse[idx], tc);
 }
 
 /* Sets the MPLS BOS bit that 'flow' matches to which should be 0 or 1. */
 void
-flow_set_mpls_bos(struct flow *flow, uint8_t bos)
+flow_set_mpls_bos(struct flow *flow, int idx, uint8_t bos)
 {
-    set_mpls_lse_bos(&flow->mpls_lse, bos);
+    set_mpls_lse_bos(&flow->mpls_lse[idx], bos);
 }
 
+/* Sets the entire MPLS LSE. */
+void
+flow_set_mpls_lse(struct flow *flow, int idx, ovs_be32 lse)
+{
+    flow->mpls_lse[idx] = lse;
+}
 
 static void
 flow_compose_l4(struct ofpbuf *b, const struct flow *flow)
@@ -1235,8 +1409,17 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
     }
 
     if (eth_type_mpls(flow->dl_type)) {
+        int n;
+
         b->l2_5 = b->l3;
-        push_mpls(b, flow->dl_type, flow->mpls_lse);
+        for (n = 1; n < FLOW_MAX_MPLS_LABELS; n++) {
+            if (flow->mpls_lse[n - 1] & htonl(MPLS_BOS_MASK)) {
+                break;
+            }
+        }
+        while (n > 0) {
+            push_mpls(b, flow->dl_type, flow->mpls_lse[--n]);
+        }
     }
 }
 

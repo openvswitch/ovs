@@ -79,9 +79,19 @@ sed 's/^/skb_priority(0),skb_mark(0),/' odp-base.txt | sed -n 's/,frag=no),/,fra
  echo
  echo '# Valid forms with IP later fragment.'
 sed 's/^/skb_priority(0),skb_mark(0),/' odp-base.txt | sed -n 's/,frag=no),.*/,frag=later)/p'
-) > odp.txt
-AT_CAPTURE_FILE([odp.txt])
-AT_CHECK_UNQUOTED([test-odp parse-keys < odp.txt], [0], [`cat odp.txt`
+) > odp-in.txt
+AT_CAPTURE_FILE([odp-in.txt])
+
+dnl If the BoS bit of the last LSE is 0 then the stack is unterminated
+dnl Internally a stack of 3 LSEs will be used with the trailing LSEs
+dnl set to zero. This is reflected when the key is formated
+sed '/bos=0/{
+s/^/ODP_FIT_TOO_LITTLE: /
+s/mpls(label=100,tc=7,ttl=100,bos=0)/mpls(lse0=0x64e64,lse1=0,lse2=0)/
+s/mpls(label=1000,tc=4,ttl=200,bos=0)/mpls(lse0=0x3e88c8,lse1=0,lse2=0)/
+}' < odp-in.txt > odp-out.txt
+
+AT_CHECK_UNQUOTED([test-odp parse-keys < odp-in.txt], [0], [`cat odp-out.txt`
 ])
 AT_CLEANUP
 
