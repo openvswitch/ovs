@@ -1217,7 +1217,7 @@ ofproto_rule_delete__(struct ofproto *ofproto, struct rule *rule,
     ofopgroup_submit(group);
 }
 
-/* Deletes 'rule' from 'cls' within 'ofproto'.
+/* Deletes 'rule' from 'ofproto'.
  *
  * Within an ofproto implementation, this function allows an ofproto
  * implementation to destroy any rules that remain when its ->destruct()
