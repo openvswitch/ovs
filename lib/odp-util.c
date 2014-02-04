@@ -3548,10 +3548,6 @@ commit_mpls_action(const struct flow *flow, struct flow *base,
     while (base_n < flow_n) {
         struct ovs_action_push_mpls *mpls;
 
-        /* If there's a VLAN tag, pop it off so that our new MPLS label doesn't
-         * end up outside it. */
-        pop_vlan(base, odp_actions, wc);
-
         mpls = nl_msg_put_unspec_zero(odp_actions,
                                       OVS_ACTION_ATTR_PUSH_MPLS,
                                       sizeof *mpls);

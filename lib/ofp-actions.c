@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -286,8 +286,7 @@ sample_from_openflow(const struct nx_action_sample *nas,
 }
 
 static enum ofperr
-push_mpls_from_openflow(ovs_be16 ethertype, enum ofpact_mpls_position position,
-                        struct ofpbuf *out)
+push_mpls_from_openflow(ovs_be16 ethertype, struct ofpbuf *out)
 {
     struct ofpact_push_mpls *oam;
 
@@ -296,7 +295,6 @@ push_mpls_from_openflow(ovs_be16 ethertype, enum ofpact_mpls_position position,
     }
     oam = ofpact_put_PUSH_MPLS(out);
     oam->ethertype = ethertype;
-    oam->position = position;
 
     return 0;
 }
@@ -473,8 +471,7 @@ ofpact_from_nxast(const union ofp_action *a, enum ofputil_action_code code,
         break;
 
     case OFPUTIL_NXAST_PUSH_MPLS:
-        error = push_mpls_from_openflow(a->push_mpls.ethertype,
-                                        OFPACT_MPLS_AFTER_VLAN, out);
+        error = push_mpls_from_openflow(a->push_mpls.ethertype, out);
         break;
 
     case OFPUTIL_NXAST_SET_MPLS_LABEL:
@@ -1255,11 +1252,7 @@ ofpact_from_openflow11(const union ofp_action *a, enum ofp_version version,
         break;
 
     case OFPUTIL_OFPAT11_PUSH_MPLS:
-        /* OpenFlow 1.3 has different semantics. */
-        error = push_mpls_from_openflow(a->push.ethertype,
-                                        version >= OFP13_VERSION ?
-                                        OFPACT_MPLS_BEFORE_VLAN :
-                                        OFPACT_MPLS_AFTER_VLAN, out);
+        error = push_mpls_from_openflow(a->push.ethertype, out);
         break;
 
     case OFPUTIL_OFPAT11_POP_MPLS:

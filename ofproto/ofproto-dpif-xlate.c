@@ -2103,18 +2103,12 @@ compose_mpls_push_action(struct xlate_ctx *ctx, struct ofpact_push_mpls *mpls)
 {
     struct flow_wildcards *wc = &ctx->xout->wc;
     struct flow *flow = &ctx->xin->flow;
-    ovs_be16 vlan_tci = flow->vlan_tci;
     int n;
 
     ovs_assert(eth_type_mpls(mpls->ethertype));
 
     n = flow_count_mpls_labels(flow, wc);
     if (!n) {
-        if (mpls->position == OFPACT_MPLS_BEFORE_VLAN) {
-            vlan_tci = 0;
-        } else {
-            flow->vlan_tci = 0;
-        }
         ctx->xout->slow |= commit_odp_actions(flow, &ctx->base_flow,
                                               &ctx->xout->odp_actions,
                                               &ctx->xout->wc);
@@ -2134,7 +2128,6 @@ compose_mpls_push_action(struct xlate_ctx *ctx, struct ofpact_push_mpls *mpls)
     }
 
     flow_push_mpls(flow, n, mpls->ethertype, wc);
-    flow->vlan_tci = vlan_tci;
 }
 
 static void

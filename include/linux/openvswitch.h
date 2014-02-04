@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2013 Nicira, Inc.
+ * Copyright (c) 2007-2014 Nicira, Inc.
  *
  * This file is offered under your choice of two licenses: Apache 2.0 or GNU
  * GPL 2.0 or later.  The permission statements for each of these licenses is
@@ -545,13 +545,13 @@ struct ovs_action_push_vlan {
  * single nested %OVS_KEY_ATTR_* attribute specifies a header to modify and its
  * value.
  * @OVS_ACTION_ATTR_PUSH_MPLS: Push a new MPLS label stack entry onto the
- * top of the packets MPLS label stack. Set the ethertype of the
+ * top of the packets MPLS label stack.  Set the ethertype of the
  * encapsulating frame to either %ETH_P_MPLS_UC or %ETH_P_MPLS_MC to
  * indicate the new packet contents.
  * @OVS_ACTION_ATTR_POP_MPLS: Pop an MPLS label stack entry off of the
  * packet's MPLS label stack.  Set the encapsulating frame's ethertype to
- * indicate the new packet contents This could potentially still be
- * %ETH_P_MPLS_* if the resulting MPLS label stack is not empty.  If there
+ * indicate the new packet contents. This could potentially still be
+ * %ETH_P_MPLS if the resulting MPLS label stack is not empty.  If there
  * is no MPLS label stack, as determined by ethertype, no action is taken.
  *
  * Only a single header can be set with a single %OVS_ACTION_ATTR_SET.  Not all

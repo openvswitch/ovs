@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -363,19 +363,6 @@ struct ofpact_reg_load {
     union mf_subvalue subvalue; /* Least-significant bits are used. */
 };
 
-/* The position in the packet at which to insert an MPLS header.
- *
- * Used NXAST_PUSH_MPLS, OFPAT11_PUSH_MPLS. */
-enum ofpact_mpls_position {
-    /* Add the MPLS LSE after the Ethernet header but before any VLAN tags.
-     * OpenFlow 1.3+ requires this behavior. */
-   OFPACT_MPLS_BEFORE_VLAN,
-
-   /* Add the MPLS LSE after the Ethernet header and any VLAN tags.
-    * OpenFlow 1.1 and 1.2 require this behavior. */
-   OFPACT_MPLS_AFTER_VLAN
-};
-
 /* OFPACT_SET_FIELD.
  *
  * Used for OFPAT12_SET_FIELD. */
@@ -392,7 +379,6 @@ struct ofpact_set_field {
 struct ofpact_push_mpls {
     struct ofpact ofpact;
     ovs_be16 ethertype;
-    enum ofpact_mpls_position position;
 };
 
 /* OFPACT_POP_MPLS
