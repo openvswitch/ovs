@@ -168,6 +168,17 @@ ovs_mutex_init_recursive(const struct ovs_mutex *mutex)
     ovs_mutex_init__(mutex, PTHREAD_MUTEX_RECURSIVE);
 }
 
+/* Initializes 'mutex' as a recursive mutex. */
+void
+ovs_mutex_init_adaptive(const struct ovs_mutex *mutex)
+{
+#ifdef PTHREAD_ADAPTIVE_MUTEX_INITIALIZER_NP
+    ovs_mutex_init__(mutex, PTHREAD_MUTEX_ADAPTIVE_NP);
+#else
+    ovs_mutex_init(mutex);
+#endif
+}
+
 void
 ovs_rwlock_init(const struct ovs_rwlock *l_)
 {

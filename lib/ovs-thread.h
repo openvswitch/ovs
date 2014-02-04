@@ -37,6 +37,13 @@ struct OVS_LOCKABLE ovs_mutex {
 #define OVS_MUTEX_INITIALIZER { PTHREAD_MUTEX_INITIALIZER, NULL }
 #endif
 
+#ifdef PTHREAD_ADAPTIVE_MUTEX_INITIALIZER_NP
+#define OVS_ADAPTIVE_MUTEX_INITIALIZER                  \
+    { PTHREAD_ADAPTIVE_MUTEX_INITIALIZER_NP, NULL }
+#else
+#define OVS_ADAPTIVE_MUTEX_INITIALIZER OVS_MUTEX_INITIALIZER
+#endif
+
 /* ovs_mutex functions analogous to pthread_mutex_*() functions.
  *
  * Most of these functions abort the process with an error message on any
@@ -44,6 +51,7 @@ struct OVS_LOCKABLE ovs_mutex {
  * return value to the caller and aborts on any other error. */
 void ovs_mutex_init(const struct ovs_mutex *);
 void ovs_mutex_init_recursive(const struct ovs_mutex *);
+void ovs_mutex_init_adaptive(const struct ovs_mutex *);
 void ovs_mutex_destroy(const struct ovs_mutex *);
 void ovs_mutex_unlock(const struct ovs_mutex *mutex) OVS_RELEASES(mutex);
 void ovs_mutex_lock_at(const struct ovs_mutex *mutex, const char *where)
