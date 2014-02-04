@@ -1033,7 +1033,10 @@ dpif_netdev_mask_from_nlattrs(const struct nlattr *key, uint32_t key_len,
                               struct flow *mask)
 {
     if (mask_key_len) {
-        if (odp_flow_key_to_mask(mask_key, mask_key_len, mask, flow)) {
+        enum odp_key_fitness fitness;
+
+        fitness = odp_flow_key_to_mask(mask_key, mask_key_len, mask, flow);
+        if (fitness) {
             /* This should not happen: it indicates that
              * odp_flow_key_from_mask() and odp_flow_key_to_mask()
              * disagree on the acceptable form of a mask.  Log the problem
@@ -1046,7 +1049,8 @@ dpif_netdev_mask_from_nlattrs(const struct nlattr *key, uint32_t key_len,
                 ds_init(&s);
                 odp_flow_format(key, key_len, mask_key, mask_key_len, NULL, &s,
                                 true);
-                VLOG_ERR("internal error parsing flow mask %s", ds_cstr(&s));
+                VLOG_ERR("internal error parsing flow mask %s (%s)",
+                         ds_cstr(&s), odp_key_fitness_to_string(fitness));
                 ds_destroy(&s);
             }
 
