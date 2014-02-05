@@ -863,7 +863,7 @@ netdev_bsd_get_carrier(const struct netdev *netdev_, bool *carrier)
 }
 
 static void
-convert_stats(struct netdev_stats *stats, const struct if_data *ifd)
+convert_stats_system(struct netdev_stats *stats, const struct if_data *ifd)
 {
     /*
      * note: UINT64_MAX means unsupported
@@ -889,6 +889,51 @@ convert_stats(struct netdev_stats *stats, const struct if_data *ifd)
     stats->tx_fifo_errors = UINT64_MAX;
     stats->tx_heartbeat_errors = UINT64_MAX;
     stats->tx_window_errors = UINT64_MAX;
+}
+
+static void
+convert_stats_tap(struct netdev_stats *stats, const struct if_data *ifd)
+{
+    /*
+     * Similar to convert_stats_system but swapping rx and tx
+     * because 'ifd' is stats for the network interface side of the
+     * tap device and what the caller wants is one for the character
+     * device side.
+     *
+     * note: UINT64_MAX means unsupported
+     */
+    stats->rx_packets = ifd->ifi_opackets;
+    stats->tx_packets = ifd->ifi_ipackets;
+    stats->rx_bytes = ifd->ifi_ibytes;
+    stats->tx_bytes = ifd->ifi_obytes;
+    stats->rx_errors = ifd->ifi_oerrors;
+    stats->tx_errors = ifd->ifi_ierrors;
+    stats->rx_dropped = UINT64_MAX;
+    stats->tx_dropped = ifd->ifi_iqdrops;
+    stats->multicast = ifd->ifi_omcasts;
+    stats->collisions = UINT64_MAX;
+    stats->rx_length_errors = UINT64_MAX;
+    stats->rx_over_errors = UINT64_MAX;
+    stats->rx_crc_errors = UINT64_MAX;
+    stats->rx_frame_errors = UINT64_MAX;
+    stats->rx_fifo_errors = UINT64_MAX;
+    stats->rx_missed_errors = UINT64_MAX;
+    stats->tx_aborted_errors = UINT64_MAX;
+    stats->tx_carrier_errors = UINT64_MAX;
+    stats->tx_fifo_errors = UINT64_MAX;
+    stats->tx_heartbeat_errors = UINT64_MAX;
+    stats->tx_window_errors = UINT64_MAX;
+}
+
+static void
+convert_stats(const struct netdev *netdev, struct netdev_stats *stats,
+              const struct if_data *ifd)
+{
+    if (netdev_bsd_cast(netdev)->tap_fd == -1) {
+        convert_stats_system(stats, ifd);
+    } else {
+        convert_stats_tap(stats, ifd);
+    }
 }
 
 /* Retrieves current device stats for 'netdev'. */
@@ -926,7 +971,7 @@ netdev_bsd_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
                         netdev_get_name(netdev_), ovs_strerror(errno));
             return errno;
         } else if (!strcmp(ifmd.ifmd_name, netdev_get_name(netdev_))) {
-            convert_stats(stats, &ifmd.ifmd_data);
+            convert_stats(netdev, stats, &ifdr.ifdr_data);
             break;
         }
     }
@@ -941,7 +986,7 @@ netdev_bsd_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
             sizeof(ifdr.ifdr_name));
     error = af_link_ioctl(SIOCGIFDATA, &ifdr);
     if (!error) {
-        convert_stats(stats, &ifdr.ifdr_data);
+        convert_stats(netdev_, stats, &ifdr.ifdr_data);
     }
     return error;
 #else
