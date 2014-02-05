@@ -173,7 +173,8 @@ void ovs_flow_free(struct sw_flow *flow, bool deferred)
 		struct sw_flow_mask *mask = flow->mask;
 
 		/* ovs-lock is required to protect mask-refcount and
-		 * mask list. */
+		 * mask list.
+		 */
 		ASSERT_OVSL();
 		BUG_ON(!mask->ref_count);
 		mask->ref_count--;

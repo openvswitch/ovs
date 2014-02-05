@@ -400,7 +400,7 @@ static int queue_userspace_packet(struct datapath *dp, struct sk_buff *skb,
 #endif
 		.snd_portid = upcall_info->portid,
 	};
-	size_t len, plen;
+	size_t len;
 	unsigned int hlen;
 	int err, dp_ifindex;
 
@@ -472,9 +472,12 @@ static int queue_userspace_packet(struct datapath *dp, struct sk_buff *skb,
 	skb_zerocopy(user_skb, skb, skb->len, hlen);
 
 	/* Pad OVS_PACKET_ATTR_PACKET if linear copy was performed */
-	if (!(dp->user_features & OVS_DP_F_UNALIGNED) &&
-	    (plen = (ALIGN(user_skb->len, NLA_ALIGNTO) - user_skb->len)) > 0)
-		memset(skb_put(user_skb, plen), 0, plen);
+	if (!(dp->user_features & OVS_DP_F_UNALIGNED)) {
+		size_t plen = NLA_ALIGN(user_skb->len) - user_skb->len;
+
+		if (plen > 0)
+			memset(skb_put(user_skb, plen), 0, plen);
+	}
 
 	((struct nlmsghdr *) user_skb->data)->nlmsg_len = user_skb->len;
 
