@@ -53,9 +53,9 @@ extern "C" {
 void poll_fd_wait_at(int fd, HANDLE wevent, short int events, const char *where);
 #ifndef _WIN32
 #define poll_fd_wait(fd, events) poll_fd_wait_at(fd, 0, events, SOURCE_LOCATOR)
-#else
-#define poll_fd_wait_event(fd, wevent, events) poll_fd_wait_at(fd, wevent, events, SOURCE_LOCATOR)
 #endif
+#define poll_fd_wait_event(fd, wevent, events)  \
+    poll_fd_wait_at(fd, wevent, events, SOURCE_LOCATOR)
 
 void poll_timer_wait_at(long long int msec, const char *where);
 #define poll_timer_wait(msec) poll_timer_wait_at(msec, SOURCE_LOCATOR)

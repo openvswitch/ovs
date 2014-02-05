@@ -81,11 +81,13 @@ find_poll_node(struct poll_loop *loop, int fd, uint32_t wevent)
  *
  * On Windows system:
  *
- *     Register 'wevent' handle for the specified 'events'.  These wevents are
- *     given to the handleMultipleObjects() to be polled.  The event
- *     registration is one-shot: only the following call to poll_block() is
- *     affected.  The event will need to be re-registered after poll_block() is
- *     called if it is to persist.
+ *     If both 'wevent' handle and 'fd' is specified, associate the 'fd' with
+ *     with that 'wevent' for 'events' (implemented in poll_block()).
+ *     In case of no 'fd' specified, wake up on any event on that 'wevent'.
+ *     These wevents are given to the WaitForMultipleObjects() to be polled.
+ *     The event registration is one-shot: only the following call to
+ *     poll_block() is affected.  The event will need to be re-registered after
+ *     poll_block() is called if it is to persist.
  *
  * ('where' is used in debug logging.  Commonly one would use poll_fd_wait() to
  * automatically provide the caller's source file and line number for
@@ -293,6 +295,16 @@ poll_block(void)
         pollfds[i] = node->pollfd;
 #ifdef _WIN32
         wevents[i] = node->wevent;
+        if (node->pollfd.fd && node->wevent) {
+            short int wsa_events = 0;
+            if (node->pollfd.events & POLLIN) {
+                wsa_events |= FD_READ | FD_ACCEPT | FD_CLOSE;
+            }
+            if (node->pollfd.events & POLLOUT) {
+                wsa_events |= FD_WRITE | FD_CONNECT | FD_CLOSE;
+            }
+            WSAEventSelect(node->pollfd.fd, node->wevent, wsa_events);
+        }
 #endif
         i++;
     }
