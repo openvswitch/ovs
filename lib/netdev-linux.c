@@ -33,7 +33,6 @@
 #include <linux/pkt_sched.h>
 #include <linux/rtnetlink.h>
 #include <linux/sockios.h>
-#include <linux/version.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
