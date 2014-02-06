@@ -43,6 +43,10 @@
 
 VLOG_DEFINE_THIS_MODULE(bond);
 
+static struct ovs_rwlock rwlock = OVS_RWLOCK_INITIALIZER;
+static struct hmap all_bonds__ = HMAP_INITIALIZER(&all_bonds__);
+static struct hmap *const all_bonds OVS_GUARDED_BY(rwlock) = &all_bonds__;
+
 /* Bit-mask for hashing a flow down to a bucket.
  * There are (BOND_MASK + 1) buckets. */
 #define BOND_MASK 0xff
@@ -58,6 +62,7 @@ struct bond_entry {
 /* A bond slave, that is, one of the links comprising a bond. */
 struct bond_slave {
     struct hmap_node hmap_node; /* In struct bond's slaves hmap. */
+    struct list list_node;      /* In struct bond's enabled_slaves list. */
     struct bond *bond;          /* The bond that contains this slave. */
     void *aux;                  /* Client-provided handle for this slave. */
 
@@ -85,6 +90,14 @@ struct bond {
     /* Slaves. */
     struct hmap slaves;
 
+    /* Enabled slaves.
+     *
+     * Any reader or writer of 'enabled_slaves' must hold 'mutex'.
+     * (To prevent the bond_slave from disappearing they must also hold
+     * 'rwlock'.) */
+    struct ovs_mutex mutex OVS_ACQ_AFTER(rwlock);
+    struct list enabled_slaves OVS_GUARDED; /* Contains struct bond_slaves. */
+
     /* Bonding info. */
     enum bond_mode balance;     /* Balancing mode, one of BM_*. */
     struct bond_slave *active_slave;
@@ -106,10 +119,6 @@ struct bond {
     struct ovs_refcount ref_cnt;
 };
 
-static struct ovs_rwlock rwlock = OVS_RWLOCK_INITIALIZER;
-static struct hmap all_bonds__ = HMAP_INITIALIZER(&all_bonds__);
-static struct hmap *const all_bonds OVS_GUARDED_BY(rwlock) = &all_bonds__;
-
 static void bond_entry_reset(struct bond *) OVS_REQ_WRLOCK(rwlock);
 static struct bond_slave *bond_slave_lookup(struct bond *, const void *slave_)
     OVS_REQ_RDLOCK(rwlock);
@@ -126,6 +135,8 @@ static unsigned int bond_hash_tcp(const struct flow *, uint16_t vlan,
 static struct bond_entry *lookup_bond_entry(const struct bond *,
                                             const struct flow *,
                                             uint16_t vlan)
+    OVS_REQ_RDLOCK(rwlock);
+static struct bond_slave *get_enabled_slave(struct bond *)
     OVS_REQ_RDLOCK(rwlock);
 static struct bond_slave *choose_output_slave(const struct bond *,
                                               const struct flow *,
@@ -180,6 +191,8 @@ bond_create(const struct bond_settings *s)
 
     bond = xzalloc(sizeof *bond);
     hmap_init(&bond->slaves);
+    list_init(&bond->enabled_slaves);
+    ovs_mutex_init(&bond->mutex);
     bond->next_fake_iface_update = LLONG_MAX;
     ovs_refcount_init(&bond->ref_cnt);
 
@@ -220,6 +233,7 @@ bond_unref(struct bond *bond)
     }
     hmap_destroy(&bond->slaves);
 
+    ovs_mutex_destroy(&bond->mutex);
     free(bond->hash);
     free(bond->name);
     ovs_refcount_destroy(&bond->ref_cnt);
@@ -1339,6 +1353,15 @@ bond_enable_slave(struct bond_slave *slave, bool enable)
     if (enable != slave->enabled) {
         slave->bond->bond_revalidate = true;
         slave->enabled = enable;
+
+        ovs_mutex_lock(&slave->bond->mutex);
+        if (enable) {
+            list_insert(&slave->bond->enabled_slaves, &slave->list_node);
+        } else {
+            list_remove(&slave->list_node);
+        }
+        ovs_mutex_unlock(&slave->bond->mutex);
+
         VLOG_INFO("interface %s: %s", slave->name,
                   slave->enabled ? "enabled" : "disabled");
     }
@@ -1414,6 +1437,27 @@ lookup_bond_entry(const struct bond *bond, const struct flow *flow,
     return &bond->hash[bond_hash(bond, flow, vlan) & BOND_MASK];
 }
 
+/* Selects and returns an enabled slave from the 'enabled_slaves' list
+ * in a round-robin fashion.  If the 'enabled_slaves' list is empty,
+ * returns NULL. */
+static struct bond_slave *
+get_enabled_slave(struct bond *bond)
+{
+    struct list *node;
+
+    ovs_mutex_lock(&bond->mutex);
+    if (list_is_empty(&bond->enabled_slaves)) {
+        ovs_mutex_unlock(&bond->mutex);
+        return NULL;
+    }
+
+    node = list_pop_front(&bond->enabled_slaves);
+    list_push_back(&bond->enabled_slaves, node);
+    ovs_mutex_unlock(&bond->mutex);
+
+    return CONTAINER_OF(node, struct bond_slave, list_node);
+}
+
 static struct bond_slave *
 choose_output_slave(const struct bond *bond, const struct flow *flow,
                     struct flow_wildcards *wc, uint16_t vlan)
@@ -1451,11 +1495,7 @@ choose_output_slave(const struct bond *bond, const struct flow *flow,
         }
         e = lookup_bond_entry(bond, flow, vlan);
         if (!e->slave || !e->slave->enabled) {
-            e->slave = CONTAINER_OF(hmap_random_node(&bond->slaves),
-                                    struct bond_slave, hmap_node);
-            if (!e->slave->enabled) {
-                e->slave = bond->active_slave;
-            }
+            e->slave = get_enabled_slave(CONST_CAST(struct bond*, bond));
         }
         return e->slave;
 
