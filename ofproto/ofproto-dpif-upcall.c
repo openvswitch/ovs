@@ -239,6 +239,8 @@ static void upcall_unixctl_disable_megaflows(struct unixctl_conn *, int argc,
                                              const char *argv[], void *aux);
 static void upcall_unixctl_enable_megaflows(struct unixctl_conn *, int argc,
                                             const char *argv[], void *aux);
+static void upcall_unixctl_set_flow_limit(struct unixctl_conn *conn, int argc,
+                                            const char *argv[], void *aux);
 static void ukey_delete(struct revalidator *, struct udpif_key *);
 
 static atomic_bool enable_megaflows = ATOMIC_VAR_INIT(true);
@@ -256,6 +258,8 @@ udpif_create(struct dpif_backer *backer, struct dpif *dpif)
                                  upcall_unixctl_disable_megaflows, NULL);
         unixctl_command_register("upcall/enable-megaflows", "", 0, 0,
                                  upcall_unixctl_enable_megaflows, NULL);
+        unixctl_command_register("upcall/set-flow-limit", "", 1, 1,
+                                 upcall_unixctl_set_flow_limit, NULL);
         ovsthread_once_done(&once);
     }
 
@@ -1687,4 +1691,26 @@ upcall_unixctl_enable_megaflows(struct unixctl_conn *conn,
     atomic_store(&enable_megaflows, true);
     udpif_flush();
     unixctl_command_reply(conn, "megaflows enabled");
+}
+
+/* Set the flow limit.
+ *
+ * This command is only needed for advanced debugging, so it's not
+ * documented in the man page. */
+static void
+upcall_unixctl_set_flow_limit(struct unixctl_conn *conn,
+                              int argc OVS_UNUSED,
+                              const char *argv[] OVS_UNUSED,
+                              void *aux OVS_UNUSED)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    struct udpif *udpif;
+    unsigned int flow_limit = atoi(argv[1]);
+
+    LIST_FOR_EACH (udpif, list_node, &all_udpifs) {
+        atomic_store(&udpif->flow_limit, flow_limit);
+    }
+    ds_put_format(&ds, "set flow_limit to %u\n", flow_limit);
+    unixctl_command_reply(conn, ds_cstr(&ds));
+    ds_destroy(&ds);
 }
