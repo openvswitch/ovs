@@ -88,4 +88,15 @@ char *ss_format_address(const struct sockaddr_storage *,
 size_t ss_length(const struct sockaddr_storage *);
 const char *sock_strerror(int error);
 
+#ifdef _WIN32
+/* Windows defines the 'optval' argument as char * instead of void *. */
+#define setsockopt(sock, level, optname, optval, optlen) \
+    rpl_setsockopt(sock, level, optname, optval, optlen)
+static inline int rpl_setsockopt(int sock, int level, int optname,
+                                 const void *optval, socklen_t optlen)
+{
+    return (setsockopt)(sock, level, optname, optval, optlen);
+}
+#endif
+
 #endif /* socket-util.h */
