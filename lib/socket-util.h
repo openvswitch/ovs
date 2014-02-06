@@ -86,5 +86,6 @@ uint16_t ss_get_port(const struct sockaddr_storage *);
 char *ss_format_address(const struct sockaddr_storage *,
                         char *buf, size_t bufsize);
 size_t ss_length(const struct sockaddr_storage *);
+const char *sock_strerror(int error);
 
 #endif /* socket-util.h */

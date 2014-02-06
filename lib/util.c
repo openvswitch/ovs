@@ -323,6 +323,10 @@ ovs_retval_to_string(int retval)
             : ovs_strerror(retval));
 }
 
+/* This function returns the string describing the error number in 'error'
+ * for POSIX platforms.  For Windows, this function can be used for C library
+ * calls.  For socket calls that are also used in Windows, use sock_strerror()
+ * instead.  For WINAPI calls, look at ovs_lasterror_to_string(). */
 const char *
 ovs_strerror(int error)
 {
