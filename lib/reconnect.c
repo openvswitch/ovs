@@ -348,7 +348,7 @@ reconnect_disconnected(struct reconnect *fsm, long long int now, int error)
         } else {
             const char *type = fsm->passive ? "listen" : "connection";
             if (error > 0) {
-                VLOG_WARN("%s: %s attempt failed (%s)",
+                VLOG_INFO("%s: %s attempt failed (%s)",
                           fsm->name, type, ovs_strerror(error));
             } else {
                 VLOG(fsm->info, "%s: %s attempt timed out", fsm->name, type);

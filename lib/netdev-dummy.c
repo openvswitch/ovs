@@ -198,6 +198,7 @@ dummy_packet_stream_run(struct netdev_dummy *dev, struct dummy_packet_stream *s)
 
         txbuf = ofpbuf_from_list(list_front(&s->txq));
         retval = stream_send(s->stream, txbuf->data, txbuf->size);
+
         if (retval > 0) {
             ofpbuf_pull(txbuf, retval);
             if (!txbuf->size) {
@@ -229,6 +230,7 @@ dummy_packet_stream_run(struct netdev_dummy *dev, struct dummy_packet_stream *s)
 
         ofpbuf_prealloc_tailroom(&s->rxbuf, n);
         retval = stream_recv(s->stream, ofpbuf_tail(&s->rxbuf), n);
+
         if (retval > 0) {
             s->rxbuf.size += retval;
             if (retval == n && s->rxbuf.size > 2) {
@@ -370,23 +372,24 @@ dummy_packet_conn_set_config(struct dummy_packet_conn *conn,
         reconnect_set_backoff(reconnect, 1000, INT_MAX);
         reconnect_set_probe_interval(reconnect, 0);
         conn->u.rconn.reconnect = reconnect;
+        conn->type = ACTIVE;
 
         error = stream_open(stream, &active_stream, DSCP_DEFAULT);
         conn->u.rconn.rstream = dummy_packet_stream_create(active_stream);
 
         switch (error) {
         case 0:
-            reconnect_connected(conn->u.rconn.reconnect, time_msec());
-            conn->type = ACTIVE;
+            reconnect_connected(reconnect, time_msec());
             break;
 
         case EAGAIN:
-            reconnect_connecting(conn->u.rconn.reconnect, time_msec());
+            reconnect_connecting(reconnect, time_msec());
             break;
 
         default:
-            reconnect_connecting(conn->u.rconn.reconnect, time_msec());
+            reconnect_connect_failed(reconnect, time_msec(), error);
             stream_close(active_stream);
+            conn->u.rconn.rstream->stream = NULL;
             break;
         }
     }
@@ -441,22 +444,29 @@ OVS_REQUIRES(dev->mutex)
     switch (reconnect_run(rconn->reconnect, time_msec())) {
     case RECONNECT_CONNECT:
         {
-            int err = stream_connect(rconn->rstream->stream);
+            int error;
 
-            switch (err) {
-            case 0: /* Connected. */
+            if (rconn->rstream->stream) {
+                error = stream_connect(rconn->rstream->stream);
+            } else {
+                error = stream_open(reconnect_get_name(rconn->reconnect),
+                                    &rconn->rstream->stream, DSCP_DEFAULT);
+            }
+
+            switch (error) {
+            case 0:
                 reconnect_connected(rconn->reconnect, time_msec());
-                dev->conn.type = ACTIVE;
                 break;
 
             case EAGAIN:
                 reconnect_connecting(rconn->reconnect, time_msec());
-                return;
+                break;
 
             default:
-                reconnect_connect_failed(rconn->reconnect, time_msec(), err);
+                reconnect_connect_failed(rconn->reconnect, time_msec(), error);
                 stream_close(rconn->rstream->stream);
-                return;
+                rconn->rstream->stream = NULL;
+                break;
             }
         }
         break;
@@ -475,6 +485,7 @@ OVS_REQUIRES(dev->mutex)
         if (err) {
             reconnect_disconnected(rconn->reconnect, time_msec(), err);
             stream_close(rconn->rstream->stream);
+            rconn->rstream->stream = NULL;
         }
     }
 }
@@ -511,7 +522,9 @@ dummy_packet_conn_wait(struct dummy_packet_conn *conn)
         }
         break;
     case ACTIVE:
-        dummy_packet_stream_wait(conn->u.rconn.rstream);
+        if (reconnect_is_connected(conn->u.rconn.reconnect)) {
+            dummy_packet_stream_wait(conn->u.rconn.rstream);
+        }
         break;
 
     case NONE:
@@ -537,8 +550,10 @@ dummy_packet_conn_send(struct dummy_packet_conn *conn,
         break;
 
     case ACTIVE:
-        dummy_packet_stream_send(conn->u.rconn.rstream, buffer, size);
-        dummy_packet_stream_wait(conn->u.rconn.rstream);
+        if (reconnect_is_connected(conn->u.rconn.reconnect)) {
+            dummy_packet_stream_send(conn->u.rconn.rstream, buffer, size);
+            dummy_packet_stream_wait(conn->u.rconn.rstream);
+        }
         break;
 
     case NONE:
