@@ -1755,7 +1755,7 @@ mf_set_flow_value(const struct mf_field *mf,
         break;
 
     case MFF_IP_FRAG:
-        flow->nw_frag &= value->u8;
+        flow->nw_frag = value->u8 & FLOW_NW_FRAG_MASK;
         break;
 
     case MFF_ARP_OP:
