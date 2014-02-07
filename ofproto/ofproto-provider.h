@@ -339,7 +339,9 @@ struct rule {
 
     /* Protects members marked OVS_GUARDED.
      * Readers only need to hold this mutex.
-     * Writers must hold both this mutex AND ofproto_mutex. */
+     * Writers must hold both this mutex AND ofproto_mutex.
+     * By implication writers can read *without* taking this mutex while they
+     * hold ofproto_mutex. */
     struct ovs_mutex mutex OVS_ACQ_AFTER(ofproto_mutex);
 
     /* Number of references.
@@ -356,10 +358,6 @@ struct rule {
     ovs_be64 flow_cookie OVS_GUARDED;
     struct hindex_node cookie_node OVS_GUARDED_BY(ofproto_mutex);
 
-    /* Times. */
-    long long int created OVS_GUARDED; /* Creation time. */
-    long long int modified OVS_GUARDED; /* Time of last modification. */
-    long long int used OVS_GUARDED; /* Last use; time created if never used. */
     enum ofputil_flow_mod_flags flags OVS_GUARDED;
 
     /* Timeouts. */
@@ -393,6 +391,16 @@ struct rule {
     /* Optimisation for flow expiry.  In ofproto's 'expirable' list if this
      * rule is expirable, otherwise empty. */
     struct list expirable OVS_GUARDED_BY(ofproto_mutex);
+
+    /* Times.  Last so that they are more likely close to the stats managed
+     * by the provider. */
+    long long int created OVS_GUARDED; /* Creation time. */
+
+    /* Must hold 'mutex' for both read/write, 'ofproto_mutex' not needed. */
+    long long int modified OVS_GUARDED; /* Time of last modification. */
+
+    /* XXX: Currently updated by provider without protection. */
+    long long int used OVS_GUARDED; /* Last use; time created if never used. */
 };
 
 void ofproto_rule_ref(struct rule *);

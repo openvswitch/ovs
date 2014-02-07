@@ -1935,6 +1935,46 @@ int
 ofproto_flow_mod(struct ofproto *ofproto, struct ofputil_flow_mod *fm)
     OVS_EXCLUDED(ofproto_mutex)
 {
+    /* Optimize for the most common case of a repeated learn action.
+     * If an identical flow already exists we only need to update its
+     * 'modified' time. */
+    if (fm->command == OFPFC_MODIFY_STRICT && fm->table_id != OFPTT_ALL
+        && !(fm->flags & OFPUTIL_FF_RESET_COUNTS)) {
+        struct oftable *table = &ofproto->tables[fm->table_id];
+        struct cls_rule match_rule;
+        struct rule *rule;
+        bool done = false;
+
+        cls_rule_init(&match_rule, &fm->match, fm->priority);
+        fat_rwlock_rdlock(&table->cls.rwlock);
+        rule = rule_from_cls_rule(classifier_find_rule_exactly(&table->cls,
+                                                               &match_rule));
+        if (rule) {
+            /* Reading many of the rule fields and writing on 'modified'
+             * requires the rule->mutex.  Also, rule->actions may change
+             * if rule->mutex is not held. */
+            ovs_mutex_lock(&rule->mutex);
+            if (rule->idle_timeout == fm->idle_timeout
+                && rule->hard_timeout == fm->hard_timeout
+                && rule->flags == (fm->flags & OFPUTIL_FF_STATE)
+                && (!fm->modify_cookie || (fm->new_cookie == rule->flow_cookie))
+                && ofpacts_equal(fm->ofpacts, fm->ofpacts_len,
+                                 rule->actions->ofpacts,
+                                 rule->actions->ofpacts_len)) {
+                /* Rule already exists and need not change, only update the
+                   modified timestamp. */
+                rule->modified = time_msec();
+                done = true;
+            }
+            ovs_mutex_unlock(&rule->mutex);
+        }
+        fat_rwlock_unlock(&table->cls.rwlock);
+
+        if (done) {
+            return 0;
+        }
+    }
+
     return handle_flow_mod__(ofproto, NULL, fm, NULL);
 }
 
@@ -6192,10 +6232,12 @@ ofopgroup_complete(struct ofopgroup *group)
             if (!op->error) {
                 long long int now = time_msec();
 
+                ovs_mutex_lock(&rule->mutex);
                 rule->modified = now;
                 if (op->type == OFOPERATION_REPLACE) {
                     rule->created = rule->used = now;
                 }
+                ovs_mutex_unlock(&rule->mutex);
             } else {
                 ofproto_rule_change_cookie(ofproto, rule, op->flow_cookie);
                 ovs_mutex_lock(&rule->mutex);
