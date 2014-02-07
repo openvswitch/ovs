@@ -87,7 +87,7 @@ m4_define([OVSDB_CHECK_IDL_TCP6_PY],
 
    m4_if([$2], [], [],
      [AT_CHECK([ovsdb-client transact "tcp:[[::1]]:$TCP_PORT" $2], [0], [ignore], [ignore], [kill `cat pid`])])
-   AT_CHECK([strace $PYTHON $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema tcp:[[::1]]:$TCP_PORT $3],
+   AT_CHECK([$PYTHON $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema tcp:[[::1]]:$TCP_PORT $3],
             [0], [stdout], [ignore], [kill `cat pid`])
    AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
             [0], [$4], [], [kill `cat pid`])
