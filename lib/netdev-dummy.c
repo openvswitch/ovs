@@ -368,6 +368,7 @@ dummy_packet_conn_set_config(struct dummy_packet_conn *conn,
         reconnect_set_passive(reconnect, false, time_msec());
         reconnect_enable(reconnect, time_msec());
         reconnect_set_backoff(reconnect, 1000, INT_MAX);
+        reconnect_set_probe_interval(reconnect, 0);
         conn->u.rconn.reconnect = reconnect;
 
         error = stream_open(stream, &active_stream, DSCP_DEFAULT);
