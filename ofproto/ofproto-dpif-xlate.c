@@ -1780,19 +1780,18 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                                  &ctx->xout->odp_actions);
         flow->tunnel = flow_tnl; /* Restore tunnel metadata */
     } else {
-        ofp_port_t vlandev_port;
-
         odp_port = xport->odp_port;
+        out_port = odp_port;
         if (ofproto_has_vlan_splinters(ctx->xbridge->ofproto)) {
+            ofp_port_t vlandev_port;
+
             wc->masks.vlan_tci |= htons(VLAN_VID_MASK | VLAN_CFI);
-        }
-        vlandev_port = vsp_realdev_to_vlandev(ctx->xbridge->ofproto, ofp_port,
-                                              flow->vlan_tci);
-        if (vlandev_port == ofp_port) {
-            out_port = odp_port;
-        } else {
-            out_port = ofp_port_to_odp_port(ctx->xbridge, vlandev_port);
-            flow->vlan_tci = htons(0);
+            vlandev_port = vsp_realdev_to_vlandev(ctx->xbridge->ofproto,
+                                                  ofp_port, flow->vlan_tci);
+            if (vlandev_port != ofp_port) {
+                out_port = ofp_port_to_odp_port(ctx->xbridge, vlandev_port);
+                flow->vlan_tci = htons(0);
+            }
         }
     }
 

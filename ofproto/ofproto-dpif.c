@@ -4250,12 +4250,8 @@ bool
 ofproto_has_vlan_splinters(const struct ofproto_dpif *ofproto)
     OVS_EXCLUDED(ofproto->vsp_mutex)
 {
-    bool ret;
-
-    ovs_mutex_lock(&ofproto->vsp_mutex);
-    ret = !hmap_is_empty(&ofproto->realdev_vid_map);
-    ovs_mutex_unlock(&ofproto->vsp_mutex);
-    return ret;
+    /* hmap_is_empty is thread safe. */
+    return !hmap_is_empty(&ofproto->realdev_vid_map);
 }
 
 static ofp_port_t
@@ -4293,6 +4289,10 @@ vsp_realdev_to_vlandev(const struct ofproto_dpif *ofproto,
 {
     ofp_port_t ret;
 
+    /* hmap_is_empty is thread safe, see if we can return immediately. */
+    if (hmap_is_empty(&ofproto->realdev_vid_map)) {
+        return realdev_ofp_port;
+    }
     ovs_mutex_lock(&ofproto->vsp_mutex);
     ret = vsp_realdev_to_vlandev__(ofproto, realdev_ofp_port, vlan_tci);
     ovs_mutex_unlock(&ofproto->vsp_mutex);
@@ -4355,6 +4355,11 @@ vsp_adjust_flow(const struct ofproto_dpif *ofproto, struct flow *flow)
 {
     ofp_port_t realdev;
     int vid;
+
+    /* hmap_is_empty is thread safe. */
+    if (hmap_is_empty(&ofproto->vlandev_map)) {
+        return false;
+    }
 
     ovs_mutex_lock(&ofproto->vsp_mutex);
     realdev = vsp_vlandev_to_realdev(ofproto, flow->in_port.ofp_port, &vid);

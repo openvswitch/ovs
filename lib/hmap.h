@@ -19,6 +19,7 @@
 
 #include <stdbool.h>
 #include <stdlib.h>
+#include "ovs-atomic.h"
 #include "util.h"
 
 #ifdef  __cplusplus
@@ -189,10 +190,13 @@ hmap_capacity(const struct hmap *hmap)
 }
 
 /* Returns true if 'hmap' currently contains no nodes,
- * false otherwise. */
+ * false otherwise.
+ * Note: While hmap in general is not thread-safe without additional locking,
+ * hmap_is_empty() is. */
 static inline bool
 hmap_is_empty(const struct hmap *hmap)
 {
+    atomic_thread_fence(memory_order_acquire);
     return hmap->n == 0;
 }
 
