@@ -1111,6 +1111,26 @@ A: Open vSwitch 1.9 and earlier support only OpenFlow 1.0 (plus
    When support for a given OpenFlow version is solidly implemented,
    Open vSwitch will enable that version by default.
 
+Q: Does Open vSwitch support MPLS?
+
+A: Before version 1.11, Open vSwitch did not support MPLS.  That is,
+   these versions can match on MPLS Ethernet types, but they cannot
+   match, push, or pop MPLS labels, nor can they look past MPLS labels
+   into the encapsulated packet.
+
+   Open vSwitch versions 1.11, 2.0, and 2.1 have very minimal support
+   for MPLS.  With the userspace datapath only, these versions can
+   match, push, or pop a single MPLS label, but they still cannot look
+   past MPLS labels (even after popping them) into the encapsulated
+   packet.  Kernel datapath support is unchanged from earlier verions.
+
+   Open vSwitch version 2.2 will be able to match, push, or pop up to
+   3 MPLS labels.  Looking past MPLS labels into the encapsulated
+   packet will still be unsupported.  Both userspace and kernel
+   datapaths will be supported, but MPLS processing always happens in
+   userspace either way, so kernel datapath performance will be
+   disappointing.
+
 Q: I'm getting "error type 45250 code 0".  What's that?
 
 A: This is a Open vSwitch extension to OpenFlow error codes.  Open
