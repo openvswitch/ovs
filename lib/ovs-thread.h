@@ -444,9 +444,15 @@ void xpthread_join(pthread_t, void **);
  * (by recompiling).  Thus, one may more freely use this form of
  * thread-specific data.
  *
- * Compared to pthread_key_t, ovsthread_key_t has the follow limitations:
+ * ovsthread_key_t also differs from pthread_key_t in the following ways:
  *
  *    - Destructors must not access thread-specific data (via ovsthread_key).
+ *
+ *    - The pthread_key_t API allows concurrently exiting threads to start
+ *      executing the destructor after pthread_key_delete() returns.  The
+ *      ovsthread_key_t API guarantees that, when ovsthread_key_delete()
+ *      returns, all destructors have returned and no new ones will start
+ *      execution.
  */
 typedef struct ovsthread_key *ovsthread_key_t;
 
