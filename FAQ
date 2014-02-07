@@ -1122,7 +1122,8 @@ A: Before version 1.11, Open vSwitch did not support MPLS.  That is,
    for MPLS.  With the userspace datapath only, these versions can
    match, push, or pop a single MPLS label, but they still cannot look
    past MPLS labels (even after popping them) into the encapsulated
-   packet.  Kernel datapath support is unchanged from earlier verions.
+   packet.  Kernel datapath support is unchanged from earlier
+   versions.
 
    Open vSwitch version 2.2 will be able to match, push, or pop up to
    3 MPLS labels.  Looking past MPLS labels into the encapsulated
