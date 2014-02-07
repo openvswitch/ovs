@@ -43,6 +43,7 @@
 #include <linux/icmpv6.h>
 #include <linux/rculist.h>
 #include <net/ip.h>
+#include <net/ip_tunnels.h>
 #include <net/ipv6.h>
 #include <net/ndisc.h>
 

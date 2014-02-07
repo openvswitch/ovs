@@ -16,6 +16,9 @@
  * 02110-1301, USA
  */
 
+#include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0)
+
 #include <linux/kconfig.h>
 #if IS_ENABLED(CONFIG_NET_IPGRE_DEMUX)
 
@@ -340,3 +343,5 @@ void gre_build_header(struct sk_buff *skb, const struct tnl_ptk_info *tpi,
 }
 
 #endif /* CONFIG_NET_IPGRE_DEMUX */
+
+#endif /* 3.12 */

@@ -18,6 +18,9 @@
  * This code is derived from kernel vxlan module.
  */
 
+#include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0)
+
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/kernel.h>
@@ -223,7 +226,7 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 	if (err)
 		return err;
 
-	return iptunnel_xmit(rt, skb, src, dst, IPPROTO_UDP, tos, ttl, df);
+	return iptunnel_xmit(rt, skb, src, dst, IPPROTO_UDP, tos, ttl, df, false);
 }
 
 static void rcu_free_vs(struct rcu_head *rcu)
@@ -298,7 +301,7 @@ static struct vxlan_sock *vxlan_socket_create(struct net *net, __be16 port,
 
 struct vxlan_sock *vxlan_sock_add(struct net *net, __be16 port,
 				  vxlan_rcv_t *rcv, void *data,
-				  bool no_share)
+				  bool no_share, bool ipv6)
 {
 	return vxlan_socket_create(net, port, rcv, data);
 }
@@ -310,3 +313,5 @@ void vxlan_sock_release(struct vxlan_sock *vs)
 
 	queue_work(system_wq, &vs->del_work);
 }
+
+#endif /* 3.12 */

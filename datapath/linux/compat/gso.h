@@ -1,6 +1,9 @@
 #ifndef __LINUX_GSO_WRAPPER_H
 #define __LINUX_GSO_WRAPPER_H
 
+#include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0)
+
 #include <linux/skbuff.h>
 #include <net/protocol.h>
 
@@ -69,4 +72,6 @@ static inline void skb_reset_inner_headers(struct sk_buff *skb)
 
 #define ip_local_out rpl_ip_local_out
 int ip_local_out(struct sk_buff *skb);
+
+#endif /* 3.12 */
 #endif

@@ -16,6 +16,9 @@
  * 02110-1301, USA
  */
 
+#include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0)
+
 #include <linux/module.h>
 #include <linux/if.h>
 #include <linux/if_tunnel.h>
@@ -229,3 +232,4 @@ int rpl_ip_local_out(struct sk_buff *skb)
 	}
 	return ret;
 }
+#endif /* 3.12 */

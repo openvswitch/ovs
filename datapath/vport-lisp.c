@@ -381,6 +381,8 @@ error:
 	return ERR_PTR(err);
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0)
+
 static void lisp_fix_segment(struct sk_buff *skb)
 {
 	struct udphdr *udph = udp_hdr(skb);
@@ -388,13 +390,30 @@ static void lisp_fix_segment(struct sk_buff *skb)
 	udph->len = htons(skb->len - skb_transport_offset(skb));
 }
 
-static void handle_offloads(struct sk_buff *skb)
+static int handle_offloads(struct sk_buff *skb)
 {
 	if (skb_is_gso(skb))
 		OVS_GSO_CB(skb)->fix_segment = lisp_fix_segment;
 	else if (skb->ip_summed != CHECKSUM_PARTIAL)
 		skb->ip_summed = CHECKSUM_NONE;
+	return 0;
 }
+#else
+static int handle_offloads(struct sk_buff *skb)
+{
+	if (skb_is_gso(skb)) {
+		int err = skb_unclone(skb, GFP_ATOMIC);
+		if (unlikely(err))
+			return err;
+
+		skb_shinfo(skb)->gso_type |= SKB_GSO_UDP_TUNNEL;
+	} else if (skb->ip_summed != CHECKSUM_PARTIAL)
+		skb->ip_summed = CHECKSUM_NONE;
+
+	skb->encapsulation = 1;
+	return 0;
+}
+#endif
 
 static int lisp_send(struct vport *vport, struct sk_buff *skb)
 {
@@ -455,7 +474,10 @@ static int lisp_send(struct vport *vport, struct sk_buff *skb)
 	lisp_build_header(vport, skb);
 
 	/* Offloading */
-	handle_offloads(skb);
+	err = handle_offloads(skb);
+	if (err)
+		goto err_free_rt;
+
 	skb->local_df = 1;
 
 	df = OVS_CB(skb)->tun_key->tun_flags &
@@ -463,7 +485,7 @@ static int lisp_send(struct vport *vport, struct sk_buff *skb)
 	sent_len = iptunnel_xmit(rt, skb,
 			     saddr, OVS_CB(skb)->tun_key->ipv4_dst,
 			     IPPROTO_UDP, OVS_CB(skb)->tun_key->ipv4_tos,
-			     OVS_CB(skb)->tun_key->ipv4_ttl, df);
+			     OVS_CB(skb)->tun_key->ipv4_ttl, df, false);
 
 	return sent_len > 0 ? sent_len + network_offset : sent_len;
 

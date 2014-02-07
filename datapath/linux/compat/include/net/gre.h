@@ -4,6 +4,7 @@
 #include <linux/skbuff.h>
 #include <net/ip_tunnels.h>
 
+#include <linux/version.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37) || \
    defined(HAVE_GRE_CISCO_REGISTER)
 #include_next <net/gre.h>
@@ -78,6 +79,8 @@ static inline __be16 tnl_flags_to_gre_flags(__be16 tflags)
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0) */
 #endif /* HAVE_GRE_CISCO_REGISTER */
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0)
+
 #define gre_build_header rpl_gre_build_header
 void gre_build_header(struct sk_buff *skb, const struct tnl_ptk_info *tpi,
 		      int hdr_len);
@@ -98,5 +101,6 @@ static inline int ip_gre_calc_hlen(__be16 o_flags)
 		addend += 4;
 	return addend;
 }
+#endif
 
 #endif

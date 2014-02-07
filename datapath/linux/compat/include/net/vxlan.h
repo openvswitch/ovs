@@ -5,6 +5,11 @@
 #include <linux/netdevice.h>
 #include <linux/udp.h>
 
+#include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,12,0)
+#include_next <net/vxlan.h>
+#else
+
 struct vxlan_sock;
 typedef void (vxlan_rcv_t)(struct vxlan_sock *vs, struct sk_buff *skb, __be32 key);
 
@@ -20,7 +25,7 @@ struct vxlan_sock {
 
 struct vxlan_sock *vxlan_sock_add(struct net *net, __be16 port,
 				  vxlan_rcv_t *rcv, void *data,
-				  bool no_share);
+				  bool no_share, bool ipv6);
 
 void vxlan_sock_release(struct vxlan_sock *vs);
 
@@ -31,4 +36,5 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 
 __be16 vxlan_src_port(__u16 port_min, __u16 port_max, struct sk_buff *skb);
 
+#endif /* 3.12 */
 #endif

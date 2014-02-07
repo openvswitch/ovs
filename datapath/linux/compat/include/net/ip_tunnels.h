@@ -1,6 +1,11 @@
 #ifndef __NET_IP_TUNNELS_WRAPPER_H
 #define __NET_IP_TUNNELS_WRAPPER_H 1
 
+#include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,12,0)
+#include_next <net/ip_tunnels.h>
+#else
+
 #include <linux/if_tunnel.h>
 #include <linux/netdevice.h>
 #include <linux/skbuff.h>
@@ -34,7 +39,9 @@ struct tnl_ptk_info {
 int iptunnel_xmit(struct rtable *rt,
 		  struct sk_buff *skb,
 		  __be32 src, __be32 dst, __u8 proto,
-		  __u8 tos, __u8 ttl, __be16 df);
+		  __u8 tos, __u8 ttl, __be16 df, bool xnet);
 
 int iptunnel_pull_header(struct sk_buff *skb, int hdr_len, __be16 inner_proto);
+
+#endif
 #endif /* __NET_IP_TUNNELS_H */
