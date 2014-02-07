@@ -1,9 +1,10 @@
 .IP "\fBssl:\fIip\fR[\fB:\fIport\fR]"
 .IQ "\fBtcp:\fIip\fR[\fB:\fIport\fR]"
 The specified \fIport\fR on the host at the given \fIip\fR, which must
-be expressed as an IP address (not a DNS name).  For \fBssl\fR, the
-\fB\-\-private\-key\fR, \fB\-\-certificate\fR, and \fB\-\-ca\-cert\fR
-options are mandatory.
+be expressed as an IP address (not a DNS name) in IPv4 or IPv6 address
+format.  Wrap IPv6 addresses in square brackets,
+e.g. \fBtcp:[::1]:6633\fR.  For \fBssl\fR, the \fB\-\-private\-key\fR,
+\fB\-\-certificate\fR, and \fB\-\-ca\-cert\fR options are mandatory.
 .IP
 If \fIport\fR is not specified, it currently defaults to 6633.  In the
 future, the default will change to 6653, which is the IANA-defined

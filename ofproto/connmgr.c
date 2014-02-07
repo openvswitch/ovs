@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -734,17 +734,13 @@ update_in_band_remotes(struct connmgr *mgr)
 
     /* Add all the remotes. */
     HMAP_FOR_EACH (ofconn, hmap_node, &mgr->controllers) {
-        struct sockaddr_in *sin = &addrs[n_addrs];
         const char *target = rconn_get_target(ofconn->rconn);
+        struct sockaddr_storage ss;
 
-        if (ofconn->band == OFPROTO_OUT_OF_BAND) {
-            continue;
-        }
-
-        if (stream_parse_target_with_default_port(target,
-                                                  OFP_OLD_PORT,
-                                                  sin)) {
-            n_addrs++;
+        if (ofconn->band == OFPROTO_IN_BAND
+            && stream_parse_target_with_default_port(target, OFP_OLD_PORT, &ss)
+            && ss.ss_family == AF_INET) {
+            addrs[n_addrs++] = *(struct sockaddr_in *) &ss;
         }
     }
     for (i = 0; i < mgr->n_extra_remotes; i++) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -612,59 +612,125 @@ guess_netmask(ovs_be32 ip_)
             : htonl(0));                          /* ??? */
 }
 
-/* Parses 'target', which should be a string in the format "<host>[:<port>]".
- * <host> is required.  If 'default_port' is nonzero then <port> is optional
- * and defaults to 'default_port'.
+/* This is like strsep() except:
  *
- * On success, returns true and stores the parsed remote address into '*sinp'.
- * On failure, logs an error, stores zeros into '*sinp', and returns false. */
-bool
-inet_parse_active(const char *target_, uint16_t default_port,
-                  struct sockaddr_in *sinp)
+ *    - The separator string is ":".
+ *
+ *    - Square brackets [] quote ":" separators and are removed from the
+ *      tokens. */
+static char *
+parse_bracketed_token(char **pp)
 {
-    char *target = xstrdup(target_);
-    char *save_ptr = NULL;
-    const char *host_name;
-    const char *port_string;
-    bool ok = false;
+    char *p = *pp;
 
-    /* Defaults. */
-    sinp->sin_family = AF_INET;
-    sinp->sin_port = htons(default_port);
+    if (p == NULL) {
+        return NULL;
+    } else if (*p == '\0') {
+        *pp = NULL;
+        return p;
+    } else if (*p == '[') {
+        char *start = p + 1;
+        char *end = start + strcspn(start, "]");
+        *pp = (*end == '\0' ? NULL
+               : end[1] == ':' ? end + 2
+               : end + 1);
+        *end = '\0';
+        return start;
+    } else {
+        char *start = p;
+        char *end = start + strcspn(start, ":");
+        *pp = *end == '\0' ? NULL : end + 1;
+        *end = '\0';
+        return start;
+    }
+}
 
-    /* Tokenize. */
-    host_name = strtok_r(target, ":", &save_ptr);
-    port_string = strtok_r(NULL, ":", &save_ptr);
-    if (!host_name) {
-        VLOG_ERR("%s: bad peer name format", target_);
-        goto exit;
+static bool
+parse_sockaddr_components(struct sockaddr_storage *ss,
+                          const char *host_s,
+                          const char *port_s, uint16_t default_port,
+                          const char *s)
+{
+    struct sockaddr_in *sin = ALIGNED_CAST(struct sockaddr_in *, ss);
+    int port;
+
+    if (port_s && port_s[0]) {
+        if (!str_to_int(port_s, 10, &port) || port < 0 || port > 65535) {
+            VLOG_ERR("%s: bad port number \"%s\"", s, port_s);
+        }
+    } else {
+        port = default_port;
     }
 
-    /* Look up IP, port. */
-    if (lookup_ip(host_name, &sinp->sin_addr)) {
-        goto exit;
-    }
-    if (port_string && atoi(port_string)) {
-        sinp->sin_port = htons(atoi(port_string));
-    } else if (!default_port) {
-        VLOG_ERR("%s: port number must be specified", target_);
-        goto exit;
+    memset(ss, 0, sizeof *ss);
+    if (strchr(host_s, ':')) {
+        struct sockaddr_in6 *sin6
+            = ALIGNED_CAST(struct sockaddr_in6 *, ss);
+
+        sin6->sin6_family = AF_INET6;
+        sin6->sin6_port = htons(port);
+        if (!inet_pton(AF_INET6, host_s, sin6->sin6_addr.s6_addr)) {
+            VLOG_ERR("%s: bad IPv6 address \"%s\"", s, host_s);
+            goto exit;
+        }
+    } else {
+        sin->sin_family = AF_INET;
+        sin->sin_port = htons(port);
+        if (!inet_pton(AF_INET, host_s, &sin->sin_addr.s_addr)) {
+            VLOG_ERR("%s: bad IPv4 address \"%s\"", s, host_s);
+            goto exit;
+        }
     }
 
-    ok = true;
+    return true;
 
 exit:
+    memset(ss, 0, sizeof *ss);
+    return false;
+}
+
+/* Parses 'target', which should be a string in the format "<host>[:<port>]".
+ * <host>, which is required, may be an IPv4 address or an IPv6 address
+ * enclosed in square brackets.  If 'default_port' is nonzero then <port> is
+ * optional and defaults to 'default_port'.
+ *
+ * On success, returns true and stores the parsed remote address into '*ss'.
+ * On failure, logs an error, stores zeros into '*ss', and returns false. */
+bool
+inet_parse_active(const char *target_, uint16_t default_port,
+                  struct sockaddr_storage *ss)
+{
+    char *target = xstrdup(target_);
+    const char *port;
+    const char *host;
+    char *p;
+    bool ok;
+
+    p = target;
+    host = parse_bracketed_token(&p);
+    port = parse_bracketed_token(&p);
+    if (!host) {
+        VLOG_ERR("%s: host must be specified", target_);
+        ok = false;
+    } else if (!port && !default_port) {
+        VLOG_ERR("%s: port must be specified", target_);
+        ok = false;
+    } else {
+        ok = parse_sockaddr_components(ss, host, port, default_port, target_);
+    }
     if (!ok) {
-        memset(sinp, 0, sizeof *sinp);
+        memset(ss, 0, sizeof *ss);
     }
     free(target);
     return ok;
 }
 
-/* Opens a non-blocking IPv4 socket of the specified 'style' and connects to
- * 'target', which should be a string in the format "<host>[:<port>]".  <host>
- * is required.  If 'default_port' is nonzero then <port> is optional and
- * defaults to 'default_port'.
+
+/* Opens a non-blocking IPv4 or IPv6 socket of the specified 'style' and
+ * connects to 'target', which should be a string in the format
+ * "<host>[:<port>]".  <host>, which is required, may be an IPv4 address or an
+ * IPv6 address enclosed in square brackets.  If 'default_port' is nonzero then
+ * <port> is optional and defaults to 'default_port'.
  *
  * 'style' should be SOCK_STREAM (for TCP) or SOCK_DGRAM (for UDP).
  *
@@ -673,28 +739,27 @@ exit:
  * into '*fdp'.  On failure, returns a positive errno value other than EAGAIN
  * and stores -1 into '*fdp'.
  *
- * If 'sinp' is non-null, then on success the target address is stored into
- * '*sinp'.
+ * If 'ss' is non-null, then on success stores the target address into '*ss'.
  *
  * 'dscp' becomes the DSCP bits in the IP headers for the new connection.  It
  * should be in the range [0, 63] and will automatically be shifted to the
  * appropriately place in the IP tos field. */
 int
 inet_open_active(int style, const char *target, uint16_t default_port,
-                 struct sockaddr_in *sinp, int *fdp, uint8_t dscp)
+                 struct sockaddr_storage *ssp, int *fdp, uint8_t dscp)
 {
-    struct sockaddr_in sin;
+    struct sockaddr_storage ss;
     int fd = -1;
     int error;
 
     /* Parse. */
-    if (!inet_parse_active(target, default_port, &sin)) {
+    if (!inet_parse_active(target, default_port, &ss)) {
         error = EAFNOSUPPORT;
         goto exit;
     }
 
     /* Create non-blocking socket. */
-    fd = socket(AF_INET, style, 0);
+    fd = socket(ss.ss_family, style, 0);
     if (fd < 0) {
         VLOG_ERR("%s: socket: %s", target, ovs_strerror(errno));
         error = errno;
@@ -705,8 +770,8 @@ inet_open_active(int style, const char *target, uint16_t default_port,
         goto exit;
     }
 
-    /* The dscp bits must be configured before connect() to ensure that the TOS
-     * field is set during the connection establishment.  If set after
+    /* The dscp bits must be configured before connect() to ensure that the
+     * TOS field is set during the connection establishment.  If set after
      * connect(), the handshake SYN frames will be sent with a TOS of 0. */
     error = set_dscp(fd, dscp);
     if (error) {
@@ -715,25 +780,32 @@ inet_open_active(int style, const char *target, uint16_t default_port,
     }
 
     /* Connect. */
-    error = connect(fd, (struct sockaddr *) &sin, sizeof sin) == 0 ? 0 : errno;
+    error = connect(fd, (struct sockaddr *) &ss, ss_length(&ss)) == 0
+                    ? 0
+                    : errno;
     if (error == EINPROGRESS) {
         error = EAGAIN;
     }
 
 exit:
-    if (!error || error == EAGAIN) {
-        if (sinp) {
-            *sinp = sin;
+    if (error && error != EAGAIN) {
+        if (ssp) {
+            memset(ssp, 0, sizeof *ssp);
         }
-    } else if (fd >= 0) {
-        close(fd);
-        fd = -1;
+        if (fd >= 0) {
+            close(fd);
+            fd = -1;
+        }
+    } else {
+        if (ssp) {
+            *ssp = ss;
+        }
     }
     *fdp = fd;
     return error;
 }
 
-/* Parses 'target', which should be a string in the format "[<port>][:<ip>]":
+/* Parses 'target', which should be a string in the format "[<port>][:<host>]":
  *
  *      - If 'default_port' is -1, then <port> is required.  Otherwise, if
  *        <port> is omitted, then 'default_port' is used instead.
@@ -741,54 +813,41 @@ exit:
  *      - If <port> (or 'default_port', if used) is 0, then no port is bound
  *        and the TCP/IP stack will select a port.
  *
- *      - If <ip> is omitted then the IP address is wildcarded.
+ *      - <host> is optional.  If supplied, it may be an IPv4 address or an
+ *        IPv6 address enclosed in square brackets.  If omitted, the IP address
+ *        is wildcarded.
  *
- * If successful, stores the address into '*sinp' and returns true; otherwise
- * zeros '*sinp' and returns false. */
+ * If successful, stores the address into '*ss' and returns true; otherwise
+ * zeros '*ss' and returns false. */
 bool
 inet_parse_passive(const char *target_, int default_port,
-                   struct sockaddr_in *sinp)
+                   struct sockaddr_storage *ss)
 {
     char *target = xstrdup(target_);
-    char *string_ptr = target;
-    const char *host_name;
-    const char *port_string;
-    bool ok = false;
-    int port;
+    const char *port;
+    const char *host;
+    char *p;
+    bool ok;
 
-    /* Address defaults. */
-    memset(sinp, 0, sizeof *sinp);
-    sinp->sin_family = AF_INET;
-    sinp->sin_addr.s_addr = htonl(INADDR_ANY);
-    sinp->sin_port = htons(default_port);
-
-    /* Parse optional port number. */
-    port_string = strsep(&string_ptr, ":");
-    if (port_string && str_to_int(port_string, 10, &port)) {
-        sinp->sin_port = htons(port);
-    } else if (default_port < 0) {
-        VLOG_ERR("%s: port number must be specified", target_);
-        goto exit;
+    p = target;
+    port = parse_bracketed_token(&p);
+    host = parse_bracketed_token(&p);
+    if (!port && default_port < 0) {
+        VLOG_ERR("%s: port must be specified", target_);
+        ok = false;
+    } else {
+        ok = parse_sockaddr_components(ss, host ? host : "0.0.0.0",
+                                       port, default_port, target_);
     }
-
-    /* Parse optional bind IP. */
-    host_name = strsep(&string_ptr, ":");
-    if (host_name && host_name[0] && lookup_ip(host_name, &sinp->sin_addr)) {
-        goto exit;
-    }
-
-    ok = true;
-
-exit:
     if (!ok) {
-        memset(sinp, 0, sizeof *sinp);
+        memset(ss, 0, sizeof *ss);
     }
     free(target);
     return ok;
 }
 
 
-/* Opens a non-blocking IPv4 socket of the specified 'style', binds to
+/* Opens a non-blocking IPv4 or IPv6 socket of the specified 'style', binds to
  * 'target', and listens for incoming connections.  Parses 'target' in the same
  * way was inet_parse_passive().
  *
@@ -799,27 +858,27 @@ exit:
  * On success, returns a non-negative file descriptor.  On failure, returns a
  * negative errno value.
  *
- * If 'sinp' is non-null, then on success the bound address is stored into
- * '*sinp'.
+ * If 'ss' is non-null, then on success stores the bound address into '*ss'.
  *
  * 'dscp' becomes the DSCP bits in the IP headers for the new connection.  It
  * should be in the range [0, 63] and will automatically be shifted to the
  * appropriately place in the IP tos field. */
 int
 inet_open_passive(int style, const char *target, int default_port,
-                  struct sockaddr_in *sinp, uint8_t dscp)
+                  struct sockaddr_storage *ssp, uint8_t dscp)
 {
     bool kernel_chooses_port;
-    struct sockaddr_in sin;
+    struct sockaddr_storage ss;
     int fd = 0, error;
     unsigned int yes = 1;
 
-    if (!inet_parse_passive(target, default_port, &sin)) {
+    if (!inet_parse_passive(target, default_port, &ss)) {
         return -EAFNOSUPPORT;
     }
+    kernel_chooses_port = ss_get_port(&ss) == 0;
 
     /* Create non-blocking socket, set SO_REUSEADDR. */
-    fd = socket(AF_INET, style, 0);
+    fd = socket(ss.ss_family, style, 0);
     if (fd < 0) {
         error = errno;
         VLOG_ERR("%s: socket: %s", target, ovs_strerror(error));
@@ -838,7 +897,7 @@ inet_open_passive(int style, const char *target, int default_port,
     }
 
     /* Bind. */
-    if (bind(fd, (struct sockaddr *) &sin, sizeof sin) < 0) {
+    if (bind(fd, (struct sockaddr *) &ss, ss_length(&ss)) < 0) {
         error = errno;
         VLOG_ERR("%s: bind: %s", target, ovs_strerror(error));
         goto error;
@@ -860,31 +919,28 @@ inet_open_passive(int style, const char *target, int default_port,
         goto error;
     }
 
-    kernel_chooses_port = sin.sin_port == htons(0);
-    if (sinp || kernel_chooses_port) {
-        socklen_t sin_len = sizeof sin;
-        if (getsockname(fd, (struct sockaddr *) &sin, &sin_len) < 0) {
+    if (ssp || kernel_chooses_port) {
+        socklen_t ss_len = sizeof ss;
+        if (getsockname(fd, (struct sockaddr *) &ss, &ss_len) < 0) {
             error = errno;
             VLOG_ERR("%s: getsockname: %s", target, ovs_strerror(error));
             goto error;
         }
-        if (sin.sin_family != AF_INET || sin_len != sizeof sin) {
-            error = EAFNOSUPPORT;
-            VLOG_ERR("%s: getsockname: invalid socket name", target);
-            goto error;
-        }
-        if (sinp) {
-            *sinp = sin;
-        }
         if (kernel_chooses_port) {
             VLOG_INFO("%s: listening on port %"PRIu16,
-                      target, ntohs(sin.sin_port));
+                      target, ss_get_port(&ss));
+        }
+        if (ssp) {
+            *ssp = ss;
         }
     }
 
     return fd;
 
 error:
+    if (ssp) {
+        memset(ssp, 0, sizeof *ssp);
+    }
     close(fd);
     return -error;
 }
@@ -1060,12 +1116,12 @@ describe_sockaddr(struct ds *string, int fd,
     socklen_t len = sizeof ss;
 
     if (!getaddr(fd, (struct sockaddr *) &ss, &len)) {
-        if (ss.ss_family == AF_INET) {
-            struct sockaddr_in sin;
+        if (ss.ss_family == AF_INET || ss.ss_family == AF_INET6) {
+            char addrbuf[SS_NTOP_BUFSIZE];
 
-            memcpy(&sin, &ss, sizeof sin);
-            ds_put_format(string, IP_FMT":%"PRIu16,
-                          IP_ARGS(sin.sin_addr.s_addr), ntohs(sin.sin_port));
+            ds_put_format(string, "%s:%"PRIu16,
+                          ss_format_address(&ss, addrbuf, sizeof addrbuf),
+                          ss_get_port(&ss));
         } else if (ss.ss_family == AF_UNIX) {
             struct sockaddr_un sun;
             const char *null;
@@ -1225,4 +1281,66 @@ af_inet_ifreq_ioctl(const char *name, struct ifreq *ifr, unsigned long int cmd,
     }
     return error;
 }
+
+/* sockaddr_storage helpers. */
 
+/* Returns the IPv4 or IPv6 port in 'ss'. */
+uint16_t
+ss_get_port(const struct sockaddr_storage *ss)
+{
+    if (ss->ss_family == AF_INET) {
+        const struct sockaddr_in *sin
+            = ALIGNED_CAST(const struct sockaddr_in *, ss);
+        return ntohs(sin->sin_port);
+    } else if (ss->ss_family == AF_INET6) {
+        const struct sockaddr_in6 *sin6
+            = ALIGNED_CAST(const struct sockaddr_in6 *, ss);
+        return ntohs(sin6->sin6_port);
+    } else {
+        OVS_NOT_REACHED();
+    }
+}
+
+/* Formats the IPv4 or IPv6 address in 'ss' into the 'bufsize' bytes in 'buf'.
+ * If 'ss' is an IPv6 address, puts square brackets around the address.
+ * 'bufsize' should be at least SS_NTOP_BUFSIZE.
+ *
+ * Returns 'buf'. */
+char *
+ss_format_address(const struct sockaddr_storage *ss,
+                  char *buf, size_t bufsize)
+{
+    ovs_assert(bufsize >= SS_NTOP_BUFSIZE);
+    if (ss->ss_family == AF_INET) {
+        const struct sockaddr_in *sin
+            = ALIGNED_CAST(const struct sockaddr_in *, ss);
+
+        snprintf(buf, bufsize, IP_FMT, IP_ARGS(sin->sin_addr.s_addr));
+    } else if (ss->ss_family == AF_INET6) {
+        const struct sockaddr_in6 *sin6
+            = ALIGNED_CAST(const struct sockaddr_in6 *, ss);
+
+        buf[0] = '[';
+        inet_ntop(AF_INET6, sin6->sin6_addr.s6_addr, buf + 1, bufsize - 1);
+        strcpy(strchr(buf, '\0'), "]");
+    } else {
+        OVS_NOT_REACHED();
+    }
+
+    return buf;
+}
+
+size_t
+ss_length(const struct sockaddr_storage *ss)
+{
+    switch (ss->ss_family) {
+    case AF_INET:
+        return sizeof(struct sockaddr_in);
+
+    case AF_INET6:
+        return sizeof(struct sockaddr_in6);
+
+    default:
+        OVS_NOT_REACHED();
+    }
+}

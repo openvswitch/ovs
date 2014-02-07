@@ -81,7 +81,7 @@ int pstream_open_with_default_port(const char *name,
                                    uint8_t dscp);
 bool stream_parse_target_with_default_port(const char *target,
                                            uint16_t default_port,
-                                           struct sockaddr_in *sin);
+                                           struct sockaddr_storage *ss);
 int stream_or_pstream_needs_probes(const char *name);
 
 /* Error reporting. */

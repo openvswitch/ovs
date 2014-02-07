@@ -177,7 +177,7 @@ OVSDB_CHECK_EXECUTION([duplicate uuid-name not allowed],
   [[[{"uuid":["uuid","<0>"]},{"details":"This \"uuid-name\" appeared on an earlier \"insert\" operation.","error":"duplicate uuid-name","syntax":"\"x\""}]
 ]])
 
-m4_define([EXECUTION_EXAMPLES], [
+m4_define([ONE_EXECUTION_EXAMPLE], [dnl
 dnl At one point the "commit" code ignored new rows with all-default values,
 dnl so this checks for that problem.
 OVSDB_CHECK_EXECUTION([insert default row, query table],
@@ -193,7 +193,10 @@ OVSDB_CHECK_EXECUTION([insert default row, query table],
   [[[{"uuid":["uuid","<0>"]}]
 [{"rows":[{"_uuid":["uuid","<0>"],"_version":["uuid","<1>"],"name":"","number":0}]}]
 ]])
+])
 
+m4_define([EXECUTION_EXAMPLES], [
+ONE_EXECUTION_EXAMPLE
 OVSDB_CHECK_EXECUTION([insert row, query table],
   [ordinal_schema],
   [[[["ordinals",

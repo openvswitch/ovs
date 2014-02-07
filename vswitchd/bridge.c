@@ -466,12 +466,12 @@ collect_in_band_managers(const struct ovsrec_open_vswitch *ovs_cfg,
 
         managers = xmalloc(sset_count(&targets) * sizeof *managers);
         SSET_FOR_EACH (target, &targets) {
-            struct sockaddr_in *sin = &managers[n_managers];
+            struct sockaddr_storage ss;
 
-            if (stream_parse_target_with_default_port(target,
-                                                      OVSDB_OLD_PORT,
-                                                      sin)) {
-                n_managers++;
+            if (stream_parse_target_with_default_port(target, OVSDB_OLD_PORT,
+                                                      &ss)
+                && ss.ss_family == AF_INET) {
+                managers[n_managers++] = *(struct sockaddr_in *) &ss;
             }
         }
     }

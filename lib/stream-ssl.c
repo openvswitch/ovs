@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -206,7 +206,7 @@ static int
 new_ssl_stream(const char *name, int fd, enum session_type type,
                enum ssl_state state, struct stream **streamp)
 {
-    struct sockaddr_in local;
+    struct sockaddr_storage local;
     socklen_t local_len = sizeof local;
     struct ssl_stream *sslv;
     SSL *ssl = NULL;
@@ -780,9 +780,11 @@ static int
 pssl_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp,
           uint8_t dscp)
 {
+    char bound_name[SS_NTOP_BUFSIZE + 16];
+    char addrbuf[SS_NTOP_BUFSIZE];
+    struct sockaddr_storage ss;
     struct pssl_pstream *pssl;
-    struct sockaddr_in sin;
-    char bound_name[128];
+    uint16_t port;
     int retval;
     int fd;
 
@@ -791,16 +793,18 @@ pssl_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp,
         return retval;
     }
 
-    fd = inet_open_passive(SOCK_STREAM, suffix, OFP_OLD_PORT, &sin, dscp);
+    fd = inet_open_passive(SOCK_STREAM, suffix, OFP_OLD_PORT, &ss, dscp);
     if (fd < 0) {
         return -fd;
     }
-    sprintf(bound_name, "pssl:%"PRIu16":"IP_FMT,
-            ntohs(sin.sin_port), IP_ARGS(sin.sin_addr.s_addr));
+
+    port = ss_get_port(&ss);
+    snprintf(bound_name, sizeof bound_name, "ptcp:%"PRIu16":%s",
+             port, ss_format_address(&ss, addrbuf, sizeof addrbuf));
 
     pssl = xmalloc(sizeof *pssl);
     pstream_init(&pssl->pstream, &pssl_pstream_class, bound_name);
-    pstream_set_bound_port(&pssl->pstream, sin.sin_port);
+    pstream_set_bound_port(&pssl->pstream, htons(port));
     pssl->fd = fd;
     *pstreamp = &pssl->pstream;
     return 0;
@@ -818,13 +822,14 @@ static int
 pssl_accept(struct pstream *pstream, struct stream **new_streamp)
 {
     struct pssl_pstream *pssl = pssl_pstream_cast(pstream);
-    struct sockaddr_in sin;
-    socklen_t sin_len = sizeof sin;
-    char name[128];
+    char name[SS_NTOP_BUFSIZE + 16];
+    char addrbuf[SS_NTOP_BUFSIZE];
+    struct sockaddr_storage ss;
+    socklen_t ss_len = sizeof ss;
     int new_fd;
     int error;
 
-    new_fd = accept(pssl->fd, (struct sockaddr *) &sin, &sin_len);
+    new_fd = accept(pssl->fd, (struct sockaddr *) &ss, &ss_len);
     if (new_fd < 0) {
         error = errno;
         if (error != EAGAIN) {
@@ -839,10 +844,9 @@ pssl_accept(struct pstream *pstream, struct stream **new_streamp)
         return error;
     }
 
-    sprintf(name, "ssl:"IP_FMT, IP_ARGS(sin.sin_addr.s_addr));
-    if (sin.sin_port != htons(OFP_OLD_PORT)) {
-        sprintf(strchr(name, '\0'), ":%"PRIu16, ntohs(sin.sin_port));
-    }
+    snprintf(name, sizeof name, "tcp:%s:%"PRIu16,
+             ss_format_address(&ss, addrbuf, sizeof addrbuf),
+             ss_get_port(&ss));
     return new_ssl_stream(name, new_fd, SERVER, STATE_SSL_CONNECTING,
                           new_streamp);
 }

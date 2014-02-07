@@ -21,7 +21,7 @@ s/ hard_age=[0-9]*,//
 # log, given that the server was told to listen on a kernel-chosen
 # port, file provided on stdin, and prints the port number on stdout.
 # You should specify the listening remote as ptcp:0:127.0.0.1 or
-# pssl:0:127.0.0.1.
+# pssl:0:127.0.0.1, or the equivalent with [::1] instead of 127.0.0.1.
 #
 # Here's an example of how to use this with ovsdb-server:
 #
@@ -29,7 +29,7 @@ s/ hard_age=[0-9]*,//
 #    ovsdb-server --log-file --remote=ptcp:0:127.0.0.1 ...
 #    TCP_PORT=`parse_listening_port < ovsdb-server.log`
 parse_listening_port () {
-    sed -n 's/.*0:127\.0\.0\.1: listening on port \([0-9]*\)$/\1/p'
+    sed -n 's/.*0:.*: listening on port \([0-9]*\)$/\1/p'
 }]
 m4_divert_pop([PREPARE_TESTS])
 

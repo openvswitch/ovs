@@ -1829,55 +1829,58 @@ AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]\{1,\}$/?/' | sort],
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-dnl Test that sFlow samples packets correctly.
-AT_SETUP([ofproto-dpif - sFlow packet sampling])
-OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
+# CHECK_SFLOW_SAMPLING_PACKET(LOOPBACK_ADDR, ADDR_WITHOUT_BRACKETS)
+#
+# Test that sFlow samples packets correctly using IPv4/IPv6 sFlow collector
+#
+# IP_VERSION_TYPE is used in AT_SETUP
+m4_define([CHECK_SFLOW_SAMPLING_PACKET],
+  [AT_SETUP([ofproto-dpif - sFlow packet sampling - $2 collector])
+  OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
 
-ON_EXIT([kill `cat test-sflow.pid`])
-AT_CHECK([test-sflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > sflow.log], [0], [], [ignore])
-AT_CAPTURE_FILE([sflow.log])
-SFLOW_PORT=`parse_listening_port < test-sflow.log`
+  ON_EXIT([kill `cat test-sflow.pid`])
+  AT_CHECK([test-sflow --log-file --detach --no-chdir --pidfile 0:$1 > sflow.log], [0], [], [ignore])
+  AT_CAPTURE_FILE([sflow.log])
+  SFLOW_PORT=`parse_listening_port < test-sflow.log`
+  ovs-appctl time/stop
 
-ovs-appctl time/stop
+  ADD_OF_PORTS([br0], 1, 2)
+  ovs-vsctl \
+     set Interface br0 options:ifindex=1002 -- \
+     set Interface p1 options:ifindex=1004 -- \
+     set Interface p2 options:ifindex=1003 -- \
+     set Bridge br0 sflow=@sf -- \
+     --id=@sf create sflow targets=\"$1:$SFLOW_PORT\" \
+       header=128 sampling=1 polling=1 agent=lo
 
-ADD_OF_PORTS([br0], 1, 2)
-ovs-vsctl \
-   set Interface br0 options:ifindex=1002 -- \
-   set Interface p1 options:ifindex=1004 -- \
-   set Interface p2 options:ifindex=1003 -- \
-   set Bridge br0 sflow=@sf -- \
-   --id=@sf create sflow targets=\"127.0.0.1:$SFLOW_PORT\" \
-     header=128 sampling=1 polling=1
+  dnl open with ARP packets to seed the bridge-learning.  The output
+  dnl ifIndex numbers should be reported predictably after that.
+  dnl Since we set sampling=1 we should see all of these packets
+  dnl reported. Sorting the output by data-source and seqNo makes
+  dnl it deterministic. Ensuring that we send at least two packets
+  dnl into each port means we get to check the seq nos are
+  dnl incrementing correctly.
+  dnl because packets from different ports can be handled by separate
+  dnl threads, put some sleeps
 
-dnl open with ARP packets to seed the bridge-learning.  The output
-dnl ifIndex numbers should be reported predictably after that.
-dnl Since we set sampling=1 we should see all of these packets
-dnl reported. Sorting the output by data-source and seqNo makes
-dnl it deterministic. Ensuring that we send at least two packets
-dnl into each port means we get to check the seq nos are
-dnl incrementing correctly.
+  ovs-appctl netdev-dummy/receive p1 'in_port(2),eth(src=50:54:00:00:00:05,dst=FF:FF:FF:FF:FF:FF),eth_type(0x0806),arp(sip=192.168.0.2,tip=192.168.0.1,op=1,sha=50:54:00:00:00:05,tha=00:00:00:00:00:00)'
+  sleep 1
+  ovs-appctl netdev-dummy/receive p2 'in_port(1),eth(src=50:54:00:00:00:07,dst=FF:FF:FF:FF:FF:FF),eth_type(0x0806),arp(sip=192.168.0.1,tip=192.168.0.2,op=1,sha=50:54:00:00:00:07,tha=00:00:00:00:00:00)'
+  sleep 1
+  ovs-appctl netdev-dummy/receive p1 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'
+  sleep 1
+  ovs-appctl netdev-dummy/receive p2 'in_port(1),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=0,code=0)'
+  ovs-appctl netdev-dummy/receive p2 'in_port(1),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x86dd),ipv6(src=fe80::1,dst=fe80::2,label=0,proto=10,tclass=0x70,hlimit=128,frag=no)'
 
-dnl because packets from different ports can be handled by separate
-dnl threads, put some sleeps
+  dnl sleep long enough to get more than one counter sample
+  dnl from each datasource so we can check sequence numbers
+  for i in `seq 1 30`; do
+      ovs-appctl time/warp 100
+  done
+  OVS_VSWITCHD_STOP
+  ovs-appctl -t test-sflow exit
 
-ovs-appctl netdev-dummy/receive p1 'in_port(2),eth(src=50:54:00:00:00:05,dst=FF:FF:FF:FF:FF:FF),eth_type(0x0806),arp(sip=192.168.0.2,tip=192.168.0.1,op=1,sha=50:54:00:00:00:05,tha=00:00:00:00:00:00)'
-sleep 1
-ovs-appctl netdev-dummy/receive p2 'in_port(1),eth(src=50:54:00:00:00:07,dst=FF:FF:FF:FF:FF:FF),eth_type(0x0806),arp(sip=192.168.0.1,tip=192.168.0.2,op=1,sha=50:54:00:00:00:07,tha=00:00:00:00:00:00)'
-sleep 1
-ovs-appctl netdev-dummy/receive p1 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'
-sleep 1
-ovs-appctl netdev-dummy/receive p2 'in_port(1),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=0,code=0)'
-ovs-appctl netdev-dummy/receive p2 'in_port(1),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x86dd),ipv6(src=fe80::1,dst=fe80::2,label=0,proto=10,tclass=0x70,hlimit=128,frag=no)'
-
-dnl sleep long enough to get more than one counter sample
-dnl from each datasource so we can check sequence numbers
-for i in `seq 1 30`; do
-    ovs-appctl time/warp 100
-done
-OVS_VSWITCHD_STOP
-ovs-appctl -t test-sflow exit
-
-AT_CHECK([[sort sflow.log | $EGREP 'HEADER|ERROR' | sed 's/ /\
+  AT_CHECK_UNQUOTED([[sort sflow.log | $EGREP 'HEADER|ERROR' | sed 's/ /\
 	/g']], [0], [dnl
 HEADER
 	dgramSeqNo=1
@@ -1981,7 +1984,7 @@ HEADER
 	hdr=50-54-00-00-00-05-50-54-00-00-00-07-86-DD-67-00-00-00-00-00-0A-80-FE-80-00-00-00-00-00-00-00-00-00-00-00-00-00-01-FE-80-00-00-00-00-00-00-00-00-00-00-00-00-00-02-00-00-00-00-00-00
 ])
 
-AT_CHECK([[sort sflow.log | $EGREP 'IFCOUNTERS|ERROR' | head -6 | sed 's/ /\
+  AT_CHECK_UNQUOTED([[sort sflow.log | $EGREP 'IFCOUNTERS|ERROR' | head -6 | sed 's/ /\
 	/g']], [0], [dnl
 IFCOUNTERS
 	dgramSeqNo=2
@@ -2122,128 +2125,144 @@ IFCOUNTERS
 	out_errors=0
 	promiscuous=0
 ])
-AT_CLEANUP
+  AT_CLEANUP])
 
+CHECK_SFLOW_SAMPLING_PACKET([127.0.0.1], [IPv4])
+CHECK_SFLOW_SAMPLING_PACKET([[[::1]]], [IPv6])
 
+# CHECK_NETFLOW_EXPIRATION(LOOPBACK_ADDR, IP_VERSION_TYPE)
+#
+# Test that basic NetFlow reports flow statistics correctly:
+# The initial packet of a flow are correctly accounted.
+# Later packets within a flow are correctly accounted.
+# Flow actions changing (in this case, due to MAC learning)
+# cause a record to be sent.
+#
+# IP_VERSION_TYPE is used in AT_SETUP
+m4_define([CHECK_NETFLOW_EXPIRATION],
+  [AT_SETUP([ofproto-dpif - NetFlow flow expiration - $2 collector])
+  OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
+  ADD_OF_PORTS([br0], 1, 2)
 
-dnl Test that basic NetFlow reports flow statistics correctly:
-dnl - The initial packet of a flow are correctly accounted.
-dnl - Later packets within a flow are correctly accounted.
-dnl - Flow actions changing (in this case, due to MAC learning)
-dnl   cause a record to be sent.
-AT_SETUP([ofproto-dpif - NetFlow flow expiration])
+  ovs-appctl time/stop
+  ON_EXIT([kill `cat test-netflow.pid`])
+  AT_CHECK([test-netflow --log-file --detach --no-chdir --pidfile 0:$1 > netflow.log], [0], [], [ignore])
+  AT_CAPTURE_FILE([netflow.log])
+  NETFLOW_PORT=`parse_listening_port < test-netflow.log`
 
-OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
-ADD_OF_PORTS([br0], 1, 2)
+  ovs-vsctl \
+     set Bridge br0 netflow=@nf -- \
+     --id=@nf create NetFlow targets=\"$1:$NETFLOW_PORT\" \
+       engine_id=1 engine_type=2 active_timeout=30 add-id-to-interface=false
 
-ovs-appctl time/stop
-ON_EXIT([kill `cat test-netflow.pid`])
-AT_CHECK([test-netflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > netflow.log], [0], [], [ignore])
-AT_CAPTURE_FILE([netflow.log])
-NETFLOW_PORT=`parse_listening_port < test-netflow.log`
+  for delay in 1000 30000; do
+      ovs-appctl netdev-dummy/receive p1 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'
+      ovs-appctl netdev-dummy/receive p2 'in_port(1),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=0,code=0)'
 
-ovs-vsctl \
-   set Bridge br0 netflow=@nf -- \
-   --id=@nf create NetFlow targets=\"127.0.0.1:$NETFLOW_PORT\" \
-     engine_id=1 engine_type=2 active_timeout=30 add-id-to-interface=false
+      ovs-appctl time/warp $delay
+  done
 
-for delay in 1000 30000; do
-    ovs-appctl netdev-dummy/receive p1 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'
-    ovs-appctl netdev-dummy/receive p2 'in_port(1),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=0,code=0)'
+  ovs-appctl time/warp 6000
+  sleep 1
+  OVS_VSWITCHD_STOP
+  ovs-appctl -t test-netflow exit
 
-    ovs-appctl time/warp $delay
-done
+  AT_CHECK([test `grep "192.168.0.1 > 192.168.0.2, if 1 > 65535, 1 pkts, 60 bytes, ICMP 8:0" netflow.log | wc -l` -eq 1])
 
-ovs-appctl time/warp 6000
-sleep 1
-OVS_VSWITCHD_STOP
-ovs-appctl -t test-netflow exit
+  AT_CHECK([test `grep "192.168.0.1 > 192.168.0.2, if 1 > 2, 1 pkts, 60 bytes, ICMP 8:0" netflow.log | wc -l` -eq 1])
 
-AT_CHECK([test `grep "192.168.0.1 > 192.168.0.2, if 1 > 65535, 1 pkts, 60 bytes, ICMP 8:0" netflow.log | wc -l` -eq 1])
+  combined=`grep "192.168.0.2 > 192.168.0.1, if 2 > 1, 2 pkts, 120 bytes, ICMP 0:0" netflow.log | wc -l`
+  separate=`grep "192.168.0.2 > 192.168.0.1, if 2 > 1, 1 pkts, 60 bytes, ICMP 0:0" netflow.log | wc -l`
+  AT_CHECK([test $separate = 2 || test $combined = 1], [0])
 
-AT_CHECK([test `grep "192.168.0.1 > 192.168.0.2, if 1 > 2, 1 pkts, 60 bytes, ICMP 8:0" netflow.log | wc -l` -eq 1])
+  AT_CLEANUP])
 
-combined=`grep "192.168.0.2 > 192.168.0.1, if 2 > 1, 2 pkts, 120 bytes, ICMP 0:0" netflow.log | wc -l`
-separate=`grep "192.168.0.2 > 192.168.0.1, if 2 > 1, 1 pkts, 60 bytes, ICMP 0:0" netflow.log | wc -l`
-AT_CHECK([test $separate = 2 || test $combined = 1], [0])
+CHECK_NETFLOW_EXPIRATION([127.0.0.1], [IPv4])
+CHECK_NETFLOW_EXPIRATION([[[::1]]], [IPv6])
 
-AT_CLEANUP
+# CHECK_NETFLOW_ACTIVE_EXPIRATION(LOOPBACK_ADDR, IP_VERSION_TYPE)
+#
+# Test that basic NetFlow reports active expirations correctly.
+#
+# IP_VERSION_TYPE is used in AT_SETUP
+m4_define([CHECK_NETFLOW_ACTIVE_EXPIRATION],
+  [AT_SETUP([ofproto-dpif - NetFlow active expiration - $2 collector])
 
-dnl Test that basic NetFlow reports active expirations correctly.
-AT_SETUP([ofproto-dpif - NetFlow active expiration])
+  OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
+  ADD_OF_PORTS([br0], 1, 2)
 
-OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
-ADD_OF_PORTS([br0], 1, 2)
+  ON_EXIT([kill `cat test-netflow.pid`])
+  AT_CHECK([test-netflow --log-file --detach --no-chdir --pidfile 0:$1 > netflow.log], [0], [], [ignore])
+  AT_CAPTURE_FILE([netflow.log])
+  NETFLOW_PORT=`parse_listening_port < test-netflow.log`
 
-ON_EXIT([kill `cat test-netflow.pid`])
-AT_CHECK([test-netflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > netflow.log], [0], [], [ignore])
-AT_CAPTURE_FILE([netflow.log])
-NETFLOW_PORT=`parse_listening_port < test-netflow.log`
+  ovs-vsctl \
+     set Bridge br0 netflow=@nf -- \
+     --id=@nf create NetFlow targets=\"$1:$NETFLOW_PORT\" \
+       engine_id=1 engine_type=2 active_timeout=10 add-id-to-interface=false
 
-ovs-vsctl \
-   set Bridge br0 netflow=@nf -- \
-   --id=@nf create NetFlow targets=\"127.0.0.1:$NETFLOW_PORT\" \
-     engine_id=1 engine_type=2 active_timeout=10 add-id-to-interface=false
+  AT_CHECK([ovs-appctl time/stop])
+  n=1
+  while test $n -le 60; do
+      n=`expr $n + 1`
 
-AT_CHECK([ovs-appctl time/stop])
-n=1
-while test $n -le 60; do
-    n=`expr $n + 1`
+      ovs-appctl netdev-dummy/receive p1 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=1234,dst=80)'
+      ovs-appctl netdev-dummy/receive p2 'in_port(1),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=6,tos=0,ttl=64,frag=no),tcp(src=80,dst=1234)'
 
-    ovs-appctl netdev-dummy/receive p1 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=1234,dst=80)'
-    ovs-appctl netdev-dummy/receive p2 'in_port(1),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=6,tos=0,ttl=64,frag=no),tcp(src=80,dst=1234)'
+      ovs-appctl time/warp 1000
+  done
 
-    ovs-appctl time/warp 1000
-done
+  ovs-appctl time/warp 10000
 
-ovs-appctl time/warp 10000
+  sleep 1
+  OVS_VSWITCHD_STOP
+  ovs-appctl -t test-netflow exit
 
-sleep 1
-OVS_VSWITCHD_STOP
-ovs-appctl -t test-netflow exit
+  # Count the number of reported packets:
+  # - From source to destination before MAC learning kicks in (just one).
+  # - From source to destination after that.
+  # - From destination to source.
+  n_learn=0
+  n_in=0
+  n_out=0
+  n_other=0
+  n_recs=0
+  none=0
+  while read line; do
+      pkts=`echo "$line" | sed 's/.*, \([[0-9]]*\) pkts,.*/\1/'`
+      case $pkts in
+           [[0-9]]*) ;;
+       *) continue ;;
+      esac
 
-# Count the number of reported packets:
-# - From source to destination before MAC learning kicks in (just one).
-# - From source to destination after that.
-# - From destination to source.
-n_learn=0
-n_in=0
-n_out=0
-n_other=0
-n_recs=0
-none=0
-while read line; do
-    pkts=`echo "$line" | sed 's/.*, \([[0-9]]*\) pkts,.*/\1/'`
-    case $pkts in
-         [[0-9]]*) ;;
-	 *) continue ;;
-    esac
+      case $line in
+          "seq "*": 192.168.0.1 > 192.168.0.2, if 1 > 65535, "*" pkts, "*" bytes, TCP 1234 > 80, time "*)
+              counter=n_learn
+          ;;
+      "seq "*": 192.168.0.1 > 192.168.0.2, if 1 > 2, "*" pkts, "*" bytes, TCP 1234 > 80, time "*)
+          counter=n_in
+          ;;
+      "seq "*": 192.168.0.2 > 192.168.0.1, if 2 > 1, "*" pkts, "*" bytes, TCP 80 > 1234, time "*)
+          counter=n_out
+          ;;
+      *)
+          counter=n_other
+          ;;
+      esac
+      eval $counter=\`expr \$$counter + \$pkts\`
+      n_recs=`expr $n_recs + 1`
+  done < netflow.log
 
-    case $line in
-        "seq "*": 192.168.0.1 > 192.168.0.2, if 1 > 65535, "*" pkts, "*" bytes, TCP 1234 > 80, time "*)
-            counter=n_learn
-	    ;;
-	"seq "*": 192.168.0.1 > 192.168.0.2, if 1 > 2, "*" pkts, "*" bytes, TCP 1234 > 80, time "*)
-	    counter=n_in
-	    ;;
-	"seq "*": 192.168.0.2 > 192.168.0.1, if 2 > 1, "*" pkts, "*" bytes, TCP 80 > 1234, time "*)
-	    counter=n_out
-	    ;;
-	*)
-	    counter=n_other
-	    ;;
-    esac
-    eval $counter=\`expr \$$counter + \$pkts\`
-    n_recs=`expr $n_recs + 1`
-done < netflow.log
-
-# There should be exactly 1 MAC learning packet,
-# exactly 59 other packets in that direction,
-# and exactly 60 packets in the other direction.
-AT_CHECK([echo $n_learn $n_in $n_out $n_other], [0], [1 59 60 0
+  # There should be exactly 1 MAC learning packet,
+  # exactly 59 other packets in that direction,
+  # and exactly 60 packets in the other direction.
+  AT_CHECK([echo $n_learn $n_in $n_out $n_other], [0], [1 59 60 0
 ])
 
-AT_CLEANUP
+  AT_CLEANUP])
+
+CHECK_NETFLOW_ACTIVE_EXPIRATION([127.0.0.1], [IPv4])
+CHECK_NETFLOW_ACTIVE_EXPIRATION([[[::1]]], [IPv6])
 
 AT_SETUP([idle_age and hard_age increase over time])
 OVS_VSWITCHD_START
@@ -2700,30 +2719,37 @@ skb_priority(0),in_port(1),eth(src=50:54:00:00:00:0b/ff:ff:ff:ff:ff:ff,dst=50:54
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto-dpif megaflow - netflow])
-OVS_VSWITCHD_START
-ADD_OF_PORTS([br0], [1], [2])
+# CHECK_MEGAFLOW_NETFLOW(LOOPBACK_ADDR, IP_VERSION_TYPE)
+#
+# IP_VERSION_TYPE is used in AT_SETUP
+m4_define([CHECK_MEGAFLOW_NETFLOW],
+  [AT_SETUP([ofproto-dpif megaflow - netflow - $2 collector])
+  OVS_VSWITCHD_START
+  ADD_OF_PORTS([br0], [1], [2])
 
-dnl NetFlow configuration disables wildcarding relevant fields
-ON_EXIT([kill `cat test-netflow.pid`])
-AT_CHECK([test-netflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > netflow.log], [0], [], [ignore])
-AT_CAPTURE_FILE([netflow.log])
-NETFLOW_PORT=`parse_listening_port < test-netflow.log`
-ovs-vsctl \
-   set Bridge br0 netflow=@nf -- \
-   --id=@nf create NetFlow targets=\"127.0.0.1:$NETFLOW_PORT\" \
-     engine_id=1 engine_type=2 active_timeout=30 add-id-to-interface=false
+  dnl NetFlow configuration disables wildcarding relevant fields
+  ON_EXIT([kill `cat test-netflow.pid`])
+  AT_CHECK([test-netflow --log-file --detach --no-chdir --pidfile 0:$1 > netflow.log], [0], [], [ignore])
+  AT_CAPTURE_FILE([netflow.log])
+  NETFLOW_PORT=`parse_listening_port < test-netflow.log`
+  ovs-vsctl \
+     set Bridge br0 netflow=@nf -- \
+     --id=@nf create NetFlow targets=\"$1:$NETFLOW_PORT\" \
+       engine_id=1 engine_type=2 active_timeout=30 add-id-to-interface=false
 
-AT_CHECK([ovs-ofctl add-flow br0 action=normal])
-AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
-AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
-sleep 1
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
+  AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+  AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+  AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+  sleep 1
+  AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
 skb_priority(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/255.255.255.255,dst=10.0.0.1/255.255.255.255,proto=1/0xff,tos=0/0xfc,ttl=64/0,frag=no/0xff),icmp(type=8,code=0), packets:0, bytes:0, used:never, actions: <del>
 skb_priority(0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4/255.255.255.255,dst=10.0.0.3/255.255.255.255,proto=1/0xff,tos=0/0xfc,ttl=64/0,frag=no/0xff),icmp(type=8,code=0), packets:0, bytes:0, used:never, actions: <del>
 ])
-OVS_VSWITCHD_STOP
-AT_CLEANUP
+  OVS_VSWITCHD_STOP
+  AT_CLEANUP])
+
+CHECK_MEGAFLOW_NETFLOW([127.0.0.1], [IPv4])
+CHECK_MEGAFLOW_NETFLOW([[[::1]]], [IPv6])
 
 AT_SETUP([ofproto-dpif megaflow - normal, active-backup bonding])
 OVS_VSWITCHD_START(

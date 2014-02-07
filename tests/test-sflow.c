@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2014 Nicira, Inc.
  * Copyright (c) 2013 InMon Corp.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -44,7 +44,6 @@ static unixctl_cb_func test_sflow_exit;
 /* Datagram. */
 #define SFLOW_VERSION_5 5
 #define SFLOW_MIN_LEN 36
-#define SFLOW_MAX_AGENTIP_STRLEN 64
 
 /* Sample tag numbers. */
 #define SFLOW_FLOW_SAMPLE 1
@@ -82,7 +81,7 @@ struct sflow_xdr {
 
     /* Agent. */
     struct sflow_addr agentAddr;
-    char agentIPStr[SFLOW_MAX_AGENTIP_STRLEN];
+    char agentIPStr[INET6_ADDRSTRLEN + 2];
     uint32_t subAgentId;
     uint32_t uptime_mS;
 
@@ -325,14 +324,12 @@ process_datagram(struct sflow_xdr *x)
 
     /* Store the agent address as a string. */
     if (x->agentAddr.type == SFLOW_ADDRTYPE_IP6) {
-        snprintf(x->agentIPStr, SFLOW_MAX_AGENTIP_STRLEN,
-                 "%04x:%04x:%04x:%04x",
-                 x->agentAddr.a.ip6[0],
-                 x->agentAddr.a.ip6[1],
-                 x->agentAddr.a.ip6[2],
-                 x->agentAddr.a.ip6[3]);
+        char ipstr[INET6_ADDRSTRLEN];
+        inet_ntop(AF_INET6, (const void *) &x->agentAddr.a.ip6,
+                  ipstr, INET6_ADDRSTRLEN);
+        snprintf(x->agentIPStr, sizeof x->agentIPStr, "[%s]", ipstr);
     } else {
-        snprintf(x->agentIPStr, SFLOW_MAX_AGENTIP_STRLEN,
+        snprintf(x->agentIPStr, sizeof x->agentIPStr,
                  IP_FMT, IP_ARGS(x->agentAddr.a.ip4));
     }
 

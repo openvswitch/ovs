@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -148,7 +148,7 @@ struct fd_pstream
 {
     struct pstream pstream;
     int fd;
-    int (*accept_cb)(int fd, const struct sockaddr *, size_t sa_len,
+    int (*accept_cb)(int fd, const struct sockaddr_storage *, size_t ss_len,
                      struct stream **);
     int (*set_dscp_cb)(int fd, uint8_t dscp);
     char *unlink_path;
@@ -179,8 +179,8 @@ fd_pstream_cast(struct pstream *pstream)
  * implementation never fails.) */
 int
 new_fd_pstream(const char *name, int fd,
-               int (*accept_cb)(int fd, const struct sockaddr *sa,
-                                size_t sa_len, struct stream **streamp),
+               int (*accept_cb)(int fd, const struct sockaddr_storage *ss,
+                                size_t ss_len, struct stream **streamp),
                int (*set_dscp_cb)(int fd, uint8_t dscp),
                char *unlink_path, struct pstream **pstreamp)
 {
@@ -227,8 +227,7 @@ pfd_accept(struct pstream *pstream, struct stream **new_streamp)
         return retval;
     }
 
-    return ps->accept_cb(new_fd, (const struct sockaddr *) &ss, ss_len,
-                         new_streamp);
+    return ps->accept_cb(new_fd, &ss, ss_len, new_streamp);
 }
 
 static void

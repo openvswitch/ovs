@@ -64,6 +64,7 @@ v2.1.0 - xx xxx xxxx
      hard limit on the number of flows in the datapath.  It defaults to 200,000
      flows.  OVS automatically adjusts this number depending on network
      conditions.
+   - Added IPv6 support for active and passive socket communications.
 
 
 v2.0.0 - 15 Oct 2013

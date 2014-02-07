@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  * Copyright (c) 2009 InMon Corp.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -253,13 +253,16 @@ sflow_choose_agent_address(const char *agent_device,
     }
 
     SSET_FOR_EACH (target, targets) {
-        struct sockaddr_in sin;
+        struct sockaddr_storage ss;
         char name[IFNAMSIZ];
 
-        if (inet_parse_active(target, SFL_DEFAULT_COLLECTOR_PORT, &sin)
-            && route_table_get_name(sin.sin_addr.s_addr, name)
-            && !netdev_get_in4_by_name(name, &in4)) {
-            goto success;
+        if (inet_parse_active(target, SFL_DEFAULT_COLLECTOR_PORT, &ss)
+            && ss.ss_family == AF_INET) {
+            struct sockaddr_in *sin = (struct sockaddr_in *) &ss;
+            if (route_table_get_name(sin->sin_addr.s_addr, name)
+                && !netdev_get_in4_by_name(name, &in4)) {
+                goto success;
+            }
         }
     }
 

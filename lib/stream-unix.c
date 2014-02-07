@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,8 +75,8 @@ const struct stream_class unix_stream_class = {
 
 /* Passive UNIX socket. */
 
-static int punix_accept(int fd, const struct sockaddr *sa, size_t sa_len,
-                        struct stream **streamp);
+static int punix_accept(int fd, const struct sockaddr_storage *ss,
+                        size_t ss_len, struct stream **streamp);
 
 static int
 punix_open(const char *name OVS_UNUSED, char *suffix,
@@ -105,11 +105,11 @@ punix_open(const char *name OVS_UNUSED, char *suffix,
 }
 
 static int
-punix_accept(int fd, const struct sockaddr *sa, size_t sa_len,
+punix_accept(int fd, const struct sockaddr_storage *ss, size_t ss_len,
              struct stream **streamp)
 {
-    const struct sockaddr_un *sun = (const struct sockaddr_un *) sa;
-    int name_len = get_unix_name_len(sa_len);
+    const struct sockaddr_un *sun = (const struct sockaddr_un *) ss;
+    int name_len = get_unix_name_len(ss_len);
     char name[128];
 
     if (name_len > 0) {

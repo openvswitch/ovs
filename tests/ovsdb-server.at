@@ -748,7 +748,7 @@ for i in `seq 1 100`; do
 done
 AT_CLEANUP
 
-AT_BANNER([OVSDB -- ovsdb-server transactions (SSL sockets)])
+AT_BANNER([OVSDB -- ovsdb-server transactions (SSL IPv4 sockets)])
 
 # OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
 #
@@ -787,7 +787,46 @@ cat stdout >> output
 
 EXECUTION_EXAMPLES
 
-AT_BANNER([OVSDB -- ovsdb-server transactions (TCP sockets)])
+AT_BANNER([OVSDB -- ovsdb-server transactions (SSL IPv6 sockets)])
+
+# OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
+#
+# Creates a database with the given SCHEMA, starts an ovsdb-server on
+# that database, and runs each of the TRANSACTIONS (which should be a
+# quoted list of quoted strings) against it with ovsdb-client one at a
+# time.
+#
+# Checks that the overall output is OUTPUT, but UUIDs in the output
+# are replaced by markers of the form <N> where N is a number.  The
+# first unique UUID is replaced by <0>, the next by <1>, and so on.
+# If a given UUID appears more than once it is always replaced by the
+# same marker.
+#
+# TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
+m4_define([OVSDB_CHECK_EXECUTION],
+  [AT_SETUP([$1])
+   AT_KEYWORDS([ovsdb server positive ssl6 $5])
+   AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
+   OVS_RUNDIR=`pwd`; export OVS_RUNDIR
+   OVS_LOGDIR=`pwd`; export OVS_LOGDIR
+   $2 > schema
+   PKIDIR=$abs_top_builddir/tests
+   AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server --log-file --detach --no-chdir --pidfile="`pwd`"/pid --private-key=$PKIDIR/testpki-privkey2.pem --certificate=$PKIDIR/testpki-cert2.pem --ca-cert=$PKIDIR/testpki-cacert.pem --remote=pssl:0:[[::1]] --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   SSL_PORT=`parse_listening_port < ovsdb-server.log`
+   m4_foreach([txn], [$3],
+     [AT_CHECK([ovsdb-client --private-key=$PKIDIR/testpki-privkey.pem --certificate=$PKIDIR/testpki-cert.pem --ca-cert=$PKIDIR/testpki-cacert.pem transact ssl:[[::1]]:$SSL_PORT 'txn'], [0], [stdout], [ignore],
+     [test ! -e pid || kill `cat pid`])
+cat stdout >> output
+])
+   AT_CHECK([${PERL} $srcdir/uuidfilt.pl output], [0], [$4], [ignore],
+            [test ! -e pid || kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+ONE_EXECUTION_EXAMPLE
+
+AT_BANNER([OVSDB -- ovsdb-server transactions (TCP IPv4 sockets)])
 
 AT_SETUP([ovsdb-client get-schema-version - tcp socket])
 AT_KEYWORDS([ovsdb server positive tcp])
@@ -836,6 +875,42 @@ cat stdout >> output
    AT_CLEANUP])
 
 EXECUTION_EXAMPLES
+
+# OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
+#
+# Creates a database with the given SCHEMA, starts an ovsdb-server on
+# that database, and runs each of the TRANSACTIONS (which should be a
+# quoted list of quoted strings) against it with ovsdb-client one at a
+# time.
+#
+# Checks that the overall output is OUTPUT, but UUIDs in the output
+# are replaced by markers of the form <N> where N is a number.  The
+# first unique UUID is replaced by <0>, the next by <1>, and so on.
+# If a given UUID appears more than once it is always replaced by the
+# same marker.
+#
+# TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
+m4_define([OVSDB_CHECK_EXECUTION],
+  [AT_SETUP([$1])
+   AT_KEYWORDS([ovsdb server positive tcp6 $5])
+   OVS_RUNDIR=`pwd`; export OVS_RUNDIR
+   OVS_LOGDIR=`pwd`; export OVS_LOGDIR
+   $2 > schema
+   PKIDIR=$abs_top_builddir/tests
+   AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server --log-file --detach --no-chdir --pidfile="`pwd`"/pid --remote=ptcp:0:[[::1]] --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   TCP_PORT=`parse_listening_port < ovsdb-server.log`
+   m4_foreach([txn], [$3],
+     [AT_CHECK([ovsdb-client transact tcp:[[::1]]:$TCP_PORT 'txn'], [0], [stdout], [ignore],
+     [test ! -e pid || kill `cat pid`])
+cat stdout >> output
+])
+   AT_CHECK([${PERL} $srcdir/uuidfilt.pl output], [0], [$4], [ignore],
+            [test ! -e pid || kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+ONE_EXECUTION_EXAMPLE
 
 AT_BANNER([OVSDB -- transactions on transient ovsdb-server])
 

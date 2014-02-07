@@ -720,18 +720,18 @@ pstream_open_with_default_port(const char *name_,
 /*
  * This function extracts IP address and port from the target string.
  *
- *     - On success, function returns true and fills *sin structure with port
+ *     - On success, function returns true and fills *ss structure with port
  *       and IP address. If port was absent in target string then it will use
  *       corresponding default port value.
- *     - On error, function returns false and *sin contains garbage.
+ *     - On error, function returns false and *ss contains garbage.
  */
 bool
 stream_parse_target_with_default_port(const char *target,
                                       uint16_t default_port,
-                                      struct sockaddr_in *sin)
+                                      struct sockaddr_storage *ss)
 {
     return ((!strncmp(target, "tcp:", 4) || !strncmp(target, "ssl:", 4))
-             && inet_parse_active(target + 4, default_port, sin));
+            && inet_parse_active(target + 4, default_port, ss));
 }
 
 /* Attempts to guess the content type of a stream whose first few bytes were

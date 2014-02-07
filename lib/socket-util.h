@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,14 +48,14 @@ ovs_be32 guess_netmask(ovs_be32 ip);
 int get_null_fd(void);
 
 bool inet_parse_active(const char *target, uint16_t default_port,
-                       struct sockaddr_in *sinp);
+                       struct sockaddr_storage *ssp);
 int inet_open_active(int style, const char *target, uint16_t default_port,
-		     struct sockaddr_in *sinp, int *fdp, uint8_t dscp);
+                     struct sockaddr_storage *ssp, int *fdp, uint8_t dscp);
 
 bool inet_parse_passive(const char *target, int default_port,
-                        struct sockaddr_in *sinp);
+                        struct sockaddr_storage *ssp);
 int inet_open_passive(int style, const char *target, int default_port,
-                      struct sockaddr_in *sinp, uint8_t dscp);
+                      struct sockaddr_storage *ssp, uint8_t dscp);
 
 int read_fully(int fd, void *, size_t, size_t *bytes_read);
 int write_fully(int fd, const void *, size_t, size_t *bytes_written);
@@ -78,5 +78,13 @@ struct ifreq;
 int af_inet_ioctl(unsigned long int command, const void *arg);
 int af_inet_ifreq_ioctl(const char *name, struct ifreq *,
                         unsigned long int cmd, const char *cmd_name);
+
+/* Functions for working with sockaddr_storage that might contain an IPv4 or
+ * IPv6 address. */
+uint16_t ss_get_port(const struct sockaddr_storage *);
+#define SS_NTOP_BUFSIZE (1 + INET6_ADDRSTRLEN + 1)
+char *ss_format_address(const struct sockaddr_storage *,
+                        char *buf, size_t bufsize);
+size_t ss_length(const struct sockaddr_storage *);
 
 #endif /* socket-util.h */
