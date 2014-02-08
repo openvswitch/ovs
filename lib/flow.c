@@ -1130,7 +1130,7 @@ flow_count_common_mpls_labels(const struct flow *a, int an,
  * If the new label is the second or label MPLS label in 'flow', it is
  * generated as;
  *
- *     - label: 0.
+ *     - label: Copied from outer label.
  *
  *     - TTL: Copied from outer label.
  *
@@ -1156,7 +1156,7 @@ flow_push_mpls(struct flow *flow, int n, ovs_be16 mpls_eth_type,
             flow->mpls_lse[i] = flow->mpls_lse[i - 1];
         }
         flow->mpls_lse[0] = (flow->mpls_lse[1]
-                             & htonl(MPLS_TTL_MASK | MPLS_TC_MASK));
+                             & htonl(~MPLS_BOS_MASK));
     } else {
         int label = 0;          /* IPv4 Explicit Null. */
         int tc = 0;
