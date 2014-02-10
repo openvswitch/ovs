@@ -876,6 +876,8 @@ cat stdout >> output
 
 EXECUTION_EXAMPLES
 
+AT_BANNER([OVSDB -- ovsdb-server transactions (TCP IPv6 sockets)])
+
 # OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
 #
 # Creates a database with the given SCHEMA, starts an ovsdb-server on
