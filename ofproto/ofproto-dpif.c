@@ -89,9 +89,11 @@ struct rule_dpif {
     struct ovs_mutex stats_mutex;
     uint64_t packet_count OVS_GUARDED;  /* Number of packets received. */
     uint64_t byte_count OVS_GUARDED;    /* Number of bytes received. */
+    long long int used;                 /* Last used time (msec). */
 };
 
-static void rule_get_stats(struct rule *, uint64_t *packets, uint64_t *bytes);
+static void rule_get_stats(struct rule *, uint64_t *packets, uint64_t *bytes,
+                           long long int *used);
 static struct rule_dpif *rule_dpif_cast(const struct rule *);
 static void rule_expire(struct rule_dpif *);
 
@@ -1402,14 +1404,16 @@ get_tables(struct ofproto *ofproto_, struct ofp12_table_stats *ots)
     struct dpif_dp_stats s;
     uint64_t n_miss, n_no_pkt_in, n_bytes, n_dropped_frags;
     uint64_t n_lookup;
+    long long int used;
 
     strcpy(ots->name, "classifier");
 
     dpif_get_dp_stats(ofproto->backer->dpif, &s);
-    rule_get_stats(&ofproto->miss_rule->up, &n_miss, &n_bytes);
-    rule_get_stats(&ofproto->no_packet_in_rule->up, &n_no_pkt_in, &n_bytes);
-    rule_get_stats(&ofproto->drop_frags_rule->up, &n_dropped_frags, &n_bytes);
-
+    rule_get_stats(&ofproto->miss_rule->up, &n_miss, &n_bytes, &used);
+    rule_get_stats(&ofproto->no_packet_in_rule->up, &n_no_pkt_in, &n_bytes,
+                   &used);
+    rule_get_stats(&ofproto->drop_frags_rule->up, &n_dropped_frags, &n_bytes,
+                   &used);
     n_lookup = s.n_hit + s.n_missed - n_dropped_frags;
     ots->lookup_count = htonll(n_lookup);
     ots->matched_count = htonll(n_lookup - n_miss - n_no_pkt_in);
@@ -2911,24 +2915,39 @@ static void
 rule_expire(struct rule_dpif *rule)
     OVS_REQUIRES(ofproto_mutex)
 {
-    uint16_t idle_timeout, hard_timeout;
+    uint16_t hard_timeout, idle_timeout;
     long long int now = time_msec();
-    int reason;
+    int reason = -1;
 
     ovs_assert(!rule->up.pending);
 
-    /* Has 'rule' expired? */
-    ovs_mutex_lock(&rule->up.mutex);
     hard_timeout = rule->up.hard_timeout;
     idle_timeout = rule->up.idle_timeout;
-    if (hard_timeout && now > rule->up.modified + hard_timeout * 1000) {
-        reason = OFPRR_HARD_TIMEOUT;
-    } else if (idle_timeout && now > rule->up.used + idle_timeout * 1000) {
-        reason = OFPRR_IDLE_TIMEOUT;
-    } else {
-        reason = -1;
+
+    /* Has 'rule' expired? */
+    if (hard_timeout) {
+        long long int modified;
+
+        ovs_mutex_lock(&rule->up.mutex);
+        modified = rule->up.modified;
+        ovs_mutex_unlock(&rule->up.mutex);
+
+        if (now > modified + hard_timeout * 1000) {
+            reason = OFPRR_HARD_TIMEOUT;
+        }
     }
-    ovs_mutex_unlock(&rule->up.mutex);
+
+    if (reason < 0 && idle_timeout) {
+        long long int used;
+
+        ovs_mutex_lock(&rule->stats_mutex);
+        used = rule->used;
+        ovs_mutex_unlock(&rule->stats_mutex);
+
+        if (now > used + idle_timeout * 1000) {
+            reason = OFPRR_IDLE_TIMEOUT;
+        }
+    }
 
     if (reason >= 0) {
         COVERAGE_INC(ofproto_dpif_expired);
@@ -2992,7 +3011,7 @@ rule_dpif_credit_stats(struct rule_dpif *rule,
     ovs_mutex_lock(&rule->stats_mutex);
     rule->packet_count += stats->n_packets;
     rule->byte_count += stats->n_bytes;
-    rule->up.used = MAX(rule->up.used, stats->used);
+    rule->used = MAX(rule->used, stats->used);
     ovs_mutex_unlock(&rule->stats_mutex);
 }
 
@@ -3154,13 +3173,13 @@ rule_dealloc(struct rule *rule_)
 
 static enum ofperr
 rule_construct(struct rule *rule_)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
     ovs_mutex_init(&rule->stats_mutex);
-    ovs_mutex_lock(&rule->stats_mutex);
     rule->packet_count = 0;
     rule->byte_count = 0;
-    ovs_mutex_unlock(&rule->stats_mutex);
+    rule->used = rule->up.modified;
     return 0;
 }
 
@@ -3188,13 +3207,15 @@ rule_destruct(struct rule *rule_)
 }
 
 static void
-rule_get_stats(struct rule *rule_, uint64_t *packets, uint64_t *bytes)
+rule_get_stats(struct rule *rule_, uint64_t *packets, uint64_t *bytes,
+               long long int *used)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
 
     ovs_mutex_lock(&rule->stats_mutex);
     *packets = rule->packet_count;
     *bytes = rule->byte_count;
+    *used = rule->used;
     ovs_mutex_unlock(&rule->stats_mutex);
 }
 

@@ -398,9 +398,6 @@ struct rule {
 
     /* Must hold 'mutex' for both read/write, 'ofproto_mutex' not needed. */
     long long int modified OVS_GUARDED; /* Time of last modification. */
-
-    /* XXX: Currently updated by provider without protection. */
-    long long int used OVS_GUARDED; /* Last use; time created if never used. */
 };
 
 void ofproto_rule_ref(struct rule *);
@@ -1287,7 +1284,7 @@ struct ofproto_class {
      * in '*byte_count'.  UINT64_MAX indicates that the packet count or byte
      * count is unknown. */
     void (*rule_get_stats)(struct rule *rule, uint64_t *packet_count,
-                           uint64_t *byte_count)
+                           uint64_t *byte_count, long long int *used)
         /* OVS_EXCLUDED(ofproto_mutex) */;
 
     /* Applies the actions in 'rule' to 'packet'.  (This implements sending
