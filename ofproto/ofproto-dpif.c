@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -7156,6 +7156,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     struct flow orig_flow;
     struct xlate_ctx ctx;
     size_t ofpacts_len;
+    bool is_icmp;
 
     COVERAGE_INC(ofproto_dpif_xlate);
 
@@ -7196,6 +7197,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     memset(&wc->masks.skb_priority, 0xff, sizeof wc->masks.skb_priority);
     memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
     wc->masks.nw_frag |= FLOW_NW_FRAG_MASK;
+    is_icmp = is_icmpv4(&ctx.xin->flow) || is_icmpv6(&ctx.xin->flow);
 
     if (tnl_port_should_receive(&ctx.xin->flow)) {
         memset(&wc->masks.tunnel, 0xff, sizeof wc->masks.tunnel);
@@ -7332,6 +7334,21 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     memset(&ctx.xout->wc.masks.metadata, 0,
            sizeof ctx.xout->wc.masks.metadata);
     memset(&ctx.xout->wc.masks.regs, 0, sizeof ctx.xout->wc.masks.regs);
+
+    /* ICMPv4 and ICMPv6 have 8-bit "type" and "code" fields.  struct flow uses
+     * the low 8 bits of the 16-bit tp_src and tp_dst members to represent
+     * these fields.  The datapath interface, on the other hand, represents
+     * them with just 8 bits each.  This means that if the high 8 bits of the
+     * masks for these fields somehow become set, then they will get chopped
+     * off by a round trip through the datapath, and revalidation will spot
+     * that as an inconsistency and delete the flow.  Avoid the problem here by
+     * making sure that only the low 8 bits of either field can be unwildcarded
+     * for ICMP.
+     */
+    if (is_icmp) {
+        wc->masks.tp_src &= htons(UINT8_MAX);
+        wc->masks.tp_dst &= htons(UINT8_MAX);
+    }
 }
 
 /* Translates the 'ofpacts_len' bytes of "struct ofpact"s starting at 'ofpacts'
