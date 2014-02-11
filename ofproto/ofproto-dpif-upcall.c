@@ -1549,14 +1549,31 @@ revalidate_udumps(struct revalidator *revalidator, struct list *udumps)
 static void
 revalidator_sweep(struct revalidator *revalidator)
 {
+    struct dump_op ops[REVALIDATE_MAX_BATCH];
     struct udpif_key *ukey, *next;
+    size_t n_ops;
+
+    n_ops = 0;
 
     HMAP_FOR_EACH_SAFE (ukey, next, hmap_node, &revalidator->ukeys) {
         if (ukey->mark) {
             ukey->mark = false;
         } else {
-            ukey_delete(revalidator, ukey);
+            struct dump_op *op = &ops[n_ops++];
+
+            /* If we have previously seen a flow in the datapath, but didn't
+             * see it during the most recent dump, delete it. This allows us
+             * to clean up the ukey and keep the statistics consistent. */
+            dump_op_init(op, ukey->key, ukey->key_len, ukey, NULL);
+            if (n_ops == REVALIDATE_MAX_BATCH) {
+                push_dump_ops(revalidator, ops, n_ops);
+                n_ops = 0;
+            }
         }
+    }
+
+    if (n_ops) {
+        push_dump_ops(revalidator, ops, n_ops);
     }
 }
 
