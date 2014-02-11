@@ -1019,20 +1019,6 @@ mf_is_mask_valid(const struct mf_field *mf, const union mf_value *mask)
     OVS_NOT_REACHED();
 }
 
-static bool
-is_icmpv4(const struct flow *flow)
-{
-    return (flow->dl_type == htons(ETH_TYPE_IP)
-            && flow->nw_proto == IPPROTO_ICMP);
-}
-
-static bool
-is_icmpv6(const struct flow *flow)
-{
-    return (flow->dl_type == htons(ETH_TYPE_IPV6)
-            && flow->nw_proto == IPPROTO_ICMPV6);
-}
-
 /* Returns true if 'flow' meets the prerequisites for 'mf', false otherwise. */
 bool
 mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow)

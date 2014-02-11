@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -625,6 +625,18 @@ static inline bool dl_type_is_ip_any(ovs_be16 dl_type)
 static inline bool is_ip_any(const struct flow *flow)
 {
     return dl_type_is_ip_any(flow->dl_type);
+}
+
+static inline bool is_icmpv4(const struct flow *flow)
+{
+    return (flow->dl_type == htons(ETH_TYPE_IP)
+            && flow->nw_proto == IPPROTO_ICMP);
+}
+
+static inline bool is_icmpv6(const struct flow *flow)
+{
+    return (flow->dl_type == htons(ETH_TYPE_IPV6)
+            && flow->nw_proto == IPPROTO_ICMPV6);
 }
 
 void format_ipv6_addr(char *addr_str, const struct in6_addr *addr);
