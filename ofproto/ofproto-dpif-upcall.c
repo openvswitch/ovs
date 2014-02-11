@@ -1461,12 +1461,17 @@ push_dump_ops(struct revalidator *revalidator,
     }
 
     for (i = 0; i < n_ops; i++) {
-        struct udpif_key *ukey = ops[i].ukey;
+        struct udpif_key *ukey;
 
-        /* Look up the ukey to prevent double-free in case 'ops' contains a
-         * given ukey more than once (which can happen if the datapath dumps a
-         * given flow more than once). */
-        ukey = ukey_lookup(revalidator, ops[i].udump);
+        /* If there's a udump, this ukey came directly from a datapath flow
+         * dump.  Sometimes a datapath can send duplicates in flow dumps, in
+         * which case we wouldn't want to double-free a ukey, so avoid that by
+         * looking up the ukey again.
+         *
+         * If there's no udump then we know what we're doing. */
+        ukey = (ops[i].udump
+                ? ukey_lookup(revalidator, ops[i].udump)
+                : ops[i].ukey);
         if (ukey) {
             ukey_delete(revalidator, ukey);
         }
@@ -1543,14 +1548,31 @@ revalidate_udumps(struct revalidator *revalidator, struct list *udumps)
 static void
 revalidator_sweep(struct revalidator *revalidator)
 {
+    struct dump_op ops[REVALIDATE_MAX_BATCH];
     struct udpif_key *ukey, *next;
+    size_t n_ops;
+
+    n_ops = 0;
 
     HMAP_FOR_EACH_SAFE (ukey, next, hmap_node, &revalidator->ukeys) {
         if (ukey->mark) {
             ukey->mark = false;
         } else {
-            ukey_delete(revalidator, ukey);
+            struct dump_op *op = &ops[n_ops++];
+
+            /* If we have previously seen a flow in the datapath, but didn't
+             * see it during the most recent dump, delete it. This allows us
+             * to clean up the ukey and keep the statistics consistent. */
+            dump_op_init(op, ukey->key, ukey->key_len, ukey, NULL);
+            if (n_ops == REVALIDATE_MAX_BATCH) {
+                push_dump_ops(revalidator, ops, n_ops);
+                n_ops = 0;
+            }
         }
+    }
+
+    if (n_ops) {
+        push_dump_ops(revalidator, ops, n_ops);
     }
 }
 
