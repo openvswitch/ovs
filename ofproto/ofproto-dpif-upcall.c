@@ -461,16 +461,16 @@ classify_upcall(const struct upcall *upcall)
     }
     memset(&cookie, 0, sizeof cookie);
     memcpy(&cookie, nl_attr_get(dpif_upcall->userdata), userdata_len);
-    if (userdata_len == sizeof cookie.sflow
+    if (userdata_len == MAX(8, sizeof cookie.sflow)
         && cookie.type == USER_ACTION_COOKIE_SFLOW) {
         return SFLOW_UPCALL;
-    } else if (userdata_len == sizeof cookie.slow_path
+    } else if (userdata_len == MAX(8, sizeof cookie.slow_path)
                && cookie.type == USER_ACTION_COOKIE_SLOW_PATH) {
         return MISS_UPCALL;
-    } else if (userdata_len == sizeof cookie.flow_sample
+    } else if (userdata_len == MAX(8, sizeof cookie.flow_sample)
                && cookie.type == USER_ACTION_COOKIE_FLOW_SAMPLE) {
         return FLOW_SAMPLE_UPCALL;
-    } else if (userdata_len == sizeof cookie.ipfix
+    } else if (userdata_len == MAX(8, sizeof cookie.ipfix)
                && cookie.type == USER_ACTION_COOKIE_IPFIX) {
         return IPFIX_UPCALL;
     } else {
