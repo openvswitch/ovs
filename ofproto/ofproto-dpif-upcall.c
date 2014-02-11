@@ -1268,6 +1268,22 @@ ukey_lookup(struct revalidator *revalidator, struct udpif_flow_dump *udump)
     return NULL;
 }
 
+static struct udpif_key *
+ukey_create(const struct nlattr *key, size_t key_len, long long int used)
+{
+    struct udpif_key *ukey = xmalloc(sizeof *ukey);
+
+    ukey->key = (struct nlattr *) &ukey->key_buf;
+    memcpy(&ukey->key_buf, key, key_len);
+    ukey->key_len = key_len;
+
+    ukey->mark = false;
+    ukey->created = used ? used : time_msec();
+    memset(&ukey->stats, 0, sizeof ukey->stats);
+
+    return ukey;
+}
+
 static void
 ukey_delete(struct revalidator *revalidator, struct udpif_key *ukey)
 {
@@ -1376,22 +1392,101 @@ exit:
     return ok;
 }
 
+struct dump_op {
+    struct udpif_key *ukey;
+    struct udpif_flow_dump *udump;
+    struct dpif_flow_stats stats; /* Stats for 'op'. */
+    struct dpif_op op;            /* Flow del operation. */
+};
+
+static void
+dump_op_init(struct dump_op *op, const struct nlattr *key, size_t key_len,
+             struct udpif_key *ukey, struct udpif_flow_dump *udump)
+{
+    op->ukey = ukey;
+    op->udump = udump;
+    op->op.type = DPIF_OP_FLOW_DEL;
+    op->op.u.flow_del.key = key;
+    op->op.u.flow_del.key_len = key_len;
+    op->op.u.flow_del.stats = &op->stats;
+}
+
+static void
+push_dump_ops(struct revalidator *revalidator,
+              struct dump_op *ops, size_t n_ops)
+{
+    struct udpif *udpif = revalidator->udpif;
+    struct dpif_op *opsp[REVALIDATE_MAX_BATCH];
+    size_t i;
+
+    ovs_assert(n_ops <= REVALIDATE_MAX_BATCH);
+    for (i = 0; i < n_ops; i++) {
+        opsp[i] = &ops[i].op;
+    }
+    dpif_operate(udpif->dpif, opsp, n_ops);
+
+    for (i = 0; i < n_ops; i++) {
+        struct dump_op *op = &ops[i];
+        struct dpif_flow_stats *push, *stats, push_buf;
+
+        stats = op->op.u.flow_del.stats;
+        if (op->ukey) {
+            push = &push_buf;
+            push->used = MAX(stats->used, op->ukey->stats.used);
+            push->tcp_flags = stats->tcp_flags | op->ukey->stats.tcp_flags;
+            push->n_packets = stats->n_packets - op->ukey->stats.n_packets;
+            push->n_bytes = stats->n_bytes - op->ukey->stats.n_bytes;
+        } else {
+            push = stats;
+        }
+
+        if (push->n_packets || netflow_exists()) {
+            struct ofproto_dpif *ofproto;
+            struct netflow *netflow;
+            struct flow flow;
+
+            if (!xlate_receive(udpif->backer, NULL, op->op.u.flow_del.key,
+                               op->op.u.flow_del.key_len, &flow, &ofproto,
+                               NULL, NULL, &netflow, NULL)) {
+                struct xlate_in xin;
+
+                xlate_in_init(&xin, ofproto, &flow, NULL, push->tcp_flags,
+                              NULL);
+                xin.resubmit_stats = push->n_packets ? push : NULL;
+                xin.may_learn = push->n_packets > 0;
+                xin.skip_wildcards = true;
+                xlate_actions_for_side_effects(&xin);
+
+                if (netflow) {
+                    netflow_expire(netflow, &flow);
+                    netflow_flow_clear(netflow, &flow);
+                    netflow_unref(netflow);
+                }
+            }
+        }
+    }
+
+    for (i = 0; i < n_ops; i++) {
+        struct udpif_key *ukey = ops[i].ukey;
+
+        /* Look up the ukey to prevent double-free in case 'ops' contains a
+         * given ukey more than once (which can happen if the datapath dumps a
+         * given flow more than once). */
+        ukey = ukey_lookup(revalidator, ops[i].udump);
+        if (ukey) {
+            ukey_delete(revalidator, ukey);
+        }
+    }
+}
+
 static void
 revalidate_udumps(struct revalidator *revalidator, struct list *udumps)
 {
     struct udpif *udpif = revalidator->udpif;
 
-    struct dump_op {
-        struct udpif_key *ukey;
-        struct udpif_flow_dump *udump;
-        struct dpif_flow_stats stats; /* Stats for 'op'. */
-        struct dpif_op op;            /* Flow del operation. */
-    };
-
     struct dump_op ops[REVALIDATE_MAX_BATCH];
-    struct dpif_op *opsp[REVALIDATE_MAX_BATCH];
     struct udpif_flow_dump *udump, *next_udump;
-    size_t n_ops, i, n_flows;
+    size_t n_ops, n_flows;
     unsigned int flow_limit;
     long long int max_idle;
     bool must_del;
@@ -1422,30 +1517,13 @@ revalidate_udumps(struct revalidator *revalidator, struct list *udumps)
 
         if (must_del || (used && used < now - max_idle)) {
             struct dump_op *dop = &ops[n_ops++];
-            struct dpif_op *op = &dop->op;
 
-            dop->ukey = ukey;
-            dop->udump = udump;
-            op->type = DPIF_OP_FLOW_DEL;
-            op->u.flow_del.key = udump->key;
-            op->u.flow_del.key_len = udump->key_len;
-            op->u.flow_del.stats = &ops[n_ops].stats;
-
+            dump_op_init(dop, udump->key, udump->key_len, ukey, udump);
             continue;
         }
 
         if (!ukey) {
-            ukey = xmalloc(sizeof *ukey);
-
-            ukey->key = (struct nlattr *) &ukey->key_buf;
-            memcpy(ukey->key, udump->key, udump->key_len);
-            ukey->key_len = udump->key_len;
-
-            ukey->created = used ? used : now;
-            memset(&ukey->stats, 0, sizeof ukey->stats);
-
-            ukey->mark = false;
-
+            ukey = ukey_create(udump->key, udump->key_len, used);
             hmap_insert(&revalidator->ukeys, &ukey->hmap_node,
                         udump->key_hash);
         }
@@ -1460,57 +1538,7 @@ revalidate_udumps(struct revalidator *revalidator, struct list *udumps)
         free(udump);
     }
 
-    for (i = 0; i < n_ops; i++) {
-        opsp[i] = &ops[i].op;
-    }
-    dpif_operate(udpif->dpif, opsp, n_ops);
-
-    for (i = 0; i < n_ops; i++) {
-        struct dpif_flow_stats push, *stats, *ukey_stats;
-
-        ukey_stats = &ops[i].ukey->stats;
-        stats = ops[i].op.u.flow_del.stats;
-        push.used = MAX(stats->used, ukey_stats->used);
-        push.tcp_flags = stats->tcp_flags | ukey_stats->tcp_flags;
-        push.n_packets = stats->n_packets - ukey_stats->n_packets;
-        push.n_bytes = stats->n_bytes - ukey_stats->n_bytes;
-
-        if (push.n_packets || netflow_exists()) {
-            struct ofproto_dpif *ofproto;
-            struct netflow *netflow;
-            struct flow flow;
-
-            if (!xlate_receive(udpif->backer, NULL, ops[i].op.u.flow_del.key,
-                               ops[i].op.u.flow_del.key_len, &flow,
-                               &ofproto, NULL, NULL, &netflow, NULL)) {
-                struct xlate_in xin;
-
-                xlate_in_init(&xin, ofproto, &flow, NULL, push.tcp_flags,
-                              NULL);
-                xin.resubmit_stats = push.n_packets ? &push : NULL;
-                xin.may_learn = push.n_packets > 0;
-                xin.skip_wildcards = true;
-                xlate_actions_for_side_effects(&xin);
-
-                if (netflow) {
-                    netflow_expire(netflow, &flow);
-                    netflow_flow_clear(netflow, &flow);
-                    netflow_unref(netflow);
-                }
-            }
-        }
-    }
-
-    for (i = 0; i < n_ops; i++) {
-        struct udpif_key *ukey = ops[i].ukey;
-
-        /* Look up the ukey to prevent double-free if the datapath dumps the
-         * same flow twice. */
-        ukey = ukey_lookup(revalidator, ops[i].udump);
-        if (ukey) {
-            ukey_delete(revalidator, ukey);
-        }
-    }
+    push_dump_ops(revalidator, ops, n_ops);
 
     LIST_FOR_EACH_SAFE (udump, next_udump, list_node, udumps) {
         list_remove(&udump->list_node);
