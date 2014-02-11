@@ -230,6 +230,7 @@ static void *udpif_revalidator(void *);
 static uint64_t udpif_get_n_flows(struct udpif *);
 static void revalidate_udumps(struct revalidator *, struct list *udumps);
 static void revalidator_sweep(struct revalidator *);
+static void revalidator_purge(struct revalidator *);
 static void upcall_unixctl_show(struct unixctl_conn *conn, int argc,
                                 const char *argv[], void *aux);
 static void upcall_unixctl_disable_megaflows(struct unixctl_conn *, int argc,
@@ -325,7 +326,6 @@ udpif_set_threads(struct udpif *udpif, size_t n_handlers,
         for (i = 0; i < udpif->n_revalidators; i++) {
             struct revalidator *revalidator = &udpif->revalidators[i];
             struct udpif_flow_dump *udump, *next_udump;
-            struct udpif_key *ukey, *next_ukey;
 
             LIST_FOR_EACH_SAFE (udump, next_udump, list_node,
                                 &revalidator->udumps) {
@@ -333,10 +333,9 @@ udpif_set_threads(struct udpif *udpif, size_t n_handlers,
                 free(udump);
             }
 
-            HMAP_FOR_EACH_SAFE (ukey, next_ukey, hmap_node,
-                                &revalidator->ukeys) {
-                ukey_delete(revalidator, ukey);
-            }
+            /* Delete ukeys, and delete all flows from the datapath to prevent
+             * double-counting stats. */
+            revalidator_purge(revalidator);
             hmap_destroy(&revalidator->ukeys);
             ovs_mutex_destroy(&revalidator->mutex);
 
@@ -1546,7 +1545,7 @@ revalidate_udumps(struct revalidator *revalidator, struct list *udumps)
 }
 
 static void
-revalidator_sweep(struct revalidator *revalidator)
+revalidator_sweep__(struct revalidator *revalidator, bool purge)
 {
     struct dump_op ops[REVALIDATE_MAX_BATCH];
     struct udpif_key *ukey, *next;
@@ -1555,7 +1554,7 @@ revalidator_sweep(struct revalidator *revalidator)
     n_ops = 0;
 
     HMAP_FOR_EACH_SAFE (ukey, next, hmap_node, &revalidator->ukeys) {
-        if (ukey->mark) {
+        if (!purge && ukey->mark) {
             ukey->mark = false;
         } else {
             struct dump_op *op = &ops[n_ops++];
@@ -1574,6 +1573,18 @@ revalidator_sweep(struct revalidator *revalidator)
     if (n_ops) {
         push_dump_ops(revalidator, ops, n_ops);
     }
+}
+
+static void
+revalidator_sweep(struct revalidator *revalidator)
+{
+    revalidator_sweep__(revalidator, false);
+}
+
+static void
+revalidator_purge(struct revalidator *revalidator)
+{
+    revalidator_sweep__(revalidator, true);
 }
 
 static void
