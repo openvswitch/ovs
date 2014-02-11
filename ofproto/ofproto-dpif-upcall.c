@@ -1375,12 +1375,14 @@ revalidate_udumps(struct revalidator *revalidator, struct list *udumps)
 {
     struct udpif *udpif = revalidator->udpif;
 
-    struct {
-        struct dpif_flow_stats ukey_stats;    /* Stats stored in the ukey. */
-        struct dpif_flow_stats stats;         /* Stats for 'op'. */
-        struct dpif_op op;                    /* Flow del operation. */
-    } ops[REVALIDATE_MAX_BATCH];
+    struct dump_op {
+        struct udpif_key *ukey;
+        struct udpif_flow_dump *udump;
+        struct dpif_flow_stats stats; /* Stats for 'op'. */
+        struct dpif_op op;            /* Flow del operation. */
+    };
 
+    struct dump_op ops[REVALIDATE_MAX_BATCH];
     struct dpif_op *opsp[REVALIDATE_MAX_BATCH];
     struct udpif_flow_dump *udump, *next_udump;
     size_t n_ops, i, n_flows;
@@ -1413,21 +1415,15 @@ revalidate_udumps(struct revalidator *revalidator, struct list *udumps)
         }
 
         if (must_del || (used && used < now - max_idle)) {
-            struct dpif_flow_stats *ukey_stats = &ops[n_ops].ukey_stats;
-            struct dpif_op *op = &ops[n_ops].op;
+            struct dump_op *dop = &ops[n_ops++];
+            struct dpif_op *op = &dop->op;
 
+            dop->ukey = ukey;
+            dop->udump = udump;
             op->type = DPIF_OP_FLOW_DEL;
             op->u.flow_del.key = udump->key;
             op->u.flow_del.key_len = udump->key_len;
             op->u.flow_del.stats = &ops[n_ops].stats;
-            n_ops++;
-
-            if (ukey) {
-                *ukey_stats = ukey->stats;
-                ukey_delete(revalidator, ukey);
-            } else {
-                memset(ukey_stats, 0, sizeof *ukey_stats);
-            }
 
             continue;
         }
@@ -1466,7 +1462,7 @@ revalidate_udumps(struct revalidator *revalidator, struct list *udumps)
     for (i = 0; i < n_ops; i++) {
         struct dpif_flow_stats push, *stats, *ukey_stats;
 
-        ukey_stats  = &ops[i].ukey_stats;
+        ukey_stats = &ops[i].ukey->stats;
         stats = ops[i].op.u.flow_del.stats;
         push.used = MAX(stats->used, ukey_stats->used);
         push.tcp_flags = stats->tcp_flags | ukey_stats->tcp_flags;
@@ -1496,6 +1492,17 @@ revalidate_udumps(struct revalidator *revalidator, struct list *udumps)
                     netflow_unref(netflow);
                 }
             }
+        }
+    }
+
+    for (i = 0; i < n_ops; i++) {
+        struct udpif_key *ukey = ops[i].ukey;
+
+        /* Look up the ukey to prevent double-free if the datapath dumps the
+         * same flow twice. */
+        ukey = ukey_lookup(revalidator, ops[i].udump);
+        if (ukey) {
+            ukey_delete(revalidator, ukey);
         }
     }
 
