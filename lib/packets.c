@@ -218,7 +218,7 @@ eth_pop_vlan(struct ofpbuf *packet)
 }
 
 /* Set ethertype of the packet. */
-void
+static void
 set_ethertype(struct ofpbuf *packet, ovs_be16 eth_type)
 {
     struct eth_header *eh = packet->data;

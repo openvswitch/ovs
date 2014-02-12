@@ -154,8 +154,6 @@ void compose_rarp(struct ofpbuf *, const uint8_t eth_src[ETH_ADDR_LEN]);
 void eth_push_vlan(struct ofpbuf *, ovs_be16 tpid, ovs_be16 tci);
 void eth_pop_vlan(struct ofpbuf *);
 
-void set_ethertype(struct ofpbuf *packet, ovs_be16 eth_type);
-
 const char *eth_from_hex(const char *hex, struct ofpbuf **packetp);
 void eth_format_masked(const uint8_t eth[ETH_ADDR_LEN],
                        const uint8_t mask[ETH_ADDR_LEN], struct ds *s);
