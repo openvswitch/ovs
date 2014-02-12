@@ -329,9 +329,10 @@ push_mpls(struct ofpbuf *packet, ovs_be16 ethtype, ovs_be32 lse)
         return;
     }
 
+    set_ethertype(packet, ethtype);
+
     if (!is_mpls(packet)) {
-        /* Set ethtype and MPLS label stack entry. */
-        set_ethertype(packet, ethtype);
+        /* Set MPLS label stack entry. */
         packet->l2_5 = packet->l3;
     }
 
