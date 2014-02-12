@@ -1403,9 +1403,9 @@ A: Yes, OpenFlow requires a switch to ignore attempts to send a packet
    even be convenient, e.g. it is often the desired behavior in a flow
    that forwards a packet to several ports ("floods" the packet).
 
-   Sometimes one really needs to send a packet out its ingress port.
-   In this case, output to OFPP_IN_PORT, which in ovs-ofctl syntax is
-   expressed as just "in_port", e.g.:
+   Sometimes one really needs to send a packet out its ingress port
+   ("hairpin"). In this case, output to OFPP_IN_PORT, which in
+   ovs-ofctl syntax is expressed as just "in_port", e.g.:
 
        ovs-ofctl add-flow br0 in_port=2,actions=in_port
 
