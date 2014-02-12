@@ -1049,7 +1049,7 @@ construct(struct ofproto *ofproto_)
     ofproto->mbridge = mbridge_create();
     ofproto->has_bonded_bundles = false;
     ofproto->lacp_enabled = false;
-    ovs_mutex_init(&ofproto->stats_mutex);
+    ovs_mutex_init_adaptive(&ofproto->stats_mutex);
     ovs_mutex_init(&ofproto->vsp_mutex);
 
     guarded_list_init(&ofproto->pins);
@@ -3176,7 +3176,7 @@ rule_construct(struct rule *rule_)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
-    ovs_mutex_init(&rule->stats_mutex);
+    ovs_mutex_init_adaptive(&rule->stats_mutex);
     rule->packet_count = 0;
     rule->byte_count = 0;
     rule->used = rule->up.modified;
@@ -3291,7 +3291,7 @@ static enum ofperr
 group_construct(struct ofgroup *group_)
 {
     struct group_dpif *group = group_dpif_cast(group_);
-    ovs_mutex_init(&group->stats_mutex);
+    ovs_mutex_init_adaptive(&group->stats_mutex);
     ovs_mutex_lock(&group->stats_mutex);
     group_construct_stats(group);
     ovs_mutex_unlock(&group->stats_mutex);
