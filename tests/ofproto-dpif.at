@@ -1121,6 +1121,7 @@ ON_EXIT([kill `cat ovs-ofctl.pid`])
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_DATA([flows.txt], [dnl
 dl_src=40:44:44:44:00:00 actions=push_mpls:0x8847,controller
+dl_src=40:44:44:44:00:01,mpls actions=push_mpls:0x8847,controller
 ])
 AT_CHECK([ovs-ofctl --protocols=OpenFlow12 add-flows br0 flows.txt])
 
@@ -1153,6 +1154,38 @@ mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=40:44:44:44:00:00,dl_dst=50:54:
 00000010  01 40 45 00 00 28 00 00-00 00 40 06 f9 7c c0 a8
 00000020  00 01 c0 a8 00 02 00 00-00 00 00 00 00 00 00 00
 00000030  00 00 50 00 00 00 00 00-00 00 00 00 00 00 00 00
+])
+
+dnl In this test, we push an MPLS tag to an MPLS packet. The LSE should be
+dnl copied exactly, except for the BOS bit.
+AT_CHECK([ovs-ofctl --protocols=OpenFlow12 monitor br0 65534 -m -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=40:44:44:44:00:01,dst=50:54:00:00:00:07),eth_type(0x8847),mpls(label=10,tc=0,ttl=64,bos=1)'
+done
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+AT_CHECK([cat ofctl_monitor.log | ofctl_strip], [0], [dnl
+OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=40:44:44:44:00:01,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=0,mpls_lse1=41280
+00000000  50 54 00 00 00 07 40 44-44 44 00 01 88 47 00 00
+00000010  a0 40 00 00 a1 40 00 00-00 00 00 00 00 00 00 00
+00000020  00 00 00 00 00 00 00 00-00 00 00 00 00 00 00 00
+00000030  00 00 00 00 00 00 00 00-00 00 00 00 00 00 00 00
+dnl
+OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=40:44:44:44:00:01,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=0,mpls_lse1=41280
+00000000  50 54 00 00 00 07 40 44-44 44 00 01 88 47 00 00
+00000010  a0 40 00 00 a1 40 00 00-00 00 00 00 00 00 00 00
+00000020  00 00 00 00 00 00 00 00-00 00 00 00 00 00 00 00
+00000030  00 00 00 00 00 00 00 00-00 00 00 00 00 00 00 00
+dnl
+OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=40:44:44:44:00:01,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=0,mpls_lse1=41280
+00000000  50 54 00 00 00 07 40 44-44 44 00 01 88 47 00 00
+00000010  a0 40 00 00 a1 40 00 00-00 00 00 00 00 00 00 00
+00000020  00 00 00 00 00 00 00 00-00 00 00 00 00 00 00 00
+00000030  00 00 00 00 00 00 00 00-00 00 00 00 00 00 00 00
 ])
 
 OVS_VSWITCHD_STOP
