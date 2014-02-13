@@ -779,10 +779,14 @@ xreadlink(const char *filename)
  *
  *     - Only symlinks in the final component of 'filename' are dereferenced.
  *
+ * For Windows platform, this function returns a string that has the same
+ * value as the passed string.
+ *
  * The caller must eventually free the returned string (with free()). */
 char *
 follow_symlinks(const char *filename)
 {
+#ifndef _WIN32
     struct stat s;
     char *fn;
     int i;
@@ -827,6 +831,7 @@ follow_symlinks(const char *filename)
 
     VLOG_WARN("%s: too many levels of symlinks", filename);
     free(fn);
+#endif
     return xstrdup(filename);
 }
 
