@@ -55,6 +55,8 @@ DEFINE_STATIC_PER_THREAD_DATA(struct { char s[128]; },
                               strerror_buffer,
                               { "" });
 
+static char *xreadlink(const char *filename);
+
 void
 ovs_assert_failure(const char *where, const char *function,
                    const char *condition)
@@ -745,7 +747,7 @@ abs_file_name(const char *dir, const char *file_name)
 /* Like readlink(), but returns the link name as a null-terminated string in
  * allocated memory that the caller must eventually free (with free()).
  * Returns NULL on error, in which case errno is set appropriately. */
-char *
+static char *
 xreadlink(const char *filename)
 {
     size_t size;
