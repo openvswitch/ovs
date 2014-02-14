@@ -1,0 +1,134 @@
+#! /bin/sh
+
+run () {
+    echo "$@"
+    "$@" || exit 1
+}
+
+# Put built tools early in $PATH.
+builddir=`pwd`
+if test ! -e vswitchd/ovs-vswitchd; then
+    echo >&2 'not in build directory, please change directory or run via \"make check-ryu'
+    exit 1
+fi
+PATH=$builddir/ovsdb:$builddir/vswitchd:$builddir/utilities:$PATH; export PATH
+
+# Find srcdir.
+case $srcdir in
+    '') srcdir=$builddir ;;
+    /*) ;;
+    *) srcdir=`pwd`/$srcdir ;;
+esac
+if test ! -e "$srcdir"/WHY-OVS; then
+    echo >&2 'source directory not found, please set $srcdir or run via \"make check-ryu'
+    exit 1
+fi
+
+# Make sure ryu is available.
+if test X"$RYUDIR" = X; then
+    RYUDIR=$srcdir/../ryu
+fi
+PYTHONPATH=$RYUDIR:$PYTHONPATH; export PYTHONPATH
+PATH=$RYUDIR/bin:$PATH; export PATH
+if (ryu-manager --version) >/dev/null 2>&1; then
+    :
+else
+    echo >&2 '"ryu-manager" binary not found or cannot be run, please set $RYUDIR'
+    exit 1
+fi
+
+# Create sandbox.
+rm -rf sandbox
+mkdir sandbox
+cd sandbox
+sandbox=`pwd`
+
+# Set up environment for OVS programs to sandbox themselves.
+OVS_RUNDIR=$sandbox; export OVS_RUNDIR
+OVS_LOGDIR=$sandbox; export OVS_LOGDIR
+OVS_DBDIR=$sandbox; export OVS_DBDIR
+OVS_SYSCONFDIR=$sandbox; export OVS_SYSCONFDIR
+
+for signal in 0 1 2 3 13 14 15; do
+    trap 'kill `cat $sandbox/*.pid`; trap - $signal; kill -$signal $$' $signal
+done
+
+# Create database and start ovsdb-server.
+touch .conf.db.~lock~
+rm -f conf.db
+run ovsdb-tool create conf.db "$srcdir"/vswitchd/vswitch.ovsschema
+run ovsdb-server --detach --no-chdir --pidfile -vconsole:off --log-file \
+    --remote=punix:"$sandbox"/db.sock
+
+# Start ovs-vswitchd.
+run ovs-vswitchd --detach --no-chdir --pidfile -vconsole:off --log-file \
+    --enable-dummy --disable-system -vvconn -vnetdev_dummy
+
+# Add bridges for Ryu to use, and configure them to connect to Ryu.
+for config in \
+    'br0 0000000000000001 a c b d' \
+    'br1 0000000000000002 c a d b'
+do
+    set $config
+    bridge=$1 dpid=$2 port1=$3 peer1=$4 port2=$5 peer2=$6
+    run ovs-vsctl --no-wait \
+        -- add-br $bridge \
+        -- set bridge $bridge \
+               datapath-type=dummy fail-mode=secure \
+               protocols='[OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13]' \
+               other-config:datapath-id=$dpid \
+        -- set-controller $bridge tcp:127.0.0.1:6633 \
+        -- set controller $bridge connection-mode=out-of-band \
+                                  max-backoff=1000 \
+        -- add-port $bridge $port1 \
+        -- set interface $port1 ofport_request=1 type=patch options:peer=$peer1 \
+        -- add-port $bridge $port2 \
+        -- set interface $port2 ofport_request=2 type=patch options:peer=$peer2
+done
+
+# Run Ryu.
+cd $RYUDIR
+logs=
+for app in \
+    ryu/tests/switch/tester.py \
+    ryu/tests/integrated/test_add_flow_v10.py \
+    ryu/tests/integrated/test_request_reply_v12.py \
+    ryu/tests/integrated/test_add_flow_v12_actions.py \
+    ryu/tests/integrated/test_add_flow_v12_matches.py
+do
+    cat <<EOF
+
+--- Running $app...
+
+EOF
+    logfile=$sandbox/`echo $app | sed 's,/,.,g'`.log
+    logs="$logs
+        $sandbox/$log.log"
+    ryu-manager "$app" --log-file="$logfile" & pid=$!
+    echo $pid > "$sandbox/ryu.pid"
+    i=0
+    while sleep 1; do
+        if grep -q -E 'TEST_FINISHED|Test end|uncaught exception' "$logfile" \
+                >/dev/null
+        then
+            break
+        fi
+
+        i=`expr $i + 1`
+        if test $i -ge 600; then
+            echo "--- TIMEOUT after $i seconds"
+            break
+        fi
+    done
+    kill $pid
+    wait
+done
+
+cat <<EOF
+
+----------------------------------------------------------------------
+Logs may be found under $sandbox, e.g.:$logs
+	$sandbox/ovs-vswitchd.log
+	$sandbox/ovsdb-server.log
+----------------------------------------------------------------------
+EOF

@@ -154,6 +154,11 @@ check-valgrind: all tests/atconfig tests/atlocal $(TESTSUITE) \
 check-oftest: all
 	srcdir='$(srcdir)' $(SHELL) $(srcdir)/tests/run-oftest
 EXTRA_DIST += tests/run-oftest
+
+# Ryu support.
+check-ryu: all
+	srcdir='$(srcdir)' $(SHELL) $(srcdir)/tests/run-ryu
+EXTRA_DIST += tests/run-ryu
 
 clean-local:
 	test ! -f '$(TESTSUITE)' || $(SHELL) '$(TESTSUITE)' -C tests --clean

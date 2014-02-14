@@ -73,8 +73,6 @@ EXTRA_DIST = \
 	NOTICE \
 	OPENFLOW-1.1+ \
 	PORTING \
-	README-OFTest \
-	README-gcov \
 	README-lisp \
 	REPORTING-BUGS \
 	SubmittingPatches \

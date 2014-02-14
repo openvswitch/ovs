@@ -2,6 +2,8 @@ Post-v2.1.0
 ---------------------
    - The "ovsdbmonitor" graphical tool has been removed, because it was
      poorly maintained and not widely used.
+   - New "check-ryu" Makefile target for running Ryu tests for OpenFlow
+     controllers against Open vSwitch.  See INSTALL for details.
 
 v2.1.0 - xx xxx xxxx
 ---------------------
