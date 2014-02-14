@@ -97,11 +97,7 @@ EOF
 
     -l*)
         lib=`echo "$1" | sed 's/-l//'`
-    if [ $lib != "dnsapi" -a $lib != "ws2_32" -a $lib != "wsock32" ]; then
-      lib="lib$lib.lib"
-    else
-      lib="$lib.lib"
-    fi
+        lib="$lib.lib"
 
         clopt="$clopt $lib"
         linkopt="$linkopt $lib"
