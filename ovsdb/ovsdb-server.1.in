@@ -88,6 +88,8 @@ otherwise, it exits with exit code 1.
 This option can be useful where a database server is needed only to
 run a single command, e.g.:
 .B "ovsdb\-server \-\-remote=punix:socket \-\-run='ovsdb\-client dump unix:socket Open_vSwitch'"
+.IP
+This option is not supported on Windows platform.
 .SS "Daemon Options"
 .ds DD \
 \fBovsdb\-server\fR detaches only after it starts listening on all \

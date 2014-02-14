@@ -1172,7 +1172,9 @@ parse_options(int *argcp, char **argvp[],
     static const struct option long_options[] = {
         {"remote",      required_argument, NULL, OPT_REMOTE},
         {"unixctl",     required_argument, NULL, OPT_UNIXCTL},
+#ifndef _WIN32
         {"run",         required_argument, NULL, OPT_RUN},
+#endif
         {"help",        no_argument, NULL, 'h'},
         {"version",     no_argument, NULL, 'V'},
         DAEMON_LONG_OPTIONS,
