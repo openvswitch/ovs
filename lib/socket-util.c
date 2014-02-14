@@ -65,13 +65,6 @@ VLOG_DEFINE_THIS_MODULE(socket_util);
  * space for a null terminator. */
 #define MAX_UN_LEN (sizeof(((struct sockaddr_un *) 0)->sun_path) - 1)
 
-#ifdef _WIN32
-/* Buffer used by sock_strerror(). */
-DEFINE_STATIC_PER_THREAD_DATA(struct { char s[128]; },
-                              sockerror_buffer,
-                              { "" });
-#endif
-
 static int getsockopt_int(int fd, int level, int option, const char *optname,
                           int *valuep);
 
@@ -1355,21 +1348,15 @@ ss_length(const struct sockaddr_storage *ss)
 
 /* For Windows socket calls, 'errno' is not set.  One has to call
  * WSAGetLastError() to get the error number and then pass it to
- * FormatMessage() (through this function) to get the correct error string.
-
+ * this function to get the correct error string.
+ *
  * ovs_strerror() calls strerror_r() and would not get the correct error
  * string for Windows sockets, but is good for POSIX. */
 const char *
 sock_strerror(int error)
 {
 #ifdef _WIN32
-    enum { BUFSIZE = sizeof sockerror_buffer_get()->s };
-    char *buffer = sockerror_buffer_get()->s;
-
-    FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM
-                  | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, error, 0,
-                  buffer, BUFSIZE, NULL);
-    return buffer;
+    return ovs_format_message(error);
 #else
     return ovs_strerror(error);
 #endif

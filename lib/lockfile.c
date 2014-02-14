@@ -285,9 +285,7 @@ lockfile_try_lock_windows(const char *name, pid_t *pidp,
     retval = LockFileEx(lock_handle, LOCKFILE_EXCLUSIVE_LOCK
                         | LOCKFILE_FAIL_IMMEDIATELY, 0, 1, 0, &overl);
     if (!retval) {
-        char *msg_buf = ovs_lasterror_to_string();
-        VLOG_WARN("Failed to lock file : %s", msg_buf);
-        LocalFree(msg_buf);
+        VLOG_WARN("Failed to lock file : %s", ovs_lasterror_to_string());
         return EEXIST;
     }
 

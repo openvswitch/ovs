@@ -60,10 +60,8 @@ get_entropy(void *buffer, size_t n)
     CryptAcquireContext(&crypt_prov, NULL, NULL,
                         PROV_RSA_FULL, CRYPT_VERIFYCONTEXT);
     if (!CryptGenRandom(crypt_prov, n, buffer)) {
-        char *msg_buf = ovs_lasterror_to_string();
+        VLOG_ERR("CryptGenRandom: read error (%s)", ovs_lasterror_to_string());
         error = EINVAL;
-        VLOG_ERR("CryptGenRandom: read error (%s)", msg_buf);
-        LocalFree(msg_buf);
     }
 
     CryptReleaseContext(crypt_prov, 0);

@@ -491,6 +491,7 @@ uint64_t bitwise_get(const void *src, unsigned int src_len,
 
 #ifdef _WIN32
 
+char *ovs_format_message(int error);
 char *ovs_lasterror_to_string(void);
 #endif
 

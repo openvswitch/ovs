@@ -50,7 +50,7 @@ DEFINE_PER_THREAD_MALLOCED_DATA(char *, subprogram_name);
 /* --version option output. */
 static char *program_version;
 
-/* Buffer used by ovs_strerror(). */
+/* Buffer used by ovs_strerror() and ovs_format_message(). */
 DEFINE_STATIC_PER_THREAD_DATA(struct { char s[128]; },
                               strerror_buffer,
                               { "" });
@@ -1666,17 +1666,22 @@ exit:
 
 #ifdef _WIN32
 
-/* Calls FormatMessage() with GetLastError() as an argument. Returns
- * pointer to a buffer that receives the null-terminated string that specifies
- * the formatted message and that has to be freed by the caller with
- * LocalFree(). */
+char *
+ovs_format_message(int error)
+{
+    enum { BUFSIZE = sizeof strerror_buffer_get()->s };
+    char *buffer = strerror_buffer_get()->s;
+
+    FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                  NULL, error, 0, buffer, BUFSIZE, NULL);
+    return buffer;
+}
+
+/* Returns a null-terminated string that explains the last error.
+ * Use this function to get the error string for WINAPI calls. */
 char *
 ovs_lasterror_to_string(void)
 {
-    char *buffer;
-    FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM
-                  | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, GetLastError(), 0,
-                  (char *)&buffer, 0, NULL);
-    return buffer;
+    return ovs_format_message(GetLastError());
 }
 #endif
