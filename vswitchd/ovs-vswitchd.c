@@ -37,7 +37,6 @@
 #include "openflow/openflow.h"
 #include "ovsdb-idl.h"
 #include "poll-loop.h"
-#include "process.h"
 #include "signals.h"
 #include "simap.h"
 #include "stream-ssl.h"
@@ -77,7 +76,6 @@ main(int argc, char *argv[])
     remote = parse_options(argc, argv, &unixctl_path);
     signal(SIGPIPE, SIG_IGN);
     sighup = signal_register(SIGHUP);
-    process_init();
     ovsrec_init();
 
     daemonize_start();
