@@ -86,16 +86,10 @@ do
         -- set interface $port2 ofport_request=2 type=patch options:peer=$peer2
 done
 
-# Run Ryu.
-cd $RYUDIR
 logs=
-for app in \
-    ryu/tests/switch/tester.py \
-    ryu/tests/integrated/test_add_flow_v10.py \
-    ryu/tests/integrated/test_request_reply_v12.py \
-    ryu/tests/integrated/test_add_flow_v12_actions.py \
-    ryu/tests/integrated/test_add_flow_v12_matches.py
-do
+
+run_app() {
+    app=$1
     cat <<EOF
 
 --- Running $app...
@@ -122,6 +116,26 @@ EOF
     done
     kill $pid
     wait
+}
+
+# Run Ryu.
+cd $RYUDIR
+for app in \
+    ryu/tests/switch/tester.py
+do
+    run_app $app
+done
+
+# tweak OVS setup because the following tests assume single bridge.
+run ovs-vsctl -- del-br br1
+
+for app in \
+    ryu/tests/integrated/test_add_flow_v10.py \
+    ryu/tests/integrated/test_request_reply_v12.py \
+    ryu/tests/integrated/test_add_flow_v12_actions.py \
+    ryu/tests/integrated/test_add_flow_v12_matches.py
+do
+    run_app $app
 done
 
 cat <<EOF
