@@ -103,7 +103,7 @@ do
 EOF
     logfile=$sandbox/`echo $app | sed 's,/,.,g'`.log
     logs="$logs
-        $sandbox/$log.log"
+        $sandbox/$logfile.log"
     ryu-manager "$app" --log-file="$logfile" & pid=$!
     echo $pid > "$sandbox/ryu.pid"
     i=0
