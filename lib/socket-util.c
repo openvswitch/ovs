@@ -224,14 +224,19 @@ check_connection_completion(int fd)
 
     pfd.fd = fd;
     pfd.events = POLLOUT;
+
+#ifndef _WIN32
     do {
         retval = poll(&pfd, 1, 0);
     } while (retval < 0 && errno == EINTR);
+#else
+    retval = WSAPoll(&pfd, 1, 0);
+#endif
     if (retval == 1) {
         if (pfd.revents & POLLERR) {
-            ssize_t n = send(fd, "", 1, MSG_DONTWAIT);
+            ssize_t n = send(fd, "", 1, 0);
             if (n < 0) {
-                return errno;
+                return sock_errno();
             } else {
                 VLOG_ERR_RL(&rl, "poll return POLLERR but send succeeded");
                 return EPROTO;
@@ -239,7 +244,7 @@ check_connection_completion(int fd)
         }
         return 0;
     } else if (retval < 0) {
-        VLOG_ERR_RL(&rl, "poll: %s", ovs_strerror(errno));
+        VLOG_ERR_RL(&rl, "poll: %s", sock_strerror(sock_errno()));
         return errno;
     } else {
         return EAGAIN;
@@ -271,8 +276,7 @@ drain_rcvbuf(int fd)
          * On other Unix-like OSes, MSG_TRUNC has no effect in the flags
          * argument. */
         char buffer[LINUX_DATAPATH ? 1 : 2048];
-        ssize_t n_bytes = recv(fd, buffer, sizeof buffer,
-                               MSG_TRUNC | MSG_DONTWAIT);
+        ssize_t n_bytes = recv(fd, buffer, sizeof buffer, MSG_TRUNC);
         if (n_bytes <= 0 || n_bytes >= rcvbuf) {
             break;
         }
