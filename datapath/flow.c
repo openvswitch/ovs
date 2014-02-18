@@ -66,8 +66,9 @@ void ovs_flow_stats_update(struct sw_flow *flow, struct sk_buff *skb)
 {
 	struct flow_stats *stats;
 	__be16 tcp_flags = 0;
+	int node = numa_node_id();
 
-	stats = this_cpu_ptr(flow->stats);
+	stats = rcu_dereference(flow->stats[node]);
 
 	if ((flow->key.eth.type == htons(ETH_P_IP) ||
 	     flow->key.eth.type == htons(ETH_P_IPV6)) &&
@@ -77,88 +78,102 @@ void ovs_flow_stats_update(struct sw_flow *flow, struct sk_buff *skb)
 		tcp_flags = TCP_FLAGS_BE16(tcp_hdr(skb));
 	}
 
-	spin_lock(&stats->lock);
+	/* Check if already have node-specific stats. */
+	if (likely(stats)) {
+		spin_lock(&stats->lock);
+		/* Mark if we write on the pre-allocated stats. */
+		if (node == 0 && unlikely(flow->stats_last_writer != node))
+			flow->stats_last_writer = node;
+	} else {
+		stats = rcu_dereference(flow->stats[0]); /* Pre-allocated. */
+		spin_lock(&stats->lock);
+
+		/* If the current NUMA-node is the only writer on the
+		 * pre-allocated stats keep using them.
+		 */
+		if (unlikely(flow->stats_last_writer != node)) {
+			/* A previous locker may have already allocated the
+			 * stats, so we need to check again.  If node-specific
+			 * stats were already allocated, we update the pre-
+			 * allocated stats as we have already locked them.
+			 */
+			if (likely(flow->stats_last_writer != NUMA_NO_NODE)
+			    && likely(!rcu_dereference(flow->stats[node]))) {
+				/* Try to allocate node-specific stats. */
+				struct flow_stats *new_stats;
+
+				new_stats =
+					kmem_cache_alloc_node(flow_stats_cache,
+							      GFP_THISNODE |
+							      __GFP_NOMEMALLOC,
+							      node);
+				if (likely(new_stats)) {
+					new_stats->used = jiffies;
+					new_stats->packet_count = 1;
+					new_stats->byte_count = skb->len;
+					new_stats->tcp_flags = tcp_flags;
+					spin_lock_init(&new_stats->lock);
+
+					rcu_assign_pointer(flow->stats[node],
+							   new_stats);
+					goto unlock;
+				}
+			}
+			flow->stats_last_writer = node;
+		}
+	}
+
 	stats->used = jiffies;
 	stats->packet_count++;
 	stats->byte_count += skb->len;
 	stats->tcp_flags |= tcp_flags;
+unlock:
 	spin_unlock(&stats->lock);
-}
-
-static void stats_read(struct flow_stats *stats, bool lock_bh,
-		       struct ovs_flow_stats *ovs_stats,
-		       unsigned long *used, __be16 *tcp_flags)
-{
-	if (lock_bh)
-		spin_lock_bh(&stats->lock);
-	else
-		spin_lock(&stats->lock);
-
-	if (time_after(stats->used, *used))
-		*used = stats->used;
-	*tcp_flags |= stats->tcp_flags;
-	ovs_stats->n_packets += stats->packet_count;
-	ovs_stats->n_bytes += stats->byte_count;
-
-	if (lock_bh)
-		spin_unlock_bh(&stats->lock);
-	else
-		spin_unlock(&stats->lock);
 }
 
 void ovs_flow_stats_get(struct sw_flow *flow, struct ovs_flow_stats *ovs_stats,
 			unsigned long *used, __be16 *tcp_flags)
 {
-	int cpu, cur_cpu;
+	int node;
 
 	*used = 0;
 	*tcp_flags = 0;
 	memset(ovs_stats, 0, sizeof(*ovs_stats));
 
-	cur_cpu = get_cpu();
+	for_each_node(node) {
+		struct flow_stats *stats = rcu_dereference(flow->stats[node]);
 
-	for_each_possible_cpu(cpu) {
-		struct flow_stats *stats;
-		bool lock_bh;
-
-		stats = per_cpu_ptr(flow->stats, cpu);
-		lock_bh = (cpu == cur_cpu);
-		stats_read(stats, lock_bh, ovs_stats, used, tcp_flags);
+		if (stats) {
+			/* Local CPU may write on non-local stats, so we must
+			 * block bottom-halves here.
+			 */
+			spin_lock_bh(&stats->lock);
+			if (time_after(stats->used, *used))
+				*used = stats->used;
+			*tcp_flags |= stats->tcp_flags;
+			ovs_stats->n_packets += stats->packet_count;
+			ovs_stats->n_bytes += stats->byte_count;
+			spin_unlock_bh(&stats->lock);
+		}
 	}
-	put_cpu();
-}
-
-static void stats_reset(struct flow_stats *stats, bool lock_bh)
-{
-	if (lock_bh)
-		spin_lock_bh(&stats->lock);
-	else
-		spin_lock(&stats->lock);
-
-	stats->used = 0;
-	stats->packet_count = 0;
-	stats->byte_count = 0;
-	stats->tcp_flags = 0;
-
-	if (lock_bh)
-		spin_unlock_bh(&stats->lock);
-	else
-		spin_unlock(&stats->lock);
 }
 
 void ovs_flow_stats_clear(struct sw_flow *flow)
 {
-	int cpu, cur_cpu;
+	int node;
 
-	cur_cpu = get_cpu();
+	for_each_node(node) {
+		struct flow_stats *stats = rcu_dereference(flow->stats[node]);
 
-	for_each_possible_cpu(cpu) {
-		bool lock_bh;
-
-		lock_bh = (cpu == cur_cpu);
-		stats_reset(per_cpu_ptr(flow->stats, cpu), lock_bh);
+		if (stats) {
+			spin_lock_bh(&stats->lock);
+			stats->used = 0;
+			stats->packet_count = 0;
+			stats->byte_count = 0;
+			stats->tcp_flags = 0;
+			spin_unlock_bh(&stats->lock);
+		}
 	}
-	put_cpu();
 }
 
 static int check_header(struct sk_buff *skb, int len)
