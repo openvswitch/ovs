@@ -810,7 +810,7 @@ exit:
             memset(ssp, 0, sizeof *ssp);
         }
         if (fd >= 0) {
-            close(fd);
+            closesocket(fd);
             fd = -1;
         }
     } else {
@@ -958,7 +958,7 @@ error:
     if (ssp) {
         memset(ssp, 0, sizeof *ssp);
     }
-    close(fd);
+    closesocket(fd);
     return -error;
 }
 

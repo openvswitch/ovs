@@ -111,4 +111,8 @@ static inline int sock_errno(void)
 #endif
 }
 
+#ifndef _WIN32
+#define closesocket close
+#endif
+
 #endif /* socket-util.h */

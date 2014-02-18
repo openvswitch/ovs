@@ -60,8 +60,6 @@
  * compiled with /MD is not tested. */
 #include <openssl/applink.c>
 #define SHUT_RDWR SD_BOTH
-#else
-#define closesocket close
 #endif
 
 VLOG_DEFINE_THIS_MODULE(stream_ssl);
