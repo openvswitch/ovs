@@ -394,6 +394,14 @@ ovsdb_idl_has_ever_connected(const struct ovsdb_idl *idl)
     return ovsdb_idl_get_seqno(idl) != 0;
 }
 
+/* Reconfigures 'idl' so that it would reconnect to the database, if
+ * connection was dropped. */
+void
+ovsdb_idl_enable_reconnect(struct ovsdb_idl *idl)
+{
+    jsonrpc_session_enable_reconnect(idl->session);
+}
+
 /* Forces 'idl' to drop its connection to the database and reconnect.  In the
  * meantime, the contents of 'idl' will not change. */
 void

@@ -4123,6 +4123,11 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
     free(commands);
 
     if (wait_for_reload && status != TXN_UNCHANGED) {
+        /* Even, if --retry flag was not specified, ovs-vsctl still
+         * has to retry to establish OVSDB connection, if wait_for_reload
+         * was set.  Otherwise, ovs-vsctl would end up waiting forever
+         * until cur_cfg would be updated. */
+        ovsdb_idl_enable_reconnect(idl);
         for (;;) {
             ovsdb_idl_run(idl);
             OVSREC_OPEN_VSWITCH_FOR_EACH (ovs, idl) {
