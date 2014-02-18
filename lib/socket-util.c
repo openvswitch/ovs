@@ -243,13 +243,15 @@ lookup_hostname(const char *host_name, struct in_addr *addr)
     case EAI_MEMORY:
         return ENOMEM;
 
-#ifdef EAI_NODATA
+#if defined (EAI_NODATA) && EAI_NODATA != EAI_NONAME
     case EAI_NODATA:
         return ENXIO;
 #endif
 
+#ifdef EAI_SYSTEM
     case EAI_SYSTEM:
         return sock_errno();
+#endif
 
     default:
         return EPROTO;
