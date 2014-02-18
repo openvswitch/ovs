@@ -73,6 +73,7 @@ static int getsockopt_int(int fd, int level, int option, const char *optname,
 int
 set_nonblocking(int fd)
 {
+#ifndef _WIN32
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags != -1) {
         if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) != -1) {
@@ -85,6 +86,15 @@ set_nonblocking(int fd)
         VLOG_ERR("fcntl(F_GETFL) failed: %s", ovs_strerror(errno));
         return errno;
     }
+#else
+    unsigned long arg = 1;
+    if (ioctlsocket(fd, FIONBIO, &arg)) {
+        int error = sock_errno();
+        VLOG_ERR("set_nonblocking failed: %s", sock_strerror(error));
+        return error;
+    }
+    return 0;
+#endif
 }
 
 void
