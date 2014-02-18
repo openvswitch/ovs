@@ -42,9 +42,11 @@ int get_socket_rcvbuf(int sock);
 int check_connection_completion(int fd);
 int drain_rcvbuf(int fd);
 void drain_fd(int fd, size_t n_packets);
+#ifndef _WIN32
 int make_unix_socket(int style, bool nonblock,
                      const char *bind_path, const char *connect_path);
 int get_unix_name_len(socklen_t sun_len);
+#endif
 ovs_be32 guess_netmask(ovs_be32 ip);
 int get_null_fd(void);
 

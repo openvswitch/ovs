@@ -354,6 +354,7 @@ drain_fd(int fd, size_t n_packets)
     }
 }
 
+#ifndef _WIN32
 /* Attempts to shorten 'name' by opening a file descriptor for the directory
  * part of the name and indirecting through /proc/self/fd/<dirfd>/<basename>.
  * On systems with Linux-like /proc, this works as long as <basename> isn't too
@@ -614,6 +615,7 @@ get_unix_name_len(socklen_t sun_len)
             ? sun_len - offsetof(struct sockaddr_un, sun_path)
             : 0);
 }
+#endif /* _WIN32 */
 
 ovs_be32
 guess_netmask(ovs_be32 ip_)
@@ -1141,6 +1143,7 @@ describe_sockaddr(struct ds *string, int fd,
             ds_put_format(string, "%s:%"PRIu16,
                           ss_format_address(&ss, addrbuf, sizeof addrbuf),
                           ss_get_port(&ss));
+#ifndef _WIN32
         } else if (ss.ss_family == AF_UNIX) {
             struct sockaddr_un sun;
             const char *null;
@@ -1151,6 +1154,7 @@ describe_sockaddr(struct ds *string, int fd,
             null = memchr(sun.sun_path, '\0', maxlen);
             ds_put_buffer(string, sun.sun_path,
                           null ? null - sun.sun_path : maxlen);
+#endif
         }
 #ifdef HAVE_NETLINK
         else if (ss.ss_family == AF_NETLINK) {

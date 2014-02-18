@@ -193,7 +193,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/stream-provider.h \
 	lib/stream-ssl.h \
 	lib/stream-tcp.c \
-	lib/stream-unix.c \
 	lib/stream.c \
 	lib/stream.h \
 	lib/stdio.c \
@@ -244,7 +243,8 @@ lib_libopenvswitch_la_SOURCES += \
 else
 lib_libopenvswitch_la_SOURCES += \
 	lib/daemon.c \
-	lib/latch.c
+	lib/latch.c \
+	lib/stream-unix.c
 endif
 
 EXTRA_DIST += \
