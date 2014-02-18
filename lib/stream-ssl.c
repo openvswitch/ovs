@@ -1416,18 +1416,6 @@ ssl_protocol_cb(int write_p, int version OVS_UNUSED, int content_type,
     ds_destroy(&details);
 }
 
-/* In Windows platform, errno is not set for socket calls.
- * The last error has to be gotten from WSAGetLastError(). */
-static int
-sock_errno(void)
-{
-#ifdef _WIN32
-    return WSAGetLastError();
-#else
-    return errno;
-#endif
-}
-
 static void
 clear_handle(int fd OVS_UNUSED, HANDLE wevent OVS_UNUSED)
 {

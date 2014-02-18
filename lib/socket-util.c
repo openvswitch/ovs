@@ -106,7 +106,7 @@ set_dscp(int fd, uint8_t dscp)
 
     val = dscp << 2;
     if (setsockopt(fd, IPPROTO_IP, IP_TOS, &val, sizeof val)) {
-        return errno;
+        return sock_errno();
     }
 
     return 0;
@@ -239,7 +239,7 @@ lookup_hostname(const char *host_name, struct in_addr *addr)
 #endif
 
     case EAI_SYSTEM:
-        return errno;
+        return sock_errno();
 
     default:
         return EPROTO;
@@ -762,8 +762,8 @@ inet_open_active(int style, const char *target, uint16_t default_port,
     /* Create non-blocking socket. */
     fd = socket(ss.ss_family, style, 0);
     if (fd < 0) {
-        VLOG_ERR("%s: socket: %s", target, ovs_strerror(errno));
-        error = errno;
+        error = sock_errno();
+        VLOG_ERR("%s: socket: %s", target, sock_strerror(error));
         goto exit;
     }
     error = set_nonblocking(fd);
@@ -776,15 +776,19 @@ inet_open_active(int style, const char *target, uint16_t default_port,
      * connect(), the handshake SYN frames will be sent with a TOS of 0. */
     error = set_dscp(fd, dscp);
     if (error) {
-        VLOG_ERR("%s: socket: %s", target, ovs_strerror(error));
+        VLOG_ERR("%s: socket: %s", target, sock_strerror(error));
         goto exit;
     }
 
     /* Connect. */
     error = connect(fd, (struct sockaddr *) &ss, ss_length(&ss)) == 0
                     ? 0
-                    : errno;
-    if (error == EINPROGRESS) {
+                    : sock_errno();
+    if (error == EINPROGRESS
+#ifdef _WIN32
+        || error == WSAEALREADY || error == WSAEWOULDBLOCK
+#endif
+        ) {
         error = EAGAIN;
     }
 
@@ -881,8 +885,8 @@ inet_open_passive(int style, const char *target, int default_port,
     /* Create non-blocking socket, set SO_REUSEADDR. */
     fd = socket(ss.ss_family, style, 0);
     if (fd < 0) {
-        error = errno;
-        VLOG_ERR("%s: socket: %s", target, ovs_strerror(error));
+        error = sock_errno();
+        VLOG_ERR("%s: socket: %s", target, sock_strerror(error));
         return -error;
     }
     error = set_nonblocking(fd);
@@ -891,16 +895,16 @@ inet_open_passive(int style, const char *target, int default_port,
     }
     if (style == SOCK_STREAM
         && setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes) < 0) {
-        error = errno;
+        error = sock_errno();
         VLOG_ERR("%s: setsockopt(SO_REUSEADDR): %s",
-                 target, ovs_strerror(error));
+                 target, sock_strerror(error));
         goto error;
     }
 
     /* Bind. */
     if (bind(fd, (struct sockaddr *) &ss, ss_length(&ss)) < 0) {
-        error = errno;
-        VLOG_ERR("%s: bind: %s", target, ovs_strerror(error));
+        error = sock_errno();
+        VLOG_ERR("%s: bind: %s", target, sock_strerror(error));
         goto error;
     }
 
@@ -909,22 +913,22 @@ inet_open_passive(int style, const char *target, int default_port,
      * connect(), the handshake SYN frames will be sent with a TOS of 0. */
     error = set_dscp(fd, dscp);
     if (error) {
-        VLOG_ERR("%s: socket: %s", target, ovs_strerror(error));
+        VLOG_ERR("%s: socket: %s", target, sock_strerror(error));
         goto error;
     }
 
     /* Listen. */
     if (style == SOCK_STREAM && listen(fd, 10) < 0) {
-        error = errno;
-        VLOG_ERR("%s: listen: %s", target, ovs_strerror(error));
+        error = sock_errno();
+        VLOG_ERR("%s: listen: %s", target, sock_strerror(error));
         goto error;
     }
 
     if (ssp || kernel_chooses_port) {
         socklen_t ss_len = sizeof ss;
         if (getsockname(fd, (struct sockaddr *) &ss, &ss_len) < 0) {
-            error = errno;
-            VLOG_ERR("%s: getsockname: %s", target, ovs_strerror(error));
+            error = sock_errno();
+            VLOG_ERR("%s: getsockname: %s", target, sock_strerror(error));
             goto error;
         }
         if (kernel_chooses_port) {
@@ -1095,8 +1099,8 @@ getsockopt_int(int fd, int level, int option, const char *optname, int *valuep)
 
     len = sizeof value;
     if (getsockopt(fd, level, option, &value, &len)) {
-        error = errno;
-        VLOG_ERR_RL(&rl, "getsockopt(%s): %s", optname, ovs_strerror(error));
+        error = sock_errno();
+        VLOG_ERR_RL(&rl, "getsockopt(%s): %s", optname, sock_strerror(error));
     } else if (len != sizeof value) {
         error = EINVAL;
         VLOG_ERR_RL(&rl, "getsockopt(%s): value is %u bytes (expected %"PRIuSIZE")",
@@ -1256,8 +1260,9 @@ af_inet_ioctl(unsigned long int command, const void *arg)
     if (ovsthread_once_start(&once)) {
         sock = socket(AF_INET, SOCK_DGRAM, 0);
         if (sock < 0) {
-            sock = -errno;
-            VLOG_ERR("failed to create inet socket: %s", ovs_strerror(errno));
+            int error = sock_errno();
+            VLOG_ERR("failed to create inet socket: %s", sock_strerror(error));
+            sock = -error;
         }
         ovsthread_once_done(&once);
     }

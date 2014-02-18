@@ -17,6 +17,7 @@
 #ifndef SOCKET_UTIL_H
 #define SOCKET_UTIL_H 1
 
+#include <errno.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -98,5 +99,16 @@ static inline int rpl_setsockopt(int sock, int level, int optname,
     return (setsockopt)(sock, level, optname, optval, optlen);
 }
 #endif
+
+/* In Windows platform, errno is not set for socket calls.
+ * The last error has to be gotten from WSAGetLastError(). */
+static inline int sock_errno(void)
+{
+#ifdef _WIN32
+    return WSAGetLastError();
+#else
+    return errno;
+#endif
+}
 
 #endif /* socket-util.h */
