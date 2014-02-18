@@ -937,8 +937,9 @@ struct ofproto_class {
     void (*port_reconfigured)(struct ofport *ofport,
                               enum ofputil_port_config old_config);
 
-    /* Looks up a port named 'devname' in 'ofproto'.  On success, initializes
-     * '*port' appropriately.
+    /* Looks up a port named 'devname' in 'ofproto'.  On success, returns 0 and
+     * initializes '*port' appropriately. Otherwise, returns a positive errno
+     * value.
      *
      * The caller owns the data in 'port' and must free it with
      * ofproto_port_destroy() when it is no longer needed. */
