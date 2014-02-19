@@ -194,7 +194,6 @@ static void bridge_del_ports(struct bridge *,
 static void bridge_add_ports(struct bridge *,
                              const struct shash *wanted_ports);
 
-static void bridge_configure_flow_miss_model(const char *opt);
 static void bridge_configure_datapath_id(struct bridge *);
 static void bridge_configure_netflow(struct bridge *);
 static void bridge_configure_forward_bpdu(struct bridge *);
@@ -498,9 +497,6 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     ofproto_set_threads(
         smap_get_int(&ovs_cfg->other_config, "n-handler-threads", 0),
         smap_get_int(&ovs_cfg->other_config, "n-revalidator-threads", 0));
-
-    bridge_configure_flow_miss_model(smap_get(&ovs_cfg->other_config,
-                                              "force-miss-model"));
 
     /* Destroy "struct bridge"s, "struct port"s, and "struct iface"s according
      * to 'ovs_cfg', with only very minimal configuration otherwise.
@@ -876,22 +872,6 @@ port_configure(struct port *port)
     free(s.slaves);
     free(s.trunks);
     free(s.lacp_slaves);
-}
-
-static void
-bridge_configure_flow_miss_model(const char *opt)
-{
-    enum ofproto_flow_miss_model model = OFPROTO_HANDLE_MISS_AUTO;
-
-    if (opt) {
-        if (!strcmp(opt, "with-facets")) {
-            model = OFPROTO_HANDLE_MISS_WITH_FACETS;
-        } else if (!strcmp(opt, "without-facets")) {
-            model = OFPROTO_HANDLE_MISS_WITHOUT_FACETS;
-        }
-    }
-
-    ofproto_set_flow_miss_model(model);
 }
 
 /* Pick local port hardware address and datapath ID for 'br'. */

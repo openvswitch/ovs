@@ -307,7 +307,6 @@ static size_t allocated_ofproto_classes;
 struct ovs_mutex ofproto_mutex = OVS_MUTEX_INITIALIZER;
 
 unsigned ofproto_flow_limit = OFPROTO_FLOW_LIMIT_DEFAULT;
-enum ofproto_flow_miss_model flow_miss_model = OFPROTO_HANDLE_MISS_AUTO;
 
 size_t n_handlers, n_revalidators;
 
@@ -696,13 +695,6 @@ void
 ofproto_set_flow_limit(unsigned limit)
 {
     ofproto_flow_limit = limit;
-}
-
-/* Sets the path for handling flow misses. */
-void
-ofproto_set_flow_miss_model(unsigned model)
-{
-    flow_miss_model = model;
 }
 
 /* If forward_bpdu is true, the NORMAL action will forward frames with

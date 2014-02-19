@@ -468,10 +468,6 @@ extern unsigned ofproto_flow_limit;
  * ofproto-dpif implementation. */
 extern size_t n_handlers, n_revalidators;
 
-/* Determines which model to use for handling misses in the ofproto-dpif
- * implementation */
-extern enum ofproto_flow_miss_model flow_miss_model;
-
 static inline struct rule *
 rule_from_cls_rule(const struct cls_rule *cls_rule)
 {
