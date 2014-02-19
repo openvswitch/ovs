@@ -1548,30 +1548,14 @@ bridge_configure_mac_table(struct bridge *br)
 }
 
 static void
-bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
-                          struct iface **hw_addr_iface)
+find_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
+                   struct iface **hw_addr_iface)
 {
     struct hmapx mirror_output_ports;
-    const char *hwaddr;
     struct port *port;
     bool found_addr = false;
     int error;
     int i;
-
-    *hw_addr_iface = NULL;
-
-    /* Did the user request a particular MAC? */
-    hwaddr = smap_get(&br->cfg->other_config, "hwaddr");
-    if (hwaddr && eth_addr_from_string(hwaddr, ea)) {
-        if (eth_addr_is_multicast(ea)) {
-            VLOG_ERR("bridge %s: cannot set MAC address to multicast "
-                     "address "ETH_ADDR_FMT, br->name, ETH_ADDR_ARGS(ea));
-        } else if (eth_addr_is_zero(ea)) {
-            VLOG_ERR("bridge %s: cannot set MAC address to zero", br->name);
-        } else {
-            return;
-        }
-    }
 
     /* Mirror output ports don't participate in picking the local hardware
      * address.  ofproto can't help us find out whether a given port is a
@@ -1654,6 +1638,30 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
     }
 
     hmapx_destroy(&mirror_output_ports);
+}
+
+static void
+bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
+                          struct iface **hw_addr_iface)
+{
+    const char *hwaddr;
+    *hw_addr_iface = NULL;
+
+    /* Did the user request a particular MAC? */
+    hwaddr = smap_get(&br->cfg->other_config, "hwaddr");
+    if (hwaddr && eth_addr_from_string(hwaddr, ea)) {
+        if (eth_addr_is_multicast(ea)) {
+            VLOG_ERR("bridge %s: cannot set MAC address to multicast "
+                     "address "ETH_ADDR_FMT, br->name, ETH_ADDR_ARGS(ea));
+        } else if (eth_addr_is_zero(ea)) {
+            VLOG_ERR("bridge %s: cannot set MAC address to zero", br->name);
+        } else {
+            return;
+        }
+    }
+
+    /* Find a local hw address */
+    find_local_hw_addr(br, ea, hw_addr_iface);
 }
 
 /* Choose and returns the datapath ID for bridge 'br' given that the bridge
