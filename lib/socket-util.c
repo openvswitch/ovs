@@ -1033,6 +1033,7 @@ int
 fsync_parent_dir(const char *file_name)
 {
     int error = 0;
+#ifndef _WIN32
     char *dir;
     int fd;
 
@@ -1054,6 +1055,7 @@ fsync_parent_dir(const char *file_name)
         VLOG_ERR("%s: open failed (%s)", dir, ovs_strerror(error));
     }
     free(dir);
+#endif
 
     return error;
 }
