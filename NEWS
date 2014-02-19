@@ -4,6 +4,8 @@ Post-v2.1.0
      poorly maintained and not widely used.
    - New "check-ryu" Makefile target for running Ryu tests for OpenFlow
      controllers against Open vSwitch.  See INSTALL for details.
+   - Added IPFIX support for SCTP flows and templates for ICMPv4/v6 flows.
+
 
 v2.1.0 - xx xxx xxxx
 ---------------------
