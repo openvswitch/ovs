@@ -3640,7 +3640,7 @@ ofputil_decode_ofp11_port(struct ofputil_phy_port *pp,
     ovs_strlcpy(pp->name, op->name, OFP_MAX_PORT_NAME_LEN);
 
     pp->config = ntohl(op->config) & OFPPC11_ALL;
-    pp->state = ntohl(op->state) & OFPPC11_ALL;
+    pp->state = ntohl(op->state) & OFPPS11_ALL;
 
     pp->curr = netdev_port_features_from_ofp11(op->curr);
     pp->advertised = netdev_port_features_from_ofp11(op->advertised);
