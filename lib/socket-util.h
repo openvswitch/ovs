@@ -98,6 +98,14 @@ static inline int rpl_setsockopt(int sock, int level, int optname,
 {
     return (setsockopt)(sock, level, optname, optval, optlen);
 }
+
+#define getsockopt(sock, level, optname, optval, optlen) \
+    rpl_getsockopt(sock, level, optname, optval, optlen)
+static inline int rpl_getsockopt(int sock, int level, int optname,
+                                 void *optval, socklen_t *optlen)
+{
+    return (getsockopt)(sock, level, optname, optval, optlen);
+}
 #endif
 
 /* In Windows platform, errno is not set for socket calls.
