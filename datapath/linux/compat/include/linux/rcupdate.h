@@ -22,4 +22,16 @@ static inline int rcu_read_lock_held(void)
 }
 #endif
 
+#ifndef RCU_INITIALIZER
+#define RCU_INITIALIZER(v) (typeof(*(v)) __force __rcu *)(v)
+#endif
+
+#ifndef RCU_INIT_POINTER
+#define RCU_INIT_POINTER(p, v) \
+        do { \
+                p = RCU_INITIALIZER(v); \
+        } while (0)
+
+#endif
+
 #endif /* linux/rcupdate.h wrapper */
