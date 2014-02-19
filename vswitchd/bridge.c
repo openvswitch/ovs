@@ -251,7 +251,7 @@ static struct iface *iface_lookup(const struct bridge *, const char *name);
 static struct iface *iface_find(const char *name);
 static struct iface *iface_from_ofp_port(const struct bridge *,
                                          ofp_port_t ofp_port);
-static void iface_set_mac(struct iface *, const uint8_t *);
+static void iface_set_mac(const struct bridge *, const struct port *, struct iface *);
 static void iface_set_ofport(const struct ovsrec_interface *, ofp_port_t ofport);
 static void iface_clear_db_record(const struct ovsrec_interface *if_cfg);
 static void iface_configure_qos(struct iface *, const struct ovsrec_qos *);
@@ -574,7 +574,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                 iface_set_ofport(iface->cfg, iface->ofp_port);
                 iface_configure_cfm(iface);
                 iface_configure_qos(iface, port->cfg->qos);
-                iface_set_mac(iface, port->cfg->fake_bridge ? br->ea : NULL);
+                iface_set_mac(br, port, iface);
                 ofproto_port_set_bfd(br->ofproto, iface->ofp_port,
                                      &iface->cfg->bfd);
             }
@@ -1548,8 +1548,8 @@ bridge_configure_mac_table(struct bridge *br)
 }
 
 static void
-find_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
-                   struct iface **hw_addr_iface)
+find_local_hw_addr(const struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
+                   const struct port *fake_br, struct iface **hw_addr_iface)
 {
     struct hmapx mirror_output_ports;
     struct port *port;
@@ -1612,6 +1612,16 @@ find_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
                 continue;
             }
 
+            /* For fake bridges we only choose from ports with the same tag */
+            if (fake_br && fake_br->cfg && fake_br->cfg->tag) {
+                if (!port->cfg->tag) {
+                    continue;
+                }
+                if (*port->cfg->tag != *fake_br->cfg->tag) {
+                    continue;
+                }
+            }
+
             /* Grab MAC. */
             error = netdev_get_etheraddr(iface->netdev, iface_ea);
             if (error) {
@@ -1661,7 +1671,7 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
     }
 
     /* Find a local hw address */
-    find_local_hw_addr(br, ea, hw_addr_iface);
+    find_local_hw_addr(br, ea, NULL, hw_addr_iface);
 }
 
 /* Choose and returns the datapath ID for bridge 'br' given that the bridge
@@ -3477,15 +3487,20 @@ iface_from_ofp_port(const struct bridge *br, ofp_port_t ofp_port)
 /* Set Ethernet address of 'iface', if one is specified in the configuration
  * file. */
 static void
-iface_set_mac(struct iface *iface, const uint8_t *mac)
+iface_set_mac(const struct bridge *br, const struct port *port, struct iface *iface)
 {
-    uint8_t ea[ETH_ADDR_LEN];
+    uint8_t ea[ETH_ADDR_LEN], *mac = NULL;
+    struct iface *hw_addr_iface;
 
     if (strcmp(iface->type, "internal")) {
         return;
     }
 
     if (iface->cfg->mac && eth_addr_from_string(iface->cfg->mac, ea)) {
+        mac = ea;
+    } else if (port->cfg->fake_bridge) {
+        /* Fake bridge and no MAC set in the configuration. Pick a local one. */
+        find_local_hw_addr(br, ea, port, &hw_addr_iface);
         mac = ea;
     }
 
