@@ -1241,6 +1241,7 @@ describe_fd(int fd)
     struct stat s;
 
     ds_init(&string);
+#ifndef _WIN32
     if (fstat(fd, &s)) {
         ds_put_format(&string, "fstat failed (%s)", ovs_strerror(errno));
     } else if (S_ISSOCK(s.st_mode)) {
@@ -1260,6 +1261,9 @@ describe_fd(int fd)
         put_fd_filename(&string, fd);
 #endif
     }
+#else
+    ds_put_format(&string,"file descriptor");
+#endif /* _WIN32 */
     return ds_steal_cstr(&string);
 }
 
