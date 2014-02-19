@@ -2067,10 +2067,10 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
         return 0;
 
     case OFPACT_POP_MPLS:
-        flow->dl_type = ofpact_get_POP_MPLS(a)->ethertype;
         if (!eth_type_mpls(flow->dl_type)) {
             inconsistent_match(usable_protocols);
         }
+        flow->dl_type = ofpact_get_POP_MPLS(a)->ethertype;
         return 0;
 
     case OFPACT_SAMPLE:
