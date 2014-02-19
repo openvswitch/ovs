@@ -56,7 +56,7 @@ probably incomplete.
 
     * OFPT_TABLE_MOD message.  This is new in OF1.1, so we need to
       implement it.  It should be implemented so that the default OVS
-      behavior does not change.
+      behavior does not change.  Simon Horman has posted a patch.
       [required for OF1.1 and OF1.2]
 
     * MPLS.  Simon Horman maintains a patch series that adds this
@@ -91,8 +91,8 @@ didn't compare the specs carefully yet.)
       Currently we always report OFPBRC_MULTIPART_BUFFER_OVERFLOW.
       [optional for OF1.3+]
 
-    * Add OFPMP_TABLE_FEATURES statistics.
-      [optional for OF1.3+]
+    * Add OFPMP_TABLE_FEATURES statistics.  Alexander Wu has posted a
+      patch series.  [optional for OF1.3+]
 
     * More flexible table miss support.
       This requires the following.
