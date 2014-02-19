@@ -1267,6 +1267,7 @@ describe_fd(int fd)
     return ds_steal_cstr(&string);
 }
 
+#ifndef _WIN32
 /* Calls ioctl() on an AF_INET sock, passing the specified 'command' and
  * 'arg'.  Returns 0 if successful, otherwise a positive errno value. */
 int
@@ -1305,6 +1306,7 @@ af_inet_ifreq_ioctl(const char *name, struct ifreq *ifr, unsigned long int cmd,
     }
     return error;
 }
+#endif
 
 /* sockaddr_storage helpers. */
 

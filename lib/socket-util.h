@@ -74,11 +74,13 @@ char *describe_fd(int fd);
  * in <netinet/ip.h> is used. */
 #define DSCP_DEFAULT (IPTOS_PREC_INTERNETCONTROL >> 2)
 
+#ifndef _WIN32
 /* Helpers for calling ioctl() on an AF_INET socket. */
 struct ifreq;
 int af_inet_ioctl(unsigned long int command, const void *arg);
 int af_inet_ifreq_ioctl(const char *name, struct ifreq *,
                         unsigned long int cmd, const char *cmd_name);
+#endif
 
 /* Functions for working with sockaddr_storage that might contain an IPv4 or
  * IPv6 address. */
