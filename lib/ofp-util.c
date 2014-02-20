@@ -169,9 +169,11 @@ ofputil_match_from_ofp10_match(const struct ofp10_match *ofmatch,
         match->wc.masks.vlan_tci = htons(0xffff);
     } else {
         ovs_be16 vid, pcp, tci;
+        uint16_t hpcp;
 
         vid = ofmatch->dl_vlan & htons(VLAN_VID_MASK);
-        pcp = htons((ofmatch->dl_vlan_pcp << VLAN_PCP_SHIFT) & VLAN_PCP_MASK);
+        hpcp = (ofmatch->dl_vlan_pcp << VLAN_PCP_SHIFT) & VLAN_PCP_MASK;
+        pcp = htons(hpcp);
         tci = vid | pcp | htons(VLAN_CFI);
         match->flow.vlan_tci = tci & match->wc.masks.vlan_tci;
     }
