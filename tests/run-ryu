@@ -97,7 +97,7 @@ run_app() {
 EOF
     logfile=$sandbox/`echo $app | sed 's,/,.,g'`.log
     logs="$logs
-        $sandbox/$logfile.log"
+        $logfile"
     ryu-manager "$app" --log-file="$logfile" & pid=$!
     echo $pid > "$sandbox/ryu.pid"
     i=0
