@@ -39,66 +39,6 @@ VLOG_DEFINE_THIS_MODULE(signals);
 #define N_SIGNALS 32
 #endif
 
-struct signal {
-    int fds[2];
-};
-
-static struct signal signals[N_SIGNALS];
-
-static void signal_handler(int signr);
-
-/* Sets up a handler for 'signr' and returns a structure that represents it.
- *
- * Only one handler for a given signal may be registered. */
-struct signal *
-signal_register(int signr)
-{
-    struct sigaction sa;
-    struct signal *s;
-
-    ovs_assert(signr >= 1 && signr < N_SIGNALS);
-
-    /* Create a pipe. */
-    s = &signals[signr];
-    ovs_assert(!s->fds[0] && !s->fds[1]);
-    xpipe_nonblocking(s->fds);
-
-    /* Install signal handler. */
-    memset(&sa, 0, sizeof sa);
-    sa.sa_handler = signal_handler;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_RESTART;
-    xsigaction(signr, &sa, NULL);
-
-    return s;
-}
-
-/* Returns true if signal 's' has been received since the last call to this
- * function with argument 's'. */
-bool
-signal_poll(struct signal *s)
-{
-    char buf[_POSIX_PIPE_BUF];
-
-    return read(s->fds[0], buf, sizeof buf) > 0;
-}
-
-/* Causes the next call to poll_block() to wake up when signal_poll(s) would
- * return true. */
-void
-signal_wait(struct signal *s)
-{
-    poll_fd_wait(s->fds[0], POLLIN);
-}
-
-static void
-signal_handler(int signr)
-{
-    if (signr >= 1 && signr < N_SIGNALS) {
-        ignore(write(signals[signr].fds[1], "", 1));
-    }
-}
-
 /* Returns the name of signal 'signum' as a string.  The return value is either
  * a statically allocated constant string or the 'bufsize'-byte buffer
  * 'namebuf'.  'bufsize' should be at least SIGNAL_NAME_BUFSIZE.
@@ -131,14 +71,5 @@ xsigaction(int signum, const struct sigaction *new, struct sigaction *old)
         VLOG_FATAL("sigaction(%s) failed (%s)",
                    signal_name(signum, namebuf, sizeof namebuf),
                    ovs_strerror(errno));
-    }
-}
-
-void
-xpthread_sigmask(int how, const sigset_t *new, sigset_t *old)
-{
-    int error = pthread_sigmask(how, new, old);
-    if (error) {
-        VLOG_FATAL("pthread_sigmask failed (%s)", ovs_strerror(error));
     }
 }

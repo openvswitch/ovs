@@ -18,18 +18,11 @@
 #define SIGNALS_H 1
 
 #include <signal.h>
-#include <stdbool.h>
-#include <stddef.h>
 #include "type-props.h"
-
-struct signal *signal_register(int signr);
-bool signal_poll(struct signal *);
-void signal_wait(struct signal *);
 
 enum { SIGNAL_NAME_BUFSIZE = 7 + INT_STRLEN(int) + 1 };
 const char *signal_name(int signum, char *namebuf, size_t bufsize);
 
 void xsigaction(int signum, const struct sigaction *, struct sigaction *old);
-void xpthread_sigmask(int how, const sigset_t *, sigset_t *old);
 
 #endif /* signals.h */
