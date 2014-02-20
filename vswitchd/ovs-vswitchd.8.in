@@ -30,9 +30,6 @@ switching across each bridge described in its configuration files.  As
 the database changes, \fBovs\-vswitchd\fR automatically updates its
 configuration to match.
 .PP
-Upon receipt of a SIGHUP signal, \fBovs\-vswitchd\fR reopens its log
-file, if one was specified on the command line.
-.PP
 \fBovs\-vswitchd\fR switches may be configured with any of the following
 features:
 .

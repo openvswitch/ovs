@@ -37,7 +37,6 @@
 #include "openflow/openflow.h"
 #include "ovsdb-idl.h"
 #include "poll-loop.h"
-#include "signals.h"
 #include "simap.h"
 #include "stream-ssl.h"
 #include "stream.h"
@@ -65,7 +64,6 @@ main(int argc, char *argv[])
 {
     char *unixctl_path = NULL;
     struct unixctl_server *unixctl;
-    struct signal *sighup;
     char *remote;
     bool exiting;
     int retval;
@@ -75,7 +73,6 @@ main(int argc, char *argv[])
     service_start(&argc, &argv);
     remote = parse_options(argc, argv, &unixctl_path);
     signal(SIGPIPE, SIG_IGN);
-    sighup = signal_register(SIGHUP);
     ovsrec_init();
 
     daemonize_start();
@@ -101,9 +98,6 @@ main(int argc, char *argv[])
 
     exiting = false;
     while (!exiting) {
-        if (signal_poll(sighup)) {
-            vlog_reopen_log_file();
-        }
         memory_run();
         if (memory_should_report()) {
             struct simap usage;
@@ -117,7 +111,6 @@ main(int argc, char *argv[])
         unixctl_server_run(unixctl);
         netdev_run();
 
-        signal_wait(sighup);
         memory_wait();
         bridge_wait();
         unixctl_server_wait(unixctl);
