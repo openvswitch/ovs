@@ -2823,7 +2823,8 @@ bridge_configure_local_iface_netdev(struct bridge *br,
 
     /* If there's no local interface or no IP address, give up. */
     local_iface = iface_from_ofp_port(br, OFPP_LOCAL);
-    if (!local_iface || !c->local_ip || !inet_aton(c->local_ip, &ip)) {
+    if (!local_iface || !c->local_ip
+        || !inet_pton(AF_INET, c->local_ip, &ip)) {
         return;
     }
 
@@ -2833,7 +2834,7 @@ bridge_configure_local_iface_netdev(struct bridge *br,
 
     /* Configure the IP address and netmask. */
     if (!c->local_netmask
-        || !inet_aton(c->local_netmask, &mask)
+        || !inet_pton(AF_INET, c->local_netmask, &mask)
         || !mask.s_addr) {
         mask.s_addr = guess_netmask(ip.s_addr);
     }
@@ -2844,7 +2845,7 @@ bridge_configure_local_iface_netdev(struct bridge *br,
 
     /* Configure the default gateway. */
     if (c->local_gateway
-        && inet_aton(c->local_gateway, &gateway)
+        && inet_pton(AF_INET, c->local_gateway, &gateway)
         && gateway.s_addr) {
         if (!netdev_add_router(netdev, gateway)) {
             VLOG_INFO("bridge %s: configured gateway "IP_FMT,

@@ -128,7 +128,7 @@ set_dscp(int fd, uint8_t dscp)
 int
 lookup_ip(const char *host_name, struct in_addr *addr)
 {
-    if (!inet_aton(host_name, addr)) {
+    if (!inet_pton(AF_INET, host_name, addr)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
         VLOG_ERR_RL(&rl, "\"%s\" is not a valid IP address", host_name);
         return ENOENT;
@@ -165,7 +165,7 @@ lookup_hostname(const char *host_name, struct in_addr *addr)
     struct addrinfo *result;
     struct addrinfo hints;
 
-    if (inet_aton(host_name, addr)) {
+    if (inet_pton(AF_INET, host_name, addr)) {
         return 0;
     }
 
