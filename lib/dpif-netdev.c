@@ -1295,6 +1295,7 @@ dpif_netdev_flow_del(struct dpif *dpif, const struct dpif_flow_del *del)
             ovs_mutex_unlock(&netdev_flow->mutex);
         }
         dp_netdev_remove_flow(dp, netdev_flow);
+        dp_netdev_flow_unref(netdev_flow);
     } else {
         error = ENOENT;
     }
@@ -1706,6 +1707,7 @@ dp_netdev_port_input(struct dp_netdev *dp, struct ofpbuf *packet,
         dp_netdev_execute_actions(dp, &key, packet, md,
                                   actions->actions, actions->size);
         dp_netdev_actions_unref(actions);
+        dp_netdev_flow_unref(netdev_flow);
         ovsthread_counter_inc(dp->n_hit, 1);
     } else {
         ovsthread_counter_inc(dp->n_missed, 1);
