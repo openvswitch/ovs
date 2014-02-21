@@ -46,7 +46,6 @@ int make_unix_socket(int style, bool nonblock,
 int get_unix_name_len(socklen_t sun_len);
 #endif
 ovs_be32 guess_netmask(ovs_be32 ip);
-int get_null_fd(void);
 
 bool inet_parse_active(const char *target, uint16_t default_port,
                        struct sockaddr_storage *ssp);

@@ -441,6 +441,26 @@ monitor_daemon(pid_t daemon_pid)
     set_subprogram_name("");
 }
 
+/* Returns a readable and writable fd for /dev/null, if successful, otherwise
+ * a negative errno value.  The caller must not close the returned fd (because
+ * the same fd will be handed out to subsequent callers). */
+static int
+get_null_fd(void)
+{
+    static int null_fd;
+
+    if (!null_fd) {
+        null_fd = open("/dev/null", O_RDWR);
+        if (null_fd < 0) {
+            int error = errno;
+            VLOG_ERR("could not open /dev/null: %s", ovs_strerror(error));
+            null_fd = -error;
+        }
+    }
+
+    return null_fd;
+}
+
 /* Close standard file descriptors (except any that the client has requested we
  * leave open by calling daemon_save_fd()).  If we're started from e.g. an SSH
  * session, then this keeps us from holding that session open artificially. */
