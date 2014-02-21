@@ -165,6 +165,49 @@ process_register(const char *name, pid_t pid)
     return p;
 }
 
+#ifndef _WIN32
+static bool
+rlim_is_finite(rlim_t limit)
+{
+    if (limit == RLIM_INFINITY) {
+        return false;
+    }
+
+#ifdef RLIM_SAVED_CUR           /* FreeBSD 8.0 lacks RLIM_SAVED_CUR. */
+    if (limit == RLIM_SAVED_CUR) {
+        return false;
+    }
+#endif
+
+#ifdef RLIM_SAVED_MAX           /* FreeBSD 8.0 lacks RLIM_SAVED_MAX. */
+    if (limit == RLIM_SAVED_MAX) {
+        return false;
+    }
+#endif
+
+    return true;
+}
+
+/* Returns the maximum valid FD value, plus 1. */
+static int
+get_max_fds(void)
+{
+    static int max_fds;
+
+    if (!max_fds) {
+        struct rlimit r;
+        if (!getrlimit(RLIMIT_NOFILE, &r) && rlim_is_finite(r.rlim_cur)) {
+            max_fds = r.rlim_cur;
+        } else {
+            VLOG_WARN("failed to obtain fd limit, defaulting to 1024");
+            max_fds = 1024;
+        }
+    }
+
+    return max_fds;
+}
+#endif /* _WIN32 */
+
 /* Starts a subprocess with the arguments in the null-terminated argv[] array.
  * argv[0] is used as the name of the process.  Searches the PATH environment
  * variable to find the program to execute.

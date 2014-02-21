@@ -31,8 +31,6 @@ int set_nonblocking(int fd);
 void xset_nonblocking(int fd);
 int set_dscp(int fd, uint8_t dscp);
 
-int get_max_fds(void);
-
 int lookup_ip(const char *host_name, struct in_addr *address);
 int lookup_ipv6(const char *host_name, struct in6_addr *address);
 

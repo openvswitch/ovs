@@ -122,49 +122,6 @@ set_dscp(int fd, uint8_t dscp)
     return 0;
 }
 
-static bool
-rlim_is_finite(rlim_t limit)
-{
-    if (limit == RLIM_INFINITY) {
-        return false;
-    }
-
-#ifdef RLIM_SAVED_CUR           /* FreeBSD 8.0 lacks RLIM_SAVED_CUR. */
-    if (limit == RLIM_SAVED_CUR) {
-        return false;
-    }
-#endif
-
-#ifdef RLIM_SAVED_MAX           /* FreeBSD 8.0 lacks RLIM_SAVED_MAX. */
-    if (limit == RLIM_SAVED_MAX) {
-        return false;
-    }
-#endif
-
-    return true;
-}
-
-/* Returns the maximum valid FD value, plus 1. */
-int
-get_max_fds(void)
-{
-    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
-    static int max_fds;
-
-    if (ovsthread_once_start(&once)) {
-        struct rlimit r;
-        if (!getrlimit(RLIMIT_NOFILE, &r) && rlim_is_finite(r.rlim_cur)) {
-            max_fds = r.rlim_cur;
-        } else {
-            VLOG_WARN("failed to obtain fd limit, defaulting to 1024");
-            max_fds = 1024;
-        }
-        ovsthread_once_done(&once);
-    }
-
-    return max_fds;
-}
-
 /* Translates 'host_name', which must be a string representation of an IP
  * address, into a numeric IP address in '*addr'.  Returns 0 if successful,
  * otherwise a positive errno value. */
