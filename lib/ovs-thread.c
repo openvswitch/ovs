@@ -125,6 +125,12 @@ XPTHREAD_FUNC1(pthread_mutexattr_destroy, pthread_mutexattr_t *);
 XPTHREAD_FUNC2(pthread_mutexattr_settype, pthread_mutexattr_t *, int);
 XPTHREAD_FUNC2(pthread_mutexattr_gettype, pthread_mutexattr_t *, int *);
 
+XPTHREAD_FUNC1(pthread_rwlockattr_init, pthread_rwlockattr_t *);
+XPTHREAD_FUNC1(pthread_rwlockattr_destroy, pthread_rwlockattr_t *);
+#ifdef PTHREAD_RWLOCK_WRITER_NONRECURSIVE_INITIALIZER_NP
+XPTHREAD_FUNC2(pthread_rwlockattr_setkind_np, pthread_rwlockattr_t *, int);
+#endif
+
 XPTHREAD_FUNC2(pthread_cond_init, pthread_cond_t *, pthread_condattr_t *);
 XPTHREAD_FUNC1(pthread_cond_destroy, pthread_cond_t *);
 XPTHREAD_FUNC1(pthread_cond_signal, pthread_cond_t *);
@@ -183,13 +189,21 @@ void
 ovs_rwlock_init(const struct ovs_rwlock *l_)
 {
     struct ovs_rwlock *l = CONST_CAST(struct ovs_rwlock *, l_);
+    pthread_rwlockattr_t attr;
     int error;
 
     l->where = NULL;
+
+    xpthread_rwlockattr_init(&attr);
+#ifdef PTHREAD_RWLOCK_WRITER_NONRECURSIVE_INITIALIZER_NP
+    xpthread_rwlockattr_setkind_np(
+        &attr, PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP);
+#endif
     error = pthread_rwlock_init(&l->lock, NULL);
     if (OVS_UNLIKELY(error)) {
         ovs_abort(error, "pthread_rwlock_init failed");
     }
+    xpthread_rwlockattr_destroy(&attr);
 }
 
 void

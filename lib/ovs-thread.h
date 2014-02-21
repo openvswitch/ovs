@@ -77,14 +77,30 @@ void xpthread_mutexattr_destroy(pthread_mutexattr_t *);
 void xpthread_mutexattr_settype(pthread_mutexattr_t *, int type);
 void xpthread_mutexattr_gettype(pthread_mutexattr_t *, int *typep);
 
-/* Read-write lock. */
+/* Read-write lock.
+ *
+ * An ovs_rwlock does not support recursive readers, because POSIX allows
+ * taking the reader lock recursively to deadlock when a thread is waiting on
+ * the write-lock.  (NetBSD does deadlock.)  glibc rwlocks in their default
+ * configuration do not deadlock, but ovs_rwlock_init() initializes rwlocks as
+ * non-recursive (which will deadlock) for two reasons:
+ *
+ *     - glibc only provides fairness to writers in this mode.
+ *
+ *     - It's better to find bugs in the primary Open vSwitch target rather
+ *       than exposing them only to porters. */
 struct OVS_LOCKABLE ovs_rwlock {
     pthread_rwlock_t lock;
     const char *where;
 };
 
 /* Initializer. */
+#ifdef PTHREAD_RWLOCK_WRITER_NONRECURSIVE_INITIALIZER_NP
+#define OVS_RWLOCK_INITIALIZER \
+        { PTHREAD_RWLOCK_WRITER_NONRECURSIVE_INITIALIZER_NP, NULL }
+#else
 #define OVS_RWLOCK_INITIALIZER { PTHREAD_RWLOCK_INITIALIZER, NULL }
+#endif
 
 /* ovs_rwlock functions analogous to pthread_rwlock_*() functions.
  *
@@ -94,6 +110,13 @@ struct OVS_LOCKABLE ovs_rwlock {
 void ovs_rwlock_init(const struct ovs_rwlock *);
 void ovs_rwlock_destroy(const struct ovs_rwlock *);
 void ovs_rwlock_unlock(const struct ovs_rwlock *rwlock) OVS_RELEASES(rwlock);
+
+/* Wrappers for pthread_rwlockattr_*() that abort the process on any error. */
+void xpthread_rwlockattr_init(pthread_rwlockattr_t *);
+void xpthread_rwlockattr_destroy(pthread_rwlockattr_t *);
+#ifdef PTHREAD_RWLOCK_WRITER_NONRECURSIVE_INITIALIZER_NP
+void xpthread_rwlockattr_setkind_np(pthread_rwlockattr_t *, int kind);
+#endif
 
 void ovs_rwlock_wrlock_at(const struct ovs_rwlock *rwlock, const char *where)
     OVS_ACQ_WRLOCK(rwlock);
