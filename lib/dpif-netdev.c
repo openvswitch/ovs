@@ -871,6 +871,7 @@ dp_netdev_flow_unref(struct dp_netdev_flow *flow)
         cls_rule_destroy(CONST_CAST(struct cls_rule *, &flow->cr));
         ovs_mutex_lock(&flow->mutex);
         dp_netdev_actions_unref(flow->actions);
+        ovs_refcount_destroy(&flow->ref_cnt);
         ovs_mutex_unlock(&flow->mutex);
         ovs_mutex_destroy(&flow->mutex);
         free(flow);
@@ -1543,6 +1544,7 @@ void
 dp_netdev_actions_unref(struct dp_netdev_actions *actions)
 {
     if (actions && ovs_refcount_unref(&actions->ref_cnt) == 1) {
+        ovs_refcount_destroy(&actions->ref_cnt);
         free(actions->actions);
         free(actions);
     }
