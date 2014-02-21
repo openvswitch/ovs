@@ -1475,6 +1475,23 @@ A: These flows drop the ARP packets that IP hosts use to establish IP
       priority=5,in_port=1,dl_dst=01:00:00:00:00:00/01:00:00:00:00:00,actions=2
       priority=5,in_port=2,dl_dst=01:00:00:00:00:00/01:00:00:00:00:00,actions=1
 
+
+Development
+-----------
+
+Q: How do I implement a new OpenFlow message?
+
+A: Add your new message to "enum ofpraw" and "enum ofptype" in
+   lib/ofp-msgs.h, following the existing pattern.  Then recompile and
+   fix all of the new warnings, implementing new functionality for the
+   new message as needed.  (If you configure with --enable-Werror, as
+   described in INSTALL, then it is impossible to miss any warnings.)
+
+   If you need to add an OpenFlow vendor extension message for a
+   vendor that doesn't yet have any extension messages, then you will
+   also need to edit build-aux/extract-ofp-msgs.
+
+
 Contact 
 -------
 
