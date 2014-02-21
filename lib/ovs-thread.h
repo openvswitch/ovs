@@ -123,17 +123,6 @@ void xpthread_cond_destroy(pthread_cond_t *);
 void xpthread_cond_signal(pthread_cond_t *);
 void xpthread_cond_broadcast(pthread_cond_t *);
 
-#ifdef __CHECKER__
-/* Replace these functions by the macros already defined in the <pthread.h>
- * annotations, because the macro definitions have correct semantics for the
- * conditional acquisition that can't be captured in a function annotation.
- * The difference in semantics from pthread_*() to xpthread_*() does not matter
- * because sparse is not a compiler. */
-#define xpthread_mutex_trylock pthread_mutex_trylock
-#define xpthread_rwlock_tryrdlock pthread_rwlock_tryrdlock
-#define xpthread_rwlock_trywrlock pthread_rwlock_trywrlock
-#endif
-
 void xpthread_key_create(pthread_key_t *, void (*destructor)(void *));
 void xpthread_key_delete(pthread_key_t);
 void xpthread_setspecific(pthread_key_t, const void *);
