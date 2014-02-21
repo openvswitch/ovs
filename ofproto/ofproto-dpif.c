@@ -1229,6 +1229,9 @@ port_destruct(struct ofport *port_)
     ofproto->need_revalidate = REV_RECONFIGURE;
     bundle_remove(port_);
     set_cfm(port_, NULL);
+    if (port->stp_port) {
+        stp_port_disable(port->stp_port);
+    }
     if (ofproto->sflow) {
         dpif_sflow_del_port(ofproto->sflow, port->odp_port);
     }
