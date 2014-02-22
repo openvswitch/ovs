@@ -112,6 +112,17 @@ AT_CHECK([tail -1 stdout], [0],
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - group chaining not supported])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [10], [11])
+AT_CHECK([ovs-ofctl -O OpenFlow12 add-group br0 'group_id=1234,type=all,bucket=output:10,set_field:192.168.3.90->ip_src,group:123,bucket=output:11'],
+  [1], [], [stderr])
+AT_CHECK([STRIP_XIDS stderr | sed 1q], [0],
+  [OFPT_ERROR (OF1.2): OFPGMFC_CHAINING_UNSUPPORTED
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - all group in action list])
 OVS_VSWITCHD_START
 ADD_OF_PORTS([br0], [1], [10], [11])

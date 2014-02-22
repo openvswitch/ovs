@@ -3294,6 +3294,20 @@ static enum ofperr
 group_construct(struct ofgroup *group_)
 {
     struct group_dpif *group = group_dpif_cast(group_);
+    const struct ofputil_bucket *bucket;
+
+    /* Prevent group chaining because our locking structure makes it hard to
+     * implement deadlock-free.  (See xlate_group_resource_check().) */
+    LIST_FOR_EACH (bucket, list_node, &group->up.buckets) {
+        const struct ofpact *a;
+
+        OFPACT_FOR_EACH (a, bucket->ofpacts, bucket->ofpacts_len) {
+            if (a->type == OFPACT_GROUP) {
+                return OFPERR_OFPGMFC_CHAINING_UNSUPPORTED;
+            }
+        }
+    }
+
     ovs_mutex_init_adaptive(&group->stats_mutex);
     ovs_mutex_lock(&group->stats_mutex);
     group_construct_stats(group);
