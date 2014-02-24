@@ -295,5 +295,18 @@ def set_nonblocking(sock):
 def set_dscp(sock, dscp):
     if dscp > 63:
         raise ValueError("Invalid dscp %d" % dscp)
+
+    # Note: this function is used for both of IPv4 and IPv6 sockets
+    success = False
     val = dscp << 2
-    sock.setsockopt(socket.IPPROTO_IP, socket.IP_TOS, val)
+    try:
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_TOS, val)
+    except socket.error, e:
+        if e.errno != errno.ENOPROTOOPT:
+            raise
+    success = True
+    try:
+        sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_TCLASS, val)
+    except socket.error, e:
+        if e.errno != errno.ENOPROTOOPT or not success:
+            raise

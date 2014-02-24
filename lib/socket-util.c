@@ -108,14 +108,31 @@ int
 set_dscp(int fd, uint8_t dscp)
 {
     int val;
+    bool success;
 
     if (dscp > 63) {
         return EINVAL;
     }
 
+    /* Note: this function is used for both of IPv4 and IPv6 sockets */
+    success = false;
     val = dscp << 2;
     if (setsockopt(fd, IPPROTO_IP, IP_TOS, &val, sizeof val)) {
-        return sock_errno();
+        if (sock_errno() != ENOPROTOOPT) {
+            return sock_errno();
+        }
+    } else {
+        success = true;
+    }
+    if (setsockopt(fd, IPPROTO_IPV6, IPV6_TCLASS, &val, sizeof val)) {
+        if (sock_errno() != ENOPROTOOPT) {
+            return sock_errno();
+        }
+    } else {
+        success = true;
+    }
+    if (!success) {
+        return ENOPROTOOPT;
     }
 
     return 0;
