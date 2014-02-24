@@ -250,6 +250,7 @@ check_connection_completion(int fd)
     }
 }
 
+#ifndef _WIN32
 /* Drain all the data currently in the receive queue of a datagram socket (and
  * possibly additional data).  There is no way to know how many packets are in
  * the receive queue, but we do know that the total number of bytes queued does
@@ -275,7 +276,8 @@ drain_rcvbuf(int fd)
          * On other Unix-like OSes, MSG_TRUNC has no effect in the flags
          * argument. */
         char buffer[LINUX_DATAPATH ? 1 : 2048];
-        ssize_t n_bytes = recv(fd, buffer, sizeof buffer, MSG_TRUNC);
+        ssize_t n_bytes = recv(fd, buffer, sizeof buffer,
+                               MSG_TRUNC | MSG_DONTWAIT);
         if (n_bytes <= 0 || n_bytes >= rcvbuf) {
             break;
         }
@@ -283,6 +285,7 @@ drain_rcvbuf(int fd)
     }
     return 0;
 }
+#endif
 
 /* Returns the size of socket 'sock''s receive buffer (SO_RCVBUF), or a
  * negative errno value if an error occurs. */

@@ -38,7 +38,9 @@ int lookup_hostname(const char *host_name, struct in_addr *);
 
 int get_socket_rcvbuf(int sock);
 int check_connection_completion(int fd);
+#ifndef _WIN32
 int drain_rcvbuf(int fd);
+#endif
 void drain_fd(int fd, size_t n_packets);
 #ifndef _WIN32
 int make_unix_socket(int style, bool nonblock,
