@@ -753,7 +753,7 @@ inet_open_active(int style, const char *target, uint16_t default_port,
      * connect(), the handshake SYN frames will be sent with a TOS of 0. */
     error = set_dscp(fd, dscp);
     if (error) {
-        VLOG_ERR("%s: socket: %s", target, sock_strerror(error));
+        VLOG_ERR("%s: set_dscp: %s", target, sock_strerror(error));
         goto exit;
     }
 
@@ -890,7 +890,7 @@ inet_open_passive(int style, const char *target, int default_port,
      * connect(), the handshake SYN frames will be sent with a TOS of 0. */
     error = set_dscp(fd, dscp);
     if (error) {
-        VLOG_ERR("%s: socket: %s", target, sock_strerror(error));
+        VLOG_ERR("%s: set_dscp: %s", target, sock_strerror(error));
         goto error;
     }
 
