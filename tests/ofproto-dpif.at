@@ -2366,7 +2366,7 @@ m4_define([CHECK_SFLOW_SAMPLING_PACKET],
      set Interface p2 options:ifindex=1003 -- \
      set Bridge br0 sflow=@sf -- \
      --id=@sf create sflow targets=\"$1:$SFLOW_PORT\" \
-       header=128 sampling=1 polling=1 agent=lo
+       header=128 sampling=1 polling=1 agent=$LOOPBACK_INTERFACE
 
   dnl open with ARP packets to seed the bridge-learning.  The output
   dnl ifIndex numbers should be reported predictably after that.

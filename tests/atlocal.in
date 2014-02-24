@@ -68,3 +68,13 @@ FreeBSD)
     esac
     export MALLOC_CONF
 esac
+
+# The name of loopback interface 
+case `uname` in
+Linux)
+    LOOPBACK_INTERFACE=lo
+    ;;
+FreeBSD|NetBSD)
+    LOOPBACK_INTERFACE=lo0
+    ;;
+esac
