@@ -12,6 +12,9 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * Note on windows platform, stream fd can only handle sockets, on unix any
+ * fd is acceptable.
  */
 
 #ifndef STREAM_FD_H
