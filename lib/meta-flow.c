@@ -1298,7 +1298,6 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
     case MFF_MPLS_BOS:
         value->u8 = mpls_lse_to_bos(flow->mpls_lse[0]);
         break;
-        break;
 
     case MFF_IPV4_SRC:
         value->be32 = flow->nw_src;
@@ -1494,7 +1493,6 @@ mf_set_value(const struct mf_field *mf,
 
     case MFF_MPLS_BOS:
         match_set_mpls_bos(match, 0, value->u8);
-        break;
         break;
 
     case MFF_IPV4_SRC:
@@ -1709,7 +1707,6 @@ mf_set_flow_value(const struct mf_field *mf,
     case MFF_MPLS_BOS:
         flow_set_mpls_bos(flow, 0, value->u8);
         break;
-        break;
 
     case MFF_IPV4_SRC:
         flow->nw_src = value->be32;
@@ -1919,7 +1916,6 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
 
     case MFF_MPLS_BOS:
         match_set_any_mpls_bos(match, 0);
-        break;
         break;
 
     case MFF_IPV4_SRC:
