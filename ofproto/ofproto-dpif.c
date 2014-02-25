@@ -1182,9 +1182,9 @@ destruct(struct ofproto *ofproto_)
     xlate_remove_ofproto(ofproto);
     ovs_rwlock_unlock(&xlate_rwlock);
 
-    /* Discard any flow_miss_batches queued up for 'ofproto', avoiding a
-     * use-after-free error. */
-    udpif_revalidate(ofproto->backer->udpif);
+    /* Ensure that the upcall processing threads have no remaining references
+     * to the ofproto or anything in it. */
+    udpif_synchronize(ofproto->backer->udpif);
 
     hmap_remove(&all_ofproto_dpifs, &ofproto->all_ofproto_dpifs_node);
 

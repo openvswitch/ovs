@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 Nicira, Inc.
+/* Copyright (c) 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ struct simap;
 struct udpif *udpif_create(struct dpif_backer *, struct dpif *);
 void udpif_set_threads(struct udpif *, size_t n_handlers,
                        size_t n_revalidators);
+void udpif_synchronize(struct udpif *);
 void udpif_destroy(struct udpif *);
 void udpif_revalidate(struct udpif *);
 void udpif_get_memory_usage(struct udpif *, struct simap *usage);
