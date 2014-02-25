@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -213,6 +213,23 @@ udpif_recv_set(struct udpif *udpif, size_t n_handlers, bool enable)
             xpthread_create(&handler->thread, NULL, udpif_miss_handler, handler);
         }
         xpthread_create(&udpif->dispatcher, NULL, udpif_dispatcher, udpif);
+    }
+}
+
+/* Waits for all ongoing upcall translations to complete.  This ensures that
+ * there are no transient references to any removed ofprotos (or other
+ * objects).  In particular, this should be called after an ofproto is removed
+ * (e.g. via xlate_remove_ofproto()) but before it is destroyed. */
+void
+udpif_synchronize(struct udpif *udpif)
+{
+    /* This is stronger than necessary.  It would be sufficient to ensure
+     * (somehow) that each handler and revalidator thread had passed through
+     * its main loop once. */
+    size_t n_handlers = udpif->n_handlers;
+    if (n_handlers) {
+        udpif_recv_set(udpif, 0, false);
+        udpif_recv_set(udpif, n_handlers, true);
     }
 }
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 Nicira, Inc.
+/* Copyright (c) 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ struct dpif_backer;
 
 struct udpif *udpif_create(struct dpif_backer *, struct dpif *);
 void udpif_recv_set(struct udpif *, size_t n_workers, bool enable);
+void udpif_synchronize(struct udpif *);
 void udpif_destroy(struct udpif *);
 
 void udpif_wait(struct udpif *);
