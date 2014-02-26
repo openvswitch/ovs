@@ -65,8 +65,10 @@ int write_fully(int fd, const void *, size_t, size_t *bytes_written);
 int fsync_parent_dir(const char *file_name);
 int get_mtime(const char *file_name, struct timespec *mtime);
 
+#ifndef _WIN32
 void xpipe(int fds[2]);
 void xpipe_nonblocking(int fds[2]);
+#endif
 
 char *describe_fd(int fd);
 

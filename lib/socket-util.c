@@ -1047,6 +1047,7 @@ get_mtime(const char *file_name, struct timespec *mtime)
     }
 }
 
+#ifndef _WIN32
 void
 xpipe(int fds[2])
 {
@@ -1062,6 +1063,7 @@ xpipe_nonblocking(int fds[2])
     xset_nonblocking(fds[0]);
     xset_nonblocking(fds[1]);
 }
+#endif
 
 static int
 getsockopt_int(int fd, int level, int option, const char *optname, int *valuep)
