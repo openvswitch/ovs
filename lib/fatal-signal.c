@@ -41,7 +41,11 @@
 VLOG_DEFINE_THIS_MODULE(fatal_signal);
 
 /* Signals to catch. */
+#ifndef _WIN32
 static const int fatal_signals[] = { SIGTERM, SIGINT, SIGHUP, SIGALRM };
+#else
+static const int fatal_signals[] = { SIGTERM };
+#endif
 
 /* Hooks to call upon catching a signal */
 struct hook {
@@ -55,6 +59,7 @@ static struct hook hooks[MAX_HOOKS];
 static size_t n_hooks;
 
 static int signal_fds[2];
+HANDLE wevent;
 static volatile sig_atomic_t stored_sig_nr = SIG_ATOMIC_MAX;
 
 static struct ovs_mutex mutex;
@@ -78,10 +83,19 @@ fatal_signal_init(void)
         inited = true;
 
         ovs_mutex_init_recursive(&mutex);
+#ifndef _WIN32
         xpipe_nonblocking(signal_fds);
+#else
+        wevent = CreateEvent(NULL, TRUE, FALSE, NULL);
+        if (!wevent) {
+            char *msg_buf = ovs_lasterror_to_string();
+            VLOG_FATAL("Failed to create a event (%s).", msg_buf);
+        }
+#endif
 
         for (i = 0; i < ARRAY_SIZE(fatal_signals); i++) {
             int sig_nr = fatal_signals[i];
+#ifndef _WIN32
             struct sigaction old_sa;
 
             xsigaction(sig_nr, NULL, &old_sa);
@@ -89,6 +103,11 @@ fatal_signal_init(void)
                 && signal(sig_nr, fatal_signal_handler) == SIG_ERR) {
                 VLOG_FATAL("signal failed (%s)", ovs_strerror(errno));
             }
+#else
+            if (signal(sig_nr, fatal_signal_handler) == SIG_ERR) {
+                VLOG_FATAL("signal failed (%s)", ovs_strerror(errno));
+            }
+#endif
         }
         atexit(atexit_handler);
     }
@@ -136,7 +155,11 @@ fatal_signal_add_hook(void (*hook_cb)(void *aux), void (*cancel_cb)(void *aux),
 void
 fatal_signal_handler(int sig_nr)
 {
+#ifndef _WIN32
     ignore(write(signal_fds[1], "", 1));
+#else
+    SetEvent(wevent);
+#endif
     stored_sig_nr = sig_nr;
 }
 
@@ -164,8 +187,12 @@ fatal_signal_run(void)
 
         ovs_mutex_lock(&mutex);
 
+#ifndef _WIN32
         VLOG_WARN("terminating with signal %d (%s)",
                   (int)sig_nr, signal_name(sig_nr, namebuf, sizeof namebuf));
+#else
+        VLOG_WARN("terminating with signal %d", (int)sig_nr);
+#endif
         call_hooks(sig_nr);
 
         /* Re-raise the signal with the default handling so that the program
@@ -182,7 +209,7 @@ void
 fatal_signal_wait(void)
 {
     fatal_signal_init();
-    poll_fd_wait(signal_fds[0], POLLIN);
+    poll_fd_wait_event(signal_fds[0], wevent, POLLIN);
 }
 
 static void

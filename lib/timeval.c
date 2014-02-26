@@ -282,7 +282,12 @@ time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
 #endif
 
         if (deadline <= time_msec()) {
+#ifndef _WIN32
             fatal_signal_handler(SIGALRM);
+#else
+            VLOG_ERR("wake up from WaitForMultipleObjects after deadline");
+            fatal_signal_handler(SIGTERM);
+#endif
             if (retval < 0) {
                 retval = 0;
             }
