@@ -176,8 +176,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/shash.h \
 	lib/simap.c \
 	lib/simap.h \
-	lib/signals.c \
-	lib/signals.h \
 	lib/smap.c \
 	lib/smap.h \
 	lib/socket-util.c \
@@ -244,6 +242,8 @@ else
 lib_libopenvswitch_la_SOURCES += \
 	lib/daemon.c \
 	lib/latch-unix.c \
+	lib/signals.c \
+	lib/signals.h \
 	lib/stream-fd-unix.c \
 	lib/stream-unix.c
 endif
