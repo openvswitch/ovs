@@ -218,6 +218,14 @@ fatal_signal_wait(void)
     poll_fd_wait_event(signal_fds[0], wevent, POLLIN);
 }
 
+void
+fatal_ignore_sigpipe(void)
+{
+#ifndef _WIN32
+    signal(SIGPIPE, SIG_IGN);
+#endif
+}
+
 static void
 atexit_handler(void)
 {

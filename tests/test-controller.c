@@ -27,6 +27,7 @@
 #include "command-line.h"
 #include "compiler.h"
 #include "daemon.h"
+#include "fatal-signal.h"
 #include "learning-switch.h"
 #include "ofp-parse.h"
 #include "ofp-version-opt.h"
@@ -105,7 +106,7 @@ main(int argc, char *argv[])
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
     parse_options(argc, argv);
-    signal(SIGPIPE, SIG_IGN);
+    fatal_ignore_sigpipe();
 
     if (argc - optind < 1) {
         ovs_fatal(0, "at least one vconn argument required; "

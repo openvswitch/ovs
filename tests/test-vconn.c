@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include "command-line.h"
+#include "fatal-signal.h"
 #include "ofp-msgs.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
@@ -436,7 +437,7 @@ main(int argc, char *argv[])
     set_program_name(argv[0]);
     vlog_set_levels(NULL, VLF_ANY_FACILITY, VLL_EMER);
     vlog_set_levels(NULL, VLF_CONSOLE, VLL_DBG);
-    signal(SIGPIPE, SIG_IGN);
+    fatal_ignore_sigpipe();
 
     time_alarm(10);
 

@@ -27,6 +27,7 @@ void fatal_signal_add_hook(void (*hook_cb)(void *aux),
 void fatal_signal_fork(void);
 void fatal_signal_run(void);
 void fatal_signal_wait(void);
+void fatal_ignore_sigpipe(void);
 
 /* Convenience functions for unlinking files upon termination.
  *

@@ -27,6 +27,7 @@
 #include "dirs.h"
 #include "dummy.h"
 #include "dynamic-string.h"
+#include "fatal-signal.h"
 #include "file.h"
 #include "hash.h"
 #include "json.h"
@@ -137,7 +138,7 @@ main(int argc, char *argv[])
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
     service_start(&argc, &argv);
-    signal(SIGPIPE, SIG_IGN);
+    fatal_ignore_sigpipe();
     process_init();
 
     parse_options(&argc, &argv, &remotes, &unixctl_path, &run_command);

@@ -36,6 +36,7 @@
 #include "compiler.h"
 #include "dirs.h"
 #include "dynamic-string.h"
+#include "fatal-signal.h"
 #include "nx-match.h"
 #include "odp-util.h"
 #include "ofp-actions.h"
@@ -113,7 +114,7 @@ main(int argc, char *argv[])
 {
     set_program_name(argv[0]);
     parse_options(argc, argv);
-    signal(SIGPIPE, SIG_IGN);
+    fatal_ignore_sigpipe();
     run_command(argc - optind, argv + optind, get_all_commands());
     return 0;
 }

@@ -31,6 +31,7 @@
 #include "compiler.h"
 #include "dirs.h"
 #include "dynamic-string.h"
+#include "fatal-signal.h"
 #include "hash.h"
 #include "json.h"
 #include "ovsdb-data.h"
@@ -167,7 +168,7 @@ main(int argc, char *argv[])
     char *args;
 
     set_program_name(argv[0]);
-    signal(SIGPIPE, SIG_IGN);
+    fatal_ignore_sigpipe();
     vlog_set_levels(NULL, VLF_CONSOLE, VLL_WARN);
     vlog_set_levels(&VLM_reconnect, VLF_ANY_FACILITY, VLL_WARN);
     vteprec_init();

@@ -32,6 +32,7 @@
 #include "dirs.h"
 #include "dpif.h"
 #include "dummy.h"
+#include "fatal-signal.h"
 #include "memory.h"
 #include "netdev.h"
 #include "openflow/openflow.h"
@@ -72,7 +73,7 @@ main(int argc, char *argv[])
     set_program_name(argv[0]);
     service_start(&argc, &argv);
     remote = parse_options(argc, argv, &unixctl_path);
-    signal(SIGPIPE, SIG_IGN);
+    fatal_ignore_sigpipe();
     ovsrec_init();
 
     daemonize_start();
