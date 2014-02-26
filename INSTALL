@@ -36,11 +36,15 @@ you will need the following software:
 
     - Python 2.x, for x >= 4.
 
-To compile the kernel module on Linux, you must also install the
-following.  If you cannot build or install the kernel module, you may
-use the userspace-only implementation, at a cost in performance.  The
-userspace implementation may also lack some features.  Refer to
-INSTALL.userspace for more information.
+On Linux, you may choose to compile the kernel module that comes with
+the Open vSwitch distribution or to use the kernel module built into
+the Linux kernel (version 3.3 or later).  See the FAQ question "What
+features are not available in the Open vSwitch kernel datapath that
+ships as part of the upstream Linux kernel?" for more information on
+this trade-off.  You may also use the userspace-only implementation,
+at some cost in features and performance (see INSTALL.userspace for
+details).  To compile the kernel module on Linux, you must also
+install the following:
 
     - A supported Linux kernel version.  Please refer to README for a
       list of supported versions.
