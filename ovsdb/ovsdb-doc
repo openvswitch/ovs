@@ -270,7 +270,7 @@ def docsToNroff(schemaFile, xmlFile, erFile, title=None, version=None):
     # Putting '\" p as the first line tells "man" that the manpage
     # needs to be preprocessed by "pic".
     s = r''''\" p
-.TH "%s" 5 "%s" "Open vSwitch" "Open vSwitch Manual"
+.TH "%s" 5 " DB Schema %s" "Open vSwitch %s" "Open vSwitch Manual"
 .\" -*- nroff -*-
 .de TQ
 .  br
@@ -286,7 +286,7 @@ def docsToNroff(schemaFile, xmlFile, erFile, title=None, version=None):
 .SH NAME
 %s \- %s database schema
 .PP
-''' % (title, version, textToNroff(schema.name), schema.name)
+''' % (title, schema.version, version, textToNroff(schema.name), schema.name)
 
     tables = ""
     introNodes = []
