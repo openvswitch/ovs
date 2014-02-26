@@ -818,6 +818,25 @@ flow_wildcards_set_reg_mask(struct flow_wildcards *wc, int idx, uint32_t mask)
     wc->masks.regs[idx] = mask;
 }
 
+/* Calculates the 5-tuple hash from the given flow. */
+uint32_t
+flow_hash_5tuple(const struct flow *flow, uint32_t basis)
+{
+    uint32_t hash = 0;
+
+    if (!flow) {
+        return 0;
+    }
+
+    hash = mhash_add(hash, (OVS_FORCE unsigned int) flow->nw_src);
+    hash = mhash_add(basis, (OVS_FORCE unsigned int) flow->nw_dst);
+    hash = mhash_add(hash, ((OVS_FORCE unsigned int) flow->tp_src << 16)
+                           | (OVS_FORCE unsigned int) flow->tp_dst);
+    hash = mhash_add(hash, flow->nw_proto);
+
+    return mhash_finish(hash, 13);
+}
+
 /* Hashes 'flow' based on its L2 through L4 protocol information. */
 uint32_t
 flow_hash_symmetric_l4(const struct flow *flow, uint32_t basis)
