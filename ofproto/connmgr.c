@@ -1456,9 +1456,11 @@ static void schedule_packet_in(struct ofconn *, struct ofproto_packet_in,
                                enum ofp_packet_in_reason wire_reason);
 
 /* Sends an OFPT_PORT_STATUS message with 'opp' and 'reason' to appropriate
- * controllers managed by 'mgr'. */
+ * controllers managed by 'mgr'.  For messages caused by a controller
+ * OFPT_PORT_MOD, specify 'source' as the controller connection that sent the
+ * request; otherwise, specify 'source' as NULL. */
 void
-connmgr_send_port_status(struct connmgr *mgr,
+connmgr_send_port_status(struct connmgr *mgr, struct ofconn *source,
                          const struct ofputil_phy_port *pp, uint8_t reason)
 {
     /* XXX Should limit the number of queued port status change messages. */
@@ -1470,6 +1472,30 @@ connmgr_send_port_status(struct connmgr *mgr,
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
         if (ofconn_receives_async_msg(ofconn, OAM_PORT_STATUS, reason)) {
             struct ofpbuf *msg;
+
+            /* Before 1.5, OpenFlow specified that OFPT_PORT_MOD should not
+             * generate OFPT_PORT_STATUS messages.  That requirement was a
+             * relic of how OpenFlow originally supported a single controller,
+             * so that one could expect the controller to already know the
+             * changes it had made.
+             *
+             * EXT-338 changes OpenFlow 1.5 OFPT_PORT_MOD to send
+             * OFPT_PORT_STATUS messages to every controller.  This is
+             * obviously more useful in the multi-controller case.  We could
+             * always implement it that way in OVS, but that would risk
+             * confusing controllers that are intended for single-controller
+             * use only.  (Imagine a controller that generates an OFPT_PORT_MOD
+             * in response to any OFPT_PORT_STATUS!)
+             *
+             * So this compromises: for OpenFlow 1.4 and earlier, it generates
+             * OFPT_PORT_STATUS for OFPT_PORT_MOD, but not back to the
+             * originating controller.  In a single-controller environment, in
+             * particular, this means that it will never generate
+             * OFPT_PORT_STATUS for OFPT_PORT_MOD at all. */
+            if (ofconn == source
+                && rconn_get_version(ofconn->rconn) < OFP15_VERSION) {
+                continue;
+            }
 
             msg = ofputil_encode_port_status(&ps, ofconn_get_protocol(ofconn));
             ofconn_send(ofconn, msg, NULL);

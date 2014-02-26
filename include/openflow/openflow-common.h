@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2011, 2012, 2013 The Board of Trustees of The Leland Stanford
+/* Copyright (c) 2008, 2011, 2012, 2013, 2014 The Board of Trustees of The Leland Stanford
  * Junior University
  *
  * We are making the OpenFlow specification and associated documentation
@@ -32,7 +32,7 @@
  */
 
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008-2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,6 +76,12 @@ enum ofp_version {
     OFP11_VERSION = 0x02,
     OFP12_VERSION = 0x03,
     OFP13_VERSION = 0x04
+
+    /* When we add real support for these versions, add them to the enum so
+     * that we get compiler warnings everywhere we might forget to provide
+     * support.  Until then, keep them as macros to avoid those warnings. */
+#define OFP14_VERSION 0x05
+#define OFP15_VERSION 0x06
 };
 
 /* Vendor (aka experimenter) IDs.

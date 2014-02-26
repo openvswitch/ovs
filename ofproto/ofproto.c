@@ -2193,7 +2193,7 @@ ofport_install(struct ofproto *p,
     if (error) {
         goto error;
     }
-    connmgr_send_port_status(p->connmgr, pp, OFPPR_ADD);
+    connmgr_send_port_status(p->connmgr, NULL, pp, OFPPR_ADD);
     return;
 
 error:
@@ -2210,7 +2210,7 @@ error:
 static void
 ofport_remove(struct ofport *ofport)
 {
-    connmgr_send_port_status(ofport->ofproto->connmgr, &ofport->pp,
+    connmgr_send_port_status(ofport->ofproto->connmgr, NULL, &ofport->pp,
                              OFPPR_DELETE);
     ofport_destroy(ofport);
 }
@@ -2245,7 +2245,8 @@ ofport_modified(struct ofport *port, struct ofputil_phy_port *pp)
     port->pp.curr_speed = pp->curr_speed;
     port->pp.max_speed = pp->max_speed;
 
-    connmgr_send_port_status(port->ofproto->connmgr, &port->pp, OFPPR_MODIFY);
+    connmgr_send_port_status(port->ofproto->connmgr, NULL,
+                             &port->pp, OFPPR_MODIFY);
 }
 
 /* Update OpenFlow 'state' in 'port' and notify controller. */
@@ -2254,8 +2255,8 @@ ofproto_port_set_state(struct ofport *port, enum ofputil_port_state state)
 {
     if (port->pp.state != state) {
         port->pp.state = state;
-        connmgr_send_port_status(port->ofproto->connmgr, &port->pp,
-                                 OFPPR_MODIFY);
+        connmgr_send_port_status(port->ofproto->connmgr, NULL,
+                                 &port->pp, OFPPR_MODIFY);
     }
 }
 
@@ -2975,26 +2976,27 @@ exit:
 }
 
 static void
-update_port_config(struct ofport *port,
+update_port_config(struct ofconn *ofconn, struct ofport *port,
                    enum ofputil_port_config config,
                    enum ofputil_port_config mask)
 {
-    enum ofputil_port_config old_config = port->pp.config;
-    enum ofputil_port_config toggle;
+    enum ofputil_port_config toggle = (config ^ port->pp.config) & mask;
 
-    toggle = (config ^ port->pp.config) & mask;
-    if (toggle & OFPUTIL_PC_PORT_DOWN) {
-        if (config & OFPUTIL_PC_PORT_DOWN) {
-            netdev_turn_flags_off(port->netdev, NETDEV_UP, NULL);
-        } else {
-            netdev_turn_flags_on(port->netdev, NETDEV_UP, NULL);
-        }
+    if (toggle & OFPUTIL_PC_PORT_DOWN
+        && (config & OFPUTIL_PC_PORT_DOWN
+            ? netdev_turn_flags_off(port->netdev, NETDEV_UP, NULL)
+            : netdev_turn_flags_on(port->netdev, NETDEV_UP, NULL))) {
+        /* We tried to bring the port up or down, but it failed, so don't
+         * update the "down" bit. */
         toggle &= ~OFPUTIL_PC_PORT_DOWN;
     }
 
-    port->pp.config ^= toggle;
-    if (port->pp.config != old_config) {
+    if (toggle) {
+        enum ofputil_port_config old_config = port->pp.config;
+        port->pp.config ^= toggle;
         port->ofproto->ofproto_class->port_reconfigured(port, old_config);
+        connmgr_send_port_status(port->ofproto->connmgr, ofconn, &port->pp,
+                                 OFPPR_MODIFY);
     }
 }
 
@@ -3022,7 +3024,7 @@ handle_port_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     } else if (!eth_addr_equals(port->pp.hw_addr, pm.hw_addr)) {
         return OFPERR_OFPPMFC_BAD_HW_ADDR;
     } else {
-        update_port_config(port, pm.config, pm.mask);
+        update_port_config(ofconn, port, pm.config, pm.mask);
         if (pm.advertise) {
             netdev_set_advertisements(port->netdev, pm.advertise);
         }

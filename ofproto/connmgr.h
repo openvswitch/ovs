@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -147,7 +147,7 @@ void ofconn_remove_opgroup(struct ofconn *, struct list *,
                            const struct ofp_header *request, int error);
 
 /* Sending asynchronous messages. */
-void connmgr_send_port_status(struct connmgr *,
+void connmgr_send_port_status(struct connmgr *, struct ofconn *source,
                               const struct ofputil_phy_port *, uint8_t reason);
 void connmgr_send_flow_removed(struct connmgr *,
                                const struct ofputil_flow_removed *);
