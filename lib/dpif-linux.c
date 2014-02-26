@@ -439,8 +439,11 @@ get_vport_type(const struct dpif_linux_vport *vport)
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
     switch (vport->type) {
-    case OVS_VPORT_TYPE_NETDEV:
-        return "system";
+    case OVS_VPORT_TYPE_NETDEV: {
+        const char *type = netdev_get_type_from_name(vport->name);
+
+        return type ? type : "system";
+    }
 
     case OVS_VPORT_TYPE_INTERNAL:
         return "internal";
