@@ -2793,9 +2793,9 @@ done
 ovs-appctl time/warp 1000
 
 AT_CHECK([ovs-ofctl dump-flows br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=0.0s/p'], [0], [dnl
- cookie=0x0, duration=0.0s, table=0, n_packets=10, n_bytes=600, idle_age=1, ip actions=NORMAL
+AT_CHECK([STRIP_XIDS stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=0.0s/p' | sort], [0], [dnl
  cookie=0x0, duration=0.0s, table=0, n_packets=0, n_bytes=0, idle_age=1, icmp actions=NORMAL
+ cookie=0x0, duration=0.0s, table=0, n_packets=10, n_bytes=600, idle_age=1, ip actions=NORMAL
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -2816,9 +2816,9 @@ AT_CHECK([ovs-vsctl set Open_vSwitch . other-config:n-revalidator-threads=2])
 ovs-appctl time/warp 1000
 
 AT_CHECK([ovs-ofctl dump-flows br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=0.0s/p'], [0], [dnl
- cookie=0x0, duration=0.0s, table=0, n_packets=10, n_bytes=600, idle_age=1, ip actions=NORMAL
+AT_CHECK([STRIP_XIDS stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=0.0s/p' | sort], [0], [dnl
  cookie=0x0, duration=0.0s, table=0, n_packets=0, n_bytes=0, idle_age=1, icmp actions=NORMAL
+ cookie=0x0, duration=0.0s, table=0, n_packets=10, n_bytes=600, idle_age=1, ip actions=NORMAL
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
