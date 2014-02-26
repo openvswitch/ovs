@@ -1466,12 +1466,17 @@ push_dump_ops(struct revalidator *revalidator,
     }
 
     for (i = 0; i < n_ops; i++) {
-        struct udpif_key *ukey = ops[i].ukey;
+        struct udpif_key *ukey;
 
-        /* Look up the ukey to prevent double-free in case 'ops' contains a
-         * given ukey more than once (which can happen if the datapath dumps a
-         * given flow more than once). */
-        ukey = ukey_lookup(revalidator, ops[i].udump);
+        /* If there's a udump, this ukey came directly from a datapath flow
+         * dump.  Sometimes a datapath can send duplicates in flow dumps, in
+         * which case we wouldn't want to double-free a ukey, so avoid that by
+         * looking up the ukey again.
+         *
+         * If there's no udump then we know what we're doing. */
+        ukey = (ops[i].udump
+                ? ukey_lookup(revalidator, ops[i].udump)
+                : ops[i].ukey);
         if (ukey) {
             ukey_delete(revalidator, ukey);
         }
