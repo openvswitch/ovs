@@ -50,6 +50,7 @@ $(srcdir)/vtep/vtep.5: \
 	$(OVSDB_DOC) \
 		--title="vtep" \
 		$(VTEP_DOT_DIAGRAM_ARG) \
+		--version=$(VERSION) \
 		$(srcdir)/vtep/vtep.ovsschema \
 		$(srcdir)/vtep/vtep.xml > $@.tmp
 	mv $@.tmp $@
