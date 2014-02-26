@@ -66,6 +66,9 @@ static struct ovs_mutex mutex;
 
 static void atexit_handler(void);
 static void call_hooks(int sig_nr);
+#ifdef _WIN32
+static BOOL WINAPI ConsoleHandlerRoutine(DWORD dwCtrlType);
+#endif
 
 /* Initializes the fatal signal handling module.  Calling this function is
  * optional, because calling any other function in the module will also
@@ -91,6 +94,9 @@ fatal_signal_init(void)
             char *msg_buf = ovs_lasterror_to_string();
             VLOG_FATAL("Failed to create a event (%s).", msg_buf);
         }
+
+        /* Register a function to handle Ctrl+C. */
+        SetConsoleCtrlHandler(ConsoleHandlerRoutine, true);
 #endif
 
         for (i = 0; i < ARRAY_SIZE(fatal_signals); i++) {
@@ -235,6 +241,15 @@ call_hooks(int sig_nr)
         }
     }
 }
+
+#ifdef _WIN32
+BOOL WINAPI ConsoleHandlerRoutine(DWORD dwCtrlType)
+{
+    stored_sig_nr = SIGINT;
+    SetEvent(wevent);
+    return true;
+}
+#endif
 
 /* Files to delete on exit. */
 static struct sset files = SSET_INITIALIZER(&files);
