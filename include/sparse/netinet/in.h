@@ -58,6 +58,7 @@ struct sockaddr_in6 {
 };
 
 #define IPPROTO_IP 0
+#define IPPROTO_IPV6  41
 #define IPPROTO_HOPOPTS 0
 #define IPPROTO_ICMP 1
 #define IPPROTO_TCP 6
@@ -97,6 +98,8 @@ struct sockaddr_in6 {
 #define INADDR_NONE             0xffffffff
 
 #define INET6_ADDRSTRLEN 46
+
+#define IPV6_TCLASS   67
 
 static inline ovs_be32 htonl(uint32_t x)
 {
