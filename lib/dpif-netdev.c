@@ -1315,7 +1315,8 @@ struct dp_netdev_flow_state {
 struct dp_netdev_flow_iter {
     uint32_t bucket;
     uint32_t offset;
-    void *state;
+    int status;
+    struct ovs_mutex mutex;
 };
 
 static void
@@ -1344,32 +1345,43 @@ dpif_netdev_flow_dump_start(const struct dpif *dpif OVS_UNUSED, void **iterp)
     *iterp = iter = xmalloc(sizeof *iter);
     iter->bucket = 0;
     iter->offset = 0;
-    dpif_netdev_flow_dump_state_init(&iter->state);
+    iter->status = 0;
+    ovs_mutex_init(&iter->mutex);
     return 0;
 }
 
 static int
-dpif_netdev_flow_dump_next(const struct dpif *dpif, void *iter_,
+dpif_netdev_flow_dump_next(const struct dpif *dpif, void *iter_, void *state_,
                            const struct nlattr **key, size_t *key_len,
                            const struct nlattr **mask, size_t *mask_len,
                            const struct nlattr **actions, size_t *actions_len,
                            const struct dpif_flow_stats **stats)
 {
     struct dp_netdev_flow_iter *iter = iter_;
-    struct dp_netdev_flow_state *state = iter->state;
+    struct dp_netdev_flow_state *state = state_;
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *netdev_flow;
-    struct hmap_node *node;
+    int error;
 
-    fat_rwlock_rdlock(&dp->cls.rwlock);
-    node = hmap_at_position(&dp->flow_table, &iter->bucket, &iter->offset);
-    if (node) {
-        netdev_flow = CONTAINER_OF(node, struct dp_netdev_flow, node);
-        dp_netdev_flow_ref(netdev_flow);
+    ovs_mutex_lock(&iter->mutex);
+    error = iter->status;
+    if (!error) {
+        struct hmap_node *node;
+
+        fat_rwlock_rdlock(&dp->cls.rwlock);
+        node = hmap_at_position(&dp->flow_table, &iter->bucket, &iter->offset);
+        if (node) {
+            netdev_flow = CONTAINER_OF(node, struct dp_netdev_flow, node);
+            dp_netdev_flow_ref(netdev_flow);
+        }
+        fat_rwlock_unlock(&dp->cls.rwlock);
+        if (!node) {
+            iter->status = error = EOF;
+        }
     }
-    fat_rwlock_unlock(&dp->cls.rwlock);
-    if (!node) {
-        return EOF;
+    ovs_mutex_unlock(&iter->mutex);
+    if (error) {
+        return error;
     }
 
     if (key) {
@@ -1424,7 +1436,7 @@ dpif_netdev_flow_dump_done(const struct dpif *dpif OVS_UNUSED, void *iter_)
 {
     struct dp_netdev_flow_iter *iter = iter_;
 
-    dpif_netdev_flow_dump_state_uninit(iter->state);
+    ovs_mutex_destroy(&iter->mutex);
     free(iter);
     return 0;
 }

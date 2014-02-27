@@ -1000,7 +1000,7 @@ struct dpif_linux_flow_state {
 
 struct dpif_linux_flow_iter {
     struct nl_dump dump;
-    void *state;
+    atomic_int status;
 };
 
 static void
@@ -1041,21 +1041,20 @@ dpif_linux_flow_dump_start(const struct dpif *dpif_, void **iterp)
     dpif_linux_flow_to_ofpbuf(&request, buf);
     nl_dump_start(&iter->dump, NETLINK_GENERIC, buf);
     ofpbuf_delete(buf);
-
-    dpif_linux_flow_dump_state_init(&iter->state);
+    atomic_init(&iter->status, 0);
 
     return 0;
 }
 
 static int
-dpif_linux_flow_dump_next(const struct dpif *dpif_, void *iter_,
+dpif_linux_flow_dump_next(const struct dpif *dpif_, void *iter_, void *state_,
                           const struct nlattr **key, size_t *key_len,
                           const struct nlattr **mask, size_t *mask_len,
                           const struct nlattr **actions, size_t *actions_len,
                           const struct dpif_flow_stats **stats)
 {
     struct dpif_linux_flow_iter *iter = iter_;
-    struct dpif_linux_flow_state *state = iter->state;
+    struct dpif_linux_flow_state *state = state_;
     struct ofpbuf buf;
     int error;
 
@@ -1069,6 +1068,7 @@ dpif_linux_flow_dump_next(const struct dpif *dpif_, void *iter_,
 
         error = dpif_linux_flow_from_ofpbuf(&state->flow, &buf);
         if (error) {
+            atomic_store(&iter->status, error);
             return error;
         }
 
@@ -1108,10 +1108,13 @@ static int
 dpif_linux_flow_dump_done(const struct dpif *dpif OVS_UNUSED, void *iter_)
 {
     struct dpif_linux_flow_iter *iter = iter_;
-    int error = nl_dump_done(&iter->dump);
-    dpif_linux_flow_dump_state_uninit(iter->state);
+    int dump_status;
+    unsigned int nl_status = nl_dump_done(&iter->dump);
+
+    atomic_read(&iter->status, &dump_status);
+    atomic_destroy(&iter->status);
     free(iter);
-    return error;
+    return dump_status ? dump_status : nl_status;
 }
 
 static void

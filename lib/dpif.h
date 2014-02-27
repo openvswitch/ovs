@@ -356,11 +356,19 @@
  *      thread-safe: they may be called from different threads only on
  *      different dpif objects.
  *
- *    - Functions that operate on struct dpif_port_dump or struct
- *      dpif_flow_dump are conditionally thread-safe with respect to those
- *      objects.  That is, one may dump ports or flows from any number of
- *      threads at once, but each thread must use its own struct dpif_port_dump
- *      or dpif_flow_dump.
+ *    - dpif_flow_dump_next() is conditionally thread-safe: It may be called
+ *      from different threads with the same 'struct dpif_flow_dump', but all
+ *      other parameters must be different for each thread.
+ *
+ *    - dpif_flow_dump_done() is conditionally thread-safe: All threads that
+ *      share the same 'struct dpif_flow_dump' must have finished using it.
+ *      This function must then be called exactly once for a particular
+ *      dpif_flow_dump to finish the corresponding flow dump operation.
+ *
+ *    - Functions that operate on 'struct dpif_port_dump' are conditionally
+ *      thread-safe with respect to those objects.  That is, one may dump ports
+ *      from any number of threads at once, but each thread must use its own
+ *      struct dpif_port_dump.
  */
 #ifndef DPIF_H
 #define DPIF_H 1
@@ -511,7 +519,7 @@ struct dpif_flow_dump {
 };
 void dpif_flow_dump_state_init(const struct dpif *, void **statep);
 void dpif_flow_dump_start(struct dpif_flow_dump *, const struct dpif *);
-bool dpif_flow_dump_next(struct dpif_flow_dump *,
+bool dpif_flow_dump_next(struct dpif_flow_dump *, void *state,
                          const struct nlattr **key, size_t *key_len,
                          const struct nlattr **mask, size_t *mask_len,
                          const struct nlattr **actions, size_t *actions_len,

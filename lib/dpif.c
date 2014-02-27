@@ -992,12 +992,17 @@ dpif_flow_dump_start(struct dpif_flow_dump *dump, const struct dpif *dpif)
     log_operation(dpif, "flow_dump_start", dump->error);
 }
 
-/* Attempts to retrieve another flow from 'dump', which must have been
- * initialized with dpif_flow_dump_start().  On success, updates the output
- * parameters as described below and returns true.  Otherwise, returns false.
- * Failure might indicate an actual error or merely the end of the flow table.
- * An error status for the entire dump operation is provided when it is
- * completed by calling dpif_flow_dump_done().
+/* Attempts to retrieve another flow from 'dump', using 'state' for
+ * thread-local storage. 'dump' must have been initialized with
+ * dpif_flow_dump_start(), and 'state' must have been initialized with
+ * dpif_flow_state_init().
+ *
+ * On success, updates the output parameters as described below and returns
+ * true. Otherwise, returns false. Failure might indicate an actual error or
+ * merely the end of the flow table. An error status for the entire dump
+ * operation is provided when it is completed by calling dpif_flow_dump_done().
+ * Multiple threads may use the same 'dump' with this function, but all other
+ * parameters must not be shared.
  *
  * On success, if 'key' and 'key_len' are nonnull then '*key' and '*key_len'
  * will be set to Netlink attributes with types OVS_KEY_ATTR_* representing the
@@ -1009,9 +1014,9 @@ dpif_flow_dump_start(struct dpif_flow_dump *dump, const struct dpif *dpif)
  * All of the returned data is owned by 'dpif', not by the caller, and the
  * caller must not modify or free it.  'dpif' guarantees that it remains
  * accessible and unchanging until at least the next call to 'flow_dump_next'
- * or 'flow_dump_done' for 'dump'. */
+ * or 'flow_dump_done' for 'dump' and 'state'. */
 bool
-dpif_flow_dump_next(struct dpif_flow_dump *dump,
+dpif_flow_dump_next(struct dpif_flow_dump *dump, void *state,
                     const struct nlattr **key, size_t *key_len,
                     const struct nlattr **mask, size_t *mask_len,
                     const struct nlattr **actions, size_t *actions_len,
@@ -1021,7 +1026,7 @@ dpif_flow_dump_next(struct dpif_flow_dump *dump,
     int error = dump->error;
 
     if (!error) {
-        error = dpif->dpif_class->flow_dump_next(dpif, dump->iter,
+        error = dpif->dpif_class->flow_dump_next(dpif, dump->iter, state,
                                                  key, key_len,
                                                  mask, mask_len,
                                                  actions, actions_len,

@@ -552,6 +552,7 @@ udpif_flow_dumper(void *arg)
         bool need_revalidate;
         uint64_t reval_seq;
         size_t n_flows, i;
+        void *state = NULL;
 
         reval_seq = seq_read(udpif->reval_seq);
         need_revalidate = udpif->last_reval_seq != reval_seq;
@@ -563,8 +564,9 @@ udpif_flow_dumper(void *arg)
 
         start_time = time_msec();
         dpif_flow_dump_start(&dump, udpif->dpif);
-        while (dpif_flow_dump_next(&dump, &key, &key_len, &mask, &mask_len,
-                                   NULL, NULL, &stats)
+        dpif_flow_dump_state_init(udpif->dpif, &state);
+        while (dpif_flow_dump_next(&dump, state, &key, &key_len,
+                                   &mask, &mask_len, NULL, NULL, &stats)
                && !latch_is_set(&udpif->exit_latch)) {
             struct udpif_flow_dump *udump = xmalloc(sizeof *udump);
             struct revalidator *revalidator;
@@ -595,6 +597,7 @@ udpif_flow_dumper(void *arg)
             xpthread_cond_signal(&revalidator->wake_cond);
             ovs_mutex_unlock(&revalidator->mutex);
         }
+        dpif_flow_dump_state_uninit(udpif->dpif, state);
         dpif_flow_dump_done(&dump);
 
         /* Let all the revalidators finish and garbage collect. */

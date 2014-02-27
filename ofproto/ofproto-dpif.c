@@ -4165,6 +4165,7 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
     struct dpif_port dpif_port;
     struct dpif_port_dump port_dump;
     struct hmap portno_names;
+    void *state = NULL;
 
     ofproto = ofproto_dpif_lookup(argv[argc - 1]);
     if (!ofproto) {
@@ -4183,8 +4184,10 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
 
     ds_init(&ds);
     dpif_flow_dump_start(&flow_dump, ofproto->backer->dpif);
-    while (dpif_flow_dump_next(&flow_dump, &key, &key_len, &mask, &mask_len,
-                               &actions, &actions_len, &stats)) {
+    dpif_flow_dump_state_init(ofproto->backer->dpif, &state);
+    while (dpif_flow_dump_next(&flow_dump, state, &key, &key_len,
+                               &mask, &mask_len, &actions, &actions_len,
+                               &stats)) {
         if (!ofproto_dpif_contains_flow(ofproto, key, key_len)) {
             continue;
         }
@@ -4197,6 +4200,7 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
         format_odp_actions(&ds, actions, actions_len);
         ds_put_char(&ds, '\n');
     }
+    dpif_flow_dump_state_uninit(ofproto->backer->dpif, state);
 
     if (dpif_flow_dump_done(&flow_dump)) {
         ds_clear(&ds);

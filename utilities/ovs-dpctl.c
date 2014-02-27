@@ -764,6 +764,7 @@ dpctl_dump_flows(int argc, char *argv[])
     char *name, *error, *filter = NULL;
     struct flow flow_filter;
     struct flow_wildcards wc_filter;
+    void *state = NULL;
 
     if (argc > 1 && !strncmp(argv[argc - 1], "filter=", 7)) {
         filter = xstrdup(argv[--argc] + 7);
@@ -791,9 +792,10 @@ dpctl_dump_flows(int argc, char *argv[])
 
     ds_init(&ds);
     dpif_flow_dump_start(&flow_dump, dpif);
-    while (dpif_flow_dump_next(&flow_dump, &key, &key_len,
-                               &mask, &mask_len,
-                               &actions, &actions_len, &stats)) {
+    dpif_flow_dump_state_init(dpif, &state);
+    while (dpif_flow_dump_next(&flow_dump, state, &key, &key_len,
+                               &mask, &mask_len, &actions, &actions_len,
+                               &stats)) {
         if (filter) {
             struct flow flow;
             struct flow_wildcards wc;
@@ -824,6 +826,7 @@ dpctl_dump_flows(int argc, char *argv[])
         format_odp_actions(&ds, actions, actions_len);
         printf("%s\n", ds_cstr(&ds));
     }
+    dpif_flow_dump_state_uninit(dpif, state);
     dpif_flow_dump_done(&flow_dump);
 
     free(filter);
