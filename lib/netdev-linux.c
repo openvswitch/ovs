@@ -2184,8 +2184,13 @@ netdev_linux_get_queue_stats(const struct netdev *netdev_,
     return error;
 }
 
+struct queue_dump_state {
+    struct nl_dump dump;
+    struct ofpbuf buf;
+};
+
 static bool
-start_queue_dump(const struct netdev *netdev, struct nl_dump *dump)
+start_queue_dump(const struct netdev *netdev, struct queue_dump_state *state)
 {
     struct ofpbuf request;
     struct tcmsg *tcmsg;
@@ -2195,9 +2200,18 @@ start_queue_dump(const struct netdev *netdev, struct nl_dump *dump)
         return false;
     }
     tcmsg->tcm_parent = 0;
-    nl_dump_start(dump, NETLINK_ROUTE, &request);
+    nl_dump_start(&state->dump, NETLINK_ROUTE, &request);
     ofpbuf_uninit(&request);
+
+    ofpbuf_init(&state->buf, NL_DUMP_BUFSIZE);
     return true;
+}
+
+static int
+finish_queue_dump(struct queue_dump_state *state)
+{
+    ofpbuf_uninit(&state->buf);
+    return nl_dump_done(&state->dump);
 }
 
 struct netdev_linux_queue_state {
@@ -2283,17 +2297,17 @@ netdev_linux_dump_queue_stats(const struct netdev *netdev_,
     ovs_mutex_lock(&netdev->mutex);
     error = tc_query_qdisc(netdev_);
     if (!error) {
-        struct nl_dump dump;
+        struct queue_dump_state state;
 
         if (!netdev->tc->ops->class_dump_stats) {
             error = EOPNOTSUPP;
-        } else if (!start_queue_dump(netdev_, &dump)) {
+        } else if (!start_queue_dump(netdev_, &state)) {
             error = ENODEV;
         } else {
             struct ofpbuf msg;
             int retval;
 
-            while (nl_dump_next(&dump, &msg)) {
+            while (nl_dump_next(&state.dump, &msg, &state.buf)) {
                 retval = netdev->tc->ops->class_dump_stats(netdev_, &msg,
                                                            cb, aux);
                 if (retval) {
@@ -2301,7 +2315,7 @@ netdev_linux_dump_queue_stats(const struct netdev *netdev_,
                 }
             }
 
-            retval = nl_dump_done(&dump);
+            retval = finish_queue_dump(&state);
             if (retval) {
                 error = retval;
             }
@@ -3079,7 +3093,7 @@ static int
 htb_tc_load(struct netdev *netdev, struct ofpbuf *nlmsg OVS_UNUSED)
 {
     struct ofpbuf msg;
-    struct nl_dump dump;
+    struct queue_dump_state state;
     struct htb_class hc;
 
     /* Get qdisc options. */
@@ -3088,17 +3102,17 @@ htb_tc_load(struct netdev *netdev, struct ofpbuf *nlmsg OVS_UNUSED)
     htb_install__(netdev, hc.max_rate);
 
     /* Get queues. */
-    if (!start_queue_dump(netdev, &dump)) {
+    if (!start_queue_dump(netdev, &state)) {
         return ENODEV;
     }
-    while (nl_dump_next(&dump, &msg)) {
+    while (nl_dump_next(&state.dump, &msg, &state.buf)) {
         unsigned int queue_id;
 
         if (!htb_parse_tcmsg__(&msg, &queue_id, &hc, NULL)) {
             htb_update_queue__(netdev, queue_id, &hc);
         }
     }
-    nl_dump_done(&dump);
+    finish_queue_dump(&state);
 
     return 0;
 }
@@ -3579,18 +3593,18 @@ static int
 hfsc_tc_load(struct netdev *netdev, struct ofpbuf *nlmsg OVS_UNUSED)
 {
     struct ofpbuf msg;
-    struct nl_dump dump;
+    struct queue_dump_state state;
     struct hfsc_class hc;
 
     hc.max_rate = 0;
     hfsc_query_class__(netdev, tc_make_handle(1, 0xfffe), 0, &hc, NULL);
     hfsc_install__(netdev, hc.max_rate);
 
-    if (!start_queue_dump(netdev, &dump)) {
+    if (!start_queue_dump(netdev, &state)) {
         return ENODEV;
     }
 
-    while (nl_dump_next(&dump, &msg)) {
+    while (nl_dump_next(&state.dump, &msg, &state.buf)) {
         unsigned int queue_id;
 
         if (!hfsc_parse_tcmsg__(&msg, &queue_id, &hc, NULL)) {
@@ -3598,7 +3612,7 @@ hfsc_tc_load(struct netdev *netdev, struct ofpbuf *nlmsg OVS_UNUSED)
         }
     }
 
-    nl_dump_done(&dump);
+    finish_queue_dump(&state);
     return 0;
 }
 

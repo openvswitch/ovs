@@ -690,7 +690,6 @@ nl_sock_drain(struct nl_sock *sock)
 void
 nl_dump_start(struct nl_dump *dump, int protocol, const struct ofpbuf *request)
 {
-    ofpbuf_init(&dump->buffer, 4096);
     dump->status = nl_pool_alloc(protocol, &dump->sock);
     if (dump->status) {
         return;
@@ -704,24 +703,24 @@ nl_dump_start(struct nl_dump *dump, int protocol, const struct ofpbuf *request)
 
 /* Helper function for nl_dump_next(). */
 static int
-nl_dump_recv(struct nl_dump *dump)
+nl_dump_recv(struct nl_dump *dump, struct ofpbuf *buffer)
 {
     struct nlmsghdr *nlmsghdr;
     int retval;
 
-    retval = nl_sock_recv__(dump->sock, &dump->buffer, true);
+    retval = nl_sock_recv__(dump->sock, buffer, true);
     if (retval) {
         return retval == EINTR ? EAGAIN : retval;
     }
 
-    nlmsghdr = nl_msg_nlmsghdr(&dump->buffer);
+    nlmsghdr = nl_msg_nlmsghdr(buffer);
     if (dump->nl_seq != nlmsghdr->nlmsg_seq) {
         VLOG_DBG_RL(&rl, "ignoring seq %#"PRIx32" != expected %#"PRIx32,
                     nlmsghdr->nlmsg_seq, dump->nl_seq);
         return EAGAIN;
     }
 
-    if (nl_msg_nlmsgerr(&dump->buffer, &retval)) {
+    if (nl_msg_nlmsgerr(buffer, &retval)) {
         VLOG_INFO_RL(&rl, "netlink dump request error (%s)",
                      ovs_strerror(retval));
         return retval && retval != EAGAIN ? retval : EPROTO;
@@ -730,12 +729,14 @@ nl_dump_recv(struct nl_dump *dump)
     return 0;
 }
 
-/* Attempts to retrieve another reply from 'dump', which must have been
- * initialized with nl_dump_start().
+/* Attempts to retrieve another reply from 'dump' into 'buffer'. 'dump' must
+ * have been initialized with nl_dump_start(), and 'buffer' must have been
+ * initialized. 'buffer' should be at least NL_DUMP_BUFSIZE bytes long.
  *
  * If successful, returns true and points 'reply->data' and 'reply->size' to
- * the message that was retrieved.  The caller must not modify 'reply' (because
- * it points into the middle of a larger buffer).
+ * the message that was retrieved. The caller must not modify 'reply' (because
+ * it points within 'buffer', which will be used by future calls to this
+ * function).
  *
  * On failure, returns false and sets 'reply->data' to NULL and 'reply->size'
  * to 0.  Failure might indicate an actual error or merely the end of replies.
@@ -743,7 +744,7 @@ nl_dump_recv(struct nl_dump *dump)
  * completed by calling nl_dump_done().
  */
 bool
-nl_dump_next(struct nl_dump *dump, struct ofpbuf *reply)
+nl_dump_next(struct nl_dump *dump, struct ofpbuf *reply, struct ofpbuf *buffer)
 {
     struct nlmsghdr *nlmsghdr;
 
@@ -753,10 +754,10 @@ nl_dump_next(struct nl_dump *dump, struct ofpbuf *reply)
         return false;
     }
 
-    while (!dump->buffer.size) {
-        int retval = nl_dump_recv(dump);
+    while (!buffer->size) {
+        int retval = nl_dump_recv(dump, buffer);
         if (retval) {
-            ofpbuf_clear(&dump->buffer);
+            ofpbuf_clear(buffer);
             if (retval != EAGAIN) {
                 dump->status = retval;
                 return false;
@@ -764,7 +765,7 @@ nl_dump_next(struct nl_dump *dump, struct ofpbuf *reply)
         }
     }
 
-    nlmsghdr = nl_msg_next(&dump->buffer, reply);
+    nlmsghdr = nl_msg_next(buffer, reply);
     if (!nlmsghdr) {
         VLOG_WARN_RL(&rl, "netlink dump reply contains message fragment");
         dump->status = EPROTO;
@@ -783,18 +784,22 @@ nl_dump_next(struct nl_dump *dump, struct ofpbuf *reply)
 int
 nl_dump_done(struct nl_dump *dump)
 {
+    uint64_t tmp_reply_stub[NL_DUMP_BUFSIZE / 8];
+    struct ofpbuf buf;
+
     /* Drain any remaining messages that the client didn't read.  Otherwise the
      * kernel will continue to queue them up and waste buffer space.
      *
      * XXX We could just destroy and discard the socket in this case. */
+    ofpbuf_use_stub(&buf, tmp_reply_stub, sizeof tmp_reply_stub);
     while (!dump->status) {
         struct ofpbuf reply;
-        if (!nl_dump_next(dump, &reply)) {
+        if (!nl_dump_next(dump, &reply, &buf)) {
             ovs_assert(dump->status);
         }
     }
     nl_pool_release(dump->sock);
-    ofpbuf_uninit(&dump->buffer);
+    ofpbuf_uninit(&buf);
     return dump->status == EOF ? 0 : dump->status;
 }
 

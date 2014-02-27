@@ -223,7 +223,8 @@ route_table_reset(void)
 {
     struct nl_dump dump;
     struct rtgenmsg *rtmsg;
-    struct ofpbuf request, reply;
+    uint64_t reply_stub[NL_DUMP_BUFSIZE / 8];
+    struct ofpbuf request, reply, buf;
 
     route_map_clear();
     route_table_valid = true;
@@ -238,13 +239,15 @@ route_table_reset(void)
     nl_dump_start(&dump, NETLINK_ROUTE, &request);
     ofpbuf_uninit(&request);
 
-    while (nl_dump_next(&dump, &reply)) {
+    ofpbuf_use_stub(&buf, reply_stub, sizeof reply_stub);
+    while (nl_dump_next(&dump, &reply, &buf)) {
         struct route_table_msg msg;
 
         if (route_table_parse(&reply, &msg)) {
             route_table_handle_msg(&msg);
         }
     }
+    ofpbuf_uninit(&buf);
 
     return nl_dump_done(&dump);
 }
@@ -407,7 +410,8 @@ name_table_reset(void)
 {
     struct nl_dump dump;
     struct rtgenmsg *rtmsg;
-    struct ofpbuf request, reply;
+    uint64_t reply_stub[NL_DUMP_BUFSIZE / 8];
+    struct ofpbuf request, reply, buf;
 
     name_table_valid = true;
     name_map_clear();
@@ -420,7 +424,8 @@ name_table_reset(void)
     nl_dump_start(&dump, NETLINK_ROUTE, &request);
     ofpbuf_uninit(&request);
 
-    while (nl_dump_next(&dump, &reply)) {
+    ofpbuf_use_stub(&buf, reply_stub, sizeof reply_stub);
+    while (nl_dump_next(&dump, &reply, &buf)) {
         struct rtnetlink_link_change change;
 
         if (rtnetlink_link_parse(&reply, &change)
@@ -434,6 +439,7 @@ name_table_reset(void)
             hmap_insert(&name_map, &nn->node, hash_int(nn->ifi_index, 0));
         }
     }
+    ofpbuf_uninit(&buf);
     return nl_dump_done(&dump);
 }
 

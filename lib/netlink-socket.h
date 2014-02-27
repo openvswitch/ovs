@@ -96,16 +96,17 @@ int nl_transact(int protocol, const struct ofpbuf *request,
 void nl_transact_multiple(int protocol, struct nl_transaction **, size_t n);
 
 /* Table dumping. */
+#define NL_DUMP_BUFSIZE         4096
+
 struct nl_dump {
     struct nl_sock *sock;       /* Socket being dumped. */
     uint32_t nl_seq;            /* Expected nlmsg_seq for replies. */
-    struct ofpbuf buffer;       /* Receive buffer currently being iterated. */
     int status;                 /* 0=OK, EOF=done, or positive errno value. */
 };
 
 void nl_dump_start(struct nl_dump *, int protocol,
                    const struct ofpbuf *request);
-bool nl_dump_next(struct nl_dump *, struct ofpbuf *reply);
+bool nl_dump_next(struct nl_dump *, struct ofpbuf *reply, struct ofpbuf *buf);
 int nl_dump_done(struct nl_dump *);
 
 /* Miscellaneous */
