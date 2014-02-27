@@ -1104,6 +1104,14 @@ dpif_linux_flow_dump_next(const struct dpif *dpif_, void *iter_, void *state_,
     return error;
 }
 
+static bool
+dpif_linux_flow_dump_next_may_destroy_keys(void *state_)
+{
+    struct dpif_linux_flow_state *state = state_;
+
+    return state->buffer.size ? false : true;
+}
+
 static int
 dpif_linux_flow_dump_done(const struct dpif *dpif OVS_UNUSED, void *iter_)
 {
@@ -1669,6 +1677,7 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_flow_dump_state_init,
     dpif_linux_flow_dump_start,
     dpif_linux_flow_dump_next,
+    dpif_linux_flow_dump_next_may_destroy_keys,
     dpif_linux_flow_dump_done,
     dpif_linux_flow_dump_state_uninit,
     dpif_linux_execute,

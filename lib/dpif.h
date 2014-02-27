@@ -523,6 +523,8 @@ bool dpif_flow_dump_next(struct dpif_flow_dump *, void *state,
                          const struct nlattr **mask, size_t *mask_len,
                          const struct nlattr **actions, size_t *actions_len,
                          const struct dpif_flow_stats **);
+bool dpif_flow_dump_next_may_destroy_keys(struct dpif_flow_dump *dump,
+                                          void *state);
 int dpif_flow_dump_done(struct dpif_flow_dump *);
 void dpif_flow_dump_state_uninit(const struct dpif *, void *state);
 

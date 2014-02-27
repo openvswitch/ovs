@@ -1056,6 +1056,27 @@ dpif_flow_dump_next(struct dpif_flow_dump *dump, void *state,
     return !error;
 }
 
+/* Determines whether the next call to 'dpif_flow_dump_next' for 'dump' and
+ * 'state' will modify or free the keys that it previously returned. 'state'
+ * must have been initialized by a call to 'dpif_flow_dump_state_init' for
+ * 'dump'.
+ *
+ * 'dpif' guarantees that data returned by flow_dump_next() will remain
+ * accessible and unchanging until the next call. This function provides a way
+ * for callers to determine whether that guarantee extends beyond the next
+ * call.
+ *
+ * Returns true if the next call to flow_dump_next() is expected to be
+ * destructive to previously returned keys for 'state', false otherwise. */
+bool
+dpif_flow_dump_next_may_destroy_keys(struct dpif_flow_dump *dump, void *state)
+{
+    const struct dpif *dpif = dump->dpif;
+    return (dpif->dpif_class->flow_dump_next_may_destroy_keys
+            ? dpif->dpif_class->flow_dump_next_may_destroy_keys(state)
+            : true);
+}
+
 /* Completes flow table dump operation 'dump', which must have been initialized
  * with a successful call to dpif_flow_dump_start().  Returns 0 if the dump
  * operation was error-free, otherwise a positive errno value describing the

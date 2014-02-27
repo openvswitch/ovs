@@ -312,6 +312,19 @@ struct dpif_class {
                           const struct nlattr **actions, size_t *actions_len,
                           const struct dpif_flow_stats **stats);
 
+    /* Determines whether the next call to 'flow_dump_next' with 'state' will
+     * modify or free the keys that it previously returned. 'state' must have
+     * been initialized by a call to 'flow_dump_state_init' for 'dpif'.
+     *
+     * 'dpif' guarantees that data returned by flow_dump_next() will remain
+     * accessible and unchanging until the next call. This function provides a
+     * way for callers to determine whether that guarantee extends beyond the
+     * next call.
+     *
+     * Returns true if the next call to flow_dump_next() is expected to be
+     * destructive to previously returned keys for 'state', false otherwise. */
+    bool (*flow_dump_next_may_destroy_keys)(void *state);
+
     /* Releases resources from 'dpif' for 'iter', which was initialized by a
      * successful call to the 'flow_dump_start' function for 'dpif'. Callers
      * must ensure that this function is called once within a given iteration,

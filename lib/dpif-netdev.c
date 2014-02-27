@@ -1892,6 +1892,7 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_flow_dump_state_init,
     dpif_netdev_flow_dump_start,
     dpif_netdev_flow_dump_next,
+    NULL,
     dpif_netdev_flow_dump_done,
     dpif_netdev_flow_dump_state_uninit,
     dpif_netdev_execute,
