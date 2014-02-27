@@ -100,6 +100,7 @@ These options control the format of output from the \fBlist\fR and
 .so lib/ssl-bootstrap.man
 .so lib/ssl-peer-ca-cert.man
 .so lib/vlog.man
+.so lib/common.man
 .
 .SH COMMANDS
 The commands implemented by \fBvtep\-ctl\fR are described in the
