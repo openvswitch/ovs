@@ -507,8 +507,9 @@ int dpif_flow_get(const struct dpif *,
 struct dpif_flow_dump {
     const struct dpif *dpif;
     int error;
-    void *state;
+    void *iter;
 };
+void dpif_flow_dump_state_init(const struct dpif *, void **statep);
 void dpif_flow_dump_start(struct dpif_flow_dump *, const struct dpif *);
 bool dpif_flow_dump_next(struct dpif_flow_dump *,
                          const struct nlattr **key, size_t *key_len,
@@ -516,6 +517,7 @@ bool dpif_flow_dump_next(struct dpif_flow_dump *,
                          const struct nlattr **actions, size_t *actions_len,
                          const struct dpif_flow_stats **);
 int dpif_flow_dump_done(struct dpif_flow_dump *);
+void dpif_flow_dump_state_uninit(const struct dpif *, void *state);
 
 /* Operation batching interface.
  *

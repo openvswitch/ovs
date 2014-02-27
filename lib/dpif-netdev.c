@@ -1306,40 +1306,63 @@ dpif_netdev_flow_del(struct dpif *dpif, const struct dpif_flow_del *del)
 }
 
 struct dp_netdev_flow_state {
-    uint32_t bucket;
-    uint32_t offset;
     struct dp_netdev_actions *actions;
     struct odputil_keybuf keybuf;
     struct odputil_keybuf maskbuf;
     struct dpif_flow_stats stats;
 };
 
-static int
-dpif_netdev_flow_dump_start(const struct dpif *dpif OVS_UNUSED, void **statep)
+struct dp_netdev_flow_iter {
+    uint32_t bucket;
+    uint32_t offset;
+    void *state;
+};
+
+static void
+dpif_netdev_flow_dump_state_init(void **statep)
 {
     struct dp_netdev_flow_state *state;
 
     *statep = state = xmalloc(sizeof *state);
-    state->bucket = 0;
-    state->offset = 0;
     state->actions = NULL;
+}
+
+static void
+dpif_netdev_flow_dump_state_uninit(void *state_)
+{
+    struct dp_netdev_flow_state *state = state_;
+
+    dp_netdev_actions_unref(state->actions);
+    free(state);
+}
+
+static int
+dpif_netdev_flow_dump_start(const struct dpif *dpif OVS_UNUSED, void **iterp)
+{
+    struct dp_netdev_flow_iter *iter;
+
+    *iterp = iter = xmalloc(sizeof *iter);
+    iter->bucket = 0;
+    iter->offset = 0;
+    dpif_netdev_flow_dump_state_init(&iter->state);
     return 0;
 }
 
 static int
-dpif_netdev_flow_dump_next(const struct dpif *dpif, void *state_,
+dpif_netdev_flow_dump_next(const struct dpif *dpif, void *iter_,
                            const struct nlattr **key, size_t *key_len,
                            const struct nlattr **mask, size_t *mask_len,
                            const struct nlattr **actions, size_t *actions_len,
                            const struct dpif_flow_stats **stats)
 {
-    struct dp_netdev_flow_state *state = state_;
+    struct dp_netdev_flow_iter *iter = iter_;
+    struct dp_netdev_flow_state *state = iter->state;
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *netdev_flow;
     struct hmap_node *node;
 
     fat_rwlock_rdlock(&dp->cls.rwlock);
-    node = hmap_at_position(&dp->flow_table, &state->bucket, &state->offset);
+    node = hmap_at_position(&dp->flow_table, &iter->bucket, &iter->offset);
     if (node) {
         netdev_flow = CONTAINER_OF(node, struct dp_netdev_flow, node);
         dp_netdev_flow_ref(netdev_flow);
@@ -1397,12 +1420,12 @@ dpif_netdev_flow_dump_next(const struct dpif *dpif, void *state_,
 }
 
 static int
-dpif_netdev_flow_dump_done(const struct dpif *dpif OVS_UNUSED, void *state_)
+dpif_netdev_flow_dump_done(const struct dpif *dpif OVS_UNUSED, void *iter_)
 {
-    struct dp_netdev_flow_state *state = state_;
+    struct dp_netdev_flow_iter *iter = iter_;
 
-    dp_netdev_actions_unref(state->actions);
-    free(state);
+    dpif_netdev_flow_dump_state_uninit(iter->state);
+    free(iter);
     return 0;
 }
 
@@ -1854,9 +1877,11 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_flow_put,
     dpif_netdev_flow_del,
     dpif_netdev_flow_flush,
+    dpif_netdev_flow_dump_state_init,
     dpif_netdev_flow_dump_start,
     dpif_netdev_flow_dump_next,
     dpif_netdev_flow_dump_done,
+    dpif_netdev_flow_dump_state_uninit,
     dpif_netdev_execute,
     NULL,                       /* operate */
     dpif_netdev_recv_set,

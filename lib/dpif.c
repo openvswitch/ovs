@@ -961,6 +961,23 @@ dpif_flow_del(struct dpif *dpif,
     return dpif_flow_del__(dpif, &del);
 }
 
+/* Allocates thread-local state for use with the 'flow_dump_next' function for
+ * 'dpif'. On return, initializes '*statep' with any private data needed for
+ * iteration. */
+void
+dpif_flow_dump_state_init(const struct dpif *dpif, void **statep)
+{
+    dpif->dpif_class->flow_dump_state_init(statep);
+}
+
+/* Releases 'state' which was initialized by a call to the
+ * 'flow_dump_state_init' function for 'dpif'. */
+void
+dpif_flow_dump_state_uninit(const struct dpif *dpif, void *state)
+{
+    dpif->dpif_class->flow_dump_state_uninit(state);
+}
+
 /* Initializes 'dump' to begin dumping the flows in a dpif.
  *
  * This function provides no status indication.  An error status for the entire
@@ -971,7 +988,7 @@ void
 dpif_flow_dump_start(struct dpif_flow_dump *dump, const struct dpif *dpif)
 {
     dump->dpif = dpif;
-    dump->error = dpif->dpif_class->flow_dump_start(dpif, &dump->state);
+    dump->error = dpif->dpif_class->flow_dump_start(dpif, &dump->iter);
     log_operation(dpif, "flow_dump_start", dump->error);
 }
 
@@ -1004,13 +1021,13 @@ dpif_flow_dump_next(struct dpif_flow_dump *dump,
     int error = dump->error;
 
     if (!error) {
-        error = dpif->dpif_class->flow_dump_next(dpif, dump->state,
+        error = dpif->dpif_class->flow_dump_next(dpif, dump->iter,
                                                  key, key_len,
                                                  mask, mask_len,
                                                  actions, actions_len,
                                                  stats);
         if (error) {
-            dpif->dpif_class->flow_dump_done(dpif, dump->state);
+            dpif->dpif_class->flow_dump_done(dpif, dump->iter);
         }
     }
     if (error) {
@@ -1053,7 +1070,7 @@ dpif_flow_dump_done(struct dpif_flow_dump *dump)
 {
     const struct dpif *dpif = dump->dpif;
     if (!dump->error) {
-        dump->error = dpif->dpif_class->flow_dump_done(dpif, dump->state);
+        dump->error = dpif->dpif_class->flow_dump_done(dpif, dump->iter);
         log_operation(dpif, "flow_dump_done", dump->error);
     }
     return dump->error == EOF ? 0 : dump->error;
