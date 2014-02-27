@@ -54,7 +54,11 @@ ovs_ctl () {
             # of ovs-ctl. It is also useful to document the o/p in ovs-ctl.log.
             display=`"${datadir}/scripts/ovs-ctl" "$@" 2>&1`
             rc=$?
-            echo "${display}" | tee -a "${logdir}/ovs-ctl.log"
+            if test -w "${logdir}/ovs-ctl.log"; then
+                 echo "${display}" | tee -a "${logdir}/ovs-ctl.log"
+            else
+                 echo "${display}"
+            fi
             return ${rc}
         ;;
         *)
