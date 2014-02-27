@@ -978,23 +978,22 @@ dpif_flow_dump_state_uninit(const struct dpif *dpif, void *state)
     dpif->dpif_class->flow_dump_state_uninit(state);
 }
 
-/* Initializes 'dump' to begin dumping the flows in a dpif.
- *
- * This function provides no status indication.  An error status for the entire
- * dump operation is provided when it is completed by calling
- * dpif_flow_dump_done().
- */
-void
+/* Initializes 'dump' to begin dumping the flows in a dpif. On sucess,
+ * initializes 'dump' with any data needed for iteration and returns 0.
+ * Otherwise, returns a positive errno value describing the problem. */
+int
 dpif_flow_dump_start(struct dpif_flow_dump *dump, const struct dpif *dpif)
 {
+    int error;
     dump->dpif = dpif;
-    dump->error = dpif->dpif_class->flow_dump_start(dpif, &dump->iter);
-    log_operation(dpif, "flow_dump_start", dump->error);
+    error = dpif->dpif_class->flow_dump_start(dpif, &dump->iter);
+    log_operation(dpif, "flow_dump_start", error);
+    return error;
 }
 
 /* Attempts to retrieve another flow from 'dump', using 'state' for
- * thread-local storage. 'dump' must have been initialized with
- * dpif_flow_dump_start(), and 'state' must have been initialized with
+ * thread-local storage. 'dump' must have been initialized with a successful
+ * call to dpif_flow_dump_start(), and 'state' must have been initialized with
  * dpif_flow_state_init().
  *
  * On success, updates the output parameters as described below and returns
@@ -1023,18 +1022,11 @@ dpif_flow_dump_next(struct dpif_flow_dump *dump, void *state,
                     const struct dpif_flow_stats **stats)
 {
     const struct dpif *dpif = dump->dpif;
-    int error = dump->error;
+    int error;
 
-    if (!error) {
-        error = dpif->dpif_class->flow_dump_next(dpif, dump->iter, state,
-                                                 key, key_len,
-                                                 mask, mask_len,
-                                                 actions, actions_len,
-                                                 stats);
-        if (error) {
-            dpif->dpif_class->flow_dump_done(dpif, dump->iter);
-        }
-    }
+    error = dpif->dpif_class->flow_dump_next(dpif, dump->iter, state,
+                                             key, key_len, mask, mask_len,
+                                             actions, actions_len, stats);
     if (error) {
         if (key) {
             *key = NULL;
@@ -1052,33 +1044,29 @@ dpif_flow_dump_next(struct dpif_flow_dump *dump, void *state,
             *stats = NULL;
         }
     }
-    if (!dump->error) {
-        if (error == EOF) {
-            VLOG_DBG_RL(&dpmsg_rl, "%s: dumped all flows", dpif_name(dpif));
-        } else if (should_log_flow_message(error)) {
-            log_flow_message(dpif, error, "flow_dump",
-                             key ? *key : NULL, key ? *key_len : 0,
-                             mask ? *mask : NULL, mask ? *mask_len : 0,
-                             stats ? *stats : NULL, actions ? *actions : NULL,
-                             actions ? *actions_len : 0);
-        }
+    if (error == EOF) {
+        VLOG_DBG_RL(&dpmsg_rl, "%s: dumped all flows", dpif_name(dpif));
+    } else if (should_log_flow_message(error)) {
+        log_flow_message(dpif, error, "flow_dump",
+                         key ? *key : NULL, key ? *key_len : 0,
+                         mask ? *mask : NULL, mask ? *mask_len : 0,
+                         stats ? *stats : NULL, actions ? *actions : NULL,
+                         actions ? *actions_len : 0);
     }
-    dump->error = error;
     return !error;
 }
 
 /* Completes flow table dump operation 'dump', which must have been initialized
- * with dpif_flow_dump_start().  Returns 0 if the dump operation was
- * error-free, otherwise a positive errno value describing the problem. */
+ * with a successful call to dpif_flow_dump_start().  Returns 0 if the dump
+ * operation was error-free, otherwise a positive errno value describing the
+ * problem. */
 int
 dpif_flow_dump_done(struct dpif_flow_dump *dump)
 {
     const struct dpif *dpif = dump->dpif;
-    if (!dump->error) {
-        dump->error = dpif->dpif_class->flow_dump_done(dpif, dump->iter);
-        log_operation(dpif, "flow_dump_done", dump->error);
-    }
-    return dump->error == EOF ? 0 : dump->error;
+    int error = dpif->dpif_class->flow_dump_done(dpif, dump->iter);
+    log_operation(dpif, "flow_dump_done", error);
+    return error == EOF ? 0 : error;
 }
 
 struct dpif_execute_helper_aux {

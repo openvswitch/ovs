@@ -761,10 +761,11 @@ dpctl_dump_flows(int argc, char *argv[])
     size_t key_len;
     size_t mask_len;
     struct ds ds;
-    char *name, *error, *filter = NULL;
+    char *name, *filter = NULL;
     struct flow flow_filter;
     struct flow_wildcards wc_filter;
     void *state = NULL;
+    int error;
 
     if (argc > 1 && !strncmp(argv[argc - 1], "filter=", 7)) {
         filter = xstrdup(argv[--argc] + 7);
@@ -783,15 +784,18 @@ dpctl_dump_flows(int argc, char *argv[])
     }
 
     if (filter) {
-        error = parse_ofp_exact_flow(&flow_filter, &wc_filter.masks, filter,
-                                     &names_portno);
-        if (error) {
-            ovs_fatal(0, "Failed to parse filter (%s)", error);
+        char *err = parse_ofp_exact_flow(&flow_filter, &wc_filter.masks,
+                                         filter, &names_portno);
+        if (err) {
+            ovs_fatal(0, "Failed to parse filter (%s)", err);
         }
     }
 
     ds_init(&ds);
-    dpif_flow_dump_start(&flow_dump, dpif);
+    error = dpif_flow_dump_start(&flow_dump, dpif);
+    if (error) {
+        goto exit;
+    }
     dpif_flow_dump_state_init(dpif, &state);
     while (dpif_flow_dump_next(&flow_dump, state, &key, &key_len,
                                &mask, &mask_len, &actions, &actions_len,
@@ -827,8 +831,12 @@ dpctl_dump_flows(int argc, char *argv[])
         printf("%s\n", ds_cstr(&ds));
     }
     dpif_flow_dump_state_uninit(dpif, state);
-    dpif_flow_dump_done(&flow_dump);
+    error = dpif_flow_dump_done(&flow_dump);
 
+exit:
+    if (error) {
+        ovs_fatal(error, "Failed to dump flows from datapath");
+    }
     free(filter);
     odp_portno_names_destroy(&portno_names);
     hmap_destroy(&portno_names);

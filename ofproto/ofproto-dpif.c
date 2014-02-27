@@ -4166,6 +4166,7 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
     struct dpif_port_dump port_dump;
     struct hmap portno_names;
     void *state = NULL;
+    int error;
 
     ofproto = ofproto_dpif_lookup(argv[argc - 1]);
     if (!ofproto) {
@@ -4183,7 +4184,10 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
     }
 
     ds_init(&ds);
-    dpif_flow_dump_start(&flow_dump, ofproto->backer->dpif);
+    error = dpif_flow_dump_start(&flow_dump, ofproto->backer->dpif);
+    if (error) {
+        goto exit;
+    }
     dpif_flow_dump_state_init(ofproto->backer->dpif, &state);
     while (dpif_flow_dump_next(&flow_dump, state, &key, &key_len,
                                &mask, &mask_len, &actions, &actions_len,
@@ -4201,8 +4205,10 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
         ds_put_char(&ds, '\n');
     }
     dpif_flow_dump_state_uninit(ofproto->backer->dpif, state);
+    error = dpif_flow_dump_done(&flow_dump);
 
-    if (dpif_flow_dump_done(&flow_dump)) {
+exit:
+    if (error) {
         ds_clear(&ds);
         ds_put_format(&ds, "dpif/dump_flows failed: %s", ovs_strerror(errno));
         unixctl_command_reply_error(conn, ds_cstr(&ds));

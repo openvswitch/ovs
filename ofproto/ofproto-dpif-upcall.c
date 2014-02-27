@@ -552,6 +552,7 @@ udpif_flow_dumper(void *arg)
         bool need_revalidate;
         uint64_t reval_seq;
         size_t n_flows, i;
+        int error;
         void *state = NULL;
 
         reval_seq = seq_read(udpif->reval_seq);
@@ -563,7 +564,11 @@ udpif_flow_dumper(void *arg)
         udpif->avg_n_flows = (udpif->avg_n_flows + n_flows) / 2;
 
         start_time = time_msec();
-        dpif_flow_dump_start(&dump, udpif->dpif);
+        error = dpif_flow_dump_start(&dump, udpif->dpif);
+        if (error) {
+            VLOG_INFO("Failed to start flow dump (%s)", ovs_strerror(error));
+            goto skip;
+        }
         dpif_flow_dump_state_init(udpif->dpif, &state);
         while (dpif_flow_dump_next(&dump, state, &key, &key_len,
                                    &mask, &mask_len, NULL, NULL, &stats)
@@ -640,6 +645,7 @@ udpif_flow_dumper(void *arg)
                       duration);
         }
 
+skip:
         poll_timer_wait_until(start_time + MIN(MAX_IDLE, 500));
         seq_wait(udpif->reval_seq, udpif->last_reval_seq);
         latch_wait(&udpif->exit_latch);
