@@ -392,6 +392,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
 
         case 'V':
             ovs_print_version(0, 0);
+            printf("DB Schema %s\n", ovsrec_get_db_version());
             exit(EXIT_SUCCESS);
 
         case 't':
