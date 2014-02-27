@@ -59,7 +59,7 @@ static struct hook hooks[MAX_HOOKS];
 static size_t n_hooks;
 
 static int signal_fds[2];
-HANDLE wevent;
+static HANDLE wevent;
 static volatile sig_atomic_t stored_sig_nr = SIG_ATOMIC_MAX;
 
 static struct ovs_mutex mutex;
