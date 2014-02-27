@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -291,6 +291,15 @@ vconn_run_wait(struct vconn *vconn)
     if (vconn->class->run_wait) {
         (vconn->class->run_wait)(vconn);
     }
+}
+
+/* Returns 0 if 'vconn' is healthy (connecting or connected), a positive errno
+ * value if the connection died abnormally (connection failed or aborted), or
+ * EOF if the connection was closed in a normal way. */
+int
+vconn_get_status(const struct vconn *vconn)
+{
+    return vconn->error;
 }
 
 int

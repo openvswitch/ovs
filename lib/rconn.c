@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -592,7 +592,15 @@ rconn_run(struct rconn *rc)
 
     ovs_mutex_lock(&rc->mutex);
     if (rc->vconn) {
+        int error;
+
         vconn_run(rc->vconn);
+
+        error = vconn_get_status(rc->vconn);
+        if (error) {
+            report_error(rc, error);
+            disconnect(rc, error);
+        }
     }
     for (i = 0; i < rc->n_monitors; ) {
         struct ofpbuf *msg;

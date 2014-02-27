@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,6 +56,8 @@ int vconn_transact_multiple_noreply(struct vconn *, struct list *requests,
 
 void vconn_run(struct vconn *);
 void vconn_run_wait(struct vconn *);
+
+int vconn_get_status(const struct vconn *);
 
 int vconn_open_block(const char *name, uint32_t allowed_versions, uint8_t dscp,
                      struct vconn **);
