@@ -556,7 +556,6 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
 
     struct ofpbuf pkt;
     struct flow flow;
-    union flow_in_port in_port_;
 
     error = ofputil_decode_packet_in(&pi, oh);
     if (error) {
@@ -574,8 +573,8 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
 
     /* Extract flow data from 'opi' into 'flow'. */
     ofpbuf_use_const(&pkt, pi.packet, pi.packet_len);
-    in_port_.ofp_port = pi.fmd.in_port;
-    flow_extract(&pkt, 0, 0, NULL, &in_port_, &flow);
+    flow_extract(&pkt, NULL, &flow);
+    flow.in_port.ofp_port = pi.fmd.in_port;
     flow.tunnel.tun_id = pi.fmd.tun_id;
 
     /* Choose output port. */

@@ -3184,12 +3184,11 @@ xlate_send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
     struct xport *xport;
     struct ofpact_output output;
     struct flow flow;
-    union flow_in_port in_port_;
 
     ofpact_init(&output.ofpact, OFPACT_OUTPUT, sizeof output);
     /* Use OFPP_NONE as the in_port to avoid special packet processing. */
-    in_port_.ofp_port = OFPP_NONE;
-    flow_extract(packet, 0, 0, NULL, &in_port_, &flow);
+    flow_extract(packet, NULL, &flow);
+    flow.in_port.ofp_port = OFPP_NONE;
 
     ovs_rwlock_rdlock(&xlate_rwlock);
     xport = xport_lookup(ofport);

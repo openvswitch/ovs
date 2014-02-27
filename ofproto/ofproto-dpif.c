@@ -2997,7 +2997,7 @@ ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
     execute.md.tunnel = flow->tunnel;
     execute.md.skb_priority = flow->skb_priority;
     execute.md.pkt_mark = flow->pkt_mark;
-    execute.md.in_port = ofp_port_to_odp_port(ofproto, in_port);
+    execute.md.in_port.odp_port = ofp_port_to_odp_port(ofproto, in_port);
     execute.needs_help = (xout.slow & SLOW_ACTION) != 0;
 
     error = dpif_execute(ofproto->backer->dpif, &execute);
@@ -3784,11 +3784,14 @@ parse_flow_and_packet(int argc, const char *argv[],
             flow_compose(packet, flow);
         } else {
             union flow_in_port in_port = flow->in_port;
+            struct pkt_metadata md;
 
             /* Use the metadata from the flow and the packet argument
              * to reconstruct the flow. */
-            flow_extract(packet, flow->skb_priority, flow->pkt_mark, NULL,
-                         &in_port, flow);
+            pkt_metadata_init(&md, NULL, flow->skb_priority,
+                                   flow->pkt_mark, &in_port);
+
+            flow_extract(packet, &md, flow);
         }
     }
 

@@ -32,6 +32,7 @@ struct ds;
 struct flow_wildcards;
 struct minimask;
 struct ofpbuf;
+struct pkt_metadata;
 
 /* This sequence number should be incremented whenever anything involving flows
  * or the wildcarding of flows changes.  This will cause build assertion
@@ -72,8 +73,8 @@ struct flow_tnl {
  * numbers and other times datapath (dpif) port numbers.  This union allows
  * access to both. */
 union flow_in_port {
-    ofp_port_t ofp_port;
     odp_port_t odp_port;
+    ofp_port_t ofp_port;
 };
 
 /* Maximum number of supported MPLS labels. */
@@ -173,8 +174,7 @@ struct flow_metadata {
     ofp_port_t in_port;              /* OpenFlow port or zero. */
 };
 
-void flow_extract(struct ofpbuf *, uint32_t priority, uint32_t mark,
-                  const struct flow_tnl *, const union flow_in_port *in_port,
+void flow_extract(struct ofpbuf *, const struct pkt_metadata *md,
                   struct flow *);
 
 void flow_zero_wildcards(struct flow *, const struct flow_wildcards *);

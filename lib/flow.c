@@ -35,6 +35,7 @@
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "packets.h"
+#include "odp-util.h"
 #include "random.h"
 #include "unaligned.h"
 
@@ -361,8 +362,7 @@ invalid:
 
 }
 
-/* Initializes 'flow' members from 'packet', 'skb_priority', 'tnl', and
- * 'in_port'.
+/* Initializes 'flow' members from 'packet' and 'md'
  *
  * Initializes 'packet' header pointers as follows:
  *
@@ -381,8 +381,7 @@ invalid:
  *      present and has a correct length, and otherwise NULL.
  */
 void
-flow_extract(struct ofpbuf *packet, uint32_t skb_priority, uint32_t pkt_mark,
-             const struct flow_tnl *tnl, const union flow_in_port *in_port,
+flow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
              struct flow *flow)
 {
     struct ofpbuf b = *packet;
@@ -392,15 +391,14 @@ flow_extract(struct ofpbuf *packet, uint32_t skb_priority, uint32_t pkt_mark,
 
     memset(flow, 0, sizeof *flow);
 
-    if (tnl) {
-        ovs_assert(tnl != &flow->tunnel);
-        flow->tunnel = *tnl;
+    if (md) {
+        flow->tunnel = md->tunnel;
+        if (md->in_port.odp_port != ODPP_NONE) {
+            flow->in_port = md->in_port;
+        };
+        flow->skb_priority = md->skb_priority;
+        flow->pkt_mark = md->pkt_mark;
     }
-    if (in_port) {
-        flow->in_port = *in_port;
-    }
-    flow->skb_priority = skb_priority;
-    flow->pkt_mark = pkt_mark;
 
     packet->l2   = b.data;
     packet->l2_5 = NULL;

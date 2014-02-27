@@ -2713,11 +2713,10 @@ run_rule_executes(struct ofproto *ofproto)
 
     guarded_list_pop_all(&ofproto->rule_executes, &executes);
     LIST_FOR_EACH_SAFE (e, next, list_node, &executes) {
-        union flow_in_port in_port_;
         struct flow flow;
 
-        in_port_.ofp_port = e->in_port;
-        flow_extract(e->packet, 0, 0, NULL, &in_port_, &flow);
+        flow_extract(e->packet, NULL, &flow);
+        flow.in_port.ofp_port = e->in_port;
         ofproto->ofproto_class->rule_execute(e->rule, &flow, e->packet);
 
         rule_execute_destroy(e);
@@ -2926,7 +2925,6 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
     uint64_t ofpacts_stub[1024 / 8];
     struct ofpbuf ofpacts;
     struct flow flow;
-    union flow_in_port in_port_;
     enum ofperr error;
 
     COVERAGE_INC(ofproto_packet_out);
@@ -2960,8 +2958,8 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
     }
 
     /* Verify actions against packet, then send packet if successful. */
-    in_port_.ofp_port = po.in_port;
-    flow_extract(payload, 0, 0, NULL, &in_port_, &flow);
+    flow_extract(payload, NULL, &flow);
+    flow.in_port.ofp_port = po.in_port;
     error = ofproto_check_ofpacts(p, po.ofpacts, po.ofpacts_len);
     if (!error) {
         error = p->ofproto_class->packet_out(p, payload, &flow,

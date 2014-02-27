@@ -1454,8 +1454,7 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
     }
 
     /* Extract flow key. */
-    flow_extract(execute->packet, md->skb_priority, md->pkt_mark, &md->tunnel,
-                 (union flow_in_port *)&md->in_port, &key);
+    flow_extract(execute->packet, md, &key);
 
     ovs_rwlock_rdlock(&dp->port_rwlock);
     dp_netdev_execute_actions(dp, &key, execute->packet, md, execute->actions,
@@ -1627,8 +1626,8 @@ dp_forwarder_main(void *f_)
                     if (!error) {
                         struct pkt_metadata md
                             = PKT_METADATA_INITIALIZER(port->port_no);
-                        dp_netdev_port_input(dp, &packet, &md);
 
+                        dp_netdev_port_input(dp, &packet, &md);
                         received_anything = true;
                     } else if (error != EAGAIN && error != EOPNOTSUPP) {
                         static struct vlog_rate_limit rl
@@ -1728,8 +1727,7 @@ dp_netdev_port_input(struct dp_netdev *dp, struct ofpbuf *packet,
     if (packet->size < ETH_HEADER_LEN) {
         return;
     }
-    flow_extract(packet, md->skb_priority, md->pkt_mark, &md->tunnel,
-                 (union flow_in_port *)&md->in_port, &key);
+    flow_extract(packet, md, &key);
     netdev_flow = dp_netdev_lookup_flow(dp, &key);
     if (netdev_flow) {
         struct dp_netdev_actions *actions;

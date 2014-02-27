@@ -46,6 +46,7 @@
 #include "packets.h"
 #include "type-props.h"
 #include "unaligned.h"
+#include "odp-util.h"
 #include "util.h"
 
 static void ofp_print_queue_name(struct ds *string, uint32_t port);
@@ -58,11 +59,12 @@ char *
 ofp_packet_to_string(const void *data, size_t len)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
+    const struct pkt_metadata md = PKT_METADATA_INITIALIZER(ODPP_NONE);
     struct ofpbuf buf;
     struct flow flow;
 
     ofpbuf_use_const(&buf, data, len);
-    flow_extract(&buf, 0, 0, NULL, NULL, &flow);
+    flow_extract(&buf, &md, &flow);
     flow_format(&ds, &flow);
 
     if (buf.l7) {

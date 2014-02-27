@@ -2646,8 +2646,8 @@ odp_key_from_pkt_metadata(struct ofpbuf *buf, const struct pkt_metadata *md)
 
     /* Add an ingress port attribute if 'odp_in_port' is not the magical
      * value "ODPP_NONE". */
-    if (md->in_port != ODPP_NONE) {
-        nl_msg_put_odp_port(buf, OVS_KEY_ATTR_IN_PORT, md->in_port);
+    if (md->in_port.odp_port != ODPP_NONE) {
+        nl_msg_put_odp_port(buf, OVS_KEY_ATTR_IN_PORT, md->in_port.odp_port);
     }
 }
 
@@ -2662,8 +2662,7 @@ odp_key_to_pkt_metadata(const struct nlattr *key, size_t key_len,
         1u << OVS_KEY_ATTR_SKB_MARK | 1u << OVS_KEY_ATTR_TUNNEL |
         1u << OVS_KEY_ATTR_IN_PORT;
 
-    memset(md, 0, sizeof *md);
-    md->in_port = ODPP_NONE;
+    *md = PKT_METADATA_INITIALIZER(ODPP_NONE);
 
     NL_ATTR_FOR_EACH (nla, left, key, key_len) {
         uint16_t type = nl_attr_type(nla);
@@ -2690,7 +2689,7 @@ odp_key_to_pkt_metadata(const struct nlattr *key, size_t key_len,
                 wanted_attrs &= ~(1u << OVS_KEY_ATTR_TUNNEL);
             }
         } else if (type == OVS_KEY_ATTR_IN_PORT) {
-            md->in_port = nl_attr_get_odp_port(nla);
+            md->in_port.odp_port = nl_attr_get_odp_port(nla);
             wanted_attrs &= ~(1u << OVS_KEY_ATTR_IN_PORT);
         }
 

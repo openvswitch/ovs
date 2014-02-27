@@ -36,11 +36,17 @@ struct pkt_metadata {
     struct flow_tnl tunnel;     /* Encapsulating tunnel parameters. */
     uint32_t skb_priority;      /* Packet priority for QoS. */
     uint32_t pkt_mark;          /* Packet mark. */
-    odp_port_t in_port;         /* Input port. */
+    union flow_in_port in_port; /* Input port. */
 };
 
 #define PKT_METADATA_INITIALIZER(PORT) \
-    (struct pkt_metadata){ { 0, 0, 0, 0, 0, 0}, 0, 0, (PORT) }
+    (struct pkt_metadata){ { 0, 0, 0, 0, 0, 0}, 0, 0, {(PORT)} }
+
+void pkt_metadata_init(struct pkt_metadata *md, const struct flow_tnl *tnl,
+                            const uint32_t skb_priority,
+                            const uint32_t pkt_mark,
+                            const union flow_in_port *in_port);
+void pkt_metadata_from_flow(struct pkt_metadata *md, const struct flow *flow);
 
 bool dpid_from_string(const char *s, uint64_t *dpidp);
 
