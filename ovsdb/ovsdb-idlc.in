@@ -166,6 +166,8 @@ struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
 
     print "\nextern struct ovsdb_idl_class %sidl_class;" % prefix
     print "\nvoid %sinit(void);" % prefix
+
+    print "\nconst char * %sget_db_version(void);" % prefix
     print "\n#endif /* %(prefix)sIDL_HEADER */" % {'prefix': prefix.upper()}
 
 def printEnum(members):
@@ -651,6 +653,16 @@ void
         structName = "%s%s" % (prefix, tableName.lower())
         print "    %s_columns_init();" % structName
     print "}"
+
+    print """
+/* Return the schema version.  The caller must not free the returned value. */
+const char *
+%sget_db_version(void)
+{
+    return "%s";
+}
+""" % (prefix, schema.version)
+
 
 
 def ovsdb_escape(string):
