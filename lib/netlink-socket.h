@@ -35,13 +35,23 @@
  * Thread-safety
  * =============
  *
- * Only a single thread may use a given nl_sock or nl_dump at one time.
+ * Most of the netlink functions are not fully thread-safe: Only a single
+ * thread may use a given nl_sock or nl_dump at one time. The exceptions are:
+ *
+ *    - nl_sock_recv() is conditionally thread-safe: it may be called from
+ *      different threads with the same nl_sock, but each caller must provide
+ *      an independent receive buffer.
+ *
+ *    - nl_dump_next() is conditionally thread-safe: it may be called from
+ *      different threads with the same nl_dump, but each caller must provide
+ *      independent buffers.
  */
 
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include "ofpbuf.h"
+#include "ovs-atomic.h"
 
 struct nl_sock;
 
@@ -101,7 +111,9 @@ void nl_transact_multiple(int protocol, struct nl_transaction **, size_t n);
 struct nl_dump {
     struct nl_sock *sock;       /* Socket being dumped. */
     uint32_t nl_seq;            /* Expected nlmsg_seq for replies. */
-    int status;                 /* 0=OK, EOF=done, or positive errno value. */
+    atomic_uint status;         /* Low bit set if we read final message.
+                                 * Other bits hold an errno (0 for success). */
+    struct seq *status_seq;     /* Tracks changes to the above 'status'. */
 };
 
 void nl_dump_start(struct nl_dump *, int protocol,
