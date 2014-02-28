@@ -224,8 +224,8 @@ void
 udpif_synchronize(struct udpif *udpif)
 {
     /* This is stronger than necessary.  It would be sufficient to ensure
-     * (somehow) that each handler and revalidator thread had passed through
-     * its main loop once. */
+     * (somehow) that each handler thread had passed through its main
+     * loop once. */
     size_t n_handlers = udpif->n_handlers;
     if (n_handlers) {
         udpif_recv_set(udpif, 0, false);

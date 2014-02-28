@@ -1411,6 +1411,10 @@ destruct(struct ofproto *ofproto_)
      * to the ofproto or anything in it. */
     udpif_synchronize(ofproto->backer->udpif);
 
+    /* Discard any flow_miss_batches queued up for 'ofproto', avoiding a
+     * use-after-free error. */
+    udpif_revalidate(ofproto->backer->udpif);
+
     hmap_remove(&all_ofproto_dpifs, &ofproto->all_ofproto_dpifs_node);
 
     OFPROTO_FOR_EACH_TABLE (table, &ofproto->up) {
