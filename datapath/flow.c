@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2013 Nicira, Inc.
+ * Copyright (c) 2007-2014 Nicira, Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of version 2 of the GNU General Public
@@ -148,7 +148,7 @@ void ovs_flow_stats_get(struct sw_flow *flow, struct ovs_flow_stats *ovs_stats,
 			 * block bottom-halves here.
 			 */
 			spin_lock_bh(&stats->lock);
-			if (time_after(stats->used, *used))
+			if (!*used || time_after(stats->used, *used))
 				*used = stats->used;
 			*tcp_flags |= stats->tcp_flags;
 			ovs_stats->n_packets += stats->packet_count;
