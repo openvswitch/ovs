@@ -299,7 +299,7 @@ vconn_run_wait(struct vconn *vconn)
 int
 vconn_get_status(const struct vconn *vconn)
 {
-    return vconn->error;
+    return vconn->error == EAGAIN ? 0 : vconn->error;
 }
 
 int
