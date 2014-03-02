@@ -272,10 +272,15 @@ tnl_xlate_init(const struct flow *base_flow, struct flow *flow,
                struct flow_wildcards *wc)
 {
     if (tnl_port_should_receive(flow)) {
-        memset(&wc->masks.tunnel, 0xff, sizeof wc->masks.tunnel);
+        wc->masks.tunnel.tun_id = OVS_BE64_MAX;
+        wc->masks.tunnel.ip_src = OVS_BE32_MAX;
+        wc->masks.tunnel.ip_dst = OVS_BE32_MAX;
         wc->masks.tunnel.flags = (FLOW_TNL_F_DONT_FRAGMENT |
                                   FLOW_TNL_F_CSUM |
                                   FLOW_TNL_F_KEY);
+        wc->masks.tunnel.ip_tos = UINT8_MAX;
+        wc->masks.tunnel.ip_ttl = UINT8_MAX;
+
         memset(&wc->masks.pkt_mark, 0xff, sizeof wc->masks.pkt_mark);
 
         if (!tnl_ecn_ok(base_flow, flow)) {
