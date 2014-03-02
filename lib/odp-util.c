@@ -857,7 +857,8 @@ tun_key_to_attr(struct ofpbuf *a, const struct flow_tnl *tun_key)
 
     tun_key_ofs = nl_msg_start_nested(a, OVS_KEY_ATTR_TUNNEL);
 
-    if (tun_key->flags & FLOW_TNL_F_KEY) {
+    /* tun_id != 0 without FLOW_TNL_F_KEY is valid if tun_key is a mask. */
+    if (tun_key->tun_id || tun_key->flags & FLOW_TNL_F_KEY) {
         nl_msg_put_be64(a, OVS_TUNNEL_KEY_ATTR_ID, tun_key->tun_id);
     }
     if (tun_key->ip_src) {
