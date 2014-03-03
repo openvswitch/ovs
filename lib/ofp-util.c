@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -573,6 +573,7 @@ ofputil_match_typical_len(enum ofputil_protocol protocol)
 
     case OFPUTIL_P_OF12_OXM:
     case OFPUTIL_P_OF13_OXM:
+    case OFPUTIL_P_OF14_OXM:
         return NXM_TYPICAL_LEN;
 
     default:
@@ -613,6 +614,7 @@ ofputil_put_ofp11_match(struct ofpbuf *b, const struct match *match,
 
     case OFPUTIL_P_OF12_OXM:
     case OFPUTIL_P_OF13_OXM:
+    case OFPUTIL_P_OF14_OXM:
         return oxm_put_match(b, match);
     }
 
@@ -659,6 +661,7 @@ static const struct proto_abbrev proto_abbrevs[] = {
 #define N_PROTO_ABBREVS ARRAY_SIZE(proto_abbrevs)
 
 enum ofputil_protocol ofputil_flow_dump_protocols[] = {
+    OFPUTIL_P_OF14_OXM,
     OFPUTIL_P_OF13_OXM,
     OFPUTIL_P_OF12_OXM,
     OFPUTIL_P_OF11_STD,
@@ -683,6 +686,8 @@ ofputil_protocols_from_ofp_version(enum ofp_version version)
         return OFPUTIL_P_OF12_OXM;
     case OFP13_VERSION:
         return OFPUTIL_P_OF13_OXM;
+    case OFP14_VERSION:
+        return OFPUTIL_P_OF14_OXM;
     default:
         return 0;
     }
@@ -716,6 +721,8 @@ ofputil_protocol_to_ofp_version(enum ofputil_protocol protocol)
         return OFP12_VERSION;
     case OFPUTIL_P_OF13_OXM:
         return OFP13_VERSION;
+    case OFPUTIL_P_OF14_OXM:
+        return OFP14_VERSION;
     }
 
     OVS_NOT_REACHED();
@@ -792,6 +799,9 @@ ofputil_protocol_set_tid(enum ofputil_protocol protocol, bool enable)
     case OFPUTIL_P_OF13_OXM:
         return OFPUTIL_P_OF13_OXM;
 
+    case OFPUTIL_P_OF14_OXM:
+        return OFPUTIL_P_OF14_OXM;
+
     default:
         OVS_NOT_REACHED();
     }
@@ -832,6 +842,9 @@ ofputil_protocol_set_base(enum ofputil_protocol cur,
     case OFPUTIL_P_OF13_OXM:
         return ofputil_protocol_set_tid(OFPUTIL_P_OF13_OXM, tid);
 
+    case OFPUTIL_P_OF14_OXM:
+        return ofputil_protocol_set_tid(OFPUTIL_P_OF14_OXM, tid);
+
     default:
         OVS_NOT_REACHED();
     }
@@ -868,6 +881,9 @@ ofputil_protocol_to_string(enum ofputil_protocol protocol)
 
     case OFPUTIL_P_OF13_OXM:
         return "OXM-OpenFlow13";
+
+    case OFPUTIL_P_OF14_OXM:
+        return "OXM-OpenFlow14";
     }
 
     /* Check abbreviations. */
@@ -1003,6 +1019,9 @@ ofputil_version_from_string(const char *s)
     if (!strcasecmp(s, "OpenFlow13")) {
         return OFP13_VERSION;
     }
+    if (!strcasecmp(s, "OpenFlow14")) {
+        return OFP14_VERSION;
+    }
     return 0;
 }
 
@@ -1073,6 +1092,8 @@ ofputil_version_to_string(enum ofp_version ofp_version)
         return "OpenFlow12";
     case OFP13_VERSION:
         return "OpenFlow13";
+    case OFP14_VERSION:
+        return "OpenFlow14";
     default:
         OVS_NOT_REACHED();
     }
@@ -1306,6 +1327,7 @@ ofputil_encode_set_protocol(enum ofputil_protocol current,
         case OFPUTIL_P_OF11_STD:
         case OFPUTIL_P_OF12_OXM:
         case OFPUTIL_P_OF13_OXM:
+        case OFPUTIL_P_OF14_OXM:
             /* There is only one variant of each OpenFlow 1.1+ protocol, and we
              * verified above that we're not trying to change versions. */
             OVS_NOT_REACHED();
@@ -2077,7 +2099,8 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
     switch (protocol) {
     case OFPUTIL_P_OF11_STD:
     case OFPUTIL_P_OF12_OXM:
-    case OFPUTIL_P_OF13_OXM: {
+    case OFPUTIL_P_OF13_OXM:
+    case OFPUTIL_P_OF14_OXM: {
         struct ofp11_flow_mod *ofm;
         int tailroom;
 
@@ -2561,7 +2584,8 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
     switch (protocol) {
     case OFPUTIL_P_OF11_STD:
     case OFPUTIL_P_OF12_OXM:
-    case OFPUTIL_P_OF13_OXM: {
+    case OFPUTIL_P_OF13_OXM:
+    case OFPUTIL_P_OF14_OXM: {
         struct ofp11_flow_stats_request *ofsr;
 
         raw = (fsr->aggregate
@@ -3053,7 +3077,8 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
     switch (protocol) {
     case OFPUTIL_P_OF11_STD:
     case OFPUTIL_P_OF12_OXM:
-    case OFPUTIL_P_OF13_OXM: {
+    case OFPUTIL_P_OF13_OXM:
+    case OFPUTIL_P_OF14_OXM: {
         struct ofp12_flow_removed *ofr;
 
         msg = ofpraw_alloc_xid(OFPRAW_OFPT11_FLOW_REMOVED,
@@ -3417,6 +3442,7 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
 
     case OFPUTIL_P_OF12_OXM:
     case OFPUTIL_P_OF13_OXM:
+    case OFPUTIL_P_OF14_OXM:
         packet = ofputil_encode_ofp12_packet_in(pin, protocol);
         break;
 
@@ -3664,6 +3690,7 @@ ofputil_get_phy_port_size(enum ofp_version ofp_version)
     case OFP11_VERSION:
     case OFP12_VERSION:
     case OFP13_VERSION:
+    case OFP14_VERSION:
         return sizeof(struct ofp11_port);
     default:
         OVS_NOT_REACHED();
@@ -3736,6 +3763,10 @@ ofputil_put_phy_port(enum ofp_version ofp_version,
         break;
     }
 
+    case OFP14_VERSION:
+        OVS_NOT_REACHED();
+        break;
+
     default:
         OVS_NOT_REACHED();
     }
@@ -3764,6 +3795,10 @@ ofputil_append_port_desc_stats_reply(enum ofp_version ofp_version,
         ofputil_encode_ofp11_port(pp, op);
         break;
     }
+
+    case OFP14_VERSION:
+        OVS_NOT_REACHED();
+        break;
 
     default:
       OVS_NOT_REACHED();
@@ -3828,6 +3863,9 @@ ofputil_capabilities_mask(enum ofp_version ofp_version)
     case OFP12_VERSION:
     case OFP13_VERSION:
         return OFPC_COMMON | OFPC12_PORT_BLOCKED;
+    case OFP14_VERSION:
+        OVS_NOT_REACHED();
+        break;
     default:
         /* Caller needs to check osf->header.version itself */
         return 0;
@@ -3954,6 +3992,7 @@ ofputil_encode_switch_features(const struct ofputil_switch_features *features,
         raw = OFPRAW_OFPT11_FEATURES_REPLY;
         break;
     case OFP13_VERSION:
+    case OFP14_VERSION:
         raw = OFPRAW_OFPT13_FEATURES_REPLY;
         break;
     default:
@@ -3976,6 +4015,7 @@ ofputil_encode_switch_features(const struct ofputil_switch_features *features,
         osf->actions = encode_action_bits(features->actions, of10_action_bits);
         break;
     case OFP13_VERSION:
+    case OFP14_VERSION:
         osf->auxiliary_id = features->auxiliary_id;
         /* fall through */
     case OFP11_VERSION:
@@ -4054,6 +4094,7 @@ ofputil_encode_port_status(const struct ofputil_port_status *ps,
     case OFP11_VERSION:
     case OFP12_VERSION:
     case OFP13_VERSION:
+    case OFP14_VERSION:
         raw = OFPRAW_OFPT11_PORT_STATUS;
         break;
 
@@ -4150,6 +4191,9 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
         opm->advertise = netdev_port_features_to_ofp11(pm->advertise);
         break;
     }
+    case OFP14_VERSION:
+        OVS_NOT_REACHED();
+        break;
     default:
         OVS_NOT_REACHED();
     }
@@ -4210,6 +4254,9 @@ ofputil_encode_table_mod(const struct ofputil_table_mod *pm,
         otm->config = htonl(pm->config);
         break;
     }
+    case OFP14_VERSION:
+        OVS_NOT_REACHED();
+        break;
     default:
         OVS_NOT_REACHED();
     }
@@ -4516,6 +4563,7 @@ ofputil_encode_table_stats_reply(const struct ofp12_table_stats stats[], int n,
             break;
 
         case OFP13_VERSION:
+        case OFP14_VERSION:
             ofputil_put_ofp13_table_stats(&stats[i], reply);
             break;
 
@@ -4824,7 +4872,8 @@ ofputil_encode_packet_out(const struct ofputil_packet_out *po,
 
     case OFP11_VERSION:
     case OFP12_VERSION:
-    case OFP13_VERSION: {
+    case OFP13_VERSION:
+    case OFP14_VERSION:{
         struct ofp11_packet_out *opo;
         size_t len;
 
@@ -4882,6 +4931,7 @@ ofputil_encode_barrier_request(enum ofp_version ofp_version)
     enum ofpraw type;
 
     switch (ofp_version) {
+    case OFP14_VERSION:
     case OFP13_VERSION:
     case OFP12_VERSION:
     case OFP11_VERSION:
@@ -5162,6 +5212,9 @@ ofputil_pull_phy_port(enum ofp_version ofp_version, struct ofpbuf *b,
         const struct ofp11_port *op = ofpbuf_try_pull(b, sizeof *op);
         return op ? ofputil_decode_ofp11_port(pp, op) : EOF;
     }
+    case OFP14_VERSION:
+        OVS_NOT_REACHED();
+        break;
     default:
         OVS_NOT_REACHED();
     }
@@ -5490,7 +5543,8 @@ ofputil_encode_dump_ports_request(enum ofp_version ofp_version, ofp_port_t port)
     }
     case OFP11_VERSION:
     case OFP12_VERSION:
-    case OFP13_VERSION: {
+    case OFP13_VERSION:
+    case OFP14_VERSION:{
         struct ofp11_port_stats_request *req;
         request = ofpraw_alloc(OFPRAW_OFPST11_PORT_REQUEST, ofp_version, 0);
         req = ofpbuf_put_zeros(request, sizeof *req);
@@ -5581,6 +5635,10 @@ ofputil_append_port_stat(struct list *replies,
         break;
     }
 
+    case OFP14_VERSION:
+        OVS_NOT_REACHED();
+        break;
+
     default:
         OVS_NOT_REACHED();
     }
@@ -5663,6 +5721,9 @@ ofputil_get_port_stats_size(enum ofp_version ofp_version)
         return sizeof(struct ofp11_port_stats);
     case OFP13_VERSION:
         return sizeof(struct ofp13_port_stats);
+    case OFP14_VERSION:
+        OVS_NOT_REACHED();
+        return 0;
     default:
         OVS_NOT_REACHED();
     }
@@ -5761,6 +5822,10 @@ ofputil_decode_port_stats_request(const struct ofp_header *request,
         return 0;
     }
 
+    case OFP14_VERSION:
+        OVS_NOT_REACHED();
+        break;
+
     default:
         OVS_NOT_REACHED();
     }
@@ -5796,7 +5861,8 @@ ofputil_encode_group_stats_request(enum ofp_version ofp_version,
                      "(\'-O OpenFlow11\')");
     case OFP11_VERSION:
     case OFP12_VERSION:
-    case OFP13_VERSION: {
+    case OFP13_VERSION:
+    case OFP14_VERSION: {
         struct ofp11_group_stats_request *req;
         request = ofpraw_alloc(OFPRAW_OFPST11_GROUP_REQUEST, ofp_version, 0);
         req = ofpbuf_put_zeros(request, sizeof *req);
@@ -5827,10 +5893,10 @@ ofputil_encode_group_desc_request(enum ofp_version ofp_version)
                      "(\'-O OpenFlow11\')");
     case OFP11_VERSION:
     case OFP12_VERSION:
-    case OFP13_VERSION: {
+    case OFP13_VERSION:
+    case OFP14_VERSION:
         request = ofpraw_alloc(OFPRAW_OFPST11_GROUP_DESC_REQUEST, ofp_version, 0);
         break;
-    }
     default:
         OVS_NOT_REACHED();
     }
@@ -5900,6 +5966,10 @@ ofputil_append_group_stats(struct list *replies,
         ofputil_append_of13_group_stats(ogs, replies);
         break;
 
+    case OFP14_VERSION:
+        OVS_NOT_REACHED();
+        break;
+
     case OFP10_VERSION:
     default:
         OVS_NOT_REACHED();
@@ -5919,11 +5989,11 @@ ofputil_encode_group_features_request(enum ofp_version ofp_version)
         ovs_fatal(0, "dump-group-features needs OpenFlow 1.2 or later "
                      "(\'-O OpenFlow12\')");
     case OFP12_VERSION:
-    case OFP13_VERSION: {
+    case OFP13_VERSION:
+    case OFP14_VERSION:
         request = ofpraw_alloc(OFPRAW_OFPST12_GROUP_FEATURES_REQUEST,
-                                        ofp_version, 0);
+                               ofp_version, 0);
         break;
-    }
     default:
         OVS_NOT_REACHED();
     }
@@ -6250,7 +6320,8 @@ ofputil_encode_group_mod(enum ofp_version ofp_version,
 
     case OFP11_VERSION:
     case OFP12_VERSION:
-    case OFP13_VERSION: {
+    case OFP13_VERSION:
+    case OFP14_VERSION:
         b = ofpraw_alloc(OFPRAW_OFPT11_GROUP_MOD, ofp_version, 0);
         start_ogm = b->size;
         ofpbuf_put_zeros(b, sizeof *ogm);
@@ -6275,7 +6346,6 @@ ofputil_encode_group_mod(enum ofp_version ofp_version,
         ogm->group_id = htonl(gm->group_id);
 
         break;
-    }
 
     default:
         OVS_NOT_REACHED();
@@ -6338,6 +6408,7 @@ ofputil_decode_queue_stats_request(const struct ofp_header *request,
                                    struct ofputil_queue_stats_request *oqsr)
 {
     switch ((enum ofp_version)request->version) {
+    case OFP14_VERSION:
     case OFP13_VERSION:
     case OFP12_VERSION:
     case OFP11_VERSION: {
@@ -6374,7 +6445,8 @@ ofputil_encode_queue_stats_request(enum ofp_version ofp_version,
     switch (ofp_version) {
     case OFP11_VERSION:
     case OFP12_VERSION:
-    case OFP13_VERSION: {
+    case OFP13_VERSION:
+    case OFP14_VERSION: {
         struct ofp11_queue_stats_request *req;
         request = ofpraw_alloc(OFPRAW_OFPST11_QUEUE_REQUEST, ofp_version, 0);
         req = ofpbuf_put_zeros(request, sizeof *req);
@@ -6410,6 +6482,9 @@ ofputil_get_queue_stats_size(enum ofp_version ofp_version)
         return sizeof(struct ofp11_queue_stats);
     case OFP13_VERSION:
         return sizeof(struct ofp13_queue_stats);
+    case OFP14_VERSION:
+        OVS_NOT_REACHED();
+        return 0;
     default:
         OVS_NOT_REACHED();
     }
@@ -6598,6 +6673,10 @@ ofputil_append_queue_stat(struct list *replies,
         ofputil_queue_stats_to_ofp10(oqs, reply);
         break;
     }
+
+    case OFP14_VERSION:
+        OVS_NOT_REACHED();
+        break;
 
     default:
         OVS_NOT_REACHED();

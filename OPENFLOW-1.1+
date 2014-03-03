@@ -1,7 +1,7 @@
                 OpenFlow 1.1+ support in Open vSwitch
                 =====================================
 
-Open vSwitch support for OpenFlow 1.1, 1.2, and 1.3 is a work in
+Open vSwitch support for OpenFlow 1.1 and beyond is a work in
 progress.  This file describes the work still to be done.
 
 The Plan

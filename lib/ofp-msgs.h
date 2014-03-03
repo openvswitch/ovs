@@ -278,7 +278,7 @@ enum ofpraw {
     OFPRAW_OFPST11_TABLE_REPLY,
     /* OFPST 1.2 (3): struct ofp12_table_stats[]. */
     OFPRAW_OFPST12_TABLE_REPLY,
-    /* OFPST 1.3 (3): struct ofp13_table_stats[]. */
+    /* OFPST 1.3+ (3): struct ofp13_table_stats[]. */
     OFPRAW_OFPST13_TABLE_REPLY,
 
     /* OFPST 1.0 (4): struct ofp10_port_stats_request. */
@@ -310,7 +310,7 @@ enum ofpraw {
 
     /* OFPST 1.1-1.2 (6): uint8_t[8][]. */
     OFPRAW_OFPST11_GROUP_REPLY,
-    /* OFPST 1.3 (6): uint8_t[8][]. */
+    /* OFPST 1.3+ (6): uint8_t[8][]. */
     OFPRAW_OFPST13_GROUP_REPLY,
 
     /* OFPST 1.1+ (7): void. */

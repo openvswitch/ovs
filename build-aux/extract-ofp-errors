@@ -10,7 +10,8 @@ macros = {}
 version_map = {"1.0": 0x01,
                "1.1": 0x02,
                "1.2": 0x03,
-               "1.3": 0x04}
+               "1.3": 0x04,
+               "1.4": 0x05}
 version_reverse_map = dict((v, k) for (k, v) in version_map.iteritems())
 
 token = None

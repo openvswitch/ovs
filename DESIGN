@@ -266,6 +266,12 @@ OpenFlow 1.3 makes these changes:
 The table for 1.3 is the same as the one shown above for 1.2.
 
 
+OpenFlow 1.4
+------------
+
+OpenFlow 1.4 does not change flow_mod semantics.
+
+
 OFPT_PACKET_IN
 ==============
 

@@ -50,6 +50,8 @@ ofperr_domain_from_version(enum ofp_version version)
         return &ofperr_of12;
     case OFP13_VERSION:
         return &ofperr_of13;
+    case OFP14_VERSION:
+        return &ofperr_of14;
     default:
         return NULL;
     }

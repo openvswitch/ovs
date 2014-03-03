@@ -540,6 +540,7 @@ ofp_print_switch_features(struct ds *string, const struct ofp_header *oh)
     case OFP12_VERSION:
         break;
     case OFP13_VERSION:
+    case OFP14_VERSION:
         return; /* no ports in ofp13_switch_features */
     default:
         OVS_NOT_REACHED();
@@ -1790,6 +1791,7 @@ ofp_print_ofpst_table_reply(struct ds *string, const struct ofp_header *oh,
                             int verbosity)
 {
     switch ((enum ofp_version)oh->version) {
+    case OFP14_VERSION:
     case OFP13_VERSION:
         ofp_print_ofpst_table_reply13(string, oh, verbosity);
         break;

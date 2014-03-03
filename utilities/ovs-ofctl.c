@@ -1539,6 +1539,7 @@ ofctl_monitor(int argc, char *argv[])
         case OFP11_VERSION:
         case OFP12_VERSION:
         case OFP13_VERSION:
+        case OFP14_VERSION:
             break;
         default:
             OVS_NOT_REACHED();

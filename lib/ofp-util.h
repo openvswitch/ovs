@@ -108,7 +108,8 @@ enum ofputil_protocol {
      * variant. */
     OFPUTIL_P_OF12_OXM      = 1 << 5,
     OFPUTIL_P_OF13_OXM      = 1 << 6,
-#define OFPUTIL_P_ANY_OXM (OFPUTIL_P_OF12_OXM | OFPUTIL_P_OF13_OXM)
+    OFPUTIL_P_OF14_OXM      = 1 << 7,
+#define OFPUTIL_P_ANY_OXM (OFPUTIL_P_OF12_OXM | OFPUTIL_P_OF13_OXM | OFPUTIL_P_OF14_OXM)
 
 #define OFPUTIL_P_NXM_OF11_UP (OFPUTIL_P_OF10_NXM_ANY | OFPUTIL_P_OF11_STD | \
                                OFPUTIL_P_ANY_OXM)
@@ -121,8 +122,10 @@ enum ofputil_protocol {
 
 #define OFPUTIL_P_OF13_UP (OFPUTIL_P_OF13_OXM)
 
+#define OFPUTIL_P_OF14_UP (OFPUTIL_P_OF14_OXM)
+
     /* All protocols. */
-#define OFPUTIL_P_ANY ((1 << 7) - 1)
+#define OFPUTIL_P_ANY ((1 << 8) - 1)
 
     /* Protocols in which a specific table may be specified in flow_mods. */
 #define OFPUTIL_P_TID (OFPUTIL_P_OF10_STD_TID | \
