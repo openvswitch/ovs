@@ -40,6 +40,21 @@
 
 VLOG_DEFINE_THIS_MODULE(timeval);
 
+#ifdef _WIN32
+typedef unsigned int clockid_t;
+
+#ifndef CLOCK_MONOTONIC
+#define CLOCK_MONOTONIC 1
+#endif
+
+#ifndef CLOCK_REALTIME
+#define CLOCK_REALTIME 2
+#endif
+
+/* Number of 100 ns intervals from January 1, 1601 till January 1, 1970. */
+static ULARGE_INTEGER unix_epoch;
+#endif /* _WIN32 */
+
 struct clock {
     clockid_t id;               /* CLOCK_MONOTONIC or CLOCK_REALTIME. */
 
@@ -95,6 +110,16 @@ static void
 do_init_time(void)
 {
     struct timespec ts;
+
+#ifdef _WIN32
+    /* Calculate number of 100-nanosecond intervals till 01/01/1970. */
+    SYSTEMTIME unix_epoch_st = { 1970, 1, 0, 1, 0, 0, 0, 0};
+    FILETIME unix_epoch_ft;
+
+    SystemTimeToFileTime(&unix_epoch_st, &unix_epoch_ft);
+    unix_epoch.LowPart = unix_epoch_ft.dwLowDateTime;
+    unix_epoch.HighPart = unix_epoch_ft.dwHighDateTime;
+#endif
 
     coverage_init();
 
@@ -324,6 +349,55 @@ time_boot_msec(void)
     time_init();
     return boot_time;
 }
+
+#ifdef _WIN32
+static ULARGE_INTEGER
+xgetfiletime(void)
+{
+    ULARGE_INTEGER current_time;
+    FILETIME current_time_ft;
+
+    /* Returns current time in UTC as a 64-bit value representing the number
+     * of 100-nanosecond intervals since January 1, 1601 . */
+    GetSystemTimePreciseAsFileTime(&current_time_ft);
+    current_time.LowPart = current_time_ft.dwLowDateTime;
+    current_time.HighPart = current_time_ft.dwHighDateTime;
+
+    return current_time;
+}
+
+static int
+clock_gettime(clock_t id, struct timespec *ts)
+{
+    if (id == CLOCK_MONOTONIC) {
+        static LARGE_INTEGER freq;
+        LARGE_INTEGER count;
+        long long int ns;
+
+        if (!freq.QuadPart) {
+            /* Number of counts per second. */
+            QueryPerformanceFrequency(&freq);
+        }
+        /* Total number of counts from a starting point. */
+        QueryPerformanceCounter(&count);
+
+        /* Total nano seconds from a starting point. */
+        ns = (double) count.QuadPart / freq.QuadPart * 1000000000;
+
+        ts->tv_sec = count.QuadPart / freq.QuadPart;
+        ts->tv_nsec = ns % 1000000000;
+    } else if (id == CLOCK_REALTIME) {
+        ULARGE_INTEGER current_time = xgetfiletime();
+
+        /* Time from Epoch to now. */
+        ts->tv_sec = (current_time.QuadPart - unix_epoch.QuadPart) / 10000000;
+        ts->tv_nsec = ((current_time.QuadPart - unix_epoch.QuadPart) %
+                       10000000) * 100;
+    } else {
+        return -1;
+    }
+}
+#endif /* _WIN32 */
 
 void
 xgettimeofday(struct timeval *tv)
