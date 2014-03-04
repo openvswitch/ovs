@@ -572,9 +572,22 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct match *match,
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 24);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 25);
 
     /* Metadata. */
+    if (match->wc.masks.dp_hash) {
+        if (!oxm) {
+            nxm_put_32m(b, NXM_NX_DP_HASH, htonl(flow->dp_hash),
+                        htonl(match->wc.masks.dp_hash));
+        }
+    }
+
+    if (match->wc.masks.recirc_id) {
+        if (!oxm) {
+            nxm_put_32(b, NXM_NX_RECIRC_ID, htonl(flow->recirc_id));
+        }
+    }
+
     if (match->wc.masks.in_port.ofp_port) {
         ofp_port_t in_port = flow->in_port.ofp_port;
         if (oxm) {

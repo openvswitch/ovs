@@ -37,7 +37,7 @@ struct pkt_metadata;
 /* This sequence number should be incremented whenever anything involving flows
  * or the wildcarding of flows changes.  This will cause build assertion
  * failures in places which likely need to be updated. */
-#define FLOW_WC_SEQ 24
+#define FLOW_WC_SEQ 25
 
 #define FLOW_N_REGS 8
 BUILD_ASSERT_DECL(FLOW_N_REGS <= NXM_NX_MAX_REGS);
@@ -97,6 +97,11 @@ union flow_in_port {
  * be looked at.  This enables better wildcarding for datapath flows.
  */
 struct flow {
+    /* Recirculation */
+    uint32_t dp_hash;           /* Datapath computed hash value. The exact
+                                   computation is opaque to the user space.*/
+    uint32_t recirc_id;         /* Must be exact match. */
+
     /* L1 */
     struct flow_tnl tunnel;     /* Encapsulating tunnel parameters. */
     ovs_be64 metadata;          /* OpenFlow Metadata. */
@@ -139,8 +144,8 @@ BUILD_ASSERT_DECL(sizeof(struct flow) % 4 == 0);
 
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
 BUILD_ASSERT_DECL(offsetof(struct flow, tp_dst) + 2
-                  == sizeof(struct flow_tnl) + 164
-                  && FLOW_WC_SEQ == 24);
+                  == sizeof(struct flow_tnl) + 172
+                  && FLOW_WC_SEQ == 25);
 
 /* Incremental points at which flow classification may be performed in
  * segments.
@@ -165,6 +170,8 @@ extern const uint8_t flow_segment_u32s[];
 
 /* Represents the metadata fields of struct flow. */
 struct flow_metadata {
+    uint32_t dp_hash;                /* Datapath computed hash field. */
+    uint32_t recirc_id;              /* Recirculation ID. */
     ovs_be64 tun_id;                 /* Encapsulating tunnel ID. */
     ovs_be32 tun_src;                /* Tunnel outer IPv4 src addr */
     ovs_be32 tun_dst;                /* Tunnel outer IPv4 dst addr */

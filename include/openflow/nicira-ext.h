@@ -1803,6 +1803,35 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
 #define NXM_NX_TCP_FLAGS   NXM_HEADER  (0x0001, 34, 2)
 #define NXM_NX_TCP_FLAGS_W NXM_HEADER_W(0x0001, 34, 2)
 
+/* Metadata dp_hash.
+ *
+ * Internal use only, not programable from controller.
+ *
+ * The dp_hash is used to carry the flow hash computed in the
+ * datapath.
+ *
+ * Prereqs: None.
+ *
+ * Format: 32-bit integer in network byte order.
+ *
+ * Masking: Fully maskable. */
+#define NXM_NX_DP_HASH   NXM_HEADER  (0x0001, 35, 4)
+#define NXM_NX_DP_HASH_W NXM_HEADER_W(0x0001, 35, 4)
+
+/* Metadata recirc_id.
+ *
+ * Internal use only, not programable from controller.
+ *
+ * The recirc_id used for recirculation. 0 is reserved
+ * for initially received packet.
+ *
+ * Prereqs: None.
+ *
+ * Format: 32-bit integer in network byte order.
+ *
+ * Masking: not maskable. */
+#define NXM_NX_RECIRC_ID   NXM_HEADER  (0x0001, 36, 4)
+
 /* ## --------------------- ## */
 /* ## Requests and replies. ## */
 /* ## --------------------- ## */

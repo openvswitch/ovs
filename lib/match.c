@@ -165,6 +165,26 @@ match_zero_wildcarded_fields(struct match *match)
 }
 
 void
+match_set_dp_hash(struct match *match, uint32_t value)
+{
+    match_set_dp_hash_masked(match, value, UINT32_MAX);
+}
+
+void
+match_set_dp_hash_masked(struct match *match, uint32_t value, uint32_t mask)
+{
+    match->wc.masks.dp_hash = mask;
+    match->flow.dp_hash = value & mask;
+}
+
+void
+match_set_recirc_id(struct match *match, uint32_t value)
+{
+    match->flow.recirc_id = value;
+    match->wc.masks.recirc_id = UINT32_MAX;
+}
+
+void
 match_set_reg(struct match *match, unsigned int reg_idx, uint32_t value)
 {
     match_set_reg_masked(match, reg_idx, value, UINT32_MAX);
@@ -895,13 +915,23 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 24);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 25);
 
     if (priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%u,", priority);
     }
 
     format_uint32_masked(s, "pkt_mark", f->pkt_mark, wc->masks.pkt_mark);
+
+    if (wc->masks.recirc_id) {
+        format_uint32_masked(s, "recirc_id", f->recirc_id,
+                             wc->masks.recirc_id);
+    }
+
+    if (f->dp_hash && wc->masks.dp_hash) {
+        format_uint32_masked(s, "dp_hash", f->dp_hash,
+                             wc->masks.dp_hash);
+    }
 
     if (wc->masks.skb_priority) {
         ds_put_format(s, "skb_priority=%#"PRIx32",", f->skb_priority);

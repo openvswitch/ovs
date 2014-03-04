@@ -52,6 +52,30 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
     /* ## -------- ## */
 
     {
+        MFF_DP_HASH, "dp_hash", NULL,
+        MF_FIELD_SIZES(be32),
+        MFM_FULLY,
+        MFS_HEXADECIMAL,
+        MFP_NONE,
+        false,
+        NXM_NX_DP_HASH, "NXM_NX_DP_HASH",
+        NXM_NX_DP_HASH, "NXM_NX_DP_HASH",
+        OFPUTIL_P_NXM_OXM_ANY,
+        OFPUTIL_P_NXM_OXM_ANY,
+        -1,
+    }, {
+        MFF_RECIRC_ID, "recirc_id", NULL,
+        MF_FIELD_SIZES(be32),
+        MFM_NONE,
+        MFS_DECIMAL,
+        MFP_NONE,
+        false,
+        NXM_NX_RECIRC_ID, "NXM_NX_RECIRC_ID",
+        NXM_NX_RECIRC_ID, "NXM_NX_RECIRC_ID",
+        OFPUTIL_P_NXM_OXM_ANY,
+        OFPUTIL_P_NXM_OXM_ANY,
+        -1,
+    }, {
         MFF_TUN_ID, "tun_id", "tunnel_id",
         MF_FIELD_SIZES(be64),
         MFM_FULLY,
@@ -879,6 +903,10 @@ bool
 mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
 {
     switch (mf->id) {
+    case MFF_DP_HASH:
+        return !wc->masks.dp_hash;
+    case MFF_RECIRC_ID:
+        return !wc->masks.recirc_id;
     case MFF_TUN_SRC:
         return !wc->masks.tunnel.ip_src;
     case MFF_TUN_DST:
@@ -1124,6 +1152,8 @@ bool
 mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
 {
     switch (mf->id) {
+    case MFF_DP_HASH:
+    case MFF_RECIRC_ID:
     case MFF_TUN_ID:
     case MFF_TUN_SRC:
     case MFF_TUN_DST:
@@ -1217,6 +1247,12 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
              union mf_value *value)
 {
     switch (mf->id) {
+    case MFF_DP_HASH:
+        value->be32 = htonl(flow->dp_hash);
+        break;
+    case MFF_RECIRC_ID:
+        value->be32 = htonl(flow->recirc_id);
+        break;
     case MFF_TUN_ID:
         value->be64 = flow->tunnel.tun_id;
         break;
@@ -1409,6 +1445,12 @@ mf_set_value(const struct mf_field *mf,
              const union mf_value *value, struct match *match)
 {
     switch (mf->id) {
+    case MFF_DP_HASH:
+        match_set_dp_hash(match, ntohl(value->be32));
+        break;
+    case MFF_RECIRC_ID:
+        match_set_recirc_id(match, ntohl(value->be32));
+        break;
     case MFF_TUN_ID:
         match_set_tun_id(match, value->be64);
         break;
@@ -1622,6 +1664,12 @@ mf_set_flow_value(const struct mf_field *mf,
                   const union mf_value *value, struct flow *flow)
 {
     switch (mf->id) {
+    case MFF_DP_HASH:
+        flow->dp_hash = ntohl(value->be32);
+        break;
+    case MFF_RECIRC_ID:
+        flow->recirc_id = ntohl(value->be32);
+        break;
     case MFF_TUN_ID:
         flow->tunnel.tun_id = value->be64;
         break;
@@ -1834,6 +1882,14 @@ void
 mf_set_wild(const struct mf_field *mf, struct match *match)
 {
     switch (mf->id) {
+    case MFF_DP_HASH:
+        match->flow.dp_hash = 0;
+        match->wc.masks.dp_hash = 0;
+        break;
+    case MFF_RECIRC_ID:
+        match->flow.recirc_id = 0;
+        match->wc.masks.recirc_id = 0;
+        break;
     case MFF_TUN_ID:
         match_set_tun_id_masked(match, htonll(0), htonll(0));
         break;
@@ -2046,6 +2102,7 @@ mf_set(const struct mf_field *mf,
     }
 
     switch (mf->id) {
+    case MFF_RECIRC_ID:
     case MFF_IN_PORT:
     case MFF_IN_PORT_OXM:
     case MFF_SKB_PRIORITY:
@@ -2068,6 +2125,9 @@ mf_set(const struct mf_field *mf,
     case MFF_ICMPV6_CODE:
         return OFPUTIL_P_NONE;
 
+    case MFF_DP_HASH:
+        match_set_dp_hash_masked(match, ntohl(value->be32), ntohl(mask->be32));
+        break;
     case MFF_TUN_ID:
         match_set_tun_id_masked(match, value->be64, mask->be64);
         break;

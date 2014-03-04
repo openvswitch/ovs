@@ -33,6 +33,8 @@ struct match;
  * to represent its value. */
 enum OVS_PACKED_ENUM mf_field_id {
     /* Metadata. */
+    MFF_DP_HASH,                /* be32 */
+    MFF_RECIRC_ID,              /* be32 */
     MFF_TUN_ID,                 /* be64 */
     MFF_TUN_SRC,                /* be32 */
     MFF_TUN_DST,                /* be32 */

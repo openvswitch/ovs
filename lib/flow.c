@@ -530,8 +530,10 @@ flow_unwildcard_tp_ports(const struct flow *flow, struct flow_wildcards *wc)
 void
 flow_get_metadata(const struct flow *flow, struct flow_metadata *fmd)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 24);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 25);
 
+    fmd->dp_hash = flow->dp_hash;
+    fmd->recirc_id = flow->recirc_id;
     fmd->tun_id = flow->tunnel.tun_id;
     fmd->tun_src = flow->tunnel.ip_src;
     fmd->tun_dst = flow->tunnel.ip_dst;
@@ -1194,7 +1196,7 @@ flow_push_mpls(struct flow *flow, int n, ovs_be16 mpls_eth_type,
         flow->mpls_lse[0] = set_mpls_lse_values(ttl, tc, 1, htonl(label));
 
         /* Clear all L3 and L4 fields. */
-        BUILD_ASSERT(FLOW_WC_SEQ == 24);
+        BUILD_ASSERT(FLOW_WC_SEQ == 25);
         memset((char *) flow + FLOW_SEGMENT_2_ENDS_AT, 0,
                sizeof(struct flow) - FLOW_SEGMENT_2_ENDS_AT);
     }
