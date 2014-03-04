@@ -117,6 +117,15 @@ UNLOCK_FUNCTION(rwlock, destroy);
             ovs_abort(error, "%s failed", #FUNCTION);   \
         }                                               \
     }
+#define XPTHREAD_FUNC3(FUNCTION, PARAM1, PARAM2, PARAM3)\
+    void                                                \
+    x##FUNCTION(PARAM1 arg1, PARAM2 arg2, PARAM3 arg3)  \
+    {                                                   \
+        int error = FUNCTION(arg1, arg2, arg3);         \
+        if (OVS_UNLIKELY(error)) {                      \
+            ovs_abort(error, "%s failed", #FUNCTION);   \
+        }                                               \
+    }
 
 XPTHREAD_FUNC1(pthread_mutex_lock, pthread_mutex_t *);
 XPTHREAD_FUNC1(pthread_mutex_unlock, pthread_mutex_t *);
@@ -135,6 +144,10 @@ XPTHREAD_FUNC2(pthread_cond_init, pthread_cond_t *, pthread_condattr_t *);
 XPTHREAD_FUNC1(pthread_cond_destroy, pthread_cond_t *);
 XPTHREAD_FUNC1(pthread_cond_signal, pthread_cond_t *);
 XPTHREAD_FUNC1(pthread_cond_broadcast, pthread_cond_t *);
+
+XPTHREAD_FUNC3(pthread_barrier_init, pthread_barrier_t *,
+               pthread_barrierattr_t *, unsigned int);
+XPTHREAD_FUNC1(pthread_barrier_destroy, pthread_barrier_t *);
 
 XPTHREAD_FUNC2(pthread_join, pthread_t, void **);
 
@@ -214,6 +227,19 @@ ovs_mutex_cond_wait(pthread_cond_t *cond, const struct ovs_mutex *mutex_)
     if (OVS_UNLIKELY(error)) {
         ovs_abort(error, "pthread_cond_wait failed");
     }
+}
+
+int
+xpthread_barrier_wait(pthread_barrier_t *barrier)
+{
+    int error;
+
+    error = pthread_barrier_wait(barrier);
+    if (error && OVS_UNLIKELY(error != PTHREAD_BARRIER_SERIAL_THREAD)) {
+        ovs_abort(error, "pthread_barrier_wait failed");
+    }
+
+    return error;
 }
 
 DEFINE_EXTERN_PER_THREAD_DATA(ovsthread_id, 0);

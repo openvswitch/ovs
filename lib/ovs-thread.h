@@ -146,6 +146,12 @@ void xpthread_cond_destroy(pthread_cond_t *);
 void xpthread_cond_signal(pthread_cond_t *);
 void xpthread_cond_broadcast(pthread_cond_t *);
 
+/* Wrappers for pthread_barrier_*() that abort the process on any error. */
+void xpthread_barrier_init(pthread_barrier_t *, pthread_barrierattr_t *,
+                           unsigned int count);
+int xpthread_barrier_wait(pthread_barrier_t *);
+void xpthread_barrier_destroy(pthread_barrier_t *);
+
 void xpthread_key_create(pthread_key_t *, void (*destructor)(void *));
 void xpthread_key_delete(pthread_key_t);
 void xpthread_setspecific(pthread_key_t, const void *);
