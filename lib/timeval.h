@@ -40,6 +40,11 @@ BUILD_ASSERT_DECL(TYPE_IS_SIGNED(time_t));
 #define TIME_MAX TYPE_MAXIMUM(time_t)
 #define TIME_MIN TYPE_MINIMUM(time_t)
 
+#ifdef _WIN32
+#define localtime_r(timep, result) localtime_s(result, timep)
+#define gmtime_r(timep, result) gmtime_s(result, timep)
+#endif /* _WIN32 */
+
 struct tm_msec {
   struct tm tm;
   int msec;
