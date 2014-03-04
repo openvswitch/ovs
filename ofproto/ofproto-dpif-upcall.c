@@ -1331,6 +1331,32 @@ ukey_delete(struct revalidator *revalidator, struct udpif_key *ukey)
 }
 
 static bool
+should_revalidate(uint64_t packets, long long int used)
+{
+    long long int metric, now, duration;
+
+    /* Calculate the mean time between seeing these packets. If this
+     * exceeds the threshold, then delete the flow rather than performing
+     * costly revalidation for flows that aren't being hit frequently.
+     *
+     * This is targeted at situations where the dump_duration is high (~1s),
+     * and revalidation is triggered by a call to udpif_revalidate(). In
+     * these situations, revalidation of all flows causes fluctuations in the
+     * flow_limit due to the interaction with the dump_duration and max_idle.
+     * This tends to result in deletion of low-throughput flows anyway, so
+     * skip the revalidation and just delete those flows. */
+    packets = MAX(packets, 1);
+    now = MAX(used, time_msec());
+    duration = now - used;
+    metric = duration / packets;
+
+    if (metric > 200) {
+        return false;
+    }
+    return true;
+}
+
+static bool
 revalidate_ukey(struct udpif *udpif, struct udpif_flow_dump *udump,
                 struct udpif_key *ukey)
 {
@@ -1344,6 +1370,7 @@ revalidate_ukey(struct udpif *udpif, struct udpif_flow_dump *udump,
     uint32_t *udump32, *xout32;
     odp_port_t odp_in_port;
     struct xlate_in xin;
+    long long int last_used;
     int error;
     size_t i;
     bool may_learn, ok;
@@ -1364,6 +1391,7 @@ revalidate_ukey(struct udpif *udpif, struct udpif_flow_dump *udump,
         }
     }
 
+    last_used = ukey->stats.used;
     push.used = udump->stats.used;
     push.tcp_flags = udump->stats.tcp_flags;
     push.n_packets = udump->stats.n_packets > ukey->stats.n_packets
@@ -1373,6 +1401,12 @@ revalidate_ukey(struct udpif *udpif, struct udpif_flow_dump *udump,
         ? udump->stats.n_bytes - ukey->stats.n_bytes
         : 0;
     ukey->stats = udump->stats;
+
+    if (udump->need_revalidate && last_used
+        && !should_revalidate(push.n_packets, last_used)) {
+        ok = false;
+        goto exit;
+    }
 
     if (!push.n_packets && !udump->need_revalidate) {
         ok = true;
