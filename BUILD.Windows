@@ -34,6 +34,11 @@ If after the above step, a 'which link' inside MSYS's bash says,
 "/bin/link.exe", rename /bin/link.exe to something else so that the
 Visual studio's linker is used.
 
+* For pthread support, install the library, dll and includes of pthreads-win32
+project from
+ftp://sourceware.org/pub/pthreads-win32/prebuilt-dll-2-9-1-release to a
+directory (e.g.: C:/pthread).
+
 * Get the Open vSwitch sources from either cloning the repo using git
 or from a distribution tar ball.
 
@@ -49,7 +54,7 @@ or from a distribution tar ball.
 
   % ./configure CC=./build-aux/cccl LD="`which link`" LIBS="-lws2_32 ..." \
     --prefix="C:/openvswitch/usr" --localstatedir="C:/openvswitch/var" \
-    --sysconfdir="C:/openvswitch/etc"
+    --sysconfdir="C:/openvswitch/etc" --with-pthread="C:/pthread"
 
 * Run make for the ported executables in the top source directory, e.g.:
 

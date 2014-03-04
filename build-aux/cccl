@@ -91,7 +91,7 @@ EOF
 
     -L*)
         path=`echo "$1" | sed 's/-L//'`
-        linkopt="$linkopt ${slash}LIBPATH:\"$path\""
+        linkopt="$linkopt ${slash}LIBPATH:$path"
         cl_linkopt="${slash}link ${slash}LIBPATH:\"$path\""
         ;;
 

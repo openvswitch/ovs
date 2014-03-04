@@ -47,6 +47,10 @@ ofproto_libofproto_la_SOURCES = \
 ofproto_libofproto_la_CPPFLAGS = $(AM_CPPFLAGS)
 ofproto_libofproto_la_CFLAGS = $(AM_CFLAGS)
 ofproto_libofproto_la_LIBADD = lib/libsflow.la
+if WIN32
+ofproto_libofproto_la_LIBADD += ${PTHREAD_LIBS}
+endif
+
 
 # Distribute this generated file in order not to require Python at
 # build time if ofproto/ipfix.xml is not modified.

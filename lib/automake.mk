@@ -8,6 +8,11 @@
 lib_LTLIBRARIES += lib/libopenvswitch.la
 
 lib_libopenvswitch_la_LIBADD = $(SSL_LIBS)
+
+if WIN32
+lib_libopenvswitch_la_LIBADD += ${PTHREAD_LIBS}
+endif
+
 lib_libopenvswitch_la_LDFLAGS = -release $(VERSION)
 
 lib_libopenvswitch_la_SOURCES = \
