@@ -28,7 +28,7 @@ struct ofpbuf;
 struct pkt_metadata;
 
 typedef void (*odp_execute_cb)(void *dp, struct ofpbuf *packet,
-                               const struct pkt_metadata *,
+                               struct pkt_metadata *,
                                const struct nlattr *action, bool may_steal);
 
 /* Actions that need to be executed in the context of a datapath are handed

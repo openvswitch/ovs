@@ -2082,7 +2082,7 @@ struct dp_netdev_execute_aux {
 
 static void
 dp_execute_cb(void *aux_, struct ofpbuf *packet,
-              const struct pkt_metadata *md OVS_UNUSED,
+              struct pkt_metadata *md,
               const struct nlattr *a, bool may_steal)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
@@ -2114,6 +2114,24 @@ dp_execute_cb(void *aux_, struct ofpbuf *packet,
         }
         break;
     }
+
+    case OVS_ACTION_ATTR_RECIRC: {
+        const struct ovs_action_recirc *act;
+        act = nl_attr_get(a);
+        md->recirc_id =act->recirc_id;
+        md->dp_hash = 0;
+
+        if (act->hash_alg == OVS_RECIRC_HASH_ALG_L4) {
+            struct flow flow;
+
+            flow_extract(packet, md, &flow);
+            md->dp_hash = flow_hash_symmetric_l4(&flow, act->hash_bias);
+        }
+
+        dp_netdev_port_input(aux->dp, packet, md);
+        break;
+    }
+
     case OVS_ACTION_ATTR_PUSH_VLAN:
     case OVS_ACTION_ATTR_POP_VLAN:
     case OVS_ACTION_ATTR_PUSH_MPLS:

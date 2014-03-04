@@ -1108,7 +1108,7 @@ struct dpif_execute_helper_aux {
  * meaningful. */
 static void
 dpif_execute_helper_cb(void *aux_, struct ofpbuf *packet,
-                       const struct pkt_metadata *md,
+                       struct pkt_metadata *md,
                        const struct nlattr *action, bool may_steal OVS_UNUSED)
 {
     struct dpif_execute_helper_aux *aux = aux_;
@@ -1133,6 +1133,7 @@ dpif_execute_helper_cb(void *aux_, struct ofpbuf *packet,
     case OVS_ACTION_ATTR_SET:
     case OVS_ACTION_ATTR_SAMPLE:
     case OVS_ACTION_ATTR_UNSPEC:
+    case OVS_ACTION_ATTR_RECIRC:
     case __OVS_ACTION_ATTR_MAX:
         OVS_NOT_REACHED();
     }

@@ -135,6 +135,64 @@ void ofproto_dpif_flow_mod(struct ofproto_dpif *, struct ofputil_flow_mod *);
 
 struct ofport_dpif *odp_port_to_ofport(const struct dpif_backer *, odp_port_t);
 
+/*
+ * Recirculation
+ * =============
+ *
+ * Recirculation is a technique to allow a frame to re-enter the packet processing
+ * path for one or multiple times to achieve more flexible packet processing in the
+ * data path. MPLS handling and selecting bond slave port of a bond ports.
+ *
+ * Data path and user space interface
+ * -----------------------------------
+ *
+ * Two new fields, recirc_id and dp_hash, are added to the current flow data structure.
+ * They are both both of type uint32_t. In addition, a new action, RECIRC, are added.
+ *
+ * The value recirc_id is used to distinguish a packet from multiple iterations of
+ * recirculation. A packet initially received is considered of having recirc_id of 0.
+ * Recirc_id is managed by the user space, opaque to the data path.
+ *
+ * On the other hand, dp_hash can only be computed by the data path, opaque to
+ * the user space. In fact, user space may not able to recompute the hash value.
+ * The dp_hash value should be wildcarded when for a newly received packet.
+ * RECIRC action specifies whether the hash is computed. If computed, how many
+ * fields to be included in the hash computation. The computed hash value is
+ * stored into the dp_hash field prior to recirculation.
+ *
+ * The RECIRC action computes and set the dp_hash field, set the recirc_id field
+ * and then reprocess the packet as if it was received on the same input port.
+ * RECIRC action works like a function call; actions listed behind the RECIRC
+ * action will be executed after its execution.  RECIRC action can be nested,
+ * data path implementation limits the number of recirculation executed
+ * to prevent unreasonable nesting depth or infinite loop.
+ *
+ * Both flow fields and the RECIRC action are exposed as open flow fields via
+ * Nicira extensions.
+ *
+ * Post recirculation flow
+ * ------------------------
+ *
+ * At the open flow level, post recirculation rules are always hidden from the
+ * controller.  They are installed in table 254 which is set up as a hidden table
+ * during boot time. Those rules are managed by the local user space program only.
+ *
+ * To speed up the classifier look up process, recirc_id is always reflected into
+ * the metadata field, since recirc_id is required to be exactly matched.
+ *
+ * Classifier look up always starts with table 254. A post recirculation flow
+ * lookup should find its hidden rule within this table. On the other hand, A
+ * newly received packet should miss all post recirculation rules because its
+ * recirc_id is zero, then hit a pre-installed lower priority rule to redirect
+ * classifier to look up starting from table 0:
+ *
+ *       * , actions=resubmit(,0)
+ *
+ * Post recirculation data path flows are managed like other data path flows.
+ * They are created on demand. Miss handling, stats collection and revalidation
+ * work the same way as regular flows.
+ */
+
 uint32_t ofproto_dpif_alloc_recirc_id(struct ofproto_dpif *ofproto);
 void ofproto_dpif_free_recirc_id(struct ofproto_dpif *ofproto, uint32_t recirc_id);
 #endif /* ofproto-dpif.h */

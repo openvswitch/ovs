@@ -33,6 +33,11 @@ struct ds;
 
 /* Datapath packet metadata */
 struct pkt_metadata {
+    uint32_t recirc_id;         /* Recirculation id carried with the
+                                   recirculating packets. 0 for packets
+                                   received from the wire. */
+    uint32_t dp_hash;           /* hash value computed by the recirculation
+                                   action. */
     struct flow_tnl tunnel;     /* Encapsulating tunnel parameters. */
     uint32_t skb_priority;      /* Packet priority for QoS. */
     uint32_t pkt_mark;          /* Packet mark. */
@@ -40,13 +45,15 @@ struct pkt_metadata {
 };
 
 #define PKT_METADATA_INITIALIZER(PORT) \
-    (struct pkt_metadata){ { 0, 0, 0, 0, 0, 0}, 0, 0, {(PORT)} }
+    (struct pkt_metadata){ 0, 0, { 0, 0, 0, 0, 0, 0}, 0, 0, {(PORT)} }
 
 static inline struct pkt_metadata
 pkt_metadata_from_flow(const struct flow *flow)
 {
     struct pkt_metadata md;
 
+    md.recirc_id = flow->recirc_id;
+    md.dp_hash = flow->dp_hash;
     md.tunnel = flow->tunnel;
     md.skb_priority = flow->skb_priority;
     md.pkt_mark = flow->pkt_mark;

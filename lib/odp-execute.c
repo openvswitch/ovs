@@ -125,6 +125,14 @@ odp_execute_set_action(struct ofpbuf *packet, const struct nlattr *a,
         set_arp(packet, nl_attr_get_unspec(a, sizeof(struct ovs_key_arp)));
         break;
 
+    case OVS_KEY_ATTR_DP_HASH:
+        md->dp_hash = nl_attr_get_u32(a);
+        break;
+
+    case OVS_KEY_ATTR_RECIRC_ID:
+        md->recirc_id = nl_attr_get_u32(a);
+        break;
+
     case OVS_KEY_ATTR_UNSPEC:
     case OVS_KEY_ATTR_ENCAP:
     case OVS_KEY_ATTR_ETHERTYPE:
@@ -197,6 +205,7 @@ odp_execute_actions__(void *dp, struct ofpbuf *packet, bool steal,
             /* These only make sense in the context of a datapath. */
         case OVS_ACTION_ATTR_OUTPUT:
         case OVS_ACTION_ATTR_USERSPACE:
+        case OVS_ACTION_ATTR_RECIRC:
             if (dp_execute_action) {
                 bool may_steal;
                 /* Allow 'dp_execute_action' to steal the packet data if we do

@@ -79,6 +79,7 @@ odp_action_len(uint16_t type)
     case OVS_ACTION_ATTR_POP_VLAN: return 0;
     case OVS_ACTION_ATTR_PUSH_MPLS: return sizeof(struct ovs_action_push_mpls);
     case OVS_ACTION_ATTR_POP_MPLS: return sizeof(ovs_be16);
+    case OVS_ACTION_ATTR_RECIRC: return sizeof(struct ovs_action_recirc);
     case OVS_ACTION_ATTR_SET: return -2;
     case OVS_ACTION_ATTR_SAMPLE: return -2;
 
@@ -118,6 +119,8 @@ ovs_key_attr_to_string(enum ovs_key_attr attr, char *namebuf, size_t bufsize)
     case OVS_KEY_ATTR_ARP: return "arp";
     case OVS_KEY_ATTR_ND: return "nd";
     case OVS_KEY_ATTR_MPLS: return "mpls";
+    case OVS_KEY_ATTR_DP_HASH: return "dp_hash";
+    case OVS_KEY_ATTR_RECIRC_ID: return "recirc_id";
 
     case __OVS_KEY_ATTR_MAX:
     default:
@@ -384,6 +387,19 @@ format_mpls(struct ds *ds, const struct ovs_key_mpls *mpls_key,
 }
 
 static void
+format_odp_recirc_action(struct ds *ds,
+                         const struct ovs_action_recirc *act)
+{
+    ds_put_format(ds, "recirc(");
+
+    if (act->hash_alg == OVS_RECIRC_HASH_ALG_L4) {
+        ds_put_format(ds, "hash_l4(%"PRIu32"), ", act->hash_bias);
+    }
+
+    ds_put_format(ds, "%"PRIu32")", act->recirc_id);
+}
+
+static void
 format_odp_action(struct ds *ds, const struct nlattr *a)
 {
     int expected_len;
@@ -404,6 +420,9 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
         break;
     case OVS_ACTION_ATTR_USERSPACE:
         format_odp_userspace_action(ds, a);
+        break;
+    case OVS_ACTION_ATTR_RECIRC:
+        format_odp_recirc_action(ds, nl_attr_get(a));
         break;
     case OVS_ACTION_ATTR_SET:
         ds_put_cstr(ds, "set(");
@@ -730,6 +749,8 @@ odp_flow_key_attr_len(uint16_t type)
     case OVS_KEY_ATTR_ENCAP: return -2;
     case OVS_KEY_ATTR_PRIORITY: return 4;
     case OVS_KEY_ATTR_SKB_MARK: return 4;
+    case OVS_KEY_ATTR_DP_HASH: return 4;
+    case OVS_KEY_ATTR_RECIRC_ID: return 4;
     case OVS_KEY_ATTR_TUNNEL: return -2;
     case OVS_KEY_ATTR_IN_PORT: return 4;
     case OVS_KEY_ATTR_ETHERNET: return sizeof(struct ovs_key_ethernet);
@@ -1025,6 +1046,8 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
 
     case OVS_KEY_ATTR_PRIORITY:
     case OVS_KEY_ATTR_SKB_MARK:
+    case OVS_KEY_ATTR_DP_HASH:
+    case OVS_KEY_ATTR_RECIRC_ID:
         ds_put_format(ds, "%#"PRIx32, nl_attr_get_u32(a));
         if (!is_exact) {
             ds_put_format(ds, "/%#"PRIx32, nl_attr_get_u32(ma));
@@ -1386,7 +1409,6 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         }
         break;
     }
-
     case OVS_KEY_ATTR_UNSPEC:
     case __OVS_KEY_ATTR_MAX:
     default:
@@ -1613,6 +1635,36 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
             nl_msg_put_u32(key, OVS_KEY_ATTR_SKB_MARK, mark);
             if (mask) {
                 nl_msg_put_u32(mask, OVS_KEY_ATTR_SKB_MARK, UINT32_MAX);
+            }
+            return n;
+        }
+    }
+
+    {
+        uint32_t recirc_id;
+        int n = -1;
+
+        if (ovs_scan(s, "recirc_id(%"SCNi32")%n", &recirc_id, &n)) {
+            nl_msg_put_u32(key, OVS_KEY_ATTR_RECIRC_ID, recirc_id);
+            nl_msg_put_u32(mask, OVS_KEY_ATTR_RECIRC_ID, UINT32_MAX);
+            return n;
+        }
+    }
+
+    {
+        uint32_t dp_hash;
+        uint32_t dp_hash_mask;
+        int n = -1;
+
+        if (mask && ovs_scan(s, "dp_hash(%"SCNi32"/%"SCNi32")%n", &dp_hash,
+                             &dp_hash_mask, &n)) {
+            nl_msg_put_u32(key, OVS_KEY_ATTR_DP_HASH, dp_hash);
+            nl_msg_put_u32(mask, OVS_KEY_ATTR_DP_HASH, dp_hash_mask);
+            return n;
+        } else if (ovs_scan(s, "dp_hash(%"SCNi32")%n", &dp_hash, &n)) {
+            nl_msg_put_u32(key, OVS_KEY_ATTR_DP_HASH, dp_hash);
+            if (mask) {
+                nl_msg_put_u32(mask, OVS_KEY_ATTR_DP_HASH, UINT32_MAX);
             }
             return n;
         }
@@ -2438,6 +2490,14 @@ odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *data,
 
     nl_msg_put_u32(buf, OVS_KEY_ATTR_SKB_MARK, data->pkt_mark);
 
+    if (flow->recirc_id) {
+        nl_msg_put_u32(buf, OVS_KEY_ATTR_RECIRC_ID, data->recirc_id);
+    }
+
+    if (flow->dp_hash) {
+        nl_msg_put_u32(buf, OVS_KEY_ATTR_DP_HASH, data->dp_hash);
+    }
+
     /* Add an ingress port attribute if this is a mask or 'odp_in_port'
      * is not the magical value "ODPP_NONE". */
     if (is_mask || odp_in_port != ODPP_NONE) {
@@ -2673,13 +2733,24 @@ odp_key_to_pkt_metadata(const struct nlattr *key, size_t key_len,
             continue;
         }
 
-        if (type == OVS_KEY_ATTR_PRIORITY) {
+        switch (type) {
+        case OVS_KEY_ATTR_RECIRC_ID:
+            md->recirc_id = nl_attr_get_u32(nla);
+            wanted_attrs &= ~(1u << OVS_KEY_ATTR_RECIRC_ID);
+            break;
+        case OVS_KEY_ATTR_DP_HASH:
+            md->dp_hash = nl_attr_get_u32(nla);
+            wanted_attrs &= ~(1u << OVS_KEY_ATTR_DP_HASH);
+            break;
+        case OVS_KEY_ATTR_PRIORITY:
             md->skb_priority = nl_attr_get_u32(nla);
             wanted_attrs &= ~(1u << OVS_KEY_ATTR_PRIORITY);
-        } else if (type == OVS_KEY_ATTR_SKB_MARK) {
+            break;
+        case OVS_KEY_ATTR_SKB_MARK:
             md->pkt_mark = nl_attr_get_u32(nla);
             wanted_attrs &= ~(1u << OVS_KEY_ATTR_SKB_MARK);
-        } else if (type == OVS_KEY_ATTR_TUNNEL) {
+            break;
+        case OVS_KEY_ATTR_TUNNEL: {
             enum odp_key_fitness res;
 
             res = odp_tun_key_from_attr(nla, &md->tunnel);
@@ -2688,9 +2759,14 @@ odp_key_to_pkt_metadata(const struct nlattr *key, size_t key_len,
             } else if (res == ODP_FIT_PERFECT) {
                 wanted_attrs &= ~(1u << OVS_KEY_ATTR_TUNNEL);
             }
-        } else if (type == OVS_KEY_ATTR_IN_PORT) {
+            break;
+        }
+        case OVS_KEY_ATTR_IN_PORT:
             md->in_port.odp_port = nl_attr_get_odp_port(nla);
             wanted_attrs &= ~(1u << OVS_KEY_ATTR_IN_PORT);
+            break;
+        default:
+            break;
         }
 
         if (!wanted_attrs) {
@@ -3226,6 +3302,18 @@ odp_flow_key_to_flow__(const struct nlattr *key, size_t key_len,
     expected_attrs = 0;
 
     /* Metadata. */
+    if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_RECIRC_ID)) {
+        flow->recirc_id = nl_attr_get_u32(attrs[OVS_KEY_ATTR_RECIRC_ID]);
+        expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_RECIRC_ID;
+    } else if (is_mask) {
+        /* Always exact match recirc_id when datapath does not sepcify it. */
+        flow->recirc_id = UINT32_MAX;
+    }
+
+    if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_DP_HASH)) {
+        flow->dp_hash = nl_attr_get_u32(attrs[OVS_KEY_ATTR_DP_HASH]);
+        expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_DP_HASH;
+    }
     if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_PRIORITY)) {
         flow->skb_priority = nl_attr_get_u32(attrs[OVS_KEY_ATTR_PRIORITY]);
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_PRIORITY;

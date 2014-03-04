@@ -307,10 +307,12 @@ enum ovs_key_attr {
 	OVS_KEY_ATTR_TUNNEL,	/* Nested set of ovs_tunnel attributes */
 	OVS_KEY_ATTR_SCTP,      /* struct ovs_key_sctp */
 	OVS_KEY_ATTR_TCP_FLAGS,	/* be16 TCP flags. */
-
 #ifdef __KERNEL__
 	OVS_KEY_ATTR_IPV4_TUNNEL,  /* struct ovs_key_ipv4_tunnel */
 #endif
+
+	OVS_KEY_ATTR_DP_HASH = 20,	/* u32 hash value */
+	OVS_KEY_ATTR_RECIRC_ID,		/* u32 recirc id */
 
 	OVS_KEY_ATTR_MPLS = 62, /* array of struct ovs_key_mpls.
 				 * The implementation may restrict
@@ -532,6 +534,29 @@ struct ovs_action_push_vlan {
 	__be16 vlan_tci;	/* 802.1Q TCI (VLAN ID and priority). */
 };
 
+/* Data path hash algorithm for computing Datapath hash.
+ *
+ * The Algorithm type only specifies the fields in a flow
+ * will be used as part of the hash. Each datapath is free
+ * to use its own hash algorithm. The hash value will be
+ * opaque to the user space daemon.
+ */
+enum ovs_recirc_hash_alg {
+	OVS_RECIRC_HASH_ALG_NONE,
+	OVS_RECIRC_HASH_ALG_L4,
+};
+/*
+ * struct ovs_action_recirc - %OVS_ACTION_ATTR_RECIRC action argument.
+ * @recirc_id: The Recirculation label, Zero is invalid.
+ * @hash_alg: Algorithm used to compute hash prior to recirculation.
+ * @hash_bias: bias used for computing hash.  used to compute hash prior to recirculation.
+ */
+struct ovs_action_recirc {
+	uint32_t  hash_alg;	/* One of ovs_dp_hash_alg. */
+	uint32_t  hash_bias;
+	uint32_t  recirc_id;	/* Recirculation label. */
+};
+
 /**
  * enum ovs_action_attr - Action types.
  *
@@ -555,6 +580,7 @@ struct ovs_action_push_vlan {
  * indicate the new packet contents. This could potentially still be
  * %ETH_P_MPLS if the resulting MPLS label stack is not empty.  If there
  * is no MPLS label stack, as determined by ethertype, no action is taken.
+ * @OVS_ACTION_RECIRC: Recirculate within the data path.
  *
  * Only a single header can be set with a single %OVS_ACTION_ATTR_SET.  Not all
  * fields within a header are modifiable, e.g. the IPv4 protocol and fragment
@@ -571,6 +597,7 @@ enum ovs_action_attr {
 	OVS_ACTION_ATTR_SAMPLE,       /* Nested OVS_SAMPLE_ATTR_*. */
 	OVS_ACTION_ATTR_PUSH_MPLS,    /* struct ovs_action_push_mpls. */
 	OVS_ACTION_ATTR_POP_MPLS,     /* __be16 ethertype. */
+	OVS_ACTION_ATTR_RECIRC,	      /* struct ovs_action_recirc. */
 	__OVS_ACTION_ATTR_MAX
 };
 
