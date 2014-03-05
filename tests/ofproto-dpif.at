@@ -47,6 +47,148 @@ skb_priority(0),in_port(8),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif, active-backup bonding])
+# Create br0 with interfaces p1, p2 and p7, creating bond0 with p1 and p2
+#    and br1 with interfaces p3, p4 and p8.
+# toggle p1,p2 of bond0 up and down to test bonding in active-backup mode.
+OVS_VSWITCHD_START(
+  [add-bond br0 bond0 p1 p2 bond_mode=active-backup --\
+   set interface p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p1.sock ofport_request=1 -- \
+   set interface p2 type=dummy options:pstream=punix:$OVS_RUNDIR/p2.sock ofport_request=2 -- \
+   add-port br0 p7 -- set interface p7 ofport_request=7 type=dummy -- \
+   add-br br1 -- \
+   set bridge br1 other-config:hwaddr=aa:66:aa:66:00:00 -- \
+   set bridge br1 datapath-type=dummy other-config:datapath-id=1234 \
+                  fail-mode=secure -- \
+   add-port br1 p3 -- set interface p3 type=dummy options:stream=unix:$OVS_RUNDIR/p1.sock ofport_request=3 -- \
+   add-port br1 p4 -- set interface p4 type=dummy options:stream=unix:$OVS_RUNDIR/p2.sock ofport_request=4 -- \
+   add-port br1 p8 -- set interface p8 ofport_request=8 type=dummy --])
+
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+AT_CHECK([ovs-ofctl add-flow br1 action=normal])
+ovs-appctl netdev-dummy/set-admin-state up
+ovs-appctl time/warp 100
+ovs-appctl netdev-dummy/set-admin-state p2 down
+ovs-appctl time/stop
+ovs-appctl time/warp 100
+AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+ovs-appctl time/warp 100
+ovs-appctl netdev-dummy/set-admin-state p2 up
+ovs-appctl netdev-dummy/set-admin-state p1 down
+ovs-appctl time/warp 100
+AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0d),eth_type(0x0800),ipv4(src=10.0.0.5,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0e),eth_type(0x0800),ipv4(src=10.0.0.6,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+ovs-appctl time/warp 100
+ovs-appctl time/warp 100
+AT_CHECK([ovs-appctl dpif/dump-flows br1 | STRIP_XOUT], [0], [dnl
+skb_priority(0),in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
+skb_priority(0),in_port(3),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3/0.0.0.0,dst=10.0.0.4/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
+skb_priority(0),in_port(4),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0d),eth_type(0x0800),ipv4(src=10.0.0.5/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
+skb_priority(0),in_port(4),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0e),eth_type(0x0800),ipv4(src=10.0.0.6/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
+skb_priority(0),in_port(4),eth(src=50:54:00:00:00:09,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8035), packets:0, bytes:0, used:never, actions: <del>
+skb_priority(0),in_port(4),eth(src=50:54:00:00:00:0b,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8035), packets:0, bytes:0, used:never, actions: <del>
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif, balance-slb bonding])
+# Create br0 with interfaces bond0(p1, p2, p3) and p7,
+#    and br1 with interfaces p4, p5, p6 and p8.
+#    p1 <-> p4, p2 <-> p5, p3 <-> p6
+# Send some traffic, make sure the traffic are spread based on source mac.
+OVS_VSWITCHD_START(
+  [add-bond br0 bond0 p1 p2 p3 bond_mode=balance-slb --\
+   set interface p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p1.sock ofport_request=1 -- \
+   set interface p2 type=dummy options:pstream=punix:$OVS_RUNDIR/p2.sock ofport_request=2 -- \
+   set interface p3 type=dummy options:pstream=punix:$OVS_RUNDIR/p3.sock ofport_request=3 -- \
+   add-port br0 p7 -- set interface p7 ofport_request=7 type=dummy -- \
+   add-br br1 -- \
+   set bridge br1 other-config:hwaddr=aa:66:aa:66:00:00 -- \
+   set bridge br1 datapath-type=dummy other-config:datapath-id=1234 \
+                  fail-mode=secure -- \
+   add-port br1 p4 -- set interface p4 type=dummy options:stream=unix:$OVS_RUNDIR/p1.sock ofport_request=4 -- \
+   add-port br1 p5 -- set interface p5 type=dummy options:stream=unix:$OVS_RUNDIR/p2.sock ofport_request=5 -- \
+   add-port br1 p6 -- set interface p6 type=dummy options:stream=unix:$OVS_RUNDIR/p3.sock ofport_request=6 -- \
+   add-port br1 p8 -- set interface p8 ofport_request=8 type=dummy --])
+
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+AT_CHECK([ovs-ofctl add-flow br1 action=normal])
+AT_CHECK([ovs-appctl netdev-dummy/set-admin-state up], 0, [OK
+])
+ovs-appctl netdev-dummy/set-admin-state up
+ovs-appctl time/stop
+ovs-appctl time/warp 100
+(
+for i in `seq 0 100 |xargs printf '%02x\n'`;
+    do
+    pkt="in_port(7),eth(src=50:54:00:00:00:$i,dst=50:54:00:00:01:00),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)"
+    AT_CHECK([ovs-appctl netdev-dummy/receive p7 $pkt])
+    done
+)
+ovs-appctl time/warp 100
+AT_CHECK([ovs-appctl dpif/dump-flows br1 > br1_flows.txt])
+# Make sure there is resonable distribution to all three ports.
+# We don't want to make this check precise, in case hash function changes.
+AT_CHECK([test `egrep 'in_port\(4\)' br1_flows.txt |wc -l` -gt 3])
+AT_CHECK([test `egrep 'in_port\(5\)' br1_flows.txt |wc -l` -gt 3])
+AT_CHECK([test `egrep 'in_port\(6\)' br1_flows.txt |wc -l` -gt 3])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif, balance-tcp bonding])
+# Create br0 with interfaces bond0(p1, p2, p3) and p7,
+#    and br1 with interfaces bond1(p4, p5, p6) and p8.
+#    bond0 <-> bond1
+# Send some traffic, make sure the traffic are spread based on L4 headers.
+OVS_VSWITCHD_START(
+  [add-bond br0 bond0 p1 p2 p3 bond_mode=balance-tcp lacp=active \
+        other-config:lacp-time=fast other-config:bond-rebalance-interval=0 --\
+   set interface p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p1.sock ofport_request=1 -- \
+   set interface p2 type=dummy options:pstream=punix:$OVS_RUNDIR/p2.sock ofport_request=2 -- \
+   set interface p3 type=dummy options:pstream=punix:$OVS_RUNDIR/p3.sock ofport_request=3 -- \
+   add-port br0 p7 -- set interface p7 ofport_request=7 type=dummy -- \
+   add-br br1 -- \
+   set bridge br1 other-config:hwaddr=aa:66:aa:66:00:00 -- \
+   set bridge br1 datapath-type=dummy other-config:datapath-id=1234 \
+                  fail-mode=secure -- \
+   add-bond br1 bond1 p4 p5 p6 bond_mode=balance-tcp lacp=active \
+        other-config:lacp-time=fast other-config:bond-rebalance-interval=0 --\
+   set interface p4 type=dummy options:stream=unix:$OVS_RUNDIR/p1.sock ofport_request=4 -- \
+   set interface p5 type=dummy options:stream=unix:$OVS_RUNDIR/p2.sock ofport_request=5 -- \
+   set interface p6 type=dummy options:stream=unix:$OVS_RUNDIR/p3.sock ofport_request=6 -- \
+   add-port br1 p8 -- set interface p8 ofport_request=8 type=dummy --])
+AT_CHECK([ovs-appctl netdev-dummy/set-admin-state up], 0, [OK
+])
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+AT_CHECK([ovs-ofctl add-flow br1 action=normal])
+AT_CHECK([ovs-appctl upcall/disable-megaflows], [0], [megaflows disabled
+], [])
+sleep 1;
+ovs-appctl time/stop
+ovs-appctl time/warp 100
+ovs-appctl lacp/show > lacp.txt
+ovs-appctl bond/show > bond.txt
+(
+for i in `seq 10 100` ;
+    do
+    pkt="in_port(7),eth(src=50:54:00:00:00:05,dst=50:54:00:00:01:00),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=$i),tcp_flags(0x010)"
+    AT_CHECK([ovs-appctl netdev-dummy/receive p7 $pkt])
+    done
+)
+ovs-appctl time/warp 100
+ovs-appctl time/warp 100
+ovs-appctl time/warp 100
+AT_CHECK([ovs-appctl dpif/dump-flows br0 |grep tcp > br0_flows.txt])
+AT_CHECK([ovs-appctl dpif/dump-flows br1 |grep tcp > br1_flows.txt])
+# Make sure there is resonable distribution to all three ports.
+# We don't want to make this check precise, in case hash function changes.
+AT_CHECK([test `grep in_port.4 br1_flows.txt |wc -l` -gt 7])
+AT_CHECK([test `grep in_port.5 br1_flows.txt |wc -l` -gt 7])
+AT_CHECK([test `grep in_port.6 br1_flows.txt |wc -l` -gt 7])
+OVS_VSWITCHD_STOP()
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - resubmit])
 OVS_VSWITCHD_START
 ADD_OF_PORTS([br0], [1], [10], [11], [12], [13], [14], [15],
@@ -3909,7 +4051,7 @@ ovs-appctl time/stop
 ovs-appctl time/warp 5000
 AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
-sleep 1
+
 AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
 skb_priority(0),in_port(7),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/255.255.255.255,dst=10.0.0.1/255.255.255.255,proto=1/0xff,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8,code=0), packets:0, bytes:0, used:never, actions: <del>
 skb_priority(0),in_port(7),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4/255.255.255.255,dst=10.0.0.3/255.255.255.255,proto=1/0xff,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8,code=0), packets:0, bytes:0, used:never, actions: <del>

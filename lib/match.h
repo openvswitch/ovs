@@ -134,6 +134,9 @@ void match_set_nd_target_masked(struct match *, const struct in6_addr *,
 bool match_equal(const struct match *, const struct match *);
 uint32_t match_hash(const struct match *, uint32_t basis);
 
+void match_init_hidden_fields(struct match *);
+bool match_has_default_hidden_fields(const struct match *);
+
 void match_format(const struct match *, struct ds *, unsigned int priority);
 char *match_to_string(const struct match *, unsigned int priority);
 void match_print(const struct match *);

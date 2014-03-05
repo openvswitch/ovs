@@ -788,6 +788,34 @@ match_hash(const struct match *match, uint32_t basis)
     return flow_wildcards_hash(&match->wc, flow_hash(&match->flow, basis));
 }
 
+static bool
+match_has_default_recirc_id(const struct match *m)
+{
+    return m->flow.recirc_id == 0 && (m->wc.masks.recirc_id == UINT32_MAX ||
+                                      m->wc.masks.recirc_id == 0);
+}
+
+static bool
+match_has_default_dp_hash(const struct match *m)
+{
+    return ((m->flow.dp_hash | m->wc.masks.dp_hash) == 0);
+}
+
+/* Return true if the hidden fields of the match are set to the default values.
+ * The default values equals to those set up by match_init_hidden_fields(). */
+bool
+match_has_default_hidden_fields(const struct match *m)
+{
+    return match_has_default_recirc_id(m) && match_has_default_dp_hash(m);
+}
+
+void
+match_init_hidden_fields(struct match *m)
+{
+    match_set_recirc_id(m, 0);
+    match_set_dp_hash_masked(m, 0, 0);
+}
+
 static void
 format_eth_masked(struct ds *s, const char *name, const uint8_t eth[6],
                   const uint8_t mask[6])

@@ -261,7 +261,8 @@ struct ofport_usage {
 /* rule. */
 static void ofproto_rule_destroy__(struct rule *);
 static void ofproto_rule_send_removed(struct rule *, uint8_t reason);
-static bool rule_is_modifiable(const struct rule *);
+static bool rule_is_modifiable(const struct rule *rule,
+                               enum ofputil_flow_mod_flags flag);
 
 /* OpenFlow. */
 static enum ofperr add_flow(struct ofproto *, struct ofconn *,
@@ -1141,6 +1142,24 @@ int
 ofproto_get_n_tables(const struct ofproto *ofproto)
 {
     return ofproto->n_tables;
+}
+
+/* Returns the number of Controller visible OpenFlow tables
+ * in 'ofproto'. This number will exclude Hidden tables.
+ * This funtion's return value should be less or equal to that of
+ * ofproto_get_n_tables() . */
+uint8_t
+ofproto_get_n_visible_tables(const struct ofproto *ofproto)
+{
+    uint8_t n = ofproto->n_tables;
+
+    /* Count only non-hidden tables in the number of tables.  (Hidden tables,
+     * if present, are always at the end.) */
+    while(n && (ofproto->tables[n - 1].flags & OFTABLE_HIDDEN)) {
+        n--;
+    }
+
+    return n;
 }
 
 /* Configures the OpenFlow table in 'ofproto' with id 'table_id' with the
@@ -2741,19 +2760,27 @@ destroy_rule_executes(struct ofproto *ofproto)
 static bool
 ofproto_rule_is_hidden(const struct rule *rule)
 {
-    return rule->cr.priority > UINT16_MAX;
-}
-
-static enum oftable_flags
-rule_get_flags(const struct rule *rule)
-{
-    return rule->ofproto->tables[rule->table_id].flags;
+    return (rule->cr.priority > UINT16_MAX);
 }
 
 static bool
-rule_is_modifiable(const struct rule *rule)
+oftable_is_modifiable(const struct oftable *table,
+                      enum ofputil_flow_mod_flags flags)
 {
-    return !(rule_get_flags(rule) & OFTABLE_READONLY);
+    if (flags & OFPUTIL_FF_NO_READONLY) {
+        return true;
+    }
+
+    return !(table->flags & OFTABLE_READONLY);
+}
+
+static bool
+rule_is_modifiable(const struct rule *rule, enum ofputil_flow_mod_flags flags)
+{
+    const struct oftable *rule_table;
+
+    rule_table = &rule->ofproto->tables[rule->table_id];
+    return oftable_is_modifiable(rule_table, flags);
 }
 
 static enum ofperr
@@ -2771,26 +2798,14 @@ handle_features_request(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofport *port;
     bool arp_match_ip;
     struct ofpbuf *b;
-    int n_tables;
-    int i;
 
     ofproto->ofproto_class->get_features(ofproto, &arp_match_ip,
                                          &features.actions);
     ovs_assert(features.actions & OFPUTIL_A_OUTPUT); /* sanity check */
 
-    /* Count only non-hidden tables in the number of tables.  (Hidden tables,
-     * if present, are always at the end.) */
-    n_tables = ofproto->n_tables;
-    for (i = 0; i < ofproto->n_tables; i++) {
-        if (ofproto->tables[i].flags & OFTABLE_HIDDEN) {
-            n_tables = i;
-            break;
-        }
-    }
-
     features.datapath_id = ofproto->datapath_id;
     features.n_buffers = pktbuf_capacity();
-    features.n_tables = n_tables;
+    features.n_tables = ofproto_get_n_visible_tables(ofproto);
     features.capabilities = (OFPUTIL_C_FLOW_STATS | OFPUTIL_C_TABLE_STATS |
                              OFPUTIL_C_PORT_STATS | OFPUTIL_C_QUEUE_STATS);
     if (arp_match_ip) {
@@ -3968,8 +3983,16 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
 
     table = &ofproto->tables[table_id];
 
-    if (table->flags & OFTABLE_READONLY) {
+    if (!oftable_is_modifiable(table, fm->flags)) {
         return OFPERR_OFPBRC_EPERM;
+    }
+
+    if (!(fm->flags & OFPUTIL_FF_HIDDEN_FIELDS)) {
+        if (!match_has_default_hidden_fields(&fm->match)) {
+            VLOG_WARN_RL(&rl, "%s: (add_flow) only internal flows can set "
+                         "non-default values to hidden fields", ofproto->name);
+            return OFPERR_OFPBRC_EPERM;
+        }
     }
 
     cls_rule_init(&cr, &fm->match, fm->priority);
@@ -3980,7 +4003,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     fat_rwlock_unlock(&table->cls.rwlock);
     if (rule) {
         cls_rule_destroy(&cr);
-        if (!rule_is_modifiable(rule)) {
+        if (!rule_is_modifiable(rule, fm->flags)) {
             return OFPERR_OFPBRC_EPERM;
         } else if (rule->pending) {
             return OFPROTO_POSTPONE;
@@ -4108,7 +4131,7 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
 
         /* FIXME: Implement OFPFUTIL_FF_RESET_COUNTS */
 
-        if (rule_is_modifiable(rule)) {
+        if (rule_is_modifiable(rule, fm->flags)) {
             /* At least one rule is modifiable, don't report EPERM error. */
             error = 0;
         } else {

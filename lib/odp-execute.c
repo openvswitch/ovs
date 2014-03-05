@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  * Copyright (c) 2013 Simon Horman
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -209,10 +209,11 @@ odp_execute_actions__(void *dp, struct ofpbuf *packet, bool steal,
         case OVS_ACTION_ATTR_USERSPACE:
         case OVS_ACTION_ATTR_RECIRC:
             if (dp_execute_action) {
-                bool may_steal;
                 /* Allow 'dp_execute_action' to steal the packet data if we do
                  * not need it any more. */
-                may_steal = steal && (!more_actions && left <= NLA_ALIGN(a->nla_len));
+                bool may_steal = steal && (!more_actions
+                                           && left <= NLA_ALIGN(a->nla_len)
+                                           && type != OVS_ACTION_ATTR_RECIRC);
                 dp_execute_action(dp, packet, md, a, may_steal);
             }
             break;

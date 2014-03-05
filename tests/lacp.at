@@ -1,5 +1,10 @@
 AT_BANNER([lacp])
 
+# Strips out Reciulation ID information since it may change over time.
+m4_define([STRIP_RECIRC_ID], [[sed '
+    s/Recirc-ID.*$/<del>/
+' ]])
+
 AT_SETUP([lacp - config])
 OVS_VSWITCHD_START([\
         add-port br0 p1 --\
@@ -113,6 +118,7 @@ slave: p2: expired attached
 AT_CHECK([ovs-appctl bond/show], [0], [dnl
 ---- bond ----
 bond_mode: active-backup
+bond may use recirculation: no, Recirc-ID : -1
 bond-hash-basis: 0
 updelay: 0 ms
 downdelay: 0 ms
@@ -182,8 +188,8 @@ done
 AT_CHECK(
   [ovs-appctl lacp/show bond0
 ovs-appctl lacp/show bond1
-ovs-appctl bond/show bond0
-ovs-appctl bond/show bond1], [0], [stdout])
+ovs-appctl bond/show bond0 | STRIP_RECIRC_ID
+ovs-appctl bond/show bond1 | STRIP_RECIRC_ID ], [0], [stdout])
 AT_CHECK([sed '/active slave/d' stdout], [0], [dnl
 ---- bond0 ----
 	status: active negotiated
@@ -275,6 +281,7 @@ slave: p3: current attached
 	partner state: activity timeout aggregation synchronized collecting distributing
 ---- bond0 ----
 bond_mode: balance-tcp
+bond may use recirculation: yes, <del>
 bond-hash-basis: 0
 updelay: 0 ms
 downdelay: 0 ms
@@ -288,6 +295,7 @@ slave p1: enabled
 
 ---- bond1 ----
 bond_mode: balance-tcp
+bond may use recirculation: yes, <del>
 bond-hash-basis: 0
 updelay: 0 ms
 downdelay: 0 ms
@@ -316,8 +324,8 @@ for i in `seq 0 40`; do ovs-appctl time/warp 100; done
 AT_CHECK(
   [ovs-appctl lacp/show bond0
 ovs-appctl lacp/show bond1
-ovs-appctl bond/show bond0
-ovs-appctl bond/show bond1], [0], [dnl
+ovs-appctl bond/show bond0 | STRIP_RECIRC_ID
+ovs-appctl bond/show bond1 | STRIP_RECIRC_ID ], [0], [dnl
 ---- bond0 ----
 	status: active negotiated
 	sys_id: aa:55:aa:55:00:00
@@ -408,6 +416,7 @@ slave: p3: current attached
 	partner state: activity timeout aggregation synchronized collecting distributing
 ---- bond0 ----
 bond_mode: balance-tcp
+bond may use recirculation: yes, <del>
 bond-hash-basis: 0
 updelay: 0 ms
 downdelay: 0 ms
@@ -422,6 +431,7 @@ slave p1: enabled
 
 ---- bond1 ----
 bond_mode: balance-tcp
+bond may use recirculation: yes, <del>
 bond-hash-basis: 0
 updelay: 0 ms
 downdelay: 0 ms
@@ -442,8 +452,8 @@ for i in `seq 0 40`; do ovs-appctl time/warp 100; done
 AT_CHECK(
   [ovs-appctl lacp/show bond0
 ovs-appctl lacp/show bond1
-ovs-appctl bond/show bond0
-ovs-appctl bond/show bond1], [0], [dnl
+ovs-appctl bond/show bond0 | STRIP_RECIRC_ID
+ovs-appctl bond/show bond1 | STRIP_RECIRC_ID ], [0], [dnl
 ---- bond0 ----
 	status: active negotiated
 	sys_id: aa:55:aa:55:00:00
@@ -534,6 +544,7 @@ slave: p3: current attached
 	partner state: activity timeout aggregation synchronized collecting distributing
 ---- bond0 ----
 bond_mode: balance-tcp
+bond may use recirculation: yes, <del>
 bond-hash-basis: 0
 updelay: 0 ms
 downdelay: 0 ms
@@ -548,6 +559,7 @@ slave p1: enabled
 
 ---- bond1 ----
 bond_mode: balance-tcp
+bond may use recirculation: yes, <del>
 bond-hash-basis: 0
 updelay: 0 ms
 downdelay: 0 ms

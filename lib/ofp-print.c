@@ -743,6 +743,12 @@ ofp_print_flow_flags(struct ds *s, enum ofputil_flow_mod_flags flags)
     if (flags & OFPUTIL_FF_NO_BYT_COUNTS) {
         ds_put_cstr(s, "no_byte_counts ");
     }
+    if (flags & OFPUTIL_FF_HIDDEN_FIELDS) {
+        ds_put_cstr(s, "allow_hidden_fields ");
+    }
+    if (flags & OFPUTIL_FF_NO_READONLY) {
+        ds_put_cstr(s, "no_readonly_table ");
+    }
 }
 
 static void

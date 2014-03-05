@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,12 +19,13 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-
+#include "ofproto-provider.h"
 #include "packets.h"
 
 struct flow;
 struct netdev;
 struct ofpbuf;
+struct ofproto_dpif;
 enum lacp_status;
 
 /* How flows are balanced among bond slaves. */
@@ -60,12 +61,13 @@ struct bond_settings {
 void bond_init(void);
 
 /* Basics. */
-struct bond *bond_create(const struct bond_settings *);
+struct bond *bond_create(const struct bond_settings *,
+                         struct ofproto_dpif *ofproto);
 void bond_unref(struct bond *);
 struct bond *bond_ref(const struct bond *);
 
 bool bond_reconfigure(struct bond *, const struct bond_settings *);
-void bond_slave_register(struct bond *, void *slave_, struct netdev *);
+void bond_slave_register(struct bond *, void *slave_, ofp_port_t ofport, struct netdev *);
 void bond_slave_set_netdev(struct bond *, void *slave_, struct netdev *);
 void bond_slave_unregister(struct bond *, const void *slave);
 
@@ -94,6 +96,27 @@ void *bond_choose_output_slave(struct bond *, const struct flow *,
 /* Rebalancing. */
 void bond_account(struct bond *, const struct flow *, uint16_t vlan,
                   uint64_t n_bytes);
-void bond_rebalance(struct bond *);
+bool bond_rebalance(struct bond *);
 
+/* Recirculation
+ *
+ * Only balance_tcp mode uses recirculation.
+ *
+ * When recirculation is used, each bond port is assigned with a unique
+ * recirc_id. The output action to the bond port will be replaced by
+ * a RECIRC action.
+ *
+ *   ... actions= ... RECIRC(L4_HASH, recirc_id) ....
+ *
+ * On handling first output packet, 256 post recirculation flows are installed:
+ *
+ *  recirc_id=<bond_recirc_id>, dp_hash=<[0..255]>/0xff, actions: output<slave>
+ *
+ * Bond module pulls stats from those post recirculation rules. If rebalancing
+ * is needed, those rules are updated with new output actions.
+*/
+void bond_update_post_recirc_rules(struct bond *, const bool force);
+bool bond_may_recirc(const struct bond *, uint32_t *recirc_id,
+                     uint32_t *hash_bias);
+void bond_recirculation_account(struct bond *);
 #endif /* bond.h */

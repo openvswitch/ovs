@@ -58,6 +58,8 @@ VLOG_DEFINE_THIS_MODULE(ofproto_dpif_xlate);
 /* Maximum depth of flow table recursion (due to resubmit actions) in a
  * flow translation. */
 #define MAX_RESUBMIT_RECURSION 64
+#define MAX_INTERNAL_RESUBMITS 1   /* Max resbmits allowed using rules in
+                                      internal table. */
 
 /* Maximum number of resubmit actions in a flow translation, whether they are
  * recursive or not. */
@@ -88,6 +90,9 @@ struct xbridge {
     enum ofp_config_flags frag;   /* Fragmentation handling. */
     bool has_in_band;             /* Bridge has in band control? */
     bool forward_bpdu;            /* Bridge forwards STP BPDUs? */
+
+    /* True if the datapath supports recirculation. */
+    bool enable_recirc;
 
     /* True if the datapath supports variable-length
      * OVS_USERSPACE_ATTR_USERDATA in OVS_ACTION_ATTR_USERSPACE actions.
@@ -226,8 +231,8 @@ static void do_xlate_actions(const struct ofpact *, size_t ofpacts_len,
                              struct xlate_ctx *);
 static void xlate_actions__(struct xlate_in *, struct xlate_out *)
     OVS_REQ_RDLOCK(xlate_rwlock);
-    static void xlate_normal(struct xlate_ctx *);
-    static void xlate_report(struct xlate_ctx *, const char *);
+static void xlate_normal(struct xlate_ctx *);
+static void xlate_report(struct xlate_ctx *, const char *);
 static void xlate_table_action(struct xlate_ctx *, ofp_port_t in_port,
                                uint8_t table_id, bool may_packet_in,
                                bool honor_table_miss);
@@ -257,6 +262,7 @@ xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
                   const struct dpif_ipfix *ipfix,
                   const struct netflow *netflow, enum ofp_config_flags frag,
                   bool forward_bpdu, bool has_in_band,
+                  bool enable_recirc,
                   bool variable_length_userdata,
                   size_t max_mpls_depth)
 {
@@ -310,6 +316,7 @@ xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
     xbridge->frag = frag;
     xbridge->miss_rule = miss_rule;
     xbridge->no_packet_in_rule = no_packet_in_rule;
+    xbridge->enable_recirc = enable_recirc;
     xbridge->variable_length_userdata = variable_length_userdata;
     xbridge->max_mpls_depth = max_mpls_depth;
 }
@@ -1131,10 +1138,23 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
         /* Partially configured bundle with no slaves.  Drop the packet. */
         return;
     } else if (!out_xbundle->bond) {
+        ctx->xout->use_recirc = false;
         xport = CONTAINER_OF(list_front(&out_xbundle->xports), struct xport,
                              bundle_node);
     } else {
         struct ofport_dpif *ofport;
+        struct xlate_recirc *xr = &ctx->xout->recirc;
+
+        if (ctx->xbridge->enable_recirc) {
+            ctx->xout->use_recirc = bond_may_recirc(
+                out_xbundle->bond, &xr->recirc_id, &xr->hash_bias);
+
+            if (ctx->xout->use_recirc) {
+                /* Only TCP mode uses recirculation. */
+                xr->hash_alg = OVS_RECIRC_HASH_ALG_L4;
+                bond_update_post_recirc_rules(out_xbundle->bond, false);
+            }
+        }
 
         ofport = bond_choose_output_slave(out_xbundle->bond, &ctx->xin->flow,
                                           &ctx->xout->wc, vid);
@@ -1817,8 +1837,20 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         ctx->xout->slow |= commit_odp_actions(flow, &ctx->base_flow,
                                               &ctx->xout->odp_actions,
                                               &ctx->xout->wc);
-        nl_msg_put_odp_port(&ctx->xout->odp_actions, OVS_ACTION_ATTR_OUTPUT,
-                            out_port);
+
+        if (ctx->xout->use_recirc) {
+            struct ovs_action_recirc *act_recirc;
+            struct xlate_recirc *xr = &ctx->xout->recirc;
+
+            act_recirc = nl_msg_put_unspec_uninit(&ctx->xout->odp_actions,
+                               OVS_ACTION_ATTR_RECIRC, sizeof *act_recirc);
+            act_recirc->recirc_id = xr->recirc_id;
+            act_recirc->hash_alg = xr->hash_alg;
+            act_recirc->hash_bias = xr->hash_bias;
+        } else {
+            nl_msg_put_odp_port(&ctx->xout->odp_actions, OVS_ACTION_ATTR_OUTPUT,
+                                out_port);
+        }
 
         ctx->sflow_odp_port = odp_port;
         ctx->sflow_n_outputs++;
@@ -1862,10 +1894,10 @@ xlate_resubmit_resource_check(struct xlate_ctx *ctx)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
 
-    if (ctx->recurse >= MAX_RESUBMIT_RECURSION) {
+    if (ctx->recurse >= MAX_RESUBMIT_RECURSION + MAX_INTERNAL_RESUBMITS) {
         VLOG_ERR_RL(&rl, "resubmit actions recursed over %d times",
                     MAX_RESUBMIT_RECURSION);
-    } else if (ctx->resubmits >= MAX_RESUBMITS) {
+    } else if (ctx->resubmits >= MAX_RESUBMITS + MAX_INTERNAL_RESUBMITS) {
         VLOG_ERR_RL(&rl, "over %d resubmit actions", MAX_RESUBMITS);
     } else if (ofpbuf_size(&ctx->xout->odp_actions) > UINT16_MAX) {
         VLOG_ERR_RL(&rl, "resubmits yielded over 64 kB of actions");
@@ -2086,6 +2118,15 @@ xlate_ofpact_resubmit(struct xlate_ctx *ctx,
 {
     ofp_port_t in_port;
     uint8_t table_id;
+    bool may_packet_in = false;
+    bool honor_table_miss = false;
+
+    if (ctx->rule && rule_dpif_is_internal(ctx->rule)) {
+        /* Still allow missed packets to be sent to the controller
+         * if resubmitting from an internal table. */
+        may_packet_in = true;
+        honor_table_miss = true;
+    }
 
     in_port = resubmit->in_port;
     if (in_port == OFPP_IN_PORT) {
@@ -2097,7 +2138,8 @@ xlate_ofpact_resubmit(struct xlate_ctx *ctx,
         table_id = ctx->table_id;
     }
 
-    xlate_table_action(ctx, in_port, table_id, false, false);
+    xlate_table_action(ctx, in_port, table_id, may_packet_in,
+                       honor_table_miss);
 }
 
 static void
@@ -3069,6 +3111,7 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
         ctx.rule = rule;
     }
     xout->fail_open = ctx.rule && rule_dpif_is_fail_open(ctx.rule);
+    xout->use_recirc = false;
 
     if (xin->ofpacts) {
         ofpacts = xin->ofpacts;

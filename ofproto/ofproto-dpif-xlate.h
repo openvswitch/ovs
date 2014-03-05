@@ -32,6 +32,12 @@ struct dpif_ipfix;
 struct dpif_sflow;
 struct mac_learning;
 
+struct xlate_recirc {
+    uint32_t recirc_id;  /* !0 Use recirculation instead of output. */
+    uint8_t  hash_alg;   /* !0 Compute hash for recirc before. */
+    uint32_t hash_bias;  /* Compute hash for recirc before. */
+};
+
 struct xlate_out {
     /* Wildcards relevant in translation.  Any fields that were used to
      * calculate the action must be set for caching and kernel
@@ -50,6 +56,9 @@ struct xlate_out {
     ofp_port_t nf_output_iface; /* Output interface index for NetFlow. */
     mirror_mask_t mirrors;      /* Bitmap of associated mirrors. */
 
+    bool use_recirc;            /* Should generate recirc? */
+    struct xlate_recirc recirc; /* Information used for generating
+                                 * recirculation actions */
     uint64_t odp_actions_stub[256 / 8];
     struct ofpbuf odp_actions;
 };
@@ -129,7 +138,8 @@ void xlate_ofproto_set(struct ofproto_dpif *, const char *name,
                        const struct mbridge *, const struct dpif_sflow *,
                        const struct dpif_ipfix *, const struct netflow *,
                        enum ofp_config_flags, bool forward_bpdu,
-                       bool has_in_band, bool variable_length_userdata,
+                       bool has_in_band, bool enable_recirc,
+                       bool variable_length_userdata,
                        size_t mpls_label_stack_length)
     OVS_REQ_WRLOCK(xlate_rwlock);
 void xlate_remove_ofproto(struct ofproto_dpif *) OVS_REQ_WRLOCK(xlate_rwlock);
@@ -161,8 +171,8 @@ int xlate_receive(const struct dpif_backer *, struct ofpbuf *packet,
 void xlate_actions(struct xlate_in *, struct xlate_out *)
     OVS_EXCLUDED(xlate_rwlock);
 void xlate_in_init(struct xlate_in *, struct ofproto_dpif *,
-                   const struct flow *, struct rule_dpif *, uint16_t tcp_flags,
-                   const struct ofpbuf *packet);
+                   const struct flow *, struct rule_dpif *,
+                   uint16_t tcp_flags, const struct ofpbuf *packet);
 void xlate_out_uninit(struct xlate_out *);
 void xlate_actions_for_side_effects(struct xlate_in *);
 void xlate_out_copy(struct xlate_out *dst, const struct xlate_out *src);

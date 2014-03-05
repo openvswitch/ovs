@@ -246,6 +246,13 @@ enum ofputil_flow_mod_flags {
     OFPUTIL_FF_CHECK_OVERLAP = 1 << 3, /* All versions. */
     OFPUTIL_FF_EMERG         = 1 << 4, /* OpenFlow 1.0 only. */
     OFPUTIL_FF_RESET_COUNTS  = 1 << 5, /* OpenFlow 1.2+. */
+
+    /* Flags that are only set by OVS for its internal use.  Cannot be set via
+     * OpenFlow. */
+    OFPUTIL_FF_HIDDEN_FIELDS = 1 << 6, /* Allow hidden match fields to be
+                                          set or modified. */
+    OFPUTIL_FF_NO_READONLY   = 1 << 7, /* Allow rules within read only tables
+                                          to be modified */
 };
 
 /* Protocol-independent flow_mod.

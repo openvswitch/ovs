@@ -1326,6 +1326,9 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
         } else if (fields & F_FLAGS && !strcmp(name, "no_byte_counts")) {
             fm->flags |= OFPUTIL_FF_NO_BYT_COUNTS;
             *usable_protocols &= OFPUTIL_P_OF13_UP;
+        } else if (!strcmp(name, "no_readonly_table")
+                   || !strcmp(name, "allow_hidden_fields")) {
+             /* ignore these fields. */
         } else {
             char *value;
 

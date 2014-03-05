@@ -40,22 +40,22 @@ table=0 in_port=3 priority=0,ip,action=drop
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=2,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=6,nw_tos=0,nw_ttl=128,tp_src=8,tp_dst=80'], [0], [stdout])
 AT_CHECK([tail -2 stdout], [0],
-  [Megaflow: skb_priority=0,tcp,in_port=2,nw_dst=192.168.0.0/16,nw_frag=no
+  [Megaflow: recirc_id=0,skb_priority=0,tcp,in_port=2,nw_dst=192.168.0.0/16,nw_frag=no
 Datapath actions: 1
 ])
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=6,nw_tos=0,nw_ttl=128,tp_src=8,tp_dst=80'], [0], [stdout])
 AT_CHECK([tail -2 stdout], [0],
-  [Megaflow: skb_priority=0,tcp,in_port=1,nw_dst=192.168.0.2,nw_frag=no
+  [Megaflow: recirc_id=0,skb_priority=0,tcp,in_port=1,nw_dst=192.168.0.2,nw_frag=no
 Datapath actions: drop
 ])
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=10.1.2.15,nw_proto=6,nw_tos=0,nw_ttl=128,tp_src=8,tp_dst=80'], [0], [stdout])
 AT_CHECK([tail -2 stdout], [0],
-  [Megaflow: skb_priority=0,tcp,in_port=1,nw_dst=10.1.2.15,nw_frag=no,tp_dst=80
+  [Megaflow: recirc_id=0,skb_priority=0,tcp,in_port=1,nw_dst=10.1.2.15,nw_frag=no,tp_dst=80
 Datapath actions: drop
 ])
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=10.1.2.15,nw_proto=6,nw_tos=0,nw_ttl=128,tp_src=8,tp_dst=79'], [0], [stdout])
 AT_CHECK([tail -2 stdout], [0],
-  [Megaflow: skb_priority=0,tcp,in_port=1,nw_dst=10.1.2.15,nw_frag=no,tp_dst=79
+  [Megaflow: recirc_id=0,skb_priority=0,tcp,in_port=1,nw_dst=10.1.2.15,nw_frag=no,tp_dst=79
 Datapath actions: 2
 ])
 OVS_VSWITCHD_STOP
@@ -87,22 +87,22 @@ table=0 in_port=3 priority=0,ip,action=drop
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=6,nw_tos=0,nw_ttl=128,tp_src=8,tp_dst=80'], [0], [stdout])
 AT_CHECK([tail -2 stdout], [0],
-  [Megaflow: skb_priority=0,tcp,in_port=1,nw_dst=192.168.0.0/16,nw_frag=no
+  [Megaflow: recirc_id=0,skb_priority=0,tcp,in_port=1,nw_dst=192.168.0.0/16,nw_frag=no
 Datapath actions: drop
 ])
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=2,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=6,nw_tos=0,nw_ttl=128,tp_src=8,tp_dst=80'], [0], [stdout])
 AT_CHECK([tail -2 stdout], [0],
-  [Megaflow: skb_priority=0,tcp,in_port=2,nw_dst=192.168.0.0/16,nw_frag=no
+  [Megaflow: recirc_id=0,skb_priority=0,tcp,in_port=2,nw_dst=192.168.0.0/16,nw_frag=no
 Datapath actions: 1
 ])
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=10.1.2.15,nw_proto=6,nw_tos=0,nw_ttl=128,tp_src=8,tp_dst=80'], [0], [stdout])
 AT_CHECK([tail -2 stdout], [0],
-  [Megaflow: skb_priority=0,tcp,in_port=1,nw_dst=10.1.2.15,nw_frag=no,tp_dst=80
+  [Megaflow: recirc_id=0,skb_priority=0,tcp,in_port=1,nw_dst=10.1.2.15,nw_frag=no,tp_dst=80
 Datapath actions: drop
 ])
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=10.1.2.15,nw_proto=6,nw_tos=0,nw_ttl=128,tp_src=8,tp_dst=79'], [0], [stdout])
 AT_CHECK([tail -2 stdout], [0],
-  [Megaflow: skb_priority=0,tcp,in_port=1,nw_dst=10.1.2.15,nw_frag=no,tp_src=8,tp_dst=79
+  [Megaflow: recirc_id=0,skb_priority=0,tcp,in_port=1,nw_dst=10.1.2.15,nw_frag=no,tp_src=8,tp_dst=79
 Datapath actions: 3
 ])
 OVS_VSWITCHD_STOP(["/'prefixes' with incompatible field: ipv6_label/d"])

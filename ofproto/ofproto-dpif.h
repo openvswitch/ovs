@@ -21,6 +21,7 @@
 #include "odp-util.h"
 #include "ofp-util.h"
 #include "ovs-thread.h"
+#include "ofproto-provider.h"
 #include "timer.h"
 #include "util.h"
 #include "ovs-thread.h"
@@ -83,9 +84,10 @@ extern struct ovs_rwlock xlate_rwlock;
  *   actions into datapath actions. */
 
 size_t ofproto_dpif_get_max_mpls_depth(const struct ofproto_dpif *);
+bool ofproto_dpif_get_enable_recirc(const struct ofproto_dpif *);
 
-uint8_t rule_dpif_lookup(struct ofproto_dpif *, const struct flow *,
-                         struct flow_wildcards *, struct rule_dpif **rule);
+uint8_t rule_dpif_lookup(struct ofproto_dpif *, struct flow *,
+                      struct flow_wildcards *, struct rule_dpif **rule);
 
 enum rule_dpif_lookup_verdict rule_dpif_lookup_from_table(struct ofproto_dpif *,
                                                           const struct flow *,
@@ -103,6 +105,7 @@ void rule_dpif_credit_stats(struct rule_dpif *rule ,
 bool rule_dpif_is_fail_open(const struct rule_dpif *);
 bool rule_dpif_is_table_miss(const struct rule_dpif *);
 bool rule_dpif_is_internal(const struct rule_dpif *);
+uint8_t rule_dpif_get_table(const struct rule_dpif *);
 
 struct rule_actions *rule_dpif_get_actions(const struct rule_dpif *);
 
@@ -207,4 +210,11 @@ struct ofport_dpif *odp_port_to_ofport(const struct dpif_backer *, odp_port_t);
 
 uint32_t ofproto_dpif_alloc_recirc_id(struct ofproto_dpif *ofproto);
 void ofproto_dpif_free_recirc_id(struct ofproto_dpif *ofproto, uint32_t recirc_id);
+int ofproto_dpif_add_internal_flow(struct ofproto_dpif *,
+                                   struct match *, int priority,
+                                   const struct ofpbuf *ofpacts,
+                                   struct rule **rulep);
+int ofproto_dpif_delete_internal_flow(struct ofproto_dpif *, struct match *,
+                                      int priority);
+
 #endif /* ofproto-dpif.h */

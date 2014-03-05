@@ -370,6 +370,8 @@ flow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
         flow->in_port = md->in_port;
         flow->skb_priority = md->skb_priority;
         flow->pkt_mark = md->pkt_mark;
+        flow->recirc_id = md->recirc_id;
+        flow->dp_hash = md->dp_hash;
     }
 
     ofpbuf_set_frame(packet, ofpbuf_data(packet));
