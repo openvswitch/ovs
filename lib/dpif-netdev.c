@@ -49,6 +49,7 @@
 #include "odp-util.h"
 #include "ofp-print.h"
 #include "ofpbuf.h"
+#include "ovs-rcu.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "random.h"
@@ -245,12 +246,6 @@ struct dp_netdev_flow {
     const struct hmap_node node; /* In owning dp_netdev's 'flow_table'. */
     const struct flow flow;      /* The flow that created this entry. */
 
-    /* Number of references.
-     * The classifier owns one reference.
-     * Any thread trying to keep a rule from being freed should hold its own
-     * reference. */
-    struct ovs_refcount ref_cnt;
-
     /* Protects members marked OVS_GUARDED.
      *
      * Acquire after datapath's flow_mutex. */
@@ -266,12 +261,10 @@ struct dp_netdev_flow {
      * Reading 'actions' requires 'mutex'.
      * Writing 'actions' requires 'mutex' and (to allow for transactions) the
      * datapath's flow_mutex. */
-    struct dp_netdev_actions *actions OVS_GUARDED;
+    OVSRCU_TYPE(struct dp_netdev_actions *) actions;
 };
 
-static struct dp_netdev_flow *dp_netdev_flow_ref(
-    const struct dp_netdev_flow *);
-static void dp_netdev_flow_unref(struct dp_netdev_flow *);
+static void dp_netdev_flow_free(struct dp_netdev_flow *);
 
 /* Contained by struct dp_netdev_flow's 'stats' member.  */
 struct dp_netdev_flow_stats {
@@ -294,8 +287,6 @@ struct dp_netdev_flow_stats {
  * 'flow' is the dp_netdev_flow for which 'flow->actions == actions') or that
  * owns a reference to 'actions->ref_cnt' (or both). */
 struct dp_netdev_actions {
-    struct ovs_refcount ref_cnt;
-
     /* These members are immutable: they do not change during the struct's
      * lifetime.  */
     struct nlattr *actions;     /* Sequence of OVS_ACTION_ATTR_* attributes. */
@@ -304,9 +295,9 @@ struct dp_netdev_actions {
 
 struct dp_netdev_actions *dp_netdev_actions_create(const struct nlattr *,
                                                    size_t);
-struct dp_netdev_actions *dp_netdev_actions_ref(
-    const struct dp_netdev_actions *);
-void dp_netdev_actions_unref(struct dp_netdev_actions *);
+struct dp_netdev_actions *dp_netdev_flow_get_actions(
+    const struct dp_netdev_flow *);
+static void dp_netdev_actions_free(struct dp_netdev_actions *);
 
 /* A thread that receives packets from some ports, looks them up in the flow
  * table, and executes the actions it finds. */
@@ -871,6 +862,24 @@ dpif_netdev_port_query_by_name(const struct dpif *dpif, const char *devname,
 }
 
 static void
+dp_netdev_flow_free(struct dp_netdev_flow *flow)
+{
+    struct dp_netdev_flow_stats *bucket;
+    size_t i;
+
+    OVSTHREAD_STATS_FOR_EACH_BUCKET (bucket, i, &flow->stats) {
+        ovs_mutex_destroy(&bucket->mutex);
+        free_cacheline(bucket);
+    }
+    ovsthread_stats_destroy(&flow->stats);
+
+    cls_rule_destroy(CONST_CAST(struct cls_rule *, &flow->cr));
+    dp_netdev_actions_free(dp_netdev_flow_get_actions(flow));
+    ovs_mutex_destroy(&flow->mutex);
+    free(flow);
+}
+
+static void
 dp_netdev_remove_flow(struct dp_netdev *dp, struct dp_netdev_flow *flow)
     OVS_REQ_WRLOCK(dp->cls.rwlock)
     OVS_REQUIRES(dp->flow_mutex)
@@ -880,39 +889,7 @@ dp_netdev_remove_flow(struct dp_netdev *dp, struct dp_netdev_flow *flow)
 
     classifier_remove(&dp->cls, cr);
     hmap_remove(&dp->flow_table, node);
-    dp_netdev_flow_unref(flow);
-}
-
-static struct dp_netdev_flow *
-dp_netdev_flow_ref(const struct dp_netdev_flow *flow_)
-{
-    struct dp_netdev_flow *flow = CONST_CAST(struct dp_netdev_flow *, flow_);
-    if (flow) {
-        ovs_refcount_ref(&flow->ref_cnt);
-    }
-    return flow;
-}
-
-static void
-dp_netdev_flow_unref(struct dp_netdev_flow *flow)
-{
-    if (flow && ovs_refcount_unref(&flow->ref_cnt) == 1) {
-        struct dp_netdev_flow_stats *bucket;
-        size_t i;
-
-        OVSTHREAD_STATS_FOR_EACH_BUCKET (bucket, i, &flow->stats) {
-            ovs_mutex_destroy(&bucket->mutex);
-            free_cacheline(bucket);
-        }
-        ovsthread_stats_destroy(&flow->stats);
-
-        cls_rule_destroy(CONST_CAST(struct cls_rule *, &flow->cr));
-        ovs_mutex_lock(&flow->mutex);
-        dp_netdev_actions_unref(flow->actions);
-        ovs_mutex_unlock(&flow->mutex);
-        ovs_mutex_destroy(&flow->mutex);
-        free(flow);
-    }
+    ovsrcu_postpone(dp_netdev_flow_free, flow);
 }
 
 static void
@@ -1031,7 +1008,6 @@ dp_netdev_lookup_flow(const struct dp_netdev *dp, const struct flow *flow)
 
     fat_rwlock_rdlock(&dp->cls.rwlock);
     netdev_flow = dp_netdev_flow_cast(classifier_lookup(&dp->cls, flow, NULL));
-    dp_netdev_flow_ref(netdev_flow);
     fat_rwlock_unlock(&dp->cls.rwlock);
 
     return netdev_flow;
@@ -1046,7 +1022,7 @@ dp_netdev_find_flow(const struct dp_netdev *dp, const struct flow *flow)
     HMAP_FOR_EACH_WITH_HASH (netdev_flow, node, flow_hash(flow, 0),
                              &dp->flow_table) {
         if (flow_equal(&netdev_flow->flow, flow)) {
-            return dp_netdev_flow_ref(netdev_flow);
+            return netdev_flow;
         }
     }
 
@@ -1177,25 +1153,17 @@ dpif_netdev_flow_get(const struct dpif *dpif,
     fat_rwlock_unlock(&dp->cls.rwlock);
 
     if (netdev_flow) {
-        struct dp_netdev_actions *actions = NULL;
-
         if (stats) {
             get_dpif_flow_stats(netdev_flow, stats);
         }
 
-        ovs_mutex_lock(&netdev_flow->mutex);
         if (actionsp) {
-            actions = dp_netdev_actions_ref(netdev_flow->actions);
-        }
-        ovs_mutex_unlock(&netdev_flow->mutex);
+            struct dp_netdev_actions *actions;
 
-        dp_netdev_flow_unref(netdev_flow);
-
-        if (actionsp) {
+            actions = dp_netdev_flow_get_actions(netdev_flow);
             *actionsp = ofpbuf_clone_data(actions->actions, actions->size);
-            dp_netdev_actions_unref(actions);
         }
-    } else {
+     } else {
         error = ENOENT;
     }
 
@@ -1214,14 +1182,13 @@ dp_netdev_flow_add(struct dp_netdev *dp, const struct flow *flow,
 
     netdev_flow = xzalloc(sizeof *netdev_flow);
     *CONST_CAST(struct flow *, &netdev_flow->flow) = *flow;
-    ovs_refcount_init(&netdev_flow->ref_cnt);
 
     ovs_mutex_init(&netdev_flow->mutex);
-    ovs_mutex_lock(&netdev_flow->mutex);
 
     ovsthread_stats_init(&netdev_flow->stats);
 
-    netdev_flow->actions = dp_netdev_actions_create(actions, actions_len);
+    ovsrcu_set(&netdev_flow->actions,
+               dp_netdev_actions_create(actions, actions_len));
 
     match_init(&match, flow, wc);
     cls_rule_init(CONST_CAST(struct cls_rule *, &netdev_flow->cr),
@@ -1233,8 +1200,6 @@ dp_netdev_flow_add(struct dp_netdev *dp, const struct flow *flow,
                 CONST_CAST(struct hmap_node *, &netdev_flow->node),
                 flow_hash(flow, 0));
     fat_rwlock_unlock(&dp->cls.rwlock);
-
-    ovs_mutex_unlock(&netdev_flow->mutex);
 
     return 0;
 }
@@ -1300,10 +1265,8 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
             new_actions = dp_netdev_actions_create(put->actions,
                                                    put->actions_len);
 
-            ovs_mutex_lock(&netdev_flow->mutex);
-            old_actions = netdev_flow->actions;
-            netdev_flow->actions = new_actions;
-            ovs_mutex_unlock(&netdev_flow->mutex);
+            old_actions = dp_netdev_flow_get_actions(netdev_flow);
+            ovsrcu_set(&netdev_flow->actions, new_actions);
 
             if (put->stats) {
                 get_dpif_flow_stats(netdev_flow, put->stats);
@@ -1312,14 +1275,13 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
                 clear_stats(netdev_flow);
             }
 
-            dp_netdev_actions_unref(old_actions);
+            ovsrcu_postpone(dp_netdev_actions_free, old_actions);
         } else if (put->flags & DPIF_FP_CREATE) {
             error = EEXIST;
         } else {
             /* Overlapping flow. */
             error = EINVAL;
         }
-        dp_netdev_flow_unref(netdev_flow);
     }
     ovs_mutex_unlock(&dp->flow_mutex);
 
@@ -1347,7 +1309,6 @@ dpif_netdev_flow_del(struct dpif *dpif, const struct dpif_flow_del *del)
             get_dpif_flow_stats(netdev_flow, del->stats);
         }
         dp_netdev_remove_flow(dp, netdev_flow);
-        dp_netdev_flow_unref(netdev_flow);
     } else {
         error = ENOENT;
     }
@@ -1385,7 +1346,6 @@ dpif_netdev_flow_dump_state_uninit(void *state_)
 {
     struct dp_netdev_flow_state *state = state_;
 
-    dp_netdev_actions_unref(state->actions);
     free(state);
 }
 
@@ -1402,6 +1362,7 @@ dpif_netdev_flow_dump_start(const struct dpif *dpif OVS_UNUSED, void **iterp)
     return 0;
 }
 
+/* XXX the caller must use 'actions' without quiescing */
 static int
 dpif_netdev_flow_dump_next(const struct dpif *dpif, void *iter_, void *state_,
                            const struct nlattr **key, size_t *key_len,
@@ -1424,7 +1385,6 @@ dpif_netdev_flow_dump_next(const struct dpif *dpif, void *iter_, void *state_,
         node = hmap_at_position(&dp->flow_table, &iter->bucket, &iter->offset);
         if (node) {
             netdev_flow = CONTAINER_OF(node, struct dp_netdev_flow, node);
-            dp_netdev_flow_ref(netdev_flow);
         }
         fat_rwlock_unlock(&dp->cls.rwlock);
         if (!node) {
@@ -1462,24 +1422,19 @@ dpif_netdev_flow_dump_next(const struct dpif *dpif, void *iter_, void *state_,
     }
 
     if (actions || stats) {
-        dp_netdev_actions_unref(state->actions);
         state->actions = NULL;
 
-        ovs_mutex_lock(&netdev_flow->mutex);
         if (actions) {
-            state->actions = dp_netdev_actions_ref(netdev_flow->actions);
+            state->actions = dp_netdev_flow_get_actions(netdev_flow);
             *actions = state->actions->actions;
             *actions_len = state->actions->size;
         }
-        ovs_mutex_unlock(&netdev_flow->mutex);
 
         if (stats) {
             get_dpif_flow_stats(netdev_flow, &state->stats);
             *stats = &state->stats;
         }
     }
-
-    dp_netdev_flow_unref(netdev_flow);
 
     return 0;
 }
@@ -1606,35 +1561,23 @@ dp_netdev_actions_create(const struct nlattr *actions, size_t size)
     struct dp_netdev_actions *netdev_actions;
 
     netdev_actions = xmalloc(sizeof *netdev_actions);
-    ovs_refcount_init(&netdev_actions->ref_cnt);
     netdev_actions->actions = xmemdup(actions, size);
     netdev_actions->size = size;
 
     return netdev_actions;
 }
 
-/* Increments 'actions''s refcount. */
 struct dp_netdev_actions *
-dp_netdev_actions_ref(const struct dp_netdev_actions *actions_)
+dp_netdev_flow_get_actions(const struct dp_netdev_flow *flow)
 {
-    struct dp_netdev_actions *actions;
-
-    actions = CONST_CAST(struct dp_netdev_actions *, actions_);
-    if (actions) {
-        ovs_refcount_ref(&actions->ref_cnt);
-    }
-    return actions;
+    return ovsrcu_get(struct dp_netdev_actions *, &flow->actions);
 }
 
-/* Decrements 'actions''s refcount and frees 'actions' if the refcount reaches
- * 0. */
-void
-dp_netdev_actions_unref(struct dp_netdev_actions *actions)
+static void
+dp_netdev_actions_free(struct dp_netdev_actions *actions)
 {
-    if (actions && ovs_refcount_unref(&actions->ref_cnt) == 1) {
-        free(actions->actions);
-        free(actions);
-    }
+    free(actions->actions);
+    free(actions);
 }
 
 static void *
@@ -1821,14 +1764,9 @@ dp_netdev_port_input(struct dp_netdev *dp, struct ofpbuf *packet,
 
         dp_netdev_flow_used(netdev_flow, packet);
 
-        ovs_mutex_lock(&netdev_flow->mutex);
-        actions = dp_netdev_actions_ref(netdev_flow->actions);
-        ovs_mutex_unlock(&netdev_flow->mutex);
-
+        actions = dp_netdev_flow_get_actions(netdev_flow);
         dp_netdev_execute_actions(dp, &key, packet, md,
                                   actions->actions, actions->size);
-        dp_netdev_actions_unref(actions);
-        dp_netdev_flow_unref(netdev_flow);
         dp_netdev_count_packet(dp, DP_STAT_HIT);
     } else {
         dp_netdev_count_packet(dp, DP_STAT_MISS);
