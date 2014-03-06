@@ -464,6 +464,11 @@ void rule_collection_destroy(struct rule_collection *);
  * ofproto-dpif implementation. */
 extern unsigned ofproto_flow_limit;
 
+/* Maximum idle time (in ms) for flows to be cached in the datapath.
+ * Revalidators may expire flows more quickly than the configured value based
+ * on system load and other factors. This variable is subject to change. */
+extern unsigned ofproto_max_idle;
+
 /* Number of upcall handler and revalidator threads. Only affects the
  * ofproto-dpif implementation. */
 extern size_t n_handlers, n_revalidators;

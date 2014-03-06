@@ -493,6 +493,8 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
     ofproto_set_flow_limit(smap_get_int(&ovs_cfg->other_config, "flow-limit",
                                         OFPROTO_FLOW_LIMIT_DEFAULT));
+    ofproto_set_max_idle(smap_get_int(&ovs_cfg->other_config, "max-idle",
+                                      OFPROTO_MAX_IDLE_DEFAULT));
 
     ofproto_set_threads(
         smap_get_int(&ovs_cfg->other_config, "n-handler-threads", 0),

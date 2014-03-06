@@ -307,6 +307,7 @@ static size_t allocated_ofproto_classes;
 struct ovs_mutex ofproto_mutex = OVS_MUTEX_INITIALIZER;
 
 unsigned ofproto_flow_limit = OFPROTO_FLOW_LIMIT_DEFAULT;
+unsigned ofproto_max_idle = OFPROTO_MAX_IDLE_DEFAULT;
 
 size_t n_handlers, n_revalidators;
 
@@ -695,6 +696,14 @@ void
 ofproto_set_flow_limit(unsigned limit)
 {
     ofproto_flow_limit = limit;
+}
+
+/* Sets the maximum idle time for flows in the datapath before they are
+ * expired. */
+void
+ofproto_set_max_idle(unsigned max_idle)
+{
+    ofproto_max_idle = max_idle;
 }
 
 /* If forward_bpdu is true, the NORMAL action will forward frames with

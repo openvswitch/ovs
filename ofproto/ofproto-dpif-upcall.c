@@ -41,7 +41,6 @@
 #define MAX_QUEUE_LENGTH 512
 #define FLOW_MISS_MAX_BATCH 50
 #define REVALIDATE_MAX_BATCH 50
-#define MAX_IDLE 1500
 
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif_upcall);
 
@@ -646,7 +645,7 @@ udpif_flow_dumper(void *arg)
         }
 
 skip:
-        poll_timer_wait_until(start_time + MIN(MAX_IDLE, 500));
+        poll_timer_wait_until(start_time + MIN(ofproto_max_idle, 500));
         seq_wait(udpif->reval_seq, udpif->last_reval_seq);
         latch_wait(&udpif->exit_latch);
         poll_block();
@@ -1510,7 +1509,7 @@ revalidate_udumps(struct revalidator *revalidator, struct list *udumps)
     n_flows = udpif_get_n_flows(udpif);
 
     must_del = false;
-    max_idle = MAX_IDLE;
+    max_idle = ofproto_max_idle;
     if (n_flows > flow_limit) {
         must_del = n_flows > 2 * flow_limit;
         max_idle = 100;
