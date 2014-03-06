@@ -8,4 +8,5 @@
 noinst_HEADERS += \
 	include/windows/getopt.h \
 	include/windows/syslog.h \
+	include/windows/sys/resource.h \
 	include/windows/windefs.h

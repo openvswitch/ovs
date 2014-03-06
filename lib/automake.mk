@@ -236,6 +236,7 @@ if WIN32
 lib_libopenvswitch_la_SOURCES += \
 	lib/daemon-windows.c \
 	lib/getopt_long.c \
+	lib/getrusage-windows.c \
 	lib/latch-windows.c \
 	lib/stream-fd-windows.c
 else
