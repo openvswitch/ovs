@@ -214,6 +214,7 @@ int ofproto_port_dump_done(struct ofproto_port_dump *);
         )
 
 #define OFPROTO_FLOW_LIMIT_DEFAULT 200000
+#define OFPROTO_MAX_IDLE_DEFAULT 1500
 
 /* How flow misses should be handled in ofproto-dpif */
 enum ofproto_flow_miss_model {
@@ -244,6 +245,7 @@ void ofproto_set_extra_in_band_remotes(struct ofproto *,
 void ofproto_set_in_band_queue(struct ofproto *, int queue_id);
 void ofproto_set_flow_limit(unsigned limit);
 void ofproto_set_flow_miss_model(unsigned model);
+void ofproto_set_max_idle(unsigned max_idle);
 void ofproto_set_forward_bpdu(struct ofproto *, bool forward_bpdu);
 void ofproto_set_mac_table_config(struct ofproto *, unsigned idle_time,
                                   size_t max_entries);
