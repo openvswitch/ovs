@@ -87,9 +87,7 @@ struct rule_dpif {
      *   - Do include packets and bytes from datapath flows which have not
      *   recently been processed by a revalidator. */
     struct ovs_mutex stats_mutex;
-    uint64_t packet_count OVS_GUARDED;  /* Number of packets received. */
-    uint64_t byte_count OVS_GUARDED;    /* Number of bytes received. */
-    long long int used;                 /* Last used time (msec). */
+    struct dpif_flow_stats stats OVS_GUARDED;
 };
 
 static void rule_get_stats(struct rule *, uint64_t *packets, uint64_t *bytes,
@@ -2944,7 +2942,7 @@ rule_expire(struct rule_dpif *rule)
         long long int used;
 
         ovs_mutex_lock(&rule->stats_mutex);
-        used = rule->used;
+        used = rule->stats.used;
         ovs_mutex_unlock(&rule->stats_mutex);
 
         if (now > used + idle_timeout * 1000) {
@@ -3012,9 +3010,9 @@ rule_dpif_credit_stats(struct rule_dpif *rule,
                        const struct dpif_flow_stats *stats)
 {
     ovs_mutex_lock(&rule->stats_mutex);
-    rule->packet_count += stats->n_packets;
-    rule->byte_count += stats->n_bytes;
-    rule->used = MAX(rule->used, stats->used);
+    rule->stats.n_packets += stats->n_packets;
+    rule->stats.n_bytes += stats->n_bytes;
+    rule->stats.used = MAX(rule->stats.used, stats->used);
     ovs_mutex_unlock(&rule->stats_mutex);
 }
 
@@ -3180,9 +3178,9 @@ rule_construct(struct rule *rule_)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
     ovs_mutex_init_adaptive(&rule->stats_mutex);
-    rule->packet_count = 0;
-    rule->byte_count = 0;
-    rule->used = rule->up.modified;
+    rule->stats.n_packets = 0;
+    rule->stats.n_bytes = 0;
+    rule->stats.used = rule->up.modified;
     return 0;
 }
 
@@ -3216,9 +3214,9 @@ rule_get_stats(struct rule *rule_, uint64_t *packets, uint64_t *bytes,
     struct rule_dpif *rule = rule_dpif_cast(rule_);
 
     ovs_mutex_lock(&rule->stats_mutex);
-    *packets = rule->packet_count;
-    *bytes = rule->byte_count;
-    *used = rule->used;
+    *packets = rule->stats.n_packets;
+    *bytes = rule->stats.n_bytes;
+    *used = rule->stats.used;
     ovs_mutex_unlock(&rule->stats_mutex);
 }
 
@@ -3248,8 +3246,8 @@ rule_modify_actions(struct rule *rule_, bool reset_counters)
 
     if (reset_counters) {
         ovs_mutex_lock(&rule->stats_mutex);
-        rule->packet_count = 0;
-        rule->byte_count = 0;
+        rule->stats.n_packets = 0;
+        rule->stats.n_bytes = 0;
         ovs_mutex_unlock(&rule->stats_mutex);
     }
 
