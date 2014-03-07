@@ -146,7 +146,16 @@ struct dpif_class {
 
     /* Returns the Netlink PID value to supply in OVS_ACTION_ATTR_USERSPACE
      * actions as the OVS_USERSPACE_ATTR_PID attribute's value, for use in
-     * flows whose packets arrived on port 'port_no'.
+     * flows whose packets arrived on port 'port_no'.  In the case where the
+     * provider allocates multiple Netlink PIDs to a single port, it may use
+     * 'hash' to spread load among them.  The caller need not use a particular
+     * hash function; a 5-tuple hash is suitable.
+     *
+     * (The datapath implementation might use some different hash function for
+     * distributing packets received via flow misses among PIDs.  This means
+     * that packets received via flow misses might be reordered relative to
+     * packets received via userspace actions.  This is not ordinarily a
+     * problem.)
      *
      * A 'port_no' of UINT32_MAX should be treated as a special case.  The
      * implementation should return a reserved PID, not allocated to any port,
@@ -158,7 +167,8 @@ struct dpif_class {
      *
      * A dpif provider that doesn't have meaningful Netlink PIDs can use NULL
      * for this function.  This is equivalent to always returning 0. */
-    uint32_t (*port_get_pid)(const struct dpif *dpif, odp_port_t port_no);
+    uint32_t (*port_get_pid)(const struct dpif *dpif, odp_port_t port_no,
+                             uint32_t hash);
 
     /* Attempts to begin dumping the ports in a dpif.  On success, returns 0
      * and initializes '*statep' with any data needed for iteration.  On
@@ -355,14 +365,38 @@ struct dpif_class {
      * updating flows as necessary if it does this. */
     int (*recv_set)(struct dpif *dpif, bool enable);
 
+    /* Refreshes the poll loops and Netlink sockets associated to each port,
+     * when the number of upcall handlers (upcall receiving thread) is changed
+     * to 'n_handlers' and receiving packets for 'dpif' is enabled by
+     * recv_set().
+     *
+     * Since multiple upcall handlers can read upcalls simultaneously from
+     * 'dpif', each port can have multiple Netlink sockets, one per upcall
+     * handler.  So, handlers_set() is responsible for the following tasks:
+     *
+     *    When receiving upcall is enabled, extends or creates the
+     *    configuration to support:
+     *
+     *        - 'n_handlers' Netlink sockets for each port.
+     *
+     *        - 'n_handlers' poll loops, one for each upcall handler.
+     *
+     *        - registering the Netlink sockets for the same upcall handler to
+     *          the corresponding poll loop.
+     * */
+    int (*handlers_set)(struct dpif *dpif, uint32_t n_handlers);
+
     /* Translates OpenFlow queue ID 'queue_id' (in host byte order) into a
      * priority value used for setting packet priority. */
     int (*queue_to_priority)(const struct dpif *dpif, uint32_t queue_id,
                              uint32_t *priority);
 
-    /* Polls for an upcall from 'dpif'.  If successful, stores the upcall into
-     * '*upcall', using 'buf' for storage.  Should only be called if 'recv_set'
-     * has been used to enable receiving packets from 'dpif'.
+    /* Polls for an upcall from 'dpif' for an upcall handler.  Since there
+     * can be multiple poll loops (see ->handlers_set()), 'handler_id' is
+     * needed as index to identify the corresponding poll loop.  If
+     * successful, stores the upcall into '*upcall', using 'buf' for
+     * storage.  Should only be called if 'recv_set' has been used to enable
+     * receiving packets from 'dpif'.
      *
      * The implementation should point 'upcall->key' and 'upcall->userdata'
      * (if any) into data in the caller-provided 'buf'.  The implementation may
@@ -378,12 +412,15 @@ struct dpif_class {
      *
      * This function must not block.  If no upcall is pending when it is
      * called, it should return EAGAIN without blocking. */
-    int (*recv)(struct dpif *dpif, struct dpif_upcall *upcall,
-                struct ofpbuf *buf);
+    int (*recv)(struct dpif *dpif, uint32_t handler_id,
+                struct dpif_upcall *upcall, struct ofpbuf *buf);
 
-    /* Arranges for the poll loop to wake up when 'dpif' has a message queued
-     * to be received with the recv member function. */
-    void (*recv_wait)(struct dpif *dpif);
+    /* Arranges for the poll loop for an upcall handler to wake up when 'dpif'
+     * has a message queued to be received with the recv member functions.
+     * Since there can be multiple poll loops (see ->handlers_set()),
+     * 'handler_id' is needed as index to identify the corresponding poll loop.
+     * */
+    void (*recv_wait)(struct dpif *dpif, uint32_t handler_id);
 
     /* Throws away any queued upcalls that 'dpif' currently has ready to
      * return. */

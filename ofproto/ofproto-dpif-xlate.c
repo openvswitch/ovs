@@ -1491,7 +1491,7 @@ compose_sample_action(const struct xbridge *xbridge,
     actions_offset = nl_msg_start_nested(odp_actions, OVS_SAMPLE_ATTR_ACTIONS);
 
     odp_port = ofp_port_to_odp_port(xbridge, flow->in_port.ofp_port);
-    pid = dpif_port_get_pid(xbridge->dpif, odp_port);
+    pid = dpif_port_get_pid(xbridge->dpif, odp_port, 0);
     cookie_offset = odp_put_userspace_action(pid, cookie, cookie_size, odp_actions);
 
     nl_msg_end_nested(odp_actions, actions_offset);

@@ -171,7 +171,7 @@ static unsigned int ovs_vport_mcgroup;
 static int dpif_linux_init(void);
 static int open_dpif(const struct dpif_linux_dp *, struct dpif **);
 static uint32_t dpif_linux_port_get_pid(const struct dpif *,
-                                        odp_port_t port_no);
+                                        odp_port_t port_no, uint32_t hash);
 static int dpif_linux_refresh_channels(struct dpif *);
 
 static void dpif_linux_vport_to_ofpbuf(const struct dpif_linux_vport *,
@@ -307,7 +307,7 @@ destroy_channels(struct dpif_linux *dpif)
     dpif->n_events = dpif->event_offset = 0;
 
     /* Don't close dpif->epoll_fd since that would cause other threads that
-     * call dpif_recv_wait(dpif) to wait on an arbitrary fd or a closed fd. */
+     * call dpif_recv_wait() to wait on an arbitrary fd or a closed fd. */
 }
 
 static int
@@ -678,7 +678,8 @@ dpif_linux_port_query_by_name(const struct dpif *dpif, const char *devname,
 }
 
 static uint32_t
-dpif_linux_port_get_pid(const struct dpif *dpif_, odp_port_t port_no)
+dpif_linux_port_get_pid(const struct dpif *dpif_, odp_port_t port_no,
+                        uint32_t hash OVS_UNUSED)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     uint32_t port_idx = odp_to_u32(port_no);
@@ -1460,6 +1461,13 @@ dpif_linux_recv_set(struct dpif *dpif_, bool enable)
 }
 
 static int
+dpif_linux_handlers_set(struct dpif *dpif_ OVS_UNUSED,
+                        uint32_t n_handlers OVS_UNUSED)
+{
+    return 0;
+}
+
+static int
 dpif_linux_queue_to_priority(const struct dpif *dpif OVS_UNUSED,
                              uint32_t queue_id, uint32_t *priority)
 {
@@ -1605,8 +1613,8 @@ dpif_linux_recv__(struct dpif *dpif_, struct dpif_upcall *upcall,
 }
 
 static int
-dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall,
-                struct ofpbuf *buf)
+dpif_linux_recv(struct dpif *dpif_, uint32_t handler_id OVS_UNUSED,
+                struct dpif_upcall *upcall, struct ofpbuf *buf)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     int error;
@@ -1619,7 +1627,7 @@ dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall,
 }
 
 static void
-dpif_linux_recv_wait(struct dpif *dpif_)
+dpif_linux_recv_wait(struct dpif *dpif_, uint32_t handler_id OVS_UNUSED)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
@@ -1682,6 +1690,7 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_execute,
     dpif_linux_operate,
     dpif_linux_recv_set,
+    dpif_linux_handlers_set,
     dpif_linux_queue_to_priority,
     dpif_linux_recv,
     dpif_linux_recv_wait,

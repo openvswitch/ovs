@@ -1479,6 +1479,13 @@ dpif_netdev_recv_set(struct dpif *dpif OVS_UNUSED, bool enable OVS_UNUSED)
 }
 
 static int
+dpif_netdev_handlers_set(struct dpif *dpif OVS_UNUSED,
+                         uint32_t n_handlers OVS_UNUSED)
+{
+    return 0;
+}
+
+static int
 dpif_netdev_queue_to_priority(const struct dpif *dpif OVS_UNUSED,
                               uint32_t queue_id, uint32_t *priority)
 {
@@ -1502,8 +1509,8 @@ find_nonempty_queue(struct dp_netdev *dp)
 }
 
 static int
-dpif_netdev_recv(struct dpif *dpif, struct dpif_upcall *upcall,
-                 struct ofpbuf *buf)
+dpif_netdev_recv(struct dpif *dpif, uint32_t n_handlers OVS_UNUSED,
+                 struct dpif_upcall *upcall, struct ofpbuf *buf)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_queue *q;
@@ -1529,7 +1536,7 @@ dpif_netdev_recv(struct dpif *dpif, struct dpif_upcall *upcall,
 }
 
 static void
-dpif_netdev_recv_wait(struct dpif *dpif)
+dpif_netdev_recv_wait(struct dpif *dpif, uint32_t handler_id OVS_UNUSED)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     uint64_t seq;
@@ -1923,6 +1930,7 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_execute,
     NULL,                       /* operate */
     dpif_netdev_recv_set,
+    dpif_netdev_handlers_set,
     dpif_netdev_queue_to_priority,
     dpif_netdev_recv,
     dpif_netdev_recv_wait,

@@ -632,9 +632,18 @@ dpif_port_query_by_name(const struct dpif *dpif, const char *devname,
     return error;
 }
 
-/* Returns the Netlink PID value to supply in OVS_ACTION_ATTR_USERSPACE actions
- * as the OVS_USERSPACE_ATTR_PID attribute's value, for use in flows whose
- * packets arrived on port 'port_no'.
+/* Returns the Netlink PID value to supply in OVS_ACTION_ATTR_USERSPACE
+ * actions as the OVS_USERSPACE_ATTR_PID attribute's value, for use in
+ * flows whose packets arrived on port 'port_no'.  In the case where the
+ * provider allocates multiple Netlink PIDs to a single port, it may use
+ * 'hash' to spread load among them.  The caller need not use a particular
+ * hash function; a 5-tuple hash is suitable.
+ *
+ * (The datapath implementation might use some different hash function for
+ * distributing packets received via flow misses among PIDs.  This means
+ * that packets received via flow misses might be reordered relative to
+ * packets received via userspace actions.  This is not ordinarily a
+ * problem.)
  *
  * A 'port_no' of ODPP_NONE is a special case: it returns a reserved PID, not
  * allocated to any port, that the client may use for special purposes.
@@ -645,10 +654,10 @@ dpif_port_query_by_name(const struct dpif *dpif, const char *devname,
  * update all of the flows that it installed that contain
  * OVS_ACTION_ATTR_USERSPACE actions. */
 uint32_t
-dpif_port_get_pid(const struct dpif *dpif, odp_port_t port_no)
+dpif_port_get_pid(const struct dpif *dpif, odp_port_t port_no, uint32_t hash)
 {
     return (dpif->dpif_class->port_get_pid
-            ? (dpif->dpif_class->port_get_pid)(dpif, port_no)
+            ? (dpif->dpif_class->port_get_pid)(dpif, port_no, hash)
             : 0);
 }
 
@@ -1294,9 +1303,39 @@ dpif_recv_set(struct dpif *dpif, bool enable)
     return error;
 }
 
-/* Polls for an upcall from 'dpif'.  If successful, stores the upcall into
- * '*upcall', using 'buf' for storage.  Should only be called if
- * dpif_recv_set() has been used to enable receiving packets on 'dpif'.
+/* Refreshes the poll loops and Netlink sockets associated to each port,
+ * when the number of upcall handlers (upcall receiving thread) is changed
+ * to 'n_handlers' and receiving packets for 'dpif' is enabled by
+ * recv_set().
+ *
+ * Since multiple upcall handlers can read upcalls simultaneously from
+ * 'dpif', each port can have multiple Netlink sockets, one per upcall
+ * handler.  So, handlers_set() is responsible for the following tasks:
+ *
+ *    When receiving upcall is enabled, extends or creates the
+ *    configuration to support:
+ *
+ *        - 'n_handlers' Netlink sockets for each port.
+ *
+ *        - 'n_handlers' poll loops, one for each upcall handler.
+ *
+ *        - registering the Netlink sockets for the same upcall handler to
+ *          the corresponding poll loop.
+ *
+ * Returns 0 if successful, otherwise a positive errno value. */
+int
+dpif_handlers_set(struct dpif *dpif, uint32_t n_handlers)
+{
+    int error = dpif->dpif_class->handlers_set(dpif, n_handlers);
+    log_operation(dpif, "handlers_set", error);
+    return error;
+}
+
+/* Polls for an upcall from 'dpif' for an upcall handler.  Since there
+ * there can be multiple poll loops, 'handler_id' is needed as index to
+ * identify the corresponding poll loop.  If successful, stores the upcall
+ * into '*upcall', using 'buf' for storage.  Should only be called if
+ * 'recv_set' has been used to enable receiving packets from 'dpif'.
  *
  * 'upcall->key' and 'upcall->userdata' point into data in the caller-provided
  * 'buf', so their memory cannot be freed separately from 'buf'.
@@ -1311,9 +1350,10 @@ dpif_recv_set(struct dpif *dpif, bool enable)
  * Returns 0 if successful, otherwise a positive errno value.  Returns EAGAIN
  * if no upcall is immediately available. */
 int
-dpif_recv(struct dpif *dpif, struct dpif_upcall *upcall, struct ofpbuf *buf)
+dpif_recv(struct dpif *dpif, uint32_t handler_id, struct dpif_upcall *upcall,
+          struct ofpbuf *buf)
 {
-    int error = dpif->dpif_class->recv(dpif, upcall, buf);
+    int error = dpif->dpif_class->recv(dpif, handler_id, upcall, buf);
     if (!error && !VLOG_DROP_DBG(&dpmsg_rl)) {
         struct ds flow;
         char *packet;
@@ -1347,12 +1387,14 @@ dpif_recv_purge(struct dpif *dpif)
     }
 }
 
-/* Arranges for the poll loop to wake up when 'dpif' has a message queued to be
- * received with dpif_recv(). */
+/* Arranges for the poll loop for an upcall handler to wake up when 'dpif'
+ * 'dpif' has a message queued to be received with the recv member
+ * function.  Since there can be multiple poll loops, 'handler_id' is
+ * needed as index to identify the corresponding poll loop. */
 void
-dpif_recv_wait(struct dpif *dpif)
+dpif_recv_wait(struct dpif *dpif, uint32_t handler_id)
 {
-    dpif->dpif_class->recv_wait(dpif);
+    dpif->dpif_class->recv_wait(dpif, handler_id);
 }
 
 /* Obtains the NetFlow engine type and engine ID for 'dpif' into '*engine_type'

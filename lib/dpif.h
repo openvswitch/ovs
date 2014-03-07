@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,7 +61,8 @@
  *      "internal" (for a simulated port used to connect to the TCP/IP stack),
  *      and "gre" (for a GRE tunnel).
  *
- *    - A Netlink PID (see "Upcall Queuing and Ordering" below).
+ *    - A Netlink PID for each upcall reading thread (see "Upcall Queuing and
+ *      Ordering" below).
  *
  * The dpif interface has functions for adding and deleting ports.  When a
  * datapath implements these (e.g. as the Linux and netdev datapaths do), then
@@ -205,10 +206,10 @@
  * connection consists of two flows with 1-ms latency to set up each one.
  *
  * To receive upcalls, a client has to enable them with dpif_recv_set().  A
- * datapath should generally support multiple clients at once (e.g. so that one
- * may run "ovs-dpctl show" or "ovs-dpctl dump-flows" while "ovs-vswitchd" is
- * also running) but need not support multiple clients enabling upcalls at
- * once.
+ * datapath should generally support being opened multiple times (e.g. so that
+ * one may run "ovs-dpctl show" or "ovs-dpctl dump-flows" while "ovs-vswitchd"
+ * is also running) but need not support more than one of these clients
+ * enabling upcalls at once.
  *
  *
  * Upcall Queuing and Ordering
@@ -261,7 +262,7 @@
  * PID in "action" upcalls is that dpif_port_get_pid() returns a constant value
  * and all upcalls are appended to a single queue.
  *
- * The ideal behavior is:
+ * The preferred behavior is:
  *
  *    - Each port has a PID that identifies the queue used for "miss" upcalls
  *      on that port.  (Thus, if each port has its own queue for "miss"
@@ -274,6 +275,18 @@
  *      upcalls.
  *
  *    - Upcalls that specify the "special" Netlink PID are queued separately.
+ *
+ * Multiple threads may want to read upcalls simultaneously from a single
+ * datapath.  To support multiple threads well, one extends the above preferred
+ * behavior:
+ *
+ *    - Each port has multiple PIDs.  The datapath distributes "miss" upcalls
+ *      across the PIDs, ensuring that a given flow is mapped in a stable way
+ *      to a single PID.
+ *
+ *    - For "action" upcalls, the thread can specify its own Netlink PID or
+ *      other threads' Netlink PID of the same port for offloading purpose
+ *      (e.g. in a "round robin" manner).
  *
  *
  * Packet Format
@@ -453,7 +466,8 @@ int dpif_port_query_by_name(const struct dpif *, const char *devname,
                             struct dpif_port *);
 int dpif_port_get_name(struct dpif *, odp_port_t port_no,
                        char *name, size_t name_size);
-uint32_t dpif_port_get_pid(const struct dpif *, odp_port_t port_no);
+uint32_t dpif_port_get_pid(const struct dpif *, odp_port_t port_no,
+                           uint32_t hash);
 
 struct dpif_port_dump {
     const struct dpif *dpif;
@@ -625,9 +639,11 @@ struct dpif_upcall {
 };
 
 int dpif_recv_set(struct dpif *, bool enable);
-int dpif_recv(struct dpif *, struct dpif_upcall *, struct ofpbuf *);
+int dpif_handlers_set(struct dpif *, uint32_t n_handlers);
+int dpif_recv(struct dpif *, uint32_t handler_id, struct dpif_upcall *,
+              struct ofpbuf *);
 void dpif_recv_purge(struct dpif *);
-void dpif_recv_wait(struct dpif *);
+void dpif_recv_wait(struct dpif *, uint32_t handler_id);
 
 /* Miscellaneous. */
 

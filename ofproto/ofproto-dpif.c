@@ -930,7 +930,7 @@ check_variable_length_userdata(struct dpif_backer *backer)
     ofpbuf_init(&actions, 64);
     start = nl_msg_start_nested(&actions, OVS_ACTION_ATTR_USERSPACE);
     nl_msg_put_u32(&actions, OVS_USERSPACE_ATTR_PID,
-                   dpif_port_get_pid(backer->dpif, ODPP_NONE));
+                   dpif_port_get_pid(backer->dpif, ODPP_NONE, 0));
     nl_msg_put_unspec_zero(&actions, OVS_USERSPACE_ATTR_USERDATA, 4);
     nl_msg_end_nested(&actions, start);
 

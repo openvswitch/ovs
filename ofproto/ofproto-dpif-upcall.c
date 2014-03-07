@@ -298,8 +298,9 @@ void
 udpif_set_threads(struct udpif *udpif, size_t n_handlers,
                   size_t n_revalidators)
 {
-    ovsrcu_quiesce_start();
+    int error;
 
+    ovsrcu_quiesce_start();
     /* Stop the old threads (if any). */
     if (udpif->handlers &&
         (udpif->n_handlers != n_handlers
@@ -370,6 +371,13 @@ udpif_set_threads(struct udpif *udpif, size_t n_handlers,
         free(udpif->handlers);
         udpif->handlers = NULL;
         udpif->n_handlers = 0;
+    }
+
+    error = dpif_handlers_set(udpif->dpif, 1);
+    if (error) {
+        VLOG_ERR("failed to configure handlers in dpif %s: %s",
+                 dpif_name(udpif->dpif), ovs_strerror(error));
+        return;
     }
 
     /* Start new threads (if necessary). */
@@ -544,7 +552,7 @@ udpif_dispatcher(void *arg)
     set_subprogram_name("dispatcher");
     while (!latch_is_set(&udpif->exit_latch)) {
         recv_upcalls(udpif);
-        dpif_recv_wait(udpif->dpif);
+        dpif_recv_wait(udpif->dpif, 0);
         latch_wait(&udpif->exit_latch);
         poll_block();
     }
@@ -825,7 +833,7 @@ recv_upcalls(struct udpif *udpif)
         upcall = xmalloc(sizeof *upcall);
         ofpbuf_use_stub(&upcall->upcall_buf, upcall->upcall_stub,
                         sizeof upcall->upcall_stub);
-        error = dpif_recv(udpif->dpif, &upcall->dpif_upcall,
+        error = dpif_recv(udpif->dpif, 0, &upcall->dpif_upcall,
                           &upcall->upcall_buf);
         if (error) {
             /* upcall_destroy() can only be called on successfully received
@@ -913,7 +921,7 @@ compose_slow_path(struct udpif *udpif, struct xlate_out *xout,
     port = xout->slow & (SLOW_CFM | SLOW_BFD | SLOW_LACP | SLOW_STP)
         ? ODPP_NONE
         : odp_in_port;
-    pid = dpif_port_get_pid(udpif->dpif, port);
+    pid = dpif_port_get_pid(udpif->dpif, port, 0);
     odp_put_userspace_action(pid, &cookie, sizeof cookie.slow_path, buf);
 }
 
