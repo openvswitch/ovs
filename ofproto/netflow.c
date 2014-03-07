@@ -170,7 +170,7 @@ gen_netflow_rec(struct netflow *nf, struct netflow_flow *nf_flow,
 }
 
 void
-netflow_flow_update(struct netflow *nf, struct flow *flow,
+netflow_flow_update(struct netflow *nf, const struct flow *flow,
                     ofp_port_t output_iface,
                     const struct dpif_flow_stats *stats)
     OVS_EXCLUDED(mutex)

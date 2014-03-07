@@ -55,7 +55,7 @@ void netflow_mask_wc(struct flow *, struct flow_wildcards *);
 
 void netflow_flow_clear(struct netflow *netflow, struct flow *flow);
 
-void netflow_flow_update(struct netflow *nf, struct flow *flow,
+void netflow_flow_update(struct netflow *nf, const struct flow *flow,
                          ofp_port_t output_iface,
                          const struct dpif_flow_stats *);
 
