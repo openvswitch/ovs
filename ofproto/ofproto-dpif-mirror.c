@@ -36,7 +36,7 @@ struct mbridge {
     bool need_revalidate;
     bool has_mirrors;
 
-    int ref_cnt;
+    struct ovs_refcount ref_cnt;
 };
 
 struct mbundle {
@@ -82,7 +82,7 @@ mbridge_create(void)
     struct mbridge *mbridge;
 
     mbridge = xzalloc(sizeof *mbridge);
-    mbridge->ref_cnt = 1;
+    ovs_refcount_init(&mbridge->ref_cnt);
 
     hmap_init(&mbridge->mbundles);
     return mbridge;
@@ -93,8 +93,7 @@ mbridge_ref(const struct mbridge *mbridge_)
 {
     struct mbridge *mbridge = CONST_CAST(struct mbridge *, mbridge_);
     if (mbridge) {
-        ovs_assert(mbridge->ref_cnt > 0);
-        mbridge->ref_cnt++;
+        ovs_refcount_ref(&mbridge->ref_cnt);
     }
     return mbridge;
 }
@@ -109,23 +108,20 @@ mbridge_unref(struct mbridge *mbridge)
         return;
     }
 
-    ovs_assert(mbridge->ref_cnt > 0);
-    if (--mbridge->ref_cnt) {
-        return;
-    }
-
-    for (i = 0; i < MAX_MIRRORS; i++) {
-        if (mbridge->mirrors[i]) {
-            mirror_destroy(mbridge, mbridge->mirrors[i]->aux);
+    if (ovs_refcount_unref(&mbridge->ref_cnt) == 1) {
+        for (i = 0; i < MAX_MIRRORS; i++) {
+            if (mbridge->mirrors[i]) {
+                mirror_destroy(mbridge, mbridge->mirrors[i]->aux);
+            }
         }
-    }
 
-    HMAP_FOR_EACH_SAFE (mbundle, next, hmap_node, &mbridge->mbundles) {
-        mbridge_unregister_bundle(mbridge, mbundle->ofbundle);
-    }
+        HMAP_FOR_EACH_SAFE (mbundle, next, hmap_node, &mbridge->mbundles) {
+            mbridge_unregister_bundle(mbridge, mbundle->ofbundle);
+        }
 
-    hmap_destroy(&mbridge->mbundles);
-    free(mbridge);
+        hmap_destroy(&mbridge->mbundles);
+        free(mbridge);
+    }
 }
 
 bool
