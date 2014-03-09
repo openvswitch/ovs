@@ -120,6 +120,7 @@ enum stp_state {
 const char *stp_state_name(enum stp_state);
 bool stp_forward_in_state(enum stp_state);
 bool stp_learn_in_state(enum stp_state);
+bool stp_listen_in_state(enum stp_state);
 
 /* Role of an STP port. */
 enum stp_role {
