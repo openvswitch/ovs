@@ -1451,19 +1451,23 @@ ofproto_run(struct ofproto *p)
             }
 
             ovs_mutex_lock(&ofproto_mutex);
-            HEAP_FOR_EACH (evg, size_node, &table->eviction_groups_by_size) {
-                heap_rebuild(&evg->rules);
-            }
-
             fat_rwlock_rdlock(&table->cls.rwlock);
             cls_cursor_init(&cursor, &table->cls, NULL);
             CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
-                if (!rule->eviction_group
-                    && (rule->idle_timeout || rule->hard_timeout)) {
-                    eviction_group_add_rule(rule);
+                if (rule->idle_timeout || rule->hard_timeout) {
+                    if (!rule->eviction_group) {
+                        eviction_group_add_rule(rule);
+                    } else {
+                        heap_raw_change(&rule->evg_node,
+                                        rule_eviction_priority(p, rule));
+                    }
                 }
             }
             fat_rwlock_unlock(&table->cls.rwlock);
+
+            HEAP_FOR_EACH (evg, size_node, &table->eviction_groups_by_size) {
+                heap_rebuild(&evg->rules);
+            }
             ovs_mutex_unlock(&ofproto_mutex);
         }
     }
