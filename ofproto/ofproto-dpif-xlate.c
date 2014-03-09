@@ -665,7 +665,7 @@ xport_get_stp_port(const struct xport *xport)
         : NULL;
 }
 
-static enum stp_state
+static bool
 xport_stp_learn_state(const struct xport *xport)
 {
     struct stp_port *sp = xport_get_stp_port(xport);
@@ -677,6 +677,13 @@ xport_stp_forward_state(const struct xport *xport)
 {
     struct stp_port *sp = xport_get_stp_port(xport);
     return stp_forward_in_state(sp ? stp_port_get_state(sp) : STP_DISABLED);
+}
+
+static bool
+xport_stp_listen_state(const struct xport *xport)
+{
+    struct stp_port *sp = xport_get_stp_port(xport);
+    return stp_listen_in_state(sp ? stp_port_get_state(sp) : STP_DISABLED);
 }
 
 /* Returns true if STP should process 'flow'.  Sets fields in 'wc' that
@@ -1693,9 +1700,18 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     } else if (xport->config & OFPUTIL_PC_NO_FWD) {
         xlate_report(ctx, "OFPPC_NO_FWD set, skipping output");
         return;
-    } else if (check_stp && !xport_stp_forward_state(xport)) {
-        xlate_report(ctx, "STP not in forwarding state, skipping output");
-        return;
+    } else if (check_stp) {
+        if (eth_addr_equals(ctx->base_flow.dl_dst, eth_addr_stp)) {
+            if (!xport_stp_listen_state(xport)) {
+                xlate_report(ctx, "STP not in listening state, "
+                             "skipping bpdu output");
+                return;
+            }
+        } else if (!xport_stp_forward_state(xport)) {
+            xlate_report(ctx, "STP not in forwarding state, "
+                         "skipping output");
+            return;
+        }
     }
 
     if (mbridge_has_mirrors(ctx->xbridge->mbridge) && xport->xbundle) {

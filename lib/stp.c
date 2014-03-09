@@ -684,6 +684,15 @@ stp_learn_in_state(enum stp_state state)
     return (state & (STP_DISABLED | STP_LEARNING | STP_FORWARDING)) != 0;
 }
 
+/* Returns true if 'state' is one in which rx&tx bpdu should be done on
+ * on a port, false otherwise. */
+bool
+stp_listen_in_state(enum stp_state state)
+{
+    return (state &
+            (STP_LISTENING | STP_LEARNING | STP_FORWARDING)) != 0;
+}
+
 /* Returns the name for the given 'role' (for use in debugging and log
  * messages). */
 const char *
