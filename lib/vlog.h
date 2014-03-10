@@ -269,7 +269,7 @@ void vlog_usage(void);
         {                                                               \
             LIST_INITIALIZER(&VLM_##MODULE.list),                       \
             #MODULE,                                        /* name */  \
-            { [ 0 ... VLF_N_FACILITIES - 1] = VLL_INFO }, /* levels */  \
+            { VLL_INFO, VLL_INFO, VLL_INFO },             /* levels */  \
             VLL_INFO,                                  /* min_level */  \
             true                               /* honor_rate_limits */  \
         };
