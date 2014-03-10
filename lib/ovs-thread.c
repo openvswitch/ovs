@@ -509,10 +509,16 @@ count_cpu_cores(void)
     static long int n_cores;
 
     if (ovsthread_once_start(&once)) {
+#ifndef _WIN32
         parse_cpuinfo(&n_cores);
         if (!n_cores) {
             n_cores = sysconf(_SC_NPROCESSORS_ONLN);
         }
+#else
+        SYSTEM_INFO sysinfo;
+        GetSystemInfo(&sysinfo);
+        n_cores = sysinfo.dwNumberOfProcessors;
+#endif
         ovsthread_once_done(&once);
     }
 
