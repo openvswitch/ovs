@@ -646,7 +646,11 @@ get_cwd(void)
     size_t size;
 
     /* Get maximum path length or at least a reasonable estimate. */
+#ifndef _WIN32
     path_max = pathconf(".", _PC_PATH_MAX);
+#else
+    path_max = MAX_PATH;
+#endif
     size = (path_max < 0 ? 1024
             : path_max > 10240 ? 10240
             : path_max);
