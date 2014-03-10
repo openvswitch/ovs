@@ -1688,4 +1688,16 @@ ovs_lasterror_to_string(void)
 {
     return ovs_format_message(GetLastError());
 }
+
+int
+ftruncate(int fd, off_t length)
+{
+    int error;
+
+    error = _chsize_s(fd, length);
+    if (error) {
+        return -1;
+    }
+    return 0;
+}
 #endif

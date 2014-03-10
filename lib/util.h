@@ -493,6 +493,7 @@ uint64_t bitwise_get(const void *src, unsigned int src_len,
 
 char *ovs_format_message(int error);
 char *ovs_lasterror_to_string(void);
+int ftruncate(int fd, off_t length);
 #endif
 
 #ifdef  __cplusplus

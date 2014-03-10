@@ -22,6 +22,7 @@
 #include <WS2tcpip.h>
 #include <windows.h>
 #include <BaseTsd.h>
+#include <io.h>
 
 #define inline __inline
 #define __func__ __FUNCTION__
