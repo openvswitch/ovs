@@ -206,31 +206,33 @@ error:
 }
 
 static void
+sha1_update_int(struct sha1_ctx *sha1_ctx, uintmax_t x)
+{
+   sha1_update(sha1_ctx, &x, sizeof x);
+}
+
+static void
 do_init(void)
 {
     uint8_t sha1[SHA1_DIGEST_SIZE];
     struct sha1_ctx sha1_ctx;
     uint8_t random_seed[16];
     struct timeval now;
-    pid_t pid, ppid;
-    uid_t uid;
-    gid_t gid;
 
     /* Get seed data. */
     get_entropy_or_die(random_seed, sizeof random_seed);
     xgettimeofday(&now);
-    pid = getpid();
-    ppid = getppid();
-    uid = getuid();
-    gid = getgid();
 
     /* Convert seed into key. */
     sha1_init(&sha1_ctx);
     sha1_update(&sha1_ctx, random_seed, sizeof random_seed);
-    sha1_update(&sha1_ctx, &pid, sizeof pid);
-    sha1_update(&sha1_ctx, &ppid, sizeof ppid);
-    sha1_update(&sha1_ctx, &uid, sizeof uid);
-    sha1_update(&sha1_ctx, &gid, sizeof gid);
+    sha1_update(&sha1_ctx, &now, sizeof now);
+    sha1_update_int(&sha1_ctx, getpid());
+#ifndef _WIN32
+    sha1_update_int(&sha1_ctx, getppid());
+    sha1_update_int(&sha1_ctx, getuid());
+    sha1_update_int(&sha1_ctx, getgid());
+#endif
     sha1_final(&sha1_ctx, sha1);
 
     /* Generate key. */
