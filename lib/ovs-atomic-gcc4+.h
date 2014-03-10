@@ -202,7 +202,7 @@ atomic_signal_fence(memory_order order OVS_UNUSED)
 #define atomic_read_explicit(SRC, DST, ORDER)                           \
     (ATOMIC_SWITCH(SRC,                                                 \
                    (atomic_thread_fence_if_seq_cst(ORDER),              \
-                    (*DST) = (SRC)->value,                              \
+                    *(DST) = (SRC)->value,                              \
                     atomic_thread_fence(ORDER)),                        \
                    *(DST) = locked_uint64_load(AS_LOCKED_UINT64(SRC)),  \
                    *(DST) = locked_int64_load(AS_LOCKED_INT64(SRC))),   \
