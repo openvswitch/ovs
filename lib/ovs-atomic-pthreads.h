@@ -90,15 +90,55 @@ atomic_signal_fence(memory_order order OVS_UNUSED)
 
 typedef struct {
     bool b;
-    pthread_mutex_t mutex;
 } atomic_flag;
-#define ATOMIC_FLAG_INIT { false, PTHREAD_MUTEX_INITIALIZER }
+#define ATOMIC_FLAG_INIT { false }
 
-void atomic_flag_init(volatile atomic_flag *);
-void atomic_flag_destroy(volatile atomic_flag *);
+static inline void
+atomic_flag_init(volatile atomic_flag *flag OVS_UNUSED)
+{
+    /* Nothing to do. */
+}
 
-bool atomic_flag_test_and_set(volatile atomic_flag *);
-bool atomic_flag_test_and_set_explicit(volatile atomic_flag *, memory_order);
+static inline void
+atomic_flag_destroy(volatile atomic_flag *flag OVS_UNUSED)
+{
+    /* Nothing to do. */
+}
 
-void atomic_flag_clear(volatile atomic_flag *);
-void atomic_flag_clear_explicit(volatile atomic_flag *, memory_order);
+static inline bool
+atomic_flag_test_and_set(volatile atomic_flag *flag_)
+{
+    atomic_flag *flag = CONST_CAST(atomic_flag *, flag_);
+    bool old_value;
+
+    atomic_lock__(flag);
+    old_value = flag->b;
+    flag->b = true;
+    atomic_unlock__(flag);
+
+    return old_value;
+}
+
+static inline bool
+atomic_flag_test_and_set_explicit(volatile atomic_flag *flag,
+                                  memory_order order OVS_UNUSED)
+{
+    return atomic_flag_test_and_set(flag);
+}
+
+static inline void
+atomic_flag_clear(volatile atomic_flag *flag_)
+{
+    atomic_flag *flag = CONST_CAST(atomic_flag *, flag_);
+
+    atomic_lock__(flag);
+    flag->b = false;
+    atomic_unlock__(flag);
+}
+
+static inline void
+atomic_flag_clear_explicit(volatile atomic_flag *flag,
+                           memory_order order OVS_UNUSED)
+{
+    atomic_flag_clear(flag);
+}
