@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Nicira, Inc.
+ * Copyright (c) 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,44 +21,8 @@
 
 #define OVS_ATOMIC_CLANG_IMPL 1
 
-/* Standard atomic types. */
-typedef _Atomic(_Bool) atomic_bool;
-
-typedef _Atomic(char) atomic_char;
-typedef _Atomic(signed char) atomic_schar;
-typedef _Atomic(unsigned char) atomic_uchar;
-
-typedef _Atomic(short) atomic_short;
-typedef _Atomic(unsigned short) atomic_ushort;
-
-typedef _Atomic(int) atomic_int;
-typedef _Atomic(unsigned int) atomic_uint;
-
-typedef _Atomic(long) atomic_long;
-typedef _Atomic(unsigned long) atomic_ulong;
-
-typedef _Atomic(long long) atomic_llong;
-typedef _Atomic(unsigned long long) atomic_ullong;
-
-typedef _Atomic(size_t) atomic_size_t;
-typedef _Atomic(ptrdiff_t) atomic_ptrdiff_t;
-
-typedef _Atomic(intmax_t) atomic_intmax_t;
-typedef _Atomic(uintmax_t) atomic_uintmax_t;
-
-typedef _Atomic(intptr_t) atomic_intptr_t;
-typedef _Atomic(uintptr_t) atomic_uintptr_t;
-
-/* Nonstandard atomic types. */
-typedef _Atomic(uint8_t)   atomic_uint8_t;
-typedef _Atomic(uint16_t)  atomic_uint16_t;
-typedef _Atomic(uint32_t)  atomic_uint32_t;
-typedef _Atomic(uint64_t)  atomic_uint64_t;
-
-typedef _Atomic(int8_t)    atomic_int8_t;
-typedef _Atomic(int16_t)   atomic_int16_t;
-typedef _Atomic(int32_t)   atomic_int32_t;
-typedef _Atomic(int64_t)   atomic_int64_t;
+#define ATOMIC(TYPE) _Atomic(TYPE)
+#include "ovs-atomic-types.h"
 
 #define ATOMIC_VAR_INIT(VALUE) (VALUE)
 

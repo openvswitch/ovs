@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Nicira, Inc.
+ * Copyright (c) 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,16 +22,9 @@
 
 #include <stdatomic.h>
 
-/* Nonstandard atomic types. */
-typedef _Atomic(uint8_t)   atomic_uint8_t;
-typedef _Atomic(uint16_t)  atomic_uint16_t;
-typedef _Atomic(uint32_t)  atomic_uint32_t;
-typedef _Atomic(uint64_t)  atomic_uint64_t;
-
-typedef _Atomic(int8_t)    atomic_int8_t;
-typedef _Atomic(int16_t)   atomic_int16_t;
-typedef _Atomic(int32_t)   atomic_int32_t;
-typedef _Atomic(int64_t)   atomic_int64_t;
+#define OMIT_STANDARD_ATOMIC_TYPES 1
+#define ATOMIC(TYPE) _Atomic(TYPE)
+#include "ovs-atomic-types.h"
 
 #define atomic_read(SRC, DST) \
     atomic_read_explicit(SRC, DST, memory_order_seq_cst)

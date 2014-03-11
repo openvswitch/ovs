@@ -144,6 +144,7 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/ovs-atomic-gcc4.7+.h \
 	lib/ovs-atomic-pthreads.c \
 	lib/ovs-atomic-pthreads.h \
+	lib/ovs-atomic-types.h \
 	lib/ovs-atomic.h \
 	lib/ovs-thread.c \
 	lib/ovs-thread.h \

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Nicira, Inc.
+ * Copyright (c) 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,46 +19,8 @@
 #error "This header should only be included indirectly via ovs-atomic.h."
 #endif
 
-/* C11 standardized atomic type. */
-typedef bool               atomic_bool;
-
-typedef char               atomic_char;
-typedef signed char        atomic_schar;
-typedef unsigned char      atomic_uchar;
-
-typedef short              atomic_short;
-typedef unsigned short     atomic_ushort;
-
-typedef int                atomic_int;
-typedef unsigned int       atomic_uint;
-
-typedef long               atomic_long;
-typedef unsigned long      atomic_ulong;
-
-typedef long long          atomic_llong;
-typedef unsigned long long atomic_ullong;
-
-typedef size_t             atomic_size_t;
-typedef ptrdiff_t          atomic_ptrdiff_t;
-
-typedef intmax_t           atomic_intmax_t;
-typedef uintmax_t          atomic_uintmax_t;
-
-typedef intptr_t           atomic_intptr_t;
-typedef uintptr_t          atomic_uintptr_t;
-
-/* Nonstandard atomic types. */
-typedef int8_t             atomic_int8_t;
-typedef uint8_t            atomic_uint8_t;
-
-typedef int16_t            atomic_int16_t;
-typedef uint16_t           atomic_uint16_t;
-
-typedef int32_t            atomic_int32_t;
-typedef uint32_t           atomic_uint32_t;
-
-typedef int64_t            atomic_int64_t;
-typedef uint64_t           atomic_uint64_t;
+#define ATOMIC(TYPE) TYPE
+#include "ovs-atomic-types.h"
 
 typedef enum {
     memory_order_relaxed = __ATOMIC_RELAXED,

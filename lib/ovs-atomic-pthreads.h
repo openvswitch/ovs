@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Nicira, Inc.
+ * Copyright (c) 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,55 +21,16 @@
 
 #define OVS_ATOMIC_PTHREADS_IMPL 1
 
-#define DEFINE_PTHREAD_ATOMIC(TYPE, NAME)       \
-    typedef struct {                            \
-        TYPE value;                             \
-        pthread_mutex_t mutex;                  \
-    } NAME;
+#define ATOMIC(TYPE) struct { TYPE value; pthread_mutex_t mutex; }
+#include "ovs-atomic-types.h"
 
 #define ATOMIC_BOOL_LOCK_FREE 0
-DEFINE_PTHREAD_ATOMIC(bool, atomic_bool);
-
 #define ATOMIC_CHAR_LOCK_FREE 0
-DEFINE_PTHREAD_ATOMIC(char, atomic_char);
-DEFINE_PTHREAD_ATOMIC(signed char, atomic_schar);
-DEFINE_PTHREAD_ATOMIC(unsigned char, atomic_uchar);
-
 #define ATOMIC_SHORT_LOCK_FREE 0
-DEFINE_PTHREAD_ATOMIC(short, atomic_short);
-DEFINE_PTHREAD_ATOMIC(unsigned short, atomic_ushort);
-
 #define ATOMIC_INT_LOCK_FREE 0
-DEFINE_PTHREAD_ATOMIC(int, atomic_int);
-DEFINE_PTHREAD_ATOMIC(unsigned int, atomic_uint);
-
 #define ATOMIC_LONG_LOCK_FREE 0
-DEFINE_PTHREAD_ATOMIC(long, atomic_long);
-DEFINE_PTHREAD_ATOMIC(unsigned long, atomic_ulong);
-
 #define ATOMIC_LLONG_LOCK_FREE 0
-DEFINE_PTHREAD_ATOMIC(long long, atomic_llong);
-DEFINE_PTHREAD_ATOMIC(unsigned long long, atomic_ullong);
-
-DEFINE_PTHREAD_ATOMIC(size_t, atomic_size_t);
-DEFINE_PTHREAD_ATOMIC(ptrdiff_t, atomic_ptrdiff_t);
-
-DEFINE_PTHREAD_ATOMIC(intmax_t, atomic_intmax_t);
-DEFINE_PTHREAD_ATOMIC(uintmax_t, atomic_uintmax_t);
-
 #define ATOMIC_POINTER_LOCK_FREE 0
-DEFINE_PTHREAD_ATOMIC(intptr_t, atomic_intptr_t);
-DEFINE_PTHREAD_ATOMIC(uintptr_t, atomic_uintptr_t);
-
-/* Nonstandard atomic types. */
-DEFINE_PTHREAD_ATOMIC(uint8_t,  atomic_uint8_t);
-DEFINE_PTHREAD_ATOMIC(uint16_t, atomic_uint16_t);
-DEFINE_PTHREAD_ATOMIC(uint32_t, atomic_uint32_t);
-DEFINE_PTHREAD_ATOMIC(int8_t,   atomic_int8_t);
-DEFINE_PTHREAD_ATOMIC(int16_t,  atomic_int16_t);
-DEFINE_PTHREAD_ATOMIC(int32_t,  atomic_int32_t);
-DEFINE_PTHREAD_ATOMIC(uint64_t, atomic_uint64_t);
-DEFINE_PTHREAD_ATOMIC(int64_t,  atomic_int64_t);
 
 typedef enum {
     memory_order_relaxed,
