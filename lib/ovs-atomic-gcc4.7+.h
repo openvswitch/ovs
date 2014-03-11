@@ -20,7 +20,6 @@
 #endif
 
 #define ATOMIC(TYPE) TYPE
-#include "ovs-atomic-types.h"
 
 typedef enum {
     memory_order_relaxed = __ATOMIC_RELAXED,

@@ -23,7 +23,6 @@
 #define OVS_ATOMIC_GCC4P_IMPL 1
 
 #define ATOMIC(TYPE) TYPE
-#include "ovs-atomic-types.h"
 
 #define ATOMIC_BOOL_LOCK_FREE 2
 #define ATOMIC_CHAR_LOCK_FREE 2

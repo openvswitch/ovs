@@ -22,7 +22,6 @@
 #define OVS_ATOMIC_CLANG_IMPL 1
 
 #define ATOMIC(TYPE) _Atomic(TYPE)
-#include "ovs-atomic-types.h"
 
 #define ATOMIC_VAR_INIT(VALUE) (VALUE)
 

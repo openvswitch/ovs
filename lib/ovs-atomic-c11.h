@@ -24,7 +24,6 @@
 
 #define OMIT_STANDARD_ATOMIC_TYPES 1
 #define ATOMIC(TYPE) _Atomic(TYPE)
-#include "ovs-atomic-types.h"
 
 #define atomic_read(SRC, DST) \
     atomic_read_explicit(SRC, DST, memory_order_seq_cst)
