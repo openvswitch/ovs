@@ -23,6 +23,7 @@
 
 #include <stdarg.h>
 #include <stddef.h>
+#include <sys/types.h>
 
 /* Windows libc has defective snprintf() and vsnprintf():
  *
@@ -38,6 +39,8 @@ int ovs_snprintf(char *, size_t, const char *, ...);
 #undef vsnprintf
 #define vsnprintf ovs_vsnprintf
 int ovs_vsnprintf(char *, size_t, const char *, va_list);
+
+int fseeko(FILE *stream, off_t offset, int whence);
 #endif /* _WIN32 */
 
 #endif /* stdio.h wrapper */

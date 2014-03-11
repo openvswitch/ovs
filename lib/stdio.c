@@ -17,6 +17,7 @@
 #include <config.h>
 
 #include <stdio.h>
+#include <sys/types.h>
 
 #ifdef _WIN32
 #undef snprintf
@@ -44,5 +45,16 @@ ovs_vsnprintf(char *s, size_t n, const char *format, va_list args)
         s[n - 1] = '\0';
     }
     return needed;
+}
+
+int
+fseeko(FILE *stream, off_t offset, int whence)
+{
+    int error;
+    error = _fseeki64(stream, offset, whence);
+    if (error) {
+        return -1;
+    }
+    return error;
 }
 #endif  /* _WIN32 */
