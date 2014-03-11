@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -177,6 +177,20 @@
 #define OVS_PACKED(DECL) DECL __attribute__((__packed__))
 #else
 #define OVS_PACKED(DECL) __pragma(pack(push, 1)) DECL __pragma(pack(pop))
+#endif
+
+/* For defining a structure whose instances should aligned on an N-byte
+ * boundary.
+ *
+ * e.g. The following:
+ *     OVS_ALIGNED_STRUCT(64, mystruct) { ... };
+ * is equivalent to the following except that it specifies 64-byte alignment:
+ *     struct mystruct { ... };
+ */
+#ifndef _MSC_VER
+#define OVS_ALIGNED_STRUCT(N, TAG) struct __attribute__((aligned(N))) TAG
+#else
+#define OVS_ALIGNED_STRUCT(N, TAG) __declspec(align(N)) struct TAG
 #endif
 
 #ifdef _MSC_VER
