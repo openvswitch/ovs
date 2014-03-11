@@ -19,9 +19,11 @@
 #error "This header should only be included indirectly via ovs-atomic.h."
 #endif
 
+#include "ovs-atomic-locked.h"
+
 #define OVS_ATOMIC_PTHREADS_IMPL 1
 
-#define ATOMIC(TYPE) struct { TYPE value; pthread_mutex_t mutex; }
+#define ATOMIC(TYPE) TYPE
 #include "ovs-atomic-types.h"
 
 #define ATOMIC_BOOL_LOCK_FREE 0
@@ -41,14 +43,9 @@ typedef enum {
     memory_order_seq_cst
 } memory_order;
 
-#define ATOMIC_VAR_INIT(VALUE) { VALUE, PTHREAD_MUTEX_INITIALIZER }
-#define atomic_init(OBJECT, VALUE)                      \
-    ((OBJECT)->value = (VALUE),                         \
-     pthread_mutex_init(&(OBJECT)->mutex, NULL),        \
-     (void) 0)
-#define atomic_destroy(OBJECT)                  \
-    (pthread_mutex_destroy(&(OBJECT)->mutex),   \
-     (void) 0)
+#define ATOMIC_VAR_INIT(VALUE) (VALUE)
+#define atomic_init(OBJECT, VALUE) (*(OBJECT) = (VALUE), (void) 0)
+#define atomic_destroy(OBJECT) ((void) (OBJECT))
 
 static inline void
 atomic_thread_fence(memory_order order OVS_UNUSED)
@@ -64,45 +61,30 @@ atomic_signal_fence(memory_order order OVS_UNUSED)
 
 #define atomic_is_lock_free(OBJ) false
 
-#define atomic_store(DST, SRC)                  \
-    (pthread_mutex_lock(&(DST)->mutex),         \
-     (DST)->value = (SRC),                      \
-     pthread_mutex_unlock(&(DST)->mutex),       \
-     (void) 0)
+#define atomic_store(DST, SRC) atomic_store_locked(DST, SRC)
 #define atomic_store_explicit(DST, SRC, ORDER) \
     ((void) (ORDER), atomic_store(DST, SRC))
 
-#define atomic_read(SRC, DST)                                           \
-    (pthread_mutex_lock(CONST_CAST(pthread_mutex_t *, &(SRC)->mutex)),  \
-     *(DST) = (SRC)->value,                                             \
-     pthread_mutex_unlock(CONST_CAST(pthread_mutex_t *, &(SRC)->mutex)), \
-     (void) 0)
+#define atomic_read(SRC, DST) atomic_read_locked(SRC, DST)
 #define atomic_read_explicit(SRC, DST, ORDER)   \
     ((void) (ORDER), atomic_read(SRC, DST))
 
-#define atomic_op__(RMW, OPERATOR, OPERAND, ORIG)       \
-    (pthread_mutex_lock(&(RMW)->mutex),                 \
-     *(ORIG) = (RMW)->value,                            \
-     (RMW)->value OPERATOR (OPERAND),                   \
-     pthread_mutex_unlock(&(RMW)->mutex),               \
-     (void) 0)
+#define atomic_add(RMW, ARG, ORIG) atomic_op_locked(RMW, add, ARG, ORIG)
+#define atomic_sub(RMW, ARG, ORIG) atomic_op_locked(RMW, sub, ARG, ORIG)
+#define atomic_or( RMW, ARG, ORIG) atomic_op_locked(RMW, or, ARG, ORIG)
+#define atomic_xor(RMW, ARG, ORIG) atomic_op_locked(RMW, xor, ARG, ORIG)
+#define atomic_and(RMW, ARG, ORIG) atomic_op_locked(RMW, and, ARG, ORIG)
 
-#define atomic_add(RMW, OPERAND, ORIG) atomic_op__(RMW, +=, OPERAND, ORIG)
-#define atomic_sub(RMW, OPERAND, ORIG) atomic_op__(RMW, -=, OPERAND, ORIG)
-#define atomic_or( RMW, OPERAND, ORIG) atomic_op__(RMW, |=, OPERAND, ORIG)
-#define atomic_xor(RMW, OPERAND, ORIG) atomic_op__(RMW, ^=, OPERAND, ORIG)
-#define atomic_and(RMW, OPERAND, ORIG) atomic_op__(RMW, &=, OPERAND, ORIG)
-
-#define atomic_add_explicit(RMW, OPERAND, ORIG, ORDER)  \
-    ((void) (ORDER), atomic_add(RMW, OPERAND, ORIG))
-#define atomic_sub_explicit(RMW, OPERAND, ORIG, ORDER)  \
-    ((void) (ORDER), atomic_sub(RMW, OPERAND, ORIG))
-#define atomic_or_explicit(RMW, OPERAND, ORIG, ORDER)   \
-    ((void) (ORDER), atomic_or(RMW, OPERAND, ORIG))
-#define atomic_xor_explicit(RMW, OPERAND, ORIG, ORDER)  \
-    ((void) (ORDER), atomic_xor(RMW, OPERAND, ORIG))
-#define atomic_and_explicit(RMW, OPERAND, ORIG, ORDER)  \
-    ((void) (ORDER), atomic_and(RMW, OPERAND, ORIG))
+#define atomic_add_explicit(RMW, ARG, ORIG, ORDER)  \
+    ((void) (ORDER), atomic_add(RMW, ARG, ORIG))
+#define atomic_sub_explicit(RMW, ARG, ORIG, ORDER)  \
+    ((void) (ORDER), atomic_sub(RMW, ARG, ORIG))
+#define atomic_or_explicit(RMW, ARG, ORIG, ORDER)   \
+    ((void) (ORDER), atomic_or(RMW, ARG, ORIG))
+#define atomic_xor_explicit(RMW, ARG, ORIG, ORDER)  \
+    ((void) (ORDER), atomic_xor(RMW, ARG, ORIG))
+#define atomic_and_explicit(RMW, ARG, ORIG, ORDER)  \
+    ((void) (ORDER), atomic_and(RMW, ARG, ORIG))
 
 /* atomic_flag */
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Nicira, Inc.
+ * Copyright (c) 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,88 +19,19 @@
 #error "This header should only be included indirectly via ovs-atomic.h."
 #endif
 
+#include "ovs-atomic-locked.h"
 #define OVS_ATOMIC_GCC4P_IMPL 1
 
-#define DEFINE_LOCKLESS_ATOMIC(TYPE, NAME) typedef struct { TYPE value; } NAME
+#define ATOMIC(TYPE) TYPE
+#include "ovs-atomic-types.h"
 
 #define ATOMIC_BOOL_LOCK_FREE 2
-DEFINE_LOCKLESS_ATOMIC(bool, atomic_bool);
-
 #define ATOMIC_CHAR_LOCK_FREE 2
-DEFINE_LOCKLESS_ATOMIC(char, atomic_char);
-DEFINE_LOCKLESS_ATOMIC(signed char, atomic_schar);
-DEFINE_LOCKLESS_ATOMIC(unsigned char, atomic_uchar);
-
 #define ATOMIC_SHORT_LOCK_FREE 2
-DEFINE_LOCKLESS_ATOMIC(short, atomic_short);
-DEFINE_LOCKLESS_ATOMIC(unsigned short, atomic_ushort);
-
 #define ATOMIC_INT_LOCK_FREE 2
-DEFINE_LOCKLESS_ATOMIC(int, atomic_int);
-DEFINE_LOCKLESS_ATOMIC(unsigned int, atomic_uint);
-
-#if ULONG_MAX <= UINTPTR_MAX
-    #define ATOMIC_LONG_LOCK_FREE 2
-    DEFINE_LOCKLESS_ATOMIC(long, atomic_long);
-    DEFINE_LOCKLESS_ATOMIC(unsigned long, atomic_ulong);
-#elif ULONG_MAX == UINT64_MAX
-    #define ATOMIC_LONG_LOCK_FREE 0
-    typedef struct locked_int64  atomic_long;
-    typedef struct locked_uint64 atomic_ulong;
-#else
-    #error "not implemented"
-#endif
-
-#if ULLONG_MAX <= UINTPTR_MAX
-    #define ATOMIC_LLONG_LOCK_FREE 2
-    DEFINE_LOCKLESS_ATOMIC(long long, atomic_llong);
-    DEFINE_LOCKLESS_ATOMIC(unsigned long long, atomic_ullong);
-#elif ULLONG_MAX == UINT64_MAX
-    #define ATOMIC_LLONG_LOCK_FREE 0
-    typedef struct locked_int64  atomic_llong;
-    typedef struct locked_uint64 atomic_ullong;
-#else
-    #error "not implemented"
-#endif
-
-#if SIZE_MAX <= UINTPTR_MAX
-    DEFINE_LOCKLESS_ATOMIC(size_t, atomic_size_t);
-    DEFINE_LOCKLESS_ATOMIC(ptrdiff_t, atomic_ptrdiff_t);
-#elif SIZE_MAX == UINT64_MAX
-    typedef struct locked_uint64 atomic_size_t;
-    typedef struct locked_int64  atomic_ptrdiff_t;
-#else
-    #error "not implemented"
-#endif
-
-#if UINTMAX_MAX <= UINTPTR_MAX
-    DEFINE_LOCKLESS_ATOMIC(intmax_t, atomic_intmax_t);
-    DEFINE_LOCKLESS_ATOMIC(uintmax_t, atomic_uintmax_t);
-#elif UINTMAX_MAX == UINT64_MAX
-    typedef struct locked_int64  atomic_intmax_t;
-    typedef struct locked_uint64 atomic_uintmax_t;
-#else
-    #error "not implemented"
-#endif
-
+#define ATOMIC_LONG_LOCK_FREE (ULONG_MAX <= UINTPTR_MAX ? 2 : 0)
+#define ATOMIC_LLONG_LOCK_FREE (ULLONG_MAX <= UINTPTR_MAX ? 2 : 0)
 #define ATOMIC_POINTER_LOCK_FREE 2
-DEFINE_LOCKLESS_ATOMIC(intptr_t, atomic_intptr_t);
-DEFINE_LOCKLESS_ATOMIC(uintptr_t, atomic_uintptr_t);
-
-/* Nonstandard atomic types. */
-DEFINE_LOCKLESS_ATOMIC(uint8_t,  atomic_uint8_t);
-DEFINE_LOCKLESS_ATOMIC(uint16_t, atomic_uint16_t);
-DEFINE_LOCKLESS_ATOMIC(uint32_t, atomic_uint32_t);
-DEFINE_LOCKLESS_ATOMIC(int8_t,   atomic_int8_t);
-DEFINE_LOCKLESS_ATOMIC(int16_t,  atomic_int16_t);
-DEFINE_LOCKLESS_ATOMIC(int32_t,  atomic_int32_t);
-#if UINT64_MAX <= UINTPTR_MAX
-    DEFINE_LOCKLESS_ATOMIC(uint64_t, atomic_uint64_t);
-    DEFINE_LOCKLESS_ATOMIC(int64_t,  atomic_int64_t);
-#else
-    typedef struct locked_uint64 atomic_uint64_t;
-    typedef struct locked_int64  atomic_int64_t;
-#endif
 
 typedef enum {
     memory_order_relaxed,
@@ -111,45 +42,10 @@ typedef enum {
     memory_order_seq_cst
 } memory_order;
 
-/* locked_uint64. */
-
-#define IF_LOCKED_UINT64(OBJECT, THEN, ELSE)                            \
-    __builtin_choose_expr(                                              \
-        __builtin_types_compatible_p(typeof(OBJECT), struct locked_uint64), \
-        (THEN), (ELSE))
-#define AS_LOCKED_UINT64(OBJECT) ((struct locked_uint64 *) (void *) (OBJECT))
-#define AS_UINT64(OBJECT) ((uint64_t *) (OBJECT))
-struct locked_uint64 {
-    uint64_t value;
-};
-
-uint64_t locked_uint64_load(const struct locked_uint64 *);
-void locked_uint64_store(struct locked_uint64 *, uint64_t);
-uint64_t locked_uint64_add(struct locked_uint64 *, uint64_t arg);
-uint64_t locked_uint64_sub(struct locked_uint64 *, uint64_t arg);
-uint64_t locked_uint64_or(struct locked_uint64 *, uint64_t arg);
-uint64_t locked_uint64_xor(struct locked_uint64 *, uint64_t arg);
-uint64_t locked_uint64_and(struct locked_uint64 *, uint64_t arg);
+#define IS_LOCKLESS_ATOMIC(OBJECT) (sizeof(OBJECT) <= sizeof(void *))
 
-#define IF_LOCKED_INT64(OBJECT, THEN, ELSE)                             \
-    __builtin_choose_expr(                                              \
-        __builtin_types_compatible_p(typeof(OBJECT), struct locked_int64), \
-        (THEN), (ELSE))
-#define AS_LOCKED_INT64(OBJECT) ((struct locked_int64 *) (void *) (OBJECT))
-#define AS_INT64(OBJECT) ((int64_t *) (OBJECT))
-struct locked_int64 {
-    int64_t value;
-};
-int64_t locked_int64_load(const struct locked_int64 *);
-void locked_int64_store(struct locked_int64 *, int64_t);
-int64_t locked_int64_add(struct locked_int64 *, int64_t arg);
-int64_t locked_int64_sub(struct locked_int64 *, int64_t arg);
-int64_t locked_int64_or(struct locked_int64 *, int64_t arg);
-int64_t locked_int64_xor(struct locked_int64 *, int64_t arg);
-int64_t locked_int64_and(struct locked_int64 *, int64_t arg);
-
-#define ATOMIC_VAR_INIT(VALUE) { .value = (VALUE) }
-#define atomic_init(OBJECT, VALUE) ((OBJECT)->value = (VALUE), (void) 0)
+#define ATOMIC_VAR_INIT(VALUE) VALUE
+#define atomic_init(OBJECT, VALUE) (*(OBJECT) = (VALUE), (void) 0)
 #define atomic_destroy(OBJECT) ((void) (OBJECT))
 
 static inline void
@@ -176,44 +72,56 @@ atomic_signal_fence(memory_order order OVS_UNUSED)
     }
 }
 
-#define ATOMIC_SWITCH(OBJECT, LOCKLESS_CASE,                    \
-                      LOCKED_UINT64_CASE, LOCKED_INT64_CASE)    \
-    IF_LOCKED_UINT64(OBJECT, LOCKED_UINT64_CASE,                \
-                     IF_LOCKED_INT64(OBJECT, LOCKED_INT64_CASE, \
-                                     LOCKLESS_CASE))
-
 #define atomic_is_lock_free(OBJ)                \
-    ((void) (OBJ)->value,                       \
-     ATOMIC_SWITCH(OBJ, true, false, false))
+    ((void) *(OBJ),                             \
+     IF_LOCKLESS_ATOMIC(OBJ, true, false))
 
 #define atomic_store(DST, SRC) \
     atomic_store_explicit(DST, SRC, memory_order_seq_cst)
-#define atomic_store_explicit(DST, SRC, ORDER)                          \
-    (ATOMIC_SWITCH(DST,                                                 \
-                   (atomic_thread_fence(ORDER),                         \
-                    (DST)->value = (SRC),                               \
-                    atomic_thread_fence_if_seq_cst(ORDER)),             \
-                   locked_uint64_store(AS_LOCKED_UINT64(DST), SRC),     \
-                   locked_int64_store(AS_LOCKED_INT64(DST), SRC)),      \
-     (void) 0)
-
+#define atomic_store_explicit(DST, SRC, ORDER)          \
+    ({                                                  \
+        typeof(DST) dst__ = (DST);                      \
+        typeof(SRC) src__ = (SRC);                      \
+        memory_order order__ = (ORDER);                 \
+                                                        \
+        if (IS_LOCKLESS_ATOMIC(*dst__)) {               \
+            atomic_thread_fence(order__);               \
+            *dst__ = src__;                             \
+            atomic_thread_fence_if_seq_cst(order__);    \
+        } else {                                        \
+            atomic_store_locked(DST, SRC);              \
+        }                                               \
+        (void) 0;                                       \
+    })
 #define atomic_read(SRC, DST) \
     atomic_read_explicit(SRC, DST, memory_order_seq_cst)
-#define atomic_read_explicit(SRC, DST, ORDER)                           \
-    (ATOMIC_SWITCH(SRC,                                                 \
-                   (atomic_thread_fence_if_seq_cst(ORDER),              \
-                    *(DST) = (SRC)->value,                              \
-                    atomic_thread_fence(ORDER)),                        \
-                   *(DST) = locked_uint64_load(AS_LOCKED_UINT64(SRC)),  \
-                   *(DST) = locked_int64_load(AS_LOCKED_INT64(SRC))),   \
-     (void) 0)
+#define atomic_read_explicit(SRC, DST, ORDER)           \
+    ({                                                  \
+        typeof(DST) dst__ = (DST);                      \
+        typeof(SRC) src__ = (SRC);                      \
+        memory_order order__ = (ORDER);                 \
+                                                        \
+        if (IS_LOCKLESS_ATOMIC(*src__)) {               \
+            atomic_thread_fence_if_seq_cst(order__);    \
+            *dst__ = *src__;                            \
+        } else {                                        \
+            atomic_read_locked(SRC, DST);               \
+        }                                               \
+        (void) 0;                                       \
+    })
 
-#define atomic_op__(RMW, OP, ARG, ORIG)                                 \
-    (ATOMIC_SWITCH(RMW,                                                 \
-                   *(ORIG) = __sync_fetch_and_##OP(&(RMW)->value, ARG), \
-                   *(ORIG) = locked_uint64_##OP(AS_LOCKED_UINT64(RMW), ARG), \
-                   *(ORIG) = locked_int64_##OP(AS_LOCKED_INT64(RMW), ARG)), \
-     (void) 0)
+#define atomic_op__(RMW, OP, ARG, ORIG)                     \
+    ({                                                      \
+        typeof(RMW) rmw__ = (RMW);                          \
+        typeof(ARG) arg__ = (ARG);                          \
+        typeof(ORIG) orig__ = (ORIG);                       \
+                                                            \
+        if (IS_LOCKLESS_ATOMIC(*rmw__)) {                   \
+            *orig__ = __sync_fetch_and_##OP(rmw__, arg__);  \
+        } else {                                            \
+            atomic_op_locked(RMW, OP, ARG, ORIG);           \
+        }                                                   \
+    })
 
 #define atomic_add(RMW, ARG, ORIG) atomic_op__(RMW, add, ARG, ORIG)
 #define atomic_sub(RMW, ARG, ORIG) atomic_op__(RMW, sub, ARG, ORIG)

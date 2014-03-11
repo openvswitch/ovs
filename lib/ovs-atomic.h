@@ -74,10 +74,14 @@
  *
  *     (*) Not specified by C11.
  *
+ * Atomic types may also be obtained via ATOMIC(TYPE), e.g. ATOMIC(void *).
+ * Only basic integer types and pointer types can be made atomic this way,
+ * e.g. atomic structs are not supported.
+ *
  * The atomic version of a type doesn't necessarily have the same size or
  * representation as the ordinary version; for example, atomic_int might be a
- * typedef for a struct that also includes a mutex.  The range of an atomic
- * type does match the range of the corresponding ordinary type.
+ * typedef for a struct.  The range of an atomic type does match the range of
+ * the corresponding ordinary type.
  *
  * C11 says that one may use the _Atomic keyword in place of the typedef name,
  * e.g. "_Atomic int" instead of "atomic_int".  This library doesn't support
