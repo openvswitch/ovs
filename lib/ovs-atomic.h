@@ -102,15 +102,6 @@
  * ...
  *     atomic_init(&ai, 123);
  *
- * C11 does not hav an destruction function for atomic types, but some
- * implementations of the OVS atomics do need them.  Thus, the following
- * function is provided for destroying non-static atomic objects (A is any
- * atomic type):
- *
- *     void atomic_destroy(A *object);
- *
- *         Destroys 'object'.
- *
  *
  * Barriers
  * ========
@@ -224,19 +215,7 @@
  * ATOMIC_FLAG_INIT is an initializer for atomic_flag.  The initial state is
  * "clear".
  *
- * C11 does not have an initialization or destruction function for atomic_flag,
- * because implementations should not need one (one may simply
- * atomic_flag_clear() an uninitialized atomic_flag), but some implementations
- * of the OVS atomics do need them.  Thus, the following two functions are
- * provided for initializing and destroying non-static atomic_flags:
- *
- *     void atomic_flag_init(volatile atomic_flag *object);
- *
- *         Initializes 'object'.  The initial state is "clear".
- *
- *     void atomic_flag_destroy(volatile atomic_flag *object);
- *
- *         Destroys 'object'.
+ * An atomic_flag may also be initialized at runtime with atomic_flag_clear().
  *
  *
  * Operations
@@ -334,13 +313,6 @@ static inline void
 ovs_refcount_init(struct ovs_refcount *refcount)
 {
     atomic_init(&refcount->count, 1);
-}
-
-/* Destroys 'refcount'. */
-static inline void
-ovs_refcount_destroy(struct ovs_refcount *refcount)
-{
-    atomic_destroy(&refcount->count);
 }
 
 /* Increments 'refcount'. */

@@ -448,7 +448,6 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     *CONST_CAST(const struct dpif_class **, &dp->class) = class;
     *CONST_CAST(const char **, &dp->name) = xstrdup(name);
     ovs_refcount_init(&dp->ref_cnt);
-    atomic_flag_init(&dp->destroyed);
 
     ovs_mutex_init(&dp->flow_mutex);
     classifier_init(&dp->cls, NULL);
@@ -558,8 +557,6 @@ dp_netdev_free(struct dp_netdev *dp)
     ovs_mutex_destroy(&dp->flow_mutex);
     seq_destroy(dp->port_seq);
     hmap_destroy(&dp->ports);
-    atomic_flag_destroy(&dp->destroyed);
-    ovs_refcount_destroy(&dp->ref_cnt);
     latch_destroy(&dp->exit_latch);
     free(CONST_CAST(char *, dp->name));
     free(dp);
@@ -871,7 +868,6 @@ dp_netdev_flow_unref(struct dp_netdev_flow *flow)
         cls_rule_destroy(CONST_CAST(struct cls_rule *, &flow->cr));
         ovs_mutex_lock(&flow->mutex);
         dp_netdev_actions_unref(flow->actions);
-        ovs_refcount_destroy(&flow->ref_cnt);
         ovs_mutex_unlock(&flow->mutex);
         ovs_mutex_destroy(&flow->mutex);
         free(flow);
@@ -1579,7 +1575,6 @@ void
 dp_netdev_actions_unref(struct dp_netdev_actions *actions)
 {
     if (actions && ovs_refcount_unref(&actions->ref_cnt) == 1) {
-        ovs_refcount_destroy(&actions->ref_cnt);
         free(actions->actions);
         free(actions);
     }

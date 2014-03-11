@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1120,7 +1120,6 @@ dpif_linux_flow_dump_done(const struct dpif *dpif OVS_UNUSED, void *iter_)
     unsigned int nl_status = nl_dump_done(&iter->dump);
 
     atomic_read(&iter->status, &dump_status);
-    atomic_destroy(&iter->status);
     free(iter);
     return dump_status ? dump_status : nl_status;
 }

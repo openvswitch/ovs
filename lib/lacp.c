@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2012, 2013 Nicira, Inc.
+/* Copyright (c) 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -249,7 +249,6 @@ lacp_unref(struct lacp *lacp) OVS_EXCLUDED(mutex)
         hmap_destroy(&lacp->slaves);
         list_remove(&lacp->node);
         free(lacp->name);
-        ovs_refcount_destroy(&lacp->ref_cnt);
         free(lacp);
         ovs_mutex_unlock(&mutex);
     }

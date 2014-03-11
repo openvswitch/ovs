@@ -2615,7 +2615,6 @@ ofproto_rule_destroy__(struct rule *rule)
     cls_rule_destroy(CONST_CAST(struct cls_rule *, &rule->cr));
     rule_actions_unref(rule->actions);
     ovs_mutex_destroy(&rule->mutex);
-    ovs_refcount_destroy(&rule->ref_count);
     rule->ofproto->ofproto_class->rule_dealloc(rule);
 }
 
@@ -2656,7 +2655,6 @@ void
 rule_actions_unref(struct rule_actions *actions)
 {
     if (actions && ovs_refcount_unref(&actions->ref_count) == 1) {
-        ovs_refcount_destroy(&actions->ref_count);
         free(actions->ofpacts);
         free(actions);
     }
@@ -6705,7 +6703,6 @@ oftable_destroy(struct oftable *table)
     oftable_disable_eviction(table);
     classifier_destroy(&table->cls);
     free(table->name);
-    atomic_destroy(&table->config);
 }
 
 /* Changes the name of 'table' to 'name'.  If 'name' is NULL or the empty

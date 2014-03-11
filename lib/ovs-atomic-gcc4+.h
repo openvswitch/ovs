@@ -45,7 +45,6 @@ typedef enum {
 
 #define ATOMIC_VAR_INIT(VALUE) VALUE
 #define atomic_init(OBJECT, VALUE) (*(OBJECT) = (VALUE), (void) 0)
-#define atomic_destroy(OBJECT) ((void) (OBJECT))
 
 static inline void
 atomic_thread_fence(memory_order order)
@@ -145,18 +144,6 @@ typedef struct {
     int b;
 } atomic_flag;
 #define ATOMIC_FLAG_INIT { false }
-
-static inline void
-atomic_flag_init(volatile atomic_flag *object OVS_UNUSED)
-{
-    /* Nothing to do. */
-}
-
-static inline void
-atomic_flag_destroy(volatile atomic_flag *object OVS_UNUSED)
-{
-    /* Nothing to do. */
-}
 
 static inline bool
 atomic_flag_test_and_set(volatile atomic_flag *object)

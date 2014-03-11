@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 Nicira, Inc.
+/* Copyright (c) 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -469,7 +469,6 @@ bfd_unref(struct bfd *bfd) OVS_EXCLUDED(mutex)
         ovs_mutex_lock(&mutex);
         hmap_remove(all_bfds, &bfd->node);
         netdev_close(bfd->netdev);
-        ovs_refcount_destroy(&bfd->ref_cnt);
         free(bfd->name);
         free(bfd);
         ovs_mutex_unlock(&mutex);

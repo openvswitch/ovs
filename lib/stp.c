@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -332,7 +332,6 @@ stp_unref(struct stp *stp)
         list_remove(&stp->node);
         ovs_mutex_unlock(&mutex);
         free(stp->name);
-        ovs_refcount_destroy(&stp->ref_cnt);
         free(stp);
     }
 }

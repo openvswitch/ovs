@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -371,10 +371,6 @@ cfm_unref(struct cfm *cfm) OVS_EXCLUDED(mutex)
     hmap_destroy(&cfm->remote_mps);
     netdev_close(cfm->netdev);
     free(cfm->rmps_array);
-
-    atomic_destroy(&cfm->extended);
-    atomic_destroy(&cfm->check_tnl_key);
-    ovs_refcount_destroy(&cfm->ref_cnt);
 
     free(cfm);
 }

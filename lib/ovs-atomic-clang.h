@@ -26,7 +26,6 @@
 #define ATOMIC_VAR_INIT(VALUE) (VALUE)
 
 #define atomic_init(OBJECT, VALUE) __c11_atomic_init(OBJECT, VALUE)
-#define atomic_destroy(OBJECT) ((void) (OBJECT))
 
 /* Clang hard-codes these exact values internally but does not appear to
  * export any names for them. */

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Nicira, Inc.
+ * Copyright (c) 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,8 +59,6 @@
         ovs_assert(orig == 2);                          \
         atomic_read(&x, &value);                        \
         ovs_assert(value == 8);                         \
-                                                        \
-        atomic_destroy(&x);                             \
     }
 
 static void

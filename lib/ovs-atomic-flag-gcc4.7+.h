@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Nicira, Inc.
+ * Copyright (c) 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,18 +25,6 @@ typedef struct {
     unsigned char b;
 } atomic_flag;
 #define ATOMIC_FLAG_INIT { .b = false }
-
-static inline void
-atomic_flag_init(volatile atomic_flag *object OVS_UNUSED)
-{
-    /* Nothing to do. */
-}
-
-static inline void
-atomic_flag_destroy(volatile atomic_flag *object OVS_UNUSED)
-{
-    /* Nothing to do. */
-}
 
 static inline bool
 atomic_flag_test_and_set_explicit(volatile atomic_flag *object,

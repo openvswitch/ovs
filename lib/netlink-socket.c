@@ -822,7 +822,6 @@ nl_dump_done(struct nl_dump *dump)
         ovs_assert(status);
         ofpbuf_uninit(&buf);
     }
-    atomic_destroy(&dump->status);
     nl_pool_release(dump->sock);
     seq_destroy(dump->status_seq);
     return status >> 1;

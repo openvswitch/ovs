@@ -285,9 +285,6 @@ udpif_destroy(struct udpif *udpif)
     latch_destroy(&udpif->exit_latch);
     seq_destroy(udpif->reval_seq);
     seq_destroy(udpif->dump_seq);
-    atomic_destroy(&udpif->flow_limit);
-    atomic_destroy(&udpif->n_flows);
-    atomic_destroy(&udpif->n_flows_timestamp);
     ovs_mutex_destroy(&udpif->n_flows_mutex);
     free(udpif);
 }

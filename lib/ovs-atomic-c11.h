@@ -52,15 +52,3 @@
     (*(ORIG) = atomic_fetch_xor_explicit(RMW, ARG, ORDER), (void) 0)
 #define atomic_and_explicit(RMW, ARG, ORIG, ORDER) \
     (*(ORIG) = atomic_fetch_and_explicit(RMW, ARG, ORDER), (void) 0)
-
-static inline void
-atomic_flag_init(volatile atomic_flag *object OVS_UNUSED)
-{
-    /* Nothing to do. */
-}
-
-static inline void
-atomic_flag_destroy(volatile atomic_flag *object OVS_UNUSED)
-{
-    /* Nothing to do. */
-}
