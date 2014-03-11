@@ -145,6 +145,11 @@ is_pow2(uintmax_t x)
 #define RDP2_4(X) (RDP2_5(X) | (RDP2_5(X) >> 2))
 #define RDP2_5(X) (      (X) | (      (X) >> 1))
 
+/* This system's cache line size, in bytes.
+ * Being wrong hurts performance but not correctness. */
+#define CACHE_LINE_SIZE 64
+BUILD_ASSERT_DECL(IS_POW2(CACHE_LINE_SIZE));
+
 #ifndef MIN
 #define MIN(X, Y) ((X) < (Y) ? (X) : (Y))
 #endif

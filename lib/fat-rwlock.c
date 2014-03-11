@@ -25,11 +25,6 @@
 #include "ovs-thread.h"
 #include "random.h"
 
-/* This system's cache line size, in bytes.
- * Being wrong hurts performance but not correctness. */
-#define CACHE_LINE_SIZE 64      /* Correct for most CPUs. */
-BUILD_ASSERT_DECL(IS_POW2(CACHE_LINE_SIZE));
-
 struct fat_rwlock_slot {
     /* Membership in rwlock's list of "struct fat_rwlock_slot"s.
      *
