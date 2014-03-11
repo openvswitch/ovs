@@ -111,6 +111,9 @@ extern const char *program_name;
 /* Returns X rounded up to the nearest multiple of Y. */
 #define ROUND_UP(X, Y) (DIV_ROUND_UP(X, Y) * (Y))
 
+/* Returns the least number that, when added to X, yields a multiple of Y. */
+#define PAD_SIZE(X, Y) (ROUND_UP(X, Y) - (X))
+
 /* Returns X rounded down to the nearest multiple of Y. */
 #define ROUND_DOWN(X, Y) ((X) / (Y) * (Y))
 

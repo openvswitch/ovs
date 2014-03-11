@@ -3627,8 +3627,8 @@ ofpact_update_len(struct ofpbuf *ofpacts, struct ofpact *ofpact)
 void
 ofpact_pad(struct ofpbuf *ofpacts)
 {
-    unsigned int rem = ofpacts->size % OFPACT_ALIGNTO;
-    if (rem) {
-        ofpbuf_put_zeros(ofpacts, OFPACT_ALIGNTO - rem);
+    unsigned int pad = PAD_SIZE(ofpacts->size, OFPACT_ALIGNTO);
+    if (pad) {
+        ofpbuf_put_zeros(ofpacts, pad);
     }
 }

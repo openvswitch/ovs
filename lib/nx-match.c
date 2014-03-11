@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -730,7 +730,7 @@ nx_put_match(struct ofpbuf *b, const struct match *match,
 {
     int match_len = nx_put_raw(b, false, match, cookie, cookie_mask);
 
-    ofpbuf_put_zeros(b, ROUND_UP(match_len, 8) - match_len);
+    ofpbuf_put_zeros(b, PAD_SIZE(match_len, 8));
     return match_len;
 }
 
@@ -753,7 +753,7 @@ oxm_put_match(struct ofpbuf *b, const struct match *match)
 
     ofpbuf_put_uninit(b, sizeof *omh);
     match_len = nx_put_raw(b, true, match, cookie, cookie_mask) + sizeof *omh;
-    ofpbuf_put_zeros(b, ROUND_UP(match_len, 8) - match_len);
+    ofpbuf_put_zeros(b, PAD_SIZE(match_len, 8));
 
     omh = ofpbuf_at(b, start_len, sizeof *omh);
     omh->type = htons(OFPMT_OXM);
@@ -994,7 +994,7 @@ int
 nx_match_from_string(const char *s, struct ofpbuf *b)
 {
     int match_len = nx_match_from_string_raw(s, b);
-    ofpbuf_put_zeros(b, ROUND_UP(match_len, 8) - match_len);
+    ofpbuf_put_zeros(b, PAD_SIZE(match_len, 8));
     return match_len;
 }
 
@@ -1007,7 +1007,7 @@ oxm_match_from_string(const char *s, struct ofpbuf *b)
 
     ofpbuf_put_uninit(b, sizeof *omh);
     match_len = nx_match_from_string_raw(s, b) + sizeof *omh;
-    ofpbuf_put_zeros(b, ROUND_UP(match_len, 8) - match_len);
+    ofpbuf_put_zeros(b, PAD_SIZE(match_len, 8));
 
     omh = ofpbuf_at(b, start_len, sizeof *omh);
     omh->type = htons(OFPMT_OXM);

@@ -436,7 +436,7 @@ struct ofpact_meter {
  * Used for OFPIT11_WRITE_ACTIONS. */
 struct ofpact_nest {
     struct ofpact ofpact;
-    uint8_t pad[OFPACT_ALIGN(sizeof(struct ofpact)) - sizeof(struct ofpact)];
+    uint8_t pad[PAD_SIZE(sizeof(struct ofpact), OFPACT_ALIGNTO)];
     struct ofpact actions[];
 };
 BUILD_ASSERT_DECL(offsetof(struct ofpact_nest, actions) % OFPACT_ALIGNTO == 0);

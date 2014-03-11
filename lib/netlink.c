@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -174,7 +174,7 @@ nl_msg_put(struct ofpbuf *msg, const void *data, size_t size)
 void *
 nl_msg_put_uninit(struct ofpbuf *msg, size_t size)
 {
-    size_t pad = NLMSG_ALIGN(size) - size;
+    size_t pad = PAD_SIZE(size, NLMSG_ALIGNTO);
     char *p = ofpbuf_put_uninit(msg, size + pad);
     if (pad) {
         memset(p + size, 0, pad);
@@ -197,7 +197,7 @@ nl_msg_push(struct ofpbuf *msg, const void *data, size_t size)
 void *
 nl_msg_push_uninit(struct ofpbuf *msg, size_t size)
 {
-    size_t pad = NLMSG_ALIGN(size) - size;
+    size_t pad = PAD_SIZE(size, NLMSG_ALIGNTO);
     char *p = ofpbuf_push_uninit(msg, size + pad);
     if (pad) {
         memset(p + size, 0, pad);
