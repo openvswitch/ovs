@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -263,6 +263,10 @@ char *xstrdup(const char *) MALLOC_LIKE;
 char *xasprintf(const char *format, ...) PRINTF_FORMAT(1, 2) MALLOC_LIKE;
 char *xvasprintf(const char *format, va_list) PRINTF_FORMAT(1, 0) MALLOC_LIKE;
 void *x2nrealloc(void *p, size_t *n, size_t s);
+
+void *xmalloc_cacheline(size_t) MALLOC_LIKE;
+void *xzalloc_cacheline(size_t) MALLOC_LIKE;
+void free_cacheline(void *);
 
 void ovs_strlcpy(char *dst, const char *src, size_t size);
 void ovs_strzcpy(char *dst, const char *src, size_t size);
