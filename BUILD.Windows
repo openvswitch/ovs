@@ -58,6 +58,7 @@ or from a distribution tar ball.
 
 * Run make for the ported executables in the top source directory, e.g.:
 
+  % make lib/vswitch-idl.h lib/vtep-idl.h
   % make utilities/ovs-vsctl.exe ovsdb/ovsdb-server.exe
 
 OpenSSL, Open vSwitch and Visual C++
