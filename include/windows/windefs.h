@@ -23,6 +23,7 @@
 #include <windows.h>
 #include <BaseTsd.h>
 #include <io.h>
+#include <inttypes.h>
 
 #pragma comment(lib, "advapi32")
 

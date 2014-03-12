@@ -8,6 +8,10 @@
 #ifndef SFLOW_H
 #define SFLOW_H 1
 
+#ifdef _WIN32
+#include "windefs.h"
+#endif
+
 typedef enum {
     SFL_DSCLASS_IFINDEX = 0,
     SFL_DSCLASS_VLAN = 1,
