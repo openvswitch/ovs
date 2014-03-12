@@ -591,7 +591,7 @@ struct ofpbuf *ofputil_encode_port_mod(const struct ofputil_port_mod *,
 /* Abstract ofp_table_mod. */
 struct ofputil_table_mod {
     uint8_t table_id;         /* ID of the table, 0xff indicates all tables. */
-    uint32_t config;
+    enum ofp_table_config config;
 };
 
 enum ofperr ofputil_decode_table_mod(const struct ofp_header *,
