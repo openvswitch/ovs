@@ -15,6 +15,8 @@ Upstream Copyright Holders:
 	Copyright (c) 2011 Gaetano Catalli
 	Copyright (C) 2000-2003 Geoffrey Wossum (gwossum@acm.org)
 	Copyright (C) 2000 The NetBSD Foundation, Inc.
+	Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
+	Copyright (c) 1982, 1986, 1993 The Regents of the University of California.
 
 License:
 
@@ -83,6 +85,11 @@ License:
 
 	lib/getopt_long.c
 	include/windows/getopt.h
+
+* The following files are licensed under the 3-clause BSD-license
+
+	include/windows/netinet/icmp6.h
+	include/windows/netinet/ip6.h
 
 * The following components are dual-licensed under the
   GNU General Public License version 2 and the Apache License Version 2.0.

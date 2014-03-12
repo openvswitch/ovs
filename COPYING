@@ -26,6 +26,10 @@ The following files are licensed under the 2-clause BSD license.
     include/windows/getopt.h
     lib/getopt_long.c
 
+The following files are licensed under the 3-clause BSD-license
+    include/windows/netinet/icmp6.h
+    include/windows/netinet/ip6.h
+
 Files under the xenserver directory are licensed on a file-by-file
 basis.  Refer to each file for details.
 
