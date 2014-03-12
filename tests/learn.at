@@ -350,7 +350,8 @@ for i in `seq 1 10`; do
     fi
 done
 
-# Check that the first packet of each flow went out port 2 and the rest out port 3.
+# Check that the first packet of each flow went out port 2 and the rest out
+# port 3.
 AT_CHECK(
   [(ovs-ofctl dump-ports br0 2; ovs-ofctl dump-ports br0 3) | STRIP_XIDS], [0],
   [OFPST_PORT reply: 1 ports
@@ -401,7 +402,8 @@ for i in `seq 1 10`; do
     fi
 done
 
-# Check that the first packet of each flow went out port 2 and the rest out port 3.
+# Check that the first packet of each flow went out port 2 and the rest out
+# port 3.
 AT_CHECK(
   [(ovs-ofctl dump-ports br0 2; ovs-ofctl dump-ports br0 3) | STRIP_XIDS], [0],
   [OFPST_PORT reply: 1 ports
