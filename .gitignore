@@ -7,7 +7,12 @@
 *.loT
 *.mod.c
 *.o
-*.o
+*.obj
+*.exe
+*.exp
+*.ilk
+*.lib
+*.pdb
 *.pyc
 *.so
 *~
