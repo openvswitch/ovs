@@ -601,8 +601,10 @@ unsigned long long int ovsthread_counter_read(
 void assert_single_threaded_at(const char *where);
 #define assert_single_threaded() assert_single_threaded_at(SOURCE_LOCATOR)
 
+#ifndef _WIN32
 pid_t xfork_at(const char *where);
 #define xfork() xfork_at(SOURCE_LOCATOR)
+#endif
 
 void forbid_forking(const char *reason);
 bool may_fork(void);

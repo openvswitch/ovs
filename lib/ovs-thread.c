@@ -322,6 +322,7 @@ assert_single_threaded_at(const char *where)
     }
 }
 
+#ifndef _WIN32
 /* Forks the current process (checking that this is allowed).  Aborts with
  * VLOG_FATAL if fork() returns an error, and otherwise returns the value
  * returned by fork().
@@ -345,6 +346,7 @@ xfork_at(const char *where)
     }
     return pid;
 }
+#endif
 
 /* Notes that the process must not call fork() from now on, for the specified
  * 'reason'.  (The process may still fork() if it execs itself immediately
