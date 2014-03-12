@@ -433,6 +433,7 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
         static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
         static pid_t pid = 0;
 
+#ifndef _WIN32
         ovs_mutex_lock(&mutex);
         if (pid <= 0) {
             char *file_name = xasprintf("%s/%s", ovs_rundir(),
@@ -441,6 +442,7 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
             free(file_name);
         }
         ovs_mutex_unlock(&mutex);
+#endif
 
         if (pid < 0) {
             VLOG_ERR("%s: IPsec requires the ovs-monitor-ipsec daemon",
