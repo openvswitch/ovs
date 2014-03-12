@@ -76,7 +76,7 @@ struct in_band_remote {
 /* What to do to an in_band_rule. */
 enum in_band_op {
     ADD,                       /* Add the rule to ofproto's flow table. */
-    DELETE                     /* Delete the rule from ofproto's flow table. */
+    DEL                        /* Delete the rule from ofproto's flow table. */
 };
 
 /* A rule to add to or delete from ofproto's flow table.  */
@@ -265,7 +265,7 @@ update_rules(struct in_band *ib)
     /* Mark all the existing rules for deletion.  (Afterward we will re-add any
      * rules that are still valid.) */
     HMAP_FOR_EACH (ib_rule, hmap_node, &ib->rules) {
-        ib_rule->op = DELETE;
+        ib_rule->op = DEL;
     }
 
     if (ib->n_remotes && !eth_addr_is_zero(ib->local_mac)) {
@@ -385,7 +385,7 @@ in_band_run(struct in_band *ib)
                              ofpacts.data, ofpacts.size);
             break;
 
-        case DELETE:
+        case DEL:
             if (ofproto_delete_flow(ib->ofproto,
                                     &rule->match, rule->priority)) {
                 /* ofproto doesn't have the rule anymore so there's no reason
