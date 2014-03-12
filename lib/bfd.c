@@ -30,7 +30,6 @@
 #include "hmap.h"
 #include "list.h"
 #include "netdev.h"
-#include "netlink.h"
 #include "odp-util.h"
 #include "ofpbuf.h"
 #include "ovs-thread.h"
