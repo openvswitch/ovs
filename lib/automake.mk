@@ -243,6 +243,7 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/getopt_long.c \
 	lib/getrusage-windows.c \
 	lib/latch-windows.c \
+	lib/route-table-stub.c \
 	lib/stream-fd-windows.c
 else
 lib_libopenvswitch_la_SOURCES += \
