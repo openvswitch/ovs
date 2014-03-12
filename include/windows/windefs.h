@@ -24,6 +24,8 @@
 #include <BaseTsd.h>
 #include <io.h>
 
+#pragma comment(lib, "advapi32")
+
 #define inline __inline
 #define __func__ __FUNCTION__
 #define ssize_t SSIZE_T

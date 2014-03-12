@@ -21,8 +21,6 @@
 #include "poll-loop.h"
 #include "vlog.h"
 
-#pragma comment(lib, "advapi32")
-
 VLOG_DEFINE_THIS_MODULE(daemon);
 
 static bool detach;             /* Was --service specified? */
