@@ -138,7 +138,7 @@ fd_wait(struct stream *stream, enum stream_wait_type wait)
         break;
 
     default:
-        NOT_REACHED();
+        OVS_NOT_REACHED();
     }
 }
 
