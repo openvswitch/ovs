@@ -32,4 +32,6 @@
 #define u_int32_t uint32_t
 #define u_int64_t uint64_t
 
+typedef int pid_t;
+
 #endif /* windefs.h */
