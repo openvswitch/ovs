@@ -381,25 +381,31 @@ ADD_OF_PORTS([br0], 1, 2, 3)
 
 ovs-appctl time/stop
 # Set up flow table for TCPv4 port learning.
-AT_CHECK([[ovs-ofctl add-flow br0 'actions=load:3->NXM_NX_REG0[0..15],learn(table=0,hard_timeout=5,priority=65535,NXM_OF_ETH_SRC[],NXM_OF_VLAN_TCI[0..11],output:NXM_NX_REG0[0..15]),output:2']])
+AT_CHECK([[ovs-ofctl add-flow br0 'actions=load:3->NXM_NX_REG0[0..15],learn(table=0,hard_timeout=10,priority=65535,NXM_OF_ETH_SRC[],NXM_OF_VLAN_TCI[0..11],output:NXM_NX_REG0[0..15]),output:2']])
 
 # Trace some packets arriving.  The particular packets don't matter.
 for i in `seq 1 10`; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'
-    ovs-appctl time/warp 10
     if [[ $i -eq 1 ]]; then
         sleep 1
     fi
+    ovs-appctl time/warp 10
 done
 
 # Trace some packets arriving.  This is is a different flow from the previous.
-# Note that we advance time by 1 second between each packet here.
+# Note that we advance time by 2 second between each packet here.
 for i in `seq 1 10`; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:06,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'
-    ovs-appctl time/warp 1000
-    if [[ $i -eq 1 ]]; then
+    # Note: hard_timeout should fire immediately after #6 packet.
+    # #7 packet re-install the flow and the following 3 packets
+    # (#8, #9, #10) use the flow.
+    # it's difficult to predict the exact timing of rule expiry
+    # because it's affected by flow dumper thread via udpif_dump_seq.
+    # hard_timeout value for this test was chosen to overcome the uncertainty.
+    if [[ $i -eq 1 -o $i -eq 6 -o $i -eq 7 ]]; then
         sleep 1
     fi
+    ovs-appctl time/warp 2000
 done
 
 # Check that the first packet of each flow went out port 2 and the rest out
@@ -416,9 +422,10 @@ OFPST_PORT reply: 1 ports
 
 # Check for the learning entry.
 ovs-appctl time/warp 1000
+sleep 1
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0],
-[[ n_packets=3, n_bytes=180, actions=load:0x3->NXM_NX_REG0[0..15],learn(table=0,hard_timeout=5,priority=65535,NXM_OF_ETH_SRC[],NXM_OF_VLAN_TCI[0..11],output:NXM_NX_REG0[0..15]),output:2
- n_packets=3, n_bytes=180, hard_timeout=5, priority=65535,vlan_tci=0x0000/0x0fff,dl_src=50:54:00:00:00:06 actions=output:3
+[[ n_packets=3, n_bytes=180, actions=load:0x3->NXM_NX_REG0[0..15],learn(table=0,hard_timeout=10,priority=65535,NXM_OF_ETH_SRC[],NXM_OF_VLAN_TCI[0..11],output:NXM_NX_REG0[0..15]),output:2
+ n_packets=3, n_bytes=180, hard_timeout=10, priority=65535,vlan_tci=0x0000/0x0fff,dl_src=50:54:00:00:00:06 actions=output:3
 NXST_FLOW reply:
 ]])
 OVS_VSWITCHD_STOP
