@@ -439,7 +439,7 @@ struct ofpact_nest {
     uint8_t pad[OFPACT_ALIGN(sizeof(struct ofpact)) - sizeof(struct ofpact)];
     struct ofpact actions[];
 };
-BUILD_ASSERT_DECL(offsetof(struct ofpact_nest, actions) == OFPACT_ALIGNTO);
+BUILD_ASSERT_DECL(offsetof(struct ofpact_nest, actions) % OFPACT_ALIGNTO == 0);
 
 static inline size_t
 ofpact_nest_get_action_len(const struct ofpact_nest *on)
