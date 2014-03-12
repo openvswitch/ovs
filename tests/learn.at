@@ -372,7 +372,7 @@ NXST_FLOW reply:
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-# This test is much like the previous, but adds idle timeouts and sends
+# This test is much like the previous, but adds hard timeouts and sends
 # two different flows to the bridge. This tests that the statistics are
 # attributed correctly.
 AT_SETUP([learning action - self-modifying flow with hard_timeout])
