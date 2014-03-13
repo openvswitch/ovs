@@ -153,4 +153,49 @@ struct ofp14_role_prop_experimenter {
 };
 OFP_ASSERT(sizeof(struct ofp14_role_prop_experimenter) == 12);
 
+/* Bundle control message types */
+enum ofp14_bundle_ctrl_type {
+    OFPBCT_OPEN_REQUEST    = 0,
+    OFPBCT_OPEN_REPLY      = 1,
+    OFPBCT_CLOSE_REQUEST   = 2,
+    OFPBCT_CLOSE_REPLY     = 3,
+    OFPBCT_COMMIT_REQUEST  = 4,
+    OFPBCT_COMMIT_REPLY    = 5,
+    OFPBCT_DISCARD_REQUEST = 6,
+    OFPBCT_DISCARD_REPLY   = 7,
+};
+
+/* Bundle configuration flags. */
+enum ofp14_bundle_flags {
+    OFPBF_ATOMIC  = 1 << 0,  /* Execute atomically. */
+    OFPBF_ORDERED = 1 << 1,  /* Execute in specified order. */
+};
+
+/* Message structure for ONF_ET_BUNDLE_CONTROL. */
+struct ofp14_bundle_ctrl_msg {
+    ovs_be32 bundle_id;     /* Identify the bundle. */
+    ovs_be16 type;          /* OFPBCT_*. */
+    ovs_be16 flags;         /* Bitmap of OFPBF_* flags. */
+    /* Bundle Property list. */
+    /* struct ofp14_bundle_prop_header properties[0]; */
+};
+OFP_ASSERT(sizeof(struct ofp14_bundle_ctrl_msg) == 8);
+
+/* Message structure for OFP_BUNDLE_ADD_MESSAGE.
+* Adding a message in a bundle is done with. */
+struct ofp14_bundle_add_msg {
+    ovs_be32            bundle_id;  /* Identify the bundle. */
+    uint8_t             pad[2];     /* Align to 64 bits. */
+    ovs_be16            flags;      /* Bitmap of ONF_BF_* flags. */
+
+    struct ofp_header   message;    /* Message added to the bundle. */
+
+    /* If there is one property or more, 'message' is followed by:
+     * - Exactly (message.length + 7)/8*8 - (message.length) (between 0 and 7)
+     *   bytes of all-zero bytes */
+
+    /* Bundle Property list. */
+    /* struct ofp14_bundle_prop_header properties[0]; */
+};
+OFP_ASSERT(sizeof(struct ofp14_bundle_add_msg) == 16);
 #endif /* openflow/openflow-1.4.h */
