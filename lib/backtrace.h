@@ -18,6 +18,48 @@
 #define BACKTRACE_H 1
 
 #include <stdint.h>
+#include "dynamic-string.h"
+
+/* log_backtrace() will save the backtrace of a running program
+ * into the log at the DEBUG level.
+ *
+ * To use it, insert the following code to where backtrace is
+ * desired:
+ *       #include "backtrace.h"
+ *
+ *       log_backtrace();
+ *       // A message can be added with log_backtrace_msg("your message")
+ *
+ *
+ * A typical log will look like the following. The hex numbers listed after
+ * "backtrace" are the addresses of the backtrace.
+ *
+ * 2014-03-13T23:18:11.979Z|00002|backtrace(revalidator_6)|ERR|lib/dpif-netdev.c:1312: (backtrace: 0x00521f57 0x00460365 0x00463ea4 0x0046470b 0x0043b32d 0x0043bac3 0x0043bae2 0x0043943b 0x004c22b3 0x2b5b3ac94e9a 0x2b5b3b4a33fd)
+ *
+ * The following bash command can be used to  view backtrace in
+ * a more readable form.
+ * addr2line -p -e vswitchd/ovs-vswitchd <cut-and-paste back traces>
+ *
+ * An typical run and output will look like:
+ * addr2line -p -e vswitchd/ovs-vswitchd  0x00521f57 0x00460365 0x00463ea4
+ * 0x0046470b 0x0043b32d 0x0043bac3 0x0043bae2 0x0043943b 0x004c22b3
+ * 0x2b5b3ac94e9a 0x2b5b3b4a33fd
+ *
+ * openvswitch/lib/backtrace.c:33
+ * openvswitch/lib/dpif-netdev.c:1312
+ * openvswitch/lib/dpif.c:937
+ * openvswitch/lib/dpif.c:1258
+ * openvswitch/ofproto/ofproto-dpif-upcall.c:1440
+ * openvswitch/ofproto/ofproto-dpif-upcall.c:1595
+ * openvswitch/ofproto/ofproto-dpif-upcall.c:160
+ * openvswitch/ofproto/ofproto-dpif-upcall.c:717
+ * openvswitch/lib/ovs-thread.c:268
+ * ??:0
+ * ??:0
+ */
+
+#define log_backtrace() log_backtrace_at(NULL, SOURCE_LOCATOR);
+#define log_backtrace_msg(msg) log_backtrace_at(msg, SOURCE_LOCATOR);
 
 #define BACKTRACE_MAX_FRAMES 31
 
@@ -27,5 +69,6 @@ struct backtrace {
 };
 
 void backtrace_capture(struct backtrace *);
+void log_backtrace_at(const char *msg, const char *where);
 
 #endif /* backtrace.h */
