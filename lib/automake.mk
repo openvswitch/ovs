@@ -244,6 +244,7 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/getrusage-windows.c \
 	lib/latch-windows.c \
 	lib/route-table-stub.c \
+	lib/strsep.c \
 	lib/stream-fd-windows.c
 else
 lib_libopenvswitch_la_SOURCES += \

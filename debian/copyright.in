@@ -16,7 +16,7 @@ Upstream Copyright Holders:
 	Copyright (C) 2000-2003 Geoffrey Wossum (gwossum@acm.org)
 	Copyright (C) 2000 The NetBSD Foundation, Inc.
 	Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
-	Copyright (c) 1982, 1986, 1993 The Regents of the University of California.
+	Copyright (c) 1982, 1986, 1990, 1993 The Regents of the University of California.
 
 License:
 
@@ -90,6 +90,7 @@ License:
 
 	include/windows/netinet/icmp6.h
 	include/windows/netinet/ip6.h
+	lib/strsep.c
 
 * The following components are dual-licensed under the
   GNU General Public License version 2 and the Apache License Version 2.0.

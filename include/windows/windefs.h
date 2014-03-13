@@ -37,4 +37,6 @@
 
 typedef int pid_t;
 
+char *strsep(char **stringp, const char *delim);
+
 #endif /* windefs.h */
