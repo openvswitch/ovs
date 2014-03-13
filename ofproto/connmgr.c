@@ -1534,7 +1534,8 @@ connmgr_send_flow_removed(struct connmgr *mgr,
 static enum ofp_packet_in_reason
 wire_reason(struct ofconn *ofconn, const struct ofproto_packet_in *pin)
 {
-    if (pin->generated_by_table_miss && pin->up.reason == OFPR_ACTION) {
+    if (pin->miss_type == OFPROTO_PACKET_IN_MISS_FLOW
+        && pin->up.reason == OFPR_ACTION) {
         enum ofputil_protocol protocol = ofconn_get_protocol(ofconn);
 
         if (protocol != OFPUTIL_P_NONE

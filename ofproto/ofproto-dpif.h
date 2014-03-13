@@ -94,6 +94,7 @@ void rule_dpif_credit_stats(struct rule_dpif *rule ,
 
 bool rule_dpif_is_fail_open(const struct rule_dpif *);
 bool rule_dpif_is_table_miss(const struct rule_dpif *);
+bool rule_dpif_is_internal(const struct rule_dpif *);
 
 struct rule_actions *rule_dpif_get_actions(const struct rule_dpif *);
 

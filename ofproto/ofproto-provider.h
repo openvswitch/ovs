@@ -421,6 +421,7 @@ rule_is_table_miss(const struct rule *rule)
 {
     return rule->cr.priority == 0 && cls_rule_is_catchall(&rule->cr);
 }
+bool rule_is_internal(const struct rule *);
 
 /* A set of actions within a "struct rule".
  *

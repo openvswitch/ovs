@@ -2151,8 +2151,22 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
 
     pin->controller_id = controller_id;
     pin->send_len = len;
-    pin->generated_by_table_miss = (ctx->rule
-                                    && rule_dpif_is_table_miss(ctx->rule));
+    /* If a rule is a table-miss rule then this is
+     * a table-miss handled by a table-miss rule.
+     *
+     * Else, if rule is internal and has a controller action,
+     * the later being implied by the rule being processed here,
+     * then this is a table-miss handled without a table-miss rule.
+     *
+     * Otherwise this is not a table-miss. */
+    pin->miss_type = OFPROTO_PACKET_IN_NO_MISS;
+    if (ctx->rule) {
+        if (rule_dpif_is_table_miss(ctx->rule)) {
+            pin->miss_type = OFPROTO_PACKET_IN_MISS_FLOW;
+        } else if (rule_dpif_is_internal(ctx->rule)) {
+            pin->miss_type = OFPROTO_PACKET_IN_MISS_WITHOUT_FLOW;
+        }
+    }
     ofproto_dpif_send_packet_in(ctx->xbridge->ofproto, pin);
     ofpbuf_delete(packet);
 }

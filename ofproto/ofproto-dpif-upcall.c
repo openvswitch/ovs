@@ -1261,7 +1261,7 @@ handle_upcalls(struct handler *handler, struct list *upcalls)
             pin->up.cookie = OVS_BE64_MAX;
             flow_get_metadata(&miss->flow, &pin->up.fmd);
             pin->send_len = 0; /* Not used for flow table misses. */
-            pin->generated_by_table_miss = false;
+            pin->miss_type = OFPROTO_PACKET_IN_NO_MISS;
             ofproto_dpif_send_packet_in(miss->ofproto, pin);
         }
     }
