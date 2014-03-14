@@ -34,6 +34,6 @@ void udpif_destroy(struct udpif *);
 void udpif_revalidate(struct udpif *);
 void udpif_get_memory_usage(struct udpif *, struct simap *usage);
 struct seq *udpif_dump_seq(struct udpif *);
-void udpif_flush(void);
+void udpif_flush(struct udpif *);
 
 #endif /* ofproto-dpif-upcall.h */

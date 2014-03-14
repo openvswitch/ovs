@@ -1371,9 +1371,14 @@ type_get_memory_usage(const char *type, struct simap *usage)
 }
 
 static void
-flush(struct ofproto *ofproto OVS_UNUSED)
+flush(struct ofproto *ofproto_)
 {
-    udpif_flush();
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+    struct dpif_backer *backer = ofproto->backer;
+
+    if (backer) {
+        udpif_flush(backer->udpif);
+    }
 }
 
 static void
