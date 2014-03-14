@@ -1852,7 +1852,6 @@ xlate_recursively(struct xlate_ctx *ctx, struct rule_dpif *rule)
     ctx->rule = rule;
     actions = rule_dpif_get_actions(rule);
     do_xlate_actions(actions->ofpacts, actions->ofpacts_len, ctx);
-    rule_actions_unref(actions);
     ctx->rule = old_rule;
     ctx->recurse--;
 }
@@ -3187,7 +3186,6 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
     }
 
 out:
-    rule_actions_unref(actions);
     rule_dpif_unref(rule);
 }
 

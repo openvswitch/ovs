@@ -2043,8 +2043,9 @@ ofmonitor_report(struct connmgr *mgr, struct rule *rule,
                 ovs_mutex_unlock(&rule->mutex);
 
                 if (flags & NXFMF_ACTIONS) {
-                    fu.ofpacts = rule->actions->ofpacts;
-                    fu.ofpacts_len = rule->actions->ofpacts_len;
+                    struct rule_actions *actions = rule_get_actions(rule);
+                    fu.ofpacts = actions->ofpacts;
+                    fu.ofpacts_len = actions->ofpacts_len;
                 } else {
                     fu.ofpacts = NULL;
                     fu.ofpacts_len = 0;
