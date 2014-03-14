@@ -6,6 +6,7 @@
 #include_next <linux/flex_array.h>
 #else
 
+#include <linux/reciprocal_div.h>
 #include <linux/types.h>
 #include <asm/page.h>
 
@@ -27,7 +28,7 @@ struct flex_array {
 			int element_size;
 			int total_nr_elements;
 			int elems_per_part;
-			u32 reciprocal_elems;
+			struct reciprocal_value reciprocal_elems;
 			struct flex_array_part *parts[];
 		};
 		/*

@@ -93,8 +93,8 @@ struct flex_array *flex_array_alloc(int element_size, unsigned int total,
 					gfp_t flags)
 {
 	struct flex_array *ret;
+	struct reciprocal_value reciprocal_elems = {0};
 	int elems_per_part = 0;
-	int reciprocal_elems = 0;
 	int max_size = 0;
 
 	if (element_size) {
