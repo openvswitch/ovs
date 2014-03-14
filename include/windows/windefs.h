@@ -39,4 +39,7 @@ typedef int pid_t;
 
 char *strsep(char **stringp, const char *delim);
 
+#define srandom srand
+#define random rand
+
 #endif /* windefs.h */
