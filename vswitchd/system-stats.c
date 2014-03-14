@@ -85,7 +85,14 @@ get_page_size(void)
     static unsigned int cached;
 
     if (!cached) {
+#ifndef _WIN32
         long int value = sysconf(_SC_PAGESIZE);
+#else
+        long int value;
+        SYSTEM_INFO sysinfo;
+        GetSystemInfo(&sysinfo);
+        value = sysinfo.dwPageSize;
+#endif
         if (value >= 0) {
             cached = value;
         }
@@ -111,12 +118,20 @@ get_memory_stats(struct smap *stats)
 #endif
         int mem_total, mem_used;
 
+#ifndef _WIN32
         if (pagesize <= 0 || phys_pages <= 0 || avphys_pages <= 0) {
             return;
         }
 
         mem_total = phys_pages * (pagesize / 1024);
         mem_used = (phys_pages - avphys_pages) * (pagesize / 1024);
+#else
+        MEMORYSTATUS memory_status;
+        GlobalMemoryStatus(&memory_status);
+
+        mem_total = memory_status.dwTotalPhys;
+        mem_used = memory_status.dwTotalPhys - memory_status.dwAvailPhys;
+#endif
         smap_add_format(stats, "memory", "%d,%d", mem_total, mem_used);
     } else {
         static const char file_name[] = "/proc/meminfo";
@@ -398,6 +413,7 @@ get_process_info(pid_t pid, struct process_info *pinfo)
 static void
 get_process_stats(struct smap *stats)
 {
+#ifndef _WIN32
     struct dirent *de;
     DIR *dir;
 
@@ -448,6 +464,7 @@ get_process_stats(struct smap *stats)
     }
 
     closedir(dir);
+#endif /* _WIN32 */
 }
 
 static void

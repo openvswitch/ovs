@@ -7,6 +7,7 @@
 
 noinst_HEADERS += \
 	include/windows/arpa/inet.h \
+	include/windows/dirent.h \
 	include/windows/getopt.h \
 	include/windows/net/if.h \
 	include/windows/netdb.h \
