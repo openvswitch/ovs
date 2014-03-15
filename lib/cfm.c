@@ -397,6 +397,10 @@ cfm_run(struct cfm *cfm) OVS_EXCLUDED(mutex)
     if (timer_expired(&cfm->fault_timer)) {
         long long int interval = cfm_fault_interval(cfm);
         struct remote_mp *rmp, *rmp_next;
+        uint64_t old_flap_count = cfm->flap_count;
+        int old_health = cfm->health;
+        size_t old_rmps_array_len = cfm->rmps_array_len;
+        bool old_rmps_deleted = false;
         bool old_cfm_fault = cfm->fault;
         bool old_rmp_opup = cfm->remote_opup;
         bool demand_override;
@@ -423,7 +427,6 @@ cfm_run(struct cfm *cfm) OVS_EXCLUDED(mutex)
                 cfm->health = 0;
             } else {
                 int exp_ccm_recvd;
-                int old_health = cfm->health;
 
                 rmp = CONTAINER_OF(hmap_first(&cfm->remote_mps),
                                    struct remote_mp, node);
@@ -438,10 +441,6 @@ cfm_run(struct cfm *cfm) OVS_EXCLUDED(mutex)
                 cfm->health = MIN(cfm->health, 100);
                 rmp->num_health_ccm = 0;
                 ovs_assert(cfm->health >= 0 && cfm->health <= 100);
-
-                if (cfm->health != old_health) {
-                    seq_change(connectivity_seq_get());
-                }
             }
             cfm->health_interval = 0;
         }
@@ -461,6 +460,7 @@ cfm_run(struct cfm *cfm) OVS_EXCLUDED(mutex)
                           " %lldms", cfm->name, rmp->mpid,
                           time_msec() - rmp->last_rx);
                 if (!demand_override) {
+                    old_rmps_deleted = true;
                     hmap_remove(&cfm->remote_mps, &rmp->node);
                     free(rmp);
                 }
@@ -484,10 +484,6 @@ cfm_run(struct cfm *cfm) OVS_EXCLUDED(mutex)
             cfm->remote_opup = true;
         }
 
-        if (old_rmp_opup != cfm->remote_opup) {
-            seq_change(connectivity_seq_get());
-        }
-
         if (hmap_is_empty(&cfm->remote_mps)) {
             cfm->fault |= CFM_FAULT_RECV;
         }
@@ -509,7 +505,15 @@ cfm_run(struct cfm *cfm) OVS_EXCLUDED(mutex)
             if (old_cfm_fault == false || cfm->fault == false) {
                 cfm->flap_count++;
             }
+        }
 
+        /* These variables represent the cfm session status, it is desirable
+         * to update them to database immediately after change. */
+        if (old_health != cfm->health
+            || old_rmp_opup != cfm->remote_opup
+            || (old_rmps_array_len != cfm->rmps_array_len || old_rmps_deleted)
+            || old_cfm_fault != cfm->fault
+            || old_flap_count != cfm->flap_count) {
             seq_change(connectivity_seq_get());
         }
 
