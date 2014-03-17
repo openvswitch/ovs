@@ -774,6 +774,13 @@ A: With the Linux kernel, the Open vSwitch implementation of QoS has
    tc-htb(8), tc-hfsc(8)), web resources (e.g. http://lartc.org/), or
    mailing lists (e.g. http://vger.kernel.org/vger-lists.html#netdev).
 
+Q: Does Open vSwitch support OpenFlow meters?
+
+A: Since version 2.0, Open vSwitch has OpenFlow protocol support for
+   OpenFlow meters.  There is no implementation of meters in the Open
+   vSwitch software switch (neither the kernel-based nor userspace
+   switches).
+
 
 VLANs
 -----
