@@ -156,7 +156,7 @@ files.
 Patch
 -----
 
-The patch should be in the body of the email following the descrition,
+The patch should be in the body of the email following the description,
 separated by a blank line.
 
 Patches should be in "diff -up" format.  We recommend that you use Git
