@@ -270,7 +270,6 @@ netflow_expire__(struct netflow *nf, struct netflow_flow *nf_flow)
     }
 
     /* Update flow tracking data. */
-    nf_flow->created = 0;
     nf_flow->packet_count = 0;
     nf_flow->byte_count = 0;
     nf_flow->tcp_flags = 0;
