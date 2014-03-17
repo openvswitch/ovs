@@ -53,9 +53,9 @@ VLOG_DEFINE_THIS_MODULE(socket_util);
  * Thus, this file compiles all of the code regardless of the target, by
  * writing "if (LINUX)" instead of "#ifdef __linux__". */
 #ifdef __linux__
-#define LINUX 0
-#else
 #define LINUX 1
+#else
+#define LINUX 0
 #endif
 
 #ifndef O_DIRECTORY
