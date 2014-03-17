@@ -31,9 +31,11 @@
 #include "ofpbuf.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
+#include "ovs-thread.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "random.h"
+#include "socket-util.h"
 #include "util.h"
 #include "vlog.h"
 
@@ -68,6 +70,27 @@ static const struct pstream_class *pstream_classes[] = {
     &pssl_pstream_class,
 #endif
 };
+
+#ifdef _WIN32
+static void
+do_winsock_start(void)
+{
+    WSADATA wsaData;
+    int error;
+
+    error = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (error != 0) {
+        VLOG_FATAL("WSAStartup failed: %s", sock_strerror(sock_errno()));
+    }
+}
+
+static void
+winsock_start(void)
+{
+    static pthread_once_t once = PTHREAD_ONCE_INIT;
+    pthread_once(&once, do_winsock_start);
+}
+#endif
 
 /* Check the validity of the stream class structures. */
 static void
@@ -206,6 +229,10 @@ stream_open(const char *name, struct stream **streamp, uint8_t dscp)
     int error;
 
     COVERAGE_INC(stream_open);
+
+#ifdef _WIN32
+    winsock_start();
+#endif
 
     /* Look up the class. */
     error = stream_lookup_class(name, &class);
@@ -496,6 +523,10 @@ pstream_open(const char *name, struct pstream **pstreamp, uint8_t dscp)
     int error;
 
     COVERAGE_INC(pstream_open);
+
+#ifdef _WIN32
+    winsock_start();
+#endif
 
     /* Look up the class. */
     error = pstream_lookup_class(name, &class);
