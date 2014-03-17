@@ -3152,6 +3152,7 @@ group_destruct(struct ofgroup *group_)
 static enum ofperr
 group_modify(struct ofgroup *group_, struct ofgroup *victim_)
 {
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(group_->ofproto);
     struct group_dpif *group = group_dpif_cast(group_);
     struct group_dpif *victim = group_dpif_cast(victim_);
 
@@ -3161,6 +3162,8 @@ group_modify(struct ofgroup *group_, struct ofgroup *victim_)
     }
     group_construct_stats(group);
     ovs_mutex_unlock(&group->stats_mutex);
+
+    ofproto->backer->need_revalidate = REV_FLOW_TABLE;
 
     return 0;
 }
