@@ -120,14 +120,22 @@ set_dscp(int fd, uint8_t dscp)
     success = false;
     val = dscp << 2;
     if (setsockopt(fd, IPPROTO_IP, IP_TOS, &val, sizeof val)) {
+#ifndef _WIN32
         if (sock_errno() != ENOPROTOOPT) {
+#else
+        if (sock_errno() != WSAENOPROTOOPT) {
+#endif
             return sock_errno();
         }
     } else {
         success = true;
     }
     if (setsockopt(fd, IPPROTO_IPV6, IPV6_TCLASS, &val, sizeof val)) {
+#ifndef _WIN32
         if (sock_errno() != ENOPROTOOPT) {
+#else
+        if (sock_errno() != WSAENOPROTOOPT) {
+#endif
             return sock_errno();
         }
     } else {
