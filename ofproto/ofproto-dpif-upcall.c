@@ -32,6 +32,7 @@
 #include "ofproto-dpif-ipfix.h"
 #include "ofproto-dpif-sflow.h"
 #include "ofproto-dpif-xlate.h"
+#include "ovs-rcu.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "seq.h"
@@ -297,6 +298,8 @@ void
 udpif_set_threads(struct udpif *udpif, size_t n_handlers,
                   size_t n_revalidators)
 {
+    ovsrcu_quiesce_start();
+
     /* Stop the old threads (if any). */
     if (udpif->handlers &&
         (udpif->n_handlers != n_handlers
@@ -405,6 +408,8 @@ udpif_set_threads(struct udpif *udpif, size_t n_handlers,
         xpthread_create(&udpif->dispatcher, NULL, udpif_dispatcher, udpif);
         xpthread_create(&udpif->flow_dumper, NULL, udpif_flow_dumper, udpif);
     }
+
+    ovsrcu_quiesce_end();
 }
 
 /* Waits for all ongoing upcall translations to complete.  This ensures that

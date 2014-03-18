@@ -31,6 +31,7 @@
 #include "fatal-signal.h"
 #include "hash.h"
 #include "hmap.h"
+#include "ovs-rcu.h"
 #include "ovs-thread.h"
 #include "signals.h"
 #include "seq.h"
@@ -286,6 +287,12 @@ time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
             time_left = timeout_when - now;
         }
 
+        if (!time_left) {
+            ovsrcu_quiesce();
+        } else {
+            ovsrcu_quiesce_start();
+        }
+
 #ifndef _WIN32
         retval = poll(pollfds, n_pollfds, time_left);
         if (retval < 0) {
@@ -305,6 +312,10 @@ time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
             retval = -EINVAL;
         }
 #endif
+
+        if (time_left) {
+            ovsrcu_quiesce_end();
+        }
 
         if (deadline <= time_msec()) {
 #ifndef _WIN32

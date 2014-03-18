@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include "compiler.h"
 #include "hash.h"
+#include "ovs-rcu.h"
 #include "poll-loop.h"
 #include "socket-util.h"
 #include "util.h"
@@ -223,7 +224,12 @@ void
 ovs_mutex_cond_wait(pthread_cond_t *cond, const struct ovs_mutex *mutex_)
 {
     struct ovs_mutex *mutex = CONST_CAST(struct ovs_mutex *, mutex_);
-    int error = pthread_cond_wait(cond, &mutex->lock);
+    int error;
+
+    ovsrcu_quiesce_start();
+    error = pthread_cond_wait(cond, &mutex->lock);
+    ovsrcu_quiesce_end();
+
     if (OVS_UNLIKELY(error)) {
         ovs_abort(error, "pthread_cond_wait failed");
     }
@@ -264,6 +270,7 @@ ovsthread_wrapper(void *aux_)
     aux = *auxp;
     free(auxp);
 
+    ovsrcu_quiesce_end();
     return aux.start(aux.arg);
 }
 
@@ -277,6 +284,7 @@ xpthread_create(pthread_t *threadp, pthread_attr_t *attr,
 
     forbid_forking("multiple threads exist");
     multithreaded = true;
+    ovsrcu_quiesce_end();
 
     aux = xmalloc(sizeof *aux);
     aux->start = start;
@@ -307,6 +315,12 @@ ovsthread_once_done(struct ovsthread_once *once)
     ovs_mutex_unlock(&once->mutex);
 }
 
+bool
+single_threaded(void)
+{
+    return !multithreaded;
+}
+
 /* Asserts that the process has not yet created any threads (beyond the initial
  * thread).
  *

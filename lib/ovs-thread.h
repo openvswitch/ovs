@@ -598,6 +598,8 @@ void ovsthread_counter_inc(struct ovsthread_counter *, unsigned long long int);
 unsigned long long int ovsthread_counter_read(
     const struct ovsthread_counter *);
 
+bool single_threaded(void);
+
 void assert_single_threaded_at(const char *where);
 #define assert_single_threaded() assert_single_threaded_at(SOURCE_LOCATOR)
 
