@@ -448,6 +448,7 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     *CONST_CAST(const struct dpif_class **, &dp->class) = class;
     *CONST_CAST(const char **, &dp->name) = xstrdup(name);
     ovs_refcount_init(&dp->ref_cnt);
+    atomic_flag_clear(&dp->destroyed);
 
     ovs_mutex_init(&dp->flow_mutex);
     classifier_init(&dp->cls, NULL);
