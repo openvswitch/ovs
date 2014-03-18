@@ -949,7 +949,7 @@ command, above, for more details.
 .IP \fBarp_spa=\fIip\fR[\fB/\fInetmask\fR]
 .IQ \fBarp_tpa=\fIip\fR[\fB/\fInetmask\fR]
 When \fBdl_type\fR specifies either ARP or RARP, \fBarp_spa\fR and
-\fBarp_tha\fR match the source and target IPv4 address, respectively.
+\fBarp_tpa\fR match the source and target IPv4 address, respectively.
 An address may be specified as an IP address or host name
 (e.g. \fB192.168.1.1\fR or \fBwww.example.com\fR).  The optional
 \fInetmask\fR allows restricting a match to an IPv4 address prefix.
