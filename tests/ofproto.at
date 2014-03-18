@@ -1001,7 +1001,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow12 dump-tables br0], [0], [expout])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto - hard limits on flow table size (OpenFLow 1.0)])
+AT_SETUP([ofproto - hard limits on flow table size (OpenFlow 1.0)])
 OVS_VSWITCHD_START
 # Configure a maximum of 4 flows.
 AT_CHECK(
@@ -1045,7 +1045,7 @@ NXST_FLOW reply:
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto - hard limits on flow table size (OpenFLow 1.2)])
+AT_SETUP([ofproto - hard limits on flow table size (OpenFlow 1.2)])
 OVS_VSWITCHD_START
 # Configure a maximum of 4 flows.
 AT_CHECK(
