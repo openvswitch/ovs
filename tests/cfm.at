@@ -21,6 +21,44 @@ $3
 ])
 ])
 
+m4_define([CFM_CHECK_DB], [
+CFM_VSCTL_LIST_IFACE([$1], [cfm_fault_status], [cfm_fault_status    : [[$2]]])
+CFM_VSCTL_LIST_IFACE([$1], [cfm_flap_count], [cfm_flap_count      : $3])
+CFM_VSCTL_LIST_IFACE([$1], [cfm_health], [cfm_health          : [[$4]]])
+CFM_VSCTL_LIST_IFACE([$1], [cfm_remote_mpids], [cfm_remote_mpids    : [[$5]]])
+CFM_VSCTL_LIST_IFACE([$1], [cfm_remote_opstate], [cfm_remote_opstate  : $6])
+])
+
+# This test checks the update of cfm status to OVSDB at startup.
+# The cfm status should be updated to OVSDB within 3.5 * cfm_interval.
+AT_SETUP([cfm - check update ovsdb])
+#Create 2 bridges connected by patch ports and enable cfm
+OVS_VSWITCHD_START([add-br br1 -- \
+                    set bridge br1 datapath-type=dummy \
+                    other-config:hwaddr=aa:55:aa:56:00:00 -- \
+                    add-port br1 p1 -- set Interface p1 type=patch \
+                    options:peer=p0 -- \
+                    add-port br0 p0 -- set Interface p0 type=patch \
+                    options:peer=p1 -- \
+                    set Interface p0 other_config:cfm_interval=300 other_config:cfm_extended=true -- \
+                    set Interface p1 other_config:cfm_interval=300 other_config:cfm_extended=true])
+
+ovs-appctl time/stop
+
+AT_CHECK([ovs-vsctl set Interface p0 cfm_mpid=1])
+# check cfm status update in OVSDB.
+for i in `seq 0 14`; do ovs-appctl time/warp 100; done
+CFM_CHECK_DB([p0], [recv], [1], [], [], [up])
+
+# turn cfm on p1 off, should increment the cfm_flap_count on p0.
+AT_CHECK([ovs-vsctl set interface p1 cfm_mpid=2])
+for i in `seq 0 14`; do ovs-appctl time/warp 100; done
+CFM_CHECK_DB([p0], [], [2], [], [2], [up])
+CFM_CHECK_DB([p1], [], [0], [], [1], [up])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 # test cfm under demand mode.
 AT_SETUP([cfm - demand mode])
 #Create 2 bridges connected by patch ports and enable cfm
