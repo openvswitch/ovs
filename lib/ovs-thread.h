@@ -592,11 +592,24 @@ ovsthread_id_self(void)
  *
  * Fully thread-safe. */
 
-struct ovsthread_counter *ovsthread_counter_create(void);
-void ovsthread_counter_destroy(struct ovsthread_counter *);
-void ovsthread_counter_inc(struct ovsthread_counter *, unsigned long long int);
-unsigned long long int ovsthread_counter_read(
-    const struct ovsthread_counter *);
+struct ovsthread_stats {
+    struct ovs_mutex mutex;
+    void *volatile buckets[16];
+};
+
+void ovsthread_stats_init(struct ovsthread_stats *);
+void ovsthread_stats_destroy(struct ovsthread_stats *);
+
+void *ovsthread_stats_bucket_get(struct ovsthread_stats *,
+                                 void *(*new_bucket)(void));
+
+#define OVSTHREAD_STATS_FOR_EACH_BUCKET(BUCKET, IDX, STATS)             \
+    for ((IDX) = ovs_thread_stats_next_bucket(STATS, 0);                \
+         ((IDX) < ARRAY_SIZE((STATS)->buckets)                          \
+          ? ((BUCKET) = (STATS)->buckets[IDX], true)                    \
+          : false);                                                     \
+         (IDX) = ovs_thread_stats_next_bucket(STATS, (IDX) + 1))
+size_t ovs_thread_stats_next_bucket(const struct ovsthread_stats *, size_t);
 
 bool single_threaded(void);
 

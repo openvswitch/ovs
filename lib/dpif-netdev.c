@@ -147,10 +147,8 @@ struct dp_netdev {
 
     /* Statistics.
      *
-     * ovsthread_counter is internally synchronized. */
-    struct ovsthread_counter *n_hit;    /* Number of flow table matches. */
-    struct ovsthread_counter *n_missed; /* Number of flow table misses. */
-    struct ovsthread_counter *n_lost;   /* Number of misses not passed up. */
+     * ovsthread_stats is internally synchronized. */
+    struct ovsthread_stats stats; /* Contains 'struct dp_netdev_stats *'. */
 
     /* Ports.
      *
@@ -169,6 +167,22 @@ struct dp_netdev {
 static struct dp_netdev_port *dp_netdev_lookup_port(const struct dp_netdev *dp,
                                                     odp_port_t)
     OVS_REQ_RDLOCK(dp->port_rwlock);
+
+enum dp_stat_type {
+    DP_STAT_HIT,                /* Packets that matched in the flow table. */
+    DP_STAT_MISS,               /* Packets that did not match. */
+    DP_STAT_LOST,               /* Packets not passed up to the client. */
+    DP_N_STATS
+};
+
+/* Contained by struct dp_netdev's 'stats' member.  */
+struct dp_netdev_stats {
+    struct ovs_mutex mutex;          /* Protects 'n'. */
+
+    /* Indexed by DP_STAT_*, protected by 'mutex'. */
+    unsigned long long int n[DP_N_STATS] OVS_GUARDED;
+};
+
 
 /* A port in a netdev-based datapath. */
 struct dp_netdev_port {
@@ -462,9 +476,7 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     ovs_mutex_unlock(&dp->queue_mutex);
     dp->queue_seq = seq_create();
 
-    dp->n_hit = ovsthread_counter_create();
-    dp->n_missed = ovsthread_counter_create();
-    dp->n_lost = ovsthread_counter_create();
+    ovsthread_stats_init(&dp->stats);
 
     ovs_rwlock_init(&dp->port_rwlock);
     hmap_init(&dp->ports);
@@ -533,6 +545,8 @@ dp_netdev_free(struct dp_netdev *dp)
     OVS_REQUIRES(dp_netdev_mutex)
 {
     struct dp_netdev_port *port, *next;
+    struct dp_netdev_stats *bucket;
+    int i;
 
     shash_find_and_delete(&dp_netdevs, dp->name);
 
@@ -545,9 +559,12 @@ dp_netdev_free(struct dp_netdev *dp)
         do_del_port(dp, port->port_no);
     }
     ovs_rwlock_unlock(&dp->port_rwlock);
-    ovsthread_counter_destroy(dp->n_hit);
-    ovsthread_counter_destroy(dp->n_missed);
-    ovsthread_counter_destroy(dp->n_lost);
+
+    OVSTHREAD_STATS_FOR_EACH_BUCKET (bucket, i, &dp->stats) {
+        ovs_mutex_destroy(&bucket->mutex);
+        free_cacheline(bucket);
+    }
+    ovsthread_stats_destroy(&dp->stats);
 
     dp_netdev_purge_queues(dp);
     seq_destroy(dp->queue_seq);
@@ -605,14 +622,21 @@ static int
 dpif_netdev_get_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
+    struct dp_netdev_stats *bucket;
+    size_t i;
 
     fat_rwlock_rdlock(&dp->cls.rwlock);
     stats->n_flows = hmap_count(&dp->flow_table);
     fat_rwlock_unlock(&dp->cls.rwlock);
 
-    stats->n_hit = ovsthread_counter_read(dp->n_hit);
-    stats->n_missed = ovsthread_counter_read(dp->n_missed);
-    stats->n_lost = ovsthread_counter_read(dp->n_lost);
+    stats->n_hit = stats->n_missed = stats->n_lost = 0;
+    OVSTHREAD_STATS_FOR_EACH_BUCKET (bucket, i, &dp->stats) {
+        ovs_mutex_lock(&bucket->mutex);
+        stats->n_hit += bucket->n[DP_STAT_HIT];
+        stats->n_missed += bucket->n[DP_STAT_MISS];
+        stats->n_lost += bucket->n[DP_STAT_LOST];
+        ovs_mutex_unlock(&bucket->mutex);
+    }
     stats->n_masks = UINT32_MAX;
     stats->n_mask_hit = UINT64_MAX;
 
@@ -1712,6 +1736,25 @@ dp_netdev_flow_used(struct dp_netdev_flow *netdev_flow,
     netdev_flow->tcp_flags |= packet_get_tcp_flags(packet, &netdev_flow->flow);
 }
 
+static void *
+dp_netdev_stats_new_cb(void)
+{
+    struct dp_netdev_stats *bucket = xzalloc_cacheline(sizeof *bucket);
+    ovs_mutex_init(&bucket->mutex);
+    return bucket;
+}
+
+static void
+dp_netdev_count_packet(struct dp_netdev *dp, enum dp_stat_type type)
+{
+    struct dp_netdev_stats *bucket;
+
+    bucket = ovsthread_stats_bucket_get(&dp->stats, dp_netdev_stats_new_cb);
+    ovs_mutex_lock(&bucket->mutex);
+    bucket->n[type]++;
+    ovs_mutex_unlock(&bucket->mutex);
+}
+
 static void
 dp_netdev_port_input(struct dp_netdev *dp, struct ofpbuf *packet,
                      struct pkt_metadata *md)
@@ -1737,9 +1780,9 @@ dp_netdev_port_input(struct dp_netdev *dp, struct ofpbuf *packet,
                                   actions->actions, actions->size);
         dp_netdev_actions_unref(actions);
         dp_netdev_flow_unref(netdev_flow);
-        ovsthread_counter_inc(dp->n_hit, 1);
+        dp_netdev_count_packet(dp, DP_STAT_HIT);
     } else {
-        ovsthread_counter_inc(dp->n_missed, 1);
+        dp_netdev_count_packet(dp, DP_STAT_MISS);
         dp_netdev_output_userspace(dp, packet, DPIF_UC_MISS, &key, NULL);
     }
 }
@@ -1789,7 +1832,7 @@ dp_netdev_output_userspace(struct dp_netdev *dp, struct ofpbuf *packet,
 
         error = 0;
     } else {
-        ovsthread_counter_inc(dp->n_lost, 1);
+        dp_netdev_count_packet(dp, DP_STAT_LOST);
         error = ENOBUFS;
     }
     ovs_mutex_unlock(&dp->queue_mutex);

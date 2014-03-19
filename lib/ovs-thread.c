@@ -379,83 +379,53 @@ may_fork(void)
     return !must_not_fork;
 }
 
-/* ovsthread_counter.
- *
- * We implement the counter as an array of N_COUNTERS individual counters, each
- * with its own lock.  Each thread uses one of the counters chosen based on a
- * hash of the thread's ID, the idea being that, statistically, different
- * threads will tend to use different counters and therefore avoid
- * interfering with each other.
- *
- * Undoubtedly, better implementations are possible. */
+/* ovsthread_stats. */
 
-/* Basic counter structure. */
-struct ovsthread_counter__ {
-    struct ovs_mutex mutex;
-    unsigned long long int value;
-};
-
-/* Pad the basic counter structure to 64 bytes to avoid cache line
- * interference. */
-struct ovsthread_counter {
-    struct ovsthread_counter__ c;
-    char pad[ROUND_UP(sizeof(struct ovsthread_counter__), 64)
-             - sizeof(struct ovsthread_counter__)];
-};
-
-#define N_COUNTERS 16
-
-struct ovsthread_counter *
-ovsthread_counter_create(void)
+void
+ovsthread_stats_init(struct ovsthread_stats *stats)
 {
-    struct ovsthread_counter *c;
     int i;
 
-    c = xmalloc(N_COUNTERS * sizeof *c);
-    for (i = 0; i < N_COUNTERS; i++) {
-        ovs_mutex_init(&c[i].c.mutex);
-        c[i].c.value = 0;
+    ovs_mutex_init(&stats->mutex);
+    for (i = 0; i < ARRAY_SIZE(stats->buckets); i++) {
+        stats->buckets[i] = NULL;
     }
-    return c;
 }
 
 void
-ovsthread_counter_destroy(struct ovsthread_counter *c)
+ovsthread_stats_destroy(struct ovsthread_stats *stats)
 {
-    if (c) {
-        int i;
+    ovs_mutex_destroy(&stats->mutex);
+}
 
-        for (i = 0; i < N_COUNTERS; i++) {
-            ovs_mutex_destroy(&c[i].c.mutex);
+void *
+ovsthread_stats_bucket_get(struct ovsthread_stats *stats,
+                           void *(*new_bucket)(void))
+{
+    unsigned int idx = ovsthread_id_self() & (ARRAY_SIZE(stats->buckets) - 1);
+    void *bucket = stats->buckets[idx];
+    if (!bucket) {
+        ovs_mutex_lock(&stats->mutex);
+        bucket = stats->buckets[idx];
+        if (!bucket) {
+            bucket = stats->buckets[idx] = new_bucket();
         }
-        free(c);
+        ovs_mutex_unlock(&stats->mutex);
     }
+    return bucket;
 }
 
-void
-ovsthread_counter_inc(struct ovsthread_counter *c, unsigned long long int n)
+size_t
+ovs_thread_stats_next_bucket(const struct ovsthread_stats *stats, size_t i)
 {
-    c = &c[hash_int(ovsthread_id_self(), 0) % N_COUNTERS];
-
-    ovs_mutex_lock(&c->c.mutex);
-    c->c.value += n;
-    ovs_mutex_unlock(&c->c.mutex);
-}
-
-unsigned long long int
-ovsthread_counter_read(const struct ovsthread_counter *c)
-{
-    unsigned long long int sum;
-    int i;
-
-    sum = 0;
-    for (i = 0; i < N_COUNTERS; i++) {
-        ovs_mutex_lock(&c[i].c.mutex);
-        sum += c[i].c.value;
-        ovs_mutex_unlock(&c[i].c.mutex);
+    for (; i < ARRAY_SIZE(stats->buckets); i++) {
+        if (stats->buckets[i]) {
+            break;
+        }
     }
-    return sum;
+    return i;
 }
+
 
 /* Parses /proc/cpuinfo for the total number of physical cores on this system
  * across all CPU packages, not counting hyper-threads.
