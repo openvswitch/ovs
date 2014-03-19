@@ -196,7 +196,6 @@ hmap_capacity(const struct hmap *hmap)
 static inline bool
 hmap_is_empty(const struct hmap *hmap)
 {
-    atomic_thread_fence(memory_order_acquire);
     return hmap->n == 0;
 }
 
