@@ -992,23 +992,3 @@ packet_format_tcp_flags(struct ds *s, uint16_t tcp_flags)
         ds_put_cstr(s, "[800]");
     }
 }
-
-void pkt_metadata_init(struct pkt_metadata *md, const struct flow_tnl *tnl,
-                            const uint32_t skb_priority,
-                            const uint32_t pkt_mark,
-                            const union flow_in_port *in_port)
-{
-
-    tnl ? memcpy(&md->tunnel, tnl, sizeof(md->tunnel))
-        : memset(&md->tunnel, 0, sizeof(md->tunnel));
-
-    md->skb_priority = skb_priority;
-    md->pkt_mark = pkt_mark;
-    md->in_port.odp_port = in_port ? in_port->odp_port : ODPP_NONE;
-}
-
-void pkt_metadata_from_flow(struct pkt_metadata *md, const struct flow *flow)
-{
-    pkt_metadata_init(md, &flow->tunnel, flow->skb_priority,
-                           flow->pkt_mark, &flow->in_port);
-}

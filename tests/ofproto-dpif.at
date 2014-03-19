@@ -975,15 +975,15 @@ AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 
 # Check the packets that were output.
 AT_CHECK([ovs-ofctl parse-pcap p2.pcap], [0], [dnl
-arp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.0.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=00:00:00:00:00:00
-arp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.128.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=00:00:00:00:00:00
-arp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.128.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=40:44:44:44:44:41
-arp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.0.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=00:00:00:00:00:00
-arp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.128.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=00:00:00:00:00:00
-arp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.128.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=40:44:44:44:44:41
-arp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.0.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=00:00:00:00:00:00
-arp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.128.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=00:00:00:00:00:00
-arp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.128.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=40:44:44:44:44:41
+arp,metadata=0,in_port=ANY,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.0.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=00:00:00:00:00:00
+arp,metadata=0,in_port=ANY,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.128.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=00:00:00:00:00:00
+arp,metadata=0,in_port=ANY,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.128.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=40:44:44:44:44:41
+arp,metadata=0,in_port=ANY,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.0.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=00:00:00:00:00:00
+arp,metadata=0,in_port=ANY,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.128.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=00:00:00:00:00:00
+arp,metadata=0,in_port=ANY,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.128.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=40:44:44:44:44:41
+arp,metadata=0,in_port=ANY,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.0.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=00:00:00:00:00:00
+arp,metadata=0,in_port=ANY,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.128.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=00:00:00:00:00:00
+arp,metadata=0,in_port=ANY,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.128.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=40:44:44:44:44:41
 ])
 
 OVS_VSWITCHD_STOP

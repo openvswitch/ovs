@@ -1008,11 +1008,9 @@ handle_upcalls(struct handler *handler, struct list *upcalls)
         type = classify_upcall(upcall);
         if (type == MISS_UPCALL) {
             uint32_t hash;
-            struct pkt_metadata md;
+            struct pkt_metadata md = PKT_METADATA_INITIALIZER_FLOW(&flow);
 
-            pkt_metadata_from_flow(&md, &flow);
             flow_extract(packet, &md, &miss->flow);
-
             hash = flow_hash(&miss->flow, 0);
             existing_miss = flow_miss_find(&misses, ofproto, &miss->flow,
                                            hash);

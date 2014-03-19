@@ -59,7 +59,7 @@ char *
 ofp_packet_to_string(const void *data, size_t len)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
-    const struct pkt_metadata md = PKT_METADATA_INITIALIZER(ODPP_NONE);
+    const struct pkt_metadata md = PKT_METADATA_INITIALIZER(0);
     struct ofpbuf buf;
     struct flow flow;
 

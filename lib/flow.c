@@ -393,9 +393,7 @@ flow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
 
     if (md) {
         flow->tunnel = md->tunnel;
-        if (md->in_port.odp_port != ODPP_NONE) {
-            flow->in_port = md->in_port;
-        };
+        flow->in_port = md->in_port;
         flow->skb_priority = md->skb_priority;
         flow->pkt_mark = md->pkt_mark;
     }

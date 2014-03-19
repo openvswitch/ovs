@@ -3787,14 +3787,10 @@ parse_flow_and_packet(int argc, const char *argv[],
         if (!packet->size) {
             flow_compose(packet, flow);
         } else {
-            union flow_in_port in_port = flow->in_port;
-            struct pkt_metadata md;
+            struct pkt_metadata md = PKT_METADATA_INITIALIZER_FLOW(flow);
 
             /* Use the metadata from the flow and the packet argument
              * to reconstruct the flow. */
-            pkt_metadata_init(&md, NULL, flow->skb_priority,
-                                   flow->pkt_mark, &in_port);
-
             flow_extract(packet, &md, flow);
         }
     }
