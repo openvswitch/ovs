@@ -127,6 +127,7 @@ ovsrcu_quiesce_start(void)
 void
 ovsrcu_quiesce(void)
 {
+    ovsrcu_init();
     ovsrcu_perthread_get()->seqno = seq_read(global_seqno);
     seq_change(global_seqno);
 
