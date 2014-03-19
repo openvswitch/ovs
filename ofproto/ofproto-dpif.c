@@ -3964,12 +3964,10 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
     }
 
     if (rule || ofpacts) {
-        uint16_t tcp_flags;
-
-        tcp_flags = packet ? packet_get_tcp_flags(packet, flow) : 0;
         trace.result = ds;
         trace.flow = *flow;
-        xlate_in_init(&trace.xin, ofproto, flow, rule, tcp_flags, packet);
+        xlate_in_init(&trace.xin, ofproto, flow, rule, ntohs(flow->tcp_flags),
+                      packet);
         if (ofpacts) {
             trace.xin.ofpacts = ofpacts;
             trace.xin.ofpacts_len = ofpacts_len;

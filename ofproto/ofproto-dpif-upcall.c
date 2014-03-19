@@ -1031,7 +1031,7 @@ handle_upcalls(struct handler *handler, struct list *upcalls)
             } else {
                 miss = existing_miss;
             }
-            miss->stats.tcp_flags |= packet_get_tcp_flags(packet, &miss->flow);
+            miss->stats.tcp_flags |= ntohs(miss->flow.tcp_flags);
             miss->stats.n_bytes += packet->size;
             miss->stats.n_packets++;
 

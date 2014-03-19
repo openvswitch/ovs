@@ -778,7 +778,7 @@ void
 dpif_flow_stats_extract(const struct flow *flow, const struct ofpbuf *packet,
                         long long int used, struct dpif_flow_stats *stats)
 {
-    stats->tcp_flags = packet_get_tcp_flags(packet, flow);
+    stats->tcp_flags = ntohs(flow->tcp_flags);
     stats->n_bytes = packet->size;
     stats->n_packets = 1;
     stats->used = used;

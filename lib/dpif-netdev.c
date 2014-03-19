@@ -1713,7 +1713,7 @@ dp_netdev_flow_used(struct dp_netdev_flow *netdev_flow,
                     const struct ofpbuf *packet,
                     const struct flow *key)
 {
-    uint16_t tcp_flags = packet_get_tcp_flags(packet, key);
+    uint16_t tcp_flags = ntohs(key->tcp_flags);
     long long int now = time_msec();
     struct dp_netdev_flow_stats *bucket;
 
