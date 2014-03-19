@@ -1710,9 +1710,10 @@ dp_netdev_flow_stats_new_cb(void)
 
 static void
 dp_netdev_flow_used(struct dp_netdev_flow *netdev_flow,
-                    const struct ofpbuf *packet)
+                    const struct ofpbuf *packet,
+                    const struct flow *key)
 {
-    uint16_t tcp_flags = packet_get_tcp_flags(packet, &netdev_flow->flow);
+    uint16_t tcp_flags = packet_get_tcp_flags(packet, key);
     long long int now = time_msec();
     struct dp_netdev_flow_stats *bucket;
 
@@ -1762,7 +1763,7 @@ dp_netdev_port_input(struct dp_netdev *dp, struct ofpbuf *packet,
     if (netdev_flow) {
         struct dp_netdev_actions *actions;
 
-        dp_netdev_flow_used(netdev_flow, packet);
+        dp_netdev_flow_used(netdev_flow, packet, &key);
 
         actions = dp_netdev_flow_get_actions(netdev_flow);
         dp_netdev_execute_actions(dp, &key, packet, md,
