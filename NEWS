@@ -1,4 +1,4 @@
-v2.1.0 - xx xxx xxxx
+v2.1.0 - 19 Mar 2014
 ---------------------
    - Address prefix tracking support for flow tables.  New columns
      "prefixes" in OVS-DB table "Flow_Table" controls which packet

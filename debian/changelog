@@ -64,7 +64,7 @@ openvswitch (2.1.0-1) unstable; urgency=low
      users assumed incorrectly that ovs-controller was a necessary or
      desirable part of an Open vSwitch deployment.
 
- -- Open vSwitch team <dev@openvswitch.org>  Mon, 23 Dec 2013 18:07:18 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Wed, 19 Mar 2014 16:08:38 -0700
 
 openvswitch (2.0.0-1) unstable; urgency=low
    [ Open vSwitch team ]
