@@ -392,7 +392,7 @@ cfm_run(struct cfm *cfm) OVS_EXCLUDED(mutex)
     if (timer_expired(&cfm->fault_timer)) {
         long long int interval = cfm_fault_interval(cfm);
         struct remote_mp *rmp, *rmp_next;
-        bool old_cfm_fault = cfm->fault;
+        enum cfm_fault_reason old_cfm_fault = cfm->fault;
         bool demand_override;
         bool rmp_set_opup = false;
         bool rmp_set_opdown = false;
