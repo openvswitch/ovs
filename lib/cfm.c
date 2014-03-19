@@ -397,11 +397,11 @@ cfm_run(struct cfm *cfm) OVS_EXCLUDED(mutex)
     if (timer_expired(&cfm->fault_timer)) {
         long long int interval = cfm_fault_interval(cfm);
         struct remote_mp *rmp, *rmp_next;
+        enum cfm_fault_reason old_cfm_fault = cfm->fault;
         uint64_t old_flap_count = cfm->flap_count;
         int old_health = cfm->health;
         size_t old_rmps_array_len = cfm->rmps_array_len;
         bool old_rmps_deleted = false;
-        bool old_cfm_fault = cfm->fault;
         bool old_rmp_opup = cfm->remote_opup;
         bool demand_override;
         bool rmp_set_opup = false;
@@ -502,7 +502,7 @@ cfm_run(struct cfm *cfm) OVS_EXCLUDED(mutex)
             }
 
             /* If there is a flap, increments the counter. */
-            if (old_cfm_fault == false || cfm->fault == false) {
+            if (old_cfm_fault == 0 || cfm->fault == 0) {
                 cfm->flap_count++;
             }
         }
