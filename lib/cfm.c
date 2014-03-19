@@ -332,7 +332,7 @@ cfm_run(struct cfm *cfm)
     if (timer_expired(&cfm->fault_timer)) {
         long long int interval = cfm_fault_interval(cfm);
         struct remote_mp *rmp, *rmp_next;
-        bool old_cfm_fault = cfm->fault;
+        enum cfm_fault_reason old_cfm_fault = cfm->fault;
 
         cfm->fault = cfm->recv_fault;
         cfm->recv_fault = 0;
