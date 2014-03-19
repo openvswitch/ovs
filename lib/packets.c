@@ -895,22 +895,6 @@ packet_set_sctp_port(struct ofpbuf *packet, ovs_be16 src, ovs_be16 dst)
     sh->sctp_csum = old_csum ^ old_correct_csum ^ new_csum;
 }
 
-/* If 'packet' is a TCP packet, returns the TCP flags.  Otherwise, returns 0.
- *
- * 'flow' must be the flow corresponding to 'packet' and 'packet''s header
- * pointers must be properly initialized (e.g. with flow_extract()). */
-uint16_t
-packet_get_tcp_flags(const struct ofpbuf *packet, const struct flow *flow)
-{
-    if (dl_type_is_ip_any(flow->dl_type) &&
-        flow->nw_proto == IPPROTO_TCP && packet->l7) {
-        const struct tcp_header *tcp = packet->l4;
-        return TCP_FLAGS(tcp->tcp_ctl);
-    } else {
-        return 0;
-    }
-}
-
 const char *
 packet_tcp_flag_to_string(uint32_t flag)
 {
@@ -945,7 +929,7 @@ packet_tcp_flag_to_string(uint32_t flag)
 }
 
 /* Appends a string representation of the TCP flags value 'tcp_flags'
- * (e.g. obtained via packet_get_tcp_flags() or TCP_FLAGS) to 's', in the
+ * (e.g. from struct flow.tcp_flags or obtained via TCP_FLAGS) to 's', in the
  * format used by tcpdump. */
 void
 packet_format_tcp_flags(struct ds *s, uint16_t tcp_flags)
