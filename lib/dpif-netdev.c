@@ -1249,12 +1249,13 @@ dpif_netdev_recv_purge(struct dpif *dpif)
 
 static void
 dp_netdev_flow_used(struct dp_netdev_flow *netdev_flow,
-                    const struct ofpbuf *packet)
+                    const struct ofpbuf *packet,
+                    const struct flow *key)
 {
     netdev_flow->used = time_msec();
     netdev_flow->packet_count++;
     netdev_flow->byte_count += packet->size;
-    netdev_flow->tcp_flags |= packet_get_tcp_flags(packet, &netdev_flow->flow);
+    netdev_flow->tcp_flags |= packet_get_tcp_flags(packet, key);
 }
 
 static void
@@ -1272,7 +1273,7 @@ dp_netdev_port_input(struct dp_netdev *dp, struct dp_netdev_port *port,
     flow_extract(packet, 0, 0, NULL, &in_port_, &key);
     netdev_flow = dp_netdev_lookup_flow(dp, &key);
     if (netdev_flow) {
-        dp_netdev_flow_used(netdev_flow, packet);
+        dp_netdev_flow_used(netdev_flow, packet, &key);
         dp_netdev_execute_actions(dp, &key, packet,
                                   netdev_flow->actions,
                                   netdev_flow->actions_len);
