@@ -34,6 +34,15 @@ struct dpif_backer;
 struct OVS_LOCKABLE rule_dpif;
 struct OVS_LOCKABLE group_dpif;
 
+enum rule_dpif_lookup_verdict {
+    RULE_DPIF_LOOKUP_VERDICT_MATCH,         /* A match occurred. */
+    RULE_DPIF_LOOKUP_VERDICT_CONTROLLER,    /* A miss occurred and the packet
+                                             * should be passed to
+                                             * the controller. */
+    RULE_DPIF_LOOKUP_VERDICT_DROP,          /* A miss occurred and the packet
+                                             * should be dropped. */
+};
+
 /* For lock annotation below only. */
 extern struct ovs_rwlock xlate_rwlock;
 
@@ -67,12 +76,15 @@ extern struct ovs_rwlock xlate_rwlock;
 
 size_t ofproto_dpif_get_max_mpls_depth(const struct ofproto_dpif *);
 
-void rule_dpif_lookup(struct ofproto_dpif *, const struct flow *,
-                      struct flow_wildcards *, struct rule_dpif **rule);
+uint8_t rule_dpif_lookup(struct ofproto_dpif *, const struct flow *,
+                         struct flow_wildcards *, struct rule_dpif **rule);
 
-bool rule_dpif_lookup_in_table(struct ofproto_dpif *, const struct flow *,
-                               struct flow_wildcards *, uint8_t table_id,
-                               struct rule_dpif **rule);
+enum rule_dpif_lookup_verdict rule_dpif_lookup_from_table(struct ofproto_dpif *,
+                                                          const struct flow *,
+                                                          struct flow_wildcards *,
+                                                          bool force_controller_on_miss,
+                                                          uint8_t *table_id,
+                                                          struct rule_dpif **rule);
 
 void rule_dpif_ref(struct rule_dpif *);
 void rule_dpif_unref(struct rule_dpif *);

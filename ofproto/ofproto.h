@@ -433,6 +433,11 @@ void ofproto_get_vlan_usage(struct ofproto *, unsigned long int *vlan_bitmap);
 bool ofproto_has_vlan_usage_changed(const struct ofproto *);
 int ofproto_port_set_realdev(struct ofproto *, ofp_port_t vlandev_ofp_port,
                              ofp_port_t realdev_ofp_port, int vid);
+
+/* Table configuration */
+
+enum ofp_table_config table_get_config(const struct ofproto *,
+                                       uint8_t table_id);
 
 #ifdef  __cplusplus
 }

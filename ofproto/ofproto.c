@@ -5787,11 +5787,21 @@ handle_group_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     }
 }
 
+enum ofp_table_config
+table_get_config(const struct ofproto *ofproto, uint8_t table_id)
+{
+    unsigned int value;
+    atomic_read(&ofproto->tables[table_id].config, &value);
+    return (enum ofp_table_config)value;
+}
+
 static enum ofperr
 table_mod(struct ofproto *ofproto, const struct ofputil_table_mod *tm)
 {
-    /* XXX Reject all configurations because none are currently supported */
-    return OFPERR_OFPTMFC_BAD_CONFIG;
+    /* Only accept currently supported configurations */
+    if (tm->config & ~OFPTC11_TABLE_MISS_MASK) {
+        return OFPERR_OFPTMFC_BAD_CONFIG;
+    }
 
     if (tm->table_id == OFPTT_ALL) {
         int i;

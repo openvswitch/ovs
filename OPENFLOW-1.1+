@@ -54,11 +54,6 @@ OpenFlow 1.1
 The list of remaining work items for OpenFlow 1.1 is below.  It is
 probably incomplete.
 
-    * OFPT_TABLE_MOD message.  This is new in OF1.1, so we need to
-      implement it.  It should be implemented so that the default OVS
-      behavior does not change.  Simon Horman has posted a patch.
-      [required for OF1.1 and OF1.2]
-
     * MPLS.  Simon Horman maintains a patch series that adds this
       feature.  This is partially merged.
       [optional for OF1.1+]
