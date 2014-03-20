@@ -265,6 +265,9 @@ ofpbuf_resize__(struct ofpbuf *b, size_t new_headroom, size_t new_tailroom)
     new_allocated = new_headroom + b->size + new_tailroom;
 
     switch (b->source) {
+    case OFPBUF_DPDK:
+        OVS_NOT_REACHED();
+
     case OFPBUF_MALLOC:
         if (new_headroom == ofpbuf_headroom(b)) {
             new_base = xrealloc(b->base, new_allocated);
@@ -343,6 +346,8 @@ ofpbuf_prealloc_headroom(struct ofpbuf *b, size_t size)
 void
 ofpbuf_trim(struct ofpbuf *b)
 {
+    ovs_assert(b->source != OFPBUF_DPDK);
+
     if (b->source == OFPBUF_MALLOC
         && (ofpbuf_headroom(b) || ofpbuf_tailroom(b))) {
         ofpbuf_resize__(b, 0, 0);
@@ -562,6 +567,8 @@ void *
 ofpbuf_steal_data(struct ofpbuf *b)
 {
     void *p;
+    ovs_assert(b->source != OFPBUF_DPDK);
+
     if (b->source == OFPBUF_MALLOC && b->data == b->base) {
         p = b->data;
     } else {
