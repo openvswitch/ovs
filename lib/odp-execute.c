@@ -141,13 +141,14 @@ odp_execute_set_action(struct ofpbuf *packet, const struct nlattr *a,
 }
 
 static void
-odp_execute_actions__(void *dp, struct ofpbuf *packet, struct pkt_metadata *,
+odp_execute_actions__(void *dp, struct ofpbuf *packet, bool steal,
+                      struct pkt_metadata *,
                       const struct nlattr *actions, size_t actions_len,
                       odp_execute_cb dp_execute_action, bool more_actions);
 
 static void
-odp_execute_sample(void *dp, struct ofpbuf *packet, struct pkt_metadata *md,
-                   const struct nlattr *action,
+odp_execute_sample(void *dp, struct ofpbuf *packet, bool steal,
+                   struct pkt_metadata *md, const struct nlattr *action,
                    odp_execute_cb dp_execute_action, bool more_actions)
 {
     const struct nlattr *subactions = NULL;
@@ -175,13 +176,14 @@ odp_execute_sample(void *dp, struct ofpbuf *packet, struct pkt_metadata *md,
         }
     }
 
-    odp_execute_actions__(dp, packet, md, nl_attr_get(subactions),
+    odp_execute_actions__(dp, packet, steal, md, nl_attr_get(subactions),
                           nl_attr_get_size(subactions), dp_execute_action,
                           more_actions);
 }
 
 static void
-odp_execute_actions__(void *dp, struct ofpbuf *packet, struct pkt_metadata *md,
+odp_execute_actions__(void *dp, struct ofpbuf *packet, bool steal,
+                      struct pkt_metadata *md,
                       const struct nlattr *actions, size_t actions_len,
                       odp_execute_cb dp_execute_action, bool more_actions)
 {
@@ -196,10 +198,11 @@ odp_execute_actions__(void *dp, struct ofpbuf *packet, struct pkt_metadata *md,
         case OVS_ACTION_ATTR_OUTPUT:
         case OVS_ACTION_ATTR_USERSPACE:
             if (dp_execute_action) {
+                bool may_steal;
                 /* Allow 'dp_execute_action' to steal the packet data if we do
                  * not need it any more. */
-                bool steal = !more_actions && left <= NLA_ALIGN(a->nla_len);
-                dp_execute_action(dp, packet, md, a, steal);
+                may_steal = steal && (!more_actions && left <= NLA_ALIGN(a->nla_len));
+                dp_execute_action(dp, packet, md, a, may_steal);
             }
             break;
 
@@ -228,7 +231,7 @@ odp_execute_actions__(void *dp, struct ofpbuf *packet, struct pkt_metadata *md,
             break;
 
         case OVS_ACTION_ATTR_SAMPLE:
-            odp_execute_sample(dp, packet, md, a, dp_execute_action,
+            odp_execute_sample(dp, packet, steal, md, a, dp_execute_action,
                                more_actions || left > NLA_ALIGN(a->nla_len));
             break;
 
@@ -240,10 +243,16 @@ odp_execute_actions__(void *dp, struct ofpbuf *packet, struct pkt_metadata *md,
 }
 
 void
-odp_execute_actions(void *dp, struct ofpbuf *packet, struct pkt_metadata *md,
+odp_execute_actions(void *dp, struct ofpbuf *packet, bool steal,
+                    struct pkt_metadata *md,
                     const struct nlattr *actions, size_t actions_len,
                     odp_execute_cb dp_execute_action)
 {
-    odp_execute_actions__(dp, packet, md, actions, actions_len,
+    odp_execute_actions__(dp, packet, steal, md, actions, actions_len,
                           dp_execute_action, false);
+
+    if (!actions_len && steal) {
+        /* Drop action. */
+        ofpbuf_delete(packet);
+    }
 }

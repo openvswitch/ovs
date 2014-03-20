@@ -69,10 +69,6 @@ VLOG_DEFINE_THIS_MODULE(dpif_netdev);
 /* Configuration parameters. */
 enum { MAX_FLOWS = 65536 };     /* Maximum number of flows in flow table. */
 
-/* Enough headroom to add a vlan tag, plus an extra 2 bytes to allow IP
- * headers to be aligned on a 4-byte boundary.  */
-enum { DP_NETDEV_HEADROOM = 2 + VLAN_HEADER_LEN };
-
 /* Queues. */
 enum { MAX_QUEUE_LEN = 128 };   /* Maximum number of packets per queue. */
 enum { QUEUE_MASK = MAX_QUEUE_LEN - 1 };
@@ -343,7 +339,7 @@ static int dp_netdev_output_userspace(struct dp_netdev *dp, struct ofpbuf *,
                                       const struct nlattr *userdata)
     OVS_EXCLUDED(dp->queue_rwlock);
 static void dp_netdev_execute_actions(struct dp_netdev *dp,
-                                      const struct flow *, struct ofpbuf *,
+                                      const struct flow *, struct ofpbuf *, bool may_steal,
                                       struct pkt_metadata *,
                                       const struct nlattr *actions,
                                       size_t actions_len)
@@ -1468,8 +1464,8 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
     flow_extract(execute->packet, md, &key);
 
     ovs_rwlock_rdlock(&dp->port_rwlock);
-    dp_netdev_execute_actions(dp, &key, execute->packet, md, execute->actions,
-                              execute->actions_len);
+    dp_netdev_execute_actions(dp, &key, execute->packet, false, md,
+                              execute->actions, execute->actions_len);
     ovs_rwlock_unlock(&dp->port_rwlock);
 
     return 0;
@@ -1682,12 +1678,10 @@ dp_forwarder_main(void *f_)
 {
     struct dp_forwarder *f = f_;
     struct dp_netdev *dp = f->dp;
-    struct ofpbuf packet;
 
     f->name = xasprintf("forwarder_%u", ovsthread_id_self());
     set_subprogram_name("%s", f->name);
 
-    ofpbuf_init(&packet, 0);
     while (!latch_is_set(&dp->exit_latch)) {
         bool received_anything;
         int i;
@@ -1701,25 +1695,19 @@ dp_forwarder_main(void *f_)
                 if (port->rx
                     && port->node.hash >= f->min_hash
                     && port->node.hash <= f->max_hash) {
-                    int buf_size;
+                    struct ofpbuf *packets[NETDEV_MAX_RX_BATCH];
+                    int count;
                     int error;
-                    int mtu;
 
-                    if (netdev_get_mtu(port->netdev, &mtu)) {
-                        mtu = ETH_PAYLOAD_MAX;
-                    }
-                    buf_size = DP_NETDEV_HEADROOM + VLAN_ETH_HEADER_LEN + mtu;
-
-                    ofpbuf_clear(&packet);
-                    ofpbuf_reserve_with_tailroom(&packet, DP_NETDEV_HEADROOM,
-                                                 buf_size);
-
-                    error = netdev_rx_recv(port->rx, &packet);
+                    error = netdev_rx_recv(port->rx, packets, &count);
                     if (!error) {
+                        int i;
                         struct pkt_metadata md
                             = PKT_METADATA_INITIALIZER(port->port_no);
 
-                        dp_netdev_port_input(dp, &packet, &md);
+                        for (i = 0; i < count; i++) {
+                            dp_netdev_port_input(dp, packets[i], &md);
+                        }
                         received_anything = true;
                     } else if (error != EAGAIN && error != EOPNOTSUPP) {
                         static struct vlog_rate_limit rl
@@ -1755,7 +1743,6 @@ dp_forwarder_main(void *f_)
 
         poll_block();
     }
-    ofpbuf_uninit(&packet);
 
     free(f->name);
 
@@ -1853,6 +1840,7 @@ dp_netdev_port_input(struct dp_netdev *dp, struct ofpbuf *packet,
     struct flow key;
 
     if (packet->size < ETH_HEADER_LEN) {
+        ofpbuf_delete(packet);
         return;
     }
     flow_extract(packet, md, &key);
@@ -1863,7 +1851,7 @@ dp_netdev_port_input(struct dp_netdev *dp, struct ofpbuf *packet,
         dp_netdev_flow_used(netdev_flow, packet, &key);
 
         actions = dp_netdev_flow_get_actions(netdev_flow);
-        dp_netdev_execute_actions(dp, &key, packet, md,
+        dp_netdev_execute_actions(dp, &key, packet, true, md,
                                   actions->actions, actions->size);
         dp_netdev_count_packet(dp, DP_STAT_HIT);
     } else if (dp->handler_queues) {
@@ -1871,6 +1859,7 @@ dp_netdev_port_input(struct dp_netdev *dp, struct ofpbuf *packet,
         dp_netdev_output_userspace(dp, packet,
                                    flow_hash_5tuple(&key, 0) % dp->n_handlers,
                                    DPIF_UC_MISS, &key, NULL);
+        ofpbuf_delete(packet);
     }
 }
 
@@ -1899,6 +1888,7 @@ dp_netdev_output_userspace(struct dp_netdev *dp, struct ofpbuf *packet,
         if (userdata) {
             buf_size += NLA_ALIGN(userdata->nla_len);
         }
+        buf_size += packet->size;
         ofpbuf_init(buf, buf_size);
 
         /* Put ODP flow. */
@@ -1912,10 +1902,8 @@ dp_netdev_output_userspace(struct dp_netdev *dp, struct ofpbuf *packet,
                                           NLA_ALIGN(userdata->nla_len));
         }
 
-        /* Steal packet data. */
-        ovs_assert(packet->source == OFPBUF_MALLOC);
-        upcall->packet = *packet;
-        ofpbuf_use(packet, NULL, 0);
+        upcall->packet.data = ofpbuf_put(buf, packet->data, packet->size);
+        upcall->packet.size = packet->size;
 
         seq_change(q->seq);
 
@@ -1958,18 +1946,11 @@ dp_execute_cb(void *aux_, struct ofpbuf *packet,
 
         userdata = nl_attr_find_nested(a, OVS_USERSPACE_ATTR_USERDATA);
 
-        /* Make a copy if we are not allowed to steal the packet's data. */
-        if (!may_steal) {
-            packet = ofpbuf_clone_with_headroom(packet, DP_NETDEV_HEADROOM);
-        }
         dp_netdev_output_userspace(aux->dp, packet,
                                    flow_hash_5tuple(aux->key, 0)
                                        % aux->dp->n_handlers,
                                    DPIF_UC_ACTION, aux->key,
                                    userdata);
-        if (!may_steal) {
-            ofpbuf_uninit(packet);
-        }
         break;
     }
     case OVS_ACTION_ATTR_PUSH_VLAN:
@@ -1982,17 +1963,23 @@ dp_execute_cb(void *aux_, struct ofpbuf *packet,
     case __OVS_ACTION_ATTR_MAX:
         OVS_NOT_REACHED();
     }
+
+    if (may_steal) {
+        ofpbuf_delete(packet);
+    }
 }
 
 static void
 dp_netdev_execute_actions(struct dp_netdev *dp, const struct flow *key,
-                          struct ofpbuf *packet, struct pkt_metadata *md,
+                          struct ofpbuf *packet, bool may_steal,
+                          struct pkt_metadata *md,
                           const struct nlattr *actions, size_t actions_len)
     OVS_REQ_RDLOCK(dp->port_rwlock)
 {
     struct dp_netdev_execute_aux aux = {dp, key};
 
-    odp_execute_actions(&aux, packet, md, actions, actions_len, dp_execute_cb);
+    odp_execute_actions(&aux, packet, may_steal, md,
+                        actions, actions_len, dp_execute_cb);
 }
 
 const struct dpif_class dpif_netdev_class = {

@@ -52,6 +52,7 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/dhparams.h \
 	lib/dirs.h \
 	lib/dpif-netdev.c \
+	lib/dpif-netdev.h \
 	lib/dpif-provider.h \
 	lib/dpif.c \
 	lib/dpif.h \

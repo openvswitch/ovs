@@ -2135,7 +2135,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
                                           &ctx->xout->odp_actions,
                                           &ctx->xout->wc);
 
-    odp_execute_actions(NULL, packet, &md, ctx->xout->odp_actions.data,
+    odp_execute_actions(NULL, packet, false, &md, ctx->xout->odp_actions.data,
                         ctx->xout->odp_actions.size, NULL);
 
     pin = xmalloc(sizeof *pin);

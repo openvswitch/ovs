@@ -161,7 +161,7 @@ void netdev_rx_close(struct netdev_rx *);
 
 const char *netdev_rx_get_name(const struct netdev_rx *);
 
-int netdev_rx_recv(struct netdev_rx *, struct ofpbuf *);
+int netdev_rx_recv(struct netdev_rx *rx, struct ofpbuf **buffers, int *cnt);
 void netdev_rx_wait(struct netdev_rx *);
 int netdev_rx_drain(struct netdev_rx *);
 
@@ -312,6 +312,8 @@ typedef void netdev_dump_queue_stats_cb(unsigned int queue_id,
                                         void *aux);
 int netdev_dump_queue_stats(const struct netdev *,
                             netdev_dump_queue_stats_cb *, void *aux);
+
+enum { NETDEV_MAX_RX_BATCH = 256 };     /* Maximum number packets in rx_recv() batch. */
 
 #ifdef  __cplusplus
 }

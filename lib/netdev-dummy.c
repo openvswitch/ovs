@@ -21,6 +21,7 @@
 #include <errno.h>
 
 #include "connectivity.h"
+#include "dpif-netdev.h"
 #include "flow.h"
 #include "list.h"
 #include "netdev-provider.h"
@@ -755,12 +756,11 @@ netdev_dummy_rx_dealloc(struct netdev_rx *rx_)
 }
 
 static int
-netdev_dummy_rx_recv(struct netdev_rx *rx_, struct ofpbuf *buffer)
+netdev_dummy_rx_recv(struct netdev_rx *rx_, struct ofpbuf **arr, int *c)
 {
     struct netdev_rx_dummy *rx = netdev_rx_dummy_cast(rx_);
     struct netdev_dummy *netdev = netdev_dummy_cast(rx->up.netdev);
     struct ofpbuf *packet;
-    int retval;
 
     ovs_mutex_lock(&netdev->mutex);
     if (!list_is_empty(&rx->recv_queue)) {
@@ -774,22 +774,15 @@ netdev_dummy_rx_recv(struct netdev_rx *rx_, struct ofpbuf *buffer)
     if (!packet) {
         return EAGAIN;
     }
+    ovs_mutex_lock(&netdev->mutex);
+    netdev->stats.rx_packets++;
+    netdev->stats.rx_bytes += packet->size;
+    ovs_mutex_unlock(&netdev->mutex);
 
-    if (packet->size <= ofpbuf_tailroom(buffer)) {
-        memcpy(buffer->data, packet->data, packet->size);
-        buffer->size += packet->size;
-        retval = 0;
-
-        ovs_mutex_lock(&netdev->mutex);
-        netdev->stats.rx_packets++;
-        netdev->stats.rx_bytes += packet->size;
-        ovs_mutex_unlock(&netdev->mutex);
-    } else {
-        retval = EMSGSIZE;
-    }
-    ofpbuf_delete(packet);
-
-    return retval;
+    dp_packet_pad(packet);
+    arr[0] = packet;
+    *c = 1;
+    return 0;
 }
 
 static void

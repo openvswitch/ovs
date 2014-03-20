@@ -551,21 +551,12 @@ netdev_rx_close(struct netdev_rx *rx)
     }
 }
 
-/* Attempts to receive a packet from 'rx' into the tailroom of 'buffer', which
- * must initially be empty.  If successful, returns 0 and increments
- * 'buffer->size' by the number of bytes in the received packet, otherwise a
- * positive errno value.
+/* Attempts to receive batch of packets from 'rx'.
  *
  * Returns EAGAIN immediately if no packet is ready to be received.
  *
  * Returns EMSGSIZE, and discards the packet, if the received packet is longer
  * than 'ofpbuf_tailroom(buffer)'.
- *
- * Implementations may make use of VLAN_HEADER_LEN bytes of tailroom to
- * add a VLAN header which is obtained out-of-band to the packet. If
- * this occurs then VLAN_HEADER_LEN bytes of tailroom will no longer be
- * available for the packet, otherwise it may be used for the packet
- * itself.
  *
  * It is advised that the tailroom of 'buffer' should be
  * VLAN_HEADER_LEN bytes longer than the MTU to allow space for an
@@ -575,23 +566,15 @@ netdev_rx_close(struct netdev_rx *rx)
  * This function may be set to null if it would always return EOPNOTSUPP
  * anyhow. */
 int
-netdev_rx_recv(struct netdev_rx *rx, struct ofpbuf *buffer)
+netdev_rx_recv(struct netdev_rx *rx, struct ofpbuf **buffers, int *cnt)
 {
     int retval;
 
-    ovs_assert(buffer->size == 0);
-    ovs_assert(ofpbuf_tailroom(buffer) >= ETH_TOTAL_MIN);
-
-    retval = rx->netdev->netdev_class->rx_recv(rx, buffer);
+    retval = rx->netdev->netdev_class->rx_recv(rx, buffers, cnt);
     if (!retval) {
         COVERAGE_INC(netdev_received);
-        if (buffer->size < ETH_TOTAL_MIN) {
-            ofpbuf_put_zeros(buffer, ETH_TOTAL_MIN - buffer->size);
-        }
-        return 0;
-    } else {
-        return retval;
     }
+    return retval;
 }
 
 /* Arranges for poll_block() to wake up when a packet is ready to be received

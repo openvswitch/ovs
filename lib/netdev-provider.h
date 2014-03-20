@@ -634,28 +634,18 @@ struct netdev_class {
     void (*rx_destruct)(struct netdev_rx *);
     void (*rx_dealloc)(struct netdev_rx *);
 
-    /* Attempts to receive a packet from 'rx' into the tailroom of 'buffer',
-     * which should initially be empty.  If successful, returns 0 and
-     * increments 'buffer->size' by the number of bytes in the received packet,
-     * otherwise a positive errno value.  Returns EAGAIN immediately if no
-     * packet is ready to be received.
+    /* Attempts to receive batch of packets from 'rx' and place array of pointers
+     * into '*pkt'. netdev is responsible for allocating buffers.
+     * '*cnt' points to packet count for given batch. Once packets are returned
+     * to caller, netdev should give up ownership of ofpbuf data.
      *
-     * Must return EMSGSIZE, and discard the packet, if the received packet
-     * is longer than 'ofpbuf_tailroom(buffer)'.
+     * Implementations should allocate buffer with DP_NETDEV_HEADROOM headroom
+     * and add a VLAN header which is obtained out-of-band to the packet.
      *
-     * Implementations may make use of VLAN_HEADER_LEN bytes of tailroom to
-     * add a VLAN header which is obtained out-of-band to the packet. If
-     * this occurs then VLAN_HEADER_LEN bytes of tailroom will no longer be
-     * available for the packet, otherwise it may be used for the packet
-     * itself.
-     *
-     * It is advised that the tailroom of 'buffer' should be
-     * VLAN_HEADER_LEN bytes longer than the MTU to allow space for an
-     * out-of-band VLAN header to be added to the packet.
-     *
+     * Caller is expected to pass array of size MAX_RX_BATCH.
      * This function may be set to null if it would always return EOPNOTSUPP
      * anyhow. */
-    int (*rx_recv)(struct netdev_rx *rx, struct ofpbuf *buffer);
+    int (*rx_recv)(struct netdev_rx *rx, struct ofpbuf **pkt, int *cnt);
 
     /* Registers with the poll loop to wake up from the next call to
      * poll_block() when a packet is ready to be received with netdev_rx_recv()

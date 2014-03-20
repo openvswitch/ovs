@@ -50,6 +50,7 @@
 #include "connectivity.h"
 #include "coverage.h"
 #include "dpif-linux.h"
+#include "dpif-netdev.h"
 #include "dynamic-string.h"
 #include "fatal-signal.h"
 #include "hash.h"
@@ -461,6 +462,7 @@ static int af_packet_sock(void);
 static bool netdev_linux_miimon_enabled(void);
 static void netdev_linux_miimon_run(void);
 static void netdev_linux_miimon_wait(void);
+static int netdev_linux_get_mtu__(struct netdev_linux *netdev, int *mtup);
 
 static bool
 is_netdev_linux_class(const struct netdev_class *netdev_class)
@@ -984,17 +986,34 @@ netdev_linux_rx_recv_tap(int fd, struct ofpbuf *buffer)
 }
 
 static int
-netdev_linux_rx_recv(struct netdev_rx *rx_, struct ofpbuf *buffer)
+netdev_linux_rx_recv(struct netdev_rx *rx_, struct ofpbuf **packet, int *c)
 {
     struct netdev_rx_linux *rx = netdev_rx_linux_cast(rx_);
-    int retval;
+    struct netdev *netdev = rx->up.netdev;
+    struct ofpbuf *buffer;
+    ssize_t retval;
+    int mtu;
+
+    if (netdev_linux_get_mtu__(netdev_linux_cast(netdev), &mtu)) {
+        mtu = ETH_PAYLOAD_MAX;
+    }
+
+    buffer = ofpbuf_new_with_headroom(VLAN_ETH_HEADER_LEN + mtu, DP_NETDEV_HEADROOM);
 
     retval = (rx->is_tap
               ? netdev_linux_rx_recv_tap(rx->fd, buffer)
               : netdev_linux_rx_recv_sock(rx->fd, buffer));
-    if (retval && retval != EAGAIN && retval != EMSGSIZE) {
-        VLOG_WARN_RL(&rl, "error receiving Ethernet packet on %s: %s",
-                     ovs_strerror(errno), netdev_rx_get_name(rx_));
+
+    if (retval) {
+        if (retval != EAGAIN && retval != EMSGSIZE) {
+            VLOG_WARN_RL(&rl, "error receiving Ethernet packet on %s: %s",
+                         ovs_strerror(errno), netdev_rx_get_name(rx_));
+        }
+        ofpbuf_delete(buffer);
+    } else {
+        dp_packet_pad(buffer);
+        packet[0] = buffer;
+        *c = 1;
     }
 
     return retval;

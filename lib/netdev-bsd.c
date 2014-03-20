@@ -49,6 +49,7 @@
 #include "rtbsd.h"
 #include "connectivity.h"
 #include "coverage.h"
+#include "dpif-netdev.h"
 #include "dynamic-string.h"
 #include "fatal-signal.h"
 #include "ofpbuf.h"
@@ -151,6 +152,7 @@ static int af_link_ioctl(unsigned long command, const void *arg);
 #endif
 
 static void netdev_bsd_run(void);
+static int netdev_bsd_get_mtu(const struct netdev *netdev_, int *mtup);
 
 static bool
 is_netdev_bsd_class(const struct netdev_class *netdev_class)
@@ -620,13 +622,32 @@ netdev_rx_bsd_recv_tap(struct netdev_rx_bsd *rx, struct ofpbuf *buffer)
 }
 
 static int
-netdev_bsd_rx_recv(struct netdev_rx *rx_, struct ofpbuf *buffer)
+netdev_bsd_rx_recv(struct netdev_rx *rx_, struct ofpbuf **packet, int *c)
 {
     struct netdev_rx_bsd *rx = netdev_rx_bsd_cast(rx_);
+    struct netdev *netdev = rx->up.netdev;
+    struct ofpbuf *buffer;
+    ssize_t retval;
+    int mtu;
 
-    return (rx->pcap_handle
+    if (netdev_bsd_get_mtu(netdev_bsd_cast(netdev), &mtu)) {
+        mtu = ETH_PAYLOAD_MAX;
+    }
+
+    buffer = ofpbuf_new_with_headroom(VLAN_ETH_HEADER_LEN + mtu, DP_NETDEV_HEADROOM);
+
+    retval = (rx->pcap_handle
             ? netdev_rx_bsd_recv_pcap(rx, buffer)
             : netdev_rx_bsd_recv_tap(rx, buffer));
+
+    if (retval) {
+        ofpbuf_delete(buffer);
+    } else {
+        dp_packet_pad(buffer);
+        packet[0] = buffer;
+        *c = 1;
+    }
+    return retval;
 }
 
 /*
