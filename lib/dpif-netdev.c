@@ -192,6 +192,7 @@ struct dp_netdev_port {
     struct netdev *netdev;
     struct netdev_saved_flags *sf;
     struct netdev_rx *rx;
+    struct ovs_refcount ref_cnt;
     char *type;                 /* Port type as requested by user. */
 };
 
@@ -695,6 +696,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
 
     hmap_insert(&dp->ports, &port->node, hash_int(odp_to_u32(port_no), 0));
     seq_change(dp->port_seq);
+    ovs_refcount_init(&port->ref_cnt);
 
     return 0;
 }
@@ -775,6 +777,26 @@ get_port_by_number(struct dp_netdev *dp,
     }
 }
 
+static void
+port_ref(struct dp_netdev_port *port)
+{
+    if (port) {
+        ovs_refcount_ref(&port->ref_cnt);
+    }
+}
+
+static void
+port_unref(struct dp_netdev_port *port)
+{
+    if (port && ovs_refcount_unref(&port->ref_cnt) == 1) {
+        netdev_close(port->netdev);
+        netdev_restore_flags(port->sf);
+        netdev_rx_close(port->rx);
+        free(port->type);
+        free(port);
+    }
+}
+
 static int
 get_port_by_name(struct dp_netdev *dp,
                  const char *devname, struct dp_netdev_port **portp)
@@ -806,12 +828,7 @@ do_del_port(struct dp_netdev *dp, odp_port_t port_no)
     hmap_remove(&dp->ports, &port->node);
     seq_change(dp->port_seq);
 
-    netdev_close(port->netdev);
-    netdev_restore_flags(port->sf);
-    netdev_rx_close(port->rx);
-    free(port->type);
-    free(port);
-
+    port_unref(port);
     return 0;
 }
 
