@@ -360,7 +360,7 @@ shorten_name_via_proc(const char *name, char short_name[MAX_UN_LEN + 1],
     int dirfd;
     int len;
 
-    if (LINUX) {
+    if (!LINUX) {
         return ENAMETOOLONG;
     }
 
