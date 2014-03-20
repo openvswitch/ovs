@@ -515,8 +515,7 @@ global variables.
 
 C DIALECT
 
-  Some C99 features are OK because they are widely implemented even in
-older compilers:
+  Some C99 features are OK because they are widely implemented:
 
     * Flexible array members (e.g. struct { int foo[]; }).
 
@@ -531,11 +530,11 @@ older compilers:
       only take on the values 0 or 1, because this behavior can't be
       simulated on C89 compilers.
 
+    * Designated initializers (e.g. "struct foo foo = {.a = 1};" and
+      "int a[] = {[2] = 5};").
+
   Don't use other C99 features that are not widely implemented in
 older compilers:
-
-    * Don't use designated initializers (e.g. don't write "struct foo
-      foo = {.a = 1};" or "int a[] = {[2] = 5};").
 
     * Don't mix declarations and code within a block.
 
