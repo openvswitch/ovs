@@ -66,6 +66,8 @@ VLOG_DEFINE_THIS_MODULE(dpif_netdev);
 /* By default, choose a priority in the middle. */
 #define NETDEV_RULE_PRIORITY 0x8000
 
+#define NR_THREADS 1
+
 /* Configuration parameters. */
 enum { MAX_FLOWS = 65536 };     /* Maximum number of flows in flow table. */
 
@@ -161,8 +163,9 @@ struct dp_netdev {
 
     /* Forwarding threads. */
     struct latch exit_latch;
-    struct dp_forwarder *forwarders;
-    size_t n_forwarders;
+    struct pmd_thread *pmd_threads;
+    size_t n_pmd_threads;
+    int pmd_count;
 };
 
 static struct dp_netdev_port *dp_netdev_lookup_port(const struct dp_netdev *dp,
@@ -300,13 +303,23 @@ struct dp_netdev_actions *dp_netdev_flow_get_actions(
     const struct dp_netdev_flow *);
 static void dp_netdev_actions_free(struct dp_netdev_actions *);
 
-/* A thread that receives packets from some ports, looks them up in the flow
- * table, and executes the actions it finds. */
-struct dp_forwarder {
+/* PMD: Poll modes drivers.  PMD accesses devices via polling to eliminate
+ * the performance overhead of interrupt processing.  Therefore netdev can
+ * not implement rx-wait for these devices.  dpif-netdev needs to poll
+ * these device to check for recv buffer.  pmd-thread does polling for
+ * devices assigned to itself thread.
+ *
+ * DPDK used PMD for accessing NIC.
+ *
+ * A thread that receives packets from PMD ports, looks them up in the flow
+ * table, and executes the actions it finds.
+ **/
+struct pmd_thread {
     struct dp_netdev *dp;
     pthread_t thread;
+    int id;
+    atomic_uint change_seq;
     char *name;
-    uint32_t min_hash, max_hash;
 };
 
 /* Interface to netdev-based datapath. */
@@ -337,18 +350,16 @@ static int dpif_netdev_open(const struct dpif_class *, const char *name,
 static int dp_netdev_output_userspace(struct dp_netdev *dp, struct ofpbuf *,
                                       int queue_no, int type,
                                       const struct flow *,
-                                      const struct nlattr *userdata)
-    OVS_EXCLUDED(dp->queue_rwlock);
+                                      const struct nlattr *userdata);
 static void dp_netdev_execute_actions(struct dp_netdev *dp,
                                       const struct flow *, struct ofpbuf *, bool may_steal,
                                       struct pkt_metadata *,
                                       const struct nlattr *actions,
-                                      size_t actions_len)
-    OVS_REQ_RDLOCK(dp->port_rwlock);
+                                      size_t actions_len);
 static void dp_netdev_port_input(struct dp_netdev *dp, struct ofpbuf *packet,
-                                 struct pkt_metadata *)
-    OVS_REQ_RDLOCK(dp->port_rwlock);
-static void dp_netdev_set_threads(struct dp_netdev *, int n);
+                                 struct pkt_metadata *);
+
+static void dp_netdev_set_pmd_threads(struct dp_netdev *, int n);
 
 static struct dpif_netdev *
 dpif_netdev_cast(const struct dpif *dpif)
@@ -485,7 +496,6 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
         dp_netdev_free(dp);
         return error;
     }
-    dp_netdev_set_threads(dp, 2);
 
     *dpp = dp;
     return 0;
@@ -546,8 +556,8 @@ dp_netdev_free(struct dp_netdev *dp)
 
     shash_find_and_delete(&dp_netdevs, dp->name);
 
-    dp_netdev_set_threads(dp, 0);
-    free(dp->forwarders);
+    dp_netdev_set_pmd_threads(dp, 0);
+    free(dp->pmd_threads);
 
     dp_netdev_flow_flush(dp);
     ovs_rwlock_wrlock(&dp->port_rwlock);
@@ -641,6 +651,19 @@ dpif_netdev_get_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
     return 0;
 }
 
+static void
+dp_netdev_reload_pmd_threads(struct dp_netdev *dp)
+{
+    int i;
+
+    for (i = 0; i < dp->n_pmd_threads; i++) {
+        struct pmd_thread *f = &dp->pmd_threads[i];
+        int id;
+
+        atomic_add(&f->change_seq, 1, &id);
+   }
+}
+
 static int
 do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
             odp_port_t port_no)
@@ -649,7 +672,6 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     struct netdev_saved_flags *sf;
     struct dp_netdev_port *port;
     struct netdev *netdev;
-    struct netdev_rx *rx;
     enum netdev_flags flags;
     const char *open_type;
     int error;
@@ -671,7 +693,11 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
         return EINVAL;
     }
 
-    error = netdev_rx_open(netdev, &rx);
+    port = xzalloc(sizeof *port);
+    port->port_no = port_no;
+    port->netdev = netdev;
+    port->type = xstrdup(type);
+    error = netdev_rx_open(netdev, &port->rx);
     if (error
         && !(error == EOPNOTSUPP && dpif_netdev_class_is_dummy(dp->class))) {
         VLOG_ERR("%s: cannot receive packets on this network device (%s)",
@@ -682,21 +708,23 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
 
     error = netdev_turn_flags_on(netdev, NETDEV_PROMISC, &sf);
     if (error) {
-        netdev_rx_close(rx);
+        netdev_rx_close(port->rx);
         netdev_close(netdev);
+        free(port->rx);
+        free(port);
         return error;
     }
-
-    port = xmalloc(sizeof *port);
-    port->port_no = port_no;
-    port->netdev = netdev;
     port->sf = sf;
-    port->rx = rx;
-    port->type = xstrdup(type);
+
+    if (netdev_is_pmd(netdev)) {
+        dp->pmd_count++;
+        dp_netdev_set_pmd_threads(dp, NR_THREADS);
+        dp_netdev_reload_pmd_threads(dp);
+    }
+    ovs_refcount_init(&port->ref_cnt);
 
     hmap_insert(&dp->ports, &port->node, hash_int(odp_to_u32(port_no), 0));
     seq_change(dp->port_seq);
-    ovs_refcount_init(&port->ref_cnt);
 
     return 0;
 }
@@ -827,6 +855,9 @@ do_del_port(struct dp_netdev *dp, odp_port_t port_no)
 
     hmap_remove(&dp->ports, &port->node);
     seq_change(dp->port_seq);
+    if (netdev_is_pmd(port->netdev)) {
+        dp_netdev_reload_pmd_threads(dp);
+    }
 
     port_unref(port);
     return 0;
@@ -1690,116 +1721,199 @@ dp_netdev_actions_free(struct dp_netdev_actions *actions)
     free(actions);
 }
 
-static void *
-dp_forwarder_main(void *f_)
+
+inline static void
+dp_netdev_process_rx_port(struct dp_netdev *dp,
+                          struct dp_netdev_port *port,
+                          struct netdev_rx *queue)
 {
-    struct dp_forwarder *f = f_;
-    struct dp_netdev *dp = f->dp;
+    struct ofpbuf *packet[NETDEV_MAX_RX_BATCH];
+    int error, c;
 
-    f->name = xasprintf("forwarder_%u", ovsthread_id_self());
-    set_subprogram_name("%s", f->name);
-
-    while (!latch_is_set(&dp->exit_latch)) {
-        bool received_anything;
+    error = netdev_rx_recv(queue, packet, &c);
+    if (!error) {
+        struct pkt_metadata md = PKT_METADATA_INITIALIZER(port->port_no);
         int i;
 
-        ovs_rwlock_rdlock(&dp->port_rwlock);
-        for (i = 0; i < 50; i++) {
-            struct dp_netdev_port *port;
+        for (i = 0; i < c; i++) {
+            dp_netdev_port_input(dp, packet[i], &md);
+        }
+    } else if (error != EAGAIN && error != EOPNOTSUPP) {
+        static struct vlog_rate_limit rl
+            = VLOG_RATE_LIMIT_INIT(1, 5);
 
-            received_anything = false;
-            HMAP_FOR_EACH (port, node, &f->dp->ports) {
-                if (port->rx
-                    && port->node.hash >= f->min_hash
-                    && port->node.hash <= f->max_hash) {
-                    struct ofpbuf *packets[NETDEV_MAX_RX_BATCH];
-                    int count;
-                    int error;
+        VLOG_ERR_RL(&rl, "error receiving data from %s: %s",
+                    netdev_get_name(port->netdev),
+                    ovs_strerror(error));
+    }
+}
 
-                    error = netdev_rx_recv(port->rx, packets, &count);
-                    if (!error) {
-                        int i;
-                        struct pkt_metadata md
-                            = PKT_METADATA_INITIALIZER(port->port_no);
+static void
+dpif_netdev_run(struct dpif *dpif)
+{
+    struct dp_netdev_port *port;
+    struct dp_netdev *dp = get_dp_netdev(dpif);
 
-                        for (i = 0; i < count; i++) {
-                            dp_netdev_port_input(dp, packets[i], &md);
-                        }
-                        received_anything = true;
-                    } else if (error != EAGAIN && error != EOPNOTSUPP) {
-                        static struct vlog_rate_limit rl
-                            = VLOG_RATE_LIMIT_INIT(1, 5);
+    ovs_rwlock_rdlock(&dp->port_rwlock);
 
-                        VLOG_ERR_RL(&rl, "error receiving data from %s: %s",
-                                    netdev_get_name(port->netdev),
-                                    ovs_strerror(error));
-                    }
-                }
+    HMAP_FOR_EACH (port, node, &dp->ports) {
+        if (port->rx && !netdev_is_pmd(port->netdev)) {
+            dp_netdev_process_rx_port(dp, port, port->rx);
+        }
+    }
+
+    ovs_rwlock_unlock(&dp->port_rwlock);
+}
+
+static void
+dpif_netdev_wait(struct dpif *dpif)
+{
+    struct dp_netdev_port *port;
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+
+    ovs_rwlock_rdlock(&dp->port_rwlock);
+
+    HMAP_FOR_EACH (port, node, &dp->ports) {
+        if (port->rx && !netdev_is_pmd(port->netdev)) {
+            netdev_rx_wait(port->rx);
+        }
+    }
+    ovs_rwlock_unlock(&dp->port_rwlock);
+}
+
+struct rx_poll {
+    struct dp_netdev_port *port;
+};
+
+static int
+pmd_load_queues(struct pmd_thread *f,
+                struct rx_poll **ppoll_list, int poll_cnt)
+{
+    struct dp_netdev *dp = f->dp;
+    struct rx_poll *poll_list = *ppoll_list;
+    struct dp_netdev_port *port;
+    int id = f->id;
+    int index;
+    int i;
+
+    /* Simple scheduler for netdev rx polling. */
+    ovs_rwlock_rdlock(&dp->port_rwlock);
+    for (i = 0; i < poll_cnt; i++) {
+         port_unref(poll_list[i].port);
+    }
+
+    poll_cnt = 0;
+    index = 0;
+
+    HMAP_FOR_EACH (port, node, &f->dp->ports) {
+        if (netdev_is_pmd(port->netdev)) {
+            if ((index % dp->n_pmd_threads) == id) {
+                poll_list = xrealloc(poll_list, sizeof *poll_list * (poll_cnt + 1));
+
+                port_ref(port);
+                poll_list[poll_cnt++].port = port;
             }
+            index++;
+        }
+    }
 
-            if (!received_anything) {
+    ovs_rwlock_unlock(&dp->port_rwlock);
+    *ppoll_list = poll_list;
+    return poll_cnt;
+}
+
+static void *
+pmd_thread_main(void *f_)
+{
+    struct pmd_thread *f = f_;
+    struct dp_netdev *dp = f->dp;
+    unsigned int lc = 0;
+    struct rx_poll *poll_list;
+    unsigned int port_seq;
+    int poll_cnt;
+    int i;
+
+    f->name = xasprintf("pmd_%u", ovsthread_id_self());
+    set_subprogram_name("%s", f->name);
+    poll_cnt = 0;
+    poll_list = NULL;
+
+reload:
+    poll_cnt = pmd_load_queues(f, &poll_list, poll_cnt);
+    atomic_read(&f->change_seq, &port_seq);
+
+    for (;;) {
+        unsigned int c_port_seq;
+        int i;
+
+        for (i = 0; i < poll_cnt; i++) {
+            dp_netdev_process_rx_port(dp,  poll_list[i].port, poll_list[i].port->rx);
+        }
+
+        if (lc++ > 1024) {
+            ovsrcu_quiesce();
+
+            /* TODO: need completely userspace based signaling method.
+             * to keep this thread entirely in userspace.
+             * For now using atomic counter. */
+            lc = 0;
+            atomic_read_explicit(&f->change_seq, &c_port_seq, memory_order_consume);
+            if (c_port_seq != port_seq) {
                 break;
             }
         }
-
-        if (received_anything) {
-            poll_immediate_wake();
-        } else {
-            struct dp_netdev_port *port;
-
-            HMAP_FOR_EACH (port, node, &f->dp->ports)
-                if (port->rx
-                    && port->node.hash >= f->min_hash
-                    && port->node.hash <= f->max_hash) {
-                    netdev_rx_wait(port->rx);
-                }
-            seq_wait(dp->port_seq, seq_read(dp->port_seq));
-            latch_wait(&dp->exit_latch);
-        }
-        ovs_rwlock_unlock(&dp->port_rwlock);
-
-        poll_block();
     }
 
-    free(f->name);
+    if (!latch_is_set(&f->dp->exit_latch)){
+        goto reload;
+    }
 
+    for (i = 0; i < poll_cnt; i++) {
+         port_unref(poll_list[i].port);
+    }
+
+    free(poll_list);
+    free(f->name);
     return NULL;
 }
 
 static void
-dp_netdev_set_threads(struct dp_netdev *dp, int n)
+dp_netdev_set_pmd_threads(struct dp_netdev *dp, int n)
 {
     int i;
 
-    if (n == dp->n_forwarders) {
+    if (n == dp->n_pmd_threads) {
         return;
     }
 
     /* Stop existing threads. */
     latch_set(&dp->exit_latch);
-    for (i = 0; i < dp->n_forwarders; i++) {
-        struct dp_forwarder *f = &dp->forwarders[i];
+    dp_netdev_reload_pmd_threads(dp);
+    for (i = 0; i < dp->n_pmd_threads; i++) {
+        struct pmd_thread *f = &dp->pmd_threads[i];
 
         xpthread_join(f->thread, NULL);
     }
     latch_poll(&dp->exit_latch);
-    free(dp->forwarders);
+    free(dp->pmd_threads);
 
     /* Start new threads. */
-    dp->forwarders = xmalloc(n * sizeof *dp->forwarders);
-    dp->n_forwarders = n;
+    dp->pmd_threads = xmalloc(n * sizeof *dp->pmd_threads);
+    dp->n_pmd_threads = n;
+
     for (i = 0; i < n; i++) {
-        struct dp_forwarder *f = &dp->forwarders[i];
+        struct pmd_thread *f = &dp->pmd_threads[i];
 
         f->dp = dp;
-        f->min_hash = UINT32_MAX / n * i;
-        f->max_hash = UINT32_MAX / n * (i + 1) - 1;
-        if (i == n - 1) {
-            f->max_hash = UINT32_MAX;
-        }
-        xpthread_create(&f->thread, NULL, dp_forwarder_main, f);
+        f->id = i;
+        atomic_store(&f->change_seq, 1);
+
+        /* Each thread will distribute all devices rx-queues among
+         * themselves. */
+        xpthread_create(&f->thread, NULL, pmd_thread_main, f);
     }
 }
+
 
 static void *
 dp_netdev_flow_stats_new_cb(void)
@@ -1851,7 +1965,6 @@ dp_netdev_count_packet(struct dp_netdev *dp, enum dp_stat_type type)
 static void
 dp_netdev_port_input(struct dp_netdev *dp, struct ofpbuf *packet,
                      struct pkt_metadata *md)
-    OVS_REQ_RDLOCK(dp->port_rwlock)
 {
     struct dp_netdev_flow *netdev_flow;
     struct flow key;
@@ -1884,7 +1997,6 @@ static int
 dp_netdev_output_userspace(struct dp_netdev *dp, struct ofpbuf *packet,
                            int queue_no, int type, const struct flow *flow,
                            const struct nlattr *userdata)
-    OVS_EXCLUDED(dp->queue_rwlock)
 {
     struct dp_netdev_queue *q;
     int error;
@@ -1992,7 +2104,6 @@ dp_netdev_execute_actions(struct dp_netdev *dp, const struct flow *key,
                           struct ofpbuf *packet, bool may_steal,
                           struct pkt_metadata *md,
                           const struct nlattr *actions, size_t actions_len)
-    OVS_REQ_RDLOCK(dp->port_rwlock)
 {
     struct dp_netdev_execute_aux aux = {dp, key};
 
@@ -2007,8 +2118,8 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_open,
     dpif_netdev_close,
     dpif_netdev_destroy,
-    NULL,                       /* run */
-    NULL,                       /* wait */
+    dpif_netdev_run,
+    dpif_netdev_wait,
     dpif_netdev_get_stats,
     dpif_netdev_port_add,
     dpif_netdev_port_del,

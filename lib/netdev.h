@@ -134,8 +134,11 @@ void netdev_wait(void);
 void netdev_enumerate_types(struct sset *types);
 bool netdev_is_reserved_name(const char *name);
 
+bool netdev_is_pmd(const struct netdev *netdev);
+
 /* Open and close. */
-int netdev_open(const char *name, const char *type, struct netdev **);
+int netdev_open(const char *name, const char *type, struct netdev **netdevp);
+
 struct netdev *netdev_ref(const struct netdev *);
 void netdev_close(struct netdev *);
 

@@ -90,6 +90,12 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 static void restore_all_flags(void *aux OVS_UNUSED);
 void update_device_args(struct netdev *, const struct shash *args);
 
+bool
+netdev_is_pmd(const struct netdev *netdev)
+{
+    return !strcmp(netdev->netdev_class->type, "dpdk");
+}
+
 static void
 netdev_initialize(void)
     OVS_EXCLUDED(netdev_class_mutex, netdev_mutex)
