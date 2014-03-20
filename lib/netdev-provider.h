@@ -223,13 +223,13 @@ struct netdev_class {
     const struct netdev_tunnel_config *
         (*get_tunnel_config)(const struct netdev *netdev);
 
-    /* Sends the 'size'-byte packet in 'buffer' on 'netdev'.  Returns 0 if
-     * successful, otherwise a positive errno value.  Returns EAGAIN without
-     * blocking if the packet cannot be queued immediately.  Returns EMSGSIZE
-     * if a partial packet was transmitted or if the packet is too big or too
-     * small to transmit on the device.
+    /* Sends the buffer on 'netdev'.
+     * Returns 0 if successful, otherwise a positive errno value.  Returns
+     * EAGAIN without blocking if the packet cannot be queued immediately.
+     * Returns EMSGSIZE if a partial packet was transmitted or if the packet
+     * is too big or too small to transmit on the device.
      *
-     * The caller retains ownership of 'buffer' in all cases.
+     * To retain ownership of 'buffer' caller can set may_steal to false.
      *
      * The network device is expected to maintain a packet transmission queue,
      * so that the caller does not ordinarily have to do additional queuing of
@@ -241,7 +241,7 @@ struct netdev_class {
      * network device from being usefully used by the netdev-based "userspace
      * datapath".  It will also prevent the OVS implementation of bonding from
      * working properly over 'netdev'.) */
-    int (*send)(struct netdev *netdev, const void *buffer, size_t size);
+    int (*send)(struct netdev *netdev, struct ofpbuf *buffer, bool may_steal);
 
     /* Registers with the poll loop to wake up from the next call to
      * poll_block() when the packet transmission queue for 'netdev' has

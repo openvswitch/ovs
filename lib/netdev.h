@@ -166,7 +166,7 @@ void netdev_rx_wait(struct netdev_rx *);
 int netdev_rx_drain(struct netdev_rx *);
 
 /* Packet transmission. */
-int netdev_send(struct netdev *, const struct ofpbuf *);
+int netdev_send(struct netdev *, struct ofpbuf *, bool may_steal);
 void netdev_send_wait(struct netdev *);
 
 /* Hardware address. */

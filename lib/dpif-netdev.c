@@ -1937,7 +1937,7 @@ dp_execute_cb(void *aux_, struct ofpbuf *packet,
     case OVS_ACTION_ATTR_OUTPUT:
         p = dp_netdev_lookup_port(aux->dp, u32_to_odp(nl_attr_get_u32(a)));
         if (p) {
-            netdev_send(p->netdev, packet);
+            netdev_send(p->netdev, packet, may_steal);
         }
         break;
 
@@ -1951,6 +1951,10 @@ dp_execute_cb(void *aux_, struct ofpbuf *packet,
                                        % aux->dp->n_handlers,
                                    DPIF_UC_ACTION, aux->key,
                                    userdata);
+
+        if (may_steal) {
+            ofpbuf_delete(packet);
+        }
         break;
     }
     case OVS_ACTION_ATTR_PUSH_VLAN:
@@ -1964,9 +1968,6 @@ dp_execute_cb(void *aux_, struct ofpbuf *packet,
         OVS_NOT_REACHED();
     }
 
-    if (may_steal) {
-        ofpbuf_delete(packet);
-    }
 }
 
 static void

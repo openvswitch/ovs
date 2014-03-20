@@ -818,9 +818,11 @@ netdev_dummy_rx_drain(struct netdev_rx *rx_)
 }
 
 static int
-netdev_dummy_send(struct netdev *netdev, const void *buffer, size_t size)
+netdev_dummy_send(struct netdev *netdev, struct ofpbuf *pkt, bool may_steal)
 {
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
+    const void *buffer = pkt->data;
+    size_t size = pkt->size;
 
     if (size < ETH_HEADER_LEN) {
         return EMSGSIZE;
@@ -855,6 +857,9 @@ netdev_dummy_send(struct netdev *netdev, const void *buffer, size_t size)
     }
 
     ovs_mutex_unlock(&dev->mutex);
+    if (may_steal) {
+        ofpbuf_delete(pkt);
+    }
 
     return 0;
 }

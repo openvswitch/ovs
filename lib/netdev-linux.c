@@ -1054,8 +1054,11 @@ netdev_linux_rx_drain(struct netdev_rx *rx_)
  * The kernel maintains a packet transmission queue, so the caller is not
  * expected to do additional queuing of packets. */
 static int
-netdev_linux_send(struct netdev *netdev_, const void *data, size_t size)
+netdev_linux_send(struct netdev *netdev_, struct ofpbuf *pkt, bool may_steal)
 {
+    const void *data = pkt->data;
+    size_t size = pkt->size;
+
     for (;;) {
         ssize_t retval;
 
@@ -1104,6 +1107,10 @@ netdev_linux_send(struct netdev *netdev_, const void *data, size_t size)
             struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
             retval = write(netdev->tap_fd, data, size);
+        }
+
+        if (may_steal) {
+            ofpbuf_delete(pkt);
         }
 
         if (retval < 0) {

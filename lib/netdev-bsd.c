@@ -683,10 +683,12 @@ netdev_bsd_rx_drain(struct netdev_rx *rx_)
  * system or a tap device.
  */
 static int
-netdev_bsd_send(struct netdev *netdev_, const void *data, size_t size)
+netdev_bsd_send(struct netdev *netdev_, struct ofpbuf *pkt, bool may_steal)
 {
     struct netdev_bsd *dev = netdev_bsd_cast(netdev_);
     const char *name = netdev_get_name(netdev_);
+    const void *data = pkt->data;
+    size_t size = pkt->size;
     int error;
 
     ovs_mutex_lock(&dev->mutex);
@@ -723,6 +725,10 @@ netdev_bsd_send(struct netdev *netdev_, const void *data, size_t size)
     }
 
     ovs_mutex_unlock(&dev->mutex);
+    if (may_steal) {
+        ofpbuf_delete(pkt);
+    }
+
     return error;
 }
 

@@ -599,7 +599,7 @@ netdev_rx_drain(struct netdev_rx *rx)
  * immediately.  Returns EMSGSIZE if a partial packet was transmitted or if
  * the packet is too big or too small to transmit on the device.
  *
- * The caller retains ownership of 'buffer' in all cases.
+ * To retain ownership of 'buffer' caller can set may_steal to false.
  *
  * The kernel maintains a packet transmission queue, so the caller is not
  * expected to do additional queuing of packets.
@@ -607,12 +607,12 @@ netdev_rx_drain(struct netdev_rx *rx)
  * Some network devices may not implement support for this function.  In such
  * cases this function will always return EOPNOTSUPP. */
 int
-netdev_send(struct netdev *netdev, const struct ofpbuf *buffer)
+netdev_send(struct netdev *netdev, struct ofpbuf *buffer, bool may_steal)
 {
     int error;
 
     error = (netdev->netdev_class->send
-             ? netdev->netdev_class->send(netdev, buffer->data, buffer->size)
+             ? netdev->netdev_class->send(netdev, buffer, may_steal)
              : EOPNOTSUPP);
     if (!error) {
         COVERAGE_INC(netdev_sent);
