@@ -42,9 +42,18 @@ struct pkt_metadata {
 #define PKT_METADATA_INITIALIZER(PORT) \
     (struct pkt_metadata){ { 0, 0, 0, 0, 0, 0}, 0, 0, {(PORT)} }
 
-#define PKT_METADATA_INITIALIZER_FLOW(FLOW) \
-    (struct pkt_metadata){ (FLOW)->tunnel, (FLOW)->skb_priority, \
-            (FLOW)->pkt_mark, (FLOW)->in_port }
+static inline struct pkt_metadata
+pkt_metadata_from_flow(const struct flow *flow)
+{
+    struct pkt_metadata md;
+
+    md.tunnel = flow->tunnel;
+    md.skb_priority = flow->skb_priority;
+    md.pkt_mark = flow->pkt_mark;
+    md.in_port = flow->in_port;
+
+    return md;
+}
 
 bool dpid_from_string(const char *s, uint64_t *dpidp);
 

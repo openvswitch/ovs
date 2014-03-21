@@ -3876,7 +3876,7 @@ parse_flow_and_packet(int argc, const char *argv[],
         if (!packet->size) {
             flow_compose(packet, flow);
         } else {
-            struct pkt_metadata md = PKT_METADATA_INITIALIZER_FLOW(flow);
+            struct pkt_metadata md = pkt_metadata_from_flow(flow);
 
             /* Use the metadata from the flow and the packet argument
              * to reconstruct the flow. */
