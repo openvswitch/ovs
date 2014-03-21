@@ -43,6 +43,7 @@
 #include "list.h"
 #include "meta-flow.h"
 #include "netdev.h"
+#include "netdev-dpdk.h"
 #include "netdev-vport.h"
 #include "netlink.h"
 #include "odp-execute.h"
@@ -1864,6 +1865,7 @@ pmd_thread_main(void *f_)
     poll_cnt = 0;
     poll_list = NULL;
 
+    pmd_thread_setaffinity_cpu(f->id);
 reload:
     poll_cnt = pmd_load_queues(f, &poll_list, poll_cnt);
     atomic_read(&f->change_seq, &port_seq);

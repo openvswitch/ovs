@@ -21,12 +21,14 @@
 int dpdk_init(int argc, char **argv);
 void netdev_dpdk_register(void);
 void free_dpdk_buf(struct ofpbuf *);
+int pmd_thread_setaffinity_cpu(int cpu);
 
 #else
 
 #define dpdk_init(arg1, arg2) (0)
 #define netdev_dpdk_register()
 #define free_dpdk_buf(arg)
+#define pmd_thread_setaffinity_cpu(c) (0)
 
 #endif /* DPDK_NETDEV */
 #endif

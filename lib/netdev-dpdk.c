@@ -1196,3 +1196,21 @@ netdev_dpdk_register(void)
 {
     netdev_register_provider(&netdev_dpdk_class);
 }
+
+int
+pmd_thread_setaffinity_cpu(int cpu)
+{
+    cpu_set_t cpuset;
+    int err;
+
+    CPU_ZERO(&cpuset);
+    CPU_SET(cpu, &cpuset);
+    err = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+    if (err) {
+        VLOG_ERR("Thread affinity error %d",err);
+        return err;
+    }
+    RTE_PER_LCORE(_lcore_id) = cpu;
+
+    return 0;
+}
