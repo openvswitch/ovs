@@ -416,7 +416,7 @@ monitor_daemon(pid_t daemon_pid)
                         if (now >= wakeup) {
                             break;
                         }
-                        sleep(wakeup - now);
+                        xsleep(wakeup - now);
                     }
                 }
                 last_restart = time(NULL);

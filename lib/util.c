@@ -30,6 +30,7 @@
 #include "bitmap.h"
 #include "byte-order.h"
 #include "coverage.h"
+#include "ovs-rcu.h"
 #include "ovs-thread.h"
 #include "vlog.h"
 #ifdef HAVE_PTHREAD_SET_NAME_NP
@@ -1724,6 +1725,17 @@ ovs_scan(const char *s, const char *format, ...)
 exit:
     va_end(args);
     return ok;
+}
+
+unsigned int
+xsleep(unsigned int seconds)
+{
+    unsigned int t;
+
+    ovsrcu_quiesce_start();
+    t = sleep(seconds);
+    ovsrcu_quiesce_end();
+    return t;
 }
 
 #ifdef _WIN32

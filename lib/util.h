@@ -507,6 +507,7 @@ char *ovs_format_message(int error);
 char *ovs_lasterror_to_string(void);
 int ftruncate(int fd, off_t length);
 #endif
+unsigned int xsleep(unsigned int seconds);
 
 #ifdef  __cplusplus
 }
