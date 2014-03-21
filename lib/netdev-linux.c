@@ -424,8 +424,8 @@ struct netdev_linux {
     int tap_fd;
 };
 
-struct netdev_rx_linux {
-    struct netdev_rx up;
+struct netdev_rxq_linux {
+    struct netdev_rxq up;
     bool is_tap;
     int fd;
 };
@@ -484,11 +484,11 @@ netdev_linux_cast(const struct netdev *netdev)
     return CONTAINER_OF(netdev, struct netdev_linux, up);
 }
 
-static struct netdev_rx_linux *
-netdev_rx_linux_cast(const struct netdev_rx *rx)
+static struct netdev_rxq_linux *
+netdev_rxq_linux_cast(const struct netdev_rxq *rx)
 {
     ovs_assert(is_netdev_linux_class(netdev_get_class(rx->netdev)));
-    return CONTAINER_OF(rx, struct netdev_rx_linux, up);
+    return CONTAINER_OF(rx, struct netdev_rxq_linux, up);
 }
 
 static void netdev_linux_update(struct netdev_linux *netdev,
@@ -773,17 +773,17 @@ netdev_linux_dealloc(struct netdev *netdev_)
     free(netdev);
 }
 
-static struct netdev_rx *
-netdev_linux_rx_alloc(void)
+static struct netdev_rxq *
+netdev_linux_rxq_alloc(void)
 {
-    struct netdev_rx_linux *rx = xzalloc(sizeof *rx);
+    struct netdev_rxq_linux *rx = xzalloc(sizeof *rx);
     return &rx->up;
 }
 
 static int
-netdev_linux_rx_construct(struct netdev_rx *rx_)
+netdev_linux_rxq_construct(struct netdev_rxq *rxq_)
 {
-    struct netdev_rx_linux *rx = netdev_rx_linux_cast(rx_);
+    struct netdev_rxq_linux *rx = netdev_rxq_linux_cast(rxq_);
     struct netdev *netdev_ = rx->up.netdev;
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     int error;
@@ -869,9 +869,9 @@ error:
 }
 
 static void
-netdev_linux_rx_destruct(struct netdev_rx *rx_)
+netdev_linux_rxq_destruct(struct netdev_rxq *rxq_)
 {
-    struct netdev_rx_linux *rx = netdev_rx_linux_cast(rx_);
+    struct netdev_rxq_linux *rx = netdev_rxq_linux_cast(rxq_);
 
     if (!rx->is_tap) {
         close(rx->fd);
@@ -879,9 +879,9 @@ netdev_linux_rx_destruct(struct netdev_rx *rx_)
 }
 
 static void
-netdev_linux_rx_dealloc(struct netdev_rx *rx_)
+netdev_linux_rxq_dealloc(struct netdev_rxq *rxq_)
 {
-    struct netdev_rx_linux *rx = netdev_rx_linux_cast(rx_);
+    struct netdev_rxq_linux *rx = netdev_rxq_linux_cast(rxq_);
 
     free(rx);
 }
@@ -903,7 +903,7 @@ auxdata_has_vlan_tci(const struct tpacket_auxdata *aux)
 }
 
 static int
-netdev_linux_rx_recv_sock(int fd, struct ofpbuf *buffer)
+netdev_linux_rxq_recv_sock(int fd, struct ofpbuf *buffer)
 {
     size_t size;
     ssize_t retval;
@@ -966,7 +966,7 @@ netdev_linux_rx_recv_sock(int fd, struct ofpbuf *buffer)
 }
 
 static int
-netdev_linux_rx_recv_tap(int fd, struct ofpbuf *buffer)
+netdev_linux_rxq_recv_tap(int fd, struct ofpbuf *buffer)
 {
     ssize_t retval;
     size_t size = ofpbuf_tailroom(buffer);
@@ -986,9 +986,9 @@ netdev_linux_rx_recv_tap(int fd, struct ofpbuf *buffer)
 }
 
 static int
-netdev_linux_rx_recv(struct netdev_rx *rx_, struct ofpbuf **packet, int *c)
+netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct ofpbuf **packet, int *c)
 {
-    struct netdev_rx_linux *rx = netdev_rx_linux_cast(rx_);
+    struct netdev_rxq_linux *rx = netdev_rxq_linux_cast(rxq_);
     struct netdev *netdev = rx->up.netdev;
     struct ofpbuf *buffer;
     ssize_t retval;
@@ -1001,13 +1001,13 @@ netdev_linux_rx_recv(struct netdev_rx *rx_, struct ofpbuf **packet, int *c)
     buffer = ofpbuf_new_with_headroom(VLAN_ETH_HEADER_LEN + mtu, DP_NETDEV_HEADROOM);
 
     retval = (rx->is_tap
-              ? netdev_linux_rx_recv_tap(rx->fd, buffer)
-              : netdev_linux_rx_recv_sock(rx->fd, buffer));
+              ? netdev_linux_rxq_recv_tap(rx->fd, buffer)
+              : netdev_linux_rxq_recv_sock(rx->fd, buffer));
 
     if (retval) {
         if (retval != EAGAIN && retval != EMSGSIZE) {
             VLOG_WARN_RL(&rl, "error receiving Ethernet packet on %s: %s",
-                         ovs_strerror(errno), netdev_rx_get_name(rx_));
+                         ovs_strerror(errno), netdev_rxq_get_name(rxq_));
         }
         ofpbuf_delete(buffer);
     } else {
@@ -1020,19 +1020,19 @@ netdev_linux_rx_recv(struct netdev_rx *rx_, struct ofpbuf **packet, int *c)
 }
 
 static void
-netdev_linux_rx_wait(struct netdev_rx *rx_)
+netdev_linux_rxq_wait(struct netdev_rxq *rxq_)
 {
-    struct netdev_rx_linux *rx = netdev_rx_linux_cast(rx_);
+    struct netdev_rxq_linux *rx = netdev_rxq_linux_cast(rxq_);
     poll_fd_wait(rx->fd, POLLIN);
 }
 
 static int
-netdev_linux_rx_drain(struct netdev_rx *rx_)
+netdev_linux_rxq_drain(struct netdev_rxq *rxq_)
 {
-    struct netdev_rx_linux *rx = netdev_rx_linux_cast(rx_);
+    struct netdev_rxq_linux *rx = netdev_rxq_linux_cast(rxq_);
     if (rx->is_tap) {
         struct ifreq ifr;
-        int error = af_inet_ifreq_ioctl(netdev_rx_get_name(rx_), &ifr,
+        int error = af_inet_ifreq_ioctl(netdev_rxq_get_name(rxq_), &ifr,
                                         SIOCGIFTXQLEN, "SIOCGIFTXQLEN");
         if (error) {
             return error;
@@ -2761,13 +2761,13 @@ netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
                                                                 \
     netdev_linux_update_flags,                                  \
                                                                 \
-    netdev_linux_rx_alloc,                                      \
-    netdev_linux_rx_construct,                                  \
-    netdev_linux_rx_destruct,                                   \
-    netdev_linux_rx_dealloc,                                    \
-    netdev_linux_rx_recv,                                       \
-    netdev_linux_rx_wait,                                       \
-    netdev_linux_rx_drain,                                      \
+    netdev_linux_rxq_alloc,                                     \
+    netdev_linux_rxq_construct,                                 \
+    netdev_linux_rxq_destruct,                                  \
+    netdev_linux_rxq_dealloc,                                   \
+    netdev_linux_rxq_recv,                                      \
+    netdev_linux_rxq_wait,                                      \
+    netdev_linux_rxq_drain,                                     \
 }
 
 const struct netdev_class netdev_linux_class =

@@ -56,12 +56,12 @@ void netdev_get_devices(const struct netdev_class *,
  * Network device implementations may read these members but should not modify
  * them.
  *
- * None of these members change during the lifetime of a struct netdev_rx. */
-struct netdev_rx {
+ * None of these members change during the lifetime of a struct netdev_rxq. */
+struct netdev_rxq {
     struct netdev *netdev;      /* Owns a reference to the netdev. */
 };
 
-struct netdev *netdev_rx_get_netdev(const struct netdev_rx *);
+struct netdev *netdev_rxq_get_netdev(const struct netdev_rxq *);
 
 /* Network device class structure, to be defined by each implementation of a
  * network device.
@@ -77,7 +77,7 @@ struct netdev *netdev_rx_get_netdev(const struct netdev_rx *);
  *
  *   - "struct netdev", which represents a network device.
  *
- *   - "struct netdev_rx", which represents a handle for capturing packets
+ *   - "struct netdev_rxq", which represents a handle for capturing packets
  *     received on a network device
  *
  * Each of these data structures contains all of the implementation-independent
@@ -96,10 +96,10 @@ struct netdev *netdev_rx_get_netdev(const struct netdev_rx *);
  *
  * Four stylized functions accompany each of these data structures:
  *
- *            "alloc"       "construct"       "destruct"       "dealloc"
- *            ------------  ----------------  ---------------  --------------
- * netdev     ->alloc       ->construct       ->destruct       ->dealloc
- * netdev_rx  ->rx_alloc    ->rx_construct    ->rx_destruct    ->rx_dealloc
+ *            "alloc"          "construct"        "destruct"       "dealloc"
+ *            ------------   ----------------  ---------------  --------------
+ * netdev      ->alloc        ->construct        ->destruct        ->dealloc
+ * netdev_rxq  ->rxq_alloc    ->rxq_construct    ->rxq_destruct    ->rxq_dealloc
  *
  * Any instance of a given data structure goes through the following life
  * cycle:
@@ -620,19 +620,19 @@ struct netdev_class {
     int (*update_flags)(struct netdev *netdev, enum netdev_flags off,
                         enum netdev_flags on, enum netdev_flags *old_flags);
 
-/* ## ------------------- ## */
-/* ## netdev_rx Functions ## */
-/* ## ------------------- ## */
+/* ## -------------------- ## */
+/* ## netdev_rxq Functions ## */
+/* ## -------------------- ## */
 
 /* If a particular netdev class does not support receiving packets, all these
  * function pointers must be NULL. */
 
-    /* Life-cycle functions for a netdev_rx.  See the large comment above on
+    /* Life-cycle functions for a netdev_rxq.  See the large comment above on
      * struct netdev_class. */
-    struct netdev_rx *(*rx_alloc)(void);
-    int (*rx_construct)(struct netdev_rx *);
-    void (*rx_destruct)(struct netdev_rx *);
-    void (*rx_dealloc)(struct netdev_rx *);
+    struct netdev_rxq *(*rxq_alloc)(void);
+    int (*rxq_construct)(struct netdev_rxq *);
+    void (*rxq_destruct)(struct netdev_rxq *);
+    void (*rxq_dealloc)(struct netdev_rxq *);
 
     /* Attempts to receive batch of packets from 'rx' and place array of pointers
      * into '*pkt'. netdev is responsible for allocating buffers.
@@ -645,15 +645,15 @@ struct netdev_class {
      * Caller is expected to pass array of size MAX_RX_BATCH.
      * This function may be set to null if it would always return EOPNOTSUPP
      * anyhow. */
-    int (*rx_recv)(struct netdev_rx *rx, struct ofpbuf **pkt, int *cnt);
+    int (*rxq_recv)(struct netdev_rxq *rx, struct ofpbuf **pkt, int *cnt);
 
     /* Registers with the poll loop to wake up from the next call to
-     * poll_block() when a packet is ready to be received with netdev_rx_recv()
+     * poll_block() when a packet is ready to be received with netdev_rxq_recv()
      * on 'rx'. */
-    void (*rx_wait)(struct netdev_rx *rx);
+    void (*rxq_wait)(struct netdev_rxq *rx);
 
     /* Discards all packets waiting to be received from 'rx'. */
-    int (*rx_drain)(struct netdev_rx *rx);
+    int (*rxq_drain)(struct netdev_rxq *rx);
 };
 
 int netdev_register_provider(const struct netdev_class *);

@@ -506,24 +506,24 @@ netdev_parse_name(const char *netdev_name_, char **name, char **type)
     }
 }
 
-/* Attempts to open a netdev_rx handle for obtaining packets received on
- * 'netdev'.  On success, returns 0 and stores a nonnull 'netdev_rx *' into
+/* Attempts to open a netdev_rxq handle for obtaining packets received on
+ * 'netdev'.  On success, returns 0 and stores a nonnull 'netdev_rxq *' into
  * '*rxp'.  On failure, returns a positive errno value and stores NULL into
  * '*rxp'.
  *
  * Some kinds of network devices might not support receiving packets.  This
  * function returns EOPNOTSUPP in that case.*/
 int
-netdev_rx_open(struct netdev *netdev, struct netdev_rx **rxp)
+netdev_rxq_open(struct netdev *netdev, struct netdev_rxq **rxp)
     OVS_EXCLUDED(netdev_mutex)
 {
     int error;
 
-    if (netdev->netdev_class->rx_alloc) {
-        struct netdev_rx *rx = netdev->netdev_class->rx_alloc();
+    if (netdev->netdev_class->rxq_alloc) {
+        struct netdev_rxq *rx = netdev->netdev_class->rxq_alloc();
         if (rx) {
             rx->netdev = netdev;
-            error = netdev->netdev_class->rx_construct(rx);
+            error = netdev->netdev_class->rxq_construct(rx);
             if (!error) {
                 ovs_mutex_lock(&netdev_mutex);
                 netdev->ref_cnt++;
@@ -532,7 +532,7 @@ netdev_rx_open(struct netdev *netdev, struct netdev_rx **rxp)
                 *rxp = rx;
                 return 0;
             }
-            netdev->netdev_class->rx_dealloc(rx);
+            netdev->netdev_class->rxq_dealloc(rx);
         } else {
             error = ENOMEM;
         }
@@ -546,13 +546,13 @@ netdev_rx_open(struct netdev *netdev, struct netdev_rx **rxp)
 
 /* Closes 'rx'. */
 void
-netdev_rx_close(struct netdev_rx *rx)
+netdev_rxq_close(struct netdev_rxq *rx)
     OVS_EXCLUDED(netdev_mutex)
 {
     if (rx) {
         struct netdev *netdev = rx->netdev;
-        netdev->netdev_class->rx_destruct(rx);
-        netdev->netdev_class->rx_dealloc(rx);
+        netdev->netdev_class->rxq_destruct(rx);
+        netdev->netdev_class->rxq_dealloc(rx);
         netdev_close(netdev);
     }
 }
@@ -572,11 +572,11 @@ netdev_rx_close(struct netdev_rx *rx)
  * This function may be set to null if it would always return EOPNOTSUPP
  * anyhow. */
 int
-netdev_rx_recv(struct netdev_rx *rx, struct ofpbuf **buffers, int *cnt)
+netdev_rxq_recv(struct netdev_rxq *rx, struct ofpbuf **buffers, int *cnt)
 {
     int retval;
 
-    retval = rx->netdev->netdev_class->rx_recv(rx, buffers, cnt);
+    retval = rx->netdev->netdev_class->rxq_recv(rx, buffers, cnt);
     if (!retval) {
         COVERAGE_INC(netdev_received);
     }
@@ -586,17 +586,17 @@ netdev_rx_recv(struct netdev_rx *rx, struct ofpbuf **buffers, int *cnt)
 /* Arranges for poll_block() to wake up when a packet is ready to be received
  * on 'rx'. */
 void
-netdev_rx_wait(struct netdev_rx *rx)
+netdev_rxq_wait(struct netdev_rxq *rx)
 {
-    rx->netdev->netdev_class->rx_wait(rx);
+    rx->netdev->netdev_class->rxq_wait(rx);
 }
 
 /* Discards any packets ready to be received on 'rx'. */
 int
-netdev_rx_drain(struct netdev_rx *rx)
+netdev_rxq_drain(struct netdev_rxq *rx)
 {
-    return (rx->netdev->netdev_class->rx_drain
-            ? rx->netdev->netdev_class->rx_drain(rx)
+    return (rx->netdev->netdev_class->rxq_drain
+            ? rx->netdev->netdev_class->rxq_drain(rx)
             : 0);
 }
 
@@ -1594,16 +1594,16 @@ netdev_get_type_from_name(const char *name)
 }
 
 struct netdev *
-netdev_rx_get_netdev(const struct netdev_rx *rx)
+netdev_rxq_get_netdev(const struct netdev_rxq *rx)
 {
     ovs_assert(rx->netdev->ref_cnt > 0);
     return rx->netdev;
 }
 
 const char *
-netdev_rx_get_name(const struct netdev_rx *rx)
+netdev_rxq_get_name(const struct netdev_rxq *rx)
 {
-    return netdev_get_name(netdev_rx_get_netdev(rx));
+    return netdev_get_name(netdev_rxq_get_netdev(rx));
 }
 
 static void

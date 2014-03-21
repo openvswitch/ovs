@@ -194,7 +194,7 @@ struct dp_netdev_port {
     odp_port_t port_no;
     struct netdev *netdev;
     struct netdev_saved_flags *sf;
-    struct netdev_rx *rx;
+    struct netdev_rxq *rxq;
     struct ovs_refcount ref_cnt;
     char *type;                 /* Port type as requested by user. */
 };
@@ -697,7 +697,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     port->port_no = port_no;
     port->netdev = netdev;
     port->type = xstrdup(type);
-    error = netdev_rx_open(netdev, &port->rx);
+    error = netdev_rxq_open(netdev, &port->rxq);
     if (error
         && !(error == EOPNOTSUPP && dpif_netdev_class_is_dummy(dp->class))) {
         VLOG_ERR("%s: cannot receive packets on this network device (%s)",
@@ -708,9 +708,9 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
 
     error = netdev_turn_flags_on(netdev, NETDEV_PROMISC, &sf);
     if (error) {
-        netdev_rx_close(port->rx);
+        netdev_rxq_close(port->rxq);
         netdev_close(netdev);
-        free(port->rx);
+        free(port->rxq);
         free(port);
         return error;
     }
@@ -819,7 +819,7 @@ port_unref(struct dp_netdev_port *port)
     if (port && ovs_refcount_unref(&port->ref_cnt) == 1) {
         netdev_close(port->netdev);
         netdev_restore_flags(port->sf);
-        netdev_rx_close(port->rx);
+        netdev_rxq_close(port->rxq);
         free(port->type);
         free(port);
     }
@@ -1723,14 +1723,14 @@ dp_netdev_actions_free(struct dp_netdev_actions *actions)
 
 
 inline static void
-dp_netdev_process_rx_port(struct dp_netdev *dp,
+dp_netdev_process_rxq_port(struct dp_netdev *dp,
                           struct dp_netdev_port *port,
-                          struct netdev_rx *queue)
+                          struct netdev_rxq *rxq)
 {
     struct ofpbuf *packet[NETDEV_MAX_RX_BATCH];
     int error, c;
 
-    error = netdev_rx_recv(queue, packet, &c);
+    error = netdev_rxq_recv(rxq, packet, &c);
     if (!error) {
         struct pkt_metadata md = PKT_METADATA_INITIALIZER(port->port_no);
         int i;
@@ -1757,8 +1757,8 @@ dpif_netdev_run(struct dpif *dpif)
     ovs_rwlock_rdlock(&dp->port_rwlock);
 
     HMAP_FOR_EACH (port, node, &dp->ports) {
-        if (port->rx && !netdev_is_pmd(port->netdev)) {
-            dp_netdev_process_rx_port(dp, port, port->rx);
+        if (port->rxq && !netdev_is_pmd(port->netdev)) {
+            dp_netdev_process_rxq_port(dp, port, port->rxq);
         }
     }
 
@@ -1774,23 +1774,23 @@ dpif_netdev_wait(struct dpif *dpif)
     ovs_rwlock_rdlock(&dp->port_rwlock);
 
     HMAP_FOR_EACH (port, node, &dp->ports) {
-        if (port->rx && !netdev_is_pmd(port->netdev)) {
-            netdev_rx_wait(port->rx);
+        if (port->rxq && !netdev_is_pmd(port->netdev)) {
+            netdev_rxq_wait(port->rxq);
         }
     }
     ovs_rwlock_unlock(&dp->port_rwlock);
 }
 
-struct rx_poll {
+struct rxq_poll {
     struct dp_netdev_port *port;
 };
 
 static int
 pmd_load_queues(struct pmd_thread *f,
-                struct rx_poll **ppoll_list, int poll_cnt)
+                struct rxq_poll **ppoll_list, int poll_cnt)
 {
     struct dp_netdev *dp = f->dp;
-    struct rx_poll *poll_list = *ppoll_list;
+    struct rxq_poll *poll_list = *ppoll_list;
     struct dp_netdev_port *port;
     int id = f->id;
     int index;
@@ -1828,7 +1828,7 @@ pmd_thread_main(void *f_)
     struct pmd_thread *f = f_;
     struct dp_netdev *dp = f->dp;
     unsigned int lc = 0;
-    struct rx_poll *poll_list;
+    struct rxq_poll *poll_list;
     unsigned int port_seq;
     int poll_cnt;
     int i;
@@ -1847,7 +1847,7 @@ reload:
         int i;
 
         for (i = 0; i < poll_cnt; i++) {
-            dp_netdev_process_rx_port(dp,  poll_list[i].port, poll_list[i].port->rx);
+            dp_netdev_process_rxq_port(dp,  poll_list[i].port, poll_list[i].port->rxq);
         }
 
         if (lc++ > 1024) {
