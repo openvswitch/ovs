@@ -194,7 +194,7 @@ struct dp_netdev_port {
     odp_port_t port_no;
     struct netdev *netdev;
     struct netdev_saved_flags *sf;
-    struct netdev_rxq *rxq;
+    struct netdev_rxq **rxq;
     struct ovs_refcount ref_cnt;
     char *type;                 /* Port type as requested by user. */
 };
@@ -675,6 +675,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     enum netdev_flags flags;
     const char *open_type;
     int error;
+    int i;
 
     /* XXX reject devices already in some dp_netdev. */
 
@@ -696,19 +697,24 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     port = xzalloc(sizeof *port);
     port->port_no = port_no;
     port->netdev = netdev;
+    port->rxq = xmalloc(sizeof *port->rxq * netdev_n_rxq(netdev));
     port->type = xstrdup(type);
-    error = netdev_rxq_open(netdev, &port->rxq);
-    if (error
-        && !(error == EOPNOTSUPP && dpif_netdev_class_is_dummy(dp->class))) {
-        VLOG_ERR("%s: cannot receive packets on this network device (%s)",
-                 devname, ovs_strerror(errno));
-        netdev_close(netdev);
-        return error;
+    for (i = 0; i < netdev_n_rxq(netdev); i++) {
+        error = netdev_rxq_open(netdev, &port->rxq[i], i);
+        if (error
+            && !(error == EOPNOTSUPP && dpif_netdev_class_is_dummy(dp->class))) {
+            VLOG_ERR("%s: cannot receive packets on this network device (%s)",
+                     devname, ovs_strerror(errno));
+            netdev_close(netdev);
+            return error;
+        }
     }
 
     error = netdev_turn_flags_on(netdev, NETDEV_PROMISC, &sf);
     if (error) {
-        netdev_rxq_close(port->rxq);
+        for (i = 0; i < netdev_n_rxq(netdev); i++) {
+            netdev_rxq_close(port->rxq[i]);
+        }
         netdev_close(netdev);
         free(port->rxq);
         free(port);
@@ -817,9 +823,14 @@ static void
 port_unref(struct dp_netdev_port *port)
 {
     if (port && ovs_refcount_unref(&port->ref_cnt) == 1) {
+        int i;
+
         netdev_close(port->netdev);
         netdev_restore_flags(port->sf);
-        netdev_rxq_close(port->rxq);
+
+        for (i = 0; i < netdev_n_rxq(port->netdev); i++) {
+            netdev_rxq_close(port->rxq[i]);
+        }
         free(port->type);
         free(port);
     }
@@ -1757,8 +1768,12 @@ dpif_netdev_run(struct dpif *dpif)
     ovs_rwlock_rdlock(&dp->port_rwlock);
 
     HMAP_FOR_EACH (port, node, &dp->ports) {
-        if (port->rxq && !netdev_is_pmd(port->netdev)) {
-            dp_netdev_process_rxq_port(dp, port, port->rxq);
+        if (!netdev_is_pmd(port->netdev)) {
+            int i;
+
+            for (i = 0; i < netdev_n_rxq(port->netdev); i++) {
+                dp_netdev_process_rxq_port(dp, port, port->rxq[i]);
+            }
         }
     }
 
@@ -1774,8 +1789,12 @@ dpif_netdev_wait(struct dpif *dpif)
     ovs_rwlock_rdlock(&dp->port_rwlock);
 
     HMAP_FOR_EACH (port, node, &dp->ports) {
-        if (port->rxq && !netdev_is_pmd(port->netdev)) {
-            netdev_rxq_wait(port->rxq);
+        if (!netdev_is_pmd(port->netdev)) {
+            int i;
+
+            for (i = 0; i < netdev_n_rxq(port->netdev); i++) {
+                netdev_rxq_wait(port->rxq[i]);
+            }
         }
     }
     ovs_rwlock_unlock(&dp->port_rwlock);
@@ -1783,6 +1802,7 @@ dpif_netdev_wait(struct dpif *dpif)
 
 struct rxq_poll {
     struct dp_netdev_port *port;
+    struct netdev_rxq *rx;
 };
 
 static int
@@ -1807,13 +1827,19 @@ pmd_load_queues(struct pmd_thread *f,
 
     HMAP_FOR_EACH (port, node, &f->dp->ports) {
         if (netdev_is_pmd(port->netdev)) {
-            if ((index % dp->n_pmd_threads) == id) {
-                poll_list = xrealloc(poll_list, sizeof *poll_list * (poll_cnt + 1));
+            int i;
 
-                port_ref(port);
-                poll_list[poll_cnt++].port = port;
+            for (i = 0; i < netdev_n_rxq(port->netdev); i++) {
+                if ((index % dp->n_pmd_threads) == id) {
+                    poll_list = xrealloc(poll_list, sizeof *poll_list * (poll_cnt + 1));
+
+                    port_ref(port);
+                    poll_list[poll_cnt].port = port;
+                    poll_list[poll_cnt].rx = port->rxq[i];
+                    poll_cnt++;
+                }
+                index++;
             }
-            index++;
         }
     }
 
@@ -1847,7 +1873,7 @@ reload:
         int i;
 
         for (i = 0; i < poll_cnt; i++) {
-            dp_netdev_process_rxq_port(dp,  poll_list[i].port, poll_list[i].port->rxq);
+            dp_netdev_process_rxq_port(dp,  poll_list[i].port, poll_list[i].rx);
         }
 
         if (lc++ > 1024) {

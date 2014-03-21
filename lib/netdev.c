@@ -90,6 +90,12 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 static void restore_all_flags(void *aux OVS_UNUSED);
 void update_device_args(struct netdev *, const struct shash *args);
 
+int
+netdev_n_rxq(const struct netdev *netdev)
+{
+    return netdev->n_rxq;
+}
+
 bool
 netdev_is_pmd(const struct netdev *netdev)
 {
@@ -333,6 +339,13 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
                 netdev->netdev_class = rc->class;
                 netdev->name = xstrdup(name);
                 netdev->node = shash_add(&netdev_shash, name, netdev);
+
+                /* By default enable one rx queue per netdev. */
+                if (netdev->netdev_class->rxq_alloc) {
+                    netdev->n_rxq = 1;
+                } else {
+                    netdev->n_rxq = 0;
+                }
                 list_init(&netdev->saved_flags_list);
 
                 error = rc->class->construct(netdev);
@@ -514,15 +527,16 @@ netdev_parse_name(const char *netdev_name_, char **name, char **type)
  * Some kinds of network devices might not support receiving packets.  This
  * function returns EOPNOTSUPP in that case.*/
 int
-netdev_rxq_open(struct netdev *netdev, struct netdev_rxq **rxp)
+netdev_rxq_open(struct netdev *netdev, struct netdev_rxq **rxp, int id)
     OVS_EXCLUDED(netdev_mutex)
 {
     int error;
 
-    if (netdev->netdev_class->rxq_alloc) {
+    if (netdev->netdev_class->rxq_alloc && id < netdev->n_rxq) {
         struct netdev_rxq *rx = netdev->netdev_class->rxq_alloc();
         if (rx) {
             rx->netdev = netdev;
+            rx->queue_id = id;
             error = netdev->netdev_class->rxq_construct(rx);
             if (!error) {
                 ovs_mutex_lock(&netdev_mutex);

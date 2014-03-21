@@ -39,6 +39,7 @@ struct netdev {
                                                 this device. */
 
     /* The following are protected by 'netdev_mutex' (internal to netdev.c). */
+    int n_rxq;
     int ref_cnt;                        /* Times this devices was opened. */
     struct shash_node *node;            /* Pointer to element in global map. */
     struct list saved_flags_list; /* Contains "struct netdev_saved_flags". */
@@ -59,6 +60,7 @@ void netdev_get_devices(const struct netdev_class *,
  * None of these members change during the lifetime of a struct netdev_rxq. */
 struct netdev_rxq {
     struct netdev *netdev;      /* Owns a reference to the netdev. */
+    int queue_id;
 };
 
 struct netdev *netdev_rxq_get_netdev(const struct netdev_rxq *);
@@ -126,6 +128,9 @@ struct netdev *netdev_rxq_get_netdev(const struct netdev_rxq *);
  *   7. The client calls the "dealloc" to free the raw memory.  The
  *      implementation must not refer to base or derived state in the data
  *      structure, because it has already been uninitialized.
+ *
+ * If netdev support multi-queue IO then netdev->construct should set initialize
+ * netdev->n_rxq to number of queues.
  *
  * Each "alloc" function allocates and returns a new instance of the respective
  * data structure.  The "alloc" function is not given any information about the
