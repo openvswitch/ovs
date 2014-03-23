@@ -651,12 +651,16 @@ struct proto_abbrev {
 };
 
 /* Most users really don't care about some of the differences between
- * protocols.  These abbreviations help with that. */
+ * protocols.  These abbreviations help with that.
+ *
+ * Until it is safe to use the OpenFlow 1.4 protocol (which currently can
+ * cause aborts due to unimplemented features), we omit OpenFlow 1.4 from all
+ * abbrevations. */
 static const struct proto_abbrev proto_abbrevs[] = {
-    { OFPUTIL_P_ANY,          "any" },
-    { OFPUTIL_P_OF10_STD_ANY, "OpenFlow10" },
-    { OFPUTIL_P_OF10_NXM_ANY, "NXM" },
-    { OFPUTIL_P_ANY_OXM,      "OXM" },
+    { OFPUTIL_P_ANY          & ~OFPUTIL_P_OF14_OXM, "any" },
+    { OFPUTIL_P_OF10_STD_ANY & ~OFPUTIL_P_OF14_OXM, "OpenFlow10" },
+    { OFPUTIL_P_OF10_NXM_ANY & ~OFPUTIL_P_OF14_OXM, "NXM" },
+    { OFPUTIL_P_ANY_OXM      & ~OFPUTIL_P_OF14_OXM, "OXM" },
 };
 #define N_PROTO_ABBREVS ARRAY_SIZE(proto_abbrevs)
 

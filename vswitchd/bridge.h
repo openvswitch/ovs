@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+/* Copyright (c) 2008, 2009, 2010, 2011, 2012, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@ struct simap;
 
 void bridge_init(const char *remote);
 void bridge_exit(void);
+
+void bridge_enable_of14(void);
 
 void bridge_run(void);
 void bridge_wait(void);

@@ -1973,9 +1973,13 @@ format.
 .
 .IP "\fBOXM-OpenFlow12\fR"
 .IQ "\fBOXM-OpenFlow13\fR"
-.IQ "\fBOXM-OpenFlow14\fR"
 These are the standard OXM (OpenFlow Extensible Match) flow format in
-OpenFlow 1.2, 1.3, and 1.4, respectively.
+OpenFlow 1.2 and 1.3, respectively.
+.IP "\fBOXM-OpenFlow14\fR"
+The standard OXM (OpenFlow Extensible Match) flow format in OpenFlow
+1.4.  OpenFlow 1.4 is not yet well supported; in particular, the
+implementation is unsafe, such that sending an unsupported message in
+OpenFlow 1.4 to \fBovs\-vswitchd\fR can cause it to crash.
 .RE
 .
 .IP
@@ -1983,13 +1987,15 @@ OpenFlow 1.2, 1.3, and 1.4, respectively.
 collections of flow formats:
 .RS
 .IP "\fBany\fR"
-Any supported flow format.
+Any supported flow format except \fBOXM-OpenFlow14\fR, which is not
+yet well supported (see above).
 .IP "\fBOpenFlow10\fR"
 \fBOpenFlow10\-table_id\fR or \fBOpenFlow10+table_id\fR.
 .IP "\fBNXM\fR"
 \fBNXM\-table_id\fR or \fBNXM+table_id\fR.
 .IP "\fBOXM\fR"
-\fBOXM-OpenFlow12\fR, \fBOXM-OpenFlow13\fR, or \fBOXM-OpenFlow14\fR.
+\fBOXM-OpenFlow12\fR or \fBOXM-OpenFlow13\fR.  \fBOXM-OpenFlow14\fR is
+not included because it is not yet well supported (see above).
 .RE
 .
 .IP

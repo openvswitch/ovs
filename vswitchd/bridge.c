@@ -165,6 +165,11 @@ static uint64_t connectivity_seqno = LLONG_MIN;
 #define IFACE_STATS_INTERVAL (5 * 1000) /* In milliseconds. */
 static long long int iface_stats_timer = LLONG_MIN;
 
+/* Set to true to allow experimental use of OpenFlow 1.4.
+ * This is false initially because OpenFlow 1.4 is not yet safe to use: it can
+ * abort due to unimplemented features. */
+static bool allow_of14;
+
 /* In some datapaths, creating and destroying OpenFlow ports can be extremely
  * expensive.  This can cause bridge_reconfigure() to take a long time during
  * which no other work can be done.  To deal with this problem, we limit port
@@ -423,6 +428,14 @@ bridge_exit(void)
         bridge_destroy(br);
     }
     ovsdb_idl_destroy(idl);
+}
+
+/* Enables use of OpenFlow 1.4.  This is off by default because OpenFlow 1.4 is
+ * not yet safe to use: it can abort due to unimplemented features. */
+void
+bridge_enable_of14(void)
+{
+    allow_of14 = true;
 }
 
 /* Looks at the list of managers in 'ovs_cfg' and extracts their remote IP
@@ -915,11 +928,17 @@ bridge_configure_datapath_id(struct bridge *br)
 static uint32_t
 bridge_get_allowed_versions(struct bridge *br)
 {
+    uint32_t allowed_versions;
+
     if (!br->cfg->n_protocols)
         return 0;
 
-    return ofputil_versions_from_strings(br->cfg->protocols,
-                                         br->cfg->n_protocols);
+    allowed_versions = ofputil_versions_from_strings(br->cfg->protocols,
+                                                     br->cfg->n_protocols);
+    if (!allow_of14) {
+        allowed_versions &= ~(1u << OFP14_VERSION);
+    }
+    return allowed_versions;
 }
 
 /* Set NetFlow configuration on 'br'. */

@@ -565,9 +565,22 @@
       </column>
 
       <column name="protocols">
-        List of OpenFlow protocols that may be used when negotiating a
-        connection with a controller.  A default value of
-        <code>OpenFlow10</code> will be used if this column is empty.
+	<p>
+	  List of OpenFlow protocols that may be used when negotiating a
+	  connection with a controller.  A default value of
+	  <code>OpenFlow10</code> will be used if this column is empty.
+	</p>
+
+	<p>
+	  The current implementation of OpenFlow 1.4 support is not safe:
+	  <code>ovs-vswitchd</code> will abort when certain unimplemented
+	  features are tested.  Thus, for now it is suitable only for
+	  experimental use.  For this reason, OpenFlow 1.4 is supported only
+	  if, in addition to specifying <code>OpenFlow14</code> in this field,
+	  <code>ovs-vswitchd</code> is invoked with the
+	  <code>--enable-of14</code> option.  (When support becomes safe, this
+	  option will be removed.)
+	</p>
       </column>
     </group>
 
