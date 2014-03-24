@@ -1326,7 +1326,7 @@ bridge_configure_stp(struct bridge *br)
             }
         }
 
-        if (bitmap_scan(port_num_bitmap, 0, STP_MAX_PORTS) != STP_MAX_PORTS
+        if (bitmap_scan(port_num_bitmap, 1, 0, STP_MAX_PORTS) != STP_MAX_PORTS
                     && port_num_counter) {
             VLOG_ERR("bridge %s: must manually configure all STP port "
                      "IDs or none, disabling", br->name);
@@ -4111,7 +4111,7 @@ collect_splinter_vlans(const struct ovsrec_open_vswitch *ovs_cfg)
 
     sset_destroy(&splinter_ifaces);
 
-    if (bitmap_scan(splinter_vlans, 0, 4096) >= 4096) {
+    if (bitmap_scan(splinter_vlans, 1, 0, 4096) >= 4096) {
         free(splinter_vlans);
         return NULL;
     }

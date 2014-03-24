@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -100,11 +100,12 @@ bitmap_set(unsigned long *bitmap, size_t offset, bool value)
 void bitmap_set_multiple(unsigned long *, size_t start, size_t count,
                          bool value);
 bool bitmap_equal(const unsigned long *, const unsigned long *, size_t n);
-size_t bitmap_scan(const unsigned long int *, size_t start, size_t end);
+size_t bitmap_scan(const unsigned long int *, bool target,
+                   size_t start, size_t end);
 size_t bitmap_count1(const unsigned long *, size_t n);
 
 #define BITMAP_FOR_EACH_1(IDX, SIZE, BITMAP) \
-    for ((IDX) = bitmap_scan(BITMAP, 0, SIZE); (IDX) < (SIZE); \
-         (IDX) = bitmap_scan(BITMAP, (IDX) + 1, SIZE))
+    for ((IDX) = bitmap_scan(BITMAP, 1, 0, SIZE); (IDX) < (SIZE);    \
+         (IDX) = bitmap_scan(BITMAP, 1, (IDX) + 1, SIZE))
 
 #endif /* bitmap.h */

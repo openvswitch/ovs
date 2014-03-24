@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -653,7 +653,7 @@ duplicate_index_row__(const struct ovsdb_column_set *index,
     ds_put_format(out, "%s row, with UUID "UUID_FMT", ",
                   title, UUID_ARGS(ovsdb_row_get_uuid(row)));
     if (!row->txn_row
-        || bitmap_scan(row->txn_row->changed, 0, n_columns) == n_columns) {
+        || bitmap_scan(row->txn_row->changed, 1, 0, n_columns) == n_columns) {
         ds_put_cstr(out, "existed in the database before this "
                     "transaction and was not modified by the transaction.");
     } else if (!row->txn_row->old) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2011, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,16 +78,17 @@ bitmap_equal(const unsigned long *a, const unsigned long *b, size_t n)
 }
 
 /* Scans 'bitmap' from bit offset 'start' to 'end', excluding 'end' itself.
- * Returns the bit offset of the lowest-numbered bit set to 1, or 'end' if
- * all of the bits are set to 0. */
+ * Returns the bit offset of the lowest-numbered bit set to 'target', or 'end'
+ * if all of the bits are set to '!target'. */
 size_t
-bitmap_scan(const unsigned long int *bitmap, size_t start, size_t end)
+bitmap_scan(const unsigned long int *bitmap, bool target,
+            size_t start, size_t end)
 {
     /* XXX slow */
     size_t i;
 
     for (i = start; i < end; i++) {
-        if (bitmap_is_set(bitmap, i)) {
+        if (bitmap_is_set(bitmap, i) == target) {
             break;
         }
     }

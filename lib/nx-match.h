@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 
 struct ds;
 struct match;
+struct mf_field;
 struct mf_subfield;
 struct ofpact_reg_move;
 struct ofpact_reg_load;
