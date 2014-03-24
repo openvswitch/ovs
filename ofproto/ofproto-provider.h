@@ -835,7 +835,7 @@ struct ofproto_class {
      *
      *   - 'write_setfields' and 'apply_setfields' to OFPXMT12_MASK.
      *
-     *   - 'metadata_match' and 'metadata_write' to UINT64_MAX.
+     *   - 'metadata_match' and 'metadata_write' to OVS_BE64_MAX.
      *
      *   - 'instructions' to OFPIT11_ALL.
      *

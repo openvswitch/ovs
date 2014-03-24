@@ -2625,7 +2625,7 @@ ofp_print_table_features(struct ds *s, const struct ofp_header *oh)
         ds_put_format(s, "\n  table %"PRIu8":\n", tf.table_id);
         ds_put_format(s, "    name=\"%s\"\n", tf.name);
         ds_put_format(s, "    metadata: match=%#"PRIx64" write=%#"PRIx64"\n",
-                      tf.metadata_match, tf.metadata_write);
+                      ntohll(tf.metadata_match), ntohll(tf.metadata_write));
 
         ds_put_cstr(s, "    config=");
         ofp_print_table_miss_config(s, tf.config);
