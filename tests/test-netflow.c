@@ -162,7 +162,7 @@ print_netflow(struct ofpbuf *buf)
     }
 
     if (buf->size) {
-        printf("%"PRIuSIZE" extra bytes after last record\n", buf->size);
+        printf("%"PRIu32" extra bytes after last record\n", buf->size);
     }
 }
 

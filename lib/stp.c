@@ -1537,7 +1537,7 @@ stp_send_bpdu(struct stp_port *p, const void *bpdu, size_t bpdu_size)
     pkt = ofpbuf_new(ETH_HEADER_LEN + LLC_HEADER_LEN + bpdu_size);
     pkt->l2 = eth = ofpbuf_put_zeros(pkt, sizeof *eth);
     llc = ofpbuf_put_zeros(pkt, sizeof *llc);
-    pkt->l3 = ofpbuf_put(pkt, bpdu, bpdu_size);
+    ofpbuf_set_l3(pkt, ofpbuf_put(pkt, bpdu, bpdu_size));
 
     /* 802.2 header. */
     memcpy(eth->eth_dst, eth_addr_stp, ETH_ADDR_LEN);

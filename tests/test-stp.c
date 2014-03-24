@@ -92,7 +92,7 @@ send_bpdu(struct ofpbuf *pkt, int port_no, void *b_)
     assert(port_no < b->n_ports);
     lan = b->ports[port_no];
     if (lan) {
-        const void *data = pkt->l3;
+        const void *data = ofpbuf_get_l3(pkt);
         size_t size = (char *) ofpbuf_tail(pkt) - (char *) data;
         int i;
 

@@ -310,7 +310,7 @@ tcp_reader_run(struct tcp_reader *r, const struct flow *flow,
         || !l7) {
         return NULL;
     }
-    tcp = packet->l4;
+    tcp = ofpbuf_get_l4(packet);
     flags = TCP_FLAGS(tcp->tcp_ctl);
     l7_length = (char *) ofpbuf_tail(packet) - l7;
     seq = ntohl(get_16aligned_be32(&tcp->tcp_seq));

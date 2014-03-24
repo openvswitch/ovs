@@ -30,9 +30,9 @@ ofpbuf_use__(struct ofpbuf *b, void *base, size_t allocated,
     b->allocated = allocated;
     b->source = source;
     b->size = 0;
-    b->l2 = b->l2_5 = b->l3 = b->l4 = NULL;
+    b->l2 = NULL;
+    b->l2_5_ofs = b->l3_ofs = b->l4_ofs = UINT16_MAX;
     list_poison(&b->list_node);
-    b->private_p = NULL;
 }
 
 /* Initializes 'b' as an empty ofpbuf that contains the 'allocated' bytes of
@@ -164,24 +164,17 @@ struct ofpbuf *
 ofpbuf_clone_with_headroom(const struct ofpbuf *buffer, size_t headroom)
 {
     struct ofpbuf *new_buffer;
-    uintptr_t data_delta;
 
     new_buffer = ofpbuf_clone_data_with_headroom(buffer->data, buffer->size,
                                                  headroom);
-    data_delta = (char *) new_buffer->data - (char *) buffer->data;
-
     if (buffer->l2) {
+        uintptr_t data_delta = (char *)new_buffer->data - (char *)buffer->data;
+
         new_buffer->l2 = (char *) buffer->l2 + data_delta;
     }
-    if (buffer->l2_5) {
-        new_buffer->l2_5 = (char *) buffer->l2_5 + data_delta;
-    }
-    if (buffer->l3) {
-        new_buffer->l3 = (char *) buffer->l3 + data_delta;
-    }
-    if (buffer->l4) {
-        new_buffer->l4 = (char *) buffer->l4 + data_delta;
-    }
+    new_buffer->l2_5_ofs = buffer->l2_5_ofs;
+    new_buffer->l3_ofs = buffer->l3_ofs;
+    new_buffer->l4_ofs = buffer->l4_ofs;
 
     return new_buffer;
 }
@@ -263,18 +256,10 @@ ofpbuf_resize__(struct ofpbuf *b, size_t new_headroom, size_t new_tailroom)
     new_data = (char *) new_base + new_headroom;
     if (b->data != new_data) {
         uintptr_t data_delta = (char *) new_data - (char *) b->data;
+
         b->data = new_data;
         if (b->l2) {
             b->l2 = (char *) b->l2 + data_delta;
-        }
-        if (b->l2_5) {
-            b->l2_5 = (char *) b->l2_5 + data_delta;
-        }
-        if (b->l3) {
-            b->l3 = (char *) b->l3 + data_delta;
-        }
-        if (b->l4) {
-            b->l4 = (char *) b->l4 + data_delta;
         }
     }
 }
@@ -491,7 +476,7 @@ ofpbuf_to_string(const struct ofpbuf *b, size_t maxbytes)
     struct ds s;
 
     ds_init(&s);
-    ds_put_format(&s, "size=%"PRIuSIZE", allocated=%"PRIuSIZE", head=%"PRIuSIZE", tail=%"PRIuSIZE"\n",
+    ds_put_format(&s, "size=%"PRIu32", allocated=%"PRIu32", head=%"PRIuSIZE", tail=%"PRIuSIZE"\n",
                   b->size, b->allocated,
                   ofpbuf_headroom(b), ofpbuf_tailroom(b));
     ds_put_hex_dump(&s, b->data, MIN(b->size, maxbytes), 0, false);
@@ -509,4 +494,43 @@ ofpbuf_list_delete(struct list *list)
         list_remove(&b->list_node);
         ofpbuf_delete(b);
     }
+}
+
+static inline void
+ofpbuf_adjust_layer_offset(uint16_t *offset, int increment)
+{
+    if (*offset != UINT16_MAX) {
+        *offset += increment;
+    }
+}
+
+/* Adjust the size of the l2_5 portion of the ofpbuf, updating the l2
+ * pointer and the layer offsets.  The caller is responsible for
+ * modifying the contents. */
+void *
+ofpbuf_resize_l2_5(struct ofpbuf *b, int increment)
+{
+    if (increment >= 0) {
+        ofpbuf_push_uninit(b, increment);
+    } else {
+        ofpbuf_pull(b, -increment);
+    }
+
+    b->l2 = b->data;
+    /* Adjust layer offsets after l2_5. */
+    ofpbuf_adjust_layer_offset(&b->l3_ofs, increment);
+    ofpbuf_adjust_layer_offset(&b->l4_ofs, increment);
+
+    return b->l2;
+}
+
+/* Adjust the size of the l2 portion of the ofpbuf, updating the l2
+ * pointer and the layer offsets.  The caller is responsible for
+ * modifying the contents. */
+void *
+ofpbuf_resize_l2(struct ofpbuf *b, int increment)
+{
+    ofpbuf_resize_l2_5(b, increment);
+    ofpbuf_adjust_layer_offset(&b->l2_5_ofs, increment);
+    return b->l2;
 }

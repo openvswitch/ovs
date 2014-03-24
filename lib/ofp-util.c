@@ -1929,7 +1929,7 @@ ofputil_decode_meter_config(struct ofpbuf *msg,
     omc = ofpbuf_try_pull(msg, sizeof *omc);
     if (!omc) {
         VLOG_WARN_RL(&bad_ofmsg_rl,
-                     "OFPMP_METER_CONFIG reply has %"PRIuSIZE" leftover bytes at end",
+                     "OFPMP_METER_CONFIG reply has %"PRIu32" leftover bytes at end",
                      msg->size);
         return OFPERR_OFPBRC_BAD_LEN;
     }
@@ -2005,7 +2005,7 @@ ofputil_decode_meter_stats(struct ofpbuf *msg,
     oms = ofpbuf_try_pull(msg, sizeof *oms);
     if (!oms) {
         VLOG_WARN_RL(&bad_ofmsg_rl,
-                     "OFPMP_METER reply has %"PRIuSIZE" leftover bytes at end",
+                     "OFPMP_METER reply has %"PRIu32" leftover bytes at end",
                      msg->size);
         return OFPERR_OFPBRC_BAD_LEN;
     }
@@ -2176,7 +2176,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         nfm->command = ofputil_tid_command(fm, protocol);
         nfm->cookie = fm->new_cookie;
         match_len = nx_put_match(msg, &fm->match, fm->cookie, fm->cookie_mask);
-        nfm = msg->l3;
+        nfm = ofpbuf_get_l3(msg);
         nfm->idle_timeout = htons(fm->idle_timeout);
         nfm->hard_timeout = htons(fm->hard_timeout);
         nfm->priority = htons(fm->priority);
@@ -2396,7 +2396,7 @@ ofputil_append_queue_get_config_reply(struct ofpbuf *reply,
         struct ofp12_packet_queue *opq12;
         ovs_be32 port;
 
-        qgcr11 = reply->l3;
+        qgcr11 = ofpbuf_get_l3(reply);
         port = qgcr11->port;
 
         opq12 = ofpbuf_put_zeros(reply, sizeof *opq12);
@@ -2636,7 +2636,7 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
         match_len = nx_put_match(msg, &fsr->match,
                                  fsr->cookie, fsr->cookie_mask);
 
-        nfsr = msg->l3;
+        nfsr = ofpbuf_get_l3(msg);
         nfsr->out_port = htons(ofp_to_u16(fsr->out_port));
         nfsr->match_len = htons(match_len);
         nfsr->table_id = fsr->table_id;
@@ -2698,7 +2698,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
 
         ofs = ofpbuf_try_pull(msg, sizeof *ofs);
         if (!ofs) {
-            VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_FLOW reply has %"PRIuSIZE" leftover "
+            VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_FLOW reply has %"PRIu32" leftover "
                          "bytes at end", msg->size);
             return EINVAL;
         }
@@ -2748,7 +2748,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
 
         ofs = ofpbuf_try_pull(msg, sizeof *ofs);
         if (!ofs) {
-            VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_FLOW reply has %"PRIuSIZE" leftover "
+            VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_FLOW reply has %"PRIu32" leftover "
                          "bytes at end", msg->size);
             return EINVAL;
         }
@@ -2784,7 +2784,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
 
         nfs = ofpbuf_try_pull(msg, sizeof *nfs);
         if (!nfs) {
-            VLOG_WARN_RL(&bad_ofmsg_rl, "NXST_FLOW reply has %"PRIuSIZE" leftover "
+            VLOG_WARN_RL(&bad_ofmsg_rl, "NXST_FLOW reply has %"PRIu32" leftover "
                          "bytes at end", msg->size);
             return EINVAL;
         }
@@ -2982,7 +2982,7 @@ ofputil_decode_aggregate_stats_reply(struct ofputil_aggregate_stats *stats,
     ofpbuf_use_const(&msg, reply, ntohs(reply->length));
     ofpraw_pull_assert(&msg);
 
-    asr = msg.l3;
+    asr = ofpbuf_get_l3(&msg);
     stats->packet_count = ntohll(get_32aligned_be64(&asr->packet_count));
     stats->byte_count = ntohll(get_32aligned_be64(&asr->byte_count));
     stats->flow_count = ntohl(asr->flow_count);
@@ -3134,7 +3134,7 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
         nfr = ofpbuf_put_zeros(msg, sizeof *nfr);
         match_len = nx_put_match(msg, &fr->match, 0, 0);
 
-        nfr = msg->l3;
+        nfr = ofpbuf_get_l3(msg);
         nfr->cookie = fr->cookie;
         nfr->priority = htons(fr->priority);
         nfr->reason = fr->reason;
@@ -3346,7 +3346,7 @@ ofputil_encode_nx_packet_in(const struct ofputil_packet_in *pin)
     ofpbuf_put_zeros(packet, 2);
     ofpbuf_put(packet, pin->packet, pin->packet_len);
 
-    npi = packet->l3;
+    npi = ofpbuf_get_l3(packet);
     npi->buffer_id = htonl(pin->buffer_id);
     npi->total_len = htons(pin->total_len);
     npi->reason = pin->reason;
@@ -3410,7 +3410,7 @@ ofputil_encode_ofp12_packet_in(const struct ofputil_packet_in *pin,
     ofpbuf_put_zeros(packet, 2);
     ofpbuf_put(packet, pin->packet, pin->packet_len);
 
-    opi = packet->l3;
+    opi = ofpbuf_get_l3(packet);
     opi->pi.buffer_id = htonl(pin->buffer_id);
     opi->pi.total_len = htons(pin->total_len);
     opi->pi.reason = pin->reason;
@@ -4629,7 +4629,7 @@ ofputil_decode_role_message(const struct ofp_header *oh,
 
     if (raw == OFPRAW_OFPT12_ROLE_REQUEST ||
         raw == OFPRAW_OFPT12_ROLE_REPLY) {
-        const struct ofp12_role_request *orr = b.l3;
+        const struct ofp12_role_request *orr = ofpbuf_get_l3(&b);
 
         if (orr->role != htonl(OFPCR12_ROLE_NOCHANGE) &&
             orr->role != htonl(OFPCR12_ROLE_EQUAL) &&
@@ -4650,7 +4650,7 @@ ofputil_decode_role_message(const struct ofp_header *oh,
         }
     } else if (raw == OFPRAW_NXT_ROLE_REQUEST ||
                raw == OFPRAW_NXT_ROLE_REPLY) {
-        const struct nx_role_request *nrr = b.l3;
+        const struct nx_role_request *nrr = ofpbuf_get_l3(&b);
 
         BUILD_ASSERT(NX_ROLE_OTHER + 1 == OFPCR12_ROLE_EQUAL);
         BUILD_ASSERT(NX_ROLE_MASTER + 1 == OFPCR12_ROLE_MASTER);
@@ -4739,7 +4739,7 @@ ofputil_decode_role_status(const struct ofp_header *oh,
     raw = ofpraw_pull_assert(&b);
     ovs_assert(raw == OFPRAW_OFPT14_ROLE_STATUS);
 
-    r = b.l3;
+    r = ofpbuf_get_l3(&b);
     if (r->role != htonl(OFPCR12_ROLE_NOCHANGE) &&
         r->role != htonl(OFPCR12_ROLE_EQUAL) &&
         r->role != htonl(OFPCR12_ROLE_MASTER) &&
@@ -4953,7 +4953,7 @@ ofputil_decode_flow_monitor_request(struct ofputil_flow_monitor_request *rq,
 
     nfmr = ofpbuf_try_pull(msg, sizeof *nfmr);
     if (!nfmr) {
-        VLOG_WARN_RL(&bad_ofmsg_rl, "NXST_FLOW_MONITOR request has %"PRIuSIZE" "
+        VLOG_WARN_RL(&bad_ofmsg_rl, "NXST_FLOW_MONITOR request has %"PRIu32" "
                      "leftover bytes at end", msg->size);
         return OFPERR_OFPBRC_BAD_LEN;
     }
@@ -5107,7 +5107,7 @@ ofputil_decode_flow_update(struct ofputil_flow_update *update,
     }
 
 bad_len:
-    VLOG_WARN_RL(&bad_ofmsg_rl, "NXST_FLOW_MONITOR reply has %"PRIuSIZE" "
+    VLOG_WARN_RL(&bad_ofmsg_rl, "NXST_FLOW_MONITOR reply has %"PRIu32" "
                  "leftover bytes at end", msg->size);
     return OFPERR_OFPBRC_BAD_LEN;
 }
@@ -5211,7 +5211,7 @@ ofputil_encode_packet_out(const struct ofputil_packet_out *po,
         ofpacts_put_openflow_actions(po->ofpacts, po->ofpacts_len, msg,
                                      ofp_version);
 
-        opo = msg->l3;
+        opo = ofpbuf_get_l3(msg);
         opo->buffer_id = htonl(po->buffer_id);
         opo->in_port = htons(ofp_to_u16(po->in_port));
         opo->actions_len = htons(msg->size - actions_ofs);
@@ -5229,7 +5229,7 @@ ofputil_encode_packet_out(const struct ofputil_packet_out *po,
         ofpbuf_put_zeros(msg, sizeof *opo);
         len = ofpacts_put_openflow_actions(po->ofpacts, po->ofpacts_len, msg,
                                            ofp_version);
-        opo = msg->l3;
+        opo = ofpbuf_get_l3(msg);
         opo->buffer_id = htonl(po->buffer_id);
         opo->in_port = ofputil_port_to_ofp11(po->in_port);
         opo->actions_len = htons(len);
@@ -6164,7 +6164,7 @@ ofputil_decode_port_stats(struct ofputil_port_stats *ps, struct ofpbuf *msg)
     }
 
  bad_len:
-    VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_PORT reply has %"PRIuSIZE" leftover "
+    VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_PORT reply has %"PRIu32" leftover "
                  "bytes at end", msg->size);
     return OFPERR_OFPBRC_BAD_LEN;
 }
@@ -6483,7 +6483,7 @@ ofputil_decode_group_stats_reply(struct ofpbuf *msg,
     }
 
     if (!ogs11) {
-        VLOG_WARN_RL(&bad_ofmsg_rl, "%s reply has %"PRIuSIZE" leftover bytes at end",
+        VLOG_WARN_RL(&bad_ofmsg_rl, "%s reply has %"PRIu32" leftover bytes at end",
                      ofpraw_get_name(raw), msg->size);
         return OFPERR_OFPBRC_BAD_LEN;
     }
@@ -6502,7 +6502,7 @@ ofputil_decode_group_stats_reply(struct ofpbuf *msg,
     gs->n_buckets = (length - base_len) / sizeof *obc;
     obc = ofpbuf_try_pull(msg, gs->n_buckets * sizeof *obc);
     if (!obc) {
-        VLOG_WARN_RL(&bad_ofmsg_rl, "%s reply has %"PRIuSIZE" leftover bytes at end",
+        VLOG_WARN_RL(&bad_ofmsg_rl, "%s reply has %"PRIu32" leftover bytes at end",
                      ofpraw_get_name(raw), msg->size);
         return OFPERR_OFPBRC_BAD_LEN;
     }
@@ -6641,7 +6641,7 @@ ofputil_decode_group_desc_reply(struct ofputil_group_desc *gd,
 
     ogds = ofpbuf_try_pull(msg, sizeof *ogds);
     if (!ogds) {
-        VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST11_GROUP_DESC reply has %"PRIuSIZE" "
+        VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST11_GROUP_DESC reply has %"PRIu32" "
                      "leftover bytes at end", msg->size);
         return OFPERR_OFPBRC_BAD_LEN;
     }
@@ -6972,7 +6972,7 @@ ofputil_decode_queue_stats(struct ofputil_queue_stats *qs, struct ofpbuf *msg)
     }
 
  bad_len:
-    VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_QUEUE reply has %"PRIuSIZE" leftover "
+    VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_QUEUE reply has %"PRIu32" leftover "
                  "bytes at end", msg->size);
     return OFPERR_OFPBRC_BAD_LEN;
 }

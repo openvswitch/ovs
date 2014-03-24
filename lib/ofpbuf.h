@@ -27,7 +27,7 @@
 extern "C" {
 #endif
 
-enum ofpbuf_source {
+enum OVS_PACKED_ENUM ofpbuf_source {
     OFPBUF_MALLOC,              /* Obtained via malloc(). */
     OFPBUF_STACK,               /* Un-movable stack space or static buffer. */
     OFPBUF_STUB,                /* Starts on stack, may expand into heap. */
@@ -39,20 +39,34 @@ enum ofpbuf_source {
  * as necessary if it grows too large for the available memory. */
 struct ofpbuf {
     void *base;                 /* First byte of allocated space. */
-    size_t allocated;           /* Number of bytes allocated. */
-    enum ofpbuf_source source;  /* Source of memory allocated as 'base'. */
-
+    uint32_t allocated;         /* Number of bytes allocated. */
+    uint32_t size;              /* Number of bytes in use. */
     void *data;                 /* First byte actually in use. */
-    size_t size;                /* Number of bytes in use. */
 
     void *l2;                   /* Link-level header. */
-    void *l2_5;                 /* MPLS label stack */
-    void *l3;                   /* Network-level header. */
-    void *l4;                   /* Transport-level header. */
-
+    uint16_t l2_5_ofs;          /* MPLS label stack offset from l2, or
+                                 * UINT16_MAX */
+    uint16_t l3_ofs;            /* Network-level header offset from l2, or
+                                 * UINT16_MAX. */
+    uint16_t l4_ofs;            /* Transport-level header offset from l2, or
+                                   UINT16_MAX. */
+    enum ofpbuf_source source;  /* Source of memory allocated as 'base'. */
     struct list list_node;      /* Private list element for use by owner. */
-    void *private_p;            /* Private pointer for use by owner. */
 };
+
+void * ofpbuf_resize_l2(struct ofpbuf *, int increment);
+void * ofpbuf_resize_l2_5(struct ofpbuf *, int increment);
+static inline void * ofpbuf_get_l2_5(const struct ofpbuf *);
+static inline void ofpbuf_set_l2_5(struct ofpbuf *, void *);
+static inline void * ofpbuf_get_l3(const struct ofpbuf *);
+static inline void ofpbuf_set_l3(struct ofpbuf *, void *);
+static inline void * ofpbuf_get_l4(const struct ofpbuf *);
+static inline void ofpbuf_set_l4(struct ofpbuf *, void *);
+static inline size_t ofpbuf_get_l4_size(const struct ofpbuf *);
+static inline const void *ofpbuf_get_tcp_payload(const struct ofpbuf *);
+static inline const void *ofpbuf_get_udp_payload(const struct ofpbuf *);
+static inline const void *ofpbuf_get_sctp_payload(const struct ofpbuf *);
+static inline const void *ofpbuf_get_icmp_payload(const struct ofpbuf *);
 
 void ofpbuf_use(struct ofpbuf *, void *, size_t);
 void ofpbuf_use_stack(struct ofpbuf *, void *, size_t);
@@ -212,9 +226,40 @@ static inline bool ofpbuf_equal(const struct ofpbuf *a, const struct ofpbuf *b)
     return a->size == b->size && memcmp(a->data, b->data, a->size) == 0;
 }
 
+static inline void * ofpbuf_get_l2_5(const struct ofpbuf *b)
+{
+    return b->l2_5_ofs != UINT16_MAX ? (char *)b->l2 + b->l2_5_ofs : NULL;
+}
+
+static inline void ofpbuf_set_l2_5(struct ofpbuf *b, void *l2_5)
+{
+    b->l2_5_ofs = l2_5 ? (char *)l2_5 - (char *)b->l2 : UINT16_MAX;
+}
+
+static inline void * ofpbuf_get_l3(const struct ofpbuf *b)
+{
+    return b->l3_ofs != UINT16_MAX ? (char *)b->l2 + b->l3_ofs : NULL;
+}
+
+static inline void ofpbuf_set_l3(struct ofpbuf *b, void *l3)
+{
+    b->l3_ofs = l3 ? (char *)l3 - (char *)b->l2 : UINT16_MAX;
+}
+
+static inline void * ofpbuf_get_l4(const struct ofpbuf *b)
+{
+    return b->l4_ofs != UINT16_MAX ? (char *)b->l2 + b->l4_ofs : NULL;
+}
+
+static inline void ofpbuf_set_l4(struct ofpbuf *b, void *l4)
+{
+    b->l4_ofs = l4 ? (char *)l4 - (char *)b->l2 : UINT16_MAX;
+}
+
 static inline size_t ofpbuf_get_l4_size(const struct ofpbuf *b)
 {
-    return b->l4 ? (const char *)ofpbuf_tail(b) - (const char *)b->l4 : 0;
+    return b->l4_ofs != UINT16_MAX
+        ? (const char *)ofpbuf_tail(b) - (const char *)ofpbuf_get_l4(b) : 0;
 }
 
 static inline const void *ofpbuf_get_tcp_payload(const struct ofpbuf *b)
@@ -222,7 +267,7 @@ static inline const void *ofpbuf_get_tcp_payload(const struct ofpbuf *b)
     size_t l4_size = ofpbuf_get_l4_size(b);
 
     if (OVS_LIKELY(l4_size >= TCP_HEADER_LEN)) {
-        struct tcp_header *tcp = b->l4;
+        struct tcp_header *tcp = ofpbuf_get_l4(b);
         int tcp_len = TCP_OFFSET(tcp->tcp_ctl) * 4;
 
         if (OVS_LIKELY(tcp_len >= TCP_HEADER_LEN && tcp_len <= l4_size)) {
@@ -235,19 +280,19 @@ static inline const void *ofpbuf_get_tcp_payload(const struct ofpbuf *b)
 static inline const void *ofpbuf_get_udp_payload(const struct ofpbuf *b)
 {
     return OVS_LIKELY(ofpbuf_get_l4_size(b) >= UDP_HEADER_LEN)
-        ? (const char *)b->l4 + UDP_HEADER_LEN : NULL;
+        ? (const char *)ofpbuf_get_l4(b) + UDP_HEADER_LEN : NULL;
 }
 
 static inline const void *ofpbuf_get_sctp_payload(const struct ofpbuf *b)
 {
     return OVS_LIKELY(ofpbuf_get_l4_size(b) >= SCTP_HEADER_LEN)
-        ? (const char *)b->l4 + SCTP_HEADER_LEN : NULL;
+        ? (const char *)ofpbuf_get_l4(b) + SCTP_HEADER_LEN : NULL;
 }
 
 static inline const void *ofpbuf_get_icmp_payload(const struct ofpbuf *b)
 {
     return OVS_LIKELY(ofpbuf_get_l4_size(b) >= ICMP_HEADER_LEN)
-        ? (const char *)b->l4 + ICMP_HEADER_LEN : NULL;
+        ? (const char *)ofpbuf_get_l4(b) + ICMP_HEADER_LEN : NULL;
 }
 
 #ifdef  __cplusplus

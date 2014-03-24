@@ -2419,7 +2419,9 @@ bundle_send_learning_packets(struct ofbundle *bundle)
             learning_packet = bond_compose_learning_packet(bundle->bond,
                                                            e->mac, e->vlan,
                                                            &port_void);
-            learning_packet->private_p = port_void;
+            /* Temporarily use l2 as a private pointer (see below). */
+            ovs_assert(learning_packet->l2 == learning_packet->data);
+            learning_packet->l2 = port_void;
             list_push_back(&packets, &learning_packet->list_node);
         }
     }
@@ -2428,8 +2430,11 @@ bundle_send_learning_packets(struct ofbundle *bundle)
     error = n_packets = n_errors = 0;
     LIST_FOR_EACH (learning_packet, list_node, &packets) {
         int ret;
+        void *port_void = learning_packet->l2;
 
-        ret = ofproto_dpif_send_packet(learning_packet->private_p, learning_packet);
+        /* Restore l2. */
+        learning_packet->l2 = learning_packet->data;
+        ret = ofproto_dpif_send_packet(port_void, learning_packet);
         if (ret) {
             error = ret;
             n_errors++;

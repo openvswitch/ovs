@@ -51,7 +51,7 @@ odp_set_tunnel_action(const struct nlattr *a, struct flow_tnl *tun_key)
 static void
 set_arp(struct ofpbuf *packet, const struct ovs_key_arp *arp_key)
 {
-    struct arp_eth_header *arp = packet->l3;
+    struct arp_eth_header *arp = ofpbuf_get_l3(packet);
 
     arp->ar_op = arp_key->arp_op;
     memcpy(arp->ar_sha, arp_key->arp_sha, ETH_ADDR_LEN);

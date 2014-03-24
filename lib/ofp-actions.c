@@ -710,7 +710,7 @@ ofpacts_pull_openflow_actions(struct ofpbuf *openflow,
     actions = ofpbuf_try_pull(openflow, actions_len);
     if (actions == NULL) {
         VLOG_WARN_RL(&rl, "OpenFlow message actions length %u exceeds "
-                     "remaining message length (%"PRIuSIZE")",
+                     "remaining message length (%"PRIu32")",
                      actions_len, openflow->size);
         return OFPERR_OFPBRC_BAD_LEN;
     }
@@ -1768,7 +1768,7 @@ ofpacts_pull_openflow_instructions(struct ofpbuf *openflow,
     instructions = ofpbuf_try_pull(openflow, instructions_len);
     if (instructions == NULL) {
         VLOG_WARN_RL(&rl, "OpenFlow message instructions length %u exceeds "
-                     "remaining message length (%"PRIuSIZE")",
+                     "remaining message length (%"PRIu32")",
                      instructions_len, openflow->size);
         error = OFPERR_OFPBIC_BAD_LEN;
         goto exit;
