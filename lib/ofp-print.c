@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2305,12 +2305,6 @@ ofp_header_to_string__(const struct ofp_header *oh, enum ofpraw raw,
 }
 
 static void
-ofp_print_not_implemented(struct ds *string)
-{
-    ds_put_cstr(string, "NOT IMPLEMENTED YET!\n");
-}
-
-static void
 ofp_print_group(struct ds *s, uint32_t group_id, uint8_t type,
                 struct list *p_buckets)
 {
@@ -2505,6 +2499,166 @@ ofp_print_group_mod(struct ds *s, const struct ofp_header *oh)
     ofp_print_group(s, gm.group_id, gm.type, &gm.buckets);
 }
 
+static const char *
+ofp13_action_to_string(uint32_t bit)
+{
+    switch (bit) {
+#define OFPAT13_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME)  \
+        case 1u << ENUM: return NAME;
+#include "ofp-util.def"
+    }
+    return NULL;
+}
+
+static void
+print_table_action_features(struct ds *s,
+                            const struct ofputil_table_action_features *taf)
+{
+    ds_put_cstr(s, "        actions: ");
+    ofp_print_bit_names(s, taf->actions, ofp13_action_to_string, ',');
+    ds_put_char(s, '\n');
+
+    ds_put_cstr(s, "        supported on Set-Field: ");
+    if (taf->set_fields) {
+        int i;
+
+        for (i = 0; i < MFF_N_IDS; i++) {
+            uint64_t bit = UINT64_C(1) << i;
+
+            if (taf->set_fields & bit) {
+                ds_put_format(s, "%s,", mf_from_id(i)->name);
+            }
+        }
+        ds_chomp(s, ',');
+    } else {
+        ds_put_cstr(s, "none");
+    }
+    ds_put_char(s, '\n');
+}
+
+static bool
+table_action_features_equal(const struct ofputil_table_action_features *a,
+                            const struct ofputil_table_action_features *b)
+{
+    return a->actions == b->actions && a->set_fields == b->set_fields;
+}
+
+static void
+print_table_instruction_features(
+    struct ds *s, const struct ofputil_table_instruction_features *tif)
+{
+    int start, end;
+
+    ds_put_cstr(s, "      next tables: ");
+    for (start = bitmap_scan(tif->next, 1, 0, 255); start < 255;
+         start = bitmap_scan(tif->next, 1, end, 255)) {
+        end = bitmap_scan(tif->next, 0, start + 1, 255);
+        if (end == start + 1) {
+            ds_put_format(s, "%d,", start);
+        } else {
+            ds_put_format(s, "%d-%d,", start, end - 1);
+        }
+    }
+    ds_chomp(s, ',');
+    if (ds_last(s) == ' ') {
+        ds_put_cstr(s, "none");
+    }
+    ds_put_char(s, '\n');
+
+    ds_put_cstr(s, "      instructions: ");
+    if (tif->instructions) {
+        int i;
+
+        for (i = 0; i < 32; i++) {
+            if (tif->instructions & (1u << i)) {
+                ds_put_format(s, "%s,", ovs_instruction_name_from_type(i));
+            }
+        }
+        ds_chomp(s, ',');
+    } else {
+        ds_put_cstr(s, "none");
+    }
+    ds_put_char(s, '\n');
+
+    if (table_action_features_equal(&tif->write, &tif->apply)) {
+        ds_put_cstr(s, "      Write-Actions and Apply-Actions features:\n");
+        print_table_action_features(s, &tif->write);
+    } else {
+        ds_put_cstr(s, "      Write-Actions features:\n");
+        print_table_action_features(s, &tif->write);
+        ds_put_cstr(s, "      Apply-Actions features:\n");
+        print_table_action_features(s, &tif->apply);
+    }
+}
+
+static bool
+table_instruction_features_equal(
+    const struct ofputil_table_instruction_features *a,
+    const struct ofputil_table_instruction_features *b)
+{
+    return (bitmap_equal(a->next, b->next, 255)
+            && a->instructions == b->instructions
+            && table_action_features_equal(&a->write, &b->write)
+            && table_action_features_equal(&a->apply, &b->apply));
+}
+
+static void
+ofp_print_table_features(struct ds *s, const struct ofp_header *oh)
+{
+    struct ofpbuf b;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+
+    for (;;) {
+        struct ofputil_table_features tf;
+        int retval;
+        int i;
+
+        retval = ofputil_decode_table_features(&b, &tf, true);
+        if (retval) {
+            if (retval != EOF) {
+                ofp_print_error(s, retval);
+            }
+            return;
+        }
+
+        ds_put_format(s, "\n  table %"PRIu8":\n", tf.table_id);
+        ds_put_format(s, "    name=\"%s\"\n", tf.name);
+        ds_put_format(s, "    metadata: match=%#"PRIx64" write=%#"PRIx64"\n",
+                      tf.metadata_match, tf.metadata_write);
+
+        ds_put_cstr(s, "    config=");
+        ofp_print_table_miss_config(s, tf.config);
+
+        ds_put_format(s, "    max_entries=%"PRIu32"\n", tf.max_entries);
+
+        if (table_instruction_features_equal(&tf.nonmiss, &tf.miss)) {
+            ds_put_cstr(s, "    instructions (table miss and others):\n");
+            print_table_instruction_features(s, &tf.nonmiss);
+        } else {
+            ds_put_cstr(s, "    instructions (other than table miss):\n");
+            print_table_instruction_features(s, &tf.nonmiss);
+            ds_put_cstr(s, "    instructions (table miss):\n");
+            print_table_instruction_features(s, &tf.miss);
+        }
+
+        ds_put_cstr(s, "    matching:\n");
+        for (i = 0; i < MFF_N_IDS; i++) {
+            uint64_t bit = UINT64_C(1) << i;
+
+            if (tf.match & bit) {
+                const struct mf_field *f = mf_from_id(i);
+
+                ds_put_format(s, "      %s: %s\n",
+                              f->name,
+                              (tf.mask ? "arbitrary mask"
+                               : tf.wildcard ? "exact match or wildcard"
+                               : "must exact match"));
+            }
+        }
+    }
+}
+
 static void
 ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
                 struct ds *string, int verbosity)
@@ -2545,7 +2699,7 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
 
     case OFPTYPE_TABLE_FEATURES_STATS_REQUEST:
     case OFPTYPE_TABLE_FEATURES_STATS_REPLY:
-        ofp_print_not_implemented(string);
+        ofp_print_table_features(string, oh);
         break;
 
     case OFPTYPE_HELLO:

@@ -58,6 +58,10 @@ information on its flow tables and ports.
 \fBdump\-tables \fIswitch\fR
 Prints to the console statistics for each of the flow tables used by
 \fIswitch\fR.
+.TP
+\fBdump\-table\-features \fIswitch\fR
+Prints to the console features for each of the flow tables used by
+\fIswitch\fR.
 .
 .TP
 \fBdump\-ports \fIswitch\fR [\fInetdev\fR]

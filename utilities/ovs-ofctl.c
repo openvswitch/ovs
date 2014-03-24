@@ -282,6 +282,7 @@ usage(void)
            "  show SWITCH                 show OpenFlow information\n"
            "  dump-desc SWITCH            print switch description\n"
            "  dump-tables SWITCH          print table stats\n"
+           "  dump-table-features SWITCH  print table features\n"
            "  mod-port SWITCH IFACE ACT   modify port behavior\n"
            "  mod-table SWITCH MOD        modify flow table behavior\n"
            "  get-frags SWITCH            print fragment handling behavior\n"
@@ -650,6 +651,21 @@ static void
 ofctl_dump_tables(int argc OVS_UNUSED, char *argv[])
 {
     dump_trivial_stats_transaction(argv[1], OFPRAW_OFPST_TABLE_REQUEST);
+}
+
+static void
+ofctl_dump_table_features(int argc OVS_UNUSED, char *argv[])
+{
+    struct ofpbuf *request;
+    struct vconn *vconn;
+
+    open_vconn(argv[1], &vconn);
+    request = ofputil_encode_table_features_request(vconn_get_version(vconn));
+    if (request) {
+        dump_stats_transaction(vconn, request);
+    }
+
+    vconn_close(vconn);
 }
 
 static bool
@@ -3431,6 +3447,7 @@ static const struct command all_commands[] = {
     { "snoop", 1, 1, ofctl_snoop },
     { "dump-desc", 1, 1, ofctl_dump_desc },
     { "dump-tables", 1, 1, ofctl_dump_tables },
+    { "dump-table-features", 1, 1, ofctl_dump_table_features },
     { "dump-flows", 1, 2, ofctl_dump_flows },
     { "dump-aggregate", 1, 2, ofctl_dump_aggregate },
     { "queue-stats", 1, 3, ofctl_queue_stats },

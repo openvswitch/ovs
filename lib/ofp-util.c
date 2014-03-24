@@ -42,6 +42,7 @@
 #include "unaligned.h"
 #include "type-props.h"
 #include "vlog.h"
+#include "bitmap.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_util);
 
@@ -4205,6 +4206,349 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
     return b;
 }
 
+struct ofp_prop_header {
+    ovs_be16 type;
+    ovs_be16 len;
+};
+
+static enum ofperr
+ofputil_pull_property(struct ofpbuf *msg, struct ofpbuf *payload,
+                      uint16_t *typep)
+{
+    struct ofp_prop_header *oph;
+    unsigned int len;
+
+    if (msg->size < sizeof *oph) {
+        return OFPERR_OFPTFFC_BAD_LEN;
+    }
+
+    oph = msg->data;
+    len = ntohs(oph->len);
+    if (len < sizeof *oph || ROUND_UP(len, 8) > msg->size) {
+        return OFPERR_OFPTFFC_BAD_LEN;
+    }
+
+    *typep = ntohs(oph->type);
+    if (payload) {
+        ofpbuf_use_const(payload, msg->data, len);
+        ofpbuf_pull(payload, sizeof *oph);
+    }
+    ofpbuf_pull(msg, ROUND_UP(len, 8));
+    return 0;
+}
+
+static void PRINTF_FORMAT(2, 3)
+log_property(bool loose, const char *message, ...)
+{
+    enum vlog_level level = loose ? VLL_DBG : VLL_WARN;
+    if (!vlog_should_drop(THIS_MODULE, level, &bad_ofmsg_rl)) {
+        va_list args;
+
+        va_start(args, message);
+        vlog_valist(THIS_MODULE, level, message, args);
+        va_end(args);
+    }
+}
+
+static enum ofperr
+parse_table_ids(struct ofpbuf *payload, uint32_t *ids)
+{
+    uint16_t type;
+
+    *ids = 0;
+    while (payload->size > 0) {
+        enum ofperr error = ofputil_pull_property(payload, NULL, &type);
+        if (error) {
+            return error;
+        }
+        if (type < CHAR_BIT * sizeof *ids) {
+            *ids |= 1u << type;
+        }
+    }
+    return 0;
+}
+
+static enum ofperr
+parse_instruction_ids(struct ofpbuf *payload, bool loose, uint32_t *insts)
+{
+    *insts = 0;
+    while (payload->size > 0) {
+        enum ovs_instruction_type inst;
+        enum ofperr error;
+        uint16_t ofpit;
+
+        error = ofputil_pull_property(payload, NULL, &ofpit);
+        if (error) {
+            return error;
+        }
+
+        error = ovs_instruction_type_from_inst_type(&inst, ofpit);
+        if (!error) {
+            *insts |= 1u << inst;
+        } else if (!loose) {
+            return error;
+        }
+    }
+    return 0;
+}
+
+static enum ofperr
+parse_table_features_next_table(struct ofpbuf *payload,
+                                unsigned long int *next_tables)
+{
+    size_t i;
+
+    memset(next_tables, 0, bitmap_n_bytes(255));
+    for (i = 0; i < payload->size; i++) {
+        uint8_t id = ((const uint8_t *) payload->data)[i];
+        if (id >= 255) {
+            return OFPERR_OFPTFFC_BAD_ARGUMENT;
+        }
+        bitmap_set1(next_tables, id);
+    }
+    return 0;
+}
+
+static enum ofperr
+parse_oxm(struct ofpbuf *b, bool loose,
+          const struct mf_field **fieldp, bool *hasmask)
+{
+    ovs_be32 *oxmp;
+    uint32_t oxm;
+
+    oxmp = ofpbuf_try_pull(b, sizeof *oxmp);
+    if (!oxmp) {
+        return OFPERR_OFPTFFC_BAD_LEN;
+    }
+    oxm = ntohl(*oxmp);
+
+    /* Determine '*hasmask'.  If 'oxm' is masked, convert it to the equivalent
+     * unmasked version, because the table of OXM fields we support only has
+     * masked versions of fields that we support with masks, but we should be
+     * able to parse the masked versions of those here. */
+    *hasmask = NXM_HASMASK(oxm);
+    if (*hasmask) {
+        if (NXM_LENGTH(oxm) & 1) {
+            return OFPERR_OFPTFFC_BAD_ARGUMENT;
+        }
+        oxm = NXM_HEADER(NXM_VENDOR(oxm), NXM_FIELD(oxm), NXM_LENGTH(oxm) / 2);
+    }
+
+    *fieldp = mf_from_nxm_header(oxm);
+    if (!*fieldp) {
+        log_property(loose, "unknown OXM field %#"PRIx32, ntohl(*oxmp));
+    }
+    return *fieldp ? 0 : OFPERR_OFPBMC_BAD_FIELD;
+}
+
+static enum ofperr
+parse_oxms(struct ofpbuf *payload, bool loose,
+           uint64_t *exactp, uint64_t *maskedp)
+{
+    uint64_t exact, masked;
+
+    exact = masked = 0;
+    while (payload->size > 0) {
+        const struct mf_field *field;
+        enum ofperr error;
+        bool hasmask;
+
+        error = parse_oxm(payload, loose, &field, &hasmask);
+        if (!error) {
+            if (hasmask) {
+                masked |= UINT64_C(1) << field->id;
+            } else {
+                exact |= UINT64_C(1) << field->id;
+            }
+        } else if (error != OFPERR_OFPBMC_BAD_FIELD || !loose) {
+            return error;
+        }
+    }
+    if (exactp) {
+        *exactp = exact;
+    } else if (exact) {
+        return OFPERR_OFPBMC_BAD_MASK;
+    }
+    if (maskedp) {
+        *maskedp = masked;
+    } else if (masked) {
+        return OFPERR_OFPBMC_BAD_MASK;
+    }
+    return 0;
+}
+
+/* Converts an OFPMP_TABLE_FEATURES request or reply in 'msg' into an abstract
+ * ofputil_table_features in 'tf'.
+ *
+ * If 'loose' is true, this function ignores properties and values that it does
+ * not understand, as a controller would want to do when interpreting
+ * capabilities provided by a switch.  If 'loose' is false, this function
+ * treats unknown properties and values as an error, as a switch would want to
+ * do when interpreting a configuration request made by a controller.
+ *
+ * A single OpenFlow message can specify features for multiple tables.  Calling
+ * this function multiple times for a single 'msg' iterates through the tables
+ * in the message.  The caller must initially leave 'msg''s layer pointers null
+ * and not modify them between calls.
+ *
+ * Returns 0 if successful, EOF if no tables were left in this 'msg', otherwise
+ * a positive "enum ofperr" value. */
+int
+ofputil_decode_table_features(struct ofpbuf *msg,
+                              struct ofputil_table_features *tf, bool loose)
+{
+    struct ofp13_table_features *otf;
+    unsigned int len;
+
+    if (!msg->l2) {
+        msg->l2 = msg->data;
+        ofpraw_pull_assert(msg);
+    }
+
+    if (!msg->size) {
+        return EOF;
+    }
+
+    if (msg->size < sizeof *otf) {
+        return OFPERR_OFPTFFC_BAD_LEN;
+    }
+
+    otf = msg->data;
+    len = ntohs(otf->length);
+    if (len < sizeof *otf || len % 8 || len > msg->size) {
+        return OFPERR_OFPTFFC_BAD_LEN;
+    }
+    ofpbuf_pull(msg, sizeof *otf);
+
+    tf->table_id = otf->table_id;
+    if (tf->table_id == OFPTT_ALL) {
+        return OFPERR_OFPTFFC_BAD_TABLE;
+    }
+
+    ovs_strlcpy(tf->name, otf->name, OFP_MAX_TABLE_NAME_LEN);
+    tf->metadata_match = otf->metadata_match;
+    tf->metadata_write = otf->metadata_write;
+    tf->config = ntohl(otf->config);
+    tf->max_entries = ntohl(otf->max_entries);
+
+    while (msg->size > 0) {
+        struct ofpbuf payload;
+        enum ofperr error;
+        uint16_t type;
+
+        error = ofputil_pull_property(msg, &payload, &type);
+        if (error) {
+            return error;
+        }
+
+        switch ((enum ofp13_table_feature_prop_type) type) {
+        case OFPTFPT13_INSTRUCTIONS:
+            error = parse_instruction_ids(&payload, loose,
+                                          &tf->nonmiss.instructions);
+            break;
+        case OFPTFPT13_INSTRUCTIONS_MISS:
+            error = parse_instruction_ids(&payload, loose,
+                                          &tf->miss.instructions);
+            break;
+
+        case OFPTFPT13_NEXT_TABLES:
+            error = parse_table_features_next_table(&payload,
+                                                    tf->nonmiss.next);
+            break;
+        case OFPTFPT13_NEXT_TABLES_MISS:
+            error = parse_table_features_next_table(&payload, tf->miss.next);
+            break;
+
+        case OFPTFPT13_WRITE_ACTIONS:
+            error = parse_table_ids(&payload, &tf->nonmiss.write.actions);
+            break;
+        case OFPTFPT13_WRITE_ACTIONS_MISS:
+            error = parse_table_ids(&payload, &tf->miss.write.actions);
+            break;
+
+        case OFPTFPT13_APPLY_ACTIONS:
+            error = parse_table_ids(&payload, &tf->nonmiss.apply.actions);
+            break;
+        case OFPTFPT13_APPLY_ACTIONS_MISS:
+            error = parse_table_ids(&payload, &tf->miss.apply.actions);
+            break;
+
+        case OFPTFPT13_MATCH:
+            error = parse_oxms(&payload, loose, &tf->match, &tf->mask);
+            break;
+        case OFPTFPT13_WILDCARDS:
+            error = parse_oxms(&payload, loose, &tf->wildcard, NULL);
+            break;
+
+        case OFPTFPT13_WRITE_SETFIELD:
+            error = parse_oxms(&payload, loose,
+                               &tf->nonmiss.write.set_fields, NULL);
+            break;
+        case OFPTFPT13_WRITE_SETFIELD_MISS:
+            error = parse_oxms(&payload, loose,
+                               &tf->miss.write.set_fields, NULL);
+            break;
+        case OFPTFPT13_APPLY_SETFIELD:
+            error = parse_oxms(&payload, loose,
+                               &tf->nonmiss.apply.set_fields, NULL);
+            break;
+        case OFPTFPT13_APPLY_SETFIELD_MISS:
+            error = parse_oxms(&payload, loose,
+                               &tf->miss.apply.set_fields, NULL);
+            break;
+
+        case OFPTFPT13_EXPERIMENTER:
+        case OFPTFPT13_EXPERIMENTER_MISS:
+            log_property(loose,
+                         "unknown table features experimenter property");
+            error = loose ? 0 : OFPERR_OFPTFFC_BAD_TYPE;
+            break;
+        }
+        if (error) {
+            return error;
+        }
+    }
+
+    /* Fix inconsistencies:
+     *
+     *     - Turn off 'mask' and 'wildcard' bits that are not in 'match',
+     *       because a field must be matchable to be masked or wildcarded.
+     *
+     *     - Turn on 'wildcard' bits that are set in 'mask', because a field
+     *       that is arbitrarily maskable can be wildcarded entirely. */
+    tf->mask &= tf->match;
+    tf->wildcard &= tf->match;
+
+    tf->wildcard |= tf->mask;
+
+    return 0;
+}
+
+/* Encodes and returns a request to obtain the table features of a switch.
+ * The message is encoded for OpenFlow version 'ofp_version'. */
+struct ofpbuf *
+ofputil_encode_table_features_request(enum ofp_version ofp_version)
+{
+    struct ofpbuf *request = NULL;
+
+    switch (ofp_version) {
+    case OFP10_VERSION:
+    case OFP11_VERSION:
+    case OFP12_VERSION:
+        ovs_fatal(0, "dump-table-features needs OpenFlow 1.3 or later "
+                     "(\'-O OpenFlow13\')");
+    case OFP13_VERSION:
+    case OFP14_VERSION:
+        request = ofpraw_alloc(OFPRAW_OFPST13_TABLE_FEATURES_REQUEST,
+                               ofp_version, 0);
+        break;
+    default:
+        OVS_NOT_REACHED();
+    }
+
+    return request;
+}
+
 /* ofputil_table_mod */
 
 /* Decodes the OpenFlow "table mod" message in '*oh' into an abstract form in
@@ -5264,6 +5608,21 @@ ofputil_action_name_from_code(enum ofputil_action_code code)
 {
     return code < (int)OFPUTIL_N_ACTIONS && names[code] ? names[code]
         : "Unknown action";
+}
+
+enum ofputil_action_code
+ofputil_action_code_from_ofp13_action(enum ofp13_action_type type)
+{
+    switch (type) {
+
+#define OFPAT13_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME)  \
+    case ENUM:                                          \
+        return OFPUTIL_##ENUM;
+#include "ofp-util.def"
+
+    default:
+        return OFPUTIL_ACTION_INVALID;
+    }
 }
 
 /* Appends an action of the type specified by 'code' to 'buf' and returns the

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "bitmap.h"
 #include "compiler.h"
 #include "flow.h"
 #include "list.h"
@@ -602,6 +603,76 @@ enum ofperr ofputil_decode_table_mod(const struct ofp_header *,
 struct ofpbuf *ofputil_encode_table_mod(const struct ofputil_table_mod *,
                                        enum ofputil_protocol);
 
+/* Abstract ofp_table_features. */
+struct ofputil_table_features {
+    uint8_t table_id;         /* Identifier of table. Lower numbered tables
+                                 are consulted first. */
+    char name[OFP_MAX_TABLE_NAME_LEN];
+    ovs_be64 metadata_match;  /* Bits of metadata table can match. */
+    ovs_be64 metadata_write;  /* Bits of metadata table can write. */
+    uint32_t config;          /* Bitmap of OFPTC_* values */
+    uint32_t max_entries;     /* Max number of entries supported. */
+
+    /* Table features related to instructions.  There are two instances:
+     *
+     *   - 'miss' reports features available in the table miss flow.
+     *
+     *   - 'nonmiss' reports features available in other flows. */
+    struct ofputil_table_instruction_features {
+        /* Tables that "goto-table" may jump to. */
+        unsigned long int next[BITMAP_N_LONGS(255)];
+
+        /* Bitmap of OVSINST_* for supported instructions. */
+        uint32_t instructions;
+
+        /* Table features related to actions.  There are two instances:
+         *
+         *    - 'write' reports features available in a "write_actions"
+         *      instruction.
+         *
+         *    - 'apply' reports features available in an "apply_actions"
+         *      instruction. */
+        struct ofputil_table_action_features {
+            uint32_t actions;     /* Bitmap of supported OFPAT*. */
+            uint64_t set_fields;  /* Bitmap of MFF_* "set-field" supports. */
+        } write, apply;
+    } nonmiss, miss;
+
+    /* MFF_* bitmaps.
+     *
+     * For any given field the following combinations are valid:
+     *
+     *    - match=0, wildcard=0, mask=0: Flows in this table cannot match on
+     *      this field.
+     *
+     *    - match=1, wildcard=0, mask=0: Flows in this table must match on all
+     *      the bits in this field.
+     *
+     *    - match=1, wildcard=1, mask=0: Flows in this table must either match
+     *      on all the bits in the field or wildcard the field entirely.
+     *
+     *    - match=1, wildcard=1, mask=1: Flows in this table may arbitrarily
+     *      mask this field (as special cases, they may match on all the bits
+     *      or wildcard it entirely).
+     *
+     * Other combinations do not make sense.
+     */
+    uint64_t match;             /* Fields that may be matched. */
+    uint64_t mask;              /* Subset of 'match' that may have masks. */
+    uint64_t wildcard;          /* Subset of 'match' that may be wildcarded. */
+};
+
+int ofputil_decode_table_features(struct ofpbuf *,
+                                  struct ofputil_table_features *, bool loose);
+struct ofpbuf *ofputil_encode_table_features_request(
+                            enum ofp_version ofp_version);
+void ofputil_append_table_features_reply(
+                            const struct ofputil_table_features *tf,
+                            struct list *replies);
+
+uint16_t table_feature_prop_get_size(enum ofp13_table_feature_prop_type type);
+char *table_feature_prop_get_name(enum ofp13_table_feature_prop_type type);
+
 /* Meter band configuration for all supported band types. */
 struct ofputil_meter_band {
     uint16_t type;
@@ -868,6 +939,8 @@ enum {
 
 int ofputil_action_code_from_name(const char *);
 const char * ofputil_action_name_from_code(enum ofputil_action_code code);
+enum ofputil_action_code ofputil_action_code_from_ofp13_action(
+    enum ofp13_action_type type);
 
 void *ofputil_put_action(enum ofputil_action_code, struct ofpbuf *buf);
 
