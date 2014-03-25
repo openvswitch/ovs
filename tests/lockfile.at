@@ -14,12 +14,12 @@ CHECK_LOCKFILE([lock_and_unlock], [0])
 CHECK_LOCKFILE([lock_and_unlock_twice], [0])
 
 CHECK_LOCKFILE([lock_blocks_same_process], [0],
-  [lockfile|WARN|.file.~lock~: failed to lock file: Resource deadlock avoided
+  [lockfile|WARN|.file.~lock~: cannot lock file because this process has already locked it
 ])
 
 CHECK_LOCKFILE([lock_blocks_same_process_twice], [0],
-  [lockfile|WARN|.file.~lock~: failed to lock file: Resource deadlock avoided
-lockfile|WARN|.file.~lock~: failed to lock file: Resource deadlock avoided
+  [lockfile|WARN|.file.~lock~: cannot lock file because this process has already locked it
+lockfile|WARN|.file.~lock~: cannot lock file because this process has already locked it
 ])
 
 CHECK_LOCKFILE([lock_blocks_other_process], [1],
@@ -28,7 +28,7 @@ lockfile|WARN|.file.~lock~: cannot lock file because it is already locked by pid
 ])
 
 CHECK_LOCKFILE([lock_twice_blocks_other_process], [1],
-  [lockfile|WARN|.file.~lock~: failed to lock file: Resource deadlock avoided
+  [lockfile|WARN|.file.~lock~: cannot lock file because this process has already locked it
 lockfile|WARN|.file.~lock~: child does not inherit lock
 lockfile|WARN|.file.~lock~: cannot lock file because it is already locked by pid <pid>
 ])
@@ -36,16 +36,16 @@ lockfile|WARN|.file.~lock~: cannot lock file because it is already locked by pid
 CHECK_LOCKFILE([lock_and_unlock_allows_other_process], [1])
 
 CHECK_LOCKFILE([lock_multiple], [0],
-  [lockfile|WARN|.a.~lock~: failed to lock file: Resource deadlock avoided
+  [lockfile|WARN|.a.~lock~: cannot lock file because this process has already locked it
 ])
 
 CHECK_LOCKFILE([lock_symlink], [0],
-  [lockfile|WARN|.a.~lock~: failed to lock file: Resource deadlock avoided
-lockfile|WARN|.b.~lock~: failed to lock file: Resource deadlock avoided
-lockfile|WARN|.b.~lock~: failed to lock file: Resource deadlock avoided
-lockfile|WARN|.a.~lock~: failed to lock file: Resource deadlock avoided
+  [lockfile|WARN|.a.~lock~: cannot lock file because this process has already locked it
+lockfile|WARN|.b.~lock~: cannot lock file because this process has already locked it
+lockfile|WARN|.b.~lock~: cannot lock file because this process has already locked it
+lockfile|WARN|.a.~lock~: cannot lock file because this process has already locked it
 ])
 
 CHECK_LOCKFILE([lock_symlink_to_dir], [0],
-  [lockfile|WARN|dir/.b.~lock~: failed to lock file: Resource deadlock avoided
+  [lockfile|WARN|dir/.b.~lock~: cannot lock file because this process has already locked it
 ])

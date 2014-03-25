@@ -122,7 +122,10 @@ lockfile_lock(const char *file, struct lockfile **lockfilep)
         if (error == EACCES) {
             error = EAGAIN;
         }
-        if (pid) {
+        if (pid == getpid()) {
+            VLOG_WARN("%s: cannot lock file because this process has already "
+                      "locked it", lock_name);
+        } else if (pid) {
             VLOG_WARN("%s: cannot lock file because it is already locked by "
                       "pid %ld", lock_name, (long int) pid);
         } else {
@@ -307,6 +310,7 @@ lockfile_try_lock(const char *name, pid_t *pidp, struct lockfile **lockfilep)
     /* Check whether we've already got a lock on that file. */
     if (!stat(name, &s)) {
         if (lockfile_find(s.st_dev, s.st_ino)) {
+            *pidp = getpid();
             return EDEADLK;
         }
     } else if (errno != ENOENT) {
