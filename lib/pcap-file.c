@@ -311,7 +311,7 @@ tcp_reader_run(struct tcp_reader *r, const struct flow *flow,
     }
     tcp = packet->l4;
     flags = TCP_FLAGS(tcp->tcp_ctl);
-    l7_length = (char *) ofpbuf_end(packet) - (char *) packet->l7;
+    l7_length = (char *) ofpbuf_tail(packet) - (char *) packet->l7;
     seq = ntohl(get_16aligned_be32(&tcp->tcp_seq));
 
     /* Construct key. */
