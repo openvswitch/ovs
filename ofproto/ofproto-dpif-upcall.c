@@ -695,7 +695,10 @@ udpif_upcall_handler(void *arg)
         size_t i;
 
         ovs_mutex_lock(&handler->mutex);
-        if (!handler->n_upcalls) {
+        /* Must check the 'exit_latch' again to make sure the main thread is
+         * not joining on the handler thread. */
+        if (!handler->n_upcalls
+            && !latch_is_set(&handler->udpif->exit_latch)) {
             ovs_mutex_cond_wait(&handler->wake_cond, &handler->mutex);
         }
 
