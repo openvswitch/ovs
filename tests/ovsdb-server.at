@@ -194,9 +194,8 @@ AT_CHECK([ovsdb-client list-tables unix:socket constraints], [0], [ignore], [ign
 AT_CHECK([ovsdb-client list-tables unix:socket ordinals], [0], [ignore], [ignore])
 
 # Add an already added database.
-AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/add-db db2], 2, [], [stderr])
-AT_CHECK([sed 's/(.*)/(...)/' stderr], [0],
-  [I/O error: db2: failed to lock lockfile (...)
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/add-db db2], 2, [],
+  [db2: already open
 ovs-appctl: ovsdb-server: server returned an error
 ])
 

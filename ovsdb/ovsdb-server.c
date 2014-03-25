@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <getopt.h>
 #include <inttypes.h>
 #include <signal.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "column.h"
@@ -328,12 +329,49 @@ main(int argc, char *argv[])
     return 0;
 }
 
+/* Returns true if 'filename' is known to be already open as a database,
+ * false if not.
+ *
+ * "False negatives" are possible. */
+static bool
+is_already_open(struct server_config *config OVS_UNUSED,
+                const char *filename OVS_UNUSED)
+{
+#ifndef _WIN32
+    struct stat s;
+
+    if (!stat(filename, &s)) {
+        struct shash_node *node;
+
+        SHASH_FOR_EACH (node, config->all_dbs) {
+            struct db *db = node->data;
+            struct stat s2;
+
+            if (!stat(db->filename, &s2)
+                && s.st_dev == s2.st_dev
+                && s.st_ino == s2.st_ino) {
+                return true;
+            }
+        }
+    }
+#endif  /* !_WIN32 */
+
+    return false;
+}
+
 static char *
 open_db(struct server_config *config, const char *filename)
 {
     struct ovsdb_error *db_error;
     struct db *db;
     char *error;
+
+    /* If we know that the file is already open, return a good error message.
+     * Otherwise, if the file is open, we'll fail later on with a harder to
+     * interpret file locking error. */
+    if (is_already_open(config, filename)) {
+        return xasprintf("%s: already open", filename);
+    }
 
     db = xzalloc(sizeof *db);
     db->filename = xstrdup(filename);
