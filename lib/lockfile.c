@@ -1,4 +1,4 @@
- /* Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ /* Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,14 +59,11 @@ static struct hmap *const lock_table OVS_GUARDED_BY(lock_table_mutex)
     = &lock_table__;
 
 static void lockfile_unhash(struct lockfile *);
-#ifdef _WIN32
-static int lockfile_try_lock_windows(const char *name, pid_t *pidp,
-                                     struct lockfile **lockfilep);
-static void lockfile_unlock_windows(struct lockfile * lockfile);
-#else
-static int lockfile_try_lock_posix(const char *name, pid_t *pidp,
-                                   struct lockfile **lockfilep);
-#endif
+static int lockfile_try_lock(const char *name, pid_t *pidp,
+                             struct lockfile **lockfilep)
+    OVS_REQUIRES(&lock_table_mutex);
+static void lockfile_do_unlock(struct lockfile * lockfile)
+    OVS_REQUIRES(&lock_table_mutex);
 
 /* Returns the name of the lockfile that would be created for locking a file
  * named 'filename_'.  The caller is responsible for freeing the returned name,
@@ -117,11 +114,7 @@ lockfile_lock(const char *file, struct lockfile **lockfilep)
     lock_name = lockfile_name(file);
 
     ovs_mutex_lock(&lock_table_mutex);
-#ifdef _WIN32
-    error = lockfile_try_lock_windows(lock_name, &pid, lockfilep);
-#else
-    error = lockfile_try_lock_posix(lock_name, &pid, lockfilep);
-#endif
+    error = lockfile_try_lock(lock_name, &pid, lockfilep);
     ovs_mutex_unlock(&lock_table_mutex);
 
     if (error) {
@@ -149,11 +142,7 @@ lockfile_unlock(struct lockfile *lockfile)
 {
     if (lockfile) {
         ovs_mutex_lock(&lock_table_mutex);
-#ifdef _WIN32
-        lockfile_unlock_windows(lockfile);
-#else
-        lockfile_unhash(lockfile);
-#endif
+        lockfile_do_unlock(lockfile);
         ovs_mutex_unlock(&lock_table_mutex);
 
         COVERAGE_INC(lockfile_unlock);
@@ -235,7 +224,7 @@ lockfile_register(const char *name, dev_t device, ino_t inode, int fd)
 
 #ifdef _WIN32
 static void
-lockfile_unlock_windows(struct lockfile *lockfile)
+lockfile_do_unlock(struct lockfile *lockfile)
     OVS_REQUIRES(&lock_table_mutex)
 {
     if (lockfile->fd >= 0) {
@@ -251,8 +240,7 @@ lockfile_unlock_windows(struct lockfile *lockfile)
 }
 
 static int
-lockfile_try_lock_windows(const char *name, pid_t *pidp,
-                          struct lockfile **lockfilep)
+lockfile_try_lock(const char *name, pid_t *pidp, struct lockfile **lockfilep)
     OVS_REQUIRES(&lock_table_mutex)
 {
     HANDLE lock_handle;
@@ -297,12 +285,15 @@ lockfile_try_lock_windows(const char *name, pid_t *pidp,
     *lockfilep = lockfile;
     return 0;
 }
-#endif
+#else /* !_WIN32 */
+static void
+lockfile_do_unlock(struct lockfile *lockfile)
+{
+    lockfile_unhash(lockfile);
+}
 
-#ifndef _WIN32
 static int
-lockfile_try_lock_posix(const char *name, pid_t *pidp,
-                        struct lockfile **lockfilep)
+lockfile_try_lock(const char *name, pid_t *pidp, struct lockfile **lockfilep)
     OVS_REQUIRES(&lock_table_mutex)
 {
     struct flock l;
