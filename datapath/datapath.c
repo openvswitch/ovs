@@ -1922,12 +1922,6 @@ static int __init dp_init(void)
 	pr_info("Open vSwitch switching datapath %s, built "__DATE__" "__TIME__"\n",
 		VERSION);
 
-	pr_info("Datapath sw_flow_key size: %ld bytes. ip.frag at %ld, tp.flags at %ld, ipv4.addr at %ld\n",
-		sizeof(struct sw_flow_key),
-		offsetof(struct sw_flow_key, ip.frag),
-		offsetof(struct sw_flow_key, tp.flags),
-		offsetof(struct sw_flow_key, ipv4.addr));
-
 	err = ovs_flow_init();
 	if (err)
 		goto error;
