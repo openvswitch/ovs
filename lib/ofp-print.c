@@ -62,25 +62,23 @@ ofp_packet_to_string(const void *data, size_t len)
     const struct pkt_metadata md = PKT_METADATA_INITIALIZER(0);
     struct ofpbuf buf;
     struct flow flow;
+    size_t l4_size;
 
     ofpbuf_use_const(&buf, data, len);
     flow_extract(&buf, &md, &flow);
     flow_format(&ds, &flow);
 
-    if (buf.l7) {
-        if (flow.nw_proto == IPPROTO_TCP) {
-            struct tcp_header *th = buf.l4;
-            ds_put_format(&ds, " tcp_csum:%"PRIx16,
-                          ntohs(th->tcp_csum));
-        } else if (flow.nw_proto == IPPROTO_UDP) {
-            struct udp_header *uh = buf.l4;
-            ds_put_format(&ds, " udp_csum:%"PRIx16,
-                          ntohs(uh->udp_csum));
-        } else if (flow.nw_proto == IPPROTO_SCTP) {
-            struct sctp_header *sh = buf.l4;
-            ds_put_format(&ds, " sctp_csum:%"PRIx32,
-                          ntohl(sh->sctp_csum));
-        }
+    l4_size = ofpbuf_get_l4_size(&buf);
+
+    if (flow.nw_proto == IPPROTO_TCP && l4_size >= TCP_HEADER_LEN) {
+        struct tcp_header *th = buf.l4;
+        ds_put_format(&ds, " tcp_csum:%"PRIx16, ntohs(th->tcp_csum));
+    } else if (flow.nw_proto == IPPROTO_UDP && l4_size >= UDP_HEADER_LEN) {
+        struct udp_header *uh = buf.l4;
+        ds_put_format(&ds, " udp_csum:%"PRIx16, ntohs(uh->udp_csum));
+    } else if (flow.nw_proto == IPPROTO_SCTP && l4_size >= SCTP_HEADER_LEN) {
+        struct sctp_header *sh = buf.l4;
+        ds_put_format(&ds, " sctp_csum:%"PRIx32, ntohl(sh->sctp_csum));
     }
 
     ds_put_char(&ds, '\n');

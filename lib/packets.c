@@ -619,12 +619,13 @@ packet_set_ipv4_addr(struct ofpbuf *packet,
 {
     struct ip_header *nh = packet->l3;
     ovs_be32 old_addr = get_16aligned_be32(addr);
+    size_t l4_size = ofpbuf_get_l4_size(packet);
 
-    if (nh->ip_proto == IPPROTO_TCP && packet->l7) {
+    if (nh->ip_proto == IPPROTO_TCP && l4_size >= TCP_HEADER_LEN) {
         struct tcp_header *th = packet->l4;
 
         th->tcp_csum = recalc_csum32(th->tcp_csum, old_addr, new_addr);
-    } else if (nh->ip_proto == IPPROTO_UDP && packet->l7) {
+    } else if (nh->ip_proto == IPPROTO_UDP && l4_size >= UDP_HEADER_LEN ) {
         struct udp_header *uh = packet->l4;
 
         if (uh->udp_csum) {
@@ -727,11 +728,13 @@ static void
 packet_update_csum128(struct ofpbuf *packet, uint8_t proto,
                      ovs_16aligned_be32 addr[4], const ovs_be32 new_addr[4])
 {
-    if (proto == IPPROTO_TCP && packet->l7) {
+    size_t l4_size = ofpbuf_get_l4_size(packet);
+
+    if (proto == IPPROTO_TCP && l4_size >= TCP_HEADER_LEN) {
         struct tcp_header *th = packet->l4;
 
         th->tcp_csum = recalc_csum128(th->tcp_csum, addr, new_addr);
-    } else if (proto == IPPROTO_UDP && packet->l7) {
+    } else if (proto == IPPROTO_UDP && l4_size >= UDP_HEADER_LEN) {
         struct udp_header *uh = packet->l4;
 
         if (uh->udp_csum) {

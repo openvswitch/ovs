@@ -69,31 +69,6 @@ pull_ip(struct ofpbuf *packet)
     return NULL;
 }
 
-static struct tcp_header *
-pull_tcp(struct ofpbuf *packet)
-{
-    if (packet->size >= TCP_HEADER_LEN) {
-        struct tcp_header *tcp = packet->data;
-        int tcp_len = TCP_OFFSET(tcp->tcp_ctl) * 4;
-        if (tcp_len >= TCP_HEADER_LEN && packet->size >= tcp_len) {
-            return ofpbuf_pull(packet, tcp_len);
-        }
-    }
-    return NULL;
-}
-
-static struct udp_header *
-pull_udp(struct ofpbuf *packet)
-{
-    return ofpbuf_try_pull(packet, UDP_HEADER_LEN);
-}
-
-static struct sctp_header *
-pull_sctp(struct ofpbuf *packet)
-{
-    return ofpbuf_try_pull(packet, SCTP_HEADER_LEN);
-}
-
 static struct icmp_header *
 pull_icmp(struct ofpbuf *packet)
 {
@@ -258,46 +233,46 @@ parse_ipv6(struct ofpbuf *packet, struct flow *flow)
 }
 
 static void
-parse_tcp(struct ofpbuf *packet, struct ofpbuf *b, struct flow *flow)
+parse_tcp(struct ofpbuf *b, struct flow *flow)
 {
-    const struct tcp_header *tcp = pull_tcp(b);
-    if (tcp) {
+    if (b->size >= TCP_HEADER_LEN) {
+        const struct tcp_header *tcp = b->data;
+
         flow->tp_src = tcp->tcp_src;
         flow->tp_dst = tcp->tcp_dst;
         flow->tcp_flags = tcp->tcp_ctl & htons(0x0fff);
-        packet->l7 = b->data;
     }
 }
 
 static void
-parse_udp(struct ofpbuf *packet, struct ofpbuf *b, struct flow *flow)
+parse_udp(struct ofpbuf *b, struct flow *flow)
 {
-    const struct udp_header *udp = pull_udp(b);
-    if (udp) {
+    if (b->size >= UDP_HEADER_LEN) {
+        const struct udp_header *udp = b->data;
+
         flow->tp_src = udp->udp_src;
         flow->tp_dst = udp->udp_dst;
-        packet->l7 = b->data;
     }
 }
 
 static void
-parse_sctp(struct ofpbuf *packet, struct ofpbuf *b, struct flow *flow)
+parse_sctp(struct ofpbuf *b, struct flow *flow)
 {
-    const struct sctp_header *sctp = pull_sctp(b);
-    if (sctp) {
+    if (b->size >= SCTP_HEADER_LEN) {
+        const struct sctp_header *sctp = b->data;
+
         flow->tp_src = sctp->sctp_src;
         flow->tp_dst = sctp->sctp_dst;
-        packet->l7 = b->data;
     }
 }
 
-static bool
+static void
 parse_icmpv6(struct ofpbuf *b, struct flow *flow)
 {
     const struct icmp6_hdr *icmp = pull_icmpv6(b);
 
     if (!icmp) {
-        return false;
+        return;
     }
 
     /* The ICMPv6 type and code fields use the 16-bit transport port
@@ -312,7 +287,7 @@ parse_icmpv6(struct ofpbuf *b, struct flow *flow)
 
         nd_target = ofpbuf_try_pull(b, sizeof *nd_target);
         if (!nd_target) {
-            return false;
+            return;
         }
         flow->nd_target = *nd_target;
 
@@ -351,15 +326,14 @@ parse_icmpv6(struct ofpbuf *b, struct flow *flow)
         }
     }
 
-    return true;
+    return;
 
 invalid:
     memset(&flow->nd_target, 0, sizeof(flow->nd_target));
     memset(flow->arp_sha, 0, sizeof(flow->arp_sha));
     memset(flow->arp_tha, 0, sizeof(flow->arp_tha));
 
-    return false;
-
+    return;
 }
 
 /* Initializes 'flow' members from 'packet' and 'md'
@@ -376,9 +350,6 @@ invalid:
  *
  *    - packet->l4 to just past the IPv4 header, if one is present and has a
  *      correct length, and otherwise NULL.
- *
- *    - packet->l7 to just past the TCP/UDP/SCTP/ICMP header, if one is
- *      present and has a correct length, and otherwise NULL.
  */
 void
 flow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
@@ -402,7 +373,6 @@ flow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
     packet->l2_5 = NULL;
     packet->l3   = NULL;
     packet->l4   = NULL;
-    packet->l7   = NULL;
 
     if (b.size < sizeof *eth) {
         return;
@@ -448,17 +418,16 @@ flow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
 
             if (!(nh->ip_frag_off & htons(IP_FRAG_OFF_MASK))) {
                 if (flow->nw_proto == IPPROTO_TCP) {
-                    parse_tcp(packet, &b, flow);
+                    parse_tcp(&b, flow);
                 } else if (flow->nw_proto == IPPROTO_UDP) {
-                    parse_udp(packet, &b, flow);
+                    parse_udp(&b, flow);
                 } else if (flow->nw_proto == IPPROTO_SCTP) {
-                    parse_sctp(packet, &b, flow);
+                    parse_sctp(&b, flow);
                 } else if (flow->nw_proto == IPPROTO_ICMP) {
                     const struct icmp_header *icmp = pull_icmp(&b);
                     if (icmp) {
                         flow->tp_src = htons(icmp->icmp_type);
                         flow->tp_dst = htons(icmp->icmp_code);
-                        packet->l7 = b.data;
                     }
                 }
             }
@@ -470,15 +439,13 @@ flow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
 
         packet->l4 = b.data;
         if (flow->nw_proto == IPPROTO_TCP) {
-            parse_tcp(packet, &b, flow);
+            parse_tcp(&b, flow);
         } else if (flow->nw_proto == IPPROTO_UDP) {
-            parse_udp(packet, &b, flow);
+            parse_udp(&b, flow);
         } else if (flow->nw_proto == IPPROTO_SCTP) {
-            parse_sctp(packet, &b, flow);
+            parse_sctp(&b, flow);
         } else if (flow->nw_proto == IPPROTO_ICMPV6) {
-            if (parse_icmpv6(&b, flow)) {
-                packet->l7 = b.data;
-            }
+            parse_icmpv6(&b, flow);
         }
     } else if (flow->dl_type == htons(ETH_TYPE_ARP) ||
                flow->dl_type == htons(ETH_TYPE_RARP)) {
@@ -1270,7 +1237,7 @@ flow_set_mpls_lse(struct flow *flow, int idx, ovs_be32 lse)
     flow->mpls_lse[idx] = lse;
 }
 
-static void
+static uint8_t *
 flow_compose_l4(struct ofpbuf *b, const struct flow *flow)
 {
     if (!(flow->nw_frag & FLOW_NW_FRAG_ANY)
@@ -1282,21 +1249,21 @@ flow_compose_l4(struct ofpbuf *b, const struct flow *flow)
             tcp->tcp_src = flow->tp_src;
             tcp->tcp_dst = flow->tp_dst;
             tcp->tcp_ctl = TCP_CTL(ntohs(flow->tcp_flags), 5);
-            b->l7 = ofpbuf_tail(b);
+            return ofpbuf_tail(b);
         } else if (flow->nw_proto == IPPROTO_UDP) {
             struct udp_header *udp;
 
             udp = ofpbuf_put_zeros(b, sizeof *udp);
             udp->udp_src = flow->tp_src;
             udp->udp_dst = flow->tp_dst;
-            b->l7 = ofpbuf_tail(b);
+            return ofpbuf_tail(b);
         } else if (flow->nw_proto == IPPROTO_SCTP) {
             struct sctp_header *sctp;
 
             sctp = ofpbuf_put_zeros(b, sizeof *sctp);
             sctp->sctp_src = flow->tp_src;
             sctp->sctp_dst = flow->tp_dst;
-            b->l7 = ofpbuf_tail(b);
+            return ofpbuf_tail(b);
         } else if (flow->nw_proto == IPPROTO_ICMP) {
             struct icmp_header *icmp;
 
@@ -1304,7 +1271,7 @@ flow_compose_l4(struct ofpbuf *b, const struct flow *flow)
             icmp->icmp_type = ntohs(flow->tp_src);
             icmp->icmp_code = ntohs(flow->tp_dst);
             icmp->icmp_csum = csum(icmp, ICMP_HEADER_LEN);
-            b->l7 = ofpbuf_tail(b);
+            return ofpbuf_tail(b);
         } else if (flow->nw_proto == IPPROTO_ICMPV6) {
             struct icmp6_hdr *icmp;
 
@@ -1336,9 +1303,10 @@ flow_compose_l4(struct ofpbuf *b, const struct flow *flow)
             }
             icmp->icmp6_cksum = (OVS_FORCE uint16_t)
                 csum(icmp, (char *)ofpbuf_tail(b) - (char *)icmp);
-            b->l7 = ofpbuf_tail(b);
+            return ofpbuf_tail(b);
         }
     }
+    return NULL;
 }
 
 /* Puts into 'b' a packet that flow_extract() would parse as having the given
@@ -1389,6 +1357,7 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
         ip->ip_csum = csum(ip, sizeof *ip);
     } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
         struct ovs_16aligned_ip6_hdr *nh;
+        uint8_t *l7;
 
         nh = ofpbuf_put_zeros(b, sizeof *nh);
         put_16aligned_be32(&nh->ip6_flow, htonl(6 << 28) |
@@ -1401,10 +1370,9 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
 
         b->l4 = ofpbuf_tail(b);
 
-        flow_compose_l4(b, flow);
+        l7 = flow_compose_l4(b, flow);
 
-        nh->ip6_plen =
-            b->l7 ? htons((uint8_t *) b->l7 - (uint8_t *) b->l4) : htons(0);
+        nh->ip6_plen = l7 ? htons(l7 - (uint8_t *) b->l4) : htons(0);
     } else if (flow->dl_type == htons(ETH_TYPE_ARP) ||
                flow->dl_type == htons(ETH_TYPE_RARP)) {
         struct arp_eth_header *arp;

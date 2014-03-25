@@ -654,6 +654,11 @@ bfd_process_packet(struct bfd *bfd, const struct flow *flow,
     enum flags flags;
     uint8_t version;
     struct msg *msg;
+    const uint8_t *l7 = ofpbuf_get_udp_payload(p);
+
+    if (!l7) {
+        return; /* No UDP payload. */
+    }
 
     /* This function is designed to follow section RFC 5880 6.8.6 closely. */
 
@@ -668,11 +673,11 @@ bfd_process_packet(struct bfd *bfd, const struct flow *flow,
         goto out;
     }
 
-    msg = ofpbuf_at(p, (uint8_t *)p->l7 - (uint8_t *)p->data, BFD_PACKET_LEN);
+    msg = ofpbuf_at(p, l7 - (uint8_t *)p->data, BFD_PACKET_LEN);
     if (!msg) {
         VLOG_INFO_RL(&rl, "%s: Received too-short BFD control message (only "
                      "%"PRIdPTR" bytes long, at least %d required).",
-                     bfd->name, (uint8_t *) ofpbuf_tail(p) - (uint8_t *) p->l7,
+                     bfd->name, (uint8_t *) ofpbuf_tail(p) - l7,
                      BFD_PACKET_LEN);
         goto out;
     }

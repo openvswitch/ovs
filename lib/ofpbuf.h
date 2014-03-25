@@ -20,6 +20,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "list.h"
+#include "packets.h"
 #include "util.h"
 
 #ifdef  __cplusplus
@@ -48,7 +49,6 @@ struct ofpbuf {
     void *l2_5;                 /* MPLS label stack */
     void *l3;                   /* Network-level header. */
     void *l4;                   /* Transport-level header. */
-    void *l7;                   /* Application data. */
 
     struct list list_node;      /* Private list element for use by owner. */
     void *private_p;            /* Private pointer for use by owner. */
@@ -212,6 +212,43 @@ static inline bool ofpbuf_equal(const struct ofpbuf *a, const struct ofpbuf *b)
     return a->size == b->size && memcmp(a->data, b->data, a->size) == 0;
 }
 
+static inline size_t ofpbuf_get_l4_size(const struct ofpbuf *b)
+{
+    return b->l4 ? (const char *)ofpbuf_tail(b) - (const char *)b->l4 : 0;
+}
+
+static inline const void *ofpbuf_get_tcp_payload(const struct ofpbuf *b)
+{
+    size_t l4_size = ofpbuf_get_l4_size(b);
+
+    if (OVS_LIKELY(l4_size >= TCP_HEADER_LEN)) {
+        struct tcp_header *tcp = b->l4;
+        int tcp_len = TCP_OFFSET(tcp->tcp_ctl) * 4;
+
+        if (OVS_LIKELY(tcp_len >= TCP_HEADER_LEN && tcp_len <= l4_size)) {
+            return (const char *)tcp + tcp_len;
+        }
+    }
+    return NULL;
+}
+
+static inline const void *ofpbuf_get_udp_payload(const struct ofpbuf *b)
+{
+    return OVS_LIKELY(ofpbuf_get_l4_size(b) >= UDP_HEADER_LEN)
+        ? (const char *)b->l4 + UDP_HEADER_LEN : NULL;
+}
+
+static inline const void *ofpbuf_get_sctp_payload(const struct ofpbuf *b)
+{
+    return OVS_LIKELY(ofpbuf_get_l4_size(b) >= SCTP_HEADER_LEN)
+        ? (const char *)b->l4 + SCTP_HEADER_LEN : NULL;
+}
+
+static inline const void *ofpbuf_get_icmp_payload(const struct ofpbuf *b)
+{
+    return OVS_LIKELY(ofpbuf_get_l4_size(b) >= ICMP_HEADER_LEN)
+        ? (const char *)b->l4 + ICMP_HEADER_LEN : NULL;
+}
 
 #ifdef  __cplusplus
 }

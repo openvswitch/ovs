@@ -303,15 +303,16 @@ tcp_reader_run(struct tcp_reader *r, const struct flow *flow,
     uint32_t hash;
     uint32_t seq;
     uint8_t flags;
+    const char *l7 = ofpbuf_get_tcp_payload(packet);
 
     if (flow->dl_type != htons(ETH_TYPE_IP)
         || flow->nw_proto != IPPROTO_TCP
-        || !packet->l7) {
+        || !l7) {
         return NULL;
     }
     tcp = packet->l4;
     flags = TCP_FLAGS(tcp->tcp_ctl);
-    l7_length = (char *) ofpbuf_tail(packet) - (char *) packet->l7;
+    l7_length = (char *) ofpbuf_tail(packet) - l7;
     seq = ntohl(get_16aligned_be32(&tcp->tcp_seq));
 
     /* Construct key. */
@@ -347,7 +348,7 @@ tcp_reader_run(struct tcp_reader *r, const struct flow *flow,
          * continually expanding it. */
         ofpbuf_shift(payload, (char *) payload->base - (char *) payload->data);
 
-        ofpbuf_put(payload, packet->l7, l7_length);
+        ofpbuf_put(payload, l7, l7_length);
         stream->seq_no += l7_length;
         return payload;
     } else {
