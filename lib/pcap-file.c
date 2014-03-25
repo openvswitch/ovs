@@ -329,7 +329,7 @@ tcp_reader_run(struct tcp_reader *r, const struct flow *flow,
          * continually expanding it. */
         ofpbuf_shift(payload, (char *) payload->base - (char *) payload->data);
 
-        length = (char *) ofpbuf_end(packet) - (char *) packet->l7;
+        length = (char *) ofpbuf_tail(packet) - (char *) packet->l7;
         ofpbuf_put(payload, packet->l7, length);
         stream->seq_no += length;
         return payload;
