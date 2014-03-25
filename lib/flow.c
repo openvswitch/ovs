@@ -828,10 +828,10 @@ flow_hash_5tuple(const struct flow *flow, uint32_t basis)
         return 0;
     }
 
-    hash = mhash_add(hash, (OVS_FORCE unsigned int) flow->nw_src);
-    hash = mhash_add(basis, (OVS_FORCE unsigned int) flow->nw_dst);
-    hash = mhash_add(hash, ((OVS_FORCE unsigned int) flow->tp_src << 16)
-                           | (OVS_FORCE unsigned int) flow->tp_dst);
+    hash = mhash_add(basis, (OVS_FORCE uint32_t) flow->nw_src);
+    hash = mhash_add(hash, (OVS_FORCE uint32_t) flow->nw_dst);
+    hash = mhash_add(hash, ((OVS_FORCE uint32_t) flow->tp_src << 16)
+                           | (OVS_FORCE uint32_t) flow->tp_dst);
     hash = mhash_add(hash, flow->nw_proto);
 
     return mhash_finish(hash, 13);
