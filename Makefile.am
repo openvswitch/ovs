@@ -63,6 +63,7 @@ EXTRA_DIST = \
 	FAQ \
 	INSTALL \
 	INSTALL.Debian \
+        INSTALL.DPDK \
 	INSTALL.Fedora \
 	INSTALL.KVM \
 	INSTALL.Libvirt \

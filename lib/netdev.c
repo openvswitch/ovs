@@ -31,6 +31,7 @@
 #include "fatal-signal.h"
 #include "hash.h"
 #include "list.h"
+#include "netdev-dpdk.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "ofpbuf.h"
@@ -124,6 +125,7 @@ netdev_initialize(void)
         netdev_register_provider(&netdev_tap_class);
         netdev_register_provider(&netdev_bsd_class);
 #endif
+        netdev_dpdk_register();
 
         ovsthread_once_done(&once);
     }

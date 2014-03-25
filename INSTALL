@@ -10,6 +10,7 @@ on a specific platform, please see one of these files:
     - INSTALL.RHEL
     - INSTALL.XenServer
     - INSTALL.NetBSD
+    - INSTALL.DPDK
 
 Build Requirements
 ------------------

@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "dynamic-string.h"
+#include "netdev-dpdk.h"
 #include "util.h"
 
 static void
@@ -110,8 +111,13 @@ ofpbuf_init(struct ofpbuf *b, size_t size)
 void
 ofpbuf_uninit(struct ofpbuf *b)
 {
-    if (b && b->source == OFPBUF_MALLOC) {
-        free(b->base);
+    if (b) {
+        if (b->source == OFPBUF_MALLOC) {
+            free(b->base);
+        }
+        if (b->source == OFPBUF_DPDK) {
+            free_dpdk_buf(b);
+        }
     }
 }
 

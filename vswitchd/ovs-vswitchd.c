@@ -48,6 +48,7 @@
 #include "vconn.h"
 #include "vlog.h"
 #include "lib/vswitch-idl.h"
+#include "lib/netdev-dpdk.h"
 
 VLOG_DEFINE_THIS_MODULE(vswitchd);
 
@@ -69,8 +70,12 @@ main(int argc, char *argv[])
     bool exiting;
     int retval;
 
-    proctitle_init(argc, argv);
     set_program_name(argv[0]);
+    retval = dpdk_init(argc,argv);
+    argc -= retval;
+    argv += retval;
+
+    proctitle_init(argc, argv);
     service_start(&argc, &argv);
     remote = parse_options(argc, argv, &unixctl_path);
     fatal_ignore_sigpipe();
@@ -143,7 +148,8 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
         OPT_ENABLE_DUMMY,
         OPT_DISABLE_SYSTEM,
         OPT_ENABLE_OF14,
-        DAEMON_OPTION_ENUMS
+        DAEMON_OPTION_ENUMS,
+        OPT_DPDK,
     };
     static const struct option long_options[] = {
         {"help",        no_argument, NULL, 'h'},
@@ -158,6 +164,7 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
         {"enable-dummy", optional_argument, NULL, OPT_ENABLE_DUMMY},
         {"disable-system", no_argument, NULL, OPT_DISABLE_SYSTEM},
         {"enable-of14", no_argument, NULL, OPT_ENABLE_OF14},
+        {"dpdk", required_argument, NULL, OPT_DPDK},
         {NULL, 0, NULL, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
@@ -212,6 +219,9 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
 
         case '?':
             exit(EXIT_FAILURE);
+
+        case OPT_DPDK:
+            break;
 
         default:
             abort();

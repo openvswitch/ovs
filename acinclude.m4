@@ -157,6 +157,32 @@ AC_DEFUN([OVS_CHECK_LINUX], [
   AM_CONDITIONAL(LINUX_ENABLED, test -n "$KBUILD")
 ])
 
+dnl OVS_CHECK_DPDK
+dnl
+dnl Configure DPDK source tree
+AC_DEFUN([OVS_CHECK_DPDK], [
+  AC_ARG_WITH([dpdk],
+              [AC_HELP_STRING([--with-dpdk=/path/to/dpdk],
+                              [Specify the DPDP build directory])])
+
+  if test X"$with_dpdk" != X; then
+    RTE_SDK=$with_dpdk
+
+    DPDK_INCLUDE=$RTE_SDK/include
+    DPDK_LIB_DIR=$RTE_SDK/lib
+    DPDK_LIBS="$DPDK_LIB_DIR/libintel_dpdk.a"
+
+    LIBS="$DPDK_LIBS $LIBS"
+    CPPFLAGS="-I$DPDK_INCLUDE $CPPFLAGS"
+
+    AC_DEFINE([DPDK_NETDEV], [1], [System uses the DPDK module.])
+  else
+    RTE_SDK=
+  fi
+
+  AM_CONDITIONAL([DPDK_NETDEV], test -n "$RTE_SDK")
+])
+
 dnl OVS_GREP_IFELSE(FILE, REGEX, [IF-MATCH], [IF-NO-MATCH])
 dnl
 dnl Greps FILE for REGEX.  If it matches, runs IF-MATCH, otherwise IF-NO-MATCH.

@@ -10,6 +10,7 @@ Post-v2.1.0
      instead.
    - Support for Linux kernels up to 3.12. On Kernel 3.12 OVS uses tunnel
      API for GRE and VXLAN.
+   - Added DPDK support.
 
 
 v2.1.0 - xx xxx xxxx

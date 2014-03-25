@@ -302,6 +302,12 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/route-table.h
 endif
 
+if DPDK_NETDEV
+lib_libopenvswitch_la_SOURCES += \
+       lib/netdev-dpdk.c \
+       lib/netdev-dpdk.h
+endif
+
 if HAVE_POSIX_AIO
 lib_libopenvswitch_la_SOURCES += lib/async-append-aio.c
 else

@@ -1,0 +1,93 @@
+                   Using Open vSwitch with DPDK
+                   ============================
+
+Open vSwitch can use Intel(R) DPDK lib to operate entirely in
+userspace. This file explains how to install and use Open vSwitch in
+such a mode.
+
+The DPDK support of Open vSwitch is considered experimental.
+It has not been thoroughly tested.
+
+This version of Open vSwitch should be built manually with "configure"
+and "make".
+
+Building and Installing:
+------------------------
+
+Recommended to use DPDK 1.6.
+
+DPDK:
+cd DPDK
+update config/defconfig_x86_64-default-linuxapp-gcc so that dpdk generate single lib file.
+CONFIG_RTE_BUILD_COMBINE_LIBS=y
+
+make install T=x86_64-default-linuxapp-gcc
+For details refer to  http://dpdk.org/
+
+Linux kernel:
+Refer to intel-dpdk-getting-started-guide.pdf for understanding
+DPDK kernel requirement.
+
+OVS:
+cd $(OVS_DIR)/openvswitch
+./boot.sh
+./configure --with-dpdk=$(DPDK_BUILD)
+make
+
+Refer to INSTALL.userspace for general requirements of building
+userspace OVS.
+
+Using the DPDK with ovs-vswitchd:
+---------------------------------
+
+First setup DPDK devices:
+  - insert uio.ko
+  - insert igb_uio.ko
+    e.g. insmod DPDK/x86_64-default-linuxapp-gcc/kmod/igb_uio.ko
+  - mount hugetlbfs
+    e.g. mount -t hugetlbfs -o pagesize=1G none /mnt/huge/
+  - Bind network device to ibg_uio.
+    e.g. DPDK/tools/pci_unbind.py --bind=igb_uio eth1
+
+Ref to http://www.dpdk.org/doc/quick-start for verifying DPDK setup.
+
+Start vswitchd:
+DPDK configuration arguments can be passed to vswitchd via `--dpdk`
+argument. dpdk arg -c is ignored by ovs-dpdk, but it is required parameter
+for dpdk initialization.
+
+   e.g.
+   ./vswitchd/ovs-vswitchd --dpdk -c 0x1 -n 4 -- unix:$DB_SOCK  --pidfile --detach
+
+To use ovs-vswitchd with DPDK, create a bridge with datapath_type
+"netdev" in the configuration database.  For example:
+
+    ovs-vsctl add-br br0
+    ovs-vsctl set bridge br0 datapath_type=netdev
+
+Now you can add dpdk devices. OVS expect DPDK device name start with dpdk
+and end with portid. vswitchd should print number of dpdk devices found.
+
+    ovs-vsctl add-port br0 dpdk0 -- set Interface dpdk0 type=dpdk
+
+Once first DPDK port is added vswitchd, it creates Polling thread and
+polls dpdk device in continuous loop. Therefore CPU utilization
+for that thread is always 100%.
+
+Restrictions:
+-------------
+
+  - This Support is for Physical NIC. I have tested with Intel NIC only.
+  - vswitchd userspace datapath does affine polling thread but it is
+    assumed that devices are on numa node 0. Therefore if device is
+    attached to non zero numa node switching performance would be
+    suboptimal.
+  - There are fixed number of polling thread and fixed number of per
+    device queues configured.
+  - Work with 1500 MTU, needs few changes in DPDK lib to fix this issue.
+  - Currently DPDK port does not make use any offload functionality.
+
+Bug Reporting:
+--------------
+
+Please report problems to bugs@openvswitch.org.
