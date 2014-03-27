@@ -58,7 +58,7 @@ new_tcp_stream(const char *name, int fd, int connect_status,
         int error = sock_errno();
         VLOG_ERR("%s: setsockopt(TCP_NODELAY): %s",
                  name, sock_strerror(error));
-        close(fd);
+        closesocket(fd);
         return error;
     }
 
