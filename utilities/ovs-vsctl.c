@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -164,6 +164,34 @@ static bool is_condition_satisfied(const struct vsctl_table_class *,
                                    const struct ovsdb_idl_row *,
                                    const char *arg,
                                    struct ovsdb_symbol_table *);
+
+/* Post_db_reload_check frame work is to allow ovs-vsctl to do additional
+ * checks after OVSDB transactions are successfully recorded and reload by
+ * ovs-vswitchd.
+ *
+ * For example, When a new interface is added to OVSDB, ovs-vswitchd will
+ * either store a positive values on successful implementing the new
+ * interface, or -1 on failure.
+ *
+ * Unless -no-wait command line option is specified,
+ * post_db_reload_do_checks() is called right after any configuration
+ * changes is picked up (i.e. reload) by ovs-vswitchd. Any error detected
+ * post OVSDB reload is reported as ovs-vsctl errors. OVS-vswitchd logs
+ * more detailed messages about those errors.
+ *
+ * Current implementation only check for Post OVSDB reload failures on new
+ * interface additions with 'add-br' and 'add-port' commands.
+ *
+ * post_db_reload_expect_iface()
+ *
+ * keep track of interfaces to be checked post OVSDB reload. */
+static void post_db_reload_check_init(void);
+static void post_db_reload_do_checks(const struct vsctl_context *);
+static void post_db_reload_expect_iface(const struct ovsrec_interface *);
+
+static struct uuid *neoteric_ifaces;
+static size_t n_neoteric_ifaces;
+static size_t allocated_neoteric_ifaces;
 
 int
 main(int argc, char *argv[])
@@ -1004,6 +1032,7 @@ pre_get_info(struct vsctl_context *ctx)
     ovsdb_idl_add_column(ctx->idl, &ovsrec_port_col_interfaces);
 
     ovsdb_idl_add_column(ctx->idl, &ovsrec_interface_col_name);
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_interface_col_ofport);
 }
 
 static void
@@ -1561,6 +1590,7 @@ cmd_add_br(struct vsctl_context *ctx)
 {
     bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
     const char *br_name, *parent_name;
+    struct ovsrec_interface *iface;
     int vlan;
 
     br_name = ctx->argv[1];
@@ -1614,7 +1644,6 @@ cmd_add_br(struct vsctl_context *ctx)
 
     if (!parent_name) {
         struct ovsrec_port *port;
-        struct ovsrec_interface *iface;
         struct ovsrec_bridge *br;
 
         iface = ovsrec_interface_insert(ctx->txn);
@@ -1633,7 +1662,6 @@ cmd_add_br(struct vsctl_context *ctx)
     } else {
         struct vsctl_bridge *parent;
         struct ovsrec_port *port;
-        struct ovsrec_interface *iface;
         struct ovsrec_bridge *br;
         int64_t tag = vlan;
 
@@ -1659,6 +1687,7 @@ cmd_add_br(struct vsctl_context *ctx)
         bridge_insert_port(br, port);
     }
 
+    post_db_reload_expect_iface(iface);
     vsctl_context_invalidate_cache(ctx);
 }
 
@@ -1952,6 +1981,7 @@ add_port(struct vsctl_context *ctx,
     for (i = 0; i < n_ifaces; i++) {
         ifaces[i] = ovsrec_interface_insert(ctx->txn);
         ovsrec_interface_set_name(ifaces[i], iface_names[i]);
+        post_db_reload_expect_iface(ifaces[i]);
     }
 
     port = ovsrec_port_insert(ctx->txn);
@@ -3644,6 +3674,52 @@ post_create(struct vsctl_context *ctx)
 }
 
 static void
+post_db_reload_check_init(void)
+{
+    n_neoteric_ifaces = 0;
+}
+
+static void
+post_db_reload_expect_iface(const struct ovsrec_interface *iface)
+{
+    if (n_neoteric_ifaces >= allocated_neoteric_ifaces) {
+        neoteric_ifaces = x2nrealloc(neoteric_ifaces,
+                                     &allocated_neoteric_ifaces,
+                                     sizeof *neoteric_ifaces);
+    }
+    neoteric_ifaces[n_neoteric_ifaces++] = iface->header_.uuid;
+}
+
+static void
+post_db_reload_do_checks(const struct vsctl_context *ctx)
+{
+    struct ds dead_ifaces = DS_EMPTY_INITIALIZER;
+    size_t i;
+
+    for (i = 0; i < n_neoteric_ifaces; i++) {
+        const struct uuid *uuid;
+
+        uuid = ovsdb_idl_txn_get_insert_uuid(ctx->txn, &neoteric_ifaces[i]);
+        if (uuid) {
+            const struct ovsrec_interface *iface;
+
+            iface = ovsrec_interface_get_for_uuid(ctx->idl, uuid);
+            if (iface && (!iface->ofport || *iface->ofport == -1)) {
+                ds_put_format(&dead_ifaces, "'%s', ", iface->name);
+            }
+        }
+    }
+
+    if (dead_ifaces.length) {
+        dead_ifaces.length -= 2; /* Strip off trailing comma and space. */
+        ovs_error(0, "Error detected while setting up %s.  See ovs-vswitchd "
+                  "log for details.", ds_cstr(&dead_ifaces));
+    }
+
+    ds_destroy(&dead_ifaces);
+}
+
+static void
 pre_cmd_destroy(struct vsctl_context *ctx)
 {
     const char *table_name = ctx->argv[1];
@@ -3999,6 +4075,7 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
                                 &ovsrec_open_vswitch_col_next_cfg);
     }
 
+    post_db_reload_check_init();
     symtab = ovsdb_symbol_table_create();
     for (c = commands; c < &commands[n_commands]; c++) {
         ds_init(&c->output);
@@ -4055,8 +4132,6 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
         }
     }
     error = xstrdup(ovsdb_idl_txn_get_error(txn));
-    ovsdb_idl_txn_destroy(txn);
-    txn = the_idl_txn = NULL;
 
     switch (status) {
     case TXN_UNCOMMITTED:
@@ -4134,6 +4209,7 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
             ovsdb_idl_run(idl);
             OVSREC_OPEN_VSWITCH_FOR_EACH (ovs, idl) {
                 if (ovs->cur_cfg >= next_cfg) {
+                    post_db_reload_do_checks(&ctx);
                     goto done;
                 }
             }
@@ -4142,6 +4218,7 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
         }
     done: ;
     }
+    ovsdb_idl_txn_destroy(txn);
     ovsdb_idl_destroy(idl);
 
     exit(EXIT_SUCCESS);

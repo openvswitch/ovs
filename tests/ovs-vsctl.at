@@ -1209,7 +1209,9 @@ m4_foreach(
 [vxlan_system]],
 [
 # Try creating the port
-AT_CHECK([ovs-vsctl add-port br0 reserved_name], [0], [], [])
+AT_CHECK([ovs-vsctl add-port br0 reserved_name], [0], [], [dnl
+ovs-vsctl: Error detected while setting up 'reserved_name'.  See ovs-vswitchd log for details.
+])
 # Detect the warning log message
 AT_CHECK([sed -n "s/^.*\(|bridge|WARN|.*\)$/\1/p" ovs-vswitchd.log], [0], [dnl
 |bridge|WARN|could not create interface reserved_name, name is reserved
@@ -1242,7 +1244,9 @@ m4_foreach(
 [vxlan_system]],
 [
 # Try creating the port
-AT_CHECK([ovs-vsctl add-port br0 reserved_name], [0], [], [])
+AT_CHECK([ovs-vsctl add-port br0 reserved_name], [0], [], [dnl
+ovs-vsctl: Error detected while setting up 'reserved_name'.  See ovs-vswitchd log for details.
+])
 # Detect the warning log message
 AT_CHECK([sed -n "s/^.*\(|bridge|WARN|.*\)$/\1/p" ovs-vswitchd.log], [0], [dnl
 |bridge|WARN|could not create interface reserved_name, name is reserved
