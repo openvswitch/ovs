@@ -55,9 +55,11 @@ new_tcp_stream(const char *name, int fd, int connect_status,
 
     retval = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &on, sizeof on);
     if (retval) {
-        VLOG_ERR("%s: setsockopt(TCP_NODELAY): %s", name, ovs_strerror(errno));
+        int error = sock_errno();
+        VLOG_ERR("%s: setsockopt(TCP_NODELAY): %s",
+                 name, sock_strerror(error));
         close(fd);
-        return errno;
+        return error;
     }
 
     return new_fd_stream(name, fd, connect_status, streamp);
