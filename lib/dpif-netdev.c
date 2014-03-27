@@ -2117,8 +2117,9 @@ dp_execute_cb(void *aux_, struct ofpbuf *packet,
 
     case OVS_ACTION_ATTR_RECIRC: {
         const struct ovs_action_recirc *act;
+
         act = nl_attr_get(a);
-        md->recirc_id =act->recirc_id;
+        md->recirc_id = act->recirc_id;
         md->dp_hash = 0;
 
         if (act->hash_alg == OVS_RECIRC_HASH_ALG_L4) {

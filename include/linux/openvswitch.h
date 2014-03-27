@@ -549,7 +549,8 @@ enum ovs_recirc_hash_alg {
  * struct ovs_action_recirc - %OVS_ACTION_ATTR_RECIRC action argument.
  * @recirc_id: The Recirculation label, Zero is invalid.
  * @hash_alg: Algorithm used to compute hash prior to recirculation.
- * @hash_bias: bias used for computing hash.  used to compute hash prior to recirculation.
+ * @hash_bias: bias used for computing hash.  used to compute hash prior to
+ *             recirculation.
  */
 struct ovs_action_recirc {
 	uint32_t  hash_alg;	/* One of ovs_dp_hash_alg. */
