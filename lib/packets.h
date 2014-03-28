@@ -26,6 +26,7 @@
 #include "flow.h"
 #include "openvswitch/types.h"
 #include "random.h"
+#include "hash.h"
 #include "util.h"
 
 struct ofpbuf;
@@ -134,6 +135,11 @@ static inline uint64_t eth_addr_to_uint64(const uint8_t ea[ETH_ADDR_LEN])
             | ((uint64_t) ea[4] << 8)
             | ea[5]);
 }
+static inline uint64_t eth_addr_vlan_to_uint64(const uint8_t ea[ETH_ADDR_LEN],
+                                               uint16_t vlan)
+{
+    return (((uint64_t)vlan << 48) | eth_addr_to_uint64(ea));
+}
 static inline void eth_addr_from_uint64(uint64_t x, uint8_t ea[ETH_ADDR_LEN])
 {
     ea[0] = x >> 40;
@@ -164,6 +170,11 @@ static inline void eth_addr_nicira_random(uint8_t ea[ETH_ADDR_LEN])
 
     /* Set the top bit to indicate random Nicira address. */
     ea[3] |= 0x80;
+}
+static inline uint32_t hash_mac(const uint8_t ea[ETH_ADDR_LEN],
+                                const uint16_t vlan, const uint32_t basis)
+{
+    return hash_uint64_basis(eth_addr_vlan_to_uint64(ea, vlan), basis);
 }
 
 bool eth_addr_is_reserved(const uint8_t ea[ETH_ADDR_LEN]);

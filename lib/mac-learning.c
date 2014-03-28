@@ -45,9 +45,7 @@ static uint32_t
 mac_table_hash(const struct mac_learning *ml, const uint8_t mac[ETH_ADDR_LEN],
                uint16_t vlan)
 {
-    unsigned int mac1 = get_unaligned_u32(ALIGNED_CAST(uint32_t *, mac));
-    unsigned int mac2 = get_unaligned_u16(ALIGNED_CAST(uint16_t *, mac + 4));
-    return hash_3words(mac1, mac2 | (vlan << 16), ml->secret);
+    return hash_mac(mac, vlan, ml->secret);
 }
 
 static struct mac_entry *

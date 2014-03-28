@@ -1404,7 +1404,7 @@ bond_link_status_update(struct bond_slave *slave)
 static unsigned int
 bond_hash_src(const uint8_t mac[ETH_ADDR_LEN], uint16_t vlan, uint32_t basis)
 {
-    return hash_3words(hash_bytes(mac, ETH_ADDR_LEN, 0), vlan, basis);
+    return hash_mac(mac, vlan, basis);
 }
 
 static unsigned int

@@ -2001,7 +2001,7 @@ xlate_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
     const struct ofputil_bucket *bucket;
     uint32_t basis;
 
-    basis = hash_bytes(ctx->xin->flow.dl_dst, sizeof ctx->xin->flow.dl_dst, 0);
+    basis = hash_mac(ctx->xin->flow.dl_dst, 0, 0);
     bucket = group_best_live_bucket(ctx, group, basis);
     if (bucket) {
         memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
