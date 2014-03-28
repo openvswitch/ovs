@@ -27,6 +27,7 @@
 #include "poll-loop.h"
 #include "shash.h"
 #include "stream.h"
+#include "stream-provider.h"
 #include "svec.h"
 #include "vlog.h"
 
@@ -177,18 +178,25 @@ unixctl_command_reply_error(struct unixctl_conn *conn, const char *error)
     unixctl_command_reply__(conn, false, error);
 }
 
-/* Creates a unixctl server listening on 'path', which may be:
+/* Creates a unixctl server listening on 'path', which for POSIX may be:
  *
  *      - NULL, in which case <rundir>/<program>.<pid>.ctl is used.
- *
- *      - "none", in which case the function will return successfully but
- *        no socket will actually be created.
  *
  *      - A name that does not start with '/', in which case it is put in
  *        <rundir>.
  *
  *      - An absolute path (starting with '/') that gives the exact name of
  *        the Unix domain socket to listen on.
+ *
+ * For Windows, a kernel assigned TCP port is used and written in 'path'
+ * which may be:
+ *
+ *      - NULL, in which case <rundir>/<program>.ctl is used.
+ *
+ *      - An absolute path that gives the name of the file.
+ *
+ * For both POSIX and Windows, if the path is "none", the function will
+ * return successfully but no socket will actually be created.
  *
  * A program that (optionally) daemonizes itself should call this function
  * *after* daemonization, so that the socket name contains the pid of the
@@ -203,28 +211,58 @@ unixctl_server_create(const char *path, struct unixctl_server **serverp)
 {
     struct unixctl_server *server;
     struct pstream *listener;
-    char *punix_path;
+    char *punix_path, *abs_path = NULL;
     int error;
+#ifdef _WIN32
+    FILE *file;
+#endif
 
     *serverp = NULL;
     if (path && !strcmp(path, "none")) {
         return 0;
     }
 
+#ifndef _WIN32
     if (path) {
-        char *abs_path = abs_file_name(ovs_rundir(), path);
+        abs_path = abs_file_name(ovs_rundir(), path);
         punix_path = xasprintf("punix:%s", abs_path);
-        free(abs_path);
     } else {
         punix_path = xasprintf("punix:%s/%s.%ld.ctl", ovs_rundir(),
                                program_name, (long int) getpid());
     }
+#else
+    punix_path = xstrdup("ptcp:0:127.0.0.1");
+#endif
 
     error = pstream_open(punix_path, &listener, 0);
     if (error) {
         ovs_error(error, "could not initialize control socket %s", punix_path);
         goto exit;
     }
+
+#ifdef _WIN32
+    if (path) {
+        abs_path = xstrdup(path);
+    } else {
+        abs_path = xasprintf("%s/%s.ctl", ovs_rundir(), program_name);
+    }
+
+    file = fopen(abs_path, "w");
+    if (!file) {
+        error = errno;
+        ovs_error(error, "could not open %s", abs_path);
+        goto exit;
+    }
+
+    fprintf(file, "%d\n", ntohs(listener->bound_port));
+    if (fflush(file) == EOF) {
+        error = EIO;
+        ovs_error(error, "write failed for %s", abs_path);
+        fclose(file);
+        goto exit;
+    }
+    fclose(file);
+#endif
 
     unixctl_command_register("help", "", 0, 0, unixctl_help, NULL);
     unixctl_command_register("version", "", 0, 0, unixctl_version, NULL);
@@ -235,6 +273,9 @@ unixctl_server_create(const char *path, struct unixctl_server **serverp)
     *serverp = server;
 
 exit:
+    if (abs_path) {
+        free(abs_path);
+    }
     free(punix_path);
     return error;
 }
@@ -404,9 +445,12 @@ unixctl_server_destroy(struct unixctl_server *server)
     }
 }
 
-/* Connects to a unixctl server socket.  'path' should be the name of a unixctl
- * server socket.  If it does not start with '/', it will be prefixed with the
- * rundir (e.g. /usr/local/var/run/openvswitch).
+/* On POSIX based systems, connects to a unixctl server socket.  'path' should
+ * be the name of a unixctl server socket.  If it does not start with '/', it
+ * will be prefixed with the rundir (e.g. /usr/local/var/run/openvswitch).
+ *
+ * On Windows, connects to a localhost TCP port as written inside 'path'.
+ * 'path' should be an absolute path of the file.
  *
  * Returns 0 if successful, otherwise a positive errno value.  If successful,
  * sets '*client' to the new jsonrpc, otherwise to NULL. */
@@ -416,11 +460,35 @@ unixctl_client_create(const char *path, struct jsonrpc **client)
     char *abs_path, *unix_path;
     struct stream *stream;
     int error;
+#ifdef _WIN32
+    FILE *file;
+    int port;
+
+    abs_path = strdup(path);
+    file = fopen(abs_path, "r");
+    if (!file) {
+        int error = errno;
+        ovs_error(error, "could not open %s", abs_path);
+        free(abs_path);
+        return error;
+    }
+
+    error = fscanf(file, "%d", &port);
+    if (error != 1) {
+        ovs_error(errno, "failed to read port from %s", abs_path);
+        free(abs_path);
+        return EINVAL;
+    }
+    fclose(file);
+
+    unix_path = xasprintf("tcp:127.0.0.1:%d", port);
+#else
+    abs_path = abs_file_name(ovs_rundir(), path);
+    unix_path = xasprintf("unix:%s", abs_path);
+#endif
 
     *client = NULL;
 
-    abs_path = abs_file_name(ovs_rundir(), path);
-    unix_path = xasprintf("unix:%s", abs_path);
     error = stream_open_block(stream_open(unix_path, &stream, DSCP_DEFAULT),
                               &stream);
     free(unix_path);
