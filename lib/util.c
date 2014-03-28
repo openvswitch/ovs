@@ -1727,15 +1727,16 @@ exit:
     return ok;
 }
 
-unsigned int
+void
 xsleep(unsigned int seconds)
 {
-    unsigned int t;
-
     ovsrcu_quiesce_start();
-    t = sleep(seconds);
+#ifdef _WIN32
+    Sleep(seconds * 1000);
+#else
+    sleep(seconds);
+#endif
     ovsrcu_quiesce_end();
-    return t;
 }
 
 #ifdef _WIN32

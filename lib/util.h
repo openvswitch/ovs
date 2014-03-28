@@ -502,13 +502,13 @@ void bitwise_put(uint64_t value,
 uint64_t bitwise_get(const void *src, unsigned int src_len,
                      unsigned int src_ofs, unsigned int n_bits);
 
+void xsleep(unsigned int seconds);
 #ifdef _WIN32
 
 char *ovs_format_message(int error);
 char *ovs_lasterror_to_string(void);
 int ftruncate(int fd, off_t length);
 #endif
-unsigned int xsleep(unsigned int seconds);
 
 #ifdef  __cplusplus
 }
