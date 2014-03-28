@@ -115,7 +115,7 @@ static inline uint32_t hash_pointer(const void *p, uint32_t basis)
 
 static inline uint32_t hash_2words(uint32_t x, uint32_t y)
 {
-    return mhash_finish(mhash_add(mhash_add(x, 0), y), 4);
+    return mhash_finish(mhash_add(mhash_add(x, 0), y), 8);
 }
 
 #ifdef __cplusplus
