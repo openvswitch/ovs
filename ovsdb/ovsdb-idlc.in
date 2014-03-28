@@ -110,6 +110,7 @@ def printCIDLHeader(schemaFile):
         print "\nextern struct ovsdb_idl_column %s_columns[%s_N_COLUMNS];" % (structName, structName.upper())
 
         print '''
+const struct %(s)s *%(s)s_get_for_uuid(const struct ovsdb_idl *, const struct uuid *);
 const struct %(s)s *%(s)s_first(const struct ovsdb_idl *);
 const struct %(s)s *%(s)s_next(const struct %(s)s *);
 #define %(S)s_FOR_EACH(ROW, IDL) \\
@@ -381,6 +382,12 @@ void
 
         # First, next functions.
         print '''
+const struct %(s)s *
+%(s)s_get_for_uuid(const struct ovsdb_idl *idl, const struct uuid *uuid)
+{
+    return %(s)s_cast(ovsdb_idl_get_row_for_uuid(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s], uuid));
+}
+
 const struct %(s)s *
 %(s)s_first(const struct ovsdb_idl *idl)
 {
