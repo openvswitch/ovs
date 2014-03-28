@@ -18,11 +18,11 @@ AM_CPPFLAGS += $(PTHREAD_INCLUDES)
 AM_LDFLAGS += $(PTHREAD_LDFLAGS)
 endif
 
-AM_CPPFLAGS += $(SSL_INCLUDES)
-
 AM_CPPFLAGS += -I $(top_srcdir)/include
 AM_CPPFLAGS += -I $(top_srcdir)/lib
 AM_CPPFLAGS += -I $(top_builddir)/lib
+
+AM_CPPFLAGS += $(SSL_INCLUDES)
 
 AM_CFLAGS = -Wstrict-prototypes
 AM_CFLAGS += $(WARNING_FLAGS)
