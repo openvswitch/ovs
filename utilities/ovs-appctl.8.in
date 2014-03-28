@@ -52,6 +52,15 @@ named \fB@RUNDIR@/\fItarget\fB.\fIpid\fB.ctl\fR, where \fIpid\fR is
 replaced by the process ID read from the pidfile, and uses that file
 as if it had been specified directly as the target.
 .IP
+On Windows, \fItarget\fR can be an absolute path to a file that contains
+a localhost TCP port on which an Open vSwitch daemon is listening
+for control channel connections. By default, each daemon writes the
+TCP port on which it is listening for control connection into the file
+\fIprogram\fB.ctl\fR located inside the configured \fIOVS_RUNDIR\fR
+directory. If \fItarget\fR is not an absolute path, \fBovs\-appctl\fR
+looks for a file named \fItarget\fB.ctl\fR in the configured \fIOVS_RUNDIR\fR
+directory.
+.IP
 The default target is \fBovs\-vswitchd\fR.
 .
 .SH COMMON COMMANDS

@@ -61,7 +61,8 @@ or from a distribution tar ball.
   % make lib/vswitch-idl.h lib/vtep-idl.h ofproto/ipfix-entities.def
   % make ovsdb/ovsdb-server.exe ovsdb/ovsdb-tool.exe ovsdb/ovsdb-client.exe \
          utilities/ovs-vsctl.exe utilities/ovs-ofctl.exe \
-         utilities/ovs-dpctl.exe vswitchd/ovs-vswitchd.exe
+         utilities/ovs-dpctl.exe vswitchd/ovs-vswitchd.exe \
+         utilities/ovs-appctl.exe
 
 OpenSSL, Open vSwitch and Visual C++
 ------------------------------------
