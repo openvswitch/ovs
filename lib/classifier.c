@@ -312,7 +312,7 @@ static uint32_t
 hash_metadata(ovs_be64 metadata_)
 {
     uint64_t metadata = (OVS_FORCE uint64_t) metadata_;
-    return hash_2words(metadata, metadata >> 32);
+    return hash_uint64(metadata);
 }
 
 static struct cls_partition *

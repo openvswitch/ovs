@@ -285,7 +285,7 @@ ms_to_ccm_interval(int interval_ms)
 static uint32_t
 hash_mpid(uint64_t mpid)
 {
-    return hash_bytes(&mpid, sizeof mpid, 0);
+    return hash_uint64(mpid);
 }
 
 static bool

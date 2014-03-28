@@ -112,15 +112,13 @@ eth_addr_is_reserved(const uint8_t ea[ETH_ADDR_LEN])
     if (ovsthread_once_start(&once)) {
         hmap_init(&addrs);
         for (node = nodes; node < &nodes[ARRAY_SIZE(nodes)]; node++) {
-            hmap_insert(&addrs, &node->hmap_node,
-                        hash_2words(node->ea64, node->ea64 >> 32));
+            hmap_insert(&addrs, &node->hmap_node, hash_uint64(node->ea64));
         }
         ovsthread_once_done(&once);
     }
 
     ea64 = eth_addr_to_uint64(ea);
-    HMAP_FOR_EACH_IN_BUCKET (node, hmap_node, hash_2words(ea64, ea64 >> 32),
-                             &addrs) {
+    HMAP_FOR_EACH_IN_BUCKET (node, hmap_node, hash_uint64(ea64), &addrs) {
         if (node->ea64 == ea64) {
             return true;
         }

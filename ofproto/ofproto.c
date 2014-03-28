@@ -3192,8 +3192,7 @@ handle_port_desc_stats_request(struct ofconn *ofconn,
 static uint32_t
 hash_cookie(ovs_be64 cookie)
 {
-    return hash_2words((OVS_FORCE uint64_t)cookie >> 32,
-                       (OVS_FORCE uint64_t)cookie);
+    return hash_uint64((OVS_FORCE uint64_t)cookie);
 }
 
 static void
