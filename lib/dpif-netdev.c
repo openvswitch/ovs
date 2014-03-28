@@ -1734,7 +1734,7 @@ dp_netdev_actions_free(struct dp_netdev_actions *actions)
 }
 
 
-inline static void
+static void
 dp_netdev_process_rxq_port(struct dp_netdev *dp,
                           struct dp_netdev_port *port,
                           struct netdev_rxq *rxq)
