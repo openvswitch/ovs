@@ -94,6 +94,7 @@ check-pycov: all tests/atconfig tests/atlocal $(TESTSUITE) clean-pycov
 valgrind_wrappers = \
 	tests/valgrind/ovs-appctl \
 	tests/valgrind/ovs-ofctl \
+	tests/valgrind/ovstest \
 	tests/valgrind/ovs-vsctl \
 	tests/valgrind/ovs-vswitchd \
 	tests/valgrind/ovsdb-client \
@@ -296,6 +297,11 @@ tests/idltest.ovsidl: $(IDLTEST_IDL_FILES)
 	mv $@.tmp $@
 
 tests/idltest.c: tests/idltest.h
+
+noinst_PROGRAMS += tests/ovstest
+tests_ovstest_SOURCES = tests/ovstest.c \
+	 tests/ovstest.h
+tests_ovstest_LDADD = lib/libopenvswitch.la
 
 noinst_PROGRAMS += tests/test-reconnect
 tests_test_reconnect_SOURCES = tests/test-reconnect.c
