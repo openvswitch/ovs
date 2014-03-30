@@ -103,7 +103,7 @@ vconn_stream_close(struct vconn *vconn)
     struct vconn_stream *s = vconn_stream_cast(vconn);
 
     if ((vconn->error == EPROTO || s->n_packets < 1) && s->rxbuf) {
-        stream_report_content(s->rxbuf->data, s->rxbuf->size, STREAM_OPENFLOW,
+        stream_report_content(ofpbuf_data(s->rxbuf), ofpbuf_size(s->rxbuf), STREAM_OPENFLOW,
                               THIS_MODULE, vconn_get_name(vconn));
     }
 
@@ -126,14 +126,14 @@ vconn_stream_recv__(struct vconn_stream *s, int rx_len)
     struct ofpbuf *rx = s->rxbuf;
     int want_bytes, retval;
 
-    want_bytes = rx_len - rx->size;
+    want_bytes = rx_len - ofpbuf_size(rx);
     ofpbuf_prealloc_tailroom(rx, want_bytes);
     retval = stream_recv(s->stream, ofpbuf_tail(rx), want_bytes);
     if (retval > 0) {
-        rx->size += retval;
+        ofpbuf_set_size(rx, ofpbuf_size(rx) + retval);
         return retval == want_bytes ? 0 : EAGAIN;
     } else if (retval == 0) {
-        if (rx->size) {
+        if (ofpbuf_size(rx)) {
             VLOG_ERR_RL(&rl, "connection dropped mid-packet");
             return EPROTO;
         }
@@ -156,7 +156,7 @@ vconn_stream_recv(struct vconn *vconn, struct ofpbuf **bufferp)
     }
 
     /* Read ofp_header. */
-    if (s->rxbuf->size < sizeof(struct ofp_header)) {
+    if (ofpbuf_size(s->rxbuf) < sizeof(struct ofp_header)) {
         int retval = vconn_stream_recv__(s, sizeof(struct ofp_header));
         if (retval) {
             return retval;
@@ -164,12 +164,12 @@ vconn_stream_recv(struct vconn *vconn, struct ofpbuf **bufferp)
     }
 
     /* Read payload. */
-    oh = s->rxbuf->data;
+    oh = ofpbuf_data(s->rxbuf);
     rx_len = ntohs(oh->length);
     if (rx_len < sizeof(struct ofp_header)) {
         VLOG_ERR_RL(&rl, "received too-short ofp_header (%d bytes)", rx_len);
         return EPROTO;
-    } else if (s->rxbuf->size < rx_len) {
+    } else if (ofpbuf_size(s->rxbuf) < rx_len) {
         int retval = vconn_stream_recv__(s, rx_len);
         if (retval) {
             return retval;
@@ -199,8 +199,8 @@ vconn_stream_send(struct vconn *vconn, struct ofpbuf *buffer)
         return EAGAIN;
     }
 
-    retval = stream_send(s->stream, buffer->data, buffer->size);
-    if (retval == buffer->size) {
+    retval = stream_send(s->stream, ofpbuf_data(buffer), ofpbuf_size(buffer));
+    if (retval == ofpbuf_size(buffer)) {
         ofpbuf_delete(buffer);
         return 0;
     } else if (retval >= 0 || retval == -EAGAIN) {
@@ -225,7 +225,7 @@ vconn_stream_run(struct vconn *vconn)
         return;
     }
 
-    retval = stream_send(s->stream, s->txbuf->data, s->txbuf->size);
+    retval = stream_send(s->stream, ofpbuf_data(s->txbuf), ofpbuf_size(s->txbuf));
     if (retval < 0) {
         if (retval != -EAGAIN) {
             VLOG_ERR_RL(&rl, "send: %s", ovs_strerror(-retval));
@@ -234,7 +234,7 @@ vconn_stream_run(struct vconn *vconn)
         }
     } else if (retval > 0) {
         ofpbuf_pull(s->txbuf, retval);
-        if (!s->txbuf->size) {
+        if (!ofpbuf_size(s->txbuf)) {
             vconn_stream_clear_txbuf(s);
             return;
         }

@@ -78,7 +78,7 @@ parse_bundle_actions(char *actions)
         ovs_fatal(0, "%s", error);
     }
 
-    action = ofpacts.data;
+    action = ofpbuf_data(&ofpacts);
     bundle = ofpact_get_BUNDLE(xmemdup(action, action->len));
     ofpbuf_uninit(&ofpacts);
 

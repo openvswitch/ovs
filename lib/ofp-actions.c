@@ -711,7 +711,7 @@ ofpacts_pull_openflow_actions(struct ofpbuf *openflow,
     if (actions == NULL) {
         VLOG_WARN_RL(&rl, "OpenFlow message actions length %u exceeds "
                      "remaining message length (%"PRIu32")",
-                     actions_len, openflow->size);
+                     actions_len, ofpbuf_size(openflow));
         return OFPERR_OFPBRC_BAD_LEN;
     }
 
@@ -722,7 +722,7 @@ ofpacts_pull_openflow_actions(struct ofpbuf *openflow,
         return error;
     }
 
-    error = ofpacts_verify(ofpacts->data, ofpacts->size);
+    error = ofpacts_verify(ofpbuf_data(ofpacts), ofpbuf_size(ofpacts));
     if (error) {
         ofpbuf_clear(ofpacts);
     }
@@ -1420,7 +1420,7 @@ ofpacts_copy_last(struct ofpbuf *out, const struct ofpbuf *in,
     const struct ofpact *a;
 
     target = NULL;
-    OFPACT_FOR_EACH (a, in->data, in->size) {
+    OFPACT_FOR_EACH (a, ofpbuf_data(in), ofpbuf_size(in)) {
         if (a->type == filter) {
             target = a;
         }
@@ -1439,7 +1439,7 @@ ofpacts_copy_all(struct ofpbuf *out, const struct ofpbuf *in,
 {
     const struct ofpact *a;
 
-    OFPACT_FOR_EACH (a, in->data, in->size) {
+    OFPACT_FOR_EACH (a, ofpbuf_data(in), ofpbuf_size(in)) {
         if (filter(a)) {
             ofpact_copy(out, a);
         }
@@ -1497,7 +1497,7 @@ ofpacts_from_openflow11_for_action_set(const union ofp_action *in,
 {
     enum ofperr error;
     struct ofpact *a;
-    size_t start = out->size;
+    size_t start = ofpbuf_size(out);
 
     error = ofpacts_from_openflow(in, n_in, version, out);
 
@@ -1505,7 +1505,7 @@ ofpacts_from_openflow11_for_action_set(const union ofp_action *in,
         return error;
     }
 
-    OFPACT_FOR_EACH (a, ofpact_end(out->data, start), out->size - start) {
+    OFPACT_FOR_EACH (a, ofpact_end(ofpbuf_data(out), start), ofpbuf_size(out) - start) {
         if (!ofpact_is_allowed_in_actions_set(a)) {
             VLOG_WARN_RL(&rl, "disallowed action in action set");
             return OFPERR_OFPBAC_BAD_TYPE;
@@ -1769,7 +1769,7 @@ ofpacts_pull_openflow_instructions(struct ofpbuf *openflow,
     if (instructions == NULL) {
         VLOG_WARN_RL(&rl, "OpenFlow message instructions length %u exceeds "
                      "remaining message length (%"PRIu32")",
-                     instructions_len, openflow->size);
+                     instructions_len, ofpbuf_size(openflow));
         error = OFPERR_OFPBIC_BAD_LEN;
         goto exit;
     }
@@ -1814,7 +1814,7 @@ ofpacts_pull_openflow_instructions(struct ofpbuf *openflow,
         size_t start;
 
         ofpact_pad(ofpacts);
-        start = ofpacts->size;
+        start = ofpbuf_size(ofpacts);
         on = ofpact_put(ofpacts, OFPACT_WRITE_ACTIONS,
                         offsetof(struct ofpact_nest, actions));
         get_actions_from_instruction(insts[OVSINST_OFPIT11_WRITE_ACTIONS],
@@ -1825,7 +1825,7 @@ ofpacts_pull_openflow_instructions(struct ofpbuf *openflow,
             goto exit;
         }
         on = ofpbuf_at_assert(ofpacts, start, sizeof *on);
-        on->ofpact.len = ofpacts->size - start;
+        on->ofpact.len = ofpbuf_size(ofpacts) - start;
     }
     if (insts[OVSINST_OFPIT11_WRITE_METADATA]) {
         const struct ofp11_instruction_write_metadata *oiwm;
@@ -1848,7 +1848,7 @@ ofpacts_pull_openflow_instructions(struct ofpbuf *openflow,
         ogt->table_id = oigt->table_id;
     }
 
-    error = ofpacts_verify(ofpacts->data, ofpacts->size);
+    error = ofpacts_verify(ofpbuf_data(ofpacts), ofpbuf_size(ofpacts));
 exit:
     if (error) {
         ofpbuf_clear(ofpacts);
@@ -2288,23 +2288,23 @@ ofpact_write_metadata_to_nxast(const struct ofpact_metadata *om,
 static void
 ofpact_note_to_nxast(const struct ofpact_note *note, struct ofpbuf *out)
 {
-    size_t start_ofs = out->size;
+    size_t start_ofs = ofpbuf_size(out);
     struct nx_action_note *nan;
     unsigned int remainder;
     unsigned int len;
 
     nan = ofputil_put_NXAST_NOTE(out);
-    out->size -= sizeof nan->note;
+    ofpbuf_set_size(out, ofpbuf_size(out) - sizeof nan->note);
 
     ofpbuf_put(out, note->data, note->length);
 
-    len = out->size - start_ofs;
+    len = ofpbuf_size(out) - start_ofs;
     remainder = len % OFP_ACTION_ALIGN;
     if (remainder) {
         ofpbuf_put_zeros(out, OFP_ACTION_ALIGN - remainder);
     }
     nan = ofpbuf_at(out, start_ofs, sizeof *nan);
-    nan->len = htons(out->size - start_ofs);
+    nan->len = htons(ofpbuf_size(out) - start_ofs);
 }
 
 static void
@@ -2981,7 +2981,7 @@ ofpacts_put_openflow_actions(const struct ofpact ofpacts[], size_t ofpacts_len,
                              enum ofp_version ofp_version)
 {
     const struct ofpact *a;
-    size_t start_size = openflow->size;
+    size_t start_size = ofpbuf_size(openflow);
 
     void (*translate)(const struct ofpact *a, struct ofpbuf *out) =
         (ofp_version == OFP10_VERSION) ? ofpact_to_openflow10 :
@@ -2991,7 +2991,7 @@ ofpacts_put_openflow_actions(const struct ofpact ofpacts[], size_t ofpacts_len,
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
         translate(a, openflow);
     }
-    return openflow->size - start_size;
+    return ofpbuf_size(openflow) - start_size;
 }
 
 static void
@@ -3001,10 +3001,10 @@ ofpacts_update_instruction_actions(struct ofpbuf *openflow, size_t ofs)
 
     /* Update the instruction's length (or, if it's empty, delete it). */
     oia = ofpbuf_at_assert(openflow, ofs, sizeof *oia);
-    if (openflow->size > ofs + sizeof *oia) {
-        oia->len = htons(openflow->size - ofs);
+    if (ofpbuf_size(openflow) > ofs + sizeof *oia) {
+        oia->len = htons(ofpbuf_size(openflow) - ofs);
     } else {
-        openflow->size = ofs;
+        ofpbuf_set_size(openflow, ofs);
     }
 }
 
@@ -3055,7 +3055,7 @@ ofpacts_put_openflow_instructions(const struct ofpact ofpacts[],
             break;
 
         case OVSINST_OFPIT11_APPLY_ACTIONS: {
-            const size_t ofs = openflow->size;
+            const size_t ofs = ofpbuf_size(openflow);
             const size_t ofpacts_len_left =
                 (uint8_t*)ofpact_end(ofpacts, ofpacts_len) - (uint8_t*)a;
             const struct ofpact *action;
@@ -3080,7 +3080,7 @@ ofpacts_put_openflow_instructions(const struct ofpact ofpacts[],
         }
 
         case OVSINST_OFPIT11_WRITE_ACTIONS: {
-            const size_t ofs = openflow->size;
+            const size_t ofs = ofpbuf_size(openflow);
             const struct ofpact_nest *on;
 
             on = ofpact_get_WRITE_ACTIONS(a);
@@ -3648,7 +3648,7 @@ ofpact_update_len(struct ofpbuf *ofpacts, struct ofpact *ofpact)
 void
 ofpact_pad(struct ofpbuf *ofpacts)
 {
-    unsigned int pad = PAD_SIZE(ofpacts->size, OFPACT_ALIGNTO);
+    unsigned int pad = PAD_SIZE(ofpbuf_size(ofpacts), OFPACT_ALIGNTO);
     if (pad) {
         ofpbuf_put_zeros(ofpacts, pad);
     }

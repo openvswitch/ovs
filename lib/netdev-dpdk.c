@@ -558,11 +558,11 @@ build_ofpbuf(struct rte_mbuf *pkt)
     b = ofpbuf_new(0);
     b->private_p = pkt;
 
-    b->data = pkt->pkt.data;
-    b->base = (char *)b->data - DP_NETDEV_HEADROOM - VLAN_ETH_HEADER_LEN;
-    b->allocated = pkt->buf_len;
+    ofpbuf_set_data(b, pkt->pkt.data);
+    ofpbuf_set_base(b, (char *)ofpbuf_data(b) - DP_NETDEV_HEADROOM - VLAN_ETH_HEADER_LEN);
+    b->allocated =  pkt->buf_len;
+    ofpbuf_set_size(b, rte_pktmbuf_data_len(pkt));
     b->source = OFPBUF_DPDK;
-    b->size = rte_pktmbuf_data_len(pkt);
 
     dp_packet_pad(b);
 
@@ -665,9 +665,9 @@ netdev_dpdk_send(struct netdev *netdev,
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     int ret;
 
-    if (ofpbuf->size > dev->max_packet_len) {
+    if (ofpbuf_size(ofpbuf) > dev->max_packet_len) {
         VLOG_WARN_RL(&rl, "Too big size %d max_packet_len %d",
-                     (int)ofpbuf->size , dev->max_packet_len);
+                     (int)ofpbuf_size(ofpbuf) , dev->max_packet_len);
 
         ovs_mutex_lock(&dev->mutex);
         dev->stats.tx_dropped++;
@@ -680,15 +680,15 @@ netdev_dpdk_send(struct netdev *netdev,
     rte_prefetch0(&ofpbuf->private_p);
     if (!may_steal ||
         !ofpbuf->private_p || ofpbuf->source != OFPBUF_DPDK) {
-        dpdk_do_tx_copy(netdev, (char *) ofpbuf->data, ofpbuf->size);
+        dpdk_do_tx_copy(netdev, (char *) ofpbuf_data(ofpbuf), ofpbuf_size(ofpbuf));
     } else {
         struct rte_mbuf *pkt;
         int qid;
 
         pkt = ofpbuf->private_p;
         ofpbuf->private_p = NULL;
-        rte_pktmbuf_data_len(pkt) = ofpbuf->size;
-        rte_pktmbuf_pkt_len(pkt) = ofpbuf->size;
+        rte_pktmbuf_data_len(pkt) = ofpbuf_size(ofpbuf);
+        rte_pktmbuf_pkt_len(pkt) = ofpbuf_size(ofpbuf);
 
         qid = rte_lcore_id() % NR_QUEUE;
 

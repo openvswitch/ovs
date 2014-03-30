@@ -250,15 +250,15 @@ nl_sock_send__(struct nl_sock *sock, const struct ofpbuf *msg,
     struct nlmsghdr *nlmsg = nl_msg_nlmsghdr(msg);
     int error;
 
-    nlmsg->nlmsg_len = msg->size;
+    nlmsg->nlmsg_len = ofpbuf_size(msg);
     nlmsg->nlmsg_seq = nlmsg_seq;
     nlmsg->nlmsg_pid = sock->pid;
     do {
         int retval;
-        retval = send(sock->fd, msg->data, msg->size, wait ? 0 : MSG_DONTWAIT);
+        retval = send(sock->fd, ofpbuf_data(msg), ofpbuf_size(msg), wait ? 0 : MSG_DONTWAIT);
         error = retval < 0 ? errno : 0;
     } while (error == EINTR);
-    log_nlmsg(__func__, error, msg->data, msg->size, sock->protocol);
+    log_nlmsg(__func__, error, ofpbuf_data(msg), ofpbuf_size(msg), sock->protocol);
     if (!error) {
         COVERAGE_INC(netlink_sent);
     }
@@ -266,7 +266,7 @@ nl_sock_send__(struct nl_sock *sock, const struct ofpbuf *msg,
 }
 
 /* Tries to send 'msg', which must contain a Netlink message, to the kernel on
- * 'sock'.  nlmsg_len in 'msg' will be finalized to match msg->size, nlmsg_pid
+ * 'sock'.  nlmsg_len in 'msg' will be finalized to match ofpbuf_size(msg), nlmsg_pid
  * will be set to 'sock''s pid, and nlmsg_seq will be initialized to a fresh
  * sequence number, before the message is sent.
  *
@@ -280,7 +280,7 @@ nl_sock_send(struct nl_sock *sock, const struct ofpbuf *msg, bool wait)
 }
 
 /* Tries to send 'msg', which must contain a Netlink message, to the kernel on
- * 'sock'.  nlmsg_len in 'msg' will be finalized to match msg->size, nlmsg_pid
+ * 'sock'.  nlmsg_len in 'msg' will be finalized to match ofpbuf_size(msg), nlmsg_pid
  * will be set to 'sock''s pid, and nlmsg_seq will be initialized to
  * 'nlmsg_seq', before the message is sent.
  *
@@ -314,7 +314,7 @@ nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, bool wait)
     ovs_assert(buf->allocated >= sizeof *nlmsghdr);
     ofpbuf_clear(buf);
 
-    iov[0].iov_base = buf->base;
+    iov[0].iov_base = ofpbuf_base(buf);
     iov[0].iov_len = buf->allocated;
     iov[1].iov_base = tail;
     iov[1].iov_len = sizeof tail;
@@ -343,7 +343,7 @@ nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, bool wait)
         return E2BIG;
     }
 
-    nlmsghdr = buf->data;
+    nlmsghdr = ofpbuf_data(buf);
     if (retval < sizeof *nlmsghdr
         || nlmsghdr->nlmsg_len < sizeof *nlmsghdr
         || nlmsghdr->nlmsg_len > retval) {
@@ -352,13 +352,13 @@ nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, bool wait)
         return EPROTO;
     }
 
-    buf->size = MIN(retval, buf->allocated);
+    ofpbuf_set_size(buf, MIN(retval, buf->allocated));
     if (retval > buf->allocated) {
         COVERAGE_INC(netlink_recv_jumbo);
         ofpbuf_put(buf, tail, retval - buf->allocated);
     }
 
-    log_nlmsg(__func__, 0, buf->data, buf->size, sock->protocol);
+    log_nlmsg(__func__, 0, ofpbuf_data(buf), ofpbuf_size(buf), sock->protocol);
     COVERAGE_INC(netlink_received);
 
     return 0;
@@ -424,12 +424,12 @@ nl_sock_transact_multiple__(struct nl_sock *sock,
         struct nl_transaction *txn = transactions[i];
         struct nlmsghdr *nlmsg = nl_msg_nlmsghdr(txn->request);
 
-        nlmsg->nlmsg_len = txn->request->size;
+        nlmsg->nlmsg_len = ofpbuf_size(txn->request);
         nlmsg->nlmsg_seq = base_seq + i;
         nlmsg->nlmsg_pid = sock->pid;
 
-        iovs[i].iov_base = txn->request->data;
-        iovs[i].iov_len = txn->request->size;
+        iovs[i].iov_base = ofpbuf_data(txn->request);
+        iovs[i].iov_len = ofpbuf_size(txn->request);
     }
 
     memset(&msg, 0, sizeof msg);
@@ -442,7 +442,7 @@ nl_sock_transact_multiple__(struct nl_sock *sock,
     for (i = 0; i < n; i++) {
         struct nl_transaction *txn = transactions[i];
 
-        log_nlmsg(__func__, error, txn->request->data, txn->request->size,
+        log_nlmsg(__func__, error, ofpbuf_data(txn->request), ofpbuf_size(txn->request),
                   sock->protocol);
     }
     if (!error) {
@@ -579,12 +579,12 @@ nl_sock_transact_multiple(struct nl_sock *sock,
 #else
         enum { MAX_BATCH_BYTES = 4096 - 512 };
 #endif
-        bytes = transactions[0]->request->size;
+        bytes = ofpbuf_size(transactions[0]->request);
         for (count = 1; count < n && count < max_batch_count; count++) {
-            if (bytes + transactions[count]->request->size > MAX_BATCH_BYTES) {
+            if (bytes + ofpbuf_size(transactions[count]->request) > MAX_BATCH_BYTES) {
                 break;
             }
-            bytes += transactions[count]->request->size;
+            bytes += ofpbuf_size(transactions[count]->request);
         }
 
         error = nl_sock_transact_multiple__(sock, transactions, count, &done);
@@ -609,7 +609,7 @@ nl_sock_transact_multiple(struct nl_sock *sock,
  * reply, if any, is discarded.
  *
  * Before the message is sent, nlmsg_len in 'request' will be finalized to
- * match msg->size, nlmsg_pid will be set to 'sock''s pid, and nlmsg_seq will
+ * match ofpbuf_size(msg), nlmsg_pid will be set to 'sock''s pid, and nlmsg_seq will
  * be initialized, NLM_F_ACK will be set in nlmsg_flags.
  *
  * The caller is responsible for destroying 'request'.
@@ -709,12 +709,12 @@ nl_dump_start(struct nl_dump *dump, int protocol, const struct ofpbuf *request)
  * have been initialized with nl_dump_start(), and 'buffer' must have been
  * initialized. 'buffer' should be at least NL_DUMP_BUFSIZE bytes long.
  *
- * If successful, returns true and points 'reply->data' and 'reply->size' to
+ * If successful, returns true and points 'reply->data' and 'ofpbuf_size(reply)' to
  * the message that was retrieved. The caller must not modify 'reply' (because
  * it points within 'buffer', which will be used by future calls to this
  * function).
  *
- * On failure, returns false and sets 'reply->data' to NULL and 'reply->size'
+ * On failure, returns false and sets 'reply->data' to NULL and 'ofpbuf_size(reply)'
  * to 0.  Failure might indicate an actual error or merely the end of replies.
  * An error status for the entire dump operation is provided when it is
  * completed by calling nl_dump_done().
@@ -731,11 +731,11 @@ nl_dump_next(struct nl_dump *dump, struct ofpbuf *reply, struct ofpbuf *buffer)
     struct nlmsghdr *nlmsghdr;
     int error = 0;
 
-    reply->data = NULL;
-    reply->size = 0;
+    ofpbuf_set_data(reply, NULL);
+    ofpbuf_set_size(reply, 0);
 
     /* If 'buffer' is empty, fetch another batch of nlmsgs. */
-    while (!buffer->size) {
+    while (!ofpbuf_size(buffer)) {
         unsigned int status;
         int retval, seq;
 

@@ -265,10 +265,10 @@ enum ofperr
 ofputil_pull_ofp11_match(struct ofpbuf *buf, struct match *match,
                          uint16_t *padded_match_len)
 {
-    struct ofp11_match_header *omh = buf->data;
+    struct ofp11_match_header *omh = ofpbuf_data(buf);
     uint16_t match_len;
 
-    if (buf->size < sizeof *omh) {
+    if (ofpbuf_size(buf) < sizeof *omh) {
         return OFPERR_OFPBMC_BAD_LEN;
     }
 
@@ -278,7 +278,7 @@ ofputil_pull_ofp11_match(struct ofpbuf *buf, struct match *match,
     case OFPMT_STANDARD: {
         struct ofp11_match *om;
 
-        if (match_len != sizeof *om || buf->size < sizeof *om) {
+        if (match_len != sizeof *om || ofpbuf_size(buf) < sizeof *om) {
             return OFPERR_OFPBMC_BAD_LEN;
         }
         om = ofpbuf_pull(buf, sizeof *om);
@@ -1234,15 +1234,15 @@ ofputil_decode_hello(const struct ofp_header *oh, uint32_t *allowed_versions)
     ofpbuf_pull(&msg, sizeof *oh);
 
     *allowed_versions = version_bitmap_from_version(oh->version);
-    while (msg.size) {
+    while (ofpbuf_size(&msg)) {
         const struct ofp_hello_elem_header *oheh;
         unsigned int len;
 
-        if (msg.size < sizeof *oheh) {
+        if (ofpbuf_size(&msg) < sizeof *oheh) {
             return false;
         }
 
-        oheh = msg.data;
+        oheh = ofpbuf_data(&msg);
         len = ntohs(oheh->length);
         if (len < sizeof *oheh || !ofpbuf_try_pull(&msg, ROUND_UP(len, 8))) {
             return false;
@@ -1543,7 +1543,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             return error;
         }
 
-        error = ofpacts_pull_openflow_instructions(&b, b.size, oh->version,
+        error = ofpacts_pull_openflow_instructions(&b, ofpbuf_size(&b), oh->version,
                                                    ofpacts);
         if (error) {
             return error;
@@ -1610,7 +1610,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             ofputil_normalize_match(&fm->match);
 
             /* Now get the actions. */
-            error = ofpacts_pull_openflow_actions(&b, b.size, oh->version,
+            error = ofpacts_pull_openflow_actions(&b, ofpbuf_size(&b), oh->version,
                                                   ofpacts);
             if (error) {
                 return error;
@@ -1644,7 +1644,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             if (error) {
                 return error;
             }
-            error = ofpacts_pull_openflow_actions(&b, b.size, oh->version,
+            error = ofpacts_pull_openflow_actions(&b, ofpbuf_size(&b), oh->version,
                                                   ofpacts);
             if (error) {
                 return error;
@@ -1679,8 +1679,8 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
         }
     }
 
-    fm->ofpacts = ofpacts->data;
-    fm->ofpacts_len = ofpacts->size;
+    fm->ofpacts = ofpbuf_data(ofpacts);
+    fm->ofpacts_len = ofpbuf_size(ofpacts);
 
     error = ofputil_decode_flow_mod_flags(raw_flags, fm->command,
                                           oh->version, &fm->flags);
@@ -1778,9 +1778,9 @@ ofputil_decode_meter_mod(const struct ofp_header *oh,
             mm->meter.flags & OFPMF13_PKTPS) {
             return OFPERR_OFPMMFC_BAD_FLAGS;
         }
-        mm->meter.bands = bands->data;
+        mm->meter.bands = ofpbuf_data(bands);
 
-        error = ofputil_pull_bands(&b, b.size, &mm->meter.n_bands, bands);
+        error = ofputil_pull_bands(&b, ofpbuf_size(&b), &mm->meter.n_bands, bands);
         if (error) {
             return error;
         }
@@ -1856,14 +1856,14 @@ ofputil_append_meter_config(struct list *replies,
                             const struct ofputil_meter_config *mc)
 {
     struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
-    size_t start_ofs = msg->size;
+    size_t start_ofs = ofpbuf_size(msg);
     struct ofp13_meter_config *reply = ofpbuf_put_uninit(msg, sizeof *reply);
     reply->flags = htons(mc->flags);
     reply->meter_id = htonl(mc->meter_id);
 
     ofputil_put_bands(mc->n_bands, mc->bands, msg);
 
-    reply->length = htons(msg->size - start_ofs);
+    reply->length = htons(ofpbuf_size(msg) - start_ofs);
 
     ofpmp_postappend(replies, start_ofs);
 }
@@ -1922,7 +1922,7 @@ ofputil_decode_meter_config(struct ofpbuf *msg,
         ofpraw_pull_assert(msg);
     }
 
-    if (!msg->size) {
+    if (!ofpbuf_size(msg)) {
         return EOF;
     }
 
@@ -1930,7 +1930,7 @@ ofputil_decode_meter_config(struct ofpbuf *msg,
     if (!omc) {
         VLOG_WARN_RL(&bad_ofmsg_rl,
                      "OFPMP_METER_CONFIG reply has %"PRIu32" leftover bytes at end",
-                     msg->size);
+                     ofpbuf_size(msg));
         return OFPERR_OFPBRC_BAD_LEN;
     }
 
@@ -1942,7 +1942,7 @@ ofputil_decode_meter_config(struct ofpbuf *msg,
     }
     mc->meter_id = ntohl(omc->meter_id);
     mc->flags = ntohs(omc->flags);
-    mc->bands = bands->data;
+    mc->bands = ofpbuf_data(bands);
 
     return 0;
 }
@@ -1998,7 +1998,7 @@ ofputil_decode_meter_stats(struct ofpbuf *msg,
         ofpraw_pull_assert(msg);
     }
 
-    if (!msg->size) {
+    if (!ofpbuf_size(msg)) {
         return EOF;
     }
 
@@ -2006,7 +2006,7 @@ ofputil_decode_meter_stats(struct ofpbuf *msg,
     if (!oms) {
         VLOG_WARN_RL(&bad_ofmsg_rl,
                      "OFPMP_METER reply has %"PRIu32" leftover bytes at end",
-                     msg->size);
+                     ofpbuf_size(msg));
         return OFPERR_OFPBRC_BAD_LEN;
     }
 
@@ -2022,7 +2022,7 @@ ofputil_decode_meter_stats(struct ofpbuf *msg,
     ms->byte_in_count = ntohll(oms->byte_in_count);
     ms->duration_sec = ntohl(oms->duration_sec);
     ms->duration_nsec = ntohl(oms->duration_nsec);
-    ms->bands = bands->data;
+    ms->bands = ofpbuf_data(bands);
 
     return 0;
 }
@@ -2250,7 +2250,7 @@ ofputil_decode_nxst_flow_request(struct ofputil_flow_stats_request *fsr,
     if (error) {
         return error;
     }
-    if (b->size) {
+    if (ofpbuf_size(b)) {
         return OFPERR_OFPBRC_BAD_LEN;
     }
 
@@ -2306,12 +2306,12 @@ ofputil_decode_queue_get_config_request(const struct ofp_header *oh,
 
     switch ((int) raw) {
     case OFPRAW_OFPT10_QUEUE_GET_CONFIG_REQUEST:
-        qgcr10 = b.data;
+        qgcr10 = ofpbuf_data(&b);
         *port = u16_to_ofp(ntohs(qgcr10->port));
         return 0;
 
     case OFPRAW_OFPT11_QUEUE_GET_CONFIG_REQUEST:
-        qgcr11 = b.data;
+        qgcr11 = ofpbuf_data(&b);
         return ofputil_port_from_ofp11(qgcr11->port, port);
     }
 
@@ -2380,17 +2380,17 @@ void
 ofputil_append_queue_get_config_reply(struct ofpbuf *reply,
                                       const struct ofputil_queue_config *oqc)
 {
-    const struct ofp_header *oh = reply->data;
+    const struct ofp_header *oh = ofpbuf_data(reply);
     size_t start_ofs, len_ofs;
     ovs_be16 *len;
 
-    start_ofs = reply->size;
+    start_ofs = ofpbuf_size(reply);
     if (oh->version < OFP12_VERSION) {
         struct ofp10_packet_queue *opq10;
 
         opq10 = ofpbuf_put_zeros(reply, sizeof *opq10);
         opq10->queue_id = htonl(oqc->queue_id);
-        len_ofs = (char *) &opq10->len - (char *) reply->data;
+        len_ofs = (char *) &opq10->len - (char *) ofpbuf_data(reply);
     } else {
         struct ofp11_queue_get_config_reply *qgcr11;
         struct ofp12_packet_queue *opq12;
@@ -2402,14 +2402,14 @@ ofputil_append_queue_get_config_reply(struct ofpbuf *reply,
         opq12 = ofpbuf_put_zeros(reply, sizeof *opq12);
         opq12->port = port;
         opq12->queue_id = htonl(oqc->queue_id);
-        len_ofs = (char *) &opq12->len - (char *) reply->data;
+        len_ofs = (char *) &opq12->len - (char *) ofpbuf_data(reply);
     }
 
     put_queue_rate(reply, OFPQT_MIN_RATE, oqc->min_rate);
     put_queue_rate(reply, OFPQT_MAX_RATE, oqc->max_rate);
 
     len = ofpbuf_at(reply, len_ofs, sizeof *len);
-    *len = htons(reply->size - start_ofs);
+    *len = htons(ofpbuf_size(reply) - start_ofs);
 }
 
 /* Decodes the initial part of an OFPT_QUEUE_GET_CONFIG_REPLY from 'reply' and
@@ -2468,7 +2468,7 @@ ofputil_pull_queue_get_config_reply(struct ofpbuf *reply,
     unsigned int opq_len;
     unsigned int len;
 
-    if (!reply->size) {
+    if (!ofpbuf_size(reply)) {
         return EOF;
     }
 
@@ -2498,7 +2498,7 @@ ofputil_pull_queue_get_config_reply(struct ofpbuf *reply,
         opq_len = sizeof *opq12;
     }
 
-    if (len < opq_len || len > reply->size + opq_len || len % 8) {
+    if (len < opq_len || len > ofpbuf_size(reply) + opq_len || len % 8) {
         return OFPERR_OFPBRC_BAD_LEN;
     }
     len -= opq_len;
@@ -2511,7 +2511,7 @@ ofputil_pull_queue_get_config_reply(struct ofpbuf *reply,
 
         hdr = ofpbuf_at_assert(reply, 0, sizeof *hdr);
         prop_len = ntohs(hdr->len);
-        if (prop_len < sizeof *hdr || prop_len > reply->size || prop_len % 8) {
+        if (prop_len < sizeof *hdr || prop_len > ofpbuf_size(reply) || prop_len % 8) {
             return OFPERR_OFPBRC_BAD_LEN;
         }
 
@@ -2553,10 +2553,10 @@ ofputil_decode_flow_stats_request(struct ofputil_flow_stats_request *fsr,
     raw = ofpraw_pull_assert(&b);
     switch ((int) raw) {
     case OFPRAW_OFPST10_FLOW_REQUEST:
-        return ofputil_decode_ofpst10_flow_request(fsr, b.data, false);
+        return ofputil_decode_ofpst10_flow_request(fsr, ofpbuf_data(&b), false);
 
     case OFPRAW_OFPST10_AGGREGATE_REQUEST:
-        return ofputil_decode_ofpst10_flow_request(fsr, b.data, true);
+        return ofputil_decode_ofpst10_flow_request(fsr, ofpbuf_data(&b), true);
 
     case OFPRAW_OFPST11_FLOW_REQUEST:
         return ofputil_decode_ofpst11_flow_request(fsr, &b, false);
@@ -2688,7 +2688,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
     }
     oh = msg->l2;
 
-    if (!msg->size) {
+    if (!ofpbuf_size(msg)) {
         return EOF;
     } else if (raw == OFPRAW_OFPST11_FLOW_REPLY
                || raw == OFPRAW_OFPST13_FLOW_REPLY) {
@@ -2699,7 +2699,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
         ofs = ofpbuf_try_pull(msg, sizeof *ofs);
         if (!ofs) {
             VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_FLOW reply has %"PRIu32" leftover "
-                         "bytes at end", msg->size);
+                         "bytes at end", ofpbuf_size(msg));
             return EINVAL;
         }
 
@@ -2749,7 +2749,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
         ofs = ofpbuf_try_pull(msg, sizeof *ofs);
         if (!ofs) {
             VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_FLOW reply has %"PRIu32" leftover "
-                         "bytes at end", msg->size);
+                         "bytes at end", ofpbuf_size(msg));
             return EINVAL;
         }
 
@@ -2785,7 +2785,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
         nfs = ofpbuf_try_pull(msg, sizeof *nfs);
         if (!nfs) {
             VLOG_WARN_RL(&bad_ofmsg_rl, "NXST_FLOW reply has %"PRIu32" leftover "
-                         "bytes at end", msg->size);
+                         "bytes at end", ofpbuf_size(msg));
             return EINVAL;
         }
 
@@ -2830,8 +2830,8 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
         OVS_NOT_REACHED();
     }
 
-    fs->ofpacts = ofpacts->data;
-    fs->ofpacts_len = ofpacts->size;
+    fs->ofpacts = ofpbuf_data(ofpacts);
+    fs->ofpacts_len = ofpbuf_size(ofpacts);
 
     return 0;
 }
@@ -2854,11 +2854,11 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
                                 struct list *replies)
 {
     struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
-    size_t start_ofs = reply->size;
+    size_t start_ofs = ofpbuf_size(reply);
     enum ofpraw raw;
-    enum ofp_version version = ((struct ofp_header *)reply->data)->version;
+    enum ofp_version version = ((struct ofp_header *)ofpbuf_data(reply))->version;
 
-    ofpraw_decode_partial(&raw, reply->data, reply->size);
+    ofpraw_decode_partial(&raw, ofpbuf_data(reply), ofpbuf_size(reply));
     if (raw == OFPRAW_OFPST11_FLOW_REPLY || raw == OFPRAW_OFPST13_FLOW_REPLY) {
         struct ofp11_flow_stats *ofs;
 
@@ -2868,7 +2868,7 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
                                           version);
 
         ofs = ofpbuf_at_assert(reply, start_ofs, sizeof *ofs);
-        ofs->length = htons(reply->size - start_ofs);
+        ofs->length = htons(ofpbuf_size(reply) - start_ofs);
         ofs->table_id = fs->table_id;
         ofs->pad = 0;
         ofs->duration_sec = htonl(fs->duration_sec);
@@ -2892,7 +2892,7 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
         ofpacts_put_openflow_actions(fs->ofpacts, fs->ofpacts_len, reply,
                                      version);
         ofs = ofpbuf_at_assert(reply, start_ofs, sizeof *ofs);
-        ofs->length = htons(reply->size - start_ofs);
+        ofs->length = htons(ofpbuf_size(reply) - start_ofs);
         ofs->table_id = fs->table_id;
         ofs->pad = 0;
         ofputil_match_to_ofp10_match(&fs->match, &ofs->match);
@@ -2916,7 +2916,7 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
         ofpacts_put_openflow_actions(fs->ofpacts, fs->ofpacts_len, reply,
                                      version);
         nfs = ofpbuf_at_assert(reply, start_ofs, sizeof *nfs);
-        nfs->length = htons(reply->size - start_ofs);
+        nfs->length = htons(ofpbuf_size(reply) - start_ofs);
         nfs->table_id = fs->table_id;
         nfs->pad = 0;
         nfs->duration_sec = htonl(fs->duration_sec);
@@ -3049,7 +3049,7 @@ ofputil_decode_flow_removed(struct ofputil_flow_removed *fr,
         if (error) {
             return error;
         }
-        if (b.size) {
+        if (ofpbuf_size(&b)) {
             return OFPERR_OFPBRC_BAD_LEN;
         }
 
@@ -3159,8 +3159,8 @@ static void
 ofputil_decode_packet_in_finish(struct ofputil_packet_in *pin,
                                 struct match *match, struct ofpbuf *b)
 {
-    pin->packet = b->data;
-    pin->packet_len = b->size;
+    pin->packet = ofpbuf_data(b);
+    pin->packet_len = ofpbuf_size(b);
 
     pin->fmd.in_port = match->flow.in_port.ofp_port;
     pin->fmd.tun_id = match->flow.tunnel.tun_id;
@@ -3221,7 +3221,7 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
         opi = ofpbuf_pull(&b, offsetof(struct ofp10_packet_in, data));
 
         pin->packet = opi->data;
-        pin->packet_len = b.size;
+        pin->packet_len = ofpbuf_size(&b);
 
         pin->fmd.in_port = u16_to_ofp(ntohs(opi->in_port));
         pin->reason = opi->reason;
@@ -3233,8 +3233,8 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
 
         opi = ofpbuf_pull(&b, sizeof *opi);
 
-        pin->packet = b.data;
-        pin->packet_len = b.size;
+        pin->packet = ofpbuf_data(&b);
+        pin->packet_len = ofpbuf_size(&b);
 
         pin->buffer_id = ntohl(opi->buffer_id);
         error = ofputil_port_from_ofp11(opi->in_port, &pin->fmd.in_port);
@@ -3559,12 +3559,12 @@ ofputil_decode_packet_out(struct ofputil_packet_out *po,
         return OFPERR_OFPBRC_BAD_PORT;
     }
 
-    po->ofpacts = ofpacts->data;
-    po->ofpacts_len = ofpacts->size;
+    po->ofpacts = ofpbuf_data(ofpacts);
+    po->ofpacts_len = ofpbuf_size(ofpacts);
 
     if (po->buffer_id == UINT32_MAX) {
-        po->packet = b.data;
-        po->packet_len = b.size;
+        po->packet = ofpbuf_data(&b);
+        po->packet_len = ofpbuf_size(&b);
     } else {
         po->packet = NULL;
         po->packet_len = 0;
@@ -3750,7 +3750,7 @@ ofputil_put_phy_port(enum ofp_version ofp_version,
     switch (ofp_version) {
     case OFP10_VERSION: {
         struct ofp10_phy_port *opp;
-        if (b->size + sizeof *opp <= UINT16_MAX) {
+        if (ofpbuf_size(b) + sizeof *opp <= UINT16_MAX) {
             opp = ofpbuf_put_uninit(b, sizeof *opp);
             ofputil_encode_ofp10_phy_port(pp, opp);
         }
@@ -3761,7 +3761,7 @@ ofputil_put_phy_port(enum ofp_version ofp_version,
     case OFP12_VERSION:
     case OFP13_VERSION: {
         struct ofp11_port *op;
-        if (b->size + sizeof *op <= UINT16_MAX) {
+        if (ofpbuf_size(b) + sizeof *op <= UINT16_MAX) {
             op = ofpbuf_put_uninit(b, sizeof *op);
             ofputil_encode_ofp11_port(pp, op);
         }
@@ -3902,7 +3902,7 @@ ofputil_decode_switch_features(const struct ofp_header *oh,
     features->capabilities = ntohl(osf->capabilities) &
         ofputil_capabilities_mask(oh->version);
 
-    if (b->size % ofputil_get_phy_port_size(oh->version)) {
+    if (ofpbuf_size(b) % ofputil_get_phy_port_size(oh->version)) {
         return OFPERR_OFPBRC_BAD_LEN;
     }
 
@@ -3945,12 +3945,12 @@ max_ports_in_features(const struct ofp_header *oh)
 bool
 ofputil_switch_features_ports_trunc(struct ofpbuf *b)
 {
-    struct ofp_header *oh = b->data;
+    struct ofp_header *oh = ofpbuf_data(b);
 
     if (max_ports_in_features(oh)) {
         /* Remove all the ports. */
-        b->size = (sizeof(struct ofp_header)
-                   + sizeof(struct ofp_switch_features));
+        ofpbuf_set_size(b, (sizeof(struct ofp_header) +
+                            sizeof(struct ofp_switch_features)));
         ofpmsg_update_length(b);
 
         return true;
@@ -4043,7 +4043,7 @@ void
 ofputil_put_switch_features_port(const struct ofputil_phy_port *pp,
                                  struct ofpbuf *b)
 {
-    const struct ofp_header *oh = b->data;
+    const struct ofp_header *oh = ofpbuf_data(b);
 
     if (oh->version < OFP13_VERSION) {
         ofputil_put_phy_port(oh->version, pp, b);
@@ -4130,7 +4130,7 @@ ofputil_decode_port_mod(const struct ofp_header *oh,
     raw = ofpraw_pull_assert(&b);
 
     if (raw == OFPRAW_OFPT10_PORT_MOD) {
-        const struct ofp10_port_mod *opm = b.data;
+        const struct ofp10_port_mod *opm = ofpbuf_data(&b);
 
         pm->port_no = u16_to_ofp(ntohs(opm->port_no));
         memcpy(pm->hw_addr, opm->hw_addr, ETH_ADDR_LEN);
@@ -4138,7 +4138,7 @@ ofputil_decode_port_mod(const struct ofp_header *oh,
         pm->mask = ntohl(opm->mask) & OFPPC10_ALL;
         pm->advertise = netdev_port_features_from_ofp10(opm->advertise);
     } else if (raw == OFPRAW_OFPT11_PORT_MOD) {
-        const struct ofp11_port_mod *opm = b.data;
+        const struct ofp11_port_mod *opm = ofpbuf_data(&b);
         enum ofperr error;
 
         error = ofputil_port_from_ofp11(opm->port_no, &pm->port_no);
@@ -4218,19 +4218,19 @@ ofputil_pull_property(struct ofpbuf *msg, struct ofpbuf *payload,
     struct ofp_prop_header *oph;
     unsigned int len;
 
-    if (msg->size < sizeof *oph) {
+    if (ofpbuf_size(msg) < sizeof *oph) {
         return OFPERR_OFPTFFC_BAD_LEN;
     }
 
-    oph = msg->data;
+    oph = ofpbuf_data(msg);
     len = ntohs(oph->len);
-    if (len < sizeof *oph || ROUND_UP(len, 8) > msg->size) {
+    if (len < sizeof *oph || ROUND_UP(len, 8) > ofpbuf_size(msg)) {
         return OFPERR_OFPTFFC_BAD_LEN;
     }
 
     *typep = ntohs(oph->type);
     if (payload) {
-        ofpbuf_use_const(payload, msg->data, len);
+        ofpbuf_use_const(payload, ofpbuf_data(msg), len);
         ofpbuf_pull(payload, sizeof *oph);
     }
     ofpbuf_pull(msg, ROUND_UP(len, 8));
@@ -4256,7 +4256,7 @@ parse_table_ids(struct ofpbuf *payload, uint32_t *ids)
     uint16_t type;
 
     *ids = 0;
-    while (payload->size > 0) {
+    while (ofpbuf_size(payload) > 0) {
         enum ofperr error = ofputil_pull_property(payload, NULL, &type);
         if (error) {
             return error;
@@ -4272,7 +4272,7 @@ static enum ofperr
 parse_instruction_ids(struct ofpbuf *payload, bool loose, uint32_t *insts)
 {
     *insts = 0;
-    while (payload->size > 0) {
+    while (ofpbuf_size(payload) > 0) {
         enum ovs_instruction_type inst;
         enum ofperr error;
         uint16_t ofpit;
@@ -4299,8 +4299,8 @@ parse_table_features_next_table(struct ofpbuf *payload,
     size_t i;
 
     memset(next_tables, 0, bitmap_n_bytes(255));
-    for (i = 0; i < payload->size; i++) {
-        uint8_t id = ((const uint8_t *) payload->data)[i];
+    for (i = 0; i < ofpbuf_size(payload); i++) {
+        uint8_t id = ((const uint8_t *) ofpbuf_data(payload))[i];
         if (id >= 255) {
             return OFPERR_OFPTFFC_BAD_ARGUMENT;
         }
@@ -4348,7 +4348,7 @@ parse_oxms(struct ofpbuf *payload, bool loose,
     uint64_t exact, masked;
 
     exact = masked = 0;
-    while (payload->size > 0) {
+    while (ofpbuf_size(payload) > 0) {
         const struct mf_field *field;
         enum ofperr error;
         bool hasmask;
@@ -4401,21 +4401,21 @@ ofputil_decode_table_features(struct ofpbuf *msg,
     unsigned int len;
 
     if (!msg->l2) {
-        msg->l2 = msg->data;
+        msg->l2 = ofpbuf_data(msg);
         ofpraw_pull_assert(msg);
     }
 
-    if (!msg->size) {
+    if (!ofpbuf_size(msg)) {
         return EOF;
     }
 
-    if (msg->size < sizeof *otf) {
+    if (ofpbuf_size(msg) < sizeof *otf) {
         return OFPERR_OFPTFFC_BAD_LEN;
     }
 
-    otf = msg->data;
+    otf = ofpbuf_data(msg);
     len = ntohs(otf->length);
-    if (len < sizeof *otf || len % 8 || len > msg->size) {
+    if (len < sizeof *otf || len % 8 || len > ofpbuf_size(msg)) {
         return OFPERR_OFPTFFC_BAD_LEN;
     }
     ofpbuf_pull(msg, sizeof *otf);
@@ -4431,7 +4431,7 @@ ofputil_decode_table_features(struct ofpbuf *msg,
     tf->config = ntohl(otf->config);
     tf->max_entries = ntohl(otf->max_entries);
 
-    while (msg->size > 0) {
+    while (ofpbuf_size(msg) > 0) {
         struct ofpbuf payload;
         enum ofperr error;
         uint16_t type;
@@ -4564,7 +4564,7 @@ ofputil_decode_table_mod(const struct ofp_header *oh,
     raw = ofpraw_pull_assert(&b);
 
     if (raw == OFPRAW_OFPT11_TABLE_MOD) {
-        const struct ofp11_table_mod *otm = b.data;
+        const struct ofp11_table_mod *otm = ofpbuf_data(&b);
 
         pm->table_id = otm->table_id;
         pm->config = ntohl(otm->config);
@@ -4943,18 +4943,18 @@ ofputil_decode_flow_monitor_request(struct ofputil_flow_monitor_request *rq,
     uint16_t flags;
 
     if (!msg->l2) {
-        msg->l2 = msg->data;
+        msg->l2 = ofpbuf_data(msg);
         ofpraw_pull_assert(msg);
     }
 
-    if (!msg->size) {
+    if (!ofpbuf_size(msg)) {
         return EOF;
     }
 
     nfmr = ofpbuf_try_pull(msg, sizeof *nfmr);
     if (!nfmr) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "NXST_FLOW_MONITOR request has %"PRIu32" "
-                     "leftover bytes at end", msg->size);
+                     "leftover bytes at end", ofpbuf_size(msg));
         return OFPERR_OFPBRC_BAD_LEN;
     }
 
@@ -4987,11 +4987,11 @@ ofputil_append_flow_monitor_request(
     size_t start_ofs;
     int match_len;
 
-    if (!msg->size) {
+    if (!ofpbuf_size(msg)) {
         ofpraw_put(OFPRAW_NXST_FLOW_MONITOR_REQUEST, OFP10_VERSION, msg);
     }
 
-    start_ofs = msg->size;
+    start_ofs = ofpbuf_size(msg);
     ofpbuf_put_zeros(msg, sizeof *nfmr);
     match_len = nx_put_match(msg, &rq->match, htonll(0), htonll(0));
 
@@ -5028,24 +5028,24 @@ ofputil_decode_flow_update(struct ofputil_flow_update *update,
     struct ofp_header *oh;
 
     if (!msg->l2) {
-        msg->l2 = msg->data;
+        msg->l2 = ofpbuf_data(msg);
         ofpraw_pull_assert(msg);
     }
 
-    if (!msg->size) {
+    if (!ofpbuf_size(msg)) {
         return EOF;
     }
 
-    if (msg->size < sizeof(struct nx_flow_update_header)) {
+    if (ofpbuf_size(msg) < sizeof(struct nx_flow_update_header)) {
         goto bad_len;
     }
 
     oh = msg->l2;
 
-    nfuh = msg->data;
+    nfuh = ofpbuf_data(msg);
     update->event = ntohs(nfuh->event);
     length = ntohs(nfuh->length);
-    if (length > msg->size || length % 8) {
+    if (length > ofpbuf_size(msg) || length % 8) {
         goto bad_len;
     }
 
@@ -5096,8 +5096,8 @@ ofputil_decode_flow_update(struct ofputil_flow_update *update,
             return error;
         }
 
-        update->ofpacts = ofpacts->data;
-        update->ofpacts_len = ofpacts->size;
+        update->ofpacts = ofpbuf_data(ofpacts);
+        update->ofpacts_len = ofpbuf_size(ofpacts);
         return 0;
     } else {
         VLOG_WARN_RL(&bad_ofmsg_rl,
@@ -5108,7 +5108,7 @@ ofputil_decode_flow_update(struct ofputil_flow_update *update,
 
 bad_len:
     VLOG_WARN_RL(&bad_ofmsg_rl, "NXST_FLOW_MONITOR reply has %"PRIu32" "
-                 "leftover bytes at end", msg->size);
+                 "leftover bytes at end", ofpbuf_size(msg));
     return OFPERR_OFPBRC_BAD_LEN;
 }
 
@@ -5154,7 +5154,7 @@ ofputil_append_flow_update(const struct ofputil_flow_update *update,
     enum ofp_version version;
 
     msg = ofpbuf_from_list(list_back(replies));
-    start_ofs = msg->size;
+    start_ofs = ofpbuf_size(msg);
     version = ((struct ofp_header *)msg->l2)->version;
 
     if (update->event == NXFME_ABBREV) {
@@ -5181,7 +5181,7 @@ ofputil_append_flow_update(const struct ofputil_flow_update *update,
     }
 
     nfuh = ofpbuf_at_assert(msg, start_ofs, sizeof *nfuh);
-    nfuh->length = htons(msg->size - start_ofs);
+    nfuh->length = htons(ofpbuf_size(msg) - start_ofs);
     nfuh->event = htons(update->event);
 
     ofpmp_postappend(replies, start_ofs);
@@ -5207,14 +5207,14 @@ ofputil_encode_packet_out(const struct ofputil_packet_out *po,
 
         msg = ofpraw_alloc(OFPRAW_OFPT10_PACKET_OUT, OFP10_VERSION, size);
         ofpbuf_put_zeros(msg, sizeof *opo);
-        actions_ofs = msg->size;
+        actions_ofs = ofpbuf_size(msg);
         ofpacts_put_openflow_actions(po->ofpacts, po->ofpacts_len, msg,
                                      ofp_version);
 
         opo = ofpbuf_get_l3(msg);
         opo->buffer_id = htonl(po->buffer_id);
         opo->in_port = htons(ofp_to_u16(po->in_port));
-        opo->actions_len = htons(msg->size - actions_ofs);
+        opo->actions_len = htons(ofpbuf_size(msg) - actions_ofs);
         break;
     }
 
@@ -5268,8 +5268,8 @@ make_echo_reply(const struct ofp_header *rq)
     ofpbuf_use_const(&rq_buf, rq, ntohs(rq->length));
     ofpraw_pull_assert(&rq_buf);
 
-    reply = ofpraw_alloc_reply(OFPRAW_OFPT_ECHO_REPLY, rq, rq_buf.size);
-    ofpbuf_put(reply, rq_buf.data, rq_buf.size);
+    reply = ofpraw_alloc_reply(OFPRAW_OFPT_ECHO_REPLY, rq, ofpbuf_size(&rq_buf));
+    ofpbuf_put(reply, ofpbuf_data(&rq_buf), ofpbuf_size(&rq_buf));
     return reply;
 }
 
@@ -5572,7 +5572,7 @@ ofputil_pull_phy_port(enum ofp_version ofp_version, struct ofpbuf *b,
  * 'ofp_version', returns the number of elements. */
 size_t ofputil_count_phy_ports(uint8_t ofp_version, struct ofpbuf *b)
 {
-    return b->size / ofputil_get_phy_port_size(ofp_version);
+    return ofpbuf_size(b) / ofputil_get_phy_port_size(ofp_version);
 }
 
 /* ofp-util.def lists the mapping from names to action. */
@@ -5982,7 +5982,7 @@ ofputil_append_port_stat(struct list *replies,
                          const struct ofputil_port_stats *ops)
 {
     struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
-    struct ofp_header *oh = msg->data;
+    struct ofp_header *oh = ofpbuf_data(msg);
 
     switch ((enum ofp_version)oh->version) {
     case OFP13_VERSION: {
@@ -6107,7 +6107,7 @@ ofputil_count_port_stats(const struct ofp_header *oh)
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     ofpraw_pull_assert(&b);
 
-    return b.size / ofputil_get_port_stats_size(oh->version);
+    return ofpbuf_size(&b) / ofputil_get_port_stats_size(oh->version);
 }
 
 /* Converts an OFPST_PORT_STATS reply in 'msg' into an abstract
@@ -6133,7 +6133,7 @@ ofputil_decode_port_stats(struct ofputil_port_stats *ps, struct ofpbuf *msg)
         return error;
     }
 
-    if (!msg->size) {
+    if (!ofpbuf_size(msg)) {
         return EOF;
     } else if (raw == OFPRAW_OFPST13_PORT_REPLY) {
         const struct ofp13_port_stats *ps13;
@@ -6165,7 +6165,7 @@ ofputil_decode_port_stats(struct ofputil_port_stats *ps, struct ofpbuf *msg)
 
  bad_len:
     VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_PORT reply has %"PRIu32" leftover "
-                 "bytes at end", msg->size);
+                 "bytes at end", ofpbuf_size(msg));
     return OFPERR_OFPBRC_BAD_LEN;
 }
 
@@ -6321,7 +6321,7 @@ ofputil_append_group_stats(struct list *replies,
                            const struct ofputil_group_stats *ogs)
 {
     struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
-    struct ofp_header *oh = msg->data;
+    struct ofp_header *oh = ofpbuf_data(msg);
 
     switch ((enum ofp_version)oh->version) {
     case OFP11_VERSION:
@@ -6458,7 +6458,7 @@ ofputil_decode_group_stats_reply(struct ofpbuf *msg,
         return error;
     }
 
-    if (!msg->size) {
+    if (!ofpbuf_size(msg)) {
         return EOF;
     }
 
@@ -6484,7 +6484,7 @@ ofputil_decode_group_stats_reply(struct ofpbuf *msg,
 
     if (!ogs11) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "%s reply has %"PRIu32" leftover bytes at end",
-                     ofpraw_get_name(raw), msg->size);
+                     ofpraw_get_name(raw), ofpbuf_size(msg));
         return OFPERR_OFPBRC_BAD_LEN;
     }
     length = ntohs(ogs11->length);
@@ -6503,7 +6503,7 @@ ofputil_decode_group_stats_reply(struct ofpbuf *msg,
     obc = ofpbuf_try_pull(msg, gs->n_buckets * sizeof *obc);
     if (!obc) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "%s reply has %"PRIu32" leftover bytes at end",
-                     ofpraw_get_name(raw), msg->size);
+                     ofpraw_get_name(raw), ofpbuf_size(msg));
         return OFPERR_OFPBRC_BAD_LEN;
     }
 
@@ -6528,26 +6528,26 @@ ofputil_append_group_desc_reply(const struct ofputil_group_desc *gds,
     struct ofp11_group_desc_stats *ogds;
     struct ofputil_bucket *bucket;
     size_t start_ogds;
-    enum ofp_version version = ((struct ofp_header *)reply->data)->version;
+    enum ofp_version version = ((struct ofp_header *)ofpbuf_data(reply))->version;
 
-    start_ogds = reply->size;
+    start_ogds = ofpbuf_size(reply);
     ofpbuf_put_zeros(reply, sizeof *ogds);
     LIST_FOR_EACH (bucket, list_node, buckets) {
         struct ofp11_bucket *ob;
         size_t start_ob;
 
-        start_ob = reply->size;
+        start_ob = ofpbuf_size(reply);
         ofpbuf_put_zeros(reply, sizeof *ob);
         ofpacts_put_openflow_actions(bucket->ofpacts, bucket->ofpacts_len,
                                      reply, version);
         ob = ofpbuf_at_assert(reply, start_ob, sizeof *ob);
-        ob->len = htons(reply->size - start_ob);
+        ob->len = htons(ofpbuf_size(reply) - start_ob);
         ob->weight = htons(bucket->weight);
         ob->watch_port = ofputil_port_to_ofp11(bucket->watch_port);
         ob->watch_group = htonl(bucket->watch_group);
     }
     ogds = ofpbuf_at_assert(reply, start_ogds, sizeof *ogds);
-    ogds->length = htons(reply->size - start_ogds);
+    ogds->length = htons(ofpbuf_size(reply) - start_ogds);
     ogds->type = gds->type;
     ogds->group_id = htonl(gds->group_id);
 
@@ -6607,7 +6607,7 @@ ofputil_pull_buckets(struct ofpbuf *msg, size_t buckets_length,
         }
         bucket->watch_group = ntohl(ob->watch_group);
         bucket->ofpacts = ofpbuf_steal_data(&ofpacts);
-        bucket->ofpacts_len = ofpacts.size;
+        bucket->ofpacts_len = ofpbuf_size(&ofpacts);
         list_push_back(buckets, &bucket->list_node);
     }
 
@@ -6635,21 +6635,21 @@ ofputil_decode_group_desc_reply(struct ofputil_group_desc *gd,
         ofpraw_pull_assert(msg);
     }
 
-    if (!msg->size) {
+    if (!ofpbuf_size(msg)) {
         return EOF;
     }
 
     ogds = ofpbuf_try_pull(msg, sizeof *ogds);
     if (!ogds) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST11_GROUP_DESC reply has %"PRIu32" "
-                     "leftover bytes at end", msg->size);
+                     "leftover bytes at end", ofpbuf_size(msg));
         return OFPERR_OFPBRC_BAD_LEN;
     }
     gd->type = ogds->type;
     gd->group_id = ntohl(ogds->group_id);
 
     length = ntohs(ogds->length);
-    if (length < sizeof *ogds || length - sizeof *ogds > msg->size) {
+    if (length < sizeof *ogds || length - sizeof *ogds > ofpbuf_size(msg)) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST11_GROUP_DESC reply claims invalid "
                      "length %"PRIuSIZE, length);
         return OFPERR_OFPBRC_BAD_LEN;
@@ -6691,11 +6691,11 @@ ofputil_encode_group_mod(enum ofp_version ofp_version,
     case OFP13_VERSION:
     case OFP14_VERSION:
         b = ofpraw_alloc(OFPRAW_OFPT11_GROUP_MOD, ofp_version, 0);
-        start_ogm = b->size;
+        start_ogm = ofpbuf_size(b);
         ofpbuf_put_zeros(b, sizeof *ogm);
 
         LIST_FOR_EACH (bucket, list_node, &gm->buckets) {
-            start_bucket = b->size;
+            start_bucket = ofpbuf_size(b);
             ofpbuf_put_zeros(b, sizeof *ob);
             if (bucket->ofpacts && bucket->ofpacts_len) {
                 ofpacts_put_openflow_actions(bucket->ofpacts,
@@ -6703,7 +6703,7 @@ ofputil_encode_group_mod(enum ofp_version ofp_version,
                                              ofp_version);
             }
             ob = ofpbuf_at_assert(b, start_bucket, sizeof *ob);
-            ob->len = htons(b->size - start_bucket);;
+            ob->len = htons(ofpbuf_size(b) - start_bucket);;
             ob->weight = htons(bucket->weight);
             ob->watch_port = ofputil_port_to_ofp11(bucket->watch_port);
             ob->watch_group = htonl(bucket->watch_group);
@@ -6741,7 +6741,7 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
     gm->type = ogm->type;
     gm->group_id = ntohl(ogm->group_id);
 
-    err = ofputil_pull_buckets(&msg, msg.size, oh->version, &gm->buckets);
+    err = ofputil_pull_buckets(&msg, ofpbuf_size(&msg), oh->version, &gm->buckets);
     if (err) {
         return err;
     }
@@ -6868,7 +6868,7 @@ ofputil_count_queue_stats(const struct ofp_header *oh)
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     ofpraw_pull_assert(&b);
 
-    return b.size / ofputil_get_queue_stats_size(oh->version);
+    return ofpbuf_size(&b) / ofputil_get_queue_stats_size(oh->version);
 }
 
 static enum ofperr
@@ -6941,7 +6941,7 @@ ofputil_decode_queue_stats(struct ofputil_queue_stats *qs, struct ofpbuf *msg)
         return error;
     }
 
-    if (!msg->size) {
+    if (!ofpbuf_size(msg)) {
         return EOF;
     } else if (raw == OFPRAW_OFPST13_QUEUE_REPLY) {
         const struct ofp13_queue_stats *qs13;
@@ -6973,7 +6973,7 @@ ofputil_decode_queue_stats(struct ofputil_queue_stats *qs, struct ofpbuf *msg)
 
  bad_len:
     VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_QUEUE reply has %"PRIu32" leftover "
-                 "bytes at end", msg->size);
+                 "bytes at end", ofpbuf_size(msg));
     return OFPERR_OFPBRC_BAD_LEN;
 }
 
@@ -7020,7 +7020,7 @@ ofputil_append_queue_stat(struct list *replies,
                           const struct ofputil_queue_stats *oqs)
 {
     struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
-    struct ofp_header *oh = msg->data;
+    struct ofp_header *oh = ofpbuf_data(msg);
 
     switch ((enum ofp_version)oh->version) {
     case OFP13_VERSION: {

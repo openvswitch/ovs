@@ -196,7 +196,7 @@ eth_pop_vlan(struct ofpbuf *packet)
 {
     struct vlan_eth_header *veh = packet->l2;
 
-    if (packet->size >= sizeof *veh
+    if (ofpbuf_size(packet) >= sizeof *veh
         && veh->veth_type == htons(ETH_TYPE_VLAN)) {
 
         memmove((char *)veh + VLAN_HEADER_LEN, veh, 2 * ETH_ADDR_LEN);
@@ -329,7 +329,7 @@ pop_mpls(struct ofpbuf *packet, ovs_be16 ethtype)
             ofpbuf_set_l2_5(packet, NULL);
         }
         /* Shift the l2 header forward. */
-        memmove((char*)packet->data + MPLS_HLEN, packet->data, len);
+        memmove((char*)ofpbuf_data(packet) + MPLS_HLEN, ofpbuf_data(packet), len);
         ofpbuf_resize_l2_5(packet, -MPLS_HLEN);
     }
 }
@@ -353,7 +353,7 @@ eth_from_hex(const char *hex, struct ofpbuf **packetp)
         return "Trailing garbage in packet data";
     }
 
-    if (packet->size < ETH_HEADER_LEN) {
+    if (ofpbuf_size(packet) < ETH_HEADER_LEN) {
         ofpbuf_delete(packet);
         *packetp = NULL;
         return "Packet data too short for Ethernet";
@@ -850,7 +850,7 @@ packet_set_sctp_port(struct ofpbuf *packet, ovs_be16 src, ovs_be16 dst)
 {
     struct sctp_header *sh = ofpbuf_get_l4(packet);
     ovs_be32 old_csum, old_correct_csum, new_csum;
-    uint16_t tp_len = packet->size - ((uint8_t*)sh - (uint8_t*)packet->data);
+    uint16_t tp_len = ofpbuf_size(packet) - ((uint8_t*)sh - (uint8_t*)ofpbuf_data(packet));
 
     old_csum = sh->sctp_csum;
     sh->sctp_csum = 0;

@@ -161,8 +161,8 @@ print_netflow(struct ofpbuf *buf)
         putchar('\n');
     }
 
-    if (buf->size) {
-        printf("%"PRIu32" extra bytes after last record\n", buf->size);
+    if (ofpbuf_size(buf)) {
+        printf("%"PRIu32" extra bytes after last record\n", ofpbuf_size(buf));
     }
 }
 
@@ -213,7 +213,7 @@ main(int argc, char *argv[])
 
         ofpbuf_clear(&buf);
         do {
-            retval = read(sock, buf.data, buf.allocated);
+            retval = read(sock, ofpbuf_data(&buf), buf.allocated);
         } while (retval < 0 && errno == EINTR);
         if (retval > 0) {
             ofpbuf_put_uninit(&buf, retval);

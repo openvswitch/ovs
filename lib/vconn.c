@@ -456,16 +456,16 @@ vcs_recv_hello(struct vconn *vconn)
         enum ofptype type;
         enum ofperr error;
 
-        error = ofptype_decode(&type, b->data);
+        error = ofptype_decode(&type, ofpbuf_data(b));
         if (!error && type == OFPTYPE_HELLO) {
             char *peer_s, *local_s;
             uint32_t common_versions;
 
-            if (!ofputil_decode_hello(b->data, &vconn->peer_versions)) {
+            if (!ofputil_decode_hello(ofpbuf_data(b), &vconn->peer_versions)) {
                 struct ds msg = DS_EMPTY_INITIALIZER;
                 ds_put_format(&msg, "%s: unknown data in hello:\n",
                               vconn->name);
-                ds_put_hex_dump(&msg, b->data, b->size, 0, true);
+                ds_put_hex_dump(&msg, ofpbuf_data(b), ofpbuf_size(b), 0, true);
                 VLOG_WARN_RL(&bad_ofmsg_rl, "%s", ds_cstr(&msg));
                 ds_destroy(&msg);
             }
@@ -495,7 +495,7 @@ vcs_recv_hello(struct vconn *vconn)
             ofpbuf_delete(b);
             return;
         } else {
-            char *s = ofp_to_string(b->data, b->size, 1);
+            char *s = ofp_to_string(ofpbuf_data(b), ofpbuf_size(b), 1);
             VLOG_WARN_RL(&bad_ofmsg_rl,
                          "%s: received message while expecting hello: %s",
                          vconn->name, s);
@@ -598,11 +598,11 @@ vconn_recv(struct vconn *vconn, struct ofpbuf **msgp)
         retval = do_recv(vconn, &msg);
     }
     if (!retval && !vconn->recv_any_version) {
-        const struct ofp_header *oh = msg->data;
+        const struct ofp_header *oh = ofpbuf_data(msg);
         if (oh->version != vconn->version) {
             enum ofptype type;
 
-            if (ofptype_decode(&type, msg->data)
+            if (ofptype_decode(&type, ofpbuf_data(msg))
                 || (type != OFPTYPE_HELLO &&
                     type != OFPTYPE_ERROR &&
                     type != OFPTYPE_ECHO_REQUEST &&
@@ -641,7 +641,7 @@ do_recv(struct vconn *vconn, struct ofpbuf **msgp)
     if (!retval) {
         COVERAGE_INC(vconn_received);
         if (VLOG_IS_DBG_ENABLED()) {
-            char *s = ofp_to_string((*msgp)->data, (*msgp)->size, 1);
+            char *s = ofp_to_string(ofpbuf_data(*msgp), ofpbuf_size(*msgp), 1);
             VLOG_DBG_RL(&ofmsg_rl, "%s: received: %s", vconn->name, s);
             free(s);
         }
@@ -674,14 +674,14 @@ do_send(struct vconn *vconn, struct ofpbuf *msg)
 {
     int retval;
 
-    ovs_assert(msg->size >= sizeof(struct ofp_header));
+    ovs_assert(ofpbuf_size(msg) >= sizeof(struct ofp_header));
 
     ofpmsg_update_length(msg);
     if (!VLOG_IS_DBG_ENABLED()) {
         COVERAGE_INC(vconn_sent);
         retval = (vconn->class->send)(vconn, msg);
     } else {
-        char *s = ofp_to_string(msg->data, msg->size, 1);
+        char *s = ofp_to_string(ofpbuf_data(msg), ofpbuf_size(msg), 1);
         retval = (vconn->class->send)(vconn, msg);
         if (retval != EAGAIN) {
             VLOG_DBG_RL(&ofmsg_rl, "%s: sent (%s): %s",
@@ -763,7 +763,7 @@ vconn_recv_xid(struct vconn *vconn, ovs_be32 xid, struct ofpbuf **replyp)
             *replyp = NULL;
             return error;
         }
-        recv_xid = ((struct ofp_header *) reply->data)->xid;
+        recv_xid = ((struct ofp_header *) ofpbuf_data(reply))->xid;
         if (xid == recv_xid) {
             *replyp = reply;
             return 0;
@@ -790,7 +790,7 @@ int
 vconn_transact(struct vconn *vconn, struct ofpbuf *request,
                struct ofpbuf **replyp)
 {
-    ovs_be32 send_xid = ((struct ofp_header *) request->data)->xid;
+    ovs_be32 send_xid = ((struct ofp_header *) ofpbuf_data(request))->xid;
     int error;
 
     *replyp = NULL;
@@ -824,7 +824,7 @@ vconn_transact_noreply(struct vconn *vconn, struct ofpbuf *request,
     *replyp = NULL;
 
     /* Send request. */
-    request_xid = ((struct ofp_header *) request->data)->xid;
+    request_xid = ((struct ofp_header *) ofpbuf_data(request))->xid;
     error = vconn_send_block(vconn, request);
     if (error) {
         ofpbuf_delete(request);
@@ -833,7 +833,7 @@ vconn_transact_noreply(struct vconn *vconn, struct ofpbuf *request,
 
     /* Send barrier. */
     barrier = ofputil_encode_barrier_request(vconn_get_version(vconn));
-    barrier_xid = ((struct ofp_header *) barrier->data)->xid;
+    barrier_xid = ((struct ofp_header *) ofpbuf_data(barrier))->xid;
     error = vconn_send_block(vconn, barrier);
     if (error) {
         ofpbuf_delete(barrier);
@@ -852,7 +852,7 @@ vconn_transact_noreply(struct vconn *vconn, struct ofpbuf *request,
             return error;
         }
 
-        msg_xid = ((struct ofp_header *) msg->data)->xid;
+        msg_xid = ((struct ofp_header *) ofpbuf_data(msg))->xid;
         if (msg_xid == request_xid) {
             if (*replyp) {
                 VLOG_WARN_RL(&bad_ofmsg_rl, "%s: duplicate replies with "

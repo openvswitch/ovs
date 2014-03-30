@@ -371,7 +371,7 @@ ofpraw_decode_assert(const struct ofp_header *oh)
 }
 
 /* Determines the OFPRAW_* type of the OpenFlow message in 'msg', which starts
- * at 'msg->data' and has length 'msg->size' bytes.  On success, returns 0 and
+ * at 'ofpbuf_data(msg)' and has length 'ofpbuf_size(msg)' bytes.  On success, returns 0 and
  * stores the type into '*rawp'.  On failure, returns an OFPERR_* error code
  * and zeros '*rawp'.
  *
@@ -382,7 +382,7 @@ ofpraw_decode_assert(const struct ofp_header *oh)
  * (including the stats headers, vendor header, and any subtype header) with
  * ofpbuf_pull().  It also sets 'msg->l2' to the start of the OpenFlow header
  * and 'msg->l3' just beyond the headers (that is, to the final value of
- * msg->data). */
+ * ofpbuf_data(msg)). */
 enum ofperr
 ofpraw_pull(enum ofpraw *rawp, struct ofpbuf *msg)
 {
@@ -399,12 +399,12 @@ ofpraw_pull(enum ofpraw *rawp, struct ofpbuf *msg)
     enum ofpraw raw;
 
     /* Set default outputs. */
-    msg->l2 = msg->data;
-    ofpbuf_set_l3(msg, msg->data);
+    msg->l2 = ofpbuf_data(msg);
+    ofpbuf_set_l3(msg, ofpbuf_data(msg));
     *rawp = 0;
 
-    len = msg->size;
-    error = ofphdrs_decode(&hdrs, msg->data, len);
+    len = ofpbuf_size(msg);
+    error = ofphdrs_decode(&hdrs, ofpbuf_data(msg), len);
     if (error) {
         return error;
     }
@@ -417,7 +417,7 @@ ofpraw_pull(enum ofpraw *rawp, struct ofpbuf *msg)
     info = raw_info_get(raw);
     instance = raw_instance_get(info, hdrs.version);
     msg->l2 = ofpbuf_pull(msg, instance->hdrs_len);
-    ofpbuf_set_l3(msg, msg->data);
+    ofpbuf_set_l3(msg, ofpbuf_data(msg));
 
     min_len = instance->hdrs_len + info->min_body;
     switch (info->extra_multiple) {
@@ -670,7 +670,7 @@ ofpraw_put__(enum ofpraw raw, uint8_t version, ovs_be32 xid,
     oh = buf->l2;
     oh->version = version;
     oh->type = hdrs->type;
-    oh->length = htons(buf->size);
+    oh->length = htons(ofpbuf_size(buf));
     oh->xid = xid;
 
     if (hdrs->type == OFPT_VENDOR) {
@@ -790,7 +790,7 @@ ofptype_decode(enum ofptype *typep, const struct ofp_header *oh)
 }
 
 /* Determines the OFPTYPE_* type of the OpenFlow message in 'msg', which starts
- * at 'msg->data' and has length 'msg->size' bytes.  On success, returns 0 and
+ * at 'ofpbuf_data(msg)' and has length 'ofpbuf_size(msg)' bytes.  On success, returns 0 and
  * stores the type into '*typep'.  On failure, returns an OFPERR_* error code
  * and zeros '*typep'.
  *
@@ -801,7 +801,7 @@ ofptype_decode(enum ofptype *typep, const struct ofp_header *oh)
  * (including the stats headers, vendor header, and any subtype header) with
  * ofpbuf_pull().  It also sets 'msg->l2' to the start of the OpenFlow header
  * and 'msg->l3' just beyond the headers (that is, to the final value of
- * msg->data). */
+ * ofpbuf_data(msg)). */
 enum ofperr
 ofptype_pull(enum ofptype *typep, struct ofpbuf *buf)
 {
@@ -824,12 +824,12 @@ ofptype_from_ofpraw(enum ofpraw raw)
 }
 
 /* Updates the 'length' field of the OpenFlow message in 'buf' to
- * 'buf->size'. */
+ * 'ofpbuf_size(buf)'. */
 void
 ofpmsg_update_length(struct ofpbuf *buf)
 {
     struct ofp_header *oh = ofpbuf_at_assert(buf, 0, sizeof *oh);
-    oh->length = htons(buf->size);
+    oh->length = htons(ofpbuf_size(buf));
 }
 
 /* Returns just past the Openflow header (including the stats headers, vendor
@@ -880,7 +880,7 @@ ofpmp_reserve(struct list *replies, size_t len)
 {
     struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
 
-    if (msg->size + len <= UINT16_MAX) {
+    if (ofpbuf_size(msg) + len <= UINT16_MAX) {
         ofpbuf_prealloc_tailroom(msg, len);
         return msg;
     } else {
@@ -888,16 +888,16 @@ ofpmp_reserve(struct list *replies, size_t len)
         struct ofpbuf *next;
         struct ofphdrs hdrs;
 
-        ofphdrs_decode_assert(&hdrs, msg->data, msg->size);
+        ofphdrs_decode_assert(&hdrs, ofpbuf_data(msg), ofpbuf_size(msg));
         hdrs_len = ofphdrs_len(&hdrs);
 
         next = ofpbuf_new(MAX(1024, hdrs_len + len));
-        ofpbuf_put(next, msg->data, hdrs_len);
-        next->l2 = next->data;
+        ofpbuf_put(next, ofpbuf_data(msg), hdrs_len);
+        next->l2 = ofpbuf_data(next);
         ofpbuf_set_l3(next, ofpbuf_tail(next));
         list_push_back(replies, &next->list_node);
 
-        *ofpmp_flags__(msg->data) |= htons(OFPSF_REPLY_MORE);
+        *ofpmp_flags__(ofpbuf_data(msg)) |= htons(OFPSF_REPLY_MORE);
 
         return next;
     }
@@ -927,11 +927,11 @@ ofpmp_postappend(struct list *replies, size_t start_ofs)
     struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
 
     ovs_assert(start_ofs <= UINT16_MAX);
-    if (msg->size > UINT16_MAX) {
-        size_t len = msg->size - start_ofs;
+    if (ofpbuf_size(msg) > UINT16_MAX) {
+        size_t len = ofpbuf_size(msg) - start_ofs;
         memcpy(ofpmp_append(replies, len),
-               (const uint8_t *) msg->data + start_ofs, len);
-        msg->size = start_ofs;
+               (const uint8_t *) ofpbuf_data(msg) + start_ofs, len);
+        ofpbuf_set_size(msg, start_ofs);
     }
 }
 

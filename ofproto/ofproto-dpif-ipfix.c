@@ -724,11 +724,11 @@ ipfix_send_msg(const struct collectors *collectors, struct ofpbuf *msg)
     struct ipfix_header *hdr;
 
     /* Adjust the length in the header. */
-    hdr = msg->data;
-    hdr->length = htons(msg->size);
+    hdr = ofpbuf_data(msg);
+    hdr->length = htons(ofpbuf_size(msg));
 
-    collectors_send(collectors, msg->data, msg->size);
-    msg->size = 0;
+    collectors_send(collectors, ofpbuf_data(msg), ofpbuf_size(msg));
+    ofpbuf_set_size(msg, 0);
 }
 
 static uint16_t
@@ -852,7 +852,7 @@ ipfix_send_template_msg(struct dpif_ipfix_exporter *exporter,
 
     ipfix_init_header(export_time_sec, exporter->seq_number, obs_domain_id,
                       &msg);
-    set_hdr_offset = msg.size;
+    set_hdr_offset = ofpbuf_size(&msg);
 
     /* Add a Template Set. */
     set_hdr = ofpbuf_put_zeros(&msg, sizeof *set_hdr);
@@ -867,20 +867,20 @@ ipfix_send_template_msg(struct dpif_ipfix_exporter *exporter,
                     l4 != IPFIX_PROTO_L4_UNKNOWN) {
                     continue;
                 }
-                tmpl_hdr_offset = msg.size;
+                tmpl_hdr_offset = ofpbuf_size(&msg);
                 tmpl_hdr = ofpbuf_put_zeros(&msg, sizeof *tmpl_hdr);
                 tmpl_hdr->template_id = htons(
                     ipfix_get_template_id(l2, l3, l4));
                 field_count = ipfix_define_template_fields(l2, l3, l4, &msg);
                 tmpl_hdr = (struct ipfix_template_record_header*)
-                    ((uint8_t*)msg.data + tmpl_hdr_offset);
+                    ((uint8_t*)ofpbuf_data(&msg) + tmpl_hdr_offset);
                 tmpl_hdr->field_count = htons(field_count);
             }
         }
     }
 
-    set_hdr = (struct ipfix_set_header*)((uint8_t*)msg.data + set_hdr_offset);
-    set_hdr->length = htons(msg.size - set_hdr_offset);
+    set_hdr = (struct ipfix_set_header*)((uint8_t*)ofpbuf_data(&msg) + set_hdr_offset);
+    set_hdr->length = htons(ofpbuf_size(&msg) - set_hdr_offset);
 
     /* XXX: Add Options Template Sets, at least to define a Flow Keys
      * Option Template. */
@@ -1084,7 +1084,7 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
 
     ethernet_header_length = (l2 == IPFIX_PROTO_L2_VLAN)
         ? VLAN_ETH_HEADER_LEN : ETH_HEADER_LEN;
-    ethernet_total_length = packet->size;
+    ethernet_total_length = ofpbuf_size(packet);
 
     /* Common Ethernet entities. */
     {
@@ -1154,7 +1154,7 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
         data_icmp->icmp_code = ntohs(flow->tp_dst) & 0xff;
     }
 
-    flow_key->flow_key_msg_part_size = msg.size;
+    flow_key->flow_key_msg_part_size = ofpbuf_size(&msg);
 
     {
         struct timeval now;
@@ -1205,7 +1205,7 @@ ipfix_put_data_set(uint32_t export_time_sec,
     size_t set_hdr_offset;
     struct ipfix_set_header *set_hdr;
 
-    set_hdr_offset = msg->size;
+    set_hdr_offset = ofpbuf_size(msg);
 
     /* Put a Data Set. */
     set_hdr = ofpbuf_put_zeros(msg, sizeof *set_hdr);
@@ -1259,8 +1259,8 @@ ipfix_put_data_set(uint32_t export_time_sec,
             entry->maximum_ip_total_length);
     }
 
-    set_hdr = (struct ipfix_set_header*)((uint8_t*)msg->data + set_hdr_offset);
-    set_hdr->length = htons(msg->size - set_hdr_offset);
+    set_hdr = (struct ipfix_set_header*)((uint8_t*)ofpbuf_data(msg) + set_hdr_offset);
+    set_hdr->length = htons(ofpbuf_size(msg) - set_hdr_offset);
 }
 
 /* Send an IPFIX message with a single data record. */

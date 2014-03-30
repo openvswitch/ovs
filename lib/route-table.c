@@ -272,7 +272,7 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
         const struct rtmsg *rtm;
         const struct nlmsghdr *nlmsg;
 
-        nlmsg = buf->data;
+        nlmsg = ofpbuf_data(buf);
         rtm = ofpbuf_at(buf, NLMSG_HDRLEN, sizeof *rtm);
 
         if (rtm->rtm_family != AF_INET) {

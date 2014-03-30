@@ -119,11 +119,11 @@ jsonrpc_run(struct jsonrpc *rpc)
         struct ofpbuf *buf = ofpbuf_from_list(rpc->output.next);
         int retval;
 
-        retval = stream_send(rpc->stream, buf->data, buf->size);
+        retval = stream_send(rpc->stream, ofpbuf_data(buf), ofpbuf_size(buf));
         if (retval >= 0) {
             rpc->backlog -= retval;
             ofpbuf_pull(buf, retval);
-            if (!buf->size) {
+            if (!ofpbuf_size(buf)) {
                 list_remove(&buf->list_node);
                 ofpbuf_delete(buf);
             }
@@ -256,7 +256,7 @@ jsonrpc_send(struct jsonrpc *rpc, struct jsonrpc_msg *msg)
 
     buf = xmalloc(sizeof *buf);
     ofpbuf_use(buf, s, length);
-    buf->size = length;
+    ofpbuf_set_size(buf, length);
     list_push_back(&rpc->output, &buf->list_node);
     rpc->backlog += length;
 

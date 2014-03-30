@@ -215,7 +215,7 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
         if (!p) {
             VLOG_DBG_RL(&rl, "nx_match length %u, rounded up to a "
                         "multiple of 8, is longer than space in message (max "
-                        "length %"PRIu32")", match_len, b->size);
+                        "length %"PRIu32")", match_len, ofpbuf_size(b));
             return OFPERR_OFPBMC_BAD_LEN;
         }
     }
@@ -251,11 +251,11 @@ nx_pull_match_loose(struct ofpbuf *b, unsigned int match_len,
 static enum ofperr
 oxm_pull_match__(struct ofpbuf *b, bool strict, struct match *match)
 {
-    struct ofp11_match_header *omh = b->data;
+    struct ofp11_match_header *omh = ofpbuf_data(b);
     uint8_t *p;
     uint16_t match_len;
 
-    if (b->size < sizeof *omh) {
+    if (ofpbuf_size(b) < sizeof *omh) {
         return OFPERR_OFPBMC_BAD_LEN;
     }
 
@@ -272,7 +272,7 @@ oxm_pull_match__(struct ofpbuf *b, bool strict, struct match *match)
     if (!p) {
         VLOG_DBG_RL(&rl, "oxm length %u, rounded up to a "
                     "multiple of 8, is longer than space in message (max "
-                    "length %"PRIu32")", match_len, b->size);
+                    "length %"PRIu32")", match_len, ofpbuf_size(b));
         return OFPERR_OFPBMC_BAD_LEN;
     }
 
@@ -568,7 +568,7 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct match *match,
            ovs_be64 cookie, ovs_be64 cookie_mask)
 {
     const struct flow *flow = &match->flow;
-    const size_t start_len = b->size;
+    const size_t start_len = ofpbuf_size(b);
     int match_len;
     int i;
 
@@ -723,7 +723,7 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct match *match,
     /* Cookie. */
     nxm_put_64m(b, NXM_NX_COOKIE, cookie, cookie_mask);
 
-    match_len = b->size - start_len;
+    match_len = ofpbuf_size(b) - start_len;
     return match_len;
 }
 
@@ -761,7 +761,7 @@ oxm_put_match(struct ofpbuf *b, const struct match *match)
 {
     int match_len;
     struct ofp11_match_header *omh;
-    size_t start_len = b->size;
+    size_t start_len = ofpbuf_size(b);
     ovs_be64 cookie = htonll(0), cookie_mask = htonll(0);
 
     ofpbuf_put_uninit(b, sizeof *omh);
@@ -833,7 +833,7 @@ nx_match_to_string(const uint8_t *p, unsigned int match_len)
 char *
 oxm_match_to_string(const struct ofpbuf *p, unsigned int match_len)
 {
-    const struct ofp11_match_header *omh = p->data;
+    const struct ofp11_match_header *omh = ofpbuf_data(p);
     uint16_t match_len_;
     struct ds s;
 
@@ -948,10 +948,10 @@ static int
 nx_match_from_string_raw(const char *s, struct ofpbuf *b)
 {
     const char *full_s = s;
-    const size_t start_len = b->size;
+    const size_t start_len = ofpbuf_size(b);
 
     if (!strcmp(s, "<any>")) {
-        /* Ensure that 'b->data' isn't actually null. */
+        /* Ensure that 'ofpbuf_data(b)' isn't actually null. */
         ofpbuf_prealloc_tailroom(b, 1);
         return 0;
     }
@@ -1000,7 +1000,7 @@ nx_match_from_string_raw(const char *s, struct ofpbuf *b)
         s++;
     }
 
-    return b->size - start_len;
+    return ofpbuf_size(b) - start_len;
 }
 
 int
@@ -1016,7 +1016,7 @@ oxm_match_from_string(const char *s, struct ofpbuf *b)
 {
     int match_len;
     struct ofp11_match_header *omh;
-    size_t start_len = b->size;
+    size_t start_len = ofpbuf_size(b);
 
     ofpbuf_put_uninit(b, sizeof *omh);
     match_len = nx_match_from_string_raw(s, b) + sizeof *omh;
@@ -1385,8 +1385,9 @@ nx_stack_pop(struct ofpbuf *stack)
 {
     union mf_subvalue *v = NULL;
 
-    if (stack->size) {
-        stack->size -= sizeof *v;
+    if (ofpbuf_size(stack)) {
+
+        ofpbuf_set_size(stack, ofpbuf_size(stack) - sizeof *v);
         v = (union mf_subvalue *) ofpbuf_tail(stack);
     }
 

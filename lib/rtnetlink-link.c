@@ -58,7 +58,7 @@ rtnetlink_link_parse(struct ofpbuf *buf,
         const struct nlmsghdr *nlmsg;
         const struct ifinfomsg *ifinfo;
 
-        nlmsg  = buf->data;
+        nlmsg  = ofpbuf_data(buf);
         ifinfo = ofpbuf_at(buf, NLMSG_HDRLEN, sizeof *ifinfo);
 
         change->nlmsg_type     = nlmsg->nlmsg_type;

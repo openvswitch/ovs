@@ -198,10 +198,10 @@ ovs_pcap_write(FILE *file, struct ofpbuf *buf)
     xgettimeofday(&tv);
     prh.ts_sec = tv.tv_sec;
     prh.ts_usec = tv.tv_usec;
-    prh.incl_len = buf->size;
-    prh.orig_len = buf->size;
+    prh.incl_len = ofpbuf_size(buf);
+    prh.orig_len = ofpbuf_size(buf);
     ignore(fwrite(&prh, sizeof prh, 1, file));
-    ignore(fwrite(buf->data, buf->size, 1, file));
+    ignore(fwrite(ofpbuf_data(buf), ofpbuf_size(buf), 1, file));
 }
 
 struct tcp_key {
@@ -346,7 +346,7 @@ tcp_reader_run(struct tcp_reader *r, const struct flow *flow,
         /* Shift all of the existing payload to the very beginning of the
          * allocated space, so that we reuse allocated space instead of
          * continually expanding it. */
-        ofpbuf_shift(payload, (char *) payload->base - (char *) payload->data);
+        ofpbuf_shift(payload, (char *) ofpbuf_base(payload) - (char *) ofpbuf_data(payload));
 
         ofpbuf_put(payload, l7, l7_length);
         stream->seq_no += l7_length;

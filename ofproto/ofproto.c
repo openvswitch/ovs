@@ -5842,7 +5842,7 @@ static enum ofperr
 handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     OVS_EXCLUDED(ofproto_mutex)
 {
-    const struct ofp_header *oh = msg->data;
+    const struct ofp_header *oh = ofpbuf_data(msg);
     enum ofptype type;
     enum ofperr error;
 
@@ -6015,7 +6015,7 @@ handle_openflow(struct ofconn *ofconn, const struct ofpbuf *ofp_msg)
 {
     int error = handle_openflow__(ofconn, ofp_msg);
     if (error && error != OFPROTO_POSTPONE) {
-        ofconn_send_error(ofconn, ofp_msg->data, error);
+        ofconn_send_error(ofconn, ofpbuf_data(ofp_msg), error);
     }
     COVERAGE_INC(ofproto_recv_openflow);
     return error != OFPROTO_POSTPONE;

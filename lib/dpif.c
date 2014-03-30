@@ -788,7 +788,7 @@ dpif_flow_stats_extract(const struct flow *flow, const struct ofpbuf *packet,
                         long long int used, struct dpif_flow_stats *stats)
 {
     stats->tcp_flags = ntohs(flow->tcp_flags);
-    stats->n_bytes = packet->size;
+    stats->n_bytes = ofpbuf_size(packet);
     stats->n_packets = 1;
     stats->used = used;
 }
@@ -861,8 +861,8 @@ dpif_flow_get(const struct dpif *dpif,
         size_t actions_len;
 
         if (!error && actionsp) {
-            actions = (*actionsp)->data;
-            actions_len = (*actionsp)->size;
+            actions = ofpbuf_data(*actionsp);
+            actions_len = ofpbuf_size(*actionsp);
         } else {
             actions = NULL;
             actions_len = 0;
@@ -1359,8 +1359,8 @@ dpif_recv(struct dpif *dpif, uint32_t handler_id, struct dpif_upcall *upcall,
         struct ds flow;
         char *packet;
 
-        packet = ofp_packet_to_string(upcall->packet.data,
-                                      upcall->packet.size);
+        packet = ofp_packet_to_string(ofpbuf_data(&upcall->packet),
+                                      ofpbuf_size(&upcall->packet));
 
         ds_init(&flow);
         odp_flow_key_format(upcall->key, upcall->key_len, &flow);
@@ -1563,8 +1563,8 @@ log_execute_message(struct dpif *dpif, const struct dpif_execute *execute,
         struct ds ds = DS_EMPTY_INITIALIZER;
         char *packet;
 
-        packet = ofp_packet_to_string(execute->packet->data,
-                                      execute->packet->size);
+        packet = ofp_packet_to_string(ofpbuf_data(execute->packet),
+                                      ofpbuf_size(execute->packet));
         ds_put_format(&ds, "%s: execute ", dpif_name(dpif));
         format_odp_actions(&ds, execute->actions, execute->actions_len);
         if (error) {

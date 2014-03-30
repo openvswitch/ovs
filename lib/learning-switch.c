@@ -315,12 +315,12 @@ lswitch_process_packet(struct lswitch *sw, const struct ofpbuf *msg)
 
     switch (type) {
     case OFPTYPE_ECHO_REQUEST:
-        process_echo_request(sw, msg->data);
+        process_echo_request(sw, ofpbuf_data(msg));
         break;
 
     case OFPTYPE_FEATURES_REPLY:
         if (sw->state == S_FEATURES_REPLY) {
-            if (!process_switch_features(sw, msg->data)) {
+            if (!process_switch_features(sw, ofpbuf_data(msg))) {
                 sw->state = S_SWITCHING;
             } else {
                 rconn_disconnect(sw->rconn);
@@ -329,7 +329,7 @@ lswitch_process_packet(struct lswitch *sw, const struct ofpbuf *msg)
         break;
 
     case OFPTYPE_PACKET_IN:
-        process_packet_in(sw, msg->data);
+        process_packet_in(sw, ofpbuf_data(msg));
         break;
 
     case OFPTYPE_FLOW_REMOVED:
@@ -400,7 +400,7 @@ lswitch_process_packet(struct lswitch *sw, const struct ofpbuf *msg)
     case OFPTYPE_TABLE_FEATURES_STATS_REPLY:
     default:
         if (VLOG_IS_DBG_ENABLED()) {
-            char *s = ofp_to_string(msg->data, msg->size, 2);
+            char *s = ofp_to_string(ofpbuf_data(msg), ofpbuf_size(msg), 2);
             VLOG_DBG_RL(&rl, "%016llx: OpenFlow packet ignored: %s",
                         sw->datapath_id, s);
             free(s);
@@ -598,15 +598,15 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
     /* Prepare packet_out in case we need one. */
     po.buffer_id = pi.buffer_id;
     if (po.buffer_id == UINT32_MAX) {
-        po.packet = pkt.data;
-        po.packet_len = pkt.size;
+        po.packet = ofpbuf_data(&pkt);
+        po.packet_len = ofpbuf_size(&pkt);
     } else {
         po.packet = NULL;
         po.packet_len = 0;
     }
     po.in_port = pi.fmd.in_port;
-    po.ofpacts = ofpacts.data;
-    po.ofpacts_len = ofpacts.size;
+    po.ofpacts = ofpbuf_data(&ofpacts);
+    po.ofpacts_len = ofpbuf_size(&ofpacts);
 
     /* Send the packet, and possibly the whole flow, to the output port. */
     if (sw->max_idle >= 0 && (!sw->ml || out_port != OFPP_FLOOD)) {
@@ -624,8 +624,8 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
         fm.idle_timeout = sw->max_idle;
         fm.buffer_id = pi.buffer_id;
         fm.out_port = OFPP_NONE;
-        fm.ofpacts = ofpacts.data;
-        fm.ofpacts_len = ofpacts.size;
+        fm.ofpacts = ofpbuf_data(&ofpacts);
+        fm.ofpacts_len = ofpbuf_size(&ofpacts);
         buffer = ofputil_encode_flow_mod(&fm, sw->protocol);
 
         queue_tx(sw, buffer);

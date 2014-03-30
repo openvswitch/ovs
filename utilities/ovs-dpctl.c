@@ -883,9 +883,10 @@ dpctl_put_flow(int argc, char *argv[], enum dpif_flow_put_flags flags)
     run(odp_actions_from_string(actions_s, NULL, &actions), "parsing actions");
 
     run(dpif_flow_put(dpif, flags,
-                      key.data, key.size,
-                      mask.size == 0 ? NULL : mask.data, mask.size,
-                      actions.data, actions.size,
+                      ofpbuf_data(&key), ofpbuf_size(&key),
+                      ofpbuf_size(&mask) == 0 ? NULL : ofpbuf_data(&mask),
+                      ofpbuf_size(&mask),
+                      ofpbuf_data(&actions), ofpbuf_size(&actions),
                       print_statistics ? &stats : NULL),
         "updating flow table");
 
@@ -952,7 +953,7 @@ dpctl_del_flow(int argc, char *argv[])
     run(odp_flow_from_string(key_s, &port_names, &key, &mask), "parsing flow key");
 
     run(dpif_flow_del(dpif,
-                      key.data, key.size,
+                      ofpbuf_data(&key), ofpbuf_size(&key),
                       print_statistics ? &stats : NULL), "deleting flow");
 
     simap_destroy(&port_names);
@@ -1005,7 +1006,7 @@ dpctl_parse_actions(int argc, char *argv[])
             "odp_actions_from_string");
 
         ds_init(&s);
-        format_odp_actions(&s, actions.data, actions.size);
+        format_odp_actions(&s, ofpbuf_data(&actions), ofpbuf_size(&actions));
         puts(ds_cstr(&s));
         ds_destroy(&s);
 
@@ -1141,10 +1142,10 @@ dpctl_normalize_actions(int argc, char *argv[])
         "odp_flow_key_from_string");
 
     ds_clear(&s);
-    odp_flow_format(keybuf.data, keybuf.size, NULL, 0, NULL, &s, verbosity);
+    odp_flow_format(ofpbuf_data(&keybuf), ofpbuf_size(&keybuf), NULL, 0, NULL, &s, verbosity);
     printf("input flow: %s\n", ds_cstr(&s));
 
-    run(odp_flow_key_to_flow(keybuf.data, keybuf.size, &flow),
+    run(odp_flow_key_to_flow(ofpbuf_data(&keybuf), ofpbuf_size(&keybuf), &flow),
         "odp_flow_key_to_flow");
     ofpbuf_uninit(&keybuf);
 
@@ -1156,12 +1157,12 @@ dpctl_normalize_actions(int argc, char *argv[])
 
     if (verbosity) {
         ds_clear(&s);
-        format_odp_actions(&s, odp_actions.data, odp_actions.size);
+        format_odp_actions(&s, ofpbuf_data(&odp_actions), ofpbuf_size(&odp_actions));
         printf("input actions: %s\n", ds_cstr(&s));
     }
 
     hmap_init(&actions_per_flow);
-    NL_ATTR_FOR_EACH (a, left, odp_actions.data, odp_actions.size) {
+    NL_ATTR_FOR_EACH (a, left, ofpbuf_data(&odp_actions), ofpbuf_size(&odp_actions)) {
         const struct ovs_action_push_vlan *push;
         switch(nl_attr_type(a)) {
         case OVS_ACTION_ATTR_POP_VLAN:
@@ -1192,7 +1193,7 @@ dpctl_normalize_actions(int argc, char *argv[])
     for (i = 0; i < n_afs; i++) {
         const struct actions_for_flow *af = afs[i];
 
-        sort_output_actions(af->actions.data, af->actions.size);
+        sort_output_actions(ofpbuf_data(&af->actions), ofpbuf_size(&af->actions));
 
         if (af->flow.vlan_tci != htons(0)) {
             printf("vlan(vid=%"PRIu16",pcp=%d): ",
@@ -1212,7 +1213,7 @@ dpctl_normalize_actions(int argc, char *argv[])
         }
 
         ds_clear(&s);
-        format_odp_actions(&s, af->actions.data, af->actions.size);
+        format_odp_actions(&s, ofpbuf_data(&af->actions), ofpbuf_size(&af->actions));
         puts(ds_cstr(&s));
     }
     ds_destroy(&s);

@@ -919,7 +919,7 @@ netdev_linux_rxq_recv_sock(int fd, struct ofpbuf *buffer)
     ofpbuf_reserve(buffer, VLAN_HEADER_LEN);
     size = ofpbuf_tailroom(buffer);
 
-    iov.iov_base = buffer->data;
+    iov.iov_base = ofpbuf_data(buffer);
     iov.iov_len = size;
     msgh.msg_name = NULL;
     msgh.msg_namelen = 0;
@@ -939,7 +939,7 @@ netdev_linux_rxq_recv_sock(int fd, struct ofpbuf *buffer)
         return EMSGSIZE;
     }
 
-    buffer->size += retval;
+    ofpbuf_set_size(buffer, ofpbuf_size(buffer) + retval);
 
     for (cmsg = CMSG_FIRSTHDR(&msgh); cmsg; cmsg = CMSG_NXTHDR(&msgh, cmsg)) {
         const struct tpacket_auxdata *aux;
@@ -972,7 +972,7 @@ netdev_linux_rxq_recv_tap(int fd, struct ofpbuf *buffer)
     size_t size = ofpbuf_tailroom(buffer);
 
     do {
-        retval = read(fd, buffer->data, size);
+        retval = read(fd, ofpbuf_data(buffer), size);
     } while (retval < 0 && errno == EINTR);
 
     if (retval < 0) {
@@ -981,7 +981,7 @@ netdev_linux_rxq_recv_tap(int fd, struct ofpbuf *buffer)
         return EMSGSIZE;
     }
 
-    buffer->size += retval;
+    ofpbuf_set_size(buffer, ofpbuf_size(buffer) + retval);
     return 0;
 }
 
@@ -1056,8 +1056,8 @@ netdev_linux_rxq_drain(struct netdev_rxq *rxq_)
 static int
 netdev_linux_send(struct netdev *netdev_, struct ofpbuf *pkt, bool may_steal)
 {
-    const void *data = pkt->data;
-    size_t size = pkt->size;
+    const void *data = ofpbuf_data(pkt);
+    size_t size = ofpbuf_size(pkt);
 
     for (;;) {
         ssize_t retval;

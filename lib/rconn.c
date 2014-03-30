@@ -718,11 +718,11 @@ rconn_send__(struct rconn *rc, struct ofpbuf *b,
         copy_to_monitor(rc, b);
 
         if (counter) {
-            rconn_packet_counter_inc(counter, b->size);
+            rconn_packet_counter_inc(counter, ofpbuf_size(b));
         }
 
         /* Use 'l2' as a private pointer while 'b' is in txq. */
-        ovs_assert(b->l2 == b->data);
+        ovs_assert(b->l2 == ofpbuf_data(b));
         b->l2 = counter;
 
         list_push_back(&rc->txq, &b->list_node);
@@ -1107,7 +1107,7 @@ try_send(struct rconn *rc)
     OVS_REQUIRES(rc->mutex)
 {
     struct ofpbuf *msg = ofpbuf_from_list(rc->txq.next);
-    unsigned int n_bytes = msg->size;
+    unsigned int n_bytes = ofpbuf_size(msg);
     struct rconn_packet_counter *counter = msg->l2;
     int retval;
 
@@ -1115,7 +1115,7 @@ try_send(struct rconn *rc)
      * after sending, if sending is successful, because it is then owned by the
      * vconn, which might have freed it already. */
     list_remove(&msg->list_node);
-    msg->l2 = msg->data; /* Restore 'l2'. */
+    msg->l2 = ofpbuf_data(msg); /* Restore 'l2'. */
 
     retval = vconn_send(rc->vconn, msg);
     if (retval) {
@@ -1214,7 +1214,7 @@ flush_queue(struct rconn *rc)
         struct ofpbuf *b = ofpbuf_from_list(list_pop_front(&rc->txq));
         struct rconn_packet_counter *counter = b->l2;
         if (counter) {
-            rconn_packet_counter_dec(counter, b->size);
+            rconn_packet_counter_dec(counter, ofpbuf_size(b));
         }
         COVERAGE_INC(rconn_discarded);
         ofpbuf_delete(b);
@@ -1324,7 +1324,7 @@ is_admitted_msg(const struct ofpbuf *b)
     enum ofptype type;
     enum ofperr error;
 
-    error = ofptype_decode(&type, b->data);
+    error = ofptype_decode(&type, ofpbuf_data(b));
     if (error) {
         return false;
     }

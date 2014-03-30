@@ -946,8 +946,8 @@ check_variable_length_userdata(struct dpif_backer *backer)
 
     /* Execute the actions.  On older datapaths this fails with ERANGE, on
      * newer datapaths it succeeds. */
-    execute.actions = actions.data;
-    execute.actions_len = actions.size;
+    execute.actions = ofpbuf_data(&actions);
+    execute.actions_len = ofpbuf_size(&actions);
     execute.packet = &packet;
     execute.md = PKT_METADATA_INITIALIZER(0);
     execute.needs_help = false;
@@ -1009,7 +1009,7 @@ check_max_mpls_depth(struct dpif_backer *backer)
         odp_flow_key_from_flow(&key, &flow, 0);
 
         error = dpif_flow_put(backer->dpif, DPIF_FP_CREATE | DPIF_FP_MODIFY,
-                              key.data, key.size, NULL, 0, NULL, 0, NULL);
+                              ofpbuf_data(&key), ofpbuf_size(&key), NULL, 0, NULL, 0, NULL);
         if (error && error != EEXIST) {
             if (error != EINVAL) {
                 VLOG_WARN("%s: MPLS stack length feature probe failed (%s)",
@@ -1018,7 +1018,7 @@ check_max_mpls_depth(struct dpif_backer *backer)
             break;
         }
 
-        error = dpif_flow_del(backer->dpif, key.data, key.size, NULL);
+        error = dpif_flow_del(backer->dpif, ofpbuf_data(&key), ofpbuf_size(&key), NULL);
         if (error) {
             VLOG_WARN("%s: failed to delete MPLS feature probe flow",
                       dpif_name(backer->dpif));
@@ -1117,8 +1117,8 @@ add_internal_flow(struct ofproto_dpif *ofproto, int id,
     fm.buffer_id = 0;
     fm.out_port = 0;
     fm.flags = 0;
-    fm.ofpacts = ofpacts->data;
-    fm.ofpacts_len = ofpacts->size;
+    fm.ofpacts = ofpbuf_data(ofpacts);
+    fm.ofpacts_len = ofpbuf_size(ofpacts);
 
     error = ofproto_flow_mod(&ofproto->up, &fm);
     if (error) {
@@ -2420,7 +2420,7 @@ bundle_send_learning_packets(struct ofbundle *bundle)
                                                            e->mac, e->vlan,
                                                            &port_void);
             /* Temporarily use l2 as a private pointer (see below). */
-            ovs_assert(learning_packet->l2 == learning_packet->data);
+            ovs_assert(learning_packet->l2 == ofpbuf_data(learning_packet));
             learning_packet->l2 = port_void;
             list_push_back(&packets, &learning_packet->list_node);
         }
@@ -2433,7 +2433,7 @@ bundle_send_learning_packets(struct ofbundle *bundle)
         void *port_void = learning_packet->l2;
 
         /* Restore l2. */
-        learning_packet->l2 = learning_packet->data;
+        learning_packet->l2 = ofpbuf_data(learning_packet);
         ret = ofproto_dpif_send_packet(port_void, learning_packet);
         if (ret) {
             error = ret;
@@ -3005,8 +3005,8 @@ ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
     if (in_port == OFPP_NONE) {
         in_port = OFPP_LOCAL;
     }
-    execute.actions = xout.odp_actions.data;
-    execute.actions_len = xout.odp_actions.size;
+    execute.actions = ofpbuf_data(&xout.odp_actions);
+    execute.actions_len = ofpbuf_size(&xout.odp_actions);
     execute.packet = packet;
     execute.md.tunnel = flow->tunnel;
     execute.md.skb_priority = flow->skb_priority;
@@ -3517,7 +3517,7 @@ ofproto_dpif_send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet
 
     ovs_mutex_lock(&ofproto->stats_mutex);
     ofproto->stats.tx_packets++;
-    ofproto->stats.tx_bytes += packet->size;
+    ofproto->stats.tx_bytes += ofpbuf_size(packet);
     ovs_mutex_unlock(&ofproto->stats_mutex);
     return error;
 }
@@ -3731,7 +3731,8 @@ trace_format_odp(struct ds *result, int level, const char *title,
 
     ds_put_char_multiple(result, '\t', level);
     ds_put_format(result, "%s: ", title);
-    format_odp_actions(result, odp_actions->data, odp_actions->size);
+    format_odp_actions(result, ofpbuf_data(odp_actions),
+                               ofpbuf_size(odp_actions));
     ds_put_char(result, '\n');
 }
 
@@ -3855,7 +3856,8 @@ parse_flow_and_packet(int argc, const char *argv[],
             goto exit;
         }
 
-        if (xlate_receive(backer, NULL, odp_key.data, odp_key.size, flow,
+        if (xlate_receive(backer, NULL, ofpbuf_data(&odp_key),
+                          ofpbuf_size(&odp_key), flow,
                           ofprotop, NULL, NULL, NULL, NULL)) {
             error = "Invalid datapath flow";
             goto exit;
@@ -3883,7 +3885,7 @@ parse_flow_and_packet(int argc, const char *argv[],
 
     /* Generate a packet, if requested. */
     if (packet) {
-        if (!packet->size) {
+        if (!ofpbuf_size(packet)) {
             flow_compose(packet, flow);
         } else {
             struct pkt_metadata md = pkt_metadata_from_flow(flow);
@@ -3996,11 +3998,11 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
         goto exit;
     }
     if (enforce_consistency) {
-        retval = ofpacts_check_consistency(ofpacts.data, ofpacts.size, &flow,
-                                           u16_to_ofp(ofproto->up.max_ports),
+        retval = ofpacts_check_consistency(ofpbuf_data(&ofpacts), ofpbuf_size(&ofpacts),
+                                           &flow, u16_to_ofp(ofproto->up.max_ports),
                                            0, 0, usable_protocols);
     } else {
-        retval = ofpacts_check(ofpacts.data, ofpacts.size, &flow,
+        retval = ofpacts_check(ofpbuf_data(&ofpacts), ofpbuf_size(&ofpacts), &flow,
                                u16_to_ofp(ofproto->up.max_ports), 0, 0,
                                &usable_protocols);
     }
@@ -4012,7 +4014,8 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
         goto exit;
     }
 
-    ofproto_trace(ofproto, &flow, packet, ofpacts.data, ofpacts.size, &result);
+    ofproto_trace(ofproto, &flow, packet,
+                  ofpbuf_data(&ofpacts), ofpbuf_size(&ofpacts), &result);
     unixctl_command_reply(conn, ds_cstr(&result));
 
 exit:
@@ -4081,8 +4084,8 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
         trace_format_megaflow(ds, 0, "Megaflow", &trace);
 
         ds_put_cstr(ds, "Datapath actions: ");
-        format_odp_actions(ds, trace.xout.odp_actions.data,
-                           trace.xout.odp_actions.size);
+        format_odp_actions(ds, ofpbuf_data(&trace.xout.odp_actions),
+                           ofpbuf_size(&trace.xout.odp_actions));
 
         if (trace.xout.slow) {
             enum slow_path_reason slow;

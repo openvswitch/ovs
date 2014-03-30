@@ -34,8 +34,8 @@ enum { DP_NETDEV_HEADROOM = 2 + VLAN_HEADER_LEN };
 
 static inline void dp_packet_pad(struct ofpbuf *b)
 {
-    if (b->size < ETH_TOTAL_MIN) {
-        ofpbuf_put_zeros(b, ETH_TOTAL_MIN - b->size);
+    if (ofpbuf_size(b) < ETH_TOTAL_MIN) {
+        ofpbuf_put_zeros(b, ETH_TOTAL_MIN - ofpbuf_size(b));
     }
 }
 

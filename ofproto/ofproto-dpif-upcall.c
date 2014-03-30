@@ -1043,7 +1043,7 @@ handle_upcalls(struct handler *handler, struct list *upcalls)
                 miss = existing_miss;
             }
             miss->stats.tcp_flags |= ntohs(miss->flow.tcp_flags);
-            miss->stats.n_bytes += packet->size;
+            miss->stats.n_bytes += ofpbuf_size(packet);
             miss->stats.n_packets++;
 
             upcall->flow_miss = miss;
@@ -1164,7 +1164,7 @@ handle_upcalls(struct handler *handler, struct list *upcalls)
              * the packet contained no VLAN.  So, we must remove the
              * VLAN header from the packet before trying to execute the
              * actions. */
-            if (miss->xout.odp_actions.size) {
+            if (ofpbuf_size(&miss->xout.odp_actions)) {
                 eth_pop_vlan(packet);
             }
 
@@ -1204,21 +1204,21 @@ handle_upcalls(struct handler *handler, struct list *upcalls)
             op->u.flow_put.flags = DPIF_FP_CREATE | DPIF_FP_MODIFY;
             op->u.flow_put.key = miss->key;
             op->u.flow_put.key_len = miss->key_len;
-            op->u.flow_put.mask = mask.data;
-            op->u.flow_put.mask_len = mask.size;
+            op->u.flow_put.mask = ofpbuf_data(&mask);
+            op->u.flow_put.mask_len = ofpbuf_size(&mask);
             op->u.flow_put.stats = NULL;
 
             if (!miss->xout.slow) {
-                op->u.flow_put.actions = miss->xout.odp_actions.data;
-                op->u.flow_put.actions_len = miss->xout.odp_actions.size;
+                op->u.flow_put.actions = ofpbuf_data(&miss->xout.odp_actions);
+                op->u.flow_put.actions_len = ofpbuf_size(&miss->xout.odp_actions);
             } else {
                 struct ofpbuf buf;
 
                 ofpbuf_use_stack(&buf, miss->slow_path_buf,
                                  sizeof miss->slow_path_buf);
                 compose_slow_path(udpif, &miss->xout, miss->odp_in_port, &buf);
-                op->u.flow_put.actions = buf.data;
-                op->u.flow_put.actions_len = buf.size;
+                op->u.flow_put.actions = ofpbuf_data(&buf);
+                op->u.flow_put.actions_len = ofpbuf_size(&buf);
             }
         }
 
@@ -1228,15 +1228,15 @@ handle_upcalls(struct handler *handler, struct list *upcalls)
          * upcall. */
         miss->flow.vlan_tci = flow_vlan_tci;
 
-        if (miss->xout.odp_actions.size) {
+        if (ofpbuf_size(&miss->xout.odp_actions)) {
 
             op = &ops[n_ops++];
             op->type = DPIF_OP_EXECUTE;
             op->u.execute.packet = packet;
             odp_key_to_pkt_metadata(miss->key, miss->key_len,
                                     &op->u.execute.md);
-            op->u.execute.actions = miss->xout.odp_actions.data;
-            op->u.execute.actions_len = miss->xout.odp_actions.size;
+            op->u.execute.actions = ofpbuf_data(&miss->xout.odp_actions);
+            op->u.execute.actions_len = ofpbuf_size(&miss->xout.odp_actions);
             op->u.execute.needs_help = (miss->xout.slow & SLOW_ACTION) != 0;
         }
     }
@@ -1257,8 +1257,8 @@ handle_upcalls(struct handler *handler, struct list *upcalls)
             struct ofproto_packet_in *pin;
 
             pin = xmalloc(sizeof *pin);
-            pin->up.packet = xmemdup(packet->data, packet->size);
-            pin->up.packet_len = packet->size;
+            pin->up.packet = xmemdup(ofpbuf_data(packet), ofpbuf_size(packet));
+            pin->up.packet_len = ofpbuf_size(packet);
             pin->up.reason = OFPR_NO_MATCH;
             pin->up.table_id = 0;
             pin->up.cookie = OVS_BE64_MAX;
@@ -1390,8 +1390,8 @@ revalidate_ukey(struct udpif *udpif, struct udpif_flow_dump *udump,
     }
 
     if (!xout.slow) {
-        ofpbuf_use_const(&xout_actions, xout.odp_actions.data,
-                         xout.odp_actions.size);
+        ofpbuf_use_const(&xout_actions, ofpbuf_data(&xout.odp_actions),
+                         ofpbuf_size(&xout.odp_actions));
     } else {
         ofpbuf_use_stack(&xout_actions, slow_path_buf, sizeof slow_path_buf);
         compose_slow_path(udpif, &xout, odp_in_port, &xout_actions);

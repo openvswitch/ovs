@@ -58,6 +58,14 @@ struct ofpbuf {
 #endif
 };
 
+static inline void * ofpbuf_data(const struct ofpbuf *);
+static inline void ofpbuf_set_data(struct ofpbuf *, void *);
+static inline void * ofpbuf_base(const struct ofpbuf *);
+static inline void ofpbuf_set_base(struct ofpbuf *, void *);
+
+static inline uint32_t ofpbuf_size(const struct ofpbuf *);
+static inline void ofpbuf_set_size(struct ofpbuf *, uint32_t);
+
 void * ofpbuf_resize_l2(struct ofpbuf *, int increment);
 void * ofpbuf_resize_l2_5(struct ofpbuf *, int increment);
 static inline void * ofpbuf_get_l2_5(const struct ofpbuf *);
@@ -136,7 +144,7 @@ static inline bool ofpbuf_equal(const struct ofpbuf *, const struct ofpbuf *);
 static inline void *ofpbuf_get_uninit_pointer(struct ofpbuf *b)
 {
     /* XXX: If 'source' is OFPBUF_DPDK memory gets leaked! */
-    return b && b->source == OFPBUF_MALLOC ? b->base : NULL;
+    return b && b->source == OFPBUF_MALLOC ? ofpbuf_base(b) : NULL;
 }
 
 /* Frees memory that 'b' points to, as well as 'b' itself. */
@@ -153,7 +161,7 @@ static inline void ofpbuf_delete(struct ofpbuf *b)
 static inline void *ofpbuf_at(const struct ofpbuf *b, size_t offset,
                               size_t size)
 {
-    return offset + size <= b->size ? (char *) b->data + offset : NULL;
+    return offset + size <= ofpbuf_size(b) ? (char *) ofpbuf_data(b) + offset : NULL;
 }
 
 /* Returns a pointer to byte 'offset' in 'b', which must contain at least
@@ -161,21 +169,21 @@ static inline void *ofpbuf_at(const struct ofpbuf *b, size_t offset,
 static inline void *ofpbuf_at_assert(const struct ofpbuf *b, size_t offset,
                                      size_t size)
 {
-    ovs_assert(offset + size <= b->size);
-    return ((char *) b->data) + offset;
+    ovs_assert(offset + size <= ofpbuf_size(b));
+    return ((char *) ofpbuf_data(b)) + offset;
 }
 
 /* Returns the byte following the last byte of data in use in 'b'. */
 static inline void *ofpbuf_tail(const struct ofpbuf *b)
 {
-    return (char *) b->data + b->size;
+    return (char *) ofpbuf_data(b) + ofpbuf_size(b);
 }
 
 /* Returns the byte following the last byte allocated for use (but not
  * necessarily in use) by 'b'. */
 static inline void *ofpbuf_end(const struct ofpbuf *b)
 {
-    return (char *) b->base + b->allocated;
+    return (char *) ofpbuf_base(b) + b->allocated;
 }
 
 /* Returns the number of bytes of headroom in 'b', that is, the number of bytes
@@ -184,7 +192,7 @@ static inline void *ofpbuf_end(const struct ofpbuf *b)
  * headroom is 0.) */
 static inline size_t ofpbuf_headroom(const struct ofpbuf *b)
 {
-    return (char*)b->data - (char*)b->base;
+    return (char*)ofpbuf_data(b) - (char*)ofpbuf_base(b);
 }
 
 /* Returns the number of bytes that may be appended to the tail end of ofpbuf
@@ -197,18 +205,18 @@ static inline size_t ofpbuf_tailroom(const struct ofpbuf *b)
 /* Clears any data from 'b'. */
 static inline void ofpbuf_clear(struct ofpbuf *b)
 {
-    b->data = b->base;
-    b->size = 0;
+    ofpbuf_set_data(b, ofpbuf_base(b));
+    ofpbuf_set_size(b, 0);
 }
 
 /* Removes 'size' bytes from the head end of 'b', which must contain at least
  * 'size' bytes of data.  Returns the first byte of data removed. */
 static inline void *ofpbuf_pull(struct ofpbuf *b, size_t size)
 {
-    void *data = b->data;
-    ovs_assert(b->size >= size);
-    b->data = (char*)b->data + size;
-    b->size -= size;
+    void *data = ofpbuf_data(b);
+    ovs_assert(ofpbuf_size(b) >= size);
+    ofpbuf_set_data(b, (char*)ofpbuf_data(b) + size);
+    ofpbuf_set_size(b, ofpbuf_size(b) - size);
     return data;
 }
 
@@ -217,7 +225,7 @@ static inline void *ofpbuf_pull(struct ofpbuf *b, size_t size)
  * null pointer without modifying 'b'. */
 static inline void *ofpbuf_try_pull(struct ofpbuf *b, size_t size)
 {
-    return b->size >= size ? ofpbuf_pull(b, size) : NULL;
+    return ofpbuf_size(b) >= size ? ofpbuf_pull(b, size) : NULL;
 }
 
 static inline struct ofpbuf *ofpbuf_from_list(const struct list *list)
@@ -227,7 +235,8 @@ static inline struct ofpbuf *ofpbuf_from_list(const struct list *list)
 
 static inline bool ofpbuf_equal(const struct ofpbuf *a, const struct ofpbuf *b)
 {
-    return a->size == b->size && memcmp(a->data, b->data, a->size) == 0;
+    return ofpbuf_size(a) == ofpbuf_size(b) &&
+           memcmp(ofpbuf_data(a), ofpbuf_data(b), ofpbuf_size(a)) == 0;
 }
 
 static inline void * ofpbuf_get_l2_5(const struct ofpbuf *b)
@@ -297,6 +306,36 @@ static inline const void *ofpbuf_get_icmp_payload(const struct ofpbuf *b)
 {
     return OVS_LIKELY(ofpbuf_get_l4_size(b) >= ICMP_HEADER_LEN)
         ? (const char *)ofpbuf_get_l4(b) + ICMP_HEADER_LEN : NULL;
+}
+
+static inline void * ofpbuf_data(const struct ofpbuf *b)
+{
+    return b->data;
+}
+
+static inline void ofpbuf_set_data(struct ofpbuf *b, void *d)
+{
+    b->data = d;
+}
+
+static inline void * ofpbuf_base(const struct ofpbuf *b)
+{
+    return b->base;
+}
+
+static inline void ofpbuf_set_base(struct ofpbuf *b, void *d)
+{
+    b->base = d;
+}
+
+static inline uint32_t ofpbuf_size(const struct ofpbuf *b)
+{
+    return b->size;
+}
+
+static inline void ofpbuf_set_size(struct ofpbuf *b, uint32_t v)
+{
+    b->size = v;
 }
 
 #ifdef  __cplusplus

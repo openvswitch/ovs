@@ -125,11 +125,11 @@ send_bogus_packet_ins(struct fail_open *fo)
     compose_rarp(&b, mac);
 
     memset(&pin, 0, sizeof pin);
-    pin.up.packet = b.data;
-    pin.up.packet_len = b.size;
+    pin.up.packet = ofpbuf_data(&b);
+    pin.up.packet_len = ofpbuf_size(&b);
     pin.up.reason = OFPR_NO_MATCH;
     pin.up.fmd.in_port = OFPP_LOCAL;
-    pin.send_len = b.size;
+    pin.send_len = ofpbuf_size(&b);
     pin.miss_type = OFPROTO_PACKET_IN_NO_MISS;
     connmgr_send_packet_in(fo->connmgr, &pin);
 
@@ -230,7 +230,7 @@ fail_open_flushed(struct fail_open *fo)
 
         match_init_catchall(&match);
         ofproto_add_flow(fo->ofproto, &match, FAIL_OPEN_PRIORITY,
-                         ofpacts.data, ofpacts.size);
+                         ofpbuf_data(&ofpacts), ofpbuf_size(&ofpacts));
 
         ofpbuf_uninit(&ofpacts);
     }

@@ -1542,7 +1542,7 @@ stp_send_bpdu(struct stp_port *p, const void *bpdu, size_t bpdu_size)
     /* 802.2 header. */
     memcpy(eth->eth_dst, eth_addr_stp, ETH_ADDR_LEN);
     /* p->stp->send_bpdu() must fill in source address. */
-    eth->eth_type = htons(pkt->size - ETH_HEADER_LEN);
+    eth->eth_type = htons(ofpbuf_size(pkt) - ETH_HEADER_LEN);
 
     /* LLC header. */
     llc->llc_dsap = STP_LLC_DSAP;

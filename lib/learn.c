@@ -255,7 +255,7 @@ learn_to_nxast(const struct ofpact_learn *learn, struct ofpbuf *openflow)
     struct nx_action_learn *nal;
     size_t start_ofs;
 
-    start_ofs = openflow->size;
+    start_ofs = ofpbuf_size(openflow);
     nal = ofputil_put_NXAST_LEARN(openflow);
     nal->idle_timeout = htons(learn->idle_timeout);
     nal->hard_timeout = htons(learn->hard_timeout);
@@ -287,12 +287,12 @@ learn_to_nxast(const struct ofpact_learn *learn, struct ofpbuf *openflow)
         }
     }
 
-    if ((openflow->size - start_ofs) % 8) {
-        ofpbuf_put_zeros(openflow, 8 - (openflow->size - start_ofs) % 8);
+    if ((ofpbuf_size(openflow) - start_ofs) % 8) {
+        ofpbuf_put_zeros(openflow, 8 - (ofpbuf_size(openflow) - start_ofs) % 8);
     }
 
     nal = ofpbuf_at_assert(openflow, start_ofs, sizeof *nal);
-    nal->len = htons(openflow->size - start_ofs);
+    nal->len = htons(ofpbuf_size(openflow) - start_ofs);
 }
 
 /* Composes 'fm' so that executing it will implement 'learn' given that the
@@ -382,8 +382,8 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
     }
     ofpact_pad(ofpacts);
 
-    fm->ofpacts = ofpacts->data;
-    fm->ofpacts_len = ofpacts->size;
+    fm->ofpacts = ofpbuf_data(ofpacts);
+    fm->ofpacts_len = ofpbuf_size(ofpacts);
 }
 
 /* Perform a bitwise-OR on 'wc''s fields that are relevant as sources in

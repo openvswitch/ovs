@@ -602,12 +602,12 @@ dpif_sflow_received(struct dpif_sflow *ds, struct ofpbuf *packet,
     header->header_protocol = SFLHEADER_ETHERNET_ISO8023;
     /* The frame_length should include the Ethernet FCS (4 bytes),
      * but it has already been stripped,  so we need to add 4 here. */
-    header->frame_length = packet->size + 4;
+    header->frame_length = ofpbuf_size(packet) + 4;
     /* Ethernet FCS stripped off. */
     header->stripped = 4;
-    header->header_length = MIN(packet->size,
+    header->header_length = MIN(ofpbuf_size(packet),
                                 sampler->sFlowFsMaximumHeaderSize);
-    header->header_bytes = packet->data;
+    header->header_bytes = ofpbuf_data(packet);
 
     /* Add extended switch element. */
     memset(&switchElem, 0, sizeof(switchElem));

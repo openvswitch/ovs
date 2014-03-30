@@ -59,10 +59,10 @@ pull_arp(struct ofpbuf *packet)
 static struct ip_header *
 pull_ip(struct ofpbuf *packet)
 {
-    if (packet->size >= IP_HEADER_LEN) {
-        struct ip_header *ip = packet->data;
+    if (ofpbuf_size(packet) >= IP_HEADER_LEN) {
+        struct ip_header *ip = ofpbuf_data(packet);
         int ip_len = IP_IHL(ip->ip_ihl_ver) * 4;
-        if (ip_len >= IP_HEADER_LEN && packet->size >= ip_len) {
+        if (ip_len >= IP_HEADER_LEN && ofpbuf_size(packet) >= ip_len) {
             return ofpbuf_pull(packet, ip_len);
         }
     }
@@ -105,7 +105,7 @@ parse_vlan(struct ofpbuf *b, struct flow *flow)
         ovs_be16 tci;
     };
 
-    if (b->size >= sizeof(struct qtag_prefix) + sizeof(ovs_be16)) {
+    if (ofpbuf_size(b) >= sizeof(struct qtag_prefix) + sizeof(ovs_be16)) {
         struct qtag_prefix *qp = ofpbuf_pull(b, sizeof *qp);
         flow->vlan_tci = qp->tci | htons(VLAN_CFI);
     }
@@ -122,11 +122,11 @@ parse_ethertype(struct ofpbuf *b)
         return proto;
     }
 
-    if (b->size < sizeof *llc) {
+    if (ofpbuf_size(b) < sizeof *llc) {
         return htons(FLOW_DL_TYPE_NONE);
     }
 
-    llc = b->data;
+    llc = ofpbuf_data(b);
     if (llc->llc.llc_dsap != LLC_DSAP_SNAP
         || llc->llc.llc_ssap != LLC_SSAP_SNAP
         || llc->llc.llc_cntl != LLC_CNTL_SNAP
@@ -184,7 +184,7 @@ parse_ipv6(struct ofpbuf *packet, struct flow *flow)
          * accesses within the extension header are within those first 8
          * bytes. All extension headers are required to be at least 8
          * bytes. */
-        if (packet->size < 8) {
+        if (ofpbuf_size(packet) < 8) {
             return EINVAL;
         }
 
@@ -193,7 +193,7 @@ parse_ipv6(struct ofpbuf *packet, struct flow *flow)
                 || (nexthdr == IPPROTO_DSTOPTS)) {
             /* These headers, while different, have the fields we care about
              * in the same location and with the same interpretation. */
-            const struct ip6_ext *ext_hdr = packet->data;
+            const struct ip6_ext *ext_hdr = ofpbuf_data(packet);
             nexthdr = ext_hdr->ip6e_nxt;
             if (!ofpbuf_try_pull(packet, (ext_hdr->ip6e_len + 1) * 8)) {
                 return EINVAL;
@@ -203,13 +203,13 @@ parse_ipv6(struct ofpbuf *packet, struct flow *flow)
              * we care about are in the same location as the generic
              * option header--only the header length is calculated
              * differently. */
-            const struct ip6_ext *ext_hdr = packet->data;
+            const struct ip6_ext *ext_hdr = ofpbuf_data(packet);
             nexthdr = ext_hdr->ip6e_nxt;
             if (!ofpbuf_try_pull(packet, (ext_hdr->ip6e_len + 2) * 4)) {
                return EINVAL;
             }
         } else if (nexthdr == IPPROTO_FRAGMENT) {
-            const struct ovs_16aligned_ip6_frag *frag_hdr = packet->data;
+            const struct ovs_16aligned_ip6_frag *frag_hdr = ofpbuf_data(packet);
 
             nexthdr = frag_hdr->ip6f_nxt;
             if (!ofpbuf_try_pull(packet, sizeof *frag_hdr)) {
@@ -235,8 +235,8 @@ parse_ipv6(struct ofpbuf *packet, struct flow *flow)
 static void
 parse_tcp(struct ofpbuf *b, struct flow *flow)
 {
-    if (b->size >= TCP_HEADER_LEN) {
-        const struct tcp_header *tcp = b->data;
+    if (ofpbuf_size(b) >= TCP_HEADER_LEN) {
+        const struct tcp_header *tcp = ofpbuf_data(b);
 
         flow->tp_src = tcp->tcp_src;
         flow->tp_dst = tcp->tcp_dst;
@@ -247,8 +247,8 @@ parse_tcp(struct ofpbuf *b, struct flow *flow)
 static void
 parse_udp(struct ofpbuf *b, struct flow *flow)
 {
-    if (b->size >= UDP_HEADER_LEN) {
-        const struct udp_header *udp = b->data;
+    if (ofpbuf_size(b) >= UDP_HEADER_LEN) {
+        const struct udp_header *udp = ofpbuf_data(b);
 
         flow->tp_src = udp->udp_src;
         flow->tp_dst = udp->udp_dst;
@@ -258,8 +258,8 @@ parse_udp(struct ofpbuf *b, struct flow *flow)
 static void
 parse_sctp(struct ofpbuf *b, struct flow *flow)
 {
-    if (b->size >= SCTP_HEADER_LEN) {
-        const struct sctp_header *sctp = b->data;
+    if (ofpbuf_size(b) >= SCTP_HEADER_LEN) {
+        const struct sctp_header *sctp = ofpbuf_data(b);
 
         flow->tp_src = sctp->sctp_src;
         flow->tp_dst = sctp->sctp_dst;
@@ -291,13 +291,13 @@ parse_icmpv6(struct ofpbuf *b, struct flow *flow)
         }
         flow->nd_target = *nd_target;
 
-        while (b->size >= 8) {
+        while (ofpbuf_size(b) >= 8) {
             /* The minimum size of an option is 8 bytes, which also is
              * the size of Ethernet link-layer options. */
-            const struct nd_opt_hdr *nd_opt = b->data;
+            const struct nd_opt_hdr *nd_opt = ofpbuf_data(b);
             int opt_len = nd_opt->nd_opt_len * 8;
 
-            if (!opt_len || opt_len > b->size) {
+            if (!opt_len || opt_len > ofpbuf_size(b)) {
                 goto invalid;
             }
 
@@ -371,17 +371,17 @@ flow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
         flow->pkt_mark = md->pkt_mark;
     }
 
-    packet->l2   = b.data;
+    packet->l2   = ofpbuf_data(&b);
     ofpbuf_set_l2_5(packet, NULL);
     ofpbuf_set_l3(packet, NULL);
     ofpbuf_set_l4(packet, NULL);
 
-    if (b.size < sizeof *eth) {
+    if (ofpbuf_size(&b) < sizeof *eth) {
         return;
     }
 
     /* Link layer. */
-    eth = b.data;
+    eth = ofpbuf_data(&b);
     memcpy(flow->dl_src, eth->eth_src, ETH_ADDR_LEN);
     memcpy(flow->dl_dst, eth->eth_dst, ETH_ADDR_LEN);
 
@@ -394,16 +394,16 @@ flow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
 
     /* Parse mpls, copy l3 ttl. */
     if (eth_type_mpls(flow->dl_type)) {
-        ofpbuf_set_l2_5(packet, b.data);
+        ofpbuf_set_l2_5(packet, ofpbuf_data(&b));
         parse_mpls(&b, flow);
     }
 
     /* Network layer. */
-    ofpbuf_set_l3(packet, b.data);
+    ofpbuf_set_l3(packet, ofpbuf_data(&b));
     if (flow->dl_type == htons(ETH_TYPE_IP)) {
         const struct ip_header *nh = pull_ip(&b);
         if (nh) {
-            ofpbuf_set_l4(packet, b.data);
+            ofpbuf_set_l4(packet, ofpbuf_data(&b));
 
             flow->nw_src = get_16aligned_be32(&nh->ip_src);
             flow->nw_dst = get_16aligned_be32(&nh->ip_dst);
@@ -439,7 +439,7 @@ flow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
             return;
         }
 
-        ofpbuf_set_l4(packet, b.data);
+        ofpbuf_set_l4(packet, ofpbuf_data(&b));
         if (flow->nw_proto == IPPROTO_TCP) {
             parse_tcp(&b, flow);
         } else if (flow->nw_proto == IPPROTO_UDP) {
@@ -1331,7 +1331,7 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
     eth_compose(b, flow->dl_dst, flow->dl_src, ntohs(flow->dl_type), 0);
     if (flow->dl_type == htons(FLOW_DL_TYPE_NONE)) {
         struct eth_header *eth = b->l2;
-        eth->eth_type = htons(b->size);
+        eth->eth_type = htons(ofpbuf_size(b));
         return;
     }
 

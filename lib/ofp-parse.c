@@ -632,7 +632,7 @@ parse_named_action(enum ofputil_action_code code,
                    char *arg, struct ofpbuf *ofpacts,
                    enum ofputil_protocol *usable_protocols)
 {
-    size_t orig_size = ofpacts->size;
+    size_t orig_size = ofpbuf_size(ofpacts);
     struct ofpact_tunnel *tunnel;
     struct ofpact_vlan_vid *vlan_vid;
     struct ofpact_vlan_pcp *vlan_pcp;
@@ -929,7 +929,7 @@ parse_named_action(enum ofputil_action_code code,
     }
 
     if (error) {
-        ofpacts->size = orig_size;
+        ofpbuf_set_size(ofpacts, orig_size);
     }
     return error;
 }
@@ -978,7 +978,7 @@ static char * WARN_UNUSED_RESULT
 str_to_ofpacts__(char *str, struct ofpbuf *ofpacts,
                  enum ofputil_protocol *usable_protocols)
 {
-    size_t orig_size = ofpacts->size;
+    size_t orig_size = ofpbuf_size(ofpacts);
     char *pos, *act, *arg;
     int n_actions;
 
@@ -988,7 +988,7 @@ str_to_ofpacts__(char *str, struct ofpbuf *ofpacts,
         char *error = str_to_ofpact__(pos, act, arg, ofpacts, n_actions,
                                       usable_protocols);
         if (error) {
-            ofpacts->size = orig_size;
+            ofpbuf_set_size(ofpacts, orig_size);
             return error;
         }
         n_actions++;
@@ -1007,7 +1007,7 @@ static char * WARN_UNUSED_RESULT
 str_to_ofpacts(char *str, struct ofpbuf *ofpacts,
                enum ofputil_protocol *usable_protocols)
 {
-    size_t orig_size = ofpacts->size;
+    size_t orig_size = ofpbuf_size(ofpacts);
     char *error_s;
     enum ofperr error;
 
@@ -1016,9 +1016,9 @@ str_to_ofpacts(char *str, struct ofpbuf *ofpacts,
         return error_s;
     }
 
-    error = ofpacts_verify(ofpacts->data, ofpacts->size);
+    error = ofpacts_verify(ofpbuf_data(ofpacts), ofpbuf_size(ofpacts));
     if (error) {
-        ofpacts->size = orig_size;
+        ofpbuf_set_size(ofpacts, orig_size);
         return xstrdup("Incorrect action ordering");
     }
 
@@ -1050,16 +1050,16 @@ parse_named_instruction(enum ovs_instruction_type type,
         size_t ofs;
 
         ofpact_pad(ofpacts);
-        ofs = ofpacts->size;
+        ofs = ofpbuf_size(ofpacts);
         on = ofpact_put(ofpacts, OFPACT_WRITE_ACTIONS,
                         offsetof(struct ofpact_nest, actions));
         error_s = str_to_ofpacts__(arg, ofpacts, usable_protocols);
 
         on = ofpbuf_at_assert(ofpacts, ofs, sizeof *on);
-        on->ofpact.len = ofpacts->size - ofs;
+        on->ofpact.len = ofpbuf_size(ofpacts) - ofs;
 
         if (error_s) {
-            ofpacts->size = ofs;
+            ofpbuf_set_size(ofpacts, ofs);
         }
         break;
     }
@@ -1095,7 +1095,7 @@ parse_named_instruction(enum ovs_instruction_type type,
 
     /* If write_metadata is specified as an action AND an instruction, ofpacts
        could be invalid. */
-    error = ofpacts_verify(ofpacts->data, ofpacts->size);
+    error = ofpacts_verify(ofpbuf_data(ofpacts), ofpbuf_size(ofpacts));
     if (error) {
         return xstrdup("Incorrect instruction ordering");
     }
@@ -1110,7 +1110,7 @@ static char * WARN_UNUSED_RESULT
 str_to_inst_ofpacts(char *str, struct ofpbuf *ofpacts,
                     enum ofputil_protocol *usable_protocols)
 {
-    size_t orig_size = ofpacts->size;
+    size_t orig_size = ofpbuf_size(ofpacts);
     char *pos, *inst, *arg;
     int type;
     const char *prev_inst = NULL;
@@ -1124,7 +1124,7 @@ str_to_inst_ofpacts(char *str, struct ofpbuf *ofpacts,
             char *error = str_to_ofpact__(pos, inst, arg, ofpacts, n_actions,
                                           usable_protocols);
             if (error) {
-                ofpacts->size = orig_size;
+                ofpbuf_set_size(ofpacts, orig_size);
                 return error;
             }
 
@@ -1134,20 +1134,20 @@ str_to_inst_ofpacts(char *str, struct ofpbuf *ofpacts,
                 continue;
             }
         } else if (type == OVSINST_OFPIT11_APPLY_ACTIONS) {
-            ofpacts->size = orig_size;
+            ofpbuf_set_size(ofpacts, orig_size);
             return xasprintf("%s isn't supported. Just write actions then "
                              "it is interpreted as apply_actions", inst);
         } else {
             char *error = parse_named_instruction(type, arg, ofpacts,
                                                   usable_protocols);
             if (error) {
-                ofpacts->size = orig_size;
+                ofpbuf_set_size(ofpacts, orig_size);
                 return error;
             }
         }
 
         if (type <= prev_type) {
-            ofpacts->size = orig_size;
+            ofpbuf_set_size(ofpacts, orig_size);
             if (type == prev_type) {
                 return xasprintf("instruction %s may be specified only once",
                                  inst);
@@ -1433,7 +1433,7 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
         if (!error) {
             enum ofperr err;
 
-            err = ofpacts_check(ofpacts.data, ofpacts.size, &fm->match.flow,
+            err = ofpacts_check(ofpbuf_data(&ofpacts), ofpbuf_size(&ofpacts), &fm->match.flow,
                                 OFPP_MAX, fm->table_id, 255, usable_protocols);
             if (!err && !usable_protocols) {
                 err = OFPERR_OFPBAC_MATCH_INCONSISTENT;
@@ -1449,7 +1449,7 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
             return error;
         }
 
-        fm->ofpacts_len = ofpacts.size;
+        fm->ofpacts_len = ofpbuf_size(&ofpacts);
         fm->ofpacts = ofpbuf_steal_data(&ofpacts);
     } else {
         fm->ofpacts_len = 0;
@@ -2130,8 +2130,8 @@ parse_bucket_str(struct ofputil_bucket *bucket, char *str_,
     }
 
     ofpact_pad(&ofpacts);
-    bucket->ofpacts = ofpacts.data;
-    bucket->ofpacts_len = ofpacts.size;
+    bucket->ofpacts = ofpbuf_data(&ofpacts);
+    bucket->ofpacts_len = ofpbuf_size(&ofpacts);
 
     return NULL;
 }

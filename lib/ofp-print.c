@@ -1361,9 +1361,9 @@ ofp_print_error_msg(struct ds *string, const struct ofp_header *oh)
     ds_put_format(string, " %s\n", ofperr_get_name(error));
 
     if (error == OFPERR_OFPHFC_INCOMPATIBLE || error == OFPERR_OFPHFC_EPERM) {
-        ds_put_printable(string, payload.data, payload.size);
+        ds_put_printable(string, ofpbuf_data(&payload), ofpbuf_size(&payload));
     } else {
-        s = ofp_to_string(payload.data, payload.size, 1);
+        s = ofp_to_string(ofpbuf_data(&payload), ofpbuf_size(&payload), 1);
         ds_put_cstr(string, s);
         free(s);
     }
@@ -1663,7 +1663,7 @@ ofp_print_ofpst_table_reply13(struct ds *string, const struct ofp_header *oh,
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     ofpraw_pull_assert(&b);
 
-    n = b.size / sizeof *ts;
+    n = ofpbuf_size(&b) / sizeof *ts;
     ds_put_format(string, " %"PRIuSIZE" tables\n", n);
     if (verbosity < 1) {
         return;
@@ -1693,7 +1693,7 @@ ofp_print_ofpst_table_reply12(struct ds *string, const struct ofp_header *oh,
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     ofpraw_pull_assert(&b);
 
-    n = b.size / sizeof *ts;
+    n = ofpbuf_size(&b) / sizeof *ts;
     ds_put_format(string, " %"PRIuSIZE" tables\n", n);
     if (verbosity < 1) {
         return;
@@ -1720,7 +1720,7 @@ ofp_print_ofpst_table_reply11(struct ds *string, const struct ofp_header *oh,
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     ofpraw_pull_assert(&b);
 
-    n = b.size / sizeof *ts;
+    n = ofpbuf_size(&b) / sizeof *ts;
     ds_put_format(string, " %"PRIuSIZE" tables\n", n);
     if (verbosity < 1) {
         return;
@@ -1760,7 +1760,7 @@ ofp_print_ofpst_table_reply10(struct ds *string, const struct ofp_header *oh,
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     ofpraw_pull_assert(&b);
 
-    n = b.size / sizeof *ts;
+    n = ofpbuf_size(&b) / sizeof *ts;
     ds_put_format(string, " %"PRIuSIZE" tables\n", n);
     if (verbosity < 1) {
         return;

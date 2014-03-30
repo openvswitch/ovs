@@ -673,7 +673,7 @@ bfd_process_packet(struct bfd *bfd, const struct flow *flow,
         goto out;
     }
 
-    msg = ofpbuf_at(p, l7 - (uint8_t *)p->data, BFD_PACKET_LEN);
+    msg = ofpbuf_at(p, l7 - (uint8_t *)ofpbuf_data(p), BFD_PACKET_LEN);
     if (!msg) {
         VLOG_INFO_RL(&rl, "%s: Received too-short BFD control message (only "
                      "%"PRIdPTR" bytes long, at least %d required).",

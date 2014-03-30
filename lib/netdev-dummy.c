@@ -198,11 +198,11 @@ dummy_packet_stream_run(struct netdev_dummy *dev, struct dummy_packet_stream *s)
         int retval;
 
         txbuf = ofpbuf_from_list(list_front(&s->txq));
-        retval = stream_send(s->stream, txbuf->data, txbuf->size);
+        retval = stream_send(s->stream, ofpbuf_data(txbuf), ofpbuf_size(txbuf));
 
         if (retval > 0) {
             ofpbuf_pull(txbuf, retval);
-            if (!txbuf->size) {
+            if (!ofpbuf_size(txbuf)) {
                 list_remove(&txbuf->list_node);
                 ofpbuf_delete(txbuf);
             }
@@ -212,17 +212,17 @@ dummy_packet_stream_run(struct netdev_dummy *dev, struct dummy_packet_stream *s)
     }
 
     if (!error) {
-        if (s->rxbuf.size < 2) {
-            n = 2 - s->rxbuf.size;
+        if (ofpbuf_size(&s->rxbuf) < 2) {
+            n = 2 - ofpbuf_size(&s->rxbuf);
         } else {
             uint16_t frame_len;
 
-            frame_len = ntohs(get_unaligned_be16(s->rxbuf.data));
+            frame_len = ntohs(get_unaligned_be16(ofpbuf_data(&s->rxbuf)));
             if (frame_len < ETH_HEADER_LEN) {
                 error = EPROTO;
                 n = 0;
             } else {
-                n = (2 + frame_len) - s->rxbuf.size;
+                n = (2 + frame_len) - ofpbuf_size(&s->rxbuf);
             }
         }
     }
@@ -233,8 +233,8 @@ dummy_packet_stream_run(struct netdev_dummy *dev, struct dummy_packet_stream *s)
         retval = stream_recv(s->stream, ofpbuf_tail(&s->rxbuf), n);
 
         if (retval > 0) {
-            s->rxbuf.size += retval;
-            if (retval == n && s->rxbuf.size > 2) {
+            ofpbuf_set_size(&s->rxbuf, ofpbuf_size(&s->rxbuf) + retval);
+            if (retval == n && ofpbuf_size(&s->rxbuf) > 2) {
                 ofpbuf_pull(&s->rxbuf, 2);
                 netdev_dummy_queue_packet(dev,
                                           ofpbuf_clone(&s->rxbuf));
@@ -242,7 +242,7 @@ dummy_packet_stream_run(struct netdev_dummy *dev, struct dummy_packet_stream *s)
             }
         } else if (retval != -EAGAIN) {
             error = (retval < 0 ? -retval
-                     : s->rxbuf.size ? EPROTO
+                     : ofpbuf_size(&s->rxbuf) ? EPROTO
                      : EOF);
         }
     }
@@ -776,7 +776,7 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct ofpbuf **arr, int *c)
     }
     ovs_mutex_lock(&netdev->mutex);
     netdev->stats.rx_packets++;
-    netdev->stats.rx_bytes += packet->size;
+    netdev->stats.rx_bytes += ofpbuf_size(packet);
     ovs_mutex_unlock(&netdev->mutex);
 
     dp_packet_pad(packet);
@@ -821,8 +821,8 @@ static int
 netdev_dummy_send(struct netdev *netdev, struct ofpbuf *pkt, bool may_steal)
 {
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
-    const void *buffer = pkt->data;
-    size_t size = pkt->size;
+    const void *buffer = ofpbuf_data(pkt);
+    size_t size = ofpbuf_size(pkt);
 
     if (size < ETH_HEADER_LEN) {
         return EMSGSIZE;
@@ -1082,7 +1082,7 @@ eth_from_packet_or_flow(const char *s)
     }
 
     /* Convert odp_key to flow. */
-    fitness = odp_flow_key_to_flow(odp_key.data, odp_key.size, &flow);
+    fitness = odp_flow_key_to_flow(ofpbuf_data(&odp_key), ofpbuf_size(&odp_key), &flow);
     if (fitness == ODP_FIT_ERROR) {
         ofpbuf_uninit(&odp_key);
         return NULL;

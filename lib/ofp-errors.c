@@ -323,7 +323,7 @@ ofperr_decode_msg(const struct ofp_header *oh, struct ofpbuf *payload)
     /* Translate the error type and code into an ofperr. */
     error = ofperr_decode(oh->version, vendor, type, code);
     if (error && payload) {
-        ofpbuf_use_const(payload, b.data, b.size);
+        ofpbuf_use_const(payload, ofpbuf_data(&b), ofpbuf_size(&b));
     }
     return error;
 }
