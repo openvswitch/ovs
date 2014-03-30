@@ -26,7 +26,7 @@ On Windows platform, \fBsyslog\fR is accepted as a word and is only
 useful along with the \fB\-\-syslog\-target\fR option (the word has no
 effect otherwise).
 .
-.IP \(bu 
+.IP \(bu
 \fBoff\fR, \fBemer\fR, \fBerr\fR, \fBwarn\fR, \fBinfo\fR, or
 \fBdbg\fR, to control the log level.  Messages of the given severity
 or higher will be logged, and messages of lower severity will be
@@ -49,15 +49,10 @@ a word but has no effect.
 Sets the maximum logging verbosity level, equivalent to
 \fB\-\-verbose=dbg\fR.
 .
-.\" Python vlog doesn't implement -vPATTERN so only document it if
-.\" \*(PY is empty:
-.ie dPY
-.el \{
 .IP "\fB\-vPATTERN:\fIfacility\fB:\fIpattern\fR"
 .IQ "\fB\-\-verbose=PATTERN:\fIfacility\fB:\fIpattern\fR"
 Sets the log pattern for \fIfacility\fR to \fIpattern\fR.  Refer to
 \fBovs\-appctl\fR(8) for a description of the valid syntax for \fIpattern\fR.
-\}
 .
 .TP
 \fB\-\-log\-file\fR[\fB=\fIfile\fR]

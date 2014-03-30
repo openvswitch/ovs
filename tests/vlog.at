@@ -7,94 +7,92 @@ AT_CAPTURE_FILE([stderr_log])
 AT_CHECK([$PYTHON $srcdir/test-vlog.py --log-file log_file \
 -v dbg module_1:info module_2:warn syslog:off 2>stderr_log])
 
-AT_CHECK([diff log_file stderr_log])
-
-AT_CHECK([sed -e 's/.*-.*-.*T..:..:..\....Z|//' \
+AT_CHECK([sed -e 's/.*-.*-.*T..:..:..Z |//' \
 -e 's/File ".*", line [[0-9]][[0-9]]*,/File <name>, line <number>,/' \
 stderr_log], [0], [dnl
-0|module_0|EMER|emergency
-1|module_0|ERR|error
-2|module_0|WARN|warning
-3|module_0|INFO|information
-4|module_0|DBG|debug
-5|module_0|EMER|emergency exception
+  0  | module_0 | EMER | emergency
+  1  | module_0 | ERR | error
+  2  | module_0 | WARN | warning
+  3  | module_0 | INFO | information
+  4  | module_0 | DBG | debug
+  5  | module_0 | EMER | emergency exception
 Traceback (most recent call last):
   File <name>, line <number>, in main
     assert fail
 AssertionError
-6|module_0|ERR|error exception
+  6  | module_0 | ERR | error exception
 Traceback (most recent call last):
   File <name>, line <number>, in main
     assert fail
 AssertionError
-7|module_0|WARN|warn exception
+  7  | module_0 | WARN | warn exception
 Traceback (most recent call last):
   File <name>, line <number>, in main
     assert fail
 AssertionError
-8|module_0|INFO|information exception
+  8  | module_0 | INFO | information exception
 Traceback (most recent call last):
   File <name>, line <number>, in main
     assert fail
 AssertionError
-9|module_0|DBG|debug exception
+  9  | module_0 | DBG | debug exception
 Traceback (most recent call last):
   File <name>, line <number>, in main
     assert fail
 AssertionError
-10|module_0|ERR|exception
+  10 | module_0 | ERR | exception
 Traceback (most recent call last):
   File <name>, line <number>, in main
     assert fail
 AssertionError
-11|module_1|EMER|emergency
-12|module_1|ERR|error
-13|module_1|WARN|warning
-14|module_1|INFO|information
-16|module_1|EMER|emergency exception
+  11 | module_1 | EMER | emergency
+  12 | module_1 | ERR | error
+  13 | module_1 | WARN | warning
+  14 | module_1 | INFO | information
+  16 | module_1 | EMER | emergency exception
 Traceback (most recent call last):
   File <name>, line <number>, in main
     assert fail
 AssertionError
-17|module_1|ERR|error exception
+  17 | module_1 | ERR | error exception
 Traceback (most recent call last):
   File <name>, line <number>, in main
     assert fail
 AssertionError
-18|module_1|WARN|warn exception
+  18 | module_1 | WARN | warn exception
 Traceback (most recent call last):
   File <name>, line <number>, in main
     assert fail
 AssertionError
-19|module_1|INFO|information exception
+  19 | module_1 | INFO | information exception
 Traceback (most recent call last):
   File <name>, line <number>, in main
     assert fail
 AssertionError
-21|module_1|ERR|exception
+  21 | module_1 | ERR | exception
 Traceback (most recent call last):
   File <name>, line <number>, in main
     assert fail
 AssertionError
-22|module_2|EMER|emergency
-23|module_2|ERR|error
-24|module_2|WARN|warning
-27|module_2|EMER|emergency exception
+  22 | module_2 | EMER | emergency
+  23 | module_2 | ERR | error
+  24 | module_2 | WARN | warning
+  27 | module_2 | EMER | emergency exception
 Traceback (most recent call last):
   File <name>, line <number>, in main
     assert fail
 AssertionError
-28|module_2|ERR|error exception
+  28 | module_2 | ERR | error exception
 Traceback (most recent call last):
   File <name>, line <number>, in main
     assert fail
 AssertionError
-29|module_2|WARN|warn exception
+  29 | module_2 | WARN | warn exception
 Traceback (most recent call last):
   File <name>, line <number>, in main
     assert fail
 AssertionError
-32|module_2|ERR|exception
+  32 | module_2 | ERR | exception
 Traceback (most recent call last):
   File <name>, line <number>, in main
     assert fail
@@ -123,12 +121,12 @@ AT_CHECK([APPCTL -t test-unixctl.py log message3])
 AT_CHECK([APPCTL -t test-unixctl.py exit])
 
 AT_CHECK([sed 's/.*|//' log.old], [0], [dnl
-Entering run loop.
-message
-message2
+ Entering run loop.
+ message
+ message2
 ])
 AT_CHECK([sed 's/.*|//' log], [0], [dnl
-message3
+ message3
 ])
 AT_CLEANUP
 
@@ -174,11 +172,11 @@ AT_CHECK([APPCTL -t test-unixctl.py vlog/reopen])
 AT_CHECK([APPCTL -t test-unixctl.py log message3])
 AT_CHECK([APPCTL -t test-unixctl.py exit])
 AT_CHECK([sed 's/.*|//' log.old], [0], [dnl
-Entering run loop.
-message
+ Entering run loop.
+ message
 ])
 AT_CHECK([sed 's/.*|//' log], [0], [dnl
-message3
+ message3
 ])
 AT_CLEANUP
 
@@ -225,4 +223,14 @@ stream            info       info        dbg
 test-unixctl      info       info        dbg
 unixctl_server    info       info        dbg
 ])
+
+AT_CHECK([APPCTL -t test-unixctl.py vlog/set pattern], [0],
+  [Please supply a valid pattern and facility
+])
+AT_CHECK([APPCTL -t test-unixctl.py vlog/set pattern:nonexistent], [0],
+  [Facility nonexistent does not exist
+])
+AT_CHECK([APPCTL -t test-unixctl.py vlog/set pattern:file:'I<3OVS|%m'])
+AT_CHECK([APPCTL -t test-unixctl.py log patterntest])
+AT_CHECK([grep -q 'I<3OVS' log])
 AT_CLEANUP

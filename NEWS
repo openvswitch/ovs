@@ -16,6 +16,7 @@ Post-v2.1.0
    - Support for Linux kernels up to 3.13. From Kernel 3.12 onwards OVS uses
      tunnel API for GRE and VXLAN.
    - Added DPDK support.
+   - Added support for custom vlog patterns in Python
 
 
 v2.1.0 - xx xxx xxxx

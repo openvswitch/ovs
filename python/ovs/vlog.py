@@ -16,15 +16,22 @@
 import datetime
 import logging
 import logging.handlers
+import os
 import re
 import socket
 import sys
+import threading
 
 import ovs.dirs
 import ovs.unixctl
 import ovs.util
 
 FACILITIES = {"console": "info", "file": "info", "syslog": "info"}
+PATTERNS = {
+    "console": "%D{%Y-%m-%dT%H:%M:%SZ}|%05N|%c%T|%p|%m",
+    "file": "%D{%Y-%m-%dT%H:%M:%S.###Z}|%05N|%c%T|%p|%m",
+    "syslog": "ovs|%05N|%c%T|%p|%m",
+}
 LEVELS = {
     "dbg": logging.DEBUG,
     "info": logging.INFO,
@@ -42,9 +49,11 @@ def get_level(level_str):
 class Vlog:
     __inited = False
     __msg_num = 0
+    __start_time = 0
     __mfl = {}  # Module -> facility -> level
     __log_file = None
     __file_handler = None
+    __log_patterns = PATTERNS
 
     def __init__(self, name):
         """Creates a new Vlog object representing a module called 'name'.  The
@@ -60,22 +69,96 @@ class Vlog:
         if not Vlog.__inited:
             return
 
-        dt = datetime.datetime.utcnow();
-        now = dt.strftime("%Y-%m-%dT%H:%M:%S.%%03iZ") % (dt.microsecond/1000)
-        syslog_message = ("%s|%s|%s|%s"
-                           % (Vlog.__msg_num, self.name, level, message))
-
-        level = LEVELS.get(level.lower(), logging.DEBUG)
+        level_num = LEVELS.get(level.lower(), logging.DEBUG)
+        msg_num = Vlog.__msg_num
         Vlog.__msg_num += 1
 
         for f, f_level in Vlog.__mfl[self.name].iteritems():
             f_level = LEVELS.get(f_level, logging.CRITICAL)
-            if level >= f_level:
-                if f == "syslog":
-                    message = "ovs|" + syslog_message
+            if level_num >= f_level:
+                msg = self._build_message(message, f, level, msg_num)
+                logging.getLogger(f).log(level_num, msg, **kwargs)
+
+    def _build_message(self, message, facility, level, msg_num):
+        pattern = self.__log_patterns[facility]
+        tmp = pattern
+
+        tmp = self._format_time(tmp)
+
+        matches = re.findall("(%-?[0]?[0-9]?[AcmNnpPrtT])", tmp)
+        for m in matches:
+            if "A" in m:
+                tmp = self._format_field(tmp, m, ovs.util.PROGRAM_NAME)
+            elif "c" in m:
+                tmp = self._format_field(tmp, m, self.name)
+            elif "m" in m:
+                tmp = self._format_field(tmp, m, message)
+            elif "N" in m:
+                tmp = self._format_field(tmp, m, str(msg_num))
+            elif "n" in m:
+                tmp = re.sub(m, "\n", tmp)
+            elif "p" in m:
+                tmp = self._format_field(tmp, m, level.upper())
+            elif "P" in m:
+                self._format_field(tmp, m, str(os.getpid()))
+            elif "r" in m:
+                now = datetime.datetime.utcnow()
+                delta = now - self.__start_time
+                ms = delta.microseconds / 1000
+                tmp = self._format_field(tmp, m, str(ms))
+            elif "t" in m:
+                subprogram = threading.current_thread().name
+                if subprogram == "MainThread":
+                    subprogram = "main"
+                tmp = self._format_field(tmp, m, subprogram)
+            elif "T" in m:
+                subprogram = threading.current_thread().name
+                if not subprogram == "MainThread":
+                    subprogram = "({})".format(subprogram)
                 else:
-                    message = "%s|%s" % (now, syslog_message)
-                logging.getLogger(f).log(level, message, **kwargs)
+                    subprogram = ""
+                tmp = self._format_field(tmp, m, subprogram)
+        return tmp.strip()
+
+    def _format_field(self, tmp, match, replace):
+        formatting = re.compile("^%(0)?([1-9])?")
+        matches = formatting.match(match)
+        # Do we need to apply padding?
+        if not matches.group(1) and replace != "":
+            replace = replace.center(len(replace)+2)
+        # Does the field have a minimum width
+        if matches.group(2):
+            min_width = int(matches.group(2))
+            if len(replace) < min_width:
+                replace = replace.center(min_width)
+        return re.sub(match, replace, tmp)
+
+    def _format_time(self, tmp):
+        date_regex = re.compile('(%(0?[1-9]?[dD])(\{(.*)\})?)')
+        match = date_regex.search(tmp)
+
+        if match is None:
+            return tmp
+
+        # UTC date or Local TZ?
+        if match.group(2) == "d":
+            now = datetime.datetime.now()
+        elif match.group(2) == "D":
+            now = datetime.datetime.utcnow()
+
+        # Custom format or ISO format?
+        if match.group(3):
+            time = datetime.date.strftime(now, match.group(4))
+            try:
+                i = len(re.search("#+", match.group(4)).group(0))
+                msec = '{0:0>{i}.{i}}'.format(str(now.microsecond / 1000), i=i)
+                time = re.sub('#+', msec, time)
+            except AttributeError:
+                pass
+        else:
+            time = datetime.datetime.isoformat(now.replace(microsecond=0))
+
+        return self._format_field(tmp, match.group(1), time)
 
     def emer(self, message, **kwargs):
         self.__log("EMER", message, **kwargs)
@@ -130,6 +213,7 @@ class Vlog:
             return
 
         Vlog.__inited = True
+        Vlog.__start_time = datetime.datetime.utcnow()
         logging.raiseExceptions = False
         Vlog.__log_file = log_file
         for f in FACILITIES:
@@ -191,12 +275,31 @@ class Vlog:
                 Vlog.__mfl[m][f] = level
 
     @staticmethod
+    def set_pattern(facility, pattern):
+        """ Sets the log pattern of the 'facility' to 'pattern' """
+        facility = facility.lower()
+        Vlog.__log_patterns[facility] = pattern
+
+    @staticmethod
     def set_levels_from_string(s):
         module = None
         level = None
         facility = None
 
-        for word in [w.lower() for w in re.split('[ :]', s)]:
+        words = re.split('[ :]', s)
+        if words[0] == "pattern":
+            try:
+                if words[1] in FACILITIES and words[2]:
+                    segments = [words[i] for i in range(2, len(words))]
+                    pattern = "".join(segments)
+                    Vlog.set_pattern(words[1], pattern)
+                    return
+                else:
+                    return "Facility %s does not exist" % words[1]
+            except IndexError:
+                return "Please supply a valid pattern and facility"
+
+        for word in [w.lower() for w in words]:
             if word == "any":
                 pass
             elif word in FACILITIES:
@@ -259,6 +362,7 @@ class Vlog:
     @staticmethod
     def _unixctl_vlog_list(conn, unused_argv, unused_aux):
         conn.reply(Vlog.get_levels())
+
 
 def add_args(parser):
     """Adds vlog related options to 'parser', an ArgumentParser object.  The
