@@ -56,6 +56,9 @@ case "$TYPE" in
 		retval=$?
 		ovs-vsctl -t ${TIMEOUT} -- --if-exists del-port "$OVS_BRIDGE" "$DEVICE"
 		;;
+	OVSPatchPort)
+		ovs-vsctl -t ${TIMEOUT} -- --if-exists del-port "$OVS_BRIDGE" "$DEVICE"
+		;;
 	*)
 		echo $"Invalid OVS interface type $TYPE"
 		exit 1
