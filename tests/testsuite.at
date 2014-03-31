@@ -53,6 +53,14 @@ m4_define([OVS_WAIT_UNTIL], [OVS_WAIT([$1], [$2])])
 m4_define([OVS_WAIT_WHILE],
   [OVS_WAIT([if $1; then return 1; else return 0; fi], [$2])])
 
+dnl OVS_APP_EXIT_AND_WAIT(DAEMON)
+dnl
+dnl Ask the daemon named DAEMON to exit, via ovs-appctl, and then waits for it
+dnl to exit.
+m4_define([OVS_APP_EXIT_AND_WAIT],
+  [ovs-appctl -t $1 exit
+   OVS_WAIT_WHILE([test -e $1.pid])])
+
 dnl ON_EXIT([COMMANDS])
 dnl
 dnl Adds the shell COMMANDS to a collection executed when the current test
