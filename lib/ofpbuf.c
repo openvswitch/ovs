@@ -135,9 +135,7 @@ ofpbuf_uninit(struct ofpbuf *b)
         if (b->source == OFPBUF_MALLOC) {
             free(ofpbuf_base(b));
         }
-        if (b->source == OFPBUF_DPDK) {
-            free_dpdk_buf(b);
-        }
+        ovs_assert(b->source != OFPBUF_DPDK);
     }
 }
 

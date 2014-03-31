@@ -209,14 +209,51 @@ dpdk_rte_mzalloc(size_t sz)
 void
 free_dpdk_buf(struct ofpbuf *b)
 {
-    struct rte_mbuf *pkt;
-
-    pkt = b->private_p;
-    if (!pkt) {
-        return;
-    }
+    struct rte_mbuf *pkt = (struct rte_mbuf *) b;
 
     rte_mempool_put(pkt->pool, pkt);
+}
+
+static void
+__rte_pktmbuf_init(struct rte_mempool *mp,
+                   void *opaque_arg OVS_UNUSED,
+                   void *_m,
+                   unsigned i OVS_UNUSED)
+{
+    struct rte_mbuf *m = _m;
+    uint32_t buf_len = mp->elt_size - sizeof(struct ofpbuf);
+
+    RTE_MBUF_ASSERT(mp->elt_size >= sizeof(struct ofpbuf));
+
+    memset(m, 0, mp->elt_size);
+
+    /* start of buffer is just after mbuf structure */
+    m->buf_addr = (char *)m + sizeof(struct ofpbuf);
+    m->buf_physaddr = rte_mempool_virt2phy(mp, m) +
+                    sizeof(struct ofpbuf);
+    m->buf_len = (uint16_t)buf_len;
+
+    /* keep some headroom between start of buffer and data */
+    m->pkt.data = (char*) m->buf_addr + RTE_MIN(RTE_PKTMBUF_HEADROOM, m->buf_len);
+
+    /* init some constant fields */
+    m->type = RTE_MBUF_PKT;
+    m->pool = mp;
+    m->pkt.nb_segs = 1;
+    m->pkt.in_port = 0xff;
+}
+
+static void
+ovs_rte_pktmbuf_init(struct rte_mempool *mp,
+                     void *opaque_arg OVS_UNUSED,
+                     void *_m,
+                     unsigned i OVS_UNUSED)
+{
+    struct rte_mbuf *m = _m;
+
+    __rte_pktmbuf_init(mp, opaque_arg, _m, i);
+
+    ofpbuf_init_dpdk((struct ofpbuf *) m, m->buf_len);
 }
 
 static struct dpdk_mp *
@@ -242,7 +279,7 @@ dpdk_mp_get(int socket_id, int mtu) OVS_REQUIRES(dpdk_mutex)
                                  MP_CACHE_SZ,
                                  sizeof(struct rte_pktmbuf_pool_private),
                                  rte_pktmbuf_pool_init, NULL,
-                                 rte_pktmbuf_init, NULL,
+                                 ovs_rte_pktmbuf_init, NULL,
                                  socket_id, 0);
 
     if (dmp->mp == NULL) {
@@ -550,45 +587,20 @@ dpdk_queue_flush(struct netdev_dpdk *dev, int qid)
     rte_spinlock_unlock(&txq->tx_lock);
 }
 
-inline static struct ofpbuf *
-build_ofpbuf(struct rte_mbuf *pkt)
-{
-    struct ofpbuf *b;
-
-    b = ofpbuf_new(0);
-    b->private_p = pkt;
-
-    ofpbuf_set_data(b, pkt->pkt.data);
-    ofpbuf_set_base(b, (char *)ofpbuf_data(b) - DP_NETDEV_HEADROOM - VLAN_ETH_HEADER_LEN);
-    b->allocated =  pkt->buf_len;
-    ofpbuf_set_size(b, rte_pktmbuf_data_len(pkt));
-    b->source = OFPBUF_DPDK;
-
-    dp_packet_pad(b);
-
-    return b;
-}
-
 static int
-netdev_dpdk_rxq_recv(struct netdev_rxq *rxq_, struct ofpbuf **packet, int *c)
+netdev_dpdk_rxq_recv(struct netdev_rxq *rxq_, struct ofpbuf **packets, int *c)
 {
     struct netdev_rxq_dpdk *rx = netdev_rxq_dpdk_cast(rxq_);
     struct netdev *netdev = rx->up.netdev;
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    struct rte_mbuf *burst_pkts[MAX_RX_QUEUE_LEN];
     int nb_rx;
-    int i;
 
     dpdk_queue_flush(dev, rxq_->queue_id);
 
     nb_rx = rte_eth_rx_burst(rx->port_id, rxq_->queue_id,
-                             burst_pkts, MAX_RX_QUEUE_LEN);
+                             (struct rte_mbuf **) packets, MAX_RX_QUEUE_LEN);
     if (!nb_rx) {
         return EAGAIN;
-    }
-
-    for (i = 0; i < nb_rx; i++) {
-        packet[i] = build_ofpbuf(burst_pkts[i]);
     }
 
     *c = nb_rx;
@@ -677,32 +689,23 @@ netdev_dpdk_send(struct netdev *netdev,
         goto out;
     }
 
-    rte_prefetch0(&ofpbuf->private_p);
-    if (!may_steal ||
-        !ofpbuf->private_p || ofpbuf->source != OFPBUF_DPDK) {
+    if (!may_steal || ofpbuf->source != OFPBUF_DPDK) {
         dpdk_do_tx_copy(netdev, (char *) ofpbuf_data(ofpbuf), ofpbuf_size(ofpbuf));
-    } else {
-        struct rte_mbuf *pkt;
-        int qid;
 
-        pkt = ofpbuf->private_p;
-        ofpbuf->private_p = NULL;
-        rte_pktmbuf_data_len(pkt) = ofpbuf_size(ofpbuf);
-        rte_pktmbuf_pkt_len(pkt) = ofpbuf_size(ofpbuf);
+        if (may_steal) {
+            ofpbuf_delete(ofpbuf);
+        }
+    } else {
+        int qid;
 
         qid = rte_lcore_id() % NR_QUEUE;
 
-        dpdk_queue_pkt(dev, qid, pkt);
+        dpdk_queue_pkt(dev, qid, (struct rte_mbuf *)ofpbuf);
 
-        ofpbuf->private_p = NULL;
     }
     ret = 0;
 
 out:
-    if (may_steal) {
-        ofpbuf_delete(ofpbuf);
-    }
-
     return ret;
 }
 

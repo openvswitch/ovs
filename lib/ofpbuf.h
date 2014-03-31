@@ -41,7 +41,6 @@ enum OVS_PACKED_ENUM ofpbuf_source {
 struct ofpbuf {
 #ifdef DPDK_NETDEV
     struct rte_mbuf mbuf;       /* DPDK mbuf */
-    void *private_p;            /* private pointer for use by dpdk */
 #else
     void *base;                 /* First byte of allocated space. */
     void *data;                 /* First byte actually in use. */
@@ -155,6 +154,11 @@ static inline void *ofpbuf_get_uninit_pointer(struct ofpbuf *b)
 static inline void ofpbuf_delete(struct ofpbuf *b)
 {
     if (b) {
+        if (b->source == OFPBUF_DPDK) {
+            free_dpdk_buf(b);
+            return;
+        }
+
         ofpbuf_uninit(b);
         free(b);
     }
