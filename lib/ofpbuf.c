@@ -23,6 +23,16 @@
 #include "util.h"
 
 static void
+ofpbuf_init__(struct ofpbuf *b, size_t allocated, enum ofpbuf_source source)
+{
+    b->allocated = allocated;
+    b->source = source;
+    b->l2 = NULL;
+    b->l2_5_ofs = b->l3_ofs = b->l4_ofs = UINT16_MAX;
+    list_poison(&b->list_node);
+}
+
+static void
 ofpbuf_use__(struct ofpbuf *b, void *base, size_t allocated,
              enum ofpbuf_source source)
 {
@@ -30,11 +40,7 @@ ofpbuf_use__(struct ofpbuf *b, void *base, size_t allocated,
     ofpbuf_set_data(b, base);
     ofpbuf_set_size(b, 0);
 
-    b->allocated = allocated;
-    b->source = source;
-    b->l2 = NULL;
-    b->l2_5_ofs = b->l3_ofs = b->l4_ofs = UINT16_MAX;
-    list_poison(&b->list_node);
+    ofpbuf_init__(b, allocated, source);
 }
 
 /* Initializes 'b' as an empty ofpbuf that contains the 'allocated' bytes of
@@ -99,6 +105,18 @@ ofpbuf_use_const(struct ofpbuf *b, const void *data, size_t size)
 {
     ofpbuf_use__(b, CONST_CAST(void *, data), size, OFPBUF_STACK);
     ofpbuf_set_size(b, size);
+}
+
+/* Initializes 'b' as an empty ofpbuf that contains the 'allocated' bytes of
+ * memory starting at 'base'.  DPDK allocated ofpbuf and *data is allocated
+ * from one continous memory region, so in memory data start right after
+ * ofpbuf.  Therefore there is special method to free this type of
+ * buffer.  ofpbuf base, data and size are initialized by dpdk rcv() so no
+ * need to initialize those fields. */
+void
+ofpbuf_init_dpdk(struct ofpbuf *b, size_t allocated)
+{
+    ofpbuf_init__(b, allocated, OFPBUF_DPDK);
 }
 
 /* Initializes 'b' as an empty ofpbuf with an initial capacity of 'size'

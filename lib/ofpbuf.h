@@ -85,6 +85,8 @@ void ofpbuf_use_stack(struct ofpbuf *, void *, size_t);
 void ofpbuf_use_stub(struct ofpbuf *, void *, size_t);
 void ofpbuf_use_const(struct ofpbuf *, const void *, size_t);
 
+void ofpbuf_init_dpdk(struct ofpbuf *b, size_t allocated);
+
 void ofpbuf_init(struct ofpbuf *, size_t);
 void ofpbuf_uninit(struct ofpbuf *);
 static inline void *ofpbuf_get_uninit_pointer(struct ofpbuf *);
