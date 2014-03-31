@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 Nicira, Inc.
+ * Copyright (c) 2012, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #include "command-line.h"
 #include "random.h"
 #include "util.h"
+#include "ovstest.h"
 
 #undef NDEBUG
 #include <assert.h>
@@ -473,14 +474,15 @@ static const struct command commands[] = {
       test_heap_insert_delete_same_order_with_dups, },
     { "raw-insert", 0, 0, test_heap_raw_insert, },
     { "raw-delete", 0, 0, test_heap_raw_delete, },
+    { NULL, 0, 0, NULL, },
 };
 
-int
-main(int argc, char *argv[])
+static void
+test_heap_main(int argc, char *argv[])
 {
     set_program_name(argv[0]);
 
     run_command(argc - 1, argv + 1, commands);
-
-    return 0;
 }
+
+OVSTEST_REGISTER("test-heap", test_heap_main, commands);
