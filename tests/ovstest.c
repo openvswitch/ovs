@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include "command-line.h"
 #include "ovstest.h"
+#include "dynamic-string.h"
 #include "util.h"
 
 static struct command *commands = NULL;
@@ -43,45 +44,60 @@ add_command(struct command *cmd)
     n_commands++;
 }
 
+#define OVSTEST_USAGE \
+"TEST [TESTARGS] where 'TEST' is a string, 'TESTARGS' are optional \n"\
+"arguments of the TEST"
+
 static void
-list(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+flush_help_string(struct ds *ds)
+{
+    if (ds->length > 2 ) {
+        ds->length -= 2;
+        printf ("%s\n", ds_cstr(ds));
+        ds_clear(ds);
+    }
+}
+
+static void
+help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     const struct command *p;
+    struct ds test_names = DS_EMPTY_INITIALIZER;
+    const int linesize = 70;
+
+    printf("%s: the big test executable\n"
+           "usage: %s TEST [TESTARGS]\n"
+           "where TEST is one of the following. \n\n",
+           program_name, program_name);
 
     for(p = commands; p->name != NULL; p++) {
-        printf("%s, %d, %d\n", p->name,p->min_args, p->max_args);
+        if (*p->name != '-') { /* Skip internal commands */
+            ds_put_format(&test_names, "%s, ", p->name);
+            if ((test_names.length) >= linesize) {
+                flush_help_string(&test_names);
+            }
+        }
     }
+    flush_help_string(&test_names);
+    ds_destroy(&test_names);
 }
 
 static void
 add_top_level_commands(void)
 {
-    struct command help_cmd = {"--help", 0, 0, list};
+    struct command help_cmd = {"--help", 0, 0, help};
 
     add_command(&help_cmd);
 }
 
 void
-ovstest_register(const char *test_name, ovstest_func f,
-                  const struct command *sub_commands)
+ovstest_register(const char *test_name, ovstest_func f)
 {
     struct command test_cmd;
-    int max_args = 0;
-
-    if (sub_commands) {
-        const struct command *p;
-
-        for(p = sub_commands; p->name != NULL; p++) {
-            if (p->max_args > max_args) {
-                max_args = p->max_args;
-            }
-        }
-    }
-    max_args++;  /* adding in the sub program */
 
     test_cmd.name = test_name;
-    test_cmd.min_args = 1;
-    test_cmd.max_args = max_args;
+    test_cmd.min_args = 0;
+    test_cmd.max_args = INT_MAX;
     test_cmd.handler = f;
 
     add_command(&test_cmd);
@@ -99,6 +115,11 @@ int
 main(int argc, char *argv[])
 {
     set_program_name(argv[0]);
+
+    if (argc < 2) {
+        ovs_fatal(0, "expect test program to be specified; "
+                  "use --help for usage");
+    }
 
     add_top_level_commands();
     if (argc > 1) {

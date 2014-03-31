@@ -17,6 +17,8 @@
 #ifndef OVSTEST_H
 #define OVSTEST_H
 
+#include "compiler.h"
+
 /* Overview
  * ========
  *
@@ -29,33 +31,31 @@
  * the number of test programs, linking will be done only once to produce
  * ovstest.
  *
- * With ovs-test, each test programs now becomes a sub program of ovstest.
+ * With ovstest, each test programs now becomes a sub program of ovstest.
  * For example, 'mytest' program, can now be invoked as 'ovs mytest'.
  *
  * 'ovstest --help' will list all test programs can be invoked.
  *
- * The Usage comment section below documents how a new test program can
- * be added to ovs-test.
+ * The 'Usage' section below documents how to add a new sub program
+ * to ovstest using OVSTEST_REIGSTER macros.
  */
 
 typedef void (*ovstest_func)(int argc, char *argv[]);
-
-void
-ovstest_register(const char *test_name, ovstest_func f,
-                  const struct command * sub_commands);
+void ovstest_register(const char *test_name, ovstest_func f);
 
 /* Usage
  * =====
  *
- * For each test sub program, its 'main' program should be named as
+ * For each sub test program, its 'main' program should be named as
  * '<test_name>_main()'.
  *
- * OVSTEST_REGISTER register the sub program with ovs-test top level
- * command line parser. <test_name> is expected as argv[1] when invoking
- * ovs-test.
+ * The 'main' programs should be registered with ovstest as a sub program.
+ *    OVSTEST_REGISTER(name, function)
  *
- * In case the test program has sub commands, its command array can be
- * passed in  as <sub_command>. Otherwise, NULL can be used instead.
+ * 'name' will be name of the test program. It is expected as argv[1] when
+ * invoking with ovstest.
+ *
+ * 'function' is the 'main' program mentioned above.
  *
  * Example:
  * ----------
@@ -69,16 +69,11 @@ ovstest_register(const char *test_name, ovstest_func f,
  *   ....
  * }
  *
- * // The last parameter is NULL in case my-test.c does
- * // not have sub commands. Otherwise, its command
- * // array can replace the NULL here.
- *
- * OVSTEST_REGISTER("my-test", my_test_main, NULL);
+ * OVSTEST_REGISTER("my-test", my_test_main);
  */
-
-#define OVSTEST_REGISTER(name, function, sub_commands) \
+#define OVSTEST_REGISTER(name, function) \
     OVS_CONSTRUCTOR(register_##function) { \
-        ovstest_register(name, function, sub_commands); \
+        ovstest_register(name, function); \
     }
 
 #endif

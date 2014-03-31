@@ -485,4 +485,4 @@ test_heap_main(int argc, char *argv[])
     run_command(argc - 1, argv + 1, commands);
 }
 
-OVSTEST_REGISTER("test-heap", test_heap_main, commands);
+OVSTEST_REGISTER("test-heap", test_heap_main);
