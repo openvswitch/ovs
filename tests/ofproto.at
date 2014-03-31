@@ -2168,7 +2168,12 @@ AT_CHECK([ovs-ofctl mod-flows br0 in_port=2,cookie=2,actions=output:2])
 AT_CHECK([ovs-ofctl del-flows br0 cookie=1/-1])
 
 ovs-appctl -t ovs-ofctl ofctl/unblock
-ovs-appctl -t ovs-ofctl ofctl/barrier
+
+# Wait for the connection resumed.
+# A barrier doesn't work for this purpose.
+#    https://www.mail-archive.com/dev@openvswitch.org/msg27013.html
+#    https://www.mail-archive.com/dev@openvswitch.org/msg27675.html
+OVS_WAIT_UNTIL([grep NXT_FLOW_MONITOR_RESUMED monitor.log])
 
 ovs-appctl -t ovs-ofctl exit
 
