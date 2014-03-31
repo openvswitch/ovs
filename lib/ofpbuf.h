@@ -22,6 +22,7 @@
 #include "list.h"
 #include "packets.h"
 #include "util.h"
+#include "netdev-dpdk.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -52,6 +53,9 @@ struct ofpbuf {
                                    UINT16_MAX. */
     enum ofpbuf_source source;  /* Source of memory allocated as 'base'. */
     struct list list_node;      /* Private list element for use by owner. */
+#ifdef DPDK_NETDEV
+    void *private_p;            /* private pointer for use by dpdk */
+#endif
 };
 
 void * ofpbuf_resize_l2(struct ofpbuf *, int increment);
