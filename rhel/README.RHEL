@@ -25,6 +25,8 @@ assignments.  The following OVS-specific variable names are supported:
 
         * "OVSTunnel", if <name> is an OVS tunnel.
 
+        * "OVSPatchPort", if <name> is a patch port
+
     - OVS_BRIDGE: If TYPE is anything other than "OVSBridge", set to
       the name of the OVS bridge to which the port should be attached.
 
@@ -46,6 +48,9 @@ assignments.  The following OVS-specific variable names are supported:
 
     - OVS_TUNNEL_OPTIONS: For "OVSTunnel" interfaces, this field should be
       used to specify the tunnel options like remote_ip, key, etc.
+
+    - OVS_PATCH_PEER: For "OVSPatchPort" devices, this field specifies
+      the patch's peer on the other bridge.
 
 Note
 ----
@@ -181,6 +186,26 @@ TYPE=OVSTunnel
 OVS_BRIDGE=ovsbridge0
 OVS_TUNNEL_TYPE=gre
 OVS_TUNNEL_OPTIONS="options:remote_ip=A.B.C.D"
+
+
+Patch Ports:
+
+==> ifcfg-patch-ovs-0 <==
+DEVICE=patch-ovs-0
+ONBOOT=yes
+DEVICETYPE=ovs
+TYPE=OVSPatchPort
+OVS_BRIDGE=ovsbridge0
+OVS_PATCH_PEER=patch-ovs-1
+
+==> ifcfg-patch-ovs-1 <==
+DEVICE=patch-ovs-1
+ONBOOT=yes
+DEVICETYPE=ovs
+TYPE=OVSPatchPort
+OVS_BRIDGE=ovsbridge1
+OVS_PATCH_PEER=patch-ovs-0
+
 
 Reporting Bugs
 --------------
