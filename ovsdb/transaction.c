@@ -533,6 +533,7 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
         }
 
         if (datum->n != orig_n) {
+            bitmap_set1(txn_row->changed, OVSDB_COL_VERSION);
             bitmap_set1(txn_row->changed, column->index);
             ovsdb_datum_sort_assert(datum, column->type.key.type);
             if (datum->n < column->type.n_min) {

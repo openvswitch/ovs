@@ -213,7 +213,7 @@ OVSDB_CHECK_MONITOR([monitor weak reference change],
 
 row,action,a,a2a,a2a1,a2b,_version
 <0>,delete,0,"[""set"",[]]","[""uuid"",""<0>""]","[""uuid"",""<1>""]","[""uuid"",""<2>""]"
-<3>,old,,"[""uuid"",""<0>""]",,,
+<3>,old,,"[""uuid"",""<0>""]",,,"[""uuid"",""<4>""]"
 ,new,1,"[""set"",[]]","[""uuid"",""<3>""]","[""uuid"",""<1>""]","[""uuid"",""<5>""]"
 ]])
 
