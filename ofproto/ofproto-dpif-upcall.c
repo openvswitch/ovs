@@ -1291,6 +1291,7 @@ revalidate_ukey(struct udpif *udpif, struct udpif_flow_dump *udump,
     struct ofpbuf xout_actions, *actions;
     uint64_t slow_path_buf[128 / 8];
     struct xlate_out xout, *xoutp;
+    struct netflow *netflow;
     struct flow flow, udump_mask;
     struct ofproto_dpif *ofproto;
     struct dpif_flow_stats push;
@@ -1304,6 +1305,7 @@ revalidate_ukey(struct udpif *udpif, struct udpif_flow_dump *udump,
     ok = false;
     xoutp = NULL;
     actions = NULL;
+    netflow = NULL;
 
     /* If we don't need to revalidate, we can simply push the stats contained
      * in the udump, otherwise we'll have to get the actions so we can check
@@ -1331,7 +1333,7 @@ revalidate_ukey(struct udpif *udpif, struct udpif_flow_dump *udump,
     }
 
     error = xlate_receive(udpif->backer, NULL, ukey->key, ukey->key_len, &flow,
-                          NULL, &ofproto, NULL, NULL, NULL, &odp_in_port);
+                          NULL, &ofproto, NULL, NULL, &netflow, &odp_in_port);
     if (error) {
         goto exit;
     }
@@ -1380,6 +1382,13 @@ revalidate_ukey(struct udpif *udpif, struct udpif_flow_dump *udump,
     ok = true;
 
 exit:
+    if (netflow) {
+        if (!ok) {
+            netflow_expire(netflow, &flow);
+            netflow_flow_clear(netflow, &flow);
+        }
+        netflow_unref(netflow);
+    }
     ofpbuf_delete(actions);
     xlate_out_uninit(xoutp);
     return ok;
