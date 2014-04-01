@@ -1,5 +1,8 @@
 Post-v2.1.0
 ---------------------
+   - Internal ports are no longer brought up by default, because it
+     should be an administrator task to bring up devices as they are
+     configured properly.
    - ovs-vsctl now reports when ovs-vswitchd fails to create a new port or
      bridge.
    - The "ovsdbmonitor" graphical tool has been removed, because it was

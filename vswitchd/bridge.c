@@ -1446,8 +1446,7 @@ iface_do_create(const struct bridge *br,
     VLOG_INFO("bridge %s: added interface %s on port %d",
               br->name, iface_cfg->name, *ofp_portp);
 
-    if ((port_cfg->vlan_mode && !strcmp(port_cfg->vlan_mode, "splinter"))
-        || iface_is_internal(iface_cfg, br->cfg)) {
+    if (port_cfg->vlan_mode && !strcmp(port_cfg->vlan_mode, "splinter")) {
         netdev_turn_flags_on(netdev, NETDEV_UP, NULL);
     }
 

@@ -2955,7 +2955,7 @@ IFCOUNTERS
 	type=6
 	ifspeed=100000000
 	direction=0
-	status=3
+	status=0
 	in_octets=0
 	in_unicasts=0
 	in_multicasts=0
@@ -3024,7 +3024,7 @@ IFCOUNTERS
 	type=6
 	ifspeed=100000000
 	direction=0
-	status=3
+	status=0
 	in_octets=0
 	in_unicasts=0
 	in_multicasts=0
