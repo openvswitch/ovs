@@ -39,10 +39,15 @@ enum OVS_PACKED_ENUM ofpbuf_source {
 /* Buffer for holding arbitrary data.  An ofpbuf is automatically reallocated
  * as necessary if it grows too large for the available memory. */
 struct ofpbuf {
+#ifdef DPDK_NETDEV
+    struct rte_mbuf mbuf;       /* DPDK mbuf */
+    void *private_p;            /* private pointer for use by dpdk */
+#else
     void *base;                 /* First byte of allocated space. */
-    uint32_t allocated;         /* Number of bytes allocated. */
-    uint32_t size;              /* Number of bytes in use. */
     void *data;                 /* First byte actually in use. */
+    uint32_t size;              /* Number of bytes in use. */
+#endif
+    uint32_t allocated;         /* Number of bytes allocated. */
 
     void *l2;                   /* Link-level header. */
     uint16_t l2_5_ofs;          /* MPLS label stack offset from l2, or
@@ -53,9 +58,6 @@ struct ofpbuf {
                                    UINT16_MAX. */
     enum ofpbuf_source source;  /* Source of memory allocated as 'base'. */
     struct list list_node;      /* Private list element for use by owner. */
-#ifdef DPDK_NETDEV
-    void *private_p;            /* private pointer for use by dpdk */
-#endif
 };
 
 static inline void * ofpbuf_data(const struct ofpbuf *);
@@ -310,6 +312,40 @@ static inline const void *ofpbuf_get_icmp_payload(const struct ofpbuf *b)
         ? (const char *)ofpbuf_get_l4(b) + ICMP_HEADER_LEN : NULL;
 }
 
+#ifdef DPDK_NETDEV
+static inline void * ofpbuf_data(const struct ofpbuf *b)
+{
+    return b->mbuf.pkt.data;
+}
+
+static inline void ofpbuf_set_data(struct ofpbuf *b, void *d)
+{
+    b->mbuf.pkt.data = d;
+}
+
+static inline void * ofpbuf_base(const struct ofpbuf *b)
+{
+    return b->mbuf.buf_addr;
+}
+
+static inline void ofpbuf_set_base(struct ofpbuf *b, void *d)
+{
+    b->mbuf.buf_addr = d;
+}
+
+static inline uint32_t ofpbuf_size(const struct ofpbuf *b)
+{
+    return b->mbuf.pkt.pkt_len;
+}
+
+static inline void ofpbuf_set_size(struct ofpbuf *b, uint32_t v)
+{
+    b->mbuf.pkt.data_len = v;    /* Current seg length. */
+    b->mbuf.pkt.pkt_len = v;     /* Total length of all segments linked to
+                                  * this segment. */
+}
+
+#else
 static inline void * ofpbuf_data(const struct ofpbuf *b)
 {
     return b->data;
@@ -339,6 +375,7 @@ static inline void ofpbuf_set_size(struct ofpbuf *b, uint32_t v)
 {
     b->size = v;
 }
+#endif
 
 #ifdef  __cplusplus
 }
