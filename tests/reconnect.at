@@ -13,7 +13,7 @@ m4_define([RECONNECT_CHECK],
      [$1 - C],
      [],
      [$2],
-     [test-reconnect < input],
+     [ovstest test-reconnect < input],
      [$3])
    __RECONNECT_CHECK(
      [$1 - Python],

@@ -3,7 +3,7 @@ AT_BANNER([AES-128 unit tests])
 m4_define([AES128_CHECK], 
   [AT_SETUP([$1])
    AT_KEYWORDS([aes128])
-   AT_CHECK([test-aes128 $2 $3], [0], [$4
+   AT_CHECK([ovstest test-aes128 $2 $3], [0], [$4
 ], [])
    AT_CLEANUP])
 

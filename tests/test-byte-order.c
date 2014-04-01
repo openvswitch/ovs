@@ -18,9 +18,10 @@
 #include "byte-order.h"
 #include <assert.h>
 #include <inttypes.h>
+#include "ovstest.h"
 
-int
-main(void)
+static void
+test_byte_order_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
 #ifndef __CHECKER__
     /* I picked some random numbers. */
@@ -48,6 +49,6 @@ main(void)
 #else  /* __CHECKER__ */
 /* Making sparse happy with this code makes it unreadable, so don't bother. */
 #endif
-
-    return 0;
 }
+
+OVSTEST_REGISTER("test-byte-order", test_byte_order_main);

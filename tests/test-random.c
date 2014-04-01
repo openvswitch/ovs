@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,12 @@
 #include <config.h>
 
 #include "random.h"
-
+#include "ovstest.h"
 #include <stdio.h>
 #include <string.h>
 
-int
-main(void)
+static void
+test_random_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     enum { N_ROUNDS = 10000 };
     unsigned long long int total;
@@ -74,6 +74,6 @@ main(void)
         printf("\n");
     }
     printf("(expected values are %d)\n", N_ROUNDS / 16);
-
-    return 0;
 }
+
+OVSTEST_REGISTER("test-random", test_random_main);

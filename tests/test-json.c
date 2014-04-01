@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@
 #include <stdio.h>
 
 #include "util.h"
-
+#include "ovstest.h"
 /* --pretty: If set, the JSON output is pretty-printed, instead of printed as
  * compactly as possible.  */
 static int pretty = 0;
@@ -103,8 +103,8 @@ parse_multiple(FILE *stream)
     return ok;
 }
 
-int
-main(int argc, char *argv[])
+static void
+test_json_main(int argc, char *argv[])
 {
     const char *input_file;
     FILE *stream;
@@ -154,5 +154,7 @@ main(int argc, char *argv[])
 
     fclose(stream);
 
-    return !ok;
+    exit(!ok);
 }
+
+OVSTEST_REGISTER("test-json", test_json_main);

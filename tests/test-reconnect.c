@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@
 #include "svec.h"
 #include "util.h"
 #include "vlog.h"
+#include "ovstest.h"
 
 static struct reconnect *reconnect;
 static int now;
@@ -38,8 +39,8 @@ static void diff_stats(const struct reconnect_stats *old,
                        const struct reconnect_stats *new,
                        int delta);
 
-int
-main(void)
+static void
+test_reconnect_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     extern struct vlog_module VLM_reconnect;
     struct reconnect_stats prev;
@@ -87,8 +88,6 @@ main(void)
 
         old_time = now;
     }
-
-    return 0;
 }
 
 static void
@@ -290,3 +289,5 @@ static const struct command commands[] = {
     { "listen-error", 1, 1, do_listen_error },
     { NULL, 0, 0, NULL },
 };
+
+OVSTEST_REGISTER("test-reconnect", test_reconnect_main);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira, Inc.
+ * Copyright (c) 2009, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,10 @@
 #include <config.h>
 #include "uuid.h"
 #include <stdio.h>
+#include "ovstest.h"
 
-int
-main(int argc, char *argv[])
+static void
+test_uuid_main(int argc, char *argv[])
 {
     struct uuid uuid;
 
@@ -34,6 +35,6 @@ main(int argc, char *argv[])
     }
 
     printf(UUID_FMT"\n", UUID_ARGS(&uuid));
-
-    return 0;
 }
+
+OVSTEST_REGISTER("test-uuid", test_uuid_main);

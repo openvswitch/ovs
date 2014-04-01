@@ -91,7 +91,7 @@ s/mpls(label=100,tc=7,ttl=100,bos=0)/mpls(lse0=0x64e64,lse1=0,lse2=0)/
 s/mpls(label=1000,tc=4,ttl=200,bos=0)/mpls(lse0=0x3e88c8,lse1=0,lse2=0)/
 }' < odp-in.txt > odp-out.txt
 
-AT_CHECK_UNQUOTED([test-odp parse-keys < odp-in.txt], [0], [`cat odp-out.txt`
+AT_CHECK_UNQUOTED([ovstest test-odp parse-keys < odp-in.txt], [0], [`cat odp-out.txt`
 ])
 AT_CLEANUP
 
@@ -157,7 +157,7 @@ sed -n 's/,frag=no),/,frag=first),/p' odp-base.txt
  echo '# Valid forms with IP later fragment.'
 sed -n 's/,frag=no),.*/,frag=later)/p' odp-base.txt) > odp.txt
 AT_CAPTURE_FILE([odp.txt])
-AT_CHECK_UNQUOTED([test-odp parse-wc-keys < odp.txt], [0], [`cat odp.txt`
+AT_CHECK_UNQUOTED([ovstest test-odp parse-wc-keys < odp.txt], [0], [`cat odp.txt`
 ])
 AT_CLEANUP
 
@@ -204,25 +204,25 @@ AT_DATA([odp-tcp6.txt], [dnl
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1/::255,dst=::2/::255,label=0/0xf0,proto=10/0xf0,tclass=0x70/0xf0,hlimit=128/0xf0,frag=no/0xf0)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1,dst=::2,label=0,proto=6,tclass=0,hlimit=128,frag=no),tcp(src=80/0xff00,dst=8080/0xff)
 ])
-AT_CHECK_UNQUOTED([test-odp parse-filter filter='dl_type=0x1235' < odp-base.txt], [0], [`cat odp-eth-type.txt`
+AT_CHECK_UNQUOTED([ovstest test-odp parse-filter filter='dl_type=0x1235' < odp-base.txt], [0], [`cat odp-eth-type.txt`
 ])
-AT_CHECK_UNQUOTED([test-odp parse-filter filter='dl_vlan=99' < odp-vlan-base.txt], [0], [`cat odp-vlan.txt`
+AT_CHECK_UNQUOTED([ovstest test-odp parse-filter filter='dl_vlan=99' < odp-vlan-base.txt], [0], [`cat odp-vlan.txt`
 ])
-AT_CHECK_UNQUOTED([test-odp parse-filter filter='dl_vlan=99,ip' < odp-vlan-base.txt], [0], [`cat odp-vlan.txt`
+AT_CHECK_UNQUOTED([ovstest test-odp parse-filter filter='dl_vlan=99,ip' < odp-vlan-base.txt], [0], [`cat odp-vlan.txt`
 ])
-AT_CHECK_UNQUOTED([test-odp parse-filter filter='ip,nw_src=35.8.2.199' < odp-base.txt], [0], [`cat odp-ipv4.txt`
+AT_CHECK_UNQUOTED([ovstest test-odp parse-filter filter='ip,nw_src=35.8.2.199' < odp-base.txt], [0], [`cat odp-ipv4.txt`
 ])
-AT_CHECK_UNQUOTED([test-odp parse-filter filter='ip,nw_dst=172.16.0.199' < odp-base.txt], [0], [`cat odp-ipv4.txt`
+AT_CHECK_UNQUOTED([ovstest test-odp parse-filter filter='ip,nw_dst=172.16.0.199' < odp-base.txt], [0], [`cat odp-ipv4.txt`
 ])
-AT_CHECK_UNQUOTED([test-odp parse-filter filter='dl_type=0x0800,nw_src=35.8.2.199,nw_dst=172.16.0.199' < odp-base.txt], [0], [`cat odp-ipv4.txt`
+AT_CHECK_UNQUOTED([ovstest test-odp parse-filter filter='dl_type=0x0800,nw_src=35.8.2.199,nw_dst=172.16.0.199' < odp-base.txt], [0], [`cat odp-ipv4.txt`
 ])
-AT_CHECK_UNQUOTED([test-odp parse-filter filter='icmp,nw_src=35.8.2.199' < odp-base.txt], [0], [`cat odp-icmp.txt`
+AT_CHECK_UNQUOTED([ovstest test-odp parse-filter filter='icmp,nw_src=35.8.2.199' < odp-base.txt], [0], [`cat odp-icmp.txt`
 ])
-AT_CHECK_UNQUOTED([test-odp parse-filter filter='arp,arp_spa=1.2.3.5' < odp-base.txt], [0], [`cat odp-arp.txt`
+AT_CHECK_UNQUOTED([ovstest test-odp parse-filter filter='arp,arp_spa=1.2.3.5' < odp-base.txt], [0], [`cat odp-arp.txt`
 ])
-AT_CHECK_UNQUOTED([test-odp parse-filter filter='tcp,tp_src=90' < odp-base.txt], [0], [`cat odp-tcp.txt`
+AT_CHECK_UNQUOTED([ovstest test-odp parse-filter filter='tcp,tp_src=90' < odp-base.txt], [0], [`cat odp-tcp.txt`
 ])
-AT_CHECK_UNQUOTED([test-odp parse-filter filter='tcp6,tp_src=90' < odp-base.txt], [0], [`cat odp-tcp6.txt`
+AT_CHECK_UNQUOTED([ovstest test-odp parse-filter filter='tcp6,tp_src=90' < odp-base.txt], [0], [`cat odp-tcp6.txt`
 ])
 AT_CLEANUP
 
@@ -254,7 +254,7 @@ sample(sample=9.7%,actions(1,2,3,push_vlan(vid=1,pcp=2)))
 set(tunnel(tun_id=0xabcdef1234567890,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags(df,csum,key)))
 set(tunnel(tun_id=0xabcdef1234567890,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags(key)))
 ])
-AT_CHECK_UNQUOTED([test-odp parse-actions < actions.txt], [0],
+AT_CHECK_UNQUOTED([ovstest test-odp parse-actions < actions.txt], [0],
   [`cat actions.txt`
 ])
 AT_CLEANUP

@@ -8,7 +8,7 @@ AT_BANNER([multipath link selection])
 # if the test does fail.
 
 AT_SETUP([modulo_n multipath link selection])
-AT_CHECK([[test-multipath 'eth_src,50,modulo_n,1,0,NXM_NX_REG0[]']],
+AT_CHECK([[ovstest test-multipath 'eth_src,50,modulo_n,1,0,NXM_NX_REG0[]']],
   [0], [ignore])
 # 1 ->  2: disruption=0.50 (perfect=0.50); stddev/expected=0.0000
 # 2 ->  3: disruption=0.66 (perfect=0.33); stddev/expected=0.0023
@@ -76,7 +76,7 @@ AT_CHECK([[test-multipath 'eth_src,50,modulo_n,1,0,NXM_NX_REG0[]']],
 AT_CLEANUP
 
 AT_SETUP([hash_threshold multipath link selection])
-AT_CHECK([[test-multipath 'eth_src,50,hash_threshold,1,0,NXM_NX_REG0[]']],
+AT_CHECK([[ovstest test-multipath 'eth_src,50,hash_threshold,1,0,NXM_NX_REG0[]']],
   [0], [ignore])
 # 1 ->  2: disruption=0.50 (perfect=0.50); stddev/expected=0.0000
 # 2 ->  3: disruption=0.50 (perfect=0.33); stddev/expected=0.0056
@@ -144,7 +144,7 @@ AT_CHECK([[test-multipath 'eth_src,50,hash_threshold,1,0,NXM_NX_REG0[]']],
 AT_CLEANUP
 
 AT_SETUP([hrw multipath link selection])
-AT_CHECK([[test-multipath 'eth_src,50,hrw,1,0,NXM_NX_REG0[]']],
+AT_CHECK([[ovstest test-multipath 'eth_src,50,hrw,1,0,NXM_NX_REG0[]']],
   [0], [ignore])
 # 1 ->  2: disruption=0.50 (perfect=0.50); stddev/expected=0.0000
 # 2 ->  3: disruption=0.33 (perfect=0.33); stddev/expected=0.0033
@@ -212,7 +212,7 @@ AT_CHECK([[test-multipath 'eth_src,50,hrw,1,0,NXM_NX_REG0[]']],
 AT_CLEANUP
 
 AT_SETUP([iter_hash multipath link selection])
-AT_CHECK([[test-multipath 'eth_src,50,iter_hash,1,0,NXM_NX_REG0[]']],
+AT_CHECK([[ovstest test-multipath 'eth_src,50,iter_hash,1,0,NXM_NX_REG0[]']],
   [0], [ignore])
 # 1 ->  2: disruption=0.50 (perfect=0.50); stddev/expected=0.0000
 # 2 ->  3: disruption=0.42 (perfect=0.33); stddev/expected=0.0034

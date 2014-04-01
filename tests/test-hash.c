@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2012, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <string.h>
 #include "hash.h"
 #include "jhash.h"
+#include "ovstest.h"
 
 #undef NDEBUG
 #include <assert.h>
@@ -111,8 +112,8 @@ check_3word_hash(uint32_t (*hash)(const uint32_t[], size_t, uint32_t),
     }
 }
 
-int
-main(void)
+static void
+test_hash_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     /* Check that all hashes computed with hash_words with one 1-bit (or no
      * 1-bits) set within a single 32-bit word have different values in all
@@ -167,6 +168,6 @@ main(void)
      * function.
      */
     check_word_hash(hash_int_cb, "hash_int", 12);
-
-    return 0;
 }
+
+OVSTEST_REGISTER("test-hash", test_hash_main);

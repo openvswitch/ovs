@@ -2800,7 +2800,7 @@ m4_define([CHECK_SFLOW_SAMPLING_PACKET],
   OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
 
   ON_EXIT([kill `cat test-sflow.pid`])
-  AT_CHECK([test-sflow --log-file --detach --no-chdir --pidfile 0:$1 > sflow.log], [0], [], [ignore])
+  AT_CHECK([ovstest test-sflow --log-file --detach --no-chdir --pidfile 0:$1 > sflow.log], [0], [], [ignore])
   AT_CAPTURE_FILE([sflow.log])
   SFLOW_PORT=`parse_listening_port < test-sflow.log`
   ovs-appctl time/stop
@@ -3107,7 +3107,7 @@ m4_define([CHECK_NETFLOW_EXPIRATION],
 
   ovs-appctl time/stop
   ON_EXIT([kill `cat test-netflow.pid`])
-  AT_CHECK([test-netflow --log-file --detach --no-chdir --pidfile 0:$1 > netflow.log], [0], [], [ignore])
+  AT_CHECK([ovstest test-netflow --log-file --detach --no-chdir --pidfile 0:$1 > netflow.log], [0], [], [ignore])
   AT_CAPTURE_FILE([netflow.log])
   NETFLOW_PORT=`parse_listening_port < test-netflow.log`
 
@@ -3153,7 +3153,7 @@ m4_define([CHECK_NETFLOW_ACTIVE_EXPIRATION],
   ADD_OF_PORTS([br0], 1, 2)
 
   ON_EXIT([kill `cat test-netflow.pid`])
-  AT_CHECK([test-netflow --log-file --detach --no-chdir --pidfile 0:$1 > netflow.log], [0], [], [ignore])
+  AT_CHECK([ovstest test-netflow --log-file --detach --no-chdir --pidfile 0:$1 > netflow.log], [0], [], [ignore])
   AT_CAPTURE_FILE([netflow.log])
   NETFLOW_PORT=`parse_listening_port < test-netflow.log`
 
@@ -3740,7 +3740,7 @@ m4_define([CHECK_MEGAFLOW_NETFLOW],
 
   dnl NetFlow configuration disables wildcarding relevant fields
   ON_EXIT([kill `cat test-netflow.pid`])
-  AT_CHECK([test-netflow --log-file --detach --no-chdir --pidfile 0:$1 > netflow.log], [0], [], [ignore])
+  AT_CHECK([ovstest test-netflow --log-file --detach --no-chdir --pidfile 0:$1 > netflow.log], [0], [], [ignore])
   AT_CAPTURE_FILE([netflow.log])
   NETFLOW_PORT=`parse_listening_port < test-netflow.log`
   ovs-vsctl \

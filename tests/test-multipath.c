@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2010, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,9 +27,10 @@
 #include "flow.h"
 #include "ofp-actions.h"
 #include "util.h"
+#include "ovstest.h"
 
-int
-main(int argc, char *argv[])
+static void
+test_multipath_main(int argc, char *argv[])
 {
     enum { MP_MAX_LINKS = 63 };
     struct ofpact_multipath mp;
@@ -132,5 +133,7 @@ main(int argc, char *argv[])
         }
     }
 
-    return ok ? 0 : 1;
+    exit(ok ? 0 : 1);
 }
+
+OVSTEST_REGISTER("test-multipath", test_multipath_main);

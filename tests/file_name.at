@@ -3,7 +3,7 @@ AT_BANNER([test dir_name and base_name functions])
 m4_define([CHECK_FILE_NAME],
   [AT_SETUP([components of "$1" are "$2", "$3"])
    AT_KEYWORDS([dir_name base_name])
-   AT_CHECK([test-file_name "AS_ESCAPE($1)"], [0], [$2
+   AT_CHECK([ovstest test-file_name "AS_ESCAPE($1)"], [0], [$2
 $3
 ])
    AT_CLEANUP])
@@ -29,7 +29,7 @@ AT_BANNER([test follow_symlinks function])
 
 m4_define([CHECK_FOLLOW],
   [echo "check $1 -> $2"
-   AT_CHECK_UNQUOTED([test-util follow-symlinks "$1"], [0], [$2
+   AT_CHECK_UNQUOTED([ovstest test-util follow-symlinks "$1"], [0], [$2
 ])
    echo])
 
@@ -115,7 +115,7 @@ AT_SKIP_IF([test ! -h b])
 ln -s b a
 AT_SKIP_IF([test ! -h a])
 
-AT_CHECK([test-util follow-symlinks a], [0], [a
+AT_CHECK([ovstest test-util follow-symlinks a], [0], [a
 ], [stderr])
 AT_CHECK([sed 's/^[[^|]]*|//' stderr], [0],
   [00001|util|WARN|a: too many levels of symlinks

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include "random.h"
 #include "util.h"
 #include "vlog.h"
+#include "ovstest.h"
 
 #undef NDEBUG
 #include <assert.h>
@@ -1080,11 +1081,12 @@ parse_options(int argc, char *argv[])
     free(short_options);
 }
 
-int
-main(int argc, char *argv[])
+static void
+test_util_main(int argc, char *argv[])
 {
     set_program_name(argv[0]);
     parse_options(argc, argv);
     run_command(argc - optind, argv + optind, commands);
-    return 0;
 }
+
+OVSTEST_REGISTER("test-util", test_util_main);

@@ -35,6 +35,7 @@
 #include "unixctl.h"
 #include "util.h"
 #include "vlog.h"
+#include "ovstest.h"
 
 static void usage(void) NO_RETURN;
 static void parse_options(int argc, char *argv[]);
@@ -484,8 +485,8 @@ print_sflow(struct ofpbuf *buf)
     }
 }
 
-int
-main(int argc, char *argv[])
+static void
+test_sflow_main(int argc, char *argv[])
 {
     struct unixctl_server *server;
     enum { MAX_RECV = 1500 };
@@ -545,8 +546,6 @@ main(int argc, char *argv[])
         unixctl_server_wait(server);
         poll_block();
     }
-
-    return 0;
 }
 
 static void
@@ -612,3 +611,5 @@ test_sflow_exit(struct unixctl_conn *conn,
     *exiting = true;
     unixctl_command_reply(conn, NULL);
 }
+
+OVSTEST_REGISTER("test-sflow", test_sflow_main);

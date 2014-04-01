@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2012, 2013 Nicira, Inc.
+/* Copyright (c) 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 #include "ofpbuf.h"
 
 #include "util.h"
+#include "ovstest.h"
 
 #define N_FLOWS  50000
 #define MAX_SLAVES 8 /* Maximum supported by this test framework. */
@@ -104,8 +105,8 @@ mask_str(uint8_t mask, size_t n_bits)
     return str;
 }
 
-int
-main(int argc, char *argv[])
+static void
+test_bundle_main(int argc, char *argv[])
 {
     bool ok = true;
     struct ofpact_bundle *bundle;
@@ -264,5 +265,7 @@ main(int argc, char *argv[])
 
     free(bundle);
     free(flows);
-    return ok ? 0 : 1;
+    exit(ok ? 0 : 1);
 }
+
+OVSTEST_REGISTER("test-bundle", test_bundle_main);

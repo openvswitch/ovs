@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include "hash.h"
 #include "random.h"
 #include "util.h"
+#include "ovstest.h"
 
 #undef NDEBUG
 #include <assert.h>
@@ -285,13 +286,13 @@ run_test(void (*function)(hash_func *))
     }
 }
 
-int
-main(void)
+static void
+test_hmap_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     run_test(test_hmap_insert_delete);
     run_test(test_hmap_for_each_safe);
     run_test(test_hmap_reserve_shrink);
     printf("\n");
-    return 0;
 }
 
+OVSTEST_REGISTER("test-hmap", test_hmap_main);

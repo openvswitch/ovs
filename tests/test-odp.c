@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include "ofpbuf.h"
 #include "util.h"
 #include "vlog.h"
+#include "ovstest.h"
 
 static int
 parse_keys(bool wc_keys)
@@ -215,19 +216,25 @@ parse_filter(char *filter_parse)
     return 0;
 }
 
-int
-main(int argc, char *argv[])
+static void
+test_odp_main(int argc, char *argv[])
 {
+    int exit_code = 0;
+
     set_program_name(argv[0]);
     if (argc == 2 &&!strcmp(argv[1], "parse-keys")) {
-        return parse_keys(false);
+        exit_code =parse_keys(false);
     } else if (argc == 2 &&!strcmp(argv[1], "parse-wc-keys")) {
-        return parse_keys(true);
+        exit_code =parse_keys(true);
     } else if (argc == 2 && !strcmp(argv[1], "parse-actions")) {
-        return parse_actions();
+        exit_code = parse_actions();
     } else if (argc == 3 && !strcmp(argv[1], "parse-filter")) {
-        return parse_filter(argv[2]);
+        exit_code =parse_filter(argv[2]);
     } else {
         ovs_fatal(0, "usage: %s parse-keys | parse-wc-keys | parse-actions", argv[0]);
     }
+
+    exit(exit_code);
 }
+
+OVSTEST_REGISTER("test-odp", test_odp_main);

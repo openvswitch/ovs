@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include "ofpbuf.h"
 #include "packets.h"
 #include "vlog.h"
+#include "ovstest.h"
 
 struct bpdu {
     int port_no;
@@ -434,8 +435,8 @@ must_match(const char *want)
     }
 }
 
-int
-main(int argc, char *argv[])
+static void
+test_stp_main(int argc, char *argv[])
 {
     struct test_case *tc;
     FILE *input_file;
@@ -665,6 +666,6 @@ main(int argc, char *argv[])
         free(bridge);
     }
     free(tc);
-
-    return 0;
 }
+
+OVSTEST_REGISTER("test-stp", test_stp_main);

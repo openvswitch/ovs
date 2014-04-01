@@ -18,7 +18,7 @@ AT_CHECK([
   uuids=
   for i in m4_for([count], [1], [100], [1], [count ]); do
      # Generate random UUID and check that it is in the expected format.
-     uuid=`test-uuid`
+     uuid=`ovstest test-uuid`
      CHECK_UUID
 
      # Verify that $uuid does not duplicate any UUID generated so far.
@@ -30,7 +30,7 @@ AT_CHECK([
      uuids="$uuids $uuid"
 
      # Verify that test-uuid parses and re-serializes this UUID correctly.
-     serialized=`test-uuid $uuid`
+     serialized=`ovstest test-uuid $uuid`
      if test "$uuid" != "$serialized"; then
        echo "$uuid: test-uuid serialized this as $serialized"
        exit 1

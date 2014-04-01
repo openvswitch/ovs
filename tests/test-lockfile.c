@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@
 #include "timeval.h"
 #include "util.h"
 #include "vlog.h"
+#include "ovstest.h"
 
 struct test {
     const char *name;
@@ -266,8 +267,8 @@ static const struct test tests[] = {
 #undef TEST
 };
 
-int
-main(int argc, char *argv[])
+static void
+test_lockfile_main(int argc, char *argv[])
 {
     size_t i;
 
@@ -278,7 +279,6 @@ main(int argc, char *argv[])
     if (argc != 2) {
         ovs_fatal(0, "exactly one argument required; use \"%s help\" for help",
                   program_name);
-        return 1;
     }
 
     for (i = 0; tests[i].name; i++) {
@@ -310,3 +310,4 @@ main(int argc, char *argv[])
               argv[1], program_name);
 }
 
+OVSTEST_REGISTER("test-lockfile", test_lockfile_main);

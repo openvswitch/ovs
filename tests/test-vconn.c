@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@
 #include "timeval.h"
 #include "util.h"
 #include "vlog.h"
+#include "ovstest.h"
 
 #undef NDEBUG
 #include <assert.h>
@@ -431,8 +432,8 @@ static const struct command commands[] = {
     {NULL, 0, 0, NULL},
 };
 
-int
-main(int argc, char *argv[])
+static void
+test_vconn_main(int argc, char *argv[])
 {
     set_program_name(argv[0]);
     vlog_set_levels(NULL, VLF_ANY_FACILITY, VLL_EMER);
@@ -442,6 +443,6 @@ main(int argc, char *argv[])
     time_alarm(10);
 
     run_command(argc - 1, argv + 1, commands);
-
-    return 0;
 }
+
+OVSTEST_REGISTER("test-vconn", test_vconn_main);

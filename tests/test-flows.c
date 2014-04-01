@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,12 +28,13 @@
 #include "pcap-file.h"
 #include "util.h"
 #include "vlog.h"
+#include "ovstest.h"
 
 #undef NDEBUG
 #include <assert.h>
 
-int
-main(int argc OVS_UNUSED, char *argv[])
+static void
+test_flows_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     struct ofp10_match expected_match;
     FILE *flows, *pcap;
@@ -94,6 +95,7 @@ main(int argc OVS_UNUSED, char *argv[])
         ofpbuf_delete(packet);
     }
     printf("checked %d packets, %d errors\n", n, errors);
-    return errors != 0;
+    exit(errors != 0);
 }
 
+OVSTEST_REGISTER("test-flows", test_flows_main);

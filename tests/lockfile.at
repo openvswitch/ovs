@@ -3,7 +3,7 @@ AT_BANNER([lockfile unit tests])
 m4_define([CHECK_LOCKFILE],
   [AT_SETUP([m4_translit([$1], [_], [ ])])
    AT_KEYWORDS([lockfile])
-   AT_CHECK([test-lockfile $1], [0], [$1: success (m4_if(
+   AT_CHECK([ovstest test-lockfile $1], [0], [$1: success (m4_if(
      [$2], [1], [$2 child], [$2 children]))
 ], [stderr])
    AT_CHECK([sed 's/pid [[0-9]]*/pid <pid>/' stderr], [0], [$3])

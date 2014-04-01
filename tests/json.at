@@ -3,7 +3,7 @@ m4_define([JSON_CHECK_POSITIVE_C],
    AT_KEYWORDS([json positive])
    AT_CHECK([printf %s "AS_ESCAPE([$2])" > input])
    AT_CAPTURE_FILE([input])
-   AT_CHECK([test-json $4 input], [0], [stdout], [])
+   AT_CHECK([ovstest test-json $4 input], [0], [stdout], [])
    AT_CHECK([cat stdout], [0], [$3
 ])
    AT_CLEANUP])
@@ -40,7 +40,7 @@ m4_define([JSON_CHECK_NEGATIVE_C],
    AT_KEYWORDS([json negative])
    AT_CHECK([printf %s "AS_ESCAPE([$2])" > input])
    AT_CAPTURE_FILE([input])
-   AT_CHECK([test-json $4 input], [1], [stdout], [])
+   AT_CHECK([ovstest test-json $4 input], [1], [stdout], [])
    AT_CHECK([[sed 's/^error: [^:]*:/error:/' < stdout]], [0], [$3
 ])
    AT_CLEANUP])
@@ -123,7 +123,7 @@ JSON_CHECK_NEGATIVE([null bytes not allowed],
 
 AT_SETUP([end of input in quoted string - C])
 AT_KEYWORDS([json negative])
-AT_CHECK([printf '"xxx' | test-json -], [1],
+AT_CHECK([printf '"xxx' | ovstest test-json -], [1],
   [error: line 0, column 4, byte 4: unexpected end of input in quoted string
 ])
 AT_CLEANUP
@@ -328,7 +328,7 @@ JSON_CHECK_NEGATIVE([objects nesting too deep],
 
 AT_SETUP([input may not be empty])
 AT_KEYWORDS([json negative])
-AT_CHECK([test-json /dev/null], [1], [error: line 0, column 0, byte 0: empty input stream
+AT_CHECK([ovstest test-json /dev/null], [1], [error: line 0, column 0, byte 0: empty input stream
 ])
 AT_CLEANUP
 

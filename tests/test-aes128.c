@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <ctype.h>
 #include "aes128.h"
 #include "util.h"
+#include "ovstest.h"
 
 static void
 hex_to_uint8(const char *input, uint8_t *output, size_t n)
@@ -41,8 +42,8 @@ error:
     ovs_fatal(0, "\"%s\" is not exactly %"PRIuSIZE" hex digits", input, n * 2);
 }
 
-int
-main(int argc, char *argv[])
+static void
+test_aes128_main(int argc, char *argv[])
 {
     struct aes128 aes;
     uint8_t plaintext[16];
@@ -64,6 +65,6 @@ main(int argc, char *argv[])
         printf("%02x", ciphertext[i]);
     }
     putchar('\n');
-
-    return 0;
 }
+
+OVSTEST_REGISTER("test-aes128", test_aes128_main);

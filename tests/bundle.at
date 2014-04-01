@@ -8,7 +8,7 @@ AT_BANNER([bundle link selection])
 # if the test does fail.
 
 AT_SETUP([hrw bundle link selection])
-AT_CHECK([[test-bundle 'symmetric_l4,60,hrw,ofport,NXM_NX_REG0[],slaves:1,2,3,4,5']],
+AT_CHECK([[ovstest test-bundle 'symmetric_l4,60,hrw,ofport,NXM_NX_REG0[],slaves:1,2,3,4,5']],
   [0], [ignore])
 # 100000: disruption=1.00 (perfect=1.00) 1.00 0.00 0.00 0.00 0.00 0.00
 # 110000: disruption=0.50 (perfect=0.50) 0.50 0.50 0.00 0.00 0.00 0.00
@@ -78,7 +78,7 @@ AT_CHECK([[test-bundle 'symmetric_l4,60,hrw,ofport,NXM_NX_REG0[],slaves:1,2,3,4,
 AT_CLEANUP
 
 AT_SETUP([active_backup bundle link selection])
-AT_CHECK([[test-bundle 'symmetric_l4,60,active_backup,ofport,NXM_NX_REG0[],slaves:1,2,3,4,5,6']],
+AT_CHECK([[ovstest test-bundle 'symmetric_l4,60,active_backup,ofport,NXM_NX_REG0[],slaves:1,2,3,4,5,6']],
   [0],
 [100000: disruption=1.00 (perfect=1.00) 1.00 0.00 0.00 0.00 0.00 0.00
 110000: disruption=0.00 (perfect=0.00) 1.00 0.00 0.00 0.00 0.00 0.00
@@ -149,7 +149,7 @@ AT_CHECK([[test-bundle 'symmetric_l4,60,active_backup,ofport,NXM_NX_REG0[],slave
 AT_CLEANUP
 
 AT_SETUP([hrw bundle single link selection])
-AT_CHECK([[test-bundle 'symmetric_l4,60,hrw,ofport,NXM_NX_REG0[],slaves:1']],
+AT_CHECK([[ovstest test-bundle 'symmetric_l4,60,hrw,ofport,NXM_NX_REG0[],slaves:1']],
   [0], [ignore])
 # 1: disruption=1.00 (perfect=1.00) 1.00
 # 0: disruption=1.00 (perfect=1.00) 0.00
@@ -157,7 +157,7 @@ AT_CHECK([[test-bundle 'symmetric_l4,60,hrw,ofport,NXM_NX_REG0[],slaves:1']],
 AT_CLEANUP
 
 AT_SETUP([hrw bundle no link selection])
-AT_CHECK([[test-bundle 'symmetric_l4,60,hrw,ofport,NXM_NX_REG0[],slaves:']],
+AT_CHECK([[ovstest test-bundle 'symmetric_l4,60,hrw,ofport,NXM_NX_REG0[],slaves:']],
   [0], [ignore])
 AT_CLEANUP
 #: disruption=0.00 (perfect=0.00)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,20 +33,20 @@
 #include "timeval.h"
 #include "util.h"
 #include "vlog.h"
+#include "ovstest.h"
 
 static struct command all_commands[];
 
 static void usage(void) NO_RETURN;
 static void parse_options(int argc, char *argv[]);
 
-int
-main(int argc, char *argv[])
+static void
+test_jsonrpc_main(int argc, char *argv[])
 {
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
     parse_options(argc, argv);
     run_command(argc - optind, argv + optind, all_commands);
-    return 0;
 }
 
 static void
@@ -336,3 +336,5 @@ static struct command all_commands[] = {
     { "help", 0, INT_MAX, do_help },
     { NULL, 0, 0, NULL },
 };
+
+OVSTEST_REGISTER("test-jsonrpc", test_jsonrpc_main);

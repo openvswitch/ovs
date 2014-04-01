@@ -2,44 +2,44 @@ AT_BANNER([library unit tests])
 
 AT_SETUP([test flow extractor])
 AT_CHECK([$PERL `which flowgen.pl` >/dev/null 3>flows 4>pcap])
-AT_CHECK([test-flows <flows 3<pcap], [0], [checked 247 packets, 0 errors
+AT_CHECK([ovstest test-flows <flows 3<pcap], [0], [checked 247 packets, 0 errors
 ])
 AT_CLEANUP
 
 AT_SETUP([test TCP/IP checksumming])
-AT_CHECK([test-csum], [0], [....#....#....###................................#................................#
+AT_CHECK([ovstest test-csum], [0], [....#....#....###................................#................................#
 ])
 AT_CLEANUP
 
 AT_SETUP([test hash functions])
-AT_CHECK([test-hash])
+AT_CHECK([ovstest test-hash])
 AT_CLEANUP
 
 AT_SETUP([test hash map])
-AT_CHECK([test-hmap], [0], [.........
+AT_CHECK([ovstest test-hmap], [0], [.........
 ])
 AT_CLEANUP
 
 AT_SETUP([test hash index])
-AT_CHECK([test-hindex], [0], [.....................
+AT_CHECK([ovstest test-hindex], [0], [.....................
 ])
 AT_CLEANUP
 
 AT_SETUP([test atomic operations])
-AT_CHECK([test-atomic])
+AT_CHECK([ovstest test-atomic])
 AT_CLEANUP
 
 AT_SETUP([test linked lists])
-AT_CHECK([test-list], [0], [..
+AT_CHECK([ovstest test-list], [0], [..
 ])
 AT_CLEANUP
 
 AT_SETUP([test packet library])
-AT_CHECK([test-packets])
+AT_CHECK([ovstest test-packets])
 AT_CLEANUP
 
 AT_SETUP([test SHA-1])
-AT_CHECK([test-sha1], [0], [.........
+AT_CHECK([ovstest test-sha1], [0], [.........
 ])
 AT_CLEANUP
 
@@ -54,11 +54,11 @@ AT_CLEANUP
 
 AT_SETUP([test byte order conversion])
 AT_KEYWORDS([byte order])
-AT_CHECK([test-byte-order])
+AT_CHECK([ovstest test-byte-order])
 AT_CLEANUP
 
 AT_SETUP([test random number generator])
-AT_CHECK([test-random], [0], [dnl
+AT_CHECK([ovstest test-random], [0], [dnl
 average=7fa2014f
 
 bit      0     1
@@ -124,11 +124,11 @@ m4_foreach(
    [ovs_scan]],
   [AT_SETUP([testname[()] function])
    AT_KEYWORDS([testname])
-   AT_CHECK([test-util testname], [0], [], [])
+   AT_CHECK([ovstest test-util testname], [0], [], [])
    AT_CLEANUP])
 
 AT_SETUP([test unix socket, short pathname - C])
-AT_CHECK([test-unix-socket x])
+AT_CHECK([ovstest test-unix-socket x])
 AT_CLEANUP
 
 dnl Unix sockets with long names are problematic because the name has to
@@ -141,7 +141,7 @@ dnl Linux has a 108 byte limit; this is 150 bytes long.
 longname=012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789
 mkdir $longname
 cd $longname
-AT_CHECK([test-unix-socket ../$longname/socket socket])
+AT_CHECK([ovstest test-unix-socket ../$longname/socket socket])
 AT_CLEANUP
 
 AT_SETUP([test unix socket, short pathname - Python])
@@ -165,7 +165,7 @@ AT_CLEANUP
 
 AT_SETUP([ovs_assert])
 OVS_LOGDIR=`pwd`; export OVS_LOGDIR
-AT_CHECK([test-util -voff -vfile:info '-vPATTERN:file:%c|%p|%m' --log-file assert || kill -l $?],
+AT_CHECK([ovstest test-util -voff -vfile:info '-vPATTERN:file:%c|%p|%m' --log-file assert || kill -l $?],
   [0], [ABRT
 ], [stderr])
 
@@ -183,5 +183,5 @@ AT_CHECK([sed 's/.*: //
 AT_CLEANUP
 
 AT_SETUP([snprintf])
-AT_CHECK([test-util snprintf])
+AT_CHECK([ovstest test-util snprintf])
 AT_CLEANUP

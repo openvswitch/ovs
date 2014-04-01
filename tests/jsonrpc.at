@@ -2,11 +2,11 @@ AT_BANNER([JSON-RPC - C])
 
 AT_SETUP([JSON-RPC request and successful reply])
 OVS_RUNDIR=`pwd`; export OVS_RUNDIR
-AT_CHECK([test-jsonrpc --detach --no-chdir --pidfile="`pwd`"/pid listen punix:socket])
+AT_CHECK([ovstest test-jsonrpc --detach --no-chdir --pidfile="`pwd`"/pid listen punix:socket])
 AT_CHECK([test -s pid])
 AT_CHECK([kill -0 `cat pid`])
 AT_CHECK(
-  [[test-jsonrpc request unix:socket echo '[{"a": "b", "x": null}]']], [0],
+  [[ovstest test-jsonrpc request unix:socket echo '[{"a": "b", "x": null}]']], [0],
   [[{"error":null,"id":0,"result":[{"a":"b","x":null}]}
 ]], [], [test ! -e pid || kill `cat pid`])
 AT_CHECK([kill `cat pid`])
@@ -14,11 +14,11 @@ AT_CLEANUP
 
 AT_SETUP([JSON-RPC request and error reply])
 OVS_RUNDIR=`pwd`; export OVS_RUNDIR
-AT_CHECK([test-jsonrpc --detach --no-chdir --pidfile="`pwd`"/pid listen punix:socket])
+AT_CHECK([ovstest test-jsonrpc --detach --no-chdir --pidfile="`pwd`"/pid listen punix:socket])
 AT_CHECK([test -s pid])
 AT_CHECK([kill -0 `cat pid`])
 AT_CHECK(
-  [[test-jsonrpc request unix:socket bad-request '[]']], [0],
+  [[ovstest test-jsonrpc request unix:socket bad-request '[]']], [0],
   [[{"error":{"error":"unknown method"},"id":0,"result":null}
 ]], [], [test ! -e pid || kill `cat pid`])
 AT_CHECK([kill `cat pid`])
@@ -26,12 +26,12 @@ AT_CLEANUP
 
 AT_SETUP([JSON-RPC notification])
 OVS_RUNDIR=`pwd`; export OVS_RUNDIR
-AT_CHECK([test-jsonrpc --detach --no-chdir --pidfile="`pwd`"/pid listen punix:socket])
+AT_CHECK([ovstest test-jsonrpc --detach --no-chdir --pidfile="`pwd`"/pid listen punix:socket])
 AT_CHECK([test -s pid])
 # When a daemon dies it deletes its pidfile, so make a copy.
 AT_CHECK([cp pid pid2])
 AT_CHECK([kill -0 `cat pid2`])
-AT_CHECK([[test-jsonrpc notify unix:socket shutdown '[]']], [0], [], 
+AT_CHECK([[ovstest test-jsonrpc notify unix:socket shutdown '[]']], [0], [],
   [], [kill `cat pid2`])
 AT_CHECK(
   [pid=`cat pid2`

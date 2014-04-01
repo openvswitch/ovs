@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2012 Nicira, Inc.
+ * Copyright (c) 2010, 2012, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,9 +22,10 @@
 
 #include "util.h"
 #include "socket-util.h"
+#include "ovstest.h"
 
-int
-main(int argc, char *argv[])
+static void
+test_unix_socket_main(int argc, char *argv[])
 {
     const char *sockname1;
     const char *sockname2;
@@ -59,6 +60,6 @@ main(int argc, char *argv[])
 
     close(sock1);
     close(sock2);
-
-    return 0;
 }
+
+OVSTEST_REGISTER("test-unix-socket", test_unix_socket_main);

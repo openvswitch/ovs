@@ -10,7 +10,7 @@ m4_foreach(
    [many-rules-in-two-tables],
    [many-rules-in-five-tables]],
   [AT_SETUP([flow classifier - m4_bpatsubst(testname, [-], [ ])])
-   AT_CHECK([test-classifier testname], [0], [], [])
+   AT_CHECK([ovstest test-classifier testname], [0], [], [])
    AT_CLEANUP])])
 
 AT_BANNER([miniflow unit tests])
@@ -20,7 +20,7 @@ m4_foreach(
    [minimask_has_extra],
    [minimask_combine]],
   [AT_SETUP([miniflow - m4_bpatsubst(testname, [-], [ ])])
-   AT_CHECK([test-classifier testname], [0], [], [])
+   AT_CHECK([ovstest test-classifier testname], [0], [], [])
    AT_CLEANUP])])
 
 AT_BANNER([flow classifier lookup segmentation])

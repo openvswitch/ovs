@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@
 #include "packets.h"
 #include "random.h"
 #include "unaligned.h"
-
+#include "ovstest.h"
 #undef NDEBUG
 #include <assert.h>
 
@@ -1340,17 +1340,18 @@ static const struct command commands[] = {
 
     /* Miniflow and minimask tests. */
     {"miniflow", 0, 0, test_miniflow},
-	{"minimask_has_extra", 0, 0, test_minimask_has_extra},
-	{"minimask_combine", 0, 0, test_minimask_combine},
+    {"minimask_has_extra", 0, 0, test_minimask_has_extra},
+    {"minimask_combine", 0, 0, test_minimask_combine},
 
     {NULL, 0, 0, NULL},
 };
 
-int
-main(int argc, char *argv[])
+static void
+test_classifier_main(int argc, char *argv[])
 {
     set_program_name(argv[0]);
     init_values();
     run_command(argc - 1, argv + 1, commands);
-    return 0;
 }
+
+OVSTEST_REGISTER("test-classifier", test_classifier_main);

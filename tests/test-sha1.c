@@ -22,6 +22,7 @@
 #include <string.h>
 #include "random.h"
 #include "util.h"
+#include "ovstest.h"
 
 #undef NDEBUG
 #include <assert.h>
@@ -137,8 +138,8 @@ test_big_vector(void)
     free(vec.data);
 }
 
-int
-main(void)
+static void
+test_shar1_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     int i;
 
@@ -149,6 +150,6 @@ main(void)
     test_big_vector();
 
     putchar('\n');
-
-    return 0;
 }
+
+OVSTEST_REGISTER("test-sha1", test_shar1_main);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 #include "random.h"
 #include "unaligned.h"
 #include "util.h"
+#include "ovstest.h"
 
 #undef NDEBUG
 #include <assert.h>
@@ -175,8 +176,9 @@ test_crc32c(void)
     mark('#');
 }
 
-int
-main(void)
+
+static void
+test_csum_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     const struct test_case *tc;
     int i;
@@ -280,6 +282,6 @@ main(void)
     mark('#');
 
     putchar('\n');
-
-    return 0;
 }
+
+OVSTEST_REGISTER("test-csum", test_csum_main);
