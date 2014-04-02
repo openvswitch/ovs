@@ -54,14 +54,26 @@ static const struct command *get_all_commands(void);
 static void parse_options(int argc, char *argv[]);
 static void usage(void);
 
+static int
+do_poll(struct pollfd *fds, int nfds, int timeout)
+{
+    int retval;
+#ifndef _WIN32
+    do {
+        retval = poll(fds, nfds, timeout);
+    } while (retval < 0 && errno == EINTR);
+#else
+    retval = WSAPoll(fds, nfds, timeout);
+#endif
+    return retval;
+}
+
 static long long int
 time_in_msec(void)
 {
     struct timeval tv;
 
-    if (gettimeofday(&tv, NULL) < 0) {
-        ovs_fatal(errno, "gettimeofday");
-    }
+    xgettimeofday(&tv);
 
     return tv.tv_sec * 1000LL + tv.tv_usec / 1000;
 }
@@ -284,9 +296,7 @@ cmd_listen(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     for (;;) {
         int retval;
 
-        do {
-            retval = poll(fds, n_fds, -1);
-        } while (retval < 0 && errno == EINTR);
+        retval = do_poll(fds, n_fds, -1);
         if (retval < 0) {
             ovs_fatal(errno, "poll failed");
         }
@@ -445,9 +455,7 @@ cmd_rate(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
             delay = 1000;
         }
 
-        do {
-            error = poll(fds, n_fds, delay) < 0 ? errno : 0;
-        } while (error == EINTR);
+        error = do_poll(fds, n_fds, delay);
         if (error) {
             ovs_fatal(errno, "poll");
         }
@@ -578,9 +586,7 @@ cmd_latency(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         while (n_fds > 0) {
             int error;
 
-            do {
-                error = poll(fds, n_fds, -1) < 0 ? errno : 0;
-            } while (error == EINTR);
+            error = do_poll(fds, n_fds, -1);
             if (error) {
                 ovs_fatal(errno, "poll");
             }
