@@ -27,6 +27,7 @@
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
 #include "ovsdb.h"
+#include "poll-loop.h"
 #include "reconnect.h"
 #include "row.h"
 #include "server.h"
@@ -62,6 +63,8 @@ static bool ovsdb_jsonrpc_session_get_status(
     struct ovsdb_jsonrpc_remote_status *);
 static void ovsdb_jsonrpc_session_unlock_all(struct ovsdb_jsonrpc_session *);
 static void ovsdb_jsonrpc_session_unlock__(struct ovsdb_lock_waiter *);
+static void ovsdb_jsonrpc_session_send(struct ovsdb_jsonrpc_session *,
+                                       struct jsonrpc_msg *);
 
 /* Triggers. */
 static void ovsdb_jsonrpc_trigger_create(struct ovsdb_jsonrpc_session *,
@@ -82,6 +85,8 @@ static struct jsonrpc_msg *ovsdb_jsonrpc_monitor_cancel(
     struct json_array *params,
     const struct json *request_id);
 static void ovsdb_jsonrpc_monitor_remove_all(struct ovsdb_jsonrpc_session *);
+static void ovsdb_jsonrpc_monitor_flush_all(struct ovsdb_jsonrpc_session *);
+static bool ovsdb_jsonrpc_monitor_needs_flush(struct ovsdb_jsonrpc_session *);
 
 /* JSON-RPC database server. */
 
@@ -437,7 +442,11 @@ ovsdb_jsonrpc_session_run(struct ovsdb_jsonrpc_session *s)
     ovsdb_jsonrpc_trigger_complete_done(s);
 
     if (!jsonrpc_session_get_backlog(s->js)) {
-        struct jsonrpc_msg *msg = jsonrpc_session_recv(s->js);
+        struct jsonrpc_msg *msg;
+
+        ovsdb_jsonrpc_monitor_flush_all(s);
+
+        msg = jsonrpc_session_recv(s->js);
         if (msg) {
             if (msg->type == JSONRPC_REQUEST) {
                 ovsdb_jsonrpc_session_got_request(s, msg);
@@ -482,7 +491,11 @@ ovsdb_jsonrpc_session_wait(struct ovsdb_jsonrpc_session *s)
 {
     jsonrpc_session_wait(s->js);
     if (!jsonrpc_session_get_backlog(s->js)) {
-        jsonrpc_session_recv_wait(s->js);
+        if (ovsdb_jsonrpc_monitor_needs_flush(s)) {
+            poll_immediate_wake();
+        } else {
+            jsonrpc_session_recv_wait(s->js);
+        }
     }
 }
 
@@ -698,7 +711,7 @@ ovsdb_jsonrpc_session_notify(struct ovsdb_session *session,
 
     s = CONTAINER_OF(session, struct ovsdb_jsonrpc_session, up);
     params = json_array_create_1(json_string_create(lock_name));
-    jsonrpc_session_send(s->js, jsonrpc_create_notify(method, params));
+    ovsdb_jsonrpc_session_send(s, jsonrpc_create_notify(method, params));
 }
 
 static struct jsonrpc_msg *
@@ -873,7 +886,7 @@ ovsdb_jsonrpc_session_got_request(struct ovsdb_jsonrpc_session *s,
 
     if (reply) {
         jsonrpc_msg_destroy(request);
-        jsonrpc_session_send(s->js, reply);
+        ovsdb_jsonrpc_session_send(s, reply);
     }
 }
 
@@ -900,6 +913,14 @@ ovsdb_jsonrpc_session_got_notify(struct ovsdb_jsonrpc_session *s,
         execute_cancel(s, request);
     }
     jsonrpc_msg_destroy(request);
+}
+
+static void
+ovsdb_jsonrpc_session_send(struct ovsdb_jsonrpc_session *s,
+                           struct jsonrpc_msg *msg)
+{
+    ovsdb_jsonrpc_monitor_flush_all(s);
+    jsonrpc_session_send(s->js, msg);
 }
 
 /* JSON-RPC database server triggers.
@@ -928,7 +949,7 @@ ovsdb_jsonrpc_trigger_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
 
         msg = jsonrpc_create_error(json_string_create("duplicate request ID"),
                                    id);
-        jsonrpc_session_send(s->js, msg);
+        ovsdb_jsonrpc_session_send(s, msg);
         json_destroy(id);
         json_destroy(params);
         return;
@@ -979,7 +1000,7 @@ ovsdb_jsonrpc_trigger_complete(struct ovsdb_jsonrpc_trigger *t)
             reply = jsonrpc_create_error(json_string_create("canceled"),
                                          t->id);
         }
-        jsonrpc_session_send(s->js, reply);
+        ovsdb_jsonrpc_session_send(s, reply);
     }
 
     json_destroy(t->id);
@@ -1639,6 +1660,46 @@ ovsdb_jsonrpc_monitor_compose_table_update(
     return json;
 }
 
+static bool
+ovsdb_jsonrpc_monitor_needs_flush(struct ovsdb_jsonrpc_session *s)
+{
+    struct ovsdb_jsonrpc_monitor *m;
+
+    HMAP_FOR_EACH (m, node, &s->monitors) {
+        struct shash_node *node;
+
+        SHASH_FOR_EACH (node, &m->tables) {
+            struct ovsdb_jsonrpc_monitor_table *mt = node->data;
+
+            if (!hmap_is_empty(&mt->changes)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+static void
+ovsdb_jsonrpc_monitor_flush_all(struct ovsdb_jsonrpc_session *s)
+{
+    struct ovsdb_jsonrpc_monitor *m;
+
+    HMAP_FOR_EACH (m, node, &s->monitors) {
+        struct json *json;
+
+        json = ovsdb_jsonrpc_monitor_compose_table_update(m, false);
+        if (json) {
+            struct jsonrpc_msg *msg;
+            struct json *params;
+
+            params = json_array_create_2(json_clone(m->monitor_id), json);
+            msg = jsonrpc_create_notify("update", params);
+            jsonrpc_session_send(s->js, msg);
+        }
+    }
+}
+
 static void
 ovsdb_jsonrpc_monitor_init_aux(struct ovsdb_jsonrpc_monitor_aux *aux,
                                const struct ovsdb_jsonrpc_monitor *m)
@@ -1654,20 +1715,9 @@ ovsdb_jsonrpc_monitor_commit(struct ovsdb_replica *replica,
 {
     struct ovsdb_jsonrpc_monitor *m = ovsdb_jsonrpc_monitor_cast(replica);
     struct ovsdb_jsonrpc_monitor_aux aux;
-    struct json *json;
 
     ovsdb_jsonrpc_monitor_init_aux(&aux, m);
     ovsdb_txn_for_each_change(txn, ovsdb_jsonrpc_monitor_change_cb, &aux);
-    json = ovsdb_jsonrpc_monitor_compose_table_update(m, false);
-    if (json) {
-        struct jsonrpc_msg *msg;
-        struct json *params;
-
-        params = json_array_create_2(json_clone(aux.monitor->monitor_id),
-                                     json);
-        msg = jsonrpc_create_notify("update", params);
-        jsonrpc_session_send(aux.monitor->session->js, msg);
-    }
 
     return NULL;
 }
