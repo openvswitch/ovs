@@ -262,7 +262,7 @@ struct oftable {
     struct hmap eviction_groups_by_id;
     struct heap eviction_groups_by_size;
 
-    /* Table config: contains enum ofp_table_config; accessed atomically. */
+    /* Table config: contains enum ofproto_table_config; accessed atomically. */
     atomic_uint config;
 };
 

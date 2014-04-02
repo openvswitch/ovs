@@ -1924,6 +1924,11 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
         case RULE_DPIF_LOOKUP_VERDICT_DROP:
             config = OFPUTIL_PC_NO_PACKET_IN;
             break;
+        case RULE_DPIF_LOOKUP_VERDICT_DEFAULT:
+            if (!ofproto_dpif_wants_packet_in_on_miss(ctx->xbridge->ofproto)) {
+                config = OFPUTIL_PC_NO_PACKET_IN;
+            }
+            break;
         default:
             OVS_NOT_REACHED();
         }

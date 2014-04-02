@@ -89,13 +89,6 @@ didn't compare the specs carefully yet.)
     * Add OFPMP_TABLE_FEATURES statistics.  Alexander Wu has posted a
       patch series.  [optional for OF1.3+]
 
-    * More flexible table miss support.
-      This requires the following.
-      - Change the default table-miss action (in the absense of table-miss
-        entry) from packet_in to drop for OF1.3+.  Decide what to do if
-        a switch is configured to support multiple OF versions.
-      [required for OF1.3+]
-
     * IPv6 extension header handling support.  Fully implementing this
       requires kernel support.  This likely will take some careful and
       probably time-consuming design work.  The actual coding, once

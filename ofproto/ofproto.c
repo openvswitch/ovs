@@ -5786,12 +5786,12 @@ handle_group_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     }
 }
 
-enum ofp_table_config
-table_get_config(const struct ofproto *ofproto, uint8_t table_id)
+enum ofproto_table_config
+ofproto_table_get_config(const struct ofproto *ofproto, uint8_t table_id)
 {
     unsigned int value;
     atomic_read(&ofproto->tables[table_id].config, &value);
-    return (enum ofp_table_config)value;
+    return (enum ofproto_table_config)value;
 }
 
 static enum ofperr
@@ -6678,7 +6678,7 @@ oftable_init(struct oftable *table)
     memset(table, 0, sizeof *table);
     classifier_init(&table->cls, flow_segment_u32s);
     table->max_flows = UINT_MAX;
-    atomic_init(&table->config, (unsigned int)OFPTC11_TABLE_MISS_CONTROLLER);
+    atomic_init(&table->config, (unsigned int)OFPROTO_TABLE_MISS_DEFAULT);
 }
 
 /* Destroys 'table', including its classifier and eviction groups.

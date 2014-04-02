@@ -366,6 +366,18 @@ ofproto_dpif_send_packet_in(struct ofproto_dpif *ofproto,
         free(pin);
     }
 }
+
+/* The default "table-miss" behaviour for OpenFlow1.3+ is to drop the
+ * packet rather than to send the packet to the controller.
+ *
+ * This function returns false to indicate that a packet_in message
+ * for a "table-miss" should be sent to at least one controller.
+ * False otherwise. */
+bool
+ofproto_dpif_wants_packet_in_on_miss(struct ofproto_dpif *ofproto)
+{
+    return connmgr_wants_packet_in_on_miss(ofproto->up.connmgr);
+}
 
 /* Factory functions. */
 
@@ -3108,6 +3120,11 @@ rule_dpif_lookup(struct ofproto_dpif *ofproto, const struct flow *flow,
     case RULE_DPIF_LOOKUP_VERDICT_DROP:
         config = OFPUTIL_PC_NO_PACKET_IN;
         break;
+    case RULE_DPIF_LOOKUP_VERDICT_DEFAULT:
+        if (!connmgr_wants_packet_in_on_miss(ofproto->up.connmgr)) {
+            config = OFPUTIL_PC_NO_PACKET_IN;
+        }
+        break;
     default:
         OVS_NOT_REACHED();
     }
@@ -3177,12 +3194,17 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, uint8_t table_id,
  *
  *    - RULE_DPIF_LOOKUP_VERDICT_MATCH if a rule (in '*rule') was found.
  *
- *    - RULE_DPIF_LOOKUP_VERDICT_DROP if no rule was found and a table miss
- *      configuration specified that the packet should be dropped in this
- *      case.  (This occurs only if 'honor_table_miss' is true, because only in
- *      this case does the table miss configuration matter.)
+ *    - RULE_OFPTC_TABLE_MISS_CONTROLLER if no rule was found and either:
+ *      + 'honor_table_miss' is false
+ *      + a table miss configuration specified that the packet should be
  *
- *    - RULE_DPIF_LOOKUP_VERDICT_CONTROLLER if no rule was found otherwise. */
+ *    - RULE_DPIF_LOOKUP_VERDICT_DROP if no rule was found, 'honor_table_miss'
+ *      is true and a table miss configuration specified that the packet
+ *      should be dropped in this case.
+ *
+ *    - RULE_DPIF_LOOKUP_VERDICT_DEFAULT if no rule was found,
+ *      'honor_table_miss' is true and a table miss configuration has
+ *      not been specified in this case. */
 enum rule_dpif_lookup_verdict
 rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
                             const struct flow *flow,
@@ -3203,16 +3225,18 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
         } else if (!honor_table_miss) {
             return RULE_DPIF_LOOKUP_VERDICT_CONTROLLER;
         } else {
-            switch (table_get_config(&ofproto->up, *table_id)
-                    & OFPTC11_TABLE_MISS_MASK) {
-            case OFPTC11_TABLE_MISS_CONTINUE:
+            switch (ofproto_table_get_config(&ofproto->up, *table_id)) {
+            case OFPROTO_TABLE_MISS_CONTINUE:
                 break;
 
-            case OFPTC11_TABLE_MISS_CONTROLLER:
+            case OFPROTO_TABLE_MISS_CONTROLLER:
                 return RULE_DPIF_LOOKUP_VERDICT_CONTROLLER;
 
-            case OFPTC11_TABLE_MISS_DROP:
+            case OFPROTO_TABLE_MISS_DROP:
                 return RULE_DPIF_LOOKUP_VERDICT_DROP;
+
+            case OFPROTO_TABLE_MISS_DEFAULT:
+                return RULE_DPIF_LOOKUP_VERDICT_DEFAULT;
             }
         }
     }

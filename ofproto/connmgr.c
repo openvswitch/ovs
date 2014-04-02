@@ -1410,6 +1410,65 @@ ofconn_receives_async_msg(const struct ofconn *ofconn,
     return true;
 }
 
+/* The default "table-miss" behaviour for OpenFlow1.3+ is to drop the
+ * packet rather than to send the packet to the controller.
+ *
+ * This function returns false to indicate the packet should be dropped if
+ * the controller action was the result of the default table-miss behaviour
+ * and the controller is using OpenFlow1.3+.
+ *
+ * Otherwise true is returned to indicate the packet should be forwarded to
+ * the controller */
+static bool
+ofconn_wants_packet_in_on_miss(struct ofconn *ofconn,
+                               const struct ofproto_packet_in *pin)
+{
+    if (pin->miss_type == OFPROTO_PACKET_IN_MISS_WITHOUT_FLOW) {
+        enum ofputil_protocol protocol = ofconn_get_protocol(ofconn);
+
+        if (protocol != OFPUTIL_P_NONE
+            && ofputil_protocol_to_ofp_version(protocol) >= OFP13_VERSION) {
+            enum ofproto_table_config config;
+
+            config = ofproto_table_get_config(ofconn->connmgr->ofproto,
+                                              pin->up.table_id);
+            if (config == OFPROTO_TABLE_MISS_DEFAULT) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+/* The default "table-miss" behaviour for OpenFlow1.3+ is to drop the
+ * packet rather than to send the packet to the controller.
+ *
+ * This function returns false to indicate that a packet_in message
+ * for a "table-miss" should be sent to at least one controller.
+ * That is there is at least one controller with controller_id 0
+ * which connected using an OpenFlow version earlier than OpenFlow1.3.
+ *
+ * False otherwise.
+ *
+ * This logic assumes that "table-miss" packet_in messages
+ * are always sent to controller_id 0. */
+bool
+connmgr_wants_packet_in_on_miss(struct connmgr *mgr)
+{
+    struct ofconn *ofconn;
+
+    LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
+        enum ofputil_protocol protocol = ofconn_get_protocol(ofconn);
+
+        if (ofconn->controller_id == 0 &&
+            (protocol == OFPUTIL_P_NONE ||
+             ofputil_protocol_to_ofp_version(protocol) < OFP13_VERSION)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /* Returns a human-readable name for an OpenFlow connection between 'mgr' and
  * 'target', suitable for use in log messages for identifying the connection.
  *
@@ -1559,7 +1618,8 @@ connmgr_send_packet_in(struct connmgr *mgr,
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
         enum ofp_packet_in_reason reason = wire_reason(ofconn, pin);
 
-        if (ofconn_receives_async_msg(ofconn, OAM_PACKET_IN, reason)
+        if (ofconn_wants_packet_in_on_miss(ofconn, pin)
+            && ofconn_receives_async_msg(ofconn, OAM_PACKET_IN, pin->up.reason)
             && ofconn->controller_id == pin->controller_id) {
             schedule_packet_in(ofconn, *pin, reason);
         }
