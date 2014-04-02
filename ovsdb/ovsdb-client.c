@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -166,14 +166,15 @@ parse_options(int argc, char *argv[])
     enum {
         OPT_BOOTSTRAP_CA_CERT = UCHAR_MAX + 1,
         OPT_TIMESTAMP,
+        VLOG_OPTION_ENUMS,
         DAEMON_OPTION_ENUMS,
         TABLE_OPTION_ENUMS
     };
     static const struct option long_options[] = {
-        {"verbose", optional_argument, NULL, 'v'},
         {"help", no_argument, NULL, 'h'},
         {"version", no_argument, NULL, 'V'},
         {"timestamp", no_argument, NULL, OPT_TIMESTAMP},
+        VLOG_LONG_OPTIONS,
         DAEMON_LONG_OPTIONS,
 #ifdef HAVE_OPENSSL
         {"bootstrap-ca-cert", required_argument, NULL, OPT_BOOTSTRAP_CA_CERT},
@@ -200,14 +201,9 @@ parse_options(int argc, char *argv[])
             ovs_print_version(0, 0);
             exit(EXIT_SUCCESS);
 
-        case 'v':
-            vlog_set_verbosity(optarg);
-            break;
-
+        VLOG_OPTION_HANDLERS
         DAEMON_OPTION_HANDLERS
-
         TABLE_OPTION_HANDLERS(&table_style)
-
         STREAM_SSL_OPTION_HANDLERS
 
         case OPT_BOOTSTRAP_CA_CERT:
