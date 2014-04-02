@@ -986,51 +986,54 @@ static int ovs_flow_cmd_del(struct sk_buff *skb, struct genl_info *info)
 	struct sw_flow_match match;
 	int err;
 
+	if (likely(a[OVS_FLOW_ATTR_KEY])) {
+		ovs_match_init(&match, &key, NULL);
+		err = ovs_nla_get_match(&match, a[OVS_FLOW_ATTR_KEY], NULL);
+		if (unlikely(err))
+			return err;
+	}
+
 	ovs_lock();
 	dp = get_dp(sock_net(skb->sk), ovs_header->dp_ifindex);
-	if (!dp) {
+	if (unlikely(!dp)) {
 		err = -ENODEV;
 		goto unlock;
 	}
-
-	if (!a[OVS_FLOW_ATTR_KEY]) {
+	if (unlikely(!a[OVS_FLOW_ATTR_KEY])) {
 		err = ovs_flow_tbl_flush(&dp->table);
 		goto unlock;
 	}
-
-	ovs_match_init(&match, &key, NULL);
-	err = ovs_nla_get_match(&match, a[OVS_FLOW_ATTR_KEY], NULL);
-	if (err)
-		goto unlock;
-
 	flow = ovs_flow_tbl_lookup(&dp->table, &key);
-	if (!flow || !ovs_flow_cmp_unmasked_key(flow, &match)) {
+	if (unlikely(!flow || !ovs_flow_cmp_unmasked_key(flow, &match))) {
 		err = -ENOENT;
 		goto unlock;
 	}
 
-	reply = ovs_flow_cmd_alloc_info(ovsl_dereference(flow->sf_acts), info,
-					false);
-	if (IS_ERR(reply)) {
-		err = PTR_ERR(reply);
-		goto unlock;
-	}
-
 	ovs_flow_tbl_remove(&dp->table, flow);
+	ovs_unlock();
 
-	if (reply) {
-		err = ovs_flow_cmd_fill_info(flow, ovs_header->dp_ifindex,
-					     reply, info->snd_portid,
-					     info->snd_seq, 0,
-					     OVS_FLOW_CMD_DEL);
-		BUG_ON(err < 0);
+	reply = ovs_flow_cmd_alloc_info((const struct sw_flow_actions __force *)flow->sf_acts,
+					info, false);
+
+	if (likely(reply)) {
+		if (likely(!IS_ERR(reply))) {
+			rcu_read_lock(); /* Keep RCU checker happy. */
+			err = ovs_flow_cmd_fill_info(flow,
+						     ovs_header->dp_ifindex,
+						     reply, info->snd_portid,
+						     info->snd_seq, 0,
+						     OVS_FLOW_CMD_DEL);
+			rcu_read_unlock();
+			BUG_ON(err < 0);
+			ovs_notify(reply, info, &ovs_dp_flow_multicast_group);
+		} else {
+			netlink_set_err(sock_net(skb->sk)->genl_sock, 0,
+					ovs_dp_flow_multicast_group.id,
+					PTR_ERR(reply));
+		}
 	}
 
 	ovs_flow_free(flow, true);
-	ovs_unlock();
-
-	if (reply)
-		ovs_notify(reply, info, &ovs_dp_flow_multicast_group);
 	return 0;
 unlock:
 	ovs_unlock();
