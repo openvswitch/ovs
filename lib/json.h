@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -127,8 +127,6 @@ enum {
 };
 char *json_to_string(const struct json *, int flags);
 void json_to_ds(const struct json *, int flags, struct ds *);
-
-size_t json_serialized_length(const struct json *);
 
 /* JSON string formatting operations. */
 
