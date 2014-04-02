@@ -13,8 +13,8 @@ Post-v2.1.0
    - Upon the receipt of a SIGHUP signal, ovs-vswitchd no longer reopens its
      log file (it will terminate instead). Please use 'ovs-appctl vlog/reopen'
      instead.
-   - Support for Linux kernels up to 3.12. On Kernel 3.12 OVS uses tunnel
-     API for GRE and VXLAN.
+   - Support for Linux kernels up to 3.13. From Kernel 3.12 onwards OVS uses
+     tunnel API for GRE and VXLAN.
    - Added DPDK support.
 
 

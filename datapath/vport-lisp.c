@@ -163,7 +163,7 @@ static __be64 instance_id_to_tunnel_id(__u8 *iid)
 /* Compute source UDP port for outgoing packet.
  * Currently we use the flow hash.
  */
-static u16 get_src_port(struct sk_buff *skb)
+static u16 get_src_port(struct net *net, struct sk_buff *skb)
 {
 	u32 hash = skb_get_rxhash(skb);
 	unsigned int range;
@@ -177,7 +177,7 @@ static u16 get_src_port(struct sk_buff *skb)
 			    sizeof(*pkt_key) / sizeof(u32), 0);
 	}
 
-	inet_get_local_port_range(&low, &high);
+	inet_get_local_port_range(net, &low, &high);
 	range = (high - low) + 1;
 	return (((u64) hash * range) >> 32) + low;
 }
@@ -185,13 +185,14 @@ static u16 get_src_port(struct sk_buff *skb)
 static void lisp_build_header(const struct vport *vport,
 			      struct sk_buff *skb)
 {
+	struct net *net = ovs_dp_get_net(vport->dp);
 	struct lisp_port *lisp_port = lisp_vport(vport);
 	struct udphdr *udph = udp_hdr(skb);
 	struct lisphdr *lisph = (struct lisphdr *)(udph + 1);
 	const struct ovs_key_ipv4_tunnel *tun_key = OVS_CB(skb)->tun_key;
 
 	udph->dest = lisp_port->dst_port;
-	udph->source = htons(get_src_port(skb));
+	udph->source = htons(get_src_port(net, skb));
 	udph->check = 0;
 	udph->len = htons(skb->len - skb_transport_offset(skb));
 

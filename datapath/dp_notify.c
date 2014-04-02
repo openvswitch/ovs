@@ -31,18 +31,18 @@ static void dp_detach_port_notify(struct vport *vport)
 	struct datapath *dp;
 
 	dp = vport->dp;
-	notify = ovs_vport_cmd_build_info(vport, 0, 0,
-					  OVS_VPORT_CMD_DEL);
+	notify = ovs_vport_cmd_build_info(vport, 0, 0, OVS_VPORT_CMD_DEL);
 	ovs_dp_detach_port(vport);
 	if (IS_ERR(notify)) {
-		netlink_set_err(ovs_dp_get_net(dp)->genl_sock, 0,
-				ovs_dp_vport_multicast_group.id,
-				PTR_ERR(notify));
+		genl_set_err(&dp_vport_genl_family, ovs_dp_get_net(dp), 0,
+			     GROUP_ID(&ovs_dp_vport_multicast_group),
+			     PTR_ERR(notify));
 		return;
 	}
 
-	genlmsg_multicast_netns(ovs_dp_get_net(dp), notify, 0,
-				ovs_dp_vport_multicast_group.id,
+	genlmsg_multicast_netns(&dp_vport_genl_family,
+				ovs_dp_get_net(dp), notify, 0,
+				GROUP_ID(&ovs_dp_vport_multicast_group),
 				GFP_KERNEL);
 }
 

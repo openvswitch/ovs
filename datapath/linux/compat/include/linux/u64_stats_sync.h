@@ -144,4 +144,15 @@ static inline bool u64_stats_fetch_retry_bh(const struct u64_stats_sync *syncp,
 }
 
 #endif /* Linux kernel < 2.6.36 */
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
+
+#if BITS_PER_LONG == 32 && defined(CONFIG_SMP)
+# define u64_stats_init(syncp)  seqcount_init(syncp.seq)
+#else
+# define u64_stats_init(syncp)  do { } while (0)
+#endif
+
+#endif
+
 #endif /* _LINUX_U64_STATS_SYNC_WRAPPER_H */

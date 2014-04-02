@@ -122,6 +122,7 @@ struct vport *ovs_vport_alloc(int priv_size, const struct vport_ops *ops,
 {
 	struct vport *vport;
 	size_t alloc_size;
+	int i;
 
 	alloc_size = sizeof(struct vport);
 	if (priv_size) {
@@ -143,6 +144,12 @@ struct vport *ovs_vport_alloc(int priv_size, const struct vport_ops *ops,
 	if (!vport->percpu_stats) {
 		kfree(vport);
 		return ERR_PTR(-ENOMEM);
+	}
+
+	for_each_possible_cpu(i) {
+		struct pcpu_tstats *vport_stats;
+		vport_stats = per_cpu_ptr(vport->percpu_stats, i);
+		u64_stats_init(&vport_stats->syncp);
 	}
 
 	spin_lock_init(&vport->stats_lock);
