@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,8 +88,6 @@ struct ovsdb_error *ovsdb_atom_from_json(union ovsdb_atom *,
     WARN_UNUSED_RESULT;
 struct json *ovsdb_atom_to_json(const union ovsdb_atom *,
                                 enum ovsdb_atomic_type);
-size_t ovsdb_atom_json_length(const union ovsdb_atom *,
-                              enum ovsdb_atomic_type);
 
 char *ovsdb_atom_from_string(union ovsdb_atom *,
                              const struct ovsdb_base_type *, const char *,
@@ -165,8 +163,6 @@ struct ovsdb_error *ovsdb_datum_from_json(struct ovsdb_datum *,
     WARN_UNUSED_RESULT;
 struct json *ovsdb_datum_to_json(const struct ovsdb_datum *,
                                  const struct ovsdb_type *);
-size_t ovsdb_datum_json_length(const struct ovsdb_datum *,
-                               const struct ovsdb_type *);
 
 char *ovsdb_datum_from_string(struct ovsdb_datum *,
                               const struct ovsdb_type *, const char *,

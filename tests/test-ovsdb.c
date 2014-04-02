@@ -218,16 +218,13 @@ unbox_json(struct json *json)
     }
 }
 
-static size_t
+static void
 print_and_free_json(struct json *json)
 {
     char *string = json_to_string(json, JSSF_SORT);
-    size_t length = strlen(string);
     json_destroy(json);
     puts(string);
     free(string);
-
-    return length;
 }
 
 static void
@@ -445,10 +442,7 @@ do_parse_atoms(int argc, char *argv[])
         if (error) {
             print_and_free_ovsdb_error(error);
         } else {
-            size_t length;
-
-            length = print_and_free_json(ovsdb_atom_to_json(&atom, base.type));
-            ovs_assert(length == ovsdb_atom_json_length(&atom, base.type));
+            print_and_free_json(ovsdb_atom_to_json(&atom, base.type));
             ovsdb_atom_destroy(&atom, base.type);
         }
     }
@@ -500,14 +494,12 @@ do_parse_data__(int argc, char *argv[],
 
     for (i = 2; i < argc; i++) {
         struct ovsdb_datum datum;
-        size_t length;
 
         json = unbox_json(parse_json(argv[i]));
         check_ovsdb_error(parse(&datum, &type, json, NULL));
         json_destroy(json);
 
-        length = print_and_free_json(ovsdb_datum_to_json(&datum, &type));
-        ovs_assert(length == ovsdb_datum_json_length(&datum, &type));
+        print_and_free_json(ovsdb_datum_to_json(&datum, &type));
 
         ovsdb_datum_destroy(&datum, &type);
     }
