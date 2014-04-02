@@ -664,7 +664,7 @@ static size_t ovs_flow_cmd_msg_size(const struct sw_flow_actions *acts)
 }
 
 /* Called with ovs_mutex or RCU read lock. */
-static int ovs_flow_cmd_fill_info(struct sw_flow *flow, struct datapath *dp,
+static int ovs_flow_cmd_fill_info(const struct sw_flow *flow, int dp_ifindex,
 				  struct sk_buff *skb, u32 portid,
 				  u32 seq, u32 flags, u8 cmd)
 {
@@ -681,7 +681,7 @@ static int ovs_flow_cmd_fill_info(struct sw_flow *flow, struct datapath *dp,
 	if (!ovs_header)
 		return -EMSGSIZE;
 
-	ovs_header->dp_ifindex = get_dpifindex(dp);
+	ovs_header->dp_ifindex = dp_ifindex;
 
 	/* Fill flow key. */
 	nla = nla_nest_start(skb, OVS_FLOW_ATTR_KEY);
@@ -704,6 +704,7 @@ static int ovs_flow_cmd_fill_info(struct sw_flow *flow, struct datapath *dp,
 	nla_nest_end(skb, nla);
 
 	ovs_flow_stats_get(flow, &stats, &used, &tcp_flags);
+
 	if (used &&
 	    nla_put_u64(skb, OVS_FLOW_ATTR_USED, ovs_flow_used_time(used)))
 		goto nla_put_failure;
@@ -731,9 +732,9 @@ static int ovs_flow_cmd_fill_info(struct sw_flow *flow, struct datapath *dp,
 		const struct sw_flow_actions *sf_acts;
 
 		sf_acts = rcu_dereference_ovsl(flow->sf_acts);
-
 		err = ovs_nla_put_actions(sf_acts->actions,
 					  sf_acts->actions_len, skb);
+
 		if (!err)
 			nla_nest_end(skb, start);
 		else {
@@ -754,20 +755,17 @@ error:
 	return err;
 }
 
-/* Must be called with ovs_mutex. */
-static struct sk_buff *ovs_flow_cmd_alloc_info(struct sw_flow *flow,
+/* May not be called with RCU read lock. */
+static struct sk_buff *ovs_flow_cmd_alloc_info(const struct sw_flow_actions *acts,
 					       struct genl_info *info,
 					       bool always)
 {
 	struct sk_buff *skb;
-	size_t len;
 
 	if (!always && !ovs_must_notify(info, &ovs_dp_flow_multicast_group))
 		return NULL;
 
-	len = ovs_flow_cmd_msg_size(ovsl_dereference(flow->sf_acts));
-
-	skb = genlmsg_new_unicast(len, info, GFP_KERNEL);
+	skb = genlmsg_new_unicast(ovs_flow_cmd_msg_size(acts), info, GFP_KERNEL);
 
 	if (!skb)
 		return ERR_PTR(-ENOMEM);
@@ -775,21 +773,23 @@ static struct sk_buff *ovs_flow_cmd_alloc_info(struct sw_flow *flow,
 	return skb;
 }
 
-/* Must be called with ovs_mutex. */
-static struct sk_buff *ovs_flow_cmd_build_info(struct sw_flow *flow,
-					       struct datapath *dp,
-					       struct genl_info *info,
-					       u8 cmd, bool always)
+/* Called with ovs_mutex. */
+static struct sk_buff *ovs_flow_cmd_build_info(const struct sw_flow *flow,
+					       int dp_ifindex,
+					       struct genl_info *info, u8 cmd,
+					       bool always)
 {
 	struct sk_buff *skb;
 	int retval;
 
-	skb = ovs_flow_cmd_alloc_info(flow, info, always);
+	skb = ovs_flow_cmd_alloc_info(ovsl_dereference(flow->sf_acts), info,
+				      always);
 	if (!skb || IS_ERR(skb))
 		return skb;
 
-	retval = ovs_flow_cmd_fill_info(flow, dp, skb, info->snd_portid,
-					info->snd_seq, 0, cmd);
+	retval = ovs_flow_cmd_fill_info(flow, dp_ifindex, skb,
+					info->snd_portid, info->snd_seq, 0,
+					cmd);
 	BUG_ON(retval < 0);
 	return skb;
 }
@@ -870,8 +870,8 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 			goto err_flow_free;
 		}
 
-		reply = ovs_flow_cmd_build_info(flow, dp, info,
-						OVS_FLOW_CMD_NEW, false);
+		reply = ovs_flow_cmd_build_info(flow, ovs_header->dp_ifindex,
+						info, OVS_FLOW_CMD_NEW, false);
 	} else {
 		/* We found a matching flow. */
 		/* Bail out if we're not allowed to modify an existing flow.
@@ -897,8 +897,9 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 			rcu_assign_pointer(flow->sf_acts, acts);
 			ovs_nla_free_flow_actions(old_acts);
 		}
-		reply = ovs_flow_cmd_build_info(flow, dp, info,
-						OVS_FLOW_CMD_NEW, false);
+
+		reply = ovs_flow_cmd_build_info(flow, ovs_header->dp_ifindex,
+						info, OVS_FLOW_CMD_NEW, false);
 
 		/* Clear stats. */
 		if (a[OVS_FLOW_ATTR_CLEAR])
@@ -960,7 +961,8 @@ static int ovs_flow_cmd_get(struct sk_buff *skb, struct genl_info *info)
 		goto unlock;
 	}
 
-	reply = ovs_flow_cmd_build_info(flow, dp, info, OVS_FLOW_CMD_NEW, true);
+	reply = ovs_flow_cmd_build_info(flow, ovs_header->dp_ifindex, info,
+					OVS_FLOW_CMD_NEW, true);
 	if (IS_ERR(reply)) {
 		err = PTR_ERR(reply);
 		goto unlock;
@@ -1007,7 +1009,8 @@ static int ovs_flow_cmd_del(struct sk_buff *skb, struct genl_info *info)
 		goto unlock;
 	}
 
-	reply = ovs_flow_cmd_alloc_info(flow, info, false);
+	reply = ovs_flow_cmd_alloc_info(ovsl_dereference(flow->sf_acts), info,
+					false);
 	if (IS_ERR(reply)) {
 		err = PTR_ERR(reply);
 		goto unlock;
@@ -1016,7 +1019,8 @@ static int ovs_flow_cmd_del(struct sk_buff *skb, struct genl_info *info)
 	ovs_flow_tbl_remove(&dp->table, flow);
 
 	if (reply) {
-		err = ovs_flow_cmd_fill_info(flow, dp, reply, info->snd_portid,
+		err = ovs_flow_cmd_fill_info(flow, ovs_header->dp_ifindex,
+					     reply, info->snd_portid,
 					     info->snd_seq, 0,
 					     OVS_FLOW_CMD_DEL);
 		BUG_ON(err < 0);
@@ -1057,7 +1061,7 @@ static int ovs_flow_cmd_dump(struct sk_buff *skb, struct netlink_callback *cb)
 		if (!flow)
 			break;
 
-		if (ovs_flow_cmd_fill_info(flow, dp, skb,
+		if (ovs_flow_cmd_fill_info(flow, ovs_header->dp_ifindex, skb,
 					   NETLINK_CB(cb->skb).portid,
 					   cb->nlh->nlmsg_seq, NLM_F_MULTI,
 					   OVS_FLOW_CMD_NEW) < 0)
