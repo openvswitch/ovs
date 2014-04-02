@@ -1535,8 +1535,9 @@ stp_send_bpdu(struct stp_port *p, const void *bpdu, size_t bpdu_size)
 
     /* Skeleton. */
     pkt = ofpbuf_new(ETH_HEADER_LEN + LLC_HEADER_LEN + bpdu_size);
-    pkt->l2 = eth = ofpbuf_put_zeros(pkt, sizeof *eth);
+    eth = ofpbuf_put_zeros(pkt, sizeof *eth);
     llc = ofpbuf_put_zeros(pkt, sizeof *llc);
+    ofpbuf_set_frame(pkt, eth);
     ofpbuf_set_l3(pkt, ofpbuf_put(pkt, bpdu, bpdu_size));
 
     /* 802.2 header. */

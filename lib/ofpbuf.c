@@ -27,7 +27,7 @@ ofpbuf_init__(struct ofpbuf *b, size_t allocated, enum ofpbuf_source source)
 {
     b->allocated = allocated;
     b->source = source;
-    b->l2 = NULL;
+    b->frame = NULL;
     b->l2_5_ofs = b->l3_ofs = b->l4_ofs = UINT16_MAX;
     list_poison(&b->list_node);
 }
@@ -186,10 +186,11 @@ ofpbuf_clone_with_headroom(const struct ofpbuf *buffer, size_t headroom)
     new_buffer = ofpbuf_clone_data_with_headroom(ofpbuf_data(buffer),
                                                  ofpbuf_size(buffer),
                                                  headroom);
-    if (buffer->l2) {
-        uintptr_t data_delta = (char *)ofpbuf_data(new_buffer) - (char *)ofpbuf_data(buffer);
+    if (buffer->frame) {
+        uintptr_t data_delta
+            = (char *)ofpbuf_data(new_buffer) - (char *)ofpbuf_data(buffer);
 
-        new_buffer->l2 = (char *) buffer->l2 + data_delta;
+        new_buffer->frame = (char *) buffer->frame + data_delta;
     }
     new_buffer->l2_5_ofs = buffer->l2_5_ofs;
     new_buffer->l3_ofs = buffer->l3_ofs;
@@ -274,12 +275,12 @@ ofpbuf_resize__(struct ofpbuf *b, size_t new_headroom, size_t new_tailroom)
 
     new_data = (char *) new_base + new_headroom;
     if (ofpbuf_data(b) != new_data) {
-        uintptr_t data_delta = (char *) new_data - (char *) ofpbuf_data(b);
+        if (b->frame) {
+            uintptr_t data_delta = (char *) new_data - (char *) ofpbuf_data(b);
 
-        ofpbuf_set_data(b, new_data);
-        if (b->l2) {
-            b->l2 = (char *) b->l2 + data_delta;
+            b->frame = (char *) b->frame + data_delta;
         }
+        ofpbuf_set_data(b, new_data);
     }
 }
 
@@ -536,12 +537,12 @@ ofpbuf_resize_l2_5(struct ofpbuf *b, int increment)
         ofpbuf_pull(b, -increment);
     }
 
-    b->l2 = ofpbuf_data(b);
+    b->frame = ofpbuf_data(b);
     /* Adjust layer offsets after l2_5. */
     ofpbuf_adjust_layer_offset(&b->l3_ofs, increment);
     ofpbuf_adjust_layer_offset(&b->l4_ofs, increment);
 
-    return b->l2;
+    return b->frame;
 }
 
 /* Adjust the size of the l2 portion of the ofpbuf, updating the l2
@@ -552,5 +553,5 @@ ofpbuf_resize_l2(struct ofpbuf *b, int increment)
 {
     ofpbuf_resize_l2_5(b, increment);
     ofpbuf_adjust_layer_offset(&b->l2_5_ofs, increment);
-    return b->l2;
+    return b->frame;
 }

@@ -177,7 +177,7 @@ bundle_from_openflow(const struct nx_action_bundle *nab,
         ofpbuf_put(ofpacts, &ofp_port, sizeof ofp_port);
     }
 
-    bundle = ofpacts->l2;
+    bundle = ofpacts->frame;
     ofpact_update_len(ofpacts, &bundle->ofpact);
 
     if (!error) {
@@ -288,7 +288,7 @@ bundle_parse__(const char *s, char **save_ptr,
         }
         ofpbuf_put(ofpacts, &slave_port, sizeof slave_port);
 
-        bundle = ofpacts->l2;
+        bundle = ofpacts->frame;
         bundle->n_slaves++;
     }
     ofpact_update_len(ofpacts, &bundle->ofpact);

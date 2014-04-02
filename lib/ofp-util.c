@@ -1918,7 +1918,7 @@ ofputil_decode_meter_config(struct ofpbuf *msg,
     enum ofperr err;
 
     /* Pull OpenFlow headers for the first call. */
-    if (!msg->l2) {
+    if (!msg->frame) {
         ofpraw_pull_assert(msg);
     }
 
@@ -1994,7 +1994,7 @@ ofputil_decode_meter_stats(struct ofpbuf *msg,
     enum ofperr err;
 
     /* Pull OpenFlow headers for the first call. */
-    if (!msg->l2) {
+    if (!msg->frame) {
         ofpraw_pull_assert(msg);
     }
 
@@ -2475,7 +2475,7 @@ ofputil_pull_queue_get_config_reply(struct ofpbuf *reply,
     queue->min_rate = UINT16_MAX;
     queue->max_rate = UINT16_MAX;
 
-    oh = reply->l2;
+    oh = reply->frame;
     if (oh->version < OFP12_VERSION) {
         const struct ofp10_packet_queue *opq10;
 
@@ -2680,13 +2680,13 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
     enum ofperr error;
     enum ofpraw raw;
 
-    error = (msg->l2
-             ? ofpraw_decode(&raw, msg->l2)
+    error = (msg->frame
+             ? ofpraw_decode(&raw, msg->frame)
              : ofpraw_pull(&raw, msg));
     if (error) {
         return error;
     }
-    oh = msg->l2;
+    oh = msg->frame;
 
     if (!ofpbuf_size(msg)) {
         return EOF;
@@ -4400,8 +4400,7 @@ ofputil_decode_table_features(struct ofpbuf *msg,
     struct ofp13_table_features *otf;
     unsigned int len;
 
-    if (!msg->l2) {
-        msg->l2 = ofpbuf_data(msg);
+    if (!msg->frame) {
         ofpraw_pull_assert(msg);
     }
 
@@ -4942,8 +4941,7 @@ ofputil_decode_flow_monitor_request(struct ofputil_flow_monitor_request *rq,
     struct nx_flow_monitor_request *nfmr;
     uint16_t flags;
 
-    if (!msg->l2) {
-        msg->l2 = ofpbuf_data(msg);
+    if (!msg->frame) {
         ofpraw_pull_assert(msg);
     }
 
@@ -5027,8 +5025,7 @@ ofputil_decode_flow_update(struct ofputil_flow_update *update,
     unsigned int length;
     struct ofp_header *oh;
 
-    if (!msg->l2) {
-        msg->l2 = ofpbuf_data(msg);
+    if (!msg->frame) {
         ofpraw_pull_assert(msg);
     }
 
@@ -5040,7 +5037,7 @@ ofputil_decode_flow_update(struct ofputil_flow_update *update,
         goto bad_len;
     }
 
-    oh = msg->l2;
+    oh = msg->frame;
 
     nfuh = ofpbuf_data(msg);
     update->event = ntohs(nfuh->event);
@@ -5155,7 +5152,7 @@ ofputil_append_flow_update(const struct ofputil_flow_update *update,
 
     msg = ofpbuf_from_list(list_back(replies));
     start_ofs = ofpbuf_size(msg);
-    version = ((struct ofp_header *)msg->l2)->version;
+    version = ((struct ofp_header *)msg->frame)->version;
 
     if (update->event == NXFME_ABBREV) {
         struct nx_flow_update_abbrev *nfua;
@@ -6126,8 +6123,8 @@ ofputil_decode_port_stats(struct ofputil_port_stats *ps, struct ofpbuf *msg)
     enum ofperr error;
     enum ofpraw raw;
 
-    error = (msg->l2
-             ? ofpraw_decode(&raw, msg->l2)
+    error = (msg->frame
+             ? ofpraw_decode(&raw, msg->frame)
              : ofpraw_pull(&raw, msg));
     if (error) {
         return error;
@@ -6451,8 +6448,8 @@ ofputil_decode_group_stats_reply(struct ofpbuf *msg,
     size_t i;
 
     gs->bucket_stats = NULL;
-    error = (msg->l2
-             ? ofpraw_decode(&raw, msg->l2)
+    error = (msg->frame
+             ? ofpraw_decode(&raw, msg->frame)
              : ofpraw_pull(&raw, msg));
     if (error) {
         return error;
@@ -6631,7 +6628,7 @@ ofputil_decode_group_desc_reply(struct ofputil_group_desc *gd,
     struct ofp11_group_desc_stats *ogds;
     size_t length;
 
-    if (!msg->l2) {
+    if (!msg->frame) {
         ofpraw_pull_assert(msg);
     }
 
@@ -6934,8 +6931,8 @@ ofputil_decode_queue_stats(struct ofputil_queue_stats *qs, struct ofpbuf *msg)
     enum ofperr error;
     enum ofpraw raw;
 
-    error = (msg->l2
-             ? ofpraw_decode(&raw, msg->l2)
+    error = (msg->frame
+             ? ofpraw_decode(&raw, msg->frame)
              : ofpraw_pull(&raw, msg));
     if (error) {
         return error;

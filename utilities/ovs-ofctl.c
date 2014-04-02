@@ -2396,7 +2396,7 @@ recv_flow_stats_reply(struct vconn *vconn, ovs_be32 send_xid,
             return true;
 
         case EOF:
-            more = ofpmp_more(reply->l2);
+            more = ofpmp_more(reply->frame);
             ofpbuf_delete(reply);
             reply = NULL;
             if (!more) {

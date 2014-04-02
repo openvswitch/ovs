@@ -718,7 +718,7 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
 
     ovs_mutex_lock(&mutex);
 
-    eth = p->l2;
+    eth = ofpbuf_l2(p);
     ccm = ofpbuf_at(p, (uint8_t *)ofpbuf_l3(p) - (uint8_t *)ofpbuf_data(p),
                     CCM_ACCEPT_LEN);
 

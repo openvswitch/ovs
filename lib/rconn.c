@@ -721,9 +721,8 @@ rconn_send__(struct rconn *rc, struct ofpbuf *b,
             rconn_packet_counter_inc(counter, ofpbuf_size(b));
         }
 
-        /* Use 'l2' as a private pointer while 'b' is in txq. */
-        ovs_assert(b->l2 == ofpbuf_data(b));
-        b->l2 = counter;
+        /* Reuse 'frame' as a private pointer while 'b' is in txq. */
+        ofpbuf_set_frame(b, counter);
 
         list_push_back(&rc->txq, &b->list_node);
 
@@ -1108,18 +1107,18 @@ try_send(struct rconn *rc)
 {
     struct ofpbuf *msg = ofpbuf_from_list(rc->txq.next);
     unsigned int n_bytes = ofpbuf_size(msg);
-    struct rconn_packet_counter *counter = msg->l2;
+    struct rconn_packet_counter *counter = msg->frame;
     int retval;
 
     /* Eagerly remove 'msg' from the txq.  We can't remove it from the list
      * after sending, if sending is successful, because it is then owned by the
      * vconn, which might have freed it already. */
     list_remove(&msg->list_node);
-    msg->l2 = ofpbuf_data(msg); /* Restore 'l2'. */
+    ofpbuf_set_frame(msg, NULL);
 
     retval = vconn_send(rc->vconn, msg);
     if (retval) {
-        msg->l2 = counter; /* 'l2' is a private pointer while msg is in txq. */
+        ofpbuf_set_frame(msg, counter);
         list_push_front(&rc->txq, &msg->list_node);
         if (retval != EAGAIN) {
             report_error(rc, retval);
@@ -1212,7 +1211,7 @@ flush_queue(struct rconn *rc)
     }
     while (!list_is_empty(&rc->txq)) {
         struct ofpbuf *b = ofpbuf_from_list(list_pop_front(&rc->txq));
-        struct rconn_packet_counter *counter = b->l2;
+        struct rconn_packet_counter *counter = b->frame;
         if (counter) {
             rconn_packet_counter_dec(counter, ofpbuf_size(b));
         }

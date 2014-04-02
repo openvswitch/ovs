@@ -371,10 +371,7 @@ flow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
         flow->pkt_mark = md->pkt_mark;
     }
 
-    packet->l2   = ofpbuf_data(&b);
-    ofpbuf_set_l2_5(packet, NULL);
-    ofpbuf_set_l3(packet, NULL);
-    ofpbuf_set_l4(packet, NULL);
+    ofpbuf_set_frame(packet, ofpbuf_data(packet));
 
     if (ofpbuf_size(&b) < sizeof *eth) {
         return;
@@ -1330,7 +1327,7 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
     /* eth_compose() sets l3 pointer and makes sure it is 32-bit aligned. */
     eth_compose(b, flow->dl_dst, flow->dl_src, ntohs(flow->dl_type), 0);
     if (flow->dl_type == htons(FLOW_DL_TYPE_NONE)) {
-        struct eth_header *eth = b->l2;
+        struct eth_header *eth = ofpbuf_l2(b);
         eth->eth_type = htons(ofpbuf_size(b));
         return;
     }

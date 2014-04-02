@@ -168,13 +168,15 @@ compose_rarp(struct ofpbuf *b, const uint8_t eth_src[ETH_ADDR_LEN])
     put_16aligned_be32(&arp->ar_spa, htonl(0));
     memcpy(arp->ar_tha, eth_src, ETH_ADDR_LEN);
     put_16aligned_be32(&arp->ar_tpa, htonl(0));
+
+    ofpbuf_set_frame(b, eth);
+    ofpbuf_set_l3(b, arp);
 }
 
 /* Insert VLAN header according to given TCI. Packet passed must be Ethernet
  * packet.  Ignores the CFI bit of 'tci' using 0 instead.
  *
- * Also sets 'packet->l2' to point to the new Ethernet header and adjusts
- * the layer offsets accordingly. */
+ * Also adjusts the layer offsets accordingly. */
 void
 eth_push_vlan(struct ofpbuf *packet, ovs_be16 tpid, ovs_be16 tci)
 {
@@ -194,9 +196,9 @@ eth_push_vlan(struct ofpbuf *packet, ovs_be16 tpid, ovs_be16 tci)
 void
 eth_pop_vlan(struct ofpbuf *packet)
 {
-    struct vlan_eth_header *veh = packet->l2;
+    struct vlan_eth_header *veh = ofpbuf_l2(packet);
 
-    if (ofpbuf_size(packet) >= sizeof *veh
+    if (veh && ofpbuf_size(packet) >= sizeof *veh
         && veh->veth_type == htons(ETH_TYPE_VLAN)) {
 
         memmove((char *)veh + VLAN_HEADER_LEN, veh, 2 * ETH_ADDR_LEN);
@@ -208,7 +210,11 @@ eth_pop_vlan(struct ofpbuf *packet)
 static void
 set_ethertype(struct ofpbuf *packet, ovs_be16 eth_type)
 {
-    struct eth_header *eh = packet->l2;
+    struct eth_header *eh = ofpbuf_l2(packet);
+
+    if (!eh) {
+        return;
+    }
 
     if (eh->eth_type == htons(ETH_TYPE_VLAN)) {
         ovs_be16 *p;
@@ -545,8 +551,8 @@ ipv6_is_cidr(const struct in6_addr *netmask)
 /* Populates 'b' with an Ethernet II packet headed with the given 'eth_dst',
  * 'eth_src' and 'eth_type' parameters.  A payload of 'size' bytes is allocated
  * in 'b' and returned.  This payload may be populated with appropriate
- * information by the caller.  Sets 'b''s 'l2' pointer and 'l3' offset to the
- * Ethernet header and payload respectively.  Aligns b->l3 on a 32-bit
+ * information by the caller.  Sets 'b''s 'frame' pointer and 'l3' offset to
+ * the Ethernet header and payload respectively.  Aligns b->l3 on a 32-bit
  * boundary.
  *
  * The returned packet has enough headroom to insert an 802.1Q VLAN header if
@@ -572,7 +578,7 @@ eth_compose(struct ofpbuf *b, const uint8_t eth_dst[ETH_ADDR_LEN],
     memcpy(eth->eth_src, eth_src, ETH_ADDR_LEN);
     eth->eth_type = htons(eth_type);
 
-    b->l2 = eth;
+    ofpbuf_set_frame(b, eth);
     ofpbuf_set_l3(b, data);
 
     return data;
@@ -850,7 +856,7 @@ packet_set_sctp_port(struct ofpbuf *packet, ovs_be16 src, ovs_be16 dst)
 {
     struct sctp_header *sh = ofpbuf_l4(packet);
     ovs_be32 old_csum, old_correct_csum, new_csum;
-    uint16_t tp_len = ofpbuf_size(packet) - ((uint8_t*)sh - (uint8_t*)ofpbuf_data(packet));
+    uint16_t tp_len = ofpbuf_l4_size(packet);
 
     old_csum = sh->sctp_csum;
     sh->sctp_csum = 0;

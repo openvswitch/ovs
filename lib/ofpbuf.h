@@ -37,7 +37,25 @@ enum OVS_PACKED_ENUM ofpbuf_source {
 };
 
 /* Buffer for holding arbitrary data.  An ofpbuf is automatically reallocated
- * as necessary if it grows too large for the available memory. */
+ * as necessary if it grows too large for the available memory.
+ *
+ * 'frame' and offset conventions:
+ *
+ * Network frames (aka "packets"): 'frame' MUST be set to the start of the
+ *    packet, layer offsets MAY be set as appropriate for the packet.
+ *    Additionally, we assume in many places that the 'frame' and 'data' are
+ *    the same for packets.
+ *
+ * OpenFlow messages: 'frame' points to the start of the OpenFlow
+ *    header, while 'l3_ofs' is the length of the OpenFlow header.
+ *    When parsing, the 'data' will move past these, as data is being
+ *    pulled from the OpenFlow message.
+ *
+ * Actions: When encoding OVS action lists, the 'frame' is used
+ *    as a pointer to the beginning of the current action (see ofpact_put()).
+ *
+ * rconn: Reuses 'frame' as a private pointer while queuing.
+ */
 struct ofpbuf {
 #ifdef DPDK_NETDEV
     struct rte_mbuf mbuf;       /* DPDK mbuf */
@@ -48,13 +66,13 @@ struct ofpbuf {
 #endif
     uint32_t allocated;         /* Number of bytes allocated. */
 
-    void *l2;                   /* Link-level header. */
-    uint16_t l2_5_ofs;          /* MPLS label stack offset from l2, or
+    void *frame;                /* Packet frame start, or NULL. */
+    uint16_t l2_5_ofs;          /* MPLS label stack offset from 'packet', or
                                  * UINT16_MAX */
-    uint16_t l3_ofs;            /* Network-level header offset from l2, or
-                                 * UINT16_MAX. */
-    uint16_t l4_ofs;            /* Transport-level header offset from l2, or
-                                   UINT16_MAX. */
+    uint16_t l3_ofs;            /* Network-level header offset from 'packet',
+                                   or UINT16_MAX. */
+    uint16_t l4_ofs;            /* Transport-level header offset from 'packet',
+                                   or UINT16_MAX. */
     enum ofpbuf_source source;  /* Source of memory allocated as 'base'. */
     struct list list_node;      /* Private list element for use by owner. */
 };
@@ -69,6 +87,8 @@ static inline void ofpbuf_set_size(struct ofpbuf *, uint32_t);
 
 void * ofpbuf_resize_l2(struct ofpbuf *, int increment);
 void * ofpbuf_resize_l2_5(struct ofpbuf *, int increment);
+static inline void * ofpbuf_l2(const struct ofpbuf *);
+static inline void ofpbuf_set_frame(struct ofpbuf *, void *);
 static inline void * ofpbuf_l2_5(const struct ofpbuf *);
 static inline void ofpbuf_set_l2_5(struct ofpbuf *, void *);
 static inline void * ofpbuf_l3(const struct ofpbuf *);
@@ -247,34 +267,51 @@ static inline bool ofpbuf_equal(const struct ofpbuf *a, const struct ofpbuf *b)
            memcmp(ofpbuf_data(a), ofpbuf_data(b), ofpbuf_size(a)) == 0;
 }
 
+/* Get the start if the Ethernet frame.  'l3_ofs' marks the end of the l2
+ * headers, so return NULL if it is not set. */
+static inline void * ofpbuf_l2(const struct ofpbuf *b)
+{
+    return (b->l3_ofs != UINT16_MAX) ? b->frame : NULL;
+}
+
+/* Sets the packet frame start pointer and resets all layer offsets.
+ * l3 offset must be set before 'l2' can be retrieved. */
+static inline void ofpbuf_set_frame(struct ofpbuf *b, void *packet)
+{
+    b->frame = packet;
+    b->l2_5_ofs = UINT16_MAX;
+    b->l3_ofs = UINT16_MAX;
+    b->l4_ofs = UINT16_MAX;
+}
+
 static inline void * ofpbuf_l2_5(const struct ofpbuf *b)
 {
-    return b->l2_5_ofs != UINT16_MAX ? (char *)b->l2 + b->l2_5_ofs : NULL;
+    return b->l2_5_ofs != UINT16_MAX ? (char *)b->frame + b->l2_5_ofs : NULL;
 }
 
 static inline void ofpbuf_set_l2_5(struct ofpbuf *b, void *l2_5)
 {
-    b->l2_5_ofs = l2_5 ? (char *)l2_5 - (char *)b->l2 : UINT16_MAX;
+    b->l2_5_ofs = l2_5 ? (char *)l2_5 - (char *)b->frame : UINT16_MAX;
 }
 
 static inline void * ofpbuf_l3(const struct ofpbuf *b)
 {
-    return b->l3_ofs != UINT16_MAX ? (char *)b->l2 + b->l3_ofs : NULL;
+    return b->l3_ofs != UINT16_MAX ? (char *)b->frame + b->l3_ofs : NULL;
 }
 
 static inline void ofpbuf_set_l3(struct ofpbuf *b, void *l3)
 {
-    b->l3_ofs = l3 ? (char *)l3 - (char *)b->l2 : UINT16_MAX;
+    b->l3_ofs = l3 ? (char *)l3 - (char *)b->frame : UINT16_MAX;
 }
 
 static inline void * ofpbuf_l4(const struct ofpbuf *b)
 {
-    return b->l4_ofs != UINT16_MAX ? (char *)b->l2 + b->l4_ofs : NULL;
+    return b->l4_ofs != UINT16_MAX ? (char *)b->frame + b->l4_ofs : NULL;
 }
 
 static inline void ofpbuf_set_l4(struct ofpbuf *b, void *l4)
 {
-    b->l4_ofs = l4 ? (char *)l4 - (char *)b->l2 : UINT16_MAX;
+    b->l4_ofs = l4 ? (char *)l4 - (char *)b->frame : UINT16_MAX;
 }
 
 static inline size_t ofpbuf_l4_size(const struct ofpbuf *b)

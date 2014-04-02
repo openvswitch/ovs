@@ -33,10 +33,12 @@ static void
 odp_eth_set_addrs(struct ofpbuf *packet,
                   const struct ovs_key_ethernet *eth_key)
 {
-    struct eth_header *eh = packet->l2;
+    struct eth_header *eh = ofpbuf_l2(packet);
 
-    memcpy(eh->eth_src, eth_key->eth_src, sizeof eh->eth_src);
-    memcpy(eh->eth_dst, eth_key->eth_dst, sizeof eh->eth_dst);
+    if (eh) {
+        memcpy(eh->eth_src, eth_key->eth_src, sizeof eh->eth_src);
+        memcpy(eh->eth_dst, eth_key->eth_dst, sizeof eh->eth_dst);
+    }
 }
 
 static void

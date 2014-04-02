@@ -127,7 +127,7 @@ learn_from_openflow(const struct nx_action_learn *nal, struct ofpbuf *ofpacts)
         }
 
         spec = ofpbuf_put_zeros(ofpacts, sizeof *spec);
-        learn = ofpacts->l2;
+        learn = ofpacts->frame;
         learn->n_specs++;
 
         spec->src_type = header & NX_LEARN_SRC_MASK;
@@ -585,7 +585,7 @@ learn_parse__(char *orig, char *arg, struct ofpbuf *ofpacts)
             char *error;
 
             spec = ofpbuf_put_zeros(ofpacts, sizeof *spec);
-            learn = ofpacts->l2;
+            learn = ofpacts->frame;
             learn->n_specs++;
 
             error = learn_parse_spec(orig, name, value, spec);

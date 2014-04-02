@@ -225,7 +225,7 @@ dec_ttl_from_openflow(struct ofpbuf *out, enum ofputil_action_code compat)
     ids->ofpact.compat = compat;
     ids->n_controllers = 1;
     ofpbuf_put(out, &id, sizeof id);
-    ids = out->l2;
+    ids = out->frame;
     ofpact_update_len(out, &ids->ofpact);
     return error;
 }
@@ -258,7 +258,7 @@ dec_ttl_cnt_ids_from_openflow(const struct nx_action_cnt_ids *nac_ids,
     for (i = 0; i < ids->n_controllers; i++) {
         uint16_t id = ntohs(((ovs_be16 *)(nac_ids + 1))[i]);
         ofpbuf_put(out, &id, sizeof id);
-        ids = out->l2;
+        ids = out->frame;
     }
 
     ofpact_update_len(out, &ids->ofpact);
@@ -1077,7 +1077,7 @@ static void
 set_field_to_openflow(const struct ofpact_set_field *sf,
                       struct ofpbuf *openflow)
 {
-    struct ofp_header *oh = (struct ofp_header *)openflow->l2;
+    struct ofp_header *oh = (struct ofp_header *)openflow->frame;
 
     if (oh->version >= OFP12_VERSION) {
         set_field_to_openflow12(sf, openflow);
@@ -3608,7 +3608,7 @@ ofpact_put(struct ofpbuf *ofpacts, enum ofpact_type type, size_t len)
     struct ofpact *ofpact;
 
     ofpact_pad(ofpacts);
-    ofpact = ofpacts->l2 = ofpbuf_put_uninit(ofpacts, len);
+    ofpact = ofpacts->frame = ofpbuf_put_uninit(ofpacts, len);
     ofpact_init(ofpact, type, len);
     return ofpact;
 }
@@ -3631,7 +3631,7 @@ ofpact_init(struct ofpact *ofpact, enum ofpact_type type, size_t len)
 void
 ofpact_update_len(struct ofpbuf *ofpacts, struct ofpact *ofpact)
 {
-    ovs_assert(ofpact == ofpacts->l2);
+    ovs_assert(ofpact == ofpacts->frame);
     ofpact->len = (char *) ofpbuf_tail(ofpacts) - (char *) ofpact;
 }
 
