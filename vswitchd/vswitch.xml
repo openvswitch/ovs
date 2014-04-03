@@ -72,6 +72,22 @@
         host as displayed by <code>xe host-list</code>.
       </column>
 
+      <column name="other_config" key="stats-update-interval"
+              type='{"type": "integer", "minInteger": 5000}'>
+        <p>
+          Interval for updating statistics to the database, in milliseconds.
+          This option will affect the update of the <code>statistics</code>
+          column in the following tables: <code>Port</code>, <code>Interface
+          </code>, <code>Mirror</code>.
+        </p>
+        <p>
+          Default value is 5000 ms.
+        </p>
+        <p>
+          Getting statistics more frequently can be achieved via OpenFlow.
+        </p>
+      </column>
+
       <column name="other_config" key="flow-restore-wait"
               type='{"type": "boolean"}'>
         <p>
@@ -1211,7 +1227,9 @@
 
     <group title="Port Statistics">
       <p>
-        Key-value pairs that report port statistics.
+        Key-value pairs that report port statistics.  The update period
+        is controlled by <ref column="other_config"
+        key="stats-update-interval"/> in the <code>Open_vSwitch</code> table.
       </p>
       <group title="Statistics: STP transmit and receive counters">
         <column name="statistics" key="stp_tx_count">
@@ -1769,12 +1787,14 @@
     <group title="Statistics">
       <p>
         Key-value pairs that report interface statistics.  The current
-        implementation updates these counters periodically.  Future
-        implementations may update them when an interface is created, when they
-        are queried (e.g. using an OVSDB <code>select</code> operation), and
-        just before an interface is deleted due to virtual interface hot-unplug
-        or VM shutdown, and perhaps at other times, but not on any regular
-        periodic basis.
+        implementation updates these counters periodically.  The update period
+        is controlled by <ref column="other_config"
+        key="stats-update-interval"/> in the <code>Open_vSwitch</code> table.
+        Future implementations may update them when an interface is created,
+        when they are queried (e.g. using an OVSDB <code>select</code>
+        operation), and just before an interface is deleted due to virtual
+        interface hot-unplug or VM shutdown, and perhaps at other times, but
+        not on any regular periodic basis.
       </p>
       <p>
         These are the same statistics reported by OpenFlow in its <code>struct
@@ -2898,7 +2918,9 @@
 
     <group title="Statistics: Mirror counters">
       <p>
-        Key-value pairs that report mirror statistics.
+        Key-value pairs that report mirror statistics.  The update period
+        is controlled by <ref column="other_config"
+        key="stats-update-interval"/> in the <code>Open_vSwitch</code> table.
       </p>
       <column name="statistics" key="tx_packets">
         Number of packets transmitted through this mirror.

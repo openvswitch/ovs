@@ -182,8 +182,8 @@ static struct ovsdb_idl_txn *status_txn;
 
 /* Each time this timer expires, the bridge fetches interface and mirror
  * statistics and pushes them into the database. */
-#define IFACE_STATS_INTERVAL (5 * 1000) /* In milliseconds. */
-static long long int iface_stats_timer = LLONG_MIN;
+static int stats_timer_interval;
+static long long int stats_timer = LLONG_MIN;
 
 /* Set to true to allow experimental use of OpenFlow 1.4.
  * This is false initially because OpenFlow 1.4 is not yet safe to use: it can
@@ -2275,6 +2275,7 @@ bridge_run(void)
 
     bool vlan_splinters_changed;
     struct bridge *br;
+    int stats_interval;
 
     ovsrec_open_vswitch_init(&null_cfg);
 
@@ -2380,8 +2381,17 @@ bridge_run(void)
         }
     }
 
+    /* Statistics update interval should always be greater than or equal to
+     * 5000 ms. */
+    stats_interval = MAX(smap_get_int(&cfg->other_config,
+                                      "stats-update-interval", 5000), 5000);
+    if (stats_timer_interval != stats_interval) {
+        stats_timer_interval = stats_interval;
+        stats_timer = LLONG_MIN;
+    }
+
     /* Refresh interface and mirror stats if necessary. */
-    if (time_msec() >= iface_stats_timer) {
+    if (time_msec() >= stats_timer) {
         if (cfg) {
             struct ovsdb_idl_txn *txn;
 
@@ -2410,7 +2420,7 @@ bridge_run(void)
             ovsdb_idl_txn_destroy(txn); /* XXX */
         }
 
-        iface_stats_timer = time_msec() + IFACE_STATS_INTERVAL;
+        stats_timer = time_msec() + stats_timer_interval;
     }
 
     if (!status_txn) {
@@ -2477,7 +2487,8 @@ bridge_wait(void)
         HMAP_FOR_EACH (br, node, &all_bridges) {
             ofproto_wait(br->ofproto);
         }
-        poll_timer_wait_until(iface_stats_timer);
+
+        poll_timer_wait_until(stats_timer);
     }
 
     /* If the status database transaction is 'TXN_INCOMPLETE' in this run,
