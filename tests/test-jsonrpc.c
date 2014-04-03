@@ -35,10 +35,9 @@
 #include "vlog.h"
 #include "ovstest.h"
 
-static struct command all_commands[];
-
 static void usage(void) NO_RETURN;
 static void parse_options(int argc, char *argv[]);
+static struct command *get_all_commands(void);
 
 static void
 test_jsonrpc_main(int argc, char *argv[])
@@ -46,7 +45,7 @@ test_jsonrpc_main(int argc, char *argv[])
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
     parse_options(argc, argv);
-    run_command(argc - optind, argv + optind, all_commands);
+    run_command(argc - optind, argv + optind, get_all_commands());
 }
 
 static void
@@ -336,5 +335,11 @@ static struct command all_commands[] = {
     { "help", 0, INT_MAX, do_help },
     { NULL, 0, 0, NULL },
 };
+
+static struct command *
+get_all_commands(void)
+{
+    return all_commands;
+}
 
 OVSTEST_REGISTER("test-jsonrpc", test_jsonrpc_main);

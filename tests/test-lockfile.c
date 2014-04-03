@@ -35,7 +35,7 @@ struct test {
     void (*function)(void);
 };
 
-static const struct test tests[];
+static void run_help(void);
 
 #define CHECK(A, B) check(A, B, #A, #B, __FILE__, __LINE__)
 static void
@@ -237,19 +237,6 @@ run_lock_symlink_to_dir(void)
     lockfile_unlock(a);
 }
 
-static void
-run_help(void)
-{
-    size_t i;
-
-    printf("usage: %s TESTNAME\n"
-           "where TESTNAME is one of the following:\n",
-           program_name);
-    for (i = 0; tests[i].name; i++) {
-        fprintf(stderr, "\t%s\n", tests[i].name);
-    }
-}
-
 static const struct test tests[] = {
 #define TEST(NAME) { #NAME, run_##NAME }
     TEST(lock_and_unlock),
@@ -266,6 +253,19 @@ static const struct test tests[] = {
     { NULL, NULL }
 #undef TEST
 };
+
+static void
+run_help(void)
+{
+    size_t i;
+
+    printf("usage: %s TESTNAME\n"
+           "where TESTNAME is one of the following:\n",
+           program_name);
+    for (i = 0; tests[i].name; i++) {
+        fprintf(stderr, "\t%s\n", tests[i].name);
+    }
+}
 
 static void
 test_lockfile_main(int argc, char *argv[])

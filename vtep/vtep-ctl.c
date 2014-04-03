@@ -115,9 +115,6 @@ static int timeout;
 /* Format for table output. */
 static struct table_style table_style = TABLE_STYLE_DEFAULT;
 
-/* All supported commands. */
-static const struct vtep_ctl_command_syntax all_commands[];
-
 /* The IDL we're using and the current transaction, if any.
  * This is for use by vtep_ctl_exit() only, to allow it to clean up.
  * Other code should use its context arguments. */
@@ -155,6 +152,7 @@ static bool is_condition_satisfied(const struct vtep_ctl_table_class *,
 static struct vtep_ctl_lswitch *find_lswitch(struct vtep_ctl_context *,
                                              const char *name,
                                              bool must_exist);
+static const struct vtep_ctl_command_syntax *get_all_commands(void);
 
 int
 main(int argc, char *argv[])
@@ -285,7 +283,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
     options = xmemdup(global_long_options, sizeof global_long_options);
     allocated_options = ARRAY_SIZE(global_long_options);
     n_options = n_global_long_options;
-    for (p = all_commands; p->name; p++) {
+    for (p = get_all_commands(); p->name; p++) {
         if (p->options[0]) {
             char *save_ptr = NULL;
             char *name;
@@ -544,7 +542,7 @@ find_command(const char *name)
     if (shash_is_empty(&commands)) {
         const struct vtep_ctl_command_syntax *p;
 
-        for (p = all_commands; p->name; p++) {
+        for (p = get_all_commands(); p->name; p++) {
             shash_add_assert(&commands, p->name, p);
         }
     }
@@ -3890,3 +3888,8 @@ static const struct vtep_ctl_command_syntax all_commands[] = {
     {NULL, 0, 0, NULL, NULL, NULL, NULL, RO},
 };
 
+static const struct vtep_ctl_command_syntax *
+get_all_commands(void)
+{
+    return all_commands;
+}

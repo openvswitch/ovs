@@ -51,17 +51,16 @@
 #include "util.h"
 #include "vlog.h"
 
-static struct command all_commands[];
-
 static void usage(void) NO_RETURN;
 static void parse_options(int argc, char *argv[]);
+static struct command *get_all_commands(void);
 
 int
 main(int argc, char *argv[])
 {
     set_program_name(argv[0]);
     parse_options(argc, argv);
-    run_command(argc - optind, argv + optind, all_commands);
+    run_command(argc - optind, argv + optind, get_all_commands());
     return 0;
 }
 
@@ -1993,3 +1992,9 @@ static struct command all_commands[] = {
     { "help", 0, INT_MAX, do_help },
     { NULL, 0, 0, NULL },
 };
+
+static struct command *
+get_all_commands(void)
+{
+    return all_commands;
+}
