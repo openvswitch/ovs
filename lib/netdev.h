@@ -284,6 +284,7 @@ int netdev_set_queue(struct netdev *,
 int netdev_delete_queue(struct netdev *, unsigned int queue_id);
 int netdev_get_queue_stats(const struct netdev *, unsigned int queue_id,
                            struct netdev_queue_stats *);
+uint64_t netdev_get_change_seq(const struct netdev *);
 
 struct netdev_queue_dump {
     struct netdev *netdev;

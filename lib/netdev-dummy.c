@@ -20,7 +20,6 @@
 
 #include <errno.h>
 
-#include "connectivity.h"
 #include "dpif-netdev.h"
 #include "flow.h"
 #include "list.h"
@@ -32,7 +31,6 @@
 #include "packets.h"
 #include "pcap-file.h"
 #include "poll-loop.h"
-#include "seq.h"
 #include "shash.h"
 #include "sset.h"
 #include "stream.h"
@@ -873,7 +871,7 @@ netdev_dummy_set_etheraddr(struct netdev *netdev,
     ovs_mutex_lock(&dev->mutex);
     if (!eth_addr_equals(dev->hwaddr, mac)) {
         memcpy(dev->hwaddr, mac, ETH_ADDR_LEN);
-        seq_change(connectivity_seq_get());
+        netdev_change_seq_changed(netdev);
     }
     ovs_mutex_unlock(&dev->mutex);
 
@@ -968,7 +966,7 @@ netdev_dummy_update_flags__(struct netdev_dummy *netdev,
     netdev->flags |= on;
     netdev->flags &= ~off;
     if (*old_flagsp != netdev->flags) {
-        seq_change(connectivity_seq_get());
+        netdev_change_seq_changed(&netdev->up);
     }
 
     return 0;

@@ -28,7 +28,6 @@
 #include <unistd.h>
 #include <stdio.h>
 
-#include "connectivity.h"
 #include "dpif-netdev.h"
 #include "list.h"
 #include "netdev-dpdk.h"
@@ -41,7 +40,6 @@
 #include "ovs-rcu.h"
 #include "packets.h"
 #include "shash.h"
-#include "seq.h"
 #include "sset.h"
 #include "unaligned.h"
 #include "timeval.h"
@@ -318,7 +316,7 @@ check_link_status(struct netdev_dpdk *dev)
     rte_eth_link_get_nowait(dev->port_id, &link);
 
     if (dev->link.link_status != link.link_status) {
-        seq_change(connectivity_seq_get());
+        netdev_change_seq_changed(&dev->up);
 
         dev->link_reset_cnt++;
         dev->link = link;

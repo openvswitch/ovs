@@ -47,7 +47,6 @@
 #endif
 
 #include "rtbsd.h"
-#include "connectivity.h"
 #include "coverage.h"
 #include "dpif-netdev.h"
 #include "dynamic-string.h"
@@ -57,7 +56,6 @@
 #include "ovs-thread.h"
 #include "packets.h"
 #include "poll-loop.h"
-#include "seq.h"
 #include "shash.h"
 #include "socket-util.h"
 #include "svec.h"
@@ -217,7 +215,7 @@ netdev_bsd_cache_cb(const struct rtbsd_change *change,
             if (is_netdev_bsd_class(netdev_class)) {
                 dev = netdev_bsd_cast(base_dev);
                 dev->cache_valid = 0;
-                seq_change(connectivity_seq_get());
+                netdev_change_seq_changed(base_dev);
             }
             netdev_close(base_dev);
         }
@@ -235,7 +233,7 @@ netdev_bsd_cache_cb(const struct rtbsd_change *change,
             struct netdev *netdev = node->data;
             dev = netdev_bsd_cast(netdev);
             dev->cache_valid = 0;
-            seq_change(connectivity_seq_get());
+            netdev_change_seq_changed(netdev);
             netdev_close(netdev);
         }
         shash_destroy(&device_shash);
@@ -774,7 +772,7 @@ netdev_bsd_set_etheraddr(struct netdev *netdev_,
         if (!error) {
             netdev->cache_valid |= VALID_ETHERADDR;
             memcpy(netdev->etheraddr, mac, ETH_ADDR_LEN);
-            seq_change(connectivity_seq_get());
+            netdev_change_seq_changed(netdev_);
         }
     }
     ovs_mutex_unlock(&netdev->mutex);
@@ -1228,7 +1226,7 @@ netdev_bsd_set_in4(struct netdev *netdev_, struct in_addr addr,
                 netdev->netmask = mask;
             }
         }
-        seq_change(connectivity_seq_get());
+        netdev_change_seq_changed(netdev_);
     }
     ovs_mutex_unlock(&netdev->mutex);
 
@@ -1526,7 +1524,7 @@ netdev_bsd_update_flags(struct netdev *netdev_, enum netdev_flags off,
         new_flags = (old_flags & ~nd_to_iff_flags(off)) | nd_to_iff_flags(on);
         if (new_flags != old_flags) {
             error = set_flags(netdev_get_kernel_name(netdev_), new_flags);
-            seq_change(connectivity_seq_get());
+            netdev_change_seq_changed(netdev_);
         }
     }
     return error;

@@ -25,7 +25,6 @@
 #include <sys/ioctl.h>
 
 #include "byte-order.h"
-#include "connectivity.h"
 #include "daemon.h"
 #include "dirs.h"
 #include "dpif.h"
@@ -36,7 +35,6 @@
 #include "ofpbuf.h"
 #include "packets.h"
 #include "route-table.h"
-#include "seq.h"
 #include "shash.h"
 #include "socket-util.h"
 #include "vlog.h"
@@ -212,7 +210,7 @@ netdev_vport_set_etheraddr(struct netdev *netdev_,
     ovs_mutex_lock(&netdev->mutex);
     memcpy(netdev->etheraddr, mac, ETH_ADDR_LEN);
     ovs_mutex_unlock(&netdev->mutex);
-    seq_change(connectivity_seq_get());
+    netdev_change_seq_changed(netdev_);
 
     return 0;
 }
@@ -486,7 +484,7 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
 
     ovs_mutex_lock(&dev->mutex);
     dev->tnl_cfg = tnl_cfg;
-    seq_change(connectivity_seq_get());
+    netdev_change_seq_changed(dev_);
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
@@ -660,7 +658,7 @@ set_patch_config(struct netdev *dev_, const struct smap *args)
     ovs_mutex_lock(&dev->mutex);
     free(dev->peer);
     dev->peer = xstrdup(peer);
-    seq_change(connectivity_seq_get());
+    netdev_change_seq_changed(dev_);
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;

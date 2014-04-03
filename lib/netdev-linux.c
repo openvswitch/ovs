@@ -47,7 +47,6 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "connectivity.h"
 #include "coverage.h"
 #include "dpif-linux.h"
 #include "dpif-netdev.h"
@@ -66,7 +65,6 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "rtnetlink-link.h"
-#include "seq.h"
 #include "shash.h"
 #include "socket-util.h"
 #include "sset.h"
@@ -616,7 +614,7 @@ netdev_linux_changed(struct netdev_linux *dev,
                      unsigned int ifi_flags, unsigned int mask)
     OVS_REQUIRES(dev->mutex)
 {
-    seq_change(connectivity_seq_get());
+    netdev_change_seq_changed(&dev->up);
 
     if ((dev->ifi_flags ^ ifi_flags) & IFF_RUNNING) {
         dev->carrier_resets++;

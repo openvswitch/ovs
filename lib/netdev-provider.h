@@ -19,8 +19,10 @@
 
 /* Generic interface to network devices. */
 
+#include "connectivity.h"
 #include "netdev.h"
 #include "list.h"
+#include "seq.h"
 #include "shash.h"
 #include "smap.h"
 
@@ -38,12 +40,30 @@ struct netdev {
     const struct netdev_class *netdev_class; /* Functions to control
                                                 this device. */
 
+    /* A sequence number which indicates changes in one of 'netdev''s
+     * properties.   It must be nonzero so that users have a value which
+     * they may use as a reset when tracking 'netdev'.
+     *
+     * Minimally, the sequence number is required to change whenever
+     * 'netdev''s flags, features, ethernet address, or carrier changes. */
+    uint64_t change_seq;
+
     /* The following are protected by 'netdev_mutex' (internal to netdev.c). */
     int n_rxq;
     int ref_cnt;                        /* Times this devices was opened. */
     struct shash_node *node;            /* Pointer to element in global map. */
     struct list saved_flags_list; /* Contains "struct netdev_saved_flags". */
 };
+
+static void
+netdev_change_seq_changed(struct netdev *netdev)
+{
+    seq_change(connectivity_seq_get());
+    netdev->change_seq++;
+    if (!netdev->change_seq) {
+        netdev->change_seq++;
+    }
+}
 
 const char *netdev_get_type(const struct netdev *);
 const struct netdev_class *netdev_get_class(const struct netdev *);

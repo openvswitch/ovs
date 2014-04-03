@@ -24,7 +24,6 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "connectivity.h"
 #include "coverage.h"
 #include "dpif.h"
 #include "dynamic-string.h"
@@ -38,7 +37,6 @@
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
-#include "seq.h"
 #include "shash.h"
 #include "smap.h"
 #include "sset.h"
@@ -340,6 +338,7 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
                 memset(netdev, 0, sizeof *netdev);
                 netdev->netdev_class = rc->class;
                 netdev->name = xstrdup(name);
+                netdev->change_seq = 1;
                 netdev->node = shash_add(&netdev_shash, name, netdev);
 
                 /* By default enable one rx queue per netdev. */
@@ -355,7 +354,7 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
                     int old_ref_cnt;
 
                     atomic_add(&rc->ref_cnt, 1, &old_ref_cnt);
-                    seq_change(connectivity_seq_get());
+                    netdev_change_seq_changed(netdev);
                 } else {
                     free(netdev->name);
                     ovs_assert(list_is_empty(&netdev->saved_flags_list));
@@ -1648,4 +1647,10 @@ restore_all_flags(void *aux OVS_UNUSED)
                                                &old_flags);
         }
     }
+}
+
+uint64_t
+netdev_get_change_seq(const struct netdev *netdev)
+{
+    return netdev->change_seq;
 }
