@@ -49,6 +49,7 @@ void bfd_unref(struct bfd *);
 
 void bfd_account_rx(struct bfd *, const struct dpif_flow_stats *);
 bool bfd_forwarding(struct bfd *);
+bool bfd_check_status_change(struct bfd *);
 void bfd_get_status(const struct bfd *, struct smap *);
 void bfd_set_netdev(struct bfd *, const struct netdev *);
 long long int bfd_wake_time(const struct bfd *);

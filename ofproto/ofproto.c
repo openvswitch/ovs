@@ -1018,10 +1018,12 @@ ofproto_port_set_bfd(struct ofproto *ofproto, ofp_port_t ofp_port,
     }
 }
 
-/* Populates 'status' with key value pairs indicating the status of the BFD
- * session on 'ofp_port'.  This information is intended to be populated in the
- * OVS database.  Has no effect if 'ofp_port' is not na OpenFlow port in
- * 'ofproto'. */
+/* Populates 'status' with the status of BFD on 'ofport'.  Returns 0 on
+ * success.  Returns a negative number if there is no status change since
+ * last update.  Returns a positive errno otherwise.  Has no effect if
+ * 'ofp_port' is not an OpenFlow port in 'ofproto'.
+ *
+ * The caller must provide and own '*status'. */
 int
 ofproto_port_get_bfd_status(struct ofproto *ofproto, ofp_port_t ofp_port,
                             struct smap *status)
@@ -3755,20 +3757,22 @@ ofproto_get_netflow_ids(const struct ofproto *ofproto,
     ofproto->ofproto_class->get_netflow_ids(ofproto, engine_type, engine_id);
 }
 
-/* Checks the status of CFM configured on 'ofp_port' within 'ofproto'.  Returns
- * true if the port's CFM status was successfully stored into '*status'.
- * Returns false if the port did not have CFM configured, in which case
- * '*status' is indeterminate.
+/* Checks the status of CFM configured on 'ofp_port' within 'ofproto'.
+ * Returns 0 if the port's CFM status was successfully stored into
+ * '*status'.  Returns positive errno if the port did not have CFM
+ * configured.  Returns negative number if there is no status change
+ * since last update.
  *
- * The caller must provide and owns '*status', and must free 'status->rmps'. */
-bool
+ * The caller must provide and own '*status', and must free 'status->rmps'.
+ * '*status' is indeterminate if the return value is non-zero. */
+int
 ofproto_port_get_cfm_status(const struct ofproto *ofproto, ofp_port_t ofp_port,
                             struct ofproto_cfm_status *status)
 {
     struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
-    return (ofport
-            && ofproto->ofproto_class->get_cfm_status
-            && ofproto->ofproto_class->get_cfm_status(ofport, status));
+    return (ofport && ofproto->ofproto_class->get_cfm_status
+            ? ofproto->ofproto_class->get_cfm_status(ofport, status)
+            : EOPNOTSUPP);
 }
 
 static enum ofperr

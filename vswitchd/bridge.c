@@ -1876,9 +1876,13 @@ iface_refresh_cfm_stats(struct iface *iface)
 {
     const struct ovsrec_interface *cfg = iface->cfg;
     struct ofproto_cfm_status status;
+    int error;
 
-    if (!ofproto_port_get_cfm_status(iface->port->bridge->ofproto,
-                                    iface->ofp_port, &status)) {
+    error = ofproto_port_get_cfm_status(iface->port->bridge->ofproto,
+                                        iface->ofp_port, &status);
+    if (error < 0) {
+        /* Do nothing if there is no status change since last update. */
+    } else if (error > 0) {
         ovsrec_interface_set_cfm_fault(cfg, NULL, 0);
         ovsrec_interface_set_cfm_fault_status(cfg, NULL, 0);
         ovsrec_interface_set_cfm_remote_opstate(cfg, NULL);
@@ -2286,9 +2290,11 @@ instant_stats_run(void)
                 iface_refresh_cfm_stats(iface);
 
                 smap_init(&smap);
-                ofproto_port_get_bfd_status(br->ofproto, iface->ofp_port,
-                                            &smap);
-                ovsrec_interface_set_bfd_status(iface->cfg, &smap);
+                error = ofproto_port_get_bfd_status(br->ofproto, iface->ofp_port,
+                                                    &smap);
+                if (error >= 0) {
+                    ovsrec_interface_set_bfd_status(iface->cfg, &smap);
+                }
                 smap_destroy(&smap);
             }
         }

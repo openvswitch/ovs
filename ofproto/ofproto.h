@@ -419,9 +419,9 @@ struct ofproto_cfm_status {
     size_t n_rmps;
 };
 
-bool ofproto_port_get_cfm_status(const struct ofproto *,
-                                 ofp_port_t ofp_port,
-                                 struct ofproto_cfm_status *);
+int ofproto_port_get_cfm_status(const struct ofproto *,
+                                ofp_port_t ofp_port,
+                                struct ofproto_cfm_status *);
 
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
  *

@@ -78,6 +78,9 @@ enum { N_TABLES = 255 };
 enum { TBL_INTERNAL = N_TABLES - 1 };    /* Used for internal hidden rules. */
 BUILD_ASSERT_DECL(N_TABLES >= 2 && N_TABLES <= 255);
 
+/* No bfd/cfm status change. */
+#define NO_STATUS_CHANGE -1
+
 struct flow_miss;
 
 struct rule_dpif {
@@ -1813,22 +1816,28 @@ out:
     return error;
 }
 
-static bool
+static int
 get_cfm_status(const struct ofport *ofport_,
                struct ofproto_cfm_status *status)
 {
     struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
+    int ret = 0;
 
     if (ofport->cfm) {
-        status->faults = cfm_get_fault(ofport->cfm);
-        status->flap_count = cfm_get_flap_count(ofport->cfm);
-        status->remote_opstate = cfm_get_opup(ofport->cfm);
-        status->health = cfm_get_health(ofport->cfm);
-        cfm_get_remote_mpids(ofport->cfm, &status->rmps, &status->n_rmps);
-        return true;
+        if (cfm_check_status_change(ofport->cfm)) {
+            status->faults = cfm_get_fault(ofport->cfm);
+            status->flap_count = cfm_get_flap_count(ofport->cfm);
+            status->remote_opstate = cfm_get_opup(ofport->cfm);
+            status->health = cfm_get_health(ofport->cfm);
+            cfm_get_remote_mpids(ofport->cfm, &status->rmps, &status->n_rmps);
+        } else {
+            ret = NO_STATUS_CHANGE;
+        }
     } else {
-        return false;
+        ret = ENOENT;
     }
+
+    return ret;
 }
 
 static int
@@ -1853,13 +1862,19 @@ static int
 get_bfd_status(struct ofport *ofport_, struct smap *smap)
 {
     struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
+    int ret = 0;
 
     if (ofport->bfd) {
-        bfd_get_status(ofport->bfd, smap);
-        return 0;
+        if (bfd_check_status_change(ofport->bfd)) {
+            bfd_get_status(ofport->bfd, smap);
+        } else {
+            ret = NO_STATUS_CHANGE;
+        }
     } else {
-        return ENOENT;
+        ret = ENOENT;
     }
+
+    return ret;
 }
 
 /* Spanning Tree. */

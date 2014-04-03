@@ -76,6 +76,7 @@ void cfm_set_netdev(struct cfm *, const struct netdev *);
 bool cfm_should_process_flow(const struct cfm *cfm, const struct flow *,
                              struct flow_wildcards *);
 void cfm_process_heartbeat(struct cfm *, const struct ofpbuf *packet);
+bool cfm_check_status_change(struct cfm *);
 int cfm_get_fault(const struct cfm *);
 uint64_t cfm_get_flap_count(const struct cfm *);
 int cfm_get_health(const struct cfm *);
