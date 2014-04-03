@@ -78,3 +78,13 @@ FreeBSD|NetBSD)
     LOOPBACK_INTERFACE=lo0
     ;;
 esac
+
+# Check for MINGW platform.
+case `uname` in
+MINGW*)
+    IS_WIN32="yes"
+    ;;
+*)
+    IS_WIN32="no"
+    ;;
+esac
