@@ -6,6 +6,7 @@
 /idltest.c
 /idltest.h
 /idltest.ovsidl
+/ovstest
 /ovs-pki.log
 /pki/
 /test-aes128
