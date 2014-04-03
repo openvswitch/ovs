@@ -1514,7 +1514,13 @@ ofproto_run(struct ofproto *p)
          * need this two-phase approach. */
         sset_init(&devnames);
         HMAP_FOR_EACH (ofport, hmap_node, &p->ports) {
-            sset_add(&devnames, netdev_get_name(ofport->netdev));
+            uint64_t port_change_seq;
+
+            port_change_seq = netdev_get_change_seq(ofport->netdev);
+            if (ofport->change_seq != port_change_seq) {
+                ofport->change_seq = port_change_seq;
+                sset_add(&devnames, netdev_get_name(ofport->netdev));
+            }
         }
         SSET_FOR_EACH (devname, &devnames) {
             update_port(p, devname);
@@ -2210,6 +2216,7 @@ ofport_install(struct ofproto *p,
     }
     ofport->ofproto = p;
     ofport->netdev = netdev;
+    ofport->change_seq = netdev_get_change_seq(netdev);
     ofport->pp = *pp;
     ofport->ofp_port = pp->port_no;
     ofport->created = time_msec();
@@ -2446,6 +2453,7 @@ update_port(struct ofproto *ofproto, const char *name)
              * Don't close the old netdev yet in case port_modified has to
              * remove a retained reference to it.*/
             port->netdev = netdev;
+            port->change_seq = netdev_get_change_seq(netdev);
 
             if (port->ofproto->ofproto_class->port_modified) {
                 port->ofproto->ofproto_class->port_modified(port);

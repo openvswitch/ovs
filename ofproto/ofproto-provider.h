@@ -174,6 +174,7 @@ struct ofport {
     struct netdev *netdev;
     struct ofputil_phy_port pp;
     ofp_port_t ofp_port;        /* OpenFlow port number. */
+    uint64_t change_seq;
     long long int created;      /* Time created, in msec. */
     int mtu;
 };
