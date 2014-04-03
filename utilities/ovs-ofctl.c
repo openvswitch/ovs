@@ -1964,7 +1964,7 @@ ofctl_ping(int argc, char *argv[])
         if (ofptype_pull(&type, reply)
             || type != OFPTYPE_ECHO_REPLY
             || ofpbuf_size(reply) != payload
-            || memcmp(ofpbuf_get_l3(request), ofpbuf_get_l3(reply), payload)) {
+            || memcmp(ofpbuf_l3(request), ofpbuf_l3(reply), payload)) {
             printf("Reply does not match request.  Request:\n");
             ofp_print(stdout, request, ofpbuf_size(request), verbosity + 2);
             printf("Reply:\n");

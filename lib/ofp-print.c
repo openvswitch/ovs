@@ -68,16 +68,16 @@ ofp_packet_to_string(const void *data, size_t len)
     flow_extract(&buf, &md, &flow);
     flow_format(&ds, &flow);
 
-    l4_size = ofpbuf_get_l4_size(&buf);
+    l4_size = ofpbuf_l4_size(&buf);
 
     if (flow.nw_proto == IPPROTO_TCP && l4_size >= TCP_HEADER_LEN) {
-        struct tcp_header *th = ofpbuf_get_l4(&buf);
+        struct tcp_header *th = ofpbuf_l4(&buf);
         ds_put_format(&ds, " tcp_csum:%"PRIx16, ntohs(th->tcp_csum));
     } else if (flow.nw_proto == IPPROTO_UDP && l4_size >= UDP_HEADER_LEN) {
-        struct udp_header *uh = ofpbuf_get_l4(&buf);
+        struct udp_header *uh = ofpbuf_l4(&buf);
         ds_put_format(&ds, " udp_csum:%"PRIx16, ntohs(uh->udp_csum));
     } else if (flow.nw_proto == IPPROTO_SCTP && l4_size >= SCTP_HEADER_LEN) {
-        struct sctp_header *sh = ofpbuf_get_l4(&buf);
+        struct sctp_header *sh = ofpbuf_l4(&buf);
         ds_put_format(&ds, " sctp_csum:%"PRIx32, ntohl(sh->sctp_csum));
     }
 

@@ -2176,7 +2176,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         nfm->command = ofputil_tid_command(fm, protocol);
         nfm->cookie = fm->new_cookie;
         match_len = nx_put_match(msg, &fm->match, fm->cookie, fm->cookie_mask);
-        nfm = ofpbuf_get_l3(msg);
+        nfm = ofpbuf_l3(msg);
         nfm->idle_timeout = htons(fm->idle_timeout);
         nfm->hard_timeout = htons(fm->hard_timeout);
         nfm->priority = htons(fm->priority);
@@ -2396,7 +2396,7 @@ ofputil_append_queue_get_config_reply(struct ofpbuf *reply,
         struct ofp12_packet_queue *opq12;
         ovs_be32 port;
 
-        qgcr11 = ofpbuf_get_l3(reply);
+        qgcr11 = ofpbuf_l3(reply);
         port = qgcr11->port;
 
         opq12 = ofpbuf_put_zeros(reply, sizeof *opq12);
@@ -2636,7 +2636,7 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
         match_len = nx_put_match(msg, &fsr->match,
                                  fsr->cookie, fsr->cookie_mask);
 
-        nfsr = ofpbuf_get_l3(msg);
+        nfsr = ofpbuf_l3(msg);
         nfsr->out_port = htons(ofp_to_u16(fsr->out_port));
         nfsr->match_len = htons(match_len);
         nfsr->table_id = fsr->table_id;
@@ -2982,7 +2982,7 @@ ofputil_decode_aggregate_stats_reply(struct ofputil_aggregate_stats *stats,
     ofpbuf_use_const(&msg, reply, ntohs(reply->length));
     ofpraw_pull_assert(&msg);
 
-    asr = ofpbuf_get_l3(&msg);
+    asr = ofpbuf_l3(&msg);
     stats->packet_count = ntohll(get_32aligned_be64(&asr->packet_count));
     stats->byte_count = ntohll(get_32aligned_be64(&asr->byte_count));
     stats->flow_count = ntohl(asr->flow_count);
@@ -3134,7 +3134,7 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
         nfr = ofpbuf_put_zeros(msg, sizeof *nfr);
         match_len = nx_put_match(msg, &fr->match, 0, 0);
 
-        nfr = ofpbuf_get_l3(msg);
+        nfr = ofpbuf_l3(msg);
         nfr->cookie = fr->cookie;
         nfr->priority = htons(fr->priority);
         nfr->reason = fr->reason;
@@ -3346,7 +3346,7 @@ ofputil_encode_nx_packet_in(const struct ofputil_packet_in *pin)
     ofpbuf_put_zeros(packet, 2);
     ofpbuf_put(packet, pin->packet, pin->packet_len);
 
-    npi = ofpbuf_get_l3(packet);
+    npi = ofpbuf_l3(packet);
     npi->buffer_id = htonl(pin->buffer_id);
     npi->total_len = htons(pin->total_len);
     npi->reason = pin->reason;
@@ -3410,7 +3410,7 @@ ofputil_encode_ofp12_packet_in(const struct ofputil_packet_in *pin,
     ofpbuf_put_zeros(packet, 2);
     ofpbuf_put(packet, pin->packet, pin->packet_len);
 
-    opi = ofpbuf_get_l3(packet);
+    opi = ofpbuf_l3(packet);
     opi->pi.buffer_id = htonl(pin->buffer_id);
     opi->pi.total_len = htons(pin->total_len);
     opi->pi.reason = pin->reason;
@@ -4629,7 +4629,7 @@ ofputil_decode_role_message(const struct ofp_header *oh,
 
     if (raw == OFPRAW_OFPT12_ROLE_REQUEST ||
         raw == OFPRAW_OFPT12_ROLE_REPLY) {
-        const struct ofp12_role_request *orr = ofpbuf_get_l3(&b);
+        const struct ofp12_role_request *orr = ofpbuf_l3(&b);
 
         if (orr->role != htonl(OFPCR12_ROLE_NOCHANGE) &&
             orr->role != htonl(OFPCR12_ROLE_EQUAL) &&
@@ -4650,7 +4650,7 @@ ofputil_decode_role_message(const struct ofp_header *oh,
         }
     } else if (raw == OFPRAW_NXT_ROLE_REQUEST ||
                raw == OFPRAW_NXT_ROLE_REPLY) {
-        const struct nx_role_request *nrr = ofpbuf_get_l3(&b);
+        const struct nx_role_request *nrr = ofpbuf_l3(&b);
 
         BUILD_ASSERT(NX_ROLE_OTHER + 1 == OFPCR12_ROLE_EQUAL);
         BUILD_ASSERT(NX_ROLE_MASTER + 1 == OFPCR12_ROLE_MASTER);
@@ -4739,7 +4739,7 @@ ofputil_decode_role_status(const struct ofp_header *oh,
     raw = ofpraw_pull_assert(&b);
     ovs_assert(raw == OFPRAW_OFPT14_ROLE_STATUS);
 
-    r = ofpbuf_get_l3(&b);
+    r = ofpbuf_l3(&b);
     if (r->role != htonl(OFPCR12_ROLE_NOCHANGE) &&
         r->role != htonl(OFPCR12_ROLE_EQUAL) &&
         r->role != htonl(OFPCR12_ROLE_MASTER) &&
@@ -5211,7 +5211,7 @@ ofputil_encode_packet_out(const struct ofputil_packet_out *po,
         ofpacts_put_openflow_actions(po->ofpacts, po->ofpacts_len, msg,
                                      ofp_version);
 
-        opo = ofpbuf_get_l3(msg);
+        opo = ofpbuf_l3(msg);
         opo->buffer_id = htonl(po->buffer_id);
         opo->in_port = htons(ofp_to_u16(po->in_port));
         opo->actions_len = htons(ofpbuf_size(msg) - actions_ofs);
@@ -5229,7 +5229,7 @@ ofputil_encode_packet_out(const struct ofputil_packet_out *po,
         ofpbuf_put_zeros(msg, sizeof *opo);
         len = ofpacts_put_openflow_actions(po->ofpacts, po->ofpacts_len, msg,
                                            ofp_version);
-        opo = ofpbuf_get_l3(msg);
+        opo = ofpbuf_l3(msg);
         opo->buffer_id = htonl(po->buffer_id);
         opo->in_port = ofputil_port_to_ofp11(po->in_port);
         opo->actions_len = htons(len);

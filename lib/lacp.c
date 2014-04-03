@@ -181,7 +181,7 @@ parse_lacp_packet(const struct ofpbuf *b)
 {
     const struct lacp_pdu *pdu;
 
-    pdu = ofpbuf_at(b, (uint8_t *)ofpbuf_get_l3(b) - (uint8_t *)ofpbuf_data(b),
+    pdu = ofpbuf_at(b, (uint8_t *)ofpbuf_l3(b) - (uint8_t *)ofpbuf_data(b),
                     LACP_PDU_LEN);
 
     if (pdu && pdu->subtype == 1

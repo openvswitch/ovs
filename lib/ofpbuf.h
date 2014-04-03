@@ -69,13 +69,13 @@ static inline void ofpbuf_set_size(struct ofpbuf *, uint32_t);
 
 void * ofpbuf_resize_l2(struct ofpbuf *, int increment);
 void * ofpbuf_resize_l2_5(struct ofpbuf *, int increment);
-static inline void * ofpbuf_get_l2_5(const struct ofpbuf *);
+static inline void * ofpbuf_l2_5(const struct ofpbuf *);
 static inline void ofpbuf_set_l2_5(struct ofpbuf *, void *);
-static inline void * ofpbuf_get_l3(const struct ofpbuf *);
+static inline void * ofpbuf_l3(const struct ofpbuf *);
 static inline void ofpbuf_set_l3(struct ofpbuf *, void *);
-static inline void * ofpbuf_get_l4(const struct ofpbuf *);
+static inline void * ofpbuf_l4(const struct ofpbuf *);
 static inline void ofpbuf_set_l4(struct ofpbuf *, void *);
-static inline size_t ofpbuf_get_l4_size(const struct ofpbuf *);
+static inline size_t ofpbuf_l4_size(const struct ofpbuf *);
 static inline const void *ofpbuf_get_tcp_payload(const struct ofpbuf *);
 static inline const void *ofpbuf_get_udp_payload(const struct ofpbuf *);
 static inline const void *ofpbuf_get_sctp_payload(const struct ofpbuf *);
@@ -247,7 +247,7 @@ static inline bool ofpbuf_equal(const struct ofpbuf *a, const struct ofpbuf *b)
            memcmp(ofpbuf_data(a), ofpbuf_data(b), ofpbuf_size(a)) == 0;
 }
 
-static inline void * ofpbuf_get_l2_5(const struct ofpbuf *b)
+static inline void * ofpbuf_l2_5(const struct ofpbuf *b)
 {
     return b->l2_5_ofs != UINT16_MAX ? (char *)b->l2 + b->l2_5_ofs : NULL;
 }
@@ -257,7 +257,7 @@ static inline void ofpbuf_set_l2_5(struct ofpbuf *b, void *l2_5)
     b->l2_5_ofs = l2_5 ? (char *)l2_5 - (char *)b->l2 : UINT16_MAX;
 }
 
-static inline void * ofpbuf_get_l3(const struct ofpbuf *b)
+static inline void * ofpbuf_l3(const struct ofpbuf *b)
 {
     return b->l3_ofs != UINT16_MAX ? (char *)b->l2 + b->l3_ofs : NULL;
 }
@@ -267,7 +267,7 @@ static inline void ofpbuf_set_l3(struct ofpbuf *b, void *l3)
     b->l3_ofs = l3 ? (char *)l3 - (char *)b->l2 : UINT16_MAX;
 }
 
-static inline void * ofpbuf_get_l4(const struct ofpbuf *b)
+static inline void * ofpbuf_l4(const struct ofpbuf *b)
 {
     return b->l4_ofs != UINT16_MAX ? (char *)b->l2 + b->l4_ofs : NULL;
 }
@@ -277,18 +277,18 @@ static inline void ofpbuf_set_l4(struct ofpbuf *b, void *l4)
     b->l4_ofs = l4 ? (char *)l4 - (char *)b->l2 : UINT16_MAX;
 }
 
-static inline size_t ofpbuf_get_l4_size(const struct ofpbuf *b)
+static inline size_t ofpbuf_l4_size(const struct ofpbuf *b)
 {
     return b->l4_ofs != UINT16_MAX
-        ? (const char *)ofpbuf_tail(b) - (const char *)ofpbuf_get_l4(b) : 0;
+        ? (const char *)ofpbuf_tail(b) - (const char *)ofpbuf_l4(b) : 0;
 }
 
 static inline const void *ofpbuf_get_tcp_payload(const struct ofpbuf *b)
 {
-    size_t l4_size = ofpbuf_get_l4_size(b);
+    size_t l4_size = ofpbuf_l4_size(b);
 
     if (OVS_LIKELY(l4_size >= TCP_HEADER_LEN)) {
-        struct tcp_header *tcp = ofpbuf_get_l4(b);
+        struct tcp_header *tcp = ofpbuf_l4(b);
         int tcp_len = TCP_OFFSET(tcp->tcp_ctl) * 4;
 
         if (OVS_LIKELY(tcp_len >= TCP_HEADER_LEN && tcp_len <= l4_size)) {
@@ -300,20 +300,20 @@ static inline const void *ofpbuf_get_tcp_payload(const struct ofpbuf *b)
 
 static inline const void *ofpbuf_get_udp_payload(const struct ofpbuf *b)
 {
-    return OVS_LIKELY(ofpbuf_get_l4_size(b) >= UDP_HEADER_LEN)
-        ? (const char *)ofpbuf_get_l4(b) + UDP_HEADER_LEN : NULL;
+    return OVS_LIKELY(ofpbuf_l4_size(b) >= UDP_HEADER_LEN)
+        ? (const char *)ofpbuf_l4(b) + UDP_HEADER_LEN : NULL;
 }
 
 static inline const void *ofpbuf_get_sctp_payload(const struct ofpbuf *b)
 {
-    return OVS_LIKELY(ofpbuf_get_l4_size(b) >= SCTP_HEADER_LEN)
-        ? (const char *)ofpbuf_get_l4(b) + SCTP_HEADER_LEN : NULL;
+    return OVS_LIKELY(ofpbuf_l4_size(b) >= SCTP_HEADER_LEN)
+        ? (const char *)ofpbuf_l4(b) + SCTP_HEADER_LEN : NULL;
 }
 
 static inline const void *ofpbuf_get_icmp_payload(const struct ofpbuf *b)
 {
-    return OVS_LIKELY(ofpbuf_get_l4_size(b) >= ICMP_HEADER_LEN)
-        ? (const char *)ofpbuf_get_l4(b) + ICMP_HEADER_LEN : NULL;
+    return OVS_LIKELY(ofpbuf_l4_size(b) >= ICMP_HEADER_LEN)
+        ? (const char *)ofpbuf_l4(b) + ICMP_HEADER_LEN : NULL;
 }
 
 #ifdef DPDK_NETDEV

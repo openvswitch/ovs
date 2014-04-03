@@ -212,10 +212,10 @@ set_ethertype(struct ofpbuf *packet, ovs_be16 eth_type)
 
     if (eh->eth_type == htons(ETH_TYPE_VLAN)) {
         ovs_be16 *p;
-        char *l2_5 = ofpbuf_get_l2_5(packet);
+        char *l2_5 = ofpbuf_l2_5(packet);
 
         p = ALIGNED_CAST(ovs_be16 *,
-                         (l2_5 ? l2_5 : (char *)ofpbuf_get_l3(packet)) - 2);
+                         (l2_5 ? l2_5 : (char *)ofpbuf_l3(packet)) - 2);
         *p = eth_type;
     } else {
         eh->eth_type = eth_type;
@@ -279,7 +279,7 @@ set_mpls_lse(struct ofpbuf *packet, ovs_be32 mpls_lse)
 {
     /* Packet type should be MPLS to set label stack entry. */
     if (is_mpls(packet)) {
-        struct mpls_hdr *mh = ofpbuf_get_l2_5(packet);
+        struct mpls_hdr *mh = ofpbuf_l2_5(packet);
 
         /* Update mpls label stack entry. */
         mh->mpls_lse = mpls_lse;
@@ -321,7 +321,7 @@ void
 pop_mpls(struct ofpbuf *packet, ovs_be16 ethtype)
 {
     if (is_mpls(packet)) {
-        struct mpls_hdr *mh = ofpbuf_get_l2_5(packet);
+        struct mpls_hdr *mh = ofpbuf_l2_5(packet);
         size_t len = packet->l2_5_ofs;
 
         set_ethertype(packet, ethtype);
@@ -582,16 +582,16 @@ static void
 packet_set_ipv4_addr(struct ofpbuf *packet,
                      ovs_16aligned_be32 *addr, ovs_be32 new_addr)
 {
-    struct ip_header *nh = ofpbuf_get_l3(packet);
+    struct ip_header *nh = ofpbuf_l3(packet);
     ovs_be32 old_addr = get_16aligned_be32(addr);
-    size_t l4_size = ofpbuf_get_l4_size(packet);
+    size_t l4_size = ofpbuf_l4_size(packet);
 
     if (nh->ip_proto == IPPROTO_TCP && l4_size >= TCP_HEADER_LEN) {
-        struct tcp_header *th = ofpbuf_get_l4(packet);
+        struct tcp_header *th = ofpbuf_l4(packet);
 
         th->tcp_csum = recalc_csum32(th->tcp_csum, old_addr, new_addr);
     } else if (nh->ip_proto == IPPROTO_UDP && l4_size >= UDP_HEADER_LEN ) {
-        struct udp_header *uh = ofpbuf_get_l4(packet);
+        struct udp_header *uh = ofpbuf_l4(packet);
 
         if (uh->udp_csum) {
             uh->udp_csum = recalc_csum32(uh->udp_csum, old_addr, new_addr);
@@ -615,7 +615,7 @@ packet_rh_present(struct ofpbuf *packet)
     int nexthdr;
     size_t len;
     size_t remaining;
-    uint8_t *data = ofpbuf_get_l3(packet);
+    uint8_t *data = ofpbuf_l3(packet);
 
     remaining = packet->l4_ofs - packet->l3_ofs;
 
@@ -693,14 +693,14 @@ static void
 packet_update_csum128(struct ofpbuf *packet, uint8_t proto,
                      ovs_16aligned_be32 addr[4], const ovs_be32 new_addr[4])
 {
-    size_t l4_size = ofpbuf_get_l4_size(packet);
+    size_t l4_size = ofpbuf_l4_size(packet);
 
     if (proto == IPPROTO_TCP && l4_size >= TCP_HEADER_LEN) {
-        struct tcp_header *th = ofpbuf_get_l4(packet);
+        struct tcp_header *th = ofpbuf_l4(packet);
 
         th->tcp_csum = recalc_csum128(th->tcp_csum, addr, new_addr);
     } else if (proto == IPPROTO_UDP && l4_size >= UDP_HEADER_LEN) {
-        struct udp_header *uh = ofpbuf_get_l4(packet);
+        struct udp_header *uh = ofpbuf_l4(packet);
 
         if (uh->udp_csum) {
             uh->udp_csum = recalc_csum128(uh->udp_csum, addr, new_addr);
@@ -746,7 +746,7 @@ void
 packet_set_ipv4(struct ofpbuf *packet, ovs_be32 src, ovs_be32 dst,
                 uint8_t tos, uint8_t ttl)
 {
-    struct ip_header *nh = ofpbuf_get_l3(packet);
+    struct ip_header *nh = ofpbuf_l3(packet);
 
     if (get_16aligned_be32(&nh->ip_src) != src) {
         packet_set_ipv4_addr(packet, &nh->ip_src, src);
@@ -782,7 +782,7 @@ packet_set_ipv6(struct ofpbuf *packet, uint8_t proto, const ovs_be32 src[4],
                 const ovs_be32 dst[4], uint8_t key_tc, ovs_be32 key_fl,
                 uint8_t key_hl)
 {
-    struct ovs_16aligned_ip6_hdr *nh = ofpbuf_get_l3(packet);
+    struct ovs_16aligned_ip6_hdr *nh = ofpbuf_l3(packet);
 
     if (memcmp(&nh->ip6_src, src, sizeof(ovs_be32[4]))) {
         packet_set_ipv6_addr(packet, proto, nh->ip6_src.be32, src, true);
@@ -815,7 +815,7 @@ packet_set_port(ovs_be16 *port, ovs_be16 new_port, ovs_be16 *csum)
 void
 packet_set_tcp_port(struct ofpbuf *packet, ovs_be16 src, ovs_be16 dst)
 {
-    struct tcp_header *th = ofpbuf_get_l4(packet);
+    struct tcp_header *th = ofpbuf_l4(packet);
 
     packet_set_port(&th->tcp_src, src, &th->tcp_csum);
     packet_set_port(&th->tcp_dst, dst, &th->tcp_csum);
@@ -827,7 +827,7 @@ packet_set_tcp_port(struct ofpbuf *packet, ovs_be16 src, ovs_be16 dst)
 void
 packet_set_udp_port(struct ofpbuf *packet, ovs_be16 src, ovs_be16 dst)
 {
-    struct udp_header *uh = ofpbuf_get_l4(packet);
+    struct udp_header *uh = ofpbuf_l4(packet);
 
     if (uh->udp_csum) {
         packet_set_port(&uh->udp_src, src, &uh->udp_csum);
@@ -848,7 +848,7 @@ packet_set_udp_port(struct ofpbuf *packet, ovs_be16 src, ovs_be16 dst)
 void
 packet_set_sctp_port(struct ofpbuf *packet, ovs_be16 src, ovs_be16 dst)
 {
-    struct sctp_header *sh = ofpbuf_get_l4(packet);
+    struct sctp_header *sh = ofpbuf_l4(packet);
     ovs_be32 old_csum, old_correct_csum, new_csum;
     uint16_t tp_len = ofpbuf_size(packet) - ((uint8_t*)sh - (uint8_t*)ofpbuf_data(packet));
 

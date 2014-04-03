@@ -557,7 +557,7 @@ cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
         eth_push_vlan(packet, htons(ETH_TYPE_VLAN), htons(tci));
     }
 
-    ccm = ofpbuf_get_l3(packet);
+    ccm = ofpbuf_l3(packet);
     ccm->mdlevel_version = 0;
     ccm->opcode = CCM_OPCODE;
     ccm->tlv_offset = 70;
@@ -719,7 +719,7 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
     ovs_mutex_lock(&mutex);
 
     eth = p->l2;
-    ccm = ofpbuf_at(p, (uint8_t *)ofpbuf_get_l3(p) - (uint8_t *)ofpbuf_data(p),
+    ccm = ofpbuf_at(p, (uint8_t *)ofpbuf_l3(p) - (uint8_t *)ofpbuf_data(p),
                     CCM_ACCEPT_LEN);
 
     if (!ccm) {
