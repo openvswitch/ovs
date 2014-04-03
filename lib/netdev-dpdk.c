@@ -716,6 +716,7 @@ netdev_dpdk_set_etheraddr(struct netdev *netdev,
     ovs_mutex_lock(&dev->mutex);
     if (!eth_addr_equals(dev->hwaddr, mac)) {
         memcpy(dev->hwaddr, mac, ETH_ADDR_LEN);
+        netdev_change_seq_changed(netdev);
     }
     ovs_mutex_unlock(&dev->mutex);
 
@@ -788,6 +789,7 @@ netdev_dpdk_set_mtu(const struct netdev *netdev, int mtu)
     }
 
     dpdk_mp_put(old_mp);
+    netdev_change_seq_changed(netdev);
 out:
     ovs_mutex_unlock(&dev->mutex);
     ovs_mutex_unlock(&dpdk_mutex);
