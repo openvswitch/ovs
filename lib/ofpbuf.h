@@ -67,11 +67,11 @@ struct ofpbuf {
     uint32_t allocated;         /* Number of bytes allocated. */
 
     void *frame;                /* Packet frame start, or NULL. */
-    uint16_t l2_5_ofs;          /* MPLS label stack offset from 'packet', or
+    uint16_t l2_5_ofs;          /* MPLS label stack offset from 'frame', or
                                  * UINT16_MAX */
-    uint16_t l3_ofs;            /* Network-level header offset from 'packet',
+    uint16_t l3_ofs;            /* Network-level header offset from 'frame',
                                    or UINT16_MAX. */
-    uint16_t l4_ofs;            /* Transport-level header offset from 'packet',
+    uint16_t l4_ofs;            /* Transport-level header offset from 'frame',
                                    or UINT16_MAX. */
     enum ofpbuf_source source;  /* Source of memory allocated as 'base'. */
     struct list list_node;      /* Private list element for use by owner. */
