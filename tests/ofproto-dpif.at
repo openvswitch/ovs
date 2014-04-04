@@ -1180,8 +1180,9 @@ dnl in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x8847)
 for i in 1 2 3; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=40:44:44:44:44:43,dst=50:54:00:00:00:07),eth_type(0x8847),mpls(label=11,tc=3,ttl=64,bos=1)'
 done
-
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
 mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=40:44:44:44:44:43,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=64,mpls_bos=0,mpls_lse1=46912
