@@ -685,7 +685,7 @@ fi
 # Calculate the number of iterations we need to queue.  Each of the
 # iterations we execute, by itself, yields a monitor update of about
 # 25 kB, so fill up that much space plus a few for luck.
-n_iterations=`expr $rmem_max / 2500 + 5`
+n_iterations=`expr $rmem_max / 25000 + 5`
 echo rmem_max=$rmem_max n_iterations=$n_iterations
 
 # Calculate the exact number of monitor updates expected for $n_iterations,
