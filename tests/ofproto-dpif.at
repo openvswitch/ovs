@@ -3594,13 +3594,13 @@ AT_DATA([flows.txt], [dnl
 in_port=1 actions=output:2
 in_port=2 actions=mod_vlan_vid:17,output:1
 ])
+ovs-appctl time/stop
 AT_CHECK([ovs-ofctl add-flow br0 'idle_timeout=60,actions=fin_timeout(idle_timeout=5)'])
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip], [0],
 [NXST_FLOW reply:
  idle_timeout=60, actions=fin_timeout(idle_timeout=5)
 ])
 
-ovs-appctl time/stop
 # Check that a TCP SYN packet does not change the timeout.  (Because
 # flow stats updates are mainly what implements the fin_timeout
 # feature, we warp forward a couple of times to ensure that flow stats
@@ -3609,6 +3609,7 @@ AT_CHECK([ovs-appctl netdev-dummy/receive br0 0021853763af0026b98cb0f90800450000
 AT_CHECK([ovs-appctl time/warp 1000 && ovs-appctl time/warp 1000], [0], [warped
 warped
 ])
+sleep 1
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip], [0],
 [NXST_FLOW reply:
  n_packets=1, n_bytes=74, idle_timeout=60, actions=fin_timeout(idle_timeout=5)
