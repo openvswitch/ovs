@@ -211,58 +211,37 @@ unixctl_server_create(const char *path, struct unixctl_server **serverp)
 {
     struct unixctl_server *server;
     struct pstream *listener;
-    char *punix_path, *abs_path = NULL;
+    char *punix_path;
     int error;
-#ifdef _WIN32
-    FILE *file;
-#endif
 
     *serverp = NULL;
     if (path && !strcmp(path, "none")) {
         return 0;
     }
 
-#ifndef _WIN32
     if (path) {
+        char *abs_path;
+#ifndef _WIN32
         abs_path = abs_file_name(ovs_rundir(), path);
+#else
+        abs_path = strdup(path);
+#endif
         punix_path = xasprintf("punix:%s", abs_path);
+        free(abs_path);
     } else {
+#ifndef _WIN32
         punix_path = xasprintf("punix:%s/%s.%ld.ctl", ovs_rundir(),
                                program_name, (long int) getpid());
-    }
 #else
-    punix_path = xstrdup("ptcp:0:127.0.0.1");
+        punix_path = xasprintf("punix:%s/%s.ctl", ovs_rundir(), program_name);
 #endif
+    }
 
     error = pstream_open(punix_path, &listener, 0);
     if (error) {
         ovs_error(error, "could not initialize control socket %s", punix_path);
         goto exit;
     }
-
-#ifdef _WIN32
-    if (path) {
-        abs_path = xstrdup(path);
-    } else {
-        abs_path = xasprintf("%s/%s.ctl", ovs_rundir(), program_name);
-    }
-
-    file = fopen(abs_path, "w");
-    if (!file) {
-        error = errno;
-        ovs_error(error, "could not open %s", abs_path);
-        goto exit;
-    }
-
-    fprintf(file, "%d\n", ntohs(listener->bound_port));
-    if (fflush(file) == EOF) {
-        error = EIO;
-        ovs_error(error, "write failed for %s", abs_path);
-        fclose(file);
-        goto exit;
-    }
-    fclose(file);
-#endif
 
     unixctl_command_register("help", "", 0, 0, unixctl_help, NULL);
     unixctl_command_register("version", "", 0, 0, unixctl_version, NULL);
@@ -273,9 +252,6 @@ unixctl_server_create(const char *path, struct unixctl_server **serverp)
     *serverp = server;
 
 exit:
-    if (abs_path) {
-        free(abs_path);
-    }
     free(punix_path);
     return error;
 }
@@ -460,32 +436,13 @@ unixctl_client_create(const char *path, struct jsonrpc **client)
     char *abs_path, *unix_path;
     struct stream *stream;
     int error;
+
 #ifdef _WIN32
-    FILE *file;
-    int port;
-
     abs_path = strdup(path);
-    file = fopen(abs_path, "r");
-    if (!file) {
-        int error = errno;
-        ovs_error(error, "could not open %s", abs_path);
-        free(abs_path);
-        return error;
-    }
-
-    error = fscanf(file, "%d", &port);
-    if (error != 1) {
-        ovs_error(errno, "failed to read port from %s", abs_path);
-        free(abs_path);
-        return EINVAL;
-    }
-    fclose(file);
-
-    unix_path = xasprintf("tcp:127.0.0.1:%d", port);
 #else
     abs_path = abs_file_name(ovs_rundir(), path);
-    unix_path = xasprintf("unix:%s", abs_path);
 #endif
+    unix_path = xasprintf("unix:%s", abs_path);
 
     *client = NULL;
 

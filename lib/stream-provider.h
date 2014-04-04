@@ -191,8 +191,13 @@ struct pstream_class {
 /* Active and passive stream classes. */
 extern const struct stream_class tcp_stream_class;
 extern const struct pstream_class ptcp_pstream_class;
+#ifndef _WIN32
 extern const struct stream_class unix_stream_class;
 extern const struct pstream_class punix_pstream_class;
+#else
+extern const struct stream_class windows_stream_class;
+extern const struct pstream_class pwindows_pstream_class;
+#endif
 #ifdef HAVE_OPENSSL
 extern const struct stream_class ssl_stream_class;
 extern const struct pstream_class pssl_pstream_class;

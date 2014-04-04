@@ -11,4 +11,6 @@ future, the default will change to 6653, which is the IANA-defined
 value.
 .TP
 \fBunix:\fIfile\fR
-The Unix domain server socket named \fIfile\fR.
+On POSIX, a Unix domain server socket named \fIfile\fR.
+.IP
+On Windows, a localhost TCP port written in \fIfile\fR.

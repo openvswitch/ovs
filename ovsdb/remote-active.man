@@ -12,4 +12,7 @@ or IPv6 address. If \fIip\fR is an IPv6 address, then wrap \fIip\fR with
 square brackets, e.g.: \fBtcp:[::1]:6632\fR.
 .
 .IP "\fBunix:\fIfile\fR"
-Connect to the Unix domain server socket named \fIfile\fR.
+On POSIX, connect to the Unix domain server socket named \fIfile\fR.
+.IP
+On Windows, connect to a localhost TCP port whose value is written in
+\fIfile\fR.

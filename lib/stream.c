@@ -55,6 +55,8 @@ static const struct stream_class *stream_classes[] = {
     &tcp_stream_class,
 #ifndef _WIN32
     &unix_stream_class,
+#else
+    &windows_stream_class,
 #endif
 #ifdef HAVE_OPENSSL
     &ssl_stream_class,
@@ -65,6 +67,8 @@ static const struct pstream_class *pstream_classes[] = {
     &ptcp_pstream_class,
 #ifndef _WIN32
     &punix_pstream_class,
+#else
+    &pwindows_pstream_class,
 #endif
 #ifdef HAVE_OPENSSL
     &pssl_pstream_class,

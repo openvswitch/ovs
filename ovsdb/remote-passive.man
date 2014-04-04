@@ -19,5 +19,8 @@ an IPv6 address, then wrap \fIip\fR with square brackets, e.g.:
 \fBptcp:6632:[::1]\fR.
 .
 .IP "\fBpunix:\fIfile\fR"
-Listen on the Unix domain server socket named \fIfile\fR for a
+On POSIX, listen on the Unix domain server socket named \fIfile\fR for a
 connection.
+.IP
+On Windows, listen on a kernel chosen TCP port on the localhost. The kernel
+chosen TCP port value is written in \fIfile\fR.

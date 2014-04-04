@@ -91,6 +91,62 @@ const struct stream_class tcp_stream_class = {
     NULL,                       /* run_wait */
     NULL,                       /* wait */
 };
+
+#ifdef _WIN32
+static int
+windows_open(const char *name, char *suffix, struct stream **streamp,
+             uint8_t dscp)
+{
+    int error, port;
+    FILE *file;
+    char *suffix_new, *path;
+
+    /* If the path does not contain a ':', assume it is relative to
+     * OVS_RUNDIR. */
+    if (!strchr(suffix, ':')) {
+        path = xasprintf("%s/%s", ovs_rundir(), suffix);
+    } else {
+        path = strdup(suffix);
+    }
+
+    file = fopen(path, "r");
+    if (!file) {
+        error = errno;
+        VLOG_DBG("%s: could not open %s (%s)", name, suffix,
+                 ovs_strerror(error));
+        return error;
+    }
+
+    error = fscanf(file, "%d", &port);
+    if (error != 1) {
+        VLOG_ERR("failed to read port from %s", suffix);
+        fclose(file);
+        return EINVAL;
+    }
+    fclose(file);
+
+    suffix_new = xasprintf("127.0.0.1:%d", port);
+
+    error = tcp_open(name, suffix_new, streamp, dscp);
+
+    free(suffix_new);
+    free(path);
+    return error;
+}
+
+const struct stream_class windows_stream_class = {
+    "unix",                     /* name */
+    false,                      /* needs_probes */
+    windows_open,                  /* open */
+    NULL,                       /* close */
+    NULL,                       /* connect */
+    NULL,                       /* recv */
+    NULL,                       /* send */
+    NULL,                       /* run */
+    NULL,                       /* run_wait */
+    NULL,                       /* wait */
+};
+#endif
 
 /* Passive TCP. */
 
@@ -148,3 +204,60 @@ const struct pstream_class ptcp_pstream_class = {
     NULL,
 };
 
+#ifdef _WIN32
+static int
+pwindows_open(const char *name OVS_UNUSED, char *suffix,
+              struct pstream **pstreamp, uint8_t dscp)
+{
+    int error;
+    char *suffix_new, *path;
+    FILE *file;
+    struct pstream *listener;
+
+    suffix_new = xstrdup("0:127.0.0.1");
+    error = ptcp_open(name, suffix_new, pstreamp, dscp);
+    if (error) {
+        goto exit;
+    }
+    listener = *pstreamp;
+
+    /* If the path does not contain a ':', assume it is relative to
+     * OVS_RUNDIR. */
+    if (!strchr(suffix, ':')) {
+        path = xasprintf("%s/%s", ovs_rundir(), suffix);
+    } else {
+        path = strdup(suffix);
+    }
+
+    file = fopen(path, "w");
+    if (!file) {
+        error = errno;
+        VLOG_DBG("could not open %s (%s)", path, ovs_strerror(error));
+        goto exit;
+    }
+
+    fprintf(file, "%d\n", ntohs(listener->bound_port));
+    if (fflush(file) == EOF) {
+        error = EIO;
+        VLOG_ERR("write failed for %s", path);
+        fclose(file);
+        goto exit;
+    }
+    fclose(file);
+    free(path);
+
+exit:
+    free(suffix_new);
+    return error;
+}
+
+const struct pstream_class pwindows_pstream_class = {
+    "punix",
+    false,
+    pwindows_open,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+};
+#endif
