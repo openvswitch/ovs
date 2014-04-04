@@ -36,7 +36,7 @@ static int now;
 static void diff_stats(const struct reconnect_stats *old,
                        const struct reconnect_stats *new,
                        int delta);
-static struct command *get_all_commands(void);
+static const struct command *get_all_commands(void);
 
 static void
 test_reconnect_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
@@ -289,7 +289,7 @@ static const struct command all_commands[] = {
     { NULL, 0, 0, NULL },
 };
 
-static struct command *
+static const struct command *
 get_all_commands(void)
 {
     return all_commands;
