@@ -722,6 +722,7 @@ tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:0
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+sleep 1  # wait for revalidator to update stats
 AT_CHECK([ovs-ofctl -OOpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
  n_packets=3, n_bytes=180, actions=goto_table:1
 OFPST_FLOW reply (OF1.2):
@@ -750,6 +751,7 @@ AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+sleep 1  # wait for revalidator to update stats
 AT_CHECK([ovs-ofctl -OOpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
  n_packets=3, n_bytes=180, actions=resubmit(1,1)
 OFPST_FLOW reply (OF1.2):
@@ -809,6 +811,7 @@ tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:0
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+sleep 1  # wait for revalidator to update stats
 AT_CHECK([ovs-ofctl -OOpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
  table=1, n_packets=3, n_bytes=180, dl_src=10:11:11:11:11:11 actions=CONTROLLER:65535
 OFPST_FLOW reply (OF1.2):
@@ -872,6 +875,7 @@ tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:0
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+sleep 1  # wait for revalidator to update stats
 AT_CHECK([ovs-ofctl -OOpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
  n_packets=6, n_bytes=360, actions=goto_table:1
  table=2, n_packets=3, n_bytes=180, dl_src=10:11:11:11:11:11 actions=CONTROLLER:65535
@@ -918,6 +922,7 @@ AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+sleep 1  # wait for revalidator to update stats
 AT_CHECK([ovs-ofctl -OOpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
  n_packets=6, n_bytes=360, actions=resubmit(1,1)
  table=2, dl_src=10:11:11:11:11:11 actions=CONTROLLER:65535
@@ -978,6 +983,7 @@ AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+sleep 1  # wait for revalidator to update stats
 AT_CHECK([ovs-ofctl -OOpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
  n_packets=3, n_bytes=180, actions=goto_table:1
 OFPST_FLOW reply (OF1.2):
@@ -1009,6 +1015,7 @@ AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+sleep 1  # wait for revalidator to update stats
 AT_CHECK([ovs-ofctl -OOpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
  n_packets=3, n_bytes=180, actions=resubmit(1,1)
 OFPST_FLOW reply (OF1.2):
