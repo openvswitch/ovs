@@ -748,31 +748,6 @@ AT_CHECK([test $logged_updates -lt $n_updates])
 AT_CHECK_UNQUOTED([ovs-vsctl get open_vswitch . system_version], [0],
   ["xyzzy$counter"
 ])
-
-# Start an ovsdb-client monitoring all changes to the database,
-# without making it block, and then execute the same transactions that
-# we did before.
-AT_CHECK([ovsdb-client --detach --no-chdir --pidfile monitor ALL >ovsdb-client.out 2>ovsdb-client.err])
-for i in `seq 1 $n_iterations`; do
-    echo "unblocked update ($i of $n_iterations)"
-    trigger_big_update
-
-    # Make sure that ovsdb-client gets enough CPU time to process the updates.
-    ovs-appctl -t ovsdb-client version > /dev/null
-done
-OVS_WAIT_UNTIL([grep "\"xyzzy$counter\"" ovsdb-client.out])
-AT_CHECK([ovs-appctl -t ovsdb-client exit])
-OVS_WAIT_WHILE([test -e ovsdb-client.pid])
-
-# The ovsdb-client output should have exactly $n_updates updates.
-#
-# Also check that the counter is what we expect.
-logged_updates=`grep -c '^Open_vSwitch' ovsdb-client.out`
-echo "logged_updates=$logged_updates (expected $n_updates)"
-AT_CHECK([test $logged_updates -eq $n_updates])
-AT_CHECK_UNQUOTED([ovs-vsctl get open_vswitch . system_version], [0],
-  ["xyzzy$counter"
-])
 AT_CLEANUP
 
 AT_BANNER([OVSDB -- ovsdb-server transactions (SSL IPv4 sockets)])
