@@ -21,6 +21,7 @@
 
 #include "bfd.h"
 #include "cfm.h"
+#include "guarded-list.h"
 #include "hash.h"
 #include "heap.h"
 #include "hmap.h"
@@ -52,11 +53,23 @@ struct mport {
     uint8_t hw_addr[OFP_ETH_ALEN];    /* Hardware address. */
 };
 
+/* Entry of the 'send_soon' list.  Contains the pointer to the
+ * 'ofport_dpif'.  Note, the pointed object is not protected, so
+ * users should always use the mport_find() to convert it to 'mport'. */
+struct send_soon_entry {
+    struct list list_node;            /* In send_soon. */
+    const struct ofport_dpif *ofport;
+};
+
 /* hmap that contains "struct mport"s. */
 static struct hmap monitor_hmap = HMAP_INITIALIZER(&monitor_hmap);
 
 /* heap for ordering mport based on bfd/cfm wakeup time. */
 static struct heap monitor_heap;
+
+/* guarded-list for storing the mports that need to send bfd/cfm control
+ * packet soon. */
+static struct guarded_list send_soon = GUARDED_LIST_INITIALIZER(&send_soon);
 
 /* The monitor thread id. */
 static pthread_t monitor_tid;
@@ -67,7 +80,9 @@ static struct latch monitor_exit_latch;
 static struct ovs_mutex monitor_mutex = OVS_MUTEX_INITIALIZER;
 
 static void *monitor_main(void *);
+static void monitor_check_send_soon(struct ofpbuf *);
 static void monitor_run(void);
+static void monitor_mport_run(struct mport *, struct ofpbuf *);
 
 static void mport_register(const struct ofport_dpif *, struct bfd *,
                            struct cfm *, uint8_t[ETH_ADDR_LEN])
@@ -172,9 +187,8 @@ monitor_main(void * args OVS_UNUSED)
  * reconfigured monitoring ports are run in a timely manner. */
 #define MONITOR_INTERVAL_MSEC 100
 
-/* Checks the sending of control packets on mports that have timed out.
- * Sends the control packets if needed.  Executes bfd and cfm periodic
- * functions (run, wait) on those mports. */
+/* Checks the 'send_soon' list and the heap for mports that have timed
+ * out bfd/cfm sessions. */
 static void
 monitor_run(void)
 {
@@ -184,38 +198,25 @@ monitor_run(void)
 
     ofpbuf_use_stub(&packet, stub, sizeof stub);
     ovs_mutex_lock(&monitor_mutex);
+
+    /* The monitor_check_send_soon() needs to be run twice.  The first
+     * time is for preventing the same 'mport' from being processed twice
+     * (i.e. once from heap, the other from the 'send_soon' array).
+     * The second run is to cover the case when the control packet is sent
+     * via patch port and the other end needs to send back immediately. */
+    monitor_check_send_soon(&packet);
+
     prio_now = MSEC_TO_PRIO(time_msec());
     /* Peeks the top of heap and checks if we should run this mport. */
     while (!heap_is_empty(&monitor_heap)
            && heap_max(&monitor_heap)->priority >= prio_now) {
-        long long int next_wake_time;
         struct mport *mport;
 
         mport = CONTAINER_OF(heap_max(&monitor_heap), struct mport, heap_node);
-        if (mport->cfm && cfm_should_send_ccm(mport->cfm)) {
-            ofpbuf_clear(&packet);
-            cfm_compose_ccm(mport->cfm, &packet, mport->hw_addr);
-            ofproto_dpif_send_packet(mport->ofport, &packet);
-        }
-        if (mport->bfd && bfd_should_send_packet(mport->bfd)) {
-            ofpbuf_clear(&packet);
-            bfd_put_packet(mport->bfd, &packet, mport->hw_addr);
-            ofproto_dpif_send_packet(mport->ofport, &packet);
-        }
-        if (mport->cfm) {
-            cfm_run(mport->cfm);
-            cfm_wait(mport->cfm);
-        }
-        if (mport->bfd) {
-            bfd_run(mport->bfd);
-            bfd_wait(mport->bfd);
-        }
-        /* Computes the next wakeup time for this mport. */
-        next_wake_time = MIN(bfd_wake_time(mport->bfd),
-                             cfm_wake_time(mport->cfm));
-        heap_change(&monitor_heap, &mport->heap_node,
-                    MSEC_TO_PRIO(next_wake_time));
+        monitor_mport_run(mport, &packet);
     }
+
+    monitor_check_send_soon(&packet);
 
     /* Waits on the earliest next wakeup time. */
     if (!heap_is_empty(&monitor_heap)) {
@@ -227,6 +228,61 @@ monitor_run(void)
     }
     ovs_mutex_unlock(&monitor_mutex);
     ofpbuf_uninit(&packet);
+}
+
+/* Checks the 'send_soon' list for any mport that needs to send cfm/bfd
+ * control packet immediately, and calls monitor_mport_run(). */
+static void
+monitor_check_send_soon(struct ofpbuf *packet)
+    OVS_REQUIRES(monitor_mutex)
+{
+    while (!guarded_list_is_empty(&send_soon)) {
+        struct send_soon_entry *entry;
+        struct mport *mport;
+
+        entry = CONTAINER_OF(guarded_list_pop_front(&send_soon),
+                             struct send_soon_entry, list_node);
+        mport = mport_find(entry->ofport);
+        if (mport) {
+            monitor_mport_run(mport, packet);
+        }
+        free(entry);
+    }
+}
+
+/* Checks the sending of control packet on 'mport'.  Sends the control
+ * packet if needed.  Executes bfd and cfm periodic functions (run, wait)
+ * on 'mport'.  And changes the location of 'mport' in heap based on next
+ * timeout. */
+static void
+monitor_mport_run(struct mport *mport, struct ofpbuf *packet)
+    OVS_REQUIRES(monitor_mutex)
+{
+    long long int next_wake_time;
+
+    if (mport->cfm && cfm_should_send_ccm(mport->cfm)) {
+        ofpbuf_clear(packet);
+        cfm_compose_ccm(mport->cfm, packet, mport->hw_addr);
+        ofproto_dpif_send_packet(mport->ofport, packet);
+    }
+    if (mport->bfd && bfd_should_send_packet(mport->bfd)) {
+        ofpbuf_clear(packet);
+        bfd_put_packet(mport->bfd, packet, mport->hw_addr);
+        ofproto_dpif_send_packet(mport->ofport, packet);
+    }
+    if (mport->cfm) {
+        cfm_run(mport->cfm);
+        cfm_wait(mport->cfm);
+    }
+    if (mport->bfd) {
+        bfd_run(mport->bfd);
+        bfd_wait(mport->bfd);
+    }
+    /* Computes the next wakeup time for this mport. */
+    next_wake_time = MIN(bfd_wake_time(mport->bfd),
+                         cfm_wake_time(mport->cfm));
+    heap_change(&monitor_heap, &mport->heap_node,
+                MSEC_TO_PRIO(next_wake_time));
 }
 
 
@@ -262,25 +318,16 @@ ofproto_dpif_monitor_port_update(const struct ofport_dpif *ofport,
     }
 }
 
-/* Moves the mport on top of the heap.  This is necessary when
- * for example, bfd POLL is received and the mport should
- * immediately send FINAL back. */
-void
-ofproto_dpif_monitor_port_send_soon_safe(const struct ofport_dpif *ofport)
-{
-    ovs_mutex_lock(&monitor_mutex);
-    ofproto_dpif_monitor_port_send_soon(ofport);
-    ovs_mutex_unlock(&monitor_mutex);
-}
-
+/* Registers the 'ofport' in the 'send_soon' list.  We cannot directly
+ * insert the corresponding mport to the 'send_soon' list, since the
+ * 'send_soon' list is not updated when the mport is removed.
+ *
+ * Reader of the 'send_soon' list is responsible for freeing the entry. */
 void
 ofproto_dpif_monitor_port_send_soon(const struct ofport_dpif *ofport)
-    OVS_REQUIRES(monitor_mutex)
 {
-    struct mport *mport;
+    struct send_soon_entry *entry = xzalloc(sizeof *entry);
+    entry->ofport = ofport;
 
-    mport = mport_find(ofport);
-    if (mport) {
-        heap_change(&monitor_heap, &mport->heap_node, LLONG_MAX);
-    }
+    guarded_list_push_back(&send_soon, &entry->list_node, SIZE_MAX);
 }
