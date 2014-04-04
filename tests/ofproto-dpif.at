@@ -3710,7 +3710,9 @@ dnl     192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x7744 (correct), se
 
 for dl_src in 00 01; do
     AT_CHECK([ovs-appctl netdev-dummy/receive p1 "505400000007 6066666666$dl_src 8847 00014020 00014120 45 00 00 2c 00 00 00 00 40 06 3b 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45"])
-
+done
+sleep 1  # wait for the datapath flow installed
+for dl_src in 00 01; do
     AT_CHECK_UNQUOTED([ovs-appctl dpif/dump-flows br0 | grep ":$dl_src/" | STRIP_USED], [0], [dnl
 skb_priority(0),in_port(1),eth(src=60:66:66:66:66:$dl_src/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:07/00:00:00:00:00:00),eth_type(0x8847),mpls(lse0=0x14020,lse1=0x14120), packets:0, bytes:0, used:never, actions:userspace(pid=0,slow_path(controller))
 ])
@@ -3747,7 +3749,9 @@ dnl     192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x7744 (correct), se
 
 for dl_src in 00 01; do
     AT_CHECK([ovs-appctl netdev-dummy/receive p1 "505400000007 6066666666$dl_src 8847 00014020 00014120 45 00 00 2c 00 00 00 00 40 06 3b 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45"])
-
+done
+sleep 1  # wait for the datapath flow installed
+for dl_src in 00 01; do
     AT_CHECK_UNQUOTED([ovs-appctl dpif/dump-flows br0 | grep ":$dl_src/" | STRIP_USED], [0], [dnl
 skb_priority(0),in_port(1),eth(src=60:66:66:66:66:$dl_src/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:07/00:00:00:00:00:00),eth_type(0x8847),mpls(lse0=0x14020,lse1=0x14120), packets:0, bytes:0, used:never, actions:userspace(pid=0,slow_path(controller))
 ])
