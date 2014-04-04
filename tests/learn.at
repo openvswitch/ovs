@@ -345,7 +345,13 @@ done
 for i in `seq 1 10`; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:06,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'
     ovs-appctl time/warp 1000
-    if [[ $i -eq 1 ]]; then
+    # Note: netdev-dummy/receive merely queues the packet.
+    # We need to wait for other thread to process the packet
+    # and update the flow's 'used' for the packet.
+    # (i % 3 == 0) below is somehow arbitrary but chosen to ensure
+    # that we update the flow's 'used' frequently enough to prevent
+    # idle_timeout.
+    if [[ $i -eq 1 -or $((i % 3)) -eq 0 ]]; then
         sleep 1
     fi
 done
