@@ -216,7 +216,8 @@ done
 ovs-appctl time/warp 5000
 ovs-appctl time/warp 5000
 ovs-appctl time/warp 5000
-    AT_CHECK([ovs-ofctl dump-flows br0 table=1 | ofctl_strip | sort], [0], [dnl
+sleep 1
+AT_CHECK([ovs-ofctl dump-flows br0 table=1 | ofctl_strip | sort], [0], [dnl
  table=1, priority=0 actions=FLOOD
 NXST_FLOW reply:
 ])
