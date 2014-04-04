@@ -1774,11 +1774,7 @@ process_special(struct xlate_ctx *ctx, const struct flow *flow,
             bfd_process_packet(xport->bfd, flow, packet);
             /* If POLL received, immediately sends FINAL back. */
             if (bfd_should_send_packet(xport->bfd)) {
-                if (xport->peer) {
-                    ofproto_dpif_monitor_port_send_soon(xport->ofport);
-                } else {
-                    ofproto_dpif_monitor_port_send_soon_safe(xport->ofport);
-                }
+                ofproto_dpif_monitor_port_send_soon(xport->ofport);
             }
         }
         return SLOW_BFD;
