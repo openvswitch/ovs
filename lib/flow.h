@@ -97,17 +97,13 @@ union flow_in_port {
  * be looked at.  This enables better wildcarding for datapath flows.
  */
 struct flow {
-    /* Recirculation */
-    uint32_t dp_hash;           /* Datapath computed hash value. The exact
-                                   computation is opaque to the user space.*/
-    uint32_t recirc_id;         /* Must be exact match. */
-
     /* L1 */
     struct flow_tnl tunnel;     /* Encapsulating tunnel parameters. */
     ovs_be64 metadata;          /* OpenFlow Metadata. */
     uint32_t regs[FLOW_N_REGS]; /* Registers. */
     uint32_t skb_priority;      /* Packet priority for QoS. */
     uint32_t pkt_mark;          /* Packet mark. */
+    uint32_t recirc_id;         /* Must be exact match. */
     union flow_in_port in_port; /* Input port.*/
 
     /* L2 */
@@ -134,6 +130,8 @@ struct flow {
     ovs_be16 pad;               /* Padding. */
 
     /* L4 */
+    uint32_t dp_hash;           /* Datapath computed hash value. The exact
+                                   computation is opaque to the user space.*/
     ovs_be16 tp_src;            /* TCP/UDP/SCTP source port. */
     ovs_be16 tp_dst;            /* TCP/UDP/SCTP destination port.
                                  * Keep last for the BUILD_ASSERT_DECL below */
@@ -156,7 +154,7 @@ BUILD_ASSERT_DECL(offsetof(struct flow, tp_dst) + 2
 enum {
     FLOW_SEGMENT_1_ENDS_AT = offsetof(struct flow, dl_src),
     FLOW_SEGMENT_2_ENDS_AT = offsetof(struct flow, ipv6_src),
-    FLOW_SEGMENT_3_ENDS_AT = offsetof(struct flow, tp_src),
+    FLOW_SEGMENT_3_ENDS_AT = offsetof(struct flow, dp_hash),
 };
 BUILD_ASSERT_DECL(FLOW_SEGMENT_1_ENDS_AT % 4 == 0);
 BUILD_ASSERT_DECL(FLOW_SEGMENT_2_ENDS_AT % 4 == 0);
