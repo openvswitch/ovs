@@ -3555,6 +3555,7 @@ ovs-appctl netdev-dummy/receive br0 'in_port(0),eth(src=50:54:00:00:00:07,dst=50
 ovs-appctl time/warp 1000
 ovs-appctl time/warp 1000
 ovs-appctl time/warp 1000
+sleep 1
 get_ages duration4 hard4 idle4
 
 printf "duration: %4s => %4s => %4s => %4s\n" $duration1 $duration2 $duration3 $duration4
