@@ -408,10 +408,38 @@ for i in `seq 1 10`; do
     # it's difficult to predict the exact timing of rule expiry
     # because it's affected by flow dumper thread via udpif_dump_seq.
     # hard_timeout value for this test was chosen to overcome the uncertainty.
-    if [[ $i -eq 1 -o $i -eq 6 -o $i -eq 7 ]]; then
+    #
+    # receive #1  learn, install flow with hard_timeout=10
+    #  sleep to ensure the flow installation
+    #  (warp, timeout left 8s)
+    # receive #2   the learned flow
+    #  (warp, timeout left 6s)
+    # receive #3
+    #  (warp, timeout left 4s)
+    # receive #4
+    #  (warp, timeout left 2s)
+    # receive #5
+    #  (warp, timeout left 0s)
+    #  NOTE: OVS does not consider this expired yet.  cf. rule_expire()
+    # receive #6
+    #  (warp, timeout left -2s)
+    #  sleep to ensure flow expiration
+    # receive #7  learn, install flow with hard_timeout=10
+    #  sleep to ensure the flow installation
+    #  (warp, timeout left 8s)
+    # receive #8
+    #  (warp, timeout left 6s)
+    # receive #9
+    #  (warp, timeout left 4s)
+    # receive #10
+    #  (warp, timeout left 2s)
+    if [[ $i -eq 1 -o $i -eq 7 ]]; then
         sleep 1
     fi
     ovs-appctl time/warp 2000
+    if [[ $i -eq 6 ]]; then
+        sleep 1
+    fi
 done
 
 # Check that the first packet of each flow went out port 2 and the rest out
