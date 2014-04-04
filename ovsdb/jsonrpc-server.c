@@ -1512,8 +1512,8 @@ ovsdb_jsonrpc_monitor_change_cb(const struct ovsdb_row *old,
     return true;
 }
 
-/* Returns JSON for a <row-update> (as described in ovsdb/SPECS) for 'row'
- * within 'mt', or NULL if no row update should be sent.
+/* Returns JSON for a <row-update> (as described in RFC 7047) for 'row' within
+ * 'mt', or NULL if no row update should be sent.
  *
  * The caller should specify 'initial' as true if the returned JSON is going to
  * be used as part of the initial reply to a "monitor" request, false if it is
@@ -1596,9 +1596,9 @@ ovsdb_jsonrpc_monitor_compose_row_update(
 }
 
 /* Constructs and returns JSON for a <table-updates> object (as described in
- * ovsdb/SPECS) for all the outstanding changes within 'monitor', and deletes
- * all the outstanding changes from 'monitor'.  Returns NULL if no update needs
- * to be sent.
+ * RFC 7047) for all the outstanding changes within 'monitor', and deletes all
+ * the outstanding changes from 'monitor'.  Returns NULL if no update needs to
+ * be sent.
  *
  * The caller should specify 'initial' as true if the returned JSON is going to
  * be used as part of the initial reply to a "monitor" request, false if it is

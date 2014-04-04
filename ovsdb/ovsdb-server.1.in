@@ -183,6 +183,54 @@ the command line or through the \fBovsdb\-server/add\-db\fR command.
 .so lib/vlog-unixctl.man
 .so lib/memory-unixctl.man
 .so lib/coverage-unixctl.man
+.SH "SPECIFICATIONS"
+.
+.PP
+\fBovsdb\-server\fR implements the Open vSwitch Database (OVSDB)
+protocol specified in RFC 7047, with the following clarifications:
+.
+.IP "3.1. JSON Usage"
+RFC 4627 says that names within a JSON object should be unique.
+The Open vSwitch JSON parser discards all but the last value
+for a name that is specified more than once.
+.
+.IP "3.2. Schema Format"
+RFC 7047 requires the "version" field in <database-schema>.  Current
+versions of \fBovsdb\-server\fR allow it to be omitted (future
+versions are likely to require it).
+.
+.IP "4. Wire Protocol"
+The original OVSDB specifications included the following reason,
+omitted from RFC 7047, to operate JSON-RPC directly over a stream
+instead of over HTTP:
+.
+.RS
+.IP \(bu
+JSON-RPC is a peer-to-peer protocol, but HTTP is a client-server
+protocol, which is a poor match.  Thus, JSON-RPC over HTTP requires
+the client to periodically poll the server to receive server requests.
+.IP \(bu
+HTTP is more complicated than stream connections and doesn't provide
+any corresponding advantage.
+.IP \(bu
+The JSON-RPC specification for HTTP transport is incomplete.
+.RE
+.
+.IP "4.1.5. Monitor"
+For backward compatibility, \fBovsdb\-server\fR currently permits a
+single <monitor-request> to be used instead of an array; it is treated
+as a single-element array.  Future versions of \fBovsdb\-server\fR
+might remove this compatibility feature.
+.IP
+Because the <json-value> parameter is used to match subsequent update
+notifications (see below) to the request, it must be unique among all
+active monitors.  \fBovsdb\-server\fR rejects attempt to create two
+monitors with the same identifier.
+.
+.IP "6. IANA Considerations"
+\fBovsdb\-server\fR currently defaults to its historical port number
+6632.  Future versions will adopt IANA-assigned port 6640 as default.
+
 .SH "SEE ALSO"
 .
 .BR ovsdb\-tool (1).

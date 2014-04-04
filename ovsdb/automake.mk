@@ -65,7 +65,6 @@ DISTCLEANFILES += ovsdb/ovsdb-server.1
 MAN_ROOTS += ovsdb/ovsdb-server.1.in
 
 # ovsdb-idlc
-EXTRA_DIST += ovsdb/SPECS
 noinst_SCRIPTS += ovsdb/ovsdb-idlc
 EXTRA_DIST += ovsdb/ovsdb-idlc.in
 MAN_ROOTS += ovsdb/ovsdb-idlc.1

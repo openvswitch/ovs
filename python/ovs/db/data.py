@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+# Copyright (c) 2009, 2010, 2011, 2014 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -307,7 +307,7 @@ class Datum(object):
         Violations of constraints expressed by 'type' are treated as errors.
 
         If 'symtab' is nonnull, then named UUIDs in 'symtab' are accepted.
-        Refer to ovsdb/SPECS for information about this, and for the syntax
+        Refer to RFC 7047 for information about this, and for the syntax
         that this function accepts."""
         is_map = type_.is_map()
         if (is_map or

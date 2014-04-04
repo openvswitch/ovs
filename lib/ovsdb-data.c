@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ wrap_json(const char *name, struct json *wrapped)
 
 /* Initializes 'atom' with the default value of the given 'type'.
  *
- * The default value for an atom is as defined in ovsdb/SPECS:
+ * The default value for an atom is as defined in RFC 7047:
  *
  *      - "integer" or "real": 0
  *
@@ -409,10 +409,9 @@ ovsdb_atom_from_json__(union ovsdb_atom *atom,
  * Violations of constraints expressed by 'base' are treated as errors.
  *
  * If 'symtab' is nonnull, then named UUIDs in 'symtab' are accepted.  Refer to
- * ovsdb/SPECS for information about this, and for the syntax that this
- * function accepts.  If 'base' is a reference and a symbol is parsed, then the
- * symbol's 'strong_ref' or 'weak_ref' member is set to true, as
- * appropriate. */
+ * RFC 7047 for information about this, and for the syntax that this function
+ * accepts.  If 'base' is a reference and a symbol is parsed, then the symbol's
+ * 'strong_ref' or 'weak_ref' member is set to true, as appropriate. */
 struct ovsdb_error *
 ovsdb_atom_from_json(union ovsdb_atom *atom,
                      const struct ovsdb_base_type *base,
@@ -436,8 +435,7 @@ ovsdb_atom_from_json(union ovsdb_atom *atom,
 /* Converts 'atom', of the specified 'type', to JSON format, and returns the
  * JSON.  The caller is responsible for freeing the returned JSON.
  *
- * Refer to ovsdb/SPECS for the format of the JSON that this function
- * produces. */
+ * Refer to RFC 7047 for the format of the JSON that this function produces. */
 struct json *
 ovsdb_atom_to_json(const union ovsdb_atom *atom, enum ovsdb_atomic_type type)
 {
@@ -843,7 +841,7 @@ ovsdb_datum_init_empty(struct ovsdb_datum *datum)
 
 /* Initializes 'datum' as a datum that has the default value for 'type'.
  *
- * The default value for a particular type is as defined in ovsdb/SPECS:
+ * The default value for a particular type is as defined in RFC 7047:
  *
  *    - If n_min is 0, then the default value is the empty set (or map).
  *
@@ -1248,8 +1246,8 @@ ovsdb_datum_from_json__(struct ovsdb_datum *datum,
  * Violations of constraints expressed by 'type' are treated as errors.
  *
  * If 'symtab' is nonnull, then named UUIDs in 'symtab' are accepted.  Refer to
- * ovsdb/SPECS for information about this, and for the syntax that this
- * function accepts. */
+ * RFC 7047 for information about this, and for the syntax that this function
+ * accepts. */
 struct ovsdb_error *
 ovsdb_datum_from_json(struct ovsdb_datum *datum,
                       const struct ovsdb_type *type,
@@ -1275,8 +1273,7 @@ ovsdb_datum_from_json(struct ovsdb_datum *datum,
  *
  * 'type' constraints on datum->n are ignored.
  *
- * Refer to ovsdb/SPECS for the format of the JSON that this function
- * produces. */
+ * Refer to RFC 7047 for the format of the JSON that this function produces. */
 struct json *
 ovsdb_datum_to_json(const struct ovsdb_datum *datum,
                     const struct ovsdb_type *type)
