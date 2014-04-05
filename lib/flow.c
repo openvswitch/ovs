@@ -88,10 +88,11 @@ parse_mpls(struct ofpbuf *b, struct flow *flow)
     int idx = 0;
 
     while ((mh = ofpbuf_try_pull(b, sizeof *mh))) {
+        ovs_be32 mpls_lse = get_16aligned_be32(&mh->mpls_lse);
         if (idx < FLOW_MAX_MPLS_LABELS) {
-            flow->mpls_lse[idx++] = mh->mpls_lse;
+            flow->mpls_lse[idx++] = mpls_lse;
         }
-        if (mh->mpls_lse & htonl(MPLS_BOS_MASK)) {
+        if (mpls_lse & htonl(MPLS_BOS_MASK)) {
             break;
         }
     }

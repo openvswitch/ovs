@@ -78,7 +78,8 @@ ofp_packet_to_string(const void *data, size_t len)
         ds_put_format(&ds, " udp_csum:%"PRIx16, ntohs(uh->udp_csum));
     } else if (flow.nw_proto == IPPROTO_SCTP && l4_size >= SCTP_HEADER_LEN) {
         struct sctp_header *sh = ofpbuf_l4(&buf);
-        ds_put_format(&ds, " sctp_csum:%"PRIx32, ntohl(sh->sctp_csum));
+        ds_put_format(&ds, " sctp_csum:%"PRIx32,
+                      ntohl(get_16aligned_be32(&sh->sctp_csum)));
     }
 
     ds_put_char(&ds, '\n');

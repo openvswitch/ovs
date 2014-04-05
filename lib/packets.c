@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -288,7 +288,7 @@ set_mpls_lse(struct ofpbuf *packet, ovs_be32 mpls_lse)
         struct mpls_hdr *mh = ofpbuf_l2_5(packet);
 
         /* Update mpls label stack entry. */
-        mh->mpls_lse = mpls_lse;
+        put_16aligned_be32(&mh->mpls_lse, mpls_lse);
     }
 }
 
@@ -331,7 +331,7 @@ pop_mpls(struct ofpbuf *packet, ovs_be16 ethtype)
         size_t len = packet->l2_5_ofs;
 
         set_ethertype(packet, ethtype);
-        if (mh->mpls_lse & htonl(MPLS_BOS_MASK)) {
+        if (get_16aligned_be32(&mh->mpls_lse) & htonl(MPLS_BOS_MASK)) {
             ofpbuf_set_l2_5(packet, NULL);
         }
         /* Shift the l2 header forward. */
@@ -858,15 +858,15 @@ packet_set_sctp_port(struct ofpbuf *packet, ovs_be16 src, ovs_be16 dst)
     ovs_be32 old_csum, old_correct_csum, new_csum;
     uint16_t tp_len = ofpbuf_l4_size(packet);
 
-    old_csum = sh->sctp_csum;
-    sh->sctp_csum = 0;
+    old_csum = get_16aligned_be32(&sh->sctp_csum);
+    put_16aligned_be32(&sh->sctp_csum, 0);
     old_correct_csum = crc32c((void *)sh, tp_len);
 
     sh->sctp_src = src;
     sh->sctp_dst = dst;
 
     new_csum = crc32c((void *)sh, tp_len);
-    sh->sctp_csum = old_csum ^ old_correct_csum ^ new_csum;
+    put_16aligned_be32(&sh->sctp_csum, old_csum ^ old_correct_csum ^ new_csum);
 }
 
 const char *
