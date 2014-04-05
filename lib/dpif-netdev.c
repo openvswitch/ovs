@@ -814,8 +814,6 @@ dpif_netdev_mask_from_nlattrs(const struct nlattr *key, uint32_t key_len,
 
             return EINVAL;
         }
-        /* Force unwildcard the in_port. */
-        mask->in_port.odp_port = u32_to_odp(UINT32_MAX);
     } else {
         enum mf_field_id id;
         /* No mask key, unwildcard everything except fields whose
@@ -833,6 +831,14 @@ dpif_netdev_mask_from_nlattrs(const struct nlattr *key, uint32_t key_len,
             }
         }
     }
+
+    /* Force unwildcard the in_port.
+     *
+     * We need to do this even in the case where we unwildcard "everything"
+     * above because "everything" only includes the 16-bit OpenFlow port number
+     * mask->in_port.ofp_port, which only covers half of the 32-bit datapath
+     * port number mask->in_port.odp_port. */
+    mask->in_port.odp_port = u32_to_odp(UINT32_MAX);
 
     return 0;
 }
