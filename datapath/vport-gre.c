@@ -116,6 +116,25 @@ static int gre_rcv(struct sk_buff *skb,
 	return PACKET_RCVD;
 }
 
+/* Called with rcu_read_lock and BH disabled. */
+static int gre_err(struct sk_buff *skb, u32 info,
+		   const struct tnl_ptk_info *tpi)
+{
+	struct ovs_net *ovs_net;
+	struct vport *vport;
+
+	ovs_net = net_generic(dev_net(skb->dev), ovs_net_id);
+	if ((tpi->flags & TUNNEL_KEY) && (tpi->flags & TUNNEL_SEQ))
+		vport = rcu_dereference(ovs_net->vport_net.gre64_vport);
+	else
+		vport = rcu_dereference(ovs_net->vport_net.gre_vport);
+
+	if (unlikely(!vport))
+		return PACKET_REJECT;
+	else
+		return PACKET_RCVD;
+}
+
 static int __send(struct vport *vport, struct sk_buff *skb,
 		  int tunnel_hlen,
 		  __be32 seq, __be16 gre64_flag)
@@ -187,6 +206,7 @@ error:
 
 static struct gre_cisco_protocol gre_protocol = {
 	.handler	= gre_rcv,
+	.err_handler	= gre_err,
 	.priority	= 1,
 };
 

@@ -16,6 +16,8 @@
 
 struct gre_cisco_protocol {
 	int (*handler)(struct sk_buff *skb, const struct tnl_ptk_info *tpi);
+	int (*err_handler)(struct sk_buff *skb, u32 info,
+			   const struct tnl_ptk_info *tpi);
 	u8 priority;
 };
 
