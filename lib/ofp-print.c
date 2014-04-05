@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,7 +77,7 @@ ofp_packet_to_string(const void *data, size_t len)
         } else if (flow.nw_proto == IPPROTO_SCTP) {
             struct sctp_header *sh = buf.l4;
             ds_put_format(&ds, " sctp_csum:%"PRIx32,
-                          ntohl(sh->sctp_csum));
+                          ntohl(get_16aligned_be32(&sh->sctp_csum)));
         }
     }
 

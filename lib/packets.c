@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -313,7 +313,7 @@ set_mpls_lse(struct ofpbuf *packet, ovs_be32 mpls_lse)
     /* Packet type should be MPLS to set label stack entry. */
     if (is_mpls(packet)) {
         /* Update mpls label stack entry. */
-        mh->mpls_lse = mpls_lse;
+        put_16aligned_be32(&mh->mpls_lse, mpls_lse);
     }
 }
 
@@ -336,7 +336,7 @@ push_mpls(struct ofpbuf *packet, ovs_be16 ethtype, ovs_be32 lse)
     }
 
     /* Push new MPLS shim header onto packet. */
-    mh.mpls_lse = lse;
+    put_16aligned_be32(&mh.mpls_lse, lse);
     push_mpls_lse(packet, &mh);
 }
 
@@ -354,7 +354,7 @@ pop_mpls(struct ofpbuf *packet, ovs_be16 ethtype)
         mh = packet->l2_5;
         len = (char*)packet->l2_5 - (char*)packet->l2;
         set_ethertype(packet, ethtype);
-        if (mh->mpls_lse & htonl(MPLS_BOS_MASK)) {
+        if (get_16aligned_be32(&mh->mpls_lse) & htonl(MPLS_BOS_MASK)) {
             packet->l2_5 = NULL;
         } else {
             packet->l2_5 = (char*)packet->l2_5 + MPLS_HLEN;
@@ -882,15 +882,15 @@ packet_set_sctp_port(struct ofpbuf *packet, ovs_be16 src, ovs_be16 dst)
     ovs_be32 old_csum, old_correct_csum, new_csum;
     uint16_t tp_len = packet->size - ((uint8_t*)sh - (uint8_t*)packet->data);
 
-    old_csum = sh->sctp_csum;
-    sh->sctp_csum = 0;
+    old_csum = get_16aligned_be32(&sh->sctp_csum);
+    put_16aligned_be32(&sh->sctp_csum, 0);
     old_correct_csum = crc32c(packet->l4, tp_len);
 
     sh->sctp_src = src;
     sh->sctp_dst = dst;
 
     new_csum = crc32c(packet->l4, tp_len);
-    sh->sctp_csum = old_csum ^ old_correct_csum ^ new_csum;
+    put_16aligned_be32(&sh->sctp_csum, old_csum ^ old_correct_csum ^ new_csum);
 }
 
 /* If 'packet' is a TCP packet, returns the TCP flags.  Otherwise, returns 0.

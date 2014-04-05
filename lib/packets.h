@@ -323,7 +323,7 @@ BUILD_ASSERT_DECL(VLAN_ETH_HEADER_LEN == sizeof(struct vlan_eth_header));
 #define MPLS_HLEN           4
 
 struct mpls_hdr {
-    ovs_be32 mpls_lse;
+    ovs_16aligned_be32 mpls_lse;
 };
 BUILD_ASSERT_DECL(MPLS_HLEN == sizeof(struct mpls_hdr));
 
@@ -470,8 +470,8 @@ BUILD_ASSERT_DECL(ICMP_HEADER_LEN == sizeof(struct icmp_header));
 struct sctp_header {
     ovs_be16 sctp_src;
     ovs_be16 sctp_dst;
-    ovs_be32 sctp_vtag;
-    ovs_be32 sctp_csum;
+    ovs_16aligned_be32 sctp_vtag;
+    ovs_16aligned_be32 sctp_csum;
 };
 BUILD_ASSERT_DECL(SCTP_HEADER_LEN == sizeof(struct sctp_header));
 

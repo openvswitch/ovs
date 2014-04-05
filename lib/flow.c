@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -112,11 +112,12 @@ parse_mpls(struct ofpbuf *b, struct flow *flow)
     bool top = true;
 
     while ((mh = ofpbuf_try_pull(b, sizeof *mh))) {
+        ovs_be32 mpls_lse = get_16aligned_be32(&mh->mpls_lse);
         if (top) {
             top = false;
-            flow->mpls_lse = mh->mpls_lse;
+            flow->mpls_lse = mpls_lse;
         }
-        if (mh->mpls_lse & htonl(MPLS_BOS_MASK)) {
+        if (mpls_lse & htonl(MPLS_BOS_MASK)) {
             break;
         }
     }
