@@ -1366,6 +1366,7 @@ ofp_print_error_msg(struct ds *string, const struct ofp_header *oh)
         ds_put_cstr(string, s);
         free(s);
     }
+    ofpbuf_uninit(&payload);
 }
 
 static void

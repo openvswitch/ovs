@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -270,8 +270,10 @@ ofperr_get_code(enum ofperr error, enum ofp_version version)
 /* Tries to decode 'oh', which should be an OpenFlow OFPT_ERROR message.
  * Returns an OFPERR_* constant on success, 0 on failure.
  *
- * If 'payload' is nonnull, on success '*payload' is initialized to the
- * error's payload, and on failure it is cleared. */
+ * If 'payload' is nonnull, on success '*payload' is initialized with a copy of
+ * the error's payload (copying is required because the payload is not properly
+ * aligned).  The caller must free the payload (with ofpbuf_uninit()) when it
+ * is no longer needed.  On failure, '*payload' is cleared. */
 enum ofperr
 ofperr_decode_msg(const struct ofp_header *oh, struct ofpbuf *payload)
 {
@@ -321,7 +323,8 @@ ofperr_decode_msg(const struct ofp_header *oh, struct ofpbuf *payload)
     /* Translate the error type and code into an ofperr. */
     error = ofperr_decode(oh->version, vendor, type, code);
     if (error && payload) {
-        ofpbuf_use_const(payload, b.data, b.size);
+        ofpbuf_init(payload, b.size);
+        ofpbuf_push(payload, b.data, b.size);
     }
     return error;
 }
