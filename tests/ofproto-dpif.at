@@ -336,6 +336,56 @@ ip,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+dnl A dec_ttl action at offset 32 in ofpacts will cause the ofpacts
+dnl buffer to be resized just before pushing the id of the dec_ttl action.
+dnl Thus the implementation must account for this by using the
+dnl reallocated buffer rather than the original buffer.
+dnl
+dnl A number of similar rules are added to try and exercise
+dnl xrealloc sufficiently that it returns a different base pointer
+AT_SETUP([ofproto-dpif - dec_ttl without arguments at offset 32 in ofpacts])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1])
+(for i in `seq 0 255`; do
+  printf "dl_src=10:11:11:11:11:%02x actions=output:1,output:1,output:1,dec_ttl,controller\n" $i
+ done) > flows.txt
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl A dec_ttl action at offset 32 in ofpacts will cause the ofpacts
+dnl buffer to be resized just before pushing the id of the dec_ttl action.
+dnl Thus the implementation must account for this by using the
+dnl reallocated buffer rather than the original buffer.
+dnl
+dnl A number of similar rules are added to try and exercise
+dnl xrealloc sufficiently that it returns a different base pointer
+AT_SETUP([ofproto-dpif - dec_ttl with arguments at offset 32 in ofpacts])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1])
+(for i in `seq 0 255`; do
+  printf "dl_src=10:11:11:11:11:%02x actions=output:1,output:1,output:1,dec_ttl(1),controller\n" $i
+ done) > flows.txt
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl A note action at offset 24 in ofpacts will cause the ofpacts
+dnl buffer to be resized just before pushing the id of the dec_ttl action.
+dnl Thus the implementation must account for this by using the
+dnl reallocated buffer rather than the original buffer.
+dnl
+dnl A number of similar rules are added to try and exercise
+dnl xrealloc sufficiently that it returns a different base pointer
+AT_SETUP([ofproto-dpif - note at offset 24 in ofpacts])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1])
+(for i in `seq 0 255`; do
+  printf "dl_src=10:11:11:11:11:%02x actions=output:1,output:1,note:ff,controller\n" $i
+ done) > flows.txt
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - output, OFPP_NONE ingress port])
 OVS_VSWITCHD_START

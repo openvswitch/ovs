@@ -291,6 +291,7 @@ parse_note(const char *arg, struct ofpbuf *ofpacts)
         }
         ofpbuf_put(ofpacts, &byte, 1);
 
+        note = ofpacts->frame;
         note->length++;
 
         arg += 2;
@@ -399,6 +400,7 @@ parse_noargs_dec_ttl(struct ofpbuf *b)
 
     ids = ofpact_put_DEC_TTL(b);
     ofpbuf_put(b, &id, sizeof id);
+    ids = b->frame;
     ids->n_controllers++;
     ofpact_update_len(b, &ids->ofpact);
 }
@@ -424,6 +426,7 @@ parse_dec_ttl(struct ofpbuf *b, char *arg)
             uint16_t id = atoi(cntr);
 
             ofpbuf_put(b, &id, sizeof id);
+            ids = b->frame;
             ids->n_controllers++;
         }
         if (!ids->n_controllers) {
