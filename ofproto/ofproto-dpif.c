@@ -954,7 +954,8 @@ check_recirc(struct dpif_backer *backer)
     odp_flow_key_from_flow(&key, &flow, 0);
 
     error = dpif_flow_put(backer->dpif, DPIF_FP_CREATE | DPIF_FP_MODIFY,
-                          key.data, key.size, NULL, 0, NULL, 0, NULL);
+                          ofpbuf_data(&key), ofpbuf_size(&key), NULL, 0, NULL,
+                          0, NULL);
     if (error && error != EEXIST) {
         if (error != EINVAL) {
             VLOG_WARN("%s: Reciculation flow probe failed (%s)",
@@ -963,7 +964,8 @@ check_recirc(struct dpif_backer *backer)
         goto done;
     }
 
-    error = dpif_flow_del(backer->dpif, key.data, key.size, NULL);
+    error = dpif_flow_del(backer->dpif, ofpbuf_data(&key), ofpbuf_size(&key),
+                          NULL);
     if (error) {
         VLOG_WARN("%s: failed to delete recirculation feature probe flow",
                   dpif_name(backer->dpif));
@@ -4778,8 +4780,8 @@ ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
     fm.buffer_id = 0;
     fm.out_port = 0;
     fm.flags = OFPUTIL_FF_HIDDEN_FIELDS | OFPUTIL_FF_NO_READONLY;
-    fm.ofpacts = ofpacts->data;
-    fm.ofpacts_len = ofpacts->size;
+    fm.ofpacts = ofpbuf_data(ofpacts);
+    fm.ofpacts_len = ofpbuf_size(ofpacts);
 
     error = ofproto_flow_mod(&ofproto->up, &fm);
     if (error) {
