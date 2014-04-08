@@ -1144,6 +1144,7 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
     } else {
         struct ofport_dpif *ofport;
         struct xlate_recirc *xr = &ctx->xout->recirc;
+        struct flow_wildcards *wc = &ctx->xout->wc;
 
         if (ctx->xbridge->enable_recirc) {
             ctx->xout->use_recirc = bond_may_recirc(
@@ -1153,11 +1154,14 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
                 /* Only TCP mode uses recirculation. */
                 xr->hash_alg = OVS_RECIRC_HASH_ALG_L4;
                 bond_update_post_recirc_rules(out_xbundle->bond, false);
+
+                /* Recirculation does not require unmasking hash fields. */
+                wc = NULL;
             }
         }
 
-        ofport = bond_choose_output_slave(out_xbundle->bond, &ctx->xin->flow,
-                                          &ctx->xout->wc, vid);
+        ofport = bond_choose_output_slave(out_xbundle->bond,
+                                          &ctx->xin->flow, wc, vid);
         xport = xport_lookup(ofport);
 
         if (!xport) {
