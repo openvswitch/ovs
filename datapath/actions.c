@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2013 Nicira, Inc.
+ * Copyright (c) 2007-2014 Nicira, Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of version 2 of the GNU General Public
@@ -521,6 +521,26 @@ static int execute_set_action(struct sk_buff *skb,
 	return err;
 }
 
+static int execute_recirc(struct datapath *dp, struct sk_buff *skb,
+				 const struct nlattr *a)
+{
+	struct sw_flow_key recirc_key;
+	const struct vport *p = OVS_CB(skb)->input_vport;
+	uint32_t hash = OVS_CB(skb)->pkt_key->ovs_flow_hash;
+	int err;
+
+	err = ovs_flow_extract(skb, p->port_no, &recirc_key);
+	if (err)
+		return err;
+
+	recirc_key.ovs_flow_hash = hash;
+	recirc_key.recirc_id = nla_get_u32(a);
+
+	ovs_dp_process_packet_with_key(skb, &recirc_key);
+
+	return 0;
+}
+
 /* Execute a list of actions against 'skb'. */
 static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			const struct nlattr *attr, int len, bool keep_skb)
@@ -564,6 +584,23 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 		case OVS_ACTION_ATTR_POP_VLAN:
 			err = pop_vlan(skb);
 			break;
+
+		case OVS_ACTION_ATTR_RECIRC: {
+			struct sk_buff *recirc_skb;
+			const bool last_action = (a->nla_len == rem);
+
+			if (!last_action || keep_skb)
+				recirc_skb = skb_clone(skb, GFP_ATOMIC);
+			else
+				recirc_skb = skb;
+
+			err = execute_recirc(dp, recirc_skb, a);
+
+			if (last_action || err)
+				return err;
+
+			break;
+		}
 
 		case OVS_ACTION_ATTR_SET:
 			err = execute_set_action(skb, nla_data(a));
