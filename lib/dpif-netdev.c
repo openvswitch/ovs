@@ -2140,33 +2140,31 @@ dp_execute_cb(void *aux_, struct ofpbuf *packet,
 
     case OVS_ACTION_ATTR_RECIRC:
         if (*depth < MAX_RECIRC_DEPTH) {
-            uint32_t old_recirc_id = md->recirc_id;
-            uint32_t old_dp_hash = md->dp_hash;
-            const struct ovs_action_recirc *act;
+            struct pkt_metadata recirc_md = *md;
             struct ofpbuf *recirc_packet;
+            const struct ovs_action_recirc *act;
 
             recirc_packet = may_steal ? packet : ofpbuf_clone(packet);
 
             act = nl_attr_get(a);
-            md->recirc_id = act->recirc_id;
-            md->dp_hash = 0;
+            recirc_md.recirc_id = act->recirc_id;
+            recirc_md.dp_hash = 0;
 
             if (act->hash_alg == OVS_RECIRC_HASH_ALG_L4) {
                 struct flow flow;
 
                 flow_extract(recirc_packet, md, &flow);
-                md->dp_hash = flow_hash_symmetric_l4(&flow, act->hash_bias);
-                if (!md->dp_hash) {
-                    md->dp_hash = 1;  /* 0 is not valid */
+                recirc_md.dp_hash = flow_hash_symmetric_l4(&flow,
+                                                           act->hash_bias);
+                if (!recirc_md.dp_hash) {
+                    recirc_md.dp_hash = 1;  /* 0 is not valid */
                 }
             }
 
             (*depth)++;
-            dp_netdev_input(aux->dp, recirc_packet, md);
+            dp_netdev_input(aux->dp, recirc_packet, &recirc_md);
             (*depth)--;
 
-            md->recirc_id = old_recirc_id;
-            md->recirc_id = old_dp_hash;
             break;
         } else {
             VLOG_WARN("Packet dropped. Max recirculation depth exceeded.");
