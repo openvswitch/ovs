@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright (c) 2013 Nicira, Inc.
+# Copyright (c) 2013, 2014 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -275,7 +275,7 @@ Basic Configuration:
             libssl-dev gdb linux-headers-`uname -r`
 
     # Next clone the Open vSwitch source.
-    git clone git://git.openvswitch.org/openvswitch %(ovs)s
+    git clone https://github.com/openvswitch/ovs.git %(ovs)s
 
     # Setup environment variables.
     `%(v)s env`
