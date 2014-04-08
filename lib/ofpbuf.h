@@ -60,9 +60,9 @@ struct ofpbuf {
 #ifdef DPDK_NETDEV
     struct rte_mbuf mbuf;       /* DPDK mbuf */
 #else
-    void *base;                 /* First byte of allocated space. */
-    void *data;                 /* First byte actually in use. */
-    uint32_t size;              /* Number of bytes in use. */
+    void *base_;                 /* First byte of allocated space. */
+    void *data_;                 /* First byte actually in use. */
+    uint32_t size_;              /* Number of bytes in use. */
 #endif
     uint32_t allocated;         /* Number of bytes allocated. */
 
@@ -389,32 +389,32 @@ static inline void ofpbuf_set_size(struct ofpbuf *b, uint32_t v)
 #else
 static inline void * ofpbuf_data(const struct ofpbuf *b)
 {
-    return b->data;
+    return b->data_;
 }
 
 static inline void ofpbuf_set_data(struct ofpbuf *b, void *d)
 {
-    b->data = d;
+    b->data_ = d;
 }
 
 static inline void * ofpbuf_base(const struct ofpbuf *b)
 {
-    return b->base;
+    return b->base_;
 }
 
 static inline void ofpbuf_set_base(struct ofpbuf *b, void *d)
 {
-    b->base = d;
+    b->base_ = d;
 }
 
 static inline uint32_t ofpbuf_size(const struct ofpbuf *b)
 {
-    return b->size;
+    return b->size_;
 }
 
 static inline void ofpbuf_set_size(struct ofpbuf *b, uint32_t v)
 {
-    b->size = v;
+    b->size_ = v;
 }
 #endif
 
