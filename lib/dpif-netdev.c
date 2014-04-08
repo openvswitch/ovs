@@ -2151,10 +2151,7 @@ dp_execute_cb(void *aux_, struct ofpbuf *packet,
             recirc_md.dp_hash = 0;
 
             if (act->hash_alg == OVS_RECIRC_HASH_ALG_L4) {
-                struct flow flow;
-
-                flow_extract(recirc_packet, md, &flow);
-                recirc_md.dp_hash = flow_hash_symmetric_l4(&flow,
+                recirc_md.dp_hash = flow_hash_symmetric_l4(aux->key,
                                                            act->hash_bias);
                 if (!recirc_md.dp_hash) {
                     recirc_md.dp_hash = 1;  /* 0 is not valid */
