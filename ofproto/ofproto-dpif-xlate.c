@@ -1152,7 +1152,7 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
 
             if (ctx->xout->use_recirc) {
                 /* Only TCP mode uses recirculation. */
-                xr->hash_alg = OVS_RECIRC_HASH_ALG_L4;
+                xr->hash_alg = OVS_HASH_ALG_L4;
                 bond_update_post_recirc_rules(out_xbundle->bond, false);
 
                 /* Recirculation does not require unmasking hash fields. */
@@ -1843,14 +1843,19 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                                               &ctx->xout->wc);
 
         if (ctx->xout->use_recirc) {
-            struct ovs_action_recirc *act_recirc;
+            struct ovs_action_hash *act_hash;
             struct xlate_recirc *xr = &ctx->xout->recirc;
 
-            act_recirc = nl_msg_put_unspec_uninit(&ctx->xout->odp_actions,
-                               OVS_ACTION_ATTR_RECIRC, sizeof *act_recirc);
-            act_recirc->recirc_id = xr->recirc_id;
-            act_recirc->hash_alg = xr->hash_alg;
-            act_recirc->hash_bias = xr->hash_bias;
+            /* Hash action. */
+            act_hash = nl_msg_put_unspec_uninit(&ctx->xout->odp_actions,
+                                                OVS_ACTION_ATTR_HASH,
+                                                sizeof *act_hash);
+            act_hash->hash_alg = xr->hash_alg;
+            act_hash->hash_bias = xr->hash_bias;
+
+            /* Recirc action. */
+            nl_msg_put_u32(&ctx->xout->odp_actions, OVS_ACTION_ATTR_RECIRC,
+                           xr->recirc_id);
         } else {
             nl_msg_put_odp_port(&ctx->xout->odp_actions, OVS_ACTION_ATTR_OUTPUT,
                                 out_port);

@@ -79,7 +79,8 @@ odp_action_len(uint16_t type)
     case OVS_ACTION_ATTR_POP_VLAN: return 0;
     case OVS_ACTION_ATTR_PUSH_MPLS: return sizeof(struct ovs_action_push_mpls);
     case OVS_ACTION_ATTR_POP_MPLS: return sizeof(ovs_be16);
-    case OVS_ACTION_ATTR_RECIRC: return sizeof(struct ovs_action_recirc);
+    case OVS_ACTION_ATTR_RECIRC: return sizeof(uint32_t);
+    case OVS_ACTION_ATTR_HASH: return sizeof(struct ovs_action_hash);
     case OVS_ACTION_ATTR_SET: return -2;
     case OVS_ACTION_ATTR_SAMPLE: return -2;
 
@@ -387,16 +388,23 @@ format_mpls(struct ds *ds, const struct ovs_key_mpls *mpls_key,
 }
 
 static void
-format_odp_recirc_action(struct ds *ds,
-                         const struct ovs_action_recirc *act)
+format_odp_recirc_action(struct ds *ds, uint32_t recirc_id)
 {
-    ds_put_format(ds, "recirc(");
+    ds_put_format(ds, "recirc(%"PRIu32")", recirc_id);
+}
 
-    if (act->hash_alg == OVS_RECIRC_HASH_ALG_L4) {
-        ds_put_format(ds, "hash_l4(%"PRIu32"), ", act->hash_bias);
+static void
+format_odp_hash_action(struct ds *ds, const struct ovs_action_hash *hash_act)
+{
+    ds_put_format(ds, "hash(");
+
+    if (hash_act->hash_alg == OVS_HASH_ALG_L4) {
+        ds_put_format(ds, "hash_l4(%"PRIu32")", hash_act->hash_bias);
+    } else {
+        ds_put_format(ds, "Unknown hash algorithm(%"PRIu32")",
+                      hash_act->hash_alg);
     }
-
-    ds_put_format(ds, "%"PRIu32")", act->recirc_id);
+    ds_put_format(ds, ")");
 }
 
 static void
@@ -422,7 +430,10 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
         format_odp_userspace_action(ds, a);
         break;
     case OVS_ACTION_ATTR_RECIRC:
-        format_odp_recirc_action(ds, nl_attr_get(a));
+        format_odp_recirc_action(ds, nl_attr_get_u32(a));
+        break;
+    case OVS_ACTION_ATTR_HASH:
+        format_odp_hash_action(ds, nl_attr_get(a));
         break;
     case OVS_ACTION_ATTR_SET:
         ds_put_cstr(ds, "set(");

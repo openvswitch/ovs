@@ -542,26 +542,22 @@ struct ovs_action_push_vlan {
 
 /* Data path hash algorithm for computing Datapath hash.
  *
- * The Algorithm type only specifies the fields in a flow
+ * The algorithm type only specifies the fields in a flow
  * will be used as part of the hash. Each datapath is free
  * to use its own hash algorithm. The hash value will be
  * opaque to the user space daemon.
  */
-enum ovs_recirc_hash_alg {
-	OVS_RECIRC_HASH_ALG_NONE,
-	OVS_RECIRC_HASH_ALG_L4,
+enum ovs_hash_alg {
+	OVS_HASH_ALG_L4,
 };
 /*
- * struct ovs_action_recirc - %OVS_ACTION_ATTR_RECIRC action argument.
- * @recirc_id: The Recirculation label, Zero is invalid.
+ * struct ovs_action_hash - %OVS_ACTION_ATTR_HASH action argument.
  * @hash_alg: Algorithm used to compute hash prior to recirculation.
- * @hash_bias: bias used for computing hash.  used to compute hash prior to
- *             recirculation.
+ * @hash_bias: bias used for computing hash.
  */
-struct ovs_action_recirc {
-	uint32_t  hash_alg;	/* One of ovs_dp_hash_alg. */
+struct ovs_action_hash {
+	uint32_t  hash_alg;	/* One of ovs_hash_alg. */
 	uint32_t  hash_bias;
-	uint32_t  recirc_id;	/* Recirculation label. */
 };
 
 /**
@@ -604,7 +600,8 @@ enum ovs_action_attr {
 	OVS_ACTION_ATTR_SAMPLE,       /* Nested OVS_SAMPLE_ATTR_*. */
 	OVS_ACTION_ATTR_PUSH_MPLS,    /* struct ovs_action_push_mpls. */
 	OVS_ACTION_ATTR_POP_MPLS,     /* __be16 ethertype. */
-	OVS_ACTION_ATTR_RECIRC,	      /* struct ovs_action_recirc. */
+	OVS_ACTION_ATTR_RECIRC,	      /* u32 recirc_id. */
+	OVS_ACTION_ATTR_HASH,	      /* struct ovs_action_hash. */
 	__OVS_ACTION_ATTR_MAX
 };
 

@@ -2138,25 +2138,34 @@ dp_execute_cb(void *aux_, struct ofpbuf *packet,
         break;
     }
 
+    case OVS_ACTION_ATTR_HASH: {
+        const struct ovs_action_hash *hash_act;
+        uint32_t hash;
+
+        hash_act = nl_attr_get(a);
+        if (hash_act->hash_alg == OVS_HASH_ALG_L4) {
+
+            hash = flow_hash_symmetric_l4(aux->key, hash_act->hash_bias);
+            if (!hash) {
+                hash = 1; /* 0 is not valid */
+            }
+
+        } else {
+            VLOG_WARN("Unknown hash algorithm specified for the hash action.");
+            hash = 2;
+        }
+
+        md->dp_hash = hash;
+        break;
+    }
+
     case OVS_ACTION_ATTR_RECIRC:
         if (*depth < MAX_RECIRC_DEPTH) {
             struct pkt_metadata recirc_md = *md;
             struct ofpbuf *recirc_packet;
-            const struct ovs_action_recirc *act;
 
             recirc_packet = may_steal ? packet : ofpbuf_clone(packet);
-
-            act = nl_attr_get(a);
-            recirc_md.recirc_id = act->recirc_id;
-            recirc_md.dp_hash = 0;
-
-            if (act->hash_alg == OVS_RECIRC_HASH_ALG_L4) {
-                recirc_md.dp_hash = flow_hash_symmetric_l4(aux->key,
-                                                           act->hash_bias);
-                if (!recirc_md.dp_hash) {
-                    recirc_md.dp_hash = 1;  /* 0 is not valid */
-                }
-            }
+            recirc_md.recirc_id = nl_attr_get_u32(a);
 
             (*depth)++;
             dp_netdev_input(aux->dp, recirc_packet, &recirc_md);
