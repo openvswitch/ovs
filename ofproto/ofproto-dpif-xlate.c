@@ -2752,15 +2752,22 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_SET_FIELD:
             set_field = ofpact_get_SET_FIELD(a);
             mf = set_field->field;
-            mf_mask_field_and_prereqs(mf, &wc->masks);
 
             /* Set field action only ever overwrites packet's outermost
              * applicable header fields.  Do nothing if no header exists. */
-            if ((mf->id != MFF_VLAN_VID || flow->vlan_tci & htons(VLAN_CFI))
-                && ((mf->id != MFF_MPLS_LABEL && mf->id != MFF_MPLS_TC)
-                    || eth_type_mpls(flow->dl_type))) {
-                mf_set_flow_value(mf, &set_field->value, flow);
+            if (mf->id == MFF_VLAN_VID) {
+                wc->masks.vlan_tci |= htons(VLAN_CFI);
+                if (!(flow->vlan_tci & htons(VLAN_CFI))) {
+                    break;
+                }
+            } else if ((mf->id == MFF_MPLS_LABEL || mf->id == MFF_MPLS_TC)
+                       /* 'dl_type' is already unwildcarded. */
+                       && !eth_type_mpls(flow->dl_type)) {
+                break;
             }
+
+            mf_mask_field_and_prereqs(mf, &wc->masks);
+            mf_set_flow_value(mf, &set_field->value, flow);
             break;
 
         case OFPACT_STACK_PUSH:
