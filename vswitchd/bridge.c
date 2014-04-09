@@ -839,15 +839,16 @@ port_configure(struct port *port)
             s.vlan_mode = PORT_VLAN_NATIVE_UNTAGGED;
         } else {
             /* This "can't happen" because ovsdb-server should prevent it. */
-            VLOG_ERR("unknown VLAN mode %s", cfg->vlan_mode);
+            VLOG_WARN("port %s: unknown VLAN mode %s, falling "
+                      "back to trunk mode", port->name, cfg->vlan_mode);
             s.vlan_mode = PORT_VLAN_TRUNK;
         }
     } else {
         if (s.vlan >= 0) {
             s.vlan_mode = PORT_VLAN_ACCESS;
             if (cfg->n_trunks) {
-                VLOG_ERR("port %s: ignoring trunks in favor of implicit vlan",
-                         port->name);
+                VLOG_WARN("port %s: ignoring trunks in favor of implicit vlan",
+                          port->name);
             }
         } else {
             s.vlan_mode = PORT_VLAN_TRUNK;
