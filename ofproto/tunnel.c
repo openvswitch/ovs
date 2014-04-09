@@ -298,17 +298,20 @@ out:
 }
 
 static bool
-tnl_ecn_ok(const struct flow *base_flow, struct flow *flow)
+tnl_ecn_ok(const struct flow *base_flow, struct flow *flow,
+           struct flow_wildcards *wc)
 {
-    if (is_ip_any(base_flow)
-        && (flow->tunnel.ip_tos & IP_ECN_MASK) == IP_ECN_CE) {
-        if ((base_flow->nw_tos & IP_ECN_MASK) == IP_ECN_NOT_ECT) {
-            VLOG_WARN_RL(&rl, "dropping tunnel packet marked ECN CE"
-                         " but is not ECN capable");
-            return false;
-        } else {
-            /* Set the ECN CE value in the tunneled packet. */
-            flow->nw_tos |= IP_ECN_CE;
+    if (is_ip_any(base_flow)) {
+        wc->masks.nw_tos |= IP_ECN_MASK;
+        if ((flow->tunnel.ip_tos & IP_ECN_MASK) == IP_ECN_CE) {
+            if ((base_flow->nw_tos & IP_ECN_MASK) == IP_ECN_NOT_ECT) {
+                VLOG_WARN_RL(&rl, "dropping tunnel packet marked ECN CE"
+                             " but is not ECN capable");
+                return false;
+            } else {
+                /* Set the ECN CE value in the tunneled packet. */
+                flow->nw_tos |= IP_ECN_CE;
+            }
         }
     }
 
@@ -335,7 +338,7 @@ tnl_xlate_init(const struct flow *base_flow, struct flow *flow,
 
         memset(&wc->masks.pkt_mark, 0xff, sizeof wc->masks.pkt_mark);
 
-        if (!tnl_ecn_ok(base_flow, flow)) {
+        if (!tnl_ecn_ok(base_flow, flow, wc)) {
             return false;
         }
 
@@ -392,7 +395,7 @@ tnl_port_send(const struct ofport_dpif *ofport, struct flow *flow,
     }
 
     if (cfg->tos_inherit && is_ip_any(flow)) {
-        wc->masks.nw_tos = 0xff;
+        wc->masks.nw_tos = IP_DSCP_MASK;
         flow->tunnel.ip_tos = flow->nw_tos & IP_DSCP_MASK;
     } else {
         flow->tunnel.ip_tos = cfg->tos;
@@ -401,12 +404,12 @@ tnl_port_send(const struct ofport_dpif *ofport, struct flow *flow,
     /* ECN fields are always inherited. */
     if (is_ip_any(flow)) {
         wc->masks.nw_tos |= IP_ECN_MASK;
-    }
 
-    if ((flow->nw_tos & IP_ECN_MASK) == IP_ECN_CE) {
-        flow->tunnel.ip_tos |= IP_ECN_ECT_0;
-    } else {
-        flow->tunnel.ip_tos |= flow->nw_tos & IP_ECN_MASK;
+        if ((flow->nw_tos & IP_ECN_MASK) == IP_ECN_CE) {
+            flow->tunnel.ip_tos |= IP_ECN_ECT_0;
+        } else {
+            flow->tunnel.ip_tos |= flow->nw_tos & IP_ECN_MASK;
+        }
     }
 
     flow->tunnel.flags = (cfg->dont_fragment ? FLOW_TNL_F_DONT_FRAGMENT : 0)
