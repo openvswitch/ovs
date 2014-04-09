@@ -11,6 +11,15 @@ m4_define([STRIP_XOUT], [[sed '
     s/packets:[0-9]*/packets:0/
     s/bytes:[0-9]*/bytes:0/
 ' | sort]])
+m4_define([FILTER_FLOW_INSTALL], [[
+grep ' put' | sed '
+    s/.*put\[create\]\[modify\] //
+' | sort | uniq]])
+m4_define([FILTER_FLOW_DUMP], [[
+grep 'flow_dump ' | sed '
+    s/.*flow_dump //
+    s/used:[0-9]*\.[0-9]*/used:0.0/
+' | sort | uniq]])
 
 AT_SETUP([ofproto-dpif - dummy interface])
 # Create br0 with interfaces p1 and p7
@@ -25,6 +34,7 @@ OVS_VSWITCHD_START(
                   fail-mode=secure -- \
    add-port br1 p2 -- set interface p2 type=dummy options:stream=unix:$OVS_RUNDIR/p0.sock ofport_request=2 -- \
    add-port br1 p8 -- set interface p8 ofport_request=8 type=dummy --])
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 AT_CHECK([ovs-ofctl add-flow br1 action=normal])
@@ -35,14 +45,11 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),eth(src=50:54:00:00:00:
 ovs-appctl time/warp 100
 sleep 1  # wait for forwarders process packets
 
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
-skb_priority(0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3/0.0.0.0,dst=10.0.0.4/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0),in_port(7),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
-])
-
-AT_CHECK([ovs-appctl dpif/dump-flows br1 | STRIP_XOUT], [0], [dnl
-skb_priority(0),in_port(2),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0),in_port(8),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3/0.0.0.0,dst=10.0.0.4/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
+AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3/0.0.0.0,dst=10.0.0.4/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(2),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(7),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(8),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3/0.0.0.0,dst=10.0.0.4/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -63,6 +70,7 @@ OVS_VSWITCHD_START(
    add-port br1 p3 -- set interface p3 type=dummy options:stream=unix:$OVS_RUNDIR/p1.sock ofport_request=3 -- \
    add-port br1 p4 -- set interface p4 type=dummy options:stream=unix:$OVS_RUNDIR/p2.sock ofport_request=4 -- \
    add-port br1 p8 -- set interface p8 ofport_request=8 type=dummy --])
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 AT_CHECK([ovs-ofctl add-flow br1 action=normal])
@@ -81,13 +89,13 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0e),eth_type(0x0800),ipv4(src=10.0.0.6,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 ovs-appctl time/warp 100
 ovs-appctl time/warp 100
-AT_CHECK([ovs-appctl dpif/dump-flows br1 | STRIP_XOUT], [0], [dnl
-skb_priority(0),in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0),in_port(3),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3/0.0.0.0,dst=10.0.0.4/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0),in_port(4),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0d),eth_type(0x0800),ipv4(src=10.0.0.5/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0),in_port(4),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0e),eth_type(0x0800),ipv4(src=10.0.0.6/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0),in_port(4),eth(src=50:54:00:00:00:09,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8035), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0),in_port(4),eth(src=50:54:00:00:00:0b,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8035), packets:0, bytes:0, used:never, actions: <del>
+AT_CHECK([cat ovs-vswitchd.log | grep 'in_port([[348]])' | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(3),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3/0.0.0.0,dst=10.0.0.4/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(4),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0d),eth_type(0x0800),ipv4(src=10.0.0.5/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(4),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0e),eth_type(0x0800),ipv4(src=10.0.0.6/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(4),eth(src=50:54:00:00:00:09,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8035),arp(sip=0.0.0.0/0.0.0.0,tip=0.0.0.0/0.0.0.0,op=3/0,sha=50:54:00:00:00:09/00:00:00:00:00:00,tha=50:54:00:00:00:09/00:00:00:00:00:00), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(4),eth(src=50:54:00:00:00:0b,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8035),arp(sip=0.0.0.0/0.0.0.0,tip=0.0.0.0/0.0.0.0,op=3/0,sha=50:54:00:00:00:0b/00:00:00:00:00:00,tha=50:54:00:00:00:0b/00:00:00:00:00:00), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -2600,7 +2608,7 @@ in_port=2 actions=output:1
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
-odp_flow="in_port(p1)"
+odp_flow="in_port(1)"
 br_flow="in_port=1"
 # Test command: ofproto/trace odp_flow with in_port as a name.
 AT_CHECK([ovs-appctl ofproto/trace "$odp_flow"], [0], [stdout])
@@ -3702,6 +3710,7 @@ AT_SETUP([ofproto-dpif - ovs-appctl dpif/dump-flows - MPLS actions that result i
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 ON_EXIT([kill `cat ovs-ofctl.pid`])
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
@@ -3725,8 +3734,8 @@ for dl_src in 00 01; do
 done
 sleep 1  # wait for the datapath flow installed
 for dl_src in 00 01; do
-    AT_CHECK_UNQUOTED([ovs-appctl dpif/dump-flows br0 | grep ":$dl_src/" | STRIP_USED], [0], [dnl
-skb_priority(0),in_port(1),eth(src=60:66:66:66:66:$dl_src/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:07/00:00:00:00:00:00),eth_type(0x8847),mpls(lse0=0x14020,lse1=0x14120), packets:0, bytes:0, used:never, actions:userspace(pid=0,slow_path(controller))
+    AT_CHECK_UNQUOTED([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | grep ":$dl_src/" | STRIP_USED], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=60:66:66:66:66:$dl_src/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:07/00:00:00:00:00:00),eth_type(0x8847),mpls(lse0=0x14020,lse1=0x14120), actions:userspace(pid=0,slow_path(controller))
 ])
 done
 
@@ -3738,6 +3747,7 @@ AT_SETUP([ofproto-dpif - ovs-appctl dpif/dump-flows - MPLS actions that result i
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 ON_EXIT([kill `cat ovs-ofctl.pid`])
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
@@ -3764,8 +3774,8 @@ for dl_src in 00 01; do
 done
 sleep 1  # wait for the datapath flow installed
 for dl_src in 00 01; do
-    AT_CHECK_UNQUOTED([ovs-appctl dpif/dump-flows br0 | grep ":$dl_src/" | STRIP_USED], [0], [dnl
-skb_priority(0),in_port(1),eth(src=60:66:66:66:66:$dl_src/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:07/00:00:00:00:00:00),eth_type(0x8847),mpls(lse0=0x14020,lse1=0x14120), packets:0, bytes:0, used:never, actions:userspace(pid=0,slow_path(controller))
+    AT_CHECK_UNQUOTED([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | grep ":$dl_src/" | STRIP_USED], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=60:66:66:66:66:$dl_src/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:07/00:00:00:00:00:00),eth_type(0x8847),mpls(lse0=0x14020,lse1=0x14120), actions:userspace(pid=0,slow_path(controller))
 ])
 done
 
@@ -3782,6 +3792,7 @@ ADD_OF_PORTS([br0], [2])
 ADD_OF_PORTS([br1], [3])
 
 AT_CHECK([ovs-appctl time/stop])
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 
 AT_CHECK([ovs-ofctl add-flow br0 actions=LOCAL,output:1,output:2])
 AT_CHECK([ovs-ofctl add-flow br1 actions=LOCAL,output:1,output:3])
@@ -3816,11 +3827,16 @@ dummy@ovs-dummy: hit:13 missed:2
 		pbr1 1/none: (patch: peer=pbr0)
 ])
 
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_USED], [0], [dnl
-skb_priority(0),in_port(100),eth_type(0x0800),ipv4(src=192.168.0.1/0.0.0.0,dst=192.168.0.2/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:9, bytes:540, used:0.0s, actions:101,3,2
-]),
-AT_CHECK([ovs-appctl dpif/dump-flows br1 | STRIP_USED], [0], [dnl
-skb_priority(0),in_port(101),eth_type(0x0800),ipv4(src=192.168.0.2/0.0.0.0,dst=192.168.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:4, bytes:240, used:0.0s, actions:100,2,3
+AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_USED], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(100),eth(src=50:54:00:00:00:05/00:00:00:00:00:00,dst=50:54:00:00:00:07/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=192.168.0.1/0.0.0.0,dst=192.168.0.2/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions:101,3,2
+skb_priority(0),skb_mark(0/0),in_port(101),eth(src=50:54:00:00:00:07/00:00:00:00:00:00,dst=50:54:00:00:00:05/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=192.168.0.2/0.0.0.0,dst=192.168.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions:100,2,3
+])
+
+AT_CHECK([cat ovs-vswitchd.log | grep -e 'in_port(100).*packets:9' | FILTER_FLOW_DUMP], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(100),eth(src=50:54:00:00:00:05/00:00:00:00:00:00,dst=50:54:00:00:00:07/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=192.168.0.1/0.0.0.0,dst=192.168.0.2/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), packets:9, bytes:540, used:0.0s
+])
+AT_CHECK([cat ovs-vswitchd.log | grep -e 'in_port(101).*packets:4' | FILTER_FLOW_DUMP], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(101),eth(src=50:54:00:00:00:07/00:00:00:00:00:00,dst=50:54:00:00:00:05/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=192.168.0.2/0.0.0.0,dst=192.168.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), packets:4, bytes:240, used:0.0s
 ])
 
 AT_CHECK([ovs-ofctl dump-ports br0 pbr0], [0], [dnl
@@ -3860,6 +3876,7 @@ AT_BANNER([ofproto-dpif -- megaflows])
 
 AT_SETUP([ofproto-dpif megaflow - port classification])
 OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 ADD_OF_PORTS([br0], [1], [2])
 AT_DATA([flows.txt], [dnl
 table=0 in_port=1 actions=output(2)
@@ -3868,14 +3885,15 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
-skb_priority(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:0.0s, actions: <del>
+AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif megaflow - L2 classification])
 OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 ADD_OF_PORTS([br0], [1], [2])
 AT_DATA([flows.txt], [dnl
 table=0 in_port=1,dl_src=50:54:00:00:00:09 actions=output(2)
@@ -3884,15 +3902,16 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
-skb_priority(0),in_port(1),eth(src=50:54:00:00:00:09/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0),in_port(1),eth(src=50:54:00:00:00:0b/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0c/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
+AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:09/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:0b/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0c/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif megaflow - L3 classification])
 OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 ADD_OF_PORTS([br0], [1], [2])
 AT_CHECK([ovs-vsctl set Bridge br0 flow_tables:0=@N1 -- --id=@N1 create Flow_Table name=t0 prefixes=nw_dst,nw_src], [0], [ignore], [])
 AT_DATA([flows.txt], [dnl
@@ -3902,15 +3921,16 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
-skb_priority(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.2/255.255.255.252,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.4/255.255.255.255,dst=10.0.0.3/0.0.0.0,proto=1/0xff,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
+AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/255.255.255.252,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:0b/00:00:00:00:00:00,dst=50:54:00:00:00:0c/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.4/255.255.255.255,dst=10.0.0.3/0.0.0.0,proto=1/0xff,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif megaflow - IPv6 classification])
 OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 ADD_OF_PORTS([br0], [1], [2])
 AT_CHECK([ovs-vsctl set Bridge br0 flow_tables:0=@N1 -- --id=@N1 create Flow_Table name=t0 prefixes=ipv6_dst,ipv6_src], [0], [ignore], [])
 AT_DATA([flows.txt], [dnl
@@ -3920,15 +3940,16 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x86dd),ipv6(src=2001:db8:3c4d:1:2:3:4:5,dst=fe80::2,label=0,proto=10,tclass=0x70,hlimit=128,frag=no)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x86dd),ipv6(src=2001:db8:3c4d:5:4:3:2:1,dst=2001:db8:3c4d:1:2:3:4:1,label=0,proto=99,tclass=0x70,hlimit=64,frag=no)'])
 sleep 1
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
-skb_priority(0),in_port(1),eth_type(0x86dd),ipv6(src=2001:db8:3c4d:1:2:3:4:5/ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff,dst=fe80::2/::,label=0/0,proto=10/0,tclass=0x70/0,hlimit=128/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0),in_port(1),eth_type(0x86dd),ipv6(src=2001:db8:3c4d:5:4:3:2:1/ffff:ffff:ffff:fffc::,dst=2001:db8:3c4d:1:2:3:4:1/::,label=0/0,proto=99/0,tclass=0x70/0,hlimit=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
+AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:07/00:00:00:00:00:00,dst=50:54:00:00:00:05/00:00:00:00:00:00),eth_type(0x86dd),ipv6(src=2001:db8:3c4d:1:2:3:4:5/ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff,dst=fe80::2/::,label=0/0,proto=10/0,tclass=0x70/0,hlimit=128/0,frag=no/0xff), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x86dd),ipv6(src=2001:db8:3c4d:5:4:3:2:1/ffff:ffff:ffff:fffc::,dst=2001:db8:3c4d:1:2:3:4:1/::,label=0/0,proto=99/0,tclass=0x70/0,hlimit=64/0,frag=no/0xff), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif megaflow - L4 classification])
 OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 ADD_OF_PORTS([br0], [1], [2])
 AT_DATA([flows.txt], [dnl
 table=0 in_port=1,icmp,icmp_type=8 actions=output(2)
@@ -3936,28 +3957,30 @@ table=0 in_port=1,icmp,icmp_type=8 actions=output(2)
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
-skb_priority(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0xff,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0xff,code=0/0), packets:0, bytes:0, used:0.0s, actions: <del>
+AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0xff,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0xff,code=0/0), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif megaflow - normal])
 OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 ADD_OF_PORTS([br0], [1], [2])
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
-skb_priority(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
+AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif megaflow - mpls])
 OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 ADD_OF_PORTS([br0], [1], [2])
 AT_DATA([flows.txt], [dnl
 table=0 dl_src=50:54:00:00:00:09 actions=push_mpls:0x8847,2
@@ -3967,9 +3990,9 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x8847),mpls(label=11,tc=3,ttl=64,bos=1)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0a),eth_type(0x8847),mpls(label=11,tc=3,ttl=64,bos=1)'])
 sleep 1
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
-skb_priority(0),in_port(1),eth(src=50:54:00:00:00:09/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x8847),mpls(label=11,tc=3,ttl=64,bos=1), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0),in_port(1),eth(src=50:54:00:00:00:0b/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x8847),mpls(label=11,tc=3,ttl=64,bos=1), packets:0, bytes:0, used:never, actions: <del>
+AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:09/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x8847),mpls(label=11,tc=3,ttl=64,bos=1), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:0b/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x8847),mpls(label=11,tc=3,ttl=64,bos=1), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -3980,6 +4003,7 @@ AT_CLEANUP
 m4_define([CHECK_MEGAFLOW_NETFLOW],
   [AT_SETUP([ofproto-dpif megaflow - netflow - $2 collector])
   OVS_VSWITCHD_START
+  AT_CHECK([ovs-appctl vlog/set dpif:dbg])
   ADD_OF_PORTS([br0], [1], [2])
 
   dnl NetFlow configuration disables wildcarding relevant fields
@@ -3996,9 +4020,9 @@ m4_define([CHECK_MEGAFLOW_NETFLOW],
   AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
   AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
   sleep 1
-  AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
-skb_priority(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/255.255.255.255,dst=10.0.0.1/255.255.255.255,proto=1/0xff,tos=0/0xfc,ttl=64/0,frag=no/0xff),icmp(type=8,code=0), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4/255.255.255.255,dst=10.0.0.3/255.255.255.255,proto=1/0xff,tos=0/0xfc,ttl=64/0,frag=no/0xff),icmp(type=8,code=0), packets:0, bytes:0, used:never, actions: <del>
+  AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/255.255.255.255,dst=10.0.0.1/255.255.255.255,proto=1/0xff,tos=0/0xfc,ttl=64/0,frag=no/0xff),icmp(type=8,code=0), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4/255.255.255.255,dst=10.0.0.3/255.255.255.255,proto=1/0xff,tos=0/0xfc,ttl=64/0,frag=no/0xff),icmp(type=8,code=0), actions: <del>
 ])
   OVS_VSWITCHD_STOP
   AT_CLEANUP])
@@ -4014,14 +4038,15 @@ OVS_VSWITCHD_START(
    set interface p3 type=dummy ofport_request=3])
 AT_CHECK([ovs-appctl netdev-dummy/set-admin-state up], 0, [OK
 ])
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
-skb_priority(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
+AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -4034,14 +4059,15 @@ OVS_VSWITCHD_START(
    set interface p3 type=dummy ofport_request=3])
 AT_CHECK([ovs-appctl netdev-dummy/set-admin-state up], 0, [OK
 ])
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
-skb_priority(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
+AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -4068,6 +4094,7 @@ OVS_VSWITCHD_START(
 
 AT_CHECK([ovs-appctl netdev-dummy/set-admin-state up], 0, [OK
 ])
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 ADD_OF_PORTS([br0], [7])
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 AT_CHECK([ovs-ofctl add-flow br1 action=normal])
@@ -4076,15 +4103,16 @@ ovs-appctl time/warp 5000
 AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
-skb_priority(0),in_port(7),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0),in_port(7),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
+AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(7),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(7),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif megaflow - resubmit port action])
 OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 ADD_OF_PORTS([br0], [1], [2])
 AT_DATA([flows.txt], [dnl
 table=0 in_port=1,ip actions=resubmit(90)
@@ -4094,15 +4122,16 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
-skb_priority(0),in_port(1),eth(src=50:54:00:00:00:09/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0),in_port(1),eth(src=50:54:00:00:00:0b/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0c/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
+AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:09/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:0b/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0c/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif megaflow - resubmit table action])
 OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 ADD_OF_PORTS([br0], [1], [2])
 AT_DATA([flows.txt], [dnl
 table=0 in_port=1,ip actions=resubmit(,1)
@@ -4113,15 +4142,16 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=
 1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
-skb_priority(0),in_port(1),eth(src=50:54:00:00:00:09/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0),in_port(1),eth(src=50:54:00:00:00:0b/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0c/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
+AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:09/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:0b/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0c/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif megaflow - goto_table action])
 OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 ADD_OF_PORTS([br0], [1], [2])
 AT_DATA([flows.txt], [dnl
 table=0 in_port=1,ip actions=goto_table(1)
@@ -4131,15 +4161,16 @@ AT_CHECK([ovs-ofctl -O OpenFlow12 add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
-skb_priority(0),in_port(1),eth(src=50:54:00:00:00:09/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0),in_port(1),eth(src=50:54:00:00:00:0b/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0c/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
+AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:09/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:0b/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0c/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif megaflow - mirroring, select_all])
 OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 ADD_OF_PORTS([br0], [1], [2], [3])
 ovs-vsctl \
         set Bridge br0 mirrors=@m --\
@@ -4153,14 +4184,15 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
-skb_priority(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:0.0s, actions: <del>
+AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif megaflow - mirroring, select_vlan])
 OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 ADD_OF_PORTS([br0], [1], [2], [3])
 ovs-vsctl \
         set Bridge br0 mirrors=@m --\
@@ -4174,15 +4206,16 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x8100),vlan(vid=11,pcp=7),encap(eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0))'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
-skb_priority(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0),in_port(1),eth_type(0x8100),vlan(vid=11/0xfff,pcp=7/0x0,cfi=1/1),encap(eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff)), packets:0, bytes:0, used:never, actions: <del>
+AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x8100),vlan(vid=11/0xfff,pcp=7/0x0,cfi=1/1),encap(eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0)), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:0b/00:00:00:00:00:00,dst=50:54:00:00:00:0c/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif megaflow - move action])
 OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 ADD_OF_PORTS([br0], [1], [2])
 AT_DATA([flows.txt], [dnl
 table=0 in_port=1 ip,actions=move:NXM_OF_IP_SRC[[]]->NXM_NX_REG0[[]],resubmit(90)
@@ -4193,15 +4226,16 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
-skb_priority(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.2/255.255.255.255,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.4/255.255.255.255,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
+AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/255.255.255.255,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:0b/00:00:00:00:00:00,dst=50:54:00:00:00:0c/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.4/255.255.255.255,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif megaflow - push action])
 OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 ADD_OF_PORTS([br0], [1], [2])
 AT_DATA([flows.txt], [dnl
 table=0 in_port=1 ip,actions=push:NXM_OF_IP_SRC[[]],output(2)
@@ -4210,15 +4244,16 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
-skb_priority(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.2/255.255.255.255,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.4/255.255.255.255,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
+AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/255.255.255.255,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:0b/00:00:00:00:00:00,dst=50:54:00:00:00:0c/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.4/255.255.255.255,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif megaflow - learning])
 OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 ADD_OF_PORTS([br0], [1], [2])
 AT_DATA([flows.txt], [dnl
 table=0 in_port=1 actions=load:2->NXM_NX_REG0[[0..15]],learn(table=1,priority=65535,NXM_OF_ETH_SRC[[]],NXM_OF_VLAN_TCI[[0..11]],output:NXM_NX_REG0[[0..15]]),output:2
@@ -4236,9 +4271,9 @@ for i in 1 2; do
 done
 sleep 1
 dnl The original flow is missing due to a revalidation.
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
-skb_priority(0),in_port(1),eth(src=50:54:00:00:00:09/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:0.0s, actions: <del>
-skb_priority(0),in_port(1),eth(src=50:54:00:00:00:0b/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0c/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:0.0s, actions: <del>
+AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:09/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:0b/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0c/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -4246,6 +4281,7 @@ AT_CLEANUP
 AT_SETUP([ofproto-dpif megaflow - tunnels])
 OVS_VSWITCHD_START(
   [add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1])
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 AT_CHECK([ovs-vsctl add-port br0 p2 -- set Interface p2 type=gre \
      options:remote_ip=1.1.1.1 ofport_request=2 options:key=flow])
 AT_CHECK([ovs-vsctl add-port br0 p3 -- set Interface p3 type=dummy \
@@ -4265,16 +4301,17 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p3 'in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0xfd,ttl=128,frag=no),icmp(type=8,code=0)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p3 'in_port(3),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0x1,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
-skb_priority(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0xfd/0x3,ttl=128/0,frag=no/0xff), packets:0, bytes:0, used:0.0s, actions: <del>
-skb_priority(0),in_port(3),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0xfd/0xff,ttl=128/0xff,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0),in_port(3),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0x1/0xff,ttl=64/0xff,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
+AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0xfd/0x3,ttl=128/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(3),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0xfd/0xff,ttl=128/0xff,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(3),eth(src=50:54:00:00:00:0b/00:00:00:00:00:00,dst=50:54:00:00:00:0c/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0x1/0xff,ttl=64/0xff,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif megaflow - dec_ttl])
 OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 ADD_OF_PORTS([br0], [1], [2])
 AT_CHECK([ovs-vsctl set Bridge br0 flow_tables:0=@N1 -- --id=@N1 create Flow_Table name=t0 prefixes=nw_dst,nw_src], [0], [ignore], [])
 AT_DATA([flows.txt], [dnl
@@ -4284,15 +4321,16 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_XOUT], [0], [dnl
-skb_priority(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.2/255.255.255.252,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no), packets:0, bytes:0, used:never, actions: <del>
+AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/255.255.255.252,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:0b/00:00:00:00:00:00,dst=50:54:00:00:00:0c/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8/0,code=0/0), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif megaflow - set dl_dst])
 OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 ADD_OF_PORTS([br0], [1], [2])
 AT_DATA([flows.txt], [dnl
 table=0 in_port=1 actions=mod_dl_dst(50:54:00:00:00:0a),output(2)
@@ -4311,15 +4349,16 @@ dnl ofproto-dpif).  The second entry actually updates the destination
 dnl MAC, so both the source and destination MAC addresses are
 dnl un-wildcarded, since the ODP commit functions update both the source
 dnl and destination MAC addresses.
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_USED], [0], [dnl
-skb_priority(0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/ff:ff:ff:ff:ff:ff),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions:2
-skb_priority(0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions:set(eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0a)),2
+AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_USED], [0], [dnl
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/ff:ff:ff:ff:ff:ff),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions:2
+skb_priority(0),skb_mark(0/0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions:set(eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0a)),2
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif megaflow - disabled])
 OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 ADD_OF_PORTS([br0], [1], [2])
 AT_DATA([flows.txt], [dnl
 table=0 in_port=1,ip,nw_dst=10.0.0.1 actions=output(2)
@@ -4334,9 +4373,15 @@ for i in 1 2 3 4; do
     AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 done
 sleep 1
-AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_USED], [0], [dnl
-skb_priority(0),skb_mark(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:3, bytes:180, used:0.0s, actions:2
-skb_priority(0),skb_mark(0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:3, bytes:180, used:0.0s, actions:drop
+AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_USED], [0], [dnl
+skb_priority(0),skb_mark(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), actions:2
+skb_priority(0),skb_mark(0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), actions:drop
+])
+AT_CHECK([cat ovs-vswitchd.log | grep '00:09.*packets:3' | FILTER_FLOW_DUMP], [0], [dnl
+skb_priority(0),skb_mark(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:3, bytes:180, used:0.0s
+])
+AT_CHECK([cat ovs-vswitchd.log | grep '00:0b.*packets:3' | FILTER_FLOW_DUMP], [0], [dnl
+skb_priority(0),skb_mark(0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:3, bytes:180, used:0.0s
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
