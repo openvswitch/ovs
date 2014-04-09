@@ -577,13 +577,13 @@ netdev_rxq_bsd_recv_pcap(struct netdev_rxq_bsd *rxq, struct ofpbuf *buffer)
 
     /* prepare the pcap argument to store the packet */
     arg.size = ofpbuf_tailroom(buffer);
-    arg.data = buffer->data;
+    arg.data = ofpbuf_data(buffer);
 
     for (;;) {
         ret = pcap_dispatch(rxq->pcap_handle, 1, proc_pkt, (u_char *) &arg);
 
         if (ret > 0) {
-            buffer->size += arg.retval;
+            ofpbuf_set_size(buffer, ofpbuf_size(buffer) + arg.retval);
             return 0;
         }
         if (ret == -1) {
@@ -607,9 +607,9 @@ netdev_rxq_bsd_recv_tap(struct netdev_rxq_bsd *rxq, struct ofpbuf *buffer)
     size_t size = ofpbuf_tailroom(buffer);
 
     for (;;) {
-        ssize_t retval = read(rxq->fd, buffer->data, size);
+        ssize_t retval = read(rxq->fd, ofpbuf_data(buffer), size);
         if (retval >= 0) {
-            buffer->size += retval;
+            ofpbuf_set_size(buffer, ofpbuf_size(buffer) + retval);
             return 0;
         } else if (errno != EINTR) {
             if (errno != EAGAIN) {
@@ -687,8 +687,8 @@ netdev_bsd_send(struct netdev *netdev_, struct ofpbuf *pkt, bool may_steal)
 {
     struct netdev_bsd *dev = netdev_bsd_cast(netdev_);
     const char *name = netdev_get_name(netdev_);
-    const void *data = pkt->data;
-    size_t size = pkt->size;
+    const void *data = ofpbuf_data(pkt);
+    size_t size = ofpbuf_size(pkt);
     int error;
 
     ovs_mutex_lock(&dev->mutex);
