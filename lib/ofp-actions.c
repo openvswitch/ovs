@@ -2589,6 +2589,8 @@ ofpact_to_openflow10(const struct ofpact *a, struct ofpbuf *out)
          * follow this action. */
         break;
 
+    case OFPACT_SET_IP_ECN:
+    case OFPACT_SET_IP_TTL:
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_WRITE_ACTIONS:
     case OFPACT_GOTO_TABLE:
@@ -2611,8 +2613,6 @@ ofpact_to_openflow10(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_STACK_PUSH:
     case OFPACT_STACK_POP:
     case OFPACT_DEC_TTL:
-    case OFPACT_SET_IP_ECN:
-    case OFPACT_SET_IP_TTL:
     case OFPACT_SET_MPLS_LABEL:
     case OFPACT_SET_MPLS_TC:
     case OFPACT_SET_MPLS_TTL:
