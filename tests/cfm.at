@@ -14,6 +14,19 @@ Remote MPID $7
 ])
 ])
 
+m4_define([CFM_CHECK_EXTENDED_FAULT], [
+AT_CHECK([ovs-appctl cfm/show $1 | sed -e '/next CCM tx:/d' | sed -e '/next fault check:/d' | sed -e  '/recv since check:/d'],[0],
+[dnl
+---- $1 ----
+MPID $2: extended
+	fault: $3
+	average health: $4
+	opstate: $5
+	remote_opstate: $6
+	interval: $7
+])
+])
+
 m4_define([CFM_VSCTL_LIST_IFACE], [
 AT_CHECK([ovs-vsctl list interface $1 | sed -n '/$2/p'],[0],
 [dnl
@@ -97,6 +110,68 @@ do
     CFM_CHECK_EXTENDED([p0], [1], [100], [up], [up], [300ms], [2], [up])
     CFM_CHECK_EXTENDED([p1], [2], [100], [up], [up], [300ms], [1], [up])
 done
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+# test demand_rx_ccm under demand mode.
+AT_SETUP([cfm - demand_rx_ccm])
+#Create 2 bridges connected by patch ports and enable cfm
+OVS_VSWITCHD_START([add-br br1 -- \
+                    set bridge br1 datapath-type=dummy \
+                    other-config:hwaddr=aa:55:aa:56:00:00 -- \
+                    add-port br1 p1 -- set Interface p1 type=patch \
+                    options:peer=p0 ofport_request=2 -- \
+                    add-port br0 p0 -- set Interface p0 type=patch \
+                    options:peer=p1 ofport_request=1 -- \
+                    set Interface p0 cfm_mpid=1 other_config:cfm_interval=300 other_config:cfm_extended=true other_config:cfm_demand=true -- \
+                    set Interface p1 cfm_mpid=2 other_config:cfm_interval=300 other_config:cfm_extended=true other_config:cfm_demand=true])
+
+ovs-appctl time/stop
+# wait for a while to stablize cfm. (need a longer time, since in demand mode
+# the fault interval is (MAX(ccm_interval_ms, 500) * 3.5) ms)
+for i in `seq 0 200`; do ovs-appctl time/warp 100; done
+CFM_CHECK_EXTENDED([p0], [1], [100], [up], [up], [300ms], [2], [up])
+CFM_CHECK_EXTENDED([p1], [2], [100], [up], [up], [300ms], [1], [up])
+
+# turn off the cfm on p1.
+AT_CHECK([ovs-vsctl clear Interface p1 cfm_mpid])
+# cfm should never go down while receiving data packets.
+for i in `seq 0 200`
+do
+    ovs-appctl time/warp 100
+    AT_CHECK([ovs-ofctl packet-out br1 3 2  "90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202"],
+             [0], [stdout], [])
+done
+CFM_CHECK_EXTENDED([p0], [1], [0], [up], [up], [300ms], [2], [up])
+
+# wait longer, since the demand_rx_ccm interval is 100 * 300 ms.
+# since there is no ccm received, the [recv] fault should be raised.
+for i in `seq 0 200`
+do
+    ovs-appctl time/warp 100
+    AT_CHECK([ovs-ofctl packet-out br1 3 2  "90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202"],
+             [0], [stdout], [])
+done
+CFM_CHECK_EXTENDED_FAULT([p0], [1], [recv], [0], [up], [up], [300ms])
+
+# now turn on the cfm on p1 again,
+AT_CHECK([ovs-vsctl set Interface p1 cfm_mpid=2])
+# cfm should be up for both p0 and p1
+for i in `seq 0 200`; do ovs-appctl time/warp 100; done
+CFM_CHECK_EXTENDED([p0], [1], [100], [up], [up], [300ms], [2], [up])
+CFM_CHECK_EXTENDED([p1], [2], [100], [up], [up], [300ms], [1], [up])
+
+# now turn off the cfm on p1 again
+AT_CHECK([ovs-vsctl clear Interface p1 cfm_mpid])
+# since there is no ccm received, the [recv] fault should be raised.
+for i in `seq 0 400`
+do
+    ovs-appctl time/warp 100
+    AT_CHECK([ovs-ofctl packet-out br1 3 2  "90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202"],
+             [0], [stdout], [])
+done
+CFM_CHECK_EXTENDED_FAULT([p0], [1], [recv], [0], [up], [up], [300ms])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP

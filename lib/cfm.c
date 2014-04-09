@@ -137,6 +137,11 @@ struct cfm {
     /* True when the variables returned by cfm_get_*() are changed
      * since last check. */
     bool status_changed;
+
+    /* When 'cfm->demand' is set, at least one ccm is required to be received
+     * every 100 * cfm_interval.  If ccm is not received within this interval,
+     * even if data packets are received, the cfm fault will be set. */
+    struct timer demand_rx_ccm_t;
 };
 
 /* Remote MPs represent foreign network entities that are configured to have
@@ -459,7 +464,8 @@ cfm_run(struct cfm *cfm) OVS_EXCLUDED(mutex)
         if (cfm->demand) {
             uint64_t rx_packets = cfm_rx_packets(cfm);
             demand_override = hmap_count(&cfm->remote_mps) == 1
-                && rx_packets > cfm->rx_packets;
+                && rx_packets > cfm->rx_packets
+                && !timer_expired(&cfm->demand_rx_ccm_t);
             cfm->rx_packets = rx_packets;
         }
 
@@ -836,6 +842,10 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
             rmp->mpid = ccm_mpid;
             if (!cfm_fault) {
                 rmp->num_health_ccm++;
+                if (cfm->demand) {
+                    timer_set_duration(&cfm->demand_rx_ccm_t,
+                                       100 * cfm->ccm_interval_ms);
+                }
             }
             rmp->recv = true;
             cfm->recv_fault |= cfm_fault;
