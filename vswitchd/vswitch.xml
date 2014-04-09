@@ -2231,9 +2231,10 @@
           <ref column="other_config" key="cfm_extended"/> is true, the CFM
           module operates in demand mode.  When in demand mode, traffic
           received on the <ref table="Interface"/> is used to indicate
-          liveness.  CCMs are still transmitted and received, but if the
-          <ref table="Interface"/> is receiving traffic, their absence does not
-          cause a connectivity fault.
+          liveness.  CCMs are still transmitted and received.  At least one
+          CCM must be received every 100 * <ref column="other_config"
+          key="cfm_interval"/> amount of time.  Otherwise, even if traffic
+          are received, the CFM module will raise the connectivity fault.
         </p>
 
         <p>
