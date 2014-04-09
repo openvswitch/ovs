@@ -3780,6 +3780,7 @@ ofproto_unixctl_fdb_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
 struct trace_ctx {
     struct xlate_out xout;
     struct xlate_in xin;
+    const struct flow *key;
     struct flow flow;
     struct flow_wildcards wc;
     struct ds *result;
@@ -3820,7 +3821,9 @@ trace_format_flow(struct ds *result, int level, const char *title,
 {
     ds_put_char_multiple(result, '\t', level);
     ds_put_format(result, "%s: ", title);
-    if (flow_equal(&trace->xin.flow, &trace->flow)) {
+    /* Do not report unchanged flows for resubmits. */
+    if ((level > 0 && flow_equal(&trace->xin.flow, &trace->flow))
+        || (level == 0 && flow_equal(&trace->xin.flow, trace->key))) {
         ds_put_cstr(result, "unchanged");
     } else {
         flow_format(result, &trace->xin.flow);
@@ -3865,7 +3868,7 @@ trace_format_megaflow(struct ds *result, int level, const char *title,
     ds_put_char_multiple(result, '\t', level);
     ds_put_format(result, "%s: ", title);
     flow_wildcards_or(&trace->wc, &trace->xout.wc, &trace->wc);
-    match_init(&match, &trace->flow, &trace->wc);
+    match_init(&match, trace->key, &trace->wc);
     match_format(&match, result, OFP_DEFAULT_PRIORITY);
     ds_put_char(result, '\n');
 }
@@ -4187,7 +4190,8 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
 
     if (rule || ofpacts) {
         trace.result = ds;
-        trace.flow = *flow;
+        trace.key = flow; /* Original flow key, used for megaflow. */
+        trace.flow = *flow; /* May be modified by actions. */
         xlate_in_init(&trace.xin, ofproto, flow, rule, ntohs(flow->tcp_flags),
                       packet);
         if (ofpacts) {
