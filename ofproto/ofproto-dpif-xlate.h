@@ -31,6 +31,7 @@ struct lacp;
 struct dpif_ipfix;
 struct dpif_sflow;
 struct mac_learning;
+struct xlate_cache;
 
 struct xlate_recirc {
     uint32_t recirc_id;  /* !0 Use recirculation instead of output. */
@@ -127,6 +128,15 @@ struct xlate_in {
      * This is normally null so the client has to set it manually after
      * calling xlate_in_init(). */
     const struct dpif_flow_stats *resubmit_stats;
+
+    /* If nonnull, flow translation populates this cache with references to all
+     * modules that are affected by translation. This 'xlate_cache' may be
+     * passed to xlate_push_stats() to perform the same function as
+     * xlate_actions() without the full cost of translation.
+     *
+     * This is normally null so the client has to set it manually after
+     * calling xlate_in_init(). */
+    struct xlate_cache *xcache;
 };
 
 extern struct ovs_rwlock xlate_rwlock;
@@ -178,5 +188,11 @@ void xlate_actions_for_side_effects(struct xlate_in *);
 void xlate_out_copy(struct xlate_out *dst, const struct xlate_out *src);
 
 int xlate_send_packet(const struct ofport_dpif *, struct ofpbuf *);
+
+struct xlate_cache *xlate_cache_new(void);
+void xlate_push_stats(struct xlate_cache *, bool may_learn,
+                      const struct dpif_flow_stats *);
+void xlate_cache_clear(struct xlate_cache *);
+void xlate_cache_delete(struct xlate_cache *);
 
 #endif /* ofproto-dpif-xlate.h */
