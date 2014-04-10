@@ -352,7 +352,7 @@ for i in `seq 1 10`; do
     # (i % 3 == 0) below is somehow arbitrary but chosen to ensure
     # that we update the flow's 'used' frequently enough to prevent
     # idle_timeout.
-    if [[ $i -eq 1 -or $((i % 3)) -eq 0 ]]; then
+    if [[ $i -eq 1 -o $((i % 3)) -eq 0 ]]; then
         sleep 1
     fi
 done
