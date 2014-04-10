@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -180,7 +180,6 @@ netflow_expire(struct netflow *nf, struct netflow_flow *nf_flow,
     }
 
     /* Update flow tracking data. */
-    nf_flow->created = 0;
     nf_flow->packet_count_off = expired->packet_count;
     nf_flow->byte_count_off = expired->byte_count;
     nf_flow->tcp_flags = 0;
