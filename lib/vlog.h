@@ -205,6 +205,11 @@ void vlog_rate_limit(const struct vlog_module *, enum vlog_level,
 #define VLOG_INFO_RL(RL, ...) VLOG_RL(RL, VLL_INFO, __VA_ARGS__)
 #define VLOG_DBG_RL(RL, ...) VLOG_RL(RL, VLL_DBG, __VA_ARGS__)
 
+/* Convenience macros to additionally store log message in buffer
+ * Caller is responsible for freeing *ERRP afterwards */
+#define VLOG_ERR_BUF(ERRP, ...) VLOG_ERRP(ERRP, VLL_ERR, __VA_ARGS__)
+#define VLOG_WARN_BUF(ERRP, ...) VLOG_ERRP(ERRP, VLL_WARN, __VA_ARGS__)
+
 #define VLOG_DROP_ERR(RL) vlog_should_drop(THIS_MODULE, VLL_ERR, RL)
 #define VLOG_DROP_WARN(RL) vlog_should_drop(THIS_MODULE, VLL_WARN, RL)
 #define VLOG_DROP_INFO(RL) vlog_should_drop(THIS_MODULE, VLL_INFO, RL)
@@ -260,6 +265,13 @@ void vlog_usage(void);
         if (ovsthread_once_start(&once)) {                              \
             vlog(THIS_MODULE, LEVEL, __VA_ARGS__);                      \
             ovsthread_once_done(&once);                                 \
+        }                                                               \
+    } while (0)
+#define VLOG_ERRP(ERRP, LEVEL, ...)                                     \
+    do {                                                                \
+        VLOG(LEVEL, __VA_ARGS__);                                       \
+        if (ERRP) {                                                     \
+            *(ERRP) = xasprintf(__VA_ARGS__);                           \
         }                                                               \
     } while (0)
 
