@@ -3706,7 +3706,7 @@ skb_priority(0),skb_mark(0/0),in_port(p3),eth(src=50:54:00:00:00:09/00:00:00:00:
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto-dpif - ovs-appctl dpif/dump-flows - MPLS actions that result in a userspace action])
+AT_SETUP([ofproto-dpif - MPLS actions that result in a userspace action])
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
@@ -3743,7 +3743,7 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 
-AT_SETUP([ofproto-dpif - ovs-appctl dpif/dump-flows - MPLS actions that result in a drop])
+AT_SETUP([ofproto-dpif - MPLS actions that result in a drop])
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
