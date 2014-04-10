@@ -237,7 +237,7 @@ Please consider the following:
     * Coding style (see the CodingStyle file at the top of the source
       tree).
 
-    * The patch submission guidelines (see SubmittingPatches).  I
+    * The patch submission guidelines (see CONTRIBUTING).  I
       recommend using "git send-email", which automatically follows a
       lot of those guidelines.
 

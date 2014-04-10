@@ -58,6 +58,7 @@ DISTCLEANFILES =
 PYCOV_CLEAN_FILES = build-aux/check-structs,cover
 EXTRA_DIST = \
 	BUILD.Windows \
+	CONTRIBUTING \
 	CodingStyle \
 	DESIGN \
 	FAQ \
@@ -78,7 +79,6 @@ EXTRA_DIST = \
 	PORTING \
 	README-lisp \
 	REPORTING-BUGS \
-	SubmittingPatches \
 	WHY-OVS \
 	boot.sh \
 	build-aux/cccl \
