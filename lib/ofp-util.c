@@ -6269,78 +6269,81 @@ ofputil_encode_group_desc_request(enum ofp_version ofp_version)
     return request;
 }
 
-static void *
-ofputil_group_stats_to_ofp11(const struct ofputil_group_stats *ogs,
-                             size_t base_len, struct list *replies)
+static void
+ofputil_group_stats_to_ofp11__(const struct ofputil_group_stats *gs,
+                               struct ofp11_group_stats *gs11, size_t length,
+                               struct ofp11_bucket_counter bucket_cnts[])
 {
-    struct ofp11_bucket_counter *bc11;
-    struct ofp11_group_stats *gs11;
-    size_t length;
     int i;
 
-    length = base_len + sizeof(struct ofp11_bucket_counter) * ogs->n_buckets;
-
-    gs11 = ofpmp_append(replies, length);
-    memset(gs11, 0, base_len);
+    memset(gs11, 0, length);
     gs11->length = htons(length);
-    gs11->group_id = htonl(ogs->group_id);
-    gs11->ref_count = htonl(ogs->ref_count);
-    gs11->packet_count = htonll(ogs->packet_count);
-    gs11->byte_count = htonll(ogs->byte_count);
+    gs11->group_id = htonl(gs->group_id);
+    gs11->ref_count = htonl(gs->ref_count);
+    gs11->packet_count = htonll(gs->packet_count);
+    gs11->byte_count = htonll(gs->byte_count);
 
-    bc11 = (void *) (((uint8_t *) gs11) + base_len);
-    for (i = 0; i < ogs->n_buckets; i++) {
-        const struct bucket_counter *obc = &ogs->bucket_stats[i];
-
-        bc11[i].packet_count = htonll(obc->packet_count);
-        bc11[i].byte_count = htonll(obc->byte_count);
+    for (i = 0; i < gs->n_buckets; i++) {
+       bucket_cnts[i].packet_count = htonll(gs->bucket_stats[i].packet_count);
+       bucket_cnts[i].byte_count = htonll(gs->bucket_stats[i].byte_count);
     }
-
-    return gs11;
 }
 
 static void
-ofputil_append_of13_group_stats(const struct ofputil_group_stats *ogs,
-                                struct list *replies)
+ofputil_group_stats_to_ofp11(const struct ofputil_group_stats *gs,
+                             struct ofp11_group_stats *gs11, size_t length)
 {
-    struct ofp13_group_stats *gs13;
-
-    gs13 = ofputil_group_stats_to_ofp11(ogs, sizeof *gs13, replies);
-    gs13->duration_sec = htonl(ogs->duration_sec);
-    gs13->duration_nsec = htonl(ogs->duration_nsec);
+    ofputil_group_stats_to_ofp11__(gs, gs11, length, gs11->bucket_stats);
 }
 
-/* Encodes 'ogs' properly for the format of the list of group statistics
+static void
+ofputil_group_stats_to_ofp13(const struct ofputil_group_stats *gs,
+                             struct ofp13_group_stats *gs13, size_t length)
+{
+    ofputil_group_stats_to_ofp11__(gs, &gs13->gs, length, gs13->bucket_stats);
+    gs13->duration_sec = htonl(gs->duration_sec);
+    gs13->duration_nsec = htonl(gs->duration_nsec);
+}
+
+/* Encodes 'gs' properly for the format of the list of group statistics
  * replies already begun in 'replies' and appends it to the list.  'replies'
  * must have originally been initialized with ofpmp_init(). */
 void
 ofputil_append_group_stats(struct list *replies,
-                           const struct ofputil_group_stats *ogs)
+                           const struct ofputil_group_stats *gs)
 {
     struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
     struct ofp_header *oh = ofpbuf_data(msg);
+    size_t length;
 
-    switch ((enum ofp_version)oh->version) {
+    switch ((enum ofp_version) oh->version) {
     case OFP11_VERSION:
-    case OFP12_VERSION:
-        ofputil_group_stats_to_ofp11(ogs, sizeof(struct ofp11_group_stats),
-                                     replies);
-        break;
+    case OFP12_VERSION:{
+            struct ofp11_group_stats *reply;
+
+            length = gs->n_buckets * sizeof reply->bucket_stats[0]
+                + sizeof *reply;
+            reply = ofpmp_append(replies, length);
+            ofputil_group_stats_to_ofp11(gs, reply, length);
+            break;
+        }
 
     case OFP13_VERSION:
-        ofputil_append_of13_group_stats(ogs, replies);
-        break;
+    case OFP14_VERSION:{
+            struct ofp13_group_stats *reply;
 
-    case OFP14_VERSION:
-        OVS_NOT_REACHED();
-        break;
+            length = gs->n_buckets * sizeof reply->bucket_stats[0]
+                + sizeof *reply;
+            reply = ofpmp_append(replies, length);
+            ofputil_group_stats_to_ofp13(gs, reply, length);
+            break;
+        }
 
     case OFP10_VERSION:
     default:
         OVS_NOT_REACHED();
     }
 }
-
 /* Returns an OpenFlow group features request for OpenFlow version
  * 'ofp_version'. */
 struct ofpbuf *
