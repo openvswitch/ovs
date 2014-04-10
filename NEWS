@@ -23,6 +23,8 @@ v2.2.0 - Internal Release
      configured properly.
    - ovs-vsctl now reports when ovs-vswitchd fails to create a new port or
      bridge.
+   - Port creation and configuration errors are now stored in a new error
+     column of the Interface table and included in 'ovs-vsctl show'.
    - The "ovsdbmonitor" graphical tool has been removed, because it was
      poorly maintained and not widely used.
    - New "check-ryu" Makefile target for running Ryu tests for OpenFlow
