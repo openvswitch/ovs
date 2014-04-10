@@ -374,7 +374,7 @@ static int
 vlandev_del__(const char *vlan_dev)
 {
     struct shash_node *vd_node = shash_find(&vlan_devs, vlan_dev);
-    if (!vd_node) {
+    if (vd_node) {
         struct vlan_dev *vd = vd_node->data;
         struct vlan_real_dev *vrd = vd->real_dev;
 
