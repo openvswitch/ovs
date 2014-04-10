@@ -688,6 +688,13 @@ struct ofp11_group_stats_request {
 };
 OFP_ASSERT(sizeof(struct ofp11_group_stats_request) == 8);
 
+/* Used in group stats replies. */
+struct ofp11_bucket_counter {
+    ovs_be64 packet_count;   /* Number of packets processed by bucket. */
+    ovs_be64 byte_count;     /* Number of bytes processed by bucket. */
+};
+OFP_ASSERT(sizeof(struct ofp11_bucket_counter) == 16);
+
 /* Body of reply to OFPST11_GROUP request */
 struct ofp11_group_stats {
     ovs_be16 length;           /* Length of this entry. */
@@ -698,17 +705,9 @@ struct ofp11_group_stats {
     uint8_t pad2[4];           /* Align to 64 bits. */
     ovs_be64 packet_count;     /* Number of packets processed by group. */
     ovs_be64 byte_count;       /* Number of bytes processed by group. */
-    /* struct ofp11_bucket_counter bucket_stats[0]; */
-
+    struct ofp11_bucket_counter bucket_stats[0];
 };
 OFP_ASSERT(sizeof(struct ofp11_group_stats) == 32);
-
-/* Used in group stats replies. */
-struct ofp11_bucket_counter {
-    ovs_be64 packet_count;   /* Number of packets processed by bucket. */
-    ovs_be64 byte_count;     /* Number of bytes processed by bucket. */
-};
-OFP_ASSERT(sizeof(struct ofp11_bucket_counter) == 16);
 
 /* Body of reply to OFPST11_GROUP_DESC request. */
 struct ofp11_group_desc_stats {
