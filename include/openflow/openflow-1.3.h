@@ -385,10 +385,10 @@ OFP_ASSERT(sizeof(struct ofp13_queue_stats) == 40);
 /* Body of reply to OFPMP13_GROUP request */
 struct ofp13_group_stats {
     struct ofp11_group_stats gs;
-    ovs_be32 duration_sec;    /* NEW: Time group has been alive in seconds. */
-    ovs_be32 duration_nsec;   /* NEW: Time group has been alive in nanoseconds
+    ovs_be32 duration_sec;    /* Time group has been alive in seconds. */
+    ovs_be32 duration_nsec;   /* Time group has been alive in nanoseconds
                                  beyond duration_sec. */
-    /* struct ofp11_bucket_counter bucket_stats[0]; */
+    struct ofp11_bucket_counter bucket_stats[0];
 };
 OFP_ASSERT(sizeof(struct ofp13_group_stats) == 40);
 
