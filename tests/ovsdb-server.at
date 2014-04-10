@@ -687,6 +687,9 @@ fi
 n_iterations=`expr $rmem_max / 25000 + 5`
 echo rmem_max=$rmem_max n_iterations=$n_iterations
 
+# If there's too much queuing skip the test to avoid timing out.
+AT_SKIP_IF([test $rmem_max -gt 1048576])
+
 # Calculate the exact number of monitor updates expected for $n_iterations,
 # assuming no updates are combined.  The "extra" update is for the initial
 # contents of the database.

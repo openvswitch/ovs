@@ -2154,6 +2154,9 @@ fi
 queue_size=`expr $rmem_max + 128 \* 1024`
 echo rmem_max=$rmem_max queue_size=$queue_size
 
+# If there's too much queuing skip the test to avoid timing out.
+AT_SKIP_IF([test $rmem_max -gt 1048576])
+
 # Each flow update message takes up at least 48 bytes of space in queues
 # and in practice more than that.
 n_msgs=`expr $queue_size / 48`
