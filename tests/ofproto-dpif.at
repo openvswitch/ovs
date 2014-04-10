@@ -2135,7 +2135,7 @@ for i in 1 2 3; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=40:44:44:44:54:55,dst=50:54:00:00:00:07),eth_type(0x8100),vlan(vid=88,pcp=7),encap(eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no))'
 done
 OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([cat ofctl_monitor.log | ofctl_strip], [0], [dnl
 OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
