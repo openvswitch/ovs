@@ -147,7 +147,7 @@ void netdev_close(struct netdev *);
 void netdev_parse_name(const char *netdev_name, char **name, char **type);
 
 /* Options. */
-int netdev_set_config(struct netdev *, const struct smap *args);
+int netdev_set_config(struct netdev *, const struct smap *args, char **errp);
 int netdev_get_config(const struct netdev *, struct smap *);
 const struct netdev_tunnel_config *
     netdev_get_tunnel_config(const struct netdev *);

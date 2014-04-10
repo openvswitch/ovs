@@ -274,7 +274,7 @@ static struct iface *iface_from_ofp_port(const struct bridge *,
                                          ofp_port_t ofp_port);
 static void iface_set_mac(const struct bridge *, const struct port *, struct iface *);
 static void iface_set_ofport(const struct ovsrec_interface *, ofp_port_t ofport);
-static void iface_clear_db_record(const struct ovsrec_interface *if_cfg);
+static void iface_clear_db_record(const struct ovsrec_interface *if_cfg, char *errp);
 static void iface_configure_qos(struct iface *, const struct ovsrec_qos *);
 static void iface_configure_cfm(struct iface *);
 static void iface_refresh_cfm_stats(struct iface *);
@@ -396,6 +396,7 @@ bridge_init(const char *remote)
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_cfm_remote_opstate);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_bfd_status);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_lacp_current);
+    ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_error);
     ovsdb_idl_omit(idl, &ovsrec_interface_col_external_ids);
 
     ovsdb_idl_omit_alert(idl, &ovsrec_controller_col_is_connected);
@@ -596,6 +597,8 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
             LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
                 iface_set_ofport(iface->cfg, iface->ofp_port);
+                /* Clear eventual previous errors */
+                ovsrec_interface_set_error(iface->cfg, NULL);
                 iface_configure_cfm(iface);
                 iface_configure_qos(iface, port->cfg->qos);
                 iface_set_mac(br, port, iface);
@@ -711,7 +714,7 @@ bridge_delete_or_reconfigure_ports(struct bridge *br)
         }
 
         if (strcmp(ofproto_port.type, iface->type)
-            || netdev_set_config(iface->netdev, &iface->cfg->options)) {
+            || netdev_set_config(iface->netdev, &iface->cfg->options, NULL)) {
             /* The interface is the wrong type or can't be configured.
              * Delete it. */
             goto delete;
@@ -1434,9 +1437,9 @@ add_del_bridges(const struct ovsrec_open_vswitch *cfg)
  * Returns 0 if successful, otherwise a positive errno value. */
 static int
 iface_set_netdev_config(const struct ovsrec_interface *iface_cfg,
-                        struct netdev *netdev)
+                        struct netdev *netdev, char **errp)
 {
-    return netdev_set_config(netdev, &iface_cfg->options);
+    return netdev_set_config(netdev, &iface_cfg->options, errp);
 }
 
 /* Opens a network device for 'if_cfg' and configures it.  Adds the network
@@ -1448,7 +1451,8 @@ static int
 iface_do_create(const struct bridge *br,
                 const struct ovsrec_interface *iface_cfg,
                 const struct ovsrec_port *port_cfg,
-                ofp_port_t *ofp_portp, struct netdev **netdevp)
+                ofp_port_t *ofp_portp, struct netdev **netdevp,
+                char **errp)
 {
     struct netdev *netdev = NULL;
     int error;
@@ -1463,12 +1467,12 @@ iface_do_create(const struct bridge *br,
     error = netdev_open(iface_cfg->name,
                         iface_get_type(iface_cfg, br->cfg), &netdev);
     if (error) {
-        VLOG_WARN("could not open network device %s (%s)",
-                  iface_cfg->name, ovs_strerror(error));
+        VLOG_WARN_BUF(errp, "could not open network device %s (%s)",
+                      iface_cfg->name, ovs_strerror(error));
         goto error;
     }
 
-    error = iface_set_netdev_config(iface_cfg, netdev);
+    error = iface_set_netdev_config(iface_cfg, netdev, errp);
     if (error) {
         goto error;
     }
@@ -1509,13 +1513,15 @@ iface_create(struct bridge *br, const struct ovsrec_interface *iface_cfg,
     struct iface *iface;
     ofp_port_t ofp_port;
     struct port *port;
+    char *errp = NULL;
     int error;
 
     /* Do the bits that can fail up front. */
     ovs_assert(!iface_lookup(br, iface_cfg->name));
-    error = iface_do_create(br, iface_cfg, port_cfg, &ofp_port, &netdev);
+    error = iface_do_create(br, iface_cfg, port_cfg, &ofp_port, &netdev, &errp);
     if (error) {
-        iface_clear_db_record(iface_cfg);
+        iface_clear_db_record(iface_cfg, errp);
+        free(errp);
         return false;
     }
 
@@ -3586,10 +3592,11 @@ iface_set_ofport(const struct ovsrec_interface *if_cfg, ofp_port_t ofport)
  * This is appropriate when 'if_cfg''s interface cannot be created or is
  * otherwise invalid. */
 static void
-iface_clear_db_record(const struct ovsrec_interface *if_cfg)
+iface_clear_db_record(const struct ovsrec_interface *if_cfg, char *errp)
 {
     if (!ovsdb_idl_row_is_synthetic(&if_cfg->header_)) {
         iface_set_ofport(if_cfg, OFPP_NONE);
+        ovsrec_interface_set_error(if_cfg, errp);
         ovsrec_interface_set_status(if_cfg, NULL);
         ovsrec_interface_set_admin_state(if_cfg, NULL);
         ovsrec_interface_set_duplex(if_cfg, NULL);

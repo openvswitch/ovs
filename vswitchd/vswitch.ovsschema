@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "7.6.0",
- "cksum": "1731605290 20602",
+ "version": "7.7.0",
+ "cksum": "2517737670 20677",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -288,7 +288,9 @@
          "ephemeral": true},
        "mtu": {
          "type": {"key": "integer", "min": 0, "max": 1},
-         "ephemeral": true}},
+         "ephemeral": true},
+       "error": {
+         "type": {"key": "string", "min": 0, "max": 1}}},
      "indexes": [["name"]]},
    "Flow_Table": {
      "columns": {

@@ -419,7 +419,7 @@ netdev_ref(const struct netdev *netdev_)
 /* Reconfigures the device 'netdev' with 'args'.  'args' may be empty
  * or NULL if none are needed. */
 int
-netdev_set_config(struct netdev *netdev, const struct smap *args)
+netdev_set_config(struct netdev *netdev, const struct smap *args, char **errp)
     OVS_EXCLUDED(netdev_mutex)
 {
     if (netdev->netdev_class->set_config) {
@@ -429,13 +429,13 @@ netdev_set_config(struct netdev *netdev, const struct smap *args)
         error = netdev->netdev_class->set_config(netdev,
                                                  args ? args : &no_args);
         if (error) {
-            VLOG_WARN("%s: could not set configuration (%s)",
-                      netdev_get_name(netdev), ovs_strerror(error));
+            VLOG_WARN_BUF(errp, "%s: could not set configuration (%s)",
+                          netdev_get_name(netdev), ovs_strerror(error));
         }
         return error;
     } else if (args && !smap_is_empty(args)) {
-        VLOG_WARN("%s: arguments provided to device that is not configurable",
-                  netdev_get_name(netdev));
+        VLOG_WARN_BUF(errp, "%s: arguments provided to device that is not configurable",
+                      netdev_get_name(netdev));
     }
     return 0;
 }

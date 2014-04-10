@@ -349,7 +349,7 @@ dpctl_add_if(int argc OVS_UNUSED, char *argv[])
             goto next;
         }
 
-        error = netdev_set_config(netdev, &args);
+        error = netdev_set_config(netdev, &args, NULL);
         if (error) {
             goto next;
         }
@@ -456,7 +456,7 @@ dpctl_set_if(int argc, char *argv[])
         }
 
         /* Update configuration. */
-        error = netdev_set_config(netdev, &args);
+        error = netdev_set_config(netdev, &args, NULL);
         smap_destroy(&args);
         if (error) {
             goto next;

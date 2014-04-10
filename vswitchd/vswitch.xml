@@ -1299,6 +1299,13 @@
         address.</p>
       </column>
 
+      <column name="error">
+        If the configuration of the port failed, as indicated by -1 in <ref
+        column="ofport"/>, Open vSwitch sets this column to an error
+        description in human readable form.  Otherwise, Open vSwitch clears
+        this column.
+      </column>
+
       <group title="OpenFlow Port Number">
 	<p>
 	  When a client adds a new interface, Open vSwitch chooses an OpenFlow
