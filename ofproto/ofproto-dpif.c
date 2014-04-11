@@ -1241,13 +1241,13 @@ add_internal_flows(struct ofproto_dpif *ofproto)
 
     ofpbuf_clear(&ofpacts);
     error = add_internal_miss_flow(ofproto, id++, &ofpacts,
-                              &ofproto->no_packet_in_rule);
+                                   &ofproto->no_packet_in_rule);
     if (error) {
         return error;
     }
 
     error = add_internal_miss_flow(ofproto, id++, &ofpacts,
-                              &ofproto->drop_frags_rule);
+                                   &ofproto->drop_frags_rule);
     if (error) {
         return error;
     }
@@ -1264,7 +1264,7 @@ add_internal_flows(struct ofproto_dpif *ofproto)
     match_init_catchall(&match);
     match_set_recirc_id(&match, 0);
 
-    error = ofproto_dpif_add_internal_flow(ofproto, &match, 2,  &ofpacts,
+    error = ofproto_dpif_add_internal_flow(ofproto, &match, 2, &ofpacts,
                                            &unused_rulep);
     if (error) {
         return error;
@@ -1277,7 +1277,7 @@ add_internal_flows(struct ofproto_dpif *ofproto)
      */
     ofpbuf_clear(&ofpacts);
     match_init_catchall(&match);
-    error = ofproto_dpif_add_internal_flow(ofproto, &match, 1,  &ofpacts,
+    error = ofproto_dpif_add_internal_flow(ofproto, &match, 1, &ofpacts,
                                            &unused_rulep);
 
     return error;
