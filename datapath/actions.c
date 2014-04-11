@@ -460,6 +460,21 @@ static int sample(struct datapath *dp, struct sk_buff *skb,
 				  nla_len(acts_list), true);
 }
 
+static void execute_hash(struct sk_buff *skb, const struct nlattr *attr)
+{
+	struct sw_flow_key *key = OVS_CB(skb)->pkt_key;
+	struct ovs_action_hash *hash_act = nla_data(attr);
+	u32 hash = 0;
+
+	/* OVS_HASH_ALG_L4 is the only possible hash algorithm.  */
+	hash = skb_get_rxhash(skb);
+	hash = jhash_1word(hash, hash_act->hash_basis);
+	if (!hash)
+		hash = 0x1;
+
+	key->ovs_flow_hash = hash;
+}
+
 static int execute_set_action(struct sk_buff *skb,
 				 const struct nlattr *nested_attr)
 {
@@ -534,6 +549,10 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 
 		case OVS_ACTION_ATTR_USERSPACE:
 			output_userspace(dp, skb, a);
+			break;
+
+		case OVS_ACTION_ATTR_HASH:
+			execute_hash(skb, a);
 			break;
 
 		case OVS_ACTION_ATTR_PUSH_VLAN:

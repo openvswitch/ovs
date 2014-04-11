@@ -312,7 +312,8 @@ enum ovs_key_attr {
 	OVS_KEY_ATTR_TUNNEL,	/* Nested set of ovs_tunnel attributes */
 	OVS_KEY_ATTR_SCTP,      /* struct ovs_key_sctp */
 	OVS_KEY_ATTR_TCP_FLAGS,	/* be16 TCP flags. */
-	OVS_KEY_ATTR_DP_HASH,	/* u32 hash value */
+	OVS_KEY_ATTR_DP_HASH,	/* u32 hash value. Value 0 indicates the hash
+				   is not computed by the datapath. */
 	OVS_KEY_ATTR_RECIRC_ID, /* u32 recirc id */
 #ifdef __KERNEL__
 	/* Only used within kernel data path. */
