@@ -1009,22 +1009,22 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         expected_len = odp_flow_key_attr_len(nl_attr_type(a));
         if (expected_len != -2) {
             bool bad_key_len = nl_attr_get_size(a) != expected_len;
-            bool bad_mask_len = ma && nl_attr_get_size(a) != expected_len;
+            bool bad_mask_len = ma && nl_attr_get_size(ma) != expected_len;
 
             if (bad_key_len || bad_mask_len) {
                 if (bad_key_len) {
                     ds_put_format(ds, "(bad key length %"PRIuSIZE", expected %d)(",
-                                  nl_attr_get_size(a),
-                                  odp_flow_key_attr_len(nl_attr_type(a)));
+                                  nl_attr_get_size(a), expected_len);
                 }
                 format_generic_odp_key(a, ds);
-                if (bad_mask_len) {
+                if (ma) {
                     ds_put_char(ds, '/');
-                    ds_put_format(ds, "(bad mask length %"PRIuSIZE", expected %d)(",
-                                  nl_attr_get_size(ma),
-                                  odp_flow_key_attr_len(nl_attr_type(ma)));
+                    if (bad_mask_len) {
+                        ds_put_format(ds, "(bad mask length %"PRIuSIZE", expected %d)(",
+                                      nl_attr_get_size(ma), expected_len);
+                    }
+                    format_generic_odp_key(ma, ds);
                 }
-                format_generic_odp_key(ma, ds);
                 ds_put_char(ds, ')');
                 return;
             }
