@@ -1306,6 +1306,66 @@ is_gratuitous_arp(const struct flow *flow, struct flow_wildcards *wc)
     }
 }
 
+/* Determines whether packets in 'flow' within 'xbridge' should be forwarded or
+ * dropped.  Returns true if they may be forwarded, false if they should be
+ * dropped.
+ *
+ * 'in_port' must be the xport that corresponds to flow->in_port.
+ * 'in_port' must be part of a bundle (e.g. in_port->bundle must be nonnull).
+ *
+ * 'vlan' must be the VLAN that corresponds to flow->vlan_tci on 'in_port', as
+ * returned by input_vid_to_vlan().  It must be a valid VLAN for 'in_port', as
+ * checked by input_vid_is_valid().
+ *
+ * May also add tags to '*tags', although the current implementation only does
+ * so in one special case.
+ */
+static bool
+is_admissible(struct xlate_ctx *ctx, struct xport *in_port,
+              uint16_t vlan)
+{
+    struct xbundle *in_xbundle = in_port->xbundle;
+    const struct xbridge *xbridge = ctx->xbridge;
+    struct flow *flow = &ctx->xin->flow;
+
+    /* Drop frames for reserved multicast addresses
+     * only if forward_bpdu option is absent. */
+    if (!xbridge->forward_bpdu && eth_addr_is_reserved(flow->dl_dst)) {
+        xlate_report(ctx, "packet has reserved destination MAC, dropping");
+        return false;
+    }
+
+    if (in_xbundle->bond) {
+        struct mac_entry *mac;
+
+        switch (bond_check_admissibility(in_xbundle->bond, in_port->ofport,
+                                         flow->dl_dst)) {
+        case BV_ACCEPT:
+            break;
+
+        case BV_DROP:
+            xlate_report(ctx, "bonding refused admissibility, dropping");
+            return false;
+
+        case BV_DROP_IF_MOVED:
+            ovs_rwlock_rdlock(&xbridge->ml->rwlock);
+            mac = mac_learning_lookup(xbridge->ml, flow->dl_src, vlan);
+            if (mac && mac->port.p != in_xbundle->ofbundle &&
+                (!is_gratuitous_arp(flow, &ctx->xout->wc)
+                 || mac_entry_is_grat_arp_locked(mac))) {
+                ovs_rwlock_unlock(&xbridge->ml->rwlock);
+                xlate_report(ctx, "SLB bond thinks this packet looped back, "
+                             "dropping");
+                return false;
+            }
+            ovs_rwlock_unlock(&xbridge->ml->rwlock);
+            break;
+        }
+    }
+
+    return true;
+}
+
 /* Checks whether a MAC learning update is necessary for MAC learning table
  * 'ml' given that a packet matching 'flow' was received  on 'in_xbundle' in
  * 'vlan'.
@@ -1419,66 +1479,6 @@ update_learning_table(const struct xbridge *xbridge,
         update_learning_table__(xbridge, flow, wc, vlan, in_xbundle);
         ovs_rwlock_unlock(&xbridge->ml->rwlock);
     }
-}
-
-/* Determines whether packets in 'flow' within 'xbridge' should be forwarded or
- * dropped.  Returns true if they may be forwarded, false if they should be
- * dropped.
- *
- * 'in_port' must be the xport that corresponds to flow->in_port.
- * 'in_port' must be part of a bundle (e.g. in_port->bundle must be nonnull).
- *
- * 'vlan' must be the VLAN that corresponds to flow->vlan_tci on 'in_port', as
- * returned by input_vid_to_vlan().  It must be a valid VLAN for 'in_port', as
- * checked by input_vid_is_valid().
- *
- * May also add tags to '*tags', although the current implementation only does
- * so in one special case.
- */
-static bool
-is_admissible(struct xlate_ctx *ctx, struct xport *in_port,
-              uint16_t vlan)
-{
-    struct xbundle *in_xbundle = in_port->xbundle;
-    const struct xbridge *xbridge = ctx->xbridge;
-    struct flow *flow = &ctx->xin->flow;
-
-    /* Drop frames for reserved multicast addresses
-     * only if forward_bpdu option is absent. */
-    if (!xbridge->forward_bpdu && eth_addr_is_reserved(flow->dl_dst)) {
-        xlate_report(ctx, "packet has reserved destination MAC, dropping");
-        return false;
-    }
-
-    if (in_xbundle->bond) {
-        struct mac_entry *mac;
-
-        switch (bond_check_admissibility(in_xbundle->bond, in_port->ofport,
-                                         flow->dl_dst)) {
-        case BV_ACCEPT:
-            break;
-
-        case BV_DROP:
-            xlate_report(ctx, "bonding refused admissibility, dropping");
-            return false;
-
-        case BV_DROP_IF_MOVED:
-            ovs_rwlock_rdlock(&xbridge->ml->rwlock);
-            mac = mac_learning_lookup(xbridge->ml, flow->dl_src, vlan);
-            if (mac && mac->port.p != in_xbundle->ofbundle &&
-                (!is_gratuitous_arp(flow, &ctx->xout->wc)
-                 || mac_entry_is_grat_arp_locked(mac))) {
-                ovs_rwlock_unlock(&xbridge->ml->rwlock);
-                xlate_report(ctx, "SLB bond thinks this packet looped back, "
-                             "dropping");
-                return false;
-            }
-            ovs_rwlock_unlock(&xbridge->ml->rwlock);
-            break;
-        }
-    }
-
-    return true;
 }
 
 static void
