@@ -243,6 +243,13 @@ static inline int skb_unclone(struct sk_buff *skb, gfp_t pri)
 }
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,6,0)
+static inline int skb_orphan_frags(struct sk_buff *skb, gfp_t gfp_mask)
+{
+	return 0;
+}
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(3,6,0) */
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0)
 #define __skb_get_rxhash rpl__skb_get_rxhash
 #define skb_get_rxhash rpl_skb_get_rxhash
@@ -256,11 +263,16 @@ static inline __u32 skb_get_rxhash(struct sk_buff *skb)
 #endif
 	return __skb_get_rxhash(skb);
 }
-#endif
+
+static inline void skb_tx_error(struct sk_buff *skb)
+{
+	return;
+}
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0) */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
 unsigned int skb_zerocopy_headlen(const struct sk_buff *from);
-void skb_zerocopy(struct sk_buff *to, const struct sk_buff *from, int len, 
+int skb_zerocopy(struct sk_buff *to, struct sk_buff *from, int len,
 		  int hlen);
 #endif
 
