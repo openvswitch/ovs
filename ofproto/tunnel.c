@@ -302,8 +302,8 @@ tnl_ecn_ok(const struct flow *base_flow, struct flow *flow,
            struct flow_wildcards *wc)
 {
     if (is_ip_any(base_flow)) {
-        wc->masks.nw_tos |= IP_ECN_MASK;
         if ((flow->tunnel.ip_tos & IP_ECN_MASK) == IP_ECN_CE) {
+            wc->masks.nw_tos |= IP_ECN_MASK;
             if ((base_flow->nw_tos & IP_ECN_MASK) == IP_ECN_NOT_ECT) {
                 VLOG_WARN_RL(&rl, "dropping tunnel packet marked ECN CE"
                              " but is not ECN capable");
@@ -326,6 +326,11 @@ bool
 tnl_xlate_init(const struct flow *base_flow, struct flow *flow,
                struct flow_wildcards *wc)
 {
+    /* tnl_port_should_receive() examines the 'tunnel.ip_dst' field to
+     * determine the presence of the tunnel metadata.  However, since tunnels'
+     * datapath port numbers are different from the non-tunnel ports, and we
+     * always unwildcard the 'in_port', we do not need to unwildcard
+     * the 'tunnel.ip_dst' for non-tunneled packets. */
     if (tnl_port_should_receive(flow)) {
         wc->masks.tunnel.tun_id = OVS_BE64_MAX;
         wc->masks.tunnel.ip_src = OVS_BE32_MAX;
