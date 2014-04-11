@@ -247,7 +247,7 @@ thread-safety-check:
 	@if test -e '$(srcdir)'/.git && (git --version) >/dev/null 2>&1 && \
 	   grep -n -f '$(srcdir)'/build-aux/thread-safety-blacklist \
 	       `git ls-files '$(srcdir)' | grep '\.[ch]$$' \
-                | $(EGREP) -v '^datapath|^lib/sflow|^third-party'` \
+                | $(EGREP) -v '^datapath|^lib/sflow|^third-party'` /dev/null \
 	       | $(EGREP) -v ':[ 	]*/?\*'; \
 	then \
 	    echo "See above for list of calls to functions that are"; \
