@@ -72,46 +72,11 @@ packages.
 
 You must be superuser to install Debian packages.
 
-1. Start by installing an Open vSwitch kernel module.  There are multiple ways
-   to do this.  In order of increasing manual effort, these are:
-
-       * Use a Linux kernel 3.3 or later, which has an integrated Open
-	 vSwitch kernel module.
-
-	 The upstream Linux kernel module lacks a few features that
-	 are in the third-party module.  For details, please see the
-	 FAQ, "What features are not available in the Open vSwitch
-	 kernel datapath that ships as part of the upstream Linux
-	 kernel?".
-
-       * Install the "openvswitch-datapath-dkms" Debian package that
-	 you built earlier.  This should automatically build and
-	 install the Open vSwitch kernel module for your running
-	 kernel.
-
-	 This option requires that you have a compiler and toolchain
-	 installed on the machine where you run Open vSwitch, which
-	 may be unacceptable in some production server environments.
-
-       * Install the "openvswitch-datapath-source" Debian package, use
-	 "module-assistant" to build a Debian package of the Open
-	 vSwitch kernel module for your kernel, and then install that
-	 Debian package.
-
-	 You can install the kernel module Debian packages that you
-	 build this way on the same machine where you built it or on
-	 another machine or machines, which means that you don't
-	 necessarily have to have any build infrastructure on the
-	 machines where you use the kernel module.
-
-	 /usr/share/doc/openvswitch-datapath-source/README.Debian has
-	 details on the build process.
-
-       * Build and install the kernel module by hand.
+1. Start by installing an Open vSwitch kernel module.  See
+   debian/openvswitch-switch.README.Debian for the available options.
 
 2. Install the "openvswitch-switch" and "openvswitch-common" packages.
    These packages include the core userspace components of the switch.
-
 
 Open vSwitch .deb packages not mentioned above are rarely useful.
 Please refer to their individual package descriptions to find out
