@@ -508,6 +508,21 @@ struct icmp_header {
 };
 BUILD_ASSERT_DECL(ICMP_HEADER_LEN == sizeof(struct icmp_header));
 
+#define IGMP_HEADER_LEN 8
+struct igmp_header {
+    uint8_t igmp_type;
+    uint8_t igmp_code;
+    ovs_be16 igmp_csum;
+    ovs_16aligned_be32 group;
+};
+BUILD_ASSERT_DECL(IGMP_HEADER_LEN == sizeof(struct igmp_header));
+
+#define IGMP_HOST_MEMBERSHIP_QUERY    0x11 /* From RFC1112 */
+#define IGMP_HOST_MEMBERSHIP_REPORT   0x12 /* Ditto */
+#define IGMPV2_HOST_MEMBERSHIP_REPORT 0x16 /* V2 version of 0x12 */
+#define IGMP_HOST_LEAVE_MESSAGE       0x17
+#define IGMPV3_HOST_MEMBERSHIP_REPORT 0x22 /* V3 version of 0x12 */
+
 #define SCTP_HEADER_LEN 12
 struct sctp_header {
     ovs_be16 sctp_src;
