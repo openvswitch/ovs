@@ -583,12 +583,12 @@ type_run(const char *type)
         simap_destroy(&tmp_backers);
 
         switch (backer->need_revalidate) {
-        case REV_RECONFIGURE:   COVERAGE_INC(rev_reconfigure);   break;
-        case REV_STP:           COVERAGE_INC(rev_stp);           break;
-        case REV_BOND:          COVERAGE_INC(rev_bond);          break;
-        case REV_PORT_TOGGLED:  COVERAGE_INC(rev_port_toggled);  break;
-        case REV_FLOW_TABLE:    COVERAGE_INC(rev_flow_table);    break;
-        case REV_MAC_LEARNING:  COVERAGE_INC(rev_mac_learning);  break;
+        case REV_RECONFIGURE:    COVERAGE_INC(rev_reconfigure);    break;
+        case REV_STP:            COVERAGE_INC(rev_stp);            break;
+        case REV_BOND:           COVERAGE_INC(rev_bond);           break;
+        case REV_PORT_TOGGLED:   COVERAGE_INC(rev_port_toggled);   break;
+        case REV_FLOW_TABLE:     COVERAGE_INC(rev_flow_table);     break;
+        case REV_MAC_LEARNING:   COVERAGE_INC(rev_mac_learning);   break;
         }
         backer->need_revalidate = 0;
 
