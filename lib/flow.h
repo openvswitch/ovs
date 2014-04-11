@@ -149,7 +149,7 @@ BUILD_ASSERT_DECL(offsetof(struct flow, tp_dst) + 2
  * segments.
  * This is located here since this is dependent on the structure of the
  * struct flow defined above:
- * Each offset must be on a distint, successive U32 boundary srtictly
+ * Each offset must be on a distinct, successive U32 boundary strictly
  * within the struct flow. */
 enum {
     FLOW_SEGMENT_1_ENDS_AT = offsetof(struct flow, dl_src),
