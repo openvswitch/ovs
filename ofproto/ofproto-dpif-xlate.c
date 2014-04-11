@@ -1482,6 +1482,23 @@ update_learning_table(const struct xbridge *xbridge,
 }
 
 static void
+xlate_normal_flood(struct xlate_ctx *ctx, struct xbundle *in_xbundle,
+                   uint16_t vlan)
+{
+    struct xbundle *xbundle;
+
+    LIST_FOR_EACH (xbundle, list_node, &ctx->xbridge->xbundles) {
+        if (xbundle != in_xbundle
+            && xbundle_includes_vlan(xbundle, vlan)
+            && xbundle->floodable
+            && !xbundle_mirror_out(ctx->xbridge, xbundle)) {
+            output_normal(ctx, xbundle, vlan);
+        }
+    }
+    ctx->xout->nf_output_iface = NF_OUT_FLOOD;
+}
+
+static void
 xlate_normal(struct xlate_ctx *ctx)
 {
     struct flow_wildcards *wc = &ctx->xout->wc;
@@ -1575,18 +1592,8 @@ xlate_normal(struct xlate_ctx *ctx)
             xlate_report(ctx, "learned port is input port, dropping");
         }
     } else {
-        struct xbundle *xbundle;
-
         xlate_report(ctx, "no learned MAC for destination, flooding");
-        LIST_FOR_EACH (xbundle, list_node, &ctx->xbridge->xbundles) {
-            if (xbundle != in_xbundle
-                && xbundle_includes_vlan(xbundle, vlan)
-                && xbundle->floodable
-                && !xbundle_mirror_out(ctx->xbridge, xbundle)) {
-                output_normal(ctx, xbundle, vlan);
-            }
-        }
-        ctx->xout->nf_output_iface = NF_OUT_FLOOD;
+        xlate_normal_flood(ctx, in_xbundle, vlan);
     }
 }
 
