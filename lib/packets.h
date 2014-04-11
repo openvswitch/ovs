@@ -446,6 +446,11 @@ ip_is_multicast(ovs_be32 ip)
 {
     return (ip & htonl(0xf0000000)) == htonl(0xe0000000);
 }
+static inline bool
+ip_is_local_multicast(ovs_be32 ip)
+{
+    return (ip & htonl(0xffffff00)) == htonl(0xe0000000);
+}
 int ip_count_cidr_bits(ovs_be32 netmask);
 void ip_format_masked(ovs_be32 ip, ovs_be32 mask, struct ds *);
 
