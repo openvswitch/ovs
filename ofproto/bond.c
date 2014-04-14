@@ -53,13 +53,13 @@ static struct ovs_rwlock rwlock = OVS_RWLOCK_INITIALIZER;
 static struct hmap all_bonds__ = HMAP_INITIALIZER(&all_bonds__);
 static struct hmap *const all_bonds OVS_GUARDED_BY(rwlock) = &all_bonds__;
 
-/* Bit-mask for hashing a flow down to a bucket.
- * There are (BOND_MASK + 1) buckets. */
+/* Bit-mask for hashing a flow down to a bucket. */
 #define BOND_MASK 0xff
+#define BOND_BUCKETS (BOND_MASK + 1)
 #define RECIRC_RULE_PRIORITY 20   /* Priority level for internal rules */
 
 /* A hash bucket for mapping a flow to a slave.
- * "struct bond" has an array of (BOND_MASK + 1) of these. */
+ * "struct bond" has an array of BOND_BUCKETS of these. */
 struct bond_entry {
     struct bond_slave *slave;   /* Assigned slave, NULL if unassigned. */
     uint64_t tx_bytes;          /* Count of bytes recently transmitted. */
@@ -122,7 +122,7 @@ struct bond {
     uint32_t basis;             /* Basis for flow hash function. */
 
     /* SLB specific bonding info. */
-    struct bond_entry *hash;     /* An array of (BOND_MASK + 1) elements. */
+    struct bond_entry *hash;     /* An array of BOND_BUCKETS elements. */
     int rebalance_interval;      /* Interval between rebalances, in ms. */
     long long int next_rebalance; /* Next rebalancing time. */
     bool send_learning_packets;
@@ -159,7 +159,7 @@ static void bond_enable_slave(struct bond_slave *, bool enable)
 static void bond_link_status_update(struct bond_slave *)
     OVS_REQ_WRLOCK(rwlock);
 static void bond_choose_active_slave(struct bond *)
-    OVS_REQ_WRLOCK(rwlock);;
+    OVS_REQ_WRLOCK(rwlock);
 static unsigned int bond_hash_src(const uint8_t mac[ETH_ADDR_LEN],
                                   uint16_t vlan, uint32_t basis);
 static unsigned int bond_hash_tcp(const struct flow *, uint16_t vlan,
@@ -330,7 +330,7 @@ update_recirc_rules(struct bond *bond)
         return;
     }
 
-    for (i = 0; i < BOND_MASK + 1; i++) {
+    for (i = 0; i < BOND_BUCKETS; i++) {
         struct bond_slave *slave = bond->hash[i].slave;
 
         if (slave) {
@@ -1570,7 +1570,7 @@ static void
 bond_entry_reset(struct bond *bond)
 {
     if (bond->balance != BM_AB) {
-        size_t hash_len = (BOND_MASK + 1) * sizeof *bond->hash;
+        size_t hash_len = BOND_BUCKETS * sizeof *bond->hash;
 
         if (!bond->hash) {
             bond->hash = xmalloc(hash_len);
