@@ -3218,7 +3218,7 @@ rule_dpif_lookup__ (struct ofproto_dpif *ofproto, const struct flow *flow,
  * the lookup. Returns the table_id where a match or miss occurred.
  *
  * The return value will be zero unless there was a miss and
- * O!-TC_TABLE_MISS_CONTINUE is in effect for the sequence of tables
+ * OFPTC11_TABLE_MISS_CONTINUE is in effect for the sequence of tables
  * where misses occur. */
 uint8_t
 rule_dpif_lookup(struct ofproto_dpif *ofproto, struct flow *flow,
