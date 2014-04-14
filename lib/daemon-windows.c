@@ -23,8 +23,8 @@
 
 VLOG_DEFINE_THIS_MODULE(daemon);
 
-static bool detach;             /* Was --service specified? */
-static bool detached;           /* Have we already detached? */
+static bool service_create;          /* Was --service specified? */
+static bool service_started;         /* Have we dispatched service to start? */
 
 /* --service-monitor: Should the service be restarted if it dies
  * unexpectedly? */
@@ -77,10 +77,10 @@ service_start(int *argcp, char **argvp[])
         {NULL, NULL}
     };
 
-    /* 'detached' is 'false' when service_start() is called the first time.
-     * It is 'true', when it is called the second time by the Windows services
-     * manager. */
-    if (detached) {
+    /* 'service_started' is 'false' when service_start() is called the first
+     * time.  It is 'true', when it is called the second time by the Windows
+     * services manager. */
+    if (service_started) {
         init_service_status();
 
         wevent = CreateEvent(NULL, TRUE, FALSE, NULL);
@@ -133,14 +133,14 @@ service_start(int *argcp, char **argvp[])
      * options before the call-back from the service control manager. */
     for (i = 0; i < argc; i ++) {
         if (!strcmp(argv[i], "--service")) {
-            detach = true;
+            service_create = true;
         } else if (!strcmp(argv[i], "--service-monitor")) {
             monitor = true;
         }
     }
 
     /* If '--service' is not a command line option, run in foreground. */
-    if (!detach) {
+    if (!service_create) {
         return;
     }
 
@@ -149,7 +149,7 @@ service_start(int *argcp, char **argvp[])
      * script. */
     check_service();
 
-    detached = true;
+    service_started = true;
 
     /* StartServiceCtrlDispatcher blocks and returns after the service is
      * stopped. */
@@ -184,7 +184,7 @@ control_handler(DWORD request)
 bool
 should_service_stop(void)
 {
-    if (detached) {
+    if (service_started) {
         if (service_status.dwCurrentState != SERVICE_RUNNING) {
             return true;
         } else {
