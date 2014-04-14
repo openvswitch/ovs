@@ -62,14 +62,17 @@ static struct hmap *const all_bonds OVS_GUARDED_BY(rwlock) = &all_bonds__;
  * "struct bond" has an array of BOND_BUCKETS of these. */
 struct bond_entry {
     struct bond_slave *slave;   /* Assigned slave, NULL if unassigned. */
-    uint64_t tx_bytes;          /* Count of bytes recently transmitted. */
+    uint64_t tx_bytes           /* Count of bytes recently transmitted. */
+        OVS_GUARDED_BY(rwlock);
     struct list list_node;      /* In bond_slave's 'entries' list. */
 
-    /* Recirculation. */
-    struct rule *pr_rule;       /* Post recirculation rule for this entry.*/
-    uint64_t pr_tx_bytes;       /* Record the rule tx_bytes to figure out
-                                   the delta to update the tx_bytes entry
-                                   above.*/
+    /* Recirculation.
+     *
+     * 'pr_rule' is the post-recirculation rule for this entry.
+     * 'pr_tx_bytes' is the most recently seen statistics for 'pr_rule', which
+     * is used to determine delta (applied to 'tx_bytes' above.) */
+    struct rule *pr_rule;
+    uint64_t pr_tx_bytes OVS_GUARDED_BY(rwlock);
 };
 
 /* A bond slave, that is, one of the links comprising a bond. */
@@ -854,7 +857,7 @@ bond_choose_output_slave(struct bond *bond, const struct flow *flow,
 /* Recirculation. */
 static void
 bond_entry_account(struct bond_entry *entry, uint64_t rule_tx_bytes)
-    OVS_REQ_RDLOCK(rwlock)
+    OVS_REQ_WRLOCK(rwlock)
 {
     if (entry->slave) {
         uint64_t delta;
@@ -871,7 +874,7 @@ bond_recirculation_account(struct bond *bond)
 {
     int i;
 
-    ovs_rwlock_rdlock(&rwlock);
+    ovs_rwlock_wrlock(&rwlock);
     for (i=0; i<=BOND_MASK; i++) {
         struct bond_entry *entry = &bond->hash[i];
         struct rule *rule = entry->pr_rule;
@@ -958,6 +961,7 @@ bond_slave_from_bal_node(struct list *bal) OVS_REQ_RDLOCK(rwlock)
 
 static void
 log_bals(struct bond *bond, const struct list *bals)
+    OVS_REQ_RDLOCK(rwlock)
 {
     if (VLOG_IS_DBG_ENABLED()) {
         struct ds ds = DS_EMPTY_INITIALIZER;
@@ -995,6 +999,7 @@ log_bals(struct bond *bond, const struct list *bals)
 /* Shifts 'hash' from its current slave to 'to'. */
 static void
 bond_shift_load(struct bond_entry *hash, struct bond_slave *to)
+    OVS_REQ_WRLOCK(rwlock)
 {
     struct bond_slave *from = hash->slave;
     struct bond *bond = from->bond;
@@ -1026,6 +1031,7 @@ bond_shift_load(struct bond_entry *hash, struct bond_slave *to)
  * shift away small hashes or large hashes. */
 static struct bond_entry *
 choose_entry_to_migrate(const struct bond_slave *from, uint64_t to_tx_bytes)
+    OVS_REQ_WRLOCK(rwlock)
 {
     struct bond_entry *e;
 
