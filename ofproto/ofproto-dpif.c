@@ -3293,6 +3293,7 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, uint8_t table_id,
  *    - RULE_OFPTC_TABLE_MISS_CONTROLLER if no rule was found and either:
  *      + 'honor_table_miss' is false
  *      + a table miss configuration specified that the packet should be
+ *        sent to the controller in this case.
  *
  *    - RULE_DPIF_LOOKUP_VERDICT_DROP if no rule was found, 'honor_table_miss'
  *      is true and a table miss configuration specified that the packet
