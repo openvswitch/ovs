@@ -237,11 +237,7 @@ struct dp_netdev_port {
  *
  * 'flow->ref_cnt' protects 'flow' from being freed.  It doesn't protect the
  * flow from being deleted from 'cls' (that's 'cls->rwlock') and it doesn't
- * protect members of 'flow' from modification (that's 'flow->mutex').
- *
- * 'flow->mutex' protects the members of 'flow' from modification.  It doesn't
- * protect the flow from being deleted from 'cls' (that's 'cls->rwlock') and it
- * doesn't prevent the flow from being freed (that's 'flow->ref_cnt').
+ * protect members of 'flow' from modification.
  *
  * Some members, marked 'const', are immutable.  Accessing other members
  * requires synchronization, as noted in more detail below.
@@ -254,21 +250,12 @@ struct dp_netdev_flow {
     const struct hmap_node node; /* In owning dp_netdev's 'flow_table'. */
     const struct flow flow;      /* The flow that created this entry. */
 
-    /* Protects members marked OVS_GUARDED.
-     *
-     * Acquire after datapath's flow_mutex. */
-    struct ovs_mutex mutex OVS_ACQ_AFTER(dp_netdev_mutex);
-
     /* Statistics.
      *
      * Reading or writing these members requires 'mutex'. */
     struct ovsthread_stats stats; /* Contains "struct dp_netdev_flow_stats". */
 
-    /* Actions.
-     *
-     * Reading 'actions' requires 'mutex'.
-     * Writing 'actions' requires 'mutex' and (to allow for transactions) the
-     * datapath's flow_mutex. */
+    /* Actions. */
     OVSRCU_TYPE(struct dp_netdev_actions *) actions;
 };
 
@@ -290,10 +277,7 @@ struct dp_netdev_flow_stats {
  * Thread-safety
  * =============
  *
- * A struct dp_netdev_actions 'actions' may be accessed without a risk of being
- * freed by code that holds a read-lock or write-lock on 'flow->mutex' (where
- * 'flow' is the dp_netdev_flow for which 'flow->actions == actions') or that
- * owns a reference to 'actions->ref_cnt' (or both). */
+ * A struct dp_netdev_actions 'actions' is protected with RCU. */
 struct dp_netdev_actions {
     /* These members are immutable: they do not change during the struct's
      * lifetime.  */
@@ -937,7 +921,6 @@ dp_netdev_flow_free(struct dp_netdev_flow *flow)
 
     cls_rule_destroy(CONST_CAST(struct cls_rule *, &flow->cr));
     dp_netdev_actions_free(dp_netdev_flow_get_actions(flow));
-    ovs_mutex_destroy(&flow->mutex);
     free(flow);
 }
 
@@ -1253,8 +1236,6 @@ dp_netdev_flow_add(struct dp_netdev *dp, const struct flow *flow,
     netdev_flow = xzalloc(sizeof *netdev_flow);
     *CONST_CAST(struct flow *, &netdev_flow->flow) = *flow;
 
-    ovs_mutex_init(&netdev_flow->mutex);
-
     ovsthread_stats_init(&netdev_flow->stats);
 
     ovsrcu_set(&netdev_flow->actions,
@@ -1391,7 +1372,6 @@ dpif_netdev_flow_del(struct dpif *dpif, const struct dpif_flow_del *del)
 }
 
 struct dp_netdev_flow_state {
-    struct dp_netdev_actions *actions;
     struct odputil_keybuf keybuf;
     struct odputil_keybuf maskbuf;
     struct dpif_flow_stats stats;
@@ -1410,7 +1390,6 @@ dpif_netdev_flow_dump_state_init(void **statep)
     struct dp_netdev_flow_state *state;
 
     *statep = state = xmalloc(sizeof *state);
-    state->actions = NULL;
 }
 
 static void
@@ -1495,12 +1474,12 @@ dpif_netdev_flow_dump_next(const struct dpif *dpif, void *iter_, void *state_,
     }
 
     if (actions || stats) {
-        state->actions = NULL;
-
         if (actions) {
-            state->actions = dp_netdev_flow_get_actions(netdev_flow);
-            *actions = state->actions->actions;
-            *actions_len = state->actions->size;
+            struct dp_netdev_actions *dp_actions =
+                dp_netdev_flow_get_actions(netdev_flow);
+
+            *actions = dp_actions->actions;
+            *actions_len = dp_actions->size;
         }
 
         if (stats) {
