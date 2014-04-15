@@ -227,6 +227,7 @@ ovsrcu_call_postponed(void)
 static void *
 ovsrcu_postpone_thread(void *arg OVS_UNUSED)
 {
+    set_subprogram_name("urcu");
     pthread_detach(pthread_self());
 
     for (;;) {
