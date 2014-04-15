@@ -30,6 +30,10 @@ static bool service_started;         /* Have we dispatched service to start? */
  * unexpectedly? */
 static bool monitor;
 
+static bool detach; /* Was --detach specified? */
+static bool detached; /* Running as the child process. */
+static HANDLE write_handle; /* End of pipe to write to parent. */
+
 /* Handle to the Services Manager and the created service. */
 static SC_HANDLE manager, service;
 
@@ -50,6 +54,8 @@ static void check_service(void);
 static void handle_scm_callback(void);
 static void init_service_status(void);
 static void set_config_failure_actions(void);
+
+static bool detach_process(int argc, char *argv[]);
 
 extern int main(int argc, char *argv[]);
 
@@ -76,6 +82,14 @@ service_start(int *argcp, char **argvp[])
         {(LPTSTR)program_name, (LPSERVICE_MAIN_FUNCTION)main},
         {NULL, NULL}
     };
+
+    /* If one of the command line option is "--detach", we create
+     * a new process in case of parent, wait for child to start and exit.
+     * In case of the child, we just return. We should not be creating a
+     * service in either case. */
+    if (detach_process(argc, argv)) {
+        return;
+    }
 
     /* 'service_started' is 'false' when service_start() is called the first
      * time.  It is 'true', when it is called the second time by the Windows
@@ -301,12 +315,88 @@ set_config_failure_actions()
     }
 }
 
-
-/* Stub functions to handle daemonize related calls in non-windows platform. */
+/* When a daemon is passed the --detach option, we create a new
+ * process and pass an additional non-documented option called --pipe-handle.
+ * Through this option, the parent passes one end of a pipe handle. */
+void
+set_pipe_handle(const char *pipe_handle)
+{
+    write_handle = (HANDLE) atoi(pipe_handle);
+}
+
+/* If one of the command line option is "--detach", creates
+ * a new process in case of parent, waits for child to start and exits.
+ * In case of the child, returns. */
+static bool
+detach_process(int argc, char *argv[])
+{
+    SECURITY_ATTRIBUTES sa;
+    STARTUPINFO si;
+    PROCESS_INFORMATION pi;
+    HANDLE read_pipe, write_pipe;
+    char *buffer;
+    int error, i;
+    char ch;
+
+    /* We are only interested in the '--detach' and '--pipe-handle'. */
+    for (i = 0; i < argc; i ++) {
+        if (!strcmp(argv[i], "--detach")) {
+            detach = true;
+        } else if (!strncmp(argv[i], "--pipe-handle", 13)) {
+            /* If running as a child, return. */
+            detached = true;
+            return true;
+        }
+    }
+
+    /* Nothing to do if the option --detach is not set. */
+    if (!detach) {
+        return false;
+    }
+
+    /* Set the security attribute such that a process created will
+     * inherit the pipe handles. */
+    sa.nLength = sizeof(sa);
+    sa.lpSecurityDescriptor = NULL;
+    sa.bInheritHandle = TRUE;
+
+    /* Create an anonymous pipe to communicate with the child. */
+    error = CreatePipe(&read_pipe, &write_pipe, &sa, 0);
+    if (!error) {
+        VLOG_FATAL("CreatePipe failed (%s)", ovs_lasterror_to_string());
+    }
+
+    GetStartupInfo(&si);
+
+    /* To the child, we pass an extra argument '--pipe-handle=write_pipe' */
+    buffer = xasprintf("%s %s=%ld", GetCommandLine(), "--pipe-handle",
+                       write_pipe);
+
+    /* Create a detached child */
+    error = CreateProcess(NULL, buffer, NULL, NULL, TRUE, DETACHED_PROCESS,
+                          NULL, NULL, &si, &pi);
+    if (!error) {
+        VLOG_FATAL("CreateProcess failed (%s)", ovs_lasterror_to_string());
+    }
+
+    /* Close one end of the pipe in the parent. */
+    CloseHandle(write_pipe);
+
+    /* Block and wait for child to say it is ready. */
+    error = ReadFile(read_pipe, &ch, 1, NULL, NULL);
+    if (!error) {
+        VLOG_FATAL("Failed to read from child (%s)",
+                   ovs_lasterror_to_string());
+    }
+    /* The child has successfully started and is ready. */
+    exit(0);
+}
+
+/* Will daemonize() really detach? */
 bool
 get_detach()
 {
-    return false;
+    return detach;
 }
 
 void
@@ -326,5 +416,16 @@ void daemonize_start(void)
 void
 daemonize_complete(void)
 {
+    /* If running as a child because '--detach' option was specified,
+     * communicate with the parent to inform that the child is ready. */
+    if (detached) {
+        int error;
+        error = WriteFile(write_handle, "a", 1, NULL, NULL);
+        if (!error) {
+            VLOG_FATAL("Failed to communicate with the parent (%s)",
+                       ovs_lasterror_to_string());
+        }
+    }
+
     service_complete();
 }
