@@ -34,6 +34,9 @@ static bool detach; /* Was --detach specified? */
 static bool detached; /* Running as the child process. */
 static HANDLE write_handle; /* End of pipe to write to parent. */
 
+static char *pidfile;         /* --pidfile: Name of pidfile (null if none). */
+static FILE *filep_pidfile;   /* File pointer to access the pidfile. */
+
 /* Handle to the Services Manager and the created service. */
 static SC_HANDLE manager, service;
 
@@ -407,10 +410,59 @@ daemon_save_fd(int fd OVS_UNUSED)
 void
 daemonize(void)
 {
+    daemonize_start();
+    daemonize_complete();
+}
+
+static void
+unlink_pidfile(void)
+{
+    if (filep_pidfile) {
+        fclose(filep_pidfile);
+    }
+    if (pidfile) {
+        unlink(pidfile);
+    }
+}
+
+/* If a pidfile has been configured, creates it and stores the running
+ * process's pid in it.  Ensures that the pidfile will be deleted when the
+ * process exits. */
+static void
+make_pidfile(void)
+{
+    int error;
+
+    error = GetFileAttributes(pidfile);
+    if (error != INVALID_FILE_ATTRIBUTES) {
+        /* pidfile exists. Try to unlink() it. */
+        error = unlink(pidfile);
+        if (error) {
+            VLOG_FATAL("Failed to delete existing pidfile %s (%s)", pidfile,
+                       ovs_strerror(errno));
+        }
+    }
+
+    filep_pidfile = fopen(pidfile, "w");
+    if (filep_pidfile == NULL) {
+        VLOG_FATAL("failed to open %s (%s)", pidfile, ovs_strerror(errno));
+    }
+
+    fatal_signal_add_hook(unlink_pidfile, NULL, NULL, true);
+
+    fprintf(filep_pidfile, "%d\n", _getpid());
+    if (fflush(filep_pidfile) == EOF) {
+        VLOG_FATAL("Failed to write into the pidfile %s", pidfile);
+    }
+
+    /* Don't close the pidfile till the process exits. */
 }
 
 void daemonize_start(void)
 {
+    if (pidfile) {
+        make_pidfile();
+    }
 }
 
 void
@@ -428,4 +480,30 @@ daemonize_complete(void)
     }
 
     service_complete();
+}
+
+/* Returns the file name that would be used for a pidfile if 'name' were
+ * provided to set_pidfile().  The caller must free the returned string. */
+static char *
+make_pidfile_name(const char *name)
+{
+    if (name && strchr(name, ':')) {
+        return strdup(name);
+    } else {
+        return xasprintf("%s/%s.pid", ovs_rundir(), program_name);
+    }
+}
+
+/* Sets up a following call to daemonize() to create a pidfile named 'name'.
+ * If 'name' begins with '/', then it is treated as an absolute path.
+ * Otherwise, it is taken relative to RUNDIR, which is $(prefix)/var/run by
+ * default.
+ *
+ * If 'name' is null, then program_name followed by ".pid" is used. */
+void
+set_pidfile(const char *name)
+{
+    assert_single_threaded();
+    free(pidfile);
+    pidfile = make_pidfile_name(name);
 }

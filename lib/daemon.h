@@ -74,25 +74,30 @@
 
 void set_detach(void);
 void daemon_set_monitor(void);
-void set_pidfile(const char *name);
 void set_no_chdir(void);
 void ignore_existing_pidfile(void);
 pid_t read_pidfile(const char *name);
 #else
 #define DAEMON_OPTION_ENUMS                    \
     OPT_DETACH,                                \
+    OPT_PIDFILE,                               \
     OPT_PIPE_HANDLE,                           \
     OPT_SERVICE,                               \
     OPT_SERVICE_MONITOR
 
 #define DAEMON_LONG_OPTIONS                                               \
         {"detach",             no_argument, NULL, OPT_DETACH},            \
+        {"pidfile",            optional_argument, NULL, OPT_PIDFILE},     \
         {"pipe-handle",        required_argument, NULL, OPT_PIPE_HANDLE}, \
         {"service",            no_argument, NULL, OPT_SERVICE},           \
         {"service-monitor",    no_argument, NULL, OPT_SERVICE_MONITOR}
 
 #define DAEMON_OPTION_HANDLERS                  \
         case OPT_DETACH:                        \
+            break;                              \
+                                                \
+        case OPT_PIDFILE:                       \
+            set_pidfile(optarg);                \
             break;                              \
                                                 \
         case OPT_PIPE_HANDLE:                   \
@@ -118,5 +123,6 @@ void daemon_usage(void);
 void service_start(int *argcp, char **argvp[]);
 void service_stop(void);
 bool should_service_stop(void);
+void set_pidfile(const char *name);
 
 #endif /* daemon.h */
