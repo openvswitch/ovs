@@ -102,13 +102,25 @@ netdev_is_pmd(const struct netdev *netdev)
 }
 
 static void
-netdev_initialize(void)
+netdev_class_mutex_initialize(void)
     OVS_EXCLUDED(netdev_class_mutex, netdev_mutex)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
 
     if (ovsthread_once_start(&once)) {
         ovs_mutex_init_recursive(&netdev_class_mutex);
+        ovsthread_once_done(&once);
+    }
+}
+
+static void
+netdev_initialize(void)
+    OVS_EXCLUDED(netdev_class_mutex, netdev_mutex)
+{
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+
+    if (ovsthread_once_start(&once)) {
+        netdev_class_mutex_initialize();
 
         fatal_signal_add_hook(restore_all_flags, NULL, NULL, true);
         netdev_vport_patch_register();
@@ -190,6 +202,7 @@ netdev_register_provider(const struct netdev_class *new_class)
 {
     int error;
 
+    netdev_class_mutex_initialize();
     ovs_mutex_lock(&netdev_class_mutex);
     if (netdev_lookup_class(new_class->type)) {
         VLOG_WARN("attempted to register duplicate netdev provider: %s",
