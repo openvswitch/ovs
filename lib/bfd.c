@@ -203,6 +203,12 @@ struct bfd {
     bool forwarding_if_rx;
     long long int forwarding_if_rx_detect_time;
 
+    /* When 'bfd->forwarding_if_rx' is set, at least one bfd control packet
+     * is required to be received every 100 * bfd->cfg_min_rx.  If bfd
+     * control packet is not received within this interval, even if data
+     * packets are received, the bfd->forwarding will still be false. */
+    long long int demand_rx_bfd_time;
+
     /* BFD decay related variables. */
     bool in_decay;                /* True when bfd is in decay. */
     int decay_min_rx;             /* min_rx is set to decay_min_rx when */
@@ -841,6 +847,10 @@ bfd_process_packet(struct bfd *bfd, const struct flow *flow,
     }
     /* XXX: RFC 5880 Section 6.8.6 Demand mode related calculations here. */
 
+    if (bfd->forwarding_if_rx) {
+        bfd->demand_rx_bfd_time = time_msec() + 100 * bfd->cfg_min_rx;
+    }
+
 out:
     bfd_forwarding__(bfd);
     ovs_mutex_unlock(&mutex);
@@ -876,19 +886,22 @@ bfd_set_netdev(struct bfd *bfd, const struct netdev *netdev)
 static bool
 bfd_forwarding__(struct bfd *bfd) OVS_REQUIRES(mutex)
 {
-    long long int time;
+    long long int now = time_msec();
+    bool forwarding_if_rx;
     bool last_forwarding = bfd->last_forwarding;
 
     if (bfd->forwarding_override != -1) {
         return bfd->forwarding_override == 1;
     }
 
-    time = bfd->forwarding_if_rx_detect_time;
-    bfd->last_forwarding = (bfd->state == STATE_UP
-                            || (bfd->forwarding_if_rx && time > time_msec()))
-                            && bfd->rmt_diag != DIAG_PATH_DOWN
-                            && bfd->rmt_diag != DIAG_CPATH_DOWN
-                            && bfd->rmt_diag != DIAG_RCPATH_DOWN;
+    forwarding_if_rx = bfd->forwarding_if_rx
+                       && bfd->forwarding_if_rx_detect_time > now
+                       && bfd->demand_rx_bfd_time > now;
+
+    bfd->last_forwarding = (bfd->state == STATE_UP || forwarding_if_rx)
+                           && bfd->rmt_diag != DIAG_PATH_DOWN
+                           && bfd->rmt_diag != DIAG_CPATH_DOWN
+                           && bfd->rmt_diag != DIAG_RCPATH_DOWN;
     if (bfd->last_forwarding != last_forwarding) {
         bfd->flap_count++;
         bfd_status_changed(bfd);
