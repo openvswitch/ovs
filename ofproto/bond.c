@@ -1327,13 +1327,17 @@ bond_print_details(struct ds *ds, const struct bond *bond)
         /* Hashes. */
         for (be = bond->hash; be <= &bond->hash[BOND_MASK]; be++) {
             int hash = be - bond->hash;
+            uint64_t be_tx_k;
 
             if (be->slave != slave) {
                 continue;
             }
 
-            ds_put_format(ds, "\thash %d: %"PRIu64" kB load\n",
-                          hash, be->tx_bytes / 1024);
+            be_tx_k = be->tx_bytes / 1024;
+            if (be_tx_k) {
+                ds_put_format(ds, "\thash %d: %"PRIu64" kB load\n",
+                          hash, be_tx_k);
+            }
 
             /* XXX How can we list the MACs assigned to hashes of SLB bonds? */
         }
