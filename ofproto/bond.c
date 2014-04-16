@@ -1179,9 +1179,6 @@ bond_rebalance(struct bond *bond)
      * take 20 rebalancing runs to decay to 0 and get deleted entirely. */
     for (e = &bond->hash[0]; e <= &bond->hash[BOND_MASK]; e++) {
         e->tx_bytes /= 2;
-        if (!e->tx_bytes) {
-            e->slave = NULL;
-        }
     }
 
 done:
