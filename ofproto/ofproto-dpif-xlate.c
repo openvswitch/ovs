@@ -1169,7 +1169,7 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
             return;
         }
 
-        if (ctx->xin->resubmit_stats) {
+        if (ctx->xin->resubmit_stats && !ctx->xout->use_recirc) {
             bond_account(out_xbundle->bond, &ctx->xin->flow, vid,
                          ctx->xin->resubmit_stats->n_bytes);
         }
