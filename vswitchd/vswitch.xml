@@ -1968,10 +1968,13 @@
 	</column>
 
 	<column name="bfd" key="forwarding_if_rx" type='{"type": "boolean"}'>
-          True to consider the interface capable of packet I/O as long as it
-          continues to receive any packets (not just BFD packets).  This
-          prevents link congestion that causes consecutive BFD control packets
-          to be lost from marking the interface down.
+          When <code>true</code>, traffic received on the
+          <ref table="Interface"/> is used to indicate the capability of packet
+          I/O.  BFD control packets are still transmitted and received.  At
+          least one BFD control packet must be received every 100 * <ref
+          column="bfd" key="min_rx"/> amount of time.  Otherwise, even if
+          traffic are received, the <ref column="bfd" key="forwarding"/>
+          will be <code>false</code>.
 	</column>
 
 	<column name="bfd" key="cpath_down" type='{"type": "boolean"}'>
