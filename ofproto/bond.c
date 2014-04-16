@@ -151,7 +151,7 @@ struct bond_pr_rule_op {
     struct match match;
     ofp_port_t out_ofport;
     enum bond_op op;
-    struct rule *pr_rule;
+    struct rule **pr_rule;
 };
 
 static void bond_entry_reset(struct bond *) OVS_REQ_WRLOCK(rwlock);
@@ -292,7 +292,7 @@ bond_unref(struct bond *bond)
 
 static void
 add_pr_rule(struct bond *bond, const struct match *match,
-            ofp_port_t out_ofport, struct rule *rule)
+            ofp_port_t out_ofport, struct rule **rule)
 {
     uint32_t hash = match_hash(match, 0);
     struct bond_pr_rule_op *pr_op;
@@ -329,28 +329,25 @@ update_recirc_rules(struct bond *bond)
         pr_op->op = DEL;
     }
 
-    if ((bond->hash == NULL) || (!bond->recirc_id)) {
-        return;
-    }
+    if (bond->hash && bond->recirc_id) {
+        for (i = 0; i < BOND_BUCKETS; i++) {
+            struct bond_slave *slave = bond->hash[i].slave;
 
-    for (i = 0; i < BOND_BUCKETS; i++) {
-        struct bond_slave *slave = bond->hash[i].slave;
+            if (slave) {
+                match_init_catchall(&match);
+                match_set_recirc_id(&match, bond->recirc_id);
+                /* recirc_id -> metadata to speed up look ups. */
+                match_set_metadata(&match, htonll(bond->recirc_id));
+                match_set_dp_hash_masked(&match, i, BOND_MASK);
 
-        if (slave) {
-            match_init_catchall(&match);
-            match_set_recirc_id(&match, bond->recirc_id);
-            /* recirc_id -> metadata to speed up look ups. */
-            match_set_metadata(&match, htonll(bond->recirc_id));
-            match_set_dp_hash_masked(&match, i, BOND_MASK);
-
-            add_pr_rule(bond, &match, slave->ofp_port,
-                            bond->hash[i].pr_rule);
+                add_pr_rule(bond, &match, slave->ofp_port,
+                            &bond->hash[i].pr_rule);
+            }
         }
     }
 
     HMAP_FOR_EACH_SAFE(pr_op, next_op, hmap_node, &bond->pr_rule_ops) {
         int error;
-        struct rule *rule;
         switch (pr_op->op) {
         case ADD:
             ofpbuf_clear(&ofpacts);
@@ -358,16 +355,13 @@ update_recirc_rules(struct bond *bond)
             error = ofproto_dpif_add_internal_flow(bond->ofproto,
                                                    &pr_op->match,
                                                    RECIRC_RULE_PRIORITY,
-                                                   &ofpacts, &rule);
+                                                   &ofpacts, pr_op->pr_rule);
             if (error) {
                 char *err_s = match_to_string(&pr_op->match,
                                               RECIRC_RULE_PRIORITY);
 
                 VLOG_ERR("failed to add post recirculation flow %s", err_s);
                 free(err_s);
-                pr_op->pr_rule = NULL;
-            } else {
-                pr_op->pr_rule = rule;
             }
             break;
 
@@ -384,7 +378,7 @@ update_recirc_rules(struct bond *bond)
             }
 
             hmap_remove(&bond->pr_rule_ops, &pr_op->hmap_node);
-            pr_op->pr_rule = NULL;
+            *pr_op->pr_rule = NULL;
             free(pr_op);
             break;
         }
