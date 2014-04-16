@@ -81,8 +81,8 @@ extern struct ovs_rwlock xlate_rwlock;
  *   to install a kernel flow.
  *
  * - ofproto-dpif-xlate.c
- *   Ofproto-dpif-xlate is responsible for translating translating OpenFlow
- *   actions into datapath actions. */
+ *   Ofproto-dpif-xlate is responsible for translating OpenFlow actions into
+ *   datapath actions. */
 
 size_t ofproto_dpif_get_max_mpls_depth(const struct ofproto_dpif *);
 bool ofproto_dpif_get_enable_recirc(const struct ofproto_dpif *);
