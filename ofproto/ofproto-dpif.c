@@ -300,6 +300,8 @@ struct ofproto_dpif {
 
     /* Work queues. */
     struct guarded_list pins;      /* Contains "struct ofputil_packet_in"s. */
+    struct seq *pins_seq;          /* For notifying 'pins' reception. */
+    uint64_t pins_seqno;
 };
 
 /* All existing ofproto_dpif instances, indexed by ->up.name. */
@@ -347,6 +349,9 @@ ofproto_dpif_send_packet_in(struct ofproto_dpif *ofproto,
         free(CONST_CAST(void *, pin->up.packet));
         free(pin);
     }
+
+    /* Wakes up main thread for packet-in I/O. */
+    seq_change(ofproto->pins_seq);
 }
 
 /* Factory functions. */
@@ -917,6 +922,9 @@ construct(struct ofproto *ofproto_)
     sset_init(&ofproto->port_poll_set);
     ofproto->port_poll_errno = 0;
     ofproto->change_seq = 0;
+    ofproto->pins_seq = seq_create();
+    ofproto->pins_seqno = seq_read(ofproto->pins_seq);
+
 
     SHASH_FOR_EACH_SAFE (node, next, &init_ofp_ports) {
         struct iface_hint *iface_hint = node->data;
@@ -1077,6 +1085,8 @@ destruct(struct ofproto *ofproto_)
     ovs_mutex_destroy(&ofproto->stats_mutex);
     ovs_mutex_destroy(&ofproto->vsp_mutex);
 
+    seq_destroy(ofproto->pins_seq);
+
     close_dpif_backer(ofproto->backer);
 }
 
@@ -1107,6 +1117,12 @@ run(struct ofproto *ofproto_)
             free(pin);
         }
     }
+
+    /* Always updates the ofproto->pins_seqno to avoid frequent wakeup during
+     * flow restore.  Even though nothing is processed during flow restore,
+     * all queued 'pins' will be handled immediately when flow restore
+     * completes. */
+    ofproto->pins_seqno = seq_read(ofproto->pins_seq);
 
     if (ofproto->netflow) {
         netflow_run(ofproto->netflow);
@@ -1212,6 +1228,7 @@ wait(struct ofproto *ofproto_)
     }
 
     seq_wait(udpif_dump_seq(ofproto->backer->udpif), ofproto->dump_seq);
+    seq_wait(ofproto->pins_seq, ofproto->pins_seqno);
 }
 
 static void
