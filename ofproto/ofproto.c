@@ -268,6 +268,9 @@ static bool rule_is_modifiable(const struct rule *rule,
 static enum ofperr add_flow(struct ofproto *, struct ofconn *,
                             struct ofputil_flow_mod *,
                             const struct ofp_header *);
+static void do_add_flow(struct ofproto *, struct ofconn *,
+                        const struct ofp_header *request, uint32_t buffer_id,
+                        struct rule *);
 static enum ofperr modify_flows__(struct ofproto *, struct ofconn *,
                                   struct ofputil_flow_mod *,
                                   const struct ofp_header *,
@@ -2007,6 +2010,47 @@ ofproto_flow_mod(struct ofproto *ofproto, struct ofputil_flow_mod *fm)
     }
 
     return handle_flow_mod__(ofproto, NULL, fm, NULL);
+}
+
+/* Resets the modified time for 'rule' or an equivalent rule. If 'rule' is not
+ * in the classifier, but an equivalent rule is, unref 'rule' and ref the new
+ * rule. Otherwise if 'rule' is no longer installed in the classifier,
+ * reinstall it.
+ *
+ * Returns the rule whose modified time has been reset. */
+struct rule *
+ofproto_refresh_rule(struct rule *rule)
+{
+    const struct oftable *table = &rule->ofproto->tables[rule->table_id];
+    const struct cls_rule *cr = &rule->cr;
+    struct rule *r;
+
+    /* do_add_flow() requires that the rule is not installed. We lock the
+     * ofproto_mutex here so that another thread cannot add the flow before
+     * we get a chance to add it.*/
+    ovs_mutex_lock(&ofproto_mutex);
+
+    fat_rwlock_rdlock(&table->cls.rwlock);
+    r = rule_from_cls_rule(classifier_find_rule_exactly(&table->cls, cr));
+    if (r != rule) {
+        ofproto_rule_ref(r);
+    }
+    fat_rwlock_unlock(&table->cls.rwlock);
+
+    if (!r) {
+        do_add_flow(rule->ofproto, NULL, NULL, 0, rule);
+    } else if  (r != rule) {
+        ofproto_rule_unref(rule);
+        rule = r;
+    }
+    ovs_mutex_unlock(&ofproto_mutex);
+
+    /* Refresh the modified time for the rule. */
+    ovs_mutex_lock(&rule->mutex);
+    rule->modified = MAX(rule->modified, time_msec());
+    ovs_mutex_unlock(&rule->mutex);
+
+    return rule;
 }
 
 /* Searches for a rule with matching criteria exactly equal to 'target' in
@@ -3959,7 +4003,6 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     OVS_REQUIRES(ofproto_mutex)
 {
     struct oftable *table;
-    struct ofopgroup *group;
     struct cls_rule cr;
     struct rule *rule;
     uint8_t table_id;
@@ -4097,14 +4140,25 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     }
 
     /* Insert rule. */
+    do_add_flow(ofproto, ofconn, request, fm->buffer_id, rule);
+
+    return error;
+}
+
+static void
+do_add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
+            const struct ofp_header *request, uint32_t buffer_id,
+            struct rule *rule)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct ofopgroup *group;
+
     oftable_insert_rule(rule);
 
-    group = ofopgroup_create(ofproto, ofconn, request, fm->buffer_id);
+    group = ofopgroup_create(ofproto, ofconn, request, buffer_id);
     ofoperation_create(group, rule, OFOPERATION_ADD, 0);
     ofproto->ofproto_class->rule_insert(rule);
     ofopgroup_submit(group);
-
-    return error;
 }
 
 /* OFPFC_MODIFY and OFPFC_MODIFY_STRICT. */
