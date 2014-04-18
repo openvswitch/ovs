@@ -1255,7 +1255,6 @@ revalidate_ukey(struct udpif *udpif, struct udpif_flow_dump *udump,
     xoutp = NULL;
     actions = NULL;
     netflow = NULL;
-    may_learn = push.n_packets > 0;
 
     /* If we don't need to revalidate, we can simply push the stats contained
      * in the udump, otherwise we'll have to get the actions so we can check
@@ -1289,6 +1288,7 @@ revalidate_ukey(struct udpif *udpif, struct udpif_flow_dump *udump,
         goto exit;
     }
 
+    may_learn = push.n_packets > 0;
     if (ukey->xcache && !udump->need_revalidate) {
         xlate_push_stats(ukey->xcache, may_learn, &push);
         ok = true;
