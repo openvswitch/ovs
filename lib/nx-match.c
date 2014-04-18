@@ -572,7 +572,7 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct match *match,
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 25);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 26);
 
     /* Metadata. */
     if (match->wc.masks.dp_hash) {

@@ -78,4 +78,16 @@ uint32_byteswap(uint32_t crc) {
          ((((ovs_be64) (VALUE)) & UINT64_C(0xff00000000000000)) >> 56))
 #endif
 
+#if WORDS_BIGENDIAN
+#define BYTES_TO_BE32(B1, B2, B3, B4) \
+    (OVS_FORCE ovs_be32)((uint32_t)(B1) << 24 | (B2) << 16 | (B3) << 8 | (B4))
+#define BE16S_TO_BE32(B1, B2) \
+    (OVS_FORCE ovs_be32)((uint32_t)(B1) << 16 | (B2))
+#else
+#define BYTES_TO_BE32(B1, B2, B3, B4) \
+    (OVS_FORCE ovs_be32)((uint32_t)(B1) | (B2) << 8 | (B3) << 16 | (B4) << 24)
+#define BE16S_TO_BE32(B1, B2) \
+    (OVS_FORCE ovs_be32)((uint32_t)(B1) | (B2) << 16)
+#endif
+
 #endif /* byte-order.h */

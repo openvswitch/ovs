@@ -37,7 +37,7 @@ struct pkt_metadata;
 /* This sequence number should be incremented whenever anything involving flows
  * or the wildcarding of flows changes.  This will cause build assertion
  * failures in places which likely need to be updated. */
-#define FLOW_WC_SEQ 25
+#define FLOW_WC_SEQ 26
 
 #define FLOW_N_REGS 8
 BUILD_ASSERT_DECL(FLOW_N_REGS <= NXM_NX_MAX_REGS);
@@ -95,6 +95,9 @@ union flow_in_port {
  * The fields are organized in four segments to facilitate staged lookup, where
  * lower layer fields are first used to determine if the later fields need to
  * be looked at.  This enables better wildcarding for datapath flows.
+ *
+ * NOTE: Order of the fields is significant, any change in the order must be
+ * reflected in miniflow_extract()!
  */
 struct flow {
     /* L1 */
@@ -106,9 +109,9 @@ struct flow {
     uint32_t recirc_id;         /* Must be exact match. */
     union flow_in_port in_port; /* Input port.*/
 
-    /* L2 */
-    uint8_t dl_src[6];          /* Ethernet source address. */
+    /* L2, Order the same as in the Ethernet header! */
     uint8_t dl_dst[6];          /* Ethernet destination address. */
+    uint8_t dl_src[6];          /* Ethernet source address. */
     ovs_be16 dl_type;           /* Ethernet frame type. */
     ovs_be16 vlan_tci;          /* If 802.1Q, TCI | VLAN_CFI; otherwise 0. */
     ovs_be32 mpls_lse[FLOW_MAX_MPLS_LABELS]; /* MPLS label stack entry. */
@@ -116,7 +119,6 @@ struct flow {
     /* L3 */
     struct in6_addr ipv6_src;   /* IPv6 source address. */
     struct in6_addr ipv6_dst;   /* IPv6 destination address. */
-    struct in6_addr nd_target;  /* IPv6 neighbor discovery (ND) target. */
     ovs_be32 ipv6_label;        /* IPv6 flow label. */
     ovs_be32 nw_src;            /* IPv4 source address. */
     ovs_be32 nw_dst;            /* IPv4 destination address. */
@@ -126,24 +128,25 @@ struct flow {
     uint8_t nw_proto;           /* IP protocol or low 8 bits of ARP opcode. */
     uint8_t arp_sha[6];         /* ARP/ND source hardware address. */
     uint8_t arp_tha[6];         /* ARP/ND target hardware address. */
+    struct in6_addr nd_target;  /* IPv6 neighbor discovery (ND) target. */
     ovs_be16 tcp_flags;         /* TCP flags. With L3 to avoid matching L4. */
     ovs_be16 pad;               /* Padding. */
 
     /* L4 */
-    uint32_t dp_hash;           /* Datapath computed hash value. The exact
-                                   computation is opaque to the user space.*/
     ovs_be16 tp_src;            /* TCP/UDP/SCTP source port. */
     ovs_be16 tp_dst;            /* TCP/UDP/SCTP destination port.
                                  * Keep last for the BUILD_ASSERT_DECL below */
+    uint32_t dp_hash;           /* Datapath computed hash value. The exact
+                                   computation is opaque to the user space.*/
 };
 BUILD_ASSERT_DECL(sizeof(struct flow) % 4 == 0);
 
 #define FLOW_U32S (sizeof(struct flow) / 4)
 
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
-BUILD_ASSERT_DECL(offsetof(struct flow, tp_dst) + 2
+BUILD_ASSERT_DECL(offsetof(struct flow, dp_hash) + sizeof(uint32_t)
                   == sizeof(struct flow_tnl) + 172
-                  && FLOW_WC_SEQ == 25);
+                  && FLOW_WC_SEQ == 26);
 
 /* Incremental points at which flow classification may be performed in
  * segments.
@@ -152,9 +155,9 @@ BUILD_ASSERT_DECL(offsetof(struct flow, tp_dst) + 2
  * Each offset must be on a distinct, successive U32 boundary strictly
  * within the struct flow. */
 enum {
-    FLOW_SEGMENT_1_ENDS_AT = offsetof(struct flow, dl_src),
+    FLOW_SEGMENT_1_ENDS_AT = offsetof(struct flow, dl_dst),
     FLOW_SEGMENT_2_ENDS_AT = offsetof(struct flow, ipv6_src),
-    FLOW_SEGMENT_3_ENDS_AT = offsetof(struct flow, dp_hash),
+    FLOW_SEGMENT_3_ENDS_AT = offsetof(struct flow, tp_src),
 };
 BUILD_ASSERT_DECL(FLOW_SEGMENT_1_ENDS_AT % 4 == 0);
 BUILD_ASSERT_DECL(FLOW_SEGMENT_2_ENDS_AT % 4 == 0);
@@ -391,6 +394,21 @@ struct miniflow {
     uint32_t inline_values[MINI_N_INLINE];
 };
 
+/* This is useful for initializing a miniflow for a miniflow_extract() call. */
+static inline void miniflow_initialize(struct miniflow *mf,
+                                       uint32_t buf[FLOW_U32S])
+{
+    mf->map = 0;
+    mf->values = buf;
+}
+
+struct pkt_metadata;
+
+/* The 'dst->values' must be initialized with a buffer with space for
+ * FLOW_U32S.  'dst->map' is ignored on input and set on output to
+ * indicate which fields were extracted. */
+void miniflow_extract(struct ofpbuf *packet, const struct pkt_metadata *,
+                      struct miniflow *dst);
 void miniflow_init(struct miniflow *, const struct flow *);
 void miniflow_init_with_minimask(struct miniflow *, const struct flow *,
                                  const struct minimask *);
