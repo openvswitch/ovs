@@ -168,6 +168,9 @@ struct udpif_key {
     bool mark;                     /* Used by mark and sweep GC algorithm. */
 
     struct odputil_keybuf key_buf; /* Memory for 'key'. */
+    struct xlate_cache *xcache;    /* Cache for xlate entries that
+                                    * are affected by this ukey.
+                                    * Used for stats and learning.*/
 };
 
 /* 'udpif_flow_dump's hold the state associated with one iteration in a flow
@@ -1314,6 +1317,7 @@ ukey_create(const struct nlattr *key, size_t key_len, long long int used)
     ukey->mark = false;
     ukey->created = used ? used : time_msec();
     memset(&ukey->stats, 0, sizeof ukey->stats);
+    ukey->xcache = NULL;
 
     return ukey;
 }
@@ -1322,7 +1326,34 @@ static void
 ukey_delete(struct revalidator *revalidator, struct udpif_key *ukey)
 {
     hmap_remove(&revalidator->ukeys, &ukey->hmap_node);
+    xlate_cache_delete(ukey->xcache);
     free(ukey);
+}
+
+static bool
+should_revalidate(uint64_t packets, long long int used)
+{
+    long long int metric, now, duration;
+
+    /* Calculate the mean time between seeing these packets. If this
+     * exceeds the threshold, then delete the flow rather than performing
+     * costly revalidation for flows that aren't being hit frequently.
+     *
+     * This is targeted at situations where the dump_duration is high (~1s),
+     * and revalidation is triggered by a call to udpif_revalidate(). In
+     * these situations, revalidation of all flows causes fluctuations in the
+     * flow_limit due to the interaction with the dump_duration and max_idle.
+     * This tends to result in deletion of low-throughput flows anyway, so
+     * skip the revalidation and just delete those flows. */
+    packets = MAX(packets, 1);
+    now = MAX(used, time_msec());
+    duration = now - used;
+    metric = duration / packets;
+
+    if (metric > 200) {
+        return false;
+    }
+    return true;
 }
 
 static bool
@@ -1339,14 +1370,16 @@ revalidate_ukey(struct udpif *udpif, struct udpif_flow_dump *udump,
     uint32_t *udump32, *xout32;
     odp_port_t odp_in_port;
     struct xlate_in xin;
+    long long int last_used;
     int error;
     size_t i;
-    bool ok;
+    bool may_learn, ok;
 
     ok = false;
     xoutp = NULL;
     actions = NULL;
     netflow = NULL;
+    may_learn = push.n_packets > 0;
 
     /* If we don't need to revalidate, we can simply push the stats contained
      * in the udump, otherwise we'll have to get the actions so we can check
@@ -1358,6 +1391,7 @@ revalidate_ukey(struct udpif *udpif, struct udpif_flow_dump *udump,
         }
     }
 
+    last_used = ukey->stats.used;
     push.used = udump->stats.used;
     push.tcp_flags = udump->stats.tcp_flags;
     push.n_packets = udump->stats.n_packets > ukey->stats.n_packets
@@ -1368,7 +1402,19 @@ revalidate_ukey(struct udpif *udpif, struct udpif_flow_dump *udump,
         : 0;
     ukey->stats = udump->stats;
 
+    if (udump->need_revalidate && last_used
+        && !should_revalidate(push.n_packets, last_used)) {
+        ok = false;
+        goto exit;
+    }
+
     if (!push.n_packets && !udump->need_revalidate) {
+        ok = true;
+        goto exit;
+    }
+
+    if (ukey->xcache && !udump->need_revalidate) {
+        xlate_push_stats(ukey->xcache, may_learn, &push);
         ok = true;
         goto exit;
     }
@@ -1379,9 +1425,17 @@ revalidate_ukey(struct udpif *udpif, struct udpif_flow_dump *udump,
         goto exit;
     }
 
+    if (udump->need_revalidate) {
+        xlate_cache_clear(ukey->xcache);
+    }
+    if (!ukey->xcache) {
+        ukey->xcache = xlate_cache_new();
+    }
+
     xlate_in_init(&xin, ofproto, &flow, NULL, push.tcp_flags, NULL);
     xin.resubmit_stats = push.n_packets ? &push : NULL;
-    xin.may_learn = push.n_packets > 0;
+    xin.xcache = ukey->xcache;
+    xin.may_learn = may_learn;
     xin.skip_wildcards = !udump->need_revalidate;
     xlate_actions(&xin, &xout);
     xoutp = &xout;
@@ -1487,6 +1541,13 @@ push_dump_ops(struct revalidator *revalidator,
             struct ofproto_dpif *ofproto;
             struct netflow *netflow;
             struct flow flow;
+            bool may_learn;
+
+            may_learn = push->n_packets > 0;
+            if (op->ukey && op->ukey->xcache) {
+                xlate_push_stats(op->ukey->xcache, may_learn, push);
+                continue;
+            }
 
             if (!xlate_receive(udpif->backer, NULL, op->op.u.flow_del.key,
                                op->op.u.flow_del.key_len, &flow, &ofproto,
@@ -1496,7 +1557,7 @@ push_dump_ops(struct revalidator *revalidator,
                 xlate_in_init(&xin, ofproto, &flow, NULL, push->tcp_flags,
                               NULL);
                 xin.resubmit_stats = push->n_packets ? push : NULL;
-                xin.may_learn = push->n_packets > 0;
+                xin.may_learn = may_learn;
                 xin.skip_wildcards = true;
                 xlate_actions_for_side_effects(&xin);
 
