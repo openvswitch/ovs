@@ -41,6 +41,12 @@ seq () {
         set `expr $1 + ${3-1}` $2 $3
     done
 }
+
+if test "$IS_WIN32" = "yes"; then
+    pwd () {
+        command pwd -W "$@"
+    }
+fi
 ]
 m4_divert_pop([PREPARE_TESTS])
 
