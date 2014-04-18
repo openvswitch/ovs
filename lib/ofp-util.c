@@ -5394,8 +5394,12 @@ ofputil_port_to_ofp11(ofp_port_t ofp10_port)
 bool
 ofputil_port_from_string(const char *s, ofp_port_t *portp)
 {
-    uint32_t port32;
+    unsigned int port32; /* int is at least 32 bits wide. */
 
+    if (*s == '-') {
+        VLOG_WARN("Negative value %s is not a valid port number.", s);
+        return false;
+    }
     *portp = 0;
     if (str_to_uint(s, 10, &port32)) {
         if (port32 < ofp_to_u16(OFPP_MAX)) {
