@@ -1815,11 +1815,27 @@ miniflow_hash_in_minimask(const struct miniflow *flow,
     const uint32_t *p = mask->masks.values;
     uint32_t hash;
     uint64_t map;
+    const uint32_t *fp = flow->values;
+    uint64_t fmap = flow->map;
+    uint64_t rm1bit;
 
     hash = basis;
 
-    for (map = mask->masks.map; map; map = zero_rightmost_1bit(map)) {
-        hash = mhash_add(hash, miniflow_get(flow, raw_ctz(map)) & *p++);
+    for (map = mask->masks.map; map; map -= rm1bit) {
+        uint32_t flow_u32 = 0;
+
+        rm1bit = rightmost_1bit(map);
+        if (fmap & rm1bit) {
+            uint64_t trash = fmap & (rm1bit - 1);
+
+            /* Skip data in 'flow' that is of no interest, once. */
+            if (trash) {
+                fp += count_1bits(trash);
+                fmap -= trash;
+            }
+            flow_u32 = *fp;
+        }
+        hash = mhash_add(hash, flow_u32 & *p++);
     }
 
     return mhash_finish(hash, (p - mask->masks.values) * 4);
