@@ -47,6 +47,10 @@ if test "$IS_WIN32" = "yes"; then
         command pwd -W "$@"
     }
 
+    diff () {
+        command diff --strip-trailing-cr "$@"
+    }
+
     kill () {
         case "$1" in
             -0)
