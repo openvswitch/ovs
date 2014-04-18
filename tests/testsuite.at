@@ -46,6 +46,35 @@ if test "$IS_WIN32" = "yes"; then
     pwd () {
         command pwd -W "$@"
     }
+
+    kill () {
+        case "$1" in
+            -0)
+                shift
+                for i in $*; do
+                    # tasklist will always have return code 0.
+                    # If pid does exist, there will be a line with the pid.
+                    if tasklist //fi "PID eq $i" | grep $i; then
+                        :
+                    else
+                        return 1
+                    fi
+                done
+                return 0
+                ;;
+            -[1-9]*)
+                shift
+                for i in $*; do
+                    taskkill //F //PID $i
+                done
+                ;;
+            [1-9][1-9]*)
+                for i in $*; do
+                    taskkill //F //PID $i
+                done
+                ;;
+        esac
+    }
 fi
 ]
 m4_divert_pop([PREPARE_TESTS])
