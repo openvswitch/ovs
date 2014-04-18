@@ -444,6 +444,7 @@ static inline ovs_be32 miniflow_get_be32(const struct miniflow *,
 static inline uint16_t miniflow_get_vid(const struct miniflow *);
 static inline uint16_t miniflow_get_tcp_flags(const struct miniflow *);
 static inline ovs_be64 miniflow_get_metadata(const struct miniflow *);
+static inline uint8_t miniflow_get_u8(const struct miniflow *, unsigned int ofs);
 
 bool miniflow_equal(const struct miniflow *a, const struct miniflow *b);
 bool miniflow_equal_in_minimask(const struct miniflow *a,
@@ -458,6 +459,7 @@ uint32_t miniflow_hash_in_minimask(const struct miniflow *,
 uint64_t miniflow_get_map_in_range(const struct miniflow *miniflow,
                                    uint8_t start, uint8_t end,
                                    unsigned int *offset);
+uint32_t miniflow_hash_5tuple(const struct miniflow *flow, uint32_t basis);
 
 
 /* Compressed flow wildcards. */

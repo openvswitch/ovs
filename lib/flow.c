@@ -945,8 +945,36 @@ flow_wildcards_set_reg_mask(struct flow_wildcards *wc, int idx, uint32_t mask)
 
 /* Calculates the 5-tuple hash from the given flow. */
 uint32_t
+miniflow_hash_5tuple(const struct miniflow *flow, uint32_t basis)
+{
+    uint32_t hash = 0;
+
+    if (!flow) {
+        return 0;
+    }
+
+    hash = mhash_add(basis,
+                     miniflow_get_u32(flow, offsetof(struct flow, nw_src)));
+    hash = mhash_add(hash,
+                     miniflow_get_u32(flow, offsetof(struct flow, nw_dst)));
+    hash = mhash_add(hash,
+                     miniflow_get_u32(flow, offsetof(struct flow, tp_src)));
+    hash = mhash_add(hash,
+                     miniflow_get_u8(flow, offsetof(struct flow, nw_proto)));
+
+    return mhash_finish(hash, 13);
+}
+
+BUILD_ASSERT_DECL(offsetof(struct flow, tp_src) + 2
+                  == offsetof(struct flow, tp_dst) &&
+                  offsetof(struct flow, tp_src) / 4
+                  == offsetof(struct flow, tp_dst) / 4);
+
+/* Calculates the 5-tuple hash from the given flow. */
+uint32_t
 flow_hash_5tuple(const struct flow *flow, uint32_t basis)
 {
+    const uint32_t *flow_u32 = (const uint32_t *)flow;
     uint32_t hash = 0;
 
     if (!flow) {
@@ -955,8 +983,7 @@ flow_hash_5tuple(const struct flow *flow, uint32_t basis)
 
     hash = mhash_add(basis, (OVS_FORCE uint32_t) flow->nw_src);
     hash = mhash_add(hash, (OVS_FORCE uint32_t) flow->nw_dst);
-    hash = mhash_add(hash, ((OVS_FORCE uint32_t) flow->tp_src << 16)
-                           | (OVS_FORCE uint32_t) flow->tp_dst);
+    hash = mhash_add(hash, flow_u32[offsetof(struct flow, tp_src) / 4]);
     hash = mhash_add(hash, flow->nw_proto);
 
     return mhash_finish(hash, 13);
