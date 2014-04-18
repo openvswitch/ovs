@@ -2481,37 +2481,33 @@ ovs_to_odp_frag_mask(uint8_t nw_frag_mask)
 }
 
 static void
-odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *data,
-                         const struct flow *flow, odp_port_t odp_in_port,
-                         size_t max_mpls_depth)
+odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *flow,
+                         const struct flow *mask, odp_port_t odp_in_port,
+                         size_t max_mpls_depth, bool export_mask)
 {
-    bool is_mask;
     struct ovs_key_ethernet *eth_key;
     size_t encap;
-
-    /* We assume that if 'data' and 'flow' are not the same, we should
-     * treat 'data' as a mask. */
-    is_mask = (data != flow);
+    const struct flow *data = export_mask ? mask : flow;
 
     nl_msg_put_u32(buf, OVS_KEY_ATTR_PRIORITY, data->skb_priority);
 
-    if (flow->tunnel.ip_dst || is_mask) {
+    if (flow->tunnel.ip_dst || export_mask) {
         tun_key_to_attr(buf, &data->tunnel);
     }
 
     nl_msg_put_u32(buf, OVS_KEY_ATTR_SKB_MARK, data->pkt_mark);
 
-    if (flow->recirc_id) {
+    if (data->recirc_id || (mask && mask->recirc_id)) {
         nl_msg_put_u32(buf, OVS_KEY_ATTR_RECIRC_ID, data->recirc_id);
     }
 
-    if (flow->dp_hash) {
+    if (data->dp_hash || (mask && mask->dp_hash)) {
         nl_msg_put_u32(buf, OVS_KEY_ATTR_DP_HASH, data->dp_hash);
     }
 
     /* Add an ingress port attribute if this is a mask or 'odp_in_port'
      * is not the magical value "ODPP_NONE". */
-    if (is_mask || odp_in_port != ODPP_NONE) {
+    if (export_mask || odp_in_port != ODPP_NONE) {
         nl_msg_put_odp_port(buf, OVS_KEY_ATTR_IN_PORT, odp_in_port);
     }
 
@@ -2521,7 +2517,7 @@ odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *data,
     memcpy(eth_key->eth_dst, data->dl_dst, ETH_ADDR_LEN);
 
     if (flow->vlan_tci != htons(0) || flow->dl_type == htons(ETH_TYPE_VLAN)) {
-        if (is_mask) {
+        if (export_mask) {
             nl_msg_put_be16(buf, OVS_KEY_ATTR_ETHERTYPE, OVS_BE16_MAX);
         } else {
             nl_msg_put_be16(buf, OVS_KEY_ATTR_ETHERTYPE, htons(ETH_TYPE_VLAN));
@@ -2547,7 +2543,7 @@ odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *data,
          *  <none>   0xffff   Any non-Ethernet II frame (except valid
          *                    802.3 SNAP packet with valid eth_type).
          */
-        if (is_mask) {
+        if (export_mask) {
             nl_msg_put_be16(buf, OVS_KEY_ATTR_ETHERTYPE, OVS_BE16_MAX);
         }
         goto unencap;
@@ -2565,7 +2561,7 @@ odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *data,
         ipv4_key->ipv4_proto = data->nw_proto;
         ipv4_key->ipv4_tos = data->nw_tos;
         ipv4_key->ipv4_ttl = data->nw_ttl;
-        ipv4_key->ipv4_frag = is_mask ? ovs_to_odp_frag_mask(data->nw_frag)
+        ipv4_key->ipv4_frag = export_mask ? ovs_to_odp_frag_mask(data->nw_frag)
                                       : ovs_to_odp_frag(data->nw_frag);
     } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
         struct ovs_key_ipv6 *ipv6_key;
@@ -2578,7 +2574,7 @@ odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *data,
         ipv6_key->ipv6_proto = data->nw_proto;
         ipv6_key->ipv6_tclass = data->nw_tos;
         ipv6_key->ipv6_hlimit = data->nw_ttl;
-        ipv6_key->ipv6_frag = is_mask ? ovs_to_odp_frag_mask(data->nw_frag)
+        ipv6_key->ipv6_frag = export_mask ? ovs_to_odp_frag_mask(data->nw_frag)
                                       : ovs_to_odp_frag(data->nw_frag);
     } else if (flow->dl_type == htons(ETH_TYPE_ARP) ||
                flow->dl_type == htons(ETH_TYPE_RARP)) {
@@ -2650,7 +2646,7 @@ odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *data,
             if (flow->tp_dst == htons(0) &&
                 (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT) ||
                  flow->tp_src == htons(ND_NEIGHBOR_ADVERT)) &&
-                (!is_mask || (data->tp_src == htons(0xffff) &&
+                (!export_mask || (data->tp_src == htons(0xffff) &&
                               data->tp_dst == htons(0xffff)))) {
 
                 struct ovs_key_nd *nd_key;
@@ -2681,9 +2677,9 @@ unencap:
  * capable of being expanded to allow for that much space. */
 void
 odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow,
-                       odp_port_t odp_in_port)
+                       const struct flow *mask, odp_port_t odp_in_port)
 {
-    odp_flow_key_from_flow__(buf, flow, flow, odp_in_port, SIZE_MAX);
+    odp_flow_key_from_flow__(buf, flow, mask, odp_in_port, SIZE_MAX, false);
 }
 
 /* Appends a representation of 'mask' as OVS_KEY_ATTR_* attributes to
@@ -2699,8 +2695,8 @@ odp_flow_key_from_mask(struct ofpbuf *buf, const struct flow *mask,
                        const struct flow *flow, uint32_t odp_in_port_mask,
                        size_t max_mpls_depth)
 {
-    odp_flow_key_from_flow__(buf, mask, flow, u32_to_odp(odp_in_port_mask),
-                             max_mpls_depth);
+    odp_flow_key_from_flow__(buf, flow, mask,
+                             u32_to_odp(odp_in_port_mask), max_mpls_depth, true);
 }
 
 /* Generate ODP flow key from the given packet metadata */

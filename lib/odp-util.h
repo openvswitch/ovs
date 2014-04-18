@@ -143,8 +143,8 @@ int odp_flow_from_string(const char *s,
                          const struct simap *port_names,
                          struct ofpbuf *, struct ofpbuf *);
 
-void odp_flow_key_from_flow(struct ofpbuf *, const struct flow *,
-                            odp_port_t odp_in_port);
+void odp_flow_key_from_flow(struct ofpbuf *, const struct flow * flow,
+                            const struct flow *mask, odp_port_t odp_in_port);
 void odp_flow_key_from_mask(struct ofpbuf *, const struct flow *mask,
                             const struct flow *flow, uint32_t odp_in_port,
                             size_t max_mpls_depth);

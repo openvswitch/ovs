@@ -963,7 +963,7 @@ check_recirc(struct dpif_backer *backer)
     flow.dp_hash = 1;
 
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
-    odp_flow_key_from_flow(&key, &flow, 0);
+    odp_flow_key_from_flow(&key, &flow, NULL, 0);
 
     error = dpif_flow_put(backer->dpif, DPIF_FP_CREATE | DPIF_FP_MODIFY,
                           ofpbuf_data(&key), ofpbuf_size(&key), NULL, 0, NULL,
@@ -1096,7 +1096,7 @@ check_max_mpls_depth(struct dpif_backer *backer)
         flow_set_mpls_bos(&flow, n, 1);
 
         ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
-        odp_flow_key_from_flow(&key, &flow, 0);
+        odp_flow_key_from_flow(&key, &flow, NULL, 0);
 
         error = dpif_flow_put(backer->dpif, DPIF_FP_CREATE | DPIF_FP_MODIFY,
                               ofpbuf_data(&key), ofpbuf_size(&key), NULL, 0, NULL, 0, NULL);

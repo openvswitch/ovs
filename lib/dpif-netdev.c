@@ -1447,6 +1447,7 @@ dpif_netdev_flow_dump_next(const struct dpif *dpif, void *iter_, void *state_,
     struct dp_netdev_flow_state *state = state_;
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *netdev_flow;
+    struct flow_wildcards wc;
     int error;
 
     ovs_mutex_lock(&iter->mutex);
@@ -1469,11 +1470,13 @@ dpif_netdev_flow_dump_next(const struct dpif *dpif, void *iter_, void *state_,
         return error;
     }
 
+    minimask_expand(&netdev_flow->cr.match.mask, &wc);
+
     if (key) {
         struct ofpbuf buf;
 
         ofpbuf_use_stack(&buf, &state->keybuf, sizeof state->keybuf);
-        odp_flow_key_from_flow(&buf, &netdev_flow->flow,
+        odp_flow_key_from_flow(&buf, &netdev_flow->flow, &wc.masks,
                                netdev_flow->flow.in_port.odp_port);
 
         *key = ofpbuf_data(&buf);
@@ -1482,10 +1485,8 @@ dpif_netdev_flow_dump_next(const struct dpif *dpif, void *iter_, void *state_,
 
     if (key && mask) {
         struct ofpbuf buf;
-        struct flow_wildcards wc;
 
         ofpbuf_use_stack(&buf, &state->maskbuf, sizeof state->maskbuf);
-        minimask_expand(&netdev_flow->cr.match.mask, &wc);
         odp_flow_key_from_mask(&buf, &wc.masks, &netdev_flow->flow,
                                odp_to_u32(wc.masks.in_port.odp_port),
                                SIZE_MAX);
@@ -2083,7 +2084,7 @@ dp_netdev_output_userspace(struct dp_netdev *dp, struct ofpbuf *packet,
 
         /* Put ODP flow. */
         miniflow_expand(key, &flow);
-        odp_flow_key_from_flow(buf, &flow, flow.in_port.odp_port);
+        odp_flow_key_from_flow(buf, &flow, NULL, flow.in_port.odp_port);
         upcall->key = ofpbuf_data(buf);
         upcall->key_len = ofpbuf_size(buf);
 
