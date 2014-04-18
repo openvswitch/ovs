@@ -80,6 +80,7 @@ pid_t read_pidfile(const char *name);
 #else
 #define DAEMON_OPTION_ENUMS                    \
     OPT_DETACH,                                \
+    OPT_NO_CHDIR,                              \
     OPT_PIDFILE,                               \
     OPT_PIPE_HANDLE,                           \
     OPT_SERVICE,                               \
@@ -87,6 +88,7 @@ pid_t read_pidfile(const char *name);
 
 #define DAEMON_LONG_OPTIONS                                               \
         {"detach",             no_argument, NULL, OPT_DETACH},            \
+        {"no-chdir",           no_argument, NULL, OPT_NO_CHDIR},          \
         {"pidfile",            optional_argument, NULL, OPT_PIDFILE},     \
         {"pipe-handle",        required_argument, NULL, OPT_PIPE_HANDLE}, \
         {"service",            no_argument, NULL, OPT_SERVICE},           \
@@ -94,6 +96,9 @@ pid_t read_pidfile(const char *name);
 
 #define DAEMON_OPTION_HANDLERS                  \
         case OPT_DETACH:                        \
+            break;                              \
+                                                \
+        case OPT_NO_CHDIR:                      \
             break;                              \
                                                 \
         case OPT_PIDFILE:                       \
