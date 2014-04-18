@@ -553,11 +553,11 @@ enum ovs_hash_alg {
 /*
  * struct ovs_action_hash - %OVS_ACTION_ATTR_HASH action argument.
  * @hash_alg: Algorithm used to compute hash prior to recirculation.
- * @hash_bias: bias used for computing hash.
+ * @hash_basis: basis used for computing hash.
  */
 struct ovs_action_hash {
 	uint32_t  hash_alg;	/* One of ovs_hash_alg. */
-	uint32_t  hash_bias;
+	uint32_t  hash_basis;
 };
 
 /**

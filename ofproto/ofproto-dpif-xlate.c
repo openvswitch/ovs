@@ -1217,7 +1217,7 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
 
         if (ctx->xbridge->enable_recirc) {
             ctx->xout->use_recirc = bond_may_recirc(
-                out_xbundle->bond, &xr->recirc_id, &xr->hash_bias);
+                out_xbundle->bond, &xr->recirc_id, &xr->hash_basis);
 
             if (ctx->xout->use_recirc) {
                 /* Only TCP mode uses recirculation. */
@@ -1959,7 +1959,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                                                 OVS_ACTION_ATTR_HASH,
                                                 sizeof *act_hash);
             act_hash->hash_alg = xr->hash_alg;
-            act_hash->hash_bias = xr->hash_bias;
+            act_hash->hash_basis = xr->hash_basis;
 
             /* Recirc action. */
             nl_msg_put_u32(&ctx->xout->odp_actions, OVS_ACTION_ATTR_RECIRC,

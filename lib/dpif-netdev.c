@@ -2160,7 +2160,7 @@ dp_execute_cb(void *aux_, struct ofpbuf *packet,
         if (hash_act->hash_alg == OVS_HASH_ALG_L4) {
             /* Hash need not be symmetric, nor does it need to include
              * L2 fields. */
-            hash = miniflow_hash_5tuple(aux->key, hash_act->hash_bias);
+            hash = miniflow_hash_5tuple(aux->key, hash_act->hash_basis);
             if (!hash) {
                 hash = 1; /* 0 is not valid */
             }
