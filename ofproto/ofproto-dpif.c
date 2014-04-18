@@ -3183,13 +3183,33 @@ rule_dpif_get_actions(const struct rule_dpif *rule)
     return rule_get_actions(&rule->up);
 }
 
-static uint8_t
-rule_dpif_lookup__ (struct ofproto_dpif *ofproto, const struct flow *flow,
-                    struct flow_wildcards *wc, struct rule_dpif **rule)
+/* Lookup 'flow' in table 0 of 'ofproto''s classifier.
+ * If 'wc' is non-null, sets the fields that were relevant as part of
+ * the lookup. Returns the table_id where a match or miss occurred.
+ *
+ * The return value will be zero unless there was a miss and
+ * OFPTC11_TABLE_MISS_CONTINUE is in effect for the sequence of tables
+ * where misses occur. */
+uint8_t
+rule_dpif_lookup(struct ofproto_dpif *ofproto, struct flow *flow,
+                 struct flow_wildcards *wc, struct rule_dpif **rule)
 {
     enum rule_dpif_lookup_verdict verdict;
     enum ofputil_port_config config = 0;
-    uint8_t table_id = TBL_INTERNAL;
+    uint8_t table_id;
+
+    if (ofproto_dpif_get_enable_recirc(ofproto)) {
+        if (flow->recirc_id == 0) {
+            if (wc) {
+                wc->masks.recirc_id = UINT32_MAX;
+            }
+            table_id = 0;
+        } else {
+            table_id = TBL_INTERNAL;
+        }
+    } else {
+        table_id = 0;
+    }
 
     verdict = rule_dpif_lookup_from_table(ofproto, flow, wc, true,
                                           &table_id, rule);
@@ -3223,23 +3243,6 @@ rule_dpif_lookup__ (struct ofproto_dpif *ofproto, const struct flow *flow,
     choose_miss_rule(config, ofproto->miss_rule,
                      ofproto->no_packet_in_rule, rule);
     return table_id;
-}
-
-/* Lookup 'flow' in table 0 of 'ofproto''s classifier.
- * If 'wc' is non-null, sets the fields that were relevant as part of
- * the lookup. Returns the table_id where a match or miss occurred.
- *
- * The return value will be zero unless there was a miss and
- * OFPTC11_TABLE_MISS_CONTINUE is in effect for the sequence of tables
- * where misses occur. */
-uint8_t
-rule_dpif_lookup(struct ofproto_dpif *ofproto, struct flow *flow,
-                 struct flow_wildcards *wc, struct rule_dpif **rule)
-{
-    /* Set metadata to the value of recirc_id to speed up internal
-     * rule lookup. */
-    flow->metadata = htonll(flow->recirc_id);
-    return rule_dpif_lookup__(ofproto, flow, wc, rule);
 }
 
 static struct rule_dpif *
