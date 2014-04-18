@@ -24,6 +24,7 @@
 #include "byte-order.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
+#include "packets.h"
 #include "hash.h"
 #include "util.h"
 
@@ -59,23 +60,6 @@ BUILD_ASSERT_DECL(FLOW_NW_FRAG_LATER == NX_IP_FRAG_LATER);
 #define FLOW_TNL_F_KEY (1 << 2)
 
 const char *flow_tun_flag_to_string(uint32_t flags);
-
-struct flow_tnl {
-    ovs_be64 tun_id;
-    ovs_be32 ip_src;
-    ovs_be32 ip_dst;
-    uint16_t flags;
-    uint8_t ip_tos;
-    uint8_t ip_ttl;
-};
-
-/* Unfortunately, a "struct flow" sometimes has to handle OpenFlow port
- * numbers and other times datapath (dpif) port numbers.  This union allows
- * access to both. */
-union flow_in_port {
-    odp_port_t odp_port;
-    ofp_port_t ofp_port;
-};
 
 /* Maximum number of supported MPLS labels. */
 #define FLOW_MAX_MPLS_LABELS 3
@@ -418,8 +402,21 @@ void miniflow_destroy(struct miniflow *);
 
 void miniflow_expand(const struct miniflow *, struct flow *);
 
-uint32_t miniflow_get(const struct miniflow *, unsigned int u32_ofs);
-uint16_t miniflow_get_vid(const struct miniflow *);
+/* These accessors use byte offsets, which are assumed to be compile-time
+ * constants. */
+static inline uint8_t miniflow_get_u8(const struct miniflow *,
+                                       unsigned int ofs);
+static inline uint16_t miniflow_get_u16(const struct miniflow *,
+                                        unsigned int ofs);
+static inline ovs_be16 miniflow_get_be16(const struct miniflow *,
+                                         unsigned int ofs);
+static inline uint32_t miniflow_get_u32(const struct miniflow *,
+                                        unsigned int ofs);
+static inline ovs_be32 miniflow_get_be32(const struct miniflow *,
+                                         unsigned int ofs);
+
+static inline uint16_t miniflow_get_vid(const struct miniflow *);
+static inline uint16_t miniflow_get_tcp_flags(const struct miniflow *);
 static inline ovs_be64 miniflow_get_metadata(const struct miniflow *);
 
 bool miniflow_equal(const struct miniflow *a, const struct miniflow *b);
@@ -460,7 +457,7 @@ void minimask_destroy(struct minimask *);
 void minimask_expand(const struct minimask *, struct flow_wildcards *);
 
 uint32_t minimask_get(const struct minimask *, unsigned int u32_ofs);
-uint16_t minimask_get_vid_mask(const struct minimask *);
+static inline uint16_t minimask_get_vid_mask(const struct minimask *);
 static inline ovs_be64 minimask_get_metadata_mask(const struct minimask *);
 
 bool minimask_equal(const struct minimask *a, const struct minimask *b);
@@ -469,14 +466,81 @@ uint32_t minimask_hash(const struct minimask *, uint32_t basis);
 bool minimask_has_extra(const struct minimask *, const struct minimask *);
 bool minimask_is_catchall(const struct minimask *);
 
+
+/* 'OFS' is a compile-time constant. */
+#define MINIFLOW_GET_TYPE(MF, TYPE, OFS)                                \
+    (MF->map & UINT64_C(1) << OFS / 4)                                  \
+    ? ((OVS_FORCE const TYPE *)                                         \
+       (MF->values + count_1bits(MF->map & ((UINT64_C(1) << OFS / 4) - 1)))) \
+      [OFS % 4 / sizeof(TYPE)]                                          \
+    : 0
+
+static inline uint8_t
+miniflow_get_u8(const struct miniflow *flow, unsigned int ofs)
+{
+    return MINIFLOW_GET_TYPE(flow, uint8_t, ofs);
+}
+
+static inline uint16_t
+miniflow_get_u16(const struct miniflow *flow, unsigned int ofs)
+{
+    return MINIFLOW_GET_TYPE(flow, uint16_t, ofs);
+}
+
+/* Returns the ovs_be16 that would be at byte offset 'u8_ofs' if 'flow' were
+ * expanded into a "struct flow". */
+static inline ovs_be16
+miniflow_get_be16(const struct miniflow *flow, unsigned int ofs)
+{
+    return MINIFLOW_GET_TYPE(flow, ovs_be16, ofs);
+}
+
+static inline uint32_t
+miniflow_get_u32(const struct miniflow *flow, unsigned int ofs)
+{
+    return MINIFLOW_GET_TYPE(flow, uint32_t, ofs);
+}
+
+static inline ovs_be32
+miniflow_get_be32(const struct miniflow *flow, unsigned int ofs)
+{
+    return MINIFLOW_GET_TYPE(flow, ovs_be32, ofs);
+}
+
+#undef MINIFLOW_GET_TYPE
+
+/* Returns the VID within the vlan_tci member of the "struct flow" represented
+ * by 'flow'. */
+static inline uint16_t
+miniflow_get_vid(const struct miniflow *flow)
+{
+    ovs_be16 tci = miniflow_get_be16(flow, offsetof(struct flow, vlan_tci));
+    return vlan_tci_to_vid(tci);
+}
+
+/* Returns the VID mask within the vlan_tci member of the "struct
+ * flow_wildcards" represented by 'mask'. */
+static inline uint16_t
+minimask_get_vid_mask(const struct minimask *mask)
+{
+    return miniflow_get_vid(&mask->masks);
+}
+
+/* Returns the value of the "tcp_flags" field in 'flow'. */
+static inline uint16_t
+miniflow_get_tcp_flags(const struct miniflow *flow)
+{
+    return ntohs(miniflow_get_be16(flow, offsetof(struct flow, tcp_flags)));
+}
+
 /* Returns the value of the OpenFlow 1.1+ "metadata" field in 'flow'. */
 static inline ovs_be64
 miniflow_get_metadata(const struct miniflow *flow)
 {
     enum { MD_OFS = offsetof(struct flow, metadata) };
     BUILD_ASSERT_DECL(MD_OFS % sizeof(uint32_t) == 0);
-    ovs_be32 hi = (OVS_FORCE ovs_be32) miniflow_get(flow, MD_OFS / 4);
-    ovs_be32 lo = (OVS_FORCE ovs_be32) miniflow_get(flow, MD_OFS / 4 + 1);
+    ovs_be32 hi = miniflow_get_be32(flow, MD_OFS);
+    ovs_be32 lo = miniflow_get_be32(flow, MD_OFS + 4);
 
     return htonll(((uint64_t) ntohl(hi) << 32) | ntohl(lo));
 }
@@ -491,6 +555,38 @@ static inline ovs_be64
 minimask_get_metadata_mask(const struct minimask *mask)
 {
     return miniflow_get_metadata(&mask->masks);
+}
+
+static inline struct pkt_metadata
+pkt_metadata_from_flow(const struct flow *flow)
+{
+    struct pkt_metadata md;
+
+    md.recirc_id = flow->recirc_id;
+    md.dp_hash = flow->dp_hash;
+    md.tunnel = flow->tunnel;
+    md.skb_priority = flow->skb_priority;
+    md.pkt_mark = flow->pkt_mark;
+    md.in_port = flow->in_port;
+
+    return md;
+}
+
+static inline bool is_ip_any(const struct flow *flow)
+{
+    return dl_type_is_ip_any(flow->dl_type);
+}
+
+static inline bool is_icmpv4(const struct flow *flow)
+{
+    return (flow->dl_type == htons(ETH_TYPE_IP)
+            && flow->nw_proto == IPPROTO_ICMP);
+}
+
+static inline bool is_icmpv6(const struct flow *flow)
+{
+    return (flow->dl_type == htons(ETH_TYPE_IPV6)
+            && flow->nw_proto == IPPROTO_ICMPV6);
 }
 
 #endif /* flow.h */

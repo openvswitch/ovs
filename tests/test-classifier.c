@@ -1203,7 +1203,7 @@ test_miniflow(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         /* Check that the flow equals its miniflow. */
         assert(miniflow_get_vid(&miniflow) == vlan_tci_to_vid(flow.vlan_tci));
         for (i = 0; i < FLOW_U32S; i++) {
-            assert(miniflow_get(&miniflow, i) == flow_u32[i]);
+            assert(miniflow_get_u32(&miniflow, i * 4) == flow_u32[i]);
         }
 
         /* Check that the miniflow equals itself. */

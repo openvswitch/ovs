@@ -1692,42 +1692,15 @@ miniflow_expand(const struct miniflow *src, struct flow *dst)
     flow_union_with_miniflow(dst, src);
 }
 
-static const uint32_t *
-miniflow_get__(const struct miniflow *flow, unsigned int u32_ofs)
-{
-    if (!(flow->map & (UINT64_C(1) << u32_ofs))) {
-        static const uint32_t zero = 0;
-        return &zero;
-    }
-    return flow->values +
-           count_1bits(flow->map & ((UINT64_C(1) << u32_ofs) - 1));
-}
-
 /* Returns the uint32_t that would be at byte offset '4 * u32_ofs' if 'flow'
  * were expanded into a "struct flow". */
-uint32_t
+static uint32_t
 miniflow_get(const struct miniflow *flow, unsigned int u32_ofs)
 {
-    return *miniflow_get__(flow, u32_ofs);
-}
-
-/* Returns the ovs_be16 that would be at byte offset 'u8_ofs' if 'flow' were
- * expanded into a "struct flow". */
-static ovs_be16
-miniflow_get_be16(const struct miniflow *flow, unsigned int u8_ofs)
-{
-    const uint32_t *u32p = miniflow_get__(flow, u8_ofs / 4);
-    const ovs_be16 *be16p = (const ovs_be16 *) u32p;
-    return be16p[u8_ofs % 4 != 0];
-}
-
-/* Returns the VID within the vlan_tci member of the "struct flow" represented
- * by 'flow'. */
-uint16_t
-miniflow_get_vid(const struct miniflow *flow)
-{
-    ovs_be16 tci = miniflow_get_be16(flow, offsetof(struct flow, vlan_tci));
-    return vlan_tci_to_vid(tci);
+    return (flow->map & UINT64_C(1) << u32_ofs)
+        ? *(flow->values +
+            count_1bits(flow->map & ((UINT64_C(1) << u32_ofs) - 1)))
+        : 0;
 }
 
 /* Returns true if 'a' and 'b' are the same flow, false otherwise.  */
@@ -1974,14 +1947,6 @@ uint32_t
 minimask_get(const struct minimask *mask, unsigned int u32_ofs)
 {
     return miniflow_get(&mask->masks, u32_ofs);
-}
-
-/* Returns the VID mask within the vlan_tci member of the "struct
- * flow_wildcards" represented by 'mask'. */
-uint16_t
-minimask_get_vid_mask(const struct minimask *mask)
-{
-    return miniflow_get_vid(&mask->masks);
 }
 
 /* Returns true if 'a' and 'b' are the same flow mask, false otherwise.  */

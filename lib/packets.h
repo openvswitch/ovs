@@ -23,7 +23,6 @@
 #include <stdint.h>
 #include <string.h>
 #include "compiler.h"
-#include "flow.h"
 #include "openvswitch/types.h"
 #include "random.h"
 #include "hash.h"
@@ -31,6 +30,24 @@
 
 struct ofpbuf;
 struct ds;
+
+/* Tunnel information used in flow key and metadata. */
+struct flow_tnl {
+    ovs_be64 tun_id;
+    ovs_be32 ip_src;
+    ovs_be32 ip_dst;
+    uint16_t flags;
+    uint8_t ip_tos;
+    uint8_t ip_ttl;
+};
+
+/* Unfortunately, a "struct flow" sometimes has to handle OpenFlow port
+ * numbers and other times datapath (dpif) port numbers.  This union allows
+ * access to both. */
+union flow_in_port {
+    odp_port_t odp_port;
+    ofp_port_t ofp_port;
+};
 
 /* Datapath packet metadata */
 struct pkt_metadata {
@@ -47,21 +64,6 @@ struct pkt_metadata {
 
 #define PKT_METADATA_INITIALIZER(PORT) \
     (struct pkt_metadata){ 0, 0, { 0, 0, 0, 0, 0, 0}, 0, 0, {(PORT)} }
-
-static inline struct pkt_metadata
-pkt_metadata_from_flow(const struct flow *flow)
-{
-    struct pkt_metadata md;
-
-    md.recirc_id = flow->recirc_id;
-    md.dp_hash = flow->dp_hash;
-    md.tunnel = flow->tunnel;
-    md.skb_priority = flow->skb_priority;
-    md.pkt_mark = flow->pkt_mark;
-    md.in_port = flow->in_port;
-
-    return md;
-}
 
 bool dpid_from_string(const char *s, uint64_t *dpidp);
 
@@ -650,23 +652,6 @@ static inline bool dl_type_is_ip_any(ovs_be16 dl_type)
 {
     return dl_type == htons(ETH_TYPE_IP)
         || dl_type == htons(ETH_TYPE_IPV6);
-}
-
-static inline bool is_ip_any(const struct flow *flow)
-{
-    return dl_type_is_ip_any(flow->dl_type);
-}
-
-static inline bool is_icmpv4(const struct flow *flow)
-{
-    return (flow->dl_type == htons(ETH_TYPE_IP)
-            && flow->nw_proto == IPPROTO_ICMP);
-}
-
-static inline bool is_icmpv6(const struct flow *flow)
-{
-    return (flow->dl_type == htons(ETH_TYPE_IPV6)
-            && flow->nw_proto == IPPROTO_ICMPV6);
 }
 
 void format_ipv6_addr(char *addr_str, const struct in6_addr *addr);
