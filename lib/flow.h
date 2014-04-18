@@ -402,6 +402,32 @@ void miniflow_destroy(struct miniflow *);
 
 void miniflow_expand(const struct miniflow *, struct flow *);
 
+static inline uint32_t
+mf_get_next_in_map(uint64_t *fmap, uint64_t rm1bit, const uint32_t **fp,
+                   uint32_t *value)
+{
+    *value = 0;
+    if (*fmap & rm1bit) {
+        uint64_t trash = *fmap & (rm1bit - 1);
+
+        if (trash) {
+            *fmap -= trash;
+            *fp += count_1bits(trash);
+        }
+        *value = **fp;
+    }
+    return rm1bit != 0;
+}
+
+/* Iterate through all miniflow u32 values specified by the 'MAP'.
+ * This works as the first statement in a block.*/
+#define MINIFLOW_FOR_EACH_IN_MAP(VALUE, FLOW, MAP)                      \
+    const uint32_t *fp_ = (FLOW)->values;                               \
+    uint64_t rm1bit_, fmap_, map_;                                      \
+    for (fmap_ = (FLOW)->map, map_ = (MAP), rm1bit_ = rightmost_1bit(map_); \
+         mf_get_next_in_map(&fmap_, rm1bit_, &fp_, &(VALUE));           \
+         map_ -= rm1bit_, rm1bit_ = rightmost_1bit(map_))
+
 /* These accessors use byte offsets, which are assumed to be compile-time
  * constants. */
 static inline uint8_t miniflow_get_u8(const struct miniflow *,

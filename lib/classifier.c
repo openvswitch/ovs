@@ -566,6 +566,68 @@ classifier_lookup(const struct classifier *cls, const struct flow *flow,
     return best;
 }
 
+/* Returns true if 'target' satisifies 'match', that is, if each bit for which
+ * 'match' specifies a particular value has the correct value in 'target'. */
+static bool
+minimatch_matches_miniflow(const struct minimatch *match,
+                           const struct miniflow *target)
+{
+    const uint32_t *flowp = (const uint32_t *)match->flow.values;
+    const uint32_t *maskp = (const uint32_t *)match->mask.masks.values;
+    uint32_t target_u32;
+
+    MINIFLOW_FOR_EACH_IN_MAP(target_u32, target, match->mask.masks.map) {
+        if ((*flowp++ ^ target_u32) & *maskp++) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static inline struct cls_rule *
+find_match_miniflow(const struct cls_subtable *subtable,
+                    const struct miniflow *flow,
+                    uint32_t hash)
+{
+    struct cls_rule *rule;
+
+    HMAP_FOR_EACH_WITH_HASH (rule, hmap_node, hash, &subtable->rules) {
+        if (minimatch_matches_miniflow(&rule->match, flow)) {
+            return rule;
+        }
+    }
+
+    return NULL;
+}
+
+/* Finds and returns the highest-priority rule in 'cls' that matches
+ * 'miniflow'.  Returns a null pointer if no rules in 'cls' match 'flow'.
+ * If multiple rules of equal priority match 'flow', returns one arbitrarily.
+ *
+ * This function is optimized for the userspace datapath, which only ever has
+ * one priority value for it's flows!
+ */
+struct cls_rule *classifier_lookup_miniflow_first(const struct classifier *cls,
+                                                  const struct miniflow *flow)
+{
+    struct cls_subtable *subtable;
+
+    LIST_FOR_EACH (subtable, list_node, &cls->subtables_priority) {
+        struct cls_rule *rule;
+
+        rule = find_match_miniflow(subtable, flow,
+                                   miniflow_hash_in_minimask(flow,
+                                                             &subtable->mask,
+                                                             0));
+        if (rule) {
+            return rule;
+        }
+    }
+
+    return NULL;
+}
+
 /* Finds and returns a rule in 'cls' with exactly the same priority and
  * matching criteria as 'target'.  Returns a null pointer if 'cls' doesn't
  * contain an exact match. */
