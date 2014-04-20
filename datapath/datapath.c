@@ -135,7 +135,6 @@ int lockdep_ovsl_is_held(void)
 }
 #endif
 
-static struct vport *new_vport(const struct vport_parms *);
 static int queue_gso_packets(struct datapath *dp, struct sk_buff *,
 			     const struct dp_upcall_info *);
 static int queue_userspace_packet(struct datapath *dp, struct sk_buff *,
