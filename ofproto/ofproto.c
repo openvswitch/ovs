@@ -1311,9 +1311,9 @@ ofproto_destroy__(struct ofproto *ofproto)
     ovs_assert(list_is_empty(&ofproto->pending));
 
     destroy_rule_executes(ofproto);
-    guarded_list_destroy(&ofproto->rule_executes);
-
     delete_group(ofproto, OFPG_ALL);
+
+    guarded_list_destroy(&ofproto->rule_executes);
     ovs_rwlock_destroy(&ofproto->groups_rwlock);
     hmap_destroy(&ofproto->groups);
 
