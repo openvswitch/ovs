@@ -214,8 +214,8 @@ hmap_random_node(const struct hmap *hmap)
     size_t n, i;
 
     /* Choose a random non-empty bucket. */
-    for (i = random_uint32(); ; i++) {
-        bucket = hmap->buckets[i & hmap->mask];
+    for (;;) {
+        bucket = hmap->buckets[random_uint32() & hmap->mask];
         if (bucket) {
             break;
         }
