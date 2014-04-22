@@ -296,9 +296,7 @@ udpif_destroy(struct udpif *udpif)
 static void
 udpif_stop_threads(struct udpif *udpif)
 {
-    if (udpif->handlers &&
-        (udpif->n_handlers != n_handlers
-         || udpif->n_revalidators != n_revalidators)) {
+    if (udpif && (udpif->n_handlers != 0 || udpif->n_revalidators != 0)) {
         size_t i;
 
         latch_set(&udpif->exit_latch);
@@ -360,7 +358,7 @@ static void
 udpif_start_threads(struct udpif *udpif, size_t n_handlers,
                     size_t n_revalidators)
 {
-    if (!udpif->handlers && n_handlers) {
+    if (udpif && (!udpif->handlers && !udpif->revalidators)) {
         size_t i;
 
         udpif->n_handlers = n_handlers;
@@ -403,10 +401,14 @@ udpif_set_threads(struct udpif *udpif, size_t n_handlers,
 {
     int error;
 
+    ovs_assert(udpif);
     ovs_assert(n_handlers && n_revalidators);
 
     ovsrcu_quiesce_start();
-    udpif_stop_threads(udpif);
+    if (udpif->n_handlers != n_handlers
+        || udpif->n_revalidators != n_revalidators) {
+        udpif_stop_threads(udpif);
+    }
 
     error = dpif_handlers_set(udpif->dpif, n_handlers);
     if (error) {
@@ -415,7 +417,9 @@ udpif_set_threads(struct udpif *udpif, size_t n_handlers,
         return;
     }
 
-    udpif_start_threads(udpif, n_handlers, n_revalidators);
+    if (!udpif->handlers && !udpif->revalidators) {
+        udpif_start_threads(udpif, n_handlers, n_revalidators);
+    }
     ovsrcu_quiesce_end();
 }
 
