@@ -79,6 +79,7 @@ EXTRA_DIST = \
 	PORTING \
 	README-lisp \
 	REPORTING-BUGS \
+	TODO \
 	WHY-OVS \
 	boot.sh \
 	build-aux/cccl \
