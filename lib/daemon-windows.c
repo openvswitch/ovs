@@ -21,7 +21,7 @@
 #include "poll-loop.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(daemon);
+VLOG_DEFINE_THIS_MODULE(daemon_windows);
 
 static bool service_create;          /* Was --service specified? */
 static bool service_started;         /* Have we dispatched service to start? */

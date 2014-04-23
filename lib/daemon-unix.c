@@ -36,7 +36,7 @@
 #include "util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(daemon);
+VLOG_DEFINE_THIS_MODULE(daemon_unix);
 
 /* --detach: Should we run in the background? */
 static bool detach;             /* Was --detach specified? */

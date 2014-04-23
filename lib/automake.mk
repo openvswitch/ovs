@@ -251,7 +251,7 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/stream-fd-windows.c
 else
 lib_libopenvswitch_la_SOURCES += \
-	lib/daemon.c \
+	lib/daemon-unix.c \
 	lib/latch-unix.c \
 	lib/signals.c \
 	lib/signals.h \
