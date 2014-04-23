@@ -129,5 +129,6 @@ void service_start(int *argcp, char **argvp[]);
 void service_stop(void);
 bool should_service_stop(void);
 void set_pidfile(const char *name);
+void close_standard_fds(void);
 
 #endif /* daemon.h */

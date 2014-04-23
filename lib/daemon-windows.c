@@ -403,11 +403,6 @@ get_detach()
 }
 
 void
-daemon_save_fd(int fd OVS_UNUSED)
-{
-}
-
-void
 daemonize(void)
 {
     daemonize_start();
@@ -472,6 +467,9 @@ daemonize_complete(void)
      * communicate with the parent to inform that the child is ready. */
     if (detached) {
         int error;
+
+        close_standard_fds();
+
         error = WriteFile(write_handle, "a", 1, NULL, NULL);
         if (!error) {
             VLOG_FATAL("Failed to communicate with the parent (%s)",

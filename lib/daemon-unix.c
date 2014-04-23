@@ -63,10 +63,6 @@ static int daemonize_fd = -1;
  * it dies due to an error signal? */
 static bool monitor;
 
-/* For each of the standard file descriptors, whether to replace it by
- * /dev/null (if false) or keep it for the daemon to use (if true). */
-static bool save_fds[3];
-
 static void check_already_running(void);
 static int lock_pidfile(FILE *, int command);
 static char *make_pidfile_name(const char *name);
@@ -134,22 +130,6 @@ void
 daemon_set_monitor(void)
 {
     monitor = true;
-}
-
-/* A daemon doesn't normally have any use for the file descriptors for stdin,
- * stdout, and stderr after it detaches.  To keep these file descriptors from
- * e.g. holding an SSH session open, by default detaching replaces each of
- * these file descriptors by /dev/null.  But a few daemons expect the user to
- * redirect stdout or stderr to a file, in which case it is desirable to keep
- * these file descriptors.  This function, therefore, disables replacing 'fd'
- * by /dev/null when the daemon detaches. */
-void
-daemon_save_fd(int fd)
-{
-    ovs_assert(fd == STDIN_FILENO ||
-               fd == STDOUT_FILENO ||
-               fd == STDERR_FILENO);
-    save_fds[fd] = true;
 }
 
 /* If a pidfile has been configured, creates it and stores the running
@@ -439,47 +419,6 @@ monitor_daemon(pid_t daemon_pid)
     /* Running in new daemon process. */
     proctitle_restore();
     set_subprogram_name("");
-}
-
-/* Returns a readable and writable fd for /dev/null, if successful, otherwise
- * a negative errno value.  The caller must not close the returned fd (because
- * the same fd will be handed out to subsequent callers). */
-static int
-get_null_fd(void)
-{
-    static int null_fd;
-
-    if (!null_fd) {
-        null_fd = open("/dev/null", O_RDWR);
-        if (null_fd < 0) {
-            int error = errno;
-            VLOG_ERR("could not open /dev/null: %s", ovs_strerror(error));
-            null_fd = -error;
-        }
-    }
-
-    return null_fd;
-}
-
-/* Close standard file descriptors (except any that the client has requested we
- * leave open by calling daemon_save_fd()).  If we're started from e.g. an SSH
- * session, then this keeps us from holding that session open artificially. */
-static void
-close_standard_fds(void)
-{
-    int null_fd = get_null_fd();
-    if (null_fd >= 0) {
-        int fd;
-
-        for (fd = 0; fd < 3; fd++) {
-            if (!save_fds[fd]) {
-                dup2(null_fd, fd);
-            }
-        }
-    }
-
-    /* Disable logging to stderr to avoid wasting CPU time. */
-    vlog_set_levels(NULL, VLF_CONSOLE, VLL_OFF);
 }
 
 /* If daemonization is configured, then starts daemonization, by forking and
