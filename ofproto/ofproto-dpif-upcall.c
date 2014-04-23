@@ -45,6 +45,8 @@
 
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif_upcall);
 
+COVERAGE_DEFINE(upcall_duplicate_flow);
+
 /* A thread that reads upcalls from dpif, forwards each upcall's packet,
  * and possibly sets up a kernel flow as a cache. */
 struct handler {
@@ -161,6 +163,7 @@ struct udpif_key {
     long long int created;         /* Estimation of creation time. */
 
     bool mark;                     /* Used by mark and sweep GC algorithm. */
+    bool flow_exists;              /* Ensures flows are only deleted once. */
 
     struct odputil_keybuf key_buf; /* Memory for 'key'. */
     struct xlate_cache *xcache;    /* Cache for xlate entries that
@@ -1220,6 +1223,7 @@ ukey_create(const struct nlattr *key, size_t key_len, long long int used)
     ukey->key_len = key_len;
 
     ukey->mark = false;
+    ukey->flow_exists = true;
     ukey->created = used ? used : time_msec();
     memset(&ukey->stats, 0, sizeof ukey->stats);
     ukey->xcache = NULL;
@@ -1529,9 +1533,20 @@ revalidate_udumps(struct revalidator *revalidator, struct list *udumps)
             used = ukey->created;
         }
 
+        if (ukey && (ukey->mark || !ukey->flow_exists)) {
+            /* The flow has already been dumped. This can occasionally occur
+             * if the datapath is changed in the middle of a flow dump. Rather
+             * than perform the same work twice, skip the flow this time. */
+            COVERAGE_INC(upcall_duplicate_flow);
+            continue;
+        }
+
         if (must_del || (used && used < now - max_idle)) {
             struct dump_op *dop = &ops[n_ops++];
 
+            if (ukey) {
+                ukey->flow_exists = false;
+            }
             dump_op_init(dop, udump->key, udump->key_len, ukey, udump);
             continue;
         }
@@ -1544,8 +1559,10 @@ revalidate_udumps(struct revalidator *revalidator, struct list *udumps)
         ukey->mark = true;
 
         if (!revalidate_ukey(udpif, udump, ukey)) {
+            ukey->flow_exists = false;
             dpif_flow_del(udpif->dpif, udump->key, udump->key_len, NULL);
-            ukey_delete(revalidator, ukey);
+            /* The ukey will be cleaned up by revalidator_sweep().
+             * This helps to avoid deleting the same flow twice. */
         }
 
         list_remove(&udump->list_node);
@@ -1572,6 +1589,8 @@ revalidator_sweep__(struct revalidator *revalidator, bool purge)
     HMAP_FOR_EACH_SAFE (ukey, next, hmap_node, &revalidator->ukeys) {
         if (!purge && ukey->mark) {
             ukey->mark = false;
+        } else if (!ukey->flow_exists) {
+            ukey_delete(revalidator, ukey);
         } else {
             struct dump_op *op = &ops[n_ops++];
 
