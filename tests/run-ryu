@@ -66,11 +66,11 @@ run ovs-vswitchd --detach --no-chdir --pidfile -vconsole:off --log-file \
 
 # Add bridges for Ryu to use, and configure them to connect to Ryu.
 for config in \
-    'br0 0000000000000001 a c b d' \
-    'br1 0000000000000002 c a d b'
+    'br0 0000000000000001 a b pstream=punix' \
+    'br1 0000000000000002 c d stream=unix'
 do
     set $config
-    bridge=$1 dpid=$2 port1=$3 peer1=$4 port2=$5 peer2=$6
+    bridge=$1 dpid=$2 port1=$3 port2=$4 stream_mode=$5
     run ovs-vsctl --no-wait \
         -- add-br $bridge \
         -- set bridge $bridge \
@@ -81,9 +81,11 @@ do
         -- set controller $bridge connection-mode=out-of-band \
                                   max-backoff=1000 \
         -- add-port $bridge $port1 \
-        -- set interface $port1 ofport_request=1 type=patch options:peer=$peer1 \
+	-- set interface $port1 ofport_request=1 type=dummy \
+                                options:${stream_mode}:"$sandbox"/p1.sock \
         -- add-port $bridge $port2 \
-        -- set interface $port2 ofport_request=2 type=patch options:peer=$peer2
+        -- set interface $port2 ofport_request=2 type=dummy \
+                                options:${stream_mode}:"$sandbox"/p2.sock
 done
 
 logs=
