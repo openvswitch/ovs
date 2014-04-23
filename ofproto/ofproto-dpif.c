@@ -3199,14 +3199,21 @@ rule_dpif_lookup(struct ofproto_dpif *ofproto, struct flow *flow,
     uint8_t table_id;
 
     if (ofproto_dpif_get_enable_recirc(ofproto)) {
-        if (flow->recirc_id == 0) {
-            if (wc) {
-                wc->masks.recirc_id = UINT32_MAX;
-            }
-            table_id = 0;
-        } else {
-            table_id = TBL_INTERNAL;
+        /* Always exactly match recirc_id since datapath supports
+         * recirculation.  */
+        if (wc) {
+            wc->masks.recirc_id = UINT32_MAX;
         }
+
+        /* Start looking up from internal table for post recirculation flows
+         * or packets. We can also simply send all, including normal flows
+         * or packets to the internal table. They will not match any post
+         * recirculation rules except the 'catch all' rule that resubmit
+         * them to table 0.
+         *
+         * As an optimization, we send normal flows and packets to table 0
+         * directly, saving one table lookup.  */
+        table_id = flow->recirc_id ? TBL_INTERNAL : 0;
     } else {
         table_id = 0;
     }
