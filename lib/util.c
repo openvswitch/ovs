@@ -613,6 +613,20 @@ str_to_llong(const char *s, int base, long long *x)
     }
 }
 
+bool
+str_to_uint(const char *s, int base, unsigned int *u)
+{
+    long long ll;
+    bool ok = str_to_llong(s, base, &ll);
+    if (!ok || ll < 0 || ll > UINT_MAX) {
+	*u = 0;
+	return false;
+    } else {
+	*u = ll;
+	return true;
+    }
+}
+
 /* Converts floating-point string 's' into a double.  If successful, stores
  * the double in '*d' and returns true; on failure, stores 0 in '*d' and
  * returns false.
