@@ -27,7 +27,7 @@
  * POSIX platforms and some are applicable only on Windows. As such, the
  * function definitions unique to each platform are separated out with
  * ifdef macros. More descriptive comments on individual functions are provided
- * in daemon.c (for Linux) and daemon-windows.c (for Windows).
+ * in daemon-unix.c (for POSIX platforms) and daemon-windows.c (for Windows).
 
  * The DAEMON_OPTION_ENUMS, DAEMON_LONG_OPTIONS and DAEMON_OPTION_HANDLERS
  * macros are useful for parsing command-line options in individual utilities.

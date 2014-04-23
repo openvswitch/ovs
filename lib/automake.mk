@@ -47,6 +47,7 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/csum.h \
 	lib/daemon.c \
 	lib/daemon.h \
+	lib/daemon-private.h \
 	lib/dhcp.h \
 	lib/dummy.c \
 	lib/dummy.h \

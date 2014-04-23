@@ -16,6 +16,7 @@
 
 #include <config.h>
 #include "daemon.h"
+#include "daemon-private.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -39,11 +40,11 @@
 VLOG_DEFINE_THIS_MODULE(daemon_unix);
 
 /* --detach: Should we run in the background? */
-static bool detach;             /* Was --detach specified? */
+bool detach;                    /* Was --detach specified? */
 static bool detached;           /* Have we already detached? */
 
 /* --pidfile: Name of pidfile (null if none). */
-static char *pidfile;
+char *pidfile;
 
 /* Device and inode of pidfile, so we can avoid reopening it. */
 static dev_t pidfile_dev;
@@ -65,32 +66,17 @@ static bool monitor;
 
 static void check_already_running(void);
 static int lock_pidfile(FILE *, int command);
-static char *make_pidfile_name(const char *name);
 static pid_t fork_and_clean_up(void);
 static void daemonize_post_detach(void);
 
 /* Returns the file name that would be used for a pidfile if 'name' were
  * provided to set_pidfile().  The caller must free the returned string. */
-static char *
+char *
 make_pidfile_name(const char *name)
 {
     return (!name
             ? xasprintf("%s/%s.pid", ovs_rundir(), program_name)
             : abs_file_name(ovs_rundir(), name));
-}
-
-/* Sets up a following call to daemonize() to create a pidfile named 'name'.
- * If 'name' begins with '/', then it is treated as an absolute path.
- * Otherwise, it is taken relative to RUNDIR, which is $(prefix)/var/run by
- * default.
- *
- * If 'name' is null, then program_name followed by ".pid" is used. */
-void
-set_pidfile(const char *name)
-{
-    assert_single_threaded();
-    free(pidfile);
-    pidfile = make_pidfile_name(name);
 }
 
 /* Sets that we do not chdir to "/". */
@@ -115,13 +101,6 @@ void
 set_detach(void)
 {
     detach = true;
-}
-
-/* Will daemonize() really detach? */
-bool
-get_detach(void)
-{
-    return detach;
 }
 
 /* Sets up a following call to daemonize() to fork a supervisory process to
@@ -210,15 +189,6 @@ make_pidfile(void)
     pidfile_dev = s.st_dev;
     pidfile_ino = s.st_ino;
     free(tmpfile);
-}
-
-/* If configured with set_pidfile() or set_detach(), creates the pid file and
- * detaches from the foreground session.  */
-void
-daemonize(void)
-{
-    daemonize_start();
-    daemonize_complete();
 }
 
 /* Calls fork() and on success returns its return value.  On failure, logs an

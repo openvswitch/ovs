@@ -15,6 +15,7 @@
  */
 #include <config.h>
 #include "daemon.h"
+#include "daemon-private.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -25,6 +26,36 @@ VLOG_DEFINE_THIS_MODULE(daemon);
 /* For each of the standard file descriptors, whether to replace it by
  * /dev/null (if false) or keep it for the daemon to use (if true). */
 static bool save_fds[3];
+
+/* Will daemonize() really detach? */
+bool
+get_detach(void)
+{
+    return detach;
+}
+
+/* If configured with set_pidfile() or set_detach(), creates the pid file and
+ * detaches from the foreground session.  */
+void
+daemonize(void)
+{
+    daemonize_start();
+    daemonize_complete();
+}
+
+/* Sets up a following call to daemonize() to create a pidfile named 'name'.
+ * If 'name' begins with '/' (or contains ':' in windows), then it is treated
+ * as an absolute path. Otherwise, it is taken relative to RUNDIR,
+ * which is $(prefix)/var/run by default.
+ *
+ * If 'name' is null, then program_name followed by ".pid" is used. */
+void
+set_pidfile(const char *name)
+{
+    assert_single_threaded();
+    free(pidfile);
+    pidfile = make_pidfile_name(name);
+}
 
 /* A daemon doesn't normally have any use for the file descriptors for stdin,
  * stdout, and stderr after it detaches.  To keep these file descriptors from

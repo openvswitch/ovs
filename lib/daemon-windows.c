@@ -16,6 +16,7 @@
 
 #include <config.h>
 #include "daemon.h"
+#include "daemon-private.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include "poll-loop.h"
@@ -30,12 +31,12 @@ static bool service_started;         /* Have we dispatched service to start? */
  * unexpectedly? */
 static bool monitor;
 
-static bool detach; /* Was --detach specified? */
-static bool detached; /* Running as the child process. */
-static HANDLE write_handle; /* End of pipe to write to parent. */
+bool detach;                 /* Was --detach specified? */
+static bool detached;        /* Running as the child process. */
+static HANDLE write_handle;  /* End of pipe to write to parent. */
 
-static char *pidfile;         /* --pidfile: Name of pidfile (null if none). */
-static FILE *filep_pidfile;   /* File pointer to access the pidfile. */
+char *pidfile;                 /* --pidfile: Name of pidfile (null if none). */
+static FILE *filep_pidfile;    /* File pointer to access the pidfile. */
 
 /* Handle to the Services Manager and the created service. */
 static SC_HANDLE manager, service;
@@ -395,20 +396,6 @@ detach_process(int argc, char *argv[])
     exit(0);
 }
 
-/* Will daemonize() really detach? */
-bool
-get_detach()
-{
-    return detach;
-}
-
-void
-daemonize(void)
-{
-    daemonize_start();
-    daemonize_complete();
-}
-
 static void
 unlink_pidfile(void)
 {
@@ -482,7 +469,7 @@ daemonize_complete(void)
 
 /* Returns the file name that would be used for a pidfile if 'name' were
  * provided to set_pidfile().  The caller must free the returned string. */
-static char *
+char *
 make_pidfile_name(const char *name)
 {
     if (name && strchr(name, ':')) {
@@ -490,18 +477,4 @@ make_pidfile_name(const char *name)
     } else {
         return xasprintf("%s/%s.pid", ovs_rundir(), program_name);
     }
-}
-
-/* Sets up a following call to daemonize() to create a pidfile named 'name'.
- * If 'name' begins with '/', then it is treated as an absolute path.
- * Otherwise, it is taken relative to RUNDIR, which is $(prefix)/var/run by
- * default.
- *
- * If 'name' is null, then program_name followed by ".pid" is used. */
-void
-set_pidfile(const char *name)
-{
-    assert_single_threaded();
-    free(pidfile);
-    pidfile = make_pidfile_name(name);
 }
