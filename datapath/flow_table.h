@@ -41,6 +41,12 @@ struct mask_cache_entry {
 	u32 mask_index;
 };
 
+struct mask_array {
+	struct rcu_head rcu;
+	int count, max;
+	struct sw_flow_mask __rcu *masks[];
+};
+
 struct table_instance {
 	struct flex_array *buckets;
 	unsigned int n_buckets;
@@ -53,7 +59,7 @@ struct table_instance {
 struct flow_table {
 	struct table_instance __rcu *ti;
 	struct mask_cache_entry __percpu *mask_cache;
-	struct list_head mask_list;
+	struct mask_array __rcu *mask_array;
 	unsigned long last_rehash;
 	unsigned int count;
 };
