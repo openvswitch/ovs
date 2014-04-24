@@ -617,4 +617,10 @@ static inline bool is_icmpv6(const struct flow *flow)
             && flow->nw_proto == IPPROTO_ICMPV6);
 }
 
+static inline bool is_stp(const struct flow *flow)
+{
+    return (eth_addr_equals(flow->dl_dst, eth_addr_stp)
+            && flow->dl_type == htons(FLOW_DL_TYPE_NONE));
+}
+
 #endif /* flow.h */

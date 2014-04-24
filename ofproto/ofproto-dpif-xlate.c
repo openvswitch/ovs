@@ -770,8 +770,9 @@ xport_stp_listen_state(const struct xport *xport)
 static bool
 stp_should_process_flow(const struct flow *flow, struct flow_wildcards *wc)
 {
+    /* is_stp() also checks dl_type, but dl_type is always set in 'wc'. */
     memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
-    return eth_addr_equals(flow->dl_dst, eth_addr_stp);
+    return is_stp(flow);
 }
 
 static void
@@ -1820,7 +1821,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         xlate_report(ctx, "OFPPC_NO_FWD set, skipping output");
         return;
     } else if (check_stp) {
-        if (eth_addr_equals(ctx->base_flow.dl_dst, eth_addr_stp)) {
+        if (is_stp(&ctx->base_flow)) {
             if (!xport_stp_listen_state(xport)) {
                 xlate_report(ctx, "STP not in listening state, "
                              "skipping bpdu output");
@@ -2724,7 +2725,7 @@ xlate_sample_action(struct xlate_ctx *ctx,
 static bool
 may_receive(const struct xport *xport, struct xlate_ctx *ctx)
 {
-    if (xport->config & (eth_addr_equals(ctx->xin->flow.dl_dst, eth_addr_stp)
+    if (xport->config & (is_stp(&ctx->xin->flow)
                          ? OFPUTIL_PC_NO_RECV_STP
                          : OFPUTIL_PC_NO_RECV)) {
         return false;
