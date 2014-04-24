@@ -345,18 +345,18 @@ out:
 enum lacp_status
 lacp_status(const struct lacp *lacp) OVS_EXCLUDED(mutex)
 {
-    enum lacp_status ret;
+    if (lacp) {
+        enum lacp_status ret;
 
-    ovs_mutex_lock(&mutex);
-    if (!lacp) {
-        ret = LACP_DISABLED;
-    } else if (lacp->negotiated) {
-        ret = LACP_NEGOTIATED;
+        ovs_mutex_lock(&mutex);
+        ret = lacp->negotiated ? LACP_NEGOTIATED : LACP_CONFIGURED;
+        ovs_mutex_unlock(&mutex);
+        return ret;
     } else {
-        ret = LACP_CONFIGURED;
+        /* Don't take 'mutex'.  It might not even be initialized, since we
+         * don't know that any lacp object has been created. */
+        return LACP_DISABLED;
     }
-    ovs_mutex_unlock(&mutex);
-    return ret;
 }
 
 /* Registers 'slave_' as subordinate to 'lacp'.  This should be called at least
