@@ -3189,10 +3189,16 @@ rule_dpif_get_actions(const struct rule_dpif *rule)
  *
  * The return value will be zero unless there was a miss and
  * OFPTC11_TABLE_MISS_CONTINUE is in effect for the sequence of tables
- * where misses occur. */
+ * where misses occur.
+ *
+ * The rule is returned in '*rule', which is valid at least until the next
+ * RCU quiescent period.  If the '*rule' needs to stay around longer,
+ * a non-zero 'take_ref' must be passed in to cause a reference to be taken
+ * on it before this returns. */
 uint8_t
 rule_dpif_lookup(struct ofproto_dpif *ofproto, struct flow *flow,
-                 struct flow_wildcards *wc, struct rule_dpif **rule)
+                 struct flow_wildcards *wc, struct rule_dpif **rule,
+                 bool take_ref)
 {
     enum rule_dpif_lookup_verdict verdict;
     enum ofputil_port_config config = 0;
@@ -3219,7 +3225,7 @@ rule_dpif_lookup(struct ofproto_dpif *ofproto, struct flow *flow,
     }
 
     verdict = rule_dpif_lookup_from_table(ofproto, flow, wc, true,
-                                          &table_id, rule);
+                                          &table_id, rule, take_ref);
 
     switch (verdict) {
     case RULE_DPIF_LOOKUP_VERDICT_MATCH:
@@ -3248,13 +3254,17 @@ rule_dpif_lookup(struct ofproto_dpif *ofproto, struct flow *flow,
     }
 
     choose_miss_rule(config, ofproto->miss_rule,
-                     ofproto->no_packet_in_rule, rule);
+                     ofproto->no_packet_in_rule, rule, take_ref);
     return table_id;
 }
 
+/* The returned rule is valid at least until the next RCU quiescent period.
+ * If the '*rule' needs to stay around longer, a non-zero 'take_ref' must be
+ * passed in to cause a reference to be taken on it before this returns. */
 static struct rule_dpif *
 rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, uint8_t table_id,
-                          const struct flow *flow, struct flow_wildcards *wc)
+                          const struct flow *flow, struct flow_wildcards *wc,
+                          bool take_ref)
 {
     struct classifier *cls = &ofproto->up.tables[table_id].cls;
     const struct cls_rule *cls_rule;
@@ -3288,7 +3298,9 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, uint8_t table_id,
     }
 
     rule = rule_dpif_cast(rule_from_cls_rule(cls_rule));
-    rule_dpif_ref(rule);
+    if (take_ref) {
+        rule_dpif_ref(rule);
+    }
     fat_rwlock_unlock(&cls->rwlock);
 
     return rule;
@@ -3323,13 +3335,19 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, uint8_t table_id,
  *
  *    - RULE_DPIF_LOOKUP_VERDICT_DEFAULT if no rule was found,
  *      'honor_table_miss' is true and a table miss configuration has
- *      not been specified in this case. */
+ *      not been specified in this case.
+ *
+ * The rule is returned in '*rule', which is valid at least until the next
+ * RCU quiescent period.  If the '*rule' needs to stay around longer,
+ * a non-zero 'take_ref' must be passed in to cause a reference to be taken
+ * on it before this returns. */
 enum rule_dpif_lookup_verdict
 rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
                             const struct flow *flow,
                             struct flow_wildcards *wc,
                             bool honor_table_miss,
-                            uint8_t *table_id, struct rule_dpif **rule)
+                            uint8_t *table_id, struct rule_dpif **rule,
+                            bool take_ref)
 {
     uint8_t next_id;
 
@@ -3338,7 +3356,8 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
          next_id++, next_id += (next_id == TBL_INTERNAL))
     {
         *table_id = next_id;
-        *rule = rule_dpif_lookup_in_table(ofproto, *table_id, flow, wc);
+        *rule = rule_dpif_lookup_in_table(ofproto, *table_id, flow, wc,
+                                          take_ref);
         if (*rule) {
             return RULE_DPIF_LOOKUP_VERDICT_MATCH;
         } else if (!honor_table_miss) {
@@ -3365,13 +3384,21 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
 
 /* Given a port configuration (specified as zero if there's no port), chooses
  * which of 'miss_rule' and 'no_packet_in_rule' should be used in case of a
- * flow table miss. */
+ * flow table miss.
+ *
+ * The rule is returned in '*rule', which is valid at least until the next
+ * RCU quiescent period.  If the '*rule' needs to stay around longer,
+ * a reference must be taken on it (rule_dpif_ref()).
+ */
 void
 choose_miss_rule(enum ofputil_port_config config, struct rule_dpif *miss_rule,
-                 struct rule_dpif *no_packet_in_rule, struct rule_dpif **rule)
+                 struct rule_dpif *no_packet_in_rule, struct rule_dpif **rule,
+                 bool take_ref)
 {
     *rule = config & OFPUTIL_PC_NO_PACKET_IN ? no_packet_in_rule : miss_rule;
-    rule_dpif_ref(*rule);
+    if (take_ref) {
+        rule_dpif_ref(*rule);
+    }
 }
 
 void
@@ -4197,7 +4224,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
     if (ofpacts) {
         rule = NULL;
     } else {
-        rule_dpif_lookup(ofproto, flow, &trace.wc, &rule);
+        rule_dpif_lookup(ofproto, flow, &trace.wc, &rule, false);
 
         trace_format_rule(ds, 0, rule);
         if (rule == ofproto->miss_rule) {
@@ -4253,8 +4280,6 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
 
         xlate_out_uninit(&trace.xout);
     }
-
-    rule_dpif_unref(rule);
 }
 
 /* Store the current ofprotos in 'ofproto_shash'.  Returns a sorted list
@@ -4819,9 +4844,8 @@ ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
     }
 
     rule = rule_dpif_lookup_in_table(ofproto, TBL_INTERNAL, &match->flow,
-                                     &match->wc);
+                                     &match->wc, false);
     if (rule) {
-        rule_dpif_unref(rule);
         *rulep = &rule->up;
     } else {
         OVS_NOT_REACHED();

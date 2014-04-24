@@ -2057,7 +2057,7 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
                                               !skip_wildcards
                                               ? &ctx->xout->wc : NULL,
                                               honor_table_miss,
-                                              &ctx->table_id, &rule);
+                                              &ctx->table_id, &rule, true);
         ctx->xin->flow.in_port.ofp_port = old_in_port;
 
         if (ctx->xin->resubmit_hook) {
@@ -2090,7 +2090,7 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
         }
 
         choose_miss_rule(config, ctx->xbridge->miss_rule,
-                         ctx->xbridge->no_packet_in_rule, &rule);
+                         ctx->xbridge->no_packet_in_rule, &rule, true);
 
 match:
         if (rule) {
@@ -2654,7 +2654,7 @@ xlate_learn_action(struct xlate_ctx *ctx,
         entry = xlate_cache_add_entry(ctx->xin->xcache, XC_LEARN);
         entry->u.learn.ofproto = ctx->xin->ofproto;
         rule_dpif_lookup(ctx->xbridge->ofproto, &ctx->xin->flow, NULL,
-                         &entry->u.learn.rule);
+                         &entry->u.learn.rule, true);
     }
 }
 
@@ -3263,7 +3263,7 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
     if (!xin->ofpacts && !ctx.rule) {
         ctx.table_id = rule_dpif_lookup(ctx.xbridge->ofproto, flow,
                                         !xin->skip_wildcards ? wc : NULL,
-                                        &rule);
+                                        &rule, true);
         if (ctx.xin->resubmit_stats) {
             rule_dpif_credit_stats(rule, ctx.xin->resubmit_stats);
         }

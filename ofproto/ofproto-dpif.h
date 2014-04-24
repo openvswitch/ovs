@@ -87,14 +87,16 @@ size_t ofproto_dpif_get_max_mpls_depth(const struct ofproto_dpif *);
 bool ofproto_dpif_get_enable_recirc(const struct ofproto_dpif *);
 
 uint8_t rule_dpif_lookup(struct ofproto_dpif *, struct flow *,
-                      struct flow_wildcards *, struct rule_dpif **rule);
+                         struct flow_wildcards *, struct rule_dpif **rule,
+                         bool take_ref);
 
 enum rule_dpif_lookup_verdict rule_dpif_lookup_from_table(struct ofproto_dpif *,
                                                           const struct flow *,
                                                           struct flow_wildcards *,
                                                           bool force_controller_on_miss,
                                                           uint8_t *table_id,
-                                                          struct rule_dpif **rule);
+                                                          struct rule_dpif **rule, 
+                                                          bool take_ref);
 
 void rule_dpif_ref(struct rule_dpif *);
 void rule_dpif_unref(struct rule_dpif *);
@@ -117,7 +119,7 @@ void rule_dpif_reduce_timeouts(struct rule_dpif *rule, uint16_t idle_timeout,
 void choose_miss_rule(enum ofputil_port_config,
                       struct rule_dpif *miss_rule,
                       struct rule_dpif *no_packet_in_rule,
-                      struct rule_dpif **rule);
+                      struct rule_dpif **rule, bool take_ref);
 
 bool group_dpif_lookup(struct ofproto_dpif *ofproto, uint32_t group_id,
                        struct group_dpif **group);
