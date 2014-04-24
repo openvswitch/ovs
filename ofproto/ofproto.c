@@ -259,7 +259,6 @@ struct ofport_usage {
 };
 
 /* rule. */
-static void ofproto_rule_destroy__(struct rule *);
 static void ofproto_rule_send_removed(struct rule *, uint8_t reason);
 static bool rule_is_modifiable(const struct rule *rule,
                                enum ofputil_flow_mod_flags flag);
@@ -1372,7 +1371,8 @@ ofproto_destroy(struct ofproto *p)
     }
 
     p->ofproto_class->destruct(p);
-    ofproto_destroy__(p);
+    /* Destroying rules is deferred, must have 'ofproto' around for them. */
+    ovsrcu_postpone(ofproto_destroy__, p);
 }
 
 /* Destroys the datapath with the respective 'name' and 'type'.  With the Linux
@@ -2642,23 +2642,6 @@ update_mtu(struct ofproto *p, struct ofport *port)
     }
 }
 
-void
-ofproto_rule_ref(struct rule *rule)
-{
-    if (rule) {
-        ovs_refcount_ref(&rule->ref_count);
-    }
-}
-
-void
-ofproto_rule_unref(struct rule *rule)
-{
-    if (rule && ovs_refcount_unref(&rule->ref_count) == 1) {
-        rule->ofproto->ofproto_class->rule_destruct(rule);
-        ofproto_rule_destroy__(rule);
-    }
-}
-
 static void
 ofproto_rule_destroy__(struct rule *rule)
     OVS_NO_THREAD_SAFETY_ANALYSIS
@@ -2667,6 +2650,35 @@ ofproto_rule_destroy__(struct rule *rule)
     rule_actions_destroy(rule_get_actions(rule));
     ovs_mutex_destroy(&rule->mutex);
     rule->ofproto->ofproto_class->rule_dealloc(rule);
+}
+
+static void
+rule_destroy_cb(struct rule *rule)
+{
+    rule->ofproto->ofproto_class->rule_destruct(rule);
+    ofproto_rule_destroy__(rule);
+}
+
+void
+ofproto_rule_ref(struct rule *rule)
+{
+    if (rule) {
+        ovs_refcount_ref(&rule->ref_count);
+    }
+}
+
+/* Decrements 'rule''s ref_count and schedules 'rule' to be destroyed if the
+ * ref_count reaches 0.
+ *
+ * Use of RCU allows short term use (between RCU quiescent periods) without
+ * keeping a reference.  A reference must be taken if the rule needs to
+ * stay around accross the RCU quiescent periods. */
+void
+ofproto_rule_unref(struct rule *rule)
+{
+    if (rule && ovs_refcount_unref(&rule->ref_count) == 1) {
+        ovsrcu_postpone(rule_destroy_cb, rule);
+    }
 }
 
 static uint32_t get_provider_meter_id(const struct ofproto *,
