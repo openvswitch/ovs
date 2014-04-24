@@ -252,6 +252,7 @@ static bool iface_is_internal(const struct ovsrec_interface *iface,
 static const char *iface_get_type(const struct ovsrec_interface *,
                                   const struct ovsrec_bridge *);
 static void iface_destroy(struct iface *);
+static void iface_destroy__(struct iface *);
 static struct iface *iface_lookup(const struct bridge *, const char *name);
 static struct iface *iface_find(const char *name);
 static struct iface *iface_from_ofp_port(const struct bridge *,
@@ -667,6 +668,9 @@ bridge_delete_or_reconfigure_ports(struct bridge *br)
     struct ofproto_port ofproto_port;
     struct ofproto_port_dump dump;
 
+    struct sset ofproto_ports;
+    struct port *port, *port_next;
+
     /* List of "ofp_port"s to delete.  We make a list instead of deleting them
      * right away because ofproto implementations aren't necessarily able to
      * iterate through a changing list of ports in an entirely robust way. */
@@ -676,10 +680,20 @@ bridge_delete_or_reconfigure_ports(struct bridge *br)
 
     del = NULL;
     n = allocated = 0;
+    sset_init(&ofproto_ports);
 
+    /* Main task: Iterate over the ports in 'br->ofproto' and remove the ports
+     * that are not configured in the database.  (This commonly happens when
+     * ports have been deleted, e.g. with "ovs-vsctl del-port".)
+     *
+     * Side tasks: Reconfigure the ports that are still in 'br'.  Delete ports
+     * that have the wrong OpenFlow port number (and arrange to add them back
+     * with the correct OpenFlow port number). */
     OFPROTO_PORT_FOR_EACH (&ofproto_port, &dump, br->ofproto) {
         ofp_port_t requested_ofp_port;
         struct iface *iface;
+
+        sset_add(&ofproto_ports, ofproto_port.name);
 
         iface = iface_lookup(br, ofproto_port.name);
         if (!iface) {
@@ -746,11 +760,37 @@ bridge_delete_or_reconfigure_ports(struct bridge *br)
         iface_destroy(iface);
         del = add_ofp_port(ofproto_port.ofp_port, del, &n, &allocated);
     }
-
     for (i = 0; i < n; i++) {
         ofproto_port_del(br->ofproto, del[i]);
     }
     free(del);
+
+    /* Iterate over this module's idea of interfaces in 'br'.  Remove any ports
+     * that we didn't see when we iterated through the datapath, i.e. ports
+     * that disappeared underneath use.  This is an unusual situation, but it
+     * can happen in some cases:
+     *
+     *     - An admin runs a command like "ovs-dpctl del-port" (which is a bad
+     *       idea but could happen).
+     *
+     *     - The port represented a device that disappeared, e.g. a tuntap
+     *       device destroyed via "tunctl -d", a physical Ethernet device
+     *       whose module was just unloaded via "rmmod", or a virtual NIC for a
+     *       VM whose VM was just terminated. */
+    HMAP_FOR_EACH_SAFE (port, port_next, hmap_node, &br->ports) {
+        struct iface *iface, *iface_next;
+
+        LIST_FOR_EACH_SAFE (iface, iface_next, port_elem, &port->ifaces) {
+            if (!sset_contains(&ofproto_ports, iface->name)) {
+                iface_destroy__(iface);
+            }
+        }
+
+        if (list_is_empty(&port->ifaces)) {
+            port_destroy(port);
+        }
+    }
+    sset_destroy(&ofproto_ports);
 }
 
 static void
@@ -3144,8 +3184,6 @@ bridge_configure_dp_desc(struct bridge *br)
 }
 
 /* Port functions. */
-
-static void iface_destroy__(struct iface *);
 
 static struct port *
 port_create(struct bridge *br, const struct ovsrec_port *cfg)
