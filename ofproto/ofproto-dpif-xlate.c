@@ -1996,13 +1996,6 @@ xlate_recursively(struct xlate_ctx *ctx, struct rule_dpif *rule)
     if (ctx->xin->resubmit_stats) {
         rule_dpif_credit_stats(rule, ctx->xin->resubmit_stats);
     }
-    if (ctx->xin->xcache) {
-        struct xc_entry *entry;
-
-        entry = xlate_cache_add_entry(ctx->xin->xcache, XC_RULE);
-        entry->u.rule = rule;
-        rule_dpif_ref(rule);
-    }
 
     ctx->resubmits++;
     ctx->recurse++;
@@ -2057,7 +2050,8 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
                                               !skip_wildcards
                                               ? &ctx->xout->wc : NULL,
                                               honor_table_miss,
-                                              &ctx->table_id, &rule, true);
+                                              &ctx->table_id, &rule,
+                                              ctx->xin->xcache != NULL);
         ctx->xin->flow.in_port.ofp_port = old_in_port;
 
         if (ctx->xin->resubmit_hook) {
@@ -2090,12 +2084,22 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
         }
 
         choose_miss_rule(config, ctx->xbridge->miss_rule,
-                         ctx->xbridge->no_packet_in_rule, &rule, true);
+                         ctx->xbridge->no_packet_in_rule, &rule,
+                         ctx->xin->xcache != NULL);
 
 match:
         if (rule) {
+            /* Fill in the cache entry here instead of xlate_recursively
+             * to make the reference counting more explicit.  We take a
+             * reference in the lookups above if we are going to cache the
+             * rule. */
+            if (ctx->xin->xcache) {
+                struct xc_entry *entry;
+
+                entry = xlate_cache_add_entry(ctx->xin->xcache, XC_RULE);
+                entry->u.rule = rule;
+            }
             xlate_recursively(ctx, rule);
-            rule_dpif_unref(rule);
         }
 
         ctx->table_id = old_table_id;
@@ -2653,6 +2657,8 @@ xlate_learn_action(struct xlate_ctx *ctx,
 
         entry = xlate_cache_add_entry(ctx->xin->xcache, XC_LEARN);
         entry->u.learn.ofproto = ctx->xin->ofproto;
+        /* Lookup the learned rule, taking a reference on it.  The reference
+         * is released when this cache entry is deleted. */
         rule_dpif_lookup(ctx->xbridge->ofproto, &ctx->xin->flow, NULL,
                          &entry->u.learn.rule, true);
     }
@@ -2678,10 +2684,11 @@ xlate_fin_timeout(struct xlate_ctx *ctx,
             struct xc_entry *entry;
 
             entry = xlate_cache_add_entry(ctx->xin->xcache, XC_FIN_TIMEOUT);
+            /* XC_RULE already holds a reference on the rule, none is taken
+             * here. */
             entry->u.fin.rule = ctx->rule;
             entry->u.fin.idle = oft->fin_idle_timeout;
             entry->u.fin.hard = oft->fin_hard_timeout;
-            rule_dpif_ref(ctx->rule);
         }
     }
 }
@@ -3230,7 +3237,7 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
 
     ctx.xbridge = xbridge_lookup(xin->ofproto);
     if (!ctx.xbridge) {
-        goto out;
+        return;
     }
 
     ctx.rule = xin->rule;
@@ -3263,7 +3270,7 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
     if (!xin->ofpacts && !ctx.rule) {
         ctx.table_id = rule_dpif_lookup(ctx.xbridge->ofproto, flow,
                                         !xin->skip_wildcards ? wc : NULL,
-                                        &rule, true);
+                                        &rule, ctx.xin->xcache != NULL);
         if (ctx.xin->resubmit_stats) {
             rule_dpif_credit_stats(rule, ctx.xin->resubmit_stats);
         }
@@ -3271,7 +3278,6 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
             struct xc_entry *entry;
 
             entry = xlate_cache_add_entry(ctx.xin->xcache, XC_RULE);
-            rule_dpif_ref(rule);
             entry->u.rule = rule;
         }
         ctx.rule = rule;
@@ -3309,7 +3315,7 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
             break;
 
         case OFPC_FRAG_DROP:
-            goto out;
+            return;
 
         case OFPC_FRAG_REASM:
             OVS_NOT_REACHED();
@@ -3456,9 +3462,6 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
         wc->masks.tp_src &= htons(UINT8_MAX);
         wc->masks.tp_dst &= htons(UINT8_MAX);
     }
-
-out:
-    rule_dpif_unref(rule);
 }
 
 /* Sends 'packet' out 'ofport'.
@@ -3580,9 +3583,9 @@ xlate_push_stats(struct xlate_cache *xcache, bool may_learn,
                 struct rule_dpif *rule = entry->u.learn.rule;
 
                 /* Reset the modified time for a rule that is equivalent to
-                 * the currently cached rule. If the rule is not the exact
-                 * rule wehave cached, update the reference that we have. */
-                    entry->u.learn.rule = ofproto_dpif_refresh_rule(rule);
+                 * the currently cached rule.  If the rule is not the exact
+                 * rule we have cached, update the reference that we have. */
+                entry->u.learn.rule = ofproto_dpif_refresh_rule(rule);
             }
             break;
         case XC_NORMAL:
@@ -3651,13 +3654,15 @@ xlate_cache_clear(struct xlate_cache *xcache)
             mbridge_unref(entry->u.mirror.mbridge);
             break;
         case XC_LEARN:
+            /* 'u.learn.rule' is the learned rule. */
             rule_dpif_unref(entry->u.learn.rule);
             break;
         case XC_NORMAL:
             free(entry->u.normal.flow);
             break;
         case XC_FIN_TIMEOUT:
-            rule_dpif_unref(entry->u.fin.rule);
+            /* 'u.fin.rule' is always already held as a XC_RULE, which
+             * has already released it's reference above. */
             break;
         default:
             OVS_NOT_REACHED();
