@@ -177,6 +177,10 @@ Prerequisites section, follow the procedure below to build.
 
       % ./configure --with-linux=/lib/modules/`uname -r`/build
 
+   If --with-linux requests building for an unsupported version of
+   Linux, then "configure" will fail with an error message.  Please
+   refer to the FAQ for advice in that case.
+
    If you wish to build the kernel module for an architecture other
    than the architecture of the machine used for the build, you may
    specify the kernel architecture string using the KARCH variable

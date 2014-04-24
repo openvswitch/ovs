@@ -158,18 +158,22 @@ A: The following table lists the Linux kernel versions against which the
    It should build against almost any kernel, certainly against 2.6.32
    and later.
 
-Q: What Linux kernel versions does IPFIX flow monitoring work with?
+Q: I get an error like this when I configure Open vSwitch:
 
-A: IPFIX flow monitoring requires the Linux kernel module from Open
-   vSwitch version 1.10.90 or later.
+       configure: error: Linux kernel in <dir> is version <x>, but
+       version newer than <y> is not supported (please refer to the
+       FAQ for advice)
 
-Q: Should userspace or kernel be upgraded first to minimize downtime?
+   What should I do?
 
-   In general, the Open vSwitch userspace should be used with the
-   kernel version included in the same release or with the version
-   from upstream Linux.  However, when upgrading between two releases
-   of Open vSwitch it is best to migrate userspace first to reduce
-   the possibility of incompatibilities.
+A: If there is a newer version of Open vSwitch, consider building that
+   one, because it may support the kernel that you are building
+   against.  (To find out, consult the table in the previous answer.)
+
+   Otherwise, use the Linux kernel module supplied with the kernel
+   that you are using.  All versions of Open vSwitch userspace are
+   compatible with all versions of the Open vSwitch kernel module, so
+   this will also work.  See also the following question.
 
 Q: What features are not available in the Open vSwitch kernel datapath
    that ships as part of the upstream Linux kernel?
@@ -192,6 +196,19 @@ A: Tunnel virtual ports are not supported, as described in the
    previous answer.  It is also not possible to use queue-related
    actions.  On Linux kernels before 2.6.39, maximum-sized VLAN packets
    may not be transmitted.
+
+Q: What Linux kernel versions does IPFIX flow monitoring work with?
+
+A: IPFIX flow monitoring requires the Linux kernel module from Open
+   vSwitch version 1.10.90 or later.
+
+Q: Should userspace or kernel be upgraded first to minimize downtime?
+
+   In general, the Open vSwitch userspace should be used with the
+   kernel version included in the same release or with the version
+   from upstream Linux.  However, when upgrading between two releases
+   of Open vSwitch it is best to migrate userspace first to reduce
+   the possibility of incompatibilities.
 
 Q: What happened to the bridge compatibility feature?
 
