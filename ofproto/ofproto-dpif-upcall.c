@@ -342,7 +342,7 @@ static void
 udpif_start_threads(struct udpif *udpif, size_t n_handlers,
                     size_t n_revalidators)
 {
-    if (udpif && (!udpif->handlers && !udpif->revalidators)) {
+    if (udpif && n_handlers && n_revalidators) {
         size_t i;
 
         udpif->n_handlers = n_handlers;
