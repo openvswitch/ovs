@@ -888,7 +888,7 @@ bool
 bond_may_recirc(const struct bond *bond, uint32_t *recirc_id,
                 uint32_t *hash_bias)
 {
-    if (bond->balance == BM_TCP) {
+    if (bond->balance == BM_TCP && recirc_id) {
         if (recirc_id) {
             *recirc_id = bond->recirc_id;
         }
