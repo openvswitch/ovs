@@ -3817,6 +3817,7 @@ done
 AT_CHECK([ovs-appctl time/warp 500], [0],
 [warped
 ])
+sleep 1  # wait for log writer
 
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 dummy@ovs-dummy: hit:13 missed:2
