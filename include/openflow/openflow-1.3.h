@@ -388,7 +388,7 @@ struct ofp13_group_stats {
     ovs_be32 duration_sec;    /* Time group has been alive in seconds. */
     ovs_be32 duration_nsec;   /* Time group has been alive in nanoseconds
                                  beyond duration_sec. */
-    struct ofp11_bucket_counter bucket_stats[0];
+    /* struct ofp11_bucket_counter bucket_stats[]; */
 };
 OFP_ASSERT(sizeof(struct ofp13_group_stats) == 40);
 

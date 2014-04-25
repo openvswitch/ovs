@@ -705,7 +705,7 @@ struct ofp11_group_stats {
     uint8_t pad2[4];           /* Align to 64 bits. */
     ovs_be64 packet_count;     /* Number of packets processed by group. */
     ovs_be64 byte_count;       /* Number of bytes processed by group. */
-    struct ofp11_bucket_counter bucket_stats[0];
+    /* struct ofp11_bucket_counter bucket_stats[]; */
 };
 OFP_ASSERT(sizeof(struct ofp11_group_stats) == 32);
 

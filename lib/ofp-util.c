@@ -6274,18 +6274,10 @@ ofputil_encode_group_desc_request(enum ofp_version ofp_version)
 }
 
 static void
-ofputil_group_stats_to_ofp11__(const struct ofputil_group_stats *gs,
-                               struct ofp11_group_stats *gs11, size_t length,
-                               struct ofp11_bucket_counter bucket_cnts[])
+ofputil_group_bucket_counters_to_ofp11(const struct ofputil_group_stats *gs,
+                                    struct ofp11_bucket_counter bucket_cnts[])
 {
     int i;
-
-    memset(gs11, 0, length);
-    gs11->length = htons(length);
-    gs11->group_id = htonl(gs->group_id);
-    gs11->ref_count = htonl(gs->ref_count);
-    gs11->packet_count = htonll(gs->packet_count);
-    gs11->byte_count = htonll(gs->byte_count);
 
     for (i = 0; i < gs->n_buckets; i++) {
        bucket_cnts[i].packet_count = htonll(gs->bucket_stats[i].packet_count);
@@ -6295,18 +6287,27 @@ ofputil_group_stats_to_ofp11__(const struct ofputil_group_stats *gs,
 
 static void
 ofputil_group_stats_to_ofp11(const struct ofputil_group_stats *gs,
-                             struct ofp11_group_stats *gs11, size_t length)
+                             struct ofp11_group_stats *gs11, size_t length,
+                             struct ofp11_bucket_counter bucket_cnts[])
 {
-    ofputil_group_stats_to_ofp11__(gs, gs11, length, gs11->bucket_stats);
+    memset(gs11, 0, sizeof *gs11);
+    gs11->length = htons(length);
+    gs11->group_id = htonl(gs->group_id);
+    gs11->ref_count = htonl(gs->ref_count);
+    gs11->packet_count = htonll(gs->packet_count);
+    gs11->byte_count = htonll(gs->byte_count);
+    ofputil_group_bucket_counters_to_ofp11(gs, bucket_cnts);
 }
 
 static void
 ofputil_group_stats_to_ofp13(const struct ofputil_group_stats *gs,
-                             struct ofp13_group_stats *gs13, size_t length)
+                             struct ofp13_group_stats *gs13, size_t length,
+                             struct ofp11_bucket_counter bucket_cnts[])
 {
-    ofputil_group_stats_to_ofp11__(gs, &gs13->gs, length, gs13->bucket_stats);
+    ofputil_group_stats_to_ofp11(gs, &gs13->gs, length, bucket_cnts);
     gs13->duration_sec = htonl(gs->duration_sec);
     gs13->duration_nsec = htonl(gs->duration_nsec);
+
 }
 
 /* Encodes 'gs' properly for the format of the list of group statistics
@@ -6318,28 +6319,32 @@ ofputil_append_group_stats(struct list *replies,
 {
     struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
     struct ofp_header *oh = ofpbuf_data(msg);
+    size_t bucket_counter_size;
+    struct ofp11_bucket_counter *bucket_counters;
     size_t length;
+
+    bucket_counter_size = gs->n_buckets * sizeof(struct ofp11_bucket_counter);
 
     switch ((enum ofp_version) oh->version) {
     case OFP11_VERSION:
     case OFP12_VERSION:{
-            struct ofp11_group_stats *reply;
+            struct ofp11_group_stats *gs11;
 
-            length = gs->n_buckets * sizeof reply->bucket_stats[0]
-                + sizeof *reply;
-            reply = ofpmp_append(replies, length);
-            ofputil_group_stats_to_ofp11(gs, reply, length);
+            length = sizeof *gs11 + bucket_counter_size;
+            gs11 = ofpmp_append(replies, length);
+            bucket_counters = (struct ofp11_bucket_counter *)(gs11 + 1);
+            ofputil_group_stats_to_ofp11(gs, gs11, length, bucket_counters);
             break;
         }
 
     case OFP13_VERSION:
     case OFP14_VERSION:{
-            struct ofp13_group_stats *reply;
+            struct ofp13_group_stats *gs13;
 
-            length = gs->n_buckets * sizeof reply->bucket_stats[0]
-                + sizeof *reply;
-            reply = ofpmp_append(replies, length);
-            ofputil_group_stats_to_ofp13(gs, reply, length);
+            length = sizeof *gs13 + bucket_counter_size;
+            gs13 = ofpmp_append(replies, length);
+            bucket_counters = (struct ofp11_bucket_counter *)(gs13 + 1);
+            ofputil_group_stats_to_ofp13(gs, gs13, length, bucket_counters);
             break;
         }
 
