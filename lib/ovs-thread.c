@@ -240,7 +240,10 @@ xpthread_barrier_wait(pthread_barrier_t *barrier)
 {
     int error;
 
+    ovsrcu_quiesce_start();
     error = pthread_barrier_wait(barrier);
+    ovsrcu_quiesce_end();
+
     if (error && OVS_UNLIKELY(error != PTHREAD_BARRIER_SERIAL_THREAD)) {
         ovs_abort(error, "pthread_barrier_wait failed");
     }
