@@ -1351,7 +1351,6 @@ run(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     uint64_t new_seq, new_dump_seq;
-    const bool enable_recirc = ofproto_dpif_get_enable_recirc(ofproto);
 
     if (mbridge_need_revalidate(ofproto->mbridge)) {
         ofproto->backer->need_revalidate = REV_RECONFIGURE;
@@ -1435,17 +1434,12 @@ run(struct ofproto *ofproto_)
 
         /* All outstanding data in existing flows has been accounted, so it's a
          * good time to do bond rebalancing. */
-        if (enable_recirc && ofproto->has_bonded_bundles) {
+        if (ofproto->has_bonded_bundles) {
             struct ofbundle *bundle;
 
             HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
-                struct bond *bond = bundle->bond;
-
-                if (bond && bond_may_recirc(bond, NULL, NULL)) {
-                    bond_recirculation_account(bond);
-                    if (bond_rebalance(bundle->bond)) {
-                        bond_update_post_recirc_rules(bond, true);
-                    }
+                if (bundle->bond) {
+                    bond_rebalance(bundle->bond);
                 }
             }
         }

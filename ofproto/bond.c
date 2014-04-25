@@ -861,7 +861,7 @@ bond_entry_account(struct bond_entry *entry, uint64_t rule_tx_bytes)
 }
 
 /* Maintain bond stats using post recirculation rule byte counters.*/
-void
+static void
 bond_recirculation_account(struct bond *bond)
 {
     int i;
@@ -1087,21 +1087,28 @@ reinsert_bal(struct list *bals, struct bond_slave *slave)
  * The caller should have called bond_account() for each active flow, or in case
  * of recirculation is used, have called bond_recirculation_account(bond),
  * to ensure that flow data is consistently accounted at this point.
- *
- * Return whether rebalancing took place.*/
-bool
+ */
+void
 bond_rebalance(struct bond *bond)
 {
     struct bond_slave *slave;
     struct bond_entry *e;
     struct list bals;
     bool rebalanced = false;
+    bool use_recirc;
 
     ovs_rwlock_wrlock(&rwlock);
     if (!bond_is_balanced(bond) || time_msec() < bond->next_rebalance) {
         goto done;
     }
     bond->next_rebalance = time_msec() + bond->rebalance_interval;
+
+    use_recirc = ofproto_dpif_get_enable_recirc(bond->ofproto) &&
+                 bond_may_recirc(bond, NULL, NULL);
+
+    if (use_recirc) {
+        bond_recirculation_account(bond);
+    }
 
     /* Add each bond_entry to its slave's 'entries' list.
      * Compute each slave's tx_bytes as the sum of its entries' tx_bytes. */
@@ -1158,7 +1165,7 @@ bond_rebalance(struct bond *bond)
             /* Re-sort 'bals'. */
             reinsert_bal(&bals, from);
             reinsert_bal(&bals, to);
-	    rebalanced = true;
+            rebalanced = true;
         } else {
             /* Can't usefully migrate anything away from 'from'.
              * Don't reconsider it. */
@@ -1174,8 +1181,10 @@ bond_rebalance(struct bond *bond)
     }
 
 done:
+    if (use_recirc && rebalanced) {
+        bond_update_post_recirc_rules(bond,true);
+    }
     ovs_rwlock_unlock(&rwlock);
-    return rebalanced;
 }
 
 /* Bonding unixctl user interface functions. */
