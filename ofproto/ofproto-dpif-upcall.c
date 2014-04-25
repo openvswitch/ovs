@@ -1245,7 +1245,6 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
     push.n_bytes = stats->n_bytes > ukey->stats.n_bytes
         ? stats->n_bytes - ukey->stats.n_bytes
         : 0;
-    ukey->stats = *stats;
 
     if (!ukey->flow_exists) {
         /* Don't bother revalidating if the flow was already deleted. */
@@ -1258,6 +1257,8 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
         goto exit;
     }
 
+    /* We will push the stats, so update the ukey stats cache. */
+    ukey->stats = *stats;
     if (!push.n_packets && !udpif->need_revalidate) {
         ok = true;
         goto exit;
