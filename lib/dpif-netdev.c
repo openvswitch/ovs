@@ -323,7 +323,6 @@ struct pmd_thread {
     pthread_t thread;
     int id;
     atomic_uint change_seq;
-    char *name;
 };
 
 /* Interface to netdev-based datapath. */
@@ -1877,8 +1876,6 @@ pmd_thread_main(void *f_)
     int poll_cnt;
     int i;
 
-    f->name = xasprintf("pmd_%u", ovsthread_id_self());
-    set_subprogram_name("%s", f->name);
     poll_cnt = 0;
     poll_list = NULL;
 
@@ -1918,7 +1915,6 @@ reload:
     }
 
     free(poll_list);
-    free(f->name);
     return NULL;
 }
 
@@ -1955,7 +1951,7 @@ dp_netdev_set_pmd_threads(struct dp_netdev *dp, int n)
 
         /* Each thread will distribute all devices rx-queues among
          * themselves. */
-        xpthread_create(&f->thread, NULL, pmd_thread_main, f);
+        f->thread = ovs_thread_create("pmd", pmd_thread_main, f);
     }
 }
 

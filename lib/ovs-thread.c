@@ -256,6 +256,7 @@ DEFINE_EXTERN_PER_THREAD_DATA(ovsthread_id, 0);
 struct ovsthread_aux {
     void *(*start)(void *);
     void *arg;
+    char name[16];
 };
 
 static void *
@@ -273,13 +274,16 @@ ovsthread_wrapper(void *aux_)
     aux = *auxp;
     free(auxp);
 
+    set_subprogram_name("%s%u", aux.name, id);
+
     ovsrcu_quiesce_end();
     return aux.start(aux.arg);
 }
 
-void
-xpthread_create(pthread_t *threadp, pthread_attr_t *attr,
-                void *(*start)(void *), void *arg)
+/* Starts a thread that calls 'start(arg)'.  Sets the thread's name to 'name'
+ * (suffixed by its ovsthread_id()).  Returns the new thread's pthread_t. */
+pthread_t
+ovs_thread_create(const char *name, void *(*start)(void *), void *arg)
 {
     struct ovsthread_aux *aux;
     pthread_t thread;
@@ -292,12 +296,13 @@ xpthread_create(pthread_t *threadp, pthread_attr_t *attr,
     aux = xmalloc(sizeof *aux);
     aux->start = start;
     aux->arg = arg;
+    ovs_strlcpy(aux->name, name, sizeof aux->name);
 
-    error = pthread_create(threadp ? threadp : &thread, attr,
-                           ovsthread_wrapper, aux);
+    error = pthread_create(&thread, NULL, ovsthread_wrapper, aux);
     if (error) {
         ovs_abort(error, "pthread_create failed");
     }
+    return thread;
 }
 
 bool

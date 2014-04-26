@@ -542,7 +542,8 @@ system_stats_enable(bool enable)
         ovs_mutex_lock(&mutex);
         if (enable) {
             if (!started) {
-                xpthread_create(NULL, NULL, system_stats_thread_func, NULL);
+                ovs_thread_create("system_stats",
+                                  system_stats_thread_func, NULL);
                 latch_init(&latch);
                 started = true;
             }

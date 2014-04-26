@@ -99,7 +99,7 @@ ovsrcu_quiesced(void)
     } else {
         static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
         if (ovsthread_once_start(&once)) {
-            xpthread_create(NULL, NULL, ovsrcu_postpone_thread, NULL);
+            ovs_thread_create("urcu", ovsrcu_postpone_thread, NULL);
             ovsthread_once_done(&once);
         }
     }
@@ -234,7 +234,6 @@ ovsrcu_call_postponed(void)
 static void *
 ovsrcu_postpone_thread(void *arg OVS_UNUSED)
 {
-    set_subprogram_name("urcu");
     pthread_detach(pthread_self());
 
     for (;;) {

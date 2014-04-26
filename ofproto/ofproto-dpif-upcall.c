@@ -52,7 +52,6 @@ COVERAGE_DEFINE(upcall_duplicate_flow);
 struct handler {
     struct udpif *udpif;               /* Parent udpif. */
     pthread_t thread;                  /* Thread ID. */
-    char *name;                        /* Thread name. */
     uint32_t handler_id;               /* Handler id. */
 };
 
@@ -60,9 +59,8 @@ struct handler {
  * updates or removes them if necessary. */
 struct revalidator {
     struct udpif *udpif;               /* Parent udpif. */
-    char *name;                        /* Thread name. */
-
     pthread_t thread;                  /* Thread ID. */
+    unsigned int id;                   /* ovsthread_id_self(). */
     struct hmap *ukeys;                /* Points into udpif->ukeys for this
                                           revalidator. Used for GC phase. */
 };
@@ -310,15 +308,11 @@ udpif_stop_threads(struct udpif *udpif)
             /* Delete ukeys, and delete all flows from the datapath to prevent
              * double-counting stats. */
             revalidator_purge(revalidator);
-            free(revalidator->name);
 
             hmap_destroy(&udpif->ukeys[i].hmap);
             ovs_mutex_destroy(&udpif->ukeys[i].mutex);
         }
 
-        for (i = 0; i < udpif->n_handlers; i++) {
-            free(udpif->handlers[i].name);
-        }
         latch_poll(&udpif->exit_latch);
 
         xpthread_barrier_destroy(&udpif->reval_barrier);
@@ -354,8 +348,8 @@ udpif_start_threads(struct udpif *udpif, size_t n_handlers,
 
             handler->udpif = udpif;
             handler->handler_id = i;
-            xpthread_create(&handler->thread, NULL, udpif_upcall_handler,
-                            handler);
+            handler->thread = ovs_thread_create(
+                "handler", udpif_upcall_handler, handler);
         }
 
         xpthread_barrier_init(&udpif->reval_barrier, NULL,
@@ -371,8 +365,8 @@ udpif_start_threads(struct udpif *udpif, size_t n_handlers,
             hmap_init(&udpif->ukeys[i].hmap);
             ovs_mutex_init(&udpif->ukeys[i].mutex);
             revalidator->ukeys = &udpif->ukeys[i].hmap;
-            xpthread_create(&revalidator->thread, NULL, udpif_revalidator,
-                            revalidator);
+            revalidator->thread = ovs_thread_create(
+                "revalidator", udpif_revalidator, revalidator);
         }
     }
 }
@@ -522,9 +516,6 @@ udpif_upcall_handler(void *arg)
     struct udpif *udpif = handler->udpif;
     struct hmap misses = HMAP_INITIALIZER(&misses);
 
-    handler->name = xasprintf("handler_%u", ovsthread_id_self());
-    set_subprogram_name("%s", handler->name);
-
     while (!latch_is_set(&handler->udpif->exit_latch)) {
         struct upcall upcalls[FLOW_MISS_MAX_BATCH];
         struct flow_miss miss_buf[FLOW_MISS_MAX_BATCH];
@@ -569,8 +560,7 @@ udpif_revalidator(void *arg)
     unsigned int flow_limit = 0;
     size_t n_flows = 0;
 
-    revalidator->name = xasprintf("revalidator_%u", ovsthread_id_self());
-    set_subprogram_name("%s", revalidator->name);
+    revalidator->id = ovsthread_id_self();
     for (;;) {
         if (leader) {
             uint64_t reval_seq;
@@ -1619,8 +1609,8 @@ upcall_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
             struct revalidator *revalidator = &udpif->revalidators[i];
 
             ovs_mutex_lock(&udpif->ukeys[i].mutex);
-            ds_put_format(&ds, "\t%s: (keys %"PRIuSIZE")\n", revalidator->name,
-                          hmap_count(&udpif->ukeys[i].hmap));
+            ds_put_format(&ds, "\t%u: (keys %"PRIuSIZE")\n",
+                          revalidator->id, hmap_count(&udpif->ukeys[i].hmap));
             ovs_mutex_unlock(&udpif->ukeys[i].mutex);
         }
     }

@@ -133,8 +133,6 @@ static struct list dpdk_list OVS_GUARDED_BY(dpdk_mutex)
 static struct list dpdk_mp_list OVS_GUARDED_BY(dpdk_mutex)
     = LIST_INITIALIZER(&dpdk_mp_list);
 
-static pthread_t watchdog_thread;
-
 struct dpdk_mp {
     struct rte_mempool *mp;
     int mtu;
@@ -1105,7 +1103,7 @@ dpdk_class_init(void)
                              "[netdev] up|down", 1, 2,
                              netdev_dpdk_set_admin_state, NULL);
 
-    xpthread_create(&watchdog_thread, NULL, dpdk_watchdog, NULL);
+    ovs_thread_create("dpdk_watchdog", dpdk_watchdog, NULL);
     return 0;
 }
 

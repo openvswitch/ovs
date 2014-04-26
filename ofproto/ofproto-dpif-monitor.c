@@ -158,7 +158,6 @@ mport_update(struct mport *mport, struct bfd *bfd, struct cfm *cfm,
 static void *
 monitor_main(void * args OVS_UNUSED)
 {
-    set_subprogram_name("monitor");
     VLOG_INFO("monitor thread created");
     while (!latch_is_set(&monitor_exit_latch)) {
         monitor_run();
@@ -253,7 +252,7 @@ ofproto_dpif_monitor_port_update(const struct ofport_dpif *ofport,
      * terminates it. */
     if (!monitor_running && !hmap_is_empty(&monitor_hmap))  {
         latch_init(&monitor_exit_latch);
-        xpthread_create(&monitor_tid, NULL, monitor_main, NULL);
+        monitor_tid = ovs_thread_create("monitor", monitor_main, NULL);
         monitor_running = true;
     } else if (monitor_running && hmap_is_empty(&monitor_hmap))  {
         latch_set(&monitor_exit_latch);
