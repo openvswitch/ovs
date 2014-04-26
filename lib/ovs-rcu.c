@@ -134,6 +134,13 @@ ovsrcu_quiesce(void)
     ovsrcu_quiesced();
 }
 
+bool
+ovsrcu_is_quiescent(void)
+{
+    ovsrcu_init();
+    return pthread_getspecific(perthread_key) == NULL;
+}
+
 static void
 ovsrcu_synchronize(void)
 {

@@ -263,6 +263,7 @@ time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
 {
     long long int *last_wakeup = last_wakeup_get();
     long long int start;
+    bool quiescent;
     int retval = 0;
 
     time_init();
@@ -274,6 +275,7 @@ time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
     start = time_msec();
 
     timeout_when = MIN(timeout_when, deadline);
+    quiescent = ovsrcu_is_quiescent();
 
     for (;;) {
         long long int now = time_msec();
@@ -287,10 +289,12 @@ time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
             time_left = timeout_when - now;
         }
 
-        if (!time_left) {
-            ovsrcu_quiesce();
-        } else {
-            ovsrcu_quiesce_start();
+        if (!quiescent) {
+            if (!time_left) {
+                ovsrcu_quiesce();
+            } else {
+                ovsrcu_quiesce_start();
+            }
         }
 
 #ifndef _WIN32
@@ -313,7 +317,7 @@ time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
         }
 #endif
 
-        if (time_left) {
+        if (!quiescent && time_left) {
             ovsrcu_quiesce_end();
         }
 
