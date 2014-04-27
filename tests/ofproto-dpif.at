@@ -4492,37 +4492,27 @@ OVS_VSWITCHD_START([add-port br0 p0 -- set interface p0 type=gre options:remote_
 # enable bfd on p0.
 AT_CHECK([ovs-vsctl set interface p0 bfd:enable=true])
 # check log.
-AT_CHECK([sed -n "s/^.*|ofproto_dpif_monitor(monitor)|INFO|\(.* created\)$/\1/p" ovs-vswitchd.log], [0], [dnl
-monitor thread created
-])
+OVS_WAIT_UNTIL([grep "monitor thread created" ovs-vswitchd.log])
 # disable bfd on p0.
 AT_CHECK([ovs-vsctl set interface p0 bfd:enable=false])
 # check log.
-AT_CHECK([sed -n "s/^.*|ofproto_dpif_monitor(monitor)|INFO|\(.* terminated\)$/\1/p" ovs-vswitchd.log], [0], [dnl
-monitor thread terminated
-])
+OVS_WAIT_UNTIL([grep "monitor thread terminated" ovs-vswitchd.log])
 AT_CHECK([cat ovs-vswitchd.log | sed -e '/^.*ofproto_dpif_monitor.*$/d' > ovs-vswitchd.log])
 
 # enable cfm on p0.
 AT_CHECK([ovs-vsctl set interface p0 cfm_mpid=10])
 # check log.
-AT_CHECK([sed -n "s/^.*|ofproto_dpif_monitor(monitor)|INFO|\(.* created\)$/\1/p" ovs-vswitchd.log], [0], [dnl
-monitor thread created
-])
+OVS_WAIT_UNTIL([grep "monitor thread created" ovs-vswitchd.log])
 # disable cfm on p0.
 AT_CHECK([ovs-vsctl remove interface p0 cfm_mpid 10])
 # check log.
-AT_CHECK([sed -n "s/^.*|ofproto_dpif_monitor(monitor)|INFO|\(.* terminated\)$/\1/p" ovs-vswitchd.log], [0], [dnl
-monitor thread terminated
-])
+OVS_WAIT_UNTIL([grep "monitor thread terminated" ovs-vswitchd.log])
 AT_CHECK([cat ovs-vswitchd.log | sed -e '/^.*ofproto_dpif_monitor.*$/d' > ovs-vswitchd.log])
 
 # enable both bfd and cfm on p0.
 AT_CHECK([ovs-vsctl set interface p0 bfd:enable=true cfm_mpid=10])
 # check log.
-AT_CHECK([sed -n "s/^.*|ofproto_dpif_monitor(monitor)|INFO|\(.* created\)$/\1/p" ovs-vswitchd.log], [0], [dnl
-monitor thread created
-])
+OVS_WAIT_UNTIL([grep "monitor thread created" ovs-vswitchd.log])
 # disable bfd on p0.
 AT_CHECK([ovs-vsctl set interface p0 bfd:enable=false])
 # check log, there should not be the log of thread terminated.
@@ -4537,9 +4527,7 @@ monitor thread created
 # disable bfd and cfm together.
 AT_CHECK([ovs-vsctl set interface p0 bfd:enable=false -- remove interface p0 cfm_mpid 10])
 # check log.
-AT_CHECK([sed -n "s/^.*|ofproto_dpif_monitor(monitor)|INFO|\(.* terminated\)$/\1/p" ovs-vswitchd.log], [0], [dnl
-monitor thread terminated
-])
+OVS_WAIT_UNTIL([grep "monitor thread terminated" ovs-vswitchd.log])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
