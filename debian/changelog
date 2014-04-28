@@ -1,9 +1,25 @@
-openvswitch (2.1.90-1) unstable; urgency=low
+openvswitch (2.2.0-1) unstable; urgency=low
    [ Open vSwitch team ]
    * New upstream version
-    - Nothing yet!  Try NEWS...
+   - Internal ports are no longer brought up by default, because it
+     should be an administrator task to bring up devices as they are
+     configured properly.
+   - ovs-vsctl now reports when ovs-vswitchd fails to create a new port or
+     bridge.
+   - The "ovsdbmonitor" graphical tool has been removed, because it was
+     poorly maintained and not widely used.
+   - New "check-ryu" Makefile target for running Ryu tests for OpenFlow
+     controllers against Open vSwitch.  See INSTALL for details.
+   - Added IPFIX support for SCTP flows and templates for ICMPv4/v6 flows.
+   - Upon the receipt of a SIGHUP signal, ovs-vswitchd no longer reopens its
+     log file (it will terminate instead). Please use 'ovs-appctl vlog/reopen'
+     instead.
+   - Support for Linux kernels up to 3.13. From Kernel 3.12 onwards OVS uses
+     tunnel API for GRE and VXLAN.
+   - Added DPDK support.
+   - Added support for custom vlog patterns in Python
 
- -- Open vSwitch team <dev@openvswitch.org>  Mon, 23 Dec 2013 18:07:18 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Wed, 19 Mar 2014 16:08:38 -0700
 
 openvswitch (2.1.0-1) unstable; urgency=low
    [ Open vSwitch team ]
@@ -71,7 +87,7 @@ openvswitch (2.1.0-1) unstable; urgency=low
      users assumed incorrectly that ovs-controller was a necessary or
      desirable part of an Open vSwitch deployment.
 
- -- Open vSwitch team <dev@openvswitch.org>  Mon, 23 Dec 2013 18:07:18 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Wed, 19 Mar 2014 16:08:38 -0700
 
 openvswitch (2.0.0-1) unstable; urgency=low
    [ Open vSwitch team ]
