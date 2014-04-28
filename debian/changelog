@@ -1,3 +1,12 @@
+openvswitch (2.1.1-1) unstable; urgency=low
+   [ Open vSwitch team ]
+   * New upstream version
+   - The "ovsdbmonitor" graphical tool has been removed, because it was
+     poorly maintained and not widely used.
+   - Bug fixes.
+
+ -- Open vSwitch team <dev@openvswitch.org>  Mon, 28 Apr 2014 14:51:37 -0700
+
 openvswitch (2.1.0-1) unstable; urgency=low
    [ Open vSwitch team ]
    * New upstream version
