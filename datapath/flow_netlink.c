@@ -1433,6 +1433,81 @@ static int validate_and_copy_sample(const struct nlattr *attr,
 	return 0;
 }
 
+static int validate_and_copy_elephant(const struct nlattr *attr,
+				    const struct sw_flow_key *key, int depth,
+				    struct sw_flow_actions **sfa,
+				    __be16 eth_type, __be16 vlan_tci)
+{
+	const struct nlattr *attrs[OVS_ELEPHANT_ATTR_MAX + 1];
+	const struct nlattr *mech, *arg1, *arg2, *dscp, *actions;
+	const struct nlattr *a;
+	int rem, start, err, st_acts;
+
+	memset(attrs, 0, sizeof(attrs));
+	nla_for_each_nested(a, attr, rem) {
+		int type = nla_type(a);
+		if (!type || type > OVS_ELEPHANT_ATTR_MAX || attrs[type])
+			return -EINVAL;
+		attrs[type] = a;
+	}
+	if (rem)
+		return -EINVAL;
+
+	mech = attrs[OVS_ELEPHANT_ATTR_DETECT_MECH];
+	if (!mech || nla_len(mech) != sizeof(u32))
+		return -EINVAL;
+
+	arg1 = attrs[OVS_ELEPHANT_ATTR_DETECT_ARG1];
+	if (!arg1 || nla_len(arg1) != sizeof(u32))
+		return -EINVAL;
+
+	arg2 = attrs[OVS_ELEPHANT_ATTR_DETECT_ARG2];
+	if (!arg2 || nla_len(arg2) != sizeof(u32))
+		return -EINVAL;
+
+	dscp = attrs[OVS_ELEPHANT_ATTR_DETECT_DSCP];
+	if (!dscp || nla_len(dscp) != sizeof(u8))
+		return -EINVAL;
+
+	actions = attrs[OVS_ELEPHANT_ATTR_ACTIONS];
+	if (!actions || (nla_len(actions) && nla_len(actions) < NLA_HDRLEN))
+		return -EINVAL;
+
+	/* validation done, copy elephant action. */
+	start = add_nested_action_start(sfa, OVS_ACTION_ATTR_ELEPHANT);
+	if (start < 0)
+		return start;
+	err = add_action(sfa, OVS_ELEPHANT_ATTR_DETECT_MECH,
+			 nla_data(mech), sizeof(u32));
+	if (err)
+		return err;
+	err = add_action(sfa, OVS_ELEPHANT_ATTR_DETECT_ARG1,
+			 nla_data(arg1), sizeof(u32));
+	if (err)
+		return err;
+	err = add_action(sfa, OVS_ELEPHANT_ATTR_DETECT_ARG2,
+			 nla_data(arg2), sizeof(u32));
+	if (err)
+		return err;
+	err = add_action(sfa, OVS_ELEPHANT_ATTR_DETECT_DSCP,
+			 nla_data(dscp), sizeof(u8));
+	if (err)
+		return err;
+	st_acts = add_nested_action_start(sfa, OVS_ELEPHANT_ATTR_ACTIONS);
+	if (st_acts < 0)
+		return st_acts;
+
+	err = ovs_nla_copy_actions__(actions, key, depth + 1, sfa,
+			         eth_type, vlan_tci);
+	if (err)
+		return err;
+
+	add_nested_action_end(*sfa, st_acts);
+	add_nested_action_end(*sfa, start);
+
+	return 0;
+}
+
 static int validate_tp_port(const struct sw_flow_key *flow_key,
 			    __be16 eth_type)
 {
@@ -1670,6 +1745,7 @@ static int ovs_nla_copy_actions__(const struct nlattr *attr,
 	const struct nlattr *a;
 	int rem, err;
 
+	/* xxx What do we need to do for elephants? */
 	if (depth >= SAMPLE_ACTION_DEPTH)
 		return -EOVERFLOW;
 
@@ -1685,7 +1761,8 @@ static int ovs_nla_copy_actions__(const struct nlattr *attr,
 			[OVS_ACTION_ATTR_POP_VLAN] = 0,
 			[OVS_ACTION_ATTR_SET] = (u32)-1,
 			[OVS_ACTION_ATTR_SAMPLE] = (u32)-1,
-			[OVS_ACTION_ATTR_HASH] = sizeof(struct ovs_action_hash)
+			[OVS_ACTION_ATTR_HASH] = sizeof(struct ovs_action_hash),
+			[OVS_ACTION_ATTR_ELEPHANT] = (u32)-1
 		};
 		const struct ovs_action_push_vlan *vlan;
 		int type = nla_type(a);
@@ -1791,6 +1868,14 @@ static int ovs_nla_copy_actions__(const struct nlattr *attr,
 			skip_copy = true;
 			break;
 
+		case OVS_ACTION_ATTR_ELEPHANT:
+			err = validate_and_copy_elephant(a, key, depth, sfa,
+						       eth_type, vlan_tci);
+			if (err)
+				return err;
+			skip_copy = true;
+			break;
+
 		default:
 			return -EINVAL;
 		}
@@ -1843,6 +1928,58 @@ static int sample_action_to_attr(const struct nlattr *attr, struct sk_buff *skb)
 			if (err)
 				return err;
 			nla_nest_end(skb, st_sample);
+			break;
+		}
+	}
+
+	nla_nest_end(skb, start);
+	return err;
+}
+
+static int elephant_action_to_attr(const struct nlattr *attr,
+		struct sk_buff *skb)
+{
+	const struct nlattr *a;
+	struct nlattr *start;
+	int err = 0, rem;
+
+	start = nla_nest_start(skb, OVS_ACTION_ATTR_ELEPHANT);
+	if (!start)
+		return -EMSGSIZE;
+
+	nla_for_each_nested(a, attr, rem) {
+		int type = nla_type(a);
+		struct nlattr *st_elephant;
+
+		switch (type) {
+		case OVS_ELEPHANT_ATTR_DETECT_MECH:
+			if (nla_put(skb, OVS_ELEPHANT_ATTR_DETECT_MECH,
+				    sizeof(u32), nla_data(a)))
+				return -EMSGSIZE;
+			break;
+		case OVS_ELEPHANT_ATTR_DETECT_ARG1:
+			if (nla_put(skb, OVS_ELEPHANT_ATTR_DETECT_ARG1,
+				    sizeof(u32), nla_data(a)))
+				return -EMSGSIZE;
+			break;
+		case OVS_ELEPHANT_ATTR_DETECT_ARG2:
+			if (nla_put(skb, OVS_ELEPHANT_ATTR_DETECT_ARG2,
+				    sizeof(u32), nla_data(a)))
+				return -EMSGSIZE;
+			break;
+		case OVS_ELEPHANT_ATTR_DETECT_DSCP:
+			if (nla_put(skb, OVS_ELEPHANT_ATTR_DETECT_DSCP,
+				    sizeof(u8), nla_data(a)))
+				return -EMSGSIZE;
+			break;
+		case OVS_ELEPHANT_ATTR_ACTIONS:
+			st_elephant = nla_nest_start(skb, OVS_ELEPHANT_ATTR_ACTIONS);
+			if (!st_elephant)
+				return -EMSGSIZE;
+			err = ovs_nla_put_actions(nla_data(a), nla_len(a), skb);
+			if (err)
+				return err;
+			nla_nest_end(skb, st_elephant);
 			break;
 		}
 	}
@@ -1904,6 +2041,13 @@ int ovs_nla_put_actions(const struct nlattr *attr, int len, struct sk_buff *skb)
 			if (err)
 				return err;
 			break;
+
+		case OVS_ACTION_ATTR_ELEPHANT:
+			err = elephant_action_to_attr(a, skb);
+			if (err)
+				return err;
+			break;
+
 		default:
 			if (nla_put(skb, type, nla_len(a), nla_data(a)))
 				return -EMSGSIZE;

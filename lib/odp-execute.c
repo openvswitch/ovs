@@ -314,6 +314,10 @@ odp_execute_actions__(void *dp, struct dpif_packet **packets, int cnt,
             }
             break;
 
+        case OVS_ACTION_ATTR_ELEPHANT:
+            /* xxx This isn't supported in userspace. */
+            break;
+
         case OVS_ACTION_ATTR_UNSPEC:
         case __OVS_ACTION_ATTR_MAX:
             OVS_NOT_REACHED();

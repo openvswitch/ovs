@@ -157,6 +157,8 @@ struct rule_dpif *ofproto_dpif_refresh_rule(struct rule_dpif *);
 
 struct ofport_dpif *odp_port_to_ofport(const struct dpif_backer *, odp_port_t);
 
+int ofproto_get_elephant_dscp(struct ofproto_dpif *);
+
 /*
  * Recirculation
  * =============

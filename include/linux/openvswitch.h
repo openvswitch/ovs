@@ -566,6 +566,34 @@ struct ovs_action_hash {
 };
 
 /**
+ *
+ * xxx Very ugly.  Should make configuration better, too.
+ *
+ * enum ovs_elephant_attr - Attributes for %OVS_ACTION_ATTR_ELEPHANT action.
+ * @OVS_SAMPLE_ATTR_PROBABILITY: 32-bit fraction of packets to sample with
+ * @OVS_ACTION_ATTR_ELEPHANT.  A value of 0 samples no packets, a value of
+ * %UINT32_MAX samples all packets and intermediate values sample intermediate
+ * fractions of packets.
+ * @OVS_ELEPHANT_ATTR_ACTIONS: Set of actions to execute if flow is
+ * determined to be an elephant. Actions are passed as nested attributes.
+ *
+ * Executes the specified actions with the given probability on a per-packet
+ * basis.
+ */
+enum ovs_elephant_attr {
+	OVS_ELEPHANT_ATTR_UNSPEC,
+	OVS_ELEPHANT_ATTR_DETECT_MECH, /* u32 detection mechanism */
+	OVS_ELEPHANT_ATTR_DETECT_ARG1, /* u32 detection first argument */
+	OVS_ELEPHANT_ATTR_DETECT_ARG2, /* u32 detection second argument */
+	OVS_ELEPHANT_ATTR_DETECT_DSCP, /* u8 DSCP value, 0 if unchanged */
+    /* xxx The actions aren't currently being used.  Consider removal. */
+	OVS_ELEPHANT_ATTR_ACTIONS,     /* Nested OVS_ACTION_ATTR_* attributes. */
+	__OVS_ELEPHANT_ATTR_MAX,
+};
+
+#define OVS_ELEPHANT_ATTR_MAX (__OVS_ELEPHANT_ATTR_MAX - 1)
+
+/**
  * enum ovs_action_attr - Action types.
  *
  * @OVS_ACTION_ATTR_OUTPUT: Output packet to port.
@@ -608,6 +636,7 @@ enum ovs_action_attr {
 	OVS_ACTION_ATTR_HASH,	      /* struct ovs_action_hash. */
 	OVS_ACTION_ATTR_PUSH_MPLS,    /* struct ovs_action_push_mpls. */
 	OVS_ACTION_ATTR_POP_MPLS,     /* __be16 ethertype. */
+	OVS_ACTION_ATTR_ELEPHANT,	  /* Nested OVS_ACTION_ATTR_*. */
 	__OVS_ACTION_ATTR_MAX
 };
 

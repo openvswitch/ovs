@@ -1301,6 +1301,20 @@ struct ofproto_class {
                               const struct ofpact *ofpacts,
                               size_t ofpacts_len);
 
+    /* xxx Update this explanation. */
+
+    /* Configure detecting and handling of elephant flows.  A flow is
+     * considered an elephant when it reaches 'bytes' for 'msecs'
+     * milliseconds.  Once a flow is determined to be an elephant, it is
+     * never considered a mouse again.  If 'dscp' is not -1, then that
+     * value will be used for the DSCP of packets placed on the wire. */
+    int (*set_elephant)(struct ofproto *ofproto, uint64_t mech,
+                        uint64_t arg1, uint64_t arg2, int dscp);
+
+    /* Populates "elephants" with the key a string representation of the
+     * flow and the value with the byte count. */
+    int (*get_elephants)(struct ofproto *ofproto, struct smap *elephants);
+
 /* ## ------------------------- ## */
 /* ## OFPP_NORMAL configuration ## */
 /* ## ------------------------- ## */

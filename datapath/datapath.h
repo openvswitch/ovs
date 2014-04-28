@@ -27,6 +27,7 @@
 #include <linux/u64_stats_sync.h>
 
 #include "compat.h"
+#include "elephant.h"
 #include "flow.h"
 #include "flow_table.h"
 #include "vlan.h"
@@ -90,6 +91,9 @@ struct datapath {
 	/* Network namespace ref. */
 	struct net *net;
 #endif
+
+	/* Elephant flow table. */
+	struct elephant_table __rcu *elephant_table;
 
 	u32 user_features;
 };

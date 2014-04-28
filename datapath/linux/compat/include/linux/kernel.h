@@ -46,6 +46,12 @@
 
 #endif
 
+#ifndef U8_MAX
+#define U8_MAX	((u8)(~0U))
+#define S8_MAX	((s8)(U8_MAX>>1))
+#define S8_MIN	((s8)(-S8_MAX - 1))
+#endif
+
 #ifndef USHRT_MAX
 #define USHRT_MAX	((u16)(~0U))
 #define SHRT_MAX	((s16)(USHRT_MAX>>1))

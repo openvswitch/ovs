@@ -83,6 +83,7 @@ odp_action_len(uint16_t type)
     case OVS_ACTION_ATTR_HASH: return sizeof(struct ovs_action_hash);
     case OVS_ACTION_ATTR_SET: return -2;
     case OVS_ACTION_ATTR_SAMPLE: return -2;
+    case OVS_ACTION_ATTR_ELEPHANT: return -2;
 
     case OVS_ACTION_ATTR_UNSPEC:
     case __OVS_ACTION_ATTR_MAX:
@@ -176,6 +177,40 @@ format_odp_sample_action(struct ds *ds, const struct nlattr *attr)
     ds_put_cstr(ds, "actions(");
     nla_acts = nl_attr_get(a[OVS_SAMPLE_ATTR_ACTIONS]);
     len = nl_attr_get_size(a[OVS_SAMPLE_ATTR_ACTIONS]);
+    format_odp_actions(ds, nla_acts, len);
+    ds_put_format(ds, "))");
+}
+
+static void
+format_odp_elephant_action(struct ds *ds, const struct nlattr *attr)
+{
+    static const struct nl_policy ovs_elephant_policy[] = {
+        [OVS_ELEPHANT_ATTR_DETECT_MECH] = { .type = NL_A_U32 },
+        [OVS_ELEPHANT_ATTR_DETECT_ARG1] = { .type = NL_A_U32 },
+        [OVS_ELEPHANT_ATTR_DETECT_ARG2] = { .type = NL_A_U32 },
+        [OVS_ELEPHANT_ATTR_DETECT_DSCP] = { .type = NL_A_U8 },
+        [OVS_ELEPHANT_ATTR_ACTIONS] = { .type = NL_A_NESTED }
+    };
+    struct nlattr *a[ARRAY_SIZE(ovs_elephant_policy)];
+    const struct nlattr *nla_acts;
+    int len;
+
+    ds_put_cstr(ds, "elephant");
+
+    if (!nl_parse_nested(attr, ovs_elephant_policy, a, ARRAY_SIZE(a))) {
+        ds_put_cstr(ds, "(error)");
+        return;
+    }
+
+    ds_put_format(ds, "(mech=%d,arg1=%d,arg2=%d,dscp=%d,",
+                  nl_attr_get_u32(a[OVS_ELEPHANT_ATTR_DETECT_MECH]),
+                  nl_attr_get_u32(a[OVS_ELEPHANT_ATTR_DETECT_ARG1]),
+                  nl_attr_get_u32(a[OVS_ELEPHANT_ATTR_DETECT_ARG2]),
+                  nl_attr_get_u8(a[OVS_ELEPHANT_ATTR_DETECT_DSCP]));
+
+    ds_put_cstr(ds, "actions(");
+    nla_acts = nl_attr_get(a[OVS_ELEPHANT_ATTR_ACTIONS]);
+    len = nl_attr_get_size(a[OVS_ELEPHANT_ATTR_ACTIONS]);
     format_odp_actions(ds, nla_acts, len);
     ds_put_format(ds, "))");
 }
@@ -467,6 +502,9 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
     case OVS_ACTION_ATTR_SAMPLE:
         format_odp_sample_action(ds, a);
         break;
+    case OVS_ACTION_ATTR_ELEPHANT:
+        format_odp_elephant_action(ds, a);
+        break;
     case OVS_ACTION_ATTR_UNSPEC:
     case __OVS_ACTION_ATTR_MAX:
     default:
@@ -703,6 +741,46 @@ parse_odp_action(const char *s, const struct simap *port_names,
             }
             nl_msg_end_nested(actions, actions_ofs);
             nl_msg_end_nested(actions, sample_ofs);
+
+            return s[n + 1] == ')' ? n + 2 : -EINVAL;
+        }
+    }
+
+    {
+        uint32_t mech, arg1, arg2;
+        uint8_t dscp;
+        int n = -1;
+
+        if (ovs_scan(s, "elephant(mech=%"SCNi32",arg1=%"SCNi32
+                     ",arg2=%"SCNi32",dscp=%"SCNi8",actions(%n",
+                     &mech, &arg1, &arg2, &dscp, &n)) {
+            size_t elephant_ofs, actions_ofs;
+
+            elephant_ofs = nl_msg_start_nested(actions,
+                                               OVS_ACTION_ATTR_ELEPHANT);
+            nl_msg_put_u32(actions, OVS_ELEPHANT_ATTR_DETECT_MECH, mech);
+            nl_msg_put_u32(actions, OVS_ELEPHANT_ATTR_DETECT_ARG1, arg1);
+            nl_msg_put_u32(actions, OVS_ELEPHANT_ATTR_DETECT_ARG2, arg2);
+            nl_msg_put_u8(actions, OVS_ELEPHANT_ATTR_DETECT_DSCP, dscp);
+
+            actions_ofs = nl_msg_start_nested(actions,
+                                              OVS_ELEPHANT_ATTR_ACTIONS);
+            for (;;) {
+                int retval;
+
+                n += strspn(s + n, delimiters);
+                if (s[n] == ')') {
+                    break;
+                }
+
+                retval = parse_odp_action(s + n, port_names, actions);
+                if (retval < 0) {
+                    return retval;
+                }
+                n += retval;
+            }
+            nl_msg_end_nested(actions, actions_ofs);
+            nl_msg_end_nested(actions, elephant_ofs);
 
             return s[n + 1] == ')' ? n + 2 : -EINVAL;
         }

@@ -11,6 +11,7 @@
 /datapath.c
 /dp_dev.c
 /dp_notify.c
+/elephant.c
 /exthdrs_core.c
 /flex_array.c
 /flow.c

@@ -228,6 +228,7 @@ static void bridge_configure_mcast_snooping(struct bridge *);
 static void bridge_configure_sflow(struct bridge *, int *sflow_bridge_number);
 static void bridge_configure_ipfix(struct bridge *);
 static void bridge_configure_stp(struct bridge *);
+static void bridge_configure_elephant(struct bridge *);
 static void bridge_configure_tables(struct bridge *);
 static void bridge_configure_dp_desc(struct bridge *);
 static void bridge_configure_remotes(struct bridge *,
@@ -265,6 +266,8 @@ static struct mirror *mirror_create(struct bridge *,
 static void mirror_destroy(struct mirror *);
 static bool mirror_configure(struct mirror *);
 static void mirror_refresh_stats(struct mirror *);
+
+static void elephants_refresh_stats(struct bridge *);
 
 static void iface_configure_lacp(struct iface *, struct lacp_slave_settings *);
 static bool iface_create(struct bridge *, const struct ovsrec_interface *,
@@ -378,6 +381,7 @@ bridge_init(const char *remote)
 
     ovsdb_idl_omit_alert(idl, &ovsrec_bridge_col_datapath_id);
     ovsdb_idl_omit_alert(idl, &ovsrec_bridge_col_status);
+    ovsdb_idl_omit_alert(idl, &ovsrec_bridge_col_elephant_flows);
     ovsdb_idl_omit(idl, &ovsrec_bridge_col_external_ids);
 
     ovsdb_idl_omit_alert(idl, &ovsrec_port_col_status);
@@ -622,6 +626,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         bridge_configure_sflow(br, &sflow_bridge_number);
         bridge_configure_ipfix(br);
         bridge_configure_stp(br);
+        bridge_configure_elephant(br);
         bridge_configure_tables(br);
         bridge_configure_dp_desc(br);
     }
@@ -1381,6 +1386,29 @@ bridge_configure_stp(struct bridge *br)
         }
         bitmap_free(port_num_bitmap);
     }
+}
+
+/* Set elephant flow detection configuration on 'br'. */
+static void
+bridge_configure_elephant(struct bridge *br)
+{
+    const char *config_str;
+    uint64_t mech, arg1, arg2;
+    int dscp;
+
+    config_str = smap_get(&br->cfg->other_config, "elephant-mech");
+    mech = config_str ? strtoul(config_str, NULL, 0) : 0;
+
+    config_str = smap_get(&br->cfg->other_config, "elephant-arg1");
+    arg1 = config_str ? strtoul(config_str, NULL, 0) : 0;
+
+    config_str = smap_get(&br->cfg->other_config, "elephant-arg2");
+    arg2 = config_str ? strtoul(config_str, NULL, 0) : 0;
+
+    config_str = smap_get(&br->cfg->other_config, "elephant-dscp");
+    dscp = config_str ? strtoul(config_str, NULL, 0) : -1;
+
+    ofproto_set_elephant(br->ofproto, mech, arg1, arg2, dscp);
 }
 
 static bool
@@ -2459,6 +2487,8 @@ bridge_run(void)
                     mirror_refresh_stats(m);
                 }
 
+                /* xxx Find better place for this, but useful timer. */
+                elephants_refresh_stats(br);
             }
             refresh_controller_status();
             ovsdb_idl_txn_commit(txn);
@@ -4336,4 +4366,16 @@ mirror_refresh_stats(struct mirror *m)
     }
 
     ovsrec_mirror_set_statistics(m->cfg, keys, values, stat_cnt);
+}
+
+static void
+elephants_refresh_stats(struct bridge *br)
+{
+    struct smap elephants;
+
+    if (!ofproto_get_elephants(br->ofproto, &elephants)) {
+        ovsrec_bridge_set_elephant_flows(br->cfg, &elephants);
+    }
+
+    smap_destroy(&elephants);
 }

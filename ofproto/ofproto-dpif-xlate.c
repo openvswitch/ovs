@@ -41,6 +41,7 @@
 #include "nx-match.h"
 #include "odp-execute.h"
 #include "ofp-actions.h"
+#include "ofproto/ofproto-dpif-elephant.h"
 #include "ofproto/ofproto-dpif-ipfix.h"
 #include "ofproto/ofproto-dpif-mirror.h"
 #include "ofproto/ofproto-dpif-monitor.h"
@@ -86,6 +87,7 @@ struct xbridge {
     struct dpif_ipfix *ipfix;     /* Ipfix handle, or null. */
     struct netflow *netflow;      /* Netflow handle, or null. */
     struct stp *stp;              /* STP or null if disabled. */
+    struct dpif_elephant *elephant; /* Elephant flow detection, or null. */
 
     /* Special rules installed by ofproto-dpif. */
     struct rule_dpif *miss_rule;
@@ -360,6 +362,7 @@ static void xlate_xbridge_set(struct xbridge *xbridge,
                               const struct mac_learning *ml, struct stp *stp,
                               const struct mcast_snooping *ms,
                               const struct mbridge *mbridge,
+                              const struct dpif_elephant *elephant,
                               const struct dpif_sflow *sflow,
                               const struct dpif_ipfix *ipfix,
                               const struct netflow *netflow,
@@ -425,6 +428,7 @@ xlate_xbridge_set(struct xbridge *xbridge,
                   const struct mac_learning *ml, struct stp *stp,
                   const struct mcast_snooping *ms,
                   const struct mbridge *mbridge,
+                  const struct dpif_elephant *elephant,
                   const struct dpif_sflow *sflow,
                   const struct dpif_ipfix *ipfix,
                   const struct netflow *netflow, enum ofp_config_flags frag,
@@ -466,6 +470,11 @@ xlate_xbridge_set(struct xbridge *xbridge,
     if (xbridge->netflow != netflow) {
         netflow_unref(xbridge->netflow);
         xbridge->netflow = netflow_ref(netflow);
+    }
+
+    if (xbridge->elephant != elephant) {
+        dpif_elephant_unref(xbridge->elephant);
+        xbridge->elephant = dpif_elephant_ref(elephant);
     }
 
     xbridge->dpif = dpif;
@@ -548,10 +557,11 @@ xlate_xbridge_copy(struct xbridge *xbridge)
     xlate_xbridge_set(new_xbridge,
                       xbridge->dpif, xbridge->miss_rule,
                       xbridge->no_packet_in_rule, xbridge->ml, xbridge->stp,
-                      xbridge->ms, xbridge->mbridge, xbridge->sflow,
-                      xbridge->ipfix, xbridge->netflow, xbridge->frag,
-                      xbridge->forward_bpdu, xbridge->has_in_band,
-                      xbridge->enable_recirc, xbridge->variable_length_userdata,
+                      xbridge->ms, xbridge->mbridge, xbridge->elephant,
+                      xbridge->sflow, xbridge->ipfix,
+                      xbridge->netflow, xbridge->frag, xbridge->forward_bpdu,
+                      xbridge->has_in_band, xbridge->enable_recirc,
+                      xbridge->variable_length_userdata,
                       xbridge->max_mpls_depth);
     LIST_FOR_EACH (xbundle, list_node, &xbridge->xbundles) {
         xlate_xbundle_copy(new_xbridge, xbundle);
@@ -700,6 +710,7 @@ xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
                   const struct mac_learning *ml, struct stp *stp,
                   const struct mcast_snooping *ms,
                   const struct mbridge *mbridge,
+                  const struct dpif_elephant *elephant,
                   const struct dpif_sflow *sflow,
                   const struct dpif_ipfix *ipfix,
                   const struct netflow *netflow, enum ofp_config_flags frag,
@@ -724,9 +735,9 @@ xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
     xbridge->name = xstrdup(name);
 
     xlate_xbridge_set(xbridge, dpif, miss_rule, no_packet_in_rule, ml, stp,
-                      ms, mbridge, sflow, ipfix, netflow, frag, forward_bpdu,
-                      has_in_band, enable_recirc, variable_length_userdata,
-                      max_mpls_depth);
+                      ms, mbridge, elephant, sflow, ipfix, netflow, frag,
+                      forward_bpdu, has_in_band, enable_recirc,
+                      variable_length_userdata, max_mpls_depth);
 }
 
 static void
@@ -754,6 +765,7 @@ xlate_xbridge_remove(struct xlate_cfg *xcfg, struct xbridge *xbridge)
     dpif_sflow_unref(xbridge->sflow);
     dpif_ipfix_unref(xbridge->ipfix);
     stp_unref(xbridge->stp);
+    dpif_elephant_unref(xbridge->elephant);
     hmap_destroy(&xbridge->xports);
     free(xbridge->name);
     free(xbridge);
@@ -2310,6 +2322,48 @@ fix_sflow_action(struct xlate_ctx *ctx)
 
     compose_sflow_cookie(ctx->xbridge, base->vlan_tci,
                          ctx->sflow_odp_port, ctx->sflow_n_outputs, cookie);
+}
+
+static void
+add_elephant_action(struct xlate_ctx *ctx)
+{
+    const struct xbridge *xbridge = ctx->xbridge;
+    struct ofpbuf *odp_actions = &ctx->xout->odp_actions;
+    size_t elephant_offset, actions_offset;
+#if 0
+    int cookie_offset;
+    uint32_t pid;
+#endif
+
+    if (!xbridge->elephant) {
+        return;
+    }
+
+    elephant_offset = nl_msg_start_nested(odp_actions,
+                                          OVS_ACTION_ATTR_ELEPHANT);
+
+    nl_msg_put_u32(odp_actions, OVS_ELEPHANT_ATTR_DETECT_MECH,
+                   xbridge->elephant->mech);
+    nl_msg_put_u32(odp_actions, OVS_ELEPHANT_ATTR_DETECT_ARG1,
+                   xbridge->elephant->arg1);
+    nl_msg_put_u32(odp_actions, OVS_ELEPHANT_ATTR_DETECT_ARG2,
+                   xbridge->elephant->arg2);
+    nl_msg_put_u8(odp_actions, OVS_ELEPHANT_ATTR_DETECT_DSCP,
+                   xbridge->elephant->dscp);
+
+    actions_offset = nl_msg_start_nested(odp_actions,
+                                         OVS_ELEPHANT_ATTR_ACTIONS);
+
+#if 0
+    odp_port = ofp_port_to_odp_port(xbridge, flow->in_port.ofp_port);
+    pid = dpif_port_get_pid(xbridge->dpif, odp_port,
+                            flow_hash_5tuple(flow, 0));
+    cookie_offset = odp_put_userspace_action(pid, cookie, cookie_size,
+                                             odp_actions);
+#endif
+
+    nl_msg_end_nested(odp_actions, actions_offset);
+    nl_msg_end_nested(odp_actions, elephant_offset);
 }
 
 static enum slow_path_reason
@@ -4083,6 +4137,8 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         add_sflow_action(&ctx);
         add_ipfix_action(&ctx);
         sample_actions_len = ofpbuf_size(&ctx.xout->odp_actions);
+
+        add_elephant_action(&ctx);
 
         if (tnl_may_send && (!in_port || may_receive(in_port, &ctx))) {
             do_xlate_actions(ofpacts, ofpacts_len, &ctx);

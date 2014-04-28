@@ -55,6 +55,7 @@
 #include <net/netns/generic.h>
 
 #include "datapath.h"
+#include "elephant.h"
 #include "flow.h"
 #include "flow_table.h"
 #include "flow_netlink.h"
@@ -198,6 +199,7 @@ static void destroy_dp_rcu(struct rcu_head *rcu)
 	struct datapath *dp = container_of(rcu, struct datapath, rcu);
 
 	ovs_flow_tbl_destroy(&dp->table);
+	ovs_elephant_tbl_destroy(dp->elephant_table);
 	free_percpu(dp->stats_percpu);
 	release_net(ovs_dp_get_net(dp));
 	kfree(dp->ports);
@@ -1460,10 +1462,20 @@ static int ovs_dp_cmd_new(struct sk_buff *skb, struct genl_info *info)
 	if (err)
 		goto err_free_dp;
 
+	/* Allocate elephant table. */
+	rcu_assign_pointer(dp->elephant_table,
+			ovs_elephant_tbl_alloc(ELEPHANT_TBL_MIN_BUCKETS));
+	if (!dp->elephant_table)
+		goto err_destroy_table;
+
+	err = ovs_elephant_dp_init(dp);
+	if (err)
+		goto err_destroy_elephant_table;
+
 	dp->stats_percpu = alloc_percpu(struct dp_stats_percpu);
 	if (!dp->stats_percpu) {
 		err = -ENOMEM;
-		goto err_destroy_table;
+		goto err_elephant_dp_exit;
 	}
 
 	for_each_possible_cpu(i) {
@@ -1530,6 +1542,10 @@ err_destroy_ports_array:
 	kfree(dp->ports);
 err_destroy_percpu:
 	free_percpu(dp->stats_percpu);
+err_elephant_dp_exit:
+	ovs_elephant_dp_exit(dp);
+err_destroy_elephant_table:
+	ovs_elephant_tbl_destroy(dp->elephant_table);
 err_destroy_table:
 	ovs_flow_tbl_destroy(&dp->table);
 err_free_dp:
@@ -1561,6 +1577,8 @@ static void __dp_destroy(struct datapath *dp)
 	 * all ports in datapath are destroyed first before freeing datapath.
 	 */
 	ovs_dp_detach_port(ovs_vport_ovsl(dp, OVSP_LOCAL));
+
+	ovs_elephant_dp_exit(dp);
 
 	/* RCU destroy the flow table */
 	call_rcu(&dp->rcu, destroy_dp_rcu);
@@ -1673,6 +1691,9 @@ static int ovs_dp_cmd_dump(struct sk_buff *skb, struct netlink_callback *cb)
 					 cb->nlh->nlmsg_seq, NLM_F_MULTI,
 					 OVS_DP_CMD_NEW) < 0)
 			break;
+
+		ovs_elephant_print_flows(dp);
+
 		i++;
 	}
 	rcu_read_unlock();
@@ -2189,9 +2210,13 @@ static int __init dp_init(void)
 	if (err)
 		goto error_flow_exit;
 
-	err = register_pernet_device(&ovs_net_ops);
+	err = ovs_elephant_init();
 	if (err)
 		goto error_vport_exit;
+
+	err = register_pernet_device(&ovs_net_ops);
+	if (err)
+		goto error_elephant_exit;
 
 	err = register_netdevice_notifier(&ovs_dp_device_notifier);
 	if (err)
@@ -2207,6 +2232,8 @@ error_unreg_notifier:
 	unregister_netdevice_notifier(&ovs_dp_device_notifier);
 error_netns_exit:
 	unregister_pernet_device(&ovs_net_ops);
+error_elephant_exit:
+	ovs_elephant_exit();
 error_vport_exit:
 	ovs_vport_exit();
 error_flow_exit:
@@ -2221,6 +2248,7 @@ static void dp_cleanup(void)
 	unregister_netdevice_notifier(&ovs_dp_device_notifier);
 	unregister_pernet_device(&ovs_net_ops);
 	rcu_barrier();
+	ovs_elephant_exit();
 	ovs_vport_exit();
 	ovs_flow_exit();
 }

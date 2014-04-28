@@ -10,6 +10,7 @@ openvswitch_sources = \
 	actions.c \
 	datapath.c \
 	dp_notify.c \
+	elephant.c \
 	flow.c \
 	flow_netlink.c \
 	flow_table.c \
@@ -24,6 +25,7 @@ openvswitch_sources = \
 openvswitch_headers = \
 	compat.h \
 	datapath.h \
+	elephant.h \
 	flow.h \
 	flow_netlink.h \
 	flow_table.h \

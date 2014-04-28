@@ -780,6 +780,25 @@ ofproto_set_snoops(struct ofproto *ofproto, const struct sset *snoops)
     return connmgr_set_snoops(ofproto->connmgr, snoops);
 }
 
+/* xxx Move to better location and explain. */
+int
+ofproto_set_elephant(struct ofproto *ofproto, uint64_t mech,
+                     uint64_t arg1, uint64_t arg2, int dscp)
+{
+    return (ofproto->ofproto_class->set_elephant
+            ? ofproto->ofproto_class->set_elephant(ofproto, mech, arg1,
+                                                   arg2, dscp)
+            : EOPNOTSUPP);
+}
+
+int
+ofproto_get_elephants(struct ofproto *ofproto, struct smap *elephants)
+{
+    return (ofproto->ofproto_class->get_elephants
+            ? ofproto->ofproto_class->get_elephants(ofproto, elephants)
+            : EOPNOTSUPP);
+}
+
 int
 ofproto_set_netflow(struct ofproto *ofproto,
                     const struct netflow_options *nf_options)

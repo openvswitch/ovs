@@ -51,6 +51,7 @@
 #include "ofp-actions.h"
 #include "ofp-parse.h"
 #include "ofp-print.h"
+#include "ofproto-dpif-elephant.h"
 #include "ofproto-dpif-ipfix.h"
 #include "ofproto-dpif-mirror.h"
 #include "ofproto-dpif-monitor.h"
@@ -293,6 +294,7 @@ struct ofproto_dpif {
     bool has_bonded_bundles;
     bool lacp_enabled;
     struct mbridge *mbridge;
+    struct dpif_elephant *elephant;
 
     struct ovs_mutex stats_mutex;
     struct netdev_stats stats OVS_GUARDED; /* To account packets generated and
@@ -596,6 +598,7 @@ type_run(const char *type)
                               ofproto->backer->dpif, ofproto->miss_rule,
                               ofproto->no_packet_in_rule, ofproto->ml,
                               ofproto->stp, ofproto->ms, ofproto->mbridge,
+                              ofproto->elephant,
                               ofproto->sflow, ofproto->ipfix,
                               ofproto->netflow, ofproto->up.frag_handling,
                               ofproto->up.forward_bpdu,
@@ -1133,6 +1136,7 @@ construct(struct ofproto *ofproto_)
     ofproto->sflow = NULL;
     ofproto->ipfix = NULL;
     ofproto->stp = NULL;
+    ofproto->elephant = NULL;
     ofproto->dump_seq = 0;
     hmap_init(&ofproto->bundles);
     ofproto->ml = mac_learning_create(MAC_ENTRY_DEFAULT_IDLE_TIME);
@@ -3807,6 +3811,41 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
                                  ofpacts_len, packet);
     return 0;
 }
+
+/* Elephants. */
+
+static int
+set_elephant(struct ofproto *ofproto_, uint64_t mech, uint64_t arg1,
+             uint64_t arg2, int dscp)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+    struct dpif_elephant *de = ofproto->elephant;
+
+    if (mech && !de) {
+        de = ofproto->elephant = dpif_elephant_create();
+    }
+
+    if (de) {
+        dpif_elephant_set_options(de, mech, arg1, arg2, dscp);
+
+        if (!mech) {
+            dpif_elephant_unref(de);
+            ofproto->elephant = NULL;
+        }
+    }
+
+    return 0;
+}
+
+static int
+get_elephants(struct ofproto *ofproto_ OVS_UNUSED, struct smap *elephants)
+{
+    smap_init(elephants);
+
+    /* xxx Figure out how to do this. */
+
+    return 0;
+}
 
 /* NetFlow. */
 
@@ -5100,6 +5139,8 @@ const struct ofproto_class ofproto_dpif_class = {
     rule_modify_actions,
     set_frag_handling,
     packet_out,
+    set_elephant,
+    get_elephants,
     set_netflow,
     get_netflow_ids,
     set_sflow,

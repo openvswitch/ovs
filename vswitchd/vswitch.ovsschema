@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "7.8.0",
- "cksum": "2676751133 20740",
+ "version": "7.78.0",
+ "cksum": "904547257 20882",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -93,6 +93,9 @@
          "type": {"key": {"type": "string",
                           "enum": ["set", ["standalone", "secure"]]},
                   "min": 0, "max": 1}},
+       "elephant_flows": {
+         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
+         "ephemeral": true},
        "status": {
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
          "ephemeral": true},

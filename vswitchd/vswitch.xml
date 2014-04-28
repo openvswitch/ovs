@@ -480,6 +480,75 @@
       </column>
     </group>
 
+    <group title="Elephant Flow Detection">
+      <p>
+        The conventional wisdom is that majority of flows in the
+        datacenter are short (mice), yet the majority of packets belong to
+        a few long-lived flows (elephants).  Mice are often associated
+        with bursty, latency sensitive apps whereas elephants tend to be
+        large transfers in which throughput is far more important than
+        latency.
+      </p>
+
+      <p>
+        Open vSwitch has the ability to distinguish elephant flows and
+        identify them through the database or mark them.  Elephants are
+        identified by the combination of their duration and number of
+        bytes.
+      </p>
+
+      <column name="other_config" key="elephant-mech">
+        The mechanism used to detect elephants.  It may be set to one of
+        the following:
+        <dl>
+          <dt><code>0</code></dt>
+          <dd>Disable elephant detection.</dd>
+
+          <dt><code>1</code></dt>
+          <dd>Bytes.  A flow is declared an elephant based on a
+          threshold of the total number of bytes sent.  <ref
+          column="other_config" key="elephant-arg1"/> specifies the
+          number of bytes.  <ref column="other_config"
+          key="elephant-arg2"/> specifies the number of seconds that the
+          flow must exist before being declared an elephant; set to
+          <code>0</code> for immediate detection when the byte threshold
+          is crossed.</dd>
+
+          <dt><code>2</code></dt>
+          <dd>TSO.  A flow is declared an elephant based on the segment
+          size.  <ref column="other_config" key="elephant-arg1"/>
+          specifies the size of the segment.  <ref column="other_config"
+          key="elephant-arg2"/> specifies the required number of
+          segments of the configured size that must be seen.
+          </dd>
+        </dl>
+      </column>
+
+      <column name="other_config" key="elephant-arg1">
+        First argument to elephant mechanism.  The arguments are
+        described in <ref column="other_config" key="elephant-mech"/>.
+      </column>
+
+      <column name="other_config" key="elephant-arg2">
+        Second argument to elephant mechanism.  The arguments are
+        described in <ref column="other_config" key="elephant-mech"/>.
+      </column>
+
+      <column name="other_config" key="elephant-dscp">
+        When an elephant flow is detected sets the DSCP value to use on
+        the wire for packets matching that flow.  Not setting the key or
+        using a value of -1 will leave elephant flows unmarked.
+      </column>
+
+      <column name="elephant_flows">
+        <code>xxx Not currently supported xxx</code>
+        The <code>elephants</code> column contains key-value pairs that
+        report elephant flows.  The key is a description of the flow,
+        and the value is size of the flow in bytes.  These are updated
+        periodically (currently, every 5 seconds).
+      </column>
+    </group>
+
     <group title="OpenFlow Configuration">
       <column name="controller">
         <p>

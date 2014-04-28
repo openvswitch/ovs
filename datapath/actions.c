@@ -37,6 +37,7 @@
 #include "datapath.h"
 #include "gso.h"
 #include "mpls.h"
+#include "elephant.h"
 #include "vlan.h"
 #include "vport.h"
 
@@ -583,6 +584,75 @@ static int sample(struct datapath *dp, struct sk_buff *skb,
 	return do_execute_actions(dp, sample_skb, a, rem);
 }
 
+static int elephant(struct datapath *dp, struct sk_buff *skb,
+		  const struct nlattr *attr)
+{
+	struct sw_flow_key *key = OVS_CB(skb)->pkt_key;
+	uint32_t mech=0, arg1=0, arg2=0;
+	uint8_t dscp = U8_MAX;
+	const struct nlattr *acts_list = NULL;
+	const struct nlattr *a;
+	int rem;
+
+	/* We only process IP packets. */
+	if (key->eth.type != htons(ETH_P_IP) &&
+			key->eth.type != htons(ETH_P_IPV6))
+		return 0;
+
+	for (a = nla_data(attr), rem = nla_len(attr); rem > 0;
+		a = nla_next(a, &rem)) {
+		switch (nla_type(a)) {
+		case OVS_ELEPHANT_ATTR_DETECT_MECH:
+			mech = nla_get_u32(a);
+			break;
+
+		case OVS_ELEPHANT_ATTR_DETECT_ARG1:
+			arg1 = nla_get_u32(a);
+			break;
+
+		case OVS_ELEPHANT_ATTR_DETECT_ARG2:
+			arg2 = nla_get_u32(a);
+			break;
+
+		case OVS_ELEPHANT_ATTR_DETECT_DSCP:
+			dscp = nla_get_u8(a);
+			break;
+
+		case OVS_ELEPHANT_ATTR_ACTIONS:
+			acts_list = a;
+			break;
+		}
+	}
+
+	if (!is_elephant(skb, mech, arg1, arg2))
+		return 0;
+
+	if (dscp != U8_MAX) {
+	    struct iphdr *nh = ip_hdr(skb);
+		int err;
+
+		err = make_writable(skb, skb_network_offset(skb) +
+				sizeof(struct iphdr));
+		if (unlikely(err))
+			return err;
+
+		ipv4_change_dsfield(nh, 0x03, dscp<<2);
+	}
+
+	/* xxx We need to make sure that only "set" or userspace actions are
+	 * xxx provided in the verification code. */
+
+	/* The only action with a side-effect that is allowed is the "set"
+	 * action.  Since the do_execute_actions() never consumes 'skb', a
+	 * skb_get(skb) call prevents consumption by do_execute_actions().
+	 * Thus, it is safe to simply return the error code and let the
+	 * caller (also do_execute_actions()) free skb on error. */
+	skb_get(skb);
+
+	return do_execute_actions(dp, skb, nla_data(acts_list),
+			nla_len(acts_list));
+}
+
 static void execute_hash(struct sk_buff *skb, const struct nlattr *attr)
 {
 	struct sw_flow_key *key = OVS_CB(skb)->pkt_key;
@@ -750,6 +820,12 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 
 		case OVS_ACTION_ATTR_SAMPLE:
 			err = sample(dp, skb, a);
+			break;
+
+		case OVS_ACTION_ATTR_ELEPHANT:
+			err = elephant(dp, skb, a);
+			if (unlikely(err)) /* skb already freed. */
+				return err;
 			break;
 		}
 

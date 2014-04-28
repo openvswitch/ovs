@@ -25,6 +25,8 @@ ofproto_libofproto_la_SOURCES = \
 	ofproto/ofproto.h \
 	ofproto/ofproto-dpif.c \
 	ofproto/ofproto-dpif.h \
+	ofproto/ofproto-dpif-elephant.c \
+	ofproto/ofproto-dpif-elephant.h \
 	ofproto/ofproto-dpif-ipfix.c \
 	ofproto/ofproto-dpif-ipfix.h \
 	ofproto/ofproto-dpif-mirror.c \

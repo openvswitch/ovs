@@ -256,6 +256,9 @@ int ofproto_port_set_mcast_snooping(struct ofproto *ofproto, void *aux,
 void ofproto_set_threads(int n_handlers, int n_revalidators);
 void ofproto_set_dp_desc(struct ofproto *, const char *dp_desc);
 int ofproto_set_snoops(struct ofproto *, const struct sset *snoops);
+int ofproto_set_elephant(struct ofproto *, uint64_t mech, uint64_t arg1,
+                         uint64_t arg2, int dscp);
+int ofproto_get_elephants(struct ofproto *, struct smap *elephants);
 int ofproto_set_netflow(struct ofproto *,
                         const struct netflow_options *nf_options);
 int ofproto_set_sflow(struct ofproto *, const struct ofproto_sflow_options *);

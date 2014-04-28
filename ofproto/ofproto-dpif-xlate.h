@@ -28,6 +28,7 @@ struct bfd;
 struct bond;
 struct dpif;
 struct lacp;
+struct dpif_elephant;
 struct dpif_ipfix;
 struct dpif_sflow;
 struct mac_learning;
@@ -142,8 +143,9 @@ void xlate_ofproto_set(struct ofproto_dpif *, const char *name,
                        struct rule_dpif *no_packet_in_rule,
                        const struct mac_learning *, struct stp *,
                        const struct mcast_snooping *,
-                       const struct mbridge *, const struct dpif_sflow *,
-                       const struct dpif_ipfix *, const struct netflow *,
+                       const struct mbridge *, const struct dpif_elephant *,
+                       const struct dpif_sflow *, const struct dpif_ipfix *,
+                       const struct netflow *,
                        enum ofp_config_flags, bool forward_bpdu,
                        bool has_in_band, bool enable_recirc,
                        bool variable_length_userdata,
