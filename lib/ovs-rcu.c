@@ -21,6 +21,10 @@
 #include "ovs-thread.h"
 #include "poll-loop.h"
 #include "seq.h"
+#include "timeval.h"
+#include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(ovs_rcu);
 
 struct ovsrcu_cb {
     void (*function)(void *aux);
@@ -34,11 +38,12 @@ struct ovsrcu_cbset {
 };
 
 struct ovsrcu_perthread {
-    struct list list_node;           /* In global list. */
+    struct list list_node;      /* In global list. */
 
     struct ovs_mutex mutex;
     uint64_t seqno;
     struct ovsrcu_cbset *cbset;
+    char name[16];              /* This thread's name. */
 };
 
 static struct seq *global_seqno;
@@ -70,6 +75,8 @@ ovsrcu_perthread_get(void)
         ovs_mutex_init(&perthread->mutex);
         perthread->seqno = seq_read(global_seqno);
         perthread->cbset = NULL;
+        ovs_strlcpy(perthread->name, get_subprogram_name(),
+                    sizeof perthread->name);
 
         ovs_mutex_lock(&ovsrcu_threads_mutex);
         list_push_back(&ovsrcu_threads, &perthread->list_node);
@@ -144,7 +151,9 @@ ovsrcu_is_quiescent(void)
 static void
 ovsrcu_synchronize(void)
 {
+    unsigned int warning_threshold = 1000;
     uint64_t target_seqno;
+    long long int start;
 
     if (single_threaded()) {
         return;
@@ -152,15 +161,20 @@ ovsrcu_synchronize(void)
 
     target_seqno = seq_read(global_seqno);
     ovsrcu_quiesce_start();
+    start = time_msec();
 
     for (;;) {
         uint64_t cur_seqno = seq_read(global_seqno);
         struct ovsrcu_perthread *perthread;
+        char stalled_thread[16];
+        unsigned int elapsed;
         bool done = true;
 
         ovs_mutex_lock(&ovsrcu_threads_mutex);
         LIST_FOR_EACH (perthread, list_node, &ovsrcu_threads) {
             if (perthread->seqno <= target_seqno) {
+                ovs_strlcpy(stalled_thread, perthread->name,
+                            sizeof stalled_thread);
                 done = false;
                 break;
             }
@@ -170,6 +184,14 @@ ovsrcu_synchronize(void)
         if (done) {
             break;
         }
+
+        elapsed = time_msec() - start;
+        if (elapsed >= warning_threshold) {
+            VLOG_WARN("blocked %u ms waiting for %s to quiesce",
+                      elapsed, stalled_thread);
+            warning_threshold *= 2;
+        }
+        poll_timer_wait_until(start + warning_threshold);
 
         seq_wait(global_seqno, cur_seqno);
         poll_block();

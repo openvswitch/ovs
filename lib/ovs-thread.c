@@ -274,9 +274,11 @@ ovsthread_wrapper(void *aux_)
     aux = *auxp;
     free(auxp);
 
+    /* The order of the following calls is important, because
+     * ovsrcu_quiesce_end() saves a copy of the thread name. */
     set_subprogram_name("%s%u", aux.name, id);
-
     ovsrcu_quiesce_end();
+
     return aux.start(aux.arg);
 }
 
