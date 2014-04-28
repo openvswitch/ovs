@@ -4516,12 +4516,12 @@ OVS_WAIT_UNTIL([grep "monitor thread created" ovs-vswitchd.log])
 # disable bfd on p0.
 AT_CHECK([ovs-vsctl set interface p0 bfd:enable=false])
 # check log, there should not be the log of thread terminated.
-AT_CHECK([sed -n "s/^.*|ofproto_dpif_monitor(monitor)|INFO|\(.* terminated\)$/\1/p" ovs-vswitchd.log], [0], [dnl
+AT_CHECK([sed -n "s/^.*|ofproto_dpif_monitor(monitor[[0-9]]*)|INFO|\(.* terminated\)$/\1/p" ovs-vswitchd.log], [0], [dnl
 ])
 # reenable bfd on p0.
 AT_CHECK([ovs-vsctl set interface p0 bfd:enable=true])
 # check log, should still be on log of thread created.
-AT_CHECK([sed -n "s/^.*|ofproto_dpif_monitor(monitor)|INFO|\(.* created\)$/\1/p" ovs-vswitchd.log], [0], [dnl
+AT_CHECK([sed -n "s/^.*|ofproto_dpif_monitor(monitor[[0-9]]*)|INFO|\(.* created\)$/\1/p" ovs-vswitchd.log], [0], [dnl
 monitor thread created
 ])
 # disable bfd and cfm together.
