@@ -243,12 +243,12 @@ static inline int skb_unclone(struct sk_buff *skb, gfp_t pri)
 }
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,6,0)
+#ifndef HAVE_SKB_ORPHAN_FRAGS
 static inline int skb_orphan_frags(struct sk_buff *skb, gfp_t gfp_mask)
 {
 	return 0;
 }
-#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(3,6,0) */
+#endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0)
 #define __skb_get_rxhash rpl__skb_get_rxhash
