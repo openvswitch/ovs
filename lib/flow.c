@@ -1859,19 +1859,17 @@ minimask_equal(const struct minimask *a, const struct minimask *b)
     return miniflow_equal(&a->masks, &b->masks);
 }
 
-/* Returns true if at least one bit is wildcarded in 'a_' but not in 'b_',
+/* Returns true if at least one bit matched by 'b' is wildcarded by 'a',
  * false otherwise. */
 bool
-minimask_has_extra(const struct minimask *a_, const struct minimask *b_)
+minimask_has_extra(const struct minimask *a, const struct minimask *b)
 {
-    const struct miniflow *a = &a_->masks;
-    const struct miniflow *b = &b_->masks;
+    const uint32_t *p = b->masks.values;
     uint64_t map;
 
-    for (map = a->map | b->map; map; map = zero_rightmost_1bit(map)) {
-        int ofs = raw_ctz(map);
-        uint32_t a_u32 = miniflow_get(a, ofs);
-        uint32_t b_u32 = miniflow_get(b, ofs);
+    for (map = b->masks.map; map; map = zero_rightmost_1bit(map)) {
+        uint32_t a_u32 = minimask_get(a, raw_ctz(map));
+        uint32_t b_u32 = *p++;
 
         if ((a_u32 & b_u32) != b_u32) {
             return true;
@@ -1879,21 +1877,4 @@ minimask_has_extra(const struct minimask *a_, const struct minimask *b_)
     }
 
     return false;
-}
-
-/* Returns true if 'mask' matches every packet, false if 'mask' fixes any bits
- * or fields. */
-bool
-minimask_is_catchall(const struct minimask *mask_)
-{
-    const struct miniflow *mask = &mask_->masks;
-    const uint32_t *p = mask->values;
-    uint64_t map;
-
-    for (map = mask->map; map; map = zero_rightmost_1bit(map)) {
-        if (*p++) {
-            return false;
-        }
-    }
-    return true;
 }

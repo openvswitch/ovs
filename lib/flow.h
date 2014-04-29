@@ -484,7 +484,17 @@ static inline ovs_be64 minimask_get_metadata_mask(const struct minimask *);
 
 bool minimask_equal(const struct minimask *a, const struct minimask *b);
 bool minimask_has_extra(const struct minimask *, const struct minimask *);
-bool minimask_is_catchall(const struct minimask *);
+
+/* Returns true if 'mask' matches every packet, false if 'mask' fixes any bits
+ * or fields. */
+static inline bool
+minimask_is_catchall(const struct minimask *mask)
+{
+    /* For every 1-bit in mask's map, the corresponding value is non-zero,
+     * so the only way the mask can not fix any bits or fields is for the
+     * map the be zero. */
+    return mask->masks.map == 0;
+}
 
 
 
