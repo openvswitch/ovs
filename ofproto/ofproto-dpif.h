@@ -17,6 +17,7 @@
 
 #include <stdint.h>
 
+#include "fail-open.h"
 #include "hmapx.h"
 #include "odp-util.h"
 #include "ofp-util.h"
@@ -98,15 +99,16 @@ enum rule_dpif_lookup_verdict rule_dpif_lookup_from_table(struct ofproto_dpif *,
                                                           struct rule_dpif **rule, 
                                                           bool take_ref);
 
-void rule_dpif_ref(struct rule_dpif *);
-void rule_dpif_unref(struct rule_dpif *);
+static inline void rule_dpif_ref(struct rule_dpif *);
+static inline void rule_dpif_unref(struct rule_dpif *);
 
 void rule_dpif_credit_stats(struct rule_dpif *rule ,
                             const struct dpif_flow_stats *);
 
-bool rule_dpif_is_fail_open(const struct rule_dpif *);
-bool rule_dpif_is_table_miss(const struct rule_dpif *);
-bool rule_dpif_is_internal(const struct rule_dpif *);
+static inline bool rule_dpif_is_fail_open(const struct rule_dpif *);
+static inline bool rule_dpif_is_table_miss(const struct rule_dpif *);
+static inline bool rule_dpif_is_internal(const struct rule_dpif *);
+
 uint8_t rule_dpif_get_table(const struct rule_dpif *);
 
 const struct rule_actions *rule_dpif_get_actions(const struct rule_dpif *);
@@ -219,5 +221,46 @@ int ofproto_dpif_add_internal_flow(struct ofproto_dpif *,
                                    struct rule **rulep);
 int ofproto_dpif_delete_internal_flow(struct ofproto_dpif *, struct match *,
                                       int priority);
+
+/* Number of implemented OpenFlow tables. */
+enum { N_TABLES = 255 };
+enum { TBL_INTERNAL = N_TABLES - 1 };    /* Used for internal hidden rules. */
+BUILD_ASSERT_DECL(N_TABLES >= 2 && N_TABLES <= 255);
+
+
+/* struct rule_dpif has struct rule as it's first member. */
+#define RULE_CAST(RULE) ((struct rule *)RULE)
+
+static inline void rule_dpif_ref(struct rule_dpif *rule)
+{
+    if (rule) {
+        ofproto_rule_ref(RULE_CAST(rule));
+    }
+}
+
+static inline void rule_dpif_unref(struct rule_dpif *rule)
+{
+    if (rule) {
+        ofproto_rule_unref(RULE_CAST(rule));
+    }
+}
+
+static inline bool rule_dpif_is_fail_open(const struct rule_dpif *rule)
+{
+    return is_fail_open_rule(RULE_CAST(rule));
+}
+
+static inline bool rule_dpif_is_table_miss(const struct rule_dpif *rule)
+{
+    return rule_is_table_miss(RULE_CAST(rule));
+}
+
+/* Returns true if 'rule' is an internal rule, false otherwise. */
+static inline bool rule_dpif_is_internal(const struct rule_dpif *rule)
+{
+    return RULE_CAST(rule)->table_id == TBL_INTERNAL;
+}
+
+#undef RULE_CAST
 
 #endif /* ofproto-dpif.h */

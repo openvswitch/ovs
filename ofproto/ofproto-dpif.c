@@ -73,11 +73,6 @@ VLOG_DEFINE_THIS_MODULE(ofproto_dpif);
 COVERAGE_DEFINE(ofproto_dpif_expired);
 COVERAGE_DEFINE(packet_in_overflow);
 
-/* Number of implemented OpenFlow tables. */
-enum { N_TABLES = 255 };
-enum { TBL_INTERNAL = N_TABLES - 1 };    /* Used for internal hidden rules. */
-BUILD_ASSERT_DECL(N_TABLES >= 2 && N_TABLES <= 255);
-
 /* No bfd/cfm status change. */
 #define NO_STATUS_CHANGE -1
 
@@ -93,6 +88,9 @@ struct rule_dpif {
     struct ovs_mutex stats_mutex;
     struct dpif_flow_stats stats OVS_GUARDED;
 };
+
+/* RULE_CAST() depends on this. */
+BUILD_ASSERT_DECL(offsetof(struct rule_dpif, up) == 0);
 
 static void rule_get_stats(struct rule *, uint64_t *packets, uint64_t *bytes,
                            long long int *used);
@@ -3168,24 +3166,6 @@ rule_dpif_credit_stats(struct rule_dpif *rule,
     ovs_mutex_unlock(&rule->stats_mutex);
 }
 
-bool
-rule_dpif_is_fail_open(const struct rule_dpif *rule)
-{
-    return is_fail_open_rule(&rule->up);
-}
-
-bool
-rule_dpif_is_table_miss(const struct rule_dpif *rule)
-{
-    return rule_is_table_miss(&rule->up);
-}
-
-bool
-rule_dpif_is_internal(const struct rule_dpif *rule)
-{
-    return rule_is_internal(&rule->up);
-}
-
 ovs_be64
 rule_dpif_get_flow_cookie(const struct rule_dpif *rule)
     OVS_REQUIRES(rule->up.mutex)
@@ -3424,22 +3404,6 @@ choose_miss_rule(enum ofputil_port_config config, struct rule_dpif *miss_rule,
     *rule = config & OFPUTIL_PC_NO_PACKET_IN ? no_packet_in_rule : miss_rule;
     if (take_ref) {
         rule_dpif_ref(*rule);
-    }
-}
-
-void
-rule_dpif_ref(struct rule_dpif *rule)
-{
-    if (rule) {
-        ofproto_rule_ref(&rule->up);
-    }
-}
-
-void
-rule_dpif_unref(struct rule_dpif *rule)
-{
-    if (rule) {
-        ofproto_rule_unref(&rule->up);
     }
 }
 
@@ -4550,13 +4514,6 @@ ofproto_dpif_unixctl_init(void)
                              ofproto_unixctl_dpif_dump_flows, NULL);
 }
 
-
-/* Returns true if 'rule' is an internal rule, false otherwise. */
-bool
-rule_is_internal(const struct rule *rule)
-{
-    return rule->table_id == TBL_INTERNAL;
-}
 
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
  *
