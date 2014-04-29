@@ -206,4 +206,18 @@
     static void f(void)
 #endif
 
+/* OVS_PREFETCH() can be used to instruct the CPU to fetch the cache
+ * line containing the given address to a CPU cache.
+ * OVS_PREFETCH_WRITE() should be used when the memory is going to be
+ * written to.  Depending on the target CPU, this can generate the same
+ * instruction as OVS_PREFETCH(), or bring the data into the cache in an
+ * exclusive state. */
+#if __GNUC__
+#define OVS_PREFETCH(addr) __builtin_prefetch((addr))
+#define OVS_PREFETCH_WRITE(addr) __builtin_prefetch((addr), 1)
+#else
+#define OVS_PREFETCH(addr)
+#define OVS_PREFETCH_WRITE(addr)
+#endif
+
 #endif /* compiler.h */
