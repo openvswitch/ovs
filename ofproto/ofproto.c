@@ -125,7 +125,7 @@ struct ofoperation {
 
     /* OFOPERATION_MODIFY, OFOPERATION_REPLACE: The old actions, if the actions
      * are changing. */
-    struct rule_actions *actions;
+    const struct rule_actions *actions;
 
     /* OFOPERATION_DELETE. */
     enum ofp_flow_removed_reason reason; /* Reason flow was removed. */
@@ -1941,7 +1941,7 @@ ofproto_add_flow(struct ofproto *ofproto, const struct match *match,
     rule = rule_from_cls_rule(classifier_find_match_exactly(
                                   &ofproto->tables[0].cls, match, priority));
     if (rule) {
-        struct rule_actions *actions = rule_get_actions(rule);
+        const struct rule_actions *actions = rule_get_actions(rule);
         must_add = !ofpacts_equal(actions->ofpacts, actions->ofpacts_len,
                                   ofpacts, ofpacts_len);
     } else {
@@ -2686,38 +2686,30 @@ ofproto_rule_unref(struct rule *rule)
 static uint32_t get_provider_meter_id(const struct ofproto *,
                                       uint32_t of_meter_id);
 
-/* Creates and returns a new 'struct rule_actions', with a ref_count of 1,
- * whose actions are a copy of from the 'ofpacts_len' bytes of 'ofpacts'. */
-struct rule_actions *
+/* Creates and returns a new 'struct rule_actions', whose actions are a copy
+ * of from the 'ofpacts_len' bytes of 'ofpacts'. */
+const struct rule_actions *
 rule_actions_create(const struct ofproto *ofproto,
                     const struct ofpact *ofpacts, size_t ofpacts_len)
 {
     struct rule_actions *actions;
 
-    actions = xmalloc(sizeof *actions);
-    actions->ofpacts = xmemdup(ofpacts, ofpacts_len);
+    actions = xmalloc(sizeof *actions + ofpacts_len);
     actions->ofpacts_len = ofpacts_len;
     actions->provider_meter_id
         = get_provider_meter_id(ofproto,
                                 ofpacts_get_meter(ofpacts, ofpacts_len));
+    memcpy(actions->ofpacts, ofpacts, ofpacts_len);
 
     return actions;
 }
 
-static void
-rule_actions_destroy_cb(struct rule_actions *actions)
-{
-    free(actions->ofpacts);
-    free(actions);
-}
-
-/* Decrements 'actions''s ref_count and frees 'actions' if the ref_count
- * reaches 0. */
+/* Free the actions after the RCU quiescent period is reached. */
 void
-rule_actions_destroy(struct rule_actions *actions)
+rule_actions_destroy(const struct rule_actions *actions)
 {
     if (actions) {
-        ovsrcu_postpone(rule_actions_destroy_cb, actions);
+        ovsrcu_postpone(free, CONST_CAST(struct rule_actions *, actions));
     }
 }
 
@@ -3661,7 +3653,7 @@ handle_flow_stats_request(struct ofconn *ofconn,
         long long int now = time_msec();
         struct ofputil_flow_stats fs;
         long long int created, used, modified;
-        struct rule_actions *actions;
+        const struct rule_actions *actions;
         enum ofputil_flow_mod_flags flags;
 
         ovs_mutex_lock(&rule->mutex);
@@ -3702,7 +3694,7 @@ static void
 flow_stats_ds(struct rule *rule, struct ds *results)
 {
     uint64_t packet_count, byte_count;
-    struct rule_actions *actions;
+    const struct rule_actions *actions;
     long long int created, used;
 
     rule->ofproto->ofproto_class->rule_get_stats(rule, &packet_count,
@@ -4244,7 +4236,7 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
 
         reset_counters = (fm->flags & OFPUTIL_FF_RESET_COUNTS) != 0;
         if (actions_changed || reset_counters) {
-            struct rule_actions *new_actions;
+            const struct rule_actions *new_actions;
 
             op->actions = rule_get_actions(rule);
             new_actions = rule_actions_create(ofproto,
@@ -6342,7 +6334,7 @@ ofopgroup_complete(struct ofopgroup *group)
                 rule->hard_timeout = op->hard_timeout;
                 ovs_mutex_unlock(&rule->mutex);
                 if (op->actions) {
-                    struct rule_actions *old_actions;
+                    const struct rule_actions *old_actions;
 
                     ovs_mutex_lock(&rule->mutex);
                     old_actions = rule_get_actions(rule);
@@ -6918,7 +6910,7 @@ oftable_insert_rule(struct rule *rule)
 {
     struct ofproto *ofproto = rule->ofproto;
     struct oftable *table = &ofproto->tables[rule->table_id];
-    struct rule_actions *actions;
+    const struct rule_actions *actions;
     bool may_expire;
 
     ovs_mutex_lock(&rule->mutex);

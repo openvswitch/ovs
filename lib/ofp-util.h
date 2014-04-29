@@ -298,8 +298,8 @@ struct ofputil_flow_mod {
     ofp_port_t out_port;
     uint32_t out_group;
     enum ofputil_flow_mod_flags flags;
-    struct ofpact *ofpacts;     /* Series of "struct ofpact"s. */
-    size_t ofpacts_len;         /* Length of ofpacts, in bytes. */
+    struct ofpact *ofpacts;  /* Series of "struct ofpact"s. */
+    size_t ofpacts_len;      /* Length of ofpacts, in bytes. */
 };
 
 enum ofperr ofputil_decode_flow_mod(struct ofputil_flow_mod *,
@@ -341,7 +341,7 @@ struct ofputil_flow_stats {
     int hard_age;               /* Seconds since last change, -1 if unknown. */
     uint64_t packet_count;      /* Packet count, UINT64_MAX if unknown. */
     uint64_t byte_count;        /* Byte count, UINT64_MAX if unknown. */
-    struct ofpact *ofpacts;
+    const struct ofpact *ofpacts;
     size_t ofpacts_len;
     enum ofputil_flow_mod_flags flags;
 };
@@ -854,7 +854,7 @@ struct ofputil_flow_update {
     uint16_t priority;
     ovs_be64 cookie;
     struct match *match;
-    struct ofpact *ofpacts;
+    const struct ofpact *ofpacts;
     size_t ofpacts_len;
 
     /* Used only for NXFME_ABBREV. */

@@ -1026,7 +1026,7 @@ ofctl_dump_flows(int argc, char *argv[])
         ds_destroy(&s);
 
         for (i = 0; i < n_fses; i++) {
-            free(fses[i].ofpacts);
+            free(CONST_CAST(struct ofpact *, fses[i].ofpacts));
         }
         free(fses);
 
@@ -1136,7 +1136,7 @@ ofctl_flow_mod__(const char *remote, struct ofputil_flow_mod *fms,
         struct ofputil_flow_mod *fm = &fms[i];
 
         transact_noreply(vconn, ofputil_encode_flow_mod(fm, protocol));
-        free(fm->ofpacts);
+        free(CONST_CAST(struct ofpact *, fm->ofpacts));
     }
     vconn_close(vconn);
 }
@@ -2199,7 +2199,7 @@ static void
 fte_version_free(struct fte_version *version)
 {
     if (version) {
-        free(version->ofpacts);
+        free(CONST_CAST(struct ofpact *, version->ofpacts));
         free(version);
     }
 }
@@ -2739,7 +2739,7 @@ ofctl_parse_flows__(struct ofputil_flow_mod *fms, size_t n_fms,
         ofp_print(stdout, ofpbuf_data(msg), ofpbuf_size(msg), verbosity);
         ofpbuf_delete(msg);
 
-        free(fm->ofpacts);
+        free(CONST_CAST(struct ofpact *, fm->ofpacts));
     }
 }
 

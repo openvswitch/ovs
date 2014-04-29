@@ -3203,7 +3203,7 @@ rule_dpif_reduce_timeouts(struct rule_dpif *rule, uint16_t idle_timeout,
 /* Returns 'rule''s actions.  The caller owns a reference on the returned
  * actions and must eventually release it (with rule_actions_unref()) to avoid
  * a memory leak. */
-struct rule_actions *
+const struct rule_actions *
 rule_dpif_get_actions(const struct rule_dpif *rule)
 {
     return rule_get_actions(&rule->up);
@@ -3865,7 +3865,7 @@ struct trace_ctx {
 static void
 trace_format_rule(struct ds *result, int level, const struct rule_dpif *rule)
 {
-    struct rule_actions *actions;
+    const struct rule_actions *actions;
     ovs_be64 cookie;
 
     ds_put_char_multiple(result, '\t', level);

@@ -109,7 +109,7 @@ bool rule_dpif_is_table_miss(const struct rule_dpif *);
 bool rule_dpif_is_internal(const struct rule_dpif *);
 uint8_t rule_dpif_get_table(const struct rule_dpif *);
 
-struct rule_actions *rule_dpif_get_actions(const struct rule_dpif *);
+const struct rule_actions *rule_dpif_get_actions(const struct rule_dpif *);
 
 ovs_be64 rule_dpif_get_flow_cookie(const struct rule_dpif *rule);
 

@@ -1992,7 +1992,7 @@ static void
 xlate_recursively(struct xlate_ctx *ctx, struct rule_dpif *rule)
 {
     struct rule_dpif *old_rule = ctx->rule;
-    struct rule_actions *actions;
+    const struct rule_actions *actions;
 
     if (ctx->xin->resubmit_stats) {
         rule_dpif_credit_stats(rule, ctx->xin->resubmit_stats);
@@ -3191,7 +3191,7 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
     struct flow *flow = &xin->flow;
     struct rule_dpif *rule = NULL;
 
-    struct rule_actions *actions = NULL;
+    const struct rule_actions *actions = NULL;
     enum slow_path_reason special;
     const struct ofpact *ofpacts;
     struct xport *in_port;

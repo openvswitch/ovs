@@ -1924,7 +1924,7 @@ parse_ofp_flow_mod_file(const char *file_name, uint16_t command,
             size_t i;
 
             for (i = 0; i < *n_fms; i++) {
-                free((*fms)[i].ofpacts);
+                free(CONST_CAST(struct ofpact *, (*fms)[i].ofpacts));
             }
             free(*fms);
             *fms = NULL;

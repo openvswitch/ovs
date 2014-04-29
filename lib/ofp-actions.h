@@ -234,8 +234,8 @@ struct ofpact_enqueue {
  * Used for NXAST_OUTPUT_REG. */
 struct ofpact_output_reg {
     struct ofpact ofpact;
-    struct mf_subfield src;
     uint16_t max_len;
+    struct mf_subfield src;
 };
 
 /* OFPACT_BUNDLE.

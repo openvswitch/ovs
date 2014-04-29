@@ -39,6 +39,7 @@
 #include "heap.h"
 #include "hindex.h"
 #include "list.h"
+#include "ofp-actions.h"
 #include "ofp-errors.h"
 #include "ofp-util.h"
 #include "ofproto/ofproto.h"
@@ -50,7 +51,6 @@
 #include "timeval.h"
 
 struct match;
-struct ofpact;
 struct ofputil_flow_mod;
 struct bfd_cfg;
 struct meter;
@@ -377,7 +377,7 @@ struct rule {
 
     /* OpenFlow actions.  See struct rule_actions for more thread-safety
      * notes. */
-    OVSRCU_TYPE(struct rule_actions *) actions;
+    OVSRCU_TYPE(const struct rule_actions *) actions;
 
     /* In owning meter's 'rules' list.  An empty list if there is no meter. */
     struct list meter_list_node OVS_GUARDED_BY(ofproto_mutex);
@@ -406,10 +406,10 @@ struct rule {
 void ofproto_rule_ref(struct rule *);
 void ofproto_rule_unref(struct rule *);
 
-static inline struct rule_actions *
+static inline const struct rule_actions *
 rule_get_actions(const struct rule *rule)
 {
-    return ovsrcu_get(struct rule_actions *, &rule->actions);
+    return ovsrcu_get(const struct rule_actions *, &rule->actions);
 }
 
 /* Returns true if 'rule' is an OpenFlow 1.3 "table-miss" rule, false
@@ -431,21 +431,22 @@ bool rule_is_internal(const struct rule *);
  * Thread-safety
  * =============
  *
- * A struct rule_actions 'actions' may be accessed without a risk of being
+ * A struct rule_actions may be accessed without a risk of being
  * freed by code that holds a read-lock or write-lock on 'rule->mutex' (where
- * 'rule' is the rule for which 'rule->actions == actions') or that owns a
- * reference to 'actions->ref_count' (or both). */
+ * 'rule' is the rule for which 'rule->actions == actions') or during the RCU
+ * active period. */
 struct rule_actions {
     /* These members are immutable: they do not change during the struct's
      * lifetime.  */
-    struct ofpact *ofpacts;     /* Sequence of "struct ofpacts". */
-    unsigned int ofpacts_len;   /* Size of 'ofpacts', in bytes. */
-    uint32_t provider_meter_id; /* Datapath meter_id, or UINT32_MAX. */
+    uint32_t ofpacts_len;         /* Size of 'ofpacts', in bytes. */
+    uint32_t provider_meter_id;   /* Datapath meter_id, or UINT32_MAX. */
+    struct ofpact ofpacts[];      /* Sequence of "struct ofpacts". */
 };
+BUILD_ASSERT_DECL(offsetof(struct rule_actions, ofpacts) % OFPACT_ALIGNTO == 0);
 
-struct rule_actions *rule_actions_create(const struct ofproto *,
-                                         const struct ofpact *, size_t);
-void rule_actions_destroy(struct rule_actions *);
+const struct rule_actions *rule_actions_create(const struct ofproto *,
+                                               const struct ofpact *, size_t);
+void rule_actions_destroy(const struct rule_actions *);
 
 /* A set of rules to which an OpenFlow operation applies. */
 struct rule_collection {
