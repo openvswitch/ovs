@@ -344,26 +344,29 @@ void
 flow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
              struct flow *flow)
 {
-    uint32_t buf[FLOW_U32S];
-    struct miniflow mf;
+    struct {
+        struct miniflow mf;
+        uint32_t buf[FLOW_U32S];
+    } m;
 
     COVERAGE_INC(flow_extract);
 
-    miniflow_initialize(&mf, buf);
-    miniflow_extract(packet, md, &mf);
-    miniflow_expand(&mf, flow);
+    miniflow_initialize(&m.mf, m.buf);
+    miniflow_extract(packet, md, &m.mf);
+    miniflow_expand(&m.mf, flow);
 }
 
-/* Caller is responsible for initializing 'dst->values' with enough storage
- * for FLOW_U32S * 4 bytes. */
+/* Caller is responsible for initializing 'dst' with enough storage for
+ * FLOW_U32S * 4 bytes. */
 void
 miniflow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
                  struct miniflow *dst)
 {
     void *data = ofpbuf_data(packet);
     size_t size = ofpbuf_size(packet);
+    uint32_t *values = miniflow_values(dst);
+    struct mf_ctx mf = { 0, values, values + FLOW_U32S };
     char *l2;
-    struct mf_ctx mf = { 0, dst->values, dst->values + FLOW_U32S };
     ovs_be16 dl_type;
     uint8_t nw_frag, nw_tos, nw_ttl, nw_proto;
 
@@ -1575,11 +1578,14 @@ miniflow_n_values(const struct miniflow *flow)
 static uint32_t *
 miniflow_alloc_values(struct miniflow *flow, int n)
 {
-    if (n <= MINI_N_INLINE) {
+    if (n <= sizeof flow->inline_values / sizeof(uint32_t)) {
+        flow->values_inline = true;
         return flow->inline_values;
     } else {
         COVERAGE_INC(miniflow_malloc);
-        return xmalloc(n * sizeof *flow->values);
+        flow->values_inline = false;
+        flow->offline_values = xmalloc(n * sizeof(uint32_t));
+        return flow->offline_values;
     }
 }
 
@@ -1592,25 +1598,24 @@ miniflow_alloc_values(struct miniflow *flow, int n)
  * when a miniflow is initialized from a (mini)mask, the values can be zeroes,
  * so that the flow and mask always have the same maps.
  *
- * This function initializes 'dst->values' (either inline if possible or with
+ * This function initializes values (either inline if possible or with
  * malloc() otherwise) and copies the uint32_t elements of 'src' indicated by
  * 'dst->map' into it. */
 static void
 miniflow_init__(struct miniflow *dst, const struct flow *src, int n)
 {
     const uint32_t *src_u32 = (const uint32_t *) src;
-    unsigned int ofs;
+    uint32_t *dst_u32 = miniflow_alloc_values(dst, n);
     uint64_t map;
 
-    dst->values = miniflow_alloc_values(dst, n);
-    ofs = 0;
     for (map = dst->map; map; map = zero_rightmost_1bit(map)) {
-        dst->values[ofs++] = src_u32[raw_ctz(map)];
+        *dst_u32++ = src_u32[raw_ctz(map)];
     }
 }
 
 /* Initializes 'dst' as a copy of 'src'.  The caller must eventually free 'dst'
- * with miniflow_destroy(). */
+ * with miniflow_destroy().
+ * Always allocates offline storage. */
 void
 miniflow_init(struct miniflow *dst, const struct flow *src)
 {
@@ -1649,8 +1654,8 @@ miniflow_clone(struct miniflow *dst, const struct miniflow *src)
 {
     int n = miniflow_n_values(src);
     dst->map = src->map;
-    dst->values = miniflow_alloc_values(dst, n);
-    memcpy(dst->values, src->values, n * sizeof *dst->values);
+    memcpy(miniflow_alloc_values(dst, n), miniflow_get_values(src),
+           n * sizeof(uint32_t));
 }
 
 /* Initializes 'dst' with the data in 'src', destroying 'src'.
@@ -1658,14 +1663,7 @@ miniflow_clone(struct miniflow *dst, const struct miniflow *src)
 void
 miniflow_move(struct miniflow *dst, struct miniflow *src)
 {
-    if (src->values == src->inline_values) {
-        dst->values = dst->inline_values;
-        memcpy(dst->values, src->values,
-               miniflow_n_values(src) * sizeof *dst->values);
-    } else {
-        dst->values = src->values;
-    }
-    dst->map = src->map;
+    *dst = *src;
 }
 
 /* Frees any memory owned by 'flow'.  Does not free the storage in which 'flow'
@@ -1673,8 +1671,8 @@ miniflow_move(struct miniflow *dst, struct miniflow *src)
 void
 miniflow_destroy(struct miniflow *flow)
 {
-    if (flow->values != flow->inline_values) {
-        free(flow->values);
+    if (!flow->values_inline) {
+        free(flow->offline_values);
     }
 }
 
@@ -1692,7 +1690,7 @@ static uint32_t
 miniflow_get(const struct miniflow *flow, unsigned int u32_ofs)
 {
     return (flow->map & UINT64_C(1) << u32_ofs)
-        ? *(flow->values +
+        ? *(miniflow_get_u32_values(flow) +
             count_1bits(flow->map & ((UINT64_C(1) << u32_ofs) - 1)))
         : 0;
 }
@@ -1701,19 +1699,22 @@ miniflow_get(const struct miniflow *flow, unsigned int u32_ofs)
 bool
 miniflow_equal(const struct miniflow *a, const struct miniflow *b)
 {
-    const uint32_t *ap = a->values;
-    const uint32_t *bp = b->values;
+    const uint32_t *ap = miniflow_get_u32_values(a);
+    const uint32_t *bp = miniflow_get_u32_values(b);
     const uint64_t a_map = a->map;
     const uint64_t b_map = b->map;
-    uint64_t map;
 
-    if (a_map == b_map) {
-        for (map = a_map; map; map = zero_rightmost_1bit(map)) {
+    if (OVS_LIKELY(a_map == b_map)) {
+        int count = miniflow_n_values(a);
+
+        while (count--) {
             if (*ap++ != *bp++) {
                 return false;
             }
         }
     } else {
+        uint64_t map;
+
         for (map = a_map | b_map; map; map = zero_rightmost_1bit(map)) {
             uint64_t bit = rightmost_1bit(map);
             uint64_t a_value = a_map & bit ? *ap++ : 0;
@@ -1734,18 +1735,15 @@ bool
 miniflow_equal_in_minimask(const struct miniflow *a, const struct miniflow *b,
                            const struct minimask *mask)
 {
-    const uint32_t *p;
+    const uint32_t *p = miniflow_get_u32_values(&mask->masks);
     uint64_t map;
-
-    p = mask->masks.values;
 
     for (map = mask->masks.map; map; map = zero_rightmost_1bit(map)) {
         int ofs = raw_ctz(map);
 
-        if ((miniflow_get(a, ofs) ^ miniflow_get(b, ofs)) & *p) {
+        if ((miniflow_get(a, ofs) ^ miniflow_get(b, ofs)) & *p++) {
             return false;
         }
-        p++;
     }
 
     return true;
@@ -1758,18 +1756,15 @@ miniflow_equal_flow_in_minimask(const struct miniflow *a, const struct flow *b,
                                 const struct minimask *mask)
 {
     const uint32_t *b_u32 = (const uint32_t *) b;
-    const uint32_t *p;
+    const uint32_t *p = miniflow_get_u32_values(&mask->masks);
     uint64_t map;
-
-    p = mask->masks.values;
 
     for (map = mask->masks.map; map; map = zero_rightmost_1bit(map)) {
         int ofs = raw_ctz(map);
 
-        if ((miniflow_get(a, ofs) ^ b_u32[ofs]) & *p) {
+        if ((miniflow_get(a, ofs) ^ b_u32[ofs]) & *p++) {
             return false;
         }
-        p++;
     }
 
     return true;
@@ -1810,12 +1805,14 @@ minimask_combine(struct minimask *dst_,
                  uint32_t storage[FLOW_U32S])
 {
     struct miniflow *dst = &dst_->masks;
+    uint32_t *dst_values = storage;
     const struct miniflow *a = &a_->masks;
     const struct miniflow *b = &b_->masks;
     uint64_t map;
     int n = 0;
 
-    dst->values = storage;
+    dst->values_inline = false;
+    dst->offline_values = storage;
 
     dst->map = 0;
     for (map = a->map & b->map; map; map = zero_rightmost_1bit(map)) {
@@ -1824,7 +1821,7 @@ minimask_combine(struct minimask *dst_,
 
         if (mask) {
             dst->map |= rightmost_1bit(map);
-            dst->values[n++] = mask;
+            dst_values[n++] = mask;
         }
     }
 }
@@ -1864,7 +1861,7 @@ minimask_equal(const struct minimask *a, const struct minimask *b)
 bool
 minimask_has_extra(const struct minimask *a, const struct minimask *b)
 {
-    const uint32_t *p = b->masks.values;
+    const uint32_t *p = miniflow_get_u32_values(&b->masks);
     uint64_t map;
 
     for (map = b->masks.map; map; map = zero_rightmost_1bit(map)) {

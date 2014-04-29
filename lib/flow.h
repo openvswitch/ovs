@@ -323,7 +323,7 @@ bool flow_equal_except(const struct flow *a, const struct flow *b,
 /* Compressed flow. */
 
 #define MINI_N_INLINE (sizeof(void *) == 4 ? 7 : 8)
-BUILD_ASSERT_DECL(FLOW_U32S <= 64);
+BUILD_ASSERT_DECL(FLOW_U32S <= 63);
 
 /* A sparse representation of a "struct flow".
  *
@@ -334,42 +334,59 @@ BUILD_ASSERT_DECL(FLOW_U32S <= 64);
  *
  * The 'map' member holds one bit for each uint32_t in a "struct flow".  Each
  * 0-bit indicates that the corresponding uint32_t is zero, each 1-bit that it
- * *may* be nonzero.
+ * *may* be nonzero (see below how this applies to minimasks).
  *
- * 'values' points to the start of an array that has one element for each 1-bit
- * in 'map'.  The least-numbered 1-bit is in values[0], the next 1-bit is in
- * values[1], and so on.
+ * The 'values_inline' boolean member indicates that the values are at
+ * 'inline_values'.  If 'values_inline' is zero, then the values are
+ * offline at 'offline_values'.  In either case, values is an array that has
+ * one element for each 1-bit in 'map'.  The least-numbered 1-bit is in
+ * the first element of the values array, the next 1-bit is in the next array
+ * element, and so on.
  *
- * 'values' may point to a few different locations:
- *
- *     - If 'map' has MINI_N_INLINE or fewer 1-bits, it may point to
- *       'inline_values'.  One hopes that this is the common case.
- *
- *     - If 'map' has more than MINI_N_INLINE 1-bits, it may point to memory
- *       allocated with malloc().
- *
- *     - The caller could provide storage on the stack for situations where
- *       that makes sense.  So far that's only proved useful for
- *       minimask_combine(), but the principle works elsewhere.
- *
- * Elements in 'values' are allowed to be zero.  This is useful for "struct
+ * Elements in values array are allowed to be zero.  This is useful for "struct
  * minimatch", for which ensuring that the miniflow and minimask members have
  * same 'map' allows optimization.  This allowance applies only to a miniflow
  * that is not a mask.  That is, a minimask may NOT have zero elements in
  * its 'values'.
  */
 struct miniflow {
-    uint64_t map;
-    uint32_t *values;
-    uint32_t inline_values[MINI_N_INLINE];
+    uint64_t map:63;
+    uint64_t values_inline:1;
+    union {
+        uint32_t *offline_values;
+        uint32_t inline_values[MINI_N_INLINE];
+    };
 };
+
+static inline uint32_t *miniflow_values(struct miniflow *mf)
+{
+    return mf->values_inline ? mf->inline_values : mf->offline_values;
+}
+
+static inline const uint32_t *miniflow_get_values(const struct miniflow *mf)
+{
+    return mf->values_inline ? mf->inline_values : mf->offline_values;
+}
+
+static inline const uint32_t *miniflow_get_u32_values(const struct miniflow *mf)
+{
+    return miniflow_get_values(mf);
+}
+
+static inline const ovs_be32 *miniflow_get_be32_values(const struct miniflow *mf)
+{
+    return (OVS_FORCE const ovs_be32 *)miniflow_get_values(mf);
+}
 
 /* This is useful for initializing a miniflow for a miniflow_extract() call. */
 static inline void miniflow_initialize(struct miniflow *mf,
                                        uint32_t buf[FLOW_U32S])
 {
     mf->map = 0;
-    mf->values = buf;
+    mf->values_inline = (buf == (uint32_t *)(mf + 1));
+    if (!mf->values_inline) {
+        mf->offline_values = buf;
+    }
 }
 
 struct pkt_metadata;
@@ -415,7 +432,7 @@ mf_get_next_in_map(uint64_t *fmap, uint64_t rm1bit, const uint32_t **fp,
 /* Iterate through all miniflow u32 values specified by the 'MAP'.
  * This works as the first statement in a block.*/
 #define MINIFLOW_FOR_EACH_IN_MAP(VALUE, FLOW, MAP)                      \
-    const uint32_t *fp_ = (FLOW)->values;                               \
+    const uint32_t *fp_ = miniflow_get_u32_values(FLOW);                \
     uint64_t rm1bit_, fmap_, map_;                                      \
     for (fmap_ = (FLOW)->map, map_ = (MAP), rm1bit_ = rightmost_1bit(map_); \
          mf_get_next_in_map(&fmap_, rm1bit_, &fp_, &(VALUE));           \
@@ -426,7 +443,7 @@ mf_get_next_in_map(uint64_t *fmap, uint64_t rm1bit, const uint32_t **fp,
 #define MINIFLOW_GET_TYPE(MF, TYPE, OFS)                                \
     (((MF)->map & (UINT64_C(1) << (OFS) / 4))                           \
      ? ((OVS_FORCE const TYPE *)                                        \
-        ((MF)->values                                                   \
+        (miniflow_get_u32_values(MF)                                    \
          + count_1bits((MF)->map & ((UINT64_C(1) << (OFS) / 4) - 1))))  \
        [(OFS) % 4 / sizeof(TYPE)]                                       \
      : 0)                                                               \
@@ -485,6 +502,7 @@ static inline ovs_be64 minimask_get_metadata_mask(const struct minimask *);
 bool minimask_equal(const struct minimask *a, const struct minimask *b);
 bool minimask_has_extra(const struct minimask *, const struct minimask *);
 
+
 /* Returns true if 'mask' matches every packet, false if 'mask' fixes any bits
  * or fields. */
 static inline bool
@@ -495,8 +513,6 @@ minimask_is_catchall(const struct minimask *mask)
      * map the be zero. */
     return mask->masks.map == 0;
 }
-
-
 
 /* Returns the VID within the vlan_tci member of the "struct flow" represented
  * by 'flow'. */
@@ -560,7 +576,7 @@ static inline void
 flow_union_with_miniflow(struct flow *dst, const struct miniflow *src)
 {
     uint32_t *dst_u32 = (uint32_t *) dst;
-    const uint32_t *p = (uint32_t *)src->values;
+    const uint32_t *p = miniflow_get_u32_values(src);
     uint64_t map;
 
     for (map = src->map; map; map = zero_rightmost_1bit(map)) {

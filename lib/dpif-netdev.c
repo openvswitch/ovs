@@ -1527,8 +1527,10 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct pkt_metadata *md = &execute->md;
-    struct miniflow key;
-    uint32_t buf[FLOW_U32S];
+    struct {
+        struct miniflow flow;
+        uint32_t buf[FLOW_U32S];
+    } key;
 
     if (ofpbuf_size(execute->packet) < ETH_HEADER_LEN ||
         ofpbuf_size(execute->packet) > UINT16_MAX) {
@@ -1536,11 +1538,11 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
     }
 
     /* Extract flow key. */
-    miniflow_initialize(&key, buf);
-    miniflow_extract(execute->packet, md, &key);
+    miniflow_initialize(&key.flow, key.buf);
+    miniflow_extract(execute->packet, md, &key.flow);
 
     ovs_rwlock_rdlock(&dp->port_rwlock);
-    dp_netdev_execute_actions(dp, &key, execute->packet, false, md,
+    dp_netdev_execute_actions(dp, &key.flow, execute->packet, false, md,
                               execute->actions, execute->actions_len);
     ovs_rwlock_unlock(&dp->port_rwlock);
 
@@ -2009,32 +2011,34 @@ dp_netdev_input(struct dp_netdev *dp, struct ofpbuf *packet,
     OVS_REQ_RDLOCK(dp->port_rwlock)
 {
     struct dp_netdev_flow *netdev_flow;
-    struct miniflow key;
-    uint32_t buf[FLOW_U32S];
+    struct {
+        struct miniflow flow;
+        uint32_t buf[FLOW_U32S];
+    } key;
 
     if (ofpbuf_size(packet) < ETH_HEADER_LEN) {
         ofpbuf_delete(packet);
         return;
     }
-    miniflow_initialize(&key, buf);
-    miniflow_extract(packet, md, &key);
+    miniflow_initialize(&key.flow, key.buf);
+    miniflow_extract(packet, md, &key.flow);
 
-    netdev_flow = dp_netdev_lookup_flow(dp, &key);
+    netdev_flow = dp_netdev_lookup_flow(dp, &key.flow);
     if (netdev_flow) {
         struct dp_netdev_actions *actions;
 
-        dp_netdev_flow_used(netdev_flow, packet, &key);
+        dp_netdev_flow_used(netdev_flow, packet, &key.flow);
 
         actions = dp_netdev_flow_get_actions(netdev_flow);
-        dp_netdev_execute_actions(dp, &key, packet, true, md,
+        dp_netdev_execute_actions(dp, &key.flow, packet, true, md,
                                   actions->actions, actions->size);
         dp_netdev_count_packet(dp, DP_STAT_HIT);
     } else if (dp->handler_queues) {
         dp_netdev_count_packet(dp, DP_STAT_MISS);
         dp_netdev_output_userspace(dp, packet,
-                                   miniflow_hash_5tuple(&key, 0)
+                                   miniflow_hash_5tuple(&key.flow, 0)
                                    % dp->n_handlers,
-                                   DPIF_UC_MISS, &key, NULL);
+                                   DPIF_UC_MISS, &key.flow, NULL);
         ofpbuf_delete(packet);
     }
 }

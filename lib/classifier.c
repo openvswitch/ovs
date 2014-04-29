@@ -40,7 +40,7 @@ struct cls_trie {
 
 struct cls_subtable_entry {
     struct cls_subtable *subtable;
-    uint32_t *mask_values;
+    const uint32_t *mask_values;
     tag_type tag;
     unsigned int max_priority;
 };
@@ -278,8 +278,9 @@ static inline uint32_t
 flow_hash_in_minimask(const struct flow *flow, const struct minimask *mask,
                       uint32_t basis)
 {
+    const uint32_t *mask_values = miniflow_get_u32_values(&mask->masks);
     const uint32_t *flow_u32 = (const uint32_t *)flow;
-    const uint32_t *p = mask->masks.values;
+    const uint32_t *p = mask_values;
     uint32_t hash;
     uint64_t map;
 
@@ -288,7 +289,7 @@ flow_hash_in_minimask(const struct flow *flow, const struct minimask *mask,
         hash = mhash_add(hash, flow_u32[raw_ctz(map)] & *p++);
     }
 
-    return mhash_finish(hash, (p - mask->masks.values) * 4);
+    return mhash_finish(hash, (p - mask_values) * 4);
 }
 
 /* Returns a hash value for the bits of 'flow' where there are 1-bits in
@@ -300,7 +301,8 @@ static inline uint32_t
 miniflow_hash_in_minimask(const struct miniflow *flow,
                           const struct minimask *mask, uint32_t basis)
 {
-    const uint32_t *p = mask->masks.values;
+    const uint32_t *mask_values = miniflow_get_u32_values(&mask->masks);
+    const uint32_t *p = mask_values;
     uint32_t hash = basis;
     uint32_t flow_u32;
 
@@ -308,7 +310,7 @@ miniflow_hash_in_minimask(const struct miniflow *flow,
         hash = mhash_add(hash, flow_u32 & *p++);
     }
 
-    return mhash_finish(hash, (p - mask->masks.values) * 4);
+    return mhash_finish(hash, (p - mask_values) * 4);
 }
 
 /* Returns a hash value for the bits of range [start, end) in 'flow',
@@ -321,11 +323,12 @@ flow_hash_in_minimask_range(const struct flow *flow,
                             const struct minimask *mask,
                             uint8_t start, uint8_t end, uint32_t *basis)
 {
+    const uint32_t *mask_values = miniflow_get_u32_values(&mask->masks);
     const uint32_t *flow_u32 = (const uint32_t *)flow;
     unsigned int offset;
     uint64_t map = miniflow_get_map_in_range(&mask->masks, start, end,
                                              &offset);
-    const uint32_t *p = mask->masks.values + offset;
+    const uint32_t *p = mask_values + offset;
     uint32_t hash = *basis;
 
     for (; map; map = zero_rightmost_1bit(map)) {
@@ -333,7 +336,7 @@ flow_hash_in_minimask_range(const struct flow *flow,
     }
 
     *basis = hash; /* Allow continuation from the unfinished value. */
-    return mhash_finish(hash, (p - mask->masks.values) * 4);
+    return mhash_finish(hash, (p - mask_values) * 4);
 }
 
 /* Fold minimask 'mask''s wildcard mask into 'wc's wildcard mask. */
@@ -355,7 +358,7 @@ flow_wildcards_fold_minimask_range(struct flow_wildcards *wc,
     unsigned int offset;
     uint64_t map = miniflow_get_map_in_range(&mask->masks, start, end,
                                              &offset);
-    const uint32_t *p = mask->masks.values + offset;
+    const uint32_t *p = miniflow_get_u32_values(&mask->masks) + offset;
 
     for (; map; map = zero_rightmost_1bit(map)) {
         dst_u32[raw_ctz(map)] |= *p++;
@@ -366,7 +369,8 @@ flow_wildcards_fold_minimask_range(struct flow_wildcards *wc,
 static inline uint32_t
 miniflow_hash(const struct miniflow *flow, uint32_t basis)
 {
-    const uint32_t *p = flow->values;
+    const uint32_t *values = miniflow_get_u32_values(flow);
+    const uint32_t *p = values;
     uint32_t hash = basis;
     uint64_t hash_map = 0;
     uint64_t map;
@@ -381,7 +385,7 @@ miniflow_hash(const struct miniflow *flow, uint32_t basis)
     hash = mhash_add(hash, hash_map);
     hash = mhash_add(hash, hash_map >> 32);
 
-    return mhash_finish(hash, p - flow->values);
+    return mhash_finish(hash, p - values);
 }
 
 /* Returns a hash value for 'mask', given 'basis'. */
@@ -414,8 +418,8 @@ minimatch_hash_range(const struct minimatch *match, uint8_t start, uint8_t end,
 
     n = count_1bits(miniflow_get_map_in_range(&match->mask.masks, start, end,
                                               &offset));
-    q = match->mask.masks.values + offset;
-    p = match->flow.values + offset;
+    q = miniflow_get_u32_values(&match->mask.masks) + offset;
+    p = miniflow_get_u32_values(&match->flow) + offset;
 
     for (i = 0; i < n; i++) {
         hash = mhash_add(hash, p[i] & q[i]);
@@ -969,8 +973,8 @@ static bool
 minimatch_matches_miniflow(const struct minimatch *match,
                            const struct miniflow *target)
 {
-    const uint32_t *flowp = (const uint32_t *)match->flow.values;
-    const uint32_t *maskp = (const uint32_t *)match->mask.masks.values;
+    const uint32_t *flowp = miniflow_get_u32_values(&match->flow);
+    const uint32_t *maskp = miniflow_get_u32_values(&match->mask.masks);
     uint32_t target_u32;
 
     MINIFLOW_FOR_EACH_IN_MAP(target_u32, target, match->mask.masks.map) {
@@ -1324,7 +1328,7 @@ insert_subtable(struct cls_classifier *cls, const struct minimask *mask)
 
     hmap_insert(&cls->subtables, &subtable->hmap_node, hash);
     elem.subtable = subtable;
-    elem.mask_values = subtable->mask.masks.values;
+    elem.mask_values = miniflow_get_values(&subtable->mask.masks);
     elem.tag = subtable->tag;
     elem.max_priority = subtable->max_priority;
     cls_subtable_cache_push_back(&cls->subtables_priority, elem);
@@ -1987,7 +1991,7 @@ minimask_get_prefix_len(const struct minimask *minimask,
 static const ovs_be32 *
 minimatch_get_prefix(const struct minimatch *match, const struct mf_field *mf)
 {
-    return match->flow.values +
+    return miniflow_get_be32_values(&match->flow) +
         count_1bits(match->flow.map & ((UINT64_C(1) << mf->flow_be32ofs) - 1));
 }
 
