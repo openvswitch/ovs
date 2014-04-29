@@ -6992,25 +6992,30 @@ ofproto_unixctl_init(void)
 void
 ofproto_get_vlan_usage(struct ofproto *ofproto, unsigned long int *vlan_bitmap)
 {
+    struct match match;
+    struct cls_rule target;
     const struct oftable *oftable;
+
+    match_init_catchall(&match);
+    match_set_vlan_vid_masked(&match, htons(VLAN_CFI), htons(VLAN_CFI));
+    cls_rule_init(&target, &match, 0);
 
     free(ofproto->vlan_bitmap);
     ofproto->vlan_bitmap = bitmap_allocate(4096);
     ofproto->vlans_changed = false;
 
     OFPROTO_FOR_EACH_TABLE (oftable, ofproto) {
-        const struct cls_subtable *table;
+        struct cls_cursor cursor;
+        struct rule *rule;
 
         fat_rwlock_rdlock(&oftable->cls.rwlock);
-        HMAP_FOR_EACH (table, hmap_node, &oftable->cls.subtables) {
-            if (minimask_get_vid_mask(&table->mask) == VLAN_VID_MASK) {
-                const struct cls_rule *rule;
+        cls_cursor_init(&cursor, &oftable->cls, &target);
+        CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
+            if (minimask_get_vid_mask(&rule->cr.match.mask) == VLAN_VID_MASK) {
+                uint16_t vid = miniflow_get_vid(&rule->cr.match.flow);
 
-                HMAP_FOR_EACH (rule, hmap_node, &table->rules) {
-                    uint16_t vid = miniflow_get_vid(&rule->match.flow);
-                    bitmap_set1(vlan_bitmap, vid);
-                    bitmap_set1(ofproto->vlan_bitmap, vid);
-                }
+                bitmap_set1(vlan_bitmap, vid);
+                bitmap_set1(ofproto->vlan_bitmap, vid);
             }
         }
         fat_rwlock_unlock(&oftable->cls.rwlock);
