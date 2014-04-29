@@ -40,7 +40,6 @@ struct cls_trie {
 
 struct cls_subtable_entry {
     struct cls_subtable *subtable;
-    const uint32_t *mask_values;
     tag_type tag;
     unsigned int max_priority;
 };
@@ -72,7 +71,6 @@ struct cls_subtable {
     struct hmap_node hmap_node; /* Within struct cls_classifier 'subtables'
                                  * hmap. */
     struct hmap rules;          /* Contains "struct cls_rule"s. */
-    struct minimask mask;       /* Wildcards for fields. */
     int n_rules;                /* Number of rules, including duplicates. */
     unsigned int max_priority;  /* Max priority of any rule in the subtable. */
     unsigned int max_count;     /* Count of max_priority rules. */
@@ -81,6 +79,8 @@ struct cls_subtable {
     uint8_t index_ofs[CLS_MAX_INDICES]; /* u32 flow segment boundaries. */
     struct hindex indices[CLS_MAX_INDICES]; /* Staged lookup indices. */
     unsigned int trie_plen[CLS_MAX_TRIES];  /* Trie prefix length in 'mask'. */
+    struct minimask mask;       /* Wildcards for fields. */
+    /* 'mask' must be the last field. */
 };
 
 /* Associates a metadata value (that is, a value of the OpenFlow 1.1+ metadata
@@ -103,16 +103,21 @@ struct cls_match {
     unsigned int priority;      /* Larger numbers are higher priorities. */
     struct cls_partition *partition;
     struct list list;           /* List of identical, lower-priority rules. */
-    struct minimatch match;     /* Matching rule. */
+    struct miniflow flow;       /* Matching rule. Mask is in the subtable. */
+    /* 'flow' must be the last field. */
 };
 
 static struct cls_match *
 cls_match_alloc(struct cls_rule *rule)
 {
-    struct cls_match *cls_match = xmalloc(sizeof *cls_match);
+    int count = count_1bits(rule->match.flow.map);
+
+    struct cls_match *cls_match
+        = xmalloc(sizeof *cls_match - sizeof cls_match->flow.inline_values
+                  + MINIFLOW_VALUES_SIZE(count));
 
     cls_match->cls_rule = rule;
-    minimatch_clone(&cls_match->match, &rule->match);
+    miniflow_clone_inline(&cls_match->flow, &rule->match.flow, count);
     cls_match->priority = rule->priority;
     rule->cls_match = cls_match;
 
@@ -874,7 +879,6 @@ static inline void
 lookahead_subtable(const struct cls_subtable_entry *subtables)
 {
     ovs_prefetch_range(subtables->subtable, sizeof *subtables->subtable);
-    ovs_prefetch_range(subtables->mask_values, 1);
 }
 
 /* Finds and returns the highest-priority rule in 'cls' that matches 'flow'.
@@ -968,16 +972,19 @@ classifier_lookup(const struct classifier *cls_, const struct flow *flow,
 }
 
 /* Returns true if 'target' satisifies 'match', that is, if each bit for which
- * 'match' specifies a particular value has the correct value in 'target'. */
+ * 'match' specifies a particular value has the correct value in 'target'.
+ *
+ * 'flow' and 'mask' have the same mask! */
 static bool
-minimatch_matches_miniflow(const struct minimatch *match,
-                           const struct miniflow *target)
+miniflow_and_mask_matches_miniflow(const struct miniflow *flow,
+                                   const struct minimask *mask,
+                                   const struct miniflow *target)
 {
-    const uint32_t *flowp = miniflow_get_u32_values(&match->flow);
-    const uint32_t *maskp = miniflow_get_u32_values(&match->mask.masks);
+    const uint32_t *flowp = miniflow_get_u32_values(flow);
+    const uint32_t *maskp = miniflow_get_u32_values(&mask->masks);
     uint32_t target_u32;
 
-    MINIFLOW_FOR_EACH_IN_MAP(target_u32, target, match->mask.masks.map) {
+    MINIFLOW_FOR_EACH_IN_MAP(target_u32, target, mask->masks.map) {
         if ((*flowp++ ^ target_u32) & *maskp++) {
             return false;
         }
@@ -994,7 +1001,8 @@ find_match_miniflow(const struct cls_subtable *subtable,
     struct cls_match *rule;
 
     HMAP_FOR_EACH_WITH_HASH (rule, hmap_node, hash, &subtable->rules) {
-        if (minimatch_matches_miniflow(&rule->match, flow)) {
+        if (miniflow_and_mask_matches_miniflow(&rule->flow, &subtable->mask,
+                                               flow)) {
             return rule;
         }
     }
@@ -1112,7 +1120,7 @@ classifier_rule_overlaps(const struct classifier *cls_,
                 }
                 if (rule->priority == target->priority
                     && miniflow_equal_in_minimask(&target->match.flow,
-                                                  &rule->match.flow, &mask)) {
+                                                  &rule->flow, &mask)) {
                     return true;
                 }
             }
@@ -1170,7 +1178,7 @@ static bool
 rule_matches(const struct cls_match *rule, const struct cls_rule *target)
 {
     return (!target
-            || miniflow_equal_in_minimask(&rule->match.flow,
+            || miniflow_equal_in_minimask(&rule->flow,
                                           &target->match.flow,
                                           &target->match.mask));
 }
@@ -1284,10 +1292,12 @@ insert_subtable(struct cls_classifier *cls, const struct minimask *mask)
     struct flow_wildcards old, new;
     uint8_t prev;
     struct cls_subtable_entry elem;
+    int count = count_1bits(mask->masks.map);
 
-    subtable = xzalloc(sizeof *subtable);
+    subtable = xzalloc(sizeof *subtable - sizeof mask->masks.inline_values
+                       + MINIFLOW_VALUES_SIZE(count));
     hmap_init(&subtable->rules);
-    minimask_clone(&subtable->mask, mask);
+    miniflow_clone_inline(&subtable->mask.masks, &mask->masks, count);
 
     /* Init indices for segmented lookup, if any. */
     flow_wildcards_init_catchall(&new);
@@ -1328,7 +1338,6 @@ insert_subtable(struct cls_classifier *cls, const struct minimask *mask)
 
     hmap_insert(&cls->subtables, &subtable->hmap_node, hash);
     elem.subtable = subtable;
-    elem.mask_values = miniflow_get_values(&subtable->mask.masks);
     elem.tag = subtable->tag;
     elem.max_priority = subtable->max_priority;
     cls_subtable_cache_push_back(&cls->subtables_priority, elem);
@@ -1524,6 +1533,31 @@ check_tries(struct trie_ctx trie_ctx[CLS_MAX_TRIES], unsigned int n_tries,
     return false;
 }
 
+/* Returns true if 'target' satisifies 'flow'/'mask', that is, if each bit
+ * for which 'flow', for which 'mask' has a bit set, specifies a particular
+ * value has the correct value in 'target'.
+ *
+ * This function is equivalent to miniflow_equal_flow_in_minimask(flow,
+ * target, mask) but it is faster because of the invariant that
+ * flow->map and mask->masks.map are the same. */
+static inline bool
+miniflow_and_mask_matches_flow(const struct miniflow *flow,
+                               const struct minimask *mask,
+                               const struct flow *target)
+{
+    const uint32_t *flowp = miniflow_get_u32_values(flow);
+    const uint32_t *maskp = miniflow_get_u32_values(&mask->masks);
+    uint32_t target_u32;
+
+    FLOW_FOR_EACH_IN_MAP(target_u32, target, mask->masks.map) {
+        if ((*flowp++ ^ target_u32) & *maskp++) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 static inline struct cls_match *
 find_match(const struct cls_subtable *subtable, const struct flow *flow,
            uint32_t hash)
@@ -1531,7 +1565,8 @@ find_match(const struct cls_subtable *subtable, const struct flow *flow,
     struct cls_match *rule;
 
     HMAP_FOR_EACH_WITH_HASH (rule, hmap_node, hash, &subtable->rules) {
-        if (minimatch_matches_flow(&rule->match, flow)) {
+        if (miniflow_and_mask_matches_flow(&rule->flow, &subtable->mask,
+                                           flow)) {
             return rule;
         }
     }
@@ -1579,8 +1614,8 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
          * not match, then we know that we will never get a match, but we do
          * not yet know how many wildcards we need to fold into 'wc' so we
          * continue iterating through indices to find that out.  (We won't
-         * waste time calling minimatch_matches_flow() again because we've set
-         * 'rule' nonnull.)
+         * waste time calling miniflow_and_mask_matches_flow() again because
+         * we've set 'rule' nonnull.)
          *
          * This check shows a measurable benefit with non-trivial flow tables.
          *
@@ -1588,7 +1623,8 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
          * optimization. */
         if (!inode->s && !rule) {
             ASSIGN_CONTAINER(rule, inode - i, index_nodes);
-            if (minimatch_matches_flow(&rule->match, flow)) {
+            if (miniflow_and_mask_matches_flow(&rule->flow, &subtable->mask,
+                                               flow)) {
                 goto out;
             }
         }
@@ -1628,7 +1664,7 @@ find_equal(struct cls_subtable *subtable, const struct miniflow *flow,
     struct cls_match *head;
 
     HMAP_FOR_EACH_WITH_HASH (head, hmap_node, hash, &subtable->rules) {
-        if (miniflow_equal(&head->match.flow, flow)) {
+        if (miniflow_equal(&head->flow, flow)) {
             return head;
         }
     }

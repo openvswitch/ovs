@@ -1578,13 +1578,15 @@ miniflow_n_values(const struct miniflow *flow)
 static uint32_t *
 miniflow_alloc_values(struct miniflow *flow, int n)
 {
-    if (n <= sizeof flow->inline_values / sizeof(uint32_t)) {
+    int size = MINIFLOW_VALUES_SIZE(n);
+
+    if (size <= sizeof flow->inline_values) {
         flow->values_inline = true;
         return flow->inline_values;
     } else {
         COVERAGE_INC(miniflow_malloc);
         flow->values_inline = false;
-        flow->offline_values = xmalloc(n * sizeof(uint32_t));
+        flow->offline_values = xmalloc(size);
         return flow->offline_values;
     }
 }
@@ -1652,18 +1654,57 @@ miniflow_init_with_minimask(struct miniflow *dst, const struct flow *src,
 void
 miniflow_clone(struct miniflow *dst, const struct miniflow *src)
 {
-    int n = miniflow_n_values(src);
+    int size = MINIFLOW_VALUES_SIZE(miniflow_n_values(src));
+    uint32_t *values;
+
     dst->map = src->map;
-    memcpy(miniflow_alloc_values(dst, n), miniflow_get_values(src),
-           n * sizeof(uint32_t));
+    if (size <= sizeof dst->inline_values) {
+        dst->values_inline = true;
+        values = dst->inline_values;
+    } else {
+        dst->values_inline = false;
+        COVERAGE_INC(miniflow_malloc);
+        dst->offline_values = xmalloc(size);
+        values = dst->offline_values;
+    }
+    memcpy(values, miniflow_get_values(src), size);
+}
+
+/* Initializes 'dst' as a copy of 'src'.  The caller must have allocated
+ * 'dst' to have inline space all data in 'src'. */
+void
+miniflow_clone_inline(struct miniflow *dst, const struct miniflow *src,
+                      size_t n_values)
+{
+    dst->values_inline = true;
+    dst->map = src->map;
+    memcpy(dst->inline_values, miniflow_get_values(src),
+           MINIFLOW_VALUES_SIZE(n_values));
 }
 
 /* Initializes 'dst' with the data in 'src', destroying 'src'.
- * The caller must eventually free 'dst' with miniflow_destroy(). */
+ * The caller must eventually free 'dst' with miniflow_destroy().
+ * 'dst' must be regularly sized miniflow, but 'src' can have
+ * larger than default inline values. */
 void
 miniflow_move(struct miniflow *dst, struct miniflow *src)
 {
-    *dst = *src;
+    int size = MINIFLOW_VALUES_SIZE(miniflow_n_values(src));
+
+    dst->map = src->map;
+    if (size <= sizeof dst->inline_values) {
+        dst->values_inline = true;
+        memcpy(dst->inline_values, miniflow_get_values(src), size);
+        miniflow_destroy(src);
+    } else if (src->values_inline) {
+        dst->values_inline = false;
+        COVERAGE_INC(miniflow_malloc);
+        dst->offline_values = xmalloc(size);
+        memcpy(dst->offline_values, src->inline_values, size);
+    } else {
+        dst->values_inline = false;
+        dst->offline_values = src->offline_values;
+    }
 }
 
 /* Frees any memory owned by 'flow'.  Does not free the storage in which 'flow'

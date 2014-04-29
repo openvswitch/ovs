@@ -358,14 +358,18 @@ struct miniflow {
     };
 };
 
+#define MINIFLOW_VALUES_SIZE(COUNT) ((COUNT) * sizeof(uint32_t))
+
 static inline uint32_t *miniflow_values(struct miniflow *mf)
 {
-    return mf->values_inline ? mf->inline_values : mf->offline_values;
+    return OVS_LIKELY(mf->values_inline)
+        ? mf->inline_values : mf->offline_values;
 }
 
 static inline const uint32_t *miniflow_get_values(const struct miniflow *mf)
 {
-    return mf->values_inline ? mf->inline_values : mf->offline_values;
+    return OVS_LIKELY(mf->values_inline)
+        ? mf->inline_values : mf->offline_values;
 }
 
 static inline const uint32_t *miniflow_get_u32_values(const struct miniflow *mf)
@@ -400,10 +404,30 @@ void miniflow_init(struct miniflow *, const struct flow *);
 void miniflow_init_with_minimask(struct miniflow *, const struct flow *,
                                  const struct minimask *);
 void miniflow_clone(struct miniflow *, const struct miniflow *);
+void miniflow_clone_inline(struct miniflow *, const struct miniflow *,
+                           size_t n_values);
 void miniflow_move(struct miniflow *dst, struct miniflow *);
 void miniflow_destroy(struct miniflow *);
 
 void miniflow_expand(const struct miniflow *, struct flow *);
+
+static inline uint32_t
+flow_get_next_in_map(const struct flow *flow, uint64_t map, uint32_t *value)
+{
+    if (map) {
+        *value = ((const uint32_t *)flow)[raw_ctz(map)];
+        return true;
+    }
+    return false;
+}
+
+/* Iterate through all flow u32 values specified by 'MAP'.
+ * This works as the first statement in a block.*/
+#define FLOW_FOR_EACH_IN_MAP(VALUE, FLOW, MAP)                          \
+    uint64_t map_;                                                      \
+    for (map_ = (MAP);                                                  \
+         flow_get_next_in_map(FLOW, map_, &(VALUE));                    \
+         map_ = zero_rightmost_1bit(map_))
 
 #define FLOW_U32_SIZE(FIELD)                                            \
     DIV_ROUND_UP(sizeof(((struct flow *)0)->FIELD), sizeof(uint32_t))
@@ -429,7 +453,7 @@ mf_get_next_in_map(uint64_t *fmap, uint64_t rm1bit, const uint32_t **fp,
     return rm1bit != 0;
 }
 
-/* Iterate through all miniflow u32 values specified by the 'MAP'.
+/* Iterate through all miniflow u32 values specified by 'MAP'.
  * This works as the first statement in a block.*/
 #define MINIFLOW_FOR_EACH_IN_MAP(VALUE, FLOW, MAP)                      \
     const uint32_t *fp_ = miniflow_get_u32_values(FLOW);                \
