@@ -641,8 +641,8 @@ void *ofpact_put(struct ofpbuf *, enum ofpact_type, size_t len);
  *     After using this function to add a variable-length action, add the
  *     elements of the flexible array (e.g. with ofpbuf_put()), then use
  *     ofpact_update_len() to update the length embedded into the action.
- *     (Keep in mind the need to refresh the structure from 'ofpacts->l2' after
- *     adding data to 'ofpacts'.)
+ *     (Keep in mind the need to refresh the structure from 'ofpacts->frame'
+ *     after adding data to 'ofpacts'.)
  *
  *   struct <STRUCT> *ofpact_get_<ENUM>(const struct ofpact *ofpact);
  *
