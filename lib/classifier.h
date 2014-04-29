@@ -237,6 +237,11 @@ extern struct ovs_mutex ofproto_mutex;
 struct cls_classifier;
 struct cls_subtable;
 struct cls_partition;
+struct cls_match;
+
+enum {
+    CLS_MAX_TRIES = 3    /* Maximum number of prefix trees per classifier. */
+};
 
 /* A flow classifier. */
 struct classifier {
@@ -244,20 +249,11 @@ struct classifier {
     struct cls_classifier *cls;
 };
 
-enum {
-    CLS_MAX_INDICES = 3, /* Maximum number of lookup indices per subtable. */
-    CLS_MAX_TRIES = 3    /* Maximum number of prefix trees per classifier. */
-};
-
-/* A rule in a "struct cls_subtable". */
+/* A rule to be inserted to the classifier. */
 struct cls_rule {
-    struct hmap_node hmap_node; /* Within struct cls_subtable 'rules'. */
-    struct list list;           /* List of identical, lower-priority rules. */
-    struct minimatch match;     /* Matching rule. */
-    unsigned int priority;      /* Larger numbers are higher priorities. */
-    struct cls_partition *partition;
-    struct hindex_node index_nodes[CLS_MAX_INDICES]; /* Within subtable's
-                                                      * 'indices'. */
+    struct minimatch match;      /* Matching rule. */
+    unsigned int priority;       /* Larger numbers are higher priorities. */
+    struct cls_match *cls_match; /* NULL if rule is not in a classifier. */
 };
 
 void cls_rule_init(struct cls_rule *, const struct match *,
