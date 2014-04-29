@@ -577,7 +577,6 @@ struct sw_flow *ovs_flow_tbl_lookup_stats(struct flow_table *tbl,
 
 		if (ce->skb_hash == skb_hash) {
 			struct sw_flow_mask *mask;
-			struct sw_flow *flow;
 
 			mask = rcu_dereference_ovsl(ma->masks[ce->mask_index]);
 			if (mask) {
