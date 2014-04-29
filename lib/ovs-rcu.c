@@ -71,11 +71,13 @@ ovsrcu_perthread_get(void)
 
     perthread = pthread_getspecific(perthread_key);
     if (!perthread) {
+        const char *name = get_subprogram_name();
+
         perthread = xmalloc(sizeof *perthread);
         ovs_mutex_init(&perthread->mutex);
         perthread->seqno = seq_read(global_seqno);
         perthread->cbset = NULL;
-        ovs_strlcpy(perthread->name, get_subprogram_name(),
+        ovs_strlcpy(perthread->name, name[0] ? name : "main",
                     sizeof perthread->name);
 
         ovs_mutex_lock(&ovsrcu_threads_mutex);
