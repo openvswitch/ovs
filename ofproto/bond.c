@@ -1180,10 +1180,11 @@ bond_rebalance(struct bond *bond)
         e->tx_bytes /= 2;
     }
 
-done:
     if (use_recirc && rebalanced) {
         bond_update_post_recirc_rules(bond,true);
     }
+
+done:
     ovs_rwlock_unlock(&rwlock);
 }
 
