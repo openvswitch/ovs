@@ -355,7 +355,7 @@ flow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
 }
 
 /* Caller is responsible for initializing 'dst->values' with enough storage
- * (FLOW_U64S * 8 bytes is enough). */
+ * for FLOW_U32S * 4 bytes. */
 void
 miniflow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
                  struct miniflow *dst)
@@ -943,50 +943,76 @@ flow_wildcards_set_reg_mask(struct flow_wildcards *wc, int idx, uint32_t mask)
     wc->masks.regs[idx] = mask;
 }
 
-/* Calculates the 5-tuple hash from the given flow. */
+/* Calculates the 5-tuple hash from the given miniflow.
+ * This returns the same value as flow_hash_5tuple for the corresponding
+ * flow. */
 uint32_t
 miniflow_hash_5tuple(const struct miniflow *flow, uint32_t basis)
 {
-    uint32_t hash = 0;
+    uint32_t hash = basis;
 
-    if (!flow) {
-        return 0;
+    if (flow) {
+        ovs_be16 dl_type = MINIFLOW_GET_BE16(flow, dl_type);
+
+        hash = mhash_add(hash, MINIFLOW_GET_U8(flow, nw_proto));
+
+        /* Separate loops for better optimization. */
+        if (dl_type == htons(ETH_TYPE_IPV6)) {
+            uint64_t map = MINIFLOW_MAP(ipv6_src) | MINIFLOW_MAP(ipv6_dst)
+                | MINIFLOW_MAP(tp_src); /* Covers both ports */
+            uint32_t value;
+
+            MINIFLOW_FOR_EACH_IN_MAP(value, flow, map) {
+                hash = mhash_add(hash, value);
+            }
+        } else {
+            uint64_t map = MINIFLOW_MAP(nw_src) | MINIFLOW_MAP(nw_dst)
+                | MINIFLOW_MAP(tp_src); /* Covers both ports */
+            uint32_t value;
+
+            MINIFLOW_FOR_EACH_IN_MAP(value, flow, map) {
+                hash = mhash_add(hash, value);
+            }
+        }
+        hash = mhash_finish(hash, 42); /* Arbitrary number. */
     }
-
-    hash = mhash_add(basis,
-                     miniflow_get_u32(flow, offsetof(struct flow, nw_src)));
-    hash = mhash_add(hash,
-                     miniflow_get_u32(flow, offsetof(struct flow, nw_dst)));
-    hash = mhash_add(hash,
-                     miniflow_get_u32(flow, offsetof(struct flow, tp_src)));
-    hash = mhash_add(hash,
-                     miniflow_get_u8(flow, offsetof(struct flow, nw_proto)));
-
-    return mhash_finish(hash, 13);
+    return hash;
 }
 
 BUILD_ASSERT_DECL(offsetof(struct flow, tp_src) + 2
                   == offsetof(struct flow, tp_dst) &&
                   offsetof(struct flow, tp_src) / 4
                   == offsetof(struct flow, tp_dst) / 4);
+BUILD_ASSERT_DECL(offsetof(struct flow, ipv6_src) + 16
+                  == offsetof(struct flow, ipv6_dst));
 
 /* Calculates the 5-tuple hash from the given flow. */
 uint32_t
 flow_hash_5tuple(const struct flow *flow, uint32_t basis)
 {
-    const uint32_t *flow_u32 = (const uint32_t *)flow;
-    uint32_t hash = 0;
+    uint32_t hash = basis;
 
-    if (!flow) {
-        return 0;
+    if (flow) {
+        const uint32_t *flow_u32 = (const uint32_t *)flow;
+
+        hash = mhash_add(hash, flow->nw_proto);
+
+        if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
+            int ofs = offsetof(struct flow, ipv6_src) / 4;
+            int end = ofs + 2 * sizeof flow->ipv6_src / 4;
+
+            while (ofs < end) {
+                hash = mhash_add(hash, flow_u32[ofs++]);
+            }
+        } else {
+            hash = mhash_add(hash, (OVS_FORCE uint32_t) flow->nw_src);
+            hash = mhash_add(hash, (OVS_FORCE uint32_t) flow->nw_dst);
+        }
+        hash = mhash_add(hash, flow_u32[offsetof(struct flow, tp_src) / 4]);
+
+        hash = mhash_finish(hash, 42); /* Arbitrary number. */
     }
-
-    hash = mhash_add(basis, (OVS_FORCE uint32_t) flow->nw_src);
-    hash = mhash_add(hash, (OVS_FORCE uint32_t) flow->nw_dst);
-    hash = mhash_add(hash, flow_u32[offsetof(struct flow, tp_src) / 4]);
-    hash = mhash_add(hash, flow->nw_proto);
-
-    return mhash_finish(hash, 13);
+    return hash;
 }
 
 /* Hashes 'flow' based on its L2 through L4 protocol information. */

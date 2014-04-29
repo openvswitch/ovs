@@ -402,6 +402,13 @@ void miniflow_destroy(struct miniflow *);
 
 void miniflow_expand(const struct miniflow *, struct flow *);
 
+#define FLOW_U32_SIZE(FIELD)                                            \
+    DIV_ROUND_UP(sizeof(((struct flow *)0)->FIELD), sizeof(uint32_t))
+
+#define MINIFLOW_MAP(FIELD)                       \
+    (((UINT64_C(1) << FLOW_U32_SIZE(FIELD)) - 1)  \
+     << (offsetof(struct flow, FIELD) / 4))
+
 static inline uint32_t
 mf_get_next_in_map(uint64_t *fmap, uint64_t rm1bit, const uint32_t **fp,
                    uint32_t *value)
@@ -428,23 +435,30 @@ mf_get_next_in_map(uint64_t *fmap, uint64_t rm1bit, const uint32_t **fp,
          mf_get_next_in_map(&fmap_, rm1bit_, &fp_, &(VALUE));           \
          map_ -= rm1bit_, rm1bit_ = rightmost_1bit(map_))
 
-/* These accessors use byte offsets, which are assumed to be compile-time
- * constants. */
-static inline uint8_t miniflow_get_u8(const struct miniflow *,
-                                       unsigned int ofs);
-static inline uint16_t miniflow_get_u16(const struct miniflow *,
-                                        unsigned int ofs);
-static inline ovs_be16 miniflow_get_be16(const struct miniflow *,
-                                         unsigned int ofs);
-static inline uint32_t miniflow_get_u32(const struct miniflow *,
-                                        unsigned int ofs);
-static inline ovs_be32 miniflow_get_be32(const struct miniflow *,
-                                         unsigned int ofs);
+/* Get the value of 'FIELD' of an up to 4 byte wide integer type 'TYPE' of
+ * a miniflow. */
+#define MINIFLOW_GET_TYPE(MF, TYPE, OFS)                                \
+    (((MF)->map & (UINT64_C(1) << (OFS) / 4))                           \
+     ? ((OVS_FORCE const TYPE *)                                        \
+        ((MF)->values                                                   \
+         + count_1bits((MF)->map & ((UINT64_C(1) << (OFS) / 4) - 1))))  \
+       [(OFS) % 4 / sizeof(TYPE)]                                       \
+     : 0)                                                               \
+
+#define MINIFLOW_GET_U8(FLOW, FIELD)                                    \
+    MINIFLOW_GET_TYPE(FLOW, uint8_t, offsetof(struct flow, FIELD))
+#define MINIFLOW_GET_U16(FLOW, FIELD)                                    \
+    MINIFLOW_GET_TYPE(FLOW, uint16_t, offsetof(struct flow, FIELD))
+#define MINIFLOW_GET_BE16(FLOW, FIELD)                                    \
+    MINIFLOW_GET_TYPE(FLOW, ovs_be16, offsetof(struct flow, FIELD))
+#define MINIFLOW_GET_U32(FLOW, FIELD)                                    \
+    MINIFLOW_GET_TYPE(FLOW, uint32_t, offsetof(struct flow, FIELD))
+#define MINIFLOW_GET_BE32(FLOW, FIELD)                                    \
+    MINIFLOW_GET_TYPE(FLOW, ovs_be32, offsetof(struct flow, FIELD))
 
 static inline uint16_t miniflow_get_vid(const struct miniflow *);
 static inline uint16_t miniflow_get_tcp_flags(const struct miniflow *);
 static inline ovs_be64 miniflow_get_metadata(const struct miniflow *);
-static inline uint8_t miniflow_get_u8(const struct miniflow *, unsigned int ofs);
 
 bool miniflow_equal(const struct miniflow *a, const struct miniflow *b);
 bool miniflow_equal_in_minimask(const struct miniflow *a,
@@ -495,54 +509,12 @@ bool minimask_has_extra(const struct minimask *, const struct minimask *);
 bool minimask_is_catchall(const struct minimask *);
 
 
-/* 'OFS' is a compile-time constant. */
-#define MINIFLOW_GET_TYPE(MF, TYPE, OFS)                                \
-    (MF->map & UINT64_C(1) << OFS / 4)                                  \
-    ? ((OVS_FORCE const TYPE *)                                         \
-       (MF->values + count_1bits(MF->map & ((UINT64_C(1) << OFS / 4) - 1)))) \
-      [OFS % 4 / sizeof(TYPE)]                                          \
-    : 0
-
-static inline uint8_t
-miniflow_get_u8(const struct miniflow *flow, unsigned int ofs)
-{
-    return MINIFLOW_GET_TYPE(flow, uint8_t, ofs);
-}
-
-static inline uint16_t
-miniflow_get_u16(const struct miniflow *flow, unsigned int ofs)
-{
-    return MINIFLOW_GET_TYPE(flow, uint16_t, ofs);
-}
-
-/* Returns the ovs_be16 that would be at byte offset 'u8_ofs' if 'flow' were
- * expanded into a "struct flow". */
-static inline ovs_be16
-miniflow_get_be16(const struct miniflow *flow, unsigned int ofs)
-{
-    return MINIFLOW_GET_TYPE(flow, ovs_be16, ofs);
-}
-
-static inline uint32_t
-miniflow_get_u32(const struct miniflow *flow, unsigned int ofs)
-{
-    return MINIFLOW_GET_TYPE(flow, uint32_t, ofs);
-}
-
-static inline ovs_be32
-miniflow_get_be32(const struct miniflow *flow, unsigned int ofs)
-{
-    return MINIFLOW_GET_TYPE(flow, ovs_be32, ofs);
-}
-
-#undef MINIFLOW_GET_TYPE
-
 /* Returns the VID within the vlan_tci member of the "struct flow" represented
  * by 'flow'. */
 static inline uint16_t
 miniflow_get_vid(const struct miniflow *flow)
 {
-    ovs_be16 tci = miniflow_get_be16(flow, offsetof(struct flow, vlan_tci));
+    ovs_be16 tci = MINIFLOW_GET_BE16(flow, vlan_tci);
     return vlan_tci_to_vid(tci);
 }
 
@@ -558,19 +530,27 @@ minimask_get_vid_mask(const struct minimask *mask)
 static inline uint16_t
 miniflow_get_tcp_flags(const struct miniflow *flow)
 {
-    return ntohs(miniflow_get_be16(flow, offsetof(struct flow, tcp_flags)));
+    return ntohs(MINIFLOW_GET_BE16(flow, tcp_flags));
 }
 
 /* Returns the value of the OpenFlow 1.1+ "metadata" field in 'flow'. */
 static inline ovs_be64
 miniflow_get_metadata(const struct miniflow *flow)
 {
+    union {
+        ovs_be64 be64;
+        struct {
+            ovs_be32 hi;
+            ovs_be32 lo;
+        };
+    } value;
+
     enum { MD_OFS = offsetof(struct flow, metadata) };
     BUILD_ASSERT_DECL(MD_OFS % sizeof(uint32_t) == 0);
-    ovs_be32 hi = miniflow_get_be32(flow, MD_OFS);
-    ovs_be32 lo = miniflow_get_be32(flow, MD_OFS + 4);
+    value.hi = MINIFLOW_GET_TYPE(flow, ovs_be32, MD_OFS);
+    value.lo = MINIFLOW_GET_TYPE(flow, ovs_be32, MD_OFS + 4);
 
-    return htonll(((uint64_t) ntohl(hi) << 32) | ntohl(lo));
+    return value.be64;
 }
 
 /* Returns the mask for the OpenFlow 1.1+ "metadata" field in 'mask'.
