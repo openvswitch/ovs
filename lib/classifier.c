@@ -30,18 +30,70 @@
 
 VLOG_DEFINE_THIS_MODULE(classifier);
 
+struct trie_node;
+
+/* Prefix trie for a 'field' */
+struct cls_trie {
+    const struct mf_field *field; /* Trie field, or NULL. */
+    struct trie_node *root;       /* NULL if none. */
+};
+
+struct cls_classifier {
+    int n_rules;                /* Total number of rules. */
+    uint8_t n_flow_segments;
+    uint8_t flow_segments[CLS_MAX_INDICES]; /* Flow segment boundaries to use
+                                             * for staged lookup. */
+    struct hmap subtables;      /* Contains "struct cls_subtable"s.  */
+    struct list subtables_priority; /* Subtables in descending priority order.
+                                     */
+    struct hmap partitions;     /* Contains "struct cls_partition"s. */
+    struct cls_trie tries[CLS_MAX_TRIES]; /* Prefix tries. */
+    unsigned int n_tries;
+};
+
+/* A set of rules that all have the same fields wildcarded. */
+struct cls_subtable {
+    struct hmap_node hmap_node; /* Within struct cls_classifier 'subtables'
+                                 * hmap. */
+    struct list list_node;      /* Within classifier 'subtables_priority' list.
+                                 */
+    struct hmap rules;          /* Contains "struct cls_rule"s. */
+    struct minimask mask;       /* Wildcards for fields. */
+    int n_rules;                /* Number of rules, including duplicates. */
+    unsigned int max_priority;  /* Max priority of any rule in the subtable. */
+    unsigned int max_count;     /* Count of max_priority rules. */
+    tag_type tag;               /* Tag generated from mask for partitioning. */
+    uint8_t n_indices;           /* How many indices to use. */
+    uint8_t index_ofs[CLS_MAX_INDICES]; /* u32 flow segment boundaries. */
+    struct hindex indices[CLS_MAX_INDICES]; /* Staged lookup indices. */
+    unsigned int trie_plen[CLS_MAX_TRIES];  /* Trie prefix length in 'mask'. */
+};
+
+/* Associates a metadata value (that is, a value of the OpenFlow 1.1+ metadata
+ * field) with tags for the "cls_subtable"s that contain rules that match that
+ * metadata value.  */
+struct cls_partition {
+    struct hmap_node hmap_node; /* In struct cls_classifier's 'partitions'
+                                 * hmap. */
+    ovs_be64 metadata;          /* metadata value for this partition. */
+    tag_type tags;              /* OR of each flow's cls_subtable tag. */
+    struct tag_tracker tracker; /* Tracks the bits in 'tags'. */
+};
+
+
+
 struct trie_ctx;
-static struct cls_subtable *find_subtable(const struct classifier *,
+static struct cls_subtable *find_subtable(const struct cls_classifier *,
                                           const struct minimask *);
-static struct cls_subtable *insert_subtable(struct classifier *,
+static struct cls_subtable *insert_subtable(struct cls_classifier *,
                                             const struct minimask *);
 
-static void destroy_subtable(struct classifier *, struct cls_subtable *);
+static void destroy_subtable(struct cls_classifier *, struct cls_subtable *);
 
-static void update_subtables_after_insertion(struct classifier *,
+static void update_subtables_after_insertion(struct cls_classifier *,
                                              struct cls_subtable *,
                                              unsigned int new_priority);
-static void update_subtables_after_removal(struct classifier *,
+static void update_subtables_after_removal(struct cls_classifier *,
                                            struct cls_subtable *,
                                            unsigned int del_priority);
 
@@ -51,7 +103,7 @@ static struct cls_rule *find_match_wc(const struct cls_subtable *,
                                       struct flow_wildcards *);
 static struct cls_rule *find_equal(struct cls_subtable *,
                                    const struct miniflow *, uint32_t hash);
-static struct cls_rule *insert_rule(struct classifier *,
+static struct cls_rule *insert_rule(struct cls_classifier *,
                                     struct cls_subtable *, struct cls_rule *);
 
 /* Iterates RULE over HEAD and all of the cls_rules on HEAD->list. */
@@ -67,7 +119,7 @@ static struct cls_rule *next_rule_in_list(struct cls_rule *);
 
 static unsigned int minimask_get_prefix_len(const struct minimask *,
                                             const struct mf_field *);
-static void trie_init(struct classifier *, int trie_idx,
+static void trie_init(struct cls_classifier *, int trie_idx,
                       const struct mf_field *);
 static unsigned int trie_lookup(const struct cls_trie *, const struct flow *,
                                 unsigned int *checkbits);
@@ -349,13 +401,18 @@ cls_rule_is_catchall(const struct cls_rule *rule)
 /* Initializes 'cls' as a classifier that initially contains no classification
  * rules. */
 void
-classifier_init(struct classifier *cls, const uint8_t *flow_segments)
+classifier_init(struct classifier *cls_, const uint8_t *flow_segments)
 {
+    struct cls_classifier *cls = xmalloc(sizeof *cls);
+
+    fat_rwlock_init(&cls_->rwlock);
+
+    cls_->cls = cls;
+
     cls->n_rules = 0;
     hmap_init(&cls->subtables);
     list_init(&cls->subtables_priority);
     hmap_init(&cls->partitions);
-    fat_rwlock_init(&cls->rwlock);
     cls->n_flow_segments = 0;
     if (flow_segments) {
         while (cls->n_flow_segments < CLS_MAX_INDICES
@@ -369,12 +426,18 @@ classifier_init(struct classifier *cls, const uint8_t *flow_segments)
 /* Destroys 'cls'.  Rules within 'cls', if any, are not freed; this is the
  * caller's responsibility. */
 void
-classifier_destroy(struct classifier *cls)
+classifier_destroy(struct classifier *cls_)
 {
-    if (cls) {
+    if (cls_) {
+        struct cls_classifier *cls = cls_->cls;
         struct cls_subtable *partition, *next_partition;
         struct cls_subtable *subtable, *next_subtable;
         int i;
+
+        fat_rwlock_destroy(&cls_->rwlock);
+        if (!cls) {
+            return;
+        }
 
         for (i = 0; i < cls->n_tries; i++) {
             trie_destroy(cls->tries[i].root);
@@ -392,7 +455,8 @@ classifier_destroy(struct classifier *cls)
             free(partition);
         }
         hmap_destroy(&cls->partitions);
-        fat_rwlock_destroy(&cls->rwlock);
+
+        free(cls);
     }
 }
 
@@ -401,10 +465,11 @@ BUILD_ASSERT_DECL(MFF_N_IDS <= 64);
 
 /* Set the fields for which prefix lookup should be performed. */
 void
-classifier_set_prefix_fields(struct classifier *cls,
+classifier_set_prefix_fields(struct classifier *cls_,
                              const enum mf_field_id *trie_fields,
                              unsigned int n_fields)
 {
+    struct cls_classifier *cls = cls_->cls;
     uint64_t fields = 0;
     int i, trie;
 
@@ -439,7 +504,7 @@ classifier_set_prefix_fields(struct classifier *cls,
 }
 
 static void
-trie_init(struct classifier *cls, int trie_idx,
+trie_init(struct cls_classifier *cls, int trie_idx,
           const struct mf_field *field)
 {
     struct cls_trie *trie = &cls->tries[trie_idx];
@@ -477,14 +542,14 @@ trie_init(struct classifier *cls, int trie_idx,
 bool
 classifier_is_empty(const struct classifier *cls)
 {
-    return cls->n_rules == 0;
+    return cls->cls->n_rules == 0;
 }
 
 /* Returns the number of rules in 'cls'. */
 int
 classifier_count(const struct classifier *cls)
 {
-    return cls->n_rules;
+    return cls->cls->n_rules;
 }
 
 static uint32_t
@@ -495,7 +560,8 @@ hash_metadata(ovs_be64 metadata_)
 }
 
 static struct cls_partition *
-find_partition(const struct classifier *cls, ovs_be64 metadata, uint32_t hash)
+find_partition(const struct cls_classifier *cls, ovs_be64 metadata,
+               uint32_t hash)
 {
     struct cls_partition *partition;
 
@@ -509,7 +575,7 @@ find_partition(const struct classifier *cls, ovs_be64 metadata, uint32_t hash)
 }
 
 static struct cls_partition *
-create_partition(struct classifier *cls, struct cls_subtable *subtable,
+create_partition(struct cls_classifier *cls, struct cls_subtable *subtable,
                  ovs_be64 metadata)
 {
     uint32_t hash = hash_metadata(metadata);
@@ -539,8 +605,9 @@ create_partition(struct classifier *cls, struct cls_subtable *subtable,
  * rule, even rules that cannot have any effect because the new rule matches a
  * superset of their flows and has higher priority. */
 struct cls_rule *
-classifier_replace(struct classifier *cls, struct cls_rule *rule)
+classifier_replace(struct classifier *cls_, struct cls_rule *rule)
 {
+    struct cls_classifier *cls = cls_->cls;
     struct cls_rule *old_rule;
     struct cls_subtable *subtable;
 
@@ -591,8 +658,9 @@ classifier_insert(struct classifier *cls, struct cls_rule *rule)
  * 'rule' with cls_rule_destroy(), freeing the memory block in which 'rule'
  * resides, etc., as necessary. */
 void
-classifier_remove(struct classifier *cls, struct cls_rule *rule)
+classifier_remove(struct classifier *cls_, struct cls_rule *rule)
 {
+    struct cls_classifier *cls = cls_->cls;
     struct cls_partition *partition;
     struct cls_rule *head;
     struct cls_subtable *subtable;
@@ -672,9 +740,10 @@ trie_ctx_init(struct trie_ctx *ctx, const struct cls_trie *trie)
  * earlier, 'wc' should have been initialized (e.g., by
  * flow_wildcards_init_catchall()). */
 struct cls_rule *
-classifier_lookup(const struct classifier *cls, const struct flow *flow,
+classifier_lookup(const struct classifier *cls_, const struct flow *flow,
                   struct flow_wildcards *wc)
 {
+    struct cls_classifier *cls = cls_->cls;
     const struct cls_partition *partition;
     struct cls_subtable *subtable;
     struct cls_rule *best;
@@ -787,9 +856,10 @@ find_match_miniflow(const struct cls_subtable *subtable,
  * This function is optimized for the userspace datapath, which only ever has
  * one priority value for it's flows!
  */
-struct cls_rule *classifier_lookup_miniflow_first(const struct classifier *cls,
+struct cls_rule *classifier_lookup_miniflow_first(const struct classifier *cls_,
                                                   const struct miniflow *flow)
 {
+    struct cls_classifier *cls = cls_->cls;
     struct cls_subtable *subtable;
 
     LIST_FOR_EACH (subtable, list_node, &cls->subtables_priority) {
@@ -811,9 +881,10 @@ struct cls_rule *classifier_lookup_miniflow_first(const struct classifier *cls,
  * matching criteria as 'target'.  Returns a null pointer if 'cls' doesn't
  * contain an exact match. */
 struct cls_rule *
-classifier_find_rule_exactly(const struct classifier *cls,
+classifier_find_rule_exactly(const struct classifier *cls_,
                              const struct cls_rule *target)
 {
+    struct cls_classifier *cls = cls_->cls;
     struct cls_rule *head, *rule;
     struct cls_subtable *subtable;
 
@@ -860,9 +931,10 @@ classifier_find_match_exactly(const struct classifier *cls,
  * considered to overlap if both rules have the same priority and a packet
  * could match both. */
 bool
-classifier_rule_overlaps(const struct classifier *cls,
+classifier_rule_overlaps(const struct classifier *cls_,
                          const struct cls_rule *target)
 {
+    struct cls_classifier *cls = cls_->cls;
     struct cls_subtable *subtable;
 
     /* Iterate subtables in the descending max priority order. */
@@ -976,7 +1048,7 @@ void
 cls_cursor_init(struct cls_cursor *cursor, const struct classifier *cls,
                 const struct cls_rule *target)
 {
-    cursor->cls = cls;
+    cursor->cls = cls->cls;
     cursor->target = target && !cls_rule_is_catchall(target) ? target : NULL;
 }
 
@@ -1035,7 +1107,7 @@ cls_cursor_next(struct cls_cursor *cursor, const struct cls_rule *rule_)
 }
 
 static struct cls_subtable *
-find_subtable(const struct classifier *cls, const struct minimask *mask)
+find_subtable(const struct cls_classifier *cls, const struct minimask *mask)
 {
     struct cls_subtable *subtable;
 
@@ -1049,7 +1121,7 @@ find_subtable(const struct classifier *cls, const struct minimask *mask)
 }
 
 static struct cls_subtable *
-insert_subtable(struct classifier *cls, const struct minimask *mask)
+insert_subtable(struct cls_classifier *cls, const struct minimask *mask)
 {
     uint32_t hash = minimask_hash(mask, 0);
     struct cls_subtable *subtable;
@@ -1104,7 +1176,7 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
 }
 
 static void
-destroy_subtable(struct classifier *cls, struct cls_subtable *subtable)
+destroy_subtable(struct cls_classifier *cls, struct cls_subtable *subtable)
 {
     int i;
 
@@ -1129,7 +1201,7 @@ destroy_subtable(struct classifier *cls, struct cls_subtable *subtable)
  * This function should only be called after adding a new rule, not after
  * replacing a rule by an identical one or modifying a rule in-place. */
 static void
-update_subtables_after_insertion(struct classifier *cls,
+update_subtables_after_insertion(struct cls_classifier *cls,
                                  struct cls_subtable *subtable,
                                  unsigned int new_priority)
 {
@@ -1173,7 +1245,7 @@ update_subtables_after_insertion(struct classifier *cls,
  * This function should only be called after removing a rule, not after
  * replacing a rule by an identical one or modifying a rule in-place. */
 static void
-update_subtables_after_removal(struct classifier *cls,
+update_subtables_after_removal(struct cls_classifier *cls,
                                struct cls_subtable *subtable,
                                unsigned int del_priority)
 {
@@ -1390,7 +1462,7 @@ find_equal(struct cls_subtable *subtable, const struct miniflow *flow,
 }
 
 static struct cls_rule *
-insert_rule(struct classifier *cls, struct cls_subtable *subtable,
+insert_rule(struct cls_classifier *cls, struct cls_subtable *subtable,
             struct cls_rule *new)
 {
     struct cls_rule *head;

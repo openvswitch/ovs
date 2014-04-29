@@ -475,7 +475,7 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
     int found_dups = 0;
     int found_rules2 = 0;
 
-    HMAP_FOR_EACH (table, hmap_node, &cls->subtables) {
+    HMAP_FOR_EACH (table, hmap_node, &cls->cls->subtables) {
         const struct cls_rule *head;
         unsigned int max_priority = 0;
         unsigned int max_count = 0;
@@ -509,8 +509,8 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
         assert(table->max_count == max_count);
     }
 
-    assert(found_tables == hmap_count(&cls->subtables));
-    assert(n_tables == -1 || n_tables == hmap_count(&cls->subtables));
+    assert(found_tables == hmap_count(&cls->cls->subtables));
+    assert(n_tables == -1 || n_tables == hmap_count(&cls->cls->subtables));
     assert(n_rules == -1 || found_rules == n_rules);
     assert(n_dups == -1 || found_dups == n_dups);
 

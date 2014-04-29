@@ -232,59 +232,22 @@ extern "C" {
 
 /* Needed only for the lock annotation in struct classifier. */
 extern struct ovs_mutex ofproto_mutex;
-struct trie_node;
 
-/* Prefix trie for a 'field' */
-struct cls_trie {
-    const struct mf_field *field; /* Trie field, or NULL. */
-    struct trie_node *root;       /* NULL if none. */
+/* Classifier internal data structures. */
+struct cls_classifier;
+struct cls_subtable;
+struct cls_partition;
+
+/* A flow classifier. */
+struct classifier {
+    struct fat_rwlock rwlock OVS_ACQ_AFTER(ofproto_mutex);
+    struct cls_classifier *cls;
 };
 
 enum {
     CLS_MAX_INDICES = 3, /* Maximum number of lookup indices per subtable. */
     CLS_MAX_TRIES = 3    /* Maximum number of prefix trees per classifier. */
 };
-
-/* A flow classifier. */
-struct classifier {
-    int n_rules;                /* Total number of rules. */
-    uint8_t n_flow_segments;
-    uint8_t flow_segments[CLS_MAX_INDICES]; /* Flow segment boundaries to use
-                                             * for staged lookup. */
-    struct hmap subtables;      /* Contains "struct cls_subtable"s.  */
-    struct list subtables_priority; /* Subtables in descending priority order.
-                                     */
-    struct hmap partitions;     /* Contains "struct cls_partition"s. */
-    struct fat_rwlock rwlock OVS_ACQ_AFTER(ofproto_mutex);
-    struct cls_trie tries[CLS_MAX_TRIES]; /* Prefix tries. */
-    unsigned int n_tries;
-};
-
-/* A set of rules that all have the same fields wildcarded. */
-struct cls_subtable {
-    struct hmap_node hmap_node; /* Within struct classifier 'subtables' hmap.
-                                 */
-    struct list list_node;      /* Within classifier 'subtables_priority' list.
-                                 */
-    struct hmap rules;          /* Contains "struct cls_rule"s. */
-    struct minimask mask;       /* Wildcards for fields. */
-    int n_rules;                /* Number of rules, including duplicates. */
-    unsigned int max_priority;  /* Max priority of any rule in the subtable. */
-    unsigned int max_count;     /* Count of max_priority rules. */
-    tag_type tag;               /* Tag generated from mask for partitioning. */
-    uint8_t n_indices;           /* How many indices to use. */
-    uint8_t index_ofs[CLS_MAX_INDICES]; /* u32 flow segment boundaries. */
-    struct hindex indices[CLS_MAX_INDICES]; /* Staged lookup indices. */
-    unsigned int trie_plen[CLS_MAX_TRIES];  /* Trie prefix length in 'mask'. */
-};
-
-/* Returns true if 'table' is a "catch-all" subtable that will match every
- * packet (if there is no higher-priority match). */
-static inline bool
-cls_subtable_is_catchall(const struct cls_subtable *subtable)
-{
-    return minimask_is_catchall(&subtable->mask);
-}
 
 /* A rule in a "struct cls_subtable". */
 struct cls_rule {
@@ -295,16 +258,6 @@ struct cls_rule {
     struct cls_partition *partition;
     struct hindex_node index_nodes[CLS_MAX_INDICES]; /* Within subtable's
                                                       * 'indices'. */
-};
-
-/* Associates a metadata value (that is, a value of the OpenFlow 1.1+ metadata
- * field) with tags for the "cls_subtable"s that contain rules that match that
- * metadata value.  */
-struct cls_partition {
-    struct hmap_node hmap_node; /* In struct classifier's 'partitions' hmap. */
-    ovs_be64 metadata;          /* metadata value for this partition. */
-    tag_type tags;              /* OR of each flow's cls_subtable tag. */
-    struct tag_tracker tracker; /* Tracks the bits in 'tags'. */
 };
 
 void cls_rule_init(struct cls_rule *, const struct match *,
@@ -366,7 +319,7 @@ struct cls_rule *classifier_find_match_exactly(const struct classifier *cls,
 /* Iteration. */
 
 struct cls_cursor {
-    const struct classifier *cls;
+    const struct cls_classifier *cls;
     const struct cls_subtable *subtable;
     const struct cls_rule *target;
 };
