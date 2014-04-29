@@ -151,6 +151,7 @@ netdev_run(void)
 {
     struct netdev_registered_class *rc;
 
+    netdev_initialize();
     ovs_mutex_lock(&netdev_class_mutex);
     HMAP_FOR_EACH (rc, hmap_node, &netdev_classes) {
         if (rc->class->run) {
