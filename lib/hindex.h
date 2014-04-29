@@ -132,7 +132,18 @@ void hindex_remove(struct hindex *, struct hindex_node *);
          NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER);                     \
          ASSIGN_CONTAINER(NODE, (NODE)->MEMBER.s, MEMBER))
 
-struct hindex_node *hindex_node_with_hash(const struct hindex *, size_t hash);
+/* Returns the head node in 'hindex' with the given 'hash', or a null pointer
+ * if no nodes have that hash value. */
+static inline struct hindex_node *
+hindex_node_with_hash(const struct hindex *hindex, size_t hash)
+{
+    struct hindex_node *node = hindex->buckets[hash & hindex->mask];
+
+    while (node && node->hash != hash) {
+        node = node->d;
+    }
+    return node;
+}
 
 /* Iteration. */
 

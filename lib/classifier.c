@@ -80,6 +80,185 @@ static void mask_set_prefix_bits(struct flow_wildcards *, uint8_t be32ofs,
 static bool mask_prefix_bits_set(const struct flow_wildcards *,
                                  uint8_t be32ofs, unsigned int nbits);
 
+/* flow/miniflow/minimask/minimatch utilities.
+ * These are only used by the classifier, so place them here to allow
+ * for better optimization. */
+
+static inline uint64_t
+miniflow_get_map_in_range(const struct miniflow *miniflow,
+                          uint8_t start, uint8_t end, unsigned int *offset)
+{
+    uint64_t map = miniflow->map;
+    *offset = 0;
+
+    if (start > 0) {
+        uint64_t msk = (UINT64_C(1) << start) - 1; /* 'start' LSBs set */
+        *offset = count_1bits(map & msk);
+        map &= ~msk;
+    }
+    if (end < FLOW_U32S) {
+        uint64_t msk = (UINT64_C(1) << end) - 1; /* 'end' LSBs set */
+        map &= msk;
+    }
+    return map;
+}
+
+/* Returns a hash value for the bits of 'flow' where there are 1-bits in
+ * 'mask', given 'basis'.
+ *
+ * The hash values returned by this function are the same as those returned by
+ * miniflow_hash_in_minimask(), only the form of the arguments differ. */
+static inline uint32_t
+flow_hash_in_minimask(const struct flow *flow, const struct minimask *mask,
+                      uint32_t basis)
+{
+    const uint32_t *flow_u32 = (const uint32_t *)flow;
+    const uint32_t *p = mask->masks.values;
+    uint32_t hash;
+    uint64_t map;
+
+    hash = basis;
+    for (map = mask->masks.map; map; map = zero_rightmost_1bit(map)) {
+        hash = mhash_add(hash, flow_u32[raw_ctz(map)] & *p++);
+    }
+
+    return mhash_finish(hash, (p - mask->masks.values) * 4);
+}
+
+/* Returns a hash value for the bits of 'flow' where there are 1-bits in
+ * 'mask', given 'basis'.
+ *
+ * The hash values returned by this function are the same as those returned by
+ * flow_hash_in_minimask(), only the form of the arguments differ. */
+static inline uint32_t
+miniflow_hash_in_minimask(const struct miniflow *flow,
+                          const struct minimask *mask, uint32_t basis)
+{
+    const uint32_t *p = mask->masks.values;
+    uint32_t hash = basis;
+    uint32_t flow_u32;
+
+    MINIFLOW_FOR_EACH_IN_MAP(flow_u32, flow, mask->masks.map) {
+        hash = mhash_add(hash, flow_u32 & *p++);
+    }
+
+    return mhash_finish(hash, (p - mask->masks.values) * 4);
+}
+
+/* Returns a hash value for the bits of range [start, end) in 'flow',
+ * where there are 1-bits in 'mask', given 'hash'.
+ *
+ * The hash values returned by this function are the same as those returned by
+ * minimatch_hash_range(), only the form of the arguments differ. */
+static inline uint32_t
+flow_hash_in_minimask_range(const struct flow *flow,
+                            const struct minimask *mask,
+                            uint8_t start, uint8_t end, uint32_t *basis)
+{
+    const uint32_t *flow_u32 = (const uint32_t *)flow;
+    unsigned int offset;
+    uint64_t map = miniflow_get_map_in_range(&mask->masks, start, end,
+                                             &offset);
+    const uint32_t *p = mask->masks.values + offset;
+    uint32_t hash = *basis;
+
+    for (; map; map = zero_rightmost_1bit(map)) {
+        hash = mhash_add(hash, flow_u32[raw_ctz(map)] & *p++);
+    }
+
+    *basis = hash; /* Allow continuation from the unfinished value. */
+    return mhash_finish(hash, (p - mask->masks.values) * 4);
+}
+
+/* Fold minimask 'mask''s wildcard mask into 'wc's wildcard mask. */
+static inline void
+flow_wildcards_fold_minimask(struct flow_wildcards *wc,
+                             const struct minimask *mask)
+{
+    flow_union_with_miniflow(&wc->masks, &mask->masks);
+}
+
+/* Fold minimask 'mask''s wildcard mask into 'wc's wildcard mask
+ * in range [start, end). */
+static inline void
+flow_wildcards_fold_minimask_range(struct flow_wildcards *wc,
+                                   const struct minimask *mask,
+                                   uint8_t start, uint8_t end)
+{
+    uint32_t *dst_u32 = (uint32_t *)&wc->masks;
+    unsigned int offset;
+    uint64_t map = miniflow_get_map_in_range(&mask->masks, start, end,
+                                             &offset);
+    const uint32_t *p = mask->masks.values + offset;
+
+    for (; map; map = zero_rightmost_1bit(map)) {
+        dst_u32[raw_ctz(map)] |= *p++;
+    }
+}
+
+/* Returns a hash value for 'flow', given 'basis'. */
+static inline uint32_t
+miniflow_hash(const struct miniflow *flow, uint32_t basis)
+{
+    const uint32_t *p = flow->values;
+    uint32_t hash = basis;
+    uint64_t hash_map = 0;
+    uint64_t map;
+
+    for (map = flow->map; map; map = zero_rightmost_1bit(map)) {
+        if (*p) {
+            hash = mhash_add(hash, *p);
+            hash_map |= rightmost_1bit(map);
+        }
+        p++;
+    }
+    hash = mhash_add(hash, hash_map);
+    hash = mhash_add(hash, hash_map >> 32);
+
+    return mhash_finish(hash, p - flow->values);
+}
+
+/* Returns a hash value for 'mask', given 'basis'. */
+static inline uint32_t
+minimask_hash(const struct minimask *mask, uint32_t basis)
+{
+    return miniflow_hash(&mask->masks, basis);
+}
+
+/* Returns a hash value for 'match', given 'basis'. */
+static inline uint32_t
+minimatch_hash(const struct minimatch *match, uint32_t basis)
+{
+    return miniflow_hash(&match->flow, minimask_hash(&match->mask, basis));
+}
+
+/* Returns a hash value for the bits of range [start, end) in 'minimatch',
+ * given 'basis'.
+ *
+ * The hash values returned by this function are the same as those returned by
+ * flow_hash_in_minimask_range(), only the form of the arguments differ. */
+static inline uint32_t
+minimatch_hash_range(const struct minimatch *match, uint8_t start, uint8_t end,
+                     uint32_t *basis)
+{
+    unsigned int offset;
+    const uint32_t *p, *q;
+    uint32_t hash = *basis;
+    int n, i;
+
+    n = count_1bits(miniflow_get_map_in_range(&match->mask.masks, start, end,
+                                              &offset));
+    q = match->mask.masks.values + offset;
+    p = match->flow.values + offset;
+
+    for (i = 0; i < n; i++) {
+        hash = mhash_add(hash, p[i] & q[i]);
+    }
+    *basis = hash; /* Allow continuation from the unfinished value. */
+    return mhash_finish(hash, (offset + n) * 4);
+}
+
+
 /* cls_rule. */
 
 /* Initializes 'rule' to match packets specified by 'match' at the given
@@ -1565,7 +1744,7 @@ minimask_get_prefix_len(const struct minimask *minimask,
 static const ovs_be32 *
 minimatch_get_prefix(const struct minimatch *match, const struct mf_field *mf)
 {
-    return (OVS_FORCE const ovs_be32 *)match->flow.values +
+    return match->flow.values +
         count_1bits(match->flow.map & ((UINT64_C(1) << mf->flow_be32ofs) - 1));
 }
 

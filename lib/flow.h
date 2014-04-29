@@ -271,13 +271,6 @@ hash_odp_port(odp_port_t odp_port)
 {
     return hash_int(odp_to_u32(odp_port), 0);
 }
-
-uint32_t flow_hash_in_minimask(const struct flow *, const struct minimask *,
-                               uint32_t basis);
-uint32_t flow_hash_in_minimask_range(const struct flow *,
-                                     const struct minimask *,
-                                     uint8_t start, uint8_t end,
-                                     uint32_t *basis);
 
 /* Wildcards for a flow.
  *
@@ -305,13 +298,6 @@ void flow_wildcards_or(struct flow_wildcards *dst,
                        const struct flow_wildcards *src2);
 bool flow_wildcards_has_extra(const struct flow_wildcards *,
                               const struct flow_wildcards *);
-
-void flow_wildcards_fold_minimask(struct flow_wildcards *,
-                                  const struct minimask *);
-void flow_wildcards_fold_minimask_range(struct flow_wildcards *,
-                                        const struct minimask *,
-                                        uint8_t start, uint8_t end);
-
 uint32_t flow_wildcards_hash(const struct flow_wildcards *, uint32_t basis);
 bool flow_wildcards_equal(const struct flow_wildcards *,
                           const struct flow_wildcards *);
@@ -467,12 +453,6 @@ bool miniflow_equal_in_minimask(const struct miniflow *a,
 bool miniflow_equal_flow_in_minimask(const struct miniflow *a,
                                      const struct flow *b,
                                      const struct minimask *);
-uint32_t miniflow_hash(const struct miniflow *, uint32_t basis);
-uint32_t miniflow_hash_in_minimask(const struct miniflow *,
-                                   const struct minimask *, uint32_t basis);
-uint64_t miniflow_get_map_in_range(const struct miniflow *miniflow,
-                                   uint8_t start, uint8_t end,
-                                   unsigned int *offset);
 uint32_t miniflow_hash_5tuple(const struct miniflow *flow, uint32_t basis);
 
 
@@ -503,10 +483,9 @@ static inline uint16_t minimask_get_vid_mask(const struct minimask *);
 static inline ovs_be64 minimask_get_metadata_mask(const struct minimask *);
 
 bool minimask_equal(const struct minimask *a, const struct minimask *b);
-uint32_t minimask_hash(const struct minimask *, uint32_t basis);
-
 bool minimask_has_extra(const struct minimask *, const struct minimask *);
 bool minimask_is_catchall(const struct minimask *);
+
 
 
 /* Returns the VID within the vlan_tci member of the "struct flow" represented
@@ -563,6 +542,20 @@ static inline ovs_be64
 minimask_get_metadata_mask(const struct minimask *mask)
 {
     return miniflow_get_metadata(&mask->masks);
+}
+
+/* Perform a bitwise OR of miniflow 'src' flow data with the equivalent
+ * fields in 'dst', storing the result in 'dst'. */
+static inline void
+flow_union_with_miniflow(struct flow *dst, const struct miniflow *src)
+{
+    uint32_t *dst_u32 = (uint32_t *) dst;
+    const uint32_t *p = (uint32_t *)src->values;
+    uint64_t map;
+
+    for (map = src->map; map; map = zero_rightmost_1bit(map)) {
+        dst_u32[raw_ctz(map)] |= *p++;
+    }
 }
 
 static inline struct pkt_metadata

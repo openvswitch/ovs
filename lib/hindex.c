@@ -274,19 +274,6 @@ hindex_calc_mask(size_t capacity)
     return mask;
 }
 
-/* Returns the head node in 'hindex' with the given 'hash', or a null pointer
- * if no nodes have that hash value. */
-struct hindex_node *
-hindex_node_with_hash(const struct hindex *hindex, size_t hash)
-{
-    struct hindex_node *node = hindex->buckets[hash & hindex->mask];
-
-    while (node && node->hash != hash) {
-        node = node->d;
-    }
-    return node;
-}
-
 /* Returns the head node in 'hindex' with the given 'hash'.  'hindex' must
  * contain a head node with the given hash. */
 static struct hindex_node *

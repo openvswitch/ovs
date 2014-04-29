@@ -1244,13 +1244,6 @@ minimatch_equal(const struct minimatch *a, const struct minimatch *b)
             && minimask_equal(&a->mask, &b->mask));
 }
 
-/* Returns a hash value for 'match', given 'basis'. */
-uint32_t
-minimatch_hash(const struct minimatch *match, uint32_t basis)
-{
-    return miniflow_hash(&match->flow, minimask_hash(&match->mask, basis));
-}
-
 /* Returns true if 'target' satisifies 'match', that is, if each bit for which
  * 'match' specifies a particular value has the correct value in 'target'.
  *
@@ -1273,32 +1266,6 @@ minimatch_matches_flow(const struct minimatch *match,
     }
 
     return true;
-}
-
-/* Returns a hash value for the bits of range [start, end) in 'minimatch',
- * given 'basis'.
- *
- * The hash values returned by this function are the same as those returned by
- * flow_hash_in_minimask_range(), only the form of the arguments differ. */
-uint32_t
-minimatch_hash_range(const struct minimatch *match, uint8_t start, uint8_t end,
-                     uint32_t *basis)
-{
-    unsigned int offset;
-    const uint32_t *p, *q;
-    uint32_t hash = *basis;
-    int n, i;
-
-    n = count_1bits(miniflow_get_map_in_range(&match->mask.masks, start, end,
-                                              &offset));
-    q = match->mask.masks.values + offset;
-    p = match->flow.values + offset;
-
-    for (i = 0; i < n; i++) {
-        hash = mhash_add(hash, p[i] & q[i]);
-    }
-    *basis = hash; /* Allow continuation from the unfinished value. */
-    return mhash_finish(hash, (offset + n) * 4);
 }
 
 /* Appends a string representation of 'match' to 's'.  If 'priority' is

@@ -823,65 +823,6 @@ flow_wildcards_or(struct flow_wildcards *dst,
     }
 }
 
-/* Perform a bitwise OR of miniflow 'src' flow data with the equivalent
- * fields in 'dst', storing the result in 'dst'. */
-static void
-flow_union_with_miniflow(struct flow *dst, const struct miniflow *src)
-{
-    uint32_t *dst_u32 = (uint32_t *) dst;
-    const uint32_t *p = src->values;
-    uint64_t map;
-
-    for (map = src->map; map; map = zero_rightmost_1bit(map)) {
-        dst_u32[raw_ctz(map)] |= *p++;
-    }
-}
-
-/* Fold minimask 'mask''s wildcard mask into 'wc's wildcard mask. */
-void
-flow_wildcards_fold_minimask(struct flow_wildcards *wc,
-                             const struct minimask *mask)
-{
-    flow_union_with_miniflow(&wc->masks, &mask->masks);
-}
-
-uint64_t
-miniflow_get_map_in_range(const struct miniflow *miniflow,
-                          uint8_t start, uint8_t end, unsigned int *offset)
-{
-    uint64_t map = miniflow->map;
-    *offset = 0;
-
-    if (start > 0) {
-        uint64_t msk = (UINT64_C(1) << start) - 1; /* 'start' LSBs set */
-        *offset = count_1bits(map & msk);
-        map &= ~msk;
-    }
-    if (end < FLOW_U32S) {
-        uint64_t msk = (UINT64_C(1) << end) - 1; /* 'end' LSBs set */
-        map &= msk;
-    }
-    return map;
-}
-
-/* Fold minimask 'mask''s wildcard mask into 'wc's wildcard mask
- * in range [start, end). */
-void
-flow_wildcards_fold_minimask_range(struct flow_wildcards *wc,
-                                   const struct minimask *mask,
-                                   uint8_t start, uint8_t end)
-{
-    uint32_t *dst_u32 = (uint32_t *)&wc->masks;
-    unsigned int offset;
-    uint64_t map = miniflow_get_map_in_range(&mask->masks, start, end,
-                                             &offset);
-    const uint32_t *p = mask->masks.values + offset;
-
-    for (; map; map = zero_rightmost_1bit(map)) {
-        dst_u32[raw_ctz(map)] |= *p++;
-    }
-}
-
 /* Returns a hash of the wildcards in 'wc'. */
 uint32_t
 flow_wildcards_hash(const struct flow_wildcards *wc, uint32_t basis)
@@ -1834,95 +1775,6 @@ miniflow_equal_flow_in_minimask(const struct miniflow *a, const struct flow *b,
     return true;
 }
 
-/* Returns a hash value for 'flow', given 'basis'. */
-uint32_t
-miniflow_hash(const struct miniflow *flow, uint32_t basis)
-{
-    const uint32_t *p = flow->values;
-    uint32_t hash = basis;
-    uint64_t hash_map = 0;
-    uint64_t map;
-
-    for (map = flow->map; map; map = zero_rightmost_1bit(map)) {
-        if (*p) {
-            hash = mhash_add(hash, *p);
-            hash_map |= rightmost_1bit(map);
-        }
-        p++;
-    }
-    hash = mhash_add(hash, hash_map);
-    hash = mhash_add(hash, hash_map >> 32);
-
-    return mhash_finish(hash, p - flow->values);
-}
-
-/* Returns a hash value for the bits of 'flow' where there are 1-bits in
- * 'mask', given 'basis'.
- *
- * The hash values returned by this function are the same as those returned by
- * flow_hash_in_minimask(), only the form of the arguments differ. */
-uint32_t
-miniflow_hash_in_minimask(const struct miniflow *flow,
-                          const struct minimask *mask, uint32_t basis)
-{
-    const uint32_t *p = mask->masks.values;
-    uint32_t hash = basis;
-    uint32_t flow_u32;
-
-    MINIFLOW_FOR_EACH_IN_MAP(flow_u32, flow, mask->masks.map) {
-        hash = mhash_add(hash, flow_u32 & *p++);
-    }
-
-    return mhash_finish(hash, (p - mask->masks.values) * 4);
-}
-
-/* Returns a hash value for the bits of 'flow' where there are 1-bits in
- * 'mask', given 'basis'.
- *
- * The hash values returned by this function are the same as those returned by
- * miniflow_hash_in_minimask(), only the form of the arguments differ. */
-uint32_t
-flow_hash_in_minimask(const struct flow *flow, const struct minimask *mask,
-                      uint32_t basis)
-{
-    const uint32_t *flow_u32 = (const uint32_t *)flow;
-    const uint32_t *p = mask->masks.values;
-    uint32_t hash;
-    uint64_t map;
-
-    hash = basis;
-    for (map = mask->masks.map; map; map = zero_rightmost_1bit(map)) {
-        hash = mhash_add(hash, flow_u32[raw_ctz(map)] & *p++);
-    }
-
-    return mhash_finish(hash, (p - mask->masks.values) * 4);
-}
-
-/* Returns a hash value for the bits of range [start, end) in 'flow',
- * where there are 1-bits in 'mask', given 'hash'.
- *
- * The hash values returned by this function are the same as those returned by
- * minimatch_hash_range(), only the form of the arguments differ. */
-uint32_t
-flow_hash_in_minimask_range(const struct flow *flow,
-                            const struct minimask *mask,
-                            uint8_t start, uint8_t end, uint32_t *basis)
-{
-    const uint32_t *flow_u32 = (const uint32_t *)flow;
-    unsigned int offset;
-    uint64_t map = miniflow_get_map_in_range(&mask->masks, start, end,
-                                             &offset);
-    const uint32_t *p = mask->masks.values + offset;
-    uint32_t hash = *basis;
-
-    for (; map; map = zero_rightmost_1bit(map)) {
-        hash = mhash_add(hash, flow_u32[raw_ctz(map)] & *p++);
-    }
-
-    *basis = hash; /* Allow continuation from the unfinished value. */
-    return mhash_finish(hash, (p - mask->masks.values) * 4);
-}
-
 
 /* Initializes 'dst' as a copy of 'src'.  The caller must eventually free 'dst'
  * with minimask_destroy(). */
@@ -2005,13 +1857,6 @@ bool
 minimask_equal(const struct minimask *a, const struct minimask *b)
 {
     return miniflow_equal(&a->masks, &b->masks);
-}
-
-/* Returns a hash value for 'mask', given 'basis'. */
-uint32_t
-minimask_hash(const struct minimask *mask, uint32_t basis)
-{
-    return miniflow_hash(&mask->masks, basis);
 }
 
 /* Returns true if at least one bit is wildcarded in 'a_' but not in 'b_',

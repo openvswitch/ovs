@@ -26,7 +26,6 @@
  */
 
 #include <config.h>
-#include "classifier.h"
 #include <errno.h>
 #include <limits.h>
 #include "byte-order.h"
@@ -39,6 +38,11 @@
 #include "ovstest.h"
 #undef NDEBUG
 #include <assert.h>
+
+/* We need access to classifier internal definitions to be able to fully
+ * test them.  The alternative would be to expose them all in the classifier
+ * API. */
+#include "classifier.c"
 
 /* Fields in a rule. */
 #define CLS_FIELDS                                                  \
