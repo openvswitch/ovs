@@ -171,7 +171,9 @@ enum ovs_packet_cmd {
  * @OVS_PACKET_ATTR_KEY: Present for all notifications.  Contains the flow key
  * extracted from the packet as nested %OVS_KEY_ATTR_* attributes.  This allows
  * userspace to adapt its flow setup strategy by comparing its notion of the
- * flow key against the kernel's.
+ * flow key against the kernel's.  When used with %OVS_PACKET_CMD_EXECUTE, only
+ * metadata key fields (e.g. priority, skb mark) are honored.  All the packet
+ * header fields are parsed from the packet instead.
  * @OVS_PACKET_ATTR_ACTIONS: Contains actions for the packet.  Used
  * for %OVS_PACKET_CMD_EXECUTE.  It has nested %OVS_ACTION_ATTR_* attributes.
  * @OVS_PACKET_ATTR_USERDATA: Present for an %OVS_PACKET_CMD_ACTION
