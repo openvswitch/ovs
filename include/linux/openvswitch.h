@@ -109,6 +109,7 @@ enum ovs_datapath_attr {
 
 #define OVS_DP_ATTR_MAX (__OVS_DP_ATTR_MAX - 1)
 
+/* All 64-bit integers within Netlink messages are 4-byte aligned only. */
 struct ovs_dp_stats {
 	__u64 n_hit;             /* Number of flow table matches. */
 	__u64 n_missed;          /* Number of flow table misses. */
