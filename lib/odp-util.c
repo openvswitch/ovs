@@ -1319,7 +1319,7 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         } else {
             const struct ovs_key_sctp *sctp_key = nl_attr_get(a);
 
-            ds_put_format(ds, "(src=%"PRIu16",dst=%"PRIu16")",
+            ds_put_format(ds, "src=%"PRIu16",dst=%"PRIu16,
                           ntohs(sctp_key->sctp_src), ntohs(sctp_key->sctp_dst));
         }
         break;
