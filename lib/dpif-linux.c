@@ -676,7 +676,7 @@ dpif_linux_port_add__(struct dpif_linux *dpif, struct netdev *netdev,
 
     request.port_no = *port_nop;
     upcall_pids = vport_socksp_to_pids(socksp, dpif->n_handlers);
-    request.n_upcall_pids = dpif->n_handlers;
+    request.n_upcall_pids = socksp ? dpif->n_handlers : 1;
     request.upcall_pids = upcall_pids;
 
     error = dpif_linux_vport_transact(&request, &reply, &buf);
