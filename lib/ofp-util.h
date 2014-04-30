@@ -170,13 +170,15 @@ void ofputil_format_version_bitmap_names(struct ds *msg, uint32_t bitmap);
 uint32_t ofputil_protocols_to_version_bitmap(enum ofputil_protocol);
 enum ofputil_protocol ofputil_protocols_from_version_bitmap(uint32_t bitmap);
 
-/* Bitmap of OpenFlow versions that Open vSwitch supports. */
-#define OFPUTIL_SUPPORTED_VERSIONS \
-    ((1u << OFP10_VERSION) | (1u << OFP12_VERSION) | (1u << OFP13_VERSION))
-
-/* Bitmap of OpenFlow versions to enable by default (a subset of
- * OFPUTIL_SUPPORTED_VERSIONS). */
-#define OFPUTIL_DEFAULT_VERSIONS (1u << OFP10_VERSION)
+/* Bitmaps of OpenFlow versions that Open vSwitch supports, and that it enables
+ * by default.  When Open vSwitch has experimental or incomplete support for
+ * newer versions of OpenFlow, those versions should not be supported by
+ * default and thus should be omitted from the latter bitmap. */
+#define OFPUTIL_SUPPORTED_VERSIONS ((1u << OFP10_VERSION) | \
+                                    (1u << OFP11_VERSION) | \
+                                    (1u << OFP12_VERSION) | \
+                                    (1u << OFP13_VERSION))
+#define OFPUTIL_DEFAULT_VERSIONS OFPUTIL_SUPPORTED_VERSIONS
 
 enum ofputil_protocol ofputil_protocols_from_string(const char *s);
 

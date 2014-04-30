@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -173,6 +173,23 @@ parse_options(int argc, char *argv[])
     char *short_options = long_options_to_short_options(long_options);
     uint32_t versions;
     enum ofputil_protocol version_protocols;
+
+    /* For now, ovs-ofctl only enables OpenFlow 1.0 by default.  This is
+     * because ovs-ofctl implements command such as "add-flow" as raw OpenFlow
+     * requests, but those requests have subtly different semantics in
+     * different OpenFlow versions.  For example:
+     *
+     *     - In OpenFlow 1.0, a "mod-flow" operation that does not find any
+     *       existing flow to modify adds a new flow.
+     *
+     *     - In OpenFlow 1.1, a "mod-flow" operation that does not find any
+     *       existing flow to modify adds a new flow, but only if the mod-flow
+     *       did not match on the flow cookie.
+     *
+     *     - In OpenFlow 1.2 and a later, a "mod-flow" operation never adds a
+     *       new flow.
+     */
+    set_allowed_ofp_versions("OpenFlow10");
 
     for (;;) {
         unsigned long int timeout;

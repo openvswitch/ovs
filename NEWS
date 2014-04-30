@@ -1,5 +1,7 @@
 Post-v2.2.0
 ---------------------
+   - OpenFlow 1.1, 1.2, and 1.3 are now enabled by default in
+     ovs-vswitchd.
 
 
 v2.2.0 - xx xxx xxx

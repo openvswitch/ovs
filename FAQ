@@ -1119,19 +1119,28 @@ A: The following table lists the versions of OpenFlow supported by
        2.0                yes    [*]    [*]    [*]    ---
        2.1                yes    [*]    [*]    [*]    ---
        2.2                yes    [*]    [*]    [*]    [%]
+       2.3                yes    yes    yes    yes    [%]
 
        [*] Supported, with one or more missing features.
        [%] Support is unsafe: ovs-vswitchd will abort when certain
            unimplemented features are tested.
 
-   Because of missing features, OpenFlow 1.1, 1.2, and 1.3 must be
-   enabled manually.  The following command enables OpenFlow 1.0, 1.1,
-   1.2, and 1.3 on bridge br0:
+   Open vSwitch 2.3 enables OpenFlow 1.0, 1.1, 1.2, and 1.3 by default
+   in ovs-vswitchd.  In Open vSwitch 1.10 through 2.2, OpenFlow 1.1,
+   1.2, and 1.3 must be enabled manually in ovs-vswitchd.  Either way,
+   the user may override the default:
 
-       ovs-vsctl set bridge br0 protocols=OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13
+       - To enable OpenFlow 1.0, 1.1, 1.2, and 1.3 on bridge br0:
 
-   Use the -O option to enable support for later versions of OpenFlow
-   in ovs-ofctl.  For example:
+         ovs-vsctl set bridge br0 protocols=OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13
+
+       - To enable only OpenFlow 1.0 on bridge br0:
+
+         ovs-vsctl set bridge br0 protocols=OpenFlow10
+
+   All current versions of ovs-ofctl enable only OpenFlow 1.0 by
+   default.  Use the -O option to enable support for later versions of
+   OpenFlow in ovs-ofctl.  For example:
 
        ovs-ofctl -O OpenFlow13 dump-flows br0
 
@@ -1143,9 +1152,9 @@ A: The following table lists the versions of OpenFlow supported by
    invoked with a special --enable-of14 command line option.
 
    OPENFLOW-1.1+ in the Open vSwitch source tree tracks support for
-   OpenFlow 1.1 and later features.  When support for a given OpenFlow
-   version is solidly implemented, Open vSwitch will enable that
-   version by default.
+   OpenFlow 1.1 and later features.  When support for OpenFlow 1.4 is
+   solidly implemented, Open vSwitch will enable that version by
+   default.
 
 Q: Does Open vSwitch support MPLS?
 
