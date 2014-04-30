@@ -161,6 +161,9 @@ void ofconn_add_opgroup(struct ofconn *, struct list *);
 
 struct hmap *ofconn_get_bundles(struct ofconn *ofconn);
 
+/* Logging flow_mod summaries. */
+void ofconn_report_flow_mod(struct ofconn *, enum ofp_flow_mod_command);
+
 /* Sending asynchronous messages. */
 bool connmgr_wants_packet_in_on_miss(struct connmgr *mgr);
 void connmgr_send_port_status(struct connmgr *, struct ofconn *source,

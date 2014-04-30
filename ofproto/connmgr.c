@@ -22,6 +22,7 @@
 #include <stdlib.h>
 
 #include "coverage.h"
+#include "dynamic-string.h"
 #include "fail-open.h"
 #include "in-band.h"
 #include "odp-util.h"
@@ -101,6 +102,12 @@ struct ofconn {
     uint32_t master_async_config[OAM_N_TYPES]; /* master, other */
     uint32_t slave_async_config[OAM_N_TYPES];  /* slave */
 
+    /* Flow table operation logging. */
+    int n_add, n_delete, n_modify; /* Number of unreported ops of each kind. */
+    long long int first_op, last_op; /* Range of times for unreported ops. */
+    long long int next_op_report;    /* Time to report ops, or LLONG_MAX. */
+    long long int op_backoff;        /* Earliest time to report ops again. */
+
 /* Flow monitors (e.g. NXST_FLOW_MONITOR). */
 
     /* Configuration.  Contains "struct ofmonitor"s. */
@@ -149,6 +156,8 @@ static void ofconn_run(struct ofconn *,
                        bool (*handle_openflow)(struct ofconn *,
                                                const struct ofpbuf *ofp_msg));
 static void ofconn_wait(struct ofconn *, bool handling_openflow);
+
+static void ofconn_log_flow_mods(struct ofconn *);
 
 static const char *ofconn_get_target(const struct ofconn *);
 static char *ofconn_make_name(const struct connmgr *, const char *target);
@@ -1120,6 +1129,39 @@ ofconn_pktbuf_retrieve(struct ofconn *ofconn, uint32_t id,
     return pktbuf_retrieve(ofconn->pktbuf, id, bufferp, in_port);
 }
 
+/* Reports that a flow_mod operation of the type specified by 'command' was
+ * successfully executed by 'ofconn', so that the connmgr can log it. */
+void
+ofconn_report_flow_mod(struct ofconn *ofconn,
+                       enum ofp_flow_mod_command command)
+{
+    long long int now;
+
+    switch (command) {
+    case OFPFC_ADD:
+        ofconn->n_add++;
+        break;
+
+    case OFPFC_MODIFY:
+    case OFPFC_MODIFY_STRICT:
+        ofconn->n_modify++;
+        break;
+
+    case OFPFC_DELETE:
+    case OFPFC_DELETE_STRICT:
+        ofconn->n_delete++;
+        break;
+    }
+
+    now = time_msec();
+    if (ofconn->next_op_report == LLONG_MAX) {
+        ofconn->first_op = now;
+        ofconn->next_op_report = MAX(now + 10 * 1000, ofconn->op_backoff);
+        ofconn->op_backoff = ofconn->next_op_report + 60 * 1000;
+    }
+    ofconn->last_op = now;
+}
+
 /* Returns true if 'ofconn' has any pending opgroups. */
 bool
 ofconn_has_pending_opgroups(const struct ofconn *ofconn)
@@ -1191,6 +1233,8 @@ ofconn_flush(struct ofconn *ofconn)
     struct ofmonitor *monitor, *next_monitor;
     int i;
 
+    ofconn_log_flow_mods(ofconn);
+
     ofconn->role = OFPCR12_ROLE_EQUAL;
     ofconn_set_protocol(ofconn, OFPUTIL_P_NONE);
     ofconn->packet_in_format = NXPIF_OPENFLOW10;
@@ -1257,6 +1301,11 @@ ofconn_flush(struct ofconn *ofconn)
         memset(ofconn->slave_async_config, 0,
                sizeof ofconn->slave_async_config);
     }
+
+    ofconn->n_add = ofconn->n_delete = ofconn->n_modify = 0;
+    ofconn->first_op = ofconn->last_op = LLONG_MIN;
+    ofconn->next_op_report = LLONG_MAX;
+    ofconn->op_backoff = LLONG_MIN;
 
     HMAP_FOR_EACH_SAFE (monitor, next_monitor, ofconn_node,
                         &ofconn->monitors) {
@@ -1364,6 +1413,11 @@ ofconn_run(struct ofconn *ofconn,
         }
     }
 
+
+    if (time_msec() >= ofconn->next_op_report) {
+        ofconn_log_flow_mods(ofconn);
+    }
+
     ovs_mutex_lock(&ofproto_mutex);
     if (!rconn_is_alive(ofconn->rconn)) {
         ofconn_destroy(ofconn);
@@ -1385,6 +1439,50 @@ ofconn_wait(struct ofconn *ofconn, bool handling_openflow)
     if (handling_openflow && ofconn_may_recv(ofconn)) {
         rconn_recv_wait(ofconn->rconn);
     }
+    if (ofconn->next_op_report != LLONG_MAX) {
+        poll_timer_wait_until(ofconn->next_op_report);
+    }
+}
+
+static void
+ofconn_log_flow_mods(struct ofconn *ofconn)
+{
+    int n_flow_mods = ofconn->n_add + ofconn->n_delete + ofconn->n_modify;
+    if (n_flow_mods) {
+        long long int ago = (time_msec() - ofconn->first_op) / 1000;
+        long long int interval = (ofconn->last_op - ofconn->first_op) / 1000;
+        struct ds s;
+
+        ds_init(&s);
+        ds_put_format(&s, "%d flow_mods ", n_flow_mods);
+        if (interval == ago) {
+            ds_put_format(&s, "in the last %lld s", ago);
+        } else if (interval) {
+            ds_put_format(&s, "in the %lld s starting %lld s ago",
+                          interval, ago);
+        } else {
+            ds_put_format(&s, "%lld s ago", ago);
+        }
+
+        ds_put_cstr(&s, " (");
+        if (ofconn->n_add) {
+            ds_put_format(&s, "%d adds, ", ofconn->n_add);
+        }
+        if (ofconn->n_delete) {
+            ds_put_format(&s, "%d deletes, ", ofconn->n_delete);
+        }
+        if (ofconn->n_modify) {
+            ds_put_format(&s, "%d modifications, ", ofconn->n_modify);
+        }
+        s.length -= 2;
+        ds_put_char(&s, ')');
+
+        VLOG_INFO("%s: %s", rconn_get_name(ofconn->rconn), ds_cstr(&s));
+        ds_destroy(&s);
+
+        ofconn->n_add = ofconn->n_delete = ofconn->n_modify = 0;
+    }
+    ofconn->next_op_report = LLONG_MAX;
 }
 
 /* Returns true if 'ofconn' should receive asynchronous messages of the given
