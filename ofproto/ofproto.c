@@ -1975,14 +1975,13 @@ ofproto_flow_mod(struct ofproto *ofproto, struct ofputil_flow_mod *fm)
     if (fm->command == OFPFC_MODIFY_STRICT && fm->table_id != OFPTT_ALL
         && !(fm->flags & OFPUTIL_FF_RESET_COUNTS)) {
         struct oftable *table = &ofproto->tables[fm->table_id];
-        struct cls_rule match_rule;
         struct rule *rule;
         bool done = false;
 
-        cls_rule_init(&match_rule, &fm->match, fm->priority);
         fat_rwlock_rdlock(&table->cls.rwlock);
-        rule = rule_from_cls_rule(classifier_find_rule_exactly(&table->cls,
-                                                               &match_rule));
+        rule = rule_from_cls_rule(classifier_find_match_exactly(&table->cls,
+                                                                &fm->match,
+                                                                fm->priority));
         if (rule) {
             /* Reading many of the rule fields and writing on 'modified'
              * requires the rule->mutex.  Also, rule->actions may change
