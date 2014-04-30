@@ -893,9 +893,10 @@ lookup_input_bundle(const struct xbridge *xbridge, ofp_port_t in_port,
         return xport->xbundle;
     }
 
-    /* Special-case OFPP_NONE, which a controller may use as the ingress
-     * port for traffic that it is sourcing. */
-    if (in_port == OFPP_NONE) {
+    /* Special-case OFPP_NONE (OF1.0) and OFPP_CONTROLLER (OF1.1+),
+     * which a controller may use as the ingress port for traffic that
+     * it is sourcing. */
+    if (in_port == OFPP_CONTROLLER || in_port == OFPP_NONE) {
         ofpp_none_bundle.name = "OFPP_NONE";
         ofpp_none_bundle.vlan_mode = PORT_VLAN_TRUNK;
         return &ofpp_none_bundle;
