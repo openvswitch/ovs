@@ -30,9 +30,6 @@
 #include <unistd.h>
 
 #include "util.h"
-#include "vlog.h"
-
-VLOG_DEFINE_THIS_MODULE(route_table);
 
 static int pid;
 static unsigned int register_count = 0;
