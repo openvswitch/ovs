@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Nicira, Inc.
+ * Copyright (c) 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -125,7 +125,7 @@ seq_read(const struct seq *seq)
 }
 
 static void
-seq_wait__(struct seq *seq, uint64_t value)
+seq_wait__(struct seq *seq, uint64_t value, const char *where)
     OVS_REQUIRES(seq_mutex)
 {
     unsigned int id = ovsthread_id_self();
@@ -137,7 +137,7 @@ seq_wait__(struct seq *seq, uint64_t value)
             if (waiter->value != value) {
                 /* The current value is different from the value we've already
                  * waited for, */
-                poll_immediate_wake();
+                poll_immediate_wake_at(where);
             } else {
                 /* Already waiting on 'value', nothing more to do. */
             }
@@ -154,7 +154,7 @@ seq_wait__(struct seq *seq, uint64_t value)
     list_push_back(&waiter->thread->waiters, &waiter->list_node);
 
     if (!waiter->thread->waiting) {
-        latch_wait(&waiter->thread->latch);
+        latch_wait_at(&waiter->thread->latch, where);
         waiter->thread->waiting = true;
     }
 }
@@ -165,18 +165,22 @@ seq_wait__(struct seq *seq, uint64_t value)
  *
  * seq_read() and seq_wait() can be used together to yield a race-free wakeup
  * when an object changes, even without an ability to lock the object.  See
- * Usage in seq.h for details. */
+ * Usage in seq.h for details.
+ *
+ * ('where' is used in debug logging.  Commonly one would use seq_wait() to
+ * automatically provide the caller's source file and line number for
+ * 'where'.) */
 void
-seq_wait(const struct seq *seq_, uint64_t value)
+seq_wait_at(const struct seq *seq_, uint64_t value, const char *where)
     OVS_EXCLUDED(seq_mutex)
 {
     struct seq *seq = CONST_CAST(struct seq *, seq_);
 
     ovs_mutex_lock(&seq_mutex);
     if (value == seq->value) {
-        seq_wait__(seq, value);
+        seq_wait__(seq, value, where);
     } else {
-        poll_immediate_wake();
+        poll_immediate_wake_at(where);
     }
     ovs_mutex_unlock(&seq_mutex);
 }
