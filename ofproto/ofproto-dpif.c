@@ -1359,6 +1359,12 @@ run(struct ofproto *ofproto_)
         ovs_rwlock_unlock(&ofproto->ml->rwlock);
     }
 
+    /* Always updates the ofproto->pins_seqno to avoid frequent wakeup during
+     * flow restore.  Even though nothing is processed during flow restore,
+     * all queued 'pins' will be handled immediately when flow restore
+     * completes. */
+    ofproto->pins_seqno = seq_read(ofproto->pins_seq);
+
     /* Do not perform any periodic activity required by 'ofproto' while
      * waiting for flow restore to complete. */
     if (!ofproto_get_flow_restore_wait()) {
@@ -1373,12 +1379,6 @@ run(struct ofproto *ofproto_)
             free(pin);
         }
     }
-
-    /* Always updates the ofproto->pins_seqno to avoid frequent wakeup during
-     * flow restore.  Even though nothing is processed during flow restore,
-     * all queued 'pins' will be handled immediately when flow restore
-     * completes. */
-    ofproto->pins_seqno = seq_read(ofproto->pins_seq);
 
     if (ofproto->netflow) {
         netflow_run(ofproto->netflow);
