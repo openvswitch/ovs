@@ -1085,10 +1085,7 @@ rconn_packet_counter_n_bytes(const struct rconn_packet_counter *c)
 }
 
 /* Set rc->target and rc->name to 'target' and 'name', respectively.  If 'name'
- * is null, 'target' is used.
- *
- * Also, clear out the cached IP address and port information, since changing
- * the target also likely changes these values. */
+ * is null, 'target' is used. */
 static void
 rconn_set_target__(struct rconn *rc, const char *target, const char *name)
     OVS_REQUIRES(rc->mutex)
