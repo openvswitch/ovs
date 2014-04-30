@@ -29,6 +29,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "util.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(route_table);
@@ -88,8 +89,8 @@ route_table_get_name(ovs_be32 ip, char name[IFNAMSIZ])
     for (i = 1; i; i <<= 1) {
         if (rtm->rtm_addrs & i) {
             if (i == RTA_IFP && sa->sa_family == AF_LINK &&
-              ((struct sockaddr_dl *)sa)->sdl_nlen) {
-                ifp = (struct sockaddr_dl *)sa;
+              ALIGNED_CAST(struct sockaddr_dl *, sa)->sdl_nlen) {
+                ifp = ALIGNED_CAST(struct sockaddr_dl *, sa);
                 namelen = ifp->sdl_nlen;
                 if (namelen > IFNAMSIZ - 1)
                     namelen = IFNAMSIZ - 1;
