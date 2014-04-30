@@ -536,7 +536,7 @@ static int execute_recirc(struct datapath *dp, struct sk_buff *skb,
 	recirc_key.ovs_flow_hash = hash;
 	recirc_key.recirc_id = nla_get_u32(a);
 
-	ovs_dp_process_packet_with_key(skb, &recirc_key);
+	ovs_dp_process_packet_with_key(skb, &recirc_key, true);
 
 	return 0;
 }
@@ -631,11 +631,18 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 }
 
 /* We limit the number of times that we pass into execute_actions()
- * to avoid blowing out the stack in the event that we have a loop. */
-#define MAX_LOOPS 4
+ * to avoid blowing out the stack in the event that we have a loop.
+ *
+ * Each loop adds some (estimated) cost to the kernel stack.
+ * The loop terminates when the max cost is exceeded.
+ * */
+#define RECIRC_STACK_COST 1
+#define DEFAULT_STACK_COST 4
+/* Allow up to 4 regular services, and up to 3 recirculations */
+#define MAX_STACK_COST (DEFAULT_STACK_COST * 4 + RECIRC_STACK_COST * 3)
 
 struct loop_counter {
-	u8 count;		/* Count. */
+	u8 stack_cost;		/* loop stack cost. */
 	bool looping;		/* Loop detected? */
 };
 
@@ -644,22 +651,24 @@ static DEFINE_PER_CPU(struct loop_counter, loop_counters);
 static int loop_suppress(struct datapath *dp, struct sw_flow_actions *actions)
 {
 	if (net_ratelimit())
-		pr_warn("%s: flow looped %d times, dropping\n",
-				ovs_dp_name(dp), MAX_LOOPS);
+		pr_warn("%s: flow loop detected, dropping\n",
+				ovs_dp_name(dp));
 	actions->actions_len = 0;
 	return -ELOOP;
 }
 
 /* Execute a list of actions against 'skb'. */
-int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb)
+int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb, bool recirc)
 {
 	struct sw_flow_actions *acts = rcu_dereference(OVS_CB(skb)->flow->sf_acts);
+	const u8 stack_cost = recirc ? RECIRC_STACK_COST : DEFAULT_STACK_COST;
 	struct loop_counter *loop;
 	int error;
 
 	/* Check whether we've looped too much. */
 	loop = &__get_cpu_var(loop_counters);
-	if (unlikely(++loop->count > MAX_LOOPS))
+	loop->stack_cost += stack_cost;
+	if (unlikely(loop->stack_cost > MAX_STACK_COST))
 		loop->looping = true;
 	if (unlikely(loop->looping)) {
 		error = loop_suppress(dp, acts);
@@ -676,8 +685,9 @@ int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb)
 		error = loop_suppress(dp, acts);
 
 out_loop:
-	/* Decrement loop counter. */
-	if (!--loop->count)
+	/* Decrement loop stack cost. */
+	loop->stack_cost -= stack_cost;
+	if (!loop->stack_cost)
 		loop->looping = false;
 
 	return error;

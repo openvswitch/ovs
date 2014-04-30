@@ -240,7 +240,8 @@ void ovs_dp_detach_port(struct vport *p)
 }
 
 void ovs_dp_process_packet_with_key(struct sk_buff *skb,
-		struct sw_flow_key *pkt_key)
+				    struct sw_flow_key *pkt_key,
+				    bool recirc)
 {
 	const struct vport *p = OVS_CB(skb)->input_vport;
 	struct datapath *dp = p->dp;
@@ -270,7 +271,7 @@ void ovs_dp_process_packet_with_key(struct sk_buff *skb,
 	OVS_CB(skb)->flow = flow;
 
 	ovs_flow_stats_update(OVS_CB(skb)->flow, pkt_key->tp.flags, skb);
-	ovs_execute_actions(dp, skb);
+	ovs_execute_actions(dp, skb, recirc);
 	stats_counter = &stats->n_hit;
 
 out:
@@ -296,7 +297,7 @@ void ovs_dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 		return;
 	}
 
-	ovs_dp_process_packet_with_key(skb, &key);
+	ovs_dp_process_packet_with_key(skb, &key, false);
 }
 
 int ovs_dp_upcall(struct datapath *dp, struct sk_buff *skb,
@@ -599,7 +600,7 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	OVS_CB(packet)->input_vport = input_vport;
 
 	local_bh_disable();
-	err = ovs_execute_actions(dp, packet);
+	err = ovs_execute_actions(dp, packet, false);
 	local_bh_enable();
 	rcu_read_unlock();
 
