@@ -2,7 +2,15 @@ Post-v2.2.0
 ---------------------
    - OpenFlow 1.1, 1.2, and 1.3 are now enabled by default in
      ovs-vswitchd.
-
+   - Linux kernel datapath now has an exact match cache optimizing the
+     flow matching process.
+   - Datapath flows now have partially wildcarded tranport port field
+     matches.  This reduces userspace upcalls, but increases the
+     number of different masks in the datapath.  The kernel datapath
+     exact match cache removes the overhead of matching the incoming
+     packets with the larger number of masks, but when paired with an
+     older kernel module, some workloads may perform worse with the
+     new userspace.
 
 v2.2.0 - xx xxx xxx
 ---------------------

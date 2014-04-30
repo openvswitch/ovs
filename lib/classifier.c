@@ -31,6 +31,11 @@
 VLOG_DEFINE_THIS_MODULE(classifier);
 
 struct trie_node;
+struct trie_ctx;
+
+/* Ports trie depends on both ports sharing the same ovs_be32. */
+#define TP_PORTS_OFS32 (offsetof(struct flow, tp_src) / 4)
+BUILD_ASSERT_DECL(TP_PORTS_OFS32 == offsetof(struct flow, tp_dst) / 4);
 
 /* Prefix trie for a 'field' */
 struct cls_trie {
@@ -79,6 +84,8 @@ struct cls_subtable {
     uint8_t index_ofs[CLS_MAX_INDICES]; /* u32 flow segment boundaries. */
     struct hindex indices[CLS_MAX_INDICES]; /* Staged lookup indices. */
     unsigned int trie_plen[CLS_MAX_TRIES];  /* Trie prefix length in 'mask'. */
+    int ports_mask_len;
+    struct trie_node *ports_trie; /* NULL if none. */
     struct minimask mask;       /* Wildcards for fields. */
     /* 'mask' must be the last field. */
 };
@@ -124,7 +131,6 @@ cls_match_alloc(struct cls_rule *rule)
     return cls_match;
 }
 
-struct trie_ctx;
 static struct cls_subtable *find_subtable(const struct cls_classifier *,
                                           const struct minimask *);
 static struct cls_subtable *insert_subtable(struct cls_classifier *,
@@ -165,10 +171,16 @@ static void trie_init(struct cls_classifier *, int trie_idx,
                       const struct mf_field *);
 static unsigned int trie_lookup(const struct cls_trie *, const struct flow *,
                                 unsigned int *checkbits);
-
+static unsigned int trie_lookup_value(const struct trie_node *,
+                                      const ovs_be32 value[],
+                                      unsigned int *checkbits);
 static void trie_destroy(struct trie_node *);
 static void trie_insert(struct cls_trie *, const struct cls_rule *, int mlen);
+static void trie_insert_prefix(struct trie_node **, const ovs_be32 *prefix,
+                               int mlen);
 static void trie_remove(struct cls_trie *, const struct cls_rule *, int mlen);
+static void trie_remove_prefix(struct trie_node **, const ovs_be32 *prefix,
+                               int mlen);
 static void mask_set_prefix_bits(struct flow_wildcards *, uint8_t be32ofs,
                                  unsigned int nbits);
 static bool mask_prefix_bits_set(const struct flow_wildcards *,
@@ -721,6 +733,13 @@ create_partition(struct cls_classifier *cls, struct cls_subtable *subtable,
     return partition;
 }
 
+static inline ovs_be32 minimatch_get_ports(const struct minimatch *match)
+{
+    /* Could optimize to use the same map if needed for fast path. */
+    return MINIFLOW_GET_BE32(&match->flow, tp_src)
+        & MINIFLOW_GET_BE32(&match->mask.masks, tp_src);
+}
+
 /* Inserts 'rule' into 'cls'.  Until 'rule' is removed from 'cls', the caller
  * must not modify or free it.
  *
@@ -765,6 +784,19 @@ classifier_replace(struct classifier *cls_, struct cls_rule *rule)
                 trie_insert(&cls->tries[i], rule, subtable->trie_plen[i]);
             }
         }
+
+        /* Ports trie. */
+        if (subtable->ports_mask_len) {
+            /* We mask the value to be inserted to always have the wildcarded
+             * bits in known (zero) state, so we can include them in comparison
+             * and they will always match (== their original value does not
+             * matter). */
+            ovs_be32 masked_ports = minimatch_get_ports(&rule->match);
+
+            trie_insert_prefix(&subtable->ports_trie, &masked_ports,
+                               subtable->ports_mask_len);
+        }
+
         return NULL;
     } else {
         struct cls_rule *old_cls_rule = old_rule->cls_rule;
@@ -805,9 +837,14 @@ classifier_remove(struct classifier *cls_, struct cls_rule *rule)
     ovs_assert(cls_match);
 
     subtable = find_subtable(cls, &rule->match.mask);
-
     ovs_assert(subtable);
 
+    if (subtable->ports_mask_len) {
+        ovs_be32 masked_ports = minimatch_get_ports(&rule->match);
+
+        trie_remove_prefix(&subtable->ports_trie,
+                           &masked_ports, subtable->ports_mask_len);
+    }
     for (i = 0; i < cls->n_tries; i++) {
         if (subtable->trie_plen[i]) {
             trie_remove(&cls->tries[i], rule, subtable->trie_plen[i]);
@@ -1336,6 +1373,11 @@ insert_subtable(struct cls_classifier *cls, const struct minimask *mask)
                                                          cls->tries[i].field);
     }
 
+    /* Ports trie. */
+    subtable->ports_trie = NULL;
+    subtable->ports_mask_len
+        = 32 - ctz32(ntohl(MINIFLOW_GET_BE32(&mask->masks, tp_src)));
+
     hmap_insert(&cls->subtables, &subtable->hmap_node, hash);
     elem.subtable = subtable;
     elem.tag = subtable->tag;
@@ -1358,6 +1400,8 @@ destroy_subtable(struct cls_classifier *cls, struct cls_subtable *subtable)
             break;
         }
     }
+
+    trie_destroy(subtable->ports_trie);
 
     for (i = 0; i < subtable->n_indices; i++) {
         hindex_destroy(&subtable->indices[i]);
@@ -1643,6 +1687,23 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
         /* We already narrowed the matching candidates down to just 'rule',
          * but it didn't match. */
         rule = NULL;
+    }
+    if (!rule && subtable->ports_mask_len) {
+        /* Ports are always part of the final range, if any.
+         * No match was found for the ports.  Use the ports trie to figure out
+         * which ports bits to unwildcard. */
+        unsigned int mbits;
+        ovs_be32 value, mask;
+
+        mask = MINIFLOW_GET_BE32(&subtable->mask.masks, tp_src);
+        value = ((OVS_FORCE ovs_be32 *)flow)[TP_PORTS_OFS32] & mask;
+        trie_lookup_value(subtable->ports_trie, &value, &mbits);
+
+        ((OVS_FORCE ovs_be32 *)&wc->masks)[TP_PORTS_OFS32] |=
+            mask & htonl(~0 << (32 - mbits));
+
+        ofs.start = TP_PORTS_OFS32;
+        goto range_out;
     }
  out:
     /* Must unwildcard all the fields, as they were looked at. */
@@ -2037,14 +2098,18 @@ minimatch_get_prefix(const struct minimatch *match, const struct mf_field *mf)
 static void
 trie_insert(struct cls_trie *trie, const struct cls_rule *rule, int mlen)
 {
-    const ovs_be32 *prefix = minimatch_get_prefix(&rule->match, trie->field);
+    trie_insert_prefix(&trie->root,
+                       minimatch_get_prefix(&rule->match, trie->field), mlen);
+}
+
+static void
+trie_insert_prefix(struct trie_node **edge, const ovs_be32 *prefix, int mlen)
+{
     struct trie_node *node;
-    struct trie_node **edge;
     int ofs = 0;
 
     /* Walk the tree. */
-    for (edge = &trie->root;
-         (node = *edge) != NULL;
+    for (; (node = *edge) != NULL;
          edge = trie_next_edge(node, prefix, ofs)) {
         unsigned int eqbits = trie_prefix_equal_bits(node, prefix, ofs, mlen);
         ofs += eqbits;
@@ -2085,16 +2150,25 @@ trie_insert(struct cls_trie *trie, const struct cls_rule *rule, int mlen)
 static void
 trie_remove(struct cls_trie *trie, const struct cls_rule *rule, int mlen)
 {
-    const ovs_be32 *prefix = minimatch_get_prefix(&rule->match, trie->field);
+    trie_remove_prefix(&trie->root,
+                       minimatch_get_prefix(&rule->match, trie->field), mlen);
+}
+
+/* 'mlen' must be the (non-zero) CIDR prefix length of the 'trie->field' mask
+ * in 'rule'. */
+static void
+trie_remove_prefix(struct trie_node **root, const ovs_be32 *prefix, int mlen)
+{
     struct trie_node *node;
     struct trie_node **edges[sizeof(union mf_value) * 8];
     int depth = 0, ofs = 0;
 
     /* Walk the tree. */
-    for (edges[depth] = &trie->root;
+    for (edges[0] = root;
          (node = *edges[depth]) != NULL;
          edges[++depth] = trie_next_edge(node, prefix, ofs)) {
         unsigned int eqbits = trie_prefix_equal_bits(node, prefix, ofs, mlen);
+
         if (eqbits < node->nbits) {
             /* Mismatch, nothing to be removed.  This should never happen, as
              * only rules in the classifier are ever removed. */
