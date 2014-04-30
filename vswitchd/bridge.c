@@ -626,13 +626,6 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         bridge_configure_stp(br);
         bridge_configure_tables(br);
         bridge_configure_dp_desc(br);
-
-        if (smap_get(&br->cfg->other_config, "flow-eviction-threshold")) {
-            /* XXX: Remove this warning message eventually. */
-            VLOG_WARN_ONCE("As of June 2013, flow-eviction-threshold has been"
-                           " moved to the Open_vSwitch table.  Ignoring its"
-                           " setting in the bridge table.");
-        }
     }
     free(managers);
 
