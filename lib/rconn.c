@@ -39,12 +39,31 @@ COVERAGE_DEFINE(rconn_overflow);
 COVERAGE_DEFINE(rconn_queued);
 COVERAGE_DEFINE(rconn_sent);
 
+/* The connection states have the following meanings:
+ *
+ *    - S_VOID: No connection information is configured.
+ *
+ *    - S_BACKOFF: Waiting for a period of time before reconnecting.
+ *
+ *    - S_CONNECTING: A connection attempt is in progress and has not yet
+ *      succeeded or failed.
+ *
+ *    - S_ACTIVE: A connection has been established and appears to be healthy.
+ *
+ *    - S_IDLE: A connection has been established but has been idle for some
+ *      time.  An echo request has been sent, but no reply has yet been
+ *      received.
+ *
+ *    - S_DISCONNECTED: An unreliable connection has disconnected and cannot be
+ *      automatically retried.
+ */
 #define STATES                                  \
     STATE(VOID, 1 << 0)                         \
     STATE(BACKOFF, 1 << 1)                      \
     STATE(CONNECTING, 1 << 2)                   \
     STATE(ACTIVE, 1 << 3)                       \
-    STATE(IDLE, 1 << 4)
+    STATE(IDLE, 1 << 4)                         \
+    STATE(DISCONNECTED, 1 << 5)
 enum state {
 #define STATE(NAME, VALUE) S_##NAME = VALUE,
     STATES
@@ -580,6 +599,20 @@ run_IDLE(struct rconn *rc)
     }
 }
 
+static unsigned int
+timeout_DISCONNECTED(const struct rconn *rc OVS_UNUSED)
+    OVS_REQUIRES(rc->mutex)
+{
+    return UINT_MAX;
+}
+
+static void
+run_DISCONNECTED(struct rconn *rc OVS_UNUSED)
+    OVS_REQUIRES(rc->mutex)
+{
+    /* Nothing to do. */
+}
+
 /* Performs whatever activities are necessary to maintain 'rc': if 'rc' is
  * disconnected, attempts to (re)connect, backing off as necessary; if 'rc' is
  * connected, attempts to send packets in the send queue, if any. */
@@ -858,7 +891,7 @@ rconn_get_target(const struct rconn *rc)
 bool
 rconn_is_alive(const struct rconn *rconn)
 {
-    return rconn->state != S_VOID;
+    return rconn->state != S_VOID && rconn->state != S_DISCONNECTED;
 }
 
 /* Returns true if 'rconn' is connected, false otherwise. */
@@ -1165,13 +1198,15 @@ disconnect(struct rconn *rc, int error)
     OVS_REQUIRES(rc->mutex)
 {
     rc->last_error = error;
+    if (rc->vconn) {
+        vconn_close(rc->vconn);
+        rc->vconn = NULL;
+    }
     if (rc->reliable) {
         time_t now = time_now();
 
         if (rc->state & (S_CONNECTING | S_ACTIVE | S_IDLE)) {
             rc->last_disconnected = now;
-            vconn_close(rc->vconn);
-            rc->vconn = NULL;
             flush_queue(rc);
         }
 
@@ -1193,7 +1228,7 @@ disconnect(struct rconn *rc, int error)
         state_transition(rc, S_BACKOFF);
     } else {
         rc->last_disconnected = time_now();
-        rconn_disconnect__(rc);
+        state_transition(rc, S_DISCONNECTED);
     }
 }
 
