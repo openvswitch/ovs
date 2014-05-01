@@ -2375,7 +2375,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 05 1e 00 18 00 00 00 0a \
 00 00 00 02 02 00 00 00 ff ff ff ff ff ff ff ff \
 "], [0], [dnl
-OFPT_ROLE_STATUS (OF 0x05) (xid=0xa): role=master reason=experimenter_data_changed
+OFPT_ROLE_STATUS (OF1.4) (xid=0xa): role=master reason=experimenter_data_changed
 ])
 AT_CLEANUP
 
@@ -2385,7 +2385,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 05 1e 00 18 00 00 00 0a \
 00 00 00 02 01 00 00 00 ff ff ff ff ff ff ff ff \
 "], [0], [dnl
-OFPT_ROLE_STATUS (OF 0x05) (xid=0xa): role=master reason=configuration_changed
+OFPT_ROLE_STATUS (OF1.4) (xid=0xa): role=master reason=configuration_changed
 ])
 AT_CLEANUP
 
@@ -2395,7 +2395,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 05 1e 00 18 00 00 00 0a \
 00 00 00 02 01 00 00 00 00 00 00 00 00 00 00 10 \
 "], [0], [dnl
-OFPT_ROLE_STATUS (OF 0x05) (xid=0xa): role=master generation_id=16 reason=configuration_changed
+OFPT_ROLE_STATUS (OF1.4) (xid=0xa): role=master generation_id=16 reason=configuration_changed
 ])
 AT_CLEANUP
 

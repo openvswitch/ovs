@@ -24,7 +24,7 @@ OFPT_HELLO (OF1.3) (xid=0x1):
 ])
 AT_CHECK([ovs-ofctl encode-hello 0x3e], [0], [dnl
 00000000  05 00 00 08 00 00 00 01-
-OFPT_HELLO (OF 0x05) (xid=0x1):
+OFPT_HELLO (OF1.4) (xid=0x1):
  version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05
 ])
 
