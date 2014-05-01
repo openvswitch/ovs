@@ -57,9 +57,6 @@ struct xlate_out {
     ofp_port_t nf_output_iface; /* Output interface index for NetFlow. */
     mirror_mask_t mirrors;      /* Bitmap of associated mirrors. */
 
-    bool use_recirc;            /* Should generate recirc? */
-    struct xlate_recirc recirc; /* Information used for generating
-                                 * recirculation actions */
     uint64_t odp_actions_stub[256 / 8];
     struct ofpbuf odp_actions;
 };

@@ -192,6 +192,10 @@ struct xlate_ctx {
     uint16_t user_cookie_offset;/* Used for user_action_cookie fixup. */
     bool exit;                  /* No further actions should be processed. */
 
+    bool use_recirc;            /* Should generate recirc? */
+    struct xlate_recirc recirc; /* Information used for generating
+                                 * recirculation actions */
+
     /* OpenFlow 1.1+ action set.
      *
      * 'action_set' accumulates "struct ofpact"s added by OFPACT_WRITE_ACTIONS.
@@ -1209,19 +1213,19 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
         /* Partially configured bundle with no slaves.  Drop the packet. */
         return;
     } else if (!out_xbundle->bond) {
-        ctx->xout->use_recirc = false;
+        ctx->use_recirc = false;
         xport = CONTAINER_OF(list_front(&out_xbundle->xports), struct xport,
                              bundle_node);
     } else {
         struct ofport_dpif *ofport;
-        struct xlate_recirc *xr = &ctx->xout->recirc;
+        struct xlate_recirc *xr = &ctx->recirc;
         struct flow_wildcards *wc = &ctx->xout->wc;
 
         if (ctx->xbridge->enable_recirc) {
-            ctx->xout->use_recirc = bond_may_recirc(
+            ctx->use_recirc = bond_may_recirc(
                 out_xbundle->bond, &xr->recirc_id, &xr->hash_basis);
 
-            if (ctx->xout->use_recirc) {
+            if (ctx->use_recirc) {
                 /* Only TCP mode uses recirculation. */
                 xr->hash_alg = OVS_HASH_ALG_L4;
                 bond_update_post_recirc_rules(out_xbundle->bond, false);
@@ -1242,7 +1246,7 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
 
         /* If ctx->xout->use_recirc is set, the main thread will handle stats
          * accounting for this bond. */
-        if (!ctx->xout->use_recirc) {
+        if (!ctx->use_recirc) {
             if (ctx->xin->resubmit_stats) {
                 bond_account(out_xbundle->bond, &ctx->xin->flow, vid,
                              ctx->xin->resubmit_stats->n_bytes);
@@ -1952,9 +1956,9 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                                               &ctx->xout->odp_actions,
                                               &ctx->xout->wc);
 
-        if (ctx->xout->use_recirc) {
+        if (ctx->use_recirc) {
             struct ovs_action_hash *act_hash;
-            struct xlate_recirc *xr = &ctx->xout->recirc;
+            struct xlate_recirc *xr = &ctx->recirc;
 
             /* Hash action. */
             act_hash = nl_msg_put_unspec_uninit(&ctx->xout->odp_actions,
@@ -3268,6 +3272,7 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
     ctx.orig_skb_priority = flow->skb_priority;
     ctx.table_id = 0;
     ctx.exit = false;
+    ctx.use_recirc = false;
 
     if (!xin->ofpacts && !ctx.rule) {
         ctx.table_id = rule_dpif_lookup(ctx.xbridge->ofproto, flow,
@@ -3285,7 +3290,6 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
         ctx.rule = rule;
     }
     xout->fail_open = ctx.rule && rule_dpif_is_fail_open(ctx.rule);
-    xout->use_recirc = false;
 
     if (xin->ofpacts) {
         ofpacts = xin->ofpacts;
