@@ -554,10 +554,7 @@ netdev_rxq_open(struct netdev *netdev, struct netdev_rxq **rxp, int id)
             rx->queue_id = id;
             error = netdev->netdev_class->rxq_construct(rx);
             if (!error) {
-                ovs_mutex_lock(&netdev_mutex);
-                netdev->ref_cnt++;
-                ovs_mutex_unlock(&netdev_mutex);
-
+                netdev_ref(netdev);
                 *rxp = rx;
                 return 0;
             }
