@@ -352,15 +352,15 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
         error = 0;
     }
 
-    ovs_mutex_unlock(&netdev_mutex);
-    ovs_rwlock_unlock(&netdev_class_rwlock);
-
     if (!error) {
         netdev->ref_cnt++;
         *netdevp = netdev;
     } else {
         *netdevp = NULL;
     }
+    ovs_mutex_unlock(&netdev_mutex);
+    ovs_rwlock_unlock(&netdev_class_rwlock);
+
     return error;
 }
 
