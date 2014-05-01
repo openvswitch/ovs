@@ -19,6 +19,7 @@ Release: 1
 Source: openvswitch-%{version}.tar.gz
 Buildroot: /tmp/openvswitch-rpm
 Requires: openvswitch-kmod, logrotate, python
+BuildRequires: openssl-devel
 
 %description
 Open vSwitch provides standard network bridging functions and
