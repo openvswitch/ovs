@@ -3953,7 +3953,8 @@ is_flow_deletion_pending(const struct ofproto *ofproto,
         HMAP_FOR_EACH_WITH_HASH (op, hmap_node,
                                  cls_rule_hash(cls_rule, table_id),
                                  &ofproto->deletions) {
-            if (cls_rule_equal(cls_rule, &op->rule->cr)) {
+            if (op->rule->table_id == table_id
+                && cls_rule_equal(cls_rule, &op->rule->cr)) {
                 return true;
             }
         }
