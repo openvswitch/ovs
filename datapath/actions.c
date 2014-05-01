@@ -166,7 +166,7 @@ static void set_ip_addr(struct sk_buff *skb, struct iphdr *nh,
 	}
 
 	csum_replace4(&nh->check, *addr, new_addr);
-	skb_clear_rxhash(skb);
+	skb_clear_hash(skb);
 	*addr = new_addr;
 }
 
@@ -200,7 +200,7 @@ static void set_ipv6_addr(struct sk_buff *skb, u8 l4_proto,
 	if (recalculate_csum)
 		update_ipv6_checksum(skb, l4_proto, addr, new_addr);
 
-	skb_clear_rxhash(skb);
+	skb_clear_hash(skb);
 	memcpy(addr, new_addr, sizeof(__be32[4]));
 }
 
@@ -297,7 +297,7 @@ static void set_tp_port(struct sk_buff *skb, __be16 *port,
 {
 	inet_proto_csum_replace2(check, skb, *port, new_port, 0);
 	*port = new_port;
-	skb_clear_rxhash(skb);
+	skb_clear_hash(skb);
 }
 
 static void set_udp_port(struct sk_buff *skb, __be16 *port, __be16 new_port)
@@ -311,7 +311,7 @@ static void set_udp_port(struct sk_buff *skb, __be16 *port, __be16 new_port)
 			uh->check = CSUM_MANGLED_0;
 	} else {
 		*port = new_port;
-		skb_clear_rxhash(skb);
+		skb_clear_hash(skb);
 	}
 }
 
@@ -382,7 +382,7 @@ static int set_sctp(struct sk_buff *skb,
 		/* Carry any checksum errors through. */
 		sh->checksum = old_csum ^ old_correct_csum ^ new_csum;
 
-		skb_clear_rxhash(skb);
+		skb_clear_hash(skb);
 	}
 
 	return 0;
@@ -446,7 +446,7 @@ static int sample(struct datapath *dp, struct sk_buff *skb,
 		 a = nla_next(a, &rem)) {
 		switch (nla_type(a)) {
 		case OVS_SAMPLE_ATTR_PROBABILITY:
-			if (net_random() >= nla_get_u32(a))
+			if (prandom_u32() >= nla_get_u32(a))
 				return 0;
 			break;
 
@@ -467,7 +467,7 @@ static void execute_hash(struct sk_buff *skb, const struct nlattr *attr)
 	u32 hash = 0;
 
 	/* OVS_HASH_ALG_L4 is the only possible hash algorithm.  */
-	hash = skb_get_rxhash(skb);
+	hash = skb_get_hash(skb);
 	hash = jhash_1word(hash, hash_act->hash_basis);
 	if (!hash)
 		hash = 0x1;

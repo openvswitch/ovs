@@ -165,7 +165,7 @@ static __be64 instance_id_to_tunnel_id(__u8 *iid)
  */
 static u16 get_src_port(struct net *net, struct sk_buff *skb)
 {
-	u32 hash = skb_get_rxhash(skb);
+	u32 hash = skb_get_hash(skb);
 	unsigned int range;
 	int high;
 	int low;

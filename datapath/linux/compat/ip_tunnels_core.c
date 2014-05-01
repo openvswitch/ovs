@@ -48,7 +48,7 @@ int iptunnel_xmit(struct rtable *rt,
 
 	nf_reset(skb);
 	secpath_reset(skb);
-	skb_clear_rxhash(skb);
+	skb_clear_hash(skb);
 	skb_dst_drop(skb);
 	skb_dst_set(skb, &rt_dst(rt));
 #if 0
@@ -104,7 +104,7 @@ int iptunnel_pull_header(struct sk_buff *skb, int hdr_len, __be16 inner_proto)
 
 	nf_reset(skb);
 	secpath_reset(skb);
-	skb_clear_rxhash(skb);
+	skb_clear_hash(skb);
 	skb_dst_drop(skb);
 	vlan_set_tci(skb, 0);
 	skb_set_queue_mapping(skb, 0);

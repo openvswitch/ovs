@@ -34,6 +34,7 @@ static inline int eth_mac_addr(struct net_device *dev, void *p)
 }
 #endif
 
+#ifndef HAVE_ETHER_ADDR_COPY
 static inline void ether_addr_copy(u8 *dst, const u8 *src)
 {
 #if defined(CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS)
@@ -48,5 +49,6 @@ static inline void ether_addr_copy(u8 *dst, const u8 *src)
 	a[2] = b[2];
 #endif
 }
+#endif
 
 #endif
