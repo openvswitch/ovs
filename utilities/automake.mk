@@ -82,6 +82,7 @@ DISTCLEANFILES += \
 man_MANS += \
 	utilities/ovs-appctl.8 \
 	utilities/ovs-benchmark.1 \
+	utilities/ovs-ctl.8 \
 	utilities/ovs-dpctl.8 \
 	utilities/ovs-dpctl-top.8 \
 	utilities/ovs-l3ping.8 \
@@ -94,7 +95,6 @@ man_MANS += \
 	utilities/ovs-test.8 \
 	utilities/ovs-vlan-test.8 \
 	utilities/ovs-vsctl.8
-dist_man_MANS += utilities/ovs-ctl.8
 
 utilities_ovs_appctl_SOURCES = utilities/ovs-appctl.c
 utilities_ovs_appctl_LDADD = lib/libopenvswitch.la
