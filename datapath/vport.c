@@ -142,14 +142,14 @@ struct vport *ovs_vport_alloc(int priv_size, const struct vport_ops *ops,
 	if (ovs_vport_set_upcall_portids(vport, parms->upcall_portids))
 		return ERR_PTR(-EINVAL);
 
-	vport->percpu_stats = alloc_percpu(struct pcpu_tstats);
+	vport->percpu_stats = alloc_percpu(struct pcpu_sw_netstats);
 	if (!vport->percpu_stats) {
 		kfree(vport);
 		return ERR_PTR(-ENOMEM);
 	}
 
 	for_each_possible_cpu(i) {
-		struct pcpu_tstats *vport_stats;
+		struct pcpu_sw_netstats *vport_stats;
 		vport_stats = per_cpu_ptr(vport->percpu_stats, i);
 		u64_stats_init(&vport_stats->syncp);
 	}
@@ -302,8 +302,8 @@ void ovs_vport_get_stats(struct vport *vport, struct ovs_vport_stats *stats)
 	spin_unlock_bh(&vport->stats_lock);
 
 	for_each_possible_cpu(i) {
-		const struct pcpu_tstats *percpu_stats;
-		struct pcpu_tstats local_stats;
+		const struct pcpu_sw_netstats *percpu_stats;
+		struct pcpu_sw_netstats local_stats;
 		unsigned int start;
 
 		percpu_stats = per_cpu_ptr(vport->percpu_stats, i);
@@ -436,7 +436,7 @@ int ovs_vport_get_upcall_portids(const struct vport *vport,
  * @vport: vport from which the missed packet is received.
  * @skb: skb that the missed packet was received.
  *
- * Uses the skb_get_rxhash() to select the upcall portid to send the
+ * Uses the skb_get_hash() to select the upcall portid to send the
  * upcall.
  *
  * Returns the portid of the target socket.  Must be called with rcu_read_lock.
@@ -451,7 +451,7 @@ u32 ovs_vport_find_upcall_portid(const struct vport *p, struct sk_buff *skb)
 	if (ids->n_ids == 1 && ids->ids[0] == 0)
 		return 0;
 
-	hash = skb_get_rxhash(skb);
+	hash = skb_get_hash(skb);
 	return ids->ids[hash - ids->n_ids * reciprocal_divide(hash, ids->rn_ids)];
 }
 
@@ -469,7 +469,7 @@ u32 ovs_vport_find_upcall_portid(const struct vport *p, struct sk_buff *skb)
 void ovs_vport_receive(struct vport *vport, struct sk_buff *skb,
 		       struct ovs_key_ipv4_tunnel *tun_key)
 {
-	struct pcpu_tstats *stats;
+	struct pcpu_sw_netstats *stats;
 
 	stats = this_cpu_ptr(vport->percpu_stats);
 	u64_stats_update_begin(&stats->syncp);
@@ -495,7 +495,7 @@ int ovs_vport_send(struct vport *vport, struct sk_buff *skb)
 	int sent = vport->ops->send(vport, skb);
 
 	if (likely(sent > 0)) {
-		struct pcpu_tstats *stats;
+		struct pcpu_sw_netstats *stats;
 
 		stats = this_cpu_ptr(vport->percpu_stats);
 

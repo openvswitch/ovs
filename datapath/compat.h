@@ -25,13 +25,6 @@
 #include <net/route.h>
 #include <net/xfrm.h>
 
-static inline void skb_clear_rxhash(struct sk_buff *skb)
-{
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35)
-	skb->rxhash = 0;
-#endif
-}
-
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,13,0)
 #define GROUP_ID(grp)	0
 #else

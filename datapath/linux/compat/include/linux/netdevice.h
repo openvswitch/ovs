@@ -125,4 +125,17 @@ static inline struct net_device *netdev_notifier_info_to_dev(void *info)
 }
 #endif
 
+#ifndef HAVE_PCPU_SW_NETSTATS
+
+#include <linux/u64_stats_sync.h>
+
+struct pcpu_sw_netstats {
+	u64     rx_packets;
+	u64     rx_bytes;
+	u64     tx_packets;
+	u64     tx_bytes;
+	struct u64_stats_sync   syncp;
+};
+#endif
+
 #endif
