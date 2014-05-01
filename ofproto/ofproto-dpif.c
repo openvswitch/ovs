@@ -948,9 +948,9 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     return error;
 }
 
-/* Tests whether 'backer''s datapath supports recirculation Only newer datapath
- * supports OVS_KEY_ATTR in OVS_ACTION_ATTR_USERSPACE actions.  We need to
- * disable some features on older datapaths that don't support this feature.
+/* Tests whether 'backer''s datapath supports recirculation.  Only newer
+ * datapaths support OVS_KEY_ATTR_RECIRC_ID in keys.  We need to disable some
+ * features on older datapaths that don't support this feature.
  *
  * Returns false if 'backer' definitely does not support recirculation, true if
  * it seems to support recirculation or if at least the error we get is
