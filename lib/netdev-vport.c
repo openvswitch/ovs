@@ -34,6 +34,7 @@
 #include "netdev-provider.h"
 #include "ofpbuf.h"
 #include "packets.h"
+#include "poll-loop.h"
 #include "route-table.h"
 #include "shash.h"
 #include "socket-util.h"
@@ -57,6 +58,8 @@ struct netdev_vport {
 
     /* Tunnels. */
     struct netdev_tunnel_config tnl_cfg;
+    char egress_iface[IFNAMSIZ];
+    bool carrier_status;
 
     /* Patch Ports. */
     char *peer;
@@ -67,14 +70,24 @@ struct vport_class {
     struct netdev_class netdev_class;
 };
 
+/* Last read of the route-table's change number. */
+static uint64_t rt_change_seqno;
+
 static int netdev_vport_construct(struct netdev *);
 static int get_patch_config(const struct netdev *netdev, struct smap *args);
 static int get_tunnel_config(const struct netdev *, struct smap *args);
+static bool tunnel_check_status_change__(struct netdev_vport *);
 
 static bool
 is_vport_class(const struct netdev_class *class)
 {
     return class->construct == netdev_vport_construct;
+}
+
+bool
+netdev_vport_is_vport_class(const struct netdev_class *class)
+{
+    return is_vport_class(class);
 }
 
 static const struct vport_class *
@@ -164,6 +177,34 @@ netdev_vport_get_dpif_port_strdup(const struct netdev *netdev)
                                               sizeof namebuf));
 }
 
+/* Whenever the route-table change number is incremented,
+ * netdev_vport_route_changed() should be called to update
+ * the corresponding tunnel interface status. */
+static void
+netdev_vport_route_changed(void)
+{
+    struct netdev **vports;
+    size_t i, n_vports;
+
+    vports = netdev_get_vports(&n_vports);
+    for (i = 0; i < n_vports; i++) {
+        struct netdev *netdev_ = vports[i];
+        struct netdev_vport *netdev = netdev_vport_cast(netdev_);
+
+        ovs_mutex_lock(&netdev->mutex);
+        /* Finds all tunnel vports. */
+        if (netdev->tnl_cfg.ip_dst) {
+            if (tunnel_check_status_change__(netdev)) {
+                netdev_change_seq_changed(netdev_);
+            }
+        }
+        netdev_close(netdev_);
+        ovs_mutex_unlock(&netdev->mutex);
+    }
+
+    free(vports);
+}
+
 static struct netdev *
 netdev_vport_alloc(void)
 {
@@ -228,27 +269,48 @@ netdev_vport_get_etheraddr(const struct netdev *netdev_,
     return 0;
 }
 
+/* Checks if the tunnel status has changed and returns a boolean.
+ * Updates the tunnel status if it has changed. */
+static bool
+tunnel_check_status_change__(struct netdev_vport *netdev)
+    OVS_REQUIRES(netdev->mutex)
+{
+    char iface[IFNAMSIZ];
+    bool status = false;
+    ovs_be32 route;
+
+    iface[0] = '\0';
+    route = netdev->tnl_cfg.ip_dst;
+    if (route_table_get_name(route, iface)) {
+        struct netdev *egress_netdev;
+
+        if (!netdev_open(iface, "system", &egress_netdev)) {
+            status = netdev_get_carrier(egress_netdev);
+            netdev_close(egress_netdev);
+        }
+    }
+
+    if (strcmp(netdev->egress_iface, iface)
+        || netdev->carrier_status != status) {
+        ovs_strlcpy(netdev->egress_iface, iface, IFNAMSIZ);
+        netdev->carrier_status = status;
+
+        return true;
+    }
+
+    return false;
+}
+
 static int
 tunnel_get_status(const struct netdev *netdev_, struct smap *smap)
 {
     struct netdev_vport *netdev = netdev_vport_cast(netdev_);
-    char iface[IFNAMSIZ];
-    ovs_be32 route;
 
-    ovs_mutex_lock(&netdev->mutex);
-    route = netdev->tnl_cfg.ip_dst;
-    ovs_mutex_unlock(&netdev->mutex);
+    if (netdev->egress_iface[0]) {
+        smap_add(smap, "tunnel_egress_iface", netdev->egress_iface);
 
-    if (route_table_get_name(route, iface)) {
-        struct netdev *egress_netdev;
-
-        smap_add(smap, "tunnel_egress_iface", iface);
-
-        if (!netdev_open(iface, "system", &egress_netdev)) {
-            smap_add(smap, "tunnel_egress_iface_carrier",
-                     netdev_get_carrier(egress_netdev) ? "up" : "down");
-            netdev_close(egress_netdev);
-        }
+        smap_add(smap, "tunnel_egress_iface_carrier",
+                 netdev->carrier_status ? "up" : "down");
     }
 
     return 0;
@@ -271,13 +333,26 @@ netdev_vport_update_flags(struct netdev *netdev OVS_UNUSED,
 static void
 netdev_vport_run(void)
 {
+    uint64_t seq;
+
     route_table_run();
+    seq = route_table_get_change_seq();
+    if (rt_change_seqno != seq) {
+        rt_change_seqno = seq;
+        netdev_vport_route_changed();
+    }
 }
 
 static void
 netdev_vport_wait(void)
 {
+    uint64_t seq;
+
     route_table_wait();
+    seq = route_table_get_change_seq();
+    if (rt_change_seqno != seq) {
+        poll_immediate_wake();
+    }
 }
 
 /* Code specific to tunnel types. */
@@ -484,6 +559,7 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
 
     ovs_mutex_lock(&dev->mutex);
     dev->tnl_cfg = tnl_cfg;
+    tunnel_check_status_change__(dev);
     netdev_change_seq_changed(dev_);
     ovs_mutex_unlock(&dev->mutex);
 

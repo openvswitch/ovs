@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,6 +64,10 @@ struct name_node {
 };
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
+
+/* Global change number for route-table, which should be incremented
+ * every time route_table_reset() is called.  */
+static uint64_t rt_change_seq;
 
 static unsigned int register_count = 0;
 static struct nln *nln = NULL;
@@ -154,6 +158,12 @@ route_table_get_ifindex(ovs_be32 ip_, int *ifindex)
     return false;
 }
 
+uint64_t
+route_table_get_change_seq(void)
+{
+    return rt_change_seq;
+}
+
 /* Users of the route_table module should register themselves with this
  * function before making any other route_table function calls. */
 void
@@ -205,6 +215,10 @@ route_table_run(void)
     if (nln) {
         rtnetlink_link_run();
         nln_run(nln);
+
+        if (!route_table_valid) {
+            route_table_reset();
+        }
     }
 }
 
@@ -228,6 +242,7 @@ route_table_reset(void)
 
     route_map_clear();
     route_table_valid = true;
+    rt_change_seq++;
 
     ofpbuf_init(&request, 0);
 

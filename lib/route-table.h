@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 
 bool route_table_get_ifindex(ovs_be32 ip, int *ifindex);
 bool route_table_get_name(ovs_be32 ip, char name[IFNAMSIZ]);
+uint64_t route_table_get_change_seq(void);
 void route_table_register(void);
 void route_table_unregister(void);
 void route_table_run(void);
