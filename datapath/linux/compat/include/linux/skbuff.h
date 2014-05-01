@@ -289,6 +289,9 @@ static inline void skb_clear_hash(struct sk_buff *skb)
 #if HAVE_RXHASH
 	skb->rxhash = 0;
 #endif
+#if HAVE_L4_RXHASH
+	skb->l4_rxhash = 0;
+#endif
 }
 #endif
 
