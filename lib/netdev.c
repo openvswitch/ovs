@@ -1613,6 +1613,41 @@ netdev_get_devices(const struct netdev_class *netdev_class,
     ovs_mutex_unlock(&netdev_mutex);
 }
 
+/* Extracts pointers to all 'netdev-vports' into an array 'vports'
+ * and returns it.  Stores the size of the array into '*size'.
+ *
+ * The caller is responsible for freeing 'vports' and must close
+ * each 'netdev-vport' in the list. */
+struct netdev **
+netdev_get_vports(size_t *size)
+    OVS_EXCLUDED(netdev_mutex)
+{
+    struct netdev **vports;
+    struct shash_node *node;
+    size_t n = 0;
+
+    if (!size) {
+        return NULL;
+    }
+
+    /* Explicitly allocates big enough chunk of memory. */
+    vports = xmalloc(shash_count(&netdev_shash) * sizeof *vports);
+    ovs_mutex_lock(&netdev_mutex);
+    SHASH_FOR_EACH (node, &netdev_shash) {
+        struct netdev *dev = node->data;
+
+        if (netdev_vport_is_vport_class(dev->netdev_class)) {
+            dev->ref_cnt++;
+            vports[n] = dev;
+            n++;
+        }
+    }
+    ovs_mutex_unlock(&netdev_mutex);
+    *size = n;
+
+    return vports;
+}
+
 const char *
 netdev_get_type_from_name(const char *name)
 {

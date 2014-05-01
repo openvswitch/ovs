@@ -109,6 +109,12 @@ route_table_get_name(ovs_be32 ip, char name[IFNAMSIZ])
     return false;
 }
 
+uint64_t
+route_table_get_change_seq(void)
+{
+    return 0;
+}
+
 void
 route_table_register(void)
 {

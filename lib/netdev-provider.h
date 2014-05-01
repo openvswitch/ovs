@@ -71,6 +71,7 @@ const char *netdev_get_name(const struct netdev *);
 struct netdev *netdev_from_name(const char *name);
 void netdev_get_devices(const struct netdev_class *,
                         struct shash *device_list);
+struct netdev **netdev_get_vports(size_t *size);
 
 /* A data structure for capturing packets received by a network device.
  *

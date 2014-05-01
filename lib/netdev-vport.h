@@ -39,6 +39,7 @@ void netdev_vport_inc_rx(const struct netdev *,
 void netdev_vport_inc_tx(const struct netdev *,
                          const struct dpif_flow_stats *);
 
+bool netdev_vport_is_vport_class(const struct netdev_class *);
 const char *netdev_vport_class_get_dpif_port(const struct netdev_class *);
 
 #ifndef _WIN32
