@@ -178,7 +178,7 @@ ovs-appctl time/warp 100
 ovs-appctl lacp/show > lacp.txt
 ovs-appctl bond/show > bond.txt
 (
-for i in `seq 10 100` ;
+for i in `seq 0 255` ;
     do
     pkt="in_port(7),eth(src=50:54:00:00:00:05,dst=50:54:00:00:01:00),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=$i),tcp_flags(0x010)"
     AT_CHECK([ovs-appctl netdev-dummy/receive p7 $pkt])
