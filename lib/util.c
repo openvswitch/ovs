@@ -189,6 +189,17 @@ BUILD_ASSERT_DECL(CACHE_LINE_SIZE >= MEM_ALIGN);
 void *
 xmalloc_cacheline(size_t size)
 {
+#ifdef HAVE_POSIX_MEMALIGN
+    void *p;
+    int error;
+
+    COVERAGE_INC(util_xalloc);
+    error = posix_memalign(&p, CACHE_LINE_SIZE, size ? size : 1);
+    if (error != 0) {
+        out_of_memory();
+    }
+    return p;
+#else
     void **payload;
     void *base;
 
@@ -211,6 +222,7 @@ xmalloc_cacheline(size_t size)
     *payload = base;
 
     return (char *) payload + MEM_ALIGN;
+#endif
 }
 
 /* Like xmalloc_cacheline() but clears the allocated memory to all zero
@@ -228,9 +240,13 @@ xzalloc_cacheline(size_t size)
 void
 free_cacheline(void *p)
 {
+#ifdef HAVE_POSIX_MEMALIGN
+    free(p);
+#else
     if (p) {
         free(*(void **) ((uintptr_t) p - MEM_ALIGN));
     }
+#endif
 }
 
 char *
