@@ -39,7 +39,7 @@ AT_SETUP([ovs-vswitchd -- stats-update-interval])
 OVS_VSWITCHD_START([add-port br0 p1 -- set int p1 type=internal])
 ovs-appctl time/stop
 
-dnl at the beginning, the udpate of rx_packets should happen every 5 seconds.
+dnl at the beginning, the update of rx_packets should happen every 5 seconds.
 for i in `seq 0 10`; do ovs-appctl time/warp 1000; done
 OVS_VSCTL_CHECK_RX_PKT([p1], [0])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
