@@ -557,6 +557,58 @@ enum ofperr {
     /* OF1.3+(13,5).  Permissions error. */
     OFPERR_OFPTFFC_EPERM,
 
+/* ## -------------------- ## */
+/* ## OFPET_BUNDLE_FAILED  ## */
+/* ## -------------------- ## */
+
+    /* OF1.4+(17,0).  Unspecified error. */
+    OFPERR_OFPBFC_UNKNOWN,
+
+    /* OF1.4+(17,1).  Permissions error. */
+    OFPERR_OFPBFC_EPERM,
+
+    /* OF1.4+(17,2).  Bundle ID doesn't exist. */
+    OFPERR_OFPBFC_BAD_ID,
+
+    /* OF1.4+(17,3).  Bundle ID already exists. */
+    OFPERR_OFPBFC_BUNDLE_EXIST,
+
+    /* OF1.4+(17,4).  Bundle ID is closed. */
+    OFPERR_OFPBFC_BUNDLE_CLOSED,
+
+    /* OF1.4+(17,5).  Too many bundle IDs. */
+    OFPERR_OFPBFC_OUT_OF_BUNDLES,
+
+    /* OF1.4+(17,6).  Unsupported of unknown message control type. */
+    OFPERR_OFPBFC_BAD_TYPE,
+
+    /* OF1.4+(17,7).  Unsupported, unknown, or inconsistent flags. */
+    OFPERR_OFPBFC_BAD_FLAGS,
+
+    /* OF1.4+(17,8).  Length problem in included message. */
+    OFPERR_OFPBFC_MSG_BAD_LEN,
+
+    /* OF1.4+(17,9).  Inconsistent or duplicate XID. */
+    OFPERR_OFPBFC_MSG_BAD_XID,
+
+    /* OF1.4+(17,10).  Unsupported message in this bundle. */
+    OFPERR_OFPBFC_MSG_UNSUP,
+
+    /* OF1.4+(17,11).  Unsupported message combination in this bundle. */
+    OFPERR_OFPBFC_MSG_CONFLICT,
+
+    /* OF1.4+(17,12).  Cant handle this many messages in bundle. */
+    OFPERR_OFPBFC_MSG_TOO_MANY,
+
+    /* OF1.4+(17,13).  One message in bundle failed. */
+    OFPERR_OFPBFC_MSG_FAILED,
+
+    /* OF1.4+(17,14).  Bundle is taking too long. */
+    OFPERR_OFPBFC_TIMEOUT,
+
+    /* OF1.4+(17,15).  Bundle is locking the resource. */
+    OFPERR_OFPBFC_BUNDLE_IN_PROGRESS,
+
 /* ## ------------------ ## */
 /* ## OFPET_EXPERIMENTER ## */
 /* ## ------------------ ## */

@@ -233,6 +233,12 @@ enum ofpraw {
     /* OFPT 1.4+ (30): struct ofp14_role_status, uint8_t[8][]. */
     OFPRAW_OFPT14_ROLE_STATUS,
 
+    /* OFPT 1.4+ (33): struct ofp14_bundle_ctrl_msg, uint8_t[8][]. */
+    OFPRAW_OFPT14_BUNDLE_CONTROL,
+
+    /* OFPT 1.4+ (34): struct ofp14_bundle_ctrl_msg, uint8_t[]. */
+    OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE,
+
 /* Standard statistics. */
 
     /* OFPST 1.0+ (0): void. */
@@ -507,6 +513,10 @@ enum ofptype {
 
     /* Controller role change event messages. */
     OFPTYPE_ROLE_STATUS,          /* OFPRAW_OFPT14_ROLE_STATUS. */
+
+    OFPTYPE_BUNDLE_CONTROL,       /* OFPRAW_OFPT14_BUNDLE_CONTROL. */
+
+    OFPTYPE_BUNDLE_ADD_MESSAGE,   /* OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE. */
 
     /* Statistics. */
     OFPTYPE_DESC_STATS_REQUEST,      /* OFPRAW_OFPST_DESC_REQUEST. */

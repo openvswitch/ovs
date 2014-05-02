@@ -161,6 +161,8 @@ void ofconn_add_opgroup(struct ofconn *, struct list *);
 void ofconn_remove_opgroup(struct ofconn *, struct list *,
                            const struct ofp_header *request, int error);
 
+struct hmap *ofconn_get_bundles(struct ofconn *ofconn);
+
 /* Sending asynchronous messages. */
 bool connmgr_wants_packet_in_on_miss(struct connmgr *mgr);
 void connmgr_send_port_status(struct connmgr *, struct ofconn *source,

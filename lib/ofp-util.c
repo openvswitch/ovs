@@ -7054,3 +7054,83 @@ ofputil_append_queue_stat(struct list *replies,
         OVS_NOT_REACHED();
     }
 }
+
+enum ofperr
+ofputil_decode_bundle_ctrl(const struct ofp_header *oh,
+                           struct ofputil_bundle_ctrl_msg *msg)
+{
+    struct ofpbuf b;
+    enum ofpraw raw;
+    const struct ofp14_bundle_ctrl_msg *m;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    raw = ofpraw_pull_assert(&b);
+    ovs_assert(raw == OFPRAW_OFPT14_BUNDLE_CONTROL);
+
+    m = ofpbuf_l3(&b);
+    msg->bundle_id = ntohl(m->bundle_id);
+    msg->type = ntohs(m->type);
+    msg->flags = ntohs(m->flags);
+
+    return 0;
+}
+
+struct ofpbuf *
+ofputil_encode_bundle_ctrl_reply(const struct ofp_header *oh,
+                                 struct ofputil_bundle_ctrl_msg *msg)
+{
+    struct ofpbuf *buf;
+    struct ofp14_bundle_ctrl_msg *m;
+
+    buf = ofpraw_alloc_reply(OFPRAW_OFPT14_BUNDLE_CONTROL, oh, 0);
+    m = ofpbuf_put_zeros(buf, sizeof *m);
+
+    m->bundle_id = htonl(msg->bundle_id);
+    m->type = htons(msg->type);
+    m->flags = htons(msg->flags);
+
+    return buf;
+}
+
+enum ofperr
+ofputil_decode_bundle_add(const struct ofp_header *oh,
+                          struct ofputil_bundle_add_msg *msg)
+{
+    const struct ofp14_bundle_ctrl_msg *m;
+    struct ofpbuf b;
+    enum ofpraw raw;
+    size_t inner_len;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    raw = ofpraw_pull_assert(&b);
+    ovs_assert(raw == OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE);
+
+    m = ofpbuf_pull(&b, sizeof *m);
+    msg->bundle_id = ntohl(m->bundle_id);
+    msg->flags = ntohs(m->flags);
+
+    msg->msg = ofpbuf_data(&b);
+    inner_len = ntohs(msg->msg->length);
+    if (inner_len < sizeof(struct ofp_header) || inner_len > ofpbuf_size(&b)) {
+        return OFPERR_OFPBFC_MSG_BAD_LEN;
+    }
+
+    return 0;
+}
+
+struct ofpbuf *
+ofputil_encode_bundle_add(enum ofp_version ofp_version,
+                          struct ofputil_bundle_add_msg *msg)
+{
+    struct ofpbuf *request;
+    struct ofp14_bundle_ctrl_msg *m;
+
+    request = ofpraw_alloc(OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE, ofp_version, 0);
+    m = ofpbuf_put_zeros(request, sizeof *m);
+
+    m->bundle_id = htonl(msg->bundle_id);
+    m->flags = htons(msg->flags);
+    ofpbuf_put(request, msg->msg, ntohs(msg->msg->length));
+
+    return request;
+}

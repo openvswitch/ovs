@@ -2329,3 +2329,237 @@ for pre in      '1 2' '[[]] 2' '1 [[]]' '[[]] [[]]' '2 1' '[[]] 1' '2 [[]]' \
 done
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+
+AT_SETUP([ofproto - bundles, open (OpenFlow 1.4)])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+# Start a monitor, use the required protocol version
+ovs-ofctl -O OpenFlow14 monitor br0 --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+
+# Send an OpenFlow14 message (05), OFPT_BUNDLE_CONTROL (21), length (10), xid (0a)
+ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 00 00 01"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl exit
+
+AT_CHECK([ofctl_strip < monitor.log], [], [dnl
+send: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=OPEN_REQUEST flags=atomic
+OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=OPEN_REPLY flags=0
+OFPT_BARRIER_REPLY (OF1.4):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - bundles, double open (OpenFlow 1.4)])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+# Start a monitor, use the required protocol version
+ovs-ofctl -O OpenFlow14 monitor br0 --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+
+# Send twice an OpenFlow14 message (05), OFPT_BUNDLE_CONTROL (21), length (10), xid (0a)
+ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 00 00 01"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 00 00 01"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl exit
+
+AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
+send: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=OPEN_REQUEST flags=atomic
+OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=OPEN_REPLY flags=0
+OFPT_BARRIER_REPLY (OF1.4):
+send: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=OPEN_REQUEST flags=atomic
+OFPT_ERROR (OF1.4): OFPBFC_BAD_ID
+OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=OPEN_REQUEST flags=atomic
+OFPT_BARRIER_REPLY (OF1.4):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - bundle close without open (OpenFlow 1.4)])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+# Start a monitor, use the required protocol version
+ovs-ofctl -O OpenFlow14 monitor br0 --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+
+ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 02 00 01"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl exit
+
+AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
+send: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=CLOSE_REQUEST flags=atomic
+OFPT_ERROR (OF1.4): OFPBFC_BAD_ID
+OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=CLOSE_REQUEST flags=atomic
+OFPT_BARRIER_REPLY (OF1.4):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - bundle double close (OpenFlow 1.4)])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+# Start a monitor, use the required protocol version
+ovs-ofctl -O OpenFlow14 monitor br0 --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+
+# Open, Close, Close
+ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 00 00 01"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 02 00 01"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 02 00 01"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl exit
+
+AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
+send: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=OPEN_REQUEST flags=atomic
+OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=OPEN_REPLY flags=0
+OFPT_BARRIER_REPLY (OF1.4):
+send: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=CLOSE_REQUEST flags=atomic
+OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=CLOSE_REPLY flags=0
+OFPT_BARRIER_REPLY (OF1.4):
+send: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=CLOSE_REQUEST flags=atomic
+OFPT_ERROR (OF1.4): OFPBFC_BUNDLE_CLOSED
+OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=CLOSE_REQUEST flags=atomic
+OFPT_BARRIER_REPLY (OF1.4):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - bundle close, different flags (OpenFlow 1.4)])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+# Start a monitor, use the required protocol version
+ovs-ofctl -O OpenFlow14 monitor br0 --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+
+# Open, Close, Close
+ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 00 00 01"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 02 00 02"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl exit
+
+AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
+send: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=OPEN_REQUEST flags=atomic
+OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=OPEN_REPLY flags=0
+OFPT_BARRIER_REPLY (OF1.4):
+send: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=CLOSE_REQUEST flags=ordered
+OFPT_ERROR (OF1.4): OFPBFC_BAD_FLAGS
+OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=CLOSE_REQUEST flags=ordered
+OFPT_BARRIER_REPLY (OF1.4):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - bundle commit without open (OpenFlow 1.4)])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+# Start a monitor, use the required protocol version
+ovs-ofctl -O OpenFlow14 monitor br0 --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+
+# Open, Close, Close
+ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 04 00 01"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl exit
+
+AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
+send: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=COMMIT_REQUEST flags=atomic
+OFPT_ERROR (OF1.4): OFPBFC_BAD_ID
+OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=COMMIT_REQUEST flags=atomic
+OFPT_BARRIER_REPLY (OF1.4):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - bundle commit, different flags (OpenFlow 1.4)])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+# Start a monitor, use the required protocol version
+ovs-ofctl -O OpenFlow14 monitor br0 --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+
+# Open, Close, Close
+ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 00 00 01"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 04 00 02"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl exit
+
+AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
+send: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=OPEN_REQUEST flags=atomic
+OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=OPEN_REPLY flags=0
+OFPT_BARRIER_REPLY (OF1.4):
+send: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=COMMIT_REQUEST flags=ordered
+OFPT_ERROR (OF1.4): OFPBFC_BAD_FLAGS
+OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=COMMIT_REQUEST flags=ordered
+OFPT_BARRIER_REPLY (OF1.4):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - bundle discard without open (OpenFlow 1.4)])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+# Start a monitor, use the required protocol version
+ovs-ofctl -O OpenFlow14 monitor br0 --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+
+# Open, Close, Close
+ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 06 00 01"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl exit
+
+AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
+send: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=DISCARD_REQUEST flags=atomic
+OFPT_ERROR (OF1.4): OFPBFC_BAD_ID
+OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=DISCARD_REQUEST flags=atomic
+OFPT_BARRIER_REPLY (OF1.4):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP

@@ -1350,6 +1350,8 @@ is_admitted_msg(const struct ofpbuf *b)
     case OFPTYPE_GROUP_FEATURES_STATS_REPLY:
     case OFPTYPE_TABLE_FEATURES_STATS_REQUEST:
     case OFPTYPE_TABLE_FEATURES_STATS_REPLY:
+    case OFPTYPE_BUNDLE_CONTROL:
+    case OFPTYPE_BUNDLE_ADD_MESSAGE:
         return false;
 
     case OFPTYPE_PACKET_IN:

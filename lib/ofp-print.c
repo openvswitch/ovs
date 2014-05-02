@@ -2668,6 +2668,90 @@ ofp_print_table_features(struct ds *s, const struct ofp_header *oh)
     }
 }
 
+static const char *
+bundle_flags_to_name(uint32_t bit)
+{
+    switch (bit) {
+    case OFPBF_ATOMIC:
+        return "atomic";
+    case OFPBF_ORDERED:
+        return "ordered";
+    default:
+        return NULL;
+    }
+}
+
+static void
+ofp_print_bundle_ctrl(struct ds *s, const struct ofp_header *oh)
+{
+    int error;
+    struct ofputil_bundle_ctrl_msg bctrl;
+
+    error = ofputil_decode_bundle_ctrl(oh, &bctrl);
+    if (error) {
+        ofp_print_error(s, error);
+        return;
+    }
+
+    ds_put_char(s, '\n');
+
+    ds_put_format(s, " bundle_id=%#"PRIx32" type=",  bctrl.bundle_id);
+    switch (bctrl.type) {
+    case OFPBCT_OPEN_REQUEST:
+        ds_put_cstr(s, "OPEN_REQUEST");
+        break;
+    case OFPBCT_OPEN_REPLY:
+        ds_put_cstr(s, "OPEN_REPLY");
+        break;
+    case OFPBCT_CLOSE_REQUEST:
+        ds_put_cstr(s, "CLOSE_REQUEST");
+        break;
+    case OFPBCT_CLOSE_REPLY:
+        ds_put_cstr(s, "CLOSE_REPLY");
+        break;
+    case OFPBCT_COMMIT_REQUEST:
+        ds_put_cstr(s, "COMMIT_REQUEST");
+        break;
+    case OFPBCT_COMMIT_REPLY:
+        ds_put_cstr(s, "COMMIT_REPLY");
+        break;
+    case OFPBCT_DISCARD_REQUEST:
+        ds_put_cstr(s, "DISCARD_REQUEST");
+        break;
+    case OFPBCT_DISCARD_REPLY:
+        ds_put_cstr(s, "DISCARD_REPLY");
+        break;
+    }
+
+    ds_put_cstr(s, " flags=");
+    ofp_print_bit_names(s, bctrl.flags, bundle_flags_to_name, ' ');
+}
+
+static void
+ofp_print_bundle_add(struct ds *s, const struct ofp_header *oh, int verbosity)
+{
+    int error;
+    struct ofputil_bundle_add_msg badd;
+    char *msg;
+
+    error = ofputil_decode_bundle_add(oh, &badd);
+    if (error) {
+        ofp_print_error(s, error);
+        return;
+    }
+
+    ds_put_char(s, '\n');
+    ds_put_format(s, " bundle_id=%#"PRIx32,  badd.bundle_id);
+    ds_put_cstr(s, " flags=");
+    ofp_print_bit_names(s, badd.flags, bundle_flags_to_name, ' ');
+
+    ds_put_char(s, '\n');
+    msg = ofp_to_string(badd.msg, ntohs(badd.msg->length), verbosity);
+    if (msg) {
+        ds_put_cstr(s, msg);
+    }
+}
+
 static void
 ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
                 struct ds *string, int verbosity)
@@ -2912,6 +2996,14 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
 
     case OFPTYPE_FLOW_MONITOR_STATS_REPLY:
         ofp_print_nxst_flow_monitor_reply(string, msg);
+        break;
+
+    case OFPTYPE_BUNDLE_CONTROL:
+        ofp_print_bundle_ctrl(string, msg);
+        break;
+
+    case OFPTYPE_BUNDLE_ADD_MESSAGE:
+        ofp_print_bundle_add(string, msg, verbosity);
         break;
     }
 }

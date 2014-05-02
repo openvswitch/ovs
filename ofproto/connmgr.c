@@ -41,6 +41,8 @@
 #include "vconn.h"
 #include "vlog.h"
 
+#include "bundles.h"
+
 VLOG_DEFINE_THIS_MODULE(connmgr);
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
@@ -129,6 +131,9 @@ struct ofconn {
      * contains an update event of type NXFME_ABBREV and false otherwise.. */
     struct list updates OVS_GUARDED_BY(ofproto_mutex);
     bool sent_abbrev_update OVS_GUARDED_BY(ofproto_mutex);
+
+    /* Active bundles. Contains "struct ofp_bundle"s. */
+    struct hmap bundles;
 };
 
 static struct ofconn *ofconn_create(struct connmgr *, struct rconn *,
@@ -1136,6 +1141,13 @@ ofconn_add_opgroup(struct ofconn *ofconn, struct list *ofconn_node)
 {
     list_push_back(&ofconn->opgroups, ofconn_node);
 }
+
+struct hmap *
+ofconn_get_bundles(struct ofconn *ofconn)
+{
+    return &ofconn->bundles;
+}
+
 
 /* Private ofconn functions. */
 
@@ -1162,6 +1174,8 @@ ofconn_create(struct connmgr *mgr, struct rconn *rconn, enum ofconn_type type,
 
     hmap_init(&ofconn->monitors);
     list_init(&ofconn->updates);
+
+    hmap_init(&ofconn->bundles);
 
     ofconn_flush(ofconn);
 
@@ -1262,6 +1276,8 @@ ofconn_destroy(struct ofconn *ofconn)
     if (ofconn->type == OFCONN_PRIMARY) {
         hmap_remove(&ofconn->connmgr->controllers, &ofconn->hmap_node);
     }
+
+    ofp_bundle_remove_all(ofconn);
 
     hmap_destroy(&ofconn->monitors);
     list_remove(&ofconn->node);

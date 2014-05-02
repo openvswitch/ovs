@@ -45,7 +45,10 @@ ofproto_libofproto_la_SOURCES = \
 	ofproto/pinsched.c \
 	ofproto/pinsched.h \
 	ofproto/tunnel.c \
-	ofproto/tunnel.h
+	ofproto/tunnel.h \
+	ofproto/bundles.c \
+	ofproto/bundles.h
+
 ofproto_libofproto_la_CPPFLAGS = $(AM_CPPFLAGS)
 ofproto_libofproto_la_CFLAGS = $(AM_CFLAGS)
 ofproto_libofproto_la_LIBADD = lib/libsflow.la

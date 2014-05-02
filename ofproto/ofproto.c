@@ -58,6 +58,7 @@
 #include "unaligned.h"
 #include "unixctl.h"
 #include "vlog.h"
+#include "bundles.h"
 
 VLOG_DEFINE_THIS_MODULE(ofproto);
 
@@ -5932,6 +5933,69 @@ handle_table_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 }
 
 static enum ofperr
+handle_bundle_control(struct ofconn *ofconn, const struct ofp_header *oh)
+{
+    enum ofperr error;
+    struct ofputil_bundle_ctrl_msg bctrl;
+    struct ofpbuf *buf;
+    struct ofputil_bundle_ctrl_msg reply;
+
+    error = ofputil_decode_bundle_ctrl(oh, &bctrl);
+    if (error) {
+        return error;
+    }
+    reply.flags = 0;
+    reply.bundle_id = bctrl.bundle_id;
+
+    switch (bctrl.type) {
+        case OFPBCT_OPEN_REQUEST:
+        error = ofp_bundle_open(ofconn, bctrl.bundle_id, bctrl.flags);
+        reply.type = OFPBCT_OPEN_REPLY;
+        break;
+    case OFPBCT_CLOSE_REQUEST:
+        error = ofp_bundle_close(ofconn, bctrl.bundle_id, bctrl.flags);
+        reply.type = OFPBCT_CLOSE_REPLY;;
+        break;
+    case OFPBCT_COMMIT_REQUEST:
+        error = ofp_bundle_commit(ofconn, bctrl.bundle_id, bctrl.flags);
+        reply.type = OFPBCT_COMMIT_REPLY;
+        break;
+    case OFPBCT_DISCARD_REQUEST:
+        error = ofp_bundle_discard(ofconn, bctrl.bundle_id);
+        reply.type = OFPBCT_DISCARD_REPLY;
+        break;
+
+    case OFPBCT_OPEN_REPLY:
+    case OFPBCT_CLOSE_REPLY:
+    case OFPBCT_COMMIT_REPLY:
+    case OFPBCT_DISCARD_REPLY:
+        return OFPERR_OFPBFC_BAD_TYPE;
+        break;
+    }
+
+    if (!error) {
+        buf = ofputil_encode_bundle_ctrl_reply(oh, &reply);
+        ofconn_send_reply(ofconn, buf);
+    }
+    return error;
+}
+
+
+static enum ofperr
+handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
+{
+    enum ofperr error;
+    struct ofputil_bundle_add_msg badd;
+
+    error = ofputil_decode_bundle_add(oh, &badd);
+    if (error) {
+        return error;
+    }
+
+    return ofp_bundle_add_message(ofconn, &badd);
+}
+
+static enum ofperr
 handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     OVS_EXCLUDED(ofproto_mutex)
 {
@@ -6062,6 +6126,12 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
 
     case OFPTYPE_QUEUE_GET_CONFIG_REQUEST:
         return handle_queue_get_config_request(ofconn, oh);
+
+    case OFPTYPE_BUNDLE_CONTROL:
+        return handle_bundle_control(ofconn, oh);
+
+    case OFPTYPE_BUNDLE_ADD_MESSAGE:
+        return handle_bundle_add(ofconn, oh);
 
     case OFPTYPE_HELLO:
     case OFPTYPE_ERROR:

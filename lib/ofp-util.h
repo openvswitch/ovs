@@ -1137,4 +1137,27 @@ void ofputil_append_group_desc_reply(const struct ofputil_group_desc *,
                                      struct list *replies);
 struct ofpbuf *ofputil_encode_group_desc_request(enum ofp_version);
 
+struct ofputil_bundle_ctrl_msg {
+    uint32_t    bundle_id;
+    uint16_t    type;
+    uint16_t    flags;
+};
+
+struct ofputil_bundle_add_msg {
+    uint32_t            bundle_id;
+    uint16_t            flags;
+    const struct ofp_header   *msg;
+};
+
+enum ofperr ofputil_decode_bundle_ctrl(const struct ofp_header *,
+                                       struct ofputil_bundle_ctrl_msg *);
+
+struct ofpbuf *ofputil_encode_bundle_ctrl_reply(const struct ofp_header *,
+                                                struct ofputil_bundle_ctrl_msg *);
+
+struct ofpbuf *ofputil_encode_bundle_add(enum ofp_version ofp_version,
+                                         struct ofputil_bundle_add_msg *msg);
+
+enum ofperr ofputil_decode_bundle_add(const struct ofp_header *,
+                                      struct ofputil_bundle_add_msg *);
 #endif /* ofp-util.h */
