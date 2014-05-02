@@ -89,6 +89,8 @@ enum OVS_PACKED_ENUM mf_field_id {
     MFF_MPLS_BOS,               /* u8 */
 
     /* L3. */
+    /* Update mf_is_l3_or_higher() if MFF_IPV4_SRC is
+     * no longer the first element for a field of layer 3 or higher */
     MFF_IPV4_SRC,               /* be32 */
     MFF_IPV4_DST,               /* be32 */
 
@@ -360,6 +362,12 @@ void mf_get_mask(const struct mf_field *, const struct flow_wildcards *,
 /* Prerequisites. */
 bool mf_are_prereqs_ok(const struct mf_field *, const struct flow *);
 void mf_mask_field_and_prereqs(const struct mf_field *, struct flow *mask);
+
+static inline bool
+mf_is_l3_or_higher(const struct mf_field *mf)
+{
+    return mf->id >= MFF_IPV4_SRC;
+}
 
 /* Field values. */
 bool mf_is_value_valid(const struct mf_field *, const union mf_value *value);
