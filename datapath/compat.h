@@ -30,7 +30,7 @@ static inline void skb_clear_rxhash(struct sk_buff *skb)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35)
 	skb->rxhash = 0;
 #endif
-#if HAVE_L4_RXHASH
+#ifdef HAVE_L4_RXHASH
 	skb->l4_rxhash = 0;
 #endif
 }
