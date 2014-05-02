@@ -2383,8 +2383,13 @@ bridge_run(void)
 
     /* Statistics update interval should always be greater than or equal to
      * 5000 ms. */
-    stats_interval = MAX(smap_get_int(&cfg->other_config,
-                                      "stats-update-interval", 5000), 5000);
+    if (cfg) {
+        stats_interval = MAX(smap_get_int(&cfg->other_config,
+                                          "stats-update-interval",
+                                          5000), 5000);
+    } else {
+        stats_interval = 5000;
+    }
     if (stats_timer_interval != stats_interval) {
         stats_timer_interval = stats_interval;
         stats_timer = LLONG_MIN;
