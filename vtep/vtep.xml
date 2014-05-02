@@ -80,8 +80,8 @@
               (not a DNS name).
             </p>
             <p>
-	      SSL key and certificate configuration happens outside the
-	      database.
+              SSL key and certificate configuration happens outside the
+              database.
             </p>
           </dd>
 
@@ -266,19 +266,19 @@
 
     <group title="Identification">
       <column name="name">
-	Symbolic name for the switch, such as its hostname.
+        Symbolic name for the switch, such as its hostname.
       </column>
       
       <column name="description">
-	An extended description for the switch, such as its switch login
-	banner.
+        An extended description for the switch, such as its switch login
+        banner.
       </column>
     </group>
     <group title="Error Notification">
       <p>
-	An entry in this column indicates to the NVC that this switch
-	has encountered a fault. The switch must clear this column
-	when the fault has been cleared.
+        An entry in this column indicates to the NVC that this switch
+        has encountered a fault. The switch must clear this column
+        when the fault has been cleared.
       </p>
 
       <column name="switch_fault_status" key="mac_table_exhaustion">
@@ -320,33 +320,33 @@
 
     <group title="Identification">
       <column name="name">
-	Symbolic name for the port.  The name ought to be unique within a given
-	<ref table="Physical_Switch"/>, but the database is not capable of
-	enforcing this.
+        Symbolic name for the port.  The name ought to be unique within a given
+        <ref table="Physical_Switch"/>, but the database is not capable of
+        enforcing this.
       </column>
       
       <column name="description">
-	An extended description for the port.
+        An extended description for the port.
       </column>
     </group>
     <group title="Error Notification">
       <p>
-	An entry in this column indicates to the NVC that the physical port has
-	encountered a fault. The switch must clear this column when the errror
-	has been cleared.
+        An entry in this column indicates to the NVC that the physical port has
+        encountered a fault. The switch must clear this column when the errror
+        has been cleared.
       </p>
       <column name="port_fault_status" key="invalid_vlan_map">
-	<p>
-	  Indicates that a VLAN-to-logical-switch mapping requested by
-	  the controller could not be instantiated by the switch
-	  because of a conflict with local configuration.
-	</p>
+        <p>
+          Indicates that a VLAN-to-logical-switch mapping requested by
+          the controller could not be instantiated by the switch
+          because of a conflict with local configuration.
+        </p>
       </column>
       <column name="port_fault_status" key="unspecified_fault">
-	<p>
-	  Indicates that an error has occurred on the port but that no
-	  more specific information is available.
-	</p>
+        <p>
+          Indicates that an error has occurred on the port but that no
+          more specific information is available.
+        </p>
       </column>
     </group>
 
@@ -445,12 +445,12 @@
 
     <group title="Identification">
       <column name="name">
-	Symbolic name for the logical switch.
+        Symbolic name for the logical switch.
       </column>
       
       <column name="description">
-	An extended description for the logical switch, such as its switch
-	login banner.
+        An extended description for the logical switch, such as its switch
+        login banner.
       </column>
     </group>
   </table>
@@ -528,15 +528,15 @@
 
     <column name="MAC">
       <p>
-	A MAC address that has been learned by the VTEP. 
+        A MAC address that has been learned by the VTEP. 
       </p>
       <p>
-	The keyword <code>unknown-dst</code> is used as a special
-	``Ethernet address'' that indicates the locations to which
-	packets in a logical switch whose destination addresses do not
-	otherwise appear in <ref table="Ucast_Macs_Local"/> (for
-	unicast addresses) or <ref table="Mcast_Macs_Local"/> (for
-	multicast addresses) should be sent.
+        The keyword <code>unknown-dst</code> is used as a special
+        ``Ethernet address'' that indicates the locations to which
+        packets in a logical switch whose destination addresses do not
+        otherwise appear in <ref table="Ucast_Macs_Local"/> (for
+        unicast addresses) or <ref table="Mcast_Macs_Local"/> (for
+        multicast addresses) should be sent.
       </p>
     </column>
 
@@ -570,15 +570,15 @@
 
     <column name="MAC">
       <p>
-	A MAC address that has been learned by the NVC.
+        A MAC address that has been learned by the NVC.
       </p>
       <p>
-	The keyword <code>unknown-dst</code> is used as a special
-	``Ethernet address'' that indicates the locations to which
-	packets in a logical switch whose destination addresses do not
-	otherwise appear in <ref table="Ucast_Macs_Remote"/> (for
-	unicast addresses) or <ref table="Mcast_Macs_Remote"/> (for
-	multicast addresses) should be sent.
+        The keyword <code>unknown-dst</code> is used as a special
+        ``Ethernet address'' that indicates the locations to which
+        packets in a logical switch whose destination addresses do not
+        otherwise appear in <ref table="Ucast_Macs_Remote"/> (for
+        unicast addresses) or <ref table="Mcast_Macs_Remote"/> (for
+        multicast addresses) should be sent.
       </p>
     </column>
 
@@ -623,11 +623,11 @@
 
     <group title="Identification">
       <column name="name">
-	Symbolic name for the logical router.
+        Symbolic name for the logical router.
       </column>
       
       <column name="description">
-	An extended description for the logical router.
+        An extended description for the logical router.
       </column>
     </group>
   </table>
@@ -743,43 +743,43 @@
 
     <group title="Bidirectional Forwarding Detection (BFD)">
       <p>
-	BFD, defined in RFC 5880, allows point to point detection of
-	connectivity failures by occasional transmission of BFD control
-	messages. VTEPs are expected to implement BFD.
+        BFD, defined in RFC 5880, allows point to point detection of
+        connectivity failures by occasional transmission of BFD control
+        messages. VTEPs are expected to implement BFD.
       </p>
       
       <p>
-	BFD operates by regularly transmitting BFD control messages at a
-	rate negotiated independently in each direction.  Each endpoint
-	specifies the rate at which it expects to receive control messages,
-	and the rate at which it's willing to transmit them.  An endpoint
-	which fails to receive BFD control messages for a period of three
-	times the expected reception rate will signal a connectivity
-	fault.  In the case of a unidirectional connectivity issue, the
-	system not receiving BFD control messages will signal the problem
-	to its peer in the messages it transmits.
+        BFD operates by regularly transmitting BFD control messages at a
+        rate negotiated independently in each direction.  Each endpoint
+        specifies the rate at which it expects to receive control messages,
+        and the rate at which it's willing to transmit them.  An endpoint
+        which fails to receive BFD control messages for a period of three
+        times the expected reception rate will signal a connectivity
+        fault.  In the case of a unidirectional connectivity issue, the
+        system not receiving BFD control messages will signal the problem
+        to its peer in the messages it transmits.
       </p>
       
       <p>
-	A hardware VTEP is expected to use BFD to determine reachability of
-	devices at the end of the tunnels with which it exchanges data. This
-	can enable the VTEP to choose a functioning service node among a set of
-	service nodes providing high availability. It also enables the NVC to
-	report the health status of tunnels.
+        A hardware VTEP is expected to use BFD to determine reachability of
+        devices at the end of the tunnels with which it exchanges data. This
+        can enable the VTEP to choose a functioning service node among a set of
+        service nodes providing high availability. It also enables the NVC to
+        report the health status of tunnels.
       </p>
 
       <p>
-	In most cases the BFD peer of a hardware VTEP will be an Open vSwitch
-	instance. The Open vSwitch implementation of BFD aims to comply
-	faithfully with the requirements put forth in RFC 5880.  Open vSwitch
-	does not implement the optional Authentication or ``Echo Mode''
-	features.
+        In most cases the BFD peer of a hardware VTEP will be an Open vSwitch
+        instance. The Open vSwitch implementation of BFD aims to comply
+        faithfully with the requirements put forth in RFC 5880.  Open vSwitch
+        does not implement the optional Authentication or ``Echo Mode''
+        features.
       </p>
 
       <group title="BFD Configuration">
-	<p>
-	  A controller sets up key-value pairs in the <ref column="bfd"/>
-	  column to enable and configure BFD.
+        <p>
+          A controller sets up key-value pairs in the <ref column="bfd"/>
+          column to enable and configure BFD.
         </p>
 
         <column name="bfd" key="enable" type='{"type": "boolean"}'>
@@ -843,55 +843,55 @@
           <code>00:23:20:00:00:01</code>.
         </column>
 
-	<column name="bfd" key="bfd_src_ip">
+        <column name="bfd" key="bfd_src_ip">
           Set to an IPv4 address to set the IP address used as source for
           transmitted BFD packets.  The default is <code>169.254.1.0</code>.
-	</column>
+        </column>
 
-	<column name="bfd" key="bfd_dst_ip">
+        <column name="bfd" key="bfd_dst_ip">
           Set to an IPv4 address to set the IP address used as destination
           for transmitted BFD packets.  The default is <code>169.254.1.1</code>.
-	</column>
+        </column>
       </group>
 
       <group title="BFD Status">
-	<p>
-	  The VTEP sets key-value pairs in the <ref column="bfd_status"/>
-	  column to report the status of BFD on this interface.  When BFD is
-	  not enabled, with <ref column="bfd" key="enable"/>, the switch clears
-	  all key-value pairs from <ref column="bfd_status"/>.
-	</p>
+        <p>
+          The VTEP sets key-value pairs in the <ref column="bfd_status"/>
+          column to report the status of BFD on this interface.  When BFD is
+          not enabled, with <ref column="bfd" key="enable"/>, the switch clears
+          all key-value pairs from <ref column="bfd_status"/>.
+        </p>
 
-	<column name="bfd_status" key="state"
-		type='{"type": "string",
-		      "enum": ["set", ["admin_down", "down", "init", "up"]]}'>
-	  Reports the state of the BFD session.  The BFD session is fully
-	  healthy and negotiated if <code>UP</code>.
-	</column>
+        <column name="bfd_status" key="state"
+                type='{"type": "string",
+                      "enum": ["set", ["admin_down", "down", "init", "up"]]}'>
+          Reports the state of the BFD session.  The BFD session is fully
+          healthy and negotiated if <code>UP</code>.
+        </column>
 
-	<column name="bfd_status" key="forwarding" type='{"type": "boolean"}'>
-	  Reports whether the BFD session believes this <ref
-	  table="Physical_Locator"/> may be used to forward traffic.  Typically
-	  this means the local session is signaling <code>UP</code>, and the
-	  remote system isn't signaling a problem such as concatenated path
-	  down.
-	</column>
+        <column name="bfd_status" key="forwarding" type='{"type": "boolean"}'>
+          Reports whether the BFD session believes this <ref
+          table="Physical_Locator"/> may be used to forward traffic.  Typically
+          this means the local session is signaling <code>UP</code>, and the
+          remote system isn't signaling a problem such as concatenated path
+          down.
+        </column>
 
-	<column name="bfd_status" key="diagnostic">
-	  In case of a problem, set to a short message that reports what the
-	  local BFD session thinks is wrong.
-	</column>
+        <column name="bfd_status" key="diagnostic">
+          In case of a problem, set to a short message that reports what the
+          local BFD session thinks is wrong.
+        </column>
 
-	<column name="bfd_status" key="remote_state"
-		type='{"type": "string",
-		      "enum": ["set", ["admin_down", "down", "init", "up"]]}'>
-	  Reports the state of the remote endpoint's BFD session.
-	</column>
+        <column name="bfd_status" key="remote_state"
+                type='{"type": "string",
+                      "enum": ["set", ["admin_down", "down", "init", "up"]]}'>
+          Reports the state of the remote endpoint's BFD session.
+        </column>
 
-	<column name="bfd_status" key="remote_diagnostic">
-	  In case of a problem, set to a short message that reports what the
-	  remote endpoint's BFD session thinks is wrong.
-	</column>
+        <column name="bfd_status" key="remote_diagnostic">
+          In case of a problem, set to a short message that reports what the
+          remote endpoint's BFD session thinks is wrong.
+        </column>
       </group>
     </group>
   </table>
