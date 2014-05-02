@@ -431,6 +431,12 @@ A: First, why do you want to do this?  Two connected bridges are not
    ports will not work with the userspace datapath, only with the
    kernel module.
 
+Q: How do I configure a bridge without an OpenFlow local port?
+   (Local port in the sense of OFPP_LOCAL)
+
+A: Open vSwitch does not support such a configuration.
+   Bridges always have their local ports.
+
 
 Implementation Details
 ----------------------
