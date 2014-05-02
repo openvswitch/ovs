@@ -4514,6 +4514,13 @@ ofproto_dpif_unixctl_init(void)
                              ofproto_unixctl_dpif_dump_flows, NULL);
 }
 
+/* Returns true if 'table' is the table used for internal rules,
+ * false otherwise. */
+bool
+table_is_internal(uint8_t table_id)
+{
+    return table_id == TBL_INTERNAL;
+}
 
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
  *
