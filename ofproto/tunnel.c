@@ -159,8 +159,9 @@ tnl_port_add__(const struct ofport_dpif *ofport, const struct netdev *netdev,
                       "port '%s' (%s)", tnl_port_get_name(tnl_port),
                       tnl_port_get_name(existing_port), ds_cstr(&ds));
             ds_destroy(&ds);
-            free(tnl_port);
         }
+        netdev_close(tnl_port->netdev);
+        free(tnl_port);
         return false;
     }
 
