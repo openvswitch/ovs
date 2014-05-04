@@ -1028,3 +1028,20 @@ action_down: bring down physical devices - [u'eth0', u'eth1']
 ]])
 
 AT_CLEANUP
+
+dnl This test configures two tunnels, then deletes the second and re-uses its
+dnl name for different types of ports. This was introduced to detect errors
+dnl where port configuration persists even when the port is deleted and
+dnl readded.
+AT_SETUP([Re-create port with different types])
+AT_KEYWORDS([interface-reconfigure])
+OVS_VSWITCHD_START(
+  [add-port br0 p0 -- set int p0 type=gre options:remote_ip=127.0.0.1 -- \
+   add-port br0 p1 -- set int p1 type=dummy -- \
+   add-port br0 p2 -- set int p2 type=dummy])
+
+AT_CHECK([ovs-vsctl set int p1 type=gre options:remote_ip=127.0.0.1])
+AT_CHECK([ovs-vsctl del-port p1])
+AT_CHECK([ovs-vsctl add-port br0 p1 -- set int p1 type=dummy])
+
+AT_CLEANUP
