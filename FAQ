@@ -275,8 +275,8 @@ A: The following commands configure br0 with eth0 and tap0 as trunk
        ovs-vsctl add-port br0 tap0
        ovs-vsctl add-port br0 tap1 \
            -- --id=@p get port tap1 \
-	   -- --id=@m create mirror name=m0 select-all=true output-port=@p \
-	   -- set bridge br0 mirrors=@m
+           -- --id=@m create mirror name=m0 select-all=true output-port=@p \
+           -- set bridge br0 mirrors=@m
 
    To later disable mirroring, run:
 
@@ -330,9 +330,9 @@ A: The following commands configure br0 with eth0 as a trunk port and
        ovs-vsctl add-port br0 eth0
        ovs-vsctl add-port br0 tap0 tag=10
        ovs-vsctl \
-	   -- --id=@m create mirror name=m0 select-all=true select-vlan=10 \
+           -- --id=@m create mirror name=m0 select-all=true select-vlan=10 \
                                     output-vlan=15 \
-	   -- set bridge br0 mirrors=@m
+           -- set bridge br0 mirrors=@m
 
    To later disable mirroring, run:
 
@@ -380,8 +380,8 @@ A: The following commands configure br0 with eth0 and tap0 as trunk
        ovs-vsctl add-port br0 gre0 \
            -- set interface gre0 type=gre options:remote_ip=192.168.1.10 \
            -- --id=@p get port gre0 \
-	   -- --id=@m create mirror name=m0 select-all=true output-port=@p \
-	   -- set bridge br0 mirrors=@m
+           -- --id=@m create mirror name=m0 select-all=true output-port=@p \
+           -- set bridge br0 mirrors=@m
 
    To later disable mirroring and destroy the GRE tunnel:
 
@@ -690,14 +690,14 @@ A: Suppose that you want to set up bridge br0 connected to physical
 
        ovs-vsctl -- \
            add-br br0 -- \
-	   add-port br0 eth0 -- \
-	   add-port br0 vif1.0 -- set interface vif1.0 ofport_request=5 -- \
-	   add-port br0 vif2.0 -- set interface vif2.0 ofport_request=6 -- \
-	   set port eth0 qos=@newqos -- \
-	   --id=@newqos create qos type=linux-htb \
+           add-port br0 eth0 -- \
+           add-port br0 vif1.0 -- set interface vif1.0 ofport_request=5 -- \
+           add-port br0 vif2.0 -- set interface vif2.0 ofport_request=6 -- \
+           set port eth0 qos=@newqos -- \
+           --id=@newqos create qos type=linux-htb \
                other-config:max-rate=1000000000 \
-	       queues:123=@vif10queue \
-	       queues:234=@vif20queue -- \
+               queues:123=@vif10queue \
+               queues:234=@vif20queue -- \
            --id=@vif10queue create queue other-config:max-rate=10000000 -- \
            --id=@vif20queue create queue other-config:max-rate=20000000
 
