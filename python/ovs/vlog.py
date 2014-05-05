@@ -107,12 +107,12 @@ class Vlog:
                 ms = delta.microseconds / 1000
                 tmp = self._format_field(tmp, m, str(ms))
             elif "t" in m:
-                subprogram = threading.current_thread().name
+                subprogram = threading.currentThread().getName()
                 if subprogram == "MainThread":
                     subprogram = "main"
                 tmp = self._format_field(tmp, m, subprogram)
             elif "T" in m:
-                subprogram = threading.current_thread().name
+                subprogram = threading.currentThread().getName()
                 if not subprogram == "MainThread":
                     subprogram = "({})".format(subprogram)
                 else:
