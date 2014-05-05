@@ -64,6 +64,9 @@ struct revalidator {
     struct udpif *udpif;               /* Parent udpif. */
     pthread_t thread;                  /* Thread ID. */
     unsigned int id;                   /* ovsthread_id_self(). */
+    struct ovs_mutex *mutex;           /* Points into udpif->ukeys for this
+                                          revalidator. Required for writing
+                                          to 'ukeys'. */
     struct cmap *ukeys;                /* Points into udpif->ukeys for this
                                           revalidator. Used for GC phase. */
 };
@@ -413,6 +416,7 @@ udpif_start_threads(struct udpif *udpif, size_t n_handlers,
             revalidator->udpif = udpif;
             cmap_init(&udpif->ukeys[i].cmap);
             ovs_mutex_init(&udpif->ukeys[i].mutex);
+            revalidator->mutex = &udpif->ukeys[i].mutex;
             revalidator->ukeys = &udpif->ukeys[i].cmap;
             revalidator->thread = ovs_thread_create(
                 "revalidator", udpif_revalidator, revalidator);
@@ -1498,9 +1502,11 @@ push_dump_ops(struct revalidator *revalidator,
     int i;
 
     push_dump_ops__(revalidator->udpif, ops, n_ops);
+    ovs_mutex_lock(revalidator->mutex);
     for (i = 0; i < n_ops; i++) {
         ukey_delete(revalidator, ops[i].ukey);
     }
+    ovs_mutex_unlock(revalidator->mutex);
 }
 
 static void
@@ -1605,7 +1611,6 @@ revalidate(struct revalidator *revalidator)
 static bool
 handle_missed_revalidation(struct revalidator *revalidator,
                            struct udpif_key *ukey)
-    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct udpif *udpif = revalidator->udpif;
     struct dpif_flow flow;
@@ -1617,7 +1622,9 @@ handle_missed_revalidation(struct revalidator *revalidator,
 
     ofpbuf_use_stub(&buf, &stub, sizeof stub);
     if (!dpif_flow_get(udpif->dpif, ukey->key, ukey->key_len, &buf, &flow)) {
+        ovs_mutex_lock(&ukey->mutex);
         keep = revalidate_ukey(udpif, ukey, &flow);
+        ovs_mutex_unlock(&ukey->mutex);
     }
     ofpbuf_uninit(&buf);
 
@@ -1626,7 +1633,6 @@ handle_missed_revalidation(struct revalidator *revalidator,
 
 static void
 revalidator_sweep__(struct revalidator *revalidator, bool purge)
-    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct dump_op ops[REVALIDATE_MAX_BATCH];
     struct udpif_key *ukey;
@@ -1636,13 +1642,18 @@ revalidator_sweep__(struct revalidator *revalidator, bool purge)
     n_ops = 0;
     dump_seq = seq_read(revalidator->udpif->dump_seq);
 
-    /* During garbage collection, this revalidator completely owns its ukeys
-     * map, and therefore doesn't need to do any locking. */
     CMAP_FOR_EACH(ukey, cmap_node, revalidator->ukeys) {
-        if (ukey->flow_exists
+        bool flow_exists, seq_mismatch;
+
+        ovs_mutex_lock(&ukey->mutex);
+        flow_exists = ukey->flow_exists;
+        seq_mismatch = (ukey->dump_seq != dump_seq
+                        && revalidator->udpif->need_revalidate);
+        ovs_mutex_unlock(&ukey->mutex);
+
+        if (flow_exists
             && (purge
-                || (ukey->dump_seq != dump_seq
-                    && revalidator->udpif->need_revalidate
+                || (seq_mismatch
                     && !handle_missed_revalidation(revalidator, ukey)))) {
             struct dump_op *op = &ops[n_ops++];
 
@@ -1651,8 +1662,10 @@ revalidator_sweep__(struct revalidator *revalidator, bool purge)
                 push_dump_ops(revalidator, ops, n_ops);
                 n_ops = 0;
             }
-        } else if (!ukey->flow_exists) {
+        } else if (!flow_exists) {
+            ovs_mutex_lock(revalidator->mutex);
             ukey_delete(revalidator, ukey);
+            ovs_mutex_unlock(revalidator->mutex);
         }
     }
 
