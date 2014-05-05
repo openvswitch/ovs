@@ -676,6 +676,36 @@ A: On Linux kernels before 3.11, the OVS GRE module and Linux GRE module
    can then reload the OVS module following the directions in INSTALL,
    which will ensure that dependencies are satisfied.
 
+Q: Open vSwitch does not seem to obey my packet filter rules.
+
+A: It depends on mechanisms and configurations you want to use.
+
+   You cannot usefully use typical packet filters, like iptables, on
+   physical Ethernet ports that you add to an Open vSwitch bridge.
+   This is because Open vSwitch captures packets from the interface at
+   a layer lower below where typical packet-filter implementations
+   install their hooks.  (This actually applies to any interface of
+   type "system" that you might add to an Open vSwitch bridge.)
+
+   You can usefully use typical packet filters on Open vSwitch
+   internal ports as they are mostly ordinary interfaces from the point
+   of view of packet filters.
+
+   For example, suppose you create a bridge br0 and add Ethernet port
+   eth0 to it.  Then you can usefully add iptables rules to affect the
+   internal interface br0, but not the physical interface eth0.  (br0
+   is also where you would add an IP address, as discussed elsewhere
+   in the FAQ.)
+
+   For simple filtering rules, it might be possible to achieve similar
+   results by installing appropriate OpenFlow flows instead.
+
+   If the use of a particular packet filter setup is essential, Open
+   vSwitch might not be the best choice for you.  On Linux, you might
+   want to consider using the Linux Bridge.  (This is the only choice if
+   you want to use ebtables rules.)  On NetBSD, you might want to
+   consider using the bridge(4) with BRIDGE_IPF option.
+
 
 Quality of Service (QoS)
 ------------------------
