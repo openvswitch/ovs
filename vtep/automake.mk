@@ -33,7 +33,7 @@ if HAVE_PYTHON
 if HAVE_DOT
 vtep/vtep.gv: ovsdb/ovsdb-dot.in vtep/vtep.ovsschema
 	$(OVSDB_DOT) --no-arrows $(srcdir)/vtep/vtep.ovsschema > $@
-vtep/vtep.pic: vtep/vtep.gv ovsdb/dot2pic
+vtep/vtep.pic: vtep/vtep.gv $(srcdir)/ovsdb/dot2pic
 	(dot -T plain < vtep/vtep.gv | $(srcdir)/ovsdb/dot2pic -f 3) > $@;
 VTEP_PIC = vtep/vtep.pic
 VTEP_DOT_DIAGRAM_ARG = --er-diagram=$(VTEP_PIC)
