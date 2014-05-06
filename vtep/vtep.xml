@@ -244,6 +244,10 @@
       The physical ports within the switch.
     </column>
 
+    <column name="tunnels">
+      Tunnels created by this switch as instructed by the NVC.
+    </column>
+
     <group title="Network Status">
       <column name="management_ips">
         IPv4 or IPv6 addresses at which the switch may be contacted
@@ -296,6 +300,195 @@
         more specific information is available.
       </column>
 
+    </group>
+  </table>
+
+  <table name="Tunnel" title="A tunnel created by a physical switch.">
+    A tunnel created by a <ref table="Physical_Switch"/>.
+
+    <column name="local">
+      Tunnel end-point local to the physical switch.
+    </column>
+
+    <column name="remote">
+      Tunnel end-point remote to the physical switch.
+    </column>
+
+    <group title="Bidirectional Forwarding Detection (BFD)">
+      <p>
+        BFD, defined in RFC 5880, allows point to point detection of
+        connectivity failures by occasional transmission of BFD control
+        messages. VTEPs are expected to implement BFD.
+      </p>
+
+      <p>
+        BFD operates by regularly transmitting BFD control messages at a
+        rate negotiated independently in each direction.  Each endpoint
+        specifies the rate at which it expects to receive control messages,
+        and the rate at which it's willing to transmit them.  An endpoint
+        which fails to receive BFD control messages for a period of three
+        times the expected reception rate will signal a connectivity
+        fault.  In the case of a unidirectional connectivity issue, the
+        system not receiving BFD control messages will signal the problem
+        to its peer in the messages it transmits.
+      </p>
+
+      <p>
+        A hardware VTEP is expected to use BFD to determine reachability of
+        devices at the end of the tunnels with which it exchanges data. This
+        can enable the VTEP to choose a functioning service node among a set of
+        service nodes providing high availability. It also enables the NVC to
+        report the health status of tunnels.
+      </p>
+
+      <p>
+        In most cases the BFD peer of a hardware VTEP will be an Open vSwitch
+        instance. The Open vSwitch implementation of BFD aims to comply
+        faithfully with the requirements put forth in RFC 5880.  Open vSwitch
+        does not implement the optional Authentication or ``Echo Mode''
+        features.
+      </p>
+
+      <group title="BFD Local Configuration">
+        <p>
+          The HSC writes the key-value pairs in the
+          <ref column="bfd_config_local"/> column to specifiy the local
+          configurations to be used for BFD sessions on this tunnel.
+        </p>
+
+        <column name="bfd_config_local" key="bfd_dst_mac">
+          Set to an Ethernet address in the form
+          <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
+          to set the MAC expected as destination for received BFD packets.
+        </column>
+
+        <column name="bfd_config_local" key="bfd_dst_ip">
+          Set to an IPv4 address to set the IP address that is expected as destination
+          for received BFD packets.  The default is <code>169.254.1.0</code>.
+        </column>
+
+      </group>
+
+      <group title="BFD Remote Configuration">
+        <p>
+          The <ref column="bfd_config_remote"/> column is the remote
+          counterpart of the <ref column="bfd_config_local"/> column.
+          The NVC writes the key-value pairs in this column.
+        </p>
+
+        <column name="bfd_config_remote" key="bfd_dst_mac">
+          Set to an Ethernet address in the form
+          <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
+          to set the destination MAC to be used for transmitted BFD packets.
+          The default is <code>00:23:20:00:00:01</code>.
+        </column>
+
+        <column name="bfd_config_remote" key="bfd_dst_ip">
+          Set to an IPv4 address to set the IP address used as destination
+          for transmitted BFD packets.  The default is <code>169.254.1.1</code>.
+        </column>
+
+      </group>
+
+      <group title="BFD Parameters">
+        <p>
+          The NVC sets up key-value pairs in the <ref column="bfd_params"/>
+          column to enable and configure BFD.
+        </p>
+
+        <column name="bfd_params" key="enable" type='{"type": "boolean"}'>
+          True to enable BFD on this tunnel.
+        </column>
+
+        <column name="bfd_params" key="min_rx"
+                type='{"type": "integer", "minInteger": 1}'>
+          The shortest interval, in milliseconds, at which this BFD session
+          offers to receive BFD control messages.  The remote endpoint may
+          choose to send messages at a slower rate.  Defaults to
+          <code>1000</code>.
+        </column>
+
+        <column name="bfd_params" key="min_tx"
+                type='{"type": "integer", "minInteger": 1}'>
+          The shortest interval, in milliseconds, at which this BFD session is
+          willing to transmit BFD control messages.  Messages will actually be
+          transmitted at a slower rate if the remote endpoint is not willing to
+          receive as quickly as specified.  Defaults to <code>100</code>.
+        </column>
+
+        <column name="bfd_params" key="decay_min_rx" type='{"type": "integer"}'>
+          An alternate receive interval, in milliseconds, that must be greater
+          than or equal to <ref column="bfd" key="min_rx"/>.  The
+          implementation switches from <ref column="bfd" key="min_rx"/> to <ref
+          column="bfd" key="decay_min_rx"/> when there is no obvious incoming
+          data traffic at the interface, to reduce the CPU and bandwidth cost
+          of monitoring an idle interface.  This feature may be disabled by
+          setting a value of 0.  This feature is reset whenever <ref
+          column="bfd" key="decay_min_rx"/> or <ref column="bfd" key="min_rx"/>
+          changes.
+        </column>
+
+        <column name="bfd_params" key="forwarding_if_rx" type='{"type": "boolean"}'>
+          True to consider the interface capable of packet I/O as long as it
+          continues to receive any packets (not just BFD packets).  This
+          prevents link congestion that causes consecutive BFD control packets
+          to be lost from marking the interface down.
+        </column>
+
+        <column name="bfd_params" key="cpath_down" type='{"type": "boolean"}'>
+          Set to true to notify the remote endpoint that traffic should not be
+          forwarded to this system for some reason other than a connectivty
+          failure on the interface being monitored.  The typical underlying
+          reason is ``concatenated path down,'' that is, that connectivity
+          beyond the local system is down.  Defaults to false.
+        </column>
+
+        <column name="bfd_params" key="check_tnl_key" type='{"type": "boolean"}'>
+          Set to true to make BFD accept only control messages with a tunnel
+          key of zero.  By default, BFD accepts control messages with any
+          tunnel key.
+        </column>
+
+      </group>
+
+     <group title="BFD Status">
+      <p>
+        The VTEP sets key-value pairs in the <ref column="bfd_status"/>
+        column to report the status of BFD on this tunnel.  When BFD is
+        not enabled, with <ref column="bfd_params" key="enable"/>, the
+        HSC clears all key-value pairs from <ref column="bfd_status"/>.
+      </p>
+
+      <column name="bfd_status" key="state"
+        type='{"type": "string",
+              "enum": ["set", ["admin_down", "down", "init", "up"]]}'>
+        Reports the state of the BFD session.  The BFD session is fully
+        healthy and negotiated if <code>UP</code>.
+      </column>
+
+      <column name="bfd_status" key="forwarding" type='{"type": "boolean"}'>
+        Reports whether the BFD session believes this tunnel
+        may be used to forward traffic.  Typically this means the local session
+        is signaling <code>UP</code>, and the remote system isn't signaling a
+        problem such as concatenated path down.
+      </column>
+
+      <column name="bfd_status" key="diagnostic">
+        In case of a problem, set to a short message that reports what the
+        local BFD session thinks is wrong.
+      </column>
+
+      <column name="bfd_status" key="remote_state"
+        type='{"type": "string",
+              "enum": ["set", ["admin_down", "down", "init", "up"]]}'>
+        Reports the state of the remote endpoint's BFD session.
+      </column>
+
+      <column name="bfd_status" key="remote_diagnostic">
+        In case of a problem, set to a short message that reports what the
+        remote endpoint's BFD session thinks is wrong.
+      </column>
+      </group>
     </group>
   </table>
 
@@ -741,159 +934,6 @@
       </p>
     </column>
 
-    <group title="Bidirectional Forwarding Detection (BFD)">
-      <p>
-        BFD, defined in RFC 5880, allows point to point detection of
-        connectivity failures by occasional transmission of BFD control
-        messages. VTEPs are expected to implement BFD.
-      </p>
-      
-      <p>
-        BFD operates by regularly transmitting BFD control messages at a
-        rate negotiated independently in each direction.  Each endpoint
-        specifies the rate at which it expects to receive control messages,
-        and the rate at which it's willing to transmit them.  An endpoint
-        which fails to receive BFD control messages for a period of three
-        times the expected reception rate will signal a connectivity
-        fault.  In the case of a unidirectional connectivity issue, the
-        system not receiving BFD control messages will signal the problem
-        to its peer in the messages it transmits.
-      </p>
-      
-      <p>
-        A hardware VTEP is expected to use BFD to determine reachability of
-        devices at the end of the tunnels with which it exchanges data. This
-        can enable the VTEP to choose a functioning service node among a set of
-        service nodes providing high availability. It also enables the NVC to
-        report the health status of tunnels.
-      </p>
-
-      <p>
-        In most cases the BFD peer of a hardware VTEP will be an Open vSwitch
-        instance. The Open vSwitch implementation of BFD aims to comply
-        faithfully with the requirements put forth in RFC 5880.  Open vSwitch
-        does not implement the optional Authentication or ``Echo Mode''
-        features.
-      </p>
-
-      <group title="BFD Configuration">
-        <p>
-          A controller sets up key-value pairs in the <ref column="bfd"/>
-          column to enable and configure BFD.
-        </p>
-
-        <column name="bfd" key="enable" type='{"type": "boolean"}'>
-          True to enable BFD on this <ref table="Physical_Locator"/>.
-        </column>
-        
-        <column name="bfd" key="min_rx"
-                type='{"type": "integer", "minInteger": 1}'>
-          The shortest interval, in milliseconds, at which this BFD session
-          offers to receive BFD control messages.  The remote endpoint may
-          choose to send messages at a slower rate.  Defaults to
-          <code>1000</code>.
-        </column>
-
-        <column name="bfd" key="min_tx"
-                type='{"type": "integer", "minInteger": 1}'>
-          The shortest interval, in milliseconds, at which this BFD session is
-          willing to transmit BFD control messages.  Messages will actually be
-          transmitted at a slower rate if the remote endpoint is not willing to
-          receive as quickly as specified.  Defaults to <code>100</code>.
-        </column>
-
-        <column name="bfd" key="decay_min_rx" type='{"type": "integer"}'>
-          An alternate receive interval, in milliseconds, that must be greater
-          than or equal to <ref column="bfd" key="min_rx"/>.  The
-          implementation switches from <ref column="bfd" key="min_rx"/> to <ref
-          column="bfd" key="decay_min_rx"/> when there is no obvious incoming
-          data traffic at the interface, to reduce the CPU and bandwidth cost
-          of monitoring an idle interface.  This feature may be disabled by
-          setting a value of 0.  This feature is reset whenever <ref
-          column="bfd" key="decay_min_rx"/> or <ref column="bfd" key="min_rx"/>
-          changes.
-        </column>
-
-        <column name="bfd" key="forwarding_if_rx" type='{"type": "boolean"}'>
-          True to consider the interface capable of packet I/O as long as it
-          continues to receive any packets (not just BFD packets).  This
-          prevents link congestion that causes consecutive BFD control packets
-          to be lost from marking the interface down.
-        </column>
-
-        <column name="bfd" key="cpath_down" type='{"type": "boolean"}'>
-          Set to true to notify the remote endpoint that traffic should not be
-          forwarded to this system for some reason other than a connectivty
-          failure on the interface being monitored.  The typical underlying
-          reason is ``concatenated path down,'' that is, that connectivity
-          beyond the local system is down.  Defaults to false.
-        </column>
-
-        <column name="bfd" key="check_tnl_key" type='{"type": "boolean"}'>
-          Set to true to make BFD accept only control messages with a tunnel
-          key of zero.  By default, BFD accepts control messages with any
-          tunnel key.
-        </column>
-
-        <column name="bfd" key="bfd_dst_mac">
-          Set to an Ethernet address in the form
-          <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
-          to set the MAC used as destination for transmitted BFD packets and
-          expected as destination for received BFD packets.  The default is
-          <code>00:23:20:00:00:01</code>.
-        </column>
-
-        <column name="bfd" key="bfd_src_ip">
-          Set to an IPv4 address to set the IP address used as source for
-          transmitted BFD packets.  The default is <code>169.254.1.0</code>.
-        </column>
-
-        <column name="bfd" key="bfd_dst_ip">
-          Set to an IPv4 address to set the IP address used as destination
-          for transmitted BFD packets.  The default is <code>169.254.1.1</code>.
-        </column>
-      </group>
-
-      <group title="BFD Status">
-        <p>
-          The VTEP sets key-value pairs in the <ref column="bfd_status"/>
-          column to report the status of BFD on this interface.  When BFD is
-          not enabled, with <ref column="bfd" key="enable"/>, the switch clears
-          all key-value pairs from <ref column="bfd_status"/>.
-        </p>
-
-        <column name="bfd_status" key="state"
-                type='{"type": "string",
-                      "enum": ["set", ["admin_down", "down", "init", "up"]]}'>
-          Reports the state of the BFD session.  The BFD session is fully
-          healthy and negotiated if <code>UP</code>.
-        </column>
-
-        <column name="bfd_status" key="forwarding" type='{"type": "boolean"}'>
-          Reports whether the BFD session believes this <ref
-          table="Physical_Locator"/> may be used to forward traffic.  Typically
-          this means the local session is signaling <code>UP</code>, and the
-          remote system isn't signaling a problem such as concatenated path
-          down.
-        </column>
-
-        <column name="bfd_status" key="diagnostic">
-          In case of a problem, set to a short message that reports what the
-          local BFD session thinks is wrong.
-        </column>
-
-        <column name="bfd_status" key="remote_state"
-                type='{"type": "string",
-                      "enum": ["set", ["admin_down", "down", "init", "up"]]}'>
-          Reports the state of the remote endpoint's BFD session.
-        </column>
-
-        <column name="bfd_status" key="remote_diagnostic">
-          In case of a problem, set to a short message that reports what the
-          remote endpoint's BFD session thinks is wrong.
-        </column>
-      </group>
-    </group>
   </table>
 
 </database>
