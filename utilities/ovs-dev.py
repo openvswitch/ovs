@@ -28,7 +28,6 @@ BUILD_GCC = OVS_SRC + "/_build-gcc"
 BUILD_CLANG = OVS_SRC + "/_build-clang"
 PATH = "%(ovs)s/utilities:%(ovs)s/ovsdb:%(ovs)s/vswitchd" % {"ovs": BUILD_GCC}
 
-ENV["CFLAGS"] = "-g -fno-omit-frame-pointer"
 ENV["PATH"] = PATH + ":" + ENV["PATH"]
 
 options = None
@@ -64,6 +63,8 @@ def conf():
                  "--with-logdir=%s/log" % ROOT, "--with-rundir=%s/run" % ROOT,
                  "--enable-silent-rules", "--with-dbdir=" + ROOT, "--silent"]
 
+    cflags = "-g -fno-omit-frame-pointer"
+
     if options.werror:
         configure.append("--enable-Werror")
 
@@ -73,9 +74,16 @@ def conf():
     if options.mandir:
         configure.append("--mandir=" + options.mandir)
 
+    if options.with_dpdk:
+        configure.append("--with-dpdk=" + options.with_dpdk)
+        cflags += " -Wno-cast-align -Wno-bad-function-cast" # DPDK warnings.
+
     if options.optimize is None:
         options.optimize = 0
-    ENV["CFLAGS"] = "%s -O%d" % (ENV["CFLAGS"], options.optimize)
+
+    cflags += " -O%d" % options.optimize
+
+    ENV["CFLAGS"] = cflags
 
     _sh("./boot.sh")
 
@@ -323,6 +331,8 @@ def main():
                      action="store_true", help="configure with cached timing")
     group.add_option("--mandir", dest="mandir", metavar="MANDIR",
                      help="configure the man documentation install directory")
+    group.add_option("--with-dpdk", dest="with_dpdk", metavar="DPDK_BUILD",
+                     help="built with dpdk libraries located at DPDK_BUILD");
 
     for i in range(4):
         group.add_option("--O%d" % i, dest="optimize", action="store_const",
