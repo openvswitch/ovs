@@ -863,10 +863,10 @@ bond_entry_account(struct bond_entry *entry, uint64_t rule_tx_bytes)
 /* Maintain bond stats using post recirculation rule byte counters.*/
 static void
 bond_recirculation_account(struct bond *bond)
+    OVS_REQ_WRLOCK(rwlock)
 {
     int i;
 
-    ovs_rwlock_wrlock(&rwlock);
     for (i=0; i<=BOND_MASK; i++) {
         struct bond_entry *entry = &bond->hash[i];
         struct rule *rule = entry->pr_rule;
@@ -881,14 +881,13 @@ bond_recirculation_account(struct bond *bond)
             bond_entry_account(entry, n_bytes);
         }
     }
-    ovs_rwlock_unlock(&rwlock);
 }
 
 bool
 bond_may_recirc(const struct bond *bond, uint32_t *recirc_id,
                 uint32_t *hash_bias)
 {
-    if (bond->balance == BM_TCP && recirc_id) {
+    if (bond->balance == BM_TCP && bond->recirc_id) {
         if (recirc_id) {
             *recirc_id = bond->recirc_id;
         }
