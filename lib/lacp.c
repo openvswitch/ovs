@@ -203,25 +203,37 @@ lacp_init(void)
                              lacp_unixctl_show, NULL);
 }
 
-/* Creates a LACP object. */
-struct lacp *
-lacp_create(void) OVS_EXCLUDED(mutex)
+static void
+lacp_lock(void) OVS_ACQUIRES(mutex)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
-    struct lacp *lacp;
 
     if (ovsthread_once_start(&once)) {
         ovs_mutex_init_recursive(&mutex);
         ovsthread_once_done(&once);
     }
+    ovs_mutex_lock(&mutex);
+}
+
+static void
+lacp_unlock(void) OVS_RELEASES(mutex)
+{
+    ovs_mutex_unlock(&mutex);
+}
+
+/* Creates a LACP object. */
+struct lacp *
+lacp_create(void) OVS_EXCLUDED(mutex)
+{
+    struct lacp *lacp;
 
     lacp = xzalloc(sizeof *lacp);
     hmap_init(&lacp->slaves);
     ovs_refcount_init(&lacp->ref_cnt);
 
-    ovs_mutex_lock(&mutex);
+    lacp_lock();
     list_push_back(all_lacps, &lacp->node);
-    ovs_mutex_unlock(&mutex);
+    lacp_unlock();
     return lacp;
 }
 
@@ -242,7 +254,7 @@ lacp_unref(struct lacp *lacp) OVS_EXCLUDED(mutex)
     if (lacp && ovs_refcount_unref(&lacp->ref_cnt) == 1) {
         struct slave *slave, *next;
 
-        ovs_mutex_lock(&mutex);
+        lacp_lock();
         HMAP_FOR_EACH_SAFE (slave, next, node, &lacp->slaves) {
             slave_destroy(slave);
         }
@@ -251,7 +263,7 @@ lacp_unref(struct lacp *lacp) OVS_EXCLUDED(mutex)
         list_remove(&lacp->node);
         free(lacp->name);
         free(lacp);
-        ovs_mutex_unlock(&mutex);
+        lacp_unlock();
     }
 }
 
@@ -262,7 +274,7 @@ lacp_configure(struct lacp *lacp, const struct lacp_settings *s)
 {
     ovs_assert(!eth_addr_is_zero(s->id));
 
-    ovs_mutex_lock(&mutex);
+    lacp_lock();
     if (!lacp->name || strcmp(s->name, lacp->name)) {
         free(lacp->name);
         lacp->name = xstrdup(s->name);
@@ -283,7 +295,7 @@ lacp_configure(struct lacp *lacp, const struct lacp_settings *s)
         lacp->update = true;
     }
 
-    ovs_mutex_unlock(&mutex);
+    lacp_unlock();
 }
 
 /* Returns true if 'lacp' is configured in active mode, false if 'lacp' is
@@ -292,9 +304,9 @@ bool
 lacp_is_active(const struct lacp *lacp) OVS_EXCLUDED(mutex)
 {
     bool ret;
-    ovs_mutex_lock(&mutex);
+    lacp_lock();
     ret = lacp->active;
-    ovs_mutex_unlock(&mutex);
+    lacp_unlock();
     return ret;
 }
 
@@ -311,7 +323,7 @@ lacp_process_packet(struct lacp *lacp, const void *slave_,
     long long int tx_rate;
     struct slave *slave;
 
-    ovs_mutex_lock(&mutex);
+    lacp_lock();
     slave = slave_lookup(lacp, slave_);
     if (!slave) {
         goto out;
@@ -338,7 +350,7 @@ lacp_process_packet(struct lacp *lacp, const void *slave_,
     }
 
 out:
-    ovs_mutex_unlock(&mutex);
+    lacp_unlock();
 }
 
 /* Returns the lacp_status of the given 'lacp' object (which may be NULL). */
@@ -348,9 +360,9 @@ lacp_status(const struct lacp *lacp) OVS_EXCLUDED(mutex)
     if (lacp) {
         enum lacp_status ret;
 
-        ovs_mutex_lock(&mutex);
+        lacp_lock();
         ret = lacp->negotiated ? LACP_NEGOTIATED : LACP_CONFIGURED;
-        ovs_mutex_unlock(&mutex);
+        lacp_unlock();
         return ret;
     } else {
         /* Don't take 'mutex'.  It might not even be initialized, since we
@@ -369,7 +381,7 @@ lacp_slave_register(struct lacp *lacp, void *slave_,
 {
     struct slave *slave;
 
-    ovs_mutex_lock(&mutex);
+    lacp_lock();
     slave = slave_lookup(lacp, slave_);
     if (!slave) {
         slave = xzalloc(sizeof *slave);
@@ -401,7 +413,7 @@ lacp_slave_register(struct lacp *lacp, void *slave_,
             slave_set_expired(slave);
         }
     }
-    ovs_mutex_unlock(&mutex);
+    lacp_unlock();
 }
 
 /* Unregisters 'slave_' with 'lacp'.  */
@@ -411,13 +423,13 @@ lacp_slave_unregister(struct lacp *lacp, const void *slave_)
 {
     struct slave *slave;
 
-    ovs_mutex_lock(&mutex);
+    lacp_lock();
     slave = slave_lookup(lacp, slave_);
     if (slave) {
         slave_destroy(slave);
         lacp->update = true;
     }
-    ovs_mutex_unlock(&mutex);
+    lacp_unlock();
 }
 
 /* This function should be called whenever the carrier status of 'slave_' has
@@ -431,7 +443,7 @@ lacp_slave_carrier_changed(const struct lacp *lacp, const void *slave_)
         return;
     }
 
-    ovs_mutex_lock(&mutex);
+    lacp_lock();
     slave = slave_lookup(lacp, slave_);
     if (!slave) {
         goto out;
@@ -442,7 +454,7 @@ lacp_slave_carrier_changed(const struct lacp *lacp, const void *slave_)
     }
 
 out:
-    ovs_mutex_unlock(&mutex);
+    lacp_unlock();
 }
 
 static bool
@@ -466,10 +478,10 @@ lacp_slave_may_enable(const struct lacp *lacp, const void *slave_)
         struct slave *slave;
         bool ret;
 
-        ovs_mutex_lock(&mutex);
+        lacp_lock();
         slave = slave_lookup(lacp, slave_);
         ret = slave ? slave_may_enable__(slave) : false;
-        ovs_mutex_unlock(&mutex);
+        lacp_unlock();
         return ret;
     } else {
         return true;
@@ -486,10 +498,10 @@ lacp_slave_is_current(const struct lacp *lacp, const void *slave_)
     struct slave *slave;
     bool ret;
 
-    ovs_mutex_lock(&mutex);
+    lacp_lock();
     slave = slave_lookup(lacp, slave_);
     ret = slave ? slave->status != LACP_DEFAULTED : false;
-    ovs_mutex_unlock(&mutex);
+    lacp_unlock();
     return ret;
 }
 
@@ -499,7 +511,7 @@ lacp_run(struct lacp *lacp, lacp_send_pdu *send_pdu) OVS_EXCLUDED(mutex)
 {
     struct slave *slave;
 
-    ovs_mutex_lock(&mutex);
+    lacp_lock();
     HMAP_FOR_EACH (slave, node, &lacp->slaves) {
         if (timer_expired(&slave->rx)) {
             enum slave_status old_status = slave->status;
@@ -545,7 +557,7 @@ lacp_run(struct lacp *lacp, lacp_send_pdu *send_pdu) OVS_EXCLUDED(mutex)
             seq_change(connectivity_seq_get());
         }
     }
-    ovs_mutex_unlock(&mutex);
+    lacp_unlock();
 }
 
 /* Causes poll_block() to wake up when lacp_run() needs to be called again. */
@@ -554,7 +566,7 @@ lacp_wait(struct lacp *lacp) OVS_EXCLUDED(mutex)
 {
     struct slave *slave;
 
-    ovs_mutex_lock(&mutex);
+    lacp_lock();
     HMAP_FOR_EACH (slave, node, &lacp->slaves) {
         if (slave_may_tx(slave)) {
             timer_wait(&slave->tx);
@@ -564,7 +576,7 @@ lacp_wait(struct lacp *lacp) OVS_EXCLUDED(mutex)
             timer_wait(&slave->rx);
         }
     }
-    ovs_mutex_unlock(&mutex);
+    lacp_unlock();
 }
 
 /* Static Helpers. */
@@ -946,7 +958,7 @@ lacp_unixctl_show(struct unixctl_conn *conn, int argc, const char *argv[],
     struct ds ds = DS_EMPTY_INITIALIZER;
     struct lacp *lacp;
 
-    ovs_mutex_lock(&mutex);
+    lacp_lock();
     if (argc > 1) {
         lacp = lacp_find(argv[1]);
         if (!lacp) {
@@ -964,5 +976,5 @@ lacp_unixctl_show(struct unixctl_conn *conn, int argc, const char *argv[],
     ds_destroy(&ds);
 
 out:
-    ovs_mutex_unlock(&mutex);
+    lacp_unlock();
 }
