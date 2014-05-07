@@ -935,6 +935,31 @@ ofpmp_postappend(struct list *replies, size_t start_ofs)
     }
 }
 
+/* Returns the OpenFlow version of the replies being constructed in 'replies',
+ * which should have been initialized by ofpmp_init(). */
+enum ofp_version
+ofpmp_version(struct list *replies)
+{
+    struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
+    const struct ofp_header *oh = ofpbuf_data(msg);
+
+    return oh->version;
+}
+
+/* Determines the OFPRAW_* type of the OpenFlow messages in 'replies', which
+ * should have been initialized by ofpmp_init(). */
+enum ofpraw
+ofpmp_decode_raw(struct list *replies)
+{
+    struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
+    enum ofperr error;
+    enum ofpraw raw;
+
+    error = ofpraw_decode_partial(&raw, ofpbuf_data(msg), ofpbuf_size(msg));
+    ovs_assert(!error);
+    return raw;
+}
+
 static ovs_be16 *
 ofpmp_flags__(const struct ofp_header *oh)
 {

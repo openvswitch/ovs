@@ -2855,10 +2855,9 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
 {
     struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
     size_t start_ofs = ofpbuf_size(reply);
-    enum ofpraw raw;
-    enum ofp_version version = ((struct ofp_header *)ofpbuf_data(reply))->version;
+    enum ofp_version version = ofpmp_version(replies);
+    enum ofpraw raw = ofpmp_decode_raw(replies);
 
-    ofpraw_decode_partial(&raw, ofpbuf_data(reply), ofpbuf_size(reply));
     if (raw == OFPRAW_OFPST11_FLOW_REPLY || raw == OFPRAW_OFPST13_FLOW_REPLY) {
         struct ofp11_flow_stats *ofs;
 
@@ -3778,11 +3777,10 @@ ofputil_put_phy_port(enum ofp_version ofp_version,
 }
 
 void
-ofputil_append_port_desc_stats_reply(enum ofp_version ofp_version,
-                                     const struct ofputil_phy_port *pp,
+ofputil_append_port_desc_stats_reply(const struct ofputil_phy_port *pp,
                                      struct list *replies)
 {
-    switch (ofp_version) {
+    switch (ofpmp_version(replies)) {
     case OFP10_VERSION: {
         struct ofp10_phy_port *opp;
 
@@ -5149,14 +5147,13 @@ void
 ofputil_append_flow_update(const struct ofputil_flow_update *update,
                            struct list *replies)
 {
+    enum ofp_version version = ofpmp_version(replies);
     struct nx_flow_update_header *nfuh;
     struct ofpbuf *msg;
     size_t start_ofs;
-    enum ofp_version version;
 
     msg = ofpbuf_from_list(list_back(replies));
     start_ofs = ofpbuf_size(msg);
-    version = ((struct ofp_header *)msg->frame)->version;
 
     if (update->event == NXFME_ABBREV) {
         struct nx_flow_update_abbrev *nfua;
@@ -5986,10 +5983,7 @@ void
 ofputil_append_port_stat(struct list *replies,
                          const struct ofputil_port_stats *ops)
 {
-    struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
-    struct ofp_header *oh = ofpbuf_data(msg);
-
-    switch ((enum ofp_version)oh->version) {
+    switch (ofpmp_version(replies)) {
     case OFP13_VERSION: {
         struct ofp13_port_stats *reply = ofpmp_append(replies, sizeof *reply);
         ofputil_port_stats_to_ofp13(ops, reply);
@@ -6321,15 +6315,13 @@ void
 ofputil_append_group_stats(struct list *replies,
                            const struct ofputil_group_stats *gs)
 {
-    struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
-    struct ofp_header *oh = ofpbuf_data(msg);
     size_t bucket_counter_size;
     struct ofp11_bucket_counter *bucket_counters;
     size_t length;
 
     bucket_counter_size = gs->n_buckets * sizeof(struct ofp11_bucket_counter);
 
-    switch ((enum ofp_version) oh->version) {
+    switch (ofpmp_version(replies)) {
     case OFP11_VERSION:
     case OFP12_VERSION:{
             struct ofp11_group_stats *gs11;
@@ -6538,10 +6530,10 @@ ofputil_append_group_desc_reply(const struct ofputil_group_desc *gds,
                                 struct list *replies)
 {
     struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
+    enum ofp_version version = ofpmp_version(replies);
     struct ofp11_group_desc_stats *ogds;
     struct ofputil_bucket *bucket;
     size_t start_ogds;
-    enum ofp_version version = ((struct ofp_header *)ofpbuf_data(reply))->version;
 
     start_ogds = ofpbuf_size(reply);
     ofpbuf_put_zeros(reply, sizeof *ogds);
@@ -7032,10 +7024,7 @@ void
 ofputil_append_queue_stat(struct list *replies,
                           const struct ofputil_queue_stats *oqs)
 {
-    struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
-    struct ofp_header *oh = ofpbuf_data(msg);
-
-    switch ((enum ofp_version)oh->version) {
+    switch (ofpmp_version(replies)) {
     case OFP13_VERSION: {
         struct ofp13_queue_stats *reply = ofpmp_append(replies, sizeof *reply);
         ofputil_queue_stats_to_ofp13(oqs, reply);

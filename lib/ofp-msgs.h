@@ -639,6 +639,9 @@ struct ofpbuf *ofpmp_reserve(struct list *, size_t len);
 void *ofpmp_append(struct list *, size_t len);
 void ofpmp_postappend(struct list *, size_t start_ofs);
 
+enum ofp_version ofpmp_version(struct list *);
+enum ofpraw ofpmp_decode_raw(struct list *);
+
 /* Decoding multipart replies. */
 uint16_t ofpmp_flags(const struct ofp_header *);
 bool ofpmp_more(const struct ofp_header *);

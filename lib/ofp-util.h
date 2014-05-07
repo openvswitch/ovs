@@ -872,8 +872,7 @@ uint32_t ofputil_decode_flow_monitor_cancel(const struct ofp_header *);
 struct ofpbuf *ofputil_encode_flow_monitor_cancel(uint32_t id);
 
 /* Encoding OpenFlow stats messages. */
-void ofputil_append_port_desc_stats_reply(enum ofp_version ofp_version,
-                                          const struct ofputil_phy_port *pp,
+void ofputil_append_port_desc_stats_reply(const struct ofputil_phy_port *pp,
                                           struct list *replies);
 
 /* Encoding simple OpenFlow messages. */
