@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "7.5.0",
- "cksum": "1448369194 20560",
+ "version": "7.6.0",
+ "cksum": "1731605290 20602",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -84,7 +84,8 @@
                             "OpenFlow11",
                             "OpenFlow12",
                             "OpenFlow13",
-                            "OpenFlow14"]]},
+                            "OpenFlow14",
+                            "OpenFlow15"]]},
 	   "min": 0, "max": "unlimited"}},
        "fail_mode": {
          "type": {"key": {"type": "string",

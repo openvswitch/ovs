@@ -545,6 +545,7 @@ ofp_print_switch_features(struct ds *string, const struct ofp_header *oh)
         break;
     case OFP13_VERSION:
     case OFP14_VERSION:
+    case OFP15_VERSION:
         return; /* no ports in ofp13_switch_features */
     default:
         OVS_NOT_REACHED();
@@ -1802,6 +1803,7 @@ ofp_print_ofpst_table_reply(struct ds *string, const struct ofp_header *oh,
                             int verbosity)
 {
     switch ((enum ofp_version)oh->version) {
+    case OFP15_VERSION:
     case OFP14_VERSION:
     case OFP13_VERSION:
         ofp_print_ofpst_table_reply13(string, oh, verbosity);
@@ -2302,6 +2304,9 @@ ofp_print_version(const struct ofp_header *oh,
         break;
     case OFP14_VERSION:
         ds_put_cstr(string, " (OF1.4)");
+        break;
+    case OFP15_VERSION:
+        ds_put_cstr(string, " (OF1.5)");
         break;
     default:
         ds_put_format(string, " (OF 0x%02"PRIx8")", oh->version);

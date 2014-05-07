@@ -622,6 +622,7 @@ ofputil_match_typical_len(enum ofputil_protocol protocol)
     case OFPUTIL_P_OF12_OXM:
     case OFPUTIL_P_OF13_OXM:
     case OFPUTIL_P_OF14_OXM:
+    case OFPUTIL_P_OF15_OXM:
         return NXM_TYPICAL_LEN;
 
     default:
@@ -663,6 +664,7 @@ ofputil_put_ofp11_match(struct ofpbuf *b, const struct match *match,
     case OFPUTIL_P_OF12_OXM:
     case OFPUTIL_P_OF13_OXM:
     case OFPUTIL_P_OF14_OXM:
+    case OFPUTIL_P_OF15_OXM:
         return oxm_put_match(b, match);
     }
 
@@ -709,6 +711,7 @@ static const struct proto_abbrev proto_abbrevs[] = {
 #define N_PROTO_ABBREVS ARRAY_SIZE(proto_abbrevs)
 
 enum ofputil_protocol ofputil_flow_dump_protocols[] = {
+    OFPUTIL_P_OF15_OXM,
     OFPUTIL_P_OF14_OXM,
     OFPUTIL_P_OF13_OXM,
     OFPUTIL_P_OF12_OXM,
@@ -736,6 +739,8 @@ ofputil_protocols_from_ofp_version(enum ofp_version version)
         return OFPUTIL_P_OF13_OXM;
     case OFP14_VERSION:
         return OFPUTIL_P_OF14_OXM;
+    case OFP15_VERSION:
+        return OFPUTIL_P_OF15_OXM;
     default:
         return 0;
     }
@@ -771,6 +776,8 @@ ofputil_protocol_to_ofp_version(enum ofputil_protocol protocol)
         return OFP13_VERSION;
     case OFPUTIL_P_OF14_OXM:
         return OFP14_VERSION;
+    case OFPUTIL_P_OF15_OXM:
+        return OFP15_VERSION;
     }
 
     OVS_NOT_REACHED();
@@ -850,6 +857,9 @@ ofputil_protocol_set_tid(enum ofputil_protocol protocol, bool enable)
     case OFPUTIL_P_OF14_OXM:
         return OFPUTIL_P_OF14_OXM;
 
+    case OFPUTIL_P_OF15_OXM:
+        return OFPUTIL_P_OF15_OXM;
+
     default:
         OVS_NOT_REACHED();
     }
@@ -893,6 +903,9 @@ ofputil_protocol_set_base(enum ofputil_protocol cur,
     case OFPUTIL_P_OF14_OXM:
         return ofputil_protocol_set_tid(OFPUTIL_P_OF14_OXM, tid);
 
+    case OFPUTIL_P_OF15_OXM:
+        return ofputil_protocol_set_tid(OFPUTIL_P_OF15_OXM, tid);
+
     default:
         OVS_NOT_REACHED();
     }
@@ -932,6 +945,9 @@ ofputil_protocol_to_string(enum ofputil_protocol protocol)
 
     case OFPUTIL_P_OF14_OXM:
         return "OXM-OpenFlow14";
+
+    case OFPUTIL_P_OF15_OXM:
+        return "OXM-OpenFlow15";
     }
 
     /* Check abbreviations. */
@@ -1070,6 +1086,9 @@ ofputil_version_from_string(const char *s)
     if (!strcasecmp(s, "OpenFlow14")) {
         return OFP14_VERSION;
     }
+    if (!strcasecmp(s, "OpenFlow15")) {
+        return OFP15_VERSION;
+    }
     return 0;
 }
 
@@ -1142,6 +1161,8 @@ ofputil_version_to_string(enum ofp_version ofp_version)
         return "OpenFlow13";
     case OFP14_VERSION:
         return "OpenFlow14";
+    case OFP15_VERSION:
+        return "OpenFlow15";
     default:
         OVS_NOT_REACHED();
     }
@@ -1376,6 +1397,7 @@ ofputil_encode_set_protocol(enum ofputil_protocol current,
         case OFPUTIL_P_OF12_OXM:
         case OFPUTIL_P_OF13_OXM:
         case OFPUTIL_P_OF14_OXM:
+        case OFPUTIL_P_OF15_OXM:
             /* There is only one variant of each OpenFlow 1.1+ protocol, and we
              * verified above that we're not trying to change versions. */
             OVS_NOT_REACHED();
@@ -2148,7 +2170,8 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
     case OFPUTIL_P_OF11_STD:
     case OFPUTIL_P_OF12_OXM:
     case OFPUTIL_P_OF13_OXM:
-    case OFPUTIL_P_OF14_OXM: {
+    case OFPUTIL_P_OF14_OXM:
+    case OFPUTIL_P_OF15_OXM: {
         struct ofp11_flow_mod *ofm;
         int tailroom;
 
@@ -2633,7 +2656,8 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
     case OFPUTIL_P_OF11_STD:
     case OFPUTIL_P_OF12_OXM:
     case OFPUTIL_P_OF13_OXM:
-    case OFPUTIL_P_OF14_OXM: {
+    case OFPUTIL_P_OF14_OXM:
+    case OFPUTIL_P_OF15_OXM: {
         struct ofp11_flow_stats_request *ofsr;
 
         raw = (fsr->aggregate
@@ -3125,7 +3149,8 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
     case OFPUTIL_P_OF11_STD:
     case OFPUTIL_P_OF12_OXM:
     case OFPUTIL_P_OF13_OXM:
-    case OFPUTIL_P_OF14_OXM: {
+    case OFPUTIL_P_OF14_OXM:
+    case OFPUTIL_P_OF15_OXM: {
         struct ofp12_flow_removed *ofr;
 
         msg = ofpraw_alloc_xid(OFPRAW_OFPT11_FLOW_REMOVED,
@@ -3490,6 +3515,7 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
     case OFPUTIL_P_OF12_OXM:
     case OFPUTIL_P_OF13_OXM:
     case OFPUTIL_P_OF14_OXM:
+    case OFPUTIL_P_OF15_OXM:
         packet = ofputil_encode_ofp12_packet_in(pin, protocol);
         break;
 
@@ -3893,6 +3919,7 @@ ofputil_put_phy_port(enum ofp_version ofp_version,
     }
 
     case OFP14_VERSION:
+    case OFP15_VERSION:
         ofputil_put_ofp14_port(pp, b);
         break;
 
@@ -3970,6 +3997,7 @@ ofputil_capabilities_mask(enum ofp_version ofp_version)
     case OFP12_VERSION:
     case OFP13_VERSION:
     case OFP14_VERSION:
+    case OFP15_VERSION:
         return OFPC_COMMON | OFPC12_PORT_BLOCKED;
     default:
         /* Caller needs to check osf->header.version itself */
@@ -4102,6 +4130,7 @@ ofputil_encode_switch_features(const struct ofputil_switch_features *features,
         break;
     case OFP13_VERSION:
     case OFP14_VERSION:
+    case OFP15_VERSION:
         raw = OFPRAW_OFPT13_FEATURES_REPLY;
         break;
     default:
@@ -4125,6 +4154,7 @@ ofputil_encode_switch_features(const struct ofputil_switch_features *features,
         break;
     case OFP13_VERSION:
     case OFP14_VERSION:
+    case OFP15_VERSION:
         osf->auxiliary_id = features->auxiliary_id;
         /* fall through */
     case OFP11_VERSION:
@@ -4214,6 +4244,7 @@ ofputil_encode_port_status(const struct ofputil_port_status *ps,
         break;
 
     case OFP14_VERSION:
+    case OFP15_VERSION:
         raw = OFPRAW_OFPT14_PORT_STATUS;
         break;
 
@@ -4370,7 +4401,8 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
         opm->advertise = netdev_port_features_to_ofp11(pm->advertise);
         break;
     }
-    case OFP14_VERSION: {
+    case OFP14_VERSION:
+    case OFP15_VERSION: {
         struct ofp14_port_mod_prop_ethernet *eth;
         struct ofp14_port_mod *opm;
 
@@ -4698,6 +4730,7 @@ ofputil_encode_table_features_request(enum ofp_version ofp_version)
                      "(\'-O OpenFlow13\')");
     case OFP13_VERSION:
     case OFP14_VERSION:
+    case OFP15_VERSION:
         request = ofpraw_alloc(OFPRAW_OFPST13_TABLE_FEATURES_REQUEST,
                                ofp_version, 0);
         break;
@@ -4768,7 +4801,8 @@ ofputil_encode_table_mod(const struct ofputil_table_mod *pm,
         otm->config = htonl(pm->config);
         break;
     }
-    case OFP14_VERSION: {
+    case OFP14_VERSION:
+    case OFP15_VERSION: {
         struct ofp14_table_mod *otm;
 
         b = ofpraw_alloc(OFPRAW_OFPT14_TABLE_MOD, ofp_version, 0);
@@ -5084,6 +5118,7 @@ ofputil_encode_table_stats_reply(const struct ofp12_table_stats stats[], int n,
 
         case OFP13_VERSION:
         case OFP14_VERSION:
+        case OFP15_VERSION:
             ofputil_put_ofp13_table_stats(&stats[i], reply);
             break;
 
@@ -5390,7 +5425,8 @@ ofputil_encode_packet_out(const struct ofputil_packet_out *po,
     case OFP11_VERSION:
     case OFP12_VERSION:
     case OFP13_VERSION:
-    case OFP14_VERSION:{
+    case OFP14_VERSION:
+    case OFP15_VERSION: {
         struct ofp11_packet_out *opo;
         size_t len;
 
@@ -5448,6 +5484,7 @@ ofputil_encode_barrier_request(enum ofp_version ofp_version)
     enum ofpraw type;
 
     switch (ofp_version) {
+    case OFP15_VERSION:
     case OFP14_VERSION:
     case OFP13_VERSION:
     case OFP12_VERSION:
@@ -5736,6 +5773,7 @@ ofputil_pull_phy_port(enum ofp_version ofp_version, struct ofpbuf *b,
         return op ? ofputil_decode_ofp11_port(pp, op) : EOF;
     }
     case OFP14_VERSION:
+    case OFP15_VERSION:
         return ofpbuf_size(b) ? ofputil_pull_ofp14_port(pp, b) : EOF;
     default:
         OVS_NOT_REACHED();
@@ -6079,7 +6117,8 @@ ofputil_encode_dump_ports_request(enum ofp_version ofp_version, ofp_port_t port)
     case OFP11_VERSION:
     case OFP12_VERSION:
     case OFP13_VERSION:
-    case OFP14_VERSION:{
+    case OFP14_VERSION:
+    case OFP15_VERSION: {
         struct ofp11_port_stats_request *req;
         request = ofpraw_alloc(OFPRAW_OFPST11_PORT_REQUEST, ofp_version, 0);
         req = ofpbuf_put_zeros(request, sizeof *req);
@@ -6202,6 +6241,7 @@ ofputil_append_port_stat(struct list *replies,
     }
 
     case OFP14_VERSION:
+    case OFP15_VERSION:
         ofputil_append_ofp14_port_stats(ops, replies);
         break;
 
@@ -6450,6 +6490,7 @@ ofputil_decode_port_stats_request(const struct ofp_header *request,
                                   ofp_port_t *ofp10_port)
 {
     switch ((enum ofp_version)request->version) {
+    case OFP15_VERSION:
     case OFP14_VERSION:
     case OFP13_VERSION:
     case OFP12_VERSION:
@@ -6500,7 +6541,8 @@ ofputil_encode_group_stats_request(enum ofp_version ofp_version,
     case OFP11_VERSION:
     case OFP12_VERSION:
     case OFP13_VERSION:
-    case OFP14_VERSION: {
+    case OFP14_VERSION:
+    case OFP15_VERSION: {
         struct ofp11_group_stats_request *req;
         request = ofpraw_alloc(OFPRAW_OFPST11_GROUP_REQUEST, ofp_version, 0);
         req = ofpbuf_put_zeros(request, sizeof *req);
@@ -6533,6 +6575,7 @@ ofputil_encode_group_desc_request(enum ofp_version ofp_version)
     case OFP12_VERSION:
     case OFP13_VERSION:
     case OFP14_VERSION:
+    case OFP15_VERSION:
         request = ofpraw_alloc(OFPRAW_OFPST11_GROUP_DESC_REQUEST, ofp_version, 0);
         break;
     default:
@@ -6605,7 +6648,8 @@ ofputil_append_group_stats(struct list *replies,
         }
 
     case OFP13_VERSION:
-    case OFP14_VERSION:{
+    case OFP14_VERSION:
+    case OFP15_VERSION: {
             struct ofp13_group_stats *gs13;
 
             length = sizeof *gs13 + bucket_counter_size;
@@ -6635,6 +6679,7 @@ ofputil_encode_group_features_request(enum ofp_version ofp_version)
     case OFP12_VERSION:
     case OFP13_VERSION:
     case OFP14_VERSION:
+    case OFP15_VERSION:
         request = ofpraw_alloc(OFPRAW_OFPST12_GROUP_FEATURES_REQUEST,
                                ofp_version, 0);
         break;
@@ -6966,6 +7011,7 @@ ofputil_encode_group_mod(enum ofp_version ofp_version,
     case OFP12_VERSION:
     case OFP13_VERSION:
     case OFP14_VERSION:
+    case OFP15_VERSION:
         b = ofpraw_alloc(OFPRAW_OFPT11_GROUP_MOD, ofp_version, 0);
         start_ogm = ofpbuf_size(b);
         ofpbuf_put_zeros(b, sizeof *ogm);
@@ -7052,6 +7098,7 @@ ofputil_decode_queue_stats_request(const struct ofp_header *request,
                                    struct ofputil_queue_stats_request *oqsr)
 {
     switch ((enum ofp_version)request->version) {
+    case OFP15_VERSION:
     case OFP14_VERSION:
     case OFP13_VERSION:
     case OFP12_VERSION:
@@ -7090,7 +7137,8 @@ ofputil_encode_queue_stats_request(enum ofp_version ofp_version,
     case OFP11_VERSION:
     case OFP12_VERSION:
     case OFP13_VERSION:
-    case OFP14_VERSION: {
+    case OFP14_VERSION:
+    case OFP15_VERSION: {
         struct ofp11_queue_stats_request *req;
         request = ofpraw_alloc(OFPRAW_OFPST11_QUEUE_REQUEST, ofp_version, 0);
         req = ofpbuf_put_zeros(request, sizeof *req);
@@ -7335,7 +7383,8 @@ ofputil_append_queue_stat(struct list *replies,
         break;
     }
 
-    case OFP14_VERSION: {
+    case OFP14_VERSION:
+    case OFP15_VERSION: {
         struct ofp14_queue_stats *reply = ofpmp_append(replies, sizeof *reply);
         ofputil_queue_stats_to_ofp14(oqs, reply);
         break;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -269,6 +269,7 @@ ofp_is_stat_request(enum ofp_version version, uint8_t type)
     case OFP12_VERSION:
     case OFP13_VERSION:
     case OFP14_VERSION:
+    case OFP15_VERSION:
         return type == OFPT11_STATS_REQUEST;
     }
 
@@ -285,6 +286,7 @@ ofp_is_stat_reply(enum ofp_version version, uint8_t type)
     case OFP12_VERSION:
     case OFP13_VERSION:
     case OFP14_VERSION:
+    case OFP15_VERSION:
         return type == OFPT11_STATS_REPLY;
     }
 
@@ -325,6 +327,7 @@ ofphdrs_len(const struct ofphdrs *hdrs)
     case OFP12_VERSION:
     case OFP13_VERSION:
     case OFP14_VERSION:
+    case OFP15_VERSION:
         if (hdrs->type == OFPT11_STATS_REQUEST ||
             hdrs->type == OFPT11_STATS_REPLY) {
             return (hdrs->stat == OFPST_VENDOR
@@ -758,6 +761,7 @@ ofpraw_stats_request_to_reply(enum ofpraw raw, uint8_t version)
     case OFP12_VERSION:
     case OFP13_VERSION:
     case OFP14_VERSION:
+    case OFP15_VERSION:
         ovs_assert(hdrs.type == OFPT11_STATS_REQUEST);
         hdrs.type = OFPT11_STATS_REPLY;
         break;
@@ -970,6 +974,7 @@ ofpmp_flags__(const struct ofp_header *oh)
     case OFP12_VERSION:
     case OFP13_VERSION:
     case OFP14_VERSION:
+    case OFP15_VERSION:
         return &((struct ofp11_stats_msg *) oh)->flags;
     default:
         OVS_NOT_REACHED();

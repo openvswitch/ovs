@@ -76,12 +76,8 @@ enum ofp_version {
     OFP11_VERSION = 0x02,
     OFP12_VERSION = 0x03,
     OFP13_VERSION = 0x04,
-    OFP14_VERSION = 0x05
-
-    /* When we add real support for these versions, add them to the enum so
-     * that we get compiler warnings everywhere we might forget to provide
-     * support.  Until then, keep them as macros to avoid those warnings. */
-#define OFP15_VERSION 0x06
+    OFP14_VERSION = 0x05,
+    OFP15_VERSION = 0x06
 };
 
 /* Vendor (aka experimenter) IDs.
