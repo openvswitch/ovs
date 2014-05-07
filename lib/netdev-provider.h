@@ -56,8 +56,9 @@ struct netdev {
 };
 
 static void
-netdev_change_seq_changed(struct netdev *netdev)
+netdev_change_seq_changed(const struct netdev *netdev_)
 {
+    struct netdev *netdev = CONST_CAST(struct netdev *, netdev_);
     seq_change(connectivity_seq_get());
     netdev->change_seq++;
     if (!netdev->change_seq) {
