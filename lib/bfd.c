@@ -388,6 +388,8 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
         bfd_set_state(bfd, STATE_DOWN, DIAG_NONE);
 
         memcpy(bfd->eth_dst, eth_addr_bfd, ETH_ADDR_LEN);
+
+        bfd_status_changed(bfd);
     }
 
     atomic_store(&bfd->check_tnl_key,
@@ -492,6 +494,7 @@ bfd_unref(struct bfd *bfd) OVS_EXCLUDED(mutex)
 {
     if (bfd && ovs_refcount_unref(&bfd->ref_cnt) == 1) {
         ovs_mutex_lock(&mutex);
+        bfd_status_changed(bfd);
         hmap_remove(all_bfds, &bfd->node);
         netdev_close(bfd->netdev);
         free(bfd->name);
