@@ -328,6 +328,14 @@ cfm_init(void)
                              1, 2, cfm_unixctl_set_fault, NULL);
 }
 
+/* Records the status change and changes the global connectivity seq. */
+static void
+cfm_status_changed(struct cfm *cfm) OVS_REQUIRES(mutex)
+{
+    seq_change(connectivity_seq_get());
+    cfm->status_changed = true;
+}
+
 /* Allocates a 'cfm' object called 'name'.  'cfm' should be initialized by
  * cfm_configure() before use. */
 struct cfm *
@@ -349,6 +357,7 @@ cfm_create(const struct netdev *netdev) OVS_EXCLUDED(mutex)
     ovs_refcount_init(&cfm->ref_cnt);
 
     ovs_mutex_lock(&mutex);
+    cfm_status_changed(cfm);
     cfm_generate_maid(cfm);
     hmap_insert(all_cfms, &cfm->hmap_node, hash_string(cfm->name, 0));
     ovs_mutex_unlock(&mutex);
@@ -370,6 +379,7 @@ cfm_unref(struct cfm *cfm) OVS_EXCLUDED(mutex)
     }
 
     ovs_mutex_lock(&mutex);
+    cfm_status_changed(cfm);
     hmap_remove(all_cfms, &cfm->hmap_node);
     ovs_mutex_unlock(&mutex);
 
@@ -393,14 +403,6 @@ cfm_ref(const struct cfm *cfm_)
         ovs_refcount_ref(&cfm->ref_cnt);
     }
     return cfm;
-}
-
-/* Records the status change and changes the global connectivity seq. */
-static void
-cfm_status_changed(struct cfm *cfm) OVS_REQUIRES(mutex)
-{
-    seq_change(connectivity_seq_get());
-    cfm->status_changed = true;
 }
 
 /* Should be run periodically to update fault statistics messages. */
