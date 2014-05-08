@@ -55,11 +55,14 @@ static bool multithreaded;
         int error; \
  \
         /* Verify that 'l' was initialized. */ \
-        ovs_assert(l->where); \
+        if (OVS_UNLIKELY(!l->where)) { \
+            ovs_abort(0, "%s: %s() passed uninitialized ovs_"#TYPE, \
+                      where, __func__); \
+        } \
  \
         error = pthread_##TYPE##_##FUN(&l->lock); \
         if (OVS_UNLIKELY(error)) { \
-            ovs_abort(error, "pthread_%s_%s failed", #TYPE, #FUN); \
+            ovs_abort(error, "%s: pthread_%s_%s failed", where, #TYPE, #FUN); \
         } \
         l->where = where; \
  }
@@ -77,11 +80,14 @@ LOCK_FUNCTION(rwlock, wrlock);
         int error; \
  \
         /* Verify that 'l' was initialized. */ \
-        ovs_assert(l->where); \
+        if (OVS_UNLIKELY(!l->where)) { \
+            ovs_abort(0, "%s: %s() passed uninitialized ovs_"#TYPE, \
+                      where, __func__); \
+        } \
  \
         error = pthread_##TYPE##_##FUN(&l->lock); \
         if (OVS_UNLIKELY(error) && error != EBUSY) { \
-            ovs_abort(error, "pthread_%s_%s failed", #TYPE, #FUN); \
+            ovs_abort(error, "%s: pthread_%s_%s failed", where, #TYPE, #FUN); \
         } \
         if (!error) { \
             l->where = where; \
