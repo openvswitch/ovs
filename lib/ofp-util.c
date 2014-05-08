@@ -3795,22 +3795,16 @@ ofputil_put_phy_port(enum ofp_version ofp_version,
 {
     switch (ofp_version) {
     case OFP10_VERSION: {
-        struct ofp10_phy_port *opp;
-        if (ofpbuf_size(b) + sizeof *opp <= UINT16_MAX) {
-            opp = ofpbuf_put_uninit(b, sizeof *opp);
-            ofputil_encode_ofp10_phy_port(pp, opp);
-        }
+        struct ofp10_phy_port *opp = ofpbuf_put_uninit(b, sizeof *opp);
+        ofputil_encode_ofp10_phy_port(pp, opp);
         break;
     }
 
     case OFP11_VERSION:
     case OFP12_VERSION:
     case OFP13_VERSION: {
-        struct ofp11_port *op;
-        if (ofpbuf_size(b) + sizeof *op <= UINT16_MAX) {
-            op = ofpbuf_put_uninit(b, sizeof *op);
-            ofputil_encode_ofp11_port(pp, op);
-        }
+        struct ofp11_port *op = ofpbuf_put_uninit(b, sizeof *op);
+        ofputil_encode_ofp11_port(pp, op);
         break;
     }
 
@@ -3827,32 +3821,11 @@ void
 ofputil_append_port_desc_stats_reply(const struct ofputil_phy_port *pp,
                                      struct list *replies)
 {
-    switch (ofpmp_version(replies)) {
-    case OFP10_VERSION: {
-        struct ofp10_phy_port *opp;
+    struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
+    size_t start_ofs = ofpbuf_size(reply);
 
-        opp = ofpmp_append(replies, sizeof *opp);
-        ofputil_encode_ofp10_phy_port(pp, opp);
-        break;
-    }
-
-    case OFP11_VERSION:
-    case OFP12_VERSION:
-    case OFP13_VERSION: {
-        struct ofp11_port *op;
-
-        op = ofpmp_append(replies, sizeof *op);
-        ofputil_encode_ofp11_port(pp, op);
-        break;
-    }
-
-    case OFP14_VERSION:
-        OVS_NOT_REACHED();
-        break;
-
-    default:
-      OVS_NOT_REACHED();
-    }
+    ofputil_put_phy_port(ofpmp_version(replies), pp, reply);
+    ofpmp_postappend(replies, start_ofs);
 }
 
 /* ofputil_switch_features */
@@ -4095,7 +4068,14 @@ ofputil_put_switch_features_port(const struct ofputil_phy_port *pp,
     const struct ofp_header *oh = ofpbuf_data(b);
 
     if (oh->version < OFP13_VERSION) {
+        /* Try adding a port description to the message, but drop it again if
+         * the buffer overflows.  (This possibility for overflow is why
+         * OpenFlow 1.3+ moved port descriptions into a multipart message.)  */
+        size_t start_ofs = ofpbuf_size(b);
         ofputil_put_phy_port(oh->version, pp, b);
+        if (ofpbuf_size(b) > UINT16_MAX) {
+            ofpbuf_set_size(b, start_ofs);
+        }
     }
 }
 
