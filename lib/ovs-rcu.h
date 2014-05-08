@@ -117,7 +117,7 @@
  * Use ovsrcu_get(TYPE, VAR) to read an RCU-protected pointer, e.g. to read the
  * pointer variable declared above:
  *
- *     struct flow *flow = ovsrcu_get(struct flow *, flowp);
+ *     struct flow *flow = ovsrcu_get(struct flow *, &flowp);
  *
  * If the pointer variable is currently protected against change (because
  * the current thread holds a mutex that protects it), ovsrcu_get_protected()
