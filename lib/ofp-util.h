@@ -1130,13 +1130,16 @@ enum ofperr ofputil_decode_group_mod(const struct ofp_header *,
 int ofputil_decode_group_stats_reply(struct ofpbuf *,
                                      struct ofputil_group_stats *);
 
+uint32_t ofputil_decode_group_desc_request(const struct ofp_header *);
+struct ofpbuf *ofputil_encode_group_desc_request(enum ofp_version,
+                                                 uint32_t group_id);
+
 int ofputil_decode_group_desc_reply(struct ofputil_group_desc *,
                                     struct ofpbuf *, enum ofp_version);
 
 void ofputil_append_group_desc_reply(const struct ofputil_group_desc *,
                                      struct list *buckets,
                                      struct list *replies);
-struct ofpbuf *ofputil_encode_group_desc_request(enum ofp_version);
 
 struct ofputil_bundle_ctrl_msg {
     uint32_t    bundle_id;

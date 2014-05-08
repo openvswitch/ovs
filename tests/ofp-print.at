@@ -1875,11 +1875,20 @@ OFPST_GROUP reply (OF1.3) (xid=0x2):
 ])
 AT_CLEANUP
 
-AT_SETUP([OFPST_GROUP_DESC request])
+AT_SETUP([OFPST_GROUP_DESC request - OF1.1])
 AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
 AT_CHECK([ovs-ofctl ofp-print "\
 02 12 00 10 00 00 00 02 00 07 00 00 00 00 00 00 \
-"], [0], [OFPST_GROUP_DESC request (OF1.1) (xid=0x2):
+"], [0], [OFPST_GROUP_DESC request (OF1.1) (xid=0x2): group_id=ALL
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_GROUP_DESC request - OF1.5])
+AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
+AT_CHECK([ovs-ofctl ofp-print "\
+06 12 00 14 00 00 00 02 00 07 00 00 00 00 00 00 \
+00 00 00 01
+"], [0], [OFPST_GROUP_DESC request (OF1.5) (xid=0x2): group_id=1
 ])
 AT_CLEANUP
 

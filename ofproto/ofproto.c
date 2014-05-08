@@ -5448,64 +5448,66 @@ append_group_stats(struct ofgroup *group, struct list *replies)
     free(ogs.bucket_stats);
 }
 
+static void
+handle_group_request(struct ofconn *ofconn,
+                     const struct ofp_header *request, uint32_t group_id,
+                     void (*cb)(struct ofgroup *, struct list *replies))
+{
+    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
+    struct ofgroup *group;
+    struct list replies;
+
+    ofpmp_init(&replies, request);
+    if (group_id == OFPG_ALL) {
+        ovs_rwlock_rdlock(&ofproto->groups_rwlock);
+        HMAP_FOR_EACH (group, hmap_node, &ofproto->groups) {
+            ovs_rwlock_rdlock(&group->rwlock);
+            cb(group, &replies);
+            ovs_rwlock_unlock(&group->rwlock);
+        }
+        ovs_rwlock_unlock(&ofproto->groups_rwlock);
+    } else {
+        if (ofproto_group_lookup(ofproto, group_id, &group)) {
+            cb(group, &replies);
+            ofproto_group_release(group);
+        }
+    }
+    ofconn_send_replies(ofconn, &replies);
+}
+
 static enum ofperr
 handle_group_stats_request(struct ofconn *ofconn,
                            const struct ofp_header *request)
 {
-    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    struct list replies;
-    enum ofperr error;
-    struct ofgroup *group;
     uint32_t group_id;
+    enum ofperr error;
 
     error = ofputil_decode_group_stats_request(request, &group_id);
     if (error) {
         return error;
     }
 
-    ofpmp_init(&replies, request);
-
-    if (group_id == OFPG_ALL) {
-        ovs_rwlock_rdlock(&ofproto->groups_rwlock);
-        HMAP_FOR_EACH (group, hmap_node, &ofproto->groups) {
-            ovs_rwlock_rdlock(&group->rwlock);
-            append_group_stats(group, &replies);
-            ovs_rwlock_unlock(&group->rwlock);
-        }
-        ovs_rwlock_unlock(&ofproto->groups_rwlock);
-    } else {
-        if (ofproto_group_lookup(ofproto, group_id, &group)) {
-            append_group_stats(group, &replies);
-            ofproto_group_release(group);
-        }
-    }
-
-    ofconn_send_replies(ofconn, &replies);
-
+    handle_group_request(ofconn, request, group_id, append_group_stats);
     return 0;
+}
+
+static void
+append_group_desc(struct ofgroup *group, struct list *replies)
+{
+    struct ofputil_group_desc gds;
+
+    gds.group_id = group->group_id;
+    gds.type = group->type;
+    ofputil_append_group_desc_reply(&gds, &group->buckets, replies);
 }
 
 static enum ofperr
 handle_group_desc_stats_request(struct ofconn *ofconn,
                                 const struct ofp_header *request)
 {
-    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    struct list replies;
-    struct ofputil_group_desc gds;
-    struct ofgroup *group;
-
-    ofpmp_init(&replies, request);
-
-    ovs_rwlock_rdlock(&ofproto->groups_rwlock);
-    HMAP_FOR_EACH (group, hmap_node, &ofproto->groups) {
-        gds.group_id = group->group_id;
-        gds.type = group->type;
-        ofputil_append_group_desc_reply(&gds, &group->buckets, &replies);
-    }
-    ovs_rwlock_unlock(&ofproto->groups_rwlock);
-
-    ofconn_send_replies(ofconn, &replies);
-
+    handle_group_request(ofconn, request,
+                         ofputil_decode_group_desc_request(request),
+                         append_group_desc);
     return 0;
 }
 

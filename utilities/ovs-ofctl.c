@@ -327,7 +327,7 @@ usage(void)
            "  mod-group SWITCH GROUP      modify specific group\n"
            "  del-groups SWITCH [GROUP]   delete matching GROUPs\n"
            "  dump-group-features SWITCH  print group features\n"
-           "  dump-groups SWITCH          print group description\n"
+           "  dump-groups SWITCH [GROUP]  print group description\n"
            "  dump-group-stats SWITCH [GROUP]  print group statistics\n"
            "  queue-get-config SWITCH PORT  print queue information for port\n"
            "  add-meter SWITCH METER      add meter described by METER\n"
@@ -2173,10 +2173,16 @@ ofctl_dump_group_desc(int argc OVS_UNUSED, char *argv[])
 {
     struct ofpbuf *request;
     struct vconn *vconn;
+    uint32_t group_id;
 
     open_vconn(argv[1], &vconn);
 
-    request = ofputil_encode_group_desc_request(vconn_get_version(vconn));
+    if (argc < 3 || !ofputil_group_from_string(argv[2], &group_id)) {
+        group_id = OFPG11_ALL;
+    }
+
+    request = ofputil_encode_group_desc_request(vconn_get_version(vconn),
+                                                group_id);
     if (request) {
         dump_stats_transaction(vconn, request);
     }
@@ -3514,7 +3520,7 @@ static const struct command all_commands[] = {
     { "add-groups", 1, 2, ofctl_add_groups },
     { "mod-group", 1, 2, ofctl_mod_group },
     { "del-groups", 1, 2, ofctl_del_groups },
-    { "dump-groups", 1, 1, ofctl_dump_group_desc },
+    { "dump-groups", 1, 2, ofctl_dump_group_desc },
     { "dump-group-stats", 1, 2, ofctl_dump_group_stats },
     { "dump-group-features", 1, 1, ofctl_dump_group_features },
     { "help", 0, INT_MAX, ofctl_help },

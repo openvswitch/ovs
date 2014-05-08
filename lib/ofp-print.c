@@ -2356,6 +2356,15 @@ ofp_print_group(struct ds *s, uint32_t group_id, uint8_t type,
 }
 
 static void
+ofp_print_ofpst_group_desc_request(struct ds *string,
+                                   const struct ofp_header *oh)
+{
+    uint32_t group_id = ofputil_decode_group_desc_request(oh);
+    ds_put_cstr(string, " group_id=");
+    ofputil_format_group(group_id, string);
+}
+
+static void
 ofp_print_group_desc(struct ds *s, const struct ofp_header *oh)
 {
     struct ofpbuf b;
@@ -2782,6 +2791,7 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
 
     case OFPTYPE_GROUP_DESC_STATS_REQUEST:
         ofp_print_stats_request(string, oh);
+        ofp_print_ofpst_group_desc_request(string, oh);
         break;
 
     case OFPTYPE_GROUP_DESC_STATS_REPLY:

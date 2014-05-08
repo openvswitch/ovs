@@ -204,9 +204,15 @@ the switch itself (with the \fBprotocols\fR column in the \fBBridge\fR
 table).  For more information, see ``Q: What versions of OpenFlow does
 Open vSwitch support?'' in the Open vSwitch FAQ.
 .
-.IP "\fBdump\-groups \fIswitch"
-Prints to the console all group entries in \fIswitch\fR's tables. Each line
-of output is a group entry as described in \fBGroup Syntax\fR below.
+.IP "\fBdump\-groups \fIswitch\fR [\fIgroup\fR]"
+Prints group entries in \fIswitch\fR's tables to console.  To dump
+only a specific group, specify its number as \fIgroup\fR.  Otherwise,
+if \fIgroup\fR is omitted, or if it is specified as \fBALL\fR, then
+all groups are printed.  Each line of output is a group entry as
+described in \fBGroup Syntax\fR below.
+.IP
+Only OpenFlow 1.5 and later support dumping a specific group.  Earlier
+versions of OpenFlow always dump all groups.
 .
 .IP "\fBdump\-group\-features \fIswitch"
 Prints to the console the group features of the \fIswitch\fR.
@@ -1830,7 +1836,7 @@ of each field is honoured.
 .PP
 .IP \fBgroup_id=\fIid\fR
 The integer group id of group.
-When this field is specified in \fBdel-groups\fR or \fBdump-groups\fR,
+When this field is specified in \fBdel\-groups\fR or \fBdump\-groups\fR,
 the keyword "all" may be used to designate all groups.
 .
 This field is required.

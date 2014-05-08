@@ -6556,16 +6556,40 @@ ofputil_encode_group_stats_request(enum ofp_version ofp_version,
     return request;
 }
 
+/* Decodes the OpenFlow group description request in 'oh', returning the group
+ * whose description is requested, or OFPG_ALL if stats for all groups was
+ * requested. */
+uint32_t
+ofputil_decode_group_desc_request(const struct ofp_header *oh)
+{
+    struct ofpbuf request;
+    enum ofpraw raw;
+
+    ofpbuf_use_const(&request, oh, ntohs(oh->length));
+    raw = ofpraw_pull_assert(&request);
+    if (raw == OFPRAW_OFPST11_GROUP_DESC_REQUEST) {
+        return OFPG_ALL;
+    } else if (raw == OFPRAW_OFPST15_GROUP_DESC_REQUEST) {
+        ovs_be32 *group_id = ofpbuf_pull(&request, sizeof *group_id);
+        return ntohl(*group_id);
+    } else {
+        OVS_NOT_REACHED();
+    }
+}
+
 /* Returns an OpenFlow group description request for OpenFlow version
- * 'ofp_version', that requests stats for group 'group_id'.  (Use OFPG_ALL to
- * request stats for all groups.)
+ * 'ofp_version', that requests stats for group 'group_id'.  Use OFPG_ALL to
+ * request stats for all groups (OpenFlow 1.4 and earlier always request all
+ * groups).
  *
  * Group descriptions include the bucket and action configuration for each
  * group. */
 struct ofpbuf *
-ofputil_encode_group_desc_request(enum ofp_version ofp_version)
+ofputil_encode_group_desc_request(enum ofp_version ofp_version,
+                                  uint32_t group_id)
 {
     struct ofpbuf *request;
+    ovs_be32 gid;
 
     switch (ofp_version) {
     case OFP10_VERSION:
@@ -6575,8 +6599,14 @@ ofputil_encode_group_desc_request(enum ofp_version ofp_version)
     case OFP12_VERSION:
     case OFP13_VERSION:
     case OFP14_VERSION:
+        request = ofpraw_alloc(OFPRAW_OFPST11_GROUP_DESC_REQUEST,
+                               ofp_version, 0);
+        break;
     case OFP15_VERSION:
-        request = ofpraw_alloc(OFPRAW_OFPST11_GROUP_DESC_REQUEST, ofp_version, 0);
+        request = ofpraw_alloc(OFPRAW_OFPST15_GROUP_DESC_REQUEST,
+                               ofp_version, 0);
+        gid = htonl(group_id);
+        ofpbuf_put(request, &gid, sizeof gid);
         break;
     default:
         OVS_NOT_REACHED();

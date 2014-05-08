@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -329,8 +329,10 @@ enum ofpraw {
     /* OFPST 1.3+ (6): uint8_t[8][]. */
     OFPRAW_OFPST13_GROUP_REPLY,
 
-    /* OFPST 1.1+ (7): void. */
+    /* OFPST 1.1-1.4 (7): void. */
     OFPRAW_OFPST11_GROUP_DESC_REQUEST,
+    /* OFPST 1.5+ (7): ovs_be32. */
+    OFPRAW_OFPST15_GROUP_DESC_REQUEST,
 
     /* OFPST 1.1+ (7): uint8_t[8][]. */
     OFPRAW_OFPST11_GROUP_DESC_REPLY,
@@ -571,7 +573,8 @@ enum ofptype {
     OFPTYPE_GROUP_STATS_REPLY,       /* OFPRAW_OFPST11_GROUP_REPLY.
                                       * OFPRAW_OFPST13_GROUP_REPLY. */
 
-    OFPTYPE_GROUP_DESC_STATS_REQUEST, /* OFPRAW_OFPST11_GROUP_DESC_REQUEST. */
+    OFPTYPE_GROUP_DESC_STATS_REQUEST, /* OFPRAW_OFPST11_GROUP_DESC_REQUEST.
+                                       * OFPRAW_OFPST15_GROUP_DESC_REQUEST. */
 
     OFPTYPE_GROUP_DESC_STATS_REPLY,  /* OFPRAW_OFPST11_GROUP_DESC_REPLY. */
 
