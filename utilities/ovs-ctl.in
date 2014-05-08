@@ -227,7 +227,10 @@ start_forwarding () {
         # On Linux, ovs-vswitchd needs about three file descriptors
         # per bridge and one file descriptor per bridge port, so this
         # allows a very large number of bridges and ports.
-        ulimit -n 7500
+        MAXFD=7500
+        if [ $(ulimit -n) -lt $MAXFD ]; then
+            ulimit -n $MAXFD
+        fi
 
 	    # Start ovs-vswitchd.
 	    set ovs-vswitchd unix:"$DB_SOCK"
