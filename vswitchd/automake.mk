@@ -32,7 +32,8 @@ if HAVE_DOT
 vswitchd/vswitch.gv: ovsdb/ovsdb-dot.in vswitchd/vswitch.ovsschema
 	$(OVSDB_DOT) --no-arrows $(srcdir)/vswitchd/vswitch.ovsschema > $@
 vswitchd/vswitch.pic: vswitchd/vswitch.gv ovsdb/dot2pic
-	(dot -T plain < vswitchd/vswitch.gv | $(srcdir)/ovsdb/dot2pic -f 3) > $@;
+	(dot -T plain < vswitchd/vswitch.gv | $(srcdir)/ovsdb/dot2pic -f 3) > $@.tmp;
+	mv $@.tmp $@
 VSWITCH_PIC = vswitchd/vswitch.pic
 VSWITCH_DOT_DIAGRAM_ARG = --er-diagram=$(VSWITCH_PIC)
 DISTCLEANFILES += vswitchd/vswitch.gv vswitchd/vswitch.pic
