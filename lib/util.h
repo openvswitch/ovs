@@ -151,8 +151,6 @@ is_pow2(uintmax_t x)
 #define CACHE_LINE_SIZE 64
 BUILD_ASSERT_DECL(IS_POW2(CACHE_LINE_SIZE));
 
-#define CACHE_LINE_SIZE 64      /* Correct for most CPUs. */
-
 static inline void
 ovs_prefetch_range(const void *start, size_t size)
 {
