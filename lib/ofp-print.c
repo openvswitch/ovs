@@ -418,28 +418,33 @@ static void
 ofp_print_phy_ports(struct ds *string, uint8_t ofp_version,
                     struct ofpbuf *b)
 {
-    size_t n_ports;
     struct ofputil_phy_port *ports;
-    enum ofperr error;
+    size_t allocated_ports, n_ports;
+    int retval;
     size_t i;
 
-    n_ports = ofputil_count_phy_ports(ofp_version, b);
+    ports = NULL;
+    allocated_ports = 0;
+    for (n_ports = 0; ; n_ports++) {
+        if (n_ports >= allocated_ports) {
+            ports = x2nrealloc(ports, &allocated_ports, sizeof *ports);
+        }
 
-    ports = xmalloc(n_ports * sizeof *ports);
-    for (i = 0; i < n_ports; i++) {
-        error = ofputil_pull_phy_port(ofp_version, b, &ports[i]);
-        if (error) {
-            ofp_print_error(string, error);
-            goto exit;
+        retval = ofputil_pull_phy_port(ofp_version, b, &ports[n_ports]);
+        if (retval) {
+            break;
         }
     }
+
     qsort(ports, n_ports, sizeof *ports, compare_ports);
     for (i = 0; i < n_ports; i++) {
         ofp_print_phy_port(string, &ports[i]);
     }
-
-exit:
     free(ports);
+
+    if (retval != EOF) {
+        ofp_print_error(string, retval);
+    }
 }
 
 static const char *

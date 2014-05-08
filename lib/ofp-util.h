@@ -572,7 +572,6 @@ bool ofputil_switch_features_has_ports(struct ofpbuf *b);
 /* phy_port helper functions. */
 int ofputil_pull_phy_port(enum ofp_version ofp_version, struct ofpbuf *,
                           struct ofputil_phy_port *);
-size_t ofputil_count_phy_ports(uint8_t ofp_version, struct ofpbuf *);
 
 /* Abstract ofp_port_status. */
 struct ofputil_port_status {

@@ -5570,13 +5570,6 @@ ofputil_pull_phy_port(enum ofp_version ofp_version, struct ofpbuf *b,
     }
 }
 
-/* Given a buffer 'b' that contains an array of OpenFlow ports of type
- * 'ofp_version', returns the number of elements. */
-size_t ofputil_count_phy_ports(uint8_t ofp_version, struct ofpbuf *b)
-{
-    return ofpbuf_size(b) / ofputil_get_phy_port_size(ofp_version);
-}
-
 /* ofp-util.def lists the mapping from names to action. */
 static const char *const names[OFPUTIL_N_ACTIONS] = {
     NULL,
