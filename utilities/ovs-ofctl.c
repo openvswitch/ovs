@@ -305,7 +305,7 @@ usage(void)
            "  get-frags SWITCH            print fragment handling behavior\n"
            "  set-frags SWITCH FRAG_MODE  set fragment handling behavior\n"
            "  dump-ports SWITCH [PORT]    print port statistics\n"
-           "  dump-ports-desc SWITCH      print port descriptions\n"
+           "  dump-ports-desc SWITCH [PORT]  print port descriptions\n"
            "  dump-flows SWITCH           print all flow entries\n"
            "  dump-flows SWITCH FLOW      print matching FLOWs\n"
            "  dump-aggregate SWITCH       print aggregate flow statistics\n"
@@ -648,7 +648,7 @@ ofctl_show(int argc OVS_UNUSED, char *argv[])
     ofpbuf_delete(reply);
 
     if (!has_ports) {
-        request = ofpraw_alloc(OFPRAW_OFPST_PORT_DESC_REQUEST, version, 0);
+        request = ofputil_encode_port_desc_stats_request(version, OFPP_ANY);
         dump_stats_transaction(vconn, request);
     }
     dump_trivial_transaction(vconn_name, OFPRAW_OFPT_GET_CONFIG_REQUEST);
@@ -761,8 +761,8 @@ fetch_port_by_stats(struct vconn *vconn,
     bool done = false;
     bool found = false;
 
-    request = ofpraw_alloc(OFPRAW_OFPST_PORT_DESC_REQUEST,
-                           vconn_get_version(vconn), 0);
+    request = ofputil_encode_port_desc_stats_request(vconn_get_version(vconn),
+                                                     port_no);
     send_xid = ((struct ofp_header *) ofpbuf_data(request))->xid;
 
     send_openflow_buffer(vconn, request);
@@ -1620,7 +1620,16 @@ ofctl_dump_ports(int argc, char *argv[])
 static void
 ofctl_dump_ports_desc(int argc OVS_UNUSED, char *argv[])
 {
-    dump_trivial_stats_transaction(argv[1], OFPRAW_OFPST_PORT_DESC_REQUEST);
+    struct ofpbuf *request;
+    struct vconn *vconn;
+    ofp_port_t port;
+
+    open_vconn(argv[1], &vconn);
+    port = argc > 2 ? str_to_port_no(argv[1], argv[2]) : OFPP_ANY;
+    request = ofputil_encode_port_desc_stats_request(vconn_get_version(vconn),
+                                                     port);
+    dump_stats_transaction(vconn, request);
+    vconn_close(vconn);
 }
 
 static void
@@ -3504,7 +3513,7 @@ static const struct command all_commands[] = {
     { "meter-features", 1, 1, ofctl_meter_features },
     { "packet-out", 4, INT_MAX, ofctl_packet_out },
     { "dump-ports", 1, 2, ofctl_dump_ports },
-    { "dump-ports-desc", 1, 1, ofctl_dump_ports_desc },
+    { "dump-ports-desc", 1, 2, ofctl_dump_ports_desc },
     { "mod-port", 3, 3, ofctl_mod_port },
     { "mod-table", 3, 3, ofctl_mod_table },
     { "get-frags", 1, 1, ofctl_get_frags },

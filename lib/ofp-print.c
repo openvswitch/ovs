@@ -1900,6 +1900,23 @@ ofp_print_ofpst_queue_reply(struct ds *string, const struct ofp_header *oh,
 }
 
 static void
+ofp_print_ofpst_port_desc_request(struct ds *string,
+                                  const struct ofp_header *oh)
+{
+    enum ofperr error;
+    ofp_port_t port;
+
+    error = ofputil_decode_port_desc_stats_request(oh, &port);
+    if (error) {
+        ofp_print_error(string, error);
+        return;
+    }
+
+    ds_put_cstr(string, " port=");
+    ofputil_format_port(port, string);
+}
+
+static void
 ofp_print_ofpst_port_desc_reply(struct ds *string,
                                 const struct ofp_header *oh)
 {
@@ -2917,7 +2934,6 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
         break;
 
     case OFPTYPE_DESC_STATS_REQUEST:
-    case OFPTYPE_PORT_DESC_STATS_REQUEST:
     case OFPTYPE_METER_FEATURES_STATS_REQUEST:
         ofp_print_stats_request(string, oh);
         break;
@@ -2970,6 +2986,11 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
     case OFPTYPE_AGGREGATE_STATS_REPLY:
         ofp_print_stats_reply(string, oh);
         ofp_print_aggregate_stats_reply(string, oh);
+        break;
+
+    case OFPTYPE_PORT_DESC_STATS_REQUEST:
+        ofp_print_stats_request(string, oh);
+        ofp_print_ofpst_port_desc_request(string, oh);
         break;
 
     case OFPTYPE_PORT_DESC_STATS_REPLY:

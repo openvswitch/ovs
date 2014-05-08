@@ -3170,52 +3170,62 @@ append_port_stat(struct ofport *port, struct list *replies)
     ofputil_append_port_stat(replies, &ops);
 }
 
-static enum ofperr
-handle_port_stats_request(struct ofconn *ofconn,
-                          const struct ofp_header *request)
+static void
+handle_port_request(struct ofconn *ofconn,
+                    const struct ofp_header *request, ofp_port_t port_no,
+                    void (*cb)(struct ofport *, struct list *replies))
 {
-    struct ofproto *p = ofconn_get_ofproto(ofconn);
+    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct ofport *port;
     struct list replies;
-    ofp_port_t port_no;
-    enum ofperr error;
-
-    error = ofputil_decode_port_stats_request(request, &port_no);
-    if (error) {
-        return error;
-    }
 
     ofpmp_init(&replies, request);
     if (port_no != OFPP_ANY) {
-        port = ofproto_get_port(p, port_no);
+        port = ofproto_get_port(ofproto, port_no);
         if (port) {
-            append_port_stat(port, &replies);
+            cb(port, &replies);
         }
     } else {
-        HMAP_FOR_EACH (port, hmap_node, &p->ports) {
-            append_port_stat(port, &replies);
+        HMAP_FOR_EACH (port, hmap_node, &ofproto->ports) {
+            cb(port, &replies);
         }
     }
 
     ofconn_send_replies(ofconn, &replies);
-    return 0;
+}
+
+static enum ofperr
+handle_port_stats_request(struct ofconn *ofconn,
+                          const struct ofp_header *request)
+{
+    ofp_port_t port_no;
+    enum ofperr error;
+
+    error = ofputil_decode_port_stats_request(request, &port_no);
+    if (!error) {
+        handle_port_request(ofconn, request, port_no, append_port_stat);
+    }
+    return error;
+}
+
+static void
+append_port_desc(struct ofport *port, struct list *replies)
+{
+    ofputil_append_port_desc_stats_reply(&port->pp, replies);
 }
 
 static enum ofperr
 handle_port_desc_stats_request(struct ofconn *ofconn,
                                const struct ofp_header *request)
 {
-    struct ofproto *p = ofconn_get_ofproto(ofconn);
-    struct ofport *port;
-    struct list replies;
+    ofp_port_t port_no;
+    enum ofperr error;
 
-    ofpmp_init(&replies, request);
-    HMAP_FOR_EACH (port, hmap_node, &p->ports) {
-        ofputil_append_port_desc_stats_reply(&port->pp, &replies);
+    error = ofputil_decode_port_desc_stats_request(request, &port_no);
+    if (!error) {
+        handle_port_request(ofconn, request, port_no, append_port_desc);
     }
-
-    ofconn_send_replies(ofconn, &replies);
-    return 0;
+    return error;
 }
 
 static uint32_t

@@ -1943,7 +1943,16 @@ AT_CLEANUP
 AT_SETUP([OFPST_PORT_DESC request - OF1.0])
 AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
 AT_CHECK([ovs-ofctl ofp-print "0110000c00000001000d0000"], [0], [dnl
-OFPST_PORT_DESC request (xid=0x1):
+OFPST_PORT_DESC request (xid=0x1): port=ANY
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_PORT_DESC request - OF1.5])
+AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
+AT_CHECK([ovs-ofctl ofp-print "\
+06 12 00 14 00 00 00 02 00 0d 00 00 00 00 00 00 \
+00 00 00 05"], [0], [dnl
+OFPST_PORT_DESC request (OF1.5) (xid=0x2): port=5
 ])
 AT_CLEANUP
 

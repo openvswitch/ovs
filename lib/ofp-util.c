@@ -3928,6 +3928,59 @@ ofputil_put_phy_port(enum ofp_version ofp_version,
     }
 }
 
+enum ofperr
+ofputil_decode_port_desc_stats_request(const struct ofp_header *request,
+                                       ofp_port_t *port)
+{
+    struct ofpbuf b;
+    enum ofpraw raw;
+
+    ofpbuf_use_const(&b, request, ntohs(request->length));
+    raw = ofpraw_pull_assert(&b);
+    if (raw == OFPRAW_OFPST10_PORT_DESC_REQUEST) {
+        *port = OFPP_ANY;
+        return 0;
+    } else if (raw == OFPRAW_OFPST15_PORT_DESC_REQUEST) {
+        ovs_be32 *ofp11_port;
+
+        ofp11_port = ofpbuf_pull(&b, sizeof *ofp11_port);
+        return ofputil_port_from_ofp11(*ofp11_port, port);
+    } else {
+        OVS_NOT_REACHED();
+    }
+}
+
+struct ofpbuf *
+ofputil_encode_port_desc_stats_request(enum ofp_version ofp_version,
+                                       ofp_port_t port)
+{
+    struct ofpbuf *request;
+    ovs_be32 ofp11_port;
+
+    switch (ofp_version) {
+    case OFP10_VERSION:
+    case OFP11_VERSION:
+    case OFP12_VERSION:
+    case OFP13_VERSION:
+    case OFP14_VERSION:
+        request = ofpraw_alloc(OFPRAW_OFPST10_PORT_DESC_REQUEST,
+                               ofp_version, 0);
+        break;
+
+    case OFP15_VERSION:
+        request = ofpraw_alloc(OFPRAW_OFPST15_PORT_DESC_REQUEST,
+                               ofp_version, 0);
+        ofp11_port = ofputil_port_to_ofp11(port);
+        ofpbuf_put(request, &ofp11_port, sizeof ofp11_port);
+        break;
+
+    default:
+        OVS_NOT_REACHED();
+    }
+
+    return request;
+}
+
 void
 ofputil_append_port_desc_stats_reply(const struct ofputil_phy_port *pp,
                                      struct list *replies)

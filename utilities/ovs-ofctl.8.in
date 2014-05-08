@@ -70,11 +70,19 @@ Prints to the console statistics for network devices associated with
 associated with that device will be printed.  \fInetdev\fR can be an
 OpenFlow assigned port number or device name, e.g. \fBeth0\fR.
 .
-.TP
-\fBdump\-ports\-desc \fIswitch\fR
+.IP "\fBdump\-ports\-desc \fIswitch\fR [\fIport\fR]"
 Prints to the console detailed information about network devices
-associated with \fIswitch\fR (version 1.7 or later).  This is a subset
-of the information provided by the \fBshow\fR command.
+associated with \fIswitch\fR.  To dump only a specific port, specify
+its number as \fIport\fR.  Otherwise, if \fIport\fR is omitted, or if
+it is specified as \fBANY\fR, then all ports are printed.  This is a
+subset of the information provided by the \fBshow\fR command.
+.IP
+If the connection to \fIswitch\fR negotiates OpenFlow 1.0, 1.2, or
+1.2, this command uses an OpenFlow extension only implemented in Open
+vSwitch (version 1.7 and later).
+.IP
+Only OpenFlow 1.5 and later support dumping a specific port.  Earlier
+versions of OpenFlow always dump all ports.
 .
 .IP "\fBmod\-port \fIswitch\fR \fIport\fR \fIaction\fR"
 Modify characteristics of port \fBport\fR in \fIswitch\fR.  \fIport\fR
