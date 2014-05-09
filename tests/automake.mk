@@ -233,10 +233,15 @@ tests_ovstest_SOURCES = \
 	tests/test-sflow.c \
 	tests/test-sha1.c \
 	tests/test-stp.c \
-	tests/test-unix-socket.c \
 	tests/test-util.c \
 	tests/test-uuid.c \
 	tests/test-vconn.c
+
+if !WIN32
+tests_ovstest_SOURCES += \
+	tests/test-unix-socket.c
+endif
+
 tests_ovstest_LDADD = lib/libopenvswitch.la
 dist_check_SCRIPTS = tests/flowgen.pl
 
