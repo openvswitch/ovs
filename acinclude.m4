@@ -35,8 +35,8 @@ AC_DEFUN([OVS_CHECK_LINUX], [
   AC_ARG_WITH([linux-source],
               [AC_HELP_STRING([--with-linux-source=/path/to/linux-source],
                               [Specify the Linux kernel source directory
-			       (usually figured out automatically from build
-			       directory)])])
+                               (usually figured out automatically from build
+                               directory)])])
 
   # Deprecated equivalents to --with-linux, --with-linux-source.
   AC_ARG_WITH([l26])
@@ -75,11 +75,11 @@ AC_DEFUN([OVS_CHECK_LINUX], [
     # Make sure that it exists.
     AC_MSG_CHECKING([for Linux build directory])
     if test -d "$KBUILD"; then
-	AC_MSG_RESULT([$KBUILD])
-	AC_SUBST(KBUILD)
+        AC_MSG_RESULT([$KBUILD])
+        AC_SUBST(KBUILD)
     else
-	AC_MSG_RESULT([no])
-	AC_ERROR([source dir $KBUILD doesn't exist])
+        AC_MSG_RESULT([no])
+        AC_ERROR([source dir $KBUILD doesn't exist])
     fi
 
     # Debian breaks kernel headers into "source" header and "build" headers.
@@ -150,7 +150,7 @@ AC_DEFUN([OVS_CHECK_LINUX], [
         test ! -e "$KBUILD"/include/generated/uapi/linux/version.h)|| \
        (test ! -e "$KBUILD"/include/linux/autoconf.h && \
         test ! -e "$KBUILD"/include/generated/autoconf.h); then
-	AC_MSG_ERROR([Linux kernel source in $KBUILD is not configured])
+        AC_MSG_ERROR([Linux kernel source in $KBUILD is not configured])
     fi
     OVS_CHECK_LINUX_COMPAT
   fi
@@ -490,7 +490,7 @@ AC_DEFUN([OVS_CHECK_MAKE_IF],
      [ovs_cv_gnu_make_if],
      [cat <<'EOF' > conftest.mk
 conftest.out:
-	echo $(if x,y,z) > conftest.out
+        echo $(if x,y,z) > conftest.out
 .PHONY: all
 EOF
       rm -f conftest.out
@@ -592,25 +592,25 @@ AC_DEFUN([OVS_CHECK_PTHREAD_SET_NAME],
        [for pthread_setname_np() variant],
        [ovs_cv_pthread_setname_np],
        [AC_LINK_IFELSE(
-	 [AC_LANG_PROGRAM([#include <pthread.h>
+         [AC_LANG_PROGRAM([#include <pthread.h>
   ], [pthread_setname_np(pthread_self(), "name");])],
-	 [ovs_cv_pthread_setname_np=glibc],
+         [ovs_cv_pthread_setname_np=glibc],
          [AC_LINK_IFELSE(
-	   [AC_LANG_PROGRAM([#include <pthread.h>
+           [AC_LANG_PROGRAM([#include <pthread.h>
 ], [pthread_setname_np(pthread_self(), "%s", "name");])],
            [ovs_cv_pthread_setname_np=netbsd],
-	   [ovs_cv_pthread_setname_np=none])])])
+           [ovs_cv_pthread_setname_np=none])])])
      case $ovs_cv_pthread_setname_np in # (
        glibc)
-	  AC_DEFINE(
-	    [HAVE_GLIBC_PTHREAD_SETNAME_NP], [1],
-	    [Define to 1 if pthread_setname_np() is available and takes 2 parameters (like glibc).])
-	  ;; # (
+          AC_DEFINE(
+            [HAVE_GLIBC_PTHREAD_SETNAME_NP], [1],
+            [Define to 1 if pthread_setname_np() is available and takes 2 parameters (like glibc).])
+          ;; # (
        netbsd)
-	  AC_DEFINE(
-	    [HAVE_NETBSD_PTHREAD_SETNAME_NP], [1],
-	    [Define to 1 if pthread_setname_np() is available and takes 3 parameters (like NetBSD).])
-	  ;;
+          AC_DEFINE(
+            [HAVE_NETBSD_PTHREAD_SETNAME_NP], [1],
+            [Define to 1 if pthread_setname_np() is available and takes 3 parameters (like NetBSD).])
+          ;;
      esac
    fi])
 
