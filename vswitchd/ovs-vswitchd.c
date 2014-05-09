@@ -147,7 +147,6 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
         OPT_BOOTSTRAP_CA_CERT,
         OPT_ENABLE_DUMMY,
         OPT_DISABLE_SYSTEM,
-        OPT_ENABLE_OF14,
         DAEMON_OPTION_ENUMS,
         OPT_DPDK,
     };
@@ -163,7 +162,6 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
         {"bootstrap-ca-cert", required_argument, NULL, OPT_BOOTSTRAP_CA_CERT},
         {"enable-dummy", optional_argument, NULL, OPT_ENABLE_DUMMY},
         {"disable-system", no_argument, NULL, OPT_DISABLE_SYSTEM},
-        {"enable-of14", no_argument, NULL, OPT_ENABLE_OF14},
         {"dpdk", required_argument, NULL, OPT_DPDK},
         {NULL, 0, NULL, 0},
     };
@@ -213,10 +211,6 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
             dp_blacklist_provider("system");
             break;
 
-        case OPT_ENABLE_OF14:
-            bridge_enable_of14();
-            break;
-
         case '?':
             exit(EXIT_FAILURE);
 
@@ -258,7 +252,6 @@ usage(void)
     vlog_usage();
     printf("\nOther options:\n"
            "  --unixctl=SOCKET        override default control socket name\n"
-           "  --enable-of14           allow enabling OF1.4 (unsafely!)\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n");
     exit(EXIT_SUCCESS);

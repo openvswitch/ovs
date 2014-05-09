@@ -21,8 +21,6 @@ struct simap;
 void bridge_init(const char *remote);
 void bridge_exit(void);
 
-void bridge_enable_of14(void);
-
 void bridge_run(void);
 void bridge_wait(void);
 

@@ -83,16 +83,6 @@ only allow privileged users, such as the superuser, to use it.
 \fBovs\-vswitchd\fR emits a log message if \fBmlockall()\fR is
 unavailable or unsuccessful.
 .
-.IP "\fB\-\-enable\-of14\fR"
-Specifying this option allows OpenFlow 1.4 to be used if it is enabled
-through the \fBprotocols\fR column in the \fBController\fR.  Without
-this option, \fBovs\-vswitchd\fR will not use OpenFlow 1.4 even if it
-is enabled that way.  This option is present because OpenFlow 1.4
-support is not safe: the daemon will abort when certain unimplemented
-features are tested.  Thus, for now it is suitable only for
-experimental use.  When the support is implemented safely, this option
-will be removed.
-.
 .SS "Daemon Options"
 .ds DD \
 \fBovs\-vswitchd\fR detaches only after it has connected to the \

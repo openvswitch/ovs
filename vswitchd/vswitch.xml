@@ -588,14 +588,8 @@
 	</p>
 
 	<p>
-	  The current implementation of OpenFlow 1.4 support is not safe:
-	  <code>ovs-vswitchd</code> will abort when certain unimplemented
-	  features are tested.  Thus, for now it is suitable only for
-	  experimental use.  For this reason, OpenFlow 1.4 is supported only
-	  if, in addition to specifying <code>OpenFlow14</code> in this field,
-	  <code>ovs-vswitchd</code> is invoked with the
-	  <code>--enable-of14</code> option.  (When support becomes safe, this
-	  option will be removed.)
+	  OpenFlow 1.4 is not enabled by default because its implementation is
+	  missing features.
 	</p>
       </column>
     </group>
