@@ -379,8 +379,6 @@ void
 udpif_set_threads(struct udpif *udpif, size_t n_handlers,
                   size_t n_revalidators)
 {
-    int error;
-
     ovs_assert(udpif);
     ovs_assert(n_handlers && n_revalidators);
 
@@ -390,14 +388,16 @@ udpif_set_threads(struct udpif *udpif, size_t n_handlers,
         udpif_stop_threads(udpif);
     }
 
-    error = dpif_handlers_set(udpif->dpif, n_handlers);
-    if (error) {
-        VLOG_ERR("failed to configure handlers in dpif %s: %s",
-                 dpif_name(udpif->dpif), ovs_strerror(error));
-        return;
-    }
-
     if (!udpif->handlers && !udpif->revalidators) {
+        int error;
+
+        error = dpif_handlers_set(udpif->dpif, n_handlers);
+        if (error) {
+            VLOG_ERR("failed to configure handlers in dpif %s: %s",
+                     dpif_name(udpif->dpif), ovs_strerror(error));
+            return;
+        }
+
         udpif_start_threads(udpif, n_handlers, n_revalidators);
     }
     ovsrcu_quiesce_end();
