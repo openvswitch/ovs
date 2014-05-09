@@ -423,6 +423,38 @@ done
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto - mod-port (OpenFlow 1.4)])
+OVS_VSWITCHD_START
+for command_config_state in \
+    'up 0 0' \
+    'down PORT_DOWN LINK_DOWN' \
+    'no-receive PORT_DOWN,NO_RECV LINK_DOWN' \
+    'no-forward PORT_DOWN,NO_RECV,NO_FWD LINK_DOWN' \
+    'no-packet-in PORT_DOWN,NO_RECV,NO_FWD,NO_PACKET_IN LINK_DOWN' \
+    'forward PORT_DOWN,NO_RECV,NO_PACKET_IN LINK_DOWN' \
+    'packet-in PORT_DOWN,NO_RECV LINK_DOWN' \
+    'up NO_RECV 0' \
+    'receive 0 0'
+do
+    set $command_config_state
+    command=$[1] config=`echo $[2] | sed 's/,/ /g'` state=$[3]
+    AT_CHECK([ovs-ofctl -O OpenFlow14 -vwarn mod-port br0 br0 $command])
+    AT_CHECK([ovs-ofctl -O OpenFlow14 -vwarn show br0], [0], [stdout])
+    AT_CHECK_UNQUOTED([STRIP_XIDS stdout], [0], [dnl
+OFPT_FEATURES_REPLY (OF1.4): dpid:fedcba9876543210
+n_tables:254, n_buffers:256
+capabilities: FLOW_STATS TABLE_STATS PORT_STATS QUEUE_STATS
+OFPST_PORT_DESC reply (OF1.4):
+ LOCAL(br0): addr:aa:55:aa:55:00:00
+     config:     $config
+     state:      $state
+     speed: 0 Mbps now, 0 Mbps max
+OFPT_GET_CONFIG_REPLY (OF1.4): frags=normal miss_send_len=0
+])
+done
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto - basic flow_mod commands (NXM)])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip], [0], [NXST_FLOW reply:

@@ -184,8 +184,10 @@ enum ofpraw {
 
     /* OFPT 1.0 (15): struct ofp10_port_mod. */
     OFPRAW_OFPT10_PORT_MOD,
-    /* OFPT 1.1+ (16): struct ofp11_port_mod. */
+    /* OFPT 1.1-1.3 (16): struct ofp11_port_mod. */
     OFPRAW_OFPT11_PORT_MOD,
+    /* OFPT 1.4+ (16): struct ofp14_port_mod, uint8_t[8][]. */
+    OFPRAW_OFPT14_PORT_MOD,
 
     /* OFPT 1.1+ (17): struct ofp11_table_mod. */
     OFPRAW_OFPT11_TABLE_MOD,
@@ -486,7 +488,8 @@ enum ofptype {
                                   * OFPRAW_NXT_FLOW_MOD. */
     OFPTYPE_GROUP_MOD,           /* OFPRAW_OFPT11_GROUP_MOD. */
     OFPTYPE_PORT_MOD,            /* OFPRAW_OFPT10_PORT_MOD.
-                                  * OFPRAW_OFPT11_PORT_MOD. */
+                                  * OFPRAW_OFPT11_PORT_MOD.
+                                  * OFPRAW_OFPT14_PORT_MOD. */
     OFPTYPE_TABLE_MOD,           /* OFPRAW_OFPT11_TABLE_MOD. */
 
     /* Barrier messages. */

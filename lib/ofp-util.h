@@ -594,7 +594,7 @@ struct ofputil_port_mod {
 };
 
 enum ofperr ofputil_decode_port_mod(const struct ofp_header *,
-                                    struct ofputil_port_mod *);
+                                    struct ofputil_port_mod *, bool loose);
 struct ofpbuf *ofputil_encode_port_mod(const struct ofputil_port_mod *,
                                        enum ofputil_protocol);
 

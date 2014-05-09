@@ -970,7 +970,7 @@ ofp_print_port_mod(struct ds *string, const struct ofp_header *oh)
     struct ofputil_port_mod pm;
     enum ofperr error;
 
-    error = ofputil_decode_port_mod(oh, &pm);
+    error = ofputil_decode_port_mod(oh, &pm, true);
     if (error) {
         ofp_print_error(string, error);
         return;

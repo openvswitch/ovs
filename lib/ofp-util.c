@@ -3989,10 +3989,8 @@ ofputil_capabilities_mask(enum ofp_version ofp_version)
         return OFPC_COMMON | OFPC_ARP_MATCH_IP;
     case OFP12_VERSION:
     case OFP13_VERSION:
-        return OFPC_COMMON | OFPC12_PORT_BLOCKED;
     case OFP14_VERSION:
-        OVS_NOT_REACHED();
-        break;
+        return OFPC_COMMON | OFPC12_PORT_BLOCKED;
     default:
         /* Caller needs to check osf->header.version itself */
         return 0;
@@ -4253,11 +4251,25 @@ ofputil_encode_port_status(const struct ofputil_port_status *ps,
 
 /* ofputil_port_mod */
 
+static enum ofperr
+parse_port_mod_ethernet_property(struct ofpbuf *property,
+                                 struct ofputil_port_mod *pm)
+{
+    struct ofp14_port_mod_prop_ethernet *eth = ofpbuf_data(property);
+
+    if (ofpbuf_size(property) != sizeof *eth) {
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+
+    pm->advertise = netdev_port_features_from_ofp11(eth->advertise);
+    return 0;
+}
+
 /* Decodes the OpenFlow "port mod" message in '*oh' into an abstract form in
  * '*pm'.  Returns 0 if successful, otherwise an OFPERR_* value. */
 enum ofperr
 ofputil_decode_port_mod(const struct ofp_header *oh,
-                        struct ofputil_port_mod *pm)
+                        struct ofputil_port_mod *pm, bool loose)
 {
     enum ofpraw raw;
     struct ofpbuf b;
@@ -4286,6 +4298,52 @@ ofputil_decode_port_mod(const struct ofp_header *oh,
         pm->config = ntohl(opm->config) & OFPPC11_ALL;
         pm->mask = ntohl(opm->mask) & OFPPC11_ALL;
         pm->advertise = netdev_port_features_from_ofp11(opm->advertise);
+    } else if (raw == OFPRAW_OFPT14_PORT_MOD) {
+        const struct ofp14_port_mod *opm = ofpbuf_pull(&b, sizeof *opm);
+        enum ofperr error;
+
+        memset(pm, 0, sizeof *pm);
+
+        error = ofputil_port_from_ofp11(opm->port_no, &pm->port_no);
+        if (error) {
+            return error;
+        }
+
+        memcpy(pm->hw_addr, opm->hw_addr, ETH_ADDR_LEN);
+        pm->config = ntohl(opm->config) & OFPPC11_ALL;
+        pm->mask = ntohl(opm->mask) & OFPPC11_ALL;
+
+        while (ofpbuf_size(&b) > 0) {
+            struct ofpbuf property;
+            enum ofperr error;
+            uint16_t type;
+
+            error = ofputil_pull_property(&b, &property, &type);
+            if (error) {
+                return error;
+            }
+
+            switch (type) {
+            case OFPPMPT14_ETHERNET:
+                error = parse_port_mod_ethernet_property(&property, pm);
+                break;
+
+            default:
+                log_property(loose, "unknown port_mod property %"PRIu16, type);
+                if (loose) {
+                    error = 0;
+                } else if (type == OFPPMPT14_EXPERIMENTER) {
+                    error = OFPERR_OFPBPC_BAD_EXPERIMENTER;
+                } else {
+                    error = OFPERR_OFPBRC_BAD_TYPE;
+                }
+                break;
+            }
+
+            if (error) {
+                return error;
+            }
+        }
     } else {
         return OFPERR_OFPBRC_BAD_TYPE;
     }
@@ -4332,9 +4390,25 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
         opm->advertise = netdev_port_features_to_ofp11(pm->advertise);
         break;
     }
-    case OFP14_VERSION:
-        OVS_NOT_REACHED();
+    case OFP14_VERSION: {
+        struct ofp14_port_mod_prop_ethernet *eth;
+        struct ofp14_port_mod *opm;
+
+        b = ofpraw_alloc(OFPRAW_OFPT14_PORT_MOD, ofp_version, sizeof *eth);
+        opm = ofpbuf_put_zeros(b, sizeof *opm);
+        opm->port_no = ofputil_port_to_ofp11(pm->port_no);
+        memcpy(opm->hw_addr, pm->hw_addr, ETH_ADDR_LEN);
+        opm->config = htonl(pm->config & OFPPC11_ALL);
+        opm->mask = htonl(pm->mask & OFPPC11_ALL);
+
+        if (pm->advertise) {
+            eth = ofpbuf_put_zeros(b, sizeof *eth);
+            eth->type = htons(OFPPMPT14_ETHERNET);
+            eth->length = htons(sizeof *eth);
+            eth->advertise = netdev_port_features_to_ofp11(pm->advertise);
+        }
         break;
+    }
     default:
         OVS_NOT_REACHED();
     }

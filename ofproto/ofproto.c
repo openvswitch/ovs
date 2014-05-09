@@ -3038,7 +3038,7 @@ handle_port_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         return error;
     }
 
-    error = ofputil_decode_port_mod(oh, &pm);
+    error = ofputil_decode_port_mod(oh, &pm, false);
     if (error) {
         return error;
     }

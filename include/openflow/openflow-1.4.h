@@ -38,9 +38,11 @@
 #define OPENFLOW_14_H 1
 
 #include "openflow/openflow-1.3.h"
-/*
- * OpenFlow 1.4 is more extensible by using TLV structures
- */
+
+
+/* ## ---------- ## */
+/* ## ofp14_port ## */
+/* ## ---------- ## */
 
 /* Port description property types. */
 enum ofp_port_desc_prop_type {
@@ -80,6 +82,42 @@ struct ofp14_port {
     /* Followed by 0 or more OFPPDPT14_* properties. */
 };
 OFP_ASSERT(sizeof(struct ofp14_port) == 40);
+
+
+/* ## -------------- ## */
+/* ## ofp14_port_mod ## */
+/* ## -------------- ## */
+
+enum ofp14_port_mod_prop_type {
+    OFPPMPT14_ETHERNET          = 0,      /* Ethernet property. */
+    OFPPMPT14_OPTICAL           = 1,      /* Optical property. */
+    OFPPMPT14_EXPERIMENTER      = 0xFFFF, /* Experimenter property. */
+};
+
+/* Ethernet port mod property. */
+struct ofp14_port_mod_prop_ethernet {
+    ovs_be16      type;       /* OFPPMPT14_ETHERNET. */
+    ovs_be16      length;     /* Length in bytes of this property. */
+    ovs_be32      advertise;  /* Bitmap of OFPPF_*.  Zero all bits to prevent
+                                 any action taking place. */
+};
+OFP_ASSERT(sizeof(struct ofp14_port_mod_prop_ethernet) == 8);
+
+struct ofp14_port_mod {
+    ovs_be32 port_no;
+    uint8_t pad[4];
+    uint8_t hw_addr[OFP_ETH_ALEN];
+    uint8_t pad2[2];
+    ovs_be32 config;        /* Bitmap of OFPPC_* flags. */
+    ovs_be32 mask;          /* Bitmap of OFPPC_* flags to be changed. */
+    /* Followed by 0 or more OFPPMPT14_* properties. */
+};
+OFP_ASSERT(sizeof(struct ofp14_port_mod) == 24);
+
+
+/* ## -------------- ## */
+/* ## Miscellaneous. ## */
+/* ## -------------- ## */
 
 /* Common header for all async config Properties */
 struct ofp14_async_config_prop_header {
