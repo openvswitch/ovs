@@ -3808,22 +3808,6 @@ ofputil_pull_ofp14_port(struct ofputil_phy_port *pp, struct ofpbuf *msg)
     return 0;
 }
 
-static size_t
-ofputil_get_phy_port_size(enum ofp_version ofp_version)
-{
-    switch (ofp_version) {
-    case OFP10_VERSION:
-        return sizeof(struct ofp10_phy_port);
-    case OFP11_VERSION:
-    case OFP12_VERSION:
-    case OFP13_VERSION:
-    case OFP14_VERSION:
-        return sizeof(struct ofp11_port);
-    default:
-        OVS_NOT_REACHED();
-    }
-}
-
 static void
 ofputil_encode_ofp10_phy_port(const struct ofputil_phy_port *pp,
                               struct ofp10_phy_port *opp)
@@ -4043,14 +4027,6 @@ ofputil_decode_switch_features(const struct ofp_header *oh,
     return 0;
 }
 
-/* Returns true if the maximum number of ports are in 'oh'. */
-static bool
-max_ports_in_features(const struct ofp_header *oh)
-{
-    size_t pp_size = ofputil_get_phy_port_size(oh->version);
-    return ntohs(oh->length) + pp_size > UINT16_MAX;
-}
-
 /* In OpenFlow 1.0, 1.1, and 1.2, an OFPT_FEATURES_REPLY message lists all the
  * switch's ports, unless there are too many to fit.  In OpenFlow 1.3 and
  * later, an OFPT_FEATURES_REPLY does not list ports at all.
@@ -4067,16 +4043,28 @@ bool
 ofputil_switch_features_has_ports(struct ofpbuf *b)
 {
     struct ofp_header *oh = ofpbuf_data(b);
+    size_t phy_port_size;
 
     if (oh->version >= OFP13_VERSION) {
+        /* OpenFlow 1.3+ never has ports in the feature reply. */
         return false;
-    } else if (max_ports_in_features(oh)) {
-        ofpbuf_set_size(b, sizeof *oh + sizeof(struct ofp_switch_features));
-        ofpmsg_update_length(b);
-        return false;
-    } else {
+    }
+
+    phy_port_size = (oh->version == OFP10_VERSION
+                     ? sizeof(struct ofp10_phy_port)
+                     : sizeof(struct ofp11_port));
+    if (ntohs(oh->length) + phy_port_size <= UINT16_MAX) {
+        /* There's room for additional ports in the feature reply.
+         * Assume that the list is complete. */
         return true;
     }
+
+    /* The feature reply has no room for more ports.  Probably the list is
+     * truncated.  Drop the ports and tell the caller to retrieve them with
+     * OFPST_PORT_DESC. */
+    ofpbuf_set_size(b, sizeof *oh + sizeof(struct ofp_switch_features));
+    ofpmsg_update_length(b);
+    return false;
 }
 
 static ovs_be32
