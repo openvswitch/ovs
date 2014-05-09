@@ -1455,7 +1455,7 @@ dpif_netdev_flow_dump_next(const struct dpif *dpif, void *iter_, void *state_,
 
         ofpbuf_use_stack(&buf, &state->keybuf, sizeof state->keybuf);
         odp_flow_key_from_flow(&buf, &netdev_flow->flow, &wc.masks,
-                               netdev_flow->flow.in_port.odp_port);
+                               netdev_flow->flow.in_port.odp_port, true);
 
         *key = ofpbuf_data(&buf);
         *key_len = ofpbuf_size(&buf);
@@ -1467,7 +1467,7 @@ dpif_netdev_flow_dump_next(const struct dpif *dpif, void *iter_, void *state_,
         ofpbuf_use_stack(&buf, &state->maskbuf, sizeof state->maskbuf);
         odp_flow_key_from_mask(&buf, &wc.masks, &netdev_flow->flow,
                                odp_to_u32(wc.masks.in_port.odp_port),
-                               SIZE_MAX);
+                               SIZE_MAX, true);
 
         *mask = ofpbuf_data(&buf);
         *mask_len = ofpbuf_size(&buf);
@@ -2063,7 +2063,7 @@ dp_netdev_output_userspace(struct dp_netdev *dp, struct ofpbuf *packet,
 
         /* Put ODP flow. */
         miniflow_expand(key, &flow);
-        odp_flow_key_from_flow(buf, &flow, NULL, flow.in_port.odp_port);
+        odp_flow_key_from_flow(buf, &flow, NULL, flow.in_port.odp_port, true);
         upcall->key = ofpbuf_data(buf);
         upcall->key_len = ofpbuf_size(buf);
 

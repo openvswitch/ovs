@@ -77,7 +77,7 @@ parse_keys(bool wc_keys)
             ofpbuf_uninit(&odp_key);
             ofpbuf_init(&odp_key, 0);
             odp_flow_key_from_flow(&odp_key, &flow, NULL,
-                                   flow.in_port.odp_port);
+                                   flow.in_port.odp_port, true);
 
             if (ofpbuf_size(&odp_key) > ODPUTIL_FLOW_KEY_BYTES) {
                 printf ("too long: %"PRIu32" > %d\n",

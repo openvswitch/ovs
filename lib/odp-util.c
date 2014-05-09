@@ -2483,7 +2483,7 @@ ovs_to_odp_frag_mask(uint8_t nw_frag_mask)
 static void
 odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *flow,
                          const struct flow *mask, odp_port_t odp_in_port,
-                         size_t max_mpls_depth, bool export_mask)
+                         size_t max_mpls_depth, bool recirc, bool export_mask)
 {
     struct ovs_key_ethernet *eth_key;
     size_t encap;
@@ -2497,11 +2497,8 @@ odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *flow,
 
     nl_msg_put_u32(buf, OVS_KEY_ATTR_SKB_MARK, data->pkt_mark);
 
-    if (data->recirc_id || (mask && mask->recirc_id)) {
+    if (recirc) {
         nl_msg_put_u32(buf, OVS_KEY_ATTR_RECIRC_ID, data->recirc_id);
-    }
-
-    if (data->dp_hash || (mask && mask->dp_hash)) {
         nl_msg_put_u32(buf, OVS_KEY_ATTR_DP_HASH, data->dp_hash);
     }
 
@@ -2674,12 +2671,17 @@ unencap:
  * port.
  *
  * 'buf' must have at least ODPUTIL_FLOW_KEY_BYTES bytes of space, or be
- * capable of being expanded to allow for that much space. */
+ * capable of being expanded to allow for that much space.
+ *
+ * 'recirc' indicates support for recirculation fields. If this is true, then
+ * these fields will always be serialised. */
 void
 odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow,
-                       const struct flow *mask, odp_port_t odp_in_port)
+                       const struct flow *mask, odp_port_t odp_in_port,
+                       bool recirc)
 {
-    odp_flow_key_from_flow__(buf, flow, mask, odp_in_port, SIZE_MAX, false);
+    odp_flow_key_from_flow__(buf, flow, mask, odp_in_port, SIZE_MAX, recirc,
+                             false);
 }
 
 /* Appends a representation of 'mask' as OVS_KEY_ATTR_* attributes to
@@ -2689,14 +2691,17 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow,
  * ARP, IPv4, IPv6, etc.
  *
  * 'buf' must have at least ODPUTIL_FLOW_KEY_BYTES bytes of space, or be
- * capable of being expanded to allow for that much space. */
+ * capable of being expanded to allow for that much space.
+ *
+ * 'recirc' indicates support for recirculation fields. If this is true, then
+ * these fields will always be serialised. */
 void
 odp_flow_key_from_mask(struct ofpbuf *buf, const struct flow *mask,
                        const struct flow *flow, uint32_t odp_in_port_mask,
-                       size_t max_mpls_depth)
+                       size_t max_mpls_depth, bool recirc)
 {
-    odp_flow_key_from_flow__(buf, flow, mask,
-                             u32_to_odp(odp_in_port_mask), max_mpls_depth, true);
+    odp_flow_key_from_flow__(buf, flow, mask, u32_to_odp(odp_in_port_mask),
+                             max_mpls_depth, recirc, true);
 }
 
 /* Generate ODP flow key from the given packet metadata */
