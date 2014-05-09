@@ -1067,6 +1067,15 @@ OFPT_TABLE_MOD (OF1.3) (xid=0x2): table_id=2, flow_miss_config=controller
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPT_TABLE_MOD - OF1.4])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 11 00 10 00 00 00 02 02 00 00 00 00 00 00 00 \
+" 3], [0], [dnl
+OFPT_TABLE_MOD (OF1.4) (xid=0x2): table_id=2, flow_miss_config=controller
+])
+AT_CLEANUP
+
 AT_SETUP([OFPST_DESC request])
 AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
 AT_CHECK([ovs-ofctl ofp-print "0110000c0000000100000000"], [0], [dnl

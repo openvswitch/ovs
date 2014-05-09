@@ -4747,6 +4747,13 @@ ofputil_decode_table_mod(const struct ofp_header *oh,
 
         pm->table_id = otm->table_id;
         pm->config = ntohl(otm->config);
+    } else if (raw == OFPRAW_OFPT14_TABLE_MOD) {
+        const struct ofp14_table_mod *otm = ofpbuf_pull(&b, sizeof *otm);
+
+        pm->table_id = otm->table_id;
+        pm->config = ntohl(otm->config);
+        /* We do not understand any properties yet, so we do not bother
+         * parsing them. */
     } else {
         return OFPERR_OFPBRC_BAD_TYPE;
     }
@@ -4781,9 +4788,15 @@ ofputil_encode_table_mod(const struct ofputil_table_mod *pm,
         otm->config = htonl(pm->config);
         break;
     }
-    case OFP14_VERSION:
-        OVS_NOT_REACHED();
+    case OFP14_VERSION: {
+        struct ofp14_table_mod *otm;
+
+        b = ofpraw_alloc(OFPRAW_OFPT14_TABLE_MOD, ofp_version, 0);
+        otm = ofpbuf_put_zeros(b, sizeof *otm);
+        otm->table_id = pm->table_id;
+        otm->config = htonl(pm->config);
         break;
+    }
     default:
         OVS_NOT_REACHED();
     }

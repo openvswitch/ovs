@@ -114,6 +114,47 @@ struct ofp14_port_mod {
 };
 OFP_ASSERT(sizeof(struct ofp14_port_mod) == 24);
 
+/* ## --------------- ## */
+/* ## ofp14_table_mod ## */
+/* ## --------------- ## */
+
+enum ofp14_table_mod_prop_type {
+    OFPTMPT14_EVICTION               = 0x2,    /* Eviction property. */
+    OFPTMPT14_VACANCY                = 0x3,    /* Vacancy property. */
+    OFPTMPT14_EXPERIMENTER           = 0xFFFF, /* Experimenter property. */
+};
+
+enum ofp14_table_mod_prop_eviction_flag {
+    OFPTMPEF14_OTHER           = 1 << 0,     /* Using other factors. */
+    OFPTMPEF14_IMPORTANCE      = 1 << 1,     /* Using flow entry importance. */
+    OFPTMPEF14_LIFETIME        = 1 << 2,     /* Using flow entry lifetime. */
+};
+
+struct ofp14_table_mod_prop_eviction {
+    ovs_be16         type;    /* OFPTMPT14_EVICTION. */
+    ovs_be16         length;  /* Length in bytes of this property. */
+    ovs_be32         flags;   /* Bitmap of OFPTMPEF14_* flags */
+};
+OFP_ASSERT(sizeof(struct ofp14_table_mod_prop_eviction) == 8);
+
+struct ofp14_table_mod_prop_vacancy {
+    ovs_be16         type;   /* OFPTMPT14_VACANCY. */
+    ovs_be16         length; /* Length in bytes of this property. */
+    uint8_t vacancy_down;    /* Vacancy threshold when space decreases (%). */
+    uint8_t vacancy_up;      /* Vacancy threshold when space increases (%). */
+    uint8_t vacancy;      /* Current vacancy (%) - only in ofp14_table_desc. */
+    uint8_t pad[1];          /* Align to 64 bits. */
+};
+OFP_ASSERT(sizeof(struct ofp14_table_mod_prop_vacancy) == 8);
+
+struct ofp14_table_mod {
+    uint8_t table_id;     /* ID of the table, OFPTT_ALL indicates all tables */
+    uint8_t pad[3];         /* Pad to 32 bits */
+    ovs_be32 config;        /* Bitmap of OFPTC_* flags */
+    /* Followed by 0 or more OFPTMPT14_* properties. */
+};
+OFP_ASSERT(sizeof(struct ofp14_table_mod) == 8);
+
 
 /* ## -------------- ## */
 /* ## Miscellaneous. ## */
