@@ -101,6 +101,19 @@ OFPST_PORT reply (OF1.2): 1 ports
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto - port stats - (OpenFlow 1.4)])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl -O OpenFlow14 -vwarn dump-ports br0], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout | sed 's/duration=[[0-9.]]*s/duration=?s/'],
+  [0], [dnl
+OFPST_PORT reply (OF1.4): 1 ports
+  port LOCAL: rx pkts=0, bytes=0, drop=0, errs=0, frame=0, over=0, crc=0
+           tx pkts=0, bytes=0, drop=0, errs=0, coll=0
+           duration=?s
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 dnl This is really bare-bones.
 dnl It at least checks request and reply serialization and deserialization.
 AT_SETUP([ofproto - port-desc stats (OpenFlow 1.0)])

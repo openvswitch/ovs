@@ -1616,6 +1616,26 @@ OFPST_PORT reply (OF1.3) (xid=0x2): 3 ports
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPST_PORT reply - OF1.4])
+AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 13 00 88 00 00 00 02 00 04 00 00 00 00 00 00 \
+00 78 00 00 00 00 00 02 00 00 00 01 00 0f 42 40 \
+00 00 00 00 00 01 95 56 00 00 00 00 00 00 00 88 \
+00 00 00 00 02 5d 08 98 00 00 00 00 00 00 2c f8 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 28 00 00 00 00 00 00 00 00 00 00 00 fc \
+00 00 00 00 00 00 00 fd 00 00 00 00 00 00 00 fe \
+00 00 00 00 00 00 00 ff \
+"], [0], [dnl
+OFPST_PORT reply (OF1.4) (xid=0x2): 1 ports
+  port  2: rx pkts=103766, bytes=39651480, drop=0, errs=0, frame=252, over=253, crc=254
+           tx pkts=136, bytes=11512, drop=0, errs=0, coll=255
+           duration=1.001s
+])
+AT_CLEANUP
+
 AT_SETUP([OFPST_QUEUE request - OF1.0])
 AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
 AT_CHECK([ovs-ofctl ofp-print "\

@@ -156,6 +156,55 @@ struct ofp14_table_mod {
 OFP_ASSERT(sizeof(struct ofp14_table_mod) == 8);
 
 
+/* ## ---------------- ## */
+/* ## ofp14_port_stats ## */
+/* ## ---------------- ## */
+
+enum ofp14_port_stats_prop_type {
+    OFPPSPT14_ETHERNET          = 0,      /* Ethernet property. */
+    OFPPSPT14_OPTICAL           = 1,      /* Optical property. */
+    OFPPSPT14_EXPERIMENTER      = 0xFFFF, /* Experimenter property. */
+};
+
+struct ofp14_port_stats_prop_ethernet {
+    ovs_be16         type;    /* OFPPSPT14_ETHERNET. */
+    ovs_be16         length;  /* Length in bytes of this property. */
+    uint8_t          pad[4];  /* Align to 64 bits. */
+
+    ovs_be64 rx_frame_err;   /* Number of frame alignment errors. */
+    ovs_be64 rx_over_err;    /* Number of packets with RX overrun. */
+    ovs_be64 rx_crc_err;     /* Number of CRC errors. */
+    ovs_be64 collisions;     /* Number of collisions. */
+};
+OFP_ASSERT(sizeof(struct ofp14_port_stats_prop_ethernet) == 40);
+
+struct ofp14_port_stats {
+    ovs_be16 length;         /* Length of this entry. */
+    uint8_t pad[2];          /* Align to 64 bits. */
+    ovs_be32 port_no;
+    ovs_be32 duration_sec;   /* Time port has been alive in seconds. */
+    ovs_be32 duration_nsec;  /* Time port has been alive in nanoseconds beyond
+                                duration_sec. */
+    ovs_be64 rx_packets;     /* Number of received packets. */
+    ovs_be64 tx_packets;     /* Number of transmitted packets. */
+    ovs_be64 rx_bytes;       /* Number of received bytes. */
+    ovs_be64 tx_bytes;       /* Number of transmitted bytes. */
+
+    ovs_be64 rx_dropped;     /* Number of packets dropped by RX. */
+    ovs_be64 tx_dropped;     /* Number of packets dropped by TX. */
+    ovs_be64 rx_errors;      /* Number of receive errors.  This is a super-set
+                                of more specific receive errors and should be
+                                greater than or equal to the sum of all
+                                rx_*_err values in properties. */
+    ovs_be64 tx_errors;      /* Number of transmit errors.  This is a super-set
+                                of more specific transmit errors and should be
+                                greater than or equal to the sum of all
+                                tx_*_err values (none currently defined.) */
+    /* Followed by 0 or more OFPPSPT14_* properties. */
+};
+OFP_ASSERT(sizeof(struct ofp14_port_stats) == 80);
+
+
 /* ## -------------- ## */
 /* ## Miscellaneous. ## */
 /* ## -------------- ## */

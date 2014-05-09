@@ -6162,6 +6162,40 @@ ofputil_port_stats_to_ofp13(const struct ofputil_port_stats *ops,
     ps13->duration_nsec = htonl(ops->duration_nsec);
 }
 
+static void
+ofputil_append_ofp14_port_stats(const struct ofputil_port_stats *ops,
+                                struct list *replies)
+{
+    struct ofp14_port_stats_prop_ethernet *eth;
+    struct ofp14_port_stats *ps14;
+    struct ofpbuf *reply;
+
+    reply = ofpmp_reserve(replies, sizeof *ps14 + sizeof *eth);
+
+    ps14 = ofpbuf_put_uninit(reply, sizeof *ps14);
+    ps14->length = htons(sizeof *ps14 + sizeof *eth);
+    memset(ps14->pad, 0, sizeof ps14->pad);
+    ps14->port_no = ofputil_port_to_ofp11(ops->port_no);
+    ps14->duration_sec = htonl(ops->duration_sec);
+    ps14->duration_nsec = htonl(ops->duration_nsec);
+    ps14->rx_packets = htonll(ops->stats.rx_packets);
+    ps14->tx_packets = htonll(ops->stats.tx_packets);
+    ps14->rx_bytes = htonll(ops->stats.rx_bytes);
+    ps14->tx_bytes = htonll(ops->stats.tx_bytes);
+    ps14->rx_dropped = htonll(ops->stats.rx_dropped);
+    ps14->tx_dropped = htonll(ops->stats.tx_dropped);
+    ps14->rx_errors = htonll(ops->stats.rx_errors);
+    ps14->tx_errors = htonll(ops->stats.tx_errors);
+
+    eth = ofpbuf_put_uninit(reply, sizeof *eth);
+    eth->type = htons(OFPPSPT14_ETHERNET);
+    eth->length = htons(sizeof *eth);
+    memset(eth->pad, 0, sizeof eth->pad);
+    eth->rx_frame_err = htonll(ops->stats.rx_frame_errors);
+    eth->rx_over_err = htonll(ops->stats.rx_over_errors);
+    eth->rx_crc_err = htonll(ops->stats.rx_crc_errors);
+    eth->collisions = htonll(ops->stats.collisions);
+}
 
 /* Encode a ports stat for 'ops' and append it to 'replies'. */
 void
@@ -6188,7 +6222,7 @@ ofputil_append_port_stat(struct list *replies,
     }
 
     case OFP14_VERSION:
-        OVS_NOT_REACHED();
+        ofputil_append_ofp14_port_stats(ops, replies);
         break;
 
     default:
@@ -6262,23 +6296,92 @@ ofputil_port_stats_from_ofp13(struct ofputil_port_stats *ops,
     return error;
 }
 
-static size_t
-ofputil_get_port_stats_size(enum ofp_version ofp_version)
+static enum ofperr
+parse_ofp14_port_stats_ethernet_property(const struct ofpbuf *payload,
+                                         struct ofputil_port_stats *ops)
 {
-    switch (ofp_version) {
-    case OFP10_VERSION:
-        return sizeof(struct ofp10_port_stats);
-    case OFP11_VERSION:
-    case OFP12_VERSION:
-        return sizeof(struct ofp11_port_stats);
-    case OFP13_VERSION:
-        return sizeof(struct ofp13_port_stats);
-    case OFP14_VERSION:
-        OVS_NOT_REACHED();
-        return 0;
-    default:
-        OVS_NOT_REACHED();
+    const struct ofp14_port_stats_prop_ethernet *eth = ofpbuf_data(payload);
+
+    if (ofpbuf_size(payload) != sizeof *eth) {
+        return OFPERR_OFPBPC_BAD_LEN;
     }
+
+    ops->stats.rx_frame_errors = ntohll(eth->rx_frame_err);
+    ops->stats.rx_over_errors = ntohll(eth->rx_over_err);
+    ops->stats.rx_crc_errors = ntohll(eth->rx_crc_err);
+    ops->stats.collisions = ntohll(eth->collisions);
+
+    return 0;
+}
+
+static enum ofperr
+ofputil_pull_ofp14_port_stats(struct ofputil_port_stats *ops,
+                              struct ofpbuf *msg)
+{
+    const struct ofp14_port_stats *ps14;
+    struct ofpbuf properties;
+    enum ofperr error;
+    size_t len;
+
+    ps14 = ofpbuf_try_pull(msg, sizeof *ps14);
+    if (!ps14) {
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+
+    len = ntohs(ps14->length);
+    if (len < sizeof *ps14 || len - sizeof *ps14 > ofpbuf_size(msg)) {
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+    len -= sizeof *ps14;
+    ofpbuf_use_const(&properties, ofpbuf_pull(msg, len), len);
+
+    error = ofputil_port_from_ofp11(ps14->port_no, &ops->port_no);
+    if (error) {
+        return error;
+    }
+
+    ops->duration_sec = ntohl(ps14->duration_sec);
+    ops->duration_nsec = ntohl(ps14->duration_nsec);
+    ops->stats.rx_packets = ntohll(ps14->rx_packets);
+    ops->stats.tx_packets = ntohll(ps14->tx_packets);
+    ops->stats.rx_bytes = ntohll(ps14->rx_bytes);
+    ops->stats.tx_bytes = ntohll(ps14->tx_bytes);
+    ops->stats.rx_dropped = ntohll(ps14->rx_dropped);
+    ops->stats.tx_dropped = ntohll(ps14->tx_dropped);
+    ops->stats.rx_errors = ntohll(ps14->rx_errors);
+    ops->stats.tx_errors = ntohll(ps14->tx_errors);
+    ops->stats.rx_frame_errors = UINT64_MAX;
+    ops->stats.rx_over_errors = UINT64_MAX;
+    ops->stats.rx_crc_errors = UINT64_MAX;
+    ops->stats.collisions = UINT64_MAX;
+
+    while (ofpbuf_size(&properties) > 0) {
+        struct ofpbuf payload;
+        enum ofperr error;
+        uint16_t type;
+
+        error = ofputil_pull_property(&properties, &payload, &type);
+        if (error) {
+            return error;
+        }
+
+        switch (type) {
+        case OFPPSPT14_ETHERNET:
+            error = parse_ofp14_port_stats_ethernet_property(&payload, ops);
+            break;
+
+        default:
+            log_property(true, "unknown port stats property %"PRIu16, type);
+            error = 0;
+            break;
+        }
+
+        if (error) {
+            return error;
+        }
+    }
+
+    return 0;
 }
 
 /* Returns the number of port stats elements in OFPTYPE_PORT_STATS_REPLY
@@ -6286,12 +6389,16 @@ ofputil_get_port_stats_size(enum ofp_version ofp_version)
 size_t
 ofputil_count_port_stats(const struct ofp_header *oh)
 {
+    struct ofputil_port_stats ps;
     struct ofpbuf b;
+    size_t n = 0;
 
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     ofpraw_pull_assert(&b);
-
-    return ofpbuf_size(&b) / ofputil_get_port_stats_size(oh->version);
+    while (!ofputil_decode_port_stats(&ps, &b)) {
+        n++;
+    }
+    return n;
 }
 
 /* Converts an OFPST_PORT_STATS reply in 'msg' into an abstract
@@ -6319,6 +6426,8 @@ ofputil_decode_port_stats(struct ofputil_port_stats *ps, struct ofpbuf *msg)
 
     if (!ofpbuf_size(msg)) {
         return EOF;
+    } else if (raw == OFPRAW_OFPST14_PORT_REPLY) {
+        return ofputil_pull_ofp14_port_stats(ps, msg);
     } else if (raw == OFPRAW_OFPST13_PORT_REPLY) {
         const struct ofp13_port_stats *ps13;
 
@@ -6361,6 +6470,7 @@ ofputil_decode_port_stats_request(const struct ofp_header *request,
                                   ofp_port_t *ofp10_port)
 {
     switch ((enum ofp_version)request->version) {
+    case OFP14_VERSION:
     case OFP13_VERSION:
     case OFP12_VERSION:
     case OFP11_VERSION: {
@@ -6373,10 +6483,6 @@ ofputil_decode_port_stats_request(const struct ofp_header *request,
         *ofp10_port = u16_to_ofp(ntohs(psr10->port_no));
         return 0;
     }
-
-    case OFP14_VERSION:
-        OVS_NOT_REACHED();
-        break;
 
     default:
         OVS_NOT_REACHED();
