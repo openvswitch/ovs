@@ -205,6 +205,19 @@ struct ofp14_port_stats {
 OFP_ASSERT(sizeof(struct ofp14_port_stats) == 80);
 
 
+/* ## ----------------- ## */
+/* ## ofp14_queue_stats ## */
+/* ## ----------------- ## */
+
+struct ofp14_queue_stats {
+    ovs_be16 length;         /* Length of this entry. */
+    uint8_t pad[6];          /* Align to 64 bits. */
+    struct ofp13_queue_stats qs;
+    /* Followed by 0 or more properties (none yet defined). */
+};
+OFP_ASSERT(sizeof(struct ofp14_queue_stats) == 48);
+
+
 /* ## -------------- ## */
 /* ## Miscellaneous. ## */
 /* ## -------------- ## */

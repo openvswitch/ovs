@@ -316,8 +316,10 @@ enum ofpraw {
     OFPRAW_OFPST10_QUEUE_REPLY,
     /* OFPST 1.1-1.2 (5): struct ofp11_queue_stats[]. */
     OFPRAW_OFPST11_QUEUE_REPLY,
-    /* OFPST 1.3+ (5): struct ofp13_queue_stats[]. */
+    /* OFPST 1.3 (5): struct ofp13_queue_stats[]. */
     OFPRAW_OFPST13_QUEUE_REPLY,
+    /* OFPST 1.4+ (5): uint8_t[8][]. */
+    OFPRAW_OFPST14_QUEUE_REPLY,
 
     /* OFPST 1.1+ (6): struct ofp11_group_stats_request. */
     OFPRAW_OFPST11_GROUP_REQUEST,
@@ -561,7 +563,8 @@ enum ofptype {
                                       * OFPRAW_OFPST11_QUEUE_REQUEST. */
     OFPTYPE_QUEUE_STATS_REPLY,       /* OFPRAW_OFPST10_QUEUE_REPLY.
                                       * OFPRAW_OFPST11_QUEUE_REPLY.
-                                      * OFPRAW_OFPST13_QUEUE_REPLY. */
+                                      * OFPRAW_OFPST13_QUEUE_REPLY.
+                                      * OFPRAW_OFPST14_QUEUE_REPLY. */
 
     OFPTYPE_GROUP_STATS_REQUEST,     /* OFPRAW_OFPST11_GROUP_REQUEST. */
 

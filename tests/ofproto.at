@@ -180,6 +180,23 @@ OFPST_QUEUE request (OF1.2) (xid=0x2):port=10 queue=ALL
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto - queue stats - (OpenFlow 1.4)])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl -O OpenFlow14 -vwarn queue-stats br0], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+OFPST_QUEUE reply (OF1.4): 0 queues
+])
+AT_CHECK([ovs-ofctl -O OpenFlow14 -vwarn queue-stats br0 ALL 5], [0],
+  [OFPT_ERROR (OF1.4) (xid=0x2): OFPQOFC_BAD_QUEUE
+OFPST_QUEUE request (OF1.4) (xid=0x2):port=ANY queue=5
+])
+AT_CHECK([ovs-ofctl -O OpenFlow14 -vwarn queue-stats br0 10], [0],
+  [OFPT_ERROR (OF1.4) (xid=0x2): OFPQOFC_BAD_PORT
+OFPST_QUEUE request (OF1.4) (xid=0x2):port=10 queue=ALL
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 dnl This is really bare-bones.
 dnl It at least checks request and reply serialization and deserialization.
 AT_SETUP([ofproto - queue configuration - (OpenFlow 1.0)])

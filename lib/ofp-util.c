@@ -7135,36 +7135,21 @@ ofputil_encode_queue_stats_request(enum ofp_version ofp_version,
     return request;
 }
 
-static size_t
-ofputil_get_queue_stats_size(enum ofp_version ofp_version)
-{
-    switch (ofp_version) {
-    case OFP10_VERSION:
-        return sizeof(struct ofp10_queue_stats);
-    case OFP11_VERSION:
-    case OFP12_VERSION:
-        return sizeof(struct ofp11_queue_stats);
-    case OFP13_VERSION:
-        return sizeof(struct ofp13_queue_stats);
-    case OFP14_VERSION:
-        OVS_NOT_REACHED();
-        return 0;
-    default:
-        OVS_NOT_REACHED();
-    }
-}
-
 /* Returns the number of queue stats elements in OFPTYPE_QUEUE_STATS_REPLY
  * message 'oh'. */
 size_t
 ofputil_count_queue_stats(const struct ofp_header *oh)
 {
+    struct ofputil_queue_stats qs;
     struct ofpbuf b;
+    size_t n = 0;
 
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     ofpraw_pull_assert(&b);
-
-    return ofpbuf_size(&b) / ofputil_get_queue_stats_size(oh->version);
+    while (!ofputil_decode_queue_stats(&qs, &b)) {
+        n++;
+    }
+    return n;
 }
 
 static enum ofperr
@@ -7214,6 +7199,29 @@ ofputil_queue_stats_from_ofp13(struct ofputil_queue_stats *oqs,
     return error;
 }
 
+static enum ofperr
+ofputil_pull_ofp14_queue_stats(struct ofputil_queue_stats *oqs,
+                               struct ofpbuf *msg)
+{
+    const struct ofp14_queue_stats *qs14;
+    size_t len;
+
+    qs14 = ofpbuf_try_pull(msg, sizeof *qs14);
+    if (!qs14) {
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+
+    len = ntohs(qs14->length);
+    if (len < sizeof *qs14 || len - sizeof *qs14 > ofpbuf_size(msg)) {
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+    ofpbuf_pull(msg, len - sizeof *qs14);
+
+    /* No properties yet defined, so ignore them for now. */
+
+    return ofputil_queue_stats_from_ofp13(oqs, &qs14->qs);
+}
+
 /* Converts an OFPST_QUEUE_STATS reply in 'msg' into an abstract
  * ofputil_queue_stats in 'qs'.
  *
@@ -7239,6 +7247,8 @@ ofputil_decode_queue_stats(struct ofputil_queue_stats *qs, struct ofpbuf *msg)
 
     if (!ofpbuf_size(msg)) {
         return EOF;
+    } else if (raw == OFPRAW_OFPST14_QUEUE_REPLY) {
+        return ofputil_pull_ofp14_queue_stats(qs, msg);
     } else if (raw == OFPRAW_OFPST13_QUEUE_REPLY) {
         const struct ofp13_queue_stats *qs13;
 
@@ -7310,6 +7320,16 @@ ofputil_queue_stats_to_ofp13(const struct ofputil_queue_stats *oqs,
     }
 }
 
+static void
+ofputil_queue_stats_to_ofp14(const struct ofputil_queue_stats *oqs,
+                             struct ofp14_queue_stats *qs14)
+{
+    qs14->length = htons(sizeof *qs14);
+    memset(qs14->pad, 0, sizeof qs14->pad);
+    ofputil_queue_stats_to_ofp13(oqs, &qs14->qs);
+}
+
+
 /* Encode a queue stat for 'oqs' and append it to 'replies'. */
 void
 ofputil_append_queue_stat(struct list *replies,
@@ -7335,9 +7355,11 @@ ofputil_append_queue_stat(struct list *replies,
         break;
     }
 
-    case OFP14_VERSION:
-        OVS_NOT_REACHED();
+    case OFP14_VERSION: {
+        struct ofp14_queue_stats *reply = ofpmp_append(replies, sizeof *reply);
+        ofputil_queue_stats_to_ofp14(oqs, reply);
         break;
+    }
 
     default:
         OVS_NOT_REACHED();
