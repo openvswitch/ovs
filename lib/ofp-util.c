@@ -3935,28 +3935,32 @@ max_ports_in_features(const struct ofp_header *oh)
     return ntohs(oh->length) + pp_size > UINT16_MAX;
 }
 
-/* Given a buffer 'b' that contains a Features Reply message, checks if
- * it contains the maximum number of ports that will fit.  If so, it
- * returns true and removes the ports from the message.  The caller
- * should then send an OFPST_PORT_DESC stats request to get the ports,
- * since the switch may have more ports than could be represented in the
- * Features Reply.  Otherwise, returns false.
- */
+/* In OpenFlow 1.0, 1.1, and 1.2, an OFPT_FEATURES_REPLY message lists all the
+ * switch's ports, unless there are too many to fit.  In OpenFlow 1.3 and
+ * later, an OFPT_FEATURES_REPLY does not list ports at all.
+ *
+ * Given a buffer 'b' that contains a Features Reply message, this message
+ * checks if it contains a complete list of the switch's ports.  Returns true,
+ * if so.  Returns false if the list is missing (OF1.3+) or incomplete
+ * (OF1.0/1.1/1.2), and in the latter case removes all of the ports from the
+ * message.
+ *
+ * When this function returns false, the caller should send an OFPST_PORT_DESC
+ * stats request to get the ports. */
 bool
-ofputil_switch_features_ports_trunc(struct ofpbuf *b)
+ofputil_switch_features_has_ports(struct ofpbuf *b)
 {
     struct ofp_header *oh = ofpbuf_data(b);
 
-    if (max_ports_in_features(oh)) {
-        /* Remove all the ports. */
-        ofpbuf_set_size(b, (sizeof(struct ofp_header) +
-                            sizeof(struct ofp_switch_features)));
+    if (oh->version >= OFP13_VERSION) {
+        return false;
+    } else if (max_ports_in_features(oh)) {
+        ofpbuf_set_size(b, sizeof *oh + sizeof(struct ofp_switch_features));
         ofpmsg_update_length(b);
-
+        return false;
+    } else {
         return true;
     }
-
-    return false;
 }
 
 static ovs_be32
