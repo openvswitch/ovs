@@ -4022,10 +4022,6 @@ ofputil_decode_switch_features(const struct ofp_header *oh,
     features->capabilities = ntohl(osf->capabilities) &
         ofputil_capabilities_mask(oh->version);
 
-    if (ofpbuf_size(b) % ofputil_get_phy_port_size(oh->version)) {
-        return OFPERR_OFPBRC_BAD_LEN;
-    }
-
     if (raw == OFPRAW_OFPT10_FEATURES_REPLY) {
         if (osf->capabilities & htonl(OFPC10_STP)) {
             features->capabilities |= OFPUTIL_C_STP;
