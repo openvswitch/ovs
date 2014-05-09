@@ -163,7 +163,7 @@ dnl Configure DPDK source tree
 AC_DEFUN([OVS_CHECK_DPDK], [
   AC_ARG_WITH([dpdk],
               [AC_HELP_STRING([--with-dpdk=/path/to/dpdk],
-                              [Specify the DPDP build directory])])
+                              [Specify the DPDK build directory])])
 
   if test X"$with_dpdk" != X; then
     RTE_SDK=$with_dpdk
