@@ -4837,7 +4837,7 @@ ofproto_dpif_free_recirc_id(struct ofproto_dpif *ofproto, uint32_t recirc_id)
 
 int
 ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
-                               struct match *match, int priority,
+                               const struct match *match, int priority,
                                const struct ofpbuf *ofpacts,
                                struct rule **rulep)
 {
@@ -4869,8 +4869,8 @@ ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
         return error;
     }
 
-    rule = rule_dpif_lookup_in_table(ofproto, TBL_INTERNAL, &match->flow,
-                                     &match->wc, false);
+    rule = rule_dpif_lookup_in_table(ofproto, TBL_INTERNAL, &fm.match.flow,
+                                     &fm.match.wc, false);
     if (rule) {
         *rulep = &rule->up;
     } else {
