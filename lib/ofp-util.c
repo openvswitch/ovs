@@ -50,6 +50,53 @@ VLOG_DEFINE_THIS_MODULE(ofp_util);
  * in the peer and so there's not much point in showing a lot of them. */
 static struct vlog_rate_limit bad_ofmsg_rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
+struct ofp_prop_header {
+    ovs_be16 type;
+    ovs_be16 len;
+};
+
+/* Pulls a property, beginning with struct ofp_prop_header, from the beginning
+ * of 'msg'.  Stores the type of the property in '*typep' and, if 'property' is
+ * nonnull, the entire property, including the header, in '*property'.  Returns
+ * 0 if successful, otherwise an error code. */
+static enum ofperr
+ofputil_pull_property(struct ofpbuf *msg, struct ofpbuf *property,
+                      uint16_t *typep)
+{
+    struct ofp_prop_header *oph;
+    unsigned int len;
+
+    if (ofpbuf_size(msg) < sizeof *oph) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+
+    oph = ofpbuf_data(msg);
+    len = ntohs(oph->len);
+    if (len < sizeof *oph || ROUND_UP(len, 8) > ofpbuf_size(msg)) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+
+    *typep = ntohs(oph->type);
+    if (property) {
+        ofpbuf_use_const(property, ofpbuf_data(msg), len);
+    }
+    ofpbuf_pull(msg, ROUND_UP(len, 8));
+    return 0;
+}
+
+
+static void PRINTF_FORMAT(2, 3)
+log_property(bool loose, const char *message, ...)
+{
+    enum vlog_level level = loose ? VLL_DBG : VLL_WARN;
+    if (!vlog_should_drop(THIS_MODULE, level, &bad_ofmsg_rl)) {
+        va_list args;
+
+        va_start(args, message);
+        vlog_valist(THIS_MODULE, level, message, args);
+        va_end(args);
+    }
+}
 /* Given the wildcard bit count in the least-significant 6 of 'wcbits', returns
  * an IP netmask with a 1 in each bit that must match and a 0 in each bit that
  * is wildcarded.
@@ -4208,48 +4255,17 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
     return b;
 }
 
-struct ofp_prop_header {
-    ovs_be16 type;
-    ovs_be16 len;
-};
-
 static enum ofperr
-ofputil_pull_property(struct ofpbuf *msg, struct ofpbuf *payload,
-                      uint16_t *typep)
+pull_table_feature_property(struct ofpbuf *msg, struct ofpbuf *payload,
+                        uint16_t *typep)
 {
-    struct ofp_prop_header *oph;
-    unsigned int len;
+    enum ofperr error;
 
-    if (ofpbuf_size(msg) < sizeof *oph) {
-        return OFPERR_OFPTFFC_BAD_LEN;
+    error = ofputil_pull_property(msg, payload, typep);
+    if (payload && !error) {
+        ofpbuf_pull(payload, sizeof(struct ofp_prop_header));
     }
-
-    oph = ofpbuf_data(msg);
-    len = ntohs(oph->len);
-    if (len < sizeof *oph || ROUND_UP(len, 8) > ofpbuf_size(msg)) {
-        return OFPERR_OFPTFFC_BAD_LEN;
-    }
-
-    *typep = ntohs(oph->type);
-    if (payload) {
-        ofpbuf_use_const(payload, ofpbuf_data(msg), len);
-        ofpbuf_pull(payload, sizeof *oph);
-    }
-    ofpbuf_pull(msg, ROUND_UP(len, 8));
-    return 0;
-}
-
-static void PRINTF_FORMAT(2, 3)
-log_property(bool loose, const char *message, ...)
-{
-    enum vlog_level level = loose ? VLL_DBG : VLL_WARN;
-    if (!vlog_should_drop(THIS_MODULE, level, &bad_ofmsg_rl)) {
-        va_list args;
-
-        va_start(args, message);
-        vlog_valist(THIS_MODULE, level, message, args);
-        va_end(args);
-    }
+    return error;
 }
 
 static enum ofperr
@@ -4259,7 +4275,7 @@ parse_table_ids(struct ofpbuf *payload, uint32_t *ids)
 
     *ids = 0;
     while (ofpbuf_size(payload) > 0) {
-        enum ofperr error = ofputil_pull_property(payload, NULL, &type);
+        enum ofperr error = pull_table_feature_property(payload, NULL, &type);
         if (error) {
             return error;
         }
@@ -4279,7 +4295,7 @@ parse_instruction_ids(struct ofpbuf *payload, bool loose, uint32_t *insts)
         enum ofperr error;
         uint16_t ofpit;
 
-        error = ofputil_pull_property(payload, NULL, &ofpit);
+        error = pull_table_feature_property(payload, NULL, &ofpit);
         if (error) {
             return error;
         }
@@ -4304,7 +4320,7 @@ parse_table_features_next_table(struct ofpbuf *payload,
     for (i = 0; i < ofpbuf_size(payload); i++) {
         uint8_t id = ((const uint8_t *) ofpbuf_data(payload))[i];
         if (id >= 255) {
-            return OFPERR_OFPTFFC_BAD_ARGUMENT;
+            return OFPERR_OFPBPC_BAD_VALUE;
         }
         bitmap_set1(next_tables, id);
     }
@@ -4320,7 +4336,7 @@ parse_oxm(struct ofpbuf *b, bool loose,
 
     oxmp = ofpbuf_try_pull(b, sizeof *oxmp);
     if (!oxmp) {
-        return OFPERR_OFPTFFC_BAD_LEN;
+        return OFPERR_OFPBPC_BAD_LEN;
     }
     oxm = ntohl(*oxmp);
 
@@ -4331,7 +4347,7 @@ parse_oxm(struct ofpbuf *b, bool loose,
     *hasmask = NXM_HASMASK(oxm);
     if (*hasmask) {
         if (NXM_LENGTH(oxm) & 1) {
-            return OFPERR_OFPTFFC_BAD_ARGUMENT;
+            return OFPERR_OFPBPC_BAD_VALUE;
         }
         oxm = NXM_HEADER(NXM_VENDOR(oxm), NXM_FIELD(oxm), NXM_LENGTH(oxm) / 2);
     }
@@ -4411,13 +4427,13 @@ ofputil_decode_table_features(struct ofpbuf *msg,
     }
 
     if (ofpbuf_size(msg) < sizeof *otf) {
-        return OFPERR_OFPTFFC_BAD_LEN;
+        return OFPERR_OFPBPC_BAD_LEN;
     }
 
     otf = ofpbuf_data(msg);
     len = ntohs(otf->length);
     if (len < sizeof *otf || len % 8 || len > ofpbuf_size(msg)) {
-        return OFPERR_OFPTFFC_BAD_LEN;
+        return OFPERR_OFPBPC_BAD_LEN;
     }
     ofpbuf_pull(msg, sizeof *otf);
 
@@ -4437,7 +4453,7 @@ ofputil_decode_table_features(struct ofpbuf *msg,
         enum ofperr error;
         uint16_t type;
 
-        error = ofputil_pull_property(msg, &payload, &type);
+        error = pull_table_feature_property(msg, &payload, &type);
         if (error) {
             return error;
         }
@@ -4500,9 +4516,10 @@ ofputil_decode_table_features(struct ofpbuf *msg,
 
         case OFPTFPT13_EXPERIMENTER:
         case OFPTFPT13_EXPERIMENTER_MISS:
-            log_property(loose,
-                         "unknown table features experimenter property");
-            error = loose ? 0 : OFPERR_OFPTFFC_BAD_TYPE;
+        default:
+            log_property(loose, "unknown table features property %"PRIu16,
+                         type);
+            error = loose ? 0 : OFPERR_OFPBPC_BAD_TYPE;
             break;
         }
         if (error) {
