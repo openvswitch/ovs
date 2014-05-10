@@ -218,7 +218,7 @@ struct ofport_dpif *odp_port_to_ofport(const struct dpif_backer *, odp_port_t);
 uint32_t ofproto_dpif_alloc_recirc_id(struct ofproto_dpif *ofproto);
 void ofproto_dpif_free_recirc_id(struct ofproto_dpif *ofproto, uint32_t recirc_id);
 int ofproto_dpif_add_internal_flow(struct ofproto_dpif *,
-                                   struct match *, int priority,
+                                   const struct match *, int priority,
                                    const struct ofpbuf *ofpacts,
                                    struct rule **rulep);
 int ofproto_dpif_delete_internal_flow(struct ofproto_dpif *, struct match *,
