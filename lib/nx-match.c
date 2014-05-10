@@ -496,12 +496,24 @@ nxm_put_frag(struct ofpbuf *b, const struct match *match)
     }
 }
 
+/* Appends to 'b' a set of OXM or NXM matches for the IPv4 or IPv6 fields in
+ * 'match'.  */
 static void
-nxm_put_ip(struct ofpbuf *b, const struct match *match,
-           uint8_t icmp_proto, uint32_t icmp_type, uint32_t icmp_code,
-           bool oxm)
+nxm_put_ip(struct ofpbuf *b, const struct match *match, bool oxm)
 {
     const struct flow *flow = &match->flow;
+
+    if (flow->dl_type == htons(ETH_TYPE_IP)) {
+        nxm_put_32m(b, oxm ? OXM_OF_IPV4_SRC : NXM_OF_IP_SRC,
+                    flow->nw_src, match->wc.masks.nw_src);
+        nxm_put_32m(b, oxm ? OXM_OF_IPV4_DST : NXM_OF_IP_DST,
+                    flow->nw_dst, match->wc.masks.nw_dst);
+    } else {
+        nxm_put_ipv6(b, oxm ? OXM_OF_IPV6_SRC : NXM_NX_IPV6_SRC,
+                     &flow->ipv6_src, &match->wc.masks.ipv6_src);
+        nxm_put_ipv6(b, oxm ? OXM_OF_IPV6_DST : NXM_NX_IPV6_DST,
+                     &flow->ipv6_dst, &match->wc.masks.ipv6_dst);
+    }
 
     nxm_put_frag(b, match);
 
@@ -521,6 +533,9 @@ nxm_put_ip(struct ofpbuf *b, const struct match *match,
     if (!oxm && match->wc.masks.nw_ttl) {
         nxm_put_8(b, NXM_NX_IP_TTL, flow->nw_ttl);
     }
+
+    nxm_put_32m(b, oxm ? OXM_OF_IPV6_FLABEL : NXM_NX_IPV6_LABEL,
+                flow->ipv6_label, match->wc.masks.ipv6_label);
 
     if (match->wc.masks.nw_proto) {
         nxm_put_8(b, oxm ? OXM_OF_IP_PROTO : NXM_OF_IP_PROTO, flow->nw_proto);
@@ -542,12 +557,38 @@ nxm_put_ip(struct ofpbuf *b, const struct match *match,
                         match->wc.masks.tp_src);
             nxm_put_16m(b, OXM_OF_SCTP_DST, flow->tp_dst,
                         match->wc.masks.tp_dst);
-        } else if (flow->nw_proto == icmp_proto) {
+        } else if (is_icmpv4(flow)) {
             if (match->wc.masks.tp_src) {
-                nxm_put_8(b, icmp_type, ntohs(flow->tp_src));
+                nxm_put_8(b, oxm ? OXM_OF_ICMPV4_TYPE : NXM_OF_ICMP_TYPE,
+                          ntohs(flow->tp_src));
             }
             if (match->wc.masks.tp_dst) {
-                nxm_put_8(b, icmp_code, ntohs(flow->tp_dst));
+                nxm_put_8(b, oxm ? OXM_OF_ICMPV4_CODE : NXM_OF_ICMP_CODE,
+                          ntohs(flow->tp_dst));
+            }
+        } else if (is_icmpv6(flow)) {
+            if (match->wc.masks.tp_src) {
+                nxm_put_8(b, oxm ? OXM_OF_ICMPV6_TYPE : NXM_NX_ICMPV6_TYPE,
+                          ntohs(flow->tp_src));
+            }
+            if (match->wc.masks.tp_dst) {
+                nxm_put_8(b, oxm ? OXM_OF_ICMPV6_CODE : NXM_NX_ICMPV6_CODE,
+                          ntohs(flow->tp_dst));
+            }
+            if (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT) ||
+                flow->tp_src == htons(ND_NEIGHBOR_ADVERT)) {
+                nxm_put_ipv6(b, oxm ? OXM_OF_IPV6_ND_TARGET : NXM_NX_ND_TARGET,
+                             &flow->nd_target, &match->wc.masks.nd_target);
+                if (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT)) {
+                    uint32_t field = oxm ? OXM_OF_IPV6_ND_SLL : NXM_NX_ND_SLL;
+                    nxm_put_eth_masked(b, field,
+                                       flow->arp_sha, match->wc.masks.arp_sha);
+                }
+                if (flow->tp_src == htons(ND_NEIGHBOR_ADVERT)) {
+                    uint32_t field = oxm ? OXM_OF_IPV6_ND_TLL : NXM_NX_ND_TLL;
+                    nxm_put_eth_masked(b, field,
+                                       flow->arp_tha, match->wc.masks.arp_tha);
+                }
             }
         }
     }
@@ -644,42 +685,8 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct match *match,
     }
 
     /* L3. */
-    if (flow->dl_type == htons(ETH_TYPE_IP)) {
-        /* IP. */
-        nxm_put_32m(b, oxm ? OXM_OF_IPV4_SRC : NXM_OF_IP_SRC,
-                    flow->nw_src, match->wc.masks.nw_src);
-        nxm_put_32m(b, oxm ? OXM_OF_IPV4_DST : NXM_OF_IP_DST,
-                    flow->nw_dst, match->wc.masks.nw_dst);
-        nxm_put_ip(b, match, IPPROTO_ICMP,
-                   oxm ? OXM_OF_ICMPV4_TYPE : NXM_OF_ICMP_TYPE,
-                   oxm ? OXM_OF_ICMPV4_CODE : NXM_OF_ICMP_CODE, oxm);
-    } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
-        /* IPv6. */
-        nxm_put_ipv6(b, oxm ? OXM_OF_IPV6_SRC : NXM_NX_IPV6_SRC,
-                     &flow->ipv6_src, &match->wc.masks.ipv6_src);
-        nxm_put_ipv6(b, oxm ? OXM_OF_IPV6_DST : NXM_NX_IPV6_DST,
-                     &flow->ipv6_dst, &match->wc.masks.ipv6_dst);
-        nxm_put_ip(b, match, IPPROTO_ICMPV6,
-                   oxm ? OXM_OF_ICMPV6_TYPE : NXM_NX_ICMPV6_TYPE,
-                   oxm ? OXM_OF_ICMPV6_CODE : NXM_NX_ICMPV6_CODE, oxm);
-
-        nxm_put_32m(b, oxm ? OXM_OF_IPV6_FLABEL : NXM_NX_IPV6_LABEL,
-                    flow->ipv6_label, match->wc.masks.ipv6_label);
-
-        if (flow->nw_proto == IPPROTO_ICMPV6
-            && (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT) ||
-                flow->tp_src == htons(ND_NEIGHBOR_ADVERT))) {
-            nxm_put_ipv6(b, oxm ? OXM_OF_IPV6_ND_TARGET : NXM_NX_ND_TARGET,
-                         &flow->nd_target, &match->wc.masks.nd_target);
-            if (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT)) {
-                nxm_put_eth_masked(b, oxm ? OXM_OF_IPV6_ND_SLL : NXM_NX_ND_SLL,
-                                   flow->arp_sha, match->wc.masks.arp_sha);
-            }
-            if (flow->tp_src == htons(ND_NEIGHBOR_ADVERT)) {
-                nxm_put_eth_masked(b, oxm ? OXM_OF_IPV6_ND_TLL : NXM_NX_ND_TLL,
-                                   flow->arp_tha, match->wc.masks.arp_tha);
-            }
-        }
+    if (is_ip_any(flow)) {
+        nxm_put_ip(b, match, oxm);
     } else if (flow->dl_type == htons(ETH_TYPE_ARP) ||
                flow->dl_type == htons(ETH_TYPE_RARP)) {
         /* ARP. */
