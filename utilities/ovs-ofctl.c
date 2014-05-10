@@ -2823,7 +2823,7 @@ ofctl_parse_flows(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
-ofctl_parse_nxm__(bool oxm)
+ofctl_parse_nxm__(bool oxm, enum ofp_version version)
 {
     struct ds in;
 
@@ -2868,7 +2868,7 @@ ofctl_parse_nxm__(bool oxm)
             ofpbuf_uninit(&nx_match);
             ofpbuf_init(&nx_match, 0);
             if (oxm) {
-                match_len = oxm_put_match(&nx_match, &match);
+                match_len = oxm_put_match(&nx_match, &match, version);
                 out = oxm_match_to_string(&nx_match, match_len);
             } else {
                 match_len = nx_put_match(&nx_match, &match,
@@ -2894,16 +2894,22 @@ ofctl_parse_nxm__(bool oxm)
 static void
 ofctl_parse_nxm(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
-    return ofctl_parse_nxm__(false);
+    return ofctl_parse_nxm__(false, 0);
 }
 
-/* "parse-oxm": reads a series of OXM nx_match specifications as strings from
- * stdin, does some internal fussing with them, and then prints them back as
- * strings on stdout. */
+/* "parse-oxm VERSION": reads a series of OXM nx_match specifications as
+ * strings from stdin, does some internal fussing with them, and then prints
+ * them back as strings on stdout.  VERSION must specify an OpenFlow version,
+ * e.g. "OpenFlow12". */
 static void
-ofctl_parse_oxm(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+ofctl_parse_oxm(int argc OVS_UNUSED, char *argv[])
 {
-    return ofctl_parse_nxm__(true);
+    enum ofp_version version = ofputil_version_from_string(argv[1]);
+    if (version < OFP12_VERSION) {
+        ovs_fatal(0, "%s: not a valid version for OXM", argv[1]);
+    }
+
+    return ofctl_parse_nxm__(true, version);
 }
 
 static void
@@ -3349,7 +3355,7 @@ ofctl_check_vlan(int argc OVS_UNUSED, char *argv[])
 
     /* Convert to and from OXM. */
     ofpbuf_init(&nxm, 0);
-    nxm_match_len = oxm_put_match(&nxm, &match);
+    nxm_match_len = oxm_put_match(&nxm, &match, OFP12_VERSION);
     nxm_s = oxm_match_to_string(&nxm, nxm_match_len);
     error = oxm_pull_match(&nxm, &nxm_match);
     printf("OXM: %s -> ", nxm_s);
@@ -3539,7 +3545,7 @@ static const struct command all_commands[] = {
     { "parse-flows", 1, 1, ofctl_parse_flows },
     { "parse-nx-match", 0, 0, ofctl_parse_nxm },
     { "parse-nxm", 0, 0, ofctl_parse_nxm },
-    { "parse-oxm", 0, 0, ofctl_parse_oxm },
+    { "parse-oxm", 1, 1, ofctl_parse_oxm },
     { "parse-ofp10-actions", 0, 0, ofctl_parse_ofp10_actions },
     { "parse-ofp10-match", 0, 0, ofctl_parse_ofp10_match },
     { "parse-ofp11-match", 0, 0, ofctl_parse_ofp11_match },

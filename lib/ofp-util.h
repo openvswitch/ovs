@@ -170,6 +170,8 @@ void ofputil_format_version_name(struct ds *, enum ofp_version);
 void ofputil_format_version_bitmap(struct ds *msg, uint32_t bitmap);
 void ofputil_format_version_bitmap_names(struct ds *msg, uint32_t bitmap);
 
+enum ofp_version ofputil_version_from_string(const char *s);
+
 uint32_t ofputil_protocols_to_version_bitmap(enum ofputil_protocol);
 enum ofputil_protocol ofputil_protocols_from_version_bitmap(uint32_t bitmap);
 

@@ -52,7 +52,7 @@ enum ofperr oxm_pull_match(struct ofpbuf *, struct match *);
 enum ofperr oxm_pull_match_loose(struct ofpbuf *, struct match *);
 int nx_put_match(struct ofpbuf *, const struct match *,
                  ovs_be64 cookie, ovs_be64 cookie_mask);
-int oxm_put_match(struct ofpbuf *, const struct match *);
+int oxm_put_match(struct ofpbuf *, const struct match *, enum ofp_version);
 
 char *nx_match_to_string(const uint8_t *, unsigned int match_len);
 char *oxm_match_to_string(const struct ofpbuf *, unsigned int match_len);

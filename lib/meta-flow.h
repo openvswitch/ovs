@@ -276,6 +276,11 @@ struct mf_field {
      *
      *   - NXM and OXM both define such a field: nxm_header and oxm_header will
      *     both be nonzero and different, similarly for nxm_name and oxm_name.
+     *     In this case, 'oxm_version' is significant: if it is greater than
+     *     OFP12_VERSION, then only that version of OpenFlow introduced this
+     *     OXM header, so ovs-vswitchd should send 'nxm_header' instead with
+     *     earlier protocol versions to avoid confusing controllers that were
+     *     using a previous Open vSwitch extension.
      *
      *   - Only NXM or only OXM defines such a field: nxm_header and oxm_header
      *     will both have the same value (either an OXM_* or NXM_* value) and
@@ -285,11 +290,14 @@ struct mf_field {
      * NXM formatted match, since it will be an NXM_* constant when possible
      * for compatibility with OpenFlow implementations that expect that, with
      * OXM_* constants used for fields that OXM adds.  Conversely, 'oxm_header'
-     * is the header to use when outputting an OXM formatted match. */
+     * is the header to use when outputting an OXM formatted match to an
+     * OpenFlow connection of version 'oxm_version' or above (and otherwise
+     * 'nxm_header'). */
     uint32_t nxm_header;        /* An NXM_* (or OXM_*) constant. */
     const char *nxm_name;       /* The nxm_header constant's name. */
     uint32_t oxm_header;        /* An OXM_* (or NXM_*) constant. */
     const char *oxm_name;       /* The oxm_header constant's name */
+    enum ofp_version oxm_version; /* OpenFlow version that added oxm_header. */
 
     /* Usable protocols.
      * NXM and OXM are extensible, allowing later extensions to be sent in
@@ -351,6 +359,9 @@ mf_from_id(enum mf_field_id id)
     ovs_assert((unsigned int) id < MFF_N_IDS);
     return &mf_fields[id];
 }
+
+/* NXM and OXM protocol headers. */
+uint32_t mf_oxm_header(enum mf_field_id, enum ofp_version oxm_version);
 
 /* Inspecting wildcarded bits. */
 bool mf_is_all_wild(const struct mf_field *, const struct flow_wildcards *);

@@ -825,14 +825,15 @@ set_field_from_openflow(const struct ofp12_action_set_field *oasf,
 
 static void
 set_field_to_openflow12(const struct ofpact_set_field *sf,
-                        struct ofpbuf *openflow)
+                        struct ofpbuf *openflow,
+                        enum ofp_version version)
 {
     uint16_t padded_value_len = ROUND_UP(sf->field->n_bytes, 8);
     struct ofp12_action_set_field *oasf;
     char *value;
 
     oasf = ofputil_put_OFPAT12_SET_FIELD(openflow);
-    oasf->dst = htonl(sf->field->oxm_header);
+    oasf->dst = htonl(mf_oxm_header(sf->field->id, version));
     oasf->len = htons(sizeof *oasf + padded_value_len);
 
     value = ofpbuf_put_zeros(openflow, padded_value_len);
@@ -1080,7 +1081,7 @@ set_field_to_openflow(const struct ofpact_set_field *sf,
     struct ofp_header *oh = (struct ofp_header *)openflow->frame;
 
     if (oh->version >= OFP12_VERSION) {
-        set_field_to_openflow12(sf, openflow);
+        set_field_to_openflow12(sf, openflow, oh->version);
     } else if (oh->version == OFP11_VERSION) {
         set_field_to_openflow11(sf, openflow);
     } else if (oh->version == OFP10_VERSION) {

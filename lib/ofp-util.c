@@ -665,7 +665,8 @@ ofputil_put_ofp11_match(struct ofpbuf *b, const struct match *match,
     case OFPUTIL_P_OF13_OXM:
     case OFPUTIL_P_OF14_OXM:
     case OFPUTIL_P_OF15_OXM:
-        return oxm_put_match(b, match);
+        return oxm_put_match(b, match,
+                             ofputil_protocol_to_ofp_version(protocol));
     }
 
     OVS_NOT_REACHED();
@@ -1068,7 +1069,7 @@ ofputil_protocols_from_string(const char *s)
     return protocols;
 }
 
-static int
+enum ofp_version
 ofputil_version_from_string(const char *s)
 {
     if (!strcasecmp(s, "OpenFlow10")) {
@@ -2929,7 +2930,7 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
         struct ofp11_flow_stats *ofs;
 
         ofpbuf_put_uninit(reply, sizeof *ofs);
-        oxm_put_match(reply, &fs->match);
+        oxm_put_match(reply, &fs->match, version);
         ofpacts_put_openflow_instructions(fs->ofpacts, fs->ofpacts_len, reply,
                                           version);
 
@@ -3473,7 +3474,7 @@ ofputil_encode_ofp12_packet_in(const struct ofputil_packet_in *pin,
                               htonl(0), (sizeof(struct flow_metadata) * 2
                                          + 2 + pin->packet_len));
     ofpbuf_put_zeros(packet, packet_in_size);
-    oxm_put_match(packet, &match);
+    oxm_put_match(packet, &match, ofputil_protocol_to_ofp_version(protocol));
     ofpbuf_put_zeros(packet, 2);
     ofpbuf_put(packet, pin->packet, pin->packet_len);
 

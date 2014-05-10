@@ -1890,7 +1890,7 @@ OXM_OF_ETH_TYPE(0800) OXM_OF_IP_PROTO(3a) OXM_OF_ICMPV6_TYPE(88) OXM_OF_IPV6_ND_
 # Invalid field number.
 01020304(1111/2222)
 ])
-AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' --strict parse-oxm < oxm.txt],
+AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' --strict parse-oxm OpenFlow12 < oxm.txt],
   [0], [dnl
 <any>
 
@@ -2123,11 +2123,11 @@ AT_DATA([oxm.txt], [dnl
 OXM_OF_IN_PORT(00000001), 01020304(1111/2222), OXM_OF_ETH_TYPE(0800)
 ])
 
-AT_CHECK([ovs-ofctl --strict parse-oxm < oxm.txt], [0], [dnl
+AT_CHECK([ovs-ofctl --strict parse-oxm OpenFlow12 < oxm.txt], [0], [dnl
 nx_pull_match() returned error OFPBMC_BAD_FIELD
 ])
 
-AT_CHECK([ovs-ofctl parse-oxm < oxm.txt], [0], [dnl
+AT_CHECK([ovs-ofctl parse-oxm OpenFlow12 < oxm.txt], [0], [dnl
 OXM_OF_IN_PORT(00000001), OXM_OF_ETH_TYPE(0800)
 ])
 AT_CLEANUP
