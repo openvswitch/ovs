@@ -3313,7 +3313,7 @@ odp_flow_key_to_flow__(const struct nlattr *key, size_t key_len,
         flow->recirc_id = nl_attr_get_u32(attrs[OVS_KEY_ATTR_RECIRC_ID]);
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_RECIRC_ID;
     } else if (is_mask) {
-        /* Always exact match recirc_id when datapath does not sepcify it. */
+        /* Always exact match recirc_id if it is not specified. */
         flow->recirc_id = UINT32_MAX;
     }
 
