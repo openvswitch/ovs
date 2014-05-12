@@ -681,7 +681,9 @@ strftime_msec(char *s, size_t max, const char *format,
 {
     size_t n;
 
-    n = strftime(s, max, format, &tm->tm);
+    /* Visual Studio 2013's behavior is to crash when 0 is passed as second
+     * argument to strftime. */
+    n = max ? strftime(s, max, format, &tm->tm) : 0;
     if (n) {
         char decimals[4];
         char *p;
