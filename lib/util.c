@@ -461,7 +461,7 @@ set_program_name__(const char *argv0, const char *version, const char *date,
     SetErrorMode(GetErrorMode() | SEM_NOGPFAULTERRORBOX);
 
     if (program_name) {
-        return;
+        free(program_name);
     }
     basename = xmalloc(max_len);
     _splitpath_s(argv0, NULL, 0, NULL, 0, basename, max_len, NULL, 0);
