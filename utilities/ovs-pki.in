@@ -461,9 +461,18 @@ sign_request() {
     must_not_exist "$2"
     pkidir_must_exist
 
+    case "$1" in
+        "/"*)
+            request_file="$1"
+            ;;
+        *)
+            request_file="`pwd`/$1"
+            ;;
+    esac
+
     (cd "$pkidir/${type}ca" && 
-     openssl ca -config ca.cnf -batch -in /dev/stdin) \
-        < "$1" > "$2.tmp$$" 2>&3
+     openssl ca -config ca.cnf -batch -in "$request_file") \
+        > "$2.tmp$$" 2>&3
     mv "$2.tmp$$" "$2"
 }
 
