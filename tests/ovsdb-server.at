@@ -939,6 +939,7 @@ AT_BANNER([OVSDB -- transactions on transient ovsdb-server])
 # TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
 m4_define([OVSDB_CHECK_EXECUTION], 
   [AT_SETUP([$1])
+   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
    AT_KEYWORDS([ovsdb server positive transient $5])
    OVS_RUNDIR=`pwd`; export OVS_RUNDIR
    $2 > schema
