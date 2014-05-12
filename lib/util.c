@@ -458,6 +458,8 @@ set_program_name__(const char *argv0, const char *version, const char *date,
     char *basename;
     size_t max_len = strlen(argv0) + 1;
 
+    SetErrorMode(GetErrorMode() | SEM_NOGPFAULTERRORBOX);
+
     if (program_name) {
         return;
     }
