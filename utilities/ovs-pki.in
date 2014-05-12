@@ -485,7 +485,7 @@ elif test "$command" = sign; then
     check_type "$arg2"
     verify_fingerprint "$arg1-req.pem"
 
-    sign_request "$arg1-req.pem" "$arg2-cert.pem"
+    sign_request "$arg1-req.pem" "$arg1-cert.pem"
 elif test "$command" = req+sign; then
     one_or_two_args
     check_type "$arg2"
