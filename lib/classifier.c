@@ -262,6 +262,126 @@ cls_subtable_cache_remove(struct cls_subtable_cache *array,
          ITER > (ARRAY)->subtables                                  \
              && OVS_LIKELY(SUBTABLE = (--ITER)->subtable);)
 
+static void
+cls_subtable_cache_verify(struct cls_subtable_cache *array)
+{
+    struct cls_subtable *table;
+    struct cls_subtable_entry *iter;
+    unsigned int priority = 0;
+
+    CLS_SUBTABLE_CACHE_FOR_EACH_REVERSE (table, iter, array) {
+        if (iter->max_priority != table->max_priority) {
+            VLOG_WARN("Subtable %p has mismatching priority in cache (%u != %u)",
+                      table, iter->max_priority, table->max_priority);
+        }
+        if (iter->max_priority < priority) {
+            VLOG_WARN("Subtable cache is out of order (%u < %u)",
+                      iter->max_priority, priority);
+        }
+        priority = iter->max_priority;
+    }
+}
+
+static void
+cls_subtable_cache_reset(struct cls_classifier *cls)
+{
+    struct cls_subtable_cache old = cls->subtables_priority;
+    struct cls_subtable *subtable;
+
+    VLOG_WARN("Resetting subtable cache.");
+
+    cls_subtable_cache_verify(&cls->subtables_priority);
+
+    cls_subtable_cache_init(&cls->subtables_priority);
+
+    HMAP_FOR_EACH (subtable, hmap_node, &cls->subtables) {
+        struct cls_match *head;
+        struct cls_subtable_entry elem;
+        struct cls_subtable *table;
+        struct cls_subtable_entry *iter, *subtable_iter = NULL;
+        unsigned int new_max = 0;
+        unsigned int max_count = 0;
+        bool found;
+
+        /* Verify max_priority. */
+        HMAP_FOR_EACH (head, hmap_node, &subtable->rules) {
+            if (head->priority > new_max) {
+                new_max = head->priority;
+                max_count = 1;
+            } else if (head->priority == new_max) {
+                max_count++;
+            }
+        }
+        if (new_max != subtable->max_priority ||
+            max_count != subtable->max_count) {
+            VLOG_WARN("subtable %p (%u rules) has mismatching max_priority "
+                      "(%u) or max_count (%u). Highest priority found was %u, "
+                      "count: %u",
+                      subtable, subtable->n_rules, subtable->max_priority,
+                      subtable->max_count, new_max, max_count);
+            subtable->max_priority = new_max;
+            subtable->max_count = max_count;
+        }
+
+        /* Locate the subtable from the old cache. */
+        found = false;
+        CLS_SUBTABLE_CACHE_FOR_EACH (table, iter, &old) {
+            if (table == subtable) {
+                if (iter->max_priority != new_max) {
+                    VLOG_WARN("Subtable %p has wrong max priority (%u != %u) "
+                              "in the old cache.",
+                              subtable, iter->max_priority, new_max);
+                }
+                if (found) {
+                    VLOG_WARN("Subtable %p duplicated in the old cache.",
+                              subtable);
+                }
+                found = true;
+            }
+        }
+        if (!found) {
+            VLOG_WARN("Subtable %p not found from the old cache.", subtable);
+        }
+
+        elem.subtable = subtable;
+        elem.tag = subtable->tag;
+        elem.max_priority = subtable->max_priority;
+        cls_subtable_cache_push_back(&cls->subtables_priority, elem);
+
+        /* Possibly move 'subtable' earlier in the priority list.  If we break
+         * out of the loop, then 'subtable_iter' should be moved just before
+         * 'iter'.  If the loop terminates normally, then 'iter' will be the
+         * first list element and we'll move subtable just before that
+         * (e.g. to the front of the list). */
+        CLS_SUBTABLE_CACHE_FOR_EACH_REVERSE (table, iter,
+                                             &cls->subtables_priority) {
+            if (table == subtable) {
+                subtable_iter = iter; /* Locate the subtable as we go. */
+            } else if (table->max_priority >= new_max) {
+                ovs_assert(subtable_iter != NULL);
+                iter++;
+                break;
+            }
+        }
+
+        /* Move 'subtable' just before 'iter' (unless it's already there). */
+        if (iter != subtable_iter) {
+            cls_subtable_cache_splice(iter, subtable_iter, subtable_iter + 1);
+        }
+    }
+
+    /* Verify that the old and the new have the same size. */
+    if (old.size != cls->subtables_priority.size) {
+        VLOG_WARN("subtables cache sizes differ: old (%"PRIuSIZE
+                  ") != new (%"PRIuSIZE").",
+                  old.size, cls->subtables_priority.size);
+    }
+
+    cls_subtable_cache_destroy(&old);
+
+    cls_subtable_cache_verify(&cls->subtables_priority);
+}
+
 
 /* flow/miniflow/minimask/minimatch utilities.
  * These are only used by the classifier, so place them here to allow
@@ -1446,7 +1566,12 @@ update_subtables_after_insertion(struct cls_classifier *cls,
                 subtable_iter = iter; /* Locate the subtable as we go. */
                 iter->max_priority = new_priority;
             } else if (table->max_priority >= new_priority) {
-                ovs_assert(subtable_iter != NULL);
+                if (subtable_iter == NULL) {
+                    /* Corrupted cache? */
+                    cls_subtable_cache_reset(cls);
+                    VLOG_ABORT("update_subtables_after_insertion(): Subtable priority list corrupted.");
+                    OVS_NOT_REACHED();
+                }
                 iter++;
                 break;
             }
@@ -1499,7 +1624,12 @@ update_subtables_after_removal(struct cls_classifier *cls,
                 subtable_iter = iter; /* Locate the subtable as we go. */
                 iter->max_priority = subtable->max_priority;
             } else if (table->max_priority <= subtable->max_priority) {
-                ovs_assert(subtable_iter != NULL);
+                if (subtable_iter == NULL) {
+                    /* Corrupted cache? */
+                    cls_subtable_cache_reset(cls);
+                    VLOG_ABORT("update_subtables_after_removal(): Subtable priority list corrupted.");
+                    OVS_NOT_REACHED();
+                }
                 break;
             }
         }
