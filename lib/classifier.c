@@ -224,12 +224,14 @@ cls_subtable_cache_splice(struct cls_subtable_entry *to,
         to = start; start = end; end = temp;
     }
     if (to < start) {
+        /* Move elements [start, end) to (to) one by one. */
         while (start != end) {
             struct cls_subtable_entry temp = *start;
 
+            /* Shift array by one, making space for the element at 'temp'. */
             memmove(to + 1, to, (start - to) * sizeof *to);
             *to = temp;
-            start++;
+            start++; to++;
         }
     } /* Else nothing to be done. */
 }
