@@ -60,7 +60,7 @@ struct vconn_class {
      * connection name provided by the user, e.g. "tcp:1.2.3.4".  This name is
      * useful for error messages but must not be modified.
      *
-     * 'allowed_verions' is the OpenFlow versions that may be
+     * 'allowed_versions' is the OpenFlow versions that may be
      * negotiated for a connection.
      *
      * 'suffix' is a copy of 'name' following the colon and may be modified.
