@@ -1893,7 +1893,7 @@ do_idl(int argc, char *argv[])
         rpc = NULL;
     }
 
-    setvbuf(stdout, NULL, _IOLBF, 0);
+    setvbuf(stdout, NULL, _IONBF, 0);
 
     symtab = ovsdb_symbol_table_create();
     for (i = 2; i < argc; i++) {
