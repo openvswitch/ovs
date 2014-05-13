@@ -224,6 +224,12 @@ def run():
         % (root_uuid, version))
 
     cmd = [BUILD_GCC + "/vswitchd/ovs-vswitchd"]
+
+    if options.dpdk:
+        cmd.append("--dpdk")
+        cmd.extend(options.dpdk)
+        cmd.append("--")
+
     if options.gdb:
         cmd = ["gdb", "--args"] + cmd
     elif options.valgrind:
@@ -312,6 +318,16 @@ Commands:
     sys.exit(0)
 commands.append(doc)
 
+def parse_subargs(option, opt_str, value, parser):
+    subopts = []
+
+    while parser.rargs:
+        dpdkarg = parser.rargs.pop(0)
+        if dpdkarg == "--":
+            break
+        subopts.append(dpdkarg)
+
+    setattr(parser.values, option.dest, subopts)
 
 def main():
     global options
@@ -344,6 +360,9 @@ def main():
                      help="run ovs-vswitchd under gdb")
     group.add_option("--valgrind", dest="valgrind", action="store_true",
                      help="run ovs-vswitchd under valgrind")
+    group.add_option("--dpdk", dest="dpdk", action="callback",
+                     callback=parse_subargs,
+                     help="run ovs-vswitchd with dpdk subopts (ended by --)")
     parser.add_option_group(group)
 
     options, args = parser.parse_args()
