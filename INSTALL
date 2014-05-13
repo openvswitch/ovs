@@ -149,9 +149,8 @@ Prerequisites section, follow the procedure below to build.
 
       % ./boot.sh
 
-2. In the top source directory, configure the package by running the
-   configure script.  You can usually invoke configure without any
-   arguments:
+2. Configure the package by running the configure script.  You can
+   usually invoke configure without any arguments.  For example:
 
       % ./configure
 
@@ -203,13 +202,28 @@ Prerequisites section, follow the procedure below to build.
    additional environment variables.  For a full list, invoke
    configure with the --help option.
 
-3. Run GNU make in the top source directory, e.g.:
+   You can also run configure from a separate build directory.  This
+   is helpful if you want to build Open vSwitch in more than one way
+   from a single source directory, e.g. to try out both GCC and Clang
+   builds, or to build kernel modules for more than one Linux version.
+   Here is an example:
+
+      % mkdir _gcc && (cd _gcc && ../configure CC=gcc)
+      % mkdir _clang && (cd _clang && ../configure CC=clang)
+
+3. Run GNU make in the build directory, e.g.:
 
       % make
 
    or if GNU make is installed as "gmake":
 
       % gmake
+
+   If you used a separate build directory, run make or gmake from that
+   directory, e.g.:
+
+      % make -C _gcc
+      % make -C _clang
 
    For improved warnings if you installed "sparse" (see
    "Prerequisites"), add C=1 to the command line.
