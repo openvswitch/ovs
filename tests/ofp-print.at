@@ -621,6 +621,26 @@ OFPT_PORT_STATUS (OF1.1) (xid=0x0): MOD: 3(eth0): addr:50:54:00:00:00:01
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPT_PORT_STATUS - OF1.4])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 0c 00 58 00 00 00 00 02 00 00 00 00 00 00 00 \
+00 00 00 03 00 48 00 00 50 54 00 00 00 01 00 00 \
+65 74 68 30 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 20 00 00 00 00 \
+00 00 20 08 00 00 28 0f 00 00 28 0f 00 00 00 00 \
+00 01 86 a0 00 01 86 a0 \
+"], [0], [dnl
+OFPT_PORT_STATUS (OF1.4) (xid=0x0): MOD: 3(eth0): addr:50:54:00:00:00:01
+     config:     0
+     state:      0
+     current:    100MB-FD AUTO_NEG
+     advertised: 10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG
+     supported:  10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG
+     speed: 100 Mbps now, 100 Mbps max
+])
+AT_CLEANUP
+
 AT_SETUP([OFPT_PACKET_OUT - OF1.0])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
@@ -1853,6 +1873,27 @@ OFPST_PORT_DESC reply (xid=0x0):
  3(eth0): addr:50:54:00:00:00:01
      config:     PORT_DOWN
      state:      LINK_DOWN
+     current:    100MB-FD AUTO_NEG
+     advertised: 10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG
+     supported:  10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG
+     speed: 100 Mbps now, 100 Mbps max
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_PORT_DESC reply - OF1.4])
+AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 13 00 58 00 00 00 02 00 0d 00 00 00 00 00 00 \
+00 00 00 03 00 48 00 00 50 54 00 00 00 01 00 00 \
+65 74 68 30 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 20 00 00 00 00 \
+00 00 20 08 00 00 28 0f 00 00 28 0f 00 00 00 00 \
+00 01 86 a0 00 01 86 a0 \
+"], [0], [dnl
+OFPST_PORT_DESC reply (OF1.4) (xid=0x2):
+ 3(eth0): addr:50:54:00:00:00:01
+     config:     0
+     state:      0
      current:    100MB-FD AUTO_NEG
      advertised: 10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG
      supported:  10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG

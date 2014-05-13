@@ -387,7 +387,8 @@ enum ofp_port_reason {
 struct ofp_port_status {
     uint8_t reason;          /* One of OFPPR_*. */
     uint8_t pad[7];          /* Align to 64-bits. */
-    /* Followed by struct ofp10_phy_port or struct ofp11_port.  */
+    /* Followed by struct ofp10_phy_port, struct ofp11_port, or struct
+     * ofp14_port.  */
 };
 OFP_ASSERT(sizeof(struct ofp_port_status) == 8);
 

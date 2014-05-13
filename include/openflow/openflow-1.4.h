@@ -1,4 +1,4 @@
-/* Copyright (c) 2008 The Board of Trustees of The Leland Stanford
+/* Copyright (c) 2008, 2014 The Board of Trustees of The Leland Stanford
 * Junior University
 * Copyright (c) 2011, 2012 Open Networking Foundation
 *
@@ -41,6 +41,45 @@
 /*
  * OpenFlow 1.4 is more extensible by using TLV structures
  */
+
+/* Port description property types. */
+enum ofp_port_desc_prop_type {
+    OFPPDPT14_ETHERNET          = 0,      /* Ethernet property. */
+    OFPPDPT14_OPTICAL           = 1,      /* Optical property. */
+    OFPPDPT14_EXPERIMENTER      = 0xFFFF, /* Experimenter property. */
+};
+
+/* Ethernet port description property. */
+struct ofp14_port_desc_prop_ethernet {
+    ovs_be16         type;    /* OFPPDPT14_ETHERNET. */
+    ovs_be16         length;  /* Length in bytes of this property. */
+    uint8_t          pad[4];  /* Align to 64 bits. */
+    /* Bitmaps of OFPPF_* that describe features.  All bits zeroed if
+     * unsupported or unavailable. */
+    ovs_be32 curr;          /* Current features. */
+    ovs_be32 advertised;    /* Features being advertised by the port. */
+    ovs_be32 supported;     /* Features supported by the port. */
+    ovs_be32 peer;          /* Features advertised by peer. */
+
+    ovs_be32 curr_speed;    /* Current port bitrate in kbps. */
+    ovs_be32 max_speed;     /* Max port bitrate in kbps */
+};
+OFP_ASSERT(sizeof(struct ofp14_port_desc_prop_ethernet) == 32);
+
+struct ofp14_port {
+    ovs_be32 port_no;
+    ovs_be16 length;
+    uint8_t pad[2];
+    uint8_t hw_addr[OFP_ETH_ALEN];
+    uint8_t pad2[2];                  /* Align to 64 bits. */
+    char name[OFP_MAX_PORT_NAME_LEN]; /* Null-terminated */
+
+    ovs_be32 config;        /* Bitmap of OFPPC_* flags. */
+    ovs_be32 state;         /* Bitmap of OFPPS_* flags. */
+
+    /* Followed by 0 or more OFPPDPT14_* properties. */
+};
+OFP_ASSERT(sizeof(struct ofp14_port) == 40);
 
 /* Common header for all async config Properties */
 struct ofp14_async_config_prop_header {

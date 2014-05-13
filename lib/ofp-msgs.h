@@ -162,8 +162,10 @@ enum ofpraw {
 
     /* OFPT 1.0 (12): struct ofp_port_status, struct ofp10_phy_port. */
     OFPRAW_OFPT10_PORT_STATUS,
-    /* OFPT 1.1+ (12): struct ofp_port_status, struct ofp11_port. */
+    /* OFPT 1.1-1.3 (12): struct ofp_port_status, struct ofp11_port. */
     OFPRAW_OFPT11_PORT_STATUS,
+    /* OFPT 1.4+ (12): struct ofp_port_status, struct ofp14_port, uint8_t[8][]. */
+    OFPRAW_OFPT14_PORT_STATUS,
 
     /* OFPT 1.0 (13): struct ofp10_packet_out, uint8_t[]. */
     OFPRAW_OFPT10_PACKET_OUT,
@@ -360,8 +362,10 @@ enum ofpraw {
 
     /* OFPST 1.0 (13): struct ofp10_phy_port[]. */
     OFPRAW_OFPST10_PORT_DESC_REPLY,
-    /* OFPST 1.1+ (13): struct ofp11_port[]. */
+    /* OFPST 1.1-1.3 (13): struct ofp11_port[]. */
     OFPRAW_OFPST11_PORT_DESC_REPLY,
+    /* OFPST 1.4+ (13): uint8_t[8][]. */
+    OFPRAW_OFPST14_PORT_DESC_REPLY,
 
 /* Nicira extension messages.
  *
@@ -471,7 +475,8 @@ enum ofptype {
                                   * OFPRAW_OFPT11_FLOW_REMOVED.
                                   * OFPRAW_NXT_FLOW_REMOVED. */
     OFPTYPE_PORT_STATUS,         /* OFPRAW_OFPT10_PORT_STATUS.
-                                  * OFPRAW_OFPT11_PORT_STATUS. */
+                                  * OFPRAW_OFPT11_PORT_STATUS.
+                                  * OFPRAW_OFPT14_PORT_STATUS. */
 
     /* Controller command messages. */
     OFPTYPE_PACKET_OUT,          /* OFPRAW_OFPT10_PACKET_OUT.
@@ -581,7 +586,8 @@ enum ofptype {
     OFPTYPE_PORT_DESC_STATS_REQUEST, /* OFPRAW_OFPST_PORT_DESC_REQUEST. */
 
     OFPTYPE_PORT_DESC_STATS_REPLY,   /* OFPRAW_OFPST10_PORT_DESC_REPLY.
-                                      * OFPRAW_OFPST11_PORT_DESC_REPLY. */
+                                      * OFPRAW_OFPST11_PORT_DESC_REPLY.
+                                      * OFPRAW_OFPST14_PORT_DESC_REPLY. */
 
     /* Nicira extensions. */
     OFPTYPE_SET_FLOW_FORMAT,      /* OFPRAW_NXT_SET_FLOW_FORMAT. */

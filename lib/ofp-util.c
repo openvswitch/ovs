@@ -84,7 +84,6 @@ ofputil_pull_property(struct ofpbuf *msg, struct ofpbuf *property,
     return 0;
 }
 
-
 static void PRINTF_FORMAT(2, 3)
 log_property(bool loose, const char *message, ...)
 {
@@ -97,6 +96,7 @@ log_property(bool loose, const char *message, ...)
         va_end(args);
     }
 }
+
 /* Given the wildcard bit count in the least-significant 6 of 'wcbits', returns
  * an IP netmask with a 1 in each bit that must match and a 0 in each bit that
  * is wildcarded.
@@ -3683,8 +3683,6 @@ static enum ofperr
 ofputil_decode_ofp10_phy_port(struct ofputil_phy_port *pp,
                               const struct ofp10_phy_port *opp)
 {
-    memset(pp, 0, sizeof *pp);
-
     pp->port_no = u16_to_ofp(ntohs(opp->port_no));
     memcpy(pp->hw_addr, opp->hw_addr, OFP_ETH_ALEN);
     ovs_strlcpy(pp->name, opp->name, OFP_MAX_PORT_NAME_LEN);
@@ -3709,8 +3707,6 @@ ofputil_decode_ofp11_port(struct ofputil_phy_port *pp,
 {
     enum ofperr error;
 
-    memset(pp, 0, sizeof *pp);
-
     error = ofputil_port_from_ofp11(op->port_no, &pp->port_no);
     if (error) {
         return error;
@@ -3728,6 +3724,86 @@ ofputil_decode_ofp11_port(struct ofputil_phy_port *pp,
 
     pp->curr_speed = ntohl(op->curr_speed);
     pp->max_speed = ntohl(op->max_speed);
+
+    return 0;
+}
+
+static enum ofperr
+parse_ofp14_port_ethernet_property(const struct ofpbuf *payload,
+                                   struct ofputil_phy_port *pp)
+{
+    struct ofp14_port_desc_prop_ethernet *eth = ofpbuf_data(payload);
+
+    if (ofpbuf_size(payload) != sizeof *eth) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+
+    pp->curr = netdev_port_features_from_ofp11(eth->curr);
+    pp->advertised = netdev_port_features_from_ofp11(eth->advertised);
+    pp->supported = netdev_port_features_from_ofp11(eth->supported);
+    pp->peer = netdev_port_features_from_ofp11(eth->peer);
+
+    pp->curr_speed = ntohl(eth->curr_speed);
+    pp->max_speed = ntohl(eth->max_speed);
+
+    return 0;
+}
+
+static enum ofperr
+ofputil_pull_ofp14_port(struct ofputil_phy_port *pp, struct ofpbuf *msg)
+{
+    struct ofpbuf properties;
+    struct ofp14_port *op;
+    enum ofperr error;
+    size_t len;
+
+    op = ofpbuf_try_pull(msg, sizeof *op);
+    if (!op) {
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+
+    len = ntohs(op->length);
+    if (len < sizeof *op || len - sizeof *op > ofpbuf_size(msg)) {
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+    len -= sizeof *op;
+    ofpbuf_use_const(&properties, ofpbuf_pull(msg, len), len);
+
+    error = ofputil_port_from_ofp11(op->port_no, &pp->port_no);
+    if (error) {
+        return error;
+    }
+    memcpy(pp->hw_addr, op->hw_addr, OFP_ETH_ALEN);
+    ovs_strlcpy(pp->name, op->name, OFP_MAX_PORT_NAME_LEN);
+
+    pp->config = ntohl(op->config) & OFPPC11_ALL;
+    pp->state = ntohl(op->state) & OFPPS11_ALL;
+
+    while (ofpbuf_size(&properties) > 0) {
+        struct ofpbuf payload;
+        enum ofperr error;
+        uint16_t type;
+
+        error = ofputil_pull_property(&properties, &payload, &type);
+        if (error) {
+            return error;
+        }
+
+        switch (type) {
+        case OFPPDPT14_ETHERNET:
+            error = parse_ofp14_port_ethernet_property(&payload, pp);
+            break;
+
+        default:
+            log_property(true, "unknown port property %"PRIu16, type);
+            error = 0;
+            break;
+        }
+
+        if (error) {
+            return error;
+        }
+    }
 
     return 0;
 }
@@ -3790,6 +3866,34 @@ ofputil_encode_ofp11_port(const struct ofputil_phy_port *pp,
 }
 
 static void
+ofputil_put_ofp14_port(const struct ofputil_phy_port *pp,
+                       struct ofpbuf *b)
+{
+    struct ofp14_port *op;
+    struct ofp14_port_desc_prop_ethernet *eth;
+
+    ofpbuf_prealloc_tailroom(b, sizeof *op + sizeof *eth);
+
+    op = ofpbuf_put_zeros(b, sizeof *op);
+    op->port_no = ofputil_port_to_ofp11(pp->port_no);
+    op->length = htons(sizeof *op + sizeof *eth);
+    memcpy(op->hw_addr, pp->hw_addr, ETH_ADDR_LEN);
+    ovs_strlcpy(op->name, pp->name, sizeof op->name);
+    op->config = htonl(pp->config & OFPPC11_ALL);
+    op->state = htonl(pp->state & OFPPS11_ALL);
+
+    eth = ofpbuf_put_zeros(b, sizeof *eth);
+    eth->type = htons(OFPPDPT14_ETHERNET);
+    eth->length = htons(sizeof *eth);
+    eth->curr = netdev_port_features_to_ofp11(pp->curr);
+    eth->advertised = netdev_port_features_to_ofp11(pp->advertised);
+    eth->supported = netdev_port_features_to_ofp11(pp->supported);
+    eth->peer = netdev_port_features_to_ofp11(pp->peer);
+    eth->curr_speed = htonl(pp->curr_speed);
+    eth->max_speed = htonl(pp->max_speed);
+}
+
+static void
 ofputil_put_phy_port(enum ofp_version ofp_version,
                      const struct ofputil_phy_port *pp, struct ofpbuf *b)
 {
@@ -3809,7 +3913,7 @@ ofputil_put_phy_port(enum ofp_version ofp_version,
     }
 
     case OFP14_VERSION:
-        OVS_NOT_REACHED();
+        ofputil_put_ofp14_port(pp, b);
         break;
 
     default:
@@ -4128,8 +4232,11 @@ ofputil_encode_port_status(const struct ofputil_port_status *ps,
     case OFP11_VERSION:
     case OFP12_VERSION:
     case OFP13_VERSION:
-    case OFP14_VERSION:
         raw = OFPRAW_OFPT11_PORT_STATUS;
+        break;
+
+    case OFP14_VERSION:
+        raw = OFPRAW_OFPT14_PORT_STATUS;
         break;
 
     default:
@@ -5548,6 +5655,8 @@ int
 ofputil_pull_phy_port(enum ofp_version ofp_version, struct ofpbuf *b,
                       struct ofputil_phy_port *pp)
 {
+    memset(pp, 0, sizeof *pp);
+
     switch (ofp_version) {
     case OFP10_VERSION: {
         const struct ofp10_phy_port *opp = ofpbuf_try_pull(b, sizeof *opp);
@@ -5560,8 +5669,7 @@ ofputil_pull_phy_port(enum ofp_version ofp_version, struct ofpbuf *b,
         return op ? ofputil_decode_ofp11_port(pp, op) : EOF;
     }
     case OFP14_VERSION:
-        OVS_NOT_REACHED();
-        break;
+        return ofpbuf_size(b) ? ofputil_pull_ofp14_port(pp, b) : EOF;
     default:
         OVS_NOT_REACHED();
     }
