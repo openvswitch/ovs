@@ -530,8 +530,10 @@ static int execute_recirc(struct datapath *dp, struct sk_buff *skb,
 	int err;
 
 	err = ovs_flow_extract(skb, p->port_no, &recirc_key);
-	if (err)
+	if (err) {
+		kfree_skb(skb);
 		return err;
+	}
 
 	recirc_key.ovs_flow_hash = hash;
 	recirc_key.recirc_id = nla_get_u32(a);
@@ -596,7 +598,7 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 
 			err = execute_recirc(dp, recirc_skb, a);
 
-			if (last_action || err)
+			if (recirc_skb == skb)
 				return err;
 
 			break;
