@@ -37,6 +37,7 @@ TESTSUITE_AT = \
 	tests/lockfile.at \
 	tests/reconnect.at \
 	tests/ovs-vswitchd.at \
+	tests/dpif-netdev.at \
 	tests/ofproto-dpif.at \
 	tests/vlan-splinters.at \
 	tests/ofproto-macros.at \
