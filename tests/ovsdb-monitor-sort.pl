@@ -30,6 +30,9 @@ sub output_group {
     print "$_\n" foreach sort { compare_lines($a, $b) } @group;
 }
 
+if ("$^O" eq "msys") {
+    $/ = "\r\n";
+}
 my @group = ();
 while (<STDIN>) {
     chomp;
