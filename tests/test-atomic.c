@@ -99,8 +99,6 @@ test_atomic_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     TEST_ATOMIC_TYPE(atomic_int16_t, int16_t);
     TEST_ATOMIC_TYPE(atomic_uint32_t, uint32_t);
     TEST_ATOMIC_TYPE(atomic_int32_t, int32_t);
-    TEST_ATOMIC_TYPE(atomic_uint64_t, uint64_t);
-    TEST_ATOMIC_TYPE(atomic_int64_t, int64_t);
 
     test_atomic_flag();
 }
