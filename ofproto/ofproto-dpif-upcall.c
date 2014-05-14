@@ -179,8 +179,7 @@ struct udpif_key {
     struct ovs_mutex mutex;                   /* Guards the following. */
     struct dpif_flow_stats stats OVS_GUARDED; /* Last known stats.*/
     long long int created OVS_GUARDED;        /* Estimate of creation time. */
-    bool mark OVS_GUARDED;                    /* For mark and sweep garbage
-                                                 collection. */
+    uint64_t dump_seq OVS_GUARDED;            /* Tracks udpif->dump_seq. */
     bool flow_exists OVS_GUARDED;             /* Ensures flows are only deleted
                                                  once. */
 
@@ -1018,7 +1017,7 @@ ukey_create(const struct nlattr *key, size_t key_len, long long int used)
     ukey->key_len = key_len;
 
     ovs_mutex_lock(&ukey->mutex);
-    ukey->mark = false;
+    ukey->dump_seq = 0;
     ukey->flow_exists = true;
     ukey->created = used ? used : time_msec();
     memset(&ukey->stats, 0, sizeof ukey->stats);
@@ -1331,8 +1330,10 @@ revalidate(struct revalidator *revalidator)
 {
     struct udpif *udpif = revalidator->udpif;
     struct dpif_flow_dump_thread *dump_thread;
+    uint64_t dump_seq;
     unsigned int flow_limit;
 
+    dump_seq = seq_read(udpif->dump_seq);
     atomic_read(&udpif->flow_limit, &flow_limit);
     dump_thread = dpif_flow_dump_thread_create(udpif->dump);
     for (;;) {
@@ -1374,7 +1375,7 @@ revalidate(struct revalidator *revalidator)
         for (f = flows; f < &flows[n_dumped]; f++) {
             long long int used = f->stats.used;
             struct udpif_key *ukey;
-            bool already_dumped, mark;
+            bool already_dumped, keep;
 
             if (!ukey_acquire(udpif, f->key, f->key_len, used, &ukey)) {
                 /* We couldn't acquire the ukey. This means that
@@ -1384,7 +1385,7 @@ revalidate(struct revalidator *revalidator)
                 continue;
             }
 
-            already_dumped = ukey->mark || !ukey->flow_exists;
+            already_dumped = ukey->dump_seq == dump_seq;
             if (already_dumped) {
                 /* The flow has already been dumped and handled by another
                  * revalidator during this flow dump operation. Skip it. */
@@ -1397,13 +1398,14 @@ revalidate(struct revalidator *revalidator)
                 used = ukey->created;
             }
             if (kill_them_all || (used && used < now - max_idle)) {
-                mark = false;
+                keep = false;
             } else {
-                mark = revalidate_ukey(udpif, ukey, f);
+                keep = revalidate_ukey(udpif, ukey, f);
             }
-            ukey->mark = ukey->flow_exists = mark;
+            ukey->dump_seq = dump_seq;
+            ukey->flow_exists = keep;
 
-            if (!mark) {
+            if (!keep) {
                 dump_op_init(&ops[n_ops++], f->key, f->key_len, ukey);
             }
             ovs_mutex_unlock(&ukey->mutex);
@@ -1423,22 +1425,21 @@ revalidator_sweep__(struct revalidator *revalidator, bool purge)
     struct dump_op ops[REVALIDATE_MAX_BATCH];
     struct udpif_key *ukey, *next;
     size_t n_ops;
+    uint64_t dump_seq;
 
     n_ops = 0;
+    dump_seq = seq_read(revalidator->udpif->dump_seq);
 
     /* During garbage collection, this revalidator completely owns its ukeys
      * map, and therefore doesn't need to do any locking. */
     HMAP_FOR_EACH_SAFE (ukey, next, hmap_node, revalidator->ukeys) {
-        if (!purge && ukey->mark) {
-            ukey->mark = false;
-        } else if (!ukey->flow_exists) {
+        if (!ukey->flow_exists) {
             ukey_delete(revalidator, ukey);
-        } else {
+        } else if (purge || ukey->dump_seq != dump_seq) {
             struct dump_op *op = &ops[n_ops++];
 
-            /* If we have previously seen a flow in the datapath, but didn't
-             * see it during the most recent dump, delete it. This allows us
-             * to clean up the ukey and keep the statistics consistent. */
+            /* If we have previously seen a flow in the datapath, but it
+             * hasn't been seen in the current dump, delete it. */
             dump_op_init(op, ukey->key, ukey->key_len, ukey);
             if (n_ops == REVALIDATE_MAX_BATCH) {
                 push_dump_ops(revalidator, ops, n_ops);
