@@ -2132,6 +2132,30 @@ OXM_OF_IN_PORT(00000001), OXM_OF_ETH_TYPE(0800)
 ])
 AT_CLEANUP
 
+AT_SETUP([check TCP flags expression in OXM and NXM])
+# NXM/OXM input for matching on TCP flags.
+tcp_flags='OXM_OF_ETH_TYPE(0800), OXM_OF_IP_PROTO(06), OXM_OF_TCP_FLAGS(0fff)'
+
+# Check that marshaling into NXM gives all NXM headers.
+AT_CHECK([echo "$tcp_flags" | ovs-ofctl parse-nxm], [0],
+  [NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(06), NXM_NX_TCP_FLAGS(0fff)
+])
+
+# Check that marshaling in OXM for OF1.2 through OF1.4 gives OXM
+# headers except for TCP flags, which didn't have an OXM definition until
+# OF1.5.
+for version in OpenFlow12 OpenFlow13 OpenFlow14; do
+    AT_CHECK([echo "$tcp_flags" | ovs-ofctl parse-oxm $version], [0],
+      [OXM_OF_ETH_TYPE(0800), OXM_OF_IP_PROTO(06), NXM_NX_TCP_FLAGS(0fff)
+])
+done
+
+# OpenFlow 1.5 added an OXM header for TCP flags:
+AT_CHECK([echo "$tcp_flags" | ovs-ofctl parse-oxm OpenFlow15], [0],
+  [OXM_OF_ETH_TYPE(0800), OXM_OF_IP_PROTO(06), OXM_OF_TCP_FLAGS(0fff)
+])
+AT_CLEANUP
+
 dnl Check all of the patterns mentioned in the "VLAN Matching" section
 dnl in the DESIGN file at top level.
 AT_SETUP([ovs-ofctl check-vlan])

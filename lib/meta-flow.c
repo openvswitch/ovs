@@ -637,7 +637,7 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         MFP_TCP,
         false,
         NXM_NX_TCP_FLAGS, "NXM_NX_TCP_FLAGS",
-        NXM_NX_TCP_FLAGS, "NXM_NX_TCP_FLAGS", 0,
+        OXM_OF_TCP_FLAGS, "OXM_OF_TCP_FLAGS", OFP15_VERSION,
         OFPUTIL_P_NXM_OXM_ANY,
         OFPUTIL_P_NXM_OXM_ANY,
         -1,

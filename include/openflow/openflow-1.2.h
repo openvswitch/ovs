@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2011, 2012, 2013 The Board of Trustees of The Leland Stanford
+/* Copyright (c) 2008, 2011, 2012, 2013, 2014 The Board of Trustees of The Leland Stanford
  * Junior University
  *
  * We are making the OpenFlow specification and associated documentation
@@ -117,7 +117,15 @@ enum oxm12_ofb_match_fields {
     OFPXMT13_OFB_TUNNEL_ID,      /* Logical Port Metadata */
     OFPXMT13_OFB_IPV6_EXTHDR,    /* IPv6 Extension Header pseudo-field */
 #define OFPXMT13_MASK ((1ULL << (OFPXMT13_OFB_IPV6_EXTHDR + 1)) - 1)
-};
+
+    /* Following added in OpenFlow 1.4. */
+    OFPXMT14_OFB_PBB_UCA = 41,  /* PBB UCA header field. */
+#define OFPXMT14_MASK (1ULL << OFPXMT14_OFB_PBB_UCA)
+
+    /* Following added in OpenFlow 1.5. */
+    OFPXMT15_OFB_TCP_FLAGS = 42,  /* TCP flags. */
+#define OFPXMT15_MASK (1ULL << OFPXMT15_OFB_TCP_FLAGS)
+ };
 
 /* OXM implementation makes use of NXM as they are the same format
  * with different field definitions
@@ -185,6 +193,9 @@ enum oxm12_ofb_match_fields {
 #define OXM_OF_TUNNEL_ID_W    OXM_HEADER_W (OFPXMT13_OFB_TUNNEL_ID, 8)
 #define OXM_OF_IPV6_EXTHDR    OXM_HEADER   (OFPXMT13_OFB_IPV6_EXTHDR, 2)
 #define OXM_OF_IPV6_EXTHDR_W  OXM_HEADER_W (OFPXMT13_OFB_IPV6_EXTHDR, 2)
+#define OXM_OF_PBB_UCA        OXM_HEADER   (OFPXMT14_OFB_PBB_UCA, 1)
+#define OXM_OF_TCP_FLAGS      OXM_HEADER   (OFPXMT15_OFB_TCP_FLAGS, 2)
+#define OXM_OF_TCP_FLAGS_W    OXM_HEADER_W (OFPXMT15_OFB_TCP_FLAGS, 2)
 
 /* The VLAN id is 12-bits, so we can use the entire 16 bits to indicate
  * special conditions.
