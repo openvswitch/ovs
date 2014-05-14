@@ -125,7 +125,7 @@ struct udpif {
     atomic_uint flow_limit;            /* Datapath flow hard limit. */
 
     /* n_flows_mutex prevents multiple threads updating these concurrently. */
-    atomic_uint64_t n_flows;           /* Number of flows in the datapath. */
+    atomic_ulong n_flows;           /* Number of flows in the datapath. */
     atomic_llong n_flows_timestamp;    /* Last time n_flows was updated. */
     struct ovs_mutex n_flows_mutex;
 };
@@ -217,7 +217,7 @@ static void udpif_start_threads(struct udpif *, size_t n_handlers,
                                 size_t n_revalidators);
 static void *udpif_upcall_handler(void *);
 static void *udpif_revalidator(void *);
-static uint64_t udpif_get_n_flows(struct udpif *);
+static unsigned long udpif_get_n_flows(struct udpif *);
 static void revalidate(struct revalidator *);
 static void revalidator_sweep(struct revalidator *);
 static void revalidator_purge(struct revalidator *);
@@ -484,11 +484,11 @@ udpif_flush_all_datapaths(void)
 }
 
 
-static uint64_t
+static unsigned long
 udpif_get_n_flows(struct udpif *udpif)
 {
     long long int time, now;
-    uint64_t flow_count;
+    unsigned long flow_count;
 
     now = time_msec();
     atomic_read(&udpif->n_flows_timestamp, &time);
@@ -1600,7 +1600,7 @@ upcall_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         atomic_read(&udpif->flow_limit, &flow_limit);
 
         ds_put_format(&ds, "%s:\n", dpif_name(udpif->dpif));
-        ds_put_format(&ds, "\tflows         : (current %"PRIu64")"
+        ds_put_format(&ds, "\tflows         : (current %lu)"
             " (avg %u) (max %u) (limit %u)\n", udpif_get_n_flows(udpif),
             udpif->avg_n_flows, udpif->max_n_flows, flow_limit);
         ds_put_format(&ds, "\tdump duration : %lldms\n", udpif->dump_duration);
