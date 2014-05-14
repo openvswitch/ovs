@@ -3228,11 +3228,6 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
                             ctx.xin->resubmit_stats->n_bytes);
 
         if (ctx.xbridge->netflow) {
-            const struct ofpact *ofpacts;
-            size_t ofpacts_len;
-
-            ofpacts_len = actions->ofpacts_len;
-            ofpacts = actions->ofpacts;
             if (ofpacts_len == 0
                 || ofpacts->type != OFPACT_CONTROLLER
                 || ofpact_next(ofpacts) < ofpact_end(ofpacts, ofpacts_len)) {
