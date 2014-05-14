@@ -3413,9 +3413,6 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
     }
 
     if (ctx.xbridge->netflow) {
-        const struct ofpact *ofpacts = actions->ofpacts;
-        size_t ofpacts_len = actions->ofpacts_len;
-
         /* Only update netflow if we don't have controller flow.  We don't
          * report NetFlow expiration messages for such facets because they
          * are just part of the control logic for the network, not real
