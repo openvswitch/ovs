@@ -1,4 +1,4 @@
-Post-v2.2.0
+v2.3.0 - xx xxx xxxx
 ---------------------
    - OpenFlow 1.1, 1.2, and 1.3 are now enabled by default in
      ovs-vswitchd.
@@ -12,7 +12,7 @@ Post-v2.2.0
      older kernel module, some workloads may perform worse with the
      new userspace.
 
-v2.2.0 - xx xxx xxx
+v2.2.0 - Internal Release
 ---------------------
    - Internal ports are no longer brought up by default, because it
      should be an administrator task to bring up devices as they are
