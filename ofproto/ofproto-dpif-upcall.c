@@ -1470,7 +1470,7 @@ revalidate(struct revalidator *revalidator)
                  * flow this time. */
                 ovs_mutex_unlock(&ukey->mutex);
                 COVERAGE_INC(upcall_duplicate_flow);
-                continue;
+                goto next;
             }
 
             used = ukey->created;
@@ -1493,7 +1493,7 @@ revalidate(struct revalidator *revalidator)
                      * another revalidator is processing this flow
                      * concurrently, so don't bother processing it. */
                     ukey_delete(NULL, ukey);
-                    continue;
+                    goto next;
                 }
             }
 
@@ -1511,6 +1511,7 @@ revalidate(struct revalidator *revalidator)
             dump_op_init(&ops[n_ops++], key, key_len, ukey);
         }
 
+    next:
         may_destroy = dpif_flow_dump_next_may_destroy_keys(&udpif->dump,
                                                            state);
 
