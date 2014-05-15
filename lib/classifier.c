@@ -212,28 +212,25 @@ cls_subtable_cache_push_back(struct cls_subtable_cache *array,
     array->subtables[array->size++] = a;
 }
 
-/* Only for rearranging entries in the same cache. */
+/* Move subtable entry at 'from' to 'to', shifting the elements in between
+ * (including the one at 'to') accordingly. */
 static inline void
-cls_subtable_cache_splice(struct cls_subtable_entry *to,
-                          struct cls_subtable_entry *start,
-                          struct cls_subtable_entry *end)
+cls_subtable_cache_move(struct cls_subtable_entry *to,
+                        struct cls_subtable_entry *from)
 {
-    if (to > end) {
-        /* Same as splicing entries to (start) from [end, to). */
-        struct cls_subtable_entry *temp = to;
-        to = start; start = end; end = temp;
-    }
-    if (to < start) {
-        /* Move elements [start, end) to (to) one by one. */
-        while (start != end) {
-            struct cls_subtable_entry temp = *start;
+    if (to != from) {
+        struct cls_subtable_entry temp = *from;
 
-            /* Shift array by one, making space for the element at 'temp'. */
-            memmove(to + 1, to, (start - to) * sizeof *to);
-            *to = temp;
-            start++; to++;
+        if (to > from) {
+            /* Shift entries (from,to] backwards to make space at 'to'. */
+            memmove(from, from + 1, (to - from) * sizeof *to);
+        } else {
+            /* Shift entries [to,from) forward to make space at 'to'. */
+            memmove(to + 1, to, (from - to) * sizeof *to);
         }
-    } /* Else nothing to be done. */
+
+        *to = temp;
+    }
 }
 
 /* Array removal. */
@@ -300,7 +297,7 @@ cls_subtable_cache_reset(struct cls_classifier *cls)
         struct cls_match *head;
         struct cls_subtable_entry elem;
         struct cls_subtable *table;
-        struct cls_subtable_entry *iter, *subtable_iter = NULL;
+        struct cls_subtable_entry *iter, *from = NULL;
         unsigned int new_max = 0;
         unsigned int max_count = 0;
         bool found;
@@ -350,26 +347,25 @@ cls_subtable_cache_reset(struct cls_classifier *cls)
         elem.max_priority = subtable->max_priority;
         cls_subtable_cache_push_back(&cls->subtables_priority, elem);
 
-        /* Possibly move 'subtable' earlier in the priority list.  If we break
-         * out of the loop, then 'subtable_iter' should be moved just before
-         * 'iter'.  If the loop terminates normally, then 'iter' will be the
-         * first list element and we'll move subtable just before that
-         * (e.g. to the front of the list). */
+        /* Possibly move 'subtable' earlier in the priority array.  If
+         * we break out of the loop, then the subtable (at 'from')
+         * should be moved to the position right after the current
+         * element.  If the loop terminates normally, then 'iter' will
+         * be at the first array element and we'll move the subtable
+         * to the front of the array. */
         CLS_SUBTABLE_CACHE_FOR_EACH_REVERSE (table, iter,
                                              &cls->subtables_priority) {
             if (table == subtable) {
-                subtable_iter = iter; /* Locate the subtable as we go. */
+                from = iter; /* Locate the subtable as we go. */
             } else if (table->max_priority >= new_max) {
-                ovs_assert(subtable_iter != NULL);
-                iter++;
+                ovs_assert(from != NULL);
+                iter++; /* After this. */
                 break;
             }
         }
 
-        /* Move 'subtable' just before 'iter' (unless it's already there). */
-        if (iter != subtable_iter) {
-            cls_subtable_cache_splice(iter, subtable_iter, subtable_iter + 1);
-        }
+        /* Move subtable at 'from' to 'iter'. */
+        cls_subtable_cache_move(iter, from);
     }
 
     /* Verify that the old and the new have the same size. */
@@ -1553,36 +1549,36 @@ update_subtables_after_insertion(struct cls_classifier *cls,
         ++subtable->max_count;
     } else if (new_priority > subtable->max_priority) {
         struct cls_subtable *table;
-        struct cls_subtable_entry *iter, *subtable_iter = NULL;
+        struct cls_subtable_entry *iter, *from = NULL;
 
         subtable->max_priority = new_priority;
         subtable->max_count = 1;
 
-        /* Possibly move 'subtable' earlier in the priority list.  If we break
-         * out of the loop, then 'subtable_iter' should be moved just before
-         * 'iter'.  If the loop terminates normally, then 'iter' will be the
-         * first list element and we'll move subtable just before that
-         * (e.g. to the front of the list). */
-        CLS_SUBTABLE_CACHE_FOR_EACH_REVERSE (table, iter, &cls->subtables_priority) {
+        /* Possibly move 'subtable' earlier in the priority array.  If
+         * we break out of the loop, then the subtable (at 'from')
+         * should be moved to the position right after the current
+         * element.  If the loop terminates normally, then 'iter' will
+         * be at the first array element and we'll move the subtable
+         * to the front of the array. */
+        CLS_SUBTABLE_CACHE_FOR_EACH_REVERSE (table, iter,
+                                             &cls->subtables_priority) {
             if (table == subtable) {
-                subtable_iter = iter; /* Locate the subtable as we go. */
+                from = iter; /* Locate the subtable as we go. */
                 iter->max_priority = new_priority;
             } else if (table->max_priority >= new_priority) {
-                if (subtable_iter == NULL) {
+                if (from == NULL) {
                     /* Corrupted cache? */
                     cls_subtable_cache_reset(cls);
                     VLOG_ABORT("update_subtables_after_insertion(): Subtable priority list corrupted.");
                     OVS_NOT_REACHED();
                 }
-                iter++;
+                iter++; /* After this. */
                 break;
             }
         }
 
-        /* Move 'subtable' just before 'iter' (unless it's already there). */
-        if (iter != subtable_iter) {
-            cls_subtable_cache_splice(iter, subtable_iter, subtable_iter + 1);
-        }
+        /* Move subtable at 'from' to 'iter'. */
+        cls_subtable_cache_move(iter, from);
     }
 }
 
@@ -1604,7 +1600,7 @@ update_subtables_after_removal(struct cls_classifier *cls,
     if (del_priority == subtable->max_priority && --subtable->max_count == 0) {
         struct cls_match *head;
         struct cls_subtable *table;
-        struct cls_subtable_entry *iter, *subtable_iter = NULL;
+        struct cls_subtable_entry *iter, *from = NULL;
 
         subtable->max_priority = 0;
         HMAP_FOR_EACH (head, hmap_node, &subtable->rules) {
@@ -1616,17 +1612,17 @@ update_subtables_after_removal(struct cls_classifier *cls,
             }
         }
 
-        /* Possibly move 'subtable' later in the priority list.  If we break
-         * out of the loop, then 'subtable' should be moved just before that
-         * 'iter'.  If the loop terminates normally, then 'iter' will be the
-         * list head and we'll move subtable just before that (e.g. to the back
-         * of the list). */
+        /* Possibly move 'subtable' later in the priority array.
+         * After the loop the 'iter' will point right after the position
+         * at which the subtable should be moved (either at a subtable
+         * with an equal or lower priority, or just past the array),
+         * so it is decremented once. */
         CLS_SUBTABLE_CACHE_FOR_EACH (table, iter, &cls->subtables_priority) {
             if (table == subtable) {
-                subtable_iter = iter; /* Locate the subtable as we go. */
+                from = iter; /* Locate the subtable as we go. */
                 iter->max_priority = subtable->max_priority;
             } else if (table->max_priority <= subtable->max_priority) {
-                if (subtable_iter == NULL) {
+                if (from == NULL) {
                     /* Corrupted cache? */
                     cls_subtable_cache_reset(cls);
                     VLOG_ABORT("update_subtables_after_removal(): Subtable priority list corrupted.");
@@ -1635,11 +1631,11 @@ update_subtables_after_removal(struct cls_classifier *cls,
                 break;
             }
         }
+        /* Now at one past the destination. */
+        iter--;
 
-        /* Move 'subtable' just before 'iter' (unless it's already there). */
-        if (iter != subtable_iter) {
-            cls_subtable_cache_splice(iter, subtable_iter, subtable_iter + 1);
-        }
+        /* Move subtable at 'from' to 'iter'. */
+        cls_subtable_cache_move(iter, from);
     }
 }
 
