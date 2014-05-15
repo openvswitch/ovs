@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,29 +47,17 @@ enum OVS_PACKED_ENUM mf_field_id {
     MFF_SKB_PRIORITY,           /* be32 */
     MFF_PKT_MARK,               /* be32 */
 
-#if FLOW_N_REGS > 0
+#if FLOW_N_REGS == 8
     MFF_REG0,                   /* be32 */
-#endif
-#if FLOW_N_REGS > 1
     MFF_REG1,                   /* be32 */
-#endif
-#if FLOW_N_REGS > 2
     MFF_REG2,                   /* be32 */
-#endif
-#if FLOW_N_REGS > 3
     MFF_REG3,                   /* be32 */
-#endif
-#if FLOW_N_REGS > 4
     MFF_REG4,                   /* be32 */
-#endif
-#if FLOW_N_REGS > 5
     MFF_REG5,                   /* be32 */
-#endif
-#if FLOW_N_REGS > 6
     MFF_REG6,                   /* be32 */
-#endif
-#if FLOW_N_REGS > 7
     MFF_REG7,                   /* be32 */
+#else
+#error "Need to update MFF_REG* to match FLOW_N_REGS"
 #endif
 
     /* L2. */
@@ -148,36 +136,12 @@ enum OVS_PACKED_ENUM mf_field_id {
 
 /* Use this macro as CASE_MFF_REGS: in a switch statement to choose all of the
  * MFF_REGx cases. */
-#if FLOW_N_REGS == 1
-# define CASE_MFF_REGS                                          \
-    case MFF_REG0
-#elif FLOW_N_REGS == 2
-# define CASE_MFF_REGS                                          \
-    case MFF_REG0: case MFF_REG1
-#elif FLOW_N_REGS == 3
-# define CASE_MFF_REGS                                          \
-    case MFF_REG0: case MFF_REG1: case MFF_REG2
-#elif FLOW_N_REGS == 4
-# define CASE_MFF_REGS                                          \
-    case MFF_REG0: case MFF_REG1: case MFF_REG2: case MFF_REG3
-#elif FLOW_N_REGS == 5
-# define CASE_MFF_REGS                                          \
-    case MFF_REG0: case MFF_REG1: case MFF_REG2: case MFF_REG3: \
-    case MFF_REG4
-#elif FLOW_N_REGS == 6
-# define CASE_MFF_REGS                                          \
-    case MFF_REG0: case MFF_REG1: case MFF_REG2: case MFF_REG3: \
-    case MFF_REG4: case MFF_REG5
-#elif FLOW_N_REGS == 7
-# define CASE_MFF_REGS                                          \
-    case MFF_REG0: case MFF_REG1: case MFF_REG2: case MFF_REG3: \
-    case MFF_REG4: case MFF_REG5: case MFF_REG6
-#elif FLOW_N_REGS == 8
-# define CASE_MFF_REGS                                          \
+#if FLOW_N_REGS == 8
+#define CASE_MFF_REGS                                           \
     case MFF_REG0: case MFF_REG1: case MFF_REG2: case MFF_REG3: \
     case MFF_REG4: case MFF_REG5: case MFF_REG6: case MFF_REG7
 #else
-# error
+#error "Need to update CASE_MFF_REGS to match FLOW_N_REGS"
 #endif
 
 /* Prerequisites for matching a field.

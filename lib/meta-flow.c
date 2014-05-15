@@ -223,32 +223,17 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
         OFPUTIL_P_NXM_OXM_ANY,                  \
         -1,                                     \
     }
-#if FLOW_N_REGS > 0
+#if FLOW_N_REGS == 8
     REGISTER(0),
-#endif
-#if FLOW_N_REGS > 1
     REGISTER(1),
-#endif
-#if FLOW_N_REGS > 2
     REGISTER(2),
-#endif
-#if FLOW_N_REGS > 3
     REGISTER(3),
-#endif
-#if FLOW_N_REGS > 4
     REGISTER(4),
-#endif
-#if FLOW_N_REGS > 5
     REGISTER(5),
-#endif
-#if FLOW_N_REGS > 6
     REGISTER(6),
-#endif
-#if FLOW_N_REGS > 7
     REGISTER(7),
-#endif
-#if FLOW_N_REGS > 8
-#error
+#else
+#error "Need to update mf_fields[] to match FLOW_N_REGS"
 #endif
 
     /* ## -- ## */
