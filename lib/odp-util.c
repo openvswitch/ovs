@@ -2643,11 +2643,11 @@ odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *flow,
             icmpv6_key->icmpv6_type = ntohs(data->tp_src);
             icmpv6_key->icmpv6_code = ntohs(data->tp_dst);
 
-            if (flow->tp_dst == htons(0) &&
-                (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT) ||
-                 flow->tp_src == htons(ND_NEIGHBOR_ADVERT)) &&
-                (!export_mask || (data->tp_src == htons(0xffff) &&
-                              data->tp_dst == htons(0xffff)))) {
+            if (flow->tp_dst == htons(0)
+                && (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT)
+                    || flow->tp_src == htons(ND_NEIGHBOR_ADVERT))
+                && (!export_mask || (data->tp_src == htons(0xffff)
+                                     && data->tp_dst == htons(0xffff)))) {
 
                 struct ovs_key_nd *nd_key;
 
