@@ -113,6 +113,7 @@ int
 main(int argc, char *argv[])
 {
     set_program_name(argv[0]);
+    service_start(&argc, &argv);
     parse_options(argc, argv);
     fatal_ignore_sigpipe();
     run_command(argc - optind, argv + optind, get_all_commands());
