@@ -489,7 +489,9 @@ netdev_unref(struct netdev *dev)
 
         dev->netdev_class->destruct(dev);
 
-        shash_delete(&netdev_shash, dev->node);
+        if (dev->node) {
+            shash_delete(&netdev_shash, dev->node);
+        }
         free(dev->name);
         dev->netdev_class->dealloc(dev);
         ovs_mutex_unlock(&netdev_mutex);
@@ -511,6 +513,28 @@ netdev_close(struct netdev *netdev)
 {
     if (netdev) {
         ovs_mutex_lock(&netdev_mutex);
+        netdev_unref(netdev);
+    }
+}
+
+/* Removes 'netdev' from the global shash and unrefs 'netdev'.
+ *
+ * This allows handler and revalidator threads to still retain references
+ * to this netdev while the main thread changes interface configuration.
+ *
+ * This function should only be called by the main thread when closing
+ * netdevs during user configuration changes. Otherwise, netdev_close should be
+ * used to close netdevs. */
+void
+netdev_remove(struct netdev *netdev)
+{
+    if (netdev) {
+        ovs_mutex_lock(&netdev_mutex);
+        if (netdev->node) {
+            shash_delete(&netdev_shash, netdev->node);
+            netdev->node = NULL;
+            netdev_change_seq_changed(netdev);
+        }
         netdev_unref(netdev);
     }
 }

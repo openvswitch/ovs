@@ -141,6 +141,7 @@ bool netdev_is_pmd(const struct netdev *netdev);
 int netdev_open(const char *name, const char *type, struct netdev **netdevp);
 
 struct netdev *netdev_ref(const struct netdev *);
+void netdev_remove(struct netdev *);
 void netdev_close(struct netdev *);
 
 void netdev_parse_name(const char *netdev_name, char **name, char **type);
