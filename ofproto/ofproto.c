@@ -69,6 +69,11 @@ COVERAGE_DEFINE(ofproto_recv_openflow);
 COVERAGE_DEFINE(ofproto_reinit_ports);
 COVERAGE_DEFINE(ofproto_update_port);
 
+/* Default fields to use for prefix tries in each flow table, unless something
+ * else is configured. */
+const enum mf_field_id default_prefix_fields[2] =
+    { MFF_IPV4_DST, MFF_IPV4_SRC };
+
 enum ofproto_state {
     S_OPENFLOW,                 /* Processing OpenFlow commands. */
     S_EVICT,                    /* Evicting flows from over-limit tables. */
@@ -6785,6 +6790,11 @@ oftable_init(struct oftable *table)
     classifier_init(&table->cls, flow_segment_u32s);
     table->max_flows = UINT_MAX;
     atomic_init(&table->config, (unsigned int)OFPROTO_TABLE_MISS_DEFAULT);
+
+    fat_rwlock_wrlock(&table->cls.rwlock);
+    classifier_set_prefix_fields(&table->cls, default_prefix_fields,
+                                 ARRAY_SIZE(default_prefix_fields));
+    fat_rwlock_unlock(&table->cls.rwlock);
 }
 
 /* Destroys 'table', including its classifier and eviction groups.

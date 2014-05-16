@@ -3074,6 +3074,7 @@ bridge_configure_tables(struct bridge *br)
 
         if (j < br->cfg->n_flow_tables && i == br->cfg->key_flow_tables[j]) {
             struct ovsrec_flow_table *cfg = br->cfg->value_flow_tables[j++];
+            bool no_prefixes;
 
             s.name = cfg->name;
             if (cfg->n_flow_limit && *cfg->flow_limit < UINT_MAX) {
@@ -3102,10 +3103,17 @@ bridge_configure_tables(struct bridge *br)
                 }
             }
             /* Prefix lookup fields. */
+            no_prefixes = false;
             s.n_prefix_fields = 0;
             for (k = 0; k < cfg->n_prefixes; k++) {
                 const char *name = cfg->prefixes[k];
-                const struct mf_field *mf = mf_from_name(name);
+                const struct mf_field *mf;
+
+                if (strcmp(name, "none") == 0) {
+                    no_prefixes = true;
+                    continue;
+                }
+                mf = mf_from_name(name);
                 if (!mf) {
                     VLOG_WARN("bridge %s: 'prefixes' with unknown field: %s",
                               br->name, name);
@@ -3122,6 +3130,12 @@ bridge_configure_tables(struct bridge *br)
                     continue;
                 }
                 s.prefix_fields[s.n_prefix_fields++] = mf->id;
+            }
+            if (s.n_prefix_fields == 0 && !no_prefixes) {
+                /* Use default values. */
+                s.n_prefix_fields = ARRAY_SIZE(default_prefix_fields);
+                memcpy(s.prefix_fields, default_prefix_fields,
+                       sizeof default_prefix_fields);
             }
             if (s.n_prefix_fields > 0) {
                 int k;
