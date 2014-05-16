@@ -2854,6 +2854,7 @@ bridge_ofproto_controller_for_mgmt(const struct bridge *br,
     oc->rate_limit = 0;
     oc->burst_limit = 0;
     oc->enable_async_msgs = true;
+    oc->dscp = 0;
 }
 
 /* Converts ovsrec_controller 'c' into an ofproto_controller in 'oc'.  */
