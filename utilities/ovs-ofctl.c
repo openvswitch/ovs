@@ -1479,6 +1479,7 @@ monitor_vconn(struct vconn *vconn, bool reply_to_echo_requests)
 
             ofptype_decode(&type, ofpbuf_data(b));
             ofp_print(stderr, ofpbuf_data(b), ofpbuf_size(b), verbosity + 2);
+            fflush(stderr);
 
             switch ((int) type) {
             case OFPTYPE_BARRIER_REPLY:
@@ -1552,6 +1553,7 @@ ofctl_monitor(int argc, char *argv[])
             msg = ofpbuf_new(0);
             ofputil_append_flow_monitor_request(&fmr, msg);
             dump_stats_transaction(vconn, msg);
+            fflush(stdout);
         } else {
             ovs_fatal(0, "%s: unsupported \"monitor\" argument", arg);
         }
