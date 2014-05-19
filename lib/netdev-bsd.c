@@ -247,7 +247,7 @@ cache_notifier_ref(void)
 
     if (!cache_notifier_refcount) {
         ret = rtbsd_notifier_register(&netdev_bsd_cache_notifier,
-                                                netdev_bsd_cache_cb, NULL);
+                                      netdev_bsd_cache_cb, NULL);
         if (ret) {
             return ret;
         }
