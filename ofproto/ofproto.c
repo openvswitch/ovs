@@ -2147,7 +2147,7 @@ dealloc_ofp_port(struct ofproto *ofproto, ofp_port_t ofp_port)
 
 /* Opens and returns a netdev for 'ofproto_port' in 'ofproto', or a null
  * pointer if the netdev cannot be opened.  On success, also fills in
- * 'opp'.  */
+ * '*pp'.  */
 static struct netdev *
 ofport_open(struct ofproto *ofproto,
             struct ofproto_port *ofproto_port,
@@ -2190,7 +2190,7 @@ ofport_open(struct ofproto *ofproto,
 }
 
 /* Returns true if most fields of 'a' and 'b' are equal.  Differences in name,
- * port number, and 'config' bits other than OFPUTIL_PS_LINK_DOWN are
+ * port number, and 'config' bits other than OFPUTIL_PC_PORT_DOWN are
  * disregarded. */
 static bool
 ofport_equal(const struct ofputil_phy_port *a,
