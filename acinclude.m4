@@ -490,7 +490,7 @@ AC_DEFUN([OVS_CHECK_MAKE_IF],
      [ovs_cv_gnu_make_if],
      [cat <<'EOF' > conftest.mk
 conftest.out:
-        echo $(if x,y,z) > conftest.out
+	echo $(if x,y,z) > conftest.out
 .PHONY: all
 EOF
       rm -f conftest.out
