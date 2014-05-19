@@ -552,10 +552,14 @@ inet_parse_passive(const char *target_, int default_port,
  *
  * 'dscp' becomes the DSCP bits in the IP headers for the new connection.  It
  * should be in the range [0, 63] and will automatically be shifted to the
- * appropriately place in the IP tos field. */
+ * appropriately place in the IP tos field.
+ *
+ * If 'kernel_print_port' is true and the port is dynamically assigned by
+ * the kernel, print the chosen port. */
 int
 inet_open_passive(int style, const char *target, int default_port,
-                  struct sockaddr_storage *ssp, uint8_t dscp)
+                  struct sockaddr_storage *ssp, uint8_t dscp,
+                  bool kernel_print_port)
 {
     bool kernel_chooses_port;
     struct sockaddr_storage ss;
@@ -616,7 +620,7 @@ inet_open_passive(int style, const char *target, int default_port,
             VLOG_ERR("%s: getsockname: %s", target, sock_strerror(error));
             goto error;
         }
-        if (kernel_chooses_port) {
+        if (kernel_chooses_port && kernel_print_port) {
             VLOG_INFO("%s: listening on port %"PRIu16,
                       target, ss_get_port(&ss));
         }

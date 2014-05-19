@@ -189,7 +189,7 @@ test_netflow_main(int argc, char *argv[])
     }
     target = argv[optind];
 
-    sock = inet_open_passive(SOCK_DGRAM, target, 0, NULL, 0);
+    sock = inet_open_passive(SOCK_DGRAM, target, 0, NULL, 0, true);
     if (sock < 0) {
         ovs_fatal(0, "%s: failed to open (%s)", argv[1], ovs_strerror(-sock));
     }

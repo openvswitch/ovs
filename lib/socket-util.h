@@ -49,7 +49,8 @@ int inet_open_active(int style, const char *target, uint16_t default_port,
 bool inet_parse_passive(const char *target, int default_port,
                         struct sockaddr_storage *ssp);
 int inet_open_passive(int style, const char *target, int default_port,
-                      struct sockaddr_storage *ssp, uint8_t dscp);
+                      struct sockaddr_storage *ssp, uint8_t dscp,
+                      bool kernel_print_port);
 
 int read_fully(int fd, void *, size_t, size_t *bytes_read);
 int write_fully(int fd, const void *, size_t, size_t *bytes_written);

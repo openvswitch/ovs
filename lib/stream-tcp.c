@@ -154,17 +154,18 @@ static int ptcp_accept(int fd, const struct sockaddr_storage *,
                        size_t, struct stream **streamp);
 
 static int
-ptcp_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp,
-          uint8_t dscp)
+new_pstream(char *suffix, struct pstream **pstreamp, int dscp,
+            bool kernel_print_port)
 {
     char bound_name[SS_NTOP_BUFSIZE + 16];
     char addrbuf[SS_NTOP_BUFSIZE];
     struct sockaddr_storage ss;
-    uint16_t port;
     int error;
+    uint16_t port;
     int fd;
 
-    fd = inet_open_passive(SOCK_STREAM, suffix, -1, &ss, dscp);
+    fd = inet_open_passive(SOCK_STREAM, suffix, -1, &ss, dscp,
+                           kernel_print_port);
     if (fd < 0) {
         return -fd;
     }
@@ -179,6 +180,13 @@ ptcp_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp,
         pstream_set_bound_port(*pstreamp, htons(port));
     }
     return error;
+}
+
+static int
+ptcp_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp,
+          uint8_t dscp)
+{
+    return new_pstream(suffix, pstreamp, dscp, true);
 }
 
 static int
@@ -215,7 +223,8 @@ pwindows_open(const char *name OVS_UNUSED, char *suffix,
     struct pstream *listener;
 
     suffix_new = xstrdup("0:127.0.0.1");
-    error = ptcp_open(name, suffix_new, pstreamp, dscp);
+
+    error = new_pstream(suffix_new, pstreamp, dscp, false);
     if (error) {
         goto exit;
     }

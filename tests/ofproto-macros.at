@@ -27,9 +27,9 @@ s/ hard_age=[0-9]*,//
 #
 #    OVS_LOGDIR=`pwd`; export OVS_LOGDIR
 #    ovsdb-server --log-file --remote=ptcp:0:127.0.0.1 ...
-#    TCP_PORT=`parse_listening_port ovsdb-server.log`
+#    TCP_PORT=`parse_listening_port < ovsdb-server.log`
 parse_listening_port () {
-    sed -n 's/.*0:.*: listening on port \([0-9]*\)$/\1/p' "$1" | head -1
+    sed -n 's/.*0:.*: listening on port \([0-9]*\)$/\1/p'
 }]
 m4_divert_pop([PREPARE_TESTS])
 
