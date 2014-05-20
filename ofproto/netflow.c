@@ -276,19 +276,6 @@ netflow_expire__(struct netflow *nf, struct netflow_flow *nf_flow)
 }
 
 void
-netflow_expire(struct netflow *nf, struct flow *flow) OVS_EXCLUDED(mutex)
-{
-    struct netflow_flow *nf_flow;
-
-    ovs_mutex_lock(&mutex);
-    nf_flow = netflow_flow_lookup(nf, flow);
-    if (nf_flow) {
-        netflow_expire__(nf, nf_flow);
-    }
-    ovs_mutex_unlock(&mutex);
-}
-
-void
 netflow_flow_clear(struct netflow *nf, struct flow *flow) OVS_EXCLUDED(mutex)
 {
     struct netflow_flow *nf_flow;
@@ -296,8 +283,7 @@ netflow_flow_clear(struct netflow *nf, struct flow *flow) OVS_EXCLUDED(mutex)
     ovs_mutex_lock(&mutex);
     nf_flow = netflow_flow_lookup(nf, flow);
     if (nf_flow) {
-        ovs_assert(!nf_flow->packet_count);
-        ovs_assert(!nf_flow->byte_count);
+        netflow_expire__(nf, nf_flow);
         hmap_remove(&nf->flows, &nf_flow->hmap_node);
         free(nf_flow);
     }
