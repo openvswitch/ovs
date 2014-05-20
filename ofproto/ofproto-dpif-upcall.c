@@ -1317,7 +1317,6 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
 exit:
     if (netflow) {
         if (!ok) {
-            netflow_expire(netflow, &flow);
             netflow_flow_clear(netflow, &flow);
         }
         netflow_unref(netflow);
@@ -1402,7 +1401,6 @@ push_dump_ops__(struct udpif *udpif, struct dump_op *ops, size_t n_ops)
                 xlate_actions_for_side_effects(&xin);
 
                 if (netflow) {
-                    netflow_expire(netflow, &flow);
                     netflow_flow_clear(netflow, &flow);
                     netflow_unref(netflow);
                 }

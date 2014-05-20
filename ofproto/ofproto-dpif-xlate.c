@@ -3618,7 +3618,6 @@ xlate_dev_unref(struct xc_entry *entry)
 static void
 xlate_cache_clear_netflow(struct netflow *netflow, struct flow *flow)
 {
-    netflow_expire(netflow, flow);
     netflow_flow_clear(netflow, flow);
     netflow_unref(netflow);
     free(flow);
