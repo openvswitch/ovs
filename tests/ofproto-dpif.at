@@ -3619,10 +3619,6 @@ AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - fin_timeout])
 OVS_VSWITCHD_START
-AT_DATA([flows.txt], [dnl
-in_port=1 actions=output:2
-in_port=2 actions=mod_vlan_vid:17,output:1
-])
 ovs-appctl time/stop
 AT_CHECK([ovs-ofctl add-flow br0 'idle_timeout=60,actions=fin_timeout(idle_timeout=5)'])
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip], [0],
