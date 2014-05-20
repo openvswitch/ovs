@@ -106,6 +106,7 @@ valgrind_wrappers = \
 	tests/valgrind/test-bundle \
 	tests/valgrind/test-byte-order \
 	tests/valgrind/test-classifier \
+	tests/valgrind/test-cmap \
 	tests/valgrind/test-csum \
 	tests/valgrind/test-file_name \
 	tests/valgrind/test-flows \
@@ -214,6 +215,7 @@ tests_ovstest_SOURCES = \
 	tests/test-bundle.c \
 	tests/test-byte-order.c \
 	tests/test-classifier.c \
+	tests/test-cmap.c \
 	tests/test-csum.c \
 	tests/test-file_name.c \
 	tests/test-flows.c \
