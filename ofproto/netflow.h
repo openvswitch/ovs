@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,7 +46,6 @@ void netflow_unref(struct netflow *);
 bool netflow_exists(void);
 
 int netflow_set_options(struct netflow *, const struct netflow_options *);
-void netflow_expire(struct netflow *, struct flow *);
 
 void netflow_run(struct netflow *);
 void netflow_wait(struct netflow *);
