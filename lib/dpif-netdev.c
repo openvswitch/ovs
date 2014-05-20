@@ -32,6 +32,7 @@
 #include <unistd.h>
 
 #include "classifier.h"
+#include "cmap.h"
 #include "csum.h"
 #include "dpif.h"
 #include "dpif-provider.h"
@@ -120,7 +121,7 @@ struct dp_netdev_queue {
  * Acquisition order is, from outermost to innermost:
  *
  *    dp_netdev_mutex (global)
- *    port_rwlock
+ *    port_mutex
  *    flow_mutex
  *    cls.rwlock
  *    queue_rwlock
@@ -159,10 +160,9 @@ struct dp_netdev {
 
     /* Ports.
      *
-     * Any lookup into 'ports' or any access to the dp_netdev_ports found
-     * through 'ports' requires taking 'port_rwlock'. */
-    struct ovs_rwlock port_rwlock;
-    struct hmap ports OVS_GUARDED;
+     * Protected by RCU.  Take the mutex to add or remove ports. */
+    struct ovs_mutex port_mutex;
+    struct cmap ports;
     struct seq *port_seq;       /* Incremented whenever a port changes. */
 
     /* Forwarding threads. */
@@ -173,8 +173,7 @@ struct dp_netdev {
 };
 
 static struct dp_netdev_port *dp_netdev_lookup_port(const struct dp_netdev *dp,
-                                                    odp_port_t)
-    OVS_REQ_RDLOCK(dp->port_rwlock);
+                                                    odp_port_t);
 
 enum dp_stat_type {
     DP_STAT_HIT,                /* Packets that matched in the flow table. */
@@ -194,7 +193,7 @@ struct dp_netdev_stats {
 
 /* A port in a netdev-based datapath. */
 struct dp_netdev_port {
-    struct hmap_node node;      /* Node in dp_netdev's 'ports'. */
+    struct cmap_node node;      /* Node in dp_netdev's 'ports'. */
     odp_port_t port_no;
     struct netdev *netdev;
     struct netdev_saved_flags *sf;
@@ -317,19 +316,17 @@ struct dpif_netdev {
 };
 
 static int get_port_by_number(struct dp_netdev *dp, odp_port_t port_no,
-                              struct dp_netdev_port **portp)
-    OVS_REQ_RDLOCK(dp->port_rwlock);
+                              struct dp_netdev_port **portp);
 static int get_port_by_name(struct dp_netdev *dp, const char *devname,
-                            struct dp_netdev_port **portp)
-    OVS_REQ_RDLOCK(dp->port_rwlock);
+                            struct dp_netdev_port **portp);
 static void dp_netdev_free(struct dp_netdev *)
     OVS_REQUIRES(dp_netdev_mutex);
 static void dp_netdev_flow_flush(struct dp_netdev *);
 static int do_add_port(struct dp_netdev *dp, const char *devname,
                        const char *type, odp_port_t port_no)
-    OVS_REQ_WRLOCK(dp->port_rwlock);
+    OVS_REQUIRES(dp->port_mutex);
 static int do_del_port(struct dp_netdev *dp, odp_port_t port_no)
-    OVS_REQ_WRLOCK(dp->port_rwlock);
+    OVS_REQUIRES(dp->port_mutex);
 static void dp_netdev_destroy_all_queues(struct dp_netdev *dp)
     OVS_REQ_WRLOCK(dp->queue_rwlock);
 static int dpif_netdev_open(const struct dpif_class *, const char *name,
@@ -410,7 +407,7 @@ create_dpif_netdev(struct dp_netdev *dp)
  * Return ODPP_NONE on failure. */
 static odp_port_t
 choose_port(struct dp_netdev *dp, const char *name)
-    OVS_REQ_RDLOCK(dp->port_rwlock)
+    OVS_REQUIRES(dp->port_mutex)
 {
     uint32_t port_no;
 
@@ -472,14 +469,14 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
 
     ovsthread_stats_init(&dp->stats);
 
-    ovs_rwlock_init(&dp->port_rwlock);
-    hmap_init(&dp->ports);
+    ovs_mutex_init(&dp->port_mutex);
+    cmap_init(&dp->ports);
     dp->port_seq = seq_create();
     latch_init(&dp->exit_latch);
 
-    ovs_rwlock_wrlock(&dp->port_rwlock);
+    ovs_mutex_lock(&dp->port_mutex);
     error = do_add_port(dp, name, "internal", ODPP_LOCAL);
-    ovs_rwlock_unlock(&dp->port_rwlock);
+    ovs_mutex_unlock(&dp->port_mutex);
     if (error) {
         dp_netdev_free(dp);
         return error;
@@ -538,8 +535,9 @@ static void
 dp_netdev_free(struct dp_netdev *dp)
     OVS_REQUIRES(dp_netdev_mutex)
 {
-    struct dp_netdev_port *port, *next;
+    struct dp_netdev_port *port;
     struct dp_netdev_stats *bucket;
+    struct cmap_cursor cursor;
     int i;
 
     shash_find_and_delete(&dp_netdevs, dp->name);
@@ -548,11 +546,11 @@ dp_netdev_free(struct dp_netdev *dp)
     free(dp->pmd_threads);
 
     dp_netdev_flow_flush(dp);
-    ovs_rwlock_wrlock(&dp->port_rwlock);
-    HMAP_FOR_EACH_SAFE (port, next, node, &dp->ports) {
+    ovs_mutex_lock(&dp->port_mutex);
+    CMAP_FOR_EACH (port, node, &cursor, &dp->ports) {
         do_del_port(dp, port->port_no);
     }
-    ovs_rwlock_unlock(&dp->port_rwlock);
+    ovs_mutex_unlock(&dp->port_mutex);
 
     OVSTHREAD_STATS_FOR_EACH_BUCKET (bucket, i, &dp->stats) {
         ovs_mutex_destroy(&bucket->mutex);
@@ -570,7 +568,7 @@ dp_netdev_free(struct dp_netdev *dp)
     hmap_destroy(&dp->flow_table);
     ovs_mutex_destroy(&dp->flow_mutex);
     seq_destroy(dp->port_seq);
-    hmap_destroy(&dp->ports);
+    cmap_destroy(&dp->ports);
     latch_destroy(&dp->exit_latch);
     free(CONST_CAST(char *, dp->name));
     free(dp);
@@ -652,10 +650,16 @@ dp_netdev_reload_pmd_threads(struct dp_netdev *dp)
    }
 }
 
+static uint32_t
+hash_port_no(odp_port_t port_no)
+{
+    return hash_int(odp_to_u32(port_no), 0);
+}
+
 static int
 do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
             odp_port_t port_no)
-    OVS_REQ_WRLOCK(dp->port_rwlock)
+    OVS_REQUIRES(dp->port_mutex)
 {
     struct netdev_saved_flags *sf;
     struct dp_netdev_port *port;
@@ -717,7 +721,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     }
     ovs_refcount_init(&port->ref_cnt);
 
-    hmap_insert(&dp->ports, &port->node, hash_int(odp_to_u32(port_no), 0));
+    cmap_insert(&dp->ports, &port->node, hash_port_no(port_no));
     seq_change(dp->port_seq);
 
     return 0;
@@ -733,7 +737,7 @@ dpif_netdev_port_add(struct dpif *dpif, struct netdev *netdev,
     odp_port_t port_no;
     int error;
 
-    ovs_rwlock_wrlock(&dp->port_rwlock);
+    ovs_mutex_lock(&dp->port_mutex);
     dpif_port = netdev_vport_get_dpif_port(netdev, namebuf, sizeof namebuf);
     if (*port_nop != ODPP_NONE) {
         port_no = *port_nop;
@@ -746,7 +750,7 @@ dpif_netdev_port_add(struct dpif *dpif, struct netdev *netdev,
         *port_nop = port_no;
         error = do_add_port(dp, dpif_port, netdev_get_type(netdev), port_no);
     }
-    ovs_rwlock_unlock(&dp->port_rwlock);
+    ovs_mutex_unlock(&dp->port_mutex);
 
     return error;
 }
@@ -757,9 +761,9 @@ dpif_netdev_port_del(struct dpif *dpif, odp_port_t port_no)
     struct dp_netdev *dp = get_dp_netdev(dpif);
     int error;
 
-    ovs_rwlock_wrlock(&dp->port_rwlock);
+    ovs_mutex_lock(&dp->port_mutex);
     error = port_no == ODPP_LOCAL ? EINVAL : do_del_port(dp, port_no);
-    ovs_rwlock_unlock(&dp->port_rwlock);
+    ovs_mutex_unlock(&dp->port_mutex);
 
     return error;
 }
@@ -772,12 +776,10 @@ is_valid_port_number(odp_port_t port_no)
 
 static struct dp_netdev_port *
 dp_netdev_lookup_port(const struct dp_netdev *dp, odp_port_t port_no)
-    OVS_REQ_RDLOCK(dp->port_rwlock)
 {
     struct dp_netdev_port *port;
 
-    HMAP_FOR_EACH_IN_BUCKET (port, node, hash_int(odp_to_u32(port_no), 0),
-                             &dp->ports) {
+    CMAP_FOR_EACH_WITH_HASH (port, node, hash_port_no(port_no), &dp->ports) {
         if (port->port_no == port_no) {
             return port;
         }
@@ -788,7 +790,6 @@ dp_netdev_lookup_port(const struct dp_netdev *dp, odp_port_t port_no)
 static int
 get_port_by_number(struct dp_netdev *dp,
                    odp_port_t port_no, struct dp_netdev_port **portp)
-    OVS_REQ_RDLOCK(dp->port_rwlock)
 {
     if (!is_valid_port_number(port_no)) {
         *portp = NULL;
@@ -808,33 +809,40 @@ port_ref(struct dp_netdev_port *port)
 }
 
 static void
+port_destroy__(struct dp_netdev_port *port)
+{
+    int n_rxq;
+    int i;
+
+    netdev_close(port->netdev);
+    netdev_restore_flags(port->sf);
+
+    n_rxq = netdev_n_rxq(port->netdev);
+    for (i = 0; i < n_rxq; i++) {
+        netdev_rxq_close(port->rxq[i]);
+    }
+    free(port->rxq);
+    free(port->type);
+    free(port);
+}
+
+static void
 port_unref(struct dp_netdev_port *port)
 {
     if (port && ovs_refcount_unref(&port->ref_cnt) == 1) {
-        int n_rxq;
-        int i;
-
-        netdev_close(port->netdev);
-        netdev_restore_flags(port->sf);
-
-        n_rxq = netdev_n_rxq(port->netdev);
-        for (i = 0; i < n_rxq; i++) {
-            netdev_rxq_close(port->rxq[i]);
-        }
-        free(port->rxq);
-        free(port->type);
-        free(port);
+        ovsrcu_postpone(port_destroy__, port);
     }
 }
 
 static int
 get_port_by_name(struct dp_netdev *dp,
                  const char *devname, struct dp_netdev_port **portp)
-    OVS_REQ_RDLOCK(dp->port_rwlock)
+    OVS_REQUIRES(dp->port_mutex)
 {
     struct dp_netdev_port *port;
+    struct cmap_cursor cursor;
 
-    HMAP_FOR_EACH (port, node, &dp->ports) {
+    CMAP_FOR_EACH (port, node, &cursor, &dp->ports) {
         if (!strcmp(netdev_get_name(port->netdev), devname)) {
             *portp = port;
             return 0;
@@ -845,7 +853,7 @@ get_port_by_name(struct dp_netdev *dp,
 
 static int
 do_del_port(struct dp_netdev *dp, odp_port_t port_no)
-    OVS_REQ_WRLOCK(dp->port_rwlock)
+    OVS_REQUIRES(dp->port_mutex)
 {
     struct dp_netdev_port *port;
     int error;
@@ -855,7 +863,7 @@ do_del_port(struct dp_netdev *dp, odp_port_t port_no)
         return error;
     }
 
-    hmap_remove(&dp->ports, &port->node);
+    cmap_remove(&dp->ports, &port->node, hash_odp_port(port_no));
     seq_change(dp->port_seq);
     if (netdev_is_pmd(port->netdev)) {
         dp_netdev_reload_pmd_threads(dp);
@@ -882,12 +890,10 @@ dpif_netdev_port_query_by_number(const struct dpif *dpif, odp_port_t port_no,
     struct dp_netdev_port *port;
     int error;
 
-    ovs_rwlock_rdlock(&dp->port_rwlock);
     error = get_port_by_number(dp, port_no, &port);
     if (!error && dpif_port) {
         answer_port_query(port, dpif_port);
     }
-    ovs_rwlock_unlock(&dp->port_rwlock);
 
     return error;
 }
@@ -900,12 +906,12 @@ dpif_netdev_port_query_by_name(const struct dpif *dpif, const char *devname,
     struct dp_netdev_port *port;
     int error;
 
-    ovs_rwlock_rdlock(&dp->port_rwlock);
+    ovs_mutex_lock(&dp->port_mutex);
     error = get_port_by_name(dp, devname, &port);
     if (!error && dpif_port) {
         answer_port_query(port, dpif_port);
     }
-    ovs_rwlock_unlock(&dp->port_rwlock);
+    ovs_mutex_unlock(&dp->port_mutex);
 
     return error;
 }
@@ -964,8 +970,7 @@ dpif_netdev_flow_flush(struct dpif *dpif)
 }
 
 struct dp_netdev_port_state {
-    uint32_t bucket;
-    uint32_t offset;
+    struct cmap_position position;
     char *name;
 };
 
@@ -982,11 +987,10 @@ dpif_netdev_port_dump_next(const struct dpif *dpif, void *state_,
 {
     struct dp_netdev_port_state *state = state_;
     struct dp_netdev *dp = get_dp_netdev(dpif);
-    struct hmap_node *node;
+    struct cmap_node *node;
     int retval;
 
-    ovs_rwlock_rdlock(&dp->port_rwlock);
-    node = hmap_at_position(&dp->ports, &state->bucket, &state->offset);
+    node = cmap_next_position(&dp->ports, &state->position);
     if (node) {
         struct dp_netdev_port *port;
 
@@ -1002,7 +1006,6 @@ dpif_netdev_port_dump_next(const struct dpif *dpif, void *state_,
     } else {
         retval = EOF;
     }
-    ovs_rwlock_unlock(&dp->port_rwlock);
 
     return retval;
 }
@@ -1530,10 +1533,8 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
     miniflow_initialize(&key.flow, key.buf);
     miniflow_extract(execute->packet, md, &key.flow);
 
-    ovs_rwlock_rdlock(&dp->port_rwlock);
     dp_netdev_execute_actions(dp, &key.flow, execute->packet, false, md,
                               execute->actions, execute->actions_len);
-    ovs_rwlock_unlock(&dp->port_rwlock);
 
     return 0;
 }
@@ -1772,10 +1773,9 @@ dpif_netdev_run(struct dpif *dpif)
 {
     struct dp_netdev_port *port;
     struct dp_netdev *dp = get_dp_netdev(dpif);
+    struct cmap_cursor cursor;
 
-    ovs_rwlock_rdlock(&dp->port_rwlock);
-
-    HMAP_FOR_EACH (port, node, &dp->ports) {
+    CMAP_FOR_EACH (port, node, &cursor, &dp->ports) {
         if (!netdev_is_pmd(port->netdev)) {
             int i;
 
@@ -1784,8 +1784,6 @@ dpif_netdev_run(struct dpif *dpif)
             }
         }
     }
-
-    ovs_rwlock_unlock(&dp->port_rwlock);
 }
 
 static void
@@ -1793,10 +1791,10 @@ dpif_netdev_wait(struct dpif *dpif)
 {
     struct dp_netdev_port *port;
     struct dp_netdev *dp = get_dp_netdev(dpif);
+    struct cmap_cursor cursor;
 
-    ovs_rwlock_rdlock(&dp->port_rwlock);
-
-    HMAP_FOR_EACH (port, node, &dp->ports) {
+    ovs_mutex_lock(&dp_netdev_mutex);
+    CMAP_FOR_EACH (port, node, &cursor, &dp->ports) {
         if (!netdev_is_pmd(port->netdev)) {
             int i;
 
@@ -1805,7 +1803,7 @@ dpif_netdev_wait(struct dpif *dpif)
             }
         }
     }
-    ovs_rwlock_unlock(&dp->port_rwlock);
+    ovs_mutex_unlock(&dp_netdev_mutex);
 }
 
 struct rxq_poll {
@@ -1820,12 +1818,12 @@ pmd_load_queues(struct pmd_thread *f,
     struct dp_netdev *dp = f->dp;
     struct rxq_poll *poll_list = *ppoll_list;
     struct dp_netdev_port *port;
+    struct cmap_cursor cursor;
     int id = f->id;
     int index;
     int i;
 
     /* Simple scheduler for netdev rx polling. */
-    ovs_rwlock_rdlock(&dp->port_rwlock);
     for (i = 0; i < poll_cnt; i++) {
          port_unref(poll_list[i].port);
     }
@@ -1833,7 +1831,7 @@ pmd_load_queues(struct pmd_thread *f,
     poll_cnt = 0;
     index = 0;
 
-    HMAP_FOR_EACH (port, node, &f->dp->ports) {
+    CMAP_FOR_EACH (port, node, &cursor, &f->dp->ports) {
         if (netdev_is_pmd(port->netdev)) {
             int i;
 
@@ -1851,7 +1849,6 @@ pmd_load_queues(struct pmd_thread *f,
         }
     }
 
-    ovs_rwlock_unlock(&dp->port_rwlock);
     *ppoll_list = poll_list;
     return poll_cnt;
 }
@@ -1997,7 +1994,6 @@ dp_netdev_count_packet(struct dp_netdev *dp, enum dp_stat_type type)
 static void
 dp_netdev_input(struct dp_netdev *dp, struct ofpbuf *packet,
                 struct pkt_metadata *md)
-    OVS_REQ_RDLOCK(dp->port_rwlock)
 {
     struct dp_netdev_flow *netdev_flow;
     struct {
@@ -2035,7 +2031,6 @@ dp_netdev_input(struct dp_netdev *dp, struct ofpbuf *packet,
 static void
 dp_netdev_port_input(struct dp_netdev *dp, struct ofpbuf *packet,
                      struct pkt_metadata *md)
-    OVS_REQ_RDLOCK(dp->port_rwlock)
 {
     uint32_t *recirc_depth = recirc_depth_get();
 
@@ -2248,7 +2243,8 @@ static void
 dpif_dummy_change_port_number(struct unixctl_conn *conn, int argc OVS_UNUSED,
                               const char *argv[], void *aux OVS_UNUSED)
 {
-    struct dp_netdev_port *port;
+    struct dp_netdev_port *old_port;
+    struct dp_netdev_port *new_port;
     struct dp_netdev *dp;
     odp_port_t port_no;
 
@@ -2262,8 +2258,8 @@ dpif_dummy_change_port_number(struct unixctl_conn *conn, int argc OVS_UNUSED,
     ovs_refcount_ref(&dp->ref_cnt);
     ovs_mutex_unlock(&dp_netdev_mutex);
 
-    ovs_rwlock_wrlock(&dp->port_rwlock);
-    if (get_port_by_name(dp, argv[2], &port)) {
+    ovs_mutex_lock(&dp->port_mutex);
+    if (get_port_by_name(dp, argv[2], &old_port)) {
         unixctl_command_reply_error(conn, "unknown port");
         goto exit;
     }
@@ -2277,14 +2273,21 @@ dpif_dummy_change_port_number(struct unixctl_conn *conn, int argc OVS_UNUSED,
         unixctl_command_reply_error(conn, "port number already in use");
         goto exit;
     }
-    hmap_remove(&dp->ports, &port->node);
-    port->port_no = port_no;
-    hmap_insert(&dp->ports, &port->node, hash_int(odp_to_u32(port_no), 0));
+
+    /* Remove old port. */
+    cmap_remove(&dp->ports, &old_port->node, hash_port_no(old_port->port_no));
+    ovsrcu_postpone(free, old_port);
+
+    /* Insert new port (cmap semantics mean we cannot re-insert 'old_port'). */
+    new_port = xmemdup(old_port, sizeof *old_port);
+    new_port->port_no = port_no;
+    cmap_insert(&dp->ports, &new_port->node, hash_port_no(port_no));
+
     seq_change(dp->port_seq);
     unixctl_command_reply(conn, NULL);
 
 exit:
-    ovs_rwlock_unlock(&dp->port_rwlock);
+    ovs_mutex_unlock(&dp->port_mutex);
     dp_netdev_unref(dp);
 }
 
