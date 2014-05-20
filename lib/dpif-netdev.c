@@ -1371,134 +1371,141 @@ dpif_netdev_flow_del(struct dpif *dpif, const struct dpif_flow_del *del)
     return error;
 }
 
-struct dp_netdev_flow_state {
-    struct odputil_keybuf keybuf;
-    struct odputil_keybuf maskbuf;
-    struct dpif_flow_stats stats;
-};
-
-struct dp_netdev_flow_iter {
+struct dpif_netdev_flow_dump {
+    struct dpif_flow_dump up;
     uint32_t bucket;
     uint32_t offset;
     int status;
     struct ovs_mutex mutex;
 };
 
-static void
-dpif_netdev_flow_dump_state_init(void **statep)
+static struct dpif_netdev_flow_dump *
+dpif_netdev_flow_dump_cast(struct dpif_flow_dump *dump)
 {
-    struct dp_netdev_flow_state *state;
-
-    *statep = state = xmalloc(sizeof *state);
+    return CONTAINER_OF(dump, struct dpif_netdev_flow_dump, up);
 }
 
-static void
-dpif_netdev_flow_dump_state_uninit(void *state_)
+static struct dpif_flow_dump *
+dpif_netdev_flow_dump_create(const struct dpif *dpif_)
 {
-    struct dp_netdev_flow_state *state = state_;
+    struct dpif_netdev_flow_dump *dump;
 
-    free(state);
+    dump = xmalloc(sizeof *dump);
+    dpif_flow_dump_init(&dump->up, dpif_);
+    dump->bucket = 0;
+    dump->offset = 0;
+    dump->status = 0;
+    ovs_mutex_init(&dump->mutex);
+
+    return &dump->up;
 }
 
 static int
-dpif_netdev_flow_dump_start(const struct dpif *dpif OVS_UNUSED, void **iterp)
+dpif_netdev_flow_dump_destroy(struct dpif_flow_dump *dump_)
 {
-    struct dp_netdev_flow_iter *iter;
+    struct dpif_netdev_flow_dump *dump = dpif_netdev_flow_dump_cast(dump_);
 
-    *iterp = iter = xmalloc(sizeof *iter);
-    iter->bucket = 0;
-    iter->offset = 0;
-    iter->status = 0;
-    ovs_mutex_init(&iter->mutex);
+    ovs_mutex_destroy(&dump->mutex);
+    free(dump);
     return 0;
+}
+
+struct dpif_netdev_flow_dump_thread {
+    struct dpif_flow_dump_thread up;
+    struct dpif_netdev_flow_dump *dump;
+    struct odputil_keybuf keybuf;
+    struct odputil_keybuf maskbuf;
+};
+
+static struct dpif_netdev_flow_dump_thread *
+dpif_netdev_flow_dump_thread_cast(struct dpif_flow_dump_thread *thread)
+{
+    return CONTAINER_OF(thread, struct dpif_netdev_flow_dump_thread, up);
+}
+
+static struct dpif_flow_dump_thread *
+dpif_netdev_flow_dump_thread_create(struct dpif_flow_dump *dump_)
+{
+    struct dpif_netdev_flow_dump *dump = dpif_netdev_flow_dump_cast(dump_);
+    struct dpif_netdev_flow_dump_thread *thread;
+
+    thread = xmalloc(sizeof *thread);
+    dpif_flow_dump_thread_init(&thread->up, &dump->up);
+    thread->dump = dump;
+    return &thread->up;
+}
+
+static void
+dpif_netdev_flow_dump_thread_destroy(struct dpif_flow_dump_thread *thread_)
+{
+    struct dpif_netdev_flow_dump_thread *thread
+        = dpif_netdev_flow_dump_thread_cast(thread_);
+
+    free(thread);
 }
 
 /* XXX the caller must use 'actions' without quiescing */
 static int
-dpif_netdev_flow_dump_next(const struct dpif *dpif, void *iter_, void *state_,
-                           const struct nlattr **key, size_t *key_len,
-                           const struct nlattr **mask, size_t *mask_len,
-                           const struct nlattr **actions, size_t *actions_len,
-                           const struct dpif_flow_stats **stats)
+dpif_netdev_flow_dump_next(struct dpif_flow_dump_thread *thread_,
+                           struct dpif_flow *f, int max_flows OVS_UNUSED)
 {
-    struct dp_netdev_flow_iter *iter = iter_;
-    struct dp_netdev_flow_state *state = state_;
-    struct dp_netdev *dp = get_dp_netdev(dpif);
+    struct dpif_netdev_flow_dump_thread *thread
+        = dpif_netdev_flow_dump_thread_cast(thread_);
+    struct dpif_netdev_flow_dump *dump = thread->dump;
+    struct dpif_netdev *dpif = dpif_netdev_cast(thread->up.dpif);
+    struct dp_netdev *dp = get_dp_netdev(&dpif->dpif);
     struct dp_netdev_flow *netdev_flow;
     struct flow_wildcards wc;
+    struct dp_netdev_actions *dp_actions;
+    struct ofpbuf buf;
     int error;
 
-    ovs_mutex_lock(&iter->mutex);
-    error = iter->status;
+    ovs_mutex_lock(&dump->mutex);
+    error = dump->status;
     if (!error) {
         struct hmap_node *node;
 
         fat_rwlock_rdlock(&dp->cls.rwlock);
-        node = hmap_at_position(&dp->flow_table, &iter->bucket, &iter->offset);
+        node = hmap_at_position(&dp->flow_table, &dump->bucket, &dump->offset);
         if (node) {
             netdev_flow = CONTAINER_OF(node, struct dp_netdev_flow, node);
         }
         fat_rwlock_unlock(&dp->cls.rwlock);
         if (!node) {
-            iter->status = error = EOF;
+            dump->status = error = EOF;
         }
     }
-    ovs_mutex_unlock(&iter->mutex);
+    ovs_mutex_unlock(&dump->mutex);
     if (error) {
-        return error;
+        return 0;
     }
 
     minimask_expand(&netdev_flow->cr.match.mask, &wc);
 
-    if (key) {
-        struct ofpbuf buf;
+    /* Key. */
+    ofpbuf_use_stack(&buf, &thread->keybuf, sizeof thread->keybuf);
+    odp_flow_key_from_flow(&buf, &netdev_flow->flow, &wc.masks,
+                           netdev_flow->flow.in_port.odp_port, true);
+    f->key = ofpbuf_data(&buf);
+    f->key_len = ofpbuf_size(&buf);
 
-        ofpbuf_use_stack(&buf, &state->keybuf, sizeof state->keybuf);
-        odp_flow_key_from_flow(&buf, &netdev_flow->flow, &wc.masks,
-                               netdev_flow->flow.in_port.odp_port, true);
+    /* Mask. */
+    ofpbuf_use_stack(&buf, &thread->maskbuf, sizeof thread->maskbuf);
+    odp_flow_key_from_mask(&buf, &wc.masks, &netdev_flow->flow,
+                           odp_to_u32(wc.masks.in_port.odp_port),
+                           SIZE_MAX, true);
+    f->mask = ofpbuf_data(&buf);
+    f->mask_len = ofpbuf_size(&buf);
 
-        *key = ofpbuf_data(&buf);
-        *key_len = ofpbuf_size(&buf);
-    }
+    /* Actions. */
+    dp_actions = dp_netdev_flow_get_actions(netdev_flow);
+    f->actions = dp_actions->actions;
+    f->actions_len = dp_actions->size;
 
-    if (key && mask) {
-        struct ofpbuf buf;
+    /* Stats. */
+    get_dpif_flow_stats(netdev_flow, &f->stats);
 
-        ofpbuf_use_stack(&buf, &state->maskbuf, sizeof state->maskbuf);
-        odp_flow_key_from_mask(&buf, &wc.masks, &netdev_flow->flow,
-                               odp_to_u32(wc.masks.in_port.odp_port),
-                               SIZE_MAX, true);
-
-        *mask = ofpbuf_data(&buf);
-        *mask_len = ofpbuf_size(&buf);
-    }
-
-    if (actions || stats) {
-        if (actions) {
-            struct dp_netdev_actions *dp_actions =
-                dp_netdev_flow_get_actions(netdev_flow);
-
-            *actions = dp_actions->actions;
-            *actions_len = dp_actions->size;
-        }
-
-        if (stats) {
-            get_dpif_flow_stats(netdev_flow, &state->stats);
-            *stats = &state->stats;
-        }
-    }
-
-    return 0;
-}
-
-static int
-dpif_netdev_flow_dump_done(const struct dpif *dpif OVS_UNUSED, void *iter_)
-{
-    struct dp_netdev_flow_iter *iter = iter_;
-
-    ovs_mutex_destroy(&iter->mutex);
-    free(iter);
-    return 0;
+    return 1;
 }
 
 static int
@@ -2219,12 +2226,11 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_flow_put,
     dpif_netdev_flow_del,
     dpif_netdev_flow_flush,
-    dpif_netdev_flow_dump_state_init,
-    dpif_netdev_flow_dump_start,
+    dpif_netdev_flow_dump_create,
+    dpif_netdev_flow_dump_destroy,
+    dpif_netdev_flow_dump_thread_create,
+    dpif_netdev_flow_dump_thread_destroy,
     dpif_netdev_flow_dump_next,
-    NULL,
-    dpif_netdev_flow_dump_done,
-    dpif_netdev_flow_dump_state_uninit,
     dpif_netdev_execute,
     NULL,                       /* operate */
     dpif_netdev_recv_set,

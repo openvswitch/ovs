@@ -4416,21 +4416,18 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
                                 int argc OVS_UNUSED, const char *argv[],
                                 void *aux OVS_UNUSED)
 {
-    struct ds ds = DS_EMPTY_INITIALIZER;
-    const struct dpif_flow_stats *stats;
     const struct ofproto_dpif *ofproto;
-    struct dpif_flow_dump flow_dump;
-    const struct nlattr *actions;
-    const struct nlattr *mask;
-    const struct nlattr *key;
-    size_t actions_len;
-    size_t mask_len;
-    size_t key_len;
+
+    struct ds ds = DS_EMPTY_INITIALIZER;
     bool verbosity = false;
+
     struct dpif_port dpif_port;
     struct dpif_port_dump port_dump;
     struct hmap portno_names;
-    void *state = NULL;
+
+    struct dpif_flow_dump *flow_dump;
+    struct dpif_flow_dump_thread *flow_dump_thread;
+    struct dpif_flow f;
     int error;
 
     ofproto = ofproto_dpif_lookup(argv[argc - 1]);
@@ -4449,30 +4446,24 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
     }
 
     ds_init(&ds);
-    error = dpif_flow_dump_start(&flow_dump, ofproto->backer->dpif);
-    if (error) {
-        goto exit;
-    }
-    dpif_flow_dump_state_init(ofproto->backer->dpif, &state);
-    while (dpif_flow_dump_next(&flow_dump, state, &key, &key_len,
-                               &mask, &mask_len, &actions, &actions_len,
-                               &stats)) {
-        if (!ofproto_dpif_contains_flow(ofproto, key, key_len)) {
+    flow_dump = dpif_flow_dump_create(ofproto->backer->dpif);
+    flow_dump_thread = dpif_flow_dump_thread_create(flow_dump);
+    while (dpif_flow_dump_next(flow_dump_thread, &f, 1)) {
+        if (!ofproto_dpif_contains_flow(ofproto, f.key, f.key_len)) {
             continue;
         }
 
-        odp_flow_format(key, key_len, mask, mask_len, &portno_names, &ds,
-                        verbosity);
+        odp_flow_format(f.key, f.key_len, f.mask, f.mask_len,
+                        &portno_names, &ds, verbosity);
         ds_put_cstr(&ds, ", ");
-        dpif_flow_stats_format(stats, &ds);
+        dpif_flow_stats_format(&f.stats, &ds);
         ds_put_cstr(&ds, ", actions:");
-        format_odp_actions(&ds, actions, actions_len);
+        format_odp_actions(&ds, f.actions, f.actions_len);
         ds_put_char(&ds, '\n');
     }
-    dpif_flow_dump_state_uninit(ofproto->backer->dpif, state);
-    error = dpif_flow_dump_done(&flow_dump);
+    dpif_flow_dump_thread_destroy(flow_dump_thread);
+    error = dpif_flow_dump_destroy(flow_dump);
 
-exit:
     if (error) {
         ds_clear(&ds);
         ds_put_format(&ds, "dpif/dump_flows failed: %s", ovs_strerror(errno));

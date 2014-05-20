@@ -1138,47 +1138,28 @@ dpif_linux_flow_del(struct dpif *dpif_, const struct dpif_flow_del *del)
     return error;
 }
 
-struct dpif_linux_flow_state {
-    struct dpif_linux_flow flow;
-    struct dpif_flow_stats stats;
-    struct ofpbuf buffer;         /* Always used to store flows. */
-    struct ofpbuf *tmp;           /* Used if kernel does not supply actions. */
-};
-
-struct dpif_linux_flow_iter {
-    struct nl_dump dump;
+struct dpif_linux_flow_dump {
+    struct dpif_flow_dump up;
+    struct nl_dump nl_dump;
     atomic_int status;
 };
 
-static void
-dpif_linux_flow_dump_state_init(void **statep)
+static struct dpif_linux_flow_dump *
+dpif_linux_flow_dump_cast(struct dpif_flow_dump *dump)
 {
-    struct dpif_linux_flow_state *state;
-
-    *statep = state = xmalloc(sizeof *state);
-    ofpbuf_init(&state->buffer, NL_DUMP_BUFSIZE);
-    state->tmp = NULL;
+    return CONTAINER_OF(dump, struct dpif_linux_flow_dump, up);
 }
 
-static void
-dpif_linux_flow_dump_state_uninit(void *state_)
-{
-    struct dpif_linux_flow_state *state = state_;
-
-    ofpbuf_uninit(&state->buffer);
-    ofpbuf_delete(state->tmp);
-    free(state);
-}
-
-static int
-dpif_linux_flow_dump_start(const struct dpif *dpif_, void **iterp)
+static struct dpif_flow_dump *
+dpif_linux_flow_dump_create(const struct dpif *dpif_)
 {
     const struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    struct dpif_linux_flow_iter *iter;
+    struct dpif_linux_flow_dump *dump;
     struct dpif_linux_flow request;
     struct ofpbuf *buf;
 
-    *iterp = iter = xmalloc(sizeof *iter);
+    dump = xmalloc(sizeof *dump);
+    dpif_flow_dump_init(&dump->up, dpif_);
 
     dpif_linux_flow_init(&request);
     request.cmd = OVS_FLOW_CMD_GET;
@@ -1186,90 +1167,137 @@ dpif_linux_flow_dump_start(const struct dpif *dpif_, void **iterp)
 
     buf = ofpbuf_new(1024);
     dpif_linux_flow_to_ofpbuf(&request, buf);
-    nl_dump_start(&iter->dump, NETLINK_GENERIC, buf);
+    nl_dump_start(&dump->nl_dump, NETLINK_GENERIC, buf);
     ofpbuf_delete(buf);
-    atomic_init(&iter->status, 0);
+    atomic_init(&dump->status, 0);
 
-    return 0;
+    return &dump->up;
 }
 
 static int
-dpif_linux_flow_dump_next(const struct dpif *dpif_, void *iter_, void *state_,
-                          const struct nlattr **key, size_t *key_len,
-                          const struct nlattr **mask, size_t *mask_len,
-                          const struct nlattr **actions, size_t *actions_len,
-                          const struct dpif_flow_stats **stats)
+dpif_linux_flow_dump_destroy(struct dpif_flow_dump *dump_)
 {
-    const struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    struct dpif_linux_flow_iter *iter = iter_;
-    struct dpif_linux_flow_state *state = state_;
-    struct ofpbuf buf;
-    int error;
+    struct dpif_linux_flow_dump *dump = dpif_linux_flow_dump_cast(dump_);
+    unsigned int nl_status = nl_dump_done(&dump->nl_dump);
+    int dump_status;
 
-    do {
-        ofpbuf_delete(state->tmp);
-        state->tmp = NULL;
+    atomic_read(&dump->status, &dump_status);
+    free(dump);
+    return dump_status ? dump_status : nl_status;
+}
 
-        if (!nl_dump_next(&iter->dump, &buf, &state->buffer)) {
-            return EOF;
+struct dpif_linux_flow_dump_thread {
+    struct dpif_flow_dump_thread up;
+    struct dpif_linux_flow_dump *dump;
+    struct dpif_linux_flow flow;
+    struct dpif_flow_stats stats;
+    struct ofpbuf nl_flows;     /* Always used to store flows. */
+    struct ofpbuf *nl_actions;  /* Used if kernel does not supply actions. */
+};
+
+static struct dpif_linux_flow_dump_thread *
+dpif_linux_flow_dump_thread_cast(struct dpif_flow_dump_thread *thread)
+{
+    return CONTAINER_OF(thread, struct dpif_linux_flow_dump_thread, up);
+}
+
+static struct dpif_flow_dump_thread *
+dpif_linux_flow_dump_thread_create(struct dpif_flow_dump *dump_)
+{
+    struct dpif_linux_flow_dump *dump = dpif_linux_flow_dump_cast(dump_);
+    struct dpif_linux_flow_dump_thread *thread;
+
+    thread = xmalloc(sizeof *thread);
+    dpif_flow_dump_thread_init(&thread->up, &dump->up);
+    thread->dump = dump;
+    ofpbuf_init(&thread->nl_flows, NL_DUMP_BUFSIZE);
+    thread->nl_actions = NULL;
+
+    return &thread->up;
+}
+
+static void
+dpif_linux_flow_dump_thread_destroy(struct dpif_flow_dump_thread *thread_)
+{
+    struct dpif_linux_flow_dump_thread *thread
+        = dpif_linux_flow_dump_thread_cast(thread_);
+
+    ofpbuf_uninit(&thread->nl_flows);
+    ofpbuf_delete(thread->nl_actions);
+    free(thread);
+}
+
+static void
+dpif_linux_flow_to_dpif_flow(struct dpif_flow *dpif_flow,
+                             struct dpif_linux_flow *linux_flow)
+{
+    dpif_flow->key = linux_flow->key;
+    dpif_flow->key_len = linux_flow->key_len;
+    dpif_flow->mask = linux_flow->mask;
+    dpif_flow->mask_len = linux_flow->mask_len;
+    dpif_flow->actions = linux_flow->actions;
+    dpif_flow->actions_len = linux_flow->actions_len;
+    dpif_linux_flow_get_stats(linux_flow, &dpif_flow->stats);
+}
+
+static int
+dpif_linux_flow_dump_next(struct dpif_flow_dump_thread *thread_,
+                          struct dpif_flow *flows, int max_flows)
+{
+    struct dpif_linux_flow_dump_thread *thread
+        = dpif_linux_flow_dump_thread_cast(thread_);
+    struct dpif_linux_flow_dump *dump = thread->dump;
+    struct dpif_linux *dpif = dpif_linux_cast(thread->up.dpif);
+    int n_flows;
+
+    ofpbuf_delete(thread->nl_actions);
+    thread->nl_actions = NULL;
+
+    n_flows = 0;
+    while (!n_flows
+           || (n_flows < max_flows && ofpbuf_size(&thread->nl_flows))) {
+        struct dpif_linux_flow linux_flow;
+        struct ofpbuf nl_flow;
+        int error;
+
+        /* Try to grab another flow. */
+        if (!nl_dump_next(&dump->nl_dump, &nl_flow, &thread->nl_flows)) {
+            break;
         }
 
-        error = dpif_linux_flow_from_ofpbuf(&state->flow, &buf);
+        /* Convert the flow to our output format. */
+        error = dpif_linux_flow_from_ofpbuf(&linux_flow, &nl_flow);
         if (error) {
-            atomic_store(&iter->status, error);
-            return error;
+            atomic_store(&dump->status, error);
+            break;
         }
 
-        if (actions && !state->flow.actions) {
-            error = dpif_linux_flow_get__(dpif, state->flow.key,
-                                          state->flow.key_len,
-                                          &state->flow, &state->tmp);
+        if (linux_flow.actions) {
+            /* Common case: the flow includes actions. */
+            dpif_linux_flow_to_dpif_flow(&flows[n_flows++], &linux_flow);
+        } else {
+            /* Rare case: the flow does not include actions.  Retrieve this
+             * individual flow again to get the actions. */
+            error = dpif_linux_flow_get__(dpif, linux_flow.key,
+                                          linux_flow.key_len, &linux_flow,
+                                          &thread->nl_actions);
             if (error == ENOENT) {
                 VLOG_DBG("dumped flow disappeared on get");
+                continue;
             } else if (error) {
                 VLOG_WARN("error fetching dumped flow: %s",
                           ovs_strerror(error));
+                atomic_store(&dump->status, error);
+                break;
             }
+
+            /* Save this flow.  Then exit, because we only have one buffer to
+             * handle this case. */
+            dpif_linux_flow_to_dpif_flow(&flows[n_flows++], &linux_flow);
+            break;
         }
-    } while (error);
-
-    if (actions) {
-        *actions = state->flow.actions;
-        *actions_len = state->flow.actions_len;
     }
-    if (key) {
-        *key = state->flow.key;
-        *key_len = state->flow.key_len;
-    }
-    if (mask) {
-        *mask = state->flow.mask;
-        *mask_len = state->flow.mask ? state->flow.mask_len : 0;
-    }
-    if (stats) {
-        dpif_linux_flow_get_stats(&state->flow, &state->stats);
-        *stats = &state->stats;
-    }
-    return error;
-}
-
-static bool
-dpif_linux_flow_dump_next_may_destroy_keys(void *state_)
-{
-    struct dpif_linux_flow_state *state = state_;
-
-    return ofpbuf_size(&state->buffer) ? false : true;
-}
-
-static int
-dpif_linux_flow_dump_done(const struct dpif *dpif OVS_UNUSED, void *iter_)
-{
-    struct dpif_linux_flow_iter *iter = iter_;
-    int dump_status;
-    unsigned int nl_status = nl_dump_done(&iter->dump);
-
-    atomic_read(&iter->status, &dump_status);
-    free(iter);
-    return dump_status ? dump_status : nl_status;
+    return n_flows;
 }
 
 static void
@@ -1878,12 +1906,11 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_flow_put,
     dpif_linux_flow_del,
     dpif_linux_flow_flush,
-    dpif_linux_flow_dump_state_init,
-    dpif_linux_flow_dump_start,
+    dpif_linux_flow_dump_create,
+    dpif_linux_flow_dump_destroy,
+    dpif_linux_flow_dump_thread_create,
+    dpif_linux_flow_dump_thread_destroy,
     dpif_linux_flow_dump_next,
-    dpif_linux_flow_dump_next_may_destroy_keys,
-    dpif_linux_flow_dump_done,
-    dpif_linux_flow_dump_state_uninit,
     dpif_linux_execute,
     dpif_linux_operate,
     dpif_linux_recv_set,

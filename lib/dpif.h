@@ -525,22 +525,54 @@ int dpif_flow_del(struct dpif *,
 int dpif_flow_get(const struct dpif *,
                   const struct nlattr *key, size_t key_len,
                   struct ofpbuf **actionsp, struct dpif_flow_stats *);
+
+/* Flow dumping interface
+ * ======================
+ *
+ * This interface allows iteration through all of the flows currently installed
+ * in a datapath.  It is somewhat complicated by two requirements:
+ *
+ *    - Efficient support for dumping flows in parallel from multiple threads.
+ *
+ *    - Allow callers to avoid making unnecessary copies of data returned by
+ *      the interface across several flows in cases where the dpif
+ *      implementation has to maintain a copy of that information anyhow.
+ *      (That is, allow the client visibility into any underlying batching as
+ *      part of its own batching.)
+ *
+ *
+ * Usage
+ * -----
+ *
+ * 1. Call dpif_flow_dump_create().
+ * 2. In each thread that participates in the dump (which may be just a single
+ *    thread if parallelism isn't important):
+ *        (a) Call dpif_flow_dump_thread_create().
+ *        (b) Call dpif_flow_dump_next() repeatedly until it returns 0.
+ *        (c) Call dpif_flow_dump_thread_destroy().
+ * 3. Call dpif_flow_dump_destroy().
+ *
+ * All error reporting is deferred to the call to dpif_flow_dump_destroy().
+ */
+struct dpif_flow_dump *dpif_flow_dump_create(const struct dpif *);
+int dpif_flow_dump_destroy(struct dpif_flow_dump *);
 
-struct dpif_flow_dump {
-    const struct dpif *dpif;
-    void *iter;
+struct dpif_flow_dump_thread *dpif_flow_dump_thread_create(
+    struct dpif_flow_dump *);
+void dpif_flow_dump_thread_destroy(struct dpif_flow_dump_thread *);
+
+/* A datapath flow as dumped by dpif_flow_dump_next(). */
+struct dpif_flow {
+    const struct nlattr *key;     /* Flow key, as OVS_KEY_ATTR_* attrs. */
+    size_t key_len;               /* 'key' length in bytes. */
+    const struct nlattr *mask;    /* Flow mask, as OVS_KEY_ATTR_* attrs. */
+    size_t mask_len;              /* 'mask' length in bytes. */
+    const struct nlattr *actions; /* Actions, as OVS_ACTION_ATTR_ */
+    size_t actions_len;           /* 'actions' length in bytes. */
+    struct dpif_flow_stats stats; /* Flow statistics. */
 };
-void dpif_flow_dump_state_init(const struct dpif *, void **statep);
-int dpif_flow_dump_start(struct dpif_flow_dump *, const struct dpif *);
-bool dpif_flow_dump_next(struct dpif_flow_dump *, void *state,
-                         const struct nlattr **key, size_t *key_len,
-                         const struct nlattr **mask, size_t *mask_len,
-                         const struct nlattr **actions, size_t *actions_len,
-                         const struct dpif_flow_stats **);
-bool dpif_flow_dump_next_may_destroy_keys(struct dpif_flow_dump *dump,
-                                          void *state);
-int dpif_flow_dump_done(struct dpif_flow_dump *);
-void dpif_flow_dump_state_uninit(const struct dpif *, void *state);
+int dpif_flow_dump_next(struct dpif_flow_dump_thread *,
+                        struct dpif_flow *flows, int max_flows);
 
 /* Operation batching interface.
  *

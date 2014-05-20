@@ -970,133 +970,84 @@ dpif_flow_del(struct dpif *dpif,
     return dpif_flow_del__(dpif, &del);
 }
 
-/* Allocates thread-local state for use with the 'flow_dump_next' function for
- * 'dpif'. On return, initializes '*statep' with any private data needed for
- * iteration. */
-void
-dpif_flow_dump_state_init(const struct dpif *dpif, void **statep)
+/* Creates and returns a new 'struct dpif_flow_dump' for iterating through the
+ * flows in 'dpif'.
+ *
+ * This function always successfully returns a dpif_flow_dump.  Error
+ * reporting is deferred to dpif_flow_dump_destroy(). */
+struct dpif_flow_dump *
+dpif_flow_dump_create(const struct dpif *dpif)
 {
-    dpif->dpif_class->flow_dump_state_init(statep);
+    return dpif->dpif_class->flow_dump_create(dpif);
 }
 
-/* Releases 'state' which was initialized by a call to the
- * 'flow_dump_state_init' function for 'dpif'. */
-void
-dpif_flow_dump_state_uninit(const struct dpif *dpif, void *state)
-{
-    dpif->dpif_class->flow_dump_state_uninit(state);
-}
-
-/* Initializes 'dump' to begin dumping the flows in a dpif. On sucess,
- * initializes 'dump' with any data needed for iteration and returns 0.
- * Otherwise, returns a positive errno value describing the problem. */
+/* Destroys 'dump', which must have been created with dpif_flow_dump_create().
+ * All dpif_flow_dump_thread structures previously created for 'dump' must
+ * previously have been destroyed.
+ *
+ * Returns 0 if the dump operation was error-free, otherwise a positive errno
+ * value describing the problem. */
 int
-dpif_flow_dump_start(struct dpif_flow_dump *dump, const struct dpif *dpif)
-{
-    int error;
-    dump->dpif = dpif;
-    error = dpif->dpif_class->flow_dump_start(dpif, &dump->iter);
-    log_operation(dpif, "flow_dump_start", error);
-    return error;
-}
-
-/* Attempts to retrieve another flow from 'dump', using 'state' for
- * thread-local storage. 'dump' must have been initialized with a successful
- * call to dpif_flow_dump_start(), and 'state' must have been initialized with
- * dpif_flow_state_init().
- *
- * On success, updates the output parameters as described below and returns
- * true. Otherwise, returns false. Failure might indicate an actual error or
- * merely the end of the flow table. An error status for the entire dump
- * operation is provided when it is completed by calling dpif_flow_dump_done().
- * Multiple threads may use the same 'dump' with this function, but all other
- * parameters must not be shared.
- *
- * On success, if 'key' and 'key_len' are nonnull then '*key' and '*key_len'
- * will be set to Netlink attributes with types OVS_KEY_ATTR_* representing the
- * dumped flow's key.  If 'actions' and 'actions_len' are nonnull then they are
- * set to Netlink attributes with types OVS_ACTION_ATTR_* representing the
- * dumped flow's actions.  If 'stats' is nonnull then it will be set to the
- * dumped flow's statistics.
- *
- * All of the returned data is owned by 'dpif', not by the caller, and the
- * caller must not modify or free it.  'dpif' guarantees that it remains
- * accessible and unchanging until at least the next call to 'flow_dump_next'
- * or 'flow_dump_done' for 'dump' and 'state'. */
-bool
-dpif_flow_dump_next(struct dpif_flow_dump *dump, void *state,
-                    const struct nlattr **key, size_t *key_len,
-                    const struct nlattr **mask, size_t *mask_len,
-                    const struct nlattr **actions, size_t *actions_len,
-                    const struct dpif_flow_stats **stats)
+dpif_flow_dump_destroy(struct dpif_flow_dump *dump)
 {
     const struct dpif *dpif = dump->dpif;
-    int error;
-
-    error = dpif->dpif_class->flow_dump_next(dpif, dump->iter, state,
-                                             key, key_len, mask, mask_len,
-                                             actions, actions_len, stats);
-    if (error) {
-        if (key) {
-            *key = NULL;
-            *key_len = 0;
-        }
-        if (mask) {
-            *mask = NULL;
-            *mask_len = 0;
-        }
-        if (actions) {
-            *actions = NULL;
-            *actions_len = 0;
-        }
-        if (stats) {
-            *stats = NULL;
-        }
-    }
-    if (error == EOF) {
-        VLOG_DBG_RL(&dpmsg_rl, "%s: dumped all flows", dpif_name(dpif));
-    } else if (should_log_flow_message(error)) {
-        log_flow_message(dpif, error, "flow_dump",
-                         key ? *key : NULL, key ? *key_len : 0,
-                         mask ? *mask : NULL, mask ? *mask_len : 0,
-                         stats ? *stats : NULL, actions ? *actions : NULL,
-                         actions ? *actions_len : 0);
-    }
-    return !error;
-}
-
-/* Determines whether the next call to 'dpif_flow_dump_next' for 'dump' and
- * 'state' will modify or free the keys that it previously returned. 'state'
- * must have been initialized by a call to 'dpif_flow_dump_state_init' for
- * 'dump'.
- *
- * 'dpif' guarantees that data returned by flow_dump_next() will remain
- * accessible and unchanging until the next call. This function provides a way
- * for callers to determine whether that guarantee extends beyond the next
- * call.
- *
- * Returns true if the next call to flow_dump_next() is expected to be
- * destructive to previously returned keys for 'state', false otherwise. */
-bool
-dpif_flow_dump_next_may_destroy_keys(struct dpif_flow_dump *dump, void *state)
-{
-    const struct dpif *dpif = dump->dpif;
-    return (dpif->dpif_class->flow_dump_next_may_destroy_keys
-            ? dpif->dpif_class->flow_dump_next_may_destroy_keys(state)
-            : true);
-}
-
-/* Completes flow table dump operation 'dump', which must have been initialized
- * with a successful call to dpif_flow_dump_start().  Returns 0 if the dump
- * operation was error-free, otherwise a positive errno value describing the
- * problem. */
-int
-dpif_flow_dump_done(struct dpif_flow_dump *dump)
-{
-    const struct dpif *dpif = dump->dpif;
-    int error = dpif->dpif_class->flow_dump_done(dpif, dump->iter);
-    log_operation(dpif, "flow_dump_done", error);
+    int error = dpif->dpif_class->flow_dump_destroy(dump);
+    log_operation(dpif, "flow_dump_destroy", error);
     return error == EOF ? 0 : error;
+}
+
+/* Returns new thread-local state for use with dpif_flow_dump_next(). */
+struct dpif_flow_dump_thread *
+dpif_flow_dump_thread_create(struct dpif_flow_dump *dump)
+{
+    return dump->dpif->dpif_class->flow_dump_thread_create(dump);
+}
+
+/* Releases 'thread'. */
+void
+dpif_flow_dump_thread_destroy(struct dpif_flow_dump_thread *thread)
+{
+    thread->dpif->dpif_class->flow_dump_thread_destroy(thread);
+}
+
+/* Attempts to retrieve up to 'max_flows' more flows from 'thread'.  Returns 0
+ * if and only if no flows remained to be retrieved, otherwise a positive
+ * number reflecting the number of elements in 'flows[]' that were updated.
+ * The number of flows returned might be less than 'max_flows' because
+ * fewer than 'max_flows' remained, because this particular datapath does not
+ * benefit from batching, or because an error occurred partway through
+ * retrieval.  Thus, the caller should continue calling until a 0 return value,
+ * even if intermediate return values are less than 'max_flows'.
+ *
+ * No error status is immediately provided.  An error status for the entire
+ * dump operation is provided when it is completed by calling
+ * dpif_flow_dump_destroy().
+ *
+ * All of the data stored into 'flows' is owned by the datapath, not by the
+ * caller, and the caller must not modify or free it.  The datapath guarantees
+ * that it remains accessible and unchanged until at least the next call to
+ * dpif_flow_dump_next() for 'thread'. */
+int
+dpif_flow_dump_next(struct dpif_flow_dump_thread *thread,
+                    struct dpif_flow *flows, int max_flows)
+{
+    struct dpif *dpif = thread->dpif;
+    int n;
+
+    ovs_assert(max_flows > 0);
+    n = dpif->dpif_class->flow_dump_next(thread, flows, max_flows);
+    if (n > 0) {
+        struct dpif_flow *f;
+
+        for (f = flows; f < &flows[n] && should_log_flow_message(0); f++) {
+            log_flow_message(dpif, 0, "flow_dump",
+                             f->key, f->key_len, f->mask, f->mask_len,
+                             &f->stats, f->actions, f->actions_len);
+        }
+    } else {
+        VLOG_DBG_RL(&dpmsg_rl, "%s: dumped all flows", dpif_name(dpif));
+    }
+    return n;
 }
 
 struct dpif_execute_helper_aux {

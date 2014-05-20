@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,6 +49,27 @@ static inline void dpif_assert_class(const struct dpif *dpif,
                                      const struct dpif_class *dpif_class)
 {
     ovs_assert(dpif->dpif_class == dpif_class);
+}
+
+struct dpif_flow_dump {
+    struct dpif *dpif;
+};
+
+static inline void
+dpif_flow_dump_init(struct dpif_flow_dump *dump, const struct dpif *dpif)
+{
+    dump->dpif = CONST_CAST(struct dpif *, dpif);
+}
+
+struct dpif_flow_dump_thread {
+    struct dpif *dpif;
+};
+
+static inline void
+dpif_flow_dump_thread_init(struct dpif_flow_dump_thread *thread,
+                           struct dpif_flow_dump *dump)
+{
+    thread->dpif = dump->dpif;
 }
 
 /* Datapath interface class structure, to be defined by each implementation of
@@ -272,78 +293,29 @@ struct dpif_class {
      * packets. */
     int (*flow_flush)(struct dpif *dpif);
 
-    /* Allocates thread-local state for use with the function 'flow_dump_next'.
-     * On return, initializes '*statep' with any private data needed for
-     * iteration. */
-    void (*flow_dump_state_init)(void **statep);
+    /* Flow dumping interface.
+     *
+     * This is the back-end for the flow dumping interface described in
+     * dpif.h.  Please read the comments there first, because this code
+     * closely follows it.
+     *
+     * 'flow_dump_create' and 'flow_dump_thread_create' must always return an
+     * initialized and usable data structure and defer error return until
+     * flow_dump_destroy().  This hasn't been a problem for the dpifs that
+     * exist so far.
+     *
+     * 'flow_dump_create' and 'flow_dump_thread_create' must initialize the
+     * structures that they return with dpif_flow_dump_init() and
+     * dpif_flow_dump_thread_init(), respectively. */
+    struct dpif_flow_dump *(*flow_dump_create)(const struct dpif *dpif);
+    int (*flow_dump_destroy)(struct dpif_flow_dump *dump);
 
-    /* Attempts to begin dumping the flows in a dpif.  On success, returns 0
-     * and initializes '*iterp' with any shared data needed for iteration.
-     * On failure, returns a positive errno value. */
-    int (*flow_dump_start)(const struct dpif *dpif, void **iterp);
+    struct dpif_flow_dump_thread *(*flow_dump_thread_create)(
+        struct dpif_flow_dump *dump);
+    void (*flow_dump_thread_destroy)(struct dpif_flow_dump_thread *thread);
 
-    /* Attempts to retrieve another flow from 'dpif' for 'iter', using
-     * 'state' for storage. 'iter' must have been initialized by a successful
-     * call to the 'flow_dump_start' function for 'dpif'. 'state' must have
-     * been initialised with a call to the 'flow_dump_state_init' function for
-     * 'dpif.
-     *
-     * On success, updates the output parameters as described below and returns
-     * 0. Returns EOF if the end of the flow table has been reached, or a
-     * positive errno value on error. Multiple threads may use the same 'dpif'
-     * and 'iter' with this function, but all other parameters must be
-     * different for each thread. If this function returns non-zero,
-     * subsequent calls with the same arguments will also return non-zero.
-     *
-     * On success:
-     *
-     *     - If 'key' and 'key_len' are nonnull, then '*key' and '*key_len'
-     *       must be set to Netlink attributes with types OVS_KEY_ATTR_*
-     *       representing the dumped flow's key.
-     *
-     *     - If 'mask' and 'mask_len' are nonnull then '*mask' and '*mask_len'
-     *       must be set to Netlink attributes with types of OVS_KEY_ATTR_*
-     *       representing the dumped flow's mask.
-     *
-     *     - If 'actions' and 'actions_len' are nonnull then they should be set
-     *       to Netlink attributes with types OVS_ACTION_ATTR_* representing
-     *       the dumped flow's actions.
-     *
-     *     - If 'stats' is nonnull then it should be set to the dumped flow's
-     *       statistics.
-     *
-     * All of the returned data is owned by 'dpif', not by the caller, and the
-     * caller must not modify or free it.  'dpif' must guarantee that it
-     * remains accessible and unchanging until at least the next call to
-     * 'flow_dump_next' or 'flow_dump_done' for 'iter' and 'state'. */
-    int (*flow_dump_next)(const struct dpif *dpif, void *iter, void *state,
-                          const struct nlattr **key, size_t *key_len,
-                          const struct nlattr **mask, size_t *mask_len,
-                          const struct nlattr **actions, size_t *actions_len,
-                          const struct dpif_flow_stats **stats);
-
-    /* Determines whether the next call to 'flow_dump_next' with 'state' will
-     * modify or free the keys that it previously returned. 'state' must have
-     * been initialized by a call to 'flow_dump_state_init' for 'dpif'.
-     *
-     * 'dpif' guarantees that data returned by flow_dump_next() will remain
-     * accessible and unchanging until the next call. This function provides a
-     * way for callers to determine whether that guarantee extends beyond the
-     * next call.
-     *
-     * Returns true if the next call to flow_dump_next() is expected to be
-     * destructive to previously returned keys for 'state', false otherwise. */
-    bool (*flow_dump_next_may_destroy_keys)(void *state);
-
-    /* Releases resources from 'dpif' for 'iter', which was initialized by a
-     * successful call to the 'flow_dump_start' function for 'dpif'. Callers
-     * must ensure that this function is called once within a given iteration,
-     * as the final flow dump operation. */
-    int (*flow_dump_done)(const struct dpif *dpif, void *iter);
-
-    /* Releases 'state' which was initialized by a call to the
-     * 'flow_dump_state_init' function for this 'dpif'. */
-    void (*flow_dump_state_uninit)(void *statep);
+    int (*flow_dump_next)(struct dpif_flow_dump_thread *thread,
+                          struct dpif_flow *flows, int max_flows);
 
     /* Performs the 'execute->actions_len' bytes of actions in
      * 'execute->actions' on the Ethernet frame in 'execute->packet'

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -747,24 +747,23 @@ dpctl_dump_dps(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 static void
 dpctl_dump_flows(int argc, char *argv[])
 {
-    const struct dpif_flow_stats *stats;
-    const struct nlattr *actions;
-    struct dpif_flow_dump flow_dump;
-    const struct nlattr *key;
-    const struct nlattr *mask;
-    struct dpif_port dpif_port;
-    struct dpif_port_dump port_dump;
-    struct hmap portno_names;
-    struct simap names_portno;
-    size_t actions_len;
     struct dpif *dpif;
-    size_t key_len;
-    size_t mask_len;
     struct ds ds;
-    char *name, *filter = NULL;
+    char *name;
+
+    char *filter = NULL;
     struct flow flow_filter;
     struct flow_wildcards wc_filter;
-    void *state = NULL;
+
+    struct dpif_port_dump port_dump;
+    struct dpif_port dpif_port;
+    struct hmap portno_names;
+    struct simap names_portno;
+
+    struct dpif_flow_dump_thread *flow_dump_thread;
+    struct dpif_flow_dump *flow_dump;
+    struct dpif_flow f;
+
     int error;
 
     if (argc > 1 && !strncmp(argv[argc - 1], "filter=", 7)) {
@@ -792,22 +791,17 @@ dpctl_dump_flows(int argc, char *argv[])
     }
 
     ds_init(&ds);
-    error = dpif_flow_dump_start(&flow_dump, dpif);
-    if (error) {
-        goto exit;
-    }
-    dpif_flow_dump_state_init(dpif, &state);
-    while (dpif_flow_dump_next(&flow_dump, state, &key, &key_len,
-                               &mask, &mask_len, &actions, &actions_len,
-                               &stats)) {
+    flow_dump = dpif_flow_dump_create(dpif);
+    flow_dump_thread = dpif_flow_dump_thread_create(flow_dump);
+    while (dpif_flow_dump_next(flow_dump_thread, &f, 1)) {
         if (filter) {
             struct flow flow;
             struct flow_wildcards wc;
             struct match match, match_filter;
             struct minimatch minimatch;
 
-            odp_flow_key_to_flow(key, key_len, &flow);
-            odp_flow_key_to_mask(mask, mask_len, &wc.masks, &flow);
+            odp_flow_key_to_flow(f.key, f.key_len, &flow);
+            odp_flow_key_to_mask(f.mask, f.mask_len, &wc.masks, &flow);
             match_init(&match, &flow, &wc);
 
             match_init(&match_filter, &flow_filter, &wc);
@@ -821,19 +815,18 @@ dpctl_dump_flows(int argc, char *argv[])
             minimatch_destroy(&minimatch);
         }
         ds_clear(&ds);
-        odp_flow_format(key, key_len, mask, mask_len, &portno_names, &ds,
-                        verbosity);
+        odp_flow_format(f.key, f.key_len, f.mask, f.mask_len,
+                        &portno_names, &ds, verbosity);
         ds_put_cstr(&ds, ", ");
 
-        dpif_flow_stats_format(stats, &ds);
+        dpif_flow_stats_format(&f.stats, &ds);
         ds_put_cstr(&ds, ", actions:");
-        format_odp_actions(&ds, actions, actions_len);
+        format_odp_actions(&ds, f.actions, f.actions_len);
         printf("%s\n", ds_cstr(&ds));
     }
-    dpif_flow_dump_state_uninit(dpif, state);
-    error = dpif_flow_dump_done(&flow_dump);
+    dpif_flow_dump_thread_destroy(flow_dump_thread);
+    error = dpif_flow_dump_destroy(flow_dump);
 
-exit:
     if (error) {
         ovs_fatal(error, "Failed to dump flows from datapath");
     }
