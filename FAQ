@@ -1558,6 +1558,17 @@ A: These flows drop the ARP packets that IP hosts use to establish IP
       priority=5,in_port=1,dl_dst=01:00:00:00:00:00/01:00:00:00:00:00,actions=2
       priority=5,in_port=2,dl_dst=01:00:00:00:00:00/01:00:00:00:00:00,actions=1
 
+Q: My bridge disconnects from my controller on add-port/del-port.
+
+A: Reconfiguring your bridge can change your bridge's datapath-id because
+   Open vSwitch generates datapath-id from the MAC address of one of its ports.
+   In that case, Open vSwitch disconnects from controllers because there's
+   no graceful way to notify controllers about the change of datapath-id.
+
+   To avoid the behaviour, you can configure datapath-id manually.
+
+      ovs-vsctl set bridge br0 other-config:datapath-id=0123456789abcdef
+
 
 Development
 -----------
