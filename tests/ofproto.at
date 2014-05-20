@@ -2394,8 +2394,8 @@ for pre in      '1 2 3' '1 3 2' '2 1 3' '2 3 1' '3 1 2' '3 2 1'; do
     for post in '1 2 3' '1 3 2' '2 1 3' '2 3 1' '3 1 2' '3 2 1'; do
         echo -----------------------------------------------------------
         echo "Check changing port numbers from $pre to $post"
-	set_and_check_ofports $pre
-	set_and_check_ofports $post
+	set_and_check_specific_ofports $pre
+	set_and_check_specific_ofports $post
     done
 done
 
