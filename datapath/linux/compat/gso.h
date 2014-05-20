@@ -11,8 +11,10 @@
 
 struct ovs_gso_cb {
 	struct ovs_skb_cb dp_cb;
-	sk_buff_data_t	inner_network_header;
-	sk_buff_data_t	inner_mac_header;
+	u16		inner_network_header;	/* Offset from
+						 * inner_mac_header */
+	/* 16bit hole */
+	sk_buff_data_t	inner_mac_header;	/* Offset from skb->head */
 	void (*fix_segment)(struct sk_buff *);
 };
 #define OVS_GSO_CB(skb) ((struct ovs_gso_cb *)(skb)->cb)
@@ -20,12 +22,6 @@ struct ovs_gso_cb {
 #define skb_inner_network_header rpl_skb_inner_network_header
 
 #ifdef NET_SKBUFF_DATA_USES_OFFSET
-#define skb_inner_network_header rpl_skb_inner_network_header
-static inline unsigned char *skb_inner_network_header(const struct sk_buff *skb)
-{
-	return skb->head + OVS_GSO_CB(skb)->inner_network_header;
-}
-
 #define skb_inner_mac_header rpl_skb_inner_mac_header
 static inline unsigned char *skb_inner_mac_header(const struct sk_buff *skb)
 {
@@ -34,12 +30,6 @@ static inline unsigned char *skb_inner_mac_header(const struct sk_buff *skb)
 
 #else
 
-#define skb_inner_network_header rpl_skb_inner_network_header
-static inline unsigned char *skb_inner_network_header(const struct sk_buff *skb)
-{
-	return OVS_GSO_CB(skb)->inner_network_header;
-}
-
 #define skb_inner_mac_header rpl_skb_inner_mac_header
 static inline unsigned char *skb_inner_mac_header(const struct sk_buff *skb)
 {
@@ -47,6 +37,13 @@ static inline unsigned char *skb_inner_mac_header(const struct sk_buff *skb)
 }
 
 #endif
+
+#define skb_inner_network_header rpl_skb_inner_network_header
+static inline unsigned char *skb_inner_network_header(const struct sk_buff *skb)
+{
+	return skb_inner_mac_header(skb) +
+		OVS_GSO_CB(skb)->inner_network_header;
+}
 
 #define skb_inner_network_offset rpl_skb_inner_network_offset
 static inline int skb_inner_network_offset(const struct sk_buff *skb)
@@ -64,7 +61,8 @@ static inline int skb_inner_mac_offset(const struct sk_buff *skb)
 static inline void skb_reset_inner_headers(struct sk_buff *skb)
 {
 	BUILD_BUG_ON(sizeof(struct ovs_gso_cb) > FIELD_SIZEOF(struct sk_buff, cb));
-	OVS_GSO_CB(skb)->inner_network_header = skb->network_header;
+	OVS_GSO_CB(skb)->inner_network_header = skb->network_header -
+		skb->mac_header;
 	OVS_GSO_CB(skb)->inner_mac_header = skb->mac_header;
 
 	OVS_GSO_CB(skb)->fix_segment = NULL;
