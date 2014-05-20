@@ -225,9 +225,9 @@ start_forwarding () {
     else
         # Increase the limit on the number of open file descriptors.
         # On Linux, ovs-vswitchd needs about three file descriptors
-        # per bridge and one file descriptor per bridge port, so this
-        # allows a very large number of bridges and ports.
-        MAXFD=7500
+        # per bridge and "n-handler-threads" file descriptors per bridge
+        # port, so this allows a very large number of bridges and ports.
+        MAXFD=65535
         if [ $(ulimit -n) -lt $MAXFD ]; then
             ulimit -n $MAXFD
         fi
