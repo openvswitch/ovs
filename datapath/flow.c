@@ -87,88 +87,64 @@ void ovs_flow_stats_update(struct sw_flow *flow, struct sk_buff *skb)
 	spin_unlock(&stats->lock);
 }
 
-static void stats_read(struct flow_stats *stats, bool lock_bh,
+static void stats_read(struct flow_stats *stats,
 		       struct ovs_flow_stats *ovs_stats,
 		       unsigned long *used, __be16 *tcp_flags)
 {
-	if (lock_bh)
-		spin_lock_bh(&stats->lock);
-	else
-		spin_lock(&stats->lock);
-
+	spin_lock(&stats->lock);
 	if (!*used || time_after(stats->used, *used))
 		*used = stats->used;
 	*tcp_flags |= stats->tcp_flags;
 	ovs_stats->n_packets += stats->packet_count;
 	ovs_stats->n_bytes += stats->byte_count;
-
-	if (lock_bh)
-		spin_unlock_bh(&stats->lock);
-	else
-		spin_unlock(&stats->lock);
+	spin_unlock(&stats->lock);
 }
 
 void ovs_flow_stats_get(struct sw_flow *flow, struct ovs_flow_stats *ovs_stats,
 			unsigned long *used, __be16 *tcp_flags)
 {
-	int cpu, cur_cpu;
+	int cpu;
 
 	*used = 0;
 	*tcp_flags = 0;
 	memset(ovs_stats, 0, sizeof(*ovs_stats));
 
+	local_bh_disable();
 	if (!flow->stats.is_percpu) {
 		stats_read(flow->stats.stat, true, ovs_stats, used, tcp_flags);
 	} else {
-		cur_cpu = get_cpu();
-
 		for_each_possible_cpu(cpu) {
 			struct flow_stats *stats;
-			bool lock_bh;
 
 			stats = per_cpu_ptr(flow->stats.cpu_stats, cpu);
-			lock_bh = (cpu == cur_cpu);
-			stats_read(stats, lock_bh, ovs_stats, used, tcp_flags);
+			stats_read(stats, ovs_stats, used, tcp_flags);
 		}
-		put_cpu();
 	}
+	local_bh_enable();
 }
 
-static void stats_reset(struct flow_stats *stats, bool lock_bh)
+static void stats_reset(struct flow_stats *stats)
 {
-	if (lock_bh)
-		spin_lock_bh(&stats->lock);
-	else
-		spin_lock(&stats->lock);
-
+	spin_lock(&stats->lock);
 	stats->used = 0;
 	stats->packet_count = 0;
 	stats->byte_count = 0;
 	stats->tcp_flags = 0;
-
-	if (lock_bh)
-		spin_unlock_bh(&stats->lock);
-	else
-		spin_unlock(&stats->lock);
+	spin_unlock(&stats->lock);
 }
 
 void ovs_flow_stats_clear(struct sw_flow *flow)
 {
-	int cpu, cur_cpu;
+	int cpu;
 
+	local_bh_disable();
 	if (!flow->stats.is_percpu) {
 		stats_reset(flow->stats.stat, true);
 	} else {
-		cur_cpu = get_cpu();
-
-		for_each_possible_cpu(cpu) {
-			bool lock_bh;
-
-			lock_bh = (cpu == cur_cpu);
-			stats_reset(per_cpu_ptr(flow->stats.cpu_stats, cpu), lock_bh);
-		}
-		put_cpu();
+		for_each_possible_cpu(cpu)
+			stats_reset(per_cpu_ptr(flow->stats.cpu_stats, cpu));
 	}
+	local_bh_enable();
 }
 
 static int check_header(struct sk_buff *skb, int len)
