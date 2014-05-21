@@ -111,7 +111,7 @@ void ovs_flow_stats_get(struct sw_flow *flow, struct ovs_flow_stats *ovs_stats,
 
 	local_bh_disable();
 	if (!flow->stats.is_percpu) {
-		stats_read(flow->stats.stat, true, ovs_stats, used, tcp_flags);
+		stats_read(flow->stats.stat, ovs_stats, used, tcp_flags);
 	} else {
 		for_each_possible_cpu(cpu) {
 			struct flow_stats *stats;
@@ -139,7 +139,7 @@ void ovs_flow_stats_clear(struct sw_flow *flow)
 
 	local_bh_disable();
 	if (!flow->stats.is_percpu) {
-		stats_reset(flow->stats.stat, true);
+		stats_reset(flow->stats.stat);
 	} else {
 		for_each_possible_cpu(cpu)
 			stats_reset(per_cpu_ptr(flow->stats.cpu_stats, cpu));
