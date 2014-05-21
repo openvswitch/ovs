@@ -245,11 +245,11 @@ cmap_is_empty(const struct cmap *cmap)
 }
 
 static uint32_t
-read_counter(struct cmap_bucket *bucket, memory_order order)
+read_counter(struct cmap_bucket *bucket)
 {
     uint32_t counter;
 
-    atomic_read_explicit(&bucket->counter, &counter, order);
+    atomic_read_explicit(&bucket->counter, &counter, memory_order_acquire);
     return counter;
 }
 
@@ -259,7 +259,7 @@ read_even_counter(struct cmap_bucket *bucket)
     uint32_t counter;
 
     do {
-        counter = read_counter(bucket, memory_order_acquire);
+        counter = read_counter(bucket);
     } while (OVS_UNLIKELY(counter & 1));
 
     return counter;
@@ -268,7 +268,7 @@ read_even_counter(struct cmap_bucket *bucket)
 static bool
 counter_changed(struct cmap_bucket *b, uint32_t c)
 {
-    return OVS_UNLIKELY(read_counter(b, memory_order_release) != c);
+    return OVS_UNLIKELY(read_counter(b) != c);
 }
 
 /* Searches 'cmap' for an element with the specified 'hash'.  If one or more is
