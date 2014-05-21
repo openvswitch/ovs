@@ -1381,12 +1381,14 @@ revalidate(struct revalidator *revalidator)
                                                  hash);
             bool mark;
 
-            if (!used && ukey) {
+            if (ukey) {
                 bool already_dumped;
 
                 ovs_mutex_lock(&ukey->mutex);
                 already_dumped = ukey->mark || !ukey->flow_exists;
-                used = ukey->created;
+                if (!used) {
+                    used = ukey->created;
+                }
                 ovs_mutex_unlock(&ukey->mutex);
 
                 if (already_dumped) {
