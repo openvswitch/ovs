@@ -797,6 +797,19 @@ exit:
     return !error;
 }
 
+/* Attempts to look ahead in 'buffer' to obtain the next reply that will be
+ * returned by nl_dump_next().  Returns true if successful, in which case
+ * 'reply' will be initialize to the message that will be obtained by the next
+ * call to nl_dump_next(), or false on failure.  Failure doesn't necessarily
+ * mean that the nl_dump_next() will fail, only that it needs to obtain a new
+ * block of dump results from the kernel. */
+bool
+nl_dump_peek(struct ofpbuf *reply, struct ofpbuf *buffer)
+{
+    struct ofpbuf tmp = *buffer;
+    return nl_msg_next(&tmp, reply);
+}
+
 /* Completes Netlink dump operation 'dump', which must have been initialized
  * with nl_dump_start().  Returns 0 if the dump operation was error-free,
  * otherwise a positive errno value describing the problem. */

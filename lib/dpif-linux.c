@@ -1256,8 +1256,16 @@ static bool
 dpif_linux_flow_dump_next_may_destroy_keys(void *state_)
 {
     struct dpif_linux_flow_state *state = state_;
+    struct dpif_linux_flow flow;
+    struct ofpbuf nlmsg;
 
-    return ofpbuf_size(&state->buffer) ? false : true;
+    /* Check whether there's a flow remaining in the buffer that includes
+     * actions.  (If it does not include actions, then we could end up
+     * destroying keys previously returned trying to retrieve its actions
+     * fails.) */
+    return (!nl_dump_peek(&nlmsg, &state->buffer)
+            || dpif_linux_flow_from_ofpbuf(&flow, &nlmsg)
+            || !flow.actions);
 }
 
 static int

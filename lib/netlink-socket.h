@@ -119,6 +119,7 @@ struct nl_dump {
 void nl_dump_start(struct nl_dump *, int protocol,
                    const struct ofpbuf *request);
 bool nl_dump_next(struct nl_dump *, struct ofpbuf *reply, struct ofpbuf *buf);
+bool nl_dump_peek(struct ofpbuf *reply, struct ofpbuf *buf);
 int nl_dump_done(struct nl_dump *);
 
 /* Miscellaneous */
