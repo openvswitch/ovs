@@ -1460,7 +1460,7 @@ revalidate(struct revalidator *revalidator)
         ukey = ukey_lookup(udpif, key, key_len, hash);
 
         used = stats->used;
-        if (!used && ukey) {
+        if (ukey) {
             ovs_mutex_lock(&ukey->mutex);
 
             if (ukey->mark || !ukey->flow_exists) {
@@ -1473,7 +1473,9 @@ revalidate(struct revalidator *revalidator)
                 goto next;
             }
 
-            used = ukey->created;
+            if (!used) {
+                used = ukey->created;
+            }
             ovs_mutex_unlock(&ukey->mutex);
         }
 
