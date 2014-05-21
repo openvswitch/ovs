@@ -40,7 +40,7 @@
 #include "vlog.h"
 
 #define MAX_QUEUE_LENGTH 512
-#define FLOW_MISS_MAX_BATCH 50
+#define UPCALL_MAX_BATCH 50
 #define REVALIDATE_MAX_BATCH 50
 
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif_upcall);
@@ -139,7 +139,19 @@ enum upcall_type {
 };
 
 struct upcall {
-    struct flow_miss *flow_miss;    /* This upcall's flow_miss. */
+    struct ofproto_dpif *ofproto;
+
+    struct flow flow;
+    const struct nlattr *key;
+    size_t key_len;
+    enum dpif_upcall_type upcall_type;
+    struct dpif_flow_stats stats;
+    odp_port_t odp_in_port;
+
+    uint64_t slow_path_buf[128 / 8];
+    struct odputil_keybuf mask_buf;
+
+    struct xlate_out xout;
 
     /* Raw upcall plus data for keeping track of the memory backing it. */
     struct dpif_upcall dpif_upcall; /* As returned by dpif_recv() */
@@ -178,40 +190,12 @@ struct udpif_key {
     struct odputil_keybuf key_buf;            /* Memory for 'key'. */
 };
 
-/* Flow miss batching.
- *
- * Some dpifs implement operations faster when you hand them off in a batch.
- * To allow batching, "struct flow_miss" queues the dpif-related work needed
- * for a given flow.  Each "struct flow_miss" corresponds to sending one or
- * more packets, plus possibly installing the flow in the dpif. */
-struct flow_miss {
-    struct hmap_node hmap_node;
-    struct ofproto_dpif *ofproto;
-
-    struct flow flow;
-    const struct nlattr *key;
-    size_t key_len;
-    enum dpif_upcall_type upcall_type;
-    struct dpif_flow_stats stats;
-    odp_port_t odp_in_port;
-
-    uint64_t slow_path_buf[128 / 8];
-    struct odputil_keybuf mask_buf;
-
-    struct xlate_out xout;
-
-    bool put;
-};
-
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 static struct list all_udpifs = LIST_INITIALIZER(&all_udpifs);
 
 static size_t read_upcalls(struct handler *,
-                           struct upcall upcalls[FLOW_MISS_MAX_BATCH],
-                           struct flow_miss miss_buf[FLOW_MISS_MAX_BATCH],
-                           struct hmap *);
-static void handle_upcalls(struct handler *, struct hmap *, struct upcall *,
-                           size_t n_upcalls);
+                           struct upcall upcalls[UPCALL_MAX_BATCH]);
+static void handle_upcalls(struct handler *, struct upcall *, size_t n_upcalls);
 static void udpif_stop_threads(struct udpif *);
 static void udpif_start_threads(struct udpif *, size_t n_handlers,
                                 size_t n_revalidators);
@@ -506,7 +490,7 @@ udpif_get_n_flows(struct udpif *udpif)
     return flow_count;
 }
 
-/* The upcall handler thread tries to read a batch of FLOW_MISS_MAX_BATCH
+/* The upcall handler thread tries to read a batch of UPCALL_MAX_BATCH
  * upcalls from dpif, processes the batch and installs corresponding flows
  * in dpif. */
 static void *
@@ -514,34 +498,27 @@ udpif_upcall_handler(void *arg)
 {
     struct handler *handler = arg;
     struct udpif *udpif = handler->udpif;
-    struct hmap misses = HMAP_INITIALIZER(&misses);
 
     while (!latch_is_set(&handler->udpif->exit_latch)) {
-        struct upcall upcalls[FLOW_MISS_MAX_BATCH];
-        struct flow_miss miss_buf[FLOW_MISS_MAX_BATCH];
-        struct flow_miss *miss;
+        struct upcall upcalls[UPCALL_MAX_BATCH];
         size_t n_upcalls, i;
 
-        n_upcalls = read_upcalls(handler, upcalls, miss_buf, &misses);
+        n_upcalls = read_upcalls(handler, upcalls);
         if (!n_upcalls) {
             dpif_recv_wait(udpif->dpif, handler->handler_id);
             latch_wait(&udpif->exit_latch);
             poll_block();
         } else {
-            handle_upcalls(handler, &misses, upcalls, n_upcalls);
+            handle_upcalls(handler, upcalls, n_upcalls);
 
-            HMAP_FOR_EACH (miss, hmap_node, &misses) {
-                xlate_out_uninit(&miss->xout);
-            }
-            hmap_clear(&misses);
             for (i = 0; i < n_upcalls; i++) {
+                xlate_out_uninit(&upcalls[i].xout);
                 ofpbuf_uninit(&upcalls[i].dpif_upcall.packet);
                 ofpbuf_uninit(&upcalls[i].upcall_buf);
             }
         }
         coverage_clear();
     }
-    hmap_destroy(&misses);
 
     return NULL;
 }
@@ -710,62 +687,56 @@ compose_slow_path(struct udpif *udpif, struct xlate_out *xout,
     odp_put_userspace_action(pid, &cookie, sizeof cookie.slow_path, buf);
 }
 
-static struct flow_miss *
-flow_miss_find(struct hmap *todo, const struct ofproto_dpif *ofproto,
-               const struct flow *flow, uint32_t hash)
+static void
+upcall_init(struct upcall *upcall, struct flow *flow, struct ofpbuf *packet,
+            struct ofproto_dpif *ofproto, struct dpif_upcall *dupcall,
+            odp_port_t odp_in_port)
 {
-    struct flow_miss *miss;
+    struct xlate_in xin;
+    struct pkt_metadata md = pkt_metadata_from_flow(flow);
 
-    HMAP_FOR_EACH_WITH_HASH (miss, hmap_node, hash, todo) {
-        if (miss->ofproto == ofproto && flow_equal(&miss->flow, flow)) {
-            return miss;
-        }
+    flow_extract(packet, &md, &upcall->flow);
+
+    upcall->ofproto = ofproto;
+    upcall->key = dupcall->key;
+    upcall->key_len = dupcall->key_len;
+    upcall->upcall_type = dupcall->type;
+    upcall->stats.n_packets = 1;
+    upcall->stats.n_bytes = ofpbuf_size(packet);
+    upcall->stats.used = time_msec();
+    upcall->stats.tcp_flags = ntohs(upcall->flow.tcp_flags);
+    upcall->odp_in_port = odp_in_port;
+
+    xlate_in_init(&xin, upcall->ofproto, &upcall->flow, NULL,
+                  upcall->stats.tcp_flags, NULL);
+    xin.may_learn = true;
+
+    if (upcall->upcall_type == DPIF_UC_MISS) {
+        xin.resubmit_stats = &upcall->stats;
+    } else {
+        /* For non-miss upcalls, there's a flow in the datapath which this
+         * packet was accounted to.  Presumably the revalidators will deal
+         * with pushing its stats eventually. */
     }
 
-    return NULL;
+    xlate_actions(&xin, &upcall->xout);
 }
 
 /* Reads and classifies upcalls.  Returns the number of upcalls successfully
  * read. */
 static size_t
 read_upcalls(struct handler *handler,
-             struct upcall upcalls[FLOW_MISS_MAX_BATCH],
-             struct flow_miss miss_buf[FLOW_MISS_MAX_BATCH],
-             struct hmap *misses)
+             struct upcall upcalls[UPCALL_MAX_BATCH])
 {
     struct udpif *udpif = handler->udpif;
     size_t i;
-    size_t n_misses = 0;
     size_t n_upcalls = 0;
 
-    /*
-     * Try reading FLOW_MISS_MAX_BATCH upcalls from dpif.
-     *
-     * Extract the flow from each upcall.  Construct in 'misses' a hash table
-     * that maps each unique flow to a 'struct flow_miss'.
-     *
-     * Most commonly there is a single packet per flow_miss, but there are
-     * several reasons why there might be more than one, e.g.:
-     *
-     *   - The dpif packet interface does not support TSO (or UFO, etc.), so a
-     *     large packet sent to userspace is split into a sequence of smaller
-     *     ones.
-     *
-     *   - A stream of quickly arriving packets in an established "slow-pathed"
-     *     flow.
-     *
-     *   - Rarely, a stream of quickly arriving packets in a flow not yet
-     *     established.  (This is rare because most protocols do not send
-     *     multiple back-to-back packets before receiving a reply from the
-     *     other end of the connection, which gives OVS a chance to set up a
-     *     datapath flow.)
-     */
-    for (i = 0; i < FLOW_MISS_MAX_BATCH; i++) {
+    /* Try reading UPCALL_MAX_BATCH upcalls from dpif. */
+    for (i = 0; i < UPCALL_MAX_BATCH; i++) {
         struct upcall *upcall = &upcalls[n_upcalls];
-        struct flow_miss *miss = &miss_buf[n_misses];
         struct dpif_upcall *dupcall;
         struct ofpbuf *packet;
-        struct flow_miss *existing_miss;
         struct ofproto_dpif *ofproto;
         struct dpif_sflow *sflow;
         struct dpif_ipfix *ipfix;
@@ -807,34 +778,7 @@ read_upcalls(struct handler *handler,
 
         type = classify_upcall(upcall);
         if (type == MISS_UPCALL) {
-            uint32_t hash;
-            struct pkt_metadata md = pkt_metadata_from_flow(&flow);
-
-            flow_extract(packet, &md, &miss->flow);
-            hash = flow_hash(&miss->flow, 0);
-            existing_miss = flow_miss_find(misses, ofproto, &miss->flow,
-                                           hash);
-            if (!existing_miss) {
-                hmap_insert(misses, &miss->hmap_node, hash);
-                miss->ofproto = ofproto;
-                miss->key = dupcall->key;
-                miss->key_len = dupcall->key_len;
-                miss->upcall_type = dupcall->type;
-                miss->stats.n_packets = 0;
-                miss->stats.n_bytes = 0;
-                miss->stats.used = time_msec();
-                miss->stats.tcp_flags = 0;
-                miss->odp_in_port = odp_in_port;
-                miss->put = false;
-                n_misses++;
-            } else {
-                miss = existing_miss;
-            }
-            miss->stats.tcp_flags |= ntohs(miss->flow.tcp_flags);
-            miss->stats.n_bytes += ofpbuf_size(packet);
-            miss->stats.n_packets++;
-
-            upcall->flow_miss = miss;
+            upcall_init(upcall, &flow, packet, ofproto, dupcall, odp_in_port);
             n_upcalls++;
             continue;
         }
@@ -891,13 +835,12 @@ destroy_upcall:
 }
 
 static void
-handle_upcalls(struct handler *handler, struct hmap *misses,
-               struct upcall *upcalls, size_t n_upcalls)
+handle_upcalls(struct handler *handler, struct upcall *upcalls,
+               size_t n_upcalls)
 {
     struct udpif *udpif = handler->udpif;
-    struct dpif_op *opsp[FLOW_MISS_MAX_BATCH * 2];
-    struct dpif_op ops[FLOW_MISS_MAX_BATCH * 2];
-    struct flow_miss *miss;
+    struct dpif_op *opsp[UPCALL_MAX_BATCH * 2];
+    struct dpif_op ops[UPCALL_MAX_BATCH * 2];
     size_t n_ops, i;
     unsigned int flow_limit;
     bool fail_open, may_put;
@@ -905,36 +848,7 @@ handle_upcalls(struct handler *handler, struct hmap *misses,
     atomic_read(&udpif->flow_limit, &flow_limit);
     may_put = udpif_get_n_flows(udpif) < flow_limit;
 
-    /* Initialize each 'struct flow_miss's ->xout.
-     *
-     * We do this per-flow_miss rather than per-packet because, most commonly,
-     * all the packets in a flow can use the same translation.
-     *
-     * We can't do this in the previous loop because we need the TCP flags for
-     * all the packets in each miss. */
-    fail_open = false;
-    HMAP_FOR_EACH (miss, hmap_node, misses) {
-        struct xlate_in xin;
-
-        xlate_in_init(&xin, miss->ofproto, &miss->flow, NULL,
-                      miss->stats.tcp_flags, NULL);
-        xin.may_learn = true;
-
-        if (miss->upcall_type == DPIF_UC_MISS) {
-            xin.resubmit_stats = &miss->stats;
-        } else {
-            /* For non-miss upcalls, there's a flow in the datapath which this
-             * packet was accounted to.  Presumably the revalidators will deal
-             * with pushing its stats eventually. */
-        }
-
-        xlate_actions(&xin, &miss->xout);
-        fail_open = fail_open || miss->xout.fail_open;
-    }
-
-    /* Now handle the packets individually in order of arrival.  In the common
-     * case each packet of a miss can share the same actions, but slow-pathed
-     * packets need to be translated individually:
+    /* Handle the packets individually in order of arrival.
      *
      *   - For SLOW_CFM, SLOW_LACP, SLOW_STP, and SLOW_BFD, translation is what
      *     processes received packets for these protocols.
@@ -944,113 +858,99 @@ handle_upcalls(struct handler *handler, struct hmap *misses,
      *
      * The loop fills 'ops' with an array of operations to execute in the
      * datapath. */
+    fail_open = false;
     n_ops = 0;
     for (i = 0; i < n_upcalls; i++) {
         struct upcall *upcall = &upcalls[i];
-        struct flow_miss *miss = upcall->flow_miss;
         struct ofpbuf *packet = &upcall->dpif_upcall.packet;
         struct dpif_op *op;
-        ovs_be16 flow_vlan_tci;
 
-        /* Save a copy of flow.vlan_tci in case it is changed to
-         * generate proper mega flow masks for VLAN splinter flows. */
-        flow_vlan_tci = miss->flow.vlan_tci;
+        fail_open = fail_open || upcall->xout.fail_open;
 
-        if (miss->xout.slow) {
+        if (upcall->xout.slow) {
             struct xlate_in xin;
 
-            xlate_in_init(&xin, miss->ofproto, &miss->flow, NULL, 0, packet);
+            xlate_in_init(&xin, upcall->ofproto, &upcall->flow, NULL, 0, packet);
             xlate_actions_for_side_effects(&xin);
         }
 
-        if (miss->flow.in_port.ofp_port
-            != vsp_realdev_to_vlandev(miss->ofproto,
-                                      miss->flow.in_port.ofp_port,
-                                      miss->flow.vlan_tci)) {
+        if (upcall->flow.in_port.ofp_port
+            != vsp_realdev_to_vlandev(upcall->ofproto,
+                                      upcall->flow.in_port.ofp_port,
+                                      upcall->flow.vlan_tci)) {
             /* This packet was received on a VLAN splinter port.  We
              * added a VLAN to the packet to make the packet resemble
              * the flow, but the actions were composed assuming that
              * the packet contained no VLAN.  So, we must remove the
              * VLAN header from the packet before trying to execute the
              * actions. */
-            if (ofpbuf_size(&miss->xout.odp_actions)) {
+            if (ofpbuf_size(&upcall->xout.odp_actions)) {
                 eth_pop_vlan(packet);
             }
 
             /* Remove the flow vlan tags inserted by vlan splinter logic
              * to ensure megaflow masks generated match the data path flow. */
-            miss->flow.vlan_tci = 0;
+            upcall->flow.vlan_tci = 0;
         }
 
         /* Do not install a flow into the datapath if:
          *
          *    - The datapath already has too many flows.
          *
-         *    - An earlier iteration of this loop already put the same flow.
-         *
          *    - We received this packet via some flow installed in the kernel
          *      already. */
         if (may_put
-            && !miss->put
             && upcall->dpif_upcall.type == DPIF_UC_MISS) {
             struct ofpbuf mask;
             bool megaflow;
 
-            miss->put = true;
-
             atomic_read(&enable_megaflows, &megaflow);
-            ofpbuf_use_stack(&mask, &miss->mask_buf, sizeof miss->mask_buf);
+            ofpbuf_use_stack(&mask, &upcall->mask_buf, sizeof upcall->mask_buf);
             if (megaflow) {
                 size_t max_mpls;
                 bool recirc;
 
-                recirc = ofproto_dpif_get_enable_recirc(miss->ofproto);
-                max_mpls = ofproto_dpif_get_max_mpls_depth(miss->ofproto);
-                odp_flow_key_from_mask(&mask, &miss->xout.wc.masks,
-                                       &miss->flow, UINT32_MAX, max_mpls,
+                recirc = ofproto_dpif_get_enable_recirc(upcall->ofproto);
+                max_mpls = ofproto_dpif_get_max_mpls_depth(upcall->ofproto);
+                odp_flow_key_from_mask(&mask, &upcall->xout.wc.masks,
+                                       &upcall->flow, UINT32_MAX, max_mpls,
                                        recirc);
             }
 
             op = &ops[n_ops++];
             op->type = DPIF_OP_FLOW_PUT;
             op->u.flow_put.flags = DPIF_FP_CREATE | DPIF_FP_MODIFY;
-            op->u.flow_put.key = miss->key;
-            op->u.flow_put.key_len = miss->key_len;
+            op->u.flow_put.key = upcall->key;
+            op->u.flow_put.key_len = upcall->key_len;
             op->u.flow_put.mask = ofpbuf_data(&mask);
             op->u.flow_put.mask_len = ofpbuf_size(&mask);
             op->u.flow_put.stats = NULL;
 
-            if (!miss->xout.slow) {
-                op->u.flow_put.actions = ofpbuf_data(&miss->xout.odp_actions);
-                op->u.flow_put.actions_len = ofpbuf_size(&miss->xout.odp_actions);
+            if (!upcall->xout.slow) {
+                op->u.flow_put.actions = ofpbuf_data(&upcall->xout.odp_actions);
+                op->u.flow_put.actions_len = ofpbuf_size(&upcall->xout.odp_actions);
             } else {
                 struct ofpbuf buf;
 
-                ofpbuf_use_stack(&buf, miss->slow_path_buf,
-                                 sizeof miss->slow_path_buf);
-                compose_slow_path(udpif, &miss->xout, &miss->flow,
-                                  miss->odp_in_port, &buf);
+                ofpbuf_use_stack(&buf, upcall->slow_path_buf,
+                                 sizeof upcall->slow_path_buf);
+                compose_slow_path(udpif, &upcall->xout, &upcall->flow,
+                                  upcall->odp_in_port, &buf);
                 op->u.flow_put.actions = ofpbuf_data(&buf);
                 op->u.flow_put.actions_len = ofpbuf_size(&buf);
             }
         }
 
-        /*
-         * The 'miss' may be shared by multiple upcalls. Restore
-         * the saved flow vlan_tci field before processing the next
-         * upcall. */
-        miss->flow.vlan_tci = flow_vlan_tci;
-
-        if (ofpbuf_size(&miss->xout.odp_actions)) {
+        if (ofpbuf_size(&upcall->xout.odp_actions)) {
 
             op = &ops[n_ops++];
             op->type = DPIF_OP_EXECUTE;
             op->u.execute.packet = packet;
-            odp_key_to_pkt_metadata(miss->key, miss->key_len,
+            odp_key_to_pkt_metadata(upcall->key, upcall->key_len,
                                     &op->u.execute.md);
-            op->u.execute.actions = ofpbuf_data(&miss->xout.odp_actions);
-            op->u.execute.actions_len = ofpbuf_size(&miss->xout.odp_actions);
-            op->u.execute.needs_help = (miss->xout.slow & SLOW_ACTION) != 0;
+            op->u.execute.actions = ofpbuf_data(&upcall->xout.odp_actions);
+            op->u.execute.actions_len = ofpbuf_size(&upcall->xout.odp_actions);
+            op->u.execute.needs_help = (upcall->xout.slow & SLOW_ACTION) != 0;
         }
     }
 
@@ -1066,7 +966,6 @@ handle_upcalls(struct handler *handler, struct hmap *misses,
     if (fail_open) {
         for (i = 0; i < n_upcalls; i++) {
             struct upcall *upcall = &upcalls[i];
-            struct flow_miss *miss = upcall->flow_miss;
             struct ofpbuf *packet = &upcall->dpif_upcall.packet;
             struct ofproto_packet_in *pin;
 
@@ -1076,10 +975,10 @@ handle_upcalls(struct handler *handler, struct hmap *misses,
             pin->up.reason = OFPR_NO_MATCH;
             pin->up.table_id = 0;
             pin->up.cookie = OVS_BE64_MAX;
-            flow_get_metadata(&miss->flow, &pin->up.fmd);
+            flow_get_metadata(&upcall->flow, &pin->up.fmd);
             pin->send_len = 0; /* Not used for flow table misses. */
             pin->miss_type = OFPROTO_PACKET_IN_NO_MISS;
-            ofproto_dpif_send_packet_in(miss->ofproto, pin);
+            ofproto_dpif_send_packet_in(upcall->ofproto, pin);
         }
     }
 
