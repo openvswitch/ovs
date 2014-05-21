@@ -837,6 +837,7 @@ port_unref(struct dp_netdev_port *port)
         for (i = 0; i < n_rxq; i++) {
             netdev_rxq_close(port->rxq[i]);
         }
+        free(port->rxq);
         free(port->type);
         free(port);
     }
