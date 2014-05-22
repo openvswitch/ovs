@@ -2065,7 +2065,8 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
                                               ? &ctx->xout->wc : NULL,
                                               honor_table_miss,
                                               &ctx->table_id, &rule,
-                                              ctx->xin->xcache != NULL);
+                                              ctx->xin->xcache != NULL,
+                                              ctx->xin->resubmit_stats);
         ctx->xin->flow.in_port.ofp_port = old_in_port;
 
         if (ctx->xin->resubmit_hook) {
@@ -2693,7 +2694,7 @@ xlate_learn_action(struct xlate_ctx *ctx,
         /* Lookup the learned rule, taking a reference on it.  The reference
          * is released when this cache entry is deleted. */
         rule_dpif_lookup(ctx->xbridge->ofproto, &ctx->xin->flow, NULL,
-                         &entry->u.learn.rule, true);
+                         &entry->u.learn.rule, true, NULL);
     }
 }
 
@@ -3304,7 +3305,8 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
     if (!xin->ofpacts && !ctx.rule) {
         ctx.table_id = rule_dpif_lookup(ctx.xbridge->ofproto, flow,
                                         !xin->skip_wildcards ? wc : NULL,
-                                        &rule, ctx.xin->xcache != NULL);
+                                        &rule, ctx.xin->xcache != NULL,
+                                        ctx.xin->resubmit_stats);
         if (ctx.xin->resubmit_stats) {
             rule_dpif_credit_stats(rule, ctx.xin->resubmit_stats);
         }

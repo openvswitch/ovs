@@ -260,6 +260,9 @@ struct oftable {
 
     /* Table config: contains enum ofproto_table_config; accessed atomically. */
     atomic_uint config;
+
+    atomic_ulong n_matched;
+    atomic_ulong n_missed;
 };
 
 /* Assigns TABLE to each oftable, in turn, in OFPROTO.

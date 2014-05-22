@@ -6804,6 +6804,9 @@ oftable_init(struct oftable *table)
     classifier_set_prefix_fields(&table->cls, default_prefix_fields,
                                  ARRAY_SIZE(default_prefix_fields));
     fat_rwlock_unlock(&table->cls.rwlock);
+
+    atomic_init(&table->n_matched, 0);
+    atomic_init(&table->n_missed, 0);
 }
 
 /* Destroys 'table', including its classifier and eviction groups.
