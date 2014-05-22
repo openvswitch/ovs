@@ -3654,7 +3654,6 @@ group_dpif_lookup(struct ofproto_dpif *ofproto, uint32_t group_id,
     struct ofgroup *ofgroup;
     bool found;
 
-    *group = NULL;
     found = ofproto_group_lookup(&ofproto->up, group_id, &ofgroup);
     *group = found ?  group_dpif_cast(ofgroup) : NULL;
 
