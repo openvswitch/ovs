@@ -489,15 +489,15 @@ struct ofgroup {
 
     /* No lock is needed to protect the fields below since they are not
      * modified after construction. */
-    struct ofproto *ofproto;   /* The ofproto that contains this group. */
-    uint32_t group_id;
-    enum ofp11_group_type type; /* One of OFPGT_*. */
+    const struct ofproto *ofproto;  /* The ofproto that contains this group. */
+    const uint32_t group_id;
+    const enum ofp11_group_type type; /* One of OFPGT_*. */
 
-    long long int created;      /* Creation time. */
-    long long int modified;     /* Time of last modification. */
+    const long long int created;      /* Creation time. */
+    const long long int modified;     /* Time of last modification. */
 
     struct list buckets;        /* Contains "struct ofputil_bucket"s. */
-    uint32_t n_buckets;
+    const uint32_t n_buckets;
 };
 
 bool ofproto_group_lookup(const struct ofproto *ofproto, uint32_t group_id,

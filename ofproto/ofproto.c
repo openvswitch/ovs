@@ -5420,7 +5420,7 @@ static uint32_t
 group_get_ref_count(struct ofgroup *group)
     OVS_EXCLUDED(ofproto_mutex)
 {
-    struct ofproto *ofproto = group->ofproto;
+    struct ofproto *ofproto = CONST_CAST(struct ofproto *, group->ofproto);
     struct rule_criteria criteria;
     struct rule_collection rules;
     struct match match;
@@ -5445,7 +5445,7 @@ static void
 append_group_stats(struct ofgroup *group, struct list *replies)
 {
     struct ofputil_group_stats ogs;
-    struct ofproto *ofproto = group->ofproto;
+    const struct ofproto *ofproto = group->ofproto;
     long long int now = time_msec();
     int error;
 
@@ -5597,6 +5597,7 @@ init_group(struct ofproto *ofproto, struct ofputil_group_mod *gm,
            struct ofgroup **ofgroup)
 {
     enum ofperr error;
+    const long long int now = time_msec();
 
     if (gm->group_id > OFPG_MAX) {
         return OFPERR_OFPGMFC_INVALID_GROUP;
@@ -5611,14 +5612,16 @@ init_group(struct ofproto *ofproto, struct ofputil_group_mod *gm,
         return OFPERR_OFPGMFC_OUT_OF_GROUPS;
     }
 
-    (*ofgroup)->ofproto  = ofproto;
-    (*ofgroup)->group_id = gm->group_id;
-    (*ofgroup)->type     = gm->type;
-    (*ofgroup)->created = (*ofgroup)->modified = time_msec();
+    (*ofgroup)->ofproto = ofproto;
+    *CONST_CAST(uint32_t *, &((*ofgroup)->group_id)) = gm->group_id;
+    *CONST_CAST(enum ofp11_group_type *, &(*ofgroup)->type) = gm->type;
+    *CONST_CAST(long long int *, &((*ofgroup)->created)) = now;
+    *CONST_CAST(long long int *, &((*ofgroup)->modified)) = now;
     ovs_refcount_init(&(*ofgroup)->ref_count);
 
     list_move(&(*ofgroup)->buckets, &gm->buckets);
-    (*ofgroup)->n_buckets = list_size(&(*ofgroup)->buckets);
+    *CONST_CAST(uint32_t *, &(*ofgroup)->n_buckets) =
+        list_size(&(*ofgroup)->buckets);
 
     /* Construct called BEFORE any locks are held. */
     error = ofproto->ofproto_class->group_construct(*ofgroup);
@@ -5722,8 +5725,8 @@ modify_group(struct ofproto *ofproto, struct ofputil_group_mod *gm)
     }
 
     /* The group creation time does not change during modification. */
-    new_ofgroup->created = ofgroup->created;
-    new_ofgroup->modified = time_msec();
+    *CONST_CAST(long long int *, &(new_ofgroup->created)) = ofgroup->created;
+    *CONST_CAST(long long int *, &(new_ofgroup->modified)) = time_msec();
 
     error = ofproto->ofproto_class->group_modify(new_ofgroup);
     if (error) {
