@@ -1,0 +1,38 @@
+AT_BANNER([bridge])
+
+dnl When a port disappears from a datapath, e.g. because an admin used
+dnl "ovs-dpctl del-port", the bridge code should be resilient enough to
+dnl notice and add it back the next time we reconfigure.  A prior version
+dnl of the code failed to do this, so this test guards against regression.
+AT_SETUP([bridge - ports that disappear get added back])
+OVS_VSWITCHD_START
+
+# Add some ports and make sure that they show up in the datapath.
+ADD_OF_PORTS([br0], 1, 2)
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+dummy@ovs-dummy: hit:0 missed:0
+	br0:
+		br0 65534/100: (dummy)
+		p1 1/1: (dummy)
+		p2 2/2: (dummy)
+])
+
+# Delete p1 from the datapath as if by "ovs-dpctl del-port"
+# and check that it disappeared.
+AT_CHECK([ovs-appctl dpif-dummy/delete-port ovs-dummy p1])
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+dummy@ovs-dummy: hit:0 missed:0
+	br0:
+		br0 65534/100: (dummy)
+		p2 2/2: (dummy)
+])
+
+# Force reconfiguration and make sure that p1 got added back.
+AT_CHECK([ovs-vsctl del-port p2])
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+dummy@ovs-dummy: hit:0 missed:0
+	br0:
+		br0 65534/100: (dummy)
+		p1 1/1: (dummy)
+])
+AT_CLEANUP

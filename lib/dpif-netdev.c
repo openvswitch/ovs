@@ -325,7 +325,7 @@ static void dp_netdev_flow_flush(struct dp_netdev *);
 static int do_add_port(struct dp_netdev *dp, const char *devname,
                        const char *type, odp_port_t port_no)
     OVS_REQUIRES(dp->port_mutex);
-static int do_del_port(struct dp_netdev *dp, odp_port_t port_no)
+static void do_del_port(struct dp_netdev *dp, struct dp_netdev_port *)
     OVS_REQUIRES(dp->port_mutex);
 static void dp_netdev_destroy_all_queues(struct dp_netdev *dp)
     OVS_REQ_WRLOCK(dp->queue_rwlock);
@@ -548,7 +548,7 @@ dp_netdev_free(struct dp_netdev *dp)
     dp_netdev_flow_flush(dp);
     ovs_mutex_lock(&dp->port_mutex);
     CMAP_FOR_EACH (port, node, &cursor, &dp->ports) {
-        do_del_port(dp, port->port_no);
+        do_del_port(dp, port);
     }
     ovs_mutex_unlock(&dp->port_mutex);
 
@@ -762,7 +762,16 @@ dpif_netdev_port_del(struct dpif *dpif, odp_port_t port_no)
     int error;
 
     ovs_mutex_lock(&dp->port_mutex);
-    error = port_no == ODPP_LOCAL ? EINVAL : do_del_port(dp, port_no);
+    if (port_no == ODPP_LOCAL) {
+        error = EINVAL;
+    } else {
+        struct dp_netdev_port *port;
+
+        error = get_port_by_number(dp, port_no, &port);
+        if (!error) {
+            do_del_port(dp, port);
+        }
+    }
     ovs_mutex_unlock(&dp->port_mutex);
 
     return error;
@@ -851,26 +860,17 @@ get_port_by_name(struct dp_netdev *dp,
     return ENOENT;
 }
 
-static int
-do_del_port(struct dp_netdev *dp, odp_port_t port_no)
+static void
+do_del_port(struct dp_netdev *dp, struct dp_netdev_port *port)
     OVS_REQUIRES(dp->port_mutex)
 {
-    struct dp_netdev_port *port;
-    int error;
-
-    error = get_port_by_number(dp, port_no, &port);
-    if (error) {
-        return error;
-    }
-
-    cmap_remove(&dp->ports, &port->node, hash_odp_port(port_no));
+    cmap_remove(&dp->ports, &port->node, hash_odp_port(port->port_no));
     seq_change(dp->port_seq);
     if (netdev_is_pmd(port->netdev)) {
         dp_netdev_reload_pmd_threads(dp);
     }
 
     port_unref(port);
-    return 0;
 }
 
 static void
@@ -2292,6 +2292,37 @@ exit:
 }
 
 static void
+dpif_dummy_delete_port(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                       const char *argv[], void *aux OVS_UNUSED)
+{
+    struct dp_netdev_port *port;
+    struct dp_netdev *dp;
+
+    ovs_mutex_lock(&dp_netdev_mutex);
+    dp = shash_find_data(&dp_netdevs, argv[1]);
+    if (!dp || !dpif_netdev_class_is_dummy(dp->class)) {
+        ovs_mutex_unlock(&dp_netdev_mutex);
+        unixctl_command_reply_error(conn, "unknown datapath or not a dummy");
+        return;
+    }
+    ovs_refcount_ref(&dp->ref_cnt);
+    ovs_mutex_unlock(&dp_netdev_mutex);
+
+    ovs_mutex_lock(&dp->port_mutex);
+    if (get_port_by_name(dp, argv[2], &port)) {
+        unixctl_command_reply_error(conn, "unknown port");
+    } else if (port->port_no == ODPP_LOCAL) {
+        unixctl_command_reply_error(conn, "can't delete local port");
+    } else {
+        do_del_port(dp, port);
+        unixctl_command_reply(conn, NULL);
+    }
+    ovs_mutex_unlock(&dp->port_mutex);
+
+    dp_netdev_unref(dp);
+}
+
+static void
 dpif_dummy_register__(const char *type)
 {
     struct dpif_class *class;
@@ -2324,4 +2355,6 @@ dpif_dummy_register(bool override)
     unixctl_command_register("dpif-dummy/change-port-number",
                              "DP PORT NEW-NUMBER",
                              3, 3, dpif_dummy_change_port_number, NULL);
+    unixctl_command_register("dpif-dummy/delete-port", "DP PORT",
+                             2, 2, dpif_dummy_delete_port, NULL);
 }

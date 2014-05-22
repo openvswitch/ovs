@@ -39,6 +39,7 @@ TESTSUITE_AT = \
 	tests/ovs-vswitchd.at \
 	tests/dpif-netdev.at \
 	tests/ofproto-dpif.at \
+	tests/bridge.at \
 	tests/vlan-splinters.at \
 	tests/ofproto-macros.at \
 	tests/ofproto.at \
