@@ -5352,6 +5352,21 @@ handle_meter_request(struct ofconn *ofconn, const struct ofp_header *request,
     return 0;
 }
 
+static bool
+ofproto_group_lookup__(const struct ofproto *ofproto, uint32_t group_id,
+                       struct ofgroup **group)
+    OVS_REQ_RDLOCK(ofproto->groups_rwlock)
+{
+    HMAP_FOR_EACH_IN_BUCKET (*group, hmap_node,
+                             hash_int(group_id, 0), &ofproto->groups) {
+        if ((*group)->group_id == group_id) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /* If the group exists, this function increments the groups's reference count.
  *
  * Make sure to call ofproto_group_unref() after no longer needing to maintain
@@ -5360,32 +5375,15 @@ bool
 ofproto_group_lookup(const struct ofproto *ofproto, uint32_t group_id,
                      struct ofgroup **group)
 {
+    bool found;
+
     ovs_rwlock_rdlock(&ofproto->groups_rwlock);
-    HMAP_FOR_EACH_IN_BUCKET (*group, hmap_node,
-                             hash_int(group_id, 0), &ofproto->groups) {
-        if ((*group)->group_id == group_id) {
-            ofproto_group_ref(*group);
-            ovs_rwlock_unlock(&ofproto->groups_rwlock);
-            return true;
-        }
+    found = ofproto_group_lookup__(ofproto, group_id, group);
+    if (found) {
+        ofproto_group_ref(*group);
     }
     ovs_rwlock_unlock(&ofproto->groups_rwlock);
-    return false;
-}
-
-static bool
-ofproto_group_write_lookup(const struct ofproto *ofproto, uint32_t group_id,
-                           struct ofgroup **group)
-    OVS_ACQUIRES(ofproto->groups_rwlock)
-{
-    ovs_rwlock_wrlock(&ofproto->groups_rwlock);
-    HMAP_FOR_EACH_IN_BUCKET (*group, hmap_node,
-                             hash_int(group_id, 0), &ofproto->groups) {
-        if ((*group)->group_id == group_id) {
-            return true;
-        }
-    }
-    return false;
+    return found;
 }
 
 static bool
@@ -5712,7 +5710,8 @@ modify_group(struct ofproto *ofproto, struct ofputil_group_mod *gm)
 
     retiring = new_ofgroup;
 
-    if (!ofproto_group_write_lookup(ofproto, gm->group_id, &ofgroup)) {
+    ovs_rwlock_wrlock(&ofproto->groups_rwlock);
+    if (!ofproto_group_lookup__(ofproto, gm->group_id, &ofgroup)) {
         error = OFPERR_OFPGMFC_UNKNOWN_GROUP;
         goto out;
     }
