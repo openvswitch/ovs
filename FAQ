@@ -190,6 +190,27 @@ A: The kernel module in upstream Linux does not include support for
    Linux release or using the kernel module paired with the userspace
    distribution.
 
+Q: Why do tunnels not work when using a kernel module other than the
+   one packaged with Open vSwitch?
+
+A: Support for tunnels was added to the upstream Linux kernel module
+   after the rest of Open vSwitch. As a result, some kernels may contain
+   support for Open vSwitch but not tunnels. The minimum kernel version
+   that supports each tunnel protocol is:
+
+   Protocol    Linux Kernel
+   --------    ------------
+     GRE           3.11
+     VXLAN         3.12
+     LISP      <not upstream>
+
+   If you are using a version of the kernel that is older than the one
+   listed above, it is still possible to use that tunnel protocol. However,
+   you must compile and install the kernel module included with the Open
+   vSwitch distribution rather than the one on your machine. If problems
+   persist after doing this, check to make sure that the module that is
+   loaded is the one you expect.
+
 Q: What features are not available when using the userspace datapath?
 
 A: Tunnel virtual ports are not supported, as described in the
