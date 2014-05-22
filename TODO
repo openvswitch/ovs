@@ -52,23 +52,6 @@ These changes might have backward-compatibility implications; one
 would have to test the behavior of the reduced cipher list OVS against
 older versions.
 
-OpenFlow Group Bucket Stats
----------------------------
-
-When OpenFlow group support was added, we forgot to support statistics
-for individual buckets.  xlate_group_bucket() in
-ofproto/ofproto-dpif-xlate.c appears to be where we need to increment
-the counters, in the case where ctx->xin->resubmit_stats is
-nonnull. See the ovs-dev thread starting here:
-http://openvswitch.org/pipermail/dev/2014-January/036107.html
-
-Joe Stringer adds: If this involves resubmit_stats, then it would also
-need a new xc_type. The xlate_group_bucket() code would add an entry
-to ctx->xin->xcache if it is nonnull.  This would also need to follow
-the code in xlate_push_stats() and xlate_cache_clear() for the new
-xc_type.
-
-
 Bash Command Completion
 -----------------------
 
