@@ -125,6 +125,9 @@ void choose_miss_rule(enum ofputil_port_config,
                       struct rule_dpif *no_packet_in_rule,
                       struct rule_dpif **rule, bool take_ref);
 
+void group_dpif_credit_stats(struct group_dpif *,
+                             struct ofputil_bucket *,
+                             const struct dpif_flow_stats *);
 bool group_dpif_lookup(struct ofproto_dpif *ofproto, uint32_t group_id,
                        struct group_dpif **group);
 

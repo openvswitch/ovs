@@ -107,7 +107,6 @@ struct group_dpif {
     struct ovs_mutex stats_mutex;
     uint64_t packet_count OVS_GUARDED;  /* Number of packets received. */
     uint64_t byte_count OVS_GUARDED;    /* Number of bytes received. */
-    struct bucket_counter *bucket_stats OVS_GUARDED;  /* Bucket statistics. */
 };
 
 struct ofbundle {
@@ -3541,15 +3540,40 @@ static void
 group_construct_stats(struct group_dpif *group)
     OVS_REQUIRES(group->stats_mutex)
 {
+    struct ofputil_bucket *bucket;
+    const struct list *buckets;
+
     group->packet_count = 0;
     group->byte_count = 0;
-    if (!group->bucket_stats) {
-        group->bucket_stats = xcalloc(group->up.n_buckets,
-                                      sizeof *group->bucket_stats);
-    } else {
-        memset(group->bucket_stats, 0, group->up.n_buckets *
-               sizeof *group->bucket_stats);
+
+    group_dpif_get_buckets(group, &buckets);
+    LIST_FOR_EACH (bucket, list_node, buckets) {
+        bucket->stats.packet_count = 0;
+        bucket->stats.byte_count = 0;
     }
+}
+
+void
+group_dpif_credit_stats(struct group_dpif *group,
+                        struct ofputil_bucket *bucket,
+                        const struct dpif_flow_stats *stats)
+{
+    ovs_mutex_lock(&group->stats_mutex);
+    group->packet_count += stats->n_packets;
+    group->byte_count += stats->n_bytes;
+    if (bucket) {
+        bucket->stats.packet_count += stats->n_packets;
+        bucket->stats.byte_count += stats->n_bytes;
+    } else { /* Credit to all buckets */
+        const struct list *buckets;
+
+        group_dpif_get_buckets(group, &buckets);
+        LIST_FOR_EACH (bucket, list_node, buckets) {
+            bucket->stats.packet_count += stats->n_packets;
+            bucket->stats.byte_count += stats->n_bytes;
+        }
+    }
+    ovs_mutex_unlock(&group->stats_mutex);
 }
 
 static enum ofperr
@@ -3578,20 +3602,9 @@ group_construct(struct ofgroup *group_)
 }
 
 static void
-group_destruct__(struct group_dpif *group)
-    OVS_REQUIRES(group->stats_mutex)
-{
-    free(group->bucket_stats);
-    group->bucket_stats = NULL;
-}
-
-static void
 group_destruct(struct ofgroup *group_)
 {
     struct group_dpif *group = group_dpif_cast(group_);
-    ovs_mutex_lock(&group->stats_mutex);
-    group_destruct__(group);
-    ovs_mutex_unlock(&group->stats_mutex);
     ovs_mutex_destroy(&group->stats_mutex);
 }
 
@@ -3609,12 +3622,21 @@ static enum ofperr
 group_get_stats(const struct ofgroup *group_, struct ofputil_group_stats *ogs)
 {
     struct group_dpif *group = group_dpif_cast(group_);
+    struct ofputil_bucket *bucket;
+    const struct list *buckets;
+    struct bucket_counter *bucket_stats;
 
     ovs_mutex_lock(&group->stats_mutex);
     ogs->packet_count = group->packet_count;
     ogs->byte_count = group->byte_count;
-    memcpy(ogs->bucket_stats, group->bucket_stats,
-           group->up.n_buckets * sizeof *group->bucket_stats);
+
+    group_dpif_get_buckets(group, &buckets);
+    bucket_stats = ogs->bucket_stats;
+    LIST_FOR_EACH (bucket, list_node, buckets) {
+        bucket_stats->packet_count = bucket->stats.packet_count;
+        bucket_stats->byte_count = bucket->stats.byte_count;
+        bucket_stats++;
+    }
     ovs_mutex_unlock(&group->stats_mutex);
 
     return 0;

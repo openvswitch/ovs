@@ -235,6 +235,7 @@ enum xc_type {
     XC_LEARN,
     XC_NORMAL,
     XC_FIN_TIMEOUT,
+    XC_GROUP,
 };
 
 /* xlate_cache entries hold enough information to perform the side effects of
@@ -279,6 +280,10 @@ struct xc_entry {
             uint16_t idle;
             uint16_t hard;
         } fin;
+        struct {
+            struct group_dpif *group;
+            struct ofputil_bucket *bucket;
+        } group;
     } u;
 };
 
@@ -837,7 +842,7 @@ odp_port_is_alive(const struct xlate_ctx *ctx, ofp_port_t ofp_port)
     return true;
 }
 
-static const struct ofputil_bucket *
+static struct ofputil_bucket *
 group_first_live_bucket(const struct xlate_ctx *, const struct group_dpif *,
                         int depth);
 
@@ -862,7 +867,7 @@ group_is_alive(const struct xlate_ctx *ctx, uint32_t group_id, int depth)
 
 static bool
 bucket_is_alive(const struct xlate_ctx *ctx,
-                const struct ofputil_bucket *bucket, int depth)
+                struct ofputil_bucket *bucket, int depth)
 {
     if (depth >= MAX_LIVENESS_RECURSION) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
@@ -879,7 +884,7 @@ bucket_is_alive(const struct xlate_ctx *ctx,
          group_is_alive(ctx, bucket->watch_group, depth + 1));
 }
 
-static const struct ofputil_bucket *
+static struct ofputil_bucket *
 group_first_live_bucket(const struct xlate_ctx *ctx,
                         const struct group_dpif *group, int depth)
 {
@@ -896,16 +901,16 @@ group_first_live_bucket(const struct xlate_ctx *ctx,
     return NULL;
 }
 
-static const struct ofputil_bucket *
+static struct ofputil_bucket *
 group_best_live_bucket(const struct xlate_ctx *ctx,
                        const struct group_dpif *group,
                        uint32_t basis)
 {
-    const struct ofputil_bucket *best_bucket = NULL;
+    struct ofputil_bucket *best_bucket = NULL;
     uint32_t best_score = 0;
     int i = 0;
 
-    const struct ofputil_bucket *bucket;
+    struct ofputil_bucket *bucket;
     const struct list *buckets;
 
     group_dpif_get_buckets(group, &buckets);
@@ -2119,7 +2124,23 @@ match:
 }
 
 static void
-xlate_group_bucket(struct xlate_ctx *ctx, const struct ofputil_bucket *bucket)
+xlate_group_stats(struct xlate_ctx *ctx, struct group_dpif *group,
+                  struct ofputil_bucket *bucket)
+{
+    if (ctx->xin->resubmit_stats) {
+        group_dpif_credit_stats(group, bucket, ctx->xin->resubmit_stats);
+    }
+    if (ctx->xin->xcache) {
+        struct xc_entry *entry;
+
+        entry = xlate_cache_add_entry(ctx->xin->xcache, XC_GROUP);
+        entry->u.group.group = group_dpif_ref(group);
+        entry->u.group.bucket = bucket;
+    }
+}
+
+static void
+xlate_group_bucket(struct xlate_ctx *ctx, struct ofputil_bucket *bucket)
 {
     uint64_t action_list_stub[1024 / 8];
     struct ofpbuf action_list, action_set;
@@ -2139,7 +2160,7 @@ xlate_group_bucket(struct xlate_ctx *ctx, const struct ofputil_bucket *bucket)
 static void
 xlate_all_group(struct xlate_ctx *ctx, struct group_dpif *group)
 {
-    const struct ofputil_bucket *bucket;
+    struct ofputil_bucket *bucket;
     const struct list *buckets;
     struct flow old_flow = ctx->xin->flow;
 
@@ -2155,16 +2176,18 @@ xlate_all_group(struct xlate_ctx *ctx, struct group_dpif *group)
          * just before applying the all or indirect group. */
         ctx->xin->flow = old_flow;
     }
+    xlate_group_stats(ctx, group, NULL);
 }
 
 static void
 xlate_ff_group(struct xlate_ctx *ctx, struct group_dpif *group)
 {
-    const struct ofputil_bucket *bucket;
+    struct ofputil_bucket *bucket;
 
     bucket = group_first_live_bucket(ctx, group, 0);
     if (bucket) {
         xlate_group_bucket(ctx, bucket);
+        xlate_group_stats(ctx, group, bucket);
     }
 }
 
@@ -2172,7 +2195,7 @@ static void
 xlate_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
 {
     struct flow_wildcards *wc = &ctx->xout->wc;
-    const struct ofputil_bucket *bucket;
+    struct ofputil_bucket *bucket;
     uint32_t basis;
 
     basis = hash_mac(ctx->xin->flow.dl_dst, 0, 0);
@@ -2180,6 +2203,7 @@ xlate_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
     if (bucket) {
         memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
         xlate_group_bucket(ctx, bucket);
+        xlate_group_stats(ctx, group, bucket);
     }
 }
 
@@ -3602,6 +3626,10 @@ xlate_push_stats(struct xlate_cache *xcache, bool may_learn,
             xlate_fin_timeout__(entry->u.fin.rule, stats->tcp_flags,
                                 entry->u.fin.idle, entry->u.fin.hard);
             break;
+        case XC_GROUP:
+            group_dpif_credit_stats(entry->u.group.group, entry->u.group.bucket,
+                                    stats);
+            break;
         default:
             OVS_NOT_REACHED();
         }
@@ -3669,6 +3697,9 @@ xlate_cache_clear(struct xlate_cache *xcache)
         case XC_FIN_TIMEOUT:
             /* 'u.fin.rule' is always already held as a XC_RULE, which
              * has already released it's reference above. */
+            break;
+        case XC_GROUP:
+            group_dpif_unref(entry->u.group.group);
             break;
         default:
             OVS_NOT_REACHED();

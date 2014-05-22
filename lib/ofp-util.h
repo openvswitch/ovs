@@ -1050,6 +1050,11 @@ int ofputil_decode_queue_stats(struct ofputil_queue_stats *qs, struct ofpbuf *ms
 void ofputil_append_queue_stat(struct list *replies,
                                const struct ofputil_queue_stats *oqs);
 
+struct bucket_counter {
+    uint64_t packet_count;   /* Number of packets processed by bucket. */
+    uint64_t byte_count;     /* Number of bytes processed by bucket. */
+};
+
 /* Bucket for use in groups. */
 struct ofputil_bucket {
     struct list list_node;
@@ -1062,6 +1067,8 @@ struct ofputil_bucket {
                                  * failover groups. */
     struct ofpact *ofpacts;     /* Series of "struct ofpact"s. */
     size_t ofpacts_len;         /* Length of ofpacts, in bytes. */
+
+    struct bucket_counter stats;
 };
 
 /* Protocol-independent group_mod. */
@@ -1070,11 +1077,6 @@ struct ofputil_group_mod {
     uint8_t type;                 /* One of OFPGT11_*. */
     uint32_t group_id;            /* Group identifier. */
     struct list buckets;          /* Contains "struct ofputil_bucket"s. */
-};
-
-struct bucket_counter {
-    uint64_t packet_count;   /* Number of packets processed by bucket. */
-    uint64_t byte_count;     /* Number of bytes processed by bucket. */
 };
 
 /* Group stats reply, independent of protocol. */
