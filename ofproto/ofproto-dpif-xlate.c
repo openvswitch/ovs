@@ -1549,7 +1549,7 @@ xlate_normal(struct xlate_ctx *ctx)
 
         /* Save enough info to update mac learning table later. */
         entry = xlate_cache_add_entry(ctx->xin->xcache, XC_NORMAL);
-        entry->u.normal.ofproto = ctx->xin->ofproto;
+        entry->u.normal.ofproto = ctx->xbridge->ofproto;
         entry->u.normal.flow = xmemdup(flow, sizeof *flow);
         entry->u.normal.vlan = vlan;
     }
