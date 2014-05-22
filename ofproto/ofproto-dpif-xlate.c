@@ -850,17 +850,16 @@ static bool
 group_is_alive(const struct xlate_ctx *ctx, uint32_t group_id, int depth)
 {
     struct group_dpif *group;
-    bool hit;
 
-    hit = group_dpif_lookup(ctx->xbridge->ofproto, group_id, &group);
-    if (!hit) {
-        return false;
+    if (group_dpif_lookup(ctx->xbridge->ofproto, group_id, &group)) {
+        struct ofputil_bucket *bucket;
+
+        bucket = group_first_live_bucket(ctx, group, depth);
+        group_dpif_unref(group);
+        return bucket == NULL;
     }
 
-    hit = group_first_live_bucket(ctx, group, depth) != NULL;
-
-    group_dpif_unref(group);
-    return hit;
+    return false;
 }
 
 #define MAX_LIVENESS_RECURSION 128 /* Arbitrary limit */
