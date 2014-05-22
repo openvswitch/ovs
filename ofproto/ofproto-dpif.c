@@ -3596,18 +3596,9 @@ group_destruct(struct ofgroup *group_)
 }
 
 static enum ofperr
-group_modify(struct ofgroup *group_, struct ofgroup *victim_)
+group_modify(struct ofgroup *group_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(group_->ofproto);
-    struct group_dpif *group = group_dpif_cast(group_);
-    struct group_dpif *victim = group_dpif_cast(victim_);
-
-    ovs_mutex_lock(&group->stats_mutex);
-    if (victim->up.n_buckets < group->up.n_buckets) {
-        group_destruct__(group);
-    }
-    group_construct_stats(group);
-    ovs_mutex_unlock(&group->stats_mutex);
 
     ofproto->backer->need_revalidate = REV_FLOW_TABLE;
 
@@ -3629,10 +3620,13 @@ group_get_stats(const struct ofgroup *group_, struct ofputil_group_stats *ogs)
     return 0;
 }
 
+/* If the group exists, this function increments the groups's reference count.
+ *
+ * Make sure to call group_dpif_unref() after no longer needing to maintain
+ * a reference to the group. */
 bool
 group_dpif_lookup(struct ofproto_dpif *ofproto, uint32_t group_id,
                   struct group_dpif **group)
-    OVS_TRY_RDLOCK(true, (*group)->up.rwlock)
 {
     struct ofgroup *ofgroup;
     bool found;
@@ -3642,13 +3636,6 @@ group_dpif_lookup(struct ofproto_dpif *ofproto, uint32_t group_id,
     *group = found ?  group_dpif_cast(ofgroup) : NULL;
 
     return found;
-}
-
-void
-group_dpif_release(struct group_dpif *group)
-    OVS_RELEASES(group->up.rwlock)
-{
-    ofproto_group_release(&group->up);
 }
 
 void

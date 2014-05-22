@@ -854,7 +854,7 @@ group_is_alive(const struct xlate_ctx *ctx, uint32_t group_id, int depth)
 
     hit = group_first_live_bucket(ctx, group, depth) != NULL;
 
-    group_dpif_release(group);
+    group_dpif_unref(group);
     return hit;
 }
 
@@ -2202,7 +2202,7 @@ xlate_group_action__(struct xlate_ctx *ctx, struct group_dpif *group)
     default:
         OVS_NOT_REACHED();
     }
-    group_dpif_release(group);
+    group_dpif_unref(group);
 
     ctx->in_group = false;
 }

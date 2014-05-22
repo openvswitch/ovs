@@ -2647,6 +2647,24 @@ ofproto_rule_unref(struct rule *rule)
     }
 }
 
+void
+ofproto_group_ref(struct ofgroup *group)
+{
+    if (group) {
+        ovs_refcount_ref(&group->ref_count);
+    }
+}
+
+void
+ofproto_group_unref(struct ofgroup *group)
+{
+    if (group && ovs_refcount_unref(&group->ref_count) == 1) {
+        group->ofproto->ofproto_class->group_destruct(group);
+        ofputil_bucket_list_destroy(&group->buckets);
+        group->ofproto->ofproto_class->group_dealloc(group);
+    }
+}
+
 static uint32_t get_provider_meter_id(const struct ofproto *,
                                       uint32_t of_meter_id);
 
@@ -5334,16 +5352,19 @@ handle_meter_request(struct ofconn *ofconn, const struct ofp_header *request,
     return 0;
 }
 
+/* If the group exists, this function increments the groups's reference count.
+ *
+ * Make sure to call ofproto_group_unref() after no longer needing to maintain
+ * a reference to the group. */
 bool
 ofproto_group_lookup(const struct ofproto *ofproto, uint32_t group_id,
                      struct ofgroup **group)
-    OVS_TRY_RDLOCK(true, (*group)->rwlock)
 {
     ovs_rwlock_rdlock(&ofproto->groups_rwlock);
     HMAP_FOR_EACH_IN_BUCKET (*group, hmap_node,
                              hash_int(group_id, 0), &ofproto->groups) {
         if ((*group)->group_id == group_id) {
-            ovs_rwlock_rdlock(&(*group)->rwlock);
+            ofproto_group_ref(*group);
             ovs_rwlock_unlock(&ofproto->groups_rwlock);
             return true;
         }
@@ -5352,28 +5373,18 @@ ofproto_group_lookup(const struct ofproto *ofproto, uint32_t group_id,
     return false;
 }
 
-void
-ofproto_group_release(struct ofgroup *group)
-    OVS_RELEASES(group->rwlock)
-{
-    ovs_rwlock_unlock(&group->rwlock);
-}
-
 static bool
 ofproto_group_write_lookup(const struct ofproto *ofproto, uint32_t group_id,
                            struct ofgroup **group)
-    OVS_TRY_WRLOCK(true, ofproto->groups_rwlock)
-    OVS_TRY_WRLOCK(true, (*group)->rwlock)
+    OVS_ACQUIRES(ofproto->groups_rwlock)
 {
     ovs_rwlock_wrlock(&ofproto->groups_rwlock);
     HMAP_FOR_EACH_IN_BUCKET (*group, hmap_node,
                              hash_int(group_id, 0), &ofproto->groups) {
         if ((*group)->group_id == group_id) {
-            ovs_rwlock_wrlock(&(*group)->rwlock);
             return true;
         }
     }
-    ovs_rwlock_unlock(&ofproto->groups_rwlock);
     return false;
 }
 
@@ -5432,7 +5443,6 @@ group_get_ref_count(struct ofgroup *group)
 
 static void
 append_group_stats(struct ofgroup *group, struct list *replies)
-    OVS_REQ_RDLOCK(group->rwlock)
 {
     struct ofputil_group_stats ogs;
     struct ofproto *ofproto = group->ofproto;
@@ -5476,15 +5486,13 @@ handle_group_request(struct ofconn *ofconn,
     if (group_id == OFPG_ALL) {
         ovs_rwlock_rdlock(&ofproto->groups_rwlock);
         HMAP_FOR_EACH (group, hmap_node, &ofproto->groups) {
-            ovs_rwlock_rdlock(&group->rwlock);
             cb(group, &replies);
-            ovs_rwlock_unlock(&group->rwlock);
         }
         ovs_rwlock_unlock(&ofproto->groups_rwlock);
     } else {
         if (ofproto_group_lookup(ofproto, group_id, &group)) {
             cb(group, &replies);
-            ofproto_group_release(group);
+            ofproto_group_unref(group);
         }
     }
     ofconn_send_replies(ofconn, &replies);
@@ -5584,6 +5592,43 @@ handle_queue_get_config_request(struct ofconn *ofconn,
    return 0;
 }
 
+static enum ofperr
+init_group(struct ofproto *ofproto, struct ofputil_group_mod *gm,
+           struct ofgroup **ofgroup)
+{
+    enum ofperr error;
+
+    if (gm->group_id > OFPG_MAX) {
+        return OFPERR_OFPGMFC_INVALID_GROUP;
+    }
+    if (gm->type > OFPGT11_FF) {
+        return OFPERR_OFPGMFC_BAD_TYPE;
+    }
+
+    *ofgroup = ofproto->ofproto_class->group_alloc();
+    if (!*ofgroup) {
+        VLOG_WARN_RL(&rl, "%s: failed to allocate group", ofproto->name);
+        return OFPERR_OFPGMFC_OUT_OF_GROUPS;
+    }
+
+    (*ofgroup)->ofproto  = ofproto;
+    (*ofgroup)->group_id = gm->group_id;
+    (*ofgroup)->type     = gm->type;
+    (*ofgroup)->created = (*ofgroup)->modified = time_msec();
+    ovs_refcount_init(&(*ofgroup)->ref_count);
+
+    list_move(&(*ofgroup)->buckets, &gm->buckets);
+    (*ofgroup)->n_buckets = list_size(&(*ofgroup)->buckets);
+
+    /* Construct called BEFORE any locks are held. */
+    error = ofproto->ofproto_class->group_construct(*ofgroup);
+    if (error) {
+        ofputil_bucket_list_destroy(&(*ofgroup)->buckets);
+        ofproto->ofproto_class->group_dealloc(*ofgroup);
+    }
+    return error;
+}
+
 /* Implements OFPGC11_ADD
  * in which no matching flow already exists in the flow table.
  *
@@ -5603,33 +5648,10 @@ add_group(struct ofproto *ofproto, struct ofputil_group_mod *gm)
     struct ofgroup *ofgroup;
     enum ofperr error;
 
-    if (gm->group_id > OFPG_MAX) {
-        return OFPERR_OFPGMFC_INVALID_GROUP;
-    }
-    if (gm->type > OFPGT11_FF) {
-        return OFPERR_OFPGMFC_BAD_TYPE;
-    }
-
     /* Allocate new group and initialize it. */
-    ofgroup = ofproto->ofproto_class->group_alloc();
-    if (!ofgroup) {
-        VLOG_WARN_RL(&rl, "%s: failed to create group", ofproto->name);
-        return OFPERR_OFPGMFC_OUT_OF_GROUPS;
-    }
-
-    ovs_rwlock_init(&ofgroup->rwlock);
-    ofgroup->ofproto  = ofproto;
-    ofgroup->group_id = gm->group_id;
-    ofgroup->type     = gm->type;
-    ofgroup->created = ofgroup->modified = time_msec();
-
-    list_move(&ofgroup->buckets, &gm->buckets);
-    ofgroup->n_buckets = list_size(&ofgroup->buckets);
-
-    /* Construct called BEFORE any locks are held. */
-    error = ofproto->ofproto_class->group_construct(ofgroup);
+    error = init_group(ofproto, gm, &ofgroup);
     if (error) {
-        goto free_out;
+        return error;
     }
 
     /* We wrlock as late as possible to minimize the time we jam any other
@@ -5659,7 +5681,6 @@ add_group(struct ofproto *ofproto, struct ofputil_group_mod *gm)
  unlock_out:
     ovs_rwlock_unlock(&ofproto->groups_rwlock);
     ofproto->ofproto_class->group_destruct(ofgroup);
- free_out:
     ofputil_bucket_list_destroy(&ofgroup->buckets);
     ofproto->ofproto_class->group_dealloc(ofgroup);
 
@@ -5669,66 +5690,59 @@ add_group(struct ofproto *ofproto, struct ofputil_group_mod *gm)
 /* Implements OFPFC_MODIFY.  Returns 0 on success or an OpenFlow error code on
  * failure.
  *
+ * Note that the group is re-created and then replaces the old group in
+ * ofproto's ofgroup hash map. Thus, the group is never altered while users of
+ * the xlate module hold a pointer to the group.
+ *
  * 'ofconn' is used to retrieve the packet buffer specified in fm->buffer_id,
  * if any. */
 static enum ofperr
 modify_group(struct ofproto *ofproto, struct ofputil_group_mod *gm)
 {
-    struct ofgroup *ofgroup;
-    struct ofgroup *victim;
+    struct ofgroup *ofgroup, *new_ofgroup, *retiring;
     enum ofperr error;
 
-    if (gm->group_id > OFPG_MAX) {
-        return OFPERR_OFPGMFC_INVALID_GROUP;
+    error = init_group(ofproto, gm, &new_ofgroup);
+    if (error) {
+        return error;
     }
 
-    if (gm->type > OFPGT11_FF) {
-        return OFPERR_OFPGMFC_BAD_TYPE;
-    }
-
-    victim = ofproto->ofproto_class->group_alloc();
-    if (!victim) {
-        VLOG_WARN_RL(&rl, "%s: failed to allocate group", ofproto->name);
-        return OFPERR_OFPGMFC_OUT_OF_GROUPS;
-    }
+    retiring = new_ofgroup;
 
     if (!ofproto_group_write_lookup(ofproto, gm->group_id, &ofgroup)) {
         error = OFPERR_OFPGMFC_UNKNOWN_GROUP;
-        goto free_out;
+        goto out;
     }
-    /* Both group's and its container's write locks held now.
-     * Also, n_groups[] is protected by ofproto->groups_rwlock. */
+
+    /* Ofproto's group write lock is held now. */
     if (ofgroup->type != gm->type
         && ofproto->n_groups[gm->type] >= ofproto->ogf.max_groups[gm->type]) {
         error = OFPERR_OFPGMFC_OUT_OF_GROUPS;
-        goto unlock_out;
+        goto out;
     }
 
-    *victim = *ofgroup;
-    list_move(&victim->buckets, &ofgroup->buckets);
+    /* The group creation time does not change during modification. */
+    new_ofgroup->created = ofgroup->created;
+    new_ofgroup->modified = time_msec();
 
-    ofgroup->type = gm->type;
-    list_move(&ofgroup->buckets, &gm->buckets);
-    ofgroup->n_buckets = list_size(&ofgroup->buckets);
-
-    error = ofproto->ofproto_class->group_modify(ofgroup, victim);
-    if (!error) {
-        ofputil_bucket_list_destroy(&victim->buckets);
-        ofproto->n_groups[victim->type]--;
-        ofproto->n_groups[ofgroup->type]++;
-        ofgroup->modified = time_msec();
-    } else {
-        ofputil_bucket_list_destroy(&ofgroup->buckets);
-
-        *ofgroup = *victim;
-        list_move(&ofgroup->buckets, &victim->buckets);
+    error = ofproto->ofproto_class->group_modify(new_ofgroup);
+    if (error) {
+        goto out;
     }
 
- unlock_out:
-    ovs_rwlock_unlock(&ofgroup->rwlock);
+    retiring = ofgroup;
+    /* Replace ofgroup in ofproto's groups hash map with new_ofgroup. */
+    hmap_remove(&ofproto->groups, &ofgroup->hmap_node);
+    hmap_insert(&ofproto->groups, &new_ofgroup->hmap_node,
+                hash_int(new_ofgroup->group_id, 0));
+    if (ofgroup->type != new_ofgroup->type) {
+        ofproto->n_groups[ofgroup->type]--;
+        ofproto->n_groups[new_ofgroup->type]++;
+    }
+
+out:
+    ofproto_group_unref(retiring);
     ovs_rwlock_unlock(&ofproto->groups_rwlock);
- free_out:
-    ofproto->ofproto_class->group_dealloc(victim);
     return error;
 }
 
@@ -5745,19 +5759,11 @@ delete_group__(struct ofproto *ofproto, struct ofgroup *ofgroup)
     fm.out_group = ofgroup->group_id;
     handle_flow_mod__(ofproto, NULL, &fm, NULL);
 
-    /* Must wait until existing readers are done,
-     * while holding the container's write lock at the same time. */
-    ovs_rwlock_wrlock(&ofgroup->rwlock);
     hmap_remove(&ofproto->groups, &ofgroup->hmap_node);
     /* No-one can find this group any more. */
     ofproto->n_groups[ofgroup->type]--;
     ovs_rwlock_unlock(&ofproto->groups_rwlock);
-
-    ofproto->ofproto_class->group_destruct(ofgroup);
-    ofputil_bucket_list_destroy(&ofgroup->buckets);
-    ovs_rwlock_unlock(&ofgroup->rwlock);
-    ovs_rwlock_destroy(&ofgroup->rwlock);
-    ofproto->ofproto_class->group_dealloc(ofgroup);
+    ofproto_group_unref(ofgroup);
 }
 
 /* Implements OFPGC_DELETE. */

@@ -474,17 +474,22 @@ bool ofoperation_has_out_port(const struct ofoperation *, ofp_port_t out_port)
  * With few exceptions, ofproto implementations may look at these fields but
  * should not modify them. */
 struct ofgroup {
-    /* The rwlock is used to prevent groups from being deleted while child
-     * threads are using them to xlate flows.  A read lock means the
-     * group is currently being used.  A write lock means the group is
-     * in the process of being deleted or updated.  Note that since
-     * a read lock on the groups container is held while searching, and
-     * a group is ever write locked only while holding a write lock
-     * on the container, the user's of groups will never face a group
-     * in the write locked state. */
-    struct ovs_rwlock rwlock OVS_ACQ_AFTER(ofproto_mutex);
-    struct hmap_node hmap_node; /* In struct ofproto's "groups" hmap. */
-    struct ofproto *ofproto;    /* The ofproto that contains this group. */
+    struct hmap_node hmap_node OVS_GUARDED; /* In ofproto's "groups" hmap. */
+
+    /* Number of references.
+     *
+     * This is needed to keep track of references to the group in the xlate
+     * module.
+     *
+     * If the main thread removes the group from an ofproto, we need to
+     * guarantee that the group remains accessible to users of
+     * xlate_group_actions and the xlate_cache, as the xlate_cache will not be
+     * cleaned up until the corresponding datapath flows are revalidated. */
+    struct ovs_refcount ref_count;
+
+    /* No lock is needed to protect the fields below since they are not
+     * modified after construction. */
+    struct ofproto *ofproto;   /* The ofproto that contains this group. */
     uint32_t group_id;
     enum ofp11_group_type type; /* One of OFPGT_*. */
 
@@ -496,11 +501,10 @@ struct ofgroup {
 };
 
 bool ofproto_group_lookup(const struct ofproto *ofproto, uint32_t group_id,
-                          struct ofgroup **group)
-    OVS_TRY_RDLOCK(true, (*group)->rwlock);
+                          struct ofgroup **group);
 
-void ofproto_group_release(struct ofgroup *group)
-    OVS_RELEASES(group->rwlock);
+void ofproto_group_ref(struct ofgroup *);
+void ofproto_group_unref(struct ofgroup *);
 
 /* ofproto class structure, to be defined by each ofproto implementation.
  *
@@ -1684,7 +1688,7 @@ struct ofproto_class {
     void (*group_destruct)(struct ofgroup *);
     void (*group_dealloc)(struct ofgroup *);
 
-    enum ofperr (*group_modify)(struct ofgroup *, struct ofgroup *victim);
+    enum ofperr (*group_modify)(struct ofgroup *);
 
     enum ofperr (*group_get_stats)(const struct ofgroup *,
                                    struct ofputil_group_stats *);

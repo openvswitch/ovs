@@ -128,8 +128,6 @@ void choose_miss_rule(enum ofputil_port_config,
 bool group_dpif_lookup(struct ofproto_dpif *ofproto, uint32_t group_id,
                        struct group_dpif **group);
 
-void group_dpif_release(struct group_dpif *group);
-
 void group_dpif_get_buckets(const struct group_dpif *group,
                             const struct list **buckets);
 enum ofp11_group_type group_dpif_get_type(const struct group_dpif *group);
@@ -232,6 +230,22 @@ BUILD_ASSERT_DECL(N_TABLES >= 2 && N_TABLES <= 255);
 
 /* struct rule_dpif has struct rule as it's first member. */
 #define RULE_CAST(RULE) ((struct rule *)RULE)
+#define GROUP_CAST(GROUP) ((struct ofgroup *)GROUP)
+
+static inline struct group_dpif* group_dpif_ref(struct group_dpif *group)
+{
+    if (group) {
+        ofproto_group_ref(GROUP_CAST(group));
+    }
+    return group;
+}
+
+static inline void group_dpif_unref(struct group_dpif *group)
+{
+    if (group) {
+        ofproto_group_unref(GROUP_CAST(group));
+    }
+}
 
 static inline void rule_dpif_ref(struct rule_dpif *rule)
 {
