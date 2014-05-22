@@ -692,8 +692,8 @@ upcall_init(struct upcall *upcall, struct flow *flow, struct ofpbuf *packet,
             struct ofproto_dpif *ofproto, struct dpif_upcall *dupcall,
             odp_port_t odp_in_port)
 {
-    struct xlate_in xin;
     struct pkt_metadata md = pkt_metadata_from_flow(flow);
+    struct xlate_in xin;
 
     flow_extract(packet, &md, &upcall->flow);
 
@@ -708,8 +708,7 @@ upcall_init(struct upcall *upcall, struct flow *flow, struct ofpbuf *packet,
     upcall->odp_in_port = odp_in_port;
 
     xlate_in_init(&xin, upcall->ofproto, &upcall->flow, NULL,
-                  upcall->stats.tcp_flags, NULL);
-    xin.may_learn = true;
+                  upcall->stats.tcp_flags, packet);
 
     if (upcall->upcall_type == DPIF_UC_MISS) {
         xin.resubmit_stats = &upcall->stats;
@@ -866,13 +865,6 @@ handle_upcalls(struct handler *handler, struct upcall *upcalls,
         struct dpif_op *op;
 
         fail_open = fail_open || upcall->xout.fail_open;
-
-        if (upcall->xout.slow) {
-            struct xlate_in xin;
-
-            xlate_in_init(&xin, upcall->ofproto, &upcall->flow, NULL, 0, packet);
-            xlate_actions_for_side_effects(&xin);
-        }
 
         if (upcall->flow.in_port.ofp_port
             != vsp_realdev_to_vlandev(upcall->ofproto,
