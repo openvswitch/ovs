@@ -85,6 +85,14 @@ case "$TYPE" in
 			OVSBRIDGECONFIGURED="yes"
 		fi
 
+		# If MACADDR is provided in the interface configuration file,
+		# we need to set it using ovs-vsctl; setting it with the "ip"
+		# command in ifup-eth does not make the change persistent.
+		if [ -n "$MACADDR" ]; then
+			ovs-vsctl -t ${TIMEOUT} -- set bridge "$DEVICE" \
+				other-config:hwaddr="$MACADDR"
+		fi
+
 		# When dhcp is enabled, the assumption is that there will be a port to
 		# attach (otherwise, we can't reach out for dhcp). So, we do not
 		# configure the bridge through rhel's ifup infrastructure unless
