@@ -32,6 +32,7 @@
 #include "coverage.h"
 #include "ovs-rcu.h"
 #include "ovs-thread.h"
+#include "socket-util.h"
 #include "vlog.h"
 #ifdef HAVE_PTHREAD_SET_NAME_NP
 #include <pthread_np.h>
@@ -1802,5 +1803,15 @@ ftruncate(int fd, off_t length)
         return -1;
     }
     return 0;
+}
+
+OVS_CONSTRUCTOR(winsock_start) {
+    WSADATA wsaData;
+    int error;
+
+    error = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (error != 0) {
+        VLOG_FATAL("WSAStartup failed: %s", sock_strerror(sock_errno()));
+   }
 }
 #endif
