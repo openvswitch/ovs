@@ -499,6 +499,7 @@ test_sflow_main(int argc, char *argv[])
 
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
+    service_start(&argc, &argv);
     parse_options(argc, argv);
 
     if (argc - optind != 1) {
@@ -531,7 +532,7 @@ test_sflow_main(int argc, char *argv[])
 
         ofpbuf_clear(&buf);
         do {
-            retval = read(sock, ofpbuf_data(&buf), buf.allocated);
+            retval = recv(sock, ofpbuf_data(&buf), buf.allocated, 0);
         } while (retval < 0 && errno == EINTR);
         if (retval > 0) {
             ofpbuf_put_uninit(&buf, retval);
