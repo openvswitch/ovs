@@ -267,7 +267,6 @@ struct xc_entry {
             uint16_t vid;
         } bond;
         struct {
-            struct ofproto_dpif *ofproto;
             struct rule_dpif *rule;
         } learn;
         struct {
@@ -2689,7 +2688,6 @@ xlate_learn_action(struct xlate_ctx *ctx,
         struct xc_entry *entry;
 
         entry = xlate_cache_add_entry(ctx->xin->xcache, XC_LEARN);
-        entry->u.learn.ofproto = ctx->xin->ofproto;
         /* Lookup the learned rule, taking a reference on it.  The reference
          * is released when this cache entry is deleted. */
         rule_dpif_lookup(ctx->xbridge->ofproto, &ctx->xin->flow, NULL,
