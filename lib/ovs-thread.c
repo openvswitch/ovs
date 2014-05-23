@@ -18,6 +18,9 @@
 #include "ovs-thread.h"
 #include <errno.h>
 #include <poll.h>
+#ifndef _WIN32
+#include <signal.h>
+#endif
 #include <stdlib.h>
 #include <unistd.h>
 #include "compiler.h"
@@ -176,6 +179,10 @@ typedef void destructor_func(void *);
 XPTHREAD_FUNC2(pthread_key_create, pthread_key_t *, destructor_func *);
 XPTHREAD_FUNC1(pthread_key_delete, pthread_key_t);
 XPTHREAD_FUNC2(pthread_setspecific, pthread_key_t, const void *);
+
+#ifndef _WIN32
+XPTHREAD_FUNC3(pthread_sigmask, int, const sigset_t *, sigset_t *);
+#endif
 
 static void
 ovs_mutex_init__(const struct ovs_mutex *l_, int type)

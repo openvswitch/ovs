@@ -374,3 +374,21 @@ fatal_signal_fork(void)
         raise(stored_sig_nr);
     }
 }
+
+#ifndef _WIN32
+/* Blocks all fatal signals and returns previous signal mask into
+ * 'prev_mask'. */
+void
+fatal_signal_block(sigset_t *prev_mask)
+{
+    int i;
+    sigset_t block_mask;
+
+    sigemptyset(&block_mask);
+    for (i = 0; i < ARRAY_SIZE(fatal_signals); i++) {
+        int sig_nr = fatal_signals[i];
+        sigaddset(&block_mask, sig_nr);
+    }
+    xpthread_sigmask(SIG_BLOCK, &block_mask, prev_mask);
+}
+#endif

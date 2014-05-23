@@ -227,6 +227,7 @@ process_start(char **argv, struct process **pp)
 #ifndef _WIN32
     pid_t pid;
     int error;
+    sigset_t prev_mask;
 
     assert_single_threaded();
 
@@ -237,14 +238,15 @@ process_start(char **argv, struct process **pp)
         return error;
     }
 
+    fatal_signal_block(&prev_mask);
     pid = fork();
     if (pid < 0) {
         VLOG_WARN("fork failed: %s", ovs_strerror(errno));
-        return errno;
+        error = errno;
     } else if (pid) {
         /* Running in parent process. */
         *pp = process_register(argv[0], pid);
-        return 0;
+        error = 0;
     } else {
         /* Running in child process. */
         int fd_max = get_max_fds();
@@ -254,11 +256,14 @@ process_start(char **argv, struct process **pp)
         for (fd = 3; fd < fd_max; fd++) {
             close(fd);
         }
+        xpthread_sigmask(SIG_SETMASK, &prev_mask, NULL);
         execvp(argv[0], argv);
         fprintf(stderr, "execvp(\"%s\") failed: %s\n",
                 argv[0], ovs_strerror(errno));
         _exit(1);
     }
+    xpthread_sigmask(SIG_SETMASK, &prev_mask, NULL);
+    return error;
 #else
     *pp = NULL;
     return ENOSYS;
