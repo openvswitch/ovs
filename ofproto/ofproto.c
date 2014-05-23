@@ -6999,6 +6999,8 @@ ofproto_get_vlan_usage(struct ofproto *ofproto, unsigned long int *vlan_bitmap)
         }
         fat_rwlock_unlock(&oftable->cls.rwlock);
     }
+
+    cls_rule_destroy(&target);
 }
 
 /* Returns true if new VLANs have come into use by the flow table since the
