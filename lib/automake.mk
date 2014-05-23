@@ -259,6 +259,7 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/latch-unix.c \
 	lib/signals.c \
 	lib/signals.h \
+	lib/socket-util-unix.c \
 	lib/stream-fd-unix.c \
 	lib/stream-unix.c
 endif
