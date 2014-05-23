@@ -209,7 +209,8 @@ config-h-check:
 ALL_LOCAL += printf-check
 printf-check:
 	@if test -e $(srcdir)/.git && (git --version) >/dev/null 2>&1 && \
-	   git --no-pager grep -n -E -e '%[-+ #0-9.*]*([ztj]|hh)' --and --not -e 'ovs_scan' `git ls-files $(srcdir) | grep '\.[ch]$$'`; \
+	   git --no-pager grep -n -E -e '%[-+ #0-9.*]*([ztj]|hh)' --and --not -e 'ovs_scan' `git ls-files $(srcdir) | grep '\.[ch]$$' | \
+               grep -vE '^datapath|^lib/sflow|^third-party'`; \
 	then \
 	    echo "See above for list of violations of the rule that"; \
 	    echo "'z', 't', 'j', 'hh' printf() type modifiers are"; \
