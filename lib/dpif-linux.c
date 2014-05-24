@@ -1221,9 +1221,19 @@ dpif_linux_flow_dump_next(const struct dpif *dpif_, void *iter_, void *state_,
         }
 
         if (actions && !state->flow.actions) {
+            struct dpif_linux_flow reply;
+
+            /* Keys are required to be allocated from 'state->buffer' so
+             * they're preserved across calls.  Therefore we need a separate
+             * reply to prevent them from being overwritten.  Actions, however,
+             * don't have this requirement, so it's that fine they're destroyed
+             * on the next call. */
             error = dpif_linux_flow_get__(dpif, state->flow.key,
                                           state->flow.key_len,
-                                          &state->flow, &state->tmp);
+                                          &reply, &state->tmp);
+            state->flow.actions = reply.actions;
+            state->flow.actions_len = reply.actions_len;
+
             if (error == ENOENT) {
                 VLOG_DBG("dumped flow disappeared on get");
             } else if (error) {
