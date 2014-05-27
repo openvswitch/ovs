@@ -43,10 +43,13 @@ test_flows_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
     set_program_name(argv[0]);
 
-    flows = stdin;
-    pcap = fdopen(3, "rb");
+    flows = fopen(argv[1], "rb");
+    if (!flows) {
+        ovs_fatal(errno, "failed to open %s", argv[1]);
+    }
+    pcap = fopen(argv[2], "rb");
     if (!pcap) {
-        ovs_fatal(errno, "failed to open fd 3 for reading");
+        ovs_fatal(errno, "failed to open %s", argv[2]);
     }
 
     retval = ovs_pcap_read_header(pcap);
