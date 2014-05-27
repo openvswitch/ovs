@@ -1929,23 +1929,14 @@ ofp_print_ofpst_port_desc_reply(struct ds *string,
 }
 
 static void
-ofp_print_stats_request(struct ds *string, const struct ofp_header *oh)
-{
-    uint16_t flags = ofpmp_flags(oh);
-
-    if (flags) {
-        ds_put_format(string, " ***unknown flags 0x%04"PRIx16"***", flags);
-    }
-}
-
-static void
-ofp_print_stats_reply(struct ds *string, const struct ofp_header *oh)
+ofp_print_stats(struct ds *string, const struct ofp_header *oh)
 {
     uint16_t flags = ofpmp_flags(oh);
 
     if (flags) {
         ds_put_cstr(string, " flags=");
-        if (flags & OFPSF_REPLY_MORE) {
+        if ((!ofpmsg_is_stat_request(oh) || oh->version >= OFP13_VERSION)
+            && (flags & OFPSF_REPLY_MORE)) {
             ds_put_cstr(string, "[more]");
             flags &= ~OFPSF_REPLY_MORE;
         }
@@ -2798,7 +2789,7 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
     switch (ofptype_from_ofpraw(raw)) {
 
     case OFPTYPE_GROUP_STATS_REQUEST:
-        ofp_print_stats_request(string, oh);
+        ofp_print_stats(string, oh);
         ofp_print_ofpst_group_request(string, oh);
         break;
 
@@ -2807,7 +2798,7 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
         break;
 
     case OFPTYPE_GROUP_DESC_STATS_REQUEST:
-        ofp_print_stats_request(string, oh);
+        ofp_print_stats(string, oh);
         ofp_print_ofpst_group_desc_request(string, oh);
         break;
 
@@ -2816,7 +2807,7 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
         break;
 
     case OFPTYPE_GROUP_FEATURES_STATS_REQUEST:
-        ofp_print_stats_request(string, oh);
+        ofp_print_stats(string, oh);
         break;
 
     case OFPTYPE_GROUP_FEATURES_STATS_REPLY:
@@ -2914,87 +2905,87 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
 
     case OFPTYPE_METER_STATS_REQUEST:
     case OFPTYPE_METER_CONFIG_STATS_REQUEST:
-        ofp_print_stats_request(string, oh);
+        ofp_print_stats(string, oh);
         ofp_print_meter_stats_request(string, oh);
         break;
 
     case OFPTYPE_METER_STATS_REPLY:
-        ofp_print_stats_reply(string, oh);
+        ofp_print_stats(string, oh);
         ofp_print_meter_stats_reply(string, oh);
         break;
 
     case OFPTYPE_METER_CONFIG_STATS_REPLY:
-        ofp_print_stats_reply(string, oh);
+        ofp_print_stats(string, oh);
         ofp_print_meter_config_reply(string, oh);
         break;
 
     case OFPTYPE_METER_FEATURES_STATS_REPLY:
-        ofp_print_stats_reply(string, oh);
+        ofp_print_stats(string, oh);
         ofp_print_meter_features_reply(string, oh);
         break;
 
     case OFPTYPE_DESC_STATS_REQUEST:
     case OFPTYPE_METER_FEATURES_STATS_REQUEST:
-        ofp_print_stats_request(string, oh);
+        ofp_print_stats(string, oh);
         break;
 
     case OFPTYPE_FLOW_STATS_REQUEST:
     case OFPTYPE_AGGREGATE_STATS_REQUEST:
-        ofp_print_stats_request(string, oh);
+        ofp_print_stats(string, oh);
         ofp_print_flow_stats_request(string, oh);
         break;
 
     case OFPTYPE_TABLE_STATS_REQUEST:
-        ofp_print_stats_request(string, oh);
+        ofp_print_stats(string, oh);
         break;
 
     case OFPTYPE_PORT_STATS_REQUEST:
-        ofp_print_stats_request(string, oh);
+        ofp_print_stats(string, oh);
         ofp_print_ofpst_port_request(string, oh);
         break;
 
     case OFPTYPE_QUEUE_STATS_REQUEST:
-        ofp_print_stats_request(string, oh);
+        ofp_print_stats(string, oh);
         ofp_print_ofpst_queue_request(string, oh);
         break;
 
     case OFPTYPE_DESC_STATS_REPLY:
-        ofp_print_stats_reply(string, oh);
+        ofp_print_stats(string, oh);
         ofp_print_ofpst_desc_reply(string, oh);
         break;
 
     case OFPTYPE_FLOW_STATS_REPLY:
-        ofp_print_stats_reply(string, oh);
+        ofp_print_stats(string, oh);
         ofp_print_flow_stats_reply(string, oh);
         break;
 
     case OFPTYPE_QUEUE_STATS_REPLY:
-        ofp_print_stats_reply(string, oh);
+        ofp_print_stats(string, oh);
         ofp_print_ofpst_queue_reply(string, oh, verbosity);
         break;
 
     case OFPTYPE_PORT_STATS_REPLY:
-        ofp_print_stats_reply(string, oh);
+        ofp_print_stats(string, oh);
         ofp_print_ofpst_port_reply(string, oh, verbosity);
         break;
 
     case OFPTYPE_TABLE_STATS_REPLY:
-        ofp_print_stats_reply(string, oh);
+        ofp_print_stats(string, oh);
         ofp_print_ofpst_table_reply(string, oh, verbosity);
         break;
 
     case OFPTYPE_AGGREGATE_STATS_REPLY:
-        ofp_print_stats_reply(string, oh);
+        ofp_print_stats(string, oh);
         ofp_print_aggregate_stats_reply(string, oh);
         break;
 
     case OFPTYPE_PORT_DESC_STATS_REQUEST:
-        ofp_print_stats_request(string, oh);
+        ofp_print_stats(string, oh);
         ofp_print_ofpst_port_desc_request(string, oh);
         break;
 
     case OFPTYPE_PORT_DESC_STATS_REPLY:
-        ofp_print_stats_reply(string, oh);
+        ofp_print_stats(string, oh);
         ofp_print_ofpst_port_desc_reply(string, oh);
         break;
 
