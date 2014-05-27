@@ -175,9 +175,14 @@ AT_CLEANUP
 
 AT_SETUP([ovs_assert])
 OVS_LOGDIR=`pwd`; export OVS_LOGDIR
-AT_CHECK([ovstest test-util -voff -vfile:info '-vPATTERN:file:%c|%p|%m' --log-file assert || kill -l $?],
-  [0], [ABRT
-], [stderr])
+if test "$IS_WIN32" = "yes"; then
+  exit_status=9
+else
+  # SIGABRT + 128
+  exit_status=134
+fi
+AT_CHECK([ovstest test-util -voff -vfile:info '-vPATTERN:file:%c|%p|%m' --log-file assert],
+  [$exit_status], [], [stderr])
 
 AT_CHECK([sed 's/\(opened log file\) .*/\1/
 s/|[[^|]]*: /|/' test-util.log], [0], [dnl

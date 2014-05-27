@@ -1086,6 +1086,11 @@ test_util_main(int argc, char *argv[])
 {
     set_program_name(argv[0]);
     parse_options(argc, argv);
+    /* On Windows, stderr is fully buffered if connected to a pipe.
+     * Make it _IONBF so that an abort does not miss log contents.
+     * POSIX doesn't define the circumstances in which stderr is
+     * fully buffered either. */
+    setvbuf(stderr, NULL, _IONBF, 0);
     run_command(argc - optind, argv + optind, commands);
 }
 
