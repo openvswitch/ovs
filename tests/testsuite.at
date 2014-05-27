@@ -58,7 +58,7 @@ if test "$IS_WIN32" = "yes"; then
                 for i in $*; do
                     # tasklist will always have return code 0.
                     # If pid does exist, there will be a line with the pid.
-                    if tasklist //fi "PID eq $i" | grep $i; then
+                    if tasklist //fi "PID eq $i" | grep $i >/dev/null; then
                         :
                     else
                         return 1
@@ -69,12 +69,12 @@ if test "$IS_WIN32" = "yes"; then
             -[1-9]*)
                 shift
                 for i in $*; do
-                    taskkill //F //PID $i
+                    taskkill //F //PID $i >/dev/null
                 done
                 ;;
-            [1-9][1-9]*)
+            [1-9][0-9]*)
                 for i in $*; do
-                    taskkill //F //PID $i
+                    taskkill //F //PID $i >/dev/null
                 done
                 ;;
         esac
