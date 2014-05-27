@@ -1748,11 +1748,7 @@ miniflow_equal(const struct miniflow *a, const struct miniflow *b)
     if (OVS_LIKELY(a_map == b_map)) {
         int count = miniflow_n_values(a);
 
-        while (count--) {
-            if (*ap++ != *bp++) {
-                return false;
-            }
-        }
+        return !memcmp(ap, bp, count * sizeof *ap);
     } else {
         uint64_t map;
 
