@@ -1203,10 +1203,10 @@ m4_foreach(
 [reserved_name],
 [[ovs-netdev],
 [ovs-dummy],
-[gre_system],
-[gre64_system],
-[lisp_system],
-[vxlan_system]],
+[gre_sys],
+[gre64_sys],
+[lisp_sys],
+[vxlan_sys]],
 [
 # Try creating the port
 AT_CHECK([ovs-vsctl add-port br0 reserved_name], [0], [], [dnl
@@ -1238,10 +1238,10 @@ OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
 # Test creating all reserved tunnel port names
 m4_foreach(
 [reserved_name],
-[[gre_system],
-[gre64_system],
-[lisp_system],
-[vxlan_system]],
+[[gre_sys],
+[gre64_sys],
+[lisp_sys],
+[vxlan_sys]],
 [
 # Try creating the port
 AT_CHECK([ovs-vsctl add-port br0 reserved_name], [0], [], [dnl

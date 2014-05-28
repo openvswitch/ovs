@@ -298,7 +298,7 @@ netdev_is_reserved_name(const char *name)
     ovs_mutex_lock(&netdev_class_mutex);
     HMAP_FOR_EACH (rc, hmap_node, &netdev_classes) {
         const char *dpif_port = netdev_vport_class_get_dpif_port(rc->class);
-        if (dpif_port && !strcmp(dpif_port, name)) {
+        if (dpif_port && !strncmp(name, dpif_port, strlen(dpif_port))) {
             ovs_mutex_unlock(&netdev_class_mutex);
             return true;
         }

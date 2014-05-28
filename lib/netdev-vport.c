@@ -146,25 +146,28 @@ const char *
 netdev_vport_get_dpif_port(const struct netdev *netdev,
                            char namebuf[], size_t bufsize)
 {
+    const struct netdev_class *class = netdev_get_class(netdev);
+    const char *dpif_port = netdev_vport_class_get_dpif_port(class);
+
+    if (!dpif_port) {
+        return netdev_get_name(netdev);
+    }
+
     if (netdev_vport_needs_dst_port(netdev)) {
         const struct netdev_vport *vport = netdev_vport_cast(netdev);
-        const char *type = netdev_get_type(netdev);
 
         /*
-         * Note: IFNAMSIZ is 16 bytes long. The maximum length of a VXLAN
-         * or LISP port name below is 15 or 14 bytes respectively. Still,
-         * assert here on the size of strlen(type) in case that changes
-         * in the future.
+         * Note: IFNAMSIZ is 16 bytes long. Implementations should choose
+         * a dpif port name that is short enough to fit including any
+         * port numbers but assert just in case.
          */
         BUILD_ASSERT(NETDEV_VPORT_NAME_BUFSIZE >= IFNAMSIZ);
-        ovs_assert(strlen(type) + 10 < IFNAMSIZ);
-        snprintf(namebuf, bufsize, "%s_sys_%d", type,
+        ovs_assert(strlen(dpif_port) + 6 < IFNAMSIZ);
+        snprintf(namebuf, bufsize, "%s_%d", dpif_port,
                  ntohs(vport->tnl_cfg.dst_port));
         return namebuf;
     } else {
-        const struct netdev_class *class = netdev_get_class(netdev);
-        const char *dpif_port = netdev_vport_class_get_dpif_port(class);
-        return dpif_port ? dpif_port : netdev_get_name(netdev);
+        return dpif_port;
     }
 }
 
@@ -825,13 +828,15 @@ get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 void
 netdev_vport_tunnel_register(void)
 {
+    /* The name of the dpif_port should be short enough to accomodate adding
+     * a port number to the end if one is necessary. */
     static const struct vport_class vport_classes[] = {
-        TUNNEL_CLASS("gre", "gre_system"),
-        TUNNEL_CLASS("ipsec_gre", "gre_system"),
-        TUNNEL_CLASS("gre64", "gre64_system"),
-        TUNNEL_CLASS("ipsec_gre64", "gre64_system"),
-        TUNNEL_CLASS("vxlan", "vxlan_system"),
-        TUNNEL_CLASS("lisp", "lisp_system")
+        TUNNEL_CLASS("gre", "gre_sys"),
+        TUNNEL_CLASS("ipsec_gre", "gre_sys"),
+        TUNNEL_CLASS("gre64", "gre64_sys"),
+        TUNNEL_CLASS("ipsec_gre64", "gre64_sys"),
+        TUNNEL_CLASS("vxlan", "vxlan_sys"),
+        TUNNEL_CLASS("lisp", "lisp_sys")
     };
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
 
