@@ -78,27 +78,33 @@
  * Use ovsrcu_get(TYPE, VAR) to read an RCU-protected pointer, e.g. to read the
  * pointer variable declared above:
  *
- *     struct flow *flow = ovsrcu_get(struct flow *, flowp);
+ *     struct flow *flow = ovsrcu_get(struct flow *, &flowp);
+ *
+ * If the pointer variable is currently protected against change (because
+ * the current thread holds a mutex that protects it), ovsrcu_get_protected()
+ * may be used instead.  Only on the Alpha architecture is this likely to
+ * generate different code, but it may be useful documentation.
+ *
+ * (With GNU C or Clang, you get a compiler error if TYPE is wrong; other
+ * compilers will merrily carry along accepting the wrong type.)
  *
  * Use ovsrcu_set() to write an RCU-protected pointer and ovsrcu_postpone() to
- * free the previous data.  If more than one thread can write the pointer, then
- * some form of external synchronization, e.g. a mutex, is needed to prevent
- * writers from interfering with one another.  For example, to write the
- * pointer variable declared above while safely freeing the old value:
+ * free the previous data.  ovsrcu_init() can be used on (newly created) RCU-
+ * protected pointer that is not yet visible to the readers.  If more than one
+ * thread can write the pointer, then some form of external synchronization,
+ * e.g. a mutex, is needed to prevent writers from interfering with one
+ * another.  For example, to write the pointer variable declared above while
+ * safely freeing the old value:
  *
  *     static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
  *
- *     static void
- *     free_flow(struct flow *flow)
- *     {
- *         free(flow);
- *     }
+ *     OVSRCU_TYPE(struct flow *) flowp;
  *
  *     void
  *     change_flow(struct flow *new_flow)
  *     {
  *         ovs_mutex_lock(&mutex);
- *         ovsrcu_postpone(free_flow,
+ *         ovsrcu_postpone(free,
  *                         ovsrcu_get_protected(struct flow *, &flowp));
  *         ovsrcu_set(&flowp, new_flow);
  *         ovs_mutex_unlock(&mutex);
@@ -109,24 +115,6 @@
 #include "compiler.h"
 #include "ovs-atomic.h"
 
-/* Use OVSRCU_TYPE(TYPE) to declare a pointer to RCU-protected data, e.g. the
- * following declares an RCU-protected "struct flow *" named flowp:
- *
- *     OVSRCU_TYPE(struct flow *) flowp;
- *
- * Use ovsrcu_get(TYPE, VAR) to read an RCU-protected pointer, e.g. to read the
- * pointer variable declared above:
- *
- *     struct flow *flow = ovsrcu_get(struct flow *, &flowp);
- *
- * If the pointer variable is currently protected against change (because
- * the current thread holds a mutex that protects it), ovsrcu_get_protected()
- * may be used instead.  Only on the Alpha architecture is this likely to
- * generate different code, but it may be useful documentation.
- *
- * (With GNU C or Clang, you get a compiler error if TYPE is wrong; other
- * compilers will merrily carry along accepting the wrong type.)
- */
 #if __GNUC__
 #define OVSRCU_TYPE(TYPE) struct { ATOMIC(TYPE) p; }
 #define OVSRCU_TYPE_INITIALIZER { NULL }
@@ -167,6 +155,12 @@ ovsrcu_get__(const struct ovsrcu_pointer *pointer, memory_order order)
  * for an example. */
 #define ovsrcu_set(VAR, VALUE) \
     atomic_store_explicit(&(VAR)->p, VALUE, memory_order_release)
+
+/* This can be used for initializing RCU pointers before any readers can
+ * see them.  A later ovsrcu_set() needs to make the bigger structure this
+ * is part of visible to the readers. */
+#define ovsrcu_init(VAR, VALUE) \
+    atomic_store_explicit(&(VAR)->p, VALUE, memory_order_relaxed)
 
 /* Calls FUNCTION passing ARG as its pointer-type argument following the next
  * grace period.  See "Usage" above for example.  */

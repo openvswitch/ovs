@@ -55,7 +55,7 @@ static struct ovs_mutex ovsrcu_threads_mutex;
 static struct guarded_list flushed_cbsets;
 static struct seq *flushed_cbsets_seq;
 
-static void ovsrcu_init(void);
+static void ovsrcu_init_module(void);
 static void ovsrcu_flush_cbset(struct ovsrcu_perthread *);
 static void ovsrcu_unregister__(struct ovsrcu_perthread *);
 static bool ovsrcu_call_postponed(void);
@@ -67,7 +67,7 @@ ovsrcu_perthread_get(void)
 {
     struct ovsrcu_perthread *perthread;
 
-    ovsrcu_init();
+    ovsrcu_init_module();
 
     perthread = pthread_getspecific(perthread_key);
     if (!perthread) {
@@ -121,7 +121,7 @@ ovsrcu_quiesce_start(void)
 {
     struct ovsrcu_perthread *perthread;
 
-    ovsrcu_init();
+    ovsrcu_init_module();
     perthread = pthread_getspecific(perthread_key);
     if (perthread) {
         pthread_setspecific(perthread_key, NULL);
@@ -136,7 +136,7 @@ ovsrcu_quiesce_start(void)
 void
 ovsrcu_quiesce(void)
 {
-    ovsrcu_init();
+    ovsrcu_init_module();
     ovsrcu_perthread_get()->seqno = seq_read(global_seqno);
     seq_change(global_seqno);
 
@@ -146,7 +146,7 @@ ovsrcu_quiesce(void)
 bool
 ovsrcu_is_quiescent(void)
 {
-    ovsrcu_init();
+    ovsrcu_init_module();
     return pthread_getspecific(perthread_key) == NULL;
 }
 
@@ -308,7 +308,7 @@ ovsrcu_thread_exit_cb(void *perthread)
 }
 
 static void
-ovsrcu_init(void)
+ovsrcu_init_module(void)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
     if (ovsthread_once_start(&once)) {
