@@ -304,8 +304,8 @@ struct xlate_cfg {
     struct hmap xbundles;
     struct hmap xports;
 };
-OVSRCU_TYPE(struct xlate_cfg *) xcfgp = OVSRCU_TYPE_INITIALIZER;
-struct xlate_cfg *new_xcfg = NULL;
+static OVSRCU_TYPE(struct xlate_cfg *) xcfgp = OVSRCU_TYPE_INITIALIZER;
+static struct xlate_cfg *new_xcfg = NULL;
 
 static bool may_receive(const struct xport *, struct xlate_ctx *);
 static void do_xlate_actions(const struct ofpact *, size_t ofpacts_len,
