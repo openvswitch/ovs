@@ -45,8 +45,8 @@ endif
 # VTEP schema documentation
 EXTRA_DIST += vtep/vtep.xml
 DISTCLEANFILES += vtep/vtep.5
-dist_man_MANS += vtep/vtep.5
-$(srcdir)/vtep/vtep.5: \
+man_MANS += vtep/vtep.5
+vtep/vtep.5: \
 	ovsdb/ovsdb-doc vtep/vtep.xml vtep/vtep.ovsschema $(VTEP_PIC)
 	$(OVSDB_DOC) \
 		--title="vtep" \
