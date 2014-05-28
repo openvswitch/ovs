@@ -515,7 +515,7 @@ global variables.
 
 C DIALECT
 
-  Some C99 features are OK because they are widely implemented:
+  Most C99 features are OK because they are widely implemented:
 
     * Flexible array members (e.g. struct { int foo[]; }).
 
@@ -533,16 +533,15 @@ C DIALECT
     * Designated initializers (e.g. "struct foo foo = {.a = 1};" and
       "int a[] = {[2] = 5};").
 
-  Don't use other C99 features that are not widely implemented in
-older compilers:
+    * Mixing of declarations and code within a block.  Please use this
+      judiciously; keep declarations nicely grouped together in the
+      beginning of a block if possible.
 
-    * Don't mix declarations and code within a block.
-
-    * Don't use declarations in iteration statements (e.g. don't write
+    * Use of declarations in iteration statements (e.g.
       "for (int i = 0; i < 10; i++)").
 
-    * Don't put a trailing comma in an enum declaration (e.g. don't
-      write "enum { x = 1, };").
+    * Use of a trailing comma in an enum declaration (e.g.
+      "enum { x = 1, };").
 
   As a matter of style, avoid // comments.
 
