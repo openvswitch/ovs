@@ -5032,8 +5032,6 @@ handle_flow_monitor_cancel(struct ofconn *ofconn, const struct ofp_header *oh)
 /* Meters implementation.
  *
  * Meter table entry, indexed by the OpenFlow meter_id.
- * These are always dynamically allocated to allocate enough space for
- * the bands.
  * 'created' is used to compute the duration for meter stats.
  * 'list rules' is needed so that we can delete the dependent rules when the
  * meter table entry is deleted.
