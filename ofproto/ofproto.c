@@ -5628,19 +5628,9 @@ init_group(struct ofproto *ofproto, struct ofputil_group_mod *gm,
     return error;
 }
 
-/* Implements OFPGC11_ADD
- * in which no matching flow already exists in the flow table.
- *
- * Adds the flow specified by 'ofm', which is followed by 'n_actions'
- * ofp_actions, to the ofproto's flow table.  Returns 0 on success, an OpenFlow
- * error code on failure, or OFPROTO_POSTPONE if the operation cannot be
- * initiated now but may be retried later.
- *
- * Upon successful return, takes ownership of 'fm->ofpacts'.  On failure,
- * ownership remains with the caller.
- *
- * 'ofconn' is used to retrieve the packet buffer specified in ofm->buffer_id,
- * if any. */
+/* Implements the OFPGC11_ADD operation specified by 'gm', adding a group to
+ * 'ofproto''s group table.  Returns 0 on success or an OpenFlow error code on
+ * failure. */
 static enum ofperr
 add_group(struct ofproto *ofproto, struct ofputil_group_mod *gm)
 {
@@ -5686,15 +5676,12 @@ add_group(struct ofproto *ofproto, struct ofputil_group_mod *gm)
     return error;
 }
 
-/* Implements OFPFC_MODIFY.  Returns 0 on success or an OpenFlow error code on
- * failure.
+/* Implements OFPGC11_MODIFY.  Returns 0 on success or an OpenFlow error code
+ * on failure.
  *
  * Note that the group is re-created and then replaces the old group in
  * ofproto's ofgroup hash map. Thus, the group is never altered while users of
- * the xlate module hold a pointer to the group.
- *
- * 'ofconn' is used to retrieve the packet buffer specified in fm->buffer_id,
- * if any. */
+ * the xlate module hold a pointer to the group. */
 static enum ofperr
 modify_group(struct ofproto *ofproto, struct ofputil_group_mod *gm)
 {
@@ -5766,7 +5753,7 @@ delete_group__(struct ofproto *ofproto, struct ofgroup *ofgroup)
     ofproto_group_unref(ofgroup);
 }
 
-/* Implements OFPGC_DELETE. */
+/* Implements OFPGC11_DELETE. */
 static void
 delete_group(struct ofproto *ofproto, uint32_t group_id)
 {
@@ -6283,8 +6270,6 @@ ofopgroup_complete(struct ofopgroup *group)
               || (op->type == OFOPERATION_MODIFY
                   && op->actions
                   && rule->flow_cookie == op->flow_cookie))) {
-            /* Check that we can just cast from ofoperation_type to
-             * nx_flow_update_event. */
             enum nx_flow_update_event event_type;
 
             switch (op->type) {
