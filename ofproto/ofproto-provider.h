@@ -398,18 +398,23 @@ static inline bool rule_is_hidden(const struct rule *);
  * A struct rule_actions may be accessed without a risk of being
  * freed by code that holds a read-lock or write-lock on 'rule->mutex' (where
  * 'rule' is the rule for which 'rule->actions == actions') or during the RCU
- * active period. */
+ * active period.
+ *
+ * All members are immutable: they do not change during the struct's
+ * lifetime. */
 struct rule_actions {
-    /* These members are immutable: they do not change during the struct's
-     * lifetime.  */
+    /* Flags.
+     *
+     * 'has_meter' is true if 'ofpacts' contains an OFPACT_METER action. */
+    bool has_meter;
+
+    /* Actions. */
     uint32_t ofpacts_len;         /* Size of 'ofpacts', in bytes. */
-    uint32_t provider_meter_id;   /* Datapath meter_id, or UINT32_MAX. */
     struct ofpact ofpacts[];      /* Sequence of "struct ofpacts". */
 };
 BUILD_ASSERT_DECL(offsetof(struct rule_actions, ofpacts) % OFPACT_ALIGNTO == 0);
 
-const struct rule_actions *rule_actions_create(const struct ofproto *,
-                                               const struct ofpact *, size_t);
+const struct rule_actions *rule_actions_create(const struct ofpact *, size_t);
 void rule_actions_destroy(const struct rule_actions *);
 
 /* A set of rules to which an OpenFlow operation applies. */

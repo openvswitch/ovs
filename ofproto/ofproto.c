@@ -2494,16 +2494,13 @@ static uint32_t get_provider_meter_id(const struct ofproto *,
 /* Creates and returns a new 'struct rule_actions', whose actions are a copy
  * of from the 'ofpacts_len' bytes of 'ofpacts'. */
 const struct rule_actions *
-rule_actions_create(const struct ofproto *ofproto,
-                    const struct ofpact *ofpacts, size_t ofpacts_len)
+rule_actions_create(const struct ofpact *ofpacts, size_t ofpacts_len)
 {
     struct rule_actions *actions;
 
     actions = xmalloc(sizeof *actions + ofpacts_len);
     actions->ofpacts_len = ofpacts_len;
-    actions->provider_meter_id
-        = get_provider_meter_id(ofproto,
-                                ofpacts_get_meter(ofpacts, ofpacts_len));
+    actions->has_meter = ofpacts_get_meter(ofpacts, ofpacts_len) != 0;
     memcpy(actions->ofpacts, ofpacts, ofpacts_len);
 
     return actions;
@@ -3869,7 +3866,7 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
 
     *CONST_CAST(uint8_t *, &rule->table_id) = table - ofproto->tables;
     rule->flags = fm->flags & OFPUTIL_FF_STATE;
-    actions = rule_actions_create(ofproto, fm->ofpacts, fm->ofpacts_len);
+    actions = rule_actions_create(fm->ofpacts, fm->ofpacts_len);
     ovsrcu_set(&rule->actions, actions);
     list_init(&rule->meter_list_node);
     rule->eviction_group = NULL;
@@ -3890,7 +3887,7 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     }
     cookies_insert(ofproto, rule);
     eviction_group_add_rule(rule);
-    if (actions->provider_meter_id != UINT32_MAX) {
+    if (actions->has_meter) {
         meter_insert_rule(rule);
     }
 
@@ -4005,8 +4002,7 @@ modify_flows__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
         }
 
         if (change_actions) {
-            ovsrcu_set(&rule->actions, rule_actions_create(ofproto,
-                                                           fm->ofpacts,
+            ovsrcu_set(&rule->actions, rule_actions_create(fm->ofpacts,
                                                            fm->ofpacts_len));
             rule_actions_destroy(actions);
         }
