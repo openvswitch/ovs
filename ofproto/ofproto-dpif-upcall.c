@@ -1097,6 +1097,7 @@ should_revalidate(uint64_t packets, long long int used)
 static bool
 revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
                 const struct dpif_flow *f)
+    OVS_REQUIRES(ukey->mutex)
 {
     uint64_t slow_path_buf[128 / 8];
     struct xlate_out xout, *xoutp;
@@ -1117,7 +1118,6 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
     xoutp = NULL;
     netflow = NULL;
 
-    ovs_mutex_lock(&ukey->mutex);
     last_used = ukey->stats.used;
     push.used = f->stats.used;
     push.tcp_flags = f->stats.tcp_flags;
@@ -1127,11 +1127,6 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
     push.n_bytes = (f->stats.n_bytes > ukey->stats.n_bytes
                     ? f->stats.n_bytes - ukey->stats.n_bytes
                     : 0);
-
-    if (!ukey->flow_exists) {
-        /* Don't bother revalidating if the flow was already deleted. */
-        goto exit;
-    }
 
     if (udpif->need_revalidate && last_used
         && !should_revalidate(push.n_packets, last_used)) {
@@ -1212,7 +1207,6 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
     ok = true;
 
 exit:
-    ovs_mutex_unlock(&ukey->mutex);
     if (netflow) {
         if (!ok) {
             netflow_expire(netflow, &flow);
@@ -1371,54 +1365,53 @@ revalidate(struct revalidator *revalidator)
             uint32_t hash = hash_bytes(f->key, f->key_len, udpif->secret);
             struct udpif_key *ukey = ukey_lookup(udpif, f->key, f->key_len,
                                                  hash);
-            bool mark;
+            bool already_dumped, mark;
 
-            if (ukey) {
-                bool already_dumped;
-
-                ovs_mutex_lock(&ukey->mutex);
-                already_dumped = ukey->mark || !ukey->flow_exists;
-                if (!used) {
-                    used = ukey->created;
-                }
-                ovs_mutex_unlock(&ukey->mutex);
-
-                if (already_dumped) {
-                    /* The flow has already been dumped. This can occasionally
-                     * occur if the datapath is changed in the middle of a flow
-                     * dump. Rather than perform the same work twice, skip the
-                     * flow this time. */
+            if (!ukey) {
+                ukey = ukey_create(key, key_len, used);
+                if (!udpif_insert_ukey(udpif, ukey, hash)) {
+                    /* The same ukey has already been created. This means that
+                     * another revalidator is processing this flow
+                     * concurrently, so don't bother processing it. */
                     COVERAGE_INC(upcall_duplicate_flow);
+                    ukey_delete(NULL, ukey);
                     continue;
                 }
             }
 
+            if (ovs_mutex_trylock(&ukey->mutex)) {
+                /* The flow has been dumped, and is being handled by another
+                 * revalidator concurrently. This can occasionally occur if the
+                 * datapath is changed in the middle of a flow dump. Rather
+                 * than perform the same work twice, skip the flow this time.
+                 */
+                COVERAGE_INC(upcall_duplicate_flow);
+                continue;
+            }
+
+            already_dumped = ukey->mark || !ukey->flow_exists;
+            if (already_dumped) {
+                /* The flow has already been dumped and handled by another
+                 * revalidator during this flow dump operation. Skip it. */
+                COVERAGE_INC(upcall_duplicate_flow);
+                ovs_mutex_unlock(&ukey->mutex);
+                continue;
+            }
+
+            if (!used) {
+                used = ukey->created;
+            }
             if (kill_them_all || (used && used < now - max_idle)) {
                 mark = false;
             } else {
-                if (!ukey) {
-                    ukey = ukey_create(f->key, f->key_len, used);
-                    if (!udpif_insert_ukey(udpif, ukey, hash)) {
-                        /* The same ukey has already been created. This means
-                         * that another revalidator is processing this flow
-                         * concurrently, so don't bother processing it. */
-                        ukey_delete(NULL, ukey);
-                        continue;
-                    }
-                }
-
                 mark = revalidate_ukey(udpif, ukey, f);
             }
-
-            if (ukey) {
-                ovs_mutex_lock(&ukey->mutex);
-                ukey->mark = ukey->flow_exists = mark;
-                ovs_mutex_unlock(&ukey->mutex);
-            }
+            ukey->mark = ukey->flow_exists = mark;
 
             if (!mark) {
                 dump_op_init(&ops[n_ops++], f->key, f->key_len, ukey);
             }
+            ovs_mutex_unlock(&ukey->mutex);
         }
 
         if (n_ops) {
