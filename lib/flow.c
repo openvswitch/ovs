@@ -687,6 +687,8 @@ flow_tun_flag_to_string(uint32_t flags)
         return "csum";
     case FLOW_TNL_F_KEY:
         return "key";
+    case FLOW_TNL_F_OAM:
+        return "oam";
     default:
         return NULL;
     }

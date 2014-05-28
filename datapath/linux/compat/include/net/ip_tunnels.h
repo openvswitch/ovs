@@ -44,4 +44,8 @@ int iptunnel_xmit(struct rtable *rt,
 int iptunnel_pull_header(struct sk_buff *skb, int hdr_len, __be16 inner_proto);
 
 #endif
+
+/* Not yet upstream */
+#define TUNNEL_OAM	__cpu_to_be16(0x0200)
+
 #endif /* __NET_IP_TUNNELS_H */

@@ -347,6 +347,7 @@ static int ipv4_tun_from_nlattr(const struct nlattr *attr,
 			[OVS_TUNNEL_KEY_ATTR_TTL] = 1,
 			[OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT] = 0,
 			[OVS_TUNNEL_KEY_ATTR_CSUM] = 0,
+			[OVS_TUNNEL_KEY_ATTR_OAM] = 0,
 		};
 
 		if (type > OVS_TUNNEL_KEY_ATTR_MAX) {
@@ -390,6 +391,9 @@ static int ipv4_tun_from_nlattr(const struct nlattr *attr,
 			break;
 		case OVS_TUNNEL_KEY_ATTR_CSUM:
 			tun_flags |= TUNNEL_CSUM;
+			break;
+		case OVS_TUNNEL_KEY_ATTR_OAM:
+			tun_flags |= TUNNEL_OAM;
 			break;
 		default:
 			return -EINVAL;
@@ -447,6 +451,9 @@ static int ipv4_tun_to_nlattr(struct sk_buff *skb,
 		return -EMSGSIZE;
 	if ((output->tun_flags & TUNNEL_CSUM) &&
 		nla_put_flag(skb, OVS_TUNNEL_KEY_ATTR_CSUM))
+		return -EMSGSIZE;
+	if ((output->tun_flags & TUNNEL_OAM) &&
+		nla_put_flag(skb, OVS_TUNNEL_KEY_ATTR_OAM))
 		return -EMSGSIZE;
 
 	nla_nest_end(skb, nla);

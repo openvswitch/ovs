@@ -104,6 +104,7 @@ void odp_portno_names_destroy(struct hmap *portno_names);
  *  - OVS_TUNNEL_KEY_ATTR_TTL            1    3      4      8
  *  - OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT  0    --     4      4
  *  - OVS_TUNNEL_KEY_ATTR_CSUM           0    --     4      4
+ *  - OVS_TUNNEL_KEY_ATTR_OAM            0    --     4      4
  *  OVS_KEY_ATTR_IN_PORT                 4    --     4      8
  *  OVS_KEY_ATTR_SKB_MARK                4    --     4      8
  *  OVS_KEY_ATTR_DP_HASH                 4    --     4      8
@@ -117,7 +118,7 @@ void odp_portno_names_destroy(struct hmap *portno_names);
  *  OVS_KEY_ATTR_ICMPV6                  2     2     4      8
  *  OVS_KEY_ATTR_ND                     28    --     4     32
  *  ----------------------------------------------------------
- *  total                                                 224
+ *  total                                                 228
  *
  * We include some slack space in case the calculation isn't quite right or we
  * add another field and forget to adjust this value.
