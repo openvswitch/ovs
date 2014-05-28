@@ -411,7 +411,7 @@ void miniflow_destroy(struct miniflow *);
 
 void miniflow_expand(const struct miniflow *, struct flow *);
 
-static inline uint32_t
+static inline bool
 flow_get_next_in_map(const struct flow *flow, uint64_t map, uint32_t *value)
 {
     if (map) {
@@ -421,13 +421,11 @@ flow_get_next_in_map(const struct flow *flow, uint64_t map, uint32_t *value)
     return false;
 }
 
-/* Iterate through all flow u32 values specified by 'MAP'.
- * This works as the first statement in a block.*/
-#define FLOW_FOR_EACH_IN_MAP(VALUE, FLOW, MAP)                          \
-    uint64_t map_;                                                      \
-    for (map_ = (MAP);                                                  \
-         flow_get_next_in_map(FLOW, map_, &(VALUE));                    \
-         map_ = zero_rightmost_1bit(map_))
+/* Iterate through all flow u32 values specified by 'MAP'. */
+#define FLOW_FOR_EACH_IN_MAP(VALUE, FLOW, MAP)         \
+    for (uint64_t map__ = (MAP);                       \
+         flow_get_next_in_map(FLOW, map__, &(VALUE));  \
+         map__ = zero_rightmost_1bit(map__))
 
 #define FLOW_U32_SIZE(FIELD)                                            \
     DIV_ROUND_UP(sizeof(((struct flow *)0)->FIELD), sizeof(uint32_t))
