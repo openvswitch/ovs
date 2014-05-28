@@ -196,7 +196,7 @@ static void lisp_build_header(const struct vport *vport,
 	struct lisp_port *lisp_port = lisp_vport(vport);
 	struct udphdr *udph = udp_hdr(skb);
 	struct lisphdr *lisph = (struct lisphdr *)(udph + 1);
-	const struct ovs_key_ipv4_tunnel *tun_key = OVS_CB(skb)->tun_key;
+	const struct ovs_key_ipv4_tunnel *tun_key = &OVS_CB(skb)->tun_info->tunnel;
 
 	udph->dest = lisp_port->dst_port;
 	udph->source = htons(get_src_port(net, skb));
@@ -224,7 +224,7 @@ static int lisp_rcv(struct sock *sk, struct sk_buff *skb)
 	struct lisp_port *lisp_port;
 	struct lisphdr *lisph;
 	struct iphdr *iph, *inner_iph;
-	struct ovs_key_ipv4_tunnel tun_key;
+	struct ovs_tunnel_info tun_info;
 	__be64 key;
 	struct ethhdr *ethh;
 	__be16 protocol;
@@ -245,7 +245,7 @@ static int lisp_rcv(struct sock *sk, struct sk_buff *skb)
 
 	/* Save outer tunnel values */
 	iph = ip_hdr(skb);
-	ovs_flow_tun_key_init(&tun_key, iph, key, TUNNEL_KEY);
+	ovs_flow_tun_info_init(&tun_info, iph, key, TUNNEL_KEY);
 
 	/* Drop non-IP inner packets */
 	inner_iph = (struct iphdr *)(lisph + 1);
@@ -270,7 +270,7 @@ static int lisp_rcv(struct sock *sk, struct sk_buff *skb)
 
 	ovs_skb_postpush_rcsum(skb, skb->data, ETH_HLEN);
 
-	ovs_vport_receive(vport_from_priv(lisp_port), skb, &tun_key);
+	ovs_vport_receive(vport_from_priv(lisp_port), skb, &tun_info);
 	goto out;
 
 error:
@@ -425,6 +425,7 @@ static int handle_offloads(struct sk_buff *skb)
 
 static int lisp_send(struct vport *vport, struct sk_buff *skb)
 {
+	struct ovs_key_ipv4_tunnel *tun_key = &OVS_CB(skb)->tun_info->tunnel;
 	int network_offset = skb_network_offset(skb);
 	struct rtable *rt;
 	int min_headroom;
@@ -433,7 +434,7 @@ static int lisp_send(struct vport *vport, struct sk_buff *skb)
 	int sent_len;
 	int err;
 
-	if (unlikely(!OVS_CB(skb)->tun_key))
+	if (unlikely(!OVS_CB(skb)->tun_info))
 		return -EINVAL;
 
 	if (skb->protocol != htons(ETH_P_IP) &&
@@ -443,12 +444,10 @@ static int lisp_send(struct vport *vport, struct sk_buff *skb)
 	}
 
 	/* Route lookup */
-	saddr = OVS_CB(skb)->tun_key->ipv4_src;
+	saddr = tun_key->ipv4_src;
 	rt = find_route(ovs_dp_get_net(vport->dp),
-			&saddr,
-			OVS_CB(skb)->tun_key->ipv4_dst,
-			IPPROTO_UDP,
-			OVS_CB(skb)->tun_key->ipv4_tos,
+			&saddr, tun_key->ipv4_dst,
+			IPPROTO_UDP, tun_key->ipv4_tos,
 			skb->mark);
 	if (IS_ERR(rt)) {
 		err = PTR_ERR(rt);
@@ -488,12 +487,11 @@ static int lisp_send(struct vport *vport, struct sk_buff *skb)
 
 	skb->local_df = 1;
 
-	df = OVS_CB(skb)->tun_key->tun_flags &
-				  TUNNEL_DONT_FRAGMENT ?  htons(IP_DF) : 0;
+	df = tun_key->tun_flags & TUNNEL_DONT_FRAGMENT ? htons(IP_DF) : 0;
 	sent_len = iptunnel_xmit(rt, skb,
-			     saddr, OVS_CB(skb)->tun_key->ipv4_dst,
-			     IPPROTO_UDP, OVS_CB(skb)->tun_key->ipv4_tos,
-			     OVS_CB(skb)->tun_key->ipv4_ttl, df, false);
+			     saddr, tun_key->ipv4_dst,
+			     IPPROTO_UDP, tun_key->ipv4_tos,
+			     tun_key->ipv4_ttl, df, false);
 
 	return sent_len > 0 ? sent_len + network_offset : sent_len;
 

@@ -451,12 +451,15 @@ int ovs_flow_extract(struct sk_buff *skb, u16 in_port, struct sw_flow_key *key)
 	int error;
 	struct ethhdr *eth;
 
-	key->phy.priority = skb->priority;
-	if (OVS_CB(skb)->tun_key)
-		memcpy(&key->tun_key, OVS_CB(skb)->tun_key, sizeof(key->tun_key));
-	else
+	if (OVS_CB(skb)->tun_info) {
+		struct ovs_tunnel_info *tun_info = OVS_CB(skb)->tun_info;
+		memcpy(&key->tun_key, &tun_info->tunnel,
+			sizeof(key->tun_key));
+	} else {
 		memset(&key->tun_key, 0, sizeof(key->tun_key));
+	}
 
+	key->phy.priority = skb->priority;
 	key->phy.in_port = in_port;
 	key->phy.skb_mark = skb->mark;
 	key->ovs_flow_hash = 0;

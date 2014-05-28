@@ -518,8 +518,8 @@ static int execute_set_action(struct sk_buff *skb,
 		skb->mark = nla_get_u32(nested_attr);
 		break;
 
-	case OVS_KEY_ATTR_IPV4_TUNNEL:
-		OVS_CB(skb)->tun_key = nla_data(nested_attr);
+	case OVS_KEY_ATTR_TUNNEL_INFO:
+		OVS_CB(skb)->tun_info = nla_data(nested_attr);
 		break;
 
 	case OVS_KEY_ATTR_ETHERNET:
@@ -701,7 +701,7 @@ int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb, bool recirc)
 		goto out_loop;
 	}
 
-	OVS_CB(skb)->tun_key = NULL;
+	OVS_CB(skb)->tun_info = NULL;
 	error = do_execute_actions(dp, skb, acts->actions, acts->actions_len);
 
 	/* Check whether sub-actions looped too much. */

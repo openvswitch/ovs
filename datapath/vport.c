@@ -460,14 +460,14 @@ u32 ovs_vport_find_upcall_portid(const struct vport *p, struct sk_buff *skb)
  *
  * @vport: vport that received the packet
  * @skb: skb that was received
- * @tun_key: tunnel (if any) that carried packet
+ * @tun_info: tunnel (if any) that carried packet
  *
  * Must be called with rcu_read_lock.  The packet cannot be shared and
  * skb->data should point to the Ethernet header.  The caller must have already
  * called compute_ip_summed() to initialize the checksumming fields.
  */
 void ovs_vport_receive(struct vport *vport, struct sk_buff *skb,
-		       struct ovs_key_ipv4_tunnel *tun_key)
+		       struct ovs_tunnel_info *tun_info)
 {
 	struct pcpu_sw_netstats *stats;
 
@@ -477,7 +477,7 @@ void ovs_vport_receive(struct vport *vport, struct sk_buff *skb,
 	stats->rx_bytes += skb->len;
 	u64_stats_update_end(&stats->syncp);
 
-	OVS_CB(skb)->tun_key = tun_key;
+	OVS_CB(skb)->tun_info = tun_info;
 	ovs_dp_process_received_packet(vport, skb);
 }
 

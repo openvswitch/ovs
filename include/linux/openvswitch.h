@@ -320,7 +320,7 @@ enum ovs_key_attr {
 	OVS_KEY_ATTR_RECIRC_ID, /* u32 recirc id */
 #ifdef __KERNEL__
 	/* Only used within kernel data path. */
-	OVS_KEY_ATTR_IPV4_TUNNEL,  /* struct ovs_key_ipv4_tunnel */
+	OVS_KEY_ATTR_TUNNEL_INFO,  /* struct ovs_tunnel_info */
 #endif
 	/* Experimental */
 

@@ -66,7 +66,7 @@ static struct sk_buff *__build_header(struct sk_buff *skb,
 				      int tunnel_hlen,
 				      __be32 seq, __be16 gre64_flag)
 {
-	const struct ovs_key_ipv4_tunnel *tun_key = OVS_CB(skb)->tun_key;
+	const struct ovs_key_ipv4_tunnel *tun_key = &OVS_CB(skb)->tun_info->tunnel;
 	struct tnl_ptk_info tpi;
 
 	skb = gre_handle_offloads(skb, !!(tun_key->tun_flags & TUNNEL_CSUM));
@@ -96,7 +96,7 @@ static __be64 key_to_tunnel_id(__be32 key, __be32 seq)
 static int gre_rcv(struct sk_buff *skb,
 		   const struct tnl_ptk_info *tpi)
 {
-	struct ovs_key_ipv4_tunnel tun_key;
+	struct ovs_tunnel_info tun_info;
 	struct ovs_net *ovs_net;
 	struct vport *vport;
 	__be64 key;
@@ -110,9 +110,10 @@ static int gre_rcv(struct sk_buff *skb,
 		return PACKET_REJECT;
 
 	key = key_to_tunnel_id(tpi->key, tpi->seq);
-	ovs_flow_tun_key_init(&tun_key, ip_hdr(skb), key, filter_tnl_flags(tpi->flags));
+	ovs_flow_tun_info_init(&tun_info, ip_hdr(skb), key,
+			       filter_tnl_flags(tpi->flags));
 
-	ovs_vport_receive(vport, skb, &tun_key);
+	ovs_vport_receive(vport, skb, &tun_info);
 	return PACKET_RCVD;
 }
 
@@ -139,6 +140,7 @@ static int __send(struct vport *vport, struct sk_buff *skb,
 		  int tunnel_hlen,
 		  __be32 seq, __be16 gre64_flag)
 {
+	struct ovs_key_ipv4_tunnel *tun_key = &OVS_CB(skb)->tun_info->tunnel;
 	struct rtable *rt;
 	int min_headroom;
 	__be16 df;
@@ -146,12 +148,10 @@ static int __send(struct vport *vport, struct sk_buff *skb,
 	int err;
 
 	/* Route lookup */
-	saddr = OVS_CB(skb)->tun_key->ipv4_src;
+	saddr = tun_key->ipv4_src;
 	rt = find_route(ovs_dp_get_net(vport->dp),
-			&saddr,
-			OVS_CB(skb)->tun_key->ipv4_dst,
-			IPPROTO_GRE,
-			OVS_CB(skb)->tun_key->ipv4_tos,
+			&saddr, tun_key->ipv4_dst,
+			IPPROTO_GRE, tun_key->ipv4_tos,
 			skb->mark);
 	if (IS_ERR(rt)) {
 		err = PTR_ERR(rt);
@@ -189,15 +189,13 @@ static int __send(struct vport *vport, struct sk_buff *skb,
 		goto err_free_rt;
 	}
 
-	df = OVS_CB(skb)->tun_key->tun_flags & TUNNEL_DONT_FRAGMENT ?
-		htons(IP_DF) : 0;
-
+	df = tun_key->tun_flags & TUNNEL_DONT_FRAGMENT ? htons(IP_DF) : 0;
 	skb->local_df = 1;
 
 	return iptunnel_xmit(rt, skb, saddr,
-			     OVS_CB(skb)->tun_key->ipv4_dst, IPPROTO_GRE,
-			     OVS_CB(skb)->tun_key->ipv4_tos,
-			     OVS_CB(skb)->tun_key->ipv4_ttl, df, false);
+			     tun_key->ipv4_dst, IPPROTO_GRE,
+			     tun_key->ipv4_tos,
+			     tun_key->ipv4_ttl, df, false);
 err_free_rt:
 	ip_rt_put(rt);
 error:
@@ -286,10 +284,10 @@ static int gre_send(struct vport *vport, struct sk_buff *skb)
 {
 	int hlen;
 
-	if (unlikely(!OVS_CB(skb)->tun_key))
+	if (unlikely(!OVS_CB(skb)->tun_info))
 		return -EINVAL;
 
-	hlen = ip_gre_calc_hlen(OVS_CB(skb)->tun_key->tun_flags);
+	hlen = ip_gre_calc_hlen(OVS_CB(skb)->tun_info->tunnel.tun_flags);
 
 	return __send(vport, skb, hlen, 0, 0);
 }
@@ -360,13 +358,13 @@ static int gre64_send(struct vport *vport, struct sk_buff *skb)
 		   GRE_HEADER_SECTION;		/* GRE SEQ */
 	__be32 seq;
 
-	if (unlikely(!OVS_CB(skb)->tun_key))
+	if (unlikely(!OVS_CB(skb)->tun_info))
 		return -EINVAL;
 
-	if (OVS_CB(skb)->tun_key->tun_flags & TUNNEL_CSUM)
+	if (OVS_CB(skb)->tun_info->tunnel.tun_flags & TUNNEL_CSUM)
 		hlen += GRE_HEADER_SECTION;
 
-	seq = be64_get_high32(OVS_CB(skb)->tun_key->tun_id);
+	seq = be64_get_high32(OVS_CB(skb)->tun_info->tunnel.tun_id);
 	return __send(vport, skb, hlen, seq, (TUNNEL_KEY|TUNNEL_SEQ));
 }
 

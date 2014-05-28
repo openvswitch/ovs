@@ -382,7 +382,7 @@ static size_t key_attr_size(void)
 {
 	/* Whenever adding new OVS_KEY_ FIELDS, we should consider
 	 * updating this function.  */
-	BUILD_BUG_ON(OVS_KEY_ATTR_IPV4_TUNNEL != 21);
+	BUILD_BUG_ON(OVS_KEY_ATTR_TUNNEL_INFO != 21);
 
 	return    nla_total_size(4)   /* OVS_KEY_ATTR_PRIORITY */
 		+ nla_total_size(0)   /* OVS_KEY_ATTR_TUNNEL */
