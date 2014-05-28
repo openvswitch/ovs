@@ -31,6 +31,7 @@ void fatal_signal_fork(void);
 void fatal_signal_run(void);
 void fatal_signal_wait(void);
 void fatal_ignore_sigpipe(void);
+void fatal_signal_atexit_handler(void);
 
 /* Convenience functions for unlinking files upon termination.
  *

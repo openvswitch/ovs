@@ -218,6 +218,11 @@ should_service_stop(void)
 void
 service_stop()
 {
+    if (!service_started) {
+        return;
+    }
+    fatal_signal_atexit_handler();
+
     ResetEvent(wevent);
     CloseHandle(wevent);
 

@@ -64,7 +64,6 @@ static volatile sig_atomic_t stored_sig_nr = SIG_ATOMIC_MAX;
 
 static struct ovs_mutex mutex;
 
-static void atexit_handler(void);
 static void call_hooks(int sig_nr);
 #ifdef _WIN32
 static BOOL WINAPI ConsoleHandlerRoutine(DWORD dwCtrlType);
@@ -115,7 +114,7 @@ fatal_signal_init(void)
             }
 #endif
         }
-        atexit(atexit_handler);
+        atexit(fatal_signal_atexit_handler);
     }
 }
 
@@ -226,8 +225,8 @@ fatal_ignore_sigpipe(void)
 #endif
 }
 
-static void
-atexit_handler(void)
+void
+fatal_signal_atexit_handler(void)
 {
     call_hooks(0);
 }
