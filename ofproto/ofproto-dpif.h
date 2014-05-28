@@ -53,8 +53,6 @@ enum rule_dpif_lookup_verdict {
                                              * dropped. */
 };
 
-/* For lock annotation below only. */
-extern struct ovs_rwlock xlate_rwlock;
 
 /* Ofproto-dpif -- DPIF based ofproto implementation.
  *
@@ -144,8 +142,7 @@ bool vsp_adjust_flow(const struct ofproto_dpif *, struct flow *);
 
 int ofproto_dpif_execute_actions(struct ofproto_dpif *, const struct flow *,
                                  struct rule_dpif *, const struct ofpact *,
-                                 size_t ofpacts_len, struct ofpbuf *)
-    OVS_EXCLUDED(xlate_rwlock);
+                                 size_t ofpacts_len, struct ofpbuf *);
 void ofproto_dpif_send_packet_in(struct ofproto_dpif *,
                                  struct ofproto_packet_in *);
 bool ofproto_dpif_wants_packet_in_on_miss(struct ofproto_dpif *);

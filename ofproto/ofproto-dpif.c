@@ -599,7 +599,7 @@ type_run(const char *type)
                 continue;
             }
 
-            ovs_rwlock_wrlock(&xlate_rwlock);
+            xlate_txn_start();
             xlate_ofproto_set(ofproto, ofproto->up.name,
                               ofproto->backer->dpif, ofproto->miss_rule,
                               ofproto->no_packet_in_rule, ofproto->ml,
@@ -632,7 +632,7 @@ type_run(const char *type)
                                  ofport->up.pp.config, ofport->up.pp.state,
                                  ofport->is_tunnel, ofport->may_enable);
             }
-            ovs_rwlock_unlock(&xlate_rwlock);
+            xlate_txn_commit();
         }
 
         udpif_revalidate(backer->udpif);
@@ -1292,9 +1292,9 @@ destruct(struct ofproto *ofproto_)
     struct list pins;
 
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
-    ovs_rwlock_wrlock(&xlate_rwlock);
+    xlate_txn_start();
     xlate_remove_ofproto(ofproto);
-    ovs_rwlock_unlock(&xlate_rwlock);
+    xlate_txn_commit();
 
     /* Ensure that the upcall processing threads have no remaining references
      * to the ofproto or anything in it. */
@@ -1640,9 +1640,9 @@ port_destruct(struct ofport *port_)
     const char *dp_port_name;
 
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
-    ovs_rwlock_wrlock(&xlate_rwlock);
+    xlate_txn_start();
     xlate_ofport_remove(port);
-    ovs_rwlock_unlock(&xlate_rwlock);
+    xlate_txn_commit();
 
     dp_port_name = netdev_vport_get_dpif_port(port->up.netdev, namebuf,
                                               sizeof namebuf);
@@ -2285,9 +2285,9 @@ bundle_destroy(struct ofbundle *bundle)
     ofproto = bundle->ofproto;
     mbridge_unregister_bundle(ofproto->mbridge, bundle->aux);
 
-    ovs_rwlock_wrlock(&xlate_rwlock);
+    xlate_txn_start();
     xlate_bundle_remove(bundle);
-    ovs_rwlock_unlock(&xlate_rwlock);
+    xlate_txn_commit();
 
     LIST_FOR_EACH_SAFE (port, next_port, bundle_node, &bundle->ports) {
         bundle_del_port(port);
