@@ -648,8 +648,8 @@ cmap_insert(struct cmap *cmap, struct cmap_node *node, uint32_t hash)
 }
 
 static bool
-cmap_remove__(struct cmap_impl *impl, struct cmap_node *node,
-              uint32_t hash, uint32_t h)
+cmap_replace__(struct cmap_impl *impl, struct cmap_node *node,
+               struct cmap_node *replacement, uint32_t hash, uint32_t h)
 {
     struct cmap_bucket *b = &impl->buckets[h & impl->mask];
     int slot;
@@ -659,9 +659,18 @@ cmap_remove__(struct cmap_impl *impl, struct cmap_node *node,
         return false;
     }
 
+    /* The pointer to 'node' is changed to point to 'replacement',
+     * which is the next node if no replacement node is given. */
+    if (!replacement) {
+        replacement = cmap_node_next_protected(node);
+    } else {
+        /* 'replacement' takes the position of 'node' in the list. */
+        ovsrcu_init(&replacement->next, cmap_node_next_protected(node));
+    }
+
     if (b->nodes[slot] == node) {
-        b->nodes[slot] = cmap_node_next_protected(node);
         atomic_thread_fence(memory_order_release);
+        b->nodes[slot] = replacement;
     } else {
         struct cmap_node *iter = b->nodes[slot];
         for (;;) {
@@ -671,7 +680,7 @@ cmap_remove__(struct cmap_impl *impl, struct cmap_node *node,
             }
             iter = next;
         }
-        ovsrcu_set(&iter->next, cmap_node_next_protected(node));
+        ovsrcu_set(&iter->next, replacement);
     }
     return true;
 }
@@ -686,15 +695,29 @@ cmap_remove__(struct cmap_impl *impl, struct cmap_node *node,
 void
 cmap_remove(struct cmap *cmap, struct cmap_node *node, uint32_t hash)
 {
+    cmap_replace(cmap, node, NULL, hash);
+    cmap_get_impl(cmap)->n--;
+}
+
+/* Replaces 'old_node' in 'cmap' with 'new_node'.  The caller must
+ * ensure that 'cmap' cannot change concurrently (from another thread).
+ *
+ * 'old_node' must not be destroyed or modified or inserted back into 'cmap' or
+ * into any other concurrent hash map while any other thread might be accessing
+ * it.  One correct way to do this is to free it from an RCU callback with
+ * ovsrcu_postpone(). */
+void
+cmap_replace(struct cmap *cmap, struct cmap_node *old_node,
+             struct cmap_node *new_node, uint32_t hash)
+{
     struct cmap_impl *impl = cmap_get_impl(cmap);
     uint32_t h1 = rehash(impl, hash);
     uint32_t h2 = other_hash(h1);
     bool ok;
 
-    ok = (cmap_remove__(impl, node, hash, h1) ||
-          cmap_remove__(impl, node, hash, h2));
+    ok = cmap_replace__(impl, old_node, new_node, hash, h1)
+        || cmap_replace__(impl, old_node, new_node, hash, h2);
     ovs_assert(ok);
-    impl->n--;
 }
 
 static bool

@@ -34,16 +34,16 @@
  *
  * The general rules are:
  *
- *    - Only a single thread may safely call into cmap_insert() or
- *      cmap_remove() at any given time.
+ *    - Only a single thread may safely call into cmap_insert(),
+ *      cmap_remove(), or cmap_replace() at any given time.
  *
  *    - Any number of threads may use functions and macros that search or
  *      iterate through a given cmap, even in parallel with other threads
- *      calling cmap_insert() or cmap_remove().
+ *      calling cmap_insert(), cmap_remove(), or cmap_replace().
  *
  *      There is one exception: cmap_find_protected() is only safe if no thread
- *      is currently calling cmap_insert() or cmap_remove().  (Use ordinary
- *      cmap_find() if that is not guaranteed.)
+ *      is currently calling cmap_insert(), cmap_remove(), or cmap_replace().
+ *      (Use ordinary cmap_find() if that is not guaranteed.)
  *
  *    - See "Iteration" below for additional thread safety rules.
  *
@@ -90,6 +90,8 @@ bool cmap_is_empty(const struct cmap *);
 /* Insertion and deletion. */
 void cmap_insert(struct cmap *, struct cmap_node *, uint32_t hash);
 void cmap_remove(struct cmap *, struct cmap_node *, uint32_t hash);
+void cmap_replace(struct cmap *, struct cmap_node *old_node,
+                  struct cmap_node *new_node, uint32_t hash);
 
 /* Search.
  *
@@ -161,13 +163,29 @@ struct cmap_node *cmap_find_protected(const struct cmap *, uint32_t hash);
  *         ...operate on my_node...
  *     }
  *
- * There is no CMAP_FOR_EACH_SAFE variant because it would be rarely useful:
- * usually destruction of an element has to wait for an RCU grace period to
- * expire.
+ * CMAP_FOR_EACH_SAFE variant is useful only in deallocation code already
+ * executing at postponed time, when it is known that the RCU grace period
+ * has already expired.
  */
 #define CMAP_FOR_EACH(NODE, MEMBER, CURSOR, CMAP)                       \
     for ((cmap_cursor_init(CURSOR, CMAP),                               \
           ASSIGN_CONTAINER(NODE, cmap_cursor_next(CURSOR, NULL), MEMBER)); \
+         NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER);                 \
+         ASSIGN_CONTAINER(NODE, cmap_cursor_next(CURSOR, &(NODE)->MEMBER), \
+                          MEMBER))
+
+#define CMAP_FOR_EACH_SAFE(NODE, NEXT, MEMBER, CURSOR, CMAP)            \
+    for ((cmap_cursor_init(CURSOR, CMAP),                               \
+          ASSIGN_CONTAINER(NODE, cmap_cursor_next(CURSOR, NULL), MEMBER)); \
+         (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER)                  \
+          ? ASSIGN_CONTAINER(NEXT, cmap_cursor_next(CURSOR, &(NODE)->MEMBER), \
+                             MEMBER), 1                                  \
+          : 0);                                                          \
+         (NODE) = (NEXT))
+
+#define CMAP_FOR_EACH_CONTINUE(NODE, MEMBER, CURSOR, CMAP)              \
+    for (ASSIGN_CONTAINER(NODE, cmap_cursor_next(CURSOR, &(NODE)->MEMBER), \
+                          MEMBER);                                      \
          NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER);                 \
          ASSIGN_CONTAINER(NODE, cmap_cursor_next(CURSOR, &(NODE)->MEMBER), \
                           MEMBER))
@@ -182,6 +200,8 @@ void cmap_cursor_init(struct cmap_cursor *, const struct cmap *);
 struct cmap_node *cmap_cursor_next(struct cmap_cursor *,
                                    const struct cmap_node *);
 
+static inline struct cmap_node *cmap_first(const struct cmap *);
+
 /* Another, less preferred, form of iteration, for use in situations where it
  * is difficult to maintain a pointer to a cmap_node. */
 struct cmap_position {
@@ -192,5 +212,15 @@ struct cmap_position {
 
 struct cmap_node *cmap_next_position(const struct cmap *,
                                      struct cmap_position *);
+
+/* Returns the first node in 'cmap', in arbitrary order, or a null pointer if
+ * 'cmap' is empty. */
+static inline struct cmap_node *
+cmap_first(const struct cmap *cmap)
+{
+    struct cmap_position pos = { 0, 0, 0 };
+
+    return cmap_next_position(cmap, &pos);
+}
 
 #endif /* cmap.h */

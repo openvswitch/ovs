@@ -92,6 +92,9 @@ check_cmap(struct cmap *cmap, const int values[], size_t n,
         assert(count == 1);
     }
 
+    /* Check that cmap_first() returns NULL only when cmap_is_empty(). */
+    assert(!cmap_first(cmap) == cmap_is_empty(cmap));
+
     /* Check counters. */
     assert(cmap_is_empty(cmap) == !n);
     assert(cmap_count(cmap) == n);
@@ -155,11 +158,12 @@ constant_hash(int value OVS_UNUSED)
 
 /* Tests basic cmap insertion and deletion. */
 static void
-test_cmap_insert_delete(hash_func *hash)
+test_cmap_insert_replace_delete(hash_func *hash)
 {
     enum { N_ELEMS = 1000 };
 
     struct element elements[N_ELEMS];
+    struct element copies[N_ELEMS];
     int values[N_ELEMS];
     struct cmap cmap;
     size_t i;
@@ -173,7 +177,14 @@ test_cmap_insert_delete(hash_func *hash)
     }
     shuffle(values, N_ELEMS);
     for (i = 0; i < N_ELEMS; i++) {
-        cmap_remove(&cmap, &elements[values[i]].node, hash(values[i]));
+        copies[values[i]].value = values[i];
+        cmap_replace(&cmap, &elements[values[i]].node,
+                     &copies[values[i]].node, hash(values[i]));
+        check_cmap(&cmap, values, N_ELEMS, hash);
+    }
+    shuffle(values, N_ELEMS);
+    for (i = 0; i < N_ELEMS; i++) {
+        cmap_remove(&cmap, &copies[values[i]].node, hash(values[i]));
         check_cmap(&cmap, values + (i + 1), N_ELEMS - (i + 1), hash);
     }
     cmap_destroy(&cmap);
@@ -200,7 +211,7 @@ run_tests(int argc, char *argv[])
 
     n = argc >= 2 ? atoi(argv[1]) : 100;
     for (i = 0; i < n; i++) {
-        run_test(test_cmap_insert_delete);
+        run_test(test_cmap_insert_replace_delete);
     }
     printf("\n");
 }
