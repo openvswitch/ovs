@@ -72,7 +72,7 @@ struct ofproto {
     uint64_t datapath_id;       /* Datapath ID. */
     bool forward_bpdu;          /* Option to allow forwarding of BPDU frames
                                  * when NORMAL action is invoked. */
-    char *mfr_desc;             /* Manufacturer (NULL for default)b. */
+    char *mfr_desc;             /* Manufacturer (NULL for default). */
     char *hw_desc;              /* Hardware (NULL for default). */
     char *sw_desc;              /* Software version (NULL for default). */
     char *serial_desc;          /* Serial number (NULL for default). */
