@@ -101,7 +101,7 @@ struct udpif {
     struct seq *reval_seq;             /* Incremented to force revalidation. */
     bool need_revalidate;              /* As indicated by 'reval_seq'. */
     bool reval_exit;                   /* Set by leader on 'exit_latch. */
-    pthread_barrier_t reval_barrier;   /* Barrier used by revalidators. */
+    struct ovs_barrier reval_barrier;  /* Barrier used by revalidators. */
     struct dpif_flow_dump *dump;       /* DPIF flow dump state. */
     long long int dump_duration;       /* Duration of the last flow dump. */
     struct seq *dump_seq;              /* Increments each dump iteration. */
@@ -304,7 +304,7 @@ udpif_stop_threads(struct udpif *udpif)
 
         latch_poll(&udpif->exit_latch);
 
-        xpthread_barrier_destroy(&udpif->reval_barrier);
+        ovs_barrier_destroy(&udpif->reval_barrier);
 
         free(udpif->revalidators);
         udpif->revalidators = NULL;
@@ -341,8 +341,7 @@ udpif_start_threads(struct udpif *udpif, size_t n_handlers,
                 "handler", udpif_upcall_handler, handler);
         }
 
-        xpthread_barrier_init(&udpif->reval_barrier, NULL,
-                              udpif->n_revalidators);
+        ovs_barrier_init(&udpif->reval_barrier, udpif->n_revalidators);
         udpif->reval_exit = false;
         udpif->revalidators = xzalloc(udpif->n_revalidators
                                       * sizeof *udpif->revalidators);
@@ -567,18 +566,18 @@ udpif_revalidator(void *arg)
         }
 
         /* Wait for the leader to start the flow dump. */
-        xpthread_barrier_wait(&udpif->reval_barrier);
+        ovs_barrier_block(&udpif->reval_barrier);
         if (udpif->reval_exit) {
             break;
         }
         revalidate(revalidator);
 
         /* Wait for all flows to have been dumped before we garbage collect. */
-        xpthread_barrier_wait(&udpif->reval_barrier);
+        ovs_barrier_block(&udpif->reval_barrier);
         revalidator_sweep(revalidator);
 
         /* Wait for all revalidators to finish garbage collection. */
-        xpthread_barrier_wait(&udpif->reval_barrier);
+        ovs_barrier_block(&udpif->reval_barrier);
 
         if (leader) {
             long long int duration;
