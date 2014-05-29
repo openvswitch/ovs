@@ -25,7 +25,6 @@
 
 #include "openvswitch/types.h"
 
-bool route_table_get_ifindex(ovs_be32 ip, int *ifindex);
 bool route_table_get_name(ovs_be32 ip, char name[IFNAMSIZ]);
 uint64_t route_table_get_change_seq(void);
 void route_table_register(void);
