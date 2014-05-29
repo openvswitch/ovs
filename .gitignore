@@ -15,6 +15,7 @@
 *.pdb
 *.pyc
 *.so
+*.suo
 *~
 *,cover
 .#*
@@ -25,6 +26,7 @@
 .dirstamp
 .libs
 .tmp_versions
+.gitattributes
 /Makefile
 /Makefile.in
 /aclocal.m4
