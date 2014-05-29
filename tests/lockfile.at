@@ -1,7 +1,10 @@
 AT_BANNER([lockfile unit tests])
 
+# CHECK_LOCKFILE([test-name], [number-children], [error-message]
+# [skip-test-windows])
 m4_define([CHECK_LOCKFILE],
   [AT_SETUP([m4_translit([$1], [_], [ ])])
+   m4_if([$4], [yes], [AT_SKIP_IF([test "$IS_WIN32" = "yes"])])
    AT_KEYWORDS([lockfile])
    AT_CHECK([ovstest test-lockfile $1], [0], [$1: success (m4_if(
      [$2], [1], [$2 child], [$2 children]))
@@ -25,15 +28,15 @@ lockfile|WARN|.file.~lock~: cannot lock file because this process has already lo
 CHECK_LOCKFILE([lock_blocks_other_process], [1],
   [lockfile|WARN|.file.~lock~: child does not inherit lock
 lockfile|WARN|.file.~lock~: cannot lock file because it is already locked by pid <pid>
-])
+], [yes])
 
 CHECK_LOCKFILE([lock_twice_blocks_other_process], [1],
   [lockfile|WARN|.file.~lock~: cannot lock file because this process has already locked it
 lockfile|WARN|.file.~lock~: child does not inherit lock
 lockfile|WARN|.file.~lock~: cannot lock file because it is already locked by pid <pid>
-])
+], [yes])
 
-CHECK_LOCKFILE([lock_and_unlock_allows_other_process], [1])
+CHECK_LOCKFILE([lock_and_unlock_allows_other_process], [1], [], [yes])
 
 CHECK_LOCKFILE([lock_multiple], [0],
   [lockfile|WARN|.a.~lock~: cannot lock file because this process has already locked it
@@ -44,8 +47,8 @@ CHECK_LOCKFILE([lock_symlink], [0],
 lockfile|WARN|.b.~lock~: cannot lock file because this process has already locked it
 lockfile|WARN|.b.~lock~: cannot lock file because this process has already locked it
 lockfile|WARN|.a.~lock~: cannot lock file because this process has already locked it
-])
+], [yes])
 
 CHECK_LOCKFILE([lock_symlink_to_dir], [0],
   [lockfile|WARN|dir/.b.~lock~: cannot lock file because this process has already locked it
-])
+], [yes])

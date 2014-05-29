@@ -276,8 +276,9 @@ lockfile_try_lock(const char *name, pid_t *pidp, struct lockfile **lockfilep)
     retval = LockFileEx(lock_handle, LOCKFILE_EXCLUSIVE_LOCK
                         | LOCKFILE_FAIL_IMMEDIATELY, 0, 1, 0, &overl);
     if (!retval) {
-        VLOG_WARN("Failed to lock file : %s", ovs_lasterror_to_string());
-        return EEXIST;
+        VLOG_DBG("Failed to lock file : %s", ovs_lasterror_to_string());
+        *pidp = getpid();
+        return EDEADLK;
     }
 
     lockfile = xmalloc(sizeof *lockfile);

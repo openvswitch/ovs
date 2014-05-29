@@ -92,6 +92,7 @@ run_lock_blocks_same_process_twice(void)
     lockfile_unlock(lockfile);
 }
 
+#ifndef _WIN32
 static enum { PARENT, CHILD }
 do_fork(void)
 {
@@ -151,27 +152,6 @@ run_lock_and_unlock_allows_other_process(void)
         CHECK(lockfile_lock("file", &lockfile), 0);
         exit(11);
     }
-}
-
-static void
-run_lock_multiple(void)
-{
-    struct lockfile *a, *b, *c, *dummy;
-
-    CHECK(lockfile_lock("a", &a), 0);
-    CHECK(lockfile_lock("b", &b), 0);
-    CHECK(lockfile_lock("c", &c), 0);
-
-    lockfile_unlock(a);
-    CHECK(lockfile_lock("a", &a), 0);
-    CHECK(lockfile_lock("a", &dummy), EDEADLK);
-    lockfile_unlock(a);
-
-    lockfile_unlock(b);
-    CHECK(lockfile_lock("a", &a), 0);
-
-    lockfile_unlock(c);
-    lockfile_unlock(a);
 }
 
 /* Checks that locking a dangling symlink works OK.  (It used to hang.) */
@@ -236,6 +216,29 @@ run_lock_symlink_to_dir(void)
 
     lockfile_unlock(a);
 }
+#endif /* _WIN32 */
+
+static void
+run_lock_multiple(void)
+{
+    struct lockfile *a, *b, *c, *dummy;
+
+    CHECK(lockfile_lock("a", &a), 0);
+    CHECK(lockfile_lock("b", &b), 0);
+    CHECK(lockfile_lock("c", &c), 0);
+
+    lockfile_unlock(a);
+    CHECK(lockfile_lock("a", &a), 0);
+    CHECK(lockfile_lock("a", &dummy), EDEADLK);
+    lockfile_unlock(a);
+
+    lockfile_unlock(b);
+    CHECK(lockfile_lock("a", &a), 0);
+
+    lockfile_unlock(c);
+    lockfile_unlock(a);
+}
+
 
 static const struct test tests[] = {
 #define TEST(NAME) { #NAME, run_##NAME }
@@ -243,12 +246,14 @@ static const struct test tests[] = {
     TEST(lock_and_unlock_twice),
     TEST(lock_blocks_same_process),
     TEST(lock_blocks_same_process_twice),
+#ifndef _WIN32
     TEST(lock_blocks_other_process),
     TEST(lock_twice_blocks_other_process),
     TEST(lock_and_unlock_allows_other_process),
-    TEST(lock_multiple),
     TEST(lock_symlink),
     TEST(lock_symlink_to_dir),
+#endif /* _WIN32 */
+    TEST(lock_multiple),
     TEST(help),
     { NULL, NULL }
 #undef TEST
@@ -289,6 +294,7 @@ test_lockfile_main(int argc, char *argv[])
             (tests[i].function)();
 
             n_children = 0;
+#ifndef _WIN32
             while (wait(&status) > 0) {
                 if (WIFEXITED(status) && WEXITSTATUS(status) == 11) {
                     n_children++;
@@ -300,6 +306,7 @@ test_lockfile_main(int argc, char *argv[])
             if (errno != ECHILD) {
                 ovs_fatal(errno, "wait");
             }
+#endif /* _WIN32 */
 
             printf("%s: success (%d child%s)\n",
                    tests[i].name, n_children, n_children != 1 ? "ren" : "");
