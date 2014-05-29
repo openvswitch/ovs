@@ -24,6 +24,7 @@
 #include "hash.h"
 #include "ovs-rcu.h"
 #include "poll-loop.h"
+#include "seq.h"
 #include "socket-util.h"
 #include "util.h"
 
@@ -166,10 +167,6 @@ XPTHREAD_FUNC1(pthread_cond_destroy, pthread_cond_t *);
 XPTHREAD_FUNC1(pthread_cond_signal, pthread_cond_t *);
 XPTHREAD_FUNC1(pthread_cond_broadcast, pthread_cond_t *);
 
-XPTHREAD_FUNC3(pthread_barrier_init, pthread_barrier_t *,
-               pthread_barrierattr_t *, unsigned int);
-XPTHREAD_FUNC1(pthread_barrier_destroy, pthread_barrier_t *);
-
 XPTHREAD_FUNC2(pthread_join, pthread_t, void **);
 
 typedef void destructor_func(void *);
@@ -255,20 +252,43 @@ ovs_mutex_cond_wait(pthread_cond_t *cond, const struct ovs_mutex *mutex_)
     }
 }
 
-int
-xpthread_barrier_wait(pthread_barrier_t *barrier)
+/* Initializes the 'barrier'.  'size' is the number of threads
+ * expected to hit the barrier. */
+void
+ovs_barrier_init(struct ovs_barrier *barrier, uint32_t size)
 {
-    int error;
+    barrier->size = size;
+    atomic_init(&barrier->count, 0);
+    barrier->seq = seq_create();
+}
 
-    ovsrcu_quiesce_start();
-    error = pthread_barrier_wait(barrier);
-    ovsrcu_quiesce_end();
+/* Destroys the 'barrier'. */
+void
+ovs_barrier_destroy(struct ovs_barrier *barrier)
+{
+    seq_destroy(barrier->seq);
+}
 
-    if (error && OVS_UNLIKELY(error != PTHREAD_BARRIER_SERIAL_THREAD)) {
-        ovs_abort(error, "pthread_barrier_wait failed");
+/* Makes the calling thread block on the 'barrier' until all
+ * 'barrier->size' threads hit the barrier. */
+void
+ovs_barrier_block(struct ovs_barrier *barrier)
+{
+    uint64_t seq = seq_read(barrier->seq);
+    uint32_t orig;
+
+    atomic_add(&barrier->count, 1, &orig);
+    if (orig + 1 == barrier->size) {
+        atomic_store(&barrier->count, 0);
+        seq_change(barrier->seq);
     }
 
-    return error;
+    /* To prevent thread from waking up by other event,
+     * keeps waiting for the change of 'barrier->seq'. */
+    while (seq == seq_read(barrier->seq)) {
+        seq_wait(barrier->seq, seq);
+        poll_block();
+    }
 }
 
 DEFINE_EXTERN_PER_THREAD_DATA(ovsthread_id, 0);

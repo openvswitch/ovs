@@ -23,11 +23,19 @@
 #include "ovs-atomic.h"
 #include "util.h"
 
+struct seq;
 
 /* Mutex. */
 struct OVS_LOCKABLE ovs_mutex {
     pthread_mutex_t lock;
     const char *where;          /* NULL if and only if uninitialized. */
+};
+
+/* Poll-block()-able barrier similar to pthread_barrier_t. */
+struct ovs_barrier {
+    uint32_t size;            /* Number of threads to wait. */
+    atomic_uint32_t count;    /* Number of threads already hit the barrier. */
+    struct seq *seq;
 };
 
 /* "struct ovs_mutex" initializer. */
@@ -139,6 +147,11 @@ int ovs_rwlock_tryrdlock_at(const struct ovs_rwlock *rwlock, const char *where)
 #define ovs_rwlock_tryrdlock(rwlock) \
         ovs_rwlock_tryrdlock_at(rwlock, SOURCE_LOCATOR)
 
+/* ovs_barrier functions analogous to pthread_barrier_*() functions. */
+void ovs_barrier_init(struct ovs_barrier *, uint32_t count);
+void ovs_barrier_destroy(struct ovs_barrier *);
+void ovs_barrier_block(struct ovs_barrier *);
+
 /* Wrappers for xpthread_cond_*() that abort the process on any error.
  *
  * Use ovs_mutex_cond_wait() to wait for a condition. */
@@ -146,12 +159,6 @@ void xpthread_cond_init(pthread_cond_t *, pthread_condattr_t *);
 void xpthread_cond_destroy(pthread_cond_t *);
 void xpthread_cond_signal(pthread_cond_t *);
 void xpthread_cond_broadcast(pthread_cond_t *);
-
-/* Wrappers for pthread_barrier_*() that abort the process on any error. */
-void xpthread_barrier_init(pthread_barrier_t *, pthread_barrierattr_t *,
-                           unsigned int count);
-int xpthread_barrier_wait(pthread_barrier_t *);
-void xpthread_barrier_destroy(pthread_barrier_t *);
 
 void xpthread_key_create(pthread_key_t *, void (*destructor)(void *));
 void xpthread_key_delete(pthread_key_t);
