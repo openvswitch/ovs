@@ -109,7 +109,6 @@ valgrind_wrappers = \
 	tests/valgrind/test-classifier \
 	tests/valgrind/test-cmap \
 	tests/valgrind/test-csum \
-	tests/valgrind/test-file_name \
 	tests/valgrind/test-flows \
 	tests/valgrind/test-hash \
 	tests/valgrind/test-hindex \
@@ -218,7 +217,6 @@ tests_ovstest_SOURCES = \
 	tests/test-classifier.c \
 	tests/test-cmap.c \
 	tests/test-csum.c \
-	tests/test-file_name.c \
 	tests/test-flows.c \
 	tests/test-hash.c \
 	tests/test-heap.c \

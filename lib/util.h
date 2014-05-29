@@ -317,8 +317,10 @@ unsigned int hexits_value(const char *s, size_t n, bool *ok);
 const char *english_list_delimiter(size_t index, size_t total);
 
 char *get_cwd(void);
+#ifndef _WIN32
 char *dir_name(const char *file_name);
 char *base_name(const char *file_name);
+#endif
 char *abs_file_name(const char *dir, const char *file_name);
 
 char *follow_symlinks(const char *filename);

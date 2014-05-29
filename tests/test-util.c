@@ -1031,6 +1031,26 @@ test_snprintf(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
     ovs_assert(snprintf(NULL, 0, "abcde") == 5);
 }
+
+#ifndef _WIN32
+static void
+test_file_name(int argc, char *argv[])
+{
+    int i;
+
+    for (i = 1; i < argc; i++) {
+        char *dir, *base;
+
+        dir = dir_name(argv[i]);
+        puts(dir);
+        free(dir);
+
+        base = base_name(argv[i]);
+        puts(base);
+        free(base);
+    }
+}
+#endif /* _WIN32 */
 
 static const struct command commands[] = {
     {"ctz", 0, 0, test_ctz},
@@ -1047,6 +1067,9 @@ static const struct command commands[] = {
     {"assert", 0, 0, test_assert},
     {"ovs_scan", 0, 0, test_ovs_scan},
     {"snprintf", 0, 0, test_snprintf},
+#ifndef _WIN32
+    {"file_name", 1, INT_MAX, test_file_name},
+#endif
     {NULL, 0, 0, NULL},
 };
 

@@ -772,6 +772,7 @@ all_slashes_name(const char *s)
                    : ".");
 }
 
+#ifndef _WIN32
 /* Returns the directory name portion of 'file_name' as a malloc()'d string,
  * similar to the POSIX dirname() function but thread-safe. */
 char *
@@ -813,6 +814,7 @@ base_name(const char *file_name)
 
     return xmemdup0(file_name + start, end - start);
 }
+#endif /* _WIN32 */
 
 /* If 'file_name' starts with '/', returns a copy of 'file_name'.  Otherwise,
  * returns an absolute path to 'file_name' considering it relative to 'dir',

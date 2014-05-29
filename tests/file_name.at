@@ -2,8 +2,9 @@ AT_BANNER([test dir_name and base_name functions])
 
 m4_define([CHECK_FILE_NAME],
   [AT_SETUP([components of "$1" are "$2", "$3"])
+   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
    AT_KEYWORDS([dir_name base_name])
-   AT_CHECK([ovstest test-file_name "AS_ESCAPE($1)"], [0], [$2
+   AT_CHECK([ovstest test-util file_name "AS_ESCAPE($1)"], [0], [$2
 $3
 ])
    AT_CLEANUP])
