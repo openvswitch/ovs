@@ -1,6 +1,7 @@
 AT_BANNER([daemon unit tests - C])
 
 AT_SETUP([daemon])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 OVSDB_INIT([db])
 AT_CAPTURE_FILE([pid])
 AT_CAPTURE_FILE([expected])
@@ -19,6 +20,7 @@ AT_CHECK([test ! -e pid])
 AT_CLEANUP
 
 AT_SETUP([daemon --monitor])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 OVSDB_INIT([db])
 AT_CAPTURE_FILE([pid])
 AT_CAPTURE_FILE([parent])
@@ -77,12 +79,20 @@ AT_CHECK([test -s pid])
 AT_CHECK([kill -0 `cat pid`])
 # Kill the daemon and make sure that the pidfile gets deleted.
 cp pid saved-pid
-kill `cat pid`
+if test "$IS_WIN32" = "yes"; then
+  # When a 'kill pid' is done on windows (through 'taskkill //F'),
+  # pidfiles are not deleted (because it is force kill), so use
+  # 'ovs-appctl exit' instead
+  ovs-appctl -t `pwd`/unixctl exit
+else
+  kill `cat pid`
+fi
 OVS_WAIT_WHILE([kill -0 `cat saved-pid`])
 AT_CHECK([test ! -e pid])
 AT_CLEANUP
 
 AT_SETUP([daemon --detach --monitor])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 m4_define([CHECK], 
   [AT_CHECK([$1], [$2], [$3], [$4], [kill `cat daemon monitor`])])
 OVSDB_INIT([db])
@@ -141,6 +151,7 @@ AT_CHECK([test ! -s pid])
 AT_CLEANUP
 
 AT_SETUP([daemon --detach --monitor startup errors])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 AT_CAPTURE_FILE([pid])
 OVSDB_INIT([db])
 AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --monitor --unixctl="`pwd`"/nonexistent/unixctl db], [1], [], [stderr])
