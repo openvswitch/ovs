@@ -26,6 +26,7 @@
 #include "ofpbuf.h"
 #include "odp-util.h"
 #include "packets.h"
+#include "flow.h"
 #include "unaligned.h"
 #include "util.h"
 
@@ -208,7 +209,6 @@ odp_execute_actions__(void *dp, struct ofpbuf *packet, bool steal,
         case OVS_ACTION_ATTR_OUTPUT:
         case OVS_ACTION_ATTR_USERSPACE:
         case OVS_ACTION_ATTR_RECIRC:
-        case OVS_ACTION_ATTR_HASH:
             if (dp_execute_action) {
                 /* Allow 'dp_execute_action' to steal the packet data if we do
                  * not need it any more. */
@@ -218,6 +218,27 @@ odp_execute_actions__(void *dp, struct ofpbuf *packet, bool steal,
                 dp_execute_action(dp, packet, md, a, may_steal);
             }
             break;
+
+        case OVS_ACTION_ATTR_HASH: {
+            const struct ovs_action_hash *hash_act = nl_attr_get(a);
+
+            /* Calculate a hash value directly.  This might not match the
+             * value computed by the datapath, but it is much less expensive,
+             * and the current use case (bonding) does not require a strict
+             * match to work properly. */
+            if (hash_act->hash_alg == OVS_HASH_ALG_L4) {
+                struct flow flow;
+                uint32_t hash;
+
+                flow_extract(packet, md, &flow);
+                hash = flow_hash_5tuple(&flow, hash_act->hash_basis);
+                md->dp_hash = hash ? hash : 1;
+            } else {
+                /* Assert on unknown hash algorithm.  */
+                OVS_NOT_REACHED();
+            }
+            break;
+        }
 
         case OVS_ACTION_ATTR_PUSH_VLAN: {
             const struct ovs_action_push_vlan *vlan = nl_attr_get(a);
