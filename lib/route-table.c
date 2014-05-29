@@ -63,6 +63,7 @@ struct name_node {
     char ifname[IFNAMSIZ]; /* Interface name. */
 };
 
+static struct ovs_mutex route_table_mutex = OVS_MUTEX_INITIALIZER;
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
 /* Global change number for route-table, which should be incremented
@@ -81,6 +82,8 @@ static struct hmap route_map;
 static struct hmap name_map;
 
 static int route_table_reset(void);
+static bool route_table_get_ifindex(ovs_be32 ip, int *)
+    OVS_REQUIRES(route_table_mutex);
 static void route_table_handle_msg(const struct route_table_msg *);
 static bool route_table_parse(struct ofpbuf *, struct route_table_msg *);
 static void route_table_change(const struct route_table_msg *, void *);
@@ -102,8 +105,11 @@ static struct name_node *name_node_lookup(int ifi_index);
  * Returns true if successful, otherwise false. */
 bool
 route_table_get_name(ovs_be32 ip, char name[IFNAMSIZ])
+    OVS_EXCLUDED(route_table_mutex)
 {
     int ifindex;
+
+    ovs_mutex_lock(&route_table_mutex);
 
     if (!name_table_valid) {
         name_table_reset();
@@ -115,10 +121,12 @@ route_table_get_name(ovs_be32 ip, char name[IFNAMSIZ])
         nn = name_node_lookup(ifindex);
         if (nn) {
             ovs_strlcpy(name, nn->ifname, IFNAMSIZ);
+            ovs_mutex_unlock(&route_table_mutex);
             return true;
         }
     }
 
+    ovs_mutex_unlock(&route_table_mutex);
     return false;
 }
 
@@ -128,8 +136,9 @@ route_table_get_name(ovs_be32 ip, char name[IFNAMSIZ])
  * interface which is not physical (such as a bridge port).
  *
  * Returns true if successful, otherwise false. */
-bool
+static bool
 route_table_get_ifindex(ovs_be32 ip_, int *ifindex)
+    OVS_REQUIRES(route_table_mutex)
 {
     struct route_node *rn;
     uint32_t ip = ntohl(ip_);
@@ -168,7 +177,9 @@ route_table_get_change_seq(void)
  * function before making any other route_table function calls. */
 void
 route_table_register(void)
+    OVS_EXCLUDED(route_table_mutex)
 {
+    ovs_mutex_lock(&route_table_mutex);
     if (!register_count) {
         ovs_assert(!nln);
         ovs_assert(!route_notifier);
@@ -186,6 +197,7 @@ route_table_register(void)
     }
 
     register_count++;
+    ovs_mutex_unlock(&route_table_mutex);
 }
 
 /* Users of the route_table module should unregister themselves with this
@@ -193,7 +205,9 @@ route_table_register(void)
  * calls. */
 void
 route_table_unregister(void)
+    OVS_EXCLUDED(route_table_mutex)
 {
+    ovs_mutex_lock(&route_table_mutex);
     register_count--;
 
     if (!register_count) {
@@ -206,12 +220,15 @@ route_table_unregister(void)
         hmap_destroy(&route_map);
         name_table_uninit();
     }
+    ovs_mutex_unlock(&route_table_mutex);
 }
 
 /* Run periodically to update the locally maintained routing table. */
 void
 route_table_run(void)
+    OVS_EXCLUDED(route_table_mutex)
 {
+    ovs_mutex_lock(&route_table_mutex);
     if (nln) {
         rtnetlink_link_run();
         nln_run(nln);
@@ -220,16 +237,20 @@ route_table_run(void)
             route_table_reset();
         }
     }
+    ovs_mutex_unlock(&route_table_mutex);
 }
 
 /* Causes poll_block() to wake up when route_table updates are required. */
 void
 route_table_wait(void)
+    OVS_EXCLUDED(route_table_mutex)
 {
+    ovs_mutex_lock(&route_table_mutex);
     if (nln) {
         rtnetlink_link_wait();
         nln_wait(nln);
     }
+    ovs_mutex_unlock(&route_table_mutex);
 }
 
 static int

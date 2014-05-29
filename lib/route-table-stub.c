@@ -24,13 +24,6 @@ route_table_get_name(ovs_be32 ip OVS_UNUSED, char name[IFNAMSIZ] OVS_UNUSED)
     return false;
 }
 
-bool
-route_table_get_ifindex(ovs_be32 ip OVS_UNUSED, int *ifindex)
-{
-    *ifindex = 0;
-    return false;
-}
-
 uint64_t
 route_table_get_change_seq(void)
 {
