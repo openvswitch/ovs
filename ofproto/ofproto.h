@@ -265,7 +265,7 @@ void ofproto_port_set_cfm(struct ofproto *, ofp_port_t ofp_port,
 void ofproto_port_set_bfd(struct ofproto *, ofp_port_t ofp_port,
                           const struct smap *cfg);
 int ofproto_port_get_bfd_status(struct ofproto *, ofp_port_t ofp_port,
-                                struct smap *);
+                                bool force, struct smap *);
 int ofproto_port_is_lacp_current(struct ofproto *, ofp_port_t ofp_port);
 int ofproto_port_set_stp(struct ofproto *, ofp_port_t ofp_port,
                          const struct ofproto_port_stp_settings *);
@@ -420,7 +420,7 @@ struct ofproto_cfm_status {
 };
 
 int ofproto_port_get_cfm_status(const struct ofproto *,
-                                ofp_port_t ofp_port,
+                                ofp_port_t ofp_port, bool force,
                                 struct ofproto_cfm_status *);
 
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)

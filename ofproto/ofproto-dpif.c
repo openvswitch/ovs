@@ -1826,14 +1826,14 @@ out:
 }
 
 static int
-get_cfm_status(const struct ofport *ofport_,
+get_cfm_status(const struct ofport *ofport_, bool force,
                struct ofproto_cfm_status *status)
 {
     struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
     int ret = 0;
 
     if (ofport->cfm) {
-        if (cfm_check_status_change(ofport->cfm)) {
+        if (cfm_check_status_change(ofport->cfm) || force) {
             status->faults = cfm_get_fault(ofport->cfm);
             status->flap_count = cfm_get_flap_count(ofport->cfm);
             status->remote_opstate = cfm_get_opup(ofport->cfm);
@@ -1868,13 +1868,13 @@ set_bfd(struct ofport *ofport_, const struct smap *cfg)
 }
 
 static int
-get_bfd_status(struct ofport *ofport_, struct smap *smap)
+get_bfd_status(struct ofport *ofport_, bool force, struct smap *smap)
 {
     struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
     int ret = 0;
 
     if (ofport->bfd) {
-        if (bfd_check_status_change(ofport->bfd)) {
+        if (bfd_check_status_change(ofport->bfd) || force) {
             bfd_get_status(ofport->bfd, smap);
         } else {
             ret = NO_STATUS_CHANGE;

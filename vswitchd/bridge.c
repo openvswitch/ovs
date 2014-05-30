@@ -172,9 +172,15 @@ static uint64_t connectivity_seqno = LLONG_MIN;
  * we check the return status of each update transaction and do not start new
  * update if the previous transaction status is 'TXN_INCOMPLETE'.
  *
- * 'statux_txn' is NULL if there is no ongoing status update.
+ * 'status_txn' is NULL if there is no ongoing status update.
+ *
+ * If the previous database transaction was incomplete or failed (is not
+ * 'TXN_SUCCESS' or 'TXN_UNCHANGED'), 'force_status_commit' is set to true.
+ * This means that 'status_txn' must be committed next iteration of bridge_run()
+ * even if the connectivity or netdev sequence numbers do not change.
  */
 static struct ovsdb_idl_txn *status_txn;
+static bool force_status_commit = true;
 
 /* When the status update transaction returns 'TXN_INCOMPLETE', should register a
  * timeout in 'STATUS_CHECK_AGAIN_MSEC' to check again. */
@@ -1541,7 +1547,6 @@ iface_create(struct bridge *br, const struct ovsrec_interface *iface_cfg,
 
     /* Populate initial status in database. */
     iface_refresh_stats(iface);
-    iface_refresh_netdev_status(iface);
 
     /* Add bond fake iface if necessary. */
     if (port_is_bond_fake_iface(port)) {
@@ -1814,7 +1819,8 @@ iface_refresh_netdev_status(struct iface *iface)
         return;
     }
 
-    if (iface->change_seq == netdev_get_change_seq(iface->netdev)) {
+    if (iface->change_seq == netdev_get_change_seq(iface->netdev)
+        && !force_status_commit) {
         return;
     }
 
@@ -1907,7 +1913,8 @@ iface_refresh_ofproto_status(struct iface *iface)
 
     smap_init(&smap);
     error = ofproto_port_get_bfd_status(iface->port->bridge->ofproto,
-                                        iface->ofp_port, &smap);
+                                        iface->ofp_port, force_status_commit,
+                                        &smap);
     if (error >= 0) {
         ovsrec_interface_set_bfd_status(iface->cfg, &smap);
     }
@@ -1924,7 +1931,8 @@ iface_refresh_cfm_stats(struct iface *iface)
     int error;
 
     error = ofproto_port_get_cfm_status(iface->port->bridge->ofproto,
-                                        iface->ofp_port, &status);
+                                        iface->ofp_port, force_status_commit,
+                                        &status);
     if (error < 0) {
         /* Do nothing if there is no status change since last update. */
     } else if (error > 0) {
@@ -2414,7 +2422,7 @@ bridge_run(void)
 
         /* Check the need to update status. */
         seq = seq_read(connectivity_seq_get());
-        if (seq != connectivity_seqno) {
+        if (seq != connectivity_seqno || force_status_commit) {
             connectivity_seqno = seq;
             status_txn = ovsdb_idl_txn_create(idl);
             HMAP_FOR_EACH (br, node, &all_bridges) {
@@ -2438,6 +2446,17 @@ bridge_run(void)
         enum ovsdb_idl_txn_status status;
 
         status = ovsdb_idl_txn_commit(status_txn);
+
+        /* If the transaction is incomplete or fails, 'status_txn'
+         * needs to be committed next iteration of bridge_run() even if
+         * connectivity or netdev sequence numbers do not change. */
+        if (status == TXN_SUCCESS || status == TXN_UNCHANGED)
+        {
+            force_status_commit = false;
+        } else {
+            force_status_commit = true;
+        }
+
         /* Do not destroy "status_txn" if the transaction is
          * "TXN_INCOMPLETE". */
         if (status != TXN_INCOMPLETE) {
@@ -2477,11 +2496,11 @@ bridge_wait(void)
         poll_timer_wait_until(stats_timer);
     }
 
-    /* If the status database transaction is 'TXN_INCOMPLETE' in this run,
-     * register a timeout in 'STATUS_CHECK_AGAIN_MSEC'.  Else, wait on the
-     * global connectivity sequence number.  Note, this also helps batch
-     * multiple status changes into one transaction. */
-    if (status_txn) {
+    /* If the status database transaction is 'TXN_INCOMPLETE' or is
+     * unsuccessful, register a timeout in 'STATUS_CHECK_AGAIN_MSEC'.  Else,
+     * wait on the global connectivity sequence number.  Note, this also helps
+     * batch multiple status changes into one transaction. */
+    if (force_status_commit) {
         poll_timer_wait_until(time_msec() + STATUS_CHECK_AGAIN_MSEC);
     } else {
         seq_wait(connectivity_seq_get(), connectivity_seqno);

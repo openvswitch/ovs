@@ -1015,19 +1015,22 @@ ofproto_port_set_bfd(struct ofproto *ofproto, ofp_port_t ofp_port,
     }
 }
 
-/* Populates 'status' with the status of BFD on 'ofport'.  Returns 0 on
- * success.  Returns a negative number if there is no status change since
- * last update.  Returns a positive errno otherwise.  Has no effect if
- * 'ofp_port' is not an OpenFlow port in 'ofproto'.
+/* Populates 'status' with the status of BFD on 'ofport'.  If 'force' is set to
+ * true, status will be returned even if there is no status change since last
+ * update.
+ *
+ * Returns 0 on success.  Returns a negative number if there is no status change
+ * since last update and 'force' is set to false.  Returns a positive errno
+ * otherwise.  Has no effect if 'ofp_port' is not an OpenFlow port in 'ofproto'.
  *
  * The caller must provide and own '*status'. */
 int
 ofproto_port_get_bfd_status(struct ofproto *ofproto, ofp_port_t ofp_port,
-                            struct smap *status)
+                            bool force, struct smap *status)
 {
     struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
     return (ofport && ofproto->ofproto_class->get_bfd_status
-            ? ofproto->ofproto_class->get_bfd_status(ofport, status)
+            ? ofproto->ofproto_class->get_bfd_status(ofport, force, status)
             : EOPNOTSUPP);
 }
 
@@ -3715,21 +3718,23 @@ ofproto_get_netflow_ids(const struct ofproto *ofproto,
     ofproto->ofproto_class->get_netflow_ids(ofproto, engine_type, engine_id);
 }
 
-/* Checks the status of CFM configured on 'ofp_port' within 'ofproto'.
- * Returns 0 if the port's CFM status was successfully stored into
- * '*status'.  Returns positive errno if the port did not have CFM
- * configured.  Returns negative number if there is no status change
- * since last update.
+/* Checks the status of CFM configured on 'ofp_port' within 'ofproto' and stores
+ * the port's CFM status in '*status'.  If 'force' is set to true, status will
+ * be returned even if there is no status change since last update.
+ *
+ * Returns 0 on success.  Returns a negative number if there is no status
+ * change since last update and 'force' is set to false.  Returns positive errno
+ * if the port did not have CFM configured.
  *
  * The caller must provide and own '*status', and must free 'status->rmps'.
  * '*status' is indeterminate if the return value is non-zero. */
 int
 ofproto_port_get_cfm_status(const struct ofproto *ofproto, ofp_port_t ofp_port,
-                            struct ofproto_cfm_status *status)
+                            bool force, struct ofproto_cfm_status *status)
 {
     struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
     return (ofport && ofproto->ofproto_class->get_cfm_status
-            ? ofproto->ofproto_class->get_cfm_status(ofport, status)
+            ? ofproto->ofproto_class->get_cfm_status(ofport, force, status)
             : EOPNOTSUPP);
 }
 

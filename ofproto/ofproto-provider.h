@@ -1435,10 +1435,13 @@ struct ofproto_class {
      * support CFM, as does a null pointer. */
     int (*set_cfm)(struct ofport *ofport, const struct cfm_settings *s);
 
-    /* Checks the status of CFM configured on 'ofport'.  Returns 0 if the
-     * port's CFM status was successfully stored into '*status'.  Returns
-     * negative number if there is no status change since last update.
-     * Returns positive errno otherwise.
+    /* Checks the status of CFM configured on 'ofport' and stores port's CFM
+     * status in '*status'.  If 'force' is set to true, status will be returned
+     * even if there is no status change since last update.
+     *
+     * Returns 0 on success.  Returns a negative number if there is no status
+     * change since last update and 'force' is set to false.  Returns positive
+     * errno otherwise.
      *
      * EOPNOTSUPP as a return value indicates that this ofproto_class does not
      * support CFM, as does a null pointer.
@@ -1446,7 +1449,7 @@ struct ofproto_class {
      * The caller must provide and own '*status', and it must free the array
      * returned in 'status->rmps'.  '*status' is indeterminate if the return
      * value is non-zero. */
-    int (*get_cfm_status)(const struct ofport *ofport,
+    int (*get_cfm_status)(const struct ofport *ofport, bool force,
                           struct ofproto_cfm_status *status);
 
     /* Configures BFD on 'ofport'.
@@ -1459,13 +1462,17 @@ struct ofproto_class {
      * support BFD, as does a null pointer. */
     int (*set_bfd)(struct ofport *ofport, const struct smap *cfg);
 
-    /* Populates 'smap' with the status of BFD on 'ofport'.  Returns 0 on
-     * success.  Returns a negative number if there is no status change since
-     * last update.  Returns a positive errno otherwise.
+    /* Populates 'smap' with the status of BFD on 'ofport'.  If 'force' is set
+     * to true, status will be returned even if there is no status change since
+     * last update.
+     *
+     * Returns 0 on success.  Returns a negative number if there is no status
+     * change since last update and 'force' is set to false.  Returns a positive
+     * errno otherwise.
      *
      * EOPNOTSUPP as a return value indicates that this ofproto_class does not
      * support BFD, as does a null pointer. */
-    int (*get_bfd_status)(struct ofport *ofport, struct smap *smap);
+    int (*get_bfd_status)(struct ofport *ofport, bool force, struct smap *smap);
 
     /* Configures spanning tree protocol (STP) on 'ofproto' using the
      * settings defined in 's'.
