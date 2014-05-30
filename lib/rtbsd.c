@@ -32,14 +32,17 @@
 VLOG_DEFINE_THIS_MODULE(rtbsd);
 COVERAGE_DEFINE(rtbsd_changed);
 
+static struct ovs_mutex rtbsd_mutex = OVS_MUTEX_INITIALIZER;
+
 /* PF_ROUTE socket. */
 static int notify_sock = -1;
 
 /* All registered notifiers. */
 static struct list all_notifiers = LIST_INITIALIZER(&all_notifiers);
 
-static void rtbsd_report_change(const struct if_msghdr *);
-static void rtbsd_report_notify_error(void);
+static void rtbsd_report_change(const struct if_msghdr *)
+    OVS_REQUIRES(rtbsd_mutex);
+static void rtbsd_report_notify_error(void) OVS_REQUIRES(rtbsd_mutex);
 
 /* Registers 'cb' to be called with auxiliary data 'aux' with network device
  * change notifications.  The notifier is stored in 'notifier', which the
@@ -49,53 +52,63 @@ static void rtbsd_report_notify_error(void);
 int
 rtbsd_notifier_register(struct rtbsd_notifier *notifier,
                             rtbsd_notify_func *cb, void *aux)
+    OVS_EXCLUDED(rtbsd_mutex)
 {
+    int error = 0;
+
+    ovs_mutex_lock(&rtbsd_mutex);
     if (notify_sock < 0) {
-        int error;
         notify_sock = socket(PF_ROUTE, SOCK_RAW, 0);
         if (notify_sock < 0) {
             VLOG_WARN("could not create PF_ROUTE socket: %s",
                       ovs_strerror(errno));
-            return errno;
+            error = errno;
+            goto out;
         }
         error = set_nonblocking(notify_sock);
         if (error) {
             VLOG_WARN("error set_nonblocking PF_ROUTE socket: %s",
                     ovs_strerror(error));
-            return error;
+            goto out;
         }
-    } else {
-        /* Catch up on notification work so that the new notifier won't
-         * receive any stale notifications. XXX*/
-        rtbsd_notifier_run();
     }
 
     list_push_back(&all_notifiers, &notifier->node);
     notifier->cb = cb;
     notifier->aux = aux;
-    return 0;
+
+out:
+    ovs_mutex_unlock(&rtbsd_mutex);
+    return error;
 }
 
 /* Cancels notification on 'notifier', which must have previously been
  * registered with rtbsd_notifier_register(). */
 void
 rtbsd_notifier_unregister(struct rtbsd_notifier *notifier)
+    OVS_EXCLUDED(rtbsd_mutex)
 {
+    ovs_mutex_lock(&rtbsd_mutex);
     list_remove(&notifier->node);
     if (list_is_empty(&all_notifiers)) {
         close(notify_sock);
         notify_sock = -1;
     }
+    ovs_mutex_unlock(&rtbsd_mutex);
 }
 
 /* Calls all of the registered notifiers, passing along any as-yet-unreported
  * netdev change events. */
 void
 rtbsd_notifier_run(void)
+    OVS_EXCLUDED(rtbsd_mutex)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
     struct if_msghdr msg;
+
+    ovs_mutex_lock(&rtbsd_mutex);
     if (notify_sock < 0) {
+        ovs_mutex_unlock(&rtbsd_mutex);
         return;
     }
 
@@ -114,6 +127,7 @@ rtbsd_notifier_run(void)
                 rtbsd_report_change(&msg);
             }
         } else if (errno == EAGAIN) {
+            ovs_mutex_unlock(&rtbsd_mutex);
             return;
         } else {
             if (errno == ENOBUFS) {
@@ -131,14 +145,18 @@ rtbsd_notifier_run(void)
  * ready. */
 void
 rtbsd_notifier_wait(void)
+    OVS_EXCLUDED(rtbsd_mutex)
 {
+    ovs_mutex_lock(&rtbsd_mutex);
     if (notify_sock >= 0) {
         poll_fd_wait(notify_sock, POLLIN);
     }
+    ovs_mutex_unlock(&rtbsd_mutex);
 }
 
 static void
 rtbsd_report_change(const struct if_msghdr *msg)
+    OVS_REQUIRES(rtbsd_mutex)
 {
     struct rtbsd_notifier *notifier;
     struct rtbsd_change change;
@@ -158,6 +176,7 @@ rtbsd_report_change(const struct if_msghdr *msg)
 /* If an error occurs the notifiers' callbacks are called with NULL changes */
 static void
 rtbsd_report_notify_error(void)
+    OVS_REQUIRES(rtbsd_mutex)
 {
     struct rtbsd_notifier *notifier;
 
