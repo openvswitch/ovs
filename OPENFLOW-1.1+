@@ -193,11 +193,6 @@ OpenFlow 1.4
       [EXT-154]
       [optional for OF1.4+]
 
-    * Flow-removed reason for meter delete
-      Report flow removal due to meter deletion with OFPRR_METER_DELETE.
-      [EXT-261]
-      [optional for OF1.4+]
-
     * Meter notifications
       [EXT-235]
       [optional for OF1.4+]
