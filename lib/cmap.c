@@ -516,7 +516,7 @@ static bool
 cmap_insert_bfs(struct cmap_impl *impl, struct cmap_node *new_node,
                 uint32_t hash, struct cmap_bucket *b1, struct cmap_bucket *b2)
 {
-    enum { MAX_PATH = 4 };
+    enum { MAX_DEPTH = 4 };
 
     /* A path from 'start' to 'end' via the 'n' steps in 'slots[]'.
      *
@@ -534,7 +534,7 @@ cmap_insert_bfs(struct cmap_impl *impl, struct cmap_node *new_node,
     struct cmap_path {
         struct cmap_bucket *start; /* First bucket along the path. */
         struct cmap_bucket *end;   /* Last bucket on the path. */
-        uint8_t slots[MAX_PATH];   /* Slots used for each hop. */
+        uint8_t slots[MAX_DEPTH];  /* Slots used for each hop. */
         int n;                     /* Number of slots[]. */
     };
 
@@ -580,8 +580,8 @@ cmap_insert_bfs(struct cmap_impl *impl, struct cmap_node *new_node,
                  * table:  Start at path->start, follow all the slots in
                  * path->slots[], then follow slot 'i', then the bucket you
                  * arrive at has slot 'j' empty. */
-                struct cmap_bucket *buckets[MAX_PATH + 2];
-                int slots[MAX_PATH + 2];
+                struct cmap_bucket *buckets[MAX_DEPTH + 2];
+                int slots[MAX_DEPTH + 2];
                 int k;
 
                 /* Figure out the full sequence of slots. */
@@ -619,7 +619,7 @@ cmap_insert_bfs(struct cmap_impl *impl, struct cmap_node *new_node,
                 return true;
             }
 
-            if (path->n < MAX_PATH && head < MAX_QUEUE) {
+            if (path->n < MAX_DEPTH && head < MAX_QUEUE) {
                 struct cmap_path *new_path = &queue[head++];
 
                 *new_path = *path;
