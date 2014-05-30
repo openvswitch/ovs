@@ -23,6 +23,7 @@
 #include <stdlib.h>
 
 #include "bitmap.h"
+#include "coverage.h"
 #include "dynamic-string.h"
 #include "fatal-signal.h"
 #include "json.h"
@@ -36,6 +37,15 @@
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ovsdb_idl);
+
+COVERAGE_DEFINE(txn_uncommitted);
+COVERAGE_DEFINE(txn_unchanged);
+COVERAGE_DEFINE(txn_incomplete);
+COVERAGE_DEFINE(txn_aborted);
+COVERAGE_DEFINE(txn_success);
+COVERAGE_DEFINE(txn_try_again);
+COVERAGE_DEFINE(txn_not_locked);
+COVERAGE_DEFINE(txn_error);
 
 /* An arc from one idl_row to another.  When row A contains a UUID that
  * references row B, this is represented by an arc from A (the source) to B
@@ -1524,14 +1534,13 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
     bool any_updates;
 
     if (txn != txn->idl->txn) {
-        return txn->status;
+        goto coverage_out;
     }
 
     /* If we need a lock but don't have it, give up quickly. */
     if (txn->idl->lock_name && !ovsdb_idl_has_lock(txn->idl)) {
         txn->status = TXN_NOT_LOCKED;
-        ovsdb_idl_txn_disassemble(txn);
-        return txn->status;
+        goto disassemble_out;
     }
 
     operations = json_array_create_1(
@@ -1715,7 +1724,20 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
         txn->status = TXN_TRY_AGAIN;
     }
 
+disassemble_out:
     ovsdb_idl_txn_disassemble(txn);
+coverage_out:
+    switch (txn->status) {
+    case TXN_UNCOMMITTED:   COVERAGE_INC(txn_uncommitted);    break;
+    case TXN_UNCHANGED:     COVERAGE_INC(txn_unchanged);      break;
+    case TXN_INCOMPLETE:    COVERAGE_INC(txn_incomplete);     break;
+    case TXN_ABORTED:       COVERAGE_INC(txn_aborted);        break;
+    case TXN_SUCCESS:       COVERAGE_INC(txn_success);        break;
+    case TXN_TRY_AGAIN:     COVERAGE_INC(txn_try_again);      break;
+    case TXN_NOT_LOCKED:    COVERAGE_INC(txn_not_locked);     break;
+    case TXN_ERROR:         COVERAGE_INC(txn_error);          break;
+    }
+
     return txn->status;
 }
 
