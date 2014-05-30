@@ -2530,6 +2530,7 @@ fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
         fm.ofpacts = NULL;
         fm.ofpacts_len = 0;
     }
+    fm.delete_reason = OFPRR_DELETE;
 
     ofm = ofputil_encode_flow_mod(&fm, protocol);
     list_push_back(packets, &ofm->list_node);

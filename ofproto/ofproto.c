@@ -1868,6 +1868,7 @@ flow_mod_init(struct ofputil_flow_mod *fm,
     fm->flags = 0;
     fm->ofpacts = CONST_CAST(struct ofpact *, ofpacts);
     fm->ofpacts_len = ofpacts_len;
+    fm->delete_reason = OFPRR_DELETE;
 }
 
 static int
@@ -4338,7 +4339,8 @@ delete_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
     rule_criteria_destroy(&criteria);
 
     if (!error && rules.n > 0) {
-        error = delete_flows__(ofproto, ofconn, request, &rules, OFPRR_DELETE);
+        error = delete_flows__(ofproto, ofconn, request, &rules,
+                               fm->delete_reason);
     }
     rule_collection_destroy(&rules);
 
@@ -4363,7 +4365,8 @@ delete_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
     rule_criteria_destroy(&criteria);
 
     if (!error && rules.n > 0) {
-        error = delete_flows__(ofproto, ofconn, request, &rules, OFPRR_DELETE);
+        error = delete_flows__(ofproto, ofconn, request, &rules,
+                               fm->delete_reason);
     }
     rule_collection_destroy(&rules);
 
@@ -5705,6 +5708,7 @@ delete_group__(struct ofproto *ofproto, struct ofgroup *ofgroup)
     /* Delete all flow entries containing this group in a group action */
     match_init_catchall(&match);
     flow_mod_init(&fm, &match, 0, NULL, 0, OFPFC_DELETE);
+    fm.delete_reason = OFPRR_GROUP_DELETE;
     fm.out_group = ofgroup->group_id;
     handle_flow_mod__(ofproto, NULL, &fm, NULL);
 

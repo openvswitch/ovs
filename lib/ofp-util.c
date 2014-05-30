@@ -1596,6 +1596,9 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
     struct ofpbuf b;
     enum ofpraw raw;
 
+    /* Ignored for non-delete actions */
+    fm->delete_reason = OFPRR_DELETE;
+
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     raw = ofpraw_pull_assert(&b);
     if (raw == OFPRAW_OFPT11_FLOW_MOD) {

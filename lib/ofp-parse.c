@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1289,6 +1289,7 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
     fm->out_port = OFPP_ANY;
     fm->flags = 0;
     fm->out_group = OFPG11_ANY;
+    fm->delete_reason = OFPRR_DELETE;
     if (fields & F_ACTIONS) {
         act_str = strstr(string, "action");
         if (!act_str) {
