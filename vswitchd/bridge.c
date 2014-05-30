@@ -173,8 +173,13 @@ static uint64_t connectivity_seqno = LLONG_MIN;
  * update if the previous transaction status is 'TXN_INCOMPLETE'.
  *
  * 'statux_txn' is NULL if there is no ongoing status update.
+ *
+ * If the previous database transaction was failed (is not 'TXN_SUCCESS',
+ * 'TXN_UNCHANGED' or 'TXN_INCOMPLETE'), 'status_txn_try_again' is set to true,
+ * which will cause the main thread wake up soon and retry the status update.
  */
 static struct ovsdb_idl_txn *status_txn;
+static bool status_txn_try_again;
 
 /* When the status update transaction returns 'TXN_INCOMPLETE', should register a
  * timeout in 'STATUS_CHECK_AGAIN_MSEC' to check again. */
@@ -1820,7 +1825,8 @@ iface_refresh_netdev_status(struct iface *iface)
         return;
     }
 
-    if (iface->change_seq == netdev_get_change_seq(iface->netdev)) {
+    if (iface->change_seq == netdev_get_change_seq(iface->netdev)
+        && !status_txn_try_again) {
         return;
     }
 
@@ -1909,12 +1915,14 @@ iface_refresh_ofproto_status(struct iface *iface)
     }
 
     if (ofproto_port_cfm_status_changed(iface->port->bridge->ofproto,
-                                        iface->ofp_port)) {
+                                        iface->ofp_port)
+        || status_txn_try_again) {
         iface_refresh_cfm_stats(iface);
     }
 
     if (ofproto_port_bfd_status_changed(iface->port->bridge->ofproto,
-                                        iface->ofp_port)) {
+                                        iface->ofp_port)
+        || status_txn_try_again) {
         struct smap smap;
 
         smap_init(&smap);
@@ -2347,6 +2355,9 @@ bridge_run(void)
          * of ovs-vswitchd, then keep the transaction around to monitor
          * it for completion. */
         if (initial_config_done) {
+            /* Always sets the 'status_txn_try_again' to check again,
+             * in case that this transaction fails. */
+            status_txn_try_again = true;
             ovsdb_idl_txn_commit(txn);
             ovsdb_idl_txn_destroy(txn);
         } else {
@@ -2423,7 +2434,7 @@ bridge_run(void)
 
         /* Check the need to update status. */
         seq = seq_read(connectivity_seq_get());
-        if (seq != connectivity_seqno) {
+        if (seq != connectivity_seqno || status_txn_try_again) {
             connectivity_seqno = seq;
             status_txn = ovsdb_idl_txn_create(idl);
             HMAP_FOR_EACH (br, node, &all_bridges) {
@@ -2452,6 +2463,13 @@ bridge_run(void)
         if (status != TXN_INCOMPLETE) {
             ovsdb_idl_txn_destroy(status_txn);
             status_txn = NULL;
+
+            /* Sets the 'status_txn_try_again' if the transaction fails. */
+            if (status == TXN_SUCCESS || status == TXN_UNCHANGED) {
+                status_txn_try_again = false;
+            } else {
+                status_txn_try_again = true;
+            }
         }
     }
 
@@ -2486,11 +2504,14 @@ bridge_wait(void)
         poll_timer_wait_until(stats_timer);
     }
 
-    /* If the status database transaction is 'TXN_INCOMPLETE' in this run,
-     * register a timeout in 'STATUS_CHECK_AGAIN_MSEC'.  Else, wait on the
-     * global connectivity sequence number.  Note, this also helps batch
-     * multiple status changes into one transaction. */
+    /* If the 'status_txn' is non-null (transaction incomplete), waits for the
+     * transaction to complete.  If the status update to database needs to be
+     * run again (transaction fails), registers a timeout in
+     * 'STATUS_CHECK_AGAIN_MSEC'.  Otherwise, waits on the global connectivity
+     * sequence number. */
     if (status_txn) {
+        ovsdb_idl_txn_wait(status_txn);
+    } else if (status_txn_try_again) {
         poll_timer_wait_until(time_msec() + STATUS_CHECK_AGAIN_MSEC);
     } else {
         seq_wait(connectivity_seq_get(), connectivity_seqno);
