@@ -73,9 +73,6 @@ VLOG_DEFINE_THIS_MODULE(ofproto_dpif);
 COVERAGE_DEFINE(ofproto_dpif_expired);
 COVERAGE_DEFINE(packet_in_overflow);
 
-/* No bfd/cfm status change. */
-#define NO_STATUS_CHANGE -1
-
 struct flow_miss;
 
 struct rule_dpif {
@@ -1809,6 +1806,14 @@ out:
     return error;
 }
 
+static bool
+cfm_status_changed(struct ofport *ofport_)
+{
+    struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
+
+    return ofport->cfm ? cfm_check_status_change(ofport->cfm) : true;
+}
+
 static int
 get_cfm_status(const struct ofport *ofport_,
                struct cfm_status *status)
@@ -1817,11 +1822,7 @@ get_cfm_status(const struct ofport *ofport_,
     int ret = 0;
 
     if (ofport->cfm) {
-        if (cfm_check_status_change(ofport->cfm)) {
-            cfm_get_status(ofport->cfm, status);
-        } else {
-            ret = NO_STATUS_CHANGE;
-        }
+        cfm_get_status(ofport->cfm, status);
     } else {
         ret = ENOENT;
     }
@@ -1847,6 +1848,14 @@ set_bfd(struct ofport *ofport_, const struct smap *cfg)
     return 0;
 }
 
+static bool
+bfd_status_changed(struct ofport *ofport_)
+{
+    struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
+
+    return ofport->bfd ? bfd_check_status_change(ofport->bfd) : true;
+}
+
 static int
 get_bfd_status(struct ofport *ofport_, struct smap *smap)
 {
@@ -1854,11 +1863,7 @@ get_bfd_status(struct ofport *ofport_, struct smap *smap)
     int ret = 0;
 
     if (ofport->bfd) {
-        if (bfd_check_status_change(ofport->bfd)) {
-            bfd_get_status(ofport->bfd, smap);
-        } else {
-            ret = NO_STATUS_CHANGE;
-        }
+        bfd_get_status(ofport->bfd, smap);
     } else {
         ret = ENOENT;
     }
@@ -4949,8 +4954,10 @@ const struct ofproto_class ofproto_dpif_class = {
     set_sflow,
     set_ipfix,
     set_cfm,
+    cfm_status_changed,
     get_cfm_status,
     set_bfd,
+    bfd_status_changed,
     get_bfd_status,
     set_stp,
     get_stp_status,

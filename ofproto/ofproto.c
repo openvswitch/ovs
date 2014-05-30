@@ -1001,10 +1001,21 @@ ofproto_port_set_bfd(struct ofproto *ofproto, ofp_port_t ofp_port,
     }
 }
 
+/* Checks the status change of BFD on 'ofport'.
+ *
+ * Returns true if 'ofproto_class' does not support 'bfd_status_changed'. */
+bool
+ofproto_port_bfd_status_changed(struct ofproto *ofproto, ofp_port_t ofp_port)
+{
+    struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
+    return (ofport && ofproto->ofproto_class->bfd_status_changed
+            ? ofproto->ofproto_class->bfd_status_changed(ofport)
+            : true);
+}
+
 /* Populates 'status' with the status of BFD on 'ofport'.  Returns 0 on
- * success.  Returns a negative number if there is no status change since
- * last update.  Returns a positive errno otherwise.  Has no effect if
- * 'ofp_port' is not an OpenFlow port in 'ofproto'.
+ * success.  Returns a positive errno otherwise.  Has no effect if 'ofp_port'
+ * is not an OpenFlow port in 'ofproto'.
  *
  * The caller must provide and own '*status'. */
 int
@@ -3682,11 +3693,22 @@ ofproto_get_netflow_ids(const struct ofproto *ofproto,
     ofproto->ofproto_class->get_netflow_ids(ofproto, engine_type, engine_id);
 }
 
+/* Checks the status change of CFM on 'ofport'.
+ *
+ * Returns true if 'ofproto_class' does not support 'cfm_status_changed'. */
+bool
+ofproto_port_cfm_status_changed(struct ofproto *ofproto, ofp_port_t ofp_port)
+{
+    struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
+    return (ofport && ofproto->ofproto_class->cfm_status_changed
+            ? ofproto->ofproto_class->cfm_status_changed(ofport)
+            : true);
+}
+
 /* Checks the status of CFM configured on 'ofp_port' within 'ofproto'.
  * Returns 0 if the port's CFM status was successfully stored into
  * '*status'.  Returns positive errno if the port did not have CFM
- * configured.  Returns negative number if there is no status change
- * since last update.
+ * configured.
  *
  * The caller must provide and own '*status', and must free 'status->rmps'.
  * '*status' is indeterminate if the return value is non-zero. */

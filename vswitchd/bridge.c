@@ -1893,8 +1893,7 @@ iface_refresh_netdev_status(struct iface *iface)
 static void
 iface_refresh_ofproto_status(struct iface *iface)
 {
-    struct smap smap;
-    int current, error;
+    int current;
 
     if (iface_is_synthetic(iface)) {
         return;
@@ -1909,15 +1908,21 @@ iface_refresh_ofproto_status(struct iface *iface)
         ovsrec_interface_set_lacp_current(iface->cfg, NULL, 0);
     }
 
-    iface_refresh_cfm_stats(iface);
-
-    smap_init(&smap);
-    error = ofproto_port_get_bfd_status(iface->port->bridge->ofproto,
-                                        iface->ofp_port, &smap);
-    if (error >= 0) {
-        ovsrec_interface_set_bfd_status(iface->cfg, &smap);
+    if (ofproto_port_cfm_status_changed(iface->port->bridge->ofproto,
+                                        iface->ofp_port)) {
+        iface_refresh_cfm_stats(iface);
     }
-    smap_destroy(&smap);
+
+    if (ofproto_port_bfd_status_changed(iface->port->bridge->ofproto,
+                                        iface->ofp_port)) {
+        struct smap smap;
+
+        smap_init(&smap);
+        ofproto_port_get_bfd_status(iface->port->bridge->ofproto,
+                                    iface->ofp_port, &smap);
+        ovsrec_interface_set_bfd_status(iface->cfg, &smap);
+        smap_destroy(&smap);
+    }
 }
 
 /* Writes 'iface''s CFM statistics to the database. 'iface' must not be
@@ -1931,9 +1936,7 @@ iface_refresh_cfm_stats(struct iface *iface)
 
     error = ofproto_port_get_cfm_status(iface->port->bridge->ofproto,
                                         iface->ofp_port, &status);
-    if (error < 0) {
-        /* Do nothing if there is no status change since last update. */
-    } else if (error > 0) {
+    if (error > 0) {
         ovsrec_interface_set_cfm_fault(cfg, NULL, 0);
         ovsrec_interface_set_cfm_fault_status(cfg, NULL, 0);
         ovsrec_interface_set_cfm_remote_opstate(cfg, NULL);

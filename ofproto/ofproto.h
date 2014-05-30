@@ -264,6 +264,7 @@ void ofproto_port_set_cfm(struct ofproto *, ofp_port_t ofp_port,
                           const struct cfm_settings *);
 void ofproto_port_set_bfd(struct ofproto *, ofp_port_t ofp_port,
                           const struct smap *cfg);
+bool ofproto_port_bfd_status_changed(struct ofproto *, ofp_port_t ofp_port);
 int ofproto_port_get_bfd_status(struct ofproto *, ofp_port_t ofp_port,
                                 struct smap *);
 int ofproto_port_is_lacp_current(struct ofproto *, ofp_port_t ofp_port);
@@ -398,6 +399,8 @@ void ofproto_get_netflow_ids(const struct ofproto *,
 
 void ofproto_get_ofproto_controller_info(const struct ofproto *, struct shash *);
 void ofproto_free_ofproto_controller_info(struct shash *);
+
+bool ofproto_port_cfm_status_changed(struct ofproto *, ofp_port_t ofp_port);
 
 int ofproto_port_get_cfm_status(const struct ofproto *,
                                 ofp_port_t ofp_port,

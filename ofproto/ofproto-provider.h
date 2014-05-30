@@ -1348,13 +1348,13 @@ struct ofproto_class {
      * support CFM, as does a null pointer. */
     int (*set_cfm)(struct ofport *ofport, const struct cfm_settings *s);
 
-    /* Checks the status of CFM configured on 'ofport'.  Returns 0 if the
-     * port's CFM status was successfully stored into '*status'.  Returns
-     * negative number if there is no status change since last update.
-     * Returns positive errno otherwise.
-     *
-     * EOPNOTSUPP as a return value indicates that this ofproto_class does not
-     * support CFM, as does a null pointer.
+    /* Checks the status change of CFM on 'ofport'.  Returns true if
+     * there is status change since last call or if CFM is not specified. */
+    bool (*cfm_status_changed)(struct ofport *ofport);
+
+    /* Populates 'smap' with the status of CFM on 'ofport'.  Returns 0 on
+     * success, or a positive errno.  EOPNOTSUPP as a return value indicates
+     * that this ofproto_class does not support CFM, as does a null pointer.
      *
      * The caller must provide and own '*status', and it must free the array
      * returned in 'status->rmps'.  '*status' is indeterminate if the return
@@ -1372,12 +1372,13 @@ struct ofproto_class {
      * support BFD, as does a null pointer. */
     int (*set_bfd)(struct ofport *ofport, const struct smap *cfg);
 
+    /* Checks the status change of BFD on 'ofport'.  Returns true if there
+     * is status change since last call or if BFD is not specified. */
+    bool (*bfd_status_changed)(struct ofport *ofport);
+
     /* Populates 'smap' with the status of BFD on 'ofport'.  Returns 0 on
-     * success.  Returns a negative number if there is no status change since
-     * last update.  Returns a positive errno otherwise.
-     *
-     * EOPNOTSUPP as a return value indicates that this ofproto_class does not
-     * support BFD, as does a null pointer. */
+     * success, or a positive errno.  EOPNOTSUPP as a return value indicates
+     * that this ofproto_class does not support BFD, as does a null pointer. */
     int (*get_bfd_status)(struct ofport *ofport, struct smap *smap);
 
     /* Configures spanning tree protocol (STP) on 'ofproto' using the
