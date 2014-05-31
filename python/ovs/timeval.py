@@ -12,20 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import ctypes
-import sys
 import time
 
 LIBRT = 'librt.so.1'
 CLOCK_MONOTONIC = 1
 
-class timespec(ctypes.Structure):
-    _fields_ = [
-        ('tv_sec', ctypes.c_long),
-        ('tv_nsec', ctypes.c_long),
-    ]
-
 try:
+    import ctypes
+
+    class timespec(ctypes.Structure):
+        _fields_ = [
+            ('tv_sec', ctypes.c_long),
+            ('tv_nsec', ctypes.c_long),
+        ]
+
     librt = ctypes.CDLL(LIBRT)
     clock_gettime = librt.clock_gettime
     clock_gettime.argtypes = [ctypes.c_int, ctypes.POINTER(timespec)]
