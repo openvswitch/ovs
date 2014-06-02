@@ -4620,3 +4620,23 @@ AT_CHECK([grep -c 'resubmits yielded over 64 kB of stack' ovs-vswitchd.log], [0]
 ])
 OVS_VSWITCHD_STOP(["/resubmits yielded over 64 kB of stack/d"])
 AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - ICMPv6])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], 1)
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+
+AT_CHECK([ovs-ofctl monitor br0 65534 --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+ovs-appctl netdev-dummy/receive p1 '0060970769ea0000860580da86dd6000000000203afffe80000000000000020086fffe0580dafe80000000000000026097fffe0769ea870068bd00000000fe80000000000000026097fffe0769ea01010000860580da'
+
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=86 in_port=1 (via no_match) data_len=86 (unbuffered)
+icmp6,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=00:00:86:05:80:da,dl_dst=00:60:97:07:69:ea,ipv6_src=fe80::200:86ff:fe05:80da,ipv6_dst=fe80::260:97ff:fe07:69ea,ipv6_label=0x00000,nw_tos=0,nw_ecn=0,nw_ttl=255,icmp_type=135,icmp_code=0,nd_target=fe80::260:97ff:fe07:69ea,nd_sll=00:00:86:05:80:da,nd_tll=00:00:00:00:00:00
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
