@@ -80,6 +80,16 @@ OFPT_FEATURES_REPLY (OF1.1) (xid=0xeeff0011):
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPT_ERROR with type OFPBIC_DUP_INST - OF1.4])
+AT_KEYWORDS([ofp-print ofp-errors])
+AT_CHECK([ovs-ofctl ofp-print 0501001400000000000300090206ccddeeff0011], [0], [dnl
+OFPT_ERROR (OF1.4) (xid=0x0): OFPBIC_DUP_INST
+OFPT_FEATURES_REPLY (OF1.1) (xid=0xeeff0011):
+(***truncated to 8 bytes from 52445***)
+00000000  02 06 cc dd ee ff 00 11-                        |........        |
+])
+AT_CLEANUP
+
 dnl OF1.1 had OFPBIC_UNSUP_EXP_INST as 3,5.
 dnl OF1.2 broke it into OFPBIC_BAD_EXPERIMENTER as 3,5
 dnl                 and OFPBIC_BAD_EXT_TYPE as 3,6.

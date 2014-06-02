@@ -272,8 +272,8 @@ enum ofperr {
     /* OF1.2+(3,8).  Permissions error. */
     OFPERR_OFPBIC_EPERM,
 
-    /* ONF1.1+(2600).  Duplicate instruction. */
-    OFPERR_ONFBIC_DUP_INSTRUCTION,
+    /* ONF1.1-1.3(2600), OF1.4+(3,9).  Duplicate instruction. */
+    OFPERR_OFPBIC_DUP_INST,
 
 /* ## --------------- ## */
 /* ## OFPET_BAD_MATCH ## */

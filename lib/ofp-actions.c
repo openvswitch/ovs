@@ -1724,7 +1724,7 @@ decode_openflow11_instructions(const struct ofp11_instruction insts[],
         }
 
         if (out[type]) {
-            return OFPERR_ONFBIC_DUP_INSTRUCTION;
+            return OFPERR_OFPBIC_DUP_INST;
         }
         out[type] = inst;
     }

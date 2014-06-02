@@ -171,11 +171,6 @@ Many of them are necessary for OpenFlow 1.4 as well.
       [EXT-256]
       [optional for OF1.4+]
 
-    * Duplicate instruction error
-      We already have ONFBIC_DUP_INSTRUCTION.
-      [EXT-260]
-      [required for OF1.4+]
-
     * Multipart timeout error
       [EXT-264]
       [required for OF1.4+]
