@@ -216,6 +216,10 @@ pfd_close(struct pstream *pstream)
     WSAEventSelect(ps->fd, NULL, 0);
     CloseHandle(ps->wevent);
     closesocket(ps->fd);
+    if (ps->unlink_path) {
+        fatal_signal_unlink_file_now(ps->unlink_path);
+        free(ps->unlink_path);
+    }
     free(ps);
 }
 

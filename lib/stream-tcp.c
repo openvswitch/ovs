@@ -155,7 +155,7 @@ static int ptcp_accept(int fd, const struct sockaddr_storage *,
 
 static int
 new_pstream(char *suffix, struct pstream **pstreamp, int dscp,
-            bool kernel_print_port)
+            char *unlink_path, bool kernel_print_port)
 {
     char bound_name[SS_NTOP_BUFSIZE + 16];
     char addrbuf[SS_NTOP_BUFSIZE];
@@ -174,7 +174,7 @@ new_pstream(char *suffix, struct pstream **pstreamp, int dscp,
     snprintf(bound_name, sizeof bound_name, "ptcp:%"PRIu16":%s",
              port, ss_format_address(&ss, addrbuf, sizeof addrbuf));
 
-    error = new_fd_pstream(bound_name, fd, ptcp_accept, set_dscp, NULL,
+    error = new_fd_pstream(bound_name, fd, ptcp_accept, set_dscp, unlink_path,
                            pstreamp);
     if (!error) {
         pstream_set_bound_port(*pstreamp, htons(port));
@@ -186,7 +186,7 @@ static int
 ptcp_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp,
           uint8_t dscp)
 {
-    return new_pstream(suffix, pstreamp, dscp, true);
+    return new_pstream(suffix, pstreamp, dscp, NULL, true);
 }
 
 static int
@@ -224,12 +224,6 @@ pwindows_open(const char *name OVS_UNUSED, char *suffix,
 
     suffix_new = xstrdup("0:127.0.0.1");
 
-    error = new_pstream(suffix_new, pstreamp, dscp, false);
-    if (error) {
-        goto exit;
-    }
-    listener = *pstreamp;
-
     /* If the path does not contain a ':', assume it is relative to
      * OVS_RUNDIR. */
     if (!strchr(suffix, ':')) {
@@ -237,6 +231,12 @@ pwindows_open(const char *name OVS_UNUSED, char *suffix,
     } else {
         path = strdup(suffix);
     }
+
+    error = new_pstream(suffix_new, pstreamp, dscp, path, false);
+    if (error) {
+        goto exit;
+    }
+    listener = *pstreamp;
 
     file = fopen(path, "w");
     if (!file) {
@@ -253,7 +253,6 @@ pwindows_open(const char *name OVS_UNUSED, char *suffix,
         goto exit;
     }
     fclose(file);
-    free(path);
 
 exit:
     free(suffix_new);
