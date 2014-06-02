@@ -496,7 +496,10 @@ AT_CLEANUP
 AT_SETUP([SSL db: implementation])
 AT_KEYWORDS([ovsdb server positive ssl $5])
 AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
-PKIDIR=$abs_top_builddir/tests
+# For this test, we pass PKIDIR through a ovsdb-tool transact and
+# msys on Windows does not convert the path style automatically.
+# So, do that forcefully with a 'pwd -W' (called through pwd() function).
+PKIDIR="$(cd $abs_top_builddir/tests && pwd)"
 AT_SKIP_IF([expr "$PKIDIR" : ".*[ 	'\"
 \\]"])
 AT_DATA([schema],
