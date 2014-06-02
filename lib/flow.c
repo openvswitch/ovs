@@ -277,7 +277,7 @@ parse_icmpv6(void **datap, size_t *sizep, const struct icmp6_hdr *icmp,
         (icmp->icmp6_type == ND_NEIGHBOR_SOLICIT ||
          icmp->icmp6_type == ND_NEIGHBOR_ADVERT)) {
 
-        *nd_target = data_try_pull(datap, sizep, sizeof *nd_target);
+        *nd_target = data_try_pull(datap, sizep, sizeof **nd_target);
         if (OVS_UNLIKELY(!*nd_target)) {
             return false;
         }
@@ -607,12 +607,12 @@ miniflow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
                 memset(arp_buf, 0, sizeof arp_buf);
                 if (OVS_LIKELY(parse_icmpv6(&data, &size, icmp, &nd_target,
                                             arp_buf))) {
+                    miniflow_push_words(mf, arp_sha, arp_buf,
+                                             ETH_ADDR_LEN * 2 / 4);
                     if (nd_target) {
                         miniflow_push_words(mf, nd_target, nd_target,
                                             sizeof *nd_target / 4);
                     }
-                    miniflow_push_words(mf, arp_sha, arp_buf,
-                                             ETH_ADDR_LEN * 2 / 4);
                     miniflow_push_be16(mf, tp_src, htons(icmp->icmp6_type));
                     miniflow_push_be16(mf, tp_dst, htons(icmp->icmp6_code));
                 }
