@@ -1171,8 +1171,9 @@ AT_CHECK([RUN_OVS_VSCTL(
 type                : linux-htb
 ], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL(
-   [--columns=other_config list Queue | sort | xargs echo])], [0],
-[other_config : {max-rate=100000000, min-rate=100000000} other_config : {min-rate=500000000}
+   [--columns=other_config list Queue | sort | sed '/^$/d'])], [0],
+[other_config        : {max-rate="100000000", min-rate="100000000"}
+other_config        : {min-rate="500000000"}
 ], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL(
    [clear Port a1 qos],
