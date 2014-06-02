@@ -129,6 +129,7 @@ match_wc_init(struct match *match, const struct flow *flow)
         if (flow->nw_proto == IPPROTO_ICMPV6) {
             memset(&wc->masks.arp_sha, 0xff, sizeof wc->masks.arp_sha);
             memset(&wc->masks.arp_tha, 0xff, sizeof wc->masks.arp_tha);
+            memset(&wc->masks.nd_target, 0xff, sizeof wc->masks.nd_target);
         }
     }
 
