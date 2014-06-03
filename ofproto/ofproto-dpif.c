@@ -365,18 +365,6 @@ ofproto_dpif_flow_mod(struct ofproto_dpif *ofproto,
     ofproto_flow_mod(&ofproto->up, fm);
 }
 
-/* Resets the modified time for 'rule' or an equivalent rule. If 'rule' is not
- * in the classifier, but an equivalent rule is, unref 'rule' and ref the new
- * rule. Otherwise if 'rule' is no longer installed in the classifier,
- * reinstall it.
- *
- * Returns the rule whose modified time has been reset. */
-struct rule_dpif *
-ofproto_dpif_refresh_rule(struct rule_dpif *rule)
-{
-    return rule_dpif_cast(ofproto_refresh_rule(&rule->up));
-}
-
 /* Appends 'pin' to the queue of "packet ins" to be sent to the controller.
  * Takes ownership of 'pin' and pin->packet. */
 void

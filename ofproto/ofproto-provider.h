@@ -1716,8 +1716,6 @@ BUILD_ASSERT_DECL(OFPROTO_POSTPONE < OFPERR_OFS);
 
 int ofproto_flow_mod(struct ofproto *, struct ofputil_flow_mod *)
     OVS_EXCLUDED(ofproto_mutex);
-struct rule *ofproto_refresh_rule(struct rule *rule)
-    OVS_EXCLUDED(ofproto_mutex);
 void ofproto_add_flow(struct ofproto *, const struct match *,
                       unsigned int priority,
                       const struct ofpact *ofpacts, size_t ofpacts_len)
