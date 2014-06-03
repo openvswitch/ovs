@@ -89,12 +89,14 @@
  * compilers will merrily carry along accepting the wrong type.)
  *
  * Use ovsrcu_set() to write an RCU-protected pointer and ovsrcu_postpone() to
- * free the previous data.  ovsrcu_init() can be used on (newly created) RCU-
- * protected pointer that is not yet visible to the readers.  If more than one
- * thread can write the pointer, then some form of external synchronization,
- * e.g. a mutex, is needed to prevent writers from interfering with one
- * another.  For example, to write the pointer variable declared above while
- * safely freeing the old value:
+ * free the previous data.  ovsrcu_set_hidden() can be used on RCU protected
+ * data not visible to any readers yet, but will be made visible by a later
+ * ovsrcu_set().   ovsrcu_init() can be used to initialize RCU pointers when
+ * no readers are yet executing.  If more than one thread can write the
+ * pointer, then some form of external synchronization, e.g. a mutex, is
+ * needed to prevent writers from interfering with one another.  For example,
+ * to write the pointer variable declared above while safely freeing the old
+ * value:
  *
  *     static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
  *
@@ -180,8 +182,12 @@ static inline void ovsrcu_set__(struct ovsrcu_pointer *pointer,
 /* This can be used for initializing RCU pointers before any readers can
  * see them.  A later ovsrcu_set() needs to make the bigger structure this
  * is part of visible to the readers. */
-#define ovsrcu_init(VAR, VALUE) \
+#define ovsrcu_set_hidden(VAR, VALUE) \
     ovsrcu_set__(VAR, VALUE, memory_order_relaxed)
+
+/* This can be used for initializing RCU pointers before any readers are
+ * executing. */
+#define ovsrcu_init(VAR, VALUE) atomic_init(&(VAR)->p, VALUE)
 
 /* Calls FUNCTION passing ARG as its pointer-type argument following the next
  * grace period.  See "Usage" above for example.  */

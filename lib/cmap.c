@@ -448,7 +448,7 @@ cmap_insert_dup(struct cmap_node *new_node, uint32_t hash,
                     }
                     p = next;
                 }
-                ovsrcu_init(&p->next, node);
+                ovsrcu_set_hidden(&p->next, node);
             } else {
                 /* The hash value is there from some previous insertion, but
                  * the associated node has been removed.  We're not really
@@ -660,7 +660,7 @@ cmap_insert(struct cmap *cmap, struct cmap_node *node, uint32_t hash)
 {
     struct cmap_impl *impl = cmap_get_impl(cmap);
 
-    ovsrcu_init(&node->next, NULL);
+    ovsrcu_set_hidden(&node->next, NULL);
 
     if (OVS_UNLIKELY(impl->n >= impl->max_n)) {
         impl = cmap_rehash(cmap, (impl->mask << 1) | 1);
@@ -690,7 +690,7 @@ cmap_replace__(struct cmap_impl *impl, struct cmap_node *node,
         replacement = cmap_node_next_protected(node);
     } else {
         /* 'replacement' takes the position of 'node' in the list. */
-        ovsrcu_init(&replacement->next, cmap_node_next_protected(node));
+        ovsrcu_set_hidden(&replacement->next, cmap_node_next_protected(node));
     }
 
     struct cmap_node *iter = &b->nodes[slot];
