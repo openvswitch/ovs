@@ -170,10 +170,34 @@ AC_DEFUN([OVS_CHECK_DPDK], [
 
     DPDK_INCLUDE=$RTE_SDK/include
     DPDK_LIB_DIR=$RTE_SDK/lib
-    DPDK_LIBS="$DPDK_LIB_DIR/libintel_dpdk.a"
 
-    LIBS="$DPDK_LIBS $LIBS"
-    CPPFLAGS="-I$DPDK_INCLUDE $CPPFLAGS"
+    LDFLAGS="$LDFLAGS -L$DPDK_LIB_DIR"
+    CFLAGS="$CFLAGS -I$DPDK_INCLUDE"
+
+    # On some systems we have to add -ldl to link with dpdk
+    #
+    # This code, at first, tries to link without -ldl (""),
+    # then adds it and tries again.
+    # Before each attempt the search cache must be unset,
+    # otherwise autoconf will stick with the old result
+
+    found=false
+    save_LIBS=$LIBS
+    for extras in "" "-ldl"; do
+        LIBS="-lintel_dpdk $extras $save_LIBS"
+        AC_LINK_IFELSE(
+           [AC_LANG_PROGRAM([#include <rte_config.h>
+                             #include <rte_eal.h>],
+                            [int rte_argc; char ** rte_argv;
+                             rte_eal_init(rte_argc, rte_argv);])],
+           [found=true])
+        if $found; then
+            break
+        fi
+    done
+    if $found; then :; else
+        AC_MSG_ERROR([cannot link with dpdk])
+    fi
 
     AC_DEFINE([DPDK_NETDEV], [1], [System uses the DPDK module.])
   else
