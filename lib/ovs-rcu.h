@@ -132,7 +132,7 @@
 #define ovsrcu_get_protected(TYPE, VAR) \
     CONST_CAST(TYPE, ovsrcu_get__(TYPE, VAR, memory_order_relaxed))
 #else  /* not GNU C */
-typedef struct ovsrcu_pointer { ATOMIC(void *) p; };
+struct ovsrcu_pointer { ATOMIC(void *) p; };
 #define OVSRCU_TYPE(TYPE) struct ovsrcu_pointer
 #define OVSRCU_TYPE_INITIALIZER { NULL }
 static inline void *
