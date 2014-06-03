@@ -267,7 +267,8 @@ struct xc_entry {
         } bond;
         struct {
             struct ofproto_dpif *ofproto;
-            struct rule_dpif *rule;
+            struct ofputil_flow_mod *fm;
+            struct ofpbuf *ofpacts;
         } learn;
         struct {
             struct ofproto_dpif *ofproto;
@@ -2634,35 +2635,38 @@ xlate_bundle_action(struct xlate_ctx *ctx,
 }
 
 static void
-xlate_learn_action(struct xlate_ctx *ctx,
-                   const struct ofpact_learn *learn)
+xlate_learn_action__(struct xlate_ctx *ctx, const struct ofpact_learn *learn,
+                     struct ofputil_flow_mod *fm, struct ofpbuf *ofpacts)
 {
-    uint64_t ofpacts_stub[1024 / 8];
-    struct ofputil_flow_mod fm;
-    struct ofpbuf ofpacts;
-
-    ctx->xout->has_learn = true;
-
-    learn_mask(learn, &ctx->xout->wc);
-
-    if (!ctx->xin->may_learn) {
-        return;
+    learn_execute(learn, &ctx->xin->flow, fm, ofpacts);
+    if (ctx->xin->may_learn) {
+        ofproto_dpif_flow_mod(ctx->xbridge->ofproto, fm);
     }
+}
 
-    ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
-    learn_execute(learn, &ctx->xin->flow, &fm, &ofpacts);
-    ofproto_dpif_flow_mod(ctx->xbridge->ofproto, &fm);
-    ofpbuf_uninit(&ofpacts);
+static void
+xlate_learn_action(struct xlate_ctx *ctx, const struct ofpact_learn *learn)
+{
+    ctx->xout->has_learn = true;
+    learn_mask(learn, &ctx->xout->wc);
 
     if (ctx->xin->xcache) {
         struct xc_entry *entry;
 
         entry = xlate_cache_add_entry(ctx->xin->xcache, XC_LEARN);
-        entry->u.learn.ofproto = ctx->xin->ofproto;
-        /* Lookup the learned rule, taking a reference on it.  The reference
-         * is released when this cache entry is deleted. */
-        rule_dpif_lookup(ctx->xbridge->ofproto, &ctx->xin->flow, NULL,
-                         &entry->u.learn.rule, true);
+        entry->u.learn.ofproto = ctx->xbridge->ofproto;
+        entry->u.learn.fm = xmalloc(sizeof *entry->u.learn.fm);
+        entry->u.learn.ofpacts = ofpbuf_new(64);
+        xlate_learn_action__(ctx, learn, entry->u.learn.fm,
+                             entry->u.learn.ofpacts);
+    } else if (ctx->xin->may_learn) {
+        uint64_t ofpacts_stub[1024 / 8];
+        struct ofputil_flow_mod fm;
+        struct ofpbuf ofpacts;
+
+        ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
+        xlate_learn_action__(ctx, learn, &fm, &ofpacts);
+        ofpbuf_uninit(&ofpacts);
     }
 }
 
@@ -3579,12 +3583,8 @@ xlate_push_stats(struct xlate_cache *xcache, bool may_learn,
             break;
         case XC_LEARN:
             if (may_learn) {
-                struct rule_dpif *rule = entry->u.learn.rule;
-
-                /* Reset the modified time for a rule that is equivalent to
-                 * the currently cached rule.  If the rule is not the exact
-                 * rule we have cached, update the reference that we have. */
-                entry->u.learn.rule = ofproto_dpif_refresh_rule(rule);
+                ofproto_dpif_flow_mod(entry->u.learn.ofproto,
+                                      entry->u.learn.fm);
             }
             break;
         case XC_NORMAL:
@@ -3653,8 +3653,8 @@ xlate_cache_clear(struct xlate_cache *xcache)
             mbridge_unref(entry->u.mirror.mbridge);
             break;
         case XC_LEARN:
-            /* 'u.learn.rule' is the learned rule. */
-            rule_dpif_unref(entry->u.learn.rule);
+            free(entry->u.learn.fm);
+            ofpbuf_delete(entry->u.learn.ofpacts);
             break;
         case XC_NORMAL:
             free(entry->u.normal.flow);
