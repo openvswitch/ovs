@@ -209,11 +209,6 @@ static int set_bfd(struct ofport *, const struct smap *);
 static int set_cfm(struct ofport *, const struct cfm_settings *);
 static void ofport_update_peer(struct ofport_dpif *);
 
-struct dpif_completion {
-    struct list list_node;
-    struct ofoperation *op;
-};
-
 /* Reasons that we might need to revalidate every datapath flow, and
  * corresponding coverage counters.
  *
