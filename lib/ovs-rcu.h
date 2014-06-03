@@ -142,6 +142,20 @@
     CONST_CAST(TYPE, ovsrcu_get__(TYPE, VAR, memory_order_consume))
 #define ovsrcu_get_protected(TYPE, VAR) \
     CONST_CAST(TYPE, ovsrcu_get__(TYPE, VAR, memory_order_relaxed))
+
+/* 'VALUE' may be an atomic operation, which must be evaluated before
+ * any of the body of the atomic_store_explicit.  Since the type of
+ * 'VAR' is not fixed, we cannot use an inline function to get
+ * function semantics for this. */
+#define ovsrcu_set__(VAR, VALUE, ORDER)                                 \
+    ({                                                                  \
+        typeof(VAR) ovsrcu_var = (VAR);                                 \
+        typeof(VALUE) ovsrcu_value = (VALUE);                           \
+        memory_order ovsrcu_order = (ORDER);                            \
+                                                                        \
+        atomic_store_explicit(&ovsrcu_var->p, ovsrcu_value, ovsrcu_order); \
+        (void *) 0;                                                     \
+    })
 #else  /* not GNU C */
 struct ovsrcu_pointer { ATOMIC(void *) p; };
 #define OVSRCU_TYPE(TYPE) struct ovsrcu_pointer
@@ -157,6 +171,13 @@ ovsrcu_get__(const struct ovsrcu_pointer *pointer, memory_order order)
     CONST_CAST(TYPE, ovsrcu_get__(VAR, memory_order_consume))
 #define ovsrcu_get_protected(TYPE, VAR) \
     CONST_CAST(TYPE, ovsrcu_get__(VAR, memory_order_relaxed))
+
+static inline void ovsrcu_set__(struct ovsrcu_pointer *pointer,
+                                const void *value,
+                                memory_order order)
+{
+    atomic_store_explicit(&pointer->p, CONST_CAST(void *, value), order);
+}
 #endif
 
 /* Writes VALUE to the RCU-protected pointer whose address is VAR.
@@ -164,7 +185,7 @@ ovsrcu_get__(const struct ovsrcu_pointer *pointer, memory_order order)
  * Users require external synchronization (e.g. a mutex).  See "Usage" above
  * for an example. */
 #define ovsrcu_set(VAR, VALUE) \
-    atomic_store_explicit(&(VAR)->p, VALUE, memory_order_release)
+    ovsrcu_set__(VAR, VALUE, memory_order_release)
 
 /* Calls FUNCTION passing ARG as its pointer-type argument following the next
  * grace period.  See "Usage" above for example.  */
