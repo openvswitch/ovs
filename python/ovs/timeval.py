@@ -12,22 +12,41 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import sys
 import time
-
-LIBRT = 'librt.so.1'
-CLOCK_MONOTONIC = 1
 
 try:
     import ctypes
 
+    LIBRT = 'librt.so.1'
+    clock_gettime_name = 'clock_gettime'
+
+    if sys.platform.startswith("linux"):
+        CLOCK_MONOTONIC = 1
+        time_t = ctypes.c_long
+    elif sys.platform.startswith("netbsd"):
+        # NetBSD uses function renaming for ABI versioning.  While the proper
+        # way to get the appropriate version is of course "#include <time.h>",
+        # it is difficult with ctypes.  The following is appropriate for
+        # recent versions of NetBSD, including NetBSD-6.
+        LIBRT = 'libc.so.12'
+        clock_gettime_name = '__clock_gettime50'
+        CLOCK_MONOTONIC = 3
+        time_t = ctypes.c_int64
+    elif sys.platform.startswith("freebsd"):
+        CLOCK_MONOTONIC = 4
+        time_t = ctypes.c_int64
+    else:
+        raise Exception
+
     class timespec(ctypes.Structure):
         _fields_ = [
-            ('tv_sec', ctypes.c_long),
+            ('tv_sec', time_t),
             ('tv_nsec', ctypes.c_long),
         ]
 
     librt = ctypes.CDLL(LIBRT)
-    clock_gettime = librt.clock_gettime
+    clock_gettime = getattr(librt, clock_gettime_name)
     clock_gettime.argtypes = [ctypes.c_int, ctypes.POINTER(timespec)]
 except:
     # Librt shared library could not be loaded
@@ -48,8 +67,9 @@ if not hasattr(time, 'monotonic'):
     time.monotonic = monotonic
 
 def msec():
-    """Returns the current time, as the amount of time since the epoch, in
-    milliseconds, as a float."""
+    """ Returns the system's monotonic time if possible, otherwise returns the
+    current time as the amount of time since the epoch, in milliseconds, as a
+    float."""
     return time.monotonic() * 1000.0
 
 
