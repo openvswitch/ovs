@@ -1368,7 +1368,7 @@ revalidate(struct revalidator *revalidator)
             bool already_dumped, mark;
 
             if (!ukey) {
-                ukey = ukey_create(key, key_len, used);
+                ukey = ukey_create(f->key, f->key_len, used);
                 if (!udpif_insert_ukey(udpif, ukey, hash)) {
                     /* The same ukey has already been created. This means that
                      * another revalidator is processing this flow
