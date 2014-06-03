@@ -2757,17 +2757,6 @@ destroy_rule_executes(struct ofproto *ofproto)
     }
 }
 
-/* Returns true if 'rule' should be hidden from the controller.
- *
- * Rules with priority higher than UINT16_MAX are set up by ofproto itself
- * (e.g. by in-band control) and are intentionally hidden from the
- * controller. */
-static bool
-ofproto_rule_is_hidden(const struct rule *rule)
-{
-    return (rule->cr.priority > UINT16_MAX);
-}
-
 static bool
 oftable_is_modifiable(const struct oftable *table,
                       enum ofputil_flow_mod_flags flags)
@@ -3421,7 +3410,7 @@ collect_rule(struct rule *rule, const struct rule_criteria *c,
      * rules to be selected.  (This doesn't allow OpenFlow clients to meddle
      * with hidden flows because OpenFlow uses only a 16-bit field to specify
      * priority.) */
-    if (ofproto_rule_is_hidden(rule) && c->cr.priority <= UINT16_MAX) {
+    if (rule_is_hidden(rule) && c->cr.priority <= UINT16_MAX) {
         return 0;
     } else if (rule->pending) {
         return OFPROTO_POSTPONE;
@@ -4396,8 +4385,7 @@ ofproto_rule_send_removed(struct rule *rule, uint8_t reason)
     struct ofputil_flow_removed fr;
     long long int used;
 
-    if (ofproto_rule_is_hidden(rule) ||
-        !(rule->flags & OFPUTIL_FF_SEND_FLOW_REM)) {
+    if (rule_is_hidden(rule) || !(rule->flags & OFPUTIL_FF_SEND_FLOW_REM)) {
         return;
     }
 
@@ -4823,7 +4811,7 @@ ofproto_collect_ofmonitor_refresh_rule(const struct ofmonitor *m,
 {
     enum nx_flow_monitor_flags update;
 
-    if (ofproto_rule_is_hidden(rule)) {
+    if (rule_is_hidden(rule)) {
         return;
     }
 
@@ -6260,7 +6248,7 @@ ofopgroup_complete(struct ofopgroup *group)
 
               - The operation's only effect was to update rule->modified. */
         if (!(op->error
-              || ofproto_rule_is_hidden(rule)
+              || rule_is_hidden(rule)
               || (op->type == OFOPERATION_MODIFY
                   && !op->actions
                   && rule->flow_cookie == op->flow_cookie))) {

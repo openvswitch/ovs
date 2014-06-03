@@ -405,6 +405,7 @@ void ofproto_rule_unref(struct rule *);
 
 static inline const struct rule_actions * rule_get_actions(const struct rule *);
 static inline bool rule_is_table_miss(const struct rule *);
+static inline bool rule_is_hidden(const struct rule *);
 
 /* A set of actions within a "struct rule".
  *
@@ -1741,6 +1742,17 @@ static inline bool
 rule_is_table_miss(const struct rule *rule)
 {
     return rule->cr.priority == 0 && cls_rule_is_catchall(&rule->cr);
+}
+
+/* Returns true if 'rule' should be hidden from the controller.
+ *
+ * Rules with priority higher than UINT16_MAX are set up by ofproto itself
+ * (e.g. by in-band control) and are intentionally hidden from the
+ * controller. */
+static inline bool
+rule_is_hidden(const struct rule *rule)
+{
+    return rule->cr.priority > UINT16_MAX;
 }
 
 static inline struct rule *
