@@ -28,6 +28,10 @@ you will need the following software:
           analysis and thread-safety checks.  For Ubuntu, there are
           nightly built packages available on clang's website.
 
+      While OVS may be compatible with other compilers, optimal
+      support for atomic operations may be missing, making OVS very
+      slow (see lib/ovs-atomic.h).
+
     - libssl, from OpenSSL, is optional but recommended if you plan to
       connect the Open vSwitch to an OpenFlow controller.  libssl is
       required to establish confidentiality and authenticity in the

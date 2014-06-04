@@ -257,6 +257,9 @@
     #elif HAVE_GCC4_ATOMICS
         #include "ovs-atomic-gcc4+.h"
     #else
+        /* ovs-atomic-pthreads implementation is provided for portability.
+         * It might be too slow for real use because Open vSwitch is
+         * optimized for platforms where real atomic ops are available. */
         #include "ovs-atomic-pthreads.h"
     #endif
 #undef IN_OVS_ATOMIC_H
