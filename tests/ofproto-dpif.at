@@ -4627,7 +4627,7 @@ OVS_VSWITCHD_STOP(["/resubmits yielded over 64 kB of stack/d"])
 AT_CLEANUP
 
 
-AT_SETUP([ofproto-if packet-out controller])
+AT_SETUP([ofproto-dpif packet-out controller])
 OVS_VSWITCHD_START
 ADD_OF_PORTS([br0], 1, 2)
 
@@ -4670,7 +4670,7 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 
-AT_SETUP([ofproto-if packet-out controller (patch port)])
+AT_SETUP([ofproto-dpif packet-out controller (patch port)])
 OVS_VSWITCHD_START(
   [-- \
    add-port br0 p1 -- \
@@ -4722,7 +4722,7 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 
-AT_SETUP([ofproto-if packet-out goto_table])
+AT_SETUP([ofproto-dpif packet-out goto_table])
 OVS_VSWITCHD_START
 ADD_OF_PORTS([br0], 1, 2)
 
@@ -4774,7 +4774,7 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 
-AT_SETUP([ofproto-if packet-out table-miss (continue)])
+AT_SETUP([ofproto-dpif packet-out table-miss (continue)])
 OVS_VSWITCHD_START
 ADD_OF_PORTS([br0], 1, 2)
 
