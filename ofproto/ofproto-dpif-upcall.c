@@ -216,6 +216,12 @@ static void upcall_unixctl_set_flow_limit(struct unixctl_conn *conn, int argc,
 
 static struct udpif_key *ukey_create(const struct nlattr *key, size_t key_len,
                                      long long int used);
+static struct udpif_key *ukey_lookup(struct udpif *udpif,
+                                     const struct nlattr *key, size_t key_len,
+                                     uint32_t hash);
+static bool ukey_acquire(struct udpif *udpif, const struct nlattr *key,
+                         size_t key_len, long long int used,
+                         struct udpif_key **result);
 static void ukey_delete(struct revalidator *, struct udpif_key *);
 
 static atomic_bool enable_megaflows = ATOMIC_VAR_INIT(true);
@@ -983,8 +989,9 @@ handle_upcalls(struct handler *handler, struct upcall *upcalls,
 
 /* Must be called with udpif->ukeys[hash % udpif->n_revalidators].mutex. */
 static struct udpif_key *
-ukey_lookup__(struct udpif *udpif, const struct nlattr *key, size_t key_len,
-              uint32_t hash)
+ukey_lookup(struct udpif *udpif, const struct nlattr *key, size_t key_len,
+            uint32_t hash)
+    OVS_REQUIRES(udpif->ukeys->mutex)
 {
     struct udpif_key *ukey;
     struct hmap *hmap = &udpif->ukeys[hash % udpif->n_revalidators].hmap;
@@ -997,26 +1004,15 @@ ukey_lookup__(struct udpif *udpif, const struct nlattr *key, size_t key_len,
     return NULL;
 }
 
-static struct udpif_key *
-ukey_lookup(struct udpif *udpif, const struct nlattr *key, size_t key_len,
-            uint32_t hash)
-{
-    struct udpif_key *ukey;
-    uint32_t idx = hash % udpif->n_revalidators;
-
-    ovs_mutex_lock(&udpif->ukeys[idx].mutex);
-    ukey = ukey_lookup__(udpif, key, key_len, hash);
-    ovs_mutex_unlock(&udpif->ukeys[idx].mutex);
-
-    return ukey;
-}
-
+/* Creates a ukey for 'key' and 'key_len', returning it with ukey->mutex in
+ * a locked state. */
 static struct udpif_key *
 ukey_create(const struct nlattr *key, size_t key_len, long long int used)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct udpif_key *ukey = xmalloc(sizeof *ukey);
-    ovs_mutex_init(&ukey->mutex);
 
+    ovs_mutex_init(&ukey->mutex);
     ukey->key = (struct nlattr *) &ukey->key_buf;
     memcpy(&ukey->key_buf, key, key_len);
     ukey->key_len = key_len;
@@ -1027,33 +1023,44 @@ ukey_create(const struct nlattr *key, size_t key_len, long long int used)
     ukey->created = used ? used : time_msec();
     memset(&ukey->stats, 0, sizeof ukey->stats);
     ukey->xcache = NULL;
-    ovs_mutex_unlock(&ukey->mutex);
 
     return ukey;
 }
 
-/* Checks for a ukey in 'udpif->ukeys' with the same 'ukey->key' and 'hash',
- * and inserts 'ukey' if it does not exist.
+/* Searches for a ukey in 'udpif->ukeys' that matches 'key' and 'key_len' and
+ * attempts to lock the ukey. If the ukey does not exist, create it.
  *
- * Returns true if 'ukey' was inserted into 'udpif->ukeys', false otherwise. */
+ * Returns true on success, setting *result to the matching ukey and returning
+ * it in a locked state. Otherwise, returns false and clears *result. */
 static bool
-udpif_insert_ukey(struct udpif *udpif, struct udpif_key *ukey, uint32_t hash)
+ukey_acquire(struct udpif *udpif, const struct nlattr *key, size_t key_len,
+             long long int used, struct udpif_key **result)
+    OVS_TRY_LOCK(true, (*result)->mutex)
 {
-    struct udpif_key *duplicate;
-    uint32_t idx = hash % udpif->n_revalidators;
-    bool ok;
+    struct udpif_key *ukey;
+    uint32_t hash, idx;
+    bool locked = false;
+
+    hash = hash_bytes(key, key_len, udpif->secret);
+    idx = hash % udpif->n_revalidators;
 
     ovs_mutex_lock(&udpif->ukeys[idx].mutex);
-    duplicate = ukey_lookup__(udpif, ukey->key, ukey->key_len, hash);
-    if (duplicate) {
-        ok = false;
-    } else {
+    ukey = ukey_lookup(udpif, key, key_len, hash);
+    if (!ukey) {
+        ukey = ukey_create(key, key_len, used);
         hmap_insert(&udpif->ukeys[idx].hmap, &ukey->hmap_node, hash);
-        ok = true;
+        locked = true;
+    } else if (!ovs_mutex_trylock(&ukey->mutex)) {
+        locked = true;
     }
     ovs_mutex_unlock(&udpif->ukeys[idx].mutex);
 
-    return ok;
+    if (locked) {
+        *result = ukey;
+    } else {
+        *result = NULL;
+    }
+    return locked;
 }
 
 static void
@@ -1362,29 +1369,13 @@ revalidate(struct revalidator *revalidator)
 
         for (f = flows; f < &flows[n_dumped]; f++) {
             long long int used = f->stats.used;
-            uint32_t hash = hash_bytes(f->key, f->key_len, udpif->secret);
-            struct udpif_key *ukey = ukey_lookup(udpif, f->key, f->key_len,
-                                                 hash);
+            struct udpif_key *ukey;
             bool already_dumped, mark;
 
-            if (!ukey) {
-                ukey = ukey_create(f->key, f->key_len, used);
-                if (!udpif_insert_ukey(udpif, ukey, hash)) {
-                    /* The same ukey has already been created. This means that
-                     * another revalidator is processing this flow
-                     * concurrently, so don't bother processing it. */
-                    COVERAGE_INC(upcall_duplicate_flow);
-                    ukey_delete(NULL, ukey);
-                    continue;
-                }
-            }
-
-            if (ovs_mutex_trylock(&ukey->mutex)) {
-                /* The flow has been dumped, and is being handled by another
-                 * revalidator concurrently. This can occasionally occur if the
-                 * datapath is changed in the middle of a flow dump. Rather
-                 * than perform the same work twice, skip the flow this time.
-                 */
+            if (!ukey_acquire(udpif, f->key, f->key_len, used, &ukey)) {
+                /* We couldn't acquire the ukey. This means that
+                 * another revalidator is processing this flow
+                 * concurrently, so don't bother processing it. */
                 COVERAGE_INC(upcall_duplicate_flow);
                 continue;
             }
