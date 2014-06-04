@@ -106,6 +106,8 @@ poll_fd_wait_at(int fd, HANDLE wevent, short int events, const char *where)
         VLOG_ERR("No event to wait fd %d", fd);
         return;
     }
+#else
+    wevent = 0;
 #endif
 
     /* Check for duplicate.  If found, "or" the event. */
