@@ -369,8 +369,8 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev) OVS_REQUIRES(dpdk_mutex)
     }
 
     for (i = 0; i < NR_QUEUE; i++) {
-        diag = rte_eth_tx_queue_setup(dev->port_id, i, MAX_TX_QUEUE_LEN, 0,
-                                      &tx_conf);
+        diag = rte_eth_tx_queue_setup(dev->port_id, i, MAX_TX_QUEUE_LEN,
+                                      dev->socket_id, &tx_conf);
         if (diag) {
             VLOG_ERR("eth dev tx queue setup error %d",diag);
             return diag;
@@ -378,7 +378,8 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev) OVS_REQUIRES(dpdk_mutex)
     }
 
     for (i = 0; i < NR_QUEUE; i++) {
-        diag = rte_eth_rx_queue_setup(dev->port_id, i, MAX_RX_QUEUE_LEN, 0,
+        diag = rte_eth_rx_queue_setup(dev->port_id, i, MAX_RX_QUEUE_LEN,
+                                      dev->socket_id,
                                       &rx_conf, dev->dpdk_mp->mp);
         if (diag) {
             VLOG_ERR("eth dev rx queue setup error %d",diag);
