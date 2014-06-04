@@ -3790,6 +3790,11 @@ static void
 commit_set_port_action(const struct flow *flow, struct flow *base,
                        struct ofpbuf *odp_actions, struct flow_wildcards *wc)
 {
+    /* Check if 'flow' really has an L3 header. */
+    if (!flow->nw_proto) {
+        return;
+    }
+
     if (!is_ip_any(base) || (!base->tp_src && !base->tp_dst)) {
         return;
     }

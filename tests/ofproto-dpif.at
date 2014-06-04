@@ -1325,7 +1325,7 @@ dnl Modified MPLS controller action.
 AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
 
 for i in 1 2 3; do
-    ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=40:44:44:44:44:42,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=16,tos=0,ttl=64,frag=no)'
+    ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=40:44:44:44:44:42,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=17,tos=0,ttl=64,frag=no),udp(src=7777,dst=80)'
 done
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
