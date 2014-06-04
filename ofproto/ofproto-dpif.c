@@ -3137,18 +3137,18 @@ ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
     xin.resubmit_stats = &stats;
     xlate_actions(&xin, &xout);
 
+    execute.actions = ofpbuf_data(&xout.odp_actions);
+    execute.actions_len = ofpbuf_size(&xout.odp_actions);
+    execute.packet = packet;
+    execute.md = pkt_metadata_from_flow(flow);
+    execute.needs_help = (xout.slow & SLOW_ACTION) != 0;
+
+    /* Fix up in_port. */
     in_port = flow->in_port.ofp_port;
     if (in_port == OFPP_NONE) {
         in_port = OFPP_LOCAL;
     }
-    execute.actions = ofpbuf_data(&xout.odp_actions);
-    execute.actions_len = ofpbuf_size(&xout.odp_actions);
-    execute.packet = packet;
-    execute.md.tunnel = flow->tunnel;
-    execute.md.skb_priority = flow->skb_priority;
-    execute.md.pkt_mark = flow->pkt_mark;
     execute.md.in_port.odp_port = ofp_port_to_odp_port(ofproto, in_port);
-    execute.needs_help = (xout.slow & SLOW_ACTION) != 0;
 
     error = dpif_execute(ofproto->backer->dpif, &execute);
 
