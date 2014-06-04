@@ -144,6 +144,14 @@ commands.append(make)
 
 
 def check():
+    flags = ""
+    if options.tests:
+        for arg in str.split(options.tests):
+            if arg[0].isdigit():
+                flags += "%s " % arg
+            else:
+                flags += "-k %s " % arg
+    ENV["TESTSUITEFLAGS"] = flags
     make("check")
 commands.append(check)
 
@@ -353,6 +361,12 @@ def main():
     for i in range(4):
         group.add_option("--O%d" % i, dest="optimize", action="store_const",
                          const=i, help="compile with -O%d" % i)
+    parser.add_option_group(group)
+
+    group = optparse.OptionGroup(parser, "check")
+    group.add_option("--tests", dest="tests", metavar="FILTER",
+                     help="""run specific tests and/or a test category
+                          eg, --tests=\"1-10 megaflow\"""")
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser, "run")
