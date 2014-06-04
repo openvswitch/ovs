@@ -2024,7 +2024,6 @@ dp_netdev_input(struct dp_netdev *dp, struct ofpbuf *packet,
                                    miniflow_hash_5tuple(&key.flow, 0)
                                    % dp->n_handlers,
                                    DPIF_UC_MISS, &key.flow, NULL);
-        ofpbuf_delete(packet);
     }
 }
 
@@ -2063,7 +2062,6 @@ dp_netdev_output_userspace(struct dp_netdev *dp, struct ofpbuf *packet,
         if (userdata) {
             buf_size += NLA_ALIGN(userdata->nla_len);
         }
-        buf_size += ofpbuf_size(packet);
         ofpbuf_init(buf, buf_size);
 
         /* Put ODP flow. */
@@ -2078,15 +2076,14 @@ dp_netdev_output_userspace(struct dp_netdev *dp, struct ofpbuf *packet,
                                           NLA_ALIGN(userdata->nla_len));
         }
 
-        ofpbuf_set_data(&upcall->packet,
-                        ofpbuf_put(buf, ofpbuf_data(packet), ofpbuf_size(packet)));
-        ofpbuf_set_size(&upcall->packet, ofpbuf_size(packet));
+        upcall->packet = *packet;
 
         seq_change(q->seq);
 
         error = 0;
     } else {
         dp_netdev_count_packet(dp, DP_STAT_LOST);
+        ofpbuf_delete(packet);
         error = ENOBUFS;
     }
     ovs_mutex_unlock(&q->mutex);
@@ -2120,19 +2117,17 @@ dp_execute_cb(void *aux_, struct ofpbuf *packet,
         break;
 
     case OVS_ACTION_ATTR_USERSPACE: {
+        struct ofpbuf *userspace_packet;
         const struct nlattr *userdata;
 
         userdata = nl_attr_find_nested(a, OVS_USERSPACE_ATTR_USERDATA);
+        userspace_packet = may_steal ? packet : ofpbuf_clone(packet);
 
-        dp_netdev_output_userspace(aux->dp, packet,
+        dp_netdev_output_userspace(aux->dp, userspace_packet,
                                    miniflow_hash_5tuple(aux->key, 0)
                                        % aux->dp->n_handlers,
                                    DPIF_UC_ACTION, aux->key,
                                    userdata);
-
-        if (may_steal) {
-            ofpbuf_delete(packet);
-        }
         break;
     }
 

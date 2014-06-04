@@ -59,6 +59,7 @@ enum OVS_PACKED_ENUM ofpbuf_source {
 struct ofpbuf {
 #ifdef DPDK_NETDEV
     struct rte_mbuf mbuf;       /* DPDK mbuf */
+    void *dpdk_buf;             /* First byte of allocated DPDK buffer. */
 #else
     void *base_;                 /* First byte of allocated space. */
     void *data_;                 /* First byte actually in use. */
@@ -354,6 +355,8 @@ static inline const void *ofpbuf_get_icmp_payload(const struct ofpbuf *b)
 }
 
 #ifdef DPDK_NETDEV
+BUILD_ASSERT_DECL(offsetof(struct ofpbuf, mbuf) == 0);
+
 static inline void * ofpbuf_data(const struct ofpbuf *b)
 {
     return b->mbuf.pkt.data;
