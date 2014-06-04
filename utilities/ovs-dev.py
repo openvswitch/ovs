@@ -145,6 +145,10 @@ commands.append(make)
 
 def check():
     flags = ""
+    if options.jobs:
+        flags += "-j%d " % options.jobs
+    else:
+        flags += "-j8 "
     if options.tests:
         for arg in str.split(options.tests):
             if arg[0].isdigit():
@@ -364,6 +368,8 @@ def main():
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser, "check")
+    group.add_option("-j", "--jobs", dest="jobs", metavar="N", type="int",
+                     help="Run N tests in parallel")
     group.add_option("--tests", dest="tests", metavar="FILTER",
                      help="""run specific tests and/or a test category
                           eg, --tests=\"1-10 megaflow\"""")
