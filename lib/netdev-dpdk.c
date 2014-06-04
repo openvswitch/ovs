@@ -595,7 +595,9 @@ netdev_dpdk_rxq_recv(struct netdev_rxq *rxq_, struct ofpbuf **packets, int *c)
     dpdk_queue_flush(dev, rxq_->queue_id);
 
     nb_rx = rte_eth_rx_burst(rx->port_id, rxq_->queue_id,
-                             (struct rte_mbuf **) packets, MAX_RX_QUEUE_LEN);
+                             (struct rte_mbuf **) packets,
+                             MIN((int)NETDEV_MAX_RX_BATCH,
+                                 (int)MAX_RX_QUEUE_LEN));
     if (!nb_rx) {
         return EAGAIN;
     }
