@@ -85,3 +85,11 @@ For example,
   --with-openssl="C:/OpenSSL-Win32"
 
 * Run make for the ported executables.
+
+TODO:
+----
+
+* OVS currently has no native support for atomics on Windows.  Pthreads
+are used as a fallback, but some features, such as OVS-RCU are really
+slow without native atomics support. Atomics support for Windows has to
+be brought in.
