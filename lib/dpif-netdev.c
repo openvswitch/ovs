@@ -827,13 +827,12 @@ static void
 port_unref(struct dp_netdev_port *port)
 {
     if (port && ovs_refcount_unref(&port->ref_cnt) == 1) {
-        int n_rxq;
+        int n_rxq = netdev_n_rxq(port->netdev);
         int i;
 
         netdev_close(port->netdev);
         netdev_restore_flags(port->sf);
 
-        n_rxq = netdev_n_rxq(port->netdev);
         for (i = 0; i < n_rxq; i++) {
             netdev_rxq_close(port->rxq[i]);
         }
