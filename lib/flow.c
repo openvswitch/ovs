@@ -1542,6 +1542,7 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
 
         l4_len = flow_compose_l4(b, flow);
 
+        ip = ofpbuf_l3(b);
         ip->ip_tot_len = htons(b->l4_ofs - b->l3_ofs + l4_len);
         ip->ip_csum = csum(ip, sizeof *ip);
     } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
@@ -1560,6 +1561,7 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
 
         l4_len = flow_compose_l4(b, flow);
 
+        nh = ofpbuf_l3(b);
         nh->ip6_plen = htons(l4_len);
     } else if (flow->dl_type == htons(ETH_TYPE_ARP) ||
                flow->dl_type == htons(ETH_TYPE_RARP)) {
