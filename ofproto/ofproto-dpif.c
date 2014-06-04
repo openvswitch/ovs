@@ -3053,8 +3053,6 @@ rule_expire(struct rule_dpif *rule)
     long long int now = time_msec();
     int reason = -1;
 
-    ovs_assert(!rule->up.pending);
-
     hard_timeout = rule->up.hard_timeout;
     idle_timeout = rule->up.idle_timeout;
 
@@ -3437,7 +3435,6 @@ complete_operation(struct rule_dpif *rule)
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
 
     ofproto->backer->need_revalidate = REV_FLOW_TABLE;
-    ofoperation_complete(rule->up.pending, 0);
 }
 
 static struct rule_dpif *rule_dpif_cast(const struct rule *rule)
@@ -3473,12 +3470,13 @@ rule_construct(struct rule *rule_)
     return 0;
 }
 
-static void
+static enum ofperr
 rule_insert(struct rule *rule_)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
     complete_operation(rule);
+    return 0;
 }
 
 static void

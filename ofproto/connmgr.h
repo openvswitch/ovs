@@ -29,7 +29,6 @@
 
 struct nlattr;
 struct ofconn;
-struct ofopgroup;
 struct rule;
 struct simap;
 struct sset;
@@ -96,9 +95,9 @@ struct connmgr *connmgr_create(struct ofproto *ofproto,
 void connmgr_destroy(struct connmgr *);
 
 void connmgr_run(struct connmgr *,
-                 bool (*handle_openflow)(struct ofconn *,
+                 void (*handle_openflow)(struct ofconn *,
                                          const struct ofpbuf *ofp_msg));
-void connmgr_wait(struct connmgr *, bool handling_openflow);
+void connmgr_wait(struct connmgr *);
 
 void connmgr_get_memory_usage(const struct connmgr *, struct simap *usage);
 
@@ -155,9 +154,6 @@ void ofconn_send_error(const struct ofconn *, const struct ofp_header *request,
 
 enum ofperr ofconn_pktbuf_retrieve(struct ofconn *, uint32_t id,
                                    struct ofpbuf **bufferp, ofp_port_t *in_port);
-
-bool ofconn_has_pending_opgroups(const struct ofconn *);
-void ofconn_add_opgroup(struct ofconn *, struct list *);
 
 struct hmap *ofconn_get_bundles(struct ofconn *ofconn);
 

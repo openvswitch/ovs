@@ -54,6 +54,7 @@ struct match;
 struct ofputil_flow_mod;
 struct bfd_cfg;
 struct meter;
+struct ofoperation;
 
 extern struct ovs_mutex ofproto_mutex;
 
@@ -109,21 +110,9 @@ struct ofproto {
     /* OpenFlow connections. */
     struct connmgr *connmgr;
 
-    /* Flow table operation tracking.
-     *
-     * 'state' is meaningful only within ofproto.c, one of the enum
-     * ofproto_state constants defined there.
-     *
-     * 'pending' is the list of "struct ofopgroup"s currently pending.
-     *
-     * 'n_pending' is the number of elements in 'pending'.
-     *
-     * 'deletions' contains pending ofoperations of type OFOPERATION_DELETE,
-     * indexed on its rule's flow.*/
+    /* 'meaningful only within ofproto.c, one of the enum ofproto_state
+     * constants defined there. */
     int state;
-    struct list pending OVS_GUARDED_BY(ofproto_mutex);
-    unsigned int n_pending OVS_GUARDED_BY(ofproto_mutex);
-    struct hmap deletions OVS_GUARDED_BY(ofproto_mutex);
 
     /* Delayed rule executions.
      *
@@ -350,9 +339,6 @@ struct rule {
      * reference. */
     struct ovs_refcount ref_count;
 
-    /* Operation now in progress, if nonnull. */
-    struct ofoperation *pending OVS_GUARDED_BY(ofproto_mutex);
-
     /* A "flow cookie" is the OpenFlow name for a 64-bit value associated with
      * a flow.. */
     ovs_be64 flow_cookie OVS_GUARDED;
@@ -469,9 +455,6 @@ void ofproto_rule_reduce_timeouts(struct rule *rule, uint16_t idle_timeout,
     OVS_EXCLUDED(ofproto_mutex);
 
 void ofoperation_complete(struct ofoperation *, enum ofperr);
-
-bool ofoperation_has_out_port(const struct ofoperation *, ofp_port_t out_port)
-    OVS_REQUIRES(ofproto_mutex);
 
 /* A group within a "struct ofproto".
  *
@@ -1254,7 +1237,8 @@ struct ofproto_class {
     struct rule *(*rule_alloc)(void);
     enum ofperr (*rule_construct)(struct rule *rule)
         /* OVS_REQUIRES(ofproto_mutex) */;
-    void (*rule_insert)(struct rule *rule) /* OVS_REQUIRES(ofproto_mutex) */;
+    enum ofperr (*rule_insert)(struct rule *rule)
+        /* OVS_REQUIRES(ofproto_mutex) */;
     void (*rule_delete)(struct rule *rule) /* OVS_REQUIRES(ofproto_mutex) */;
     void (*rule_destruct)(struct rule *rule);
     void (*rule_dealloc)(struct rule *rule);
@@ -1702,25 +1686,13 @@ extern const struct ofproto_class ofproto_dpif_class;
 int ofproto_class_register(const struct ofproto_class *);
 int ofproto_class_unregister(const struct ofproto_class *);
 
-/* ofproto_flow_mod() returns this value if the flow_mod could not be processed
- * because it overlaps with an ongoing flow table operation that has not yet
- * completed.  The caller should retry the operation later.
- *
- * ofproto.c also uses this value internally for additional (similar) purposes.
- *
- * This particular value is a good choice because it is large, so that it does
- * not collide with any errno value, but not large enough to collide with an
- * OFPERR_* value. */
-enum { OFPROTO_POSTPONE = 1 << 16 };
-BUILD_ASSERT_DECL(OFPROTO_POSTPONE < OFPERR_OFS);
-
 int ofproto_flow_mod(struct ofproto *, struct ofputil_flow_mod *)
     OVS_EXCLUDED(ofproto_mutex);
 void ofproto_add_flow(struct ofproto *, const struct match *,
                       unsigned int priority,
                       const struct ofpact *ofpacts, size_t ofpacts_len)
     OVS_EXCLUDED(ofproto_mutex);
-bool ofproto_delete_flow(struct ofproto *,
+void ofproto_delete_flow(struct ofproto *,
                          const struct match *, unsigned int priority)
     OVS_EXCLUDED(ofproto_mutex);
 void ofproto_flush_flows(struct ofproto *);

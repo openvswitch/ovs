@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -386,13 +386,9 @@ in_band_run(struct in_band *ib)
             break;
 
         case DEL:
-            if (ofproto_delete_flow(ib->ofproto,
-                                    &rule->match, rule->priority)) {
-                /* ofproto doesn't have the rule anymore so there's no reason
-                 * for us to track it any longer. */
-                hmap_remove(&ib->rules, &rule->hmap_node);
-                free(rule);
-            }
+            ofproto_delete_flow(ib->ofproto, &rule->match, rule->priority);
+            hmap_remove(&ib->rules, &rule->hmap_node);
+            free(rule);
             break;
         }
     }
