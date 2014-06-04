@@ -2054,8 +2054,8 @@ ovs-appctl -t ovs-ofctl ofctl/barrier
 ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
 AT_CAPTURE_FILE([monitor.log])
 
-# Send a packet-out with a load action to set some metadata, and forward to controller
-AT_CHECK([ovs-ofctl -O OpenFlow12 packet-out br0 none 'load(0xfafafafa5a5a5a5a->OXM_OF_METADATA[[0..63]]), controller' '0001020304050010203040501234'])
+# Send a packet-out with a set-field action to set some metadata, and forward to controller
+AT_CHECK([ovs-ofctl -O OpenFlow12 packet-out br0 none 'set_field:0xfafafafa5a5a5a5a->metadata, controller' '0001020304050010203040501234'])
 
 # Stop the monitor and check its output.
 ovs-appctl -t ovs-ofctl ofctl/barrier
