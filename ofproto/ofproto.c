@@ -6150,7 +6150,7 @@ ofopgroup_complete(struct ofopgroup *group)
         if (!(op->error
               || ofproto_rule_is_hidden(rule)
               || (op->type == OFOPERATION_MODIFY
-                  && op->actions
+                  && !op->actions
                   && rule->flow_cookie == op->flow_cookie))) {
             /* Check that we can just cast from ofoperation_type to
              * nx_flow_update_event. */
