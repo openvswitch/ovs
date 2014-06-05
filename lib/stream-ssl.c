@@ -293,6 +293,8 @@ new_ssl_stream(const char *name, int fd, enum session_type type,
     sslv->fd = fd;
 #ifdef _WIN32
     sslv->wevent = CreateEvent(NULL, FALSE, FALSE, NULL);
+#else
+    sslv->wevent = 0;
 #endif
     sslv->ssl = ssl;
     sslv->txbuf = NULL;
@@ -835,6 +837,8 @@ pssl_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp,
     pssl->fd = fd;
 #ifdef _WIN32
     pssl->wevent = CreateEvent(NULL, FALSE, FALSE, NULL);
+#else
+    pssl->wevent = 0;
 #endif
     *pstreamp = &pssl->pstream;
     return 0;
