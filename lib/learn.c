@@ -96,7 +96,7 @@ learn_from_openflow(const struct nx_action_learn *nal, struct ofpbuf *ofpacts)
     learn->idle_timeout = ntohs(nal->idle_timeout);
     learn->hard_timeout = ntohs(nal->hard_timeout);
     learn->priority = ntohs(nal->priority);
-    learn->cookie = ntohll(nal->cookie);
+    learn->cookie = nal->cookie;
     learn->table_id = nal->table_id;
     learn->fin_idle_timeout = ntohs(nal->fin_idle_timeout);
     learn->fin_hard_timeout = ntohs(nal->fin_hard_timeout);
@@ -262,7 +262,7 @@ learn_to_nxast(const struct ofpact_learn *learn, struct ofpbuf *openflow)
     nal->fin_idle_timeout = htons(learn->fin_idle_timeout);
     nal->fin_hard_timeout = htons(learn->fin_hard_timeout);
     nal->priority = htons(learn->priority);
-    nal->cookie = htonll(learn->cookie);
+    nal->cookie = learn->cookie;
     nal->flags = htons(learn->flags);
     nal->table_id = learn->table_id;
 
@@ -313,7 +313,7 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
     fm->priority = learn->priority;
     fm->cookie = htonll(0);
     fm->cookie_mask = htonll(0);
-    fm->new_cookie = htonll(learn->cookie);
+    fm->new_cookie = learn->cookie;
     fm->modify_cookie = fm->new_cookie != OVS_BE64_MAX;
     fm->table_id = learn->table_id;
     fm->command = OFPFC_MODIFY_STRICT;
@@ -579,7 +579,7 @@ learn_parse__(char *orig, char *arg, struct ofpbuf *ofpacts)
         } else if (!strcmp(name, "fin_hard_timeout")) {
             learn->fin_hard_timeout = atoi(value);
         } else if (!strcmp(name, "cookie")) {
-            learn->cookie = strtoull(value, NULL, 0);
+            learn->cookie = htonll(strtoull(value, NULL, 0));
         } else if (!strcmp(name, "send_flow_rem")) {
             learn->flags |= OFPFF_SEND_FLOW_REM;
         } else {
@@ -659,7 +659,7 @@ learn_format(const struct ofpact_learn *learn, struct ds *s)
         ds_put_cstr(s, ",send_flow_rem");
     }
     if (learn->cookie != 0) {
-        ds_put_format(s, ",cookie=%#"PRIx64, learn->cookie);
+        ds_put_format(s, ",cookie=%#"PRIx64, ntohll(learn->cookie));
     }
 
     for (spec = learn->specs; spec < &learn->specs[learn->n_specs]; spec++) {
