@@ -1149,10 +1149,17 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
     }
 
     may_learn = push.n_packets > 0;
-    if (ukey->xcache && !udpif->need_revalidate) {
+    if (ukey->xcache) {
         xlate_push_stats(ukey->xcache, may_learn, &push);
-        ok = true;
-        goto exit;
+        if (udpif->need_revalidate) {
+            xlate_cache_clear(ukey->xcache);
+            push.n_packets = 0;
+            push.n_bytes = 0;
+            may_learn = false;
+        } else {
+            ok = true;
+            goto exit;
+        }
     }
 
     error = xlate_receive(udpif->backer, NULL, ukey->key, ukey->key_len, &flow,
@@ -1161,9 +1168,6 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
         goto exit;
     }
 
-    if (udpif->need_revalidate) {
-        xlate_cache_clear(ukey->xcache);
-    }
     if (!ukey->xcache) {
         ukey->xcache = xlate_cache_new();
     }
