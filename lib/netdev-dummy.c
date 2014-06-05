@@ -21,6 +21,7 @@
 #include <errno.h>
 
 #include "dpif-netdev.h"
+#include "dynamic-string.h"
 #include "flow.h"
 #include "list.h"
 #include "netdev-provider.h"
@@ -54,6 +55,12 @@ enum dummy_packet_conn_type {
     NONE,       /* No connection is configured. */
     PASSIVE,    /* Listener. */
     ACTIVE      /* Connect to listener. */
+};
+
+enum dummy_netdev_conn_state {
+    CONN_STATE_CONNECTED,      /* Listener connected. */
+    CONN_STATE_NOT_CONNECTED,  /* Listener not connected.  */
+    CONN_STATE_UNKNOWN,        /* No relavent information.  */
 };
 
 struct dummy_packet_pconn {
@@ -559,6 +566,24 @@ dummy_packet_conn_send(struct dummy_packet_conn *conn,
     default:
         break;
     }
+}
+
+static enum dummy_netdev_conn_state
+dummy_netdev_get_conn_state(struct dummy_packet_conn *conn)
+{
+    enum dummy_netdev_conn_state state;
+
+    if (conn->type == ACTIVE) {
+        if (reconnect_is_connected(conn->u.rconn.reconnect)) {
+            state = CONN_STATE_CONNECTED;
+        } else {
+            state = CONN_STATE_NOT_CONNECTED;
+        }
+    } else {
+        state = CONN_STATE_UNKNOWN;
+    }
+
+    return state;
 }
 
 static void
@@ -1219,6 +1244,70 @@ netdev_dummy_set_admin_state(struct unixctl_conn *conn, int argc,
     unixctl_command_reply(conn, "OK");
 }
 
+static void
+display_conn_state__(struct ds *s, const char *name,
+                     enum dummy_netdev_conn_state state)
+{
+    ds_put_format(s, "%s: ", name);
+
+    switch (state) {
+    case CONN_STATE_CONNECTED:
+        ds_put_cstr(s, "connected\n");
+        break;
+
+    case CONN_STATE_NOT_CONNECTED:
+        ds_put_cstr(s, "disconnected\n");
+        break;
+
+    case CONN_STATE_UNKNOWN:
+    default:
+        ds_put_cstr(s, "unknown\n");
+        break;
+    };
+}
+
+static void
+netdev_dummy_conn_state(struct unixctl_conn *conn, int argc,
+                        const char *argv[], void *aux OVS_UNUSED)
+{
+    enum dummy_netdev_conn_state state = CONN_STATE_UNKNOWN;
+    struct ds s;
+
+    ds_init(&s);
+
+    if (argc > 1) {
+        const char *dev_name = argv[1];
+        struct netdev *netdev = netdev_from_name(dev_name);
+
+        if (netdev && is_dummy_class(netdev->netdev_class)) {
+            struct netdev_dummy *dummy_dev = netdev_dummy_cast(netdev);
+
+            ovs_mutex_lock(&dummy_dev->mutex);
+            state = dummy_netdev_get_conn_state(&dummy_dev->conn);
+            ovs_mutex_unlock(&dummy_dev->mutex);
+
+            netdev_close(netdev);
+        }
+        display_conn_state__(&s, dev_name, state);
+    } else {
+        struct netdev_dummy *netdev;
+
+        ovs_mutex_lock(&dummy_list_mutex);
+        LIST_FOR_EACH (netdev, list_node, &dummy_list) {
+            ovs_mutex_lock(&netdev->mutex);
+            state = dummy_netdev_get_conn_state(&netdev->conn);
+            ovs_mutex_unlock(&netdev->mutex);
+            if (state != CONN_STATE_UNKNOWN) {
+                display_conn_state__(&s, netdev->up.name, state);
+            }
+        }
+        ovs_mutex_unlock(&dummy_list_mutex);
+    }
+
+    unixctl_command_reply(conn, ds_cstr(&s));
+    ds_destroy(&s);
+}
+
 void
 netdev_dummy_register(bool override)
 {
@@ -1227,6 +1316,9 @@ netdev_dummy_register(bool override)
     unixctl_command_register("netdev-dummy/set-admin-state",
                              "[netdev] up|down", 1, 2,
                              netdev_dummy_set_admin_state, NULL);
+    unixctl_command_register("netdev-dummy/conn-state",
+                             "[netdev]", 0, 1,
+                             netdev_dummy_conn_state, NULL);
 
     if (override) {
         struct sset types;
