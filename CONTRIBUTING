@@ -82,6 +82,8 @@ The description should include:
         - Testing that you performed (or testing that should be done
           but you could not for whatever reason).
 
+        - Tags (see below).
+
 There is no need to describe what the patch actually changed, if the
 reader can see it for himself.
 
@@ -94,21 +96,116 @@ If you, the person sending the patch, did not write the patch
 yourself, then the very first line of the body should take the form
 "From: <author name> <author email>", followed by a blank line.  This
 will automatically cause the named author to be credited with
-authorship in the repository.  If others contributed to the patch, but
-are not the main authors, then please credit them as part of the
-description (e.g. "Thanks to Bob J. User for reporting this bug.").
+authorship in the repository.
 
-Please sign off on the patch as a submitter, and be sure to have the
-author(s) sign off for patches that you did not author.
+Tags
+----
 
-Simply include your name and email address as the last line of the commit
-message before any comments (and author too, if that is not you):
+The description ends with a series of tags, written one to a line as
+the last paragraph of the email.  Each tag indicates some property of
+the patch in an easily machine-parseable manner.
 
-Signed-off-by: Author Name <author.name@email.address...>
-Signed-off-by: Submitter Name <submitter.name@email.address...>
+Examples of common tags follow.
 
-By doing this, you are agreeing to the Developer's Certificate of Origin
-(see below for more details).
+    Signed-off-by: Author Name <author.name@email.address...>
+
+        Informally, this indicates that Author Name is the author or
+        submitter of a patch and has the authority to submit it under
+        the terms of the license.  The formal meaning is to agree to
+        the Developer's Certificate of Origin (see below).
+
+        If the author and submitter are different, each must sign off.
+        If the patch has more than one author, all must sign off.
+
+        Signed-off-by: Author Name <author.name@email.address...>
+        Signed-off-by: Submitter Name <submitter.name@email.address...>
+
+    Co-authored-by: Author Name <author.name@email.address...>
+
+        Git can only record a single person as the author of a given
+        patch.  In the rare event that a patch has multiple authors,
+        one must be given the credit in Git and the others must be
+        credited via Co-authored-by: tags.  (All co-authors must also
+        sign off.)
+
+    Acked-by: Reviewer Name <reviewer.name@email.address...>
+
+        Reviewers will often give an Acked-by: tag to code of which
+        they approve.  It is polite for the submitter to add the tag
+        before posting the next version of the patch or applying the
+        patch to the repository.  Quality reviewing is hard work, so
+        this gives a small amount of credit to the reviewer.
+
+        Not all reviewers give Acked-by: tags when they provide
+        positive reviews.  It's customary only to add tags from
+        reviewers who actually provide them explicitly.
+
+    Tested-by: Tester Name <reviewer.name@email.address...>
+
+        When someone tests a patch, it is customary to add a
+        Tested-by: tag indicating that.  It's rare for a tester to
+        actually provide the tag; usually the patch submitter makes
+        the tag himself in response to an email indicating successful
+        testing results.
+
+    Reported-by: Reporter Name <reporter.name@email.address...>
+
+        When a patch fixes a bug reported by some person, please
+        credit the reporter in the commit log in this fashion.  Please
+        also add the reporter's name and email address to the list of
+        people who provided helpful bug reports in the AUTHORS file at
+        the top of the source tree.
+
+        Fairly often, the reporter of a bug also tests the fix.
+        Occasionally one sees a combined "Reported-and-tested-by:" tag
+        used to indicate this.  It is also acceptable, and more
+        common, to include both tags separately.
+
+        (If a bug report is received privately, it might not always be
+        appropriate to publicly credit the reporter.  If in doubt,
+        please ask the reporter.)
+
+    Requested-by: Requester Name <requester.name@email.address...>
+    Suggested-by: Suggester Name <suggester.name@email.address...>
+
+        When a patch implements a request or a suggestion made by some
+        person, please credit that person in the commit log in this
+        fashion.  For a helpful suggestion, please also add the
+        person's name and email address to the list of people who
+        provided suggestions in the AUTHORS file at the top of the
+        source tree.
+
+        (If a suggestion or a request is received privately, it might
+        not always be appropriate to publicly give credit.  If in
+        doubt, please ask.)
+
+    Reported-at: <URL>
+
+        If a patch fixes or is otherwise related to a bug reported in
+        a public bug tracker, please include a reference to the bug in
+        the form of a URL to the specific bug, e.g.:
+
+        Reported-at: https://bugs.debian.org/743635
+
+        This is also an appropriate way to refer to bug report emails
+        in public email archives, e.g.:
+
+        Reported-at: http://openvswitch.org/pipermail/dev/2014-June/040952.html
+
+    VMware-BZ: #1234567
+
+        If a patch fixes or is otherwise related to a bug reported in
+        a private bug tracker, you may include some tracking ID for
+        the bug for your own reference.  Please include some
+        identifier to make the origin clear, e.g. "VMware-BZ" in this
+        case refers to VMware's internal Bugzilla instance.
+
+    Bug #1234567.
+    Issue: 1234567
+
+        These are obsolete forms of VMware-BZ: that can still be seen
+        in old change log entries.  (They are obsolete because they do
+        not tell the reader what bug tracker is referred to.)
 
 Developer's Certificate of Origin
 ---------------------------------
