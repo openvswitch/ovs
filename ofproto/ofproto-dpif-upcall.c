@@ -58,17 +58,21 @@ struct handler {
     uint32_t handler_id;               /* Handler id. */
 };
 
+/* In the absence of a multiple-writer multiple-reader datastructure for
+ * storing ukeys, we use a large number of cmaps, each with its own lock for
+ * writing. */
+#define N_UMAPS 512 /* per udpif. */
+struct umap {
+    struct ovs_mutex mutex;            /* Take for writing to the following. */
+    struct cmap cmap;                  /* Datapath flow keys. */
+};
+
 /* A thread that processes datapath flows, updates OpenFlow statistics, and
  * updates or removes them if necessary. */
 struct revalidator {
     struct udpif *udpif;               /* Parent udpif. */
     pthread_t thread;                  /* Thread ID. */
     unsigned int id;                   /* ovsthread_id_self(). */
-    struct ovs_mutex *mutex;           /* Points into udpif->ukeys for this
-                                          revalidator. Required for writing
-                                          to 'ukeys'. */
-    struct cmap *ukeys;                /* Points into udpif->ukeys for this
-                                          revalidator. Used for GC phase. */
 };
 
 /* An upcall handler for ofproto_dpif.
@@ -112,16 +116,12 @@ struct udpif {
     long long int dump_duration;       /* Duration of the last flow dump. */
     struct seq *dump_seq;              /* Increments each dump iteration. */
 
-    /* There are 'n_revalidators' ukey cmaps. Each revalidator retains a
-     * reference to one of these for garbage collection.
+    /* There are 'N_UMAPS' maps containing 'struct udpif_key' elements.
      *
      * During the flow dump phase, revalidators insert into these with a random
      * distribution. During the garbage collection phase, each revalidator
-     * takes care of garbage collecting one of these hmaps. */
-    struct {
-        struct ovs_mutex mutex;        /* Take for writing to the following. */
-        struct cmap cmap;              /* Datapath flow keys. */
-    } *ukeys;
+     * takes care of garbage collecting a slice of these maps. */
+    struct umap *ukeys;
 
     /* Datapath flow statistics. */
     unsigned int max_n_flows;
@@ -185,9 +185,10 @@ struct upcall {
  * the dump phase, but are owned by a single revalidator, and are destroyed
  * by that revalidator during the garbage-collection phase.
  *
- * While some elements of a udpif_key are protected by a mutex, the ukey itself
- * is not.  Therefore it is not safe to destroy a udpif_key except when all
- * revalidators are in garbage collection phase, or they aren't running. */
+ * The mutex within the ukey protects some members of the ukey. The ukey
+ * itself is protected by RCU and is held within a umap in the parent udpif.
+ * Adding or removing a ukey from a umap is only safe when holding the
+ * corresponding umap lock. */
 struct udpif_key {
     struct cmap_node cmap_node;     /* In parent revalidator 'ukeys' map. */
 
@@ -251,7 +252,7 @@ static bool ukey_acquire(struct udpif *udpif, const struct nlattr *key,
                          size_t key_len, long long int used,
                          struct udpif_key **result);
 static void ukey_delete__(struct udpif_key *);
-static void ukey_delete(struct revalidator *, struct udpif_key *);
+static void ukey_delete(struct umap *, struct udpif_key *);
 static enum upcall_type classify_upcall(enum dpif_upcall_type type,
                                         const struct nlattr *userdata);
 
@@ -297,6 +298,11 @@ udpif_create(struct dpif_backer *backer, struct dpif *dpif)
     atomic_init(&udpif->n_flows, 0);
     atomic_init(&udpif->n_flows_timestamp, LLONG_MIN);
     ovs_mutex_init(&udpif->n_flows_mutex);
+    udpif->ukeys = xmalloc(N_UMAPS * sizeof *udpif->ukeys);
+    for (int i = 0; i < N_UMAPS; i++) {
+        cmap_init(&udpif->ukeys[i].cmap);
+        ovs_mutex_init(&udpif->ukeys[i].mutex);
+    }
 
     dpif_register_upcall_cb(dpif, upcall_cb, udpif);
 
@@ -322,6 +328,13 @@ void
 udpif_destroy(struct udpif *udpif)
 {
     udpif_stop_threads(udpif);
+
+    for (int i = 0; i < N_UMAPS; i++) {
+        cmap_destroy(&udpif->ukeys[i].cmap);
+        ovs_mutex_destroy(&udpif->ukeys[i].mutex);
+    }
+    free(udpif->ukeys);
+    udpif->ukeys = NULL;
 
     list_remove(&udpif->list_node);
     latch_destroy(&udpif->exit_latch);
@@ -359,9 +372,6 @@ udpif_stop_threads(struct udpif *udpif)
             /* Delete ukeys, and delete all flows from the datapath to prevent
              * double-counting stats. */
             revalidator_purge(revalidator);
-
-            cmap_destroy(&udpif->ukeys[i].cmap);
-            ovs_mutex_destroy(&udpif->ukeys[i].mutex);
         }
 
         latch_poll(&udpif->exit_latch);
@@ -375,9 +385,6 @@ udpif_stop_threads(struct udpif *udpif)
         free(udpif->handlers);
         udpif->handlers = NULL;
         udpif->n_handlers = 0;
-
-        free(udpif->ukeys);
-        udpif->ukeys = NULL;
     }
 }
 
@@ -409,15 +416,10 @@ udpif_start_threads(struct udpif *udpif, size_t n_handlers,
         udpif->reval_exit = false;
         udpif->revalidators = xzalloc(udpif->n_revalidators
                                       * sizeof *udpif->revalidators);
-        udpif->ukeys = xmalloc(sizeof *udpif->ukeys * n_revalidators);
         for (i = 0; i < udpif->n_revalidators; i++) {
             struct revalidator *revalidator = &udpif->revalidators[i];
 
             revalidator->udpif = udpif;
-            cmap_init(&udpif->ukeys[i].cmap);
-            ovs_mutex_init(&udpif->ukeys[i].mutex);
-            revalidator->mutex = &udpif->ukeys[i].mutex;
-            revalidator->ukeys = &udpif->ukeys[i].cmap;
             revalidator->thread = ovs_thread_create(
                 "revalidator", udpif_revalidator, revalidator);
         }
@@ -500,7 +502,7 @@ udpif_get_memory_usage(struct udpif *udpif, struct simap *usage)
     simap_increase(usage, "handlers", udpif->n_handlers);
 
     simap_increase(usage, "revalidators", udpif->n_revalidators);
-    for (i = 0; i < udpif->n_revalidators; i++) {
+    for (i = 0; i < N_UMAPS; i++) {
         simap_increase(usage, "udpif keys", cmap_count(&udpif->ukeys[i].cmap));
     }
 }
@@ -1163,7 +1165,7 @@ ukey_lookup(struct udpif *udpif, const struct nlattr *key, size_t key_len,
             uint32_t hash)
 {
     struct udpif_key *ukey;
-    struct cmap *cmap = &udpif->ukeys[hash % udpif->n_revalidators].cmap;
+    struct cmap *cmap = &udpif->ukeys[hash % N_UMAPS].cmap;
 
     CMAP_FOR_EACH_WITH_HASH (ukey, cmap_node, hash, cmap) {
         if (ukey->key_len == key_len && !memcmp(ukey->key, key, key_len)) {
@@ -1213,7 +1215,7 @@ ukey_acquire(struct udpif *udpif, const struct nlattr *key, size_t key_len,
     bool locked = false;
 
     hash = hash_bytes(key, key_len, udpif->secret);
-    idx = hash % udpif->n_revalidators;
+    idx = hash % N_UMAPS;
 
     ovs_mutex_lock(&udpif->ukeys[idx].mutex);
     ukey = ukey_lookup(udpif, key, key_len, hash);
@@ -1244,9 +1246,10 @@ ukey_delete__(struct udpif_key *ukey)
 }
 
 static void
-ukey_delete(struct revalidator *revalidator, struct udpif_key *ukey)
+ukey_delete(struct umap *umap, struct udpif_key *ukey)
+    OVS_REQUIRES(umap->mutex)
 {
-    cmap_remove(revalidator->ukeys, &ukey->cmap_node, ukey->hash);
+    cmap_remove(&umap->cmap, &ukey->cmap_node, ukey->hash);
     ovsrcu_postpone(ukey_delete__, ukey);
 }
 
@@ -1496,17 +1499,17 @@ push_dump_ops__(struct udpif *udpif, struct dump_op *ops, size_t n_ops)
 }
 
 static void
-push_dump_ops(struct revalidator *revalidator,
+push_dump_ops(struct udpif *udpif, struct umap *umap,
               struct dump_op *ops, size_t n_ops)
 {
     int i;
 
-    push_dump_ops__(revalidator->udpif, ops, n_ops);
-    ovs_mutex_lock(revalidator->mutex);
+    push_dump_ops__(udpif, ops, n_ops);
+    ovs_mutex_lock(&umap->mutex);
     for (i = 0; i < n_ops; i++) {
-        ukey_delete(revalidator, ops[i].ukey);
+        ukey_delete(umap, ops[i].ukey);
     }
-    ovs_mutex_unlock(revalidator->mutex);
+    ovs_mutex_unlock(&umap->mutex);
 }
 
 static void
@@ -1634,45 +1637,53 @@ handle_missed_revalidation(struct revalidator *revalidator,
 static void
 revalidator_sweep__(struct revalidator *revalidator, bool purge)
 {
-    struct dump_op ops[REVALIDATE_MAX_BATCH];
-    struct udpif_key *ukey;
-    size_t n_ops;
+    struct udpif *udpif;
     uint64_t dump_seq;
+    int slice;
 
-    n_ops = 0;
-    dump_seq = seq_read(revalidator->udpif->dump_seq);
+    udpif = revalidator->udpif;
+    dump_seq = seq_read(udpif->dump_seq);
+    slice = revalidator - udpif->revalidators;
+    ovs_assert(slice < udpif->n_revalidators);
 
-    CMAP_FOR_EACH(ukey, cmap_node, revalidator->ukeys) {
-        bool flow_exists, seq_mismatch;
+    for (int i = slice; i < N_UMAPS; i += udpif->n_revalidators) {
+        struct dump_op ops[REVALIDATE_MAX_BATCH];
+        struct udpif_key *ukey;
+        struct umap *umap = &udpif->ukeys[i];
+        size_t n_ops = 0;
 
-        ovs_mutex_lock(&ukey->mutex);
-        flow_exists = ukey->flow_exists;
-        seq_mismatch = (ukey->dump_seq != dump_seq
-                        && revalidator->udpif->need_revalidate);
-        ovs_mutex_unlock(&ukey->mutex);
+        CMAP_FOR_EACH(ukey, cmap_node, &umap->cmap) {
+            bool flow_exists, seq_mismatch;
 
-        if (flow_exists
-            && (purge
-                || (seq_mismatch
-                    && !handle_missed_revalidation(revalidator, ukey)))) {
-            struct dump_op *op = &ops[n_ops++];
+            ovs_mutex_lock(&ukey->mutex);
+            flow_exists = ukey->flow_exists;
+            seq_mismatch = (ukey->dump_seq != dump_seq
+                            && revalidator->udpif->need_revalidate);
+            ovs_mutex_unlock(&ukey->mutex);
 
-            dump_op_init(op, ukey->key, ukey->key_len, ukey);
-            if (n_ops == REVALIDATE_MAX_BATCH) {
-                push_dump_ops(revalidator, ops, n_ops);
-                n_ops = 0;
+            if (flow_exists
+                && (purge
+                    || (seq_mismatch
+                        && !handle_missed_revalidation(revalidator, ukey)))) {
+                struct dump_op *op = &ops[n_ops++];
+
+                dump_op_init(op, ukey->key, ukey->key_len, ukey);
+                if (n_ops == REVALIDATE_MAX_BATCH) {
+                    push_dump_ops(udpif, umap, ops, n_ops);
+                    n_ops = 0;
+                }
+            } else if (!flow_exists) {
+                ovs_mutex_lock(&umap->mutex);
+                ukey_delete(umap, ukey);
+                ovs_mutex_unlock(&umap->mutex);
             }
-        } else if (!flow_exists) {
-            ovs_mutex_lock(revalidator->mutex);
-            ukey_delete(revalidator, ukey);
-            ovs_mutex_unlock(revalidator->mutex);
         }
-    }
 
-    if (n_ops) {
-        push_dump_ops(revalidator, ops, n_ops);
+        if (n_ops) {
+            push_dump_ops(udpif, umap, ops, n_ops);
+        }
+        ovsrcu_quiesce();
     }
-    ovsrcu_quiesce();
 }
 
 static void
@@ -1705,13 +1716,16 @@ upcall_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
             " (avg %u) (max %u) (limit %u)\n", udpif_get_n_flows(udpif),
             udpif->avg_n_flows, udpif->max_n_flows, flow_limit);
         ds_put_format(&ds, "\tdump duration : %lldms\n", udpif->dump_duration);
-
         ds_put_char(&ds, '\n');
+
         for (i = 0; i < n_revalidators; i++) {
             struct revalidator *revalidator = &udpif->revalidators[i];
+            int j, elements = 0;
 
-            ds_put_format(&ds, "\t%u: (keys %"PRIuSIZE")\n",
-                          revalidator->id, cmap_count(&udpif->ukeys[i].cmap));
+            for (j = i; j < N_UMAPS; j += n_revalidators) {
+                elements += cmap_count(&udpif->ukeys[j].cmap);
+            }
+            ds_put_format(&ds, "\t%u: (keys %d)\n", revalidator->id, elements);
         }
     }
 
