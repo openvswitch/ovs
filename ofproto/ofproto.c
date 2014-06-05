@@ -163,7 +163,6 @@ static void oftable_enable_eviction(struct oftable *,
 static void oftable_remove_rule(struct rule *rule) OVS_REQUIRES(ofproto_mutex);
 static void oftable_remove_rule__(struct ofproto *, struct rule *)
     OVS_REQUIRES(ofproto_mutex);
-static void oftable_insert_rule(struct rule *);
 
 /* A set of rules within a single OpenFlow table (oftable) that have the same
  * values for the oftable's eviction_fields.  A rule to be evicted, when one is
@@ -273,9 +272,6 @@ static bool rule_is_modifiable(const struct rule *rule,
 static enum ofperr add_flow(struct ofproto *, struct ofconn *,
                             struct ofputil_flow_mod *,
                             const struct ofp_header *);
-static void do_add_flow(struct ofproto *, struct ofconn *,
-                        const struct ofp_header *request, uint32_t buffer_id,
-                        struct rule *);
 static enum ofperr modify_flows__(struct ofproto *, struct ofconn *,
                                   struct ofputil_flow_mod *,
                                   const struct ofp_header *,
@@ -304,6 +300,7 @@ static uint64_t pick_fallback_dpid(void);
 static void ofproto_destroy__(struct ofproto *);
 static void update_mtu(struct ofproto *, struct ofport *);
 static void meter_delete(struct ofproto *, uint32_t first, uint32_t last);
+static void meter_insert_rule(struct rule *);
 
 /* unixctl. */
 static void ofproto_unixctl_init(void);
@@ -3963,6 +3960,8 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
          struct ofputil_flow_mod *fm, const struct ofp_header *request)
     OVS_REQUIRES(ofproto_mutex)
 {
+    const struct rule_actions *actions;
+    struct ofopgroup *group;
     struct oftable *table;
     struct cls_rule cr;
     struct rule *rule;
@@ -4084,8 +4083,8 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
 
     *CONST_CAST(uint8_t *, &rule->table_id) = table - ofproto->tables;
     rule->flags = fm->flags & OFPUTIL_FF_STATE;
-    ovsrcu_set(&rule->actions,
-               rule_actions_create(ofproto, fm->ofpacts, fm->ofpacts_len));
+    actions = rule_actions_create(ofproto, fm->ofpacts, fm->ofpacts_len);
+    ovsrcu_set(&rule->actions, actions);
     list_init(&rule->meter_list_node);
     rule->eviction_group = NULL;
     list_init(&rule->expirable);
@@ -4100,26 +4099,25 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
         return error;
     }
 
-    /* Insert rule. */
-    do_add_flow(ofproto, ofconn, request, fm->buffer_id, rule);
+    if (fm->hard_timeout || fm->idle_timeout) {
+        list_insert(&ofproto->expirable, &rule->expirable);
+    }
+    cookies_insert(ofproto, rule);
+    eviction_group_add_rule(rule);
+    if (actions->provider_meter_id != UINT32_MAX) {
+        meter_insert_rule(rule);
+    }
 
-    return error;
-}
+    fat_rwlock_wrlock(&table->cls.rwlock);
+    classifier_insert(&table->cls, CONST_CAST(struct cls_rule *, &rule->cr));
+    fat_rwlock_unlock(&table->cls.rwlock);
 
-static void
-do_add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
-            const struct ofp_header *request, uint32_t buffer_id,
-            struct rule *rule)
-    OVS_REQUIRES(ofproto_mutex)
-{
-    struct ofopgroup *group;
-
-    oftable_insert_rule(rule);
-
-    group = ofopgroup_create(ofproto, ofconn, request, buffer_id);
+    group = ofopgroup_create(ofproto, ofconn, request, fm->buffer_id);
     ofoperation_create(group, rule, OFOPERATION_ADD, 0);
     ofproto->ofproto_class->rule_insert(rule);
     ofopgroup_submit(group);
+
+    return error;
 }
 
 /* OFPFC_MODIFY and OFPFC_MODIFY_STRICT. */
@@ -5026,6 +5024,18 @@ get_provider_meter_id(const struct ofproto *ofproto, uint32_t of_meter_id)
         }
     }
     return UINT32_MAX;
+}
+
+/* Finds the meter invoked by 'rule''s actions and adds 'rule' to the meter's
+ * list of rules. */
+static void
+meter_insert_rule(struct rule *rule)
+{
+    const struct rule_actions *a = rule_get_actions(rule);
+    uint32_t meter_id = ofpacts_get_meter(a->ofpacts, a->ofpacts_len);
+    struct meter *meter = rule->ofproto->meters[meter_id];
+
+    list_insert(&meter->rules, &rule->meter_list_node);
 }
 
 static void
@@ -6883,40 +6893,6 @@ oftable_remove_rule(struct rule *rule)
     OVS_REQUIRES(ofproto_mutex)
 {
     oftable_remove_rule__(rule->ofproto, rule);
-}
-
-/* Inserts 'rule' into its oftable, which must not already contain any rule for
- * the same cls_rule. */
-static void
-oftable_insert_rule(struct rule *rule)
-    OVS_REQUIRES(ofproto_mutex)
-{
-    struct ofproto *ofproto = rule->ofproto;
-    struct oftable *table = &ofproto->tables[rule->table_id];
-    const struct rule_actions *actions;
-    bool may_expire;
-
-    ovs_mutex_lock(&rule->mutex);
-    may_expire = rule->hard_timeout || rule->idle_timeout;
-    ovs_mutex_unlock(&rule->mutex);
-
-    if (may_expire) {
-        list_insert(&ofproto->expirable, &rule->expirable);
-    }
-
-    cookies_insert(ofproto, rule);
-
-    actions = rule_get_actions(rule);
-    if (actions->provider_meter_id != UINT32_MAX) {
-        uint32_t meter_id = ofpacts_get_meter(actions->ofpacts,
-                                              actions->ofpacts_len);
-        struct meter *meter = ofproto->meters[meter_id];
-        list_insert(&meter->rules, &rule->meter_list_node);
-    }
-    fat_rwlock_wrlock(&table->cls.rwlock);
-    classifier_insert(&table->cls, CONST_CAST(struct cls_rule *, &rule->cr));
-    fat_rwlock_unlock(&table->cls.rwlock);
-    eviction_group_add_rule(rule);
 }
 
 /* unixctl commands. */
