@@ -1073,15 +1073,13 @@ dp_netdev_flow_cast(const struct cls_rule *cr)
 
 static struct dp_netdev_flow *
 dp_netdev_lookup_flow(const struct dp_netdev *dp, const struct miniflow *key)
-    OVS_EXCLUDED(dp->cls.rwlock)
+    OVS_REQ_RDLOCK(dp->cls.rwlock)
 {
     struct dp_netdev_flow *netdev_flow;
     struct cls_rule *rule;
 
-    fat_rwlock_rdlock(&dp->cls.rwlock);
     rule = classifier_lookup_miniflow_first(&dp->cls, key);
     netdev_flow = dp_netdev_flow_cast(rule);
-    fat_rwlock_unlock(&dp->cls.rwlock);
 
     return netdev_flow;
 }
@@ -1320,7 +1318,9 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
     miniflow_init(&miniflow, &flow);
 
     ovs_mutex_lock(&dp->flow_mutex);
+    fat_rwlock_rdlock(&dp->cls.rwlock);
     netdev_flow = dp_netdev_lookup_flow(dp, &miniflow);
+    fat_rwlock_unlock(&dp->cls.rwlock);
     if (!netdev_flow) {
         if (put->flags & DPIF_FP_CREATE) {
             if (hmap_count(&dp->flow_table) < MAX_FLOWS) {
@@ -2080,6 +2080,7 @@ dp_netdev_input(struct dp_netdev *dp, struct dpif_packet **packets, int cnt,
 
     miniflow_initialize(&key.flow, key.buf);
 
+    fat_rwlock_rdlock(&dp->cls.rwlock);
     for (i = 0; i < cnt; i++) {
         struct dp_netdev_flow *netdev_flow;
         struct ofpbuf *buf = &packets[i]->ofpbuf;
@@ -2120,6 +2121,7 @@ dp_netdev_input(struct dp_netdev *dp, struct dpif_packet **packets, int cnt,
             }
         }
     }
+    fat_rwlock_unlock(&dp->cls.rwlock);
 
     if (batch.flow) {
         packet_batch_execute(&batch, dp);
