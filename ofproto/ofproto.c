@@ -222,8 +222,9 @@ static enum ofperr add_flow(struct ofproto *, struct ofputil_flow_mod *,
 static enum ofperr modify_flows__(struct ofproto *, struct ofputil_flow_mod *,
                                   const struct rule_collection *,
                                   const struct flow_mod_requester *);
-static void delete_flow__(struct rule *, enum ofp_flow_removed_reason,
-                          const struct flow_mod_requester *)
+static void delete_flows__(const struct rule_collection *,
+                           enum ofp_flow_removed_reason,
+                           const struct flow_mod_requester *)
     OVS_REQUIRES(ofproto_mutex);
 
 static enum ofperr send_buffered_packet(struct ofconn *, uint32_t buffer_id,
@@ -1165,10 +1166,12 @@ static void
 ofproto_rule_delete__(struct rule *rule, uint8_t reason)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct ofproto *ofproto = rule->ofproto;
+    struct rule_collection rules;
 
-    delete_flow__(rule, reason, NULL);
-    ofmonitor_flush(ofproto->connmgr);
+    rules.rules = rules.stub;
+    rules.n = 1;
+    rules.stub[0] = rule;
+    delete_flows__(&rules, reason, NULL);
 }
 
 /* Deletes 'rule' from 'ofproto'.
@@ -4101,39 +4104,29 @@ modify_flow_strict(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
 
 /* OFPFC_DELETE implementation. */
 
+/* Deletes the rules listed in 'rules'. */
 static void
-delete_flow__(struct rule *rule, enum ofp_flow_removed_reason reason,
-              const struct flow_mod_requester *req)
-    OVS_REQUIRES(ofproto_mutex)
-{
-    struct ofproto *ofproto = rule->ofproto;
-
-    ofproto_rule_send_removed(rule, reason);
-
-    ofmonitor_report(ofproto->connmgr, rule, NXFME_DELETED, reason,
-                     req ? req->ofconn : NULL, req ? req->xid : 0);
-    oftable_remove_rule(rule);
-    ofproto->ofproto_class->rule_delete(rule);
-}
-
-/* Deletes the rules listed in 'rules'.
- *
- * Returns 0 on success, otherwise an OpenFlow error code. */
-static enum ofperr
-delete_flows__(struct ofproto *ofproto,
-               const struct rule_collection *rules,
+delete_flows__(const struct rule_collection *rules,
                enum ofp_flow_removed_reason reason,
                const struct flow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
-    size_t i;
+    if (rules->n) {
+        struct ofproto *ofproto = rules->rules[0]->ofproto;
+        size_t i;
 
-    for (i = 0; i < rules->n; i++) {
-        delete_flow__(rules->rules[i], reason, req);
+        for (i = 0; i < rules->n; i++) {
+            struct rule *rule = rules->rules[i];
+
+            ofproto_rule_send_removed(rule, reason);
+
+            ofmonitor_report(ofproto->connmgr, rule, NXFME_DELETED, reason,
+                             req ? req->ofconn : NULL, req ? req->xid : 0);
+            oftable_remove_rule(rule);
+            ofproto->ofproto_class->rule_delete(rule);
+        }
+        ofmonitor_flush(ofproto->connmgr);
     }
-    ofmonitor_flush(ofproto->connmgr);
-
-    return 0;
 }
 
 /* Implements OFPFC_DELETE. */
@@ -4156,7 +4149,7 @@ delete_flows_loose(struct ofproto *ofproto,
     rule_criteria_destroy(&criteria);
 
     if (!error && rules.n > 0) {
-        error = delete_flows__(ofproto, &rules, fm->delete_reason, req);
+        delete_flows__(&rules, fm->delete_reason, req);
     }
     rule_collection_destroy(&rules);
 
@@ -4182,7 +4175,7 @@ delete_flow_strict(struct ofproto *ofproto, const struct ofputil_flow_mod *fm,
     rule_criteria_destroy(&criteria);
 
     if (!error && rules.n > 0) {
-        error = delete_flows__(ofproto, &rules, fm->delete_reason, req);
+        delete_flows__(&rules, fm->delete_reason, req);
     }
     rule_collection_destroy(&rules);
 
@@ -4905,7 +4898,7 @@ handle_delete_meter(struct ofconn *ofconn, struct ofputil_meter_mod *mm)
         }
     }
     if (rules.n > 0) {
-        delete_flows__(ofproto, &rules, OFPRR_METER_DELETE, NULL);
+        delete_flows__(&rules, OFPRR_METER_DELETE, NULL);
     }
 
     /* Delete the meters. */
