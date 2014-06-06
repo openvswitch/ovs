@@ -1339,6 +1339,9 @@ ofproto_destroy__(struct ofproto *ofproto)
 
     hmap_destroy(&ofproto->deletions);
 
+    ovs_assert(hindex_is_empty(&ofproto->cookies));
+    hindex_destroy(&ofproto->cookies);
+
     free(ofproto->vlan_bitmap);
 
     ofproto->ofproto_class->dealloc(ofproto);
