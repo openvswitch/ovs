@@ -186,11 +186,16 @@ struct eviction_group {
     struct heap rules;          /* Contains "struct rule"s. */
 };
 
-static bool choose_rule_to_evict(struct oftable *table, struct rule **rulep);
-static void ofproto_evict(struct ofproto *) OVS_EXCLUDED(ofproto_mutex);
-static uint32_t rule_eviction_priority(struct ofproto *ofproto, struct rule *);
-static void eviction_group_add_rule(struct rule *);
-static void eviction_group_remove_rule(struct rule *);
+static bool choose_rule_to_evict(struct oftable *table, struct rule **rulep)
+    OVS_REQUIRES(ofproto_mutex);
+static void ofproto_evict(struct ofproto *)
+    OVS_EXCLUDED(ofproto_mutex);
+static uint32_t rule_eviction_priority(struct ofproto *ofproto, struct rule *)
+    OVS_REQUIRES(ofproto_mutex);;
+static void eviction_group_add_rule(struct rule *)
+    OVS_REQUIRES(ofproto_mutex);
+static void eviction_group_remove_rule(struct rule *)
+    OVS_REQUIRES(ofproto_mutex);
 
 /* Criteria that flow_mod and other operations use for selecting rules on
  * which to operate. */
