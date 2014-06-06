@@ -284,7 +284,7 @@ poll_block(void)
         COVERAGE_INC(poll_zero_timeout);
     }
 
-    timewarp_wait();
+    timewarp_run();
     pollfds = xmalloc(hmap_count(&loop->poll_nodes) * sizeof *pollfds);
 
 #ifdef _WIN32

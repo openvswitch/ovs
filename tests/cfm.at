@@ -63,12 +63,12 @@ done
 
 # advance clock to pass the fault check timeout and check cfm
 # status update in OVSDB.
-for i in `seq 0 14`; do ovs-appctl time/warp 100; done
+ovs-appctl time/warp 1500 100
 CFM_CHECK_DB([p0], [true], [recv], [1], [], [], [up])
 
 # remove the cfm on p0 and status should be all empty.
 AT_CHECK([ovs-vsctl remove int p0 cfm_mpid 1])
-for i in `seq 0 4`; do ovs-appctl time/warp 100; done
+ovs-appctl time/warp 500 100
 CFM_CHECK_DB([p0], [[[]]], [], [[[]]], [], [], [[[]]])
 
 OVS_VSWITCHD_STOP
@@ -91,18 +91,18 @@ ovs-appctl time/stop
 
 AT_CHECK([ovs-vsctl set Interface p0 cfm_mpid=1])
 # check cfm status update in OVSDB.
-for i in `seq 0 14`; do ovs-appctl time/warp 100; done
+ovs-appctl time/warp 1500 100
 CFM_CHECK_DB([p0], [true], [recv], [1], [], [], [up])
 
 # turn cfm on p1 on, cfm status of p0 and p1 should all go up.
 AT_CHECK([ovs-vsctl set interface p1 cfm_mpid=2])
-for i in `seq 0 14`; do ovs-appctl time/warp 100; done
+ovs-appctl time/warp 1500 100
 CFM_CHECK_DB([p0], [false], [], [2], [], [2], [up])
 CFM_CHECK_DB([p1], [false], [], [0], [], [1], [up])
 
 # turn cfm on p1 off, cfm status of p0 should go down again.
 AT_CHECK([ovs-vsctl remove int p1 cfm_mpid 2])
-for i in `seq 0 14`; do ovs-appctl time/warp 100; done
+ovs-appctl time/warp 1500 100
 CFM_CHECK_DB([p0], [true], [recv], [3], [], [], [up])
 
 OVS_VSWITCHD_STOP
@@ -123,7 +123,7 @@ OVS_VSWITCHD_START([add-br br1 -- \
 
 ovs-appctl time/stop
 # wait for a while to stablize cfm.
-for i in `seq 0 100`; do ovs-appctl time/warp 100; done
+ovs-appctl time/warp 10100 100
 CFM_CHECK_EXTENDED([p0], [1], [100], [up], [up], [300ms], [2], [up])
 CFM_CHECK_EXTENDED([p1], [2], [100], [up], [up], [300ms], [1], [up])
 
@@ -166,7 +166,7 @@ OVS_VSWITCHD_START([add-br br1 -- \
 ovs-appctl time/stop
 # wait for a while to stablize cfm. (need a longer time, since in demand mode
 # the fault interval is (MAX(ccm_interval_ms, 500) * 3.5) ms)
-for i in `seq 0 200`; do ovs-appctl time/warp 100; done
+ovs-appctl time/warp 20100 100
 CFM_CHECK_EXTENDED([p0], [1], [100], [up], [up], [300ms], [2], [up])
 CFM_CHECK_EXTENDED([p1], [2], [100], [up], [up], [300ms], [1], [up])
 
@@ -194,7 +194,7 @@ CFM_CHECK_EXTENDED_FAULT([p0], [1], [recv], [0], [up], [up], [300ms])
 # now turn on the cfm on p1 again,
 AT_CHECK([ovs-vsctl set Interface p1 cfm_mpid=2])
 # cfm should be up for both p0 and p1
-for i in `seq 0 200`; do ovs-appctl time/warp 100; done
+ovs-appctl time/warp 20100 100
 CFM_CHECK_EXTENDED([p0], [1], [100], [up], [up], [300ms], [2], [up])
 CFM_CHECK_EXTENDED([p1], [2], [100], [up], [up], [300ms], [1], [up])
 
@@ -228,19 +228,19 @@ OVS_VSWITCHD_START([add-br br1 -- \
 ovs-appctl time/stop
 
 # wait for a while to stablize cfm.
-for i in `seq 0 100`; do ovs-appctl time/warp 100; done
+ovs-appctl time/warp 10100 100
 CFM_CHECK_EXTENDED([p0], [1], [100], [up], [up], [100ms], [2], [up])
 CFM_CHECK_EXTENDED([p1], [2], [100], [up], [up], [100ms], [1], [up])
 
 # turn cfm on p1 off, should increment the cfm_flap_count on p0.
 AT_CHECK([ovs-vsctl remove interface p1 cfm_mpid 2])
-for i in `seq 0 10`; do ovs-appctl time/warp 100; done
+ovs-appctl time/warp 1100 100
 CFM_VSCTL_LIST_IFACE([p0], [cfm_flap_count], [cfm_flap_count      : 1])
 CFM_VSCTL_LIST_IFACE([p1], [cfm_flap_count], [cfm_flap_count      : [[]]])
 
 # turn cfm on p1 on again, should increment the cfm_flap_count on p0.
 AT_CHECK([ovs-vsctl set interface p1 cfm_mpid=2])
-for i in `seq 0 10`; do ovs-appctl time/warp 100; done
+ovs-appctl time/warp 1100 100
 CFM_VSCTL_LIST_IFACE([p0], [cfm_flap_count], [cfm_flap_count      : 2])
 
 OVS_VSWITCHD_STOP
@@ -259,7 +259,7 @@ OVS_VSWITCHD_START([add-br br1 -- \
 
 ovs-appctl time/stop
 # wait for a while to stablize cfm.
-for i in `seq 0 100`; do ovs-appctl time/warp 100; done
+ovs-appctl time/warp 10100 100
 CFM_CHECK_EXTENDED([p0], [1], [100], [up], [up], [100ms], [2], [up])
 CFM_CHECK_EXTENDED([p1], [2], [100], [up], [up], [100ms], [1], [up])
 AT_CHECK([ovs-appctl cfm/show p1 | grep 'fault_override'], [1], [ignore])

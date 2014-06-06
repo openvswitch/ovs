@@ -56,6 +56,14 @@ typedef unsigned int clockid_t;
 static ULARGE_INTEGER unix_epoch;
 #endif /* _WIN32 */
 
+/* Structure set by unixctl time/warp command. */
+struct large_warp {
+    struct unixctl_conn *conn; /* Connection waiting for warp response. */
+    long long int total_warp; /* Total offset to be added to monotonic time. */
+    long long int warp;      /* 'total_warp' offset done in steps of 'warp'. */
+    unsigned int main_thread_id; /* Identification for the main thread. */
+};
+
 struct clock {
     clockid_t id;               /* CLOCK_MONOTONIC or CLOCK_REALTIME. */
 
@@ -65,6 +73,8 @@ struct clock {
     struct timespec warp OVS_GUARDED;  /* Offset added for unit tests. */
     bool stopped OVS_GUARDED;          /* Disable real-time updates if true. */
     struct timespec cache OVS_GUARDED; /* Last time read from kernel. */
+    struct large_warp large_warp OVS_GUARDED; /* Connection information waiting
+                                                 for warp response. */
 };
 
 /* Our clocks. */
@@ -105,6 +115,7 @@ init_clock(struct clock *c, clockid_t id)
     atomic_init(&c->slow_path, false);
     xclock_gettime(c->id, &c->cache);
     timewarp_seq = seq_create();
+    memset(&c->large_warp, 0, sizeof(c->large_warp));
 }
 
 static void
@@ -440,16 +451,77 @@ xclock_gettime(clock_t id, struct timespec *ts)
     }
 }
 
-/* Makes threads wait on timewarp_seq and be waken up when time is warped.
- * This function will be no-op unless timeval_dummy_register() is called. */
-void
-timewarp_wait(void)
+static void
+msec_to_timespec(long long int ms, struct timespec *ts)
 {
-    if (timewarp_enabled) {
-        uint64_t *last_seq = last_seq_get();
+    ts->tv_sec = ms / 1000;
+    ts->tv_nsec = (ms % 1000) * 1000 * 1000;
+}
 
-        *last_seq = seq_read(timewarp_seq);
-        seq_wait(timewarp_seq, *last_seq);
+static void
+timewarp_work(void)
+{
+    struct clock *c = &monotonic_clock;
+    struct timespec warp;
+
+    ovs_mutex_lock(&c->mutex);
+    if (!c->large_warp.conn) {
+        ovs_mutex_unlock(&c->mutex);
+        return;
+    }
+
+    if (c->large_warp.total_warp >= c->large_warp.warp) {
+        msec_to_timespec(c->large_warp.warp, &warp);
+        timespec_add(&c->warp, &c->warp, &warp);
+        c->large_warp.total_warp -= c->large_warp.warp;
+    } else if (c->large_warp.total_warp) {
+        msec_to_timespec(c->large_warp.total_warp, &warp);
+        timespec_add(&c->warp, &c->warp, &warp);
+        c->large_warp.total_warp = 0;
+    } else {
+        /* c->large_warp.total_warp is 0. */
+        msec_to_timespec(c->large_warp.warp, &warp);
+        timespec_add(&c->warp, &c->warp, &warp);
+    }
+
+    if (!c->large_warp.total_warp) {
+        unixctl_command_reply(c->large_warp.conn, "warped");
+        c->large_warp.conn = NULL;
+    }
+
+    ovs_mutex_unlock(&c->mutex);
+    seq_change(timewarp_seq);
+
+    /* give threads (eg. monitor) some chances to run */
+#ifndef _WIN32
+    poll(NULL, 0, 10);
+#else
+    Sleep(10);
+#endif
+}
+
+/* Perform work needed for "timewarp_seq"'s producer and consumers. */
+void
+timewarp_run(void)
+{
+    /* The function is a no-op unless timeval_dummy_register() is called. */
+    if (timewarp_enabled) {
+        unsigned int thread_id;
+        ovs_mutex_lock(&monotonic_clock.mutex);
+        thread_id = monotonic_clock.large_warp.main_thread_id;
+        ovs_mutex_unlock(&monotonic_clock.mutex);
+
+        if (thread_id != ovsthread_id_self()) {
+            /* For threads other than the thread that changes the sequence,
+             * wait on it. */
+            uint64_t *last_seq = last_seq_get();
+
+            *last_seq = seq_read(timewarp_seq);
+            seq_wait(timewarp_seq, *last_seq);
+        } else {
+            /* Work on adding the remaining warps. */
+            timewarp_work();
+        }
     }
 }
 
@@ -630,35 +702,37 @@ timeval_stop_cb(struct unixctl_conn *conn,
  * number of milliseconds.  Unless "time/stop" has also been executed, the
  * monotonic clock continues to tick forward at the normal rate afterward.
  *
+ * "time/warp LARGE_MSECS MSECS" is a variation of the above command. It
+ * advances the current monotonic time by LARGE_MSECS. This is done MSECS
+ * at a time in each run of the main thread. This gives other threads
+ * time to run after the clock has been advanced by MSECS.
+ *
  * Does not affect wall clock readings. */
 static void
 timeval_warp_cb(struct unixctl_conn *conn,
                 int argc OVS_UNUSED, const char *argv[], void *aux OVS_UNUSED)
 {
-    struct timespec ts;
-    int msecs;
-
-    msecs = atoi(argv[1]);
-    if (msecs <= 0) {
+    long long int total_warp = argc > 2 ? atoll(argv[1]) : 0;
+    long long int msecs = argc > 2 ? atoll(argv[2]) : atoll(argv[1]);
+    if (msecs <= 0 || total_warp < 0) {
         unixctl_command_reply_error(conn, "invalid MSECS");
         return;
     }
 
-    ts.tv_sec = msecs / 1000;
-    ts.tv_nsec = (msecs % 1000) * 1000 * 1000;
-
     ovs_mutex_lock(&monotonic_clock.mutex);
+    if (monotonic_clock.large_warp.conn) {
+        ovs_mutex_unlock(&monotonic_clock.mutex);
+        unixctl_command_reply_error(conn, "A previous warp in progress");
+        return;
+    }
     atomic_store(&monotonic_clock.slow_path, true);
-    timespec_add(&monotonic_clock.warp, &monotonic_clock.warp, &ts);
+    monotonic_clock.large_warp.conn = conn;
+    monotonic_clock.large_warp.total_warp = total_warp;
+    monotonic_clock.large_warp.warp = msecs;
+    monotonic_clock.large_warp.main_thread_id = ovsthread_id_self();
     ovs_mutex_unlock(&monotonic_clock.mutex);
-    seq_change(timewarp_seq);
-    /* give threads (eg. monitor) some chances to run */
-#ifndef _WIN32
-    poll(NULL, 0, 10);
-#else
-    Sleep(10);
-#endif
-    unixctl_command_reply(conn, "warped");
+
+    timewarp_work();
 }
 
 void
@@ -666,7 +740,7 @@ timeval_dummy_register(void)
 {
     timewarp_enabled = true;
     unixctl_command_register("time/stop", "", 0, 0, timeval_stop_cb, NULL);
-    unixctl_command_register("time/warp", "MSECS", 1, 1,
+    unixctl_command_register("time/warp", "[LARGE_MSECS] MSECS", 1, 2,
                              timeval_warp_cb, NULL);
 }
 
