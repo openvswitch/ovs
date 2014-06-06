@@ -1477,8 +1477,9 @@ specified.
 .IQ \fBhard_timeout=\fIseconds\fR
 .IQ \fBpriority=\fIvalue\fR
 .IQ \fBcookie=\fIvalue\fR
-These key-value pairs have the same meaning as in the usual
-\fBovs\-ofctl\fR flow syntax.
+.IQ \fBsend_flow_rem\fR
+These arguments have the same meaning as in the usual \fBovs\-ofctl\fR
+flow syntax.
 .
 .IP \fBfin_idle_timeout=\fIseconds\fR
 .IQ \fBfin_hard_timeout=\fIseconds\fR

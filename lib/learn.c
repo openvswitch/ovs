@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -580,6 +580,8 @@ learn_parse__(char *orig, char *arg, struct ofpbuf *ofpacts)
             learn->fin_hard_timeout = atoi(value);
         } else if (!strcmp(name, "cookie")) {
             learn->cookie = strtoull(value, NULL, 0);
+        } else if (!strcmp(name, "send_flow_rem")) {
+            learn->flags |= OFPFF_SEND_FLOW_REM;
         } else {
             struct ofpact_learn_spec *spec;
             char *error;
@@ -654,7 +656,7 @@ learn_format(const struct ofpact_learn *learn, struct ds *s)
         ds_put_format(s, ",priority=%"PRIu16, learn->priority);
     }
     if (learn->flags & OFPFF_SEND_FLOW_REM) {
-        ds_put_cstr(s, ",OFPFF_SEND_FLOW_REM");
+        ds_put_cstr(s, ",send_flow_rem");
     }
     if (learn->cookie != 0) {
         ds_put_format(s, ",cookie=%#"PRIx64, learn->cookie);
