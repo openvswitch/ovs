@@ -125,6 +125,7 @@ Many of them are necessary for OpenFlow 1.4 as well.
 
     * Flow entry notifications
       This seems to be modelled after OVS's NXST_FLOW_MONITOR.
+      (Simon Horman is working on this.)
       [EXT-187]
       [required for OF1.4+]
 
