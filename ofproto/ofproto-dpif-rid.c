@@ -70,6 +70,7 @@ recirc_id_pool_destroy(struct recirc_id_pool *pool)
 {
     rid_pool_uninit(&pool->rids);
     ovs_mutex_destroy(&pool->lock);
+    free(pool);
 }
 
 uint32_t
