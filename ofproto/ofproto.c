@@ -69,6 +69,8 @@ COVERAGE_DEFINE(ofproto_recv_openflow);
 COVERAGE_DEFINE(ofproto_reinit_ports);
 COVERAGE_DEFINE(ofproto_update_port);
 
+struct flow_mod_requester;
+
 /* Default fields to use for prefix tries in each flow table, unless something
  * else is configured. */
 const enum mf_field_id default_prefix_fields[2] =
@@ -115,9 +117,9 @@ struct ofopgroup {
 };
 
 static struct ofopgroup *ofopgroup_create_unattached(struct ofproto *);
-static struct ofopgroup *ofopgroup_create(struct ofproto *, struct ofconn *,
-                                          const struct ofp_header *,
-                                          uint32_t buffer_id);
+static struct ofopgroup *ofopgroup_create(struct ofproto *,
+                                          uint32_t buffer_id,
+                                          const struct flow_mod_requester *);
 static void ofopgroup_submit(struct ofopgroup *);
 static void ofopgroup_complete(struct ofopgroup *);
 
@@ -279,15 +281,25 @@ static void ofproto_rule_send_removed(struct rule *, uint8_t reason);
 static bool rule_is_modifiable(const struct rule *rule,
                                enum ofputil_flow_mod_flags flag);
 
+/* The source of a flow_mod request, in the code that processes flow_mods.
+ *
+ * A flow table modification request can be generated externally, via OpenFlow,
+ * or internally through a function call.  This structure indicates the source
+ * of an OpenFlow-generated flow_mod.  For an internal flow_mod, it isn't
+ * meaningful and thus supplied as NULL. */
+struct flow_mod_requester {
+    struct ofconn *ofconn;      /* Connection on which flow_mod arrived. */
+    const struct ofp_header *request; /* The flow_mod request. */
+};
+
 /* OpenFlow. */
-static enum ofperr add_flow(struct ofproto *, struct ofconn *,
-                            struct ofputil_flow_mod *,
-                            const struct ofp_header *);
-static enum ofperr modify_flows__(struct ofproto *, struct ofconn *,
-                                  struct ofputil_flow_mod *,
-                                  const struct ofp_header *,
-                                  const struct rule_collection *);
-static void delete_flow__(struct rule *rule, struct ofopgroup *,
+static enum ofperr add_flow(struct ofproto *, struct ofputil_flow_mod *,
+                            const struct flow_mod_requester *);
+
+static enum ofperr modify_flows__(struct ofproto *, struct ofputil_flow_mod *,
+                                  const struct rule_collection *,
+                                  const struct flow_mod_requester *);
+static void delete_flow__(struct rule *, struct ofopgroup *,
                           enum ofp_flow_removed_reason)
     OVS_REQUIRES(ofproto_mutex);
 static bool ofproto_group_exists__(const struct ofproto *ofproto,
@@ -298,9 +310,9 @@ static bool ofproto_group_exists(const struct ofproto *ofproto,
     OVS_EXCLUDED(ofproto->groups_rwlock);
 static enum ofperr add_group(struct ofproto *, struct ofputil_group_mod *);
 static bool handle_openflow(struct ofconn *, const struct ofpbuf *);
-static enum ofperr handle_flow_mod__(struct ofproto *, struct ofconn *,
+static enum ofperr handle_flow_mod__(struct ofproto *,
                                      struct ofputil_flow_mod *,
-                                     const struct ofp_header *)
+                                     const struct flow_mod_requester *)
     OVS_EXCLUDED(ofproto_mutex);
 static void calc_duration(long long int start, long long int now,
                           uint32_t *sec, uint32_t *nsec);
@@ -1889,7 +1901,7 @@ simple_flow_mod(struct ofproto *ofproto,
 
     flow_mod_init(&fm, match, priority, ofpacts, ofpacts_len, command);
 
-    return handle_flow_mod__(ofproto, NULL, &fm, NULL);
+    return handle_flow_mod__(ofproto, &fm, NULL);
 }
 
 /* Adds a flow to OpenFlow flow table 0 in 'p' that matches 'cls_rule' and
@@ -1987,7 +1999,7 @@ ofproto_flow_mod(struct ofproto *ofproto, struct ofputil_flow_mod *fm)
         }
     }
 
-    return handle_flow_mod__(ofproto, NULL, fm, NULL);
+    return handle_flow_mod__(ofproto, fm, NULL);
 }
 
 /* Searches for a rule with matching criteria exactly equal to 'target' in
@@ -3998,8 +4010,8 @@ evict_rules_from_table(struct ofproto *ofproto, struct oftable *table,
  * 'ofconn' is used to retrieve the packet buffer specified in ofm->buffer_id,
  * if any. */
 static enum ofperr
-add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
-         struct ofputil_flow_mod *fm, const struct ofp_header *request)
+add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+         const struct flow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
     const struct rule_actions *actions;
@@ -4066,7 +4078,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
             rule_collection_init(&rules);
             rule_collection_add(&rules, rule);
             fm->modify_cookie = true;
-            error = modify_flows__(ofproto, ofconn, fm, request, &rules);
+            error = modify_flows__(ofproto, fm, &rules, req);
             rule_collection_destroy(&rules);
 
             return error;
@@ -4154,7 +4166,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     classifier_insert(&table->cls, CONST_CAST(struct cls_rule *, &rule->cr));
     fat_rwlock_unlock(&table->cls.rwlock);
 
-    group = ofopgroup_create(ofproto, ofconn, request, fm->buffer_id);
+    group = ofopgroup_create(ofproto, fm->buffer_id, req);
     ofoperation_create(group, rule, OFOPERATION_ADD, 0);
     ofproto->ofproto_class->rule_insert(rule);
     ofopgroup_submit(group);
@@ -4172,9 +4184,9 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
  *
  * Returns 0 on success, otherwise an OpenFlow error code. */
 static enum ofperr
-modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
-               struct ofputil_flow_mod *fm, const struct ofp_header *request,
-               const struct rule_collection *rules)
+modify_flows__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+               const struct rule_collection *rules,
+               const struct flow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
     enum ofoperation_type type;
@@ -4195,7 +4207,7 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
     }
 
     type = fm->command == OFPFC_ADD ? OFOPERATION_REPLACE : OFOPERATION_MODIFY;
-    group = ofopgroup_create(ofproto, ofconn, request, fm->buffer_id);
+    group = ofopgroup_create(ofproto, fm->buffer_id, req);
     for (i = 0; i < rules->n; i++) {
         struct rule *rule = rules->rules[i];
         const struct rule_actions *actions;
@@ -4253,14 +4265,14 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
 }
 
 static enum ofperr
-modify_flows_add(struct ofproto *ofproto, struct ofconn *ofconn,
-                 struct ofputil_flow_mod *fm, const struct ofp_header *request)
+modify_flows_add(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+                 const struct flow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
     if (fm->cookie_mask != htonll(0) || fm->new_cookie == OVS_BE64_MAX) {
         return 0;
     }
-    return add_flow(ofproto, ofconn, fm, request);
+    return add_flow(ofproto, fm, req);
 }
 
 /* Implements OFPFC_MODIFY.  Returns 0 on success or an OpenFlow error code on
@@ -4269,9 +4281,8 @@ modify_flows_add(struct ofproto *ofproto, struct ofconn *ofconn,
  * 'ofconn' is used to retrieve the packet buffer specified in fm->buffer_id,
  * if any. */
 static enum ofperr
-modify_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
-                   struct ofputil_flow_mod *fm,
-                   const struct ofp_header *request)
+modify_flows_loose(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+                   const struct flow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct rule_criteria criteria;
@@ -4287,8 +4298,8 @@ modify_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
 
     if (!error) {
         error = (rules.n > 0
-                 ? modify_flows__(ofproto, ofconn, fm, request, &rules)
-                 : modify_flows_add(ofproto, ofconn, fm, request));
+                 ? modify_flows__(ofproto, fm, &rules, req)
+                 : modify_flows_add(ofproto, fm, req));
     }
 
     rule_collection_destroy(&rules);
@@ -4297,14 +4308,10 @@ modify_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
 }
 
 /* Implements OFPFC_MODIFY_STRICT.  Returns 0 on success or an OpenFlow error
- * code on failure.
- *
- * 'ofconn' is used to retrieve the packet buffer specified in fm->buffer_id,
- * if any. */
+ * code on failure. */
 static enum ofperr
-modify_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
-                   struct ofputil_flow_mod *fm,
-                   const struct ofp_header *request)
+modify_flow_strict(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+                   const struct flow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct rule_criteria criteria;
@@ -4320,9 +4327,9 @@ modify_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
 
     if (!error) {
         if (rules.n == 0) {
-            error =  modify_flows_add(ofproto, ofconn, fm, request);
+            error = modify_flows_add(ofproto, fm, req);
         } else if (rules.n == 1) {
-            error = modify_flows__(ofproto, ofconn, fm, request, &rules);
+            error = modify_flows__(ofproto, fm, &rules, req);
         }
     }
 
@@ -4351,16 +4358,16 @@ delete_flow__(struct rule *rule, struct ofopgroup *group,
  *
  * Returns 0 on success, otherwise an OpenFlow error code. */
 static enum ofperr
-delete_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
-               const struct ofp_header *request,
+delete_flows__(struct ofproto *ofproto,
                const struct rule_collection *rules,
-               enum ofp_flow_removed_reason reason)
+               enum ofp_flow_removed_reason reason,
+               const struct flow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct ofopgroup *group;
     size_t i;
 
-    group = ofopgroup_create(ofproto, ofconn, request, UINT32_MAX);
+    group = ofopgroup_create(ofproto, UINT32_MAX, req);
     for (i = 0; i < rules->n; i++) {
         delete_flow__(rules->rules[i], group, reason);
     }
@@ -4371,9 +4378,9 @@ delete_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
 
 /* Implements OFPFC_DELETE. */
 static enum ofperr
-delete_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
+delete_flows_loose(struct ofproto *ofproto,
                    const struct ofputil_flow_mod *fm,
-                   const struct ofp_header *request)
+                   const struct flow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct rule_criteria criteria;
@@ -4389,8 +4396,7 @@ delete_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
     rule_criteria_destroy(&criteria);
 
     if (!error && rules.n > 0) {
-        error = delete_flows__(ofproto, ofconn, request, &rules,
-                               fm->delete_reason);
+        error = delete_flows__(ofproto, &rules, fm->delete_reason, req);
     }
     rule_collection_destroy(&rules);
 
@@ -4399,9 +4405,8 @@ delete_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
 
 /* Implements OFPFC_DELETE_STRICT. */
 static enum ofperr
-delete_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
-                   const struct ofputil_flow_mod *fm,
-                   const struct ofp_header *request)
+delete_flow_strict(struct ofproto *ofproto, const struct ofputil_flow_mod *fm,
+                   const struct flow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct rule_criteria criteria;
@@ -4417,8 +4422,7 @@ delete_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
     rule_criteria_destroy(&criteria);
 
     if (!error && rules.n > 0) {
-        error = delete_flows__(ofproto, ofconn, request, &rules,
-                               fm->delete_reason);
+        error = delete_flows__(ofproto, &rules, fm->delete_reason, req);
     }
     rule_collection_destroy(&rules);
 
@@ -4534,7 +4538,11 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         error = ofproto_check_ofpacts(ofproto, fm.ofpacts, fm.ofpacts_len);
     }
     if (!error) {
-        error = handle_flow_mod__(ofproto, ofconn, &fm, oh);
+        struct flow_mod_requester req;
+
+        req.ofconn = ofconn;
+        req.request = oh;
+        error = handle_flow_mod__(ofproto, &fm, &req);
     }
     if (error) {
         goto exit_free_ofpacts;
@@ -4549,48 +4557,44 @@ exit:
 }
 
 static enum ofperr
-handle_flow_mod__(struct ofproto *ofproto, struct ofconn *ofconn,
-                  struct ofputil_flow_mod *fm, const struct ofp_header *oh)
+handle_flow_mod__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+                  const struct flow_mod_requester *req)
     OVS_EXCLUDED(ofproto_mutex)
 {
     enum ofperr error;
 
     ovs_mutex_lock(&ofproto_mutex);
-    if (ofproto->n_pending < 50) {
-        switch (fm->command) {
-        case OFPFC_ADD:
-            error = add_flow(ofproto, ofconn, fm, oh);
-            break;
+    switch (fm->command) {
+    case OFPFC_ADD:
+        error = add_flow(ofproto, fm, req);
+        break;
 
-        case OFPFC_MODIFY:
-            error = modify_flows_loose(ofproto, ofconn, fm, oh);
-            break;
+    case OFPFC_MODIFY:
+        error = modify_flows_loose(ofproto, fm, req);
+        break;
 
-        case OFPFC_MODIFY_STRICT:
-            error = modify_flow_strict(ofproto, ofconn, fm, oh);
-            break;
+    case OFPFC_MODIFY_STRICT:
+        error = modify_flow_strict(ofproto, fm, req);
+        break;
 
-        case OFPFC_DELETE:
-            error = delete_flows_loose(ofproto, ofconn, fm, oh);
-            break;
+    case OFPFC_DELETE:
+        error = delete_flows_loose(ofproto, fm, req);
+        break;
 
-        case OFPFC_DELETE_STRICT:
-            error = delete_flow_strict(ofproto, ofconn, fm, oh);
-            break;
+    case OFPFC_DELETE_STRICT:
+        error = delete_flow_strict(ofproto, fm, req);
+        break;
 
-        default:
-            if (fm->command > 0xff) {
-                VLOG_WARN_RL(&rl, "%s: flow_mod has explicit table_id but "
-                             "flow_mod_table_id extension is not enabled",
-                             ofproto->name);
-            }
-            error = OFPERR_OFPFMFC_BAD_COMMAND;
-            break;
+    default:
+        if (fm->command > 0xff) {
+            VLOG_WARN_RL(&rl, "%s: flow_mod has explicit table_id but "
+                         "flow_mod_table_id extension is not enabled",
+                         ofproto->name);
         }
-    } else {
-        ovs_assert(!list_is_empty(&ofproto->pending));
-        error = OFPROTO_POSTPONE;
+        error = OFPERR_OFPFMFC_BAD_COMMAND;
+        break;
     }
+    ofmonitor_flush(ofproto->connmgr);
     ovs_mutex_unlock(&ofproto_mutex);
 
     run_rule_executes(ofproto);
@@ -5178,8 +5182,7 @@ handle_modify_meter(struct ofproto *ofproto, struct ofputil_meter_mod *mm)
 }
 
 static enum ofperr
-handle_delete_meter(struct ofconn *ofconn, const struct ofp_header *oh,
-                    struct ofputil_meter_mod *mm)
+handle_delete_meter(struct ofconn *ofconn, struct ofputil_meter_mod *mm)
     OVS_EXCLUDED(ofproto_mutex)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
@@ -5217,7 +5220,7 @@ handle_delete_meter(struct ofconn *ofconn, const struct ofp_header *oh,
         }
     }
     if (rules.n > 0) {
-        delete_flows__(ofproto, ofconn, oh, &rules, OFPRR_METER_DELETE);
+        delete_flows__(ofproto, &rules, OFPRR_METER_DELETE, NULL);
     }
 
     /* Delete the meters. */
@@ -5279,7 +5282,7 @@ handle_meter_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         break;
 
     case OFPMC13_DELETE:
-        error = handle_delete_meter(ofconn, oh, &mm);
+        error = handle_delete_meter(ofconn, &mm);
         break;
 
     default:
@@ -5773,7 +5776,7 @@ delete_group__(struct ofproto *ofproto, struct ofgroup *ofgroup)
     flow_mod_init(&fm, &match, 0, NULL, 0, OFPFC_DELETE);
     fm.delete_reason = OFPRR_GROUP_DELETE;
     fm.out_group = ofgroup->group_id;
-    handle_flow_mod__(ofproto, NULL, &fm, NULL);
+    handle_flow_mod__(ofproto, &fm, NULL);
 
     hmap_remove(&ofproto->groups, &ofgroup->hmap_node);
     /* No-one can find this group any more. */
@@ -6186,19 +6189,19 @@ ofopgroup_create_unattached(struct ofproto *ofproto)
  * The caller should add operations to the returned group with
  * ofoperation_create() and then submit it with ofopgroup_submit(). */
 static struct ofopgroup *
-ofopgroup_create(struct ofproto *ofproto, struct ofconn *ofconn,
-                 const struct ofp_header *request, uint32_t buffer_id)
+ofopgroup_create(struct ofproto *ofproto, uint32_t buffer_id,
+                 const struct flow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct ofopgroup *group = ofopgroup_create_unattached(ofproto);
-    if (ofconn) {
-        size_t request_len = ntohs(request->length);
+    if (req) {
+        size_t request_len = ntohs(req->request->length);
 
-        ovs_assert(ofconn_get_ofproto(ofconn) == ofproto);
+        ovs_assert(ofconn_get_ofproto(req->ofconn) == ofproto);
 
-        ofconn_add_opgroup(ofconn, &group->ofconn_node);
-        group->ofconn = ofconn;
-        group->request = xmemdup(request, MIN(request_len, 64));
+        ofconn_add_opgroup(req->ofconn, &group->ofconn_node);
+        group->ofconn = req->ofconn;
+        group->request = xmemdup(req->request, MIN(request_len, 64));
         group->buffer_id = buffer_id;
     }
     return group;
