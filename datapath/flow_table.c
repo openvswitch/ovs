@@ -554,7 +554,7 @@ struct sw_flow *ovs_flow_tbl_lookup_stats(struct flow_table *tbl,
 {
 	struct mask_array *ma = rcu_dereference_ovsl(tbl->mask_array);
 	struct table_instance *ti = rcu_dereference_ovsl(tbl->ti);
-	struct mask_cache_entry  *entries, *ce, *del;
+	struct mask_cache_entry *entries, *ce;
 	struct sw_flow *flow;
 	u32 hash = skb_hash;
 	int seg;
@@ -566,42 +566,40 @@ struct sw_flow *ovs_flow_tbl_lookup_stats(struct flow_table *tbl,
 		return flow_lookup(tbl, ti, ma, key, n_mask_hit, &mask_index);
 	}
 
-	del = NULL;
+	ce = NULL;
 	entries = this_cpu_ptr(tbl->mask_cache);
 
+	/* Find the cache entry 'ce' to operate on. */
 	for (seg = 0; seg < MC_HASH_SEGS; seg++) {
-		int index;
+		int index = hash & (MC_HASH_ENTRIES - 1);
+		struct mask_cache_entry *e;
 
-		index = hash & (MC_HASH_ENTRIES - 1);
-		ce = &entries[index];
+		e = &entries[index];
+		if (e->skb_hash == skb_hash) {
+			struct sw_flow_mask *cache;
 
-		if (ce->skb_hash == skb_hash) {
-			struct sw_flow_mask *mask;
-
-			mask = rcu_dereference_ovsl(ma->masks[ce->mask_index]);
-			if (mask) {
-				flow = masked_flow_lookup(ti, key, mask,
+			cache = rcu_dereference_ovsl(ma->masks[e->mask_index]);
+			if (cache) {
+				flow = masked_flow_lookup(ti, key, cache,
 							  n_mask_hit);
-				if (flow)  /* Found */
+				if (flow) /* Cache hit. */
 					return flow;
-
 			}
-			del = ce;
+			e->skb_hash = 0;
+			ce = e;  /* The best cache replacement candidate. */
 			break;
 		}
 
-		if (!del || (del->skb_hash && !ce->skb_hash) ||
-		    (rcu_dereference_ovsl(ma->masks[del->mask_index]) &&
-		    !rcu_dereference_ovsl(ma->masks[ce->mask_index]))) {
-			del = ce;
-		}
+		if (!ce || e->skb_hash < ce->skb_hash)
+			ce = e;  /* A better replacement cache candidate. */
 
 		hash >>= MC_HASH_SHIFT;
 	}
 
-	flow = flow_lookup(tbl, ti, ma, key, n_mask_hit, &del->mask_index);
+	/* Cache miss, do full lookup. */
+	flow = flow_lookup(tbl, ti, ma, key, n_mask_hit, &ce->mask_index);
 	if (flow)
-		del->skb_hash = skb_hash;
+		ce->skb_hash = skb_hash;
 
 	return flow;
 }
