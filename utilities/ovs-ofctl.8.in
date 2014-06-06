@@ -1491,6 +1491,16 @@ The table in which the new flow should be inserted.  Specify a decimal
 number between 0 and 254.  The default, if \fBtable\fR is unspecified,
 is table 1.
 .
+.IP \fBdelete_learned\fR
+This flag enables deletion of the learned flows when the flow with the
+\fBlearn\fR action is removed.  Specifically, when the last
+\fBlearn\fR action with this flag and particular \fBtable\fR and
+\fBcookie\fR values is removed, the switch deletes all of the flows in
+the specified table with the specified cookie.
+.
+.IP
+This flag was added in Open vSwitch 2.4.
+.
 .IP \fIfield\fB=\fIvalue\fR
 .IQ \fIfield\fB[\fIstart\fB..\fIend\fB]=\fIsrc\fB[\fIstart\fB..\fIend\fB]\fR
 .IQ \fIfield\fB[\fIstart\fB..\fIend\fB]\fR

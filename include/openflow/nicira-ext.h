@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -927,7 +927,7 @@ struct nx_action_learn {
     ovs_be16 hard_timeout;      /* Max time before discarding (seconds). */
     ovs_be16 priority;          /* Priority level of flow entry. */
     ovs_be64 cookie;            /* Cookie for new flow. */
-    ovs_be16 flags;             /* Either 0 or OFPFF_SEND_FLOW_REM. */
+    ovs_be16 flags;             /* NX_LEARN_F_*. */
     uint8_t table_id;           /* Table to insert flow entry. */
     uint8_t pad;                /* Must be zero. */
     ovs_be16 fin_idle_timeout;  /* Idle timeout after FIN, if nonzero. */
@@ -936,6 +936,38 @@ struct nx_action_learn {
      * until the end of the action is reached. */
 };
 OFP_ASSERT(sizeof(struct nx_action_learn) == 32);
+
+/* Bits for 'flags' in struct nx_action_learn.
+ *
+ * If NX_LEARN_F_SEND_FLOW_REM is set, then the learned flows will have their
+ * OFPFF_SEND_FLOW_REM flag set.
+ *
+ * If NX_LEARN_F_DELETE_LEARNED is set, then removing this action will delete
+ * all the flows from the learn action's 'table_id' that have the learn
+ * action's 'cookie'.  Important points:
+ *
+ *     - The deleted flows include those created by this action, those created
+ *       by other learn actions with the same 'table_id' and 'cookie', those
+ *       created by flow_mod requests by a controller in the specified table
+ *       with the specified cookie, and those created through any other
+ *       means.
+ *
+ *     - If multiple flows specify "learn" actions with
+ *       NX_LEARN_F_DELETE_LEARNED with the same 'table_id' and 'cookie', then
+ *       no deletion occurs until all of those "learn" actions are deleted.
+ *
+ *     - Deleting a flow that contains a learn action is the most obvious way
+ *       to delete a learn action.  Modifying a flow's actions, or replacing it
+ *       by a new flow, can also delete a learn action.  Finally, replacing a
+ *       learn action with NX_LEARN_F_DELETE_LEARNED with a learn action
+ *       without that flag also effectively deletes the learn action and can
+ *       trigger flow deletion.
+ *
+ * NX_LEARN_F_DELETE_LEARNED was added in Open vSwitch 2.4. */
+enum nx_learn_flags {
+    NX_LEARN_F_SEND_FLOW_REM = 1 << 0,
+    NX_LEARN_F_DELETE_LEARNED = 1 << 1,
+};
 
 #define NX_LEARN_N_BITS_MASK    0x3ff
 

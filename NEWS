@@ -1,5 +1,8 @@
 Post-v2.3.0
 ---------------------
+   - The "learn" action supports a new flag "delete_learned" that causes
+     the learned flows to be deleted when the flow with the "learn" action
+     is deleted.
 
 
 v2.3.0 - xx xxx xxxx

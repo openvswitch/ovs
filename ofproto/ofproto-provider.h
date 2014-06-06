@@ -96,6 +96,7 @@ struct ofproto {
 
     /* Rules indexed on their cookie values, in all flow tables. */
     struct hindex cookies OVS_GUARDED_BY(ofproto_mutex);
+    struct hmap learned_cookies OVS_GUARDED_BY(ofproto_mutex);
 
     /* List of expirable flows, in all flow tables. */
     struct list expirable OVS_GUARDED_BY(ofproto_mutex);
@@ -405,8 +406,12 @@ static inline bool rule_is_hidden(const struct rule *);
 struct rule_actions {
     /* Flags.
      *
-     * 'has_meter' is true if 'ofpacts' contains an OFPACT_METER action. */
+     * 'has_meter' is true if 'ofpacts' contains an OFPACT_METER action.
+     *
+     * 'has_learn_with_delete' is true if 'ofpacts' contains an OFPACT_LEARN
+     * action whose flags include NX_LEARN_F_DELETE_LEARNED. */
     bool has_meter;
+    bool has_learn_with_delete;
 
     /* Actions. */
     uint32_t ofpacts_len;         /* Size of 'ofpacts', in bytes. */

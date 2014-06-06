@@ -101,15 +101,9 @@ learn_from_openflow(const struct nx_action_learn *nal, struct ofpbuf *ofpacts)
     learn->fin_idle_timeout = ntohs(nal->fin_idle_timeout);
     learn->fin_hard_timeout = ntohs(nal->fin_hard_timeout);
 
-    /* We only support "send-flow-removed" for now. */
-    switch (ntohs(nal->flags)) {
-    case 0:
-        learn->flags = 0;
-        break;
-    case OFPFF_SEND_FLOW_REM:
-        learn->flags = OFPUTIL_FF_SEND_FLOW_REM;
-        break;
-    default:
+    learn->flags = ntohs(nal->flags);
+    if (learn->flags & ~(NX_LEARN_F_SEND_FLOW_REM |
+                         NX_LEARN_F_DELETE_LEARNED)) {
         return OFPERR_OFPBAC_BAD_ARGUMENT;
     }
 
@@ -321,7 +315,10 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
     fm->hard_timeout = learn->hard_timeout;
     fm->buffer_id = UINT32_MAX;
     fm->out_port = OFPP_NONE;
-    fm->flags = learn->flags;
+    fm->flags = 0;
+    if (learn->flags & NX_LEARN_F_SEND_FLOW_REM) {
+        fm->flags |= OFPUTIL_FF_SEND_FLOW_REM;
+    }
     fm->ofpacts = NULL;
     fm->ofpacts_len = 0;
     fm->delete_reason = OFPRR_DELETE;
@@ -582,7 +579,9 @@ learn_parse__(char *orig, char *arg, struct ofpbuf *ofpacts)
         } else if (!strcmp(name, "cookie")) {
             learn->cookie = htonll(strtoull(value, NULL, 0));
         } else if (!strcmp(name, "send_flow_rem")) {
-            learn->flags |= OFPFF_SEND_FLOW_REM;
+            learn->flags |= NX_LEARN_F_SEND_FLOW_REM;
+        } else if (!strcmp(name, "delete_learned")) {
+            learn->flags |= NX_LEARN_F_DELETE_LEARNED;
         } else {
             struct ofpact_learn_spec *spec;
             char *error;
@@ -656,8 +655,11 @@ learn_format(const struct ofpact_learn *learn, struct ds *s)
     if (learn->priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, ",priority=%"PRIu16, learn->priority);
     }
-    if (learn->flags & OFPFF_SEND_FLOW_REM) {
+    if (learn->flags & NX_LEARN_F_SEND_FLOW_REM) {
         ds_put_cstr(s, ",send_flow_rem");
+    }
+    if (learn->flags & NX_LEARN_F_DELETE_LEARNED) {
+        ds_put_cstr(s, ",delete_learned");
     }
     if (learn->cookie != 0) {
         ds_put_format(s, ",cookie=%#"PRIx64, ntohll(learn->cookie));

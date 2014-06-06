@@ -161,6 +161,10 @@ static void rule_criteria_require_rw(struct rule_criteria *,
                                      bool can_write_readonly);
 static void rule_criteria_destroy(struct rule_criteria *);
 
+static enum ofperr collect_rules_loose(struct ofproto *,
+                                       const struct rule_criteria *,
+                                       struct rule_collection *);
+
 /* A packet that needs to be passed to rule_execute().
  *
  * (We can't do this immediately from ofopgroup_complete() because that holds
@@ -174,6 +178,37 @@ struct rule_execute {
 
 static void run_rule_executes(struct ofproto *) OVS_EXCLUDED(ofproto_mutex);
 static void destroy_rule_executes(struct ofproto *);
+
+struct learned_cookie {
+    union {
+        /* In struct ofproto's 'learned_cookies' hmap. */
+        struct hmap_node hmap_node OVS_GUARDED_BY(ofproto_mutex);
+
+        /* In 'dead_cookies' list when removed from hmap. */
+        struct list list_node;
+    } u;
+
+    /* Key. */
+    ovs_be64 cookie OVS_GUARDED_BY(ofproto_mutex);
+    uint8_t table_id OVS_GUARDED_BY(ofproto_mutex);
+
+    /* Number of references from "learn" actions.
+     *
+     * When this drops to 0, all of the flows in 'table_id' with the specified
+     * 'cookie' are deleted. */
+    int n OVS_GUARDED_BY(ofproto_mutex);
+};
+
+static const struct ofpact_learn *next_learn_with_delete(
+    const struct rule_actions *, const struct ofpact_learn *start);
+
+static void learned_cookies_inc(struct ofproto *, const struct rule_actions *)
+    OVS_REQUIRES(ofproto_mutex);
+static void learned_cookies_dec(struct ofproto *, const struct rule_actions *,
+                                struct list *dead_cookies)
+    OVS_REQUIRES(ofproto_mutex);
+static void learned_cookies_flush(struct ofproto *, struct list *dead_cookies)
+    OVS_REQUIRES(ofproto_mutex);
 
 /* ofport. */
 static void ofport_destroy__(struct ofport *) OVS_EXCLUDED(ofproto_mutex);
@@ -477,6 +512,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ofproto->tables = NULL;
     ofproto->n_tables = 0;
     hindex_init(&ofproto->cookies);
+    hmap_init(&ofproto->learned_cookies);
     list_init(&ofproto->expirable);
     ofproto->connmgr = connmgr_create(ofproto, datapath_name, datapath_name);
     guarded_list_init(&ofproto->rule_executes);
@@ -1262,6 +1298,9 @@ ofproto_destroy__(struct ofproto *ofproto)
 
     ovs_assert(hindex_is_empty(&ofproto->cookies));
     hindex_destroy(&ofproto->cookies);
+
+    ovs_assert(hmap_is_empty(&ofproto->learned_cookies));
+    hmap_destroy(&ofproto->learned_cookies);
 
     free(ofproto->vlan_bitmap);
 
@@ -2506,6 +2545,9 @@ rule_actions_create(const struct ofpact *ofpacts, size_t ofpacts_len)
     actions->has_meter = ofpacts_get_meter(ofpacts, ofpacts_len) != 0;
     memcpy(actions->ofpacts, ofpacts, ofpacts_len);
 
+    actions->has_learn_with_delete = (next_learn_with_delete(actions, NULL)
+                                      != NULL);
+
     return actions;
 }
 
@@ -2596,6 +2638,122 @@ rule_is_readonly(const struct rule *rule)
 {
     const struct oftable *table = &rule->ofproto->tables[rule->table_id];
     return (table->flags & OFTABLE_READONLY) != 0;
+}
+
+static uint32_t
+hash_learned_cookie(ovs_be64 cookie_, uint8_t table_id)
+{
+    uint64_t cookie = (OVS_FORCE uint64_t) cookie_;
+    return hash_3words(cookie, cookie >> 32, table_id);
+}
+
+static void
+learned_cookies_update_one__(struct ofproto *ofproto,
+                             const struct ofpact_learn *learn,
+                             int delta, struct list *dead_cookies)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    uint32_t hash = hash_learned_cookie(learn->cookie, learn->table_id);
+    struct learned_cookie *c;
+
+    HMAP_FOR_EACH_WITH_HASH (c, u.hmap_node, hash, &ofproto->learned_cookies) {
+        if (c->cookie == learn->cookie && c->table_id == learn->table_id) {
+            c->n += delta;
+            ovs_assert(c->n >= 0);
+
+            if (!c->n) {
+                hmap_remove(&ofproto->learned_cookies, &c->u.hmap_node);
+                list_push_back(dead_cookies, &c->u.list_node);
+            }
+
+            return;
+        }
+    }
+
+    ovs_assert(delta > 0);
+    c = xmalloc(sizeof *c);
+    hmap_insert(&ofproto->learned_cookies, &c->u.hmap_node, hash);
+    c->cookie = learn->cookie;
+    c->table_id = learn->table_id;
+    c->n = delta;
+}
+
+static const struct ofpact_learn *
+next_learn_with_delete(const struct rule_actions *actions,
+                       const struct ofpact_learn *start)
+{
+    const struct ofpact *pos;
+
+    for (pos = start ? ofpact_next(&start->ofpact) : actions->ofpacts;
+         pos < ofpact_end(actions->ofpacts, actions->ofpacts_len);
+         pos = ofpact_next(pos)) {
+        if (pos->type == OFPACT_LEARN) {
+            const struct ofpact_learn *learn = ofpact_get_LEARN(pos);
+            if (learn->flags & NX_LEARN_F_DELETE_LEARNED) {
+                return learn;
+            }
+        }
+    }
+
+    return NULL;
+}
+
+static void
+learned_cookies_update__(struct ofproto *ofproto,
+                         const struct rule_actions *actions,
+                         int delta, struct list *dead_cookies)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    if (actions->has_learn_with_delete) {
+        const struct ofpact_learn *learn;
+
+        for (learn = next_learn_with_delete(actions, NULL); learn;
+             learn = next_learn_with_delete(actions, learn)) {
+            learned_cookies_update_one__(ofproto, learn, delta, dead_cookies);
+        }
+    }
+}
+
+static void
+learned_cookies_inc(struct ofproto *ofproto,
+                    const struct rule_actions *actions)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    learned_cookies_update__(ofproto, actions, +1, NULL);
+}
+
+static void
+learned_cookies_dec(struct ofproto *ofproto,
+                    const struct rule_actions *actions,
+                    struct list *dead_cookies)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    learned_cookies_update__(ofproto, actions, -1, dead_cookies);
+}
+
+static void
+learned_cookies_flush(struct ofproto *ofproto, struct list *dead_cookies)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct learned_cookie *c, *next;
+
+    LIST_FOR_EACH_SAFE (c, next, u.list_node, dead_cookies) {
+        struct rule_criteria criteria;
+        struct rule_collection rules;
+        struct match match;
+
+        match_init_catchall(&match);
+        rule_criteria_init(&criteria, c->table_id, &match, 0,
+                           c->cookie, OVS_BE64_MAX, OFPP_ANY, OFPG_ANY);
+        rule_criteria_require_rw(&criteria, false);
+        collect_rules_loose(ofproto, &criteria, &rules);
+        delete_flows__(&rules, OFPRR_DELETE, NULL);
+        rule_criteria_destroy(&criteria);
+        rule_collection_destroy(&rules);
+
+        list_remove(&c->u.list_node);
+        free(c);
+    }
 }
 
 static enum ofperr
@@ -3904,6 +4062,7 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
         ofproto_rule_unref(rule);
         return error;
     }
+    learned_cookies_inc(ofproto, actions);
 
     if (minimask_get_vid_mask(&rule->cr.match.mask) == VLAN_VID_MASK) {
         if (ofproto->vlan_bitmap) {
@@ -3938,6 +4097,7 @@ modify_flows__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
                const struct flow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
+    struct list dead_cookies = LIST_INITIALIZER(&dead_cookies);
     enum nx_flow_update_event event;
     enum ofperr error;
     size_t i;
@@ -4018,7 +4178,13 @@ modify_flows__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
             ofmonitor_report(ofproto->connmgr, rule, event, 0,
                              req ? req->ofconn : NULL, req ? req->xid : 0);
         }
+
+        if (change_actions) {
+            learned_cookies_inc(ofproto, rule_get_actions(rule));
+            learned_cookies_dec(ofproto, actions, &dead_cookies);
+        }
     }
+    learned_cookies_flush(ofproto, &dead_cookies);
 
     if (fm->buffer_id != UINT32_MAX && req) {
         error = send_buffered_packet(req->ofconn, fm->buffer_id,
@@ -4112,11 +4278,13 @@ delete_flows__(const struct rule_collection *rules,
     OVS_REQUIRES(ofproto_mutex)
 {
     if (rules->n) {
+        struct list dead_cookies = LIST_INITIALIZER(&dead_cookies);
         struct ofproto *ofproto = rules->rules[0]->ofproto;
         size_t i;
 
         for (i = 0; i < rules->n; i++) {
             struct rule *rule = rules->rules[i];
+            const struct rule_actions *actions = rule_get_actions(rule);
 
             ofproto_rule_send_removed(rule, reason);
 
@@ -4124,7 +4292,10 @@ delete_flows__(const struct rule_collection *rules,
                              req ? req->ofconn : NULL, req ? req->xid : 0);
             oftable_remove_rule(rule);
             ofproto->ofproto_class->rule_delete(rule);
+
+            learned_cookies_dec(ofproto, actions, &dead_cookies);
         }
+        learned_cookies_flush(ofproto, &dead_cookies);
         ofmonitor_flush(ofproto->connmgr);
     }
 }

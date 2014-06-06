@@ -482,7 +482,7 @@ struct ofpact_learn {
     uint16_t priority;          /* Priority level of flow entry. */
     uint8_t table_id;           /* Table to insert flow entry. */
     ovs_be64 cookie;            /* Cookie for new flow. */
-    enum ofputil_flow_mod_flags flags;
+    enum nx_learn_flags flags;  /* NX_LEARN_F_*. */
     uint16_t fin_idle_timeout;  /* Idle timeout after FIN, if nonzero. */
     uint16_t fin_hard_timeout;  /* Hard timeout after FIN, if nonzero. */
 
