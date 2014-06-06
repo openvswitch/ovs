@@ -4946,6 +4946,7 @@ const struct ofproto_class ofproto_dpif_class = {
     rule_dealloc,
     rule_get_stats,
     rule_execute,
+    NULL,                       /* rule_premodify_actions */
     rule_modify_actions,
     set_frag_handling,
     packet_out,

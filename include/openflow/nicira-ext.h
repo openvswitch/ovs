@@ -2236,8 +2236,9 @@ OFP_ASSERT(sizeof(struct nx_flow_update_full) == 24);
  *     a flow_mod with type OFPFC_MODIFY affects multiple flows, but only some
  *     of those modifications succeed (e.g. due to hardware limitations).
  *
- *     This cannot occur with the current implementation of the Open vSwitch
- *     software datapath.  It could happen with other datapath implementations.
+ *     This cannot occur with the Open vSwitch software datapath.  This also
+ *     cannot occur in Open vSwitch 2.4 and later, because these versions only
+ *     execute any flow modifications if all of them will succeed.
  *
  *   - Changes that race with conflicting changes made by other controllers or
  *     other flow_mods (not separated by barriers) by the same controller.
@@ -2245,6 +2246,9 @@ OFP_ASSERT(sizeof(struct nx_flow_update_full) == 24);
  *     This cannot occur with the current Open vSwitch implementation
  *     (regardless of datapath) because Open vSwitch internally serializes
  *     potentially conflicting changes.
+ *
+ *   - Changes that occur when flow notification is paused (see "Buffer
+ *     Management" above).
  *
  * A flow_mod that does not change the flow table will not trigger any
  * notification, even an abbreviated one.  For example, a "modify" or "delete"

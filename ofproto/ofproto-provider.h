@@ -1160,23 +1160,16 @@ struct ofproto_class {
      * that the operation will probably succeed:
      *
      *   - ofproto adds the rule in the flow table before calling
-     *     ->rule_insert().
+     *     ->rule_insert().  If adding a rule in the flow table fails, ofproto
+     *     removes the new rule in the call to ofoperation_complete().
      *
      *   - ofproto updates the rule's actions and other properties before
-     *     calling ->rule_modify_actions().
+     *     calling ->rule_modify_actions().  Modifying a rule is not allowed to
+     *     fail (but ->rule_premodify_actions() can prevent the modification
+     *     attempt in advance).
      *
-     *   - ofproto removes the rule before calling ->rule_delete().
-     *
-     * With one exception, when an asynchronous operation completes with an
-     * error, ofoperation_complete() backs out the already applied changes:
-     *
-     *   - If adding a rule in the flow table fails, ofproto removes the new
-     *     rule.
-     *
-     *   - If modifying a rule fails, ofproto restores the original actions
-     *     (and other properties).
-     *
-     *   - Removing a rule is not allowed to fail.  It must always succeed.
+     *   - ofproto removes the rule before calling ->rule_delete().  Removing a
+     *     rule is not allowed to fail.  It must always succeed.
      *
      * The ofproto base code serializes operations: if any operation is in
      * progress on a given rule, ofproto postpones initiating any new operation
@@ -1292,14 +1285,21 @@ struct ofproto_class {
     enum ofperr (*rule_execute)(struct rule *rule, const struct flow *flow,
                                 struct ofpbuf *packet);
 
+    /* If the datapath can properly implement changing 'rule''s actions to the
+     * 'ofpacts_len' bytes in 'ofpacts', returns 0.  Otherwise, returns an enum
+     * ofperr indicating why the new actions wouldn't work.
+     *
+     * May be a null pointer if any set of actions is acceptable. */
+    enum ofperr (*rule_premodify_actions)(const struct rule *rule,
+                                          const struct ofpact *ofpacts,
+                                          size_t ofpacts_len)
+        /* OVS_REQUIRES(ofproto_mutex) */;
+
     /* When ->rule_modify_actions() is called, the caller has already replaced
      * the OpenFlow actions in 'rule' by a new set.  (The original actions are
      * in rule->pending->actions.)
      *
      * ->rule_modify_actions() should set the following in motion:
-     *
-     *   - Validate that the datapath can correctly implement the actions now
-     *     in 'rule'.
      *
      *   - Update the datapath flow table with the new actions.
      *
@@ -1312,8 +1312,7 @@ struct ofproto_class {
      * should call ofoperation_complete() later, after the operation does
      * complete.
      *
-     * If the operation fails, then the base ofproto code will restore the
-     * original 'actions' and 'n_actions' of 'rule'.
+     * Rule modification must not fail.
      *
      * ->rule_modify_actions() should not modify any base members of struct
      * rule. */

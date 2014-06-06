@@ -193,12 +193,14 @@ Examples of common tags follow.
         Reported-at: http://openvswitch.org/pipermail/dev/2014-June/040952.html
 
     VMware-BZ: #1234567
+    ONF-JIRA: EXT-12345
 
         If a patch fixes or is otherwise related to a bug reported in
         a private bug tracker, you may include some tracking ID for
         the bug for your own reference.  Please include some
-        identifier to make the origin clear, e.g. "VMware-BZ" in this
-        case refers to VMware's internal Bugzilla instance.
+        identifier to make the origin clear, e.g. "VMware-BZ" refers
+        to VMware's internal Bugzilla instance and "ONF-JIRA" refers
+        to the Open Networking Foundation's JIRA bug tracker.
 
     Bug #1234567.
     Issue: 1234567

@@ -4145,6 +4145,20 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
     enum ofperr error;
     size_t i;
 
+    if (ofproto->ofproto_class->rule_premodify_actions) {
+        for (i = 0; i < rules->n; i++) {
+            struct rule *rule = rules->rules[i];
+
+            if (rule_is_modifiable(rule, fm->flags)) {
+                error = ofproto->ofproto_class->rule_premodify_actions(
+                    rule, fm->ofpacts, fm->ofpacts_len);
+                if (error) {
+                    return error;
+                }
+            }
+        }
+    }
+
     type = fm->command == OFPFC_ADD ? OFOPERATION_REPLACE : OFOPERATION_MODIFY;
     group = ofopgroup_create(ofproto, ofconn, request, fm->buffer_id);
     error = OFPERR_OFPBRC_EPERM;
@@ -4200,8 +4214,7 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
 
             ovsrcu_set(&rule->actions, new_actions);
 
-            rule->ofproto->ofproto_class->rule_modify_actions(rule,
-                                                              reset_counters);
+            ofproto->ofproto_class->rule_modify_actions(rule, reset_counters);
         } else {
             ofoperation_complete(op, 0);
         }
@@ -6277,6 +6290,7 @@ ofopgroup_complete(struct ofopgroup *group)
 
         rule->pending = NULL;
 
+        ovs_assert(!op->error || op->type == OFOPERATION_ADD);
         switch (op->type) {
         case OFOPERATION_ADD:
             if (!op->error) {
@@ -6301,42 +6315,22 @@ ofopgroup_complete(struct ofopgroup *group)
             break;
 
         case OFOPERATION_DELETE:
-            ovs_assert(!op->error);
             ofproto_rule_unref(rule);
             op->rule = NULL;
             break;
 
         case OFOPERATION_MODIFY:
-        case OFOPERATION_REPLACE:
-            if (!op->error) {
-                long long int now = time_msec();
+        case OFOPERATION_REPLACE: {
+            long long now = time_msec();
 
-                ovs_mutex_lock(&rule->mutex);
-                rule->modified = now;
-                if (op->type == OFOPERATION_REPLACE) {
-                    rule->created = now;
-                }
-                ovs_mutex_unlock(&rule->mutex);
-            } else {
-                ofproto_rule_change_cookie(ofproto, rule, op->flow_cookie);
-                ovs_mutex_lock(&rule->mutex);
-                rule->idle_timeout = op->idle_timeout;
-                rule->hard_timeout = op->hard_timeout;
-                ovs_mutex_unlock(&rule->mutex);
-                if (op->actions) {
-                    const struct rule_actions *old_actions;
-
-                    ovs_mutex_lock(&rule->mutex);
-                    old_actions = rule_get_actions(rule);
-                    ovsrcu_set(&rule->actions, op->actions);
-                    ovs_mutex_unlock(&rule->mutex);
-
-                    op->actions = NULL;
-                    rule_actions_destroy(old_actions);
-                }
-                rule->flags = op->flags;
+            ovs_mutex_lock(&rule->mutex);
+            rule->modified = now;
+            if (op->type == OFOPERATION_REPLACE) {
+                rule->created = now;
             }
+            ovs_mutex_unlock(&rule->mutex);
             break;
+        }
 
         default:
             OVS_NOT_REACHED();
@@ -6428,19 +6422,12 @@ ofoperation_destroy(struct ofoperation *op)
  * If 'error' is 0, indicating success, the operation will be committed
  * permanently to the flow table.
  *
- * If 'error' is nonzero, then generally the operation will be rolled back:
- *
- *   - If 'op' is an "add flow" operation, ofproto removes the new rule or
- *     restores the original rule.  The caller must have uninitialized any
- *     derived state in the new rule, as in step 5 of in the "Life Cycle" in
- *     ofproto/ofproto-provider.h.  ofoperation_complete() performs steps 6 and
- *     and 7 for the new rule, calling its ->rule_dealloc() function.
- *
- *   - If 'op' is a "modify flow" operation, ofproto restores the original
- *     actions.
- *
- *   - 'op' must not be a "delete flow" operation.  Removing a rule is not
- *     allowed to fail.  It must always succeed.
+ * Flow modifications and deletions must always succeed.  Flow additions may
+ * fail, indicated by nonzero 'error'.  If an "add flow" operation fails, this
+ * function removes the new rule.  The caller must have uninitialized any
+ * derived state in the new rule, as in step 5 of in the "Life Cycle" in
+ * ofproto/ofproto-provider.h.  ofoperation_complete() performs steps 6 and and
+ * 7 for the new rule, calling its ->rule_dealloc() function.
  *
  * Please see the large comment in ofproto/ofproto-provider.h titled
  * "Asynchronous Operation Support" for more information. */
@@ -6450,7 +6437,7 @@ ofoperation_complete(struct ofoperation *op, enum ofperr error)
     struct ofopgroup *group = op->group;
 
     ovs_assert(group->n_running > 0);
-    ovs_assert(!error || op->type != OFOPERATION_DELETE);
+    ovs_assert(!error || op->type == OFOPERATION_ADD);
 
     op->error = error;
     if (!--group->n_running && !list_is_empty(&group->ofproto_node)) {
