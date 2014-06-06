@@ -16,7 +16,7 @@ OVS_VSWITCHD_START(
    add-port br1 p3 -- set interface p3 type=dummy options:stream=unix:$OVS_RUNDIR/p1.sock ofport_request=3 -- \
    add-port br1 p4 -- set interface p4 type=dummy options:stream=unix:$OVS_RUNDIR/p2.sock ofport_request=4 -- \
    add-port br1 p8 -- set interface p8 ofport_request=8 type=dummy --])
-sleep 2
+WAIT_FOR_DUMMY_PORTS([p3], [p4])
 AT_CHECK([ovs-appctl vlog/set dpif:dbg])
 
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
@@ -67,12 +67,11 @@ OVS_VSWITCHD_START(
    add-port br1 p5 -- set interface p5 type=dummy options:stream=unix:$OVS_RUNDIR/p2.sock ofport_request=5 -- \
    add-port br1 p6 -- set interface p6 type=dummy options:stream=unix:$OVS_RUNDIR/p3.sock ofport_request=6 -- \
    add-port br1 p8 -- set interface p8 ofport_request=8 type=dummy --])
-sleep 2
+WAIT_FOR_DUMMY_PORTS([p4], [p5], [p6])
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 AT_CHECK([ovs-ofctl add-flow br1 action=normal])
 AT_CHECK([ovs-appctl netdev-dummy/set-admin-state up], 0, [OK
 ])
-ovs-appctl netdev-dummy/set-admin-state up
 ovs-appctl time/stop
 ovs-appctl time/warp 100
 (
@@ -120,7 +119,7 @@ AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 AT_CHECK([ovs-ofctl add-flow br1 action=normal])
 AT_CHECK([ovs-appctl upcall/disable-megaflows], [0], [megaflows disabled
 ], [])
-sleep 2
+WAIT_FOR_DUMMY_PORTS([p4], [p5], [p6])
 ovs-appctl time/stop
 ovs-appctl time/warp 100
 ovs-appctl lacp/show > lacp.txt
