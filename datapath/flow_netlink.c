@@ -42,6 +42,7 @@
 #include <linux/icmp.h>
 #include <linux/icmpv6.h>
 #include <linux/rculist.h>
+#include <net/geneve.h>
 #include <net/ip.h>
 #include <net/ip_tunnels.h>
 #include <net/ipv6.h>
@@ -89,17 +90,20 @@ static void update_range__(struct sw_flow_match *match,
 		}                                                           \
 	} while (0)
 
-#define SW_FLOW_KEY_MEMCPY(match, field, value_p, len, is_mask) \
+#define SW_FLOW_KEY_MEMCPY_OFFSET(match, offset, value_p, len, is_mask) \
 	do { \
-		update_range__(match, offsetof(struct sw_flow_key, field),  \
-				len, is_mask);                              \
+		update_range__(match, offset, len, is_mask);                \
 		if (is_mask) {						    \
 			if ((match)->mask)				    \
-				memcpy(&(match)->mask->key.field, value_p, len);\
+				memcpy((u8 *)&(match)->mask->key + offset, value_p, len);\
 		} else {                                                    \
-			memcpy(&(match)->key->field, value_p, len);         \
+			memcpy((u8 *)(match)->key + offset, value_p, len);         \
 		}                                                           \
 	} while (0)
+
+#define SW_FLOW_KEY_MEMCPY(match, field, value_p, len, is_mask) \
+	SW_FLOW_KEY_MEMCPY_OFFSET(match, offsetof(struct sw_flow_key, field), \
+				  value_p, len, is_mask)
 
 static u16 range_n_bytes(const struct sw_flow_key_range *range)
 {
@@ -348,6 +352,7 @@ static int ipv4_tun_from_nlattr(const struct nlattr *attr,
 			[OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT] = 0,
 			[OVS_TUNNEL_KEY_ATTR_CSUM] = 0,
 			[OVS_TUNNEL_KEY_ATTR_OAM] = 0,
+			[OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS] = -1,
 		};
 
 		if (type > OVS_TUNNEL_KEY_ATTR_MAX) {
@@ -356,7 +361,8 @@ static int ipv4_tun_from_nlattr(const struct nlattr *attr,
 			return -EINVAL;
 		}
 
-		if (ovs_tunnel_key_lens[type] != nla_len(a)) {
+		if (ovs_tunnel_key_lens[type] != nla_len(a) &&
+		    ovs_tunnel_key_lens[type] != -1) {
 			OVS_NLERR("IPv4 tunnel attribute type has unexpected "
 				  " length (type=%d, length=%d, expected=%d).\n",
 				  type, nla_len(a), ovs_tunnel_key_lens[type]);
@@ -395,6 +401,56 @@ static int ipv4_tun_from_nlattr(const struct nlattr *attr,
 		case OVS_TUNNEL_KEY_ATTR_OAM:
 			tun_flags |= TUNNEL_OAM;
 			break;
+		case OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS:
+			if (nla_len(a) > sizeof(match->key->tun_opts)) {
+				OVS_NLERR("Geneve option length exceeds "
+					  "maximum size (len %d, max %zu).\n",
+					  nla_len(a),
+					  sizeof(match->key->tun_opts));
+				return -EINVAL;
+			}
+
+			if (nla_len(a) % 4 != 0) {
+				OVS_NLERR("Geneve option length is not "
+					  "a multiple of 4 (len %d).\n",
+					  nla_len(a));
+				return -EINVAL;
+			}
+
+			/* We need to record the length of the options passed
+			 * down, otherwise packets with the same format but
+			 * additional options will be silently matched.
+			 */
+			if (!is_mask) {
+				SW_FLOW_KEY_PUT(match, tun_opts_len, nla_len(a),
+						false);
+			} else {
+				/* This is somewhat unusual because it looks at
+				 * both the key and mask while parsing the
+				 * attributes (and by extension assumes the key
+				 * is parsed first). Normally, we would verify
+				 * that each is the correct length and that the
+				 * attributes line up in the validate function.
+				 * However, that is difficult because this is
+				 * variable length and we won't have the
+				 * information later.
+				 */
+				if (match->key->tun_opts_len != nla_len(a)) {
+					OVS_NLERR("Geneve option key length (%d)"
+					   " is different from mask length (%d).",
+					   match->key->tun_opts_len, nla_len(a));
+					return -EINVAL;
+				}
+
+				SW_FLOW_KEY_PUT(match, tun_opts_len, 0xff,
+						true);
+			}
+
+			SW_FLOW_KEY_MEMCPY_OFFSET(match,
+				(unsigned long)GENEVE_OPTS((struct sw_flow_key *)0,
+							   nla_len(a)),
+				nla_data(a), nla_len(a), is_mask);
+			break;
 		default:
 			return -EINVAL;
 		}
@@ -423,8 +479,9 @@ static int ipv4_tun_from_nlattr(const struct nlattr *attr,
 }
 
 static int ipv4_tun_to_nlattr(struct sk_buff *skb,
-			      const struct ovs_key_ipv4_tunnel *tun_key,
-			      const struct ovs_key_ipv4_tunnel *output)
+			      const struct ovs_key_ipv4_tunnel *output,
+			      const struct geneve_opt *tun_opts,
+			      int swkey_tun_opts_len)
 {
 	struct nlattr *nla;
 
@@ -455,6 +512,9 @@ static int ipv4_tun_to_nlattr(struct sk_buff *skb,
 	if ((output->tun_flags & TUNNEL_OAM) &&
 		nla_put_flag(skb, OVS_TUNNEL_KEY_ATTR_OAM))
 		return -EMSGSIZE;
+	if (tun_opts &&
+	    nla_put(skb, OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS,
+		    swkey_tun_opts_len, tun_opts));
 
 	nla_nest_end(skb, nla);
 	return 0;
@@ -900,7 +960,7 @@ int ovs_nla_get_flow_metadata(struct sw_flow *flow,
 	return 0;
 }
 
-int ovs_nla_put_flow(const struct sw_flow_key *swkey,
+int ovs_nla_put_flow(struct datapath *dp, const struct sw_flow_key *swkey,
 		     const struct sw_flow_key *output, struct sk_buff *skb)
 {
 	struct ovs_key_ethernet *eth_key;
@@ -916,9 +976,24 @@ int ovs_nla_put_flow(const struct sw_flow_key *swkey,
 	if (nla_put_u32(skb, OVS_KEY_ATTR_PRIORITY, output->phy.priority))
 		goto nla_put_failure;
 
-	if ((swkey->tun_key.ipv4_dst || is_mask) &&
-	    ipv4_tun_to_nlattr(skb, &swkey->tun_key, &output->tun_key))
-		goto nla_put_failure;
+	if ((swkey->tun_key.ipv4_dst || is_mask)) {
+		const struct geneve_opt *opts = NULL;
+
+		if (!is_mask) {
+			struct vport *in_port;
+
+			in_port = ovs_vport_ovsl_rcu(dp, swkey->phy.in_port);
+			if (in_port->ops->type == OVS_VPORT_TYPE_GENEVE)
+				opts = GENEVE_OPTS(output, swkey->tun_opts_len);
+		} else {
+			if (output->tun_opts_len)
+				opts = GENEVE_OPTS(output, swkey->tun_opts_len);
+		}
+
+		if (ipv4_tun_to_nlattr(skb, &output->tun_key, opts,
+					swkey->tun_opts_len))
+			goto nla_put_failure;
+	}
 
 	if (swkey->phy.in_port == DP_MAX_PORTS) {
 		if (is_mask && (output->phy.in_port == 0xffff))
@@ -1309,17 +1384,55 @@ static int validate_and_copy_set_tun(const struct nlattr *attr,
 	if (err)
 		return err;
 
+	if (key.tun_opts_len) {
+		struct geneve_opt *option = GENEVE_OPTS(&key,
+							key.tun_opts_len);
+		int opts_len = key.tun_opts_len;
+		bool crit_opt = false;
+
+		while (opts_len > 0) {
+			int len;
+
+			if (opts_len < sizeof(*option))
+				return -EINVAL;
+
+			len = sizeof(*option) + option->length * 4;
+			if (len > opts_len)
+				return -EINVAL;
+
+			crit_opt |= !!(option->type & GENEVE_CRIT_OPT_TYPE);
+
+			option = (struct geneve_opt *)((u8 *)option + len);
+			opts_len -= len;
+		};
+
+		key.tun_key.tun_flags |= crit_opt ? TUNNEL_CRIT_OPT : 0;
+	};
+
 	start = add_nested_action_start(sfa, OVS_ACTION_ATTR_SET);
 	if (start < 0)
 		return start;
 
 	a = __add_action(sfa, OVS_KEY_ATTR_TUNNEL_INFO, NULL,
-			sizeof(*tun_info));
+			sizeof(*tun_info) + key.tun_opts_len);
 	if (IS_ERR(a))
 		return PTR_ERR(a);
 
 	tun_info = nla_data(a);
 	tun_info->tunnel = key.tun_key;
+	tun_info->options_len = key.tun_opts_len;
+
+	if (tun_info->options_len) {
+		/* We need to store the options in the action itself since
+		 * everything else will go away after flow setup. We can append
+		 * it to tun_info and then point there.
+		 */
+		tun_info->options = (struct geneve_opt *)(tun_info + 1);
+		memcpy(tun_info->options, GENEVE_OPTS(&key, key.tun_opts_len),
+			key.tun_opts_len);
+	} else {
+		tun_info->options = NULL;
+	}
 
 	add_nested_action_end(*sfa, start);
 
@@ -1611,7 +1724,9 @@ static int set_action_to_attr(const struct nlattr *a, struct sk_buff *skb)
 			return -EMSGSIZE;
 
 		err = ipv4_tun_to_nlattr(skb, &tun_info->tunnel,
-					 &tun_info->tunnel);
+					 tun_info->options_len ?
+						tun_info->options : NULL,
+					 tun_info->options_len);
 		if (err)
 			return err;
 		nla_nest_end(skb, start);

@@ -455,7 +455,17 @@ int ovs_flow_extract(struct sk_buff *skb, u16 in_port, struct sw_flow_key *key)
 		struct ovs_tunnel_info *tun_info = OVS_CB(skb)->tun_info;
 		memcpy(&key->tun_key, &tun_info->tunnel,
 			sizeof(key->tun_key));
+		if (tun_info->options) {
+			BUILD_BUG_ON((1 << (sizeof(tun_info->options_len) * 8)) - 1
+					> sizeof(key->tun_opts));
+			memcpy(GENEVE_OPTS(key, tun_info->options_len),
+				tun_info->options, tun_info->options_len);
+			key->tun_opts_len = tun_info->options_len;
+		} else {
+			key->tun_opts_len = 0;
+		}
 	} else {
+		key->tun_opts_len = 0;
 		memset(&key->tun_key, 0, sizeof(key->tun_key));
 	}
 

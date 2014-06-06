@@ -1386,6 +1386,16 @@
           <dt><code>tap</code></dt>
           <dd>A TUN/TAP device managed by Open vSwitch.</dd>
 
+          <dt><code>geneve</code></dt>
+          <dd>
+            An Ethernet over Geneve (<code>http://tools.ietf.org/html/draft-gross-geneve-00</code>)
+            IPv4 tunnel.
+
+            Geneve supports options as a means to transport additional metadata,
+            however, currently only the 24-bit VNI is supported. This is planned
+            to be extended in the future.
+          </dd>
+
           <dt><code>gre</code></dt>
           <dd>
             An Ethernet over RFC 2890 Generic Routing Encapsulation over IPv4
@@ -1458,8 +1468,9 @@
     <group title="Tunnel Options">
       <p>
         These options apply to interfaces with <ref column="type"/> of
-        <code>gre</code>, <code>ipsec_gre</code>, <code>gre64</code>,
-        <code>ipsec_gre64</code>, <code>vxlan</code>, and <code>lisp</code>.
+        <code>geneve</code>, <code>gre</code>, <code>ipsec_gre</code>,
+        <code>gre64</code>, <code>ipsec_gre64</code>, <code>vxlan</code>,
+        and <code>lisp</code>.
       </p>
 
       <p>

@@ -215,6 +215,7 @@ enum ovs_vport_type {
 	OVS_VPORT_TYPE_INTERNAL, /* network device implemented by datapath */
 	OVS_VPORT_TYPE_GRE,	 /* GRE tunnel. */
 	OVS_VPORT_TYPE_VXLAN,    /* VXLAN tunnel */
+	OVS_VPORT_TYPE_GENEVE = 6,  /* Geneve tunnel */
 	OVS_VPORT_TYPE_GRE64 = 104, /* GRE tunnel with 64-bit keys */
 	OVS_VPORT_TYPE_LISP = 105,  /* LISP tunnel */
 	__OVS_VPORT_TYPE_MAX
@@ -341,9 +342,9 @@ enum ovs_tunnel_key_attr {
 	OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT,	/* No argument, set DF. */
 	OVS_TUNNEL_KEY_ATTR_CSUM,		/* No argument. CSUM packet. */
 	OVS_TUNNEL_KEY_ATTR_OAM,		/* No argument, OAM frame. */
+	OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS,	/* Array of Geneve options */
 	__OVS_TUNNEL_KEY_ATTR_MAX
 };
-
 #define OVS_TUNNEL_KEY_ATTR_MAX (__OVS_TUNNEL_KEY_ATTR_MAX - 1)
 
 /**

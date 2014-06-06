@@ -14,6 +14,7 @@ openvswitch_sources = \
 	flow_netlink.c \
 	flow_table.c \
 	vport.c \
+	vport-geneve.c \
 	vport-gre.c \
 	vport-internal_dev.c \
 	vport-lisp.c \

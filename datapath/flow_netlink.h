@@ -40,7 +40,7 @@
 void ovs_match_init(struct sw_flow_match *match,
 		    struct sw_flow_key *key, struct sw_flow_mask *mask);
 
-int ovs_nla_put_flow(const struct sw_flow_key *,
+int ovs_nla_put_flow(struct datapath *dp, const struct sw_flow_key *,
 		     const struct sw_flow_key *, struct sk_buff *);
 int ovs_nla_get_flow_metadata(struct sw_flow *flow,
 			      const struct nlattr *attr);

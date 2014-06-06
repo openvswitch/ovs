@@ -63,6 +63,7 @@ openvswitch_headers += \
 	linux/compat/include/net/dst.h \
 	linux/compat/include/net/flow_keys.h \
 	linux/compat/include/net/genetlink.h \
+	linux/compat/include/net/geneve.h \
 	linux/compat/include/net/gre.h \
 	linux/compat/include/net/inet_frag.h \
 	linux/compat/include/net/ip.h \

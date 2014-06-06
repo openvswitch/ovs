@@ -674,6 +674,24 @@ static inline bool dl_type_is_ip_any(ovs_be16 dl_type)
         || dl_type == htons(ETH_TYPE_IPV6);
 }
 
+#define GENEVE_CRIT_OPT_TYPE (1 << 7)
+struct geneve_opt {
+    ovs_be16  opt_class;
+    uint8_t   type;
+#ifdef LITTLE_ENDIAN
+    uint8_t   length:5;
+    uint8_t   r3:1;
+    uint8_t   r2:1;
+    uint8_t   r1:1;
+#else
+    uint8_t   r1:1;
+    uint8_t   r2:1;
+    uint8_t   r3:1;
+    uint8_t   length:5;
+#endif
+    uint8_t   opt_data[];
+};
+
 void format_ipv6_addr(char *addr_str, const struct in6_addr *addr);
 void print_ipv6_addr(struct ds *string, const struct in6_addr *addr);
 void print_ipv6_masked(struct ds *string, const struct in6_addr *addr,

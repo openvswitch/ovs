@@ -833,10 +833,44 @@ tunnel_key_attr_len(int type)
     case OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT: return 0;
     case OVS_TUNNEL_KEY_ATTR_CSUM: return 0;
     case OVS_TUNNEL_KEY_ATTR_OAM: return 0;
+    case OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS: return -2;
     case __OVS_TUNNEL_KEY_ATTR_MAX:
         return -1;
     }
     return -1;
+}
+
+#define GENEVE_OPT(class, type) ((OVS_FORCE uint32_t)(class) << 8 | (type))
+static int
+parse_geneve_opts(const struct nlattr *attr)
+{
+    int opts_len = nl_attr_get_size(attr);
+    const struct geneve_opt *opt = nl_attr_get(attr);
+
+    while (opts_len > 0) {
+        int len;
+
+        if (opts_len < sizeof(*opt)) {
+            return -EINVAL;
+        }
+
+        len = sizeof(*opt) + opt->length * 4;
+        if (len > opts_len) {
+            return -EINVAL;
+        }
+
+        switch (GENEVE_OPT(opt->opt_class, opt->type)) {
+        default:
+            if (opt->type & GENEVE_CRIT_OPT_TYPE) {
+                return -EINVAL;
+            }
+        };
+
+        opt = opt + len / sizeof(*opt);
+        opts_len -= len;
+    };
+
+    return 0;
 }
 
 enum odp_key_fitness
@@ -883,6 +917,15 @@ odp_tun_key_from_attr(const struct nlattr *attr, struct flow_tnl *tun)
         case OVS_TUNNEL_KEY_ATTR_OAM:
             tun->flags |= FLOW_TNL_F_OAM;
             break;
+        case OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS: {
+            if (parse_geneve_opts(a)) {
+                return ODP_FIT_ERROR;
+            }
+            /* It is necessary to reproduce options exactly (including order)
+             * so it's easiest to just echo them back. */
+            unknown = true;
+            break;
+        }
         default:
             /* Allow this to show up as unexpected, if there are unknown
              * tunnel attribute, eventually resulting in ODP_FIT_TOO_MUCH. */

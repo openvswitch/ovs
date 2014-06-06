@@ -580,6 +580,9 @@ get_vport_type(const struct dpif_linux_vport *vport)
     case OVS_VPORT_TYPE_INTERNAL:
         return "internal";
 
+    case OVS_VPORT_TYPE_GENEVE:
+        return "geneve";
+
     case OVS_VPORT_TYPE_GRE:
         return "gre";
 
@@ -611,6 +614,8 @@ netdev_to_ovs_vport_type(const struct netdev *netdev)
         return OVS_VPORT_TYPE_NETDEV;
     } else if (!strcmp(type, "internal")) {
         return OVS_VPORT_TYPE_INTERNAL;
+    } else if (!strcmp(type, "geneve")) {
+        return OVS_VPORT_TYPE_GENEVE;
     } else if (strstr(type, "gre64")) {
         return OVS_VPORT_TYPE_GRE64;
     } else if (strstr(type, "gre")) {

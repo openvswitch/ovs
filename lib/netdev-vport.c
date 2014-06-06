@@ -42,6 +42,7 @@
 
 VLOG_DEFINE_THIS_MODULE(netdev_vport);
 
+#define GENEVE_DST_PORT 6081
 #define VXLAN_DST_PORT 4789
 #define LISP_DST_PORT 4341
 
@@ -133,7 +134,8 @@ netdev_vport_needs_dst_port(const struct netdev *dev)
     const char *type = netdev_get_type(dev);
 
     return (class->get_config == get_tunnel_config &&
-            (!strcmp("vxlan", type) || !strcmp("lisp", type)));
+            (!strcmp("geneve", type) || !strcmp("vxlan", type) ||
+             !strcmp("lisp", type)));
 }
 
 const char *
@@ -495,12 +497,15 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
         }
     }
 
-    /* Add a default destination port for VXLAN if none specified. */
+    /* Add a default destination port for tunnel ports if none specified. */
+    if (!strcmp(type, "geneve") && !tnl_cfg.dst_port) {
+        tnl_cfg.dst_port = htons(GENEVE_DST_PORT);
+    }
+
     if (!strcmp(type, "vxlan") && !tnl_cfg.dst_port) {
         tnl_cfg.dst_port = htons(VXLAN_DST_PORT);
     }
 
-    /* Add a default destination port for LISP if none specified. */
     if (!strcmp(type, "lisp") && !tnl_cfg.dst_port) {
         tnl_cfg.dst_port = htons(LISP_DST_PORT);
     }
@@ -628,7 +633,8 @@ get_tunnel_config(const struct netdev *dev, struct smap *args)
         uint16_t dst_port = ntohs(tnl_cfg.dst_port);
         const char *type = netdev_get_type(dev);
 
-        if ((!strcmp("vxlan", type) && dst_port != VXLAN_DST_PORT) ||
+        if ((!strcmp("geneve", type) && dst_port != GENEVE_DST_PORT) ||
+            (!strcmp("vxlan", type) && dst_port != VXLAN_DST_PORT) ||
             (!strcmp("lisp", type) && dst_port != LISP_DST_PORT)) {
             smap_add_format(args, "dst_port", "%d", dst_port);
         }
@@ -831,6 +837,7 @@ netdev_vport_tunnel_register(void)
     /* The name of the dpif_port should be short enough to accomodate adding
      * a port number to the end if one is necessary. */
     static const struct vport_class vport_classes[] = {
+        TUNNEL_CLASS("geneve", "genev_sys"),
         TUNNEL_CLASS("gre", "gre_sys"),
         TUNNEL_CLASS("ipsec_gre", "gre_sys"),
         TUNNEL_CLASS("gre64", "gre64_sys"),
