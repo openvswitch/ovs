@@ -123,3 +123,12 @@ m4_define([ADD_OF_PORTS],
  [ovs-vsctl m4_foreach([of_port], m4_cdr($@),
     [ \
     -- add-port $1 p[]of_port -- set Interface p[]of_port type=dummy ofport_request=of_port])])
+
+# WAIT_FOR_DUMMY_PORTS(NETDEV_DUMMY_PORT[, NETDEV_DUMMY_PORT...])
+#
+# Wait until the netdev dummy ports are connected to each other
+m4_define([WAIT_FOR_DUMMY_PORTS], \
+  [m4_foreach([dummy_port], [$@],
+      [  \
+	 OVS_WAIT_WHILE([ovs-appctl netdev-dummy/conn-state dummy_port \
+                  | grep 'unknown\|disconnected'])])])
