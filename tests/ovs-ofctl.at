@@ -61,9 +61,9 @@ for test_case in \
     'ip,ip_dst=192.168.0.0/24                    any' \
     'ip,ip_dst=192.0.168.0/255.0.255.0           NXM,OXM,OpenFlow11' \
     'ipv6,ipv6_src=::1                           NXM,OXM' \
-    'ipv6,ipv6_src=::1/::1                       NXM,OXM' \
+    'ipv6,ipv6_src=0:0:0:0:0:0:0:1/::1           NXM,OXM' \
     'ipv6,ipv6_dst=::1                           NXM,OXM' \
-    'ipv6,ipv6_dst=::1/::1                       NXM,OXM' \
+    'ipv6,ipv6_dst=0:0:0:0:0:0:0:1/::1           NXM,OXM' \
     'ipv6,ipv6_label=5                           NXM,OXM' \
     'ipv6,ipv6_label=5/1                         NXM,OXM' \
     'ip,nw_proto=1                               any' \
