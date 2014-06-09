@@ -220,6 +220,10 @@ struct rule_criteria {
      * If out_group != OFPG_ALL, select only rules that output to out_group. */
     ofp_port_t out_port;
     uint32_t out_group;
+
+    /* If true, collects only rules that are modifiable. */
+    bool include_hidden;
+    bool include_readonly;
 };
 
 static void rule_criteria_init(struct rule_criteria *, uint8_t table_id,
@@ -227,6 +231,8 @@ static void rule_criteria_init(struct rule_criteria *, uint8_t table_id,
                                unsigned int priority,
                                ovs_be64 cookie, ovs_be64 cookie_mask,
                                ofp_port_t out_port, uint32_t out_group);
+static void rule_criteria_require_rw(struct rule_criteria *,
+                                     bool can_write_readonly);
 static void rule_criteria_destroy(struct rule_criteria *);
 
 /* A packet that needs to be passed to rule_execute().
@@ -3319,6 +3325,10 @@ next_matching_table(const struct ofproto *ofproto,
 /* Initializes 'criteria' in a straightforward way based on the other
  * parameters.
  *
+ * By default, the criteria include flows that are read-only, on the assumption
+ * that the collected flows won't be modified.  Call rule_criteria_require_rw()
+ * if flows will be modified.
+ *
  * For "loose" matching, the 'priority' parameter is unimportant and may be
  * supplied as 0. */
 static void
@@ -3333,6 +3343,32 @@ rule_criteria_init(struct rule_criteria *criteria, uint8_t table_id,
     criteria->cookie_mask = cookie_mask;
     criteria->out_port = out_port;
     criteria->out_group = out_group;
+
+    /* We ordinarily want to skip hidden rules, but there has to be a way for
+     * code internal to OVS to modify and delete them, so if the criteria
+     * specify a priority that can only be for a hidden flow, then allow hidden
+     * rules to be selected.  (This doesn't allow OpenFlow clients to meddle
+     * with hidden flows because OpenFlow uses only a 16-bit field to specify
+     * priority.) */
+    criteria->include_hidden = priority > UINT16_MAX;
+
+    /* We assume that the criteria are being used to collect flows for reading
+     * but not modification.  Thus, we should collect read-only flows. */
+    criteria->include_readonly = true;
+}
+
+/* By default, criteria initialized by rule_criteria_init() will match flows
+ * that are read-only, on the assumption that the collected flows won't be
+ * modified.  Call this function to match only flows that are be modifiable.
+ *
+ * Specify 'can_write_readonly' as false in ordinary circumstances, true if the
+ * caller has special privileges that allow it to modify even "read-only"
+ * flows. */
+static void
+rule_criteria_require_rw(struct rule_criteria *criteria,
+                         bool can_write_readonly)
+{
+    criteria->include_readonly = can_write_readonly;
 }
 
 static void
@@ -3399,38 +3435,45 @@ rule_collection_destroy(struct rule_collection *rules)
     }
 }
 
+/* Checks whether 'rule' matches 'c' and, if so, adds it to 'rules'.  This
+ * function verifies most of the criteria in 'c' itself, but the caller must
+ * check 'c->cr' itself.
+ *
+ * Increments '*n_readonly' if 'rule' wasn't added because it's read-only (and
+ * 'c' only includes modifiable rules).
+ *
+ * Returns 0 ordinarily, but OFPROTO_POSTPONE if we would otherwise collect a
+ * rule that has a pending operation. */
 static enum ofperr
 collect_rule(struct rule *rule, const struct rule_criteria *c,
-             struct rule_collection *rules)
+             struct rule_collection *rules, size_t *n_readonly)
     OVS_REQUIRES(ofproto_mutex)
 {
-    /* We ordinarily want to skip hidden rules, but there has to be a way for
-     * code internal to OVS to modify and delete them, so if the criteria
-     * specify a priority that can only be for a hidden flow, then allow hidden
-     * rules to be selected.  (This doesn't allow OpenFlow clients to meddle
-     * with hidden flows because OpenFlow uses only a 16-bit field to specify
-     * priority.) */
-    if (rule_is_hidden(rule) && c->cr.priority <= UINT16_MAX) {
-        return 0;
-    } else if (rule->pending) {
-        return OFPROTO_POSTPONE;
-    } else {
-        if ((c->table_id == rule->table_id || c->table_id == 0xff)
-            && ofproto_rule_has_out_port(rule, c->out_port)
-            && ofproto_rule_has_out_group(rule, c->out_group)
-            && !((rule->flow_cookie ^ c->cookie) & c->cookie_mask)) {
-            rule_collection_add(rules, rule);
+    if ((c->table_id == rule->table_id || c->table_id == 0xff)
+        && ofproto_rule_has_out_port(rule, c->out_port)
+        && ofproto_rule_has_out_group(rule, c->out_group)
+        && !((rule->flow_cookie ^ c->cookie) & c->cookie_mask)
+        && (!rule_is_hidden(rule) || c->include_hidden)) {
+        if (rule->pending) {
+            return OFPROTO_POSTPONE;
         }
-        return 0;
+
+        /* Rule matches all the criteria... */
+        if (rule_is_modifiable(rule, 0) || c->include_readonly) {
+            /* ...add it. */
+            rule_collection_add(rules, rule);
+        } else {
+            /* ...except it's read-only. */
+            ++*n_readonly;
+        }
     }
+    return 0;
 }
 
 /* Searches 'ofproto' for rules that match the criteria in 'criteria'.  Matches
  * on classifiers rules are done in the "loose" way required for OpenFlow
  * OFPFC_MODIFY and OFPFC_DELETE requests.  Puts the selected rules on list
  * 'rules'.
- *
- * Hidden rules are always omitted.
  *
  * Returns 0 on success, otherwise an OpenFlow error code. */
 static enum ofperr
@@ -3441,6 +3484,7 @@ collect_rules_loose(struct ofproto *ofproto,
 {
     struct oftable *table;
     enum ofperr error = 0;
+    size_t n_readonly = 0;
 
     rule_collection_init(rules);
 
@@ -3456,7 +3500,7 @@ collect_rules_loose(struct ofproto *ofproto,
                                    hash_cookie(criteria->cookie),
                                    &ofproto->cookies) {
             if (cls_rule_is_loose_match(&rule->cr, &criteria->cr.match)) {
-                error = collect_rule(rule, criteria, rules);
+                error = collect_rule(rule, criteria, rules, &n_readonly);
                 if (error) {
                     break;
                 }
@@ -3470,7 +3514,7 @@ collect_rules_loose(struct ofproto *ofproto,
             fat_rwlock_rdlock(&table->cls.rwlock);
             cls_cursor_init(&cursor, &table->cls, &criteria->cr);
             CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
-                error = collect_rule(rule, criteria, rules);
+                error = collect_rule(rule, criteria, rules, &n_readonly);
                 if (error) {
                     break;
                 }
@@ -3480,6 +3524,11 @@ collect_rules_loose(struct ofproto *ofproto,
     }
 
 exit:
+    if (!error && !rules->n && n_readonly) {
+        /* We didn't find any rules to modify.  We did find some read-only
+         * rules that we're not allowed to modify, so report that. */
+        error = OFPERR_OFPBRC_EPERM;
+    }
     if (error) {
         rule_collection_destroy(rules);
     }
@@ -3491,8 +3540,6 @@ exit:
  * OFPFC_MODIFY_STRICT and OFPFC_DELETE_STRICT requests.  Puts the selected
  * rules on list 'rules'.
  *
- * Hidden rules are always omitted.
- *
  * Returns 0 on success, otherwise an OpenFlow error code. */
 static enum ofperr
 collect_rules_strict(struct ofproto *ofproto,
@@ -3501,6 +3548,7 @@ collect_rules_strict(struct ofproto *ofproto,
     OVS_REQUIRES(ofproto_mutex)
 {
     struct oftable *table;
+    size_t n_readonly = 0;
     int error = 0;
 
     rule_collection_init(rules);
@@ -3517,7 +3565,7 @@ collect_rules_strict(struct ofproto *ofproto,
                                    hash_cookie(criteria->cookie),
                                    &ofproto->cookies) {
             if (cls_rule_equal(&rule->cr, &criteria->cr)) {
-                error = collect_rule(rule, criteria, rules);
+                error = collect_rule(rule, criteria, rules, &n_readonly);
                 if (error) {
                     break;
                 }
@@ -3532,7 +3580,7 @@ collect_rules_strict(struct ofproto *ofproto,
                                           &table->cls, &criteria->cr));
             fat_rwlock_unlock(&table->cls.rwlock);
             if (rule) {
-                error = collect_rule(rule, criteria, rules);
+                error = collect_rule(rule, criteria, rules, &n_readonly);
                 if (error) {
                     break;
                 }
@@ -4138,19 +4186,16 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
         for (i = 0; i < rules->n; i++) {
             struct rule *rule = rules->rules[i];
 
-            if (rule_is_modifiable(rule, fm->flags)) {
-                error = ofproto->ofproto_class->rule_premodify_actions(
-                    rule, fm->ofpacts, fm->ofpacts_len);
-                if (error) {
-                    return error;
-                }
+            error = ofproto->ofproto_class->rule_premodify_actions(
+                rule, fm->ofpacts, fm->ofpacts_len);
+            if (error) {
+                return error;
             }
         }
     }
 
     type = fm->command == OFPFC_ADD ? OFOPERATION_REPLACE : OFOPERATION_MODIFY;
     group = ofopgroup_create(ofproto, ofconn, request, fm->buffer_id);
-    error = OFPERR_OFPBRC_EPERM;
     for (i = 0; i < rules->n; i++) {
         struct rule *rule = rules->rules[i];
         const struct rule_actions *actions;
@@ -4160,12 +4205,6 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
 
         /* FIXME: Implement OFPFUTIL_FF_RESET_COUNTS */
 
-        if (rule_is_modifiable(rule, fm->flags)) {
-            /* At least one rule is modifiable, don't report EPERM error. */
-            error = 0;
-        } else {
-            continue;
-        }
 
         actions = rule_get_actions(rule);
         actions_changed = !ofpacts_equal(fm->ofpacts, fm->ofpacts_len,
@@ -4241,6 +4280,8 @@ modify_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
 
     rule_criteria_init(&criteria, fm->table_id, &fm->match, 0,
                        fm->cookie, fm->cookie_mask, OFPP_ANY, OFPG11_ANY);
+    rule_criteria_require_rw(&criteria,
+                             (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
     error = collect_rules_loose(ofproto, &criteria, &rules);
     rule_criteria_destroy(&criteria);
 
@@ -4272,6 +4313,8 @@ modify_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
 
     rule_criteria_init(&criteria, fm->table_id, &fm->match, fm->priority,
                        fm->cookie, fm->cookie_mask, OFPP_ANY, OFPG11_ANY);
+    rule_criteria_require_rw(&criteria,
+                             (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
     error = collect_rules_strict(ofproto, &criteria, &rules);
     rule_criteria_destroy(&criteria);
 
@@ -4340,6 +4383,8 @@ delete_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
     rule_criteria_init(&criteria, fm->table_id, &fm->match, 0,
                        fm->cookie, fm->cookie_mask,
                        fm->out_port, fm->out_group);
+    rule_criteria_require_rw(&criteria,
+                             (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
     error = collect_rules_loose(ofproto, &criteria, &rules);
     rule_criteria_destroy(&criteria);
 
@@ -4366,6 +4411,8 @@ delete_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
     rule_criteria_init(&criteria, fm->table_id, &fm->match, fm->priority,
                        fm->cookie, fm->cookie_mask,
                        fm->out_port, fm->out_group);
+    rule_criteria_require_rw(&criteria,
+                             (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
     error = collect_rules_strict(ofproto, &criteria, &rules);
     rule_criteria_destroy(&criteria);
 
