@@ -1171,7 +1171,14 @@ static void
 report_error(struct rconn *rc, int error)
     OVS_REQUIRES(rc->mutex)
 {
-    if (error == EOF) {
+    /* On Windows, when a peer terminates without calling a closesocket()
+     * on socket fd, we get WSAECONNRESET. Don't print warning messages
+     * for that case. */
+    if (error == EOF
+#ifdef _WIN32
+        || error == WSAECONNRESET
+#endif
+        ) {
         /* If 'rc' isn't reliable, then we don't really expect this connection
          * to last forever anyway (probably it's a connection that we received
          * via accept()), so use DBG level to avoid cluttering the logs. */
