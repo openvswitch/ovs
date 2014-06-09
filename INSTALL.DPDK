@@ -17,7 +17,8 @@ Building and Installing:
 Recommended to use DPDK 1.6.
 
 DPDK:
-cd DPDK
+Set dir i.g.:   export DPDK_DIR=/usr/src/dpdk-1.6.0r2
+cd $DPDK_DIR
 update config/defconfig_x86_64-default-linuxapp-gcc so that dpdk generate single lib file.
 CONFIG_RTE_BUILD_COMBINE_LIBS=y
 
@@ -31,7 +32,8 @@ DPDK kernel requirement.
 OVS:
 cd $(OVS_DIR)/openvswitch
 ./boot.sh
-./configure --with-dpdk=$(DPDK_BUILD)
+export DPDK_BUILD=/usr/src/dpdk-1.6.0r2/x86_64-default-linuxapp-gcc
+./configure --with-dpdk=$DPDK_BUILD
 make
 
 Refer to INSTALL.userspace for general requirements of building
@@ -40,24 +42,76 @@ userspace OVS.
 Using the DPDK with ovs-vswitchd:
 ---------------------------------
 
+Setup system boot:
+   kernel bootline, add: default_hugepagesz=1GB hugepagesz=1G hugepages=1
+
 First setup DPDK devices:
   - insert uio.ko
+    e.g. modprobe uio
   - insert igb_uio.ko
     e.g. insmod DPDK/x86_64-default-linuxapp-gcc/kmod/igb_uio.ko
-  - mount hugetlbfs
-    e.g. mount -t hugetlbfs -o pagesize=1G none /mnt/huge/
   - Bind network device to ibg_uio.
     e.g. DPDK/tools/pci_unbind.py --bind=igb_uio eth1
+    Alternate binding method:
+     Find target Ethernet devices
+      lspci -nn|grep Ethernet
+     Bring Down (e.g. eth2, eth3)
+      ifconfig eth2 down
+      ifconfig eth3 down
+     Look at current devices (e.g ixgbe devices)
+      ls /sys/bus/pci/drivers/ixgbe/
+      0000:02:00.0  0000:02:00.1  bind  module  new_id  remove_id  uevent  unbind
+     Unbind target pci devices from current driver (e.g. 02:00.0 ...)
+      echo 0000:02:00.0 > /sys/bus/pci/drivers/ixgbe/unbind
+      echo 0000:02:00.1 > /sys/bus/pci/drivers/ixgbe/unbind
+     Bind to target driver (e.g. igb_uio)
+      echo 0000:02:00.0 > /sys/bus/pci/drivers/igb_uio/bind
+      echo 0000:02:00.1 > /sys/bus/pci/drivers/igb_uio/bind
+     Check binding for listed devices
+      ls /sys/bus/pci/drivers/igb_uio
+      0000:02:00.0  0000:02:00.1  bind  module  new_id  remove_id  uevent  unbind
+
+Prepare system:
+  - load ovs kernel module
+    e.g modprobe openvswitch
+  - mount hugetlbfs
+    e.g. mount -t hugetlbfs -o pagesize=1G none /mnt/huge/
 
 Ref to http://www.dpdk.org/doc/quick-start for verifying DPDK setup.
 
+Start ovsdb-server as discussed in INSTALL doc:
+  Summary e.g.:
+    First time only db creation (or clearing):
+      mkdir -p /usr/local/etc/openvswitch
+      mkdir -p /usr/local/var/run/openvswitch
+      rm /usr/local/etc/openvswitch/conf.db
+      cd $OVS_DIR
+      ./ovsdb/ovsdb-tool create /usr/local/etc/openvswitch/conf.db \
+        ./vswitchd/vswitch.ovsschema
+    start ovsdb-server
+      cd $OVS_DIR
+      ./ovsdb/ovsdb-server --remote=punix:/usr/local/var/run/openvswitch/db.sock \
+          --remote=db:OpenOpen_vSwitch,manager_options \
+          --private-key=db:Open_vSwitch,SSL,private_key \
+          --certificate=dbitch,SSL,certificate \
+          --bootstrap-ca-cert=db:Open_vSwitch,SSL,ca_cert --pidfile --detach
+    First time after db creation, initialize:
+      cd $OVS_DIR
+      ./utilities/ovs-vsctl --no-wait init
+
 Start vswitchd:
 DPDK configuration arguments can be passed to vswitchd via `--dpdk`
-argument. dpdk arg -c is ignored by ovs-dpdk, but it is required parameter
+argument. dpdk arg -c is ignored by ovs-dpdk, but it is a required parameter
 for dpdk initialization.
 
    e.g.
+   export DB_SOCK=/usr/local/var/run/openvswitch/db.sock
    ./vswitchd/ovs-vswitchd --dpdk -c 0x1 -n 4 -- unix:$DB_SOCK  --pidfile --detach
+
+If allocated more than 1 GB huge pages, set amount and use NUMA node 0 memory:
+
+   ./vswitchd/ovs-vswitchd --dpdk -c 0x1 -n 4 --socket-mem 1024,0 \
+      -- unix:$DB_SOCK  --pidfile --detach
 
 To use ovs-vswitchd with DPDK, create a bridge with datapath_type
 "netdev" in the configuration database.  For example:
@@ -69,10 +123,72 @@ Now you can add dpdk devices. OVS expect DPDK device name start with dpdk
 and end with portid. vswitchd should print number of dpdk devices found.
 
     ovs-vsctl add-port br0 dpdk0 -- set Interface dpdk0 type=dpdk
+    ovs-vsctl add-port br0 dpdk1 -- set Interface dpdk1 type=dpdk
 
-Once first DPDK port is added vswitchd, it creates Polling thread and
+Once first DPDK port is added to vswitchd, it creates a Polling thread and
 polls dpdk device in continuous loop. Therefore CPU utilization
 for that thread is always 100%.
+
+Test flow script across NICs (assuming ovs in /usr/src/ovs):
+  Assume 1.1.1.1 on NIC port 1 (dpdk0)
+  Assume 1.1.1.2 on NIC port 2 (dpdk1)
+  Execute script:
+
+############################# Script:
+
+#! /bin/sh
+
+# Move to command directory
+
+cd /usr/src/ovs/utilities/
+
+# Clear current flows
+./ovs-ofctl del-flows br0
+
+# Add flows between port 1 (dpdk0) to port 2 (dpdk1)
+./ovs-ofctl add-flow br0 in_port=1,dl_type=0x800,nw_src=1.1.1.1,\
+nw_dst=1.1.1.2,idle_timeout=0,action=output:2
+./ovs-ofctl add-flow br0 in_port=2,dl_type=0x800,nw_src=1.1.1.2,\
+nw_dst=1.1.1.1,idle_timeout=0,action=output:1
+
+######################################
+
+Ideally for maximum throughput, the 100% task should not be scheduled out
+which temporarily halts the process. The following affinitization methods will
+help.
+
+At this time all ovs-vswitchd tasks end up being affinitized to cpu core 0
+but this may change. Lets pick a target core for 100% task to run on, i.e. core 7.
+Also assume a dual 8 core sandy bridge system with hyperthreading enabled.
+(A different cpu configuration will have different core mask requirements).
+
+To give better ownership of 100%, isolation maybe useful.
+To kernel bootline add core isolation list for core 7 and associated hype core 23
+  e.g.  isolcpus=7,23
+Reboot system for isolation to take effect, restart everything
+
+List threads (and their pid) of ovs-vswitchd
+  top -p `pidof ovs-vswitchd` -H -d1
+
+Look for pmd* thread which is polling dpdk devices, this will be the 100% CPU
+bound task. Using this thread pid, affinitize to core 7 (mask 0x080),
+example pid 1762
+
+taskset -p 080 1762
+  pid 1762's current affinity mask: 1
+  pid 1762's new affinity mask: 80
+
+Assume that all other ovs-vswitchd threads to be on other socket 0 cores.
+Affinitize the rest of the ovs-vswitchd thread ids to 0x0FF007F
+
+taskset -p 0x0FF007F {thread pid, e.g 1738}
+  pid 1738's current affinity mask: 1
+  pid 1738's new affinity mask: ff007f
+. . .
+
+The core 23 is left idle, which allows core 7 to run at full rate.
+
+Future changes may change the need for cpu core affinitization.
 
 Restrictions:
 -------------
