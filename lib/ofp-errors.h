@@ -156,21 +156,6 @@ enum ofperr {
      * is not valid. */
     OFPERR_NXBRC_BAD_REASON,
 
-    /* NX1.0-1.1(1,517), NX1.2+(6).  The 'id' in an NXST_FLOW_MONITOR request
-     * is the same as an existing monitor id (or two monitors in the same
-     * NXST_FLOW_MONITOR request have the same 'id').  */
-    OFPERR_NXBRC_FM_DUPLICATE_ID,
-
-    /* NX1.0-1.1(1,518), NX1.2+(7).  The 'flags' in an NXST_FLOW_MONITOR
-     * request either does not specify at least one of the NXFMF_ADD,
-     * NXFMF_DELETE, or NXFMF_MODIFY flags, or specifies a flag bit that is not
-     * defined. */
-    OFPERR_NXBRC_FM_BAD_FLAGS,
-
-    /* NX1.0-1.1(1,519), NX1.2+(8).  The 'id' in an NXT_FLOW_MONITOR_CANCEL
-     * request is not the id of any existing monitor. */
-    OFPERR_NXBRC_FM_BAD_ID,
-
     /* NX1.0-1.1(1,520), NX1.2+(9).  The 'event' in an NXST_FLOW_MONITOR reply
      * does not specify one of the NXFME_ABBREV, NXFME_ADD, NXFME_DELETE, or
      * NXFME_MODIFY. */
@@ -636,6 +621,38 @@ enum ofperr {
 
     /* OF1.4+(17,15).  Bundle is locking the resource. */
     OFPERR_OFPBFC_BUNDLE_IN_PROGRESS,
+
+/* ## ------------------------- ## */
+/* ## OFPET_FLOW_MONITOR_FAILED ## */
+/* ## ------------------------- ## */
+
+    /* OF1.4+(16,0).  Unspecified error. */
+    OFPERR_OFPMOFC_UNKNOWN,
+
+    /* NX1.0-1.1(1,517), NX1.2-1.3(6), OF1.4+(16,1).  Monitor not added
+     * because a Monitor ADD attempted to replace an existing Monitor. */
+    OFPERR_OFPMOFC_MONITOR_EXISTS,
+
+    /* OF1.4+(16,2).  Monitor not added because
+     * Monitor specified is invalid. */
+    OFPERR_OFPMOFC_INVALID_MONITOR,
+
+    /* NX1.0-1.1(1,519), NX1.2-1.3(8), OF1.4+(16,3).  Monitor not modified
+     * because a Monitor MODIFY attempted to modify a non-existent Monitor. */
+    OFPERR_OFPMOFC_UNKNOWN_MONITOR,
+
+    /* OF1.4+(16,4).  Unsupported or unknown command. */
+    OFPERR_OFPMOFC_BAD_COMMAND,
+
+    /* NX1.0-1.1(1,518), NX1.2-1.3(7), OF1.4+(16,5).  Flag configuration
+     * unsupported. */
+    OFPERR_OFPMOFC_BAD_FLAGS,
+
+    /* OF1.4+(16,6).  Specified table does not exist. */
+    OFPERR_OFPMOFC_BAD_TABLE_ID,
+
+    /* OF1.4+(16,7).  Error in output port/group. */
+    OFPERR_OFPMOFC_BAD_OUT,
 
 /* ## ------------------ ## */
 /* ## OFPET_EXPERIMENTER ## */

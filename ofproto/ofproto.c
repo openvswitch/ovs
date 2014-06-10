@@ -4895,7 +4895,7 @@ handle_flow_monitor_cancel(struct ofconn *ofconn, const struct ofp_header *oh)
         ofmonitor_destroy(m);
         error = 0;
     } else {
-        error = OFPERR_NXBRC_FM_BAD_ID;
+        error = OFPERR_OFPMOFC_UNKNOWN_MONITOR;
     }
     ovs_mutex_unlock(&ofproto_mutex);
 

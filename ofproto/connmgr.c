@@ -2022,7 +2022,7 @@ ofmonitor_create(const struct ofputil_flow_monitor_request *request,
 
     m = ofmonitor_lookup(ofconn, request->id);
     if (m) {
-        return OFPERR_NXBRC_FM_DUPLICATE_ID;
+        return OFPERR_OFPMOFC_MONITOR_EXISTS;
     }
 
     m = xmalloc(sizeof *m);

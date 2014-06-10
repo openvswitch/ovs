@@ -5232,7 +5232,7 @@ ofputil_decode_flow_monitor_request(struct ofputil_flow_monitor_request *rq,
                      | NXFMF_MODIFY | NXFMF_ACTIONS | NXFMF_OWN)) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "NXST_FLOW_MONITOR has bad flags %#"PRIx16,
                      flags);
-        return OFPERR_NXBRC_FM_BAD_FLAGS;
+        return OFPERR_OFPMOFC_BAD_FLAGS;
     }
 
     if (!is_all_zeros(nfmr->zeros, sizeof nfmr->zeros)) {
