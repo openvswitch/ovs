@@ -15,6 +15,7 @@ VERSION = {"1.0": 0x01,
            "1.5": 0x06}
 
 NX_VENDOR_ID = 0x00002320
+ONF_VENDOR_ID = 0x4f4e4600
 
 OFPT_VENDOR = 4
 OFPT10_STATS_REQUEST = 16
@@ -160,6 +161,22 @@ def extract_ofp_msgs(output_file_name):
                     hdrs = (version, OFPT10_STATS_REPLY, number, 0, 0)
                 else:
                     hdrs = (version, OFPT11_STATS_REPLY, number, 0, 0)
+            elif type_ == 'ONF':
+                hdrs = (version, OFPT_VENDOR, 0, ONF_VENDOR_ID, number)
+            elif type_ == 'ONFST' and name.endswith('_REQUEST'):
+                if version == VERSION["1.0"]:
+                    hdrs = (version, OFPT10_STATS_REQUEST, OFPST_VENDOR,
+                            ONF_VENDOR_ID, number)
+                else:
+                    hdrs = (version, OFPT11_STATS_REQUEST, OFPST_VENDOR,
+                            ONF_VENDOR_ID, number)
+            elif type_ == 'ONFST' and name.endswith('_REPLY'):
+                if version == VERSION["1.0"]:
+                    hdrs = (version, OFPT10_STATS_REPLY, OFPST_VENDOR,
+                            ONF_VENDOR_ID, number)
+                else:
+                    hdrs = (version, OFPT11_STATS_REPLY, OFPST_VENDOR,
+                            ONF_VENDOR_ID, number)
             elif type_ == 'NXT':
                 hdrs = (version, OFPT_VENDOR, 0, NX_VENDOR_ID, number)
             elif type_ == 'NXST' and name.endswith('_REQUEST'):
