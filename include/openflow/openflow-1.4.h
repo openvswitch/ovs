@@ -367,4 +367,51 @@ struct ofp14_bundle_ctrl_msg {
 };
 OFP_ASSERT(sizeof(struct ofp14_bundle_ctrl_msg) == 8);
 
+/* Body for ofp14_multipart_request of type OFPMP_FLOW_MONITOR.
+ *
+ * The OFPMP_FLOW_MONITOR request's body consists of an array of zero or more
+ * instances of this structure. The request arranges to monitor the flows
+ * that match the specified criteria, which are interpreted in the same way as
+ * for OFPMP_FLOW.
+ *
+ * 'id' identifies a particular monitor for the purpose of allowing it to be
+ * canceled later with OFPFMC_DELETE. 'id' must be unique among
+ * existing monitors that have not already been canceled.
+ */
+struct ofp14_flow_monitor_request {
+    ovs_be32 monitor_id;        /* Controller-assigned ID for this monitor. */
+    ovs_be32 out_port;          /* Required output port, if not OFPP_ANY. */
+    ovs_be32 out_group;         /* Required output port, if not OFPG_ANY. */
+    ovs_be16 flags;             /* OFPMF14_*. */
+    uint8_t table_id;           /* One table's ID or OFPTT_ALL (all tables). */
+    uint8_t command;            /* One of OFPFMC14_*. */
+    /* Followed by an ofp11_match structure. */
+};
+OFP_ASSERT(sizeof(struct ofp14_flow_monitor_request) == 16);
+
+/* Flow monitor commands */
+enum ofp14_flow_monitor_command {
+    OFPFMC14_ADD = 0, /* New flow monitor. */
+    OFPFMC14_MODIFY = 1, /* Modify existing flow monitor. */
+    OFPFMC14_DELETE = 2, /* Delete/cancel existing flow monitor. */
+};
+
+/* 'flags' bits in struct of_flow_monitor_request. */
+enum ofp14_flow_monitor_flags {
+    /* When to send updates. */
+    /* Common to NX and OpenFlow 1.4 */
+    OFPFMF14_INITIAL = 1 << 0,     /* Initially matching flows. */
+    OFPFMF14_ADD = 1 << 1,         /* New matching flows as they are added. */
+    OFPFMF14_REMOVED = 1 << 2,     /* Old matching flows as they are removed. */
+    OFPFMF14_MODIFY = 1 << 3,      /* Matching flows as they are changed. */
+
+    /* What to include in updates. */
+    /* Common to NX and OpenFlow 1.4 */
+    OFPFMF14_INSTRUCTIONS = 1 << 4, /* If set, instructions are included. */
+    OFPFMF14_NO_ABBREV = 1 << 5,    /* If set, include own changes in full. */
+    /* OpenFlow 1.4 */
+    OFPFMF14_ONLY_OWN = 1 << 6,     /* If set, don't include other controllers.
+                                     */
+};
+
 #endif /* openflow/openflow-1.4.h */
