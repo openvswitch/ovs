@@ -1360,7 +1360,7 @@ struct ofproto_class {
      * returned in 'status->rmps'.  '*status' is indeterminate if the return
      * value is non-zero. */
     int (*get_cfm_status)(const struct ofport *ofport,
-                          struct ofproto_cfm_status *status);
+                          struct cfm_status *status);
 
     /* Configures BFD on 'ofport'.
      *

@@ -925,24 +925,40 @@ cfm_get_health(const struct cfm *cfm) OVS_EXCLUDED(mutex)
     return health;
 }
 
+static int
+cfm_get_opup__(const struct cfm *cfm_) OVS_REQUIRES(mutex)
+{
+    struct cfm *cfm = CONST_CAST(struct cfm *, cfm_);
+    bool extended;
+
+    atomic_read(&cfm->extended, &extended);
+
+    return extended ? cfm->remote_opup : -1;
+}
+
 /* Gets the operational state of 'cfm'.  'cfm' is considered operationally down
  * if it has received a CCM with the operationally down bit set from any of its
  * remote maintenance points. Returns 1 if 'cfm' is operationally up, 0 if
  * 'cfm' is operationally down, or -1 if 'cfm' has no operational state
  * (because it isn't in extended mode). */
 int
-cfm_get_opup(const struct cfm *cfm_) OVS_EXCLUDED(mutex)
+cfm_get_opup(const struct cfm *cfm) OVS_EXCLUDED(mutex)
 {
-    struct cfm *cfm = CONST_CAST(struct cfm *, cfm_);
-    bool extended;
     int opup;
 
     ovs_mutex_lock(&mutex);
-    atomic_read(&cfm->extended, &extended);
-    opup = extended ? cfm->remote_opup : -1;
+    opup = cfm_get_opup__(cfm);
     ovs_mutex_unlock(&mutex);
 
     return opup;
+}
+
+static void
+cfm_get_remote_mpids__(const struct cfm *cfm, uint64_t **rmps, size_t *n_rmps)
+    OVS_REQUIRES(mutex)
+{
+    *rmps = xmemdup(cfm->rmps_array, cfm->rmps_array_len * sizeof **rmps);
+    *n_rmps = cfm->rmps_array_len;
 }
 
 /* Populates 'rmps' with an array of remote maintenance points reachable by
@@ -953,8 +969,20 @@ cfm_get_remote_mpids(const struct cfm *cfm, uint64_t **rmps, size_t *n_rmps)
     OVS_EXCLUDED(mutex)
 {
     ovs_mutex_lock(&mutex);
-    *rmps = xmemdup(cfm->rmps_array, cfm->rmps_array_len * sizeof **rmps);
-    *n_rmps = cfm->rmps_array_len;
+    cfm_get_remote_mpids__(cfm, rmps, n_rmps);
+    ovs_mutex_unlock(&mutex);
+}
+
+/* Extracts the status of 'cfm' and fills in the 's'. */
+void
+cfm_get_status(const struct cfm *cfm, struct cfm_status *s) OVS_EXCLUDED(mutex)
+{
+    ovs_mutex_lock(&mutex);
+    s->faults = cfm_get_fault__(cfm);
+    s->remote_opstate = cfm_get_opup__(cfm);
+    s->flap_count = cfm->flap_count;
+    s->health = cfm->health;
+    cfm_get_remote_mpids__(cfm, &s->rmps, &s->n_rmps);
     ovs_mutex_unlock(&mutex);
 }
 

@@ -1811,18 +1811,14 @@ out:
 
 static int
 get_cfm_status(const struct ofport *ofport_,
-               struct ofproto_cfm_status *status)
+               struct cfm_status *status)
 {
     struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
     int ret = 0;
 
     if (ofport->cfm) {
         if (cfm_check_status_change(ofport->cfm)) {
-            status->faults = cfm_get_fault(ofport->cfm);
-            status->flap_count = cfm_get_flap_count(ofport->cfm);
-            status->remote_opstate = cfm_get_opup(ofport->cfm);
-            status->health = cfm_get_health(ofport->cfm);
-            cfm_get_remote_mpids(ofport->cfm, &status->rmps, &status->n_rmps);
+            cfm_get_status(ofport->cfm, status);
         } else {
             ret = NO_STATUS_CHANGE;
         }

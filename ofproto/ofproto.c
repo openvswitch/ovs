@@ -3692,7 +3692,7 @@ ofproto_get_netflow_ids(const struct ofproto *ofproto,
  * '*status' is indeterminate if the return value is non-zero. */
 int
 ofproto_port_get_cfm_status(const struct ofproto *ofproto, ofp_port_t ofp_port,
-                            struct ofproto_cfm_status *status)
+                            struct cfm_status *status)
 {
     struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
     return (ofport && ofproto->ofproto_class->get_cfm_status

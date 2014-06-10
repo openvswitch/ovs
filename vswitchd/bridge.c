@@ -1926,7 +1926,7 @@ static void
 iface_refresh_cfm_stats(struct iface *iface)
 {
     const struct ovsrec_interface *cfg = iface->cfg;
-    struct ofproto_cfm_status status;
+    struct cfm_status status;
     int error;
 
     error = ofproto_port_get_cfm_status(iface->port->bridge->ofproto,

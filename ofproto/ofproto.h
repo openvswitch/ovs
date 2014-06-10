@@ -399,32 +399,9 @@ void ofproto_get_netflow_ids(const struct ofproto *,
 void ofproto_get_ofproto_controller_info(const struct ofproto *, struct shash *);
 void ofproto_free_ofproto_controller_info(struct shash *);
 
-/* CFM status query. */
-struct ofproto_cfm_status {
-    /* 0 if not faulted, otherwise a combination of one or more reasons. */
-    enum cfm_fault_reason faults;
-
-    /* 0 if the remote CFM endpoint is operationally down,
-     * 1 if the remote CFM endpoint is operationally up,
-     * -1 if we don't know because the remote CFM endpoint is not in extended
-     * mode. */
-    int remote_opstate;
-
-    uint64_t flap_count;
-
-    /* Ordinarily a "health status" in the range 0...100 inclusive, with 0
-     * being worst and 100 being best, or -1 if the health status is not
-     * well-defined. */
-    int health;
-
-    /* MPIDs of remote maintenance points whose CCMs have been received. */
-    uint64_t *rmps;
-    size_t n_rmps;
-};
-
 int ofproto_port_get_cfm_status(const struct ofproto *,
                                 ofp_port_t ofp_port,
-                                struct ofproto_cfm_status *);
+                                struct cfm_status *);
 
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
  *
