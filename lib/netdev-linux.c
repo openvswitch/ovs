@@ -1125,7 +1125,7 @@ netdev_linux_send(struct netdev *netdev_, struct ofpbuf *pkt, bool may_steal)
             }
             return errno;
         } else if (retval != size) {
-            VLOG_WARN_RL(&rl, "sent partial Ethernet packet (%"PRIuSIZE"d bytes of "
+            VLOG_WARN_RL(&rl, "sent partial Ethernet packet (%"PRIuSIZE" bytes of "
                          "%"PRIuSIZE") on %s", retval, size, netdev_get_name(netdev_));
             return EMSGSIZE;
         } else {
