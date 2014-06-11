@@ -116,6 +116,8 @@ uint8_t rule_dpif_get_table(const struct rule_dpif *);
 bool table_is_internal(uint8_t table_id);
 
 const struct rule_actions *rule_dpif_get_actions(const struct rule_dpif *);
+uint32_t rule_dpif_get_recirc_id(struct rule_dpif *);
+void rule_set_recirc_id(struct rule *, uint32_t id);
 
 ovs_be64 rule_dpif_get_flow_cookie(const struct rule_dpif *rule);
 
