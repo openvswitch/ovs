@@ -1194,7 +1194,8 @@ add_internal_miss_flow(struct ofproto_dpif *ofproto, int id,
     match_init_catchall(&match);
     match_set_reg(&match, 0, id);
 
-    error = ofproto_dpif_add_internal_flow(ofproto, &match, 0, ofpacts, &rule);
+    error = ofproto_dpif_add_internal_flow(ofproto, &match, 0, 0, ofpacts,
+                                           &rule);
     *rulep = error ? NULL : rule_dpif_cast(rule);
 
     return error;
@@ -1252,7 +1253,7 @@ add_internal_flows(struct ofproto_dpif *ofproto)
     match_init_catchall(&match);
     match_set_recirc_id(&match, 0);
 
-    error = ofproto_dpif_add_internal_flow(ofproto, &match, 2, &ofpacts,
+    error = ofproto_dpif_add_internal_flow(ofproto, &match, 2, 0, &ofpacts,
                                            &unused_rulep);
     if (error) {
         return error;
@@ -1265,7 +1266,7 @@ add_internal_flows(struct ofproto_dpif *ofproto)
      */
     ofpbuf_clear(&ofpacts);
     match_init_catchall(&match);
-    error = ofproto_dpif_add_internal_flow(ofproto, &match, 1, &ofpacts,
+    error = ofproto_dpif_add_internal_flow(ofproto, &match, 1, 0, &ofpacts,
                                            &unused_rulep);
 
     return error;
@@ -4832,6 +4833,7 @@ ofproto_dpif_free_recirc_id(struct ofproto_dpif *ofproto, uint32_t recirc_id)
 int
 ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
                                const struct match *match, int priority,
+                               uint16_t idle_timeout,
                                const struct ofpbuf *ofpacts,
                                struct rule **rulep)
 {
@@ -4847,7 +4849,7 @@ ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
     fm.modify_cookie = false;
     fm.table_id = TBL_INTERNAL;
     fm.command = OFPFC_ADD;
-    fm.idle_timeout = 0;
+    fm.idle_timeout = idle_timeout;
     fm.hard_timeout = 0;
     fm.buffer_id = 0;
     fm.out_port = 0;

@@ -351,7 +351,7 @@ update_recirc_rules(struct bond *bond)
             ofpact_put_OUTPUT(&ofpacts)->port = pr_op->out_ofport;
             error = ofproto_dpif_add_internal_flow(bond->ofproto,
                                                    &pr_op->match,
-                                                   RECIRC_RULE_PRIORITY,
+                                                   RECIRC_RULE_PRIORITY, 0,
                                                    &ofpacts, pr_op->pr_rule);
             if (error) {
                 char *err_s = match_to_string(&pr_op->match,
