@@ -214,17 +214,8 @@
  * by a single writer. */
 
 #include "fat-rwlock.h"
-#include "flow.h"
-#include "hindex.h"
-#include "hmap.h"
-#include "list.h"
 #include "match.h"
 #include "meta-flow.h"
-#include "tag.h"
-#include "openflow/nicira-ext.h"
-#include "openflow/openflow.h"
-#include "ovs-thread.h"
-#include "util.h"
 
 #ifdef __cplusplus
 extern "C" {

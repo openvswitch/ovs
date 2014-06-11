@@ -22,10 +22,15 @@
 #include "dynamic-string.h"
 #include "flow.h"
 #include "hash.h"
+#include "hindex.h"
+#include "hmap.h"
+#include "list.h"
 #include "odp-util.h"
 #include "ofp-util.h"
 #include "ovs-thread.h"
 #include "packets.h"
+#include "tag.h"
+#include "util.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(classifier);
