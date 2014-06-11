@@ -775,6 +775,7 @@ get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     GET_CONFIG,                                             \
     SET_CONFIG,                                             \
     GET_TUNNEL_CONFIG,                                      \
+    NULL,                       /* get_numa_id */           \
                                                             \
     NULL,                       /* send */                  \
     NULL,                       /* send_wait */             \

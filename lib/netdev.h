@@ -152,6 +152,7 @@ int netdev_set_config(struct netdev *, const struct smap *args, char **errp);
 int netdev_get_config(const struct netdev *, struct smap *);
 const struct netdev_tunnel_config *
     netdev_get_tunnel_config(const struct netdev *);
+int netdev_get_numa_id(const struct netdev *);
 
 /* Basic properties. */
 const char *netdev_get_name(const struct netdev *);

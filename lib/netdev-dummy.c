@@ -1044,6 +1044,7 @@ static const struct netdev_class dummy_class = {
     netdev_dummy_get_config,
     netdev_dummy_set_config,
     NULL,                       /* get_tunnel_config */
+    NULL,                       /* get_numa_id */
 
     netdev_dummy_send,          /* send */
     NULL,                       /* send_wait */

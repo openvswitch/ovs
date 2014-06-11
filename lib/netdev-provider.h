@@ -22,6 +22,7 @@
 #include "connectivity.h"
 #include "netdev.h"
 #include "list.h"
+#include "ovs-numa.h"
 #include "seq.h"
 #include "shash.h"
 #include "smap.h"
@@ -29,6 +30,8 @@
 #ifdef  __cplusplus
 extern "C" {
 #endif
+
+#define NETDEV_NUMA_UNSPEC OVS_NUMA_UNSPEC
 
 /* A network device (e.g. an Ethernet device).
  *
@@ -249,6 +252,10 @@ struct netdev_class {
      * If this function would always return null, it may be null instead. */
     const struct netdev_tunnel_config *
         (*get_tunnel_config)(const struct netdev *netdev);
+
+    /* Returns the id of the numa node the 'netdev' is on.  If there is no
+     * such info, returns NETDEV_NUMA_UNSPEC. */
+    int (*get_numa_id)(const struct netdev *netdev);
 
     /* Sends buffers on 'netdev'.
      * Returns 0 if successful (for every buffer), otherwise a positive errno value.

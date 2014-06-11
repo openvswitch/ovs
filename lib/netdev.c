@@ -475,6 +475,18 @@ netdev_get_tunnel_config(const struct netdev *netdev)
     }
 }
 
+/* Returns the id of the numa node the 'netdev' is on.  If the function
+ * is not implemented, returns NETDEV_NUMA_UNSPEC. */
+int
+netdev_get_numa_id(const struct netdev *netdev)
+{
+    if (netdev->netdev_class->get_numa_id) {
+        return netdev->netdev_class->get_numa_id(netdev);
+    } else {
+        return NETDEV_NUMA_UNSPEC;
+    }
+}
+
 static void
 netdev_unref(struct netdev *dev)
     OVS_RELEASES(netdev_mutex)

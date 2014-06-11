@@ -581,6 +581,14 @@ netdev_dpdk_get_config(const struct netdev *netdev_, struct smap *args)
     return 0;
 }
 
+static int
+netdev_dpdk_get_numa_id(const struct netdev *netdev_)
+{
+    struct netdev_dpdk *netdev = netdev_dpdk_cast(netdev_);
+
+    return netdev->socket_id;
+}
+
 static struct netdev_rxq *
 netdev_dpdk_rxq_alloc(void)
 {
@@ -1345,6 +1353,7 @@ unlock_dpdk:
     netdev_dpdk_get_config,                                   \
     NULL,                       /* netdev_dpdk_set_config */  \
     NULL,                       /* get_tunnel_config */       \
+    netdev_dpdk_get_numa_id,    /* get_numa_id */             \
                                                               \
     netdev_dpdk_send,           /* send */                    \
     NULL,                       /* send_wait */               \
