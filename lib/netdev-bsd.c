@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2013 Gaetano Catalli.
+ * Copyright (c) 2011, 2013, 2014 Gaetano Catalli.
  * Copyright (c) 2013, 2014 YAMAMOTO Takashi.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -714,7 +714,7 @@ netdev_bsd_send(struct netdev *netdev_, struct ofpbuf *pkt, bool may_steal)
                 }
             }
         } else if (retval != size) {
-            VLOG_WARN_RL(&rl, "sent partial Ethernet packet (%"PRIuSIZE"d bytes of "
+            VLOG_WARN_RL(&rl, "sent partial Ethernet packet (%"PRIuSIZE" bytes of "
                          "%"PRIuSIZE") on %s", retval, size, name);
             error = EMSGSIZE;
         } else {
