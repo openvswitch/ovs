@@ -66,7 +66,7 @@ nl_msg_nlmsgerr(const struct ofpbuf *msg, int *errorp)
         struct nlmsgerr *err = ofpbuf_at(msg, NLMSG_HDRLEN, sizeof *err);
         int code = EPROTO;
         if (!err) {
-            VLOG_ERR_RL(&rl, "received invalid nlmsgerr (%"PRIu32"d bytes < %"PRIuSIZE"d)",
+            VLOG_ERR_RL(&rl, "received invalid nlmsgerr (%"PRIu32" bytes < %"PRIuSIZE")",
                         ofpbuf_size(msg), NLMSG_HDRLEN + sizeof *err);
         } else if (err->error <= 0 && err->error > INT_MIN) {
             code = -err->error;
