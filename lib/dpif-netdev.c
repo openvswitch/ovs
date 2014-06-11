@@ -537,7 +537,6 @@ dp_netdev_free(struct dp_netdev *dp)
 {
     struct dp_netdev_port *port;
     struct dp_netdev_stats *bucket;
-    struct cmap_cursor cursor;
     int i;
 
     shash_find_and_delete(&dp_netdevs, dp->name);
@@ -547,7 +546,7 @@ dp_netdev_free(struct dp_netdev *dp)
 
     dp_netdev_flow_flush(dp);
     ovs_mutex_lock(&dp->port_mutex);
-    CMAP_FOR_EACH (port, node, &cursor, &dp->ports) {
+    CMAP_FOR_EACH (port, node, &dp->ports) {
         do_del_port(dp, port);
     }
     ovs_mutex_unlock(&dp->port_mutex);
@@ -848,9 +847,8 @@ get_port_by_name(struct dp_netdev *dp,
     OVS_REQUIRES(dp->port_mutex)
 {
     struct dp_netdev_port *port;
-    struct cmap_cursor cursor;
 
-    CMAP_FOR_EACH (port, node, &cursor, &dp->ports) {
+    CMAP_FOR_EACH (port, node, &dp->ports) {
         if (!strcmp(netdev_get_name(port->netdev), devname)) {
             *portp = port;
             return 0;
@@ -1772,9 +1770,8 @@ dpif_netdev_run(struct dpif *dpif)
 {
     struct dp_netdev_port *port;
     struct dp_netdev *dp = get_dp_netdev(dpif);
-    struct cmap_cursor cursor;
 
-    CMAP_FOR_EACH (port, node, &cursor, &dp->ports) {
+    CMAP_FOR_EACH (port, node, &dp->ports) {
         if (!netdev_is_pmd(port->netdev)) {
             int i;
 
@@ -1790,10 +1787,9 @@ dpif_netdev_wait(struct dpif *dpif)
 {
     struct dp_netdev_port *port;
     struct dp_netdev *dp = get_dp_netdev(dpif);
-    struct cmap_cursor cursor;
 
     ovs_mutex_lock(&dp_netdev_mutex);
-    CMAP_FOR_EACH (port, node, &cursor, &dp->ports) {
+    CMAP_FOR_EACH (port, node, &dp->ports) {
         if (!netdev_is_pmd(port->netdev)) {
             int i;
 
@@ -1817,7 +1813,6 @@ pmd_load_queues(struct pmd_thread *f,
     struct dp_netdev *dp = f->dp;
     struct rxq_poll *poll_list = *ppoll_list;
     struct dp_netdev_port *port;
-    struct cmap_cursor cursor;
     int id = f->id;
     int index;
     int i;
@@ -1830,7 +1825,7 @@ pmd_load_queues(struct pmd_thread *f,
     poll_cnt = 0;
     index = 0;
 
-    CMAP_FOR_EACH (port, node, &cursor, &f->dp->ports) {
+    CMAP_FOR_EACH (port, node, &f->dp->ports) {
         if (netdev_is_pmd(port->netdev)) {
             int i;
 

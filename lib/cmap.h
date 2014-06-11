@@ -167,23 +167,24 @@ struct cmap_node *cmap_find_protected(const struct cmap *, uint32_t hash);
  * executing at postponed time, when it is known that the RCU grace period
  * has already expired.
  */
-#define CMAP_FOR_EACH(NODE, MEMBER, CURSOR, CMAP)                       \
+
+#define CMAP_CURSOR_FOR_EACH(NODE, MEMBER, CURSOR, CMAP)                \
     for ((cmap_cursor_init(CURSOR, CMAP),                               \
           ASSIGN_CONTAINER(NODE, cmap_cursor_next(CURSOR, NULL), MEMBER)); \
          NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER);                 \
          ASSIGN_CONTAINER(NODE, cmap_cursor_next(CURSOR, &(NODE)->MEMBER), \
                           MEMBER))
 
-#define CMAP_FOR_EACH_SAFE(NODE, NEXT, MEMBER, CURSOR, CMAP)            \
+#define CMAP_CURSOR_FOR_EACH_SAFE(NODE, NEXT, MEMBER, CURSOR, CMAP)     \
     for ((cmap_cursor_init(CURSOR, CMAP),                               \
           ASSIGN_CONTAINER(NODE, cmap_cursor_next(CURSOR, NULL), MEMBER)); \
          (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER)                  \
           ? ASSIGN_CONTAINER(NEXT, cmap_cursor_next(CURSOR, &(NODE)->MEMBER), \
-                             MEMBER), 1                                  \
-          : 0);                                                          \
+                             MEMBER), true                              \
+          : false);                                                     \
          (NODE) = (NEXT))
 
-#define CMAP_FOR_EACH_CONTINUE(NODE, MEMBER, CURSOR, CMAP)              \
+#define CMAP_CURSOR_FOR_EACH_CONTINUE(NODE, MEMBER, CURSOR)             \
     for (ASSIGN_CONTAINER(NODE, cmap_cursor_next(CURSOR, &(NODE)->MEMBER), \
                           MEMBER);                                      \
          NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER);                 \
@@ -199,6 +200,38 @@ struct cmap_cursor {
 void cmap_cursor_init(struct cmap_cursor *, const struct cmap *);
 struct cmap_node *cmap_cursor_next(struct cmap_cursor *,
                                    const struct cmap_node *);
+
+
+static inline struct cmap_cursor cmap_cursor_start(const struct cmap *cmap,
+                                                   void **pnode,
+                                                   const void *offset)
+{
+    struct cmap_cursor cursor;
+
+    cmap_cursor_init(&cursor, cmap);
+    *pnode = (char *)cmap_cursor_next(&cursor, NULL) + (ptrdiff_t)offset;
+
+    return cursor;
+}
+
+#define CMAP_CURSOR_START(NODE, MEMBER, CMAP)                   \
+    cmap_cursor_start(CMAP, (void **)&(NODE),                   \
+                      OBJECT_CONTAINING(NULL, NODE, MEMBER))
+
+#define CMAP_FOR_EACH(NODE, MEMBER, CMAP)                               \
+    for (struct cmap_cursor cursor__ = CMAP_CURSOR_START(NODE, MEMBER, CMAP); \
+         NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER);                 \
+         ASSIGN_CONTAINER(NODE, cmap_cursor_next(&cursor__, &(NODE)->MEMBER), \
+                          MEMBER))
+
+#define CMAP_FOR_EACH_SAFE(NODE, NEXT, MEMBER, CMAP)                    \
+    for (struct cmap_cursor cursor__ = CMAP_CURSOR_START(NODE, MEMBER, CMAP); \
+         (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER)                 \
+          ? ASSIGN_CONTAINER(NEXT,                                      \
+                             cmap_cursor_next(&cursor__, &(NODE)->MEMBER), \
+                             MEMBER), true                              \
+          : false);                                                     \
+         (NODE) = (NEXT))
 
 static inline struct cmap_node *cmap_first(const struct cmap *);
 

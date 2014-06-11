@@ -56,8 +56,7 @@ check_cmap(struct cmap *cmap, const int values[], size_t n,
            hash_func *hash)
 {
     int *sort_values, *cmap_values;
-    struct cmap_cursor cursor;
-    struct element *e;
+    const struct element *e;
     size_t i;
 
     /* Check that all the values are there in iteration. */
@@ -65,7 +64,7 @@ check_cmap(struct cmap *cmap, const int values[], size_t n,
     cmap_values = xmalloc(sizeof *sort_values * n);
 
     i = 0;
-    CMAP_FOR_EACH (e, node, &cursor, cmap) {
+    CMAP_FOR_EACH (e, node, cmap) {
         assert(i < n);
         cmap_values[i++] = e->value;
     }
@@ -119,7 +118,7 @@ print_cmap(const char *name, struct cmap *cmap)
     struct element *e;
 
     printf("%s:", name);
-    CMAP_FOR_EACH (e, node, &cursor, cmap) {
+    CMAP_CURSOR_FOR_EACH (e, node, &cursor, cmap) {
         printf(" %d", e->value);
     }
     printf("\n");
@@ -296,7 +295,6 @@ benchmark_cmap(void)
     struct element *elements;
     struct cmap cmap;
     struct element *e;
-    struct cmap_cursor cursor;
     struct timeval start;
     pthread_t *threads;
     struct cmap_aux aux;
@@ -315,7 +313,7 @@ benchmark_cmap(void)
 
     /* Iteration. */
     xgettimeofday(&start);
-    CMAP_FOR_EACH (e, node, &cursor, &cmap) {
+    CMAP_FOR_EACH (e, node, &cmap) {
         ignore(e);
     }
     printf("cmap iterate: %5d ms\n", elapsed(&start));
@@ -336,7 +334,7 @@ benchmark_cmap(void)
 
     /* Destruction. */
     xgettimeofday(&start);
-    CMAP_FOR_EACH (e, node, &cursor, &cmap) {
+    CMAP_FOR_EACH (e, node, &cmap) {
         cmap_remove(&cmap, &e->node, hash_int(e->value, 0));
     }
     cmap_destroy(&cmap);
