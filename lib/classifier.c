@@ -687,7 +687,7 @@ classifier_destroy(struct classifier *cls_)
 {
     if (cls_) {
         struct cls_classifier *cls = cls_->cls;
-        struct cls_subtable *partition, *next_partition;
+        struct cls_partition *partition, *next_partition;
         struct cls_subtable *subtable, *next_subtable;
         int i;
 
