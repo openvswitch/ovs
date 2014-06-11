@@ -27,6 +27,9 @@
 #include "util.h"
 #include "ovs-thread.h"
 
+/* Priority for internal rules created to handle recirculation */
+#define RECIRC_RULE_PRIORITY 20
+
 union user_action_cookie;
 struct dpif_flow_stats;
 struct ofproto;

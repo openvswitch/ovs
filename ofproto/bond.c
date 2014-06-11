@@ -56,7 +56,6 @@ static struct hmap *const all_bonds OVS_GUARDED_BY(rwlock) = &all_bonds__;
 /* Bit-mask for hashing a flow down to a bucket. */
 #define BOND_MASK 0xff
 #define BOND_BUCKETS (BOND_MASK + 1)
-#define RECIRC_RULE_PRIORITY 20   /* Priority level for internal rules */
 
 /* A hash bucket for mapping a flow to a slave.
  * "struct bond" has an array of BOND_BUCKETS of these. */
