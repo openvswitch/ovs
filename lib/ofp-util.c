@@ -3148,6 +3148,11 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
                             enum ofputil_protocol protocol)
 {
     struct ofpbuf *msg;
+    enum ofp_flow_removed_reason reason = fr->reason;
+
+    if (reason == OFPRR_METER_DELETE && !(protocol & OFPUTIL_P_OF14_UP)) {
+        reason = OFPRR_DELETE;
+    }
 
     switch (protocol) {
     case OFPUTIL_P_OF11_STD:
@@ -3164,7 +3169,7 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
         ofr = ofpbuf_put_zeros(msg, sizeof *ofr);
         ofr->cookie = fr->cookie;
         ofr->priority = htons(fr->priority);
-        ofr->reason = fr->reason;
+        ofr->reason = reason;
         ofr->table_id = fr->table_id;
         ofr->duration_sec = htonl(fr->duration_sec);
         ofr->duration_nsec = htonl(fr->duration_nsec);
@@ -3186,7 +3191,7 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
         ofputil_match_to_ofp10_match(&fr->match, &ofr->match);
         ofr->cookie = fr->cookie;
         ofr->priority = htons(fr->priority);
-        ofr->reason = fr->reason;
+        ofr->reason = reason;
         ofr->duration_sec = htonl(fr->duration_sec);
         ofr->duration_nsec = htonl(fr->duration_nsec);
         ofr->idle_timeout = htons(fr->idle_timeout);
@@ -3208,7 +3213,7 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
         nfr = ofpbuf_l3(msg);
         nfr->cookie = fr->cookie;
         nfr->priority = htons(fr->priority);
-        nfr->reason = fr->reason;
+        nfr->reason = reason;
         nfr->table_id = fr->table_id + 1;
         nfr->duration_sec = htonl(fr->duration_sec);
         nfr->duration_nsec = htonl(fr->duration_nsec);
