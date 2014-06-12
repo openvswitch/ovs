@@ -380,6 +380,10 @@ static int queue_gso_packets(struct datapath *dp, struct sk_buff *skb,
 
 static size_t key_attr_size(void)
 {
+	/* Whenever adding new OVS_KEY_ FIELDS, we should consider
+	 * updating this function.  */
+	BUILD_BUG_ON(OVS_KEY_ATTR_IPV4_TUNNEL != 21);
+
 	return    nla_total_size(4)   /* OVS_KEY_ATTR_PRIORITY */
 		+ nla_total_size(0)   /* OVS_KEY_ATTR_TUNNEL */
 		  + nla_total_size(8)   /* OVS_TUNNEL_KEY_ATTR_ID */
@@ -391,6 +395,8 @@ static size_t key_attr_size(void)
 		  + nla_total_size(0)   /* OVS_TUNNEL_KEY_ATTR_CSUM */
 		+ nla_total_size(4)   /* OVS_KEY_ATTR_IN_PORT */
 		+ nla_total_size(4)   /* OVS_KEY_ATTR_SKB_MARK */
+		+ nla_total_size(4)   /* OVS_KEY_ATTR_DP_HASH */
+		+ nla_total_size(4)   /* OVS_KEY_ATTR_RECIRC_ID */
 		+ nla_total_size(12)  /* OVS_KEY_ATTR_ETHERNET */
 		+ nla_total_size(2)   /* OVS_KEY_ATTR_ETHERTYPE */
 		+ nla_total_size(4)   /* OVS_KEY_ATTR_8021Q */
