@@ -110,10 +110,6 @@ struct ofproto {
     /* OpenFlow connections. */
     struct connmgr *connmgr;
 
-    /* 'meaningful only within ofproto.c, one of the enum ofproto_state
-     * constants defined there. */
-    int state;
-
     /* Delayed rule executions.
      *
      * We delay calls to ->ofproto_class->rule_execute() past releasing
@@ -454,8 +450,6 @@ void ofproto_rule_reduce_timeouts(struct rule *rule, uint16_t idle_timeout,
                                   uint16_t hard_timeout)
     OVS_EXCLUDED(ofproto_mutex);
 
-void ofoperation_complete(struct ofoperation *, enum ofperr);
-
 /* A group within a "struct ofproto".
  *
  * With few exceptions, ofproto implementations may look at these fields but
@@ -712,18 +706,8 @@ struct ofproto_class {
      * Destruction
      * ===========
      *
-     * If 'ofproto' has any pending asynchronous operations, ->destruct()
-     * must complete all of them by calling ofoperation_complete().
-     *
      * ->destruct() must also destroy all remaining rules in the ofproto's
-     * tables, by passing each remaining rule to ofproto_rule_delete(), and
-     * then complete each of those deletions in turn by calling
-     * ofoperation_complete().
-     *
-     * (Thus, there is a multi-step process for any rule currently being
-     * inserted or modified at the beginning of destruction: first
-     * ofoperation_complete() that operation, then ofproto_rule_delete() the
-     * rule, then ofoperation_complete() the deletion operation.)
+     * tables, by passing each remaining rule to ofproto_rule_delete().
      *
      * The client will destroy the flow tables themselves after ->destruct()
      * returns.
@@ -741,9 +725,6 @@ struct ofproto_class {
      *
      *   - Call ofproto_rule_expire() for each OpenFlow flow that has reached
      *     its hard_timeout or idle_timeout, to expire the flow.
-     *
-     *     (But rules that are part of a pending operation, e.g. rules for
-     *     which ->pending is true, may not expire.)
      *
      * Returns 0 if successful, otherwise a positive errno value. */
     int (*run)(struct ofproto *ofproto);
@@ -1089,8 +1070,8 @@ struct ofproto_class {
      * cycle described above under "Life Cycle".
      *
      * After a rule is successfully constructed, it is then inserted.  If
-     * insertion completes successfully, then before it is later destructed, it
-     * is deleted.
+     * insertion is successful, then before it is later destructed, it is
+     * deleted.
      *
      * You can think of a rule as having the following extra steps inserted
      * between "Life Cycle" steps 4 and 5:
@@ -1098,9 +1079,10 @@ struct ofproto_class {
      *   4.1. The client inserts the rule into the flow table, making it
      *        visible in flow table lookups.
      *
-     *   4.2. The client calls "rule_insert".  Immediately or eventually, the
-     *        implementation calls ofoperation_complete() to indicate that the
-     *        insertion completed.  If the operation failed, skip to step 5.
+     *   4.2. The client calls "rule_insert" to insert the flow.  The
+     *        implementation attempts to install the flow in the underlying
+     *        hardware and returns an error code indicate success or failure.
+     *        On failure, go to step 5.
      *
      *   4.3. The rule is now installed in the flow table.  Eventually it will
      *        be deleted.
@@ -1108,60 +1090,9 @@ struct ofproto_class {
      *   4.4. The client removes the rule from the flow table.  It is no longer
      *        visible in flow table lookups.
      *
-     *   4.5. The client calls "rule_delete".  Immediately or eventually, the
-     *        implementation calls ofoperation_complete() to indicate that the
-     *        deletion completed.  Deletion is not allowed to fail, so it must
-     *        be successful.
-     *
-     *
-     * Asynchronous Operation Support
-     * ==============================
-     *
-     * The "insert" and "delete" life-cycle operations on rules can operate
-     * asynchronously, meaning that ->rule_insert() and ->rule_delete() only
-     * need to initiate their respective operations and do not need to wait for
-     * them to complete before they return.  ->rule_modify_actions() also
-     * operates asynchronously.
-     *
-     * An ofproto implementation reports the success or failure of an
-     * asynchronous operation on a rule using the rule's 'pending' member,
-     * which points to a opaque "struct ofoperation" that represents the
-     * ongoing operation.  When the operation completes, the ofproto
-     * implementation calls ofoperation_complete(), passing the ofoperation and
-     * an error indication.
-     *
-     * Only the following contexts may call ofoperation_complete():
-     *
-     *   - The function called to initiate the operation, e.g. ->rule_insert()
-     *     or ->rule_delete().  This is the best choice if the operation
-     *     completes quickly.
-     *
-     *   - The implementation's ->run() function.
-     *
-     *   - The implementation's ->destruct() function.
-     *
-     * The ofproto base code updates the flow table optimistically, assuming
-     * that the operation will probably succeed:
-     *
-     *   - ofproto adds the rule in the flow table before calling
-     *     ->rule_insert().  If adding a rule in the flow table fails, ofproto
-     *     removes the new rule in the call to ofoperation_complete().
-     *
-     *   - ofproto updates the rule's actions and other properties before
-     *     calling ->rule_modify_actions().  Modifying a rule is not allowed to
-     *     fail (but ->rule_premodify_actions() can prevent the modification
-     *     attempt in advance).
-     *
-     *   - ofproto removes the rule before calling ->rule_delete().  Removing a
-     *     rule is not allowed to fail.  It must always succeed.
-     *
-     * The ofproto base code serializes operations: if any operation is in
-     * progress on a given rule, ofproto postpones initiating any new operation
-     * on that rule until the pending operation completes.  Therefore, every
-     * operation must eventually complete through a call to
-     * ofoperation_complete() to avoid delaying new operations indefinitely
-     * (including any OpenFlow request that affects the rule in question, even
-     * just to query its statistics).
+     *   4.5. The client calls "rule_delete".  The implementation uninstalls
+     *        the flow from the underlying hardware.  Deletion is not allowed
+     *        to fail.
      *
      *
      * Construction
@@ -1195,16 +1126,8 @@ struct ofproto_class {
      *
      * Following successful construction, the ofproto base case inserts 'rule'
      * into its flow table, then it calls ->rule_insert().  ->rule_insert()
-     * should set in motion adding the new rule to the datapath flow table.  It
-     * must act as follows:
-     *
-     *   - If it completes insertion, either by succeeding or failing, it must
-     *     call ofoperation_complete()
-     *
-     *   - If insertion is only partially complete, then it must return without
-     *     calling ofoperation_complete().  Later, when the insertion is
-     *     complete, the ->run() or ->destruct() function must call
-     *     ofoperation_complete() to report success or failure.
+     * must add the new rule to the datapath flow table and return only after
+     * this is complete (whether it succeeds or fails).
      *
      * If ->rule_insert() fails, the ofproto base code will remove 'rule' from
      * the flow table, destruct, uninitialize, and deallocate 'rule'.  See
@@ -1215,15 +1138,8 @@ struct ofproto_class {
      * ========
      *
      * The ofproto base code removes 'rule' from its flow table before it calls
-     * ->rule_delete().  ->rule_delete() should set in motion removing 'rule'
-     * from the datapath flow table.  It must act as follows:
-     *
-     *   - If it completes deletion, it must call ofoperation_complete().
-     *
-     *   - If deletion is only partially complete, then it must return without
-     *     calling ofoperation_complete().  Later, when the deletion is
-     *     complete, the ->run() or ->destruct() function must call
-     *     ofoperation_complete().
+     * ->rule_delete().  ->rule_delete() must remove 'rule' from the datapath
+     * flow table and return only after this has completed successfully.
      *
      * Rule deletion must not fail.
      *
@@ -1281,21 +1197,17 @@ struct ofproto_class {
         /* OVS_REQUIRES(ofproto_mutex) */;
 
     /* When ->rule_modify_actions() is called, the caller has already replaced
-     * the OpenFlow actions in 'rule' by a new set.  (The original actions are
-     * in rule->pending->actions.)
+     * the OpenFlow actions in 'rule' by a new set.  (If
+     * ->rule_premodify_actions is nonnull, then it was previously called to
+     * verify that the new set of actions is acceptable.)
      *
-     * ->rule_modify_actions() should set the following in motion:
+     * ->rule_modify_actions() must:
      *
      *   - Update the datapath flow table with the new actions.
      *
      *   - Only if 'reset_counters' is true, reset any packet or byte counters
      *     associated with the rule to zero, so that rule_get_stats() will not
      *     longer count those packets or bytes.
-     *
-     * If the operation synchronously completes, ->rule_modify_actions() may
-     * call ofoperation_complete() before it returns.  Otherwise, ->run()
-     * should call ofoperation_complete() later, after the operation does
-     * complete.
      *
      * Rule modification must not fail.
      *

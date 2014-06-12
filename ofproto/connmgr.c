@@ -2074,6 +2074,10 @@ ofmonitor_report(struct connmgr *mgr, struct rule *rule,
     enum nx_flow_monitor_flags update;
     struct ofconn *ofconn;
 
+    if (rule_is_hidden(rule)) {
+        return;
+    }
+
     switch (event) {
     case NXFME_ADDED:
         update = NXFMF_ADD;

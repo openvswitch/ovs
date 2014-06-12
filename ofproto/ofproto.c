@@ -69,85 +69,10 @@ COVERAGE_DEFINE(ofproto_recv_openflow);
 COVERAGE_DEFINE(ofproto_reinit_ports);
 COVERAGE_DEFINE(ofproto_update_port);
 
-struct flow_mod_requester;
-
 /* Default fields to use for prefix tries in each flow table, unless something
  * else is configured. */
 const enum mf_field_id default_prefix_fields[2] =
     { MFF_IPV4_DST, MFF_IPV4_SRC };
-
-enum ofproto_state {
-    S_OPENFLOW,                 /* Processing OpenFlow commands. */
-    S_EVICT,                    /* Evicting flows from over-limit tables. */
-    S_FLUSH,                    /* Deleting all flow table rules. */
-};
-
-enum ofoperation_type {
-    OFOPERATION_ADD,
-    OFOPERATION_DELETE,
-    OFOPERATION_MODIFY,
-    OFOPERATION_REPLACE
-};
-
-/* A single OpenFlow request can execute any number of operations.  The
- * ofopgroup maintain OpenFlow state common to all of the operations, e.g. the
- * ofconn to which an error reply should be sent if necessary.
- *
- * ofproto initiates some operations internally.  These operations are still
- * assigned to groups but will not have an associated ofconn. */
-struct ofopgroup {
-    struct ofproto *ofproto;    /* Owning ofproto. */
-    struct list ops;            /* List of "struct ofoperation"s. */
-
-    /* Data needed to send OpenFlow reply on failure or to send a buffered
-     * packet on success.
-     *
-     * If list_is_empty(ofconn_node) then this ofopgroup never had an
-     * associated ofconn or its ofconn's connection dropped after it initiated
-     * the operation.  In the latter case 'ofconn' is a wild pointer that
-     * refers to freed memory, so the 'ofconn' member must be used only if
-     * !list_is_empty(ofconn_node).
-     */
-    struct list ofconn_node;    /* In ofconn's list of pending opgroups. */
-    struct ofconn *ofconn;      /* ofconn for reply (but see note above). */
-    struct ofp_header *request; /* Original request (truncated at 64 bytes). */
-    uint32_t buffer_id;         /* Buffer id from original request. */
-};
-
-static struct ofopgroup *ofopgroup_create_unattached(struct ofproto *);
-static struct ofopgroup *ofopgroup_create(struct ofproto *,
-                                          uint32_t buffer_id,
-                                          const struct flow_mod_requester *);
-static void ofopgroup_submit(struct ofopgroup *);
-static void ofopgroup_complete(struct ofopgroup *);
-
-/* A single flow table operation. */
-struct ofoperation {
-    struct ofopgroup *group;    /* Owning group. */
-    struct list group_node;     /* In ofopgroup's "ops" list. */
-    struct hmap_node hmap_node; /* In ofproto's "deletions" hmap. */
-    struct rule *rule;          /* Rule being operated upon. */
-    enum ofoperation_type type; /* Type of operation. */
-
-    /* OFOPERATION_MODIFY, OFOPERATION_REPLACE: The old actions, if the actions
-     * are changing. */
-    const struct rule_actions *actions;
-
-    /* OFOPERATION_DELETE. */
-    enum ofp_flow_removed_reason reason; /* Reason flow was removed. */
-
-    ovs_be64 flow_cookie;               /* Rule's old flow cookie. */
-    uint16_t idle_timeout;              /* Rule's old idle timeout. */
-    uint16_t hard_timeout;              /* Rule's old hard timeout. */
-    enum ofputil_flow_mod_flags flags;  /* Rule's old flags. */
-    enum ofperr error;                  /* 0 if no error. */
-};
-
-static struct ofoperation *ofoperation_create(struct ofopgroup *,
-                                              struct rule *,
-                                              enum ofoperation_type,
-                                              enum ofp_flow_removed_reason);
-static void ofoperation_destroy(struct ofoperation *);
 
 /* oftable. */
 static void oftable_init(struct oftable *);
@@ -155,6 +80,9 @@ static void oftable_destroy(struct oftable *);
 
 static void oftable_set_name(struct oftable *, const char *name);
 
+static enum ofperr evict_rules_from_table(struct oftable *,
+                                          unsigned int extra_space)
+    OVS_REQUIRES(ofproto_mutex);
 static void oftable_disable_eviction(struct oftable *);
 static void oftable_enable_eviction(struct oftable *,
                                     const struct mf_subfield *fields,
@@ -188,8 +116,6 @@ struct eviction_group {
 
 static bool choose_rule_to_evict(struct oftable *table, struct rule **rulep)
     OVS_REQUIRES(ofproto_mutex);
-static void ofproto_evict(struct ofproto *)
-    OVS_EXCLUDED(ofproto_mutex);
 static uint32_t rule_eviction_priority(struct ofproto *ofproto, struct rule *)
     OVS_REQUIRES(ofproto_mutex);;
 static void eviction_group_add_rule(struct rule *)
@@ -276,8 +202,7 @@ struct ofport_usage {
 
 /* rule. */
 static void ofproto_rule_send_removed(struct rule *, uint8_t reason);
-static bool rule_is_modifiable(const struct rule *rule,
-                               enum ofputil_flow_mod_flags flag);
+static bool rule_is_readonly(const struct rule *);
 
 /* The source of a flow_mod request, in the code that processes flow_mods.
  *
@@ -287,7 +212,7 @@ static bool rule_is_modifiable(const struct rule *rule,
  * meaningful and thus supplied as NULL. */
 struct flow_mod_requester {
     struct ofconn *ofconn;      /* Connection on which flow_mod arrived. */
-    const struct ofp_header *request; /* The flow_mod request. */
+    ovs_be32 xid;               /* OpenFlow xid of flow_mod request. */
 };
 
 /* OpenFlow. */
@@ -297,9 +222,14 @@ static enum ofperr add_flow(struct ofproto *, struct ofputil_flow_mod *,
 static enum ofperr modify_flows__(struct ofproto *, struct ofputil_flow_mod *,
                                   const struct rule_collection *,
                                   const struct flow_mod_requester *);
-static void delete_flow__(struct rule *, struct ofopgroup *,
-                          enum ofp_flow_removed_reason)
+static void delete_flow__(struct rule *, enum ofp_flow_removed_reason,
+                          const struct flow_mod_requester *)
     OVS_REQUIRES(ofproto_mutex);
+
+static enum ofperr send_buffered_packet(struct ofconn *, uint32_t buffer_id,
+                                        struct rule *)
+    OVS_REQUIRES(ofproto_mutex);
+
 static bool ofproto_group_exists__(const struct ofproto *ofproto,
                                    uint32_t group_id)
     OVS_REQ_RDLOCK(ofproto->groups_rwlock);
@@ -1210,26 +1140,13 @@ ofproto_configure_table(struct ofproto *ofproto, int table_id,
 
     table->max_flows = s->max_flows;
     fat_rwlock_wrlock(&table->cls.rwlock);
-    if (classifier_count(&table->cls) > table->max_flows
-        && table->eviction_fields) {
-        /* 'table' contains more flows than allowed.  We might not be able to
-         * evict them right away because of the asynchronous nature of flow
-         * table changes.  Schedule eviction for later. */
-        switch (ofproto->state) {
-        case S_OPENFLOW:
-            ofproto->state = S_EVICT;
-            break;
-        case S_EVICT:
-        case S_FLUSH:
-            /* We're already deleting flows, nothing more to do. */
-            break;
-        }
-    }
-
     classifier_set_prefix_fields(&table->cls,
                                  s->prefix_fields, s->n_prefix_fields);
-
     fat_rwlock_unlock(&table->cls.rwlock);
+
+    ovs_mutex_lock(&ofproto_mutex);
+    evict_rules_from_table(table, 0);
+    ovs_mutex_unlock(&ofproto_mutex);
 }
 
 bool
@@ -1248,11 +1165,10 @@ static void
 ofproto_rule_delete__(struct rule *rule, uint8_t reason)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct ofopgroup *group;
+    struct ofproto *ofproto = rule->ofproto;
 
-    group = ofopgroup_create_unattached(rule->ofproto);
-    delete_flow__(rule, group, reason);
-    ofopgroup_submit(group);
+    delete_flow__(rule, reason, NULL);
+    ofmonitor_flush(ofproto->connmgr);
 }
 
 /* Deletes 'rule' from 'ofproto'.
@@ -1268,17 +1184,12 @@ void
 ofproto_rule_delete(struct ofproto *ofproto, struct rule *rule)
     OVS_EXCLUDED(ofproto_mutex)
 {
-    struct ofopgroup *group;
-    struct ofoperation *op;
-
+    /* This skips the ofmonitor and flow-removed notifications because the
+     * switch is being deleted and any OpenFlow channels have been or soon will
+     * be killed. */
     ovs_mutex_lock(&ofproto_mutex);
-    group = ofopgroup_create_unattached(ofproto);
-    op = ofoperation_create(group, rule, OFOPERATION_DELETE, OFPRR_DELETE);
     oftable_remove_rule__(ofproto, rule);
     ofproto->ofproto_class->rule_delete(rule);
-    ofoperation_complete(op, 0);
-    ofopgroup_submit(group);
-
     ovs_mutex_unlock(&ofproto_mutex);
 }
 
@@ -1532,27 +1443,7 @@ ofproto_run(struct ofproto *p)
         p->change_seq = new_seq;
     }
 
-    switch (p->state) {
-    case S_OPENFLOW:
-        connmgr_run(p->connmgr, handle_openflow);
-        break;
-
-    case S_EVICT:
-        connmgr_run(p->connmgr, NULL);
-        ofproto_evict(p);
-        p->state = S_OPENFLOW;
-        break;
-
-    case S_FLUSH:
-        connmgr_run(p->connmgr, NULL);
-        ofproto_flush__(p);
-        connmgr_flushed(p->connmgr);
-        p->state = S_OPENFLOW;
-        break;
-
-    default:
-        OVS_NOT_REACHED();
-    }
+    connmgr_run(p->connmgr, handle_openflow);
 
     return error;
 }
@@ -1565,18 +1456,7 @@ ofproto_wait(struct ofproto *p)
         p->ofproto_class->port_poll_wait(p);
     }
     seq_wait(connectivity_seq_get(), p->change_seq);
-
-    switch (p->state) {
-    case S_OPENFLOW:
-        connmgr_wait(p->connmgr);
-        break;
-
-    case S_EVICT:
-    case S_FLUSH:
-        connmgr_wait(p->connmgr);
-        poll_immediate_wake();
-        break;
-    }
+    connmgr_wait(p->connmgr);
 }
 
 bool
@@ -1981,23 +1861,24 @@ ofproto_delete_flow(struct ofproto *ofproto,
     rule = rule_from_cls_rule(classifier_find_match_exactly(cls, target,
                                                             priority));
     fat_rwlock_unlock(&cls->rwlock);
-    if (rule) {
-        /* Execute a full flow mod.  We can't optimize this at all because we
-         * didn't take enough locks above to ensure that the flow table didn't
-         * already change beneath us.  */
-        simple_flow_mod(ofproto, target, priority, NULL, 0,
-                        OFPFC_DELETE_STRICT);
+    if (!rule) {
+        return;
     }
+
+    /* Execute a flow mod.  We can't optimize this at all because we didn't
+     * take enough locks above to ensure that the flow table didn't already
+     * change beneath us. */
+    simple_flow_mod(ofproto, target, priority, NULL, 0, OFPFC_DELETE_STRICT);
 }
 
-/* Starts the process of deleting all of the flows from all of ofproto's flow
- * tables and then reintroducing the flows required by in-band control and
- * fail-open.  The process will complete in a later call to ofproto_run(). */
+/* Delete all of the flows from all of ofproto's flow tables, then reintroduce
+ * the flows required by in-band control and fail-open.  */
 void
 ofproto_flush_flows(struct ofproto *ofproto)
 {
     COVERAGE_INC(ofproto_flush);
-    ofproto->state = S_FLUSH;
+    ofproto_flush__(ofproto);
+    connmgr_flushed(ofproto->connmgr);
 }
 
 static void
@@ -2711,23 +2592,10 @@ destroy_rule_executes(struct ofproto *ofproto)
 }
 
 static bool
-oftable_is_modifiable(const struct oftable *table,
-                      enum ofputil_flow_mod_flags flags)
+rule_is_readonly(const struct rule *rule)
 {
-    if (flags & OFPUTIL_FF_NO_READONLY) {
-        return true;
-    }
-
-    return !(table->flags & OFTABLE_READONLY);
-}
-
-static bool
-rule_is_modifiable(const struct rule *rule, enum ofputil_flow_mod_flags flags)
-{
-    const struct oftable *rule_table;
-
-    rule_table = &rule->ofproto->tables[rule->table_id];
-    return oftable_is_modifiable(rule_table, flags);
+    const struct oftable *table = &rule->ofproto->tables[rule->table_id];
+    return (table->flags & OFTABLE_READONLY) != 0;
 }
 
 static enum ofperr
@@ -3180,22 +3048,6 @@ cookies_remove(struct ofproto *ofproto, struct rule *rule)
 }
 
 static void
-ofproto_rule_change_cookie(struct ofproto *ofproto, struct rule *rule,
-                           ovs_be64 new_cookie)
-    OVS_REQUIRES(ofproto_mutex)
-{
-    if (new_cookie != rule->flow_cookie) {
-        cookies_remove(ofproto, rule);
-
-        ovs_mutex_lock(&rule->mutex);
-        rule->flow_cookie = new_cookie;
-        ovs_mutex_unlock(&rule->mutex);
-
-        cookies_insert(ofproto, rule);
-    }
-}
-
-static void
 calc_duration(long long int start, long long int now,
               uint32_t *sec, uint32_t *nsec)
 {
@@ -3399,7 +3251,7 @@ collect_rule(struct rule *rule, const struct rule_criteria *c,
         && !((rule->flow_cookie ^ c->cookie) & c->cookie_mask)
         && (!rule_is_hidden(rule) || c->include_hidden)) {
         /* Rule matches all the criteria... */
-        if (rule_is_modifiable(rule, 0) || c->include_readonly) {
+        if (!rule_is_readonly(rule) || c->include_readonly) {
             /* ...add it. */
             rule_collection_add(rules, rule);
         } else {
@@ -3874,8 +3726,7 @@ should_evict_a_rule(struct oftable *table, unsigned int extra_space)
 }
 
 static enum ofperr
-evict_rules_from_table(struct ofproto *ofproto, struct oftable *table,
-                       unsigned int extra_space)
+evict_rules_from_table(struct oftable *table, unsigned int extra_space)
     OVS_REQUIRES(ofproto_mutex)
 {
     while (should_evict_a_rule(table, extra_space)) {
@@ -3884,9 +3735,7 @@ evict_rules_from_table(struct ofproto *ofproto, struct oftable *table,
         if (!choose_rule_to_evict(table, &rule)) {
             return OFPERR_OFPFMFC_TABLE_FULL;
         } else {
-            struct ofopgroup *group = ofopgroup_create_unattached(ofproto);
-            delete_flow__(rule, group, OFPRR_EVICTION);
-            ofopgroup_submit(group);
+            ofproto_rule_delete__(rule, OFPRR_EVICTION);
         }
     }
 
@@ -3911,8 +3760,6 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     OVS_REQUIRES(ofproto_mutex)
 {
     const struct rule_actions *actions;
-    struct ofopgroup *group;
-    struct ofoperation *op;
     struct oftable *table;
     struct cls_rule cr;
     struct rule *rule;
@@ -3944,8 +3791,8 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     }
 
     table = &ofproto->tables[table_id];
-
-    if (!oftable_is_modifiable(table, fm->flags)) {
+    if (table->flags & OFTABLE_READONLY
+        && !(fm->flags & OFPUTIL_FF_NO_READONLY)) {
         return OFPERR_OFPBRC_EPERM;
     }
 
@@ -3964,20 +3811,17 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     rule = rule_from_cls_rule(classifier_find_rule_exactly(&table->cls, &cr));
     fat_rwlock_unlock(&table->cls.rwlock);
     if (rule) {
+        struct rule_collection rules;
+
         cls_rule_destroy(&cr);
-        if (!rule_is_modifiable(rule, fm->flags)) {
-            return OFPERR_OFPBRC_EPERM;
-        } else {
-            struct rule_collection rules;
 
-            rule_collection_init(&rules);
-            rule_collection_add(&rules, rule);
-            fm->modify_cookie = true;
-            error = modify_flows__(ofproto, fm, &rules, req);
-            rule_collection_destroy(&rules);
+        rule_collection_init(&rules);
+        rule_collection_add(&rules, rule);
+        fm->modify_cookie = true;
+        error = modify_flows__(ofproto, fm, &rules, req);
+        rule_collection_destroy(&rules);
 
-            return error;
-        }
+        return error;
     }
 
     /* Check for overlap, if requested. */
@@ -3995,7 +3839,7 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     }
 
     /* If necessary, evict an existing rule to clear out space. */
-    error = evict_rules_from_table(ofproto, table, 1);
+    error = evict_rules_from_table(table, 1);
     if (error) {
         cls_rule_destroy(&cr);
         return error;
@@ -4054,13 +3898,29 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     classifier_insert(&table->cls, CONST_CAST(struct cls_rule *, &rule->cr));
     fat_rwlock_unlock(&table->cls.rwlock);
 
-    group = ofopgroup_create(ofproto, fm->buffer_id, req);
-    op = ofoperation_create(group, rule, OFOPERATION_ADD, 0);
     error = ofproto->ofproto_class->rule_insert(rule);
-    ofoperation_complete(op, error);
-    ofopgroup_submit(group);
+    if (error) {
+        oftable_remove_rule(rule);
+        ofproto_rule_unref(rule);
+        return error;
+    }
 
-    return error;
+    if (minimask_get_vid_mask(&rule->cr.match.mask) == VLAN_VID_MASK) {
+        if (ofproto->vlan_bitmap) {
+            uint16_t vid = miniflow_get_vid(&rule->cr.match.flow);
+            if (!bitmap_is_set(ofproto->vlan_bitmap, vid)) {
+                bitmap_set1(ofproto->vlan_bitmap, vid);
+                ofproto->vlans_changed = true;
+            }
+        } else {
+            ofproto->vlans_changed = true;
+        }
+    }
+
+    ofmonitor_report(ofproto->connmgr, rule, NXFME_ADDED, 0,
+                     req ? req->ofconn : NULL, req ? req->xid : 0);
+
+    return req ? send_buffered_packet(req->ofconn, fm->buffer_id, rule) : 0;
 }
 
 /* OFPFC_MODIFY and OFPFC_MODIFY_STRICT. */
@@ -4078,8 +3938,7 @@ modify_flows__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
                const struct flow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
-    enum ofoperation_type type;
-    struct ofopgroup *group;
+    enum nx_flow_update_event event;
     enum ofperr error;
     size_t i;
 
@@ -4095,35 +3954,47 @@ modify_flows__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
         }
     }
 
-    type = fm->command == OFPFC_ADD ? OFOPERATION_REPLACE : OFOPERATION_MODIFY;
-    group = ofopgroup_create(ofproto, fm->buffer_id, req);
+    event = fm->command == OFPFC_ADD ? NXFME_ADDED : NXFME_MODIFIED;
     for (i = 0; i < rules->n; i++) {
         struct rule *rule = rules->rules[i];
-        const struct rule_actions *actions;
-        struct ofoperation *op;
-        bool actions_changed;
-        bool reset_counters;
+
+        /*  'fm' says that  */
+        bool change_cookie = (fm->modify_cookie
+                              && fm->new_cookie != OVS_BE64_MAX
+                              && fm->new_cookie != rule->flow_cookie);
+
+        const struct rule_actions *actions = rule_get_actions(rule);
+        bool change_actions = !ofpacts_equal(fm->ofpacts, fm->ofpacts_len,
+                                             actions->ofpacts,
+                                             actions->ofpacts_len);
+
+        bool reset_counters = (fm->flags & OFPUTIL_FF_RESET_COUNTS) != 0;
+
+        long long int now = time_msec();
 
         /* FIXME: Implement OFPFUTIL_FF_RESET_COUNTS */
 
-
-        actions = rule_get_actions(rule);
-        actions_changed = !ofpacts_equal(fm->ofpacts, fm->ofpacts_len,
-                                         actions->ofpacts,
-                                         actions->ofpacts_len);
-
-        op = ofoperation_create(group, rule, type, 0);
-
-        if (fm->modify_cookie && fm->new_cookie != OVS_BE64_MAX) {
-            ofproto_rule_change_cookie(ofproto, rule, fm->new_cookie);
+        if (change_cookie) {
+            cookies_remove(ofproto, rule);
         }
-        if (type == OFOPERATION_REPLACE) {
-            ovs_mutex_lock(&rule->mutex);
+
+        ovs_mutex_lock(&rule->mutex);
+        if (fm->command == OFPFC_ADD) {
             rule->idle_timeout = fm->idle_timeout;
             rule->hard_timeout = fm->hard_timeout;
-            ovs_mutex_unlock(&rule->mutex);
-
             rule->flags = fm->flags & OFPUTIL_FF_STATE;
+            rule->created = now;
+        }
+        if (change_cookie) {
+            rule->flow_cookie = fm->new_cookie;
+        }
+        rule->modified = now;
+        ovs_mutex_unlock(&rule->mutex);
+
+        if (change_cookie) {
+            cookies_insert(ofproto, rule);
+        }
+        if (fm->command == OFPFC_ADD) {
             if (fm->idle_timeout || fm->hard_timeout) {
                 if (!rule->eviction_group) {
                     eviction_group_add_rule(rule);
@@ -4133,21 +4004,27 @@ modify_flows__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
             }
         }
 
-        reset_counters = (fm->flags & OFPUTIL_FF_RESET_COUNTS) != 0;
-        if (actions_changed || reset_counters) {
-            const struct rule_actions *new_actions;
+        if (change_actions) {
+            ovsrcu_set(&rule->actions, rule_actions_create(ofproto,
+                                                           fm->ofpacts,
+                                                           fm->ofpacts_len));
+            rule_actions_destroy(actions);
+        }
 
-            op->actions = rule_get_actions(rule);
-            new_actions = rule_actions_create(ofproto,
-                                              fm->ofpacts, fm->ofpacts_len);
-
-            ovsrcu_set(&rule->actions, new_actions);
-
+        if (change_actions || reset_counters) {
             ofproto->ofproto_class->rule_modify_actions(rule, reset_counters);
         }
-        ofoperation_complete(op, 0);
+
+        if (event != NXFME_MODIFIED || change_actions || change_cookie) {
+            ofmonitor_report(ofproto->connmgr, rule, event, 0,
+                             req ? req->ofconn : NULL, req ? req->xid : 0);
+        }
     }
-    ofopgroup_submit(group);
+
+    if (fm->buffer_id != UINT32_MAX && req) {
+        error = send_buffered_packet(req->ofconn, fm->buffer_id,
+                                     rules->rules[0]);
+    }
 
     return error;
 }
@@ -4229,15 +4106,16 @@ modify_flow_strict(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
 /* OFPFC_DELETE implementation. */
 
 static void
-delete_flow__(struct rule *rule, struct ofopgroup *group,
-              enum ofp_flow_removed_reason reason)
+delete_flow__(struct rule *rule, enum ofp_flow_removed_reason reason,
+              const struct flow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct ofproto *ofproto = rule->ofproto;
 
     ofproto_rule_send_removed(rule, reason);
 
-    ofoperation_create(group, rule, OFOPERATION_DELETE, reason);
+    ofmonitor_report(ofproto->connmgr, rule, NXFME_DELETED, reason,
+                     req ? req->ofconn : NULL, req ? req->xid : 0);
     oftable_remove_rule(rule);
     ofproto->ofproto_class->rule_delete(rule);
 }
@@ -4252,14 +4130,12 @@ delete_flows__(struct ofproto *ofproto,
                const struct flow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct ofopgroup *group;
     size_t i;
 
-    group = ofopgroup_create(ofproto, UINT32_MAX, req);
     for (i = 0; i < rules->n; i++) {
-        delete_flow__(rules->rules[i], group, reason);
+        delete_flow__(rules->rules[i], reason, req);
     }
-    ofopgroup_submit(group);
+    ofmonitor_flush(ofproto->connmgr);
 
     return 0;
 }
@@ -4324,7 +4200,8 @@ ofproto_rule_send_removed(struct rule *rule, uint8_t reason)
     struct ofputil_flow_removed fr;
     long long int used;
 
-    if (rule_is_hidden(rule) || !(rule->flags & OFPUTIL_FF_SEND_FLOW_REM)) {
+    if (rule_is_hidden(rule) ||
+        !(rule->flags & OFPUTIL_FF_SEND_FLOW_REM)) {
         return;
     }
 
@@ -4349,18 +4226,12 @@ ofproto_rule_send_removed(struct rule *rule, uint8_t reason)
  * OFPRR_HARD_TIMEOUT or OFPRR_IDLE_TIMEOUT), and then removes 'rule' from its
  * ofproto.
  *
- * 'rule' must not have a pending operation (that is, 'rule->pending' must be
- * NULL).
- *
  * ofproto implementation ->run() functions should use this function to expire
  * OpenFlow flows. */
 void
 ofproto_rule_expire(struct rule *rule, uint8_t reason)
     OVS_REQUIRES(ofproto_mutex)
 {
-    ovs_assert(reason == OFPRR_HARD_TIMEOUT || reason == OFPRR_IDLE_TIMEOUT
-               || reason == OFPRR_DELETE || reason == OFPRR_GROUP_DELETE);
-
     ofproto_rule_delete__(rule, reason);
 }
 
@@ -4427,7 +4298,7 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         struct flow_mod_requester req;
 
         req.ofconn = ofconn;
-        req.request = oh;
+        req.xid = oh->xid;
         error = handle_flow_mod__(ofproto, &fm, &req);
     }
     if (error) {
@@ -5975,282 +5846,37 @@ handle_openflow(struct ofconn *ofconn, const struct ofpbuf *ofp_msg)
 
 /* Asynchronous operations. */
 
-/* Creates and returns a new ofopgroup that is not associated with any
- * OpenFlow connection.
- *
- * The caller should add operations to the returned group with
- * ofoperation_create() and then submit it with ofopgroup_submit(). */
-static struct ofopgroup *
-ofopgroup_create_unattached(struct ofproto *ofproto)
+static enum ofperr
+send_buffered_packet(struct ofconn *ofconn, uint32_t buffer_id,
+                     struct rule *rule)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct ofopgroup *group = xzalloc(sizeof *group);
-    group->ofproto = ofproto;
-    list_init(&group->ops);
-    list_init(&group->ofconn_node);
-    return group;
-}
+    enum ofperr error = 0;
+    if (ofconn && buffer_id != UINT32_MAX) {
+        struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
+        struct ofpbuf *packet;
+        ofp_port_t in_port;
 
-/* Creates and returns a new ofopgroup for 'ofproto'.
- *
- * If 'ofconn' is NULL, the new ofopgroup is not associated with any OpenFlow
- * connection.  The 'request' and 'buffer_id' arguments are ignored.
- *
- * If 'ofconn' is nonnull, then the new ofopgroup is associated with 'ofconn'.
- * If the ofopgroup eventually fails, then the error reply will include
- * 'request'.  If the ofopgroup eventually succeeds, then the packet with
- * buffer id 'buffer_id' on 'ofconn' will be sent by 'ofconn''s ofproto.
- *
- * The caller should add operations to the returned group with
- * ofoperation_create() and then submit it with ofopgroup_submit(). */
-static struct ofopgroup *
-ofopgroup_create(struct ofproto *ofproto, uint32_t buffer_id,
-                 const struct flow_mod_requester *req)
-    OVS_REQUIRES(ofproto_mutex)
-{
-    struct ofopgroup *group = ofopgroup_create_unattached(ofproto);
-    if (req) {
-        size_t request_len = ntohs(req->request->length);
+        error = ofconn_pktbuf_retrieve(ofconn, buffer_id, &packet, &in_port);
+        if (packet) {
+            struct rule_execute *re;
 
-        ovs_assert(ofconn_get_ofproto(req->ofconn) == ofproto);
+            ofproto_rule_ref(rule);
 
-        group->ofconn = req->ofconn;
-        group->request = xmemdup(req->request, MIN(request_len, 64));
-        group->buffer_id = buffer_id;
-    }
-    return group;
-}
+            re = xmalloc(sizeof *re);
+            re->rule = rule;
+            re->in_port = in_port;
+            re->packet = packet;
 
-/* Submits 'group' for processing.
- *
- * If 'group' contains no operations (e.g. none were ever added, or all of the
- * ones that were added completed synchronously), then it is destroyed
- * immediately.  Otherwise it is added to the ofproto's list of pending
- * groups. */
-static void
-ofopgroup_submit(struct ofopgroup *group)
-    OVS_REQUIRES(ofproto_mutex)
-{
-    ofopgroup_complete(group);
-}
-
-static void
-ofopgroup_complete(struct ofopgroup *group)
-    OVS_REQUIRES(ofproto_mutex)
-{
-    struct ofproto *ofproto = group->ofproto;
-
-    struct ofconn *abbrev_ofconn;
-    ovs_be32 abbrev_xid;
-
-    struct ofoperation *op, *next_op;
-    int error;
-
-    error = 0;
-    LIST_FOR_EACH (op, group_node, &group->ops) {
-        if (op->error) {
-            error = op->error;
-            break;
-        }
-    }
-
-    if (!error && group->ofconn && group->buffer_id != UINT32_MAX) {
-        LIST_FOR_EACH (op, group_node, &group->ops) {
-            if (op->type != OFOPERATION_DELETE) {
-                struct ofpbuf *packet;
-                ofp_port_t in_port;
-
-                error = ofconn_pktbuf_retrieve(group->ofconn, group->buffer_id,
-                                               &packet, &in_port);
-                if (packet) {
-                    struct rule_execute *re;
-
-                    ovs_assert(!error);
-
-                    ofproto_rule_ref(op->rule);
-
-                    re = xmalloc(sizeof *re);
-                    re->rule = op->rule;
-                    re->in_port = in_port;
-                    re->packet = packet;
-
-                    if (!guarded_list_push_back(&ofproto->rule_executes,
-                                                &re->list_node, 1024)) {
-                        ofproto_rule_unref(op->rule);
-                        ofpbuf_delete(re->packet);
-                        free(re);
-                    }
-                }
-                break;
-            }
-        }
-    }
-
-    if (!error && !list_is_empty(&group->ofconn_node)) {
-        abbrev_ofconn = group->ofconn;
-        abbrev_xid = group->request->xid;
-    } else {
-        abbrev_ofconn = NULL;
-        abbrev_xid = htonl(0);
-    }
-    LIST_FOR_EACH_SAFE (op, next_op, group_node, &group->ops) {
-        struct rule *rule = op->rule;
-
-        /* We generally want to report the change to active OpenFlow flow
-           monitors (e.g. NXST_FLOW_MONITOR).  There are three exceptions:
-
-              - The operation failed.
-
-              - The affected rule is not visible to controllers.
-
-              - The operation's only effect was to update rule->modified. */
-        if (!(op->error
-              || rule_is_hidden(rule)
-              || (op->type == OFOPERATION_MODIFY
-                  && !op->actions
-                  && rule->flow_cookie == op->flow_cookie))) {
-            enum nx_flow_update_event event_type;
-
-            switch (op->type) {
-            case OFOPERATION_ADD:
-            case OFOPERATION_REPLACE:
-                event_type = NXFME_ADDED;
-                break;
-
-            case OFOPERATION_DELETE:
-                event_type = NXFME_DELETED;
-                break;
-
-            case OFOPERATION_MODIFY:
-                event_type = NXFME_MODIFIED;
-                break;
-
-            default:
-                OVS_NOT_REACHED();
-            }
-
-            ofmonitor_report(ofproto->connmgr, rule, event_type,
-                             op->reason, abbrev_ofconn, abbrev_xid);
-        }
-
-        ovs_assert(!op->error || op->type == OFOPERATION_ADD);
-        switch (op->type) {
-        case OFOPERATION_ADD:
-            if (!op->error) {
-                uint16_t vid_mask;
-
-                vid_mask = minimask_get_vid_mask(&rule->cr.match.mask);
-                if (vid_mask == VLAN_VID_MASK) {
-                    if (ofproto->vlan_bitmap) {
-                        uint16_t vid = miniflow_get_vid(&rule->cr.match.flow);
-                        if (!bitmap_is_set(ofproto->vlan_bitmap, vid)) {
-                            bitmap_set1(ofproto->vlan_bitmap, vid);
-                            ofproto->vlans_changed = true;
-                        }
-                    } else {
-                        ofproto->vlans_changed = true;
-                    }
-                }
-            } else {
-                oftable_remove_rule(rule);
+            if (!guarded_list_push_back(&ofproto->rule_executes,
+                                        &re->list_node, 1024)) {
                 ofproto_rule_unref(rule);
+                ofpbuf_delete(re->packet);
+                free(re);
             }
-            break;
-
-        case OFOPERATION_DELETE:
-            ofproto_rule_unref(rule);
-            op->rule = NULL;
-            break;
-
-        case OFOPERATION_MODIFY:
-        case OFOPERATION_REPLACE: {
-            long long now = time_msec();
-
-            ovs_mutex_lock(&rule->mutex);
-            rule->modified = now;
-            if (op->type == OFOPERATION_REPLACE) {
-                rule->created = now;
-            }
-            ovs_mutex_unlock(&rule->mutex);
-            break;
         }
-
-        default:
-            OVS_NOT_REACHED();
-        }
-
-        ofoperation_destroy(op);
     }
-
-    ofmonitor_flush(ofproto->connmgr);
-
-    if (error) {
-        ofconn_send_error(group->ofconn, group->request, error);
-    }
-    free(group->request);
-    free(group);
-}
-
-/* Initiates a new operation on 'rule', of the specified 'type', within
- * 'group'.  Prior to calling, 'rule' must not have any pending operation.
- *
- * For a 'type' of OFOPERATION_DELETE, 'reason' should specify the reason that
- * the flow is being deleted.  For other 'type's, 'reason' is ignored (use 0).
- *
- * Returns the newly created ofoperation (which is also available as
- * rule->pending). */
-static struct ofoperation *
-ofoperation_create(struct ofopgroup *group, struct rule *rule,
-                   enum ofoperation_type type,
-                   enum ofp_flow_removed_reason reason)
-    OVS_REQUIRES(ofproto_mutex)
-{
-    struct ofoperation *op;
-
-    op = xzalloc(sizeof *op);
-    op->group = group;
-    list_push_back(&group->ops, &op->group_node);
-    op->rule = rule;
-    op->type = type;
-    op->reason = reason;
-    op->flow_cookie = rule->flow_cookie;
-    ovs_mutex_lock(&rule->mutex);
-    op->idle_timeout = rule->idle_timeout;
-    op->hard_timeout = rule->hard_timeout;
-    ovs_mutex_unlock(&rule->mutex);
-    op->flags = rule->flags;
-
-    return op;
-}
-
-static void
-ofoperation_destroy(struct ofoperation *op)
-    OVS_REQUIRES(ofproto_mutex)
-{
-    rule_actions_destroy(op->actions);
-    free(op);
-}
-
-/* Indicates that 'op' completed with status 'error', which is either 0 to
- * indicate success or an OpenFlow error code on failure.
- *
- * If 'error' is 0, indicating success, the operation will be committed
- * permanently to the flow table.
- *
- * Flow modifications and deletions must always succeed.  Flow additions may
- * fail, indicated by nonzero 'error'.  If an "add flow" operation fails, this
- * function removes the new rule.  The caller must have uninitialized any
- * derived state in the new rule, as in step 5 of in the "Life Cycle" in
- * ofproto/ofproto-provider.h.  ofoperation_complete() performs steps 6 and and
- * 7 for the new rule, calling its ->rule_dealloc() function.
- *
- * Please see the large comment in ofproto/ofproto-provider.h titled
- * "Asynchronous Operation Support" for more information. */
-void
-ofoperation_complete(struct ofoperation *op, enum ofperr error)
-{
-    ovs_assert(!error || op->type == OFOPERATION_ADD);
-    op->error = error;
+    return error;
 }
 
 static uint64_t
@@ -6321,24 +5947,6 @@ choose_rule_to_evict(struct oftable *table, struct rule **rulep)
     }
 
     return false;
-}
-
-/* Searches 'ofproto' for tables that have more flows than their configured
- * maximum and that have flow eviction enabled, and evicts as many flows as
- * necessary and currently feasible from them.
- *
- * This triggers only when an OpenFlow table has N flows in it and then the
- * client configures a maximum number of flows less than N. */
-static void
-ofproto_evict(struct ofproto *ofproto)
-{
-    struct oftable *table;
-
-    ovs_mutex_lock(&ofproto_mutex);
-    OFPROTO_FOR_EACH_TABLE (table, ofproto) {
-        evict_rules_from_table(ofproto, table, 0);
-    }
-    ovs_mutex_unlock(&ofproto_mutex);
 }
 
 /* Eviction groups. */
