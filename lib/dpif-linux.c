@@ -195,7 +195,8 @@ dpif_linux_cast(const struct dpif *dpif)
 }
 
 static int
-dpif_linux_enumerate(struct sset *all_dps)
+dpif_linux_enumerate(struct sset *all_dps,
+                     const struct dpif_class *dpif_class OVS_UNUSED)
 {
     struct nl_dump dump;
     uint64_t reply_stub[NL_DUMP_BUFSIZE / 8];

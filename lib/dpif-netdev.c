@@ -360,12 +360,19 @@ get_dp_netdev(const struct dpif *dpif)
 }
 
 static int
-dpif_netdev_enumerate(struct sset *all_dps)
+dpif_netdev_enumerate(struct sset *all_dps,
+                      const struct dpif_class *dpif_class)
 {
     struct shash_node *node;
 
     ovs_mutex_lock(&dp_netdev_mutex);
     SHASH_FOR_EACH(node, &dp_netdevs) {
+        struct dp_netdev *dp = node->data;
+        if (dpif_class != dp->class) {
+            /* 'dp_netdevs' contains both "netdev" and "dummy" dpifs.
+             * If the class doesn't match, skip this dpif. */
+             continue;
+        }
         sset_add(all_dps, node->name);
     }
     ovs_mutex_unlock(&dp_netdev_mutex);

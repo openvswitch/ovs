@@ -89,16 +89,17 @@ struct dpif_class {
      * the type assumed if no type is specified when opening a dpif. */
     const char *type;
 
-    /* Enumerates the names of all known created datapaths, if possible, into
-     * 'all_dps'.  The caller has already initialized 'all_dps' and other dpif
-     * classes might already have added names to it.
+    /* Enumerates the names of all known created datapaths (of class
+     * 'dpif_class'), if possible, into 'all_dps'.  The caller has already
+     * initialized 'all_dps' and other dpif classes might already have added
+     * names to it.
      *
      * This is used by the vswitch at startup, so that it can delete any
      * datapaths that are not configured.
      *
      * Some kinds of datapaths might not be practically enumerable, in which
      * case this function may be a null pointer. */
-    int (*enumerate)(struct sset *all_dps);
+    int (*enumerate)(struct sset *all_dps, const struct dpif_class *dpif_class);
 
     /* Returns the type to pass to netdev_open() when a dpif of class
      * 'dpif_class' has a port of type 'type', for a few special cases

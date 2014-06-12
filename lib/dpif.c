@@ -272,7 +272,9 @@ dp_enumerate_names(const char *type, struct sset *names)
     }
 
     dpif_class = registered_class->dpif_class;
-    error = dpif_class->enumerate ? dpif_class->enumerate(names) : 0;
+    error = (dpif_class->enumerate
+             ? dpif_class->enumerate(names, dpif_class)
+             : 0);
     if (error) {
         VLOG_WARN("failed to enumerate %s datapaths: %s", dpif_class->type,
                    ovs_strerror(error));
