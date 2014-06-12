@@ -88,3 +88,10 @@ MINGW*)
     IS_WIN32="no"
     ;;
 esac
+
+# XXX: Disable Python related tests on Windows because Open vSwitch code
+# written in Python has not been ported to the Windows platform. We will
+# need to remove the next block after porting is complete.
+if test "$IS_WIN32" = "yes"; then
+    HAVE_PYTHON="no"
+fi
