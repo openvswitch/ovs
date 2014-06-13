@@ -1367,8 +1367,7 @@ check_tries(struct trie_ctx trie_ctx[CLS_MAX_TRIES], unsigned int n_tries,
 static inline bool
 miniflow_and_mask_matches_flow(const struct miniflow *flow,
                                const struct minimask *mask,
-                               const struct flow *target,
-                               struct flow_wildcards *wc)
+                               const struct flow *target)
 {
     const uint32_t *flowp = miniflow_get_u32_values(flow);
     const uint32_t *maskp = miniflow_get_u32_values(&mask->masks);
@@ -1378,12 +1377,6 @@ miniflow_and_mask_matches_flow(const struct miniflow *flow,
         uint32_t diff = (*flowp++ ^ flow_u32_value(target, idx)) & *maskp++;
 
         if (diff) {
-            /* Only unwildcard if none of the differing bits is already
-             * exact-matched. */
-            if (wc && !(flow_u32_value(&wc->masks, idx) & diff)) {
-                /* Keep one bit of the difference. */
-                *flow_u32_lvalue(&wc->masks, idx) |= rightmost_1bit(diff);
-            }
             return false;
         }
     }
@@ -1399,12 +1392,48 @@ find_match(const struct cls_subtable *subtable, const struct flow *flow,
 
     HMAP_FOR_EACH_WITH_HASH (rule, hmap_node, hash, &subtable->rules) {
         if (miniflow_and_mask_matches_flow(&rule->flow, &subtable->mask,
-                                           flow, NULL)) {
+                                           flow)) {
             return rule;
         }
     }
 
     return NULL;
+}
+
+/* Returns true if 'target' satisifies 'flow'/'mask', that is, if each bit
+ * for which 'flow', for which 'mask' has a bit set, specifies a particular
+ * value has the correct value in 'target'.
+ *
+ * This function is equivalent to miniflow_and_mask_matches_flow() but this
+ * version fills in the mask bits in 'wc'. */
+static inline bool
+miniflow_and_mask_matches_flow_wc(const struct miniflow *flow,
+                                  const struct minimask *mask,
+                                  const struct flow *target,
+                                  struct flow_wildcards *wc)
+{
+    const uint32_t *flowp = miniflow_get_u32_values(flow);
+    const uint32_t *maskp = miniflow_get_u32_values(&mask->masks);
+    uint32_t idx;
+
+    MAP_FOR_EACH_INDEX(idx, mask->masks.map) {
+        uint32_t mask = *maskp++;
+        uint32_t diff = (*flowp++ ^ flow_u32_value(target, idx)) & mask;
+
+        if (diff) {
+            /* Only unwildcard if none of the differing bits is already
+             * exact-matched. */
+            if (!(flow_u32_value(&wc->masks, idx) & diff)) {
+                /* Keep one bit of the difference. */
+                *flow_u32_lvalue(&wc->masks, idx) |= rightmost_1bit(diff);
+            }
+            return false;
+        }
+        /* Fill in the bits that were looked at. */
+        *flow_u32_lvalue(&wc->masks, idx) |= mask;
+    }
+
+    return true;
 }
 
 static struct cls_match *
@@ -1449,11 +1478,11 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
          * optimization. */
         if (!inode->s) {
             ASSIGN_CONTAINER(rule, inode - i, index_nodes);
-            if (miniflow_and_mask_matches_flow(&rule->flow, &subtable->mask,
-                                               flow, wc)) {
-                goto out;
+            if (miniflow_and_mask_matches_flow_wc(&rule->flow, &subtable->mask,
+                                                  flow, wc)) {
+                return rule;
             }
-            goto range_out;
+            return NULL;
         }
     }
     ofs.end = FLOW_U32S;
@@ -1481,7 +1510,7 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
         ofs.start = TP_PORTS_OFS32;
         goto range_out;
     }
-out:
+
     /* Must unwildcard all the fields, as they were looked at. */
     flow_wildcards_fold_minimask(wc, &subtable->mask);
     return rule;
