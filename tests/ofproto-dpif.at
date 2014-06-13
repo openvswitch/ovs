@@ -4785,7 +4785,7 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 sleep 1
 AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
 skb_priority(0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:09/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
-skb_priority(0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:0b/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0c/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:0b/00:00:00:00:00:02,dst=50:54:00:00:00:0c/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -4803,7 +4803,7 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
-skb_priority(0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/255.255.255.252,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.2,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
 skb_priority(0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:0b/00:00:00:00:00:00,dst=50:54:00:00:00:0c/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.4/255.255.255.255,dst=10.0.0.3/0.0.0.0,proto=1/0xff,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
 ])
 OVS_VSWITCHD_STOP
@@ -4823,7 +4823,7 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 sleep 1
 AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
 skb_priority(0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:07/00:00:00:00:00:00,dst=50:54:00:00:00:05/00:00:00:00:00:00),eth_type(0x86dd),ipv6(src=2001:db8:3c4d:1:2:3:4:5/ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff,dst=fe80::2/::,label=0/0,proto=10/0,tclass=0x70/0,hlimit=128/0,frag=no/0xff), actions: <del>
-skb_priority(0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x86dd),ipv6(src=2001:db8:3c4d:5:4:3:2:1/ffff:ffff:ffff:fffc::,dst=2001:db8:3c4d:1:2:3:4:1/::,label=0/0,proto=99/0,tclass=0x70/0,hlimit=64/0,frag=no/0xff), actions: <del>
+skb_priority(0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x86dd),ipv6(src=2001:db8:3c4d:5:4:3:2:1/0:0:0:4::,dst=2001:db8:3c4d:1:2:3:4:1/::,label=0/0,proto=99/0,tclass=0x70/0,hlimit=64/0,frag=no/0xff), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -5007,7 +5007,7 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 sleep 1
 AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
 skb_priority(0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:09/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
-skb_priority(0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:0b/ff:ff:ff:ff:ff:ff,dst=50:54:00:00:00:0c/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:0b/00:00:00:00:00:02,dst=50:54:00:00:00:0c/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.4/0.0.0.0,dst=10.0.0.3/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -5208,7 +5208,7 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
-skb_priority(0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/255.255.255.252,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
+skb_priority(0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.2,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
 skb_priority(0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:0b/00:00:00:00:00:00,dst=50:54:00:00:00:0c/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8/0,code=0/0), actions: <del>
 ])
 OVS_VSWITCHD_STOP

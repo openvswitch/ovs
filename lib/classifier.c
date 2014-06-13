@@ -1361,19 +1361,29 @@ check_tries(struct trie_ctx trie_ctx[CLS_MAX_TRIES], unsigned int n_tries,
  * value has the correct value in 'target'.
  *
  * This function is equivalent to miniflow_equal_flow_in_minimask(flow,
- * target, mask) but it is faster because of the invariant that
- * flow->map and mask->masks.map are the same. */
+ * target, mask) but this is faster because of the invariant that
+ * flow->map and mask->masks.map are the same, and that this version
+ * takes the 'wc'. */
 static inline bool
 miniflow_and_mask_matches_flow(const struct miniflow *flow,
                                const struct minimask *mask,
-                               const struct flow *target)
+                               const struct flow *target,
+                               struct flow_wildcards *wc)
 {
     const uint32_t *flowp = miniflow_get_u32_values(flow);
     const uint32_t *maskp = miniflow_get_u32_values(&mask->masks);
-    uint32_t target_u32;
+    uint32_t idx;
 
-    FLOW_FOR_EACH_IN_MAP(target_u32, target, mask->masks.map) {
-        if ((*flowp++ ^ target_u32) & *maskp++) {
+    MAP_FOR_EACH_INDEX(idx, mask->masks.map) {
+        uint32_t diff = (*flowp++ ^ flow_u32_value(target, idx)) & *maskp++;
+
+        if (diff) {
+            /* Only unwildcard if none of the differing bits is already
+             * exact-matched. */
+            if (wc && !(flow_u32_value(&wc->masks, idx) & diff)) {
+                /* Keep one bit of the difference. */
+                *flow_u32_lvalue(&wc->masks, idx) |= rightmost_1bit(diff);
+            }
             return false;
         }
     }
@@ -1389,7 +1399,7 @@ find_match(const struct cls_subtable *subtable, const struct flow *flow,
 
     HMAP_FOR_EACH_WITH_HASH (rule, hmap_node, hash, &subtable->rules) {
         if (miniflow_and_mask_matches_flow(&rule->flow, &subtable->mask,
-                                           flow)) {
+                                           flow, NULL)) {
             return rule;
         }
     }
@@ -1403,7 +1413,7 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
               struct flow_wildcards *wc)
 {
     uint32_t basis = 0, hash;
-    struct cls_match *rule = NULL;
+    struct cls_match *rule;
     int i;
     struct range ofs;
 
@@ -1433,23 +1443,17 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
         }
 
         /* If we have narrowed down to a single rule already, check whether
-         * that rule matches.  If it does match, then we're done.  If it does
-         * not match, then we know that we will never get a match, but we do
-         * not yet know how many wildcards we need to fold into 'wc' so we
-         * continue iterating through indices to find that out.  (We won't
-         * waste time calling miniflow_and_mask_matches_flow() again because
-         * we've set 'rule' nonnull.)
-         *
-         * This check shows a measurable benefit with non-trivial flow tables.
+         * that rule matches.  Either way, we're done.
          *
          * (Rare) hash collisions may cause us to miss the opportunity for this
          * optimization. */
-        if (!inode->s && !rule) {
+        if (!inode->s) {
             ASSIGN_CONTAINER(rule, inode - i, index_nodes);
             if (miniflow_and_mask_matches_flow(&rule->flow, &subtable->mask,
-                                               flow)) {
+                                               flow, wc)) {
                 goto out;
             }
+            goto range_out;
         }
     }
     ofs.end = FLOW_U32S;
@@ -1457,16 +1461,9 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
     if (check_tries(trie_ctx, n_tries, subtable->trie_plen, ofs, flow, wc)) {
         goto range_out;
     }
-    if (!rule) {
-        /* Multiple potential matches exist, look for one. */
-        hash = flow_hash_in_minimask_range(flow, &subtable->mask, ofs.start,
-                                           ofs.end, &basis);
-        rule = find_match(subtable, flow, hash);
-    } else {
-        /* We already narrowed the matching candidates down to just 'rule',
-         * but it didn't match. */
-        rule = NULL;
-    }
+    hash = flow_hash_in_minimask_range(flow, &subtable->mask, ofs.start,
+                                       ofs.end, &basis);
+    rule = find_match(subtable, flow, hash);
     if (!rule && subtable->ports_mask_len) {
         /* Ports are always part of the final range, if any.
          * No match was found for the ports.  Use the ports trie to figure out
@@ -1484,12 +1481,12 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
         ofs.start = TP_PORTS_OFS32;
         goto range_out;
     }
- out:
+out:
     /* Must unwildcard all the fields, as they were looked at. */
     flow_wildcards_fold_minimask(wc, &subtable->mask);
     return rule;
 
- range_out:
+range_out:
     /* Must unwildcard the fields looked up so far, if any. */
     if (ofs.start) {
         flow_wildcards_fold_minimask_range(wc, &subtable->mask, 0, ofs.start);
