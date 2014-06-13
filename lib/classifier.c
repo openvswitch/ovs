@@ -2137,26 +2137,26 @@ static unsigned int
 trie_lookup_value(const struct trie_node *node, const ovs_be32 value[],
                   unsigned int *checkbits)
 {
-    unsigned int plen = 0, match_len = 0;
+    unsigned int ofs = 0, match_len = 0;
     const struct trie_node *prev = NULL;
 
-    for (; node; prev = node, node = trie_next_node(node, value, plen)) {
+    for (; node; prev = node, node = trie_next_node(node, value, ofs)) {
         unsigned int eqbits;
         /* Check if this edge can be followed. */
-        eqbits = prefix_equal_bits(node->prefix, node->nbits, value, plen);
-        plen += eqbits;
+        eqbits = prefix_equal_bits(node->prefix, node->nbits, value, ofs);
+        ofs += eqbits;
         if (eqbits < node->nbits) { /* Mismatch, nothing more to be found. */
-            /* Bit at offset 'plen' differed. */
-            *checkbits = plen + 1; /* Includes the first mismatching bit. */
+            /* Bit at offset 'ofs' differed. */
+            *checkbits = ofs + 1; /* Includes the first mismatching bit. */
             return match_len;
         }
         /* Full match, check if rules exist at this prefix length. */
         if (node->n_rules > 0) {
-            match_len = plen;
+            match_len = ofs;
         }
     }
     /* Dead end, exclude the other branch if it exists. */
-    *checkbits = !prev || trie_is_leaf(prev) ? plen : plen + 1;
+    *checkbits = !prev || trie_is_leaf(prev) ? ofs : ofs + 1;
     return match_len;
 }
 
