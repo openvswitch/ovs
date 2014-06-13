@@ -980,9 +980,17 @@ do_ssl_init(void)
         RAND_seed(seed, sizeof seed);
     }
 
-    /* New OpenSSL changed TLSv1_method() to return a "const" pointer, so the
-     * cast is needed to avoid a warning with those newer versions. */
-    method = CONST_CAST(SSL_METHOD *, TLSv1_method());
+    /* OpenSSL has a bunch of "connection methods": SSLv2_method(),
+     * SSLv3_method(), TLSv1_method(), SSLv23_method(), ...  Most of these
+     * support exactly one version of SSL, e.g. TLSv1_method() supports TLSv1
+     * only, not any earlier *or later* version.  The only exception is
+     * SSLv23_method(), which in fact supports *any* version of SSL and TLS.
+     * We don't want SSLv2 or SSLv3 support, so we turn it off below with
+     * SSL_CTX_set_options().
+     *
+     * The cast is needed to avoid a warning with newer versions of OpenSSL in
+     * which SSLv23_method() returns a "const" pointer. */
+    method = CONST_CAST(SSL_METHOD *, SSLv23_method());
     if (method == NULL) {
         VLOG_ERR("TLSv1_method: %s", ERR_error_string(ERR_get_error(), NULL));
         return ENOPROTOOPT;
