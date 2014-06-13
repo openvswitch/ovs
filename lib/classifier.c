@@ -1436,6 +1436,16 @@ miniflow_and_mask_matches_flow_wc(const struct miniflow *flow,
     return true;
 }
 
+/* Unwildcard the fields looked up so far, if any. */
+static void
+fill_range_wc(const struct cls_subtable *subtable, struct flow_wildcards *wc,
+              uint8_t to)
+{
+    if (to) {
+        flow_wildcards_fold_minimask_range(wc, &subtable->mask, 0, to);
+    }
+}
+
 static struct cls_match *
 find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
               struct trie_ctx trie_ctx[CLS_MAX_TRIES], unsigned int n_tries,
@@ -1459,16 +1469,19 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
 
         if (check_tries(trie_ctx, n_tries, subtable->trie_plen, ofs, flow,
                         wc)) {
-            goto range_out;
+            /* 'wc' bits for the trie field set, now unwildcard the preceding
+             * bits used so far. */
+            fill_range_wc(subtable, wc, ofs.start);
+            return NULL;
         }
         hash = flow_hash_in_minimask_range(flow, &subtable->mask, ofs.start,
                                            ofs.end, &basis);
-        ofs.start = ofs.end;
         inode = hindex_node_with_hash(&subtable->indices[i], hash);
         if (!inode) {
-            /* No match, can stop immediately, but must fold in the mask
-             * covered so far. */
-            goto range_out;
+            /* No match, can stop immediately, but must fold in the bits
+             * used in lookup so far. */
+            fill_range_wc(subtable, wc, ofs.end);
+            return NULL;
         }
 
         /* If we have narrowed down to a single rule already, check whether
@@ -1484,11 +1497,13 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
             }
             return NULL;
         }
+        ofs.start = ofs.end;
     }
     ofs.end = FLOW_U32S;
     /* Trie check for the final range. */
     if (check_tries(trie_ctx, n_tries, subtable->trie_plen, ofs, flow, wc)) {
-        goto range_out;
+        fill_range_wc(subtable, wc, ofs.start);
+        return NULL;
     }
     hash = flow_hash_in_minimask_range(flow, &subtable->mask, ofs.start,
                                        ofs.end, &basis);
@@ -1507,20 +1522,15 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
         ((OVS_FORCE ovs_be32 *)&wc->masks)[TP_PORTS_OFS32] |=
             mask & htonl(~0 << (32 - mbits));
 
-        ofs.start = TP_PORTS_OFS32;
-        goto range_out;
+        /* Unwildcard all bits in the mask upto the ports, as they were used
+         * to determine there is no match. */
+        fill_range_wc(subtable, wc, TP_PORTS_OFS32);
+        return NULL;
     }
 
     /* Must unwildcard all the fields, as they were looked at. */
     flow_wildcards_fold_minimask(wc, &subtable->mask);
     return rule;
-
-range_out:
-    /* Must unwildcard the fields looked up so far, if any. */
-    if (ofs.start) {
-        flow_wildcards_fold_minimask_range(wc, &subtable->mask, 0, ofs.start);
-    }
-    return NULL;
 }
 
 static struct cls_match *
