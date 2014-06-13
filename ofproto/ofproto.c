@@ -4099,12 +4099,12 @@ modify_flows__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
 {
     struct list dead_cookies = LIST_INITIALIZER(&dead_cookies);
     enum nx_flow_update_event event;
-    enum ofperr error;
     size_t i;
 
     if (ofproto->ofproto_class->rule_premodify_actions) {
         for (i = 0; i < rules->n; i++) {
             struct rule *rule = rules->rules[i];
+            enum ofperr error;
 
             error = ofproto->ofproto_class->rule_premodify_actions(
                 rule, fm->ofpacts, fm->ofpacts_len);
@@ -4187,11 +4187,11 @@ modify_flows__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     learned_cookies_flush(ofproto, &dead_cookies);
 
     if (fm->buffer_id != UINT32_MAX && req) {
-        error = send_buffered_packet(req->ofconn, fm->buffer_id,
-                                     rules->rules[0]);
+        return send_buffered_packet(req->ofconn, fm->buffer_id,
+                                    rules->rules[0]);
     }
 
-    return error;
+    return 0;
 }
 
 static enum ofperr
