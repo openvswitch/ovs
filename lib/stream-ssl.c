@@ -221,6 +221,20 @@ want_to_poll_events(int want)
 }
 
 static int
+setsockopt_tcp_nodelay(int fd)
+{
+    int on = 1;
+    int retval;
+
+    retval = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &on, sizeof on);
+    if (retval) {
+        retval = sock_errno();
+        VLOG_ERR("setsockopt(TCP_NODELAY): %s", sock_strerror(retval));
+    }
+    return retval;
+}
+
+static int
 new_ssl_stream(const char *name, int fd, enum session_type type,
                enum ssl_state state, struct stream **streamp)
 {
@@ -228,7 +242,6 @@ new_ssl_stream(const char *name, int fd, enum session_type type,
     socklen_t local_len = sizeof local;
     struct ssl_stream *sslv;
     SSL *ssl = NULL;
-    int on = 1;
     int retval;
 
     /* Check for all the needful configuration. */
@@ -260,13 +273,14 @@ new_ssl_stream(const char *name, int fd, enum session_type type,
         memset(&local, 0, sizeof local);
     }
 
-    /* Disable Nagle. */
-    retval = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &on, sizeof on);
-    if (retval) {
-        retval = sock_errno();
-        VLOG_ERR("%s: setsockopt(TCP_NODELAY): %s", name,
-                 sock_strerror(retval));
-        goto error;
+    /* Disable Nagle.
+     * On windows platforms, this can only be called upon TCP connected.
+     */
+    if (state == STATE_SSL_CONNECTING) {
+        retval = setsockopt_tcp_nodelay(fd);
+        if (retval) {
+            goto error;
+        }
     }
 
     /* Create and configure OpenSSL stream. */
@@ -455,6 +469,10 @@ ssl_connect(struct stream *stream)
             return retval;
         }
         sslv->state = STATE_SSL_CONNECTING;
+        retval = setsockopt_tcp_nodelay(sslv->fd);
+        if (retval) {
+            return retval;
+        }
         /* Fall through. */
 
     case STATE_SSL_CONNECTING:
