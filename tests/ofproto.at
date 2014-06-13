@@ -2297,6 +2297,58 @@ ovs-appctl -t ovs-ofctl exit
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto - flow monitoring with out_port])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+ovs-ofctl add-flow br0 in_port=0,dl_vlan=121,actions=output:1
+ovs-ofctl add-flow br0 in_port=0,dl_vlan=122,actions=output:1
+ovs-ofctl add-flow br0 in_port=0,dl_vlan=123,actions=output:2
+
+# Start a monitor watching the flow table and check the initial reply.
+ovs-ofctl monitor br0 watch:out_port=2 --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+ovs-appctl -t ovs-ofctl ofctl/barrier
+AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log], [0],
+  [NXST_FLOW_MONITOR reply:
+ event=ADDED table=0 cookie=0 in_port=0,dl_vlan=123 actions=output:2
+OFPT_BARRIER_REPLY:
+])
+
+ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+
+# Add, modify flows and check the updates.
+ovs-ofctl mod-flows br0 dl_vlan=121,actions=drop
+ovs-ofctl mod-flows br0 dl_vlan=122,actions=output:1,output:2
+ovs-appctl -t ovs-ofctl ofctl/barrier
+
+ovs-ofctl mod-flows br0 dl_vlan=123,actions=output:1,output:2
+ovs-appctl -t ovs-ofctl ofctl/barrier
+
+ovs-ofctl mod-flows br0 dl_vlan=122,actions=output:1
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-ofctl mod-flows br0 dl_vlan=123,actions=output:2
+ovs-appctl -t ovs-ofctl ofctl/barrier
+
+AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log], [0],
+[NXST_FLOW_MONITOR reply (xid=0x0):
+ event=MODIFIED table=0 cookie=0 in_port=0,dl_vlan=122 actions=output:1,output:2
+OFPT_BARRIER_REPLY:
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=MODIFIED table=0 cookie=0 in_port=0,dl_vlan=123 actions=output:1,output:2
+OFPT_BARRIER_REPLY:
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=MODIFIED table=0 cookie=0 in_port=0,dl_vlan=122 actions=output:1
+OFPT_BARRIER_REPLY:
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=MODIFIED table=0 cookie=0 in_port=0,dl_vlan=123 actions=output:2
+OFPT_BARRIER_REPLY:
+])
+
+ovs-appctl -t ovs-ofctl exit
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto - flow monitoring pause and resume])
 AT_KEYWORDS([monitor])
 

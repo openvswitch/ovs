@@ -2573,7 +2573,7 @@ rule_actions_destroy(const struct rule_actions *actions)
 
 /* Returns true if 'rule' has an OpenFlow OFPAT_OUTPUT or OFPAT_ENQUEUE action
  * that outputs to 'port' (output to OFPP_FLOOD and OFPP_ALL doesn't count). */
-static bool
+bool
 ofproto_rule_has_out_port(const struct rule *rule, ofp_port_t port)
     OVS_REQUIRES(ofproto_mutex)
 {
@@ -4099,7 +4099,7 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     }
 
     ofmonitor_report(ofproto->connmgr, rule, NXFME_ADDED, 0,
-                     req ? req->ofconn : NULL, req ? req->xid : 0);
+                     req ? req->ofconn : NULL, req ? req->xid : 0, NULL);
 
     return req ? send_buffered_packet(req->ofconn, fm->buffer_id, rule) : 0;
 }
@@ -4189,7 +4189,6 @@ modify_flows__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
         if (change_actions) {
             ovsrcu_set(&rule->actions, rule_actions_create(fm->ofpacts,
                                                            fm->ofpacts_len));
-            rule_actions_destroy(actions);
         }
 
         if (change_actions || reset_counters) {
@@ -4198,12 +4197,14 @@ modify_flows__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
 
         if (event != NXFME_MODIFIED || change_actions || change_cookie) {
             ofmonitor_report(ofproto->connmgr, rule, event, 0,
-                             req ? req->ofconn : NULL, req ? req->xid : 0);
+                             req ? req->ofconn : NULL, req ? req->xid : 0,
+                             change_actions ? actions : NULL);
         }
 
         if (change_actions) {
             learned_cookies_inc(ofproto, rule_get_actions(rule));
             learned_cookies_dec(ofproto, actions, &dead_cookies);
+            rule_actions_destroy(actions);
         }
     }
     learned_cookies_flush(ofproto, &dead_cookies);
@@ -4311,7 +4312,8 @@ delete_flows__(const struct rule_collection *rules,
             ofproto_rule_send_removed(rule, reason);
 
             ofmonitor_report(ofproto->connmgr, rule, NXFME_DELETED, reason,
-                             req ? req->ofconn : NULL, req ? req->xid : 0);
+                             req ? req->ofconn : NULL, req ? req->xid : 0,
+                             NULL);
             oftable_remove_rule(rule);
             ofproto->ofproto_class->rule_delete(rule);
 

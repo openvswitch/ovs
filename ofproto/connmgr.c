@@ -2068,7 +2068,8 @@ void
 ofmonitor_report(struct connmgr *mgr, struct rule *rule,
                  enum nx_flow_update_event event,
                  enum ofp_flow_removed_reason reason,
-                 const struct ofconn *abbrev_ofconn, ovs_be32 abbrev_xid)
+                 const struct ofconn *abbrev_ofconn, ovs_be32 abbrev_xid,
+                 const struct rule_actions *old_actions)
     OVS_REQUIRES(ofproto_mutex)
 {
     enum nx_flow_monitor_flags update;
@@ -2114,6 +2115,11 @@ ofmonitor_report(struct connmgr *mgr, struct rule *rule,
         HMAP_FOR_EACH (m, ofconn_node, &ofconn->monitors) {
             if (m->flags & update
                 && (m->table_id == 0xff || m->table_id == rule->table_id)
+                && (ofproto_rule_has_out_port(rule, m->out_port)
+                    || (old_actions
+                        && ofpacts_output_to_port(old_actions->ofpacts,
+                                                  old_actions->ofpacts_len,
+                                                  m->out_port)))
                 && cls_rule_is_loose_match(&rule->cr, &m->match)) {
                 flags |= m->flags;
             }
