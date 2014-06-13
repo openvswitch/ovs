@@ -73,8 +73,8 @@ struct dpif_linux_dp {
     const char *name;                  /* OVS_DP_ATTR_NAME. */
     const uint32_t *upcall_pid;        /* OVS_DP_ATTR_UPCALL_PID. */
     uint32_t user_features;            /* OVS_DP_ATTR_USER_FEATURES */
-    struct ovs_dp_stats stats;         /* OVS_DP_ATTR_STATS. */
-    struct ovs_dp_megaflow_stats megaflow_stats;
+    const struct ovs_dp_stats *stats;  /* OVS_DP_ATTR_STATS. */
+    const struct ovs_dp_megaflow_stats *megaflow_stats;
                                        /* OVS_DP_ATTR_MEGAFLOW_STATS.*/
 };
 
@@ -554,12 +554,23 @@ dpif_linux_get_stats(const struct dpif *dpif_, struct dpif_dp_stats *stats)
 
     error = dpif_linux_dp_get(dpif_, &dp, &buf);
     if (!error) {
-        stats->n_hit    = dp.stats.n_hit;
-        stats->n_missed = dp.stats.n_missed;
-        stats->n_lost   = dp.stats.n_lost;
-        stats->n_flows  = dp.stats.n_flows;
-        stats->n_masks  = dp.megaflow_stats.n_masks;
-        stats->n_mask_hit  = dp.megaflow_stats.n_mask_hit;
+        memset(stats, 0, sizeof *stats);
+
+        if (dp.stats) {
+            stats->n_hit    = get_32aligned_u64(&dp.stats->n_hit);
+            stats->n_missed = get_32aligned_u64(&dp.stats->n_missed);
+            stats->n_lost   = get_32aligned_u64(&dp.stats->n_lost);
+            stats->n_flows  = get_32aligned_u64(&dp.stats->n_flows);
+        }
+
+        if (dp.megaflow_stats) {
+            stats->n_masks = dp.megaflow_stats->n_masks;
+            stats->n_mask_hit = get_32aligned_u64(
+                &dp.megaflow_stats->n_mask_hit);
+        } else {
+            stats->n_masks = UINT32_MAX;
+            stats->n_mask_hit = UINT64_MAX;
+        }
         ofpbuf_delete(buf);
     }
     return error;
@@ -2203,17 +2214,11 @@ dpif_linux_dp_from_ofpbuf(struct dpif_linux_dp *dp, const struct ofpbuf *buf)
     dp->dp_ifindex = ovs_header->dp_ifindex;
     dp->name = nl_attr_get_string(a[OVS_DP_ATTR_NAME]);
     if (a[OVS_DP_ATTR_STATS]) {
-        /* Can't use structure assignment because Netlink doesn't ensure
-         * sufficient alignment for 64-bit members. */
-        memcpy(&dp->stats, nl_attr_get(a[OVS_DP_ATTR_STATS]),
-               sizeof dp->stats);
+        dp->stats = nl_attr_get(a[OVS_DP_ATTR_STATS]);
     }
 
     if (a[OVS_DP_ATTR_MEGAFLOW_STATS]) {
-        /* Can't use structure assignment because Netlink doesn't ensure
-         * sufficient alignment for 64-bit members. */
-        memcpy(&dp->megaflow_stats, nl_attr_get(a[OVS_DP_ATTR_MEGAFLOW_STATS]),
-               sizeof dp->megaflow_stats);
+        dp->megaflow_stats = nl_attr_get(a[OVS_DP_ATTR_MEGAFLOW_STATS]);
     }
 
     return 0;
@@ -2252,8 +2257,6 @@ static void
 dpif_linux_dp_init(struct dpif_linux_dp *dp)
 {
     memset(dp, 0, sizeof *dp);
-    dp->megaflow_stats.n_masks = UINT32_MAX;
-    dp->megaflow_stats.n_mask_hit = UINT64_MAX;
 }
 
 static void
@@ -2473,8 +2476,8 @@ dpif_linux_flow_get_stats(const struct dpif_linux_flow *flow,
                           struct dpif_flow_stats *stats)
 {
     if (flow->stats) {
-        stats->n_packets = get_unaligned_u64(&flow->stats->n_packets);
-        stats->n_bytes = get_unaligned_u64(&flow->stats->n_bytes);
+        stats->n_packets = get_32aligned_u64(&flow->stats->n_packets);
+        stats->n_bytes = get_32aligned_u64(&flow->stats->n_bytes);
     } else {
         stats->n_packets = 0;
         stats->n_bytes = 0;

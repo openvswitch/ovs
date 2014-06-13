@@ -14,17 +14,21 @@
 # Avoid using reserved names in header guards.
 s/_LINUX_OPENVSWITCH_H/ODP_NETLINK_H/
 
-# Transform Linux-specific __u<N> types into C99 uint<N>_t types,
-# and Linux-specific __be<N> into Open vSwitch ovs_be<N>,
+# Transform most Linux-specific __u<N> types into C99 uint<N>_t types,
+# and most Linux-specific __be<N> into Open vSwitch ovs_be<N>,
 # and use the appropriate userspace header.
 s,<linux/types\.h>,"openvswitch/types.h",
-s/__u64/uint64_t/g
 s/__u32/uint32_t/g
 s/__u16/uint16_t/g
 s/__u8/uint8_t/g
-s/__be64/ovs_be64/g
 s/__be32/ovs_be32/g
 s/__be16/ovs_be16/g
+
+# Transform 64-bit Linux-specific types into Open vSwitch specialized
+# types for 64-bit numbers that might only be aligned on a 32-bit
+# boundary.
+s/__u64/ovs_32aligned_u64/g
+s/__be64/ovs_32aligned_be64/g
 
 # Use OVS's own ETH_ADDR_LEN instead of Linux-specific ETH_ALEN.
 s,<linux/if_ether\.h>,"packets.h",

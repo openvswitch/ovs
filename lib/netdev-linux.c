@@ -1499,14 +1499,14 @@ static void
 netdev_stats_from_ovs_vport_stats(struct netdev_stats *dst,
                                   const struct ovs_vport_stats *src)
 {
-    dst->rx_packets = get_unaligned_u64(&src->rx_packets);
-    dst->tx_packets = get_unaligned_u64(&src->tx_packets);
-    dst->rx_bytes = get_unaligned_u64(&src->rx_bytes);
-    dst->tx_bytes = get_unaligned_u64(&src->tx_bytes);
-    dst->rx_errors = get_unaligned_u64(&src->rx_errors);
-    dst->tx_errors = get_unaligned_u64(&src->tx_errors);
-    dst->rx_dropped = get_unaligned_u64(&src->rx_dropped);
-    dst->tx_dropped = get_unaligned_u64(&src->tx_dropped);
+    dst->rx_packets = get_32aligned_u64(&src->rx_packets);
+    dst->tx_packets = get_32aligned_u64(&src->tx_packets);
+    dst->rx_bytes = get_32aligned_u64(&src->rx_bytes);
+    dst->tx_bytes = get_32aligned_u64(&src->tx_bytes);
+    dst->rx_errors = get_32aligned_u64(&src->rx_errors);
+    dst->tx_errors = get_32aligned_u64(&src->tx_errors);
+    dst->rx_dropped = get_32aligned_u64(&src->rx_dropped);
+    dst->tx_dropped = get_32aligned_u64(&src->tx_dropped);
     dst->multicast = 0;
     dst->collisions = 0;
     dst->rx_length_errors = 0;
@@ -1701,14 +1701,14 @@ netdev_internal_set_stats(struct netdev *netdev,
     struct dpif_linux_vport vport;
     int err;
 
-    vport_stats.rx_packets = stats->rx_packets;
-    vport_stats.tx_packets = stats->tx_packets;
-    vport_stats.rx_bytes = stats->rx_bytes;
-    vport_stats.tx_bytes = stats->tx_bytes;
-    vport_stats.rx_errors = stats->rx_errors;
-    vport_stats.tx_errors = stats->tx_errors;
-    vport_stats.rx_dropped = stats->rx_dropped;
-    vport_stats.tx_dropped = stats->tx_dropped;
+    put_32aligned_u64(&vport_stats.rx_packets, stats->rx_packets);
+    put_32aligned_u64(&vport_stats.tx_packets, stats->tx_packets);
+    put_32aligned_u64(&vport_stats.rx_bytes, stats->rx_bytes);
+    put_32aligned_u64(&vport_stats.tx_bytes, stats->tx_bytes);
+    put_32aligned_u64(&vport_stats.rx_errors, stats->rx_errors);
+    put_32aligned_u64(&vport_stats.tx_errors, stats->tx_errors);
+    put_32aligned_u64(&vport_stats.rx_dropped, stats->rx_dropped);
+    put_32aligned_u64(&vport_stats.tx_dropped, stats->tx_dropped);
 
     dpif_linux_vport_init(&vport);
     vport.cmd = OVS_VPORT_CMD_SET;
