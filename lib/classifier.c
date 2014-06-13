@@ -1121,6 +1121,7 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
          * but it didn't match. */
         rule = NULL;
     }
+
  out:
     /* Must unwildcard all the fields, as they were looked at. */
     flow_wildcards_fold_minimask(wc, &subtable->mask);
@@ -1419,7 +1420,7 @@ trie_next_node(const struct trie_node *node, const ovs_be32 value[],
  */
 static unsigned int
 trie_lookup_value(const struct trie_node *node, const ovs_be32 value[],
-                  unsigned int *checkbits)
+                  unsigned int n_bits, unsigned int *checkbits)
 {
     unsigned int ofs = 0, match_len = 0;
     const struct trie_node *prev = NULL;
@@ -1438,8 +1439,13 @@ trie_lookup_value(const struct trie_node *node, const ovs_be32 value[],
         if (node->n_rules > 0) {
             match_len = ofs;
         }
+        if (ofs >= n_bits) {
+            *checkbits = n_bits; /* Full prefix. */
+            return match_len;
+        }
     }
-    /* Dead end, exclude the other branch if it exists. */
+    /* node == NULL.  Full match so far, but we came to a dead end.
+     * need to exclude the other branch if it exists. */
     *checkbits = !prev || trie_is_leaf(prev) ? ofs : ofs + 1;
     return match_len;
 }
@@ -1456,7 +1462,7 @@ trie_lookup(const struct cls_trie *trie, const struct flow *flow,
     if (mf_are_prereqs_ok(mf, flow)) {
         return trie_lookup_value(trie->root,
                                  &((ovs_be32 *)flow)[mf->flow_be32ofs],
-                                 checkbits);
+                                 mf->n_bits, checkbits);
     }
     *checkbits = 0; /* Value not used in this case. */
     return UINT_MAX;
