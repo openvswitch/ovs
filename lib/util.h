@@ -249,6 +249,10 @@ ovs_prefetch_range(const void *start, size_t size)
 #define PRIXSIZE "zX"
 #endif
 
+#ifndef _WIN32
+typedef uint32_t HANDLE;
+#endif
+
 #ifdef  __cplusplus
 extern "C" {
 #endif

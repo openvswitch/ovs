@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Nicira, Inc.
+ * Copyright (c) 2011, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,9 +54,5 @@ typedef uint16_t __bitwise__ __be16;
 typedef uint32_t __bitwise__ __be32;
 typedef uint64_t __bitwise__ __be64;
 #endif	/* no <linux/types.h> */
-
-#ifndef _WIN32
-typedef __u32 HANDLE;
-#endif
 
 #endif /* <linux/types.h> */
