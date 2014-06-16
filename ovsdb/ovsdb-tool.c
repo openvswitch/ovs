@@ -249,6 +249,9 @@ compact_or_convert(const char *src_name_, const char *dst_name_,
 
     /* Replace source. */
     if (in_place) {
+#ifdef _WIN32
+        unlink(src_name);
+#endif
         if (rename(dst_name, src_name)) {
             ovs_fatal(errno, "failed to rename \"%s\" to \"%s\"",
                       dst_name, src_name);

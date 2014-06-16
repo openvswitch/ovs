@@ -182,8 +182,9 @@ AT_CHECK(
     done]],
   [0], [stdout], [ignore])
 dnl Dump out and check the actual database contents.
-AT_CHECK([[ovsdb-server --unixctl="`pwd`"/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
-  [0], [stdout], [ignore])
+AT_CHECK([[ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket db]],
+  [0])
+AT_CHECK([ovsdb-client dump unix:socket ordinals], [0], [stdout], [ignore])
 AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [dnl
 ordinals table
 _uuid                                name  number
@@ -195,6 +196,7 @@ _uuid                                name  number
 <4> two   2     @&t@
 <5> zero  0     @&t@
 ])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 dnl Now convert the database in-place.
 touch .db.tmp.~lock~
 AT_CHECK([[ovsdb-tool convert db new-schema]], [0], [], [ignore])
@@ -204,8 +206,9 @@ dnl in it now.
 AT_CAPTURE_FILE([db])
 AT_CHECK([test `wc -l < db` -eq 4])
 dnl And check that the dumped data is the same except for the removed column:
-AT_CHECK([[ovsdb-server --unixctl="`pwd`"/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
-  [0], [stdout], [ignore])
+AT_CHECK([[ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket db]],
+  [0])
+AT_CHECK([ovsdb-client dump unix:socket ordinals], [0], [stdout], [ignore])
 AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [dnl
 ordinals table
 _uuid                                number
@@ -217,6 +220,7 @@ _uuid                                number
 <4> 4     @&t@
 <5> 5     @&t@
 ])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
 AT_SETUP([ovsdb-tool convert -- adding a column])
@@ -245,8 +249,9 @@ AT_CHECK(
     done]],
   [0], [stdout], [ignore])
 dnl Dump out and check the actual database contents.
-AT_CHECK([[ovsdb-server --unixctl="`pwd`"/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
-  [0], [stdout], [ignore])
+AT_CHECK([[ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket db]],
+  [0])
+AT_CHECK([ovsdb-client dump unix:socket ordinals], [0], [stdout], [ignore])
 AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [dnl
 ordinals table
 _uuid                                number
@@ -258,6 +263,7 @@ _uuid                                number
 <4> 4     @&t@
 <5> 5     @&t@
 ])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 dnl Now convert the database in-place.
 touch .db.tmp.~lock~
 AT_CHECK([[ovsdb-tool convert db new-schema]], [0], [], [ignore])
@@ -267,8 +273,9 @@ dnl in it now.
 AT_CAPTURE_FILE([db])
 AT_CHECK([test `wc -l < db` -eq 4])
 dnl And check that the dumped data is the same except for the added column:
-AT_CHECK([[ovsdb-server --unixctl="`pwd`"/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
-  [0], [stdout], [ignore])
+AT_CHECK([[ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket db]],
+  [0])
+AT_CHECK([ovsdb-client dump unix:socket ordinals], [0], [stdout], [ignore])
 AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [dnl
 ordinals table
 _uuid                                name number
@@ -280,6 +287,7 @@ _uuid                                name number
 <4> ""   4     @&t@
 <5> ""   5     @&t@
 ])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
 AT_SETUP([ovsdb-tool schema-version])
