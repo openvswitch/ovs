@@ -246,6 +246,7 @@ AT_CLEANUP
 
 AT_SETUP([ovsdb-server/add-db with --monitor])
 AT_KEYWORDS([ovsdb server positive])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 # Start ovsdb-server, initially with one db.
 OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 OVS_LOGDIR=`pwd`; export OVS_LOGDIR
@@ -278,6 +279,7 @@ AT_CLEANUP
 
 AT_SETUP([ovsdb-server/add-db and remove-db with --monitor])
 AT_KEYWORDS([ovsdb server positive])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 # Start ovsdb-server, initially with one db.
 OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 OVS_LOGDIR=`pwd`; export OVS_LOGDIR
@@ -415,6 +417,7 @@ AT_CLEANUP
 
 AT_SETUP([ovsdb-server/add-remote with --monitor])
 AT_KEYWORDS([ovsdb server positive])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 # Start ovsdb-server, initially with no remotes.
 OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 OVS_LOGDIR=`pwd`; export OVS_LOGDIR
@@ -445,6 +448,7 @@ AT_CLEANUP
 
 AT_SETUP([ovsdb-server/add-remote and remove-remote with --monitor])
 AT_KEYWORDS([ovsdb server positive])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 # Start ovsdb-server, initially with no remotes.
 OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 OVS_LOGDIR=`pwd`; export OVS_LOGDIR
