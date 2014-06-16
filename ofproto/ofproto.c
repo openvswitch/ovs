@@ -4828,6 +4828,24 @@ ofmonitor_collect_resume_rules(struct ofmonitor *m,
 }
 
 static enum ofperr
+flow_monitor_delete(struct ofconn *ofconn, uint32_t id)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct ofmonitor *m;
+    enum ofperr error;
+
+    m = ofmonitor_lookup(ofconn, id);
+    if (m) {
+        ofmonitor_destroy(m);
+        error = 0;
+    } else {
+        error = OFPERR_OFPMOFC_UNKNOWN_MONITOR;
+    }
+
+    return error;
+}
+
+static enum ofperr
 handle_flow_monitor_request(struct ofconn *ofconn, const struct ofp_header *oh)
     OVS_EXCLUDED(ofproto_mutex)
 {
@@ -4907,20 +4925,13 @@ static enum ofperr
 handle_flow_monitor_cancel(struct ofconn *ofconn, const struct ofp_header *oh)
     OVS_EXCLUDED(ofproto_mutex)
 {
-    struct ofmonitor *m;
     enum ofperr error;
     uint32_t id;
 
     id = ofputil_decode_flow_monitor_cancel(oh);
 
     ovs_mutex_lock(&ofproto_mutex);
-    m = ofmonitor_lookup(ofconn, id);
-    if (m) {
-        ofmonitor_destroy(m);
-        error = 0;
-    } else {
-        error = OFPERR_OFPMOFC_UNKNOWN_MONITOR;
-    }
+    error = flow_monitor_delete(ofconn, id);
     ovs_mutex_unlock(&ofproto_mutex);
 
     return error;
