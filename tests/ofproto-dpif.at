@@ -3922,6 +3922,7 @@ AT_CLEANUP
 # IP_VERSION_TYPE is used in AT_SETUP
 m4_define([CHECK_SFLOW_SAMPLING_PACKET],
   [AT_SETUP([ofproto-dpif - sFlow packet sampling - $2 collector])
+  AT_XFAIL_IF([test "$IS_WIN32" = "yes"])
   OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
 
   ON_EXIT([kill `cat test-sflow.pid`])
