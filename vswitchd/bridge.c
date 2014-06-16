@@ -42,6 +42,7 @@
 #include "ofpbuf.h"
 #include "ofproto/bond.h"
 #include "ofproto/ofproto.h"
+#include "ovs-numa.h"
 #include "poll-loop.h"
 #include "seq.h"
 #include "sha1.h"
@@ -441,6 +442,7 @@ bridge_init(const char *remote)
     lacp_init();
     bond_init();
     cfm_init();
+    ovs_numa_init();
     stp_init();
 }
 

@@ -310,6 +310,8 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/netlink-protocol.h \
 	lib/netlink-socket.c \
 	lib/netlink-socket.h \
+	lib/ovs-numa.c \
+	lib/ovs-numa.h \
 	lib/rtnetlink-link.c \
 	lib/rtnetlink-link.h \
 	lib/route-table.c \
