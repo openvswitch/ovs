@@ -42,6 +42,7 @@ AT_BANNER([ovsdb-server miscellaneous features])
 
 AT_SETUP([truncating corrupted database log])
 AT_KEYWORDS([ovsdb server positive unix])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
@@ -89,6 +90,7 @@ AT_CLEANUP
 
 AT_SETUP([truncating database log with bad transaction])
 AT_KEYWORDS([ovsdb server positive unix])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
