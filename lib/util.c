@@ -460,6 +460,7 @@ set_program_name__(const char *argv0, const char *version, const char *date,
     size_t max_len = strlen(argv0) + 1;
 
     SetErrorMode(GetErrorMode() | SEM_NOGPFAULTERRORBOX);
+    _set_output_format(_TWO_DIGIT_EXPONENT);
 
     if (program_name) {
         free(program_name);
