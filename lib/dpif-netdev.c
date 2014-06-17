@@ -52,6 +52,7 @@
 #include "odp-util.h"
 #include "ofp-print.h"
 #include "ofpbuf.h"
+#include "ovs-numa.h"
 #include "ovs-rcu.h"
 #include "packet-dpif.h"
 #include "packets.h"
@@ -744,6 +745,21 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
         return EINVAL;
     }
 
+    if (netdev_is_pmd(netdev)) {
+        int n_cores = ovs_numa_get_n_cores();
+
+        if (n_cores == OVS_CORE_UNSPEC) {
+            VLOG_ERR("%s, cannot get cpu core info", devname);
+            return ENOENT;
+        }
+        /* There can only be ovs_numa_get_n_cores() pmd threads,
+         * so creates a tx_q for each. */
+        error = netdev_set_multiq(netdev, n_cores, NR_QUEUE);
+        if (error) {
+            VLOG_ERR("%s, cannot set multiq", devname);
+            return errno;
+        }
+    }
     port = xzalloc(sizeof *port);
     port->port_no = port_no;
     port->netdev = netdev;
