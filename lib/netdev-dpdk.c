@@ -303,7 +303,8 @@ dpdk_mp_get(int socket_id, int mtu) OVS_REQUIRES(dpdk_mutex)
     dmp->mtu = mtu;
     dmp->refcount = 1;
 
-    if (snprintf(mp_name, RTE_MEMPOOL_NAMESIZE, "ovs_mp_%d", dmp->mtu) < 0) {
+    if (snprintf(mp_name, RTE_MEMPOOL_NAMESIZE, "ovs_mp_%d_%d", dmp->mtu,
+                 dmp->socket_id) < 0) {
         return NULL;
     }
 
