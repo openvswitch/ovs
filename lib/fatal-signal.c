@@ -199,6 +199,7 @@ fatal_signal_run(void)
         VLOG_WARN("terminating with signal %d", (int)sig_nr);
 #endif
         call_hooks(sig_nr);
+        fflush(stderr);
 
         /* Re-raise the signal with the default handling so that the program
          * termination status reflects that we were killed by this signal */
