@@ -1442,7 +1442,7 @@ AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
  printf "%02x $pad7" $x
  printf "%s$pad32" "table$x" | od -A n -t x1 -v -N 32 | tr '\n' ' '
  echo -n "$mid 00 00 00 02 $tail") > in
-AT_CHECK([ovs-ofctl ofp-print "$(cat in)"], [0], [expout])
+AT_CHECK([ovs-ofctl ofp-print - < in], [0], [expout])
 AT_CLEANUP
 
 AT_SETUP([OFPST_TABLE reply - OF1.3])

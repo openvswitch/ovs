@@ -3468,18 +3468,41 @@ ofctl_encode_error_reply(int argc OVS_UNUSED, char *argv[])
 
 /* "ofp-print HEXSTRING [VERBOSITY]": Converts the hex digits in HEXSTRING into
  * binary data, interpreting them as an OpenFlow message, and prints the
- * OpenFlow message on stdout, at VERBOSITY (level 2 by default).  */
+ * OpenFlow message on stdout, at VERBOSITY (level 2 by default).
+ *
+ * Alternative usage: "ofp-print [VERBOSITY] - < HEXSTRING_FILE", where
+ * HEXSTRING_FILE contains the HEXSTRING. */
 static void
 ofctl_ofp_print(int argc, char *argv[])
 {
     struct ofpbuf packet;
+    char *buffer;
+    int verbosity = 2;
+    struct ds line;
 
-    ofpbuf_init(&packet, strlen(argv[1]) / 2);
-    if (ofpbuf_put_hex(&packet, argv[1], NULL)[0] != '\0') {
+    ds_init(&line);
+
+    if (!strcmp(argv[argc-1], "-")) {
+        if (ds_get_line(&line, stdin)) {
+           VLOG_FATAL("Failed to read stdin");
+        }
+
+        buffer = line.string;
+        verbosity = argc > 2 ? atoi(argv[1]) : verbosity;
+    } else if (argc > 2) {
+        buffer = argv[1];
+        verbosity = atoi(argv[2]);
+    } else {
+        buffer = argv[1];
+    }
+
+    ofpbuf_init(&packet, strlen(buffer) / 2);
+    if (ofpbuf_put_hex(&packet, buffer, NULL)[0] != '\0') {
         ovs_fatal(0, "trailing garbage following hex bytes");
     }
-    ofp_print(stdout, ofpbuf_data(&packet), ofpbuf_size(&packet), argc > 2 ? atoi(argv[2]) : 2);
+    ofp_print(stdout, ofpbuf_data(&packet), ofpbuf_size(&packet), verbosity);
     ofpbuf_uninit(&packet);
+    ds_destroy(&line);
 }
 
 /* "encode-hello BITMAP...": Encodes each BITMAP as an OpenFlow hello message
