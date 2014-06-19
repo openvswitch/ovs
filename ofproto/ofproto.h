@@ -123,6 +123,15 @@ struct ofproto_port_queue {
     uint8_t dscp;               /* DSCP bits (e.g. [0, 63]). */
 };
 
+struct ofproto_mcast_snooping_settings {
+    bool flood_unreg;           /* If true, flood unregistered packets to all
+                                   all ports. If false, send only to ports
+                                   connected to multicast routers. */
+    unsigned int idle_time;     /* Entry is removed after the idle time
+                                 * in seconds. */
+    unsigned int max_entries;   /* Size of the multicast snooping table. */
+};
+
 /* How the switch should act if the controller cannot be contacted. */
 enum ofproto_fail_mode {
     OFPROTO_FAIL_SECURE,        /* Preserve flow table. */
@@ -241,6 +250,10 @@ void ofproto_set_max_idle(unsigned max_idle);
 void ofproto_set_forward_bpdu(struct ofproto *, bool forward_bpdu);
 void ofproto_set_mac_table_config(struct ofproto *, unsigned idle_time,
                                   size_t max_entries);
+int ofproto_set_mcast_snooping(struct ofproto *ofproto,
+                              const struct ofproto_mcast_snooping_settings *s);
+int ofproto_port_set_mcast_snooping(struct ofproto *ofproto, void *aux,
+                                    bool flood);
 void ofproto_set_threads(int n_handlers, int n_revalidators);
 void ofproto_set_dp_desc(struct ofproto *, const char *dp_desc);
 int ofproto_set_snoops(struct ofproto *, const struct sset *snoops);

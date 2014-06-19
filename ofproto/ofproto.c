@@ -721,6 +721,33 @@ ofproto_set_mac_table_config(struct ofproto *ofproto, unsigned idle_time,
     }
 }
 
+/* Multicast snooping configuration. */
+
+/* Configures multicast snooping on 'ofproto' using the settings
+ * defined in 's'.  If 's' is NULL, disables multicast snooping.
+ *
+ * Returns 0 if successful, otherwise a positive errno value. */
+int
+ofproto_set_mcast_snooping(struct ofproto *ofproto,
+                           const struct ofproto_mcast_snooping_settings *s)
+{
+    return (ofproto->ofproto_class->set_mcast_snooping
+            ? ofproto->ofproto_class->set_mcast_snooping(ofproto, s)
+            : EOPNOTSUPP);
+}
+
+/* Configures multicast snooping flood setting on 'ofp_port' of 'ofproto'.
+ *
+ * Returns 0 if successful, otherwise a positive errno value.*/
+int
+ofproto_port_set_mcast_snooping(struct ofproto *ofproto, void *aux, bool flood)
+{
+    return (ofproto->ofproto_class->set_mcast_snooping_port
+            ? ofproto->ofproto_class->set_mcast_snooping_port(ofproto, aux,
+                                                              flood)
+            : EOPNOTSUPP);
+}
+
 void
 ofproto_set_threads(int n_handlers_, int n_revalidators_)
 {

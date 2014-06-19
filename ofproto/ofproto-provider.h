@@ -1530,6 +1530,31 @@ struct ofproto_class {
     void (*set_mac_table_config)(struct ofproto *ofproto,
                                  unsigned int idle_time, size_t max_entries);
 
+    /* Configures multicast snooping on 'ofport' using the settings
+     * defined in 's'.
+     *
+     * If 's' is nonnull, this function updates multicast snooping
+     * configuration to 's' in 'ofproto'.
+     *
+     * If 's' is NULL, this function disables multicast snooping
+     * on 'ofproto'.
+     *
+     * An implementation that does not support multicast snooping may set
+     * it to NULL or return EOPNOTSUPP. */
+    int (*set_mcast_snooping)(struct ofproto *ofproto,
+                              const struct ofproto_mcast_snooping_settings *s);
+
+    /* Configures multicast snooping port's flood setting on 'ofproto'.
+     *
+     * All multicast traffic is sent to struct port 'aux' in 'ofproto'
+     * if 'flood' is true. Otherwise, struct port 'aux' is an ordinary
+     * switch port.
+     *
+     * An implementation that does not support multicast snooping may set
+     * it to NULL or return EOPNOTSUPP. */
+    int (*set_mcast_snooping_port)(struct ofproto *ofproto_, void *aux,
+                                   bool flood);
+
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
  *
  * This is deprecated.  It is only for compatibility with broken device drivers

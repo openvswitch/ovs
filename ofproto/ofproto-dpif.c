@@ -2701,6 +2701,56 @@ set_mac_table_config(struct ofproto *ofproto_, unsigned int idle_time,
     mac_learning_set_max_entries(ofproto->ml, max_entries);
     ovs_rwlock_unlock(&ofproto->ml->rwlock);
 }
+
+/* Configures multicast snooping on 'ofport' using the settings
+ * defined in 's'. */
+static int
+set_mcast_snooping(struct ofproto *ofproto_,
+                   const struct ofproto_mcast_snooping_settings *s)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+
+    /* Only revalidate flows if the configuration changed. */
+    if (!s != !ofproto->ms) {
+        ofproto->backer->need_revalidate = REV_RECONFIGURE;
+    }
+
+    if (s) {
+        if (!ofproto->ms) {
+            ofproto->ms = mcast_snooping_create();
+        }
+
+        ovs_rwlock_wrlock(&ofproto->ms->rwlock);
+        mcast_snooping_set_idle_time(ofproto->ms, s->idle_time);
+        mcast_snooping_set_max_entries(ofproto->ms, s->max_entries);
+        if (mcast_snooping_set_flood_unreg(ofproto->ms, s->flood_unreg)) {
+            ofproto->backer->need_revalidate = REV_RECONFIGURE;
+        }
+        ovs_rwlock_unlock(&ofproto->ms->rwlock);
+    } else {
+        mcast_snooping_unref(ofproto->ms);
+        ofproto->ms = NULL;
+    }
+
+    return 0;
+}
+
+/* Configures multicast snooping port's flood setting on 'ofproto'. */
+static int
+set_mcast_snooping_port(struct ofproto *ofproto_, void *aux, bool flood)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+    struct ofbundle *bundle = bundle_lookup(ofproto, aux);
+
+    if (ofproto->ms) {
+        ovs_rwlock_wrlock(&ofproto->ms->rwlock);
+        mcast_snooping_set_port_flood(ofproto->ms, bundle->vlan, bundle,
+                                      flood);
+        ovs_rwlock_unlock(&ofproto->ms->rwlock);
+    }
+    return 0;
+}
+
 
 /* Ports. */
 
@@ -4988,6 +5038,8 @@ const struct ofproto_class ofproto_dpif_class = {
     is_mirror_output_bundle,
     forward_bpdu_changed,
     set_mac_table_config,
+    set_mcast_snooping,
+    set_mcast_snooping_port,
     set_realdev,
     NULL,                       /* meter_get_features */
     NULL,                       /* meter_set */
