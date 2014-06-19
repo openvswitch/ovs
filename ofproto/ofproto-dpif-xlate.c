@@ -1811,6 +1811,157 @@ update_learning_table(const struct xbridge *xbridge,
     }
 }
 
+/* Updates multicast snooping table 'ms' given that a packet matching 'flow'
+ * was received on 'in_xbundle' in 'vlan' and is either Report or Query. */
+static void
+update_mcast_snooping_table__(const struct xbridge *xbridge,
+                              const struct flow *flow,
+                              struct mcast_snooping *ms,
+                              ovs_be32 ip4, int vlan,
+                              struct xbundle *in_xbundle)
+    OVS_REQ_WRLOCK(ms->rwlock)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 30);
+
+    switch (ntohs(flow->tp_src)) {
+    case IGMP_HOST_MEMBERSHIP_REPORT:
+    case IGMPV2_HOST_MEMBERSHIP_REPORT:
+        if (mcast_snooping_add_group(ms, ip4, vlan, in_xbundle->ofbundle)) {
+            VLOG_DBG_RL(&rl, "bridge %s: multicast snooping learned that "
+                        IP_FMT" is on port %s in VLAN %d",
+                        xbridge->name, IP_ARGS(ip4), in_xbundle->name, vlan);
+        }
+        break;
+    case IGMP_HOST_LEAVE_MESSAGE:
+        if (mcast_snooping_leave_group(ms, ip4, vlan, in_xbundle->ofbundle)) {
+            VLOG_DBG_RL(&rl, "bridge %s: multicast snooping leaving "
+                        IP_FMT" is on port %s in VLAN %d",
+                        xbridge->name, IP_ARGS(ip4), in_xbundle->name, vlan);
+        }
+        break;
+    case IGMP_HOST_MEMBERSHIP_QUERY:
+        if (flow->nw_src && mcast_snooping_add_mrouter(ms, vlan,
+            in_xbundle->ofbundle)) {
+            VLOG_DBG_RL(&rl, "bridge %s: multicast snooping query from "
+                        IP_FMT" is on port %s in VLAN %d",
+                        xbridge->name, IP_ARGS(flow->nw_src),
+                        in_xbundle->name, vlan);
+        }
+        break;
+    }
+}
+
+/* Updates multicast snooping table 'ms' given that a packet matching 'flow'
+ * was received on 'in_xbundle' in 'vlan'. */
+static void
+update_mcast_snooping_table(const struct xbridge *xbridge,
+                            const struct flow *flow, int vlan,
+                            struct xbundle *in_xbundle)
+{
+    struct mcast_snooping *ms = xbridge->ms;
+    struct xlate_cfg *xcfg;
+    struct xbundle *mcast_xbundle;
+    struct mcast_fport_bundle *fport;
+
+    /* Don't learn the OFPP_NONE port. */
+    if (in_xbundle == &ofpp_none_bundle) {
+        return;
+    }
+
+    /* Don't learn from flood ports */
+    mcast_xbundle = NULL;
+    ovs_rwlock_wrlock(&ms->rwlock);
+    xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
+    LIST_FOR_EACH(fport, fport_node, &ms->fport_list) {
+        mcast_xbundle = xbundle_lookup(xcfg, fport->port);
+        if (mcast_xbundle == in_xbundle) {
+            break;
+        }
+    }
+
+    if (!mcast_xbundle || mcast_xbundle != in_xbundle) {
+        update_mcast_snooping_table__(xbridge, flow, ms, flow->igmp_group_ip4,
+                                      vlan, in_xbundle);
+    }
+    ovs_rwlock_unlock(&ms->rwlock);
+}
+
+/* send the packet to ports having the multicast group learned */
+static void
+xlate_normal_mcast_send_group(struct xlate_ctx *ctx,
+                              struct mcast_snooping *ms OVS_UNUSED,
+                              struct mcast_group *grp,
+                              struct xbundle *in_xbundle, uint16_t vlan)
+    OVS_REQ_RDLOCK(ms->rwlock)
+{
+    struct xlate_cfg *xcfg;
+    struct mcast_group_bundle *b;
+    struct xbundle *mcast_xbundle;
+
+    xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
+    LIST_FOR_EACH(b, bundle_node, &grp->bundle_lru) {
+        mcast_xbundle = xbundle_lookup(xcfg, b->port);
+        if (mcast_xbundle && mcast_xbundle != in_xbundle) {
+            xlate_report(ctx, "forwarding to mcast group port");
+            output_normal(ctx, mcast_xbundle, vlan);
+        } else if (!mcast_xbundle) {
+            xlate_report(ctx, "mcast group port is unknown, dropping");
+        } else {
+            xlate_report(ctx, "mcast group port is input port, dropping");
+        }
+    }
+}
+
+/* send the packet to ports connected to multicast routers */
+static void
+xlate_normal_mcast_send_mrouters(struct xlate_ctx *ctx,
+                                 struct mcast_snooping *ms,
+                                 struct xbundle *in_xbundle, uint16_t vlan)
+    OVS_REQ_RDLOCK(ms->rwlock)
+{
+    struct xlate_cfg *xcfg;
+    struct mcast_mrouter_bundle *mrouter;
+    struct xbundle *mcast_xbundle;
+
+    xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
+    LIST_FOR_EACH(mrouter, mrouter_node, &ms->mrouter_lru) {
+        mcast_xbundle = xbundle_lookup(xcfg, mrouter->port);
+        if (mcast_xbundle && mcast_xbundle != in_xbundle) {
+            xlate_report(ctx, "forwarding to mcast router port");
+            output_normal(ctx, mcast_xbundle, vlan);
+        } else if (!mcast_xbundle) {
+            xlate_report(ctx, "mcast router port is unknown, dropping");
+        } else {
+            xlate_report(ctx, "mcast router port is input port, dropping");
+        }
+    }
+}
+
+/* send the packet to ports flagged to be flooded */
+static void
+xlate_normal_mcast_send_fports(struct xlate_ctx *ctx,
+                               struct mcast_snooping *ms,
+                               struct xbundle *in_xbundle, uint16_t vlan)
+    OVS_REQ_RDLOCK(ms->rwlock)
+{
+    struct xlate_cfg *xcfg;
+    struct mcast_fport_bundle *fport;
+    struct xbundle *mcast_xbundle;
+
+    xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
+    LIST_FOR_EACH(fport, fport_node, &ms->fport_list) {
+        mcast_xbundle = xbundle_lookup(xcfg, fport->port);
+        if (mcast_xbundle && mcast_xbundle != in_xbundle) {
+            xlate_report(ctx, "forwarding to mcast flood port");
+            output_normal(ctx, mcast_xbundle, vlan);
+        } else if (!mcast_xbundle) {
+            xlate_report(ctx, "mcast flood port is unknown, dropping");
+        } else {
+            xlate_report(ctx, "mcast flood port is input port, dropping");
+        }
+    }
+}
+
 static void
 xlate_normal_flood(struct xlate_ctx *ctx, struct xbundle *in_xbundle,
                    uint16_t vlan)
@@ -1906,25 +2057,80 @@ xlate_normal(struct xlate_ctx *ctx)
     }
 
     /* Determine output bundle. */
-    ovs_rwlock_rdlock(&ctx->xbridge->ml->rwlock);
-    mac = mac_learning_lookup(ctx->xbridge->ml, flow->dl_dst, vlan);
-    mac_port = mac ? mac->port.p : NULL;
-    ovs_rwlock_unlock(&ctx->xbridge->ml->rwlock);
+    if (mcast_snooping_enabled(ctx->xbridge->ms)
+        && !eth_addr_is_broadcast(flow->dl_dst)
+        && eth_addr_is_multicast(flow->dl_dst)
+        && flow->dl_type == htons(ETH_TYPE_IP)) {
+        struct mcast_snooping *ms = ctx->xbridge->ms;
+        struct mcast_group *grp;
 
-    if (mac_port) {
-        struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
-        struct xbundle *mac_xbundle = xbundle_lookup(xcfg, mac_port);
-        if (mac_xbundle && mac_xbundle != in_xbundle) {
-            xlate_report(ctx, "forwarding to learned port");
-            output_normal(ctx, mac_xbundle, vlan);
-        } else if (!mac_xbundle) {
-            xlate_report(ctx, "learned port is unknown, dropping");
+        if (flow->nw_proto == IPPROTO_IGMP) {
+            if (ctx->xin->may_learn) {
+                if (mcast_snooping_is_membership(flow->tp_src) ||
+                    mcast_snooping_is_query(flow->tp_src)) {
+                    update_mcast_snooping_table(ctx->xbridge, flow, vlan,
+                                                in_xbundle);
+                    }
+            }
+
+            if (mcast_snooping_is_membership(flow->tp_src)) {
+                ovs_rwlock_rdlock(&ms->rwlock);
+                xlate_normal_mcast_send_mrouters(ctx, ms, in_xbundle, vlan);
+                ovs_rwlock_unlock(&ms->rwlock);
+            } else {
+                xlate_report(ctx, "multicast traffic, flooding");
+                xlate_normal_flood(ctx, in_xbundle, vlan);
+            }
+            return;
         } else {
-            xlate_report(ctx, "learned port is input port, dropping");
+            if (ip_is_local_multicast(flow->nw_dst)) {
+                /* RFC4541: section 2.1.2, item 2: Packets with a dst IP
+                 * address in the 224.0.0.x range which are not IGMP must
+                 * be forwarded on all ports */
+                xlate_report(ctx, "RFC4541: section 2.1.2, item 2, flooding");
+                xlate_normal_flood(ctx, in_xbundle, vlan);
+                return;
+            }
         }
+
+        /* forwarding to group base ports */
+        ovs_rwlock_rdlock(&ms->rwlock);
+        grp = mcast_snooping_lookup(ms, flow->nw_dst, vlan);
+        if (grp) {
+            xlate_normal_mcast_send_group(ctx, ms, grp, in_xbundle, vlan);
+            xlate_normal_mcast_send_fports(ctx, ms, in_xbundle, vlan);
+            xlate_normal_mcast_send_mrouters(ctx, ms, in_xbundle, vlan);
+        } else {
+            if (mcast_snooping_flood_unreg(ms)) {
+                xlate_report(ctx, "unregistered multicast, flooding");
+                xlate_normal_flood(ctx, in_xbundle, vlan);
+            } else {
+                xlate_normal_mcast_send_mrouters(ctx, ms, in_xbundle, vlan);
+                xlate_normal_mcast_send_fports(ctx, ms, in_xbundle, vlan);
+            }
+        }
+        ovs_rwlock_unlock(&ms->rwlock);
     } else {
-        xlate_report(ctx, "no learned MAC for destination, flooding");
-        xlate_normal_flood(ctx, in_xbundle, vlan);
+        ovs_rwlock_rdlock(&ctx->xbridge->ml->rwlock);
+        mac = mac_learning_lookup(ctx->xbridge->ml, flow->dl_dst, vlan);
+        mac_port = mac ? mac->port.p : NULL;
+        ovs_rwlock_unlock(&ctx->xbridge->ml->rwlock);
+
+        if (mac_port) {
+            struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
+            struct xbundle *mac_xbundle = xbundle_lookup(xcfg, mac_port);
+            if (mac_xbundle && mac_xbundle != in_xbundle) {
+                xlate_report(ctx, "forwarding to learned port");
+                output_normal(ctx, mac_xbundle, vlan);
+            } else if (!mac_xbundle) {
+                xlate_report(ctx, "learned port is unknown, dropping");
+            } else {
+                xlate_report(ctx, "learned port is input port, dropping");
+            }
+        } else {
+            xlate_report(ctx, "no learned MAC for destination, flooding");
+            xlate_normal_flood(ctx, in_xbundle, vlan);
+        }
     }
 }
 
