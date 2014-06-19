@@ -616,7 +616,7 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 26);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 27);
 
     /* Metadata. */
     if (match->wc.masks.dp_hash) {

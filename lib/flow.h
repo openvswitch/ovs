@@ -38,7 +38,7 @@ struct pkt_metadata;
 /* This sequence number should be incremented whenever anything involving flows
  * or the wildcarding of flows changes.  This will cause build assertion
  * failures in places which likely need to be updated. */
-#define FLOW_WC_SEQ 26
+#define FLOW_WC_SEQ 27
 
 #define FLOW_N_REGS 8
 BUILD_ASSERT_DECL(FLOW_N_REGS <= NXM_NX_MAX_REGS);
@@ -119,10 +119,11 @@ struct flow {
 
     /* L4 */
     ovs_be16 tp_src;            /* TCP/UDP/SCTP source port. */
-    ovs_be16 tp_dst;            /* TCP/UDP/SCTP destination port.
-                                 * Keep last for the BUILD_ASSERT_DECL below */
+    ovs_be16 tp_dst;            /* TCP/UDP/SCTP destination port. */
+    ovs_be32 igmp_group_ip4;    /* IGMP group IPv4 address */
     uint32_t dp_hash;           /* Datapath computed hash value. The exact
-                                   computation is opaque to the user space.*/
+                                 * computation is opaque to the user space.
+                                 * Keep last for BUILD_ASSERT_DECL below. */
 };
 BUILD_ASSERT_DECL(sizeof(struct flow) % 4 == 0);
 
@@ -130,8 +131,8 @@ BUILD_ASSERT_DECL(sizeof(struct flow) % 4 == 0);
 
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
 BUILD_ASSERT_DECL(offsetof(struct flow, dp_hash) + sizeof(uint32_t)
-                  == sizeof(struct flow_tnl) + 172
-                  && FLOW_WC_SEQ == 26);
+                  == sizeof(struct flow_tnl) + 176
+                  && FLOW_WC_SEQ == 27);
 
 /* Incremental points at which flow classification may be performed in
  * segments.

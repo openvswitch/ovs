@@ -598,6 +598,15 @@ miniflow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
                 miniflow_push_be16(mf, tp_src, htons(icmp->icmp_type));
                 miniflow_push_be16(mf, tp_dst, htons(icmp->icmp_code));
             }
+        } else if (OVS_LIKELY(nw_proto == IPPROTO_IGMP)) {
+            if (OVS_LIKELY(size >= IGMP_HEADER_LEN)) {
+                const struct igmp_header *igmp = data;
+
+                miniflow_push_be16(mf, tp_src, htons(igmp->igmp_type));
+                miniflow_push_be16(mf, tp_dst, htons(igmp->igmp_code));
+                miniflow_push_be32(mf, igmp_group_ip4,
+                                   get_16aligned_be32(&igmp->group));
+            }
         } else if (OVS_LIKELY(nw_proto == IPPROTO_ICMPV6)) {
             if (OVS_LIKELY(size >= sizeof(struct icmp6_hdr))) {
                 const struct in6_addr *nd_target = NULL;
@@ -656,7 +665,7 @@ flow_unwildcard_tp_ports(const struct flow *flow, struct flow_wildcards *wc)
 void
 flow_get_metadata(const struct flow *flow, struct flow_metadata *fmd)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 26);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 27);
 
     fmd->dp_hash = flow->dp_hash;
     fmd->recirc_id = flow->recirc_id;
@@ -1318,7 +1327,7 @@ flow_push_mpls(struct flow *flow, int n, ovs_be16 mpls_eth_type,
         flow->mpls_lse[0] = set_mpls_lse_values(ttl, tc, 1, htonl(label));
 
         /* Clear all L3 and L4 fields. */
-        BUILD_ASSERT(FLOW_WC_SEQ == 26);
+        BUILD_ASSERT(FLOW_WC_SEQ == 27);
         memset((char *) flow + FLOW_SEGMENT_2_ENDS_AT, 0,
                sizeof(struct flow) - FLOW_SEGMENT_2_ENDS_AT);
     }
@@ -1429,6 +1438,15 @@ flow_compose_l4(struct ofpbuf *b, const struct flow *flow)
             icmp->icmp_type = ntohs(flow->tp_src);
             icmp->icmp_code = ntohs(flow->tp_dst);
             icmp->icmp_csum = csum(icmp, ICMP_HEADER_LEN);
+        } else if (flow->nw_proto == IPPROTO_IGMP) {
+            struct igmp_header *igmp;
+
+            l4_len = sizeof *igmp;
+            igmp = ofpbuf_put_zeros(b, l4_len);
+            igmp->igmp_type = ntohs(flow->tp_src);
+            igmp->igmp_code = ntohs(flow->tp_dst);
+            put_16aligned_be32(&igmp->group, flow->igmp_group_ip4);
+            igmp->igmp_csum = csum(igmp, IGMP_HEADER_LEN);
         } else if (flow->nw_proto == IPPROTO_ICMPV6) {
             struct icmp6_hdr *icmp;
 

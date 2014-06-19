@@ -944,7 +944,7 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 26);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 27);
 
     if (priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%u,", priority);
@@ -973,6 +973,8 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
                 skip_proto = true;
                 if (f->nw_proto == IPPROTO_ICMP) {
                     ds_put_cstr(s, "icmp,");
+                } else if (f->nw_proto == IPPROTO_IGMP) {
+                    ds_put_cstr(s, "igmp,");
                 } else if (f->nw_proto == IPPROTO_TCP) {
                     ds_put_cstr(s, "tcp,");
                 } else if (f->nw_proto == IPPROTO_UDP) {
@@ -1147,6 +1149,10 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
         f->nw_proto == IPPROTO_ICMP) {
         format_be16_masked(s, "icmp_type", f->tp_src, wc->masks.tp_src);
         format_be16_masked(s, "icmp_code", f->tp_dst, wc->masks.tp_dst);
+    } else if (f->dl_type == htons(ETH_TYPE_IP) &&
+               f->nw_proto == IPPROTO_IGMP) {
+        format_be16_masked(s, "igmp_type", f->tp_src, wc->masks.tp_src);
+        format_be16_masked(s, "igmp_code", f->tp_dst, wc->masks.tp_dst);
     } else if (f->dl_type == htons(ETH_TYPE_IPV6) &&
                f->nw_proto == IPPROTO_ICMPV6) {
         format_be16_masked(s, "icmp_type", f->tp_src, wc->masks.tp_src);
