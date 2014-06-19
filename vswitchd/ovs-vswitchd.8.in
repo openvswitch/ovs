@@ -140,6 +140,13 @@ if no \fIbridge\fR is given.
 Lists each MAC address/VLAN pair learned by the specified \fIbridge\fR,
 along with the port on which it was learned and the age of the entry,
 in seconds.
+.IP "\fBmdb/flush\fR [\fIbridge\fR]"
+Flushes \fIbridge\fR multicast snooping table, or all snooping tables
+if no \fIbridge\fR is given.
+.IP "\fBmdb/show\fR \fIbridge\fR"
+Lists each multicast group/VLAN pair learned by the specified \fIbridge\fR,
+along with the port on which it was learned and the age of the entry,
+in seconds.
 .IP "\fBbridge/reconnect\fR [\fIbridge\fR]"
 Makes \fIbridge\fR drop all of its OpenFlow controller connections and
 reconnect.  If \fIbridge\fR is not specified, then all bridges drop

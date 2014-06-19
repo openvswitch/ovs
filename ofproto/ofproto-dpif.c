@@ -3883,6 +3883,36 @@ ofproto_unixctl_fdb_flush(struct unixctl_conn *conn, int argc,
     unixctl_command_reply(conn, "table successfully flushed");
 }
 
+static void
+ofproto_unixctl_mcast_snooping_flush(struct unixctl_conn *conn, int argc,
+                                     const char *argv[], void *aux OVS_UNUSED)
+{
+    struct ofproto_dpif *ofproto;
+
+    if (argc > 1) {
+        ofproto = ofproto_dpif_lookup(argv[1]);
+        if (!ofproto) {
+            unixctl_command_reply_error(conn, "no such bridge");
+            return;
+        }
+
+        if (!mcast_snooping_enabled(ofproto->ms)) {
+            unixctl_command_reply_error(conn, "multicast snooping is disabled");
+            return;
+        }
+        mcast_snooping_mdb_flush(ofproto->ms);
+    } else {
+        HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+            if (!mcast_snooping_enabled(ofproto->ms)) {
+                continue;
+            }
+            mcast_snooping_mdb_flush(ofproto->ms);
+        }
+    }
+
+    unixctl_command_reply(conn, "table successfully flushed");
+}
+
 static struct ofport_dpif *
 ofbundle_get_a_port(const struct ofbundle *bundle)
 {
@@ -3917,6 +3947,61 @@ ofproto_unixctl_fdb_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
                       mac_entry_age(ofproto->ml, e));
     }
     ovs_rwlock_unlock(&ofproto->ml->rwlock);
+    unixctl_command_reply(conn, ds_cstr(&ds));
+    ds_destroy(&ds);
+}
+
+static void
+ofproto_unixctl_mcast_snooping_show(struct unixctl_conn *conn,
+                                    int argc OVS_UNUSED,
+                                    const char *argv[],
+                                    void *aux OVS_UNUSED)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    const struct ofproto_dpif *ofproto;
+    const struct ofbundle *bundle;
+    const struct mcast_group *grp;
+    struct mcast_group_bundle *b;
+    struct mcast_mrouter_bundle *mrouter;
+
+    ofproto = ofproto_dpif_lookup(argv[1]);
+    if (!ofproto) {
+        unixctl_command_reply_error(conn, "no such bridge");
+        return;
+    }
+
+    if (!mcast_snooping_enabled(ofproto->ms)) {
+        unixctl_command_reply_error(conn, "multicast snooping is disabled");
+        return;
+    }
+
+    ds_put_cstr(&ds, " port  VLAN  GROUP                Age\n");
+    ovs_rwlock_rdlock(&ofproto->ms->rwlock);
+    LIST_FOR_EACH (grp, group_node, &ofproto->ms->group_lru) {
+        LIST_FOR_EACH(b, bundle_node, &grp->bundle_lru) {
+            char name[OFP_MAX_PORT_NAME_LEN];
+
+            bundle = b->port;
+            ofputil_port_to_string(ofbundle_get_a_port(bundle)->up.ofp_port,
+                                   name, sizeof name);
+            ds_put_format(&ds, "%5s  %4d  "IP_FMT"         %3d\n",
+                          name, grp->vlan, IP_ARGS(grp->ip4),
+                          mcast_bundle_age(ofproto->ms, b));
+        }
+    }
+
+    /* ports connected to multicast routers */
+    LIST_FOR_EACH(mrouter, mrouter_node, &ofproto->ms->mrouter_lru) {
+        char name[OFP_MAX_PORT_NAME_LEN];
+
+        bundle = mrouter->port;
+        ofputil_port_to_string(ofbundle_get_a_port(bundle)->up.ofp_port,
+                               name, sizeof name);
+            ds_put_format(&ds, "%5s  %4d  querier             %3d\n",
+                      name, mrouter->vlan,
+                      mcast_mrouter_age(ofproto->ms, mrouter));
+    }
+    ovs_rwlock_unlock(&ofproto->ms->rwlock);
     unixctl_command_reply(conn, ds_cstr(&ds));
     ds_destroy(&ds);
 }
@@ -4601,6 +4686,10 @@ ofproto_dpif_unixctl_init(void)
                              ofproto_unixctl_fdb_flush, NULL);
     unixctl_command_register("fdb/show", "bridge", 1, 1,
                              ofproto_unixctl_fdb_show, NULL);
+    unixctl_command_register("mdb/flush", "[bridge]", 0, 1,
+                             ofproto_unixctl_mcast_snooping_flush, NULL);
+    unixctl_command_register("mdb/show", "bridge", 1, 1,
+                             ofproto_unixctl_mcast_snooping_show, NULL);
     unixctl_command_register("dpif/dump-dps", "", 0, 0,
                              ofproto_unixctl_dpif_dump_dps, NULL);
     unixctl_command_register("dpif/show", "", 0, 0, ofproto_unixctl_dpif_show,
