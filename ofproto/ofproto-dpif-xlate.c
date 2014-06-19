@@ -33,6 +33,7 @@
 #include "learn.h"
 #include "list.h"
 #include "mac-learning.h"
+#include "mcast-snooping.h"
 #include "meta-flow.h"
 #include "multipath.h"
 #include "netdev-vport.h"
@@ -76,6 +77,7 @@ struct xbridge {
     char *name;                   /* Name used in log messages. */
     struct dpif *dpif;            /* Datapath interface. */
     struct mac_learning *ml;      /* Mac learning handle. */
+    struct mcast_snooping *ms;    /* Multicast Snooping handle. */
     struct mbridge *mbridge;      /* Mirroring. */
     struct dpif_sflow *sflow;     /* SFlow handle, or null. */
     struct dpif_ipfix *ipfix;     /* Ipfix handle, or null. */
@@ -347,6 +349,7 @@ static void xlate_xbridge_set(struct xbridge *xbridge,
                               struct rule_dpif *miss_rule,
                               struct rule_dpif *no_packet_in_rule,
                               const struct mac_learning *ml, struct stp *stp,
+                              const struct mcast_snooping *ms,
                               const struct mbridge *mbridge,
                               const struct dpif_sflow *sflow,
                               const struct dpif_ipfix *ipfix,
@@ -411,6 +414,7 @@ xlate_xbridge_set(struct xbridge *xbridge,
                   struct rule_dpif *miss_rule,
                   struct rule_dpif *no_packet_in_rule,
                   const struct mac_learning *ml, struct stp *stp,
+                  const struct mcast_snooping *ms,
                   const struct mbridge *mbridge,
                   const struct dpif_sflow *sflow,
                   const struct dpif_ipfix *ipfix,
@@ -423,6 +427,11 @@ xlate_xbridge_set(struct xbridge *xbridge,
     if (xbridge->ml != ml) {
         mac_learning_unref(xbridge->ml);
         xbridge->ml = mac_learning_ref(ml);
+    }
+
+    if (xbridge->ms != ms) {
+        mcast_snooping_unref(xbridge->ms);
+        xbridge->ms = mcast_snooping_ref(ms);
     }
 
     if (xbridge->mbridge != mbridge) {
@@ -530,10 +539,10 @@ xlate_xbridge_copy(struct xbridge *xbridge)
     xlate_xbridge_set(new_xbridge,
                       xbridge->dpif, xbridge->miss_rule,
                       xbridge->no_packet_in_rule, xbridge->ml, xbridge->stp,
-                      xbridge->mbridge, xbridge->sflow, xbridge->ipfix,
-                      xbridge->netflow, xbridge->frag, xbridge->forward_bpdu,
-                      xbridge->has_in_band, xbridge->enable_recirc,
-                      xbridge->variable_length_userdata,
+                      xbridge->ms, xbridge->mbridge, xbridge->sflow,
+                      xbridge->ipfix, xbridge->netflow, xbridge->frag,
+                      xbridge->forward_bpdu, xbridge->has_in_band,
+                      xbridge->enable_recirc, xbridge->variable_length_userdata,
                       xbridge->max_mpls_depth);
     LIST_FOR_EACH (xbundle, list_node, &xbridge->xbundles) {
         xlate_xbundle_copy(new_xbridge, xbundle);
@@ -680,6 +689,7 @@ xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
                   struct dpif *dpif, struct rule_dpif *miss_rule,
                   struct rule_dpif *no_packet_in_rule,
                   const struct mac_learning *ml, struct stp *stp,
+                  const struct mcast_snooping *ms,
                   const struct mbridge *mbridge,
                   const struct dpif_sflow *sflow,
                   const struct dpif_ipfix *ipfix,
@@ -705,7 +715,7 @@ xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
     xbridge->name = xstrdup(name);
 
     xlate_xbridge_set(xbridge, dpif, miss_rule, no_packet_in_rule, ml, stp,
-                      mbridge, sflow, ipfix, netflow, frag, forward_bpdu,
+                      ms, mbridge, sflow, ipfix, netflow, frag, forward_bpdu,
                       has_in_band, enable_recirc, variable_length_userdata,
                       max_mpls_depth);
 }
@@ -730,6 +740,7 @@ xlate_xbridge_remove(struct xlate_cfg *xcfg, struct xbridge *xbridge)
 
     hmap_remove(&xcfg->xbridges, &xbridge->hmap_node);
     mac_learning_unref(xbridge->ml);
+    mcast_snooping_unref(xbridge->ms);
     mbridge_unref(xbridge->mbridge);
     dpif_sflow_unref(xbridge->sflow);
     dpif_ipfix_unref(xbridge->ipfix);

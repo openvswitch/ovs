@@ -37,6 +37,7 @@
 #include "lacp.h"
 #include "learn.h"
 #include "mac-learning.h"
+#include "mcast-snooping.h"
 #include "meta-flow.h"
 #include "multipath.h"
 #include "netdev-vport.h"
@@ -227,6 +228,7 @@ enum revalidate_reason {
     REV_PORT_TOGGLED,          /* Port enabled or disabled by CFM, LACP, ...*/
     REV_FLOW_TABLE,            /* Flow table changed. */
     REV_MAC_LEARNING,          /* Mac learning changed. */
+    REV_MCAST_SNOOPING,        /* Multicast snooping changed. */
 };
 COVERAGE_DEFINE(rev_reconfigure);
 COVERAGE_DEFINE(rev_stp);
@@ -234,6 +236,7 @@ COVERAGE_DEFINE(rev_bond);
 COVERAGE_DEFINE(rev_port_toggled);
 COVERAGE_DEFINE(rev_flow_table);
 COVERAGE_DEFINE(rev_mac_learning);
+COVERAGE_DEFINE(rev_mcast_snooping);
 
 /* All datapaths of a given type share a single dpif backer instance. */
 struct dpif_backer {
@@ -286,6 +289,7 @@ struct ofproto_dpif {
     struct dpif_ipfix *ipfix;
     struct hmap bundles;        /* Contains "struct ofbundle"s. */
     struct mac_learning *ml;
+    struct mcast_snooping *ms;
     bool has_bonded_bundles;
     bool lacp_enabled;
     struct mbridge *mbridge;
@@ -574,6 +578,7 @@ type_run(const char *type)
         case REV_PORT_TOGGLED:   COVERAGE_INC(rev_port_toggled);   break;
         case REV_FLOW_TABLE:     COVERAGE_INC(rev_flow_table);     break;
         case REV_MAC_LEARNING:   COVERAGE_INC(rev_mac_learning);   break;
+        case REV_MCAST_SNOOPING: COVERAGE_INC(rev_mcast_snooping); break;
         }
         backer->need_revalidate = 0;
 
@@ -589,7 +594,7 @@ type_run(const char *type)
             xlate_ofproto_set(ofproto, ofproto->up.name,
                               ofproto->backer->dpif, ofproto->miss_rule,
                               ofproto->no_packet_in_rule, ofproto->ml,
-                              ofproto->stp, ofproto->mbridge,
+                              ofproto->stp, ofproto->ms, ofproto->mbridge,
                               ofproto->sflow, ofproto->ipfix,
                               ofproto->netflow, ofproto->up.frag_handling,
                               ofproto->up.forward_bpdu,
@@ -1130,6 +1135,7 @@ construct(struct ofproto *ofproto_)
     ofproto->dump_seq = 0;
     hmap_init(&ofproto->bundles);
     ofproto->ml = mac_learning_create(MAC_ENTRY_DEFAULT_IDLE_TIME);
+    ofproto->ms = NULL;
     ofproto->mbridge = mbridge_create();
     ofproto->has_bonded_bundles = false;
     ofproto->lacp_enabled = false;
@@ -1314,6 +1320,7 @@ destruct(struct ofproto *ofproto_)
     dpif_sflow_unref(ofproto->sflow);
     hmap_destroy(&ofproto->bundles);
     mac_learning_unref(ofproto->ml);
+    mcast_snooping_unref(ofproto->ms);
 
     hmap_destroy(&ofproto->vlandev_map);
     hmap_destroy(&ofproto->realdev_vid_map);
@@ -1341,6 +1348,7 @@ run(struct ofproto *ofproto_)
         ovs_rwlock_wrlock(&ofproto->ml->rwlock);
         mac_learning_flush(ofproto->ml);
         ovs_rwlock_unlock(&ofproto->ml->rwlock);
+        mcast_snooping_mdb_flush(ofproto->ms);
     }
 
     /* Always updates the ofproto->pins_seqno to avoid frequent wakeup during
@@ -1398,6 +1406,10 @@ run(struct ofproto *ofproto_)
         ofproto->backer->need_revalidate = REV_MAC_LEARNING;
     }
     ovs_rwlock_unlock(&ofproto->ml->rwlock);
+
+    if (mcast_snooping_run(ofproto->ms)) {
+        ofproto->backer->need_revalidate = REV_MCAST_SNOOPING;
+    }
 
     new_dump_seq = seq_read(udpif_dump_seq(ofproto->backer->udpif));
     if (ofproto->dump_seq != new_dump_seq) {
@@ -1460,6 +1472,7 @@ wait(struct ofproto *ofproto_)
     ovs_rwlock_rdlock(&ofproto->ml->rwlock);
     mac_learning_wait(ofproto->ml);
     ovs_rwlock_unlock(&ofproto->ml->rwlock);
+    mcast_snooping_wait(ofproto->ms);
     stp_wait(ofproto);
     if (ofproto->backer->need_revalidate) {
         /* Shouldn't happen, but if it does just go around again. */
@@ -1977,6 +1990,7 @@ update_stp_port_state(struct ofport_dpif *ofport)
             ovs_rwlock_wrlock(&ofproto->ml->rwlock);
             mac_learning_flush(ofproto->ml);
             ovs_rwlock_unlock(&ofproto->ml->rwlock);
+            mcast_snooping_mdb_flush(ofproto->ms);
         }
         fwd_change = stp_forward_in_state(ofport->stp_state)
                         != stp_forward_in_state(state);
@@ -2102,6 +2116,7 @@ stp_run(struct ofproto_dpif *ofproto)
             ovs_rwlock_wrlock(&ofproto->ml->rwlock);
             mac_learning_flush(ofproto->ml);
             ovs_rwlock_unlock(&ofproto->ml->rwlock);
+            mcast_snooping_mdb_flush(ofproto->ms);
         }
     }
 }

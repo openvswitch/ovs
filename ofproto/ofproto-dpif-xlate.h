@@ -31,6 +31,7 @@ struct lacp;
 struct dpif_ipfix;
 struct dpif_sflow;
 struct mac_learning;
+struct mcast_snooping;
 struct xlate_cache;
 
 struct xlate_recirc {
@@ -140,6 +141,7 @@ void xlate_ofproto_set(struct ofproto_dpif *, const char *name,
                        struct dpif *, struct rule_dpif *miss_rule,
                        struct rule_dpif *no_packet_in_rule,
                        const struct mac_learning *, struct stp *,
+                       const struct mcast_snooping *,
                        const struct mbridge *, const struct dpif_sflow *,
                        const struct dpif_ipfix *, const struct netflow *,
                        enum ofp_config_flags, bool forward_bpdu,
