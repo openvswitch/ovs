@@ -34,6 +34,7 @@
 #include "lacp.h"
 #include "list.h"
 #include "mac-learning.h"
+#include "mcast-snooping.h"
 #include "meta-flow.h"
 #include "netdev.h"
 #include "ofp-print.h"
@@ -223,6 +224,7 @@ static void bridge_configure_datapath_id(struct bridge *);
 static void bridge_configure_netflow(struct bridge *);
 static void bridge_configure_forward_bpdu(struct bridge *);
 static void bridge_configure_mac_table(struct bridge *);
+static void bridge_configure_mcast_snooping(struct bridge *);
 static void bridge_configure_sflow(struct bridge *, int *sflow_bridge_number);
 static void bridge_configure_ipfix(struct bridge *);
 static void bridge_configure_stp(struct bridge *);
@@ -614,6 +616,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         bridge_configure_mirrors(br);
         bridge_configure_forward_bpdu(br);
         bridge_configure_mac_table(br);
+        bridge_configure_mcast_snooping(br);
         bridge_configure_remotes(br, managers, n_managers);
         bridge_configure_netflow(br);
         bridge_configure_sflow(br, &sflow_bridge_number);
@@ -1612,6 +1615,52 @@ bridge_configure_mac_table(struct bridge *br)
                       : MAC_DEFAULT_MAX);
 
     ofproto_set_mac_table_config(br->ofproto, idle_time, mac_table_size);
+}
+
+/* Set multicast snooping table configuration for 'br'. */
+static void
+bridge_configure_mcast_snooping(struct bridge *br)
+{
+    if (!br->cfg->mcast_snooping_enable) {
+        ofproto_set_mcast_snooping(br->ofproto, NULL);
+    } else {
+        struct port *port;
+        struct ofproto_mcast_snooping_settings br_s;
+        const char *idle_time_str;
+        const char *max_entries_str;
+
+        idle_time_str = smap_get(&br->cfg->other_config,
+                                 "mcast-snooping-aging-time");
+        br_s.idle_time = (idle_time_str && atoi(idle_time_str)
+                          ? atoi(idle_time_str)
+                          : MCAST_ENTRY_DEFAULT_IDLE_TIME);
+
+        max_entries_str = smap_get(&br->cfg->other_config,
+                                   "mcast-snooping-table-size");
+        br_s.max_entries = (max_entries_str && atoi(max_entries_str)
+                            ? atoi(max_entries_str)
+                            : MCAST_DEFAULT_MAX_ENTRIES);
+
+        br_s.flood_unreg = !smap_get_bool(&br->cfg->other_config,
+                                    "mcast-snooping-disable-flood-unregistered",
+                                    false);
+
+        /* Configure multicast snooping on the bridge */
+        if (ofproto_set_mcast_snooping(br->ofproto, &br_s)) {
+            VLOG_ERR("bridge %s: could not enable multicast snooping",
+                     br->name);
+            return;
+        }
+
+        HMAP_FOR_EACH (port, hmap_node, &br->ports) {
+            bool flood = smap_get_bool(&port->cfg->other_config,
+                                       "mcast-snooping-flood", false);
+            if (ofproto_port_set_mcast_snooping(br->ofproto, port, flood)) {
+                VLOG_ERR("port %s: could not configure mcast snooping",
+                         port->name);
+            }
+        }
+    }
 }
 
 static void

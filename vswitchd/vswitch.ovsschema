@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "7.7.0",
- "cksum": "2517737670 20677",
+ "version": "7.8.0",
+ "cksum": "2676751133 20740",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -53,6 +53,8 @@
          "type": {"key": "string", "min": 0, "max": 1},
          "ephemeral": true},
        "stp_enable": {
+         "type": "boolean"},
+       "mcast_snooping_enable": {
          "type": "boolean"},
        "ports": {
          "type": {"key": {"type": "uuid",

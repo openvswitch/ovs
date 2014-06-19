@@ -649,6 +649,47 @@
         ports to <code>forwarding</code>, in seconds.  By default, the
         forwarding delay is 15 seconds.
       </column>
+
+      <column name="other_config" key="mcast-snooping-aging-time"
+              type='{"type": "integer", "minInteger": 1}'>
+        <p>
+          The maximum number of seconds to retain a multicast snooping entry for
+          which no packets have been seen.  The default is currently 300
+          seconds (5 minutes).  The value, if specified, is forced into a
+          reasonable range, currently 15 to 3600 seconds.
+        </p>
+      </column>
+
+      <column name="other_config" key="mcast-snooping-table-size"
+              type='{"type": "integer", "minInteger": 1}'>
+        <p>
+          The maximum number of multicast snooping addresses to learn.  The
+          default is currently 2048.  The value, if specified, is forced into
+          a reasonable range, currently 10 to 1,000,000.
+        </p>
+      </column>
+      <column name="other_config" key="mcast-snooping-disable-flood-unregistered"
+              type='{"type": "boolean"}'>
+        <p>
+          If set to <code>false</code>, unregistered multicast packets are forwarded
+          to all ports.
+          If set to <code>true</code>, unregistered multicast packets are forwarded
+          to ports connected to multicast routers.
+        </p>
+      </column>
+    </group>
+
+    <group title="Multicast Snooping Configuration">
+      Multicast snooping (RFC 4541) monitors the Internet Group Management
+      Protocol (IGMP) traffic between hosts and multicast routers.  The
+      switch uses what IGMP snooping learns to forward multicast traffic
+      only to interfaces that are connected to interested receivers.
+      Currently it supports IGMPv1 and IGMPv2 protocols.
+
+      <column name="mcast_snooping_enable">
+        Enable multicast snooping on the bridge. For now, the default
+        is disabled.
+      </column>
     </group>
 
     <group title="Other Features">
@@ -1159,6 +1200,15 @@
         Spanning tree path cost for the port.  A lower number indicates
         a faster link.  By default, the cost is based on the maximum
         speed of the link.
+      </column>
+    </group>
+    <group title="Multicast Snooping">
+      <column name="other_config" key="mcast-snooping-flood"
+              type='{"type": "boolean"}'>
+        <p>
+          If set to <code>true</code>, multicast packets are unconditionally
+          forwarded to the specific port.
+        </p>
       </column>
     </group>
 

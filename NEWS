@@ -22,6 +22,7 @@ v2.3.0 - xx xxx xxxx
      packets with the larger number of masks, but when paired with an
      older kernel module, some workloads may perform worse with the
      new userspace.
+   - Support for multicast snooping (IGMPv1 and IGMPv2)
 
 v2.2.0 - Internal Release
 ---------------------

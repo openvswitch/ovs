@@ -968,6 +968,36 @@ Deconfigure STP from above:
 .IP
 .B "ovs\-vsctl set Bridge br0 stp_enable=false"
 .PP
+.SS "Multicast Snooping"
+.PP
+Configure bridge \fBbr0\fR to enable multicast snooping:
+.IP
+.B "ovs\-vsctl set Bridge br0 mcast_snooping_enable=true"
+.PP
+Set the multicast snooping aging time \fBbr0\fR to 300 seconds:
+.IP
+.B "ovs\-vsctl set Bridge br0 other_config:mcast-snooping-aging-time=300"
+.PP
+Set the multicast snooping table size \fBbr0\fR to 2048 entries:
+.IP
+.B "ovs\-vsctl set Bridge br0 other_config:mcast-snooping-table-size=2048"
+.PP
+Disable flooding of unregistered multicast packets to all ports. When
+set to true, the switch will send unregistered multicast packets only
+to ports connected to multicast routers. When it is set to false, the
+switch will send them to all ports. This command disables the flood of
+unregistered packets on bridge \fBbr0\fR.
+.IP
+.B "ovs\-vsctl set Bridge br0 other_config:mcast-snooping-disable-flood-unregistered=true"
+.PP
+Enable flooding of multicast packets on a specific port.
+.IP
+.B "ovs\-vsctl set Port eth1 other_config:mcast-snooping-flood=true"
+.PP
+Deconfigure multicasting snooping from above:
+.IP
+.B "ovs\-vsctl set Bridge br0 mcast_snooping_enable=false"
+.PP
 .SS "OpenFlow Version"
 .PP
 Configure bridge \fBbr0\fR to support OpenFlow versions 1.0, 1.2, and
