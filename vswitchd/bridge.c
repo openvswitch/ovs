@@ -501,6 +501,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     ofproto_set_flow_eviction_threshold(
         smap_get_int(&ovs_cfg->other_config, "flow-eviction-threshold",
                      OFPROTO_FLOW_EVICTION_THRESHOLD_DEFAULT));
+    ofproto_set_max_idle(smap_get_int(&ovs_cfg->other_config, "max-idle", 0));
 
     ofproto_set_n_handler_threads(
         smap_get_int(&ovs_cfg->other_config, "n-handler-threads", 0));

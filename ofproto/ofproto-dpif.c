@@ -3804,6 +3804,12 @@ subfacet_max_idle(const struct dpif_backer *backer)
     long long int now;
     int i;
 
+    /* If ofproto_max_idle is specified, uses it instead of doing the
+     * calculation. */
+    if (ofproto_max_idle) {
+        return ofproto_max_idle;
+    }
+
     total = hmap_count(&backer->subfacets);
     if (total <= flow_eviction_threshold) {
         return N_BUCKETS * BUCKET_WIDTH;

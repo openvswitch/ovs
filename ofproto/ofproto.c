@@ -283,6 +283,7 @@ struct ovs_mutex ofproto_mutex = OVS_MUTEX_INITIALIZER;
 unsigned flow_eviction_threshold = OFPROTO_FLOW_EVICTION_THRESHOLD_DEFAULT;
 unsigned n_handler_threads;
 enum ofproto_flow_miss_model flow_miss_model = OFPROTO_HANDLE_MISS_AUTO;
+unsigned ofproto_max_idle;
 
 /* Map from datapath name to struct ofproto, for use by unixctl commands. */
 static struct hmap all_ofprotos = HMAP_INITIALIZER(&all_ofprotos);
@@ -654,6 +655,14 @@ void
 ofproto_set_flow_miss_model(unsigned model)
 {
     flow_miss_model = model;
+}
+
+/* Sets the maximum idle time for flows in the datapath before they are
+ * expired. */
+void
+ofproto_set_max_idle(unsigned max_idle)
+{
+    ofproto_max_idle = max_idle;
 }
 
 /* If forward_bpdu is true, the NORMAL action will forward frames with

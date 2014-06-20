@@ -435,6 +435,12 @@ void rule_collection_destroy(struct rule_collection *);
  * ofproto-dpif implementation */
 extern unsigned flow_eviction_threshold;
 
+/* Maximum idle time (in ms) for flows to be cached in the datapath.
+ * This option should only be used for testing.  Each ofproto-class
+ * implementation should have its own algorithm of calculating the
+ * idle time. */
+extern unsigned ofproto_max_idle;
+
 /* Number of upcall handler threads. Only affects the ofproto-dpif
  * implementation. */
 extern unsigned n_handler_threads;
