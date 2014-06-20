@@ -1144,6 +1144,10 @@ This form of \fBoutput\fR was added in Open vSwitch 1.3.0.  This form
 of \fBoutput\fR uses an OpenFlow extension that is not supported by
 standard OpenFlow switches.
 .
+.IP \fBgroup:\fIgroup_id\fR
+Outputs the packet to the OpenFlow group \fIgroup_id\fR. Group tables
+are only supported in OpenFlow 1.1+. See Group Syntax for more details.
+.
 .IP \fBnormal\fR
 Subjects the packet to the device's normal L2/L3 processing.  (This
 action is not implemented by all OpenFlow switches.)
