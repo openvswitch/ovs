@@ -573,6 +573,14 @@ ofproto_set_flow_eviction_threshold(struct ofproto *ofproto, unsigned threshold)
     }
 }
 
+/* Sets the maximum idle time for flows of 'ofproto' in the datapath before
+ * they are expired. */
+void
+ofproto_set_max_idle(struct ofproto *ofproto, unsigned max_idle)
+{
+    ofproto->max_idle = max_idle;
+}
+
 /* If forward_bpdu is true, the NORMAL action will forward frames with
  * reserved (e.g. STP) destination Ethernet addresses. if forward_bpdu is false,
  * the NORMAL action will drop these frames. */

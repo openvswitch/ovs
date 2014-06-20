@@ -50,6 +50,7 @@ struct ofproto {
     unsigned flow_eviction_threshold; /* Threshold at which to begin flow
                                        * table eviction. Only affects the
                                        * ofproto-dpif implementation */
+    unsigned max_idle;
     bool forward_bpdu;          /* Option to allow forwarding of BPDU frames
                                  * when NORMAL action is invoked. */
     char *mfr_desc;             /* Manufacturer (NULL for default)b. */
