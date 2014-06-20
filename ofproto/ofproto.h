@@ -222,6 +222,7 @@ void ofproto_set_extra_in_band_remotes(struct ofproto *,
                                        const struct sockaddr_in *, size_t n);
 void ofproto_set_in_band_queue(struct ofproto *, int queue_id);
 void ofproto_set_flow_eviction_threshold(struct ofproto *, unsigned threshold);
+void ofproto_set_max_idle(struct ofproto *, unsigned max_idle);
 void ofproto_set_forward_bpdu(struct ofproto *, bool forward_bpdu);
 void ofproto_set_mac_table_config(struct ofproto *, unsigned idle_time,
                                   size_t max_entries);

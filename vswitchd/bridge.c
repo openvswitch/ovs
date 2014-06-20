@@ -199,6 +199,7 @@ static void bridge_configure_flow_eviction_threshold(struct bridge *);
 static void bridge_configure_netflow(struct bridge *);
 static void bridge_configure_forward_bpdu(struct bridge *);
 static void bridge_configure_mac_table(struct bridge *);
+static void bridge_configure_max_idle(struct bridge *);
 static void bridge_configure_sflow(struct bridge *, int *sflow_bridge_number);
 static void bridge_configure_stp(struct bridge *);
 static void bridge_configure_tables(struct bridge *);
@@ -610,6 +611,7 @@ bridge_reconfigure_continue(const struct ovsrec_open_vswitch *ovs_cfg)
         bridge_configure_flow_eviction_threshold(br);
         bridge_configure_forward_bpdu(br);
         bridge_configure_mac_table(br);
+        bridge_configure_max_idle(br);
         bridge_configure_remotes(br, managers, n_managers);
         bridge_configure_netflow(br);
         bridge_configure_sflow(br, &sflow_bridge_number);
@@ -1491,6 +1493,22 @@ bridge_configure_flow_eviction_threshold(struct bridge *br)
         threshold = OFPROTO_FLOW_EVICTION_THRESHOLD_DEFAULT;
     }
     ofproto_set_flow_eviction_threshold(br->ofproto, threshold);
+}
+
+static void
+bridge_configure_max_idle(struct bridge *br)
+{
+    const char *max_idle_str;
+    unsigned max_idle;
+
+    max_idle_str = smap_get(&br->cfg->other_config,
+                            "max-idle");
+    if (max_idle_str) {
+        max_idle = strtoul(max_idle_str, NULL, 10);
+    } else {
+        max_idle = 0;
+    }
+    ofproto_set_max_idle(br->ofproto, max_idle);
 }
 
 /* Set forward BPDU option. */
