@@ -56,7 +56,8 @@ build-arch: build-arch-stamp
 build-arch-stamp: configure-stamp 
 	$(MAKE) -C _debian
 ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
-	if $(MAKE) -C _debian check TESTSUITEFLAGS='$(PARALLEL)'; then :; \
+	if $(MAKE) -C _debian check TESTSUITEFLAGS='$(PARALLEL)' || \
+		$(MAKE) -C _debian check TESTSUITEFLAGS='--recheck'; then :; \
 	else \
 		cat _debian/tests/testsuite.log; \
 		exit 1; \
