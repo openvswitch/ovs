@@ -105,7 +105,7 @@ def do_parse_atoms(type_string, *atom_strings):
             atom = data.Atom.from_json(base, atom_json)
             print ovs.json.to_string(atom.to_json())
         except error.Error, e:
-            print unicode(e)
+            print e.args[0].encode("utf8")
 
 
 def do_parse_data(type_string, *data_strings):
