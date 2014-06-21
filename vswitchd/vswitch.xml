@@ -1558,9 +1558,9 @@
             key="in_key"/> at all.
           </li>
           <li>
-            A positive 24-bit (for VXLAN and LISP), 32-bit (for GRE) or 64-bit
-            (for GRE64) number.  The tunnel receives only packets with the
-            specified key.
+            A positive 24-bit (for Geneve, VXLAN, and LISP), 32-bit (for GRE)
+            or 64-bit (for GRE64) number.  The tunnel receives only packets
+            with the specified key.
           </li>
           <li>
             The word <code>flow</code>.  The tunnel accepts packets with any
@@ -1585,9 +1585,9 @@
             key="out_key"/> at all.
           </li>
           <li>
-            A positive 24-bit (for VXLAN and LISP), 32-bit (for GRE) or 64-bit
-            (for GRE64) number.  Packets sent through the tunnel will have the
-            specified key.
+            A positive 24-bit (for Geneve, VXLAN and LISP), 32-bit (for GRE) or
+            64-bit (for GRE64) number.  Packets sent through the tunnel will
+            have the specified key.
           </li>
           <li>
             The word <code>flow</code>.  Packets sent through the tunnel will
@@ -1790,8 +1790,8 @@
       </column>
 
       <column name="status" key="tunnel_egress_iface">
-        Egress interface for tunnels.  Currently only relevant for GRE tunnels
-        On Linux systems, this column will show the name of the interface
+        Egress interface for tunnels.  Currently only relevant for tunnels
+        on Linux systems, this column will show the name of the interface
         which is responsible for routing traffic destined for the configured
         <ref column="options" key="remote_ip"/>.  This could be an internal
         interface such as a bridge port.
