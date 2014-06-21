@@ -349,7 +349,7 @@ static int handle_offloads(struct sk_buff *skb)
 
 static int geneve_send(struct vport *vport, struct sk_buff *skb)
 {
-	struct ovs_key_ipv4_tunnel *tun_key = &OVS_CB(skb)->tun_info->tunnel;
+	struct ovs_key_ipv4_tunnel *tun_key;
 	int network_offset = skb_network_offset(skb);
 	struct rtable *rt;
 	int min_headroom;
@@ -360,6 +360,8 @@ static int geneve_send(struct vport *vport, struct sk_buff *skb)
 
 	if (unlikely(!OVS_CB(skb)->tun_info))
 		return -EINVAL;
+
+	tun_key = &OVS_CB(skb)->tun_info->tunnel;
 
 	/* Route lookup */
 	saddr = tun_key->ipv4_src;

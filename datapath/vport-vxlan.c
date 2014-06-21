@@ -139,7 +139,7 @@ error:
 
 static int vxlan_tnl_send(struct vport *vport, struct sk_buff *skb)
 {
-	struct ovs_key_ipv4_tunnel *tun_key = &OVS_CB(skb)->tun_info->tunnel;
+	struct ovs_key_ipv4_tunnel *tun_key;
 	struct net *net = ovs_dp_get_net(vport->dp);
 	struct vxlan_port *vxlan_port = vxlan_vport(vport);
 	__be16 dst_port = inet_sport(vxlan_port->vs->sock->sk);
@@ -155,6 +155,8 @@ static int vxlan_tnl_send(struct vport *vport, struct sk_buff *skb)
 		err = -EINVAL;
 		goto error;
 	}
+
+	tun_key = &OVS_CB(skb)->tun_info->tunnel;
 
 	/* Route lookup */
 	saddr = tun_key->ipv4_src;
