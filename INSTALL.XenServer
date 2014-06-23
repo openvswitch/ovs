@@ -36,6 +36,11 @@ RPMs for Citrix XenServer is the DDK VM available from Citrix.
    "openvswitch", "openvswitch-modules-xen", and
    "openvswitch-debuginfo".
 
+   The above command automatically runs the Open vSwitch unit tests.
+   To disable the unit tests, run:
+
+       rpmbuild -bb --without check xenserver/openvswitch-xen.spec
+
 Build Parameters
 ----------------
 

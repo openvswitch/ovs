@@ -17,6 +17,10 @@
 #      -D "kernel_version 2.6.32.12-0.7.1.xs5.6.100.323.170596"
 #      -D "kernel_flavor xen"
 #      -bb /usr/src/redhat/SPECS/openvswitch-xen.spec
+#
+# If tests have to be skipped while building, specify the '--without check'
+# option. For example:
+# rpmbuild -bb --without check xenserver/openvswitch-xen.spec
 
 %if %{?openvswitch_version:0}%{!?openvswitch_version:1}
 %define openvswitch_version @VERSION@
@@ -36,6 +40,8 @@
 
 # build-supplemental-pack.sh requires this naming for kernel module packages
 %define module_package modules-%{kernel_flavor}-%{kernel_version}
+
+%bcond_without check
 
 Name: openvswitch
 Summary: Open vSwitch daemon/database/utilities
@@ -133,6 +139,16 @@ rm \
 (cd "$RPM_BUILD_ROOT" && rm -f usr/lib/lib*)
 
 install -d -m 755 $RPM_BUILD_ROOT/var/lib/openvswitch
+
+%check
+%if %{with check}
+    if make check TESTSUITEFLAGS='%{_smp_mflags}' ||
+       make check TESTSUITEFLAGS='--recheck'; then :;
+    else
+        cat tests/testsuite.log
+        exit 1
+    fi
+%endif
 
 %clean
 rm -rf $RPM_BUILD_ROOT
