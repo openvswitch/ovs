@@ -1315,9 +1315,45 @@ cookie=0xa dl_src=40:44:44:44:44:45 actions=push_mpls:0x8847,load:10->OXM_OF_MPL
 cookie=0xa dl_src=40:44:44:44:44:46 actions=push_mpls:0x8847,load:10->OXM_OF_MPLS_LABEL[[]],load:3->OXM_OF_MPLS_TC[[]],set_mpls_ttl(10),controller
 cookie=0xa dl_src=40:44:44:44:44:47 actions=push_mpls:0x8847,load:10->OXM_OF_MPLS_LABEL[[]],load:3->OXM_OF_MPLS_TC[[]],dec_mpls_ttl,set_mpls_ttl(10),controller
 cookie=0xa dl_src=40:44:44:44:44:48 actions=push_mpls:0x8847,load:10->OXM_OF_MPLS_LABEL[[]],load:3->OXM_OF_MPLS_TC[[]],set_mpls_ttl(10),dec_mpls_ttl,controller
+cookie=0xa mpls,dl_src=40:44:44:44:44:49 actions=push_mpls:0x8848,load:10->OXM_OF_MPLS_LABEL[[]],CONTROLLER:65535
 cookie=0xb dl_src=50:55:55:55:55:55 dl_type=0x8847 actions=load:1000->OXM_OF_MPLS_LABEL[[]],controller
 cookie=0xd dl_src=60:66:66:66:66:66 actions=pop_mpls:0x0800,controller
 cookie=0xc dl_src=70:77:77:77:77:77 actions=push_mpls:0x8848,load:1000->OXM_OF_MPLS_LABEL[[]],load:7->OXM_OF_MPLS_TC[[]],controller
+
+cookie=0xd dl_src=60:66:66:66:00:01 actions=pop_mpls:0x0800,dec_ttl,controller
+cookie=0xd dl_src=60:66:66:66:00:02 actions=pop_mpls:0x0800,load:0xa000001->OXM_OF_IPV4_DST[[]],controller
+cookie=0xd dl_src=60:66:66:66:00:03 actions=pop_mpls:0x0800,move:OXM_OF_IPV4_DST[[]]->OXM_OF_IPV4_SRC[[]],controller
+cookie=0xd dl_src=60:66:66:66:00:04 actions=pop_mpls:0x0800,push:OXM_OF_IPV4_DST[[]],pop:OXM_OF_IPV4_SRC[[]],controller
+cookie=0xd dl_src=60:66:66:66:00:05 actions=pop_mpls:0x0800,multipath(eth_src,50,modulo_n,256,0,OXM_OF_IPV4_SRC[[0..7]]),controller
+cookie=0xd dl_src=60:66:66:66:00:06 actions=pop_mpls:0x0800,bundle_load(eth_src,50,hrw,ofport,OXM_OF_IPV4_SRC[[0..15]],slaves:1,2),controller
+cookie=0xd dl_src=60:66:66:66:00:07 actions=pop_mpls:0x0800,learn(table=1,hard_timeout=60,eth_type=0x800,nw_proto=6,OXM_OF_IPV4_SRC[[]]=OXM_OF_IPV4_DST[[]]),controller
+
+cookie=0xd dl_src=60:66:66:66:00:08 actions=pop_mpls:0x0806,resubmit(1,1)
+cookie=0xd table=1 arp actions=controller
+
+cookie=0xd dl_src=60:66:66:66:00:09 actions=pop_mpls:0x0800,mod_nw_tos:48,controller
+cookie=0xd dl_src=60:66:66:66:00:0a actions=pop_mpls:0x0800,mod_nw_dst:10.0.0.1,controller
+cookie=0xd dl_src=60:66:66:66:00:0b actions=pop_mpls:0x0800,mod_nw_src:10.0.0.1,controller
+
+cookie=0xd dl_src=60:66:66:66:01:00 actions=pop_mpls:0x8848,controller
+cookie=0xd dl_src=60:66:66:66:01:01 actions=pop_mpls:0x8847,dec_mpls_ttl,controller
+cookie=0xd dl_src=60:66:66:66:01:02 actions=pop_mpls:0x8848,load:3->OXM_OF_MPLS_TC[[]],controller
+
+cookie=0xd dl_src=60:66:66:66:02:00 actions=pop_mpls:0x8847,pop_mpls:0x0800,controller
+cookie=0xd dl_src=60:66:66:66:02:01 actions=pop_mpls:0x8848,pop_mpls:0x0800,dec_ttl,controller
+cookie=0xd dl_src=60:66:66:66:02:10 actions=pop_mpls:0x8847,dec_mpls_ttl,pop_mpls:0x0800,dec_ttl,controller
+
+cookie=0xd dl_src=60:66:66:66:03:00 actions=pop_mpls:0x8848,pop_mpls:0x8848,controller
+cookie=0xd dl_src=60:66:66:66:03:01 actions=pop_mpls:0x8847,pop_mpls:0x8847,dec_mpls_ttl,controller
+cookie=0xd dl_src=60:66:66:66:03:10 actions=pop_mpls:0x8848,dec_mpls_ttl,pop_mpls:0x8848,dec_mpls_ttl,controller
+
+cookie=0xd dl_src=60:66:66:66:04:00 actions=pop_mpls:0x0800,push_mpls:0x8847,controller
+cookie=0xd dl_src=60:66:66:66:04:01 actions=pop_mpls:0x0800,push_mpls:0x8848,dec_mpls_ttl,controller
+cookie=0xd dl_src=60:66:66:66:04:10 actions=pop_mpls:0x0800,dec_ttl,push_mpls:0x8848,dec_mpls_ttl,controller
+
+cookie=0xd dl_src=60:66:66:66:05:00 actions=push_mpls:0x8848,pop_mpls:0x8847,controller
+cookie=0xd dl_src=60:66:66:66:05:01 actions=push_mpls:0x8847,pop_mpls:0x8848,dec_mpls_ttl,controller
+cookie=0xd dl_src=60:66:66:66:05:10 actions=push_mpls:0x8848,dec_mpls_ttl,pop_mpls:0x8847,dec_mpls_ttl,controller
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
@@ -1463,6 +1499,30 @@ NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len
 mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=40:44:44:44:44:47,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=10,mpls_bos=1
 ])
 
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS controller action.
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=40:44:44:44:44:49,dst=50:54:00:00:00:07),eth_type(0x8847),mpls(label=10,tc=3,ttl=64,bos=1)'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+ovs-appctl -t ovs-ofctl exit
+
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=40:44:44:44:44:49,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=64,mpls_bos=0,mpls_lse1=42816
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=40:44:44:44:44:49,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=64,mpls_bos=0,mpls_lse1=42816
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=40:44:44:44:44:49,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=64,mpls_bos=0,mpls_lse1=42816
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
 dnl Modified MPLS controller action.
 AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
 
@@ -1553,6 +1613,692 @@ tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:66:66,dl_dst=50:54:0
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 
+dnl Modified MPLS pop action.
+dnl The input is a frame with a single MPLS label stack entry which tcpdump -vve shows as:
+dnl 60:66:66:66:00:01 > 50:54:00:00:00:07, ethertype MPLS multicast (0x8848), length 62: MPLS (label 20, exp 0, [S], ttl 32)
+dnl             (tos 0x0, ttl 255, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl         192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x77ec (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 00 01 88 48 00 01 41 20 45 00 00 2c 00 00 00 00 ff 06 3a 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([STRIP_METADATA ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:01,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=254,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7744
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:01,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=254,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7744
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:01,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=254,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7744
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with a single MPLS label stack entry which tcpdump -vve shows as:
+dnl 60:66:66:66:00:02 > 50:54:00:00:00:07, ethertype MPLS unicast (0x8847), length 62: MPLS (label 20, exp 0, [S], ttl 32)
+dnl             (tos 0x0, ttl 255, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl         192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x77ec (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 00 02 88 47 00 01 41 20 45 00 00 2c 00 00 00 00 ff 06 3a 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([STRIP_METADATA ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:02,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:2dee
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:02,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:2dee
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:02,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:2dee
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with a single MPLS label stack entry which tcpdump -vve shows as:
+dnl 60:66:66:66:00:03 > 50:54:00:00:00:07, ethertype MPLS multicast (0x8848), length 62: MPLS (label 20, exp 0, [S], ttl 32)
+dnl             (tos 0x0, ttl 255, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl         192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x77ec (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 00 03 88 48 00 01 41 20 45 00 00 2c 00 00 00 00 ff 06 3a 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([STRIP_METADATA ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:03,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.2,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7743
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:03,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.2,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7743
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:03,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.2,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7743
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with a single MPLS label stack entry which tcpdump -vve shows as:
+dnl 60:66:66:66:00:04 > 50:54:00:00:00:07, ethertype MPLS unicast (0x8847), length 62: MPLS (label 20, exp 0, [S], ttl 32)
+dnl             (tos 0x0, ttl 255, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl         192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x77ec (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 00 04 88 47 00 01 41 20 45 00 00 2c 00 00 00 00 ff 06 3a 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([STRIP_METADATA ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:04,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.2,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7743
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:04,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.2,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7743
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:04,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.2,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7743
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with a single MPLS label stack entry which tcpdump -vve shows as:
+dnl 60:66:66:66:00:05 > 50:54:00:00:00:07, ethertype MPLS unicast (0x8847), length 62: MPLS (label 20, exp 0, [S], ttl 32)
+dnl             (tos 0x0, ttl 255, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl         192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x77ec (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 00 05 88 48 00 01 41 20 45 00 00 2c 00 00 00 00 ff 06 3a 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([STRIP_METADATA ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.106,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:76db
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.106,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:76db
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.106,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:76db
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with a single MPLS label stack entry which tcpdump -vve shows as:
+dnl 60:66:66:66:00:06 > 50:54:00:00:00:07, ethertype MPLS multicast (0x8848), length 62: MPLS (label 20, exp 0, [S], ttl 32)
+dnl             (tos 0x0, ttl 255, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl         192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x77ec (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 00 06 88 47 00 01 41 20 45 00 00 2c 00 00 00 00 ff 06 3a 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([STRIP_METADATA ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:06,dl_dst=50:54:00:00:00:07,nw_src=192.168.255.255,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7745
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:06,dl_dst=50:54:00:00:00:07,nw_src=192.168.255.255,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7745
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:06,dl_dst=50:54:00:00:00:07,nw_src=192.168.255.255,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7745
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with a single MPLS label stack entry which tcpdump -vve shows as:
+dnl 60:66:66:66:00:07 > 50:54:00:00:00:07, ethertype MPLS multicast (0x8848), length 62: MPLS (label 20, exp 0, [S], ttl 32)
+dnl             (tos 0x0, ttl 255, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl         192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x77ec (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 00 07 88 48 00 01 41 20 45 00 00 2c 00 00 00 00 ff 06 3a 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([STRIP_METADATA ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:07,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7744
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:07,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7744
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:07,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7744
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is an ARP frame with a single MPLS label stack entry which tcpdump -vve shows as:
+dnl 60:66:66:66:00:08 > ff:ff:ff:ff:ff:ff, ethertype MPLS unicast (0x8847), length 46: MPLS (label 20, exp 0, [S], ttl 32)
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 'ff ff ff ff ff ff 60 66 66 66 00 08 88 47 00 01 41 20 00 01 08 00 06 04 00 02 60 66 66 66 00 08 c0 a8 00 01 ff ff ff ff ff ff ff ff ff ff'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([STRIP_METADATA ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0xd total_len=56 in_port=1 (via action) data_len=56 (unbuffered)
+arp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:08,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.0.1,arp_tpa=255.255.255.255,arp_op=2,arp_sha=60:66:66:66:00:08,arp_tha=ff:ff:ff:ff:ff:ff
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0xd total_len=56 in_port=1 (via action) data_len=56 (unbuffered)
+arp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:08,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.0.1,arp_tpa=255.255.255.255,arp_op=2,arp_sha=60:66:66:66:00:08,arp_tha=ff:ff:ff:ff:ff:ff
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0xd total_len=56 in_port=1 (via action) data_len=56 (unbuffered)
+arp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:08,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.0.1,arp_tpa=255.255.255.255,arp_op=2,arp_sha=60:66:66:66:00:08,arp_tha=ff:ff:ff:ff:ff:ff
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with a single MPLS label stack entry which tcpdump -vve shows as:
+dnl 60:66:66:66:00:09 > 50:54:00:00:00:07, ethertype MPLS multicast (0x8848), length 62: MPLS (label 20, exp 0, [S], ttl 32)
+dnl             (tos 0x0, ttl 255, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl         192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x77ec (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 00 09 88 48 00 01 41 20 45 00 00 2c 00 00 00 00 ff 06 3a 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([STRIP_METADATA ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:09,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=48,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7744
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:09,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=48,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7744
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:09,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=48,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7744
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with a single MPLS label stack entry which tcpdump -vve shows as:
+dnl 60:66:66:66:00:0a > 50:54:00:00:00:07, ethertype MPLS multicast (0x8848), length 62: MPLS (label 20, exp 0, [S], ttl 32)
+dnl             (tos 0x0, ttl 255, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl         192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x77ec (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 00 0a 88 48 00 01 41 20 45 00 00 2c 00 00 00 00 ff 06 3a 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([STRIP_METADATA ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:0a,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:2dee
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:0a,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:2dee
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:0a,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:2dee
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with a single MPLS label stack entry which tcpdump -vve shows as:
+dnl 60:66:66:66:00:0b > 50:54:00:00:00:07, ethertype MPLS multicast (0x8848), length 62: MPLS (label 20, exp 0, [S], ttl 32)
+dnl             (tos 0x0, ttl 255, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl         192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x77ec (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 00 0b 88 48 00 01 41 20 45 00 00 2c 00 00 00 00 ff 06 3a 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([STRIP_METADATA ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:0b,dl_dst=50:54:00:00:00:07,nw_src=10.0.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:2ded
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:0b,dl_dst=50:54:00:00:00:07,nw_src=10.0.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:2ded
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:0b,dl_dst=50:54:00:00:00:07,nw_src=10.0.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:2ded
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with two MPLS label stack entries which tcpdump -vve shows as:
+dnl 60:66:66:66:01:00 > 50:54:00:00:00:07, ethertype MPLS multicast (0x8848), length 66: MPLS (label 20, exp 0, ttl 32)
+dnl		(label 20, exp 0, [S], ttl 31)
+dnl		(tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl        192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x7744 (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 01 00 88 48 00 01 40 20 00 01 41 1f 45 00 00 2c 00 00 00 00 ff 06 3b 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:01:00,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=31,mpls_bos=1
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:01:00,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=31,mpls_bos=1
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:01:00,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=31,mpls_bos=1
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with two MPLS label stack entries which tcpdump -vve shows as:
+dnl 60:66:66:66:01:01 > 50:54:00:00:00:07, ethertype MPLS unicast (0x8847), length 66: MPLS (label 20, exp 0, ttl 32)
+dnl		(label 20, exp 0, [S], ttl 31)
+dnl		(tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl        192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x7744 (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 01 01 88 47 00 01 40 20 00 01 41 1f 45 00 00 2c 00 00 00 00 ff 06 3b 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:01:01,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=30,mpls_bos=1
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:01:01,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=30,mpls_bos=1
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:01:01,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=30,mpls_bos=1
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with two MPLS label stack entries which tcpdump -vve shows as:
+dnl 60:66:66:66:01:02 > 50:54:00:00:00:07, ethertype MPLS multicast (0x8848), length 66: MPLS (label 20, exp 0, ttl 32)
+dnl		(label 20, exp 0, [S], ttl 31)
+dnl		(tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl        192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x7744 (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 01 02 88 48 00 01 40 20 00 01 41 1f 45 00 00 2c 00 00 00 00 ff 06 3b 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:01:02,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=3,mpls_ttl=31,mpls_bos=1
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:01:02,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=3,mpls_ttl=31,mpls_bos=1
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:01:02,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=3,mpls_ttl=31,mpls_bos=1
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with two MPLS label stack entries which tcpdump -vve shows as:
+dnl 60:66:66:66:02:00 > 50:54:00:00:02:00, ethertype MPLS unicast (0x8847), length 66: MPLS (label 20, exp 0, ttl 32)
+dnl		(label 20, exp 0, [S], ttl 31)
+dnl		(tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl        192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x7744 (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 02 00 88 47 00 01 40 20 00 01 41 1f 45 00 00 2c 00 00 00 00 ff 06 3b 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:02:00,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7744
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:02:00,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7744
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:02:00,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7744
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with two MPLS label stack entries which tcpdump -vve shows as:
+dnl 60:66:66:66:02:01 > 50:54:00:00:02:01, ethertype MPLS multicast (0x8848), length 66: MPLS (label 20, exp 0, ttl 32)
+dnl		(label 20, exp 0, [S], ttl 31)
+dnl		(tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl        192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x7744 (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 02 01 88 48 00 01 40 20 00 01 41 1f 45 00 00 2c 00 00 00 00 ff 06 3b 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([STRIP_METADATA ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:02:01,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=254,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7744
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:02:01,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=254,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7744
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:02:01,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=254,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7744
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with two MPLS label stack entries which tcpdump -vve shows as:
+dnl 60:66:66:66:02:10 > 50:54:00:00:02:10, ethertype MPLS unicast (0x8847), length 66: MPLS (label 20, exp 0, ttl 32)
+dnl		(label 20, exp 0, [S], ttl 31)
+dnl		(tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl        192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x7744 (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 02 10 88 47 00 01 40 20 00 01 41 1f 45 00 00 2c 00 00 00 00 ff 06 3b 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([STRIP_METADATA ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:02:10,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=254,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7744
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:02:10,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=254,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7744
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:02:10,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=254,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7744
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with three MPLS label stack entries which tcpdump -vve shows as:
+dnl 60:66:66:66:03:00 > 50:54:00:00:00:00, ethertype MPLS unicast (0x8847), length 66: MPLS (label 20, exp 0, ttl 32)
+dnl		(label 20, exp 0, ttl 31)
+dnl		(label 20, exp 0, [S], ttl 30)
+dnl		(tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl        192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x7744 (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 03 00 88 47 00 01 40 20 00 01 40 1f 00 01 41 1e 45 00 00 2c 00 00 00 00 ff 06 3b 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:03:00,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=30,mpls_bos=1
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:03:00,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=30,mpls_bos=1
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:03:00,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=30,mpls_bos=1
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with three MPLS label stack entries which tcpdump -vve shows as:
+dnl 60:66:66:66:03:01 > 50:54:00:00:00:00, ethertype MPLS multicast (0x8848), length 66: MPLS (label 20, exp 0, ttl 32)
+dnl		(label 20, exp 0, ttl 31)
+dnl		(label 20, exp 0, [S], ttl 30)
+dnl		(tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl        192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x7744 (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 03 01 88 48 00 01 40 20 00 01 40 1f 00 01 41 1e 45 00 00 2c 00 00 00 00 ff 06 3b 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:03:01,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=29,mpls_bos=1
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:03:01,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=29,mpls_bos=1
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:03:01,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=29,mpls_bos=1
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with three MPLS label stack entries which tcpdump -vve shows as:
+dnl 60:66:66:66:03:10 > 50:54:00:00:00:00, ethertype MPLS unicast (0x8847), length 66: MPLS (label 20, exp 0, ttl 32)
+dnl		(label 20, exp 0, ttl 31)
+dnl		(label 20, exp 0, [S], ttl 30)
+dnl		(tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl        192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x7744 (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 03 10 88 47 00 01 40 20 00 01 40 1f 00 01 41 1e 45 00 00 2c 00 00 00 00 ff 06 3b 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:03:10,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=29,mpls_bos=1
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:03:10,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=29,mpls_bos=1
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:03:10,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=29,mpls_bos=1
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with a single MPLS label stack entry which tcpdump -vve shows as:
+dnl 60:66:66:66:04:00 > 50:54:00:00:00:07, ethertype MPLS multicast (0x8848), length 62: MPLS (label 20, exp 0, [S], ttl 32)
+dnl             (tos 0x0, ttl 255, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl         192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x77ec (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 04 00 88 48 00 01 41 20 45 00 00 2c 00 00 00 00 ff 06 3a 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([STRIP_METADATA ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:04:00,dl_dst=50:54:00:00:00:07,mpls_label=0,mpls_tc=0,mpls_ttl=255,mpls_bos=1
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:04:00,dl_dst=50:54:00:00:00:07,mpls_label=0,mpls_tc=0,mpls_ttl=255,mpls_bos=1
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:04:00,dl_dst=50:54:00:00:00:07,mpls_label=0,mpls_tc=0,mpls_ttl=255,mpls_bos=1
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with a single MPLS label stack entry which tcpdump -vve shows as:
+dnl 60:66:66:66:04:01 > 50:54:00:00:00:07, ethertype MPLS unicast (0x8847), length 62: MPLS (label 20, exp 0, [S], ttl 32)
+dnl             (tos 0x0, ttl 255, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl         192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x77ec (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 04 01 88 47 00 01 41 20 45 00 00 2c 00 00 00 00 ff 06 3a 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([STRIP_METADATA ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:04:01,dl_dst=50:54:00:00:00:07,mpls_label=0,mpls_tc=0,mpls_ttl=254,mpls_bos=1
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:04:01,dl_dst=50:54:00:00:00:07,mpls_label=0,mpls_tc=0,mpls_ttl=254,mpls_bos=1
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:04:01,dl_dst=50:54:00:00:00:07,mpls_label=0,mpls_tc=0,mpls_ttl=254,mpls_bos=1
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with a single MPLS label stack entry which tcpdump -vve shows as:
+dnl 60:66:66:66:04:10 > 50:54:00:00:00:07, ethertype MPLS multicast (0x8848), length 62: MPLS (label 20, exp 0, [S], ttl 32)
+dnl             (tos 0x0, ttl 255, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl         192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x77ec (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 04 10 88 48 00 01 41 20 45 00 00 2c 00 00 00 00 ff 06 3a 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([STRIP_METADATA  ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:04:10,dl_dst=50:54:00:00:00:07,mpls_label=0,mpls_tc=0,mpls_ttl=253,mpls_bos=1
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:04:10,dl_dst=50:54:00:00:00:07,mpls_label=0,mpls_tc=0,mpls_ttl=253,mpls_bos=1
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:04:10,dl_dst=50:54:00:00:00:07,mpls_label=0,mpls_tc=0,mpls_ttl=253,mpls_bos=1
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with a single MPLS label stack entry which tcpdump -vve shows as:
+dnl 60:66:66:66:05:00 > 50:54:00:00:00:07, ethertype MPLS unicast (0x8847), length 62: MPLS (label 20, exp 0, [S], ttl 32)
+dnl             (tos 0x0, ttl 255, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl         192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x77ec (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 05 00 88 47 00 01 41 20 45 00 00 2c 00 00 00 00 ff 06 3a 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:05:00,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=32,mpls_bos=1
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:05:00,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=32,mpls_bos=1
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:05:00,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=32,mpls_bos=1
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with a single MPLS label stack entry which tcpdump -vve shows as:
+dnl 60:66:66:66:05:01 > 50:54:00:00:00:07, ethertype MPLS multicast (0x8848), length 62: MPLS (label 20, exp 0, [S], ttl 32)
+dnl             (tos 0x0, ttl 255, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl         192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x77ec (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 05 01 88 48 00 01 41 20 45 00 00 2c 00 00 00 00 ff 06 3a 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:05:01,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=31,mpls_bos=1
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:05:01,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=31,mpls_bos=1
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mplsm,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:05:01,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=31,mpls_bos=1
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with a single MPLS label stack entry which tcpdump -vve shows as:
+dnl 60:66:66:66:05:10 > 50:54:00:00:00:07, ethertype MPLS unicast (0x8847), length 62: MPLS (label 20, exp 0, [S], ttl 32)
+dnl             (tos 0x0, ttl 255, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl         192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x77ec (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 60 66 66 66 05 10 88 47 00 01 41 20 45 00 00 2c 00 00 00 00 ff 06 3a 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:05:10,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=31,mpls_bos=1
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:05:10,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=31,mpls_bos=1
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:05:10,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=31,mpls_bos=1
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:44:42 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],CONTROLLER:65535
  cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:44:43 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],CONTROLLER:65535
@@ -1562,15 +2308,140 @@ AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:44:47 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],dec_mpls_ttl,set_mpls_ttl(10),CONTROLLER:65535
  cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:44:48 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],set_mpls_ttl(10),dec_mpls_ttl,CONTROLLER:65535
  cookie=0xa, n_packets=3, n_bytes=180, dl_src=41:44:44:44:44:42 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],pop_mpls:0x0800,CONTROLLER:65535
+ cookie=0xa, n_packets=3, n_bytes=180, mpls,dl_src=40:44:44:44:44:49 actions=push_mpls:0x8848,load:0xa->OXM_OF_MPLS_LABEL[[]],CONTROLLER:65535
  cookie=0xb, n_packets=3, n_bytes=180, mpls,dl_src=50:55:55:55:55:55 actions=load:0x3e8->OXM_OF_MPLS_LABEL[[]],CONTROLLER:65535
  cookie=0xc, n_packets=3, n_bytes=180, dl_src=70:77:77:77:77:77 actions=push_mpls:0x8848,load:0x3e8->OXM_OF_MPLS_LABEL[[]],load:0x7->OXM_OF_MPLS_TC[[]],CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=180, dl_src=60:66:66:66:00:08 actions=pop_mpls:0x0806,resubmit(1,1)
+ cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:01 actions=pop_mpls:0x0800,dec_ttl(0),CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:02 actions=pop_mpls:0x0800,load:0xa000001->NXM_OF_IP_DST[[]],CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:03 actions=pop_mpls:0x0800,move:NXM_OF_IP_DST[[]]->NXM_OF_IP_SRC[[]],CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:04 actions=pop_mpls:0x0800,push:NXM_OF_IP_DST[[]],pop:NXM_OF_IP_SRC[[]],CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:05 actions=pop_mpls:0x0800,multipath(eth_src,50,modulo_n,256,0,NXM_OF_IP_SRC[[0..7]]),CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:06 actions=pop_mpls:0x0800,bundle_load(eth_src,50,hrw,ofport,NXM_OF_IP_SRC[[0..15]],slaves:1,2),CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:07 actions=pop_mpls:0x0800,learn(table=1,hard_timeout=60,eth_type=0x800,nw_proto=6,NXM_OF_IP_SRC[[]]=NXM_OF_IP_DST[[]]),CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:09 actions=pop_mpls:0x0800,mod_nw_tos:48,CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:0a actions=pop_mpls:0x0800,mod_nw_dst:10.0.0.1,CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:0b actions=pop_mpls:0x0800,mod_nw_src:10.0.0.1,CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:04:00 actions=pop_mpls:0x0800,push_mpls:0x8847,CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:04:01 actions=pop_mpls:0x0800,push_mpls:0x8848,dec_mpls_ttl,CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:04:10 actions=pop_mpls:0x0800,dec_ttl(0),push_mpls:0x8848,dec_mpls_ttl,CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:05:00 actions=push_mpls:0x8848,pop_mpls:0x8847,CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:05:01 actions=push_mpls:0x8847,pop_mpls:0x8848,dec_mpls_ttl,CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:05:10 actions=push_mpls:0x8848,dec_mpls_ttl,pop_mpls:0x8847,dec_mpls_ttl,CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:66:66 actions=pop_mpls:0x0800,CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=198, dl_src=60:66:66:66:01:00 actions=pop_mpls:0x8848,CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=198, dl_src=60:66:66:66:01:01 actions=pop_mpls:0x8847,dec_mpls_ttl,CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=198, dl_src=60:66:66:66:01:02 actions=pop_mpls:0x8848,load:0x3->OXM_OF_MPLS_TC[[]],CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=198, dl_src=60:66:66:66:02:00 actions=pop_mpls:0x8847,pop_mpls:0x0800,CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=198, dl_src=60:66:66:66:02:01 actions=pop_mpls:0x8848,pop_mpls:0x0800,dec_ttl(0),CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=198, dl_src=60:66:66:66:02:10 actions=pop_mpls:0x8847,dec_mpls_ttl,pop_mpls:0x0800,dec_ttl(0),CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=210, dl_src=60:66:66:66:03:00 actions=pop_mpls:0x8848,pop_mpls:0x8848,CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=210, dl_src=60:66:66:66:03:01 actions=pop_mpls:0x8847,pop_mpls:0x8847,dec_mpls_ttl,CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=210, dl_src=60:66:66:66:03:10 actions=pop_mpls:0x8848,dec_mpls_ttl,pop_mpls:0x8848,dec_mpls_ttl,CONTROLLER:65535
+ cookie=0xd, table=1, n_packets=3, n_bytes=168, arp actions=CONTROLLER:65535
 NXST_FLOW reply:
 ])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - MPLS handling with goto_table])
+OVS_VSWITCHD_START([dnl
+   add-port br0 p1 -- set Interface p1 type=dummy
+])
+ON_EXIT([kill `cat ovs-ofctl.pid`])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_DATA([flows.txt], [dnl
+table=0 mplsm actions=pop_mpls:0x800,goto_table(1)
+table=1 ip,ip_dscp=8 actions=controller
+])
+AT_CHECK([ovs-ofctl -O OpenFlow12 add-flows br0 flows.txt])
+
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with a single MPLS label stack entry which tcpdump -vve shows as:
+dnl 60:66:66:66:00:08 > 50:54:00:00:00:01, ethertype MPLS multicast (0x8848), length 62: MPLS (label 20, exp 0, [S], ttl 32)
+dnl             (tos 0x20, ttl 255, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl         192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x77ec (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl -O OpenFlow12 monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 01 60 66 66 66 00 08 88 48 00 01 41 20 45 20 00 2c 00 00 00 00 ff 06 3a 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([STRIP_METADATA ofctl_monitor.log], [0], [dnl
+OFPT_PACKET_IN (OF1.2) (xid=0x0): table_id=1 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:08,dl_dst=50:54:00:00:00:01,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=32,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7744
+dnl
+OFPT_PACKET_IN (OF1.2) (xid=0x0): table_id=1 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:08,dl_dst=50:54:00:00:00:01,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=32,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7744
+dnl
+OFPT_PACKET_IN (OF1.2) (xid=0x0): table_id=1 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:08,dl_dst=50:54:00:00:00:01,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=32,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7744
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+AT_CHECK([ovs-ofctl -O OpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
+ n_packets=3, n_bytes=186, mplsm actions=pop_mpls:0x0800,goto_table:1
+ table=1, n_packets=3, n_bytes=174, ip,nw_tos=32 actions=CONTROLLER:65535
+OFPST_FLOW reply (OF1.2):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - MPLS handling with write_actions])
+OVS_VSWITCHD_START([dnl
+   add-port br0 p1 -- set Interface p1 type=dummy
+])
+ON_EXIT([kill `cat ovs-ofctl.pid`])
+
+dnl N.B: The first (and only) action that accesses L3 data after the
+dnl pop_mpls action is present in write_actions. This exercises recirculation
+dnl triggered in write_actions due to a previous action not in write actions.
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_DATA([flows.txt], [dnl
+mplsm actions=pop_mpls:0x800,write_actions(dec_ttl,controller)
+])
+AT_CHECK([ovs-ofctl -O OpenFlow12 add-flows br0 flows.txt])
+
+dnl Modified MPLS pop action.
+dnl The input is a frame with a single MPLS label stack entry which tcpdump -vve shows as:
+dnl 60:66:66:66:00:08 > 50:54:00:00:00:01, ethertype MPLS multicast (0x8848), length 62: MPLS (label 20, exp 0, [S], ttl 32)
+dnl             (tos 0x20, ttl 255, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl         192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x77ec (correct), seq 42:46, win 10000, length 4
+AT_CHECK([ovs-ofctl -O OpenFlow12 monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 01 60 66 66 66 00 08 88 48 00 01 41 20 45 20 00 2c 00 00 00 00 ff 06 3a 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45'
+done
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
+
+AT_CHECK([STRIP_METADATA ofctl_monitor.log], [0], [dnl
+OFPT_PACKET_IN (OF1.2) (xid=0x0): table_id=254 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:08,dl_dst=50:54:00:00:00:01,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=32,nw_ecn=0,nw_ttl=254,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7744
+dnl
+OFPT_PACKET_IN (OF1.2) (xid=0x0): table_id=254 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:08,dl_dst=50:54:00:00:00:01,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=32,nw_ecn=0,nw_ttl=254,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7744
+dnl
+OFPT_PACKET_IN (OF1.2) (xid=0x0): table_id=254 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:00:08,dl_dst=50:54:00:00:00:01,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=32,nw_ecn=0,nw_ttl=254,tp_src=80,tp_dst=0,tcp_flags=0x000 tcp_csum:7744
+])
+
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+
+AT_CHECK([ovs-ofctl -O OpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
+ n_packets=3, n_bytes=186, mplsm actions=pop_mpls:0x0800,write_actions(dec_ttl,CONTROLLER:65535)
+OFPST_FLOW reply (OF1.2):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - table-miss flow (OpenFlow 1.0)])
 OVS_VSWITCHD_START([dnl

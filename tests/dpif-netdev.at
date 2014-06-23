@@ -17,6 +17,7 @@ grep 'flow_dump ' | sed '
     s/.*flow_dump //
     s/used:[0-9]*\.[0-9]*/used:0.0/
 ' | sort | uniq]])
+m4_define([STRIP_METADATA], [[sed 's/metadata=0x[0-9a-f]*/metadata=0x0/']])
 
 AT_SETUP([dpif-netdev - dummy interface])
 # Create br0 with interfaces p1 and p7
