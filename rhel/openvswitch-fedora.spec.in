@@ -6,6 +6,10 @@
 # are permitted in any medium without royalty provided the copyright
 # notice and this notice are preserved.  This file is offered as-is,
 # without warranty of any kind.
+#
+# If tests have to be skipped while building, specify the '--without check'
+# option. For example:
+# rpmbuild -bb --without check rhel/openvswitch-fedora.spec
 
 #%define kernel 2.6.40.4-5.fc15.x86_64
 
@@ -25,6 +29,8 @@ Buildroot: /tmp/openvswitch-fedora-rpm
 Requires(post):  systemd-units
 Requires(preun): systemd-units
 Requires(postun): systemd-units
+
+%bcond_without check
 
 %description
 Open vSwitch provides standard network bridging functions augmented with
@@ -73,6 +79,16 @@ install -d -m 755 $RPM_BUILD_ROOT/var/lib/openvswitch
 
 # Get rid of stuff we don't want to make RPM happy.
 (cd "$RPM_BUILD_ROOT" && rm -f usr/lib/lib*)
+
+%check
+%if %{with check}
+    if make check TESTSUITEFLAGS='%{_smp_mflags}' ||
+       make check TESTSUITEFLAGS='--recheck'; then :;
+    else
+        cat tests/testsuite.log
+        exit 1
+    fi
+%endif
 
 %clean
 rm -rf $RPM_BUILD_ROOT

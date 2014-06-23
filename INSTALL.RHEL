@@ -79,6 +79,11 @@ RHEL.  On RHEL 5, the default RPM source directory is
 
    This produces two RPMs: "openvswitch" and "openvswitch-debuginfo".
 
+   The above command automatically runs the Open vSwitch unit tests.
+   To disable the unit tests, run:
+
+       rpmbuild -bb --without check rhel/openvswitch.spec
+
    If the build fails with "configure: error: source dir
    /lib/modules/2.6.32-279.el6.x86_64/build doesn't exist" or similar,
    then the kernel-devel package is missing or buggy.  Go back to step

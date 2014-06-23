@@ -31,6 +31,11 @@ Fedora.  On Fedora 17, it is $HOME/rpmbuild/SOURCES.
 
    This produces one RPM: "openvswitch".
 
+   The above command automatically runs the Open vSwitch unit tests.
+   To disable the unit tests, run:
+
+       rpmbuild -bb --without check rhel/openvswitch-fedora.spec
+
 5. On Fedora 17, to build the Open vSwitch kernel module, run:
 
 	rpmbuild -bb rhel/openvswitch-kmod-fedora.spec
