@@ -63,6 +63,9 @@ VLOG_DEFINE_THIS_MODULE(ofproto_dpif_xlate);
 #define MAX_INTERNAL_RESUBMITS 1   /* Max resbmits allowed using rules in
                                       internal table. */
 
+/* Timeout for internal rules created to handle recirculation */
+#define RECIRC_TIMEOUT 60
+
 /* Maximum number of resubmit actions in a flow translation, whether they are
  * recursive or not. */
 #define MAX_RESUBMITS (MAX_RESUBMIT_RECURSION * MAX_RESUBMIT_RECURSION)
@@ -196,6 +199,12 @@ struct xlate_ctx {
     bool use_recirc;            /* Should generate recirc? */
     struct xlate_recirc recirc; /* Information used for generating
                                  * recirculation actions */
+
+    /* True if a packet was but is no longer MPLS (due to an MPLS pop action).
+     * This is a trigger for recirculation in cases where translating an action
+     * or looking up a flow requires access to the fields of the packet after
+     * the MPLS label stack that was originally present. */
+    bool was_mpls;
 
     /* OpenFlow 1.1+ action set.
      *
@@ -2913,6 +2922,67 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
 }
 
 static void
+compose_recirculate_action(struct xlate_ctx *ctx,
+                           const struct ofpact *ofpacts_base,
+                           const struct ofpact *ofpact_current,
+                           size_t ofpacts_base_len)
+{
+    uint32_t id;
+    int error;
+    unsigned ofpacts_len;
+    struct match match;
+    struct rule *rule;
+    struct ofpbuf ofpacts;
+
+    ctx->exit = true;
+
+    ofpacts_len = ofpacts_base_len -
+        ((uint8_t *)ofpact_current - (uint8_t *)ofpacts_base);
+
+    if (ctx->rule) {
+        id = rule_dpif_get_recirc_id(ctx->rule);
+    } else {
+        /* In the case where ctx has no rule then allocate a recirc id.
+         * The life-cycle of this recirc id is managed by associating it
+         * with the internal rule that is created to to handle
+         * recirculation below.
+         *
+         * The known use-case of this is packet_out which
+         * translates actions without a rule */
+        id = ofproto_dpif_alloc_recirc_id(ctx->xbridge->ofproto);
+    }
+    if (!id) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_ERR_RL(&rl, "Failed to allocate recirculation id");
+        return;
+    }
+
+    match_init_catchall(&match);
+    match_set_recirc_id(&match, id);
+    ofpbuf_use_const(&ofpacts, ofpact_current, ofpacts_len);
+    error = ofproto_dpif_add_internal_flow(ctx->xbridge->ofproto, &match,
+                                           RECIRC_RULE_PRIORITY,
+                                           RECIRC_TIMEOUT, &ofpacts, &rule);
+    if (error) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_ERR_RL(&rl, "Failed to add post recirculation flow %s",
+                    match_to_string(&match, 0));
+        return;
+    }
+    /* If ctx has no rule then associate the recirc id, which
+     * was allocated above, with the internal rule. This allows
+     * the recirc id to be released when the internal rule times out. */
+    if (!ctx->rule) {
+        rule_set_recirc_id(rule, id);
+    }
+
+    ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
+                                          &ctx->xout->odp_actions,
+                                          &ctx->xout->wc);
+    nl_msg_put_u32(&ctx->xout->odp_actions, OVS_ACTION_ATTR_RECIRC, id);
+}
+
+static void
 compose_mpls_push_action(struct xlate_ctx *ctx, struct ofpact_push_mpls *mpls)
 {
     struct flow_wildcards *wc = &ctx->xout->wc;
@@ -2951,7 +3021,11 @@ compose_mpls_pop_action(struct xlate_ctx *ctx, ovs_be16 eth_type)
     struct flow *flow = &ctx->xin->flow;
     int n = flow_count_mpls_labels(flow, wc);
 
-    if (!flow_pop_mpls(flow, n, eth_type, wc) && n >= FLOW_MAX_MPLS_LABELS) {
+    if (flow_pop_mpls(flow, n, eth_type, wc)) {
+        if (ctx->xbridge->enable_recirc && !eth_type_mpls(eth_type)) {
+            ctx->was_mpls = true;
+        }
+    } else if (n >= FLOW_MAX_MPLS_LABELS) {
         if (ctx->xin->packet != NULL) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
             VLOG_WARN_RL(&rl, "bridge %s: dropping packet on which an "
@@ -3329,6 +3403,83 @@ xlate_action_set(struct xlate_ctx *ctx)
     ofpbuf_uninit(&action_list);
 }
 
+static bool
+ofpact_needs_recirculation_after_mpls(const struct xlate_ctx *ctx,
+                                      const struct ofpact *a)
+{
+    struct flow_wildcards *wc = &ctx->xout->wc;
+    struct flow *flow = &ctx->xin->flow;
+
+    switch (a->type) {
+    case OFPACT_OUTPUT:
+    case OFPACT_GROUP:
+    case OFPACT_CONTROLLER:
+    case OFPACT_STRIP_VLAN:
+    case OFPACT_SET_VLAN_PCP:
+    case OFPACT_SET_VLAN_VID:
+    case OFPACT_ENQUEUE:
+    case OFPACT_PUSH_VLAN:
+    case OFPACT_SET_ETH_SRC:
+    case OFPACT_SET_ETH_DST:
+    case OFPACT_SET_TUNNEL:
+    case OFPACT_SET_QUEUE:
+    case OFPACT_POP_QUEUE:
+    case OFPACT_POP_MPLS:
+    case OFPACT_DEC_MPLS_TTL:
+    case OFPACT_SET_MPLS_TTL:
+    case OFPACT_SET_MPLS_TC:
+    case OFPACT_SET_MPLS_LABEL:
+    case OFPACT_NOTE:
+    case OFPACT_OUTPUT_REG:
+    case OFPACT_EXIT:
+    case OFPACT_METER:
+    case OFPACT_WRITE_METADATA:
+    case OFPACT_WRITE_ACTIONS:
+    case OFPACT_CLEAR_ACTIONS:
+    case OFPACT_SAMPLE:
+        return false;
+
+    case OFPACT_SET_IPV4_SRC:
+    case OFPACT_SET_IPV4_DST:
+    case OFPACT_SET_IP_DSCP:
+    case OFPACT_SET_IP_ECN:
+    case OFPACT_SET_IP_TTL:
+    case OFPACT_SET_L4_SRC_PORT:
+    case OFPACT_SET_L4_DST_PORT:
+    case OFPACT_RESUBMIT:
+    case OFPACT_STACK_PUSH:
+    case OFPACT_STACK_POP:
+    case OFPACT_DEC_TTL:
+    case OFPACT_MULTIPATH:
+    case OFPACT_BUNDLE:
+    case OFPACT_LEARN:
+    case OFPACT_FIN_TIMEOUT:
+    case OFPACT_GOTO_TABLE:
+        return true;
+
+    case OFPACT_REG_MOVE:
+        return (mf_is_l3_or_higher(ofpact_get_REG_MOVE(a)->dst.field) ||
+                mf_is_l3_or_higher(ofpact_get_REG_MOVE(a)->src.field));
+
+    case OFPACT_REG_LOAD:
+        return mf_is_l3_or_higher(ofpact_get_REG_LOAD(a)->dst.field);
+
+    case OFPACT_SET_FIELD:
+        return mf_is_l3_or_higher(ofpact_get_SET_FIELD(a)->field);
+
+    case OFPACT_PUSH_MPLS:
+        /* Recirculate if it is an IP packet with a zero ttl.  This may
+         * indicate that the packet was previously MPLS and an MPLS pop action
+         * converted it to IP. In this case recirculating should reveal the IP
+         * TTL which is used as the basis for a new MPLS LSE. */
+        return (!flow_count_mpls_labels(flow, wc)
+                && flow->nw_ttl == 0
+                && is_ip_any(flow));
+    }
+
+    OVS_NOT_REACHED();
+}
+
 static void
 do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
                  struct xlate_ctx *ctx)
@@ -3347,6 +3498,11 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         if (ctx->exit) {
             break;
+        }
+
+        if (ctx->was_mpls && ofpact_needs_recirculation_after_mpls(ctx, a)) {
+            compose_recirculate_action(ctx, ofpacts, a, ofpacts_len);
+            return;
         }
 
         switch (a->type) {
@@ -3606,7 +3762,12 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_GOTO_TABLE: {
             struct ofpact_goto_table *ogt = ofpact_get_GOTO_TABLE(a);
 
-            ovs_assert(ctx->table_id < ogt->table_id);
+            /* Allow ctx->table_id == TBL_INTERNAL, which will be greater
+             * than ogt->table_id. This is to allow goto_table actions that
+             * triggered recirculation: ctx->table_id will be TBL_INTERNAL
+             * after recirculation. */
+            ovs_assert(ctx->table_id == TBL_INTERNAL
+                       || ctx->table_id < ogt->table_id);
             xlate_table_action(ctx, ctx->xin->flow.in_port.ofp_port,
                                ogt->table_id, true, true);
             break;
@@ -3825,6 +3986,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     ctx.table_id = 0;
     ctx.exit = false;
     ctx.use_recirc = false;
+    ctx.was_mpls = false;
 
     if (!xin->ofpacts && !ctx.rule) {
         ctx.table_id = rule_dpif_lookup(ctx.xbridge->ofproto, flow,
