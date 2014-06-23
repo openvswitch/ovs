@@ -69,6 +69,7 @@ VLOG_DEFINE_THIS_MODULE(dpif_netdev);
 /* By default, choose a priority in the middle. */
 #define NETDEV_RULE_PRIORITY 0x8000
 
+#define FLOW_DUMP_MAX_BATCH 50
 #define NR_THREADS 1
 /* Use per thread recirc_depth to prevent recirculation loop. */
 #define MAX_RECIRC_DEPTH 5
@@ -1438,8 +1439,8 @@ dpif_netdev_flow_dump_destroy(struct dpif_flow_dump *dump_)
 struct dpif_netdev_flow_dump_thread {
     struct dpif_flow_dump_thread up;
     struct dpif_netdev_flow_dump *dump;
-    struct odputil_keybuf keybuf;
-    struct odputil_keybuf maskbuf;
+    struct odputil_keybuf keybuf[FLOW_DUMP_MAX_BATCH];
+    struct odputil_keybuf maskbuf[FLOW_DUMP_MAX_BATCH];
 };
 
 static struct dpif_netdev_flow_dump_thread *
@@ -1472,65 +1473,73 @@ dpif_netdev_flow_dump_thread_destroy(struct dpif_flow_dump_thread *thread_)
 /* XXX the caller must use 'actions' without quiescing */
 static int
 dpif_netdev_flow_dump_next(struct dpif_flow_dump_thread *thread_,
-                           struct dpif_flow *f, int max_flows OVS_UNUSED)
+                           struct dpif_flow *flows, int max_flows)
 {
     struct dpif_netdev_flow_dump_thread *thread
         = dpif_netdev_flow_dump_thread_cast(thread_);
     struct dpif_netdev_flow_dump *dump = thread->dump;
     struct dpif_netdev *dpif = dpif_netdev_cast(thread->up.dpif);
+    struct dp_netdev_flow *netdev_flows[FLOW_DUMP_MAX_BATCH];
     struct dp_netdev *dp = get_dp_netdev(&dpif->dpif);
-    struct dp_netdev_flow *netdev_flow;
-    struct flow_wildcards wc;
-    struct dp_netdev_actions *dp_actions;
-    struct ofpbuf buf;
-    int error;
+    int n_flows = 0;
+    int i;
 
     ovs_mutex_lock(&dump->mutex);
-    error = dump->status;
-    if (!error) {
-        struct hmap_node *node;
-
+    if (!dump->status) {
         fat_rwlock_rdlock(&dp->cls.rwlock);
-        node = hmap_at_position(&dp->flow_table, &dump->bucket, &dump->offset);
-        if (node) {
-            netdev_flow = CONTAINER_OF(node, struct dp_netdev_flow, node);
+        for (n_flows = 0; n_flows < MIN(max_flows, FLOW_DUMP_MAX_BATCH);
+             n_flows++) {
+            struct hmap_node *node;
+
+            node = hmap_at_position(&dp->flow_table, &dump->bucket,
+                                    &dump->offset);
+            if (!node) {
+                dump->status = EOF;
+                break;
+            }
+            netdev_flows[n_flows] = CONTAINER_OF(node, struct dp_netdev_flow,
+                                                 node);
         }
         fat_rwlock_unlock(&dp->cls.rwlock);
-        if (!node) {
-            dump->status = error = EOF;
-        }
     }
     ovs_mutex_unlock(&dump->mutex);
-    if (error) {
-        return 0;
+
+    for (i = 0; i < n_flows; i++) {
+        struct odputil_keybuf *maskbuf = &thread->maskbuf[i];
+        struct odputil_keybuf *keybuf = &thread->keybuf[i];
+        struct dp_netdev_flow *netdev_flow = netdev_flows[i];
+        struct dpif_flow *f = &flows[i];
+        struct dp_netdev_actions *dp_actions;
+        struct flow_wildcards wc;
+        struct ofpbuf buf;
+
+        minimask_expand(&netdev_flow->cr.match.mask, &wc);
+
+        /* Key. */
+        ofpbuf_use_stack(&buf, keybuf, sizeof *keybuf);
+        odp_flow_key_from_flow(&buf, &netdev_flow->flow, &wc.masks,
+                               netdev_flow->flow.in_port.odp_port, true);
+        f->key = ofpbuf_data(&buf);
+        f->key_len = ofpbuf_size(&buf);
+
+        /* Mask. */
+        ofpbuf_use_stack(&buf, maskbuf, sizeof *maskbuf);
+        odp_flow_key_from_mask(&buf, &wc.masks, &netdev_flow->flow,
+                               odp_to_u32(wc.masks.in_port.odp_port),
+                               SIZE_MAX, true);
+        f->mask = ofpbuf_data(&buf);
+        f->mask_len = ofpbuf_size(&buf);
+
+        /* Actions. */
+        dp_actions = dp_netdev_flow_get_actions(netdev_flow);
+        f->actions = dp_actions->actions;
+        f->actions_len = dp_actions->size;
+
+        /* Stats. */
+        get_dpif_flow_stats(netdev_flow, &f->stats);
     }
 
-    minimask_expand(&netdev_flow->cr.match.mask, &wc);
-
-    /* Key. */
-    ofpbuf_use_stack(&buf, &thread->keybuf, sizeof thread->keybuf);
-    odp_flow_key_from_flow(&buf, &netdev_flow->flow, &wc.masks,
-                           netdev_flow->flow.in_port.odp_port, true);
-    f->key = ofpbuf_data(&buf);
-    f->key_len = ofpbuf_size(&buf);
-
-    /* Mask. */
-    ofpbuf_use_stack(&buf, &thread->maskbuf, sizeof thread->maskbuf);
-    odp_flow_key_from_mask(&buf, &wc.masks, &netdev_flow->flow,
-                           odp_to_u32(wc.masks.in_port.odp_port),
-                           SIZE_MAX, true);
-    f->mask = ofpbuf_data(&buf);
-    f->mask_len = ofpbuf_size(&buf);
-
-    /* Actions. */
-    dp_actions = dp_netdev_flow_get_actions(netdev_flow);
-    f->actions = dp_actions->actions;
-    f->actions_len = dp_actions->size;
-
-    /* Stats. */
-    get_dpif_flow_stats(netdev_flow, &f->stats);
-
-    return 1;
+    return n_flows;
 }
 
 static int
