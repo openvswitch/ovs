@@ -1179,8 +1179,11 @@ dpdk_init(int argc, char **argv)
 {
     int result;
 
-    if (strcmp(argv[1], "--dpdk"))
+    if (argc < 2 || strcmp(argv[1], "--dpdk"))
         return 0;
+
+    /* Make sure program name passed to rte_eal_init() is vswitchd. */
+    argv[1] = argv[0];
 
     argc--;
     argv++;
@@ -1193,7 +1196,10 @@ dpdk_init(int argc, char **argv)
     rte_memzone_dump();
     rte_eal_init_ret = 0;
 
-    return result;
+    if (argc > result)
+        argv[result] = argv[0];
+
+    return result + 1;
 }
 
 void
