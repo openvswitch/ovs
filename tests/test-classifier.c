@@ -432,6 +432,9 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
         flow.nw_proto = nw_proto_values[get_value(&x, N_NW_PROTO_VALUES)];
         flow.nw_tos = nw_dscp_values[get_value(&x, N_NW_DSCP_VALUES)];
 
+        /* This assertion is here to suppress a GCC 4.9 array-bounds warning */
+        ovs_assert(cls->cls->n_tries <= CLS_MAX_TRIES);
+
         cr0 = classifier_lookup(cls, &flow, &wc);
         cr1 = tcls_lookup(tcls, &flow);
         assert((cr0 == NULL) == (cr1 == NULL));
