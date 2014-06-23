@@ -27,7 +27,7 @@ struct nlattr;
 struct dpif_packet;
 struct pkt_metadata;
 
-typedef void (*odp_execute_cb)(void *dp, struct dpif_packet *packet,
+typedef void (*odp_execute_cb)(void *dp, struct dpif_packet **packets, int cnt,
                                struct pkt_metadata *,
                                const struct nlattr *action, bool may_steal);
 
@@ -35,8 +35,8 @@ typedef void (*odp_execute_cb)(void *dp, struct dpif_packet *packet,
  * to 'dp_execute_action', if non-NULL.  Currently this is called only for
  * actions OVS_ACTION_ATTR_OUTPUT and OVS_ACTION_ATTR_USERSPACE so
  * 'dp_execute_action' needs to handle only these. */
-void odp_execute_actions(void *dp, struct dpif_packet *packet, bool steal,
-                         struct pkt_metadata *,
+void odp_execute_actions(void *dp, struct dpif_packet **packets, int cnt,
+                         bool steal, struct pkt_metadata *,
                          const struct nlattr *actions, size_t actions_len,
                          odp_execute_cb dp_execute_action);
 #endif

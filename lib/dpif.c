@@ -1061,13 +1061,16 @@ struct dpif_execute_helper_aux {
 /* This is called for actions that need the context of the datapath to be
  * meaningful. */
 static void
-dpif_execute_helper_cb(void *aux_, struct dpif_packet *packet,
+dpif_execute_helper_cb(void *aux_, struct dpif_packet **packets, int cnt,
                        struct pkt_metadata *md,
                        const struct nlattr *action, bool may_steal OVS_UNUSED)
 {
     struct dpif_execute_helper_aux *aux = aux_;
     struct dpif_execute execute;
     int type = nl_attr_type(action);
+    struct ofpbuf * packet = &packets[0]->ofpbuf;
+
+    ovs_assert(cnt == 1);
 
     switch ((enum ovs_action_attr)type) {
     case OVS_ACTION_ATTR_OUTPUT:
@@ -1075,7 +1078,7 @@ dpif_execute_helper_cb(void *aux_, struct dpif_packet *packet,
     case OVS_ACTION_ATTR_RECIRC:
         execute.actions = action;
         execute.actions_len = NLA_ALIGN(action->nla_len);
-        execute.packet = &packet->ofpbuf;
+        execute.packet = packet;
         execute.md = *md;
         execute.needs_help = false;
         aux->error = aux->dpif->dpif_class->execute(aux->dpif, &execute);
@@ -1103,13 +1106,14 @@ static int
 dpif_execute_with_help(struct dpif *dpif, struct dpif_execute *execute)
 {
     struct dpif_execute_helper_aux aux = {dpif, 0};
-    struct dpif_packet packet;
+    struct dpif_packet packet, *pp;
 
     COVERAGE_INC(dpif_execute_with_help);
 
     packet.ofpbuf = *execute->packet;
+    pp = &packet;
 
-    odp_execute_actions(&aux, &packet, false, &execute->md, execute->actions,
+    odp_execute_actions(&aux, &pp, 1, false, &execute->md, execute->actions,
                         execute->actions_len, dpif_execute_helper_cb);
 
     /* Even though may_steal is set to false, some actions could modify or

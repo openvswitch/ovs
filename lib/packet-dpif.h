@@ -27,6 +27,7 @@ extern "C" {
 
 struct dpif_packet {
     struct ofpbuf ofpbuf;       /* Packet data. */
+    uint32_t dp_hash;           /* Packet hash. */
 };
 
 struct dpif_packet *dpif_packet_new_with_headroom(size_t size,

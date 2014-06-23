@@ -62,5 +62,7 @@ dpif_packet_clone(struct dpif_packet *p)
 
     newp = dpif_packet_clone_from_ofpbuf(&p->ofpbuf);
 
+    newp->dp_hash = p->dp_hash;
+
     return newp;
 }

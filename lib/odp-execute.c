@@ -90,7 +90,7 @@ odp_execute_set_action(struct dpif_packet *packet, const struct nlattr *a,
 
     case OVS_KEY_ATTR_ETHERNET:
         odp_eth_set_addrs(&packet->ofpbuf,
-                          nl_attr_get_unspec(a, sizeof(struct ovs_key_ethernet)));
+                       nl_attr_get_unspec(a, sizeof(struct ovs_key_ethernet)));
         break;
 
     case OVS_KEY_ATTR_IPV4:
@@ -136,7 +136,7 @@ odp_execute_set_action(struct dpif_packet *packet, const struct nlattr *a,
         break;
 
     case OVS_KEY_ATTR_DP_HASH:
-        md->dp_hash = nl_attr_get_u32(a);
+        packet->dp_hash = md->dp_hash = nl_attr_get_u32(a);
         break;
 
     case OVS_KEY_ATTR_RECIRC_ID:
@@ -159,8 +159,8 @@ odp_execute_set_action(struct dpif_packet *packet, const struct nlattr *a,
 }
 
 static void
-odp_execute_actions__(void *dp, struct dpif_packet *packet, bool steal,
-                      struct pkt_metadata *,
+odp_execute_actions__(void *dp, struct dpif_packet **packets, int cnt,
+                      bool steal, struct pkt_metadata *,
                       const struct nlattr *actions, size_t actions_len,
                       odp_execute_cb dp_execute_action, bool more_actions);
 
@@ -194,19 +194,21 @@ odp_execute_sample(void *dp, struct dpif_packet *packet, bool steal,
         }
     }
 
-    odp_execute_actions__(dp, packet, steal, md, nl_attr_get(subactions),
+    odp_execute_actions__(dp, &packet, 1, steal, md, nl_attr_get(subactions),
                           nl_attr_get_size(subactions), dp_execute_action,
                           more_actions);
 }
 
 static void
-odp_execute_actions__(void *dp, struct dpif_packet *packet, bool steal,
-                      struct pkt_metadata *md,
+odp_execute_actions__(void *dp, struct dpif_packet **packets, int cnt,
+                      bool steal, struct pkt_metadata *md,
                       const struct nlattr *actions, size_t actions_len,
                       odp_execute_cb dp_execute_action, bool more_actions)
 {
     const struct nlattr *a;
     unsigned int left;
+
+    int i;
 
     NL_ATTR_FOR_EACH_UNSAFE (a, left, actions, actions_len) {
         int type = nl_attr_type(a);
@@ -222,7 +224,7 @@ odp_execute_actions__(void *dp, struct dpif_packet *packet, bool steal,
                 bool may_steal = steal && (!more_actions
                                            && left <= NLA_ALIGN(a->nla_len)
                                            && type != OVS_ACTION_ATTR_RECIRC);
-                dp_execute_action(dp, packet, md, a, may_steal);
+                dp_execute_action(dp, packets, cnt, md, a, may_steal);
             }
             break;
 
@@ -237,9 +239,20 @@ odp_execute_actions__(void *dp, struct dpif_packet *packet, bool steal,
                 struct flow flow;
                 uint32_t hash;
 
-                flow_extract(&packet->ofpbuf, md, &flow);
-                hash = flow_hash_5tuple(&flow, hash_act->hash_basis);
-                md->dp_hash = hash ? hash : 1;
+                for (i = 0; i < cnt; i++) {
+                    struct ofpbuf *ofp = &packets[i]->ofpbuf;
+
+                    flow_extract(ofp, md, &flow);
+                    hash = flow_hash_5tuple(&flow, hash_act->hash_basis);
+
+                    /* The hash of the first packet is in shared metadata */
+                    if (i == 0) {
+                        md->dp_hash = hash ? hash : 1;
+                    }
+
+                    /* We also store the hash value with each packet */
+                    packets[i]->dp_hash = hash ? hash : 1;
+                }
             } else {
                 /* Assert on unknown hash algorithm.  */
                 OVS_NOT_REACHED();
@@ -249,33 +262,56 @@ odp_execute_actions__(void *dp, struct dpif_packet *packet, bool steal,
 
         case OVS_ACTION_ATTR_PUSH_VLAN: {
             const struct ovs_action_push_vlan *vlan = nl_attr_get(a);
-            eth_push_vlan(&packet->ofpbuf,
-                          htons(ETH_TYPE_VLAN), vlan->vlan_tci);
+
+            for (i = 0; i < cnt; i++) {
+                struct ofpbuf *ofp = &packets[i]->ofpbuf;
+
+                eth_push_vlan(ofp, htons(ETH_TYPE_VLAN), vlan->vlan_tci);
+            }
             break;
         }
 
         case OVS_ACTION_ATTR_POP_VLAN:
-            eth_pop_vlan(&packet->ofpbuf);
+            for (i = 0; i < cnt; i++) {
+                struct ofpbuf *ofp = &packets[i]->ofpbuf;
+
+                eth_pop_vlan(ofp);
+            }
             break;
 
         case OVS_ACTION_ATTR_PUSH_MPLS: {
             const struct ovs_action_push_mpls *mpls = nl_attr_get(a);
-            push_mpls(&packet->ofpbuf,
-                      mpls->mpls_ethertype, mpls->mpls_lse);
+
+            for (i = 0; i < cnt; i++) {
+                struct ofpbuf *ofp = &packets[i]->ofpbuf;
+
+                push_mpls(ofp, mpls->mpls_ethertype, mpls->mpls_lse);
+            }
             break;
          }
 
         case OVS_ACTION_ATTR_POP_MPLS:
-            pop_mpls(&packet->ofpbuf, nl_attr_get_be16(a));
+            for (i = 0; i < cnt; i++) {
+                struct ofpbuf *ofp = &packets[i]->ofpbuf;
+
+                pop_mpls(ofp, nl_attr_get_be16(a));
+            }
             break;
 
         case OVS_ACTION_ATTR_SET:
-            odp_execute_set_action(packet, nl_attr_get(a), md);
+            for (i = 0; i < cnt; i++) {
+                odp_execute_set_action(packets[i], nl_attr_get(a),
+                                       md);
+            }
             break;
 
         case OVS_ACTION_ATTR_SAMPLE:
-            odp_execute_sample(dp, packet, steal, md, a, dp_execute_action,
-                               more_actions || left > NLA_ALIGN(a->nla_len));
+            for (i = 0; i < cnt; i++) {
+                odp_execute_sample(dp, packets[i], steal, md, a,
+                                   dp_execute_action,
+                                   more_actions ||
+                                   left > NLA_ALIGN(a->nla_len));
+            }
             break;
 
         case OVS_ACTION_ATTR_UNSPEC:
@@ -286,16 +322,20 @@ odp_execute_actions__(void *dp, struct dpif_packet *packet, bool steal,
 }
 
 void
-odp_execute_actions(void *dp, struct dpif_packet *packet, bool steal,
-                    struct pkt_metadata *md,
+odp_execute_actions(void *dp, struct dpif_packet **packets, int cnt,
+                    bool steal, struct pkt_metadata *md,
                     const struct nlattr *actions, size_t actions_len,
                     odp_execute_cb dp_execute_action)
 {
-    odp_execute_actions__(dp, packet, steal, md, actions, actions_len,
+    odp_execute_actions__(dp, packets, cnt, steal, md, actions, actions_len,
                           dp_execute_action, false);
 
     if (!actions_len && steal) {
         /* Drop action. */
-        dpif_packet_delete(packet);
+        int i;
+
+        for (i = 0; i < cnt; i++) {
+            dpif_packet_delete(packets[i]);
+        }
     }
 }

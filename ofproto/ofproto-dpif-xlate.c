@@ -2658,7 +2658,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
                                           &ctx->xout->odp_actions,
                                           &ctx->xout->wc);
 
-    odp_execute_actions(NULL, packet, false, &md,
+    odp_execute_actions(NULL, &packet, 1, false, &md,
                         ofpbuf_data(&ctx->xout->odp_actions),
                         ofpbuf_size(&ctx->xout->odp_actions), NULL);
 
