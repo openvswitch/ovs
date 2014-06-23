@@ -41,6 +41,7 @@
 /utils.c
 /vlan.c
 /vport-generic.c
+/vport-geneve.c
 /vport-gre.c
 /vport-internal_dev.c
 /vport-lisp.c
