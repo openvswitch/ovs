@@ -650,10 +650,14 @@ netdev_rxq_drain(struct netdev_rxq *rx)
             : 0);
 }
 
-/* Sends 'buffer' on 'netdev'.  Returns 0 if successful, otherwise a positive
- * errno value.  Returns EAGAIN without blocking if the packet cannot be queued
- * immediately.  Returns EMSGSIZE if a partial packet was transmitted or if
- * the packet is too big or too small to transmit on the device.
+/* Sends 'buffers' on 'netdev'.  Returns 0 if successful (for every packet),
+ * otherwise a positive errno value.  Returns EAGAIN without blocking if
+ * at least one the packets cannot be queued immediately.  Returns EMSGSIZE
+ * if a partial packet was transmitted or if a packet is too big or too small
+ * to transmit on the device.
+ *
+ * If the function returns a non-zero value, some of the packets might have
+ * been sent anyway.
  *
  * To retain ownership of 'buffer' caller can set may_steal to false.
  *
@@ -663,12 +667,13 @@ netdev_rxq_drain(struct netdev_rxq *rx)
  * Some network devices may not implement support for this function.  In such
  * cases this function will always return EOPNOTSUPP. */
 int
-netdev_send(struct netdev *netdev, struct dpif_packet *buffer, bool may_steal)
+netdev_send(struct netdev *netdev, struct dpif_packet **buffers, int cnt,
+            bool may_steal)
 {
     int error;
 
     error = (netdev->netdev_class->send
-             ? netdev->netdev_class->send(netdev, buffer, may_steal)
+             ? netdev->netdev_class->send(netdev, buffers, cnt, may_steal)
              : EOPNOTSUPP);
     if (!error) {
         COVERAGE_INC(netdev_sent);

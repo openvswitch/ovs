@@ -686,14 +686,13 @@ netdev_bsd_rxq_drain(struct netdev_rxq *rxq_)
  * system or a tap device.
  */
 static int
-netdev_bsd_send(struct netdev *netdev_, struct dpif_packet *pkt,
+netdev_bsd_send(struct netdev *netdev_, struct dpif_packet **pkts, int cnt,
                 bool may_steal)
 {
     struct netdev_bsd *dev = netdev_bsd_cast(netdev_);
     const char *name = netdev_get_name(netdev_);
-    const void *data = ofpbuf_data(&pkt->ofpbuf);
-    size_t size = ofpbuf_size(&pkt->ofpbuf);
     int error;
+    int i;
 
     ovs_mutex_lock(&dev->mutex);
     if (dev->tap_fd < 0 && !dev->pcap) {
@@ -702,35 +701,43 @@ netdev_bsd_send(struct netdev *netdev_, struct dpif_packet *pkt,
         error = 0;
     }
 
-    while (!error) {
-        ssize_t retval;
-        if (dev->tap_fd >= 0) {
-            retval = write(dev->tap_fd, data, size);
-        } else {
-            retval = pcap_inject(dev->pcap, data, size);
-        }
-        if (retval < 0) {
-            if (errno == EINTR) {
-                continue;
+    for (i = 0; i < cnt; i++) {
+        const void *data = ofpbuf_data(&pkts[i]->ofpbuf);
+        size_t size = ofpbuf_size(&pkts[i]->ofpbuf);
+
+        while (!error) {
+            ssize_t retval;
+            if (dev->tap_fd >= 0) {
+                retval = write(dev->tap_fd, data, size);
             } else {
-                error = errno;
-                if (error != EAGAIN) {
-                    VLOG_WARN_RL(&rl, "error sending Ethernet packet on %s: "
-                                 "%s", name, ovs_strerror(error));
-                }
+                retval = pcap_inject(dev->pcap, data, size);
             }
-        } else if (retval != size) {
-            VLOG_WARN_RL(&rl, "sent partial Ethernet packet (%"PRIuSIZE" bytes of "
-                         "%"PRIuSIZE") on %s", retval, size, name);
-            error = EMSGSIZE;
-        } else {
-            break;
+            if (retval < 0) {
+                if (errno == EINTR) {
+                    continue;
+                } else {
+                    error = errno;
+                    if (error != EAGAIN) {
+                        VLOG_WARN_RL(&rl, "error sending Ethernet packet on"
+                                     " %s: %s", name, ovs_strerror(error));
+                    }
+                }
+            } else if (retval != size) {
+                VLOG_WARN_RL(&rl, "sent partial Ethernet packet "
+                                  "(%"PRIuSIZE" bytes of "
+                                  "%"PRIuSIZE") on %s", retval, size, name);
+                error = EMSGSIZE;
+            } else {
+                break;
+            }
         }
     }
 
     ovs_mutex_unlock(&dev->mutex);
     if (may_steal) {
-        dpif_packet_delete(pkt);
+        for (i = 0; i < cnt; i++) {
+            dpif_packet_delete(pkts[i]);
+        }
     }
 
     return error;

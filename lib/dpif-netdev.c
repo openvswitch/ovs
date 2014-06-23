@@ -2123,7 +2123,7 @@ dp_execute_cb(void *aux_, struct dpif_packet *packet,
     case OVS_ACTION_ATTR_OUTPUT:
         p = dp_netdev_lookup_port(aux->dp, u32_to_odp(nl_attr_get_u32(a)));
         if (p) {
-            netdev_send(p->netdev, packet, may_steal);
+            netdev_send(p->netdev, &packet, 1, may_steal);
         }
         break;
 

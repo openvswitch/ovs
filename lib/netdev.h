@@ -173,7 +173,8 @@ void netdev_rxq_wait(struct netdev_rxq *);
 int netdev_rxq_drain(struct netdev_rxq *);
 
 /* Packet transmission. */
-int netdev_send(struct netdev *, struct dpif_packet *, bool may_steal);
+int netdev_send(struct netdev *, struct dpif_packet **, int cnt,
+                bool may_steal);
 void netdev_send_wait(struct netdev *);
 
 /* Hardware address. */
