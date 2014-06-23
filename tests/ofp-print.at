@@ -451,7 +451,7 @@ tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:0
 ])
 AT_CLEANUP
 
-AT_SETUP([OFPT_PACKET_IN - OF1.0, with hex output of packet data)])
+AT_SETUP([OFPT_PACKET_IN - OF1.0, with hex output of packet data])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
 01 0a 00 4e 00 00 00 00 00 00 01 11 00 3c 00 03 \
