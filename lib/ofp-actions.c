@@ -492,9 +492,6 @@ ofpact_from_nxast(const union ofp_action *a, enum ofputil_action_code code,
         break;
 
     case OFPUTIL_NXAST_POP_MPLS:
-        if (eth_type_mpls(a->pop_mpls.ethertype)) {
-            return OFPERR_OFPBAC_BAD_ARGUMENT;
-        }
         ofpact_put_POP_MPLS(out)->ethertype = a->pop_mpls.ethertype;
         break;
 
@@ -1260,9 +1257,6 @@ ofpact_from_openflow11(const union ofp_action *a, enum ofp_version version,
         break;
 
     case OFPUTIL_OFPAT11_POP_MPLS:
-        if (eth_type_mpls(a->ofp11_pop_mpls.ethertype)) {
-            return OFPERR_OFPBAC_BAD_ARGUMENT;
-        }
         ofpact_put_POP_MPLS(out)->ethertype = a->ofp11_pop_mpls.ethertype;
         break;
 
