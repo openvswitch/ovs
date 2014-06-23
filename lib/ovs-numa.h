@@ -31,6 +31,7 @@ void ovs_numa_init(void);
 bool ovs_numa_numa_id_is_valid(int numa_id);
 bool ovs_numa_core_id_is_valid(int core_id);
 int ovs_numa_get_n_numas(void);
+void ovs_numa_set_cpu_mask(const char *cmask);
 int ovs_numa_get_n_cores(void);
 int ovs_numa_get_numa_id(int core_id);
 int ovs_numa_get_n_cores_on_numa(int numa_id);
@@ -58,6 +59,12 @@ static inline bool
 ovs_numa_core_id_is_valid(int core_id OVS_UNUSED)
 {
     return false;
+}
+
+static inline void
+ovs_numa_set_cpu_mask(const char *cmask OVS_UNUSED)
+{
+    /* Nothing */
 }
 
 static inline int

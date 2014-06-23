@@ -69,6 +69,7 @@ struct cpu_core {
     struct list list_node;     /* In 'numa_node->cores' list. */
     struct numa_node *numa;    /* numa node containing the core. */
     int core_id;               /* Core id. */
+    bool available;            /* If the core can be pinned. */
     bool pinned;               /* If a thread has been pinned to the core. */
 };
 
@@ -123,6 +124,7 @@ discover_numa_and_core(void)
                     list_insert(&n->cores, &c->list_node);
                     c->core_id = core_id;
                     c->numa = n;
+                    c->available = true;
                     n_cpus++;
                 }
             }
@@ -222,8 +224,8 @@ ovs_numa_get_n_cores_on_numa(int numa_id)
     return OVS_CORE_UNSPEC;
 }
 
-/* Returns the number of unpinned cpu cores on numa node.  Returns
- * OVS_CORE_UNSPEC if 'numa_id' is invalid. */
+/* Returns the number of cpu cores that are available and unpinned
+ * on numa node.  Returns OVS_CORE_UNSPEC if 'numa_id' is invalid. */
 int
 ovs_numa_get_n_unpinned_cores_on_numa(int numa_id)
 {
@@ -236,7 +238,7 @@ ovs_numa_get_n_unpinned_cores_on_numa(int numa_id)
                                                  hash_int(numa_id, 0)),
                             struct numa_node, hmap_node);
         LIST_FOR_EACH(core, list_node, &numa->cores) {
-            if (!core->pinned) {
+            if (core->available && !core->pinned) {
                 count++;
             }
         }
@@ -248,7 +250,8 @@ ovs_numa_get_n_unpinned_cores_on_numa(int numa_id)
 }
 
 /* Given 'core_id', tries to pin that core.  Returns true, if succeeds.
- * False, if the core has already been pinned or if 'core_id' is invalid. */
+ * False, if the core has already been pinned, or if it is invalid or
+ * not available. */
 bool
 ovs_numa_try_pin_core_specific(int core_id)
 {
@@ -258,7 +261,7 @@ ovs_numa_try_pin_core_specific(int core_id)
         core = CONTAINER_OF(hmap_first_with_hash(&all_cpu_cores,
                                                  hash_int(core_id, 0)),
                             struct cpu_core, hmap_node);
-        if (!core->pinned) {
+        if (core->available && !core->pinned) {
             core->pinned = true;
             return true;
         }
@@ -267,16 +270,16 @@ ovs_numa_try_pin_core_specific(int core_id)
     return false;
 }
 
-/* Searches through all cores for an unpinned core.  Returns the core_id
- * if found and set the 'core->pinned' to true.  Otherwise, returns
- * OVS_CORE_UNSPEC. */
+/* Searches through all cores for an unpinned and available core.  Returns
+ * the 'core_id' if found and sets the 'core->pinned' to true.  Otherwise,
+ * returns OVS_CORE_UNSPEC. */
 int
 ovs_numa_get_unpinned_core_any(void)
 {
     struct cpu_core *core;
 
     HMAP_FOR_EACH(core, hmap_node, &all_cpu_cores) {
-        if (!core->pinned) {
+        if (core->available && !core->pinned) {
             core->pinned = true;
             return core->core_id;
         }
@@ -285,9 +288,9 @@ ovs_numa_get_unpinned_core_any(void)
     return OVS_CORE_UNSPEC;
 }
 
-/* Searches through all cores on numa node with 'numa_id' for an unpinned
- * core.  Returns the core_id if found and sets the 'core->pinned' to true.
- * Otherwise, returns OVS_CORE_UNSPEC. */
+/* Searches through all cores on numa node with 'numa_id' for an
+ * unpinned and available core.  Returns the core_id if found and
+ * sets the 'core->pinned' to true.  Otherwise, returns OVS_CORE_UNSPEC. */
 int
 ovs_numa_get_unpinned_core_on_numa(int numa_id)
 {
@@ -299,7 +302,7 @@ ovs_numa_get_unpinned_core_on_numa(int numa_id)
                                                  hash_int(numa_id, 0)),
                             struct numa_node, hmap_node);
         LIST_FOR_EACH(core, list_node, &numa->cores) {
-            if (!core->pinned) {
+            if (core->available && !core->pinned) {
                 core->pinned = true;
                 return core->core_id;
             }
@@ -309,7 +312,7 @@ ovs_numa_get_unpinned_core_on_numa(int numa_id)
     return OVS_CORE_UNSPEC;
 }
 
-/* Resets the 'core->pinned' for the core with 'core_id'. */
+/* Unpins the core with 'core_id'. */
 void
 ovs_numa_unpin_core(int core_id)
 {
@@ -320,6 +323,68 @@ ovs_numa_unpin_core(int core_id)
                                                  hash_int(core_id, 0)),
                             struct cpu_core, hmap_node);
         core->pinned = false;
+    }
+}
+
+/* Reads the cpu mask configuration from 'cmask' and sets the
+ * 'available' of corresponding cores.  For unspecified cores,
+ * sets 'available' to false. */
+void
+ovs_numa_set_cpu_mask(const char *cmask)
+{
+    int core_id = 0;
+    int i;
+
+    if (!found_numa_and_core) {
+        return;
+    }
+
+    /* If no mask specified, resets the 'available' to true for all cores. */
+    if (!cmask) {
+        struct cpu_core *core;
+
+        HMAP_FOR_EACH(core, hmap_node, &all_cpu_cores) {
+            core->available = true;
+        }
+
+        return;
+    }
+
+    for (i = strlen(cmask) - 1; i >= 0; i--) {
+        char hex = toupper(cmask[i]);
+        int bin, j;
+
+        if (hex >= '0' && hex <= '9') {
+            bin = hex - '0';
+        } else if (hex >= 'A' && hex <= 'F') {
+            bin = hex - 'A' + 10;
+        } else {
+            bin = 0;
+            VLOG_WARN("Invalid cpu mask: %c", cmask[i]);
+        }
+
+        for (j = 0; j < 4; j++) {
+            struct cpu_core *core;
+
+            core = CONTAINER_OF(hmap_first_with_hash(&all_cpu_cores,
+                                                     hash_int(core_id++, 0)),
+                                struct cpu_core, hmap_node);
+            core->available = (bin >> j) & 0x1;
+
+            if (core_id >= hmap_count(&all_cpu_cores)) {
+                return;
+            }
+	}
+    }
+
+    /* For unspecified cores, sets 'available' to false.  */
+    while (core_id < hmap_count(&all_cpu_cores)) {
+        struct cpu_core *core;
+
+        core = CONTAINER_OF(hmap_first_with_hash(&all_cpu_cores,
+                                                 hash_int(core_id++, 0)),
+                            struct cpu_core, hmap_node);
+        core->available = false;
     }
 }
 
