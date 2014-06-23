@@ -29,6 +29,7 @@
 #include "odp-util.h"
 #include "ofp-print.h"
 #include "ofpbuf.h"
+#include "packet-dpif.h"
 #include "packets.h"
 #include "pcap-file.h"
 #include "poll-loop.h"
@@ -779,7 +780,8 @@ netdev_dummy_rxq_dealloc(struct netdev_rxq *rxq_)
 }
 
 static int
-netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct ofpbuf **arr, int *c)
+netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dpif_packet **arr,
+                      int *c)
 {
     struct netdev_rxq_dummy *rx = netdev_rxq_dummy_cast(rxq_);
     struct netdev_dummy *netdev = netdev_dummy_cast(rx->up.netdev);
@@ -803,7 +805,10 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct ofpbuf **arr, int *c)
     ovs_mutex_unlock(&netdev->mutex);
 
     dp_packet_pad(packet);
-    arr[0] = packet;
+
+    /* This performs a (sometimes unnecessary) copy */
+    arr[0] = dpif_packet_clone_from_ofpbuf(packet);
+    ofpbuf_delete(packet);
     *c = 1;
     return 0;
 }
@@ -841,11 +846,12 @@ netdev_dummy_rxq_drain(struct netdev_rxq *rxq_)
 }
 
 static int
-netdev_dummy_send(struct netdev *netdev, struct ofpbuf *pkt, bool may_steal)
+netdev_dummy_send(struct netdev *netdev, struct dpif_packet *pkt,
+                  bool may_steal)
 {
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
-    const void *buffer = ofpbuf_data(pkt);
-    size_t size = ofpbuf_size(pkt);
+    const void *buffer = ofpbuf_data(&pkt->ofpbuf);
+    size_t size = ofpbuf_size(&pkt->ofpbuf);
 
     if (size < ETH_HEADER_LEN) {
         return EMSGSIZE;
@@ -881,7 +887,7 @@ netdev_dummy_send(struct netdev *netdev, struct ofpbuf *pkt, bool may_steal)
 
     ovs_mutex_unlock(&dev->mutex);
     if (may_steal) {
-        ofpbuf_delete(pkt);
+        dpif_packet_delete(pkt);
     }
 
     return 0;

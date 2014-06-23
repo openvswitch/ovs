@@ -38,6 +38,7 @@
 #include "ofpbuf.h"
 #include "ovs-thread.h"
 #include "ovs-rcu.h"
+#include "packet-dpif.h"
 #include "packets.h"
 #include "shash.h"
 #include "sset.h"
@@ -203,8 +204,9 @@ dpdk_rte_mzalloc(size_t sz)
 }
 
 void
-free_dpdk_buf(struct ofpbuf *b)
+free_dpdk_buf(struct dpif_packet *p)
 {
+    struct ofpbuf *b = &p->ofpbuf;
     struct rte_mbuf *pkt = (struct rte_mbuf *) b->dpdk_buf;
 
     rte_mempool_put(pkt->pool, pkt);
@@ -217,16 +219,16 @@ __rte_pktmbuf_init(struct rte_mempool *mp,
                    unsigned i OVS_UNUSED)
 {
     struct rte_mbuf *m = _m;
-    uint32_t buf_len = mp->elt_size - sizeof(struct ofpbuf);
+    uint32_t buf_len = mp->elt_size - sizeof(struct dpif_packet);
 
-    RTE_MBUF_ASSERT(mp->elt_size >= sizeof(struct ofpbuf));
+    RTE_MBUF_ASSERT(mp->elt_size >= sizeof(struct dpif_packet));
 
     memset(m, 0, mp->elt_size);
 
     /* start of buffer is just after mbuf structure */
-    m->buf_addr = (char *)m + sizeof(struct ofpbuf);
+    m->buf_addr = (char *)m + sizeof(struct dpif_packet);
     m->buf_physaddr = rte_mempool_virt2phy(mp, m) +
-                    sizeof(struct ofpbuf);
+                    sizeof(struct dpif_packet);
     m->buf_len = (uint16_t)buf_len;
 
     /* keep some headroom between start of buffer and data */
@@ -586,7 +588,8 @@ dpdk_queue_flush(struct netdev_dpdk *dev, int qid)
 }
 
 static int
-netdev_dpdk_rxq_recv(struct netdev_rxq *rxq_, struct ofpbuf **packets, int *c)
+netdev_dpdk_rxq_recv(struct netdev_rxq *rxq_, struct dpif_packet **packets,
+                     int *c)
 {
     struct netdev_rxq_dpdk *rx = netdev_rxq_dpdk_cast(rxq_);
     struct netdev *netdev = rx->up.netdev;
@@ -672,9 +675,10 @@ dpdk_do_tx_copy(struct netdev *netdev, char *buf, int size)
 
 static int
 netdev_dpdk_send(struct netdev *netdev,
-                 struct ofpbuf *ofpbuf, bool may_steal)
+                 struct dpif_packet *packet, bool may_steal)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    struct ofpbuf *ofpbuf = &packet->ofpbuf;
     int ret;
 
     if (ofpbuf_size(ofpbuf) > dev->max_packet_len) {
@@ -693,7 +697,7 @@ netdev_dpdk_send(struct netdev *netdev,
         dpdk_do_tx_copy(netdev, (char *) ofpbuf_data(ofpbuf), ofpbuf_size(ofpbuf));
 
         if (may_steal) {
-            ofpbuf_delete(ofpbuf);
+            dpif_packet_delete(packet);
         }
     } else {
         int qid;

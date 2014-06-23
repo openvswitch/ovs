@@ -52,6 +52,7 @@
 #include "ofp-print.h"
 #include "ofpbuf.h"
 #include "ovs-rcu.h"
+#include "packet-dpif.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "random.h"
@@ -337,11 +338,12 @@ static int dp_netdev_output_userspace(struct dp_netdev *dp, struct ofpbuf *,
                                       const struct nlattr *userdata);
 static void dp_netdev_execute_actions(struct dp_netdev *dp,
                                       const struct miniflow *,
-                                      struct ofpbuf *, bool may_steal,
+                                      struct dpif_packet *, bool may_steal,
                                       struct pkt_metadata *,
                                       const struct nlattr *actions,
                                       size_t actions_len);
-static void dp_netdev_port_input(struct dp_netdev *dp, struct ofpbuf *packet,
+static void dp_netdev_port_input(struct dp_netdev *dp,
+                                 struct dpif_packet *packet,
                                  struct pkt_metadata *);
 
 static void dp_netdev_set_pmd_threads(struct dp_netdev *, int n);
@@ -1522,6 +1524,7 @@ static int
 dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
+    struct dpif_packet packet;
     struct pkt_metadata *md = &execute->md;
     struct {
         struct miniflow flow;
@@ -1537,8 +1540,15 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
     miniflow_initialize(&key.flow, key.buf);
     miniflow_extract(execute->packet, md, &key.flow);
 
-    dp_netdev_execute_actions(dp, &key.flow, execute->packet, false, md,
+    packet.ofpbuf = *execute->packet;
+
+    dp_netdev_execute_actions(dp, &key.flow, &packet, false, md,
                               execute->actions, execute->actions_len);
+
+    /* Even though may_steal is set to false, some actions could modify or
+     * reallocate the ofpbuf memory. We need to pass those changes to the
+     * caller */
+    *execute->packet = packet.ofpbuf;
 
     return 0;
 }
@@ -1751,7 +1761,7 @@ dp_netdev_process_rxq_port(struct dp_netdev *dp,
                           struct dp_netdev_port *port,
                           struct netdev_rxq *rxq)
 {
-    struct ofpbuf *packet[NETDEV_MAX_RX_BATCH];
+    struct dpif_packet *packet[NETDEV_MAX_RX_BATCH];
     int error, c;
 
     error = netdev_rxq_recv(rxq, packet, &c);
@@ -1993,27 +2003,28 @@ dp_netdev_count_packet(struct dp_netdev *dp, enum dp_stat_type type)
 }
 
 static void
-dp_netdev_input(struct dp_netdev *dp, struct ofpbuf *packet,
+dp_netdev_input(struct dp_netdev *dp, struct dpif_packet *packet,
                 struct pkt_metadata *md)
 {
     struct dp_netdev_flow *netdev_flow;
+    struct ofpbuf *buf = &packet->ofpbuf;
     struct {
         struct miniflow flow;
         uint32_t buf[FLOW_U32S];
     } key;
 
-    if (ofpbuf_size(packet) < ETH_HEADER_LEN) {
-        ofpbuf_delete(packet);
+    if (ofpbuf_size(buf) < ETH_HEADER_LEN) {
+        dpif_packet_delete(packet);
         return;
     }
     miniflow_initialize(&key.flow, key.buf);
-    miniflow_extract(packet, md, &key.flow);
+    miniflow_extract(buf, md, &key.flow);
 
     netdev_flow = dp_netdev_lookup_flow(dp, &key.flow);
     if (netdev_flow) {
         struct dp_netdev_actions *actions;
 
-        dp_netdev_flow_used(netdev_flow, packet, &key.flow);
+        dp_netdev_flow_used(netdev_flow, buf, &key.flow);
 
         actions = dp_netdev_flow_get_actions(netdev_flow);
         dp_netdev_execute_actions(dp, &key.flow, packet, true, md,
@@ -2021,15 +2032,14 @@ dp_netdev_input(struct dp_netdev *dp, struct ofpbuf *packet,
         dp_netdev_count_packet(dp, DP_STAT_HIT);
     } else if (dp->handler_queues) {
         dp_netdev_count_packet(dp, DP_STAT_MISS);
-        dp_netdev_output_userspace(dp, packet,
-                                   miniflow_hash_5tuple(&key.flow, 0)
+        dp_netdev_output_userspace(dp, buf, miniflow_hash_5tuple(&key.flow, 0)
                                    % dp->n_handlers,
                                    DPIF_UC_MISS, &key.flow, NULL);
     }
 }
 
 static void
-dp_netdev_port_input(struct dp_netdev *dp, struct ofpbuf *packet,
+dp_netdev_port_input(struct dp_netdev *dp, struct dpif_packet *packet,
                      struct pkt_metadata *md)
 {
     uint32_t *recirc_depth = recirc_depth_get();
@@ -2099,7 +2109,7 @@ struct dp_netdev_execute_aux {
 };
 
 static void
-dp_execute_cb(void *aux_, struct ofpbuf *packet,
+dp_execute_cb(void *aux_, struct dpif_packet *packet,
               struct pkt_metadata *md,
               const struct nlattr *a, bool may_steal)
     OVS_NO_THREAD_SAFETY_ANALYSIS
@@ -2122,7 +2132,9 @@ dp_execute_cb(void *aux_, struct ofpbuf *packet,
         const struct nlattr *userdata;
 
         userdata = nl_attr_find_nested(a, OVS_USERSPACE_ATTR_USERDATA);
-        userspace_packet = may_steal ? packet : ofpbuf_clone(packet);
+        userspace_packet = may_steal
+                           ? &packet->ofpbuf
+                           : ofpbuf_clone(&packet->ofpbuf);
 
         dp_netdev_output_userspace(aux->dp, userspace_packet,
                                    miniflow_hash_5tuple(aux->key, 0)
@@ -2157,9 +2169,9 @@ dp_execute_cb(void *aux_, struct ofpbuf *packet,
     case OVS_ACTION_ATTR_RECIRC:
         if (*depth < MAX_RECIRC_DEPTH) {
             struct pkt_metadata recirc_md = *md;
-            struct ofpbuf *recirc_packet;
+            struct dpif_packet *recirc_packet;
 
-            recirc_packet = may_steal ? packet : ofpbuf_clone(packet);
+            recirc_packet = may_steal ? packet : dpif_packet_clone(packet);
             recirc_md.recirc_id = nl_attr_get_u32(a);
 
             (*depth)++;
@@ -2186,7 +2198,7 @@ dp_execute_cb(void *aux_, struct ofpbuf *packet,
 
 static void
 dp_netdev_execute_actions(struct dp_netdev *dp, const struct miniflow *key,
-                          struct ofpbuf *packet, bool may_steal,
+                          struct dpif_packet *packet, bool may_steal,
                           struct pkt_metadata *md,
                           const struct nlattr *actions, size_t actions_len)
 {

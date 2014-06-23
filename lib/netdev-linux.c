@@ -62,6 +62,7 @@
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "ovs-atomic.h"
+#include "packet-dpif.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "rtnetlink-link.h"
@@ -984,10 +985,12 @@ netdev_linux_rxq_recv_tap(int fd, struct ofpbuf *buffer)
 }
 
 static int
-netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct ofpbuf **packet, int *c)
+netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dpif_packet **packets,
+                      int *c)
 {
     struct netdev_rxq_linux *rx = netdev_rxq_linux_cast(rxq_);
     struct netdev *netdev = rx->up.netdev;
+    struct dpif_packet *packet;
     struct ofpbuf *buffer;
     ssize_t retval;
     int mtu;
@@ -996,7 +999,9 @@ netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct ofpbuf **packet, int *c)
         mtu = ETH_PAYLOAD_MAX;
     }
 
-    buffer = ofpbuf_new_with_headroom(VLAN_ETH_HEADER_LEN + mtu, DP_NETDEV_HEADROOM);
+    packet = dpif_packet_new_with_headroom(VLAN_ETH_HEADER_LEN + mtu,
+                                           DP_NETDEV_HEADROOM);
+    buffer = &packet->ofpbuf;
 
     retval = (rx->is_tap
               ? netdev_linux_rxq_recv_tap(rx->fd, buffer)
@@ -1010,7 +1015,7 @@ netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct ofpbuf **packet, int *c)
         ofpbuf_delete(buffer);
     } else {
         dp_packet_pad(buffer);
-        packet[0] = buffer;
+        packets[0] = packet;
         *c = 1;
     }
 
@@ -1052,10 +1057,11 @@ netdev_linux_rxq_drain(struct netdev_rxq *rxq_)
  * The kernel maintains a packet transmission queue, so the caller is not
  * expected to do additional queuing of packets. */
 static int
-netdev_linux_send(struct netdev *netdev_, struct ofpbuf *pkt, bool may_steal)
+netdev_linux_send(struct netdev *netdev_, struct dpif_packet *pkt,
+                  bool may_steal)
 {
-    const void *data = ofpbuf_data(pkt);
-    size_t size = ofpbuf_size(pkt);
+    const void *data = ofpbuf_data(&pkt->ofpbuf);
+    size_t size = ofpbuf_size(&pkt->ofpbuf);
 
     for (;;) {
         ssize_t retval;
@@ -1108,7 +1114,7 @@ netdev_linux_send(struct netdev *netdev_, struct ofpbuf *pkt, bool may_steal)
         }
 
         if (may_steal) {
-            ofpbuf_delete(pkt);
+            dpif_packet_delete(pkt);
         }
 
         if (retval < 0) {

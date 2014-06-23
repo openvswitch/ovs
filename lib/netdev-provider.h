@@ -268,7 +268,8 @@ struct netdev_class {
      * network device from being usefully used by the netdev-based "userspace
      * datapath".  It will also prevent the OVS implementation of bonding from
      * working properly over 'netdev'.) */
-    int (*send)(struct netdev *netdev, struct ofpbuf *buffer, bool may_steal);
+    int (*send)(struct netdev *netdev, struct dpif_packet *buffer,
+                bool may_steal);
 
     /* Registers with the poll loop to wake up from the next call to
      * poll_block() when the packet transmission queue for 'netdev' has
@@ -661,8 +662,8 @@ struct netdev_class {
     void (*rxq_destruct)(struct netdev_rxq *);
     void (*rxq_dealloc)(struct netdev_rxq *);
 
-    /* Attempts to receive batch of packets from 'rx' and place array of pointers
-     * into '*pkt'. netdev is responsible for allocating buffers.
+    /* Attempts to receive batch of packets from 'rx' and place array of
+     * pointers into '*pkts'. netdev is responsible for allocating buffers.
      * '*cnt' points to packet count for given batch. Once packets are returned
      * to caller, netdev should give up ownership of ofpbuf data.
      *
@@ -672,7 +673,8 @@ struct netdev_class {
      * Caller is expected to pass array of size MAX_RX_BATCH.
      * This function may be set to null if it would always return EOPNOTSUPP
      * anyhow. */
-    int (*rxq_recv)(struct netdev_rxq *rx, struct ofpbuf **pkt, int *cnt);
+    int (*rxq_recv)(struct netdev_rxq *rx, struct dpif_packet **pkts,
+                    int *cnt);
 
     /* Registers with the poll loop to wake up from the next call to
      * poll_block() when a packet is ready to be received with netdev_rxq_recv()

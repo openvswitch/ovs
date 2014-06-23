@@ -46,6 +46,7 @@
 #include "ofproto/ofproto-dpif-sflow.h"
 #include "ofproto/ofproto-dpif.h"
 #include "ofproto/ofproto-provider.h"
+#include "packet-dpif.h"
 #include "tunnel.h"
 #include "vlog.h"
 
@@ -2643,7 +2644,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
                           uint16_t controller_id)
 {
     struct ofproto_packet_in *pin;
-    struct ofpbuf *packet;
+    struct dpif_packet *packet;
     struct pkt_metadata md = PKT_METADATA_INITIALIZER(0);
 
     ctx->xout->slow |= SLOW_CONTROLLER;
@@ -2651,7 +2652,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
         return;
     }
 
-    packet = ofpbuf_clone(ctx->xin->packet);
+    packet = dpif_packet_clone_from_ofpbuf(ctx->xin->packet);
 
     ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
                                           &ctx->xout->odp_actions,
@@ -2662,8 +2663,8 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
                         ofpbuf_size(&ctx->xout->odp_actions), NULL);
 
     pin = xmalloc(sizeof *pin);
-    pin->up.packet_len = ofpbuf_size(packet);
-    pin->up.packet = ofpbuf_steal_data(packet);
+    pin->up.packet_len = ofpbuf_size(&packet->ofpbuf);
+    pin->up.packet = ofpbuf_steal_data(&packet->ofpbuf);
     pin->up.reason = reason;
     pin->up.table_id = ctx->table_id;
     pin->up.cookie = (ctx->rule
@@ -2691,7 +2692,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
         }
     }
     ofproto_dpif_send_packet_in(ctx->xbridge->ofproto, pin);
-    ofpbuf_delete(packet);
+    dpif_packet_delete(packet);
 }
 
 static void

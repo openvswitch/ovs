@@ -622,7 +622,7 @@ netdev_rxq_close(struct netdev_rxq *rx)
  * This function may be set to null if it would always return EOPNOTSUPP
  * anyhow. */
 int
-netdev_rxq_recv(struct netdev_rxq *rx, struct ofpbuf **buffers, int *cnt)
+netdev_rxq_recv(struct netdev_rxq *rx, struct dpif_packet **buffers, int *cnt)
 {
     int retval;
 
@@ -663,7 +663,7 @@ netdev_rxq_drain(struct netdev_rxq *rx)
  * Some network devices may not implement support for this function.  In such
  * cases this function will always return EOPNOTSUPP. */
 int
-netdev_send(struct netdev *netdev, struct ofpbuf *buffer, bool may_steal)
+netdev_send(struct netdev *netdev, struct dpif_packet *buffer, bool may_steal)
 {
     int error;
 

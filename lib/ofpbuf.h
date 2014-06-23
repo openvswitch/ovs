@@ -176,7 +176,9 @@ static inline void ofpbuf_delete(struct ofpbuf *b)
 {
     if (b) {
         if (b->source == OFPBUF_DPDK) {
-            free_dpdk_buf(b);
+            /* If this ofpbuf was allocated by DPDK it must have been
+             * created as a dpif_packet */
+            free_dpdk_buf((struct dpif_packet*) b);
             return;
         }
 

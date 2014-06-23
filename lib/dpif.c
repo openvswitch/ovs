@@ -34,6 +34,7 @@
 #include "ofp-print.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
+#include "packet-dpif.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "shash.h"
@@ -1060,7 +1061,7 @@ struct dpif_execute_helper_aux {
 /* This is called for actions that need the context of the datapath to be
  * meaningful. */
 static void
-dpif_execute_helper_cb(void *aux_, struct ofpbuf *packet,
+dpif_execute_helper_cb(void *aux_, struct dpif_packet *packet,
                        struct pkt_metadata *md,
                        const struct nlattr *action, bool may_steal OVS_UNUSED)
 {
@@ -1074,7 +1075,7 @@ dpif_execute_helper_cb(void *aux_, struct ofpbuf *packet,
     case OVS_ACTION_ATTR_RECIRC:
         execute.actions = action;
         execute.actions_len = NLA_ALIGN(action->nla_len);
-        execute.packet = packet;
+        execute.packet = &packet->ofpbuf;
         execute.md = *md;
         execute.needs_help = false;
         aux->error = aux->dpif->dpif_class->execute(aux->dpif, &execute);
@@ -1102,12 +1103,20 @@ static int
 dpif_execute_with_help(struct dpif *dpif, struct dpif_execute *execute)
 {
     struct dpif_execute_helper_aux aux = {dpif, 0};
+    struct dpif_packet packet;
 
     COVERAGE_INC(dpif_execute_with_help);
 
-    odp_execute_actions(&aux, execute->packet, false, &execute->md,
-                        execute->actions, execute->actions_len,
-                        dpif_execute_helper_cb);
+    packet.ofpbuf = *execute->packet;
+
+    odp_execute_actions(&aux, &packet, false, &execute->md, execute->actions,
+                        execute->actions_len, dpif_execute_helper_cb);
+
+    /* Even though may_steal is set to false, some actions could modify or
+     * reallocate the ofpbuf memory. We need to pass those changes to the
+     * caller */
+    *execute->packet = packet.ofpbuf;
+
     return aux.error;
 }
 

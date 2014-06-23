@@ -54,6 +54,7 @@
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "ovs-thread.h"
+#include "packet-dpif.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "shash.h"
@@ -620,10 +621,12 @@ netdev_rxq_bsd_recv_tap(struct netdev_rxq_bsd *rxq, struct ofpbuf *buffer)
 }
 
 static int
-netdev_bsd_rxq_recv(struct netdev_rxq *rxq_, struct ofpbuf **packet, int *c)
+netdev_bsd_rxq_recv(struct netdev_rxq *rxq_, struct dpif_packet **packets,
+                    int *c)
 {
     struct netdev_rxq_bsd *rxq = netdev_rxq_bsd_cast(rxq_);
     struct netdev *netdev = rxq->up.netdev;
+    struct dpif_packet *packet;
     struct ofpbuf *buffer;
     ssize_t retval;
     int mtu;
@@ -632,17 +635,19 @@ netdev_bsd_rxq_recv(struct netdev_rxq *rxq_, struct ofpbuf **packet, int *c)
         mtu = ETH_PAYLOAD_MAX;
     }
 
-    buffer = ofpbuf_new_with_headroom(VLAN_ETH_HEADER_LEN + mtu, DP_NETDEV_HEADROOM);
+    packet = dpif_packet_new_with_headroom(VLAN_ETH_HEADER_LEN + mtu,
+                                           DP_NETDEV_HEADROOM);
+    buffer = &packet->ofpbuf;
 
     retval = (rxq->pcap_handle
             ? netdev_rxq_bsd_recv_pcap(rxq, buffer)
             : netdev_rxq_bsd_recv_tap(rxq, buffer));
 
     if (retval) {
-        ofpbuf_delete(buffer);
+        dpif_packet_delete(packet);
     } else {
         dp_packet_pad(buffer);
-        packet[0] = buffer;
+        packets[0] = packet;
         *c = 1;
     }
     return retval;
@@ -681,12 +686,13 @@ netdev_bsd_rxq_drain(struct netdev_rxq *rxq_)
  * system or a tap device.
  */
 static int
-netdev_bsd_send(struct netdev *netdev_, struct ofpbuf *pkt, bool may_steal)
+netdev_bsd_send(struct netdev *netdev_, struct dpif_packet *pkt,
+                bool may_steal)
 {
     struct netdev_bsd *dev = netdev_bsd_cast(netdev_);
     const char *name = netdev_get_name(netdev_);
-    const void *data = ofpbuf_data(pkt);
-    size_t size = ofpbuf_size(pkt);
+    const void *data = ofpbuf_data(&pkt->ofpbuf);
+    size_t size = ofpbuf_size(&pkt->ofpbuf);
     int error;
 
     ovs_mutex_lock(&dev->mutex);
@@ -724,7 +730,7 @@ netdev_bsd_send(struct netdev *netdev_, struct ofpbuf *pkt, bool may_steal)
 
     ovs_mutex_unlock(&dev->mutex);
     if (may_steal) {
-        ofpbuf_delete(pkt);
+        dpif_packet_delete(pkt);
     }
 
     return error;

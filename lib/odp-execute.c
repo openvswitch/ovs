@@ -25,6 +25,7 @@
 #include "netlink.h"
 #include "ofpbuf.h"
 #include "odp-util.h"
+#include "packet-dpif.h"
 #include "packets.h"
 #include "flow.h"
 #include "unaligned.h"
@@ -64,7 +65,7 @@ set_arp(struct ofpbuf *packet, const struct ovs_key_arp *arp_key)
 }
 
 static void
-odp_execute_set_action(struct ofpbuf *packet, const struct nlattr *a,
+odp_execute_set_action(struct dpif_packet *packet, const struct nlattr *a,
                        struct pkt_metadata *md)
 {
     enum ovs_key_attr type = nl_attr_type(a);
@@ -88,44 +89,50 @@ odp_execute_set_action(struct ofpbuf *packet, const struct nlattr *a,
         break;
 
     case OVS_KEY_ATTR_ETHERNET:
-        odp_eth_set_addrs(packet,
+        odp_eth_set_addrs(&packet->ofpbuf,
                           nl_attr_get_unspec(a, sizeof(struct ovs_key_ethernet)));
         break;
 
     case OVS_KEY_ATTR_IPV4:
         ipv4_key = nl_attr_get_unspec(a, sizeof(struct ovs_key_ipv4));
-        packet_set_ipv4(packet, ipv4_key->ipv4_src, ipv4_key->ipv4_dst,
-                        ipv4_key->ipv4_tos, ipv4_key->ipv4_ttl);
+        packet_set_ipv4(&packet->ofpbuf, ipv4_key->ipv4_src,
+                        ipv4_key->ipv4_dst, ipv4_key->ipv4_tos,
+                        ipv4_key->ipv4_ttl);
         break;
 
     case OVS_KEY_ATTR_IPV6:
         ipv6_key = nl_attr_get_unspec(a, sizeof(struct ovs_key_ipv6));
-        packet_set_ipv6(packet, ipv6_key->ipv6_proto, ipv6_key->ipv6_src,
-                        ipv6_key->ipv6_dst, ipv6_key->ipv6_tclass,
-                        ipv6_key->ipv6_label, ipv6_key->ipv6_hlimit);
+        packet_set_ipv6(&packet->ofpbuf, ipv6_key->ipv6_proto,
+                        ipv6_key->ipv6_src, ipv6_key->ipv6_dst,
+                        ipv6_key->ipv6_tclass, ipv6_key->ipv6_label,
+                        ipv6_key->ipv6_hlimit);
         break;
 
     case OVS_KEY_ATTR_TCP:
         tcp_key = nl_attr_get_unspec(a, sizeof(struct ovs_key_tcp));
-        packet_set_tcp_port(packet, tcp_key->tcp_src, tcp_key->tcp_dst);
+        packet_set_tcp_port(&packet->ofpbuf, tcp_key->tcp_src,
+                            tcp_key->tcp_dst);
         break;
 
     case OVS_KEY_ATTR_UDP:
         udp_key = nl_attr_get_unspec(a, sizeof(struct ovs_key_udp));
-        packet_set_udp_port(packet, udp_key->udp_src, udp_key->udp_dst);
+        packet_set_udp_port(&packet->ofpbuf, udp_key->udp_src,
+                            udp_key->udp_dst);
         break;
 
     case OVS_KEY_ATTR_SCTP:
         sctp_key = nl_attr_get_unspec(a, sizeof(struct ovs_key_sctp));
-        packet_set_sctp_port(packet, sctp_key->sctp_src, sctp_key->sctp_dst);
+        packet_set_sctp_port(&packet->ofpbuf, sctp_key->sctp_src,
+                             sctp_key->sctp_dst);
         break;
 
     case OVS_KEY_ATTR_MPLS:
-         set_mpls_lse(packet, nl_attr_get_be32(a));
+         set_mpls_lse(&packet->ofpbuf, nl_attr_get_be32(a));
          break;
 
     case OVS_KEY_ATTR_ARP:
-        set_arp(packet, nl_attr_get_unspec(a, sizeof(struct ovs_key_arp)));
+        set_arp(&packet->ofpbuf,
+                nl_attr_get_unspec(a, sizeof(struct ovs_key_arp)));
         break;
 
     case OVS_KEY_ATTR_DP_HASH:
@@ -152,13 +159,13 @@ odp_execute_set_action(struct ofpbuf *packet, const struct nlattr *a,
 }
 
 static void
-odp_execute_actions__(void *dp, struct ofpbuf *packet, bool steal,
+odp_execute_actions__(void *dp, struct dpif_packet *packet, bool steal,
                       struct pkt_metadata *,
                       const struct nlattr *actions, size_t actions_len,
                       odp_execute_cb dp_execute_action, bool more_actions);
 
 static void
-odp_execute_sample(void *dp, struct ofpbuf *packet, bool steal,
+odp_execute_sample(void *dp, struct dpif_packet *packet, bool steal,
                    struct pkt_metadata *md, const struct nlattr *action,
                    odp_execute_cb dp_execute_action, bool more_actions)
 {
@@ -193,7 +200,7 @@ odp_execute_sample(void *dp, struct ofpbuf *packet, bool steal,
 }
 
 static void
-odp_execute_actions__(void *dp, struct ofpbuf *packet, bool steal,
+odp_execute_actions__(void *dp, struct dpif_packet *packet, bool steal,
                       struct pkt_metadata *md,
                       const struct nlattr *actions, size_t actions_len,
                       odp_execute_cb dp_execute_action, bool more_actions)
@@ -230,7 +237,7 @@ odp_execute_actions__(void *dp, struct ofpbuf *packet, bool steal,
                 struct flow flow;
                 uint32_t hash;
 
-                flow_extract(packet, md, &flow);
+                flow_extract(&packet->ofpbuf, md, &flow);
                 hash = flow_hash_5tuple(&flow, hash_act->hash_basis);
                 md->dp_hash = hash ? hash : 1;
             } else {
@@ -242,22 +249,24 @@ odp_execute_actions__(void *dp, struct ofpbuf *packet, bool steal,
 
         case OVS_ACTION_ATTR_PUSH_VLAN: {
             const struct ovs_action_push_vlan *vlan = nl_attr_get(a);
-            eth_push_vlan(packet, htons(ETH_TYPE_VLAN), vlan->vlan_tci);
+            eth_push_vlan(&packet->ofpbuf,
+                          htons(ETH_TYPE_VLAN), vlan->vlan_tci);
             break;
         }
 
         case OVS_ACTION_ATTR_POP_VLAN:
-            eth_pop_vlan(packet);
+            eth_pop_vlan(&packet->ofpbuf);
             break;
 
         case OVS_ACTION_ATTR_PUSH_MPLS: {
             const struct ovs_action_push_mpls *mpls = nl_attr_get(a);
-            push_mpls(packet, mpls->mpls_ethertype, mpls->mpls_lse);
+            push_mpls(&packet->ofpbuf,
+                      mpls->mpls_ethertype, mpls->mpls_lse);
             break;
          }
 
         case OVS_ACTION_ATTR_POP_MPLS:
-            pop_mpls(packet, nl_attr_get_be16(a));
+            pop_mpls(&packet->ofpbuf, nl_attr_get_be16(a));
             break;
 
         case OVS_ACTION_ATTR_SET:
@@ -277,7 +286,7 @@ odp_execute_actions__(void *dp, struct ofpbuf *packet, bool steal,
 }
 
 void
-odp_execute_actions(void *dp, struct ofpbuf *packet, bool steal,
+odp_execute_actions(void *dp, struct dpif_packet *packet, bool steal,
                     struct pkt_metadata *md,
                     const struct nlattr *actions, size_t actions_len,
                     odp_execute_cb dp_execute_action)
@@ -287,6 +296,6 @@ odp_execute_actions(void *dp, struct ofpbuf *packet, bool steal,
 
     if (!actions_len && steal) {
         /* Drop action. */
-        ofpbuf_delete(packet);
+        dpif_packet_delete(packet);
     }
 }

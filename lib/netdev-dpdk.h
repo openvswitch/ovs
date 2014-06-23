@@ -4,6 +4,8 @@
 #include <config.h>
 #include "ofpbuf.h"
 
+struct dpif_packet;
+
 #ifdef DPDK_NETDEV
 
 #include <rte_config.h>
@@ -20,7 +22,7 @@
 
 int dpdk_init(int argc, char **argv);
 void netdev_dpdk_register(void);
-void free_dpdk_buf(struct ofpbuf *);
+void free_dpdk_buf(struct dpif_packet *);
 int pmd_thread_setaffinity_cpu(int cpu);
 
 #else
@@ -38,7 +40,7 @@ netdev_dpdk_register(void)
 }
 
 static inline void
-free_dpdk_buf(struct ofpbuf *buf OVS_UNUSED)
+free_dpdk_buf(struct dpif_packet *buf OVS_UNUSED)
 {
     /* Nothing */
 }

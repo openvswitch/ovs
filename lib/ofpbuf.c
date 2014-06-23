@@ -140,7 +140,9 @@ ofpbuf_uninit(struct ofpbuf *b)
         } else if (b->source == OFPBUF_DPDK) {
 #ifdef DPDK_NETDEV
             ovs_assert(b != b->dpdk_buf);
-            free_dpdk_buf(b);
+            /* If this ofpbuf was allocated by DPDK it must have been
+             * created as a dpif_packet */
+            free_dpdk_buf((struct dpif_packet*) b);
 #else
             ovs_assert(b->source != OFPBUF_DPDK);
 #endif
