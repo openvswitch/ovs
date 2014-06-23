@@ -208,8 +208,9 @@ config-h-check:
 # Check for printf() type modifiers that MSVC doesn't support.
 ALL_LOCAL += printf-check
 printf-check:
-	@if test -e $(srcdir)/.git && (git --version) >/dev/null 2>&1 && \
-	   git --no-pager grep -n -E -e '%[-+ #0-9.*]*([ztj]|hh)' --and --not -e 'ovs_scan' `git ls-files $(srcdir) | grep '\.[ch]$$' | \
+	@cd $(srcdir); \
+	if test -e .git && (git --version) >/dev/null 2>&1 && \
+	   git --no-pager grep -n -E -e '%[-+ #0-9.*]*([ztj]|hh)' --and --not -e 'ovs_scan' `git ls-files | grep '\.[ch]$$' | \
                grep -vE '^datapath|^lib/sflow|^third-party'`; \
 	then \
 	    echo "See above for list of violations of the rule that"; \
@@ -246,9 +247,10 @@ check-assert-h-usage:
 
 ALL_LOCAL += thread-safety-check
 thread-safety-check:
-	@if test -e '$(srcdir)'/.git && (git --version) >/dev/null 2>&1 && \
-	   grep -n -f '$(srcdir)'/build-aux/thread-safety-blacklist \
-	       `git ls-files '$(srcdir)' | grep '\.[ch]$$' \
+	@cd $(srcdir); \
+	if test -e .git && (git --version) >/dev/null 2>&1 && \
+	   grep -n -f build-aux/thread-safety-blacklist \
+	       `git ls-files | grep '\.[ch]$$' \
                 | $(EGREP) -v '^datapath|^lib/sflow|^third-party'` /dev/null \
 	       | $(EGREP) -v ':[ 	]*/?\*'; \
 	then \
