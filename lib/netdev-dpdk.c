@@ -832,7 +832,6 @@ netdev_dpdk_set_mtu(const struct netdev *netdev, int mtu)
 
     err = dpdk_eth_dev_init(dev);
     if (err) {
-
         dpdk_mp_put(mp);
         dev->mtu = old_mtu;
         dev->dpdk_mp = old_mp;
@@ -1241,14 +1240,16 @@ dpdk_init(int argc, char **argv)
 
     /* Make sure things are initialized ... */
     result = rte_eal_init(argc, argv);
-    if (result < 0)
+    if (result < 0) {
         ovs_abort(result, "Cannot init EAL\n");
+    }
 
     rte_memzone_dump();
     rte_eal_init_ret = 0;
 
-    if (argc > result)
+    if (argc > result) {
         argv[result] = argv[0];
+    }
 
     return result + 1;
 }
