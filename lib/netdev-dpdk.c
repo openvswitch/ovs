@@ -117,6 +117,7 @@ static const struct rte_eth_txconf tx_conf = {
     },
     .tx_free_thresh = 0,
     .tx_rs_thresh = 0,
+    .txq_flags = ETH_TXQ_FLAGS_NOMULTSEGS|ETH_TXQ_FLAGS_NOOFFLOADS,
 };
 
 enum { MAX_RX_QUEUE_LEN = 64 };
