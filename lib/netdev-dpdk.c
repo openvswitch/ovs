@@ -733,13 +733,13 @@ netdev_dpdk_send(struct netdev *netdev, struct dpif_packet **pkts, int cnt,
                     dpdk_queue_pkts(dev, qid,
                                     (struct rte_mbuf **)&pkts[next_tx_idx],
                                     i-next_tx_idx);
-
-                    VLOG_WARN_RL(&rl, "Too big size %d max_packet_len %d",
-                                 (int)size , dev->max_packet_len);
-
-                    dpif_packet_delete(pkts[i]);
-                    dropped++;
                 }
+
+                VLOG_WARN_RL(&rl, "Too big size %d max_packet_len %d",
+                             (int)size , dev->max_packet_len);
+
+                dpif_packet_delete(pkts[i]);
+                dropped++;
                 next_tx_idx = i + 1;
             }
         }
