@@ -81,42 +81,42 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 #define TX_WTHRESH 0  /* Default values of TX write-back threshold reg. */
 
 static const struct rte_eth_conf port_conf = {
-        .rxmode = {
-                .mq_mode = ETH_MQ_RX_RSS,
-                .split_hdr_size = 0,
-                .header_split   = 0, /* Header Split disabled */
-                .hw_ip_checksum = 0, /* IP checksum offload disabled */
-                .hw_vlan_filter = 0, /* VLAN filtering disabled */
-                .jumbo_frame    = 0, /* Jumbo Frame Support disabled */
-                .hw_strip_crc   = 0,
+    .rxmode = {
+        .mq_mode = ETH_MQ_RX_RSS,
+        .split_hdr_size = 0,
+        .header_split   = 0, /* Header Split disabled */
+        .hw_ip_checksum = 0, /* IP checksum offload disabled */
+        .hw_vlan_filter = 0, /* VLAN filtering disabled */
+        .jumbo_frame    = 0, /* Jumbo Frame Support disabled */
+        .hw_strip_crc   = 0,
+    },
+    .rx_adv_conf = {
+        .rss_conf = {
+            .rss_key = NULL,
+            .rss_hf = ETH_RSS_IPV4_TCP | ETH_RSS_IPV4 | ETH_RSS_IPV6,
         },
-        .rx_adv_conf = {
-                .rss_conf = {
-                        .rss_key = NULL,
-                        .rss_hf = ETH_RSS_IPV4_TCP | ETH_RSS_IPV4 | ETH_RSS_IPV6,
-                },
-        },
-        .txmode = {
-                .mq_mode = ETH_MQ_TX_NONE,
-        },
+    },
+    .txmode = {
+        .mq_mode = ETH_MQ_TX_NONE,
+    },
 };
 
 static const struct rte_eth_rxconf rx_conf = {
-        .rx_thresh = {
-                .pthresh = RX_PTHRESH,
-                .hthresh = RX_HTHRESH,
-                .wthresh = RX_WTHRESH,
-        },
+    .rx_thresh = {
+        .pthresh = RX_PTHRESH,
+        .hthresh = RX_HTHRESH,
+        .wthresh = RX_WTHRESH,
+    },
 };
 
 static const struct rte_eth_txconf tx_conf = {
-        .tx_thresh = {
-                .pthresh = TX_PTHRESH,
-                .hthresh = TX_HTHRESH,
-                .wthresh = TX_WTHRESH,
-        },
-        .tx_free_thresh = 0,
-        .tx_rs_thresh = 0,
+    .tx_thresh = {
+        .pthresh = TX_PTHRESH,
+        .hthresh = TX_HTHRESH,
+        .wthresh = TX_WTHRESH,
+    },
+    .tx_free_thresh = 0,
+    .tx_rs_thresh = 0,
 };
 
 enum { MAX_RX_QUEUE_LEN = 64 };
