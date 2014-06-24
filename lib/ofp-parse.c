@@ -2121,6 +2121,12 @@ parse_bucket_str(struct ofputil_bucket *bucket, char *str_,
                 error = xasprintf("invalid watch_group id %"PRIu32,
                                   bucket->watch_group);
             }
+        } else if (!strcasecmp(act, "actions")) {
+            if (ofputil_parse_key_value(&arg, &act, &arg)) {
+                error = str_to_ofpact__(pos, act, arg, &ofpacts, n_actions,
+                                        usable_protocols);
+                n_actions++;
+            }
         } else {
             error = str_to_ofpact__(pos, act, arg, &ofpacts, n_actions,
                                     usable_protocols);

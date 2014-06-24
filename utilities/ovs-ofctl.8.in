@@ -1899,11 +1899,13 @@ be specified.
 \fIbucket_parameters\fR consists of a list of \fIfield\fB=\fIvalue\fR
 assignments, separated by commas or white space followed by a
 comma-separated list of actions.
-The syntax of actions are same
-to \fBactions=\fR field described in \fBFlow Syntax\fR above.
 The fields for \fIbucket_parameters\fR are:
 .
 .RS
+.IP \fBactions=\fR[\fIaction\fR][\fB,\fIaction\fR...]\fR
+The syntax of actions are identical to the \fBactions=\fR field described in
+\fBFlow Syntax\fR above. Specyfing \fBactions=\fR is optional, any unknown
+bucket parameter will be interpreted as an action.
 .IP \fBweight=\fIvalue\fR
 The relative weight of the bucket as an integer. This may be used by the switch
 during bucket select for groups whose \fBtype\fR is \fBselect\fR.
