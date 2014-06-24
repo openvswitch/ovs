@@ -286,10 +286,10 @@ static void tbl_mask_array_delete_mask(struct mask_array *ma,
 	 * </Note>
 	 */
 	for (i = 0; i < ma->count; i++)
-		if (mask == ma->masks[i]) {
+		if (mask == ovsl_dereference(ma->masks[i])) {
 			struct sw_flow_mask *last;
 
-			last = ma->masks[ma->count - 1];
+			last = ovsl_dereference(ma->masks[ma->count - 1]);
 			rcu_assign_pointer(ma->masks[i], last);
 			ma->count--;
 			break;
@@ -297,7 +297,7 @@ static void tbl_mask_array_delete_mask(struct mask_array *ma,
 
 	/* Remove the deleted mask pointers from the invalid section. */
 	for (i = ma->count; i < ma->max; i++)
-		if (mask == ma->masks[i])
+		if (mask == ovsl_dereference(ma->masks[i]))
 			RCU_INIT_POINTER(ma->masks[i], NULL);
 }
 
