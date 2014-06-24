@@ -286,8 +286,9 @@ struct cls_rule *classifier_lookup(const struct classifier *cls,
                                    const struct flow *,
                                    struct flow_wildcards *)
     OVS_REQ_RDLOCK(cls->rwlock);
-struct cls_rule *classifier_lookup_miniflow_first(const struct classifier *cls,
-                                                  const struct miniflow *)
+void classifier_lookup_miniflow_batch(const struct classifier *cls,
+                                      const struct miniflow **flows,
+                                      struct cls_rule **rules, size_t len)
     OVS_REQ_RDLOCK(cls->rwlock);
 bool classifier_rule_overlaps(const struct classifier *cls,
                               const struct cls_rule *)

@@ -942,32 +942,47 @@ find_match_miniflow(const struct cls_subtable *subtable,
     return NULL;
 }
 
-/* Finds and returns the highest-priority rule in 'cls' that matches
- * 'miniflow'.  Returns a null pointer if no rules in 'cls' match 'flow'.
- * If multiple rules of equal priority match 'flow', returns one arbitrarily.
+/* For each miniflow in 'flows' performs a classifier lookup writing the result
+ * into the corresponding slot in 'rules'.  If a particular entry in 'flows' is
+ * NULL it is skipped.
  *
- * This function is optimized for the userspace datapath, which only ever has
- * one priority value for it's flows!
- */
-struct cls_rule *classifier_lookup_miniflow_first(const struct classifier *cls_,
-                                                  const struct miniflow *flow)
+ * This function is optimized for use in the userspace datapath and therefore
+ * does not implement a lot of features available in the standard
+ * classifier_lookup() function.  Specifically, it does not implement
+ * priorities, instead returning any rule which matches the flow. */
+void
+classifier_lookup_miniflow_batch(const struct classifier *cls_,
+                                 const struct miniflow **flows,
+                                 struct cls_rule **rules, size_t len)
 {
     struct cls_classifier *cls = cls_->cls;
     struct cls_subtable *subtable;
+    size_t i, begin = 0;
 
+    memset(rules, 0, len * sizeof *rules);
     PVECTOR_FOR_EACH (subtable, &cls->subtables) {
-        struct cls_match *rule;
+        for (i = begin; i < len; i++) {
+            struct cls_match *match;
+            uint32_t hash;
 
-        rule = find_match_miniflow(subtable, flow,
-                                   miniflow_hash_in_minimask(flow,
-                                                             &subtable->mask,
-                                                             0));
-        if (rule) {
-            return rule->cls_rule;
+            if (OVS_UNLIKELY(rules[i] || !flows[i])) {
+                continue;
+            }
+
+            hash = miniflow_hash_in_minimask(flows[i], &subtable->mask, 0);
+            match = find_match_miniflow(subtable, flows[i], hash);
+            if (OVS_UNLIKELY(match)) {
+                rules[i] = match->cls_rule;
+            }
+        }
+
+        while (begin < len && (rules[begin] || !flows[begin])) {
+            begin++;
+        }
+        if (begin >= len) {
+            break;
         }
     }
-
-    return NULL;
 }
 
 /* Finds and returns a rule in 'cls' with exactly the same priority and

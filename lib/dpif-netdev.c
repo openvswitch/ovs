@@ -1078,7 +1078,7 @@ dp_netdev_lookup_flow(const struct dp_netdev *dp, const struct miniflow *key)
     struct dp_netdev_flow *netdev_flow;
     struct cls_rule *rule;
 
-    rule = classifier_lookup_miniflow_first(&dp->cls, key);
+    classifier_lookup_miniflow_batch(&dp->cls, &key, &rule, 1);
     netdev_flow = dp_netdev_flow_cast(rule);
 
     return netdev_flow;
