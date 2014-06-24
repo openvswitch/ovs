@@ -2034,18 +2034,14 @@ packet_batch_update(struct packet_batch *batch,
 
 static inline void
 packet_batch_init(struct packet_batch *batch, struct dp_netdev_flow *flow,
-                  struct dpif_packet *packet, struct pkt_metadata *md,
-                  const struct miniflow *mf)
+                  struct pkt_metadata *md)
 {
     batch->flow = flow;
     batch->md = *md;
-    batch->packets[0] = packet;
 
     batch->packet_count = 0;
     batch->byte_count = 0;
     batch->tcp_flags = 0;
-
-    packet_batch_update(batch, packet, mf);
 }
 
 static inline void
@@ -2070,61 +2066,77 @@ static void
 dp_netdev_input(struct dp_netdev *dp, struct dpif_packet **packets, int cnt,
                 struct pkt_metadata *md)
 {
-    struct packet_batch batch;
+    struct packet_batch batches[NETDEV_MAX_RX_BATCH];
+    struct netdev_flow_key keys[NETDEV_MAX_RX_BATCH];
+    const struct miniflow *mfs[NETDEV_MAX_RX_BATCH]; /* NULL at bad packets. */
+    struct cls_rule *rules[NETDEV_MAX_RX_BATCH];
+    size_t n_batches, i;
 
-    struct netdev_flow_key key;
-
-    int i;
-
-    batch.flow = NULL;
-
-    miniflow_initialize(&key.flow, key.buf);
-
-    fat_rwlock_rdlock(&dp->cls.rwlock);
     for (i = 0; i < cnt; i++) {
-        struct dp_netdev_flow *netdev_flow;
-        struct ofpbuf *buf = &packets[i]->ofpbuf;
-
-        if (ofpbuf_size(buf) < ETH_HEADER_LEN) {
+        if (OVS_UNLIKELY(ofpbuf_size(&packets[i]->ofpbuf) < ETH_HEADER_LEN)) {
             dpif_packet_delete(packets[i]);
+            mfs[i] = NULL;
             continue;
         }
 
-        miniflow_extract(buf, md, &key.flow);
+        miniflow_initialize(&keys[i].flow, keys[i].buf);
+        miniflow_extract(&packets[i]->ofpbuf, md, &keys[i].flow);
+        mfs[i] = &keys[i].flow;
+    }
 
-        netdev_flow = dp_netdev_lookup_flow(dp, &key.flow);
+    fat_rwlock_rdlock(&dp->cls.rwlock);
+    classifier_lookup_miniflow_batch(&dp->cls, mfs, rules, cnt);
+    fat_rwlock_unlock(&dp->cls.rwlock);
 
-        if (netdev_flow) {
-            if (!batch.flow) {
-                packet_batch_init(&batch, netdev_flow, packets[i], md,
-                                  &key.flow);
-            } else if (batch.flow == netdev_flow) {
-                packet_batch_update(&batch, packets[i], &key.flow);
-            } else {
-                packet_batch_execute(&batch, dp);
-                packet_batch_init(&batch, netdev_flow, packets[i], md,
-                                  &key.flow);
-            }
-        } else {
-            /* Packet's flow not in datapath */
+    n_batches = 0;
+    for (i = 0; i < cnt; i++) {
+        struct dp_netdev_flow *flow;
+        struct packet_batch *batch;
+        size_t j;
+
+        if (OVS_UNLIKELY(!mfs[i])) {
+            continue;
+        }
+
+        if (OVS_UNLIKELY(!rules[i])) {
             dp_netdev_count_packet(dp, DP_STAT_MISS, 1);
+            if (OVS_LIKELY(dp->handler_queues)) {
+                uint32_t hash = miniflow_hash_5tuple(mfs[i], 0);
+                struct ofpbuf *buf = &packets[i]->ofpbuf;
 
-            if (dp->handler_queues) {
-                /* Upcall */
-                dp_netdev_output_userspace(dp, &buf, 1,
-                                           miniflow_hash_5tuple(&key.flow, 0)
-                                           % dp->n_handlers,
-                                           DPIF_UC_MISS, &key.flow, NULL);
+                dp_netdev_output_userspace(dp, &buf, 1, hash % dp->n_handlers,
+                                           DPIF_UC_MISS, mfs[i], NULL);
             } else {
                 /* No upcall queue.  Freeing the packet */
                 dpif_packet_delete(packets[i]);
             }
+            continue;
         }
-    }
-    fat_rwlock_unlock(&dp->cls.rwlock);
 
-    if (batch.flow) {
-        packet_batch_execute(&batch, dp);
+        /* XXX: This O(n^2) algortihm makes sense if we're operating under the
+         * assumption that the number of distinct flows (and therefore the
+         * number of distinct batches) is quite small.  If this turns out not
+         * to be the case, it may make sense to pre sort based on the
+         * netdev_flow pointer.  That done we can get the appropriate batching
+         * in O(n * log(n)) instead. */
+        batch = NULL;
+        flow = dp_netdev_flow_cast(rules[i]);
+        for (j = 0; j < n_batches; j++) {
+            if (batches[j].flow == flow) {
+                batch = &batches[j];
+                break;
+            }
+        }
+
+        if (!batch) {
+            batch = &batches[n_batches++];
+            packet_batch_init(batch, flow, md);
+        }
+        packet_batch_update(batch, packets[i], mfs[i]);
+    }
+
+    for (i = 0; i < n_batches; i++) {
+        packet_batch_execute(&batches[i], dp);
     }
 }
 
