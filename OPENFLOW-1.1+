@@ -54,10 +54,6 @@ OpenFlow 1.1
 The list of remaining work items for OpenFlow 1.1 is below.  It is
 probably incomplete.
 
-    * MPLS.  Simon Horman maintains a patch series that adds this
-      feature.  This is partially merged.
-      [optional for OF1.1+]
-
     * Match and set double-tagged VLANs (QinQ).  This requires kernel
       work for reasonable performance.
       [optional for OF1.1+]
