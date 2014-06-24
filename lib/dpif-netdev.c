@@ -2012,7 +2012,7 @@ dp_netdev_count_packet(struct dp_netdev *dp, enum dp_stat_type type, int cnt)
     ovs_mutex_unlock(&bucket->mutex);
 }
 
-struct batch_pkt_execute {
+struct packet_batch {
     unsigned int packet_count;
     unsigned int byte_count;
     uint16_t tcp_flags;
@@ -2024,7 +2024,7 @@ struct batch_pkt_execute {
 };
 
 static inline void
-packet_batch_update(struct batch_pkt_execute *batch,
+packet_batch_update(struct packet_batch *batch,
                     struct dpif_packet *packet, const struct miniflow *mf)
 {
     batch->tcp_flags |= miniflow_get_tcp_flags(mf);
@@ -2033,7 +2033,7 @@ packet_batch_update(struct batch_pkt_execute *batch,
 }
 
 static inline void
-packet_batch_init(struct batch_pkt_execute *batch, struct dp_netdev_flow *flow,
+packet_batch_init(struct packet_batch *batch, struct dp_netdev_flow *flow,
                   struct dpif_packet *packet, struct pkt_metadata *md,
                   const struct miniflow *mf)
 {
@@ -2049,7 +2049,7 @@ packet_batch_init(struct batch_pkt_execute *batch, struct dp_netdev_flow *flow,
 }
 
 static inline void
-packet_batch_execute(struct batch_pkt_execute *batch, struct dp_netdev *dp)
+packet_batch_execute(struct packet_batch *batch, struct dp_netdev *dp)
 {
     struct dp_netdev_actions *actions;
     struct dp_netdev_flow *flow = batch->flow;
@@ -2070,7 +2070,7 @@ static void
 dp_netdev_input(struct dp_netdev *dp, struct dpif_packet **packets, int cnt,
                 struct pkt_metadata *md)
 {
-    struct batch_pkt_execute batch;
+    struct packet_batch batch;
 
     struct netdev_flow_key key;
 
