@@ -215,7 +215,7 @@ struct dp_netdev_port {
 struct netdev_flow_key {
     struct miniflow flow;
     uint32_t buf[NETDEV_KEY_BUF_SIZE_U32];
-} key;
+};
 
 /* A flow in dp_netdev's 'flow_table'.
  *
