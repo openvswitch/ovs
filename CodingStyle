@@ -5,6 +5,13 @@ This file describes the coding style used in most C files in the Open
 vSwitch distribution.  However, Linux kernel code datapath directory
 follows the Linux kernel's established coding conventions.
 
+The following GNU indent options approximate this style:
+
+    -npro -bad -bap -bbb -br -blf -brs -cdw -ce -fca -cli0 -npcs -i4 -l79 \
+    -lc79 -nbfda -nut -saf -sai -saw -sbi4 -sc -sob -st -ncdb -pi4 -cs -bs \
+    -di1 -lp -il0 -hnl
+
+
 BASICS
 
   Limit lines to 79 characters.
