@@ -206,8 +206,8 @@ dpdk_rte_mzalloc(size_t sz)
 void
 free_dpdk_buf(struct dpif_packet *p)
 {
-    struct ofpbuf *ofp = &p->ofpbuf;
-    struct rte_mbuf *pkt = (struct rte_mbuf *) ofp->dpdk_buf;
+    struct ofpbuf *buf = &p->ofpbuf;
+    struct rte_mbuf *pkt = (struct rte_mbuf *) buf->dpdk_buf;
 
     rte_mempool_put(pkt->pool, pkt);
 }

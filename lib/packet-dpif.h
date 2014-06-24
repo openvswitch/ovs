@@ -39,9 +39,9 @@ struct dpif_packet *dpif_packet_clone(struct dpif_packet *p);
 
 static inline void dpif_packet_delete(struct dpif_packet *p)
 {
-    struct ofpbuf *ofp = &p->ofpbuf;
+    struct ofpbuf *buf = &p->ofpbuf;
 
-    ofpbuf_delete(ofp);
+    ofpbuf_delete(buf);
 }
 
 #ifdef  __cplusplus

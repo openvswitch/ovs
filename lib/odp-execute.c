@@ -240,9 +240,9 @@ odp_execute_actions__(void *dp, struct dpif_packet **packets, int cnt,
                 uint32_t hash;
 
                 for (i = 0; i < cnt; i++) {
-                    struct ofpbuf *ofp = &packets[i]->ofpbuf;
+                    struct ofpbuf *buf = &packets[i]->ofpbuf;
 
-                    flow_extract(ofp, md, &flow);
+                    flow_extract(buf, md, &flow);
                     hash = flow_hash_5tuple(&flow, hash_act->hash_basis);
 
                     /* The hash of the first packet is in shared metadata */
@@ -264,18 +264,18 @@ odp_execute_actions__(void *dp, struct dpif_packet **packets, int cnt,
             const struct ovs_action_push_vlan *vlan = nl_attr_get(a);
 
             for (i = 0; i < cnt; i++) {
-                struct ofpbuf *ofp = &packets[i]->ofpbuf;
+                struct ofpbuf *buf = &packets[i]->ofpbuf;
 
-                eth_push_vlan(ofp, htons(ETH_TYPE_VLAN), vlan->vlan_tci);
+                eth_push_vlan(buf, htons(ETH_TYPE_VLAN), vlan->vlan_tci);
             }
             break;
         }
 
         case OVS_ACTION_ATTR_POP_VLAN:
             for (i = 0; i < cnt; i++) {
-                struct ofpbuf *ofp = &packets[i]->ofpbuf;
+                struct ofpbuf *buf = &packets[i]->ofpbuf;
 
-                eth_pop_vlan(ofp);
+                eth_pop_vlan(buf);
             }
             break;
 
@@ -283,18 +283,18 @@ odp_execute_actions__(void *dp, struct dpif_packet **packets, int cnt,
             const struct ovs_action_push_mpls *mpls = nl_attr_get(a);
 
             for (i = 0; i < cnt; i++) {
-                struct ofpbuf *ofp = &packets[i]->ofpbuf;
+                struct ofpbuf *buf = &packets[i]->ofpbuf;
 
-                push_mpls(ofp, mpls->mpls_ethertype, mpls->mpls_lse);
+                push_mpls(buf, mpls->mpls_ethertype, mpls->mpls_lse);
             }
             break;
          }
 
         case OVS_ACTION_ATTR_POP_MPLS:
             for (i = 0; i < cnt; i++) {
-                struct ofpbuf *ofp = &packets[i]->ofpbuf;
+                struct ofpbuf *buf = &packets[i]->ofpbuf;
 
-                pop_mpls(ofp, nl_attr_get_be16(a));
+                pop_mpls(buf, nl_attr_get_be16(a));
             }
             break;
 
