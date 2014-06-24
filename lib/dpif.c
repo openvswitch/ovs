@@ -1066,7 +1066,6 @@ dpif_execute_helper_cb(void *aux_, struct dpif_packet **packets, int cnt,
                        const struct nlattr *action, bool may_steal OVS_UNUSED)
 {
     struct dpif_execute_helper_aux *aux = aux_;
-    struct dpif_execute execute;
     int type = nl_attr_type(action);
     struct ofpbuf * packet = &packets[0]->ofpbuf;
 
@@ -1075,14 +1074,36 @@ dpif_execute_helper_cb(void *aux_, struct dpif_packet **packets, int cnt,
     switch ((enum ovs_action_attr)type) {
     case OVS_ACTION_ATTR_OUTPUT:
     case OVS_ACTION_ATTR_USERSPACE:
-    case OVS_ACTION_ATTR_RECIRC:
-        execute.actions = action;
-        execute.actions_len = NLA_ALIGN(action->nla_len);
+    case OVS_ACTION_ATTR_RECIRC: {
+        struct dpif_execute execute;
+        struct ofpbuf execute_actions;
+        uint64_t stub[256 / 8];
+
+        if (md->tunnel.ip_dst) {
+            /* The Linux kernel datapath throws away the tunnel information
+             * that we supply as metadata.  We have to use a "set" action to
+             * supply it. */
+            ofpbuf_use_stub(&execute_actions, stub, sizeof stub);
+            odp_put_tunnel_action(&md->tunnel, &execute_actions);
+            ofpbuf_put(&execute_actions, action, NLA_ALIGN(action->nla_len));
+
+            execute.actions = ofpbuf_data(&execute_actions);
+            execute.actions_len = ofpbuf_size(&execute_actions);
+        } else {
+            execute.actions = action;
+            execute.actions_len = NLA_ALIGN(action->nla_len);
+        }
+
         execute.packet = packet;
         execute.md = *md;
         execute.needs_help = false;
         aux->error = aux->dpif->dpif_class->execute(aux->dpif, &execute);
+
+        if (md->tunnel.ip_dst) {
+            ofpbuf_uninit(&execute_actions);
+        }
         break;
+    }
 
     case OVS_ACTION_ATTR_HASH:
     case OVS_ACTION_ATTR_PUSH_VLAN:
