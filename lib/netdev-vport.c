@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -203,8 +203,9 @@ netdev_vport_route_changed(void)
                 netdev_change_seq_changed(netdev_);
             }
         }
-        netdev_close(netdev_);
         ovs_mutex_unlock(&netdev->mutex);
+
+        netdev_close(netdev_);
     }
 
     free(vports);
