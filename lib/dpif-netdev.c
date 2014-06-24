@@ -2094,12 +2094,20 @@ dp_netdev_input(struct dp_netdev *dp, struct dpif_packet **packets, int cnt,
                 packet_batch_init(&batch, netdev_flow, packets[i], md,
                                   &key.flow);
             }
-        } else if (dp->handler_queues) {
+        } else {
+            /* Packet's flow not in datapath */
             dp_netdev_count_packet(dp, DP_STAT_MISS, 1);
-            dp_netdev_output_userspace(dp, &buf, 1,
-                                       miniflow_hash_5tuple(&key.flow, 0)
-                                       % dp->n_handlers,
-                                       DPIF_UC_MISS, &key.flow, NULL);
+
+            if (dp->handler_queues) {
+                /* Upcall */
+                dp_netdev_output_userspace(dp, &buf, 1,
+                                           miniflow_hash_5tuple(&key.flow, 0)
+                                           % dp->n_handlers,
+                                           DPIF_UC_MISS, &key.flow, NULL);
+            } else {
+                /* No upcall queue.  Freeing the packet */
+                dpif_packet_delete(packets[i]);
+            }
         }
     }
 
