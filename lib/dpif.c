@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1073,21 +1073,40 @@ dpif_execute_helper_execute__(void *aux_, struct ofpbuf *packet,
     struct dpif_execute execute;
     struct odputil_keybuf key_stub;
     struct ofpbuf key;
+    struct ofpbuf execute_actions;
+    uint64_t stub[256 / 8];
     int error;
 
     ofpbuf_use_stub(&key, &key_stub, sizeof key_stub);
     odp_flow_key_from_flow(&key, flow, flow->in_port.odp_port);
 
+    if (flow->tunnel.ip_dst) {
+        /* The Linux kernel datapath throws away the tunnel information
+         * that we supply as metadata.  We have to use a "set" action to
+         * supply it. */
+        ofpbuf_use_stub(&execute_actions, stub, sizeof stub);
+        odp_put_tunnel_action(&flow->tunnel, &execute_actions);
+        ofpbuf_put(&execute_actions, actions, actions_len);
+
+        execute.actions = execute_actions.data;
+        execute.actions_len = execute_actions.size;
+    } else {
+        execute.actions = actions;
+        execute.actions_len = actions_len;
+    }
+
     execute.key = key.data;
     execute.key_len = key.size;
-    execute.actions = actions;
-    execute.actions_len = actions_len;
     execute.packet = packet;
     execute.needs_help = false;
 
     error = aux->dpif->dpif_class->execute(aux->dpif, &execute);
     if (error) {
         aux->error = error;
+    }
+
+    if (flow->tunnel.ip_dst) {
+        ofpbuf_uninit(&execute_actions);
     }
 }
 
