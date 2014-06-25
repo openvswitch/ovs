@@ -2231,8 +2231,12 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
     switch ((enum ovs_action_attr)type) {
     case OVS_ACTION_ATTR_OUTPUT:
         p = dp_netdev_lookup_port(aux->dp, u32_to_odp(nl_attr_get_u32(a)));
-        if (p) {
+        if (OVS_LIKELY(p)) {
             netdev_send(p->netdev, packets, cnt, may_steal);
+        } else if (may_steal) {
+            for (i = 0; i < cnt; i++) {
+                dpif_packet_delete(packets[i]);
+            }
         }
         break;
 
@@ -2321,6 +2325,11 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
             break;
         } else {
             VLOG_WARN("Packet dropped. Max recirculation depth exceeded.");
+            if (may_steal) {
+                for (i = 0; i < cnt; i++) {
+                    dpif_packet_delete(packets[i]);
+                }
+            }
         }
         break;
 
