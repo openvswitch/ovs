@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -812,10 +812,6 @@ json_string_unescape(const char *in, size_t in_len, char **outp)
 
     ds_init(&out);
     ds_reserve(&out, in_len);
-    if (in_len > 0 && in[in_len - 1] == '\\') {
-        ds_put_cstr(&out, "quoted string may not end with backslash");
-        goto exit;
-    }
     while (in < end) {
         if (*in == '"') {
             ds_clear(&out);
@@ -828,6 +824,14 @@ json_string_unescape(const char *in, size_t in_len, char **outp)
         }
 
         in++;
+        if (in >= end) {
+            /* The JSON parser will never trigger this message, because its
+             * lexer will never pass in a string that ends in a single
+             * backslash, but json_string_unescape() has other callers that
+             * are not as careful.*/
+            ds_put_cstr(&out, "quoted string may not end with backslash");
+            goto exit;
+        }
         switch (*in++) {
         case '"': case '\\': case '/':
             ds_put_char(&out, in[-1]);
