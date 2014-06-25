@@ -1358,6 +1358,7 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
         }
     }
     ovs_mutex_unlock(&dp->flow_mutex);
+    miniflow_destroy(&miniflow);
 
     return error;
 }
