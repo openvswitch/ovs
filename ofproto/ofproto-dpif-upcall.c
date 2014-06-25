@@ -128,6 +128,12 @@ struct udpif {
     atomic_ulong n_flows;           /* Number of flows in the datapath. */
     atomic_llong n_flows_timestamp;    /* Last time n_flows was updated. */
     struct ovs_mutex n_flows_mutex;
+
+    /* Following fields are accessed and modified only from the main thread. */
+    struct unixctl_conn **conns;       /* Connections waiting on dump_seq. */
+    uint64_t conn_seq;                 /* Corresponds to 'dump_seq' when
+                                          conns[n_conns-1] was stored. */
+    size_t n_conns;                    /* Number of connections waiting. */
 };
 
 enum upcall_type {
@@ -212,6 +218,8 @@ static void upcall_unixctl_enable_megaflows(struct unixctl_conn *, int argc,
                                             const char *argv[], void *aux);
 static void upcall_unixctl_set_flow_limit(struct unixctl_conn *conn, int argc,
                                             const char *argv[], void *aux);
+static void upcall_unixctl_dump_wait(struct unixctl_conn *conn, int argc,
+                                     const char *argv[], void *aux);
 
 static struct udpif_key *ukey_create(const struct nlattr *key, size_t key_len,
                                      long long int used);
@@ -240,6 +248,8 @@ udpif_create(struct dpif_backer *backer, struct dpif *dpif)
                                  upcall_unixctl_enable_megaflows, NULL);
         unixctl_command_register("upcall/set-flow-limit", "", 1, 1,
                                  upcall_unixctl_set_flow_limit, NULL);
+        unixctl_command_register("revalidator/wait", "", 0, 0,
+                                 upcall_unixctl_dump_wait, NULL);
         ovsthread_once_done(&once);
     }
 
@@ -256,6 +266,21 @@ udpif_create(struct dpif_backer *backer, struct dpif *dpif)
     ovs_mutex_init(&udpif->n_flows_mutex);
 
     return udpif;
+}
+
+void
+udpif_run(struct udpif *udpif)
+{
+    if (udpif->conns && udpif->conn_seq != seq_read(udpif->dump_seq)) {
+        int i;
+
+        for (i = 0; i < udpif->n_conns; i++) {
+            unixctl_command_reply(udpif->conns[i], NULL);
+        }
+        free(udpif->conns);
+        udpif->conns = NULL;
+        udpif->n_conns = 0;
+    }
 }
 
 void
@@ -1542,4 +1567,24 @@ upcall_unixctl_set_flow_limit(struct unixctl_conn *conn,
     ds_put_format(&ds, "set flow_limit to %u\n", flow_limit);
     unixctl_command_reply(conn, ds_cstr(&ds));
     ds_destroy(&ds);
+}
+
+static void
+upcall_unixctl_dump_wait(struct unixctl_conn *conn,
+                         int argc OVS_UNUSED,
+                         const char *argv[] OVS_UNUSED,
+                         void *aux OVS_UNUSED)
+{
+    if (list_is_singleton(&all_udpifs)) {
+        struct udpif *udpif;
+        size_t len;
+
+        udpif = OBJECT_CONTAINING(list_front(&all_udpifs), udpif, list_node);
+        len = (udpif->n_conns + 1) * sizeof *udpif->conns;
+        udpif->conn_seq = seq_read(udpif->dump_seq);
+        udpif->conns = xrealloc(udpif->conns, len);
+        udpif->conns[udpif->n_conns++] = conn;
+    } else {
+        unixctl_command_reply_error(conn, "can't wait on multiple udpifs.");
+    }
 }

@@ -491,6 +491,7 @@ type_run(const char *type)
     }
 
     dpif_run(backer->dpif);
+    udpif_run(backer->udpif);
 
     /* If vswitchd started with other_config:flow_restore_wait set as "true",
      * and the configuration has now changed to "false", enable receiving

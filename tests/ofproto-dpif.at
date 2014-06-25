@@ -1,5 +1,11 @@
 AT_BANNER([ofproto-dpif])
 
+AT_SETUP([ofproto-dpif - revalidator/wait])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl revalidator/wait])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif, active-backup bonding])
 # Create br0 with interfaces p1, p2 and p7, creating bond0 with p1 and p2
 #    and br1 with interfaces p3, p4 and p8.
@@ -341,7 +347,7 @@ for i in `seq 0 2`;
     done
 )
 ovs-appctl time/warp 100
-sleep 1  # wait for forwarders process packets
+ovs-appctl revalidator/wait
 AT_CHECK([ovs-ofctl -O OpenFlow12 -vwarn dump-group-stats br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout | sort], [0], [dnl
  group_id=1234,ref_count=0,packet_count=3,byte_count=180,bucket0:packet_count=3,byte_count=180,bucket1:packet_count=0,byte_count=0
@@ -363,7 +369,7 @@ for i in `seq 0 2`;
     done
 )
 ovs-appctl time/warp 100
-sleep 1  # wait for forwarders process packets
+ovs-appctl revalidator/wait
 AT_CHECK([ovs-ofctl -O OpenFlow12 -vwarn dump-group-stats br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout | sort], [0], [dnl
  group_id=1234,ref_count=0,packet_count=3,byte_count=180,bucket0:packet_count=3,byte_count=180,bucket1:packet_count=3,byte_count=180
@@ -729,7 +735,7 @@ tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:0
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
-sleep 1  # wait for revalidator to update stats
+ovs-appctl revalidator/wait
 AT_CHECK([ovs-ofctl -OOpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
  n_packets=3, n_bytes=180, actions=goto_table:1
 OFPST_FLOW reply (OF1.2):
@@ -758,7 +764,7 @@ AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
-sleep 1  # wait for revalidator to update stats
+ovs-appctl revalidator/wait
 AT_CHECK([ovs-ofctl -OOpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
  n_packets=3, n_bytes=180, actions=resubmit(1,1)
 OFPST_FLOW reply (OF1.2):
@@ -818,7 +824,7 @@ tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:0
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
-sleep 1  # wait for revalidator to update stats
+ovs-appctl revalidator/wait
 AT_CHECK([ovs-ofctl -OOpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
  table=1, n_packets=3, n_bytes=180, dl_src=10:11:11:11:11:11 actions=CONTROLLER:65535
 OFPST_FLOW reply (OF1.2):
@@ -882,7 +888,7 @@ tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:0
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
-sleep 1  # wait for revalidator to update stats
+ovs-appctl revalidator/wait
 AT_CHECK([ovs-ofctl -OOpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
  n_packets=6, n_bytes=360, actions=goto_table:1
  table=2, n_packets=3, n_bytes=180, dl_src=10:11:11:11:11:11 actions=CONTROLLER:65535
@@ -929,7 +935,7 @@ AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
-sleep 1  # wait for revalidator to update stats
+ovs-appctl revalidator/wait
 AT_CHECK([ovs-ofctl -OOpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
  n_packets=6, n_bytes=360, actions=resubmit(1,1)
  table=2, dl_src=10:11:11:11:11:11 actions=CONTROLLER:65535
@@ -990,7 +996,7 @@ AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
-sleep 1  # wait for revalidator to update stats
+ovs-appctl revalidator/wait
 AT_CHECK([ovs-ofctl -OOpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
  n_packets=3, n_bytes=180, actions=goto_table:1
 OFPST_FLOW reply (OF1.2):
@@ -1022,7 +1028,7 @@ AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
-sleep 1  # wait for revalidator to update stats
+ovs-appctl revalidator/wait
 AT_CHECK([ovs-ofctl -OOpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
  n_packets=3, n_bytes=180, actions=resubmit(1,1)
 OFPST_FLOW reply (OF1.2):
@@ -4251,7 +4257,7 @@ m4_define([CHECK_NETFLOW_EXPIRATION],
   done
 
   ovs-appctl time/warp 6000
-  sleep 1
+  ovs-appctl revalidator/wait
   OVS_VSWITCHD_STOP
   ovs-appctl -t test-netflow exit
 
@@ -4302,7 +4308,7 @@ m4_define([CHECK_NETFLOW_ACTIVE_EXPIRATION],
 
   ovs-appctl time/warp 10000
 
-  sleep 1
+  ovs-appctl revalidator/wait
   OVS_VSWITCHD_STOP
   ovs-appctl -t test-netflow exit
 
@@ -4364,7 +4370,7 @@ for i in `seq 1 10`; do
 done
 
 ovs-appctl time/warp 1000
-sleep 1  # wait for revalidator to update stats
+ovs-appctl revalidator/wait
 
 AT_CHECK([ovs-ofctl dump-flows br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=0.0s/p' | sort], [0], [dnl
@@ -4506,7 +4512,7 @@ AT_CHECK([ovs-appctl netdev-dummy/receive br0 0021853763af0026b98cb0f90800450000
 AT_CHECK([ovs-appctl time/warp 1000 && ovs-appctl time/warp 1000], [0], [warped
 warped
 ])
-sleep 1
+ovs-appctl revalidator/wait
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip], [0],
 [NXST_FLOW reply:
  n_packets=1, n_bytes=74, idle_timeout=60, actions=fin_timeout(idle_timeout=5)
@@ -4564,7 +4570,7 @@ ADD_OF_PORTS([br1], [3])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=0,code=0)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p3 'in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
-sleep 1  # wait for upcall handlers
+ovs-appctl revalidator/wait
 AT_CHECK([ovs-appctl dpif/dump-flows br0 | sort | STRIP_USED], [0], [dnl
 skb_priority(0),recirc_id(0),in_port(1),eth_type(0x0800),ipv4(src=192.168.0.1/0.0.0.0,dst=192.168.0.2/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions:drop
 skb_priority(0),recirc_id(0),in_port(2),eth_type(0x0800),ipv4(src=192.168.0.2/0.0.0.0,dst=192.168.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff), packets:0, bytes:0, used:never, actions:drop
