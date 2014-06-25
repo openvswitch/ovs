@@ -18,6 +18,7 @@
 #define SIGNALS_H 1
 
 #include <signal.h>
+#include <stddef.h>
 #include "type-props.h"
 
 enum { SIGNAL_NAME_BUFSIZE = 7 + INT_STRLEN(int) + 1 };

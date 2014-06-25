@@ -996,7 +996,7 @@ netdev_bsd_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
                         netdev_get_name(netdev_), ovs_strerror(errno));
             return errno;
         } else if (!strcmp(ifmd.ifmd_name, netdev_get_name(netdev_))) {
-            convert_stats(netdev, stats, &ifdr.ifdr_data);
+            convert_stats(netdev_, stats, &ifmd.ifmd_data);
             break;
         }
     }
@@ -1786,6 +1786,7 @@ ifr_set_flags(struct ifreq *ifr, int flags)
 #endif
 }
 
+#if defined(__NetBSD__)
 /* Calls ioctl() on an AF_LINK sock, passing the specified 'command' and
  * 'arg'.  Returns 0 if successful, otherwise a positive errno value. */
 int
@@ -1807,3 +1808,4 @@ af_link_ioctl(unsigned long command, const void *arg)
             : ioctl(sock, command, arg) == -1 ? errno
             : 0);
 }
+#endif
