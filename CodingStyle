@@ -162,6 +162,11 @@ such a function (including the C standard library function free())
 should omit a null-pointer check.  We find that this usually makes
 code easier to read.
 
+Functions in .c files should not normally be marked "inline", because
+it does not usually help code generation and it does suppress
+compilers warnings about unused functions.  (Functions defined in .h
+usually should be marked inline.)
+
 
 FUNCTION PROTOTYPES
 
