@@ -1554,6 +1554,23 @@ log_flow_del_message(struct dpif *dpif, const struct dpif_flow_del *del,
     }
 }
 
+/* Logs that 'execute' was executed on 'dpif' and completed with errno 'error'
+ * (0 for success).  'subexecute' should be true if the execution is a result
+ * of breaking down a larger execution that needed help, false otherwise.
+ *
+ *
+ * XXX In theory, the log message could be deceptive because this function is
+ * called after the dpif_provider's '->execute' function, which is allowed to
+ * modify execute->packet and execute->md.  In practice, though:
+ *
+ *     - dpif-linux doesn't modify execute->packet or execute->md.
+ *
+ *     - dpif-netdev does modify them but it is less likely to have problems
+ *       because it is built into ovs-vswitchd and cannot have version skew,
+ *       etc.
+ *
+ * It would still be better to avoid the potential problem.  I don't know of a
+ * good way to do that, though, that isn't expensive. */
 static void
 log_execute_message(struct dpif *dpif, const struct dpif_execute *execute,
                     bool subexecute, int error)
