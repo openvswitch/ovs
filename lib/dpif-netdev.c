@@ -2114,7 +2114,10 @@ dp_execute_cb(void *aux_, struct ofpbuf *packet,
         p = dp_netdev_lookup_port(aux->dp, u32_to_odp(nl_attr_get_u32(a)));
         if (p) {
             netdev_send(p->netdev, packet, may_steal);
+        } else if (may_steal) {
+            ofpbuf_delete(packet);
         }
+
         break;
 
     case OVS_ACTION_ATTR_USERSPACE: {
@@ -2170,6 +2173,9 @@ dp_execute_cb(void *aux_, struct ofpbuf *packet,
 
             break;
         } else {
+            if (may_steal) {
+                ofpbuf_delete(packet);
+            }
             VLOG_WARN("Packet dropped. Max recirculation depth exceeded.");
         }
         break;
