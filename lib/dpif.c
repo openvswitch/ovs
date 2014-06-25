@@ -96,7 +96,7 @@ static void log_flow_put_message(struct dpif *, const struct dpif_flow_put *,
 static void log_flow_del_message(struct dpif *, const struct dpif_flow_del *,
                                  int error);
 static void log_execute_message(struct dpif *, const struct dpif_execute *,
-                                int error);
+                                bool subexecute, int error);
 
 static void
 dp_initialize(void)
@@ -1099,6 +1099,8 @@ dpif_execute_helper_cb(void *aux_, struct dpif_packet **packets, int cnt,
         execute.needs_help = false;
         aux->error = aux->dpif->dpif_class->execute(aux->dpif, &execute);
 
+        log_execute_message(aux->dpif, &execute, true, aux->error);
+
         if (md->tunnel.ip_dst) {
             ofpbuf_uninit(&execute_actions);
         }
@@ -1182,7 +1184,7 @@ dpif_execute(struct dpif *dpif, struct dpif_execute *execute)
         error = 0;
     }
 
-    log_execute_message(dpif, execute, error);
+    log_execute_message(dpif, execute, false, error);
 
     return error;
 }
@@ -1232,7 +1234,8 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
                         break;
 
                     case DPIF_OP_EXECUTE:
-                        log_execute_message(dpif, &op->u.execute, op->error);
+                        log_execute_message(dpif, &op->u.execute, false,
+                                            op->error);
                         break;
                     }
                 }
@@ -1553,7 +1556,7 @@ log_flow_del_message(struct dpif *dpif, const struct dpif_flow_del *del,
 
 static void
 log_execute_message(struct dpif *dpif, const struct dpif_execute *execute,
-                    int error)
+                    bool subexecute, int error)
 {
     if (!(error ? VLOG_DROP_WARN(&error_rl) : VLOG_DROP_DBG(&dpmsg_rl))) {
         struct ds ds = DS_EMPTY_INITIALIZER;
@@ -1561,7 +1564,11 @@ log_execute_message(struct dpif *dpif, const struct dpif_execute *execute,
 
         packet = ofp_packet_to_string(ofpbuf_data(execute->packet),
                                       ofpbuf_size(execute->packet));
-        ds_put_format(&ds, "%s: execute ", dpif_name(dpif));
+        ds_put_format(&ds, "%s: %sexecute ",
+                      dpif_name(dpif),
+                      (subexecute ? "sub-"
+                       : dpif_execute_needs_help(execute) ? "super-"
+                       : ""));
         format_odp_actions(&ds, execute->actions, execute->actions_len);
         if (error) {
             ds_put_format(&ds, " failed (%s)", ovs_strerror(error));
