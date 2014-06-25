@@ -120,6 +120,13 @@ JSON_CHECK_NEGATIVE([surrogatess must paired properly],
 JSON_CHECK_NEGATIVE([null bytes not allowed], 
                     [[["\u0000"]]], 
                     [error: null bytes not supported in quoted strings])
+dnl Check for regression against a prior bug.
+JSON_CHECK_POSITIVE([properly quoted backslash at end of string],
+  [[["\\"]]],
+  [[["\\"]]])
+JSON_CHECK_NEGATIVE([stray backslash at end of string],
+  [[["abcd\"]]],
+  [error: unexpected end of input in quoted string])
 
 AT_SETUP([end of input in quoted string - C])
 AT_KEYWORDS([json negative])
