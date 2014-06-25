@@ -1362,9 +1362,9 @@ dpif_linux_execute(struct dpif *dpif_, struct dpif_execute *execute)
 #define MAX_OPS 50
 
 static void
-dpif_linux_operate__(struct dpif_linux *dpif, struct dpif_op **ops, size_t n_ops)
+dpif_linux_operate__(struct dpif_linux *dpif,
+                     struct dpif_op **ops, size_t n_ops)
 {
-
     struct op_auxdata {
         struct nl_transaction txn;
 
