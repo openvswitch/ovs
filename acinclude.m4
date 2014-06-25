@@ -297,6 +297,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [[[^@]]proto_data_valid],
                   [OVS_DEFINE([HAVE_PROTO_DATA_VALID])])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [rxhash])
+  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [u16.*rxhash],
+                  [OVS_DEFINE([HAVE_U16_RXHASH])])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_dst(],
                   [OVS_DEFINE([HAVE_SKB_DST_ACCESSOR_FUNCS])])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], 
