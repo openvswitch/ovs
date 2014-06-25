@@ -1124,6 +1124,12 @@ A: Do you have a controller configured on br0 (as the commands above
    OpenFlow controller doesn't see the VLANs that I expect," and you
    can refer to the answer there for more information.
 
+Q: How MAC learning works with VLANs?
+
+A: Open vSwitch implements Independent VLAN Learning (IVL) for
+   OFPP_NORMAL action.  I.e. it logically has separate learning tables
+   for each VLANs.
+
 
 VXLANs
 -----
