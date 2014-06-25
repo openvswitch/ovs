@@ -1145,6 +1145,13 @@ dpif_execute_with_help(struct dpif *dpif, struct dpif_execute *execute)
     return aux.error;
 }
 
+/* Returns true if the datapath needs help executing 'execute'. */
+static bool
+dpif_execute_needs_help(const struct dpif_execute *execute)
+{
+    return execute->needs_help || nl_attr_oversized(execute->actions_len);
+}
+
 /* Causes 'dpif' to perform the 'execute->actions_len' bytes of actions in
  * 'execute->actions' on the Ethernet frame in 'execute->packet' and on packet
  * metadata in 'execute->md'.  The implementation is allowed to modify both the
@@ -1168,7 +1175,7 @@ dpif_execute(struct dpif *dpif, struct dpif_execute *execute)
 
     COVERAGE_INC(dpif_execute);
     if (execute->actions_len > 0) {
-        error = (execute->needs_help || nl_attr_oversized(execute->actions_len)
+        error = (dpif_execute_needs_help(execute)
                  ? dpif_execute_with_help(dpif, execute)
                  : dpif->dpif_class->execute(dpif, execute));
     } else {
@@ -1199,7 +1206,8 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
             for (chunk = 0; chunk < n_ops; chunk++) {
                 struct dpif_op *op = ops[chunk];
 
-                if (op->type == DPIF_OP_EXECUTE && op->u.execute.needs_help) {
+                if (op->type == DPIF_OP_EXECUTE
+                    && dpif_execute_needs_help(&op->u.execute)) {
                     break;
                 }
             }
