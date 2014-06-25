@@ -3,6 +3,7 @@
 
 #include_next <linux/skbuff.h>
 
+#include <linux/jhash.h>
 #include <linux/version.h>
 
 #ifndef HAVE_SKB_COPY_FROM_LINEAR_DATA_OFFSET
@@ -260,7 +261,11 @@ static inline __u32 skb_get_hash(struct sk_buff *skb)
 {
 #ifdef HAVE_RXHASH
 	if (skb->rxhash)
+#ifndef HAVE_U16_RXHASH
 		return skb->rxhash;
+#else
+		return jhash_1word(skb->rxhash, 0);
+#endif
 #endif
 	return __skb_get_hash(skb);
 }
