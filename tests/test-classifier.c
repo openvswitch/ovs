@@ -467,6 +467,22 @@ destroy_classifier(struct classifier *cls)
 }
 
 static void
+pvector_verify(struct pvector *pvec)
+{
+    void *ptr OVS_UNUSED;
+    unsigned int priority, prev_priority = UINT_MAX;
+
+    PVECTOR_FOR_EACH (ptr, pvec) {
+        priority = cursor__.vector[cursor__.entry_idx].priority;
+        if (priority > prev_priority) {
+            VLOG_ABORT("Priority vector is out of order (%u > %u)",
+                       priority, prev_priority);
+        }
+        prev_priority = priority;
+    }
+}
+
+static void
 check_tables(const struct classifier *cls, int n_tables, int n_rules,
              int n_dups) OVS_REQ_RDLOCK(cls->rwlock)
 {
@@ -478,10 +494,28 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
     int found_dups = 0;
     int found_rules2 = 0;
 
+    pvector_verify(&cls->cls->subtables);
+
     HMAP_FOR_EACH (table, hmap_node, &cls->cls->subtables_map) {
         const struct cls_match *head;
         unsigned int max_priority = 0;
         unsigned int max_count = 0;
+        bool found = false;
+        const struct cls_subtable *iter;
+
+        /* Locate the subtable from 'subtables'. */
+        PVECTOR_FOR_EACH (iter, &cls->cls->subtables) {
+            if (iter == table) {
+                if (found) {
+                    VLOG_ABORT("Subtable %p duplicated in 'subtables'.",
+                               table);
+                }
+                found = true;
+            }
+        }
+        if (!found) {
+            VLOG_ABORT("Subtable %p not found from 'subtables'.", table);
+        }
 
         assert(!hmap_is_empty(&table->rules));
 
@@ -514,6 +548,7 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
     }
 
     assert(found_tables == hmap_count(&cls->cls->subtables_map));
+    assert(found_tables == pvector_count(&cls->cls->subtables));
     assert(n_tables == -1 || n_tables == hmap_count(&cls->cls->subtables_map));
     assert(n_rules == -1 || found_rules == n_rules);
     assert(n_dups == -1 || found_dups == n_dups);

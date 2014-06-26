@@ -29,6 +29,7 @@
 #include "ofp-util.h"
 #include "ovs-thread.h"
 #include "packets.h"
+#include "pvector.h"
 #include "tag.h"
 #include "util.h"
 #include "vlog.h"
@@ -48,18 +49,6 @@ struct cls_trie {
     struct trie_node *root;       /* NULL if none. */
 };
 
-struct cls_subtable_entry {
-    struct cls_subtable *subtable;
-    tag_type tag;
-    unsigned int max_priority;
-};
-
-struct cls_subtables {
-    size_t count;          /* One past last valid array element. */
-    size_t alloc_size;     /* Number of allocated elements. */
-    struct cls_subtable_entry *array;
-};
-
 enum {
     CLS_MAX_INDICES = 3   /* Maximum number of lookup indices per subtable. */
 };
@@ -70,7 +59,7 @@ struct cls_classifier {
     uint8_t flow_segments[CLS_MAX_INDICES]; /* Flow segment boundaries to use
                                              * for staged lookup. */
     struct hmap subtables_map;      /* Contains "struct cls_subtable"s.  */
-    struct cls_subtables subtables;
+    struct pvector subtables;
     struct hmap partitions;         /* Contains "struct cls_partition"s. */
     struct cls_trie tries[CLS_MAX_TRIES]; /* Prefix tries. */
     unsigned int n_tries;
@@ -143,13 +132,6 @@ static struct cls_subtable *insert_subtable(struct cls_classifier *,
 
 static void destroy_subtable(struct cls_classifier *, struct cls_subtable *);
 
-static void update_subtables_after_insertion(struct cls_classifier *,
-                                             struct cls_subtable *,
-                                             unsigned int new_priority);
-static void update_subtables_after_removal(struct cls_classifier *,
-                                           struct cls_subtable *,
-                                           unsigned int del_priority);
-
 static struct cls_match *find_match_wc(const struct cls_subtable *,
                                        const struct flow *, struct trie_ctx *,
                                        unsigned int n_tries,
@@ -191,200 +173,6 @@ static void mask_set_prefix_bits(struct flow_wildcards *, uint8_t be32ofs,
                                  unsigned int nbits);
 static bool mask_prefix_bits_set(const struct flow_wildcards *,
                                  uint8_t be32ofs, unsigned int nbits);
-
-static void
-cls_subtables_init(struct cls_subtables *subtables)
-{
-    memset(subtables, 0, sizeof *subtables);
-}
-
-static void
-cls_subtables_destroy(struct cls_subtables *subtables)
-{
-    free(subtables->array);
-    memset(subtables, 0, sizeof *subtables);
-}
-
-/* Subtables insertion. */
-static void
-cls_subtables_push_back(struct cls_subtables *subtables,
-                        struct cls_subtable_entry a)
-{
-    if (subtables->count == subtables->alloc_size) {
-        subtables->array = x2nrealloc(subtables->array, &subtables->alloc_size,
-                                      sizeof a);
-    }
-
-    subtables->array[subtables->count++] = a;
-}
-
-/* Move subtable entry at 'from' to 'to', shifting the elements in between
- * (including the one at 'to') accordingly. */
-static inline void
-cls_subtables_move(struct cls_subtable_entry *to,
-                   struct cls_subtable_entry *from)
-{
-    if (to != from) {
-        struct cls_subtable_entry temp = *from;
-
-        if (to > from) {
-            /* Shift entries (from,to] backwards to make space at 'to'. */
-            memmove(from, from + 1, (to - from) * sizeof *to);
-        } else {
-            /* Shift entries [to,from) forward to make space at 'to'. */
-            memmove(to + 1, to, (from - to) * sizeof *to);
-        }
-
-        *to = temp;
-    }
-}
-
-/* Subtables removal. */
-static inline void
-cls_subtables_remove(struct cls_subtables *subtables,
-                     struct cls_subtable_entry *elem)
-{
-    ssize_t size = (&subtables->array[subtables->count]
-                    - (elem + 1)) * sizeof *elem;
-    if (size > 0) {
-        memmove(elem, elem + 1, size);
-    }
-    subtables->count--;
-}
-
-#define CLS_SUBTABLES_FOR_EACH(SUBTABLE, ITER, SUBTABLES)  \
-    for ((ITER) = (SUBTABLES)->array;                      \
-         (ITER) < &(SUBTABLES)->array[(SUBTABLES)->count]  \
-             && OVS_LIKELY((SUBTABLE) = (ITER)->subtable); \
-         ++(ITER))
-#define CLS_SUBTABLES_FOR_EACH_CONTINUE(SUBTABLE, ITER, SUBTABLES) \
-    for (++(ITER);                                                 \
-         (ITER) < &(SUBTABLES)->array[(SUBTABLES)->count]          \
-             && OVS_LIKELY((SUBTABLE) = (ITER)->subtable);         \
-         ++(ITER))
-#define CLS_SUBTABLES_FOR_EACH_REVERSE(SUBTABLE, ITER, SUBTABLES)  \
-    for ((ITER) = &(SUBTABLES)->array[(SUBTABLES)->count];         \
-         (ITER) > (SUBTABLES)->array                               \
-             && OVS_LIKELY((SUBTABLE) = (--(ITER))->subtable);)
-
-static void
-cls_subtables_verify(struct cls_subtables *subtables)
-{
-    struct cls_subtable *table;
-    struct cls_subtable_entry *iter;
-    unsigned int priority = 0;
-
-    CLS_SUBTABLES_FOR_EACH_REVERSE (table, iter, subtables) {
-        if (iter->max_priority != table->max_priority) {
-            VLOG_WARN("Subtable %p has mismatching priority in cache (%u != %u)",
-                      table, iter->max_priority, table->max_priority);
-        }
-        if (iter->max_priority < priority) {
-            VLOG_WARN("Subtable cache is out of order (%u < %u)",
-                      iter->max_priority, priority);
-        }
-        priority = iter->max_priority;
-    }
-}
-
-static void
-cls_subtables_reset(struct cls_classifier *cls)
-{
-    struct cls_subtables old = cls->subtables;
-    struct cls_subtable *subtable;
-
-    VLOG_WARN("Resetting subtable cache.");
-
-    cls_subtables_verify(&cls->subtables);
-
-    cls_subtables_init(&cls->subtables);
-
-    HMAP_FOR_EACH (subtable, hmap_node, &cls->subtables_map) {
-        struct cls_match *head;
-        struct cls_subtable_entry elem;
-        struct cls_subtable *table;
-        struct cls_subtable_entry *iter, *from = NULL;
-        unsigned int new_max = 0;
-        unsigned int max_count = 0;
-        bool found;
-
-        /* Verify max_priority. */
-        HMAP_FOR_EACH (head, hmap_node, &subtable->rules) {
-            if (head->priority > new_max) {
-                new_max = head->priority;
-                max_count = 1;
-            } else if (head->priority == new_max) {
-                max_count++;
-            }
-        }
-        if (new_max != subtable->max_priority ||
-            max_count != subtable->max_count) {
-            VLOG_WARN("subtable %p (%u rules) has mismatching max_priority "
-                      "(%u) or max_count (%u). Highest priority found was %u, "
-                      "count: %u",
-                      subtable, subtable->n_rules, subtable->max_priority,
-                      subtable->max_count, new_max, max_count);
-            subtable->max_priority = new_max;
-            subtable->max_count = max_count;
-        }
-
-        /* Locate the subtable from the old cache. */
-        found = false;
-        CLS_SUBTABLES_FOR_EACH (table, iter, &old) {
-            if (table == subtable) {
-                if (iter->max_priority != new_max) {
-                    VLOG_WARN("Subtable %p has wrong max priority (%u != %u) "
-                              "in the old cache.",
-                              subtable, iter->max_priority, new_max);
-                }
-                if (found) {
-                    VLOG_WARN("Subtable %p duplicated in the old cache.",
-                              subtable);
-                }
-                found = true;
-            }
-        }
-        if (!found) {
-            VLOG_WARN("Subtable %p not found from the old cache.", subtable);
-        }
-
-        elem.subtable = subtable;
-        elem.tag = subtable->tag;
-        elem.max_priority = subtable->max_priority;
-        cls_subtables_push_back(&cls->subtables, elem);
-
-        /* Possibly move 'subtable' earlier in the priority array.  If
-         * we break out of the loop, then the subtable (at 'from')
-         * should be moved to the position right after the current
-         * element.  If the loop terminates normally, then 'iter' will
-         * be at the first array element and we'll move the subtable
-         * to the front of the array. */
-        CLS_SUBTABLES_FOR_EACH_REVERSE (table, iter, &cls->subtables) {
-            if (table == subtable) {
-                from = iter; /* Locate the subtable as we go. */
-            } else if (table->max_priority >= new_max) {
-                ovs_assert(from != NULL);
-                iter++; /* After this. */
-                break;
-            }
-        }
-
-        /* Move subtable at 'from' to 'iter'. */
-        cls_subtables_move(iter, from);
-    }
-
-    /* Verify that the old and the new have the same size. */
-    if (old.count != cls->subtables.count) {
-        VLOG_WARN("subtables cache sizes differ: old (%"PRIuSIZE
-                  ") != new (%"PRIuSIZE").",
-                  old.count, cls->subtables.count);
-    }
-
-    cls_subtables_destroy(&old);
-
-    cls_subtables_verify(&cls->subtables);
-}
-
 
 /* flow/miniflow/minimask/minimatch utilities.
  * These are only used by the classifier, so place them here to allow
@@ -674,7 +462,7 @@ classifier_init(struct classifier *cls_, const uint8_t *flow_segments)
 
     cls->n_rules = 0;
     hmap_init(&cls->subtables_map);
-    cls_subtables_init(&cls->subtables);
+    pvector_init(&cls->subtables);
     hmap_init(&cls->partitions);
     cls->n_flow_segments = 0;
     if (flow_segments) {
@@ -719,7 +507,7 @@ classifier_destroy(struct classifier *cls_)
         }
         hmap_destroy(&cls->partitions);
 
-        cls_subtables_destroy(&cls->subtables);
+        pvector_destroy(&cls->subtables);
         free(cls);
     }
 }
@@ -773,7 +561,6 @@ trie_init(struct cls_classifier *cls, int trie_idx,
 {
     struct cls_trie *trie = &cls->tries[trie_idx];
     struct cls_subtable *subtable;
-    struct cls_subtable_entry *iter;
 
     if (trie_idx < cls->n_tries) {
         trie_destroy(trie->root);
@@ -782,7 +569,7 @@ trie_init(struct cls_classifier *cls, int trie_idx,
     trie->field = field;
 
     /* Add existing rules to the trie. */
-    CLS_SUBTABLES_FOR_EACH (subtable, iter, &cls->subtables) {
+    HMAP_FOR_EACH (subtable, hmap_node, &cls->subtables_map) {
         unsigned int plen;
 
         plen = field ? minimask_get_prefix_len(&subtable->mask, field) : 0;
@@ -899,7 +686,6 @@ classifier_replace(struct classifier *cls_, struct cls_rule *rule)
                                                           metadata);
         }
 
-        subtable->n_rules++;
         cls->n_rules++;
 
         for (i = 0; i < cls->n_tries; i++) {
@@ -1005,8 +791,22 @@ classifier_remove(struct classifier *cls_, struct cls_rule *rule)
 
     if (--subtable->n_rules == 0) {
         destroy_subtable(cls, subtable);
-    } else {
-        update_subtables_after_removal(cls, subtable, cls_match->priority);
+    } else if (subtable->max_priority == cls_match->priority
+               && --subtable->max_count == 0) {
+        /* Find the new 'max_priority' and 'max_count'. */
+        struct cls_match *head;
+        unsigned int max_priority = 0;
+
+        HMAP_FOR_EACH (head, hmap_node, &subtable->rules) {
+            if (head->priority > max_priority) {
+                max_priority = head->priority;
+                subtable->max_count = 1;
+            } else if (head->priority == max_priority) {
+                ++subtable->max_count;
+            }
+        }
+        subtable->max_priority = max_priority;
+        pvector_change_priority(&cls->subtables, subtable, max_priority);
     }
 
     cls->n_rules--;
@@ -1035,12 +835,6 @@ trie_ctx_init(struct trie_ctx *ctx, const struct cls_trie *trie)
     ctx->lookup_done = false;
 }
 
-static inline void
-lookahead_subtable(const struct cls_subtable_entry *subtables)
-{
-    ovs_prefetch_range(subtables->subtable, sizeof *subtables->subtable);
-}
-
 /* Finds and returns the highest-priority rule in 'cls' that matches 'flow'.
  * Returns a null pointer if no rules in 'cls' match 'flow'.  If multiple rules
  * of equal priority match 'flow', returns one arbitrarily.
@@ -1056,15 +850,10 @@ classifier_lookup(const struct classifier *cls_, const struct flow *flow,
     struct cls_classifier *cls = cls_->cls;
     const struct cls_partition *partition;
     tag_type tags;
-    struct cls_match *best;
-    struct trie_ctx trie_ctx[CLS_MAX_TRIES];
-    int i;
-    struct cls_subtable_entry *subtables = cls->subtables.array;
-    int n_subtables = cls->subtables.count;
     int64_t best_priority = -1;
-
-    /* Prefetch the subtables array. */
-    ovs_prefetch_range(subtables, n_subtables * sizeof *subtables);
+    const struct cls_match *best;
+    struct trie_ctx trie_ctx[CLS_MAX_TRIES];
+    struct cls_subtable *subtable;
 
     /* Determine 'tags' such that, if 'subtable->tag' doesn't intersect them,
      * then 'flow' cannot possibly match in 'subtable':
@@ -1091,37 +880,20 @@ classifier_lookup(const struct classifier *cls_, const struct flow *flow,
     tags = partition ? partition->tags : TAG_ARBITRARY;
 
     /* Initialize trie contexts for match_find_wc(). */
-    for (i = 0; i < cls->n_tries; i++) {
+    for (int i = 0; i < cls->n_tries; i++) {
         trie_ctx_init(&trie_ctx[i], &cls->tries[i]);
     }
 
-    /* Prefetch the first subtables. */
-    if (n_subtables > 1) {
-        lookahead_subtable(subtables);
-        lookahead_subtable(subtables + 1);
-    }
-
     best = NULL;
-    for (i = 0; OVS_LIKELY(i < n_subtables); i++) {
+    PVECTOR_FOR_EACH_PRIORITY(subtable, best_priority, 2,
+                              sizeof(struct cls_subtable), &cls->subtables) {
         struct cls_match *rule;
 
-        if ((int64_t)subtables[i].max_priority <= best_priority) {
-            /* Subtables are in descending priority order,
-             * can not find anything better. */
-            break;
-        }
-
-        /* Prefetch a forthcoming subtable. */
-        if (i + 2 < n_subtables) {
-            lookahead_subtable(&subtables[i + 2]);
-        }
-
-        if (!tag_intersects(tags, subtables[i].tag)) {
+        if (!tag_intersects(tags, subtable->tag)) {
             continue;
         }
 
-        rule = find_match_wc(subtables[i].subtable, flow, trie_ctx,
-                             cls->n_tries, wc);
+        rule = find_match_wc(subtable, flow, trie_ctx, cls->n_tries, wc);
         if (rule && (int64_t)rule->priority > best_priority) {
             best_priority = (int64_t)rule->priority;
             best = rule;
@@ -1182,9 +954,8 @@ struct cls_rule *classifier_lookup_miniflow_first(const struct classifier *cls_,
 {
     struct cls_classifier *cls = cls_->cls;
     struct cls_subtable *subtable;
-    struct cls_subtable_entry *iter;
 
-    CLS_SUBTABLES_FOR_EACH (subtable, iter, &cls->subtables) {
+    PVECTOR_FOR_EACH (subtable, &cls->subtables) {
         struct cls_match *rule;
 
         rule = find_match_miniflow(subtable, flow,
@@ -1258,17 +1029,14 @@ classifier_rule_overlaps(const struct classifier *cls_,
 {
     struct cls_classifier *cls = cls_->cls;
     struct cls_subtable *subtable;
-    struct cls_subtable_entry *iter;
+    int64_t stop_at_priority = (int64_t)target->priority - 1;
 
     /* Iterate subtables in the descending max priority order. */
-    CLS_SUBTABLES_FOR_EACH (subtable, iter, &cls->subtables) {
+    PVECTOR_FOR_EACH_PRIORITY (subtable, stop_at_priority, 2,
+                               sizeof(struct cls_subtable), &cls->subtables) {
         uint32_t storage[FLOW_U32S];
         struct minimask mask;
         struct cls_match *head;
-
-        if (target->priority > iter->max_priority) {
-            break; /* Can skip this and the rest of the subtables. */
-        }
 
         minimask_combine(&mask, &target->match.mask, &subtable->mask, storage);
         HMAP_FOR_EACH (head, hmap_node, &subtable->rules) {
@@ -1451,7 +1219,6 @@ insert_subtable(struct cls_classifier *cls, const struct minimask *mask)
     int i, index = 0;
     struct flow_wildcards old, new;
     uint8_t prev;
-    struct cls_subtable_entry elem;
     int count = count_1bits(mask->masks.map);
 
     subtable = xzalloc(sizeof *subtable - sizeof mask->masks.inline_values
@@ -1502,10 +1269,6 @@ insert_subtable(struct cls_classifier *cls, const struct minimask *mask)
         = 32 - ctz32(ntohl(MINIFLOW_GET_BE32(&mask->masks, tp_src)));
 
     hmap_insert(&cls->subtables_map, &subtable->hmap_node, hash);
-    elem.subtable = subtable;
-    elem.tag = subtable->tag;
-    elem.max_priority = subtable->max_priority;
-    cls_subtables_push_back(&cls->subtables, elem);
 
     return subtable;
 }
@@ -1514,133 +1277,17 @@ static void
 destroy_subtable(struct cls_classifier *cls, struct cls_subtable *subtable)
 {
     int i;
-    struct cls_subtable *table = NULL;
-    struct cls_subtable_entry *iter;
 
-    CLS_SUBTABLES_FOR_EACH (table, iter, &cls->subtables) {
-        if (table == subtable) {
-            cls_subtables_remove(&cls->subtables, iter);
-            break;
-        }
-    }
-
+    pvector_remove(&cls->subtables, subtable);
     trie_destroy(subtable->ports_trie);
 
     for (i = 0; i < subtable->n_indices; i++) {
         hindex_destroy(&subtable->indices[i]);
     }
-    minimask_destroy(&subtable->mask);
     hmap_remove(&cls->subtables_map, &subtable->hmap_node);
+    minimask_destroy(&subtable->mask);
     hmap_destroy(&subtable->rules);
-    free(subtable);
-}
-
-/* This function performs the following updates for 'subtable' in 'cls'
- * following the addition of a new rule with priority 'new_priority' to
- * 'subtable':
- *
- *    - Update 'subtable->max_priority' and 'subtable->max_count' if necessary.
- *
- *    - Update 'subtable''s position in 'cls->subtables' if necessary.
- *
- * This function should only be called after adding a new rule, not after
- * replacing a rule by an identical one or modifying a rule in-place. */
-static void
-update_subtables_after_insertion(struct cls_classifier *cls,
-                                 struct cls_subtable *subtable,
-                                 unsigned int new_priority)
-{
-    if (new_priority == subtable->max_priority) {
-        ++subtable->max_count;
-    } else if (new_priority > subtable->max_priority) {
-        struct cls_subtable *table;
-        struct cls_subtable_entry *iter, *from = NULL;
-
-        subtable->max_priority = new_priority;
-        subtable->max_count = 1;
-
-        /* Possibly move 'subtable' earlier in the priority array.  If
-         * we break out of the loop, then the subtable (at 'from')
-         * should be moved to the position right after the current
-         * element.  If the loop terminates normally, then 'iter' will
-         * be at the first array element and we'll move the subtable
-         * to the front of the array. */
-        CLS_SUBTABLES_FOR_EACH_REVERSE (table, iter, &cls->subtables) {
-            if (table == subtable) {
-                from = iter; /* Locate the subtable as we go. */
-                iter->max_priority = new_priority;
-            } else if (table->max_priority >= new_priority) {
-                if (from == NULL) {
-                    /* Corrupted cache? */
-                    cls_subtables_reset(cls);
-                    VLOG_ABORT("update_subtables_after_insertion(): Subtable priority list corrupted.");
-                    OVS_NOT_REACHED();
-                }
-                iter++; /* After this. */
-                break;
-            }
-        }
-
-        /* Move subtable at 'from' to 'iter'. */
-        cls_subtables_move(iter, from);
-    }
-}
-
-/* This function performs the following updates for 'subtable' in 'cls'
- * following the deletion of a rule with priority 'del_priority' from
- * 'subtable':
- *
- *    - Update 'subtable->max_priority' and 'subtable->max_count' if necessary.
- *
- *    - Update 'subtable''s position in 'cls->subtables' if necessary.
- *
- * This function should only be called after removing a rule, not after
- * replacing a rule by an identical one or modifying a rule in-place. */
-static void
-update_subtables_after_removal(struct cls_classifier *cls,
-                               struct cls_subtable *subtable,
-                               unsigned int del_priority)
-{
-    if (del_priority == subtable->max_priority && --subtable->max_count == 0) {
-        struct cls_match *head;
-        struct cls_subtable *table;
-        struct cls_subtable_entry *iter, *from = NULL;
-
-        subtable->max_priority = 0;
-        HMAP_FOR_EACH (head, hmap_node, &subtable->rules) {
-            if (head->priority > subtable->max_priority) {
-                subtable->max_priority = head->priority;
-                subtable->max_count = 1;
-            } else if (head->priority == subtable->max_priority) {
-                ++subtable->max_count;
-            }
-        }
-
-        /* Possibly move 'subtable' later in the priority array.
-         * After the loop the 'iter' will point right after the position
-         * at which the subtable should be moved (either at a subtable
-         * with an equal or lower priority, or just past the array),
-         * so it is decremented once. */
-        CLS_SUBTABLES_FOR_EACH (table, iter, &cls->subtables) {
-            if (table == subtable) {
-                from = iter; /* Locate the subtable as we go. */
-                iter->max_priority = subtable->max_priority;
-            } else if (table->max_priority <= subtable->max_priority) {
-                if (from == NULL) {
-                    /* Corrupted cache? */
-                    cls_subtables_reset(cls);
-                    VLOG_ABORT("update_subtables_after_removal(): Subtable priority list corrupted.");
-                    OVS_NOT_REACHED();
-                }
-                break;
-            }
-        }
-        /* Now at one past the destination. */
-        iter--;
-
-        /* Move subtable at 'from' to 'iter'. */
-        cls_subtables_move(iter, from);
-    }
+    ovsrcu_postpone(free, subtable);
 }
 
 struct range {
@@ -1898,7 +1545,8 @@ insert_rule(struct cls_classifier *cls, struct cls_subtable *subtable,
         FOR_EACH_RULE_IN_LIST (rule, head) {
             if (cls_match->priority >= rule->priority) {
                 if (rule == head) {
-                    /* 'new' is the new highest-priority flow in the list. */
+                    /* 'cls_match' is the new highest-priority flow in the
+                     * list. */
                     hmap_replace(&subtable->rules,
                                  &rule->hmap_node, &cls_match->hmap_node);
                 }
@@ -1906,11 +1554,10 @@ insert_rule(struct cls_classifier *cls, struct cls_subtable *subtable,
                 if (cls_match->priority == rule->priority) {
                     list_replace(&cls_match->list, &rule->list);
                     old = rule;
-                    goto out;
                 } else {
                     list_insert(&rule->list, &cls_match->list);
-                    goto out;
                 }
+                goto out;
             }
         }
 
@@ -1920,7 +1567,21 @@ insert_rule(struct cls_classifier *cls, struct cls_subtable *subtable,
 
  out:
     if (!old) {
-        update_subtables_after_insertion(cls, subtable, cls_match->priority);
+        subtable->n_rules++;
+
+        /* Rule was added, not replaced.  Update 'subtable's 'max_priority'
+         * and 'max_count', if necessary. */
+        if (subtable->n_rules == 1) {
+            subtable->max_priority = cls_match->priority;
+            subtable->max_count = 1;
+            pvector_insert(&cls->subtables, subtable, cls_match->priority);
+        } else if (subtable->max_priority == cls_match->priority) {
+            ++subtable->max_count;
+        } else if (cls_match->priority > subtable->max_priority) {
+            subtable->max_priority = cls_match->priority;
+            subtable->max_count = 1;
+            pvector_change_priority(&cls->subtables, subtable, cls_match->priority);
+        }
     } else {
         /* Remove old node from indices. */
         for (i = 0; i < subtable->n_indices; i++) {

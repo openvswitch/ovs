@@ -177,6 +177,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/poll-loop.h \
 	lib/process.c \
 	lib/process.h \
+	lib/pvector.c \
+	lib/pvector.h \
 	lib/random.c \
 	lib/random.h \
 	lib/rconn.c \
