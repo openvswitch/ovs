@@ -520,6 +520,10 @@ A: Open vSwitch has two kinds of flows (see the previous question), so
         dumps datapath flows for only the specified bridge, regardless
         of the type.
 
+Q: How does multicast snooping works with VLANs?
+
+A: Open vSwitch maintains snooping tables for each VLAN.
+
 
 Performance
 -----------
