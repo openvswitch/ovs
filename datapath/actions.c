@@ -811,9 +811,6 @@ int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb, bool recirc)
 		goto out_loop;
 	}
 
-	if (!recirc)
-		ovs_skb_init_inner_protocol(skb);
-
 	OVS_CB(skb)->tun_info = NULL;
 	error = do_execute_actions(dp, skb, acts->actions, acts->actions_len);
 

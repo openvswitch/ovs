@@ -32,6 +32,7 @@
 #include <net/net_namespace.h>
 
 #include "datapath.h"
+#include "gso.h"
 #include "vport.h"
 #include "vport-internal_dev.h"
 
@@ -478,8 +479,10 @@ void ovs_vport_receive(struct vport *vport, struct sk_buff *skb,
 	stats->rx_bytes += skb->len;
 	u64_stats_update_end(&stats->syncp);
 
+	ovs_skb_init_inner_protocol(skb);
 	OVS_CB(skb)->tun_info = tun_info;
-	ovs_dp_process_received_packet(vport, skb);
+	OVS_CB(skb)->input_vport = vport;
+	ovs_dp_process_received_packet(skb);
 }
 
 /**

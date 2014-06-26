@@ -285,15 +285,13 @@ out:
 }
 
 /* Must be called with rcu_read_lock. */
-void ovs_dp_process_received_packet(struct vport *p, struct sk_buff *skb)
+void ovs_dp_process_received_packet(struct sk_buff *skb)
 {
 	int error;
 	struct sw_flow_key key;
 
-	OVS_CB(skb)->input_vport = p;
-
 	/* Extract flow from 'skb' into 'key'. */
-	error = ovs_flow_extract(skb, p->port_no, &key);
+	error = ovs_flow_extract(skb, OVS_CB(skb)->input_vport->port_no, &key);
 	if (unlikely(error)) {
 		kfree_skb(skb);
 		return;

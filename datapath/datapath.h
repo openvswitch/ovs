@@ -189,7 +189,7 @@ extern struct notifier_block ovs_dp_device_notifier;
 extern struct genl_family dp_vport_genl_family;
 extern struct genl_multicast_group ovs_dp_vport_multicast_group;
 
-void ovs_dp_process_received_packet(struct vport *, struct sk_buff *);
+void ovs_dp_process_received_packet(struct sk_buff *);
 void ovs_dp_process_packet_with_key(struct sk_buff *,
 				    struct sw_flow_key *pkt_key, bool recirc);
 void ovs_dp_detach_port(struct vport *);
