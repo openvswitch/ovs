@@ -53,7 +53,7 @@ typedef unsigned int clockid_t;
 #endif
 
 /* Number of 100 ns intervals from January 1, 1601 till January 1, 1970. */
-static ULARGE_INTEGER unix_epoch;
+const static unsigned long long unix_epoch = 116444736000000000;
 #endif /* _WIN32 */
 
 /* Structure set by unixctl time/warp command. */
@@ -122,16 +122,6 @@ static void
 do_init_time(void)
 {
     struct timespec ts;
-
-#ifdef _WIN32
-    /* Calculate number of 100-nanosecond intervals till 01/01/1970. */
-    SYSTEMTIME unix_epoch_st = { 1970, 1, 0, 1, 0, 0, 0, 0};
-    FILETIME unix_epoch_ft;
-
-    SystemTimeToFileTime(&unix_epoch_st, &unix_epoch_ft);
-    unix_epoch.LowPart = unix_epoch_ft.dwLowDateTime;
-    unix_epoch.HighPart = unix_epoch_ft.dwHighDateTime;
-#endif
 
     coverage_init();
 
@@ -416,12 +406,14 @@ clock_gettime(clock_t id, struct timespec *ts)
         ULARGE_INTEGER current_time = xgetfiletime();
 
         /* Time from Epoch to now. */
-        ts->tv_sec = (current_time.QuadPart - unix_epoch.QuadPart) / 10000000;
-        ts->tv_nsec = ((current_time.QuadPart - unix_epoch.QuadPart) %
+        ts->tv_sec = (current_time.QuadPart - unix_epoch) / 10000000;
+        ts->tv_nsec = ((current_time.QuadPart - unix_epoch) %
                        10000000) * 100;
     } else {
         return -1;
     }
+
+    return 0;
 }
 #endif /* _WIN32 */
 
@@ -435,8 +427,8 @@ xgettimeofday(struct timeval *tv)
 #else
     ULARGE_INTEGER current_time = xgetfiletime();
 
-    tv->tv_sec = (current_time.QuadPart - unix_epoch.QuadPart) / 10000000;
-    tv->tv_usec = ((current_time.QuadPart - unix_epoch.QuadPart) %
+    tv->tv_sec = (current_time.QuadPart - unix_epoch) / 10000000;
+    tv->tv_usec = ((current_time.QuadPart - unix_epoch) %
                    10000000) / 10;
 #endif
 }
