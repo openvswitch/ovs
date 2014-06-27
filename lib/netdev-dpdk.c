@@ -667,7 +667,7 @@ dpdk_do_tx_copy(struct netdev *netdev, struct dpif_packet ** pkts, int cnt)
 
     for (i = 0; i < cnt; i++) {
         int size = ofpbuf_size(&pkts[i]->ofpbuf);
-        if (size > dev->max_packet_len) {
+        if (OVS_UNLIKELY(size > dev->max_packet_len)) {
             VLOG_WARN_RL(&rl, "Too big size %d max_packet_len %d",
                          (int)size , dev->max_packet_len);
 
@@ -691,7 +691,7 @@ dpdk_do_tx_copy(struct netdev *netdev, struct dpif_packet ** pkts, int cnt)
         newcnt++;
     }
 
-    if (dropped) {
+    if (OVS_UNLIKELY(dropped)) {
         ovs_mutex_lock(&dev->mutex);
         dev->stats.tx_dropped += dropped;
         ovs_mutex_unlock(&dev->mutex);
