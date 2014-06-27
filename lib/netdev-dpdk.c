@@ -584,6 +584,7 @@ dpdk_queue_flush__(struct netdev_dpdk *dev, int qid)
                              (txq->count - nb_tx));
     }
     txq->count = 0;
+    txq->tsc = rte_get_timer_cycles();
 }
 
 static inline void
@@ -629,7 +630,6 @@ dpdk_queue_pkts(struct netdev_dpdk *dev, int qid,
 {
     struct dpdk_tx_queue *txq = &dev->tx_q[qid];
     uint64_t diff_tsc;
-    uint64_t cur_tsc;
 
     int i = 0;
 
@@ -647,11 +647,7 @@ dpdk_queue_pkts(struct netdev_dpdk *dev, int qid,
         if (txq->count == MAX_TX_QUEUE_LEN) {
             dpdk_queue_flush__(dev, qid);
         }
-        cur_tsc = rte_get_timer_cycles();
-        if (txq->count == 1) {
-            txq->tsc = cur_tsc;
-        }
-        diff_tsc = cur_tsc - txq->tsc;
+        diff_tsc = rte_get_timer_cycles() - txq->tsc;
         if (diff_tsc >= DRAIN_TSC) {
             dpdk_queue_flush__(dev, qid);
         }
