@@ -661,7 +661,9 @@ dpdk_do_tx_copy(struct netdev *netdev, struct dpif_packet ** pkts, int cnt)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct rte_mbuf *mbufs[cnt];
-    int i, newcnt = 0;
+    int dropped = 0;
+    int newcnt = 0;
+    int i;
 
     for (i = 0; i < cnt; i++) {
         int size = ofpbuf_size(&pkts[i]->ofpbuf);
@@ -669,20 +671,15 @@ dpdk_do_tx_copy(struct netdev *netdev, struct dpif_packet ** pkts, int cnt)
             VLOG_WARN_RL(&rl, "Too big size %d max_packet_len %d",
                          (int)size , dev->max_packet_len);
 
-            ovs_mutex_lock(&dev->mutex);
-            dev->stats.tx_dropped++;
-            ovs_mutex_unlock(&dev->mutex);
-
+            dropped++;
             continue;
         }
 
         mbufs[newcnt] = rte_pktmbuf_alloc(dev->dpdk_mp->mp);
 
         if (!mbufs[newcnt]) {
-            ovs_mutex_lock(&dev->mutex);
-            dev->stats.tx_dropped++;
-            ovs_mutex_unlock(&dev->mutex);
-            return;
+            dropped += cnt - i;
+            break;
         }
 
         /* We have to do a copy for now */
@@ -692,6 +689,12 @@ dpdk_do_tx_copy(struct netdev *netdev, struct dpif_packet ** pkts, int cnt)
         rte_pktmbuf_pkt_len(mbufs[newcnt]) = size;
 
         newcnt++;
+    }
+
+    if (dropped) {
+        ovs_mutex_lock(&dev->mutex);
+        dev->stats.tx_dropped += dropped;
+        ovs_mutex_unlock(&dev->mutex);
     }
 
     dpdk_queue_pkts(dev, NON_PMD_THREAD_TX_QUEUE, mbufs, newcnt);
