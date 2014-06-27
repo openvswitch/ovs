@@ -39,7 +39,6 @@ struct stream_fd
 {
     struct stream stream;
     int fd;
-    HANDLE wevent;
 };
 
 static const struct stream_class stream_fd_class;
@@ -61,7 +60,6 @@ new_fd_stream(const char *name, int fd, int connect_status,
     s = xmalloc(sizeof *s);
     stream_init(&s->stream, &stream_fd_class, connect_status, name);
     s->fd = fd;
-    s->wevent = CreateEvent(NULL, FALSE, FALSE, NULL);
     *streamp = &s->stream;
     return 0;
 }
@@ -77,8 +75,6 @@ static void
 fd_close(struct stream *stream)
 {
     struct stream_fd *s = stream_fd_cast(stream);
-    WSAEventSelect(s->fd, NULL, 0);
-    CloseHandle(s->wevent);
     closesocket(s->fd);
     free(s);
 }
@@ -130,11 +126,11 @@ fd_wait(struct stream *stream, enum stream_wait_type wait)
     switch (wait) {
     case STREAM_CONNECT:
     case STREAM_SEND:
-        poll_fd_wait_event(s->fd, s->wevent, POLLOUT);
+        poll_fd_wait(s->fd, POLLOUT);
         break;
 
     case STREAM_RECV:
-        poll_fd_wait_event(s->fd, s->wevent, POLLIN);
+        poll_fd_wait(s->fd, POLLIN);
         break;
 
     default:
@@ -161,7 +157,6 @@ struct fd_pstream
 {
     struct pstream pstream;
     int fd;
-    HANDLE wevent;
     int (*accept_cb)(int fd, const struct sockaddr_storage *, size_t ss_len,
                      struct stream **);
     int (*set_dscp_cb)(int fd, uint8_t dscp);
@@ -201,7 +196,6 @@ new_fd_pstream(const char *name, int fd,
     struct fd_pstream *ps = xmalloc(sizeof *ps);
     pstream_init(&ps->pstream, &fd_pstream_class, name);
     ps->fd = fd;
-    ps->wevent = CreateEvent(NULL, FALSE, FALSE, NULL);
     ps->accept_cb = accept_cb;
     ps->set_dscp_cb = set_dscp_cb;
     ps->unlink_path = unlink_path;
@@ -213,8 +207,6 @@ static void
 pfd_close(struct pstream *pstream)
 {
     struct fd_pstream *ps = fd_pstream_cast(pstream);
-    WSAEventSelect(ps->fd, NULL, 0);
-    CloseHandle(ps->wevent);
     closesocket(ps->fd);
     if (ps->unlink_path) {
         fatal_signal_unlink_file_now(ps->unlink_path);
@@ -254,7 +246,7 @@ static void
 pfd_wait(struct pstream *pstream)
 {
     struct fd_pstream *ps = fd_pstream_cast(pstream);
-    poll_fd_wait_event(ps->fd, ps->wevent, POLLIN);
+    poll_fd_wait(ps->fd, POLLIN);
 }
 
 static int

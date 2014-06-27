@@ -79,5 +79,5 @@ latch_is_set(const struct latch *latch)
 void
 latch_wait_at(const struct latch *latch, const char *where)
 {
-    poll_fd_wait_at(0, latch->wevent, POLLIN, where);
+    poll_wevent_wait_at(latch->wevent, where);
 }

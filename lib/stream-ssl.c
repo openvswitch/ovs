@@ -82,7 +82,6 @@ struct ssl_stream
     enum ssl_state state;
     enum session_type type;
     int fd;
-    HANDLE wevent;
     SSL *ssl;
     struct ofpbuf *txbuf;
     unsigned int session_nr;
@@ -200,7 +199,6 @@ static void ssl_protocol_cb(int write_p, int version, int content_type,
                             const void *, size_t, SSL *, void *sslv_);
 static bool update_ssl_config(struct ssl_config_file *, const char *file_name);
 static int sock_errno(void);
-static void clear_handle(int fd, HANDLE wevent);
 
 static short int
 want_to_poll_events(int want)
@@ -305,11 +303,6 @@ new_ssl_stream(const char *name, int fd, enum session_type type,
     sslv->state = state;
     sslv->type = type;
     sslv->fd = fd;
-#ifdef _WIN32
-    sslv->wevent = CreateEvent(NULL, FALSE, FALSE, NULL);
-#else
-    sslv->wevent = 0;
-#endif
     sslv->ssl = ssl;
     sslv->txbuf = NULL;
     sslv->rx_want = sslv->tx_want = SSL_NOTHING;
@@ -542,7 +535,6 @@ ssl_close(struct stream *stream)
     ERR_clear_error();
 
     SSL_free(sslv->ssl);
-    clear_handle(sslv->fd, sslv->wevent);
     closesocket(sslv->fd);
     free(sslv);
 }
@@ -735,8 +727,7 @@ ssl_run_wait(struct stream *stream)
     struct ssl_stream *sslv = ssl_stream_cast(stream);
 
     if (sslv->tx_want != SSL_NOTHING) {
-        poll_fd_wait_event(sslv->fd, sslv->wevent,
-                           want_to_poll_events(sslv->tx_want));
+        poll_fd_wait(sslv->fd, want_to_poll_events(sslv->tx_want));
     }
 }
 
@@ -752,14 +743,14 @@ ssl_wait(struct stream *stream, enum stream_wait_type wait)
         } else {
             switch (sslv->state) {
             case STATE_TCP_CONNECTING:
-                poll_fd_wait_event(sslv->fd, sslv->wevent, POLLOUT);
+                poll_fd_wait(sslv->fd, POLLOUT);
                 break;
 
             case STATE_SSL_CONNECTING:
                 /* ssl_connect() called SSL_accept() or SSL_connect(), which
                  * set up the status that we test here. */
-                poll_fd_wait_event(sslv->fd, sslv->wevent,
-                                   want_to_poll_events(SSL_want(sslv->ssl)));
+                poll_fd_wait(sslv->fd,
+                               want_to_poll_events(SSL_want(sslv->ssl)));
                 break;
 
             default:
@@ -770,8 +761,7 @@ ssl_wait(struct stream *stream, enum stream_wait_type wait)
 
     case STREAM_RECV:
         if (sslv->rx_want != SSL_NOTHING) {
-            poll_fd_wait_event(sslv->fd, sslv->wevent,
-                               want_to_poll_events(sslv->rx_want));
+            poll_fd_wait(sslv->fd, want_to_poll_events(sslv->rx_want));
         } else {
             poll_immediate_wake();
         }
@@ -811,7 +801,6 @@ struct pssl_pstream
 {
     struct pstream pstream;
     int fd;
-    HANDLE wevent;
 };
 
 const struct pstream_class pssl_pstream_class;
@@ -853,11 +842,6 @@ pssl_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp,
     pstream_init(&pssl->pstream, &pssl_pstream_class, bound_name);
     pstream_set_bound_port(&pssl->pstream, htons(port));
     pssl->fd = fd;
-#ifdef _WIN32
-    pssl->wevent = CreateEvent(NULL, FALSE, FALSE, NULL);
-#else
-    pssl->wevent = 0;
-#endif
     *pstreamp = &pssl->pstream;
     return 0;
 }
@@ -866,7 +850,6 @@ static void
 pssl_close(struct pstream *pstream)
 {
     struct pssl_pstream *pssl = pssl_pstream_cast(pstream);
-    clear_handle(pssl->fd, pssl->wevent);
     closesocket(pssl->fd);
     free(pssl);
 }
@@ -913,7 +896,7 @@ static void
 pssl_wait(struct pstream *pstream)
 {
     struct pssl_pstream *pssl = pssl_pstream_cast(pstream);
-    poll_fd_wait_event(pssl->fd, pssl->wevent, POLLIN);
+    poll_fd_wait(pssl->fd, POLLIN);
 }
 
 static int
@@ -1443,17 +1426,4 @@ ssl_protocol_cb(int write_p, int version OVS_UNUSED, int content_type,
              stream_get_name(&sslv->stream), ds_cstr(&details), len);
 
     ds_destroy(&details);
-}
-
-static void
-clear_handle(int fd OVS_UNUSED, HANDLE wevent OVS_UNUSED)
-{
-#ifdef _WIN32
-    if (fd) {
-        WSAEventSelect(fd, NULL, 0);
-    }
-    if (wevent) {
-        CloseHandle(wevent);
-    }
-#endif
 }

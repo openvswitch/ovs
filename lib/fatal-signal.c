@@ -59,8 +59,11 @@ static struct hook hooks[MAX_HOOKS];
 static size_t n_hooks;
 
 static int signal_fds[2];
-static HANDLE wevent;
 static volatile sig_atomic_t stored_sig_nr = SIG_ATOMIC_MAX;
+
+#ifdef _WIN32
+static HANDLE wevent;
+#endif
 
 static struct ovs_mutex mutex;
 
@@ -215,7 +218,11 @@ void
 fatal_signal_wait(void)
 {
     fatal_signal_init();
-    poll_fd_wait_event(signal_fds[0], wevent, POLLIN);
+#ifdef _WIN32
+    poll_wevent_wait(wevent);
+#else
+    poll_fd_wait(signal_fds[0], POLLIN);
+#endif
 }
 
 void

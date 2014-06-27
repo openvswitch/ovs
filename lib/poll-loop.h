@@ -50,12 +50,12 @@ extern "C" {
  * caller to supply a location explicitly, which is useful if the caller's own
  * caller would be more useful in log output.  See timer_wait_at() for an
  * example. */
-void poll_fd_wait_at(int fd, HANDLE wevent, short int events, const char *where);
-#ifndef _WIN32
-#define poll_fd_wait(fd, events) poll_fd_wait_at(fd, 0, events, SOURCE_LOCATOR)
-#endif
-#define poll_fd_wait_event(fd, wevent, events)  \
-    poll_fd_wait_at(fd, wevent, events, SOURCE_LOCATOR)
+void poll_fd_wait_at(int fd, short int events, const char *where);
+#define poll_fd_wait(fd, events) poll_fd_wait_at(fd, events, SOURCE_LOCATOR)
+
+#ifdef _WIN32
+#define poll_wevent_wait(wevent) poll_wevent_wait_at(wevent, SOURCE_LOCATOR)
+#endif /* _WIN32 */
 
 void poll_timer_wait_at(long long int msec, const char *where);
 #define poll_timer_wait(msec) poll_timer_wait_at(msec, SOURCE_LOCATOR)

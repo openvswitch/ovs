@@ -107,7 +107,7 @@ service_start(int *argcp, char **argvp[])
             VLOG_FATAL("Failed to create a event (%s).", msg_buf);
         }
 
-        poll_fd_wait_event(0, wevent, POLLIN);
+        poll_wevent_wait(wevent);
 
         /* Register the control handler. This function is called by the service
          * manager to stop the service. */
@@ -206,7 +206,7 @@ should_service_stop(void)
         if (service_status.dwCurrentState != SERVICE_RUNNING) {
             return true;
         } else {
-            poll_fd_wait_event(0, wevent, POLLIN);
+            poll_wevent_wait(wevent);
         }
     }
     return false;
