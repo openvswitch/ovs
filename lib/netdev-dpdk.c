@@ -570,24 +570,32 @@ netdev_dpdk_rxq_dealloc(struct netdev_rxq *rxq_)
     rte_free(rx);
 }
 
-inline static void
-dpdk_queue_flush(struct netdev_dpdk *dev, int qid)
+static inline void
+dpdk_queue_flush__(struct netdev_dpdk *dev, int qid)
 {
     struct dpdk_tx_queue *txq = &dev->tx_q[qid];
     uint32_t nb_tx;
 
-    if (txq->count == 0) {
-        return;
-    }
-    rte_spinlock_lock(&txq->tx_lock);
     nb_tx = rte_eth_tx_burst(dev->port_id, qid, txq->burst_pkts, txq->count);
-    if (nb_tx != txq->count) {
+    if (OVS_UNLIKELY(nb_tx != txq->count)) {
         /* free buffers if we couldn't transmit packets */
         rte_mempool_put_bulk(dev->dpdk_mp->mp,
                              (void **) &txq->burst_pkts[nb_tx],
                              (txq->count - nb_tx));
     }
     txq->count = 0;
+}
+
+static inline void
+dpdk_queue_flush(struct netdev_dpdk *dev, int qid)
+{
+    struct dpdk_tx_queue *txq = &dev->tx_q[qid];
+
+    if (txq->count == 0) {
+        return;
+    }
+    rte_spinlock_lock(&txq->tx_lock);
+    dpdk_queue_flush__(dev, qid);
     rte_spinlock_unlock(&txq->tx_lock);
 }
 
@@ -622,7 +630,6 @@ dpdk_queue_pkts(struct netdev_dpdk *dev, int qid,
     struct dpdk_tx_queue *txq = &dev->tx_q[qid];
     uint64_t diff_tsc;
     uint64_t cur_tsc;
-    uint32_t nb_tx;
 
     int i = 0;
 
@@ -638,7 +645,7 @@ dpdk_queue_pkts(struct netdev_dpdk *dev, int qid,
         i += tocopy;
 
         if (txq->count == MAX_TX_QUEUE_LEN) {
-            goto flush;
+            dpdk_queue_flush__(dev, qid);
         }
         cur_tsc = rte_get_timer_cycles();
         if (txq->count == 1) {
@@ -646,20 +653,8 @@ dpdk_queue_pkts(struct netdev_dpdk *dev, int qid,
         }
         diff_tsc = cur_tsc - txq->tsc;
         if (diff_tsc >= DRAIN_TSC) {
-            goto flush;
+            dpdk_queue_flush__(dev, qid);
         }
-        continue;
-
-    flush:
-        nb_tx = rte_eth_tx_burst(dev->port_id, qid, txq->burst_pkts,
-                                 txq->count);
-        if (nb_tx != txq->count) {
-            /* free buffers if we couldn't transmit packets */
-            rte_mempool_put_bulk(dev->dpdk_mp->mp,
-                                 (void **) &txq->burst_pkts[nb_tx],
-                                 (txq->count - nb_tx));
-        }
-        txq->count = 0;
     }
     rte_spinlock_unlock(&txq->tx_lock);
 }
