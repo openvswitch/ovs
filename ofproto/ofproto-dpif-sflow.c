@@ -40,6 +40,7 @@
 #include "vlog.h"
 #include "lib/odp-util.h"
 #include "ofproto-provider.h"
+#include "lacp.h"
 
 VLOG_DEFINE_THIS_MODULE(sflow);
 
@@ -166,12 +167,14 @@ sflow_agent_get_counters(void *ds_, SFLPoller *poller,
     OVS_REQUIRES(mutex)
 {
     struct dpif_sflow *ds = ds_;
-    SFLCounters_sample_element elem;
+    SFLCounters_sample_element elem, lacp_elem, of_elem, name_elem;
     enum netdev_features current;
     struct dpif_sflow_port *dsp;
     SFLIf_counters *counters;
     struct netdev_stats stats;
     enum netdev_flags flags;
+    struct lacp_slave_stats lacp_stats;
+    const char *ifName;
 
     dsp = dpif_sflow_find_port(ds, u32_to_odp(poller->bridgePort));
     if (!dsp) {
@@ -223,6 +226,59 @@ sflow_agent_get_counters(void *ds_, SFLPoller *poller,
     counters->ifPromiscuousMode = 0;
 
     SFLADD_ELEMENT(cs, &elem);
+
+    /* Include LACP counters and identifiers if this port is part of a LAG. */
+    if (ofproto_port_get_lacp_stats(dsp->ofport, &lacp_stats) == 0) {
+	memset(&lacp_elem, 0, sizeof lacp_elem);
+	lacp_elem.tag = SFLCOUNTERS_LACP;
+	memcpy(&lacp_elem.counterBlock.lacp.actorSystemID,
+	       lacp_stats.dot3adAggPortActorSystemID,
+	       ETH_ADDR_LEN);
+	memcpy(&lacp_elem.counterBlock.lacp.partnerSystemID,
+	       lacp_stats.dot3adAggPortPartnerOperSystemID,
+	       ETH_ADDR_LEN);
+	lacp_elem.counterBlock.lacp.attachedAggID =
+	    lacp_stats.dot3adAggPortAttachedAggID;
+	lacp_elem.counterBlock.lacp.portState.v.actorAdmin =
+	    lacp_stats.dot3adAggPortActorAdminState;
+	lacp_elem.counterBlock.lacp.portState.v.actorOper =
+	    lacp_stats.dot3adAggPortActorOperState;
+	lacp_elem.counterBlock.lacp.portState.v.partnerAdmin =
+	    lacp_stats.dot3adAggPortPartnerAdminState;
+	lacp_elem.counterBlock.lacp.portState.v.partnerOper =
+	    lacp_stats.dot3adAggPortPartnerOperState;
+	lacp_elem.counterBlock.lacp.LACPDUsRx =
+	    lacp_stats.dot3adAggPortStatsLACPDUsRx;
+	SFL_UNDEF_COUNTER(lacp_elem.counterBlock.lacp.markerPDUsRx);
+	SFL_UNDEF_COUNTER(lacp_elem.counterBlock.lacp.markerResponsePDUsRx);
+	SFL_UNDEF_COUNTER(lacp_elem.counterBlock.lacp.unknownRx);
+	lacp_elem.counterBlock.lacp.illegalRx =
+	    lacp_stats.dot3adAggPortStatsIllegalRx;
+	lacp_elem.counterBlock.lacp.LACPDUsTx =
+	    lacp_stats.dot3adAggPortStatsLACPDUsTx;
+	SFL_UNDEF_COUNTER(lacp_elem.counterBlock.lacp.markerPDUsTx);
+	SFL_UNDEF_COUNTER(lacp_elem.counterBlock.lacp.markerResponsePDUsTx);
+	SFLADD_ELEMENT(cs, &lacp_elem);
+    }
+
+    /* Include Port name. */
+    if ((ifName = netdev_get_name(dsp->ofport->netdev)) != NULL) {
+	memset(&name_elem, 0, sizeof name_elem);
+	name_elem.tag = SFLCOUNTERS_PORTNAME;
+	name_elem.counterBlock.portName.portName.str = (char *)ifName;
+	name_elem.counterBlock.portName.portName.len = strlen(ifName);
+	SFLADD_ELEMENT(cs, &name_elem);
+    }
+
+    /* Include OpenFlow DPID and openflow port number. */
+    memset(&of_elem, 0, sizeof of_elem);
+    of_elem.tag = SFLCOUNTERS_OPENFLOWPORT;
+    of_elem.counterBlock.ofPort.datapath_id =
+	ofproto_get_datapath_id(dsp->ofport->ofproto);
+    of_elem.counterBlock.ofPort.port_no =
+      (OVS_FORCE uint32_t)dsp->ofport->ofp_port;
+    SFLADD_ELEMENT(cs, &of_elem);
+
     sfl_poller_writeCountersSample(poller, cs);
 }
 

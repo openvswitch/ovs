@@ -1036,6 +1036,14 @@ struct ofproto_class {
      * not support LACP. */
     int (*port_is_lacp_current)(const struct ofport *port);
 
+    /* Get LACP port stats. Returns -1 if LACP is not enabled on 'port'.
+     *
+     * This function may be a null pointer if the ofproto implementation does
+     * not support LACP. */
+    int (*port_get_lacp_stats)(const struct ofport *port,
+			       struct lacp_slave_stats *stats);
+
+
 /* ## ----------------------- ## */
 /* ## OpenFlow Rule Functions ## */
 /* ## ----------------------- ## */

@@ -4370,7 +4370,7 @@ HEADER
 	hdr=50-54-00-00-00-05-50-54-00-00-00-07-86-DD-67-00-00-00-00-00-0A-80-FE-80-00-00-00-00-00-00-00-00-00-00-00-00-00-01-FE-80-00-00-00-00-00-00-00-00-00-00-00-00-00-02-00-00-00-00-00-00
 ])
 
-  AT_CHECK_UNQUOTED([[sort sflow.log | $EGREP 'IFCOUNTERS|ERROR' | head -6 | sed 's/ /\
+  AT_CHECK_UNQUOTED([[sort sflow.log | $EGREP 'IFCOUNTERS|ERROR|PORTNAME|OPENFLOWPORT' | head -18 | sed 's/ /\
 	/g']], [0], [dnl
 IFCOUNTERS
 	dgramSeqNo=2
@@ -4510,11 +4510,99 @@ IFCOUNTERS
 	out_discards=0
 	out_errors=0
 	promiscuous=0
+OPENFLOWPORT
+	datapath_id=18364758544493064720
+	port_no=1
+OPENFLOWPORT
+	datapath_id=18364758544493064720
+	port_no=1
+OPENFLOWPORT
+	datapath_id=18364758544493064720
+	port_no=2
+OPENFLOWPORT
+	datapath_id=18364758544493064720
+	port_no=2
+OPENFLOWPORT
+	datapath_id=18364758544493064720
+	port_no=65534
+OPENFLOWPORT
+	datapath_id=18364758544493064720
+	port_no=65534
+PORTNAME
+	portName=br0
+PORTNAME
+	portName=br0
+PORTNAME
+	portName=p1
+PORTNAME
+	portName=p1
+PORTNAME
+	portName=p2
+PORTNAME
+	portName=p2
 ])
   AT_CLEANUP])
 
 CHECK_SFLOW_SAMPLING_PACKET([127.0.0.1], [IPv4])
 CHECK_SFLOW_SAMPLING_PACKET([[[::1]]], [IPv6])
+
+dnl Test sFlow LAG structures
+AT_SETUP([ofproto-dpif - sFlow LACP structures])
+OVS_VSWITCHD_START([dnl
+		    add-bond br0 bond p1 p2 --				\
+		    set Port bond lacp=active bond-mode=active-backup	\
+		    other_config:lacp-time="fast"			\
+		    other_config:lacp-system-id=11:22:33:44:55:66	\
+		    other_config:lacp-system-priority=54321 --		\
+		    set Interface p1 type=dummy				\
+		    other_config:lacp-port-id=11			\
+		    other_config:lacp-port-priority=111			\
+		    other_config:lacp-aggregation-key=3333 --		\
+		    set Interface p2 type=dummy				\
+		    other_config:lacp-port-id=22			\
+		    other_config:lacp-port-priority=222			\
+		    other_config:lacp-aggregation-key=3333 ])
+
+ON_EXIT([kill `cat test-sflow.pid`])
+AT_CHECK([ovstest test-sflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > sflow.log], [0], [], [ignore])
+AT_CAPTURE_FILE([sflow.log])
+SFLOW_PORT=`parse_listening_port < test-sflow.log`
+
+ovs-appctl time/stop
+
+ovs-vsctl \
+      set Interface p1 options:ifindex=1003 --			\
+      set Bridge br0 sflow=@sf --				\
+      --id=@sf create sflow targets=\"127.0.0.1:$SFLOW_PORT\"	\
+      header=128 sampling=1 polling=1
+
+dnl sleep long enough to get the sFlow datagram flushed out (may be delayed for up to 1 second)
+for i in `seq 1 30`; do
+    ovs-appctl time/warp 100
+done
+OVS_VSWITCHD_STOP
+ovs-appctl -t test-sflow exit
+AT_CHECK([[sort sflow.log | $EGREP 'LACPCOUNTERS|ERROR' | head -n 1 | sed 's/ /\
+	/g']], [0], [dnl
+LACPCOUNTERS
+	sysID=11:22:33:44:55:66
+	partnerID=00:00:00:00:00:00
+	aggID=3333
+	actorAdmin=0x7
+	actorOper=0xbf
+	partnerAdmin=0x0
+	partnerOper=0x2
+	LACPUDsRx=0
+	markerPDUsRx=4294967295
+	markerRespPDUsRx=4294967295
+	unknownRx=4294967295
+	illegalRx=0
+	LACPUDsTx=1
+	markerPDUsTx=4294967295
+	markerRespPDUsTx=4294967295
+])
+
+AT_CLEANUP
 
 # CHECK_NETFLOW_EXPIRATION(LOOPBACK_ADDR, IP_VERSION_TYPE)
 #

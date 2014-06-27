@@ -70,4 +70,27 @@ typedef void lacp_send_pdu(void *slave, const void *pdu, size_t pdu_size);
 void lacp_run(struct lacp *, lacp_send_pdu *);
 void lacp_wait(struct lacp *);
 
+struct lacp_slave_stats {
+    /* id */
+    uint8_t dot3adAggPortActorSystemID[ETH_ADDR_LEN];
+    uint8_t dot3adAggPortPartnerOperSystemID[ETH_ADDR_LEN];
+    uint32_t dot3adAggPortAttachedAggID;
+    /* state */
+    uint8_t dot3adAggPortActorAdminState;
+    uint8_t dot3adAggPortActorOperState;
+    uint8_t dot3adAggPortPartnerAdminState;
+    uint8_t dot3adAggPortPartnerOperState;
+    /* counters */
+    uint32_t dot3adAggPortStatsLACPDUsRx;
+    /* uint32_t dot3adAggPortStatsMarkerPDUsRx; */
+    /* uint32_t dot3adAggPortStatsMarkerResponsePDUsRx; */
+    /* uint32_t dot3adAggPortStatsUnknownRx; */
+    uint32_t dot3adAggPortStatsIllegalRx;
+    uint32_t dot3adAggPortStatsLACPDUsTx;
+    /* uint32_t dot3adAggPortStatsMarkerPDUsTx; */
+    /* uint32_t dot3adAggPortStatsMarkerResponsePDUsTx; */
+};
+
+bool lacp_get_slave_stats(const struct lacp *, const void *slave_, struct lacp_slave_stats *);
+
 #endif /* lacp.h */

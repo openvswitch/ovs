@@ -11,6 +11,8 @@ Post-v2.3.0
      release. The protocol is documented at
      http://tools.ietf.org/html/draft-gross-geneve-00
    - The OVS database now reports controller rate limiting statistics.
+   - sflow now exports information about LACP-based bonds, port names, and
+     OpenFlow port numbers.
    - ovs-dpctl functionality is now available for datapaths integrated
      into ovs-vswitchd, via ovs-appctl.  Some existing ovs-appctl
      commands are now redundant and will be removed in a future
