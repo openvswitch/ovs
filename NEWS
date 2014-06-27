@@ -23,6 +23,7 @@ v2.3.0 - xx xxx xxxx
      older kernel module, some workloads may perform worse with the
      new userspace.
    - Support for multicast snooping (IGMPv1 and IGMPv2)
+   - Compatibility with autoconf 2.63 (previously >=2.64)
 
 v2.2.0 - Internal Release
 ---------------------
