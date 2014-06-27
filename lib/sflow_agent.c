@@ -363,6 +363,21 @@ SFLPoller *sfl_agent_getPoller(SFLAgent *agent, SFLDataSource_instance *pdsi)
     return NULL;
 }
 
+/*_________________-----------------------------------__________________
+  _________________  sfl_agent_getPollerByBridgePort  __________________
+  -----------------___________________________________------------------
+*/
+
+SFLPoller *sfl_agent_getPollerByBridgePort(SFLAgent *agent, uint32_t port_no)
+{
+  /* find it and return it */
+    SFLPoller *pl = agent->pollers;
+    for(; pl != NULL; pl = pl->nxt)
+	if(pl->bridgePort == port_no) return pl;
+    /* not found */
+    return NULL;
+}
+
 /*_________________---------------------------__________________
   _________________  sfl_agent_getReceiver    __________________
   -----------------___________________________------------------

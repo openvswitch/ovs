@@ -54,8 +54,18 @@ static unixctl_cb_func test_sflow_exit;
 
 /* Structure element tag numbers. */
 #define SFLOW_TAG_CTR_IFCOUNTERS 1
+#define SFLOW_TAG_CTR_LACPCOUNTERS 7
+#define SFLOW_TAG_CTR_OPENFLOWPORT 1004
+#define SFLOW_TAG_CTR_PORTNAME 1005
 #define SFLOW_TAG_PKT_HEADER 1
 #define SFLOW_TAG_PKT_SWITCH 1001
+#define SFLOW_TAG_PKT_TUNNEL4_OUT 1023
+#define SFLOW_TAG_PKT_TUNNEL4_IN 1024
+#define SFLOW_TAG_PKT_TUNNEL_VNI_OUT 1029
+#define SFLOW_TAG_PKT_TUNNEL_VNI_IN 1030
+
+/* string sizes */
+#define SFL_MAX_PORTNAME_LEN 255
 
 struct sflow_addr {
     enum {
@@ -99,7 +109,14 @@ struct sflow_xdr {
     struct {
         uint32_t HEADER;
         uint32_t SWITCH;
+	uint32_t TUNNEL4_OUT;
+	uint32_t TUNNEL4_IN;
+	uint32_t TUNNEL_VNI_OUT;
+	uint32_t TUNNEL_VNI_IN;
         uint32_t IFCOUNTERS;
+	uint32_t LACPCOUNTERS;
+	uint32_t OPENFLOWPORT;
+	uint32_t PORTNAME;
     } offset;
 
     /* Flow sample fields. */
@@ -221,6 +238,63 @@ process_counter_sample(struct sflow_xdr *x)
         printf(" promiscuous=%"PRIu32, sflowxdr_next(x));
         printf("\n");
     }
+    if(x->offset.LACPCOUNTERS) {
+	uint8_t *mac;
+	union {
+	    uint32_t all;
+	    struct {
+		uint8_t actorAdmin;
+		uint8_t actorOper;
+		uint8_t partnerAdmin;
+		uint8_t partnerOper;
+	    } v;
+	} state;
+
+        sflowxdr_setc(x, x->offset.LACPCOUNTERS);
+        printf("LACPCOUNTERS");
+	mac = (uint8_t *)sflowxdr_str(x);
+	printf(" sysID="ETH_ADDR_FMT, ETH_ADDR_ARGS(mac));
+	sflowxdr_skip(x, 2);
+	mac = (uint8_t *)sflowxdr_str(x);
+	printf(" partnerID="ETH_ADDR_FMT, ETH_ADDR_ARGS(mac));
+	sflowxdr_skip(x, 2);
+	printf(" aggID=%"PRIu32, sflowxdr_next(x));
+	state.all = sflowxdr_next_n(x);
+	printf(" actorAdmin=0x%"PRIx32, state.v.actorAdmin);
+	printf(" actorOper=0x%"PRIx32, state.v.actorOper);
+	printf(" partnerAdmin=0x%"PRIx32, state.v.partnerAdmin);
+	printf(" partnerOper=0x%"PRIx32, state.v.partnerOper);
+	printf(" LACPUDsRx=%"PRIu32, sflowxdr_next(x));
+	printf(" markerPDUsRx=%"PRIu32, sflowxdr_next(x));
+	printf(" markerRespPDUsRx=%"PRIu32, sflowxdr_next(x));
+	printf(" unknownRx=%"PRIu32, sflowxdr_next(x));
+	printf(" illegalRx=%"PRIu32, sflowxdr_next(x));
+	printf(" LACPUDsTx=%"PRIu32, sflowxdr_next(x));
+	printf(" markerPDUsTx=%"PRIu32, sflowxdr_next(x));
+	printf(" markerRespPDUsTx=%"PRIu32, sflowxdr_next(x));
+        printf("\n");
+    }
+    if(x->offset.OPENFLOWPORT) {
+        sflowxdr_setc(x, x->offset.OPENFLOWPORT);
+        printf("OPENFLOWPORT");
+        printf(" datapath_id=%"PRIu64, sflowxdr_next_int64(x));
+        printf(" port_no=%"PRIu32, sflowxdr_next(x));
+	printf("\n");
+    }
+    if(x->offset.PORTNAME) {
+	uint32_t pnLen;
+	char *pnBytes;
+	char portName[SFL_MAX_PORTNAME_LEN + 1];
+        sflowxdr_setc(x, x->offset.PORTNAME);
+        printf("PORTNAME");
+	pnLen = sflowxdr_next(x);
+	SFLOWXDR_assert(x, (pnLen <= SFL_MAX_PORTNAME_LEN));
+	pnBytes = sflowxdr_str(x);
+	memcpy(portName, pnBytes, pnLen);
+	portName[pnLen] = '\0';
+	printf(" portName=%s", portName);
+	printf("\n");
+    }
 }
 
 static char
@@ -251,6 +325,25 @@ print_hex(const char *a, int len, char *buf, int bufLen)
     return b;
 }
 
+static void
+print_struct_ipv4(struct sflow_xdr *x, const char *prefix)
+{
+    uint32_t src, dst;
+
+    printf(" %s_length=%"PRIu32,    prefix, sflowxdr_next(x));
+    printf(" %s_protocol=%"PRIu32,  prefix, sflowxdr_next(x));
+
+    src = sflowxdr_next_n(x);
+    dst = sflowxdr_next_n(x);
+    printf(" %s_src="IP_FMT,        prefix, IP_ARGS(src));
+    printf(" %s_dst="IP_FMT,        prefix, IP_ARGS(dst));
+
+    printf(" %s_src_port=%"PRIu32,  prefix, sflowxdr_next(x));
+    printf(" %s_dst_port=%"PRIu32,  prefix, sflowxdr_next(x));
+    printf(" %s_tcp_flags=%"PRIu32, prefix, sflowxdr_next(x));
+    printf(" %s_tos=%"PRIu32,       prefix, sflowxdr_next(x));
+}
+
 #define SFLOW_HEX_SCRATCH 1024
 
 static void
@@ -265,6 +358,26 @@ process_flow_sample(struct sflow_xdr *x)
         printf(" ds=%s>%"PRIu32":%"PRIu32,
                x->agentIPStr, x->dsClass, x->dsIndex);
         printf(" fsSeqNo=%"PRIu32, x->fsSeqNo);
+
+        if (x->offset.TUNNEL4_IN) {
+            sflowxdr_setc(x, x->offset.TUNNEL4_IN);
+	    print_struct_ipv4(x, "tunnel4_in");
+        }
+
+        if (x->offset.TUNNEL4_OUT) {
+            sflowxdr_setc(x, x->offset.TUNNEL4_OUT);
+	    print_struct_ipv4(x, "tunnel4_out");
+        }
+
+        if (x->offset.TUNNEL_VNI_IN) {
+            sflowxdr_setc(x, x->offset.TUNNEL_VNI_IN);
+	    printf( " tunnel_in_vni=%"PRIu32, sflowxdr_next(x));
+        }
+
+        if (x->offset.TUNNEL_VNI_OUT) {
+            sflowxdr_setc(x, x->offset.TUNNEL_VNI_OUT);
+	    printf( " tunnel_out_vni=%"PRIu32, sflowxdr_next(x));
+        }
 
         if (x->offset.SWITCH) {
             sflowxdr_setc(x, x->offset.SWITCH);
@@ -372,6 +485,12 @@ process_datagram(struct sflow_xdr *x)
                 case SFLOW_TAG_CTR_IFCOUNTERS:
                     sflowxdr_mark_unique(x, &x->offset.IFCOUNTERS);
                     break;
+                case SFLOW_TAG_CTR_LACPCOUNTERS:
+                    sflowxdr_mark_unique(x, &x->offset.LACPCOUNTERS);
+                    break;
+                case SFLOW_TAG_CTR_PORTNAME:
+                    sflowxdr_mark_unique(x, &x->offset.PORTNAME);
+                    break;
 
                     /* Add others here... */
                 }
@@ -438,6 +557,22 @@ process_datagram(struct sflow_xdr *x)
 
                 case SFLOW_TAG_PKT_SWITCH:
                     sflowxdr_mark_unique(x, &x->offset.SWITCH);
+                    break;
+
+		case SFLOW_TAG_PKT_TUNNEL4_OUT:
+                    sflowxdr_mark_unique(x, &x->offset.TUNNEL4_OUT);
+                    break;
+
+		case SFLOW_TAG_PKT_TUNNEL4_IN:
+                    sflowxdr_mark_unique(x, &x->offset.TUNNEL4_IN);
+                    break;
+
+		case SFLOW_TAG_PKT_TUNNEL_VNI_OUT:
+                    sflowxdr_mark_unique(x, &x->offset.TUNNEL_VNI_OUT);
+                    break;
+
+		case SFLOW_TAG_PKT_TUNNEL_VNI_IN:
+                    sflowxdr_mark_unique(x, &x->offset.TUNNEL_VNI_IN);
                     break;
 
                     /* Add others here... */
