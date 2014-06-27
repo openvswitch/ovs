@@ -3307,6 +3307,19 @@ port_get_stats(const struct ofport *ofport_, struct netdev_stats *stats)
     return error;
 }
 
+static int
+port_get_lacp_stats(const struct ofport *ofport_, struct lacp_slave_stats *stats)
+{
+    struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
+    if(ofport->bundle
+       && ofport->bundle->lacp) {
+      if(lacp_get_slave_stats(ofport->bundle->lacp, ofport, stats)) {
+	return 0;
+      }
+    }
+    return -1;
+}
+
 struct port_dump_state {
     uint32_t bucket;
     uint32_t offset;
@@ -5382,6 +5395,7 @@ const struct ofproto_class ofproto_dpif_class = {
     port_poll,
     port_poll_wait,
     port_is_lacp_current,
+    port_get_lacp_stats,
     NULL,                       /* rule_choose_table */
     rule_alloc,
     rule_construct,

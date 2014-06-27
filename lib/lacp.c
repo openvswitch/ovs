@@ -125,6 +125,10 @@ struct slave {
     struct lacp_info ntt_actor;   /* Used to decide if we Need To Transmit. */
     struct timer tx;              /* Next message transmission timer. */
     struct timer rx;              /* Expected message receive timer. */
+
+    uint32_t count_rx_pdus;       /* dot3adAggPortStatsLACPDUsRx */
+    uint32_t count_rx_pdus_bad;   /* dot3adAggPortStatsIllegalRx */
+    uint32_t count_tx_pdus;       /* dot3adAggPortStatsLACPDUsTx */
 };
 
 static struct ovs_mutex mutex;
@@ -328,9 +332,11 @@ lacp_process_packet(struct lacp *lacp, const void *slave_,
     if (!slave) {
         goto out;
     }
+    slave->count_rx_pdus++;
 
     pdu = parse_lacp_packet(packet);
     if (!pdu) {
+	slave->count_rx_pdus_bad++;
         VLOG_WARN_RL(&rl, "%s: received an unparsable LACP PDU.", lacp->name);
         goto out;
     }
@@ -548,6 +554,7 @@ lacp_run(struct lacp *lacp, lacp_send_pdu *send_pdu) OVS_EXCLUDED(mutex)
             slave->ntt_actor = actor;
             compose_lacp_pdu(&actor, &slave->partner, &pdu);
             send_pdu(slave->aux, &pdu, sizeof pdu);
+	    slave->count_tx_pdus++;
 
             duration = (slave->partner.state & LACP_STATE_TIME
                         ? LACP_FAST_TIME_TX
@@ -977,4 +984,59 @@ lacp_unixctl_show(struct unixctl_conn *conn, int argc, const char *argv[],
 
 out:
     lacp_unlock();
+}
+
+/* Extract a snapshot of the current state and counters for a slave port.
+   Return false if the slave is not active. */
+bool
+lacp_get_slave_stats(const struct lacp *lacp, const void *slave_, struct lacp_slave_stats *stats)
+    OVS_EXCLUDED(mutex)
+{
+    struct slave *slave;
+    struct lacp_info actor;
+    bool ret;
+
+    ovs_mutex_lock(&mutex);
+
+    slave = slave_lookup(lacp, slave_);
+    if (slave) {
+	ret = true;
+	slave_get_actor(slave, &actor);
+	memcpy(&stats->dot3adAggPortActorSystemID,
+	       actor.sys_id,
+	       ETH_ADDR_LEN);
+	memcpy(&stats->dot3adAggPortPartnerOperSystemID,
+	       slave->partner.sys_id,
+	       ETH_ADDR_LEN);
+	stats->dot3adAggPortAttachedAggID = (lacp->key_slave->key ?
+					     lacp->key_slave->key :
+					     lacp->key_slave->port_id);
+
+	/* Construct my admin-state.  Assume aggregation is configured on. */
+	stats->dot3adAggPortActorAdminState = LACP_STATE_AGG;
+	if (lacp->active) {
+	    stats->dot3adAggPortActorAdminState |= LACP_STATE_ACT;
+	}
+	if (lacp->fast) {
+	    stats->dot3adAggPortActorAdminState |= LACP_STATE_TIME;
+	}
+	/* XXX Not sure how to know the partner admin state. It
+	 * might have to be captured and remembered during the
+	 * negotiation phase.
+	 */
+	stats->dot3adAggPortPartnerAdminState = 0;
+
+	stats->dot3adAggPortActorOperState = actor.state;
+	stats->dot3adAggPortPartnerOperState = slave->partner.state;
+
+	/* Read out the latest counters */
+	stats->dot3adAggPortStatsLACPDUsRx = slave->count_rx_pdus;
+	stats->dot3adAggPortStatsIllegalRx = slave->count_rx_pdus_bad;
+	stats->dot3adAggPortStatsLACPDUsTx = slave->count_tx_pdus;
+    } else {
+        ret = false;
+    }
+    ovs_mutex_unlock(&mutex);
+    return ret;
+
 }
