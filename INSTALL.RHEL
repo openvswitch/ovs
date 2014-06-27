@@ -20,10 +20,10 @@ RHEL.  On RHEL 5, the default RPM source directory is
 1. If you are building from a distribution tarball, proceed to step 2.
    Otherwise, if you are building from an Open vSwitch Git tree,
    determine the version of Autoconf available in the RHEL version you
-   are using.  If it is not at least version 2.64, then you have two
+   are using.  If it is not at least version 2.63, then you have two
    choices:
 
-     a. Install Autoconf 2.64 or later, one way or another.
+     a. Install Autoconf 2.63 or later, one way or another.
 
      b. Create a distribution tarball on some other machine, by
         running "./boot.sh; ./configure; make dist" in the Git tree.
