@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2013 Nicira, Inc.
+ * Copyright (c) 2007-2014 Nicira, Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of version 2 of the GNU General Public
@@ -524,7 +524,8 @@ static int ipv4_tun_to_nlattr(struct sk_buff *skb,
 		return -EMSGSIZE;
 	if (tun_opts &&
 	    nla_put(skb, OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS,
-		    swkey_tun_opts_len, tun_opts));
+		    swkey_tun_opts_len, tun_opts))
+		return -EMSGSIZE;
 
 	nla_nest_end(skb, nla);
 	return 0;
