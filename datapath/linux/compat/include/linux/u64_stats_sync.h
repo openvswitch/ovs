@@ -3,7 +3,7 @@
 
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
+#if defined(HAVE_U64_STATS_FETCH_BEGIN_IRQ)
 #include_next <linux/u64_stats_sync.h>
 #else
 
@@ -33,8 +33,8 @@
  *    (On UP, there is no seqcount_t protection, a reader allowing interrupts could
  *     read partial values)
  *
- * 7) For softirq uses, readers can use u64_stats_fetch_begin_bh() and
- *    u64_stats_fetch_retry_bh() helpers
+ * 7) For irq or softirq uses, readers can use u64_stats_fetch_begin_irq() and
+ *    u64_stats_fetch_retry_irq() helpers
  *
  * Usage :
  *
@@ -113,35 +113,36 @@ static inline bool u64_stats_fetch_retry(const struct u64_stats_sync *syncp,
 }
 
 /*
- * In case softirq handlers can update u64 counters, readers can use following helpers
+ * In case irq handlers can update u64 counters, readers can use following helpers
  * - SMP 32bit arches use seqcount protection, irq safe.
- * - UP 32bit must disable BH.
+ * - UP 32bit must disable irqs.
  * - 64bit have no problem atomically reading u64 values, irq safe.
  */
-static inline unsigned int u64_stats_fetch_begin_bh(const struct u64_stats_sync *syncp)
+static inline unsigned int u64_stats_fetch_begin_irq(const struct u64_stats_sync *syncp)
 {
 #if BITS_PER_LONG==32 && defined(CONFIG_SMP)
 	return read_seqcount_begin(&syncp->seq);
 #else
 #if BITS_PER_LONG==32
-	local_bh_disable();
+	local_irq_disable();
 #endif
 	return 0;
 #endif
 }
 
-static inline bool u64_stats_fetch_retry_bh(const struct u64_stats_sync *syncp,
+static inline bool u64_stats_fetch_retry_irq(const struct u64_stats_sync *syncp,
 					 unsigned int start)
 {
 #if BITS_PER_LONG==32 && defined(CONFIG_SMP)
 	return read_seqcount_retry(&syncp->seq, start);
 #else
 #if BITS_PER_LONG==32
-	local_bh_enable();
+	local_irq_enable();
 #endif
 	return false;
 #endif
 }
 
-#endif /* Linux kernel < 2.6.36 */
+#endif /* !HAVE_U64_STATS_FETCH_BEGIN_IRQ */
+
 #endif /* _LINUX_U64_STATS_SYNC_WRAPPER_H */
