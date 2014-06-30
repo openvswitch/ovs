@@ -1358,8 +1358,12 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 		/* The unmasked key has to be the same for flow updates. */
 		error = -EINVAL;
 		if (!ovs_flow_cmp_unmasked_key(flow, &key, match.range.end)) {
-			OVS_NLERR("Flow modification message rejected, unmasked key does not match.\n");
-			goto err_unlock_ovs;
+			/* Look for any overlapping flow. */
+			flow = ovs_flow_lookup_exact(table, &match);
+			if (!flow) {
+				OVS_NLERR("Flow modification message rejected, unmasked key does not match.\n");
+				goto err_unlock_ovs;
+			}
 		}
 
 		/* Update actions. */
@@ -1426,7 +1430,7 @@ static int ovs_flow_cmd_get(struct sk_buff *skb, struct genl_info *info)
 	}
 
 	table = ovsl_dereference(dp->table);
-	flow = ovs_flow_lookup_unmasked_key(table, &match);
+	flow = ovs_flow_lookup_exact(table, &match);
 	if (!flow) {
 		err = -ENOENT;
 		goto unlock;
@@ -1476,7 +1480,7 @@ static int ovs_flow_cmd_del(struct sk_buff *skb, struct genl_info *info)
 		goto unlock;
 
 	table = ovsl_dereference(dp->table);
-	flow = ovs_flow_lookup_unmasked_key(table, &match);
+	flow = ovs_flow_lookup_exact(table, &match);
 	if (!flow) {
 		err = -ENOENT;
 		goto unlock;

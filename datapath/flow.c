@@ -28,6 +28,7 @@
 #include <linux/jhash.h>
 #include <linux/jiffies.h>
 #include <linux/llc.h>
+#include <linux/list.h>
 #include <linux/module.h>
 #include <linux/in.h>
 #include <linux/rcupdate.h>
@@ -1070,20 +1071,6 @@ bool ovs_flow_cmp_unmasked_key(const struct sw_flow *flow,
 
 }
 
-struct sw_flow *ovs_flow_lookup_unmasked_key(struct flow_table *table,
-				       struct sw_flow_match *match)
-{
-	struct sw_flow_key *unmasked = match->key;
-	int key_end = match->range.end;
-	struct sw_flow *flow;
-
-	flow = ovs_flow_lookup(table, unmasked);
-	if (flow && (!ovs_flow_cmp_unmasked_key(flow, unmasked, key_end)))
-		flow = NULL;
-
-	return flow;
-}
-
 static struct sw_flow *ovs_masked_flow_lookup(struct flow_table *table,
 				    const struct sw_flow_key *unmasked,
 				    struct sw_flow_mask *mask)
@@ -1104,6 +1091,24 @@ static struct sw_flow *ovs_masked_flow_lookup(struct flow_table *table,
 					  key_start, key_end))
 			return flow;
 	}
+	return NULL;
+}
+
+struct sw_flow *ovs_flow_lookup_exact(struct flow_table *tbl,
+				      struct sw_flow_match *match)
+{
+	struct sw_flow_key *unmasked = match->key;
+	struct sw_flow *flow;
+	struct sw_flow_mask *mask;
+	int key_end = match->range.end;
+
+	/* Always called under ovs-mutex. */
+	list_for_each_entry(mask, tbl->mask_list, list) {
+		flow = ovs_masked_flow_lookup(tbl, unmasked, mask);
+		if (flow && ovs_flow_cmp_unmasked_key(flow, unmasked, key_end))  /* Found */
+			return flow;
+	}
+
 	return NULL;
 }
 

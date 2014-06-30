@@ -220,8 +220,8 @@ static inline int ovs_flow_tbl_need_to_expand(struct flow_table *table)
 
 struct sw_flow *ovs_flow_lookup(struct flow_table *,
 				const struct sw_flow_key *);
-struct sw_flow *ovs_flow_lookup_unmasked_key(struct flow_table *table,
-				    struct sw_flow_match *match);
+struct sw_flow *ovs_flow_lookup_exact(struct flow_table *tbl,
+				      struct sw_flow_match *match);
 
 void ovs_flow_tbl_destroy(struct flow_table *table, bool deferred);
 struct flow_table *ovs_flow_tbl_alloc(int new_size);
