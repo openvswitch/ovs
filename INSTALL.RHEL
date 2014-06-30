@@ -22,7 +22,7 @@ the top-level:
 5. SRPMS/ Where the newly created source package files are written.
 
 Before you begin, note the RPM sources directory on your version of
-Fedora.  The command "rpmbuild --showrc" will show the configuration
+RHEL.  The command "rpmbuild --showrc" will show the configuration
 for each of those directories. Alternatively, the command "rpm --eval
  '%{_topdir}'" shows the current configuration for the top level
 directory and the command "rpm --eval '%{_sourcedir}'" does the same
