@@ -13,9 +13,24 @@ Building Open vSwitch for RHEL
 You may build from an Open vSwitch distribution tarball or from an
 Open vSwitch Git tree.
 
-Before you begin, note the RPM source directory on your version of
-RHEL.  On RHEL 5, the default RPM source directory is
-/usr/src/redhat/SOURCES.  On RHEL 6, it is $HOME/rpmbuild/SOURCES.
+The default RPM build directory (_topdir) has five directories in
+the top-level:
+1. BUILD/ Where the software is unpacked and built.
+2. RPMS/ Where the newly created binary package files are written.
+3. SOURCES/ Contains the original sources, patches, and icon files.
+4. SPECS/ Contains the spec files for each package to be built.
+5. SRPMS/ Where the newly created source package files are written.
+
+Before you begin, note the RPM sources directory on your version of
+Fedora.  The command "rpmbuild --showrc" will show the configuration
+for each of those directories. Alternatively, the command "rpm --eval
+ '%{_topdir}'" shows the current configuration for the top level
+directory and the command "rpm --eval '%{_sourcedir}'" does the same
+for the sources directory. On RHEL 5, the default RPM _topdir is
+/usr/src/redhat and the default RPM sources directory is
+/usr/src/redhat/SOURCES. On RHEL 6, the default _topdir is
+$HOME/rpmbuild and the default RPM sources directory is
+$HOME/rpmbuild/SOURCES.
 
 1. If you are building from a distribution tarball, proceed to step 2.
    Otherwise, if you are building from an Open vSwitch Git tree,
@@ -68,7 +83,7 @@ RHEL.  On RHEL 5, the default RPM source directory is
    need to first create a distribution tarball by running "./boot.sh;
    ./configure; make dist" in the Git tree.
 
-5. Copy the distribution tarball into the RPM source directory.
+5. Copy the distribution tarball into the RPM sources directory.
 
 6. Unpack the distribution tarball into a temporary directory and "cd"
    into the root of the distribution tarball.
@@ -85,7 +100,7 @@ RHEL.  On RHEL 5, the default RPM source directory is
    1 or 2 and fix the problem.
 
 8. On RHEL 6, to build the Open vSwitch kernel module, copy
-    rhel/openvswitch-kmod.files into the RPM source directory and run:
+    rhel/openvswitch-kmod.files into the RPM sources directory and run:
 
 	rpmbuild -bb rhel/openvswitch-kmod-rhel6.spec
 
