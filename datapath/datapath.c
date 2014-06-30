@@ -923,8 +923,12 @@ static int ovs_flow_cmd_new(struct sk_buff *skb, struct genl_info *info)
 		}
 		/* The unmasked key has to be the same for flow updates. */
 		if (unlikely(!ovs_flow_cmp_unmasked_key(flow, &match))) {
-			error = -EEXIST;
-			goto err_unlock_ovs;
+			/* Look for any overlapping flow. */
+			flow = ovs_flow_tbl_lookup_exact(&dp->table, &match);
+			if (!flow) {
+				error = -ENOENT;
+				goto err_unlock_ovs;
+			}
 		}
 		/* Update actions. */
 		old_acts = ovsl_dereference(flow->sf_acts);
@@ -1015,16 +1019,12 @@ static int ovs_flow_cmd_set(struct sk_buff *skb, struct genl_info *info)
 		goto err_unlock_ovs;
 	}
 	/* Check that the flow exists. */
-	flow = ovs_flow_tbl_lookup(&dp->table, &key);
+	flow = ovs_flow_tbl_lookup_exact(&dp->table, &match);
 	if (unlikely(!flow)) {
 		error = -ENOENT;
 		goto err_unlock_ovs;
 	}
-	/* The unmasked key has to be the same for flow updates. */
-	if (unlikely(!ovs_flow_cmp_unmasked_key(flow, &match))) {
-		error = -EEXIST;
-		goto err_unlock_ovs;
-	}
+
 	/* Update actions, if present. */
 	if (likely(acts)) {
 		old_acts = ovsl_dereference(flow->sf_acts);
@@ -1096,8 +1096,8 @@ static int ovs_flow_cmd_get(struct sk_buff *skb, struct genl_info *info)
 		goto unlock;
 	}
 
-	flow = ovs_flow_tbl_lookup(&dp->table, &key);
-	if (!flow || !ovs_flow_cmp_unmasked_key(flow, &match)) {
+	flow = ovs_flow_tbl_lookup_exact(&dp->table, &match);
+	if (!flow) {
 		err = -ENOENT;
 		goto unlock;
 	}
@@ -1144,8 +1144,8 @@ static int ovs_flow_cmd_del(struct sk_buff *skb, struct genl_info *info)
 		err = ovs_flow_tbl_flush(&dp->table);
 		goto unlock;
 	}
-	flow = ovs_flow_tbl_lookup(&dp->table, &key);
-	if (unlikely(!flow || !ovs_flow_cmp_unmasked_key(flow, &match))) {
+	flow = ovs_flow_tbl_lookup_exact(&dp->table, &match);
+	if (unlikely(!flow)) {
 		err = -ENOENT;
 		goto unlock;
 	}
