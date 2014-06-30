@@ -1666,6 +1666,7 @@ static int ovs_nla_copy_actions__(const struct nlattr *attr,
 		}
 
 		case OVS_ACTION_ATTR_POP_VLAN:
+			vlan_tci = htons(0);
 			break;
 
 		case OVS_ACTION_ATTR_PUSH_VLAN:
@@ -1687,13 +1688,7 @@ static int ovs_nla_copy_actions__(const struct nlattr *attr,
 				return -EINVAL;
 			/* Prohibit push MPLS other than to a white list
 			 * for packets that have a known tag order.
-			 *
-			 * vlan_tci indicates that the packet at one
-			 * point had a VLAN. It may have been subsequently
-			 * removed using pop VLAN so this rule is stricter
-			 * than necessary. This is because it is not
-			 * possible to know if a VLAN is still present
-			 * after a pop VLAN action. */
+			 */
 			if (vlan_tci & htons(VLAN_TAG_PRESENT) ||
 			    (eth_type != htons(ETH_P_IP) &&
 			     eth_type != htons(ETH_P_IPV6) &&
