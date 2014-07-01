@@ -1288,38 +1288,35 @@ push_dump_ops__(struct udpif *udpif, struct dump_op *ops, size_t n_ops)
         struct dpif_flow_stats *push, *stats, push_buf;
 
         stats = op->op.u.flow_del.stats;
-        if (op->ukey) {
-            push = &push_buf;
-            ovs_mutex_lock(&op->ukey->mutex);
-            push->used = MAX(stats->used, op->ukey->stats.used);
-            push->tcp_flags = stats->tcp_flags | op->ukey->stats.tcp_flags;
-            push->n_packets = stats->n_packets - op->ukey->stats.n_packets;
-            push->n_bytes = stats->n_bytes - op->ukey->stats.n_bytes;
-            ovs_mutex_unlock(&op->ukey->mutex);
-        } else {
-            push = stats;
-        }
+        push = &push_buf;
+
+        ovs_mutex_lock(&op->ukey->mutex);
+        push->used = MAX(stats->used, op->ukey->stats.used);
+        push->tcp_flags = stats->tcp_flags | op->ukey->stats.tcp_flags;
+        push->n_packets = stats->n_packets - op->ukey->stats.n_packets;
+        push->n_bytes = stats->n_bytes - op->ukey->stats.n_bytes;
+        ovs_mutex_unlock(&op->ukey->mutex);
 
         if (push->n_packets || netflow_exists()) {
             struct ofproto_dpif *ofproto;
             struct netflow *netflow;
             struct flow flow;
             bool may_learn;
+            int error;
 
             may_learn = push->n_packets > 0;
-            if (op->ukey) {
-                ovs_mutex_lock(&op->ukey->mutex);
-                if (op->ukey->xcache) {
-                    xlate_push_stats(op->ukey->xcache, may_learn, push);
-                    ovs_mutex_unlock(&op->ukey->mutex);
-                    continue;
-                }
+            ovs_mutex_lock(&op->ukey->mutex);
+            if (op->ukey->xcache) {
+                xlate_push_stats(op->ukey->xcache, may_learn, push);
                 ovs_mutex_unlock(&op->ukey->mutex);
+                continue;
             }
+            ovs_mutex_unlock(&op->ukey->mutex);
 
-            if (!xlate_receive(udpif->backer, NULL, op->op.u.flow_del.key,
-                               op->op.u.flow_del.key_len, &flow, &ofproto,
-                               NULL, NULL, &netflow, NULL)) {
+            error = xlate_receive(udpif->backer, NULL, op->op.u.flow_del.key,
+                                  op->op.u.flow_del.key_len, &flow, &ofproto,
+                                  NULL, NULL, &netflow, NULL);
+            if (!error) {
                 struct xlate_in xin;
 
                 xlate_in_init(&xin, ofproto, &flow, NULL, push->tcp_flags,
