@@ -30,14 +30,26 @@ for the sources directory.  On Fedora 17, the default RPM _topdir is
 $HOME/rpmbuild and the default RPM sources directory is
 $HOME/rpmbuild/SOURCES.
 
-1. If you are building from an Open vSwitch Git tree, then you will
-   need to first create a distribution tarball by running "./boot.sh;
-   ./configure; make dist" in the Git tree.
+1. If you are building from a distribution tarball, skip to step 2.
+   Otherwise, you must be building from an Open vSwitch Git tree.
+   Create a distribution tarball from the root of the Git tree by
+   running:
 
-2. Copy the distribution tarball into the RPM sources directory.
+       ./boot.sh
+       ./configure
+       make dist
 
-3. Unpack the distribution tarball into a temporary directory and "cd"
-   into the root of the distribution tarball.
+2. Now you have a distribution tarball, named something like
+   openvswitch-x.y.z.tar.gz.  Copy this file into the RPM sources
+   directory, e.g.:
+
+       cp openvswitch-x.y.z.tar.gz $HOME/rpmbuild/SOURCES
+
+3. Make another copy of the distribution tarball in a temporary
+   directory.  Then unpack the tarball and "cd" into its root, e.g.:
+
+       tar xzf openvswitch-x.y.z.tar.gz
+       cd openvswitch-x.y.z
 
 4. To build Open vSwitch userspace, run:
 

@@ -32,10 +32,16 @@ for the sources directory. On RHEL 5, the default RPM _topdir is
 $HOME/rpmbuild and the default RPM sources directory is
 $HOME/rpmbuild/SOURCES.
 
-1. If you are building from a distribution tarball, proceed to step 2.
-   Otherwise, if you are building from an Open vSwitch Git tree,
-   determine the version of Autoconf available in the RHEL version you
-   are using.  If it is not at least version 2.63, then you have two
+1. Install build prerequisites:
+
+   yum install gcc make python-devel openssl-devel kernel-devel graphviz \
+       kernel-debug-devel autoconf automake rpm-build redhat-rpm-config \
+       libtool
+
+2. If you are building from a distribution tarball, skip to step 3.
+   Otherwise, you must be building from an Open vSwitch Git tree.
+   Determine what version of Autoconf is installed (e.g. run "autoconf
+   --version").  If it is not at least version 2.63, then you have two
    choices:
 
      a. Install Autoconf 2.63 or later, one way or another.
@@ -46,12 +52,6 @@ $HOME/rpmbuild/SOURCES.
         INSTALL as prerequisites for building from a Git tree.
         Afterward, proceed with the rest of the instructions using the
         distribution tarball.
-
-2. Install build prerequisites:
-
-   yum install gcc make python-devel openssl-devel kernel-devel graphviz \
-       kernel-debug-devel autoconf automake rpm-build redhat-rpm-config \
-       libtool
 
 3. Some versions of the RHEL 6 kernel-devel package contain a broken
    "build" symlink.  If you are using such a version, you must fix
@@ -79,14 +79,25 @@ $HOME/rpmbuild/SOURCES.
    contain some extra parts.  Once you have done this, verify the fix with
    the same procedure you used above to check for the problem.
 
-4. If you are building from an Open vSwitch Git tree, then you will
-   need to first create a distribution tarball by running "./boot.sh;
-   ./configure; make dist" in the Git tree.
+4. If you are building from a distribution tarball, skip to step 5.
+   Otherwise, create a distribution tarball from the root of the Git
+   tree by running:
 
-5. Copy the distribution tarball into the RPM sources directory.
+       ./boot.sh
+       ./configure
+       make dist
 
-6. Unpack the distribution tarball into a temporary directory and "cd"
-   into the root of the distribution tarball.
+5. Now you have a distribution tarball, named something like
+   openvswitch-x.y.z.tar.gz.  Copy this file into the RPM sources
+   directory, e.g.:
+
+       cp openvswitch-x.y.z.tar.gz $HOME/rpmbuild/SOURCES
+
+6. Make another copy of the distribution tarball in a temporary
+   directory.  Then unpack the tarball and "cd" into its root, e.g.:
+
+       tar xzf openvswitch-x.y.z.tar.gz
+       cd openvswitch-x.y.z
 
 7. To build Open vSwitch userspace, run:
 
@@ -105,20 +116,20 @@ $HOME/rpmbuild/SOURCES.
    1 or 2 and fix the problem.
 
 8. On RHEL 6, to build the Open vSwitch kernel module, copy
-    rhel/openvswitch-kmod.files into the RPM sources directory and run:
+   rhel/openvswitch-kmod.files into the RPM sources directory and run:
 
 	rpmbuild -bb rhel/openvswitch-kmod-rhel6.spec
 
-    You might have to specify a kernel version and/or variants, e.g.:
+   You might have to specify a kernel version and/or variants, e.g.:
 
 	rpmbuild -bb \
 		-D "kversion 2.6.32-131.6.1.el6.x86_64" \
 		-D "kflavors default debug kdump" \
 		rhel/openvswitch-kmod-rhel6.spec
 
-    This produces an "kmod-openvswitch" RPM for each kernel variant,
-    in this example: "kmod-openvswitch", "kmod-openvswitch-debug", and
-    "kmod-openvswitch-kdump".
+   This produces an "kmod-openvswitch" RPM for each kernel variant, in
+   this example: "kmod-openvswitch", "kmod-openvswitch-debug", and
+   "kmod-openvswitch-kdump".
 
 A RHEL host has default firewall rules that prevent any Open vSwitch tunnel
 traffic from passing through. If a user configures Open vSwitch tunnels like
