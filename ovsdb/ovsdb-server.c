@@ -93,6 +93,7 @@ static unixctl_cb_func ovsdb_server_remove_database;
 static unixctl_cb_func ovsdb_server_list_databases;
 
 static char *open_db(struct server_config *config, const char *filename);
+static void close_db(struct db *db);
 
 static void parse_options(int *argc, char **argvp[],
                           struct sset *remotes, char **unixctl_pathp,
@@ -131,7 +132,7 @@ main(int argc, char *argv[])
     FILE *config_tmpfile;
     struct server_config server_config;
     struct shash all_dbs;
-    struct shash_node *node;
+    struct shash_node *node, *next;
     char *remotes_error, *ssl_error;
     char *error;
     int i;
@@ -310,11 +311,13 @@ main(int argc, char *argv[])
         }
     }
     ovsdb_jsonrpc_server_destroy(jsonrpc);
-    SHASH_FOR_EACH(node, &all_dbs) {
+    SHASH_FOR_EACH_SAFE(node, next, &all_dbs) {
         struct db *db = node->data;
-        ovsdb_destroy(db->db);
+        close_db(db);
+        shash_delete(&all_dbs, node);
     }
     sset_destroy(&remotes);
+    sset_destroy(&db_filenames);
     unixctl_server_destroy(unixctl);
 
     if (run_process && process_exited(run_process)) {
@@ -359,6 +362,14 @@ is_already_open(struct server_config *config OVS_UNUSED,
     return false;
 }
 
+static void
+close_db(struct db *db)
+{
+    ovsdb_destroy(db->db);
+    free(db->filename);
+    free(db);
+}
+
 static char *
 open_db(struct server_config *config, const char *filename)
 {
@@ -387,9 +398,7 @@ open_db(struct server_config *config, const char *filename)
     }
 
     ovsdb_error_destroy(db_error);
-    ovsdb_destroy(db->db);
-    free(db->filename);
-    free(db);
+    close_db(db);
     return error;
 }
 
@@ -1164,10 +1173,8 @@ ovsdb_server_remove_database(struct unixctl_conn *conn, int argc OVS_UNUSED,
     ok = ovsdb_jsonrpc_server_remove_db(config->jsonrpc, db->db);
     ovs_assert(ok);
 
-    ovsdb_destroy(db->db);
+    close_db(db);
     shash_delete(config->all_dbs, node);
-    free(db->filename);
-    free(db);
 
     save_config(config);
     unixctl_command_reply(conn, NULL);
