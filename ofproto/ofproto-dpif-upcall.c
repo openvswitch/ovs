@@ -1175,9 +1175,15 @@ ukey_delete(struct revalidator *revalidator, struct udpif_key *ukey)
 }
 
 static bool
-should_revalidate(uint64_t packets, long long int used)
+should_revalidate(const struct udpif *udpif, uint64_t packets,
+                  long long int used)
 {
     long long int metric, now, duration;
+
+    if (udpif->dump_duration < 200) {
+        /* We are likely to handle full revalidation for the flows. */
+        return true;
+    }
 
     /* Calculate the mean time between seeing these packets. If this
      * exceeds the threshold, then delete the flow rather than performing
@@ -1194,10 +1200,11 @@ should_revalidate(uint64_t packets, long long int used)
     duration = now - used;
     metric = duration / packets;
 
-    if (metric > 200) {
-        return false;
+    if (metric < 200) {
+        /* The flow is receiving more than ~5pps, so keep it. */
+        return true;
     }
-    return true;
+    return false;
 }
 
 static bool
@@ -1242,7 +1249,7 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
     }
 
     if (udpif->need_revalidate && last_used
-        && !should_revalidate(push.n_packets, last_used)) {
+        && !should_revalidate(udpif, push.n_packets, last_used)) {
         ok = false;
         goto exit;
     }
