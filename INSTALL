@@ -67,8 +67,10 @@ install the following:
       obsolete and not needed.)
 
       To use GRE tunneling on Linux 2.6.37 or newer, kernel support
-      for GRE must be compiled in or available as a module
-      (CONFIG_NET_IPGRE_DEMUX).
+      for GRE demultiplexing (CONFIG_NET_IPGRE_DEMUX) must be compiled
+      in or available as a module.  Also, on kernels before 3.11, the
+      ip_gre module, for GRE tunnels over IP (NET_IPGRE), must not be
+      loaded or compiled in.
 
       To configure HTB or HFSC quality of service with Open vSwitch,
       you must enable the respective configuration options.
