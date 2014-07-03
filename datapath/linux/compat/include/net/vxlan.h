@@ -8,6 +8,22 @@
 #include <linux/version.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,12,0)
 #include_next <net/vxlan.h>
+
+static inline int rpl_vxlan_xmit_skb(struct vxlan_sock *vs,
+                   struct rtable *rt, struct sk_buff *skb,
+                   __be32 src, __be32 dst, __u8 tos, __u8 ttl, __be16 df,
+                   __be16 src_port, __be16 dst_port, __be32 vni)
+{
+	if (skb->encapsulation && skb_is_gso(skb)) {
+		kfree_skb(skb);
+		return -ENOSYS;
+	}
+
+	return vxlan_xmit_skb(vs, rt, skb, src, dst, tos, ttl, df,
+			      src_port, dst_port, vni);
+}
+
+#define vxlan_xmit_skb rpl_vxlan_xmit_skb
 #else
 
 struct vxlan_sock;

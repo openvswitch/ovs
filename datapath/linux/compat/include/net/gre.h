@@ -103,6 +103,17 @@ static inline int ip_gre_calc_hlen(__be16 o_flags)
 		addend += 4;
 	return addend;
 }
+#else
+static inline struct sk_buff *rpl_gre_handle_offloads(struct sk_buff *skb,
+						  bool gre_csum)
+{
+	if (skb->encapsulation && skb_is_gso(skb)) {
+		kfree_skb(skb);
+		return ERR_PTR(-ENOSYS);
+	}
+	return gre_handle_offloads(skb, gre_csum);
+}
+#define gre_handle_offloads rpl_gre_handle_offloads
 #endif
 
 #endif
