@@ -454,15 +454,14 @@ void
 set_program_name__(const char *argv0, const char *version, const char *date,
                    const char *time)
 {
+    free(program_name);
+
 #ifdef _WIN32
     char *basename;
     size_t max_len = strlen(argv0) + 1;
 
     SetErrorMode(GetErrorMode() | SEM_NOGPFAULTERRORBOX);
 
-    if (program_name) {
-        free(program_name);
-    }
     basename = xmalloc(max_len);
     _splitpath_s(argv0, NULL, 0, NULL, 0, basename, max_len, NULL, 0);
     assert_single_threaded();
@@ -470,7 +469,7 @@ set_program_name__(const char *argv0, const char *version, const char *date,
 #else
     const char *slash = strrchr(argv0, '/');
     assert_single_threaded();
-    program_name = slash ? slash + 1 : argv0;
+    program_name = xstrdup(slash ? slash + 1 : argv0);
 #endif
 
     free(program_version);
