@@ -1191,7 +1191,10 @@ dpif_netdev_flow_from_nlattrs(const struct nlattr *key, uint32_t key_len,
 static int
 dpif_netdev_flow_get(const struct dpif *dpif,
                      const struct nlattr *nl_key, size_t nl_key_len,
-                     struct ofpbuf **actionsp, struct dpif_flow_stats *stats)
+                     struct ofpbuf **bufp,
+                     struct nlattr **maskp, size_t *mask_len,
+                     struct nlattr **actionsp, size_t *actions_len,
+                     struct dpif_flow_stats *stats)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *netdev_flow;
@@ -1212,11 +1215,32 @@ dpif_netdev_flow_get(const struct dpif *dpif,
             get_dpif_flow_stats(netdev_flow, stats);
         }
 
-        if (actionsp) {
+        if (maskp || actionsp) {
             struct dp_netdev_actions *actions;
+            size_t len = 0;
 
             actions = dp_netdev_flow_get_actions(netdev_flow);
-            *actionsp = ofpbuf_clone_data(actions->actions, actions->size);
+            len += maskp ? sizeof(struct odputil_keybuf) : 0;
+            len += actionsp ? actions->size : 0;
+
+            *bufp = ofpbuf_new(len);
+            if (maskp) {
+                struct flow_wildcards wc;
+
+                minimask_expand(&netdev_flow->cr.match.mask, &wc);
+                odp_flow_key_from_mask(*bufp, &wc.masks, &netdev_flow->flow,
+                                       odp_to_u32(wc.masks.in_port.odp_port),
+                                       SIZE_MAX);
+                *maskp = ofpbuf_data(*bufp);
+                *mask_len = ofpbuf_size(*bufp);
+            }
+            if (actionsp) {
+                struct dp_netdev_actions *actions;
+
+                actions = dp_netdev_flow_get_actions(netdev_flow);
+                *actionsp = ofpbuf_put(*bufp, actions->actions, actions->size);
+                *actions_len = actions->size;
+            }
         }
      } else {
         error = ENOENT;

@@ -524,7 +524,10 @@ int dpif_flow_del(struct dpif *,
                   struct dpif_flow_stats *);
 int dpif_flow_get(const struct dpif *,
                   const struct nlattr *key, size_t key_len,
-                  struct ofpbuf **actionsp, struct dpif_flow_stats *);
+                  struct ofpbuf **bufp,
+                  struct nlattr **maskp, size_t *mask_len,
+                  struct nlattr **actionsp, size_t *acts_len,
+                  struct dpif_flow_stats *stats);
 
 struct dpif_flow_dump {
     const struct dpif *dpif;

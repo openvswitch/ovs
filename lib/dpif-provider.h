@@ -224,16 +224,27 @@ struct dpif_class {
      * Returns 0 if successful.  If no flow matches, returns ENOENT.  On other
      * failure, returns a positive errno value.
      *
-     * If 'actionsp' is nonnull, then on success '*actionsp' must be set to an
-     * ofpbuf owned by the caller that contains the Netlink attributes for the
-     * flow's actions.  The caller must free the ofpbuf (with ofpbuf_delete())
-     * when it is no longer needed.
+     * On success, '*bufp' will be set to an ofpbuf owned by the caller that
+     * contains the response for 'maskp' and 'actionsp'. The caller must supply
+     * a valid pointer, and must free the ofpbuf (with ofpbuf_delete()) when it
+     * is no longer needed.
+     *
+     * If 'maskp' is nonnull, then on success '*maskp' will point to the
+     * Netlink attributes for the flow's mask, stored in '*bufp'. '*mask_len'
+     * will be set to the length of the mask attributes.
+     *
+     * If 'actionsp' is nonnull, then on success '*actionsp' will point to the
+     * Netlink attributes for the flow's actions, stored in '*bufp'.
+     * '*actions_len' will be set to the length of the actions attributes.
      *
      * If 'stats' is nonnull, then on success it must be updated with the
      * flow's statistics. */
     int (*flow_get)(const struct dpif *dpif,
                     const struct nlattr *key, size_t key_len,
-                    struct ofpbuf **actionsp, struct dpif_flow_stats *stats);
+                    struct ofpbuf **bufp,
+                    struct nlattr **maskp, size_t *mask_len,
+                    struct nlattr **actionsp, size_t *acts_len,
+                    struct dpif_flow_stats *stats);
 
     /* Adds or modifies a flow in 'dpif'.  The flow is specified by the Netlink
      * attributes with types OVS_KEY_ATTR_* in the 'put->key_len' bytes

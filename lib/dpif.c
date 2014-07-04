@@ -831,44 +831,64 @@ dpif_flow_flush(struct dpif *dpif)
  * Returns 0 if successful.  If no flow matches, returns ENOENT.  On other
  * failure, returns a positive errno value.
  *
- * If 'actionsp' is nonnull, then on success '*actionsp' will be set to an
- * ofpbuf owned by the caller that contains the Netlink attributes for the
- * flow's actions.  The caller must free the ofpbuf (with ofpbuf_delete()) when
- * it is no longer needed.
+ * On success, '*bufp' will be set to an ofpbuf owned by the caller that
+ * contains the response for 'maskp' and 'actionsp'. The caller must supply
+ * a valid pointer, and must free the ofpbuf (with ofpbuf_delete()) when it
+ * is no longer needed.
+ *
+ * If 'maskp' is nonnull, then on success '*maskp' will point to the
+ * Netlink attributes for the flow's mask, stored in '*bufp'. '*mask_len'
+ * will be set to the length of the mask attributes.
+ *
+ * If 'actionsp' is nonnull, then on success '*actionsp' will point to the
+ * Netlink attributes for the flow's actions, stored in '*bufp'.
+ * '*actions_len' will be set to the length of the actions attributes.
  *
  * If 'stats' is nonnull, then on success it will be updated with the flow's
  * statistics. */
 int
 dpif_flow_get(const struct dpif *dpif,
-              const struct nlattr *key, size_t key_len,
-              struct ofpbuf **actionsp, struct dpif_flow_stats *stats)
+              const struct nlattr *key, size_t key_len, struct ofpbuf **bufp,
+              struct nlattr **maskp, size_t *mask_len,
+              struct nlattr **actionsp, size_t *actions_len,
+              struct dpif_flow_stats *stats)
 {
     int error;
 
     COVERAGE_INC(dpif_flow_get);
 
-    error = dpif->dpif_class->flow_get(dpif, key, key_len, actionsp, stats);
+    *bufp = NULL;
+    error = dpif->dpif_class->flow_get(dpif, key, key_len, bufp,
+                                       maskp, mask_len,
+                                       actionsp, actions_len,
+                                       stats);
     if (error) {
         if (actionsp) {
             *actionsp = NULL;
+            *actions_len = 0;
+        }
+        if (maskp) {
+            *maskp = NULL;
+            *mask_len = 0;
         }
         if (stats) {
             memset(stats, 0, sizeof *stats);
         }
+        ofpbuf_delete(*bufp);
     }
     if (should_log_flow_message(error)) {
         const struct nlattr *actions;
-        size_t actions_len;
+        size_t acts_len;
 
         if (!error && actionsp) {
-            actions = ofpbuf_data(*actionsp);
-            actions_len = ofpbuf_size(*actionsp);
+            actions = *actionsp;
+            acts_len = *actions_len;
         } else {
             actions = NULL;
-            actions_len = 0;
+            acts_len = 0;
         }
         log_flow_message(dpif, error, "flow_get", key, key_len,
-                         NULL, 0, stats, actions, actions_len);
+                         NULL, 0, stats, actions, acts_len);
     }
     return error;
 }
