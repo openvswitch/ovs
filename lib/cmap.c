@@ -193,7 +193,7 @@ other_hash(uint32_t hash)
 static uint32_t
 rehash(const struct cmap_impl *impl, uint32_t hash)
 {
-    return mhash_finish(impl->basis, hash);
+    return hash_finish(impl->basis, hash);
 }
 
 static struct cmap_impl *

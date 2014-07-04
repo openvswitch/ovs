@@ -22,7 +22,7 @@
 uint32_t
 hash_3words(uint32_t a, uint32_t b, uint32_t c)
 {
-    return mhash_finish(mhash_add(mhash_add(mhash_add(a, 0), b), c), 12);
+    return hash_finish(hash_add(hash_add(hash_add(a, 0), b), c), 12);
 }
 
 /* Returns the hash of the 'n' bytes at 'p', starting from 'basis'. */
@@ -35,7 +35,7 @@ hash_bytes(const void *p_, size_t n, uint32_t basis)
 
     hash = basis;
     while (n >= 4) {
-        hash = mhash_add(hash, get_unaligned_u32(p));
+        hash = hash_add(hash, get_unaligned_u32(p));
         n -= 4;
         p += 1;
     }
@@ -44,10 +44,10 @@ hash_bytes(const void *p_, size_t n, uint32_t basis)
         uint32_t tmp = 0;
 
         memcpy(&tmp, p, n);
-        hash = mhash_add__(hash, tmp);
+        hash = hash_add(hash, tmp);
     }
 
-    return mhash_finish(hash, orig_n);
+    return hash_finish(hash, orig_n);
 }
 
 /* Returns the hash of the 'n' 32-bit words at 'p', starting from 'basis'.
@@ -60,9 +60,9 @@ hash_words(const uint32_t p[], size_t n_words, uint32_t basis)
 
     hash = basis;
     for (i = 0; i < n_words; i++) {
-        hash = mhash_add(hash, p[i]);
+        hash = hash_add(hash, p[i]);
     }
-    return mhash_finish(hash, n_words * 4);
+    return hash_finish(hash, n_words * 4);
 }
 
 uint32_t

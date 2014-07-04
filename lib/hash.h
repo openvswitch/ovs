@@ -72,7 +72,7 @@ static inline uint32_t mhash_add(uint32_t hash, uint32_t data)
     return hash * 5 + 0xe6546b64;
 }
 
-static inline uint32_t mhash_finish(uint32_t hash, size_t n_bytes)
+static inline uint32_t mhash_finish(uint32_t hash, uint32_t n_bytes)
 {
     hash ^= n_bytes;
     hash ^= hash >> 16;
@@ -81,6 +81,16 @@ static inline uint32_t mhash_finish(uint32_t hash, size_t n_bytes)
     hash *= 0xc2b2ae35;
     hash ^= hash >> 16;
     return hash;
+}
+
+static inline uint32_t hash_add(uint32_t hash, uint32_t data)
+{
+    return mhash_add(hash, data);
+}
+
+static inline uint32_t hash_finish(uint32_t hash, uint32_t final)
+{
+    return mhash_finish(hash, final);
 }
 
 static inline uint32_t hash_string(const char *s, uint32_t basis)
@@ -117,7 +127,7 @@ static inline uint32_t hash_pointer(const void *p, uint32_t basis)
 
 static inline uint32_t hash_2words(uint32_t x, uint32_t y)
 {
-    return mhash_finish(mhash_add(mhash_add(x, 0), y), 8);
+    return hash_finish(hash_add(hash_add(x, 0), y), 8);
 }
 
 static inline uint32_t hash_uint64(const uint64_t x)

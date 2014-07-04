@@ -458,13 +458,13 @@ netflow_flow_hash(const struct flow *flow)
 {
     uint32_t hash = 0;
 
-    hash = mhash_add(hash, (OVS_FORCE uint32_t) flow->in_port.ofp_port);
-    hash = mhash_add(hash, ntohl(flow->nw_src));
-    hash = mhash_add(hash, ntohl(flow->nw_dst));
-    hash = mhash_add(hash, flow->nw_tos);
-    hash = mhash_add(hash, flow->nw_proto);
-    hash = mhash_add(hash, ntohs(flow->tp_src));
-    hash = mhash_add(hash, ntohs(flow->tp_dst));
+    hash = hash_add(hash, (OVS_FORCE uint32_t) flow->in_port.ofp_port);
+    hash = hash_add(hash, ntohl(flow->nw_src));
+    hash = hash_add(hash, ntohl(flow->nw_dst));
+    hash = hash_add(hash, flow->nw_tos);
+    hash = hash_add(hash, flow->nw_proto);
+    hash = hash_add(hash, ntohs(flow->tp_src));
+    hash = hash_add(hash, ntohs(flow->tp_dst));
 
-    return mhash_finish(hash, 28);
+    return hash_finish(hash, 28);
 }

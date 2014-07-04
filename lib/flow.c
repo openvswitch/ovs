@@ -909,7 +909,7 @@ miniflow_hash_5tuple(const struct miniflow *flow, uint32_t basis)
     if (flow) {
         ovs_be16 dl_type = MINIFLOW_GET_BE16(flow, dl_type);
 
-        hash = mhash_add(hash, MINIFLOW_GET_U8(flow, nw_proto));
+        hash = hash_add(hash, MINIFLOW_GET_U8(flow, nw_proto));
 
         /* Separate loops for better optimization. */
         if (dl_type == htons(ETH_TYPE_IPV6)) {
@@ -918,7 +918,7 @@ miniflow_hash_5tuple(const struct miniflow *flow, uint32_t basis)
             uint32_t value;
 
             MINIFLOW_FOR_EACH_IN_MAP(value, flow, map) {
-                hash = mhash_add(hash, value);
+                hash = hash_add(hash, value);
             }
         } else {
             uint64_t map = MINIFLOW_MAP(nw_src) | MINIFLOW_MAP(nw_dst)
@@ -926,10 +926,10 @@ miniflow_hash_5tuple(const struct miniflow *flow, uint32_t basis)
             uint32_t value;
 
             MINIFLOW_FOR_EACH_IN_MAP(value, flow, map) {
-                hash = mhash_add(hash, value);
+                hash = hash_add(hash, value);
             }
         }
-        hash = mhash_finish(hash, 42); /* Arbitrary number. */
+        hash = hash_finish(hash, 42); /* Arbitrary number. */
     }
     return hash;
 }
@@ -950,22 +950,22 @@ flow_hash_5tuple(const struct flow *flow, uint32_t basis)
     if (flow) {
         const uint32_t *flow_u32 = (const uint32_t *)flow;
 
-        hash = mhash_add(hash, flow->nw_proto);
+        hash = hash_add(hash, flow->nw_proto);
 
         if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
             int ofs = offsetof(struct flow, ipv6_src) / 4;
             int end = ofs + 2 * sizeof flow->ipv6_src / 4;
 
             while (ofs < end) {
-                hash = mhash_add(hash, flow_u32[ofs++]);
+                hash = hash_add(hash, flow_u32[ofs++]);
             }
         } else {
-            hash = mhash_add(hash, (OVS_FORCE uint32_t) flow->nw_src);
-            hash = mhash_add(hash, (OVS_FORCE uint32_t) flow->nw_dst);
+            hash = hash_add(hash, (OVS_FORCE uint32_t) flow->nw_src);
+            hash = hash_add(hash, (OVS_FORCE uint32_t) flow->nw_dst);
         }
-        hash = mhash_add(hash, flow_u32[offsetof(struct flow, tp_src) / 4]);
+        hash = hash_add(hash, flow_u32[offsetof(struct flow, tp_src) / 4]);
 
-        hash = mhash_finish(hash, 42); /* Arbitrary number. */
+        hash = hash_finish(hash, 42); /* Arbitrary number. */
     }
     return hash;
 }
@@ -1140,9 +1140,9 @@ flow_hash_in_wildcards(const struct flow *flow,
 
     hash = basis;
     for (i = 0; i < FLOW_U32S; i++) {
-        hash = mhash_add(hash, flow_u32[i] & wc_u32[i]);
+        hash = hash_add(hash, flow_u32[i] & wc_u32[i]);
     }
-    return mhash_finish(hash, 4 * FLOW_U32S);
+    return hash_finish(hash, 4 * FLOW_U32S);
 }
 
 /* Sets the VLAN VID that 'flow' matches to 'vid', which is interpreted as an

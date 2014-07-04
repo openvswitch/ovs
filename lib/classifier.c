@@ -214,10 +214,10 @@ flow_hash_in_minimask(const struct flow *flow, const struct minimask *mask,
 
     hash = basis;
     for (map = mask->masks.map; map; map = zero_rightmost_1bit(map)) {
-        hash = mhash_add(hash, flow_u32[raw_ctz(map)] & *p++);
+        hash = hash_add(hash, flow_u32[raw_ctz(map)] & *p++);
     }
 
-    return mhash_finish(hash, (p - mask_values) * 4);
+    return hash_finish(hash, (p - mask_values) * 4);
 }
 
 /* Returns a hash value for the bits of 'flow' where there are 1-bits in
@@ -235,10 +235,10 @@ miniflow_hash_in_minimask(const struct miniflow *flow,
     uint32_t flow_u32;
 
     MINIFLOW_FOR_EACH_IN_MAP(flow_u32, flow, mask->masks.map) {
-        hash = mhash_add(hash, flow_u32 & *p++);
+        hash = hash_add(hash, flow_u32 & *p++);
     }
 
-    return mhash_finish(hash, (p - mask_values) * 4);
+    return hash_finish(hash, (p - mask_values) * 4);
 }
 
 /* Returns a hash value for the bits of range [start, end) in 'flow',
@@ -260,11 +260,11 @@ flow_hash_in_minimask_range(const struct flow *flow,
     uint32_t hash = *basis;
 
     for (; map; map = zero_rightmost_1bit(map)) {
-        hash = mhash_add(hash, flow_u32[raw_ctz(map)] & *p++);
+        hash = hash_add(hash, flow_u32[raw_ctz(map)] & *p++);
     }
 
     *basis = hash; /* Allow continuation from the unfinished value. */
-    return mhash_finish(hash, (p - mask_values) * 4);
+    return hash_finish(hash, (p - mask_values) * 4);
 }
 
 /* Fold minimask 'mask''s wildcard mask into 'wc's wildcard mask. */
@@ -305,15 +305,15 @@ miniflow_hash(const struct miniflow *flow, uint32_t basis)
 
     for (map = flow->map; map; map = zero_rightmost_1bit(map)) {
         if (*p) {
-            hash = mhash_add(hash, *p);
+            hash = hash_add(hash, *p);
             hash_map |= rightmost_1bit(map);
         }
         p++;
     }
-    hash = mhash_add(hash, hash_map);
-    hash = mhash_add(hash, hash_map >> 32);
+    hash = hash_add(hash, hash_map);
+    hash = hash_add(hash, hash_map >> 32);
 
-    return mhash_finish(hash, p - values);
+    return hash_finish(hash, p - values);
 }
 
 /* Returns a hash value for 'mask', given 'basis'. */
@@ -350,10 +350,10 @@ minimatch_hash_range(const struct minimatch *match, uint8_t start, uint8_t end,
     p = miniflow_get_u32_values(&match->flow) + offset;
 
     for (i = 0; i < n; i++) {
-        hash = mhash_add(hash, p[i] & q[i]);
+        hash = hash_add(hash, p[i] & q[i]);
     }
     *basis = hash; /* Allow continuation from the unfinished value. */
-    return mhash_finish(hash, (offset + n) * 4);
+    return hash_finish(hash, (offset + n) * 4);
 }
 
 
