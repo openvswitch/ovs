@@ -125,7 +125,7 @@ AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 AT_CHECK([ovs-ofctl add-flow br1 action=normal])
 AT_CHECK([ovs-appctl upcall/disable-megaflows], [0], [megaflows disabled
 ], [])
-WAIT_FOR_DUMMY_PORTS([p4], [p5], [p6])
+OVS_WAIT_WHILE([ovs-appctl bond/show | grep "may_enable: false"])
 ovs-appctl time/stop
 ovs-appctl time/warp 100
 ovs-appctl lacp/show > lacp.txt
