@@ -39,7 +39,7 @@
 #include "dummy.h"
 #include "dynamic-string.h"
 #include "flow.h"
-#include "hmap.h"
+#include "cmap.h"
 #include "latch.h"
 #include "list.h"
 #include "meta-flow.h"
@@ -136,15 +136,17 @@ struct dp_netdev {
 
     /* Flows.
      *
-     * Readers of 'cls' and 'flow_table' must take a 'cls->rwlock' read lock.
+     * Readers of 'cls' must take a 'cls->rwlock' read lock.
      *
-     * Writers of 'cls' and 'flow_table' must take the 'flow_mutex' and then
-     * the 'cls->rwlock' write lock.  (The outer 'flow_mutex' allows writers to
-     * atomically perform multiple operations on 'cls' and 'flow_table'.)
+     * Writers of 'flow_table' must take the 'flow_mutex'.
+     *
+     * Writers of 'cls' must take the 'flow_mutex' and then the 'cls->rwlock'
+     * write lock.  (The outer 'flow_mutex' allows writers to atomically
+     * perform multiple operations on 'cls' and 'flow_table'.)
      */
     struct ovs_mutex flow_mutex;
     struct classifier cls;      /* Classifier.  Protected by cls.rwlock. */
-    struct hmap flow_table OVS_GUARDED; /* Flow table. */
+    struct cmap flow_table OVS_GUARDED; /* Flow table. */
 
     /* Queues.
      *
@@ -262,7 +264,7 @@ struct dp_netdev_flow {
     const struct cls_rule cr;   /* In owning dp_netdev's 'cls'. */
 
     /* Hash table index by unmasked flow. */
-    const struct hmap_node node; /* In owning dp_netdev's 'flow_table'. */
+    const struct cmap_node node; /* In owning dp_netdev's 'flow_table'. */
     const struct flow flow;      /* The flow that created this entry. */
 
     /* Statistics.
@@ -486,7 +488,7 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
 
     ovs_mutex_init(&dp->flow_mutex);
     classifier_init(&dp->cls, NULL);
-    hmap_init(&dp->flow_table);
+    cmap_init(&dp->flow_table);
 
     fat_rwlock_init(&dp->queue_rwlock);
 
@@ -587,7 +589,7 @@ dp_netdev_free(struct dp_netdev *dp)
     fat_rwlock_destroy(&dp->queue_rwlock);
 
     classifier_destroy(&dp->cls);
-    hmap_destroy(&dp->flow_table);
+    cmap_destroy(&dp->flow_table);
     ovs_mutex_destroy(&dp->flow_mutex);
     seq_destroy(dp->port_seq);
     cmap_destroy(&dp->ports);
@@ -641,9 +643,7 @@ dpif_netdev_get_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
     struct dp_netdev_stats *bucket;
     size_t i;
 
-    fat_rwlock_rdlock(&dp->cls.rwlock);
-    stats->n_flows = hmap_count(&dp->flow_table);
-    fat_rwlock_unlock(&dp->cls.rwlock);
+    stats->n_flows = cmap_count(&dp->flow_table);
 
     stats->n_hit = stats->n_missed = stats->n_lost = 0;
     OVSTHREAD_STATS_FOR_EACH_BUCKET (bucket, i, &dp->stats) {
@@ -959,10 +959,10 @@ dp_netdev_remove_flow(struct dp_netdev *dp, struct dp_netdev_flow *flow)
     OVS_REQUIRES(dp->flow_mutex)
 {
     struct cls_rule *cr = CONST_CAST(struct cls_rule *, &flow->cr);
-    struct hmap_node *node = CONST_CAST(struct hmap_node *, &flow->node);
+    struct cmap_node *node = CONST_CAST(struct cmap_node *, &flow->node);
 
     classifier_remove(&dp->cls, cr);
-    hmap_remove(&dp->flow_table, node);
+    cmap_remove(&dp->flow_table, node, flow_hash(&flow->flow, 0));
     ovsrcu_postpone(dp_netdev_flow_free, flow);
 }
 
@@ -973,7 +973,7 @@ dp_netdev_flow_flush(struct dp_netdev *dp)
 
     ovs_mutex_lock(&dp->flow_mutex);
     fat_rwlock_wrlock(&dp->cls.rwlock);
-    HMAP_FOR_EACH_SAFE (netdev_flow, next, node, &dp->flow_table) {
+    CMAP_FOR_EACH_SAFE (netdev_flow, next, node, &dp->flow_table) {
         dp_netdev_remove_flow(dp, netdev_flow);
     }
     fat_rwlock_unlock(&dp->cls.rwlock);
@@ -1086,11 +1086,10 @@ dp_netdev_lookup_flow(const struct dp_netdev *dp, const struct miniflow *key)
 
 static struct dp_netdev_flow *
 dp_netdev_find_flow(const struct dp_netdev *dp, const struct flow *flow)
-    OVS_REQ_RDLOCK(dp->cls.rwlock)
 {
     struct dp_netdev_flow *netdev_flow;
 
-    HMAP_FOR_EACH_WITH_HASH (netdev_flow, node, flow_hash(flow, 0),
+    CMAP_FOR_EACH_WITH_HASH (netdev_flow, node, flow_hash(flow, 0),
                              &dp->flow_table) {
         if (flow_equal(&netdev_flow->flow, flow)) {
             return netdev_flow;
@@ -1225,9 +1224,7 @@ dpif_netdev_flow_get(const struct dpif *dpif,
         return error;
     }
 
-    fat_rwlock_rdlock(&dp->cls.rwlock);
     netdev_flow = dp_netdev_find_flow(dp, &key);
-    fat_rwlock_unlock(&dp->cls.rwlock);
 
     if (netdev_flow) {
         if (stats) {
@@ -1268,12 +1265,12 @@ dp_netdev_flow_add(struct dp_netdev *dp, const struct flow *flow,
     match_init(&match, flow, wc);
     cls_rule_init(CONST_CAST(struct cls_rule *, &netdev_flow->cr),
                   &match, NETDEV_RULE_PRIORITY);
+    cmap_insert(&dp->flow_table,
+                CONST_CAST(struct cmap_node *, &netdev_flow->node),
+                flow_hash(flow, 0));
     fat_rwlock_wrlock(&dp->cls.rwlock);
     classifier_insert(&dp->cls,
                       CONST_CAST(struct cls_rule *, &netdev_flow->cr));
-    hmap_insert(&dp->flow_table,
-                CONST_CAST(struct hmap_node *, &netdev_flow->node),
-                flow_hash(flow, 0));
     fat_rwlock_unlock(&dp->cls.rwlock);
 
     return 0;
@@ -1323,7 +1320,7 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
     fat_rwlock_unlock(&dp->cls.rwlock);
     if (!netdev_flow) {
         if (put->flags & DPIF_FP_CREATE) {
-            if (hmap_count(&dp->flow_table) < MAX_FLOWS) {
+            if (cmap_count(&dp->flow_table) < MAX_FLOWS) {
                 if (put->stats) {
                     memset(put->stats, 0, sizeof *put->stats);
                 }
@@ -1382,17 +1379,17 @@ dpif_netdev_flow_del(struct dpif *dpif, const struct dpif_flow_del *del)
     }
 
     ovs_mutex_lock(&dp->flow_mutex);
-    fat_rwlock_wrlock(&dp->cls.rwlock);
     netdev_flow = dp_netdev_find_flow(dp, &key);
     if (netdev_flow) {
         if (del->stats) {
             get_dpif_flow_stats(netdev_flow, del->stats);
         }
+        fat_rwlock_wrlock(&dp->cls.rwlock);
         dp_netdev_remove_flow(dp, netdev_flow);
+        fat_rwlock_unlock(&dp->cls.rwlock);
     } else {
         error = ENOENT;
     }
-    fat_rwlock_unlock(&dp->cls.rwlock);
     ovs_mutex_unlock(&dp->flow_mutex);
 
     return error;
@@ -1400,8 +1397,7 @@ dpif_netdev_flow_del(struct dpif *dpif, const struct dpif_flow_del *del)
 
 struct dpif_netdev_flow_dump {
     struct dpif_flow_dump up;
-    uint32_t bucket;
-    uint32_t offset;
+    struct cmap_position pos;
     int status;
     struct ovs_mutex mutex;
 };
@@ -1419,8 +1415,7 @@ dpif_netdev_flow_dump_create(const struct dpif *dpif_)
 
     dump = xmalloc(sizeof *dump);
     dpif_flow_dump_init(&dump->up, dpif_);
-    dump->bucket = 0;
-    dump->offset = 0;
+    memset(&dump->pos, 0, sizeof dump->pos);
     dump->status = 0;
     ovs_mutex_init(&dump->mutex);
 
@@ -1487,13 +1482,11 @@ dpif_netdev_flow_dump_next(struct dpif_flow_dump_thread *thread_,
 
     ovs_mutex_lock(&dump->mutex);
     if (!dump->status) {
-        fat_rwlock_rdlock(&dp->cls.rwlock);
         for (n_flows = 0; n_flows < MIN(max_flows, FLOW_DUMP_MAX_BATCH);
              n_flows++) {
-            struct hmap_node *node;
+            struct cmap_node *node;
 
-            node = hmap_at_position(&dp->flow_table, &dump->bucket,
-                                    &dump->offset);
+            node = cmap_next_position(&dp->flow_table, &dump->pos);
             if (!node) {
                 dump->status = EOF;
                 break;
@@ -1501,7 +1494,6 @@ dpif_netdev_flow_dump_next(struct dpif_flow_dump_thread *thread_,
             netdev_flows[n_flows] = CONTAINER_OF(node, struct dp_netdev_flow,
                                                  node);
         }
-        fat_rwlock_unlock(&dp->cls.rwlock);
     }
     ovs_mutex_unlock(&dump->mutex);
 
