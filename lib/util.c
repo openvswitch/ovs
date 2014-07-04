@@ -455,7 +455,7 @@ void
 set_program_name__(const char *argv0, const char *version, const char *date,
                    const char *time)
 {
-    free(program_name);
+    free(CONST_CAST(char *, program_name));
 
 #ifdef _WIN32
     char *basename;
