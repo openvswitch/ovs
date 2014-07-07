@@ -294,8 +294,6 @@ bool classifier_rule_overlaps(const struct classifier *cls,
                               const struct cls_rule *)
     OVS_REQ_RDLOCK(cls->rwlock);
 
-typedef void cls_cb_func(struct cls_rule *, void *aux);
-
 struct cls_rule *classifier_find_rule_exactly(const struct classifier *cls,
                                               const struct cls_rule *)
     OVS_REQ_RDLOCK(cls->rwlock);
