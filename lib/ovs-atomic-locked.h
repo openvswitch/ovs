@@ -20,6 +20,17 @@ void atomic_unlock__(void *);
      atomic_unlock__(SRC),                      \
      (void) 0)
 
+/* XXX: Evaluates EXP multiple times. */
+#define atomic_compare_exchange_locked(DST, EXP, SRC)   \
+    (atomic_lock__(DST),                                \
+     (*(DST) == *(EXP)                                  \
+      ? (*(DST) = (SRC),                                \
+         atomic_unlock__(DST),                          \
+         true)                                          \
+      : (*(EXP) = *(DST),                               \
+         atomic_unlock__(DST),                          \
+         false)))
+
 #define atomic_op_locked_add +=
 #define atomic_op_locked_sub -=
 #define atomic_op_locked_or  |=

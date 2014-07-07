@@ -108,6 +108,29 @@ atomic_signal_fence(memory_order order OVS_UNUSED)
         (void) 0;                                       \
     })
 
+#define atomic_compare_exchange_strong(DST, EXP, SRC)   \
+    ({                                                  \
+        typeof(DST) dst__ = (DST);                      \
+        typeof(EXP) expp__ = (EXP);                     \
+        typeof(SRC) src__ = (SRC);                      \
+        typeof(SRC) exp__ = *expp__;                    \
+        typeof(SRC) ret__;                              \
+                                                        \
+        ret__ = __sync_val_compare_and_swap(dst__, exp__, src__); \
+        if (ret__ != exp__) {                                     \
+            *expp__ = ret__;                                      \
+        }                                                         \
+        ret__ == exp__;                                           \
+    })
+#define atomic_compare_exchange_strong_explicit(DST, EXP, SRC, ORD1, ORD2) \
+    ((void) (ORD1), (void) (ORD2), \
+     atomic_compare_exchange_strong(DST, EXP, SRC))
+#define atomic_compare_exchange_weak            \
+    atomic_compare_exchange_strong
+#define atomic_compare_exchange_weak_explicit   \
+    atomic_compare_exchange_strong_explicit
+
+
 #define atomic_op__(RMW, OP, ARG, ORIG)                     \
     ({                                                      \
         typeof(RMW) rmw__ = (RMW);                          \

@@ -67,6 +67,16 @@ atomic_signal_fence(memory_order order OVS_UNUSED)
 #define atomic_read_explicit(SRC, DST, ORDER)   \
     ((void) (ORDER), atomic_read(SRC, DST))
 
+#define atomic_compare_exchange_strong(DST, EXP, SRC)   \
+    atomic_compare_exchange_locked(DST, EXP, SRC)
+#define atomic_compare_exchange_strong_explicit(DST, EXP, SRC, ORD1, ORD2) \
+    ((void) (ORD1), (void) (ORD2),                                      \
+     atomic_compare_exchange_strong(DST, EXP, SRC))
+#define atomic_compare_exchange_weak            \
+    atomic_compare_exchange_strong
+#define atomic_compare_exchange_weak_explicit   \
+    atomic_compare_exchange_strong_explicit
+
 #define atomic_add(RMW, ARG, ORIG) atomic_op_locked(RMW, add, ARG, ORIG)
 #define atomic_sub(RMW, ARG, ORIG) atomic_op_locked(RMW, sub, ARG, ORIG)
 #define atomic_or( RMW, ARG, ORIG) atomic_op_locked(RMW, or, ARG, ORIG)

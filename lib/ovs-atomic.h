@@ -161,13 +161,39 @@
  * In this section, A is an atomic type and C is the corresponding non-atomic
  * type.
  *
- * The "store" primitives match C11:
+ * The "store" and "compare_exchange" primitives match C11:
  *
  *     void atomic_store(A *object, C value);
  *     void atomic_store_explicit(A *object, C value, memory_order);
  *
  *         Atomically stores 'value' into '*object', respecting the given
  *         memory order (or memory_order_seq_cst for atomic_store()).
+ *
+ *     bool atomic_compare_exchange_strong(A *object, C *expected, C desired);
+ *     bool atomic_compare_exchange_weak(A *object, C *expected, C desired);
+ *     bool atomic_compare_exchange_strong_explicit(A *object, C *expected,
+ *                                                  C desired,
+ *                                                  memory_order success,
+ *                                                  memory_order failure);
+ *     bool atomic_compare_exchange_weak_explicit(A *object, C *expected,
+ *                                                  C desired,
+ *                                                  memory_order success,
+ *                                                  memory_order failure);
+ *
+ *         Atomically loads '*object' and compares it with '*expected' and if
+ *         equal, stores 'desired' into '*object' (an atomic read-modify-write
+ *         operation) and returns true, and if non-equal, stores the actual
+ *         value of '*object' into '*expected' (an atomic load operation) and
+ *         returns false.  The memory order for the successful case (atomic
+ *         read-modify-write operation) is 'success', and for the unsuccessful
+ *         case (atomic load operation) 'failure'.  'failure' may not be
+ *         stronger than 'success'.
+ *
+ *         The weak forms may fail (returning false) also when '*object' equals
+ *         '*expected'.  The strong form can be implemented by the weak form in
+ *         a loop.  Some platforms can implement the weak form more
+ *         efficiently, so it should be used if the application will need to
+ *         loop anyway.
  *
  * The following primitives differ from the C11 ones (and have different names)
  * because there does not appear to be a way to implement the standard
