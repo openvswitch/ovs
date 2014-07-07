@@ -261,6 +261,15 @@ static inline void rule_dpif_ref(struct rule_dpif *rule)
     }
 }
 
+static inline bool rule_dpif_try_ref(struct rule_dpif *rule)
+{
+    if (rule) {
+        return ofproto_rule_try_ref(RULE_CAST(rule));
+    }
+    return false;
+}
+
+
 static inline void rule_dpif_unref(struct rule_dpif *rule)
 {
     if (rule) {

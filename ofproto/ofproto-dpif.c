@@ -3357,39 +3357,41 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, uint8_t table_id,
     struct classifier *cls = &ofproto->up.tables[table_id].cls;
     const struct cls_rule *cls_rule;
     struct rule_dpif *rule;
+    struct flow ofpc_normal_flow;
 
-    fat_rwlock_rdlock(&cls->rwlock);
     if (ofproto->up.frag_handling != OFPC_FRAG_NX_MATCH) {
-        if (wc) {
-            memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
-            if (is_ip_any(flow)) {
-                wc->masks.nw_frag |= FLOW_NW_FRAG_MASK;
-            }
-        }
+        /* We always unwildcard dl_type and nw_frag (for IP), so they
+         * need not be unwildcarded here. */
 
         if (flow->nw_frag & FLOW_NW_FRAG_ANY) {
             if (ofproto->up.frag_handling == OFPC_FRAG_NORMAL) {
                 /* We must pretend that transport ports are unavailable. */
-                struct flow ofpc_normal_flow = *flow;
+                ofpc_normal_flow = *flow;
                 ofpc_normal_flow.tp_src = htons(0);
                 ofpc_normal_flow.tp_dst = htons(0);
-                cls_rule = classifier_lookup(cls, &ofpc_normal_flow, wc);
+                flow = &ofpc_normal_flow;
             } else {
-                /* Must be OFPC_FRAG_DROP (we don't have OFPC_FRAG_REASM). */
+                /* Must be OFPC_FRAG_DROP (we don't have OFPC_FRAG_REASM).
+                 * Use the drop_frags_rule (which cannot disappear). */
                 cls_rule = &ofproto->drop_frags_rule->up.cr;
+                rule = rule_dpif_cast(rule_from_cls_rule(cls_rule));
+                if (take_ref) {
+                    rule_dpif_ref(rule);
+                }
+                return rule;
             }
-        } else {
-            cls_rule = classifier_lookup(cls, flow, wc);
         }
-    } else {
-        cls_rule = classifier_lookup(cls, flow, wc);
     }
 
-    rule = rule_dpif_cast(rule_from_cls_rule(cls_rule));
-    if (take_ref) {
-        rule_dpif_ref(rule);
-    }
-    fat_rwlock_unlock(&cls->rwlock);
+    do {
+        fat_rwlock_rdlock(&cls->rwlock);
+        cls_rule = classifier_lookup(cls, flow, wc);
+        fat_rwlock_unlock(&cls->rwlock);
+
+        rule = rule_dpif_cast(rule_from_cls_rule(cls_rule));
+
+        /* Try again if the rule was released before we get the reference. */
+    } while (rule && take_ref && !rule_dpif_try_ref(rule));
 
     return rule;
 }

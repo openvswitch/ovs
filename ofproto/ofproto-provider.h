@@ -384,6 +384,7 @@ struct rule {
 };
 
 void ofproto_rule_ref(struct rule *);
+bool ofproto_rule_try_ref(struct rule *);
 void ofproto_rule_unref(struct rule *);
 
 static inline const struct rule_actions * rule_get_actions(const struct rule *);

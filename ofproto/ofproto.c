@@ -2536,6 +2536,15 @@ ofproto_rule_ref(struct rule *rule)
     }
 }
 
+bool
+ofproto_rule_try_ref(struct rule *rule)
+{
+    if (rule) {
+        return ovs_refcount_try_ref_rcu(&rule->ref_count);
+    }
+    return false;
+}
+
 /* Decrements 'rule''s ref_count and schedules 'rule' to be destroyed if the
  * ref_count reaches 0.
  *
