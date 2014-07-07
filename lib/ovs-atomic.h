@@ -314,13 +314,17 @@ ovs_refcount_init(struct ovs_refcount *refcount)
     atomic_init(&refcount->count, 1);
 }
 
-/* Increments 'refcount'. */
+/* Increments 'refcount'.
+ *
+ * Does not provide a memory barrier, as the calling thread must have
+ * protected access to the object already. */
 static inline void
 ovs_refcount_ref(struct ovs_refcount *refcount)
 {
     unsigned int old_refcount;
 
-    atomic_add(&refcount->count, 1, &old_refcount);
+    atomic_add_explicit(&refcount->count, 1, &old_refcount,
+                        memory_order_relaxed);
     ovs_assert(old_refcount > 0);
 }
 
@@ -331,18 +335,32 @@ ovs_refcount_ref(struct ovs_refcount *refcount)
  *     // ...uninitialize object...
  *     free(object);
  * }
- */
+ *
+ * Provides a release barrier making the preceding loads and stores to not be
+ * reordered after the unref. */
 static inline unsigned int
 ovs_refcount_unref(struct ovs_refcount *refcount)
 {
     unsigned int old_refcount;
 
-    atomic_sub(&refcount->count, 1, &old_refcount);
+    atomic_sub_explicit(&refcount->count, 1, &old_refcount,
+                        memory_order_release);
     ovs_assert(old_refcount > 0);
+    if (old_refcount == 1) {
+        /* 'memory_order_release' above means that there are no (reordered)
+         * accesses to the protected object from any other thread at this
+         * point.
+         * An acquire barrier is needed to keep all subsequent access to the
+         * object's memory from being reordered before the atomic operation
+         * above. */
+        atomic_thread_fence(memory_order_acquire);
+    }
     return old_refcount;
 }
 
-/* Reads and returns 'ref_count_''s current reference count.
+/* Reads and returns 'refcount_''s current reference count.
+ *
+ * Does not provide a memory barrier.
  *
  * Rarely useful. */
 static inline unsigned int
@@ -352,7 +370,7 @@ ovs_refcount_read(const struct ovs_refcount *refcount_)
         = CONST_CAST(struct ovs_refcount *, refcount_);
     unsigned int count;
 
-    atomic_read(&refcount->count, &count);
+    atomic_read_explicit(&refcount->count, &count, memory_order_relaxed);
     return count;
 }
 
