@@ -256,7 +256,7 @@ bond_unref(struct bond *bond)
     struct bond_slave *slave, *next_slave;
     struct bond_pr_rule_op *pr_op, *next_op;
 
-    if (!bond || ovs_refcount_unref(&bond->ref_cnt) != 1) {
+    if (!bond || ovs_refcount_unref_relaxed(&bond->ref_cnt) != 1) {
         return;
     }
 

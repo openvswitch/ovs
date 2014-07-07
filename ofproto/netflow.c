@@ -409,7 +409,7 @@ netflow_ref(const struct netflow *nf_)
 void
 netflow_unref(struct netflow *nf)
 {
-    if (nf && ovs_refcount_unref(&nf->ref_cnt) == 1) {
+    if (nf && ovs_refcount_unref_relaxed(&nf->ref_cnt) == 1) {
         int orig;
 
         atomic_sub(&netflow_count, 1, &orig);

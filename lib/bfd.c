@@ -493,7 +493,7 @@ bfd_ref(const struct bfd *bfd_)
 void
 bfd_unref(struct bfd *bfd) OVS_EXCLUDED(mutex)
 {
-    if (bfd && ovs_refcount_unref(&bfd->ref_cnt) == 1) {
+    if (bfd && ovs_refcount_unref_relaxed(&bfd->ref_cnt) == 1) {
         ovs_mutex_lock(&mutex);
         bfd_status_changed(bfd);
         hmap_remove(all_bfds, &bfd->node);

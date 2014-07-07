@@ -605,7 +605,7 @@ dp_netdev_unref(struct dp_netdev *dp)
         /* Take dp_netdev_mutex so that, if dp->ref_cnt falls to zero, we can't
          * get a new reference to 'dp' through the 'dp_netdevs' shash. */
         ovs_mutex_lock(&dp_netdev_mutex);
-        if (ovs_refcount_unref(&dp->ref_cnt) == 1) {
+        if (ovs_refcount_unref_relaxed(&dp->ref_cnt) == 1) {
             dp_netdev_free(dp);
         }
         ovs_mutex_unlock(&dp_netdev_mutex);
@@ -627,7 +627,7 @@ dpif_netdev_destroy(struct dpif *dpif)
     struct dp_netdev *dp = get_dp_netdev(dpif);
 
     if (!atomic_flag_test_and_set(&dp->destroyed)) {
-        if (ovs_refcount_unref(&dp->ref_cnt) == 1) {
+        if (ovs_refcount_unref_relaxed(&dp->ref_cnt) == 1) {
             /* Can't happen: 'dpif' still owns a reference to 'dp'. */
             OVS_NOT_REACHED();
         }
@@ -859,7 +859,7 @@ port_destroy__(struct dp_netdev_port *port)
 static void
 port_unref(struct dp_netdev_port *port)
 {
-    if (port && ovs_refcount_unref(&port->ref_cnt) == 1) {
+    if (port && ovs_refcount_unref_relaxed(&port->ref_cnt) == 1) {
         ovsrcu_postpone(port_destroy__, port);
     }
 }

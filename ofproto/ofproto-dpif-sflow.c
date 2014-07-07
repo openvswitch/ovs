@@ -361,7 +361,7 @@ dpif_sflow_get_probability(const struct dpif_sflow *ds) OVS_EXCLUDED(mutex)
 void
 dpif_sflow_unref(struct dpif_sflow *ds) OVS_EXCLUDED(mutex)
 {
-    if (ds && ovs_refcount_unref(&ds->ref_cnt) == 1) {
+    if (ds && ovs_refcount_unref_relaxed(&ds->ref_cnt) == 1) {
         struct dpif_sflow_port *dsp, *next;
 
         route_table_unregister();

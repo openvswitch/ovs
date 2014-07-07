@@ -694,7 +694,7 @@ dpif_ipfix_clear(struct dpif_ipfix *di) OVS_REQUIRES(mutex)
 void
 dpif_ipfix_unref(struct dpif_ipfix *di) OVS_EXCLUDED(mutex)
 {
-    if (di && ovs_refcount_unref(&di->ref_cnt) == 1) {
+    if (di && ovs_refcount_unref_relaxed(&di->ref_cnt) == 1) {
         ovs_mutex_lock(&mutex);
         dpif_ipfix_clear(di);
         dpif_ipfix_bridge_exporter_destroy(&di->bridge_exporter);

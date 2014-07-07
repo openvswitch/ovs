@@ -251,7 +251,7 @@ lacp_ref(const struct lacp *lacp_)
 void
 lacp_unref(struct lacp *lacp) OVS_EXCLUDED(mutex)
 {
-    if (lacp && ovs_refcount_unref(&lacp->ref_cnt) == 1) {
+    if (lacp && ovs_refcount_unref_relaxed(&lacp->ref_cnt) == 1) {
         struct slave *slave, *next;
 
         lacp_lock();

@@ -374,7 +374,7 @@ cfm_unref(struct cfm *cfm) OVS_EXCLUDED(mutex)
         return;
     }
 
-    if (ovs_refcount_unref(&cfm->ref_cnt) != 1) {
+    if (ovs_refcount_unref_relaxed(&cfm->ref_cnt) != 1) {
         return;
     }
 

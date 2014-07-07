@@ -2545,7 +2545,7 @@ ofproto_rule_ref(struct rule *rule)
 void
 ofproto_rule_unref(struct rule *rule)
 {
-    if (rule && ovs_refcount_unref(&rule->ref_count) == 1) {
+    if (rule && ovs_refcount_unref_relaxed(&rule->ref_count) == 1) {
         ovsrcu_postpone(rule_destroy_cb, rule);
     }
 }
