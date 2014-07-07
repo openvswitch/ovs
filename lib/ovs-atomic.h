@@ -400,4 +400,78 @@ ovs_refcount_read(const struct ovs_refcount *refcount_)
     return count;
 }
 
+/* Increments 'refcount', but only if it is non-zero.
+ *
+ * This may only be called for an object which is RCU protected during
+ * this call.  This implies that its possible destruction is postponed
+ * until all current RCU threads quiesce.
+ *
+ * Returns false if the refcount was zero.  In this case the object may
+ * be safely accessed until the current thread quiesces, but no additional
+ * references to the object may be taken.
+ *
+ * Does not provide a memory barrier, as the calling thread must have
+ * RCU protected access to the object already.
+ *
+ * It is critical that we never increment a zero refcount to a
+ * non-zero value, as whenever a refcount reaches the zero value, the
+ * protected object may be irrevocably scheduled for deletion. */
+static inline bool
+ovs_refcount_try_ref_rcu(struct ovs_refcount *refcount)
+{
+    unsigned int count;
+
+    atomic_read_explicit(&refcount->count, &count, memory_order_relaxed);
+    do {
+        if (count == 0) {
+            return false;
+        }
+    } while (!atomic_compare_exchange_weak_explicit(&refcount->count, &count,
+                                                    count + 1,
+                                                    memory_order_relaxed,
+                                                    memory_order_relaxed));
+    return true;
+}
+
+/* Decrements 'refcount' and returns the previous reference count.  To
+ * be used only when a memory barrier is already provided for the
+ * protected object independently.
+ *
+ * For example:
+ *
+ * if (ovs_refcount_unref_relaxed(&object->ref_cnt) == 1) {
+ *     // Schedule uninitialization and freeing of the object:
+ *     ovsrcu_postpone(destructor_function, object);
+ * }
+ *
+ * Here RCU quiescing already provides a full memory barrier.  No additional
+ * barriers are needed here.
+ *
+ * Or:
+ *
+ * if (stp && ovs_refcount_unref_relaxed(&stp->ref_cnt) == 1) {
+ *     ovs_mutex_lock(&mutex);
+ *     list_remove(&stp->node);
+ *     ovs_mutex_unlock(&mutex);
+ *     free(stp->name);
+ *     free(stp);
+ * }
+ *
+ * Here a mutex is used to guard access to all of 'stp' apart from
+ * 'ref_cnt'.  Hence all changes to 'stp' by other threads must be
+ * visible when we get the mutex, and no access after the unlock can
+ * be reordered to happen prior the lock operation.  No additional
+ * barriers are needed here.
+ */
+static inline unsigned int
+ovs_refcount_unref_relaxed(struct ovs_refcount *refcount)
+{
+    unsigned int old_refcount;
+
+    atomic_sub_explicit(&refcount->count, 1, &old_refcount,
+                        memory_order_relaxed);
+    ovs_assert(old_refcount > 0);
+    return old_refcount;
+}
+
 #endif /* ovs-atomic.h */

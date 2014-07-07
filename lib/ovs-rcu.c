@@ -132,7 +132,10 @@ ovsrcu_quiesce_start(void)
 }
 
 /* Indicates a momentary quiescent state.  See "Details" near the top of
- * ovs-rcu.h. */
+ * ovs-rcu.h.
+ *
+ * Provides a full memory barrier via seq_change().
+ */
 void
 ovsrcu_quiesce(void)
 {
