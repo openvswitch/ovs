@@ -86,7 +86,7 @@ void ovs_assert_failure(const char *, const char *, const char *) NO_RETURN;
     ((void) sizeof ((int) ((POINTER) == (TYPE) (POINTER))),     \
      (TYPE) (POINTER))
 
-extern const char *program_name;
+extern char *program_name;
 
 #define __ARRAY_SIZE_NOCHECK(ARRAY) (sizeof(ARRAY) / sizeof((ARRAY)[0]))
 #ifdef __GNUC__
