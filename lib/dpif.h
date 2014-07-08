@@ -405,6 +405,7 @@ struct flow;
 struct nlattr;
 struct sset;
 struct dpif_class;
+struct dpif_flow;
 
 int dp_register_provider(const struct dpif_class *);
 int dp_unregister_provider(const char *type);
@@ -524,7 +525,7 @@ int dpif_flow_del(struct dpif *,
                   struct dpif_flow_stats *);
 int dpif_flow_get(const struct dpif *,
                   const struct nlattr *key, size_t key_len,
-                  struct ofpbuf **actionsp, struct dpif_flow_stats *);
+                  struct ofpbuf **, struct dpif_flow *);
 
 /* Flow dumping interface
  * ======================

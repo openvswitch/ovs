@@ -1053,24 +1053,27 @@ dpif_linux_flow_get__(const struct dpif_linux *dpif,
 static int
 dpif_linux_flow_get(const struct dpif *dpif_,
                     const struct nlattr *key, size_t key_len,
-                    struct ofpbuf **actionsp, struct dpif_flow_stats *stats)
+                    struct ofpbuf **bufp,
+                    struct nlattr **maskp, size_t *mask_len,
+                    struct nlattr **actionsp, size_t *actions_len,
+                    struct dpif_flow_stats *stats)
 {
     const struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     struct dpif_linux_flow reply;
-    struct ofpbuf *buf;
     int error;
 
-    error = dpif_linux_flow_get__(dpif, key, key_len, &reply, &buf);
+    error = dpif_linux_flow_get__(dpif, key, key_len, &reply, bufp);
     if (!error) {
-        if (stats) {
-            dpif_linux_flow_get_stats(&reply, stats);
+        if (maskp) {
+            *maskp = CONST_CAST(struct nlattr *, reply.mask);
+            *mask_len = reply.mask_len;
         }
         if (actionsp) {
-            ofpbuf_set_data(buf, CONST_CAST(struct nlattr *, reply.actions));
-            ofpbuf_set_size(buf, reply.actions_len);
-            *actionsp = buf;
-        } else {
-            ofpbuf_delete(buf);
+            *actionsp = CONST_CAST(struct nlattr *, reply.actions);
+            *actions_len = reply.actions_len;
+        }
+        if (stats) {
+            dpif_linux_flow_get_stats(&reply, stats);
         }
     }
     return error;

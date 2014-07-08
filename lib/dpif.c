@@ -834,44 +834,46 @@ dpif_flow_flush(struct dpif *dpif)
  * Returns 0 if successful.  If no flow matches, returns ENOENT.  On other
  * failure, returns a positive errno value.
  *
- * If 'actionsp' is nonnull, then on success '*actionsp' will be set to an
- * ofpbuf owned by the caller that contains the Netlink attributes for the
- * flow's actions.  The caller must free the ofpbuf (with ofpbuf_delete()) when
+ * On success, '*bufp' will be set to an ofpbuf owned by the caller that
+ * contains the response for 'flow->mask' and 'flow->actions'. The caller must
+ * supply a valid pointer, and must free the ofpbuf (with ofpbuf_delete()) when
  * it is no longer needed.
  *
- * If 'stats' is nonnull, then on success it will be updated with the flow's
- * statistics. */
+ * On success, 'flow' will be populated with the mask, actions and stats for
+ * the datapath flow corresponding to 'key'. The mask and actions will point
+ * within '*bufp'.
+ */
 int
 dpif_flow_get(const struct dpif *dpif,
               const struct nlattr *key, size_t key_len,
-              struct ofpbuf **actionsp, struct dpif_flow_stats *stats)
+              struct ofpbuf **bufp, struct dpif_flow *flow)
 {
     int error;
+    struct nlattr *mask, *actions;
+    size_t mask_len, actions_len;
+    struct dpif_flow_stats stats;
 
     COVERAGE_INC(dpif_flow_get);
 
-    error = dpif->dpif_class->flow_get(dpif, key, key_len, actionsp, stats);
+    *bufp = NULL;
+    error = dpif->dpif_class->flow_get(dpif, key, key_len, bufp,
+                                       &mask, &mask_len,
+                                       &actions, &actions_len, &stats);
     if (error) {
-        if (actionsp) {
-            *actionsp = NULL;
-        }
-        if (stats) {
-            memset(stats, 0, sizeof *stats);
-        }
+        memset(flow, 0, sizeof *flow);
+        ofpbuf_delete(*bufp);
+        *bufp = NULL;
+    } else {
+        flow->mask = mask;
+        flow->mask_len = mask_len;
+        flow->actions = actions;
+        flow->actions_len = actions_len;
+        flow->stats = stats;
     }
     if (should_log_flow_message(error)) {
-        const struct nlattr *actions;
-        size_t actions_len;
-
-        if (!error && actionsp) {
-            actions = ofpbuf_data(*actionsp);
-            actions_len = ofpbuf_size(*actionsp);
-        } else {
-            actions = NULL;
-            actions_len = 0;
-        }
         log_flow_message(dpif, error, "flow_get", key, key_len,
-                         NULL, 0, stats, actions, actions_len);
+                         NULL, 0, &flow->stats,
+                         flow->actions, flow->actions_len);
     }
     return error;
 }
