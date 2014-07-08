@@ -831,7 +831,13 @@ dpif_linux_port_get_pid__(const struct dpif_linux *dpif, odp_port_t port_no,
         uint32_t idx = port_idx >= dpif->uc_array_size ? 0 : port_idx;
         struct dpif_handler *h = &dpif->handlers[hash % dpif->n_handlers];
 
-        pid = nl_sock_pid(h->channels[idx].sock);
+        /* Needs to check in case the socket pointer is changed in between
+         * the holding of upcall_lock.  A known case happens when the main
+         * thread deletes the vport while the handler thread is handling
+         * the upcall from that port. */
+        if (h->channels[idx].sock) {
+            pid = nl_sock_pid(h->channels[idx].sock);
+        }
     }
 
     return pid;
