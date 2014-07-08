@@ -46,6 +46,7 @@
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif_upcall);
 
 COVERAGE_DEFINE(upcall_duplicate_flow);
+COVERAGE_DEFINE(revalidate_missed_dp_flow);
 
 /* A thread that reads upcalls from dpif, forwards each upcall's packet,
  * and possibly sets up a kernel flow as a cache. */
@@ -1440,6 +1441,27 @@ revalidate(struct revalidator *revalidator)
     dpif_flow_dump_thread_destroy(dump_thread);
 }
 
+/* Called with exclusive access to 'revalidator' and 'ukey'. */
+static bool
+handle_missed_revalidation(struct revalidator *revalidator,
+                           struct udpif_key *ukey)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
+{
+    struct udpif *udpif = revalidator->udpif;
+    struct dpif_flow flow;
+    struct ofpbuf *buf;
+    bool keep = false;
+
+    COVERAGE_INC(revalidate_missed_dp_flow);
+
+    if (!dpif_flow_get(udpif->dpif, ukey->key, ukey->key_len, &buf, &flow)) {
+        keep = revalidate_ukey(udpif, ukey, &flow);
+        ofpbuf_delete(buf);
+    }
+
+    return keep;
+}
+
 static void
 revalidator_sweep__(struct revalidator *revalidator, bool purge)
     OVS_NO_THREAD_SAFETY_ANALYSIS
@@ -1455,18 +1477,20 @@ revalidator_sweep__(struct revalidator *revalidator, bool purge)
     /* During garbage collection, this revalidator completely owns its ukeys
      * map, and therefore doesn't need to do any locking. */
     HMAP_FOR_EACH_SAFE (ukey, next, hmap_node, revalidator->ukeys) {
-        if (!ukey->flow_exists) {
-            ukey_delete(revalidator, ukey);
-        } else if (purge || ukey->dump_seq != dump_seq) {
+        if (ukey->flow_exists
+            && (purge
+                || (ukey->dump_seq != dump_seq
+                    && revalidator->udpif->need_revalidate
+                    && !handle_missed_revalidation(revalidator, ukey)))) {
             struct dump_op *op = &ops[n_ops++];
 
-            /* If we have previously seen a flow in the datapath, but it
-             * hasn't been seen in the current dump, delete it. */
             dump_op_init(op, ukey->key, ukey->key_len, ukey);
             if (n_ops == REVALIDATE_MAX_BATCH) {
                 push_dump_ops(revalidator, ops, n_ops);
                 n_ops = 0;
             }
+        } else if (!ukey->flow_exists) {
+            ukey_delete(revalidator, ukey);
         }
     }
 
