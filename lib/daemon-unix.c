@@ -214,19 +214,23 @@ fork_and_clean_up(void)
 /* Forks, then:
  *
  *   - In the parent, waits for the child to signal that it has completed its
- *     startup sequence.  Then stores -1 in '*fdp' and returns the child's pid.
+ *     startup sequence.  Then stores -1 in '*fdp' and returns the child's
+ *     pid in '*child_pid' argument.
  *
- *   - In the child, stores a fd in '*fdp' and returns 0.  The caller should
- *     pass the fd to fork_notify_startup() after it finishes its startup
- *     sequence.
+ *   - In the child, stores a fd in '*fdp' and returns 0 through '*child_pid'
+ *     argument.  The caller should pass the fd to fork_notify_startup() after
+ *     it finishes its startup sequence.
  *
- * If something goes wrong with the fork, logs a critical error and aborts the
- * process. */
-static pid_t
-fork_and_wait_for_startup(int *fdp)
+ * Returns 0 on success.  If something goes wrong and child process was not
+ * able to signal its readiness by calling fork_notify_startup(), then this
+ * function returns -1. However, even in case of failure it still sets child
+ * process id in '*child_pid'. */
+static int
+fork_and_wait_for_startup(int *fdp, pid_t *child_pid)
 {
     int fds[2];
     pid_t pid;
+    int ret = 0;
 
     xpipe(fds);
 
@@ -252,8 +256,9 @@ fork_and_wait_for_startup(int *fdp)
                     exit(WEXITSTATUS(status));
                 } else {
                     char *status_msg = process_status_msg(status);
-                    VLOG_FATAL("fork child died before signaling startup (%s)",
-                               status_msg);
+                    VLOG_ERR("fork child died before signaling startup (%s)",
+                             status_msg);
+                    ret = -1;
                 }
             } else if (retval < 0) {
                 VLOG_FATAL("waitpid failed (%s)", ovs_strerror(errno));
@@ -268,8 +273,8 @@ fork_and_wait_for_startup(int *fdp)
         close(fds[0]);
         *fdp = fds[1];
     }
-
-    return pid;
+    *child_pid = pid;
+    return ret;
 }
 
 static void
@@ -317,6 +322,7 @@ monitor_daemon(pid_t daemon_pid)
     time_t last_restart;
     char *status_msg;
     int crashes;
+    bool child_ready = true;
 
     set_subprogram_name("monitor");
     status_msg = xstrdup("healthy");
@@ -329,13 +335,16 @@ monitor_daemon(pid_t daemon_pid)
         proctitle_set("monitoring pid %lu (%s)",
                       (unsigned long int) daemon_pid, status_msg);
 
-        do {
-            retval = waitpid(daemon_pid, &status, 0);
-        } while (retval == -1 && errno == EINTR);
+        if (child_ready) {
+            do {
+                retval = waitpid(daemon_pid, &status, 0);
+            } while (retval == -1 && errno == EINTR);
+            if (retval == -1) {
+                VLOG_FATAL("waitpid failed (%s)", ovs_strerror(errno));
+            }
+        }
 
-        if (retval == -1) {
-            VLOG_FATAL("waitpid failed (%s)", ovs_strerror(errno));
-        } else if (retval == daemon_pid) {
+        if (!child_ready || retval == daemon_pid) {
             char *s = process_status_msg(status);
             if (should_restart(status)) {
                 free(status_msg);
@@ -372,8 +381,11 @@ monitor_daemon(pid_t daemon_pid)
                 last_restart = time(NULL);
 
                 VLOG_ERR("%s, restarting", status_msg);
-                daemon_pid = fork_and_wait_for_startup(&daemonize_fd);
-                if (!daemon_pid) {
+                child_ready = !fork_and_wait_for_startup(&daemonize_fd,
+                                                         &daemon_pid);
+                if (child_ready && !daemon_pid) {
+                    /* Child process needs to break out of monitoring
+                     * loop. */
                     break;
                 }
             } else {
@@ -403,7 +415,12 @@ daemonize_start(void)
     daemonize_fd = -1;
 
     if (detach) {
-        if (fork_and_wait_for_startup(&daemonize_fd) > 0) {
+        pid_t pid;
+
+        if (fork_and_wait_for_startup(&daemonize_fd, &pid)) {
+            VLOG_FATAL("could not detach from foreground session");
+        }
+        if (pid > 0) {
             /* Running in parent process. */
             exit(0);
         }
@@ -416,7 +433,9 @@ daemonize_start(void)
         int saved_daemonize_fd = daemonize_fd;
         pid_t daemon_pid;
 
-        daemon_pid = fork_and_wait_for_startup(&daemonize_fd);
+        if (fork_and_wait_for_startup(&daemonize_fd, &daemon_pid)) {
+            VLOG_FATAL("could not initiate process monitoring");
+        }
         if (daemon_pid > 0) {
             /* Running in monitor process. */
             fork_notify_startup(saved_daemonize_fd);
