@@ -729,15 +729,17 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 		case OVS_ACTION_ATTR_RECIRC: {
 			struct sk_buff *recirc_skb;
 
-			if (!last_action(a, rem))
-				recirc_skb = skb_clone(skb, GFP_ATOMIC);
-			else
-				recirc_skb = skb;
+			if (last_action(a, rem))
+				return execute_recirc(dp, skb, a);
 
-			err = execute_recirc(dp, recirc_skb, a);
+			/* Recirc action is the not the last action
+			 * of the action list. */
+			recirc_skb = skb_clone(skb, GFP_ATOMIC);
 
-			if (recirc_skb == skb)
-				return err;
+			/* Skip the recirc action when out of memory, but
+			 * continue on with the rest of the action list. */
+			if (recirc_skb)
+				err = execute_recirc(dp, recirc_skb, a);
 
 			break;
 		}
