@@ -338,7 +338,7 @@ nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, bool wait)
         error = (retval < 0 ? errno
                  : retval == 0 ? ECONNRESET /* not possible? */
                  : nlmsghdr->nlmsg_len != UINT32_MAX ? 0
-                 : -retval);
+                 : retval);
     } while (error == EINTR);
     if (error) {
         if (error == ENOBUFS) {
