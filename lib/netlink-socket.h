@@ -52,6 +52,7 @@
 #include <stdint.h>
 #include "ofpbuf.h"
 #include "ovs-atomic.h"
+#include "ovs-thread.h"
 
 struct nl_sock;
 
@@ -114,6 +115,7 @@ struct nl_dump {
     atomic_uint status;         /* Low bit set if we read final message.
                                  * Other bits hold an errno (0 for success). */
     struct seq *status_seq;     /* Tracks changes to the above 'status'. */
+    struct ovs_mutex mutex;
 };
 
 void nl_dump_start(struct nl_dump *, int protocol,

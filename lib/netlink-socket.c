@@ -714,6 +714,7 @@ nl_dump_start(struct nl_dump *dump, int protocol, const struct ofpbuf *request)
     atomic_init(&dump->status, status << 1);
     dump->nl_seq = nl_msg_nlmsghdr(request)->nlmsg_seq;
     dump->status_seq = seq_create();
+    ovs_mutex_init(&dump->mutex);
 }
 
 /* Attempts to retrieve another reply from 'dump' into 'buffer'. 'dump' must
@@ -756,7 +757,15 @@ nl_dump_next(struct nl_dump *dump, struct ofpbuf *reply, struct ofpbuf *buffer)
             return false;
         }
 
+        /* Take the mutex here to avoid an in-kernel race.  If two threads try
+         * to read from a Netlink dump socket at once, then the socket error
+         * can be set to EINVAL, which will be encountered on the next recv on
+         * that socket, which could be anywhere due to the way that we pool
+         * Netlink sockets.  Serializing the recv calls avoids the issue. */
+        ovs_mutex_lock(&dump->mutex);
         retval = nl_sock_recv__(dump->sock, buffer, false);
+        ovs_mutex_unlock(&dump->mutex);
+
         if (retval) {
             ofpbuf_clear(buffer);
             if (retval == EAGAIN) {
@@ -848,6 +857,7 @@ nl_dump_done(struct nl_dump *dump)
     }
     nl_pool_release(dump->sock);
     seq_destroy(dump->status_seq);
+    ovs_mutex_destroy(&dump->mutex);
     return status >> 1;
 }
 
