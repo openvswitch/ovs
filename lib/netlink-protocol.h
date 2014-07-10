@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2010, 2011, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,14 +39,6 @@
 
 #else
 #define NETLINK_GENERIC         16
-
-struct sockaddr_nl {
-    sa_family_t nl_family;
-    unsigned short int nl_pad;
-    uint32_t nl_pid;
-    uint32_t nl_groups;
-};
-BUILD_ASSERT_DECL(sizeof(struct sockaddr_nl) == 12);
 
 /* nlmsg_flags bits. */
 #define NLM_F_REQUEST           0x001
