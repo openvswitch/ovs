@@ -22,8 +22,7 @@
 #include "dynamic-string.h"
 #include "flow.h"
 #include "hash.h"
-#include "hindex.h"
-#include "hmap.h"
+#include "cmap.h"
 #include "list.h"
 #include "odp-util.h"
 #include "ofp-util.h"
@@ -58,25 +57,25 @@ struct cls_classifier {
     uint8_t n_flow_segments;
     uint8_t flow_segments[CLS_MAX_INDICES]; /* Flow segment boundaries to use
                                              * for staged lookup. */
-    struct hmap subtables_map;      /* Contains "struct cls_subtable"s.  */
+    struct cmap subtables_map;      /* Contains "struct cls_subtable"s.  */
     struct pvector subtables;
-    struct hmap partitions;         /* Contains "struct cls_partition"s. */
+    struct cmap partitions;         /* Contains "struct cls_partition"s. */
     struct cls_trie tries[CLS_MAX_TRIES]; /* Prefix tries. */
     unsigned int n_tries;
 };
 
 /* A set of rules that all have the same fields wildcarded. */
 struct cls_subtable {
-    struct hmap_node hmap_node; /* Within struct cls_classifier 'subtables_map'
-                                 * hmap. */
-    struct hmap rules;          /* Contains "struct cls_rule"s. */
+    struct cmap_node cmap_node; /* Within struct cls_classifier
+                                 * 'subtables_map'. */
+    struct cmap rules;          /* Contains "struct cls_rule"s. */
     int n_rules;                /* Number of rules, including duplicates. */
     unsigned int max_priority;  /* Max priority of any rule in the subtable. */
     unsigned int max_count;     /* Count of max_priority rules. */
     tag_type tag;               /* Tag generated from mask for partitioning. */
     uint8_t n_indices;           /* How many indices to use. */
     uint8_t index_ofs[CLS_MAX_INDICES]; /* u32 flow segment boundaries. */
-    struct hindex indices[CLS_MAX_INDICES]; /* Staged lookup indices. */
+    struct cmap indices[CLS_MAX_INDICES]; /* Staged lookup indices. */
     unsigned int trie_plen[CLS_MAX_TRIES];  /* Trie prefix length in 'mask'. */
     int ports_mask_len;
     struct trie_node *ports_trie; /* NULL if none. */
@@ -88,8 +87,8 @@ struct cls_subtable {
  * field) with tags for the "cls_subtable"s that contain rules that match that
  * metadata value.  */
 struct cls_partition {
-    struct hmap_node hmap_node; /* In struct cls_classifier's 'partitions'
-                                 * hmap. */
+    struct cmap_node cmap_node; /* In struct cls_classifier's 'partitions'
+                                 * map. */
     ovs_be64 metadata;          /* metadata value for this partition. */
     tag_type tags;              /* OR of each flow's cls_subtable tag. */
     struct tag_tracker tracker; /* Tracks the bits in 'tags'. */
@@ -98,9 +97,9 @@ struct cls_partition {
 /* Internal representation of a rule in a "struct cls_subtable". */
 struct cls_match {
     struct cls_rule *cls_rule;
-    struct hindex_node index_nodes[CLS_MAX_INDICES]; /* Within subtable's
-                                                      * 'indices'. */
-    struct hmap_node hmap_node; /* Within struct cls_subtable 'rules'. */
+    struct cmap_node index_nodes[CLS_MAX_INDICES]; /* Within subtable's
+                                                    * 'indices'. */
+    struct cmap_node cmap_node; /* Within struct cls_subtable 'rules'. */
     unsigned int priority;      /* Larger numbers are higher priorities. */
     struct cls_partition *partition;
     struct list list;           /* List of identical, lower-priority rules. */
@@ -461,9 +460,9 @@ classifier_init(struct classifier *cls_, const uint8_t *flow_segments)
     cls_->cls = cls;
 
     cls->n_rules = 0;
-    hmap_init(&cls->subtables_map);
+    cmap_init(&cls->subtables_map);
     pvector_init(&cls->subtables);
-    hmap_init(&cls->partitions);
+    cmap_init(&cls->partitions);
     cls->n_flow_segments = 0;
     if (flow_segments) {
         while (cls->n_flow_segments < CLS_MAX_INDICES
@@ -494,18 +493,17 @@ classifier_destroy(struct classifier *cls_)
             trie_destroy(cls->tries[i].root);
         }
 
-        HMAP_FOR_EACH_SAFE (subtable, next_subtable, hmap_node,
+        CMAP_FOR_EACH_SAFE (subtable, next_subtable, cmap_node,
                             &cls->subtables_map) {
             destroy_subtable(cls, subtable);
         }
-        hmap_destroy(&cls->subtables_map);
+        cmap_destroy(&cls->subtables_map);
 
-        HMAP_FOR_EACH_SAFE (partition, next_partition, hmap_node,
+        CMAP_FOR_EACH_SAFE (partition, next_partition, cmap_node,
                             &cls->partitions) {
-            hmap_remove(&cls->partitions, &partition->hmap_node);
-            free(partition);
+            ovsrcu_postpone(free, partition);
         }
-        hmap_destroy(&cls->partitions);
+        cmap_destroy(&cls->partitions);
 
         pvector_destroy(&cls->subtables);
         free(cls);
@@ -569,7 +567,7 @@ trie_init(struct cls_classifier *cls, int trie_idx,
     trie->field = field;
 
     /* Add existing rules to the trie. */
-    HMAP_FOR_EACH (subtable, hmap_node, &cls->subtables_map) {
+    CMAP_FOR_EACH (subtable, cmap_node, &cls->subtables_map) {
         unsigned int plen;
 
         plen = field ? minimask_get_prefix_len(&subtable->mask, field) : 0;
@@ -579,7 +577,7 @@ trie_init(struct cls_classifier *cls, int trie_idx,
         if (plen) {
             struct cls_match *head;
 
-            HMAP_FOR_EACH (head, hmap_node, &subtable->rules) {
+            CMAP_FOR_EACH (head, cmap_node, &subtable->rules) {
                 struct cls_match *match;
 
                 FOR_EACH_RULE_IN_LIST (match, head) {
@@ -617,7 +615,7 @@ find_partition(const struct cls_classifier *cls, ovs_be64 metadata,
 {
     struct cls_partition *partition;
 
-    HMAP_FOR_EACH_IN_BUCKET (partition, hmap_node, hash, &cls->partitions) {
+    CMAP_FOR_EACH_WITH_HASH (partition, cmap_node, hash, &cls->partitions) {
         if (partition->metadata == metadata) {
             return partition;
         }
@@ -637,7 +635,7 @@ create_partition(struct cls_classifier *cls, struct cls_subtable *subtable,
         partition->metadata = metadata;
         partition->tags = 0;
         tag_tracker_init(&partition->tracker);
-        hmap_insert(&cls->partitions, &partition->hmap_node, hash);
+        cmap_insert(&cls->partitions, &partition->cmap_node, hash);
     }
     tag_tracker_add(&partition->tracker, &partition->tags, subtable->tag);
     return partition;
@@ -712,7 +710,11 @@ classifier_replace(struct classifier *cls_, struct cls_rule *rule)
 
         rule->cls_match->partition = old_rule->partition;
         old_cls_rule->cls_match = NULL;
-        free(old_rule);
+
+        /* 'old_rule' contains a cmap_node, which may not be freed
+         * immediately. */
+        ovsrcu_postpone(free, old_rule);
+
         return old_cls_rule;
     }
 }
@@ -742,6 +744,8 @@ classifier_remove(struct classifier *cls_, struct cls_rule *rule)
     struct cls_match *head;
     struct cls_subtable *subtable;
     int i;
+    uint32_t basis = 0, hash, ihash[CLS_MAX_INDICES];
+    uint8_t prev_be32ofs = 0;
 
     ovs_assert(cls_match);
 
@@ -762,21 +766,26 @@ classifier_remove(struct classifier *cls_, struct cls_rule *rule)
 
     /* Remove rule node from indices. */
     for (i = 0; i < subtable->n_indices; i++) {
-        hindex_remove(&subtable->indices[i], &cls_match->index_nodes[i]);
+        ihash[i] = minimatch_hash_range(&rule->match, prev_be32ofs,
+                                        subtable->index_ofs[i], &basis);
+        cmap_remove(&subtable->indices[i], &cls_match->index_nodes[i],
+                    ihash[i]);
+        prev_be32ofs = subtable->index_ofs[i];
     }
+    hash = minimatch_hash_range(&rule->match, prev_be32ofs, FLOW_U32S, &basis);
 
-    head = find_equal(subtable, &rule->match.flow, cls_match->hmap_node.hash);
+    head = find_equal(subtable, &rule->match.flow, hash);
     if (head != cls_match) {
         list_remove(&cls_match->list);
     } else if (list_is_empty(&cls_match->list)) {
-        hmap_remove(&subtable->rules, &cls_match->hmap_node);
+        cmap_remove(&subtable->rules, &cls_match->cmap_node, hash);
     } else {
         struct cls_match *next = CONTAINER_OF(cls_match->list.next,
                                               struct cls_match, list);
 
         list_remove(&cls_match->list);
-        hmap_replace(&subtable->rules, &cls_match->hmap_node,
-                     &next->hmap_node);
+        cmap_replace(&subtable->rules, &cls_match->cmap_node,
+                     &next->cmap_node, hash);
     }
 
     partition = cls_match->partition;
@@ -784,8 +793,9 @@ classifier_remove(struct classifier *cls_, struct cls_rule *rule)
         tag_tracker_subtract(&partition->tracker, &partition->tags,
                              subtable->tag);
         if (!partition->tags) {
-            hmap_remove(&cls->partitions, &partition->hmap_node);
-            free(partition);
+            cmap_remove(&cls->partitions, &partition->cmap_node,
+                        hash_metadata(partition->metadata));
+            ovsrcu_postpone(free, partition);
         }
     }
 
@@ -797,7 +807,7 @@ classifier_remove(struct classifier *cls_, struct cls_rule *rule)
         struct cls_match *head;
         unsigned int max_priority = 0;
 
-        HMAP_FOR_EACH (head, hmap_node, &subtable->rules) {
+        CMAP_FOR_EACH (head, cmap_node, &subtable->rules) {
             if (head->priority > max_priority) {
                 max_priority = head->priority;
                 subtable->max_count = 1;
@@ -812,7 +822,7 @@ classifier_remove(struct classifier *cls_, struct cls_rule *rule)
     cls->n_rules--;
 
     rule->cls_match = NULL;
-    free(cls_match);
+    ovsrcu_postpone(free, cls_match);
 }
 
 /* Prefix tree context.  Valid when 'lookup_done' is true.  Can skip all
@@ -873,7 +883,7 @@ classifier_lookup(const struct classifier *cls_, const struct flow *flow,
      * that 'tags' always intersects such a cls_subtable's 'tags', so we don't
      * need a special case.
      */
-    partition = (hmap_is_empty(&cls->partitions)
+    partition = (cmap_is_empty(&cls->partitions)
                  ? NULL
                  : find_partition(cls, flow->metadata,
                                   hash_metadata(flow->metadata)));
@@ -932,7 +942,7 @@ find_match_miniflow(const struct cls_subtable *subtable,
 {
     struct cls_match *rule;
 
-    HMAP_FOR_EACH_WITH_HASH (rule, hmap_node, hash, &subtable->rules) {
+    CMAP_FOR_EACH_WITH_HASH (rule, cmap_node, hash, &subtable->rules) {
         if (miniflow_and_mask_matches_miniflow(&rule->flow, &subtable->mask,
                                                flow)) {
             return rule;
@@ -1054,7 +1064,7 @@ classifier_rule_overlaps(const struct classifier *cls_,
         struct cls_match *head;
 
         minimask_combine(&mask, &target->match.mask, &subtable->mask, storage);
-        HMAP_FOR_EACH (head, hmap_node, &subtable->rules) {
+        CMAP_FOR_EACH (head, cmap_node, &subtable->rules) {
             struct cls_match *rule;
 
             FOR_EACH_RULE_IN_LIST (rule, head) {
@@ -1128,13 +1138,15 @@ rule_matches(const struct cls_match *rule, const struct cls_rule *target)
 
 static struct cls_match *
 search_subtable(const struct cls_subtable *subtable,
-                const struct cls_rule *target)
+                struct cls_cursor *cursor)
 {
-    if (!target || !minimask_has_extra(&subtable->mask, &target->match.mask)) {
+    if (!cursor->target
+        || !minimask_has_extra(&subtable->mask, &cursor->target->match.mask)) {
         struct cls_match *rule;
 
-        HMAP_FOR_EACH (rule, hmap_node, &subtable->rules) {
-            if (rule_matches(rule, target)) {
+        CMAP_CURSOR_FOR_EACH (rule, cmap_node, &cursor->rules,
+                              &subtable->rules) {
+            if (rule_matches(rule, cursor->target)) {
                 return rule;
             }
         }
@@ -1165,8 +1177,10 @@ cls_cursor_first(struct cls_cursor *cursor)
 {
     struct cls_subtable *subtable;
 
-    HMAP_FOR_EACH (subtable, hmap_node, &cursor->cls->subtables_map) {
-        struct cls_match *rule = search_subtable(subtable, cursor->target);
+    CMAP_CURSOR_FOR_EACH (subtable, cmap_node, &cursor->subtables,
+                          &cursor->cls->subtables_map) {
+        struct cls_match *rule = search_subtable(subtable, cursor);
+
         if (rule) {
             cursor->subtable = subtable;
             return rule->cls_rule;
@@ -1191,18 +1205,18 @@ cls_cursor_next(struct cls_cursor *cursor, const struct cls_rule *rule_)
     }
 
     /* 'next' is the head of the list, that is, the rule that is included in
-     * the subtable's hmap.  (This is important when the classifier contains
+     * the subtable's map.  (This is important when the classifier contains
      * rules that differ only in priority.) */
     rule = next;
-    HMAP_FOR_EACH_CONTINUE (rule, hmap_node, &cursor->subtable->rules) {
+    CMAP_CURSOR_FOR_EACH_CONTINUE (rule, cmap_node, &cursor->rules) {
         if (rule_matches(rule, cursor->target)) {
             return rule->cls_rule;
         }
     }
 
     subtable = cursor->subtable;
-    HMAP_FOR_EACH_CONTINUE (subtable, hmap_node, &cursor->cls->subtables_map) {
-        rule = search_subtable(subtable, cursor->target);
+    CMAP_CURSOR_FOR_EACH_CONTINUE (subtable, cmap_node, &cursor->subtables) {
+        rule = search_subtable(subtable, cursor);
         if (rule) {
             cursor->subtable = subtable;
             return rule->cls_rule;
@@ -1217,7 +1231,7 @@ find_subtable(const struct cls_classifier *cls, const struct minimask *mask)
 {
     struct cls_subtable *subtable;
 
-    HMAP_FOR_EACH_IN_BUCKET (subtable, hmap_node, minimask_hash(mask, 0),
+    CMAP_FOR_EACH_WITH_HASH (subtable, cmap_node, minimask_hash(mask, 0),
                              &cls->subtables_map) {
         if (minimask_equal(mask, &subtable->mask)) {
             return subtable;
@@ -1238,7 +1252,7 @@ insert_subtable(struct cls_classifier *cls, const struct minimask *mask)
 
     subtable = xzalloc(sizeof *subtable - sizeof mask->masks.inline_values
                        + MINIFLOW_VALUES_SIZE(count));
-    hmap_init(&subtable->rules);
+    cmap_init(&subtable->rules);
     miniflow_clone_inline(&subtable->mask.masks, &mask->masks, count);
 
     /* Init indices for segmented lookup, if any. */
@@ -1250,7 +1264,7 @@ insert_subtable(struct cls_classifier *cls, const struct minimask *mask)
                                            cls->flow_segments[i]);
         /* Add an index if it adds mask bits. */
         if (!flow_wildcards_equal(&new, &old)) {
-            hindex_init(&subtable->indices[index]);
+            cmap_init(&subtable->indices[index]);
             subtable->index_ofs[index] = cls->flow_segments[i];
             index++;
             old = new;
@@ -1264,7 +1278,7 @@ insert_subtable(struct cls_classifier *cls, const struct minimask *mask)
         if (flow_wildcards_equal(&new, &old)) {
             --index;
             subtable->index_ofs[index] = 0;
-            hindex_destroy(&subtable->indices[index]);
+            cmap_destroy(&subtable->indices[index]);
         }
     }
     subtable->n_indices = index;
@@ -1283,7 +1297,7 @@ insert_subtable(struct cls_classifier *cls, const struct minimask *mask)
     subtable->ports_mask_len
         = 32 - ctz32(ntohl(MINIFLOW_GET_BE32(&mask->masks, tp_src)));
 
-    hmap_insert(&cls->subtables_map, &subtable->hmap_node, hash);
+    cmap_insert(&cls->subtables_map, &subtable->cmap_node, hash);
 
     return subtable;
 }
@@ -1297,11 +1311,12 @@ destroy_subtable(struct cls_classifier *cls, struct cls_subtable *subtable)
     trie_destroy(subtable->ports_trie);
 
     for (i = 0; i < subtable->n_indices; i++) {
-        hindex_destroy(&subtable->indices[i]);
+        cmap_destroy(&subtable->indices[i]);
     }
-    hmap_remove(&cls->subtables_map, &subtable->hmap_node);
+    cmap_remove(&cls->subtables_map, &subtable->cmap_node,
+                minimask_hash(&subtable->mask, 0));
     minimask_destroy(&subtable->mask);
-    hmap_destroy(&subtable->rules);
+    cmap_destroy(&subtable->rules);
     ovsrcu_postpone(free, subtable);
 }
 
@@ -1405,7 +1420,7 @@ find_match(const struct cls_subtable *subtable, const struct flow *flow,
 {
     struct cls_match *rule;
 
-    HMAP_FOR_EACH_WITH_HASH (rule, hmap_node, hash, &subtable->rules) {
+    CMAP_FOR_EACH_WITH_HASH (rule, cmap_node, hash, &subtable->rules) {
         if (miniflow_and_mask_matches_flow(&rule->flow, &subtable->mask,
                                            flow)) {
             return rule;
@@ -1479,7 +1494,8 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
     ofs.start = 0;
     /* Try to finish early by checking fields in segments. */
     for (i = 0; i < subtable->n_indices; i++) {
-        struct hindex_node *inode;
+        struct cmap_node *inode;
+
         ofs.end = subtable->index_ofs[i];
 
         if (check_tries(trie_ctx, n_tries, subtable->trie_plen, ofs, flow,
@@ -1491,7 +1507,7 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
         }
         hash = flow_hash_in_minimask_range(flow, &subtable->mask, ofs.start,
                                            ofs.end, &basis);
-        inode = hindex_node_with_hash(&subtable->indices[i], hash);
+        inode = cmap_find(&subtable->indices[i], hash);
         if (!inode) {
             /* No match, can stop immediately, but must fold in the bits
              * used in lookup so far. */
@@ -1504,7 +1520,7 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
          *
          * (Rare) hash collisions may cause us to miss the opportunity for this
          * optimization. */
-        if (!inode->s) {
+        if (!cmap_node_next(inode)) {
             ASSIGN_CONTAINER(rule, inode - i, index_nodes);
             if (miniflow_and_mask_matches_flow_wc(&rule->flow, &subtable->mask,
                                                   flow, wc)) {
@@ -1554,7 +1570,7 @@ find_equal(struct cls_subtable *subtable, const struct miniflow *flow,
 {
     struct cls_match *head;
 
-    HMAP_FOR_EACH_WITH_HASH (head, hmap_node, hash, &subtable->rules) {
+    CMAP_FOR_EACH_WITH_HASH (head, cmap_node, hash, &subtable->rules) {
         if (miniflow_equal(&head->flow, flow)) {
             return head;
         }
@@ -1564,56 +1580,54 @@ find_equal(struct cls_subtable *subtable, const struct miniflow *flow,
 
 static struct cls_match *
 insert_rule(struct cls_classifier *cls, struct cls_subtable *subtable,
-            struct cls_rule *new)
+            struct cls_rule *new_rule)
 {
-    struct cls_match *cls_match = cls_match_alloc(new);
-    struct cls_match *head;
     struct cls_match *old = NULL;
+    struct cls_match *new = cls_match_alloc(new_rule);
+    struct cls_match *head;
     int i;
-    uint32_t basis = 0, hash;
+    uint32_t basis = 0, hash, ihash[CLS_MAX_INDICES];
     uint8_t prev_be32ofs = 0;
 
     /* Add new node to segment indices. */
     for (i = 0; i < subtable->n_indices; i++) {
-        hash = minimatch_hash_range(&new->match, prev_be32ofs,
-                                    subtable->index_ofs[i], &basis);
-        hindex_insert(&subtable->indices[i], &cls_match->index_nodes[i], hash);
+        ihash[i] = minimatch_hash_range(&new_rule->match, prev_be32ofs,
+                                        subtable->index_ofs[i], &basis);
+        cmap_insert(&subtable->indices[i], &new->index_nodes[i], ihash[i]);
         prev_be32ofs = subtable->index_ofs[i];
     }
-    hash = minimatch_hash_range(&new->match, prev_be32ofs, FLOW_U32S, &basis);
-    head = find_equal(subtable, &new->match.flow, hash);
+    hash = minimatch_hash_range(&new_rule->match, prev_be32ofs, FLOW_U32S,
+                                &basis);
+    head = find_equal(subtable, &new_rule->match.flow, hash);
     if (!head) {
-        hmap_insert(&subtable->rules, &cls_match->hmap_node, hash);
-        list_init(&cls_match->list);
+        cmap_insert(&subtable->rules, &new->cmap_node, hash);
+        list_init(&new->list);
         goto out;
     } else {
         /* Scan the list for the insertion point that will keep the list in
          * order of decreasing priority. */
         struct cls_match *rule;
 
-        cls_match->hmap_node.hash = hash; /* Otherwise done by hmap_insert. */
-
         FOR_EACH_RULE_IN_LIST (rule, head) {
-            if (cls_match->priority >= rule->priority) {
+            if (new->priority >= rule->priority) {
                 if (rule == head) {
-                    /* 'cls_match' is the new highest-priority flow in the
-                     * list. */
-                    hmap_replace(&subtable->rules,
-                                 &rule->hmap_node, &cls_match->hmap_node);
+                    /* 'new' is the new highest-priority flow in the list. */
+                    cmap_replace(&subtable->rules, &rule->cmap_node,
+                                 &new->cmap_node, hash);
                 }
 
-                if (cls_match->priority == rule->priority) {
-                    list_replace(&cls_match->list, &rule->list);
+                if (new->priority == rule->priority) {
+                    list_replace(&new->list, &rule->list);
                     old = rule;
                 } else {
-                    list_insert(&rule->list, &cls_match->list);
+                    list_insert(&rule->list, &new->list);
                 }
                 goto out;
             }
         }
 
         /* Insert 'new' at the end of the list. */
-        list_push_back(&head->list, &cls_match->list);
+        list_push_back(&head->list, &new->list);
     }
 
  out:
@@ -1623,20 +1637,20 @@ insert_rule(struct cls_classifier *cls, struct cls_subtable *subtable,
         /* Rule was added, not replaced.  Update 'subtable's 'max_priority'
          * and 'max_count', if necessary. */
         if (subtable->n_rules == 1) {
-            subtable->max_priority = cls_match->priority;
+            subtable->max_priority = new->priority;
             subtable->max_count = 1;
-            pvector_insert(&cls->subtables, subtable, cls_match->priority);
-        } else if (subtable->max_priority == cls_match->priority) {
+            pvector_insert(&cls->subtables, subtable, new->priority);
+        } else if (subtable->max_priority == new->priority) {
             ++subtable->max_count;
-        } else if (cls_match->priority > subtable->max_priority) {
-            subtable->max_priority = cls_match->priority;
+        } else if (new->priority > subtable->max_priority) {
+            subtable->max_priority = new->priority;
             subtable->max_count = 1;
-            pvector_change_priority(&cls->subtables, subtable, cls_match->priority);
+            pvector_change_priority(&cls->subtables, subtable, new->priority);
         }
     } else {
         /* Remove old node from indices. */
         for (i = 0; i < subtable->n_indices; i++) {
-            hindex_remove(&subtable->indices[i], &old->index_nodes[i]);
+            cmap_remove(&subtable->indices[i], &old->index_nodes[i], ihash[i]);
         }
     }
     return old;

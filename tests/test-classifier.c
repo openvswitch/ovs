@@ -496,7 +496,7 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
 
     pvector_verify(&cls->cls->subtables);
 
-    HMAP_FOR_EACH (table, hmap_node, &cls->cls->subtables_map) {
+    CMAP_FOR_EACH (table, cmap_node, &cls->cls->subtables_map) {
         const struct cls_match *head;
         unsigned int max_priority = 0;
         unsigned int max_count = 0;
@@ -517,10 +517,10 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
             VLOG_ABORT("Subtable %p not found from 'subtables'.", table);
         }
 
-        assert(!hmap_is_empty(&table->rules));
+        assert(!cmap_is_empty(&table->rules));
 
         found_tables++;
-        HMAP_FOR_EACH (head, hmap_node, &table->rules) {
+        CMAP_FOR_EACH (head, cmap_node, &table->rules) {
             unsigned int prev_priority = UINT_MAX;
             const struct cls_match *rule;
 
@@ -547,9 +547,9 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
         assert(table->max_count == max_count);
     }
 
-    assert(found_tables == hmap_count(&cls->cls->subtables_map));
+    assert(found_tables == cmap_count(&cls->cls->subtables_map));
     assert(found_tables == pvector_count(&cls->cls->subtables));
-    assert(n_tables == -1 || n_tables == hmap_count(&cls->cls->subtables_map));
+    assert(n_tables == -1 || n_tables == cmap_count(&cls->cls->subtables_map));
     assert(n_rules == -1 || found_rules == n_rules);
     assert(n_dups == -1 || found_dups == n_dups);
 

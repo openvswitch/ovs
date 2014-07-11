@@ -213,6 +213,7 @@
  * The classifier may safely be accessed by many reader threads concurrently or
  * by a single writer. */
 
+#include "cmap.h"
 #include "fat-rwlock.h"
 #include "match.h"
 #include "meta-flow.h"
@@ -308,6 +309,8 @@ struct cls_cursor {
     const struct cls_classifier *cls;
     const struct cls_subtable *subtable;
     const struct cls_rule *target;
+    struct cmap_cursor subtables;
+    struct cmap_cursor rules;
 };
 
 void cls_cursor_init(struct cls_cursor *cursor, const struct classifier *cls,
