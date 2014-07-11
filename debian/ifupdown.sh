@@ -29,6 +29,10 @@ if (ovs_vsctl --version) > /dev/null 2>&1; then :; else
     exit 0
 fi
 
+if /etc/init.d/openvswitch-switch status > /dev/null 2>&1; then :; else
+    /etc/init.d/openvswitch-switch start
+fi
+
 if [ "${MODE}" = "start" ]; then
     eval OVS_EXTRA=\"${IF_OVS_EXTRA}\"
 
