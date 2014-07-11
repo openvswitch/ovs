@@ -214,7 +214,6 @@
  * by a single writer. */
 
 #include "cmap.h"
-#include "fat-rwlock.h"
 #include "match.h"
 #include "meta-flow.h"
 
@@ -222,13 +221,9 @@
 extern "C" {
 #endif
 
-/* Needed only for the lock annotation in struct classifier. */
-extern struct ovs_mutex ofproto_mutex;
-
 /* Classifier internal data structures. */
 struct cls_classifier;
 struct cls_subtable;
-struct cls_partition;
 struct cls_match;
 
 enum {
@@ -237,7 +232,6 @@ enum {
 
 /* A flow classifier. */
 struct classifier {
-    struct fat_rwlock rwlock OVS_ACQ_AFTER(ofproto_mutex);
     struct cls_classifier *cls;
 };
 
@@ -266,38 +260,31 @@ bool cls_rule_is_catchall(const struct cls_rule *);
 bool cls_rule_is_loose_match(const struct cls_rule *rule,
                              const struct minimatch *criteria);
 
-void classifier_init(struct classifier *cls, const uint8_t *flow_segments);
+void classifier_init(struct classifier *, const uint8_t *flow_segments);
 void classifier_destroy(struct classifier *);
-bool classifier_set_prefix_fields(struct classifier *cls,
+bool classifier_set_prefix_fields(struct classifier *,
                                   const enum mf_field_id *trie_fields,
-                                  unsigned int n_trie_fields)
-    OVS_REQ_WRLOCK(cls->rwlock);
+                                  unsigned int n_trie_fields);
 
-bool classifier_is_empty(const struct classifier *cls);
-int classifier_count(const struct classifier *cls)
-    OVS_REQ_RDLOCK(cls->rwlock);
-void classifier_insert(struct classifier *cls, struct cls_rule *)
-    OVS_REQ_WRLOCK(cls->rwlock);
-struct cls_rule *classifier_replace(struct classifier *cls, struct cls_rule *)
-    OVS_REQ_WRLOCK(cls->rwlock);
-void classifier_remove(struct classifier *cls, struct cls_rule *)
-    OVS_REQ_WRLOCK(cls->rwlock);
-struct cls_rule *classifier_lookup(const struct classifier *cls,
+bool classifier_is_empty(const struct classifier *);
+int classifier_count(const struct classifier *);
+void classifier_insert(struct classifier *, struct cls_rule *);
+struct cls_rule *classifier_replace(struct classifier *, struct cls_rule *);
+
+void classifier_remove(struct classifier *, struct cls_rule *);
+struct cls_rule *classifier_lookup(const struct classifier *,
                                    const struct flow *,
-                                   struct flow_wildcards *)
-    OVS_REQ_RDLOCK(cls->rwlock);
+                                   struct flow_wildcards *);
 void classifier_lookup_miniflow_batch(const struct classifier *cls,
                                       const struct miniflow **flows,
-                                      struct cls_rule **rules, size_t len)
-    OVS_REQ_RDLOCK(cls->rwlock);
-bool classifier_rule_overlaps(const struct classifier *cls,
-                              const struct cls_rule *)
-    OVS_REQ_RDLOCK(cls->rwlock);
+                                      struct cls_rule **rules, size_t len);
+bool classifier_rule_overlaps(const struct classifier *,
+                              const struct cls_rule *);
 
-struct cls_rule *classifier_find_rule_exactly(const struct classifier *cls,
+struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
                                               const struct cls_rule *);
 
-struct cls_rule *classifier_find_match_exactly(const struct classifier *cls,
+struct cls_rule *classifier_find_match_exactly(const struct classifier *,
                                                const struct match *,
                                                unsigned int priority);
 

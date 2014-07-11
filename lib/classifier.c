@@ -481,7 +481,6 @@ classifier_init(struct classifier *cls_, const uint8_t *flow_segments)
 {
     struct cls_classifier *cls = xmalloc(sizeof *cls);
 
-    fat_rwlock_init(&cls_->rwlock);
     ovs_mutex_init(&cls->mutex);
 
     ovs_mutex_lock(&cls->mutex);
@@ -506,7 +505,8 @@ classifier_init(struct classifier *cls_, const uint8_t *flow_segments)
 }
 
 /* Destroys 'cls'.  Rules within 'cls', if any, are not freed; this is the
- * caller's responsibility. */
+ * caller's responsibility.
+ * May only be called after all the readers have been terminated. */
 void
 classifier_destroy(struct classifier *cls_)
     OVS_EXCLUDED(cls_->cls->mutex)
@@ -517,7 +517,6 @@ classifier_destroy(struct classifier *cls_)
         struct cls_subtable *subtable, *next_subtable;
         int i;
 
-        fat_rwlock_destroy(&cls_->rwlock);
         if (!cls) {
             return;
         }
@@ -682,7 +681,10 @@ classifier_is_empty(const struct classifier *cls)
 /* Returns the number of rules in 'cls'. */
 int
 classifier_count(const struct classifier *cls)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
+    /* n_rules is an int, so in the presence of concurrent writers this will
+     * return either the old or a new value. */
     return cls->cls->n_rules;
 }
 
@@ -1711,6 +1713,33 @@ find_equal(struct cls_subtable *subtable, const struct miniflow *flow,
     return NULL;
 }
 
+/*
+ * As the readers are operating concurrently with the modifications, a
+ * concurrent reader may or may not see the new rule, depending on how
+ * the concurrent events overlap with each other.  This is no
+ * different from the former locked behavior, but there the visibility
+ * of the new rule only depended on the timing of the locking
+ * functions.
+ *
+ * The new rule is first added to the segment indices, so the readers
+ * may find the rule in the indices before the rule is visible in the
+ * subtables 'rules' map.  This may result in us losing the
+ * opportunity to quit lookups earlier, resulting in sub-optimal
+ * wildcarding.  This will be fixed by forthcoming revalidation always
+ * scheduled after flow table changes.
+ *
+ * Similar behavior may happen due to us removing the overlapping rule
+ * (if any) from the indices only after the new rule has been added.
+ *
+ * The subtable's max priority is updated only after the rule is
+ * inserted, so the concurrent readers may not see the rule, as the
+ * updated priority ordered subtable list will only be visible after
+ * the subtable's max priority is updated.
+ *
+ * Similarly, the classifier's partitions for new rules are updated by
+ * the caller after this function, so the readers may keep skipping
+ * the subtable until they see the updated partitions.
+ */
 static struct cls_match *
 insert_rule(struct cls_classifier *cls, struct cls_subtable *subtable,
             struct cls_rule *new_rule)

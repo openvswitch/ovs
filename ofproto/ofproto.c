@@ -1214,12 +1214,11 @@ ofproto_configure_table(struct ofproto *ofproto, int table_id,
     }
 
     table->max_flows = s->max_flows;
-    fat_rwlock_wrlock(&table->cls.rwlock);
+
     if (classifier_set_prefix_fields(&table->cls,
                                      s->prefix_fields, s->n_prefix_fields)) {
         /* XXX: Trigger revalidation. */
     }
-    fat_rwlock_unlock(&table->cls.rwlock);
 
     ovs_mutex_lock(&ofproto_mutex);
     evict_rules_from_table(table, 0);
@@ -1551,9 +1550,7 @@ ofproto_get_memory_usage(const struct ofproto *ofproto, struct simap *usage)
 
     n_rules = 0;
     OFPROTO_FOR_EACH_TABLE (table, ofproto) {
-        fat_rwlock_rdlock(&table->cls.rwlock);
         n_rules += classifier_count(&table->cls);
-        fat_rwlock_unlock(&table->cls.rwlock);
     }
     simap_increase(usage, "rules", n_rules);
 
@@ -1841,7 +1838,6 @@ ofproto_add_flow(struct ofproto *ofproto, const struct match *match,
 
     /* First do a cheap check whether the rule we're looking for already exists
      * with the actions that we want.  If it does, then we're done. */
-    fat_rwlock_rdlock(&ofproto->tables[0].cls.rwlock);
     rule = rule_from_cls_rule(classifier_find_match_exactly(
                                   &ofproto->tables[0].cls, match, priority));
     if (rule) {
@@ -1851,7 +1847,6 @@ ofproto_add_flow(struct ofproto *ofproto, const struct match *match,
     } else {
         must_add = true;
     }
-    fat_rwlock_unlock(&ofproto->tables[0].cls.rwlock);
 
     /* If there's no such rule or the rule doesn't have the actions we want,
      * fall back to a executing a full flow mod.  We can't optimize this at
@@ -1882,7 +1877,6 @@ ofproto_flow_mod(struct ofproto *ofproto, struct ofputil_flow_mod *fm)
         struct rule *rule;
         bool done = false;
 
-        fat_rwlock_rdlock(&table->cls.rwlock);
         rule = rule_from_cls_rule(classifier_find_match_exactly(&table->cls,
                                                                 &fm->match,
                                                                 fm->priority));
@@ -1907,7 +1901,6 @@ ofproto_flow_mod(struct ofproto *ofproto, struct ofputil_flow_mod *fm)
             }
             ovs_mutex_unlock(&rule->mutex);
         }
-        fat_rwlock_unlock(&table->cls.rwlock);
 
         if (done) {
             return 0;
@@ -1931,10 +1924,8 @@ ofproto_delete_flow(struct ofproto *ofproto,
 
     /* First do a cheap check whether the rule we're looking for has already
      * been deleted.  If so, then we're done. */
-    fat_rwlock_rdlock(&cls->rwlock);
     rule = rule_from_cls_rule(classifier_find_match_exactly(cls, target,
                                                             priority));
-    fat_rwlock_unlock(&cls->rwlock);
     if (!rule) {
         return;
     }
@@ -3117,9 +3108,7 @@ handle_table_stats_request(struct ofconn *ofconn,
         ots[i].instructions = htonl(OFPIT11_ALL);
         ots[i].config = htonl(OFPTC11_TABLE_MISS_MASK);
         ots[i].max_entries = htonl(1000000); /* An arbitrary big number. */
-        fat_rwlock_rdlock(&p->tables[i].cls.rwlock);
         ots[i].active_count = htonl(classifier_count(&p->tables[i].cls));
-        fat_rwlock_unlock(&p->tables[i].cls.rwlock);
     }
 
     p->ofproto_class->get_tables(p, ots);
@@ -3552,10 +3541,8 @@ collect_rules_strict(struct ofproto *ofproto,
         FOR_EACH_MATCHING_TABLE (table, criteria->table_id, ofproto) {
             struct rule *rule;
 
-            fat_rwlock_rdlock(&table->cls.rwlock);
             rule = rule_from_cls_rule(classifier_find_rule_exactly(
                                           &table->cls, &criteria->cr));
-            fat_rwlock_unlock(&table->cls.rwlock);
             if (rule) {
                 collect_rule(rule, criteria, rules, &n_readonly);
             }
@@ -4009,9 +3996,7 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     cls_rule_init(&cr, &fm->match, fm->priority);
 
     /* Transform "add" into "modify" if there's an existing identical flow. */
-    fat_rwlock_rdlock(&table->cls.rwlock);
     rule = rule_from_cls_rule(classifier_find_rule_exactly(&table->cls, &cr));
-    fat_rwlock_unlock(&table->cls.rwlock);
     if (rule) {
         struct rule_collection rules;
 
@@ -4028,13 +4013,7 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
 
     /* Check for overlap, if requested. */
     if (fm->flags & OFPUTIL_FF_CHECK_OVERLAP) {
-        bool overlaps;
-
-        fat_rwlock_rdlock(&table->cls.rwlock);
-        overlaps = classifier_rule_overlaps(&table->cls, &cr);
-        fat_rwlock_unlock(&table->cls.rwlock);
-
-        if (overlaps) {
+        if (classifier_rule_overlaps(&table->cls, &cr)) {
             cls_rule_destroy(&cr);
             return OFPERR_OFPFMFC_OVERLAP;
         }
@@ -4096,9 +4075,7 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
         meter_insert_rule(rule);
     }
 
-    fat_rwlock_wrlock(&table->cls.rwlock);
     classifier_insert(&table->cls, CONST_CAST(struct cls_rule *, &rule->cr));
-    fat_rwlock_unlock(&table->cls.rwlock);
 
     error = ofproto->ofproto_class->rule_insert(rule);
     if (error) {
@@ -6372,10 +6349,8 @@ oftable_init(struct oftable *table)
     table->max_flows = UINT_MAX;
     atomic_init(&table->config, (unsigned int)OFPROTO_TABLE_MISS_DEFAULT);
 
-    fat_rwlock_wrlock(&table->cls.rwlock);
     classifier_set_prefix_fields(&table->cls, default_prefix_fields,
                                  ARRAY_SIZE(default_prefix_fields));
-    fat_rwlock_unlock(&table->cls.rwlock);
 
     atomic_init(&table->n_matched, 0);
     atomic_init(&table->n_missed, 0);
@@ -6387,9 +6362,7 @@ oftable_init(struct oftable *table)
 static void
 oftable_destroy(struct oftable *table)
 {
-    fat_rwlock_rdlock(&table->cls.rwlock);
     ovs_assert(classifier_is_empty(&table->cls));
-    fat_rwlock_unlock(&table->cls.rwlock);
     oftable_disable_eviction(table);
     classifier_destroy(&table->cls);
     free(table->name);
@@ -6482,9 +6455,7 @@ oftable_remove_rule__(struct ofproto *ofproto, struct rule *rule)
 {
     struct classifier *cls = &ofproto->tables[rule->table_id].cls;
 
-    fat_rwlock_wrlock(&cls->rwlock);
     classifier_remove(cls, CONST_CAST(struct cls_rule *, &rule->cr));
-    fat_rwlock_unlock(&cls->rwlock);
 
     cookies_remove(ofproto, rule);
 

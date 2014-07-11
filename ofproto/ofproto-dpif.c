@@ -3379,9 +3379,7 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, uint8_t table_id,
     }
 
     do {
-        fat_rwlock_rdlock(&cls->rwlock);
         cls_rule = classifier_lookup(cls, flow, wc);
-        fat_rwlock_unlock(&cls->rwlock);
 
         rule = rule_dpif_cast(rule_from_cls_rule(cls_rule));
 

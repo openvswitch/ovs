@@ -196,21 +196,18 @@ enum oftable_flags {
  * Thread-safety
  * =============
  *
- * A cls->rwlock read-lock holder prevents rules from being added or deleted.
+ * Adding or removing rules requires holding ofproto_mutex.
  *
- * Adding or removing rules requires holding ofproto_mutex AND the cls->rwlock
- * write-lock.
+ * Rules in 'cls' are RCU protected.  For extended access to a rule, try
+ * incrementing its ref_count with ofproto_rule_try_ref(), or
+ * ofproto_rule_ref(), if the rule is still known to be in 'cls'.  A rule
+ * will be freed using ovsrcu_postpone() once its 'ref_count' reaches zero.
  *
- * cls->rwlock should be held only briefly.  For extended access to a rule,
- * increment its ref_count with ofproto_rule_ref().  A rule will not be freed
- * until its ref_count reaches zero.
+ * Modifying a rule requires the rule's own mutex.
  *
- * Modifying a rule requires the rule's own mutex.  Holding cls->rwlock (for
- * read or write) does not allow the holder to modify the rule.
- *
- * Freeing a rule requires ofproto_mutex and the cls->rwlock write-lock.  After
- * removing the rule from the classifier, release a ref_count from the rule
- * ('cls''s reference to the rule).
+ * Freeing a rule requires ofproto_mutex.  After removing the rule from the
+ * classifier, release a ref_count from the rule ('cls''s reference to the
+ * rule).
  *
  * Refer to the thread-safety notes on struct rule for more information.*/
 struct oftable {
@@ -289,19 +286,21 @@ struct oftable {
  * Rules
  * -----
  *
- * A rule 'rule' may be accessed without a risk of being freed by code that
- * holds a read-lock or write-lock on 'cls->rwlock' or that owns a reference to
- * 'rule->ref_count' (or both).  Code that needs to hold onto a rule for a
- * while should take 'cls->rwlock', find the rule it needs, increment
- * 'rule->ref_count' with ofproto_rule_ref(), and drop 'cls->rwlock'.
+ * A rule 'rule' may be accessed without a risk of being freed by a thread
+ * until the thread quiesces (i.e., rules are RCU protected and destructed
+ * using ovsrcu_postpone()).  Code that needs to hold onto a rule for a
+ * while should increment 'rule->ref_count' either with ofproto_rule_ref()
+ * (if 'ofproto_mutex' is held), or with ofproto_rule_try_ref() (when some
+ * other thread might remove the rule from 'cls').  ofproto_rule_try_ref()
+ * will fail if the rule has already been scheduled for destruction.
  *
  * 'rule->ref_count' protects 'rule' from being freed.  It doesn't protect the
- * rule from being deleted from 'cls' (that's 'cls->rwlock') and it doesn't
+ * rule from being deleted from 'cls' (that's 'ofproto_mutex') and it doesn't
  * protect members of 'rule' from modification (that's 'rule->mutex').
  *
  * 'rule->mutex' protects the members of 'rule' from modification.  It doesn't
- * protect the rule from being deleted from 'cls' (that's 'cls->rwlock') and it
- * doesn't prevent the rule from being freed (that's 'rule->ref_count').
+ * protect the rule from being deleted from 'cls' (that's 'ofproto_mutex') and
+ * it doesn't prevent the rule from being freed (that's 'rule->ref_count').
  *
  * Regarding thread safety, the members of a rule fall into the following
  * categories:
@@ -397,10 +396,9 @@ static inline bool rule_is_hidden(const struct rule *);
  * Thread-safety
  * =============
  *
- * A struct rule_actions may be accessed without a risk of being
- * freed by code that holds a read-lock or write-lock on 'rule->mutex' (where
- * 'rule' is the rule for which 'rule->actions == actions') or during the RCU
- * active period.
+ * A struct rule_actions may be accessed without a risk of being freed by
+ * code that holds 'rule->mutex' (where 'rule' is the rule for which
+ * 'rule->actions == actions') or during the RCU active period.
  *
  * All members are immutable: they do not change during the struct's
  * lifetime. */

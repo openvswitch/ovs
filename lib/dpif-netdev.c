@@ -38,6 +38,7 @@
 #include "dpif-provider.h"
 #include "dummy.h"
 #include "dynamic-string.h"
+#include "fat-rwlock.h"
 #include "flow.h"
 #include "cmap.h"
 #include "latch.h"
@@ -125,7 +126,6 @@ struct dp_netdev_queue {
  *    dp_netdev_mutex (global)
  *    port_mutex
  *    flow_mutex
- *    cls.rwlock
  *    queue_rwlock
  */
 struct dp_netdev {
@@ -136,16 +136,11 @@ struct dp_netdev {
 
     /* Flows.
      *
-     * Readers of 'cls' must take a 'cls->rwlock' read lock.
-     *
-     * Writers of 'flow_table' must take the 'flow_mutex'.
-     *
-     * Writers of 'cls' must take the 'flow_mutex' and then the 'cls->rwlock'
-     * write lock.  (The outer 'flow_mutex' allows writers to atomically
-     * perform multiple operations on 'cls' and 'flow_table'.)
+     * Writers of 'flow_table' must take the 'flow_mutex'.  Corresponding
+     * changes to 'cls' must be made while still holding the 'flow_mutex'.
      */
     struct ovs_mutex flow_mutex;
-    struct classifier cls;      /* Classifier.  Protected by cls.rwlock. */
+    struct classifier cls;
     struct cmap flow_table OVS_GUARDED; /* Flow table. */
 
     /* Queues.
@@ -955,7 +950,6 @@ dp_netdev_flow_free(struct dp_netdev_flow *flow)
 
 static void
 dp_netdev_remove_flow(struct dp_netdev *dp, struct dp_netdev_flow *flow)
-    OVS_REQ_WRLOCK(dp->cls.rwlock)
     OVS_REQUIRES(dp->flow_mutex)
 {
     struct cls_rule *cr = CONST_CAST(struct cls_rule *, &flow->cr);
@@ -972,11 +966,9 @@ dp_netdev_flow_flush(struct dp_netdev *dp)
     struct dp_netdev_flow *netdev_flow, *next;
 
     ovs_mutex_lock(&dp->flow_mutex);
-    fat_rwlock_wrlock(&dp->cls.rwlock);
     CMAP_FOR_EACH_SAFE (netdev_flow, next, node, &dp->flow_table) {
         dp_netdev_remove_flow(dp, netdev_flow);
     }
-    fat_rwlock_unlock(&dp->cls.rwlock);
     ovs_mutex_unlock(&dp->flow_mutex);
 }
 
@@ -1073,7 +1065,6 @@ dp_netdev_flow_cast(const struct cls_rule *cr)
 
 static struct dp_netdev_flow *
 dp_netdev_lookup_flow(const struct dp_netdev *dp, const struct miniflow *key)
-    OVS_REQ_RDLOCK(dp->cls.rwlock)
 {
     struct dp_netdev_flow *netdev_flow;
     struct cls_rule *rule;
@@ -1268,10 +1259,8 @@ dp_netdev_flow_add(struct dp_netdev *dp, const struct flow *flow,
     cmap_insert(&dp->flow_table,
                 CONST_CAST(struct cmap_node *, &netdev_flow->node),
                 flow_hash(flow, 0));
-    fat_rwlock_wrlock(&dp->cls.rwlock);
     classifier_insert(&dp->cls,
                       CONST_CAST(struct cls_rule *, &netdev_flow->cr));
-    fat_rwlock_unlock(&dp->cls.rwlock);
 
     return 0;
 }
@@ -1315,9 +1304,7 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
     miniflow_init(&miniflow, &flow);
 
     ovs_mutex_lock(&dp->flow_mutex);
-    fat_rwlock_rdlock(&dp->cls.rwlock);
     netdev_flow = dp_netdev_lookup_flow(dp, &miniflow);
-    fat_rwlock_unlock(&dp->cls.rwlock);
     if (!netdev_flow) {
         if (put->flags & DPIF_FP_CREATE) {
             if (cmap_count(&dp->flow_table) < MAX_FLOWS) {
@@ -1384,9 +1371,7 @@ dpif_netdev_flow_del(struct dpif *dpif, const struct dpif_flow_del *del)
         if (del->stats) {
             get_dpif_flow_stats(netdev_flow, del->stats);
         }
-        fat_rwlock_wrlock(&dp->cls.rwlock);
         dp_netdev_remove_flow(dp, netdev_flow);
-        fat_rwlock_unlock(&dp->cls.rwlock);
     } else {
         error = ENOENT;
     }
@@ -2076,9 +2061,7 @@ dp_netdev_input(struct dp_netdev *dp, struct dpif_packet **packets, int cnt,
         mfs[i] = &keys[i].flow;
     }
 
-    fat_rwlock_rdlock(&dp->cls.rwlock);
     classifier_lookup_miniflow_batch(&dp->cls, mfs, rules, cnt);
-    fat_rwlock_unlock(&dp->cls.rwlock);
 
     n_batches = 0;
     for (i = 0; i < cnt; i++) {

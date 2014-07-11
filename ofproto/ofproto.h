@@ -45,6 +45,9 @@ struct shash;
 struct simap;
 struct smap;
 
+/* Needed for the lock annotations. */
+extern struct ovs_mutex ofproto_mutex;
+
 struct ofproto_controller_info {
     bool is_connected;
     enum ofp12_controller_role role;
