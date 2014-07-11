@@ -190,6 +190,45 @@ The core 23 is left idle, which allows core 7 to run at full rate.
 
 Future changes may change the need for cpu core affinitization.
 
+DPDK Rings :
+------------
+
+Following the steps above to create a bridge, you can now add dpdk rings
+as a port to the vswitch.  OVS will expect the DPDK ring device name to
+start with dpdkr and end with a portid.
+
+    ovs-vsctl add-port br0 dpdkr0 -- set Interface dpdkr0 type=dpdkr
+
+DPDK rings client test application
+
+Included in the test directory is a sample DPDK application for testing
+the rings.  This is from the base dpdk directory and modified to work
+with the ring naming used within ovs.
+
+location tests/ovs_client
+
+To run the client :
+
+    ovsclient -c 1 -n 4 --proc-type=secondary -- -n "port id you gave dpdkr"
+
+In the case of the dpdkr example above the "port id you gave dpdkr" is 0.
+
+It is essential to have --proc-type=secondary
+
+The application simply receives an mbuf on the receive queue of the
+ethernet ring and then places that same mbuf on the transmit ring of
+the ethernet ring.  It is a trivial loopback application.
+
+In addition to executing the client in the host, you can execute it within
+a guest VM. To do so you will need a patched qemu.  You can download the
+patch and getting started guide at :
+
+https://01.org/packet-processing/downloads
+
+A general rule of thumb for better performance is that the client
+application should not be assigned the same dpdk core mask "-c" as
+the vswitchd.
+
 Restrictions:
 -------------
 
@@ -202,6 +241,11 @@ Restrictions:
     device queues configured.
   - Work with 1500 MTU, needs few changes in DPDK lib to fix this issue.
   - Currently DPDK port does not make use any offload functionality.
+  ivshmem
+  - The shared memory is currently restricted to the use of a 1GB
+   huge pages.
+  - All huge pages are shared amongst the host, clients, virtual
+   machines etc.
 
 Bug Reporting:
 --------------

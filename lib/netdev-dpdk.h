@@ -12,6 +12,7 @@ struct dpif_packet;
 #include <rte_eal.h>
 #include <rte_debug.h>
 #include <rte_ethdev.h>
+#include <rte_eth_ring.h>
 #include <rte_errno.h>
 #include <rte_memzone.h>
 #include <rte_memcpy.h>
