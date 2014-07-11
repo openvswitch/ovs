@@ -1215,8 +1215,10 @@ ofproto_configure_table(struct ofproto *ofproto, int table_id,
 
     table->max_flows = s->max_flows;
     fat_rwlock_wrlock(&table->cls.rwlock);
-    classifier_set_prefix_fields(&table->cls,
-                                 s->prefix_fields, s->n_prefix_fields);
+    if (classifier_set_prefix_fields(&table->cls,
+                                     s->prefix_fields, s->n_prefix_fields)) {
+        /* XXX: Trigger revalidation. */
+    }
     fat_rwlock_unlock(&table->cls.rwlock);
 
     ovs_mutex_lock(&ofproto_mutex);

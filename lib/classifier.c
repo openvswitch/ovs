@@ -42,10 +42,12 @@ struct trie_ctx;
 #define TP_PORTS_OFS32 (offsetof(struct flow, tp_src) / 4)
 BUILD_ASSERT_DECL(TP_PORTS_OFS32 == offsetof(struct flow, tp_dst) / 4);
 
+typedef OVSRCU_TYPE(struct trie_node *) rcu_trie_ptr;
+
 /* Prefix trie for a 'field' */
 struct cls_trie {
     const struct mf_field *field; /* Trie field, or NULL. */
-    struct trie_node *root;       /* NULL if none. */
+    rcu_trie_ptr root;            /* NULL if none. */
 };
 
 enum {
@@ -86,7 +88,7 @@ struct cls_subtable {
                                              * (runtime configurable). */
     int ports_mask_len;                     /* (const) */
     struct cmap indices[CLS_MAX_INDICES];   /* Staged lookup indices. */
-    struct trie_node *ports_trie;           /* NULL if none. */
+    rcu_trie_ptr ports_trie;                /* NULL if none. */
 
     /* These fields are accessed by all readers. */
     struct cmap rules;                      /* Contains "struct cls_rule"s. */
@@ -180,16 +182,16 @@ static void trie_init(struct cls_classifier *cls, int trie_idx,
     OVS_REQUIRES(cls->mutex);
 static unsigned int trie_lookup(const struct cls_trie *, const struct flow *,
                                 unsigned int *checkbits);
-static unsigned int trie_lookup_value(const struct trie_node *,
+static unsigned int trie_lookup_value(const rcu_trie_ptr *,
                                       const ovs_be32 value[],
                                       unsigned int value_bits,
                                       unsigned int *checkbits);
-static void trie_destroy(struct trie_node *);
+static void trie_destroy(rcu_trie_ptr *);
 static void trie_insert(struct cls_trie *, const struct cls_rule *, int mlen);
-static void trie_insert_prefix(struct trie_node **, const ovs_be32 *prefix,
+static void trie_insert_prefix(rcu_trie_ptr *, const ovs_be32 *prefix,
                                int mlen);
 static void trie_remove(struct cls_trie *, const struct cls_rule *, int mlen);
-static void trie_remove_prefix(struct trie_node **, const ovs_be32 *prefix,
+static void trie_remove_prefix(rcu_trie_ptr *, const ovs_be32 *prefix,
                                int mlen);
 static void mask_set_prefix_bits(struct flow_wildcards *, uint8_t be32ofs,
                                  unsigned int n_bits);
@@ -522,7 +524,7 @@ classifier_destroy(struct classifier *cls_)
 
         ovs_mutex_lock(&cls->mutex);
         for (i = 0; i < cls->n_tries; i++) {
-            trie_destroy(cls->tries[i].root);
+            trie_destroy(&cls->tries[i].root);
         }
 
         CMAP_FOR_EACH_SAFE (subtable, next_subtable, cmap_node,
@@ -548,7 +550,7 @@ classifier_destroy(struct classifier *cls_)
 BUILD_ASSERT_DECL(MFF_N_IDS <= 64);
 
 /* Set the fields for which prefix lookup should be performed. */
-void
+bool
 classifier_set_prefix_fields(struct classifier *cls_,
                              const enum mf_field_id *trie_fields,
                              unsigned int n_fields)
@@ -556,10 +558,12 @@ classifier_set_prefix_fields(struct classifier *cls_,
 {
     struct cls_classifier *cls = cls_->cls;
     uint64_t fields = 0;
-    int i, trie;
+    const struct mf_field * new_fields[CLS_MAX_TRIES];
+    int i, n_tries = 0;
+    bool changed = false;
 
     ovs_mutex_lock(&cls->mutex);
-    for (i = 0, trie = 0; i < n_fields && trie < CLS_MAX_TRIES; i++) {
+    for (i = 0; i < n_fields && n_tries < CLS_MAX_TRIES; i++) {
         const struct mf_field *field = mf_from_id(trie_fields[i]);
         if (field->flow_be32ofs < 0 || field->n_bits % 32) {
             /* Incompatible field.  This is the only place where we
@@ -576,18 +580,57 @@ classifier_set_prefix_fields(struct classifier *cls_,
         }
         fields |= UINT64_C(1) << trie_fields[i];
 
-        if (trie >= cls->n_tries || field != cls->tries[trie].field) {
-            trie_init(cls, trie, field);
+        new_fields[n_tries] = NULL;
+        if (n_tries >= cls->n_tries || field != cls->tries[n_tries].field) {
+            new_fields[n_tries] = field;
+            changed = true;
         }
-        trie++;
+        n_tries++;
     }
 
-    /* Destroy the rest. */
-    for (i = trie; i < cls->n_tries; i++) {
-        trie_init(cls, i, NULL);
+    if (changed || n_tries < cls->n_tries) {
+        struct cls_subtable *subtable;
+
+        /* Trie configuration needs to change.  Disable trie lookups
+         * for the tries that are changing and wait all the current readers
+         * with the old configuration to be done. */
+        changed = false;
+        CMAP_FOR_EACH (subtable, cmap_node, &cls->subtables_map) {
+            for (i = 0; i < cls->n_tries; i++) {
+                if ((i < n_tries && new_fields[i]) || i >= n_tries) {
+                    if (subtable->trie_plen[i]) {
+                        subtable->trie_plen[i] = 0;
+                        changed = true;
+                    }
+                }
+            }
+        }
+        /* Synchronize if any readers were using tries.  The readers may
+         * temporarily function without the trie lookup based optimizations. */
+        if (changed) {
+            /* ovsrcu_synchronize() functions as a memory barrier, so it does
+             * not matter that subtable->trie_plen is not atomic. */
+            ovsrcu_synchronize();
+        }
+
+        /* Now set up the tries. */
+        for (i = 0; i < n_tries; i++) {
+            if (new_fields[i]) {
+                trie_init(cls, i, new_fields[i]);
+            }
+        }
+        /* Destroy the rest, if any. */
+        for (; i < cls->n_tries; i++) {
+            trie_init(cls, i, NULL);
+        }
+
+        cls->n_tries = n_tries;
+        ovs_mutex_unlock(&cls->mutex);
+        return true;
     }
-    cls->n_tries = trie;
+
     ovs_mutex_unlock(&cls->mutex);
+    return false; /* No change. */
 }
 
 static void
@@ -599,19 +642,17 @@ trie_init(struct cls_classifier *cls, int trie_idx,
     struct cls_subtable *subtable;
 
     if (trie_idx < cls->n_tries) {
-        trie_destroy(trie->root);
+        trie_destroy(&trie->root);
+    } else {
+        ovsrcu_set_hidden(&trie->root, NULL);
     }
-    trie->root = NULL;
     trie->field = field;
 
-    /* Add existing rules to the trie. */
+    /* Add existing rules to the new trie. */
     CMAP_FOR_EACH (subtable, cmap_node, &cls->subtables_map) {
         unsigned int plen;
 
         plen = field ? minimask_get_prefix_len(&subtable->mask, field) : 0;
-        /* Initialize subtable's prefix length on this field. */
-        subtable->trie_plen[trie_idx] = plen;
-
         if (plen) {
             struct cls_match *head;
 
@@ -623,6 +664,10 @@ trie_init(struct cls_classifier *cls, int trie_idx,
                 }
             }
         }
+        /* Initialize subtable's prefix length on this field.  This will
+         * allow readers to use the trie. */
+        atomic_thread_fence(memory_order_release);
+        subtable->trie_plen[trie_idx] = plen;
     }
 }
 
@@ -907,6 +952,11 @@ classifier_lookup(const struct classifier *cls_, const struct flow *flow,
     const struct cls_match *best;
     struct trie_ctx trie_ctx[CLS_MAX_TRIES];
     struct cls_subtable *subtable;
+
+    /* Synchronize for cls->n_tries and subtable->trie_plen.  They can change
+     * when table configuration changes, which happens typically only on
+     * startup. */
+    atomic_thread_fence(memory_order_acquire);
 
     /* Determine 'tags' such that, if 'subtable->tag' doesn't intersect them,
      * then 'flow' cannot possibly match in 'subtable':
@@ -1375,7 +1425,7 @@ insert_subtable(struct cls_classifier *cls, const struct minimask *mask)
     }
 
     /* Ports trie. */
-    subtable->ports_trie = NULL;
+    ovsrcu_set_hidden(&subtable->ports_trie, NULL);
     subtable->ports_mask_len
         = 32 - ctz32(ntohl(MINIFLOW_GET_BE32(&mask->masks, tp_src)));
 
@@ -1391,7 +1441,7 @@ destroy_subtable(struct cls_classifier *cls, struct cls_subtable *subtable)
     int i;
 
     pvector_remove(&cls->subtables, subtable);
-    trie_destroy(subtable->ports_trie);
+    trie_destroy(&subtable->ports_trie);
 
     for (i = 0; i < subtable->n_indices; i++) {
         cmap_destroy(&subtable->indices[i]);
@@ -1631,7 +1681,7 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
 
         mask = MINIFLOW_GET_BE32(&subtable->mask.masks, tp_src);
         value = ((OVS_FORCE ovs_be32 *)flow)[TP_PORTS_OFS32] & mask;
-        trie_lookup_value(subtable->ports_trie, &value, 32, &mbits);
+        trie_lookup_value(&subtable->ports_trie, &value, 32, &mbits);
 
         ((OVS_FORCE ovs_be32 *)&wc->masks)[TP_PORTS_OFS32] |=
             mask & htonl(~0 << (32 - mbits));
@@ -1760,7 +1810,7 @@ struct trie_node {
     uint32_t prefix;           /* Prefix bits for this node, MSB first. */
     uint8_t  n_bits;           /* Never zero, except for the root node. */
     unsigned int n_rules;      /* Number of rules that have this prefix. */
-    struct trie_node *edges[2]; /* Both NULL if leaf. */
+    rcu_trie_ptr edges[2];     /* Both NULL if leaf. */
 };
 
 /* Max bits per node.  Must fit in struct trie_node's 'prefix'.
@@ -1853,8 +1903,8 @@ trie_branch_create(const ovs_be32 *prefix, unsigned int ofs, unsigned int plen,
 
     if (plen <= TRIE_PREFIX_BITS) {
         node->n_bits = plen;
-        node->edges[0] = NULL;
-        node->edges[1] = NULL;
+        ovsrcu_set_hidden(&node->edges[0], NULL);
+        ovsrcu_set_hidden(&node->edges[1], NULL);
         node->n_rules = n_rules;
     } else { /* Need intermediate nodes. */
         struct trie_node *subnode = trie_branch_create(prefix,
@@ -1863,33 +1913,51 @@ trie_branch_create(const ovs_be32 *prefix, unsigned int ofs, unsigned int plen,
                                                        n_rules);
         int bit = get_bit_at(subnode->prefix, 0);
         node->n_bits = TRIE_PREFIX_BITS;
-        node->edges[bit] = subnode;
-        node->edges[!bit] = NULL;
+        ovsrcu_set_hidden(&node->edges[bit], subnode);
+        ovsrcu_set_hidden(&node->edges[!bit], NULL);
         node->n_rules = 0;
     }
     return node;
 }
 
 static void
-trie_node_destroy(struct trie_node *node)
+trie_node_destroy(const struct trie_node *node)
 {
-    free(node);
+    ovsrcu_postpone(free, CONST_CAST(struct trie_node *, node));
 }
 
-static void
-trie_destroy(struct trie_node *node)
+/* Copy a trie node for modification and postpone delete the old one. */
+static struct trie_node *
+trie_node_rcu_realloc(const struct trie_node *node)
 {
+    struct trie_node *new_node = xmalloc(sizeof *node);
+
+    *new_node = *node;
+    trie_node_destroy(node);
+
+    return new_node;
+}
+
+/* May only be called while holding the cls_classifier mutex. */
+static void
+trie_destroy(rcu_trie_ptr *trie)
+{
+    struct trie_node *node = ovsrcu_get_protected(struct trie_node *, trie);
+
     if (node) {
-        trie_destroy(node->edges[0]);
-        trie_destroy(node->edges[1]);
-        free(node);
+        ovsrcu_set_hidden(trie, NULL);
+        trie_destroy(&node->edges[0]);
+        trie_destroy(&node->edges[1]);
+        trie_node_destroy(node);
     }
 }
 
 static bool
 trie_is_leaf(const struct trie_node *trie)
 {
-    return !trie->edges[0] && !trie->edges[1]; /* No children. */
+    /* No children? */
+    return !ovsrcu_get(struct trie_node *, &trie->edges[0])
+        && !ovsrcu_get(struct trie_node *, &trie->edges[1]);
 }
 
 static void
@@ -1925,7 +1993,7 @@ mask_prefix_bits_set(const struct flow_wildcards *wc, uint8_t be32ofs,
     return !zeroes; /* All 'n_bits' bits set. */
 }
 
-static struct trie_node **
+static rcu_trie_ptr *
 trie_next_edge(struct trie_node *node, const ovs_be32 value[],
                unsigned int ofs)
 {
@@ -1936,7 +2004,8 @@ static const struct trie_node *
 trie_next_node(const struct trie_node *node, const ovs_be32 value[],
                unsigned int ofs)
 {
-    return node->edges[be_get_bit_at(value, ofs)];
+    return ovsrcu_get(struct trie_node *,
+                      &node->edges[be_get_bit_at(value, ofs)]);
 }
 
 /* Return the prefix mask length necessary to find the longest-prefix match for
@@ -1946,9 +2015,10 @@ trie_next_node(const struct trie_node *node, const ovs_be32 value[],
  * the one that matched.
  */
 static unsigned int
-trie_lookup_value(const struct trie_node *node, const ovs_be32 value[],
+trie_lookup_value(const rcu_trie_ptr *trie, const ovs_be32 value[],
                   unsigned int n_bits, unsigned int *checkbits)
 {
+    const struct trie_node *node = ovsrcu_get(struct trie_node *, trie);
     unsigned int ofs = 0, match_len = 0;
     const struct trie_node *prev = NULL;
 
@@ -1987,7 +2057,7 @@ trie_lookup(const struct cls_trie *trie, const struct flow *flow,
      * field.  Some match fields are used for multiple purposes, so we
      * must check that the trie is relevant for this flow. */
     if (mf_are_prereqs_ok(mf, flow)) {
-        return trie_lookup_value(trie->root,
+        return trie_lookup_value(&trie->root,
                                  &((ovs_be32 *)flow)[mf->flow_be32ofs],
                                  mf->n_bits, checkbits);
     }
@@ -2051,34 +2121,37 @@ trie_insert(struct cls_trie *trie, const struct cls_rule *rule, int mlen)
 }
 
 static void
-trie_insert_prefix(struct trie_node **edge, const ovs_be32 *prefix, int mlen)
+trie_insert_prefix(rcu_trie_ptr *edge, const ovs_be32 *prefix, int mlen)
 {
     struct trie_node *node;
     int ofs = 0;
 
     /* Walk the tree. */
-    for (; (node = *edge) != NULL;
+    for (; (node = ovsrcu_get_protected(struct trie_node *, edge));
          edge = trie_next_edge(node, prefix, ofs)) {
         unsigned int eqbits = trie_prefix_equal_bits(node, prefix, ofs, mlen);
         ofs += eqbits;
         if (eqbits < node->n_bits) {
             /* Mismatch, new node needs to be inserted above. */
             int old_branch = get_bit_at(node->prefix, eqbits);
+            struct trie_node *new_parent;
 
-            /* New parent node. */
-            *edge = trie_branch_create(prefix, ofs - eqbits, eqbits,
-                                       ofs == mlen ? 1 : 0);
-
-            /* Adjust old node for its new position in the tree. */
+            new_parent = trie_branch_create(prefix, ofs - eqbits, eqbits,
+                                            ofs == mlen ? 1 : 0);
+            /* Copy the node to modify it. */
+            node = trie_node_rcu_realloc(node);
+            /* Adjust the new node for its new position in the tree. */
             node->prefix <<= eqbits;
             node->n_bits -= eqbits;
-            (*edge)->edges[old_branch] = node;
+            ovsrcu_set_hidden(&new_parent->edges[old_branch], node);
 
             /* Check if need a new branch for the new rule. */
             if (ofs < mlen) {
-                (*edge)->edges[!old_branch]
-                    = trie_branch_create(prefix, ofs, mlen - ofs, 1);
+                ovsrcu_set_hidden(&new_parent->edges[!old_branch],
+                                  trie_branch_create(prefix, ofs, mlen - ofs,
+                                                     1));
             }
+            ovsrcu_set(edge, new_parent); /* Publish changes. */
             return;
         }
         /* Full match so far. */
@@ -2090,7 +2163,7 @@ trie_insert_prefix(struct trie_node **edge, const ovs_be32 *prefix, int mlen)
         }
     }
     /* Must insert a new tree branch for the new rule. */
-    *edge = trie_branch_create(prefix, ofs, mlen - ofs, 1);
+    ovsrcu_set(edge, trie_branch_create(prefix, ofs, mlen - ofs, 1));
 }
 
 /* 'mlen' must be the (non-zero) CIDR prefix length of the 'trie->field' mask
@@ -2105,15 +2178,15 @@ trie_remove(struct cls_trie *trie, const struct cls_rule *rule, int mlen)
 /* 'mlen' must be the (non-zero) CIDR prefix length of the 'trie->field' mask
  * in 'rule'. */
 static void
-trie_remove_prefix(struct trie_node **root, const ovs_be32 *prefix, int mlen)
+trie_remove_prefix(rcu_trie_ptr *root, const ovs_be32 *prefix, int mlen)
 {
     struct trie_node *node;
-    struct trie_node **edges[sizeof(union mf_value) * 8];
+    rcu_trie_ptr *edges[sizeof(union mf_value) * 8];
     int depth = 0, ofs = 0;
 
     /* Walk the tree. */
     for (edges[0] = root;
-         (node = *edges[depth]) != NULL;
+         (node = ovsrcu_get_protected(struct trie_node *, edges[depth]));
          edges[++depth] = trie_next_edge(node, prefix, ofs)) {
         unsigned int eqbits = trie_prefix_equal_bits(node, prefix, ofs, mlen);
 
@@ -2133,27 +2206,40 @@ trie_remove_prefix(struct trie_node **root, const ovs_be32 *prefix, int mlen)
             node->n_rules--;
 
             /* Check if can prune the tree. */
-            while (!node->n_rules && !(node->edges[0] && node->edges[1])) {
-                /* No rules and at most one child node, remove this node. */
-                struct trie_node *next;
-                next = node->edges[0] ? node->edges[0] : node->edges[1];
+            while (!node->n_rules) {
+                struct trie_node *next,
+                    *edge0 = ovsrcu_get_protected(struct trie_node *,
+                                                  &node->edges[0]),
+                    *edge1 = ovsrcu_get_protected(struct trie_node *,
+                                                  &node->edges[1]);
+
+                if (edge0 && edge1) {
+                    break; /* A branching point, cannot prune. */
+                }
+
+                /* Else have at most one child node, remove this node. */
+                next = edge0 ? edge0 : edge1;
 
                 if (next) {
                     if (node->n_bits + next->n_bits > TRIE_PREFIX_BITS) {
                         break;   /* Cannot combine. */
                     }
+                    next = trie_node_rcu_realloc(next); /* Modify. */
+
                     /* Combine node with next. */
                     next->prefix = node->prefix | next->prefix >> node->n_bits;
                     next->n_bits += node->n_bits;
                 }
-                trie_node_destroy(node);
                 /* Update the parent's edge. */
-                *edges[depth] = next;
+                ovsrcu_set(edges[depth], next); /* Publish changes. */
+                trie_node_destroy(node);
+
                 if (next || !depth) {
                     /* Branch not pruned or at root, nothing more to do. */
                     break;
                 }
-                node = *edges[--depth];
+                node = ovsrcu_get_protected(struct trie_node *,
+                                            edges[--depth]);
             }
             return;
         }

@@ -268,7 +268,7 @@ bool cls_rule_is_loose_match(const struct cls_rule *rule,
 
 void classifier_init(struct classifier *cls, const uint8_t *flow_segments);
 void classifier_destroy(struct classifier *);
-void classifier_set_prefix_fields(struct classifier *cls,
+bool classifier_set_prefix_fields(struct classifier *cls,
                                   const enum mf_field_id *trie_fields,
                                   unsigned int n_trie_fields)
     OVS_REQ_WRLOCK(cls->rwlock);

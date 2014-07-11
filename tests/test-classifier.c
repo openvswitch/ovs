@@ -480,6 +480,39 @@ pvector_verify(struct pvector *pvec)
     }
 }
 
+static unsigned int
+trie_verify(const rcu_trie_ptr *trie, unsigned int ofs, unsigned int n_bits)
+{
+    const struct trie_node *node = ovsrcu_get(struct trie_node *, trie);
+
+    if (node) {
+        assert(node->n_rules == 0 || node->n_bits > 0);
+        ofs += node->n_bits;
+        assert((ofs > 0 || (ofs == 0 && node->n_bits == 0)) && ofs <= n_bits);
+
+        return node->n_rules
+            + trie_verify(&node->edges[0], ofs, n_bits)
+            + trie_verify(&node->edges[1], ofs, n_bits);
+    }
+    return 0;
+}
+
+static void
+verify_tries(struct classifier *cls_)
+{
+    struct cls_classifier *cls = cls_->cls;
+    unsigned int n_rules = 0;
+    int i;
+
+    for (i = 0; i < cls->n_tries; i++) {
+        n_rules += trie_verify(&cls->tries[i].root, 0,
+                               cls->tries[i].field->n_bits);
+    }
+    ovs_mutex_lock(&cls->mutex);
+    assert(n_rules <= cls->n_rules);
+    ovs_mutex_unlock(&cls->mutex);
+}
+
 static void
 check_tables(const struct classifier *cls, int n_tables, int n_rules,
              int n_dups) OVS_EXCLUDED(cls->rwlock)
@@ -492,7 +525,6 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
     int found_rules2 = 0;
 
     pvector_verify(&cls->cls->subtables);
-
     CMAP_FOR_EACH (table, cmap_node, &cls->cls->subtables_map) {
         const struct cls_match *head;
         unsigned int max_priority = 0;
@@ -515,6 +547,11 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
         }
 
         assert(!cmap_is_empty(&table->rules));
+
+        ovs_mutex_lock(&cls->cls->mutex);
+        assert(trie_verify(&table->ports_trie, 0, table->ports_mask_len)
+               == (table->ports_mask_len ? table->n_rules : 0));
+        ovs_mutex_unlock(&cls->cls->mutex);
 
         found_tables++;
         CMAP_FOR_EACH (head, cmap_node, &table->rules) {
@@ -658,6 +695,15 @@ static enum mf_field_id trie_fields[2] = {
     MFF_IPV4_DST, MFF_IPV4_SRC
 };
 
+static void
+set_prefix_fields(struct classifier *cls)
+    OVS_REQ_WRLOCK(cls->rwlock)
+{
+    verify_tries(cls);
+    classifier_set_prefix_fields(cls, trie_fields, ARRAY_SIZE(trie_fields));
+    verify_tries(cls);
+}
+
 /* Tests an empty classifier. */
 static void
 test_empty(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
@@ -667,7 +713,7 @@ test_empty(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
     classifier_init(&cls, flow_segment_u32s);
     fat_rwlock_wrlock(&cls.rwlock);
-    classifier_set_prefix_fields(&cls, trie_fields, ARRAY_SIZE(trie_fields));
+    set_prefix_fields(&cls);
     tcls_init(&tcls);
     assert(classifier_is_empty(&cls));
     assert(tcls_is_empty(&tcls));
@@ -700,8 +746,7 @@ test_single_rule(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
         classifier_init(&cls, flow_segment_u32s);
         fat_rwlock_wrlock(&cls.rwlock);
-        classifier_set_prefix_fields(&cls, trie_fields,
-                                     ARRAY_SIZE(trie_fields));
+        set_prefix_fields(&cls);
         tcls_init(&tcls);
 
         tcls_rule = tcls_insert(&tcls, rule);
@@ -743,8 +788,7 @@ test_rule_replacement(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
         classifier_init(&cls, flow_segment_u32s);
         fat_rwlock_wrlock(&cls.rwlock);
-        classifier_set_prefix_fields(&cls, trie_fields,
-                                     ARRAY_SIZE(trie_fields));
+        set_prefix_fields(&cls);
         tcls_init(&tcls);
         tcls_insert(&tcls, rule1);
         classifier_insert(&cls, &rule1->cls_rule);
@@ -861,8 +905,7 @@ test_many_rules_in_one_list (int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
             classifier_init(&cls, flow_segment_u32s);
             fat_rwlock_wrlock(&cls.rwlock);
-            classifier_set_prefix_fields(&cls, trie_fields,
-                                         ARRAY_SIZE(trie_fields));
+            set_prefix_fields(&cls);
             fat_rwlock_unlock(&cls.rwlock);
             tcls_init(&tcls);
 
@@ -970,8 +1013,7 @@ test_many_rules_in_one_table(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
         classifier_init(&cls, flow_segment_u32s);
         fat_rwlock_wrlock(&cls.rwlock);
-        classifier_set_prefix_fields(&cls, trie_fields,
-                                     ARRAY_SIZE(trie_fields));
+        set_prefix_fields(&cls);
         fat_rwlock_unlock(&cls.rwlock);
         tcls_init(&tcls);
 
@@ -1039,8 +1081,7 @@ test_many_rules_in_n_tables(int n_tables)
 
         classifier_init(&cls, flow_segment_u32s);
         fat_rwlock_wrlock(&cls.rwlock);
-        classifier_set_prefix_fields(&cls, trie_fields,
-                                     ARRAY_SIZE(trie_fields));
+        set_prefix_fields(&cls);
         fat_rwlock_unlock(&cls.rwlock);
         tcls_init(&tcls);
 
