@@ -203,4 +203,8 @@ void ovsrcu_quiesce_end(void);
 void ovsrcu_quiesce(void);
 bool ovsrcu_is_quiescent(void);
 
+/* Synchronization.  Waits for all non-quiescent threads to quiesce at least
+ * once.  This can block for a relatively long time. */
+void ovsrcu_synchronize(void);
+
 #endif /* ovs-rcu.h */
