@@ -529,6 +529,7 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
             }
 
             found_rules++;
+            ovs_mutex_lock(&cls->cls->mutex);
             LIST_FOR_EACH (rule, list, &head->list) {
                 assert(rule->priority < prev_priority);
                 assert(rule->priority <= table->max_priority);
@@ -536,14 +537,17 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
                 prev_priority = rule->priority;
                 found_rules++;
                 found_dups++;
-                fat_rwlock_rdlock(&cls->rwlock);
+                ovs_mutex_unlock(&cls->cls->mutex);
                 assert(classifier_find_rule_exactly(cls, rule->cls_rule)
                        == rule->cls_rule);
-                fat_rwlock_unlock(&cls->rwlock);
+                ovs_mutex_lock(&cls->cls->mutex);
             }
+            ovs_mutex_unlock(&cls->cls->mutex);
         }
+        ovs_mutex_lock(&cls->cls->mutex);
         assert(table->max_priority == max_priority);
         assert(table->max_count == max_count);
+        ovs_mutex_unlock(&cls->cls->mutex);
     }
 
     assert(found_tables == cmap_count(&cls->cls->subtables_map));

@@ -295,17 +295,16 @@ bool classifier_rule_overlaps(const struct classifier *cls,
     OVS_REQ_RDLOCK(cls->rwlock);
 
 struct cls_rule *classifier_find_rule_exactly(const struct classifier *cls,
-                                              const struct cls_rule *)
-    OVS_REQ_RDLOCK(cls->rwlock);
+                                              const struct cls_rule *);
+
 struct cls_rule *classifier_find_match_exactly(const struct classifier *cls,
                                                const struct match *,
-                                               unsigned int priority)
-    OVS_REQ_RDLOCK(cls->rwlock);
+                                               unsigned int priority);
 
 /* Iteration. */
 
 struct cls_cursor {
-    const struct classifier *cls;
+    const struct cls_classifier *cls;
     const struct cls_subtable *subtable;
     const struct cls_rule *target;
     struct cmap_cursor subtables;
@@ -313,9 +312,10 @@ struct cls_cursor {
     bool safe;
 };
 
-/* Iteration requires mutual exclusion of the writers.  We do this by taking
- * the classifier read lock for the duration of the iteration, except for the
- * 'SAFE' variant, where we release the lock for the body of the loop. */
+
+/* Iteration requires mutual exclusion of writers.  We do this by taking
+ * a mutex for the duration of the iteration, except for the
+ * 'SAFE' variant, where we release the mutex for the body of the loop. */
 struct cls_cursor cls_cursor_init(const struct classifier *cls,
                                   const struct cls_rule *target,
                                   void **pnode, const void *offset, bool safe);
