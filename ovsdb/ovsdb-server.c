@@ -116,6 +116,83 @@ static void save_config(struct server_config *);
 static void load_config(FILE *config_file, struct sset *remotes,
                         struct sset *db_filenames);
 
+static void
+main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
+          struct unixctl_server *unixctl, struct sset *remotes,
+          struct process *run_process, bool *exiting)
+{
+    char *remotes_error, *ssl_error;
+    struct shash_node *node;
+    long long int status_timer = LLONG_MIN;
+
+    *exiting = false;
+    ssl_error = NULL;
+    remotes_error = NULL;
+    while (!*exiting) {
+        memory_run();
+        if (memory_should_report()) {
+            struct simap usage;
+
+            simap_init(&usage);
+            ovsdb_jsonrpc_server_get_memory_usage(jsonrpc, &usage);
+            SHASH_FOR_EACH(node, all_dbs) {
+                struct db *db = node->data;
+                ovsdb_get_memory_usage(db->db, &usage);
+            }
+            memory_report(&usage);
+            simap_destroy(&usage);
+        }
+
+        /* Run unixctl_server_run() before reconfigure_remotes() because
+         * ovsdb-server/add-remote and ovsdb-server/remove-remote can change
+         * the set of remotes that reconfigure_remotes() uses. */
+        unixctl_server_run(unixctl);
+
+        report_error_if_changed(
+            reconfigure_remotes(jsonrpc, all_dbs, remotes),
+            &remotes_error);
+        report_error_if_changed(reconfigure_ssl(all_dbs), &ssl_error);
+        ovsdb_jsonrpc_server_run(jsonrpc);
+
+        SHASH_FOR_EACH(node, all_dbs) {
+            struct db *db = node->data;
+            ovsdb_trigger_run(db->db, time_msec());
+        }
+        if (run_process) {
+            process_run();
+            if (process_exited(run_process)) {
+                *exiting = true;
+            }
+        }
+
+        /* update Manager status(es) every 5 seconds */
+        if (time_msec() >= status_timer) {
+            status_timer = time_msec() + 5000;
+            update_remote_status(jsonrpc, remotes, all_dbs);
+        }
+
+        memory_wait();
+        ovsdb_jsonrpc_server_wait(jsonrpc);
+        unixctl_server_wait(unixctl);
+        SHASH_FOR_EACH(node, all_dbs) {
+            struct db *db = node->data;
+            ovsdb_trigger_wait(db->db, time_msec());
+        }
+        if (run_process) {
+            process_wait(run_process);
+        }
+        if (*exiting) {
+            poll_immediate_wake();
+        }
+        poll_timer_wait_until(status_timer);
+        poll_block();
+        if (should_service_stop()) {
+            *exiting = true;
+        }
+    }
+
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -128,12 +205,10 @@ main(int argc, char *argv[])
     struct process *run_process;
     bool exiting;
     int retval;
-    long long int status_timer = LLONG_MIN;
     FILE *config_tmpfile;
     struct server_config server_config;
     struct shash all_dbs;
     struct shash_node *node, *next;
-    char *remotes_error, *ssl_error;
     char *error;
     int i;
 
@@ -245,71 +320,8 @@ main(int argc, char *argv[])
     unixctl_command_register("ovsdb-server/list-dbs", "", 0, 0,
                              ovsdb_server_list_databases, &all_dbs);
 
-    exiting = false;
-    ssl_error = NULL;
-    remotes_error = NULL;
-    while (!exiting) {
-        memory_run();
-        if (memory_should_report()) {
-            struct simap usage;
+    main_loop(jsonrpc, &all_dbs, unixctl, &remotes, run_process, &exiting);
 
-            simap_init(&usage);
-            ovsdb_jsonrpc_server_get_memory_usage(jsonrpc, &usage);
-            SHASH_FOR_EACH(node, &all_dbs) {
-                struct db *db = node->data;
-                ovsdb_get_memory_usage(db->db, &usage);
-            }
-            memory_report(&usage);
-            simap_destroy(&usage);
-        }
-
-        /* Run unixctl_server_run() before reconfigure_remotes() because
-         * ovsdb-server/add-remote and ovsdb-server/remove-remote can change
-         * the set of remotes that reconfigure_remotes() uses. */
-        unixctl_server_run(unixctl);
-
-        report_error_if_changed(
-            reconfigure_remotes(jsonrpc, &all_dbs, &remotes),
-            &remotes_error);
-        report_error_if_changed(reconfigure_ssl(&all_dbs), &ssl_error);
-        ovsdb_jsonrpc_server_run(jsonrpc);
-
-        SHASH_FOR_EACH(node, &all_dbs) {
-            struct db *db = node->data;
-            ovsdb_trigger_run(db->db, time_msec());
-        }
-        if (run_process) {
-            process_run();
-            if (process_exited(run_process)) {
-                exiting = true;
-            }
-        }
-
-        /* update Manager status(es) every 5 seconds */
-        if (time_msec() >= status_timer) {
-            status_timer = time_msec() + 5000;
-            update_remote_status(jsonrpc, &remotes, &all_dbs);
-        }
-
-        memory_wait();
-        ovsdb_jsonrpc_server_wait(jsonrpc);
-        unixctl_server_wait(unixctl);
-        SHASH_FOR_EACH(node, &all_dbs) {
-            struct db *db = node->data;
-            ovsdb_trigger_wait(db->db, time_msec());
-        }
-        if (run_process) {
-            process_wait(run_process);
-        }
-        if (exiting) {
-            poll_immediate_wake();
-        }
-        poll_timer_wait_until(status_timer);
-        poll_block();
-        if (should_service_stop()) {
-            exiting = true;
-        }
-    }
     ovsdb_jsonrpc_server_destroy(jsonrpc);
     SHASH_FOR_EACH_SAFE(node, next, &all_dbs) {
         struct db *db = node->data;
