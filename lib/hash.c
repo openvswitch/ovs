@@ -50,21 +50,6 @@ hash_bytes(const void *p_, size_t n, uint32_t basis)
     return hash_finish(hash, orig_n);
 }
 
-/* Returns the hash of the 'n' 32-bit words at 'p', starting from 'basis'.
- * 'p' must be properly aligned. */
-uint32_t
-hash_words(const uint32_t p[], size_t n_words, uint32_t basis)
-{
-    uint32_t hash;
-    size_t i;
-
-    hash = basis;
-    for (i = 0; i < n_words; i++) {
-        hash = hash_add(hash, p[i]);
-    }
-    return hash_finish(hash, n_words * 4);
-}
-
 uint32_t
 hash_double(double x, uint32_t basis)
 {
@@ -73,4 +58,16 @@ hash_double(double x, uint32_t basis)
 
     memcpy(value, &x, sizeof value);
     return hash_3words(value[0], value[1], basis);
+}
+
+uint32_t
+hash_words__(const uint32_t p[], size_t n_words, uint32_t basis)
+{
+    return hash_words_inline(p, n_words, basis);
+}
+
+uint32_t
+hash_words64__(const uint64_t p[], size_t n_words, uint64_t basis)
+{
+    return hash_words64_inline(p, n_words, basis);
 }

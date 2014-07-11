@@ -92,15 +92,22 @@ check_3word_hash(uint32_t (*hash)(const uint32_t[], size_t, uint32_t),
 
     for (i = 0; i <= 96; i++) {
         for (j = i + 1; j <= 96; j++) {
-            uint32_t in1[3], in2[3];
-            uint32_t out1, out2;
+            uint32_t in0[3], in1[3], in2[3];
+            uint32_t out0,out1, out2;
             const int min_unique = 12;
             const uint32_t unique_mask = (UINT32_C(1) << min_unique) - 1;
 
+            set_bit(in0, i);
             set_bit(in1, i);
             set_bit(in2, j);
+            out0 = hash(in0, 3, 0);
             out1 = hash(in1, 3, 0);
             out2 = hash(in2, 3, 0);
+
+            if (out0 != out1) {
+                printf("%s hash not the same for non-64 aligned data "
+                       "%08"PRIx32" != %08"PRIx32"\n", name, out0, out1);
+            }
             if ((out1 & unique_mask) == (out2 & unique_mask)) {
                 printf("%s has a partial collision:\n", name);
                 printf("hash(1 << %d) == %08"PRIx32"\n", i, out1);
