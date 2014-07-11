@@ -1283,16 +1283,12 @@ ofproto_flush__(struct ofproto *ofproto)
     ovs_mutex_lock(&ofproto_mutex);
     OFPROTO_FOR_EACH_TABLE (table, ofproto) {
         struct rule *rule, *next_rule;
-        struct cls_cursor cursor;
 
         if (table->flags & OFTABLE_HIDDEN) {
             continue;
         }
 
-        fat_rwlock_rdlock(&table->cls.rwlock);
-        cls_cursor_init(&cursor, &table->cls, NULL);
-        fat_rwlock_unlock(&table->cls.rwlock);
-        CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, cr, &cursor) {
+        CLS_FOR_EACH_SAFE (rule, next_rule, cr, &table->cls) {
             ofproto_rule_delete__(rule, OFPRR_DELETE);
         }
     }
@@ -1456,7 +1452,6 @@ ofproto_run(struct ofproto *p)
         for (i = 0; i < p->n_tables; i++) {
             struct oftable *table = &p->tables[i];
             struct eviction_group *evg;
-            struct cls_cursor cursor;
             struct rule *rule;
 
             if (!table->eviction_fields) {
@@ -1464,9 +1459,7 @@ ofproto_run(struct ofproto *p)
             }
 
             ovs_mutex_lock(&ofproto_mutex);
-            fat_rwlock_rdlock(&table->cls.rwlock);
-            cls_cursor_init(&cursor, &table->cls, NULL);
-            CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
+            CLS_FOR_EACH (rule, cr, &table->cls) {
                 if (rule->idle_timeout || rule->hard_timeout) {
                     if (!rule->eviction_group) {
                         eviction_group_add_rule(rule);
@@ -1476,7 +1469,6 @@ ofproto_run(struct ofproto *p)
                     }
                 }
             }
-            fat_rwlock_unlock(&table->cls.rwlock);
 
             HEAP_FOR_EACH (evg, size_node, &table->eviction_groups_by_size) {
                 heap_rebuild(&evg->rules);
@@ -3501,15 +3493,11 @@ collect_rules_loose(struct ofproto *ofproto,
         }
     } else {
         FOR_EACH_MATCHING_TABLE (table, criteria->table_id, ofproto) {
-            struct cls_cursor cursor;
             struct rule *rule;
 
-            fat_rwlock_rdlock(&table->cls.rwlock);
-            cls_cursor_init(&cursor, &table->cls, &criteria->cr);
-            CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
+            CLS_FOR_EACH_TARGET (rule, cr, &table->cls, &criteria->cr) {
                 collect_rule(rule, criteria, rules, &n_readonly);
             }
-            fat_rwlock_unlock(&table->cls.rwlock);
         }
     }
 
@@ -3708,15 +3696,11 @@ ofproto_get_all_flows(struct ofproto *p, struct ds *results)
     struct oftable *table;
 
     OFPROTO_FOR_EACH_TABLE (table, p) {
-        struct cls_cursor cursor;
         struct rule *rule;
 
-        fat_rwlock_rdlock(&table->cls.rwlock);
-        cls_cursor_init(&cursor, &table->cls, NULL);
-        CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
+        CLS_FOR_EACH (rule, cr, &table->cls) {
             flow_stats_ds(rule, results);
         }
-        fat_rwlock_unlock(&table->cls.rwlock);
     }
 }
 
@@ -4832,15 +4816,11 @@ ofproto_collect_ofmonitor_refresh_rules(const struct ofmonitor *m,
 
     cls_rule_init_from_minimatch(&target, &m->match, 0);
     FOR_EACH_MATCHING_TABLE (table, m->table_id, ofproto) {
-        struct cls_cursor cursor;
         struct rule *rule;
 
-        fat_rwlock_rdlock(&table->cls.rwlock);
-        cls_cursor_init(&cursor, &table->cls, &target);
-        CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
+        CLS_FOR_EACH_TARGET (rule, cr, &table->cls, &target) {
             ofproto_collect_ofmonitor_refresh_rule(m, rule, seqno, rules);
         }
-        fat_rwlock_unlock(&table->cls.rwlock);
     }
     cls_rule_destroy(&target);
 }
@@ -6468,7 +6448,6 @@ oftable_enable_eviction(struct oftable *table,
                         const struct mf_subfield *fields, size_t n_fields)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct cls_cursor cursor;
     struct rule *rule;
 
     if (table->eviction_fields
@@ -6489,12 +6468,9 @@ oftable_enable_eviction(struct oftable *table,
     hmap_init(&table->eviction_groups_by_id);
     heap_init(&table->eviction_groups_by_size);
 
-    fat_rwlock_rdlock(&table->cls.rwlock);
-    cls_cursor_init(&cursor, &table->cls, NULL);
-    CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
+    CLS_FOR_EACH (rule, cr, &table->cls) {
         eviction_group_add_rule(rule);
     }
-    fat_rwlock_unlock(&table->cls.rwlock);
 }
 
 /* Removes 'rule' from the oftable that contains it. */
@@ -6596,12 +6572,9 @@ ofproto_get_vlan_usage(struct ofproto *ofproto, unsigned long int *vlan_bitmap)
     ofproto->vlans_changed = false;
 
     OFPROTO_FOR_EACH_TABLE (oftable, ofproto) {
-        struct cls_cursor cursor;
         struct rule *rule;
 
-        fat_rwlock_rdlock(&oftable->cls.rwlock);
-        cls_cursor_init(&cursor, &oftable->cls, &target);
-        CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
+        CLS_FOR_EACH_TARGET (rule, cr, &oftable->cls, &target) {
             if (minimask_get_vid_mask(&rule->cr.match.mask) == VLAN_VID_MASK) {
                 uint16_t vid = miniflow_get_vid(&rule->cr.match.flow);
 
@@ -6609,7 +6582,6 @@ ofproto_get_vlan_usage(struct ofproto *ofproto, unsigned long int *vlan_bitmap)
                 bitmap_set1(ofproto->vlan_bitmap, vid);
             }
         }
-        fat_rwlock_unlock(&oftable->cls.rwlock);
     }
 
     cls_rule_destroy(&target);

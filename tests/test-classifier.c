@@ -454,15 +454,13 @@ static void
 destroy_classifier(struct classifier *cls)
 {
     struct test_rule *rule, *next_rule;
-    struct cls_cursor cursor;
 
-    fat_rwlock_wrlock(&cls->rwlock);
-    cls_cursor_init(&cursor, cls, NULL);
-    CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, cls_rule, &cursor) {
+    CLS_FOR_EACH_SAFE (rule, next_rule, cls_rule, cls) {
+        fat_rwlock_wrlock(&cls->rwlock);
         classifier_remove(cls, &rule->cls_rule);
+        fat_rwlock_unlock(&cls->rwlock);
         free_rule(rule);
     }
-    fat_rwlock_unlock(&cls->rwlock);
     classifier_destroy(cls);
 }
 
@@ -484,11 +482,10 @@ pvector_verify(struct pvector *pvec)
 
 static void
 check_tables(const struct classifier *cls, int n_tables, int n_rules,
-             int n_dups) OVS_REQ_RDLOCK(cls->rwlock)
+             int n_dups) OVS_EXCLUDED(cls->rwlock)
 {
     const struct cls_subtable *table;
     struct test_rule *test_rule;
-    struct cls_cursor cursor;
     int found_tables = 0;
     int found_rules = 0;
     int found_dups = 0;
@@ -539,8 +536,10 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
                 prev_priority = rule->priority;
                 found_rules++;
                 found_dups++;
+                fat_rwlock_rdlock(&cls->rwlock);
                 assert(classifier_find_rule_exactly(cls, rule->cls_rule)
                        == rule->cls_rule);
+                fat_rwlock_unlock(&cls->rwlock);
             }
         }
         assert(table->max_priority == max_priority);
@@ -553,8 +552,7 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
     assert(n_rules == -1 || found_rules == n_rules);
     assert(n_dups == -1 || found_dups == n_dups);
 
-    cls_cursor_init(&cursor, cls, NULL);
-    CLS_CURSOR_FOR_EACH (test_rule, cls_rule, &cursor) {
+    CLS_FOR_EACH (test_rule, cls_rule, cls) {
         found_rules2++;
     }
     assert(found_rules == found_rules2);
@@ -704,17 +702,19 @@ test_single_rule(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
         tcls_rule = tcls_insert(&tcls, rule);
         classifier_insert(&cls, &rule->cls_rule);
-        check_tables(&cls, 1, 1, 0);
         compare_classifiers(&cls, &tcls);
+        fat_rwlock_unlock(&cls.rwlock);
+        check_tables(&cls, 1, 1, 0);
 
+        fat_rwlock_wrlock(&cls.rwlock);
         classifier_remove(&cls, &rule->cls_rule);
         tcls_remove(&tcls, tcls_rule);
         assert(classifier_is_empty(&cls));
         assert(tcls_is_empty(&tcls));
         compare_classifiers(&cls, &tcls);
+        fat_rwlock_unlock(&cls.rwlock);
 
         free_rule(rule);
-        fat_rwlock_unlock(&cls.rwlock);
         classifier_destroy(&cls);
         tcls_destroy(&tcls);
     }
@@ -744,19 +744,23 @@ test_rule_replacement(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         tcls_init(&tcls);
         tcls_insert(&tcls, rule1);
         classifier_insert(&cls, &rule1->cls_rule);
-        check_tables(&cls, 1, 1, 0);
         compare_classifiers(&cls, &tcls);
+        fat_rwlock_unlock(&cls.rwlock);
+        check_tables(&cls, 1, 1, 0);
         tcls_destroy(&tcls);
 
         tcls_init(&tcls);
         tcls_insert(&tcls, rule2);
+
+        fat_rwlock_wrlock(&cls.rwlock);
         assert(test_rule_from_cls_rule(
                    classifier_replace(&cls, &rule2->cls_rule)) == rule1);
         free_rule(rule1);
-        check_tables(&cls, 1, 1, 0);
         compare_classifiers(&cls, &tcls);
-        tcls_destroy(&tcls);
         fat_rwlock_unlock(&cls.rwlock);
+        check_tables(&cls, 1, 1, 0);
+
+        tcls_destroy(&tcls);
         destroy_classifier(&cls);
     }
 }
@@ -855,12 +859,14 @@ test_many_rules_in_one_list (int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
             fat_rwlock_wrlock(&cls.rwlock);
             classifier_set_prefix_fields(&cls, trie_fields,
                                          ARRAY_SIZE(trie_fields));
+            fat_rwlock_unlock(&cls.rwlock);
             tcls_init(&tcls);
 
             for (i = 0; i < ARRAY_SIZE(ops); i++) {
                 int j = ops[i];
                 int m, n;
 
+                fat_rwlock_wrlock(&cls.rwlock);
                 if (!tcls_rules[j]) {
                     struct test_rule *displaced_rule;
 
@@ -883,23 +889,23 @@ test_many_rules_in_one_list (int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
                     tcls_rules[j] = NULL;
                     pri_rules[pris[j]] = -1;
                 }
+                compare_classifiers(&cls, &tcls);
+                fat_rwlock_unlock(&cls.rwlock);
 
                 n = 0;
                 for (m = 0; m < N_RULES; m++) {
                     n += tcls_rules[m] != NULL;
                 }
                 check_tables(&cls, n > 0, n, n - 1);
-
-                compare_classifiers(&cls, &tcls);
             }
 
+            fat_rwlock_wrlock(&cls.rwlock);
             for (i = 0; i < N_RULES; i++) {
                 if (rules[i]->cls_rule.cls_match) {
                     classifier_remove(&cls, &rules[i]->cls_rule);
                 }
                 free_rule(rules[i]);
             }
-
             fat_rwlock_unlock(&cls.rwlock);
             classifier_destroy(&cls);
             tcls_destroy(&tcls);
@@ -962,6 +968,7 @@ test_many_rules_in_one_table(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         fat_rwlock_wrlock(&cls.rwlock);
         classifier_set_prefix_fields(&cls, trie_fields,
                                      ARRAY_SIZE(trie_fields));
+        fat_rwlock_unlock(&cls.rwlock);
         tcls_init(&tcls);
 
         for (i = 0; i < N_RULES; i++) {
@@ -973,22 +980,26 @@ test_many_rules_in_one_table(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
             rules[i] = make_rule(wcf, priority, value_pats[i]);
             tcls_rules[i] = tcls_insert(&tcls, rules[i]);
+
+            fat_rwlock_wrlock(&cls.rwlock);
             classifier_insert(&cls, &rules[i]->cls_rule);
+            compare_classifiers(&cls, &tcls);
+            fat_rwlock_unlock(&cls.rwlock);
 
             check_tables(&cls, 1, i + 1, 0);
-            compare_classifiers(&cls, &tcls);
         }
 
         for (i = 0; i < N_RULES; i++) {
             tcls_remove(&tcls, tcls_rules[i]);
+            fat_rwlock_wrlock(&cls.rwlock);
             classifier_remove(&cls, &rules[i]->cls_rule);
+            compare_classifiers(&cls, &tcls);
+            fat_rwlock_unlock(&cls.rwlock);
             free_rule(rules[i]);
 
             check_tables(&cls, i < N_RULES - 1, N_RULES - (i + 1), 0);
-            compare_classifiers(&cls, &tcls);
         }
 
-        fat_rwlock_unlock(&cls.rwlock);
         classifier_destroy(&cls);
         tcls_destroy(&tcls);
     }
@@ -1026,6 +1037,7 @@ test_many_rules_in_n_tables(int n_tables)
         fat_rwlock_wrlock(&cls.rwlock);
         classifier_set_prefix_fields(&cls, trie_fields,
                                      ARRAY_SIZE(trie_fields));
+        fat_rwlock_unlock(&cls.rwlock);
         tcls_init(&tcls);
 
         for (i = 0; i < MAX_RULES; i++) {
@@ -1035,30 +1047,35 @@ test_many_rules_in_n_tables(int n_tables)
             int value_pat = random_uint32() & ((1u << CLS_N_FIELDS) - 1);
             rule = make_rule(wcf, priority, value_pat);
             tcls_insert(&tcls, rule);
+            fat_rwlock_wrlock(&cls.rwlock);
             classifier_insert(&cls, &rule->cls_rule);
-            check_tables(&cls, -1, i + 1, -1);
             compare_classifiers(&cls, &tcls);
+            fat_rwlock_unlock(&cls.rwlock);
+            check_tables(&cls, -1, i + 1, -1);
         }
 
         while (!classifier_is_empty(&cls)) {
             struct test_rule *rule, *next_rule;
             struct test_rule *target;
-            struct cls_cursor cursor;
 
             target = clone_rule(tcls.rules[random_range(tcls.n_rules)]);
 
-            cls_cursor_init(&cursor, &cls, &target->cls_rule);
-            CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, cls_rule, &cursor) {
+            CLS_FOR_EACH_TARGET_SAFE (rule, next_rule, cls_rule, &cls,
+                                      &target->cls_rule) {
+                fat_rwlock_wrlock(&cls.rwlock);
                 classifier_remove(&cls, &rule->cls_rule);
+                fat_rwlock_unlock(&cls.rwlock);
                 free_rule(rule);
             }
+
             tcls_delete_matches(&tcls, &target->cls_rule);
+            fat_rwlock_rdlock(&cls.rwlock);
             compare_classifiers(&cls, &tcls);
+            fat_rwlock_unlock(&cls.rwlock);
             check_tables(&cls, -1, -1, -1);
             free_rule(target);
         }
 
-        fat_rwlock_unlock(&cls.rwlock);
         destroy_classifier(&cls);
         tcls_destroy(&tcls);
     }

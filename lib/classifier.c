@@ -588,11 +588,12 @@ trie_init(struct cls_classifier *cls, int trie_idx,
     }
 }
 
-/* Returns true if 'cls' contains no classification rules, false otherwise. */
+/* Returns true if 'cls' contains no classification rules, false otherwise.
+ * Checking the cmap requires no locking. */
 bool
 classifier_is_empty(const struct classifier *cls)
 {
-    return cls->cls->n_rules == 0;
+    return cmap_is_empty(&cls->cls->subtables_map);
 }
 
 /* Returns the number of rules in 'cls'. */
@@ -1154,7 +1155,8 @@ search_subtable(const struct cls_subtable *subtable,
     return NULL;
 }
 
-/* Initializes 'cursor' for iterating through rules in 'cls':
+/* Initializes 'cursor' for iterating through rules in 'cls', and returns the
+ * first matching cls_rule via '*pnode', or NULL if there are no matches.
  *
  *     - If 'target' is null, the cursor will visit every rule in 'cls'.
  *
@@ -1162,45 +1164,68 @@ search_subtable(const struct cls_subtable *subtable,
  *       such that cls_rule_is_loose_match(rule, target) returns true.
  *
  * Ignores target->priority. */
-void
-cls_cursor_init(struct cls_cursor *cursor, const struct classifier *cls,
-                const struct cls_rule *target)
+struct cls_cursor cls_cursor_init(const struct classifier *cls,
+                                  const struct cls_rule *target,
+                                  void **pnode, const void *offset, bool safe)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
-    cursor->cls = cls->cls;
-    cursor->target = target && !cls_rule_is_catchall(target) ? target : NULL;
-}
-
-/* Returns the first matching cls_rule in 'cursor''s iteration, or a null
- * pointer if there are no matches. */
-struct cls_rule *
-cls_cursor_first(struct cls_cursor *cursor)
-{
+    struct cls_cursor cursor;
     struct cls_subtable *subtable;
+    struct cls_rule *cls_rule = NULL;
 
-    CMAP_CURSOR_FOR_EACH (subtable, cmap_node, &cursor->subtables,
-                          &cursor->cls->subtables_map) {
-        struct cls_match *rule = search_subtable(subtable, cursor);
+    cursor.safe = safe;
+    cursor.cls = cls;
+    cursor.target = target && !cls_rule_is_catchall(target) ? target : NULL;
+
+    /* Find first rule. */
+    fat_rwlock_rdlock(&cursor.cls->rwlock);
+    CMAP_CURSOR_FOR_EACH (subtable, cmap_node, &cursor.subtables,
+                          &cursor.cls->cls->subtables_map) {
+        struct cls_match *rule = search_subtable(subtable, &cursor);
 
         if (rule) {
-            cursor->subtable = subtable;
-            return rule->cls_rule;
+            cursor.subtable = subtable;
+            cls_rule = rule->cls_rule;
+            break;
         }
     }
+    *pnode = (char *)cls_rule + (ptrdiff_t)offset;
 
-    return NULL;
+    /* Leave locked if requested and have a rule. */
+    if (safe || !cls_rule) {
+        fat_rwlock_unlock(&cls->rwlock);
+    }
+    return cursor;
+}
+
+static void
+cls_cursor_next_unlock(struct cls_cursor *cursor, struct cls_rule *rule)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
+{
+    /* Release the lock if no rule, or 'safe' mode. */
+    if (!rule || cursor->safe) {
+        fat_rwlock_unlock(&cursor->cls->rwlock);
+    }
 }
 
 /* Returns the next matching cls_rule in 'cursor''s iteration, or a null
  * pointer if there are no more matches. */
 struct cls_rule *
 cls_cursor_next(struct cls_cursor *cursor, const struct cls_rule *rule_)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct cls_match *rule = CONST_CAST(struct cls_match *, rule_->cls_match);
     const struct cls_subtable *subtable;
     struct cls_match *next;
 
+    /* Lock if not locked already. */
+    if (cursor->safe) {
+        fat_rwlock_rdlock(&cursor->cls->rwlock);
+    }
+
     next = next_rule_in_list__(rule);
     if (next->priority < rule->priority) {
+        cls_cursor_next_unlock(cursor, next->cls_rule);
         return next->cls_rule;
     }
 
@@ -1210,6 +1235,7 @@ cls_cursor_next(struct cls_cursor *cursor, const struct cls_rule *rule_)
     rule = next;
     CMAP_CURSOR_FOR_EACH_CONTINUE (rule, cmap_node, &cursor->rules) {
         if (rule_matches(rule, cursor->target)) {
+            cls_cursor_next_unlock(cursor, rule->cls_rule);
             return rule->cls_rule;
         }
     }
@@ -1219,10 +1245,12 @@ cls_cursor_next(struct cls_cursor *cursor, const struct cls_rule *rule_)
         rule = search_subtable(subtable, cursor);
         if (rule) {
             cursor->subtable = subtable;
+            cls_cursor_next_unlock(cursor, rule->cls_rule);
             return rule->cls_rule;
         }
     }
 
+    fat_rwlock_unlock(&cursor->cls->rwlock);
     return NULL;
 }
 

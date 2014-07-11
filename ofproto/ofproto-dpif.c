@@ -1297,12 +1297,7 @@ destruct(struct ofproto *ofproto_)
     hmap_remove(&all_ofproto_dpifs, &ofproto->all_ofproto_dpifs_node);
 
     OFPROTO_FOR_EACH_TABLE (table, &ofproto->up) {
-        struct cls_cursor cursor;
-
-        fat_rwlock_rdlock(&table->cls.rwlock);
-        cls_cursor_init(&cursor, &table->cls, NULL);
-        fat_rwlock_unlock(&table->cls.rwlock);
-        CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, up.cr, &cursor) {
+        CLS_FOR_EACH_SAFE (rule, next_rule, up.cr, &table->cls) {
             ofproto_rule_delete(&ofproto->up, &rule->up);
         }
     }
