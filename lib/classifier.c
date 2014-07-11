@@ -169,9 +169,9 @@ static void trie_remove(struct cls_trie *, const struct cls_rule *, int mlen);
 static void trie_remove_prefix(struct trie_node **, const ovs_be32 *prefix,
                                int mlen);
 static void mask_set_prefix_bits(struct flow_wildcards *, uint8_t be32ofs,
-                                 unsigned int nbits);
+                                 unsigned int n_bits);
 static bool mask_prefix_bits_set(const struct flow_wildcards *,
-                                 uint8_t be32ofs, unsigned int nbits);
+                                 uint8_t be32ofs, unsigned int n_bits);
 
 /* flow/miniflow/minimask/minimatch utilities.
  * These are only used by the classifier, so place them here to allow
@@ -1701,7 +1701,7 @@ next_rule_in_list(struct cls_match *rule)
 /* A longest-prefix match tree. */
 struct trie_node {
     uint32_t prefix;           /* Prefix bits for this node, MSB first. */
-    uint8_t  nbits;            /* Never zero, except for the root node. */
+    uint8_t  n_bits;           /* Never zero, except for the root node. */
     unsigned int n_rules;      /* Number of rules that have this prefix. */
     struct trie_node *edges[2]; /* Both NULL if leaf. */
 };
@@ -1748,15 +1748,15 @@ trie_get_prefix(const ovs_be32 pr[], unsigned int ofs, unsigned int plen)
     return raw_get_prefix(pr, ofs, plen) & ~0u << (32 - plen);
 }
 
-/* Return the number of equal bits in 'nbits' of 'prefix's MSBs and a 'value'
+/* Return the number of equal bits in 'n_bits' of 'prefix's MSBs and a 'value'
  * starting at "MSB 0"-based offset 'ofs'. */
 static unsigned int
-prefix_equal_bits(uint32_t prefix, unsigned int nbits, const ovs_be32 value[],
+prefix_equal_bits(uint32_t prefix, unsigned int n_bits, const ovs_be32 value[],
                   unsigned int ofs)
 {
-    uint64_t diff = prefix ^ raw_get_prefix(value, ofs, nbits);
+    uint64_t diff = prefix ^ raw_get_prefix(value, ofs, n_bits);
     /* Set the bit after the relevant bits to limit the result. */
-    return raw_clz64(diff << 32 | UINT64_C(1) << (63 - nbits));
+    return raw_clz64(diff << 32 | UINT64_C(1) << (63 - n_bits));
 }
 
 /* Return the number of equal bits in 'node' prefix and a 'prefix' of length
@@ -1765,7 +1765,7 @@ static unsigned int
 trie_prefix_equal_bits(const struct trie_node *node, const ovs_be32 prefix[],
                        unsigned int ofs, unsigned int plen)
 {
-    return prefix_equal_bits(node->prefix, MIN(node->nbits, plen - ofs),
+    return prefix_equal_bits(node->prefix, MIN(node->n_bits, plen - ofs),
                              prefix, ofs);
 }
 
@@ -1795,7 +1795,7 @@ trie_branch_create(const ovs_be32 *prefix, unsigned int ofs, unsigned int plen,
     node->prefix = trie_get_prefix(prefix, ofs, plen);
 
     if (plen <= TRIE_PREFIX_BITS) {
-        node->nbits = plen;
+        node->n_bits = plen;
         node->edges[0] = NULL;
         node->edges[1] = NULL;
         node->n_rules = n_rules;
@@ -1805,7 +1805,7 @@ trie_branch_create(const ovs_be32 *prefix, unsigned int ofs, unsigned int plen,
                                                        plen - TRIE_PREFIX_BITS,
                                                        n_rules);
         int bit = get_bit_at(subnode->prefix, 0);
-        node->nbits = TRIE_PREFIX_BITS;
+        node->n_bits = TRIE_PREFIX_BITS;
         node->edges[bit] = subnode;
         node->edges[!bit] = NULL;
         node->n_rules = 0;
@@ -1837,35 +1837,35 @@ trie_is_leaf(const struct trie_node *trie)
 
 static void
 mask_set_prefix_bits(struct flow_wildcards *wc, uint8_t be32ofs,
-                     unsigned int nbits)
+                     unsigned int n_bits)
 {
     ovs_be32 *mask = &((ovs_be32 *)&wc->masks)[be32ofs];
     unsigned int i;
 
-    for (i = 0; i < nbits / 32; i++) {
+    for (i = 0; i < n_bits / 32; i++) {
         mask[i] = OVS_BE32_MAX;
     }
-    if (nbits % 32) {
-        mask[i] |= htonl(~0u << (32 - nbits % 32));
+    if (n_bits % 32) {
+        mask[i] |= htonl(~0u << (32 - n_bits % 32));
     }
 }
 
 static bool
 mask_prefix_bits_set(const struct flow_wildcards *wc, uint8_t be32ofs,
-                     unsigned int nbits)
+                     unsigned int n_bits)
 {
     ovs_be32 *mask = &((ovs_be32 *)&wc->masks)[be32ofs];
     unsigned int i;
     ovs_be32 zeroes = 0;
 
-    for (i = 0; i < nbits / 32; i++) {
+    for (i = 0; i < n_bits / 32; i++) {
         zeroes |= ~mask[i];
     }
-    if (nbits % 32) {
-        zeroes |= ~mask[i] & htonl(~0u << (32 - nbits % 32));
+    if (n_bits % 32) {
+        zeroes |= ~mask[i] & htonl(~0u << (32 - n_bits % 32));
     }
 
-    return !zeroes; /* All 'nbits' bits set. */
+    return !zeroes; /* All 'n_bits' bits set. */
 }
 
 static struct trie_node **
@@ -1898,9 +1898,9 @@ trie_lookup_value(const struct trie_node *node, const ovs_be32 value[],
     for (; node; prev = node, node = trie_next_node(node, value, ofs)) {
         unsigned int eqbits;
         /* Check if this edge can be followed. */
-        eqbits = prefix_equal_bits(node->prefix, node->nbits, value, ofs);
+        eqbits = prefix_equal_bits(node->prefix, node->n_bits, value, ofs);
         ofs += eqbits;
-        if (eqbits < node->nbits) { /* Mismatch, nothing more to be found. */
+        if (eqbits < node->n_bits) { /* Mismatch, nothing more to be found. */
             /* Bit at offset 'ofs' differed. */
             *checkbits = ofs + 1; /* Includes the first mismatching bit. */
             return match_len;
@@ -1945,7 +1945,7 @@ static unsigned int
 minimask_get_prefix_len(const struct minimask *minimask,
                         const struct mf_field *mf)
 {
-    unsigned int nbits = 0, mask_tz = 0; /* Non-zero when end of mask seen. */
+    unsigned int n_bits = 0, mask_tz = 0; /* Non-zero when end of mask seen. */
     uint8_t u32_ofs = mf->flow_be32ofs;
     uint8_t u32_end = u32_ofs + mf->n_bytes / 4;
 
@@ -1963,11 +1963,11 @@ minimask_get_prefix_len(const struct minimask *minimask,
                 return 0; /* Mask not contiguous. */
             }
             mask_tz = ctz32(mask);
-            nbits += 32 - mask_tz;
+            n_bits += 32 - mask_tz;
         }
     }
 
-    return nbits;
+    return n_bits;
 }
 
 /*
@@ -2004,7 +2004,7 @@ trie_insert_prefix(struct trie_node **edge, const ovs_be32 *prefix, int mlen)
          edge = trie_next_edge(node, prefix, ofs)) {
         unsigned int eqbits = trie_prefix_equal_bits(node, prefix, ofs, mlen);
         ofs += eqbits;
-        if (eqbits < node->nbits) {
+        if (eqbits < node->n_bits) {
             /* Mismatch, new node needs to be inserted above. */
             int old_branch = get_bit_at(node->prefix, eqbits);
 
@@ -2014,7 +2014,7 @@ trie_insert_prefix(struct trie_node **edge, const ovs_be32 *prefix, int mlen)
 
             /* Adjust old node for its new position in the tree. */
             node->prefix <<= eqbits;
-            node->nbits -= eqbits;
+            node->n_bits -= eqbits;
             (*edge)->edges[old_branch] = node;
 
             /* Check if need a new branch for the new rule. */
@@ -2060,7 +2060,7 @@ trie_remove_prefix(struct trie_node **root, const ovs_be32 *prefix, int mlen)
          edges[++depth] = trie_next_edge(node, prefix, ofs)) {
         unsigned int eqbits = trie_prefix_equal_bits(node, prefix, ofs, mlen);
 
-        if (eqbits < node->nbits) {
+        if (eqbits < node->n_bits) {
             /* Mismatch, nothing to be removed.  This should never happen, as
              * only rules in the classifier are ever removed. */
             break; /* Log a warning. */
@@ -2082,12 +2082,12 @@ trie_remove_prefix(struct trie_node **root, const ovs_be32 *prefix, int mlen)
                 next = node->edges[0] ? node->edges[0] : node->edges[1];
 
                 if (next) {
-                    if (node->nbits + next->nbits > TRIE_PREFIX_BITS) {
+                    if (node->n_bits + next->n_bits > TRIE_PREFIX_BITS) {
                         break;   /* Cannot combine. */
                     }
                     /* Combine node with next. */
-                    next->prefix = node->prefix | next->prefix >> node->nbits;
-                    next->nbits += node->nbits;
+                    next->prefix = node->prefix | next->prefix >> node->n_bits;
+                    next->n_bits += node->n_bits;
                 }
                 trie_node_destroy(node);
                 /* Update the parent's edge. */
