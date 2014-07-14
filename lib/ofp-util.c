@@ -6577,6 +6577,7 @@ ofputil_pull_buckets(struct ofpbuf *msg, size_t buckets_length,
         if (!ob) {
             VLOG_WARN_RL(&bad_ofmsg_rl, "buckets end with %"PRIuSIZE" leftover bytes",
                          buckets_length);
+            return OFPERR_OFPGMFC_BAD_BUCKET;
         }
 
         ob_len = ntohs(ob->len);
