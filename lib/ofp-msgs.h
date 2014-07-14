@@ -204,12 +204,12 @@ enum ofpraw {
     /* OFPT 1.1+ (21): void. */
     OFPRAW_OFPT11_BARRIER_REPLY,
 
-    /* OFPT 1.0 (22): struct ofp10_queue_get_config_request. */
+    /* OFPT 1.0 (20): struct ofp10_queue_get_config_request. */
     OFPRAW_OFPT10_QUEUE_GET_CONFIG_REQUEST,
     /* OFPT 1.1+ (22): struct ofp11_queue_get_config_request. */
     OFPRAW_OFPT11_QUEUE_GET_CONFIG_REQUEST,
 
-    /* OFPT 1.0 (23): struct ofp10_queue_get_config_reply, uint8_t[8][]. */
+    /* OFPT 1.0 (21): struct ofp10_queue_get_config_reply, uint8_t[8][]. */
     OFPRAW_OFPT10_QUEUE_GET_CONFIG_REPLY,
     /* OFPT 1.1+ (23): struct ofp11_queue_get_config_reply, uint8_t[8][]. */
     OFPRAW_OFPT11_QUEUE_GET_CONFIG_REPLY,
