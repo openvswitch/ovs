@@ -721,15 +721,15 @@ nl_dump_start(struct nl_dump *dump, int protocol, const struct ofpbuf *request)
  * have been initialized with nl_dump_start(), and 'buffer' must have been
  * initialized. 'buffer' should be at least NL_DUMP_BUFSIZE bytes long.
  *
- * If successful, returns true and points 'reply->data' and 'ofpbuf_size(reply)' to
- * the message that was retrieved. The caller must not modify 'reply' (because
- * it points within 'buffer', which will be used by future calls to this
- * function).
+ * If successful, returns true and points 'reply->data' and
+ * 'ofpbuf_size(reply)' to the message that was retrieved. The caller must not
+ * modify 'reply' (because it points within 'buffer', which will be used by
+ * future calls to this function).
  *
- * On failure, returns false and sets 'reply->data' to NULL and 'ofpbuf_size(reply)'
- * to 0.  Failure might indicate an actual error or merely the end of replies.
- * An error status for the entire dump operation is provided when it is
- * completed by calling nl_dump_done().
+ * On failure, returns false and sets 'reply->data' to NULL and
+ * 'ofpbuf_size(reply)' to 0.  Failure might indicate an actual error or merely
+ * the end of replies.  An error status for the entire dump operation is
+ * provided when it is completed by calling nl_dump_done().
  *
  * Multiple threads may call this function, passing the same nl_dump, however
  * each must provide independent buffers. This function may cache multiple
