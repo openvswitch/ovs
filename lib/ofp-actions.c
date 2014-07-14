@@ -1810,8 +1810,8 @@ ofpacts_pull_openflow_instructions(struct ofpbuf *openflow,
 
         ofpact_pad(ofpacts);
         start = ofpbuf_size(ofpacts);
-        on = ofpact_put(ofpacts, OFPACT_WRITE_ACTIONS,
-                        offsetof(struct ofpact_nest, actions));
+        ofpact_put(ofpacts, OFPACT_WRITE_ACTIONS,
+                   offsetof(struct ofpact_nest, actions));
         get_actions_from_instruction(insts[OVSINST_OFPIT11_WRITE_ACTIONS],
                                      &actions, &max_actions);
         error = ofpacts_from_openflow11_for_action_set(actions, max_actions,
@@ -2288,7 +2288,7 @@ ofpact_note_to_nxast(const struct ofpact_note *note, struct ofpbuf *out)
     unsigned int remainder;
     unsigned int len;
 
-    nan = ofputil_put_NXAST_NOTE(out);
+    ofputil_put_NXAST_NOTE(out);
     ofpbuf_set_size(out, ofpbuf_size(out) - sizeof nan->note);
 
     ofpbuf_put(out, note->data, note->length);

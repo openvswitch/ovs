@@ -3207,7 +3207,7 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
 
         msg = ofpraw_alloc_xid(OFPRAW_NXT_FLOW_REMOVED, OFP10_VERSION,
                                htonl(0), NXM_TYPICAL_LEN);
-        nfr = ofpbuf_put_zeros(msg, sizeof *nfr);
+        ofpbuf_put_zeros(msg, sizeof *nfr);
         match_len = nx_put_match(msg, &fr->match, 0, 0);
 
         nfr = ofpbuf_l3(msg);

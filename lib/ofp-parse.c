@@ -398,7 +398,7 @@ parse_noargs_dec_ttl(struct ofpbuf *b)
     struct ofpact_cnt_ids *ids;
     uint16_t id = 0;
 
-    ids = ofpact_put_DEC_TTL(b);
+    ofpact_put_DEC_TTL(b);
     ofpbuf_put(b, &id, sizeof id);
     ids = b->frame;
     ids->n_controllers++;
@@ -1051,8 +1051,8 @@ parse_named_instruction(enum ovs_instruction_type type,
 
         ofpact_pad(ofpacts);
         ofs = ofpbuf_size(ofpacts);
-        on = ofpact_put(ofpacts, OFPACT_WRITE_ACTIONS,
-                        offsetof(struct ofpact_nest, actions));
+        ofpact_put(ofpacts, OFPACT_WRITE_ACTIONS,
+                   offsetof(struct ofpact_nest, actions));
         error_s = str_to_ofpacts__(arg, ofpacts, usable_protocols);
 
         on = ofpbuf_at_assert(ofpacts, ofs, sizeof *on);
