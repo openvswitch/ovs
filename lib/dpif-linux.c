@@ -825,7 +825,7 @@ dpif_linux_port_get_pid__(const struct dpif_linux *dpif, odp_port_t port_no,
     uint32_t port_idx = odp_to_u32(port_no);
     uint32_t pid = 0;
 
-    if (dpif->handlers) {
+    if (dpif->handlers && dpif->uc_array_size > 0) {
         /* The ODPP_NONE "reserved" port number uses the "ovs-system"'s
          * channel, since it is not heavily loaded. */
         uint32_t idx = port_idx >= dpif->uc_array_size ? 0 : port_idx;
