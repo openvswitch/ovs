@@ -702,15 +702,14 @@ nl_sock_drain(struct nl_sock *sock)
 void
 nl_dump_start(struct nl_dump *dump, int protocol, const struct ofpbuf *request)
 {
-    int status = nl_pool_alloc(protocol, &dump->sock);
-
-    if (status) {
-        return;
-    }
+    int status;
 
     nl_msg_nlmsghdr(request)->nlmsg_flags |= NLM_F_DUMP | NLM_F_ACK;
-    status = nl_sock_send__(dump->sock, request,
-                            nl_sock_allocate_seq(dump->sock, 1), true);
+    status = nl_pool_alloc(protocol, &dump->sock);
+    if (!status) {
+        status = nl_sock_send__(dump->sock, request,
+                                nl_sock_allocate_seq(dump->sock, 1), true);
+    }
     atomic_init(&dump->status, status << 1);
     dump->nl_seq = nl_msg_nlmsghdr(request)->nlmsg_seq;
     dump->status_seq = seq_create();
