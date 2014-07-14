@@ -3420,6 +3420,9 @@ rule_collection_destroy(struct rule_collection *rules)
     if (rules->rules != rules->stub) {
         free(rules->rules);
     }
+
+    /* Make repeated destruction harmless. */
+    rule_collection_init(rules);
 }
 
 /* Checks whether 'rule' matches 'c' and, if so, adds it to 'rules'.  This
