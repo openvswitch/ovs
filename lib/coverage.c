@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -300,8 +300,6 @@ coverage_run(void)
 
         for (i = 0; i < n_coverage_counters; i++) {
             unsigned int count, portion;
-            unsigned int m_idx = min_idx;
-            unsigned int h_idx = hr_idx;
             unsigned int idx = idx_count;
 
             /* Computes the differences between the current total and the one
@@ -317,8 +315,8 @@ coverage_run(void)
                 /* The m_idx is increased from 0 to MIN_AVG_LEN - 1. Every
                  * time the m_idx finishes a cycle (a cycle is one minute),
                  * the h_idx is incremented by 1. */
-                m_idx = idx % MIN_AVG_LEN;
-                h_idx = idx / MIN_AVG_LEN;
+                unsigned int m_idx = idx % MIN_AVG_LEN;
+                unsigned int h_idx = idx / MIN_AVG_LEN;
 
                 c[i]->min[m_idx] = portion + (j == (slots - 1)
                                               ? count % slots : 0);
