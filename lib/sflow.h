@@ -426,6 +426,8 @@ typedef struct _SFLIf_counters {
     u_int32_t ifPromiscuousMode;
 } SFLIf_counters;
 
+#define SFL_CTR_GENERIC_XDR_SIZE 88
+
 /* Ethernet interface counters - see RFC 2358 */
 typedef struct _SFLEthernet_counters {
     u_int32_t dot3StatsAlignmentErrors;
@@ -442,6 +444,8 @@ typedef struct _SFLEthernet_counters {
     u_int32_t dot3StatsInternalMacReceiveErrors;
     u_int32_t dot3StatsSymbolErrors;
 } SFLEthernet_counters;
+
+#define SFL_CTR_ETHERNET_XDR_SIZE 52
 
 /* Token ring counters - see RFC 1748 */
 
@@ -500,6 +504,8 @@ typedef struct {
     u_int32_t port_no;
 } SFLOpenFlowPort;
 
+#define SFL_CTR_OPENFLOWPORT_XDR_SIZE 12
+
 /* port name */
 typedef struct {
     SFLString portName;
@@ -534,6 +540,8 @@ typedef struct _SFLLACP_counters {
     uint32_t markerPDUsTx;
     uint32_t markerResponsePDUsTx;
 } SFLLACP_counters;
+
+#define SFL_CTR_LACP_XDR_SIZE 56
 
 /* Counters data */
 

@@ -491,6 +491,9 @@ process_datagram(struct sflow_xdr *x)
                 case SFLOW_TAG_CTR_PORTNAME:
                     sflowxdr_mark_unique(x, &x->offset.PORTNAME);
                     break;
+                case SFLOW_TAG_CTR_OPENFLOWPORT:
+                    sflowxdr_mark_unique(x, &x->offset.OPENFLOWPORT);
+                    break;
 
                     /* Add others here... */
                 }

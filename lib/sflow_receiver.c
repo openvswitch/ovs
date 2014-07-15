@@ -644,13 +644,13 @@ static int computeCountersSampleSize(SFLReceiver *receiver, SFL_COUNTERS_SAMPLE_
 	cs->num_elements++;
 	siz += 8; /* tag, length */
 	switch(elem->tag) {
-	case SFLCOUNTERS_GENERIC:  elemSiz = sizeof(elem->counterBlock.generic); break;
-	case SFLCOUNTERS_ETHERNET: elemSiz = sizeof(elem->counterBlock.ethernet); break;
+	case SFLCOUNTERS_GENERIC:  elemSiz = SFL_CTR_GENERIC_XDR_SIZE; break;
+	case SFLCOUNTERS_ETHERNET: elemSiz = SFL_CTR_ETHERNET_XDR_SIZE; break;
 	case SFLCOUNTERS_TOKENRING: elemSiz = sizeof(elem->counterBlock.tokenring); break;
 	case SFLCOUNTERS_VG: elemSiz = sizeof(elem->counterBlock.vg); break;
 	case SFLCOUNTERS_VLAN: elemSiz = sizeof(elem->counterBlock.vlan); break;
-	case SFLCOUNTERS_LACP: elemSiz = sizeof(elem->counterBlock.lacp); break;
-	case SFLCOUNTERS_OPENFLOWPORT: elemSiz = sizeof(&elem->counterBlock.ofPort); break;
+	case SFLCOUNTERS_LACP: elemSiz = SFL_CTR_LACP_XDR_SIZE; break;
+	case SFLCOUNTERS_OPENFLOWPORT: elemSiz = SFL_CTR_OPENFLOWPORT_XDR_SIZE; break;
 	case SFLCOUNTERS_PORTNAME: elemSiz = stringEncodingLength(&elem->counterBlock.portName.portName); break;
 	default:
 	    sflError(receiver, "unexpected counters_tag");
@@ -768,8 +768,8 @@ int sfl_receiver_writeCountersSample(SFLReceiver *receiver, SFL_COUNTERS_SAMPLE_
 		putNet32(receiver, elem->counterBlock.lacp.markerResponsePDUsTx);
 		break;
 	    case SFLCOUNTERS_OPENFLOWPORT:
-		putNet64(receiver, &elem->counterBlock.ofPort.datapath_id);
-		putNet32(receiver, &elem->counterBlock.ofPort.port_no);
+		putNet64(receiver, elem->counterBlock.ofPort.datapath_id);
+		putNet32(receiver, elem->counterBlock.ofPort.port_no);
 		break;
 	    case SFLCOUNTERS_PORTNAME:
 		putString(receiver, &elem->counterBlock.portName.portName);
