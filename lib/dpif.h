@@ -586,6 +586,28 @@ enum dpif_op_type {
     DPIF_OP_EXECUTE,
 };
 
+/* Add or modify a flow.
+ *
+ * The flow is specified by the Netlink attributes with types OVS_KEY_ATTR_* in
+ * the 'key_len' bytes starting at 'key'.  The associated actions are specified
+ * by the Netlink attributes with types OVS_ACTION_ATTR_* in the 'actions_len'
+ * bytes starting at 'actions'.
+ *
+ *   - If the flow's key does not exist in the dpif, then the flow will be
+ *     added if 'flags' includes DPIF_FP_CREATE.  Otherwise the operation will
+ *     fail with ENOENT.
+ *
+ *     If the operation succeeds, then 'stats', if nonnull, will be zeroed.
+ *
+ *   - If the flow's key does exist in the dpif, then the flow's actions will
+ *     be updated if 'flags' includes DPIF_FP_MODIFY.  Otherwise the operation
+ *     will fail with EEXIST.  If the flow's actions are updated, then its
+ *     statistics will be zeroed if 'flags' includes DPIF_FP_ZERO_STATS, and
+ *     left as-is otherwise.
+ *
+ *     If the operation succeeds, then 'stats', if nonnull, will be set to the
+ *     flow's statistics before the update.
+ */
 struct dpif_flow_put {
     /* Input. */
     enum dpif_flow_put_flags flags; /* DPIF_FP_*. */
@@ -600,6 +622,14 @@ struct dpif_flow_put {
     struct dpif_flow_stats *stats;  /* Optional flow statistics. */
 };
 
+/* Delete a flow.
+ *
+ * The flow is specified by the Netlink attributes with types OVS_KEY_ATTR_* in
+ * the 'key_len' bytes starting at 'key'.  Succeeds with status 0 if the flow
+ * is deleted, or fails with ENOENT if the dpif does not contain such a flow.
+ *
+ * If the operation succeeds, then 'stats', if nonnull, will be set to the
+ * flow's statistics before its deletion. */
 struct dpif_flow_del {
     /* Input. */
     const struct nlattr *key;       /* Flow to delete. */
@@ -609,21 +639,29 @@ struct dpif_flow_del {
     struct dpif_flow_stats *stats;  /* Optional flow statistics. */
 };
 
+/* Executes actions on a specified packet.
+ *
+ * Performs the 'actions_len' bytes of actions in 'actions' on the Ethernet
+ * frame in 'packet' and on the packet metadata in 'md'.  May modify both
+ * 'packet' and 'md'.
+ *
+ * Some dpif providers do not implement every action.  The Linux kernel
+ * datapath, in particular, does not implement ARP field modification.  If
+ * 'needs_help' is true, the dpif layer executes in userspace all of the
+ * actions that it can, and for OVS_ACTION_ATTR_OUTPUT and
+ * OVS_ACTION_ATTR_USERSPACE actions it passes the packet through to the dpif
+ * implementation.
+ *
+ * This works even if 'actions_len' is too long for a Netlink attribute. */
 struct dpif_execute {
-    /* Raw support for execute passed along to the provider. */
+    /* Input. */
     const struct nlattr *actions;   /* Actions to execute on packet. */
     size_t actions_len;             /* Length of 'actions' in bytes. */
+    bool needs_help;
+
+    /* Input, but possibly modified as a side effect of execution. */
     struct ofpbuf *packet;          /* Packet to execute. */
     struct pkt_metadata md;         /* Packet metadata. */
-
-    /* Some dpif providers do not implement every action.  The Linux kernel
-     * datapath, in particular, does not implement ARP field modification.
-     *
-     * If this member is set to true, the dpif layer executes in userspace all
-     * of the actions that it can, and for OVS_ACTION_ATTR_OUTPUT and
-     * OVS_ACTION_ATTR_USERSPACE actions it passes the packet through to the
-     * dpif implementation. */
-    bool needs_help;
 };
 
 int dpif_execute(struct dpif *, struct dpif_execute *);

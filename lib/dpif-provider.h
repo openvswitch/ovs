@@ -270,39 +270,6 @@ struct dpif_class {
                     struct nlattr **actionsp, size_t *acts_len,
                     struct dpif_flow_stats *stats);
 
-    /* Adds or modifies a flow in 'dpif'.  The flow is specified by the Netlink
-     * attributes with types OVS_KEY_ATTR_* in the 'put->key_len' bytes
-     * starting at 'put->key'.  The associated actions are specified by the
-     * Netlink attributes with types OVS_ACTION_ATTR_* in the
-     * 'put->actions_len' bytes starting at 'put->actions'.
-     *
-     * - If the flow's key does not exist in 'dpif', then the flow will be
-     *   added if 'put->flags' includes DPIF_FP_CREATE.  Otherwise the
-     *   operation will fail with ENOENT.
-     *
-     *   If the operation succeeds, then 'put->stats', if nonnull, must be
-     *   zeroed.
-     *
-     * - If the flow's key does exist in 'dpif', then the flow's actions will
-     *   be updated if 'put->flags' includes DPIF_FP_MODIFY.  Otherwise the
-     *   operation will fail with EEXIST.  If the flow's actions are updated,
-     *   then its statistics will be zeroed if 'put->flags' includes
-     *   DPIF_FP_ZERO_STATS, and left as-is otherwise.
-     *
-     *   If the operation succeeds, then 'put->stats', if nonnull, must be set
-     *   to the flow's statistics before the update.
-     */
-    int (*flow_put)(struct dpif *dpif, const struct dpif_flow_put *put);
-
-    /* Deletes a flow from 'dpif' and returns 0, or returns ENOENT if 'dpif'
-     * does not contain such a flow.  The flow is specified by the Netlink
-     * attributes with types OVS_KEY_ATTR_* in the 'del->key_len' bytes
-     * starting at 'del->key'.
-     *
-     * If the operation succeeds, then 'del->stats', if nonnull, must be set to
-     * the flow's statistics before its deletion. */
-    int (*flow_del)(struct dpif *dpif, const struct dpif_flow_del *del);
-
     /* Deletes all flows from 'dpif' and clears all of its queues of received
      * packets. */
     int (*flow_flush)(struct dpif *dpif);
@@ -331,18 +298,10 @@ struct dpif_class {
     int (*flow_dump_next)(struct dpif_flow_dump_thread *thread,
                           struct dpif_flow *flows, int max_flows);
 
-    /* Performs the 'execute->actions_len' bytes of actions in
-     * 'execute->actions' on the Ethernet frame in 'execute->packet'
-     * and on the packet metadata in 'execute->md'.
-     * May modify both packet and metadata. */
-    int (*execute)(struct dpif *dpif, struct dpif_execute *execute);
-
     /* Executes each of the 'n_ops' operations in 'ops' on 'dpif', in the order
      * in which they are specified, placing each operation's results in the
-     * "output" members documented in comments.
-     *
-     * This function is optional.  It is only worthwhile to implement it if
-     * 'dpif' can perform operations in batch faster than individually. */
+     * "output" members documented in comments and the 'error' member of each
+     * dpif_op. */
     void (*operate)(struct dpif *dpif, struct dpif_op **ops, size_t n_ops);
 
     /* Enables or disables receiving packets with dpif_recv() for 'dpif'.

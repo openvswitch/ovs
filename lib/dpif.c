@@ -884,49 +884,7 @@ dpif_flow_get(const struct dpif *dpif,
     return error;
 }
 
-static int
-dpif_flow_put__(struct dpif *dpif, const struct dpif_flow_put *put)
-{
-    int error;
-
-    COVERAGE_INC(dpif_flow_put);
-    ovs_assert(!(put->flags & ~(DPIF_FP_CREATE | DPIF_FP_MODIFY
-                                | DPIF_FP_ZERO_STATS)));
-
-    error = dpif->dpif_class->flow_put(dpif, put);
-    if (error && put->stats) {
-        memset(put->stats, 0, sizeof *put->stats);
-    }
-    log_flow_put_message(dpif, put, error);
-    return error;
-}
-
-/* Adds or modifies a flow in 'dpif'.  The flow is specified by the Netlink
- * attribute OVS_FLOW_ATTR_KEY with types OVS_KEY_ATTR_* in the 'key_len' bytes
- * starting at 'key', and OVS_FLOW_ATTR_MASK with types of OVS_KEY_ATTR_* in
- * the 'mask_len' bytes starting at 'mask'. The associated actions are
- * specified by the Netlink attributes with types OVS_ACTION_ATTR_* in the
- * 'actions_len' bytes starting at 'actions'.
- *
- * - If the flow's key does not exist in 'dpif', then the flow will be added if
- *   'flags' includes DPIF_FP_CREATE.  Otherwise the operation will fail with
- *   ENOENT.
- *
- *   The datapath may reject attempts to insert overlapping flows with EINVAL
- *   or EEXIST, but clients should not rely on this: avoiding overlapping flows
- *   is primarily the client's responsibility.
- *
- *   If the operation succeeds, then 'stats', if nonnull, will be zeroed.
- *
- * - If the flow's key does exist in 'dpif', then the flow's actions will be
- *   updated if 'flags' includes DPIF_FP_MODIFY.  Otherwise the operation will
- *   fail with EEXIST.  If the flow's actions are updated, then its statistics
- *   will be zeroed if 'flags' includes DPIF_FP_ZERO_STATS, and left as-is
- *   otherwise.
- *
- *   If the operation succeeds, then 'stats', if nonnull, will be set to the
- *   flow's statistics before the update.
- */
+/* A dpif_operate() wrapper for performing a single DPIF_OP_FLOW_PUT. */
 int
 dpif_flow_put(struct dpif *dpif, enum dpif_flow_put_flags flags,
               const struct nlattr *key, size_t key_len,
@@ -934,51 +892,43 @@ dpif_flow_put(struct dpif *dpif, enum dpif_flow_put_flags flags,
               const struct nlattr *actions, size_t actions_len,
               struct dpif_flow_stats *stats)
 {
-    struct dpif_flow_put put;
+    struct dpif_op *opp;
+    struct dpif_op op;
 
-    put.flags = flags;
-    put.key = key;
-    put.key_len = key_len;
-    put.mask = mask;
-    put.mask_len = mask_len;
-    put.actions = actions;
-    put.actions_len = actions_len;
-    put.stats = stats;
-    return dpif_flow_put__(dpif, &put);
+    op.type = DPIF_OP_FLOW_PUT;
+    op.u.flow_put.flags = flags;
+    op.u.flow_put.key = key;
+    op.u.flow_put.key_len = key_len;
+    op.u.flow_put.mask = mask;
+    op.u.flow_put.mask_len = mask_len;
+    op.u.flow_put.actions = actions;
+    op.u.flow_put.actions_len = actions_len;
+    op.u.flow_put.stats = stats;
+
+    opp = &op;
+    dpif_operate(dpif, &opp, 1);
+
+    return op.error;
 }
 
-static int
-dpif_flow_del__(struct dpif *dpif, struct dpif_flow_del *del)
-{
-    int error;
-
-    COVERAGE_INC(dpif_flow_del);
-
-    error = dpif->dpif_class->flow_del(dpif, del);
-    if (error && del->stats) {
-        memset(del->stats, 0, sizeof *del->stats);
-    }
-    log_flow_del_message(dpif, del, error);
-    return error;
-}
-
-/* Deletes a flow from 'dpif' and returns 0, or returns ENOENT if 'dpif' does
- * not contain such a flow.  The flow is specified by the Netlink attributes
- * with types OVS_KEY_ATTR_* in the 'key_len' bytes starting at 'key'.
- *
- * If the operation succeeds, then 'stats', if nonnull, will be set to the
- * flow's statistics before its deletion. */
+/* A dpif_operate() wrapper for performing a single DPIF_OP_FLOW_DEL. */
 int
 dpif_flow_del(struct dpif *dpif,
               const struct nlattr *key, size_t key_len,
               struct dpif_flow_stats *stats)
 {
-    struct dpif_flow_del del;
+    struct dpif_op *opp;
+    struct dpif_op op;
 
-    del.key = key;
-    del.key_len = key_len;
-    del.stats = stats;
-    return dpif_flow_del__(dpif, &del);
+    op.type = DPIF_OP_FLOW_DEL;
+    op.u.flow_del.key = key;
+    op.u.flow_del.key_len = key_len;
+    op.u.flow_del.stats = stats;
+
+    opp = &op;
+    dpif_operate(dpif, &opp, 1);
+
+    return op.error;
 }
 
 /* Creates and returns a new 'struct dpif_flow_dump' for iterating through the
@@ -1106,8 +1056,7 @@ dpif_execute_helper_cb(void *aux_, struct dpif_packet **packets, int cnt,
         execute.packet = packet;
         execute.md = *md;
         execute.needs_help = false;
-        aux->error = aux->dpif->dpif_class->execute(aux->dpif, &execute);
-
+        aux->error = dpif_execute(aux->dpif, &execute);
         log_execute_message(aux->dpif, &execute, true, aux->error);
 
         if (md->tunnel.ip_dst) {
@@ -1163,125 +1112,99 @@ dpif_execute_needs_help(const struct dpif_execute *execute)
     return execute->needs_help || nl_attr_oversized(execute->actions_len);
 }
 
-/* Causes 'dpif' to perform the 'execute->actions_len' bytes of actions in
- * 'execute->actions' on the Ethernet frame in 'execute->packet' and on packet
- * metadata in 'execute->md'.  The implementation is allowed to modify both the
- * '*execute->packet' and 'execute->md'.
- *
- * Some dpif providers do not implement every action.  The Linux kernel
- * datapath, in particular, does not implement ARP field modification.  If
- * 'needs_help' is true, the dpif layer executes in userspace all of the
- * actions that it can, and for OVS_ACTION_ATTR_OUTPUT and
- * OVS_ACTION_ATTR_USERSPACE actions it passes the packet through to the dpif
- * implementation.
- *
- * This works even if 'execute->actions_len' is too long for a Netlink
- * attribute.
- *
- * Returns 0 if successful, otherwise a positive errno value. */
+/* A dpif_operate() wrapper for performing a single DPIF_OP_EXECUTE. */
 int
 dpif_execute(struct dpif *dpif, struct dpif_execute *execute)
 {
-    int error;
+    if (execute->actions_len) {
+        struct dpif_op *opp;
+        struct dpif_op op;
 
-    COVERAGE_INC(dpif_execute);
-    if (execute->actions_len > 0) {
-        error = (dpif_execute_needs_help(execute)
-                 ? dpif_execute_with_help(dpif, execute)
-                 : dpif->dpif_class->execute(dpif, execute));
+        op.type = DPIF_OP_EXECUTE;
+        op.u.execute = *execute;
+
+        opp = &op;
+        dpif_operate(dpif, &opp, 1);
+
+        return op.error;
     } else {
-        error = 0;
+        return 0;
     }
-
-    log_execute_message(dpif, execute, false, error);
-
-    return error;
 }
 
 /* Executes each of the 'n_ops' operations in 'ops' on 'dpif', in the order in
- * which they are specified, placing each operation's results in the "output"
- * members documented in comments.
- *
- * This function exists because some datapaths can perform batched operations
- * faster than individual operations. */
+ * which they are specified.  Places each operation's results in the "output"
+ * members documented in comments, and 0 in the 'error' member on success or a
+ * positive errno on failure. */
 void
 dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
 {
-    if (dpif->dpif_class->operate) {
-        while (n_ops > 0) {
-            size_t chunk;
+    while (n_ops > 0) {
+        size_t chunk;
 
-            /* Count 'chunk', the number of ops that can be executed without
-             * needing any help.  Ops that need help should be rare, so we
-             * expect this to ordinarily be 'n_ops', that is, all the ops. */
-            for (chunk = 0; chunk < n_ops; chunk++) {
-                struct dpif_op *op = ops[chunk];
+        /* Count 'chunk', the number of ops that can be executed without
+         * needing any help.  Ops that need help should be rare, so we
+         * expect this to ordinarily be 'n_ops', that is, all the ops. */
+        for (chunk = 0; chunk < n_ops; chunk++) {
+            struct dpif_op *op = ops[chunk];
 
-                if (op->type == DPIF_OP_EXECUTE
-                    && dpif_execute_needs_help(&op->u.execute)) {
+            if (op->type == DPIF_OP_EXECUTE
+                && dpif_execute_needs_help(&op->u.execute)) {
+                break;
+            }
+        }
+
+        if (chunk) {
+            /* Execute a chunk full of ops that the dpif provider can
+             * handle itself, without help. */
+            size_t i;
+
+            dpif->dpif_class->operate(dpif, ops, chunk);
+
+            for (i = 0; i < chunk; i++) {
+                struct dpif_op *op = ops[i];
+                int error = op->error;
+
+                switch (op->type) {
+                case DPIF_OP_FLOW_PUT: {
+                    struct dpif_flow_put *put = &op->u.flow_put;
+
+                    COVERAGE_INC(dpif_flow_put);
+                    log_flow_put_message(dpif, put, error);
+                    if (error && put->stats) {
+                        memset(put->stats, 0, sizeof *put->stats);
+                    }
+                    break;
+                }
+
+                case DPIF_OP_FLOW_DEL: {
+                    struct dpif_flow_del *del = &op->u.flow_del;
+
+                    COVERAGE_INC(dpif_flow_del);
+                    log_flow_del_message(dpif, del, error);
+                    if (error && del->stats) {
+                        memset(del->stats, 0, sizeof *del->stats);
+                    }
+                    break;
+                }
+
+                case DPIF_OP_EXECUTE:
+                    COVERAGE_INC(dpif_execute);
+                    log_execute_message(dpif, &op->u.execute, false, error);
                     break;
                 }
             }
 
-            if (chunk) {
-                /* Execute a chunk full of ops that the dpif provider can
-                 * handle itself, without help. */
-                size_t i;
+            ops += chunk;
+            n_ops -= chunk;
+        } else {
+            /* Help the dpif provider to execute one op. */
+            struct dpif_op *op = ops[0];
 
-                dpif->dpif_class->operate(dpif, ops, chunk);
-
-                for (i = 0; i < chunk; i++) {
-                    struct dpif_op *op = ops[i];
-
-                    switch (op->type) {
-                    case DPIF_OP_FLOW_PUT:
-                        log_flow_put_message(dpif, &op->u.flow_put, op->error);
-                        break;
-
-                    case DPIF_OP_FLOW_DEL:
-                        log_flow_del_message(dpif, &op->u.flow_del, op->error);
-                        break;
-
-                    case DPIF_OP_EXECUTE:
-                        log_execute_message(dpif, &op->u.execute, false,
-                                            op->error);
-                        break;
-                    }
-                }
-
-                ops += chunk;
-                n_ops -= chunk;
-            } else {
-                /* Help the dpif provider to execute one op. */
-                struct dpif_op *op = ops[0];
-
-                op->error = dpif_execute(dpif, &op->u.execute);
-                ops++;
-                n_ops--;
-            }
-        }
-    } else {
-        size_t i;
-
-        for (i = 0; i < n_ops; i++) {
-            struct dpif_op *op = ops[i];
-
-            switch (op->type) {
-            case DPIF_OP_FLOW_PUT:
-                op->error = dpif_flow_put__(dpif, &op->u.flow_put);
-                break;
-
-            case DPIF_OP_FLOW_DEL:
-                op->error = dpif_flow_del__(dpif, &op->u.flow_del);
-                break;
-
-            case DPIF_OP_EXECUTE:
-                op->error = dpif_execute(dpif, &op->u.execute);
-                break;
-
-            default:
-                OVS_NOT_REACHED();
-            }
+            COVERAGE_INC(dpif_execute);
+            op->error = dpif_execute_with_help(dpif, &op->u.execute);
+            ops++;
+            n_ops--;
         }
     }
 }

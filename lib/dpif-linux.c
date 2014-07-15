@@ -1115,25 +1115,6 @@ dpif_linux_init_flow_put(struct dpif_linux *dpif, const struct dpif_flow_put *pu
     request->nlmsg_flags = put->flags & DPIF_FP_MODIFY ? 0 : NLM_F_CREATE;
 }
 
-static int
-dpif_linux_flow_put(struct dpif *dpif_, const struct dpif_flow_put *put)
-{
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    struct dpif_linux_flow request, reply;
-    struct ofpbuf *buf;
-    int error;
-
-    dpif_linux_init_flow_put(dpif, put, &request);
-    error = dpif_linux_flow_transact(&request,
-                                     put->stats ? &reply : NULL,
-                                     put->stats ? &buf : NULL);
-    if (!error && put->stats) {
-        dpif_linux_flow_get_stats(&reply, put->stats);
-        ofpbuf_delete(buf);
-    }
-    return error;
-}
-
 static void
 dpif_linux_init_flow_del(struct dpif_linux *dpif, const struct dpif_flow_del *del,
                          struct dpif_linux_flow *request)
@@ -1143,25 +1124,6 @@ dpif_linux_init_flow_del(struct dpif_linux *dpif, const struct dpif_flow_del *de
     request->dp_ifindex = dpif->dp_ifindex;
     request->key = del->key;
     request->key_len = del->key_len;
-}
-
-static int
-dpif_linux_flow_del(struct dpif *dpif_, const struct dpif_flow_del *del)
-{
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    struct dpif_linux_flow request, reply;
-    struct ofpbuf *buf;
-    int error;
-
-    dpif_linux_init_flow_del(dpif, del, &request);
-    error = dpif_linux_flow_transact(&request,
-                                     del->stats ? &reply : NULL,
-                                     del->stats ? &buf : NULL);
-    if (!error && del->stats) {
-        dpif_linux_flow_get_stats(&reply, del->stats);
-        ofpbuf_delete(buf);
-    }
-    return error;
 }
 
 struct dpif_linux_flow_dump {
@@ -1354,29 +1316,6 @@ dpif_linux_encode_execute(int dp_ifindex, const struct dpif_execute *d_exec,
 
     nl_msg_put_unspec(buf, OVS_PACKET_ATTR_ACTIONS,
                       d_exec->actions, d_exec->actions_len);
-}
-
-static int
-dpif_linux_execute__(int dp_ifindex, const struct dpif_execute *execute)
-{
-    uint64_t request_stub[1024 / 8];
-    struct ofpbuf request;
-    int error;
-
-    ofpbuf_use_stub(&request, request_stub, sizeof request_stub);
-    dpif_linux_encode_execute(dp_ifindex, execute, &request);
-    error = nl_transact(NETLINK_GENERIC, &request, NULL);
-    ofpbuf_uninit(&request);
-
-    return error;
-}
-
-static int
-dpif_linux_execute(struct dpif *dpif_, struct dpif_execute *execute)
-{
-    const struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-
-    return dpif_linux_execute__(dpif->dp_ifindex, execute);
 }
 
 #define MAX_OPS 50
@@ -1929,15 +1868,12 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_port_poll,
     dpif_linux_port_poll_wait,
     dpif_linux_flow_get,
-    dpif_linux_flow_put,
-    dpif_linux_flow_del,
     dpif_linux_flow_flush,
     dpif_linux_flow_dump_create,
     dpif_linux_flow_dump_destroy,
     dpif_linux_flow_dump_thread_create,
     dpif_linux_flow_dump_thread_destroy,
     dpif_linux_flow_dump_next,
-    dpif_linux_execute,
     dpif_linux_operate,
     dpif_linux_recv_set,
     dpif_linux_handlers_set,
