@@ -390,6 +390,9 @@ int ovs_vport_set_upcall_portids(struct vport *vport,  struct nlattr *ids)
 
 	vport_portids = kmalloc(sizeof *vport_portids + nla_len(ids),
 				GFP_KERNEL);
+	if (!vport_portids)
+		return -ENOMEM;
+
 	vport_portids->n_ids = nla_len(ids) / sizeof(u32);
 	vport_portids->rn_ids = reciprocal_value(vport_portids->n_ids);
 	nla_memcpy(vport_portids->ids, ids, nla_len(ids));
