@@ -671,7 +671,7 @@ dpif_linux_port_get_pid(const struct dpif *dpif_, odp_port_t port_no)
     uint32_t pid = 0;
 
     ovs_mutex_lock(&dpif->upcall_lock);
-    if (dpif->handlers && dpif->uc_array_size > 0) {
+    if (dpif->epoll_fd >= 0 && dpif->uc_array_size > 0) {
         /* The ODPP_NONE "reserved" port number uses the "ovs-system"'s
          * channel, since it is not heavily loaded. */
         uint32_t idx = port_idx >= dpif->uc_array_size ? 0 : port_idx;
