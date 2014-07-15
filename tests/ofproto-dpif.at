@@ -40,8 +40,7 @@ ovs-appctl netdev-dummy/set-admin-state p1 down
 ovs-appctl time/warp 100
 AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0d),eth_type(0x0800),ipv4(src=10.0.0.5,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0e),eth_type(0x0800),ipv4(src=10.0.0.6,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
-ovs-appctl time/warp 100
-ovs-appctl time/warp 100
+ovs-appctl time/warp 200 100
 sleep 1
 AT_CHECK([cat ovs-vswitchd.log | grep 'in_port([[348]])' | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
 skb_priority(0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no/0xff),icmp(type=8/0,code=0/0), actions: <del>
@@ -137,9 +136,7 @@ for i in `seq 0 255` ;
     AT_CHECK([ovs-appctl netdev-dummy/receive p7 $pkt])
     done
 )
-ovs-appctl time/warp 100
-ovs-appctl time/warp 100
-ovs-appctl time/warp 100
+ovs-appctl time/warp 300 100
 AT_CHECK([ovs-appctl dpif/dump-flows br0 |grep tcp > br0_flows.txt])
 AT_CHECK([ovs-appctl dpif/dump-flows br1 |grep tcp > br1_flows.txt])
 # Make sure there is resonable distribution to all three ports.
@@ -3967,9 +3964,7 @@ m4_define([CHECK_SFLOW_SAMPLING_PACKET],
 
   dnl sleep long enough to get more than one counter sample
   dnl from each datasource so we can check sequence numbers
-  for i in `seq 1 30`; do
-      ovs-appctl time/warp 100
-  done
+  ovs-appctl time/warp 3000 100
   OVS_VSWITCHD_STOP
   ovs-appctl -t test-sflow exit
 
@@ -4456,9 +4451,7 @@ get_ages duration3 hard3 idle3
 # occasionally.
 ovs-appctl time/warp 10000
 ovs-appctl netdev-dummy/receive br0 'in_port(0),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=6,tos=0,ttl=64,frag=no),tcp(src=80,dst=1234)'
-ovs-appctl time/warp 1000
-ovs-appctl time/warp 1000
-ovs-appctl time/warp 1000
+ovs-appctl time/warp 3000 1000
 sleep 1
 get_ages duration4 hard4 idle4
 
@@ -5316,7 +5309,7 @@ OVS_VSWITCHD_START([add-br br1 -- set bridge br1 datapath-type=dummy -- \
 
 ovs-appctl time/stop
 # advance the clock to stablize everything.
-for i in `seq 0 49`; do ovs-appctl time/warp 100; done
+ovs-appctl time/warp 5000 100
 # cfm/show should show 'recv' fault.
 AT_CHECK([ovs-appctl cfm/show | sed -n '/^.*fault:.*/p'], [0], [dnl
 	fault: recv
@@ -5339,7 +5332,7 @@ AT_CHECK([ovs-appctl bond/show | sed -n '/^.*may_enable:.*/p'], [0], [dnl
 # now disable the bfd on p1.
 AT_CHECK([ovs-vsctl set Interface p1 bfd:enable=false])
 # advance the clock to stablize everything.
-for i in `seq 0 49`; do ovs-appctl time/warp 100; done
+ovs-appctl time/warp 5000 100
 # cfm/show should show 'recv' fault.
 AT_CHECK([ovs-appctl cfm/show | sed -n '/^.*fault:.*/p'], [0], [dnl
 	fault: recv
@@ -5359,7 +5352,7 @@ AT_CHECK([ovs-appctl bond/show br0bond | sed -n '/^.*may_enable:.*/p'], [0], [dn
 AT_CHECK([ovs-vsctl set Interface p1 bfd:enable=true])
 AT_CHECK([ovs-vsctl set Interface p0 bfd:enable=false])
 # advance the clock to stablize everything.
-for i in `seq 0 49`; do ovs-appctl time/warp 100; done
+ovs-appctl time/warp 5000 100
 # cfm/show should show 'recv' fault.
 AT_CHECK([ovs-appctl cfm/show | sed -n '/^.*fault:.*/p'], [0], [dnl
 	fault: recv

@@ -12,9 +12,7 @@ OVS_VSWITCHD_START([\
         set Interface p1 type=dummy ])
 
 ovs-appctl time/stop
-ovs-appctl time/warp 100
-ovs-appctl time/warp 100
-ovs-appctl time/warp 100
+ovs-appctl time/warp 300 100
 
 AT_CHECK([ovs-appctl lacp/show], [0], [dnl
 ---- p1 ----
@@ -64,9 +62,7 @@ OVS_VSWITCHD_START([dnl
             other_config:lacp-aggregation-key=3333 ])
 
 ovs-appctl time/stop
-ovs-appctl time/warp 100
-ovs-appctl time/warp 100
-ovs-appctl time/warp 100
+ovs-appctl time/warp 300 100
 
 AT_CHECK([ovs-appctl lacp/show], [0], [stdout])
 AT_CHECK([sed -e 's/aggregation key:.*/aggregation key: <omitted>/' < stdout], [0], [dnl
@@ -320,7 +316,7 @@ AT_CHECK([ovs-vsctl \
 -- add-port br0 null0 -- set int null0 type=patch options:peer=p2 -- set int p2 options:peer=null0 \
 -- add-port br1 null1 -- set int null1 type=patch options:peer=p0 -- set int p0 options:peer=null1])
 
-for i in `seq 0 40`; do ovs-appctl time/warp 100; done
+ovs-appctl time/warp 4100 100
 AT_CHECK(
   [ovs-appctl lacp/show bond0
 ovs-appctl lacp/show bond1
@@ -448,7 +444,7 @@ slave p3: enabled
 
 # Wait 4 more simulated seconds.  The LACP state should become
 # "defaulted" for p0 and p2.
-for i in `seq 0 40`; do ovs-appctl time/warp 100; done
+ovs-appctl time/warp 4100 100
 AT_CHECK(
   [ovs-appctl lacp/show bond0
 ovs-appctl lacp/show bond1

@@ -219,9 +219,7 @@ NXST_FLOW reply:
 done
 
 # Make sure that 15 seconds without refreshing makes the flow time out.
-ovs-appctl time/warp 5000
-ovs-appctl time/warp 5000
-ovs-appctl time/warp 5000
+ovs-appctl time/warp 15000 5000
 sleep 1
 AT_CHECK([ovs-ofctl dump-flows br0 table=1 | ofctl_strip | sort], [0], [dnl
  table=1, priority=0 actions=FLOOD

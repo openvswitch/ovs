@@ -361,7 +361,7 @@ AT_CHECK(
         "row": {"target": "punix:socket2"}}]']], [0], [ignore], [ignore])
 ON_EXIT([kill `cat ovsdb-server.pid`])
 AT_CHECK([ovsdb-server --enable-dummy --detach --no-chdir --pidfile --remote=db:mydb,Root,managers --remote=db:mydb,Root,manager_options --log-file db], [0], [ignore], [ignore])
-for i in 1 2 3 4 5 6; do ovs-appctl -t ovsdb-server time/warp 1000; done
+ovs-appctl -t ovsdb-server time/warp 6000 1000
 AT_CHECK(
   [[ovsdb-client transact unix:socket1 \
      '["mydb",
