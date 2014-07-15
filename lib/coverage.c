@@ -279,8 +279,6 @@ coverage_clear(void)
 void
 coverage_run(void)
 {
-    /* Defines the moving average array index variables. */
-    static unsigned int min_idx, hr_idx;
     struct coverage_counter **c = coverage_counters;
     long long int now;
 
@@ -330,8 +328,6 @@ coverage_run(void)
 
         /* Updates the global index variables. */
         idx_count = (idx_count + slots) % (MIN_AVG_LEN * HR_AVG_LEN);
-        min_idx = idx_count % MIN_AVG_LEN;
-        hr_idx  = idx_count / MIN_AVG_LEN;
         /* Updates the run time. */
         coverage_run_time = now + COVERAGE_RUN_INTERVAL;
     }
