@@ -541,11 +541,8 @@ typedef struct _SFLLACP_counters {
     uint32_t markerResponsePDUsTx;
 } SFLLACP_counters;
 
-<<<<<<< HEAD
 #define SFL_CTR_LACP_XDR_SIZE 56
 
-=======
->>>>>>>  Prepare ground for extensions to sFlow export. Standard LACP
 /* Counters data */
 
 enum SFLCounters_type_tag {
