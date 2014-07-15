@@ -1466,7 +1466,6 @@ dpif_netdev_flow_dump_thread_destroy(struct dpif_flow_dump_thread *thread_)
     free(thread);
 }
 
-/* XXX the caller must use 'actions' without quiescing */
 static int
 dpif_netdev_flow_dump_next(struct dpif_flow_dump_thread *thread_,
                            struct dpif_flow *flows, int max_flows)

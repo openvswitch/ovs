@@ -842,7 +842,11 @@ dpif_flow_flush(struct dpif *dpif)
  * On success, 'flow' will be populated with the mask, actions and stats for
  * the datapath flow corresponding to 'key'. The mask and actions will point
  * within '*bufp'.
- */
+ *
+ * Implementations may opt to point 'flow->mask' and/or 'flow->actions' at
+ * RCU-protected data rather than making a copy of them. Therefore, callers
+ * that wish to hold these over quiescent periods must make a copy of these
+ * fields before quiescing. */
 int
 dpif_flow_get(const struct dpif *dpif,
               const struct nlattr *key, size_t key_len,
@@ -1030,8 +1034,9 @@ dpif_flow_dump_thread_destroy(struct dpif_flow_dump_thread *thread)
  *
  * All of the data stored into 'flows' is owned by the datapath, not by the
  * caller, and the caller must not modify or free it.  The datapath guarantees
- * that it remains accessible and unchanged until at least the next call to
- * dpif_flow_dump_next() for 'thread'. */
+ * that it remains accessible and unchanged until the first of:
+ *  - The next call to dpif_flow_dump_next() for 'thread', or
+ *  - The next rcu quiescent period. */
 int
 dpif_flow_dump_next(struct dpif_flow_dump_thread *thread,
                     struct dpif_flow *flows, int max_flows)

@@ -253,11 +253,13 @@ struct dpif_class {
      *
      * If 'maskp' is nonnull, then on success '*maskp' will point to the
      * Netlink attributes for the flow's mask. '*mask_len' will be set to the
-     * length of the mask attributes.
+     * length of the mask attributes. Implementations may opt to point 'maskp'
+     * at RCU-protected data rather than making a copy in '*bufp'.
      *
      * If 'actionsp' is nonnull, then on success '*actionsp' will point to the
      * Netlink attributes for the flow's actions. '*actions_len' will be set to
-     * the length of the actions attributes.
+     * the length of the actions attributes. Implementations may opt to point
+     * 'actionsp' at RCU-protected data rather than making a copy in '*bufp'.
      *
      * If 'stats' is nonnull, then on success it must be updated with the
      * flow's statistics. */
