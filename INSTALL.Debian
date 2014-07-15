@@ -34,20 +34,21 @@ You do not need to be the superuser to build the Debian packages.
    its top level directory.
 
 3. Install the build dependencies listed under "Build-Depends:" near
-   the top of debian/rules.  You can install these any way you like,
+   the top of debian/control.  You can install these any way you like,
    e.g. with "apt-get install".
 
-   Check your work by running "dpkg-checkbuilddeps".  If you've
-   installed all the dependencies properly, dpkg-checkbuilddeps will
-   exit without printing anything.  If you forgot to install some
-   dependencies, it will tell you which ones.
+   Check your work by running "dpkg-checkbuilddeps" in the top level of
+   your ovs directory.  If you've installed all the dependencies
+   properly, dpkg-checkbuilddeps will exit without printing anything.
+   If you forgot to install some dependencies, it will tell you which ones.
 
 4. Run:
 
        fakeroot debian/rules binary
 
-   This will do a serial build that runs the unit tests.  If you
-   prefer, you can run a faster parallel build, e.g.:
+   This will do a serial build that runs the unit tests. This will take
+   approximately 8 to 10 minutes. If you prefer, you can run a faster
+   parallel build, e.g.:
 
        DEB_BUILD_OPTIONS='parallel=8' fakeroot debian/rules binary
 
