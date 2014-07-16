@@ -462,7 +462,7 @@ nl_msg_put_nested(struct ofpbuf *msg,
  * 'ofpbuf_size(msg)', and returns a pointer to the header.
  *
  * If 'buffer' does not begin with a "struct nlmsghdr" or begins with one that
- * is invalid, returns NULL without modifying 'buffer'. */
+ * is invalid, returns NULL and clears 'buffer' and 'msg'. */
 struct nlmsghdr *
 nl_msg_next(struct ofpbuf *buffer, struct ofpbuf *msg)
 {
@@ -476,6 +476,7 @@ nl_msg_next(struct ofpbuf *buffer, struct ofpbuf *msg)
         }
     }
 
+    ofpbuf_clear(buffer);
     ofpbuf_set_data(msg, NULL);
     ofpbuf_set_size(msg, 0);
     return NULL;

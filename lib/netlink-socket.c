@@ -702,18 +702,64 @@ nl_sock_drain(struct nl_sock *sock)
 void
 nl_dump_start(struct nl_dump *dump, int protocol, const struct ofpbuf *request)
 {
-    int status;
-
     nl_msg_nlmsghdr(request)->nlmsg_flags |= NLM_F_DUMP | NLM_F_ACK;
-    status = nl_pool_alloc(protocol, &dump->sock);
-    if (!status) {
-        status = nl_sock_send__(dump->sock, request,
-                                nl_sock_allocate_seq(dump->sock, 1), true);
-    }
-    atomic_init(&dump->status, status << 1);
-    dump->nl_seq = nl_msg_nlmsghdr(request)->nlmsg_seq;
-    dump->status_seq = seq_create();
+
     ovs_mutex_init(&dump->mutex);
+    ovs_mutex_lock(&dump->mutex);
+    dump->status = nl_pool_alloc(protocol, &dump->sock);
+    if (!dump->status) {
+        dump->status = nl_sock_send__(dump->sock, request,
+                                      nl_sock_allocate_seq(dump->sock, 1),
+                                      true);
+    }
+    dump->nl_seq = nl_msg_nlmsghdr(request)->nlmsg_seq;
+    ovs_mutex_unlock(&dump->mutex);
+}
+
+static int
+nl_dump_refill(struct nl_dump *dump, struct ofpbuf *buffer)
+    OVS_REQUIRES(dump->mutex)
+{
+    struct nlmsghdr *nlmsghdr;
+    int error;
+
+    while (!ofpbuf_size(buffer)) {
+        error = nl_sock_recv__(dump->sock, buffer, true);
+        if (error) {
+            /* The kernel shouldn't return EAGAIN while there's data left. */
+            return error == EAGAIN ? EOF : error;
+        }
+
+        nlmsghdr = nl_msg_nlmsghdr(buffer);
+        if (dump->nl_seq != nlmsghdr->nlmsg_seq) {
+            VLOG_DBG_RL(&rl, "ignoring seq %#"PRIx32" != expected %#"PRIx32,
+                        nlmsghdr->nlmsg_seq, dump->nl_seq);
+            ofpbuf_clear(buffer);
+        }
+    }
+
+    if (nl_msg_nlmsgerr(buffer, &error) && error) {
+        VLOG_INFO_RL(&rl, "netlink dump request error (%s)",
+                     ovs_strerror(error));
+        ofpbuf_clear(buffer);
+        return error;
+    }
+
+    return 0;
+}
+
+static int
+nl_dump_next__(struct ofpbuf *reply, struct ofpbuf *buffer)
+{
+    struct nlmsghdr *nlmsghdr = nl_msg_next(buffer, reply);
+    if (!nlmsghdr) {
+        VLOG_WARN_RL(&rl, "netlink dump contains message fragment");
+        return EPROTO;
+    } else if (nlmsghdr->nlmsg_type == NLMSG_DONE) {
+        return EOF;
+    } else {
+        return 0;
+    }
 }
 
 /* Attempts to retrieve another reply from 'dump' into 'buffer'. 'dump' must
@@ -739,81 +785,47 @@ nl_dump_start(struct nl_dump *dump, int protocol, const struct ofpbuf *request)
 bool
 nl_dump_next(struct nl_dump *dump, struct ofpbuf *reply, struct ofpbuf *buffer)
 {
-    struct nlmsghdr *nlmsghdr;
-    int error = 0;
+    int retval = 0;
 
-    ofpbuf_set_data(reply, NULL);
-    ofpbuf_set_size(reply, 0);
-
-    /* If 'buffer' is empty, fetch another batch of nlmsgs. */
-    while (!ofpbuf_size(buffer)) {
-        unsigned int status;
-        int retval, seq;
-
-        seq = seq_read(dump->status_seq);
-        atomic_read(&dump->status, &status);
-        if (status) {
-            return false;
-        }
-
-        /* Take the mutex here to avoid an in-kernel race.  If two threads try
-         * to read from a Netlink dump socket at once, then the socket error
-         * can be set to EINVAL, which will be encountered on the next recv on
-         * that socket, which could be anywhere due to the way that we pool
-         * Netlink sockets.  Serializing the recv calls avoids the issue. */
+    /* If the buffer is empty, refill it.
+     *
+     * If the buffer is not empty, we don't check the dump's status.
+     * Otherwise, we could end up skipping some of the dump results if thread A
+     * hits EOF while thread B is in the midst of processing a batch. */
+    if (!ofpbuf_size(buffer)) {
         ovs_mutex_lock(&dump->mutex);
-        retval = nl_sock_recv__(dump->sock, buffer, false);
+        if (!dump->status) {
+            /* Take the mutex here to avoid an in-kernel race.  If two threads
+             * try to read from a Netlink dump socket at once, then the socket
+             * error can be set to EINVAL, which will be encountered on the
+             * next recv on that socket, which could be anywhere due to the way
+             * that we pool Netlink sockets.  Serializing the recv calls avoids
+             * the issue. */
+            dump->status = nl_dump_refill(dump, buffer);
+        }
+        retval = dump->status;
         ovs_mutex_unlock(&dump->mutex);
+    }
 
+    /* Fetch the next message from the buffer. */
+    if (!retval) {
+        retval = nl_dump_next__(reply, buffer);
         if (retval) {
-            ofpbuf_clear(buffer);
-            if (retval == EAGAIN) {
-                nl_sock_wait(dump->sock, POLLIN);
-                seq_wait(dump->status_seq, seq);
-                poll_block();
-                continue;
-            } else {
-                error = retval;
-                goto exit;
+            /* Record 'retval' as the dump status, but don't overwrite an error
+             * with EOF.  */
+            ovs_mutex_lock(&dump->mutex);
+            if (dump->status <= 0) {
+                dump->status = retval;
             }
-        }
-
-        nlmsghdr = nl_msg_nlmsghdr(buffer);
-        if (dump->nl_seq != nlmsghdr->nlmsg_seq) {
-            VLOG_DBG_RL(&rl, "ignoring seq %#"PRIx32" != expected %#"PRIx32,
-                        nlmsghdr->nlmsg_seq, dump->nl_seq);
-            ofpbuf_clear(buffer);
-            continue;
-        }
-
-        if (nl_msg_nlmsgerr(buffer, &retval) && retval) {
-            VLOG_INFO_RL(&rl, "netlink dump request error (%s)",
-                         ovs_strerror(retval));
-            error = retval == EAGAIN ? EPROTO : retval;
-            ofpbuf_clear(buffer);
-            goto exit;
+            ovs_mutex_unlock(&dump->mutex);
         }
     }
 
-    /* Fetch the next nlmsg in the current batch. */
-    nlmsghdr = nl_msg_next(buffer, reply);
-    if (!nlmsghdr) {
-        VLOG_WARN_RL(&rl, "netlink dump reply contains message fragment");
-        error = EPROTO;
-    } else if (nlmsghdr->nlmsg_type == NLMSG_DONE) {
-        error = EOF;
+    if (retval) {
+        ofpbuf_set_data(reply, NULL);
+        ofpbuf_set_size(reply, 0);
     }
-
-exit:
-    if (error == EOF) {
-        unsigned int old;
-        atomic_or(&dump->status, 1, &old);
-        seq_change(dump->status_seq);
-    } else if (error) {
-        atomic_store(&dump->status, error << 1);
-        seq_change(dump->status_seq);
-    }
-    return !error;
+    return !retval;
 }
 
 /* Completes Netlink dump operation 'dump', which must have been initialized
@@ -824,11 +836,14 @@ nl_dump_done(struct nl_dump *dump)
 {
     int status;
 
+    ovs_mutex_lock(&dump->mutex);
+    status = dump->status;
+    ovs_mutex_unlock(&dump->mutex);
+
     /* Drain any remaining messages that the client didn't read.  Otherwise the
      * kernel will continue to queue them up and waste buffer space.
      *
      * XXX We could just destroy and discard the socket in this case. */
-    atomic_read(&dump->status, &status);
     if (!status) {
         uint64_t tmp_reply_stub[NL_DUMP_BUFSIZE / 8];
         struct ofpbuf reply, buf;
@@ -837,14 +852,18 @@ nl_dump_done(struct nl_dump *dump)
         while (nl_dump_next(dump, &reply, &buf)) {
             /* Nothing to do. */
         }
-        atomic_read(&dump->status, &status);
-        ovs_assert(status);
         ofpbuf_uninit(&buf);
+
+        ovs_mutex_lock(&dump->mutex);
+        status = dump->status;
+        ovs_mutex_unlock(&dump->mutex);
+        ovs_assert(status);
     }
+
     nl_pool_release(dump->sock);
-    seq_destroy(dump->status_seq);
     ovs_mutex_destroy(&dump->mutex);
-    return status >> 1;
+
+    return status == EOF ? 0 : status;
 }
 
 /* Causes poll_block() to wake up when any of the specified 'events' (which is
