@@ -3324,7 +3324,7 @@
           <dd>Equivalent to <code>other</code>, except that there may be at
           most one master controller at a time.  When a controller configures
           itself as <code>master</code>, any existing master is demoted to
-          the <code>slave</code>role.</dd>
+          the <code>slave</code> role.</dd>
           <dt><code>slave</code></dt>
           <dd>Allows the controller read-only access to OpenFlow features.
           Attempts to modify the flow table will be rejected with an
