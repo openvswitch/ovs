@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 Nicira, Inc.
+/* Copyright (c) 2012, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,6 +51,15 @@ smap_add(struct smap *smap, const char *key, const char *value)
     size_t key_len = strlen(key);
     return smap_add__(smap, xmemdup0(key, key_len), xstrdup(value),
                       hash_bytes(key, key_len, 0));
+}
+
+/* Adds 'key' paired with 'value' to 'smap'.  Takes ownership of 'key' and
+ * 'value' (which will eventually be freed with free()).  It is the caller's
+ * responsibility to avoid duplicate keys if desirable. */
+struct smap_node *
+smap_add_nocopy(struct smap *smap, char *key, char *value)
+{
+    return smap_add__(smap, key, value, hash_bytes(key, strlen(key), 0));
 }
 
 /* Attempts to add 'key' to 'smap' associated with 'value'.  If 'key' already

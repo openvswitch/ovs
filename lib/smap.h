@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 Nicira, Inc.
+/* Copyright (c) 2012, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ void smap_init(struct smap *);
 void smap_destroy(struct smap *);
 
 struct smap_node *smap_add(struct smap *, const char *, const char *);
+struct smap_node *smap_add_nocopy(struct smap *, char *, char *);
 bool smap_add_once(struct smap *, const char *, const char *);
 void smap_add_format(struct smap *, const char *key, const char *, ...)
     PRINTF_FORMAT(3, 4);
