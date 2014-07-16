@@ -1101,10 +1101,10 @@ xport_stp_forward_state(const struct xport *xport)
 }
 
 static bool
-xport_stp_listen_state(const struct xport *xport)
+xport_stp_should_forward_bpdu(const struct xport *xport)
 {
     struct stp_port *sp = xport_get_stp_port(xport);
-    return stp_listen_in_state(sp ? stp_port_get_state(sp) : STP_DISABLED);
+    return stp_should_forward_bpdu(sp ? stp_port_get_state(sp) : STP_DISABLED);
 }
 
 /* Returns true if STP should process 'flow'.  Sets fields in 'wc' that
@@ -2376,7 +2376,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         return;
     } else if (check_stp) {
         if (is_stp(&ctx->base_flow)) {
-            if (!xport_stp_listen_state(xport)) {
+            if (!xport_stp_should_forward_bpdu(xport)) {
                 xlate_report(ctx, "STP not in listening state, "
                              "skipping bpdu output");
                 return;
