@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -173,10 +173,50 @@ static void
 lswitch_handshake(struct lswitch *sw)
 {
     enum ofputil_protocol protocol;
+    enum ofp_version version;
 
     send_features_request(sw);
 
-    protocol = ofputil_protocol_from_ofp_version(rconn_get_version(sw->rconn));
+    version = rconn_get_version(sw->rconn);
+    protocol = ofputil_protocol_from_ofp_version(version);
+    if (version >= OFP13_VERSION) {
+        /* OpenFlow 1.3 and later by default drop packets that miss in the flow
+         * table.  Set up a flow to send packets to the controller by
+         * default. */
+        struct ofputil_flow_mod fm;
+        struct ofpact_output output;
+        struct ofpbuf *msg;
+        int error;
+
+        ofpact_init_OUTPUT(&output);
+        output.port = OFPP_CONTROLLER;
+        output.max_len = OFP_DEFAULT_MISS_SEND_LEN;
+
+        match_init_catchall(&fm.match);
+        fm.priority = 0;
+        fm.cookie = 0;
+        fm.cookie_mask = 0;
+        fm.new_cookie = 0;
+        fm.modify_cookie = false;
+        fm.table_id = 0;
+        fm.command = OFPFC_ADD;
+        fm.idle_timeout = 0;
+        fm.hard_timeout = 0;
+        fm.buffer_id = UINT32_MAX;
+        fm.out_port = OFPP_NONE;
+        fm.out_group = OFPG_ANY;
+        fm.flags = 0;
+        fm.ofpacts = &output.ofpact;
+        fm.ofpacts_len = sizeof output;
+        fm.delete_reason = 0;
+
+        msg = ofputil_encode_flow_mod(&fm, protocol);
+        error = rconn_send(sw->rconn, msg, NULL);
+        if (error) {
+            VLOG_INFO_RL(&rl, "%s: failed to add default flow (%s)",
+                         rconn_get_name(sw->rconn), ovs_strerror(error));
+        }
+    }
     if (sw->default_flows) {
         struct ofpbuf *msg = NULL;
         int error = 0;
