@@ -55,14 +55,19 @@ static void
 check_cmap(struct cmap *cmap, const int values[], size_t n,
            hash_func *hash)
 {
-    int *sort_values, *cmap_values;
+    int *sort_values, *cmap_values, *cmap_values2;
     const struct element *e;
     size_t i;
+
+    struct cmap_position pos = { 0, 0, 0 };
+    struct cmap_node *node;
 
     /* Check that all the values are there in iteration. */
     sort_values = xmalloc(sizeof *sort_values * n);
     cmap_values = xmalloc(sizeof *sort_values * n);
+    cmap_values2 = xmalloc(sizeof *sort_values * n);
 
+    /* Here we test cursor iteration */
     i = 0;
     CMAP_FOR_EACH (e, node, cmap) {
         assert(i < n);
@@ -70,14 +75,27 @@ check_cmap(struct cmap *cmap, const int values[], size_t n,
     }
     assert(i == n);
 
+    /* Here we test iteration with cmap_next_position() */
+    i = 0;
+    while ((node = cmap_next_position(cmap, &pos))) {
+        struct element *e = OBJECT_CONTAINING(node, e, node);
+
+        assert(i < n);
+        cmap_values2[i++] = e->value;
+    }
+    assert(i == n);
+
     memcpy(sort_values, values, sizeof *sort_values * n);
     qsort(sort_values, n, sizeof *sort_values, compare_ints);
     qsort(cmap_values, n, sizeof *cmap_values, compare_ints);
+    qsort(cmap_values2, n, sizeof *cmap_values2, compare_ints);
 
     for (i = 0; i < n; i++) {
         assert(sort_values[i] == cmap_values[i]);
+        assert(sort_values[i] == cmap_values2[i]);
     }
 
+    free(cmap_values2);
     free(cmap_values);
     free(sort_values);
 

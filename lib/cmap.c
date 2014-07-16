@@ -854,7 +854,7 @@ cmap_next_position(const struct cmap *cmap,
             const struct cmap_node *node = cmap_node_next(&b->nodes[entry]);
             unsigned int i;
 
-            for (i = 0; node; i++) {
+            for (i = 0; node; i++, node = cmap_node_next(node)) {
                 if (i == offset) {
                     if (cmap_node_next(node)) {
                         offset++;
