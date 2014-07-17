@@ -1161,14 +1161,20 @@ netdev_dpdk_set_admin_state(struct unixctl_conn *conn, int argc,
     unixctl_command_reply(conn, "OK");
 }
 
+static void
+dpdk_common_init(void)
+{
+    unixctl_command_register("netdev-dpdk/set-admin-state",
+                             "[netdev] up|down", 1, 2,
+                             netdev_dpdk_set_admin_state, NULL);
+
+    ovs_thread_create("dpdk_watchdog", dpdk_watchdog, NULL);
+}
+
 static int
 dpdk_class_init(void)
 {
     int result;
-
-    if (rte_eal_init_ret) {
-        return 0;
-    }
 
     result = rte_pmd_init_all();
     if (result) {
@@ -1182,31 +1188,12 @@ dpdk_class_init(void)
         return -result;
     }
 
-    if (rte_eth_dev_count() < 1) {
-        VLOG_ERR("No Ethernet devices found. Try assigning ports to UIO.");
-    }
-
     VLOG_INFO("Ethernet Device Count: %d", (int)rte_eth_dev_count());
 
-    list_init(&dpdk_list);
-    list_init(&dpdk_mp_list);
-
-    unixctl_command_register("netdev-dpdk/set-admin-state",
-                             "[netdev] up|down", 1, 2,
-                             netdev_dpdk_set_admin_state, NULL);
-
-    ovs_thread_create("dpdk_watchdog", dpdk_watchdog, NULL);
     return 0;
 }
 
 /* Client Rings */
-
-static int
-dpdk_ring_class_init(void)
-{
-    VLOG_INFO("Initialized dpdk client handlers:\n");
-    return 0;
-}
 
 static int
 dpdk_ring_create(const char dev_name[], unsigned int port_no,
@@ -1409,7 +1396,7 @@ const struct netdev_class dpdk_class =
 const struct netdev_class dpdk_ring_class =
     NETDEV_DPDK_CLASS(
         "dpdkr",
-        dpdk_ring_class_init,
+        NULL,
         netdev_dpdk_ring_construct);
 
 void
@@ -1417,7 +1404,12 @@ netdev_dpdk_register(void)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
 
+    if (rte_eal_init_ret) {
+        return;
+    }
+
     if (ovsthread_once_start(&once)) {
+        dpdk_common_init();
         netdev_register_provider(&dpdk_class);
         netdev_register_provider(&dpdk_ring_class);
         ovsthread_once_done(&once);
