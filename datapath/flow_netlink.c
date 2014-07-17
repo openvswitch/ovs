@@ -106,6 +106,20 @@ static void update_range__(struct sw_flow_match *match,
 	SW_FLOW_KEY_MEMCPY_OFFSET(match, offsetof(struct sw_flow_key, field), \
 				  value_p, len, is_mask)
 
+#define SW_FLOW_KEY_MEMSET_FIELD(match, field, value, is_mask) \
+	do { \
+		update_range__(match, offsetof(struct sw_flow_key, field),  \
+				     sizeof((match)->key->field), is_mask); \
+		if (is_mask) {						    \
+			if ((match)->mask)				    \
+				memset((u8 *)&(match)->mask->key.field, value,\
+				       sizeof((match)->mask->key.field));   \
+		} else {                                                    \
+			memset((u8 *)&(match)->key->field, value,           \
+			       sizeof((match)->key->field));                \
+		}                                                           \
+	} while (0)
+
 static bool match_validate(const struct sw_flow_match *match,
 			   u64 key_attrs, u64 mask_attrs)
 {
@@ -911,6 +925,11 @@ int ovs_nla_get_match(struct sw_flow_match *match,
 			return -ENOMEM;
 
 		mask_set_nlattr(newmask, 0xff);
+
+		/* The userspace does not send tunnel attributes that are 0,
+		 * but we should not wildcard them nonetheless. */
+		if (match->key->tun_key.ipv4_dst)
+			SW_FLOW_KEY_MEMSET_FIELD(match, tun_key, 0xff, true);
 
 		mask = newmask;
 	}
