@@ -25,6 +25,7 @@
 #include <unistd.h>
 #include "compiler.h"
 #include "hash.h"
+#include "netdev-dpdk.h"
 #include "ovs-rcu.h"
 #include "poll-loop.h"
 #include "seq.h"
@@ -325,6 +326,8 @@ ovsthread_wrapper(void *aux_)
      * ovsrcu_quiesce_end() saves a copy of the thread name. */
     set_subprogram_name("%s%u", aux.name, id);
     ovsrcu_quiesce_end();
+
+    thread_set_nonpmd();
 
     return aux.start(aux.arg);
 }

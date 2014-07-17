@@ -40,6 +40,7 @@ static inline void dp_packet_pad(struct ofpbuf *b)
 }
 
 #define NR_QUEUE   1
+#define NR_PMD_THREADS 1
 
 #ifdef  __cplusplus
 }

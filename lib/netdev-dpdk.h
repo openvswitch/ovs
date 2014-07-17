@@ -2,7 +2,6 @@
 #define NETDEV_DPDK_H
 
 #include <config.h>
-#include "ofpbuf.h"
 
 struct dpif_packet;
 
@@ -25,6 +24,7 @@ int dpdk_init(int argc, char **argv);
 void netdev_dpdk_register(void);
 void free_dpdk_buf(struct dpif_packet *);
 int pmd_thread_setaffinity_cpu(int cpu);
+void thread_set_nonpmd(void);
 
 #else
 
@@ -50,6 +50,12 @@ static inline int
 pmd_thread_setaffinity_cpu(int cpu OVS_UNUSED)
 {
     return 0;
+}
+
+static inline void
+thread_set_nonpmd(void)
+{
+    /* Nothing */
 }
 
 #endif /* DPDK_NETDEV */

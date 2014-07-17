@@ -138,6 +138,11 @@ static struct list dpdk_list OVS_GUARDED_BY(dpdk_mutex)
 static struct list dpdk_mp_list OVS_GUARDED_BY(dpdk_mutex)
     = LIST_INITIALIZER(&dpdk_mp_list);
 
+/* This mutex must be used by non pmd threads when allocating or freeing
+ * mbufs through mempools. Since dpdk_queue_pkts() and dpdk_queue_flush() may
+ * use mempools, a non pmd thread should hold this mutex while calling them */
+struct ovs_mutex nonpmd_mempool_mutex = OVS_MUTEX_INITIALIZER;
+
 struct dpdk_mp {
     struct rte_mempool *mp;
     int mtu;
@@ -200,6 +205,8 @@ struct netdev_rxq_dpdk {
     int port_id;
 };
 
+static bool thread_is_pmd(void);
+
 static int netdev_dpdk_construct(struct netdev *);
 
 static bool
@@ -223,13 +230,14 @@ dpdk_rte_mzalloc(size_t sz)
     return ptr;
 }
 
+/* XXX this function should be called only by pmd threads (or by non pmd
+ * threads holding the nonpmd_mempool_mutex) */
 void
 free_dpdk_buf(struct dpif_packet *p)
 {
-    struct ofpbuf *buf = &p->ofpbuf;
-    struct rte_mbuf *pkt = (struct rte_mbuf *) buf->dpdk_buf;
+    struct rte_mbuf *pkt = (struct rte_mbuf *) p;
 
-    rte_mempool_put(pkt->pool, pkt);
+    rte_pktmbuf_free_seg(pkt);
 }
 
 static void
@@ -617,10 +625,13 @@ dpdk_queue_flush__(struct netdev_dpdk *dev, int qid)
 
     nb_tx = rte_eth_tx_burst(dev->port_id, qid, txq->burst_pkts, txq->count);
     if (OVS_UNLIKELY(nb_tx != txq->count)) {
-        /* free buffers if we couldn't transmit packets */
-        rte_mempool_put_bulk(dev->dpdk_mp->mp,
-                             (void **) &txq->burst_pkts[nb_tx],
-                             (txq->count - nb_tx));
+        /* free buffers, which we couldn't transmit, one at a time (each
+         * packet could come from a different mempool) */
+        int i;
+
+        for (i = nb_tx; i < txq->count; i++) {
+            rte_pktmbuf_free_seg(txq->burst_pkts[i]);
+        }
     }
     txq->count = 0;
     txq->tsc = rte_get_timer_cycles();
@@ -697,12 +708,20 @@ dpdk_queue_pkts(struct netdev_dpdk *dev, int qid,
 /* Tx function. Transmit packets indefinitely */
 static void
 dpdk_do_tx_copy(struct netdev *netdev, struct dpif_packet ** pkts, int cnt)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct rte_mbuf *mbufs[cnt];
     int dropped = 0;
     int newcnt = 0;
     int i;
+
+    /* If we are on a non pmd thread we have to use the mempool mutex, because
+     * every non pmd thread shares the same mempool cache */
+
+    if (!thread_is_pmd()) {
+        ovs_mutex_lock(&nonpmd_mempool_mutex);
+    }
 
     for (i = 0; i < cnt; i++) {
         int size = ofpbuf_size(&pkts[i]->ofpbuf);
@@ -739,6 +758,10 @@ dpdk_do_tx_copy(struct netdev *netdev, struct dpif_packet ** pkts, int cnt)
 
     dpdk_queue_pkts(dev, NON_PMD_THREAD_TX_QUEUE, mbufs, newcnt);
     dpdk_queue_flush(dev, NON_PMD_THREAD_TX_QUEUE);
+
+    if (!thread_is_pmd()) {
+        ovs_mutex_unlock(&nonpmd_mempool_mutex);
+    }
 }
 
 static int
@@ -1384,6 +1407,9 @@ dpdk_init(int argc, char **argv)
         argv[result] = argv[0];
     }
 
+    /* We are called from the main thread here */
+    thread_set_nonpmd();
+
     return result + 1;
 }
 
@@ -1429,7 +1455,25 @@ pmd_thread_setaffinity_cpu(int cpu)
         VLOG_ERR("Thread affinity error %d",err);
         return err;
     }
-    RTE_PER_LCORE(_lcore_id) = cpu;
+    /* lcore_id 0 is reseved for use by non pmd threads. */
+    RTE_PER_LCORE(_lcore_id) = cpu + 1;
 
     return 0;
+}
+
+void
+thread_set_nonpmd(void)
+{
+    /* We cannot have RTE_MAX_LCORE pmd threads, because lcore_id 0 is reserved
+     * for non pmd threads */
+    BUILD_ASSERT(NR_PMD_THREADS < RTE_MAX_LCORE);
+    /* We have to use 0 to allow non pmd threads to perform certain DPDK
+     * operations, like rte_eth_dev_configure(). */
+    RTE_PER_LCORE(_lcore_id) = 0;
+}
+
+static bool
+thread_is_pmd(void)
+{
+    return rte_lcore_id() != 0;
 }

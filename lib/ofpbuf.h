@@ -59,7 +59,6 @@ enum OVS_PACKED_ENUM ofpbuf_source {
 struct ofpbuf {
 #ifdef DPDK_NETDEV
     struct rte_mbuf mbuf;       /* DPDK mbuf */
-    void *dpdk_buf;             /* First byte of allocated DPDK buffer. */
 #else
     void *base_;                 /* First byte of allocated space. */
     void *data_;                 /* First byte actually in use. */

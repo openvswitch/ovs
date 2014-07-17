@@ -15,7 +15,7 @@
  */
 
 #include <config.h>
-#include "dpif.h"
+#include "dpif-netdev.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -71,7 +71,6 @@ VLOG_DEFINE_THIS_MODULE(dpif_netdev);
 #define NETDEV_RULE_PRIORITY 0x8000
 
 #define FLOW_DUMP_MAX_BATCH 50
-#define NR_THREADS 1
 /* Use per thread recirc_depth to prevent recirculation loop. */
 #define MAX_RECIRC_DEPTH 5
 DEFINE_STATIC_PER_THREAD_DATA(uint32_t, recirc_depth, 0)
@@ -344,8 +343,8 @@ static void dp_netdev_destroy_all_queues(struct dp_netdev *dp)
     OVS_REQ_WRLOCK(dp->queue_rwlock);
 static int dpif_netdev_open(const struct dpif_class *, const char *name,
                             bool create, struct dpif **);
-static int dp_netdev_output_userspace(struct dp_netdev *dp, struct ofpbuf **,
-                                      int cnt, int queue_no, int type,
+static int dp_netdev_output_userspace(struct dp_netdev *dp, struct ofpbuf *,
+                                      int queue_no, int type,
                                       const struct miniflow *,
                                       const struct nlattr *userdata);
 static void dp_netdev_execute_actions(struct dp_netdev *dp,
@@ -733,7 +732,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
 
     if (netdev_is_pmd(netdev)) {
         dp->pmd_count++;
-        dp_netdev_set_pmd_threads(dp, NR_THREADS);
+        dp_netdev_set_pmd_threads(dp, NR_PMD_THREADS);
         dp_netdev_reload_pmd_threads(dp);
     }
     ovs_refcount_init(&port->ref_cnt);
@@ -2088,17 +2087,18 @@ dp_netdev_input(struct dp_netdev *dp, struct dpif_packet **packets, int cnt,
         }
 
         if (OVS_UNLIKELY(!rules[i])) {
+
             dp_netdev_count_packet(dp, DP_STAT_MISS, 1);
+
             if (OVS_LIKELY(dp->handler_queues)) {
                 uint32_t hash = miniflow_hash_5tuple(mfs[i], 0);
                 struct ofpbuf *buf = &packets[i]->ofpbuf;
 
-                dp_netdev_output_userspace(dp, &buf, 1, hash % dp->n_handlers,
+                dp_netdev_output_userspace(dp, buf, hash % dp->n_handlers,
                                            DPIF_UC_MISS, mfs[i], NULL);
-            } else {
-                /* No upcall queue.  Freeing the packet */
-                dpif_packet_delete(packets[i]);
             }
+
+            dpif_packet_delete(packets[i]);
             continue;
         }
 
@@ -2161,6 +2161,7 @@ OVS_REQUIRES(q->mutex)
         if (userdata) {
             buf_size += NLA_ALIGN(userdata->nla_len);
         }
+        buf_size += ofpbuf_size(packet);
         ofpbuf_init(buf, buf_size);
 
         /* Put ODP flow. */
@@ -2175,39 +2176,37 @@ OVS_REQUIRES(q->mutex)
                     NLA_ALIGN(userdata->nla_len));
         }
 
-        upcall->packet = *packet;
+        /* We have to perform a copy of the packet, because we cannot send DPDK
+         * mbufs to a non pmd thread. When the upcall processing will be done
+         * in the pmd thread, this copy can be avoided */
+        ofpbuf_set_data(&upcall->packet, ofpbuf_put(buf, ofpbuf_data(packet),
+                        ofpbuf_size(packet)));
+        ofpbuf_set_size(&upcall->packet, ofpbuf_size(packet));
 
         seq_change(q->seq);
 
         return 0;
     } else {
-        ofpbuf_delete(packet);
         return ENOBUFS;
     }
-
 }
 
 static int
-dp_netdev_output_userspace(struct dp_netdev *dp, struct ofpbuf **packets,
-                           int cnt, int queue_no, int type,
+dp_netdev_output_userspace(struct dp_netdev *dp, struct ofpbuf *packet,
+                           int queue_no, int type,
                            const struct miniflow *key,
                            const struct nlattr *userdata)
 {
     struct dp_netdev_queue *q;
     int error;
-    int i;
 
     fat_rwlock_rdlock(&dp->queue_rwlock);
     q = &dp->handler_queues[queue_no];
     ovs_mutex_lock(&q->mutex);
-    for (i = 0; i < cnt; i++) {
-        struct ofpbuf *packet = packets[i];
-
-        error = dp_netdev_queue_userspace_packet(q, packet, type, key,
-                                                 userdata);
-        if (error == ENOBUFS) {
-            dp_netdev_count_packet(dp, DP_STAT_LOST, 1);
-        }
+    error = dp_netdev_queue_userspace_packet(q, packet, type, key,
+                                             userdata);
+    if (error == ENOBUFS) {
+        dp_netdev_count_packet(dp, DP_STAT_LOST, 1);
     }
     ovs_mutex_unlock(&q->mutex);
     fat_rwlock_unlock(&dp->queue_rwlock);
@@ -2252,19 +2251,20 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
         miniflow_initialize(&key.flow, key.buf);
 
         for (i = 0; i < cnt; i++) {
-            struct ofpbuf *packet, *userspace_packet;
+            struct ofpbuf *packet;
 
             packet = &packets[i]->ofpbuf;
 
             miniflow_extract(packet, md, &key.flow);
 
-            userspace_packet = may_steal ? packet : ofpbuf_clone(packet);
-
-            dp_netdev_output_userspace(aux->dp, &userspace_packet, 1,
+            dp_netdev_output_userspace(aux->dp, packet,
                                        miniflow_hash_5tuple(&key.flow, 0)
                                            % aux->dp->n_handlers,
                                        DPIF_UC_ACTION, &key.flow,
                                        userdata);
+            if (may_steal) {
+                dpif_packet_delete(packets[i]);
+            }
         }
         break;
     }

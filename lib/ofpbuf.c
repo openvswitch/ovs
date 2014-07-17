@@ -117,9 +117,6 @@ void
 ofpbuf_init_dpdk(struct ofpbuf *b, size_t allocated)
 {
     ofpbuf_init__(b, allocated, OFPBUF_DPDK);
-#ifdef DPDK_NETDEV
-    b->dpdk_buf = b;
-#endif
 }
 
 /* Initializes 'b' as an empty ofpbuf with an initial capacity of 'size'
@@ -139,7 +136,6 @@ ofpbuf_uninit(struct ofpbuf *b)
             free(ofpbuf_base(b));
         } else if (b->source == OFPBUF_DPDK) {
 #ifdef DPDK_NETDEV
-            ovs_assert(b != b->dpdk_buf);
             /* If this ofpbuf was allocated by DPDK it must have been
              * created as a dpif_packet */
             free_dpdk_buf((struct dpif_packet*) b);
