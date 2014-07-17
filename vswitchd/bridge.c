@@ -2269,20 +2269,10 @@ refresh_controller_status(void)
             shash_find_data(&info, cfg->target);
 
         if (cinfo) {
-            struct smap smap = SMAP_INITIALIZER(&smap);
-            const char **values = cinfo->pairs.values;
-            const char **keys = cinfo->pairs.keys;
-            size_t i;
-
-            for (i = 0; i < cinfo->pairs.n; i++) {
-                smap_add(&smap, keys[i], values[i]);
-            }
-
             ovsrec_controller_set_is_connected(cfg, cinfo->is_connected);
             ovsrec_controller_set_role(cfg, ofp12_controller_role_to_str(
                                            cinfo->role));
-            ovsrec_controller_set_status(cfg, &smap);
-            smap_destroy(&smap);
+            ovsrec_controller_set_status(cfg, &cinfo->pairs);
         } else {
             ovsrec_controller_set_is_connected(cfg, false);
             ovsrec_controller_set_role(cfg, NULL);

@@ -27,6 +27,7 @@
 #include "flow.h"
 #include "meta-flow.h"
 #include "netflow.h"
+#include "smap.h"
 #include "sset.h"
 #include "stp.h"
 
@@ -43,7 +44,6 @@ struct ofport;
 struct ofproto;
 struct shash;
 struct simap;
-struct smap;
 
 /* Needed for the lock annotations. */
 extern struct ovs_mutex ofproto_mutex;
@@ -51,11 +51,7 @@ extern struct ovs_mutex ofproto_mutex;
 struct ofproto_controller_info {
     bool is_connected;
     enum ofp12_controller_role role;
-    struct {
-        const char *keys[4];
-        const char *values[4];
-        size_t n;
-    } pairs;
+    struct smap pairs;
 };
 
 struct ofproto_sflow_options {

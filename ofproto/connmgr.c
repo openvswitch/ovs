@@ -477,28 +477,22 @@ connmgr_get_controller_info(struct connmgr *mgr, struct shash *info)
             cinfo->is_connected = rconn_is_connected(rconn);
             cinfo->role = ofconn->role;
 
-            cinfo->pairs.n = 0;
-
+            smap_init(&cinfo->pairs);
             if (last_error) {
-                cinfo->pairs.keys[cinfo->pairs.n] = "last_error";
-                cinfo->pairs.values[cinfo->pairs.n++]
-                    = xstrdup(ovs_retval_to_string(last_error));
+                smap_add(&cinfo->pairs, "last_error",
+                         ovs_retval_to_string(last_error));
             }
 
-            cinfo->pairs.keys[cinfo->pairs.n] = "state";
-            cinfo->pairs.values[cinfo->pairs.n++]
-                = xstrdup(rconn_get_state(rconn));
+            smap_add(&cinfo->pairs, "state", rconn_get_state(rconn));
 
             if (last_connection != TIME_MIN) {
-                cinfo->pairs.keys[cinfo->pairs.n] = "sec_since_connect";
-                cinfo->pairs.values[cinfo->pairs.n++]
-                    = xasprintf("%ld", (long int) (now - last_connection));
+                smap_add_format(&cinfo->pairs, "sec_since_connect",
+                                "%ld", (long int) (now - last_connection));
             }
 
             if (last_disconnect != TIME_MIN) {
-                cinfo->pairs.keys[cinfo->pairs.n] = "sec_since_disconnect";
-                cinfo->pairs.values[cinfo->pairs.n++]
-                    = xasprintf("%ld", (long int) (now - last_disconnect));
+                smap_add_format(&cinfo->pairs, "sec_since_disconnect",
+                                "%ld", (long int) (now - last_disconnect));
             }
         }
     }
@@ -511,9 +505,7 @@ connmgr_free_controller_info(struct shash *info)
 
     SHASH_FOR_EACH (node, info) {
         struct ofproto_controller_info *cinfo = node->data;
-        while (cinfo->pairs.n) {
-            free(CONST_CAST(char *, cinfo->pairs.values[--cinfo->pairs.n]));
-        }
+        smap_destroy(&cinfo->pairs);
         free(cinfo);
     }
     shash_destroy(info);
