@@ -414,7 +414,10 @@ connmgr_get_memory_usage(const struct connmgr *mgr, struct simap *usage)
 
         packets += rconn_count_txqlen(ofconn->rconn);
         for (i = 0; i < N_SCHEDULERS; i++) {
-            packets += pinsched_count_txqlen(ofconn->schedulers[i]);
+            struct pinsched_stats stats;
+
+            pinsched_get_stats(ofconn->schedulers[i], &stats);
+            packets += stats.n_queued;;
         }
         packets += pktbuf_count_packets(ofconn->pktbuf);
     }
@@ -471,6 +474,7 @@ connmgr_get_controller_info(struct connmgr *mgr, struct shash *info)
             time_t last_connection = rconn_get_last_connection(rconn);
             time_t last_disconnect = rconn_get_last_disconnect(rconn);
             int last_error = rconn_get_last_error(rconn);
+            int i;
 
             shash_add(info, target, cinfo);
 
@@ -493,6 +497,27 @@ connmgr_get_controller_info(struct connmgr *mgr, struct shash *info)
             if (last_disconnect != TIME_MIN) {
                 smap_add_format(&cinfo->pairs, "sec_since_disconnect",
                                 "%ld", (long int) (now - last_disconnect));
+            }
+
+            for (i = 0; i < N_SCHEDULERS; i++) {
+                if (ofconn->schedulers[i]) {
+                    const char *name = i ? "miss" : "action";
+                    struct pinsched_stats stats;
+
+                    pinsched_get_stats(ofconn->schedulers[i], &stats);
+                    smap_add_nocopy(&cinfo->pairs,
+                                    xasprintf("packet-in-%s-backlog", name),
+                                    xasprintf("%u", stats.n_queued));
+                    smap_add_nocopy(&cinfo->pairs,
+                                    xasprintf("packet-in-%s-bypassed", name),
+                                    xasprintf("%llu", stats.n_normal));
+                    smap_add_nocopy(&cinfo->pairs,
+                                    xasprintf("packet-in-%s-queued", name),
+                                    xasprintf("%llu", stats.n_limited));
+                    smap_add_nocopy(&cinfo->pairs,
+                                    xasprintf("packet-in-%s-dropped", name),
+                                    xasprintf("%llu", stats.n_queue_dropped));
+                }
             }
         }
     }

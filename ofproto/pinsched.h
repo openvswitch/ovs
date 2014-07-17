@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,13 @@ void pinsched_send(struct pinsched *, ofp_port_t port_no, struct ofpbuf *,
 void pinsched_run(struct pinsched *, struct list *txq);
 void pinsched_wait(struct pinsched *);
 
-unsigned int pinsched_count_txqlen(const struct pinsched *);
+struct pinsched_stats {
+    unsigned int n_queued;              /* # currently queued to send. */
+    unsigned long long n_normal;        /* # txed w/o rate limit queuing. */
+    unsigned long long n_limited;       /* # queued for rate limiting. */
+    unsigned long long n_queue_dropped; /* # dropped due to queue overflow. */
+};
+
+void pinsched_get_stats(const struct pinsched *, struct pinsched_stats *);
 
 #endif /* pinsched.h */

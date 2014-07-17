@@ -7,6 +7,7 @@ Post-v2.3.0
      possible to generate or match options. This is planned for a future
      release. The protocol is documented at
      http://tools.ietf.org/html/draft-gross-geneve-00
+   - The OVS database now reports controller rate limiting statistics.
 
 
 v2.3.0 - xx xxx xxxx
