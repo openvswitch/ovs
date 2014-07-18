@@ -1998,32 +1998,33 @@ trie_lookup_value(const rcu_trie_ptr *trie, const ovs_be32 value[],
                   unsigned int n_bits, unsigned int *checkbits)
 {
     const struct trie_node *node = ovsrcu_get(struct trie_node *, trie);
-    unsigned int ofs = 0, match_len = 0;
+    unsigned int match_len = 0, rules_at = 0;
     const struct trie_node *prev = NULL;
 
-    for (; node; prev = node, node = trie_next_node(node, value, ofs)) {
+    for (; node; prev = node, node = trie_next_node(node, value, match_len)) {
         unsigned int eqbits;
         /* Check if this edge can be followed. */
-        eqbits = prefix_equal_bits(node->prefix, node->n_bits, value, ofs);
-        ofs += eqbits;
+        eqbits = prefix_equal_bits(node->prefix, node->n_bits, value,
+                                   match_len);
+        match_len += eqbits;
         if (eqbits < node->n_bits) { /* Mismatch, nothing more to be found. */
-            /* Bit at offset 'ofs' differed. */
-            *checkbits = ofs + 1; /* Includes the first mismatching bit. */
-            return match_len;
+            /* Bit at offset 'match_len' differed. */
+            *checkbits = match_len + 1; /* Includes the mismatching bit. */
+            return rules_at;
         }
         /* Full match, check if rules exist at this prefix length. */
         if (node->n_rules > 0) {
-            match_len = ofs;
+            rules_at = match_len;
         }
-        if (ofs >= n_bits) {
+        if (match_len >= n_bits) {
             *checkbits = n_bits; /* Full prefix. */
-            return match_len;
+            return rules_at;
         }
     }
     /* node == NULL.  Full match so far, but we came to a dead end.
      * need to exclude the other branch if it exists. */
-    *checkbits = !prev || trie_is_leaf(prev) ? ofs : ofs + 1;
-    return match_len;
+    *checkbits = !prev || trie_is_leaf(prev) ? match_len : match_len + 1;
+    return rules_at;
 }
 
 static unsigned int
