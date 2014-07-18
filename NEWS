@@ -8,6 +8,10 @@ Post-v2.3.0
      release. The protocol is documented at
      http://tools.ietf.org/html/draft-gross-geneve-00
    - The OVS database now reports controller rate limiting statistics.
+   - ovs-dpctl functionality is now available for datapaths integrated
+     into ovs-vswitchd, via ovs-appctl.  Some existing ovs-appctl
+     commands are now redundant and will be removed in a future
+     release.  See ovs-vswitchd(8) for details.
    - OpenFlow:
      * OpenFlow 1.5 (draft) extended registers are now supported.
 

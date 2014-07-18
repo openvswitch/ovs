@@ -1,6 +1,9 @@
-.SS "DATAPATH COMMANDS"
-These commands manage logical datapaths.  They are are similar to the
-equivalent \fBovs\-dpctl\fR commands.
+.SS "DATAPATH DEBUGGING COMMANDS"
+These commands query and modify datapaths.  They are are similar to
+\fBovs\-dpctl\fR(8) commands.  \fBdpif/show\fR has the additional
+functionality, beyond \fBdpctl/show\fR of printing OpenFlow port
+numbers.  The other commands are redundant and will be removed in a
+future release.
 .
 .IP "\fBdpif/dump\-dps\fR"
 Prints the name of each configured datapath on a separate line.

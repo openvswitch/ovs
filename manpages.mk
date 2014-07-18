@@ -127,9 +127,11 @@ utilities/ovs-dpctl-top.8.in:
 utilities/ovs-dpctl.8: \
 	utilities/ovs-dpctl.8.in \
 	lib/common.man \
+	lib/dpctl.man \
 	lib/vlog.man
 utilities/ovs-dpctl.8.in:
 lib/common.man:
+lib/dpctl.man:
 lib/vlog.man:
 
 utilities/ovs-l3ping.8: \
@@ -239,6 +241,7 @@ vswitchd/ovs-vswitchd.8: \
 	lib/common.man \
 	lib/coverage-unixctl.man \
 	lib/daemon.man \
+	lib/dpctl.man \
 	lib/memory-unixctl.man \
 	lib/service.man \
 	lib/ssl-bootstrap.man \
@@ -253,6 +256,7 @@ vswitchd/ovs-vswitchd.8.in:
 lib/common.man:
 lib/coverage-unixctl.man:
 lib/daemon.man:
+lib/dpctl.man:
 lib/memory-unixctl.man:
 lib/service.man:
 lib/ssl-bootstrap.man:

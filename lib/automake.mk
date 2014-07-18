@@ -55,6 +55,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/dummy.h \
 	lib/dhparams.h \
 	lib/dirs.h \
+	lib/dpctl.c \
+	lib/dpctl.h \
 	lib/dpif-netdev.c \
 	lib/dpif-netdev.h \
 	lib/dpif-provider.h \
@@ -373,6 +375,7 @@ MAN_FRAGMENTS += \
 	lib/coverage-unixctl.man \
 	lib/daemon.man \
 	lib/daemon-syn.man \
+	lib/dpctl.man \
 	lib/memory-unixctl.man \
 	lib/ofp-version.man \
 	lib/ovs.tmac \

@@ -24,6 +24,7 @@
 #include <string.h>
 
 #include "coverage.h"
+#include "dpctl.h"
 #include "dynamic-string.h"
 #include "flow.h"
 #include "netdev.h"
@@ -109,6 +110,7 @@ dp_initialize(void)
         for (i = 0; i < ARRAY_SIZE(base_dpif_classes); i++) {
             dp_register_provider(base_dpif_classes[i]);
         }
+        dpctl_unixctl_register();
         ovsthread_once_done(&once);
     }
 }

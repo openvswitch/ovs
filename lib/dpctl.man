@@ -1,0 +1,147 @@
+.TP
+\*(DX\fBadd\-dp \fIdp\fR [\fInetdev\fR[\fB,\fIoption\fR]...]
+Creates datapath \fIdp\fR, with a local port also named \fIdp\fR.
+This will fail if a network device \fIdp\fR already exists.
+.IP
+If \fInetdev\fRs are specified, \fB\*(PN\fR adds them to the
+new datapath, just as if \fBadd\-if\fR was specified.
+.
+.TP
+\*(DX\fBdel\-dp \fIdp\fR
+Deletes datapath \fIdp\fR.  If \fIdp\fR is associated with any network
+devices, they are automatically removed.
+.
+.TP
+\*(DX\fBadd\-if \fIdp netdev\fR[\fB,\fIoption\fR]...
+Adds each \fInetdev\fR to the set of network devices datapath
+\fIdp\fR monitors, where \fIdp\fR is the name of an existing
+datapath, and \fInetdev\fR is the name of one of the host's
+network devices, e.g. \fBeth0\fR.  Once a network device has been added
+to a datapath, the datapath has complete ownership of the network device's
+traffic and the network device appears silent to the rest of the
+system.
+.IP
+A \fInetdev\fR may be followed by a comma-separated list of options.
+The following options are currently supported:
+.
+.RS
+.IP "\fBtype=\fItype\fR"
+Specifies the type of port to add.  The default type is \fBsystem\fR.
+.IP "\fBport_no=\fIport\fR"
+Requests a specific port number within the datapath.  If this option is
+not specified then one will be automatically assigned.
+.IP "\fIkey\fB=\fIvalue\fR"
+Adds an arbitrary key-value option to the port's configuration.
+.RE
+.IP
+\fBovs\-vswitchd.conf.db\fR(5) documents the available port types and
+options.
+.
+.IP "\*(DX\fBset\-if \fIdp port\fR[\fB,\fIoption\fR]..."
+Reconfigures each \fIport\fR in \fIdp\fR as specified.  An
+\fIoption\fR of the form \fIkey\fB=\fIvalue\fR adds the specified
+key-value option to the port or overrides an existing key's value.  An
+\fIoption\fR of the form \fIkey\fB=\fR, that is, without a value,
+deletes the key-value named \fIkey\fR.  The type and port number of a
+port cannot be changed, so \fBtype\fR and \fBport_no\fR are only allowed if
+they match the existing configuration.
+.TP
+\*(DX\fBdel\-if \fIdp netdev\fR...
+Removes each \fInetdev\fR from the list of network devices datapath
+\fIdp\fR monitors.
+.
+.TP
+\*(DX\fBdump\-dps\fR
+Prints the name of each configured datapath on a separate line.
+.
+.TP
+.DO "[\fB\-s\fR | \fB\-\-statistics\fR]" "\*(DX\fBshow" "\fR[\fIdp\fR...]"
+Prints a summary of configured datapaths, including their datapath
+numbers and a list of ports connected to each datapath.  (The local
+port is identified as port 0.)  If \fB\-s\fR or \fB\-\-statistics\fR
+is specified, then packet and byte counters are also printed for each
+port.
+.IP
+The datapath numbers consists of flow stats and mega flow mask stats.
+.IP
+The "lookups" row displays three stats related to flow lookup triggered
+by processing incoming packets in the datapath. "hit" displays number
+of packets matches existing flows. "missed" displays the number of
+packets not matching any existing flow and require user space processing.
+"lost" displays number of packets destined for user space process but
+subsequently dropped before reaching userspace. The sum of "hit" and "miss"
+equals to the total number of packets datapath processed.
+.IP
+The "flows" row displays the number of flows in datapath.
+.IP
+The "masks" row displays the mega flow mask stats. This row is omitted
+for datapath not implementing mega flow. "hit" displays the total number
+of masks visited for matching incoming packets. "total" displays number of
+masks in the datapath. "hit/pkt" displays the average number of masks
+visited per packet; the ratio between "hit" and total number of
+packets processed by the datapath".
+.IP
+If one or more datapaths are specified, information on only those
+datapaths are displayed.  Otherwise, \fB\*(PN\fR displays information
+about all configured datapaths.
+.SS "DATAPATH FLOW TABLE DEBUGGING COMMANDS"
+The following commands are primarily useful for debugging Open
+vSwitch.  The flow table entries (both matches and actions) that they
+work with are not OpenFlow flow entries.  Instead, they are different
+and considerably simpler flows maintained by the Open vSwitch kernel
+module.  Use \fBovs\-ofctl\fR(8), instead, to work with OpenFlow flow
+entries.
+.
+.PP
+The \fIdp\fR argument to each of these commands is optional when
+exactly one datapath exists, in which case that datapath is the
+default.  When multiple datapaths exist, then a datapath name is
+required.
+.
+.TP
+.DO "[\fB\-m \fR| \fB\-\-more\fR]" \*(DX\fBdump\-flows\fR "[\fIdp\fR] [\fBfilter=\fIfilter\fR]"
+Prints to the console all flow entries in datapath \fIdp\fR's flow
+table.  Without \fB\-m\fR or \fB\-\-more\fR, output omits match fields
+that a flow wildcards entirely; with \fB\-m\fR or \fB\-\-more\fR,
+output includes all wildcarded fields.
+.IP
+If \fBfilter=\fIfilter\fR is specified, only displays the flows
+that match the \fIfilter\fR. \fIfilter\fR is a flow in the form similiar
+to that accepted by \fBovs\-ofctl\fR(8)'s \fBadd\-flow\fR command. (This is
+not an OpenFlow flow: besides other differences, it never contains wildcards.)
+The \fIfilter\fR is also useful to match wildcarded fields in the datapath
+flow. As an example, \fBfilter='tcp,tp_src=100'\fR will match the
+datapath flow containing '\fBtcp(src=80/0xff00,dst=8080/0xff)\fR'.
+.
+.IP "\*(DX\fBadd\-flow\fR [\fIdp\fR] \fIflow actions\fR"
+.TP
+.DO "[\fB\-\-clear\fR] [\fB\-\-may-create\fR] [\fB\-s\fR | \fB\-\-statistics\fR]" "\*(DX\fBmod\-flow\fR" "[\fIdp\fR] \fIflow actions\fR"
+Adds or modifies a flow in \fIdp\fR's flow table that, when a packet
+matching \fIflow\fR arrives, causes \fIactions\fR to be executed.
+.IP
+The \fBadd\-flow\fR command succeeds only if \fIflow\fR does not
+already exist in \fIdp\fR.  Contrariwise, \fBmod\-flow\fR without
+\fB\-\-may\-create\fR only modifies the actions for an existing flow.
+With \fB\-\-may\-create\fR, \fBmod\-flow\fR will add a new flow or
+modify an existing one.
+.IP
+If \fB\-s\fR or \fB\-\-statistics\fR is specified, then
+\fBmod\-flows\fR prints the modified flow's statistics.  A flow's
+statistics are the number of packets and bytes that have passed
+through the flow, the elapsed time since the flow last processed a
+packet (if ever), and (for TCP flows) the union of the TCP flags
+processed through the flow.
+.IP
+With \fB\-\-clear\fR, \fBmod\-flows\fR zeros out the flow's
+statistics.  The statistics printed if \fB\-s\fR or
+\fB\-\-statistics\fR is also specified are those from just before
+clearing the statistics.
+.
+.TP
+.DO "[\fB\-s\fR | \fB\-\-statistics\fR]" "\*(DX\fBdel\-flow\fR" "[\fIdp\fR] \fIflow\fR"
+Deletes the flow from \fIdp\fR's flow table that matches \fIflow\fR.
+If \fB\-s\fR or \fB\-\-statistics\fR is specified, then
+\fBmod\-flows\fR prints the deleted flow's statistics.
+.
+.IP "\*(DX\fBdel\-flows\fR [\fIdp\fR]"
+Deletes all flow entries from datapath \fIdp\fR's flow table.
