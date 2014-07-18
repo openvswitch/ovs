@@ -151,11 +151,10 @@ static void trie_init(struct classifier *cls, int trie_idx,
                       const struct mf_field *)
     OVS_REQUIRES(cls->mutex);
 static unsigned int trie_lookup(const struct cls_trie *, const struct flow *,
-                                unsigned int *checkbits);
+                                union mf_value *plens);
 static unsigned int trie_lookup_value(const rcu_trie_ptr *,
-                                      const ovs_be32 value[],
-                                      unsigned int value_bits,
-                                      unsigned int *checkbits);
+                                      const ovs_be32 value[], ovs_be32 plens[],
+                                      unsigned int value_bits);
 static void trie_destroy(rcu_trie_ptr *);
 static void trie_insert(struct cls_trie *, const struct cls_rule *, int mlen);
 static void trie_insert_prefix(rcu_trie_ptr *, const ovs_be32 *prefix,
@@ -870,15 +869,18 @@ classifier_remove(struct classifier *cls, struct cls_rule *rule)
 }
 
 /* Prefix tree context.  Valid when 'lookup_done' is true.  Can skip all
- * subtables which have more than 'match_plen' bits in their corresponding
- * field at offset 'be32ofs'.  If skipped, 'maskbits' prefix bits should be
- * unwildcarded to quarantee datapath flow matches only packets it should. */
+ * subtables which have a prefix match on the trie field, but whose prefix
+ * length is not indicated in 'match_plens'.  For example, a subtable that
+ * has a 8-bit trie field prefix match can be skipped if
+ * !be_get_bit_at(&match_plens, 8 - 1).  If skipped, 'maskbits' prefix bits
+ * must be unwildcarded to make datapath flow only match packets it should. */
 struct trie_ctx {
     const struct cls_trie *trie;
     bool lookup_done;        /* Status of the lookup. */
     uint8_t be32ofs;         /* U32 offset of the field in question. */
-    unsigned int match_plen; /* Longest prefix than could possibly match. */
     unsigned int maskbits;   /* Prefix length needed to avoid false matches. */
+    union mf_value match_plens; /* Bitmask of prefix lengths with possible
+                                 * matches. */
 };
 
 static void
@@ -1410,6 +1412,8 @@ struct range {
     uint8_t end;
 };
 
+static unsigned int be_get_bit_at(const ovs_be32 value[], unsigned int ofs);
+
 /* Return 'true' if can skip rest of the subtable based on the prefix trie
  * lookup results. */
 static inline bool
@@ -1433,14 +1437,14 @@ check_tries(struct trie_ctx trie_ctx[CLS_MAX_TRIES], unsigned int n_tries,
             if (be32ofs >= ofs.start && be32ofs < ofs.end) {
                 /* On-demand trie lookup. */
                 if (!ctx->lookup_done) {
-                    ctx->match_plen = trie_lookup(ctx->trie, flow,
-                                                  &ctx->maskbits);
+                    memset(&ctx->match_plens, 0, sizeof ctx->match_plens);
+                    ctx->maskbits = trie_lookup(ctx->trie, flow,
+                                                &ctx->match_plens);
                     ctx->lookup_done = true;
                 }
                 /* Possible to skip the rest of the subtable if subtable's
-                 * prefix on the field is longer than what is known to match
-                 * based on the trie lookup. */
-                if (field_plen[j] > ctx->match_plen) {
+                 * prefix on the field is not included in the lookup result. */
+                if (!be_get_bit_at(&ctx->match_plens.be32, field_plen[j] - 1)) {
                     /* RFC: We want the trie lookup to never result in
                      * unwildcarding any bits that would not be unwildcarded
                      * otherwise.  Since the trie is shared by the whole
@@ -1629,11 +1633,11 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
          * No match was found for the ports.  Use the ports trie to figure out
          * which ports bits to unwildcard. */
         unsigned int mbits;
-        ovs_be32 value, mask;
+        ovs_be32 value, plens, mask;
 
         mask = MINIFLOW_GET_BE32(&subtable->mask.masks, tp_src);
         value = ((OVS_FORCE ovs_be32 *)flow)[TP_PORTS_OFS32] & mask;
-        trie_lookup_value(&subtable->ports_trie, &value, 32, &mbits);
+        mbits = trie_lookup_value(&subtable->ports_trie, &value, &plens, 32);
 
         ((OVS_FORCE ovs_be32 *)&wc->masks)[TP_PORTS_OFS32] |=
             mask & htonl(~0 << (32 - mbits));
@@ -1987,19 +1991,28 @@ trie_next_node(const struct trie_node *node, const ovs_be32 value[],
                       &node->edges[be_get_bit_at(value, ofs)]);
 }
 
-/* Return the prefix mask length necessary to find the longest-prefix match for
- * the '*value' in the prefix tree 'node'.
- * '*checkbits' is set to the number of bits in the prefix mask necessary to
- * determine a mismatch, in case there are longer prefixes in the tree below
- * the one that matched.
+/* Set the bit at ("MSB 0"-based) offset 'ofs'.  'ofs' can be greater than 31.
+ */
+static void
+be_set_bit_at(ovs_be32 value[], unsigned int ofs)
+{
+    ((uint8_t *)value)[ofs / 8] |= 1u << (7 - ofs % 8);
+}
+
+/* Returns the number of bits in the prefix mask necessary to determine a
+ * mismatch, in case there are longer prefixes in the tree below the one that
+ * matched.
+ * '*plens' will have a bit set for each prefix length that may have matching
+ * rules.  The caller is responsible for clearing the '*plens' prior to
+ * calling this.
  */
 static unsigned int
 trie_lookup_value(const rcu_trie_ptr *trie, const ovs_be32 value[],
-                  unsigned int n_bits, unsigned int *checkbits)
+                  ovs_be32 plens[], unsigned int n_bits)
 {
-    const struct trie_node *node = ovsrcu_get(struct trie_node *, trie);
-    unsigned int match_len = 0, rules_at = 0;
     const struct trie_node *prev = NULL;
+    const struct trie_node *node = ovsrcu_get(struct trie_node *, trie);
+    unsigned int match_len = 0; /* Number of matching bits. */
 
     for (; node; prev = node, node = trie_next_node(node, value, match_len)) {
         unsigned int eqbits;
@@ -2009,27 +2022,26 @@ trie_lookup_value(const rcu_trie_ptr *trie, const ovs_be32 value[],
         match_len += eqbits;
         if (eqbits < node->n_bits) { /* Mismatch, nothing more to be found. */
             /* Bit at offset 'match_len' differed. */
-            *checkbits = match_len + 1; /* Includes the mismatching bit. */
-            return rules_at;
+            return match_len + 1; /* Includes the first mismatching bit. */
         }
         /* Full match, check if rules exist at this prefix length. */
         if (node->n_rules > 0) {
-            rules_at = match_len;
+            be_set_bit_at(plens, match_len - 1);
         }
         if (match_len >= n_bits) {
-            *checkbits = n_bits; /* Full prefix. */
-            return rules_at;
+            return n_bits; /* Full prefix. */
         }
     }
-    /* node == NULL.  Full match so far, but we came to a dead end.
-     * need to exclude the other branch if it exists. */
-    *checkbits = !prev || trie_is_leaf(prev) ? match_len : match_len + 1;
-    return rules_at;
+    /* node == NULL.  Full match so far, but we tried to follow an
+     * non-existing branch.  Need to exclude the other branch if it exists
+     * (it does not if we were called on an empty trie or 'prev' is a leaf
+     * node). */
+    return !prev || trie_is_leaf(prev) ? match_len : match_len + 1;
 }
 
 static unsigned int
 trie_lookup(const struct cls_trie *trie, const struct flow *flow,
-            unsigned int *checkbits)
+            union mf_value *plens)
 {
     const struct mf_field *mf = trie->field;
 
@@ -2039,10 +2051,10 @@ trie_lookup(const struct cls_trie *trie, const struct flow *flow,
     if (mf_are_prereqs_ok(mf, flow)) {
         return trie_lookup_value(&trie->root,
                                  &((ovs_be32 *)flow)[mf->flow_be32ofs],
-                                 mf->n_bits, checkbits);
+                                 &plens->be32, mf->n_bits);
     }
-    *checkbits = 0; /* Value not used in this case. */
-    return UINT_MAX;
+    memset(plens, 0xff, sizeof *plens); /* All prefixes, no skipping. */
+    return 0; /* Value not used in this case. */
 }
 
 /* Returns the length of a prefix match mask for the field 'mf' in 'minimask'.
