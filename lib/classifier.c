@@ -26,52 +26,23 @@
 #include "list.h"
 #include "odp-util.h"
 #include "ofp-util.h"
-#include "ovs-thread.h"
 #include "packets.h"
-#include "pvector.h"
 #include "tag.h"
 #include "util.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(classifier);
 
-struct trie_node;
 struct trie_ctx;
 
 /* Ports trie depends on both ports sharing the same ovs_be32. */
 #define TP_PORTS_OFS32 (offsetof(struct flow, tp_src) / 4)
 BUILD_ASSERT_DECL(TP_PORTS_OFS32 == offsetof(struct flow, tp_dst) / 4);
 
-typedef OVSRCU_TYPE(struct trie_node *) rcu_trie_ptr;
-
-/* Prefix trie for a 'field' */
-struct cls_trie {
-    const struct mf_field *field; /* Trie field, or NULL. */
-    rcu_trie_ptr root;            /* NULL if none. */
-};
-
-enum {
-    CLS_MAX_INDICES = 3   /* Maximum number of lookup indices per subtable. */
-};
-
-struct cls_classifier {
-    struct ovs_mutex mutex;
-    int n_rules OVS_GUARDED;        /* Total number of rules. */
-    uint8_t n_flow_segments;
-    uint8_t flow_segments[CLS_MAX_INDICES]; /* Flow segment boundaries to use
-                                             * for staged lookup. */
-    struct cmap subtables_map;      /* Contains "struct cls_subtable"s.  */
-    struct pvector subtables;
-    struct cmap partitions;         /* Contains "struct cls_partition"s. */
-    struct cls_trie tries[CLS_MAX_TRIES]; /* Prefix tries. */
-    unsigned int n_tries;
-};
-
 /* A set of rules that all have the same fields wildcarded. */
 struct cls_subtable {
     /* The fields are only used by writers and iterators. */
-    struct cmap_node cmap_node; /* Within struct cls_classifier
-                                 * 'subtables_map'. */
+    struct cmap_node cmap_node; /* Within struct classifier 'subtables_map'. */
 
     /* The fields are only used by writers. */
     int n_rules OVS_GUARDED;                /* Number of rules, including
@@ -100,8 +71,7 @@ struct cls_subtable {
  * field) with tags for the "cls_subtable"s that contain rules that match that
  * metadata value.  */
 struct cls_partition {
-    struct cmap_node cmap_node; /* In struct cls_classifier's 'partitions'
-                                 * map. */
+    struct cmap_node cmap_node; /* In struct classifier's 'partitions' map. */
     ovs_be64 metadata;          /* metadata value for this partition. */
     tag_type tags;              /* OR of each flow's cls_subtable tag. */
     struct tag_tracker tracker OVS_GUARDED; /* Tracks the bits in 'tags'. */
@@ -143,15 +113,15 @@ cls_match_alloc(struct cls_rule *rule)
     return cls_match;
 }
 
-static struct cls_subtable *find_subtable(const struct cls_classifier *cls,
+static struct cls_subtable *find_subtable(const struct classifier *cls,
                                           const struct minimask *)
     OVS_REQUIRES(cls->mutex);
-static struct cls_subtable *insert_subtable(struct cls_classifier *cls,
+static struct cls_subtable *insert_subtable(struct classifier *cls,
                                             const struct minimask *)
     OVS_REQUIRES(cls->mutex);
-static void destroy_subtable(struct cls_classifier *cls, struct cls_subtable *)
+static void destroy_subtable(struct classifier *cls, struct cls_subtable *)
     OVS_REQUIRES(cls->mutex);
-static struct cls_match *insert_rule(struct cls_classifier *cls,
+static struct cls_match *insert_rule(struct classifier *cls,
                                      struct cls_subtable *, struct cls_rule *)
     OVS_REQUIRES(cls->mutex);
 
@@ -177,7 +147,7 @@ static struct cls_match *next_rule_in_list(struct cls_match *);
 
 static unsigned int minimask_get_prefix_len(const struct minimask *,
                                             const struct mf_field *);
-static void trie_init(struct cls_classifier *cls, int trie_idx,
+static void trie_init(struct classifier *cls, int trie_idx,
                       const struct mf_field *)
     OVS_REQUIRES(cls->mutex);
 static unsigned int trie_lookup(const struct cls_trie *, const struct flow *,
@@ -476,16 +446,11 @@ cls_rule_is_catchall(const struct cls_rule *rule)
 /* Initializes 'cls' as a classifier that initially contains no classification
  * rules. */
 void
-classifier_init(struct classifier *cls_, const uint8_t *flow_segments)
-    OVS_EXCLUDED(cls_->cls->mutex)
+classifier_init(struct classifier *cls, const uint8_t *flow_segments)
+    OVS_EXCLUDED(cls->mutex)
 {
-    struct cls_classifier *cls = xmalloc(sizeof *cls);
-
     ovs_mutex_init(&cls->mutex);
-
     ovs_mutex_lock(&cls->mutex);
-    cls_->cls = cls;
-
     cls->n_rules = 0;
     cmap_init(&cls->subtables_map);
     pvector_init(&cls->subtables);
@@ -508,18 +473,13 @@ classifier_init(struct classifier *cls_, const uint8_t *flow_segments)
  * caller's responsibility.
  * May only be called after all the readers have been terminated. */
 void
-classifier_destroy(struct classifier *cls_)
-    OVS_EXCLUDED(cls_->cls->mutex)
+classifier_destroy(struct classifier *cls)
+    OVS_EXCLUDED(cls->mutex)
 {
-    if (cls_) {
-        struct cls_classifier *cls = cls_->cls;
+    if (cls) {
         struct cls_partition *partition, *next_partition;
         struct cls_subtable *subtable, *next_subtable;
         int i;
-
-        if (!cls) {
-            return;
-        }
 
         ovs_mutex_lock(&cls->mutex);
         for (i = 0; i < cls->n_tries; i++) {
@@ -541,7 +501,6 @@ classifier_destroy(struct classifier *cls_)
         pvector_destroy(&cls->subtables);
         ovs_mutex_unlock(&cls->mutex);
         ovs_mutex_destroy(&cls->mutex);
-        free(cls);
     }
 }
 
@@ -550,12 +509,11 @@ BUILD_ASSERT_DECL(MFF_N_IDS <= 64);
 
 /* Set the fields for which prefix lookup should be performed. */
 bool
-classifier_set_prefix_fields(struct classifier *cls_,
+classifier_set_prefix_fields(struct classifier *cls,
                              const enum mf_field_id *trie_fields,
                              unsigned int n_fields)
-    OVS_EXCLUDED(cls_->cls->mutex)
+    OVS_EXCLUDED(cls->mutex)
 {
-    struct cls_classifier *cls = cls_->cls;
     uint64_t fields = 0;
     const struct mf_field * new_fields[CLS_MAX_TRIES];
     int i, n_tries = 0;
@@ -633,8 +591,7 @@ classifier_set_prefix_fields(struct classifier *cls_,
 }
 
 static void
-trie_init(struct cls_classifier *cls, int trie_idx,
-          const struct mf_field *field)
+trie_init(struct classifier *cls, int trie_idx, const struct mf_field *field)
     OVS_REQUIRES(cls->mutex)
 {
     struct cls_trie *trie = &cls->tries[trie_idx];
@@ -675,7 +632,7 @@ trie_init(struct cls_classifier *cls, int trie_idx,
 bool
 classifier_is_empty(const struct classifier *cls)
 {
-    return cmap_is_empty(&cls->cls->subtables_map);
+    return cmap_is_empty(&cls->subtables_map);
 }
 
 /* Returns the number of rules in 'cls'. */
@@ -685,7 +642,7 @@ classifier_count(const struct classifier *cls)
 {
     /* n_rules is an int, so in the presence of concurrent writers this will
      * return either the old or a new value. */
-    return cls->cls->n_rules;
+    return cls->n_rules;
 }
 
 static uint32_t
@@ -696,8 +653,7 @@ hash_metadata(ovs_be64 metadata_)
 }
 
 static struct cls_partition *
-find_partition(const struct cls_classifier *cls, ovs_be64 metadata,
-               uint32_t hash)
+find_partition(const struct classifier *cls, ovs_be64 metadata, uint32_t hash)
 {
     struct cls_partition *partition;
 
@@ -711,7 +667,7 @@ find_partition(const struct cls_classifier *cls, ovs_be64 metadata,
 }
 
 static struct cls_partition *
-create_partition(struct cls_classifier *cls, struct cls_subtable *subtable,
+create_partition(struct classifier *cls, struct cls_subtable *subtable,
                  ovs_be64 metadata)
     OVS_REQUIRES(cls->mutex)
 {
@@ -749,10 +705,9 @@ static inline ovs_be32 minimatch_get_ports(const struct minimatch *match)
  * rule, even rules that cannot have any effect because the new rule matches a
  * superset of their flows and has higher priority. */
 struct cls_rule *
-classifier_replace(struct classifier *cls_, struct cls_rule *rule)
-    OVS_EXCLUDED(cls_->cls->mutex)
+classifier_replace(struct classifier *cls, struct cls_rule *rule)
+    OVS_EXCLUDED(cls->mutex)
 {
-    struct cls_classifier *cls = cls_->cls;
     struct cls_match *old_rule;
     struct cls_subtable *subtable;
     struct cls_rule *old_cls_rule = NULL;
@@ -823,10 +778,9 @@ classifier_insert(struct classifier *cls, struct cls_rule *rule)
  * 'rule' with cls_rule_destroy(), freeing the memory block in which 'rule'
  * resides, etc., as necessary. */
 void
-classifier_remove(struct classifier *cls_, struct cls_rule *rule)
-    OVS_EXCLUDED(cls_->cls->mutex)
+classifier_remove(struct classifier *cls, struct cls_rule *rule)
+    OVS_EXCLUDED(cls->mutex)
 {
-    struct cls_classifier *cls = cls_->cls;
     struct cls_partition *partition;
     struct cls_match *cls_match = rule->cls_match;
     struct cls_match *head;
@@ -944,10 +898,9 @@ trie_ctx_init(struct trie_ctx *ctx, const struct cls_trie *trie)
  * earlier, 'wc' should have been initialized (e.g., by
  * flow_wildcards_init_catchall()). */
 struct cls_rule *
-classifier_lookup(const struct classifier *cls_, const struct flow *flow,
+classifier_lookup(const struct classifier *cls, const struct flow *flow,
                   struct flow_wildcards *wc)
 {
-    struct cls_classifier *cls = cls_->cls;
     const struct cls_partition *partition;
     tag_type tags;
     int64_t best_priority = -1;
@@ -1056,11 +1009,10 @@ find_match_miniflow(const struct cls_subtable *subtable,
  * classifier_lookup() function.  Specifically, it does not implement
  * priorities, instead returning any rule which matches the flow. */
 void
-classifier_lookup_miniflow_batch(const struct classifier *cls_,
+classifier_lookup_miniflow_batch(const struct classifier *cls,
                                  const struct miniflow **flows,
                                  struct cls_rule **rules, size_t len)
 {
-    struct cls_classifier *cls = cls_->cls;
     struct cls_subtable *subtable;
     size_t i, begin = 0;
 
@@ -1094,11 +1046,10 @@ classifier_lookup_miniflow_batch(const struct classifier *cls_,
  * matching criteria as 'target'.  Returns a null pointer if 'cls' doesn't
  * contain an exact match. */
 struct cls_rule *
-classifier_find_rule_exactly(const struct classifier *cls_,
+classifier_find_rule_exactly(const struct classifier *cls,
                              const struct cls_rule *target)
-    OVS_EXCLUDED(cls_->cls->mutex)
+    OVS_EXCLUDED(cls->mutex)
 {
-    struct cls_classifier *cls = cls_->cls;
     struct cls_match *head, *rule;
     struct cls_subtable *subtable;
 
@@ -1149,11 +1100,10 @@ classifier_find_match_exactly(const struct classifier *cls,
  * considered to overlap if both rules have the same priority and a packet
  * could match both. */
 bool
-classifier_rule_overlaps(const struct classifier *cls_,
+classifier_rule_overlaps(const struct classifier *cls,
                          const struct cls_rule *target)
-    OVS_EXCLUDED(cls_->cls->mutex)
+    OVS_EXCLUDED(cls->mutex)
 {
-    struct cls_classifier *cls = cls_->cls;
     struct cls_subtable *subtable;
     int64_t stop_at_priority = (int64_t)target->priority - 1;
 
@@ -1277,7 +1227,7 @@ struct cls_cursor cls_cursor_init(const struct classifier *cls,
     struct cls_rule *cls_rule = NULL;
 
     cursor.safe = safe;
-    cursor.cls = cls->cls;
+    cursor.cls = cls;
     cursor.target = target && !cls_rule_is_catchall(target) ? target : NULL;
 
     /* Find first rule. */
@@ -1358,7 +1308,7 @@ cls_cursor_next(struct cls_cursor *cursor, const struct cls_rule *rule_)
 }
 
 static struct cls_subtable *
-find_subtable(const struct cls_classifier *cls, const struct minimask *mask)
+find_subtable(const struct classifier *cls, const struct minimask *mask)
     OVS_REQUIRES(cls->mutex)
 {
     struct cls_subtable *subtable;
@@ -1374,7 +1324,7 @@ find_subtable(const struct cls_classifier *cls, const struct minimask *mask)
 
 /* The new subtable will be visible to the readers only after this. */
 static struct cls_subtable *
-insert_subtable(struct cls_classifier *cls, const struct minimask *mask)
+insert_subtable(struct classifier *cls, const struct minimask *mask)
     OVS_REQUIRES(cls->mutex)
 {
     uint32_t hash = minimask_hash(mask, 0);
@@ -1437,7 +1387,7 @@ insert_subtable(struct cls_classifier *cls, const struct minimask *mask)
 }
 
 static void
-destroy_subtable(struct cls_classifier *cls, struct cls_subtable *subtable)
+destroy_subtable(struct classifier *cls, struct cls_subtable *subtable)
     OVS_REQUIRES(cls->mutex)
 {
     int i;
@@ -1741,7 +1691,7 @@ find_equal(struct cls_subtable *subtable, const struct miniflow *flow,
  * the subtable until they see the updated partitions.
  */
 static struct cls_match *
-insert_rule(struct cls_classifier *cls, struct cls_subtable *subtable,
+insert_rule(struct classifier *cls, struct cls_subtable *subtable,
             struct cls_rule *new_rule)
     OVS_REQUIRES(cls->mutex)
 {
@@ -1967,7 +1917,7 @@ trie_node_rcu_realloc(const struct trie_node *node)
     return new_node;
 }
 
-/* May only be called while holding the cls_classifier mutex. */
+/* May only be called while holding the classifier mutex. */
 static void
 trie_destroy(rcu_trie_ptr *trie)
 {

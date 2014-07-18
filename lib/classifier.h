@@ -216,23 +216,43 @@
 #include "cmap.h"
 #include "match.h"
 #include "meta-flow.h"
+#include "ovs-thread.h"
+#include "pvector.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /* Classifier internal data structures. */
-struct cls_classifier;
 struct cls_subtable;
 struct cls_match;
 
+struct trie_node;
+typedef OVSRCU_TYPE(struct trie_node *) rcu_trie_ptr;
+
+/* Prefix trie for a 'field' */
+struct cls_trie {
+    const struct mf_field *field; /* Trie field, or NULL. */
+    rcu_trie_ptr root;            /* NULL if none. */
+};
+
 enum {
-    CLS_MAX_TRIES = 3    /* Maximum number of prefix trees per classifier. */
+    CLS_MAX_INDICES = 3,   /* Maximum number of lookup indices per subtable. */
+    CLS_MAX_TRIES = 3      /* Maximum number of prefix trees per classifier. */
 };
 
 /* A flow classifier. */
 struct classifier {
-    struct cls_classifier *cls;
+    struct ovs_mutex mutex;
+    int n_rules OVS_GUARDED;        /* Total number of rules. */
+    uint8_t n_flow_segments;
+    uint8_t flow_segments[CLS_MAX_INDICES]; /* Flow segment boundaries to use
+                                             * for staged lookup. */
+    struct cmap subtables_map;      /* Contains "struct cls_subtable"s.  */
+    struct pvector subtables;
+    struct cmap partitions;         /* Contains "struct cls_partition"s. */
+    struct cls_trie tries[CLS_MAX_TRIES]; /* Prefix tries. */
+    unsigned int n_tries;
 };
 
 /* A rule to be inserted to the classifier. */
@@ -291,14 +311,13 @@ struct cls_rule *classifier_find_match_exactly(const struct classifier *,
 /* Iteration. */
 
 struct cls_cursor {
-    const struct cls_classifier *cls;
+    const struct classifier *cls;
     const struct cls_subtable *subtable;
     const struct cls_rule *target;
     struct cmap_cursor subtables;
     struct cmap_cursor rules;
     bool safe;
 };
-
 
 /* Iteration requires mutual exclusion of writers.  We do this by taking
  * a mutex for the duration of the iteration, except for the

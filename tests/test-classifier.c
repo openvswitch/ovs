@@ -432,7 +432,7 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
         flow.nw_tos = nw_dscp_values[get_value(&x, N_NW_DSCP_VALUES)];
 
         /* This assertion is here to suppress a GCC 4.9 array-bounds warning */
-        ovs_assert(cls->cls->n_tries <= CLS_MAX_TRIES);
+        ovs_assert(cls->n_tries <= CLS_MAX_TRIES);
 
         cr0 = classifier_lookup(cls, &flow, &wc);
         cr1 = tcls_lookup(tcls, &flow);
@@ -462,7 +462,7 @@ destroy_classifier(struct classifier *cls)
 }
 
 static void
-pvector_verify(struct pvector *pvec)
+pvector_verify(const struct pvector *pvec)
 {
     void *ptr OVS_UNUSED;
     unsigned int priority, prev_priority = UINT_MAX;
@@ -495,9 +495,8 @@ trie_verify(const rcu_trie_ptr *trie, unsigned int ofs, unsigned int n_bits)
 }
 
 static void
-verify_tries(struct classifier *cls_)
+verify_tries(struct classifier *cls)
 {
-    struct cls_classifier *cls = cls_->cls;
     unsigned int n_rules = 0;
     int i;
 
@@ -521,8 +520,8 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
     int found_dups = 0;
     int found_rules2 = 0;
 
-    pvector_verify(&cls->cls->subtables);
-    CMAP_FOR_EACH (table, cmap_node, &cls->cls->subtables_map) {
+    pvector_verify(&cls->subtables);
+    CMAP_FOR_EACH (table, cmap_node, &cls->subtables_map) {
         const struct cls_match *head;
         unsigned int max_priority = 0;
         unsigned int max_count = 0;
@@ -530,7 +529,7 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
         const struct cls_subtable *iter;
 
         /* Locate the subtable from 'subtables'. */
-        PVECTOR_FOR_EACH (iter, &cls->cls->subtables) {
+        PVECTOR_FOR_EACH (iter, &cls->subtables) {
             if (iter == table) {
                 if (found) {
                     VLOG_ABORT("Subtable %p duplicated in 'subtables'.",
@@ -545,10 +544,10 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
 
         assert(!cmap_is_empty(&table->rules));
 
-        ovs_mutex_lock(&cls->cls->mutex);
+        ovs_mutex_lock(&cls->mutex);
         assert(trie_verify(&table->ports_trie, 0, table->ports_mask_len)
                == (table->ports_mask_len ? table->n_rules : 0));
-        ovs_mutex_unlock(&cls->cls->mutex);
+        ovs_mutex_unlock(&cls->mutex);
 
         found_tables++;
         CMAP_FOR_EACH (head, cmap_node, &table->rules) {
@@ -563,7 +562,7 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
             }
 
             found_rules++;
-            ovs_mutex_lock(&cls->cls->mutex);
+            ovs_mutex_lock(&cls->mutex);
             LIST_FOR_EACH (rule, list, &head->list) {
                 assert(rule->priority < prev_priority);
                 assert(rule->priority <= table->max_priority);
@@ -571,22 +570,22 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
                 prev_priority = rule->priority;
                 found_rules++;
                 found_dups++;
-                ovs_mutex_unlock(&cls->cls->mutex);
+                ovs_mutex_unlock(&cls->mutex);
                 assert(classifier_find_rule_exactly(cls, rule->cls_rule)
                        == rule->cls_rule);
-                ovs_mutex_lock(&cls->cls->mutex);
+                ovs_mutex_lock(&cls->mutex);
             }
-            ovs_mutex_unlock(&cls->cls->mutex);
+            ovs_mutex_unlock(&cls->mutex);
         }
-        ovs_mutex_lock(&cls->cls->mutex);
+        ovs_mutex_lock(&cls->mutex);
         assert(table->max_priority == max_priority);
         assert(table->max_count == max_count);
-        ovs_mutex_unlock(&cls->cls->mutex);
+        ovs_mutex_unlock(&cls->mutex);
     }
 
-    assert(found_tables == cmap_count(&cls->cls->subtables_map));
-    assert(found_tables == pvector_count(&cls->cls->subtables));
-    assert(n_tables == -1 || n_tables == cmap_count(&cls->cls->subtables_map));
+    assert(found_tables == cmap_count(&cls->subtables_map));
+    assert(found_tables == pvector_count(&cls->subtables));
+    assert(n_tables == -1 || n_tables == cmap_count(&cls->subtables_map));
     assert(n_rules == -1 || found_rules == n_rules);
     assert(n_dups == -1 || found_dups == n_dups);
 
