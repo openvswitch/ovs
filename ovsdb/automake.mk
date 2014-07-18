@@ -15,7 +15,6 @@ ovsdb_libovsdb_la_SOURCES = \
 	ovsdb/log.h \
 	ovsdb/mutation.c \
 	ovsdb/mutation.h \
-	ovsdb/ovsdb-server.c \
 	ovsdb/ovsdb.c \
 	ovsdb/ovsdb.h \
 	ovsdb/query.c \
