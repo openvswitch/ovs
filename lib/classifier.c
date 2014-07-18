@@ -1445,27 +1445,25 @@ check_tries(struct trie_ctx trie_ctx[CLS_MAX_TRIES], unsigned int n_tries,
                 /* Possible to skip the rest of the subtable if subtable's
                  * prefix on the field is not included in the lookup result. */
                 if (!be_get_bit_at(&ctx->match_plens.be32, field_plen[j] - 1)) {
-                    /* RFC: We want the trie lookup to never result in
-                     * unwildcarding any bits that would not be unwildcarded
-                     * otherwise.  Since the trie is shared by the whole
-                     * classifier, it is possible that the 'maskbits' contain
-                     * bits that are irrelevant for the partition of the
-                     * classifier relevant for the current flow. */
+                    /* We want the trie lookup to never result in unwildcarding
+                     * any bits that would not be unwildcarded otherwise.
+                     * Since the trie is shared by the whole classifier, it is
+                     * possible that the 'maskbits' contain bits that are
+                     * irrelevant for the partition relevant for the current
+                     * packet.  Hence the checks below. */
 
-                    /* Can skip if the field is already unwildcarded. */
-                    if (mask_prefix_bits_set(wc, be32ofs, ctx->maskbits)) {
-                        return true;
-                    }
                     /* Check that the trie result will not unwildcard more bits
-                     * than this stage will. */
+                     * than this subtable would otherwise. */
                     if (ctx->maskbits <= field_plen[j]) {
                         /* Unwildcard the bits and skip the rest. */
                         mask_set_prefix_bits(wc, be32ofs, ctx->maskbits);
                         /* Note: Prerequisite already unwildcarded, as the only
                          * prerequisite of the supported trie lookup fields is
-                         * the ethertype, which is currently always
-                         * unwildcarded.
-                         */
+                         * the ethertype, which is always unwildcarded. */
+                        return true;
+                    }
+                    /* Can skip if the field is already unwildcarded. */
+                    if (mask_prefix_bits_set(wc, be32ofs, ctx->maskbits)) {
                         return true;
                     }
                 }
