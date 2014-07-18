@@ -724,9 +724,15 @@ nl_dump_refill(struct nl_dump *dump, struct ofpbuf *buffer)
     int error;
 
     while (!ofpbuf_size(buffer)) {
-        error = nl_sock_recv__(dump->sock, buffer, true);
+        error = nl_sock_recv__(dump->sock, buffer, false);
         if (error) {
-            /* The kernel shouldn't return EAGAIN while there's data left. */
+            /* The kernel never blocks providing the results of a dump, so
+             * error == EAGAIN means that we've read the whole thing, and
+             * therefore transform it into EOF.  (The kernel always provides
+             * NLMSG_DONE as a sentinel.  Some other thread must have received
+             * that already but not yet signaled it in 'status'.)
+             *
+             * Any other error is just an error. */
             return error == EAGAIN ? EOF : error;
         }
 
