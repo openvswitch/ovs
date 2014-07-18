@@ -296,16 +296,6 @@ ovs_save () {
     [ -z "${bridges}" ] && return 0
 }
 
-save_ofports_if_required () {
-    # Save ofports if we are upgrading from a pre-1.10 branch.
-    case `ovs-appctl version | sed 1q` in
-        "ovs-vswitchd (Open vSwitch) 1."[0-9].*)
-            action "Saving ofport values" ovs_save save-ofports \
-                "${script_ofports}"
-            ;;
-    esac
-}
-
 save_interfaces () {
     "$datadir/scripts/ovs-save" save-interfaces ${ifaces} \
         > "${script_interfaces}"
@@ -358,8 +348,7 @@ force_reload_kmod () {
     init_restore_scripts
 
     action "Saving flows" ovs_save save-flows "${script_flows}"
-
-    save_ofports_if_required
+    action "Saving ofport values" ovs_save save-ofports "${script_ofports}"
 
     # Restart the database first, since a large database may take a
     # while to load, and we want to minimize forwarding disruption.
