@@ -2038,6 +2038,7 @@ set_stp_port(struct ofport *ofport_,
     sp = ofport->stp_port = stp_get_port(ofproto->stp, s->port_num);
     stp_port_enable(sp);
 
+    stp_port_set_name(sp, netdev_get_name(ofport->up.netdev));
     stp_port_set_aux(sp, ofport);
     stp_port_set_priority(sp, s->priority);
     stp_port_set_path_cost(sp, s->path_cost);

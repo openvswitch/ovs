@@ -146,6 +146,7 @@ const char *stp_role_name(enum stp_role);
 void stp_received_bpdu(struct stp_port *, const void *bpdu, size_t bpdu_size);
 
 struct stp *stp_port_get_stp(struct stp_port *);
+void stp_port_set_name(struct stp_port *, const char *);
 void stp_port_set_aux(struct stp_port *, void *);
 void *stp_port_get_aux(struct stp_port *);
 int stp_port_no(const struct stp_port *);
