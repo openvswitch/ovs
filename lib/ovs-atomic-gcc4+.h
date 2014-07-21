@@ -72,7 +72,7 @@ atomic_signal_fence(memory_order order OVS_UNUSED)
 
 #define atomic_is_lock_free(OBJ)                \
     ((void) *(OBJ),                             \
-     IF_LOCKLESS_ATOMIC(OBJ, true, false))
+     IS_LOCKLESS_ATOMIC(*(OBJ)) ? 2 : 0)
 
 #define atomic_store(DST, SRC) \
     atomic_store_explicit(DST, SRC, memory_order_seq_cst)
@@ -87,7 +87,7 @@ atomic_signal_fence(memory_order order OVS_UNUSED)
             *dst__ = src__;                             \
             atomic_thread_fence_if_seq_cst(order__);    \
         } else {                                        \
-            atomic_store_locked(DST, SRC);              \
+            atomic_store_locked(dst__, src__);          \
         }                                               \
         (void) 0;                                       \
     })
@@ -103,7 +103,7 @@ atomic_signal_fence(memory_order order OVS_UNUSED)
             atomic_thread_fence_if_seq_cst(order__);    \
             *dst__ = *src__;                            \
         } else {                                        \
-            atomic_read_locked(SRC, DST);               \
+            atomic_read_locked(src__, dst__);           \
         }                                               \
         (void) 0;                                       \
     })
@@ -140,7 +140,7 @@ atomic_signal_fence(memory_order order OVS_UNUSED)
         if (IS_LOCKLESS_ATOMIC(*rmw__)) {                   \
             *orig__ = __sync_fetch_and_##OP(rmw__, arg__);  \
         } else {                                            \
-            atomic_op_locked(RMW, OP, ARG, ORIG);           \
+            atomic_op_locked(rmw__, OP, arg__, orig__);     \
         }                                                   \
     })
 
