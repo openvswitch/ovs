@@ -123,16 +123,17 @@
 #define ovsrcu_get__(TYPE, VAR, ORDER)                                  \
     ({                                                                  \
         TYPE value__;                                                   \
+        typeof(VAR) ovsrcu_var = (VAR);                                 \
                                                                         \
-        atomic_read_explicit(CONST_CAST(ATOMIC(TYPE) *, &(VAR)->p),     \
+        atomic_read_explicit(CONST_CAST(ATOMIC(TYPE) *, &ovsrcu_var->p), \
                              &value__, ORDER);                          \
                                                                         \
         value__;                                                        \
     })
 #define ovsrcu_get(TYPE, VAR) \
-    CONST_CAST(TYPE, ovsrcu_get__(TYPE, VAR, memory_order_consume))
+    ovsrcu_get__(TYPE, VAR, memory_order_consume)
 #define ovsrcu_get_protected(TYPE, VAR) \
-    CONST_CAST(TYPE, ovsrcu_get__(TYPE, VAR, memory_order_relaxed))
+    ovsrcu_get__(TYPE, VAR, memory_order_relaxed)
 
 /* 'VALUE' may be an atomic operation, which must be evaluated before
  * any of the body of the atomic_store_explicit.  Since the type of
