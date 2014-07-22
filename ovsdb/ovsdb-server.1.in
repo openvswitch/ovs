@@ -194,6 +194,22 @@ RFC 4627 says that names within a JSON object should be unique.
 The Open vSwitch JSON parser discards all but the last value
 for a name that is specified more than once.
 .
+.IP
+The definition of <error> allows for implementation extensions.
+Currently \fBovsdb\-server\fR uses the following additional "error"
+strings which might change in later releases):
+.
+.RS
+.IP "\fBsyntax error\fR or \fBunknown column\fR"
+The request could not be parsed as an OVSDB request.  An additional
+"syntax" member, whose value is a string that contains JSON, may
+narrow down the particular syntax that could not be parsed.
+.IP "\fBinternal error\fR"
+The request triggered a bug in \fBovsdb\-server\fR.
+.IP "\fBovsdb error\fR"
+A map or set contains a duplicate key.
+.RE
+.
 .IP "3.2. Schema Format"
 RFC 7047 requires the "version" field in <database-schema>.  Current
 versions of \fBovsdb\-server\fR allow it to be omitted (future
