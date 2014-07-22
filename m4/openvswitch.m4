@@ -192,26 +192,6 @@ AC_DEFUN([OVS_CHECK_BACKTRACE],
                   [AC_DEFINE([HAVE_BACKTRACE], [1],
                              [Define to 1 if you have backtrace(3).])])])
 
-dnl Checks for __malloc_hook, etc., supported by glibc.
-AC_DEFUN([OVS_CHECK_MALLOC_HOOKS],
-  [AC_CACHE_CHECK(
-    [whether libc supports hooks for malloc and related functions],
-    [ovs_cv_malloc_hooks],
-    [AC_COMPILE_IFELSE(
-      [AC_LANG_PROGRAM(
-         [#include <malloc.h>
-         ],
-         [(void) __malloc_hook;
-          (void) __realloc_hook;
-          (void) __free_hook;])],
-      [ovs_cv_malloc_hooks=yes],
-      [ovs_cv_malloc_hooks=no])])
-   if test $ovs_cv_malloc_hooks = yes; then
-     AC_DEFINE([HAVE_MALLOC_HOOKS], [1],
-               [Define to 1 if you have __malloc_hook, __realloc_hook, and
-                __free_hook in <malloc.h>.])
-   fi])
-
 dnl Checks for valgrind/valgrind.h.
 AC_DEFUN([OVS_CHECK_VALGRIND],
   [AC_CHECK_HEADERS([valgrind/valgrind.h])])
