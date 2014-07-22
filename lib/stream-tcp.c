@@ -106,7 +106,7 @@ windows_open(const char *name, char *suffix, struct stream **streamp,
     if (!strchr(suffix, ':')) {
         path = xasprintf("%s/%s", ovs_rundir(), suffix);
     } else {
-        path = strdup(suffix);
+        path = xstrdup(suffix);
     }
 
     file = fopen(path, "r");
@@ -229,7 +229,7 @@ pwindows_open(const char *name OVS_UNUSED, char *suffix,
     if (!strchr(suffix, ':')) {
         path = xasprintf("%s/%s", ovs_rundir(), suffix);
     } else {
-        path = strdup(suffix);
+        path = xstrdup(suffix);
     }
 
     error = new_pstream(suffix_new, pstreamp, dscp, path, false);

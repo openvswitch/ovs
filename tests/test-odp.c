@@ -149,7 +149,7 @@ parse_filter(char *filter_parse)
 
     vlog_set_levels_from_string_assert("odp_util:console:dbg");
     if (filter_parse && !strncmp(filter_parse, "filter=", 7)) {
-        filter = strdup(filter_parse+7);
+        filter = xstrdup(filter_parse + 7);
         memset(&flow_filter, 0, sizeof(flow_filter));
         memset(&wc_filter, 0, sizeof(wc_filter));
 

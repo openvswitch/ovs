@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -224,7 +224,7 @@ unixctl_server_create(const char *path, struct unixctl_server **serverp)
 #ifndef _WIN32
         abs_path = abs_file_name(ovs_rundir(), path);
 #else
-        abs_path = strdup(path);
+        abs_path = xstrdup(path);
 #endif
         punix_path = xasprintf("punix:%s", abs_path);
         free(abs_path);
@@ -438,7 +438,7 @@ unixctl_client_create(const char *path, struct jsonrpc **client)
     int error;
 
 #ifdef _WIN32
-    abs_path = strdup(path);
+    abs_path = xstrdup(path);
 #else
     abs_path = abs_file_name(ovs_rundir(), path);
 #endif

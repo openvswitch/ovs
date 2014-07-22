@@ -478,7 +478,7 @@ char *
 make_pidfile_name(const char *name)
 {
     if (name && strchr(name, ':')) {
-        return strdup(name);
+        return xstrdup(name);
     } else {
         return xasprintf("%s/%s.pid", ovs_rundir(), program_name);
     }
