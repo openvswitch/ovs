@@ -4969,22 +4969,31 @@ ofputil_encode_role_reply(const struct ofp_header *request,
     return buf;
 }
 
+/* Encodes "role status" message 'status' for sending in the given
+ * 'protocol'.  Returns the role status message, if 'protocol' supports them,
+ * otherwise a null pointer. */
 struct ofpbuf *
 ofputil_encode_role_status(const struct ofputil_role_status *status,
                            enum ofputil_protocol protocol)
 {
-    struct ofpbuf *buf;
     enum ofp_version version;
-    struct ofp14_role_status *rstatus;
 
     version = ofputil_protocol_to_ofp_version(protocol);
-    buf = ofpraw_alloc_xid(OFPRAW_OFPT14_ROLE_STATUS, version, htonl(0), 0);
-    rstatus = ofpbuf_put_zeros(buf, sizeof *rstatus);
-    rstatus->role = htonl(status->role);
-    rstatus->reason = status->reason;
-    rstatus->generation_id = htonll(status->generation_id);
+    if (version >= OFP14_VERSION) {
+        struct ofp14_role_status *rstatus;
+        struct ofpbuf *buf;
 
-    return buf;
+        buf = ofpraw_alloc_xid(OFPRAW_OFPT14_ROLE_STATUS, version, htonl(0),
+                               0);
+        rstatus = ofpbuf_put_zeros(buf, sizeof *rstatus);
+        rstatus->role = htonl(status->role);
+        rstatus->reason = status->reason;
+        rstatus->generation_id = htonll(status->generation_id);
+
+        return buf;
+    } else {
+        return NULL;
+    }
 }
 
 enum ofperr

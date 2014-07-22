@@ -935,8 +935,9 @@ ofconn_send_role_status(struct ofconn *ofconn, uint32_t role, uint8_t reason)
     ofconn_get_master_election_id(ofconn, &status.generation_id);
 
     buf = ofputil_encode_role_status(&status, ofconn_get_protocol(ofconn));
-
-    ofconn_send(ofconn, buf, NULL);
+    if (buf) {
+        ofconn_send(ofconn, buf, NULL);
+    }
 }
 
 /* Changes 'ofconn''s role to 'role'.  If 'role' is OFPCR12_ROLE_MASTER then
