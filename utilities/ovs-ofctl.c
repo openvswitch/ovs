@@ -2316,9 +2316,9 @@ fte_free(struct fte *fte)
 static void
 fte_free_all(struct classifier *cls)
 {
-    struct fte *fte, *next;
+    struct fte *fte;
 
-    CLS_FOR_EACH_SAFE (fte, next, rule, cls) {
+    CLS_FOR_EACH_SAFE (fte, rule, cls) {
         classifier_remove(cls, &fte->rule);
         fte_free(fte);
     }

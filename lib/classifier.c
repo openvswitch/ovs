@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -476,8 +476,8 @@ classifier_destroy(struct classifier *cls)
     OVS_EXCLUDED(cls->mutex)
 {
     if (cls) {
-        struct cls_partition *partition, *next_partition;
-        struct cls_subtable *subtable, *next_subtable;
+        struct cls_partition *partition;
+        struct cls_subtable *subtable;
         int i;
 
         ovs_mutex_lock(&cls->mutex);
@@ -485,14 +485,12 @@ classifier_destroy(struct classifier *cls)
             trie_destroy(&cls->tries[i].root);
         }
 
-        CMAP_FOR_EACH_SAFE (subtable, next_subtable, cmap_node,
-                            &cls->subtables_map) {
+        CMAP_FOR_EACH_SAFE (subtable, cmap_node, &cls->subtables_map) {
             destroy_subtable(cls, subtable);
         }
         cmap_destroy(&cls->subtables_map);
 
-        CMAP_FOR_EACH_SAFE (partition, next_partition, cmap_node,
-                            &cls->partitions) {
+        CMAP_FOR_EACH_SAFE (partition, cmap_node, &cls->partitions) {
             ovsrcu_postpone(free, partition);
         }
         cmap_destroy(&cls->partitions);
@@ -1219,18 +1217,18 @@ search_subtable(const struct cls_subtable *subtable,
  *       such that cls_rule_is_loose_match(rule, target) returns true.
  *
  * Ignores target->priority. */
-struct cls_cursor cls_cursor_init(const struct classifier *cls,
-                                  const struct cls_rule *target,
-                                  void **pnode, const void *offset, bool safe)
+struct cls_cursor cls_cursor_start(const struct classifier *cls,
+                                   const struct cls_rule *target,
+                                   bool safe)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct cls_cursor cursor;
     struct cls_subtable *subtable;
-    struct cls_rule *cls_rule = NULL;
 
     cursor.safe = safe;
     cursor.cls = cls;
     cursor.target = target && !cls_rule_is_catchall(target) ? target : NULL;
+    cursor.rule = NULL;
 
     /* Find first rule. */
     ovs_mutex_lock(&cursor.cls->mutex);
@@ -1240,14 +1238,13 @@ struct cls_cursor cls_cursor_init(const struct classifier *cls,
 
         if (rule) {
             cursor.subtable = subtable;
-            cls_rule = rule->cls_rule;
+            cursor.rule = rule->cls_rule;
             break;
         }
     }
-    *pnode = (char *)cls_rule + (ptrdiff_t)offset;
 
     /* Leave locked if requested and have a rule. */
-    if (safe || !cls_rule) {
+    if (safe || !cursor.rule) {
         ovs_mutex_unlock(&cursor.cls->mutex);
     }
     return cursor;
@@ -1258,18 +1255,19 @@ cls_cursor_next_unlock(struct cls_cursor *cursor, struct cls_rule *rule)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     /* Release the mutex if no rule, or 'safe' mode. */
+    cursor->rule = rule;
     if (!rule || cursor->safe) {
         ovs_mutex_unlock(&cursor->cls->mutex);
     }
 }
 
-/* Returns the next matching cls_rule in 'cursor''s iteration, or a null
- * pointer if there are no more matches. */
-struct cls_rule *
-cls_cursor_next(struct cls_cursor *cursor, const struct cls_rule *rule_)
+/* Sets 'cursor->rule' to the next matching cls_rule in 'cursor''s iteration,
+ * or to null if all matching rules have been visited. */
+void
+cls_cursor_advance(struct cls_cursor *cursor)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
-    struct cls_match *rule = CONST_CAST(struct cls_match *, rule_->cls_match);
+    struct cls_match *rule = cursor->rule->cls_match;
     const struct cls_subtable *subtable;
     struct cls_match *next;
 
@@ -1281,7 +1279,7 @@ cls_cursor_next(struct cls_cursor *cursor, const struct cls_rule *rule_)
     next = next_rule_in_list__(rule);
     if (next->priority < rule->priority) {
         cls_cursor_next_unlock(cursor, next->cls_rule);
-        return next->cls_rule;
+        return;
     }
 
     /* 'next' is the head of the list, that is, the rule that is included in
@@ -1291,7 +1289,7 @@ cls_cursor_next(struct cls_cursor *cursor, const struct cls_rule *rule_)
     CMAP_CURSOR_FOR_EACH_CONTINUE (rule, cmap_node, &cursor->rules) {
         if (rule_matches(rule, cursor->target)) {
             cls_cursor_next_unlock(cursor, rule->cls_rule);
-            return rule->cls_rule;
+            return;
         }
     }
 
@@ -1301,12 +1299,12 @@ cls_cursor_next(struct cls_cursor *cursor, const struct cls_rule *rule_)
         if (rule) {
             cursor->subtable = subtable;
             cls_cursor_next_unlock(cursor, rule->cls_rule);
-            return rule->cls_rule;
+            return;
         }
     }
 
     ovs_mutex_unlock(&cursor->cls->mutex);
-    return NULL;
+    cursor->rule = NULL;
 }
 
 static struct cls_subtable *

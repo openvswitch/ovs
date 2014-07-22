@@ -784,31 +784,29 @@ cmap_rehash(struct cmap *cmap, uint32_t mask)
     return new;
 }
 
-/* Initializes 'cursor' for iterating through 'cmap'.
- *
- * Use via CMAP_FOR_EACH. */
-void
-cmap_cursor_init(struct cmap_cursor *cursor, const struct cmap *cmap)
+struct cmap_cursor
+cmap_cursor_start(const struct cmap *cmap)
 {
-    cursor->impl = cmap_get_impl(cmap);
-    cursor->bucket_idx = 0;
-    cursor->entry_idx = 0;
+    struct cmap_cursor cursor;
+
+    cursor.impl = cmap_get_impl(cmap);
+    cursor.bucket_idx = 0;
+    cursor.entry_idx = 0;
+    cursor.node = NULL;
+    cmap_cursor_advance(&cursor);
+
+    return cursor;
 }
 
-/* Returns the next node for 'cursor' to visit, following 'node', or NULL if
- * the last node has been visited.
- *
- * Use via CMAP_FOR_EACH. */
-struct cmap_node *
-cmap_cursor_next(struct cmap_cursor *cursor, const struct cmap_node *node)
+void
+cmap_cursor_advance(struct cmap_cursor *cursor)
 {
     const struct cmap_impl *impl = cursor->impl;
 
-    if (node) {
-        struct cmap_node *next = cmap_node_next(node);
-
-        if (next) {
-            return next;
+    if (cursor->node) {
+        cursor->node = cmap_node_next(cursor->node);
+        if (cursor->node) {
+            return;
         }
     }
 
@@ -816,18 +814,15 @@ cmap_cursor_next(struct cmap_cursor *cursor, const struct cmap_node *node)
         const struct cmap_bucket *b = &impl->buckets[cursor->bucket_idx];
 
         while (cursor->entry_idx < CMAP_K) {
-            struct cmap_node *node = cmap_node_next(&b->nodes[cursor->entry_idx++]);
-
-            if (node) {
-                return node;
+            cursor->node = cmap_node_next(&b->nodes[cursor->entry_idx++]);
+            if (cursor->node) {
+                return;
             }
         }
 
         cursor->bucket_idx++;
         cursor->entry_idx = 0;
     }
-
-    return NULL;
 }
 
 /* Returns the next node in 'cmap' in hash order, or NULL if no nodes remain in

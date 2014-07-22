@@ -1283,13 +1283,13 @@ ofproto_flush__(struct ofproto *ofproto)
 
     ovs_mutex_lock(&ofproto_mutex);
     OFPROTO_FOR_EACH_TABLE (table, ofproto) {
-        struct rule *rule, *next_rule;
+        struct rule *rule;
 
         if (table->flags & OFTABLE_HIDDEN) {
             continue;
         }
 
-        CLS_FOR_EACH_SAFE (rule, next_rule, cr, &table->cls) {
+        CLS_FOR_EACH_SAFE (rule, cr, &table->cls) {
             ofproto_rule_delete__(rule, OFPRR_DELETE);
         }
     }

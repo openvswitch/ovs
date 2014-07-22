@@ -452,9 +452,9 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
 static void
 destroy_classifier(struct classifier *cls)
 {
-    struct test_rule *rule, *next_rule;
+    struct test_rule *rule;
 
-    CLS_FOR_EACH_SAFE (rule, next_rule, cls_rule, cls) {
+    CLS_FOR_EACH_SAFE (rule, cls_rule, cls) {
         classifier_remove(cls, &rule->cls_rule);
         free_rule(rule);
     }
@@ -1069,12 +1069,12 @@ test_many_rules_in_n_tables(int n_tables)
         }
 
         while (!classifier_is_empty(&cls)) {
-            struct test_rule *rule, *next_rule;
             struct test_rule *target;
+            struct test_rule *rule;
 
             target = clone_rule(tcls.rules[random_range(tcls.n_rules)]);
 
-            CLS_FOR_EACH_TARGET_SAFE (rule, next_rule, cls_rule, &cls,
+            CLS_FOR_EACH_TARGET_SAFE (rule, cls_rule, &cls,
                                       &target->cls_rule) {
                 classifier_remove(&cls, &rule->cls_rule);
                 free_rule(rule);

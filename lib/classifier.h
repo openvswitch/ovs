@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -316,63 +316,40 @@ struct cls_cursor {
     const struct cls_rule *target;
     struct cmap_cursor subtables;
     struct cmap_cursor rules;
+    struct cls_rule *rule;
     bool safe;
 };
 
 /* Iteration requires mutual exclusion of writers.  We do this by taking
  * a mutex for the duration of the iteration, except for the
  * 'SAFE' variant, where we release the mutex for the body of the loop. */
-struct cls_cursor cls_cursor_init(const struct classifier *cls,
-                                  const struct cls_rule *target,
-                                  void **pnode, const void *offset, bool safe);
+struct cls_cursor cls_cursor_start(const struct classifier *cls,
+                                   const struct cls_rule *target,
+                                   bool safe);
 
-struct cls_rule *cls_cursor_next(struct cls_cursor *cursor,
-                                 const struct cls_rule *);
+void cls_cursor_advance(struct cls_cursor *);
 
-#define CLS_CURSOR_START(RULE, MEMBER, CLS, TARGET)                     \
-    cls_cursor_init(CLS, (TARGET), (void **)&(RULE),                    \
-                    OBJECT_CONTAINING(NULL, RULE, MEMBER), false)
-
-#define CLS_CURSOR_START_SAFE(RULE, MEMBER, CLS, TARGET)                \
-    cls_cursor_init(CLS, (TARGET), (void **)&(RULE),                    \
-                    OBJECT_CONTAINING(NULL, RULE, MEMBER), true)
-
-#define CLS_FOR_EACH(RULE, MEMBER, CLS)                                 \
-    for (struct cls_cursor cursor__ = CLS_CURSOR_START(RULE, MEMBER, CLS, \
-                                                       NULL);           \
-         RULE != OBJECT_CONTAINING(NULL, RULE, MEMBER);                 \
-         ASSIGN_CONTAINER(RULE, cls_cursor_next(&cursor__, &(RULE)->MEMBER), \
-                          MEMBER))
-
+#define CLS_FOR_EACH(RULE, MEMBER, CLS) \
+    CLS_FOR_EACH_TARGET(RULE, MEMBER, CLS, NULL)
 #define CLS_FOR_EACH_TARGET(RULE, MEMBER, CLS, TARGET)                  \
-    for (struct cls_cursor cursor__ = CLS_CURSOR_START(RULE, MEMBER, CLS, \
-                                                       TARGET);         \
-         RULE != OBJECT_CONTAINING(NULL, RULE, MEMBER);                 \
-         ASSIGN_CONTAINER(RULE, cls_cursor_next(&cursor__, &(RULE)->MEMBER), \
-                          MEMBER))
-
-/* This form allows classifier_remove() to be called within the loop. */
-#define CLS_FOR_EACH_SAFE(RULE, NEXT, MEMBER, CLS)                      \
-    for (struct cls_cursor cursor__ = CLS_CURSOR_START_SAFE(RULE, MEMBER, \
-                                                            CLS, NULL); \
-         (RULE != OBJECT_CONTAINING(NULL, RULE, MEMBER)                 \
-          ? ASSIGN_CONTAINER(NEXT, cls_cursor_next(&cursor__,           \
-                                                   &(RULE)->MEMBER),    \
-                             MEMBER), true                              \
+    for (struct cls_cursor cursor__ = cls_cursor_start(CLS, TARGET, false); \
+         (cursor__.rule                                                 \
+          ? (ASSIGN_CONTAINER(RULE, cursor__.rule, MEMBER),            \
+             true)                                                      \
           : false);                                                     \
-         (RULE) = (NEXT))
+         cls_cursor_advance(&cursor__))
 
-/* This form allows classifier_remove() to be called within the loop. */
-#define CLS_FOR_EACH_TARGET_SAFE(RULE, NEXT, MEMBER, CLS, TARGET)       \
-    for (struct cls_cursor cursor__ = CLS_CURSOR_START_SAFE(RULE, MEMBER, \
-                                                            CLS, TARGET); \
-         (RULE != OBJECT_CONTAINING(NULL, RULE, MEMBER)                 \
-          ? ASSIGN_CONTAINER(NEXT, cls_cursor_next(&cursor__,           \
-                                                   &(RULE)->MEMBER),    \
-                             MEMBER), true                              \
+/* These forms allows classifier_remove() to be called within the loop. */
+#define CLS_FOR_EACH_SAFE(RULE, MEMBER, CLS) \
+    CLS_FOR_EACH_TARGET_SAFE(RULE, MEMBER, CLS, NULL)
+#define CLS_FOR_EACH_TARGET_SAFE(RULE, MEMBER, CLS, TARGET)             \
+    for (struct cls_cursor cursor__ = cls_cursor_start(CLS, TARGET, true); \
+         (cursor__.rule                                                 \
+          ? (ASSIGN_CONTAINER(RULE, cursor__.rule, MEMBER),            \
+             cls_cursor_advance(&cursor__),                             \
+             true)                                                      \
           : false);                                                     \
-         (RULE) = (NEXT))
-
+        )                                                               \
 
 #ifdef __cplusplus
 }

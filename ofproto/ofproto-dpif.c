@@ -1280,8 +1280,8 @@ static void
 destruct(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    struct rule_dpif *rule, *next_rule;
     struct ofproto_packet_in *pin, *next_pin;
+    struct rule_dpif *rule;
     struct oftable *table;
     struct list pins;
 
@@ -1297,7 +1297,7 @@ destruct(struct ofproto *ofproto_)
     hmap_remove(&all_ofproto_dpifs, &ofproto->all_ofproto_dpifs_node);
 
     OFPROTO_FOR_EACH_TABLE (table, &ofproto->up) {
-        CLS_FOR_EACH_SAFE (rule, next_rule, up.cr, &table->cls) {
+        CLS_FOR_EACH_SAFE (rule, up.cr, &table->cls) {
             ofproto_rule_delete(&ofproto->up, &rule->up);
         }
     }
