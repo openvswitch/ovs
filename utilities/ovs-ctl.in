@@ -1,5 +1,5 @@
 #! /bin/sh
-# Copyright (C) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -297,7 +297,10 @@ ovs_save () {
 }
 
 save_ofports_if_required () {
-    # Save ofports if we are upgrading from a pre-1.10 branch.
+    # Save OpenFlow port numbers if we are upgrading from a pre-1.10 branch.
+    #
+    # (Versions 1.10 and later save OpenFlow port numbers without assistance,
+    # so we don't have to do anything for them.
     case `ovs-appctl version | sed 1q` in
         "ovs-vswitchd (Open vSwitch) 1."[0-9].*)
             action "Saving ofport values" ovs_save save-ofports \
