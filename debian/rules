@@ -35,6 +35,13 @@ endif
 buildflags := $(shell if dpkg-buildflags --export=configure >/dev/null 2>&1; \
 	              then dpkg-buildflags --export=configure; fi)
 
+# dpkg-buildflags tends to turn on -Wformat, which is admirable, but
+# the -Wformat-zero-length subset of that option triggers a couple of
+# false positives in Open vSwitch so turn it right back off again.
+# (We do this in configure.ac also, but the Debian buildflags override
+# those.)
+buildflags := $(patsubst -Wformat,-Wformat -Wno-format-zero-length,$(buildflags))
+
 configure: configure-stamp
 configure-stamp:
 	dh_testdir
