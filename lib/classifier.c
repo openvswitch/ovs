@@ -1250,36 +1250,17 @@ struct cls_cursor cls_cursor_start(const struct classifier *cls,
     return cursor;
 }
 
-static void
-cls_cursor_next_unlock(struct cls_cursor *cursor, struct cls_rule *rule)
-    OVS_NO_THREAD_SAFETY_ANALYSIS
-{
-    /* Release the mutex if no rule, or 'safe' mode. */
-    cursor->rule = rule;
-    if (!rule || cursor->safe) {
-        ovs_mutex_unlock(&cursor->cls->mutex);
-    }
-}
-
-/* Sets 'cursor->rule' to the next matching cls_rule in 'cursor''s iteration,
- * or to null if all matching rules have been visited. */
-void
-cls_cursor_advance(struct cls_cursor *cursor)
+static struct cls_rule *
+cls_cursor_next(struct cls_cursor *cursor)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct cls_match *rule = cursor->rule->cls_match;
     const struct cls_subtable *subtable;
     struct cls_match *next;
 
-    /* Lock if not locked already. */
-    if (cursor->safe) {
-        ovs_mutex_lock(&cursor->cls->mutex);
-    }
-
     next = next_rule_in_list__(rule);
     if (next->priority < rule->priority) {
-        cls_cursor_next_unlock(cursor, next->cls_rule);
-        return;
+        return next->cls_rule;
     }
 
     /* 'next' is the head of the list, that is, the rule that is included in
@@ -1288,8 +1269,7 @@ cls_cursor_advance(struct cls_cursor *cursor)
     rule = next;
     CMAP_CURSOR_FOR_EACH_CONTINUE (rule, cmap_node, &cursor->rules) {
         if (rule_matches(rule, cursor->target)) {
-            cls_cursor_next_unlock(cursor, rule->cls_rule);
-            return;
+            return rule->cls_rule;
         }
     }
 
@@ -1298,13 +1278,26 @@ cls_cursor_advance(struct cls_cursor *cursor)
         rule = search_subtable(subtable, cursor);
         if (rule) {
             cursor->subtable = subtable;
-            cls_cursor_next_unlock(cursor, rule->cls_rule);
-            return;
+            return rule->cls_rule;
         }
     }
 
-    ovs_mutex_unlock(&cursor->cls->mutex);
-    cursor->rule = NULL;
+    return NULL;
+}
+
+/* Sets 'cursor->rule' to the next matching cls_rule in 'cursor''s iteration,
+ * or to null if all matching rules have been visited. */
+void
+cls_cursor_advance(struct cls_cursor *cursor)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
+{
+    if (cursor->safe) {
+        ovs_mutex_lock(&cursor->cls->mutex);
+    }
+    cursor->rule = cls_cursor_next(cursor);
+    if (cursor->safe || !cursor->rule) {
+        ovs_mutex_unlock(&cursor->cls->mutex);
+    }
 }
 
 static struct cls_subtable *
