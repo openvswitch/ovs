@@ -182,12 +182,15 @@ nln_run(struct nln *nln)
             return;
         } else {
             if (error == ENOBUFS) {
+                /* The socket buffer might be full, there could be too many
+                 * notifications, so it makes sense to call nln_report() */
+                nln_report(nln, NULL);
                 VLOG_WARN_RL(&rl, "netlink receive buffer overflowed");
             } else {
                 VLOG_WARN_RL(&rl, "error reading netlink socket: %s",
                              ovs_strerror(error));
             }
-            nln_report(nln, NULL);
+            return;
         }
     }
 }
