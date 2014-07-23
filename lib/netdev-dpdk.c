@@ -123,8 +123,8 @@ static const struct rte_eth_txconf tx_conf = {
     .txq_flags = ETH_TXQ_FLAGS_NOMULTSEGS|ETH_TXQ_FLAGS_NOOFFLOADS,
 };
 
-enum { MAX_RX_QUEUE_LEN = 64 };
-enum { MAX_TX_QUEUE_LEN = 64 };
+enum { MAX_RX_QUEUE_LEN = 192 };
+enum { MAX_TX_QUEUE_LEN = 384 };
 enum { DRAIN_TSC = 200000ULL };
 
 static int rte_eal_init_ret = ENODEV;
