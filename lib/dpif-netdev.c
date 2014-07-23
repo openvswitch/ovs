@@ -205,7 +205,7 @@ struct dp_netdev_port {
 
 /* There are fields in the flow structure that we never use. Therefore we can
  * save a few words of memory */
-#define NETDEV_KEY_BUF_SIZE_U32 (FLOW_U32S \
+#define NETDEV_KEY_BUF_SIZE_U32 (FLOW_U32S - MINI_N_INLINE \
                                  - FLOW_U32_SIZE(regs) \
                                  - FLOW_U32_SIZE(metadata) \
                                 )
