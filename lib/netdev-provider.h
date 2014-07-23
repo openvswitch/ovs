@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -607,11 +607,11 @@ struct netdev_class {
      * anyhow. */
     int (*add_router)(struct netdev *netdev, struct in_addr router);
 
-    /* Looks up the next hop for 'host'.  If successful, stores the next hop
-     * gateway's address (0 if 'host' is on a directly connected network) in
-     * '*next_hop' and a copy of the name of the device to reach 'host' in
-     * '*netdev_name', and returns 0.  The caller is responsible for freeing
-     * '*netdev_name' (by calling free()).
+    /* Looks up the next hop for 'host' in the host's routing table.  If
+     * successful, stores the next hop gateway's address (0 if 'host' is on a
+     * directly connected network) in '*next_hop' and a copy of the name of the
+     * device to reach 'host' in '*netdev_name', and returns 0.  The caller is
+     * responsible for freeing '*netdev_name' (by calling free()).
      *
      * This function may be set to null if it would always return EOPNOTSUPP
      * anyhow. */
