@@ -938,7 +938,8 @@ int ovs_nla_get_match(struct sw_flow_match *match,
 				mask_attrs &= ~(1ULL << OVS_KEY_ATTR_ETHERTYPE);
 				encap = a[OVS_KEY_ATTR_ENCAP];
 				err = parse_flow_mask_nlattrs(encap, a, &mask_attrs);
-				goto free_newmask;
+				if (err)
+					goto free_newmask;
 			} else {
 				OVS_NLERR("VLAN frames must have an exact match on the TPID (mask=%x).\n",
 						ntohs(eth_type));
