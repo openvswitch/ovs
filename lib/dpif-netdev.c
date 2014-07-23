@@ -2153,6 +2153,7 @@ OVS_REQUIRES(q->mutex)
         struct ofpbuf *buf = &u->buf;
         size_t buf_size;
         struct flow flow;
+        void *data;
 
         upcall->type = type;
 
@@ -2179,8 +2180,8 @@ OVS_REQUIRES(q->mutex)
         /* We have to perform a copy of the packet, because we cannot send DPDK
          * mbufs to a non pmd thread. When the upcall processing will be done
          * in the pmd thread, this copy can be avoided */
-        ofpbuf_set_data(&upcall->packet, ofpbuf_put(buf, ofpbuf_data(packet),
-                        ofpbuf_size(packet)));
+        data = ofpbuf_put(buf, ofpbuf_data(packet), ofpbuf_size(packet));
+        ofpbuf_use_stub(&upcall->packet, data, ofpbuf_size(packet));
         ofpbuf_set_size(&upcall->packet, ofpbuf_size(packet));
 
         seq_change(q->seq);
