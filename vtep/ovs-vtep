@@ -424,6 +424,7 @@ def handle_physical(ps_name):
 
         if not len(ls.ports):
             ovs_vsctl("del-br %s" % Lswitches[ls_name].short_name)
+            vtep_ctl("clear-local-macs %s" % Lswitches[ls_name].name)
             del Lswitches[ls_name]
 
 def setup(ps_name):
