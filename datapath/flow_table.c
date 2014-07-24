@@ -564,35 +564,21 @@ static struct sw_flow *flow_lookup(struct flow_table *tbl,
 	struct sw_flow *flow;
 	int i;
 
-	for (i = 0; i < ma->count; i++) {
+	for (i = 0; i < ma->max; i++) {
 		struct sw_flow_mask *mask;
 
 		mask = rcu_dereference_ovsl(ma->masks[i]);
-		if (mask) {
-			flow = masked_flow_lookup(ti, key, mask, n_mask_hit);
-			if (flow) { /* Found */
-				*index = i;
-				return flow;
-			}
+		if (!mask)
+			break;
+
+		flow = masked_flow_lookup(ti, key, mask, n_mask_hit);
+		if (flow) { /* Found */
+			*index = i;
+			return flow;
 		}
 	}
 
 	return NULL;
-}
-
-/* If the the cache index is outside of the valid region, update the index
- * in case cache entry was moved up. */
-static void fixup_cache_entry_index(struct mask_cache_entry *e,
-				    const struct mask_array *ma,
-				    const struct sw_flow_mask *cache)
-{
-	int i;
-
-	for (i = 0; i < ma->count; i++)
-		if (cache == ovsl_dereference(ma->masks[i])) {
-			e->mask_index = i;
-			return;
-		}
 }
 
 /*
@@ -607,8 +593,8 @@ struct sw_flow *ovs_flow_tbl_lookup_stats(struct flow_table *tbl,
 					  u32 skb_hash,
 					  u32 *n_mask_hit)
 {
-	struct mask_array *ma = rcu_dereference_ovsl(tbl->mask_array);
-	struct table_instance *ti = rcu_dereference_ovsl(tbl->ti);
+	struct mask_array *ma = rcu_dereference(tbl->mask_array);
+	struct table_instance *ti = rcu_dereference(tbl->ti);
 	struct mask_cache_entry *entries, *ce;
 	struct sw_flow *flow;
 	u32 hash = skb_hash;
@@ -634,24 +620,15 @@ struct sw_flow *ovs_flow_tbl_lookup_stats(struct flow_table *tbl,
 			struct sw_flow_mask *cache;
 			int i = e->mask_index;
 
-			if (likely(i < ma->count)) {
-				cache = rcu_dereference_ovsl(ma->masks[i]);
-				flow = masked_flow_lookup(ti, key, cache,
-							  n_mask_hit);
-			} else if (i < ma->max) {
-				flow = NULL;
-				cache = rcu_dereference_ovsl(ma->masks[i]);
+			if (likely(i < ma->max)) {
+				cache = rcu_dereference(ma->masks[i]);
 				if (cache) {
-					fixup_cache_entry_index(e, ma, cache);
 					flow = masked_flow_lookup(ti, key,
 							cache, n_mask_hit);
+					if (flow)
+						return flow;
 				}
-			} else {
-				flow = NULL;
 			}
-
-			if (flow)  /* Cache hit. */
-				return flow;
 
 			/* Cache miss. This is the best cache
 			 * replacement candidate.  */
