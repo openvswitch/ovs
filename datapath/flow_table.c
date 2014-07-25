@@ -247,9 +247,10 @@ static int tbl_mask_array_realloc(struct flow_table *tbl, int size)
 	if (old) {
 		int i;
 
-		for (i = 0; i < old->max; i++)
+		for (i = 0; i < min(old->max, new->max); i++)
 			new->masks[i] = old->masks[i];
 
+		BUG_ON(old->count > new->max);
 		new->count = old->count;
 	}
 	rcu_assign_pointer(tbl->mask_array, new);
