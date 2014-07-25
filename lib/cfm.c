@@ -613,7 +613,7 @@ cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
     if (cfm->last_tx) {
         long long int delay = time_msec() - cfm->last_tx;
         if (delay > (cfm->ccm_interval_ms * 3 / 2)) {
-            VLOG_WARN("%s: long delay of %lldms (expected %dms) sending CCM"
+            VLOG_INFO("%s: long delay of %lldms (expected %dms) sending CCM"
                       " seq %"PRIu32, cfm->name, delay, cfm->ccm_interval_ms,
                       cfm->seq);
         }
