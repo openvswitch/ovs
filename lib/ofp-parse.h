@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include "compiler.h"
+#include "openvswitch/types.h"
 
 struct flow;
 struct ofpbuf;
@@ -85,5 +86,15 @@ char *parse_ofp_group_mod_str(struct ofputil_group_mod *, uint16_t command,
                               const char *string,
                               enum ofputil_protocol *usable_protocols)
     WARN_UNUSED_RESULT;
+
+char *str_to_u8(const char *str, const char *name, uint8_t *valuep)
+    WARN_UNUSED_RESULT;
+char *str_to_u16(const char *str, const char *name, uint16_t *valuep)
+    WARN_UNUSED_RESULT;
+char *str_to_u32(const char *str, uint32_t *valuep) WARN_UNUSED_RESULT;
+char *str_to_u64(const char *str, uint64_t *valuep) WARN_UNUSED_RESULT;
+char *str_to_be64(const char *str, ovs_be64 *valuep) WARN_UNUSED_RESULT;
+char *str_to_mac(const char *str, uint8_t mac[6]) WARN_UNUSED_RESULT;
+char *str_to_ip(const char *str, ovs_be32 *ip) WARN_UNUSED_RESULT;
 
 #endif /* ofp-parse.h */
