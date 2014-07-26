@@ -467,45 +467,6 @@ ofputil_capabilities_to_name(uint32_t bit)
     return NULL;
 }
 
-static const char *
-ofputil_action_bitmap_to_name(uint32_t bit)
-{
-    enum ofputil_action_bitmap action = bit;
-
-    switch (action) {
-    case OFPUTIL_A_OUTPUT:         return "OUTPUT";
-    case OFPUTIL_A_SET_VLAN_VID:   return "SET_VLAN_VID";
-    case OFPUTIL_A_SET_VLAN_PCP:   return "SET_VLAN_PCP";
-    case OFPUTIL_A_STRIP_VLAN:     return "STRIP_VLAN";
-    case OFPUTIL_A_SET_DL_SRC:     return "SET_DL_SRC";
-    case OFPUTIL_A_SET_DL_DST:     return "SET_DL_DST";
-    case OFPUTIL_A_SET_NW_SRC:     return "SET_NW_SRC";
-    case OFPUTIL_A_SET_NW_DST:     return "SET_NW_DST";
-    case OFPUTIL_A_SET_NW_ECN:     return "SET_NW_ECN";
-    case OFPUTIL_A_SET_NW_TOS:     return "SET_NW_TOS";
-    case OFPUTIL_A_SET_TP_SRC:     return "SET_TP_SRC";
-    case OFPUTIL_A_SET_TP_DST:     return "SET_TP_DST";
-    case OFPUTIL_A_SET_FIELD:      return "SET_FIELD";
-    case OFPUTIL_A_ENQUEUE:        return "ENQUEUE";
-    case OFPUTIL_A_COPY_TTL_OUT:   return "COPY_TTL_OUT";
-    case OFPUTIL_A_COPY_TTL_IN:    return "COPY_TTL_IN";
-    case OFPUTIL_A_SET_MPLS_LABEL: return "SET_MPLS_LABEL";
-    case OFPUTIL_A_SET_MPLS_TC:    return "SET_MPLS_TC";
-    case OFPUTIL_A_SET_MPLS_TTL:   return "SET_MPLS_TTL";
-    case OFPUTIL_A_DEC_MPLS_TTL:   return "DEC_MPLS_TTL";
-    case OFPUTIL_A_PUSH_VLAN:      return "PUSH_VLAN";
-    case OFPUTIL_A_POP_VLAN:       return "POP_VLAN";
-    case OFPUTIL_A_PUSH_MPLS:      return "PUSH_MPLS";
-    case OFPUTIL_A_POP_MPLS:       return "POP_MPLS";
-    case OFPUTIL_A_SET_QUEUE:      return "SET_QUEUE";
-    case OFPUTIL_A_GROUP:          return "GROUP";
-    case OFPUTIL_A_SET_NW_TTL:     return "SET_NW_TTL";
-    case OFPUTIL_A_DEC_NW_TTL:     return "DEC_NW_TTL";
-    }
-
-    return NULL;
-}
-
 static void
 ofp_print_switch_features(struct ds *string, const struct ofp_header *oh)
 {
@@ -536,8 +497,7 @@ ofp_print_switch_features(struct ds *string, const struct ofp_header *oh)
     switch ((enum ofp_version)oh->version) {
     case OFP10_VERSION:
         ds_put_cstr(string, "actions: ");
-        ofp_print_bit_names(string, features.actions,
-                            ofputil_action_bitmap_to_name, ' ');
+        ofpact_bitmap_format(features.ofpacts, string);
         ds_put_char(string, '\n');
         break;
     case OFP11_VERSION:
@@ -2458,10 +2418,23 @@ ofp_print_group_stats(struct ds *s, const struct ofp_header *oh)
      }
 }
 
+static const char *
+group_type_to_string(enum ofp11_group_type type)
+{
+    switch (type) {
+    case OFPGT11_ALL: return "all";
+    case OFPGT11_SELECT: return "select";
+    case OFPGT11_INDIRECT: return "indirect";
+    case OFPGT11_FF: return "fast failover";
+    default: OVS_NOT_REACHED();
+    }
+}
+
 static void
 ofp_print_group_features(struct ds *string, const struct ofp_header *oh)
 {
     struct ofputil_group_features features;
+    int i;
 
     ofputil_decode_group_features_reply(oh, &features);
 
@@ -2470,32 +2443,15 @@ ofp_print_group_features(struct ds *string, const struct ofp_header *oh)
     ds_put_format(string, "    Capabilities:  0x%"PRIx32"\n",
                   features.capabilities);
 
-    if (features.types & (1u << OFPGT11_ALL)) {
-        ds_put_format(string, "    All group :\n");
-        ds_put_format(string,
-                      "        max_groups = %#"PRIx32" actions=0x%08"PRIx32"\n",
-                      features.max_groups[0], features.actions[0]);
-    }
-
-    if (features.types & (1u << OFPGT11_SELECT)) {
-        ds_put_format(string, "    Select group :\n");
-        ds_put_format(string, "        max_groups = %#"PRIx32" "
-                      "actions=0x%08"PRIx32"\n",
-                      features.max_groups[1], features.actions[1]);
-    }
-
-    if (features.types & (1u << OFPGT11_INDIRECT)) {
-        ds_put_format(string, "    Indirect group :\n");
-        ds_put_format(string, "        max_groups = %#"PRIx32" "
-                      "actions=0x%08"PRIx32"\n",
-                      features.max_groups[2], features.actions[2]);
-    }
-
-    if (features.types & (1u << OFPGT11_FF)) {
-        ds_put_format(string, "    Fast Failover group :\n");
-        ds_put_format(string, "        max_groups = %#"PRIx32" "
-                      "actions=0x%08"PRIx32"\n",
-                      features.max_groups[3], features.actions[3]);
+    for (i = 0; i < 4; i++) {
+        if (features.types & (1u << i)) {
+            ds_put_format(string, "    %s group:\n", group_type_to_string(i));
+            ds_put_format(string, "       max_groups=%#"PRIx32"\n",
+                          features.max_groups[i]);
+            ds_put_format(string, "       actions: ");
+            ofpact_bitmap_format(features.ofpacts[i], string);
+            ds_put_char(string, '\n');
+        }
     }
 }
 
@@ -2535,23 +2491,12 @@ ofp_print_group_mod(struct ds *s, const struct ofp_header *oh)
     ofp_print_group(s, gm.group_id, gm.type, &gm.buckets);
 }
 
-static const char *
-ofp13_action_to_string(uint32_t bit)
-{
-    switch (bit) {
-#define OFPAT13_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME)  \
-        case 1u << ENUM: return NAME;
-#include "ofp-util.def"
-    }
-    return NULL;
-}
-
 static void
 print_table_action_features(struct ds *s,
                             const struct ofputil_table_action_features *taf)
 {
     ds_put_cstr(s, "        actions: ");
-    ofp_print_bit_names(s, taf->actions, ofp13_action_to_string, ',');
+    ofpact_bitmap_format(taf->ofpacts, s);
     ds_put_char(s, '\n');
 
     ds_put_cstr(s, "        supported on Set-Field: ");
@@ -2572,7 +2517,7 @@ static bool
 table_action_features_equal(const struct ofputil_table_action_features *a,
                             const struct ofputil_table_action_features *b)
 {
-    return (a->actions == b->actions
+    return (a->ofpacts == b->ofpacts
             && bitmap_equal(a->set_fields.bm, b->set_fields.bm, MFF_N_IDS));
 }
 

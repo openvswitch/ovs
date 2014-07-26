@@ -524,28 +524,10 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ovs_mutex_unlock(&ofproto_mutex);
     ofproto->ogf.capabilities = OFPGFC_CHAINING | OFPGFC_SELECT_LIVENESS |
                                 OFPGFC_SELECT_WEIGHT;
-    ofproto->ogf.max_groups[OFPGT11_ALL] = OFPG_MAX;
-    ofproto->ogf.max_groups[OFPGT11_SELECT] = OFPG_MAX;
-    ofproto->ogf.max_groups[OFPGT11_INDIRECT] = OFPG_MAX;
-    ofproto->ogf.max_groups[OFPGT11_FF] = OFPG_MAX;
-    ofproto->ogf.actions[0] =
-        (1 << OFPAT11_OUTPUT) |
-        (1 << OFPAT11_COPY_TTL_OUT) |
-        (1 << OFPAT11_COPY_TTL_IN) |
-        (1 << OFPAT11_SET_MPLS_TTL) |
-        (1 << OFPAT11_DEC_MPLS_TTL) |
-        (1 << OFPAT11_PUSH_VLAN) |
-        (1 << OFPAT11_POP_VLAN) |
-        (1 << OFPAT11_PUSH_MPLS) |
-        (1 << OFPAT11_POP_MPLS) |
-        (1 << OFPAT11_SET_QUEUE) |
-        (1 << OFPAT11_GROUP) |
-        (1 << OFPAT11_SET_NW_TTL) |
-        (1 << OFPAT11_DEC_NW_TTL) |
-        (1 << OFPAT12_SET_FIELD);
-/* not supported:
- *      (1 << OFPAT13_PUSH_PBB) |
- *      (1 << OFPAT13_POP_PBB) */
+    for (i = 0; i < 4; i++) {
+        ofproto->ogf.max_groups[i] = OFPG_MAX;
+        ofproto->ogf.ofpacts[i] = (UINT64_C(1) << N_OFPACTS) - 1;
+    }
 
     error = ofproto->ofproto_class->construct(ofproto);
     if (error) {
@@ -2805,8 +2787,8 @@ handle_features_request(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofpbuf *b;
 
     ofproto->ofproto_class->get_features(ofproto, &arp_match_ip,
-                                         &features.actions);
-    ovs_assert(features.actions & OFPUTIL_A_OUTPUT); /* sanity check */
+                                         &features.ofpacts);
+    ovs_assert(features.ofpacts & (UINT64_C(1) << OFPACT_OUTPUT));
 
     features.datapath_id = ofproto->datapath_id;
     features.n_buffers = pktbuf_capacity();
@@ -3081,11 +3063,18 @@ static enum ofperr
 handle_table_stats_request(struct ofconn *ofconn,
                            const struct ofp_header *request)
 {
+    struct mf_bitmap rw_fields = MF_BITMAP_INITIALIZER;
     struct ofproto *p = ofconn_get_ofproto(ofconn);
-    struct ofp12_table_stats *ots;
+    struct ofputil_table_stats *stats;
     struct ofpbuf *msg;
     int n_tables;
     size_t i;
+
+    for (i = 0; i < MFF_N_IDS; i++) {
+        if (mf_from_id(i)->writable) {
+            bitmap_set1(rw_fields.bm, i);
+        }
+    }
 
     /* Set up default values.
      *
@@ -3093,25 +3082,25 @@ handle_table_stats_request(struct ofconn *ofconn,
      * it is able to hold all the fields for ofp10_table_stats
      * and ofp11_table_stats (and of course itself).
      */
-    ots = xcalloc(p->n_tables, sizeof *ots);
+    stats = xcalloc(p->n_tables, sizeof *stats);
     for (i = 0; i < p->n_tables; i++) {
-        ots[i].table_id = i;
-        sprintf(ots[i].name, "table%"PRIuSIZE, i);
-        ots[i].match = htonll(OFPXMT13_MASK);
-        ots[i].wildcards = htonll(OFPXMT13_MASK);
-        ots[i].write_actions = htonl(OFPAT11_OUTPUT);
-        ots[i].apply_actions = htonl(OFPAT11_OUTPUT);
-        ots[i].write_setfields = htonll(OFPXMT13_MASK);
-        ots[i].apply_setfields = htonll(OFPXMT13_MASK);
-        ots[i].metadata_match = OVS_BE64_MAX;
-        ots[i].metadata_write = OVS_BE64_MAX;
-        ots[i].instructions = htonl(OFPIT11_ALL);
-        ots[i].config = htonl(OFPTC11_TABLE_MISS_MASK);
-        ots[i].max_entries = htonl(1000000); /* An arbitrary big number. */
-        ots[i].active_count = htonl(classifier_count(&p->tables[i].cls));
+        stats[i].table_id = i;
+        sprintf(stats[i].name, "table%"PRIuSIZE, i);
+        bitmap_set_multiple(stats[i].match.bm, 0, MFF_N_IDS, 1);
+        bitmap_set_multiple(stats[i].wildcards.bm, 0, MFF_N_IDS, 1);
+        stats[i].write_ofpacts = (UINT64_C(1) << N_OFPACTS) - 1;
+        stats[i].apply_ofpacts  = (UINT64_C(1) << N_OFPACTS) - 1;
+        stats[i].write_setfields = rw_fields;
+        stats[i].apply_setfields = rw_fields;
+        stats[i].metadata_match = OVS_BE64_MAX;
+        stats[i].metadata_write = OVS_BE64_MAX;
+        stats[i].instructions = OFPIT13_ALL;
+        stats[i].config = OFPTC11_TABLE_MISS_MASK;
+        stats[i].max_entries = 1000000; /* An arbitrary big number. */
+        stats[i].active_count = classifier_count(&p->tables[i].cls);
     }
 
-    p->ofproto_class->get_tables(p, ots);
+    p->ofproto_class->get_tables(p, stats);
 
     /* Post-process the tables, dropping hidden tables. */
     n_tables = p->n_tables;
@@ -3124,18 +3113,18 @@ handle_table_stats_request(struct ofconn *ofconn,
         }
 
         if (table->name) {
-            ovs_strzcpy(ots[i].name, table->name, sizeof ots[i].name);
+            ovs_strzcpy(stats[i].name, table->name, sizeof stats[i].name);
         }
 
-        if (table->max_flows < ntohl(ots[i].max_entries)) {
-            ots[i].max_entries = htonl(table->max_flows);
+        if (table->max_flows < stats[i].max_entries) {
+            stats[i].max_entries = table->max_flows;
         }
     }
 
-    msg = ofputil_encode_table_stats_reply(ots, n_tables, request);
+    msg = ofputil_encode_table_stats_reply(stats, n_tables, request);
     ofconn_send_reply(ofconn, msg);
 
-    free(ots);
+    free(stats);
 
     return 0;
 }

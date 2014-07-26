@@ -1504,37 +1504,26 @@ flush(struct ofproto *ofproto_)
 
 static void
 get_features(struct ofproto *ofproto_ OVS_UNUSED,
-             bool *arp_match_ip, enum ofputil_action_bitmap *actions)
+             bool *arp_match_ip, uint64_t *ofpacts)
 {
     *arp_match_ip = true;
-    *actions = (OFPUTIL_A_OUTPUT |
-                OFPUTIL_A_SET_VLAN_VID |
-                OFPUTIL_A_SET_VLAN_PCP |
-                OFPUTIL_A_STRIP_VLAN |
-                OFPUTIL_A_SET_DL_SRC |
-                OFPUTIL_A_SET_DL_DST |
-                OFPUTIL_A_SET_NW_SRC |
-                OFPUTIL_A_SET_NW_DST |
-                OFPUTIL_A_SET_NW_TOS |
-                OFPUTIL_A_SET_TP_SRC |
-                OFPUTIL_A_SET_TP_DST |
-                OFPUTIL_A_ENQUEUE);
+    *ofpacts = (UINT64_C(1) << N_OFPACTS) - 1;
 }
 
 static void
-get_tables(struct ofproto *ofproto, struct ofp12_table_stats *ots)
+get_tables(struct ofproto *ofproto, struct ofputil_table_stats *stats)
 {
     int i;
 
-    strcpy(ots->name, "classifier");
+    strcpy(stats->name, "classifier");
 
     for (i = 0; i < ofproto->n_tables; i++) {
         unsigned long missed, matched;
 
         atomic_read(&ofproto->tables[i].n_matched, &matched);
-        ots[i].matched_count = htonll(matched);
+        stats[i].matched_count = matched;
         atomic_read(&ofproto->tables[i].n_missed, &missed);
-        ots[i].lookup_count = htonll(matched + missed);
+        stats[i].lookup_count = matched + missed;
     }
 }
 

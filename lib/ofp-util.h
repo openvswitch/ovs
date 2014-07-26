@@ -528,37 +528,6 @@ enum ofputil_capabilities {
     OFPUTIL_C_PORT_BLOCKED   = 1 << 8,  /* Switch will block looping ports */
 };
 
-enum ofputil_action_bitmap {
-    OFPUTIL_A_OUTPUT         = 1 << 0,
-    OFPUTIL_A_SET_VLAN_VID   = 1 << 1,
-    OFPUTIL_A_SET_VLAN_PCP   = 1 << 2,
-    OFPUTIL_A_STRIP_VLAN     = 1 << 3,
-    OFPUTIL_A_SET_DL_SRC     = 1 << 4,
-    OFPUTIL_A_SET_DL_DST     = 1 << 5,
-    OFPUTIL_A_SET_NW_SRC     = 1 << 6,
-    OFPUTIL_A_SET_NW_DST     = 1 << 7,
-    OFPUTIL_A_SET_NW_ECN     = 1 << 8,
-    OFPUTIL_A_SET_NW_TOS     = 1 << 9,
-    OFPUTIL_A_SET_TP_SRC     = 1 << 10,
-    OFPUTIL_A_SET_TP_DST     = 1 << 11,
-    OFPUTIL_A_ENQUEUE        = 1 << 12,
-    OFPUTIL_A_COPY_TTL_OUT   = 1 << 13,
-    OFPUTIL_A_COPY_TTL_IN    = 1 << 14,
-    OFPUTIL_A_SET_MPLS_LABEL = 1 << 15,
-    OFPUTIL_A_SET_MPLS_TC    = 1 << 16,
-    OFPUTIL_A_SET_MPLS_TTL   = 1 << 17,
-    OFPUTIL_A_DEC_MPLS_TTL   = 1 << 18,
-    OFPUTIL_A_PUSH_VLAN      = 1 << 19,
-    OFPUTIL_A_POP_VLAN       = 1 << 20,
-    OFPUTIL_A_PUSH_MPLS      = 1 << 21,
-    OFPUTIL_A_POP_MPLS       = 1 << 22,
-    OFPUTIL_A_SET_QUEUE      = 1 << 23,
-    OFPUTIL_A_GROUP          = 1 << 24,
-    OFPUTIL_A_SET_NW_TTL     = 1 << 25,
-    OFPUTIL_A_DEC_NW_TTL     = 1 << 26,
-    OFPUTIL_A_SET_FIELD      = 1 << 27,
-};
-
 /* Abstract ofp_switch_features. */
 struct ofputil_switch_features {
     uint64_t datapath_id;       /* Datapath unique ID. */
@@ -566,7 +535,7 @@ struct ofputil_switch_features {
     uint8_t n_tables;           /* Number of tables supported by datapath. */
     uint8_t auxiliary_id;       /* Identify auxiliary connections */
     enum ofputil_capabilities capabilities;
-    enum ofputil_action_bitmap actions;
+    uint64_t ofpacts;           /* Bitmap of OFPACT_* bits. */
 };
 
 enum ofperr ofputil_decode_switch_features(const struct ofp_header *,
@@ -650,7 +619,7 @@ struct ofputil_table_features {
          *    - 'apply' reports features available in an "apply_actions"
          *      instruction. */
         struct ofputil_table_action_features {
-            uint32_t actions;     /* Bitmap of supported OFPAT*. */
+            uint64_t ofpacts;     /* Bitmap of supported OFPACT_*. */
             struct mf_bitmap set_fields; /* Fields for "set-field". */
         } write, apply;
     } nonmiss, miss;
@@ -798,13 +767,30 @@ struct ofpbuf *ofputil_encode_role_status(
 
 enum ofperr ofputil_decode_role_status(const struct ofp_header *oh,
                                        struct ofputil_role_status *rs);
-/* Abstract table stats.
- *
- * For now we use ofp12_table_stats as a superset of the other protocol
- * versions' table stats. */
+/* Abstract table stats. */
+struct ofputil_table_stats {
+    uint8_t table_id;
+    char name[OFP_MAX_TABLE_NAME_LEN];
+    ovs_be64 metadata_match;    /* Bits of metadata table can match. */
+    ovs_be64 metadata_write;    /* Bits of metadata table can write. */
+    uint32_t config;            /* Bitmap of OFPTC_* values */
+    uint32_t max_entries;       /* Max number of entries supported. */
+
+    struct mf_bitmap match;     /* Fields table can match. */
+    struct mf_bitmap wildcards; /* Fields table can wildcard. */
+    uint64_t write_ofpacts;     /* OFPACT_* supported on Write-Actions. */
+    uint64_t apply_ofpacts;     /* OFPACT_* supported on Apply-Actions. */
+    struct mf_bitmap write_setfields; /* Fields that can be set in W-A. */
+    struct mf_bitmap apply_setfields; /* Fields that can be set in A-A. */
+    uint32_t instructions;      /* Bitmap of OFPIT_* values supported. */
+
+    uint32_t active_count;      /* Number of active entries. */
+    uint64_t lookup_count;      /* Number of packets looked up in table. */
+    uint64_t matched_count;     /* Number of packets that hit table. */
+};
 
 struct ofpbuf *ofputil_encode_table_stats_reply(
-    const struct ofp12_table_stats[], int n,
+    const struct ofputil_table_stats[], int n,
     const struct ofp_header *request);
 
 /* Queue configuration request. */
@@ -1099,9 +1085,7 @@ struct ofputil_group_features {
     uint32_t  types;           /* Bitmap of OFPGT_* values supported. */
     uint32_t  capabilities;    /* Bitmap of OFPGFC12_* capability supported. */
     uint32_t  max_groups[4];   /* Maximum number of groups for each type. */
-
-    /* Bitmaps of OFPAT_* that are supported.  OF1.2+ actions only. */
-    uint32_t  actions[4];
+    uint64_t  ofpacts[4];      /* Bitmaps of supported OFPACT_* */
 };
 
 /* Group desc reply, independent of protocol. */

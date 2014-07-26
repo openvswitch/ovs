@@ -203,7 +203,7 @@ ff fe 50 54 00 00 00 01 62 72 30 00 00 00 00 00 \
 OFPT_FEATURES_REPLY (xid=0x1): dpid:0000505400000001
 n_tables:2, n_buffers:256
 capabilities: FLOW_STATS TABLE_STATS PORT_STATS ARP_MATCH_IP
-actions: OUTPUT SET_VLAN_VID SET_VLAN_PCP STRIP_VLAN SET_DL_SRC SET_DL_DST SET_NW_SRC SET_NW_DST SET_NW_TOS SET_TP_SRC SET_TP_DST ENQUEUE
+actions: output enqueue set_vlan_vid set_vlan_pcp strip_vlan mod_dl_src mod_dl_dst mod_nw_src mod_nw_dst mod_nw_tos mod_tp_src mod_tp_dst
  1(eth1): addr:50:54:00:00:00:02
      config:     0
      state:      0
@@ -1923,20 +1923,24 @@ AT_CHECK([ovs-ofctl ofp-print "\
 03 13 00 38 00 00 00 02 00 08 00 00 00 00 00 00 \
 00 00 00 0f 00 00 00 0f \
 00 00 00 01 00 00 00 02 00 00 00 03 00 00 00 04 \
-00 00 00 01 00 00 00 03 00 00 00 07 00 00 00 0f \
+00 00 00 01 00 02 00 01 00 06 00 01 00 0e 00 01 \
 "], [0], [dnl
 OFPST_GROUP_FEATURES reply (OF1.2) (xid=0x2):
  Group table:
     Types:  0xf
     Capabilities:  0xf
-    All group :
-        max_groups = 0x1 actions=0x00000001
-    Select group :
-        max_groups = 0x2 actions=0x00000003
-    Indirect group :
-        max_groups = 0x3 actions=0x00000007
-    Fast Failover group :
-        max_groups = 0x4 actions=0x0000000f
+    all group:
+       max_groups=0x1
+       actions: output
+    select group:
+       max_groups=0x2
+       actions: output push_vlan
+    indirect group:
+       max_groups=0x3
+       actions: output strip_vlan push_vlan
+    fast failover group:
+       max_groups=0x4
+       actions: output strip_vlan push_vlan push_mpls
 ])
 AT_CLEANUP
 
@@ -2275,7 +2279,7 @@ f5 f6 f7 f8 f9 fa fb fc fd 00 00 00 00 00 00 00 \
       next tables: 1-253
       instructions: apply_actions,clear_actions,write_actions,write_metadata,goto_table
       Write-Actions and Apply-Actions features:
-        actions: output,copy_ttl_out,copy_ttl_in,set_mpls_ttl,dec_mpls_ttl,push_vlan,pop_vlan,push_mpls,pop_mpls,set_queue,group,set_nw_ttl,dec_nw_ttl,set_field,push_pbb,pop_pbb
+        actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
         supported on Set-Field: tun_id,tun_src,tun_dst,metadata,in_port,in_port_oxm,pkt_mark,reg0,reg1,reg2,reg3,reg4,reg5,reg6,reg7,eth_src,eth_dst,vlan_tci,vlan_vid,vlan_pcp,mpls_label,mpls_tc,ip_src,ip_dst,ipv6_src,ipv6_dst,nw_tos,ip_dscp,nw_ecn,nw_ttl,arp_op,arp_spa,arp_tpa,arp_sha,arp_tha,tcp_src,tcp_dst,udp_src,udp_dst,sctp_src,sctp_dst
     matching:
       tun_id: exact match or wildcard

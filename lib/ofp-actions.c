@@ -3091,6 +3091,143 @@ ofpacts_put_openflow_instructions(const struct ofpact ofpacts[],
     }
 }
 
+/* Sets of supported actions. */
+
+struct ofpact_xlate {
+    enum ofpact_type ofpact;
+    int ofpat;
+};
+
+static const struct ofpact_xlate *
+get_ofpact_xlate(enum ofp_version version)
+{
+    /* OpenFlow 1.0 actions. */
+    static const struct ofpact_xlate of10[] = {
+        { OFPACT_OUTPUT, 0 },
+        { OFPACT_SET_VLAN_VID, 1 },
+        { OFPACT_SET_VLAN_PCP, 2 },
+        { OFPACT_STRIP_VLAN, 3 },
+        { OFPACT_SET_ETH_SRC, 4 },
+        { OFPACT_SET_ETH_DST, 5 },
+        { OFPACT_SET_IPV4_SRC, 6 },
+        { OFPACT_SET_IPV4_DST, 7 },
+        { OFPACT_SET_IP_DSCP, 8 },
+        { OFPACT_SET_L4_SRC_PORT, 9 },
+        { OFPACT_SET_L4_DST_PORT, 10 },
+        { OFPACT_ENQUEUE, 11 },
+        { 0, -1 },
+    };
+
+    /* OpenFlow 1.1 actions. */
+    static const struct ofpact_xlate of11[] = {
+        { OFPACT_OUTPUT, 0 },
+        { OFPACT_SET_VLAN_VID, 1 },
+        { OFPACT_SET_VLAN_PCP, 2 },
+        { OFPACT_SET_ETH_SRC, 3 },
+        { OFPACT_SET_ETH_DST, 4 },
+        { OFPACT_SET_IPV4_SRC, 5 },
+        { OFPACT_SET_IPV4_DST, 6 },
+        { OFPACT_SET_IP_DSCP, 7 },
+        { OFPACT_SET_IP_ECN, 8 },
+        { OFPACT_SET_L4_SRC_PORT, 9 },
+        { OFPACT_SET_L4_DST_PORT, 10 },
+        /* OFPAT_COPY_TTL_OUT (11) not supported. */
+        /* OFPAT_COPY_TTL_IN (12) not supported. */
+        { OFPACT_SET_MPLS_LABEL, 13 },
+        { OFPACT_SET_MPLS_TC, 14 },
+        { OFPACT_SET_MPLS_TTL, 15 },
+        { OFPACT_DEC_MPLS_TTL, 16 },
+        { OFPACT_PUSH_VLAN, 17 },
+        { OFPACT_STRIP_VLAN, 18 },
+        { OFPACT_PUSH_MPLS, 19 },
+        { OFPACT_POP_MPLS, 20 },
+        { OFPACT_SET_QUEUE, 21 },
+        { OFPACT_GROUP, 22 },
+        { OFPACT_SET_IP_TTL, 23 },
+        { OFPACT_DEC_TTL, 24 },
+        { 0, -1 },
+    };
+
+    /* OpenFlow 1.2, 1.3, and 1.4 actions. */
+    static const struct ofpact_xlate of12[] = {
+        { OFPACT_OUTPUT, 0 },
+        /* OFPAT_COPY_TTL_OUT (11) not supported. */
+        /* OFPAT_COPY_TTL_IN (12) not supported. */
+        { OFPACT_SET_MPLS_TTL, 15 },
+        { OFPACT_DEC_MPLS_TTL, 16 },
+        { OFPACT_PUSH_VLAN, 17 },
+        { OFPACT_STRIP_VLAN, 18 },
+        { OFPACT_PUSH_MPLS, 19 },
+        { OFPACT_POP_MPLS, 20 },
+        { OFPACT_SET_QUEUE, 21 },
+        { OFPACT_GROUP, 22 },
+        { OFPACT_SET_IP_TTL, 23 },
+        { OFPACT_DEC_TTL, 24 },
+        { OFPACT_SET_FIELD, 25 },
+        /* OF1.3+ OFPAT_PUSH_PBB (26) not supported. */
+        /* OF1.3+ OFPAT_POP_PBB (27) not supported. */
+        { 0, -1 },
+    };
+
+    switch (version) {
+    case OFP10_VERSION:
+        return of10;
+
+    case OFP11_VERSION:
+        return of11;
+
+    case OFP12_VERSION:
+    case OFP13_VERSION:
+    case OFP14_VERSION:
+    case OFP15_VERSION:
+    default:
+        return of12;
+    }
+}
+
+ovs_be32
+ofpact_bitmap_to_openflow(uint64_t ofpacts_bitmap, enum ofp_version version)
+{
+    uint32_t openflow_bitmap = 0;
+    const struct ofpact_xlate *x;
+
+    for (x = get_ofpact_xlate(version); x->ofpat >= 0; x++) {
+        if (ofpacts_bitmap & (UINT64_C(1) << x->ofpact)) {
+            openflow_bitmap |= 1u << x->ofpat;
+        }
+    }
+    return htonl(openflow_bitmap);
+}
+
+uint64_t
+ofpact_bitmap_from_openflow(ovs_be32 ofpat_bitmap, enum ofp_version version)
+{
+    uint64_t ofpact_bitmap = 0;
+    const struct ofpact_xlate *x;
+
+    for (x = get_ofpact_xlate(version); x->ofpat >= 0; x++) {
+        if (ofpat_bitmap & htonl(1u << x->ofpat)) {
+            ofpact_bitmap |= UINT64_C(1) << x->ofpact;
+        }
+    }
+    return ofpact_bitmap;
+}
+
+void
+ofpact_bitmap_format(uint64_t ofpacts_bitmap, struct ds *s)
+{
+    if (!ofpacts_bitmap) {
+        ds_put_cstr(s, "<none>");
+    } else {
+        while (ofpacts_bitmap) {
+            ds_put_format(s, "%s ",
+                          ofpact_name(rightmost_1bit_idx(ofpacts_bitmap)));
+            ofpacts_bitmap = zero_rightmost_1bit(ofpacts_bitmap);
+        }
+        ds_chomp(s, ' ');
+    }
+}
+
 /* Returns true if 'action' outputs to 'port', false otherwise. */
 static bool
 ofpact_outputs_to_port(const struct ofpact *ofpact, ofp_port_t port)
@@ -3647,4 +3784,15 @@ ofpact_pad(struct ofpbuf *ofpacts)
     if (pad) {
         ofpbuf_put_zeros(ofpacts, pad);
     }
+}
+
+const char *
+ofpact_name(enum ofpact_type type)
+{
+    switch (type) {
+#define OFPACT(ENUM, STRUCT, MEMBER, NAME) case OFPACT_##ENUM: return NAME;
+        OFPACTS
+#undef OFPACT
+    }
+    return "<unknown>";
 }

@@ -31,7 +31,7 @@
  * This macro is used directly only internally by this header, but the list is
  * still of interest to developers.
  *
- * Each DEFINE_OFPACT invocation has the following parameters:
+ * Each OFPACT invocation has the following parameters:
  *
  * 1. <ENUM>, used below in the enum definition of OFPACT_<ENUM>, and
  *    elsewhere.
@@ -49,80 +49,79 @@
  *        - If "struct <STRUCT>" is variable-length, it must be the name of the
  *          flexible array member.
  */
-#define OFPACTS                                                     \
-    /* Output. */                                                   \
-    DEFINE_OFPACT(OUTPUT,          ofpact_output,        ofpact)    \
-    DEFINE_OFPACT(GROUP,           ofpact_group,         ofpact)    \
-    DEFINE_OFPACT(CONTROLLER,      ofpact_controller,    ofpact)    \
-    DEFINE_OFPACT(ENQUEUE,         ofpact_enqueue,       ofpact)    \
-    DEFINE_OFPACT(OUTPUT_REG,      ofpact_output_reg,    ofpact)    \
-    DEFINE_OFPACT(BUNDLE,          ofpact_bundle,        slaves)    \
-                                                                    \
-    /* Header changes. */                                           \
-    DEFINE_OFPACT(SET_FIELD,       ofpact_set_field,     ofpact)    \
-    DEFINE_OFPACT(SET_VLAN_VID,    ofpact_vlan_vid,      ofpact)    \
-    DEFINE_OFPACT(SET_VLAN_PCP,    ofpact_vlan_pcp,      ofpact)    \
-    DEFINE_OFPACT(STRIP_VLAN,      ofpact_null,          ofpact)    \
-    DEFINE_OFPACT(PUSH_VLAN,       ofpact_null,          ofpact)    \
-    DEFINE_OFPACT(SET_ETH_SRC,     ofpact_mac,           ofpact)    \
-    DEFINE_OFPACT(SET_ETH_DST,     ofpact_mac,           ofpact)    \
-    DEFINE_OFPACT(SET_IPV4_SRC,    ofpact_ipv4,          ofpact)    \
-    DEFINE_OFPACT(SET_IPV4_DST,    ofpact_ipv4,          ofpact)    \
-    DEFINE_OFPACT(SET_IP_DSCP,     ofpact_dscp,          ofpact)    \
-    DEFINE_OFPACT(SET_IP_ECN,      ofpact_ecn,           ofpact)    \
-    DEFINE_OFPACT(SET_IP_TTL,      ofpact_ip_ttl,        ofpact)    \
-    DEFINE_OFPACT(SET_L4_SRC_PORT, ofpact_l4_port,       ofpact)    \
-    DEFINE_OFPACT(SET_L4_DST_PORT, ofpact_l4_port,       ofpact)    \
-    DEFINE_OFPACT(REG_MOVE,        ofpact_reg_move,      ofpact)    \
-    DEFINE_OFPACT(REG_LOAD,        ofpact_reg_load,      ofpact)    \
-    DEFINE_OFPACT(STACK_PUSH,      ofpact_stack,         ofpact)    \
-    DEFINE_OFPACT(STACK_POP,       ofpact_stack,         ofpact)    \
-    DEFINE_OFPACT(DEC_TTL,         ofpact_cnt_ids,       cnt_ids)   \
-    DEFINE_OFPACT(SET_MPLS_LABEL,  ofpact_mpls_label,    ofpact)    \
-    DEFINE_OFPACT(SET_MPLS_TC,     ofpact_mpls_tc,       ofpact)    \
-    DEFINE_OFPACT(SET_MPLS_TTL,    ofpact_mpls_ttl,      ofpact)    \
-    DEFINE_OFPACT(DEC_MPLS_TTL,    ofpact_null,          ofpact)    \
-    DEFINE_OFPACT(PUSH_MPLS,       ofpact_push_mpls,     ofpact)    \
-    DEFINE_OFPACT(POP_MPLS,        ofpact_pop_mpls,      ofpact)    \
-                                                                    \
-    /* Metadata. */                                                 \
-    DEFINE_OFPACT(SET_TUNNEL,      ofpact_tunnel,        ofpact)    \
-    DEFINE_OFPACT(SET_QUEUE,       ofpact_queue,         ofpact)    \
-    DEFINE_OFPACT(POP_QUEUE,       ofpact_null,          ofpact)    \
-    DEFINE_OFPACT(FIN_TIMEOUT,     ofpact_fin_timeout,   ofpact)    \
-                                                                    \
-    /* Flow table interaction. */                                   \
-    DEFINE_OFPACT(RESUBMIT,        ofpact_resubmit,      ofpact)    \
-    DEFINE_OFPACT(LEARN,           ofpact_learn,         specs)     \
-                                                                    \
-    /* Arithmetic. */                                               \
-    DEFINE_OFPACT(MULTIPATH,       ofpact_multipath,     ofpact)    \
-                                                                    \
-    /* Other. */                                                    \
-    DEFINE_OFPACT(NOTE,            ofpact_note,          data)      \
-    DEFINE_OFPACT(EXIT,            ofpact_null,          ofpact)    \
-    DEFINE_OFPACT(SAMPLE,          ofpact_sample,        ofpact)    \
-                                                                    \
-    /* Instructions */                                              \
-    DEFINE_OFPACT(METER,           ofpact_meter,         ofpact)    \
-    DEFINE_OFPACT(CLEAR_ACTIONS,   ofpact_null,          ofpact)    \
-    DEFINE_OFPACT(WRITE_ACTIONS,   ofpact_nest,          ofpact)    \
-    DEFINE_OFPACT(WRITE_METADATA,  ofpact_metadata,      ofpact)    \
-    DEFINE_OFPACT(GOTO_TABLE,      ofpact_goto_table,    ofpact)
+#define OFPACTS                                                         \
+    /* Output. */                                                       \
+    OFPACT(OUTPUT,          ofpact_output,      ofpact, "output")       \
+    OFPACT(GROUP,           ofpact_group,       ofpact, "group")        \
+    OFPACT(CONTROLLER,      ofpact_controller,  ofpact, "controller")   \
+    OFPACT(ENQUEUE,         ofpact_enqueue,     ofpact, "enqueue")      \
+    OFPACT(OUTPUT_REG,      ofpact_output_reg,  ofpact, "output_reg")   \
+    OFPACT(BUNDLE,          ofpact_bundle,      slaves, "bundle")       \
+                                                                        \
+    /* Header changes. */                                               \
+    OFPACT(SET_FIELD,       ofpact_set_field,   ofpact, "set_field")    \
+    OFPACT(SET_VLAN_VID,    ofpact_vlan_vid,    ofpact, "set_vlan_vid") \
+    OFPACT(SET_VLAN_PCP,    ofpact_vlan_pcp,    ofpact, "set_vlan_pcp") \
+    OFPACT(STRIP_VLAN,      ofpact_null,        ofpact, "strip_vlan")   \
+    OFPACT(PUSH_VLAN,       ofpact_null,        ofpact, "push_vlan")    \
+    OFPACT(SET_ETH_SRC,     ofpact_mac,         ofpact, "mod_dl_src")   \
+    OFPACT(SET_ETH_DST,     ofpact_mac,         ofpact, "mod_dl_dst")   \
+    OFPACT(SET_IPV4_SRC,    ofpact_ipv4,        ofpact, "mod_nw_src")   \
+    OFPACT(SET_IPV4_DST,    ofpact_ipv4,        ofpact, "mod_nw_dst")   \
+    OFPACT(SET_IP_DSCP,     ofpact_dscp,        ofpact, "mod_nw_tos")   \
+    OFPACT(SET_IP_ECN,      ofpact_ecn,         ofpact, "mod_nw_ecn")   \
+    OFPACT(SET_IP_TTL,      ofpact_ip_ttl,      ofpact, "mod_nw_ttl")   \
+    OFPACT(SET_L4_SRC_PORT, ofpact_l4_port,     ofpact, "mod_tp_src")   \
+    OFPACT(SET_L4_DST_PORT, ofpact_l4_port,     ofpact, "mod_tp_dst")   \
+    OFPACT(REG_MOVE,        ofpact_reg_move,    ofpact, "move")         \
+    OFPACT(REG_LOAD,        ofpact_reg_load,    ofpact, "load")         \
+    OFPACT(STACK_PUSH,      ofpact_stack,       ofpact, "push")         \
+    OFPACT(STACK_POP,       ofpact_stack,       ofpact, "pop")          \
+    OFPACT(DEC_TTL,         ofpact_cnt_ids,     cnt_ids, "dec_ttl")     \
+    OFPACT(SET_MPLS_LABEL,  ofpact_mpls_label,  ofpact, "set_mpls_label") \
+    OFPACT(SET_MPLS_TC,     ofpact_mpls_tc,     ofpact, "set_mpls_tc")  \
+    OFPACT(SET_MPLS_TTL,    ofpact_mpls_ttl,    ofpact, "set_mpls_ttl") \
+    OFPACT(DEC_MPLS_TTL,    ofpact_null,        ofpact, "dec_mpls_ttl") \
+    OFPACT(PUSH_MPLS,       ofpact_push_mpls,   ofpact, "push_mpls")    \
+    OFPACT(POP_MPLS,        ofpact_pop_mpls,    ofpact, "pop_mpls")     \
+                                                                        \
+    /* Metadata. */                                                     \
+    OFPACT(SET_TUNNEL,      ofpact_tunnel,      ofpact, "set_tunnel")   \
+    OFPACT(SET_QUEUE,       ofpact_queue,       ofpact, "set_queue")    \
+    OFPACT(POP_QUEUE,       ofpact_null,        ofpact, "pop_queue")    \
+    OFPACT(FIN_TIMEOUT,     ofpact_fin_timeout, ofpact, "fin_timeout")  \
+                                                                        \
+    /* Flow table interaction. */                                       \
+    OFPACT(RESUBMIT,        ofpact_resubmit,    ofpact, "resubmit")     \
+    OFPACT(LEARN,           ofpact_learn,       specs, "learn")         \
+                                                                        \
+    /* Arithmetic. */                                                   \
+    OFPACT(MULTIPATH,       ofpact_multipath,   ofpact, "multipath")    \
+                                                                        \
+    /* Other. */                                                        \
+    OFPACT(NOTE,            ofpact_note,        data, "note")           \
+    OFPACT(EXIT,            ofpact_null,        ofpact, "exit")         \
+    OFPACT(SAMPLE,          ofpact_sample,      ofpact, "sample")       \
+                                                                        \
+    /* Instructions. */                                                 \
+    OFPACT(METER,           ofpact_meter,       ofpact, "meter")        \
+    OFPACT(CLEAR_ACTIONS,   ofpact_null,        ofpact, "clear_actions") \
+    OFPACT(WRITE_ACTIONS,   ofpact_nest,        ofpact, "write_actions") \
+    OFPACT(WRITE_METADATA,  ofpact_metadata,    ofpact, "write_metadata") \
+    OFPACT(GOTO_TABLE,      ofpact_goto_table,  ofpact, "goto_table")
 
 /* enum ofpact_type, with a member OFPACT_<ENUM> for each action. */
 enum OVS_PACKED_ENUM ofpact_type {
-#define DEFINE_OFPACT(ENUM, STRUCT, MEMBER) OFPACT_##ENUM,
+#define OFPACT(ENUM, STRUCT, MEMBER, NAME) OFPACT_##ENUM,
     OFPACTS
-#undef DEFINE_OFPACT
+#undef OFPACT
 };
 
-/* N_OFPACTS, the number of values of "enum ofpact_type". */
+/* Define N_OFPACTS to the number of types of ofpacts. */
 enum {
-    N_OFPACTS =
-#define DEFINE_OFPACT(ENUM, STRUCT, MEMBER) + 1
-    OFPACTS
-#undef DEFINE_OFPACT
+#define OFPACT(ENUM, STRUCT, MEMBER, NAME) + 1
+    N_OFPACTS = OFPACTS
+#undef OFPACT
 };
 
 /* Header for an action.
@@ -611,6 +610,11 @@ void ofpacts_put_openflow_instructions(const struct ofpact[],
                                        struct ofpbuf *openflow,
                                        enum ofp_version ofp_version);
 
+/* Sets of supported actions. */
+ovs_be32 ofpact_bitmap_to_openflow(uint64_t ofpacts_bitmap, enum ofp_version);
+uint64_t ofpact_bitmap_from_openflow(ovs_be32 ofpat_bitmap, enum ofp_version);
+void ofpact_bitmap_format(uint64_t ofpacts_bitmap, struct ds *);
+
 /* Working with ofpacts. */
 bool ofpacts_output_to_port(const struct ofpact[], size_t ofpacts_len,
                             ofp_port_t port);
@@ -624,6 +628,7 @@ uint32_t ofpacts_get_meter(const struct ofpact[], size_t ofpacts_len);
  *
  * (For parsing ofpacts, see ofp-parse.h.) */
 void ofpacts_format(const struct ofpact[], size_t ofpacts_len, struct ds *);
+const char *ofpact_name(enum ofpact_type);
 
 /* Internal use by the helpers below. */
 void ofpact_init(struct ofpact *, enum ofpact_type, size_t len);
@@ -667,7 +672,7 @@ void *ofpact_put(struct ofpbuf *, enum ofpact_type, size_t len);
  *     An integer constant, the value of OFPACT_<ENUM>_RAW_SIZE rounded up to a
  *     multiple of OFPACT_ALIGNTO.
  */
-#define DEFINE_OFPACT(ENUM, STRUCT, MEMBER)                             \
+#define OFPACT(ENUM, STRUCT, MEMBER, NAME)                              \
     BUILD_ASSERT_DECL(offsetof(struct STRUCT, ofpact) == 0);            \
                                                                         \
     enum { OFPACT_##ENUM##_RAW_SIZE                                     \
@@ -699,7 +704,7 @@ void *ofpact_put(struct ofpbuf *, enum ofpact_type, size_t len);
                     OFPACT_##ENUM##_RAW_SIZE);                          \
     }
 OFPACTS
-#undef DEFINE_OFPACT
+#undef OFPACT
 
 /* Functions to use after adding ofpacts to a buffer. */
 void ofpact_update_len(struct ofpbuf *, struct ofpact *);

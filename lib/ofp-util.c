@@ -4012,42 +4012,6 @@ BUILD_ASSERT_DECL((int) OFPUTIL_C_IP_REASM == OFPC_IP_REASM);
 BUILD_ASSERT_DECL((int) OFPUTIL_C_QUEUE_STATS == OFPC_QUEUE_STATS);
 BUILD_ASSERT_DECL((int) OFPUTIL_C_ARP_MATCH_IP == OFPC_ARP_MATCH_IP);
 
-struct ofputil_action_bit_translation {
-    enum ofputil_action_bitmap ofputil_bit;
-    int of_bit;
-};
-
-static const struct ofputil_action_bit_translation of10_action_bits[] = {
-    { OFPUTIL_A_OUTPUT,       OFPAT10_OUTPUT },
-    { OFPUTIL_A_SET_VLAN_VID, OFPAT10_SET_VLAN_VID },
-    { OFPUTIL_A_SET_VLAN_PCP, OFPAT10_SET_VLAN_PCP },
-    { OFPUTIL_A_STRIP_VLAN,   OFPAT10_STRIP_VLAN },
-    { OFPUTIL_A_SET_DL_SRC,   OFPAT10_SET_DL_SRC },
-    { OFPUTIL_A_SET_DL_DST,   OFPAT10_SET_DL_DST },
-    { OFPUTIL_A_SET_NW_SRC,   OFPAT10_SET_NW_SRC },
-    { OFPUTIL_A_SET_NW_DST,   OFPAT10_SET_NW_DST },
-    { OFPUTIL_A_SET_NW_TOS,   OFPAT10_SET_NW_TOS },
-    { OFPUTIL_A_SET_TP_SRC,   OFPAT10_SET_TP_SRC },
-    { OFPUTIL_A_SET_TP_DST,   OFPAT10_SET_TP_DST },
-    { OFPUTIL_A_ENQUEUE,      OFPAT10_ENQUEUE },
-    { 0, 0 },
-};
-
-static enum ofputil_action_bitmap
-decode_action_bits(ovs_be32 of_actions,
-                   const struct ofputil_action_bit_translation *x)
-{
-    enum ofputil_action_bitmap ofputil_actions;
-
-    ofputil_actions = 0;
-    for (; x->ofputil_bit; x++) {
-        if (of_actions & htonl(1u << x->of_bit)) {
-            ofputil_actions |= x->ofputil_bit;
-        }
-    }
-    return ofputil_actions;
-}
-
 static uint32_t
 ofputil_capabilities_mask(enum ofp_version ofp_version)
 {
@@ -4096,13 +4060,14 @@ ofputil_decode_switch_features(const struct ofp_header *oh,
         if (osf->capabilities & htonl(OFPC10_STP)) {
             features->capabilities |= OFPUTIL_C_STP;
         }
-        features->actions = decode_action_bits(osf->actions, of10_action_bits);
+        features->ofpacts = ofpact_bitmap_from_openflow(osf->actions,
+                                                        OFP10_VERSION);
     } else if (raw == OFPRAW_OFPT11_FEATURES_REPLY
                || raw == OFPRAW_OFPT13_FEATURES_REPLY) {
         if (osf->capabilities & htonl(OFPC11_GROUP_STATS)) {
             features->capabilities |= OFPUTIL_C_GROUP_STATS;
         }
-        features->actions = 0;
+        features->ofpacts = 0;
         if (raw == OFPRAW_OFPT13_FEATURES_REPLY) {
             features->auxiliary_id = osf->auxiliary_id;
         }
@@ -4153,21 +4118,6 @@ ofputil_switch_features_has_ports(struct ofpbuf *b)
     return false;
 }
 
-static ovs_be32
-encode_action_bits(enum ofputil_action_bitmap ofputil_actions,
-                   const struct ofputil_action_bit_translation *x)
-{
-    uint32_t of_actions;
-
-    of_actions = 0;
-    for (; x->ofputil_bit; x++) {
-        if (ofputil_actions & x->ofputil_bit) {
-            of_actions |= 1 << x->of_bit;
-        }
-    }
-    return htonl(of_actions);
-}
-
 /* Returns a buffer owned by the caller that encodes 'features' in the format
  * required by 'protocol' with the given 'xid'.  The caller should append port
  * information to the buffer with subsequent calls to
@@ -4212,7 +4162,8 @@ ofputil_encode_switch_features(const struct ofputil_switch_features *features,
         if (features->capabilities & OFPUTIL_C_STP) {
             osf->capabilities |= htonl(OFPC10_STP);
         }
-        osf->actions = encode_action_bits(features->actions, of10_action_bits);
+        osf->actions = ofpact_bitmap_to_openflow(features->ofpacts,
+                                                 OFP10_VERSION);
         break;
     case OFP13_VERSION:
     case OFP14_VERSION:
@@ -4504,20 +4455,25 @@ pull_table_feature_property(struct ofpbuf *msg, struct ofpbuf *payload,
 }
 
 static enum ofperr
-parse_table_ids(struct ofpbuf *payload, uint32_t *ids)
+parse_action_bitmap(struct ofpbuf *payload, enum ofp_version ofp_version,
+                    uint64_t *ofpacts)
 {
-    uint16_t type;
+    uint32_t types = 0;
 
-    *ids = 0;
     while (ofpbuf_size(payload) > 0) {
-        enum ofperr error = pull_table_feature_property(payload, NULL, &type);
+        uint16_t type;
+        enum ofperr error;
+
+        error = pull_table_feature_property(payload, NULL, &type);
         if (error) {
             return error;
         }
-        if (type < CHAR_BIT * sizeof *ids) {
-            *ids |= 1u << type;
+        if (type < CHAR_BIT * sizeof types) {
+            types |= 1u << type;
         }
     }
+
+    *ofpacts = ofpact_bitmap_from_openflow(htonl(types), ofp_version);
     return 0;
 }
 
@@ -4646,12 +4602,14 @@ int
 ofputil_decode_table_features(struct ofpbuf *msg,
                               struct ofputil_table_features *tf, bool loose)
 {
+    const struct ofp_header *oh;
     struct ofp13_table_features *otf;
     unsigned int len;
 
     if (!msg->frame) {
         ofpraw_pull_assert(msg);
     }
+    oh = ofpbuf_l2(msg);
 
     if (!ofpbuf_size(msg)) {
         return EOF;
@@ -4708,17 +4666,21 @@ ofputil_decode_table_features(struct ofpbuf *msg,
             break;
 
         case OFPTFPT13_WRITE_ACTIONS:
-            error = parse_table_ids(&payload, &tf->nonmiss.write.actions);
+            error = parse_action_bitmap(&payload, oh->version,
+                                        &tf->nonmiss.write.ofpacts);
             break;
         case OFPTFPT13_WRITE_ACTIONS_MISS:
-            error = parse_table_ids(&payload, &tf->miss.write.actions);
+            error = parse_action_bitmap(&payload, oh->version,
+                                        &tf->miss.write.ofpacts);
             break;
 
         case OFPTFPT13_APPLY_ACTIONS:
-            error = parse_table_ids(&payload, &tf->nonmiss.apply.actions);
+            error = parse_action_bitmap(&payload, oh->version,
+                                        &tf->nonmiss.apply.ofpacts);
             break;
         case OFPTFPT13_APPLY_ACTIONS_MISS:
-            error = parse_table_ids(&payload, &tf->miss.apply.actions);
+            error = parse_action_bitmap(&payload, oh->version,
+                                        &tf->miss.apply.ofpacts);
             break;
 
         case OFPTFPT13_MATCH:
@@ -5030,27 +4992,27 @@ ofputil_decode_role_status(const struct ofp_header *oh,
 /* Table stats. */
 
 static void
-ofputil_put_ofp10_table_stats(const struct ofp12_table_stats *in,
+ofputil_put_ofp10_table_stats(const struct ofputil_table_stats *in,
                               struct ofpbuf *buf)
 {
     struct wc_map {
         enum ofp10_flow_wildcards wc10;
-        enum oxm12_ofb_match_fields mf12;
+        enum mf_field_id mf;
     };
 
     static const struct wc_map wc_map[] = {
-        { OFPFW10_IN_PORT,     OFPXMT12_OFB_IN_PORT },
-        { OFPFW10_DL_VLAN,     OFPXMT12_OFB_VLAN_VID },
-        { OFPFW10_DL_SRC,      OFPXMT12_OFB_ETH_SRC },
-        { OFPFW10_DL_DST,      OFPXMT12_OFB_ETH_DST},
-        { OFPFW10_DL_TYPE,     OFPXMT12_OFB_ETH_TYPE },
-        { OFPFW10_NW_PROTO,    OFPXMT12_OFB_IP_PROTO },
-        { OFPFW10_TP_SRC,      OFPXMT12_OFB_TCP_SRC },
-        { OFPFW10_TP_DST,      OFPXMT12_OFB_TCP_DST },
-        { OFPFW10_NW_SRC_MASK, OFPXMT12_OFB_IPV4_SRC },
-        { OFPFW10_NW_DST_MASK, OFPXMT12_OFB_IPV4_DST },
-        { OFPFW10_DL_VLAN_PCP, OFPXMT12_OFB_VLAN_PCP },
-        { OFPFW10_NW_TOS,      OFPXMT12_OFB_IP_DSCP },
+        { OFPFW10_IN_PORT,     MFF_IN_PORT },
+        { OFPFW10_DL_VLAN,     MFF_VLAN_VID },
+        { OFPFW10_DL_SRC,      MFF_ETH_SRC },
+        { OFPFW10_DL_DST,      MFF_ETH_DST},
+        { OFPFW10_DL_TYPE,     MFF_ETH_TYPE },
+        { OFPFW10_NW_PROTO,    MFF_IP_PROTO },
+        { OFPFW10_TP_SRC,      MFF_TCP_SRC },
+        { OFPFW10_TP_DST,      MFF_TCP_DST },
+        { OFPFW10_NW_SRC_MASK, MFF_IPV4_SRC },
+        { OFPFW10_NW_DST_MASK, MFF_IPV4_DST },
+        { OFPFW10_DL_VLAN_PCP, MFF_VLAN_PCP },
+        { OFPFW10_NW_TOS,      MFF_IP_DSCP },
     };
 
     struct ofp10_table_stats *out;
@@ -5061,41 +5023,41 @@ ofputil_put_ofp10_table_stats(const struct ofp12_table_stats *in,
     ovs_strlcpy(out->name, in->name, sizeof out->name);
     out->wildcards = 0;
     for (p = wc_map; p < &wc_map[ARRAY_SIZE(wc_map)]; p++) {
-        if (in->wildcards & htonll(1ULL << p->mf12)) {
+        if (bitmap_is_set(in->wildcards.bm, p->mf)) {
             out->wildcards |= htonl(p->wc10);
         }
     }
-    out->max_entries = in->max_entries;
-    out->active_count = in->active_count;
-    put_32aligned_be64(&out->lookup_count, in->lookup_count);
-    put_32aligned_be64(&out->matched_count, in->matched_count);
+    out->max_entries = htonl(in->max_entries);
+    out->active_count = htonl(in->active_count);
+    put_32aligned_be64(&out->lookup_count, htonll(in->lookup_count));
+    put_32aligned_be64(&out->matched_count, htonll(in->matched_count));
 }
 
 static ovs_be32
-oxm12_to_ofp11_flow_match_fields(ovs_be64 oxm12)
+fields_to_ofp11_flow_match_fields(const struct mf_bitmap *fields)
 {
     struct map {
         enum ofp11_flow_match_fields fmf11;
-        enum oxm12_ofb_match_fields mf12;
+        enum mf_field_id mf;
     };
 
     static const struct map map[] = {
-        { OFPFMF11_IN_PORT,     OFPXMT12_OFB_IN_PORT },
-        { OFPFMF11_DL_VLAN,     OFPXMT12_OFB_VLAN_VID },
-        { OFPFMF11_DL_VLAN_PCP, OFPXMT12_OFB_VLAN_PCP },
-        { OFPFMF11_DL_TYPE,     OFPXMT12_OFB_ETH_TYPE },
-        { OFPFMF11_NW_TOS,      OFPXMT12_OFB_IP_DSCP },
-        { OFPFMF11_NW_PROTO,    OFPXMT12_OFB_IP_PROTO },
-        { OFPFMF11_TP_SRC,      OFPXMT12_OFB_TCP_SRC },
-        { OFPFMF11_TP_DST,      OFPXMT12_OFB_TCP_DST },
-        { OFPFMF11_MPLS_LABEL,  OFPXMT12_OFB_MPLS_LABEL },
-        { OFPFMF11_MPLS_TC,     OFPXMT12_OFB_MPLS_TC },
+        { OFPFMF11_IN_PORT,     MFF_IN_PORT },
+        { OFPFMF11_DL_VLAN,     MFF_VLAN_VID },
+        { OFPFMF11_DL_VLAN_PCP, MFF_VLAN_PCP },
+        { OFPFMF11_DL_TYPE,     MFF_ETH_TYPE },
+        { OFPFMF11_NW_TOS,      MFF_IP_DSCP },
+        { OFPFMF11_NW_PROTO,    MFF_IP_PROTO },
+        { OFPFMF11_TP_SRC,      MFF_TCP_SRC },
+        { OFPFMF11_TP_DST,      MFF_TCP_DST },
+        { OFPFMF11_MPLS_LABEL,  MFF_MPLS_LABEL },
+        { OFPFMF11_MPLS_TC,     MFF_MPLS_TC },
         /* I don't know what OFPFMF11_TYPE means. */
-        { OFPFMF11_DL_SRC,      OFPXMT12_OFB_ETH_SRC },
-        { OFPFMF11_DL_DST,      OFPXMT12_OFB_ETH_DST },
-        { OFPFMF11_NW_SRC,      OFPXMT12_OFB_IPV4_SRC },
-        { OFPFMF11_NW_DST,      OFPXMT12_OFB_IPV4_DST },
-        { OFPFMF11_METADATA,    OFPXMT12_OFB_METADATA },
+        { OFPFMF11_DL_SRC,      MFF_ETH_SRC },
+        { OFPFMF11_DL_DST,      MFF_ETH_DST },
+        { OFPFMF11_NW_SRC,      MFF_IPV4_SRC },
+        { OFPFMF11_NW_DST,      MFF_IPV4_DST },
+        { OFPFMF11_METADATA,    MFF_METADATA },
     };
 
     const struct map *p;
@@ -5103,7 +5065,7 @@ oxm12_to_ofp11_flow_match_fields(ovs_be64 oxm12)
 
     fmf11 = 0;
     for (p = map; p < &map[ARRAY_SIZE(map)]; p++) {
-        if (oxm12 & htonll(1ULL << p->mf12)) {
+        if (bitmap_is_set(fields->bm, p->mf)) {
             fmf11 |= p->fmf11;
         }
     }
@@ -5111,7 +5073,7 @@ oxm12_to_ofp11_flow_match_fields(ovs_be64 oxm12)
 }
 
 static void
-ofputil_put_ofp11_table_stats(const struct ofp12_table_stats *in,
+ofputil_put_ofp11_table_stats(const struct ofputil_table_stats *in,
                               struct ofpbuf *buf)
 {
     struct ofp11_table_stats *out;
@@ -5119,50 +5081,85 @@ ofputil_put_ofp11_table_stats(const struct ofp12_table_stats *in,
     out = ofpbuf_put_zeros(buf, sizeof *out);
     out->table_id = in->table_id;
     ovs_strlcpy(out->name, in->name, sizeof out->name);
-    out->wildcards = oxm12_to_ofp11_flow_match_fields(in->wildcards);
-    out->match = oxm12_to_ofp11_flow_match_fields(in->match);
-    out->instructions = in->instructions;
-    out->write_actions = in->write_actions;
-    out->apply_actions = in->apply_actions;
-    out->config = in->config;
-    out->max_entries = in->max_entries;
-    out->active_count = in->active_count;
-    out->lookup_count = in->lookup_count;
-    out->matched_count = in->matched_count;
+    out->wildcards = fields_to_ofp11_flow_match_fields(&in->wildcards);
+    out->match = fields_to_ofp11_flow_match_fields(&in->match);
+    out->instructions = htonl(in->instructions);
+    out->write_actions = ofpact_bitmap_to_openflow(in->write_ofpacts,
+                                                   OFP11_VERSION);
+    out->apply_actions = ofpact_bitmap_to_openflow(in->apply_ofpacts,
+                                                   OFP11_VERSION);
+    out->config = htonl(in->config);
+    out->max_entries = htonl(in->max_entries);
+    out->active_count = htonl(in->active_count);
+    out->lookup_count = htonll(in->lookup_count);
+    out->matched_count = htonll(in->matched_count);
+}
+
+static ovs_be64
+mf_bitmap_to_oxm_bitmap(const struct mf_bitmap *fields,
+                        enum ofp_version version)
+{
+    uint64_t oxm_bitmap = 0;
+    int i;
+
+    BITMAP_FOR_EACH_1 (i, MFF_N_IDS, fields->bm) {
+        uint32_t oxm = mf_oxm_header(i, version);
+        uint32_t vendor = NXM_VENDOR(oxm);
+        int field = NXM_FIELD(oxm);
+
+        if (vendor == OFPXMC12_OPENFLOW_BASIC && field < 64) {
+            oxm_bitmap |= UINT64_C(1) << field;
+        }
+    }
+    return htonll(oxm_bitmap);
 }
 
 static void
-ofputil_put_ofp12_table_stats(const struct ofp12_table_stats *in,
+ofputil_put_ofp12_table_stats(const struct ofputil_table_stats *in,
                               struct ofpbuf *buf)
 {
-    struct ofp12_table_stats *out = ofpbuf_put(buf, in, sizeof *in);
+    struct ofp12_table_stats *out;
 
-    /* Trim off OF1.3-only capabilities. */
-    out->match &= htonll(OFPXMT12_MASK);
-    out->wildcards &= htonll(OFPXMT12_MASK);
-    out->write_setfields &= htonll(OFPXMT12_MASK);
-    out->apply_setfields &= htonll(OFPXMT12_MASK);
+    out = ofpbuf_put_zeros(buf, sizeof *out);
+    out->table_id = in->table_id;
+    ovs_strlcpy(out->name, in->name, sizeof out->name);
+    out->match = mf_bitmap_to_oxm_bitmap(&in->match, OFP12_VERSION);
+    out->wildcards = mf_bitmap_to_oxm_bitmap(&in->wildcards, OFP12_VERSION);
+    out->write_actions = ofpact_bitmap_to_openflow(in->write_ofpacts,
+                                                   OFP12_VERSION);
+    out->apply_actions = ofpact_bitmap_to_openflow(in->apply_ofpacts,
+                                                   OFP12_VERSION);
+    out->write_setfields = mf_bitmap_to_oxm_bitmap(&in->write_setfields,
+                                                   OFP12_VERSION);
+    out->apply_setfields = mf_bitmap_to_oxm_bitmap(&in->apply_setfields,
+                                                   OFP12_VERSION);
+    out->metadata_match = in->metadata_match;
+    out->metadata_write = in->metadata_write;
+    out->instructions = htonl(in->instructions & OFPIT11_ALL);
+    printf ("%d\n", in->instructions);
+    out->config = htonl(in->config);
+    out->max_entries = htonl(in->max_entries);
+    out->active_count = htonl(in->active_count);
+    out->lookup_count = htonll(in->lookup_count);
+    out->matched_count = htonll(in->matched_count);
 }
 
 static void
-ofputil_put_ofp13_table_stats(const struct ofp12_table_stats *in,
+ofputil_put_ofp13_table_stats(const struct ofputil_table_stats *in,
                               struct ofpbuf *buf)
 {
     struct ofp13_table_stats *out;
 
-    /* OF 1.3 splits table features off the ofp_table_stats,
-     * so there is not much here. */
-
     out = ofpbuf_put_uninit(buf, sizeof *out);
     out->table_id = in->table_id;
-    out->active_count = in->active_count;
-    out->lookup_count = in->lookup_count;
-    out->matched_count = in->matched_count;
+    out->active_count = htonl(in->active_count);
+    out->lookup_count = htonll(in->lookup_count);
+    out->matched_count = htonll(in->matched_count);
 }
 
 struct ofpbuf *
-ofputil_encode_table_stats_reply(const struct ofp12_table_stats stats[], int n,
-                                 const struct ofp_header *request)
+ofputil_encode_table_stats_reply(const struct ofputil_table_stats stats[],
+                                 int n, const struct ofp_header *request)
 {
     struct ofpbuf *reply;
     int i;
@@ -6796,20 +6793,18 @@ ofputil_encode_group_features_reply(
 {
     struct ofp12_group_features_stats *ogf;
     struct ofpbuf *reply;
+    int i;
 
     reply = ofpraw_alloc_xid(OFPRAW_OFPST12_GROUP_FEATURES_REPLY,
                              request->version, request->xid, 0);
     ogf = ofpbuf_put_zeros(reply, sizeof *ogf);
     ogf->types = htonl(features->types);
     ogf->capabilities = htonl(features->capabilities);
-    ogf->max_groups[0] = htonl(features->max_groups[0]);
-    ogf->max_groups[1] = htonl(features->max_groups[1]);
-    ogf->max_groups[2] = htonl(features->max_groups[2]);
-    ogf->max_groups[3] = htonl(features->max_groups[3]);
-    ogf->actions[0] = htonl(features->actions[0]);
-    ogf->actions[1] = htonl(features->actions[1]);
-    ogf->actions[2] = htonl(features->actions[2]);
-    ogf->actions[3] = htonl(features->actions[3]);
+    for (i = 0; i < 4; i++) {
+        ogf->max_groups[i] = htonl(features->max_groups[i]);
+        ogf->actions[i] = ofpact_bitmap_to_openflow(features->ofpacts[i],
+                                                    request->version);
+    }
 
     return reply;
 }
@@ -6820,17 +6815,15 @@ ofputil_decode_group_features_reply(const struct ofp_header *oh,
                                     struct ofputil_group_features *features)
 {
     const struct ofp12_group_features_stats *ogf = ofpmsg_body(oh);
+    int i;
 
     features->types = ntohl(ogf->types);
     features->capabilities = ntohl(ogf->capabilities);
-    features->max_groups[0] = ntohl(ogf->max_groups[0]);
-    features->max_groups[1] = ntohl(ogf->max_groups[1]);
-    features->max_groups[2] = ntohl(ogf->max_groups[2]);
-    features->max_groups[3] = ntohl(ogf->max_groups[3]);
-    features->actions[0] = ntohl(ogf->actions[0]);
-    features->actions[1] = ntohl(ogf->actions[1]);
-    features->actions[2] = ntohl(ogf->actions[2]);
-    features->actions[3] = ntohl(ogf->actions[3]);
+    for (i = 0; i < 4; i++) {
+        features->max_groups[i] = ntohl(ogf->max_groups[i]);
+        features->ofpacts[i] = ofpact_bitmap_from_openflow(
+            ogf->actions[i], oh->version);
+    }
 }
 
 /* Parse a group status request message into a 32 bit OpenFlow 1.1
