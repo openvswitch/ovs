@@ -666,23 +666,20 @@ struct sw_flow *ovs_flow_tbl_lookup(struct flow_table *tbl,
 struct sw_flow *ovs_flow_tbl_lookup_exact(struct flow_table *tbl,
 					  struct sw_flow_match *match)
 {
-	struct table_instance *ti = rcu_dereference_ovsl(tbl->ti);
-	struct mask_array *ma = rcu_dereference_ovsl(tbl->mask_array);
-	struct sw_flow *flow;
-	u32 __always_unused n_mask_hit;
+	struct mask_array *ma = ovsl_dereference(tbl->mask_array);
 	int i;
 
 	/* Always called under ovs-mutex. */
 	for (i = 0; i < ma->count; i++) {
+		struct table_instance *ti = ovsl_dereference(tbl->ti);
+		u32 __always_unused n_mask_hit;
 		struct sw_flow_mask *mask;
+		struct sw_flow *flow;
 
 		mask = ovsl_dereference(ma->masks[i]);
-		if (mask) {
-			flow = masked_flow_lookup(ti, match->key, mask, &n_mask_hit);
-			if (flow && ovs_flow_cmp_unmasked_key(flow, match)) { /* Found */
-				return flow;
-			}
-		}
+		flow = masked_flow_lookup(ti, match->key, mask, &n_mask_hit);
+		if (flow && ovs_flow_cmp_unmasked_key(flow, match))
+			return flow;
 	}
 	return NULL;
 }
