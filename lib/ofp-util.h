@@ -25,6 +25,7 @@
 #include "flow.h"
 #include "list.h"
 #include "match.h"
+#include "meta-flow.h"
 #include "netdev.h"
 #include "openflow/nicira-ext.h"
 #include "openvswitch/types.h"
@@ -650,7 +651,7 @@ struct ofputil_table_features {
          *      instruction. */
         struct ofputil_table_action_features {
             uint32_t actions;     /* Bitmap of supported OFPAT*. */
-            uint64_t set_fields;  /* Bitmap of MFF_* "set-field" supports. */
+            struct mf_bitmap set_fields; /* Fields for "set-field". */
         } write, apply;
     } nonmiss, miss;
 
@@ -673,9 +674,9 @@ struct ofputil_table_features {
      *
      * Other combinations do not make sense.
      */
-    uint64_t match;             /* Fields that may be matched. */
-    uint64_t mask;              /* Subset of 'match' that may have masks. */
-    uint64_t wildcard;          /* Subset of 'match' that may be wildcarded. */
+    struct mf_bitmap match;     /* Fields that may be matched. */
+    struct mf_bitmap mask;      /* Subset of 'match' that may have masks. */
+    struct mf_bitmap wildcard;  /* Subset of 'match' that may be wildcarded. */
 };
 
 int ofputil_decode_table_features(struct ofpbuf *,

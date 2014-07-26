@@ -2555,15 +2555,11 @@ print_table_action_features(struct ds *s,
     ds_put_char(s, '\n');
 
     ds_put_cstr(s, "        supported on Set-Field: ");
-    if (taf->set_fields) {
+    if (!bitmap_is_all_zeros(taf->set_fields.bm, MFF_N_IDS)) {
         int i;
 
-        for (i = 0; i < MFF_N_IDS; i++) {
-            uint64_t bit = UINT64_C(1) << i;
-
-            if (taf->set_fields & bit) {
-                ds_put_format(s, "%s,", mf_from_id(i)->name);
-            }
+        BITMAP_FOR_EACH_1 (i, MFF_N_IDS, taf->set_fields.bm) {
+            ds_put_format(s, "%s,", mf_from_id(i)->name);
         }
         ds_chomp(s, ',');
     } else {
@@ -2576,7 +2572,8 @@ static bool
 table_action_features_equal(const struct ofputil_table_action_features *a,
                             const struct ofputil_table_action_features *b)
 {
-    return a->actions == b->actions && a->set_fields == b->set_fields;
+    return (a->actions == b->actions
+            && bitmap_equal(a->set_fields.bm, b->set_fields.bm, MFF_N_IDS));
 }
 
 static void
@@ -2679,18 +2676,16 @@ ofp_print_table_features(struct ds *s, const struct ofp_header *oh)
         }
 
         ds_put_cstr(s, "    matching:\n");
-        for (i = 0; i < MFF_N_IDS; i++) {
-            uint64_t bit = UINT64_C(1) << i;
+        BITMAP_FOR_EACH_1 (i, MFF_N_IDS, tf.match.bm) {
+            const struct mf_field *f = mf_from_id(i);
+            bool mask = bitmap_is_set(tf.mask.bm, i);
+            bool wildcard = bitmap_is_set(tf.wildcard.bm, i);
 
-            if (tf.match & bit) {
-                const struct mf_field *f = mf_from_id(i);
-
-                ds_put_format(s, "      %s: %s\n",
-                              f->name,
-                              (tf.mask ? "arbitrary mask"
-                               : tf.wildcard ? "exact match or wildcard"
-                               : "must exact match"));
-            }
+            ds_put_format(s, "      %s: %s\n",
+                          f->name,
+                          (mask ? "arbitrary mask"
+                           : wildcard ? "exact match or wildcard"
+                           : "must exact match"));
         }
     }
 }

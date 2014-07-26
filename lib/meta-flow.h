@@ -20,9 +20,9 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <netinet/ip6.h>
+#include "bitmap.h"
 #include "flow.h"
 #include "ofp-errors.h"
-#include "ofp-util.h"
 #include "packets.h"
 #include "util.h"
 
@@ -133,6 +133,12 @@ enum OVS_PACKED_ENUM mf_field_id {
 
     MFF_N_IDS
 };
+
+/* A set of mf_field_ids. */
+struct mf_bitmap {
+    unsigned long bm[BITMAP_N_LONGS(MFF_N_IDS)];
+};
+#define MF_BITMAP_INITIALIZER { { [0] = 0 } }
 
 /* Use this macro as CASE_MFF_REGS: in a switch statement to choose all of the
  * MFF_REGx cases. */
@@ -264,15 +270,19 @@ struct mf_field {
     enum ofp_version oxm_version; /* OpenFlow version that added oxm_header. */
 
     /* Usable protocols.
+     *
      * NXM and OXM are extensible, allowing later extensions to be sent in
      * earlier protocol versions, so this does not necessarily correspond to
      * the OpenFlow protocol version the field was introduced in.
      * Also, some field types are tranparently mapped to each other via the
      * struct flow (like vlan and dscp/tos fields), so each variant supports
-     * all protocols. */
-    enum ofputil_protocol usable_protocols; /* If fully/cidr masked. */
-    /* If partially/non-cidr masked. */
-    enum ofputil_protocol usable_protocols_bitwise;
+     * all protocols.
+     *
+     * These are combinations of OFPUTIL_P_*.  (They are not declared as type
+     * enum ofputil_protocol because that would give meta-flow.h and ofp-util.h
+     * a circular dependency.) */
+    uint32_t usable_protocols;         /* If fully/CIDR masked. */
+    uint32_t usable_protocols_bitwise; /* If partially/non-CIDR masked. */
 
     int flow_be32ofs;  /* Field's be32 offset in "struct flow", if prefix tree
                         * lookup is supported for the field, or -1. */

@@ -501,9 +501,6 @@ classifier_destroy(struct classifier *cls)
     }
 }
 
-/* We use uint64_t as a set for the fields below. */
-BUILD_ASSERT_DECL(MFF_N_IDS <= 64);
-
 /* Set the fields for which prefix lookup should be performed. */
 bool
 classifier_set_prefix_fields(struct classifier *cls,
@@ -511,8 +508,8 @@ classifier_set_prefix_fields(struct classifier *cls,
                              unsigned int n_fields)
     OVS_EXCLUDED(cls->mutex)
 {
-    uint64_t fields = 0;
     const struct mf_field * new_fields[CLS_MAX_TRIES];
+    struct mf_bitmap fields = MF_BITMAP_INITIALIZER;
     int i, n_tries = 0;
     bool changed = false;
 
@@ -527,12 +524,12 @@ classifier_set_prefix_fields(struct classifier *cls,
             continue;
         }
 
-        if (fields & (UINT64_C(1) << trie_fields[i])) {
+        if (bitmap_is_set(fields.bm, trie_fields[i])) {
             /* Duplicate field, there is no need to build more than
              * one index for any one field. */
             continue;
         }
-        fields |= UINT64_C(1) << trie_fields[i];
+        bitmap_set1(fields.bm, trie_fields[i]);
 
         new_fields[n_tries] = NULL;
         if (n_tries >= cls->n_tries || field != cls->tries[n_tries].field) {

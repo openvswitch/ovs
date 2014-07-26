@@ -4596,11 +4596,11 @@ parse_oxm(struct ofpbuf *b, bool loose,
 
 static enum ofperr
 parse_oxms(struct ofpbuf *payload, bool loose,
-           uint64_t *exactp, uint64_t *maskedp)
+           struct mf_bitmap *exactp, struct mf_bitmap *maskedp)
 {
-    uint64_t exact, masked;
+    struct mf_bitmap exact = MF_BITMAP_INITIALIZER;
+    struct mf_bitmap masked = MF_BITMAP_INITIALIZER;
 
-    exact = masked = 0;
     while (ofpbuf_size(payload) > 0) {
         const struct mf_field *field;
         enum ofperr error;
@@ -4608,23 +4608,19 @@ parse_oxms(struct ofpbuf *payload, bool loose,
 
         error = parse_oxm(payload, loose, &field, &hasmask);
         if (!error) {
-            if (hasmask) {
-                masked |= UINT64_C(1) << field->id;
-            } else {
-                exact |= UINT64_C(1) << field->id;
-            }
+            bitmap_set1(hasmask ? masked.bm : exact.bm, field->id);
         } else if (error != OFPERR_OFPBMC_BAD_FIELD || !loose) {
             return error;
         }
     }
     if (exactp) {
         *exactp = exact;
-    } else if (exact) {
+    } else if (!bitmap_is_all_zeros(exact.bm, MFF_N_IDS)) {
         return OFPERR_OFPBMC_BAD_MASK;
     }
     if (maskedp) {
         *maskedp = masked;
-    } else if (masked) {
+    } else if (!bitmap_is_all_zeros(masked.bm, MFF_N_IDS)) {
         return OFPERR_OFPBMC_BAD_MASK;
     }
     return 0;
@@ -4769,10 +4765,10 @@ ofputil_decode_table_features(struct ofpbuf *msg,
      *
      *     - Turn on 'wildcard' bits that are set in 'mask', because a field
      *       that is arbitrarily maskable can be wildcarded entirely. */
-    tf->mask &= tf->match;
-    tf->wildcard &= tf->match;
+    bitmap_and(tf->mask.bm, tf->match.bm, MFF_N_IDS);
+    bitmap_and(tf->wildcard.bm, tf->match.bm, MFF_N_IDS);
 
-    tf->wildcard |= tf->mask;
+    bitmap_or(tf->wildcard.bm, tf->mask.bm, MFF_N_IDS);
 
     return 0;
 }
