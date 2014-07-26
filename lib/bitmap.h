@@ -104,6 +104,12 @@ size_t bitmap_scan(const unsigned long int *, bool target,
                    size_t start, size_t end);
 size_t bitmap_count1(const unsigned long *, size_t n);
 
+void bitmap_and(unsigned long *dst, const unsigned long *arg, size_t n);
+void bitmap_or(unsigned long *dst, const unsigned long *arg, size_t n);
+void bitmap_not(unsigned long *dst, size_t n);
+
+bool bitmap_is_all_zeros(const unsigned long *, size_t n);
+
 #define BITMAP_FOR_EACH_1(IDX, SIZE, BITMAP) \
     for ((IDX) = bitmap_scan(BITMAP, 1, 0, SIZE); (IDX) < (SIZE);    \
          (IDX) = bitmap_scan(BITMAP, 1, (IDX) + 1, SIZE))
