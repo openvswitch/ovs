@@ -1254,10 +1254,10 @@ dpif_handlers_set(struct dpif *dpif, uint32_t n_handlers)
 }
 
 void
-dpif_register_upcall_cb(struct dpif *dpif, exec_upcall_cb *cb)
+dpif_register_upcall_cb(struct dpif *dpif, upcall_callback *cb, void *aux)
 {
     if (dpif->dpif_class->register_upcall_cb) {
-        dpif->dpif_class->register_upcall_cb(dpif, cb);
+        dpif->dpif_class->register_upcall_cb(dpif, cb, aux);
     }
 }
 

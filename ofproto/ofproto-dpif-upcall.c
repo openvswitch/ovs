@@ -246,13 +246,12 @@ static void ukey_delete(struct revalidator *, struct udpif_key *);
 static enum upcall_type classify_upcall(enum dpif_upcall_type type,
                                         const struct nlattr *userdata);
 
-static void exec_upcalls(struct dpif *, struct dpif_upcall *, struct ofpbuf *,
-                         int cnt);
-
 static int upcall_receive(struct upcall *, const struct dpif_backer *,
                           const struct ofpbuf *packet, enum dpif_upcall_type,
                           const struct nlattr *userdata, const struct flow *);
 static void upcall_uninit(struct upcall *);
+
+static upcall_callback upcall_cb;
 
 static atomic_bool enable_megaflows = ATOMIC_VAR_INIT(true);
 
@@ -288,7 +287,7 @@ udpif_create(struct dpif_backer *backer, struct dpif *dpif)
     atomic_init(&udpif->n_flows_timestamp, LLONG_MIN);
     ovs_mutex_init(&udpif->n_flows_mutex);
 
-    dpif_register_upcall_cb(dpif, exec_upcalls);
+    dpif_register_upcall_cb(dpif, upcall_cb, udpif);
 
     return udpif;
 }
@@ -921,77 +920,53 @@ upcall_uninit(struct upcall *upcall)
     }
 }
 
-static struct udpif *
-find_udpif(struct dpif *dpif)
+static int
+upcall_cb(const struct ofpbuf *packet, const struct flow *flow,
+          enum dpif_upcall_type type, const struct nlattr *userdata,
+          struct ofpbuf *actions, struct flow_wildcards *wc,
+          struct ofpbuf *put_actions, void *aux)
 {
-    struct udpif *udpif;
+    struct udpif *udpif = aux;
+    unsigned int flow_limit;
+    struct upcall upcall;
+    bool megaflow;
+    int error;
 
-    LIST_FOR_EACH (udpif, list_node, &all_udpifs) {
-        if (udpif->dpif == dpif) {
-            return udpif;
+    error = upcall_receive(&upcall, udpif->backer, packet, type, userdata,
+                           flow);
+    if (error) {
+        goto out;
+    }
+
+    error = process_upcall(udpif, &upcall, actions);
+    if (error) {
+        goto out;
+    }
+
+    if (upcall.xout.slow && put_actions) {
+        ofpbuf_put(put_actions, ofpbuf_data(&upcall.put_actions),
+                   ofpbuf_size(&upcall.put_actions));
+    }
+
+    if (wc) {
+        atomic_read(&enable_megaflows, &megaflow);
+        if (megaflow) {
+            /* XXX: This could be avoided with sufficient API changes. */
+            *wc = upcall.xout.wc;
+        } else {
+            memset(wc, 0xff, sizeof *wc);
+            flow_wildcards_clear_non_packet_fields(wc);
         }
     }
-    return NULL;
-}
 
-static void
-exec_upcalls(struct dpif *dpif, struct dpif_upcall *dupcalls,
-             struct ofpbuf *bufs OVS_UNUSED, int cnt)
-{
-    struct upcall upcalls[UPCALL_MAX_BATCH];
-    struct udpif *udpif;
-    int i, j;
-
-    udpif = find_udpif(dpif);
-    ovs_assert(udpif);
-
-    for (i = 0; i < cnt; i += UPCALL_MAX_BATCH) {
-        size_t n_upcalls = 0;
-        for (j = i; j < MIN(i + UPCALL_MAX_BATCH, cnt); j++) {
-            struct upcall *upcall = &upcalls[n_upcalls];
-            struct dpif_upcall *dupcall = &dupcalls[j];
-            struct pkt_metadata md;
-            struct flow flow;
-            int error;
-
-            dpif_print_packet(dpif, dupcall);
-
-            if (odp_flow_key_to_flow(dupcall->key, dupcall->key_len, &flow)
-                == ODP_FIT_ERROR) {
-                continue;
-            }
-
-            error = upcall_receive(upcall, udpif->backer, &dupcall->packet,
-                                   dupcall->type, dupcall->userdata, &flow);
-            if (error) {
-                goto cleanup;
-            }
-
-            upcall->key = dupcall->key;
-            upcall->key_len = dupcall->key_len;
-
-            md = pkt_metadata_from_flow(&flow);
-            flow_extract(&dupcall->packet, &md, &flow);
-
-            error = process_upcall(udpif, upcall, NULL);
-            if (error) {
-                goto cleanup;
-            }
-
-            n_upcalls++;
-            continue;
-
-cleanup:
-            upcall_uninit(upcall);
-        }
-
-        if (n_upcalls) {
-            handle_upcalls(udpif, upcalls, n_upcalls);
-            for (j = 0; j < n_upcalls; j++) {
-                upcall_uninit(&upcalls[j]);
-            }
-        }
+    atomic_read(&udpif->flow_limit, &flow_limit);
+    if (udpif_get_n_flows(udpif) >= flow_limit) {
+        error = ENOSPC;
     }
+
+out:
+    upcall_uninit(&upcall);
+    return error;
 }
 
 static int

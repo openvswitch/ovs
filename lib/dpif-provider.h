@@ -347,8 +347,9 @@ struct dpif_class {
      * to register an upcall function and enable / disable upcalls.
      *
      * Registers an upcall callback function with 'dpif'. This is only used if
-     * if 'dpif' directly executes upcall functions. */
-    void (*register_upcall_cb)(struct dpif *, exec_upcall_cb *);
+     * if 'dpif' directly executes upcall functions. 'aux' is passed to the
+     * callback on invocation. */
+    void (*register_upcall_cb)(struct dpif *, upcall_callback *, void *aux);
 
     /* Enables upcalls if 'dpif' directly executes upcall functions. */
     void (*enable_upcall)(struct dpif *);

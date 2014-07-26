@@ -399,12 +399,13 @@ extern "C" {
 #endif
 
 struct dpif;
-struct ds;
-struct flow;
-struct nlattr;
-struct sset;
 struct dpif_class;
 struct dpif_flow;
+struct ds;
+struct flow;
+struct flow_wildcards;
+struct nlattr;
+struct sset;
 
 int dp_register_provider(const struct dpif_class *);
 int dp_unregister_provider(const char *type);
@@ -737,8 +738,33 @@ struct dpif_upcall {
     struct nlattr *userdata;    /* Argument to OVS_ACTION_ATTR_USERSPACE. */
 };
 
-typedef void exec_upcall_cb(struct dpif *, struct dpif_upcall *,
-                            struct ofpbuf *, int cnt);
+/* A callback to process an upcall, currently implemented only by dpif-netdev.
+ *
+ * The caller provides the 'packet' and 'flow' to process, the 'type' of the
+ * upcall, and if 'type' is DPIF_UC_ACTION then the 'userdata' attached to the
+ * action.
+ *
+ * The callback must fill in 'actions' with the datapath actions to apply to
+ * 'packet'.  'wc' and 'put_actions' will either be both null or both nonnull.
+ * If they are nonnull, then the caller will install a flow entry to process
+ * all future packets that match 'flow' and 'wc'; the callback must store a
+ * wildcard mask suitable for that purpose into 'wc'.  If the actions to store
+ * into the flow entry are the same as 'actions', then the callback may leave
+ * 'put_actions' empty; otherwise it must store the desired actions into
+ * 'put_actions'.
+ *
+ * Returns 0 if successful, ENOSPC if the flow limit has been reached and no
+ * flow should be installed, or some otherwise a positive errno value. */
+typedef int upcall_callback(const struct ofpbuf *packet,
+                            const struct flow *flow,
+                            enum dpif_upcall_type type,
+                            const struct nlattr *userdata,
+                            struct ofpbuf *actions,
+                            struct flow_wildcards *wc,
+                            struct ofpbuf *put_actions,
+                            void *aux);
+
+void dpif_register_upcall_cb(struct dpif *, upcall_callback *, void *aux);
 
 int dpif_recv_set(struct dpif *, bool enable);
 int dpif_handlers_set(struct dpif *, uint32_t n_handlers);
@@ -746,7 +772,6 @@ int dpif_recv(struct dpif *, uint32_t handler_id, struct dpif_upcall *,
               struct ofpbuf *);
 void dpif_recv_purge(struct dpif *);
 void dpif_recv_wait(struct dpif *, uint32_t handler_id);
-void dpif_register_upcall_cb(struct dpif *, exec_upcall_cb *);
 void dpif_enable_upcall(struct dpif *);
 void dpif_disable_upcall(struct dpif *);
 
