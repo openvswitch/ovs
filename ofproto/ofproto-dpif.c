@@ -1503,27 +1503,23 @@ flush(struct ofproto *ofproto_)
 }
 
 static void
-get_features(struct ofproto *ofproto_ OVS_UNUSED,
-             bool *arp_match_ip, uint64_t *ofpacts)
+query_tables(struct ofproto *ofproto,
+             struct ofputil_table_features *features,
+             struct ofputil_table_stats *stats)
 {
-    *arp_match_ip = true;
-    *ofpacts = (UINT64_C(1) << N_OFPACTS) - 1;
-}
+    strcpy(features->name, "classifier");
 
-static void
-get_tables(struct ofproto *ofproto, struct ofputil_table_stats *stats)
-{
-    int i;
+    if (stats) {
+        int i;
 
-    strcpy(stats->name, "classifier");
+        for (i = 0; i < ofproto->n_tables; i++) {
+            unsigned long missed, matched;
 
-    for (i = 0; i < ofproto->n_tables; i++) {
-        unsigned long missed, matched;
-
-        atomic_read(&ofproto->tables[i].n_matched, &matched);
-        stats[i].matched_count = matched;
-        atomic_read(&ofproto->tables[i].n_missed, &missed);
-        stats[i].lookup_count = matched + missed;
+            atomic_read(&ofproto->tables[i].n_matched, &matched);
+            stats[i].matched_count = matched;
+            atomic_read(&ofproto->tables[i].n_missed, &missed);
+            stats[i].lookup_count = matched + missed;
+        }
     }
 }
 
@@ -5058,8 +5054,7 @@ const struct ofproto_class ofproto_dpif_class = {
     NULL,                       /* get_memory_usage. */
     type_get_memory_usage,
     flush,
-    get_features,
-    get_tables,
+    query_tables,
     port_alloc,
     port_construct,
     port_destruct,

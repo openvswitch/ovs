@@ -767,31 +767,28 @@ struct ofpbuf *ofputil_encode_role_status(
 
 enum ofperr ofputil_decode_role_status(const struct ofp_header *oh,
                                        struct ofputil_role_status *rs);
-/* Abstract table stats. */
+
+/* Abstract table stats.
+ *
+ * This corresponds to the OpenFlow 1.3 table statistics structure, which only
+ * includes actual statistics.  In earlier versions of OpenFlow, several
+ * members describe table features, so this structure has to be paired with
+ * struct ofputil_table_features to get all information. */
 struct ofputil_table_stats {
-    uint8_t table_id;
-    char name[OFP_MAX_TABLE_NAME_LEN];
-    ovs_be64 metadata_match;    /* Bits of metadata table can match. */
-    ovs_be64 metadata_write;    /* Bits of metadata table can write. */
-    uint32_t config;            /* Bitmap of OFPTC_* values */
-    uint32_t max_entries;       /* Max number of entries supported. */
-
-    struct mf_bitmap match;     /* Fields table can match. */
-    struct mf_bitmap wildcards; /* Fields table can wildcard. */
-    uint64_t write_ofpacts;     /* OFPACT_* supported on Write-Actions. */
-    uint64_t apply_ofpacts;     /* OFPACT_* supported on Apply-Actions. */
-    struct mf_bitmap write_setfields; /* Fields that can be set in W-A. */
-    struct mf_bitmap apply_setfields; /* Fields that can be set in A-A. */
-    uint32_t instructions;      /* Bitmap of OFPIT_* values supported. */
-
+    uint8_t table_id;           /* Identifier of table. */
     uint32_t active_count;      /* Number of active entries. */
     uint64_t lookup_count;      /* Number of packets looked up in table. */
     uint64_t matched_count;     /* Number of packets that hit table. */
 };
 
-struct ofpbuf *ofputil_encode_table_stats_reply(
-    const struct ofputil_table_stats[], int n,
-    const struct ofp_header *request);
+struct ofpbuf *ofputil_encode_table_stats_reply(const struct ofp_header *rq);
+void ofputil_append_table_stats_reply(struct ofpbuf *reply,
+                                      const struct ofputil_table_stats *,
+                                      const struct ofputil_table_features *);
+
+int ofputil_decode_table_stats_reply(struct ofpbuf *reply,
+                                     struct ofputil_table_stats *,
+                                     struct ofputil_table_features *);
 
 /* Queue configuration request. */
 struct ofpbuf *ofputil_encode_queue_get_config_request(enum ofp_version,

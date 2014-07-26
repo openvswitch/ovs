@@ -5527,18 +5527,20 @@ AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
 NXST_FLOW reply:
 ])
 
-(echo "OFPST_TABLE reply (OF1.3) (xid=0x2): 254 tables"
- echo "  0: active=1, lookup=0, matched=0"
+(echo "OFPST_TABLE reply (OF1.3) (xid=0x2):
+  table 0:
+    active=1, lookup=0, matched=0"
  x=1
  while test $x -lt 254; do
-   echo "  $x: active=0, lookup=0, matched=0"
+   echo "
+  table $x:
+    active=0, lookup=0, matched=0"
    x=`expr $x + 1`
  done) > expout
 AT_CHECK([ovs-ofctl -O OpenFlow13 dump-tables br0 ], [0], [expout])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
-
 
 AT_SETUP([ofproto-dpif packet-out controller (patch port)])
 OVS_VSWITCHD_START(
@@ -5571,19 +5573,24 @@ NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=14 in_port=1 (via no_match) data_l
 metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,dl_type=0x1234
 ])
 
-(echo "OFPST_TABLE reply (OF1.3) (xid=0x2): 254 tables"
+(printf "OFPST_TABLE reply (OF1.3) (xid=0x2):"
  x=0
  while test $x -lt 254; do
-   echo "  $x: active=0, lookup=0, matched=0"
+   echo "
+  table $x:
+    active=0, lookup=0, matched=0"
    x=`expr $x + 1`
  done) > expout
 AT_CHECK([ovs-ofctl -O OpenFlow13 dump-tables br0 ], [0], [expout])
 
-(echo "OFPST_TABLE reply (OF1.3) (xid=0x2): 254 tables"
- echo "  0: active=0, lookup=3, matched=0"
+(echo "OFPST_TABLE reply (OF1.3) (xid=0x2):
+  table 0:
+    active=0, lookup=3, matched=0"
  x=1
  while test $x -lt 254; do
-   echo "  $x: active=0, lookup=0, matched=0"
+   echo "
+  table $x:
+    active=0, lookup=0, matched=0"
    x=`expr $x + 1`
  done) > expout
 AT_CHECK([ovs-ofctl -O OpenFlow13 dump-tables br1 ], [0], [expout])
@@ -5630,12 +5637,17 @@ AT_CHECK([ovs-ofctl -O OpenFlow13 dump-flows br0 | ofctl_strip | sort], [0], [dn
 OFPST_FLOW reply (OF1.3):
 ])
 
-(echo "OFPST_TABLE reply (OF1.3) (xid=0x2): 254 tables"
- echo "  0: active=1, lookup=3, matched=3"
- echo "  1: active=1, lookup=3, matched=3"
+(echo "OFPST_TABLE reply (OF1.3) (xid=0x2):
+  table 0:
+    active=1, lookup=3, matched=3
+
+  table 1:
+    active=1, lookup=3, matched=3"
  x=2
  while test $x -lt 254; do
-   echo "  $x: active=0, lookup=0, matched=0"
+   echo "
+  table $x:
+    active=0, lookup=0, matched=0"
    x=`expr $x + 1`
  done) > expout
 AT_CHECK([ovs-ofctl -O OpenFlow13 dump-tables br0 ], [0], [expout])
@@ -5678,12 +5690,17 @@ AT_CHECK([ovs-ofctl -O OpenFlow13 dump-flows br0 | ofctl_strip | sort], [0], [dn
 OFPST_FLOW reply (OF1.3):
 ])
 
-(echo "OFPST_TABLE reply (OF1.3) (xid=0x2): 254 tables"
- echo "  0: active=0, lookup=3, matched=0"
- echo "  1: active=1, lookup=3, matched=3"
+(echo "OFPST_TABLE reply (OF1.3) (xid=0x2):
+  table 0:
+    active=0, lookup=3, matched=0
+
+  table 1:
+    active=1, lookup=3, matched=3"
  x=2
  while test $x -lt 254; do
-   echo "  $x: active=0, lookup=0, matched=0"
+   echo "
+  table $x:
+    active=0, lookup=0, matched=0"
    x=`expr $x + 1`
  done) > expout
 AT_CHECK([ovs-ofctl -O OpenFlow13 dump-tables br0 ], [0], [expout])
