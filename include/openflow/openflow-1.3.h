@@ -1,4 +1,4 @@
-/* Copyright (c) 2008 The Board of Trustees of The Leland Stanford
+/* Copyright (c) 2008, 2014 The Board of Trustees of The Leland Stanford
 * Junior University
 * Copyright (c) 2011, 2012 Open Networking Foundation
 *
@@ -91,9 +91,7 @@ enum ofp13_instruction_type {
     OFPIT13_METER = 6           /* Apply meter (rate limiter) */
 };
 
-#define OFPIT13_ALL (OFPIT11_GOTO_TABLE | OFPIT11_WRITE_METADATA |      \
-                     OFPIT11_WRITE_ACTIONS | OFPIT11_APPLY_ACTIONS |    \
-                     OFPIT11_CLEAR_ACTIONS | OFPIT13_METER)
+#define OFPIT13_ALL (OFPIT11_ALL | (1u << OFPIT13_METER))
 
 /* Instruction structure for OFPIT_METER */
 struct ofp13_instruction_meter {
