@@ -1567,9 +1567,6 @@ keep the learned flows separate from the primary flow table 0.)
 .RE
 .
 .RS
-.IP \fBapply_actions(\fR[\fIaction\fR][\fB,\fIaction\fR...]\fB)
-Applies the specific action(s) immediately. The syntax of actions are same
-to \fBactions=\fR field.
 .
 .IP \fBclear_actions\fR
 Clears all the actions in the action set immediately.
