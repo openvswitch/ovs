@@ -757,7 +757,7 @@ upcall_init(struct upcall *upcall, struct flow *flow, struct ofpbuf *packet,
     xlate_actions(&xin, &upcall->xout);
 }
 
-void
+static void
 free_upcall(struct upcall *upcall)
 {
     xlate_out_uninit(&upcall->xout);
@@ -845,7 +845,7 @@ read_upcalls(struct handler *handler,
     return n_upcalls;
 }
 
-int
+static int
 convert_upcall(struct udpif *udpif, struct upcall *upcall)
 {
     struct dpif_upcall *dupcall = &upcall->dpif_upcall;
