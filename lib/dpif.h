@@ -671,12 +671,20 @@ struct dpif_upcall {
     struct nlattr *userdata;    /* Argument to OVS_ACTION_ATTR_USERSPACE. */
 };
 
+typedef void exec_upcall_cb(struct dpif *, struct dpif_upcall *,
+                            struct ofpbuf *, int cnt);
+
 int dpif_recv_set(struct dpif *, bool enable);
 int dpif_handlers_set(struct dpif *, uint32_t n_handlers);
 int dpif_recv(struct dpif *, uint32_t handler_id, struct dpif_upcall *,
               struct ofpbuf *);
 void dpif_recv_purge(struct dpif *);
 void dpif_recv_wait(struct dpif *, uint32_t handler_id);
+void dpif_register_upcall_cb(struct dpif *, exec_upcall_cb *);
+void dpif_enable_upcall(struct dpif *);
+void dpif_disable_upcall(struct dpif *);
+
+void dpif_print_packet(struct dpif *, struct dpif_upcall *);
 
 /* Miscellaneous. */
 

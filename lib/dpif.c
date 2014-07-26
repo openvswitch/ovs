@@ -1305,8 +1305,12 @@ dpif_upcall_type_to_string(enum dpif_upcall_type type)
 int
 dpif_recv_set(struct dpif *dpif, bool enable)
 {
-    int error = dpif->dpif_class->recv_set(dpif, enable);
-    log_operation(dpif, "recv_set", error);
+    int error = 0;
+
+    if (dpif->dpif_class->recv_set) {
+        error = dpif->dpif_class->recv_set(dpif, enable);
+        log_operation(dpif, "recv_set", error);
+    }
     return error;
 }
 
@@ -1333,9 +1337,59 @@ dpif_recv_set(struct dpif *dpif, bool enable)
 int
 dpif_handlers_set(struct dpif *dpif, uint32_t n_handlers)
 {
-    int error = dpif->dpif_class->handlers_set(dpif, n_handlers);
-    log_operation(dpif, "handlers_set", error);
+    int error = 0;
+
+    if (dpif->dpif_class->handlers_set) {
+        error = dpif->dpif_class->handlers_set(dpif, n_handlers);
+        log_operation(dpif, "handlers_set", error);
+    }
     return error;
+}
+
+void
+dpif_register_upcall_cb(struct dpif *dpif, exec_upcall_cb *cb)
+{
+    if (dpif->dpif_class->register_upcall_cb) {
+        dpif->dpif_class->register_upcall_cb(dpif, cb);
+    }
+}
+
+void
+dpif_enable_upcall(struct dpif *dpif)
+{
+    if (dpif->dpif_class->enable_upcall) {
+        dpif->dpif_class->enable_upcall(dpif);
+    }
+}
+
+void
+dpif_disable_upcall(struct dpif *dpif)
+{
+    if (dpif->dpif_class->disable_upcall) {
+        dpif->dpif_class->disable_upcall(dpif);
+    }
+}
+
+void
+dpif_print_packet(struct dpif *dpif, struct dpif_upcall *upcall)
+{
+    if (!VLOG_DROP_DBG(&dpmsg_rl)) {
+        struct ds flow;
+        char *packet;
+
+        packet = ofp_packet_to_string(ofpbuf_data(&upcall->packet),
+                                      ofpbuf_size(&upcall->packet));
+
+        ds_init(&flow);
+        odp_flow_key_format(upcall->key, upcall->key_len, &flow);
+
+        VLOG_DBG("%s: %s upcall:\n%s\n%s",
+                 dpif_name(dpif), dpif_upcall_type_to_string(upcall->type),
+                 ds_cstr(&flow), packet);
+
+        ds_destroy(&flow);
+        free(packet);
+    }
 }
 
 /* Polls for an upcall from 'dpif' for an upcall handler.  Since there
@@ -1360,25 +1414,15 @@ int
 dpif_recv(struct dpif *dpif, uint32_t handler_id, struct dpif_upcall *upcall,
           struct ofpbuf *buf)
 {
-    int error = dpif->dpif_class->recv(dpif, handler_id, upcall, buf);
-    if (!error && !VLOG_DROP_DBG(&dpmsg_rl)) {
-        struct ds flow;
-        char *packet;
+    int error = EAGAIN;
 
-        packet = ofp_packet_to_string(ofpbuf_data(&upcall->packet),
-                                      ofpbuf_size(&upcall->packet));
-
-        ds_init(&flow);
-        odp_flow_key_format(upcall->key, upcall->key_len, &flow);
-
-        VLOG_DBG("%s: %s upcall:\n%s\n%s",
-                 dpif_name(dpif), dpif_upcall_type_to_string(upcall->type),
-                 ds_cstr(&flow), packet);
-
-        ds_destroy(&flow);
-        free(packet);
-    } else if (error && error != EAGAIN) {
-        log_operation(dpif, "recv", error);
+    if (dpif->dpif_class->recv) {
+        error = dpif->dpif_class->recv(dpif, handler_id, upcall, buf);
+        if (!error) {
+            dpif_print_packet(dpif, upcall);
+        } else if (error != EAGAIN) {
+            log_operation(dpif, "recv", error);
+        }
     }
     return error;
 }
@@ -1401,7 +1445,9 @@ dpif_recv_purge(struct dpif *dpif)
 void
 dpif_recv_wait(struct dpif *dpif, uint32_t handler_id)
 {
-    dpif->dpif_class->recv_wait(dpif, handler_id);
+    if (dpif->dpif_class->recv_wait) {
+        dpif->dpif_class->recv_wait(dpif, handler_id);
+    }
 }
 
 /* Obtains the NetFlow engine type and engine ID for 'dpif' into '*engine_type'

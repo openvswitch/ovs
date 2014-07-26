@@ -411,6 +411,22 @@ struct dpif_class {
     /* Throws away any queued upcalls that 'dpif' currently has ready to
      * return. */
     void (*recv_purge)(struct dpif *dpif);
+
+    /* For datapaths that run in userspace (i.e. dpif-netdev), threads polling
+     * for incoming packets can directly call upcall functions instead of
+     * offloading packet processing to separate handler threads. Datapaths
+     * that directly call upcall functions should use the functions below to
+     * to register an upcall function and enable / disable upcalls.
+     *
+     * Registers an upcall callback function with 'dpif'. This is only used if
+     * if 'dpif' directly executes upcall functions. */
+    void (*register_upcall_cb)(struct dpif *, exec_upcall_cb *);
+
+    /* Enables upcalls if 'dpif' directly executes upcall functions. */
+    void (*enable_upcall)(struct dpif *);
+
+    /* Disables upcalls if 'dpif' directly executes upcall functions. */
+    void (*disable_upcall)(struct dpif *);
 };
 
 extern const struct dpif_class dpif_linux_class;

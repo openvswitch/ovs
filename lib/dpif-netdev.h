@@ -20,6 +20,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "dpif.h"
 #include "openvswitch/types.h"
 #include "ofpbuf.h"
 #include "packets.h"

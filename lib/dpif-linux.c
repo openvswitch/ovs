@@ -1934,6 +1934,9 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_recv,
     dpif_linux_recv_wait,
     dpif_linux_recv_purge,
+    NULL,                       /* register_upcall_cb */
+    NULL,                       /* enable_upcall */
+    NULL,                       /* disable_upcall */
 };
 
 static int

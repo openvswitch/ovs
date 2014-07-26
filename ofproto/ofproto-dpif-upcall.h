@@ -19,12 +19,17 @@
 
 struct dpif;
 struct dpif_backer;
+struct dpif_upcall;
+struct ofpbuf;
 struct seq;
 struct simap;
 
 /* Udif is responsible for retrieving upcalls from the kernel and processing
  * them.  Additionally, it's responsible for maintaining the datapath flow
  * table. */
+
+void exec_upcalls(struct dpif *, struct dpif_upcall *, struct ofpbuf *,
+                  int cnt);
 
 struct udpif *udpif_create(struct dpif_backer *, struct dpif *);
 void udpif_run(struct udpif *udpif);
