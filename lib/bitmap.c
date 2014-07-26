@@ -109,3 +109,47 @@ bitmap_count1(const unsigned long int *bitmap, size_t n)
 
     return count;
 }
+
+/* "dst &= arg;" for n-bit dst and arg.  */
+void
+bitmap_and(unsigned long *dst, const unsigned long *arg, size_t n)
+{
+    size_t i;
+
+    for (i = 0; i < BITMAP_N_LONGS(n); i++) {
+        dst[i] &= arg[i];
+    }
+}
+
+/* "dst |= arg;" for n-bit dst and arg.  */
+void
+bitmap_or(unsigned long *dst, const unsigned long *arg, size_t n)
+{
+    size_t i;
+
+    for (i = 0; i < BITMAP_N_LONGS(n); i++) {
+        dst[i] |= arg[i];
+    }
+}
+
+/* "dst = ~dst;" for n-bit dst.  */
+void
+bitmap_not(unsigned long *dst, size_t n)
+{
+    size_t i;
+
+    for (i = 0; i < n / BITMAP_ULONG_BITS; i++) {
+        dst[i] = ~dst[i];
+    }
+    if (n % BITMAP_ULONG_BITS) {
+        dst[i] ^= (1u << (n % BITMAP_ULONG_BITS)) - 1;
+    }
+}
+
+/* Returns true if all of the 'n' bits in 'bitmap' are 0,
+ * false if at least one bit is a 1.*/
+bool
+bitmap_is_all_zeros(const unsigned long *bitmap, size_t n)
+{
+    return bitmap_scan(bitmap, true, 0, n) == n;
+}
