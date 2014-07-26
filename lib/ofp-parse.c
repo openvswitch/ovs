@@ -46,7 +46,7 @@
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-static char * WARN_UNUSED_RESULT
+char * WARN_UNUSED_RESULT
 str_to_u8(const char *str, const char *name, uint8_t *valuep)
 {
     int value;
@@ -64,7 +64,7 @@ str_to_u8(const char *str, const char *name, uint8_t *valuep)
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-static char * WARN_UNUSED_RESULT
+char * WARN_UNUSED_RESULT
 str_to_u16(const char *str, const char *name, uint16_t *valuep)
 {
     int value;
@@ -80,7 +80,7 @@ str_to_u16(const char *str, const char *name, uint16_t *valuep)
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-static char * WARN_UNUSED_RESULT
+char * WARN_UNUSED_RESULT
 str_to_u32(const char *str, uint32_t *valuep)
 {
     char *tail;
@@ -103,7 +103,7 @@ str_to_u32(const char *str, uint32_t *valuep)
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-static char * WARN_UNUSED_RESULT
+char * WARN_UNUSED_RESULT
 str_to_u64(const char *str, uint64_t *valuep)
 {
     char *tail;
@@ -127,7 +127,7 @@ str_to_u64(const char *str, uint64_t *valuep)
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-static char * WARN_UNUSED_RESULT
+char * WARN_UNUSED_RESULT
 str_to_be64(const char *str, ovs_be64 *valuep)
 {
     uint64_t value = 0;
@@ -144,7 +144,7 @@ str_to_be64(const char *str, ovs_be64 *valuep)
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-static char * WARN_UNUSED_RESULT
+char * WARN_UNUSED_RESULT
 str_to_mac(const char *str, uint8_t mac[6])
 {
     if (!ovs_scan(str, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))) {
@@ -157,7 +157,7 @@ str_to_mac(const char *str, uint8_t mac[6])
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-static char * WARN_UNUSED_RESULT
+char * WARN_UNUSED_RESULT
 str_to_ip(const char *str, ovs_be32 *ip)
 {
     struct in_addr in_addr;
