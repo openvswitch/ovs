@@ -26,6 +26,7 @@
 
 #include "flow.h"
 #include "ofp-actions.h"
+#include "ofpbuf.h"
 #include "util.h"
 #include "ovstest.h"
 
@@ -33,7 +34,10 @@ static void
 test_multipath_main(int argc, char *argv[])
 {
     enum { MP_MAX_LINKS = 63 };
+    enum ofputil_protocol usable_protocols;
     struct ofpact_multipath mp;
+    struct ofpbuf ofpacts;
+    char *action_string;
     bool ok = true;
     char *error;
     int n;
@@ -44,11 +48,15 @@ test_multipath_main(int argc, char *argv[])
         ovs_fatal(0, "usage: %s multipath_action", program_name);
     }
 
-    error = multipath_parse(&mp, argv[1]);
+    ofpbuf_init(&ofpacts, 0);
+    action_string = xasprintf("multipath(%s)", argv[1]);
+    error = ofpacts_parse_actions(action_string, &ofpacts, &usable_protocols);
+    free(action_string);
     if (error) {
         ovs_fatal(0, "%s", error);
     }
 
+    mp = *ofpact_get_MULTIPATH(ofpbuf_data(&ofpacts));
     for (n = 1; n <= MP_MAX_LINKS; n++) {
         enum { N_FLOWS = 65536 };
         double disruption, perfect, distribution;

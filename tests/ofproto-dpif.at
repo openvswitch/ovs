@@ -2316,7 +2316,7 @@ AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  cookie=0xb, n_packets=3, n_bytes=180, mpls,dl_src=50:55:55:55:55:55 actions=load:0x3e8->OXM_OF_MPLS_LABEL[[]],CONTROLLER:65535
  cookie=0xc, n_packets=3, n_bytes=180, dl_src=70:77:77:77:77:77 actions=push_mpls:0x8848,load:0x3e8->OXM_OF_MPLS_LABEL[[]],load:0x7->OXM_OF_MPLS_TC[[]],CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=180, dl_src=60:66:66:66:00:08 actions=pop_mpls:0x0806,resubmit(1,1)
- cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:01 actions=pop_mpls:0x0800,dec_ttl(0),CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:01 actions=pop_mpls:0x0800,dec_ttl,CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:02 actions=pop_mpls:0x0800,load:0xa000001->NXM_OF_IP_DST[[]],CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:03 actions=pop_mpls:0x0800,move:NXM_OF_IP_DST[[]]->NXM_OF_IP_SRC[[]],CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:04 actions=pop_mpls:0x0800,push:NXM_OF_IP_DST[[]],pop:NXM_OF_IP_SRC[[]],CONTROLLER:65535
@@ -2328,7 +2328,7 @@ AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:0b actions=pop_mpls:0x0800,mod_nw_src:10.0.0.1,CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:04:00 actions=pop_mpls:0x0800,push_mpls:0x8847,CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:04:01 actions=pop_mpls:0x0800,push_mpls:0x8848,dec_mpls_ttl,CONTROLLER:65535
- cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:04:10 actions=pop_mpls:0x0800,dec_ttl(0),push_mpls:0x8848,dec_mpls_ttl,CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:04:10 actions=pop_mpls:0x0800,dec_ttl,push_mpls:0x8848,dec_mpls_ttl,CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:05:00 actions=push_mpls:0x8848,pop_mpls:0x8847,CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:05:01 actions=push_mpls:0x8847,pop_mpls:0x8848,dec_mpls_ttl,CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:05:10 actions=push_mpls:0x8848,dec_mpls_ttl,pop_mpls:0x8847,dec_mpls_ttl,CONTROLLER:65535
@@ -2337,8 +2337,8 @@ AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  cookie=0xd, n_packets=3, n_bytes=198, dl_src=60:66:66:66:01:01 actions=pop_mpls:0x8847,dec_mpls_ttl,CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=198, dl_src=60:66:66:66:01:02 actions=pop_mpls:0x8848,load:0x3->OXM_OF_MPLS_TC[[]],CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=198, dl_src=60:66:66:66:02:00 actions=pop_mpls:0x8847,pop_mpls:0x0800,CONTROLLER:65535
- cookie=0xd, n_packets=3, n_bytes=198, dl_src=60:66:66:66:02:01 actions=pop_mpls:0x8848,pop_mpls:0x0800,dec_ttl(0),CONTROLLER:65535
- cookie=0xd, n_packets=3, n_bytes=198, dl_src=60:66:66:66:02:10 actions=pop_mpls:0x8847,dec_mpls_ttl,pop_mpls:0x0800,dec_ttl(0),CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=198, dl_src=60:66:66:66:02:01 actions=pop_mpls:0x8848,pop_mpls:0x0800,dec_ttl,CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=198, dl_src=60:66:66:66:02:10 actions=pop_mpls:0x8847,dec_mpls_ttl,pop_mpls:0x0800,dec_ttl,CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=210, dl_src=60:66:66:66:03:00 actions=pop_mpls:0x8848,pop_mpls:0x8848,CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=210, dl_src=60:66:66:66:03:01 actions=pop_mpls:0x8847,pop_mpls:0x8847,dec_mpls_ttl,CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=210, dl_src=60:66:66:66:03:10 actions=pop_mpls:0x8848,dec_mpls_ttl,pop_mpls:0x8848,dec_mpls_ttl,CONTROLLER:65535

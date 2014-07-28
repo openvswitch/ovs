@@ -1080,37 +1080,6 @@ nxm_parse_reg_move(struct ofpact_reg_move *move, const char *s)
     }
     return NULL;
 }
-
-/* Parses 's' as a "load" action, in the form described in ovs-ofctl(8), into
- * '*load'.
- *
- * Returns NULL if successful, otherwise a malloc()'d string describing the
- * error.  The caller is responsible for freeing the returned string. */
-char * WARN_UNUSED_RESULT
-nxm_parse_reg_load(struct ofpact_reg_load *load, const char *s)
-{
-    const char *full_s = s;
-    uint64_t value = strtoull(s, (char **) &s, 0);
-    char *error;
-
-    if (strncmp(s, "->", 2)) {
-        return xasprintf("%s: missing `->' following value", full_s);
-    }
-    s += 2;
-    error = mf_parse_subfield(&load->dst, s);
-    if (error) {
-        return error;
-    }
-
-    if (load->dst.n_bits < 64 && (value >> load->dst.n_bits) != 0) {
-        return xasprintf("%s: value %"PRIu64" does not fit into %d bits",
-                         full_s, value, load->dst.n_bits);
-    }
-
-    load->subvalue.be64[0] = htonll(0);
-    load->subvalue.be64[1] = htonll(value);
-    return NULL;
-}
 
 /* nxm_format_reg_move(), nxm_format_reg_load(). */
 
@@ -1133,45 +1102,6 @@ nxm_format_reg_load(const struct ofpact_reg_load *load, struct ds *s)
 }
 
 enum ofperr
-nxm_reg_move_from_openflow(const struct nx_action_reg_move *narm,
-                           struct ofpbuf *ofpacts)
-{
-    struct ofpact_reg_move *move;
-
-    move = ofpact_put_REG_MOVE(ofpacts);
-    move->src.field = mf_from_nxm_header(ntohl(narm->src));
-    move->src.ofs = ntohs(narm->src_ofs);
-    move->src.n_bits = ntohs(narm->n_bits);
-    move->dst.field = mf_from_nxm_header(ntohl(narm->dst));
-    move->dst.ofs = ntohs(narm->dst_ofs);
-    move->dst.n_bits = ntohs(narm->n_bits);
-
-    return nxm_reg_move_check(move, NULL);
-}
-
-enum ofperr
-nxm_reg_load_from_openflow(const struct nx_action_reg_load *narl,
-                           struct ofpbuf *ofpacts)
-{
-    struct ofpact_reg_load *load;
-
-    load = ofpact_put_REG_LOAD(ofpacts);
-    load->dst.field = mf_from_nxm_header(ntohl(narl->dst));
-    load->dst.ofs = nxm_decode_ofs(narl->ofs_nbits);
-    load->dst.n_bits = nxm_decode_n_bits(narl->ofs_nbits);
-    load->subvalue.be64[1] = narl->value;
-
-    /* Reject 'narl' if a bit numbered 'n_bits' or higher is set to 1 in
-     * narl->value. */
-    if (load->dst.n_bits < 64 &&
-        ntohll(narl->value) >> load->dst.n_bits) {
-        return OFPERR_OFPBAC_BAD_ARGUMENT;
-    }
-
-    return nxm_reg_load_check(load, NULL);
-}
-
-enum ofperr
 nxm_reg_move_check(const struct ofpact_reg_move *move, const struct flow *flow)
 {
     enum ofperr error;
@@ -1190,31 +1120,6 @@ nxm_reg_load_check(const struct ofpact_reg_load *load, const struct flow *flow)
     return mf_check_dst(&load->dst, flow);
 }
 
-void
-nxm_reg_move_to_nxast(const struct ofpact_reg_move *move,
-                      struct ofpbuf *openflow)
-{
-    struct nx_action_reg_move *narm;
-
-    narm = ofputil_put_NXAST_REG_MOVE(openflow);
-    narm->n_bits = htons(move->dst.n_bits);
-    narm->src_ofs = htons(move->src.ofs);
-    narm->dst_ofs = htons(move->dst.ofs);
-    narm->src = htonl(move->src.field->nxm_header);
-    narm->dst = htonl(move->dst.field->nxm_header);
-}
-
-void
-nxm_reg_load_to_nxast(const struct ofpact_reg_load *load,
-                      struct ofpbuf *openflow)
-{
-    struct nx_action_reg_load *narl;
-
-    narl = ofputil_put_NXAST_REG_LOAD(openflow);
-    narl->ofs_nbits = nxm_encode_ofs_nbits(load->dst.ofs, load->dst.n_bits);
-    narl->dst = htonl(load->dst.field->nxm_header);
-    narl->value = load->subvalue.be64[1];
-}
 
 /* nxm_execute_reg_move(), nxm_execute_reg_load(). */
 
@@ -1322,49 +1227,6 @@ nxm_format_stack_pop(const struct ofpact_stack *pop, struct ds *s)
     mf_format_subfield(&pop->subfield, s);
 }
 
-/* Common set for both push and pop actions. */
-static void
-stack_action_from_openflow__(const struct nx_action_stack *nasp,
-                                    struct ofpact_stack *stack_action)
-{
-    stack_action->subfield.field = mf_from_nxm_header(ntohl(nasp->field));
-    stack_action->subfield.ofs = ntohs(nasp->offset);
-    stack_action->subfield.n_bits = ntohs(nasp->n_bits);
-}
-
-static void
-nxm_stack_to_nxast__(const struct ofpact_stack *stack_action,
-                            struct nx_action_stack *nasp)
-{
-    nasp->offset = htons(stack_action->subfield.ofs);
-    nasp->n_bits = htons(stack_action->subfield.n_bits);
-    nasp->field = htonl(stack_action->subfield.field->nxm_header);
-}
-
-enum ofperr
-nxm_stack_push_from_openflow(const struct nx_action_stack *nasp,
-                             struct ofpbuf *ofpacts)
-{
-    struct ofpact_stack *push;
-
-    push = ofpact_put_STACK_PUSH(ofpacts);
-    stack_action_from_openflow__(nasp, push);
-
-    return nxm_stack_push_check(push, NULL);
-}
-
-enum ofperr
-nxm_stack_pop_from_openflow(const struct nx_action_stack *nasp,
-                             struct ofpbuf *ofpacts)
-{
-    struct ofpact_stack *pop;
-
-    pop = ofpact_put_STACK_POP(ofpacts);
-    stack_action_from_openflow__(nasp, pop);
-
-    return nxm_stack_pop_check(pop, NULL);
-}
-
 enum ofperr
 nxm_stack_push_check(const struct ofpact_stack *push,
                      const struct flow *flow)
@@ -1377,20 +1239,6 @@ nxm_stack_pop_check(const struct ofpact_stack *pop,
                     const struct flow *flow)
 {
     return mf_check_dst(&pop->subfield, flow);
-}
-
-void
-nxm_stack_push_to_nxast(const struct ofpact_stack *stack,
-                        struct ofpbuf *openflow)
-{
-    nxm_stack_to_nxast__(stack, ofputil_put_NXAST_STACK_PUSH(openflow));
-}
-
-void
-nxm_stack_pop_to_nxast(const struct ofpact_stack *stack,
-                       struct ofpbuf *openflow)
-{
-    nxm_stack_to_nxast__(stack, ofputil_put_NXAST_STACK_POP(openflow));
 }
 
 /* nxm_execute_stack_push(), nxm_execute_stack_pop(). */

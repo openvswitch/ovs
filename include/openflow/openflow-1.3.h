@@ -101,27 +101,6 @@ struct ofp13_instruction_meter {
 };
 OFP_ASSERT(sizeof(struct ofp13_instruction_meter) == 8);
 
-enum ofp13_action_type {
-    OFPAT13_OUTPUT       = 0,   /* Output to switch port. */
-    OFPAT13_COPY_TTL_OUT = 11,  /* Copy TTL "outwards" -- from next-to-outermost
-                                   to outermost */
-    OFPAT13_COPY_TTL_IN  = 12,  /* Copy TTL "inwards" -- from outermost to
-                                   next-to-outermost */
-    OFPAT13_SET_MPLS_TTL = 15,  /* MPLS TTL */
-    OFPAT13_DEC_MPLS_TTL = 16,  /* Decrement MPLS TTL */
-    OFPAT13_PUSH_VLAN    = 17,  /* Push a new VLAN tag */
-    OFPAT13_POP_VLAN     = 18,  /* Pop the outer VLAN tag */
-    OFPAT13_PUSH_MPLS    = 19,  /* Push a new MPLS Label Stack Entry */
-    OFPAT13_POP_MPLS     = 20,  /* Pop the outer MPLS Label Stack Entry */
-    OFPAT13_SET_QUEUE    = 21,  /* Set queue id when outputting to a port */
-    OFPAT13_GROUP        = 22,  /* Apply group. */
-    OFPAT13_SET_NW_TTL   = 23,  /* IP TTL. */
-    OFPAT13_DEC_NW_TTL   = 24,  /* Decrement IP TTL. */
-    OFPAT13_SET_FIELD    = 25,  /* Set a header field using OXM TLV format. */
-    OFPAT13_PUSH_PBB     = 26,  /* Push a new PBB service tag (I-TAG) */
-    OFPAT13_POP_PBB      = 27   /* Pop the outer PBB service tag (I-TAG) */
-};
-
 /* enum ofp_config_flags value OFPC_INVALID_TTL_TO_CONTROLLER
  * is deprecated in OpenFlow 1.3 */
 

@@ -66,15 +66,19 @@ slave_enabled_cb(ofp_port_t slave_id, void *aux)
 }
 
 static struct ofpact_bundle *
-parse_bundle_actions(char *actions)
+parse_bundle_actions(const char *args)
 {
+    enum ofputil_protocol usable_protocols;
     struct ofpact_bundle *bundle;
     struct ofpbuf ofpacts;
     struct ofpact *action;
+    char *action_string;
     char *error;
 
     ofpbuf_init(&ofpacts, 0);
-    error = bundle_parse_load(actions, &ofpacts);
+    action_string = xasprintf("bundle_load(%s)", args);
+    error = ofpacts_parse_actions(action_string, &ofpacts, &usable_protocols);
+    free(action_string);
     if (error) {
         ovs_fatal(0, "%s", error);
     }

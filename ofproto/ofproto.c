@@ -3195,7 +3195,7 @@ handle_table_features_request(struct ofconn *ofconn,
     ofpraw_pull_assert(&msg);
     if (ofpbuf_size(&msg) || ofpmp_more(request)) {
         return OFPERR_OFPTFFC_EPERM;
-     }
+    }
 
     query_tables(ofproto, &features, NULL);
 

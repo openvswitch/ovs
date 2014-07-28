@@ -137,7 +137,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/ofp-print.c \
 	lib/ofp-print.h \
 	lib/ofp-util.c \
-	lib/ofp-util.def \
 	lib/ofp-util.h \
 	lib/ofp-version-opt.h \
 	lib/ofp-version-opt.c \
@@ -419,6 +418,12 @@ lib/dirs.c: lib/dirs.c.in Makefile
 		-e 's,[@]pkgdatadir[@],"$(pkgdatadir)",g') \
 	     > lib/dirs.c.tmp
 	mv lib/dirs.c.tmp lib/dirs.c
+
+lib/ofp-actions.inc: lib/ofp-actions.c $(srcdir)/build-aux/extract-ofp-actions
+	$(run_python) $(srcdir)/build-aux/extract-ofp-actions $< > $@.tmp
+	mv $@.tmp $@
+lib/ofp-actions.lo: lib/ofp-actions.inc
+EXTRA_DIST += build-aux/extract-ofp-actions lib/ofp-errors.inc
 
 $(srcdir)/lib/ofp-errors.inc: \
 	lib/ofp-errors.h include/openflow/openflow-common.h \
