@@ -1690,7 +1690,7 @@ reload:
         if (lc++ > 1024) {
             ovsrcu_quiesce();
 
-            /* TODO: need completely userspace based signaling method.
+            /* XXX: need completely userspace based signaling method.
              * to keep this thread entirely in userspace.
              * For now using atomic counter. */
             lc = 0;
@@ -2112,7 +2112,7 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
 
         for (i = 0; i < cnt; i++) {
 
-            /* TODO: this is slow. Use RSS hash in the future */
+            /* XXX: this is slow. Use RSS hash in the future */
             miniflow_extract(&packets[i]->ofpbuf, md, &key.flow);
 
             if (hash_act->hash_alg == OVS_HASH_ALG_L4) {

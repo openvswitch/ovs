@@ -64,7 +64,7 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 #define MBUF_SIZE(mtu)       (MTU_TO_MAX_LEN(mtu) + (512) + \
                              sizeof(struct rte_mbuf) + RTE_PKTMBUF_HEADROOM)
 
-/* TODO: mempool size should be based on system resources. */
+/* XXX: mempool size should be based on system resources. */
 #define NB_MBUF              (4096 * 64)
 #define MP_CACHE_SZ          (256 * 2)
 #define SOCKET0              0
@@ -74,7 +74,7 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 #define NIC_PORT_RX_Q_SIZE 2048  /* Size of Physical NIC RX Queue, Max (n+32<=4096)*/
 #define NIC_PORT_TX_Q_SIZE 2048  /* Size of Physical NIC TX Queue, Max (n+32<=4096)*/
 
-/* TODO: Needs per NIC value for these constants. */
+/* XXX: Needs per NIC value for these constants. */
 #define RX_PTHRESH 32 /* Default values of RX prefetch threshold reg. */
 #define RX_HTHRESH 32 /* Default values of RX host threshold reg. */
 #define RX_WTHRESH 16 /* Default values of RX write-back threshold reg. */
@@ -215,7 +215,7 @@ is_dpdk_class(const struct netdev_class *class)
     return class->construct == netdev_dpdk_construct;
 }
 
-/* TODO: use dpdk malloc for entire OVS. infact huge page shld be used
+/* XXX: use dpdk malloc for entire OVS. infact huge page shld be used
  * for all other sengments data, bss and text. */
 
 static void *
@@ -478,7 +478,7 @@ netdev_dpdk_init(struct netdev *netdev_, unsigned int port_no) OVS_REQUIRES(dpdk
     netdev->mtu = ETHER_MTU;
     netdev->max_packet_len = MTU_TO_MAX_LEN(netdev->mtu);
 
-    /* TODO: need to discover device node at run time. */
+    /* XXX: need to discover device node at run time. */
     netdev->socket_id = SOCKET0;
 
     netdev->dpdk_mp = dpdk_mp_get(netdev->socket_id, netdev->mtu);
@@ -569,7 +569,7 @@ netdev_dpdk_get_config(const struct netdev *netdev_, struct smap *args)
 
     ovs_mutex_lock(&dev->mutex);
 
-    /* TODO: Allow to configure number of queues. */
+    /* XXX: Allow to configure number of queues. */
     smap_add_format(args, "configured_rx_queues", "%u", netdev_->n_rxq);
     smap_add_format(args, "configured_tx_queues", "%u", netdev_->n_rxq);
     ovs_mutex_unlock(&dev->mutex);

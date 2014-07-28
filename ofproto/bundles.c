@@ -143,7 +143,7 @@ ofp_bundle_open(struct ofconn *ofconn, uint32_t id, uint16_t flags)
         return OFPERR_OFPBFC_BAD_ID;
     }
 
-    /* TODO: Check the limit of open bundles */
+    /* XXX: Check the limit of open bundles */
 
     bundle = ofp_bundle_create(id, flags);
     bundle->state = BS_OPEN;
@@ -198,7 +198,7 @@ ofp_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
         return OFPERR_OFPBFC_BAD_FLAGS;
     }
 
-    /* TODO: actual commit */
+    /* XXX: actual commit */
 
     return OFPERR_OFPBFC_MSG_UNSUP;
 }
