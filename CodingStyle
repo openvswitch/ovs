@@ -3,7 +3,9 @@
 
 This file describes the coding style used in most C files in the Open
 vSwitch distribution.  However, Linux kernel code datapath directory
-follows the Linux kernel's established coding conventions.
+follows the Linux kernel's established coding conventions.  For the
+Windows kernel datapath code, use the coding style described in
+datapath-windows/CodingStyle.
 
 The following GNU indent options approximate this style:
 

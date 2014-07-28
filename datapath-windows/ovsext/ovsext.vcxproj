@@ -1,0 +1,164 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Win8.1 Debug|x64">
+      <Configuration>Win8.1 Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Win8 Debug|x64">
+      <Configuration>Win8 Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Win8.1 Release|x64">
+      <Configuration>Win8.1 Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Win8 Release|x64">
+      <Configuration>Win8 Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="PropertySheets">
+    <DriverType>WDM</DriverType>
+    <ConfigurationType>Driver</ConfigurationType>
+  </PropertyGroup>
+  <PropertyGroup Label="Globals">
+    <VCTargetsPath Condition="'$(VCTargetsPath11)' != '' and '$(VisualStudioVersion)' == '11.0'">$(VCTargetsPath11)</VCTargetsPath>
+    <Configuration>Win8 Debug</Configuration>
+    <Platform Condition="'$(Platform)' == ''">Win32</Platform>
+    <SampleGuid>{0D37F250-E766-44C7-90B4-D7E07E77D1AA}</SampleGuid>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{63FE215D-98BE-4440-8081-C6160EFB80FA}</ProjectGuid>
+    <RootNamespace>$(MSBuildProjectName)</RootNamespace>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|x64'">
+    <TargetVersion>WindowsV6.3</TargetVersion>
+    <UseDebugLibraries>True</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver8.1</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|x64'">
+    <TargetVersion>Win8</TargetVersion>
+    <UseDebugLibraries>True</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver8.1</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|x64'">
+    <TargetVersion>WindowsV6.3</TargetVersion>
+    <UseDebugLibraries>False</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver8.1</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Win8 Release|x64'">
+    <TargetVersion>Win8</TargetVersion>
+    <UseDebugLibraries>False</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver8.1</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+    <OutDir>$(IntDir)</OutDir>
+  </PropertyGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Win8 Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" />
+  </ImportGroup>
+  <ItemGroup Label="WrappedTaskItems">
+    <ClInclude Include="OvsAtomic.h" />
+    <ClInclude Include="OvsBufferMgmt.h" />
+    <ClInclude Include="OvsChecksum.h" />
+    <ClInclude Include="OvsDebug.h" />
+    <ClInclude Include="OvsEth.h" />
+    <ClInclude Include="OvsEvent.h" />
+    <ClInclude Include="OvsFlow.h" />
+    <ClInclude Include="OvsIoctl.h" />
+    <ClInclude Include="OvsIpHelper.h" />
+    <ClInclude Include="OvsJhash.h" />
+    <ClInclude Include="OvsNetProto.h" />
+    <ClInclude Include="OvsOid.h" />
+    <ClInclude Include="OvsPacketParser.h" />
+    <ClInclude Include="OvsSwitch.h" />
+    <ClInclude Include="OvsTunnel.h" />
+    <ClInclude Include="OvsTunnelIntf.h" />
+    <ClInclude Include="OvsTypes.h" />
+    <ClInclude Include="OvsUser.h" />
+    <ClInclude Include="OvsUtil.h" />
+    <ClInclude Include="OvsVport.h" />
+    <ClInclude Include="OvsVxlan.h" />
+    <ClInclude Include="precomp.h" />
+  </ItemGroup>
+  <PropertyGroup>
+    <TargetName>OVSExt</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1;OVS_WIN_DP=1</PreprocessorDefinitions>
+    </ClCompile>
+    <Midl>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1</PreprocessorDefinitions>
+    </Midl>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup>
+    <Link>
+      <AdditionalDependencies>%(AdditionalDependencies);$(DDK_LIB_PATH)\ndis.lib;$(DDK_LIB_PATH)\fwpkclnt.lib;$(SDK_LIB_PATH)\uuid.lib;$(DDK_LIB_PATH)\netio.lib</AdditionalDependencies>
+    </Link>
+    <ClCompile>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <WarningLevel>Level4</WarningLevel>
+      <ExceptionHandling>
+      </ExceptionHandling>
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|x64'">$(IntDir);%(AdditionalIncludeDirectories);..\..</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|x64'">$(IntDir);%(AdditionalIncludeDirectories);..\..</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Win8 Release|x64'">$(IntDir);%(AdditionalIncludeDirectories);..\..</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|x64'">$(IntDir);%(AdditionalIncludeDirectories);..\..</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="OvsDriver.c" />
+    <ClCompile Include="OvsJhash.c" />
+    <ClCompile Include="OvsOid.c" />
+    <ClCompile Include="OvsPacketIO.c" />
+    <ClCompile Include="OvsPacketParser.c" />
+    <ClCompile Include="OvsBufferMgmt.c" />
+    <ClCompile Include="OvsChecksum.c" />
+    <ClCompile Include="OvsIpHelper.c" />
+    <ClCompile Include="OvsTunnel.c" />
+    <ClCompile Include="OvsTunnelFilter.c" />
+    <ClCompile Include="OvsVxlan.c" />
+    <ClCompile Include="OvsActions.c" />
+    <ClCompile Include="OvsDebug.c" />
+    <ClCompile Include="OvsEvent.c" />
+    <ClCompile Include="OvsFlow.c" />
+    <ClCompile Include="OvsUser.c" />
+    <ClCompile Include="OvsIoctl.c" />
+    <ClCompile Include="OvsSwitch.c" />
+    <ClCompile Include="OvsUtil.c" />
+    <ClCompile Include="OvsVport.c" />
+    <ClCompile Include="precompsrc.c">
+      <AdditionalIncludeDirectories>;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreCompiledHeaderFile>precomp.h</PreCompiledHeaderFile>
+      <PreCompiledHeader>Create</PreCompiledHeader>
+      <PreCompiledHeaderOutputFile>$(IntDir)\precomp.h.pch</PreCompiledHeaderOutputFile>
+    </ClCompile>
+    <ResourceCompile Include="ovsext.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Inf Exclude="@(Inf)" Include="*.inf" />
+    <FilesToPackage Include="$(TargetPath)" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Exclude="@(None)" Include="*.txt;*.htm;*.html" />
+    <None Exclude="@(None)" Include="*.ico;*.cur;*.bmp;*.dlg;*.rct;*.gif;*.jpg;*.jpeg;*.wav;*.jpe;*.tiff;*.tif;*.png;*.rc2" />
+    <None Exclude="@(None)" Include="*.def;*.bat;*.hpj;*.asmx" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>
