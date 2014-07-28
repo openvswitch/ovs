@@ -2085,6 +2085,7 @@ These options currently affect only \fBdump\-flows\fR output.
 \fBovs\-ofctl\fR detaches only when executing the \fBmonitor\fR or \
 \fBsnoop\fR commands.
 .so lib/daemon.man
+.so lib/unixctl.man
 .SS "Public Key Infrastructure Options"
 .so lib/ssl.man
 .so lib/vlog.man
