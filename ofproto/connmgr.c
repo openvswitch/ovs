@@ -186,8 +186,8 @@ struct connmgr {
     char *local_port_name;
 
     /* OpenFlow connections. */
-    struct hmap controllers;   /* Controller "struct ofconn"s. */
-    struct list all_conns;     /* Contains "struct ofconn"s. */
+    struct hmap controllers;   /* All OFCONN_PRIMARY controllers. */
+    struct list all_conns;     /* All controllers. */
     uint64_t master_election_id; /* monotonically increasing sequence number
                                   * for master election */
     bool master_election_id_defined;
@@ -933,7 +933,7 @@ ofconn_set_role(struct ofconn *ofconn, enum ofp12_controller_role role)
     if (role != ofconn->role && role == OFPCR12_ROLE_MASTER) {
         struct ofconn *other;
 
-        HMAP_FOR_EACH (other, hmap_node, &ofconn->connmgr->controllers) {
+        LIST_FOR_EACH (other, node, &ofconn->connmgr->all_conns) {
             if (other->role == OFPCR12_ROLE_MASTER) {
                 other->role = OFPCR12_ROLE_SLAVE;
                 ofconn_send_role_status(other, OFPCR12_ROLE_SLAVE, OFPCRR_MASTER_REQUEST);
