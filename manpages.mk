@@ -146,6 +146,7 @@ utilities/ovs-ofctl.8: \
 	lib/daemon.man \
 	lib/ofp-version.man \
 	lib/ssl.man \
+	lib/unixctl.man \
 	lib/vconn-active.man \
 	lib/vlog.man
 utilities/ovs-ofctl.8.in:
@@ -153,6 +154,7 @@ lib/common.man:
 lib/daemon.man:
 lib/ofp-version.man:
 lib/ssl.man:
+lib/unixctl.man:
 lib/vconn-active.man:
 lib/vlog.man:
 

@@ -91,6 +91,10 @@ static int verbosity;
  * "snoop" command? */
 static bool timestamp;
 
+/* --unixctl-path: Path to use for unixctl server, for "monitor" and "snoop"
+     commands. */
+static char *unixctl_path;
+
 /* --sort, --rsort: Sort order. */
 enum sort_order { SORT_ASC, SORT_DESC };
 struct sort_criterion {
@@ -150,6 +154,7 @@ parse_options(int argc, char *argv[])
         OPT_TIMESTAMP,
         OPT_SORT,
         OPT_RSORT,
+        OPT_UNIXCTL,
         DAEMON_OPTION_ENUMS,
         OFP_VERSION_OPTION_ENUMS,
         VLOG_OPTION_ENUMS
@@ -164,6 +169,7 @@ parse_options(int argc, char *argv[])
         {"timestamp", no_argument, NULL, OPT_TIMESTAMP},
         {"sort", optional_argument, NULL, OPT_SORT},
         {"rsort", optional_argument, NULL, OPT_RSORT},
+        {"unixctl",     required_argument, NULL, OPT_UNIXCTL},
         {"help", no_argument, NULL, 'h'},
         DAEMON_LONG_OPTIONS,
         OFP_VERSION_LONG_OPTIONS,
@@ -252,6 +258,10 @@ parse_options(int argc, char *argv[])
 
         case OPT_RSORT:
             add_sort_criterion(SORT_DESC, optarg);
+            break;
+
+        case OPT_UNIXCTL:
+            unixctl_path = optarg;
             break;
 
         DAEMON_OPTION_HANDLERS
@@ -362,6 +372,7 @@ usage(void)
            "  -t, --timeout=SECS          give up after SECS seconds\n"
            "  --sort[=field]              sort in ascending order\n"
            "  --rsort[=field]             sort in descending order\n"
+           "  --unixctl=SOCKET            set control socket name\n"
            "  -h, --help                  display this help message\n"
            "  -V, --version               display version information\n");
     exit(EXIT_SUCCESS);
@@ -1438,7 +1449,7 @@ monitor_vconn(struct vconn *vconn, bool reply_to_echo_requests)
 
     daemon_save_fd(STDERR_FILENO);
     daemonize_start();
-    error = unixctl_server_create(NULL, &server);
+    error = unixctl_server_create(unixctl_path, &server);
     if (error) {
         ovs_fatal(error, "failed to create unixctl server");
     }
