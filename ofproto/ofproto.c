@@ -3180,6 +3180,38 @@ handle_table_stats_request(struct ofconn *ofconn,
     return 0;
 }
 
+static enum ofperr
+handle_table_features_request(struct ofconn *ofconn,
+                              const struct ofp_header *request)
+{
+    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
+    struct ofputil_table_features *features;
+    struct list replies;
+    struct ofpbuf msg;
+    size_t i;
+
+    ofpbuf_use_const(&msg, request, ntohs(request->length));
+    ofpraw_pull_assert(&msg);
+    if (ofpbuf_size(&msg) || ofpmp_more(request)) {
+        return OFPERR_OFPTFFC_EPERM;
+     }
+
+    query_tables(ofproto, &features, NULL);
+
+    ofpmp_init(&replies, request);
+    for (i = 0; i < ofproto->n_tables; i++) {
+        if (!(ofproto->tables[i].flags & OFTABLE_HIDDEN)) {
+            ofputil_append_table_features_reply(&features[i], &replies);
+
+        }
+    }
+    ofconn_send_replies(ofconn, &replies);
+
+    free(features);
+
+    return 0;
+}
+
 static void
 append_port_stat(struct ofport *port, struct list *replies)
 {
@@ -5989,6 +6021,9 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPTYPE_TABLE_STATS_REQUEST:
         return handle_table_stats_request(ofconn, oh);
 
+    case OFPTYPE_TABLE_FEATURES_STATS_REQUEST:
+        return handle_table_features_request(ofconn, oh);
+
     case OFPTYPE_PORT_STATS_REQUEST:
         return handle_port_stats_request(ofconn, oh);
 
@@ -6053,7 +6088,6 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPTYPE_METER_STATS_REPLY:
     case OFPTYPE_METER_CONFIG_STATS_REPLY:
     case OFPTYPE_METER_FEATURES_STATS_REPLY:
-    case OFPTYPE_TABLE_FEATURES_STATS_REQUEST:
     case OFPTYPE_TABLE_FEATURES_STATS_REPLY:
     case OFPTYPE_ROLE_STATUS:
     default:

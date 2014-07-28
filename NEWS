@@ -10,6 +10,7 @@ Post-v2.3.0
    - The OVS database now reports controller rate limiting statistics.
    - OpenFlow:
      * OpenFlow 1.5 (draft) extended registers are now supported.
+     * OpenFlow 1.3+ table features requests are now supported (read-only).
 
 
 v2.3.0 - xx xxx xxxx

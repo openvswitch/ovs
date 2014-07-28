@@ -82,9 +82,6 @@ didn't compare the specs carefully yet.)
       Currently we always report OFPBRC_MULTIPART_BUFFER_OVERFLOW.
       [optional for OF1.3+]
 
-    * Add OFPMP_TABLE_FEATURES statistics.  Alexander Wu has posted a
-      patch series.  [optional for OF1.3+]
-
     * IPv6 extension header handling support.  Fully implementing this
       requires kernel support.  This likely will take some careful and
       probably time-consuming design work.  The actual coding, once
