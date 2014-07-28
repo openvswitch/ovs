@@ -201,6 +201,21 @@ match_set_reg_masked(struct match *match, unsigned int reg_idx,
 }
 
 void
+match_set_xreg(struct match *match, unsigned int xreg_idx, uint64_t value)
+{
+    match_set_xreg_masked(match, xreg_idx, value, UINT64_MAX);
+}
+
+void
+match_set_xreg_masked(struct match *match, unsigned int xreg_idx,
+                      uint64_t value, uint64_t mask)
+{
+    ovs_assert(xreg_idx < FLOW_N_XREGS);
+    flow_wildcards_set_xreg_mask(&match->wc, xreg_idx, mask);
+    flow_set_xreg(&match->flow, xreg_idx, value & mask);
+}
+
+void
 match_set_metadata(struct match *match, ovs_be64 metadata)
 {
     match_set_metadata_masked(match, metadata, OVS_BE64_MAX);

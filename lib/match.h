@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,6 +50,9 @@ void match_set_recirc_id_masked(struct match *, uint32_t value, uint32_t mask);
 void match_set_reg(struct match *, unsigned int reg_idx, uint32_t value);
 void match_set_reg_masked(struct match *, unsigned int reg_idx,
                           uint32_t value, uint32_t mask);
+void match_set_xreg(struct match *, unsigned int xreg_idx, uint64_t value);
+void match_set_xreg_masked(struct match *, unsigned int xreg_idx,
+                           uint64_t value, uint64_t mask);
 void match_set_metadata(struct match *, ovs_be64 metadata);
 void match_set_metadata_masked(struct match *,
                                ovs_be64 metadata, ovs_be64 mask);

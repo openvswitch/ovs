@@ -8,6 +8,8 @@ Post-v2.3.0
      release. The protocol is documented at
      http://tools.ietf.org/html/draft-gross-geneve-00
    - The OVS database now reports controller rate limiting statistics.
+   - OpenFlow:
+     * OpenFlow 1.5 (draft) extended registers are now supported.
 
 
 v2.3.0 - xx xxx xxxx

@@ -40,8 +40,15 @@ struct pkt_metadata;
  * failures in places which likely need to be updated. */
 #define FLOW_WC_SEQ 27
 
+/* Number of Open vSwitch extension 32-bit registers. */
 #define FLOW_N_REGS 8
 BUILD_ASSERT_DECL(FLOW_N_REGS <= NXM_NX_MAX_REGS);
+
+/* Number of OpenFlow 1.5+ 64-bit registers.
+ *
+ * Each of these overlays a pair of Open vSwitch 32-bit registers, so there
+ * are half as many of them.*/
+#define FLOW_N_XREGS (FLOW_N_REGS / 2)
 
 /* Used for struct flow's dl_type member for frames that have no Ethernet
  * type, that is, pure 802.2 frames. */
@@ -208,6 +215,19 @@ void flow_set_mpls_lse(struct flow *, int idx, ovs_be32 lse);
 
 void flow_compose(struct ofpbuf *, const struct flow *);
 
+static inline uint64_t
+flow_get_xreg(const struct flow *flow, int idx)
+{
+    return ((uint64_t) flow->regs[idx * 2] << 32) | flow->regs[idx * 2 + 1];
+}
+
+static inline void
+flow_set_xreg(struct flow *flow, int idx, uint64_t value)
+{
+    flow->regs[idx * 2] = value >> 32;
+    flow->regs[idx * 2 + 1] = value;
+}
+
 static inline int
 flow_compare_3way(const struct flow *a, const struct flow *b)
 {
@@ -291,6 +311,8 @@ bool flow_wildcards_is_catchall(const struct flow_wildcards *);
 
 void flow_wildcards_set_reg_mask(struct flow_wildcards *,
                                  int idx, uint32_t mask);
+void flow_wildcards_set_xreg_mask(struct flow_wildcards *,
+                                  int idx, uint64_t mask);
 
 void flow_wildcards_and(struct flow_wildcards *dst,
                         const struct flow_wildcards *src1,

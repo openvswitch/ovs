@@ -1084,7 +1084,22 @@ indicates that the corresponding bit in \fIvalue\fR must match
 exactly, and a 0-bit wildcards that bit.
 .IP
 When a packet enters an OpenFlow switch, all of the registers are set
-to 0.  Only explicit Nicira extension actions change register values.
+to 0.  Only explicit actions change register values.
+.
+.IP "\fBxreg\fIidx\fB=\fIvalue\fR[\fB/\fImask\fR]"
+Matches \fIvalue\fR either exactly or with optional \fImask\fR in
+64-bit ``extended register'' number \fIidx\fR.  Each of the 64-bit
+extended registers overlays two of the 32-bit registers: \fBxreg0\fR
+overlays \fBreg0\fR and \fBreg1\fR, with \fBreg0\fR supplying the
+most-significant bits of \fBxreg0\fR and \fBreg1\fR the
+least-significant.  f\fBxreg1\fR similarly overlays \fBreg2\fR and
+\fBreg3\fR, and so on.
+.IP
+These fields were added in Open vSwitch 2.3 to conform with the
+OpenFlow 1.5 (draft) specification.  OpenFlow 1.5 calls these fields
+just the ``packet registers,'' but Open vSwitch already had 32-bit
+registers by that name, which is why Open vSwitch refers to the
+standard registers as ``extended registers''.
 .
 .IP \fBpkt_mark=\fIvalue\fR[\fB/\fImask\fR]
 Matches packet metadata mark \fIvalue\fR either exactly or with optional

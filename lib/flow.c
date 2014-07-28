@@ -898,6 +898,14 @@ flow_wildcards_set_reg_mask(struct flow_wildcards *wc, int idx, uint32_t mask)
     wc->masks.regs[idx] = mask;
 }
 
+/* Sets the wildcard mask for register 'idx' in 'wc' to 'mask'.
+ * (A 0-bit indicates a wildcard bit.) */
+void
+flow_wildcards_set_xreg_mask(struct flow_wildcards *wc, int idx, uint64_t mask)
+{
+    flow_set_xreg(&wc->masks, idx, mask);
+}
+
 /* Calculates the 5-tuple hash from the given miniflow.
  * This returns the same value as flow_hash_5tuple for the corresponding
  * flow. */

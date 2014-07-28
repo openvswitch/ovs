@@ -68,6 +68,7 @@ enum ofp12_oxm_class {
     OFPXMC12_NXM_0          = 0x0000, /* Backward compatibility with NXM */
     OFPXMC12_NXM_1          = 0x0001, /* Backward compatibility with NXM */
     OFPXMC12_OPENFLOW_BASIC = 0x8000, /* Basic class for OpenFlow */
+    OFPXMC15_PACKET_REGS    = 0x8001, /* Packet registers (pipeline fields). */
     OFPXMC12_EXPERIMENTER   = 0xffff, /* Experimenter class */
 };
 
@@ -196,6 +197,9 @@ enum oxm12_ofb_match_fields {
 #define OXM_OF_PBB_UCA        OXM_HEADER   (OFPXMT14_OFB_PBB_UCA, 1)
 #define OXM_OF_TCP_FLAGS      OXM_HEADER   (OFPXMT15_OFB_TCP_FLAGS, 2)
 #define OXM_OF_TCP_FLAGS_W    OXM_HEADER_W (OFPXMT15_OFB_TCP_FLAGS, 2)
+
+#define OXM_OF_PKT_REG(N)    (NXM_HEADER  (OFPXMC15_PACKET_REGS, N, 8))
+#define OXM_OF_PKT_REG_W(N)  (NXM_HEADER_W(OFPXMC15_PACKET_REGS, N, 8))
 
 /* The VLAN id is 12-bits, so we can use the entire 16 bits to indicate
  * special conditions.

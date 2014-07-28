@@ -60,6 +60,15 @@ enum OVS_PACKED_ENUM mf_field_id {
 #error "Need to update MFF_REG* to match FLOW_N_REGS"
 #endif
 
+#if FLOW_N_XREGS == 4
+    MFF_XREG0,                  /* be32 */
+    MFF_XREG1,                  /* be32 */
+    MFF_XREG2,                  /* be32 */
+    MFF_XREG3,                  /* be32 */
+#else
+#error "Need to update MFF_REG* to match FLOW_N_XREGS"
+#endif
+
     /* L2. */
     MFF_ETH_SRC,                /* mac */
     MFF_ETH_DST,                /* mac */
@@ -141,13 +150,22 @@ struct mf_bitmap {
 #define MF_BITMAP_INITIALIZER { { [0] = 0 } }
 
 /* Use this macro as CASE_MFF_REGS: in a switch statement to choose all of the
- * MFF_REGx cases. */
+ * MFF_REGn cases. */
 #if FLOW_N_REGS == 8
 #define CASE_MFF_REGS                                           \
     case MFF_REG0: case MFF_REG1: case MFF_REG2: case MFF_REG3: \
     case MFF_REG4: case MFF_REG5: case MFF_REG6: case MFF_REG7
 #else
 #error "Need to update CASE_MFF_REGS to match FLOW_N_REGS"
+#endif
+
+/* Use this macro as CASE_MFF_XREGS: in a switch statement to choose all of the
+ * MFF_REGn cases. */
+#if FLOW_N_XREGS == 4
+#define CASE_MFF_XREGS                                              \
+    case MFF_XREG0: case MFF_XREG1: case MFF_XREG2: case MFF_XREG3
+#else
+#error "Need to update CASE_MFF_XREGS to match FLOW_N_XREGS"
 #endif
 
 /* Prerequisites for matching a field.
