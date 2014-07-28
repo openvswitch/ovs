@@ -4707,6 +4707,10 @@ ofputil_decode_table_features(struct ofpbuf *msg,
         if (error) {
             return error;
         }
+        printf ("type=%d:\n", type);
+        ovs_hex_dump(stdout, ofpbuf_data(&payload), ofpbuf_size(&payload),
+                     0, false);
+        printf ("\n");
 
         switch ((enum ofp13_table_feature_prop_type) type) {
         case OFPTFPT13_INSTRUCTIONS:

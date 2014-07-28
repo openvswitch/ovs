@@ -481,10 +481,17 @@ enum ofp_table {
 enum ofp_table_config {
     /* OpenFlow 1.1 and 1.2 defined this field as shown.
      * OpenFlow 1.3 and later mark this field as deprecated, but have not
-     * reused it for any new purpose. */
+     * reused it for any new purpose.
+     *
+     * OFPTC11_TABLE_MISS_DEFAULT is not valid in the wire.  Open vSwitch uses
+     * it internally to provide different default behavior on each protocol
+     * version.  That is, on OpenFlow 1.0 through 1.2 connections, the packet
+     * is sent to the controller, and with OpenFlow 1.3 and later, the packet
+     * is not sent. */
     OFPTC11_TABLE_MISS_CONTROLLER = 0 << 0, /* Send to controller. */
     OFPTC11_TABLE_MISS_CONTINUE   = 1 << 0, /* Go to next table, like OF1.0. */
     OFPTC11_TABLE_MISS_DROP       = 2 << 0, /* Drop the packet. */
+    OFPTC11_TABLE_MISS_DEFAULT    = 3 << 0, /* Protocol default behavior. */
     OFPTC11_TABLE_MISS_MASK       = 3 << 0,
 
     /* OpenFlow 1.4. */

@@ -2803,6 +2803,7 @@ query_tables(struct ofproto *ofproto,
         f->metadata_match = OVS_BE64_MAX;
         f->metadata_write = OVS_BE64_MAX;
         atomic_read(&ofproto->tables[i].config, &config);
+        VLOG_INFO("read config as %u\n", config);
         f->config = config;
         f->max_entries = 1000000;
 
@@ -3202,7 +3203,6 @@ handle_table_features_request(struct ofconn *ofconn,
     for (i = 0; i < ofproto->n_tables; i++) {
         if (!(ofproto->tables[i].flags & OFTABLE_HIDDEN)) {
             ofputil_append_table_features_reply(&features[i], &replies);
-
         }
     }
     ofconn_send_replies(ofconn, &replies);

@@ -974,7 +974,7 @@ ofp_print_table_miss_config(struct ds *string, const uint32_t config)
         ds_put_cstr(string, "drop\n");
         break;
     default:
-        ds_put_cstr(string, "Unknown\n");
+        ds_put_format(string, "Unknown (%d)\n", config);
         break;
     }
 }

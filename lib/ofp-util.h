@@ -596,7 +596,8 @@ struct ofputil_table_features {
     char name[OFP_MAX_TABLE_NAME_LEN];
     ovs_be64 metadata_match;  /* Bits of metadata table can match. */
     ovs_be64 metadata_write;  /* Bits of metadata table can write. */
-    uint32_t config;          /* Bitmap of OFPTC_* values */
+    enum ofproto_table_config config; /* Table configuration */
+    //uint32_t config;          /* Bitmap of OFPTC_* values */
     uint32_t max_entries;     /* Max number of entries supported. */
 
     /* Table features related to instructions.  There are two instances:
