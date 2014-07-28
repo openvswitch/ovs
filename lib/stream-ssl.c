@@ -1195,6 +1195,7 @@ read_cert_file(const char *file_name, X509 ***certs, size_t *n_certs)
             free(*certs);
             *certs = NULL;
             *n_certs = 0;
+            fclose(file);
             return EIO;
         }
 
