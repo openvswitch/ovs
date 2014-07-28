@@ -55,15 +55,12 @@ struct ofp_prop_header {
     ovs_be16 len;
 };
 
-/* Pulls a property, beginning with struct ofp_prop_header, from the beginning
- * of 'msg'.  Stores the type of the property in '*typep' and, if 'property' is
- * nonnull, the entire property, including the header, in '*property'.  Returns
- * 0 if successful, otherwise an error code. */
 static enum ofperr
-ofputil_pull_property(struct ofpbuf *msg, struct ofpbuf *property,
-                      uint16_t *typep)
+ofputil_pull_property__(struct ofpbuf *msg, struct ofpbuf *property,
+                        unsigned int alignment, uint16_t *typep)
 {
     struct ofp_prop_header *oph;
+    unsigned int padded_len;
     unsigned int len;
 
     if (ofpbuf_size(msg) < sizeof *oph) {
@@ -72,7 +69,8 @@ ofputil_pull_property(struct ofpbuf *msg, struct ofpbuf *property,
 
     oph = ofpbuf_data(msg);
     len = ntohs(oph->len);
-    if (len < sizeof *oph || ROUND_UP(len, 8) > ofpbuf_size(msg)) {
+    padded_len = ROUND_UP(len, alignment);
+    if (len < sizeof *oph || padded_len > ofpbuf_size(msg)) {
         return OFPERR_OFPBPC_BAD_LEN;
     }
 
@@ -80,8 +78,19 @@ ofputil_pull_property(struct ofpbuf *msg, struct ofpbuf *property,
     if (property) {
         ofpbuf_use_const(property, ofpbuf_data(msg), len);
     }
-    ofpbuf_pull(msg, ROUND_UP(len, 8));
+    ofpbuf_pull(msg, padded_len);
     return 0;
+}
+
+/* Pulls a property, beginning with struct ofp_prop_header, from the beginning
+ * of 'msg'.  Stores the type of the property in '*typep' and, if 'property' is
+ * nonnull, the entire property, including the header, in '*property'.  Returns
+ * 0 if successful, otherwise an error code. */
+static enum ofperr
+ofputil_pull_property(struct ofpbuf *msg, struct ofpbuf *property,
+                      uint16_t *typep)
+{
+    return ofputil_pull_property__(msg, property, 8, typep);
 }
 
 static void PRINTF_FORMAT(2, 3)
@@ -110,20 +119,27 @@ start_property(struct ofpbuf *msg, uint16_t type)
 }
 
 static void
-end_property(struct ofpbuf *msg, size_t start_ofs)
+end_property__(struct ofpbuf *msg, size_t start_ofs, unsigned int alignment)
 {
     struct ofp_prop_header *oph;
 
     oph = ofpbuf_at_assert(msg, start_ofs, sizeof *oph);
     oph->len = htons(ofpbuf_size(msg) - start_ofs);
-    ofpbuf_padto(msg, ROUND_UP(ofpbuf_size(msg), 8));
+    ofpbuf_padto(msg, ROUND_UP(ofpbuf_size(msg), alignment));
+}
+
+static void
+end_property(struct ofpbuf *msg, size_t start_ofs)
+{
+    end_property__(msg, start_ofs, 8);
 }
 
 static void
 put_bitmap_properties(struct ofpbuf *msg, uint64_t bitmap)
 {
     for (; bitmap; bitmap = zero_rightmost_1bit(bitmap)) {
-        start_property(msg, rightmost_1bit_idx(bitmap));
+        end_property__(msg, start_property(msg, rightmost_1bit_idx(bitmap)),
+                       1);
     }
 }
 
@@ -4470,10 +4486,12 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
 
     return b;
 }
+
+/* Table features. */
 
 static enum ofperr
 pull_table_feature_property(struct ofpbuf *msg, struct ofpbuf *payload,
-                        uint16_t *typep)
+                            uint16_t *typep)
 {
     enum ofperr error;
 
@@ -4494,7 +4512,7 @@ parse_action_bitmap(struct ofpbuf *payload, enum ofp_version ofp_version,
         uint16_t type;
         enum ofperr error;
 
-        error = pull_table_feature_property(payload, NULL, &type);
+        error = ofputil_pull_property__(payload, NULL, 1, &type);
         if (error) {
             return error;
         }
@@ -4516,7 +4534,16 @@ parse_instruction_ids(struct ofpbuf *payload, bool loose, uint32_t *insts)
         enum ofperr error;
         uint16_t ofpit;
 
-        error = pull_table_feature_property(payload, NULL, &ofpit);
+        /* OF1.3 and OF1.4 aren't clear about padding in the instruction IDs.
+         * It seems clear that they aren't padded to 8 bytes, though, because
+         * both standards say that "non-experimenter instructions are 4 bytes"
+         * and do not mention any padding before the first instruction ID.
+         * (There wouldn't be any point in padding to 8 bytes if the IDs were
+         * aligned on an odd 4-byte boundary.)
+         *
+         * Anyway, we just assume they're all glommed together on byte
+         * boundaries. */
+        error = ofputil_pull_property__(payload, NULL, 1, &ofpit);
         if (error) {
             return error;
         }
@@ -4846,11 +4873,16 @@ put_table_instruction_features(
 {
     size_t start_ofs;
     uint8_t table_id;
+    uint32_t insts;
 
     start_ofs = start_property(reply, OFPTFPT13_INSTRUCTIONS + miss_offset);
-    put_bitmap_properties(reply,
-                          ntohl(ovsinst_bitmap_to_openflow(tif->instructions,
-                                                           version)));
+    for (insts = ntohl(ovsinst_bitmap_to_openflow(tif->instructions, version));
+         insts; insts = zero_rightmost_1bit(insts)) {
+        ovs_be16 type = htons(rightmost_1bit_idx(insts));
+        ovs_be16 length = htons(4);
+        ofpbuf_put(reply, &type, sizeof type);
+        ofpbuf_put(reply, &length, sizeof length);
+    }
     end_property(reply, start_ofs);
 
     start_ofs = start_property(reply, OFPTFPT13_NEXT_TABLES + miss_offset);
@@ -4892,6 +4924,7 @@ ofputil_append_table_features_reply(const struct ofputil_table_features *tf,
     put_fields_property(reply, &tf->wildcard, NULL,
                         OFPTFPT13_WILDCARDS, version);
 
+    otf = ofpbuf_at_assert(reply, start_ofs, sizeof *otf);
     otf->length = htons(ofpbuf_size(reply) - start_ofs);
     ofpmp_postappend(replies, start_ofs);
 }
