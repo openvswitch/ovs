@@ -1210,29 +1210,25 @@ dpif_netdev_flow_get(const struct dpif *dpif,
 }
 
 static int
-dp_netdev_flow_add(struct dp_netdev *dp, const struct flow *flow,
-                   const struct flow_wildcards *wc,
-                   const struct nlattr *actions,
-                   size_t actions_len)
+dp_netdev_flow_add(struct dp_netdev *dp, struct match *match,
+                   const struct nlattr *actions, size_t actions_len)
     OVS_REQUIRES(dp->flow_mutex)
 {
     struct dp_netdev_flow *netdev_flow;
-    struct match match;
 
     netdev_flow = xzalloc(sizeof *netdev_flow);
-    *CONST_CAST(struct flow *, &netdev_flow->flow) = *flow;
+    *CONST_CAST(struct flow *, &netdev_flow->flow) = match->flow;
 
     ovsthread_stats_init(&netdev_flow->stats);
 
     ovsrcu_set(&netdev_flow->actions,
                dp_netdev_actions_create(actions, actions_len));
 
-    match_init(&match, flow, wc);
     cls_rule_init(CONST_CAST(struct cls_rule *, &netdev_flow->cr),
-                  &match, NETDEV_RULE_PRIORITY);
+                  match, NETDEV_RULE_PRIORITY);
     cmap_insert(&dp->flow_table,
                 CONST_CAST(struct cmap_node *, &netdev_flow->node),
-                flow_hash(flow, 0));
+                flow_hash(&match->flow, 0));
     classifier_insert(&dp->cls,
                       CONST_CAST(struct cls_rule *, &netdev_flow->cr));
 
@@ -1260,22 +1256,21 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *netdev_flow;
-    struct flow flow;
     struct miniflow miniflow;
-    struct flow_wildcards wc;
+    struct match match;
     int error;
 
-    error = dpif_netdev_flow_from_nlattrs(put->key, put->key_len, &flow);
+    error = dpif_netdev_flow_from_nlattrs(put->key, put->key_len, &match.flow);
     if (error) {
         return error;
     }
     error = dpif_netdev_mask_from_nlattrs(put->key, put->key_len,
                                           put->mask, put->mask_len,
-                                          &flow, &wc.masks);
+                                          &match.flow, &match.wc.masks);
     if (error) {
         return error;
     }
-    miniflow_init(&miniflow, &flow);
+    miniflow_init(&miniflow, &match.flow);
 
     ovs_mutex_lock(&dp->flow_mutex);
     netdev_flow = dp_netdev_lookup_flow(dp, &miniflow);
@@ -1285,7 +1280,7 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
                 if (put->stats) {
                     memset(put->stats, 0, sizeof *put->stats);
                 }
-                error = dp_netdev_flow_add(dp, &flow, &wc, put->actions,
+                error = dp_netdev_flow_add(dp, &match, put->actions,
                                            put->actions_len);
             } else {
                 error = EFBIG;
@@ -1295,7 +1290,7 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
         }
     } else {
         if (put->flags & DPIF_FP_MODIFY
-            && flow_equal(&flow, &netdev_flow->flow)) {
+            && flow_equal(&match.flow, &netdev_flow->flow)) {
             struct dp_netdev_actions *new_actions;
             struct dp_netdev_actions *old_actions;
 
