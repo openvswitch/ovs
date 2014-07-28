@@ -519,6 +519,7 @@ query_db_string(const struct shash *all_dbs, const char *name,
                                         &db, &table, &column);
         if (retval) {
             ds_put_format(errors, "%s\n", retval);
+            free(retval);
             return NULL;
         }
 
