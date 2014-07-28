@@ -758,4 +758,8 @@ enum ovs_instruction_type ovs_instruction_type_from_ofpact_type(
 enum ofperr ovs_instruction_type_from_inst_type(
     enum ovs_instruction_type *instruction_type, const uint16_t inst_type);
 
+ovs_be32 ovsinst_bitmap_to_openflow(uint32_t ovsinst_bitmap, enum ofp_version);
+uint32_t ovsinst_bitmap_from_openflow(ovs_be32 ofpit_bitmap,
+                                      enum ofp_version);
+
 #endif /* ofp-actions.h */

@@ -1646,6 +1646,66 @@ OVS_INSTRUCTIONS
     }
 }
 
+struct ovsinst_xlate {
+    enum ovs_instruction_type ovsinst;
+    int ofpit;
+};
+
+static const struct ovsinst_xlate *
+get_ovsinst_xlate(enum ofp_version version)
+{
+    /* OpenFlow 1.1 and 1.2 instructions. */
+    static const struct ovsinst_xlate of11[] = {
+        { OVSINST_OFPIT11_GOTO_TABLE, 1 },
+        { OVSINST_OFPIT11_WRITE_METADATA, 2 },
+        { OVSINST_OFPIT11_WRITE_ACTIONS, 3 },
+        { OVSINST_OFPIT11_APPLY_ACTIONS, 4 },
+        { OVSINST_OFPIT11_CLEAR_ACTIONS, 5 },
+        { 0, -1 },
+    };
+
+    /* OpenFlow 1.3+ instructions. */
+    static const struct ovsinst_xlate of13[] = {
+        { OVSINST_OFPIT11_GOTO_TABLE, 1 },
+        { OVSINST_OFPIT11_WRITE_METADATA, 2 },
+        { OVSINST_OFPIT11_WRITE_ACTIONS, 3 },
+        { OVSINST_OFPIT11_APPLY_ACTIONS, 4 },
+        { OVSINST_OFPIT11_CLEAR_ACTIONS, 5 },
+        { OVSINST_OFPIT13_METER, 6 },
+        { 0, -1 },
+    };
+
+    return version < OFP13_VERSION ? of11 : of13;
+}
+
+ovs_be32
+ovsinst_bitmap_to_openflow(uint32_t ovsinst_bitmap, enum ofp_version version)
+{
+    uint32_t ofpit_bitmap = 0;
+    const struct ovsinst_xlate *x;
+
+    for (x = get_ovsinst_xlate(version); x->ofpit >= 0; x++) {
+        if (ovsinst_bitmap & (1u << x->ovsinst)) {
+            ofpit_bitmap |= 1u << x->ofpit;
+        }
+    }
+    return htonl(ofpit_bitmap);
+}
+
+uint32_t
+ovsinst_bitmap_from_openflow(ovs_be32 ofpit_bitmap, enum ofp_version version)
+{
+    uint32_t ovsinst_bitmap = 0;
+    const struct ovsinst_xlate *x;
+
+    for (x = get_ovsinst_xlate(version); x->ofpit >= 0; x++) {
+        if (ofpit_bitmap & htonl(1u << x->ofpit)) {
+            ovsinst_bitmap |= 1u << x->ovsinst;
+        }
+    }
+    return ovsinst_bitmap;
+}
+
 static inline struct ofp11_instruction *
 instruction_next(const struct ofp11_instruction *inst)
 {
