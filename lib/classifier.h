@@ -295,7 +295,7 @@ void classifier_remove(struct classifier *, struct cls_rule *);
 struct cls_rule *classifier_lookup(const struct classifier *,
                                    const struct flow *,
                                    struct flow_wildcards *);
-void classifier_lookup_miniflow_batch(const struct classifier *cls,
+bool classifier_lookup_miniflow_batch(const struct classifier *cls,
                                       const struct miniflow **flows,
                                       struct cls_rule **rules, size_t len);
 bool classifier_rule_overlaps(const struct classifier *,

@@ -1004,8 +1004,10 @@ find_match_miniflow(const struct cls_subtable *subtable,
  * This function is optimized for use in the userspace datapath and therefore
  * does not implement a lot of features available in the standard
  * classifier_lookup() function.  Specifically, it does not implement
- * priorities, instead returning any rule which matches the flow. */
-void
+ * priorities, instead returning any rule which matches the flow.
+ *
+ * Returns true if all flows found a corresponding rule. */
+bool
 classifier_lookup_miniflow_batch(const struct classifier *cls,
                                  const struct miniflow **flows,
                                  struct cls_rule **rules, size_t len)
@@ -1034,9 +1036,11 @@ classifier_lookup_miniflow_batch(const struct classifier *cls,
             begin++;
         }
         if (begin >= len) {
-            break;
+            return true;
         }
     }
+
+    return false;
 }
 
 /* Finds and returns a rule in 'cls' with exactly the same priority and
