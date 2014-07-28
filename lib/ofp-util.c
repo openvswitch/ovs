@@ -4607,6 +4607,7 @@ ofputil_decode_table_features(struct ofpbuf *msg,
 {
     const struct ofp_header *oh;
     struct ofp13_table_features *otf;
+    struct ofpbuf properties;
     unsigned int len;
 
     memset(tf, 0, sizeof *tf);
@@ -4629,7 +4630,8 @@ ofputil_decode_table_features(struct ofpbuf *msg,
     if (len < sizeof *otf || len % 8 || len > ofpbuf_size(msg)) {
         return OFPERR_OFPBPC_BAD_LEN;
     }
-    ofpbuf_pull(msg, sizeof *otf);
+    ofpbuf_use_const(&properties, ofpbuf_pull(msg, len), len);
+    ofpbuf_pull(&properties, sizeof *otf);
 
     tf->table_id = otf->table_id;
     if (tf->table_id == OFPTT_ALL) {
@@ -4642,12 +4644,12 @@ ofputil_decode_table_features(struct ofpbuf *msg,
     tf->miss_config = ofputil_table_miss_from_config(otf->config, oh->version);
     tf->max_entries = ntohl(otf->max_entries);
 
-    while (ofpbuf_size(msg) > 0) {
+    while (ofpbuf_size(&properties) > 0) {
         struct ofpbuf payload;
         enum ofperr error;
         uint16_t type;
 
-        error = pull_table_feature_property(msg, &payload, &type);
+        error = pull_table_feature_property(&properties, &payload, &type);
         if (error) {
             return error;
         }
