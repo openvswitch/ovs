@@ -799,7 +799,7 @@ struct ofproto_class {
      *
      *   - 'ovsinsts' to all instructions.
      *
-     *   - 'config' to OFPTC11_TABLE_MISS_MASK.
+     *   - 'config' to the table miss configuration.
      *
      *   - 'max_entries' to 1,000,000.
      *

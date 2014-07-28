@@ -3084,6 +3084,8 @@ handle_table_stats_request(struct ofconn *ofconn,
      */
     stats = xcalloc(p->n_tables, sizeof *stats);
     for (i = 0; i < p->n_tables; i++) {
+        unsigned int config;
+
         stats[i].table_id = i;
         sprintf(stats[i].name, "table%"PRIuSIZE, i);
         bitmap_set_multiple(stats[i].match.bm, 0, MFF_N_IDS, 1);
@@ -3095,7 +3097,8 @@ handle_table_stats_request(struct ofconn *ofconn,
         stats[i].metadata_match = OVS_BE64_MAX;
         stats[i].metadata_write = OVS_BE64_MAX;
         stats[i].ovsinsts = (1u << N_OVS_INSTRUCTIONS) - 1;
-        stats[i].config = OFPTC11_TABLE_MISS_MASK;
+        atomic_read(&p->tables[i].config, &config);
+        stats[i].config = config;
         stats[i].max_entries = 1000000; /* An arbitrary big number. */
         stats[i].active_count = classifier_count(&p->tables[i].cls);
     }
