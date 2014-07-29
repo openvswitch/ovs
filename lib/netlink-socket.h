@@ -192,7 +192,9 @@
 struct nl_sock;
 
 #ifndef HAVE_NETLINK
+#ifndef _WIN32
 #error "netlink-socket.h is only for hosts that support Netlink sockets"
+#endif
 #endif
 
 /* Netlink sockets. */
