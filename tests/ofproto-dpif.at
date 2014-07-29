@@ -5458,7 +5458,7 @@ AT_BANNER([ofproto-dpif - flow translation resource limits])
 AT_SETUP([ofproto-dpif - infinite resubmit])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl add-flow br0 actions=resubmit:1,resubmit:2,output:3])
-AT_CHECK([ovs-appctl ofproto/trace br0 'eth_dst=ff:ff:ff:ff:ff:ff'],
+AT_CHECK([ovs-appctl -vpoll_loop:off ofproto/trace br0 'eth_dst=ff:ff:ff:ff:ff:ff'],
   [0], [stdout])
 AT_CHECK([tail -1 stdout], [0], [Datapath actions: drop
 ])
@@ -5477,7 +5477,7 @@ ADD_OF_PORTS([br0], 1)
  done
  echo "in_port=65, actions=local") > flows
  AT_CHECK([ovs-ofctl add-flows br0 flows])
-AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1'], [0], [stdout])
+AT_CHECK([ovs-appctl -vpoll_loop:off ofproto/trace br0 'in_port=1'], [0], [stdout])
 AT_CHECK([grep -c 'over 4096 resubmit actions' ovs-vswitchd.log], [0], [1
 ])
 OVS_VSWITCHD_STOP(["/over.*resubmit actions/d"])
@@ -5492,7 +5492,7 @@ ADD_OF_PORTS([br0], 1)
  done
  echo "in_port=13, actions=local,local,local,local,local,local,local,local") > flows
 AT_CHECK([ovs-ofctl add-flows br0 flows])
-AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1'], [0], [stdout])
+AT_CHECK([ovs-appctl -vpoll_loop:off ofproto/trace br0 'in_port=1'], [0], [stdout])
 AT_CHECK([grep -c -e '- Uses action(s) not supported by datapath' stdout],
   [0], [1
 ])
@@ -5511,7 +5511,7 @@ ADD_OF_PORTS([br0], 1)
  push="push:NXM_NX_REG0[[]]"
  echo "in_port=13, actions=$push,$push,$push,$push,$push,$push,$push,$push") > flows
  AT_CHECK([ovs-ofctl add-flows br0 flows])
-AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1'], [0], [stdout])
+AT_CHECK([ovs-appctl -vpoll_loop:off ofproto/trace br0 'in_port=1'], [0], [stdout])
 AT_CHECK([grep -c 'resubmits yielded over 64 kB of stack' ovs-vswitchd.log], [0], [1
 ])
 OVS_VSWITCHD_STOP(["/resubmits yielded over 64 kB of stack/d"])
