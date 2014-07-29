@@ -1568,19 +1568,23 @@ ofconn_wants_packet_in_on_miss(struct ofconn *ofconn,
  * This logic assumes that "table-miss" packet_in messages
  * are always sent to controller_id 0. */
 bool
-connmgr_wants_packet_in_on_miss(struct connmgr *mgr)
+connmgr_wants_packet_in_on_miss(struct connmgr *mgr) OVS_EXCLUDED(ofproto_mutex)
 {
     struct ofconn *ofconn;
 
+    ovs_mutex_lock(&ofproto_mutex);
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
         enum ofputil_protocol protocol = ofconn_get_protocol(ofconn);
 
         if (ofconn->controller_id == 0 &&
             (protocol == OFPUTIL_P_NONE ||
              ofputil_protocol_to_ofp_version(protocol) < OFP13_VERSION)) {
+            ovs_mutex_unlock(&ofproto_mutex);
             return true;
         }
     }
+    ovs_mutex_unlock(&ofproto_mutex);
+
     return false;
 }
 
