@@ -38,6 +38,7 @@ __pychecker__ = 'no-reuseattr'  # Remove in pychecker >= 0.8.19.
 vlog = ovs.vlog.Vlog("ovs-vtep")
 exiting = False
 
+ps_name = ""
 Tunnel_Ip = ""
 Lswitches = {}
 Bindings = {}
@@ -307,7 +308,7 @@ class Logical_Switch(object):
         self.update_remote_macs()
         self.update_stats()
 
-def add_binding(ps_name, binding, ls):
+def add_binding(binding, ls):
     vlog.info("adding binding %s" % binding)
 
     vlan, pp_name = binding.split("-", 1)
@@ -348,7 +349,7 @@ def add_binding(ps_name, binding, ls):
     ls.add_lbinding(lbinding)
     Bindings[binding] = ls.name
 
-def del_binding(ps_name, binding, ls):
+def del_binding(binding, ls):
     vlog.info("removing binding %s" % binding)
 
     vlan, pp_name = binding.split("-")
@@ -377,7 +378,7 @@ def del_binding(ps_name, binding, ls):
 
     del Bindings[binding]
 
-def handle_physical(ps_name):
+def handle_physical():
     # Gather physical ports except the patch ports we created
     ovs_ports = ovs_vsctl("list-ports %s" % ps_name).split()
     ovs_port_set = set([port for port in ovs_ports if port[-2:] != "-p"])
@@ -410,9 +411,9 @@ def handle_physical(ps_name):
                 if Bindings[binding] == ls_name:
                     continue
                 else:
-                    del_binding(ps_name, binding, Lswitches[Bindings[binding]])
+                    del_binding(binding, Lswitches[Bindings[binding]])
 
-            add_binding(ps_name, binding, ls)
+            add_binding(binding, ls)
 
 
     dead_bindings = set(Bindings.keys()).difference(new_bindings)
@@ -420,14 +421,14 @@ def handle_physical(ps_name):
         ls_name = Bindings[binding]
         ls = Lswitches[ls_name]
 
-        del_binding(ps_name, binding, ls)
+        del_binding(binding, ls)
 
         if not len(ls.ports):
             ovs_vsctl("del-br %s" % Lswitches[ls_name].short_name)
             vtep_ctl("clear-local-macs %s" % Lswitches[ls_name].name)
             del Lswitches[ls_name]
 
-def setup(ps_name):
+def setup():
     br_list = ovs_vsctl("list-br").split()
     if (ps_name not in br_list):
         ovs.util.ovs_fatal(0, "couldn't find OVS bridge %s" % ps_name, vlog)
@@ -485,6 +486,7 @@ def main():
     if args.root_prefix:
         root_prefix = args.root_prefix
 
+    global ps_name
     ps_name = args.ps_name
 
     ovs.daemon.daemonize()
@@ -495,14 +497,14 @@ def main():
     if error:
         ovs.util.ovs_fatal(error, "could not create unixctl server", vlog)
 
-    setup(ps_name)
+    setup()
 
     while True:
         unixctl.run()
         if exiting:
             break
 
-        handle_physical(ps_name)
+        handle_physical()
 
         for ls_name, ls in Lswitches.items():
             ls.run()
