@@ -163,33 +163,29 @@ struct cmap_node *cmap_find_protected(const struct cmap *, uint32_t hash);
  *         ...operate on my_node...
  *     }
  *
- * CMAP_FOR_EACH_SAFE variant is useful only in deallocation code already
- * executing at postponed time, when it is known that the RCU grace period
- * has already expired.
+ * CMAP_FOR_EACH is "safe" in the sense of HMAP_FOR_EACH_SAFE.  That is, it is
+ * safe to free the current node before going on to the next iteration.  Most
+ * of the time, though, this doesn't matter for a cmap because node
+ * deallocation has to be postponed until the next grace period.  This means
+ * that this guarantee is useful only in deallocation code already executing at
+ * postponed time, when it is known that the RCU grace period has already
+ * expired.
  */
 
-#define CMAP_CURSOR_FOR_EACH(NODE, MEMBER, CURSOR, CMAP)            \
-    for (*(CURSOR) = cmap_cursor_start(CMAP);                       \
-         ((CURSOR)->node                                            \
-          ? (ASSIGN_CONTAINER(NODE, (CURSOR)->node, MEMBER), true)  \
-          : false);                                                 \
-         cmap_cursor_advance(CURSOR))
+#define CMAP_CURSOR_FOR_EACH__(NODE, CURSOR, MEMBER)    \
+    ((CURSOR)->node                                     \
+     ? (ASSIGN_CONTAINER(NODE, (CURSOR)->node, MEMBER), \
+        cmap_cursor_advance(CURSOR),                    \
+        true)                                           \
+     : false)
 
-#define CMAP_CURSOR_FOR_EACH_SAFE(NODE, MEMBER, CURSOR, CMAP)   \
-    for (*(CURSOR) = cmap_cursor_start(CMAP);                   \
-         ((CURSOR)->node                                        \
-          ? (ASSIGN_CONTAINER(NODE, (CURSOR)->node, MEMBER),    \
-             cmap_cursor_advance(CURSOR),                       \
-             true)                                              \
-          : false);                                             \
+#define CMAP_CURSOR_FOR_EACH(NODE, MEMBER, CURSOR, CMAP)    \
+    for (*(CURSOR) = cmap_cursor_start(CMAP);               \
+         CMAP_CURSOR_FOR_EACH__(NODE, CURSOR, MEMBER);      \
         )
 
-#define CMAP_CURSOR_FOR_EACH_CONTINUE(NODE, MEMBER, CURSOR)         \
-    for (cmap_cursor_advance(CURSOR);                               \
-         ((CURSOR)->node                                            \
-          ? (ASSIGN_CONTAINER(NODE, (CURSOR)->node, MEMBER), true)  \
-          : false);                                                 \
-         cmap_cursor_advance(CURSOR))
+#define CMAP_CURSOR_FOR_EACH_CONTINUE(NODE, MEMBER, CURSOR)   \
+    while (CMAP_CURSOR_FOR_EACH__(NODE, CURSOR, MEMBER))
 
 struct cmap_cursor {
     const struct cmap_impl *impl;
@@ -201,20 +197,9 @@ struct cmap_cursor {
 struct cmap_cursor cmap_cursor_start(const struct cmap *);
 void cmap_cursor_advance(struct cmap_cursor *);
 
-#define CMAP_FOR_EACH(NODE, MEMBER, CMAP)                               \
+#define CMAP_FOR_EACH(NODE, MEMBER, CMAP)                       \
     for (struct cmap_cursor cursor__ = cmap_cursor_start(CMAP); \
-         (cursor__.node                                                 \
-          ? (ASSIGN_CONTAINER(NODE, cursor__.node, MEMBER), true)       \
-          : false);                                                     \
-         cmap_cursor_advance(&cursor__))
-
-#define CMAP_FOR_EACH_SAFE(NODE, MEMBER, CMAP)                          \
-    for (struct cmap_cursor cursor__ = cmap_cursor_start(CMAP); \
-         (cursor__.node                                                 \
-          ? (ASSIGN_CONTAINER(NODE, cursor__.node, MEMBER),             \
-             cmap_cursor_advance(&cursor__),                            \
-             true)                                                      \
-          : false);                                                     \
+         CMAP_CURSOR_FOR_EACH__(NODE, &cursor__, MEMBER);       \
         )
 
 static inline struct cmap_node *cmap_first(const struct cmap *);

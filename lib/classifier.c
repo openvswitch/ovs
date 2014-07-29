@@ -485,12 +485,12 @@ classifier_destroy(struct classifier *cls)
             trie_destroy(&cls->tries[i].root);
         }
 
-        CMAP_FOR_EACH_SAFE (subtable, cmap_node, &cls->subtables_map) {
+        CMAP_FOR_EACH (subtable, cmap_node, &cls->subtables_map) {
             destroy_subtable(cls, subtable);
         }
         cmap_destroy(&cls->subtables_map);
 
-        CMAP_FOR_EACH_SAFE (partition, cmap_node, &cls->partitions) {
+        CMAP_FOR_EACH (partition, cmap_node, &cls->partitions) {
             ovsrcu_postpone(free, partition);
         }
         cmap_destroy(&cls->partitions);

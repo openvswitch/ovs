@@ -925,7 +925,7 @@ dp_netdev_flow_flush(struct dp_netdev *dp)
     struct dp_netdev_flow *netdev_flow;
 
     ovs_mutex_lock(&dp->flow_mutex);
-    CMAP_FOR_EACH_SAFE (netdev_flow, node, &dp->flow_table) {
+    CMAP_FOR_EACH (netdev_flow, node, &dp->flow_table) {
         dp_netdev_remove_flow(dp, netdev_flow);
     }
     ovs_mutex_unlock(&dp->flow_mutex);
