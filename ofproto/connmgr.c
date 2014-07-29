@@ -1558,7 +1558,7 @@ ofconn_wants_packet_in_on_miss(struct ofconn *ofconn,
 /* The default "table-miss" behaviour for OpenFlow1.3+ is to drop the
  * packet rather than to send the packet to the controller.
  *
- * This function returns false to indicate that a packet_in message
+ * This function returns true to indicate that a packet_in message
  * for a "table-miss" should be sent to at least one controller.
  * That is there is at least one controller with controller_id 0
  * which connected using an OpenFlow version earlier than OpenFlow1.3.
