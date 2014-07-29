@@ -262,6 +262,7 @@ void ovs_dp_process_packet_with_key(struct sk_buff *skb,
 	u32 n_mask_hit;
 
 	stats = this_cpu_ptr(dp->stats_percpu);
+	OVS_CB(skb)->pkt_key = pkt_key;
 
 	/* Look up flow. */
 	flow = ovs_flow_tbl_lookup_stats(&dp->table, pkt_key, skb_get_hash(skb),
@@ -270,7 +271,6 @@ void ovs_dp_process_packet_with_key(struct sk_buff *skb,
 		struct dp_upcall_info upcall;
 
 		upcall.cmd = OVS_PACKET_CMD_MISS;
-		upcall.key = pkt_key;
 		upcall.userdata = NULL;
 		upcall.portid = ovs_vport_find_upcall_portid(p, skb);
 		ovs_dp_upcall(dp, skb, &upcall);
@@ -279,7 +279,6 @@ void ovs_dp_process_packet_with_key(struct sk_buff *skb,
 		goto out;
 	}
 
-	OVS_CB(skb)->pkt_key = pkt_key;
 	OVS_CB(skb)->flow = flow;
 
 	ovs_flow_stats_update(OVS_CB(skb)->flow, pkt_key->tp.flags, skb);
@@ -316,6 +315,8 @@ int ovs_dp_upcall(struct datapath *dp, struct sk_buff *skb,
 	struct dp_stats_percpu *stats;
 	int err;
 
+	BUG_ON(!OVS_CB(skb)->pkt_key);
+
 	if (upcall_info->portid == 0) {
 		err = -ENOTCONN;
 		goto err;
@@ -344,7 +345,6 @@ static int queue_gso_packets(struct datapath *dp, struct sk_buff *skb,
 			     const struct dp_upcall_info *upcall_info)
 {
 	unsigned short gso_type = skb_shinfo(skb)->gso_type;
-	struct dp_upcall_info later_info;
 	struct sw_flow_key later_key;
 	struct sk_buff *segs, *nskb;
 	int err;
@@ -353,25 +353,25 @@ static int queue_gso_packets(struct datapath *dp, struct sk_buff *skb,
 	if (IS_ERR(segs))
 		return PTR_ERR(segs);
 
+	if (gso_type & SKB_GSO_UDP) {
+		/* The initial flow key extracted by ovs_flow_extract()
+		 * in this case is for a first fragment, so we need to
+		 * properly mark later fragments.
+		 */
+		later_key = *OVS_CB(skb)->pkt_key;
+		later_key.ip.frag = OVS_FRAG_TYPE_LATER;
+	}
+
 	/* Queue all of the segments. */
 	skb = segs;
 	do {
+		if (gso_type & SKB_GSO_UDP && skb != segs)
+			OVS_CB(skb)->pkt_key = &later_key;
+
 		err = queue_userspace_packet(dp, skb, upcall_info);
 		if (err)
 			break;
 
-		if (skb == segs && gso_type & SKB_GSO_UDP) {
-			/* The initial flow key extracted by ovs_flow_extract()
-			 * in this case is for a first fragment, so we need to
-			 * properly mark later fragments.
-			 */
-			later_key = *upcall_info->key;
-			later_key.ip.frag = OVS_FRAG_TYPE_LATER;
-
-			later_info = *upcall_info;
-			later_info.key = &later_key;
-			upcall_info = &later_info;
-		}
 	} while ((skb = skb->next));
 
 	/* Free all of the segments. */
@@ -437,6 +437,7 @@ static int queue_userspace_packet(struct datapath *dp, struct sk_buff *skb,
 	struct ovs_header *upcall;
 	struct sk_buff *nskb = NULL;
 	struct sk_buff *user_skb; /* to be queued to userspace */
+	struct sw_flow_key *pkt_key = OVS_CB(skb)->pkt_key;
 	struct nlattr *nla;
 	struct genl_info info = {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,14,0)
@@ -497,8 +498,7 @@ static int queue_userspace_packet(struct datapath *dp, struct sk_buff *skb,
 	upcall->dp_ifindex = dp_ifindex;
 
 	nla = nla_nest_start(user_skb, OVS_PACKET_ATTR_KEY);
-	err = ovs_nla_put_flow(dp, upcall_info->key,
-			       upcall_info->key, user_skb);
+	err = ovs_nla_put_flow(dp, pkt_key, pkt_key, user_skb);
 	BUG_ON(err);
 	nla_nest_end(user_skb, nla);
 
