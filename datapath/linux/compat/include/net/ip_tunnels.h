@@ -48,5 +48,6 @@ int iptunnel_pull_header(struct sk_buff *skb, int hdr_len, __be16 inner_proto);
 /* Not yet upstream */
 #define TUNNEL_OAM	__cpu_to_be16(0x0200)
 #define TUNNEL_CRIT_OPT	__cpu_to_be16(0x0400)
+#define TUNNEL_OPTIONS_PRESENT	__cpu_to_be16(0x0800)
 
 #endif /* __NET_IP_TUNNELS_H */

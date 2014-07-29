@@ -421,6 +421,7 @@ static int ipv4_tun_from_nlattr(const struct nlattr *attr,
 			tun_flags |= TUNNEL_OAM;
 			break;
 		case OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS:
+			tun_flags |= TUNNEL_OPTIONS_PRESENT;
 			if (nla_len(a) > sizeof(match->key->tun_opts)) {
 				OVS_NLERR("Geneve option length exceeds "
 					  "maximum size (len %d, max %zu).\n",
@@ -1050,16 +1051,8 @@ int ovs_nla_put_flow(struct datapath *dp, const struct sw_flow_key *swkey,
 	if ((swkey->tun_key.ipv4_dst || is_mask)) {
 		const struct geneve_opt *opts = NULL;
 
-		if (!is_mask) {
-			struct vport *in_port;
-
-			in_port = ovs_vport_ovsl_rcu(dp, swkey->phy.in_port);
-			if (in_port->ops->type == OVS_VPORT_TYPE_GENEVE)
-				opts = GENEVE_OPTS(output, swkey->tun_opts_len);
-		} else {
-			if (output->tun_opts_len)
-				opts = GENEVE_OPTS(output, swkey->tun_opts_len);
-		}
+		if (output->tun_key.tun_flags & TUNNEL_OPTIONS_PRESENT)
+			opts = GENEVE_OPTS(output, swkey->tun_opts_len);
 
 		if (ipv4_tun_to_nlattr(skb, &output->tun_key, opts,
 					swkey->tun_opts_len))

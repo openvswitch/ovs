@@ -189,7 +189,7 @@ static int geneve_rcv(struct sock *sk, struct sk_buff *skb)
 
 	geneveh = geneve_hdr(skb);
 
-	flags = TUNNEL_KEY |
+	flags = TUNNEL_KEY | TUNNEL_OPTIONS_PRESENT |
 		(udp_hdr(skb)->check != 0 ? TUNNEL_CSUM : 0) |
 		(geneveh->oam ? TUNNEL_OAM : 0) |
 		(geneveh->critical ? TUNNEL_CRIT_OPT : 0);
