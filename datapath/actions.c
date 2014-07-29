@@ -649,11 +649,10 @@ static int execute_recirc(struct datapath *dp, struct sk_buff *skb,
 				 const struct nlattr *a)
 {
 	struct sw_flow_key recirc_key;
-	const struct vport *p = OVS_CB(skb)->input_vport;
 	uint32_t hash = OVS_CB(skb)->pkt_key->ovs_flow_hash;
 	int err;
 
-	err = ovs_flow_extract(skb, p->port_no, &recirc_key);
+	err = ovs_flow_key_extract(skb, &recirc_key);
 	if (err) {
 		kfree_skb(skb);
 		return err;

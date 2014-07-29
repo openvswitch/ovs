@@ -992,7 +992,7 @@ free_newmask:
 
 /**
  * ovs_nla_get_flow_metadata - parses Netlink attributes into a flow key.
- * @flow: Receives extracted in_port, priority, tun_key and skb_mark.
+ * @key: Receives extracted in_port, priority, tun_key and skb_mark.
  * @attr: Netlink attribute holding nested %OVS_KEY_ATTR_* Netlink attribute
  * sequence.
  *
@@ -1001,35 +1001,30 @@ free_newmask:
  * get the metadata, that is, the parts of the flow key that cannot be
  * extracted from the packet itself.
  */
-
-int ovs_nla_get_flow_metadata(struct sw_flow *flow,
-			      const struct nlattr *attr)
+int ovs_nla_get_flow_metadata(const struct nlattr *attr,
+			      struct sw_flow_key *key)
 {
-	struct ovs_key_ipv4_tunnel *tun_key = &flow->key.tun_key;
 	const struct nlattr *a[OVS_KEY_ATTR_MAX + 1];
+	struct sw_flow_match match;
 	u64 attrs = 0;
 	int err;
-	struct sw_flow_match match;
-
-	flow->key.phy.in_port = DP_MAX_PORTS;
-	flow->key.phy.priority = 0;
-	flow->key.phy.skb_mark = 0;
-	flow->key.ovs_flow_hash = 0;
-	flow->key.recirc_id = 0;
-	memset(tun_key, 0, sizeof(flow->key.tun_key));
 
 	err = parse_flow_nlattrs(attr, a, &attrs);
 	if (err)
 		return -EINVAL;
 
 	memset(&match, 0, sizeof(match));
-	match.key = &flow->key;
+	match.key = key;
 
-	err = metadata_from_nlattrs(&match, &attrs, a, false);
-	if (err)
-		return err;
+	key->tun_opts_len = 0;
+	memset(&key->tun_key, 0, sizeof(key->tun_key));
+	key->phy.priority = 0;
+	key->phy.skb_mark = 0;
+	key->phy.in_port = DP_MAX_PORTS;
+	key->ovs_flow_hash = 0;
+	key->recirc_id = 0;
 
-	return 0;
+	return metadata_from_nlattrs(&match, &attrs, a, false);
 }
 
 int ovs_nla_put_flow(struct datapath *dp, const struct sw_flow_key *swkey,

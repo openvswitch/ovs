@@ -16,8 +16,6 @@
  * 02110-1301, USA
  */
 
-#include "flow.h"
-#include "datapath.h"
 #include <linux/uaccess.h>
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
@@ -44,6 +42,10 @@
 #include <net/ip.h>
 #include <net/ipv6.h>
 #include <net/ndisc.h>
+
+#include "datapath.h"
+#include "flow.h"
+#include "flow_netlink.h"
 
 #include "mpls.h"
 #include "vlan.h"
@@ -425,10 +427,9 @@ invalid:
 }
 
 /**
- * ovs_flow_extract - extracts a flow key from an Ethernet frame.
+ * key_extract - extracts a flow key from an Ethernet frame.
  * @skb: sk_buff that contains the frame, with skb->data pointing to the
  * Ethernet header
- * @in_port: port number on which @skb was received.
  * @key: output flow key
  *
  * The caller must ensure that skb->len >= ETH_HLEN.
@@ -447,34 +448,10 @@ invalid:
  *      of a correct length, otherwise the same as skb->network_header.
  *      For other key->eth.type values it is left untouched.
  */
-int ovs_flow_extract(struct sk_buff *skb, u16 in_port, struct sw_flow_key *key)
+static int key_extract(struct sk_buff *skb, struct sw_flow_key *key)
 {
 	int error;
 	struct ethhdr *eth;
-
-	if (OVS_CB(skb)->tun_info) {
-		struct ovs_tunnel_info *tun_info = OVS_CB(skb)->tun_info;
-		memcpy(&key->tun_key, &tun_info->tunnel,
-			sizeof(key->tun_key));
-		if (tun_info->options) {
-			BUILD_BUG_ON((1 << (sizeof(tun_info->options_len) * 8)) - 1
-					> sizeof(key->tun_opts));
-			memcpy(GENEVE_OPTS(key, tun_info->options_len),
-				tun_info->options, tun_info->options_len);
-			key->tun_opts_len = tun_info->options_len;
-		} else {
-			key->tun_opts_len = 0;
-		}
-	} else {
-		key->tun_opts_len = 0;
-		memset(&key->tun_key, 0, sizeof(key->tun_key));
-	}
-
-	key->phy.priority = skb->priority;
-	key->phy.in_port = in_port;
-	key->phy.skb_mark = skb->mark;
-	key->ovs_flow_hash = 0;
-	key->recirc_id = 0;
 
 	/* Flags are always used as part of stats. */
 	key->tp.flags = 0;
@@ -693,4 +670,51 @@ int ovs_flow_extract(struct sk_buff *skb, u16 in_port, struct sw_flow_key *key)
 	}
 
 	return 0;
+}
+
+int ovs_flow_key_extract(struct sk_buff *skb, struct sw_flow_key *key)
+{
+	/* Extract metadata from packet. */
+
+	if (OVS_CB(skb)->tun_info) {
+		struct ovs_tunnel_info *tun_info = OVS_CB(skb)->tun_info;
+
+		memcpy(&key->tun_key, &tun_info->tunnel, sizeof(key->tun_key));
+
+		BUILD_BUG_ON(((1 << (sizeof(tun_info->options_len) * 8)) - 1) >
+			     sizeof(key->tun_opts));
+
+		if (tun_info->options) {
+			memcpy(GENEVE_OPTS(key, tun_info->options_len),
+				tun_info->options, tun_info->options_len);
+			key->tun_opts_len = tun_info->options_len;
+		} else {
+			key->tun_opts_len = 0;
+		}
+	} else {
+		key->tun_opts_len = 0;
+		memset(&key->tun_key, 0, sizeof(key->tun_key));
+	}
+
+	key->phy.priority = skb->priority;
+	key->phy.in_port = OVS_CB(skb)->input_vport->port_no;
+	key->phy.skb_mark = skb->mark;
+	key->ovs_flow_hash = 0;
+	key->recirc_id = 0;
+
+	return key_extract(skb, key);
+}
+
+int ovs_flow_key_extract_userspace(const struct nlattr *attr,
+				   struct sk_buff *skb,
+				   struct sw_flow_key *key)
+{
+	int err;
+
+	/* Extract metadata from netlink attributes. */
+	err = ovs_nla_get_flow_metadata(attr, key);
+	if (err)
+		return err;
+
+	return key_extract(skb, key);
 }

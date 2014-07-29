@@ -300,7 +300,7 @@ void ovs_dp_process_received_packet(struct sk_buff *skb)
 	struct sw_flow_key key;
 
 	/* Extract flow from 'skb' into 'key'. */
-	error = ovs_flow_extract(skb, OVS_CB(skb)->input_vport->port_no, &key);
+	error = ovs_flow_key_extract(skb, &key);
 	if (unlikely(error)) {
 		kfree_skb(skb);
 		return;
@@ -354,7 +354,7 @@ static int queue_gso_packets(struct datapath *dp, struct sk_buff *skb,
 		return PTR_ERR(segs);
 
 	if (gso_type & SKB_GSO_UDP) {
-		/* The initial flow key extracted by ovs_flow_extract()
+		/* The initial flow key extracted by ovs_flow_key_extract()
 		 * in this case is for a first fragment, so we need to
 		 * properly mark later fragments.
 		 */
@@ -581,13 +581,11 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	if (IS_ERR(flow))
 		goto err_kfree_skb;
 
-	err = ovs_flow_extract(packet, -1, &flow->key);
+	err = ovs_flow_key_extract_userspace(a[OVS_PACKET_ATTR_KEY], packet,
+					     &flow->key);
 	if (err)
 		goto err_flow_free;
 
-	err = ovs_nla_get_flow_metadata(flow, a[OVS_PACKET_ATTR_KEY]);
-	if (err)
-		goto err_flow_free;
 	acts = ovs_nla_alloc_flow_actions(nla_len(a[OVS_PACKET_ATTR_ACTIONS]));
 	err = PTR_ERR(acts);
 	if (IS_ERR(acts))
