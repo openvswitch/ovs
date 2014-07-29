@@ -11,6 +11,7 @@ noinst_HEADERS += \
 	include/windows/getopt.h \
 	include/windows/net/if.h \
 	include/windows/netdb.h \
+	include/windows/netpacket/packet.h \
 	include/windows/netinet/icmp6.h \
 	include/windows/netinet/in.h \
 	include/windows/netinet/in_systm.h \

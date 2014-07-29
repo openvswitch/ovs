@@ -14,9 +14,27 @@
  * limitations under the License.
  */
 
-#ifndef __SYS_UIO_H
-#define __SYS_UIO_H 1
+#ifndef __NETPACKET_PACKET_H
+#define __NETPACKET_PACKET_H 1
 
-#include <netpacket/packet.h>
+struct iovec
+{
+    void *iov_base;
+    unsigned int iov_len;
+};
 
-#endif /* sys/uio.h */
+struct msghdr
+  {
+    void *msg_name;
+    socklen_t msg_namelen;
+
+    struct iovec *msg_iov;
+    size_t msg_iovlen;
+
+    void *msg_control;
+    size_t msg_controllen;
+
+    int msg_flags;
+  };
+
+#endif /* netpacket/packet.h */
