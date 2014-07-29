@@ -48,6 +48,35 @@ COVERAGE_DEFINE(netlink_sent);
 #define SOL_NETLINK 270
 #endif
 
+#ifdef _WIN32
+static struct ovs_mutex portid_mutex = OVS_MUTEX_INITIALIZER;
+static uint32_t g_last_portid = 0;
+
+/* Port IDs must be unique! */
+static uint32_t
+portid_next(void)
+    OVS_GUARDED_BY(portid_mutex)
+{
+    g_last_portid++;
+    return g_last_portid;
+}
+
+static void
+set_sock_pid_in_kernel(HANDLE handle, uint32_t pid)
+    OVS_GUARDED_BY(portid_mutex)
+{
+    struct nlmsghdr msg = { 0 };
+
+    msg.nlmsg_len = sizeof(struct nlmsghdr);
+    msg.nlmsg_type = 80; /* target = set file pid */
+    msg.nlmsg_flags = 0;
+    msg.nlmsg_seq = 0;
+    msg.nlmsg_pid = pid;
+
+    WriteFile(handle, &msg, sizeof(struct nlmsghdr), NULL, NULL);
+}
+#endif  /* _WIN32 */
+
 /* A single (bad) Netlink message can in theory dump out many, many log
  * messages, so the burst size is set quite high here to avoid missing useful
  * information.  Also, at high logging levels we log *all* Netlink messages. */
@@ -60,7 +89,11 @@ static void log_nlmsg(const char *function, int error,
 /* Netlink sockets. */
 
 struct nl_sock {
+#ifdef _WIN32
+    HANDLE handle;
+#else
     int fd;
+#endif
     uint32_t next_seq;
     uint32_t pid;
     int protocol;
@@ -88,7 +121,9 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
     struct nl_sock *sock;
+#ifndef _WIN32
     struct sockaddr_nl local, remote;
+#endif
     socklen_t local_size;
     int rcvbuf;
     int retval = 0;
@@ -114,15 +149,38 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
     *sockp = NULL;
     sock = xmalloc(sizeof *sock);
 
+#ifdef _WIN32
+    sock->handle = CreateFileA("\\\\.\\OpenVSwitchDevice",
+                               GENERIC_READ | GENERIC_WRITE,
+                               FILE_SHARE_READ | FILE_SHARE_WRITE,
+                               NULL, OPEN_EXISTING,
+                               FILE_ATTRIBUTE_NORMAL, NULL);
+
+    int last_error = GetLastError();
+
+    if (sock->handle == INVALID_HANDLE_VALUE) {
+        VLOG_ERR("fcntl: %s", ovs_strerror(last_error));
+        goto error;
+    }
+#else
     sock->fd = socket(AF_NETLINK, SOCK_RAW, protocol);
     if (sock->fd < 0) {
         VLOG_ERR("fcntl: %s", ovs_strerror(errno));
         goto error;
     }
+#endif
+
     sock->protocol = protocol;
     sock->next_seq = 1;
 
     rcvbuf = 1024 * 1024;
+#ifdef _WIN32
+    sock->rcvbuf = rcvbuf;
+    ovs_mutex_lock(&portid_mutex);
+    sock->pid = portid_next();
+    set_sock_pid_in_kernel(sock->handle, sock->pid);
+    ovs_mutex_unlock(&portid_mutex);
+#else
     if (setsockopt(sock->fd, SOL_SOCKET, SO_RCVBUFFORCE,
                    &rcvbuf, sizeof rcvbuf)) {
         /* Only root can use SO_RCVBUFFORCE.  Everyone else gets EPERM.
@@ -161,6 +219,7 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
         goto error;
     }
     sock->pid = local.nl_pid;
+#endif
 
     *sockp = sock;
     return 0;
@@ -172,9 +231,15 @@ error:
             retval = EINVAL;
         }
     }
+#ifdef _WIN32
+    if (sock->handle != INVALID_HANDLE_VALUE) {
+        CloseHandle(sock->handle);
+    }
+#else
     if (sock->fd >= 0) {
         close(sock->fd);
     }
+#endif
     free(sock);
     return retval;
 }
@@ -193,7 +258,11 @@ void
 nl_sock_destroy(struct nl_sock *sock)
 {
     if (sock) {
+#ifdef _WIN32
+        CloseHandle(sock->handle);
+#else
         close(sock->fd);
+#endif
         free(sock);
     }
 }
@@ -212,12 +281,40 @@ nl_sock_destroy(struct nl_sock *sock)
 int
 nl_sock_join_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
 {
+#ifdef _WIN32
+#define OVS_VPORT_MCGROUP_FALLBACK_ID 33
+    struct ofpbuf msg_buf;
+    struct message_multicast
+    {
+        struct nlmsghdr;
+        /* if true, join; if else, leave */
+        unsigned char join;
+        unsigned int groupId;
+    };
+
+    struct message_multicast msg = { 0 };
+
+    msg.nlmsg_len = sizeof(struct message_multicast);
+    msg.nlmsg_type = OVS_VPORT_MCGROUP_FALLBACK_ID;
+    msg.nlmsg_flags = 0;
+    msg.nlmsg_seq = 0;
+    msg.nlmsg_pid = sock->pid;
+
+    msg.join = 1;
+    msg.groupId = multicast_group;
+    msg_buf.base_ = &msg;
+    msg_buf.data_ = &msg;
+    msg_buf.size_ = msg.nlmsg_len;
+
+    nl_sock_send__(sock, &msg_buf, msg.nlmsg_seq, 0);
+#else
     if (setsockopt(sock->fd, SOL_NETLINK, NETLINK_ADD_MEMBERSHIP,
                    &multicast_group, sizeof multicast_group) < 0) {
         VLOG_WARN("could not join multicast group %u (%s)",
                   multicast_group, ovs_strerror(errno));
         return errno;
     }
+#endif
     return 0;
 }
 
@@ -234,12 +331,33 @@ nl_sock_join_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
 int
 nl_sock_leave_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
 {
+#ifdef _WIN32
+    struct ofpbuf msg_buf;
+    struct message_multicast
+    {
+        struct nlmsghdr;
+        /* if true, join; if else, leave*/
+        unsigned char join;
+    };
+
+    struct message_multicast msg = { 0 };
+    nl_msg_put_nlmsghdr(&msg, sizeof(struct message_multicast),
+                        multicast_group, 0);
+    msg.join = 0;
+
+    msg_buf.base_ = &msg;
+    msg_buf.data_ = &msg;
+    msg_buf.size_ = msg.nlmsg_len;
+
+    nl_sock_send__(sock, &msg_buf, msg.nlmsg_seq, 0);
+#else
     if (setsockopt(sock->fd, SOL_NETLINK, NETLINK_DROP_MEMBERSHIP,
                    &multicast_group, sizeof multicast_group) < 0) {
         VLOG_WARN("could not leave multicast group %u (%s)",
                   multicast_group, ovs_strerror(errno));
         return errno;
     }
+#endif
     return 0;
 }
 
@@ -255,7 +373,19 @@ nl_sock_send__(struct nl_sock *sock, const struct ofpbuf *msg,
     nlmsg->nlmsg_pid = sock->pid;
     do {
         int retval;
+#ifdef _WIN32
+        bool result;
+        DWORD last_error = 0;
+        result = WriteFile(sock->handle, ofpbuf_data(msg), ofpbuf_size(msg),
+                           &retval, NULL);
+        last_error = GetLastError();
+        if (last_error != ERROR_SUCCESS && !result) {
+            retval = -1;
+            errno = EAGAIN;
+        }
+#else
         retval = send(sock->fd, ofpbuf_data(msg), ofpbuf_size(msg), wait ? 0 : MSG_DONTWAIT);
+#endif
         error = retval < 0 ? errno : 0;
     } while (error == EINTR);
     log_nlmsg(__func__, error, ofpbuf_data(msg), ofpbuf_size(msg), sock->protocol);
@@ -306,7 +436,12 @@ nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, bool wait)
      * 'tail' to allow Netlink messages to be up to 64 kB long (a reasonable
      * figure since that's the maximum length of a Netlink attribute). */
     struct nlmsghdr *nlmsghdr;
+#ifdef _WIN32
+#define MAX_STACK_LENGTH 81920
+    uint8_t tail[MAX_STACK_LENGTH];
+#else
     uint8_t tail[65536];
+#endif
     struct iovec iov[2];
     struct msghdr msg;
     ssize_t retval;
@@ -334,7 +469,20 @@ nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, bool wait)
     nlmsghdr = ofpbuf_base(buf);
     do {
         nlmsghdr->nlmsg_len = UINT32_MAX;
+#ifdef _WIN32
+        boolean result = false;
+        DWORD last_error = 0;
+        result = ReadFile(sock->handle, tail, MAX_STACK_LENGTH, &retval, NULL);
+        last_error = GetLastError();
+        if (last_error != ERROR_SUCCESS && !result) {
+            retval = -1;
+            errno = EAGAIN;
+        } else {
+            ofpbuf_put(buf, tail, retval);
+        }
+#else
         retval = recvmsg(sock->fd, &msg, wait ? 0 : MSG_DONTWAIT);
+#endif
         error = (retval < 0 ? errno
                  : retval == 0 ? ECONNRESET /* not possible? */
                  : nlmsghdr->nlmsg_len != UINT32_MAX ? 0
@@ -362,12 +510,13 @@ nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, bool wait)
                     retval, sizeof *nlmsghdr);
         return EPROTO;
     }
-
+#ifndef _WIN32
     ofpbuf_set_size(buf, MIN(retval, buf->allocated));
     if (retval > buf->allocated) {
         COVERAGE_INC(netlink_recv_jumbo);
         ofpbuf_put(buf, tail, retval - buf->allocated);
     }
+#endif
 
     log_nlmsg(__func__, 0, ofpbuf_data(buf), ofpbuf_size(buf), sock->protocol);
     COVERAGE_INC(netlink_received);
@@ -447,7 +596,23 @@ nl_sock_transact_multiple__(struct nl_sock *sock,
     msg.msg_iov = iovs;
     msg.msg_iovlen = n;
     do {
+#ifdef _WIN32
+    DWORD last_error = 0;
+    bool result = FALSE;
+    for (i = 0; i < n; i++) {
+        result = WriteFile((HANDLE)sock->handle, iovs[i].iov_base, iovs[i].iov_len,
+                           &error, NULL);
+        last_error = GetLastError();
+        if (last_error != ERROR_SUCCESS && !result) {
+            error = EAGAIN;
+            errno = EAGAIN;
+        } else {
+            error = 0;
+        }
+    }
+#else
         error = sendmsg(sock->fd, &msg, 0) < 0 ? errno : 0;
+#endif
     } while (error == EINTR);
 
     for (i = 0; i < n; i++) {
@@ -621,7 +786,11 @@ nl_sock_transact(struct nl_sock *sock, const struct ofpbuf *request,
 int
 nl_sock_drain(struct nl_sock *sock)
 {
+#ifdef _WIN32
+    return 0;
+#else
     return drain_rcvbuf(sock->fd);
+#endif
 }
 
 /* Starts a Netlink "dump" operation, by sending 'request' to the kernel on a
@@ -818,7 +987,11 @@ nl_dump_done(struct nl_dump *dump)
 void
 nl_sock_wait(const struct nl_sock *sock, short int events)
 {
+#ifdef _WIN32
+    poll_fd_wait(sock->handle, events);
+#else
     poll_fd_wait(sock->fd, events);
+#endif
 }
 
 /* Returns the underlying fd for 'sock', for use in "poll()"-like operations
@@ -831,7 +1004,11 @@ nl_sock_wait(const struct nl_sock *sock, short int events)
 int
 nl_sock_fd(const struct nl_sock *sock)
 {
+#ifdef _WIN32
+    return sock->handle;
+#else
     return sock->fd;
+#endif
 }
 
 /* Returns the PID associated with this socket. */
