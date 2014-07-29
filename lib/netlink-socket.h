@@ -19,17 +19,152 @@
 
 /* Netlink socket definitions.
  *
+ * This header file defines functions for working with Netlink sockets.  Only
+ * Linux natively supports Netlink sockets, but Netlink is well suited as a
+ * basis for extensible low-level protocols, so it can make sense to implement
+ * a Netlink layer on other systems.  This doesn't have to be done in exactly
+ * the same way as on Linux, as long as the implementation can support the
+ * semantics that are important to Open vSwitch.  See "Usage concepts" below
+ * for more information.
+ *
+ * For Netlink protocol definitions, see netlink-protocol.h.  For helper
+ * functions for working with Netlink messages, see netlink.h.
+ *
+ *
+ * Usage concepts
+ * ==============
+ *
  * Netlink is a datagram-based network protocol primarily for communication
- * between user processes and the kernel, and mainly on Linux.  Netlink is
- * specified in RFC 3549, "Linux Netlink as an IP Services Protocol".
+ * between user processes and the kernel.  Netlink is specified in RFC 3549,
+ * "Linux Netlink as an IP Services Protocol".
  *
  * Netlink is not suitable for use in physical networks of heterogeneous
  * machines because host byte order is used throughout.
  *
- * This header file defines functions for working with Netlink sockets, which
- * are Linux-specific.  For Netlink protocol definitions, see
- * netlink-protocol.h.  For helper functions for working with Netlink messages,
- * see netlink.h.
+ * The AF_NETLINK socket namespace is subdivided into statically numbered
+ * protocols, e.g. NETLINK_ROUTE, NETLINK_NETFILTER, provided as the third
+ * argument to the socket() function.  Maintaining the assigned numbers became
+ * a bit of a problem, so the "Generic Netlink" NETLINK_GENERIC protocol was
+ * introduced to map between human-readable names and dynamically assigned
+ * numbers.  All recently introduced Netlink protocol messages in Linux
+ * (including all of the Open vSwitch specific messages) fall under
+ * NETLINK_GENERIC.  The Netlink library provides the nl_lookup_genl_family()
+ * function for translating a Generic Netlink name to a number.  On Linux, this
+ * queries the kernel Generic Netlink implementation, but on other systems it
+ * might be easier to statically assign each of the names used by Open vSwitch
+ * and then implement this function entirely in userspace.
+ *
+ * Each Netlink socket is distinguished by its Netlink PID, a 32-bit integer
+ * that is analogous to a TCP or UDP port number.  The kernel has PID 0.
+ *
+ * Most Netlink messages manage a kernel table of some kind, e.g. the kernel
+ * routing table, ARP table, etc.  Open vSwitch specific messages manage tables
+ * of datapaths, ports within datapaths ("vports"), and flows within
+ * datapaths.  Open vSwitch also has messages related to network packets
+ * received on vports, which aren't really a table.
+ *
+ * Datagram protocols over a physical network are typically unreliable: in UDP,
+ * for example, messages can be dropped, delivered more than once, or delivered
+ * out of order.  In Linux, Netlink does not deliver messages out of order or
+ * multiple times.  In some cases it can drop messages, but the kernel
+ * indicates when a message has been dropped.  The description below of each
+ * way Open vSwitch uses Netlink also explains how to work around dropped
+ * messages.
+ *
+ * Open vSwitch uses Netlink in four characteristic ways:
+ *
+ *    1. Transactions.  A transaction is analogous to a system call, an ioctl,
+ *       or an RPC: userspace sends a request to the kernel, which processes
+ *       the request synchronously and returns a reply to userspace.
+ *       (Sometimes there is no explicit reply, but even in that case userspace
+ *       will receive an immediate reply if there is an error.)
+ *
+ *       nl_transact() is the primary interface for transactions over Netlink.
+ *       This function doesn't take a socket as a parameter because sockets do
+ *       not have any state related to transactions.
+ *
+ *       Netlink uses 16-bit "length" fields extensively, which effectively
+ *       limits requests and replies to 64 kB.  "Dumps" (see below) are one way
+ *       to work around this limit for replies.
+ *
+ *       In the Linux implementation of Netlink transactions, replies can
+ *       sometimes be lost.  When this happens, nl_transact() automatically
+ *       executes the transaction again.  This means that it is important that
+ *       transactions be idempotent, or that the client be prepared to tolerate
+ *       that a transaction might actually execute more than once.
+ *
+ *       The Linux implementation can execute several transactions at the same
+ *       time more efficiently than individually.  nl_transact_multiple()
+ *       allows for this.  The semantics are no different from executing each
+ *       of the transactions individually with nl_transact().
+ *
+ *    2. Dumps.  A dump asks the kernel to provide all of the information in a
+ *       table.  It consists of a request and a reply, where the reply consists
+ *       of an arbitrary number of messages.  Each message in the reply is
+ *       limited to 64 kB, as is the request, but the total size of the reply
+ *       can be many times larger.
+ *
+ *       The reply to a dump is usually generated piece by piece, not
+ *       atomically.  The reply can represent an inconsistent snapshot of the
+ *       table.  This is especially likely if entries in the table were being
+ *       added or deleted or changing during the dump.
+ *
+ *       nl_dump_start() begins a dump based on the caller-provided request and
+ *       initializes a "struct nl_dump" to identify the dump.  Subsequent calls
+ *       to nl_dump_next() then obtain the reply, one message at a time.
+ *       Usually, each message gives information about some entry in a table,
+ *       e.g. one flow in the Open vSwitch flow table, or one route in a
+ *       routing table.  nl_dump_done() ends the dump.
+ *
+ *       Linux implements dumps so that messages in a reply do not get lost.
+ *
+ *    3. Multicast subscriptions.  Most kernel Netlink implementations allow a
+ *       process to monitor changes to its table, by subscribing to a Netlink
+ *       multicast group dedicated to that table.  Whenever the table's content
+ *       changes (e.g. an entry is added or deleted or modified), the Netlink
+ *       implementation sends a message to all sockets that subscribe to its
+ *       multicast group notifying it of details of the change.  (This doesn't
+ *       require much extra work by the Netlink implementer because the message
+ *       is generally identical to the one sent as a reply to the request that
+ *       changed the table.)
+ *
+ *       nl_sock_join_mcgroup() subscribes a socket to a multicast group, and
+ *       nl_sock_recv() reads notifications.
+ *
+ *       If userspace doesn't read messages from a socket subscribed to a
+ *       multicast group quickly enough, then notification messages can pile up
+ *       in the socket's receive buffer.  If this continues long enough, the
+ *       receive buffer will fill up and notifications will be lost.  In that
+ *       case, nl_sock_recv() will return ENOBUFS.  The client can then use a
+ *       dump to resynchronize with the table state.  (A simple implementation
+ *       of multicast groups might take advantage of this by simply returning
+ *       ENOBUFS whenever a table changes, without implementing actual
+ *       notifications.  This would cause lots of extra dumps, so it may not be
+ *       suitable as a production implementation.)
+ *
+ *    4. Unicast subscriptions (Open vSwitch specific).  Userspace can assign
+ *       one or more Netlink PIDs to a vport as "upcall PIDs".  When a packet
+ *       received on the vport does not match any flow in its datapath's flow
+ *       table, the kernel hashes some of the packet's headers, uses the hash
+ *       to select one of the PIDs, and sends the packet (encapsulated in an
+ *       Open vSwitch Netlink message) to the socket with the selected PID.
+ *
+ *       nl_sock_recv() reads notifications sent this way.
+ *
+ *       Messages received this way can overflow, just like multicast
+ *       subscription messages, and they are reported the same way.  Because
+ *       packet notification messages do not report the state of a table, there
+ *       is no way to recover the dropped packets; they are simply lost.
+ *
+ *       The main reason to support multiple PIDs per vport is to increase
+ *       fairness, that is, to make it harder for a single high-flow-rate
+ *       sender to drown out lower rate sources.  Multiple PIDs per vport might
+ *       also improve packet handling latency or flow setup rate, but that is
+ *       not the main goal.
+ *
+ *       Old versions of the Linux kernel module supported only one PID per
+ *       vport, and userspace still copes with this, so a simple or early
+ *       implementation might only support one PID per vport too.
  *
  *
  * Thread-safety
@@ -72,8 +207,6 @@ int nl_sock_send(struct nl_sock *, const struct ofpbuf *, bool wait);
 int nl_sock_send_seq(struct nl_sock *, const struct ofpbuf *,
                      uint32_t nlmsg_seq, bool wait);
 int nl_sock_recv(struct nl_sock *, struct ofpbuf *, bool wait);
-int nl_sock_transact(struct nl_sock *, const struct ofpbuf *request,
-                     struct ofpbuf **replyp);
 
 int nl_sock_drain(struct nl_sock *);
 
@@ -97,9 +230,6 @@ struct nl_transaction {
     struct ofpbuf *reply;       /* Reply (empty if reply was an error code). */
     int error;                  /* Positive errno value, 0 if no error. */
 };
-
-void nl_sock_transact_multiple(struct nl_sock *,
-                               struct nl_transaction **, size_t n);
 
 /* Transactions without an allocated socket. */
 int nl_transact(int protocol, const struct ofpbuf *request,

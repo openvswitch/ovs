@@ -537,26 +537,7 @@ nl_sock_transact_multiple__(struct nl_sock *sock,
     return error;
 }
 
-/* Sends the 'request' member of the 'n' transactions in 'transactions' on
- * 'sock', in order, and receives responses to all of them.  Fills in the
- * 'error' member of each transaction with 0 if it was successful, otherwise
- * with a positive errno value.  If 'reply' is nonnull, then it will be filled
- * with the reply if the message receives a detailed reply.  In other cases,
- * i.e. where the request failed or had no reply beyond an indication of
- * success, 'reply' will be cleared if it is nonnull.
- *
- * The caller is responsible for destroying each request and reply, and the
- * transactions array itself.
- *
- * Before sending each message, this function will finalize nlmsg_len in each
- * 'request' to match the ofpbuf's size,  set nlmsg_pid to 'sock''s pid, and
- * initialize nlmsg_seq.
- *
- * Bare Netlink is an unreliable transport protocol.  This function layers
- * reliable delivery and reply semantics on top of bare Netlink.  See
- * nl_sock_transact() for some caveats.
- */
-void
+static void
 nl_sock_transact_multiple(struct nl_sock *sock,
                           struct nl_transaction **transactions, size_t n)
 {
@@ -611,47 +592,7 @@ nl_sock_transact_multiple(struct nl_sock *sock,
     }
 }
 
-/* Sends 'request' to the kernel via 'sock' and waits for a response.  If
- * successful, returns 0.  On failure, returns a positive errno value.
- *
- * If 'replyp' is nonnull, then on success '*replyp' is set to the kernel's
- * reply, which the caller is responsible for freeing with ofpbuf_delete(), and
- * on failure '*replyp' is set to NULL.  If 'replyp' is null, then the kernel's
- * reply, if any, is discarded.
- *
- * Before the message is sent, nlmsg_len in 'request' will be finalized to
- * match ofpbuf_size(msg), nlmsg_pid will be set to 'sock''s pid, and nlmsg_seq will
- * be initialized, NLM_F_ACK will be set in nlmsg_flags.
- *
- * The caller is responsible for destroying 'request'.
- *
- * Bare Netlink is an unreliable transport protocol.  This function layers
- * reliable delivery and reply semantics on top of bare Netlink.
- *
- * In Netlink, sending a request to the kernel is reliable enough, because the
- * kernel will tell us if the message cannot be queued (and we will in that
- * case put it on the transmit queue and wait until it can be delivered).
- *
- * Receiving the reply is the real problem: if the socket buffer is full when
- * the kernel tries to send the reply, the reply will be dropped.  However, the
- * kernel sets a flag that a reply has been dropped.  The next call to recv
- * then returns ENOBUFS.  We can then re-send the request.
- *
- * Caveats:
- *
- *      1. Netlink depends on sequence numbers to match up requests and
- *         replies.  The sender of a request supplies a sequence number, and
- *         the reply echos back that sequence number.
- *
- *         This is fine, but (1) some kernel netlink implementations are
- *         broken, in that they fail to echo sequence numbers and (2) this
- *         function will drop packets with non-matching sequence numbers, so
- *         that only a single request can be usefully transacted at a time.
- *
- *      2. Resending the request causes it to be re-executed, so the request
- *         needs to be idempotent.
- */
-int
+static int
 nl_sock_transact(struct nl_sock *sock, const struct ofpbuf *request,
                  struct ofpbuf **replyp)
 {
@@ -1124,6 +1065,47 @@ nl_pool_release(struct nl_sock *sock)
     }
 }
 
+/* Sends 'request' to the kernel on a Netlink socket for the given 'protocol'
+ * (e.g. NETLINK_ROUTE or NETLINK_GENERIC) and waits for a response.  If
+ * successful, returns 0.  On failure, returns a positive errno value.
+ *
+ * If 'replyp' is nonnull, then on success '*replyp' is set to the kernel's
+ * reply, which the caller is responsible for freeing with ofpbuf_delete(), and
+ * on failure '*replyp' is set to NULL.  If 'replyp' is null, then the kernel's
+ * reply, if any, is discarded.
+ *
+ * Before the message is sent, nlmsg_len in 'request' will be finalized to
+ * match ofpbuf_size(msg), nlmsg_pid will be set to the pid of the socket used
+ * for sending the request, and nlmsg_seq will be initialized.
+ *
+ * The caller is responsible for destroying 'request'.
+ *
+ * Bare Netlink is an unreliable transport protocol.  This function layers
+ * reliable delivery and reply semantics on top of bare Netlink.
+ *
+ * In Netlink, sending a request to the kernel is reliable enough, because the
+ * kernel will tell us if the message cannot be queued (and we will in that
+ * case put it on the transmit queue and wait until it can be delivered).
+ *
+ * Receiving the reply is the real problem: if the socket buffer is full when
+ * the kernel tries to send the reply, the reply will be dropped.  However, the
+ * kernel sets a flag that a reply has been dropped.  The next call to recv
+ * then returns ENOBUFS.  We can then re-send the request.
+ *
+ * Caveats:
+ *
+ *      1. Netlink depends on sequence numbers to match up requests and
+ *         replies.  The sender of a request supplies a sequence number, and
+ *         the reply echos back that sequence number.
+ *
+ *         This is fine, but (1) some kernel netlink implementations are
+ *         broken, in that they fail to echo sequence numbers and (2) this
+ *         function will drop packets with non-matching sequence numbers, so
+ *         that only a single request can be usefully transacted at a time.
+ *
+ *      2. Resending the request causes it to be re-executed, so the request
+ *         needs to be idempotent.
+ */
 int
 nl_transact(int protocol, const struct ofpbuf *request,
             struct ofpbuf **replyp)
@@ -1143,6 +1125,26 @@ nl_transact(int protocol, const struct ofpbuf *request,
     return error;
 }
 
+/* Sends the 'request' member of the 'n' transactions in 'transactions' on a
+ * Netlink socket for the given 'protocol' (e.g. NETLINK_ROUTE or
+ * NETLINK_GENERIC), in order, and receives responses to all of them.  Fills in
+ * the 'error' member of each transaction with 0 if it was successful,
+ * otherwise with a positive errno value.  If 'reply' is nonnull, then it will
+ * be filled with the reply if the message receives a detailed reply.  In other
+ * cases, i.e. where the request failed or had no reply beyond an indication of
+ * success, 'reply' will be cleared if it is nonnull.
+ *
+ * The caller is responsible for destroying each request and reply, and the
+ * transactions array itself.
+ *
+ * Before sending each message, this function will finalize nlmsg_len in each
+ * 'request' to match the ofpbuf's size, set nlmsg_pid to the pid of the socket
+ * used for the transaction, and initialize nlmsg_seq.
+ *
+ * Bare Netlink is an unreliable transport protocol.  This function layers
+ * reliable delivery and reply semantics on top of bare Netlink.  See
+ * nl_transact() for some caveats.
+ */
 void
 nl_transact_multiple(int protocol,
                      struct nl_transaction **transactions, size_t n)
