@@ -1076,6 +1076,7 @@ pre_get_info(struct vtep_ctl_context *ctx)
 
     ovsdb_idl_add_column(ctx->idl, &vteprec_physical_switch_col_name);
     ovsdb_idl_add_column(ctx->idl, &vteprec_physical_switch_col_ports);
+    ovsdb_idl_add_column(ctx->idl, &vteprec_physical_switch_col_tunnels);
 
     ovsdb_idl_add_column(ctx->idl, &vteprec_physical_port_col_name);
     ovsdb_idl_add_column(ctx->idl, &vteprec_physical_port_col_vlan_bindings);
@@ -1111,6 +1112,9 @@ pre_get_info(struct vtep_ctl_context *ctx)
                          &vteprec_physical_locator_col_dst_ip);
     ovsdb_idl_add_column(ctx->idl,
                          &vteprec_physical_locator_col_encapsulation_type);
+
+    ovsdb_idl_add_column(ctx->idl, &vteprec_tunnel_col_local);
+    ovsdb_idl_add_column(ctx->idl, &vteprec_tunnel_col_remote);
 }
 
 static void
@@ -1122,6 +1126,7 @@ vtep_ctl_context_populate_cache(struct vtep_ctl_context *ctx)
     const struct vteprec_ucast_macs_remote *ucast_remote_cfg;
     const struct vteprec_mcast_macs_local *mcast_local_cfg;
     const struct vteprec_mcast_macs_remote *mcast_remote_cfg;
+    const struct vteprec_tunnel *tunnel_cfg;
     struct sset pswitches, ports, lswitches;
     size_t i;
 
@@ -1245,6 +1250,15 @@ vtep_ctl_context_populate_cache(struct vtep_ctl_context *ctx)
                                            mcast_remote_cfg->locator_set,
                                            false);
         mcast_mac->remote_cfg = mcast_remote_cfg;
+    }
+
+    VTEPREC_TUNNEL_FOR_EACH (tunnel_cfg, ctx->idl) {
+        if (tunnel_cfg->local) {
+            add_ploc_to_cache(ctx, tunnel_cfg->local);
+        }
+        if (tunnel_cfg->remote) {
+            add_ploc_to_cache(ctx, tunnel_cfg->remote);
+        }
     }
 
     sset_init(&pswitches);
@@ -2281,6 +2295,10 @@ static const struct vtep_ctl_table_class tables[] = {
 
     {&vteprec_table_physical_switch,
      {{&vteprec_table_physical_switch, &vteprec_physical_switch_col_name, NULL},
+      {NULL, NULL, NULL}}},
+
+    {&vteprec_table_tunnel,
+     {{NULL, NULL, NULL},
       {NULL, NULL, NULL}}},
 
     {NULL, {{NULL, NULL, NULL}, {NULL, NULL, NULL}}}
