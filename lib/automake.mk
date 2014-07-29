@@ -319,6 +319,15 @@ lib_libopenvswitch_la_SOURCES += \
        lib/netdev-dpdk.h
 endif
 
+if WIN32
+lib_libopenvswitch_la_SOURCES += \
+	lib/netlink-notifier.c \
+	lib/netlink-notifier.h \
+	lib/netlink-protocol.h \
+	lib/netlink-socket.c \
+	lib/netlink-socket.h
+endif
+
 if HAVE_POSIX_AIO
 lib_libopenvswitch_la_SOURCES += lib/async-append-aio.c
 else
