@@ -48,7 +48,9 @@
 
 #define NLM_F_ROOT              0x100
 #define NLM_F_MATCH             0x200
+#define NLM_F_EXCL              0x200
 #define NLM_F_ATOMIC            0x400
+#define NLM_F_CREATE            0x400
 #define NLM_F_DUMP              (NLM_F_ROOT | NLM_F_MATCH)
 
 /* nlmsg_type values. */
@@ -58,6 +60,8 @@
 #define NLMSG_OVERRUN           4
 
 #define NLMSG_MIN_TYPE          0x10
+
+#define MAX_LINKS               32
 
 struct nlmsghdr {
     uint32_t nlmsg_len;
