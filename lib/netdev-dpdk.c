@@ -125,6 +125,8 @@ static const struct rte_eth_txconf tx_conf = {
 
 enum { MAX_RX_QUEUE_LEN = 192 };
 enum { MAX_TX_QUEUE_LEN = 384 };
+enum { DPDK_RING_SIZE = 256 };
+BUILD_ASSERT_DECL(IS_POW2(DPDK_RING_SIZE));
 enum { DRAIN_TSC = 200000ULL };
 
 static int rte_eal_init_ret = ENODEV;
@@ -1245,7 +1247,7 @@ dpdk_ring_create(const char dev_name[], unsigned int port_no,
         return -err;
     }
 
-    ivshmem->cring_tx = rte_ring_create(ring_name, MAX_RX_QUEUE_LEN, SOCKET0, 0);
+    ivshmem->cring_tx = rte_ring_create(ring_name, DPDK_RING_SIZE, SOCKET0, 0);
     if (ivshmem->cring_tx == NULL) {
         rte_free(ivshmem);
         return ENOMEM;
@@ -1256,7 +1258,7 @@ dpdk_ring_create(const char dev_name[], unsigned int port_no,
         return -err;
     }
 
-    ivshmem->cring_rx = rte_ring_create(ring_name, MAX_RX_QUEUE_LEN, SOCKET0, 0);
+    ivshmem->cring_rx = rte_ring_create(ring_name, DPDK_RING_SIZE, SOCKET0, 0);
     if (ivshmem->cring_rx == NULL) {
         rte_free(ivshmem);
         return ENOMEM;
