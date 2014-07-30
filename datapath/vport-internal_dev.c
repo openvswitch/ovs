@@ -236,6 +236,11 @@ static int internal_dev_recv(struct vport *vport, struct sk_buff *skb)
 	struct net_device *netdev = netdev_vport_priv(vport)->dev;
 	int len;
 
+	if (unlikely(!(netdev->flags & IFF_UP))) {
+		kfree_skb(skb);
+		return 0;
+	}
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
 	if (vlan_tx_tag_present(skb)) {
 		if (unlikely(!__vlan_put_tag(skb,
