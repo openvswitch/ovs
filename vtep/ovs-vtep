@@ -18,6 +18,7 @@
 
 import argparse
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -55,13 +56,13 @@ def call_prog(prog, args_list):
     return output
 
 def ovs_vsctl(args):
-    return call_prog("ovs-vsctl", args.split())
+    return call_prog("ovs-vsctl", shlex.split(args))
 
 def ovs_ofctl(args):
-    return call_prog("ovs-ofctl", args.split())
+    return call_prog("ovs-ofctl", shlex.split(args))
 
 def vtep_ctl(args):
-    return call_prog("vtep-ctl", args.split())
+    return call_prog("vtep-ctl", shlex.split(args))
 
 
 def unixctl_exit(conn, unused_argv, unused_aux):
