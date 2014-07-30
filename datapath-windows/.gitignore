@@ -1,0 +1,5 @@
+/Package/x64/
+*.opensdf
+*.sdf
+/ovsext/x64/
+/x64
