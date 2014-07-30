@@ -45,6 +45,8 @@ Lswitches = {}
 Bindings = {}
 ls_count = 0
 tun_id = 0
+bfd_bridge = "vtep_bfd"
+bfd_ref = {}
 
 def call_prog(prog, args_list):
     cmd = [prog, "-vconsole:off"] + args_list
@@ -112,6 +114,10 @@ class Logical_Switch(object):
 
         ovs_ofctl("del-flows %s" % self.short_name)
         ovs_ofctl("add-flow %s priority=0,action=drop" % self.short_name)
+
+    def cleanup_ls(self):
+        for port_no, tun_name, remote_ip in self.tunnels.itervalues():
+            del_bfd(remote_ip)
 
     def update_flood(self):
         flood_ports = self.ports.values()
@@ -181,7 +187,9 @@ class Logical_Switch(object):
             # Give the system a moment to allocate the port number
             time.sleep(0.5)
 
-        self.tunnels[tunnel] = (port_no, tun_name)
+        self.tunnels[tunnel] = (port_no, tun_name, ip)
+
+        add_bfd(ip)
 
         ovs_ofctl("add-flow %s table=0,priority=1000,in_port=%s,"
                   "actions=resubmit(,1)"
@@ -190,10 +198,12 @@ class Logical_Switch(object):
     def del_tunnel(self, tunnel):
         vlog.info("removing tunnel %s" % tunnel)
 
-        port_no, tun_name = self.tunnels[tunnel]
+        port_no, tun_name, remote_ip = self.tunnels[tunnel]
         ovs_ofctl("del-flows %s table=0,in_port=%s"
                     % (self.short_name, port_no))
         ovs_vsctl("del-port %s %s" % (self.short_name, tun_name))
+
+        del_bfd(remote_ip)
 
         del self.tunnels[tunnel]
 
@@ -308,6 +318,156 @@ class Logical_Switch(object):
         self.update_local_macs()
         self.update_remote_macs()
         self.update_stats()
+
+def get_vtep_tunnel(remote_ip):
+    # Get the physical_locator record for the local tunnel end point.
+    column = vtep_ctl("--columns=_uuid find physical_locator "
+                      "dst_ip=%s" % Tunnel_Ip)
+    local = column.partition(":")[2].strip()
+    if not local:
+        return (None, None, None)
+
+    # Get the physical_locator record for the remote tunnel end point.
+    column = vtep_ctl("--columns=_uuid find physical_locator "
+                      "dst_ip=%s" % remote_ip)
+    remote = column.partition(":")[2].strip()
+    if not remote:
+        return (None, None, None)
+
+    column = vtep_ctl("--columns=_uuid find tunnel "
+                      "local=%s remote=%s" % (local, remote))
+    tunnel = column.partition(":")[2].strip()
+
+    return (local, remote, tunnel)
+
+def create_vtep_tunnel(remote_ip):
+    local, remote, tunnel = get_vtep_tunnel(remote_ip)
+    if not local or not remote:
+        return None
+
+    if not tunnel:
+        vlog.info("creating tunnel record in vtep for remote_ip:%s"
+                  % remote_ip)
+        tunnel = vtep_ctl("add physical_switch %s tunnels @tun -- "
+                          "--id=@tun create Tunnel local=%s remote=%s"
+                          %(ps_name, local, remote))
+    return tunnel
+
+def destroy_vtep_tunnel(remote_ip):
+    local, remote, tunnel = get_vtep_tunnel(remote_ip)
+    if tunnel:
+        vlog.info("destroying tunnel record in vtep for remote_ip:%s"
+                  % remote_ip)
+        vtep_ctl("remove physical_switch %s tunnels %s "
+                 "-- --if-exists destroy tunnel %s"
+                 % (ps_name, tunnel, tunnel))
+
+def add_bfd(remote_ip):
+    # The VTEP emulator creates one OVS bridge for every logical switch.
+    # Multiple logical switches can have multiple OVS tunnels to the
+    # same machine (with different tunnel ids). But VTEP schema expects
+    # a single BFD session between two physical locators. Therefore
+    # create a separate bridge ('bfd_bridge') and create a single OVS tunnel
+    # between two phsyical locators (using reference counter).
+    if remote_ip in bfd_ref:
+        bfd_ref[remote_ip] += 1
+        return
+
+    vlog.info("adding bfd tunnel for remote_ip:%s" % remote_ip)
+
+    port_name = "bfd" + remote_ip
+    # Don't enable BFD yet. Enabling or disabling BFD is based on
+    # the controller setting a value in VTEP DB's tunnel record.
+    ovs_vsctl("--may-exist add-port %s %s "
+              " -- set Interface %s type=vxlan options:remote_ip=%s"
+              % (bfd_bridge, port_name, port_name, remote_ip))
+    bfd_ref[remote_ip] = 1
+
+    # Ideally, we should create a 'tunnel' record in the VTEP DB here.
+    # To create a 'tunnel' record, we need 2 entries in 'physical_locator'
+    # table (one for local and one for remote). But, 'physical_locator'
+    # can be created/destroyed asynchronously when the remote controller
+    # adds/removes entries in Ucast_Macs_Remote table. To prevent race
+    # conditions, pass the responsibility of creating a 'tunnel' record
+    # to run_bfd() which runs more often.
+
+def del_bfd(remote_ip):
+    if remote_ip in bfd_ref:
+        if bfd_ref[remote_ip] == 1:
+            port_name = "bfd" + remote_ip
+            vlog.info("deleting bfd tunnel for remote_ip:%s" % remote_ip)
+            ovs_vsctl("--if-exists del-port %s" % port_name)
+            destroy_vtep_tunnel(remote_ip)
+            del bfd_ref[remote_ip]
+        else:
+            bfd_ref[remote_ip] -= 1
+
+def run_bfd():
+    bfd_ports = ovs_vsctl("list-ports %s" % bfd_bridge).split()
+    for port in bfd_ports:
+        remote_ip = ovs_vsctl("get interface %s options:remote_ip" % port)
+        tunnel = create_vtep_tunnel(remote_ip)
+        if not tunnel:
+            continue
+
+        bfd_params_default = {'bfd_params:enable' : 'false',
+                              'bfd_params:min_rx' : 1000,
+                              'bfd_params:min_tx' : 100,
+                              'bfd_params:decay_min_rx' : 0,
+                              'bfd_params:cpath_down' : 'false',
+                              'bfd_params:check_tnl_key' : 'false'}
+        bfd_params_values = {}
+
+        for key, default in bfd_params_default.iteritems():
+            column = vtep_ctl("--if-exists get tunnel %s %s"
+                               % (tunnel, key))
+            if not column:
+                bfd_params_values[key] = default
+            else:
+                bfd_params_values[key] = column
+
+        for key, value in bfd_params_values.iteritems():
+            new_key = key.replace('_params','')
+            ovs_vsctl("set interface %s %s=%s" % (port, new_key, value))
+
+        bfd_status = ['bfd_status:state', 'bfd_status:forwarding',
+                      'bfd_status:diagnostic', 'bfd_status:remote_state',
+                      'bfd_status:remote_diagnostic']
+        for key in bfd_status:
+            value = ovs_vsctl("--if-exists get interface %s %s" % (port, key))
+            if value:
+                vtep_ctl("set tunnel %s %s=%s" %(tunnel, key, value))
+            else:
+                new_key = key.replace('bfd_status:', '')
+                vtep_ctl("remove tunnel %s bfd_status %s" % (tunnel, new_key))
+
+        vtep_ctl("set tunnel %s bfd_status:enabled=%s"
+                 % (tunnel, bfd_params_values['bfd_params:enable']))
+
+        # Add the defaults as described in VTEP schema to make it explicit.
+        bfd_lconf_default = {'bfd_config_local:bfd_dst_ip' : '169.254.1.0',
+                             'bfd_config_local:bfd_dst_mac' :
+                                    '00:23:20:00:00:01'}
+        for key, value in bfd_lconf_default.iteritems():
+            vtep_ctl("set tunnel %s %s=%s" %(tunnel, key, value))
+
+        # bfd_config_remote options from VTEP DB should be populated to
+        # corresponding OVS DB values.
+        bfd_dst_ip = vtep_ctl("--if-exists get tunnel %s "
+                              "bfd_config_remote:bfd_dst_ip" % (tunnel))
+        if not bfd_dst_ip:
+            bfd_dst_ip = "169.254.1.1"
+
+        bfd_dst_mac = vtep_ctl("--if-exists get tunnel %s "
+                              "bfd_config_remote:bfd_dst_mac" % (tunnel))
+        if not bfd_dst_mac:
+            bfd_dst_mac = "00:23:20:00:00:01"
+
+        ovs_vsctl("set interface %s bfd:bfd_dst_ip=%s "
+                  "bfd:bfd_remote_dst_mac=%s bfd:bfd_local_dst_mac=%s"
+                  % (port, bfd_dst_ip,
+                  bfd_lconf_default['bfd_config_local:bfd_dst_mac'],
+                  bfd_dst_mac))
 
 def add_binding(binding, ls):
     vlog.info("adding binding %s" % binding)
@@ -425,6 +585,7 @@ def handle_physical():
         del_binding(binding, ls)
 
         if not len(ls.ports):
+            ls.cleanup_ls()
             ovs_vsctl("del-br %s" % Lswitches[ls_name].short_name)
             vtep_ctl("clear-local-macs %s" % Lswitches[ls_name].name)
             del Lswitches[ls_name]
@@ -465,6 +626,17 @@ def setup():
                     ovs_vsctl("del-port %s" % peer)
 
             ovs_vsctl("del-br %s" % br)
+
+        if br == bfd_bridge:
+            bfd_ports = ovs_vsctl("list-ports %s" % bfd_bridge).split()
+            for port in bfd_ports:
+                remote_ip = ovs_vsctl("get interface %s options:remote_ip"
+                                      % port)
+                tunnel = destroy_vtep_tunnel(remote_ip)
+
+            ovs_vsctl("del-br %s" % br)
+
+    ovs_vsctl("add-br %s" % bfd_bridge)
 
 
 def main():
@@ -509,6 +681,8 @@ def main():
 
         for ls_name, ls in Lswitches.items():
             ls.run()
+
+        run_bfd()
 
         poller = ovs.poller.Poller()
         unixctl.wait(poller)
