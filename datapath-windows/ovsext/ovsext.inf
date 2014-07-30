@@ -1,25 +1,25 @@
 ;
-; Copyright (c) VMWare. All Rights Reserved.
+; Copyright (c) VMware. All Rights Reserved.
 ;
 
 [version]
 Signature   = "$Windows NT$"
 Class       = NetService
 ClassGUID   = {4D36E974-E325-11CE-BFC1-08002BE10318}
-Provider    = %VMWare%
+Provider    = %OVS%
 CatalogFile = ovsext.cat
 DriverVer   = 10/10/2013,1.0
 
 [Manufacturer]
-%VMWare%=VMWare,NTx86,NTia64,NTamd64
+%OVS%=OVS,NTx86,NTia64,NTamd64
 
-[VMWare.NTx86]
+[OVS.NTx86]
 %OVSExt_Desc%=Install, OVSExt
 
-[VMWare.NTia64]
+[OVS.NTia64]
 %OVSExt_Desc%=Install, OVSExt
 
-[VMWare.NTamd64]
+[OVS.NTamd64]
 %OVSExt_Desc%=Install, OVSExt
 
 ;-------------------------------------------------------------------------
@@ -80,6 +80,6 @@ AddReg          = Common.Params.reg
 DelService=OVSExt,0x200
 
 [Strings]
-VMWare = "VMWare"
-OVSExt_Desc = "VMWare OVS Extension"
-OVSExt_HelpText = "VMWare OVS forwarding switch extension"
+OVS = "Open vSwitch"
+OVSExt_Desc = "Open vSwitch Extension"
+OVSExt_HelpText = "Open vSwitch forwarding switch extension"
