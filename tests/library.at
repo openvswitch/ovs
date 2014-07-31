@@ -200,3 +200,8 @@ AT_CLEANUP
 AT_SETUP([snprintf])
 AT_CHECK([ovstest test-util snprintf])
 AT_CLEANUP
+
+AT_SETUP([test bitmap functions])
+AT_CHECK([ovstest test-bitmap check], [0], [..
+])
+AT_CLEANUP

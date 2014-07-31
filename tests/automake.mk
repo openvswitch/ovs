@@ -244,6 +244,7 @@ tests_ovstest_SOURCES = \
 	tests/test-stp.c \
 	tests/test-util.c \
 	tests/test-uuid.c \
+	tests/test-bitmap.c \
 	tests/test-vconn.c
 
 if !WIN32
