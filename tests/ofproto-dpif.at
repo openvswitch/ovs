@@ -1307,6 +1307,7 @@ for i in 1 ; do
     ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 20 22 22 22 22 22 08 00 45 00 00 24 00 00 00 00 00 84 00 00 C0 A8 00 01 C0 A8 00 02 04 58 08 af 00 00 00 00 d9 d7 91 57 01 00 00 34 cf 28 ec 4e 00 01 40 00 00 0a ff ff b7 53 24 19 00 05 00 08 7f 00 00 01 00 05 00 08 c0 a8 02 07 00 0c 00 06 00 05 00 00 80 00 00 04 c0 00 00 04'
 done
 
+AT_CHECK([ovs-appctl time/warp 1000], [0], [ignore])
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 18])
 OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
@@ -2356,6 +2357,7 @@ mpls,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:05:10,dl_dst=50:54:
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+AT_CHECK([ovs-appctl revalidator/wait], [0], [ignore])
 
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:44:42 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],CONTROLLER:65535
@@ -2532,6 +2534,7 @@ tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:0
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+AT_CHECK([ovs-appctl revalidator/wait], [0], [ignore])
 
 AT_CHECK([ovs-ofctl --protocols=OpenFlow10 dump-flows br0 | ofctl_strip | sort], [0], [dnl
  n_packets=3, n_bytes=180, priority=0 actions=CONTROLLER:65535
@@ -3238,6 +3241,7 @@ mpls,metadata=0,in_port=0,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:59,dl_d
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+AT_CHECK([ovs-appctl revalidator/wait], [0], [ignore])
 AT_CHECK([ovs-ofctl --protocols=OpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
  cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:54:50 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],push_vlan:0x8100,set_field:4195->vlan_vid,set_field:1->vlan_pcp,CONTROLLER:65535
  cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:54:51 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],push_vlan:0x8100,set_field:4195->vlan_vid,set_field:1->vlan_pcp,CONTROLLER:65535
@@ -5684,6 +5688,7 @@ metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+AT_CHECK([ovs-appctl revalidator/wait], [0], [ignore])
 
 AT_CHECK([ovs-ofctl -O OpenFlow13 dump-flows br0 | ofctl_strip | sort], [0], [dnl
  n_packets=3, n_bytes=180, dl_dst=50:54:00:00:00:0a actions=goto_table:1
@@ -5738,6 +5743,7 @@ metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+AT_CHECK([ovs-appctl revalidator/wait], [0], [ignore])
 
 AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip | sort], [0], [dnl
  table=1, n_packets=3, n_bytes=180, dl_dst=50:54:00:00:00:0a actions=CONTROLLER:65535
