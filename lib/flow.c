@@ -210,7 +210,7 @@ parse_mpls(void **datap, size_t *sizep)
             break;
         }
     }
-    return MAX(count, FLOW_MAX_MPLS_LABELS);
+    return MIN(count, FLOW_MAX_MPLS_LABELS);
 }
 
 static inline ovs_be16
