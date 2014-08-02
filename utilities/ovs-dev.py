@@ -131,6 +131,7 @@ def conf():
     if clang:
         mf.write(make_str % BUILD_CLANG)
     mf.write("\t$(MAKE) -C %s %s $@\n" % (BUILD_GCC, c1))
+    mf.write("\ncheck-valgrind:\n")
     mf.write("\ncheck:\n")
     mf.write(make_str % BUILD_GCC)
     mf.close()
