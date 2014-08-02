@@ -581,7 +581,12 @@ OvsTunnelPortTx(OvsForwardingContext *ovsFwdCtx)
      * Setup the source port to be the internal port to as to facilitate the
      * second OvsLookupFlow.
      */
-    ASSERT(ovsFwdCtx->switchContext->internalVport);
+    if (ovsFwdCtx->switchContext->internalVport == NULL) {
+        OvsClearTunTxCtx(ovsFwdCtx);
+        OvsCompleteNBLForwardingCtx(ovsFwdCtx,
+            L"OVS-Dropped since internal port is absent");
+        return NDIS_STATUS_FAILURE;
+    }
     ovsFwdCtx->srcVportNo =
         ((POVS_VPORT_ENTRY)ovsFwdCtx->switchContext->internalVport)->portNo;
 
