@@ -798,7 +798,7 @@ read_upcalls(struct handler *handler,
                  * in the kernel. */
                 VLOG_INFO_RL(&rl, "received packet on unassociated datapath "
                              "port %"PRIu32, odp_in_port);
-                dpif_flow_put(udpif->dpif, DPIF_FP_CREATE | DPIF_FP_MODIFY,
+                dpif_flow_put(udpif->dpif, DPIF_FP_CREATE,
                               dupcall->key, dupcall->key_len, NULL, 0, NULL, 0,
                               NULL);
             }
@@ -1010,7 +1010,7 @@ handle_upcalls(struct handler *handler, struct hmap *misses,
 
             op = &ops[n_ops++];
             op->type = DPIF_OP_FLOW_PUT;
-            op->u.flow_put.flags = DPIF_FP_CREATE | DPIF_FP_MODIFY;
+            op->u.flow_put.flags = DPIF_FP_CREATE;
             op->u.flow_put.key = miss->key;
             op->u.flow_put.key_len = miss->key_len;
             op->u.flow_put.mask = ofpbuf_data(&mask);
