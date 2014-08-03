@@ -917,6 +917,11 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
 
     shash_add(&all_dpif_backers, type, backer);
 
+    backer->enable_recirc = check_recirc(backer);
+    backer->variable_length_userdata = check_variable_length_userdata(backer);
+    backer->max_mpls_depth = check_max_mpls_depth(backer);
+    backer->rid_pool = recirc_id_pool_create();
+
     error = dpif_recv_set(backer->dpif, backer->recv_set_enable);
     if (error) {
         VLOG_ERR("failed to listen on datapath of type %s: %s",
@@ -924,10 +929,6 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
         close_dpif_backer(backer);
         return error;
     }
-    backer->enable_recirc = check_recirc(backer);
-    backer->variable_length_userdata = check_variable_length_userdata(backer);
-    backer->max_mpls_depth = check_max_mpls_depth(backer);
-    backer->rid_pool = recirc_id_pool_create();
 
     if (backer->recv_set_enable) {
         udpif_set_threads(backer->udpif, n_handlers, n_revalidators);
@@ -1043,11 +1044,6 @@ check_variable_length_userdata(struct dpif_backer *backer)
 
     switch (error) {
     case 0:
-        /* Variable-length userdata is supported.
-         *
-         * Purge received packets to avoid processing the nonsense packet we
-         * sent to userspace, then report success. */
-        dpif_recv_purge(backer->dpif);
         return true;
 
     case ERANGE:
