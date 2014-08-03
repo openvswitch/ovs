@@ -61,12 +61,17 @@ struct ofp_prop_header {
 /* Pulls a property, beginning with struct ofp_prop_header, from the beginning
  * of 'msg'.  Stores the type of the property in '*typep' and, if 'property' is
  * nonnull, the entire property, including the header, in '*property'.  Returns
- * 0 if successful, otherwise an error code. */
+ * 0 if successful, otherwise an error code.
+ *
+ * This function pulls the property's stated size padded out to a multiple of
+ * 'alignment' bytes.  The common case in OpenFlow is an 'alignment' of 8, so
+ * you can use ofputil_pull_property() for that case. */
 static enum ofperr
-ofputil_pull_property(struct ofpbuf *msg, struct ofpbuf *property,
-                      uint16_t *typep)
+ofputil_pull_property__(struct ofpbuf *msg, struct ofpbuf *property,
+                        unsigned int alignment, uint16_t *typep)
 {
     struct ofp_prop_header *oph;
+    unsigned int padded_len;
     unsigned int len;
 
     if (ofpbuf_size(msg) < sizeof *oph) {
@@ -75,7 +80,8 @@ ofputil_pull_property(struct ofpbuf *msg, struct ofpbuf *property,
 
     oph = ofpbuf_data(msg);
     len = ntohs(oph->len);
-    if (len < sizeof *oph || ROUND_UP(len, 8) > ofpbuf_size(msg)) {
+    padded_len = ROUND_UP(len, alignment);
+    if (len < sizeof *oph || padded_len > ofpbuf_size(msg)) {
         return OFPERR_OFPBPC_BAD_LEN;
     }
 
@@ -83,8 +89,22 @@ ofputil_pull_property(struct ofpbuf *msg, struct ofpbuf *property,
     if (property) {
         ofpbuf_use_const(property, ofpbuf_data(msg), len);
     }
-    ofpbuf_pull(msg, ROUND_UP(len, 8));
+    ofpbuf_pull(msg, padded_len);
     return 0;
+}
+
+/* Pulls a property, beginning with struct ofp_prop_header, from the beginning
+ * of 'msg'.  Stores the type of the property in '*typep' and, if 'property' is
+ * nonnull, the entire property, including the header, in '*property'.  Returns
+ * 0 if successful, otherwise an error code.
+ *
+ * This function pulls the property's stated size padded out to a multiple of
+ * 8 bytes, which is the common case for OpenFlow properties. */
+static enum ofperr
+ofputil_pull_property(struct ofpbuf *msg, struct ofpbuf *property,
+                      uint16_t *typep)
+{
+    return ofputil_pull_property__(msg, property, 8, typep);
 }
 
 static void PRINTF_FORMAT(2, 3)
@@ -4443,10 +4463,12 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
 
     return b;
 }
+
+/* Table features. */
 
 static enum ofperr
 pull_table_feature_property(struct ofpbuf *msg, struct ofpbuf *payload,
-                        uint16_t *typep)
+                            uint16_t *typep)
 {
     enum ofperr error;
 
@@ -4467,7 +4489,7 @@ parse_action_bitmap(struct ofpbuf *payload, enum ofp_version ofp_version,
         uint16_t type;
         enum ofperr error;
 
-        error = pull_table_feature_property(payload, NULL, &type);
+        error = ofputil_pull_property__(payload, NULL, 1, &type);
         if (error) {
             return error;
         }
@@ -4489,7 +4511,16 @@ parse_instruction_ids(struct ofpbuf *payload, bool loose, uint32_t *insts)
         enum ofperr error;
         uint16_t ofpit;
 
-        error = pull_table_feature_property(payload, NULL, &ofpit);
+        /* OF1.3 and OF1.4 aren't clear about padding in the instruction IDs.
+         * It seems clear that they aren't padded to 8 bytes, though, because
+         * both standards say that "non-experimenter instructions are 4 bytes"
+         * and do not mention any padding before the first instruction ID.
+         * (There wouldn't be any point in padding to 8 bytes if the IDs were
+         * aligned on an odd 4-byte boundary.)
+         *
+         * Anyway, we just assume they're all glommed together on byte
+         * boundaries. */
+        error = ofputil_pull_property__(payload, NULL, 1, &ofpit);
         if (error) {
             return error;
         }
