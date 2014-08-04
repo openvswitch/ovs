@@ -4760,15 +4760,17 @@ ofputil_decode_table_features(struct ofpbuf *msg,
 
     /* Fix inconsistencies:
      *
-     *     - Turn off 'mask' and 'wildcard' bits that are not in 'match',
-     *       because a field must be matchable to be masked or wildcarded.
+     *     - Turn on 'match' bits that are set in 'mask', because maskable
+     *       fields are matchable.
      *
      *     - Turn on 'wildcard' bits that are set in 'mask', because a field
-     *       that is arbitrarily maskable can be wildcarded entirely. */
-    bitmap_and(tf->mask.bm, tf->match.bm, MFF_N_IDS);
-    bitmap_and(tf->wildcard.bm, tf->match.bm, MFF_N_IDS);
-
+     *       that is arbitrarily maskable can be wildcarded entirely.
+     *
+     *     - Turn off 'wildcard' bits that are not in 'match', because a field
+     *       must be matchable for it to be meaningfully wildcarded. */
+    bitmap_or(tf->match.bm, tf->mask.bm, MFF_N_IDS);
     bitmap_or(tf->wildcard.bm, tf->mask.bm, MFF_N_IDS);
+    bitmap_and(tf->wildcard.bm, tf->match.bm, MFF_N_IDS);
 
     return 0;
 }
