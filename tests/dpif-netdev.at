@@ -10,7 +10,7 @@ m4_define([STRIP_XOUT], [[sed '
 ' | sort]])
 m4_define([FILTER_FLOW_INSTALL], [[
 grep ' put' | sed '
-    s/.*put\[create\]\[modify\] //
+    s/.*put\[create\] //
 ' | sort | uniq]])
 m4_define([FILTER_FLOW_DUMP], [[
 grep 'flow_dump ' | sed '
