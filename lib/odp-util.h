@@ -21,10 +21,10 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
-#include <linux/openvswitch.h>
 #include "flow.h"
 #include "hash.h"
 #include "hmap.h"
+#include "odp-netlink.h"
 #include "openflow/openflow.h"
 #include "util.h"
 

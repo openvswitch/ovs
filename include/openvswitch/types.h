@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2013 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 #ifndef OPENVSWITCH_TYPES_H
 #define OPENVSWITCH_TYPES_H 1
 
-#include <linux/types.h>
 #include <sys/types.h>
 #include <stdint.h>
 
@@ -30,14 +29,10 @@
 #endif
 
 /* The ovs_be<N> types indicate that an object is in big-endian, not
- * native-endian, byte order.  They are otherwise equivalent to uint<N>_t.
- *
- * We bootstrap these from the Linux __be<N> types.  If we instead define our
- * own independently then __be<N> and ovs_be<N> become mutually
- * incompatible. */
-typedef __be16 ovs_be16;
-typedef __be32 ovs_be32;
-typedef __be64 ovs_be64;
+ * native-endian, byte order.  They are otherwise equivalent to uint<N>_t. */
+typedef uint16_t OVS_BITWISE ovs_be16;
+typedef uint32_t OVS_BITWISE ovs_be32;
+typedef uint64_t OVS_BITWISE ovs_be64;
 
 #define OVS_BE16_MAX ((OVS_FORCE ovs_be16) 0xffff)
 #define OVS_BE32_MAX ((OVS_FORCE ovs_be32) 0xffffffff)

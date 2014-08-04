@@ -17,13 +17,13 @@
 
 #include <config.h>
 #include "odp-execute.h"
-#include <linux/openvswitch.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "dpif.h"
 #include "netlink.h"
 #include "ofpbuf.h"
+#include "odp-netlink.h"
 #include "odp-util.h"
 #include "packet-dpif.h"
 #include "packets.h"

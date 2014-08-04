@@ -46,6 +46,7 @@ openvswitch_headers += \
 	linux/compat/include/linux/netdevice.h \
 	linux/compat/include/linux/netdev_features.h \
 	linux/compat/include/linux/netlink.h \
+	linux/compat/include/linux/openvswitch.h \
 	linux/compat/include/linux/poison.h \
 	linux/compat/include/linux/rculist.h \
 	linux/compat/include/linux/rcupdate.h \

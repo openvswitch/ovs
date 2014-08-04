@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <linux/openvswitch.h>
+#include "odp-netlink.h"
 
 #include "flow.h"
 

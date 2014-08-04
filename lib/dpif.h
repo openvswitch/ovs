@@ -115,7 +115,7 @@
  *      a flow, but the datapath interface uses a different data format to
  *      allow ABI forward- and backward-compatibility.  datapath/README
  *      describes the rationale and design.  Refer to OVS_KEY_ATTR_* and
- *      "struct ovs_key_*" in include/linux/openvswitch.h for details.
+ *      "struct ovs_key_*" in include/odp-netlink.h for details.
  *      lib/odp-util.h defines several functions for working with these flows.
  *
  *    - A "mask" that, for each bit in the flow, specifies whether the datapath
@@ -154,9 +154,8 @@
  *      within a flow.  Some examples of actions are OVS_ACTION_ATTR_OUTPUT,
  *      which transmits the packet out a port, and OVS_ACTION_ATTR_SET, which
  *      modifies packet headers.  Refer to OVS_ACTION_ATTR_* and "struct
- *      ovs_action_*" in include/linux/openvswitch.h for details.
- *      lib/odp-util.h defines several functions for working with datapath
- *      actions.
+ *      ovs_action_*" in include/odp-netlink.h for details.  lib/odp-util.h
+ *      defines several functions for working with datapath actions.
  *
  *      The actions list may be empty.  This indicates that nothing should be
  *      done to matching packets, that is, they should be dropped.

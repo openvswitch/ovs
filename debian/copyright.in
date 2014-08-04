@@ -95,7 +95,7 @@ License:
 * The following components are dual-licensed under the
   GNU General Public License version 2 and the Apache License Version 2.0.
 
-	include/linux/openvswitch.h
+	datapath/linux/compat/include/linux/openvswitch.h
 
   On Debian systems, the complete text of the GNU General Public License
   version 2 can be found in `/usr/share/common-licenses/GPL-2'.
