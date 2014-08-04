@@ -2077,6 +2077,7 @@ dp_netdev_output_userspace(struct dp_netdev *dp, struct ofpbuf *packet,
         struct ofpbuf *buf = &u->buf;
         size_t buf_size;
         struct flow flow;
+        void *data;
 
         upcall->type = type;
 
@@ -2100,8 +2101,8 @@ dp_netdev_output_userspace(struct dp_netdev *dp, struct ofpbuf *packet,
                                           NLA_ALIGN(userdata->nla_len));
         }
 
-        ofpbuf_set_data(&upcall->packet,
-                        ofpbuf_put(buf, ofpbuf_data(packet), ofpbuf_size(packet)));
+        data = ofpbuf_put(buf, ofpbuf_data(packet), ofpbuf_size(packet));
+        ofpbuf_use_stub(&upcall->packet, data, ofpbuf_size(packet));
         ofpbuf_set_size(&upcall->packet, ofpbuf_size(packet));
 
         seq_change(q->seq);
