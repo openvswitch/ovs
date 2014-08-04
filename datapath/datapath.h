@@ -98,7 +98,8 @@ struct datapath {
  * struct ovs_skb_cb - OVS data in skb CB
  * @flow: The flow associated with this packet.  May be %NULL if no flow.
  * @pkt_key: The flow information extracted from the packet.  Must be nonnull.
- * @tun_key: Key for the tunnel that encapsulated this packet. NULL if the
+ * @tun_info: Tunnel information about this packet.  NULL if the packet
+ * is not being tunneled.
  * @input_vport: The original vport packet came in on. This value is cached
  * when a packet is received by OVS.
  */
