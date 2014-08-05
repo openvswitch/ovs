@@ -193,7 +193,10 @@ struct udpif_key {
     struct xlate_cache *xcache OVS_GUARDED;   /* Cache for xlate entries that
                                                * are affected by this ukey.
                                                * Used for stats and learning.*/
-    struct odputil_keybuf key_buf;            /* Memory for 'key'. */
+    union {
+        struct odputil_keybuf key_buf;        /* Memory for 'key'. */
+        struct nlattr key_buf_nla;
+    };
 };
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -1108,7 +1111,7 @@ ukey_create(const struct nlattr *key, size_t key_len, long long int used)
     struct udpif_key *ukey = xmalloc(sizeof *ukey);
 
     ovs_mutex_init(&ukey->mutex);
-    ukey->key = (struct nlattr *) &ukey->key_buf;
+    ukey->key = &ukey->key_buf_nla;
     memcpy(&ukey->key_buf, key, key_len);
     ukey->key_len = key_len;
 

@@ -253,13 +253,15 @@ sflow_choose_agent_address(const char *agent_device,
     }
 
     SSET_FOR_EACH (target, targets) {
-        struct sockaddr_storage ss;
+        union {
+            struct sockaddr_storage ss;
+            struct sockaddr_in sin;
+        } sa;
         char name[IFNAMSIZ];
 
-        if (inet_parse_active(target, SFL_DEFAULT_COLLECTOR_PORT, &ss)
-            && ss.ss_family == AF_INET) {
-            struct sockaddr_in *sin = (struct sockaddr_in *) &ss;
-            if (route_table_get_name(sin->sin_addr.s_addr, name)
+        if (inet_parse_active(target, SFL_DEFAULT_COLLECTOR_PORT, &sa.ss)
+            && sa.ss.ss_family == AF_INET) {
+            if (route_table_get_name(sa.sin.sin_addr.s_addr, name)
                 && !netdev_get_in4_by_name(name, &in4)) {
                 goto success;
             }

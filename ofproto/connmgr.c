@@ -734,12 +734,16 @@ update_in_band_remotes(struct connmgr *mgr)
     /* Add all the remotes. */
     HMAP_FOR_EACH (ofconn, hmap_node, &mgr->controllers) {
         const char *target = rconn_get_target(ofconn->rconn);
-        struct sockaddr_storage ss;
+        union {
+            struct sockaddr_storage ss;
+            struct sockaddr_in in;
+        } sa;
 
         if (ofconn->band == OFPROTO_IN_BAND
-            && stream_parse_target_with_default_port(target, OFP_OLD_PORT, &ss)
-            && ss.ss_family == AF_INET) {
-            addrs[n_addrs++] = *(struct sockaddr_in *) &ss;
+            && stream_parse_target_with_default_port(target, OFP_OLD_PORT,
+                                                     &sa.ss)
+            && sa.ss.ss_family == AF_INET) {
+            addrs[n_addrs++] = sa.in;
         }
     }
     for (i = 0; i < mgr->n_extra_remotes; i++) {
