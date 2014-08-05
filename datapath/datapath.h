@@ -98,15 +98,15 @@ struct datapath {
  * struct ovs_skb_cb - OVS data in skb CB
  * @flow: The flow associated with this packet.  May be %NULL if no flow.
  * @pkt_key: The flow information extracted from the packet.  Must be nonnull.
- * @tun_info: Tunnel information about this packet.  NULL if the packet
- * is not being tunneled.
+ * @egress_tun_info: Tunnel information about this packet on egress path.
+ * NULL if the packet is not being tunneled.
  * @input_vport: The original vport packet came in on. This value is cached
  * when a packet is received by OVS.
  */
 struct ovs_skb_cb {
 	struct sw_flow		*flow;
 	struct sw_flow_key	*pkt_key;
-	struct ovs_tunnel_info  *tun_info;
+	struct ovs_tunnel_info  *egress_tun_info;
 	struct vport	*input_vport;
 };
 #define OVS_CB(skb) ((struct ovs_skb_cb *)(skb)->cb)
@@ -188,9 +188,7 @@ extern struct notifier_block ovs_dp_device_notifier;
 extern struct genl_family dp_vport_genl_family;
 extern struct genl_multicast_group ovs_dp_vport_multicast_group;
 
-void ovs_dp_process_received_packet(struct sk_buff *);
-void ovs_dp_process_packet_with_key(struct sk_buff *,
-				    struct sw_flow_key *pkt_key, bool recirc);
+void ovs_dp_process_packet(struct sk_buff *, bool recirc);
 void ovs_dp_detach_port(struct vport *);
 int ovs_dp_upcall(struct datapath *, struct sk_buff *,
 		  const struct dp_upcall_info *);

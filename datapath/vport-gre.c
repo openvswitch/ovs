@@ -66,9 +66,10 @@ static struct sk_buff *__build_header(struct sk_buff *skb,
 				      int tunnel_hlen,
 				      __be32 seq, __be16 gre64_flag)
 {
-	const struct ovs_key_ipv4_tunnel *tun_key = &OVS_CB(skb)->tun_info->tunnel;
+	const struct ovs_key_ipv4_tunnel *tun_key;
 	struct tnl_ptk_info tpi;
 
+	tun_key = &OVS_CB(skb)->egress_tun_info->tunnel;
 	skb = gre_handle_offloads(skb, !!(tun_key->tun_flags & TUNNEL_CSUM));
 	if (IS_ERR(skb))
 		return NULL;
@@ -140,7 +141,7 @@ static int __send(struct vport *vport, struct sk_buff *skb,
 		  int tunnel_hlen,
 		  __be32 seq, __be16 gre64_flag)
 {
-	struct ovs_key_ipv4_tunnel *tun_key = &OVS_CB(skb)->tun_info->tunnel;
+	struct ovs_key_ipv4_tunnel *tun_key;
 	struct rtable *rt;
 	int min_headroom;
 	__be16 df;
@@ -148,6 +149,7 @@ static int __send(struct vport *vport, struct sk_buff *skb,
 	int err;
 
 	/* Route lookup */
+	tun_key = &OVS_CB(skb)->egress_tun_info->tunnel;
 	saddr = tun_key->ipv4_src;
 	rt = find_route(ovs_dp_get_net(vport->dp),
 			&saddr, tun_key->ipv4_dst,
@@ -284,10 +286,10 @@ static int gre_send(struct vport *vport, struct sk_buff *skb)
 {
 	int hlen;
 
-	if (unlikely(!OVS_CB(skb)->tun_info))
+	if (unlikely(!OVS_CB(skb)->egress_tun_info))
 		return -EINVAL;
 
-	hlen = ip_gre_calc_hlen(OVS_CB(skb)->tun_info->tunnel.tun_flags);
+	hlen = ip_gre_calc_hlen(OVS_CB(skb)->egress_tun_info->tunnel.tun_flags);
 
 	return __send(vport, skb, hlen, 0, 0);
 }
@@ -358,13 +360,13 @@ static int gre64_send(struct vport *vport, struct sk_buff *skb)
 		   GRE_HEADER_SECTION;		/* GRE SEQ */
 	__be32 seq;
 
-	if (unlikely(!OVS_CB(skb)->tun_info))
+	if (unlikely(!OVS_CB(skb)->egress_tun_info))
 		return -EINVAL;
 
-	if (OVS_CB(skb)->tun_info->tunnel.tun_flags & TUNNEL_CSUM)
+	if (OVS_CB(skb)->egress_tun_info->tunnel.tun_flags & TUNNEL_CSUM)
 		hlen += GRE_HEADER_SECTION;
 
-	seq = be64_get_high32(OVS_CB(skb)->tun_info->tunnel.tun_id);
+	seq = be64_get_high32(OVS_CB(skb)->egress_tun_info->tunnel.tun_id);
 	return __send(vport, skb, hlen, seq, (TUNNEL_KEY|TUNNEL_SEQ));
 }
 

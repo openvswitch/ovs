@@ -610,7 +610,7 @@ static int execute_set_action(struct sk_buff *skb,
 		break;
 
 	case OVS_KEY_ATTR_TUNNEL_INFO:
-		OVS_CB(skb)->tun_info = nla_data(nested_attr);
+		OVS_CB(skb)->egress_tun_info = nla_data(nested_attr);
 		break;
 
 	case OVS_KEY_ATTR_ETHERNET:
@@ -646,7 +646,7 @@ static int execute_set_action(struct sk_buff *skb,
 }
 
 static int execute_recirc(struct datapath *dp, struct sk_buff *skb,
-				 const struct nlattr *a)
+			  const struct nlattr *a)
 {
 	struct sw_flow_key recirc_key;
 	int err;
@@ -658,8 +658,7 @@ static int execute_recirc(struct datapath *dp, struct sk_buff *skb,
 		return err;
 	}
 
-
-	ovs_dp_process_packet_with_key(skb, &recirc_key, true);
+	ovs_dp_process_packet(skb, true);
 
 	return 0;
 }
@@ -807,7 +806,6 @@ int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb, bool recirc)
 		goto out_loop;
 	}
 
-	OVS_CB(skb)->tun_info = NULL;
 	error = do_execute_actions(dp, skb, acts->actions, acts->actions_len);
 
 	/* Check whether sub-actions looped too much. */

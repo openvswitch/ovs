@@ -151,12 +151,12 @@ static int vxlan_tnl_send(struct vport *vport, struct sk_buff *skb)
 	int port_max;
 	int err;
 
-	if (unlikely(!OVS_CB(skb)->tun_info)) {
+	if (unlikely(!OVS_CB(skb)->egress_tun_info)) {
 		err = -EINVAL;
 		goto error;
 	}
 
-	tun_key = &OVS_CB(skb)->tun_info->tunnel;
+	tun_key = &OVS_CB(skb)->egress_tun_info->tunnel;
 
 	/* Route lookup */
 	saddr = tun_key->ipv4_src;

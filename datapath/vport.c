@@ -475,6 +475,8 @@ void ovs_vport_receive(struct vport *vport, struct sk_buff *skb,
 		       struct ovs_tunnel_info *tun_info)
 {
 	struct pcpu_sw_netstats *stats;
+	struct sw_flow_key key;
+	int error;
 
 	stats = this_cpu_ptr(vport->percpu_stats);
 	u64_stats_update_begin(&stats->syncp);
@@ -483,9 +485,15 @@ void ovs_vport_receive(struct vport *vport, struct sk_buff *skb,
 	u64_stats_update_end(&stats->syncp);
 
 	ovs_skb_init_inner_protocol(skb);
-	OVS_CB(skb)->tun_info = tun_info;
 	OVS_CB(skb)->input_vport = vport;
-	ovs_dp_process_received_packet(skb);
+	OVS_CB(skb)->egress_tun_info = NULL;
+	error = ovs_flow_key_extract(tun_info, skb, &key);
+	if (unlikely(error)) {
+		kfree_skb(skb);
+		return;
+	}
+
+	ovs_dp_process_packet(skb, false);
 }
 
 /**

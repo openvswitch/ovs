@@ -669,16 +669,16 @@ static int key_extract(struct sk_buff *skb, struct sw_flow_key *key)
 		}
 	}
 
+	OVS_CB(skb)->pkt_key = key;
 	return 0;
 }
 
-int ovs_flow_key_extract(struct sk_buff *skb, struct sw_flow_key *key)
+int ovs_flow_key_extract(const struct ovs_tunnel_info *tun_info,
+			 struct sk_buff *skb,
+			 struct sw_flow_key *key)
 {
 	/* Extract metadata from packet. */
-
-	if (OVS_CB(skb)->tun_info) {
-		struct ovs_tunnel_info *tun_info = OVS_CB(skb)->tun_info;
-
+	if (tun_info) {
 		memcpy(&key->tun_key, &tun_info->tunnel, sizeof(key->tun_key));
 
 		BUILD_BUG_ON(((1 << (sizeof(tun_info->options_len) * 8)) - 1) >

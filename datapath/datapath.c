@@ -250,11 +250,11 @@ void ovs_dp_detach_port(struct vport *p)
 	ovs_vport_del(p);
 }
 
-void ovs_dp_process_packet_with_key(struct sk_buff *skb,
-				    struct sw_flow_key *pkt_key,
-				    bool recirc)
+/* Must be called with rcu_read_lock. */
+void ovs_dp_process_packet(struct sk_buff *skb, bool recirc)
 {
 	const struct vport *p = OVS_CB(skb)->input_vport;
+	struct sw_flow_key *pkt_key = OVS_CB(skb)->pkt_key;
 	struct datapath *dp = p->dp;
 	struct sw_flow *flow;
 	struct dp_stats_percpu *stats;
@@ -262,7 +262,6 @@ void ovs_dp_process_packet_with_key(struct sk_buff *skb,
 	u32 n_mask_hit;
 
 	stats = this_cpu_ptr(dp->stats_percpu);
-	OVS_CB(skb)->pkt_key = pkt_key;
 
 	/* Look up flow. */
 	flow = ovs_flow_tbl_lookup_stats(&dp->table, pkt_key, skb_get_hash(skb),
@@ -291,22 +290,6 @@ out:
 	(*stats_counter)++;
 	stats->n_mask_hit += n_mask_hit;
 	u64_stats_update_end(&stats->sync);
-}
-
-/* Must be called with rcu_read_lock. */
-void ovs_dp_process_received_packet(struct sk_buff *skb)
-{
-	int error;
-	struct sw_flow_key key;
-
-	/* Extract flow from 'skb' into 'key'. */
-	error = ovs_flow_key_extract(skb, &key);
-	if (unlikely(error)) {
-		kfree_skb(skb);
-		return;
-	}
-
-	ovs_dp_process_packet_with_key(skb, &key, false);
 }
 
 int ovs_dp_upcall(struct datapath *dp, struct sk_buff *skb,
@@ -599,6 +582,7 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 
 	OVS_CB(packet)->flow = flow;
 	OVS_CB(packet)->pkt_key = &flow->key;
+	OVS_CB(skb)->egress_tun_info = NULL;
 	packet->priority = flow->key.phy.priority;
 	packet->mark = flow->key.phy.skb_mark;
 
