@@ -63,7 +63,7 @@ atomic_thread_fence_if_seq_cst(memory_order order)
 }
 
 static inline void
-atomic_signal_fence(memory_order order OVS_UNUSED)
+atomic_signal_fence(memory_order order)
 {
     if (order != memory_order_relaxed) {
         asm volatile("" : : : "memory");
@@ -80,12 +80,11 @@ atomic_signal_fence(memory_order order OVS_UNUSED)
     ({                                                  \
         typeof(DST) dst__ = (DST);                      \
         typeof(SRC) src__ = (SRC);                      \
-        memory_order order__ = (ORDER);                 \
                                                         \
         if (IS_LOCKLESS_ATOMIC(*dst__)) {               \
-            atomic_thread_fence(order__);               \
+            atomic_thread_fence(ORDER);                 \
             *dst__ = src__;                             \
-            atomic_thread_fence_if_seq_cst(order__);    \
+            atomic_thread_fence_if_seq_cst(ORDER);      \
         } else {                                        \
             atomic_store_locked(dst__, src__);          \
         }                                               \
@@ -97,10 +96,9 @@ atomic_signal_fence(memory_order order OVS_UNUSED)
     ({                                                  \
         typeof(DST) dst__ = (DST);                      \
         typeof(SRC) src__ = (SRC);                      \
-        memory_order order__ = (ORDER);                 \
                                                         \
         if (IS_LOCKLESS_ATOMIC(*src__)) {               \
-            atomic_thread_fence_if_seq_cst(order__);    \
+            atomic_thread_fence_if_seq_cst(ORDER);      \
             *dst__ = *src__;                            \
         } else {                                        \
             atomic_read_locked(src__, dst__);           \

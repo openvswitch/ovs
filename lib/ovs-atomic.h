@@ -181,6 +181,10 @@
  *        whole system, providing a total order for stores on all atomic
  *        variables.
  *
+ * OVS atomics require the memory_order to be passed as a compile-time constant
+ * value, as some compiler implementations may perform poorly if the memory
+ * order parameter is passed in as a run-time value.
+ *
  * The following functions insert explicit barriers.  Most of the other atomic
  * functions also include barriers.
  *
