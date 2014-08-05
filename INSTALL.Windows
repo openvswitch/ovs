@@ -65,11 +65,11 @@ or from a distribution tar ball.
 
 * Run make for the ported executables in the top source directory, e.g.:
 
-  % make lib/vswitch-idl.h lib/vtep-idl.h ofproto/ipfix-entities.def
-  % make ovsdb/ovsdb-server.exe ovsdb/ovsdb-tool.exe ovsdb/ovsdb-client.exe \
-         utilities/ovs-vsctl.exe utilities/ovs-ofctl.exe \
-         utilities/ovs-dpctl.exe vswitchd/ovs-vswitchd.exe \
-         utilities/ovs-appctl.exe
+  % make
+
+* To run all the unit tests:
+
+  % make check
 
 OpenSSL, Open vSwitch and Visual C++
 ------------------------------------
@@ -199,7 +199,7 @@ vswitchd\ovs-vswitchd.exe -v tcp:127.0.0.1:6632
 utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 list interface
 
 //********** VXLAN PORT CONFIGURATION (Supports Multiple ports) ************//
-
+(Remove all patch ports added to create VLAN networks.)
 11> Add the vxlan port between 172.168.201.101 <-> 172.168.201.102
 utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 add-port br-int vxlan-1
 utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 set Interface vxlan-1 type=vxlan
@@ -217,6 +217,21 @@ utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 set Interface vxlan-2 options:in
 utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 set Interface vxlan-2 options:out_key=flow
 
 
+//********** VLAN CONFIGURATION (Using patch ports) ************//
+(Remove all VXLAN ports from the configuration.)
+13> Add a patch port from br-int to br-pif
+utilities/ovs-vsctl.exe -- add-port br-int patch-to-pif
+utilities/ovs-vsctl.exe -- set interface patch-to-pif type=patch options:peer=patch-to-int
+
+14> Add a patch port from br-pif to br-int
+utilities/ovs-vsctl.exe -- add-port br-pif patch-to-int
+utilities/ovs-vsctl.exe -- set interface patch-to-int type=patch options:peer=patch-to-pif
+
+15> Re-Add the VIF ports with the VLAN tag
+utilities\ovs-vsctl.exe add-port br-int vmNICEmu.1000048 tag=900
+utilities\ovs-vsctl.exe add-port br-int vmNICSyn.1000049 tag=900
+
+
 Requirements
 ------------
 
@@ -230,7 +245,7 @@ this is still a work in progress. Till the support is complete we recommend
 disabling TX/RX offloads for both the VM's as well as the HyperV.
 
 
-Todo
+TODO
 ----
 
 * OVS currently has no native support for atomics on Windows.  Pthreads
