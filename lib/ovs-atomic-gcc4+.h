@@ -167,27 +167,37 @@ typedef struct {
 #define ATOMIC_FLAG_INIT { false }
 
 static inline bool
-atomic_flag_test_and_set(volatile atomic_flag *object)
-{
-    return __sync_lock_test_and_set(&object->b, 1);
-}
-
-static inline bool
 atomic_flag_test_and_set_explicit(volatile atomic_flag *object,
-                                  memory_order order OVS_UNUSED)
+                                  memory_order order)
 {
-    return atomic_flag_test_and_set(object);
+    bool old;
+
+    /* __sync_lock_test_and_set() by itself is an acquire barrier.
+     * For anything higher additional barriers are needed. */
+    if (order > memory_order_acquire) {
+        atomic_thread_fence(order);
+    }
+    old = __sync_lock_test_and_set(&object->b, 1);
+    atomic_thread_fence_if_seq_cst(order);
+
+    return old;
 }
 
-static inline void
-atomic_flag_clear(volatile atomic_flag *object)
-{
-    __sync_lock_release(&object->b);
-}
+#define atomic_flag_test_and_set(FLAG)                                  \
+    atomic_flag_test_and_set_explicit(FLAG, memory_order_seq_cst)
 
 static inline void
 atomic_flag_clear_explicit(volatile atomic_flag *object,
-                           memory_order order OVS_UNUSED)
+                           memory_order order)
 {
-    atomic_flag_clear(object);
+    /* __sync_lock_release() by itself is a release barrier.  For
+     * anything else additional barrier may be needed. */
+    if (order != memory_order_release) {
+        atomic_thread_fence(order);
+    }
+    __sync_lock_release(&object->b);
+    atomic_thread_fence_if_seq_cst(order);
 }
+
+#define atomic_flag_clear(FLAG)                                 \
+    atomic_flag_clear_explicit(FLAG, memory_order_seq_cst)
