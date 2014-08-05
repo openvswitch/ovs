@@ -329,6 +329,8 @@
         #include "ovs-atomic-gcc4.7+.h"
     #elif __GNUC__ && defined(__x86_64__)
         #include "ovs-atomic-x86_64.h"
+    #elif __GNUC__ && defined(__i386__)
+        #include "ovs-atomic-i586.h"
     #elif HAVE_GCC4_ATOMICS
         #include "ovs-atomic-gcc4+.h"
     #else

@@ -150,6 +150,7 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/ovs-atomic-flag-gcc4.7+.h \
 	lib/ovs-atomic-gcc4+.h \
 	lib/ovs-atomic-gcc4.7+.h \
+	lib/ovs-atomic-i586.h \
 	lib/ovs-atomic-locked.c \
 	lib/ovs-atomic-locked.h \
 	lib/ovs-atomic-pthreads.h \
