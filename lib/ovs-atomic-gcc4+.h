@@ -83,7 +83,7 @@ atomic_signal_fence(memory_order order)
                                                         \
         if (IS_LOCKLESS_ATOMIC(*dst__)) {               \
             atomic_thread_fence(ORDER);                 \
-            *dst__ = src__;                             \
+            *(typeof(*DST) volatile *)dst__ = src__;    \
             atomic_thread_fence_if_seq_cst(ORDER);      \
         } else {                                        \
             atomic_store_locked(dst__, src__);          \
@@ -99,7 +99,7 @@ atomic_signal_fence(memory_order order)
                                                         \
         if (IS_LOCKLESS_ATOMIC(*src__)) {               \
             atomic_thread_fence_if_seq_cst(ORDER);      \
-            *dst__ = *src__;                            \
+            *dst__ = *(typeof(*SRC) volatile *)src__;   \
         } else {                                        \
             atomic_read_locked(src__, dst__);           \
         }                                               \
