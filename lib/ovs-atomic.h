@@ -109,7 +109,30 @@
  *
  *    memory_order_relaxed:
  *
- *        Compiler barrier only.  Does not imply any CPU memory ordering.
+ *        Only atomicity is provided, does not imply any memory ordering with
+ *        respect to any other variable (atomic or not).  Relaxed accesses to
+ *        the same atomic variable will be performed in the program order.
+ *        The compiler and CPU are free to move memory accesses to other
+ *        variables past the atomic operation.
+ *
+ *    memory_order_consume:
+ *
+ *        Memory accesses with data dependency on the result of the consume
+ *        operation (atomic_read_explicit, or a load operation preceding a
+ *        atomic_thread_fence) will not be moved prior to the consume
+ *        barrier.  Non-data-dependent loads and stores can be reordered to
+ *        happen before the the consume barrier.
+ *
+ *        RCU is the prime example of the use of the consume barrier: The
+ *        consume barrier guarantees that reads from a RCU protected object
+ *        are performed after the RCU protected pointer is read.  A
+ *        corresponding release barrier is used to store the modified RCU
+ *        protected pointer after the RCU protected object has been fully
+ *        constructed.  The synchronization between these barriers prevents
+ *        the RCU "consumer" from seeing uninitialized data.
+ *
+ *        May not be used with atomic_store_explicit(), as consume semantics
+ *        applies only to atomic loads.
  *
  *    memory_order_acquire:
  *
@@ -117,26 +140,46 @@
  *        barrier.  Memory accesses before an acquire barrier *can* be moved
  *        after it.
  *
+ *        An atomic_thread_fence with memory_order_acquire does not have a
+ *        load operation by itself; it prevents all following memory accesses
+ *        from moving prior to preceding loads.
+ *
+ *        May not be used with atomic_store_explicit(), as acquire semantics
+ *        applies only to atomic loads.
+ *
  *    memory_order_release:
  *
  *        Memory accesses before a release barrier cannot be moved after the
  *        barrier.  Memory accesses after a release barrier *can* be moved
  *        before it.
  *
+ *        An atomic_thread_fence with memory_order_release does not have a
+ *        store operation by itself; it prevents all preceding memory accesses
+ *        from moving past subsequent stores.
+ *
+ *        May not be used with atomic_read_explicit(), as release semantics
+ *        applies only to atomic stores.
+ *
  *    memory_order_acq_rel:
  *
  *        Memory accesses cannot be moved across an acquire-release barrier in
  *        either direction.
  *
+ *        May only be used with atomic read-modify-write operations, as both
+ *        load and store operation is required for acquire-release semantics.
+ *
+ *        An atomic_thread_fence with memory_order_acq_rel does not have
+ *        either load or store operation by itself; it prevents all following
+ *        memory accesses from moving prior to preceding loads and all
+ *        preceding memory accesses from moving past subsequent stores.
+ *
  *    memory_order_seq_cst:
  *
  *        Prevents movement of memory accesses like an acquire-release barrier,
- *        but whereas acquire-release synchronizes cooperating threads,
- *        sequential-consistency synchronizes the whole system.
- *
- *    memory_order_consume:
- *
- *        A slight relaxation of memory_order_acquire.
+ *        but whereas acquire-release synchronizes cooperating threads (using
+ *        the same atomic variable), sequential-consistency synchronizes the
+ *        whole system, providing a total order for stores on all atomic
+ *        variables.
  *
  * The following functions insert explicit barriers.  Most of the other atomic
  * functions also include barriers.
