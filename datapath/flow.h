@@ -87,6 +87,11 @@ static inline void ovs_flow_tun_info_init(struct ovs_tunnel_info *tun_info,
 	tun_info->options_len = opts_len;
 }
 
+#define OVS_SW_FLOW_KEY_METADATA_SIZE			\
+	(offsetof(struct sw_flow_key, recirc_id) +	\
+	FIELD_SIZEOF(struct sw_flow_key, recirc_id))
+
+
 struct sw_flow_key {
 	u8 tun_opts[255];
 	u8 tun_opts_len;
@@ -222,5 +227,9 @@ int ovs_flow_key_extract(struct sk_buff *skb, struct sw_flow_key *key);
 int ovs_flow_key_extract_userspace(const struct nlattr *attr,
 				   struct sk_buff *skb,
 				   struct sw_flow_key *key);
+int ovs_flow_key_extract_recirc(u32 recirc_id,
+				const struct sw_flow_key *key,
+				struct sk_buff *skb,
+				struct sw_flow_key *new_key);
 
 #endif /* flow.h */
