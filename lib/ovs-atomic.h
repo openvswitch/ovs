@@ -327,6 +327,8 @@
         #include "ovs-atomic-clang.h"
     #elif __GNUC__ >= 4 && __GNUC_MINOR__ >= 7
         #include "ovs-atomic-gcc4.7+.h"
+    #elif __GNUC__ && defined(__x86_64__)
+        #include "ovs-atomic-x86_64.h"
     #elif HAVE_GCC4_ATOMICS
         #include "ovs-atomic-gcc4+.h"
     #else
