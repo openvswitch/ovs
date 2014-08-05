@@ -3,11 +3,11 @@ EXTRA_DIST += \
 	datapath-windows/DESIGN \
 	datapath-windows/Package/package.VcxProj \
 	datapath-windows/Package/package.VcxProj.user \
-	datapath-windows/extensions.sln \
 	datapath-windows/include/OvsNetlink.h \
 	datapath-windows/include/OvsPub.h \
 	datapath-windows/misc/install.cmd \
 	datapath-windows/misc/uninstall.cmd \
+	datapath-windows/ovsext.sln \
 	datapath-windows/ovsext/OvsActions.c \
 	datapath-windows/ovsext/OvsAtomic.h \
 	datapath-windows/ovsext/OvsBufferMgmt.c \
