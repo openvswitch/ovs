@@ -2965,7 +2965,7 @@ ofctl_parse_ofp10_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         error = ofpacts_pull_openflow_actions(&of10_in, ofpbuf_size(&of10_in),
                                               OFP10_VERSION, &ofpacts);
         if (error) {
-            printf("bad OF1.1 actions: %s\n\n", ofperr_get_name(error));
+            printf("bad OF1.0 actions: %s\n\n", ofperr_get_name(error));
             ofpbuf_uninit(&ofpacts);
             ofpbuf_uninit(&of10_in);
             continue;
