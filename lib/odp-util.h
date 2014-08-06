@@ -112,7 +112,7 @@ void odp_portno_names_destroy(struct hmap *portno_names);
  *  OVS_KEY_ATTR_RECIRC_ID               4    --     4      8
  *  OVS_KEY_ATTR_ETHERNET               12    --     4     16
  *  OVS_KEY_ATTR_ETHERTYPE               2     2     4      8  (outer VLAN ethertype)
- *  OVS_KEY_ATTR_8021Q                   4    --     4      8
+ *  OVS_KEY_ATTR_VLAN                    2     2     4      8
  *  OVS_KEY_ATTR_ENCAP                   0    --     4      4  (VLAN encapsulation)
  *  OVS_KEY_ATTR_ETHERTYPE               2     2     4      8  (inner VLAN ethertype)
  *  OVS_KEY_ATTR_IPV6                   40    --     4     44

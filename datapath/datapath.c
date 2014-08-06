@@ -392,7 +392,7 @@ static size_t key_attr_size(void)
 		+ nla_total_size(4)   /* OVS_KEY_ATTR_RECIRC_ID */
 		+ nla_total_size(12)  /* OVS_KEY_ATTR_ETHERNET */
 		+ nla_total_size(2)   /* OVS_KEY_ATTR_ETHERTYPE */
-		+ nla_total_size(4)   /* OVS_KEY_ATTR_8021Q */
+		+ nla_total_size(4)   /* OVS_KEY_ATTR_VLAN */
 		+ nla_total_size(0)   /* OVS_KEY_ATTR_ENCAP */
 		+ nla_total_size(2)   /* OVS_KEY_ATTR_ETHERTYPE */
 		+ nla_total_size(40)  /* OVS_KEY_ATTR_IPV6 */
