@@ -2150,11 +2150,13 @@ dp_execute_cb(void *aux_, struct ofpbuf *packet,
 
         userdata = nl_attr_find_nested(a, OVS_USERSPACE_ATTR_USERDATA);
 
-        dp_netdev_output_userspace(aux->dp, packet,
-                                   miniflow_hash_5tuple(aux->key, 0)
+        if (aux->dp->n_handlers > 0) {
+            dp_netdev_output_userspace(aux->dp, packet,
+                                       miniflow_hash_5tuple(aux->key, 0)
                                        % aux->dp->n_handlers,
-                                   DPIF_UC_ACTION, aux->key,
-                                   userdata);
+                                       DPIF_UC_ACTION, aux->key,
+                                       userdata);
+        }
 
         if (may_steal) {
             ofpbuf_delete(packet);
