@@ -3154,14 +3154,15 @@ ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
         rule_dpif_credit_stats(rule, &stats);
     }
 
-    xlate_in_init(&xin, ofproto, flow, rule, stats.tcp_flags, packet);
+    xlate_in_init(&xin, ofproto, flow, flow->in_port.ofp_port, rule,
+                  stats.tcp_flags, packet);
     xin.ofpacts = ofpacts;
     xin.ofpacts_len = ofpacts_len;
     xin.resubmit_stats = &stats;
     xlate_actions(&xin, &xout);
 
-    execute.actions = ofpbuf_data(&xout.odp_actions);
-    execute.actions_len = ofpbuf_size(&xout.odp_actions);
+    execute.actions = ofpbuf_data(xout.odp_actions);
+    execute.actions_len = ofpbuf_size(xout.odp_actions);
     execute.packet = packet;
     execute.md = pkt_metadata_from_flow(flow);
     execute.needs_help = (xout.slow & SLOW_ACTION) != 0;
@@ -4056,7 +4057,7 @@ static void
 trace_format_odp(struct ds *result, int level, const char *title,
                  struct trace_ctx *trace)
 {
-    struct ofpbuf *odp_actions = &trace->xout.odp_actions;
+    struct ofpbuf *odp_actions = trace->xout.odp_actions;
 
     ds_put_char_multiple(result, '\t', level);
     ds_put_format(result, "%s: ", title);
@@ -4185,12 +4186,20 @@ parse_flow_and_packet(int argc, const char *argv[],
             goto exit;
         }
 
-        if (xlate_receive(backer, NULL, ofpbuf_data(&odp_key),
-                          ofpbuf_size(&odp_key), flow,
-                          ofprotop, NULL, NULL, NULL, NULL)) {
+        if (odp_flow_key_to_flow(ofpbuf_data(&odp_key), ofpbuf_size(&odp_key),
+                                 flow) == ODP_FIT_ERROR) {
+            error = "Failed to parse flow key";
+            goto exit;
+        }
+
+        if (xlate_receive(backer, flow, ofprotop, NULL, NULL, NULL,
+                          &flow->in_port.ofp_port)) {
             error = "Invalid datapath flow";
             goto exit;
         }
+
+        vsp_adjust_flow(*ofprotop, flow, NULL);
+
     } else {
         char *err = parse_ofp_exact_flow(flow, NULL, argv[argc - 1], NULL);
 
@@ -4398,8 +4407,8 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
         trace.result = ds;
         trace.key = flow; /* Original flow key, used for megaflow. */
         trace.flow = *flow; /* May be modified by actions. */
-        xlate_in_init(&trace.xin, ofproto, flow, rule, ntohs(flow->tcp_flags),
-                      packet);
+        xlate_in_init(&trace.xin, ofproto, flow, flow->in_port.ofp_port, rule,
+                      ntohs(flow->tcp_flags), packet);
         if (ofpacts) {
             trace.xin.ofpacts = ofpacts;
             trace.xin.ofpacts_len = ofpacts_len;
@@ -4414,8 +4423,8 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
         trace_format_megaflow(ds, 0, "Megaflow", &trace);
 
         ds_put_cstr(ds, "Datapath actions: ");
-        format_odp_actions(ds, ofpbuf_data(&trace.xout.odp_actions),
-                           ofpbuf_size(&trace.xout.odp_actions));
+        format_odp_actions(ds, ofpbuf_data(trace.xout.odp_actions),
+                           ofpbuf_size(trace.xout.odp_actions));
 
         if (trace.xout.slow) {
             enum slow_path_reason slow;
@@ -4572,8 +4581,14 @@ ofproto_dpif_contains_flow(const struct ofproto_dpif *ofproto,
     struct ofproto_dpif *ofp;
     struct flow flow;
 
-    xlate_receive(ofproto->backer, NULL, key, key_len, &flow, &ofp,
-                  NULL, NULL, NULL, NULL);
+    if (odp_flow_key_to_flow(key, key_len, &flow) == ODP_FIT_ERROR) {
+        return false;
+    }
+
+    if (xlate_receive(ofproto->backer, &flow, &ofp, NULL, NULL, NULL, NULL)) {
+        return false;
+    }
+
     return ofp == ofproto;
 }
 
@@ -4829,11 +4844,13 @@ vsp_vlandev_to_realdev(const struct ofproto_dpif *ofproto,
 /* Given 'flow', a flow representing a packet received on 'ofproto', checks
  * whether 'flow->in_port' represents a Linux VLAN device.  If so, changes
  * 'flow->in_port' to the "real" device backing the VLAN device, sets
- * 'flow->vlan_tci' to the VLAN VID, and returns true.  Otherwise (which is
- * always the case unless VLAN splinters are enabled), returns false without
- * making any changes. */
+ * 'flow->vlan_tci' to the VLAN VID, and returns true.  Optionally pushes the
+ * appropriate VLAN on 'packet' if provided.  Otherwise (which is always the
+ * case unless VLAN splinters are enabled), returns false without making any
+ * changes. */
 bool
-vsp_adjust_flow(const struct ofproto_dpif *ofproto, struct flow *flow)
+vsp_adjust_flow(const struct ofproto_dpif *ofproto, struct flow *flow,
+                struct ofpbuf *packet)
     OVS_EXCLUDED(ofproto->vsp_mutex)
 {
     ofp_port_t realdev;
@@ -4855,6 +4872,15 @@ vsp_adjust_flow(const struct ofproto_dpif *ofproto, struct flow *flow)
      * the VLAN device's VLAN ID. */
     flow->in_port.ofp_port = realdev;
     flow->vlan_tci = htons((vid & VLAN_VID_MASK) | VLAN_CFI);
+
+    if (packet) {
+        /* Make the packet resemble the flow, so that it gets sent to an
+         * OpenFlow controller properly, so that it looks correct for sFlow,
+         * and so that flow_extract() will get the correct vlan_tci if it is
+         * called on 'packet'. */
+        eth_push_vlan(packet, htons(ETH_TYPE_VLAN), flow->vlan_tci);
+    }
+
     return true;
 }
 

@@ -1019,7 +1019,7 @@ ipfix_cache_update(struct dpif_ipfix_exporter *exporter,
 
 static void
 ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
-                       struct ofpbuf *packet, const struct flow *flow,
+                       const struct ofpbuf *packet, const struct flow *flow,
                        uint64_t packet_delta_count, uint32_t obs_domain_id,
                        uint32_t obs_point_id)
 {
@@ -1284,7 +1284,7 @@ ipfix_send_data_msg(struct dpif_ipfix_exporter *exporter,
 
 static void
 dpif_ipfix_sample(struct dpif_ipfix_exporter *exporter,
-                  struct ofpbuf *packet, const struct flow *flow,
+                  const struct ofpbuf *packet, const struct flow *flow,
                   uint64_t packet_delta_count, uint32_t obs_domain_id,
                   uint32_t obs_point_id)
 {
@@ -1298,7 +1298,7 @@ dpif_ipfix_sample(struct dpif_ipfix_exporter *exporter,
 }
 
 void
-dpif_ipfix_bridge_sample(struct dpif_ipfix *di, struct ofpbuf *packet,
+dpif_ipfix_bridge_sample(struct dpif_ipfix *di, const struct ofpbuf *packet,
                          const struct flow *flow) OVS_EXCLUDED(mutex)
 {
     uint64_t packet_delta_count;
@@ -1315,7 +1315,7 @@ dpif_ipfix_bridge_sample(struct dpif_ipfix *di, struct ofpbuf *packet,
 }
 
 void
-dpif_ipfix_flow_sample(struct dpif_ipfix *di, struct ofpbuf *packet,
+dpif_ipfix_flow_sample(struct dpif_ipfix *di, const struct ofpbuf *packet,
                        const struct flow *flow, uint32_t collector_set_id,
                        uint16_t probability, uint32_t obs_domain_id,
                        uint32_t obs_point_id) OVS_EXCLUDED(mutex)

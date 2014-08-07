@@ -59,7 +59,8 @@ struct xlate_out {
     mirror_mask_t mirrors;      /* Bitmap of associated mirrors. */
 
     uint64_t odp_actions_stub[256 / 8];
-    struct ofpbuf odp_actions;
+    struct ofpbuf odp_actions_buf;
+    struct ofpbuf *odp_actions;
 };
 
 struct xlate_in {
@@ -135,6 +136,11 @@ struct xlate_in {
      * This is normally null so the client has to set it manually after
      * calling xlate_in_init(). */
     struct xlate_cache *xcache;
+
+    /* Allows callers to optionally supply their own buffer for the resulting
+     * odp_actions stored in xlate_out.  If NULL, the default buffer will be
+     * used. */
+    struct ofpbuf *odp_actions;
 };
 
 void xlate_ofproto_set(struct ofproto_dpif *, const char *name,
@@ -167,15 +173,14 @@ void xlate_ofport_set(struct ofproto_dpif *, struct ofbundle *,
                       bool may_enable);
 void xlate_ofport_remove(struct ofport_dpif *);
 
-int xlate_receive(const struct dpif_backer *, struct ofpbuf *packet,
-                  const struct nlattr *key, size_t key_len,
-                  struct flow *, struct ofproto_dpif **, struct dpif_ipfix **,
+int xlate_receive(const struct dpif_backer *, const struct flow *,
+                  struct ofproto_dpif **, struct dpif_ipfix **,
                   struct dpif_sflow **, struct netflow **,
-                  odp_port_t *odp_in_port);
+                  ofp_port_t *ofp_in_port);
 
 void xlate_actions(struct xlate_in *, struct xlate_out *);
 void xlate_in_init(struct xlate_in *, struct ofproto_dpif *,
-                   const struct flow *, struct rule_dpif *,
+                   const struct flow *, ofp_port_t in_port, struct rule_dpif *,
                    uint16_t tcp_flags, const struct ofpbuf *packet);
 void xlate_out_uninit(struct xlate_out *);
 void xlate_actions_for_side_effects(struct xlate_in *);

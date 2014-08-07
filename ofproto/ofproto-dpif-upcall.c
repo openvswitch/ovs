@@ -146,24 +146,32 @@ enum upcall_type {
 };
 
 struct upcall {
-    struct ofproto_dpif *ofproto;
+    struct ofproto_dpif *ofproto;  /* Parent ofproto. */
 
-    struct flow flow;
-    const struct nlattr *key;
-    size_t key_len;
-    enum dpif_upcall_type upcall_type;
-    struct dpif_flow_stats stats;
-    odp_port_t odp_in_port;
+    /* The flow and packet are only required to be constant when using
+     * dpif-netdev.  If a modification is absolutely necessary, a const cast
+     * may be used with other datapaths. */
+    const struct flow *flow;       /* Parsed representation of the packet. */
+    const struct ofpbuf *packet;   /* Packet associated with this upcall. */
+    ofp_port_t in_port;            /* OpenFlow in port, or OFPP_NONE. */
 
-    uint64_t slow_path_buf[128 / 8];
-    struct odputil_keybuf mask_buf;
+    enum dpif_upcall_type type;    /* Datapath type of the upcall. */
+    const struct nlattr *userdata; /* Userdata for DPIF_UC_ACTION Upcalls. */
 
-    struct xlate_out xout;
+    bool xout_initialized;         /* True if 'xout' must be uninitialized. */
+    struct xlate_out xout;         /* Result of xlate_actions(). */
+    struct ofpbuf put_actions;     /* Actions 'put' in the fastapath. */
 
-    /* Raw upcall plus data for keeping track of the memory backing it. */
-    struct dpif_upcall dpif_upcall; /* As returned by dpif_recv() */
-    struct ofpbuf upcall_buf;       /* Owns some data in 'dpif_upcall'. */
-    uint64_t upcall_stub[512 / 8];  /* Buffer to reduce need for malloc(). */
+    struct dpif_ipfix *ipfix;      /* IPFIX reference or NULL. */
+    struct dpif_sflow *sflow;      /* SFlow reference or NULL. */
+    struct netflow *netflow;       /* Netlow reference or NULL. */
+
+    bool vsp_adjusted;             /* 'packet' and 'flow' were adjusted for
+                                      VLAN splinters if true. */
+
+    /* Not used by the upcall callback interface. */
+    const struct nlattr *key;      /* Datapath flow key. */
+    size_t key_len;                /* Datapath flow key length. */
 };
 
 /* 'udpif_key's are responsible for tracking the little bit of state udpif
@@ -202,10 +210,9 @@ struct udpif_key {
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 static struct list all_udpifs = LIST_INITIALIZER(&all_udpifs);
 
-static size_t read_upcalls(struct handler *,
-                           struct upcall upcalls[UPCALL_MAX_BATCH]);
-static void free_upcall(struct upcall *);
-static int convert_upcall(struct udpif *, struct upcall *);
+static size_t recv_upcalls(struct handler *);
+static int process_upcall(struct udpif *, struct upcall *,
+                          struct ofpbuf *odp_actions);
 static void handle_upcalls(struct udpif *, struct upcall *, size_t n_upcalls);
 static void udpif_stop_threads(struct udpif *);
 static void udpif_start_threads(struct udpif *, size_t n_handlers,
@@ -236,6 +243,16 @@ static bool ukey_acquire(struct udpif *udpif, const struct nlattr *key,
                          size_t key_len, long long int used,
                          struct udpif_key **result);
 static void ukey_delete(struct revalidator *, struct udpif_key *);
+static enum upcall_type classify_upcall(enum dpif_upcall_type type,
+                                        const struct nlattr *userdata);
+
+static void exec_upcalls(struct dpif *, struct dpif_upcall *, struct ofpbuf *,
+                         int cnt);
+
+static int upcall_receive(struct upcall *, const struct dpif_backer *,
+                          const struct ofpbuf *packet, enum dpif_upcall_type,
+                          const struct nlattr *userdata, const struct flow *);
+static void upcall_uninit(struct upcall *);
 
 static atomic_bool enable_megaflows = ATOMIC_VAR_INIT(true);
 
@@ -541,25 +558,98 @@ udpif_upcall_handler(void *arg)
     struct udpif *udpif = handler->udpif;
 
     while (!latch_is_set(&handler->udpif->exit_latch)) {
-        struct upcall upcalls[UPCALL_MAX_BATCH];
-        size_t n_upcalls, i;
-
-        n_upcalls = read_upcalls(handler, upcalls);
-        if (!n_upcalls) {
+        if (!recv_upcalls(handler)) {
             dpif_recv_wait(udpif->dpif, handler->handler_id);
             latch_wait(&udpif->exit_latch);
             poll_block();
-        } else {
-            handle_upcalls(handler->udpif, upcalls, n_upcalls);
-
-            for (i = 0; i < n_upcalls; i++) {
-                free_upcall(&upcalls[i]);
-            }
         }
         coverage_clear();
     }
 
     return NULL;
+}
+
+static size_t
+recv_upcalls(struct handler *handler)
+{
+    struct udpif *udpif = handler->udpif;
+    uint64_t recv_stubs[UPCALL_MAX_BATCH][512 / 8];
+    struct ofpbuf recv_bufs[UPCALL_MAX_BATCH];
+    struct upcall upcalls[UPCALL_MAX_BATCH];
+    size_t n_upcalls, i;
+
+    n_upcalls = 0;
+    while (n_upcalls < UPCALL_MAX_BATCH) {
+        struct ofpbuf *recv_buf = &recv_bufs[n_upcalls];
+        struct upcall *upcall = &upcalls[n_upcalls];
+        struct dpif_upcall dupcall;
+        struct pkt_metadata md;
+        struct flow flow;
+        int error;
+
+        ofpbuf_use_stub(&recv_buf[n_upcalls], recv_stubs[n_upcalls],
+                        sizeof recv_stubs[n_upcalls]);
+        if (dpif_recv(udpif->dpif, handler->handler_id, &dupcall, recv_buf)) {
+            ofpbuf_uninit(recv_buf);
+            break;
+        }
+
+        if (odp_flow_key_to_flow(dupcall.key, dupcall.key_len, &flow)
+            == ODP_FIT_ERROR) {
+            goto free_dupcall;
+        }
+
+        error = upcall_receive(upcall, udpif->backer, &dupcall.packet,
+                               dupcall.type, dupcall.userdata, &flow);
+        if (error) {
+            if (error == ENODEV) {
+                /* Received packet on datapath port for which we couldn't
+                 * associate an ofproto.  This can happen if a port is removed
+                 * while traffic is being received.  Print a rate-limited
+                 * message in case it happens frequently. */
+                dpif_flow_put(udpif->dpif, DPIF_FP_CREATE, dupcall.key,
+                              dupcall.key_len, NULL, 0, NULL, 0, NULL);
+                VLOG_INFO_RL(&rl, "received packet on unassociated datapath "
+                             "port %"PRIu32, flow.in_port.odp_port);
+            }
+            goto free_dupcall;
+        }
+
+        upcall->key = dupcall.key;
+        upcall->key_len = dupcall.key_len;
+
+        if (vsp_adjust_flow(upcall->ofproto, &flow, &dupcall.packet)) {
+            upcall->vsp_adjusted = true;
+        }
+
+        md = pkt_metadata_from_flow(&flow);
+        flow_extract(&dupcall.packet, &md, &flow);
+
+        error = process_upcall(udpif, upcall, NULL);
+        if (error) {
+            goto cleanup;
+        }
+
+        n_upcalls++;
+        continue;
+
+cleanup:
+        upcall_uninit(upcall);
+free_dupcall:
+        ofpbuf_uninit(&dupcall.packet);
+        ofpbuf_uninit(recv_buf);
+    }
+
+    if (n_upcalls) {
+        handle_upcalls(handler->udpif, upcalls, n_upcalls);
+        for (i = 0; i < n_upcalls; i++) {
+            ofpbuf_uninit(CONST_CAST(struct ofpbuf *, upcalls[i].packet));
+            ofpbuf_uninit(&recv_bufs[i]);
+            upcall_uninit(&upcalls[i]);
+        }
+    }
+
+    return n_upcalls;
 }
 
 static void *
@@ -650,14 +740,13 @@ udpif_revalidator(void *arg)
 }
 
 static enum upcall_type
-classify_upcall(const struct upcall *upcall)
+classify_upcall(enum dpif_upcall_type type, const struct nlattr *userdata)
 {
-    const struct dpif_upcall *dpif_upcall = &upcall->dpif_upcall;
     union user_action_cookie cookie;
     size_t userdata_len;
 
     /* First look at the upcall type. */
-    switch (dpif_upcall->type) {
+    switch (type) {
     case DPIF_UC_ACTION:
         break;
 
@@ -666,17 +755,16 @@ classify_upcall(const struct upcall *upcall)
 
     case DPIF_N_UC_TYPES:
     default:
-        VLOG_WARN_RL(&rl, "upcall has unexpected type %"PRIu32,
-                     dpif_upcall->type);
+        VLOG_WARN_RL(&rl, "upcall has unexpected type %"PRIu32, type);
         return BAD_UPCALL;
     }
 
     /* "action" upcalls need a closer look. */
-    if (!dpif_upcall->userdata) {
+    if (!userdata) {
         VLOG_WARN_RL(&rl, "action upcall missing cookie");
         return BAD_UPCALL;
     }
-    userdata_len = nl_attr_get_size(dpif_upcall->userdata);
+    userdata_len = nl_attr_get_size(userdata);
     if (userdata_len < sizeof cookie.type
         || userdata_len > sizeof cookie) {
         VLOG_WARN_RL(&rl, "action upcall cookie has unexpected size %"PRIuSIZE,
@@ -684,7 +772,7 @@ classify_upcall(const struct upcall *upcall)
         return BAD_UPCALL;
     }
     memset(&cookie, 0, sizeof cookie);
-    memcpy(&cookie, nl_attr_get(dpif_upcall->userdata), userdata_len);
+    memcpy(&cookie, nl_attr_get(userdata), userdata_len);
     if (userdata_len == MAX(8, sizeof cookie.sflow)
         && cookie.type == USER_ACTION_COOKIE_SFLOW) {
         return SFLOW_UPCALL;
@@ -708,7 +796,7 @@ classify_upcall(const struct upcall *upcall)
  * initialized with at least 128 bytes of space. */
 static void
 compose_slow_path(struct udpif *udpif, struct xlate_out *xout,
-                  struct flow *flow, odp_port_t odp_in_port,
+                  const struct flow *flow, odp_port_t odp_in_port,
                   struct ofpbuf *buf)
 {
     union user_action_cookie cookie;
@@ -726,31 +814,53 @@ compose_slow_path(struct udpif *udpif, struct xlate_out *xout,
     odp_put_userspace_action(pid, &cookie, sizeof cookie.slow_path, buf);
 }
 
-static void
-upcall_init(struct upcall *upcall, struct flow *flow, struct ofpbuf *packet,
-            struct ofproto_dpif *ofproto, struct dpif_upcall *dupcall,
-            odp_port_t odp_in_port)
+static int
+upcall_receive(struct upcall *upcall, const struct dpif_backer *backer,
+               const struct ofpbuf *packet, enum dpif_upcall_type type,
+               const struct nlattr *userdata, const struct flow *flow)
 {
-    struct pkt_metadata md = pkt_metadata_from_flow(flow);
+    int error;
+
+    error = xlate_receive(backer, flow, &upcall->ofproto, &upcall->ipfix,
+                          &upcall->sflow, &upcall->netflow,
+                          &upcall->in_port);
+    if (error) {
+        return error;
+    }
+
+    upcall->flow = flow;
+    upcall->packet = packet;
+    upcall->type = type;
+    upcall->userdata = userdata;
+    ofpbuf_init(&upcall->put_actions, 0);
+
+    upcall->xout_initialized = false;
+    upcall->vsp_adjusted = false;
+
+    upcall->key = NULL;
+    upcall->key_len = 0;
+
+    return 0;
+}
+
+static void
+upcall_xlate(struct udpif *udpif, struct upcall *upcall,
+             struct ofpbuf *odp_actions)
+{
+    struct dpif_flow_stats stats;
     struct xlate_in xin;
 
-    flow_extract(packet, &md, &upcall->flow);
+    stats.n_packets = 1;
+    stats.n_bytes = ofpbuf_size(upcall->packet);
+    stats.used = time_msec();
+    stats.tcp_flags = ntohs(upcall->flow->tcp_flags);
 
-    upcall->ofproto = ofproto;
-    upcall->key = dupcall->key;
-    upcall->key_len = dupcall->key_len;
-    upcall->upcall_type = dupcall->type;
-    upcall->stats.n_packets = 1;
-    upcall->stats.n_bytes = ofpbuf_size(packet);
-    upcall->stats.used = time_msec();
-    upcall->stats.tcp_flags = ntohs(upcall->flow.tcp_flags);
-    upcall->odp_in_port = odp_in_port;
+    xlate_in_init(&xin, upcall->ofproto, upcall->flow, upcall->in_port, NULL,
+                  stats.tcp_flags, upcall->packet);
+    xin.odp_actions = odp_actions;
 
-    xlate_in_init(&xin, upcall->ofproto, &upcall->flow, NULL,
-                  upcall->stats.tcp_flags, packet);
-
-    if (upcall->upcall_type == DPIF_UC_MISS) {
-        xin.resubmit_stats = &upcall->stats;
+    if (upcall->type == DPIF_UC_MISS) {
+        xin.resubmit_stats = &stats;
     } else {
         /* For non-miss upcalls, there's a flow in the datapath which this
          * packet was accounted to.  Presumably the revalidators will deal
@@ -758,14 +868,57 @@ upcall_init(struct upcall *upcall, struct flow *flow, struct ofpbuf *packet,
     }
 
     xlate_actions(&xin, &upcall->xout);
+    upcall->xout_initialized = true;
+
+    /* Special case for fail-open mode.
+     *
+     * If we are in fail-open mode, but we are connected to a controller too,
+     * then we should send the packet up to the controller in the hope that it
+     * will try to set up a flow and thereby allow us to exit fail-open.
+     *
+     * See the top-level comment in fail-open.c for more information.
+     *
+     * Copy packets before they are modified by execution. */
+    if (upcall->xout.fail_open) {
+        const struct ofpbuf *packet = upcall->packet;
+        struct ofproto_packet_in *pin;
+
+        pin = xmalloc(sizeof *pin);
+        pin->up.packet = xmemdup(ofpbuf_data(packet), ofpbuf_size(packet));
+        pin->up.packet_len = ofpbuf_size(packet);
+        pin->up.reason = OFPR_NO_MATCH;
+        pin->up.table_id = 0;
+        pin->up.cookie = OVS_BE64_MAX;
+        flow_get_metadata(upcall->flow, &pin->up.fmd);
+        pin->send_len = 0; /* Not used for flow table misses. */
+        pin->miss_type = OFPROTO_PACKET_IN_NO_MISS;
+        ofproto_dpif_send_packet_in(upcall->ofproto, pin);
+    }
+
+    if (!upcall->xout.slow) {
+        ofpbuf_use_const(&upcall->put_actions,
+                         ofpbuf_data(upcall->xout.odp_actions),
+                         ofpbuf_size(upcall->xout.odp_actions));
+    } else {
+        ofpbuf_init(&upcall->put_actions, 0);
+        compose_slow_path(udpif, &upcall->xout, upcall->flow,
+                          upcall->flow->in_port.odp_port,
+                          &upcall->put_actions);
+    }
 }
 
 static void
-free_upcall(struct upcall *upcall)
+upcall_uninit(struct upcall *upcall)
 {
-    xlate_out_uninit(&upcall->xout);
-    ofpbuf_uninit(&upcall->dpif_upcall.packet);
-    ofpbuf_uninit(&upcall->upcall_buf);
+    if (upcall) {
+        if (upcall->xout_initialized) {
+            xlate_out_uninit(&upcall->xout);
+        }
+        ofpbuf_uninit(&upcall->put_actions);
+        dpif_ipfix_unref(upcall->ipfix);
+        dpif_sflow_unref(upcall->sflow);
+        netflow_unref(upcall->netflow);
+    }
 }
 
 static struct udpif *
@@ -781,9 +934,9 @@ find_udpif(struct dpif *dpif)
     return NULL;
 }
 
-void
+static void
 exec_upcalls(struct dpif *dpif, struct dpif_upcall *dupcalls,
-             struct ofpbuf *bufs, int cnt)
+             struct ofpbuf *bufs OVS_UNUSED, int cnt)
 {
     struct upcall upcalls[UPCALL_MAX_BATCH];
     struct udpif *udpif;
@@ -797,156 +950,114 @@ exec_upcalls(struct dpif *dpif, struct dpif_upcall *dupcalls,
         for (j = i; j < MIN(i + UPCALL_MAX_BATCH, cnt); j++) {
             struct upcall *upcall = &upcalls[n_upcalls];
             struct dpif_upcall *dupcall = &dupcalls[j];
-            struct ofpbuf *buf = &bufs[j];
-
-            upcall->dpif_upcall = *dupcall;
-            upcall->upcall_buf = *buf;
+            struct pkt_metadata md;
+            struct flow flow;
+            int error;
 
             dpif_print_packet(dpif, dupcall);
-            if (!convert_upcall(udpif, upcall)) {
-                n_upcalls += 1;
+
+            if (odp_flow_key_to_flow(dupcall->key, dupcall->key_len, &flow)
+                == ODP_FIT_ERROR) {
+                continue;
             }
+
+            error = upcall_receive(upcall, udpif->backer, &dupcall->packet,
+                                   dupcall->type, dupcall->userdata, &flow);
+            if (error) {
+                goto cleanup;
+            }
+
+            upcall->key = dupcall->key;
+            upcall->key_len = dupcall->key_len;
+
+            md = pkt_metadata_from_flow(&flow);
+            flow_extract(&dupcall->packet, &md, &flow);
+
+            error = process_upcall(udpif, upcall, NULL);
+            if (error) {
+                goto cleanup;
+            }
+
+            n_upcalls++;
+            continue;
+
+cleanup:
+            upcall_uninit(upcall);
         }
 
         if (n_upcalls) {
             handle_upcalls(udpif, upcalls, n_upcalls);
             for (j = 0; j < n_upcalls; j++) {
-                free_upcall(&upcalls[j]);
+                upcall_uninit(&upcalls[j]);
             }
         }
     }
 }
 
-/* Reads and classifies upcalls.  Returns the number of upcalls successfully
- * read. */
-static size_t
-read_upcalls(struct handler *handler,
-             struct upcall upcalls[UPCALL_MAX_BATCH])
-{
-    struct udpif *udpif = handler->udpif;
-    size_t i;
-    size_t n_upcalls = 0;
-
-    /* Try reading UPCALL_MAX_BATCH upcalls from dpif. */
-    for (i = 0; i < UPCALL_MAX_BATCH; i++) {
-        struct upcall *upcall = &upcalls[n_upcalls];
-        int error;
-
-        ofpbuf_use_stub(&upcall->upcall_buf, upcall->upcall_stub,
-                        sizeof upcall->upcall_stub);
-        error = dpif_recv(udpif->dpif, handler->handler_id,
-                          &upcall->dpif_upcall, &upcall->upcall_buf);
-        if (error) {
-            ofpbuf_uninit(&upcall->upcall_buf);
-            break;
-        }
-
-        if (!convert_upcall(udpif, upcall)) {
-            n_upcalls += 1;
-        }
-    }
-    return n_upcalls;
-}
-
 static int
-convert_upcall(struct udpif *udpif, struct upcall *upcall)
+process_upcall(struct udpif *udpif, struct upcall *upcall,
+               struct ofpbuf *odp_actions)
 {
-    struct dpif_upcall *dupcall = &upcall->dpif_upcall;
-    struct ofpbuf *packet = &dupcall->packet;
-    struct ofproto_dpif *ofproto;
-    struct dpif_sflow *sflow;
-    struct dpif_ipfix *ipfix;
-    struct flow flow;
-    enum upcall_type type;
-    odp_port_t odp_in_port;
-    int error;
+    const struct nlattr *userdata = upcall->userdata;
+    const struct ofpbuf *packet = upcall->packet;
+    const struct flow *flow = upcall->flow;
 
-    error = xlate_receive(udpif->backer, packet, dupcall->key,
-                          dupcall->key_len, &flow,
-                          &ofproto, &ipfix, &sflow, NULL, &odp_in_port);
+    switch (classify_upcall(upcall->type, userdata)) {
+    case MISS_UPCALL:
+        upcall_xlate(udpif, upcall, odp_actions);
+        return 0;
 
-    if (error) {
-        if (error == ENODEV) {
-            /* Received packet on datapath port for which we couldn't
-             * associate an ofproto.  This can happen if a port is removed
-             * while traffic is being received.  Print a rate-limited
-             * message in case it happens frequently.  Install a drop flow
-             * so that future packets of the flow are inexpensively dropped
-             * in the kernel. */
-            VLOG_INFO_RL(&rl, "received packet on unassociated datapath "
-                         "port %"PRIu32, odp_in_port);
-            dpif_flow_put(udpif->dpif, DPIF_FP_CREATE,
-                          dupcall->key, dupcall->key_len, NULL, 0, NULL, 0,
-                          NULL);
-        }
-        goto destroy_upcall;
-    }
-
-    type = classify_upcall(upcall);
-    if (type == MISS_UPCALL) {
-        upcall_init(upcall, &flow, packet, ofproto, dupcall, odp_in_port);
-        return error;
-    }
-
-    switch (type) {
     case SFLOW_UPCALL:
-        if (sflow) {
+        if (upcall->sflow) {
             union user_action_cookie cookie;
 
             memset(&cookie, 0, sizeof cookie);
-            memcpy(&cookie, nl_attr_get(dupcall->userdata),
-                   sizeof cookie.sflow);
-            dpif_sflow_received(sflow, packet, &flow, odp_in_port,
-                                &cookie);
+            memcpy(&cookie, nl_attr_get(userdata), sizeof cookie.sflow);
+            dpif_sflow_received(upcall->sflow, packet, flow,
+                                flow->in_port.odp_port, &cookie);
         }
         break;
+
     case IPFIX_UPCALL:
-        if (ipfix) {
-            dpif_ipfix_bridge_sample(ipfix, packet, &flow);
+        if (upcall->ipfix) {
+            dpif_ipfix_bridge_sample(upcall->ipfix, packet, flow);
         }
         break;
+
     case FLOW_SAMPLE_UPCALL:
-        if (ipfix) {
+        if (upcall->ipfix) {
             union user_action_cookie cookie;
 
             memset(&cookie, 0, sizeof cookie);
-            memcpy(&cookie, nl_attr_get(dupcall->userdata),
-                   sizeof cookie.flow_sample);
+            memcpy(&cookie, nl_attr_get(userdata), sizeof cookie.flow_sample);
 
             /* The flow reflects exactly the contents of the packet.
              * Sample the packet using it. */
-            dpif_ipfix_flow_sample(ipfix, packet, &flow,
+            dpif_ipfix_flow_sample(upcall->ipfix, packet, flow,
                                    cookie.flow_sample.collector_set_id,
                                    cookie.flow_sample.probability,
                                    cookie.flow_sample.obs_domain_id,
                                    cookie.flow_sample.obs_point_id);
         }
         break;
+
     case BAD_UPCALL:
         break;
-    case MISS_UPCALL:
-        OVS_NOT_REACHED();
     }
 
-    dpif_ipfix_unref(ipfix);
-    dpif_sflow_unref(sflow);
-    error = EAGAIN;
-
-destroy_upcall:
-    ofpbuf_uninit(&upcall->dpif_upcall.packet);
-    ofpbuf_uninit(&upcall->upcall_buf);
-    return error;
+    return EAGAIN;
 }
 
 static void
 handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
                size_t n_upcalls)
 {
+    struct odputil_keybuf mask_bufs[UPCALL_MAX_BATCH];
     struct dpif_op *opsp[UPCALL_MAX_BATCH * 2];
     struct dpif_op ops[UPCALL_MAX_BATCH * 2];
-    size_t n_ops, i;
     unsigned int flow_limit;
-    bool fail_open, may_put;
+    size_t n_ops, i;
+    bool may_put;
 
     atomic_read(&udpif->flow_limit, &flow_limit);
     may_put = udpif_get_n_flows(udpif) < flow_limit;
@@ -961,32 +1072,25 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
      *
      * The loop fills 'ops' with an array of operations to execute in the
      * datapath. */
-    fail_open = false;
     n_ops = 0;
     for (i = 0; i < n_upcalls; i++) {
         struct upcall *upcall = &upcalls[i];
-        struct ofpbuf *packet = &upcall->dpif_upcall.packet;
+        const struct ofpbuf *packet = upcall->packet;
         struct dpif_op *op;
 
-        fail_open = fail_open || upcall->xout.fail_open;
-
-        if (upcall->flow.in_port.ofp_port
-            != vsp_realdev_to_vlandev(upcall->ofproto,
-                                      upcall->flow.in_port.ofp_port,
-                                      upcall->flow.vlan_tci)) {
-            /* This packet was received on a VLAN splinter port.  We
-             * added a VLAN to the packet to make the packet resemble
-             * the flow, but the actions were composed assuming that
-             * the packet contained no VLAN.  So, we must remove the
-             * VLAN header from the packet before trying to execute the
-             * actions. */
-            if (ofpbuf_size(&upcall->xout.odp_actions)) {
-                eth_pop_vlan(packet);
+        if (upcall->vsp_adjusted) {
+            /* This packet was received on a VLAN splinter port.  We added a
+             * VLAN to the packet to make the packet resemble the flow, but the
+             * actions were composed assuming that the packet contained no
+             * VLAN.  So, we must remove the VLAN header from the packet before
+             * trying to execute the actions. */
+            if (ofpbuf_size(upcall->xout.odp_actions)) {
+                eth_pop_vlan(CONST_CAST(struct ofpbuf *, upcall->packet));
             }
 
             /* Remove the flow vlan tags inserted by vlan splinter logic
              * to ensure megaflow masks generated match the data path flow. */
-            upcall->flow.vlan_tci = 0;
+            CONST_CAST(struct flow *, upcall->flow)->vlan_tci = 0;
         }
 
         /* Do not install a flow into the datapath if:
@@ -995,13 +1099,12 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
          *
          *    - We received this packet via some flow installed in the kernel
          *      already. */
-        if (may_put
-            && upcall->dpif_upcall.type == DPIF_UC_MISS) {
+        if (may_put && upcall->type == DPIF_UC_MISS) {
             struct ofpbuf mask;
             bool megaflow;
 
             atomic_read(&enable_megaflows, &megaflow);
-            ofpbuf_use_stack(&mask, &upcall->mask_buf, sizeof upcall->mask_buf);
+            ofpbuf_use_stack(&mask, &mask_bufs[i], sizeof mask_bufs[i]);
             if (megaflow) {
                 size_t max_mpls;
                 bool recirc;
@@ -1009,7 +1112,7 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
                 recirc = ofproto_dpif_get_enable_recirc(upcall->ofproto);
                 max_mpls = ofproto_dpif_get_max_mpls_depth(upcall->ofproto);
                 odp_flow_key_from_mask(&mask, &upcall->xout.wc.masks,
-                                       &upcall->flow, UINT32_MAX, max_mpls,
+                                       upcall->flow, UINT32_MAX, max_mpls,
                                        recirc);
             }
 
@@ -1021,60 +1124,19 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
             op->u.flow_put.mask = ofpbuf_data(&mask);
             op->u.flow_put.mask_len = ofpbuf_size(&mask);
             op->u.flow_put.stats = NULL;
-
-            if (!upcall->xout.slow) {
-                op->u.flow_put.actions = ofpbuf_data(&upcall->xout.odp_actions);
-                op->u.flow_put.actions_len = ofpbuf_size(&upcall->xout.odp_actions);
-            } else {
-                struct ofpbuf buf;
-
-                ofpbuf_use_stack(&buf, upcall->slow_path_buf,
-                                 sizeof upcall->slow_path_buf);
-                compose_slow_path(udpif, &upcall->xout, &upcall->flow,
-                                  upcall->odp_in_port, &buf);
-                op->u.flow_put.actions = ofpbuf_data(&buf);
-                op->u.flow_put.actions_len = ofpbuf_size(&buf);
-            }
+            op->u.flow_put.actions = ofpbuf_data(&upcall->put_actions);
+            op->u.flow_put.actions_len = ofpbuf_size(&upcall->put_actions);
         }
 
-        if (ofpbuf_size(&upcall->xout.odp_actions)) {
-
+        if (ofpbuf_size(upcall->xout.odp_actions)) {
             op = &ops[n_ops++];
             op->type = DPIF_OP_EXECUTE;
-            op->u.execute.packet = packet;
+            op->u.execute.packet = CONST_CAST(struct ofpbuf *, packet);
             odp_key_to_pkt_metadata(upcall->key, upcall->key_len,
                                     &op->u.execute.md);
-            op->u.execute.actions = ofpbuf_data(&upcall->xout.odp_actions);
-            op->u.execute.actions_len = ofpbuf_size(&upcall->xout.odp_actions);
+            op->u.execute.actions = ofpbuf_data(upcall->xout.odp_actions);
+            op->u.execute.actions_len = ofpbuf_size(upcall->xout.odp_actions);
             op->u.execute.needs_help = (upcall->xout.slow & SLOW_ACTION) != 0;
-        }
-    }
-
-    /* Special case for fail-open mode.
-     *
-     * If we are in fail-open mode, but we are connected to a controller too,
-     * then we should send the packet up to the controller in the hope that it
-     * will try to set up a flow and thereby allow us to exit fail-open.
-     *
-     * See the top-level comment in fail-open.c for more information.
-     *
-     * Copy packets before they are modified by execution. */
-    if (fail_open) {
-        for (i = 0; i < n_upcalls; i++) {
-            struct upcall *upcall = &upcalls[i];
-            struct ofpbuf *packet = &upcall->dpif_upcall.packet;
-            struct ofproto_packet_in *pin;
-
-            pin = xmalloc(sizeof *pin);
-            pin->up.packet = xmemdup(ofpbuf_data(packet), ofpbuf_size(packet));
-            pin->up.packet_len = ofpbuf_size(packet);
-            pin->up.reason = OFPR_NO_MATCH;
-            pin->up.table_id = 0;
-            pin->up.cookie = OVS_BE64_MAX;
-            flow_get_metadata(&upcall->flow, &pin->up.fmd);
-            pin->send_len = 0; /* Not used for flow table misses. */
-            pin->miss_type = OFPROTO_PACKET_IN_NO_MISS;
-            ofproto_dpif_send_packet_in(upcall->ofproto, pin);
         }
     }
 
@@ -1219,7 +1281,7 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
     struct ofpbuf xout_actions;
     struct flow flow, dp_mask;
     uint32_t *dp32, *xout32;
-    odp_port_t odp_in_port;
+    ofp_port_t ofp_in_port;
     struct xlate_in xin;
     long long int last_used;
     int error;
@@ -1260,8 +1322,13 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
         goto exit;
     }
 
-    error = xlate_receive(udpif->backer, NULL, ukey->key, ukey->key_len, &flow,
-                          &ofproto, NULL, NULL, &netflow, &odp_in_port);
+    if (odp_flow_key_to_flow(ukey->key, ukey->key_len, &flow)
+        == ODP_FIT_ERROR) {
+        goto exit;
+    }
+
+    error = xlate_receive(udpif->backer, &flow, &ofproto, NULL, NULL, &netflow,
+                          &ofp_in_port);
     if (error) {
         goto exit;
     }
@@ -1273,7 +1340,8 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
         ukey->xcache = xlate_cache_new();
     }
 
-    xlate_in_init(&xin, ofproto, &flow, NULL, push.tcp_flags, NULL);
+    xlate_in_init(&xin, ofproto, &flow, ofp_in_port, NULL, push.tcp_flags,
+                  NULL);
     xin.resubmit_stats = push.n_packets ? &push : NULL;
     xin.xcache = ukey->xcache;
     xin.may_learn = may_learn;
@@ -1287,11 +1355,12 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
     }
 
     if (!xout.slow) {
-        ofpbuf_use_const(&xout_actions, ofpbuf_data(&xout.odp_actions),
-                         ofpbuf_size(&xout.odp_actions));
+        ofpbuf_use_const(&xout_actions, ofpbuf_data(xout.odp_actions),
+                         ofpbuf_size(xout.odp_actions));
     } else {
         ofpbuf_use_stack(&xout_actions, slow_path_buf, sizeof slow_path_buf);
-        compose_slow_path(udpif, &xout, &flow, odp_in_port, &xout_actions);
+        compose_slow_path(udpif, &xout, &flow, flow.in_port.odp_port,
+                          &xout_actions);
     }
 
     if (f->actions_len != ofpbuf_size(&xout_actions)
@@ -1375,6 +1444,7 @@ push_dump_ops__(struct udpif *udpif, struct dump_op *ops, size_t n_ops)
         if (push->n_packets || netflow_exists()) {
             struct ofproto_dpif *ofproto;
             struct netflow *netflow;
+            ofp_port_t ofp_in_port;
             struct flow flow;
             bool may_learn;
             int error;
@@ -1388,14 +1458,19 @@ push_dump_ops__(struct udpif *udpif, struct dump_op *ops, size_t n_ops)
             }
             ovs_mutex_unlock(&op->ukey->mutex);
 
-            error = xlate_receive(udpif->backer, NULL, op->op.u.flow_del.key,
-                                  op->op.u.flow_del.key_len, &flow, &ofproto,
-                                  NULL, NULL, &netflow, NULL);
+            if (odp_flow_key_to_flow(op->op.u.flow_del.key,
+                                     op->op.u.flow_del.key_len, &flow)
+                == ODP_FIT_ERROR) {
+                continue;
+            }
+
+            error = xlate_receive(udpif->backer, &flow, &ofproto,
+                                  NULL, NULL, &netflow, &ofp_in_port);
             if (!error) {
                 struct xlate_in xin;
 
-                xlate_in_init(&xin, ofproto, &flow, NULL, push->tcp_flags,
-                              NULL);
+                xlate_in_init(&xin, ofproto, &flow, ofp_in_port, NULL,
+                              push->tcp_flags, NULL);
                 xin.resubmit_stats = push->n_packets ? push : NULL;
                 xin.may_learn = may_learn;
                 xin.skip_wildcards = true;

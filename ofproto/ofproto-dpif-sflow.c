@@ -563,7 +563,7 @@ dpif_sflow_odp_port_to_ifindex(const struct dpif_sflow *ds,
 }
 
 void
-dpif_sflow_received(struct dpif_sflow *ds, struct ofpbuf *packet,
+dpif_sflow_received(struct dpif_sflow *ds, const struct ofpbuf *packet,
                     const struct flow *flow, odp_port_t odp_in_port,
                     const union user_action_cookie *cookie)
     OVS_EXCLUDED(mutex)

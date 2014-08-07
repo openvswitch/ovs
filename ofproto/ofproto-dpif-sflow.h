@@ -46,10 +46,8 @@ void dpif_sflow_del_port(struct dpif_sflow *, odp_port_t odp_port);
 void dpif_sflow_run(struct dpif_sflow *);
 void dpif_sflow_wait(struct dpif_sflow *);
 
-void dpif_sflow_received(struct dpif_sflow *,
-                         struct ofpbuf *,
-                         const struct flow *,
-                         odp_port_t odp_port,
+void dpif_sflow_received(struct dpif_sflow *, const struct ofpbuf *,
+                         const struct flow *, odp_port_t odp_port,
                          const union user_action_cookie *);
 
 int dpif_sflow_odp_port_to_ifindex(const struct dpif_sflow *,

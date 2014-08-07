@@ -35,9 +35,9 @@ void dpif_ipfix_set_options(
     const struct ofproto_ipfix_bridge_exporter_options *,
     const struct ofproto_ipfix_flow_exporter_options *, size_t);
 
-void dpif_ipfix_bridge_sample(struct dpif_ipfix *, struct ofpbuf *,
+void dpif_ipfix_bridge_sample(struct dpif_ipfix *, const struct ofpbuf *,
                               const struct flow *);
-void dpif_ipfix_flow_sample(struct dpif_ipfix *, struct ofpbuf *,
+void dpif_ipfix_flow_sample(struct dpif_ipfix *, const struct ofpbuf *,
                             const struct flow *, uint32_t, uint16_t, uint32_t,
                             uint32_t);
 
