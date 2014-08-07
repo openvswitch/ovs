@@ -2936,39 +2936,70 @@ print_differences(const char *prefix,
 }
 
 static void
-ofctl_parse_ofp10_actions__(bool instructions)
+ofctl_parse_actions__(const char *version_s, bool instructions)
 {
+    enum ofp_version version;
     struct ds in;
+
+    version = ofputil_version_from_string(version_s);
+    if (!version) {
+        ovs_fatal(0, "%s: not a valid OpenFlow version", version_s);
+    }
 
     ds_init(&in);
     while (!ds_get_preprocessed_line(&in, stdin, NULL)) {
-        struct ofpbuf of10_out;
-        struct ofpbuf of10_in;
+        struct ofpbuf of_out;
+        struct ofpbuf of_in;
         struct ofpbuf ofpacts;
+        const char *table_id;
+        char *actions;
         enum ofperr error;
         size_t size;
         struct ds s;
 
+        /* Parse table_id separated with the follow-up actions by ",", if
+         * any. */
+        actions = ds_cstr(&in);
+        table_id = NULL;
+        if (strstr(actions, ",")) {
+            table_id = strsep(&actions, ",");
+        }
+
         /* Parse hex bytes. */
-        ofpbuf_init(&of10_in, 0);
-        if (ofpbuf_put_hex(&of10_in, ds_cstr(&in), NULL)[0] != '\0') {
+        ofpbuf_init(&of_in, 0);
+        if (ofpbuf_put_hex(&of_in, actions, NULL)[0] != '\0') {
             ovs_fatal(0, "Trailing garbage in hex data");
         }
 
         /* Convert to ofpacts. */
         ofpbuf_init(&ofpacts, 0);
-        size = ofpbuf_size(&of10_in);
+        size = ofpbuf_size(&of_in);
         error = (instructions
                  ? ofpacts_pull_openflow_instructions
                  : ofpacts_pull_openflow_actions)(
-                     &of10_in, ofpbuf_size(&of10_in), OFP10_VERSION, &ofpacts);
+                     &of_in, ofpbuf_size(&of_in), version, &ofpacts);
+        if (!error && instructions) {
+            /* Verify actions, enforce consistency. */
+            enum ofputil_protocol protocol;
+            struct flow flow;
+
+            memset(&flow, 0, sizeof flow);
+            protocol = ofputil_protocols_from_ofp_version(version);
+            error = ofpacts_check_consistency(ofpbuf_data(&ofpacts),
+                                              ofpbuf_size(&ofpacts),
+                                              &flow, OFPP_MAX,
+                                              table_id ? atoi(table_id) : 0,
+                                              255, protocol);
+        }
         if (error) {
-            printf("bad OF1.0 actions: %s\n\n", ofperr_get_name(error));
+            printf("bad %s %s: %s\n\n",
+                   version_s, instructions ? "instructions" : "actions",
+                   ofperr_get_name(error));
             ofpbuf_uninit(&ofpacts);
-            ofpbuf_uninit(&of10_in);
+            ofpbuf_uninit(&of_in);
             continue;
         }
-        ofpbuf_push_uninit(&of10_in, size);
+        ofpbuf_push_uninit(&of_in, size);
 
         /* Print cls_rule. */
         ds_init(&s);
@@ -2978,39 +3009,46 @@ ofctl_parse_ofp10_actions__(bool instructions)
         ds_destroy(&s);
 
         /* Convert back to ofp10 actions and print differences from input. */
-        ofpbuf_init(&of10_out, 0);
-        ofpacts_put_openflow_actions(ofpbuf_data(&ofpacts), ofpbuf_size(&ofpacts), &of10_out,
-                                     OFP10_VERSION);
+        ofpbuf_init(&of_out, 0);
+        if (instructions) {
+           ofpacts_put_openflow_instructions( ofpbuf_data(&ofpacts),
+                                              ofpbuf_size(&ofpacts),
+                                              &of_out, version);
+        } else {
+           ofpacts_put_openflow_actions( ofpbuf_data(&ofpacts),
+                                         ofpbuf_size(&ofpacts),
+                                         &of_out, version);
+        }
 
-        print_differences("", ofpbuf_data(&of10_in), ofpbuf_size(&of10_in),
-                          ofpbuf_data(&of10_out), ofpbuf_size(&of10_out));
+        print_differences("", ofpbuf_data(&of_in), ofpbuf_size(&of_in),
+                          ofpbuf_data(&of_out), ofpbuf_size(&of_out));
         putchar('\n');
 
         ofpbuf_uninit(&ofpacts);
-        ofpbuf_uninit(&of10_in);
-        ofpbuf_uninit(&of10_out);
+        ofpbuf_uninit(&of_in);
+        ofpbuf_uninit(&of_out);
     }
     ds_destroy(&in);
 }
 
-/* "parse-ofp10-actions": reads a series of OpenFlow 1.0 action specifications
- * as hex bytes from stdin, converts them to ofpacts, prints them as strings
- * on stdout, and then converts them back to hex bytes and prints any
- * differences from the input. */
+/* "parse-actions VERSION": reads a series of action specifications for the
+ * given OpenFlow VERSION as hex bytes from stdin, converts them to ofpacts,
+ * prints them as strings on stdout, and then converts them back to hex bytes
+ * and prints any differences from the input. */
 static void
-ofctl_parse_ofp10_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+ofctl_parse_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
-    ofctl_parse_ofp10_actions__(false);
+    ofctl_parse_actions__(argv[1], false);
 }
 
-/* "parse-ofp10-instructions": reads a series of OpenFlow 1.0 action
- * specifications as hex bytes from stdin, converts them to ofpacts, prints
- * them as strings on stdout, and then converts them back to hex bytes and
- * prints any differences from the input. */
+/* "parse-actions VERSION": reads a series of instruction specifications for
+ * the given OpenFlow VERSION as hex bytes from stdin, converts them to
+ * ofpacts, prints them as strings on stdout, and then converts them back to
+ * hex bytes and prints any differences from the input. */
 static void
-ofctl_parse_ofp10_instructions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+ofctl_parse_instructions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
-    ofctl_parse_ofp10_actions__(true);
+    ofctl_parse_actions__(argv[1], true);
 }
 
 /* "parse-ofp10-match": reads a series of ofp10_match specifications as hex
@@ -3137,146 +3175,6 @@ ofctl_parse_ofp11_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         putchar('\n');
 
         ofpbuf_uninit(&match_in);
-    }
-    ds_destroy(&in);
-}
-
-/* "parse-ofp11-actions": reads a series of OpenFlow 1.1 action specifications
- * as hex bytes from stdin, converts them to ofpacts, prints them as strings
- * on stdout, and then converts them back to hex bytes and prints any
- * differences from the input. */
-static void
-ofctl_parse_ofp11_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
-{
-    struct ds in;
-
-    ds_init(&in);
-    while (!ds_get_preprocessed_line(&in, stdin, NULL)) {
-        struct ofpbuf of11_out;
-        struct ofpbuf of11_in;
-        struct ofpbuf ofpacts;
-        enum ofperr error;
-        size_t size;
-        struct ds s;
-
-        /* Parse hex bytes. */
-        ofpbuf_init(&of11_in, 0);
-        if (ofpbuf_put_hex(&of11_in, ds_cstr(&in), NULL)[0] != '\0') {
-            ovs_fatal(0, "Trailing garbage in hex data");
-        }
-
-        /* Convert to ofpacts. */
-        ofpbuf_init(&ofpacts, 0);
-        size = ofpbuf_size(&of11_in);
-        error = ofpacts_pull_openflow_actions(&of11_in, ofpbuf_size(&of11_in),
-                                              OFP11_VERSION, &ofpacts);
-        if (error) {
-            printf("bad OF1.1 actions: %s\n\n", ofperr_get_name(error));
-            ofpbuf_uninit(&ofpacts);
-            ofpbuf_uninit(&of11_in);
-            continue;
-        }
-        ofpbuf_push_uninit(&of11_in, size);
-
-        /* Print cls_rule. */
-        ds_init(&s);
-        ds_put_cstr(&s, "actions=");
-        ofpacts_format(ofpbuf_data(&ofpacts), ofpbuf_size(&ofpacts), &s);
-        puts(ds_cstr(&s));
-        ds_destroy(&s);
-
-        /* Convert back to ofp11 actions and print differences from input. */
-        ofpbuf_init(&of11_out, 0);
-        ofpacts_put_openflow_actions(ofpbuf_data(&ofpacts), ofpbuf_size(&ofpacts), &of11_out,
-                                     OFP11_VERSION);
-
-        print_differences("", ofpbuf_data(&of11_in), ofpbuf_size(&of11_in),
-                          ofpbuf_data(&of11_out), ofpbuf_size(&of11_out));
-        putchar('\n');
-
-        ofpbuf_uninit(&ofpacts);
-        ofpbuf_uninit(&of11_in);
-        ofpbuf_uninit(&of11_out);
-    }
-    ds_destroy(&in);
-}
-
-/* "parse-ofp11-instructions": reads a series of OpenFlow 1.1 instruction
- * specifications as hex bytes from stdin, converts them to ofpacts, prints
- * them as strings on stdout, and then converts them back to hex bytes and
- * prints any differences from the input. */
-static void
-ofctl_parse_ofp11_instructions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
-{
-    struct ds in;
-
-    ds_init(&in);
-    while (!ds_get_preprocessed_line(&in, stdin, NULL)) {
-        struct ofpbuf of11_out;
-        struct ofpbuf of11_in;
-        struct ofpbuf ofpacts;
-        enum ofperr error;
-        size_t size;
-        struct ds s;
-        const char *table_id;
-        char *instructions;
-
-        /* Parse table_id separated with the follow-up instructions by ",", if
-         * any. */
-        instructions = ds_cstr(&in);
-        table_id = NULL;
-        if (strstr(instructions, ",")) {
-            table_id = strsep(&instructions, ",");
-        }
-
-        /* Parse hex bytes. */
-        ofpbuf_init(&of11_in, 0);
-        if (ofpbuf_put_hex(&of11_in, instructions, NULL)[0] != '\0') {
-            ovs_fatal(0, "Trailing garbage in hex data");
-        }
-
-        /* Convert to ofpacts. */
-        ofpbuf_init(&ofpacts, 0);
-        size = ofpbuf_size(&of11_in);
-        error = ofpacts_pull_openflow_instructions(&of11_in, ofpbuf_size(&of11_in),
-                                                   OFP11_VERSION, &ofpacts);
-        if (!error) {
-            /* Verify actions, enforce consistency. */
-            struct flow flow;
-            memset(&flow, 0, sizeof flow);
-            error = ofpacts_check_consistency(ofpbuf_data(&ofpacts), ofpbuf_size(&ofpacts),
-                                              &flow, OFPP_MAX,
-                                              table_id ? atoi(table_id) : 0,
-                                              255, OFPUTIL_P_OF11_STD);
-        }
-        if (error) {
-            printf("bad OF1.1 instructions: %s\n\n", ofperr_get_name(error));
-            ofpbuf_uninit(&ofpacts);
-            ofpbuf_uninit(&of11_in);
-            continue;
-        }
-        ofpbuf_push_uninit(&of11_in, size);
-
-        /* Print cls_rule. */
-        ds_init(&s);
-        ds_put_cstr(&s, "actions=");
-        ofpacts_format(ofpbuf_data(&ofpacts), ofpbuf_size(&ofpacts), &s);
-        puts(ds_cstr(&s));
-        ds_destroy(&s);
-
-        /* Convert back to ofp11 instructions and print differences from
-         * input. */
-        ofpbuf_init(&of11_out, 0);
-        ofpacts_put_openflow_instructions(ofpbuf_data(&ofpacts), ofpbuf_size(&ofpacts),
-                                          &of11_out, OFP13_VERSION);
-
-        print_differences("", ofpbuf_data(&of11_in), ofpbuf_size(&of11_in),
-                          ofpbuf_data(&of11_out), ofpbuf_size(&of11_out));
-        putchar('\n');
-
-        ofpbuf_uninit(&ofpacts);
-        ofpbuf_uninit(&of11_in);
-        ofpbuf_uninit(&of11_out);
     }
     ds_destroy(&in);
 }
@@ -3587,12 +3485,10 @@ static const struct command all_commands[] = {
     { "parse-nx-match", 0, 0, ofctl_parse_nxm },
     { "parse-nxm", 0, 0, ofctl_parse_nxm },
     { "parse-oxm", 1, 1, ofctl_parse_oxm },
-    { "parse-ofp10-actions", 0, 0, ofctl_parse_ofp10_actions },
-    { "parse-ofp10-instructions", 0, 0, ofctl_parse_ofp10_instructions },
+    { "parse-actions", 1, 1, ofctl_parse_actions },
+    { "parse-instructions", 1, 1, ofctl_parse_instructions },
     { "parse-ofp10-match", 0, 0, ofctl_parse_ofp10_match },
     { "parse-ofp11-match", 0, 0, ofctl_parse_ofp11_match },
-    { "parse-ofp11-actions", 0, 0, ofctl_parse_ofp11_actions },
-    { "parse-ofp11-instructions", 0, 0, ofctl_parse_ofp11_instructions },
     { "parse-pcap", 1, 1, ofctl_parse_pcap },
     { "check-vlan", 2, 2, ofctl_check_vlan },
     { "print-error", 1, 1, ofctl_print_error },

@@ -69,11 +69,11 @@ ffff 0018 00002320 0009 000000000000 c426384d49c53d60
 # actions=set_tunnel64:0x885f3298
 ffff 0018 00002320 0009 000000000000 00000000885f3298
 
-# bad OF1.0 actions: OFPBIC_UNSUP_INST
+# bad OpenFlow10 actions: OFPBIC_UNSUP_INST
 & ofp_actions|WARN|write_metadata instruction not allowed here
 ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffffffffffffffff
 
-# bad OF1.0 actions: OFPBIC_UNSUP_INST
+# bad OpenFlow10 actions: OFPBIC_UNSUP_INST
 & ofp_actions|WARN|write_metadata instruction not allowed here
 ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffff0000ffff0000
 
@@ -127,7 +127,7 @@ AT_CAPTURE_FILE([input.txt])
 AT_CAPTURE_FILE([expout])
 AT_CAPTURE_FILE([experr])
 AT_CHECK(
-  [ovs-ofctl '-vPATTERN:console:%c|%p|%m' parse-ofp10-actions < input.txt],
+  [ovs-ofctl '-vPATTERN:console:%c|%p|%m' parse-actions OpenFlow10 < input.txt],
   [0], [expout], [experr])
 AT_CLEANUP
 
@@ -157,7 +157,7 @@ AT_CAPTURE_FILE([input.txt])
 AT_CAPTURE_FILE([expout])
 AT_CAPTURE_FILE([experr])
 AT_CHECK(
-  [ovs-ofctl '-vPATTERN:console:%c|%p|%m' parse-ofp10-instructions < input.txt],
+  [ovs-ofctl '-vPATTERN:console:%c|%p|%m' parse-instructions OpenFlow10 < input.txt],
   [0], [expout], [experr])
 AT_CLEANUP
 
@@ -235,7 +235,7 @@ ffff 0018 00002320 0009 000000000000 00000000885f3298
 
 dnl Write-Metadata is only allowed in contexts that allow instructions.
 & ofp_actions|WARN|write_metadata instruction not allowed here
-# bad OF1.1 actions: OFPBIC_UNSUP_INST
+# bad OpenFlow11 actions: OFPBIC_UNSUP_INST
 ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffffffffffffffff
 
 # actions=multipath(eth_src,50,modulo_n,1,0,NXM_NX_REG0[])
@@ -289,7 +289,7 @@ AT_CAPTURE_FILE([input.txt])
 AT_CAPTURE_FILE([expout])
 AT_CAPTURE_FILE([experr])
 AT_CHECK(
-  [ovs-ofctl '-vPATTERN:console:%c|%p|%m' parse-ofp11-actions < input.txt],
+  [ovs-ofctl '-vPATTERN:console:%c|%p|%m' parse-actions OpenFlow11 < input.txt],
   [0], [expout], [experr])
 AT_CLEANUP
 
@@ -325,16 +325,16 @@ dnl Check that an empty Apply-Actions instruction gets dropped.
 0004 0008 00000000
 
 dnl Duplicate instruction type:
-# bad OF1.1 instructions: OFPBIC_DUP_INST
+# bad OpenFlow11 instructions: OFPBIC_DUP_INST
 0004 0008 00000000 0004 0008 00000000
 
 dnl Instructions not multiple of 8 in length.
 & ofp_actions|WARN|OpenFlow message instructions length 9 is not a multiple of 8
-# bad OF1.1 instructions: OFPBIC_BAD_LEN
+# bad OpenFlow11 instructions: OFPBIC_BAD_LEN
 0004 0009 01 00000000
 
 dnl Goto-Table instruction too long.
-# bad OF1.1 instructions: OFPBIC_BAD_LEN
+# bad OpenFlow11 instructions: OFPBIC_BAD_LEN
 0001 0010 01 000000 0000000000000000
 
 dnl Goto-Table 1 instruction non-zero padding
@@ -343,7 +343,7 @@ dnl Goto-Table 1 instruction non-zero padding
 0001 0008 01 000001
 
 dnl Goto-Table 1 instruction go back to the previous table.
-# bad OF1.1 instructions: OFPBRC_BAD_TABLE_ID
+# bad OpenFlow11 instructions: OFPBRC_BAD_TABLE_ID
 2,0001 0008 01 000000
 
 dnl Goto-Table 1
@@ -397,15 +397,15 @@ dnl Write-Metadata with mask.
 0002 0018 00000000 fedcba9876543210 ff00ff00ff00ff00
 
 dnl Write-Metadata too short.
-# bad OF1.1 instructions: OFPBIC_BAD_LEN
+# bad OpenFlow11 instructions: OFPBIC_BAD_LEN
 0002 0010 00000000 fedcba9876543210
 
 dnl Write-Metadata too long.
-# bad OF1.1 instructions: OFPBIC_BAD_LEN
+# bad OpenFlow11 instructions: OFPBIC_BAD_LEN
 0002 0020 00000000 fedcba9876543210 ffffffffffffffff 0000000000000000
 
 dnl Write-Metadata duplicated.
-# bad OF1.1 instructions: OFPBIC_DUP_INST
+# bad OpenFlow11 instructions: OFPBIC_DUP_INST
 0002 0018 00000000 fedcba9876543210 ff00ff00ff00ff00 0002 0018 00000000 fedcba9876543210 ff00ff00ff00ff00
 
 dnl Write-Metadata in wrong position (OpenFlow 1.1+ disregards the order
@@ -465,7 +465,7 @@ dnl Check that an empty Write-Actions instruction gets dropped.
 0003 0008 00000000
 
 dnl Clear-Actions too-long
-# bad OF1.1 instructions: OFPBIC_BAD_LEN
+# bad OpenFlow11 instructions: OFPBIC_BAD_LEN
 0005 0010 00000000 0000000000000000
 
 dnl Clear-Actions non-zero padding
@@ -483,11 +483,11 @@ dnl Clear-Actions
 0005 0008 00000000
 
 dnl Experimenter actions not supported yet.
-# bad OF1.1 instructions: OFPBIC_BAD_EXPERIMENTER
+# bad OpenFlow11 instructions: OFPBIC_BAD_EXPERIMENTER
 ffff 0008 01 000000
 
 dnl Bad instruction number (0 not assigned).
-# bad OF1.1 instructions: OFPBIC_UNKNOWN_INST
+# bad OpenFlow11 instructions: OFPBIC_UNKNOWN_INST
 0000 0008 01 000000
 
 ])
@@ -498,7 +498,7 @@ AT_CAPTURE_FILE([input.txt])
 AT_CAPTURE_FILE([expout])
 AT_CAPTURE_FILE([experr])
 AT_CHECK(
-  [ovs-ofctl '-vPATTERN:console:%c|%p|%m' parse-ofp11-instructions < input.txt],
+  [ovs-ofctl '-vPATTERN:console:%c|%p|%m' parse-instructions OpenFlow11 < input.txt],
   [0], [expout], [experr])
 AT_CLEANUP
 
