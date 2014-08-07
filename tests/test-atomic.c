@@ -167,7 +167,7 @@ test_atomic_flag(void)
     ovs_assert(atomic_flag_test_and_set(&flag) == false);
 }
 
-uint32_t a;
+static uint32_t a;
 
 struct atomic_aux {
     atomic_uint32_t count;
@@ -175,7 +175,7 @@ struct atomic_aux {
     ATOMIC(uint32_t *) data;
 };
 
-ATOMIC(struct atomic_aux *) paux = ATOMIC_VAR_INIT(NULL);
+static ATOMIC(struct atomic_aux *) paux = ATOMIC_VAR_INIT(NULL);
 static struct atomic_aux *auxes = NULL;
 
 #define ATOMIC_ITEM_COUNT 1000000
@@ -273,7 +273,7 @@ static void *
 atomic_writer(void *aux_)
 {
     struct atomic_aux *aux = aux_;
-    atomic_uint32_t old_count;
+    uint32_t old_count;
     uint32_t *data;
     size_t i;
 
