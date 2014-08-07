@@ -671,28 +671,13 @@ ofpacts_from_openflow(const union ofp_action *in, size_t n_in,
     return 0;
 }
 
-/* Attempts to convert 'actions_len' bytes of OpenFlow actions from the
- * front of 'openflow' into ofpacts.  On success, replaces any existing content
- * in 'ofpacts' by the converted ofpacts; on failure, clears 'ofpacts'.
- * Returns 0 if successful, otherwise an OpenFlow error.
- *
- * Actions are processed according to their OpenFlow version which
- * is provided in the 'version' parameter.
- *
- * In most places in OpenFlow 1.1 and 1.2, actions appear encapsulated in
- * instructions, so you should call ofpacts_pull_openflow_instructions()
- * instead of this function.
- *
- * The parsed actions are valid generically, but they may not be valid in a
- * specific context.  For example, port numbers up to OFPP_MAX are valid
- * generically, but specific datapaths may only support port numbers in a
- * smaller range.  Use ofpacts_check() to additional check whether actions are
- * valid in a specific context. */
-enum ofperr
-ofpacts_pull_openflow_actions(struct ofpbuf *openflow,
-                              unsigned int actions_len,
-                              enum ofp_version version,
-                              struct ofpbuf *ofpacts) {
+static enum ofperr
+ofpacts_pull_openflow_actions__(struct ofpbuf *openflow,
+                                unsigned int actions_len,
+                                enum ofp_version version,
+                                uint32_t allowed_ovsinsts,
+                                struct ofpbuf *ofpacts)
+{
     const union ofp_action *actions;
     enum ofperr error;
 
@@ -719,13 +704,41 @@ ofpacts_pull_openflow_actions(struct ofpbuf *openflow,
         return error;
     }
 
-    error = ofpacts_verify(ofpbuf_data(ofpacts), ofpbuf_size(ofpacts));
+    error = ofpacts_verify(ofpbuf_data(ofpacts), ofpbuf_size(ofpacts),
+                           allowed_ovsinsts);
     if (error) {
         ofpbuf_clear(ofpacts);
     }
     return error;
 }
 
+/* Attempts to convert 'actions_len' bytes of OpenFlow actions from the
+ * front of 'openflow' into ofpacts.  On success, replaces any existing content
+ * in 'ofpacts' by the converted ofpacts; on failure, clears 'ofpacts'.
+ * Returns 0 if successful, otherwise an OpenFlow error.
+ *
+ * Actions are processed according to their OpenFlow version which
+ * is provided in the 'version' parameter.
+ *
+ * In most places in OpenFlow, actions appear encapsulated in instructions, so
+ * you should call ofpacts_pull_openflow_instructions() instead of this
+ * function.
+ *
+ * The parsed actions are valid generically, but they may not be valid in a
+ * specific context.  For example, port numbers up to OFPP_MAX are valid
+ * generically, but specific datapaths may only support port numbers in a
+ * smaller range.  Use ofpacts_check() to additional check whether actions are
+ * valid in a specific context. */
+enum ofperr
+ofpacts_pull_openflow_actions(struct ofpbuf *openflow,
+                              unsigned int actions_len,
+                              enum ofp_version version,
+                              struct ofpbuf *ofpacts)
+{
+    return ofpacts_pull_openflow_actions__(openflow, actions_len, version,
+                                           1u << OVSINST_OFPIT11_APPLY_ACTIONS,
+                                           ofpacts);
+}
 
 /* OpenFlow 1.1 actions. */
 
@@ -1819,6 +1832,13 @@ ofpacts_pull_openflow_instructions(struct ofpbuf *openflow,
     const struct ofp11_instruction *insts[N_OVS_INSTRUCTIONS];
     enum ofperr error;
 
+    if (version == OFP10_VERSION) {
+        return ofpacts_pull_openflow_actions__(openflow, instructions_len,
+                                               version,
+                                               (1u << N_OVS_INSTRUCTIONS) - 1,
+                                               ofpacts);
+    }
+
     ofpbuf_clear(ofpacts);
 
     if (instructions_len % OFP11_INSTRUCTION_ALIGN != 0) {
@@ -1912,7 +1932,8 @@ ofpacts_pull_openflow_instructions(struct ofpbuf *openflow,
         ogt->table_id = oigt->table_id;
     }
 
-    error = ofpacts_verify(ofpbuf_data(ofpacts), ofpbuf_size(ofpacts));
+    error = ofpacts_verify(ofpbuf_data(ofpacts), ofpbuf_size(ofpacts),
+                           (1u << N_OVS_INSTRUCTIONS) - 1);
 exit:
     if (error) {
         ofpbuf_clear(ofpacts);
@@ -2260,7 +2281,8 @@ ofpacts_check_consistency(struct ofpact ofpacts[], size_t ofpacts_len,
 /* Verifies that the 'ofpacts_len' bytes of actions in 'ofpacts' are
  * in the appropriate order as defined by the OpenFlow spec. */
 enum ofperr
-ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len)
+ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len,
+               uint32_t allowed_ovsinsts)
 {
     const struct ofpact *a;
     enum ovs_instruction_type inst;
@@ -2286,6 +2308,12 @@ ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len)
                           next_name, name);
             }
             return OFPERR_OFPBAC_UNSUPPORTED_ORDER;
+        }
+        if (!((1u << next) & allowed_ovsinsts)) {
+            const char *name = ovs_instruction_name_from_type(next);
+
+            VLOG_WARN("%s instruction not allowed here", name);
+            return OFPERR_OFPBIC_UNSUP_INST;
         }
 
         inst = next;
@@ -3080,7 +3108,11 @@ ofpacts_put_openflow_instructions(const struct ofpact ofpacts[],
 {
     const struct ofpact *a;
 
-    ovs_assert(ofp_version >= OFP11_VERSION);
+    if (ofp_version == OFP10_VERSION) {
+        ofpacts_put_openflow_actions(ofpacts, ofpacts_len, openflow,
+                                     ofp_version);
+        return;
+    }
 
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
         switch (ovs_instruction_type_from_ofpact_type(a->type)) {

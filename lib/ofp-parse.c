@@ -1016,7 +1016,8 @@ str_to_ofpacts(char *str, struct ofpbuf *ofpacts,
         return error_s;
     }
 
-    error = ofpacts_verify(ofpbuf_data(ofpacts), ofpbuf_size(ofpacts));
+    error = ofpacts_verify(ofpbuf_data(ofpacts), ofpbuf_size(ofpacts),
+                           (1u << OVSINST_OFPIT11_APPLY_ACTIONS));
     if (error) {
         ofpbuf_set_size(ofpacts, orig_size);
         return xstrdup("Incorrect action ordering");
@@ -1095,7 +1096,8 @@ parse_named_instruction(enum ovs_instruction_type type,
 
     /* If write_metadata is specified as an action AND an instruction, ofpacts
        could be invalid. */
-    error = ofpacts_verify(ofpbuf_data(ofpacts), ofpbuf_size(ofpacts));
+    error = ofpacts_verify(ofpbuf_data(ofpacts), ofpbuf_size(ofpacts),
+                           (1u << N_OVS_INSTRUCTIONS) - 1);
     if (error) {
         return xstrdup("Incorrect instruction ordering");
     }

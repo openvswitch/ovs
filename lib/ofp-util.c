@@ -1665,12 +1665,6 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             return error;
         }
 
-        error = ofpacts_pull_openflow_instructions(&b, ofpbuf_size(&b), oh->version,
-                                                   ofpacts);
-        if (error) {
-            return error;
-        }
-
         /* Translate the message. */
         fm->priority = ntohs(ofm->priority);
         if (ofm->command == OFPFC_ADD
@@ -1731,13 +1725,6 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             ofputil_match_from_ofp10_match(&ofm->match, &fm->match);
             ofputil_normalize_match(&fm->match);
 
-            /* Now get the actions. */
-            error = ofpacts_pull_openflow_actions(&b, ofpbuf_size(&b), oh->version,
-                                                  ofpacts);
-            if (error) {
-                return error;
-            }
-
             /* OpenFlow 1.0 says that exact-match rules have to have the
              * highest possible priority. */
             fm->priority = (ofm->match.wildcards & htonl(OFPFW10_ALL)
@@ -1763,11 +1750,6 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             nfm = ofpbuf_pull(&b, sizeof *nfm);
             error = nx_pull_match(&b, ntohs(nfm->match_len),
                                   &fm->match, &fm->cookie, &fm->cookie_mask);
-            if (error) {
-                return error;
-            }
-            error = ofpacts_pull_openflow_actions(&b, ofpbuf_size(&b), oh->version,
-                                                  ofpacts);
             if (error) {
                 return error;
             }
@@ -1801,6 +1783,11 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
         }
     }
 
+    error = ofpacts_pull_openflow_instructions(&b, ofpbuf_size(&b),
+                                               oh->version, ofpacts);
+    if (error) {
+        return error;
+    }
     fm->ofpacts = ofpbuf_data(ofpacts);
     fm->ofpacts_len = ofpbuf_size(ofpacts);
 
@@ -2801,6 +2788,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
                                 struct ofpbuf *ofpacts)
 {
     const struct ofp_header *oh;
+    size_t instructions_len;
     enum ofperr error;
     enum ofpraw raw;
 
@@ -2838,13 +2826,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
             VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_FLOW reply bad match");
             return EINVAL;
         }
-
-        if (ofpacts_pull_openflow_instructions(msg, length - sizeof *ofs -
-                                               padded_match_len, oh->version,
-                                               ofpacts)) {
-            VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_FLOW reply bad instructions");
-            return EINVAL;
-        }
+        instructions_len = length - sizeof *ofs - padded_match_len;
 
         fs->priority = ntohs(ofs->priority);
         fs->table_id = ofs->table_id;
@@ -2883,11 +2865,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
                          "length %"PRIuSIZE, length);
             return EINVAL;
         }
-
-        if (ofpacts_pull_openflow_actions(msg, length - sizeof *ofs,
-                                          oh->version, ofpacts)) {
-            return EINVAL;
-        }
+        instructions_len = length - sizeof *ofs;
 
         fs->cookie = get_32aligned_be64(&ofs->cookie);
         ofputil_match_from_ofp10_match(&ofs->match, &fs->match);
@@ -2904,7 +2882,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
         fs->flags = 0;
     } else if (raw == OFPRAW_NXST_FLOW_REPLY) {
         const struct nx_flow_stats *nfs;
-        size_t match_len, actions_len, length;
+        size_t match_len, length;
 
         nfs = ofpbuf_try_pull(msg, sizeof *nfs);
         if (!nfs) {
@@ -2923,12 +2901,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
         if (nx_pull_match(msg, match_len, &fs->match, NULL, NULL)) {
             return EINVAL;
         }
-
-        actions_len = length - sizeof *nfs - ROUND_UP(match_len, 8);
-        if (ofpacts_pull_openflow_actions(msg, actions_len, oh->version,
-                                          ofpacts)) {
-            return EINVAL;
-        }
+        instructions_len = length - sizeof *nfs - ROUND_UP(match_len, 8);
 
         fs->cookie = nfs->cookie;
         fs->table_id = nfs->table_id;
@@ -2954,6 +2927,11 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
         OVS_NOT_REACHED();
     }
 
+    if (ofpacts_pull_openflow_instructions(msg, instructions_len, oh->version,
+                                           ofpacts)) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_FLOW reply bad instructions");
+        return EINVAL;
+    }
     fs->ofpacts = ofpbuf_data(ofpacts);
     fs->ofpacts_len = ofpbuf_size(ofpacts);
 

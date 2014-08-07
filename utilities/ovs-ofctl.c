@@ -2935,12 +2935,8 @@ print_differences(const char *prefix,
     }
 }
 
-/* "parse-ofp10-actions": reads a series of OpenFlow 1.0 action specifications
- * as hex bytes from stdin, converts them to ofpacts, prints them as strings
- * on stdout, and then converts them back to hex bytes and prints any
- * differences from the input. */
 static void
-ofctl_parse_ofp10_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+ofctl_parse_ofp10_actions__(bool instructions)
 {
     struct ds in;
 
@@ -2962,8 +2958,10 @@ ofctl_parse_ofp10_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         /* Convert to ofpacts. */
         ofpbuf_init(&ofpacts, 0);
         size = ofpbuf_size(&of10_in);
-        error = ofpacts_pull_openflow_actions(&of10_in, ofpbuf_size(&of10_in),
-                                              OFP10_VERSION, &ofpacts);
+        error = (instructions
+                 ? ofpacts_pull_openflow_instructions
+                 : ofpacts_pull_openflow_actions)(
+                     &of10_in, ofpbuf_size(&of10_in), OFP10_VERSION, &ofpacts);
         if (error) {
             printf("bad OF1.0 actions: %s\n\n", ofperr_get_name(error));
             ofpbuf_uninit(&ofpacts);
@@ -2993,6 +2991,26 @@ ofctl_parse_ofp10_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         ofpbuf_uninit(&of10_out);
     }
     ds_destroy(&in);
+}
+
+/* "parse-ofp10-actions": reads a series of OpenFlow 1.0 action specifications
+ * as hex bytes from stdin, converts them to ofpacts, prints them as strings
+ * on stdout, and then converts them back to hex bytes and prints any
+ * differences from the input. */
+static void
+ofctl_parse_ofp10_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    ofctl_parse_ofp10_actions__(false);
+}
+
+/* "parse-ofp10-instructions": reads a series of OpenFlow 1.0 action
+ * specifications as hex bytes from stdin, converts them to ofpacts, prints
+ * them as strings on stdout, and then converts them back to hex bytes and
+ * prints any differences from the input. */
+static void
+ofctl_parse_ofp10_instructions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    ofctl_parse_ofp10_actions__(true);
 }
 
 /* "parse-ofp10-match": reads a series of ofp10_match specifications as hex
@@ -3570,6 +3588,7 @@ static const struct command all_commands[] = {
     { "parse-nxm", 0, 0, ofctl_parse_nxm },
     { "parse-oxm", 1, 1, ofctl_parse_oxm },
     { "parse-ofp10-actions", 0, 0, ofctl_parse_ofp10_actions },
+    { "parse-ofp10-instructions", 0, 0, ofctl_parse_ofp10_instructions },
     { "parse-ofp10-match", 0, 0, ofctl_parse_ofp10_match },
     { "parse-ofp11-match", 0, 0, ofctl_parse_ofp11_match },
     { "parse-ofp11-actions", 0, 0, ofctl_parse_ofp11_actions },

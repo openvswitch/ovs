@@ -233,7 +233,8 @@ enum ofperr {
     /* OF1.1+(3,0).  Unknown instruction. */
     OFPERR_OFPBIC_UNKNOWN_INST,
 
-    /* OF1.1+(3,1).  Switch or table does not support the instruction. */
+    /* NX1.0(2,257), OF1.1+(3,1).  Switch or table does not support the
+     * instruction. */
     OFPERR_OFPBIC_UNSUP_INST,
 
     /* OF1.1+(3,2).  Invalid Table-ID specified. */

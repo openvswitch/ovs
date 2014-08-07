@@ -69,10 +69,12 @@ ffff 0018 00002320 0009 000000000000 c426384d49c53d60
 # actions=set_tunnel64:0x885f3298
 ffff 0018 00002320 0009 000000000000 00000000885f3298
 
-# actions=write_metadata:0xfedcba9876543210
+# bad OF1.0 actions: OFPBIC_UNSUP_INST
+& ofp_actions|WARN|write_metadata instruction not allowed here
 ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffffffffffffffff
 
-# actions=write_metadata:0xfedcba9876543210/0xffff0000ffff0000
+# bad OF1.0 actions: OFPBIC_UNSUP_INST
+& ofp_actions|WARN|write_metadata instruction not allowed here
 ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffff0000ffff0000
 
 # actions=multipath(eth_src,50,modulo_n,1,0,NXM_NX_REG0[])
@@ -126,6 +128,36 @@ AT_CAPTURE_FILE([expout])
 AT_CAPTURE_FILE([experr])
 AT_CHECK(
   [ovs-ofctl '-vPATTERN:console:%c|%p|%m' parse-ofp10-actions < input.txt],
+  [0], [expout], [experr])
+AT_CLEANUP
+
+AT_SETUP([OpenFlow 1.0 "instruction" translations])
+AT_KEYWORDS([ofp-actions OF1.0 instruction])
+AT_DATA([test-data], [dnl
+dnl Try a couple of ordinary actions to make sure they're accepted,
+dnl but there's no point in retrying all the actions from the previous test.
+# actions=LOCAL
+0000 0008 fffe 04d2
+
+# actions=mod_dl_src:00:11:22:33:44:55
+0004 0010 001122334455 000000000000
+
+dnl Now check that write_metadata is accepted.
+# actions=write_metadata:0xfedcba9876543210
+ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffffffffffffffff
+
+# actions=write_metadata:0xfedcba9876543210/0xffff0000ffff0000
+ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffff0000ffff0000
+
+])
+sed '/^[[#&]]/d' < test-data > input.txt
+sed -n 's/^# //p; /^$/p' < test-data > expout
+sed -n 's/^& //p' < test-data > experr
+AT_CAPTURE_FILE([input.txt])
+AT_CAPTURE_FILE([expout])
+AT_CAPTURE_FILE([experr])
+AT_CHECK(
+  [ovs-ofctl '-vPATTERN:console:%c|%p|%m' parse-ofp10-instructions < input.txt],
   [0], [expout], [experr])
 AT_CLEANUP
 
@@ -201,52 +233,10 @@ ffff 0018 00002320 0009 000000000000 c426384d49c53d60
 # actions=set_tunnel64:0x885f3298
 ffff 0018 00002320 0009 000000000000 00000000885f3298
 
-dnl OpenFlow 1.1 uses OFPIT_WRITE_METADATA to express the NXAST_WRITE_METADATA
-dnl action instead, so parse-ofp11-actions will recognise and drop this action.
-# actions=write_metadata:0xfedcba9876543210
-#  0: ff -> (none)
-#  1: ff -> (none)
-#  2: 00 -> (none)
-#  3: 20 -> (none)
-#  4: 00 -> (none)
-#  5: 00 -> (none)
-#  6: 23 -> (none)
-#  7: 20 -> (none)
-#  8: 00 -> (none)
-#  9: 16 -> (none)
-# 10: 00 -> (none)
-# 11: 00 -> (none)
-# 12: 00 -> (none)
-# 13: 00 -> (none)
-# 14: 00 -> (none)
-# 15: 00 -> (none)
-# 16: fe -> (none)
-# 17: dc -> (none)
-# 18: ba -> (none)
-# 19: 98 -> (none)
-# 20: 76 -> (none)
-# 21: 54 -> (none)
-# 22: 32 -> (none)
-# 23: 10 -> (none)
-# 24: ff -> (none)
-# 25: ff -> (none)
-# 26: ff -> (none)
-# 27: ff -> (none)
-# 28: ff -> (none)
-# 29: ff -> (none)
-# 30: ff -> (none)
-# 31: ff -> (none)
+dnl Write-Metadata is only allowed in contexts that allow instructions.
+& ofp_actions|WARN|write_metadata instruction not allowed here
+# bad OF1.1 actions: OFPBIC_UNSUP_INST
 ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffffffffffffffff
-
-dnl Write-Metadata duplicated.
-& ofp_actions|WARN|duplicate write_metadata instruction not allowed, for OpenFlow 1.1+ compatibility
-# bad OF1.1 actions: OFPBAC_UNSUPPORTED_ORDER
-ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffffffffffffffff ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffffffffffffffff
-
-dnl Write-Metadata in wrong position.
-& ofp_actions|WARN|invalid instruction ordering: apply_actions must appear before write_metadata, for OpenFlow 1.1+ compatibility
-# bad OF1.1 actions: OFPBAC_UNSUPPORTED_ORDER
-ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffffffffffffffff ffff 0010 00002320 0002 0000 12345678
 
 # actions=multipath(eth_src,50,modulo_n,1,0,NXM_NX_REG0[])
 ffff 0020 00002320 000a 0000 0032 0000 0000 0000 0000 0000 0000 001f 00010004
@@ -367,6 +357,44 @@ dnl Goto-Table 1
 dnl Write-Metadata.
 # actions=write_metadata:0xfedcba9876543210
 0002 0018 00000000 fedcba9876543210 ffffffffffffffff
+
+dnl Write-Metadata as Nicira extension action is transformed into instruction.
+# actions=write_metadata:0xfedcba9876543210
+#  1: 04 -> 02
+#  3: 28 -> 18
+#  8: ff -> fe
+#  9: ff -> dc
+# 10: 00 -> ba
+# 11: 20 -> 98
+# 12: 00 -> 76
+# 13: 00 -> 54
+# 14: 23 -> 32
+# 15: 20 -> 10
+# 16: 00 -> ff
+# 17: 16 -> ff
+# 18: 00 -> ff
+# 19: 00 -> ff
+# 20: 00 -> ff
+# 21: 00 -> ff
+# 22: 00 -> ff
+# 23: 00 -> ff
+# 24: fe -> (none)
+# 25: dc -> (none)
+# 26: ba -> (none)
+# 27: 98 -> (none)
+# 28: 76 -> (none)
+# 29: 54 -> (none)
+# 30: 32 -> (none)
+# 31: 10 -> (none)
+# 32: ff -> (none)
+# 33: ff -> (none)
+# 34: ff -> (none)
+# 35: ff -> (none)
+# 36: ff -> (none)
+# 37: ff -> (none)
+# 38: ff -> (none)
+# 39: ff -> (none)
+0004 0028 00000000 ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffffffffffffffff
 
 dnl Write-Metadata with mask.
 # actions=write_metadata:0xfedcba9876543210/0xff00ff00ff00ff00
