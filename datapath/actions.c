@@ -40,6 +40,95 @@
 #include "vlan.h"
 #include "vport.h"
 
+static void flow_key_set_priority(struct sk_buff *skb, u32 priority)
+{
+	OVS_CB(skb)->pkt_key->phy.priority = priority;
+}
+
+static void flow_key_set_skb_mark(struct sk_buff *skb, u32 skb_mark)
+{
+	OVS_CB(skb)->pkt_key->phy.skb_mark = skb_mark;
+}
+
+static void flow_key_set_eth_src(struct sk_buff *skb, const u8 addr[])
+{
+	ether_addr_copy(OVS_CB(skb)->pkt_key->eth.src, addr);
+}
+
+static void flow_key_set_eth_dst(struct sk_buff *skb, const u8 addr[])
+{
+	ether_addr_copy(OVS_CB(skb)->pkt_key->eth.dst, addr);
+}
+
+static void flow_key_set_vlan_tci(struct sk_buff *skb, __be16 tci)
+{
+	OVS_CB(skb)->pkt_key->eth.tci = tci;
+}
+
+static void flow_key_set_mpls_top_lse(struct sk_buff *skb, __be32 top_lse)
+{
+	OVS_CB(skb)->pkt_key->mpls.top_lse = top_lse;
+}
+
+static void flow_key_set_ipv4_src(struct sk_buff *skb, __be32 addr)
+{
+	OVS_CB(skb)->pkt_key->ipv4.addr.src = addr;
+}
+
+static void flow_key_set_ipv4_dst(struct sk_buff *skb, __be32 addr)
+{
+	OVS_CB(skb)->pkt_key->ipv4.addr.src = addr;
+}
+
+static void flow_key_set_ip_tos(struct sk_buff *skb, u8 tos)
+{
+	OVS_CB(skb)->pkt_key->ip.tos = tos;
+}
+
+static void flow_key_set_ip_ttl(struct sk_buff *skb, u8 ttl)
+{
+	OVS_CB(skb)->pkt_key->ip.ttl = ttl;
+}
+
+static void flow_key_set_ipv6_src(struct sk_buff *skb,
+				  const __be32 addr[4])
+{
+	memcpy(&OVS_CB(skb)->pkt_key->ipv6.addr.src, addr, sizeof(__be32[4]));
+}
+
+static void flow_key_set_ipv6_dst(struct sk_buff *skb,
+				  const __be32 addr[4])
+{
+	memcpy(&OVS_CB(skb)->pkt_key->ipv6.addr.dst, addr, sizeof(__be32[4]));
+}
+
+static void flow_key_set_ipv6_fl(struct sk_buff *skb,
+				 const struct ipv6hdr *nh)
+{
+	OVS_CB(skb)->pkt_key->ipv6.label = *(__be32 *)nh &
+					   htonl(IPV6_FLOWINFO_FLOWLABEL);
+}
+
+static void flow_key_set_tp_src(struct sk_buff *skb, __be16 port)
+{
+	OVS_CB(skb)->pkt_key->tp.src = port;
+}
+
+static void flow_key_set_tp_dst(struct sk_buff *skb, __be16 port)
+{
+	OVS_CB(skb)->pkt_key->tp.dst = port;
+}
+
+static void invalidate_skb_flow_key(struct sk_buff *skb)
+{
+	OVS_CB(skb)->pkt_key->eth.type = htons(0);
+}
+
+static bool is_skb_flow_key_valid(struct sk_buff *skb)
+{
+	return !!OVS_CB(skb)->pkt_key->eth.type;
+}
+
 static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			      const struct nlattr *attr, int len);
 
@@ -90,6 +179,7 @@ static int push_mpls(struct sk_buff *skb,
 	if (!ovs_skb_get_inner_protocol(skb))
 		ovs_skb_set_inner_protocol(skb, skb->protocol);
 	skb->protocol = mpls->mpls_ethertype;
+	invalidate_skb_flow_key(skb);
 	return 0;
 }
 
@@ -120,6 +210,7 @@ static int pop_mpls(struct sk_buff *skb, const __be16 ethertype)
 	hdr->h_proto = ethertype;
 	if (eth_p_mpls(skb->protocol))
 		skb->protocol = ethertype;
+	invalidate_skb_flow_key(skb);
 	return 0;
 }
 
@@ -139,7 +230,7 @@ static int set_mpls(struct sk_buff *skb, const __be32 *mpls_lse)
 	}
 
 	*stack = *mpls_lse;
-
+	flow_key_set_mpls_top_lse(skb, *stack);
 	return 0;
 }
 
@@ -189,9 +280,12 @@ static int pop_vlan(struct sk_buff *skb)
 	}
 	/* move next vlan tag to hw accel tag */
 	if (likely(skb->protocol != htons(ETH_P_8021Q) ||
-		   skb->len < VLAN_ETH_HLEN))
+		   skb->len < VLAN_ETH_HLEN)) {
+		flow_key_set_vlan_tci(skb, 0);
 		return 0;
+	}
 
+	invalidate_skb_flow_key(skb);
 	err = __pop_vlan_tci(skb, &tci);
 	if (unlikely(err))
 		return err;
@@ -218,6 +312,9 @@ static int push_vlan(struct sk_buff *skb, const struct ovs_action_push_vlan *vla
 			skb->csum = csum_add(skb->csum, csum_partial(skb->data
 					+ (2 * ETH_ALEN), VLAN_HLEN, 0));
 
+		invalidate_skb_flow_key(skb);
+	} else {
+		flow_key_set_vlan_tci(skb,  vlan->vlan_tci);
 	}
 	__vlan_hwaccel_put_tag(skb, vlan->vlan_tpid, ntohs(vlan->vlan_tci) & ~VLAN_TAG_PRESENT);
 	return 0;
@@ -238,11 +335,13 @@ static int set_eth_addr(struct sk_buff *skb,
 
 	ovs_skb_postpush_rcsum(skb, eth_hdr(skb), ETH_ALEN * 2);
 
+	flow_key_set_eth_src(skb, eth_key->eth_src);
+	flow_key_set_eth_dst(skb, eth_key->eth_dst);
 	return 0;
 }
 
 static void set_ip_addr(struct sk_buff *skb, struct iphdr *nh,
-				__be32 *addr, __be32 new_addr)
+			__be32 *addr, __be32 new_addr)
 {
 	int transport_len = skb->len - skb_transport_offset(skb);
 
@@ -333,17 +432,25 @@ static int set_ipv4(struct sk_buff *skb, const struct ovs_key_ipv4 *ipv4_key)
 
 	nh = ip_hdr(skb);
 
-	if (ipv4_key->ipv4_src != nh->saddr)
+	if (ipv4_key->ipv4_src != nh->saddr) {
 		set_ip_addr(skb, nh, &nh->saddr, ipv4_key->ipv4_src);
+		flow_key_set_ipv4_src(skb, ipv4_key->ipv4_src);
+	}
 
-	if (ipv4_key->ipv4_dst != nh->daddr)
+	if (ipv4_key->ipv4_dst != nh->daddr) {
 		set_ip_addr(skb, nh, &nh->daddr, ipv4_key->ipv4_dst);
+		flow_key_set_ipv4_dst(skb, ipv4_key->ipv4_dst);
+	}
 
-	if (ipv4_key->ipv4_tos != nh->tos)
+	if (ipv4_key->ipv4_tos != nh->tos) {
 		ipv4_change_dsfield(nh, 0, ipv4_key->ipv4_tos);
+		flow_key_set_ip_tos(skb, nh->tos);
+	}
 
-	if (ipv4_key->ipv4_ttl != nh->ttl)
+	if (ipv4_key->ipv4_ttl != nh->ttl) {
 		set_ip_ttl(skb, nh, ipv4_key->ipv4_ttl);
+		flow_key_set_ip_ttl(skb, ipv4_key->ipv4_ttl);
+	}
 
 	return 0;
 }
@@ -364,9 +471,11 @@ static int set_ipv6(struct sk_buff *skb, const struct ovs_key_ipv6 *ipv6_key)
 	saddr = (__be32 *)&nh->saddr;
 	daddr = (__be32 *)&nh->daddr;
 
-	if (memcmp(ipv6_key->ipv6_src, saddr, sizeof(ipv6_key->ipv6_src)))
+	if (memcmp(ipv6_key->ipv6_src, saddr, sizeof(ipv6_key->ipv6_src))) {
 		set_ipv6_addr(skb, ipv6_key->ipv6_proto, saddr,
 			      ipv6_key->ipv6_src, true);
+		flow_key_set_ipv6_src(skb, ipv6_key->ipv6_src);
+	}
 
 	if (memcmp(ipv6_key->ipv6_dst, daddr, sizeof(ipv6_key->ipv6_dst))) {
 		unsigned int offset = 0;
@@ -380,12 +489,17 @@ static int set_ipv6(struct sk_buff *skb, const struct ovs_key_ipv6 *ipv6_key)
 
 		set_ipv6_addr(skb, ipv6_key->ipv6_proto, daddr,
 			      ipv6_key->ipv6_dst, recalc_csum);
+		flow_key_set_ipv6_dst(skb, ipv6_key->ipv6_dst);
 	}
 
 	set_ipv6_tc(nh, ipv6_key->ipv6_tclass);
-	set_ipv6_fl(nh, ntohl(ipv6_key->ipv6_label));
-	nh->hop_limit = ipv6_key->ipv6_hlimit;
+	flow_key_set_ip_tos(skb, ipv6_get_dsfield(nh));
 
+	set_ipv6_fl(nh, ntohl(ipv6_key->ipv6_label));
+	flow_key_set_ipv6_fl(skb, nh);
+
+	nh->hop_limit = ipv6_key->ipv6_hlimit;
+	flow_key_set_ip_ttl(skb, ipv6_key->ipv6_hlimit);
 	return 0;
 }
 
@@ -424,11 +538,15 @@ static int set_udp(struct sk_buff *skb, const struct ovs_key_udp *udp_port_key)
 		return err;
 
 	uh = udp_hdr(skb);
-	if (udp_port_key->udp_src != uh->source)
+	if (udp_port_key->udp_src != uh->source) {
 		set_udp_port(skb, &uh->source, udp_port_key->udp_src);
+		flow_key_set_tp_src(skb, udp_port_key->udp_src);
+	}
 
-	if (udp_port_key->udp_dst != uh->dest)
+	if (udp_port_key->udp_dst != uh->dest) {
 		set_udp_port(skb, &uh->dest, udp_port_key->udp_dst);
+		flow_key_set_tp_dst(skb, udp_port_key->udp_dst);
+	}
 
 	return 0;
 }
@@ -444,17 +562,21 @@ static int set_tcp(struct sk_buff *skb, const struct ovs_key_tcp *tcp_port_key)
 		return err;
 
 	th = tcp_hdr(skb);
-	if (tcp_port_key->tcp_src != th->source)
+	if (tcp_port_key->tcp_src != th->source) {
 		set_tp_port(skb, &th->source, tcp_port_key->tcp_src, &th->check);
+		flow_key_set_tp_src(skb, tcp_port_key->tcp_src);
+	}
 
-	if (tcp_port_key->tcp_dst != th->dest)
+	if (tcp_port_key->tcp_dst != th->dest) {
 		set_tp_port(skb, &th->dest, tcp_port_key->tcp_dst, &th->check);
+		flow_key_set_tp_dst(skb, tcp_port_key->tcp_dst);
+	}
 
 	return 0;
 }
 
 static int set_sctp(struct sk_buff *skb,
-		     const struct ovs_key_sctp *sctp_port_key)
+		    const struct ovs_key_sctp *sctp_port_key)
 {
 	struct sctphdr *sh;
 	int err;
@@ -481,6 +603,8 @@ static int set_sctp(struct sk_buff *skb,
 		sh->checksum = old_csum ^ old_correct_csum ^ new_csum;
 
 		skb_clear_hash(skb);
+		flow_key_set_tp_src(skb, sctp_port_key->sctp_src);
+		flow_key_set_tp_dst(skb, sctp_port_key->sctp_dst);
 	}
 
 	return 0;
@@ -531,6 +655,7 @@ static bool last_action(const struct nlattr *a, int rem)
 static int sample(struct datapath *dp, struct sk_buff *skb,
 		  const struct nlattr *attr)
 {
+	struct sw_flow_key sample_key;
 	const struct nlattr *acts_list = NULL;
 	const struct nlattr *a;
 	struct sk_buff *sample_skb;
@@ -569,6 +694,9 @@ static int sample(struct datapath *dp, struct sk_buff *skb,
 		if (!sample_skb)
 			/* Skip the sample action when out of memory. */
 			return 0;
+
+		sample_key = *OVS_CB(skb)->pkt_key;
+		OVS_CB(sample_skb)->pkt_key = &sample_key;
 	}
 
 	/* Note that do_execute_actions() never consumes skb.
@@ -603,10 +731,12 @@ static int execute_set_action(struct sk_buff *skb,
 	switch (nla_type(nested_attr)) {
 	case OVS_KEY_ATTR_PRIORITY:
 		skb->priority = nla_get_u32(nested_attr);
+		flow_key_set_priority(skb, skb->priority);
 		break;
 
 	case OVS_KEY_ATTR_SKB_MARK:
 		skb->mark = nla_get_u32(nested_attr);
+		flow_key_set_skb_mark(skb, skb->mark);
 		break;
 
 	case OVS_KEY_ATTR_TUNNEL_INFO:
@@ -645,21 +775,53 @@ static int execute_set_action(struct sk_buff *skb,
 	return err;
 }
 
+static void flow_key_clone_recirc(struct sk_buff *skb, u32 recirc_id,
+				  struct sw_flow_key *recirc_key)
+{
+	*recirc_key = *OVS_CB(skb)->pkt_key;
+	recirc_key->recirc_id = recirc_id;
+	OVS_CB(skb)->pkt_key = recirc_key;
+}
+
+static void flow_key_set_recirc_id(struct sk_buff *skb, u32 recirc_id)
+{
+	OVS_CB(skb)->pkt_key->recirc_id = recirc_id;
+}
+
 static int execute_recirc(struct datapath *dp, struct sk_buff *skb,
-			  const struct nlattr *a)
+			  const struct nlattr *a, int rem)
 {
 	struct sw_flow_key recirc_key;
 	int err;
 
-	err = ovs_flow_key_extract_recirc(nla_get_u32(a), OVS_CB(skb)->pkt_key,
-					  skb, &recirc_key);
-	if (err) {
-		kfree_skb(skb);
-		return err;
+	if (!last_action(a, rem)) {
+		/* Recirc action is the not the last action
+		 * of the action list. */
+		skb = skb_clone(skb, GFP_ATOMIC);
+
+		/* Skip the recirc action when out of memory, but
+		 * continue on with the rest of the action list. */
+		if (!skb)
+			return 0;
+	}
+
+	if (is_skb_flow_key_valid(skb)) {
+		if (!last_action(a, rem))
+			flow_key_clone_recirc(skb, nla_get_u32(a), &recirc_key);
+		else
+			flow_key_set_recirc_id(skb, nla_get_u32(a));
+	} else {
+		struct sw_flow_key *pkt_key = OVS_CB(skb)->pkt_key;
+
+		err = ovs_flow_key_extract_recirc(nla_get_u32(a), pkt_key,
+						  skb, &recirc_key);
+		if (err) {
+			kfree_skb(skb);
+			return err;
+		}
 	}
 
 	ovs_dp_process_packet(skb, true);
-
 	return 0;
 }
 
@@ -719,23 +881,9 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			err = pop_vlan(skb);
 			break;
 
-		case OVS_ACTION_ATTR_RECIRC: {
-			struct sk_buff *recirc_skb;
-
-			if (last_action(a, rem))
-				return execute_recirc(dp, skb, a);
-
-			/* Recirc action is the not the last action
-			 * of the action list. */
-			recirc_skb = skb_clone(skb, GFP_ATOMIC);
-
-			/* Skip the recirc action when out of memory, but
-			 * continue on with the rest of the action list. */
-			if (recirc_skb)
-				err = execute_recirc(dp, recirc_skb, a);
-
+		case OVS_ACTION_ATTR_RECIRC:
+			err = execute_recirc(dp, skb, a, rem);
 			break;
-		}
 
 		case OVS_ACTION_ATTR_SET:
 			err = execute_set_action(skb, nla_data(a));
