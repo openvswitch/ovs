@@ -23,6 +23,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/un.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include "fatal-signal.h"
 #include "random.h"
@@ -261,11 +262,44 @@ free_sockaddr_un(int dirfd, const char *linkname)
 static int
 bind_unix_socket(int fd, struct sockaddr *sun, socklen_t sun_len)
 {
-    /* According to _Unix Network Programming_, umask should affect bind(). */
-    mode_t old_umask = umask(0077);
-    int error = bind(fd, sun, sun_len) ? errno : 0;
-    umask(old_umask);
-    return error;
+    const mode_t mode = 0700;
+    if (LINUX) {
+        /* On Linux, the fd's permissions become the file's permissions.
+         * fchmod() does not affect other files, like umask() does. */
+        if (fchmod(fd, mode)) {
+            return errno;
+        }
+
+        /* Must be after fchmod(). */
+        if (bind(fd, sun, sun_len)) {
+            return errno;
+        }
+        return 0;
+    } else {
+        /* On FreeBSD and NetBSD, only the umask affects permissions.  The
+         * umask is process-wide rather than thread-specific, so we have to use
+         * a subprocess for safety. */
+        pid_t pid = fork();
+
+        if (!pid) {
+            umask(mode ^ 0777);
+            _exit(bind(fd, sun, sun_len) ? errno : 0);
+        } else if (pid > 0) {
+            int status;
+            int error;
+
+            do {
+                error = waitpid(pid, &status, 0) < 0 ? errno : 0;
+            } while (error == EINTR);
+
+            return (error ? error
+                    : WIFEXITED(status) ? WEXITSTATUS(status)
+                    : WIFSIGNALED(status) ? EINTR
+                    : ECHILD /* WTF? */);
+        } else {
+            return errno;
+        }
+    }
 }
 
 /* Creates a Unix domain socket in the given 'style' (either SOCK_DGRAM or
