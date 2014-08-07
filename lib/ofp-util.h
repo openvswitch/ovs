@@ -687,9 +687,6 @@ void ofputil_append_table_features_reply(
                             const struct ofputil_table_features *tf,
                             struct list *replies);
 
-uint16_t table_feature_prop_get_size(enum ofp13_table_feature_prop_type type);
-char *table_feature_prop_get_name(enum ofp13_table_feature_prop_type type);
-
 /* Meter band configuration for all supported band types. */
 struct ofputil_meter_band {
     uint16_t type;
