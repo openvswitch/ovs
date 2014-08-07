@@ -250,6 +250,8 @@ usage(void)
     stream_usage("DATABASE", true, false, true);
     daemon_usage();
     vlog_usage();
+    printf("\nDPDK options:\n"
+           "  --dpdk options          Initialize DPDK datapath.\n");
     printf("\nOther options:\n"
            "  --unixctl=SOCKET        override default control socket name\n"
            "  -h, --help              display this help message\n"

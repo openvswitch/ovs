@@ -83,6 +83,10 @@ only allow privileged users, such as the superuser, to use it.
 \fBovs\-vswitchd\fR emits a log message if \fBmlockall()\fR is
 unavailable or unsuccessful.
 .
+.SS "DPDK Options"
+.IP "\fB\-\-dpdk\fR"
+Initialize \fBovs\-vswitchd\fR DPDK datapath.  Refer to INSTALL.DPDK
+for details.
 .SS "Daemon Options"
 .ds DD \
 \fBovs\-vswitchd\fR detaches only after it has connected to the \
