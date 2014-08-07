@@ -569,17 +569,12 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	if (err)
 		goto err_flow_free;
 
-	acts = ovs_nla_alloc_flow_actions(nla_len(a[OVS_PACKET_ATTR_ACTIONS]));
-	err = PTR_ERR(acts);
-	if (IS_ERR(acts))
-		goto err_flow_free;
-
 	err = ovs_nla_copy_actions(a[OVS_PACKET_ATTR_ACTIONS],
 				   &flow->key, &acts);
-	rcu_assign_pointer(flow->sf_acts, acts);
 	if (err)
 		goto err_flow_free;
 
+	rcu_assign_pointer(flow->sf_acts, acts);
 	OVS_CB(packet)->flow = flow;
 	OVS_CB(packet)->pkt_key = &flow->key;
 	OVS_CB(skb)->egress_tun_info = NULL;
@@ -899,11 +894,6 @@ static int ovs_flow_cmd_new(struct sk_buff *skb, struct genl_info *info)
 	ovs_flow_mask_key(&new_flow->key, &new_flow->unmasked_key, &mask);
 
 	/* Validate actions. */
-	acts = ovs_nla_alloc_flow_actions(nla_len(a[OVS_FLOW_ATTR_ACTIONS]));
-	error = PTR_ERR(acts);
-	if (IS_ERR(acts))
-		goto err_kfree_flow;
-
 	error = ovs_nla_copy_actions(a[OVS_FLOW_ATTR_ACTIONS], &new_flow->key,
 				     &acts);
 	if (error) {
@@ -1000,29 +990,6 @@ error:
 	return error;
 }
 
-static struct sw_flow_actions *get_flow_actions(const struct nlattr *a,
-						const struct sw_flow_key *key,
-						const struct sw_flow_mask *mask)
-{
-	struct sw_flow_actions *acts;
-	struct sw_flow_key masked_key;
-	int error;
-
-	acts = ovs_nla_alloc_flow_actions(nla_len(a));
-	if (IS_ERR(acts))
-		return acts;
-
-	ovs_flow_mask_key(&masked_key, key, mask);
-	error = ovs_nla_copy_actions(a, &masked_key, &acts);
-	if (error) {
-		OVS_NLERR("Flow actions may not be safe on all matching packets.\n");
-		kfree(acts);
-		return ERR_PTR(error);
-	}
-
-	return acts;
-}
-
 static int ovs_flow_cmd_set(struct sk_buff *skb, struct genl_info *info)
 {
 	struct nlattr **a = info->attrs;
@@ -1051,15 +1018,17 @@ static int ovs_flow_cmd_set(struct sk_buff *skb, struct genl_info *info)
 
 	/* Validate actions. */
 	if (a[OVS_FLOW_ATTR_ACTIONS]) {
-		acts = get_flow_actions(a[OVS_FLOW_ATTR_ACTIONS], &key, &mask);
-		if (IS_ERR(acts)) {
-			error = PTR_ERR(acts);
+		struct sw_flow_key masked_key;
+
+		ovs_flow_mask_key(&masked_key, &key, &mask);
+		error = ovs_nla_copy_actions(a[OVS_FLOW_ATTR_ACTIONS],
+					     &masked_key, &acts);
+		if (error) {
+			OVS_NLERR("Flow actions may not be safe on all matching packets.\n");
 			goto error;
 		}
-	}
 
-	/* Can allocate before locking if have acts. */
-	if (acts) {
+		/* Can allocate before locking if have acts. */
 		reply = ovs_flow_cmd_alloc_info(acts, info, false);
 		if (IS_ERR(reply)) {
 			error = PTR_ERR(reply);
