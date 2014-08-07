@@ -502,6 +502,30 @@ AT_CHECK(
   [0], [expout], [experr])
 AT_CLEANUP
 
+dnl Our primary goal here is to verify that the copy_field action gets
+dnl used instead of the Nicira extension reg_move in OpenFlow 1.5, so
+dnl the list of action tests is very short.
+AT_SETUP([OpenFlow 1.5 action translation])
+AT_KEYWORDS([ofp-actions OF1.5])
+AT_DATA([test-data], [dnl
+# actions=LOCAL
+0000 0010 fffffffe 04d2 000000000000
+
+# actions=move:NXM_OF_IN_PORT[]->NXM_OF_VLAN_TCI[]
+001c 0018 0010 0000 0000 0008 00000002 00000802 00000000
+
+])
+sed '/^[[#&]]/d' < test-data > input.txt
+sed -n 's/^# //p; /^$/p' < test-data > expout
+sed -n 's/^& //p' < test-data > experr
+AT_CAPTURE_FILE([input.txt])
+AT_CAPTURE_FILE([expout])
+AT_CAPTURE_FILE([experr])
+AT_CHECK(
+  [ovs-ofctl '-vPATTERN:console:%c|%p|%m' parse-actions OpenFlow15 < input.txt],
+  [0], [expout], [experr])
+AT_CLEANUP
+
 AT_SETUP([ofp-actions - inconsistent MPLS actions])
 OVS_VSWITCHD_START
 dnl OK: Use fin_timeout action on TCP flow
