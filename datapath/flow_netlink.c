@@ -51,20 +51,17 @@
 
 #include "flow_netlink.h"
 
-static void update_range__(struct sw_flow_match *match,
-			   size_t offset, size_t size, bool is_mask)
+static void update_range(struct sw_flow_match *match,
+			 size_t offset, size_t size, bool is_mask)
 {
-	struct sw_flow_key_range *range = NULL;
+	struct sw_flow_key_range *range;
 	size_t start = rounddown(offset, sizeof(long));
 	size_t end = roundup(offset + size, sizeof(long));
 
 	if (!is_mask)
 		range = &match->range;
-	else if (match->mask)
+	else
 		range = &match->mask->range;
-
-	if (!range)
-		return;
 
 	if (range->start == range->end) {
 		range->start = start;
@@ -81,43 +78,37 @@ static void update_range__(struct sw_flow_match *match,
 
 #define SW_FLOW_KEY_PUT(match, field, value, is_mask) \
 	do { \
-		update_range__(match, offsetof(struct sw_flow_key, field),  \
-				     sizeof((match)->key->field), is_mask); \
-		if (is_mask) {						    \
-			if ((match)->mask)				    \
-				(match)->mask->key.field = value;	    \
-		} else {                                                    \
+		update_range(match, offsetof(struct sw_flow_key, field),    \
+			     sizeof((match)->key->field), is_mask);	    \
+		if (is_mask)						    \
+			(match)->mask->key.field = value;		    \
+		else							    \
 			(match)->key->field = value;		            \
-		}                                                           \
 	} while (0)
 
-#define SW_FLOW_KEY_MEMCPY_OFFSET(match, offset, value_p, len, is_mask) \
-	do { \
-		update_range__(match, offset, len, is_mask);                \
-		if (is_mask) {						    \
-			if ((match)->mask)				    \
-				memcpy((u8 *)&(match)->mask->key + offset, value_p, len);\
-		} else {                                                    \
-			memcpy((u8 *)(match)->key + offset, value_p, len);         \
-		}                                                           \
+#define SW_FLOW_KEY_MEMCPY_OFFSET(match, offset, value_p, len, is_mask)	    \
+	do {								    \
+		update_range(match, offset, len, is_mask);		    \
+		if (is_mask)						    \
+			memcpy((u8 *)&(match)->mask->key + offset, value_p, len);\
+		else							    \
+			memcpy((u8 *)(match)->key + offset, value_p, len);  \
 	} while (0)
 
-#define SW_FLOW_KEY_MEMCPY(match, field, value_p, len, is_mask) \
+#define SW_FLOW_KEY_MEMCPY(match, field, value_p, len, is_mask)		      \
 	SW_FLOW_KEY_MEMCPY_OFFSET(match, offsetof(struct sw_flow_key, field), \
 				  value_p, len, is_mask)
 
-#define SW_FLOW_KEY_MEMSET_FIELD(match, field, value, is_mask) \
-	do { \
-		update_range__(match, offsetof(struct sw_flow_key, field),  \
-				     sizeof((match)->key->field), is_mask); \
-		if (is_mask) {						    \
-			if ((match)->mask)				    \
-				memset((u8 *)&(match)->mask->key.field, value,\
-				       sizeof((match)->mask->key.field));   \
-		} else {                                                    \
+#define SW_FLOW_KEY_MEMSET_FIELD(match, field, value, is_mask)		    \
+	do {								    \
+		update_range(match, offsetof(struct sw_flow_key, field),    \
+			     sizeof((match)->key->field), is_mask);	    \
+		if (is_mask)						    \
+			memset((u8 *)&(match)->mask->key.field, value,      \
+			       sizeof((match)->mask->key.field));	    \
+		else							    \
 			memset((u8 *)&(match)->key->field, value,           \
 			       sizeof((match)->key->field));                \
-		}                                                           \
 	} while (0)
 
 static bool match_validate(const struct sw_flow_match *match,
@@ -633,8 +624,7 @@ static int ovs_key_from_nlattrs(struct sw_flow_match *match, u64 attrs,
 
 		SW_FLOW_KEY_PUT(match, eth.tci, tci, is_mask);
 		attrs &= ~(1ULL << OVS_KEY_ATTR_VLAN);
-	} else if (!is_mask)
-		SW_FLOW_KEY_PUT(match, eth.tci, htons(0xffff), true);
+	}
 
 	if (attrs & (1ULL << OVS_KEY_ATTR_ETHERTYPE)) {
 		__be16 eth_type;
@@ -859,8 +849,8 @@ static void mask_set_nlattr(struct nlattr *attr, u8 val)
  * attribute specifies the mask field of the wildcarded flow.
  */
 int ovs_nla_get_match(struct sw_flow_match *match,
-		      const struct nlattr *key,
-		      const struct nlattr *mask)
+		      const struct nlattr *nla_key,
+		      const struct nlattr *nla_mask)
 {
 	const struct nlattr *a[OVS_KEY_ATTR_MAX + 1];
 	const struct nlattr *encap;
@@ -870,7 +860,7 @@ int ovs_nla_get_match(struct sw_flow_match *match,
 	bool encap_valid = false;
 	int err;
 
-	err = parse_flow_nlattrs(key, a, &key_attrs);
+	err = parse_flow_nlattrs(nla_key, a, &key_attrs);
 	if (err)
 		return err;
 
@@ -911,34 +901,43 @@ int ovs_nla_get_match(struct sw_flow_match *match,
 	if (err)
 		return err;
 
-	if (match->mask && !mask) {
-		/* Create an exact match mask. We need to set to 0xff all the
-		 * 'match->mask' fields that have been touched in 'match->key'.
-		 * We cannot simply memset 'match->mask', because padding bytes
-		 * and fields not specified in 'match->key' should be left to 0.
-		 * Instead, we use a stream of netlink attributes, copied from
-		 * 'key' and set to 0xff: ovs_key_from_nlattrs() will take care
-		 * of filling 'match->mask' appropriately.
-		 */
-		newmask = kmemdup(key, nla_total_size(nla_len(key)),
-				  GFP_KERNEL);
-		if (!newmask)
-			return -ENOMEM;
+	if (match->mask) {
 
-		mask_set_nlattr(newmask, 0xff);
+		if (!nla_mask) {
+			/* Create an exact match mask. We need to set to 0xff
+			 * all the 'match->mask' fields that have been touched
+			 * in 'match->key'. We cannot simply memset
+			 * 'match->mask', because padding bytes and fields not
+			 * specified in 'match->key' should be left to 0.
+			 * Instead, we use a stream of netlink attributes,
+			 * copied from 'key' and set to 0xff: ovs_key_from_nlattrs()
+			 * will take care of filling 'match->mask'
+			 * appropriately.
+			 */
+			newmask = kmemdup(nla_key,
+					  nla_total_size(nla_len(nla_key)),
+					  GFP_KERNEL);
+			if (!newmask)
+				return -ENOMEM;
 
-		/* The userspace does not send tunnel attributes that are 0,
-		 * but we should not wildcard them nonetheless. */
-		if (match->key->tun_key.ipv4_dst)
-			SW_FLOW_KEY_MEMSET_FIELD(match, tun_key, 0xff, true);
+			mask_set_nlattr(newmask, 0xff);
 
-		mask = newmask;
-	}
+			/* The userspace does not send tunnel attributes that
+			 * are 0, but we should not wildcard them nonetheless.
+			 */
+			if (match->key->tun_key.ipv4_dst)
+				SW_FLOW_KEY_MEMSET_FIELD(match, tun_key,
+							 0xff, true);
 
-	if (mask) {
-		err = parse_flow_mask_nlattrs(mask, a, &mask_attrs);
+			nla_mask = newmask;
+		}
+
+		err = parse_flow_mask_nlattrs(nla_mask, a, &mask_attrs);
 		if (err)
 			goto free_newmask;
+
+		/* Always match on tci. */
+		SW_FLOW_KEY_PUT(match, eth.tci, htons(0xffff), true);
 
 		if (mask_attrs & 1ULL << OVS_KEY_ATTR_ENCAP) {
 			__be16 eth_type = 0;
