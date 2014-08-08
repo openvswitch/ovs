@@ -2013,12 +2013,27 @@
           tunnel key.
 	</column>
 
-	<column name="bfd" key="bfd_dst_mac">
+	<column name="bfd" key="bfd_local_src_mac">
 	  Set to an Ethernet address in the form
 	  <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
-	  to set the MAC used as destination for transmitted BFD packets and
-	  expected as destination for received BFD packets.  The default is
-	  <code>00:23:20:00:00:01</code>.
+	  to set the MAC used as source for transmitted BFD packets.  The
+	  default is the mac address of the BFD enabled interface.
+	</column>
+
+	<column name="bfd" key="bfd_local_dst_mac">
+	  Set to an Ethernet address in the form
+	  <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
+	  to set the MAC used as destination for transmitted BFD packets.  The
+	  default is <code>00:23:20:00:00:01</code>.
+	</column>
+
+	<column name="bfd" key="bfd_remoe_dst_mac">
+	  Set to an Ethernet address in the form
+	  <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
+	  to set the MAC used for checking the destination of received BFD packets.
+	  Packets with different destination MAC will not be considered as BFD packets.
+	  If not specified the destination MAC address of received BFD packets
+	  are not checked.
 	</column>
 
 	<column name="bfd" key="bfd_src_ip">
