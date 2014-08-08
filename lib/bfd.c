@@ -453,14 +453,14 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
     if (ip_src && bfd_lookup_ip(ip_src, &in_addr)) {
         memcpy(&bfd->ip_src, &in_addr, sizeof in_addr);
     } else {
-        bfd->ip_src = htonl(0xA9FE0100); /* 169.254.1.0. */
+        bfd->ip_src = htonl(0xA9FE0101); /* 169.254.1.1. */
     }
 
     ip_dst = smap_get(cfg, "bfd_dst_ip");
     if (ip_dst && bfd_lookup_ip(ip_dst, &in_addr)) {
         memcpy(&bfd->ip_dst, &in_addr, sizeof in_addr);
     } else {
-        bfd->ip_dst = htonl(0xA9FE0101); /* 169.254.1.1. */
+        bfd->ip_dst = htonl(0xA9FE0100); /* 169.254.1.0. */
     }
 
     forwarding_if_rx = smap_get_bool(cfg, "forwarding_if_rx", false);
