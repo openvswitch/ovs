@@ -990,6 +990,25 @@ error:
 	return error;
 }
 
+/* Factor out action copy to avoid "Wframe-larger-than=1024" warning. */
+static struct sw_flow_actions *get_flow_actions(const struct nlattr *a,
+						const struct sw_flow_key *key,
+						const struct sw_flow_mask *mask)
+{
+	struct sw_flow_actions *acts;
+	struct sw_flow_key masked_key;
+	int error;
+
+	ovs_flow_mask_key(&masked_key, key, mask);
+	error = ovs_nla_copy_actions(a, &masked_key, &acts);
+	if (error) {
+		OVS_NLERR("Actions may not be safe on all matching packets.\n");
+		return ERR_PTR(error);
+	}
+
+	return acts;
+}
+
 static int ovs_flow_cmd_set(struct sk_buff *skb, struct genl_info *info)
 {
 	struct nlattr **a = info->attrs;
@@ -1018,13 +1037,9 @@ static int ovs_flow_cmd_set(struct sk_buff *skb, struct genl_info *info)
 
 	/* Validate actions. */
 	if (a[OVS_FLOW_ATTR_ACTIONS]) {
-		struct sw_flow_key masked_key;
-
-		ovs_flow_mask_key(&masked_key, &key, &mask);
-		error = ovs_nla_copy_actions(a[OVS_FLOW_ATTR_ACTIONS],
-					     &masked_key, &acts);
-		if (error) {
-			OVS_NLERR("Flow actions may not be safe on all matching packets.\n");
+		acts = get_flow_actions(a[OVS_FLOW_ATTR_ACTIONS], &key, &mask);
+		if (IS_ERR(acts)) {
+			error = PTR_ERR(acts);
 			goto error;
 		}
 
