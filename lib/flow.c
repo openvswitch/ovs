@@ -118,10 +118,10 @@ struct mf_ctx {
 /* miniflow_push_* macros allow filling in a miniflow data values in order.
  * Assertions are needed only when the layout of the struct flow is modified.
  * 'ofs' is a compile-time constant, which allows most of the code be optimized
- * away.  Some GCC versions gave warnigns on ALWAYS_INLINE, so these are
+ * away.  Some GCC versions gave warnings on ALWAYS_INLINE, so these are
  * defined as macros. */
 
-#if (FLOW_WC_SEQ != 26)
+#if (FLOW_WC_SEQ != 27)
 #define MINIFLOW_ASSERT(X) ovs_assert(X)
 #else
 #define MINIFLOW_ASSERT(X)
