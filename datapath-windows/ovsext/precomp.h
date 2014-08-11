@@ -28,4 +28,4 @@
  * Include openvswitch.h from userspace. Changing the location the file from
  * include/linux is pending discussion.
  */
-#include "include\linux\openvswitch.h"
+#include "..\include\OvsDpInterface.h"

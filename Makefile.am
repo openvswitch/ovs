@@ -316,3 +316,4 @@ include python/compat/automake.mk
 include tutorial/automake.mk
 include vtep/automake.mk
 include datapath-windows/automake.mk
+include datapath-windows/include/automake.mk
