@@ -40,10 +40,78 @@
 #include "vlan.h"
 #include "vport.h"
 
+struct deferred_action {
+	struct sk_buff *skb;
+	const struct nlattr *actions;
+
+	/* Store pkt_key clone when creating deferred action. */
+	struct sw_flow_key pkt_key;
+};
+
+#define DEFERRED_ACTION_FIFO_SIZE 10
+struct action_fifo {
+	int head;
+	int tail;
+	/* Deferred action fifo queue storage. */
+	struct deferred_action fifo[DEFERRED_ACTION_FIFO_SIZE];
+};
+
+static struct action_fifo __percpu *action_fifos;
+#define EXEC_ACTIONS_LEVEL_LIMIT 4   /* limit used to detect packet
+					looping by the network stack */
+static DEFINE_PER_CPU(int, exec_actions_level);
+
+static void action_fifo_init(struct action_fifo *fifo)
+{
+	fifo->head = 0;
+	fifo->tail = 0;
+}
+
+static bool action_fifo_is_empty(struct action_fifo *fifo)
+{
+	return (fifo->head == fifo->tail);
+}
+
+static struct deferred_action *
+action_fifo_get(struct action_fifo *fifo)
+{
+	if (action_fifo_is_empty(fifo))
+		return NULL;
+
+	return &fifo->fifo[fifo->tail++];
+}
+
+static struct deferred_action *
+action_fifo_put(struct action_fifo *fifo)
+{
+	if (fifo->head >= DEFERRED_ACTION_FIFO_SIZE - 1)
+		return NULL;
+
+	return &fifo->fifo[fifo->head++];
+}
+
 static void flow_key_clone(struct sk_buff *skb, struct sw_flow_key *new_key)
 {
 	*new_key = *OVS_CB(skb)->pkt_key;
 	OVS_CB(skb)->pkt_key = new_key;
+}
+
+/* Return true if fifo is not full */
+static bool add_deferred_actions(struct sk_buff *skb,
+				 const struct nlattr *attr)
+{
+	struct action_fifo *fifo;
+	struct deferred_action *da;
+
+	fifo = this_cpu_ptr(action_fifos);
+	da = action_fifo_put(fifo);
+	if (da) {
+		da->skb = skb;
+		da->actions = attr;
+		flow_key_clone(skb, &da->pkt_key);
+	}
+
+	return (da != NULL);
 }
 
 static void flow_key_set_recirc_id(struct sk_buff *skb, u32 recirc_id)
@@ -689,7 +757,6 @@ static bool last_action(const struct nlattr *a, int rem)
 static int sample(struct datapath *dp, struct sk_buff *skb,
 		  const struct nlattr *attr)
 {
-	struct sw_flow_key sample_key;
 	const struct nlattr *acts_list = NULL;
 	const struct nlattr *a;
 	int rem;
@@ -728,10 +795,15 @@ static int sample(struct datapath *dp, struct sk_buff *skb,
 		/* Skip the sample action when out of memory. */
 		return 0;
 
-	flow_key_clone(skb, &sample_key);
+	if (!add_deferred_actions(skb, a)) {
+		if (net_ratelimit())
+			pr_warn("%s: deferred actions limit reached, dropping sample action\n",
+				ovs_dp_name(dp));
 
-	/* do_execute_actions() will consume the cloned skb. */
-	return do_execute_actions(dp, skb, a, rem);
+		kfree_skb(skb);
+	}
+
+	return 0;
 }
 
 static void execute_hash(struct sk_buff *skb, const struct nlattr *attr)
@@ -750,7 +822,7 @@ static void execute_hash(struct sk_buff *skb, const struct nlattr *attr)
 }
 
 static int execute_set_action(struct sk_buff *skb,
-				 const struct nlattr *nested_attr)
+			      const struct nlattr *nested_attr)
 {
 	int err = 0;
 
@@ -801,12 +873,9 @@ static int execute_set_action(struct sk_buff *skb,
 	return err;
 }
 
-
 static int execute_recirc(struct datapath *dp, struct sk_buff *skb,
 			  const struct nlattr *a, int rem)
 {
-	struct sw_flow_key recirc_key;
-
 	if (!is_skb_flow_key_valid(skb)) {
 		int err;
 
@@ -819,25 +888,31 @@ static int execute_recirc(struct datapath *dp, struct sk_buff *skb,
 
 	if (!last_action(a, rem)) {
 		/* Recirc action is the not the last action
-		 * of the action list. */
+		 * of the action list, need to clone the skb. */
 		skb = skb_clone(skb, GFP_ATOMIC);
 
 		/* Skip the recirc action when out of memory, but
 		 * continue on with the rest of the action list. */
 		if (!skb)
 			return 0;
-
-		flow_key_clone(skb, &recirc_key);
 	}
 
-	flow_key_set_recirc_id(skb, nla_get_u32(a));
-	ovs_dp_process_packet(skb);
+	if (add_deferred_actions(skb, NULL)) {
+		flow_key_set_recirc_id(skb, nla_get_u32(a));
+	} else {
+		kfree_skb(skb);
+
+		if (net_ratelimit())
+			pr_warn("%s: deferred action limit reached, drop recirc action\n",
+				ovs_dp_name(dp));
+	}
+
 	return 0;
 }
 
 /* Execute a list of actions against 'skb'. */
 static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
-			const struct nlattr *attr, int len)
+			       const struct nlattr *attr, int len)
 {
 	/* Every output action needs a separate clone of 'skb', but the common
 	 * case is just a single output action, so that doing a clone and
@@ -924,8 +999,72 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 	return 0;
 }
 
-/* Execute a list of actions against 'skb'. */
-int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb, struct sw_flow_actions *acts)
+static void process_deferred_actions(struct datapath *dp)
 {
-	return do_execute_actions(dp, skb, acts->actions, acts->actions_len);
+	struct action_fifo *fifo = this_cpu_ptr(action_fifos);
+
+	/* Do not touch the FIFO in case there is no deferred actions. */
+	if (action_fifo_is_empty(fifo))
+		return;
+
+	/* Finishing executing all deferred actions. */
+	do {
+		struct deferred_action *da = action_fifo_get(fifo);
+		struct sk_buff *skb = da->skb;
+		const struct nlattr *actions = da->actions;
+
+		if (actions)
+			do_execute_actions(dp, skb, actions,
+					   nla_len(actions));
+		else
+			ovs_dp_process_packet(skb);
+	} while (!action_fifo_is_empty(fifo));
+
+	/* Reset FIFO for the next packet.  */
+	action_fifo_init(fifo);
+}
+
+/* Execute a list of actions against 'skb'. */
+int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb,
+			struct sw_flow_actions *acts)
+{
+	int level = this_cpu_read(exec_actions_level);
+	int err;
+
+	if (unlikely(level >= EXEC_ACTIONS_LEVEL_LIMIT)) {
+		if (net_ratelimit())
+			pr_warn("%s: packet loop detected, dropping.\n",
+				ovs_dp_name(dp));
+
+		kfree_skb(skb);
+		return -ELOOP;
+	}
+
+	this_cpu_inc(exec_actions_level);
+
+	err = do_execute_actions(dp, skb, acts->actions, acts->actions_len);
+
+	if (!level)
+		process_deferred_actions(dp);
+
+	this_cpu_dec(exec_actions_level);
+
+	/* This return status currently does not reflect the errors
+	 * encounted during deferred actions execution. Probably needs to
+	 * be fixed in the future. */
+	return err;
+}
+
+int action_fifos_init(void)
+{
+	action_fifos = alloc_percpu(struct action_fifo);
+	if (!action_fifos)
+		return -ENOMEM;
+
+	return 0;
+}
+
+void action_fifos_exit(void)
+{
+	free_percpu(action_fifos);
 }

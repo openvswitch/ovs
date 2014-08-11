@@ -2134,9 +2134,13 @@ static int __init dp_init(void)
 	pr_info("Open vSwitch switching datapath %s, built "__DATE__" "__TIME__"\n",
 		VERSION);
 
-	err = ovs_flow_init();
+	err = action_fifos_init();
 	if (err)
 		goto error;
+
+	err = ovs_flow_init();
+	if (err)
+		goto error_action_fifos_exit;
 
 	err = ovs_vport_init();
 	if (err)
@@ -2164,6 +2168,8 @@ error_vport_exit:
 	ovs_vport_exit();
 error_flow_exit:
 	ovs_flow_exit();
+error_action_fifos_exit:
+	action_fifos_exit();
 error:
 	return err;
 }
@@ -2176,6 +2182,7 @@ static void dp_cleanup(void)
 	rcu_barrier();
 	ovs_vport_exit();
 	ovs_flow_exit();
+	action_fifos_exit();
 }
 
 module_init(dp_init);
