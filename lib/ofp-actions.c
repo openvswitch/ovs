@@ -4160,14 +4160,14 @@ format_GOTO_TABLE(const struct ofpact_goto_table *a, struct ds *s)
 }
 
 static void
-log_bad_action(const struct ofp_action_header *actions, size_t max_actions,
+log_bad_action(const struct ofp_action_header *actions, size_t actions_len,
                const struct ofp_action_header *bad_action, enum ofperr error)
 {
     if (!VLOG_DROP_WARN(&rl)) {
         struct ds s;
 
         ds_init(&s);
-        ds_put_hex_dump(&s, actions, max_actions * OFP_ACTION_ALIGN, 0, false);
+        ds_put_hex_dump(&s, actions, actions_len, 0, false);
         VLOG_WARN("bad action at offset %#"PRIxPTR" (%s):\n%s",
                   (char *)bad_action - (char *)actions,
                   ofperr_get_name(error), ds_cstr(&s));
@@ -4194,7 +4194,7 @@ ofpacts_decode(const void *actions, size_t actions_len,
         }
 
         if (error) {
-            log_bad_action(actions, actions_len * 8, action, error);
+            log_bad_action(actions, actions_len, action, error);
             return error;
         }
     }
