@@ -36,7 +36,7 @@ AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPT_FEATURES_REPLY: dpid:fedcba9876543210
 n_tables:254, n_buffers:256
 capabilities: FLOW_STATS TABLE_STATS PORT_STATS QUEUE_STATS ARP_MATCH_IP
-actions: OUTPUT SET_VLAN_VID SET_VLAN_PCP STRIP_VLAN SET_DL_SRC SET_DL_DST SET_NW_SRC SET_NW_DST SET_NW_TOS SET_TP_SRC SET_TP_DST ENQUEUE
+actions: output enqueue set_vlan_vid set_vlan_pcp strip_vlan mod_dl_src mod_dl_dst mod_nw_src mod_nw_dst mod_nw_tos mod_tp_src mod_tp_dst
  LOCAL(br0): addr:aa:55:aa:55:00:00
      config:     PORT_DOWN
      state:      LINK_DOWN
@@ -58,7 +58,7 @@ s/00:0.$/00:0x/' < stdout]],
 OFPT_FEATURES_REPLY: dpid:fedcba9876543210
 n_tables:254, n_buffers:256
 capabilities: FLOW_STATS TABLE_STATS PORT_STATS QUEUE_STATS ARP_MATCH_IP
-actions: OUTPUT SET_VLAN_VID SET_VLAN_PCP STRIP_VLAN SET_DL_SRC SET_DL_DST SET_NW_SRC SET_NW_DST SET_NW_TOS SET_TP_SRC SET_TP_DST ENQUEUE
+actions: output enqueue set_vlan_vid set_vlan_pcp strip_vlan mod_dl_src mod_dl_dst mod_nw_src mod_nw_dst mod_nw_tos mod_tp_src mod_tp_dst
  1(p1): addr:aa:55:aa:55:00:0x
      config:     PORT_DOWN
      state:      LINK_DOWN
@@ -451,7 +451,7 @@ do
 OFPT_FEATURES_REPLY: dpid:fedcba9876543210
 n_tables:254, n_buffers:256
 capabilities: FLOW_STATS TABLE_STATS PORT_STATS QUEUE_STATS ARP_MATCH_IP
-actions: OUTPUT SET_VLAN_VID SET_VLAN_PCP STRIP_VLAN SET_DL_SRC SET_DL_DST SET_NW_SRC SET_NW_DST SET_NW_TOS SET_TP_SRC SET_TP_DST ENQUEUE
+actions: output enqueue set_vlan_vid set_vlan_pcp strip_vlan mod_dl_src mod_dl_dst mod_nw_src mod_nw_dst mod_nw_tos mod_tp_src mod_tp_dst
  LOCAL(br0): addr:aa:55:aa:55:00:00
      config:     $config
      state:      $state
@@ -1064,13 +1064,13 @@ AT_CLEANUP
 AT_SETUP([ofproto - flow table configuration (OpenFlow 1.2)])
 OVS_VSWITCHD_START
 # Check the default configuration.
-(mid="wild=0xfffffffff, max=1000000,"
+(mid="wild=0x1ffffffffd, max=1000000,"
  tail="
                lookup=0, matched=0
-               match=0xfffffffff, instructions=0x00000007, config=0x00000003
-               write_actions=0x00000000, apply_actions=0x00000000
-               write_setfields=0x0000000fffffffff
-               apply_setfields=0x0000000fffffffff
+               match=0x1ffffffffd, instructions=0x00000007, config=0x00000003
+               write_actions=0x03ff8001, apply_actions=0x03ff8001
+               write_setfields=0x0000000c0fe7fbdd
+               apply_setfields=0x0000000c0fe7fbdd
                metadata_match=0xffffffffffffffff
                metadata_write=0xffffffffffffffff"
  echo "OFPST_TABLE reply (OF1.2) (xid=0x2): 254 tables
@@ -1095,9 +1095,9 @@ AT_CHECK(
 # Check that the configuration was updated.
 mv expout orig-expout
 (echo "OFPST_TABLE reply (OF1.2) (xid=0x2): 254 tables
-  0: main    : wild=0xfffffffff, max=1000000, active=0"
+  0: main    : wild=0x1ffffffffd, max=1000000, active=0"
  tail -n +3 orig-expout | head -7
- echo "  1: table1  : wild=0xfffffffff, max=  1024, active=0"
+ echo "  1: table1  : wild=0x1ffffffffd, max=  1024, active=0"
  tail -n +11 orig-expout) > expout
 AT_CHECK([ovs-ofctl -O OpenFlow12 dump-tables br0], [0], [expout])
 OVS_VSWITCHD_STOP

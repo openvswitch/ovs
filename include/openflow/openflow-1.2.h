@@ -306,12 +306,20 @@ struct ofp12_table_stats {
 };
 OFP_ASSERT(sizeof(struct ofp12_table_stats) == 128);
 
+/* Number of types of groups supported by ofp12_group_features_stats. */
+#define OFPGT12_N_TYPES 4
+
 /* Body of reply to OFPST12_GROUP_FEATURES request. Group features. */
 struct ofp12_group_features_stats {
     ovs_be32  types;           /* Bitmap of OFPGT11_* values supported. */
     ovs_be32  capabilities;    /* Bitmap of OFPGFC12_* capability supported. */
-    ovs_be32  max_groups[4];   /* Maximum number of groups for each type. */
-    ovs_be32  actions[4];      /* Bitmaps of OFPAT_* that are supported. */
+
+    /* Each element in the following arrays corresponds to the group type with
+     * the same number, e.g. max_groups[0] is the maximum number of OFPGT11_ALL
+     * groups, actions[2] is the actions supported by OFPGT11_INDIRECT
+     * groups. */
+    ovs_be32  max_groups[OFPGT12_N_TYPES]; /* Max number of groups. */
+    ovs_be32  actions[OFPGT12_N_TYPES];    /* Bitmaps of supported OFPAT_*. */
 };
 OFP_ASSERT(sizeof(struct ofp12_group_features_stats) == 40);
 

@@ -774,30 +774,30 @@ struct ofproto_class {
      * supports matching IP addresses inside ARP requests and replies, false
      * otherwise.
      *
-     * The implementation should store in '*actions' a bitmap of the supported
-     * OpenFlow actions.  Vendor actions are not included in '*actions'. */
+     * The implementation should store in '*ofpacts' a bitmap of the supported
+     * OFPACT_* actions. */
     void (*get_features)(struct ofproto *ofproto,
                          bool *arp_match_ip,
-                         enum ofputil_action_bitmap *actions);
+                         uint64_t *ofpacts);
 
     /* Helper for the OpenFlow OFPST_TABLE statistics request.
      *
-     * The 'ots' array contains 'ofproto->n_tables' elements.  Each element is
+     * The 'stats' array contains 'ofproto->n_tables' elements.  Each element is
      * initialized as:
      *
      *   - 'table_id' to the array index.
      *
      *   - 'name' to "table#" where # is the table ID.
      *
-     *   - 'match' and 'wildcards' to OFPXMT12_MASK.
+     *   - 'match' and 'wildcards' to all fields.
      *
-     *   - 'write_actions' and 'apply_actions' to OFPAT12_OUTPUT.
+     *   - 'write_actions' and 'apply_actions' to all actions.
      *
-     *   - 'write_setfields' and 'apply_setfields' to OFPXMT12_MASK.
+     *   - 'write_setfields' and 'apply_setfields' to all writable fields.
      *
      *   - 'metadata_match' and 'metadata_write' to OVS_BE64_MAX.
      *
-     *   - 'instructions' to OFPIT11_ALL.
+     *   - 'instructions' to all instructions.
      *
      *   - 'config' to OFPTC11_TABLE_MISS_MASK.
      *
@@ -838,11 +838,9 @@ struct ofproto_class {
      *
      *   - 'matched_count' to the number of packets looked up in this flow
      *     table so far that matched one of the flow entries.
-     *
-     * All of the members of struct ofp12_table_stats are in network byte
-     * order.
      */
-    void (*get_tables)(struct ofproto *ofproto, struct ofp12_table_stats *ots);
+    void (*get_tables)(struct ofproto *ofproto,
+                       struct ofputil_table_stats *stats);
 
 /* ## ---------------- ## */
 /* ## ofport Functions ## */
