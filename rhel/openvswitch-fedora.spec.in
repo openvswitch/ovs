@@ -201,6 +201,7 @@ systemctl start openvswitch.service
 %doc /usr/share/man/man8/ovs-test.8.gz
 %doc /usr/share/man/man8/ovs-l3ping.8.gz
 %doc /usr/share/man/man8/vtep-ctl.8.gz
+%doc COPYING DESIGN INSTALL.SSL NOTICE README WHY-OVS FAQ NEWS INSTALL.DPDK
 /var/lib/openvswitch
 /var/log/openvswitch
 /usr/share/openvswitch/scripts/ovs-ctl

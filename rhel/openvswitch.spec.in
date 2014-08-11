@@ -55,9 +55,6 @@ rhel_cp etc_sysconfig_network-scripts_ifup-ovs 0755
 rhel_cp etc_sysconfig_network-scripts_ifdown-ovs 0755
 rhel_cp usr_share_openvswitch_scripts_sysconfig.template 0644
 
-docdir=$RPM_BUILD_ROOT/usr/share/doc/openvswitch-%{version}
-install -d -m755 "$docdir"
-install -m 0644 FAQ rhel/README.RHEL "$docdir"
 install python/compat/uuid.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
 install python/compat/argparse.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
 
@@ -175,7 +172,7 @@ exit 0
 /usr/share/openvswitch/scripts/sysconfig.template
 /usr/share/openvswitch/vswitch.ovsschema
 /usr/share/openvswitch/vtep.ovsschema
-/usr/share/doc/openvswitch-%{version}/FAQ
-/usr/share/doc/openvswitch-%{version}/README.RHEL
+%doc COPYING DESIGN INSTALL.SSL NOTICE README WHY-OVS FAQ NEWS
+%doc INSTALL.DPDK rhel/README.RHEL
 /var/lib/openvswitch
 /var/log/openvswitch
