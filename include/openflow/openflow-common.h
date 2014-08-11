@@ -98,8 +98,11 @@ enum ofp_version {
  *
  *    - ONF_VENDOR_ID is being used within the ONF "extensibility" working
  *      group to identify extensions being proposed for standardization.
+ *
+ * The list is sorted numerically.
  */
 #define OF_VENDOR_ID    0
+#define HPL_VENDOR_ID   0x000004EA /* HP Labs. */
 #define NX_VENDOR_ID    0x00002320 /* Nicira. */
 #define ONF_VENDOR_ID   0x4f4e4600 /* Open Networking Foundation. */
 
