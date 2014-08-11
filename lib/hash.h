@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,8 @@ hash_rot(uint32_t x, int k)
 }
 
 uint32_t hash_bytes(const void *, size_t n_bytes, uint32_t basis);
+void hash_bytes128(const void *_, size_t n_bytes, uint32_t basis,
+                   ovs_u128 *out);
 
 static inline uint32_t hash_int(uint32_t x, uint32_t basis);
 static inline uint32_t hash_2words(uint32_t, uint32_t);
@@ -72,9 +74,8 @@ static inline uint32_t mhash_add(uint32_t hash, uint32_t data)
     return hash * 5 + 0xe6546b64;
 }
 
-static inline uint32_t mhash_finish(uint32_t hash, uint32_t n_bytes)
+static inline uint32_t mhash_finish(uint32_t hash)
 {
-    hash ^= n_bytes;
     hash ^= hash >> 16;
     hash *= 0x85ebca6b;
     hash ^= hash >> 13;
@@ -84,7 +85,7 @@ static inline uint32_t mhash_finish(uint32_t hash, uint32_t n_bytes)
 }
 
 #if !(defined(__SSE4_2__) && defined(__x86_64__))
-/* Mhash-based implemantation. */
+/* Mhash-based implementation. */
 
 static inline uint32_t hash_add(uint32_t hash, uint32_t data)
 {
@@ -93,7 +94,7 @@ static inline uint32_t hash_add(uint32_t hash, uint32_t data)
 
 static inline uint32_t hash_finish(uint32_t hash, uint32_t final)
 {
-    return mhash_finish(hash, final);
+    return mhash_finish(hash ^ final);
 }
 
 /* Returns the hash of the 'n' 32-bit words at 'p', starting from 'basis'.

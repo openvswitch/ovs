@@ -81,6 +81,20 @@ typedef struct {
 #endif
 } ovs_32aligned_u64;
 
+typedef union {
+    uint32_t u32[4];
+    struct {
+        uint64_t lo, hi;
+    } u64;
+} ovs_u128;
+
+/* Returns non-zero if the parameters have equal value. */
+static inline int
+ovs_u128_equal(const ovs_u128 *a, const ovs_u128 *b)
+{
+    return (a->u64.hi == b->u64.hi) && (a->u64.lo == b->u64.lo);
+}
+
 /* A 64-bit value, in network byte order, that is only aligned on a 32-bit
  * boundary. */
 typedef struct {
