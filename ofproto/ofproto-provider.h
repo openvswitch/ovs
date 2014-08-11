@@ -797,7 +797,7 @@ struct ofproto_class {
      *
      *   - 'metadata_match' and 'metadata_write' to OVS_BE64_MAX.
      *
-     *   - 'instructions' to all instructions.
+     *   - 'ovsinsts' to all instructions.
      *
      *   - 'config' to OFPTC11_TABLE_MISS_MASK.
      *
@@ -815,8 +815,8 @@ struct ofproto_class {
      *   - 'wildcards' to the set of wildcards actually supported by the table
      *     (if it doesn't support all OpenFlow wildcards).
      *
-     *   - 'instructions' to set the instructions actually supported by
-     *     the table.
+     *   - 'ovsinsts' to the set of instructions actually supported by the
+     *     table.
      *
      *   - 'write_actions' to set the write actions actually supported by
      *     the table (if it doesn't support all OpenFlow actions).

@@ -91,10 +91,6 @@ enum ofp13_instruction_type {
     OFPIT13_METER = 6           /* Apply meter (rate limiter) */
 };
 
-#define OFPIT13_ALL (OFPIT11_GOTO_TABLE | OFPIT11_WRITE_METADATA |      \
-                     OFPIT11_WRITE_ACTIONS | OFPIT11_APPLY_ACTIONS |    \
-                     OFPIT11_CLEAR_ACTIONS | OFPIT13_METER)
-
 /* Instruction structure for OFPIT_METER */
 struct ofp13_instruction_meter {
     ovs_be16 type;              /* OFPIT13_METER */

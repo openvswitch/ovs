@@ -782,7 +782,7 @@ struct ofputil_table_stats {
     uint64_t apply_ofpacts;     /* OFPACT_* supported on Apply-Actions. */
     struct mf_bitmap write_setfields; /* Fields that can be set in W-A. */
     struct mf_bitmap apply_setfields; /* Fields that can be set in A-A. */
-    uint32_t instructions;      /* Bitmap of OFPIT_* values supported. */
+    uint32_t ovsinsts;          /* Bitmap of OVSINST_* values supported. */
 
     uint32_t active_count;      /* Number of active entries. */
     uint64_t lookup_count;      /* Number of packets looked up in table. */

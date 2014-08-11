@@ -1067,7 +1067,7 @@ OVS_VSWITCHD_START
 (mid="wild=0x1ffffffffd, max=1000000,"
  tail="
                lookup=0, matched=0
-               match=0x1ffffffffd, instructions=0x00000007, config=0x00000003
+               match=0x1ffffffffd, instructions=0x0000003e, config=0x00000003
                write_actions=0x03ff8001, apply_actions=0x03ff8001
                write_setfields=0x0000000c0fe7fbdd
                apply_setfields=0x0000000c0fe7fbdd

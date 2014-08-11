@@ -3094,7 +3094,7 @@ handle_table_stats_request(struct ofconn *ofconn,
         stats[i].apply_setfields = rw_fields;
         stats[i].metadata_match = OVS_BE64_MAX;
         stats[i].metadata_write = OVS_BE64_MAX;
-        stats[i].instructions = OFPIT13_ALL;
+        stats[i].ovsinsts = (1u << N_OVS_INSTRUCTIONS) - 1;
         stats[i].config = OFPTC11_TABLE_MISS_MASK;
         stats[i].max_entries = 1000000; /* An arbitrary big number. */
         stats[i].active_count = classifier_count(&p->tables[i].cls);

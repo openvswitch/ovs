@@ -5083,7 +5083,8 @@ ofputil_put_ofp11_table_stats(const struct ofputil_table_stats *in,
     ovs_strlcpy(out->name, in->name, sizeof out->name);
     out->wildcards = fields_to_ofp11_flow_match_fields(&in->wildcards);
     out->match = fields_to_ofp11_flow_match_fields(&in->match);
-    out->instructions = htonl(in->instructions);
+    out->instructions = ovsinst_bitmap_to_openflow(in->ovsinsts,
+                                                   OFP11_VERSION);
     out->write_actions = ofpact_bitmap_to_openflow(in->write_ofpacts,
                                                    OFP11_VERSION);
     out->apply_actions = ofpact_bitmap_to_openflow(in->apply_ofpacts,
@@ -5135,7 +5136,8 @@ ofputil_put_ofp12_table_stats(const struct ofputil_table_stats *in,
                                                    OFP12_VERSION);
     out->metadata_match = in->metadata_match;
     out->metadata_write = in->metadata_write;
-    out->instructions = htonl(in->instructions & OFPIT11_ALL);
+    out->instructions = ovsinst_bitmap_to_openflow(in->ovsinsts,
+                                                   OFP12_VERSION);
     out->config = htonl(in->config);
     out->max_entries = htonl(in->max_entries);
     out->active_count = htonl(in->active_count);

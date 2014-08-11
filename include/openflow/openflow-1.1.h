@@ -290,10 +290,6 @@ enum ofp11_instruction_type {
     OFPIT11_EXPERIMENTER = 0xFFFF  /* Experimenter instruction */
 };
 
-#define OFPIT11_ALL (OFPIT11_GOTO_TABLE | OFPIT11_WRITE_METADATA |      \
-                     OFPIT11_WRITE_ACTIONS | OFPIT11_APPLY_ACTIONS |    \
-                     OFPIT11_CLEAR_ACTIONS)
-
 #define OFP11_INSTRUCTION_ALIGN 8
 
 /* Generic ofp_instruction structure. */
