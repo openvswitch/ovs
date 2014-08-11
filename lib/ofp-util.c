@@ -50,6 +50,9 @@ VLOG_DEFINE_THIS_MODULE(ofp_util);
  * in the peer and so there's not much point in showing a lot of them. */
 static struct vlog_rate_limit bad_ofmsg_rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
+static enum ofputil_table_miss ofputil_table_miss_from_config(
+    ovs_be32 config_, enum ofp_version);
+
 struct ofp_prop_header {
     ovs_be16 type;
     ovs_be16 len;
@@ -4606,6 +4609,8 @@ ofputil_decode_table_features(struct ofpbuf *msg,
     struct ofp13_table_features *otf;
     unsigned int len;
 
+    memset(tf, 0, sizeof *tf);
+
     if (!msg->frame) {
         ofpraw_pull_assert(msg);
     }
@@ -4634,7 +4639,7 @@ ofputil_decode_table_features(struct ofpbuf *msg,
     ovs_strlcpy(tf->name, otf->name, OFP_MAX_TABLE_NAME_LEN);
     tf->metadata_match = otf->metadata_match;
     tf->metadata_write = otf->metadata_write;
-    tf->config = ntohl(otf->config);
+    tf->miss_config = ofputil_table_miss_from_config(otf->config, oh->version);
     tf->max_entries = ntohl(otf->max_entries);
 
     while (ofpbuf_size(msg) > 0) {
@@ -4763,6 +4768,60 @@ ofputil_encode_table_features_request(enum ofp_version ofp_version)
 
 /* ofputil_table_mod */
 
+/* Given 'config', taken from an OpenFlow 'version' message that specifies
+ * table configuration (a table mod, table stats, or table features message),
+ * returns the table miss configuration that it specifies.  */
+static enum ofputil_table_miss
+ofputil_table_miss_from_config(ovs_be32 config_, enum ofp_version version)
+{
+    uint32_t config = ntohl(config_);
+
+    if (version < OFP13_VERSION) {
+        switch (config & OFPTC11_TABLE_MISS_MASK) {
+        case OFPTC11_TABLE_MISS_CONTROLLER:
+            return OFPUTIL_TABLE_MISS_CONTROLLER;
+
+        case OFPTC11_TABLE_MISS_CONTINUE:
+            return OFPUTIL_TABLE_MISS_CONTINUE;
+
+        case OFPTC11_TABLE_MISS_DROP:
+            return OFPUTIL_TABLE_MISS_DROP;
+
+        default:
+            VLOG_WARN_RL(&bad_ofmsg_rl, "bad table miss config %d", config);
+            return OFPUTIL_TABLE_MISS_CONTROLLER;
+        }
+    } else {
+        return OFPUTIL_TABLE_MISS_DEFAULT;
+    }
+}
+
+/* Given a table miss configuration, returns the corresponding OpenFlow table
+ * configuration for use in an OpenFlow message of the given 'version'. */
+ovs_be32
+ofputil_table_miss_to_config(enum ofputil_table_miss miss,
+                             enum ofp_version version)
+{
+    if (version < OFP13_VERSION) {
+        switch (miss) {
+        case OFPUTIL_TABLE_MISS_CONTROLLER:
+        case OFPUTIL_TABLE_MISS_DEFAULT:
+            return htonl(OFPTC11_TABLE_MISS_CONTROLLER);
+
+        case OFPUTIL_TABLE_MISS_CONTINUE:
+            return htonl(OFPTC11_TABLE_MISS_CONTINUE);
+
+        case OFPUTIL_TABLE_MISS_DROP:
+            return htonl(OFPTC11_TABLE_MISS_DROP);
+
+        default:
+            OVS_NOT_REACHED();
+        }
+    } else {
+        return htonl(0);
+    }
+}
+
 /* Decodes the OpenFlow "table mod" message in '*oh' into an abstract form in
  * '*pm'.  Returns 0 if successful, otherwise an OFPERR_* value. */
 enum ofperr
@@ -4779,12 +4838,14 @@ ofputil_decode_table_mod(const struct ofp_header *oh,
         const struct ofp11_table_mod *otm = ofpbuf_data(&b);
 
         pm->table_id = otm->table_id;
-        pm->config = ntohl(otm->config);
+        pm->miss_config = ofputil_table_miss_from_config(otm->config,
+                                                         oh->version);
     } else if (raw == OFPRAW_OFPT14_TABLE_MOD) {
         const struct ofp14_table_mod *otm = ofpbuf_pull(&b, sizeof *otm);
 
         pm->table_id = otm->table_id;
-        pm->config = ntohl(otm->config);
+        pm->miss_config = ofputil_table_miss_from_config(otm->config,
+                                                         oh->version);
         /* We do not understand any properties yet, so we do not bother
          * parsing them. */
     } else {
@@ -4818,7 +4879,8 @@ ofputil_encode_table_mod(const struct ofputil_table_mod *pm,
         b = ofpraw_alloc(OFPRAW_OFPT11_TABLE_MOD, ofp_version, 0);
         otm = ofpbuf_put_zeros(b, sizeof *otm);
         otm->table_id = pm->table_id;
-        otm->config = htonl(pm->config);
+        otm->config = ofputil_table_miss_to_config(pm->miss_config,
+                                                   ofp_version);
         break;
     }
     case OFP14_VERSION:
@@ -4828,7 +4890,8 @@ ofputil_encode_table_mod(const struct ofputil_table_mod *pm,
         b = ofpraw_alloc(OFPRAW_OFPT14_TABLE_MOD, ofp_version, 0);
         otm = ofpbuf_put_zeros(b, sizeof *otm);
         otm->table_id = pm->table_id;
-        otm->config = htonl(pm->config);
+        otm->config = ofputil_table_miss_to_config(pm->miss_config,
+                                                   ofp_version);
         break;
     }
     default:
@@ -4991,109 +5054,162 @@ ofputil_decode_role_status(const struct ofp_header *oh,
 
 /* Table stats. */
 
-static void
-ofputil_put_ofp10_table_stats(const struct ofputil_table_stats *in,
-                              struct ofpbuf *buf)
+/* OpenFlow 1.0 and 1.1 don't distinguish between a field that cannot be
+ * matched and a field that must be wildcarded.  This function returns a bitmap
+ * that contains both kinds of fields. */
+static struct mf_bitmap
+wild_or_nonmatchable_fields(const struct ofputil_table_features *features)
 {
-    struct wc_map {
-        enum ofp10_flow_wildcards wc10;
-        enum mf_field_id mf;
-    };
-
-    static const struct wc_map wc_map[] = {
-        { OFPFW10_IN_PORT,     MFF_IN_PORT },
-        { OFPFW10_DL_VLAN,     MFF_VLAN_VID },
-        { OFPFW10_DL_SRC,      MFF_ETH_SRC },
-        { OFPFW10_DL_DST,      MFF_ETH_DST},
-        { OFPFW10_DL_TYPE,     MFF_ETH_TYPE },
-        { OFPFW10_NW_PROTO,    MFF_IP_PROTO },
-        { OFPFW10_TP_SRC,      MFF_TCP_SRC },
-        { OFPFW10_TP_DST,      MFF_TCP_DST },
-        { OFPFW10_NW_SRC_MASK, MFF_IPV4_SRC },
-        { OFPFW10_NW_DST_MASK, MFF_IPV4_DST },
-        { OFPFW10_DL_VLAN_PCP, MFF_VLAN_PCP },
-        { OFPFW10_NW_TOS,      MFF_IP_DSCP },
-    };
-
-    struct ofp10_table_stats *out;
-    const struct wc_map *p;
-
-    out = ofpbuf_put_zeros(buf, sizeof *out);
-    out->table_id = in->table_id;
-    ovs_strlcpy(out->name, in->name, sizeof out->name);
-    out->wildcards = 0;
-    for (p = wc_map; p < &wc_map[ARRAY_SIZE(wc_map)]; p++) {
-        if (bitmap_is_set(in->wildcards.bm, p->mf)) {
-            out->wildcards |= htonl(p->wc10);
-        }
-    }
-    out->max_entries = htonl(in->max_entries);
-    out->active_count = htonl(in->active_count);
-    put_32aligned_be64(&out->lookup_count, htonll(in->lookup_count));
-    put_32aligned_be64(&out->matched_count, htonll(in->matched_count));
+    struct mf_bitmap wc = features->match;
+    bitmap_not(wc.bm, MFF_N_IDS);
+    bitmap_or(wc.bm, features->wildcard.bm, MFF_N_IDS);
+    return wc;
 }
+
+struct ofp10_wc_map {
+    enum ofp10_flow_wildcards wc10;
+    enum mf_field_id mf;
+};
+
+static const struct ofp10_wc_map ofp10_wc_map[] = {
+    { OFPFW10_IN_PORT,     MFF_IN_PORT },
+    { OFPFW10_DL_VLAN,     MFF_VLAN_VID },
+    { OFPFW10_DL_SRC,      MFF_ETH_SRC },
+    { OFPFW10_DL_DST,      MFF_ETH_DST},
+    { OFPFW10_DL_TYPE,     MFF_ETH_TYPE },
+    { OFPFW10_NW_PROTO,    MFF_IP_PROTO },
+    { OFPFW10_TP_SRC,      MFF_TCP_SRC },
+    { OFPFW10_TP_DST,      MFF_TCP_DST },
+    { OFPFW10_NW_SRC_MASK, MFF_IPV4_SRC },
+    { OFPFW10_NW_DST_MASK, MFF_IPV4_DST },
+    { OFPFW10_DL_VLAN_PCP, MFF_VLAN_PCP },
+    { OFPFW10_NW_TOS,      MFF_IP_DSCP },
+};
 
 static ovs_be32
-fields_to_ofp11_flow_match_fields(const struct mf_bitmap *fields)
+mf_bitmap_to_of10(const struct mf_bitmap *fields)
 {
-    struct map {
-        enum ofp11_flow_match_fields fmf11;
-        enum mf_field_id mf;
-    };
+    const struct ofp10_wc_map *p;
+    uint32_t wc10 = 0;
 
-    static const struct map map[] = {
-        { OFPFMF11_IN_PORT,     MFF_IN_PORT },
-        { OFPFMF11_DL_VLAN,     MFF_VLAN_VID },
-        { OFPFMF11_DL_VLAN_PCP, MFF_VLAN_PCP },
-        { OFPFMF11_DL_TYPE,     MFF_ETH_TYPE },
-        { OFPFMF11_NW_TOS,      MFF_IP_DSCP },
-        { OFPFMF11_NW_PROTO,    MFF_IP_PROTO },
-        { OFPFMF11_TP_SRC,      MFF_TCP_SRC },
-        { OFPFMF11_TP_DST,      MFF_TCP_DST },
-        { OFPFMF11_MPLS_LABEL,  MFF_MPLS_LABEL },
-        { OFPFMF11_MPLS_TC,     MFF_MPLS_TC },
-        /* I don't know what OFPFMF11_TYPE means. */
-        { OFPFMF11_DL_SRC,      MFF_ETH_SRC },
-        { OFPFMF11_DL_DST,      MFF_ETH_DST },
-        { OFPFMF11_NW_SRC,      MFF_IPV4_SRC },
-        { OFPFMF11_NW_DST,      MFF_IPV4_DST },
-        { OFPFMF11_METADATA,    MFF_METADATA },
-    };
-
-    const struct map *p;
-    uint32_t fmf11;
-
-    fmf11 = 0;
-    for (p = map; p < &map[ARRAY_SIZE(map)]; p++) {
+    for (p = ofp10_wc_map; p < &ofp10_wc_map[ARRAY_SIZE(ofp10_wc_map)]; p++) {
         if (bitmap_is_set(fields->bm, p->mf)) {
-            fmf11 |= p->fmf11;
+            wc10 |= p->wc10;
         }
     }
-    return htonl(fmf11);
+    return htonl(wc10);
+}
+
+static struct mf_bitmap
+mf_bitmap_from_of10(ovs_be32 wc10_)
+{
+    struct mf_bitmap fields = MF_BITMAP_INITIALIZER;
+    const struct ofp10_wc_map *p;
+    uint32_t wc10 = ntohl(wc10_);
+
+    for (p = ofp10_wc_map; p < &ofp10_wc_map[ARRAY_SIZE(ofp10_wc_map)]; p++) {
+        if (wc10 & p->wc10) {
+            bitmap_set1(fields.bm, p->mf);
+        }
+    }
+    return fields;
 }
 
 static void
-ofputil_put_ofp11_table_stats(const struct ofputil_table_stats *in,
+ofputil_put_ofp10_table_stats(const struct ofputil_table_stats *stats,
+                              const struct ofputil_table_features *features,
                               struct ofpbuf *buf)
 {
+    struct mf_bitmap wc = wild_or_nonmatchable_fields(features);
+    struct ofp10_table_stats *out;
+
+    out = ofpbuf_put_zeros(buf, sizeof *out);
+    out->table_id = features->table_id;
+    ovs_strlcpy(out->name, features->name, sizeof out->name);
+    out->wildcards = mf_bitmap_to_of10(&wc);
+    out->max_entries = htonl(features->max_entries);
+    out->active_count = htonl(stats->active_count);
+    put_32aligned_be64(&out->lookup_count, htonll(stats->lookup_count));
+    put_32aligned_be64(&out->matched_count, htonll(stats->matched_count));
+}
+
+struct ofp11_wc_map {
+    enum ofp11_flow_match_fields wc11;
+    enum mf_field_id mf;
+};
+
+static const struct ofp11_wc_map ofp11_wc_map[] = {
+    { OFPFMF11_IN_PORT,     MFF_IN_PORT },
+    { OFPFMF11_DL_VLAN,     MFF_VLAN_VID },
+    { OFPFMF11_DL_VLAN_PCP, MFF_VLAN_PCP },
+    { OFPFMF11_DL_TYPE,     MFF_ETH_TYPE },
+    { OFPFMF11_NW_TOS,      MFF_IP_DSCP },
+    { OFPFMF11_NW_PROTO,    MFF_IP_PROTO },
+    { OFPFMF11_TP_SRC,      MFF_TCP_SRC },
+    { OFPFMF11_TP_DST,      MFF_TCP_DST },
+    { OFPFMF11_MPLS_LABEL,  MFF_MPLS_LABEL },
+    { OFPFMF11_MPLS_TC,     MFF_MPLS_TC },
+    /* I don't know what OFPFMF11_TYPE means. */
+    { OFPFMF11_DL_SRC,      MFF_ETH_SRC },
+    { OFPFMF11_DL_DST,      MFF_ETH_DST },
+    { OFPFMF11_NW_SRC,      MFF_IPV4_SRC },
+    { OFPFMF11_NW_DST,      MFF_IPV4_DST },
+    { OFPFMF11_METADATA,    MFF_METADATA },
+};
+
+static ovs_be32
+mf_bitmap_to_of11(const struct mf_bitmap *fields)
+{
+    const struct ofp11_wc_map *p;
+    uint32_t wc11 = 0;
+
+    for (p = ofp11_wc_map; p < &ofp11_wc_map[ARRAY_SIZE(ofp11_wc_map)]; p++) {
+        if (bitmap_is_set(fields->bm, p->mf)) {
+            wc11 |= p->wc11;
+        }
+    }
+    return htonl(wc11);
+}
+
+static struct mf_bitmap
+mf_bitmap_from_of11(ovs_be32 wc11_)
+{
+    struct mf_bitmap fields = MF_BITMAP_INITIALIZER;
+    const struct ofp11_wc_map *p;
+    uint32_t wc11 = ntohl(wc11_);
+
+    for (p = ofp11_wc_map; p < &ofp11_wc_map[ARRAY_SIZE(ofp11_wc_map)]; p++) {
+        if (wc11 & p->wc11) {
+            bitmap_set1(fields.bm, p->mf);
+        }
+    }
+    return fields;
+}
+
+static void
+ofputil_put_ofp11_table_stats(const struct ofputil_table_stats *stats,
+                              const struct ofputil_table_features *features,
+                              struct ofpbuf *buf)
+{
+    struct mf_bitmap wc = wild_or_nonmatchable_fields(features);
     struct ofp11_table_stats *out;
 
     out = ofpbuf_put_zeros(buf, sizeof *out);
-    out->table_id = in->table_id;
-    ovs_strlcpy(out->name, in->name, sizeof out->name);
-    out->wildcards = fields_to_ofp11_flow_match_fields(&in->wildcards);
-    out->match = fields_to_ofp11_flow_match_fields(&in->match);
-    out->instructions = ovsinst_bitmap_to_openflow(in->ovsinsts,
-                                                   OFP11_VERSION);
-    out->write_actions = ofpact_bitmap_to_openflow(in->write_ofpacts,
-                                                   OFP11_VERSION);
-    out->apply_actions = ofpact_bitmap_to_openflow(in->apply_ofpacts,
-                                                   OFP11_VERSION);
-    out->config = htonl(in->config);
-    out->max_entries = htonl(in->max_entries);
-    out->active_count = htonl(in->active_count);
-    out->lookup_count = htonll(in->lookup_count);
-    out->matched_count = htonll(in->matched_count);
+    out->table_id = features->table_id;
+    ovs_strlcpy(out->name, features->name, sizeof out->name);
+    out->wildcards = mf_bitmap_to_of11(&wc);
+    out->match = mf_bitmap_to_of11(&features->match);
+    out->instructions = ovsinst_bitmap_to_openflow(
+        features->nonmiss.instructions, OFP11_VERSION);
+    out->write_actions = ofpact_bitmap_to_openflow(
+        features->nonmiss.write.ofpacts, OFP11_VERSION);
+    out->apply_actions = ofpact_bitmap_to_openflow(
+        features->nonmiss.apply.ofpacts, OFP11_VERSION);
+    out->config = htonl(features->miss_config);
+    out->max_entries = htonl(features->max_entries);
+    out->active_count = htonl(stats->active_count);
+    out->lookup_count = htonll(stats->lookup_count);
+    out->matched_count = htonll(stats->matched_count);
 }
 
 static ovs_be64
@@ -5115,84 +5231,277 @@ mf_bitmap_to_oxm_bitmap(const struct mf_bitmap *fields,
     return htonll(oxm_bitmap);
 }
 
+static struct mf_bitmap
+mf_bitmap_from_oxm_bitmap(ovs_be64 oxm_bitmap, enum ofp_version version)
+{
+    struct mf_bitmap fields = MF_BITMAP_INITIALIZER;
+
+    for (enum mf_field_id id = 0; id < MFF_N_IDS; id++) {
+        const struct mf_field *f = mf_from_id(id);
+        uint32_t oxm = f->oxm_header;
+        uint32_t vendor = NXM_VENDOR(oxm);
+        int field = NXM_FIELD(oxm);
+
+        if (version >= f->oxm_version
+            && vendor == OFPXMC12_OPENFLOW_BASIC
+            && field < 64
+            && oxm_bitmap & htonll(UINT64_C(1) << field)) {
+            bitmap_set1(fields.bm, id);
+        }
+    }
+    return fields;
+}
+
 static void
-ofputil_put_ofp12_table_stats(const struct ofputil_table_stats *in,
+ofputil_put_ofp12_table_stats(const struct ofputil_table_stats *stats,
+                              const struct ofputil_table_features *features,
                               struct ofpbuf *buf)
 {
     struct ofp12_table_stats *out;
 
     out = ofpbuf_put_zeros(buf, sizeof *out);
-    out->table_id = in->table_id;
-    ovs_strlcpy(out->name, in->name, sizeof out->name);
-    out->match = mf_bitmap_to_oxm_bitmap(&in->match, OFP12_VERSION);
-    out->wildcards = mf_bitmap_to_oxm_bitmap(&in->wildcards, OFP12_VERSION);
-    out->write_actions = ofpact_bitmap_to_openflow(in->write_ofpacts,
-                                                   OFP12_VERSION);
-    out->apply_actions = ofpact_bitmap_to_openflow(in->apply_ofpacts,
-                                                   OFP12_VERSION);
-    out->write_setfields = mf_bitmap_to_oxm_bitmap(&in->write_setfields,
-                                                   OFP12_VERSION);
-    out->apply_setfields = mf_bitmap_to_oxm_bitmap(&in->apply_setfields,
-                                                   OFP12_VERSION);
-    out->metadata_match = in->metadata_match;
-    out->metadata_write = in->metadata_write;
-    out->instructions = ovsinst_bitmap_to_openflow(in->ovsinsts,
-                                                   OFP12_VERSION);
-    out->config = htonl(in->config);
-    out->max_entries = htonl(in->max_entries);
-    out->active_count = htonl(in->active_count);
-    out->lookup_count = htonll(in->lookup_count);
-    out->matched_count = htonll(in->matched_count);
+    out->table_id = features->table_id;
+    ovs_strlcpy(out->name, features->name, sizeof out->name);
+    out->match = mf_bitmap_to_oxm_bitmap(&features->match, OFP12_VERSION);
+    out->wildcards = mf_bitmap_to_oxm_bitmap(&features->wildcard,
+                                             OFP12_VERSION);
+    out->write_actions = ofpact_bitmap_to_openflow(
+        features->nonmiss.write.ofpacts, OFP12_VERSION);
+    out->apply_actions = ofpact_bitmap_to_openflow(
+        features->nonmiss.apply.ofpacts, OFP12_VERSION);
+    out->write_setfields = mf_bitmap_to_oxm_bitmap(
+        &features->nonmiss.write.set_fields, OFP12_VERSION);
+    out->apply_setfields = mf_bitmap_to_oxm_bitmap(
+        &features->nonmiss.apply.set_fields, OFP12_VERSION);
+    out->metadata_match = features->metadata_match;
+    out->metadata_write = features->metadata_write;
+    out->instructions = ovsinst_bitmap_to_openflow(
+        features->nonmiss.instructions, OFP12_VERSION);
+    out->config = ofputil_table_miss_to_config(features->miss_config,
+                                               OFP12_VERSION);
+    out->max_entries = htonl(features->max_entries);
+    out->active_count = htonl(stats->active_count);
+    out->lookup_count = htonll(stats->lookup_count);
+    out->matched_count = htonll(stats->matched_count);
 }
 
 static void
-ofputil_put_ofp13_table_stats(const struct ofputil_table_stats *in,
+ofputil_put_ofp13_table_stats(const struct ofputil_table_stats *stats,
                               struct ofpbuf *buf)
 {
     struct ofp13_table_stats *out;
 
-    out = ofpbuf_put_uninit(buf, sizeof *out);
-    out->table_id = in->table_id;
-    out->active_count = htonl(in->active_count);
-    out->lookup_count = htonll(in->lookup_count);
-    out->matched_count = htonll(in->matched_count);
+    out = ofpbuf_put_zeros(buf, sizeof *out);
+    out->table_id = stats->table_id;
+    out->active_count = htonl(stats->active_count);
+    out->lookup_count = htonll(stats->lookup_count);
+    out->matched_count = htonll(stats->matched_count);
 }
 
 struct ofpbuf *
-ofputil_encode_table_stats_reply(const struct ofputil_table_stats stats[],
-                                 int n, const struct ofp_header *request)
+ofputil_encode_table_stats_reply(const struct ofp_header *request)
 {
-    struct ofpbuf *reply;
-    int i;
+    return ofpraw_alloc_stats_reply(request, 0);
+}
 
-    reply = ofpraw_alloc_stats_reply(request, n * sizeof *stats);
+void
+ofputil_append_table_stats_reply(struct ofpbuf *reply,
+                                 const struct ofputil_table_stats *stats,
+                                 const struct ofputil_table_features *features)
+{
+    struct ofp_header *oh = ofpbuf_l2(reply);
 
-    for (i = 0; i < n; i++) {
-        switch ((enum ofp_version) request->version) {
-        case OFP10_VERSION:
-            ofputil_put_ofp10_table_stats(&stats[i], reply);
-            break;
+    ovs_assert(stats->table_id == features->table_id);
 
-        case OFP11_VERSION:
-            ofputil_put_ofp11_table_stats(&stats[i], reply);
-            break;
+    switch ((enum ofp_version) oh->version) {
+    case OFP10_VERSION:
+        ofputil_put_ofp10_table_stats(stats, features, reply);
+        break;
 
-        case OFP12_VERSION:
-            ofputil_put_ofp12_table_stats(&stats[i], reply);
-            break;
+    case OFP11_VERSION:
+        ofputil_put_ofp11_table_stats(stats, features, reply);
+        break;
 
-        case OFP13_VERSION:
-        case OFP14_VERSION:
-        case OFP15_VERSION:
-            ofputil_put_ofp13_table_stats(&stats[i], reply);
-            break;
+    case OFP12_VERSION:
+        ofputil_put_ofp12_table_stats(stats, features, reply);
+        break;
 
-        default:
-            OVS_NOT_REACHED();
-        }
+    case OFP13_VERSION:
+    case OFP14_VERSION:
+    case OFP15_VERSION:
+        ofputil_put_ofp13_table_stats(stats, reply);
+        break;
+
+    default:
+        OVS_NOT_REACHED();
+    }
+}
+
+static int
+ofputil_decode_ofp10_table_stats(struct ofpbuf *msg,
+                                 struct ofputil_table_stats *stats,
+                                 struct ofputil_table_features *features)
+{
+    struct ofp10_table_stats *ots;
+
+    ots = ofpbuf_try_pull(msg, sizeof *ots);
+    if (!ots) {
+        return OFPERR_OFPBRC_BAD_LEN;
     }
 
-    return reply;
+    features->table_id = ots->table_id;
+    ovs_strlcpy(features->name, ots->name, sizeof features->name);
+    features->max_entries = ntohl(ots->max_entries);
+    features->match = features->wildcard = mf_bitmap_from_of10(ots->wildcards);
+
+    stats->table_id = ots->table_id;
+    stats->active_count = ntohl(ots->active_count);
+    stats->lookup_count = ntohll(get_32aligned_be64(&ots->lookup_count));
+    stats->matched_count = ntohll(get_32aligned_be64(&ots->matched_count));
+
+    return 0;
+}
+
+static int
+ofputil_decode_ofp11_table_stats(struct ofpbuf *msg,
+                                 struct ofputil_table_stats *stats,
+                                 struct ofputil_table_features *features)
+{
+    struct ofp11_table_stats *ots;
+
+    ots = ofpbuf_try_pull(msg, sizeof *ots);
+    if (!ots) {
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+
+    features->table_id = ots->table_id;
+    ovs_strlcpy(features->name, ots->name, sizeof features->name);
+    features->max_entries = ntohl(ots->max_entries);
+    features->nonmiss.instructions = ovsinst_bitmap_from_openflow(
+        ots->instructions, OFP11_VERSION);
+    features->nonmiss.write.ofpacts = ofpact_bitmap_from_openflow(
+        ots->write_actions, OFP11_VERSION);
+    features->nonmiss.apply.ofpacts = ofpact_bitmap_from_openflow(
+        ots->write_actions, OFP11_VERSION);
+    features->miss = features->nonmiss;
+    features->miss_config = ofputil_table_miss_from_config(ots->config,
+                                                           OFP11_VERSION);
+    features->match = mf_bitmap_from_of11(ots->match);
+    features->wildcard = mf_bitmap_from_of11(ots->wildcards);
+    bitmap_or(features->match.bm, features->wildcard.bm, MFF_N_IDS);
+
+    stats->table_id = ots->table_id;
+    stats->active_count = ntohl(ots->active_count);
+    stats->lookup_count = ntohll(ots->lookup_count);
+    stats->matched_count = ntohll(ots->matched_count);
+
+    return 0;
+}
+
+static int
+ofputil_decode_ofp12_table_stats(struct ofpbuf *msg,
+                                 struct ofputil_table_stats *stats,
+                                 struct ofputil_table_features *features)
+{
+    struct ofp12_table_stats *ots;
+
+    ots = ofpbuf_try_pull(msg, sizeof *ots);
+    if (!ots) {
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+
+    features->table_id = ots->table_id;
+    ovs_strlcpy(features->name, ots->name, sizeof features->name);
+    features->metadata_match = ots->metadata_match;
+    features->metadata_write = ots->metadata_write;
+    features->miss_config = ofputil_table_miss_from_config(ots->config,
+                                                           OFP12_VERSION);
+    features->max_entries = ntohl(ots->max_entries);
+
+    features->nonmiss.instructions = ovsinst_bitmap_from_openflow(
+        ots->instructions, OFP12_VERSION);
+    features->nonmiss.write.ofpacts = ofpact_bitmap_from_openflow(
+        ots->write_actions, OFP12_VERSION);
+    features->nonmiss.apply.ofpacts = ofpact_bitmap_from_openflow(
+        ots->apply_actions, OFP12_VERSION);
+    features->nonmiss.write.set_fields = mf_bitmap_from_oxm_bitmap(
+        ots->write_setfields, OFP12_VERSION);
+    features->nonmiss.apply.set_fields = mf_bitmap_from_oxm_bitmap(
+        ots->apply_setfields, OFP12_VERSION);
+    features->miss = features->nonmiss;
+
+    features->match = mf_bitmap_from_oxm_bitmap(ots->match, OFP12_VERSION);
+    features->wildcard = mf_bitmap_from_oxm_bitmap(ots->wildcards,
+                                                   OFP12_VERSION);
+    bitmap_or(features->match.bm, features->wildcard.bm, MFF_N_IDS);
+
+    stats->table_id = ots->table_id;
+    stats->active_count = ntohl(ots->active_count);
+    stats->lookup_count = ntohll(ots->lookup_count);
+    stats->matched_count = ntohll(ots->matched_count);
+
+    return 0;
+}
+
+static int
+ofputil_decode_ofp13_table_stats(struct ofpbuf *msg,
+                                 struct ofputil_table_stats *stats,
+                                 struct ofputil_table_features *features)
+{
+    struct ofp13_table_stats *ots;
+
+    ots = ofpbuf_try_pull(msg, sizeof *ots);
+    if (!ots) {
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+
+    features->table_id = ots->table_id;
+
+    stats->table_id = ots->table_id;
+    stats->active_count = ntohl(ots->active_count);
+    stats->lookup_count = ntohll(ots->lookup_count);
+    stats->matched_count = ntohll(ots->matched_count);
+
+    return 0;
+}
+
+int
+ofputil_decode_table_stats_reply(struct ofpbuf *msg,
+                                 struct ofputil_table_stats *stats,
+                                 struct ofputil_table_features *features)
+{
+    const struct ofp_header *oh;
+
+    if (!msg->frame) {
+        ofpraw_pull_assert(msg);
+    }
+    oh = msg->frame;
+
+    if (!ofpbuf_size(msg)) {
+        return EOF;
+    }
+
+    memset(stats, 0, sizeof *stats);
+    memset(features, 0, sizeof *features);
+
+    switch ((enum ofp_version) oh->version) {
+    case OFP10_VERSION:
+        return ofputil_decode_ofp10_table_stats(msg, stats, features);
+
+    case OFP11_VERSION:
+        return ofputil_decode_ofp11_table_stats(msg, stats, features);
+
+    case OFP12_VERSION:
+        return ofputil_decode_ofp12_table_stats(msg, stats, features);
+
+    case OFP13_VERSION:
+    case OFP14_VERSION:
+    case OFP15_VERSION:
+        return ofputil_decode_ofp13_table_stats(msg, stats, features);
+
+    default:
+        OVS_NOT_REACHED();
+    }
 }
 
 /* ofputil_flow_monitor_request */

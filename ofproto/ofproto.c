@@ -2777,6 +2777,112 @@ handle_echo_request(struct ofconn *ofconn, const struct ofp_header *oh)
     return 0;
 }
 
+static void
+query_tables(struct ofproto *ofproto,
+             struct ofputil_table_features **featuresp,
+             struct ofputil_table_stats **statsp)
+{
+    struct mf_bitmap rw_fields = MF_BITMAP_INITIALIZER;
+    struct mf_bitmap match = MF_BITMAP_INITIALIZER;
+    struct mf_bitmap mask = MF_BITMAP_INITIALIZER;
+
+    struct ofputil_table_features *features;
+    struct ofputil_table_stats *stats;
+    int i;
+
+    for (i = 0; i < MFF_N_IDS; i++) {
+        const struct mf_field *mf = mf_from_id(i);
+
+        if (mf->writable) {
+            bitmap_set1(rw_fields.bm, i);
+        }
+        if (mf->oxm_header || mf->nxm_header) {
+            bitmap_set1(match.bm, i);
+            if (mf->maskable == MFM_FULLY) {
+                bitmap_set1(mask.bm, i);
+            }
+        }
+    }
+
+    features = *featuresp = xcalloc(ofproto->n_tables, sizeof *features);
+    for (i = 0; i < ofproto->n_tables; i++) {
+        struct ofputil_table_features *f = &features[i];
+
+        f->table_id = i;
+        sprintf(f->name, "table%d", i);
+        f->metadata_match = OVS_BE64_MAX;
+        f->metadata_write = OVS_BE64_MAX;
+        atomic_read(&ofproto->tables[i].miss_config, &f->miss_config);
+        f->max_entries = 1000000;
+
+        bitmap_set_multiple(f->nonmiss.next, i + 1,
+                            ofproto->n_tables - (i + 1), true);
+        f->nonmiss.instructions = (1u << N_OVS_INSTRUCTIONS) - 1;
+        if (i == ofproto->n_tables - 1) {
+            f->nonmiss.instructions &= ~(1u << OVSINST_OFPIT11_GOTO_TABLE);
+        }
+        f->nonmiss.write.ofpacts = (UINT64_C(1) << N_OFPACTS) - 1;
+        f->nonmiss.write.set_fields = rw_fields;
+        f->nonmiss.apply = f->nonmiss.write;
+        f->miss = f->nonmiss;
+
+        f->match = match;
+        f->mask = mask;
+        f->wildcard = match;
+    }
+
+    if (statsp) {
+        stats = *statsp = xcalloc(ofproto->n_tables, sizeof *stats);
+        for (i = 0; i < ofproto->n_tables; i++) {
+            struct ofputil_table_stats *s = &stats[i];
+            struct classifier *cls = &ofproto->tables[i].cls;
+
+            s->table_id = i;
+            s->active_count = classifier_count(cls);
+        }
+    } else {
+        stats = NULL;
+    }
+
+    ofproto->ofproto_class->query_tables(ofproto, features, stats);
+
+    for (i = 0; i < ofproto->n_tables; i++) {
+        const struct oftable *table = &ofproto->tables[i];
+        struct ofputil_table_features *f = &features[i];
+
+        if (table->name) {
+            ovs_strzcpy(f->name, table->name, sizeof f->name);
+        }
+
+        if (table->max_flows < f->max_entries) {
+            f->max_entries = table->max_flows;
+        }
+    }
+}
+
+static void
+query_switch_features(struct ofproto *ofproto,
+                      bool *arp_match_ip, uint64_t *ofpacts)
+{
+    struct ofputil_table_features *features, *f;
+
+    *arp_match_ip = false;
+    *ofpacts = 0;
+
+    query_tables(ofproto, &features, NULL);
+    for (f = features; f < &features[ofproto->n_tables]; f++) {
+        *ofpacts |= f->nonmiss.apply.ofpacts | f->miss.apply.ofpacts;
+        if (bitmap_is_set(f->match.bm, MFF_ARP_SPA) ||
+            bitmap_is_set(f->match.bm, MFF_ARP_TPA)) {
+            *arp_match_ip = true;
+        }
+    }
+    free(features);
+
+    /* Sanity check. */
+    ovs_assert(*ofpacts & (UINT64_C(1) << OFPACT_OUTPUT));
+}
+
 static enum ofperr
 handle_features_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
@@ -2786,9 +2892,7 @@ handle_features_request(struct ofconn *ofconn, const struct ofp_header *oh)
     bool arp_match_ip;
     struct ofpbuf *b;
 
-    ofproto->ofproto_class->get_features(ofproto, &arp_match_ip,
-                                         &features.ofpacts);
-    ovs_assert(features.ofpacts & (UINT64_C(1) << OFPACT_OUTPUT));
+    query_switch_features(ofproto, &arp_match_ip, &features.ofpacts);
 
     features.datapath_id = ofproto->datapath_id;
     features.n_buffers = pktbuf_capacity();
@@ -3063,70 +3167,23 @@ static enum ofperr
 handle_table_stats_request(struct ofconn *ofconn,
                            const struct ofp_header *request)
 {
-    struct mf_bitmap rw_fields = MF_BITMAP_INITIALIZER;
-    struct ofproto *p = ofconn_get_ofproto(ofconn);
+    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
+    struct ofputil_table_features *features;
     struct ofputil_table_stats *stats;
-    struct ofpbuf *msg;
-    int n_tables;
+    struct ofpbuf *reply;
     size_t i;
 
-    for (i = 0; i < MFF_N_IDS; i++) {
-        if (mf_from_id(i)->writable) {
-            bitmap_set1(rw_fields.bm, i);
+    query_tables(ofproto, &features, &stats);
+
+    reply = ofputil_encode_table_stats_reply(request);
+    for (i = 0; i < ofproto->n_tables; i++) {
+        if (!(ofproto->tables[i].flags & OFTABLE_HIDDEN)) {
+            ofputil_append_table_stats_reply(reply, &stats[i], &features[i]);
         }
     }
+    ofconn_send_reply(ofconn, reply);
 
-    /* Set up default values.
-     *
-     * ofp12_table_stats is used as a generic structure as
-     * it is able to hold all the fields for ofp10_table_stats
-     * and ofp11_table_stats (and of course itself).
-     */
-    stats = xcalloc(p->n_tables, sizeof *stats);
-    for (i = 0; i < p->n_tables; i++) {
-        unsigned int config;
-
-        stats[i].table_id = i;
-        sprintf(stats[i].name, "table%"PRIuSIZE, i);
-        bitmap_set_multiple(stats[i].match.bm, 0, MFF_N_IDS, 1);
-        bitmap_set_multiple(stats[i].wildcards.bm, 0, MFF_N_IDS, 1);
-        stats[i].write_ofpacts = (UINT64_C(1) << N_OFPACTS) - 1;
-        stats[i].apply_ofpacts  = (UINT64_C(1) << N_OFPACTS) - 1;
-        stats[i].write_setfields = rw_fields;
-        stats[i].apply_setfields = rw_fields;
-        stats[i].metadata_match = OVS_BE64_MAX;
-        stats[i].metadata_write = OVS_BE64_MAX;
-        stats[i].ovsinsts = (1u << N_OVS_INSTRUCTIONS) - 1;
-        atomic_read(&p->tables[i].config, &config);
-        stats[i].config = config;
-        stats[i].max_entries = 1000000; /* An arbitrary big number. */
-        stats[i].active_count = classifier_count(&p->tables[i].cls);
-    }
-
-    p->ofproto_class->get_tables(p, stats);
-
-    /* Post-process the tables, dropping hidden tables. */
-    n_tables = p->n_tables;
-    for (i = 0; i < p->n_tables; i++) {
-        const struct oftable *table = &p->tables[i];
-
-        if (table->flags & OFTABLE_HIDDEN) {
-            n_tables = i;
-            break;
-        }
-
-        if (table->name) {
-            ovs_strzcpy(stats[i].name, table->name, sizeof stats[i].name);
-        }
-
-        if (table->max_flows < stats[i].max_entries) {
-            stats[i].max_entries = table->max_flows;
-        }
-    }
-
-    msg = ofputil_encode_table_stats_reply(stats, n_tables, request);
-    ofconn_send_reply(ofconn, msg);
-
+    free(features);
     free(stats);
 
     return 0;
@@ -5725,35 +5782,30 @@ handle_group_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     }
 }
 
-enum ofproto_table_config
-ofproto_table_get_config(const struct ofproto *ofproto, uint8_t table_id)
+enum ofputil_table_miss
+ofproto_table_get_miss_config(const struct ofproto *ofproto, uint8_t table_id)
 {
-    unsigned int value;
-    atomic_read(&ofproto->tables[table_id].config, &value);
-    return (enum ofproto_table_config)value;
+    enum ofputil_table_miss value;
+    atomic_read(&ofproto->tables[table_id].miss_config, &value);
+    return value;
 }
 
 static enum ofperr
 table_mod(struct ofproto *ofproto, const struct ofputil_table_mod *tm)
 {
-    /* Only accept currently supported configurations */
-    if (tm->config & ~OFPTC11_TABLE_MISS_MASK) {
-        return OFPERR_OFPTMFC_BAD_CONFIG;
-    }
-
-    if (tm->table_id == OFPTT_ALL) {
-        int i;
-        for (i = 0; i < ofproto->n_tables; i++) {
-            atomic_store(&ofproto->tables[i].config,
-                         (unsigned int)tm->config);
-        }
-    } else if (!check_table_id(ofproto, tm->table_id)) {
+    if (!check_table_id(ofproto, tm->table_id)) {
         return OFPERR_OFPTMFC_BAD_TABLE;
-    } else {
-        atomic_store(&ofproto->tables[tm->table_id].config,
-                     (unsigned int)tm->config);
+    } else if (tm->miss_config != OFPUTIL_TABLE_MISS_DEFAULT) {
+        if (tm->table_id == OFPTT_ALL) {
+            int i;
+            for (i = 0; i < ofproto->n_tables; i++) {
+                atomic_store(&ofproto->tables[i].miss_config, tm->miss_config);
+            }
+        } else {
+            atomic_store(&ofproto->tables[tm->table_id].miss_config,
+                         tm->miss_config);
+        }
     }
-
     return 0;
 }
 
@@ -6341,7 +6393,7 @@ oftable_init(struct oftable *table)
     memset(table, 0, sizeof *table);
     classifier_init(&table->cls, flow_segment_u32s);
     table->max_flows = UINT_MAX;
-    atomic_init(&table->config, (unsigned int)OFPROTO_TABLE_MISS_DEFAULT);
+    atomic_init(&table->miss_config, OFPUTIL_TABLE_MISS_DEFAULT);
 
     classifier_set_prefix_fields(&table->cls, default_prefix_fields,
                                  ARRAY_SIZE(default_prefix_fields));

@@ -1057,13 +1057,12 @@ OFPT_TABLE_MOD (OF1.2) (xid=0x2): table_id=2, flow_miss_config=continue
 ])
 AT_CLEANUP
 
-# ofp_table_mod.config is actually "reserved for future use" in OF1.3.
 AT_SETUP([OFPT_TABLE_MOD - OF1.3])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
 04 11 00 10 00 00 00 02 02 00 00 00 00 00 00 00 \
 " 3], [0], [dnl
-OFPT_TABLE_MOD (OF1.3) (xid=0x2): table_id=2, flow_miss_config=controller
+OFPT_TABLE_MOD (OF1.3) (xid=0x2): table_id=2
 ])
 AT_CLEANUP
 
@@ -1072,7 +1071,7 @@ AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
 05 11 00 10 00 00 00 02 02 00 00 00 00 00 00 00 \
 " 3], [0], [dnl
-OFPT_TABLE_MOD (OF1.4) (xid=0x2): table_id=2, flow_miss_config=controller
+OFPT_TABLE_MOD (OF1.4) (xid=0x2): table_id=2
 ])
 AT_CLEANUP
 
@@ -1384,34 +1383,85 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 3f ff ff 00 10 00 00 00 00 00 0b 00 00 00 00 \
 00 00 00 00 00 00 00 00 00 00 00 00 \
 "], [0], [dnl
-OFPST_TABLE reply (xid=0x1): 1 tables
-  0: classifier: wild=0x3fffff, max=1048576, active=11
-               lookup=0, matched=0
+OFPST_TABLE reply (xid=0x1):
+  table 0 ("classifier"):
+    active=11, lookup=0, matched=0
+    max_entries=1048576
+    matching:
+      in_port: exact match or wildcard
+      eth_src: exact match or wildcard
+      eth_dst: exact match or wildcard
+      eth_type: exact match or wildcard
+      vlan_vid: exact match or wildcard
+      vlan_pcp: exact match or wildcard
+      ip_src: exact match or wildcard
+      ip_dst: exact match or wildcard
+      nw_proto: exact match or wildcard
+      nw_tos: exact match or wildcard
+      tcp_src: exact match or wildcard
+      tcp_dst: exact match or wildcard
 ])
 AT_CLEANUP
 
 AT_SETUP([OFPST_TABLE reply - OF1.2])
 AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
-(mid="wild=0xfffffffff, max=1000000,"
- tail="
-               match=0xfffffffff, instructions=0x00000007, config=0x00000000
-               write_actions=0x00000000, apply_actions=0x00000000
-               write_setfields=0x0000000fffffffff
-               apply_setfields=0x0000000fffffffff
-               metadata_match=0x0000000000000000
-               metadata_write=0x0000000000000000"
- echo "OFPST_TABLE reply (OF1.2) (xid=0x2): 255 tables
-  0: classifier: $mid active=1
-               lookup=74614, matched=106024$tail"
+(tail="
+    config=controller
+    max_entries=1000000
+    instructions (table miss and others):
+      instructions: write_metadata,goto_table
+      Write-Actions and Apply-Actions features:
+        supported on Set-Field: metadata in_port_oxm eth_src eth_dst eth_type vlan_vid vlan_pcp mpls_label mpls_tc ip_src ip_dst ipv6_src ipv6_dst ipv6_label nw_proto ip_dscp nw_ecn arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst icmp_type icmp_code icmpv6_type icmpv6_code nd_target nd_sll nd_tll
+    matching:
+      metadata: exact match or wildcard
+      in_port_oxm: exact match or wildcard
+      eth_src: exact match or wildcard
+      eth_dst: exact match or wildcard
+      eth_type: exact match or wildcard
+      vlan_vid: exact match or wildcard
+      vlan_pcp: exact match or wildcard
+      mpls_label: exact match or wildcard
+      mpls_tc: exact match or wildcard
+      ip_src: exact match or wildcard
+      ip_dst: exact match or wildcard
+      ipv6_src: exact match or wildcard
+      ipv6_dst: exact match or wildcard
+      ipv6_label: exact match or wildcard
+      nw_proto: exact match or wildcard
+      ip_dscp: exact match or wildcard
+      nw_ecn: exact match or wildcard
+      arp_op: exact match or wildcard
+      arp_spa: exact match or wildcard
+      arp_tpa: exact match or wildcard
+      arp_sha: exact match or wildcard
+      arp_tha: exact match or wildcard
+      tcp_src: exact match or wildcard
+      tcp_dst: exact match or wildcard
+      udp_src: exact match or wildcard
+      udp_dst: exact match or wildcard
+      sctp_src: exact match or wildcard
+      sctp_dst: exact match or wildcard
+      icmp_type: exact match or wildcard
+      icmp_code: exact match or wildcard
+      icmpv6_type: exact match or wildcard
+      icmpv6_code: exact match or wildcard
+      nd_target: exact match or wildcard
+      nd_sll: exact match or wildcard
+      nd_tll: exact match or wildcard"
+ echo "OFPST_TABLE reply (OF1.2) (xid=0x2):
+  table 0 (\"classifier\"):
+    active=1, lookup=74614, matched=106024$tail"
  x=1
  while test $x -lt 254; do
-   printf "  %d: %-8s: $mid active=0
-               lookup=0, matched=0$tail
+   printf "
+  table %d (\"%s\"):
+    active=0, lookup=0, matched=0$tail
 " $x table$x
    x=`expr $x + 1`
  done
- echo "  254: table254: $mid active=2
-               lookup=0, matched=0$tail") > expout
+ echo "
+  table 254 (\"table254\"):
+    active=2, lookup=0, matched=0$tail") > expout
 
 (pad32="\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
  pad7="00 00 00 00 00 00 00 "
@@ -1453,9 +1503,12 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 00 00 00 00 00 01 00 01 00 00 00 00 00 00 0c \
 00 00 00 00 00 00 02 01 00 00 00 00 00 00 01 01 \
 "], [0], [dnl
-OFPST_TABLE reply (OF1.3) (xid=0x1): 2 tables
-  0: active=11, lookup=512, matched=256
-  1: active=12, lookup=513, matched=257
+OFPST_TABLE reply (OF1.3) (xid=0x1):
+  table 0:
+    active=11, lookup=512, matched=256
+
+  table 1:
+    active=12, lookup=513, matched=257
 ])
 AT_CLEANUP
 
@@ -2270,17 +2323,15 @@ f5 f6 f7 f8 f9 fa fb fc fd 00 00 00 00 00 00 00 \
 80 00 30 06 80 00 32 06 80 00 1a 02 80 00 1c 02 \
 80 00 1e 02 80 00 20 02 80 00 22 02 80 00 24 02 \
 "], [0], [OFPST_TABLE_FEATURES reply (OF1.3) (xid=0xd5):
-  table 0:
-    name="table0"
+  table 0 ("table0"):
     metadata: match=0xffffffffffffffff write=0xffffffffffffffff
-    config=Unknown
     max_entries=1000000
     instructions (table miss and others):
       next tables: 1-253
       instructions: apply_actions,clear_actions,write_actions,write_metadata,goto_table
       Write-Actions and Apply-Actions features:
         actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
-        supported on Set-Field: tun_id,tun_src,tun_dst,metadata,in_port,in_port_oxm,pkt_mark,reg0,reg1,reg2,reg3,reg4,reg5,reg6,reg7,eth_src,eth_dst,vlan_tci,vlan_vid,vlan_pcp,mpls_label,mpls_tc,ip_src,ip_dst,ipv6_src,ipv6_dst,nw_tos,ip_dscp,nw_ecn,nw_ttl,arp_op,arp_spa,arp_tpa,arp_sha,arp_tha,tcp_src,tcp_dst,udp_src,udp_dst,sctp_src,sctp_dst
+        supported on Set-Field: tun_id tun_src tun_dst metadata in_port in_port_oxm pkt_mark reg0 reg1 reg2 reg3 reg4 reg5 reg6 reg7 eth_src eth_dst vlan_tci vlan_vid vlan_pcp mpls_label mpls_tc ip_src ip_dst ipv6_src ipv6_dst nw_tos ip_dscp nw_ecn nw_ttl arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst
     matching:
       tun_id: exact match or wildcard
       tun_src: exact match or wildcard

@@ -241,8 +241,8 @@ struct oftable {
     struct hmap eviction_groups_by_id;
     struct heap eviction_groups_by_size;
 
-    /* Table config: contains enum ofproto_table_config; accessed atomically. */
-    atomic_uint config;
+    /* Table configuration. */
+    ATOMIC(enum ofputil_table_miss) miss_config;
 
     atomic_ulong n_matched;
     atomic_ulong n_missed;
@@ -768,40 +768,39 @@ struct ofproto_class {
      * than to do it one by one. */
     void (*flush)(struct ofproto *ofproto);
 
-    /* Helper for the OpenFlow OFPT_FEATURES_REQUEST request.
+    /* Helper for the OpenFlow OFPT_TABLE_FEATURES request.
      *
-     * The implementation should store true in '*arp_match_ip' if the switch
-     * supports matching IP addresses inside ARP requests and replies, false
-     * otherwise.
-     *
-     * The implementation should store in '*ofpacts' a bitmap of the supported
-     * OFPACT_* actions. */
-    void (*get_features)(struct ofproto *ofproto,
-                         bool *arp_match_ip,
-                         uint64_t *ofpacts);
-
-    /* Helper for the OpenFlow OFPST_TABLE statistics request.
-     *
-     * The 'stats' array contains 'ofproto->n_tables' elements.  Each element is
-     * initialized as:
+     * The 'features' array contains 'ofproto->n_tables' elements.  Each
+     * element is initialized as:
      *
      *   - 'table_id' to the array index.
      *
      *   - 'name' to "table#" where # is the table ID.
      *
-     *   - 'match' and 'wildcards' to all fields.
-     *
-     *   - 'write_actions' and 'apply_actions' to all actions.
-     *
-     *   - 'write_setfields' and 'apply_setfields' to all writable fields.
-     *
      *   - 'metadata_match' and 'metadata_write' to OVS_BE64_MAX.
-     *
-     *   - 'ovsinsts' to all instructions.
      *
      *   - 'config' to the table miss configuration.
      *
      *   - 'max_entries' to 1,000,000.
+     *
+     *   - Both 'nonmiss' and 'miss' to:
+     *
+     *     * 'next' to all 1-bits for all later tables.
+     *
+     *     * 'instructions' to all instructions.
+     *
+     *     * 'write' and 'apply' both to:
+     *
+     *       - 'ofpacts': All actions.
+     *
+     *       - 'set_fields': All fields.
+     *
+     *   - 'match', 'mask', and 'wildcard' to all fields.
+     *
+     * If 'stats' is nonnull, it also contains 'ofproto->n_tables' elements.
+     * Each element is initialized as:
+     *
+     *   - 'table_id' to the array index.
      *
      *   - 'active_count' to the classifier_count() for the table.
      *
@@ -810,28 +809,8 @@ struct ofproto_class {
      * The implementation should update any members in each element for which
      * it has better values:
      *
-     *   - 'name' to a more meaningful name.
-     *
-     *   - 'wildcards' to the set of wildcards actually supported by the table
-     *     (if it doesn't support all OpenFlow wildcards).
-     *
-     *   - 'ovsinsts' to the set of instructions actually supported by the
-     *     table.
-     *
-     *   - 'write_actions' to set the write actions actually supported by
-     *     the table (if it doesn't support all OpenFlow actions).
-     *
-     *   - 'apply_actions' to set the apply actions actually supported by
-     *     the table (if it doesn't support all OpenFlow actions).
-     *
-     *   - 'write_setfields' to set the write setfields actually supported by
-     *     the table.
-     *
-     *   - 'apply_setfields' to set the apply setfields actually supported by
-     *     the table.
-     *
-     *   - 'max_entries' to the maximum number of flows actually supported by
-     *     the hardware.
+     *   - Any member of 'features' to better describe the implementation's
+     *     capabilities.
      *
      *   - 'lookup_count' to the number of packets looked up in this flow table
      *     so far.
@@ -839,8 +818,9 @@ struct ofproto_class {
      *   - 'matched_count' to the number of packets looked up in this flow
      *     table so far that matched one of the flow entries.
      */
-    void (*get_tables)(struct ofproto *ofproto,
-                       struct ofputil_table_stats *stats);
+    void (*query_tables)(struct ofproto *ofproto,
+                         struct ofputil_table_features *features,
+                         struct ofputil_table_stats *stats);
 
 /* ## ---------------- ## */
 /* ## ofport Functions ## */

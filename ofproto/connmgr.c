@@ -1484,14 +1484,11 @@ ofconn_wants_packet_in_on_miss(struct ofconn *ofconn,
         enum ofputil_protocol protocol = ofconn_get_protocol(ofconn);
 
         if (protocol != OFPUTIL_P_NONE
-            && ofputil_protocol_to_ofp_version(protocol) >= OFP13_VERSION) {
-            enum ofproto_table_config config;
-
-            config = ofproto_table_get_config(ofconn->connmgr->ofproto,
-                                              pin->up.table_id);
-            if (config == OFPROTO_TABLE_MISS_DEFAULT) {
-                return false;
-            }
+            && ofputil_protocol_to_ofp_version(protocol) >= OFP13_VERSION
+            && (ofproto_table_get_miss_config(ofconn->connmgr->ofproto,
+                                              pin->up.table_id)
+                == OFPUTIL_TABLE_MISS_DEFAULT)) {
+            return false;
         }
     }
     return true;

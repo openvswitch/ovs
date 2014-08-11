@@ -578,10 +578,39 @@ enum ofperr ofputil_decode_port_mod(const struct ofp_header *,
 struct ofpbuf *ofputil_encode_port_mod(const struct ofputil_port_mod *,
                                        enum ofputil_protocol);
 
+/* Abstract version of OFPTC11_TABLE_MISS_*.
+ *
+ * OpenFlow 1.0 always sends packets that miss to the next flow table, or to
+ * the controller if they miss in the last flow table.
+ *
+ * OpenFlow 1.1 and 1.2 can configure table miss behavior via a "table-mod"
+ * that specifies "send to controller", "miss", or "drop".
+ *
+ * OpenFlow 1.3 and later never sends packets that miss to the controller.
+ */
+enum ofputil_table_miss {
+    /* Protocol-specific default behavior.  On OpenFlow 1.0 through 1.2
+     * connections, the packet is sent to the controller, and on OpenFlow 1.3
+     * and later connections, the packet is dropped.
+     *
+     * This is also used as a result of decoding OpenFlow 1.3+ "config" values
+     * in table-mods, to indicate that no table-miss was specified. */
+    OFPUTIL_TABLE_MISS_DEFAULT,    /* Protocol default behavior. */
+
+    /* These constants have the same meanings as those in OpenFlow with the
+     * same names. */
+    OFPUTIL_TABLE_MISS_CONTROLLER, /* Send to controller. */
+    OFPUTIL_TABLE_MISS_CONTINUE,   /* Go to next table. */
+    OFPUTIL_TABLE_MISS_DROP,       /* Drop the packet. */
+};
+
+ovs_be32 ofputil_table_miss_to_config(enum ofputil_table_miss,
+                                      enum ofp_version);
+
 /* Abstract ofp_table_mod. */
 struct ofputil_table_mod {
     uint8_t table_id;         /* ID of the table, 0xff indicates all tables. */
-    enum ofp_table_config config;
+    enum ofputil_table_miss miss_config;
 };
 
 enum ofperr ofputil_decode_table_mod(const struct ofp_header *,
@@ -596,7 +625,7 @@ struct ofputil_table_features {
     char name[OFP_MAX_TABLE_NAME_LEN];
     ovs_be64 metadata_match;  /* Bits of metadata table can match. */
     ovs_be64 metadata_write;  /* Bits of metadata table can write. */
-    uint32_t config;          /* Bitmap of OFPTC_* values */
+    enum ofputil_table_miss miss_config;
     uint32_t max_entries;     /* Max number of entries supported. */
 
     /* Table features related to instructions.  There are two instances:
@@ -767,31 +796,28 @@ struct ofpbuf *ofputil_encode_role_status(
 
 enum ofperr ofputil_decode_role_status(const struct ofp_header *oh,
                                        struct ofputil_role_status *rs);
-/* Abstract table stats. */
+
+/* Abstract table stats.
+ *
+ * This corresponds to the OpenFlow 1.3 table statistics structure, which only
+ * includes actual statistics.  In earlier versions of OpenFlow, several
+ * members describe table features, so this structure has to be paired with
+ * struct ofputil_table_features to get all information. */
 struct ofputil_table_stats {
-    uint8_t table_id;
-    char name[OFP_MAX_TABLE_NAME_LEN];
-    ovs_be64 metadata_match;    /* Bits of metadata table can match. */
-    ovs_be64 metadata_write;    /* Bits of metadata table can write. */
-    uint32_t config;            /* Bitmap of OFPTC_* values */
-    uint32_t max_entries;       /* Max number of entries supported. */
-
-    struct mf_bitmap match;     /* Fields table can match. */
-    struct mf_bitmap wildcards; /* Fields table can wildcard. */
-    uint64_t write_ofpacts;     /* OFPACT_* supported on Write-Actions. */
-    uint64_t apply_ofpacts;     /* OFPACT_* supported on Apply-Actions. */
-    struct mf_bitmap write_setfields; /* Fields that can be set in W-A. */
-    struct mf_bitmap apply_setfields; /* Fields that can be set in A-A. */
-    uint32_t ovsinsts;          /* Bitmap of OVSINST_* values supported. */
-
+    uint8_t table_id;           /* Identifier of table. */
     uint32_t active_count;      /* Number of active entries. */
     uint64_t lookup_count;      /* Number of packets looked up in table. */
     uint64_t matched_count;     /* Number of packets that hit table. */
 };
 
-struct ofpbuf *ofputil_encode_table_stats_reply(
-    const struct ofputil_table_stats[], int n,
-    const struct ofp_header *request);
+struct ofpbuf *ofputil_encode_table_stats_reply(const struct ofp_header *rq);
+void ofputil_append_table_stats_reply(struct ofpbuf *reply,
+                                      const struct ofputil_table_stats *,
+                                      const struct ofputil_table_features *);
+
+int ofputil_decode_table_stats_reply(struct ofpbuf *reply,
+                                     struct ofputil_table_stats *,
+                                     struct ofputil_table_features *);
 
 /* Queue configuration request. */
 struct ofpbuf *ofputil_encode_queue_get_config_request(enum ofp_version,

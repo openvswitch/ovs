@@ -51,7 +51,9 @@
 
 static void ofp_print_queue_name(struct ds *string, uint32_t port);
 static void ofp_print_error(struct ds *, enum ofperr);
-
+static void ofp_print_table_features(struct ds *,
+                                     const struct ofputil_table_features *,
+                                     const struct ofputil_table_stats *);
 
 /* Returns a string that represents the contents of the Ethernet frame in the
  * 'len' bytes starting at 'data'.  The caller must free the returned string.*/
@@ -957,22 +959,21 @@ ofp_print_port_mod(struct ds *string, const struct ofp_header *oh)
 }
 
 static void
-ofp_print_table_miss_config(struct ds *string, const uint32_t config)
+ofp_print_table_miss_config(struct ds *string, enum ofputil_table_miss miss)
 {
-    uint32_t table_miss_config = config & OFPTC11_TABLE_MISS_MASK;
-
-    switch (table_miss_config) {
-    case OFPTC11_TABLE_MISS_CONTROLLER:
+    switch (miss) {
+    case OFPUTIL_TABLE_MISS_CONTROLLER:
         ds_put_cstr(string, "controller\n");
         break;
-    case OFPTC11_TABLE_MISS_CONTINUE:
+    case OFPUTIL_TABLE_MISS_CONTINUE:
         ds_put_cstr(string, "continue\n");
         break;
-    case OFPTC11_TABLE_MISS_DROP:
+    case OFPUTIL_TABLE_MISS_DROP:
         ds_put_cstr(string, "drop\n");
         break;
+    case OFPUTIL_TABLE_MISS_DEFAULT:
     default:
-        ds_put_cstr(string, "Unknown\n");
+        ds_put_format(string, "Unknown (%d)\n", miss);
         break;
     }
 }
@@ -995,8 +996,10 @@ ofp_print_table_mod(struct ds *string, const struct ofp_header *oh)
         ds_put_format(string, " table_id=%"PRIu8, pm.table_id);
     }
 
-    ds_put_cstr(string, ", flow_miss_config=");
-    ofp_print_table_miss_config(string, pm.config);
+    if (pm.miss_config != OFPUTIL_TABLE_MISS_DEFAULT) {
+        ds_put_cstr(string, ", flow_miss_config=");
+        ofp_print_table_miss_config(string, pm.miss_config);
+    }
 }
 
 static void
@@ -1573,216 +1576,27 @@ ofp_print_ofpst_port_reply(struct ds *string, const struct ofp_header *oh,
 }
 
 static void
-ofp_print_one_ofpst_table_reply(struct ds *string, enum ofp_version ofp_version,
-                                const char *name, struct ofp12_table_stats *ts)
+ofp_print_table_stats_reply(struct ds *string, const struct ofp_header *oh)
 {
-    char name_[OFP_MAX_TABLE_NAME_LEN + 1];
-
-    /* ofp13_table_stats is different */
-    if (ofp_version > OFP12_VERSION) {
-        return;
-    }
-
-    ovs_strlcpy(name_, name, sizeof name_);
-
-    ds_put_format(string, "  %d: %-8s: ", ts->table_id, name_);
-    ds_put_format(string, "wild=0x%05"PRIx64", ", ntohll(ts->wildcards));
-    ds_put_format(string, "max=%6"PRIu32", ", ntohl(ts->max_entries));
-    ds_put_format(string, "active=%"PRIu32"\n", ntohl(ts->active_count));
-    ds_put_cstr(string, "               ");
-    ds_put_format(string, "lookup=%"PRIu64", ", ntohll(ts->lookup_count));
-    ds_put_format(string, "matched=%"PRIu64"\n", ntohll(ts->matched_count));
-
-    if (ofp_version < OFP11_VERSION) {
-        return;
-    }
-
-    ds_put_cstr(string, "               ");
-    ds_put_format(string, "match=0x%08"PRIx64", ", ntohll(ts->match));
-    ds_put_format(string, "instructions=0x%08"PRIx32", ",
-                  ntohl(ts->instructions));
-    ds_put_format(string, "config=0x%08"PRIx32"\n", ntohl(ts->config));
-    ds_put_cstr(string, "               ");
-    ds_put_format(string, "write_actions=0x%08"PRIx32", ",
-                  ntohl(ts->write_actions));
-    ds_put_format(string, "apply_actions=0x%08"PRIx32"\n",
-                  ntohl(ts->apply_actions));
-
-    if (ofp_version < OFP12_VERSION) {
-        return;
-    }
-
-    ds_put_cstr(string, "               ");
-    ds_put_format(string, "write_setfields=0x%016"PRIx64"\n",
-                  ntohll(ts->write_setfields));
-    ds_put_cstr(string, "               ");
-    ds_put_format(string, "apply_setfields=0x%016"PRIx64"\n",
-                  ntohll(ts->apply_setfields));
-    ds_put_cstr(string, "               ");
-    ds_put_format(string, "metadata_match=0x%016"PRIx64"\n",
-                  ntohll(ts->metadata_match));
-    ds_put_cstr(string, "               ");
-    ds_put_format(string, "metadata_write=0x%016"PRIx64"\n",
-                  ntohll(ts->metadata_write));
-}
-
-static void
-ofp_print_ofpst_table_reply13(struct ds *string, const struct ofp_header *oh,
-                              int verbosity)
-{
-    struct ofp13_table_stats *ts;
     struct ofpbuf b;
-    size_t n;
 
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     ofpraw_pull_assert(&b);
 
-    n = ofpbuf_size(&b) / sizeof *ts;
-    ds_put_format(string, " %"PRIuSIZE" tables\n", n);
-    if (verbosity < 1) {
-        return;
-    }
-
     for (;;) {
-        ts = ofpbuf_try_pull(&b, sizeof *ts);
-        if (!ts) {
-            return;
-        }
-        ds_put_format(string,
-                      "  %d: active=%"PRIu32", lookup=%"PRIu64  \
-                      ", matched=%"PRIu64"\n",
-                      ts->table_id, ntohl(ts->active_count),
-                      ntohll(ts->lookup_count), ntohll(ts->matched_count));
-    }
-}
+        struct ofputil_table_features features;
+        struct ofputil_table_stats stats;
+        int retval;
 
-static void
-ofp_print_ofpst_table_reply12(struct ds *string, const struct ofp_header *oh,
-                              int verbosity)
-{
-    struct ofp12_table_stats *ts;
-    struct ofpbuf b;
-    size_t n;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    ofpraw_pull_assert(&b);
-
-    n = ofpbuf_size(&b) / sizeof *ts;
-    ds_put_format(string, " %"PRIuSIZE" tables\n", n);
-    if (verbosity < 1) {
-        return;
-    }
-
-    for (;;) {
-        ts = ofpbuf_try_pull(&b, sizeof *ts);
-        if (!ts) {
+        retval = ofputil_decode_table_stats_reply(&b, &stats, &features);
+        if (retval) {
+            if (retval != EOF) {
+                ofp_print_error(string, retval);
+            }
             return;
         }
 
-        ofp_print_one_ofpst_table_reply(string, OFP12_VERSION, ts->name, ts);
-     }
-}
-
-static void
-ofp_print_ofpst_table_reply11(struct ds *string, const struct ofp_header *oh,
-                              int verbosity)
-{
-    struct ofp11_table_stats *ts;
-    struct ofpbuf b;
-    size_t n;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    ofpraw_pull_assert(&b);
-
-    n = ofpbuf_size(&b) / sizeof *ts;
-    ds_put_format(string, " %"PRIuSIZE" tables\n", n);
-    if (verbosity < 1) {
-        return;
-    }
-
-    for (;;) {
-        struct ofp12_table_stats ts12;
-
-        ts = ofpbuf_try_pull(&b, sizeof *ts);
-        if (!ts) {
-            return;
-        }
-
-        ts12.table_id = ts->table_id;
-        ts12.wildcards = htonll(ntohl(ts->wildcards));
-        ts12.max_entries = ts->max_entries;
-        ts12.active_count = ts->active_count;
-        ts12.lookup_count = ts->lookup_count;
-        ts12.matched_count = ts->matched_count;
-        ts12.match = htonll(ntohl(ts->match));
-        ts12.instructions = ts->instructions;
-        ts12.config = ts->config;
-        ts12.write_actions = ts->write_actions;
-        ts12.apply_actions = ts->apply_actions;
-        ofp_print_one_ofpst_table_reply(string, OFP11_VERSION, ts->name, &ts12);
-     }
-}
-
-static void
-ofp_print_ofpst_table_reply10(struct ds *string, const struct ofp_header *oh,
-                              int verbosity)
-{
-    struct ofp10_table_stats *ts;
-    struct ofpbuf b;
-    size_t n;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    ofpraw_pull_assert(&b);
-
-    n = ofpbuf_size(&b) / sizeof *ts;
-    ds_put_format(string, " %"PRIuSIZE" tables\n", n);
-    if (verbosity < 1) {
-        return;
-    }
-
-    for (;;) {
-        struct ofp12_table_stats ts12;
-
-        ts = ofpbuf_try_pull(&b, sizeof *ts);
-        if (!ts) {
-            return;
-        }
-
-        ts12.table_id = ts->table_id;
-        ts12.wildcards = htonll(ntohl(ts->wildcards));
-        ts12.max_entries = ts->max_entries;
-        ts12.active_count = ts->active_count;
-        ts12.lookup_count = get_32aligned_be64(&ts->lookup_count);
-        ts12.matched_count = get_32aligned_be64(&ts->matched_count);
-        ofp_print_one_ofpst_table_reply(string, OFP10_VERSION, ts->name, &ts12);
-     }
-}
-
-static void
-ofp_print_ofpst_table_reply(struct ds *string, const struct ofp_header *oh,
-                            int verbosity)
-{
-    switch ((enum ofp_version)oh->version) {
-    case OFP15_VERSION:
-    case OFP14_VERSION:
-    case OFP13_VERSION:
-        ofp_print_ofpst_table_reply13(string, oh, verbosity);
-        break;
-
-    case OFP12_VERSION:
-        ofp_print_ofpst_table_reply12(string, oh, verbosity);
-        break;
-
-    case OFP11_VERSION:
-        ofp_print_ofpst_table_reply11(string, oh, verbosity);
-        break;
-
-    case OFP10_VERSION:
-        ofp_print_ofpst_table_reply10(string, oh, verbosity);
-        break;
-
-    default:
-        OVS_NOT_REACHED();
+        ofp_print_table_features(string, &features, &stats);
     }
 }
 
@@ -2495,22 +2309,21 @@ static void
 print_table_action_features(struct ds *s,
                             const struct ofputil_table_action_features *taf)
 {
-    ds_put_cstr(s, "        actions: ");
-    ofpact_bitmap_format(taf->ofpacts, s);
-    ds_put_char(s, '\n');
+    if (taf->ofpacts) {
+        ds_put_cstr(s, "        actions: ");
+        ofpact_bitmap_format(taf->ofpacts, s);
+        ds_put_char(s, '\n');
+    }
 
-    ds_put_cstr(s, "        supported on Set-Field: ");
     if (!bitmap_is_all_zeros(taf->set_fields.bm, MFF_N_IDS)) {
         int i;
 
+        ds_put_cstr(s, "        supported on Set-Field:");
         BITMAP_FOR_EACH_1 (i, MFF_N_IDS, taf->set_fields.bm) {
-            ds_put_format(s, "%s,", mf_from_id(i)->name);
+            ds_put_format(s, " %s", mf_from_id(i)->name);
         }
-        ds_chomp(s, ',');
-    } else {
-        ds_put_cstr(s, "none");
+        ds_put_char(s, '\n');
     }
-    ds_put_char(s, '\n');
 }
 
 static bool
@@ -2521,30 +2334,38 @@ table_action_features_equal(const struct ofputil_table_action_features *a,
             && bitmap_equal(a->set_fields.bm, b->set_fields.bm, MFF_N_IDS));
 }
 
+static bool
+table_action_features_empty(const struct ofputil_table_action_features *taf)
+{
+    return !taf->ofpacts && bitmap_is_all_zeros(taf->set_fields.bm, MFF_N_IDS);
+}
+
 static void
 print_table_instruction_features(
     struct ds *s, const struct ofputil_table_instruction_features *tif)
 {
     int start, end;
 
-    ds_put_cstr(s, "      next tables: ");
-    for (start = bitmap_scan(tif->next, 1, 0, 255); start < 255;
-         start = bitmap_scan(tif->next, 1, end, 255)) {
-        end = bitmap_scan(tif->next, 0, start + 1, 255);
-        if (end == start + 1) {
-            ds_put_format(s, "%d,", start);
-        } else {
-            ds_put_format(s, "%d-%d,", start, end - 1);
+    if (!bitmap_is_all_zeros(tif->next, 255)) {
+        ds_put_cstr(s, "      next tables: ");
+        for (start = bitmap_scan(tif->next, 1, 0, 255); start < 255;
+             start = bitmap_scan(tif->next, 1, end, 255)) {
+            end = bitmap_scan(tif->next, 0, start + 1, 255);
+            if (end == start + 1) {
+                ds_put_format(s, "%d,", start);
+            } else {
+                ds_put_format(s, "%d-%d,", start, end - 1);
+            }
         }
+        ds_chomp(s, ',');
+        if (ds_last(s) == ' ') {
+            ds_put_cstr(s, "none");
+        }
+        ds_put_char(s, '\n');
     }
-    ds_chomp(s, ',');
-    if (ds_last(s) == ' ') {
-        ds_put_cstr(s, "none");
-    }
-    ds_put_char(s, '\n');
 
-    ds_put_cstr(s, "      instructions: ");
     if (tif->instructions) {
+        ds_put_cstr(s, "      instructions: ");
         int i;
 
         for (i = 0; i < 32; i++) {
@@ -2553,19 +2374,18 @@ print_table_instruction_features(
             }
         }
         ds_chomp(s, ',');
-    } else {
-        ds_put_cstr(s, "none");
+        ds_put_char(s, '\n');
     }
-    ds_put_char(s, '\n');
 
-    if (table_action_features_equal(&tif->write, &tif->apply)) {
-        ds_put_cstr(s, "      Write-Actions and Apply-Actions features:\n");
-        print_table_action_features(s, &tif->write);
-    } else {
+    if (!table_action_features_equal(&tif->write, &tif->apply)) {
         ds_put_cstr(s, "      Write-Actions features:\n");
         print_table_action_features(s, &tif->write);
         ds_put_cstr(s, "      Apply-Actions features:\n");
         print_table_action_features(s, &tif->apply);
+    } else if (tif->write.ofpacts
+               || !bitmap_is_all_zeros(tif->write.set_fields.bm, MFF_N_IDS)) {
+        ds_put_cstr(s, "      Write-Actions and Apply-Actions features:\n");
+        print_table_action_features(s, &tif->write);
     }
 }
 
@@ -2580,8 +2400,77 @@ table_instruction_features_equal(
             && table_action_features_equal(&a->apply, &b->apply));
 }
 
+static bool
+table_instruction_features_empty(
+    const struct ofputil_table_instruction_features *tif)
+{
+    return (bitmap_is_all_zeros(tif->next, 255)
+            && !tif->instructions
+            && table_action_features_empty(&tif->write)
+            && table_action_features_empty(&tif->apply));
+}
+
 static void
-ofp_print_table_features(struct ds *s, const struct ofp_header *oh)
+ofp_print_table_features(struct ds *s,
+                         const struct ofputil_table_features *features,
+                         const struct ofputil_table_stats *stats)
+{
+    int i;
+
+    ds_put_format(s, "\n  table %"PRIu8, features->table_id);
+    if (features->name[0]) {
+        ds_put_format(s, " (\"%s\")", features->name);
+    }
+    ds_put_cstr(s, ":\n");
+    if (stats) {
+        ds_put_format(s, "    active=%"PRIu32", ", stats->active_count);
+        ds_put_format(s, "lookup=%"PRIu64", ", stats->lookup_count);
+        ds_put_format(s, "matched=%"PRIu64"\n", stats->matched_count);
+    }
+    if (features->metadata_match || features->metadata_match) {
+        ds_put_format(s, "    metadata: match=%#"PRIx64" write=%#"PRIx64"\n",
+                      ntohll(features->metadata_match),
+                      ntohll(features->metadata_write));
+    }
+
+    if (features->miss_config != OFPUTIL_TABLE_MISS_DEFAULT) {
+        ds_put_cstr(s, "    config=");
+        ofp_print_table_miss_config(s, features->miss_config);
+    }
+
+    if (features->max_entries) {
+        ds_put_format(s, "    max_entries=%"PRIu32"\n", features->max_entries);
+    }
+
+    if (!table_instruction_features_equal(&features->nonmiss,
+                                          &features->miss)) {
+        ds_put_cstr(s, "    instructions (other than table miss):\n");
+        print_table_instruction_features(s, &features->nonmiss);
+        ds_put_cstr(s, "    instructions (table miss):\n");
+        print_table_instruction_features(s, &features->miss);
+    } else if (!table_instruction_features_empty(&features->nonmiss)) {
+        ds_put_cstr(s, "    instructions (table miss and others):\n");
+        print_table_instruction_features(s, &features->nonmiss);
+    }
+
+    if (!bitmap_is_all_zeros(features->match.bm, MFF_N_IDS)){
+        ds_put_cstr(s, "    matching:\n");
+        BITMAP_FOR_EACH_1 (i, MFF_N_IDS, features->match.bm) {
+            const struct mf_field *f = mf_from_id(i);
+            bool mask = bitmap_is_set(features->mask.bm, i);
+            bool wildcard = bitmap_is_set(features->wildcard.bm, i);
+
+            ds_put_format(s, "      %s: %s\n",
+                          f->name,
+                          (mask ? "arbitrary mask"
+                           : wildcard ? "exact match or wildcard"
+                           : "must exact match"));
+        }
+    }
+}
+
+static void
+ofp_print_table_features_reply(struct ds *s, const struct ofp_header *oh)
 {
     struct ofpbuf b;
 
@@ -2590,7 +2479,6 @@ ofp_print_table_features(struct ds *s, const struct ofp_header *oh)
     for (;;) {
         struct ofputil_table_features tf;
         int retval;
-        int i;
 
         retval = ofputil_decode_table_features(&b, &tf, true);
         if (retval) {
@@ -2599,39 +2487,7 @@ ofp_print_table_features(struct ds *s, const struct ofp_header *oh)
             }
             return;
         }
-
-        ds_put_format(s, "\n  table %"PRIu8":\n", tf.table_id);
-        ds_put_format(s, "    name=\"%s\"\n", tf.name);
-        ds_put_format(s, "    metadata: match=%#"PRIx64" write=%#"PRIx64"\n",
-                      ntohll(tf.metadata_match), ntohll(tf.metadata_write));
-
-        ds_put_cstr(s, "    config=");
-        ofp_print_table_miss_config(s, tf.config);
-
-        ds_put_format(s, "    max_entries=%"PRIu32"\n", tf.max_entries);
-
-        if (table_instruction_features_equal(&tf.nonmiss, &tf.miss)) {
-            ds_put_cstr(s, "    instructions (table miss and others):\n");
-            print_table_instruction_features(s, &tf.nonmiss);
-        } else {
-            ds_put_cstr(s, "    instructions (other than table miss):\n");
-            print_table_instruction_features(s, &tf.nonmiss);
-            ds_put_cstr(s, "    instructions (table miss):\n");
-            print_table_instruction_features(s, &tf.miss);
-        }
-
-        ds_put_cstr(s, "    matching:\n");
-        BITMAP_FOR_EACH_1 (i, MFF_N_IDS, tf.match.bm) {
-            const struct mf_field *f = mf_from_id(i);
-            bool mask = bitmap_is_set(tf.mask.bm, i);
-            bool wildcard = bitmap_is_set(tf.wildcard.bm, i);
-
-            ds_put_format(s, "      %s: %s\n",
-                          f->name,
-                          (mask ? "arbitrary mask"
-                           : wildcard ? "exact match or wildcard"
-                           : "must exact match"));
-        }
+        ofp_print_table_features(s, &tf, NULL);
     }
 }
 
@@ -2760,7 +2616,7 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
 
     case OFPTYPE_TABLE_FEATURES_STATS_REQUEST:
     case OFPTYPE_TABLE_FEATURES_STATS_REPLY:
-        ofp_print_table_features(string, oh);
+        ofp_print_table_features_reply(string, oh);
         break;
 
     case OFPTYPE_HELLO:
@@ -2911,7 +2767,7 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
 
     case OFPTYPE_TABLE_STATS_REPLY:
         ofp_print_stats(string, oh);
-        ofp_print_ofpst_table_reply(string, oh, verbosity);
+        ofp_print_table_stats_reply(string, oh);
         break;
 
     case OFPTYPE_AGGREGATE_STATS_REPLY:

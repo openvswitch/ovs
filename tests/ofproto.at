@@ -1028,15 +1028,30 @@ AT_CLEANUP
 AT_SETUP([ofproto - flow table configuration (OpenFlow 1.0)])
 OVS_VSWITCHD_START
 # Check the default configuration.
-(echo "OFPST_TABLE reply (xid=0x2): 254 tables
-  0: classifier: wild=0x3fffff, max=1000000, active=0
-               lookup=0, matched=0"
- x=1
+(printf "OFPST_TABLE reply (xid=0x2):"
+ x=0
+ name=classifier
  while test $x -lt 254; do
-   printf "  %d: %-8s: wild=0x3fffff, max=1000000, active=0
-               lookup=0, matched=0
-" $x table$x
+   printf "
+  table %d (\"%s\"):
+    active=0, lookup=0, matched=0
+    max_entries=1000000
+    matching:
+      in_port: exact match or wildcard
+      eth_src: exact match or wildcard
+      eth_dst: exact match or wildcard
+      eth_type: exact match or wildcard
+      vlan_vid: exact match or wildcard
+      vlan_pcp: exact match or wildcard
+      ip_src: exact match or wildcard
+      ip_dst: exact match or wildcard
+      nw_proto: exact match or wildcard
+      nw_tos: exact match or wildcard
+      tcp_src: exact match or wildcard
+      tcp_dst: exact match or wildcard
+" $x $name
    x=`expr $x + 1`
+   name=table$x
  done) > expout
 AT_CHECK([ovs-ofctl dump-tables br0], [0], [expout])
 # Change the configuration.
@@ -1051,12 +1066,8 @@ AT_CHECK(
 ])
 # Check that the configuration was updated.
 mv expout orig-expout
-(echo "OFPST_TABLE reply (xid=0x2): 254 tables
-  0: main    : wild=0x3fffff, max=1000000, active=0
-               lookup=0, matched=0
-  1: table1  : wild=0x3fffff, max=  1024, active=0
-               lookup=0, matched=0"
- tail -n +6 orig-expout) > expout
+sed -e 's/classifier/main/
+21s/1000000/1024/' orig-expout > expout
 AT_CHECK([ovs-ofctl dump-tables br0], [0], [expout])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -1064,22 +1075,59 @@ AT_CLEANUP
 AT_SETUP([ofproto - flow table configuration (OpenFlow 1.2)])
 OVS_VSWITCHD_START
 # Check the default configuration.
-(mid="wild=0x1ffffffffd, max=1000000,"
- tail="
-               lookup=0, matched=0
-               match=0x1ffffffffd, instructions=0x0000003e, config=0x00000003
-               write_actions=0x03ff8001, apply_actions=0x03ff8001
-               write_setfields=0x0000000c0fe7fbdd
-               apply_setfields=0x0000000c0fe7fbdd
-               metadata_match=0xffffffffffffffff
-               metadata_write=0xffffffffffffffff"
- echo "OFPST_TABLE reply (OF1.2) (xid=0x2): 254 tables
-  0: classifier: $mid active=0$tail"
- x=1
+(printf "OFPST_TABLE reply (OF1.2) (xid=0x2):"
+ x=0
+ name=classifier
  while test $x -lt 254; do
-   printf "  %d: %-8s: $mid active=0$tail
-" $x table$x
+   echo "
+  table $x (\"$name\"):
+    active=0, lookup=0, matched=0
+    metadata: match=0xffffffffffffffff write=0xffffffffffffffff
+    config=controller
+    max_entries=1000000
+    instructions (table miss and others):
+      instructions: apply_actions,clear_actions,write_actions,write_metadata,goto_table
+      Write-Actions and Apply-Actions features:
+        actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
+        supported on Set-Field: metadata in_port_oxm eth_src eth_dst vlan_vid vlan_pcp mpls_label mpls_tc ip_src ip_dst ipv6_src ipv6_dst ip_dscp nw_ecn arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst
+    matching:
+      metadata: exact match or wildcard
+      in_port_oxm: exact match or wildcard
+      eth_src: exact match or wildcard
+      eth_dst: exact match or wildcard
+      eth_type: exact match or wildcard
+      vlan_vid: exact match or wildcard
+      vlan_pcp: exact match or wildcard
+      mpls_label: exact match or wildcard
+      mpls_tc: exact match or wildcard
+      ip_src: exact match or wildcard
+      ip_dst: exact match or wildcard
+      ipv6_src: exact match or wildcard
+      ipv6_dst: exact match or wildcard
+      ipv6_label: exact match or wildcard
+      nw_proto: exact match or wildcard
+      ip_dscp: exact match or wildcard
+      nw_ecn: exact match or wildcard
+      arp_op: exact match or wildcard
+      arp_spa: exact match or wildcard
+      arp_tpa: exact match or wildcard
+      arp_sha: exact match or wildcard
+      arp_tha: exact match or wildcard
+      tcp_src: exact match or wildcard
+      tcp_dst: exact match or wildcard
+      udp_src: exact match or wildcard
+      udp_dst: exact match or wildcard
+      sctp_src: exact match or wildcard
+      sctp_dst: exact match or wildcard
+      icmp_type: exact match or wildcard
+      icmp_code: exact match or wildcard
+      icmpv6_type: exact match or wildcard
+      icmpv6_code: exact match or wildcard
+      nd_target: exact match or wildcard
+      nd_sll: exact match or wildcard
+      nd_tll: exact match or wildcard"
    x=`expr $x + 1`
+   name=table$x
  done) > expout
 AT_CHECK([ovs-ofctl -O OpenFlow12 dump-tables br0], [0], [expout])
 # Change the configuration.
@@ -1094,11 +1142,8 @@ AT_CHECK(
 ])
 # Check that the configuration was updated.
 mv expout orig-expout
-(echo "OFPST_TABLE reply (OF1.2) (xid=0x2): 254 tables
-  0: main    : wild=0x1ffffffffd, max=1000000, active=0"
- tail -n +3 orig-expout | head -7
- echo "  1: table1  : wild=0x1ffffffffd, max=  1024, active=0"
- tail -n +11 orig-expout) > expout
+sed 's/classifier/main/
+53s/1000000/1024/' < orig-expout > expout
 AT_CHECK([ovs-ofctl -O OpenFlow12 dump-tables br0], [0], [expout])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
