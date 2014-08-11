@@ -1246,7 +1246,6 @@ add_internal_flows(struct ofproto_dpif *ofproto)
      * (priority=2), recirc=0, actions=resubmit(, 0)
      */
     resubmit = ofpact_put_RESUBMIT(&ofpacts);
-    resubmit->ofpact.compat = 0;
     resubmit->in_port = OFPP_IN_PORT;
     resubmit->table_id = 0;
 
@@ -4287,7 +4286,7 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
     ofpbuf_init(&ofpacts, 0);
 
     /* Parse actions. */
-    error = parse_ofpacts(argv[--argc], &ofpacts, &usable_protocols);
+    error = ofpacts_parse_actions(argv[--argc], &ofpacts, &usable_protocols);
     if (error) {
         unixctl_command_reply_error(conn, error);
         free(error);

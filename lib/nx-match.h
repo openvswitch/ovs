@@ -67,20 +67,10 @@ char *nxm_parse_reg_load(struct ofpact_reg_load *, const char *)
 void nxm_format_reg_move(const struct ofpact_reg_move *, struct ds *);
 void nxm_format_reg_load(const struct ofpact_reg_load *, struct ds *);
 
-enum ofperr nxm_reg_move_from_openflow(const struct nx_action_reg_move *,
-                                       struct ofpbuf *ofpacts);
-enum ofperr nxm_reg_load_from_openflow(const struct nx_action_reg_load *,
-                                       struct ofpbuf *ofpacts);
-
 enum ofperr nxm_reg_move_check(const struct ofpact_reg_move *,
                                const struct flow *);
 enum ofperr nxm_reg_load_check(const struct ofpact_reg_load *,
                                const struct flow *);
-
-void nxm_reg_move_to_nxast(const struct ofpact_reg_move *,
-                           struct ofpbuf *openflow);
-void nxm_reg_load_to_nxast(const struct ofpact_reg_load *,
-                           struct ofpbuf *openflow);
 
 void nxm_execute_reg_move(const struct ofpact_reg_move *, struct flow *,
                           struct flow_wildcards *);
@@ -95,19 +85,10 @@ char *nxm_parse_stack_action(struct ofpact_stack *, const char *)
 void nxm_format_stack_push(const struct ofpact_stack *, struct ds *);
 void nxm_format_stack_pop(const struct ofpact_stack *, struct ds *);
 
-enum ofperr nxm_stack_push_from_openflow(const struct nx_action_stack *,
-                                       struct ofpbuf *ofpacts);
-enum ofperr nxm_stack_pop_from_openflow(const struct nx_action_stack *,
-                                       struct ofpbuf *ofpacts);
 enum ofperr nxm_stack_push_check(const struct ofpact_stack *,
                                  const  struct flow *);
 enum ofperr nxm_stack_pop_check(const struct ofpact_stack *,
                                const struct flow *);
-
-void nxm_stack_push_to_nxast(const struct ofpact_stack *,
-                           struct ofpbuf *openflow);
-void nxm_stack_pop_to_nxast(const struct ofpact_stack *,
-                           struct ofpbuf *openflow);
 
 void nxm_execute_stack_push(const struct ofpact_stack *,
                             const struct flow *, struct flow_wildcards *,

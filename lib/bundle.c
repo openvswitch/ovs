@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2012, 2013 Nicira, Inc.
+/* Copyright (c) 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,6 @@
 #include "ofp-util.h"
 #include "openflow/nicira-ext.h"
 #include "vlog.h"
-
-#define BUNDLE_MAX_SLAVES 2048
 
 VLOG_DEFINE_THIS_MODULE(bundle);
 
@@ -103,89 +101,6 @@ bundle_execute(const struct ofpact_bundle *bundle,
     }
 }
 
-/* Checks that 'nab' specifies a bundle action which is supported by this
- * bundle module.  Uses the 'max_ports' parameter to validate each port using
- * ofputil_check_output_port().  Returns 0 if 'nab' is supported, otherwise an
- * OFPERR_* error code. */
-enum ofperr
-bundle_from_openflow(const struct nx_action_bundle *nab,
-                     struct ofpbuf *ofpacts)
-{
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-    struct ofpact_bundle *bundle;
-    uint16_t subtype;
-    uint32_t slave_type;
-    size_t slaves_size, i;
-    enum ofperr error;
-
-    bundle = ofpact_put_BUNDLE(ofpacts);
-
-    subtype = ntohs(nab->subtype);
-    bundle->n_slaves = ntohs(nab->n_slaves);
-    bundle->basis = ntohs(nab->basis);
-    bundle->fields = ntohs(nab->fields);
-    bundle->algorithm = ntohs(nab->algorithm);
-    slave_type = ntohl(nab->slave_type);
-    slaves_size = ntohs(nab->len) - sizeof *nab;
-
-    error = OFPERR_OFPBAC_BAD_ARGUMENT;
-    if (!flow_hash_fields_valid(bundle->fields)) {
-        VLOG_WARN_RL(&rl, "unsupported fields %d", (int) bundle->fields);
-    } else if (bundle->n_slaves > BUNDLE_MAX_SLAVES) {
-        VLOG_WARN_RL(&rl, "too may slaves");
-    } else if (bundle->algorithm != NX_BD_ALG_HRW
-               && bundle->algorithm != NX_BD_ALG_ACTIVE_BACKUP) {
-        VLOG_WARN_RL(&rl, "unsupported algorithm %d", (int) bundle->algorithm);
-    } else if (slave_type != NXM_OF_IN_PORT) {
-        VLOG_WARN_RL(&rl, "unsupported slave type %"PRIu16, slave_type);
-    } else {
-        error = 0;
-    }
-
-    if (!is_all_zeros(nab->zero, sizeof nab->zero)) {
-        VLOG_WARN_RL(&rl, "reserved field is nonzero");
-        error = OFPERR_OFPBAC_BAD_ARGUMENT;
-    }
-
-    if (subtype == NXAST_BUNDLE && (nab->ofs_nbits || nab->dst)) {
-        VLOG_WARN_RL(&rl, "bundle action has nonzero reserved fields");
-        error = OFPERR_OFPBAC_BAD_ARGUMENT;
-    }
-
-    if (subtype == NXAST_BUNDLE_LOAD) {
-        bundle->dst.field = mf_from_nxm_header(ntohl(nab->dst));
-        bundle->dst.ofs = nxm_decode_ofs(nab->ofs_nbits);
-        bundle->dst.n_bits = nxm_decode_n_bits(nab->ofs_nbits);
-
-        if (bundle->dst.n_bits < 16) {
-            VLOG_WARN_RL(&rl, "bundle_load action requires at least 16 bit "
-                         "destination.");
-            error = OFPERR_OFPBAC_BAD_ARGUMENT;
-        }
-    }
-
-    if (slaves_size < bundle->n_slaves * sizeof(ovs_be16)) {
-        VLOG_WARN_RL(&rl, "Nicira action %"PRIu16" only has %"PRIuSIZE" bytes "
-                     "allocated for slaves.  %"PRIuSIZE" bytes are required for "
-                     "%"PRIu16" slaves.", subtype, slaves_size,
-                     bundle->n_slaves * sizeof(ovs_be16), bundle->n_slaves);
-        error = OFPERR_OFPBAC_BAD_LEN;
-    }
-
-    for (i = 0; i < bundle->n_slaves; i++) {
-        uint16_t ofp_port = ntohs(((ovs_be16 *)(nab + 1))[i]);
-        ofpbuf_put(ofpacts, &ofp_port, sizeof ofp_port);
-    }
-
-    bundle = ofpacts->frame;
-    ofpact_update_len(ofpacts, &bundle->ofpact);
-
-    if (!error) {
-        error = bundle_check(bundle, OFPP_MAX, NULL);
-    }
-    return error;
-}
-
 enum ofperr
 bundle_check(const struct ofpact_bundle *bundle, ofp_port_t max_ports,
              const struct flow *flow)
@@ -222,34 +137,6 @@ bundle_check(const struct ofpact_bundle *bundle, ofp_port_t max_ports,
     return 0;
 }
 
-void
-bundle_to_nxast(const struct ofpact_bundle *bundle, struct ofpbuf *openflow)
-{
-    int slaves_len = ROUND_UP(2 * bundle->n_slaves, OFP_ACTION_ALIGN);
-    struct nx_action_bundle *nab;
-    ovs_be16 *slaves;
-    size_t i;
-
-    nab = (bundle->dst.field
-           ? ofputil_put_NXAST_BUNDLE_LOAD(openflow)
-           : ofputil_put_NXAST_BUNDLE(openflow));
-    nab->len = htons(ntohs(nab->len) + slaves_len);
-    nab->algorithm = htons(bundle->algorithm);
-    nab->fields = htons(bundle->fields);
-    nab->basis = htons(bundle->basis);
-    nab->slave_type = htonl(NXM_OF_IN_PORT);
-    nab->n_slaves = htons(bundle->n_slaves);
-    if (bundle->dst.field) {
-        nab->ofs_nbits = nxm_encode_ofs_nbits(bundle->dst.ofs,
-                                              bundle->dst.n_bits);
-        nab->dst = htonl(bundle->dst.field->nxm_header);
-    }
-
-    slaves = ofpbuf_put_zeros(openflow, slaves_len);
-    for (i = 0; i < bundle->n_slaves; i++) {
-        slaves[i] = htons(ofp_to_u16(bundle->slaves[i]));
-    }
-}
 
 /* Helper for bundle_parse and bundle_parse_load.
  *

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,11 +33,7 @@ struct nx_action_learn;
  * See include/openflow/nicira-ext.h for NXAST_LEARN specification.
  */
 
-enum ofperr learn_from_openflow(const struct nx_action_learn *,
-                                struct ofpbuf *ofpacts);
 enum ofperr learn_check(const struct ofpact_learn *, const struct flow *);
-void learn_to_nxast(const struct ofpact_learn *, struct ofpbuf *openflow);
-
 void learn_execute(const struct ofpact_learn *, const struct flow *,
                    struct ofputil_flow_mod *, struct ofpbuf *ofpacts);
 void learn_mask(const struct ofpact_learn *, struct flow_wildcards *);

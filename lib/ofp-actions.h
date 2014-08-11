@@ -133,14 +133,14 @@ enum {
  * ofpact", usually followed by other data that describes the action.  Actions
  * are padded out to a multiple of OFPACT_ALIGNTO bytes in length.
  *
- * The 'compat' member is special:
+ * The 'raw' member is special:
  *
  *     - Most "struct ofpact"s correspond to one particular kind of OpenFlow
  *       action, at least in a given OpenFlow version.  For example,
  *       OFPACT_SET_VLAN_VID corresponds to OFPAT10_SET_VLAN_VID in OpenFlow
  *       1.0.
  *
- *       For such actions, the 'compat' member is not meaningful and generally
+ *       For such actions, the 'raw' member is not meaningful and generally
  *       should be zero.
  *
  *     - A few "struct ofpact"s correspond to multiple OpenFlow actions.  For
@@ -151,14 +151,14 @@ enum {
  *       (Otherwise, we'd violate the promise made in DESIGN, in the "Action
  *       Reproduction" section.)
  *
- *       For such actions, the 'compat' member should be the original action
- *       type.  (If the action didn't originate from OpenFlow, then setting
- *       'compat' to zero should be fine: code to translate the ofpact to
- *       OpenFlow must tolerate this case.)
+ *       For such actions, the 'raw' member should be the "enum ofp_raw_action"
+ *       originally extracted from the OpenFlow action.  (If the action didn't
+ *       originate from OpenFlow, then setting 'raw' to zero should be fine:
+ *       code to translate the ofpact to OpenFlow must tolerate this case.)
  */
 struct ofpact {
     enum ofpact_type type;      /* OFPACT_*. */
-    enum ofputil_action_code compat; /* Original type when added, if any. */
+    uint8_t raw;                /* Original type when added, if any. */
     uint16_t len;               /* Length of the action, in bytes, including
                                  * struct ofpact, excluding padding. */
 };
@@ -238,6 +238,29 @@ struct ofpact_output_reg {
     struct ofpact ofpact;
     uint16_t max_len;
     struct mf_subfield src;
+};
+
+/* Bundle slave choice algorithm to apply.
+ *
+ * In the descriptions below, 'slaves' is the list of possible slaves in the
+ * order they appear in the OpenFlow action. */
+enum nx_bd_algorithm {
+    /* Chooses the first live slave listed in the bundle.
+     *
+     * O(n_slaves) performance. */
+    NX_BD_ALG_ACTIVE_BACKUP = 0,
+
+    /* Highest Random Weight.
+     *
+     * for i in [0,n_slaves):
+     *   weights[i] = hash(flow, i)
+     * slave = { slaves[i] such that weights[i] >= weights[j] for all j != i }
+     *
+     * Redistributes 1/n_slaves of traffic when a slave's liveness changes.
+     * O(n_slaves) performance.
+     *
+     * Uses the 'fields' and 'basis' parameters. */
+    NX_BD_ALG_HRW = 1
 };
 
 /* OFPACT_BUNDLE.
@@ -442,6 +465,8 @@ struct ofpact_nest {
     struct ofpact actions[];
 };
 BUILD_ASSERT_DECL(offsetof(struct ofpact_nest, actions) % OFPACT_ALIGNTO == 0);
+BUILD_ASSERT_DECL(offsetof(struct ofpact_nest, actions)
+                  == sizeof(struct ofpact_nest));
 
 static inline size_t
 ofpact_nest_get_action_len(const struct ofpact_nest *on)
@@ -473,6 +498,51 @@ struct ofpact_learn_spec {
     struct mf_subfield dst;   /* NX_LEARN_DST_MATCH, NX_LEARN_DST_LOAD only. */
 };
 
+
+/* Bits for 'flags' in struct nx_action_learn.
+ *
+ * If NX_LEARN_F_SEND_FLOW_REM is set, then the learned flows will have their
+ * OFPFF_SEND_FLOW_REM flag set.
+ *
+ * If NX_LEARN_F_DELETE_LEARNED is set, then removing this action will delete
+ * all the flows from the learn action's 'table_id' that have the learn
+ * action's 'cookie'.  Important points:
+ *
+ *     - The deleted flows include those created by this action, those created
+ *       by other learn actions with the same 'table_id' and 'cookie', those
+ *       created by flow_mod requests by a controller in the specified table
+ *       with the specified cookie, and those created through any other
+ *       means.
+ *
+ *     - If multiple flows specify "learn" actions with
+ *       NX_LEARN_F_DELETE_LEARNED with the same 'table_id' and 'cookie', then
+ *       no deletion occurs until all of those "learn" actions are deleted.
+ *
+ *     - Deleting a flow that contains a learn action is the most obvious way
+ *       to delete a learn action.  Modifying a flow's actions, or replacing it
+ *       by a new flow, can also delete a learn action.  Finally, replacing a
+ *       learn action with NX_LEARN_F_DELETE_LEARNED with a learn action
+ *       without that flag also effectively deletes the learn action and can
+ *       trigger flow deletion.
+ *
+ * NX_LEARN_F_DELETE_LEARNED was added in Open vSwitch 2.4. */
+enum nx_learn_flags {
+    NX_LEARN_F_SEND_FLOW_REM = 1 << 0,
+    NX_LEARN_F_DELETE_LEARNED = 1 << 1,
+};
+
+#define NX_LEARN_N_BITS_MASK    0x3ff
+
+#define NX_LEARN_SRC_FIELD     (0 << 13) /* Copy from field. */
+#define NX_LEARN_SRC_IMMEDIATE (1 << 13) /* Copy from immediate value. */
+#define NX_LEARN_SRC_MASK      (1 << 13)
+
+#define NX_LEARN_DST_MATCH     (0 << 11) /* Add match criterion. */
+#define NX_LEARN_DST_LOAD      (1 << 11) /* Add NXAST_REG_LOAD action. */
+#define NX_LEARN_DST_OUTPUT    (2 << 11) /* Add OFPAT_OUTPUT action. */
+#define NX_LEARN_DST_RESERVED  (3 << 11) /* Not yet defined. */
+#define NX_LEARN_DST_MASK      (3 << 11)
+
 /* OFPACT_LEARN.
  *
  * Used for NXAST_LEARN. */
@@ -490,6 +560,60 @@ struct ofpact_learn {
 
     unsigned int n_specs;
     struct ofpact_learn_spec specs[];
+};
+
+/* Multipath link choice algorithm to apply.
+ *
+ * In the descriptions below, 'n_links' is max_link + 1. */
+enum nx_mp_algorithm {
+    /* link = hash(flow) % n_links.
+     *
+     * Redistributes all traffic when n_links changes.  O(1) performance.  See
+     * RFC 2992.
+     *
+     * Use UINT16_MAX for max_link to get a raw hash value. */
+    NX_MP_ALG_MODULO_N = 0,
+
+    /* link = hash(flow) / (MAX_HASH / n_links).
+     *
+     * Redistributes between one-quarter and one-half of traffic when n_links
+     * changes.  O(1) performance.  See RFC 2992.
+     */
+    NX_MP_ALG_HASH_THRESHOLD = 1,
+
+    /* Highest Random Weight.
+     *
+     * for i in [0,n_links):
+     *   weights[i] = hash(flow, i)
+     * link = { i such that weights[i] >= weights[j] for all j != i }
+     *
+     * Redistributes 1/n_links of traffic when n_links changes.  O(n_links)
+     * performance.  If n_links is greater than a threshold (currently 64, but
+     * subject to change), Open vSwitch will substitute another algorithm
+     * automatically.  See RFC 2992. */
+    NX_MP_ALG_HRW = 2,
+
+    /* Iterative Hash.
+     *
+     * i = 0
+     * repeat:
+     *     i = i + 1
+     *     link = hash(flow, i) % arg
+     * while link > max_link
+     *
+     * Redistributes 1/n_links of traffic when n_links changes.  O(1)
+     * performance when arg/max_link is bounded by a constant.
+     *
+     * Redistributes all traffic when arg changes.
+     *
+     * arg must be greater than max_link and for best performance should be no
+     * more than approximately max_link * 2.  If arg is outside the acceptable
+     * range, Open vSwitch will automatically substitute the least power of 2
+     * greater than max_link.
+     *
+     * This algorithm is specific to Open vSwitch.
+     */
+    NX_MP_ALG_ITER_HASH = 3,
 };
 
 /* OFPACT_MULTIPATH.
@@ -602,8 +726,6 @@ enum ofperr ofpacts_check_consistency(struct ofpact[], size_t ofpacts_len,
                                       struct flow *, ofp_port_t max_ports,
                                       uint8_t table_id, uint8_t n_tables,
                                       enum ofputil_protocol usable_protocols);
-enum ofperr ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len,
-                           uint32_t allowed_ovsinsts);
 enum ofperr ofpact_check_output_port(ofp_port_t port, ofp_port_t max_ports);
 
 /* Converting ofpacts to OpenFlow. */
@@ -628,10 +750,14 @@ bool ofpacts_equal(const struct ofpact a[], size_t a_len,
                    const struct ofpact b[], size_t b_len);
 uint32_t ofpacts_get_meter(const struct ofpact[], size_t ofpacts_len);
 
-/* Formatting ofpacts.
- *
- * (For parsing ofpacts, see ofp-parse.h.) */
+/* Formatting and parsing ofpacts. */
 void ofpacts_format(const struct ofpact[], size_t ofpacts_len, struct ds *);
+char *ofpacts_parse_actions(const char *, struct ofpbuf *ofpacts,
+                            enum ofputil_protocol *usable_protocols)
+    WARN_UNUSED_RESULT;
+char *ofpacts_parse_instructions(const char *, struct ofpbuf *ofpacts,
+                                 enum ofputil_protocol *usable_protocols)
+    WARN_UNUSED_RESULT;
 const char *ofpact_name(enum ofpact_type);
 
 /* Internal use by the helpers below. */

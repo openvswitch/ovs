@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,49 +28,7 @@
 #include "ofp-util.h"
 #include "openflow/nicira-ext.h"
 #include "packets.h"
-#include "vlog.h"
-
-VLOG_DEFINE_THIS_MODULE(multipath);
-
-static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
-/* Converts 'nam' into 'mp'.  Returns 0 if successful, otherwise an
- * OFPERR_*. */
-enum ofperr
-multipath_from_openflow(const struct nx_action_multipath *nam,
-                        struct ofpact_multipath *mp)
-{
-    uint32_t n_links = ntohs(nam->max_link) + 1;
-    size_t min_n_bits = log_2_ceil(n_links);
-
-    ofpact_init_MULTIPATH(mp);
-    mp->fields = ntohs(nam->fields);
-    mp->basis = ntohs(nam->basis);
-    mp->algorithm = ntohs(nam->algorithm);
-    mp->max_link = ntohs(nam->max_link);
-    mp->arg = ntohl(nam->arg);
-    mp->dst.field = mf_from_nxm_header(ntohl(nam->dst));
-    mp->dst.ofs = nxm_decode_ofs(nam->ofs_nbits);
-    mp->dst.n_bits = nxm_decode_n_bits(nam->ofs_nbits);
-
-    if (!flow_hash_fields_valid(mp->fields)) {
-        VLOG_WARN_RL(&rl, "unsupported fields %d", (int) mp->fields);
-        return OFPERR_OFPBAC_BAD_ARGUMENT;
-    } else if (mp->algorithm != NX_MP_ALG_MODULO_N
-               && mp->algorithm != NX_MP_ALG_HASH_THRESHOLD
-               && mp->algorithm != NX_MP_ALG_HRW
-               && mp->algorithm != NX_MP_ALG_ITER_HASH) {
-        VLOG_WARN_RL(&rl, "unsupported algorithm %d", (int) mp->algorithm);
-        return OFPERR_OFPBAC_BAD_ARGUMENT;
-    } else if (mp->dst.n_bits < min_n_bits) {
-        VLOG_WARN_RL(&rl, "multipath action requires at least %"PRIuSIZE" bits for "
-                     "%"PRIu32" links", min_n_bits, n_links);
-        return OFPERR_OFPBAC_BAD_ARGUMENT;
-    }
-
-    return multipath_check(mp, NULL);
-}
-
 /* Checks that 'mp' is valid on flow.  Returns 0 if it is valid, otherwise an
  * OFPERR_*. */
 enum ofperr
@@ -78,22 +36,6 @@ multipath_check(const struct ofpact_multipath *mp,
                 const struct flow *flow)
 {
     return mf_check_dst(&mp->dst, flow);
-}
-
-/* Converts 'mp' into an OpenFlow NXAST_MULTIPATH action, which it appends to
- * 'openflow'. */
-void
-multipath_to_nxast(const struct ofpact_multipath *mp, struct ofpbuf *openflow)
-{
-    struct nx_action_multipath *nam = ofputil_put_NXAST_MULTIPATH(openflow);
-
-    nam->fields = htons(mp->fields);
-    nam->basis = htons(mp->basis);
-    nam->algorithm = htons(mp->algorithm);
-    nam->max_link = htons(mp->max_link);
-    nam->arg = htonl(mp->arg);
-    nam->ofs_nbits = nxm_encode_ofs_nbits(mp->dst.ofs, mp->dst.n_bits);
-    nam->dst = htonl(mp->dst.field->nxm_header);
 }
 
 /* multipath_execute(). */

@@ -1675,7 +1675,7 @@ ofctl_packet_out(int argc, char *argv[])
     enum ofputil_protocol usable_protocols; /* XXX: Use in proto selection */
 
     ofpbuf_init(&ofpacts, 64);
-    error = parse_ofpacts(argv[3], &ofpacts, &usable_protocols);
+    error = ofpacts_parse_actions(argv[3], &ofpacts, &usable_protocols);
     if (error) {
         ovs_fatal(0, "%s", error);
     }

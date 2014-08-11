@@ -110,22 +110,18 @@ enum oxm12_ofb_match_fields {
     OFPXMT12_OFB_IPV6_ND_TLL,    /* Target link-layer for ND. */
     OFPXMT12_OFB_MPLS_LABEL,     /* MPLS label. */
     OFPXMT12_OFB_MPLS_TC,        /* MPLS TC. */
-#define OFPXMT12_MASK ((1ULL << (OFPXMT12_OFB_MPLS_TC + 1)) - 1)
 
     /* Following added in OpenFlow 1.3 */
     OFPXMT13_OFB_MPLS_BOS,       /* MPLS BoS bit. */
     OFPXMT13_OFB_PBB_ISID,       /* PBB I-SID. */
     OFPXMT13_OFB_TUNNEL_ID,      /* Logical Port Metadata */
     OFPXMT13_OFB_IPV6_EXTHDR,    /* IPv6 Extension Header pseudo-field */
-#define OFPXMT13_MASK ((1ULL << (OFPXMT13_OFB_IPV6_EXTHDR + 1)) - 1)
 
     /* Following added in OpenFlow 1.4. */
     OFPXMT14_OFB_PBB_UCA = 41,  /* PBB UCA header field. */
-#define OFPXMT14_MASK (1ULL << OFPXMT14_OFB_PBB_UCA)
 
     /* Following added in OpenFlow 1.5. */
     OFPXMT15_OFB_TCP_FLAGS = 42,  /* TCP flags. */
-#define OFPXMT15_MASK (1ULL << OFPXMT15_OFB_TCP_FLAGS)
  };
 
 /* OXM implementation makes use of NXM as they are the same format
@@ -230,10 +226,6 @@ struct ofp12_oxm_experimenter_header {
 };
 OFP_ASSERT(sizeof(struct ofp12_oxm_experimenter_header) == 8);
 
-enum ofp12_action_type {
-    OFPAT12_SET_FIELD = 25,     /* Set a header field using OXM TLV format. */
-};
-
 enum ofp12_controller_max_len {
     OFPCML12_MAX       = 0xffe5, /* maximum max_len value which can be used
                                   * to request a specific byte length. */
@@ -241,18 +233,6 @@ enum ofp12_controller_max_len {
                                   * applied and the whole packet is to be
                                   * sent to the controller. */
 };
-
-/* Action structure for OFPAT12_SET_FIELD. */
-struct ofp12_action_set_field {
-    ovs_be16 type;                  /* OFPAT12_SET_FIELD. */
-    ovs_be16 len;                   /* Length is padded to 64 bits. */
-    ovs_be32 dst;                   /* OXM TLV header */
-    /* Followed by:
-     * - Exactly ((oxm_len + 4) + 7)/8*8 - (oxm_len + 4) (between 0 and 7)
-     *   bytes of all-zero bytes
-     */
-};
-OFP_ASSERT(sizeof(struct ofp12_action_set_field) == 8);
 
 /* OpenFlow 1.2 specific flags
  * (struct ofp12_flow_mod, member flags). */

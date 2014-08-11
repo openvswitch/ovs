@@ -181,38 +181,6 @@ enum ofp11_capabilities {
     OFPC11_GROUP_STATS    = 1 << 3,  /* Group statistics. */
 };
 
-enum ofp11_action_type {
-    OFPAT11_OUTPUT,           /* Output to switch port. */
-    OFPAT11_SET_VLAN_VID,     /* Set the 802.1q VLAN id. */
-    OFPAT11_SET_VLAN_PCP,     /* Set the 802.1q priority. */
-    OFPAT11_SET_DL_SRC,       /* Ethernet source address. */
-    OFPAT11_SET_DL_DST,       /* Ethernet destination address. */
-    OFPAT11_SET_NW_SRC,       /* IP source address. */
-    OFPAT11_SET_NW_DST,       /* IP destination address. */
-    OFPAT11_SET_NW_TOS,       /* IP ToS (DSCP field, 6 bits). */
-    OFPAT11_SET_NW_ECN,       /* IP ECN (2 bits). */
-    OFPAT11_SET_TP_SRC,       /* TCP/UDP/SCTP source port. */
-    OFPAT11_SET_TP_DST,       /* TCP/UDP/SCTP destination port. */
-    OFPAT11_COPY_TTL_OUT,     /* Copy TTL "outwards" -- from next-to-outermost
-                                 to outermost */
-    OFPAT11_COPY_TTL_IN,      /* Copy TTL "inwards" -- from outermost to
-                               next-to-outermost */
-    OFPAT11_SET_MPLS_LABEL,   /* MPLS label */
-    OFPAT11_SET_MPLS_TC,      /* MPLS TC */
-    OFPAT11_SET_MPLS_TTL,     /* MPLS TTL */
-    OFPAT11_DEC_MPLS_TTL,     /* Decrement MPLS TTL */
-
-    OFPAT11_PUSH_VLAN,        /* Push a new VLAN tag */
-    OFPAT11_POP_VLAN,         /* Pop the outer VLAN tag */
-    OFPAT11_PUSH_MPLS,        /* Push a new MPLS Label Stack Entry */
-    OFPAT11_POP_MPLS,         /* Pop the outer MPLS Label Stack Entry */
-    OFPAT11_SET_QUEUE,        /* Set queue id when outputting to a port */
-    OFPAT11_GROUP,            /* Apply group. */
-    OFPAT11_SET_NW_TTL,       /* IP TTL. */
-    OFPAT11_DEC_NW_TTL,       /* Decrement IP TTL. */
-    OFPAT11_EXPERIMENTER = 0xffff
-};
-
 #define OFPMT11_STANDARD_LENGTH 88
 
 struct ofp11_match_header {
@@ -339,97 +307,6 @@ struct ofp11_instruction_experimenter {
     /* Experimenter-defined arbitrary additional data. */
 };
 OFP_ASSERT(sizeof(struct ofp11_instruction_experimenter) == 8);
-
-/* Action structure for OFPAT_OUTPUT, which sends packets out 'port'.
-   * When the 'port' is the OFPP_CONTROLLER, 'max_len' indicates the max
-   * number of bytes to send. A 'max_len' of zero means no bytes of the
-   * packet should be sent.*/
-struct ofp11_action_output {
-    ovs_be16 type;                    /* OFPAT11_OUTPUT. */
-    ovs_be16 len;                     /* Length is 16. */
-    ovs_be32 port;                    /* Output port. */
-    ovs_be16 max_len;                 /* Max length to send to controller. */
-    uint8_t pad[6];                   /* Pad to 64 bits. */
-};
-OFP_ASSERT(sizeof(struct ofp11_action_output) == 16);
-
-/* Action structure for OFPAT_GROUP. */
-struct ofp11_action_group {
-    ovs_be16 type;                    /* OFPAT11_GROUP. */
-    ovs_be16 len;                     /* Length is 8. */
-    ovs_be32 group_id;                /* Group identifier. */
-};
-OFP_ASSERT(sizeof(struct ofp11_action_group) == 8);
-
-/* OFPAT_SET_QUEUE action struct: send packets to given queue on port. */
-struct ofp11_action_set_queue {
-    ovs_be16 type;                    /* OFPAT11_SET_QUEUE. */
-    ovs_be16 len;                     /* Len is 8. */
-    ovs_be32 queue_id;                /* Queue id for the packets. */
-};
-OFP_ASSERT(sizeof(struct ofp11_action_set_queue) == 8);
-
-/* Action structure for OFPAT11_SET_MPLS_LABEL. */
-struct ofp11_action_mpls_label {
-    ovs_be16 type;                    /* OFPAT11_SET_MPLS_LABEL. */
-    ovs_be16 len;                     /* Length is 8. */
-    ovs_be32 mpls_label;              /* MPLS label */
-};
-OFP_ASSERT(sizeof(struct ofp11_action_mpls_label) == 8);
-
-/* Action structure for OFPAT11_SET_MPLS_TC. */
-struct ofp11_action_mpls_tc {
-    ovs_be16 type;                    /* OFPAT11_SET_MPLS_TC. */
-    ovs_be16 len;                     /* Length is 8. */
-    uint8_t mpls_tc;                  /* MPLS TC */
-    uint8_t pad[3];
-};
-OFP_ASSERT(sizeof(struct ofp11_action_mpls_tc) == 8);
-
-/* Action structure for OFPAT11_SET_MPLS_TTL. */
-struct ofp11_action_mpls_ttl {
-    ovs_be16 type;                    /* OFPAT11_SET_MPLS_TTL. */
-    ovs_be16 len;                     /* Length is 8. */
-    uint8_t mpls_ttl;                 /* MPLS TTL */
-    uint8_t pad[3];
-};
-OFP_ASSERT(sizeof(struct ofp11_action_mpls_ttl) == 8);
-
-/* Action structure for OFPAT11_SET_NW_ECN. */
-struct ofp11_action_nw_ecn {
-    ovs_be16 type;                    /* OFPAT11_SET_TW_SRC/DST. */
-    ovs_be16 len;                     /* Length is 8. */
-    uint8_t nw_ecn;                   /* IP ECN (2 bits). */
-    uint8_t pad[3];
-};
-OFP_ASSERT(sizeof(struct ofp11_action_nw_ecn) == 8);
-
-/* Action structure for OFPAT11_SET_NW_TTL. */
-struct ofp11_action_nw_ttl {
-    ovs_be16 type;                    /* OFPAT11_SET_NW_TTL. */
-    ovs_be16 len;                     /* Length is 8. */
-    uint8_t nw_ttl;                   /* IP TTL */
-    uint8_t pad[3];
-};
-OFP_ASSERT(sizeof(struct ofp11_action_nw_ttl) == 8);
-
-/* Action structure for OFPAT11_PUSH_VLAN/MPLS. */
-struct ofp11_action_push {
-    ovs_be16 type;                    /* OFPAT11_PUSH_VLAN/MPLS. */
-    ovs_be16 len;                     /* Length is 8. */
-    ovs_be16 ethertype;               /* Ethertype */
-    uint8_t pad[2];
-};
-OFP_ASSERT(sizeof(struct ofp11_action_push) == 8);
-
-/* Action structure for OFPAT11_POP_MPLS. */
-struct ofp11_action_pop_mpls {
-    ovs_be16 type;                    /* OFPAT11_POP_MPLS. */
-    ovs_be16 len;                     /* Length is 8. */
-    ovs_be16 ethertype;               /* Ethertype */
-    uint8_t pad[2];
-};
-OFP_ASSERT(sizeof(struct ofp11_action_pop_mpls) == 8);
 
 /* Configure/Modify behavior of a flow table */
 struct ofp11_table_mod {
