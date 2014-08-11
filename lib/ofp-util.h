@@ -679,11 +679,10 @@ struct ofputil_table_features {
 
 int ofputil_decode_table_features(struct ofpbuf *,
                                   struct ofputil_table_features *, bool loose);
-struct ofpbuf *ofputil_encode_table_features_request(
-                            enum ofp_version ofp_version);
+struct ofpbuf *ofputil_encode_table_features_request(enum ofp_version);
+
 void ofputil_append_table_features_reply(
-                            const struct ofputil_table_features *tf,
-                            struct list *replies);
+    const struct ofputil_table_features *tf, struct list *replies);
 
 /* Meter band configuration for all supported band types. */
 struct ofputil_meter_band {

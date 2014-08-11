@@ -120,6 +120,36 @@ log_property(bool loose, const char *message, ...)
     }
 }
 
+static size_t
+start_property(struct ofpbuf *msg, uint16_t type)
+{
+    size_t start_ofs = ofpbuf_size(msg);
+    struct ofp_prop_header *oph;
+
+    oph = ofpbuf_put_uninit(msg, sizeof *oph);
+    oph->type = htons(type);
+    oph->len = htons(4);        /* May be updated later by end_property(). */
+    return start_ofs;
+}
+
+static void
+end_property(struct ofpbuf *msg, size_t start_ofs)
+{
+    struct ofp_prop_header *oph;
+
+    oph = ofpbuf_at_assert(msg, start_ofs, sizeof *oph);
+    oph->len = htons(ofpbuf_size(msg) - start_ofs);
+    ofpbuf_padto(msg, ROUND_UP(ofpbuf_size(msg), 8));
+}
+
+static void
+put_bitmap_properties(struct ofpbuf *msg, uint64_t bitmap)
+{
+    for (; bitmap; bitmap = zero_rightmost_1bit(bitmap)) {
+        start_property(msg, rightmost_1bit_idx(bitmap));
+    }
+}
+
 /* Given the wildcard bit count in the least-significant 6 of 'wcbits', returns
  * an IP netmask with a 1 in each bit that must match and a 0 in each bit that
  * is wildcarded.
@@ -4799,6 +4829,108 @@ ofputil_encode_table_features_request(enum ofp_version ofp_version)
     }
 
     return request;
+}
+
+static void
+put_fields_property(struct ofpbuf *reply,
+                    const struct mf_bitmap *fields,
+                    const struct mf_bitmap *masks,
+                    enum ofp13_table_feature_prop_type property,
+                    enum ofp_version version)
+{
+    size_t start_ofs;
+    int field;
+
+    start_ofs = start_property(reply, property);
+    BITMAP_FOR_EACH_1 (field, MFF_N_IDS, fields->bm) {
+        uint32_t h_oxm = mf_oxm_header(field, version);
+        ovs_be32 n_oxm;
+
+        if (masks && bitmap_is_set(masks->bm, field)) {
+            h_oxm = NXM_MAKE_WILD_HEADER(h_oxm);
+        }
+
+        n_oxm = htonl(h_oxm);
+        ofpbuf_put(reply, &n_oxm, sizeof n_oxm);
+    }
+    end_property(reply, start_ofs);
+}
+
+static void
+put_table_action_features(struct ofpbuf *reply,
+                          const struct ofputil_table_action_features *taf,
+                          enum ofp13_table_feature_prop_type actions_type,
+                          enum ofp13_table_feature_prop_type set_fields_type,
+                          int miss_offset, enum ofp_version version)
+{
+    size_t start_ofs;
+
+    start_ofs = start_property(reply, actions_type + miss_offset);
+    put_bitmap_properties(reply,
+                          ntohl(ofpact_bitmap_to_openflow(taf->ofpacts,
+                                                          version)));
+    end_property(reply, start_ofs);
+
+    put_fields_property(reply, &taf->set_fields, NULL,
+                        set_fields_type + miss_offset, version);
+}
+
+static void
+put_table_instruction_features(
+    struct ofpbuf *reply, const struct ofputil_table_instruction_features *tif,
+    int miss_offset, enum ofp_version version)
+{
+    size_t start_ofs;
+    uint8_t table_id;
+
+    start_ofs = start_property(reply, OFPTFPT13_INSTRUCTIONS + miss_offset);
+    put_bitmap_properties(reply,
+                          ntohl(ovsinst_bitmap_to_openflow(tif->instructions,
+                                                           version)));
+    end_property(reply, start_ofs);
+
+    start_ofs = start_property(reply, OFPTFPT13_NEXT_TABLES + miss_offset);
+    BITMAP_FOR_EACH_1 (table_id, 255, tif->next) {
+        ofpbuf_put(reply, &table_id, 1);
+    }
+    end_property(reply, start_ofs);
+
+    put_table_action_features(reply, &tif->write,
+                              OFPTFPT13_WRITE_ACTIONS,
+                              OFPTFPT13_WRITE_SETFIELD, miss_offset, version);
+    put_table_action_features(reply, &tif->apply,
+                              OFPTFPT13_APPLY_ACTIONS,
+                              OFPTFPT13_APPLY_SETFIELD, miss_offset, version);
+}
+
+void
+ofputil_append_table_features_reply(const struct ofputil_table_features *tf,
+                                    struct list *replies)
+{
+    struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
+    enum ofp_version version = ofpmp_version(replies);
+    size_t start_ofs = ofpbuf_size(reply);
+    struct ofp13_table_features *otf;
+
+    otf = ofpbuf_put_zeros(reply, sizeof *otf);
+    otf->table_id = tf->table_id;
+    ovs_strlcpy(otf->name, tf->name, sizeof otf->name);
+    otf->metadata_match = tf->metadata_match;
+    otf->metadata_write = tf->metadata_write;
+    otf->config = ofputil_table_miss_to_config(tf->miss_config, version);
+    otf->max_entries = htonl(tf->max_entries);
+
+    put_table_instruction_features(reply, &tf->nonmiss, 0, version);
+    put_table_instruction_features(reply, &tf->miss, 1, version);
+
+    put_fields_property(reply, &tf->match, &tf->mask,
+                        OFPTFPT13_MATCH, version);
+    put_fields_property(reply, &tf->wildcard, NULL,
+                        OFPTFPT13_WILDCARDS, version);
+
+    otf = ofpbuf_at_assert(reply, start_ofs, sizeof *otf);
+    otf->length = htons(ofpbuf_size(reply) - start_ofs);
+    ofpmp_postappend(replies, start_ofs);
 }
 
 /* ofputil_table_mod */
