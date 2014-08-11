@@ -673,6 +673,11 @@ static int key_extract(struct sk_buff *skb, struct sw_flow_key *key)
 	return 0;
 }
 
+int ovs_flow_key_update(struct sk_buff *skb, struct sw_flow_key *key)
+{
+	return key_extract(skb, key);
+}
+
 int ovs_flow_key_extract(const struct ovs_tunnel_info *tun_info,
 			 struct sk_buff *skb,
 			 struct sw_flow_key *key)
@@ -717,14 +722,4 @@ int ovs_flow_key_extract_userspace(const struct nlattr *attr,
 		return err;
 
 	return key_extract(skb, key);
-}
-
-int ovs_flow_key_extract_recirc(u32 recirc_id,
-				const struct sw_flow_key *key,
-				struct sk_buff *skb,
-				struct sw_flow_key *new_key)
-{
-	memcpy(new_key, key, OVS_SW_FLOW_KEY_METADATA_SIZE);
-	new_key->recirc_id = recirc_id;
-	return key_extract(skb, new_key);
 }

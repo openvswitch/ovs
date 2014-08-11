@@ -228,9 +228,7 @@ int ovs_flow_key_extract(const struct ovs_tunnel_info *tun_info,
 int ovs_flow_key_extract_userspace(const struct nlattr *attr,
 				   struct sk_buff *skb,
 				   struct sw_flow_key *key);
-int ovs_flow_key_extract_recirc(u32 recirc_id,
-				const struct sw_flow_key *key,
-				struct sk_buff *skb,
-				struct sw_flow_key *new_key);
+/* Update the non-metadata part of the flow key using skb. */
+int ovs_flow_key_update(struct sk_buff *skb, struct sw_flow_key *key);
 
 #endif /* flow.h */

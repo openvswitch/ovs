@@ -40,6 +40,17 @@
 #include "vlan.h"
 #include "vport.h"
 
+static void flow_key_clone(struct sk_buff *skb, struct sw_flow_key *new_key)
+{
+	*new_key = *OVS_CB(skb)->pkt_key;
+	OVS_CB(skb)->pkt_key = new_key;
+}
+
+static void flow_key_set_recirc_id(struct sk_buff *skb, u32 recirc_id)
+{
+	OVS_CB(skb)->pkt_key->recirc_id = recirc_id;
+}
+
 static void flow_key_set_priority(struct sk_buff *skb, u32 priority)
 {
 	OVS_CB(skb)->pkt_key->phy.priority = priority;
@@ -695,8 +706,7 @@ static int sample(struct datapath *dp, struct sk_buff *skb,
 			/* Skip the sample action when out of memory. */
 			return 0;
 
-		sample_key = *OVS_CB(skb)->pkt_key;
-		OVS_CB(sample_skb)->pkt_key = &sample_key;
+		flow_key_clone(skb, &sample_key);
 	}
 
 	/* Note that do_execute_actions() never consumes skb.
@@ -775,18 +785,6 @@ static int execute_set_action(struct sk_buff *skb,
 	return err;
 }
 
-static void flow_key_clone_recirc(struct sk_buff *skb, u32 recirc_id,
-				  struct sw_flow_key *recirc_key)
-{
-	*recirc_key = *OVS_CB(skb)->pkt_key;
-	recirc_key->recirc_id = recirc_id;
-	OVS_CB(skb)->pkt_key = recirc_key;
-}
-
-static void flow_key_set_recirc_id(struct sk_buff *skb, u32 recirc_id)
-{
-	OVS_CB(skb)->pkt_key->recirc_id = recirc_id;
-}
 
 static int execute_recirc(struct datapath *dp, struct sk_buff *skb,
 			  const struct nlattr *a, int rem)
@@ -805,22 +803,19 @@ static int execute_recirc(struct datapath *dp, struct sk_buff *skb,
 			return 0;
 	}
 
-	if (is_skb_flow_key_valid(skb)) {
-		if (!last_action(a, rem))
-			flow_key_clone_recirc(skb, nla_get_u32(a), &recirc_key);
-		else
-			flow_key_set_recirc_id(skb, nla_get_u32(a));
-	} else {
-		struct sw_flow_key *pkt_key = OVS_CB(skb)->pkt_key;
-
-		err = ovs_flow_key_extract_recirc(nla_get_u32(a), pkt_key,
-						  skb, &recirc_key);
+	if (!is_skb_flow_key_valid(skb)) {
+		err = ovs_flow_key_update(skb, OVS_CB(skb)->pkt_key);
 		if (err) {
 			kfree_skb(skb);
 			return err;
 		}
 	}
+	BUG_ON(!is_skb_flow_key_valid(skb));
 
+	if (!last_action(a, rem))
+		flow_key_clone(skb, &recirc_key);
+
+	flow_key_set_recirc_id(skb, nla_get_u32(a));
 	ovs_dp_process_packet(skb, true);
 	return 0;
 }
