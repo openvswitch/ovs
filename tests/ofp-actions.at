@@ -502,9 +502,8 @@ AT_CHECK(
   [0], [expout], [experr])
 AT_CLEANUP
 
-dnl Our primary goal here is to verify that the copy_field action gets
-dnl used instead of the Nicira extension reg_move in OpenFlow 1.5, so
-dnl the list of action tests is very short.
+dnl Our primary goal here is to verify that OpenFlow 1.5-specific changes,
+dnl so the list of tests is short.
 AT_SETUP([OpenFlow 1.5 action translation])
 AT_KEYWORDS([ofp-actions OF1.5])
 AT_DATA([test-data], [dnl
@@ -513,6 +512,13 @@ AT_DATA([test-data], [dnl
 
 # actions=move:NXM_OF_IN_PORT[]->NXM_OF_VLAN_TCI[]
 001c 0018 0010 0000 0000 0008 00000002 00000802 00000000
+
+dnl This action has a lot more wrong with it than the hasmask bit, but
+dnl the current OVS implementation checks for that first.
+# bad OpenFlow15 actions: OFPBAC_BAD_SET_MASK
+& ofp_actions|WARN|bad action at offset 0 (OFPBAC_BAD_SET_MASK):
+& 00000000  00 19 00 08 00 00 01 00-
+0019 0008 0000 0100
 
 ])
 sed '/^[[#&]]/d' < test-data > input.txt

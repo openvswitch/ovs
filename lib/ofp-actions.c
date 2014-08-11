@@ -1965,7 +1965,7 @@ decode_OFPAT_RAW12_SET_FIELD(const struct ofp12_action_set_field *oasf,
     }
 
     if (NXM_HASMASK(oxm_header)) {
-        return OFPERR_OFPBAC_BAD_SET_TYPE;
+        return OFPERR_OFPBAC_BAD_SET_MASK;
     }
     mf = mf_from_nxm_header(oxm_header);
     if (!mf) {
