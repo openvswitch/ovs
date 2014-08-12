@@ -522,9 +522,9 @@ int dpif_flow_put(struct dpif *, enum dpif_flow_put_flags,
 int dpif_flow_del(struct dpif *,
                   const struct nlattr *key, size_t key_len,
                   struct dpif_flow_stats *);
-int dpif_flow_get(const struct dpif *,
+int dpif_flow_get(struct dpif *,
                   const struct nlattr *key, size_t key_len,
-                  struct ofpbuf **, struct dpif_flow *);
+                  struct ofpbuf *, struct dpif_flow *);
 
 /* Flow dumping interface
  * ======================
@@ -573,6 +573,8 @@ struct dpif_flow {
 };
 int dpif_flow_dump_next(struct dpif_flow_dump_thread *,
                         struct dpif_flow *flows, int max_flows);
+
+#define DPIF_FLOW_BUFSIZE 2048
 
 /* Operation batching interface.
  *
@@ -584,6 +586,7 @@ enum dpif_op_type {
     DPIF_OP_FLOW_PUT = 1,
     DPIF_OP_FLOW_DEL,
     DPIF_OP_EXECUTE,
+    DPIF_OP_FLOW_GET,
 };
 
 /* Add or modify a flow.
@@ -664,6 +667,31 @@ struct dpif_execute {
     struct pkt_metadata md;         /* Packet metadata. */
 };
 
+/* Queries the dpif for a flow entry.
+ *
+ * The flow is specified by the Netlink attributes with types OVS_KEY_ATTR_* in
+ * the 'key_len' bytes starting at 'key'. 'buffer' must point to an initialized
+ * buffer, with a recommended size of DPIF_FLOW_BUFSIZE bytes.
+ *
+ * On success, 'flow' will be populated with the mask, actions and stats for
+ * the datapath flow corresponding to 'key'. The mask and actions may point
+ * within '*buffer', or may point at RCU-protected data. Therefore, callers
+ * that wish to hold these over quiescent periods must make a copy of these
+ * fields before quiescing.
+ *
+ * Succeeds with status 0 if the flow is fetched, or fails with ENOENT if no
+ * such flow exists. Other failures are indicated with a positive errno value.
+ */
+struct dpif_flow_get {
+    /* Input. */
+    const struct nlattr *key;       /* Flow to get. */
+    size_t key_len;                 /* Length of 'key' in bytes. */
+    struct ofpbuf *buffer;          /* Storage for output parameters. */
+
+    /* Output. */
+    struct dpif_flow *flow;         /* Resulting flow from datapath. */
+};
+
 int dpif_execute(struct dpif *, struct dpif_execute *);
 
 struct dpif_op {
@@ -673,6 +701,7 @@ struct dpif_op {
         struct dpif_flow_put flow_put;
         struct dpif_flow_del flow_del;
         struct dpif_execute execute;
+        struct dpif_flow_get flow_get;
     } u;
 };
 

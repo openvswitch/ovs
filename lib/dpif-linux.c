@@ -126,6 +126,8 @@ static int dpif_linux_flow_transact(struct dpif_linux_flow *request,
                                     struct ofpbuf **bufp);
 static void dpif_linux_flow_get_stats(const struct dpif_linux_flow *,
                                       struct dpif_flow_stats *);
+static void dpif_linux_flow_to_dpif_flow(struct dpif_flow *,
+                                         const struct dpif_linux_flow *);
 
 /* One of the dpif channels between the kernel and userspace. */
 struct dpif_channel {
@@ -1046,48 +1048,27 @@ dpif_linux_port_poll_wait(const struct dpif *dpif_)
     }
 }
 
-static int
-dpif_linux_flow_get__(const struct dpif_linux *dpif,
-                      const struct nlattr *key, size_t key_len,
-                      struct dpif_linux_flow *reply, struct ofpbuf **bufp)
+static void
+dpif_linux_init_flow_get(const struct dpif_linux *dpif,
+                         const struct nlattr *key, size_t key_len,
+                         struct dpif_linux_flow *request)
 {
-    struct dpif_linux_flow request;
-
-    dpif_linux_flow_init(&request);
-    request.cmd = OVS_FLOW_CMD_GET;
-    request.dp_ifindex = dpif->dp_ifindex;
-    request.key = key;
-    request.key_len = key_len;
-    return dpif_linux_flow_transact(&request, reply, bufp);
+    dpif_linux_flow_init(request);
+    request->cmd = OVS_FLOW_CMD_GET;
+    request->dp_ifindex = dpif->dp_ifindex;
+    request->key = key;
+    request->key_len = key_len;
 }
 
 static int
-dpif_linux_flow_get(const struct dpif *dpif_,
+dpif_linux_flow_get(const struct dpif_linux *dpif,
                     const struct nlattr *key, size_t key_len,
-                    struct ofpbuf **bufp,
-                    struct nlattr **maskp, size_t *mask_len,
-                    struct nlattr **actionsp, size_t *actions_len,
-                    struct dpif_flow_stats *stats)
+                    struct dpif_linux_flow *reply, struct ofpbuf **bufp)
 {
-    const struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    struct dpif_linux_flow reply;
-    int error;
+    struct dpif_linux_flow request;
 
-    error = dpif_linux_flow_get__(dpif, key, key_len, &reply, bufp);
-    if (!error) {
-        if (maskp) {
-            *maskp = CONST_CAST(struct nlattr *, reply.mask);
-            *mask_len = reply.mask_len;
-        }
-        if (actionsp) {
-            *actionsp = CONST_CAST(struct nlattr *, reply.actions);
-            *actions_len = reply.actions_len;
-        }
-        if (stats) {
-            dpif_linux_flow_get_stats(&reply, stats);
-        }
-    }
-    return error;
+    dpif_linux_init_flow_get(dpif, key, key_len, &request);
+    return dpif_linux_flow_transact(&request, reply, bufp);
 }
 
 static void
@@ -1217,7 +1198,7 @@ dpif_linux_flow_dump_thread_destroy(struct dpif_flow_dump_thread *thread_)
 
 static void
 dpif_linux_flow_to_dpif_flow(struct dpif_flow *dpif_flow,
-                             struct dpif_linux_flow *linux_flow)
+                             const struct dpif_linux_flow *linux_flow)
 {
     dpif_flow->key = linux_flow->key;
     dpif_flow->key_len = linux_flow->key_len;
@@ -1266,9 +1247,9 @@ dpif_linux_flow_dump_next(struct dpif_flow_dump_thread *thread_,
         } else {
             /* Rare case: the flow does not include actions.  Retrieve this
              * individual flow again to get the actions. */
-            error = dpif_linux_flow_get__(dpif, linux_flow.key,
-                                          linux_flow.key_len, &linux_flow,
-                                          &thread->nl_actions);
+            error = dpif_linux_flow_get(dpif, linux_flow.key,
+                                        linux_flow.key_len, &linux_flow,
+                                        &thread->nl_actions);
             if (error == ENOENT) {
                 VLOG_DBG("dumped flow disappeared on get");
                 continue;
@@ -1344,6 +1325,7 @@ dpif_linux_operate__(struct dpif_linux *dpif,
         struct dpif_flow_put *put;
         struct dpif_flow_del *del;
         struct dpif_execute *execute;
+        struct dpif_flow_get *get;
         struct dpif_linux_flow flow;
 
         ofpbuf_use_stub(&aux->request,
@@ -1380,6 +1362,13 @@ dpif_linux_operate__(struct dpif_linux *dpif,
                                       &aux->request);
             break;
 
+        case DPIF_OP_FLOW_GET:
+            get = &op->u.flow_get;
+            dpif_linux_init_flow_get(dpif, get->key, get->key_len, &flow);
+            aux->txn.reply = get->buffer;
+            dpif_linux_flow_to_ofpbuf(&flow, &aux->request);
+            break;
+
         default:
             OVS_NOT_REACHED();
         }
@@ -1396,6 +1385,7 @@ dpif_linux_operate__(struct dpif_linux *dpif,
         struct dpif_op *op = ops[i];
         struct dpif_flow_put *put;
         struct dpif_flow_del *del;
+        struct dpif_flow_get *get;
 
         op->error = txn->error;
 
@@ -1412,10 +1402,6 @@ dpif_linux_operate__(struct dpif_linux *dpif,
                         dpif_linux_flow_get_stats(&reply, put->stats);
                     }
                 }
-
-                if (op->error) {
-                    memset(put->stats, 0, sizeof *put->stats);
-                }
             }
             break;
 
@@ -1431,14 +1417,22 @@ dpif_linux_operate__(struct dpif_linux *dpif,
                         dpif_linux_flow_get_stats(&reply, del->stats);
                     }
                 }
-
-                if (op->error) {
-                    memset(del->stats, 0, sizeof *del->stats);
-                }
             }
             break;
 
         case DPIF_OP_EXECUTE:
+            break;
+
+        case DPIF_OP_FLOW_GET:
+            get = &op->u.flow_get;
+            if (!op->error) {
+                struct dpif_linux_flow reply;
+
+                op->error = dpif_linux_flow_from_ofpbuf(&reply, txn->reply);
+                if (!op->error) {
+                    dpif_linux_flow_to_dpif_flow(get->flow, &reply);
+                }
+            }
             break;
 
         default:
@@ -1867,7 +1861,6 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_port_dump_done,
     dpif_linux_port_poll,
     dpif_linux_port_poll_wait,
-    dpif_linux_flow_get,
     dpif_linux_flow_flush,
     dpif_linux_flow_dump_create,
     dpif_linux_flow_dump_destroy,

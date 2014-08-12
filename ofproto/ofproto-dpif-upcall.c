@@ -1523,15 +1523,17 @@ handle_missed_revalidation(struct revalidator *revalidator,
 {
     struct udpif *udpif = revalidator->udpif;
     struct dpif_flow flow;
-    struct ofpbuf *buf;
+    struct ofpbuf buf;
+    uint64_t stub[DPIF_FLOW_BUFSIZE / 8];
     bool keep = false;
 
     COVERAGE_INC(revalidate_missed_dp_flow);
 
+    ofpbuf_use_stub(&buf, &stub, sizeof stub);
     if (!dpif_flow_get(udpif->dpif, ukey->key, ukey->key_len, &buf, &flow)) {
         keep = revalidate_ukey(udpif, ukey, &flow);
-        ofpbuf_delete(buf);
     }
+    ofpbuf_uninit(&buf);
 
     return keep;
 }

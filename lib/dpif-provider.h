@@ -239,37 +239,6 @@ struct dpif_class {
      * value other than EAGAIN. */
     void (*port_poll_wait)(const struct dpif *dpif);
 
-    /* Queries 'dpif' for a flow entry.  The flow is specified by the Netlink
-     * attributes with types OVS_KEY_ATTR_* in the 'key_len' bytes starting at
-     * 'key'.
-     *
-     * Returns 0 if successful.  If no flow matches, returns ENOENT.  On other
-     * failure, returns a positive errno value.
-     *
-     * On success, '*bufp' will be set to an ofpbuf owned by the caller that
-     * contains the response for 'maskp' and/or 'actionsp'. The caller must
-     * supply a valid pointer, and must free the ofpbuf (with ofpbuf_delete())
-     * when it is no longer needed.
-     *
-     * If 'maskp' is nonnull, then on success '*maskp' will point to the
-     * Netlink attributes for the flow's mask. '*mask_len' will be set to the
-     * length of the mask attributes. Implementations may opt to point 'maskp'
-     * at RCU-protected data rather than making a copy in '*bufp'.
-     *
-     * If 'actionsp' is nonnull, then on success '*actionsp' will point to the
-     * Netlink attributes for the flow's actions. '*actions_len' will be set to
-     * the length of the actions attributes. Implementations may opt to point
-     * 'actionsp' at RCU-protected data rather than making a copy in '*bufp'.
-     *
-     * If 'stats' is nonnull, then on success it must be updated with the
-     * flow's statistics. */
-    int (*flow_get)(const struct dpif *dpif,
-                    const struct nlattr *key, size_t key_len,
-                    struct ofpbuf **bufp,
-                    struct nlattr **maskp, size_t *mask_len,
-                    struct nlattr **actionsp, size_t *acts_len,
-                    struct dpif_flow_stats *stats);
-
     /* Deletes all flows from 'dpif' and clears all of its queues of received
      * packets. */
     int (*flow_flush)(struct dpif *dpif);

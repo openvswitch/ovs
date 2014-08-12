@@ -98,6 +98,8 @@ static void log_flow_del_message(struct dpif *, const struct dpif_flow_del *,
                                  int error);
 static void log_execute_message(struct dpif *, const struct dpif_execute *,
                                 bool subexecute, int error);
+static void log_flow_get_message(const struct dpif *,
+                                 const struct dpif_flow_get *, int error);
 
 static void
 dp_initialize(void)
@@ -829,59 +831,27 @@ dpif_flow_flush(struct dpif *dpif)
     return error;
 }
 
-/* Queries 'dpif' for a flow entry.  The flow is specified by the Netlink
- * attributes with types OVS_KEY_ATTR_* in the 'key_len' bytes starting at
- * 'key'.
- *
- * Returns 0 if successful.  If no flow matches, returns ENOENT.  On other
- * failure, returns a positive errno value.
- *
- * On success, '*bufp' will be set to an ofpbuf owned by the caller that
- * contains the response for 'flow->mask' and 'flow->actions'. The caller must
- * supply a valid pointer, and must free the ofpbuf (with ofpbuf_delete()) when
- * it is no longer needed.
- *
- * On success, 'flow' will be populated with the mask, actions and stats for
- * the datapath flow corresponding to 'key'. The mask and actions will point
- * within '*bufp'.
- *
- * Implementations may opt to point 'flow->mask' and/or 'flow->actions' at
- * RCU-protected data rather than making a copy of them. Therefore, callers
- * that wish to hold these over quiescent periods must make a copy of these
- * fields before quiescing. */
+/* A dpif_operate() wrapper for performing a single DPIF_OP_FLOW_GET. */
 int
-dpif_flow_get(const struct dpif *dpif,
+dpif_flow_get(struct dpif *dpif,
               const struct nlattr *key, size_t key_len,
-              struct ofpbuf **bufp, struct dpif_flow *flow)
+              struct ofpbuf *buf, struct dpif_flow *flow)
 {
-    int error;
-    struct nlattr *mask, *actions;
-    size_t mask_len, actions_len;
-    struct dpif_flow_stats stats;
+    struct dpif_op *opp;
+    struct dpif_op op;
 
-    COVERAGE_INC(dpif_flow_get);
+    op.type = DPIF_OP_FLOW_GET;
+    op.u.flow_get.key = key;
+    op.u.flow_get.key_len = key_len;
+    op.u.flow_get.buffer = buf;
+    op.u.flow_get.flow = flow;
+    op.u.flow_get.flow->key = key;
+    op.u.flow_get.flow->key_len = key_len;
 
-    *bufp = NULL;
-    error = dpif->dpif_class->flow_get(dpif, key, key_len, bufp,
-                                       &mask, &mask_len,
-                                       &actions, &actions_len, &stats);
-    if (error) {
-        memset(flow, 0, sizeof *flow);
-        ofpbuf_delete(*bufp);
-        *bufp = NULL;
-    } else {
-        flow->mask = mask;
-        flow->mask_len = mask_len;
-        flow->actions = actions;
-        flow->actions_len = actions_len;
-        flow->stats = stats;
-    }
-    if (should_log_flow_message(error)) {
-        log_flow_message(dpif, error, "flow_get", key, key_len,
-                         NULL, 0, &flow->stats,
-                         flow->actions, flow->actions_len);
-    }
-    return error;
+    opp = &op;
+    dpif_operate(dpif, &opp, 1);
+
+    return op.error;
 }
 
 /* A dpif_operate() wrapper for performing a single DPIF_OP_FLOW_PUT. */
@@ -1173,6 +1143,18 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
                     log_flow_put_message(dpif, put, error);
                     if (error && put->stats) {
                         memset(put->stats, 0, sizeof *put->stats);
+                    }
+                    break;
+                }
+
+                case DPIF_OP_FLOW_GET: {
+                    struct dpif_flow_get *get = &op->u.flow_get;
+
+                    COVERAGE_INC(dpif_flow_get);
+                    log_flow_get_message(dpif, get, error);
+
+                    if (error) {
+                        memset(get->flow, 0, sizeof *get->flow);
                     }
                     break;
                 }
@@ -1572,5 +1554,18 @@ log_execute_message(struct dpif *dpif, const struct dpif_execute *execute,
         vlog(THIS_MODULE, error ? VLL_WARN : VLL_DBG, "%s", ds_cstr(&ds));
         ds_destroy(&ds);
         free(packet);
+    }
+}
+
+static void
+log_flow_get_message(const struct dpif *dpif, const struct dpif_flow_get *get,
+                     int error)
+{
+    if (should_log_flow_message(error)) {
+        log_flow_message(dpif, error, "flow_get",
+                         get->key, get->key_len,
+                         get->flow->mask, get->flow->mask_len,
+                         &get->flow->stats,
+                         get->flow->actions, get->flow->actions_len);
     }
 }
