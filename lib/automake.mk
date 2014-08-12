@@ -438,6 +438,7 @@ lib/ofp-actions.inc1: $(srcdir)/build-aux/extract-ofp-actions lib/ofp-actions.c
 lib/ofp-actions.inc2: $(srcdir)/build-aux/extract-ofp-actions lib/ofp-actions.c
 	$(run_python) $^ --definitions > $@.tmp && mv $@.tmp $@
 lib/ofp-actions.lo: lib/ofp-actions.inc1 lib/ofp-actions.inc2
+CLEANFILES += lib/ofp-actions.inc1 lib/ofp-actions.inc2
 EXTRA_DIST += build-aux/extract-ofp-actions lib/ofp-errors.inc
 
 $(srcdir)/lib/ofp-errors.inc: \
