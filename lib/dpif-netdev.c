@@ -219,15 +219,13 @@ struct netdev_flow_key {
  * Rules
  * -----
  *
- * A flow 'flow' may be accessed without a risk of being freed by code that
- * holds a read-lock or write-lock on 'cls->rwlock' or that owns a reference to
- * 'flow->ref_cnt' (or both).  Code that needs to hold onto a flow for a while
- * should take 'cls->rwlock', find the flow it needs, increment 'flow->ref_cnt'
- * with dpif_netdev_flow_ref(), and drop 'cls->rwlock'.
+ * A flow 'flow' may be accessed without a risk of being freed during an RCU
+ * grace period.  Code that needs to hold onto a flow for a while
+ * should try incrementing 'flow->ref_cnt' with dp_netdev_flow_ref().
  *
  * 'flow->ref_cnt' protects 'flow' from being freed.  It doesn't protect the
- * flow from being deleted from 'cls' (that's 'cls->rwlock') and it doesn't
- * protect members of 'flow' from modification.
+ * flow from being deleted from 'cls' and it doesn't protect members of 'flow'
+ * from modification.
  *
  * Some members, marked 'const', are immutable.  Accessing other members
  * requires synchronization, as noted in more detail below.
@@ -240,6 +238,12 @@ struct dp_netdev_flow {
     const struct cmap_node node; /* In owning dp_netdev's 'flow_table'. */
     const struct flow flow;      /* The flow that created this entry. */
 
+    /* Number of references.
+     * The classifier owns one reference.
+     * Any thread trying to keep a rule from being freed should hold its own
+     * reference. */
+    struct ovs_refcount ref_cnt;
+
     /* Statistics.
      *
      * Reading or writing these members requires 'mutex'. */
@@ -249,7 +253,7 @@ struct dp_netdev_flow {
     OVSRCU_TYPE(struct dp_netdev_actions *) actions;
 };
 
-static void dp_netdev_flow_free(struct dp_netdev_flow *);
+static void dp_netdev_flow_unref(struct dp_netdev_flow *);
 
 /* Contained by struct dp_netdev_flow's 'stats' member.  */
 struct dp_netdev_flow_stats {
@@ -907,6 +911,13 @@ dp_netdev_flow_free(struct dp_netdev_flow *flow)
     free(flow);
 }
 
+static void dp_netdev_flow_unref(struct dp_netdev_flow *flow)
+{
+    if (ovs_refcount_unref_relaxed(&flow->ref_cnt) == 1) {
+        ovsrcu_postpone(dp_netdev_flow_free, flow);
+    }
+}
+
 static void
 dp_netdev_remove_flow(struct dp_netdev *dp, struct dp_netdev_flow *flow)
     OVS_REQUIRES(dp->flow_mutex)
@@ -916,7 +927,8 @@ dp_netdev_remove_flow(struct dp_netdev *dp, struct dp_netdev_flow *flow)
 
     classifier_remove(&dp->cls, cr);
     cmap_remove(&dp->flow_table, node, flow_hash(&flow->flow, 0));
-    ovsrcu_postpone(dp_netdev_flow_free, flow);
+
+    dp_netdev_flow_unref(flow);
 }
 
 static void
@@ -1218,6 +1230,8 @@ dp_netdev_flow_add(struct dp_netdev *dp, struct match *match,
 
     netdev_flow = xzalloc(sizeof *netdev_flow);
     *CONST_CAST(struct flow *, &netdev_flow->flow) = match->flow;
+
+    ovs_refcount_init(&netdev_flow->ref_cnt);
 
     ovsthread_stats_init(&netdev_flow->stats);
 
