@@ -157,16 +157,20 @@ enum {
  *       code to translate the ofpact to OpenFlow must tolerate this case.)
  */
 struct ofpact {
+    /* We want the space advantage of an 8-bit type here on every
+     * implementation, without giving up the advantage of having a useful type
+     * on implementations that support packed enums. */
+#ifdef HAVE_PACKED_ENUM
     enum ofpact_type type;      /* OFPACT_*. */
+#else
+    uint8_t type;               /* OFPACT_* */
+#endif
+
     uint8_t raw;                /* Original type when added, if any. */
     uint16_t len;               /* Length of the action, in bytes, including
                                  * struct ofpact, excluding padding. */
 };
-
-#ifdef __GNUC__
-/* Make sure that OVS_PACKED_ENUM really worked. */
 BUILD_ASSERT_DECL(sizeof(struct ofpact) == 4);
-#endif
 
 /* Alignment. */
 #define OFPACT_ALIGNTO 8

@@ -169,6 +169,7 @@
  * or otherwise exposed outside of a single process. */
 #if __GNUC__ && !__CHECKER__
 #define OVS_PACKED_ENUM __attribute__((__packed__))
+#define HAVE_PACKED_ENUM
 #else
 #define OVS_PACKED_ENUM
 #endif
