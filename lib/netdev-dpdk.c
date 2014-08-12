@@ -621,9 +621,20 @@ static inline void
 dpdk_queue_flush__(struct netdev_dpdk *dev, int qid)
 {
     struct dpdk_tx_queue *txq = &dev->tx_q[qid];
-    uint32_t nb_tx;
+    uint32_t nb_tx = 0;
 
-    nb_tx = rte_eth_tx_burst(dev->port_id, qid, txq->burst_pkts, txq->count);
+    while (nb_tx != txq->count) {
+        uint32_t ret;
+
+        ret = rte_eth_tx_burst(dev->port_id, qid, txq->burst_pkts + nb_tx,
+                               txq->count - nb_tx);
+        if (!ret) {
+            break;
+        }
+
+        nb_tx += ret;
+    }
+
     if (OVS_UNLIKELY(nb_tx != txq->count)) {
         /* free buffers, which we couldn't transmit, one at a time (each
          * packet could come from a different mempool) */
@@ -632,7 +643,11 @@ dpdk_queue_flush__(struct netdev_dpdk *dev, int qid)
         for (i = nb_tx; i < txq->count; i++) {
             rte_pktmbuf_free_seg(txq->burst_pkts[i]);
         }
+        ovs_mutex_lock(&dev->mutex);
+        dev->stats.tx_dropped += txq->count-nb_tx;
+        ovs_mutex_unlock(&dev->mutex);
     }
+
     txq->count = 0;
     txq->tsc = rte_get_timer_cycles();
 }
