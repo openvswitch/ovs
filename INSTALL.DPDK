@@ -14,15 +14,15 @@ and "make".
 Building and Installing:
 ------------------------
 
-Recommended to use DPDK 1.6.
+Required DPDK 1.7.
 
 DPDK:
-Set dir i.g.:   export DPDK_DIR=/usr/src/dpdk-1.6.0r2
+Set dir i.g.:   export DPDK_DIR=/usr/src/dpdk-1.7.0
 cd $DPDK_DIR
-update config/defconfig_x86_64-default-linuxapp-gcc so that dpdk generate single lib file.
+update config/common_linuxapp so that dpdk generate single lib file.
 CONFIG_RTE_BUILD_COMBINE_LIBS=y
 
-make install T=x86_64-default-linuxapp-gcc
+make install T=x86_64-native-linuxapp-gcc
 For details refer to  http://dpdk.org/
 
 Linux kernel:
@@ -32,7 +32,7 @@ DPDK kernel requirement.
 OVS:
 cd $(OVS_DIR)/openvswitch
 ./boot.sh
-export DPDK_BUILD=/usr/src/dpdk-1.6.0r2/x86_64-default-linuxapp-gcc
+export DPDK_BUILD=$DPDK_DIR/x86_64-native-linuxapp-gcc/
 ./configure --with-dpdk=$DPDK_BUILD
 make
 
@@ -49,9 +49,9 @@ First setup DPDK devices:
   - insert uio.ko
     e.g. modprobe uio
   - insert igb_uio.ko
-    e.g. insmod DPDK/x86_64-default-linuxapp-gcc/kmod/igb_uio.ko
-  - Bind network device to ibg_uio.
-    e.g. DPDK/tools/pci_unbind.py --bind=igb_uio eth1
+    e.g. insmod $DPDK_BUILD/kmod/igb_uio.ko
+  - Bind network device to igb_uio.
+    e.g. $DPDK_DIR/tools/dpdk_nic_bind.py --bind=igb_uio eth1
     Alternate binding method:
      Find target Ethernet devices
       lspci -nn|grep Ethernet

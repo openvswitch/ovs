@@ -72,7 +72,7 @@ get_rx_queue_name(unsigned id)
      */
     static char buffer[sizeof(MP_CLIENT_RXQ_NAME) + 2];
 
-    rte_snprintf(buffer, sizeof(buffer) - 1, MP_CLIENT_RXQ_NAME, id);
+    snprintf(buffer, sizeof(buffer) - 1, MP_CLIENT_RXQ_NAME, id);
     return buffer;
 }
 
@@ -87,7 +87,7 @@ get_tx_queue_name(unsigned id)
      */
     static char buffer[sizeof(MP_CLIENT_TXQ_NAME) + 2];
 
-    rte_snprintf(buffer, sizeof(buffer) - 1, MP_CLIENT_TXQ_NAME, id);
+    snprintf(buffer, sizeof(buffer) - 1, MP_CLIENT_TXQ_NAME, id);
     return buffer;
 }
 

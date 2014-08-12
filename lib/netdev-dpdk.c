@@ -1199,12 +1199,6 @@ dpdk_class_init(void)
 {
     int result;
 
-    result = rte_pmd_init_all();
-    if (result) {
-        VLOG_ERR("Cannot init PMD");
-        return -result;
-    }
-
     result = rte_eal_pci_probe();
     if (result) {
         VLOG_ERR("Cannot probe PCI");
@@ -1253,7 +1247,9 @@ dpdk_ring_create(const char dev_name[], unsigned int port_no,
         return ENOMEM;
     }
 
-    err = rte_eth_from_rings(&ivshmem->cring_rx, 1, &ivshmem->cring_tx, 1, SOCKET0);
+    err = rte_eth_from_rings(dev_name, &ivshmem->cring_rx, 1,
+                             &ivshmem->cring_tx, 1, SOCKET0);
+
     if (err < 0) {
         rte_free(ivshmem);
         return ENODEV;
@@ -1400,7 +1396,7 @@ dpdk_init(int argc, char **argv)
         ovs_abort(result, "Cannot init EAL\n");
     }
 
-    rte_memzone_dump();
+    rte_memzone_dump(stdout);
     rte_eal_init_ret = 0;
 
     if (argc > result) {
