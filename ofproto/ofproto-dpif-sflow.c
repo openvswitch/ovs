@@ -265,7 +265,7 @@ sflow_agent_get_counters(void *ds_, SFLPoller *poller,
     if((ifName = netdev_get_name(dsp->ofport->netdev)) != NULL) {
 	memset(&name_elem, 0, sizeof name_elem);
 	name_elem.tag = SFLCOUNTERS_PORTNAME;
-	name_elem.counterBlock.portName.portName.str = ifName;
+	name_elem.counterBlock.portName.portName.str = (char *)ifName;
 	name_elem.counterBlock.portName.portName.len = strlen(ifName);
 	SFLADD_ELEMENT(cs, &name_elem);
     }
