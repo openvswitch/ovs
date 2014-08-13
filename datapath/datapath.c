@@ -293,7 +293,7 @@ void ovs_dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 	OVS_CB(skb)->input_vport = p;
 
 	/* Extract flow from 'skb' into 'key'. */
-	error = ovs_flow_extract(skb, p->port_no, &key);
+	error = ovs_flow_key_extract(skb, &key);
 	if (unlikely(error)) {
 		kfree_skb(skb);
 		return;
@@ -570,13 +570,11 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	if (IS_ERR(flow))
 		goto err_kfree_skb;
 
-	err = ovs_flow_extract(packet, -1, &flow->key);
+	err = ovs_flow_key_extract_userspace(a[OVS_PACKET_ATTR_KEY], packet,
+					     &flow->key);
 	if (err)
 		goto err_flow_free;
 
-	err = ovs_nla_get_flow_metadata(flow, a[OVS_PACKET_ATTR_KEY]);
-	if (err)
-		goto err_flow_free;
 	acts = ovs_nla_alloc_flow_actions(nla_len(a[OVS_PACKET_ATTR_ACTIONS]));
 	err = PTR_ERR(acts);
 	if (IS_ERR(acts))
