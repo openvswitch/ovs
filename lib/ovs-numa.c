@@ -107,7 +107,7 @@ discover_sockets_and_cores(void)
                     n_cpus++;
                 }
             }
-            VLOG_INFO("Discovered %"PRIu64" CPU cores on CPU socket %d",
+            VLOG_INFO("Discovered %"PRIuSIZE" CPU cores on CPU socket %d",
                       list_size(&s->cores), s->socket_id);
             free(path);
             closedir(dir);
@@ -121,7 +121,7 @@ discover_sockets_and_cores(void)
         }
     }
 
-    VLOG_INFO("Discovered %"PRIu64" CPU Sockets and %d CPU cores",
+    VLOG_INFO("Discovered %"PRIuSIZE" CPU Sockets and %d CPU cores",
                hmap_count(&all_cpu_sockets), n_cpus);
     if (hmap_count(&all_cpu_sockets) && hmap_count(&all_cpu_cores)) {
         found_sockets_and_cores = true;
