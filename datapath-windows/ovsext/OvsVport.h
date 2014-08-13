@@ -161,6 +161,13 @@ OvsIsTunnelVportNo(UINT32 portNo)
     return (idx >= OVS_TUNNEL_INDEX_START && idx <= OVS_TUNNEL_INDEX_END);
 }
 
+static __inline BOOLEAN
+OvsIsVifVportNo(UINT32 portNo)
+{
+    UINT32 idx = OVS_VPORT_INDEX(portNo);
+    return (idx >= OVS_VM_VPORT_START && idx <= OVS_VM_VPORT_MAX);
+}
+
 static __inline POVS_VPORT_ENTRY
 OvsGetTunnelVport(OVS_VPORT_TYPE type)
 {

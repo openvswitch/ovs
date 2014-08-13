@@ -224,14 +224,18 @@ OvsDetectTunnelRxPkt(OvsForwardingContext *ovsFwdCtx,
 /*
  * --------------------------------------------------------------------------
  * OvsDetectTunnelPkt --
- *     Utility function to detect the tunnel type of a TX/RX packet.
+ *     Utility function to detect if a packet is to be subjected to
+ *     tunneling (Tx) or de-tunneling (Rx). Various factors such as source
+ *     port, destination port, packet contents, and previously setup tunnel
+ *     context are used.
  *
  * Result:
- *  True  - if the tunnel type was detected.
- *  False - if not a tunnel packet or tunnel type not supported.
- *
- *  if result==True, the forwarding context gets initialized with the
- *  right tunnel vport.
+ *  True  - If the packet is to be subjected to tunneling.
+ *          In case of invalid tunnel context, the tunneling functionality is
+ *          a no-op and is completed within this function itself by consuming
+ *          all of the tunneling context.
+ *  False - If not a tunnel packet or tunnel type not supported. Caller should
+ *          process the packet as a non-tunnel packet.
  * --------------------------------------------------------------------------
  */
 static __inline BOOLEAN
@@ -239,16 +243,17 @@ OvsDetectTunnelPkt(OvsForwardingContext *ovsFwdCtx,
                    const POVS_VPORT_ENTRY dstVport,
                    const OvsFlowKey *flowKey)
 {
-    /*
-     * The source of NBL during tunneling Rx could be the external port or if
-     * it being executed from userspace, the source port is default port.
-     */
-
     if (OvsIsInternalVportType(dstVport->ovsType)) {
+        /*
+         * Rx:
+         * The source of NBL during tunneling Rx could be the external
+         * port or if it is being executed from userspace, the source port is
+         * default port.
+         */
         BOOLEAN validSrcPort = (ovsFwdCtx->fwdDetail->SourcePortId ==
-                            ovsFwdCtx->switchContext->externalPortId)
-                || (ovsFwdCtx->fwdDetail->SourcePortId ==
-                            NDIS_SWITCH_DEFAULT_PORT_ID);
+                                ovsFwdCtx->switchContext->externalPortId) ||
+                               (ovsFwdCtx->fwdDetail->SourcePortId ==
+                                NDIS_SWITCH_DEFAULT_PORT_ID);
 
         if (validSrcPort && OvsDetectTunnelRxPkt(ovsFwdCtx, flowKey)) {
             ASSERT(ovsFwdCtx->tunnelTxNic == NULL);
@@ -258,9 +263,27 @@ OvsDetectTunnelPkt(OvsForwardingContext *ovsFwdCtx,
     } else if (OvsIsTunnelVportType(dstVport->ovsType)) {
         ASSERT(ovsFwdCtx->tunnelTxNic == NULL);
         ASSERT(ovsFwdCtx->tunnelRxNic == NULL);
-        ASSERT(ovsFwdCtx->tunKey.dst != 0);
-        ovsActionStats.txVxlan++;
-        ovsFwdCtx->tunnelTxNic = dstVport;
+
+        /*
+         * Tx:
+         * The destination port is a tunnel port. Encapsulation must be
+         * performed only on packets that originate from a VIF port or from
+         * userspace (default port)
+         *
+         * If the packet will not be encapsulated, consume the tunnel context
+         * by clearing it.
+         */
+        if (ovsFwdCtx->srcVportNo != 0 &&
+            !OvsIsVifVportNo(ovsFwdCtx->srcVportNo)) {
+            ovsFwdCtx->tunKey.dst = 0;
+        }
+
+        /* Tunnel the packet only if tunnel context is set. */
+        if (ovsFwdCtx->tunKey.dst != 0) {
+            ovsActionStats.txVxlan++;
+            ovsFwdCtx->tunnelTxNic = dstVport;
+        }
+
         return TRUE;
     }
 
@@ -318,7 +341,6 @@ OvsAddPorts(OvsForwardingContext *ovsFwdCtx,
         NET_BUFFER_DATA_LENGTH(NET_BUFFER_LIST_FIRST_NB(ovsFwdCtx->curNbl));
 
     if (OvsDetectTunnelPkt(ovsFwdCtx, vport, flowKey)) {
-        ASSERT(ovsFwdCtx->tunnelTxNic || ovsFwdCtx->tunnelRxNic);
         return NDIS_STATUS_SUCCESS;
     }
 

@@ -314,6 +314,7 @@ OvsExecuteDpIoctl(PVOID inputBuffer,
     PNDIS_SWITCH_FORWARDING_DETAIL_NET_BUFFER_LIST_INFO fwdDetail;
     OvsFlowKey key;
     OVS_PACKET_HDR_INFO layers;
+    POVS_VPORT_ENTRY vport;
 
     if (inputLength < sizeof(*execute) || outputLength != 0) {
         return STATUS_INFO_LENGTH_MISMATCH;
@@ -351,8 +352,14 @@ OvsExecuteDpIoctl(PVOID inputBuffer,
     }
 
     fwdDetail = NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(pNbl);
-    fwdDetail->SourcePortId = NDIS_SWITCH_DEFAULT_PORT_ID;
-    fwdDetail->SourceNicIndex = 0;
+    vport = OvsFindVportByPortNo(gOvsSwitchContext, execute->inPort);
+    if (vport) {
+        fwdDetail->SourcePortId = vport->portId;
+        fwdDetail->SourceNicIndex = vport->nicIndex;
+    } else {
+        fwdDetail->SourcePortId = NDIS_SWITCH_DEFAULT_PORT_ID;
+        fwdDetail->SourceNicIndex = 0;
+    }
     // XXX: Figure out if any of the other members of fwdDetail need to be set.
 
     ndisStatus = OvsExtractFlow(pNbl, fwdDetail->SourcePortId, &key, &layers,
@@ -362,10 +369,10 @@ OvsExecuteDpIoctl(PVOID inputBuffer,
         NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock, &lockState,
                               NDIS_RWL_AT_DISPATCH_LEVEL);
         ndisStatus = OvsActionsExecute(gOvsSwitchContext, NULL, pNbl,
-                                     0, // XXX: we are passing 0 for srcVportNo
-                                     NDIS_SEND_FLAGS_SWITCH_DESTINATION_GROUP,
-                                     &key, NULL, &layers, actions,
-                                     execute->actionsLen);
+                                       vport ? vport->portNo : 0,
+                                       NDIS_SEND_FLAGS_SWITCH_DESTINATION_GROUP,
+                                       &key, NULL, &layers, actions,
+                                       execute->actionsLen);
         pNbl = NULL;
         NdisReleaseRWLock(gOvsSwitchContext->dispatchLock, &lockState);
     }
