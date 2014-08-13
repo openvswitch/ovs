@@ -67,6 +67,11 @@ static inline void ovs_flow_tun_key_init(struct ovs_key_ipv4_tunnel *tun_key,
 	       sizeof(*tun_key) - OVS_TUNNEL_KEY_SIZE);
 }
 
+#define OVS_SW_FLOW_KEY_METADATA_SIZE			\
+	(offsetof(struct sw_flow_key, recirc_id) +	\
+	FIELD_SIZEOF(struct sw_flow_key, recirc_id))
+
+
 struct sw_flow_key {
 	struct ovs_key_ipv4_tunnel tun_key;  /* Encapsulating tunnel key. */
 	struct {
@@ -195,5 +200,9 @@ int ovs_flow_key_extract(struct sk_buff *skb, struct sw_flow_key *key);
 int ovs_flow_key_extract_userspace(const struct nlattr *attr,
 				   struct sk_buff *skb,
 				   struct sw_flow_key *key);
+int ovs_flow_key_extract_recirc(u32 recirc_id,
+				const struct sw_flow_key *key,
+				struct sk_buff *skb,
+				struct sw_flow_key *new_key);
 
 #endif /* flow.h */

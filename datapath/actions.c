@@ -554,17 +554,15 @@ static int execute_recirc(struct datapath *dp, struct sk_buff *skb,
 				 const struct nlattr *a)
 {
 	struct sw_flow_key recirc_key;
-	uint32_t hash = OVS_CB(skb)->pkt_key->ovs_flow_hash;
 	int err;
 
-	err = ovs_flow_key_extract(skb, &recirc_key);
+	err = ovs_flow_key_extract_recirc(nla_get_u32(a), OVS_CB(skb)->pkt_key,
+					  skb, &recirc_key);
 	if (err) {
 		kfree_skb(skb);
 		return err;
 	}
 
-	recirc_key.ovs_flow_hash = hash;
-	recirc_key.recirc_id = nla_get_u32(a);
 
 	ovs_dp_process_packet_with_key(skb, &recirc_key, true);
 
