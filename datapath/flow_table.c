@@ -555,6 +555,9 @@ static struct sw_flow *masked_flow_lookup(struct table_instance *ti,
 	return NULL;
 }
 
+/* Flow lookup does full lookup on flow table. It starts with
+ * mask from index passed in *index.
+ */
 static struct sw_flow *flow_lookup(struct flow_table *tbl,
 				   struct table_instance *ti,
 				   struct mask_array *ma,
@@ -562,15 +565,27 @@ static struct sw_flow *flow_lookup(struct flow_table *tbl,
 				   u32 *n_mask_hit,
 				   u32 *index)
 {
+	struct sw_flow_mask *mask;
 	struct sw_flow *flow;
 	int i;
 
-	for (i = 0; i < ma->max; i++) {
-		struct sw_flow_mask *mask;
+	if (*index < ma->max) {
+		mask = rcu_dereference_ovsl(ma->masks[*index]);
+		if (mask) {
+			flow = masked_flow_lookup(ti, key, mask, n_mask_hit);
+			if (flow)
+				return flow;
+		}
+	}
+
+	for (i = 0; i < ma->max; i++)  {
+
+		if (i == *index)
+			continue;
 
 		mask = rcu_dereference_ovsl(ma->masks[i]);
 		if (!mask)
-			break;
+			return NULL;
 
 		flow = masked_flow_lookup(ti, key, mask, n_mask_hit);
 		if (flow) { /* Found */
@@ -603,7 +618,7 @@ struct sw_flow *ovs_flow_tbl_lookup_stats(struct flow_table *tbl,
 
 	*n_mask_hit = 0;
 	if (unlikely(!skb_hash)) {
-		u32 __always_unused mask_index;
+		u32 mask_index = 0;
 
 		return flow_lookup(tbl, ti, ma, key, n_mask_hit, &mask_index);
 	}
@@ -618,24 +633,11 @@ struct sw_flow *ovs_flow_tbl_lookup_stats(struct flow_table *tbl,
 
 		e = &entries[index];
 		if (e->skb_hash == skb_hash) {
-			struct sw_flow_mask *cache;
-			int i = e->mask_index;
-
-			if (likely(i < ma->max)) {
-				cache = rcu_dereference(ma->masks[i]);
-				if (cache) {
-					flow = masked_flow_lookup(ti, key,
-							cache, n_mask_hit);
-					if (flow)
-						return flow;
-				}
-			}
-
-			/* Cache miss. This is the best cache
-			 * replacement candidate.  */
-			e->skb_hash = 0;
-			ce = e;
-			break;
+			flow = flow_lookup(tbl, ti, ma, key, n_mask_hit,
+					   &e->mask_index);
+			if (!flow)
+				e->skb_hash = 0;
+			return flow;
 		}
 
 		if (!ce || e->skb_hash < ce->skb_hash)
@@ -658,7 +660,7 @@ struct sw_flow *ovs_flow_tbl_lookup(struct flow_table *tbl,
 	struct table_instance *ti = rcu_dereference_ovsl(tbl->ti);
 	struct mask_array *ma = rcu_dereference_ovsl(tbl->mask_array);
 	u32 __always_unused n_mask_hit;
-	u32 __always_unused index;
+	u32 index = 0;
 
 	return flow_lookup(tbl, ti, ma, key, &n_mask_hit, &index);
 }
