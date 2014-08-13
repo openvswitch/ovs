@@ -9,6 +9,8 @@ noinst_HEADERS += \
 	include/windows/arpa/inet.h \
 	include/windows/dirent.h \
 	include/windows/getopt.h \
+	include/windows/linux/pkt_sched.h \
+	include/windows/linux/types.h \
 	include/windows/net/if.h \
 	include/windows/netdb.h \
 	include/windows/netpacket/packet.h \
@@ -21,6 +23,7 @@ noinst_HEADERS += \
 	include/windows/poll.h \
 	include/windows/strings.h \
 	include/windows/syslog.h \
+	include/windows/sys/epoll.h \
 	include/windows/sys/ioctl.h \
 	include/windows/sys/resource.h \
 	include/windows/sys/socket.h \
