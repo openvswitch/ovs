@@ -141,8 +141,10 @@ struct vport *ovs_vport_alloc(int priv_size, const struct vport_ops *ops,
 	vport->ops = ops;
 	INIT_HLIST_NODE(&vport->dp_hash_node);
 
-	if (ovs_vport_set_upcall_portids(vport, parms->upcall_portids))
+	if (ovs_vport_set_upcall_portids(vport, parms->upcall_portids)) {
+		kfree(vport);
 		return ERR_PTR(-EINVAL);
+	}
 
 	vport->percpu_stats = alloc_percpu(struct pcpu_sw_netstats);
 	if (!vport->percpu_stats) {
