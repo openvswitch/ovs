@@ -1,8 +1,10 @@
 openvswitch (2.1.3-1) unstable; urgency=low
    [ Open vSwitch team ]
-   - Nothing yet!
+   * New upstream version
+   - Compatibility with autoconf 2.63 (previously >=2.64)
+   - Bug fixes.
 
- -- Open vSwitch team <dev@openvswitch.org>  Thu, 01 May 2014 14:50:27 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Thu, 14 Aug 2014 10:52:37 -0700
 
 openvswitch (2.1.2-1) unstable; urgency=low
    [ Open vSwitch team ]
