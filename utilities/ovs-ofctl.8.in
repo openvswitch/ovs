@@ -1605,6 +1605,8 @@ the action set, the one written later replaces the earlier action:
 .IP 5.
 \fBload\fR
 .IQ
+\fBmove\fR
+.IQ
 \fBmod_dl_dst\fR
 .IQ
 \fBmod_dl_src\fR
@@ -1634,9 +1636,10 @@ the action set, the one written later replaces the earlier action:
 \fBset_tunnel64\fR
 .IQ
 The action set can contain any number of these actions, with
-cumulative effect.  That is, when multiple actions modify the same
-part of a field, the later modification takes effect, and when they
-modify different parts of a field (or different fields), then both
+cumulative effect. They will be applied in the order as added.
+That is, when multiple actions modify the same part of a field,
+the later modification takes effect, and when they modify
+different parts of a field (or different fields), then both
 modifications are applied.
 .
 .IP 6.

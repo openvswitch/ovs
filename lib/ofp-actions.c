@@ -4276,13 +4276,15 @@ ofpacts_pull_openflow_actions(struct ofpbuf *openflow,
 
 /* True if an action sets the value of a field
  * in a way that is compatibile with the action set.
+ * The field can be set via either a set or a move action.
  * False otherwise. */
 static bool
-ofpact_is_set_action(const struct ofpact *a)
+ofpact_is_set_or_move_action(const struct ofpact *a)
 {
     switch (a->type) {
     case OFPACT_SET_FIELD:
     case OFPACT_REG_LOAD:
+    case OFPACT_REG_MOVE:
     case OFPACT_SET_ETH_DST:
     case OFPACT_SET_ETH_SRC:
     case OFPACT_SET_IP_DSCP:
@@ -4320,7 +4322,6 @@ ofpact_is_set_action(const struct ofpact *a)
     case OFPACT_POP_QUEUE:
     case OFPACT_PUSH_MPLS:
     case OFPACT_PUSH_VLAN:
-    case OFPACT_REG_MOVE:
     case OFPACT_RESUBMIT:
     case OFPACT_SAMPLE:
     case OFPACT_STACK_POP:
@@ -4348,6 +4349,7 @@ ofpact_is_allowed_in_actions_set(const struct ofpact *a)
     case OFPACT_PUSH_MPLS:
     case OFPACT_PUSH_VLAN:
     case OFPACT_REG_LOAD:
+    case OFPACT_REG_MOVE:
     case OFPACT_SET_FIELD:
     case OFPACT_SET_ETH_DST:
     case OFPACT_SET_ETH_SRC:
@@ -4382,7 +4384,6 @@ ofpact_is_allowed_in_actions_set(const struct ofpact *a)
     case OFPACT_NOTE:
     case OFPACT_OUTPUT_REG:
     case OFPACT_POP_QUEUE:
-    case OFPACT_REG_MOVE:
     case OFPACT_RESUBMIT:
     case OFPACT_SAMPLE:
     case OFPACT_STACK_POP:
@@ -4471,7 +4472,7 @@ ofpacts_execute_action_set(struct ofpbuf *action_list,
     ofpacts_copy_last(action_list, action_set, OFPACT_PUSH_VLAN);
     ofpacts_copy_last(action_list, action_set, OFPACT_DEC_TTL);
     ofpacts_copy_last(action_list, action_set, OFPACT_DEC_MPLS_TTL);
-    ofpacts_copy_all(action_list, action_set, ofpact_is_set_action);
+    ofpacts_copy_all(action_list, action_set, ofpact_is_set_or_move_action);
     ofpacts_copy_last(action_list, action_set, OFPACT_SET_QUEUE);
 
     /* If both OFPACT_GROUP and OFPACT_OUTPUT are present, OpenFlow says that

@@ -16,6 +16,7 @@ Post-v2.3.0
      * OpenFlow 1.5 (draft) extended registers are now supported.
      * OpenFlow 1.5 (draft) Copy-Field action is now supported.
      * OpenFlow 1.3+ table features requests are now supported (read-only).
+     * Nicira extension "move" actions may now be included in action sets.
 
 
 v2.3.0 - 14 Aug 2014
