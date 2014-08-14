@@ -586,7 +586,7 @@ recv_upcalls(struct handler *handler)
         struct flow flow;
         int error;
 
-        ofpbuf_use_stub(&recv_buf[n_upcalls], recv_stubs[n_upcalls],
+        ofpbuf_use_stub(recv_buf, recv_stubs[n_upcalls],
                         sizeof recv_stubs[n_upcalls]);
         if (dpif_recv(udpif->dpif, handler->handler_id, &dupcall, recv_buf)) {
             ofpbuf_uninit(recv_buf);
