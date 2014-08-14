@@ -20,7 +20,7 @@ openvswitch (2.3.0-1) unstable; urgency=low
      older kernel module, some workloads may perform worse with the
      new userspace.
 
- -- Open vSwitch team <dev@openvswitch.org>  Thu, 15 May 2014 17:08:39 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Thu, 14 Aug 2014 11:03:32 -0700
 
 openvswitch (2.2.0-1) unstable; urgency=low
    [ Open vSwitch team ]

@@ -18,7 +18,7 @@ Post-v2.3.0
      * OpenFlow 1.3+ table features requests are now supported (read-only).
 
 
-v2.3.0 - xx xxx xxxx
+v2.3.0 - 14 Aug 2014
 ---------------------
    - OpenFlow 1.1, 1.2, and 1.3 are now enabled by default in
      ovs-vswitchd.
