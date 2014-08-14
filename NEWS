@@ -29,9 +29,8 @@ v2.2.0 - Internal Release
      instead.
    - Support for Linux kernels up to 3.14. From Kernel 3.12 onwards OVS uses
      tunnel API for GRE and VXLAN.
-   - Added DPDK support.
+   - Added experimental DPDK support.
    - Added support for custom vlog patterns in Python
-
 
 v2.1.0 - 19 Mar 2014
 ---------------------

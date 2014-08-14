@@ -1,3 +1,11 @@
+
+
+           !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+           !!!!!! DPDK support in OVS 2.3 is experimental. !!!!!!
+           !!!!!!  Please consider using a later version.  !!!!!!
+           !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
                    Using Open vSwitch with DPDK
                    ============================
 
