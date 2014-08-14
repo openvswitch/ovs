@@ -61,10 +61,10 @@ enum OVS_PACKED_ENUM mf_field_id {
 #endif
 
 #if FLOW_N_XREGS == 4
-    MFF_XREG0,                  /* be32 */
-    MFF_XREG1,                  /* be32 */
-    MFF_XREG2,                  /* be32 */
-    MFF_XREG3,                  /* be32 */
+    MFF_XREG0,                  /* be64 */
+    MFF_XREG1,                  /* be64 */
+    MFF_XREG2,                  /* be64 */
+    MFF_XREG3,                  /* be64 */
 #else
 #error "Need to update MFF_REG* to match FLOW_N_XREGS"
 #endif
