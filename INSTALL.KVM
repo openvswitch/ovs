@@ -18,7 +18,7 @@ install with the Debian/Ubuntu package uml-utilities.
 
 Next, you will need to modify or create custom versions of the qemu-ifup
 and qemu-ifdown scripts. In this guide, we'll create custom versions
-that make use of example open vSwitch bridges that we'll describe in this
+that make use of example Open vSwitch bridges that we'll describe in this
 guide.
 
 Create the following two files and store them in known locations.

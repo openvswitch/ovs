@@ -591,7 +591,7 @@ A: A physical Ethernet device that is part of an Open vSwitch bridge
    versions of Linux that Open vSwitch supports.
 
    By the way, this issue is not specific to physical Ethernet
-   devices.  It applies to all network devices except Open vswitch
+   devices.  It applies to all network devices except Open vSwitch
    "internal" devices.
 
 Q: I created a bridge and added a couple of Ethernet ports to it,
