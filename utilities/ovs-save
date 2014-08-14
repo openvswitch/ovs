@@ -26,7 +26,7 @@ Commands:
                         network interfaces, as well as the system iptables
                         configuration.
  save-flows             Outputs a shell script on stdout that will restore
-                        Openflow flows of each Open vSwitch bridge.
+                        OpenFlow flows of each Open vSwitch bridge.
  save-ofports           Outputs a shell script on stdout that will restore
                         the ofport value across a force-reload-kmod.
 This script is meant as a helper for the Open vSwitch init script commands.

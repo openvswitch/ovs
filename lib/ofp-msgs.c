@@ -836,7 +836,7 @@ ofpmsg_update_length(struct ofpbuf *buf)
     oh->length = htons(ofpbuf_size(buf));
 }
 
-/* Returns just past the Openflow header (including the stats headers, vendor
+/* Returns just past the OpenFlow header (including the stats headers, vendor
  * header, and any subtype header) in 'oh'. */
 const void *
 ofpmsg_body(const struct ofp_header *oh)

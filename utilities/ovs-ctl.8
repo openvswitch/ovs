@@ -237,7 +237,7 @@ aren't running.
 .PP
 The \fBrestart\fR command performs a \fBstop\fR followed by a \fBstart\fR
 command.  The command can take the same options as that of the \fBstart\fR
-command. In addition, it saves and restores Openflow flows for each
+command. In addition, it saves and restores OpenFlow flows for each
 individual bridge.
 .
 .SH "The ``status'' command"
@@ -267,7 +267,7 @@ implemented by Open vSwitch.  The most common examples of these are
 bridge ``local ports''.
 .
 .IP 2.
-Saves the Openflow flows of each bridge.
+Saves the OpenFlow flows of each bridge.
 .
 .IP 3.
 Stops the Open vSwitch daemons, as if by a call to \fBovs\-ctl
@@ -285,7 +285,7 @@ compatibility module if it is loaded).
 .IP 6.
 Starts OVS back up, as if by a call to \fBovs\-ctl start\fR.  This
 reloads the kernel module, restarts the OVS daemons and finally
-restores the saved Openflow flows.
+restores the saved OpenFlow flows.
 .
 .IP 7.
 Restores the kernel configuration state that was saved in step 4.
