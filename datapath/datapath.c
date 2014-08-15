@@ -251,7 +251,7 @@ void ovs_dp_detach_port(struct vport *p)
 }
 
 /* Must be called with rcu_read_lock. */
-void ovs_dp_process_packet(struct sk_buff *skb, bool recirc)
+void ovs_dp_process_packet(struct sk_buff *skb)
 {
 	const struct vport *p = OVS_CB(skb)->input_vport;
 	struct sw_flow_key *pkt_key = OVS_CB(skb)->pkt_key;
@@ -283,7 +283,7 @@ void ovs_dp_process_packet(struct sk_buff *skb, bool recirc)
 	ovs_flow_stats_update(flow, pkt_key->tp.flags, skb);
 
 	sf_acts = rcu_dereference(flow->sf_acts);
-	ovs_execute_actions(dp, skb, sf_acts, recirc);
+	ovs_execute_actions(dp, skb, sf_acts);
 	stats_counter = &stats->n_hit;
 
 out:
@@ -584,7 +584,7 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	sf_acts = rcu_dereference(flow->sf_acts);
 
 	local_bh_disable();
-	err = ovs_execute_actions(dp, packet, sf_acts, false);
+	err = ovs_execute_actions(dp, packet, sf_acts);
 	local_bh_enable();
 	rcu_read_unlock();
 

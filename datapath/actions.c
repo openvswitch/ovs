@@ -831,7 +831,7 @@ static int execute_recirc(struct datapath *dp, struct sk_buff *skb,
 	}
 
 	flow_key_set_recirc_id(skb, nla_get_u32(a));
-	ovs_dp_process_packet(skb, true);
+	ovs_dp_process_packet(skb);
 	return 0;
 }
 
@@ -924,63 +924,8 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 	return 0;
 }
 
-/* We limit the number of times that we pass into execute_actions()
- * to avoid blowing out the stack in the event that we have a loop.
- *
- * Each loop adds some (estimated) cost to the kernel stack.
- * The loop terminates when the max cost is exceeded.
- * */
-#define RECIRC_STACK_COST 1
-#define DEFAULT_STACK_COST 4
-/* Allow up to 4 regular services, and up to 3 recirculations */
-#define MAX_STACK_COST (DEFAULT_STACK_COST * 4 + RECIRC_STACK_COST * 3)
-
-struct loop_counter {
-	u8 stack_cost;		/* loop stack cost. */
-	bool looping;		/* Loop detected? */
-};
-
-static DEFINE_PER_CPU(struct loop_counter, loop_counters);
-
-static int loop_suppress(struct datapath *dp, struct sw_flow_actions *actions)
-{
-	if (net_ratelimit())
-		pr_warn("%s: flow loop detected, dropping\n",
-				ovs_dp_name(dp));
-	actions->actions_len = 0;
-	return -ELOOP;
-}
-
 /* Execute a list of actions against 'skb'. */
-int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb,
-			struct sw_flow_actions *acts, bool recirc)
+int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb, struct sw_flow_actions *acts)
 {
-	const u8 stack_cost = recirc ? RECIRC_STACK_COST : DEFAULT_STACK_COST;
-	struct loop_counter *loop;
-	int error;
-
-	/* Check whether we've looped too much. */
-	loop = &__get_cpu_var(loop_counters);
-	loop->stack_cost += stack_cost;
-	if (unlikely(loop->stack_cost > MAX_STACK_COST))
-		loop->looping = true;
-	if (unlikely(loop->looping)) {
-		error = loop_suppress(dp, acts);
-		kfree_skb(skb);
-		goto out_loop;
-	}
-
-	error = do_execute_actions(dp, skb, acts->actions, acts->actions_len);
-
-	/* Check whether sub-actions looped too much. */
-	if (unlikely(loop->looping))
-		error = loop_suppress(dp, acts);
-
-out_loop:
-	/* Decrement loop stack cost. */
-	loop->stack_cost -= stack_cost;
-	if (!loop->stack_cost)
-		loop->looping = false;
-
-	return error;
+	return do_execute_actions(dp, skb, acts->actions, acts->actions_len);
 }
