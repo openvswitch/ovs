@@ -297,6 +297,8 @@ struct pmd_thread {
     atomic_uint change_seq;
 };
 
+#define PMD_INITIAL_SEQ 1
+
 /* Interface to netdev-based datapath. */
 struct dpif_netdev {
     struct dpif dpif;
@@ -613,10 +615,10 @@ dp_netdev_reload_pmd_threads(struct dp_netdev *dp)
 
     for (i = 0; i < dp->n_pmd_threads; i++) {
         struct pmd_thread *f = &dp->pmd_threads[i];
-        int id;
+        int old_seq;
 
-        atomic_add(&f->change_seq, 1, &id);
-   }
+        atomic_add_explicit(&f->change_seq, 1, &old_seq, memory_order_relaxed);
+    }
 }
 
 static uint32_t
@@ -1701,7 +1703,7 @@ pmd_thread_main(void *f_)
     struct dp_netdev *dp = f->dp;
     unsigned int lc = 0;
     struct rxq_poll *poll_list;
-    unsigned int port_seq;
+    unsigned int port_seq = PMD_INITIAL_SEQ;
     int poll_cnt;
     int i;
 
@@ -1711,10 +1713,8 @@ pmd_thread_main(void *f_)
     pmd_thread_setaffinity_cpu(f->id);
 reload:
     poll_cnt = pmd_load_queues(f, &poll_list, poll_cnt);
-    atomic_read(&f->change_seq, &port_seq);
 
     for (;;) {
-        unsigned int c_port_seq;
         int i;
 
         for (i = 0; i < poll_cnt; i++) {
@@ -1722,14 +1722,15 @@ reload:
         }
 
         if (lc++ > 1024) {
+            unsigned int seq;
+
+            lc = 0;
+
             ovsrcu_quiesce();
 
-            /* XXX: need completely userspace based signaling method.
-             * to keep this thread entirely in userspace.
-             * For now using atomic counter. */
-            lc = 0;
-            atomic_read_explicit(&f->change_seq, &c_port_seq, memory_order_consume);
-            if (c_port_seq != port_seq) {
+            atomic_read_explicit(&f->change_seq, &seq, memory_order_relaxed);
+            if (seq != port_seq) {
+                port_seq = seq;
                 break;
             }
         }
@@ -1806,7 +1807,7 @@ dp_netdev_set_pmd_threads(struct dp_netdev *dp, int n)
 
         f->dp = dp;
         f->id = i;
-        atomic_store(&f->change_seq, 1);
+        atomic_init(&f->change_seq, PMD_INITIAL_SEQ);
 
         /* Each thread will distribute all devices rx-queues among
          * themselves. */
