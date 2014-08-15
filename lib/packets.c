@@ -20,6 +20,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/ip6.h>
+#include <netinet/icmp6.h>
 #include <stdlib.h>
 #include "byte-order.h"
 #include "csum.h"
@@ -714,6 +715,10 @@ packet_update_csum128(struct ofpbuf *packet, uint8_t proto,
                 uh->udp_csum = htons(0xffff);
             }
         }
+    } else if (proto == IPPROTO_ICMPV6 && l4_size >= sizeof(struct icmp6_hdr)) {
+        struct icmp6_hdr *icmp = ofpbuf_l4(packet);
+
+        icmp->icmp6_cksum = recalc_csum128(icmp->icmp6_cksum, addr, new_addr);
     }
 }
 
