@@ -574,55 +574,56 @@ recv_upcalls(struct handler *handler)
     struct udpif *udpif = handler->udpif;
     uint64_t recv_stubs[UPCALL_MAX_BATCH][512 / 8];
     struct ofpbuf recv_bufs[UPCALL_MAX_BATCH];
+    struct dpif_upcall dupcalls[UPCALL_MAX_BATCH];
     struct upcall upcalls[UPCALL_MAX_BATCH];
     size_t n_upcalls, i;
 
     n_upcalls = 0;
     while (n_upcalls < UPCALL_MAX_BATCH) {
         struct ofpbuf *recv_buf = &recv_bufs[n_upcalls];
+        struct dpif_upcall *dupcall = &dupcalls[n_upcalls];
         struct upcall *upcall = &upcalls[n_upcalls];
-        struct dpif_upcall dupcall;
         struct pkt_metadata md;
         struct flow flow;
         int error;
 
         ofpbuf_use_stub(recv_buf, recv_stubs[n_upcalls],
                         sizeof recv_stubs[n_upcalls]);
-        if (dpif_recv(udpif->dpif, handler->handler_id, &dupcall, recv_buf)) {
+        if (dpif_recv(udpif->dpif, handler->handler_id, dupcall, recv_buf)) {
             ofpbuf_uninit(recv_buf);
             break;
         }
 
-        if (odp_flow_key_to_flow(dupcall.key, dupcall.key_len, &flow)
+        if (odp_flow_key_to_flow(dupcall->key, dupcall->key_len, &flow)
             == ODP_FIT_ERROR) {
             goto free_dupcall;
         }
 
-        error = upcall_receive(upcall, udpif->backer, &dupcall.packet,
-                               dupcall.type, dupcall.userdata, &flow);
+        error = upcall_receive(upcall, udpif->backer, &dupcall->packet,
+                               dupcall->type, dupcall->userdata, &flow);
         if (error) {
             if (error == ENODEV) {
                 /* Received packet on datapath port for which we couldn't
                  * associate an ofproto.  This can happen if a port is removed
                  * while traffic is being received.  Print a rate-limited
                  * message in case it happens frequently. */
-                dpif_flow_put(udpif->dpif, DPIF_FP_CREATE, dupcall.key,
-                              dupcall.key_len, NULL, 0, NULL, 0, NULL);
+                dpif_flow_put(udpif->dpif, DPIF_FP_CREATE, dupcall->key,
+                              dupcall->key_len, NULL, 0, NULL, 0, NULL);
                 VLOG_INFO_RL(&rl, "received packet on unassociated datapath "
                              "port %"PRIu32, flow.in_port.odp_port);
             }
             goto free_dupcall;
         }
 
-        upcall->key = dupcall.key;
-        upcall->key_len = dupcall.key_len;
+        upcall->key = dupcall->key;
+        upcall->key_len = dupcall->key_len;
 
-        if (vsp_adjust_flow(upcall->ofproto, &flow, &dupcall.packet)) {
+        if (vsp_adjust_flow(upcall->ofproto, &flow, &dupcall->packet)) {
             upcall->vsp_adjusted = true;
         }
 
         md = pkt_metadata_from_flow(&flow);
-        flow_extract(&dupcall.packet, &md, &flow);
+        flow_extract(&dupcall->packet, &md, &flow);
 
         error = process_upcall(udpif, upcall, NULL);
         if (error) {
@@ -635,14 +636,14 @@ recv_upcalls(struct handler *handler)
 cleanup:
         upcall_uninit(upcall);
 free_dupcall:
-        ofpbuf_uninit(&dupcall.packet);
+        ofpbuf_uninit(&dupcall->packet);
         ofpbuf_uninit(recv_buf);
     }
 
     if (n_upcalls) {
         handle_upcalls(handler->udpif, upcalls, n_upcalls);
         for (i = 0; i < n_upcalls; i++) {
-            ofpbuf_uninit(CONST_CAST(struct ofpbuf *, upcalls[i].packet));
+            ofpbuf_uninit(&dupcalls[i].packet);
             ofpbuf_uninit(&recv_bufs[i]);
             upcall_uninit(&upcalls[i]);
         }
