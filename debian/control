@@ -60,7 +60,8 @@ Description: Open vSwitch common components
  to support distribution across multiple physical servers similar to
  VMware's vNetwork distributed vswitch or Cisco's Nexus 1000V.
  .
- openvswitch-common provides components required by both openvswitch-switch.
+ openvswitch-common provides components required by both openvswitch-switch
+ and openvswitch-testcontroller.
 
 Package: openvswitch-switch
 Architecture: linux-any
@@ -117,6 +118,17 @@ Description: Open vSwitch public key infrastructure dependency package
  Open vSwitch switches and controllers, reducing the risk of
  man-in-the-middle attacks on the Open vSwitch network infrastructure.
 
+Package: openvswitch-testcontroller
+Architecture: linux-any
+Depends:
+ ${shlibs:Depends}, openvswitch-common (= ${binary:Version}),
+ openvswitch-pki (= ${source:Version}), ${misc:Depends}
+Description: Simple controller for testing OpenFlow setups
+ This controller enables OpenFlow switches that connect to it to act
+ as MAC-learning Ethernet switches.  It can be used for initial
+ testing of OpenFlow networks.  It is not a necessary or desirable
+ part of a production OpenFlow deployment.
+
 Package: openvswitch-dbg
 Section: debug
 Architecture: linux-any
@@ -124,6 +136,9 @@ Depends:
  ${shlibs:Depends}, ${misc:Depends},
  openvswitch-common (= ${binary:Version}),
  openvswitch-switch (= ${binary:Version})
+Conflicts:
+ openvswitch-testcontroller (<< ${binary:Version}),
+ openvswitch-testcontroller (>> ${binary:Version})
 Description: Debug symbols for Open vSwitch packages
  Open vSwitch is a production quality, multilayer, software-based,
  Ethernet virtual switch. It is designed to enable massive network

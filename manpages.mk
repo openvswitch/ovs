@@ -84,26 +84,6 @@ lib/common.man:
 lib/vlog-syn.man:
 lib/vlog.man:
 
-tests/test-controller.8: \
-	tests/test-controller.8.in \
-	lib/common.man \
-	lib/daemon.man \
-	lib/ssl-peer-ca-cert.man \
-	lib/ssl.man \
-	lib/unixctl.man \
-	lib/vconn-active.man \
-	lib/vconn-passive.man \
-	lib/vlog.man
-tests/test-controller.8.in:
-lib/common.man:
-lib/daemon.man:
-lib/ssl-peer-ca-cert.man:
-lib/ssl.man:
-lib/unixctl.man:
-lib/vconn-active.man:
-lib/vconn-passive.man:
-lib/vlog.man:
-
 utilities/bugtool/ovs-bugtool.8: \
 	utilities/bugtool/ovs-bugtool.8.in
 utilities/bugtool/ovs-bugtool.8.in:
@@ -189,6 +169,26 @@ utilities/ovs-test.8.in:
 lib/common-syn.man:
 lib/common.man:
 utilities/ovs-vlan-bugs.man:
+
+utilities/ovs-testcontroller.8: \
+	utilities/ovs-testcontroller.8.in \
+	lib/common.man \
+	lib/daemon.man \
+	lib/ssl-peer-ca-cert.man \
+	lib/ssl.man \
+	lib/unixctl.man \
+	lib/vconn-active.man \
+	lib/vconn-passive.man \
+	lib/vlog.man
+utilities/ovs-testcontroller.8.in:
+lib/common.man:
+lib/daemon.man:
+lib/ssl-peer-ca-cert.man:
+lib/ssl.man:
+lib/unixctl.man:
+lib/vconn-active.man:
+lib/vconn-passive.man:
+lib/vlog.man:
 
 utilities/ovs-vlan-bug-workaround.8: \
 	utilities/ovs-vlan-bug-workaround.8.in \

@@ -8,6 +8,8 @@
 /ovs-cfg-mod
 /ovs-cfg-mod.8
 /ovs-check-dead-ifs
+/ovs-testcontroller
+/ovs-testcontroller.8
 /ovs-ctl
 /ovs-dpctl
 /ovs-dpctl.8

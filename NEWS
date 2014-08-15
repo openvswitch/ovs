@@ -19,6 +19,9 @@ Post-v2.3.0
      * Nicira extension "move" actions may now be included in action sets.
    - ovsdb-server: New OVSDB protocol extension allows inequality tests on
      "optional scalar" columns.  See ovsdb-server(1) for details.
+   - test-controller has been renamed ovs-testcontroller at request of users
+     who find it useful for testing basic OpenFlow setups.  It is still not
+     a necessary or desirable part of most Open vSwitch deployments.
 
 
 v2.3.0 - 14 Aug 2014

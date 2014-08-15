@@ -181,13 +181,6 @@ $(srcdir)/package.m4: $(top_srcdir)/configure.ac
 	  echo 'm4_define([AT_PACKAGE_BUGREPORT], [$(PACKAGE_BUGREPORT)])'; \
 	} >'$(srcdir)/package.m4'
 
-noinst_PROGRAMS += tests/test-controller
-MAN_ROOTS += tests/test-controller.8.in
-DISTCLEANFILES += tests/test-controller.8
-noinst_man_MANS += tests/test-controller.8
-tests_test_controller_SOURCES = tests/test-controller.c
-tests_test_controller_LDADD = lib/libopenvswitch.la
-
 noinst_PROGRAMS += tests/test-ovsdb
 tests_test_ovsdb_SOURCES = \
 	tests/test-ovsdb.c \

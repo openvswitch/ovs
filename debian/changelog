@@ -1,5 +1,10 @@
 openvswitch (2.3.90-1) unstable; urgency=low
    [ Open vSwitch team ]
+   * The openvswitch-testcontroller package is new.  It reintroduces the
+     simple OpenFlow controller that was packaged with Open vSwitch prior to
+     version 2.1, at request of users who find it useful for testing basic
+     OpenFlow setups.  It is still not a necessary or desirable part of most
+     Open vSwitch deployments.
    * New upstream version
     - Nothing yet!  Try NEWS...
 

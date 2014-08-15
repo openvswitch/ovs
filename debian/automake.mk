@@ -37,6 +37,14 @@ EXTRA_DIST += \
 	debian/openvswitch-test.dirs \
 	debian/openvswitch-test.install \
 	debian/openvswitch-test.manpages \
+	debian/openvswitch-testcontroller.README.Debian \
+	debian/openvswitch-testcontroller.default \
+	debian/openvswitch-testcontroller.dirs \
+	debian/openvswitch-testcontroller.init \
+	debian/openvswitch-testcontroller.install \
+	debian/openvswitch-testcontroller.manpages \
+	debian/openvswitch-testcontroller.postinst \
+	debian/openvswitch-testcontroller.postrm \
 	debian/openvswitch-vtep.default \
 	debian/openvswitch-vtep.dirs \
 	debian/openvswitch-vtep.init \

@@ -72,6 +72,9 @@ Open vSwitch also provides some tools:
     * ovs-pki, a utility for creating and managing the public-key
       infrastructure for OpenFlow switches.
 
+    * ovs-testcontroller, a simple OpenFlow controller that may be useful
+      for testing (though not for production).
+
     * A patch to tcpdump that enables it to parse OpenFlow messages.
 
 What other documentation is available?
