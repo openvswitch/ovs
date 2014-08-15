@@ -474,8 +474,9 @@
       </column>
 
       <column name="bfd_status" key="diagnostic">
-        In case of a problem, set to a short message that reports what the
-        local BFD session thinks is wrong.
+        In case of a problem, set to an error message that reports what the
+        local BFD session thinks is wrong.  The error messages are defined
+        in section 4.1 of [RFC 5880].
       </column>
 
       <column name="bfd_status" key="remote_state"
@@ -485,8 +486,9 @@
       </column>
 
       <column name="bfd_status" key="remote_diagnostic">
-        In case of a problem, set to a short message that reports what the
-        remote endpoint's BFD session thinks is wrong.
+        In case of a problem, set to an error message that reports what the
+        remote endpoint's BFD session thinks is wrong.  The error messages
+        are defined in section 4.1 of [RFC 5880].
       </column>
       </group>
     </group>
