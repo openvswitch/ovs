@@ -162,6 +162,33 @@ fat_rwlock_rdlock(const struct fat_rwlock *rwlock_)
     }
 }
 
+static struct fat_rwlock_slot *
+fat_rwlock_try_get_slot__(struct fat_rwlock *rwlock)
+{
+    struct fat_rwlock_slot *slot;
+
+    /* Fast path. */
+    slot = ovsthread_getspecific(rwlock->key);
+    if (slot) {
+        return slot;
+    }
+
+    /* Slow path: create a new slot for 'rwlock' in this thread. */
+
+    if (!ovs_mutex_trylock(&rwlock->mutex)) {
+        slot = xmalloc_cacheline(sizeof *slot);
+        slot->rwlock = rwlock;
+        ovs_mutex_init(&slot->mutex);
+        slot->depth = 0;
+
+        list_push_back(&rwlock->threads, &slot->list_node);
+        ovs_mutex_unlock(&rwlock->mutex);
+        ovsthread_setspecific(rwlock->key, slot);
+    }
+
+    return slot;
+}
+
 /* Tries to lock 'rwlock' for reading.  If successful, returns 0.  If taking
  * the lock would require blocking, returns EBUSY (without blocking). */
 int
@@ -170,8 +197,12 @@ fat_rwlock_tryrdlock(const struct fat_rwlock *rwlock_)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct fat_rwlock *rwlock = CONST_CAST(struct fat_rwlock *, rwlock_);
-    struct fat_rwlock_slot *this = fat_rwlock_get_slot__(rwlock);
+    struct fat_rwlock_slot *this = fat_rwlock_try_get_slot__(rwlock);
     int error;
+
+    if (!this) {
+        return EBUSY;
+    }
 
     switch (this->depth) {
     case UINT_MAX:
