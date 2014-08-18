@@ -283,7 +283,7 @@ process_counter_sample(struct sflow_xdr *x)
     }
     if(x->offset.PORTNAME) {
 	uint32_t pnLen;
-	char *pnBytes;
+	const char *pnBytes;
 	char portName[SFL_MAX_PORTNAME_LEN + 1];
         sflowxdr_setc(x, x->offset.PORTNAME);
         printf("PORTNAME");
