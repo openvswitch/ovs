@@ -229,13 +229,15 @@ union user_action_cookie {
     } flow_sample;
 
     struct {
-        uint16_t type;          /* USER_ACTION_COOKIE_IPFIX. */
+        uint16_t   type;            /* USER_ACTION_COOKIE_IPFIX. */
+        odp_port_t output_odp_port; /* The output odp port. */
     } ipfix;
 };
 BUILD_ASSERT_DECL(sizeof(union user_action_cookie) == 16);
 
 size_t odp_put_userspace_action(uint32_t pid,
                                 const void *userdata, size_t userdata_size,
+                                odp_port_t tunnel_out_port,
                                 struct ofpbuf *odp_actions);
 void odp_put_tunnel_action(const struct flow_tnl *tunnel,
                            struct ofpbuf *odp_actions);

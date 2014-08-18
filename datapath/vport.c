@@ -578,3 +578,61 @@ void ovs_vport_deferred_free(struct vport *vport)
 
 	call_rcu(&vport->rcu, free_vport_rcu);
 }
+
+int ovs_tunnel_get_egress_info(struct ovs_tunnel_info *egress_tun_info,
+			       struct net *net,
+			       const struct ovs_tunnel_info *tun_info,
+			       u8 ipproto,
+			       u32 skb_mark,
+			       __be16 tp_src,
+			       __be16 tp_dst)
+{
+	const struct ovs_key_ipv4_tunnel *tun_key;
+	struct rtable *rt;
+	__be32 saddr;
+
+	if (unlikely(!tun_info))
+		return -EINVAL;
+
+	tun_key = &tun_info->tunnel;
+	saddr = tun_key->ipv4_src;
+	/* Route lookup to get srouce IP address: saddr.
+	 * The process may need to be changed if the corresponding process
+	 * in vports ops changed.
+	 */
+	rt = find_route(net,
+			&saddr,
+			tun_key->ipv4_dst,
+			ipproto,
+			tun_key->ipv4_tos,
+			skb_mark);
+	if (IS_ERR(rt))
+		return PTR_ERR(rt);
+
+	ip_rt_put(rt);
+
+	/* Generate egress_tun_info based on tun_info,
+	 * saddr, tp_src and tp_dst
+	 */
+	__ovs_flow_tun_info_init(egress_tun_info,
+				 saddr, tun_key->ipv4_dst,
+				 tun_key->ipv4_tos,
+				 tun_key->ipv4_ttl,
+				 tp_src, tp_dst,
+				 tun_key->tun_id,
+				 tun_key->tun_flags,
+				 tun_info->options,
+				 tun_info->options_len);
+
+	return 0;
+}
+
+int ovs_vport_get_egress_tun_info(struct vport *vport, struct sk_buff *skb,
+				  struct ovs_tunnel_info *info)
+{
+	/* get_egress_tun_info() is only implemented on tunnel ports. */
+	if (unlikely(!vport->ops->get_egress_tun_info))
+		return -EINVAL;
+
+	return vport->ops->get_egress_tun_info(vport, skb, info);
+}

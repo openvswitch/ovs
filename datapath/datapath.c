@@ -272,6 +272,7 @@ void ovs_dp_process_packet(struct sk_buff *skb, bool recirc)
 		upcall.cmd = OVS_PACKET_CMD_MISS;
 		upcall.userdata = NULL;
 		upcall.portid = ovs_vport_find_upcall_portid(p, skb);
+		upcall.egress_tun_info = NULL;
 		ovs_dp_upcall(dp, skb, &upcall);
 		consume_skb(skb);
 		stats_counter = &stats->n_missed;
@@ -369,7 +370,7 @@ static int queue_gso_packets(struct datapath *dp, struct sk_buff *skb,
 	return err;
 }
 
-static size_t upcall_msg_size(const struct nlattr *userdata,
+static size_t upcall_msg_size(const struct dp_upcall_info *upcall_info,
 			      unsigned int hdrlen)
 {
 	size_t size = NLMSG_ALIGN(sizeof(struct ovs_header))
@@ -377,8 +378,12 @@ static size_t upcall_msg_size(const struct nlattr *userdata,
 		+ nla_total_size(ovs_key_attr_size()); /* OVS_PACKET_ATTR_KEY */
 
 	/* OVS_PACKET_ATTR_USERDATA */
-	if (userdata)
-		size += NLA_ALIGN(userdata->nla_len);
+	if (upcall_info->userdata)
+		size += NLA_ALIGN(upcall_info->userdata->nla_len);
+
+	/* OVS_PACKET_ATTR_EGRESS_TUN_KEY */
+	if (upcall_info->egress_tun_info)
+		size += nla_total_size(ovs_tun_key_attr_size());
 
 	return size;
 }
@@ -438,7 +443,7 @@ static int queue_userspace_packet(struct datapath *dp, struct sk_buff *skb,
 	else
 		hlen = skb->len;
 
-	len = upcall_msg_size(upcall_info->userdata, hlen);
+	len = upcall_msg_size(upcall_info, hlen);
 	user_skb = genlmsg_new_unicast(len, &info, GFP_ATOMIC);
 	if (!user_skb) {
 		err = -ENOMEM;
@@ -458,6 +463,14 @@ static int queue_userspace_packet(struct datapath *dp, struct sk_buff *skb,
 		__nla_put(user_skb, OVS_PACKET_ATTR_USERDATA,
 			  nla_len(upcall_info->userdata),
 			  nla_data(upcall_info->userdata));
+
+	if (upcall_info->egress_tun_info) {
+		nla = nla_nest_start(user_skb, OVS_PACKET_ATTR_EGRESS_TUN_KEY);
+		err = ovs_nla_put_egress_tunnel_key(user_skb,
+						    upcall_info->egress_tun_info);
+		BUG_ON(err);
+		nla_nest_end(user_skb, nla);
+	}
 
 	/* Only reserve room for attribute header, packet data is added
 	 * in skb_zerocopy() */

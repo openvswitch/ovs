@@ -1653,6 +1653,7 @@ parse_odp_packet(struct ofpbuf *buf, struct dpif_upcall *upcall,
 
         /* OVS_PACKET_CMD_ACTION only. */
         [OVS_PACKET_ATTR_USERDATA] = { .type = NL_A_UNSPEC, .optional = true },
+        [OVS_PACKET_ATTR_EGRESS_TUN_KEY] = { .type = NL_A_NESTED, .optional = true },
     };
 
     struct ovs_header *ovs_header;
@@ -1687,6 +1688,7 @@ parse_odp_packet(struct ofpbuf *buf, struct dpif_upcall *upcall,
                              nl_attr_get(a[OVS_PACKET_ATTR_KEY]));
     upcall->key_len = nl_attr_get_size(a[OVS_PACKET_ATTR_KEY]);
     upcall->userdata = a[OVS_PACKET_ATTR_USERDATA];
+    upcall->out_tun_key = a[OVS_PACKET_ATTR_EGRESS_TUN_KEY];
 
     /* Allow overwriting the netlink attribute header without reallocating. */
     ofpbuf_use_stub(&upcall->packet,

@@ -19,24 +19,36 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdbool.h>
+#include "lib/odp-util.h"
 
 struct flow;
 struct ofpbuf;
 struct ofproto_ipfix_bridge_exporter_options;
 struct ofproto_ipfix_flow_exporter_options;
+struct flow_tnl;
+struct ofport;
 
 struct dpif_ipfix *dpif_ipfix_create(void);
 struct dpif_ipfix *dpif_ipfix_ref(const struct dpif_ipfix *);
 void dpif_ipfix_unref(struct dpif_ipfix *);
 
+void dpif_ipfix_add_tunnel_port(struct dpif_ipfix *, struct ofport *, odp_port_t);
+void dpif_ipfix_del_tunnel_port(struct dpif_ipfix *, odp_port_t);
+
 uint32_t dpif_ipfix_get_bridge_exporter_probability(const struct dpif_ipfix *);
+bool dpif_ipfix_get_bridge_exporter_tunnel_sampling(const struct dpif_ipfix *);
+bool dpif_ipfix_get_bridge_exporter_input_sampling(const struct dpif_ipfix *);
+bool dpif_ipfix_get_bridge_exporter_output_sampling(const struct dpif_ipfix *);
+bool dpif_ipfix_get_tunnel_port(const struct dpif_ipfix *, odp_port_t);
 void dpif_ipfix_set_options(
     struct dpif_ipfix *,
     const struct ofproto_ipfix_bridge_exporter_options *,
     const struct ofproto_ipfix_flow_exporter_options *, size_t);
 
 void dpif_ipfix_bridge_sample(struct dpif_ipfix *, const struct ofpbuf *,
-                              const struct flow *);
+                              const struct flow *,
+                              odp_port_t, odp_port_t, const struct flow_tnl *);
 void dpif_ipfix_flow_sample(struct dpif_ipfix *, const struct ofpbuf *,
                             const struct flow *, uint32_t, uint16_t, uint32_t,
                             uint32_t);

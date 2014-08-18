@@ -246,7 +246,9 @@ static int lisp_rcv(struct sock *sk, struct sk_buff *skb)
 
 	/* Save outer tunnel values */
 	iph = ip_hdr(skb);
-	ovs_flow_tun_info_init(&tun_info, iph, key, TUNNEL_KEY, NULL, 0);
+	ovs_flow_tun_info_init(&tun_info, iph,
+			       udp_hdr(skb)->source, udp_hdr(skb)->dest,
+			       key, TUNNEL_KEY, NULL, 0);
 
 	/* Drop non-IP inner packets */
 	inner_iph = (struct iphdr *)(lisph + 1);
@@ -515,11 +517,33 @@ static const char *lisp_get_name(const struct vport *vport)
 	return lisp_port->name;
 }
 
+static int lisp_get_egress_tun_info(struct vport *vport, struct sk_buff *skb,
+				    struct ovs_tunnel_info *egress_tun_info)
+{
+	struct net *net = ovs_dp_get_net(vport->dp);
+	struct lisp_port *lisp_port = lisp_vport(vport);
+
+	if (skb->protocol != htons(ETH_P_IP) &&
+	    skb->protocol != htons(ETH_P_IPV6)) {
+		return -EINVAL;
+	}
+
+	/*
+	 * Get tp_src and tp_dst, refert to lisp_build_header().
+	 */
+	return ovs_tunnel_get_egress_info(egress_tun_info, net,
+					  OVS_CB(skb)->egress_tun_info,
+					  IPPROTO_UDP, skb->mark,
+					  htons(get_src_port(net, skb)),
+					  lisp_port->dst_port);
+}
+
 const struct vport_ops ovs_lisp_vport_ops = {
-	.type		= OVS_VPORT_TYPE_LISP,
-	.create		= lisp_tnl_create,
-	.destroy	= lisp_tnl_destroy,
-	.get_name	= lisp_get_name,
-	.get_options	= lisp_get_options,
-	.send		= lisp_send,
+	.type			= OVS_VPORT_TYPE_LISP,
+	.create			= lisp_tnl_create,
+	.destroy		= lisp_tnl_destroy,
+	.get_name		= lisp_get_name,
+	.get_options		= lisp_get_options,
+	.send			= lisp_send,
+	.get_egress_tun_info	= lisp_get_egress_tun_info,
 };

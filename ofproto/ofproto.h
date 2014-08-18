@@ -71,6 +71,9 @@ struct ofproto_ipfix_bridge_exporter_options {
     uint32_t obs_point_id;  /* Bridge-wide Observation Point ID. */
     uint32_t cache_active_timeout;
     uint32_t cache_max_flows;
+    bool enable_tunnel_sampling;
+    bool enable_input_sampling;
+    bool enable_output_sampling;
 };
 
 struct ofproto_ipfix_flow_exporter_options {

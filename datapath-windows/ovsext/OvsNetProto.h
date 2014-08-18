@@ -80,6 +80,7 @@ typedef UINT64 IP6UnitLength;
 #define IPPROTO_ICMP    1
 #define IPPROTO_IGMP    2
 #define IPPROTO_UDP     17
+#define IPPROTO_GRE     47
 #define IPPROTO_TCP     6
 #define IPPROTO_RSVD    0xff
 

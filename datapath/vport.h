@@ -57,6 +57,16 @@ u32 ovs_vport_find_upcall_portid(const struct vport *, struct sk_buff *);
 
 int ovs_vport_send(struct vport *, struct sk_buff *);
 
+int ovs_tunnel_get_egress_info(struct ovs_tunnel_info *egress_tun_info,
+			       struct net *net,
+			       const struct ovs_tunnel_info *tun_info,
+			       u8 ipproto,
+			       u32 skb_mark,
+			       __be16 tp_src,
+			       __be16 tp_dst);
+int ovs_vport_get_egress_tun_info(struct vport *vport, struct sk_buff *skb,
+				  struct ovs_tunnel_info *info);
+
 /* The following definitions are for implementers of vport devices: */
 
 struct vport_err_stats {
@@ -150,6 +160,7 @@ struct vport_parms {
  * @get_name: Get the device's name.
  * @send: Send a packet on the device.  Returns the length of the packet sent,
  * zero for dropped packets or negative for error.
+ * @get_egress_tun_info: Get the egress tunnel 5-tuple and other info for a packet.
  */
 struct vport_ops {
 	enum ovs_vport_type type;
@@ -165,6 +176,9 @@ struct vport_ops {
 	const char *(*get_name)(const struct vport *);
 
 	int (*send)(struct vport *, struct sk_buff *);
+
+	int (*get_egress_tun_info)(struct vport *, struct sk_buff *,
+				   struct ovs_tunnel_info *);
 };
 
 enum vport_err_type {

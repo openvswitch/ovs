@@ -261,9 +261,12 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
         [OVS_USERSPACE_ATTR_PID] = { .type = NL_A_U32 },
         [OVS_USERSPACE_ATTR_USERDATA] = { .type = NL_A_UNSPEC,
                                           .optional = true },
+        [OVS_USERSPACE_ATTR_EGRESS_TUN_PORT] = { .type = NL_A_U32,
+                                                 .optional = true },
     };
     struct nlattr *a[ARRAY_SIZE(ovs_userspace_policy)];
     const struct nlattr *userdata_attr;
+    const struct nlattr *tunnel_out_port_attr;
 
     if (!nl_parse_nested(attr, ovs_userspace_policy, a, ARRAY_SIZE(a))) {
         ds_put_cstr(ds, "userspace(error)");
@@ -314,7 +317,8 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
                               cookie.flow_sample.obs_point_id);
             } else if (userdata_len >= sizeof cookie.ipfix
                        && cookie.type == USER_ACTION_COOKIE_IPFIX) {
-                ds_put_format(ds, ",ipfix");
+                ds_put_format(ds, ",ipfix(output_port=%"PRIu32")",
+                              cookie.ipfix.output_odp_port);
             } else {
                 userdata_unspec = true;
             }
@@ -328,6 +332,12 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
             }
             ds_put_char(ds, ')');
         }
+    }
+
+    tunnel_out_port_attr = a[OVS_USERSPACE_ATTR_EGRESS_TUN_PORT];
+    if (tunnel_out_port_attr) {
+        ds_put_format(ds, ",tunnel_out_port=%"PRIu32,
+                      nl_attr_get_u32(tunnel_out_port_attr));
     }
 
     ds_put_char(ds, ')');
@@ -506,6 +516,117 @@ format_odp_actions(struct ds *ds, const struct nlattr *actions,
     }
 }
 
+/* Separate out parse_odp_userspace_action() function. */
+static int
+parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
+{
+    uint32_t pid;
+    union user_action_cookie cookie;
+    struct ofpbuf buf;
+    odp_port_t tunnel_out_port;
+    int n = -1;
+    void *user_data = NULL;
+    size_t user_data_size = 0;
+
+    if (!ovs_scan(s, "userspace(pid=%"SCNi32"%n", &pid, &n)) {
+        return -EINVAL;
+    }
+
+    {
+        uint32_t output;
+        uint32_t probability;
+        uint32_t collector_set_id;
+        uint32_t obs_domain_id;
+        uint32_t obs_point_id;
+        int vid, pcp;
+        int n1 = -1;
+        if (ovs_scan(&s[n], ",sFlow(vid=%i,"
+                     "pcp=%i,output=%"SCNi32")%n",
+                     &vid, &pcp, &output, &n1)) {
+            uint16_t tci;
+
+            n += n1;
+            tci = vid | (pcp << VLAN_PCP_SHIFT);
+            if (tci) {
+                tci |= VLAN_CFI;
+            }
+
+            cookie.type = USER_ACTION_COOKIE_SFLOW;
+            cookie.sflow.vlan_tci = htons(tci);
+            cookie.sflow.output = output;
+            user_data = &cookie;
+            user_data_size = sizeof cookie.sflow;
+        } else if (ovs_scan(&s[n], ",slow_path%n",
+                            &n1)) {
+            int res;
+
+            n += n1;
+            cookie.type = USER_ACTION_COOKIE_SLOW_PATH;
+            cookie.slow_path.unused = 0;
+            cookie.slow_path.reason = 0;
+
+            res = parse_flags(&s[n], slow_path_reason_to_string,
+                              &cookie.slow_path.reason);
+            if (res < 0) {
+                return res;
+            }
+            n += res;
+
+            user_data = &cookie;
+            user_data_size = sizeof cookie.slow_path;
+        } else if (ovs_scan(&s[n], ",flow_sample(probability=%"SCNi32","
+                            "collector_set_id=%"SCNi32","
+                            "obs_domain_id=%"SCNi32","
+                            "obs_point_id=%"SCNi32")%n",
+                            &probability, &collector_set_id,
+                            &obs_domain_id, &obs_point_id, &n1)) {
+            n += n1;
+
+            cookie.type = USER_ACTION_COOKIE_FLOW_SAMPLE;
+            cookie.flow_sample.probability = probability;
+            cookie.flow_sample.collector_set_id = collector_set_id;
+            cookie.flow_sample.obs_domain_id = obs_domain_id;
+            cookie.flow_sample.obs_point_id = obs_point_id;
+            user_data = &cookie;
+            user_data_size = sizeof cookie.flow_sample;
+        } else if (ovs_scan(&s[n], ",ipfix(output_port=%"SCNi32")%n",
+                            &output, &n1) ) {
+            n += n1;
+            cookie.type = USER_ACTION_COOKIE_IPFIX;
+            cookie.ipfix.output_odp_port = u32_to_odp(output);
+            user_data = &cookie;
+            user_data_size = sizeof cookie.ipfix;
+        } else if (ovs_scan(&s[n], ",userdata(%n",
+                            &n1)) {
+            char *end;
+
+            n += n1;
+            ofpbuf_init(&buf, 16);
+            end = ofpbuf_put_hex(&buf, &s[n], NULL);
+            if (end[0] != ')') {
+                return -EINVAL;
+            }
+            user_data = ofpbuf_data(&buf);
+            user_data_size = ofpbuf_size(&buf);
+            n = (end + 1) - s;
+        }
+    }
+
+    {
+        int n1 = -1;
+        if (ovs_scan(&s[n], ",tunnel_out_port=%"SCNi32")%n",
+                     &tunnel_out_port, &n1)) {
+            odp_put_userspace_action(pid, user_data, user_data_size, tunnel_out_port, actions);
+            return n + n1;
+        } else if (s[n] == ')') {
+            odp_put_userspace_action(pid, user_data, user_data_size, ODPP_NONE, actions);
+            return n + 1;
+        }
+    }
+
+    return -EINVAL;
+}
+
 static int
 parse_odp_action(const char *s, const struct simap *port_names,
                  struct ofpbuf *actions)
@@ -531,96 +652,8 @@ parse_odp_action(const char *s, const struct simap *port_names,
         }
     }
 
-    {
-        uint32_t pid;
-        uint32_t output;
-        uint32_t probability;
-        uint32_t collector_set_id;
-        uint32_t obs_domain_id;
-        uint32_t obs_point_id;
-        int vid, pcp;
-        int n = -1;
-
-        if (ovs_scan(s, "userspace(pid=%"SCNi32")%n", &pid, &n)) {
-            odp_put_userspace_action(pid, NULL, 0, actions);
-            return n;
-        } else if (ovs_scan(s, "userspace(pid=%"SCNi32",sFlow(vid=%i,"
-                            "pcp=%i,output=%"SCNi32"))%n",
-                            &pid, &vid, &pcp, &output, &n)) {
-            union user_action_cookie cookie;
-            uint16_t tci;
-
-            tci = vid | (pcp << VLAN_PCP_SHIFT);
-            if (tci) {
-                tci |= VLAN_CFI;
-            }
-
-            cookie.type = USER_ACTION_COOKIE_SFLOW;
-            cookie.sflow.vlan_tci = htons(tci);
-            cookie.sflow.output = output;
-            odp_put_userspace_action(pid, &cookie, sizeof cookie.sflow,
-                                     actions);
-            return n;
-        } else if (ovs_scan(s, "userspace(pid=%"SCNi32",slow_path%n",
-                            &pid, &n)) {
-            union user_action_cookie cookie;
-            int res;
-
-            cookie.type = USER_ACTION_COOKIE_SLOW_PATH;
-            cookie.slow_path.unused = 0;
-            cookie.slow_path.reason = 0;
-
-            res = parse_flags(&s[n], slow_path_reason_to_string,
-                              &cookie.slow_path.reason);
-            if (res < 0) {
-                return res;
-            }
-            n += res;
-            if (s[n] != ')') {
-                return -EINVAL;
-            }
-            n++;
-
-            odp_put_userspace_action(pid, &cookie, sizeof cookie.slow_path,
-                                     actions);
-            return n;
-        } else if (ovs_scan(s, "userspace(pid=%"SCNi32","
-                            "flow_sample(probability=%"SCNi32","
-                            "collector_set_id=%"SCNi32","
-                            "obs_domain_id=%"SCNi32","
-                            "obs_point_id=%"SCNi32"))%n",
-                            &pid, &probability, &collector_set_id,
-                            &obs_domain_id, &obs_point_id, &n)) {
-            union user_action_cookie cookie;
-
-            cookie.type = USER_ACTION_COOKIE_FLOW_SAMPLE;
-            cookie.flow_sample.probability = probability;
-            cookie.flow_sample.collector_set_id = collector_set_id;
-            cookie.flow_sample.obs_domain_id = obs_domain_id;
-            cookie.flow_sample.obs_point_id = obs_point_id;
-            odp_put_userspace_action(pid, &cookie, sizeof cookie.flow_sample,
-                                     actions);
-            return n;
-        } else if (ovs_scan(s, "userspace(pid=%"SCNi32",ipfix)%n", &pid, &n)) {
-            union user_action_cookie cookie;
-
-            cookie.type = USER_ACTION_COOKIE_IPFIX;
-            odp_put_userspace_action(pid, &cookie, sizeof cookie.ipfix,
-                                     actions);
-            return n;
-        } else if (ovs_scan(s, "userspace(pid=%"SCNi32",userdata(%n",
-                            &pid, &n)) {
-            struct ofpbuf buf;
-            char *end;
-
-            ofpbuf_init(&buf, 16);
-            end = ofpbuf_put_hex(&buf, &s[n], NULL);
-            if (end[0] == ')' && end[1] == ')') {
-                odp_put_userspace_action(pid, ofpbuf_data(&buf), ofpbuf_size(&buf), actions);
-                ofpbuf_uninit(&buf);
-                return (end + 2) - s;
-            }
-        }
+    if (!strncmp(s, "userspace(", 10)) {
+        return parse_odp_userspace_action(s, actions);
     }
 
     if (!strncmp(s, "set(", 4)) {
@@ -832,6 +865,8 @@ tunnel_key_attr_len(int type)
     case OVS_TUNNEL_KEY_ATTR_TTL: return 1;
     case OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT: return 0;
     case OVS_TUNNEL_KEY_ATTR_CSUM: return 0;
+    case OVS_TUNNEL_KEY_ATTR_TP_SRC: return 2;
+    case OVS_TUNNEL_KEY_ATTR_TP_DST: return 2;
     case OVS_TUNNEL_KEY_ATTR_OAM: return 0;
     case OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS: return -2;
     case __OVS_TUNNEL_KEY_ATTR_MAX:
@@ -914,6 +949,12 @@ odp_tun_key_from_attr(const struct nlattr *attr, struct flow_tnl *tun)
         case OVS_TUNNEL_KEY_ATTR_CSUM:
             tun->flags |= FLOW_TNL_F_CSUM;
             break;
+        case OVS_TUNNEL_KEY_ATTR_TP_SRC:
+            tun->tp_src = nl_attr_get_be16(a);
+            break;
+        case OVS_TUNNEL_KEY_ATTR_TP_DST:
+            tun->tp_dst = nl_attr_get_be16(a);
+            break;
         case OVS_TUNNEL_KEY_ATTR_OAM:
             tun->flags |= FLOW_TNL_F_OAM;
             break;
@@ -969,6 +1010,12 @@ tun_key_to_attr(struct ofpbuf *a, const struct flow_tnl *tun_key)
     }
     if (tun_key->flags & FLOW_TNL_F_CSUM) {
         nl_msg_put_flag(a, OVS_TUNNEL_KEY_ATTR_CSUM);
+    }
+    if (tun_key->tp_src) {
+        nl_msg_put_be16(a, OVS_TUNNEL_KEY_ATTR_TP_SRC, tun_key->tp_src);
+    }
+    if (tun_key->tp_dst) {
+        nl_msg_put_be16(a, OVS_TUNNEL_KEY_ATTR_TP_DST, tun_key->tp_dst);
     }
     if (tun_key->flags & FLOW_TNL_F_OAM) {
         nl_msg_put_flag(a, OVS_TUNNEL_KEY_ATTR_OAM);
@@ -3503,6 +3550,7 @@ odp_key_fitness_to_string(enum odp_key_fitness fitness)
 size_t
 odp_put_userspace_action(uint32_t pid,
                          const void *userdata, size_t userdata_size,
+                         odp_port_t tunnel_out_port,
                          struct ofpbuf *odp_actions)
 {
     size_t userdata_ofs;
@@ -3528,6 +3576,10 @@ odp_put_userspace_action(uint32_t pid,
                userdata, userdata_size);
     } else {
         userdata_ofs = 0;
+    }
+    if (tunnel_out_port != ODPP_NONE) {
+        nl_msg_put_odp_port(odp_actions, OVS_USERSPACE_ATTR_EGRESS_TUN_PORT,
+                            tunnel_out_port);
     }
     nl_msg_end_nested(odp_actions, offset);
 

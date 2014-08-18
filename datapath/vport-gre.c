@@ -111,7 +111,7 @@ static int gre_rcv(struct sk_buff *skb,
 		return PACKET_REJECT;
 
 	key = key_to_tunnel_id(tpi->key, tpi->seq);
-	ovs_flow_tun_info_init(&tun_info, ip_hdr(skb), key,
+	ovs_flow_tun_info_init(&tun_info, ip_hdr(skb), 0, 0, key,
 			       filter_tnl_flags(tpi->flags), NULL, 0);
 
 	ovs_vport_receive(vport, skb, &tun_info);
@@ -294,12 +294,22 @@ static int gre_send(struct vport *vport, struct sk_buff *skb)
 	return __send(vport, skb, hlen, 0, 0);
 }
 
+static int gre_get_egress_tun_info(struct vport *vport, struct sk_buff *skb,
+				   struct ovs_tunnel_info *egress_tun_info)
+{
+	return ovs_tunnel_get_egress_info(egress_tun_info,
+					  ovs_dp_get_net(vport->dp),
+					  OVS_CB(skb)->egress_tun_info,
+					  IPPROTO_GRE, skb->mark, 0, 0);
+}
+
 const struct vport_ops ovs_gre_vport_ops = {
-	.type		= OVS_VPORT_TYPE_GRE,
-	.create		= gre_create,
-	.destroy	= gre_tnl_destroy,
-	.get_name	= gre_get_name,
-	.send		= gre_send,
+	.type			= OVS_VPORT_TYPE_GRE,
+	.create			= gre_create,
+	.destroy		= gre_tnl_destroy,
+	.get_name		= gre_get_name,
+	.send			= gre_send,
+	.get_egress_tun_info	= gre_get_egress_tun_info,
 };
 
 /* GRE64 vport. */
@@ -371,10 +381,11 @@ static int gre64_send(struct vport *vport, struct sk_buff *skb)
 }
 
 const struct vport_ops ovs_gre64_vport_ops = {
-	.type		= OVS_VPORT_TYPE_GRE64,
-	.create		= gre64_create,
-	.destroy	= gre64_tnl_destroy,
-	.get_name	= gre_get_name,
-	.send		= gre64_send,
+	.type			= OVS_VPORT_TYPE_GRE64,
+	.create			= gre64_create,
+	.destroy		= gre64_tnl_destroy,
+	.get_name		= gre_get_name,
+	.send			= gre64_send,
+	.get_egress_tun_info	= gre_get_egress_tun_info,
 };
 #endif

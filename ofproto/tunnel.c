@@ -341,6 +341,10 @@ tnl_xlate_init(const struct flow *base_flow, struct flow *flow,
                                   FLOW_TNL_F_KEY);
         wc->masks.tunnel.ip_tos = UINT8_MAX;
         wc->masks.tunnel.ip_ttl = UINT8_MAX;
+        /* The tp_src and tp_dst members in flow_tnl are set to be always
+         * wildcarded, not to unwildcard them here. */
+        wc->masks.tunnel.tp_src = 0;
+        wc->masks.tunnel.tp_dst = 0;
 
         memset(&wc->masks.pkt_mark, 0xff, sizeof wc->masks.pkt_mark);
 

@@ -39,6 +39,8 @@ struct flow_tnl {
     uint16_t flags;
     uint8_t ip_tos;
     uint8_t ip_ttl;
+    ovs_be16 tp_src;
+    ovs_be16 tp_dst;
 };
 
 /* Unfortunately, a "struct flow" sometimes has to handle OpenFlow port
@@ -63,7 +65,7 @@ struct pkt_metadata {
 };
 
 #define PKT_METADATA_INITIALIZER(PORT) \
-    (struct pkt_metadata){ 0, 0, { 0, 0, 0, 0, 0, 0}, 0, 0, {(PORT)} }
+    (struct pkt_metadata){ .in_port.odp_port = PORT }
 
 bool dpid_from_string(const char *s, uint64_t *dpidp);
 

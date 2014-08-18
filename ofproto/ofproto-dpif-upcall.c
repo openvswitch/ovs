@@ -172,6 +172,7 @@ struct upcall {
     /* Not used by the upcall callback interface. */
     const struct nlattr *key;      /* Datapath flow key. */
     size_t key_len;                /* Datapath flow key length. */
+    const struct nlattr *out_tun_key;  /* Datapath output tunnel key. */
 };
 
 /* 'udpif_key's are responsible for tracking the little bit of state udpif
@@ -618,6 +619,8 @@ recv_upcalls(struct handler *handler)
         upcall->key = dupcall->key;
         upcall->key_len = dupcall->key_len;
 
+        upcall->out_tun_key = dupcall->out_tun_key;
+
         if (vsp_adjust_flow(upcall->ofproto, &flow, &dupcall->packet)) {
             upcall->vsp_adjusted = true;
         }
@@ -811,7 +814,8 @@ compose_slow_path(struct udpif *udpif, struct xlate_out *xout,
         ? ODPP_NONE
         : odp_in_port;
     pid = dpif_port_get_pid(udpif->dpif, port, flow_hash_5tuple(flow, 0));
-    odp_put_userspace_action(pid, &cookie, sizeof cookie.slow_path, buf);
+    odp_put_userspace_action(pid, &cookie, sizeof cookie.slow_path, ODPP_NONE,
+                             buf);
 }
 
 static int
@@ -839,6 +843,8 @@ upcall_receive(struct upcall *upcall, const struct dpif_backer *backer,
 
     upcall->key = NULL;
     upcall->key_len = 0;
+
+    upcall->out_tun_key = NULL;
 
     return 0;
 }
@@ -996,7 +1002,22 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
 
     case IPFIX_UPCALL:
         if (upcall->ipfix) {
-            dpif_ipfix_bridge_sample(upcall->ipfix, packet, flow);
+            union user_action_cookie cookie;
+            struct flow_tnl output_tunnel_key;
+
+            memset(&cookie, 0, sizeof cookie);
+            memcpy(&cookie, nl_attr_get(userdata), sizeof cookie.ipfix);
+
+            if (upcall->out_tun_key) {
+                memset(&output_tunnel_key, 0, sizeof output_tunnel_key);
+                odp_tun_key_from_attr(upcall->out_tun_key,
+                                      &output_tunnel_key);
+            }
+            dpif_ipfix_bridge_sample(upcall->ipfix, packet, flow,
+                                     flow->in_port.odp_port,
+                                     cookie.ipfix.output_odp_port,
+                                     upcall->out_tun_key ?
+                                         &output_tunnel_key : NULL);
         }
         break;
 

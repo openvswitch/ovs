@@ -246,6 +246,23 @@ static bool match_validate(const struct sw_flow_match *match,
 	return true;
 }
 
+size_t ovs_tun_key_attr_size(void)
+{
+	/* Whenever adding new OVS_TUNNEL_KEY_ FIELDS, we should consider
+	 * updating this function.  */
+	return    nla_total_size(8)    /* OVS_TUNNEL_KEY_ATTR_ID */
+		+ nla_total_size(4)    /* OVS_TUNNEL_KEY_ATTR_IPV4_SRC */
+		+ nla_total_size(4)    /* OVS_TUNNEL_KEY_ATTR_IPV4_DST */
+		+ nla_total_size(1)    /* OVS_TUNNEL_KEY_ATTR_TOS */
+		+ nla_total_size(1)    /* OVS_TUNNEL_KEY_ATTR_TTL */
+		+ nla_total_size(0)    /* OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT */
+		+ nla_total_size(0)    /* OVS_TUNNEL_KEY_ATTR_CSUM */
+		+ nla_total_size(0)    /* OVS_TUNNEL_KEY_ATTR_OAM */
+		+ nla_total_size(256)  /* OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS */
+		+ nla_total_size(2)    /* OVS_TUNNEL_KEY_ATTR_TP_SRC */
+		+ nla_total_size(2);   /* OVS_TUNNEL_KEY_ATTR_TP_DST */
+}
+
 size_t ovs_key_attr_size(void)
 {
 	/* Whenever adding new OVS_KEY_ FIELDS, we should consider
@@ -254,15 +271,7 @@ size_t ovs_key_attr_size(void)
 
 	return    nla_total_size(4)   /* OVS_KEY_ATTR_PRIORITY */
 		+ nla_total_size(0)   /* OVS_KEY_ATTR_TUNNEL */
-		  + nla_total_size(8)   /* OVS_TUNNEL_KEY_ATTR_ID */
-		  + nla_total_size(4)   /* OVS_TUNNEL_KEY_ATTR_IPV4_SRC */
-		  + nla_total_size(4)   /* OVS_TUNNEL_KEY_ATTR_IPV4_DST */
-		  + nla_total_size(1)   /* OVS_TUNNEL_KEY_ATTR_TOS */
-		  + nla_total_size(1)   /* OVS_TUNNEL_KEY_ATTR_TTL */
-		  + nla_total_size(0)   /* OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT */
-		  + nla_total_size(0)   /* OVS_TUNNEL_KEY_ATTR_CSUM */
-		  + nla_total_size(0)   /* OVS_TUNNEL_KEY_ATTR_OAM */
-		  + nla_total_size(256) /* OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS */
+		  + ovs_tun_key_attr_size()
 		+ nla_total_size(4)   /* OVS_KEY_ATTR_IN_PORT */
 		+ nla_total_size(4)   /* OVS_KEY_ATTR_SKB_MARK */
 		+ nla_total_size(4)   /* OVS_KEY_ATTR_DP_HASH */
@@ -392,6 +401,8 @@ static int ipv4_tun_from_nlattr(const struct nlattr *attr,
 			[OVS_TUNNEL_KEY_ATTR_TTL] = 1,
 			[OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT] = 0,
 			[OVS_TUNNEL_KEY_ATTR_CSUM] = 0,
+			[OVS_TUNNEL_KEY_ATTR_TP_SRC] = sizeof(u16),
+			[OVS_TUNNEL_KEY_ATTR_TP_DST] = sizeof(u16),
 			[OVS_TUNNEL_KEY_ATTR_OAM] = 0,
 			[OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS] = -1,
 		};
@@ -438,6 +449,14 @@ static int ipv4_tun_from_nlattr(const struct nlattr *attr,
 			break;
 		case OVS_TUNNEL_KEY_ATTR_CSUM:
 			tun_flags |= TUNNEL_CSUM;
+			break;
+		case OVS_TUNNEL_KEY_ATTR_TP_SRC:
+			SW_FLOW_KEY_PUT(match, tun_key.tp_src,
+					nla_get_be16(a), is_mask);
+			break;
+		case OVS_TUNNEL_KEY_ATTR_TP_DST:
+			SW_FLOW_KEY_PUT(match, tun_key.tp_dst,
+					nla_get_be16(a), is_mask);
 			break;
 		case OVS_TUNNEL_KEY_ATTR_OAM:
 			tun_flags |= TUNNEL_OAM;
@@ -521,17 +540,11 @@ static int ipv4_tun_from_nlattr(const struct nlattr *attr,
 	return 0;
 }
 
-static int ipv4_tun_to_nlattr(struct sk_buff *skb,
-			      const struct ovs_key_ipv4_tunnel *output,
-			      const struct geneve_opt *tun_opts,
-			      int swkey_tun_opts_len)
+static int __ipv4_tun_to_nlattr(struct sk_buff *skb,
+				const struct ovs_key_ipv4_tunnel *output,
+				const struct geneve_opt *tun_opts,
+				int swkey_tun_opts_len)
 {
-	struct nlattr *nla;
-
-	nla = nla_nest_start(skb, OVS_KEY_ATTR_TUNNEL);
-	if (!nla)
-		return -EMSGSIZE;
-
 	if (output->tun_flags & TUNNEL_KEY &&
 	    nla_put_be64(skb, OVS_TUNNEL_KEY_ATTR_ID, output->tun_id))
 		return -EMSGSIZE;
@@ -552,6 +565,12 @@ static int ipv4_tun_to_nlattr(struct sk_buff *skb,
 	if ((output->tun_flags & TUNNEL_CSUM) &&
 		nla_put_flag(skb, OVS_TUNNEL_KEY_ATTR_CSUM))
 		return -EMSGSIZE;
+	if (output->tp_src &&
+		nla_put_be16(skb, OVS_TUNNEL_KEY_ATTR_TP_SRC, output->tp_src))
+		return -EMSGSIZE;
+	if (output->tp_dst &&
+		nla_put_be16(skb, OVS_TUNNEL_KEY_ATTR_TP_DST, output->tp_dst))
+		return -EMSGSIZE;
 	if ((output->tun_flags & TUNNEL_OAM) &&
 		nla_put_flag(skb, OVS_TUNNEL_KEY_ATTR_OAM))
 		return -EMSGSIZE;
@@ -560,10 +579,37 @@ static int ipv4_tun_to_nlattr(struct sk_buff *skb,
 		    swkey_tun_opts_len, tun_opts))
 		return -EMSGSIZE;
 
+	return 0;
+}
+
+
+static int ipv4_tun_to_nlattr(struct sk_buff *skb,
+			      const struct ovs_key_ipv4_tunnel *output,
+			      const struct geneve_opt *tun_opts,
+			      int swkey_tun_opts_len)
+{
+	struct nlattr *nla;
+	int err;
+
+	nla = nla_nest_start(skb, OVS_KEY_ATTR_TUNNEL);
+	if (!nla)
+		return -EMSGSIZE;
+
+	err = __ipv4_tun_to_nlattr(skb, output, tun_opts, swkey_tun_opts_len);
+	if (err)
+		return err;
+
 	nla_nest_end(skb, nla);
 	return 0;
 }
 
+int ovs_nla_put_egress_tunnel_key(struct sk_buff *skb,
+				  const struct ovs_tunnel_info *egress_tun_info)
+{
+	return __ipv4_tun_to_nlattr(skb, &egress_tun_info->tunnel,
+				    egress_tun_info->options,
+				    egress_tun_info->options_len);
+}
 
 static int metadata_from_nlattrs(struct sw_flow_match *match,  u64 *attrs,
 				 const struct nlattr **a, bool is_mask)
@@ -1650,6 +1696,7 @@ static int validate_userspace(const struct nlattr *attr)
 	static const struct nla_policy userspace_policy[OVS_USERSPACE_ATTR_MAX + 1] = {
 		[OVS_USERSPACE_ATTR_PID] = {.type = NLA_U32 },
 		[OVS_USERSPACE_ATTR_USERDATA] = {.type = NLA_UNSPEC },
+		[OVS_USERSPACE_ATTR_EGRESS_TUN_PORT] = {.type = NLA_U32 },
 	};
 	struct nlattr *a[OVS_USERSPACE_ATTR_MAX + 1];
 	int error;

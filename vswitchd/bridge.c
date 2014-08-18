@@ -1165,6 +1165,15 @@ bridge_configure_ipfix(struct bridge *br)
         if (be_cfg->cache_max_flows) {
             be_opts.cache_max_flows = *be_cfg->cache_max_flows;
         }
+
+        be_opts.enable_tunnel_sampling = smap_get_bool(&be_cfg->other_config,
+                                             "enable-tunnel-sampling", true);
+
+        be_opts.enable_input_sampling = !smap_get_bool(&be_cfg->other_config,
+                                              "enable-input-sampling", false);
+
+        be_opts.enable_output_sampling = !smap_get_bool(&be_cfg->other_config,
+                                              "enable-output-sampling", false);
     }
 
     if (n_fe_opts > 0) {

@@ -637,10 +637,12 @@ static int output_userspace(struct datapath *dp, struct sk_buff *skb,
 	struct dp_upcall_info upcall;
 	const struct nlattr *a;
 	int rem;
+	struct ovs_tunnel_info info;
 
 	upcall.cmd = OVS_PACKET_CMD_ACTION;
 	upcall.userdata = NULL;
 	upcall.portid = 0;
+	upcall.egress_tun_info = NULL;
 
 	for (a = nla_data(attr), rem = nla_len(attr); rem > 0;
 		 a = nla_next(a, &rem)) {
@@ -652,7 +654,24 @@ static int output_userspace(struct datapath *dp, struct sk_buff *skb,
 		case OVS_USERSPACE_ATTR_PID:
 			upcall.portid = nla_get_u32(a);
 			break;
+
+		case OVS_USERSPACE_ATTR_EGRESS_TUN_PORT: {
+			/* Get out tunnel info. */
+			struct vport *vport;
+
+			vport = ovs_vport_rcu(dp, nla_get_u32(a));
+			if (vport) {
+				int err;
+
+				err = ovs_vport_get_egress_tun_info(vport, skb,
+								    &info);
+				if (!err)
+					upcall.egress_tun_info = &info;
+			}
+			break;
 		}
+
+		} /* End of switch. */
 	}
 
 	return ovs_dp_upcall(dp, skb, &upcall);

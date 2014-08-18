@@ -2126,7 +2126,8 @@ compose_sample_action(const struct xbridge *xbridge,
                       const struct flow *flow,
                       const uint32_t probability,
                       const union user_action_cookie *cookie,
-                      const size_t cookie_size)
+                      const size_t cookie_size,
+                      const odp_port_t tunnel_out_port)
 {
     size_t sample_offset, actions_offset;
     odp_port_t odp_port;
@@ -2143,7 +2144,7 @@ compose_sample_action(const struct xbridge *xbridge,
     pid = dpif_port_get_pid(xbridge->dpif, odp_port,
                             flow_hash_5tuple(flow, 0));
     cookie_offset = odp_put_userspace_action(pid, cookie, cookie_size,
-                                             odp_actions);
+                                             tunnel_out_port, odp_actions);
 
     nl_msg_end_nested(odp_actions, actions_offset);
     nl_msg_end_nested(odp_actions, sample_offset);
@@ -2201,7 +2202,7 @@ compose_sflow_action(const struct xbridge *xbridge,
                          odp_port == ODPP_NONE ? 0 : 1, &cookie);
 
     return compose_sample_action(xbridge, odp_actions, flow,  probability,
-                                 &cookie, sizeof cookie.sflow);
+                                 &cookie, sizeof cookie.sflow, ODPP_NONE);
 }
 
 static void
@@ -2217,29 +2218,54 @@ compose_flow_sample_cookie(uint16_t probability, uint32_t collector_set_id,
 }
 
 static void
-compose_ipfix_cookie(union user_action_cookie *cookie)
+compose_ipfix_cookie(union user_action_cookie *cookie,
+                     odp_port_t output_odp_port)
 {
     cookie->type = USER_ACTION_COOKIE_IPFIX;
+    cookie->ipfix.output_odp_port = output_odp_port;
 }
 
 /* Compose SAMPLE action for IPFIX bridge sampling. */
 static void
 compose_ipfix_action(const struct xbridge *xbridge,
                      struct ofpbuf *odp_actions,
-                     const struct flow *flow)
+                     const struct flow *flow,
+                     odp_port_t output_odp_port)
 {
     uint32_t probability;
     union user_action_cookie cookie;
+    odp_port_t tunnel_out_port = ODPP_NONE;
 
     if (!xbridge->ipfix || flow->in_port.ofp_port == OFPP_NONE) {
         return;
     }
 
+    /* For input case, output_odp_port is ODPP_NONE, which is an invalid port
+     * number. */
+    if (output_odp_port == ODPP_NONE &&
+        !dpif_ipfix_get_bridge_exporter_input_sampling(xbridge->ipfix)) {
+        return;
+    }
+
+    /* For output case, output_odp_port is valid*/
+    if (output_odp_port != ODPP_NONE) {
+        if (!dpif_ipfix_get_bridge_exporter_output_sampling(xbridge->ipfix)) {
+            return;
+        }
+        /* If tunnel sampling is enabled, put an additional option attribute:
+         * OVS_USERSPACE_ATTR_TUNNEL_OUT_PORT
+         */
+        if (dpif_ipfix_get_bridge_exporter_tunnel_sampling(xbridge->ipfix) &&
+            dpif_ipfix_get_tunnel_port(xbridge->ipfix, output_odp_port) ) {
+           tunnel_out_port = output_odp_port;
+        }
+    }
+
     probability = dpif_ipfix_get_bridge_exporter_probability(xbridge->ipfix);
-    compose_ipfix_cookie(&cookie);
+    compose_ipfix_cookie(&cookie, output_odp_port);
 
     compose_sample_action(xbridge, odp_actions, flow,  probability,
-                          &cookie, sizeof cookie.ipfix);
+                          &cookie, sizeof cookie.ipfix, tunnel_out_port);
 }
 
 /* SAMPLE action for sFlow must be first action in any given list of
@@ -2261,7 +2287,14 @@ static void
 add_ipfix_action(struct xlate_ctx *ctx)
 {
     compose_ipfix_action(ctx->xbridge, ctx->xout->odp_actions,
-                         &ctx->xin->flow);
+                         &ctx->xin->flow, ODPP_NONE);
+}
+
+static void
+add_ipfix_output_action(struct xlate_ctx *ctx, odp_port_t port)
+{
+    compose_ipfix_action(ctx->xbridge, ctx->xout->odp_actions,
+                         &ctx->xin->flow, port);
 }
 
 /* Fix SAMPLE action according to data collected while composing ODP actions.
@@ -2492,6 +2525,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
             nl_msg_put_u32(ctx->xout->odp_actions, OVS_ACTION_ATTR_RECIRC,
                            xr->recirc_id);
         } else {
+            add_ipfix_output_action(ctx, out_port);
             nl_msg_put_odp_port(ctx->xout->odp_actions, OVS_ACTION_ATTR_OUTPUT,
                                 out_port);
         }
@@ -3333,7 +3367,8 @@ xlate_sample_action(struct xlate_ctx *ctx,
   compose_flow_sample_cookie(os->probability, os->collector_set_id,
                              os->obs_domain_id, os->obs_point_id, &cookie);
   compose_sample_action(ctx->xbridge, ctx->xout->odp_actions, &ctx->xin->flow,
-                        probability, &cookie, sizeof cookie.flow_sample);
+                        probability, &cookie, sizeof cookie.flow_sample,
+                        ODPP_NONE);
 }
 
 static bool

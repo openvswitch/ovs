@@ -1309,6 +1309,7 @@ destruct(struct ofproto *ofproto_)
 
     netflow_unref(ofproto->netflow);
     dpif_sflow_unref(ofproto->sflow);
+    dpif_ipfix_unref(ofproto->ipfix);
     hmap_destroy(&ofproto->bundles);
     mac_learning_unref(ofproto->ml);
     mcast_snooping_unref(ofproto->ms);
@@ -1582,6 +1583,9 @@ port_construct(struct ofport *port_)
     if (netdev_get_tunnel_config(netdev)) {
         tnl_port_add(port, port->up.netdev, port->odp_port);
         port->is_tunnel = true;
+        if (ofproto->ipfix) {
+           dpif_ipfix_add_tunnel_port(ofproto->ipfix, port_, port->odp_port);
+        }
     } else {
         /* Sanity-check that a mapping doesn't already exist.  This
          * shouldn't happen for non-tunnel ports. */
@@ -1641,6 +1645,10 @@ port_destruct(struct ofport *port_)
         ovs_rwlock_wrlock(&ofproto->backer->odp_to_ofport_lock);
         hmap_remove(&ofproto->backer->odp_to_ofport_map, &port->odp_port_node);
         ovs_rwlock_unlock(&ofproto->backer->odp_to_ofport_lock);
+    }
+
+    if (port->is_tunnel && ofproto->ipfix) {
+       dpif_ipfix_del_tunnel_port(ofproto->ipfix, port->odp_port);
     }
 
     tnl_port_del(port);
@@ -1744,9 +1752,11 @@ set_ipfix(
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct dpif_ipfix *di = ofproto->ipfix;
     bool has_options = bridge_exporter_options || flow_exporters_options;
+    bool new_di = false;
 
     if (has_options && !di) {
         di = ofproto->ipfix = dpif_ipfix_create();
+        new_di = true;
     }
 
     if (di) {
@@ -1755,6 +1765,16 @@ set_ipfix(
         dpif_ipfix_set_options(
             di, bridge_exporter_options, flow_exporters_options,
             n_flow_exporters_options);
+
+        /* Add tunnel ports only when a new ipfix created */
+        if (new_di == true) {
+            struct ofport_dpif *ofport;
+            HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
+                if (ofport->is_tunnel == true) {
+                    dpif_ipfix_add_tunnel_port(di, &ofport->up, ofport->odp_port);
+                }
+            }
+        }
 
         if (!has_options) {
             dpif_ipfix_unref(di);

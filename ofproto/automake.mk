@@ -73,3 +73,6 @@ dist_noinst_SCRIPTS = ofproto/ipfix-gen-entities
 ofproto/ipfix-entities.def: ofproto/ipfix.xml ofproto/ipfix-gen-entities
 	$(run_python) $(srcdir)/ofproto/ipfix-gen-entities $< > $@.tmp
 	mv $@.tmp $@
+
+# IPFIX enterprise entity definition macros.
+EXTRA_DIST += ofproto/ipfix-enterprise-entities.def
