@@ -42,6 +42,21 @@ typedef struct _OVS_OPEN_INSTANCE {
     PFILE_OBJECT fileObject;
     PVOID eventQueue;
     PVOID packetQueue;
+    UINT32 pid;
+
+    /*
+     * On platforms that support netlink natively, there's generally some form of
+     * serialization between concurrent calls to netlink sockets. However, OVS
+     * userspace guarantees that a given netlink handle is not concurrently used.
+     * Despite this, we do want to have some basic checks in the kernel to make
+     * sure that things don't break if there are concurrent calls.
+     *
+     * This is generally not an issue since kernel data structure access should
+     * be sychronized anyway. Only reason to have this safeguared is to protect
+     * the state in "state-aware" read calls which rely on previous state. This
+     * restriction might go away as the userspace code gets implemented.
+     */
+    INT inUse;
 } OVS_OPEN_INSTANCE, *POVS_OPEN_INSTANCE;
 
 NDIS_STATUS OvsCreateDeviceObject(NDIS_HANDLE ovsExtDriverHandle);
@@ -51,6 +66,16 @@ POVS_OPEN_INSTANCE OvsGetOpenInstance(PFILE_OBJECT fileObject,
                                       UINT32 dpNo);
 
 NTSTATUS OvsCompleteIrpRequest(PIRP irp, ULONG_PTR infoPtr, NTSTATUS status);
+
+/*
+ * Structure of any message passed between userspace and kernel.
+ */
+typedef struct _OVS_MESSAGE {
+    struct nlmsghdr nlMsg;
+    struct genlmsghdr genlMsg;
+    struct ovs_header ovsHdr;
+    /* Variable length nl_attrs follow. */
+} OVS_MESSAGE, *POVS_MESSAGE;
 
 #endif /* __OVS_DATAPATH_H_ */
 
