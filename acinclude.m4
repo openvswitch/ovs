@@ -208,8 +208,8 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     #
     # These options are specified inside a single -Wl directive to prevent
     # autotools from reordering them.
-    vswitchd_ovs_vswitchd_LDFLAGS=-Wl,--whole-archive,$DPDK_LIB,--no-whole-archive
-    AC_SUBST([vswitchd_ovs_vswitchd_LDFLAGS])
+    DPDK_vswitchd_LDFLAGS=-Wl,--whole-archive,$DPDK_LIB,--no-whole-archive
+    AC_SUBST([DPDK_vswitchd_LDFLAGS])
     AC_DEFINE([DPDK_NETDEV], [1], [System uses the DPDK module.])
   else
     RTE_SDK=
