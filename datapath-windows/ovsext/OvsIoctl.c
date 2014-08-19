@@ -14,6 +14,14 @@
  * limitations under the License.
  */
 
+/*
+ * XXX: OVS_USE_NL_INTERFACE is being used to keep the legacy DPIF interface
+ * alive while we transition over to the netlink based interface.
+ * OVS_USE_NL_INTERFACE = 0 => legacy inteface to use with dpif-windows.c
+ * OVS_USE_NL_INTERFACE = 1 => netlink inteface to use with ported dpif-linux.c
+ */
+#if defined OVS_USE_NL_INTERFACE && OVS_USE_NL_INTERFACE == 0
+
 #include "precomp.h"
 #include "OvsIoctl.h"
 #include "OvsJhash.h"
@@ -29,7 +37,7 @@
 #ifdef OVS_DBG_MOD
 #undef OVS_DBG_MOD
 #endif
-#define OVS_DBG_MOD OVS_DBG_IOCTL
+#define OVS_DBG_MOD OVS_DBG_DATAPATH
 #include "OvsDebug.h"
 
 /* Handles to the device object for communication with userspace. */
@@ -756,3 +764,5 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
         return OvsCompleteIrpRequest(irp, (ULONG_PTR)replyLen, status);
     }
 }
+
+#endif /* OVS_USE_NL_INTERFACE */

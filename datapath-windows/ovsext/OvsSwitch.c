@@ -21,7 +21,6 @@
 
 #include "precomp.h"
 
-#include "OvsIoctl.h"
 #include "OvsSwitch.h"
 #include "OvsVport.h"
 #include "OvsEvent.h"
@@ -38,6 +37,8 @@
 
 POVS_SWITCH_CONTEXT gOvsSwitchContext;
 BOOLEAN gOvsInAttach;
+UINT64 ovsTimeIncrementPerTick;
+
 extern PNDIS_SPIN_LOCK gOvsCtrlLock;
 extern NDIS_HANDLE gOvsExtDriverHandle;
 extern NDIS_HANDLE gOvsExtDriverObject;

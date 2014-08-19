@@ -16,7 +16,7 @@
 
 #include "precomp.h"
 
-#include "OvsIoctl.h"
+#include "Datapath.h"
 #include "OvsSwitch.h"
 #include "OvsVport.h"
 #include "OvsEvent.h"

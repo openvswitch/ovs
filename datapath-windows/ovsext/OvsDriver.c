@@ -16,7 +16,7 @@
 
 #include "precomp.h"
 #include "OvsSwitch.h"
-#include "OvsIoctl.h"
+#include "Datapath.h"
 
 #ifdef OVS_DBG_MOD
 #undef OVS_DBG_MOD

@@ -29,3 +29,6 @@
  * include/linux is pending discussion.
  */
 #include "..\include\OvsDpInterface.h"
+#if defined OVS_USE_NL_INTERFACE && OVS_USE_NL_INTERFACE == 1
+#include "..\include\OvsDpInterfaceExt.h"
+#endif

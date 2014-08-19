@@ -21,15 +21,22 @@
  * OVS_USE_NL_INTERFACE = 1 => netlink inteface to use with ported dpif-linux.c
  */
 #if defined OVS_USE_NL_INTERFACE && OVS_USE_NL_INTERFACE == 0
+#include "OvsIoctl.h"
 
-#ifndef __OVS_IOCTL_H_
-#define __OVS_IOCTL_H_ 1
+#else
+
+#ifndef __OVS_DATAPATH_H_
+#define __OVS_DATAPATH_H_ 1
 
 typedef struct _OVS_DEVICE_EXTENSION {
     INT numberOpenInstance;
+    INT pidCount;
 } OVS_DEVICE_EXTENSION, *POVS_DEVICE_EXTENSION;
 
 
+/*
+ * Private context for each handle on the device.
+ */
 typedef struct _OVS_OPEN_INSTANCE {
     UINT32 cookie;
     PFILE_OBJECT fileObject;
@@ -45,6 +52,6 @@ POVS_OPEN_INSTANCE OvsGetOpenInstance(PFILE_OBJECT fileObject,
 
 NTSTATUS OvsCompleteIrpRequest(PIRP irp, ULONG_PTR infoPtr, NTSTATUS status);
 
-#endif /* __OVS_IOCTL_H_ */
+#endif /* __OVS_DATAPATH_H_ */
 
 #endif /* OVS_USE_NL_INTERFACE */

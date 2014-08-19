@@ -9,6 +9,8 @@ EXTRA_DIST += \
 	datapath-windows/misc/install.cmd \
 	datapath-windows/misc/uninstall.cmd \
 	datapath-windows/ovsext.sln \
+	datapath-windows/ovsext/Datapath.c \
+	datapath-windows/ovsext/Datapath.h \
 	datapath-windows/ovsext/OvsActions.c \
 	datapath-windows/ovsext/OvsAtomic.h \
 	datapath-windows/ovsext/OvsBufferMgmt.c \

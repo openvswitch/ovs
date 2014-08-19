@@ -74,6 +74,7 @@
     <ClInclude Include="OvsAtomic.h" />
     <ClInclude Include="OvsBufferMgmt.h" />
     <ClInclude Include="OvsChecksum.h" />
+    <ClInclude Include="Datapath.h" />
     <ClInclude Include="OvsDebug.h" />
     <ClInclude Include="OvsEth.h" />
     <ClInclude Include="OvsEvent.h" />
@@ -99,7 +100,7 @@
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
-      <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1;OVS_WIN_DP=1</PreprocessorDefinitions>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1;OVS_WIN_DP=1;OVS_USE_NL_INTERFACE=0</PreprocessorDefinitions>
     </ClCompile>
     <Midl>
       <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1</PreprocessorDefinitions>
@@ -124,6 +125,7 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Datapath.c" />
     <ClCompile Include="OvsDriver.c" />
     <ClCompile Include="OvsJhash.c" />
     <ClCompile Include="OvsOid.c" />

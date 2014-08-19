@@ -32,6 +32,7 @@
 
 extern PNDIS_SPIN_LOCK gOvsCtrlLock;
 extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
+extern UINT64 ovsTimeIncrementPerTick;
 
 static NTSTATUS ReportFlowInfo(OvsFlow *flow, UINT32 getFlags,
                                UINT32 getActionsLen, OvsFlowInfo *info);
@@ -142,7 +143,6 @@ OvsFlowUsed(OvsFlow *flow,
 
     KeQueryTickCount(&tickCount);
     flow->used = tickCount.QuadPart * ovsTimeIncrementPerTick;
-    flow->used += ovsUserTimestampDelta;
     flow->packetCount++;
     flow->byteCount += OvsPacketLenNBL(packet);
     flow->tcpFlags |= OvsGetTcpFlags(packet, &flow->key, layers);

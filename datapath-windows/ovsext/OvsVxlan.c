@@ -16,7 +16,6 @@
 
 #include "precomp.h"
 #include "OvsNetProto.h"
-#include "OvsIoctl.h"
 #include "OvsSwitch.h"
 #include "OvsVport.h"
 #include "OvsFlow.h"

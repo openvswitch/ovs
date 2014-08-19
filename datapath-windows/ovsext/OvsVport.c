@@ -15,7 +15,6 @@
  */
 
 #include "precomp.h"
-#include "OvsIoctl.h"
 #include "OvsJhash.h"
 #include "OvsSwitch.h"
 #include "OvsVport.h"

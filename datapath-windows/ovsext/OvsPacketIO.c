@@ -20,7 +20,6 @@
  */
 
 #include "precomp.h"
-#include "OvsIoctl.h"
 #include "OvsSwitch.h"
 #include "OvsVport.h"
 #include "OvsNetProto.h"

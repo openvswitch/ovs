@@ -31,7 +31,6 @@
 
 #include <fwpmk.h>
 #include "OvsTunnel.h"
-#include "OvsIoctl.h"
 #include "OvsSwitch.h"
 #include "OvsVport.h"
 #include "OvsEvent.h"
