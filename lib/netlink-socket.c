@@ -28,6 +28,7 @@
 #include "hmap.h"
 #include "netlink.h"
 #include "netlink-protocol.h"
+#include "odp-netlink.h"
 #include "ofpbuf.h"
 #include "ovs-thread.h"
 #include "poll-loop.h"
@@ -60,22 +61,7 @@ portid_next(void)
     g_last_portid++;
     return g_last_portid;
 }
-
-static void
-set_sock_pid_in_kernel(HANDLE handle, uint32_t pid)
-    OVS_GUARDED_BY(portid_mutex)
-{
-    struct nlmsghdr msg = { 0 };
-
-    msg.nlmsg_len = sizeof(struct nlmsghdr);
-    msg.nlmsg_type = 80; /* target = set file pid */
-    msg.nlmsg_flags = 0;
-    msg.nlmsg_seq = 0;
-    msg.nlmsg_pid = pid;
-
-    WriteFile(handle, &msg, sizeof(struct nlmsghdr), NULL, NULL);
-}
-#endif  /* _WIN32 */
+#endif /* _WIN32 */
 
 /* A single (bad) Netlink message can in theory dump out many, many log
  * messages, so the burst size is set quite high here to avoid missing useful
@@ -85,6 +71,9 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 600);
 static uint32_t nl_sock_allocate_seq(struct nl_sock *, unsigned int n);
 static void log_nlmsg(const char *function, int error,
                       const void *message, size_t size, int protocol);
+#ifdef _WIN32
+static int get_sock_pid_from_kernel(struct nl_sock *sock, uint32_t *pid);
+#endif
 
 /* Netlink sockets. */
 
@@ -176,10 +165,10 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
     rcvbuf = 1024 * 1024;
 #ifdef _WIN32
     sock->rcvbuf = rcvbuf;
-    ovs_mutex_lock(&portid_mutex);
-    sock->pid = portid_next();
-    set_sock_pid_in_kernel(sock->handle, sock->pid);
-    ovs_mutex_unlock(&portid_mutex);
+    retval = get_sock_pid_from_kernel(sock, &sock->pid);
+    if (retval != 0) {
+        goto error;
+    }
 #else
     if (setsockopt(sock->fd, SOL_SOCKET, SO_RCVBUFFORCE,
                    &rcvbuf, sizeof rcvbuf)) {
@@ -266,6 +255,69 @@ nl_sock_destroy(struct nl_sock *sock)
         free(sock);
     }
 }
+
+#ifdef _WIN32
+/* Reads the pid for 'sock' generated in the kernel datapath. The function
+ * follows a transaction semantic. Eventually this function should call into
+ * nl_transact. */
+static int
+get_sock_pid_from_kernel(struct nl_sock *sock, uint32_t *pid)
+{
+    struct nl_transaction txn;
+    struct ofpbuf request;
+    uint64_t request_stub[128];
+    struct ofpbuf reply;
+    uint64_t reply_stub[128];
+    struct ovs_header *ovs_header;
+    struct nlmsghdr *nlmsg;
+    uint32_t seq;
+    int retval;
+    DWORD bytes;
+    int ovs_msg_size = sizeof (struct nlmsghdr) + sizeof (struct genlmsghdr) +
+                       sizeof (struct ovs_header);
+
+    ofpbuf_use_stub(&request, request_stub, sizeof request_stub);
+    txn.request = &request;
+    ofpbuf_use_stub(&reply, reply_stub, sizeof reply_stub);
+    txn.reply = &reply;
+
+    seq = nl_sock_allocate_seq(sock, 1);
+    nl_msg_put_genlmsghdr(&request, 0, OVS_WIN_NL_CTRL_FAMILY_ID, 0,
+                          OVS_CTRL_CMD_WIN_GET_PID, OVS_WIN_CONTROL_VERSION);
+    nlmsg = nl_msg_nlmsghdr(txn.request);
+    nlmsg->nlmsg_seq = seq;
+
+    ovs_header = ofpbuf_put_uninit(&request, sizeof *ovs_header);
+    ovs_header->dp_ifindex = 0;
+    ovs_header = ofpbuf_put_uninit(&reply, ovs_msg_size);
+
+    if (!DeviceIoControl(sock->handle, OVS_IOCTL_TRANSACT,
+                         ofpbuf_data(txn.request), ofpbuf_size(txn.request),
+                         ofpbuf_data(txn.reply), ofpbuf_size(txn.reply),
+                         &bytes, NULL)) {
+        retval = EINVAL;
+        goto done;
+    } else {
+        if (bytes < ovs_msg_size) {
+            retval = EINVAL;
+            goto done;
+        }
+
+        nlmsg = nl_msg_nlmsghdr(txn.request);
+        if (nlmsg->nlmsg_seq != seq) {
+            retval = EINVAL;
+            goto done;
+        }
+        *pid = nlmsg->nlmsg_pid;
+    }
+    retval = 0;
+
+done:
+    ofpbuf_uninit(&request);
+    ofpbuf_uninit(&reply);
+    return retval;
+}
+#endif  /* _WIN32 */
 
 /* Tries to add 'sock' as a listener for 'multicast_group'.  Returns 0 if
  * successful, otherwise a positive errno value.
