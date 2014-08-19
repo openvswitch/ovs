@@ -3,6 +3,7 @@ EXTRA_DIST += \
 	datapath-windows/DESIGN \
 	datapath-windows/Package/package.VcxProj \
 	datapath-windows/Package/package.VcxProj.user \
+	datapath-windows/include/OvsDpInterfaceExt.h \
 	datapath-windows/include/OvsNetlink.h \
 	datapath-windows/include/OvsPub.h \
 	datapath-windows/misc/install.cmd \

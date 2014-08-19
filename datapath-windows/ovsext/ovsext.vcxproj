@@ -70,6 +70,7 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" />
   </ImportGroup>
   <ItemGroup Label="WrappedTaskItems">
+    <ClInclude Include="..\include\OvsDpInterfaceExt.h" />
     <ClInclude Include="OvsAtomic.h" />
     <ClInclude Include="OvsBufferMgmt.h" />
     <ClInclude Include="OvsChecksum.h" />

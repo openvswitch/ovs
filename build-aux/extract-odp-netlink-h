@@ -14,6 +14,13 @@
 # Avoid using reserved names in header guards.
 s/_LINUX_OPENVSWITCH_H/ODP_NETLINK_H/
 
+# Include platform extensions header file on Win32.
+$i\
+#ifdef _WIN32\
+#include "OvsDpInterfaceExt.h"\
+#endif\
+
+
 # Transform most Linux-specific __u<N> types into C99 uint<N>_t types,
 # and most Linux-specific __be<N> into Open vSwitch ovs_be<N>,
 # and use the appropriate userspace header.
