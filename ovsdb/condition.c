@@ -93,10 +93,10 @@ ovsdb_clause_from_json(const struct ovsdb_table_schema *ts,
     case OVSDB_F_LE:
     case OVSDB_F_GT:
     case OVSDB_F_GE:
-        /* XXX should we also allow these operators for types with n_min == 0,
-         * n_max == 1?  (They would always be "false" if the value was
-         * missing.) */
-        if (!ovsdb_type_is_scalar(&type)
+        /* Allow these operators for types with n_min == 0, n_max == 1.
+         * (They will always be "false" if the value is missing.) */
+        if (!(ovsdb_type_is_scalar(&type)
+            || ovsdb_type_is_optional_scalar(&type))
             || (type.key.type != OVSDB_TYPE_INTEGER
                 && type.key.type != OVSDB_TYPE_REAL)) {
             char *s = ovsdb_type_to_english(&type);
@@ -225,7 +225,21 @@ ovsdb_clause_evaluate(const struct ovsdb_row *row,
     const struct ovsdb_datum *arg = &c->arg;
     const struct ovsdb_type *type = &c->column->type;
 
-    if (ovsdb_type_is_scalar(type)) {
+    if (ovsdb_type_is_optional_scalar(type) && field->n == 0) {
+        switch (c->function) {
+            case OVSDB_F_LT:
+            case OVSDB_F_LE:
+            case OVSDB_F_EQ:
+            case OVSDB_F_GE:
+            case OVSDB_F_GT:
+            case OVSDB_F_INCLUDES:
+                return false;
+            case OVSDB_F_NE:
+            case OVSDB_F_EXCLUDES:
+                return true;
+        }
+    } else if (ovsdb_type_is_scalar(type)
+               || ovsdb_type_is_optional_scalar(type)) {
         int cmp = ovsdb_atom_compare_3way(&field->keys[0], &arg->keys[0],
                                           type->key.type);
         switch (c->function) {

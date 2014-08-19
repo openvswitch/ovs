@@ -152,6 +152,8 @@ bool ovsdb_type_is_valid(const struct ovsdb_type *);
 
 static inline bool ovsdb_type_is_scalar(const struct ovsdb_type *);
 static inline bool ovsdb_type_is_optional(const struct ovsdb_type *);
+static inline bool ovsdb_type_is_optional_scalar(
+    const struct ovsdb_type *);
 static inline bool ovsdb_type_is_composite(const struct ovsdb_type *);
 static inline bool ovsdb_type_is_set(const struct ovsdb_type *);
 static inline bool ovsdb_type_is_map(const struct ovsdb_type *);
@@ -200,6 +202,13 @@ static inline bool ovsdb_type_is_scalar(const struct ovsdb_type *type)
 static inline bool ovsdb_type_is_optional(const struct ovsdb_type *type)
 {
     return type->n_min == 0;
+}
+
+static inline bool ovsdb_type_is_optional_scalar(
+    const struct ovsdb_type *type)
+{
+    return (type->value.type == OVSDB_TYPE_VOID
+            && type->n_min == 0 && type->n_max == 1);
 }
 
 static inline bool ovsdb_type_is_composite(const struct ovsdb_type *type)

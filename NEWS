@@ -17,6 +17,8 @@ Post-v2.3.0
      * OpenFlow 1.5 (draft) Copy-Field action is now supported.
      * OpenFlow 1.3+ table features requests are now supported (read-only).
      * Nicira extension "move" actions may now be included in action sets.
+   - ovsdb-server: New OVSDB protocol extension allows inequality tests on
+     "optional scalar" columns.  See ovsdb-server(1) for details.
 
 
 v2.3.0 - 14 Aug 2014
