@@ -214,6 +214,13 @@ struct udpif_key {
     };
 };
 
+/* Datapath operation with optional ukey attached. */
+struct ukey_op {
+    struct udpif_key *ukey;
+    struct dpif_flow_stats stats; /* Stats for 'op'. */
+    struct dpif_op dop;           /* Flow operation. */
+};
+
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 static struct list all_udpifs = LIST_INITIALIZER(&all_udpifs);
 
@@ -1064,7 +1071,7 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
 {
     struct odputil_keybuf mask_bufs[UPCALL_MAX_BATCH];
     struct dpif_op *opsp[UPCALL_MAX_BATCH * 2];
-    struct dpif_op ops[UPCALL_MAX_BATCH * 2];
+    struct ukey_op ops[UPCALL_MAX_BATCH * 2];
     unsigned int flow_limit;
     size_t n_ops, i;
     bool may_put;
@@ -1089,7 +1096,7 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
     for (i = 0; i < n_upcalls; i++) {
         struct upcall *upcall = &upcalls[i];
         const struct ofpbuf *packet = upcall->packet;
-        struct dpif_op *op;
+        struct ukey_op *op;
 
         if (upcall->vsp_adjusted) {
             /* This packet was received on a VLAN splinter port.  We added a
@@ -1129,33 +1136,33 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
             }
 
             op = &ops[n_ops++];
-            op->type = DPIF_OP_FLOW_PUT;
-            op->u.flow_put.flags = DPIF_FP_CREATE;
-            op->u.flow_put.key = upcall->key;
-            op->u.flow_put.key_len = upcall->key_len;
-            op->u.flow_put.mask = ofpbuf_data(&mask);
-            op->u.flow_put.mask_len = ofpbuf_size(&mask);
-            op->u.flow_put.stats = NULL;
-            op->u.flow_put.actions = ofpbuf_data(&upcall->put_actions);
-            op->u.flow_put.actions_len = ofpbuf_size(&upcall->put_actions);
+            op->dop.type = DPIF_OP_FLOW_PUT;
+            op->dop.u.flow_put.flags = DPIF_FP_CREATE;
+            op->dop.u.flow_put.key = upcall->key;
+            op->dop.u.flow_put.key_len = upcall->key_len;
+            op->dop.u.flow_put.mask = ofpbuf_data(&mask);
+            op->dop.u.flow_put.mask_len = ofpbuf_size(&mask);
+            op->dop.u.flow_put.stats = NULL;
+            op->dop.u.flow_put.actions = ofpbuf_data(&upcall->put_actions);
+            op->dop.u.flow_put.actions_len = ofpbuf_size(&upcall->put_actions);
         }
 
         if (ofpbuf_size(upcall->xout.odp_actions)) {
             op = &ops[n_ops++];
-            op->type = DPIF_OP_EXECUTE;
-            op->u.execute.packet = CONST_CAST(struct ofpbuf *, packet);
+            op->dop.type = DPIF_OP_EXECUTE;
+            op->dop.u.execute.packet = CONST_CAST(struct ofpbuf *, packet);
             odp_key_to_pkt_metadata(upcall->key, upcall->key_len,
-                                    &op->u.execute.md);
-            op->u.execute.actions = ofpbuf_data(upcall->xout.odp_actions);
-            op->u.execute.actions_len = ofpbuf_size(upcall->xout.odp_actions);
-            op->u.execute.needs_help = (upcall->xout.slow & SLOW_ACTION) != 0;
-            op->u.execute.probe = false;
+                                    &op->dop.u.execute.md);
+            op->dop.u.execute.actions = ofpbuf_data(upcall->xout.odp_actions);
+            op->dop.u.execute.actions_len = ofpbuf_size(upcall->xout.odp_actions);
+            op->dop.u.execute.needs_help = (upcall->xout.slow & SLOW_ACTION) != 0;
+            op->dop.u.execute.probe = false;
         }
     }
 
     /* Execute batch. */
     for (i = 0; i < n_ops; i++) {
-        opsp[i] = &ops[i];
+        opsp[i] = &ops[i].dop;
     }
     dpif_operate(udpif->dpif, opsp, n_ops);
 }
@@ -1414,40 +1421,34 @@ exit:
     return ok;
 }
 
-struct dump_op {
-    struct udpif_key *ukey;
-    struct dpif_flow_stats stats; /* Stats for 'op'. */
-    struct dpif_op op;            /* Flow del operation. */
-};
-
 static void
-dump_op_init(struct dump_op *op, const struct nlattr *key, size_t key_len,
-             struct udpif_key *ukey)
+delete_op_init(struct ukey_op *op, const struct nlattr *key, size_t key_len,
+               struct udpif_key *ukey)
 {
     op->ukey = ukey;
-    op->op.type = DPIF_OP_FLOW_DEL;
-    op->op.u.flow_del.key = key;
-    op->op.u.flow_del.key_len = key_len;
-    op->op.u.flow_del.stats = &op->stats;
+    op->dop.type = DPIF_OP_FLOW_DEL;
+    op->dop.u.flow_del.key = key;
+    op->dop.u.flow_del.key_len = key_len;
+    op->dop.u.flow_del.stats = &op->stats;
 }
 
 static void
-push_dump_ops__(struct udpif *udpif, struct dump_op *ops, size_t n_ops)
+push_ukey_ops__(struct udpif *udpif, struct ukey_op *ops, size_t n_ops)
 {
     struct dpif_op *opsp[REVALIDATE_MAX_BATCH];
     size_t i;
 
     ovs_assert(n_ops <= REVALIDATE_MAX_BATCH);
     for (i = 0; i < n_ops; i++) {
-        opsp[i] = &ops[i].op;
+        opsp[i] = &ops[i].dop;
     }
     dpif_operate(udpif->dpif, opsp, n_ops);
 
     for (i = 0; i < n_ops; i++) {
-        struct dump_op *op = &ops[i];
+        struct ukey_op *op = &ops[i];
         struct dpif_flow_stats *push, *stats, push_buf;
 
-        stats = op->op.u.flow_del.stats;
+        stats = op->dop.u.flow_del.stats;
         push = &push_buf;
 
         ovs_mutex_lock(&op->ukey->mutex);
@@ -1472,8 +1473,8 @@ push_dump_ops__(struct udpif *udpif, struct dump_op *ops, size_t n_ops)
             }
             ovs_mutex_unlock(&op->ukey->mutex);
 
-            if (odp_flow_key_to_flow(op->op.u.flow_del.key,
-                                     op->op.u.flow_del.key_len, &flow)
+            if (odp_flow_key_to_flow(op->dop.u.flow_del.key,
+                                     op->dop.u.flow_del.key_len, &flow)
                 == ODP_FIT_ERROR) {
                 continue;
             }
@@ -1499,12 +1500,12 @@ push_dump_ops__(struct udpif *udpif, struct dump_op *ops, size_t n_ops)
 }
 
 static void
-push_dump_ops(struct udpif *udpif, struct umap *umap,
-              struct dump_op *ops, size_t n_ops)
+push_ukey_ops(struct udpif *udpif, struct umap *umap,
+              struct ukey_op *ops, size_t n_ops)
 {
     int i;
 
-    push_dump_ops__(udpif, ops, n_ops);
+    push_ukey_ops__(udpif, ops, n_ops);
     ovs_mutex_lock(&umap->mutex);
     for (i = 0; i < n_ops; i++) {
         ukey_delete(umap, ops[i].ukey);
@@ -1524,7 +1525,7 @@ revalidate(struct revalidator *revalidator)
     atomic_read_relaxed(&udpif->flow_limit, &flow_limit);
     dump_thread = dpif_flow_dump_thread_create(udpif->dump);
     for (;;) {
-        struct dump_op ops[REVALIDATE_MAX_BATCH];
+        struct ukey_op ops[REVALIDATE_MAX_BATCH];
         int n_ops = 0;
 
         struct dpif_flow flows[REVALIDATE_MAX_BATCH];
@@ -1597,13 +1598,13 @@ revalidate(struct revalidator *revalidator)
             ukey->flow_exists = keep;
 
             if (!keep) {
-                dump_op_init(&ops[n_ops++], f->key, f->key_len, ukey);
+                delete_op_init(&ops[n_ops++], f->key, f->key_len, ukey);
             }
             ovs_mutex_unlock(&ukey->mutex);
         }
 
         if (n_ops) {
-            push_dump_ops__(udpif, ops, n_ops);
+            push_ukey_ops__(udpif, ops, n_ops);
         }
         ovsrcu_quiesce();
     }
@@ -1647,7 +1648,7 @@ revalidator_sweep__(struct revalidator *revalidator, bool purge)
     ovs_assert(slice < udpif->n_revalidators);
 
     for (int i = slice; i < N_UMAPS; i += udpif->n_revalidators) {
-        struct dump_op ops[REVALIDATE_MAX_BATCH];
+        struct ukey_op ops[REVALIDATE_MAX_BATCH];
         struct udpif_key *ukey;
         struct umap *umap = &udpif->ukeys[i];
         size_t n_ops = 0;
@@ -1665,11 +1666,11 @@ revalidator_sweep__(struct revalidator *revalidator, bool purge)
                 && (purge
                     || (seq_mismatch
                         && !handle_missed_revalidation(revalidator, ukey)))) {
-                struct dump_op *op = &ops[n_ops++];
+                struct ukey_op *op = &ops[n_ops++];
 
-                dump_op_init(op, ukey->key, ukey->key_len, ukey);
+                delete_op_init(op, ukey->key, ukey->key_len, ukey);
                 if (n_ops == REVALIDATE_MAX_BATCH) {
-                    push_dump_ops(udpif, umap, ops, n_ops);
+                    push_ukey_ops(udpif, umap, ops, n_ops);
                     n_ops = 0;
                 }
             } else if (!flow_exists) {
@@ -1680,7 +1681,7 @@ revalidator_sweep__(struct revalidator *revalidator, bool purge)
         }
 
         if (n_ops) {
-            push_dump_ops(udpif, umap, ops, n_ops);
+            push_ukey_ops(udpif, umap, ops, n_ops);
         }
         ovsrcu_quiesce();
     }
