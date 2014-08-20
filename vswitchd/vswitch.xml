@@ -2026,7 +2026,8 @@
 	</p>
 
 	<column name="bfd" key="enable" type='{"type": "boolean"}'>
-          True to enable BFD on this <ref table="Interface"/>.
+          True to enable BFD on this <ref table="Interface"/>.  If not
+          specified, BFD will not be enabled by default.
 	</column>
 
 	<column name="bfd" key="min_rx"
