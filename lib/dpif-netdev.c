@@ -880,6 +880,16 @@ port_ref(struct dp_netdev_port *port)
     }
 }
 
+static bool
+port_try_ref(struct dp_netdev_port *port)
+{
+    if (port) {
+        return ovs_refcount_try_ref_rcu(&port->ref_cnt);
+    }
+
+    return false;
+}
+
 static void
 port_destroy__(struct dp_netdev_port *port)
 {
@@ -1864,20 +1874,27 @@ pmd_load_queues(struct pmd_thread *f,
     index = 0;
 
     CMAP_FOR_EACH (port, node, &f->dp->ports) {
-        if (netdev_is_pmd(port->netdev)) {
-            int i;
+        /* Calls port_try_ref() to prevent the main thread
+         * from deleting the port. */
+        if (port_try_ref(port)) {
+            if (netdev_is_pmd(port->netdev)) {
+                int i;
 
-            for (i = 0; i < netdev_n_rxq(port->netdev); i++) {
-                if ((index % dp->n_pmd_threads) == id) {
-                    poll_list = xrealloc(poll_list, sizeof *poll_list * (poll_cnt + 1));
+                for (i = 0; i < netdev_n_rxq(port->netdev); i++) {
+                    if ((index % dp->n_pmd_threads) == id) {
+                        poll_list = xrealloc(poll_list,
+                                        sizeof *poll_list * (poll_cnt + 1));
 
-                    port_ref(port);
-                    poll_list[poll_cnt].port = port;
-                    poll_list[poll_cnt].rx = port->rxq[i];
-                    poll_cnt++;
+                        port_ref(port);
+                        poll_list[poll_cnt].port = port;
+                        poll_list[poll_cnt].rx = port->rxq[i];
+                        poll_cnt++;
+                    }
+                    index++;
                 }
-                index++;
             }
+            /* Unrefs the port_try_ref(). */
+            port_unref(port);
         }
     }
 
