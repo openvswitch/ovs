@@ -1408,6 +1408,10 @@ six bits numbered 0 through 5, inclusive, in register 0 into bits 26
 through 31, inclusive;
 \fBmove:NXM_NX_REG0[0..15]\->NXM_OF_VLAN_TCI[]\fR copies the least
 significant 16 bits of register 0 into the VLAN TCI field.
+.IP
+In OpenFlow 1.0 through 1.4, \fBmove\fR uses an Open vSwitch extension
+to OpenFlow.  In OpenFlow 1.5, \fBmove\fR uses the OpenFlow 1.5
+(draft) standard \fBcopy_field\fR action.
 .
 .IP "\fBload:\fIvalue\fB\->\fIdst\fB[\fIstart\fB..\fIend\fB]"
 Writes \fIvalue\fR to bits \fIstart\fR through \fIend\fR, inclusive,
