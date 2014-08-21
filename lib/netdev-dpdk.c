@@ -1119,7 +1119,7 @@ netdev_dpdk_get_status(const struct netdev *netdev_, struct smap *args)
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev_);
     struct rte_eth_dev_info dev_info;
 
-    if (dev->port_id <= 0)
+    if (dev->port_id < 0)
         return ENODEV;
 
     ovs_mutex_lock(&dev->mutex);
