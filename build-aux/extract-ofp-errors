@@ -300,14 +300,34 @@ def extract_ofp_errors(fn):
                       % (version1_name, version2_name,
                          version2_name, version1_name))
 
-            if vendor == vendor_map['NX']:
+            if vendor == vendor_map['OF']:
+                # All standard OpenFlow errors have a type and a code.
+                if code is None:
+                    fatal("%s: %s domain requires code" % (dst, vendor_name))
+            elif vendor == vendor_map['NX']:
+                # Before OpenFlow 1.2, OVS used a Nicira extension to
+                # define errors that included a type and a code.
+                #
+                # In OpenFlow 1.2 and later, Nicira extension errors
+                # are defined using the OpenFlow experimenter error
+                # mechanism that includes a type but not a code.
+                if v1 < version_map['1.2'] or v2 < version_map['1.2']:
+                    if code is None:
+                        fatal("%s: NX1.0 and NX1.1 domains require code"
+                              % (dst, vendor_name))
                 if v1 >= version_map['1.2'] or v2 >= version_map['1.2']:
                     if code is not None:
                         fatal("%s: NX1.2+ domains do not have codes" % dst)
-                    code = 0
-            elif vendor != vendor_map['OF']:
+            else:
+                # Experimenter extension error for OF1.2+ only.
+                if v1 < version_map['1.2']:
+                    fatal("%s: %s domain not supported before OF1.2"
+                          % (dst, vendor_name))
                 if code is not None:
-                    fatal("%s: %s domains do not have codes" % vendor_name)
+                    fatal("%s: %s domains do not have codes"
+                          % (dst, vendor_name))
+            if code is None:
+                code = 0
 
             for version in range(v1, v2 + 1):
                 domain[version].setdefault(vendor, {})
@@ -376,8 +396,6 @@ static enum ofperr
             if enum not in map:
                 continue
             vendor, type_, code = map[enum]
-            if code is None:
-                continue
             value = (vendor << 32) | (type_ << 16) | code
             if value in found:
                 continue

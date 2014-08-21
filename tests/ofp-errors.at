@@ -163,10 +163,29 @@ AT_CHECK([ovs-ofctl ofp-print '0301001855555555 ffff0004 00002320 01020008111111
 OFPT_ERROR (OF1.2) (xid=0x55555555): NXBRC_MUST_BE_ZERO
 OFPT_ECHO_REQUEST (xid=0x11111111): 0 bytes of payload
 ])
+
+AT_CHECK([ovs-ofctl ofp-print '0301001812345678 ffff0a28 4f4e4600 0300000812345678'], [0], [dnl
+OFPT_ERROR (OF1.2) (xid=0x12345678): OFPBIC_DUP_INST
+OFPT_HELLO (OF1.2) (xid=0x12345678):
+ version bitmap: 0x01, 0x02, 0x03
+])
+AT_CHECK([ovs-ofctl ofp-print '0401001812345678 ffff0a28 4f4e4600 0400000812345678'], [0], [dnl
+OFPT_ERROR (OF1.3) (xid=0x12345678): OFPBIC_DUP_INST
+OFPT_HELLO (OF1.3) (xid=0x12345678):
+ version bitmap: 0x01, 0x02, 0x03, 0x04
+])
+AT_CHECK([ovs-ofctl ofp-print '0501001412345678 00030009 0500000812345678'], [0], [dnl
+OFPT_ERROR (OF1.4) (xid=0x12345678): OFPBIC_DUP_INST
+OFPT_HELLO (OF1.4) (xid=0x12345678):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05
+])
 AT_CLEANUP
 
 AT_SETUP([encoding experimenter errors])
 AT_KEYWORDS([ofp-print ofp-errors])
+# Demonstrate that a Nicira extension error gets encoded correctly
+# using the Nicira error extension format in OF1.0 and OF1.1, and
+# correctly using the standard experimenter format in OF1.2.
 AT_CHECK(
   [ovs-ofctl encode-error-reply NXBRC_MUST_BE_ZERO 0100000812345678], [0], [dnl
 00000000  01 01 00 1c 12 34 56 78-b0 c2 00 00 00 00 23 20 @&t@
@@ -181,5 +200,33 @@ AT_CHECK(
   [ovs-ofctl encode-error-reply NXBRC_MUST_BE_ZERO 0300000812345678], [0], [dnl
 00000000  03 01 00 18 12 34 56 78-ff ff 00 04 00 00 23 20 @&t@
 00000010  03 00 00 08 12 34 56 78-
+])
+
+# Check that OFPERR_OFPBIC_DUP_INST is:
+#    - not encodable in OF1.0 (OF1.0 doesn't have instructions, after all).
+#    - encoded as a Nicira extension in OF1.1.
+#    - encoded as an ONF extension in OF1.2 and OF1.3.
+#    - encoded in the standard form in OF1.4.
+AT_CHECK(
+  [ovs-ofctl '-vPATTERN:console:%c|%p|%m' encode-error-reply OFPBIC_DUP_INST 0100000812345678], [0], [dnl
+00000000  01 01 00 1c 12 34 56 78-b0 c2 00 00 00 00 23 20 @&t@
+00000010  00 01 02 09 01 00 00 08-12 34 56 78 @&t@
+], [ofp_errors|ERR|cannot encode OFPBIC_DUP_INST for OpenFlow 1.0
+])
+AT_CHECK([ovs-ofctl encode-error-reply OFPBIC_DUP_INST 0200000812345678], [0],
+[00000000  02 01 00 1c 12 34 56 78-b0 c2 00 00 00 00 23 20 @&t@
+00000010  00 03 01 00 02 00 00 08-12 34 56 78 @&t@
+])
+AT_CHECK([ovs-ofctl encode-error-reply OFPBIC_DUP_INST 0300000812345678], [0],
+[00000000  03 01 00 18 12 34 56 78-ff ff 0a 28 4f 4e 46 00 @&t@
+00000010  03 00 00 08 12 34 56 78-
+])
+AT_CHECK([ovs-ofctl encode-error-reply OFPBIC_DUP_INST 0400000812345678], [0],
+[00000000  04 01 00 18 12 34 56 78-ff ff 0a 28 4f 4e 46 00 @&t@
+00000010  04 00 00 08 12 34 56 78-
+])
+AT_CHECK([ovs-ofctl encode-error-reply OFPBIC_DUP_INST 0500000812345678], [0],
+[00000000  05 01 00 14 12 34 56 78-00 03 00 09 05 00 00 08 @&t@
+00000010  12 34 56 78 @&t@
 ])
 AT_CLEANUP
