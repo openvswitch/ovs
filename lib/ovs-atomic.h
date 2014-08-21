@@ -333,6 +333,8 @@
         #include "ovs-atomic-i586.h"
     #elif HAVE_GCC4_ATOMICS
         #include "ovs-atomic-gcc4+.h"
+    #elif _MSC_VER && _M_IX86 >= 500
+        #include "ovs-atomic-msvc.h"
     #else
         /* ovs-atomic-pthreads implementation is provided for portability.
          * It might be too slow for real use because Open vSwitch is
