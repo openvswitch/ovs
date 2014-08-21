@@ -360,7 +360,7 @@ AT_CHECK(
         "uuid-name": "x",
         "row": {"target": "punix:socket2"}}]']], [0], [ignore], [ignore])
 ON_EXIT([kill `cat ovsdb-server.pid`])
-AT_CHECK([ovsdb-server --enable-dummy --detach --no-chdir --pidfile --remote=db:mydb,Root,managers --remote=db:mydb,Root,manager_options --log-file db], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=db:mydb,Root,managers --remote=db:mydb,Root,manager_options --log-file db], [0], [ignore], [ignore])
 ovs-appctl -t ovsdb-server time/warp 6000 1000
 AT_CHECK(
   [[ovsdb-client transact unix:socket1 \
