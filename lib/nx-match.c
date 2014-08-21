@@ -724,9 +724,17 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
                 flow->tunnel.ip_dst, match->wc.masks.tunnel.ip_dst);
 
     /* Registers. */
-    for (i = 0; i < FLOW_N_REGS; i++) {
-        nxm_put_32m(b, mf_oxm_header(MFF_REG0 + i, oxm),
-                    htonl(flow->regs[i]), htonl(match->wc.masks.regs[i]));
+    if (oxm < OFP15_VERSION) {
+        for (i = 0; i < FLOW_N_REGS; i++) {
+            nxm_put_32m(b, mf_oxm_header(MFF_REG0 + i, oxm),
+                        htonl(flow->regs[i]), htonl(match->wc.masks.regs[i]));
+        }
+    } else {
+        for (i = 0; i < FLOW_N_XREGS; i++) {
+            nxm_put_64m(b, mf_oxm_header(MFF_XREG0 + i, oxm),
+                        htonll(flow_get_xreg(flow, i)),
+                        htonll(flow_get_xreg(&match->wc.masks, i)));
+        }
     }
 
     /* Mark. */
