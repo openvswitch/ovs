@@ -950,9 +950,9 @@ static int loop_suppress(struct datapath *dp, struct sw_flow_actions *actions)
 }
 
 /* Execute a list of actions against 'skb'. */
-int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb, bool recirc)
+int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb,
+			struct sw_flow_actions *acts, bool recirc)
 {
-	struct sw_flow_actions *acts = rcu_dereference(OVS_CB(skb)->flow->sf_acts);
 	const u8 stack_cost = recirc ? RECIRC_STACK_COST : DEFAULT_STACK_COST;
 	struct loop_counter *loop;
 	int error;
