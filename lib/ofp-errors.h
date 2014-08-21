@@ -557,22 +557,22 @@ enum ofperr {
      * [Known as OFPTFFC_BAD_ARGUMENT in OF1.3.] */
     OFPERR_OFPBPC_BAD_VALUE,
 
-    /* HPL1.3(4443), OF1.4+(14,3).  Can't handle this many properties. */
+    /* ONF1.3(4443), OF1.4+(14,3).  Can't handle this many properties. */
     OFPERR_OFPBPC_TOO_MANY,
 
-    /* HPL1.3(4444), OF1.4+(14,4).  A property type was duplicated. */
+    /* ONF1.3(4444), OF1.4+(14,4).  A property type was duplicated. */
     OFPERR_OFPBPC_DUP_TYPE,
 
-    /* HPL1.3(4445), OF1.4+(14,5).  Unknown experimenter id specified. */
+    /* ONF1.3(4445), OF1.4+(14,5).  Unknown experimenter id specified. */
     OFPERR_OFPBPC_BAD_EXPERIMENTER,
 
-    /* HPL1.3(4446), OF1.4+(14,6).  Unknown exp_type for experimenter id. */
+    /* ONF1.3(4446), OF1.4+(14,6).  Unknown exp_type for experimenter id. */
     OFPERR_OFPBPC_BAD_EXP_TYPE,
 
-    /* HPL1.3(4447), OF1.4+(14,7).  Unknown value for experimenter id. */
+    /* ONF1.3(4447), OF1.4+(14,7).  Unknown value for experimenter id. */
     OFPERR_OFPBPC_BAD_EXP_VALUE,
 
-    /* HPL1.3(4448), OF1.4+(14,8).  Permissions error. */
+    /* ONF1.3(4448), OF1.4+(14,8).  Permissions error. */
     OFPERR_OFPBPC_EPERM,
 
 /* ## -------------------- ## */
