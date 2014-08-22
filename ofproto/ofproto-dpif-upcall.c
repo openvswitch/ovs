@@ -827,8 +827,8 @@ upcall_receive(struct upcall *upcall, const struct dpif_backer *backer,
 {
     int error;
 
-    error = xlate_receive(backer, flow, &upcall->ofproto, &upcall->ipfix,
-                          &upcall->sflow, NULL, &upcall->in_port);
+    error = xlate_lookup(backer, flow, &upcall->ofproto, &upcall->ipfix,
+                         &upcall->sflow, NULL, &upcall->in_port);
     if (error) {
         return error;
     }
@@ -1322,8 +1322,8 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
         goto exit;
     }
 
-    error = xlate_receive(udpif->backer, &flow, &ofproto, NULL, NULL, &netflow,
-                          &ofp_in_port);
+    error = xlate_lookup(udpif->backer, &flow, &ofproto, NULL, NULL, &netflow,
+                         &ofp_in_port);
     if (error) {
         goto exit;
     }
@@ -1456,8 +1456,8 @@ push_dump_ops__(struct udpif *udpif, struct dump_op *ops, size_t n_ops)
                 continue;
             }
 
-            error = xlate_receive(udpif->backer, &flow, &ofproto,
-                                  NULL, NULL, &netflow, &ofp_in_port);
+            error = xlate_lookup(udpif->backer, &flow, &ofproto,
+                                 NULL, NULL, &netflow, &ofp_in_port);
             if (!error) {
                 struct xlate_in xin;
 

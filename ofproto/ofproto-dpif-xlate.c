@@ -987,10 +987,10 @@ xlate_lookup_ofproto(const struct dpif_backer *backer, const struct flow *flow,
  * Returns 0 if successful, ENODEV if the parsed flow has no associated ofport.
  */
 int
-xlate_receive(const struct dpif_backer *backer, const struct flow *flow,
-              struct ofproto_dpif **ofprotop, struct dpif_ipfix **ipfix,
-              struct dpif_sflow **sflow, struct netflow **netflow,
-              ofp_port_t *ofp_in_port)
+xlate_lookup(const struct dpif_backer *backer, const struct flow *flow,
+             struct ofproto_dpif **ofprotop, struct dpif_ipfix **ipfix,
+             struct dpif_sflow **sflow, struct netflow **netflow,
+             ofp_port_t *ofp_in_port)
 {
     struct ofproto_dpif *ofproto;
     const struct xport *xport;
