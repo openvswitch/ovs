@@ -62,6 +62,8 @@ enum bpdu_size {
     RAPID_SPANNING_TREE_BPDU_SIZE = 36
 };
 
+/* Same is a subset of SUPERIOR, so can be used as a boolean when the
+ * distinction is not significant. */
 enum vector_comparison {
     INFERIOR = 0,
     SUPERIOR = 1,
@@ -76,8 +78,8 @@ static int validate_received_bpdu(struct rstp_port *, const void *, size_t)
 static ovs_be16 time_encode(uint8_t);
 static uint8_t time_decode(ovs_be16);
 static enum vector_comparison
-compare_rstp_priority_vector(struct rstp_priority_vector *,
-                             struct rstp_priority_vector *);
+compare_rstp_priority_vectors(const struct rstp_priority_vector *,
+                              const struct rstp_priority_vector *);
 static bool rstp_times_equal(struct rstp_times *, struct rstp_times *);
 
 /* Per-Bridge State Machine */
@@ -306,8 +308,8 @@ updt_roles_tree__(struct rstp *r)
                 (r->bridge_priority.designated_bridge_id & 0xffffffffffffULL)) {
                 break;
             }
-            if (compare_rstp_priority_vector(&candidate_vector, &best_vector)
-                == SUPERIOR) {
+            if (compare_rstp_priority_vectors(
+                    &candidate_vector, &best_vector) == SUPERIOR) {
                 best_vector = candidate_vector;
                 r->root_times = p->port_times;
                 r->root_times.message_age++;
@@ -346,10 +348,11 @@ updt_roles_tree__(struct rstp *r)
                 break;
             case INFO_IS_MINE:
                 p->selected_role = ROLE_DESIGNATED;
-                if (compare_rstp_priority_vector(&p->port_priority,
-                                                 &p->designated_priority_vector)
-                     != SAME
-                    || !rstp_times_equal(&p->designated_times, &r->root_times)) {
+                if (compare_rstp_priority_vectors(
+                        &p->port_priority,
+                        &p->designated_priority_vector) != SAME
+                    || !rstp_times_equal(&p->designated_times,
+                                         &r->root_times)) {
                     p->updt_info = true;
                 }
                 break;
@@ -357,9 +360,9 @@ updt_roles_tree__(struct rstp *r)
                 if (vsel == p->port_number) { /* Letter i) */
                     p->selected_role = ROLE_ROOT;
                     p->updt_info = false;
-                } else if (compare_rstp_priority_vector(
-                            &p->designated_priority_vector, &p->port_priority)
-                            == INFERIOR) {
+                } else if (compare_rstp_priority_vectors(
+                               &p->designated_priority_vector,
+                               &p->port_priority) == INFERIOR) {
                     if (p->port_priority.designated_bridge_id !=
                             r->bridge_identifier) {
                         p->selected_role = ROLE_ALTERNATE;
@@ -1029,7 +1032,7 @@ rcv_info(struct rstp_port *p)
     p->msg_times.message_age =
         time_decode(p->received_bpdu_buffer.message_age);
 
-    cp = compare_rstp_priority_vector(&p->msg_priority, &p->port_priority);
+    cp = compare_rstp_priority_vectors(&p->msg_priority, &p->port_priority);
     ct = rstp_times_equal(&p->port_times, &p->msg_times);
     role =
         (p->received_bpdu_buffer.flags & ROLE_FLAG_MASK) >> ROLE_FLAG_SHIFT;
@@ -1081,14 +1084,13 @@ static int
 better_or_same_info(struct rstp_port *p, int new_info_is)
     OVS_REQUIRES(rstp_mutex)
 {
-    /* >= SUPERIOR means that the vector is better or the same. */
     return
         (new_info_is == RECEIVED && p->info_is == INFO_IS_RECEIVED
-         && compare_rstp_priority_vector(&p->msg_priority,
-                                         &p->port_priority) >= SUPERIOR)
+         && compare_rstp_priority_vectors(&p->msg_priority,
+                                          &p->port_priority))
         || (new_info_is == MINE && p->info_is == INFO_IS_MINE
-            && compare_rstp_priority_vector(&p->designated_priority_vector,
-                                            &p->port_priority) >= SUPERIOR);
+            && compare_rstp_priority_vectors(&p->designated_priority_vector,
+                                             &p->port_priority));
 }
 
 static int
@@ -1983,29 +1985,17 @@ topology_change_sm(struct rstp_port *p)
  * [17.6] Priority vector calculation helper functions
  ****************************************************************************/
 
-/* [17.6]
- * This message priority vector is superior to the port priority vector and
- * will replace it if, and only if, the message priority vector is better
- * than the port priority vector, or the message has been transmitted from the
- * same Designated Bridge and Designated Port as the port priority vector,
- * i.e.,if the following is true:
- *    ((RD  < RootBridgeID)) ||
- *    ((RD == RootBridgeID) && (RPCD < RootPathCost)) ||
- *    ((RD == RootBridgeID) && (RPCD == RootPathCost) &&
- *         (D < designated_bridge_id)) ||
- *    ((RD == RootBridgeID) && (RPCD == RootPathCost) &&
- *         (D == designated_bridge_id) && (PD < designated_port_id)) ||
- *    ((D  == designated_bridge_id.BridgeAddress) &&
- *         (PD == designated_port_id.PortNumber))
- */
-
-/* compare_rstp_priority_vector() compares two struct rstp_priority_vector and
- * returns a value indicating if the first rstp_priority_vector is superior,
- * same or inferior to the second one.
+/* compare_rstp_priority_vectors() compares two struct rstp_priority_vectors
+ * and returns a value indicating if the first rstp_priority_vector is
+ * superior, same or inferior to the second one.
+ *
+ * Zero return value indicates INFERIOR, a non-zero return value indicates
+ * SUPERIOR.  When it makes a difference the non-zero return value SAME
+ * indicates the priority vectors are identical (a subset of SUPERIOR).
  */
 static enum vector_comparison
-compare_rstp_priority_vector(struct rstp_priority_vector *v1,
-                             struct rstp_priority_vector *v2)
+compare_rstp_priority_vectors(const struct rstp_priority_vector *v1,
+                             const struct rstp_priority_vector *v2)
 {
     VLOG_DBG("v1: "RSTP_ID_FMT", %u, "RSTP_ID_FMT", %d",
              RSTP_ID_ARGS(v1->root_bridge_id), v1->root_path_cost,
@@ -2014,45 +2004,48 @@ compare_rstp_priority_vector(struct rstp_priority_vector *v1,
              RSTP_ID_ARGS(v2->root_bridge_id), v2->root_path_cost,
              RSTP_ID_ARGS(v2->designated_bridge_id), v2->designated_port_id);
 
-    if ((v1->root_bridge_id < v2->root_bridge_id) ||
-        ((v1->root_bridge_id == v2->root_bridge_id) &&
-         (v1->root_path_cost < v2->root_path_cost)) ||
-        ((v1->root_bridge_id == v2->root_bridge_id) &&
-         (v1->root_path_cost == v2->root_path_cost) &&
-         (v1->designated_bridge_id < v2->designated_bridge_id)) ||
-        ((v1->root_bridge_id == v2->root_bridge_id) &&
-         (v1->root_path_cost == v2->root_path_cost) &&
-         (v1->designated_bridge_id == v2->designated_bridge_id) &&
-            (v1->designated_port_id < v2->designated_port_id))) {
-        VLOG_DBG("superior_absolute");
+    /* [17.6]
+     * This message priority vector is superior to the port priority vector and
+     * will replace it if, and only if, the message priority vector is better
+     * than the port priority vector, or the message has been transmitted from
+     * the same Designated Bridge and Designated Port as the port priority
+     * vector, i.e., if the following is true:
+     *
+     *    ((RD  < RootBridgeID)) ||
+     *    ((RD == RootBridgeID) && (RPCD < RootPathCost)) ||
+     *    ((RD == RootBridgeID) && (RPCD == RootPathCost) &&
+     *         (D < designated_bridge_id)) ||
+     *    ((RD == RootBridgeID) && (RPCD == RootPathCost) &&
+     *         (D == designated_bridge_id) && (PD < designated_port_id)) ||
+     *    ((D  == designated_bridge_id.BridgeAddress) &&
+     *         (PD == designated_port_id.PortNumber))
+     */
+    if ((v1->root_bridge_id < v2->root_bridge_id)
+        || (v1->root_bridge_id == v2->root_bridge_id
+            && v1->root_path_cost < v2->root_path_cost)
+        || (v1->root_bridge_id == v2->root_bridge_id
+            && v1->root_path_cost == v2->root_path_cost
+            && v1->designated_bridge_id < v2->designated_bridge_id)
+        || (v1->root_bridge_id == v2->root_bridge_id
+            && v1->root_path_cost == v2->root_path_cost
+            && v1->designated_bridge_id == v2->designated_bridge_id
+            && v1->designated_port_id < v2->designated_port_id)
+        || (v1->designated_bridge_id == v2->designated_bridge_id
+            && v1->designated_port_id == v2->designated_port_id)) {
+        /* SAME is a subset of SUPERIOR. */
+        if (v1->root_bridge_id == v2->root_bridge_id
+            && v1->root_path_cost == v2->root_path_cost
+            && v1->designated_bridge_id == v2->designated_bridge_id
+            && v1->designated_port_id == v2->designated_port_id) {
+            VLOG_DBG("superior_same");
+            return SAME;
+        }
+        VLOG_DBG("superior");
         return SUPERIOR;
     }
-    else if (((v1->root_bridge_id > v2->root_bridge_id) ||
-                ((v1->root_bridge_id == v2->root_bridge_id) &&
-                 (v1->root_path_cost > v2->root_path_cost)) ||
-                ((v1->root_bridge_id == v2->root_bridge_id) &&
-                 (v1->root_path_cost == v2->root_path_cost) &&
-                 (v1->designated_bridge_id > v2->designated_bridge_id)) ||
-                ((v1->root_bridge_id == v2->root_bridge_id) &&
-                 (v1->root_path_cost == v2->root_path_cost) &&
-                 (v1->designated_bridge_id == v2->designated_bridge_id) &&
-                 (v1->designated_port_id > v2->designated_port_id))) &&
-            (v1->designated_bridge_id == v2->designated_bridge_id) &&
-            (v1->designated_port_id == v2->designated_port_id)) {
-        VLOG_DBG("superior_same_des");
-        return SUPERIOR;
-    }
-    else if ((v1->root_bridge_id == v2->root_bridge_id) &&
-             (v1->root_path_cost == v2->root_path_cost) &&
-             (v1->designated_bridge_id == v2->designated_bridge_id) &&
-             (v1->designated_port_id == v2->designated_port_id)) {
-        VLOG_DBG("same");
-        return SAME;
-    }
-    else {
-        VLOG_DBG("inferior");
-        return INFERIOR;
-    }
+
+    VLOG_DBG("inferior");
+    return INFERIOR;
 }
 
 static bool
