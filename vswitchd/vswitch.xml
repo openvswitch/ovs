@@ -608,7 +608,7 @@
       be included in the network to provide automatic backup paths if
       the active links fails.
 
-      <column name="stp_enable">
+      <column name="stp_enable" type='{"type": "boolean"}'>
         Enable spanning tree on the bridge.  By default, STP is disabled
         on bridges.  Bond, internal, and mirror ports are not supported
         and will not participate in the spanning tree.
@@ -694,17 +694,17 @@
 
     <group title="Rapid Spanning Tree Configuration">
       In IEEE Std 802.1D, 1998 Edition, and prior editions of this standard,
-      Clause 8 specified the spanning tree algorithm and protocol (STP).9 STP
+      Clause 8 specified the spanning tree algorithm and protocol (STP).  STP
       has now been superseded by the Rapid Spanning Tree Protocol (RSTP)
-      specified  in Clause 17 of the IEEE Std 802.1D, 2004 Edition.
+      specified in Clause 17 of the IEEE Std 802.1D, 2004 Edition.
       The IEEE 802.1D-2004 Rapid Spanning Tree Algorithm Protocol configures
       full, simple, and symmetric connectivity throughout a Bridged Local Area
-      Network that  comprises individual LANs interconnected by Bridges.
+      Network that comprises individual LANs interconnected by Bridges.
       Like STP, RSTP is a network protocol that ensures loop-free topologies.
-      It  allows redundant links to be included in the network to provide
+      It allows redundant links to be included in the network to provide
       automatic backup paths if the active links fails.
 
-      <column name="rstp_enable">
+      <column name="rstp_enable" type='{"type": "boolean"}'>
         Enable Rapid Spanning Tree on the bridge.  By default, RSTP is disabled
         on bridges.  Bond, internal, and mirror ports are not supported
         and will not participate in the spanning tree.
@@ -722,75 +722,41 @@
         The bridge's relative priority value for determining the root
         bridge (the upper 16 bits of the bridge-id).  A bridge with the
         lowest bridge-id is elected the root.  By default, the priority
-        is 0x8000 (32768). This value needs to be a multiple of 4096, otherwise
-        it's rounded to the nearest inferior one.
+        is 0x8000 (32768).  This value needs to be a multiple of 4096,
+        otherwise it's rounded to the nearest inferior one.
       </column>
 
       <column name="other_config" key="rstp-ageing-time"
               type='{"type": "integer", "minInteger": 10, "maxInteger": 1000000}'>
-        The Ageing Time parameter for the Bridge. The default value
-        is 300.
+        The Ageing Time parameter for the Bridge.  The default value
+        is 300 seconds.
       </column>
 
-      <column name="other_config" key="rstp-force-protocol-version">
-        The Force Protocol Version parameter for the Bridge. This
-        can take the value 0 (.STP Compatibility. mode) or 2
+      <column name="other_config" key="rstp-force-protocol-version"
+              type='{"type": "integer"}'>
+        The Force Protocol Version parameter for the Bridge.  This
+        can take the value 0 (STP Compatibility mode) or 2
         (the default, normal operation).
       </column>
 
       <column name="other_config" key="rstp-max-age"
               type='{"type": "integer", "minInteger": 6, "maxInteger": 40}'>
         The maximum age of the information transmitted by the Bridge
-        when it is the Root Bridge. The default value is 20.
+        when it is the Root Bridge.  The default value is 20.
       </column>
 
       <column name="other_config" key="rstp-forward-delay"
               type='{"type": "integer", "minInteger": 4, "maxInteger": 30}'>
         The delay used by STP Bridges to transition Root and Designated
-        Ports to Forwarding. The default value is 15.
+        Ports to Forwarding.  The default value is 15.
       </column>
 
       <column name="other_config" key="rstp-transmit-hold-count"
               type='{"type": "integer", "minInteger": 1, "maxInteger": 10}'>
         The Transmit Hold Count used by the Port Transmit state machine
-        to limit transmission rate. The default value is 6.
+        to limit transmission rate.  The default value is 6.
       </column>
 
-      <column name="other_config" key="rstp-enable">
-        The RSTP enable parameter of the Port.
-      </column>
-
-      <column name="other_config" key="rstp-port-priority"
-              type='{"type": "integer", "minInteger": 0, "maxInteger": 240}'>
-        The port's relative priority value for determining the root
-        port (the upper 8 bits of the port-id).  A port with the lowest
-        port-id is elected the root.
-        By default, the port priority is 0x80 (128). This value needs
-        to be a multiple of 16, otherwise  it's rounded to the nearest
-        inferior one.
-      </column>
-
-      <column name="other_config" key="rstp-port-num">
-        The port's relative id for determining the root port
-        (the lower 8 bits of the port-id). A port with the lowest
-        port-id is elected the root.
-      </column>
-
-      <column name="other_config" key="rstp-port-path-cost">
-        The port path cost. The Port.s contribution, when it is
-        the Root Port, to the Root Path Cost for the Bridge.
-      </column>
-
-      <column name="other_config" key="rstp-port-admin-edge">
-        The admin edge port parameter for the Port.
-      </column>
-
-      <column name="other_config" key="rstp-port-auto-edge">
-        The auto edge port parameter for the Port.
-      </column>
-      <column name="other_config" key="rstp-port-mcheck">
-        The mcheck port parameter for the Port.
-      </column>
     </group>
 
     <group title="Other Features">
@@ -939,8 +905,8 @@
       <column name="external_ids"/>
     </group>
   </table>
-
-  <table name="Port" table="Port or bond configuration.">
+ 
+ <table name="Port" table="Port or bond configuration.">
     <p>A port within a <ref table="Bridge"/>.</p>
     <p>Most commonly, a port has exactly one ``interface,'' pointed to by its
     <ref column="interfaces"/> column.  Such a port logically
@@ -1303,6 +1269,74 @@
         speed of the link.
       </column>
     </group>
+
+    <group title="Rapid Spanning Tree Configuration">
+      <column name="other_config" key="rstp-enable"
+              type='{"type": "boolean"}'>
+        If rapid spanning tree is enabled on the bridge, member ports are
+        enabled by default (with the exception of bond, internal, and
+        mirror ports which do not work with RSTP).  If this column's
+        value is <code>false</code> rapid spanning tree is disabled on the
+        port.
+      </column>
+
+      <column name="other_config" key="rstp-port-priority"
+              type='{"type": "integer", "minInteger": 0, "maxInteger": 240}'>
+        The port's relative priority value for determining the root
+        port, in multiples of 16.  By default, the port priority is 0x80
+        (128).  Any value in the lower 4 bits is rounded off.  The significant
+        upper 4 bits become the upper 4 bits of the port-id.  A port with the
+        lowest port-id is elected as the root.
+      </column>
+
+      <column name="other_config" key="rstp-port-num"
+              type='{"type": "integer", "minInteger": 1, "maxInteger": 4095}'>
+        The local RSTP port number, used as the lower 12 bits of the port-id.
+        By default the port numbers are assigned automatically, and typically
+        may not correspond to the OpenFlow port numbers.  A port with the
+        lowest port-id is elected as the root.
+      </column>
+
+      <column name="other_config" key="rstp-port-path-cost"
+              type='{"type": "integer"}'>
+        The port path cost.  The Port's contribution, when it is
+        the Root Port, to the Root Path Cost for the Bridge.  By default the
+        cost is automatically calculated from the port's speed.
+      </column>
+
+      <column name="other_config" key="rstp-port-admin-edge"
+              type='{"type": "boolean"}'>
+        The admin edge port parameter for the Port.  Default is
+        <code>false</code>.
+      </column>
+
+      <column name="other_config" key="rstp-port-auto-edge"
+              type='{"type": "boolean"}'>
+        The auto edge port parameter for the Port.  Default is
+        <code>true</code>.
+      </column>
+
+      <column name="other_config" key="rstp-port-mcheck"
+              type='{"type": "boolean"}'>
+        <p>
+          The mcheck port parameter for the Port.  Default is
+          <code>false</code>.  May be set to force the Port Protocol
+          Migration state machine to transmit RST BPDUs for a
+          MigrateTime period, to test whether all STP Bridges on the
+          attached LAN have been removed and the Port can continue to
+          transmit RSTP BPDUs.  Setting mcheck has no effect if the
+          Bridge is operating in STP Compatibility mode.
+        </p>
+        <p>
+          Changing the value from <code>true</code> to
+          <code>false</code> has no effect, but needs to be done if
+          this behavior is to be triggered again by subsequently
+          changing the value from <code>false</code> to
+          <code>true</code>.
+        </p>
+      </column>
+    </group>
+
     <group title="Multicast Snooping">
       <column name="other_config" key="mcast-snooping-flood"
               type='{"type": "boolean"}'>
