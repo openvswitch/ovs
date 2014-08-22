@@ -2027,10 +2027,10 @@ update_rstp_port_state(struct ofport_dpif *ofport)
         enum ofputil_port_state of_state;
         bool fwd_change;
 
-        VLOG_DBG_RL(&rl, "port %s: RSTP state changed from %s to %s",
-                netdev_get_name(ofport->up.netdev),
-                rstp_state_name(ofport->rstp_state),
-                rstp_state_name(state));
+        VLOG_DBG("port %s: RSTP state changed from %s to %s",
+                 netdev_get_name(ofport->up.netdev),
+                 rstp_state_name(ofport->rstp_state),
+                 rstp_state_name(state));
         if (rstp_learn_in_state(ofport->rstp_state)
                 != rstp_learn_in_state(state)) {
             /* xxx Learning action flows should also be flushed. */
@@ -2159,10 +2159,10 @@ update_stp_port_state(struct ofport_dpif *ofport)
         enum ofputil_port_state of_state;
         bool fwd_change;
 
-        VLOG_DBG_RL(&rl, "port %s: STP state changed from %s to %s",
-                    netdev_get_name(ofport->up.netdev),
-                    stp_state_name(ofport->stp_state),
-                    stp_state_name(state));
+        VLOG_DBG("port %s: STP state changed from %s to %s",
+                 netdev_get_name(ofport->up.netdev),
+                 stp_state_name(ofport->stp_state),
+                 stp_state_name(state));
         if (stp_learn_in_state(ofport->stp_state)
                 != stp_learn_in_state(state)) {
             /* xxx Learning action flows should also be flushed. */
