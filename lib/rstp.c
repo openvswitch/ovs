@@ -57,7 +57,7 @@ static void set_port_id__(struct rstp_port *);
 static void update_port_enabled__(struct rstp_port *);
 static void set_bridge_priority__(struct rstp *);
 static void reinitialize_rstp__(struct rstp *);
-static bool is_port_number_taken__(struct rstp *, int, struct rstp_port *);
+static bool is_port_number_available__(struct rstp *, int, struct rstp_port *);
 static uint16_t rstp_first_free_number__(struct rstp *, struct rstp_port *);
 static void rstp_initialize_port__(struct rstp_port *);
 
@@ -564,32 +564,26 @@ rstp_port_set_priority(struct rstp_port *rstp_port, int new_port_priority)
     }
 }
 
-/* Checks if a port number is already taken by an active port. */
+/* Checks if a port number is available. */
 static bool
-is_port_number_taken__(struct rstp *rstp, int n, struct rstp_port *rstp_port)
+is_port_number_available__(struct rstp *rstp, int n, struct rstp_port *port)
 {
-    struct rstp_port *p;
+    if (n >= 1 && n <= RSTP_MAX_PORTS) {
+        struct rstp_port *p = rstp_get_port(rstp, n);
 
-    if (rstp->ports_count > 0){
-        LIST_FOR_EACH (p, node, &rstp->ports) {
-            if (p->port_number == n && rstp_port != rstp_get_port(rstp, n)) {
-                VLOG_DBG("%s: port number %d not available", rstp->name, n);
-                return true;
-            }
-        }
+        return p == NULL || p == port;
     }
-    VLOG_DBG("%s: port number %d is available", rstp->name, n);
     return false;
 }
 
 static uint16_t
-rstp_first_free_number__(struct rstp *rstp, struct rstp_port *rstp_port) {
-    int free_number;
+rstp_first_free_number__(struct rstp *rstp, struct rstp_port *rstp_port)
+{
+    int free_number = 1;
 
-    free_number = 1;
     ovs_mutex_lock(&mutex);
     while (free_number <= RSTP_MAX_PORTS) {
-        if (!is_port_number_taken__(rstp, free_number, rstp_port)) {
+        if (is_port_number_available__(rstp, free_number, rstp_port)) {
             ovs_mutex_unlock(&mutex);
             return free_number;
         }
@@ -607,22 +601,14 @@ rstp_port_set_port_number(struct rstp_port *rstp_port,
 {
     struct rstp *rstp;
 
-    rstp = rstp_port->rstp;
     ovs_mutex_lock(&mutex);
-    /* If new_port_number is inside bounds and available, use it.
-     * If new_port_number is 0 or it is already taken, use the first free
-     * available port number.
-     */
-    if ((new_port_number >= 1 && new_port_number <= RSTP_MAX_PORTS) &&
-        (!is_port_number_taken__(rstp_port->rstp, new_port_number, rstp_port)))
-    {
-        rstp_port->port_number =  new_port_number;
-    }
-    else if (new_port_number == 0 ||
-             is_port_number_taken__(rstp_port->rstp, new_port_number,
-             rstp_port)) {
-        rstp_port->port_number = rstp_first_free_number__(rstp, rstp_port);
-    }
+    rstp = rstp_port->rstp;
+    /* If new_port_number is available, use it, otherwise use the first free
+     * available port number. */
+    rstp_port->port_number =
+        is_port_number_available__(rstp_port->rstp, new_port_number, rstp_port)
+        ? new_port_number
+        : rstp_first_free_number__(rstp, rstp_port);
 
     set_port_id__(rstp_port);
     /* [17.13] is not clear. I suppose that a port number change
