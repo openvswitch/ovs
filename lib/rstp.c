@@ -59,7 +59,8 @@ static void set_bridge_priority__(struct rstp *);
 static void reinitialize_rstp__(struct rstp *);
 static bool is_port_number_available__(struct rstp *, int, struct rstp_port *);
 static uint16_t rstp_first_free_number__(struct rstp *, struct rstp_port *);
-static void rstp_initialize_port__(struct rstp_port *);
+static void rstp_initialize_port_defaults__(struct rstp_port *);
+static void reinitialize_port__(struct rstp_port *);
 
 const char *
 rstp_state_name(enum rstp_state state)
@@ -359,35 +360,10 @@ reinitialize_rstp__(struct rstp *rstp)
     rstp->ports_count = temp.ports_count;
 
     if (rstp->ports_count > 0) {
-        struct rstp_port *p, temp_port;
+        struct rstp_port *p;
 
         LIST_FOR_EACH (p, node, &rstp->ports) {
-            temp_port = *p;
-            memset(p, 0, sizeof(struct rstp_port));
-            p->rstp = rstp;
-            p->node = temp_port.node;
-            p->aux = temp_port.aux;
-            p->port_number = temp_port.port_number;
-            p->port_priority = temp_port.port_priority;
-            p->port_id = temp_port.port_id;
-            p->rstp_state = RSTP_DISCARDING;
-
-            rstp_port_set_administrative_bridge_port(p,
-                    RSTP_ADMIN_BRIDGE_PORT_STATE_ENABLED);
-            rstp_port_set_oper_point_to_point_mac(p, 1);
-            rstp_port_set_path_cost(p, RSTP_DEFAULT_PORT_PATH_COST);
-            rstp_port_set_auto_edge(p, true);
-            /* Initialize state machines. */
-            p->port_receive_sm_state = PORT_RECEIVE_SM_INIT;
-            p->port_protocol_migration_sm_state =
-                PORT_PROTOCOL_MIGRATION_SM_INIT;
-            p->bridge_detection_sm_state = BRIDGE_DETECTION_SM_INIT;
-            p->port_transmit_sm_state = PORT_TRANSMIT_SM_INIT;
-            p->port_information_sm_state = PORT_INFORMATION_SM_INIT;
-            p->port_role_transition_sm_state = PORT_ROLE_TRANSITION_SM_INIT;
-            p->port_state_transition_sm_state = PORT_STATE_TRANSITION_SM_INIT;
-            p->topology_change_sm_state = TOPOLOGY_CHANGE_SM_INIT;
-            p->uptime = 0;
+            reinitialize_port__(p);
         }
     }
     rstp->ref_cnt = temp.ref_cnt;
@@ -730,14 +706,16 @@ rstp_get_changed_port(struct rstp *rstp, struct rstp_port **portp)
     return changed;
 }
 
-/* Returns the port in 'rstp' with number 'port_number'. */
+/* Returns the port in 'rstp' with number 'port_number'.
+ *
+ * XXX: May only be called while concurrent deletion of ports is excluded. */
 struct rstp_port *
 rstp_get_port(struct rstp *rstp, int port_number)
 {
     struct rstp_port *port;
 
     ovs_mutex_lock(&mutex);
-    if (rstp->ports_count > 0){
+    if (rstp->ports_count > 0) {
         LIST_FOR_EACH (port, node, &rstp->ports) {
             if (port->port_number == port_number) {
                 ovs_mutex_unlock(&mutex);
@@ -752,9 +730,10 @@ rstp_get_port(struct rstp *rstp, int port_number)
 /* Updates the port_enabled parameter. */
 static void
 update_port_enabled__(struct rstp_port *p)
+    OVS_REQUIRES(mutex)
 {
-    if (p->mac_operational && p->is_administrative_bridge_port ==
-            RSTP_ADMIN_BRIDGE_PORT_STATE_ENABLED) {
+    if (p->mac_operational && p->is_administrative_bridge_port
+        == RSTP_ADMIN_BRIDGE_PORT_STATE_ENABLED) {
         p->port_enabled = true;
     } else {
         p->port_enabled = false;
@@ -793,10 +772,12 @@ void
 rstp_port_set_administrative_bridge_port(struct rstp_port *p,
                                          uint8_t new_admin_port_state)
 {
-    if (new_admin_port_state == RSTP_ADMIN_BRIDGE_PORT_STATE_DISABLED ||
-            new_admin_port_state == RSTP_ADMIN_BRIDGE_PORT_STATE_ENABLED) {
+    if (new_admin_port_state == RSTP_ADMIN_BRIDGE_PORT_STATE_DISABLED
+        || new_admin_port_state == RSTP_ADMIN_BRIDGE_PORT_STATE_ENABLED) {
+        ovs_mutex_lock(&mutex);
         p->is_administrative_bridge_port = new_admin_port_state;
         update_port_enabled__(p);
+        ovs_mutex_unlock(&mutex);
     }
 }
 
@@ -805,29 +786,27 @@ void
 rstp_port_set_oper_point_to_point_mac(struct rstp_port *p,
                                       uint8_t new_oper_p2p_mac)
 {
-    if (new_oper_p2p_mac == RSTP_OPER_P2P_MAC_STATE_DISABLED ||
-            new_oper_p2p_mac == RSTP_OPER_P2P_MAC_STATE_ENABLED) {
+    if (new_oper_p2p_mac == RSTP_OPER_P2P_MAC_STATE_DISABLED
+        || new_oper_p2p_mac == RSTP_OPER_P2P_MAC_STATE_ENABLED) {
+        ovs_mutex_lock(&mutex);
         p->oper_point_to_point_mac = new_oper_p2p_mac;
         update_port_enabled__(p);
+        ovs_mutex_unlock(&mutex);
     }
 }
 
 /* Initializes a port with the defaults values for its parameters. */
 static void
-rstp_initialize_port__(struct rstp_port *p)
+rstp_initialize_port_defaults__(struct rstp_port *p)
     OVS_REQUIRES(mutex)
 {
-    struct rstp *rstp;
-
-    rstp = p->rstp;
     rstp_port_set_administrative_bridge_port(p,
         RSTP_ADMIN_BRIDGE_PORT_STATE_ENABLED);
     rstp_port_set_oper_point_to_point_mac(p, 1);
-    rstp_port_set_priority(p, RSTP_DEFAULT_PORT_PRIORITY);
-    rstp_port_set_port_number(p, 0);
     rstp_port_set_path_cost(p, RSTP_DEFAULT_PORT_PATH_COST);
     rstp_port_set_auto_edge(p, true);
 
+    /* Initialize state machines. */
     p->port_receive_sm_state = PORT_RECEIVE_SM_INIT;
     p->port_protocol_migration_sm_state = PORT_PROTOCOL_MIGRATION_SM_INIT;
     p->bridge_detection_sm_state = BRIDGE_DETECTION_SM_INIT;
@@ -836,16 +815,13 @@ rstp_initialize_port__(struct rstp_port *p)
     p->port_role_transition_sm_state = PORT_ROLE_TRANSITION_SM_INIT;
     p->port_state_transition_sm_state = PORT_STATE_TRANSITION_SM_INIT;
     p->topology_change_sm_state = TOPOLOGY_CHANGE_SM_INIT;
-    p->aux = NULL;
     p->uptime = 0;
 
-    VLOG_DBG("%s: RSTP port "RSTP_PORT_ID_FMT" initialized.", rstp->name,
-             p->port_id);
 }
 
-/* Reinitialization function used in tests. */
-void
-reinitialize_port(struct rstp_port *p)
+static void
+reinitialize_port__(struct rstp_port *p)
+    OVS_REQUIRES(mutex)
 {
     struct rstp_port temp_port;
     struct rstp *rstp;
@@ -861,25 +837,18 @@ reinitialize_port(struct rstp_port *p)
     p->port_id = temp_port.port_id;
     p->rstp_state = RSTP_DISCARDING;
 
-    rstp_port_set_administrative_bridge_port(p,
-            RSTP_ADMIN_BRIDGE_PORT_STATE_ENABLED);
-    rstp_port_set_oper_point_to_point_mac(p, 1);
-    rstp_port_set_path_cost(p, RSTP_DEFAULT_PORT_PATH_COST);
-    rstp_port_set_auto_edge(p, true);
-    /* Initialize state machines. */
-    p->port_receive_sm_state = PORT_RECEIVE_SM_INIT;
-    p->port_protocol_migration_sm_state =
-        PORT_PROTOCOL_MIGRATION_SM_INIT;
-    p->bridge_detection_sm_state = BRIDGE_DETECTION_SM_INIT;
-    p->port_transmit_sm_state = PORT_TRANSMIT_SM_INIT;
-    p->port_information_sm_state = PORT_INFORMATION_SM_INIT;
-    p->port_role_transition_sm_state = PORT_ROLE_TRANSITION_SM_INIT;
-    p->port_state_transition_sm_state = PORT_STATE_TRANSITION_SM_INIT;
-    p->topology_change_sm_state = TOPOLOGY_CHANGE_SM_INIT;
-    p->uptime = 0;
+    rstp_initialize_port_defaults__(p);
 
     VLOG_DBG("%s: RSTP port "RSTP_PORT_ID_FMT" reinitialized.", rstp->name,
-                 p->port_id);
+             p->port_id);
+}
+
+void
+reinitialize_port(struct rstp_port *p)
+{
+    ovs_mutex_lock(&mutex);
+    reinitialize_port__(p);
+    ovs_mutex_unlock(&mutex);
 }
 
 /* Sets the port state. */
@@ -908,7 +877,13 @@ rstp_add_port(struct rstp *rstp) {
 
     ovs_mutex_lock(&mutex);
     p->rstp = rstp;
-    rstp_initialize_port__(p);
+    rstp_port_set_priority(p, RSTP_DEFAULT_PORT_PRIORITY);
+    rstp_port_set_port_number(p, 0);
+    p->aux = NULL;
+    rstp_initialize_port_defaults__(p);
+    VLOG_DBG("%s: RSTP port "RSTP_PORT_ID_FMT" initialized.", rstp->name,
+             p->port_id);
+
     rstp_port_set_state(p, RSTP_DISCARDING);
     list_push_back(&rstp->ports, &p->node);
     rstp->ports_count++;

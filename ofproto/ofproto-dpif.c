@@ -2066,6 +2066,7 @@ rstp_run(struct ofproto_dpif *ofproto)
         long long int now = time_msec();
         long long int elapsed = now - ofproto->rstp_last_tick;
         struct rstp_port *rp;
+
         /* Every second, decrease the values of the timers. */
         if (elapsed >= 1000) {
             rstp_tick_timers(ofproto->rstp);
