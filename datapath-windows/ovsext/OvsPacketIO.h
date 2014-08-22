@@ -53,7 +53,7 @@ NDIS_STATUS OvsActionsExecute(POVS_SWITCH_CONTEXT switchContext,
                             PNET_BUFFER_LIST curNbl, UINT32 srcVportNo,
                             ULONG sendFlags, OvsFlowKey *key, UINT64 *hash,
                             OVS_PACKET_HDR_INFO *layers,
-                            const struct nlattr *actions, int actionsLen);
+                            const PNL_ATTR actions, int actionsLen);
 
 VOID OvsLookupFlowOutput(POVS_SWITCH_CONTEXT switchContext,
                          VOID *compList, PNET_BUFFER_LIST curNbl);

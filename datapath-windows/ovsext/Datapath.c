@@ -529,7 +529,7 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
     PIO_STACK_LOCATION irpSp;
     NTSTATUS status = STATUS_SUCCESS;
     PFILE_OBJECT fileObject;
-    PVOID inputBuffer;
+    PVOID inputBuffer = NULL;
     PVOID outputBuffer = NULL;
     UINT32 inputBufferLen, outputBufferLen;
     UINT32 code, replyLen = 0;
@@ -645,7 +645,7 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
     }
 
     ASSERT(ovsMsg);
-    switch (ovsMsg->nlMsg.nlmsg_type) {
+    switch (ovsMsg->nlMsg.nlmsgType) {
     case OVS_WIN_NL_CTRL_FAMILY_ID:
         nlFamilyOps = &nlControlFamilyOps;
         break;
@@ -801,8 +801,8 @@ OvsGetPidCmdHandler(PIRP irp,
         POVS_OPEN_INSTANCE instance = (POVS_OPEN_INSTANCE)fileObject->FsContext;
 
         RtlZeroMemory(msgOut, sizeof *msgOut);
-        msgOut->nlMsg.nlmsg_seq = msgIn->nlMsg.nlmsg_seq;
-        msgOut->nlMsg.nlmsg_pid = instance->pid;
+        msgOut->nlMsg.nlmsgSeq = msgIn->nlMsg.nlmsgSeq;
+        msgOut->nlMsg.nlmsgPid = instance->pid;
         *replyLen = sizeof *msgOut;
         /* XXX: We might need to return the DP index as well. */
     } else {

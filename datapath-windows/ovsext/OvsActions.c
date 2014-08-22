@@ -26,7 +26,6 @@
 #include "OvsChecksum.h"
 #include "OvsPacketIO.h"
 
-
 #ifdef OVS_DBG_MOD
 #undef OVS_DBG_MOD
 #endif
@@ -1030,35 +1029,35 @@ OvsPopVlanInPktBuf(OvsForwardingContext *ovsFwdCtx)
  * --------------------------------------------------------------------------
  */
 static __inline NDIS_STATUS
-OvsTunnelAttrToIPv4TunnelKey(struct nlattr *attr,
+OvsTunnelAttrToIPv4TunnelKey(PNL_ATTR attr,
                              OvsIPv4TunnelKey *tunKey)
 {
-   struct nlattr *a;
+   PNL_ATTR a;
    INT rem;
 
    tunKey->attr[0] = 0;
    tunKey->attr[1] = 0;
    tunKey->attr[2] = 0;
-   ASSERT(nl_attr_type(attr) == OVS_KEY_ATTR_TUNNEL);
+   ASSERT(NlAttrType(attr) == OVS_KEY_ATTR_TUNNEL);
 
-   NL_ATTR_FOR_EACH_UNSAFE (a, rem, nl_attr_data(attr),
-                            nl_attr_get_size(attr)) {
-      switch (nl_attr_type(a)) {
+   NL_ATTR_FOR_EACH_UNSAFE (a, rem, NlAttrData(attr),
+                            NlAttrGetSize(attr)) {
+      switch (NlAttrType(a)) {
       case OVS_TUNNEL_KEY_ATTR_ID:
-         tunKey->tunnelId = nl_attr_get_be64(a);
+         tunKey->tunnelId = NlAttrGetBe64(a);
          tunKey->flags |= OVS_TNL_F_KEY;
          break;
       case OVS_TUNNEL_KEY_ATTR_IPV4_SRC:
-         tunKey->src = nl_attr_get_be32(a);
+         tunKey->src = NlAttrGetBe32(a);
          break;
       case OVS_TUNNEL_KEY_ATTR_IPV4_DST:
-         tunKey->dst = nl_attr_get_be32(a);
+         tunKey->dst = NlAttrGetBe32(a);
          break;
       case OVS_TUNNEL_KEY_ATTR_TOS:
-         tunKey->tos = nl_attr_get_u8(a);
+         tunKey->tos = NlAttrGetU8(a);
          break;
       case OVS_TUNNEL_KEY_ATTR_TTL:
-         tunKey->ttl = nl_attr_get_u8(a);
+         tunKey->ttl = NlAttrGetU8(a);
          break;
       case OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT:
          tunKey->flags |= OVS_TNL_F_DONT_FRAGMENT;
@@ -1283,27 +1282,27 @@ static __inline NDIS_STATUS
 OvsExecuteSetAction(OvsForwardingContext *ovsFwdCtx,
                     OvsFlowKey *key,
                     UINT64 *hash,
-                    const struct nlattr *a)
+                    const PNL_ATTR a)
 {
-    enum ovs_key_attr type = nl_attr_type(a);
+    enum ovs_key_attr type = NlAttrType(a);
     NDIS_STATUS status = NDIS_STATUS_SUCCESS;
 
     switch (type) {
     case OVS_KEY_ATTR_ETHERNET:
         status = OvsUpdateEthHeader(ovsFwdCtx,
-            nl_attr_get_unspec(a, sizeof(struct ovs_key_ethernet)));
+            NlAttrGetUnspec(a, sizeof(struct ovs_key_ethernet)));
         break;
 
     case OVS_KEY_ATTR_IPV4:
         status = OvsUpdateIPv4Header(ovsFwdCtx,
-            nl_attr_get_unspec(a, sizeof(struct ovs_key_ipv4)));
+            NlAttrGetUnspec(a, sizeof(struct ovs_key_ipv4)));
         break;
 
     case OVS_KEY_ATTR_TUNNEL:
     {
         OvsIPv4TunnelKey tunKey;
 
-		status = OvsTunnelAttrToIPv4TunnelKey((struct nlattr *)a, &tunKey);
+		status = OvsTunnelAttrToIPv4TunnelKey((PNL_ATTR)a, &tunKey);
         ASSERT(status == NDIS_STATUS_SUCCESS);
         tunKey.flow_hash = (uint16)(hash ? *hash : OvsHashFlow(key));
         RtlCopyMemory(&ovsFwdCtx->tunKey, &tunKey, sizeof ovsFwdCtx->tunKey);
@@ -1357,10 +1356,10 @@ OvsActionsExecute(POVS_SWITCH_CONTEXT switchContext,
                   OvsFlowKey *key,
                   UINT64 *hash,
                   OVS_PACKET_HDR_INFO *layers,
-                  const struct nlattr *actions,
+                  const PNL_ATTR actions,
                   INT actionsLen)
 {
-    const struct nlattr *a;
+    PNL_ATTR a;
     INT rem;
     UINT32 dstPortID;
     OvsForwardingContext ovsFwdCtx;
@@ -1385,9 +1384,9 @@ OvsActionsExecute(POVS_SWITCH_CONTEXT switchContext,
     }
 
     NL_ATTR_FOR_EACH_UNSAFE (a, rem, actions, actionsLen) {
-        switch(nl_attr_type(a)) {
+        switch(NlAttrType(a)) {
         case OVS_ACTION_ATTR_OUTPUT:
-            dstPortID = nl_attr_get_u32(a);
+            dstPortID = NlAttrGetU32(a);
             status = OvsAddPorts(&ovsFwdCtx, key, dstPortID,
                                               TRUE, TRUE);
             if (status != NDIS_STATUS_SUCCESS) {
@@ -1424,7 +1423,7 @@ OvsActionsExecute(POVS_SWITCH_CONTEXT switchContext,
             } else {
                  vlanTagValue = 0;
                  vlanTag = (PNDIS_NET_BUFFER_LIST_8021Q_INFO)(PVOID *)&vlanTagValue;
-                 vlan = (struct ovs_action_push_vlan *)nl_attr_get(a);
+                 vlan = (struct ovs_action_push_vlan *)NlAttrGet((const PNL_ATTR)a);
                  vlanTag->TagHeader.VlanId = ntohs(vlan->vlan_tci) & 0xfff;
                  vlanTag->TagHeader.UserPriority = ntohs(vlan->vlan_tci) >> 13;
 
@@ -1465,19 +1464,19 @@ OvsActionsExecute(POVS_SWITCH_CONTEXT switchContext,
 
         case OVS_ACTION_ATTR_USERSPACE:
         {
-            const struct nlattr *userdata_attr;
-            const struct nlattr *queue_attr;
+            PNL_ATTR userdataAttr;
+            PNL_ATTR queueAttr;
             POVS_PACKET_QUEUE_ELEM elem;
             UINT32 queueId = OVS_DEFAULT_PACKET_QUEUE;
             //XXX confusing that portNo is actually portId for external port.
             BOOLEAN isRecv = (portNo == switchContext->externalPortId)
                             || OvsIsTunnelVportNo(portNo);
 
-            queue_attr = nl_attr_find_nested(a, OVS_USERSPACE_ATTR_PID);
-            userdata_attr = nl_attr_find_nested(a, OVS_USERSPACE_ATTR_USERDATA);
+            queueAttr = NlAttrFindNested(a, OVS_USERSPACE_ATTR_PID);
+            userdataAttr = NlAttrFindNested(a, OVS_USERSPACE_ATTR_USERDATA);
 
-            elem = OvsCreateQueuePacket(queueId, (PVOID)userdata_attr,
-                                        userdata_attr->nla_len,
+            elem = OvsCreateQueuePacket(queueId, (PVOID)userdataAttr,
+                                        userdataAttr->nlaLen,
                                         OVS_PACKET_CMD_ACTION,
                                         portNo, (OvsIPv4TunnelKey *)&key->tunKey,
                                         ovsFwdCtx.curNbl,
@@ -1510,7 +1509,8 @@ OvsActionsExecute(POVS_SWITCH_CONTEXT switchContext,
             }
 
             status = OvsExecuteSetAction(&ovsFwdCtx, key, hash,
-                                                      nl_attr_get(a));
+                                         (const PNL_ATTR)NlAttrGet
+                                         ((const PNL_ATTR)a));
             if (status != NDIS_STATUS_SUCCESS) {
                 dropReason = L"OVS-set action failed";
                 goto dropit;

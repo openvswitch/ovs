@@ -310,7 +310,7 @@ OvsExecuteDpIoctl(PVOID inputBuffer,
     OvsPacketExecute            *execute;
     LOCK_STATE_EX               lockState;
     PNET_BUFFER_LIST pNbl;
-    struct nlattr *actions;
+    PNL_ATTR actions;
     PNDIS_SWITCH_FORWARDING_DETAIL_NET_BUFFER_LIST_INFO fwdDetail;
     OvsFlowKey key;
     OVS_PACKET_HDR_INFO layers;
@@ -338,7 +338,7 @@ OvsExecuteDpIoctl(PVOID inputBuffer,
         status = STATUS_INFO_LENGTH_MISMATCH;
         goto unlock;
     }
-    actions = (struct nlattr *)((PCHAR)&execute->actions + execute->packetLen);
+    actions = (PNL_ATTR)((PCHAR)&execute->actions + execute->packetLen);
 
     /*
      * Allocate the NBL, copy the data from the userspace buffer. Allocate

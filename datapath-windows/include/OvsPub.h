@@ -17,12 +17,7 @@
 #ifndef __OVS_PUB_H_
 #define __OVS_PUB_H_ 1
 
-/* Needed by netlink-protocol.h */
-#define BUILD_ASSERT(EXPR) \
-      typedef char AssertOnCompileFailed[(EXPR) ? 1: -1]
-#define BUILD_ASSERT_DECL(EXPR) BUILD_ASSERT(EXPR)
-
-#include "OvsNetlink.h"
+#include "../ovsext/Netlink.h"
 
 #define OVS_DRIVER_MAJOR_VER 1
 #define OVS_DRIVER_MINOR_VER 0
@@ -369,7 +364,7 @@ typedef struct OvsFlowInfo {
     OvsFlowKey key;
     struct OvsFlowStats stats;
     uint32_t actionsLen;
-    struct nlattr actions[0];
+    NL_ATTR actions[0];
 } OvsFlowInfo;
 
 enum GetFlags {
@@ -425,7 +420,7 @@ typedef struct OvsFlowPut {
     uint32_t actionsLen;
     OvsFlowKey key;
     uint32_t flags;
-    struct nlattr  actions[0];  /* Variable length indicated by actionsLen. */
+    NL_ATTR  actions[0];  /* Variable length indicated by actionsLen. */
 } OvsFlowPut;
 
 #define OVS_MIN_PACKET_SIZE 60
@@ -452,7 +447,7 @@ typedef struct OvsPacketExecute {
        /* Variable size blob with packet data first, followed by action
         * attrs. */
        char packetBuf[0];
-       struct nlattr  actions[0];
+       NL_ATTR  actions[0];
    };
 } OvsPacketExecute;
 

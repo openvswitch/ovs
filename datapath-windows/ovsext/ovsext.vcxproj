@@ -75,6 +75,8 @@
     <ClInclude Include="OvsBufferMgmt.h" />
     <ClInclude Include="OvsChecksum.h" />
     <ClInclude Include="Datapath.h" />
+    <ClInclude Include="Netlink.h" />
+    <ClInclude Include="NetlinkProto.h" />
     <ClInclude Include="OvsDebug.h" />
     <ClInclude Include="OvsEth.h" />
     <ClInclude Include="OvsEvent.h" />
@@ -125,6 +127,7 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Netlink.c" />
     <ClCompile Include="Datapath.c" />
     <ClCompile Include="OvsDriver.c" />
     <ClCompile Include="OvsJhash.c" />

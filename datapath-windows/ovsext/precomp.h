@@ -24,6 +24,8 @@
 #include "OvsTypes.h"
 #include "..\include\OvsPub.h"
 #include "OvsUtil.h"
+#include "Netlink.h"
+#include "NetlinkProto.h"
 /*
  * Include openvswitch.h from userspace. Changing the location the file from
  * include/linux is pending discussion.

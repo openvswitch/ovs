@@ -71,8 +71,8 @@ NTSTATUS OvsCompleteIrpRequest(PIRP irp, ULONG_PTR infoPtr, NTSTATUS status);
  * Structure of any message passed between userspace and kernel.
  */
 typedef struct _OVS_MESSAGE {
-    struct nlmsghdr nlMsg;
-    struct genlmsghdr genlMsg;
+    NL_MSG_HDR nlMsg;
+    GENL_MSG_HDR genlMsg;
     struct ovs_header ovsHdr;
     /* Variable length nl_attrs follow. */
 } OVS_MESSAGE, *POVS_MESSAGE;

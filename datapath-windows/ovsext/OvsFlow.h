@@ -33,7 +33,7 @@ typedef struct _OvsFlow {
     UINT64 byteCount;
     UINT32 userActionsLen;   // used for flow query
     UINT32 actionBufferLen;  // used for flow reuse
-    struct nlattr actions[1];
+    NL_ATTR actions[1];
 } OvsFlow;
 
 
