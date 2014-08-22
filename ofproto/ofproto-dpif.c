@@ -2319,7 +2319,7 @@ stp_wait(struct ofproto_dpif *ofproto)
  * there are no duplicates. */
 static void
 set_rstp_port(struct ofport *ofport_,
-        const struct ofproto_port_rstp_settings *s)
+              const struct ofproto_port_rstp_settings *s)
 {
     struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);

@@ -872,7 +872,8 @@ OVS_REQUIRES(mutex)
 
 /* Adds a RSTP port. */
 struct rstp_port *
-rstp_add_port(struct rstp *rstp) {
+rstp_add_port(struct rstp *rstp)
+{
     struct rstp_port *p = xzalloc(sizeof *p);
 
     ovs_mutex_lock(&mutex);
@@ -896,7 +897,8 @@ rstp_add_port(struct rstp *rstp) {
 
 /* Deletes a RSTP port. */
 void
-rstp_delete_port(struct rstp_port *p) {
+rstp_delete_port(struct rstp_port *p)
+{
     struct rstp *rstp;
 
     ovs_mutex_lock(&mutex);
@@ -905,21 +907,21 @@ rstp_delete_port(struct rstp_port *p) {
     list_remove(&p->node);
     rstp->ports_count--;
     VLOG_DBG("%s: removed port "RSTP_PORT_ID_FMT"", rstp->name, p->port_id);
-    free(p);
     ovs_mutex_unlock(&mutex);
+    free(p);
 }
 
 /* Sets the port Admin Edge parameter. */
 void
 rstp_port_set_admin_edge(struct rstp_port *rstp_port, bool new_admin_edge)
 {
-    struct rstp *rstp;
-
-    rstp = rstp_port->rstp;
     if (rstp_port->admin_edge != new_admin_edge) {
+        struct rstp *rstp;
+
+        ovs_mutex_lock(&mutex);
+        rstp = rstp_port->rstp;
         VLOG_DBG("%s, port %u: set RSTP Admin Edge to %d", rstp->name,
                  rstp_port->port_number, new_admin_edge);
-        ovs_mutex_lock(&mutex);
         rstp_port->admin_edge = new_admin_edge;
         ovs_mutex_unlock(&mutex);
     }
@@ -929,13 +931,13 @@ rstp_port_set_admin_edge(struct rstp_port *rstp_port, bool new_admin_edge)
 void
 rstp_port_set_auto_edge(struct rstp_port *rstp_port, bool new_auto_edge)
 {
-    struct rstp *rstp;
-
-    rstp = rstp_port->rstp;
     if (rstp_port->auto_edge != new_auto_edge) {
+        struct rstp *rstp;
+
+        ovs_mutex_lock(&mutex);
+        rstp = rstp_port->rstp;
         VLOG_DBG("%s, port %u: set RSTP Auto Edge to %d", rstp->name,
                  rstp_port->port_number, new_auto_edge);
-        ovs_mutex_lock(&mutex);
         rstp_port->auto_edge = new_auto_edge;
         ovs_mutex_unlock(&mutex);
     }
@@ -959,9 +961,9 @@ rstp_port_set_mcheck(struct rstp_port *rstp_port, bool new_mcheck)
     if (new_mcheck == true && rstp_port->rstp->force_protocol_version >= 2) {
         rstp_port->mcheck = true;
     }
-    ovs_mutex_unlock(&mutex);
     VLOG_DBG("%s, port %u: set RSTP mcheck to %d", rstp->name,
              rstp_port->port_number, new_mcheck);
+    ovs_mutex_unlock(&mutex);
 }
 
 /* Returns the designated bridge id. */
@@ -973,6 +975,7 @@ rstp_get_designated_id(const struct rstp *rstp)
     ovs_mutex_lock(&mutex);
     designated_id = rstp->root_priority.designated_bridge_id;
     ovs_mutex_unlock(&mutex);
+
     return designated_id;
 }
 
@@ -985,6 +988,7 @@ rstp_get_root_id(const struct rstp *rstp)
     ovs_mutex_lock(&mutex);
     root_id = rstp->root_priority.root_bridge_id;
     ovs_mutex_unlock(&mutex);
+
     return root_id;
 }
 
@@ -997,6 +1001,7 @@ rstp_get_designated_port_id(const struct rstp *rstp)
     ovs_mutex_lock(&mutex);
     designated_port_id = rstp->root_priority.designated_port_id;
     ovs_mutex_unlock(&mutex);
+
     return designated_port_id;
 }
 
@@ -1009,6 +1014,7 @@ rstp_get_bridge_port_id(const struct rstp *rstp)
     ovs_mutex_lock(&mutex);
     bridge_port_id = rstp->root_priority.bridge_port_id;
     ovs_mutex_unlock(&mutex);
+
     return bridge_port_id;
 }
 
@@ -1024,6 +1030,7 @@ rstp_is_root_bridge(const struct rstp *rstp)
     is_root = rstp->bridge_identifier ==
                 rstp->root_priority.designated_bridge_id;
     ovs_mutex_unlock(&mutex);
+
     return is_root;
 }
 
@@ -1036,6 +1043,7 @@ rstp_get_designated_root(const struct rstp *rstp)
     ovs_mutex_lock(&mutex);
     designated_root = rstp->root_priority.designated_bridge_id;
     ovs_mutex_unlock(&mutex);
+
     return designated_root;
 }
 
@@ -1069,6 +1077,7 @@ rstp_port_get_id(const struct rstp_port *p)
     ovs_mutex_lock(&mutex);
     port_id = p->port_id;
     ovs_mutex_unlock(&mutex);
+
     return port_id;
 }
 
@@ -1081,6 +1090,7 @@ rstp_port_get_state(const struct rstp_port *p)
     ovs_mutex_lock(&mutex);
     state = p->rstp_state;
     ovs_mutex_unlock(&mutex);
+
     return state;
 }
 
@@ -1093,6 +1103,7 @@ rstp_port_get_role(const struct rstp_port *p)
     ovs_mutex_lock(&mutex);
     role = p->role;
     ovs_mutex_unlock(&mutex);
+
     return role;
 }
 
@@ -1125,6 +1136,7 @@ rstp_port_get_aux(struct rstp_port *p)
     ovs_mutex_lock(&mutex);
     aux = p->aux;
     ovs_mutex_unlock(&mutex);
+
     return aux;
 }
 
@@ -1164,7 +1176,8 @@ rstp_learn_in_state(enum rstp_state state)
 
 /* Unixctl. */
 static struct rstp *
-rstp_find(const char *name) OVS_REQUIRES(mutex)
+rstp_find(const char *name)
+    OVS_REQUIRES(mutex)
 {
     struct rstp *rstp;
 
