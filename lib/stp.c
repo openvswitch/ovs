@@ -1469,7 +1469,12 @@ stp_initialize_port(struct stp_port *p, enum stp_state state)
 {
     ovs_assert(state & (STP_DISABLED | STP_BLOCKING));
     stp_become_designated_port(p);
-    stp_set_port_state(p, state);
+
+    if (!p->state && state == STP_DISABLED) {
+        p->state = state; /* Do not trigger state change when initializing. */
+    } else {
+        stp_set_port_state(p, state);
+    }
     p->topology_change_ack = false;
     p->config_pending = false;
     p->change_detection_enabled = true;
