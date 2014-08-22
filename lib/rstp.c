@@ -48,7 +48,7 @@
 
 VLOG_DEFINE_THIS_MODULE(rstp);
 
-struct ovs_mutex rstp_mutex;
+struct ovs_mutex rstp_mutex = OVS_MUTEX_INITIALIZER;
 
 static struct list all_rstps__ = LIST_INITIALIZER(&all_rstps__);
 static struct list *const all_rstps OVS_GUARDED_BY(rstp_mutex) = &all_rstps__;
@@ -232,8 +232,6 @@ void
 rstp_init(void)
     OVS_EXCLUDED(rstp_mutex)
 {
-    ovs_mutex_init_recursive(&rstp_mutex);
-
     unixctl_command_register("rstp/tcn", "[bridge]", 0, 1, rstp_unixctl_tcn,
                              NULL);
 }
@@ -241,7 +239,8 @@ rstp_init(void)
 /* Creates and returns a new RSTP instance that initially has no ports. */
 struct rstp *
 rstp_create(const char *name, rstp_identifier bridge_address,
-            void (*send_bpdu)(struct ofpbuf *bpdu, int port_no, void *aux),
+            void (*send_bpdu)(struct ofpbuf *bpdu, void *port_aux,
+                              void *rstp_aux),
             void *aux)
     OVS_EXCLUDED(rstp_mutex)
 {

@@ -1,6 +1,6 @@
 #include <config.h>
 
-#include "rstp.h"
+#include "rstp-common.h"
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
@@ -72,11 +72,15 @@ new_test_case(void)
     return tc;
 }
 
+/* This callback is called with rstp_mutex held. */
 static void
-send_bpdu(struct ofpbuf *pkt, int port_no, void *b_)
+send_bpdu(struct ofpbuf *pkt, void *port_, void *b_)
+    OVS_REQUIRES(rstp_mutex)
 {
     struct bridge *b = b_;
     struct lan *lan;
+    const struct rstp_port *port = port_;
+    uint16_t port_no = port->port_number;
 
     assert(port_no < b->n_ports);
     lan = b->ports[port_no];
@@ -116,7 +120,7 @@ new_bridge(struct test_case *tc, int id)
     b->rstp = rstp_create(name, id, send_bpdu, b);
     for (i = 1; i < MAX_PORTS; i++) {
         p = rstp_add_port(b->rstp);
-        rstp_port_set_aux(p, b);
+        rstp_port_set_aux(p, p);
         rstp_port_set_state(p, RSTP_DISABLED);
         rstp_port_set_mac_operational(p, true);
     }
@@ -458,8 +462,6 @@ test_rstp_main(int argc, char *argv[])
     struct test_case *tc;
     FILE *input_file;
     int i;
-
-    rstp_init();
 
     vlog_set_pattern(VLF_CONSOLE, "%c|%p|%m");
     vlog_set_levels(NULL, VLF_SYSLOG, VLL_OFF);

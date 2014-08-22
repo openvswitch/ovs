@@ -1904,27 +1904,21 @@ get_bfd_status(struct ofport *ofport_, struct smap *smap)
 
 /* Spanning Tree. */
 
+/* Called while rstp_mutex is held. */
 static void
-rstp_send_bpdu_cb(struct ofpbuf *pkt, int port_num, void *ofproto_)
+rstp_send_bpdu_cb(struct ofpbuf *pkt, void *ofport_, void *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_;
-    struct ofport_dpif *ofport;
+    struct ofport_dpif *ofport = ofport_;
+    struct eth_header *eth = ofpbuf_l2(pkt);
 
-    ofport = rstp_get_port_aux(ofproto->rstp, port_num);
-    if (!ofport) {
-        VLOG_WARN_RL(&rl, "%s: cannot send BPDU on unknown RSTP port %d",
-                     ofproto->up.name, port_num);
+    netdev_get_etheraddr(ofport->up.netdev, eth->eth_src);
+    if (eth_addr_is_zero(eth->eth_src)) {
+        VLOG_WARN_RL(&rl, "%s port %d: cannot send RSTP BPDU on a port which "
+                     "does not have a configured source MAC address.",
+                     ofproto->up.name, ofp_to_u16(ofport->up.ofp_port));
     } else {
-        struct eth_header *eth = ofpbuf_l2(pkt);
-
-        netdev_get_etheraddr(ofport->up.netdev, eth->eth_src);
-        if (eth_addr_is_zero(eth->eth_src)) {
-            VLOG_WARN_RL(&rl, "%s port %d: cannot send BPDU on RSTP port %d "
-                         "with unknown MAC", ofproto->up.name,
-                         ofp_to_u16(ofport->up.ofp_port), port_num);
-        } else {
-            ofproto_dpif_send_packet(ofport, pkt);
-        }
+        ofproto_dpif_send_packet(ofport, pkt);
     }
     ofpbuf_delete(pkt);
 }

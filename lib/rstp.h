@@ -130,13 +130,12 @@ static inline bool rstp_forward_in_state(enum rstp_state);
 static inline bool rstp_learn_in_state(enum rstp_state);
 static inline bool rstp_should_manage_bpdu(enum rstp_state state);
 
-/* Must be called before any other rstp function is called. */
 void rstp_init(void)
     OVS_EXCLUDED(rstp_mutex);
 
 struct rstp * rstp_create(const char *, rstp_identifier bridge_id,
-                          void (*send_bpdu)(struct ofpbuf *, int port_no,
-                                            void *aux),
+                          void (*send_bpdu)(struct ofpbuf *, void *port_aux,
+                                            void *rstp_aux),
                           void *aux)
     OVS_EXCLUDED(rstp_mutex);
 

@@ -678,7 +678,7 @@ rstp_send_bpdu(struct rstp_port *p, const void *bpdu, size_t bpdu_size)
     llc->llc_dsap = STP_LLC_DSAP;
     llc->llc_ssap = STP_LLC_SSAP;
     llc->llc_cntl = STP_LLC_CNTL;
-    p->rstp->send_bpdu(pkt, p->port_number, p->rstp->aux);
+    p->rstp->send_bpdu(pkt, p->aux, p->rstp->aux);
 }
 
 static void

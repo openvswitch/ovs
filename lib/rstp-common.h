@@ -872,7 +872,7 @@ struct rstp {
     struct ovs_refcount ref_cnt;
 
     /* Interface to client. */
-    void (*send_bpdu)(struct ofpbuf *bpdu, int port_no, void *aux);
+    void (*send_bpdu)(struct ofpbuf *bpdu, void *port_aux, void *rstp_aux);
     void *aux;
 };
 
