@@ -4354,8 +4354,10 @@ xlate_push_stats(struct xlate_cache *xcache, bool may_learn,
             }
             break;
         case XC_NORMAL:
-            xlate_cache_normal(entry->u.normal.ofproto, entry->u.normal.flow,
-                               entry->u.normal.vlan);
+            if (may_learn) {
+                xlate_cache_normal(entry->u.normal.ofproto,
+                                   entry->u.normal.flow, entry->u.normal.vlan);
+            }
             break;
         case XC_FIN_TIMEOUT:
             xlate_fin_timeout__(entry->u.fin.rule, stats->tcp_flags,
