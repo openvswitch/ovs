@@ -164,7 +164,6 @@ struct upcall {
 
     struct dpif_ipfix *ipfix;      /* IPFIX reference or NULL. */
     struct dpif_sflow *sflow;      /* SFlow reference or NULL. */
-    struct netflow *netflow;       /* Netlow reference or NULL. */
 
     bool vsp_adjusted;             /* 'packet' and 'flow' were adjusted for
                                       VLAN splinters if true. */
@@ -826,8 +825,7 @@ upcall_receive(struct upcall *upcall, const struct dpif_backer *backer,
     int error;
 
     error = xlate_receive(backer, flow, &upcall->ofproto, &upcall->ipfix,
-                          &upcall->sflow, &upcall->netflow,
-                          &upcall->in_port);
+                          &upcall->sflow, NULL, &upcall->in_port);
     if (error) {
         return error;
     }
@@ -923,7 +921,6 @@ upcall_uninit(struct upcall *upcall)
         ofpbuf_uninit(&upcall->put_actions);
         dpif_ipfix_unref(upcall->ipfix);
         dpif_sflow_unref(upcall->sflow);
-        netflow_unref(upcall->netflow);
     }
 }
 
