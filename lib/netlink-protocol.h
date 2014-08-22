@@ -29,15 +29,9 @@
  * on other platforms it directly defines the structures and macros itself.
  */
 
-/* This file is included by windows driver as well (as of now).
- * It does not have access to following header files,
- * hence do not include them for windows driver.
- */
-#ifndef OVS_WIN_DP
 #include <stdint.h>
 #include <sys/socket.h>
 #include "util.h"
-#endif
 
 #ifdef HAVE_NETLINK
 #include <linux/netlink.h>
