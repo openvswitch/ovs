@@ -27,11 +27,6 @@
 
 struct ofpbuf;
 
-/* LLC field values used for STP frames. */
-#define STP_LLC_SSAP 0x42
-#define STP_LLC_DSAP 0x42
-#define STP_LLC_CNTL 0x03
-
 /* Bridge and port priorities that should be used by default. */
 #define STP_DEFAULT_BRIDGE_PRIORITY 32768
 #define STP_DEFAULT_PORT_PRIORITY 128

@@ -145,6 +145,10 @@ static void stp_wait(struct ofproto_dpif *ofproto);
 static int set_stp_port(struct ofport *,
                         const struct ofproto_port_stp_settings *);
 
+static void rstp_run(struct ofproto_dpif *ofproto);
+static void set_rstp_port(struct ofport *,
+                         const struct ofproto_port_rstp_settings *);
+
 struct ofport_dpif {
     struct hmap_node odp_port_node; /* In dpif_backer's "odp_to_ofport_map". */
     struct ofport up;
@@ -164,6 +168,10 @@ struct ofport_dpif {
     struct stp_port *stp_port;  /* Spanning Tree Protocol, if any. */
     enum stp_state stp_state;   /* Always STP_DISABLED if STP not in use. */
     long long int stp_state_entered;
+
+    /* Rapid Spanning Tree. */
+    struct rstp_port *rstp_port; /* Rapid Spanning Tree Protocol, if any. */
+    enum rstp_state rstp_state; /* Always RSTP_DISABLED if RSTP not in use. */
 
     /* Queue to DSCP mapping. */
     struct ofproto_port_queue *qdscp;
@@ -224,6 +232,7 @@ static void ofport_update_peer(struct ofport_dpif *);
 enum revalidate_reason {
     REV_RECONFIGURE = 1,       /* Switch configuration changed. */
     REV_STP,                   /* Spanning tree protocol port status change. */
+    REV_RSTP,                  /* RSTP port status change. */
     REV_BOND,                  /* Bonding changed. */
     REV_PORT_TOGGLED,          /* Port enabled or disabled by CFM, LACP, ...*/
     REV_FLOW_TABLE,            /* Flow table changed. */
@@ -232,6 +241,7 @@ enum revalidate_reason {
 };
 COVERAGE_DEFINE(rev_reconfigure);
 COVERAGE_DEFINE(rev_stp);
+COVERAGE_DEFINE(rev_rstp);
 COVERAGE_DEFINE(rev_bond);
 COVERAGE_DEFINE(rev_port_toggled);
 COVERAGE_DEFINE(rev_flow_table);
@@ -301,6 +311,10 @@ struct ofproto_dpif {
     /* Spanning tree. */
     struct stp *stp;
     long long int stp_last_tick;
+
+    /* Rapid Spanning Tree. */
+    struct rstp *rstp;
+    long long int rstp_last_tick;
 
     /* VLAN splinters. */
     struct ovs_mutex vsp_mutex;
@@ -575,6 +589,7 @@ type_run(const char *type)
         switch (backer->need_revalidate) {
         case REV_RECONFIGURE:    COVERAGE_INC(rev_reconfigure);    break;
         case REV_STP:            COVERAGE_INC(rev_stp);            break;
+        case REV_RSTP:           COVERAGE_INC(rev_rstp);           break;
         case REV_BOND:           COVERAGE_INC(rev_bond);           break;
         case REV_PORT_TOGGLED:   COVERAGE_INC(rev_port_toggled);   break;
         case REV_FLOW_TABLE:     COVERAGE_INC(rev_flow_table);     break;
@@ -595,8 +610,8 @@ type_run(const char *type)
             xlate_ofproto_set(ofproto, ofproto->up.name,
                               ofproto->backer->dpif, ofproto->miss_rule,
                               ofproto->no_packet_in_rule, ofproto->ml,
-                              ofproto->stp, ofproto->ms, ofproto->mbridge,
-                              ofproto->sflow, ofproto->ipfix,
+                              ofproto->stp, ofproto->rstp, ofproto->ms,
+                              ofproto->mbridge, ofproto->sflow, ofproto->ipfix,
                               ofproto->netflow, ofproto->up.frag_handling,
                               ofproto->up.forward_bpdu,
                               connmgr_has_in_band(ofproto->up.connmgr),
@@ -616,11 +631,14 @@ type_run(const char *type)
                 int stp_port = ofport->stp_port
                     ? stp_port_no(ofport->stp_port)
                     : -1;
+                int rstp_port = ofport->rstp_port
+                    ? rstp_port_number(ofport->rstp_port)
+                    : -1;
                 xlate_ofport_set(ofproto, ofport->bundle, ofport,
                                  ofport->up.ofp_port, ofport->odp_port,
                                  ofport->up.netdev, ofport->cfm,
                                  ofport->bfd, ofport->peer, stp_port,
-                                 ofport->qdscp, ofport->n_qdscp,
+                                 rstp_port, ofport->qdscp, ofport->n_qdscp,
                                  ofport->up.pp.config, ofport->up.pp.state,
                                  ofport->is_tunnel, ofport->may_enable);
             }
@@ -1129,6 +1147,7 @@ construct(struct ofproto *ofproto_)
     ofproto->sflow = NULL;
     ofproto->ipfix = NULL;
     ofproto->stp = NULL;
+    ofproto->rstp = NULL;
     ofproto->dump_seq = 0;
     hmap_init(&ofproto->bundles);
     ofproto->ml = mac_learning_create(MAC_ENTRY_DEFAULT_IDLE_TIME);
@@ -1393,6 +1412,7 @@ run(struct ofproto *ofproto_)
     }
 
     stp_run(ofproto);
+    rstp_run(ofproto);
     ovs_rwlock_wrlock(&ofproto->ml->rwlock);
     if (mac_learning_run(ofproto->ml)) {
         ofproto->backer->need_revalidate = REV_MAC_LEARNING;
@@ -1551,6 +1571,8 @@ port_construct(struct ofport *port_)
     port->may_enable = true;
     port->stp_port = NULL;
     port->stp_state = STP_DISABLED;
+    port->rstp_port = NULL;
+    port->rstp_state = RSTP_DISABLED;
     port->is_tunnel = false;
     port->peer = NULL;
     port->qdscp = NULL;
@@ -1660,6 +1682,9 @@ port_destruct(struct ofport *port_)
     set_bfd(port_, NULL);
     if (port->stp_port) {
         stp_port_disable(port->stp_port);
+    }
+    if (port->rstp_port) {
+        rstp_delete_port(port->rstp_port);
     }
     if (ofproto->sflow) {
         dpif_sflow_del_port(ofproto->sflow, port->odp_port);
@@ -1884,6 +1909,31 @@ get_bfd_status(struct ofport *ofport_, struct smap *smap)
 /* Spanning Tree. */
 
 static void
+rstp_send_bpdu_cb(struct ofpbuf *pkt, int port_num, void *ofproto_)
+{
+    struct ofproto_dpif *ofproto = ofproto_;
+    struct rstp_port *rp = rstp_get_port(ofproto->rstp, port_num);
+    struct ofport_dpif *ofport;
+
+    ofport = rstp_port_get_aux(rp);
+    if (!ofport) {
+        VLOG_WARN_RL(&rl, "%s: cannot send BPDU on unknown port %d",
+                ofproto->up.name, port_num);
+    } else {
+        struct eth_header *eth = ofpbuf_l2(pkt);
+
+        netdev_get_etheraddr(ofport->up.netdev, eth->eth_src);
+        if (eth_addr_is_zero(eth->eth_src)) {
+            VLOG_WARN_RL(&rl, "%s: cannot send BPDU on port %d "
+                    "with unknown MAC", ofproto->up.name, port_num);
+        } else {
+            ofproto_dpif_send_packet(ofport, pkt);
+        }
+    }
+    ofpbuf_delete(pkt);
+}
+
+static void
 send_bpdu_cb(struct ofpbuf *pkt, int port_num, void *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_;
@@ -1906,6 +1956,138 @@ send_bpdu_cb(struct ofpbuf *pkt, int port_num, void *ofproto_)
         }
     }
     ofpbuf_delete(pkt);
+}
+
+/* Configure RSTP on 'ofproto_' using the settings defined in 's'. */
+static void
+set_rstp(struct ofproto *ofproto_, const struct ofproto_rstp_settings *s)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+
+    /* Only revalidate flows if the configuration changed. */
+    if (!s != !ofproto->rstp) {
+        ofproto->backer->need_revalidate = REV_RECONFIGURE;
+    }
+
+    if (s) {
+        if (!ofproto->rstp) {
+            ofproto->rstp = rstp_create(ofproto_->name, s->address,
+              rstp_send_bpdu_cb, ofproto);
+            ofproto->rstp_last_tick = time_msec();
+        }
+        rstp_set_bridge_address(ofproto->rstp, s->address);
+        rstp_set_bridge_priority(ofproto->rstp, s->priority);
+        rstp_set_bridge_ageing_time(ofproto->rstp, s->ageing_time);
+        rstp_set_bridge_force_protocol_version(ofproto->rstp,
+                                               s->force_protocol_version);
+        rstp_set_bridge_max_age(ofproto->rstp, s->bridge_max_age);
+        rstp_set_bridge_forward_delay(ofproto->rstp, s->bridge_forward_delay);
+        rstp_set_bridge_transmit_hold_count(ofproto->rstp,
+                                            s->transmit_hold_count);
+    } else {
+        struct ofport *ofport;
+        HMAP_FOR_EACH (ofport, hmap_node, &ofproto->up.ports) {
+            set_rstp_port(ofport, NULL);
+        }
+        rstp_unref(ofproto->rstp);
+        ofproto->rstp = NULL;
+    }
+}
+
+static void
+get_rstp_status(struct ofproto *ofproto_, struct ofproto_rstp_status *s)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+
+    if (ofproto->rstp) {
+        s->enabled = true;
+        s->root_id = rstp_get_root_id(ofproto->rstp);
+        s->bridge_id = rstp_get_bridge_id(ofproto->rstp);
+        s->designated_id = rstp_get_designated_id(ofproto->rstp);
+        s->root_path_cost = rstp_get_root_path_cost(ofproto->rstp);
+        s->designated_port_id = rstp_get_designated_port_id(ofproto->rstp);
+        s->bridge_port_id = rstp_get_bridge_port_id(ofproto->rstp);
+    } else {
+        s->enabled = false;
+    }
+}
+
+static void
+update_rstp_port_state(struct ofport_dpif *ofport)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
+    enum rstp_state state;
+
+    /* Figure out new state. */
+    state = ofport->rstp_port ? rstp_port_get_state(ofport->rstp_port)
+        : RSTP_DISABLED;
+
+    /* Update state. */
+    if (ofport->rstp_state != state) {
+        enum ofputil_port_state of_state;
+        bool fwd_change;
+
+        VLOG_DBG_RL(&rl, "port %s: RSTP state changed from %s to %s",
+                netdev_get_name(ofport->up.netdev),
+                rstp_state_name(ofport->rstp_state),
+                rstp_state_name(state));
+        if (rstp_learn_in_state(ofport->rstp_state)
+                != rstp_learn_in_state(state)) {
+            /* xxx Learning action flows should also be flushed. */
+            ovs_rwlock_wrlock(&ofproto->ml->rwlock);
+            mac_learning_flush(ofproto->ml);
+            ovs_rwlock_unlock(&ofproto->ml->rwlock);
+        }
+        fwd_change = rstp_forward_in_state(ofport->rstp_state)
+            != rstp_forward_in_state(state);
+
+        ofproto->backer->need_revalidate = REV_RSTP;
+        ofport->rstp_state = state;
+
+        if (fwd_change && ofport->bundle) {
+            bundle_update(ofport->bundle);
+        }
+
+        /* Update the RSTP state bits in the OpenFlow port description. */
+        of_state = ofport->up.pp.state & ~OFPUTIL_PS_STP_MASK;
+        of_state |= (state == RSTP_LEARNING ? OFPUTIL_PS_STP_LEARN
+                : state == RSTP_FORWARDING ? OFPUTIL_PS_STP_FORWARD
+                : state == RSTP_DISCARDING ?  OFPUTIL_PS_STP_LISTEN
+                : 0);
+        ofproto_port_set_state(&ofport->up, of_state);
+    }
+}
+
+static void
+rstp_run(struct ofproto_dpif *ofproto)
+{
+    if (ofproto->rstp) {
+        long long int now = time_msec();
+        long long int elapsed = now - ofproto->rstp_last_tick;
+        struct rstp_port *rp;
+        /* Every second, decrease the values of the timers. */
+        if (elapsed >= 1000) {
+            rstp_tick_timers(ofproto->rstp);
+            ofproto->rstp_last_tick = now;
+        }
+        while (rstp_get_changed_port(ofproto->rstp, &rp)) {
+            struct ofport_dpif *ofport = rstp_port_get_aux(rp);
+            if (ofport) {
+                update_rstp_port_state(ofport);
+            }
+        }
+        /* FIXME: This check should be done on-event (i.e., when setting
+         * p->fdb_flush) and not periodically.
+         */
+        if (rstp_check_and_reset_fdb_flush(ofproto->rstp)) {
+            ovs_rwlock_wrlock(&ofproto->ml->rwlock);
+            /* FIXME: RSTP should be able to flush the entries pertaining to a
+             * single port, not the whole table.
+             */
+            mac_learning_flush(ofproto->ml);
+            ovs_rwlock_unlock(&ofproto->ml->rwlock);
+        }
+    }
 }
 
 /* Configures STP on 'ofproto_' using the settings defined in 's'. */
@@ -2126,6 +2308,94 @@ stp_wait(struct ofproto_dpif *ofproto)
         poll_timer_wait(1000);
     }
 }
+
+/* Configures RSTP on 'ofport_' using the settings defined in 's'.  The
+ * caller is responsible for assigning RSTP port numbers and ensuring
+ * there are no duplicates. */
+static void
+set_rstp_port(struct ofport *ofport_,
+        const struct ofproto_port_rstp_settings *s)
+{
+    struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
+    struct rstp_port *rp = ofport->rstp_port;
+    int stp_port;
+
+    if (!s || !s->enable) {
+        if (rp) {
+            ofport->rstp_port = NULL;
+            rstp_delete_port(rp);
+            update_rstp_port_state(ofport);
+        }
+        return;
+    } else if (rp && rstp_port_number(rp) != s->port_num
+                  && ofport == rstp_port_get_aux(rp)) {
+        /* The port-id changed, so disable the old one if it's not
+         * already in use by another port. */
+        if (s->port_num != 0) {
+            xlate_txn_start();
+            stp_port = ofport->stp_port ? stp_port_no(ofport->stp_port) : -1;
+            xlate_ofport_set(ofproto, ofport->bundle, ofport,
+                    ofport->up.ofp_port, ofport->odp_port,
+                    ofport->up.netdev, ofport->cfm,
+                    ofport->bfd, ofport->peer, stp_port,
+                    s->port_num,
+                    ofport->qdscp, ofport->n_qdscp,
+                    ofport->up.pp.config, ofport->up.pp.state,
+                    ofport->is_tunnel, ofport->may_enable);
+            xlate_txn_commit();
+        }
+
+        rstp_port_set_aux(rp, ofport);
+        rstp_port_set_priority(rp, s->priority);
+        rstp_port_set_port_number(rp, s->port_num);
+        rstp_port_set_path_cost(rp, s->path_cost);
+        rstp_port_set_admin_edge(rp, s->admin_edge_port);
+        rstp_port_set_auto_edge(rp, s->auto_edge);
+        rstp_port_set_mcheck(rp, s->mcheck);
+
+        update_rstp_port_state(ofport);
+
+        return;
+    }
+    rp = ofport->rstp_port = rstp_get_port(ofproto->rstp, s->port_num);
+    /* Enable RSTP on port */
+    if (!rp) {
+        rp = ofport->rstp_port = rstp_add_port(ofproto->rstp);
+    }
+    /* Setters */
+    rstp_port_set_aux(rp, ofport);
+    rstp_port_set_priority(rp, s->priority);
+    rstp_port_set_port_number(rp, s->port_num);
+    rstp_port_set_path_cost(rp, s->path_cost);
+    rstp_port_set_admin_edge(rp, s->admin_edge_port);
+    rstp_port_set_auto_edge(rp, s->auto_edge);
+    rstp_port_set_mcheck(rp, s->mcheck);
+
+    update_rstp_port_state(ofport);
+}
+
+static void
+get_rstp_port_status(struct ofport *ofport_,
+        struct ofproto_port_rstp_status *s)
+{
+    struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
+    struct rstp_port *rp = ofport->rstp_port;
+
+    if (!ofproto->rstp || !rp) {
+        s->enabled = false;
+        return;
+    }
+
+    s->enabled = true;
+    s->port_id = rstp_port_get_id(rp);
+    s->state = rstp_port_get_state(rp);
+    s->role = rstp_port_get_role(rp);
+    rstp_port_get_counts(rp, &s->tx_count, &s->rx_count,
+                         &s->error_count, &s->uptime);
+}
+
 
 static int
 set_queues(struct ofport *ofport_, const struct ofproto_port_queue *qdscp,
@@ -2863,6 +3133,12 @@ port_run(struct ofport_dpif *ofport)
     }
 
     ofport->may_enable = enable;
+
+    if (ofport->rstp_port) {
+        if (rstp_port_get_mac_operational(ofport->rstp_port) != enable) {
+            rstp_port_set_mac_operational(ofport->rstp_port, enable);
+        }
+    }
 }
 
 static int
@@ -5128,6 +5404,10 @@ const struct ofproto_class ofproto_dpif_class = {
     set_stp_port,
     get_stp_port_status,
     get_stp_port_stats,
+    set_rstp,
+    get_rstp_status,
+    set_rstp_port,
+    get_rstp_port_status,
     set_queues,
     bundle_set,
     bundle_remove,

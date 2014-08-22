@@ -31,6 +31,7 @@
 /test-packets
 /test-random
 /test-reconnect
+/test-rstp
 /test-sflow
 /test-sha1
 /test-stp

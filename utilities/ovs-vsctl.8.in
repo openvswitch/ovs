@@ -1002,6 +1002,85 @@ Deconfigure multicasting snooping from above:
 .IP
 .B "ovs\-vsctl set Bridge br0 mcast_snooping_enable=false"
 .PP
+.SS "802.1D-2004 Rapid Spanning Tree Protocol (RSTP)"
+.PP
+Configure bridge \fBbr0\fR to participate in an 802.1D-2004 Rapid Spanning Tree:
+.IP
+.B "ovs\-vsctl set Bridge br0 rstp_enable=true"
+.PP
+Set the bridge address of \fBbr0\fR to 00:aa:aa:aa:aa:aa :
+.IP
+.B "ovs\-vsctl set Bridge br0 other_config:rstp-address=00:aa:aa:aa:aa:aa"
+.PP
+Set the bridge priority of \fBbr0\fR to 0x7000. The value must be specified in
+decimal notation and should be a multiple of 4096 (if not, it is rounded down to
+the nearest multiple of 4096). The default priority value is 0x800 (32768).
+.IP
+.B "ovs\-vsctl set Bridge br0 other_config:rstp-priority=28672"
+.PP
+Set the bridge ageing time of \fBbr0\fR to 1000 s. The ageing time value should be
+between 10 s and 1000000 s. The default value is 300 s.
+.IP
+.B "ovs\-vsctl set Bridge br0 other_config:rstp-ageing-time=1000"
+.PP
+Set the bridge force protocol version of \fBbr0\fR to 0. The force protocol version
+has two acceptable values: 0 (STP compatibility mode) and 2 (normal operation).
+.IP
+.B "ovs\-vsctl set Bridge br0 other_config:rstp-force-protocol-version=0"
+.PP
+Set the bridge max age of \fBbr0\fR to 10 s. The max age value should be between 6 s
+and 40 s. The default value is 20 s.
+.IP
+.B "ovs\-vsctl set Bridge br0 other_config:rstp-max-age=10"
+.PP
+Set the bridge forward delay of \fBbr0\fR to 15 s.
+This value should be between 4 s and 30 s. The default value is 15 s.
+.IP
+.B "ovs\-vsctl set Bridge br0 other_config:rstp-forward-delay=15"
+.PP
+Set the bridge transmit hold count of \fBbr0\fR to 7 s. This value should be between
+1 s and 10 s. The default value is 6 s.
+.IP
+.B "ovs\-vsctl set Bridge br0 other_config:rstp-transmit-hold-count=7"
+.PP
+Enable RSTP on the Port \fBeth0\fR.
+.IP
+.B "ovs\-vsctl set Port eth0 other_config:rstp-enable=true"
+.PP
+Disable RSTP on the Port \fBeth0\fR.
+.IP
+.B "ovs\-vsctl set Port eth0 other_config:rstp-enable=false"
+.PP
+Set the priority of port \fBeth0\fR to 20. The value must be specified in
+decimal notation and should be a multiple of 16 (if not, it is rounded down to the
+nearest multiple of 16). The default priority value is 0x80 (128).
+.IP
+.B "ovs\-vsctl set Port eth0 other_config:rstp-port-priority=32"
+.PP
+Set the port number of port \fBeth0\fR to 3:
+.IP
+.B "ovs\-vsctl set Port eth0 other_config:rstp-port-num=3"
+.PP
+Set the path cost of port \fBeth0\fR to 150:
+.IP
+.B "ovs\-vsctl set Port eth0 other_config:rstp-path-cost=150"
+.PP
+Set the admin edge value of port \fBeth0\fR:
+.IP
+.B "ovs\-vsctl set Port eth0 other_config:rstp-port-admin-edge=true"
+.PP
+Set the auto edge value of port \fBeth0\fR:
+.IP
+.B "ovs\-vsctl set Port eth0 other_config:rstp-port-auto-edge=true"
+.PP
+Set the mcheck value of port \fBeth0\fR:
+.IP
+.B "ovs\-vsctl set Port eth0 other_config:rstp-port-mcheck=true"
+.PP
+Deconfigure RSTP from above:
+.IP
+.B "ovs\-vsctl set Bridge br0 rstp_enable=false"
+.PP
 .SS "OpenFlow Version"
 .PP
 Configure bridge \fBbr0\fR to support OpenFlow versions 1.0, 1.2, and

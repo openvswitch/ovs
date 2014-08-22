@@ -658,6 +658,8 @@ netflow             : []
 other_config        : {}
 ports               : []
 protocols           : []
+rstp_enable         : false
+rstp_status         : {}
 sflow               : []
 status              : {}
 stp_enable          : false
@@ -1154,6 +1156,8 @@ netflow             : []
 other_config        : {}
 ports               : []
 protocols           : []
+rstp_enable         : false
+rstp_status         : {}
 sflow               : []
 status              : {}
 stp_enable          : false

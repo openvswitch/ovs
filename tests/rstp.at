@@ -1,0 +1,149 @@
+AT_BANNER([Rapid Spanning Tree Protocol unit tests])
+
+AT_SETUP([RSTP Single bridge])
+AT_KEYWORDS([RSTP])
+AT_DATA([test-rstp-num1],
+[bridge 0 0x111 = a b
+run 1000
+check 0 = root
+])
+AT_CHECK([ovstest test-rstp test-rstp-num1], [0], [])
+AT_CLEANUP
+
+AT_SETUP([RSTP Link failure])
+AT_KEYWORDS([RSTP])
+AT_DATA([test-rstp-num2],
+[bridge 0 0x111 = a b
+bridge 1 0x222 = a c
+bridge 2 0x333 = b c
+run 1000
+check 0 = root
+check 1 = F:200000 F
+check 2 = F:200000 Di
+# Link b goes down
+bridge 2 = X c
+run 1000
+check 1 = F:200000 F
+check 2 = D F:400000
+])
+AT_CHECK([ovstest test-rstp test-rstp-num2], [0], [])
+AT_CLEANUP
+
+AT_SETUP([RSTP Double link Failure])
+AT_KEYWORDS([RSTP])
+AT_DATA([test-rstp-num3],
+[bridge 0 0x111 = a b
+bridge 1 0x222 = a c d
+bridge 2 0x333 = b c e
+bridge 3 0x444 = d f
+bridge 4 0x555 = e f
+run 1000
+check 0 = root
+check 1 = F:200000 F F
+check 2 = F:200000 Di F
+check 3 = F:400000 F
+check 4 = F:400000 Di
+# Link b goes down
+bridge 2 = X c e
+run 1000
+check 0 = root
+check 1 = F:200000 F F
+check 2 = D F:400000 F
+check 3 = F:400000 F
+check 4 = F:600000 Di
+# Link e goes down
+bridge 4 = X f
+run 1000
+check 0 = root
+check 1 = F:200000 F F
+check 2 = D F:400000 F
+check 3 = F:400000 F
+check 4 = D F:600000
+# Link f cost changes
+bridge 4 = X f:100000
+run 1000
+check 4 = D F:500000
+# Bridge 4 becomes root and
+bridge 4 ^ 31000
+run 1000
+check 4 = root
+])
+AT_CHECK([ovstest test-rstp test-rstp-num3], [0], [])
+AT_CLEANUP
+
+AT_SETUP([RSTP example from IEEE 802.1D-2004 figures 17.4 and 17.5])
+AT_KEYWORDS([RSTP])
+AT_DATA([test-rstp-ieee802.1d-2004-fig17.4],
+[bridge 0 0x111 = a b e c
+bridge 1 0x222 = a b d f
+bridge 2 0x333 = c d l j h g
+bridge 3 0x444 = e f n m k i
+bridge 4 0x555 = g i 0 0
+bridge 5 0x666 = h k 0 0
+bridge 6 0x777 = j m 0 0
+bridge 7 0x888 = l n 0 0
+run 1000
+check 0 = root
+check 1 = F:200000 Di F F
+check 2 = F:200000 Di F F F F
+check 3 = F:200000 Di F F F F
+check 4 = F:400000 Di F F
+check 5 = F:400000 Di F F
+check 6 = F:400000 Di F F
+check 7 = F:400000 Di F F
+
+# Now connect two ports of bridge 7 to the same LAN.
+bridge 7 = l n o o
+# Same results except for bridge 7:
+run 1000
+check 0 = root
+check 1 = F:200000 Di F F
+check 2 = F:200000 Di F F F F
+check 3 = F:200000 Di F F F F
+check 4 = F:400000 Di F F
+check 5 = F:400000 Di F F
+check 6 = F:400000 Di F F
+check 7 = F:400000 Di F Di
+])
+AT_CHECK([ovstest test-rstp test-rstp-ieee802.1d-2004-fig17.4], [0], [])
+AT_CLEANUP
+
+AT_SETUP([RSTP example from IEEE 802.1D-2004 figure 17.6])
+AT_KEYWORDS([RSTP])
+AT_DATA([test-rstp-ieee802.1d-2004-fig17.6],
+[bridge 0 0x111 = a b l
+bridge 1 0x222 = b c d
+bridge 2 0x333 = d e f
+bridge 3 0x444 = f g h
+bridge 4 0x555 = j h i
+bridge 5 0x666 = l j k
+run 1000
+check 0 = root
+check 1 = F:200000 F F
+check 2 = F:400000 F F
+check 3 = F:600000 F Di
+check 4 = F:400000 F F
+check 5 = F:200000 F F
+])
+AT_CHECK([ovstest test-rstp test-rstp-ieee802.1d-2004-fig17.6], [0], [])
+AT_CLEANUP
+
+AT_SETUP([RSTP example from IEEE 802.1D-2004 figure 17.7])
+AT_KEYWORDS([RSTP])
+AT_DATA([test-rstp-ieee802.1d-2004-fig17.7],
+[bridge 0 0x000 = b
+bridge 1 0x111 = a b d f h g e c
+bridge 2 0x222 = g h j l n m k i
+run 1000
+check 0 = root
+check 1 = F F:200000 F F F F F F
+check 2 = Di F:400000 F F F F F F
+# Link g priority increment
+bridge 1 = a b d f h g^112 e c
+run 1000
+check 0 = root
+check 1 = F F:200000 F F F F F F
+check 2 = F:400000 Di F F F F F F
+])
+AT_CHECK([ovstest test-rstp test-rstp-ieee802.1d-2004-fig17.7], [0], [])
+AT_CLEANUP

@@ -189,6 +189,11 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/rconn.h \
 	lib/reconnect.c \
 	lib/reconnect.h \
+	lib/rstp.c \
+	lib/rstp.h \
+	lib/rstp-common.h \
+	lib/rstp-state-machines.c \
+	lib/rstp-state-machines.h \
 	lib/sat-math.h \
 	lib/seq.c \
 	lib/seq.h \

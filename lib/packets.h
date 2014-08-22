@@ -282,6 +282,11 @@ struct llc_header {
 });
 BUILD_ASSERT_DECL(LLC_HEADER_LEN == sizeof(struct llc_header));
 
+/* LLC field values used for STP frames. */
+#define STP_LLC_SSAP 0x42
+#define STP_LLC_DSAP 0x42
+#define STP_LLC_CNTL 0x03
+
 #define SNAP_ORG_ETHERNET "\0\0" /* The compiler adds a null byte, so
                                     sizeof(SNAP_ORG_ETHERNET) == 3. */
 #define SNAP_HEADER_LEN 5

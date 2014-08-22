@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "7.8.0",
- "cksum": "4147598271 20869",
+ "version": "7.9.0",
+ "cksum": "2301439325 21345",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -54,6 +54,8 @@
          "ephemeral": true},
        "stp_enable": {
          "type": "boolean"},
+       "rstp_enable": {
+         "type": "boolean"},
        "mcast_snooping_enable": {
          "type": "boolean"},
        "ports": {
@@ -94,6 +96,9 @@
                           "enum": ["set", ["standalone", "secure"]]},
                   "min": 0, "max": 1}},
        "status": {
+         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
+         "ephemeral": true},
+       "rstp_status": {
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
          "ephemeral": true},
        "other_config": {
@@ -162,6 +167,12 @@
        "status": {
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
          "ephemeral": true},
+       "rstp_status": {
+         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
+         "ephemeral": true},
+       "rstp_statistics": {
+           "type": {"key": "string", "value": "integer", "min": 0, "max": "unlimited"},
+           "ephemeral": true},
        "statistics": {
          "type": {"key": "string", "value": "integer", "min": 0, "max": "unlimited"},
          "ephemeral": true},

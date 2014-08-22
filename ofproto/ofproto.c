@@ -911,6 +911,87 @@ ofproto_port_get_stp_stats(struct ofproto *ofproto, ofp_port_t ofp_port,
             ? ofproto->ofproto_class->get_stp_port_stats(ofport, s)
             : EOPNOTSUPP);
 }
+
+/* Rapid Spanning Tree Protocol (RSTP) configuration. */
+
+/* Configures RSTP on 'ofproto' using the settings defined in 's'.  If
+ * 's' is NULL, disables RSTP.
+ *
+ * Returns 0 if successful, otherwise a positive errno value. */
+int
+ofproto_set_rstp(struct ofproto *ofproto,
+                 const struct ofproto_rstp_settings *s)
+{
+    if (!ofproto->ofproto_class->set_rstp) {
+        return EOPNOTSUPP;
+    }
+    ofproto->ofproto_class->set_rstp(ofproto, s);
+    return 0;
+}
+
+/* Retrieves RSTP status of 'ofproto' and stores it in 's'.  If the
+ * 'enabled' member of 's' is false, then the other members are not
+ * meaningful.
+ *
+ * Returns 0 if successful, otherwise a positive errno value. */
+int
+ofproto_get_rstp_status(struct ofproto *ofproto,
+                        struct ofproto_rstp_status *s)
+{
+    if (!ofproto->ofproto_class->get_rstp_status) {
+        return EOPNOTSUPP;
+    }
+    ofproto->ofproto_class->get_rstp_status(ofproto, s);
+    return 0;
+}
+
+/* Configures RSTP on 'ofp_port' of 'ofproto' using the settings defined
+ * in 's'.  The caller is responsible for assigning RSTP port numbers
+ * (using the 'port_num' member in the range of 1 through 255, inclusive)
+ * and ensuring there are no duplicates.  If the 's' is NULL, then RSTP
+ * is disabled on the port.
+ *
+ * Returns 0 if successful, otherwise a positive errno value.*/
+int
+ofproto_port_set_rstp(struct ofproto *ofproto, ofp_port_t ofp_port,
+                      const struct ofproto_port_rstp_settings *s)
+{
+    struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
+    if (!ofport) {
+        VLOG_WARN("%s: cannot configure RSTP on nonexistent port %"PRIu16,
+                ofproto->name, ofp_port);
+        return ENODEV;
+    }
+
+    if (!ofproto->ofproto_class->set_rstp_port) {
+        return  EOPNOTSUPP;
+    }
+    ofproto->ofproto_class->set_rstp_port(ofport, s);
+    return 0;
+}
+
+/* Retrieves RSTP port status of 'ofp_port' on 'ofproto' and stores it in
+ * 's'.  If the 'enabled' member in 's' is false, then the other members
+ * are not meaningful.
+ *
+ * Returns 0 if successful, otherwise a positive errno value.*/
+int
+ofproto_port_get_rstp_status(struct ofproto *ofproto, ofp_port_t ofp_port,
+                             struct ofproto_port_rstp_status *s)
+{
+    struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
+    if (!ofport) {
+        VLOG_WARN_RL(&rl, "%s: cannot get RSTP status on nonexistent "
+                "port %"PRIu16, ofproto->name, ofp_port);
+        return ENODEV;
+    }
+
+    if (!ofproto->ofproto_class->get_rstp_port_status) {
+        return  EOPNOTSUPP;
+    }
+    ofproto->ofproto_class->get_rstp_port_status(ofport, s);
+    return 0;
+}
 
 /* Queue DSCP configuration. */
 
@@ -2190,6 +2271,9 @@ ofproto_port_unregister(struct ofproto *ofproto, ofp_port_t ofp_port)
         }
         if (port->ofproto->ofproto_class->set_stp_port) {
             port->ofproto->ofproto_class->set_stp_port(port, NULL);
+        }
+        if (port->ofproto->ofproto_class->set_rstp_port) {
+            port->ofproto->ofproto_class->set_rstp_port(port, NULL);
         }
         if (port->ofproto->ofproto_class->set_cfm) {
             port->ofproto->ofproto_class->set_cfm(port, NULL);
