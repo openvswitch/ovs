@@ -225,31 +225,19 @@ rstp_create(const char *name, rstp_identifier bridge_address,
  */
 static void
 set_bridge_priority__(struct rstp *rstp)
+    OVS_REQUIRES(mutex)
 {
     rstp->bridge_priority.root_bridge_id = rstp->bridge_identifier;
     rstp->bridge_priority.designated_bridge_id = rstp->bridge_identifier;
     VLOG_DBG("%s: new bridge identifier: "RSTP_ID_FMT"", rstp->name,
              RSTP_ID_ARGS(rstp->bridge_identifier));
-}
-
-/* Sets the bridge address. */
-void
-rstp_set_bridge_address(struct rstp *rstp, rstp_identifier bridge_address)
-{
-    struct rstp_port *p;
-
-    VLOG_DBG("%s: set bridge address to: "RSTP_ID_FMT"", rstp->name,
-             RSTP_ID_ARGS(bridge_address));
-
-    ovs_mutex_lock(&mutex);
-    rstp->address = bridge_address;
-    rstp->bridge_identifier = bridge_address;
-    set_bridge_priority__(rstp);
 
     /* [17.13] When the bridge address changes, recalculates all priority
      * vectors.
      */
     if (rstp->ports_count > 0) {
+        struct rstp_port *p;
+
         LIST_FOR_EACH (p, node, &rstp->ports) {
             p->selected = false;
             p->reselect = true;
@@ -257,6 +245,19 @@ rstp_set_bridge_address(struct rstp *rstp, rstp_identifier bridge_address)
     }
     rstp->changes = true;
     updt_roles_tree(rstp);
+}
+
+/* Sets the bridge address. */
+void
+rstp_set_bridge_address(struct rstp *rstp, rstp_identifier bridge_address)
+{
+    VLOG_DBG("%s: set bridge address to: "RSTP_ID_FMT"", rstp->name,
+             RSTP_ID_ARGS(bridge_address));
+
+    ovs_mutex_lock(&mutex);
+    rstp->address = bridge_address;
+    rstp->bridge_identifier = bridge_address;
+    set_bridge_priority__(rstp);
     ovs_mutex_unlock(&mutex);
 }
 
@@ -286,28 +287,17 @@ rstp_get_bridge_id(const struct rstp *rstp)
 void
 rstp_set_bridge_priority(struct rstp *rstp, int new_priority)
 {
-    struct rstp_port *p;
+    new_priority = ROUND_DOWN(new_priority, RSTP_PRIORITY_STEP);
 
-    if (new_priority >= RSTP_MIN_PRIORITY &&
-            new_priority <= RSTP_MAX_PRIORITY) {
-        VLOG_DBG("%s: set bridge priority to %d", rstp->name,
-                 (new_priority / 4096) * 4096);
+    if (new_priority >= RSTP_MIN_PRIORITY
+        && new_priority <= RSTP_MAX_PRIORITY) {
+        VLOG_DBG("%s: set bridge priority to %d", rstp->name, new_priority);
+
         ovs_mutex_lock(&mutex);
-        rstp->priority = (new_priority / 4096) * 4096;
+        rstp->priority = new_priority;
         rstp->bridge_identifier &= 0x0000ffffffffffffULL;
-        rstp->bridge_identifier |=
-                              (uint64_t) ((new_priority / 4096) * 4096) << 48;
+        rstp->bridge_identifier |= (uint64_t)new_priority << 48;
         set_bridge_priority__(rstp);
-
-        /* [17.13] */
-        if (rstp->ports_count > 0){
-            LIST_FOR_EACH (p, node, &rstp->ports) {
-                p->selected = false;
-                p->reselect = true;
-            }
-        }
-        rstp->changes = true;
-        updt_roles_tree(rstp);
         ovs_mutex_unlock(&mutex);
     }
 }
