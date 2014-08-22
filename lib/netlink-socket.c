@@ -1128,6 +1128,7 @@ genl_family_to_name(uint16_t id)
     }
 }
 
+#ifndef _WIN32
 static int
 do_lookup_genl_family(const char *name, struct nlattr **attrs,
                       struct ofpbuf **replyp)
@@ -1165,6 +1166,73 @@ do_lookup_genl_family(const char *name, struct nlattr **attrs,
     *replyp = reply;
     return 0;
 }
+#else
+static int
+do_lookup_genl_family(const char *name, struct nlattr **attrs,
+                      struct ofpbuf **replyp)
+{
+    struct nl_sock *sock;
+    struct ofpbuf *reply;
+    int error;
+    uint16_t family_id;
+    const char *family_name;
+    uint32_t family_version;
+    uint32_t family_attrmax;
+
+    *replyp = NULL;
+    reply = ofpbuf_new(1024);
+
+    if (!strcmp(name, OVS_WIN_CONTROL_FAMILY)) {
+        family_id = OVS_WIN_NL_CTRL_FAMILY_ID;
+        family_name = OVS_WIN_CONTROL_FAMILY;
+        family_version = OVS_WIN_CONTROL_VERSION;
+        family_attrmax = OVS_WIN_CONTROL_ATTR_MAX;
+    } else if (!strcmp(name, OVS_DATAPATH_FAMILY)) {
+        family_id = OVS_WIN_NL_DATAPATH_FAMILY_ID;
+        family_name = OVS_DATAPATH_FAMILY;
+        family_version = OVS_DATAPATH_VERSION;
+        family_attrmax = OVS_DP_ATTR_MAX;
+    } else if (!strcmp(name, OVS_PACKET_FAMILY)) {
+        family_id = OVS_WIN_NL_PACKET_FAMILY_ID;
+        family_name = OVS_PACKET_FAMILY;
+        family_version = OVS_PACKET_VERSION;
+        family_attrmax = OVS_PACKET_ATTR_MAX;
+    } else if (!strcmp(name, OVS_VPORT_FAMILY)) {
+        family_id = OVS_WIN_NL_VPORT_FAMILY_ID;
+        family_name = OVS_VPORT_FAMILY;
+        family_version = OVS_VPORT_VERSION;
+        family_attrmax = OVS_VPORT_ATTR_MAX;
+    } else if (!strcmp(name, OVS_FLOW_FAMILY)) {
+        family_id = OVS_WIN_NL_FLOW_FAMILY_ID;
+        family_name = OVS_FLOW_FAMILY;
+        family_version = OVS_FLOW_VERSION;
+        family_attrmax = OVS_FLOW_ATTR_MAX;
+    } else {
+        ofpbuf_delete(reply);
+        return EINVAL;
+    }
+
+    nl_msg_put_genlmsghdr(reply, 0, GENL_ID_CTRL, 0,
+                          CTRL_CMD_NEWFAMILY, family_version);
+    /* CTRL_ATTR_HDRSIZE and CTRL_ATTR_OPS are not populated, but the
+     * callers do not seem to need them. */
+    nl_msg_put_u16(reply, CTRL_ATTR_FAMILY_ID, family_id);
+    nl_msg_put_string(reply, CTRL_ATTR_FAMILY_NAME, family_name);
+    nl_msg_put_u32(reply, CTRL_ATTR_VERSION, family_version);
+    nl_msg_put_u32(reply, CTRL_ATTR_MAXATTR, family_attrmax);
+
+    if (!nl_policy_parse(reply, NLMSG_HDRLEN + GENL_HDRLEN,
+                         family_policy, attrs, ARRAY_SIZE(family_policy))
+        || nl_attr_get_u16(attrs[CTRL_ATTR_FAMILY_ID]) == 0) {
+        nl_sock_destroy(sock);
+        ofpbuf_delete(reply);
+        return EPROTO;
+    }
+
+    *replyp = reply;
+    return 0;
+}
+#endif
 
 /* Finds the multicast group called 'group_name' in genl family 'family_name'.
  * When successful, writes its result to 'multicast_group' and returns 0.
