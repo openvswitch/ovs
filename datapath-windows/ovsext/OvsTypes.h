@@ -17,6 +17,8 @@
 #ifndef __OVS_TYPES_H_
 #define __OVS_TYPES_H_ 1
 
+/* Defines the userspace specific data types
+ * for files included from user space. */
 typedef unsigned long long uint64, uint64_t, ovs_be64, u64;
 typedef long long int64, int64_t;
 typedef unsigned int uint32, uint32_t, ovs_be32, u32;
@@ -27,6 +29,13 @@ typedef uint32 __u32, __be32;
 typedef uint16 __u16, __be16;
 typedef uint8 __u8;
 
+/* Defines the  userspace specific data types for file
+ * included within kernel only. */
+typedef UINT32 BE32;
+typedef UINT64 BE64;
+
 #define ETH_ALEN 6
+
+#define SIZE_MAX MAXUINT32
 
 #endif /* __OVS_TYPES_H_ */
