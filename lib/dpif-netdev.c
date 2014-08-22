@@ -2719,8 +2719,8 @@ dpif_dummy_register(bool override)
     dpif_dummy_register__("dummy");
 
     unixctl_command_register("dpif-dummy/change-port-number",
-                             "DP PORT NEW-NUMBER",
+                             "dp port new-number",
                              3, 3, dpif_dummy_change_port_number, NULL);
-    unixctl_command_register("dpif-dummy/delete-port", "DP PORT",
+    unixctl_command_register("dpif-dummy/delete-port", "dp port",
                              2, 2, dpif_dummy_delete_port, NULL);
 }

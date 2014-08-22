@@ -1328,7 +1328,7 @@ netdev_dummy_conn_state(struct unixctl_conn *conn, int argc,
 void
 netdev_dummy_register(bool override)
 {
-    unixctl_command_register("netdev-dummy/receive", "NAME PACKET|FLOW...",
+    unixctl_command_register("netdev-dummy/receive", "name packet|flow...",
                              2, INT_MAX, netdev_dummy_receive, NULL);
     unixctl_command_register("netdev-dummy/set-admin-state",
                              "[netdev] up|down", 1, 2,

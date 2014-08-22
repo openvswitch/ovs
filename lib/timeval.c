@@ -732,7 +732,7 @@ timeval_dummy_register(void)
 {
     timewarp_enabled = true;
     unixctl_command_register("time/stop", "", 0, 0, timeval_stop_cb, NULL);
-    unixctl_command_register("time/warp", "[LARGE_MSECS] MSECS", 1, 2,
+    unixctl_command_register("time/warp", "[large_msecs] msecs", 1, 2,
                              timeval_warp_cb, NULL);
 }
 
