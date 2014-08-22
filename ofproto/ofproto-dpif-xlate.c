@@ -4326,6 +4326,10 @@ xlate_push_stats(struct xlate_cache *xcache, bool may_learn,
     struct xc_entry *entry;
     struct ofpbuf entries = xcache->entries;
 
+    if (!stats->n_packets) {
+        return;
+    }
+
     XC_ENTRY_FOR_EACH (entry, entries, xcache) {
         switch (entry->type) {
         case XC_RULE:
