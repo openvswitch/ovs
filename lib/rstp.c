@@ -176,7 +176,7 @@ rstp_unref(struct rstp *rstp)
          * ports from one bridge to another, and holders always
          * release their ports before releasing the bridge.  This
          * means that there should be not ports at this time. */
-        ovs_assert(list_is_empty(&rstp->ports));
+        ovs_assert(hmap_is_empty(&rstp->ports));
 
         list_remove(&rstp->node);
         ovs_mutex_unlock(&rstp_mutex);
@@ -251,9 +251,9 @@ rstp_create(const char *name, rstp_identifier bridge_address,
     rstp = xzalloc(sizeof *rstp);
     rstp->name = xstrdup(name);
 
-    /* Initialize the ports list before calling any setters,
-     * so that the state machines will see an empty ports list. */
-    list_init(&rstp->ports);
+    /* Initialize the ports map before calling any setters,
+     * so that the state machines will see an empty ports map. */
+    hmap_init(&rstp->ports);
 
     ovs_mutex_lock(&rstp_mutex);
     /* Set bridge address. */
@@ -303,7 +303,7 @@ set_bridge_priority__(struct rstp *rstp)
     /* [17.13] When the bridge address changes, recalculates all priority
      * vectors.
      */
-    LIST_FOR_EACH (p, node, &rstp->ports) {
+    HMAP_FOR_EACH (p, node, &rstp->ports) {
         p->selected = false;
         p->reselect = true;
     }
@@ -416,7 +416,7 @@ reinitialize_rstp__(struct rstp *rstp)
     OVS_REQUIRES(rstp_mutex)
 {
     struct rstp temp;
-    static struct list ports;
+    static struct hmap ports;
     struct rstp_port *p;
 
     /* Copy rstp in temp */
@@ -429,9 +429,9 @@ reinitialize_rstp__(struct rstp *rstp)
     /* Initialize rstp. */
     rstp->name = temp.name;
 
-    /* Initialize the ports list before calling any setters,
+    /* Initialize the ports hmap before calling any setters,
      * so that the state machines will see an empty ports list. */
-    list_init(&rstp->ports);
+    hmap_init(&rstp->ports);
 
     /* Set bridge address. */
     rstp_set_bridge_address__(rstp, temp.address);
@@ -457,7 +457,7 @@ reinitialize_rstp__(struct rstp *rstp)
     /* Restore ports. */
     rstp->ports = ports;
 
-    LIST_FOR_EACH (p, node, &rstp->ports) {
+    HMAP_FOR_EACH (p, node, &rstp->ports) {
         reinitialize_port__(p);
     }
 
@@ -583,7 +583,7 @@ rstp_set_bridge_transmit_hold_count__(struct rstp *rstp,
         /* Resetting txCount on all ports [17.13]. */
 
         rstp->transmit_hold_count = new_transmit_hold_count;
-        LIST_FOR_EACH (p, node, &rstp->ports) {
+        HMAP_FOR_EACH (p, node, &rstp->ports) {
             p->tx_count = 0;
         }
     }
@@ -779,7 +779,7 @@ rstp_check_and_reset_fdb_flush(struct rstp *rstp)
     needs_flush = false;
 
     ovs_mutex_lock(&rstp_mutex);
-    LIST_FOR_EACH (p, node, &rstp->ports) {
+    HMAP_FOR_EACH (p, node, &rstp->ports) {
         if (p->fdb_flush) {
             needs_flush = true;
             /* fdb_flush should be reset by the filtering database
@@ -812,7 +812,7 @@ rstp_get_next_changed_port_aux(struct rstp *rstp, struct rstp_port **portp)
     if (*portp == NULL) {
         struct rstp_port *p;
 
-        LIST_FOR_EACH (p, node, &rstp->ports) {
+        HMAP_FOR_EACH (p, node, &rstp->ports) {
             if (p->state_changed) {
                 p->state_changed = false;
                 aux = p->aux;
@@ -823,7 +823,7 @@ rstp_get_next_changed_port_aux(struct rstp *rstp, struct rstp_port **portp)
     } else { /* continue */
         struct rstp_port *p = *portp;
 
-        LIST_FOR_EACH_CONTINUE (p, node, &rstp->ports) {
+        HMAP_FOR_EACH_CONTINUE (p, node, &rstp->ports) {
             if (p->state_changed) {
                 p->state_changed = false;
                 aux = p->aux;
@@ -850,7 +850,8 @@ rstp_get_port__(struct rstp *rstp, uint16_t port_number)
 
     ovs_assert(rstp && port_number > 0 && port_number <= RSTP_MAX_PORTS);
 
-    LIST_FOR_EACH (port, node, &rstp->ports) {
+    HMAP_FOR_EACH_WITH_HASH (port, node, hash_int(port_number, 0),
+                             &rstp->ports) {
         if (port->port_number == port_number) {
             return port;
         }
@@ -1051,7 +1052,7 @@ rstp_add_port(struct rstp *rstp)
              p->port_id);
 
     rstp_port_set_state__(p, RSTP_DISCARDING);
-    list_push_back(&rstp->ports, &p->node);
+    hmap_insert(&rstp->ports, &p->node, hash_int(p->port_number, 0));
     rstp->changes = true;
     move_rstp__(rstp);
     VLOG_DBG("%s: added port "RSTP_PORT_ID_FMT"", rstp->name, p->port_id);
@@ -1084,7 +1085,7 @@ rstp_port_unref(struct rstp_port *rp)
         ovs_mutex_lock(&rstp_mutex);
         rstp = rp->rstp;
         rstp_port_set_state__(rp, RSTP_DISABLED);
-        list_remove(&rp->node);
+        hmap_remove(&rstp->ports, &rp->node);
         VLOG_DBG("%s: removed port "RSTP_PORT_ID_FMT"", rstp->name,
                  rp->port_id);
         ovs_mutex_unlock(&rstp_mutex);
@@ -1235,7 +1236,7 @@ rstp_get_root_port(struct rstp *rstp)
     struct rstp_port *p;
 
     ovs_mutex_lock(&rstp_mutex);
-    LIST_FOR_EACH (p, node, &rstp->ports) {
+    HMAP_FOR_EACH (p, node, &rstp->ports) {
         if (p->port_id == rstp->root_port_id) {
             ovs_mutex_unlock(&rstp_mutex);
             return p;

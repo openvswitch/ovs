@@ -192,7 +192,7 @@ move_rstp__(struct rstp *rstp)
 
         rstp->changes = false;
         port_role_selection_sm(rstp);
-        LIST_FOR_EACH (p, node, &rstp->ports) {
+        HMAP_FOR_EACH (p, node, &rstp->ports) {
             if (p->rstp_state != RSTP_DISABLED) {
                 port_receive_sm(p);
                 bridge_detection_sm(p);
@@ -219,7 +219,7 @@ void decrease_rstp_port_timers__(struct rstp *r)
 {
     struct rstp_port *p;
 
-    LIST_FOR_EACH (p, node, &r->ports) {
+    HMAP_FOR_EACH (p, node, &r->ports) {
         decrement_timer(&p->hello_when);
         decrement_timer(&p->tc_while);
         decrement_timer(&p->fd_while);
@@ -252,7 +252,7 @@ updt_role_disabled_tree(struct rstp *r)
 {
     struct rstp_port *p;
 
-    LIST_FOR_EACH (p, node, &r->ports) {
+    HMAP_FOR_EACH (p, node, &r->ports) {
         p->selected_role = ROLE_DISABLED;
     }
 }
@@ -263,7 +263,7 @@ clear_reselect_tree(struct rstp *r)
 {
     struct rstp_port *p;
 
-    LIST_FOR_EACH (p, node, &r->ports) {
+    HMAP_FOR_EACH (p, node, &r->ports) {
         p->reselect = false;
     }
 }
@@ -281,7 +281,7 @@ updt_roles_tree__(struct rstp *r)
     /* Letter c1) */
     r->root_times = r->bridge_times;
     /* Letters a) b) c) */
-    LIST_FOR_EACH (p, node, &r->ports) {
+    HMAP_FOR_EACH (p, node, &r->ports) {
         uint32_t old_root_path_cost;
         uint32_t root_path_cost;
 
@@ -312,7 +312,7 @@ updt_roles_tree__(struct rstp *r)
     VLOG_DBG("%s: new Root is "RSTP_ID_FMT, r->name,
              RSTP_ID_ARGS(r->root_priority.root_bridge_id));
     /* Letters d) e) */
-    LIST_FOR_EACH (p, node, &r->ports) {
+    HMAP_FOR_EACH (p, node, &r->ports) {
         p->designated_priority_vector.root_bridge_id =
             r->root_priority.root_bridge_id;
         p->designated_priority_vector.root_path_cost =
@@ -324,7 +324,7 @@ updt_roles_tree__(struct rstp *r)
         p->designated_times = r->root_times;
         p->designated_times.hello_time = r->bridge_times.hello_time;
     }
-    LIST_FOR_EACH (p, node, &r->ports) {
+    HMAP_FOR_EACH (p, node, &r->ports) {
         switch (p->info_is) {
         case INFO_IS_DISABLED:
             p->selected_role = ROLE_DISABLED;
@@ -375,12 +375,12 @@ set_selected_tree(struct rstp *r)
 {
     struct rstp_port *p;
 
-    LIST_FOR_EACH (p, node, &r->ports) {
+    HMAP_FOR_EACH (p, node, &r->ports) {
         if (p->reselect) {
             return;
         }
     }
-    LIST_FOR_EACH (p, node, &r->ports) {
+    HMAP_FOR_EACH (p, node, &r->ports) {
         p->selected = true;
     }
 }
@@ -417,7 +417,7 @@ port_role_selection_sm(struct rstp *r)
             PORT_ROLE_SELECTION_SM_ROLE_SELECTION;
         /* no break */
     case PORT_ROLE_SELECTION_SM_ROLE_SELECTION:
-        LIST_FOR_EACH (p, node, &r->ports) {
+        HMAP_FOR_EACH (p, node, &r->ports) {
             if (p->reselect) {
                 r->port_role_selection_sm_state =
                     PORT_ROLE_SELECTION_SM_ROLE_SELECTION_EXEC;
@@ -1259,7 +1259,7 @@ set_re_root_tree(struct rstp_port *p)
     struct rstp_port *p1;
 
     r = p->rstp;
-    LIST_FOR_EACH (p1, node, &r->ports) {
+    HMAP_FOR_EACH (p1, node, &r->ports) {
         p1->re_root = true;
     }
 }
@@ -1272,7 +1272,7 @@ set_sync_tree(struct rstp_port *p)
     struct rstp_port *p1;
 
     r = p->rstp;
-    LIST_FOR_EACH (p1, node, &r->ports) {
+    HMAP_FOR_EACH (p1, node, &r->ports) {
         p1->sync = true;
     }
 }
@@ -1360,7 +1360,7 @@ re_rooted(struct rstp_port *p)
     struct rstp_port *p1;
 
     r = p->rstp;
-    LIST_FOR_EACH (p1, node, &r->ports) {
+    HMAP_FOR_EACH (p1, node, &r->ports) {
         if ((p1 != p) && (p1->rr_while != 0)) {
             return false;
         }
@@ -1374,7 +1374,7 @@ all_synced(struct rstp *r)
 {
     struct rstp_port *p;
 
-    LIST_FOR_EACH (p, node, &r->ports) {
+    HMAP_FOR_EACH (p, node, &r->ports) {
         if (!(p->selected && p->role == p->selected_role &&
               (p->role == ROLE_ROOT || p->synced == true))) {
             return false;
@@ -1832,7 +1832,7 @@ set_tc_prop_tree(struct rstp_port *p)
     struct rstp_port *p1;
 
     r = p->rstp;
-    LIST_FOR_EACH (p1, node, &r->ports) {
+    HMAP_FOR_EACH (p1, node, &r->ports) {
         /* Set tc_prop on every port, except the one calling this
          * function. */
         if (p1->port_number != p->port_number) {

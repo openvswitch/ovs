@@ -32,6 +32,7 @@
 #include "rstp.h"
 #include <stdbool.h>
 #include <stdint.h>
+#include "hmap.h"
 #include "list.h"
 #include "ovs-atomic.h"
 #include "packets.h"
@@ -264,7 +265,7 @@ struct rstp_port {
     struct ovs_refcount ref_cnt;
 
     struct rstp *rstp OVS_GUARDED_BY(rstp_mutex);
-    struct list node OVS_GUARDED_BY(rstp_mutex); /* Node in rstp->ports list. */
+    struct hmap_node node OVS_GUARDED_BY(rstp_mutex); /* In rstp->ports. */
     void *aux OVS_GUARDED_BY(rstp_mutex);
     struct rstp_bpdu received_bpdu_buffer OVS_GUARDED_BY(rstp_mutex);
     /*************************************************************************
@@ -866,7 +867,7 @@ struct rstp {
     bool stp_version OVS_GUARDED_BY(rstp_mutex);
 
     /* Ports */
-    struct list ports OVS_GUARDED_BY(rstp_mutex);
+    struct hmap ports OVS_GUARDED_BY(rstp_mutex);
 
     struct ovs_refcount ref_cnt;
 
