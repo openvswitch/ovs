@@ -934,44 +934,78 @@ xlate_ofport_remove(struct ofport_dpif *ofport)
     xlate_xport_remove(new_xcfg, xport);
 }
 
+/* Given a datapath and flow metadata ('backer', and 'flow' respectively)
+ * returns the corresponding struct xport, or NULL if none is found. */
+static struct xport *
+xlate_lookup_xport(const struct dpif_backer *backer, const struct flow *flow)
+{
+    struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
+
+    return xport_lookup(xcfg, tnl_port_should_receive(flow)
+                         ? tnl_port_receive(flow)
+                         : odp_port_to_ofport(backer, flow->in_port.odp_port));
+}
+
+static struct ofproto_dpif *
+xlate_lookup_ofproto_(const struct dpif_backer *backer, const struct flow *flow,
+                      ofp_port_t *ofp_in_port, const struct xport **xportp)
+{
+    const struct xport *xport;
+
+    *xportp = xport = xlate_lookup_xport(backer, flow);
+
+    if (xport) {
+        if (ofp_in_port) {
+            *ofp_in_port = xport->ofp_port;
+        }
+        return xport->xbridge->ofproto;
+    }
+
+    return NULL;
+}
+
+/* Given a datapath and flow metadata ('backer', and 'flow' respectively)
+ * returns the corresponding struct ofproto_dpif and OpenFlow port number. */
+struct ofproto_dpif *
+xlate_lookup_ofproto(const struct dpif_backer *backer, const struct flow *flow,
+                     ofp_port_t *ofp_in_port)
+{
+    const struct xport *xport;
+
+    return xlate_lookup_ofproto_(backer, flow, ofp_in_port, &xport);
+}
+
 /* Given a datapath and flow metadata ('backer', and 'flow' respectively),
- * Optionally populates 'ofproto' with the ofproto_dpif, 'ofp_in_port' with the
+ * optionally populates 'ofproto' with the ofproto_dpif, 'ofp_in_port' with the
  * openflow in_port, and 'ipfix', 'sflow', and 'netflow' with the appropriate
  * handles for those protocols if they're enabled.  Caller is responsible for
  * unrefing them.
  *
- * If 'ofproto' is nonnull, requires 'flow''s in_port to exist.  Otherwise sets
- * 'flow''s in_port to OFPP_NONE.
+ * '*ofp_in_port' is set to OFPP_NONE if 'flow''s in_port does not exist.
  *
- * Similarly, this function also includes some logic to help with tunnels.  It
- * may modify 'flow' as necessary to make the tunneling implementation
- * transparent to the upcall processing logic.
- *
- * Returns 0 if successful, ENODEV if the parsed flow has no associated ofport,
- * or some other positive errno if there are other problems. */
+ * Returns 0 if successful, ENODEV if the parsed flow has no associated ofport.
+ */
 int
 xlate_receive(const struct dpif_backer *backer, const struct flow *flow,
-              struct ofproto_dpif **ofproto, struct dpif_ipfix **ipfix,
+              struct ofproto_dpif **ofprotop, struct dpif_ipfix **ipfix,
               struct dpif_sflow **sflow, struct netflow **netflow,
               ofp_port_t *ofp_in_port)
 {
-    struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
+    struct ofproto_dpif *ofproto;
     const struct xport *xport;
 
-    xport = xport_lookup(xcfg, tnl_port_should_receive(flow)
-                         ? tnl_port_receive(flow)
-                         : odp_port_to_ofport(backer, flow->in_port.odp_port));
+    ofproto = xlate_lookup_ofproto_(backer, flow, ofp_in_port, &xport);
 
-    if (ofp_in_port) {
-        *ofp_in_port = xport ? xport->ofp_port : OFPP_NONE;
+    if (ofp_in_port && !xport) {
+        *ofp_in_port = OFPP_NONE;
     }
 
     if (!xport) {
         return ENODEV;
     }
 
-    if (ofproto) {
-        *ofproto = xport->xbridge->ofproto;
+    if (ofprotop) {
+        *ofprotop = ofproto;
     }
 
     if (ipfix) {

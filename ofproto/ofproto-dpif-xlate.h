@@ -173,6 +173,9 @@ void xlate_ofport_set(struct ofproto_dpif *, struct ofbundle *,
                       bool may_enable);
 void xlate_ofport_remove(struct ofport_dpif *);
 
+struct ofproto_dpif * xlate_lookup_ofproto(const struct dpif_backer *,
+                                           const struct flow *,
+                                           ofp_port_t *ofp_in_port);
 int xlate_receive(const struct dpif_backer *, const struct flow *,
                   struct ofproto_dpif **, struct dpif_ipfix **,
                   struct dpif_sflow **, struct netflow **,

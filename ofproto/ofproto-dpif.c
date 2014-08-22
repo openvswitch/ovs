@@ -4212,8 +4212,9 @@ parse_flow_and_packet(int argc, const char *argv[],
             goto exit;
         }
 
-        if (xlate_receive(backer, flow, ofprotop, NULL, NULL, NULL,
-                          &flow->in_port.ofp_port)) {
+        *ofprotop = xlate_lookup_ofproto(backer, flow,
+                                         &flow->in_port.ofp_port);
+        if (*ofprotop == NULL) {
             error = "Invalid datapath flow";
             goto exit;
         }
@@ -4594,24 +4595,6 @@ ofproto_unixctl_dpif_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
     ds_destroy(&ds);
 }
 
-static bool
-ofproto_dpif_contains_flow(const struct ofproto_dpif *ofproto,
-                           const struct nlattr *key, size_t key_len)
-{
-    struct ofproto_dpif *ofp;
-    struct flow flow;
-
-    if (odp_flow_key_to_flow(key, key_len, &flow) == ODP_FIT_ERROR) {
-        return false;
-    }
-
-    if (xlate_receive(ofproto->backer, &flow, &ofp, NULL, NULL, NULL, NULL)) {
-        return false;
-    }
-
-    return ofp == ofproto;
-}
-
 static void
 ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
                                 int argc OVS_UNUSED, const char *argv[],
@@ -4650,7 +4633,10 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
     flow_dump = dpif_flow_dump_create(ofproto->backer->dpif);
     flow_dump_thread = dpif_flow_dump_thread_create(flow_dump);
     while (dpif_flow_dump_next(flow_dump_thread, &f, 1)) {
-        if (!ofproto_dpif_contains_flow(ofproto, f.key, f.key_len)) {
+        struct flow flow;
+
+        if (odp_flow_key_to_flow(f.key, f.key_len, &flow) == ODP_FIT_ERROR
+            || xlate_lookup_ofproto(ofproto->backer, &flow, NULL) != ofproto) {
             continue;
         }
 
