@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -192,8 +192,7 @@ void xlate_out_copy(struct xlate_out *dst, const struct xlate_out *src);
 int xlate_send_packet(const struct ofport_dpif *, struct ofpbuf *);
 
 struct xlate_cache *xlate_cache_new(void);
-void xlate_push_stats(struct xlate_cache *, bool may_learn,
-                      const struct dpif_flow_stats *);
+void xlate_push_stats(struct xlate_cache *, const struct dpif_flow_stats *);
 void xlate_cache_clear(struct xlate_cache *);
 void xlate_cache_delete(struct xlate_cache *);
 

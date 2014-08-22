@@ -1281,7 +1281,7 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
     long long int last_used;
     int error;
     size_t i;
-    bool may_learn, ok;
+    bool ok;
 
     ok = false;
     xoutp = NULL;
@@ -1310,9 +1310,8 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
         goto exit;
     }
 
-    may_learn = push.n_packets > 0;
     if (ukey->xcache && !udpif->need_revalidate) {
-        xlate_push_stats(ukey->xcache, may_learn, &push);
+        xlate_push_stats(ukey->xcache, &push);
         ok = true;
         goto exit;
     }
@@ -1337,9 +1336,11 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
 
     xlate_in_init(&xin, ofproto, &flow, ofp_in_port, NULL, push.tcp_flags,
                   NULL);
-    xin.resubmit_stats = push.n_packets ? &push : NULL;
+    if (push.n_packets) {
+        xin.resubmit_stats = &push;
+        xin.may_learn = true;
+    }
     xin.xcache = ukey->xcache;
-    xin.may_learn = may_learn;
     xin.skip_wildcards = !udpif->need_revalidate;
     xlate_actions(&xin, &xout);
     xoutp = &xout;
@@ -1438,13 +1439,11 @@ push_dump_ops__(struct udpif *udpif, struct dump_op *ops, size_t n_ops)
             struct netflow *netflow;
             ofp_port_t ofp_in_port;
             struct flow flow;
-            bool may_learn;
             int error;
 
-            may_learn = push->n_packets > 0;
             ovs_mutex_lock(&op->ukey->mutex);
             if (op->ukey->xcache) {
-                xlate_push_stats(op->ukey->xcache, may_learn, push);
+                xlate_push_stats(op->ukey->xcache, push);
                 ovs_mutex_unlock(&op->ukey->mutex);
                 continue;
             }
@@ -1464,7 +1463,7 @@ push_dump_ops__(struct udpif *udpif, struct dump_op *ops, size_t n_ops)
                 xlate_in_init(&xin, ofproto, &flow, ofp_in_port, NULL,
                               push->tcp_flags, NULL);
                 xin.resubmit_stats = push->n_packets ? push : NULL;
-                xin.may_learn = may_learn;
+                xin.may_learn = push->n_packets > 0;
                 xin.skip_wildcards = true;
                 xlate_actions_for_side_effects(&xin);
 

@@ -4320,7 +4320,7 @@ xlate_cache_normal(struct ofproto_dpif *ofproto, struct flow *flow, int vlan)
 
 /* Push stats and perform side effects of flow translation. */
 void
-xlate_push_stats(struct xlate_cache *xcache, bool may_learn,
+xlate_push_stats(struct xlate_cache *xcache,
                  const struct dpif_flow_stats *stats)
 {
     struct xc_entry *entry;
@@ -4352,16 +4352,11 @@ xlate_push_stats(struct xlate_cache *xcache, bool may_learn,
                                 stats->n_packets, stats->n_bytes);
             break;
         case XC_LEARN:
-            if (may_learn) {
-                ofproto_dpif_flow_mod(entry->u.learn.ofproto,
-                                      entry->u.learn.fm);
-            }
+            ofproto_dpif_flow_mod(entry->u.learn.ofproto, entry->u.learn.fm);
             break;
         case XC_NORMAL:
-            if (may_learn) {
-                xlate_cache_normal(entry->u.normal.ofproto,
-                                   entry->u.normal.flow, entry->u.normal.vlan);
-            }
+            xlate_cache_normal(entry->u.normal.ofproto, entry->u.normal.flow,
+                               entry->u.normal.vlan);
             break;
         case XC_FIN_TIMEOUT:
             xlate_fin_timeout__(entry->u.fin.rule, stats->tcp_flags,
