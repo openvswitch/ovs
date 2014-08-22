@@ -19,6 +19,9 @@
 
 /* Windows kernel datapath extensions to the standard datapath interface. */
 
+/* Version number of the datapath interface extensions. */
+#define OVS_DATAPATH_EXT_VERSION 1
+
 /* Name of the device. */
 #define OVS_DEVICE_NAME_NT     L"\\Device\\OpenvSwitchDevice"
 #define OVS_DEVICE_NAME_DOS    L"\\DosDevices\\OpenvSwitchDevice"
