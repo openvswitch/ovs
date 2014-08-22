@@ -1140,40 +1140,6 @@ rstp_port_get_aux(struct rstp_port *p)
     return aux;
 }
 
-/* Returns true if 'state' is one in which BPDU packets should be received
- * and transmitted on a port, false otherwise.
- */
- bool
- rstp_should_manage_bpdu(enum rstp_state state)
- {
-     return (state == RSTP_DISCARDING || state == RSTP_LEARNING ||
-             state == RSTP_FORWARDING);
- }
-
-/* Returns true if 'state' is one in which packets received on a port should
- * be forwarded, false otherwise.
- *
- * Returns true if 'state' is RSTP_DISABLED, since presumably in that case the
- * port should still work, just not have RSTP applied to it.
- */
-bool
-rstp_forward_in_state(enum rstp_state state)
-{
-    return (state == RSTP_DISABLED || state == RSTP_FORWARDING);
-}
-
-/* Returns true if 'state' is one in which MAC learning should be done on
- * packets received on a port, false otherwise.
- *
- * Returns true if 'state' is RSTP_DISABLED, since presumably in that case the
- * port should still work, just not have RSTP applied to it. */
-bool
-rstp_learn_in_state(enum rstp_state state)
-{
-    return (state == RSTP_DISABLED || state == RSTP_LEARNING ||
-            state == RSTP_FORWARDING);
-}
-
 /* Unixctl. */
 static struct rstp *
 rstp_find(const char *name)

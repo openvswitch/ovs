@@ -119,9 +119,9 @@ struct rstp_port;
 struct ofproto_rstp_settings;
 
 const char *rstp_state_name(enum rstp_state);
-bool rstp_forward_in_state(enum rstp_state);
-bool rstp_learn_in_state(enum rstp_state);
-bool rstp_should_manage_bpdu(enum rstp_state state);
+static inline bool rstp_forward_in_state(enum rstp_state);
+static inline bool rstp_learn_in_state(enum rstp_state);
+static inline bool rstp_should_manage_bpdu(enum rstp_state state);
 const char *rstp_port_role_name(enum rstp_port_role);
 
 void rstp_init(void);
@@ -198,4 +198,40 @@ enum rstp_port_role rstp_port_get_role(const struct rstp_port *);
 void rstp_port_get_counts(const struct rstp_port *, int *tx_count,
                           int *rx_count, int *error_count, int *uptime);
 void * rstp_port_get_aux(struct rstp_port *);
+
+/* Inline functions. */
+/* Returns true if 'state' is one in which BPDU packets should be received
+ * and transmitted on a port, false otherwise.
+ */
+static inline bool
+rstp_should_manage_bpdu(enum rstp_state state)
+{
+    return (state == RSTP_DISCARDING || state == RSTP_LEARNING ||
+            state == RSTP_FORWARDING);
+}
+
+/* Returns true if 'state' is one in which packets received on a port should
+ * be forwarded, false otherwise.
+ *
+ * Returns true if 'state' is RSTP_DISABLED, since presumably in that case the
+ * port should still work, just not have RSTP applied to it.
+ */
+static inline bool
+rstp_forward_in_state(enum rstp_state state)
+{
+    return (state == RSTP_DISABLED || state == RSTP_FORWARDING);
+}
+
+/* Returns true if 'state' is one in which MAC learning should be done on
+ * packets received on a port, false otherwise.
+ *
+ * Returns true if 'state' is RSTP_DISABLED, since presumably in that case the
+ * port should still work, just not have RSTP applied to it. */
+static inline bool
+rstp_learn_in_state(enum rstp_state state)
+{
+    return (state == RSTP_DISABLED || state == RSTP_LEARNING ||
+            state == RSTP_FORWARDING);
+}
+
 #endif /* rstp.h */
