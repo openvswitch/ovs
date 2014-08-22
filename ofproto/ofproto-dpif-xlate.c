@@ -978,8 +978,9 @@ xlate_lookup_ofproto(const struct dpif_backer *backer, const struct flow *flow,
 /* Given a datapath and flow metadata ('backer', and 'flow' respectively),
  * optionally populates 'ofproto' with the ofproto_dpif, 'ofp_in_port' with the
  * openflow in_port, and 'ipfix', 'sflow', and 'netflow' with the appropriate
- * handles for those protocols if they're enabled.  Caller is responsible for
- * unrefing them.
+ * handles for those protocols if they're enabled.  Caller may use the returned
+ * pointers until quiescing, for longer term use additional references must
+ * be taken.
  *
  * '*ofp_in_port' is set to OFPP_NONE if 'flow''s in_port does not exist.
  *
@@ -1009,15 +1010,15 @@ xlate_receive(const struct dpif_backer *backer, const struct flow *flow,
     }
 
     if (ipfix) {
-        *ipfix = dpif_ipfix_ref(xport->xbridge->ipfix);
+        *ipfix = xport->xbridge->ipfix;
     }
 
     if (sflow) {
-        *sflow = dpif_sflow_ref(xport->xbridge->sflow);
+        *sflow = xport->xbridge->sflow;
     }
 
     if (netflow) {
-        *netflow = netflow_ref(xport->xbridge->netflow);
+        *netflow = xport->xbridge->netflow;
     }
     return 0;
 }

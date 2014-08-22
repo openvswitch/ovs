@@ -162,8 +162,8 @@ struct upcall {
     struct xlate_out xout;         /* Result of xlate_actions(). */
     struct ofpbuf put_actions;     /* Actions 'put' in the fastapath. */
 
-    struct dpif_ipfix *ipfix;      /* IPFIX reference or NULL. */
-    struct dpif_sflow *sflow;      /* SFlow reference or NULL. */
+    struct dpif_ipfix *ipfix;      /* IPFIX pointer or NULL. */
+    struct dpif_sflow *sflow;      /* SFlow pointer or NULL. */
 
     bool vsp_adjusted;             /* 'packet' and 'flow' were adjusted for
                                       VLAN splinters if true. */
@@ -817,6 +817,9 @@ compose_slow_path(struct udpif *udpif, struct xlate_out *xout,
                              buf);
 }
 
+/* The upcall must be destroyed with upcall_uninit() before quiescing,
+ * as the referred objects are guaranteed to exist only until the calling
+ * thread quiesces. */
 static int
 upcall_receive(struct upcall *upcall, const struct dpif_backer *backer,
                const struct ofpbuf *packet, enum dpif_upcall_type type,
@@ -919,8 +922,6 @@ upcall_uninit(struct upcall *upcall)
             xlate_out_uninit(&upcall->xout);
         }
         ofpbuf_uninit(&upcall->put_actions);
-        dpif_ipfix_unref(upcall->ipfix);
-        dpif_sflow_unref(upcall->sflow);
     }
 }
 
@@ -1382,11 +1383,8 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
     ok = true;
 
 exit:
-    if (netflow) {
-        if (!ok) {
-            netflow_flow_clear(netflow, &flow);
-        }
-        netflow_unref(netflow);
+    if (netflow && !ok) {
+        netflow_flow_clear(netflow, &flow);
     }
     xlate_out_uninit(xoutp);
     return ok;
@@ -1472,7 +1470,6 @@ push_dump_ops__(struct udpif *udpif, struct dump_op *ops, size_t n_ops)
 
                 if (netflow) {
                     netflow_flow_clear(netflow, &flow);
-                    netflow_unref(netflow);
                 }
             }
         }
