@@ -809,7 +809,16 @@ static int execute_recirc(struct datapath *dp, struct sk_buff *skb,
 			  const struct nlattr *a, int rem)
 {
 	struct sw_flow_key recirc_key;
-	int err;
+
+	if (!is_skb_flow_key_valid(skb)) {
+		int err;
+
+		err = ovs_flow_key_update(skb, OVS_CB(skb)->pkt_key);
+		if (err)
+			return err;
+
+	}
+	BUG_ON(!is_skb_flow_key_valid(skb));
 
 	if (!last_action(a, rem)) {
 		/* Recirc action is the not the last action
@@ -820,19 +829,9 @@ static int execute_recirc(struct datapath *dp, struct sk_buff *skb,
 		 * continue on with the rest of the action list. */
 		if (!skb)
 			return 0;
-	}
 
-	if (!is_skb_flow_key_valid(skb)) {
-		err = ovs_flow_key_update(skb, OVS_CB(skb)->pkt_key);
-		if (err) {
-			kfree_skb(skb);
-			return err;
-		}
-	}
-	BUG_ON(!is_skb_flow_key_valid(skb));
-
-	if (!last_action(a, rem))
 		flow_key_clone(skb, &recirc_key);
+	}
 
 	flow_key_set_recirc_id(skb, nla_get_u32(a));
 	ovs_dp_process_packet(skb, true);
@@ -897,6 +896,12 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 
 		case OVS_ACTION_ATTR_RECIRC:
 			err = execute_recirc(dp, skb, a, rem);
+			if (last_action(a, rem)) {
+				/* If this is the last action, the skb has
+				 * been consumed or freed.
+				 * Return immediately. */
+				return err;
+			}
 			break;
 
 		case OVS_ACTION_ATTR_SET:
