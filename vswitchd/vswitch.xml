@@ -2096,7 +2096,7 @@
 	  default is <code>00:23:20:00:00:01</code>.
 	</column>
 
-	<column name="bfd" key="bfd_remoe_dst_mac">
+	<column name="bfd" key="bfd_remote_dst_mac">
 	  Set to an Ethernet address in the form
 	  <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
 	  to set the MAC used for checking the destination of received BFD packets.
