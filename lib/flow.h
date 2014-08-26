@@ -346,7 +346,10 @@ bool flow_equal_except(const struct flow *a, const struct flow *b,
 
 /* Compressed flow. */
 
-#define MINI_N_INLINE (sizeof(void *) == 4 ? 7 : 8)
+/* Number of 32-bit words present in struct miniflow. */
+#define MINI_N_INLINE 8
+
+/* Maximum number of 32-bit words supported. */
 BUILD_ASSERT_DECL(FLOW_U32S <= 63);
 
 /* A sparse representation of a "struct flow".
@@ -367,6 +370,11 @@ BUILD_ASSERT_DECL(FLOW_U32S <= 63);
  * the first element of the values array, the next 1-bit is in the next array
  * element, and so on.
  *
+ * MINI_N_INLINE is the default number of inline words.  When a miniflow is
+ * dynamically allocated the actual amount of inline storage may be different.
+ * In that case 'inline_values' contains storage at least for the number
+ * of words indicated by 'map' (one uint32_t for each 1-bit in the map).
+ *
  * Elements in values array are allowed to be zero.  This is useful for "struct
  * minimatch", for which ensuring that the miniflow and minimask members have
  * same 'map' allows optimization.  This allowance applies only to a miniflow
@@ -375,12 +383,14 @@ BUILD_ASSERT_DECL(FLOW_U32S <= 63);
  */
 struct miniflow {
     uint64_t map:63;
-    uint64_t values_inline:1;
+    uint8_t values_inline:1;
     union {
         uint32_t *offline_values;
-        uint32_t inline_values[MINI_N_INLINE];
+        uint32_t inline_values[MINI_N_INLINE]; /* Minimum inline size. */
     };
 };
+BUILD_ASSERT_DECL(sizeof(struct miniflow)
+                  == sizeof(uint64_t) + MINI_N_INLINE * sizeof(uint32_t));
 
 #define MINIFLOW_VALUES_SIZE(COUNT) ((COUNT) * sizeof(uint32_t))
 

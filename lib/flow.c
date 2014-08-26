@@ -1715,7 +1715,8 @@ miniflow_clone_inline(struct miniflow *dst, const struct miniflow *src,
 /* Initializes 'dst' with the data in 'src', destroying 'src'.
  * The caller must eventually free 'dst' with miniflow_destroy().
  * 'dst' must be regularly sized miniflow, but 'src' can have
- * larger than default inline values. */
+ * storage for more than the default MINI_N_INLINE inline
+ * values. */
 void
 miniflow_move(struct miniflow *dst, struct miniflow *src)
 {
