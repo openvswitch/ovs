@@ -1726,12 +1726,9 @@ miniflow_move(struct miniflow *dst, struct miniflow *src)
         dst->values_inline = true;
         memcpy(dst->inline_values, miniflow_get_values(src), size);
         miniflow_destroy(src);
-    } else if (src->values_inline) {
-        dst->values_inline = false;
-        COVERAGE_INC(miniflow_malloc);
-        dst->offline_values = xmalloc(size);
-        memcpy(dst->offline_values, src->inline_values, size);
     } else {
+        ovs_assert(!src->values_inline);
+
         dst->values_inline = false;
         dst->offline_values = src->offline_values;
     }
