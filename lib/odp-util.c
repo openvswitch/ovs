@@ -1784,6 +1784,9 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
         struct flow_tnl tun_key, tun_key_mask;
         int n = -1;
 
+        memset(&tun_key, 0, sizeof tun_key);
+        memset(&tun_key_mask, 0, sizeof tun_key_mask);
+
         if (mask && ovs_scan(s, "tunnel(tun_id=%"SCNi64"/%"SCNi64","
                              "src="IP_SCAN_FMT"/"IP_SCAN_FMT",dst="IP_SCAN_FMT
                              "/"IP_SCAN_FMT",tos=%"SCNi8"/%"SCNi8","
