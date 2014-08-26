@@ -1657,7 +1657,9 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
 
         if (ovs_scan(s, "recirc_id(%"SCNi32")%n", &recirc_id, &n)) {
             nl_msg_put_u32(key, OVS_KEY_ATTR_RECIRC_ID, recirc_id);
-            nl_msg_put_u32(mask, OVS_KEY_ATTR_RECIRC_ID, UINT32_MAX);
+            if (mask) {
+                nl_msg_put_u32(mask, OVS_KEY_ATTR_RECIRC_ID, UINT32_MAX);
+            }
             return n;
         }
     }
