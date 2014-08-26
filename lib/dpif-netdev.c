@@ -669,6 +669,9 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
             VLOG_ERR("%s: cannot receive packets on this network device (%s)",
                      devname, ovs_strerror(errno));
             netdev_close(netdev);
+            free(port->type);
+            free(port->rxq);
+            free(port);
             return error;
         }
     }
@@ -679,6 +682,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
             netdev_rxq_close(port->rxq[i]);
         }
         netdev_close(netdev);
+        free(port->type);
         free(port->rxq);
         free(port);
         return error;
