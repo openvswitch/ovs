@@ -103,7 +103,7 @@ install-indep: build-indep
 	dh_installdirs -p$(pdkms) usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)
 
 	# copy the source
-	cd debian/$(pdkms)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION) && tar xvzf $(CURDIR)/_debian/openvswitch.tar.gz && mv openvswitch/* . && rmdir openvswitch
+	cd debian/$(pdkms)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION) && tar xvzf $(CURDIR)/_debian/openvswitch.tar.gz && mv openvswitch/* openvswitch/.* . && rmdir openvswitch
 
 	# Prepare dkms.conf from the dkms.conf.in template
 	sed "s/__VERSION__/$(DEB_UPSTREAM_VERSION)/g" debian/dkms.conf.in > debian/$(pdkms)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/dkms.conf
