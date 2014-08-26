@@ -461,6 +461,7 @@ json_hash_object(const struct shash *object, size_t basis)
         basis = hash_string(node->name, basis);
         basis = json_hash(node->data, basis);
     }
+    free(nodes);
     return basis;
 }
 
