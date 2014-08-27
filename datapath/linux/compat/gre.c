@@ -64,6 +64,8 @@ struct sk_buff *gre_handle_offloads(struct sk_buff *skb, bool gre_csum)
 	if (skb_is_gso(skb)) {
 		if (gre_csum)
 			OVS_GSO_CB(skb)->fix_segment = gre_csum_fix;
+		else
+			OVS_GSO_CB(skb)->fix_segment = NULL;
 	} else {
 		if (skb->ip_summed == CHECKSUM_PARTIAL && gre_csum) {
 			err = skb_checksum_help(skb);
