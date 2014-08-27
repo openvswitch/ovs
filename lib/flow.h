@@ -383,7 +383,7 @@ BUILD_ASSERT_DECL(FLOW_U32S <= 63);
  */
 struct miniflow {
     uint64_t map:63;
-    uint8_t values_inline:1;
+    uint64_t values_inline:1;
     union {
         uint32_t *offline_values;
         uint32_t inline_values[MINI_N_INLINE]; /* Minimum inline size. */
