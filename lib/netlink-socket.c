@@ -426,17 +426,20 @@ nl_sock_send__(struct nl_sock *sock, const struct ofpbuf *msg,
     do {
         int retval;
 #ifdef _WIN32
-        bool result;
-        DWORD last_error = 0;
-        result = WriteFile(sock->handle, ofpbuf_data(msg), ofpbuf_size(msg),
-                           &retval, NULL);
-        last_error = GetLastError();
-        if (last_error != ERROR_SUCCESS && !result) {
+        DWORD bytes;
+
+        if (!DeviceIoControl(sock->handle, OVS_IOCTL_WRITE,
+                            ofpbuf_data(msg), ofpbuf_size(msg), NULL, 0,
+                            &bytes, NULL)) {
             retval = -1;
-            errno = EAGAIN;
+            /* XXX: Map to a more appropriate error based on GetLastError(). */
+            errno = EINVAL;
+        } else {
+            retval = ofpbuf_size(msg);
         }
 #else
-        retval = send(sock->fd, ofpbuf_data(msg), ofpbuf_size(msg), wait ? 0 : MSG_DONTWAIT);
+        retval = send(sock->fd, ofpbuf_data(msg), ofpbuf_size(msg),
+                      wait ? 0 : MSG_DONTWAIT);
 #endif
         error = retval < 0 ? errno : 0;
     } while (error == EINTR);
@@ -488,12 +491,7 @@ nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, bool wait)
      * 'tail' to allow Netlink messages to be up to 64 kB long (a reasonable
      * figure since that's the maximum length of a Netlink attribute). */
     struct nlmsghdr *nlmsghdr;
-#ifdef _WIN32
-#define MAX_STACK_LENGTH 81920
-    uint8_t tail[MAX_STACK_LENGTH];
-#else
     uint8_t tail[65536];
-#endif
     struct iovec iov[2];
     struct msghdr msg;
     ssize_t retval;
@@ -522,15 +520,23 @@ nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, bool wait)
     do {
         nlmsghdr->nlmsg_len = UINT32_MAX;
 #ifdef _WIN32
-        boolean result = false;
-        DWORD last_error = 0;
-        result = ReadFile(sock->handle, tail, MAX_STACK_LENGTH, &retval, NULL);
-        last_error = GetLastError();
-        if (last_error != ERROR_SUCCESS && !result) {
+        DWORD bytes;
+        if (!DeviceIoControl(sock->handle, OVS_IOCTL_READ,
+                             NULL, 0, tail, sizeof tail, &bytes, NULL)) {
             retval = -1;
-            errno = EAGAIN;
+            errno = EINVAL;
         } else {
-            ofpbuf_put(buf, tail, retval);
+            retval = bytes;
+            if (retval == 0) {
+                retval = -1;
+                errno = EAGAIN;
+            } else {
+                if (retval >= buf->allocated) {
+                    ofpbuf_reinit(buf, retval);
+                }
+                memcpy(ofpbuf_data(buf), tail, retval);
+                ofpbuf_set_size(buf, retval);
+            }
         }
 #else
         retval = recvmsg(sock->fd, &msg, wait ? 0 : MSG_DONTWAIT);
