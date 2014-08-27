@@ -659,6 +659,7 @@ ovsdb_execute_wait(struct ovsdb_execution *x, struct ovsdb_parser *parser,
             error = ovsdb_row_from_json(row, rows->u.array.elems[i], x->symtab,
                                         NULL);
             if (error) {
+                ovsdb_row_destroy(row);
                 break;
             }
 

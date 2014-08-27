@@ -109,6 +109,7 @@ check_mask_consistency(const uint8_t *p, const struct mf_field *mf)
                              "bits wildcarded by the mask.  (Future versions "
                              "of OVS may report this as an OpenFlow error.)",
                              s);
+                free(s);
                 break;
             }
         }
