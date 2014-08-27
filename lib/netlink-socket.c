@@ -72,7 +72,7 @@ static uint32_t nl_sock_allocate_seq(struct nl_sock *, unsigned int n);
 static void log_nlmsg(const char *function, int error,
                       const void *message, size_t size, int protocol);
 #ifdef _WIN32
-static int get_sock_pid_from_kernel(struct nl_sock *sock, uint32_t *pid);
+static int get_sock_pid_from_kernel(struct nl_sock *sock);
 #endif
 
 /* Netlink sockets. */
@@ -165,7 +165,7 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
     rcvbuf = 1024 * 1024;
 #ifdef _WIN32
     sock->rcvbuf = rcvbuf;
-    retval = get_sock_pid_from_kernel(sock, &sock->pid);
+    retval = get_sock_pid_from_kernel(sock);
     if (retval != 0) {
         goto error;
     }
@@ -261,7 +261,7 @@ nl_sock_destroy(struct nl_sock *sock)
  * follows a transaction semantic. Eventually this function should call into
  * nl_transact. */
 static int
-get_sock_pid_from_kernel(struct nl_sock *sock, uint32_t *pid)
+get_sock_pid_from_kernel(struct nl_sock *sock)
 {
     struct nl_transaction txn;
     struct ofpbuf request;
@@ -303,12 +303,12 @@ get_sock_pid_from_kernel(struct nl_sock *sock, uint32_t *pid)
             goto done;
         }
 
-        nlmsg = nl_msg_nlmsghdr(txn.request);
+        nlmsg = nl_msg_nlmsghdr(txn.reply);
         if (nlmsg->nlmsg_seq != seq) {
             retval = EINVAL;
             goto done;
         }
-        *pid = nlmsg->nlmsg_pid;
+        sock->pid = nlmsg->nlmsg_pid;
     }
     retval = 0;
 
