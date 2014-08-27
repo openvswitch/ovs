@@ -48,11 +48,11 @@
  * and kernel.
  */
 #define OVS_WIN_NL_INVALID_FAMILY_ID         0
-#define OVS_WIN_NL_CTRL_FAMILY_ID            1
-#define OVS_WIN_NL_DATAPATH_FAMILY_ID        2
-#define OVS_WIN_NL_PACKET_FAMILY_ID          3
-#define OVS_WIN_NL_VPORT_FAMILY_ID           4
-#define OVS_WIN_NL_FLOW_FAMILY_ID            5
+#define OVS_WIN_NL_CTRL_FAMILY_ID            (NLMSG_MIN_TYPE + 1)
+#define OVS_WIN_NL_DATAPATH_FAMILY_ID        (NLMSG_MIN_TYPE + 2)
+#define OVS_WIN_NL_PACKET_FAMILY_ID          (NLMSG_MIN_TYPE + 3)
+#define OVS_WIN_NL_VPORT_FAMILY_ID           (NLMSG_MIN_TYPE + 4)
+#define OVS_WIN_NL_FLOW_FAMILY_ID            (NLMSG_MIN_TYPE + 5)
 
 #define OVS_WIN_NL_INVALID_MCGRP_ID          0
 #define OVS_WIN_NL_MCGRP_START_ID            100
