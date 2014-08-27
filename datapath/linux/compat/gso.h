@@ -12,13 +12,13 @@
 
 struct ovs_gso_cb {
 	struct ovs_skb_cb dp_cb;
+	void (*fix_segment)(struct sk_buff *);
+	sk_buff_data_t	inner_mac_header;	/* Offset from skb->head */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,11,0)
 	__be16		inner_protocol;
 #endif
 	u16		inner_network_header;	/* Offset from
 						 * inner_mac_header */
-	sk_buff_data_t	inner_mac_header;	/* Offset from skb->head */
-	void (*fix_segment)(struct sk_buff *);
 };
 #define OVS_GSO_CB(skb) ((struct ovs_gso_cb *)(skb)->cb)
 
