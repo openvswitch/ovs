@@ -1172,16 +1172,20 @@ do_lookup_genl_family(const char *name, struct nlattr **attrs,
                       struct ofpbuf **replyp)
 {
     struct nl_sock *sock;
+    struct nlmsghdr *nlmsg;
     struct ofpbuf *reply;
     int error;
     uint16_t family_id;
     const char *family_name;
     uint32_t family_version;
     uint32_t family_attrmax;
+    uint32_t mcgrp_id = OVS_WIN_NL_INVALID_MCGRP_ID;
+    const char *mcgrp_name = NULL;
 
     *replyp = NULL;
     reply = ofpbuf_new(1024);
 
+    /* CTRL_ATTR_MCAST_GROUPS is supported only for VPORT family. */
     if (!strcmp(name, OVS_WIN_CONTROL_FAMILY)) {
         family_id = OVS_WIN_NL_CTRL_FAMILY_ID;
         family_name = OVS_WIN_CONTROL_FAMILY;
@@ -1202,6 +1206,8 @@ do_lookup_genl_family(const char *name, struct nlattr **attrs,
         family_name = OVS_VPORT_FAMILY;
         family_version = OVS_VPORT_VERSION;
         family_attrmax = OVS_VPORT_ATTR_MAX;
+        mcgrp_id = OVS_WIN_NL_VPORT_MCGRP_ID;
+        mcgrp_name = OVS_VPORT_MCGROUP;
     } else if (!strcmp(name, OVS_FLOW_FAMILY)) {
         family_id = OVS_WIN_NL_FLOW_FAMILY_ID;
         family_name = OVS_FLOW_FAMILY;
@@ -1220,6 +1226,21 @@ do_lookup_genl_family(const char *name, struct nlattr **attrs,
     nl_msg_put_string(reply, CTRL_ATTR_FAMILY_NAME, family_name);
     nl_msg_put_u32(reply, CTRL_ATTR_VERSION, family_version);
     nl_msg_put_u32(reply, CTRL_ATTR_MAXATTR, family_attrmax);
+
+    if (mcgrp_id != OVS_WIN_NL_INVALID_MCGRP_ID) {
+        size_t mcgrp_ofs1 = nl_msg_start_nested(reply, CTRL_ATTR_MCAST_GROUPS);
+        size_t mcgrp_ofs2= nl_msg_start_nested(reply,
+            OVS_WIN_NL_VPORT_MCGRP_ID - OVS_WIN_NL_MCGRP_START_ID);
+        nl_msg_put_u32(reply, CTRL_ATTR_MCAST_GRP_ID, mcgrp_id);
+        ovs_assert(mcgrp_name != NULL);
+        nl_msg_put_string(reply, CTRL_ATTR_MCAST_GRP_NAME, mcgrp_name);
+        nl_msg_end_nested(reply, mcgrp_ofs2);
+        nl_msg_end_nested(reply, mcgrp_ofs1);
+    }
+
+    /* Set the total length of the netlink message. */
+    nlmsg = nl_msg_nlmsghdr(reply);
+    nlmsg->nlmsg_len = ofpbuf_size(reply);
 
     if (!nl_policy_parse(reply, NLMSG_HDRLEN + GENL_HDRLEN,
                          family_policy, attrs, ARRAY_SIZE(family_policy))
