@@ -54,6 +54,10 @@
 #define OVS_WIN_NL_VPORT_FAMILY_ID           4
 #define OVS_WIN_NL_FLOW_FAMILY_ID            5
 
+#define OVS_WIN_NL_INVALID_MCGRP_ID          0
+#define OVS_WIN_NL_MCGRP_START_ID            100
+#define OVS_WIN_NL_VPORT_MCGRP_ID            (OVS_WIN_NL_MCGRP_START_ID + 1)
+
 /*
  * Define a family of netlink command specific to Windows. This is part of the
  * extensions.
