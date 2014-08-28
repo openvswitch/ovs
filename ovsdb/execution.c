@@ -644,6 +644,8 @@ ovsdb_execute_wait(struct ovsdb_execution *x, struct ovsdb_parser *parser,
         } else {
             timeout_msec = LLONG_MAX;
         }
+    }
+    if (!error) {
         if (strcmp(json_string(until), "==")
             && strcmp(json_string(until), "!=")) {
             error = ovsdb_syntax_error(until, NULL,
