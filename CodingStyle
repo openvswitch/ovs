@@ -428,12 +428,10 @@ prints 255 but printf("%u", -1) prints 4294967295.
 network protocol fields or in other circumstances where the exact
 format is important.
 
-  Declare bit-fields to be type "unsigned int" or "signed int".  Do
-*not* declare bit-fields of type "int": C89 allows these to be either
-signed or unsigned according to the compiler's whim.  (A 1-bit
-bit-field of type "int" may have a range of -1...0!)  Do not declare
-bit-fields of type _Bool or enum or any other type, because these are
-not portable.
+  Declare bit-fields to be signed or unsigned integer types or _Bool
+(aka bool).  Do *not* declare bit-fields of type "int": C99 allows
+these to be either signed or unsigned according to the compiler's
+whim.  (A 1-bit bit-field of type "int" may have a range of -1...0!)
 
   Try to order structure members such that they pack well on a system
 with 2-byte "short", 4-byte "int", and 4- or 8-byte "long" and pointer
