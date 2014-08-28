@@ -45,7 +45,7 @@ esac
 # We'll assume cl to start out
 prog=cl
 # opts specifies the command line to pass to the MSVC program
-clopt="${slash}nologo"
+clopt="${slash}nologo ${slash}FS"
 linkopt="${slash}nologo"
 # gotparam is 0 if we didn't ever see a param, in which case we show usage()
 gotparam=
