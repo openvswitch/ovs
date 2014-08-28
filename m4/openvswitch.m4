@@ -86,6 +86,17 @@ AC_DEFUN([OVS_CHECK_WIN32],
             AC_MSG_ERROR([pthread directory not specified])
          ]
       )
+      AC_ARG_WITH([debug],
+         [AS_HELP_STRING([--with-debug],
+            [Build without compiler optimizations])],
+         [
+            MSVC_CFLAGS="-O0"
+            AC_SUBST([MSVC_CFLAGS])
+         ], [
+            MSVC_CFLAGS="-O2"
+            AC_SUBST([MSVC_CFLAGS])
+         ]
+      )
 
       AC_DEFINE([WIN32], [1], [Define to 1 if building on WIN32.])
       AH_BOTTOM([#ifdef WIN32

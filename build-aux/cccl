@@ -89,6 +89,14 @@ EOF
         linkopt="$linkopt ${slash}DEBUG"
         ;;
 
+    -O0)
+        clopt="$clopt ${slash}Ot"
+        ;;
+
+    -O2)
+        clopt="$clopt ${slash}O2"
+        ;;
+
     -L*)
         path=`echo "$1" | sed 's/-L//'`
         linkopt="$linkopt ${slash}LIBPATH:$path"

@@ -63,6 +63,10 @@ or from a distribution tar ball.
     --prefix="C:/openvswitch/usr" --localstatedir="C:/openvswitch/var" \
     --sysconfdir="C:/openvswitch/etc" --with-pthread="C:/pthread"
 
+    By default, the above enables compiler optimization for fast code.
+    For default compiler optimization, pass the "--with-debug" configure
+    option.
+
 * Run make for the ported executables in the top source directory, e.g.:
 
   % make
