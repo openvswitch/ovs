@@ -86,11 +86,39 @@ AC_DEFUN([OVS_CHECK_WIN32],
             AC_MSG_ERROR([pthread directory not specified])
          ]
       )
+
       AC_DEFINE([WIN32], [1], [Define to 1 if building on WIN32.])
       AH_BOTTOM([#ifdef WIN32
 #include "include/windows/windefs.h"
 #endif])
    fi])
+
+dnl OVS_CHECK_WINDOWS
+dnl
+dnl Configure Visual Studio solution build
+AC_DEFUN([OVS_CHECK_VISUAL_STUDIO_DDK], [
+AC_ARG_WITH([vstudioddk],
+         [AS_HELP_STRING([--with-vstudioddk=version_type],
+            [Visual Studio DDK version type e.g. Win8.1 Release])],
+         [
+            case "$withval" in
+            "Win8.1 Release") ;;
+            "Win8.1 Debug") ;;
+            "Win8 Release") ;;
+            "Win8 Debug") ;;
+            *) AC_MSG_ERROR([No good Visual Studio configuration found]) ;;
+            esac
+
+            VSTUDIO_CONFIG=$withval
+         ], [
+            VSTUDIO_CONFIG=
+         ]
+      )
+
+  AC_SUBST([VSTUDIO_CONFIG])
+  AC_DEFINE([VSTUDIO_DDK], [1], [System uses the Visual Studio DDK version module.])
+  AM_CONDITIONAL([VSTUDIO_DDK], [test -n "$VSTUDIO_CONFIG"])
+])
 
 dnl Checks for Netlink support.
 AC_DEFUN([OVS_CHECK_NETLINK],

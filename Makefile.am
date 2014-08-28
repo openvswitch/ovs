@@ -290,6 +290,16 @@ $(srcdir)/manpages.mk: $(MAN_ROOTS) build-aux/sodepends.pl
 	fi
 CLEANFILES += manpage-dep-check
 
+if VSTUDIO_DDK
+ALL_LOCAL += ovsext_make
+ovsext_make: datapath-windows/ovsext.sln
+	MSBuild.exe datapath-windows/ovsext.sln /target:Build /property:Configuration="$(VSTUDIO_CONFIG)"
+
+CLEAN_LOCAL += ovsext_clean
+ovsext_clean: datapath-windows/ovsext.sln
+	MSBuild.exe datapath-windows/ovsext.sln /target:Clean /property:Configuration="$(VSTUDIO_CONFIG)"
+endif
+
 dist-hook: $(DIST_HOOKS)
 all-local: $(ALL_LOCAL)
 clean-local: $(CLEAN_LOCAL)
