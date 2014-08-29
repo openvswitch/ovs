@@ -617,7 +617,7 @@ dp_netdev_reload_pmd_threads(struct dp_netdev *dp)
         struct pmd_thread *f = &dp->pmd_threads[i];
         int old_seq;
 
-        atomic_add_explicit(&f->change_seq, 1, &old_seq, memory_order_relaxed);
+        atomic_add_relaxed(&f->change_seq, 1, &old_seq);
     }
 }
 
@@ -1732,7 +1732,7 @@ reload:
 
             ovsrcu_quiesce();
 
-            atomic_read_explicit(&f->change_seq, &seq, memory_order_relaxed);
+            atomic_read_relaxed(&f->change_seq, &seq);
             if (seq != port_seq) {
                 port_seq = seq;
                 break;

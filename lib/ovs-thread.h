@@ -556,7 +556,7 @@ ovsthread_once_is_done__(struct ovsthread_once *once)
 {
     bool done;
 
-    atomic_read_explicit(&once->done, &done, memory_order_relaxed);
+    atomic_read_relaxed(&once->done, &done);
     return done;
 }
 
