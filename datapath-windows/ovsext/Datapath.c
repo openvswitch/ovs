@@ -73,13 +73,15 @@ typedef struct _NETLINK_CMD {
     UINT16 cmd;
     NetlinkCmdHandler handler;
     UINT32 supportedDevOp;      /* Supported device operations. */
+    BOOLEAN validateDpIndex;    /* Does command require a valid DP argument. */
 } NETLINK_CMD, *PNETLINK_CMD;
 
 /* A netlink family is a group of commands. */
 typedef struct _NETLINK_FAMILY {
     CHAR *name;
     UINT32 id;
-    UINT16 version;
+    UINT8 version;
+    UINT8 pad;
     UINT16 maxAttr;
     NETLINK_CMD *cmds;          /* Array of netlink commands and handlers. */
     UINT16 opsCount;
@@ -109,16 +111,17 @@ static NTSTATUS OvsGetPidCmdHandler(PIRP irp, PFILE_OBJECT fileObject,
 
 /* Netlink control family: this is a Windows specific family. */
 NETLINK_CMD nlControlFamilyCmdOps[] = {
-    { OVS_CTRL_CMD_WIN_GET_PID, OvsGetPidCmdHandler, OVS_TRANSACTION_DEV_OP, }
+    { OVS_CTRL_CMD_WIN_GET_PID, OvsGetPidCmdHandler,
+      OVS_TRANSACTION_DEV_OP, FALSE }
 };
 
 NETLINK_FAMILY nlControlFamilyOps = {
-    OVS_WIN_CONTROL_FAMILY,
-    OVS_WIN_NL_CTRL_FAMILY_ID,
-    OVS_WIN_CONTROL_VERSION,
-    OVS_WIN_CONTROL_ATTR_MAX,
-    nlControlFamilyCmdOps,
-    ARRAY_SIZE(nlControlFamilyCmdOps)
+    .name     = OVS_WIN_CONTROL_FAMILY,
+    .id       = OVS_WIN_NL_CTRL_FAMILY_ID,
+    .version  = OVS_WIN_CONTROL_VERSION,
+    .maxAttr  = OVS_WIN_CONTROL_ATTR_MAX,
+    .cmds     = nlControlFamilyCmdOps,
+    .opsCount = ARRAY_SIZE(nlControlFamilyCmdOps)
 };
 
 
@@ -126,45 +129,45 @@ NETLINK_FAMILY nlControlFamilyOps = {
 /* Netlink packet family. */
 /* XXX: Add commands here. */
 NETLINK_FAMILY nlPacketFamilyOps = {
-    OVS_PACKET_FAMILY,
-    OVS_WIN_NL_PACKET_FAMILY_ID,
-    OVS_PACKET_VERSION,
-    OVS_PACKET_ATTR_MAX,
-    NULL, /* XXX: placeholder. */
-    0
+    .name     = OVS_PACKET_FAMILY,
+    .id       = OVS_WIN_NL_PACKET_FAMILY_ID,
+    .version  = OVS_PACKET_VERSION,
+    .maxAttr  = OVS_PACKET_ATTR_MAX,
+    .cmds     = NULL, /* XXX: placeholder. */
+    .opsCount = 0
 };
 
 /* Netlink datapath family. */
 /* XXX: Add commands here. */
 NETLINK_FAMILY nlDatapathFamilyOps = {
-    OVS_DATAPATH_FAMILY,
-    OVS_WIN_NL_DATAPATH_FAMILY_ID,
-    OVS_DATAPATH_VERSION,
-    OVS_DP_ATTR_MAX,
-    NULL, /* XXX: placeholder. */
-    0
+    .name     = OVS_DATAPATH_FAMILY,
+    .id       = OVS_WIN_NL_DATAPATH_FAMILY_ID,
+    .version  = OVS_DATAPATH_VERSION,
+    .maxAttr  = OVS_DP_ATTR_MAX,
+    .cmds     = NULL, /* XXX: placeholder. */
+    .opsCount = 0
 };
 
 /* Netlink vport family. */
 /* XXX: Add commands here. */
 NETLINK_FAMILY nlVportFamilyOps = {
-    OVS_VPORT_FAMILY,
-    OVS_WIN_NL_VPORT_FAMILY_ID,
-    OVS_VPORT_VERSION,
-    OVS_VPORT_ATTR_MAX,
-    NULL, /* XXX: placeholder. */
-    0
+    .name     = OVS_VPORT_FAMILY,
+    .id       = OVS_WIN_NL_VPORT_FAMILY_ID,
+    .version  = OVS_VPORT_VERSION,
+    .maxAttr  = OVS_VPORT_ATTR_MAX,
+    .cmds     = NULL, /* XXX: placeholder. */
+    .opsCount = 0
 };
 
 /* Netlink flow family. */
 /* XXX: Add commands here. */
 NETLINK_FAMILY nlFLowFamilyOps = {
-    OVS_FLOW_FAMILY,
-    OVS_WIN_NL_FLOW_FAMILY_ID,
-    OVS_FLOW_VERSION,
-    OVS_FLOW_ATTR_MAX,
-    NULL, /* XXX: placeholder. */
-    0
+    .name     = OVS_FLOW_FAMILY,
+    .id       = OVS_WIN_NL_FLOW_FAMILY_ID,
+    .version  = OVS_FLOW_VERSION,
+    .maxAttr  = OVS_FLOW_ATTR_MAX,
+    .cmds     = NULL, /* XXX: placeholder. */
+    .opsCount = 0
 };
 
 static NTSTATUS
@@ -713,10 +716,11 @@ ValidateNetlinkCmd(UINT32 devOp,
                 goto done;
             }
 
-            /* Validate the DP for commands where the DP is actually set. */
-            if (ovsMsg->genlMsg.cmd != OVS_CTRL_CMD_WIN_GET_PID) {
+            /* Validate the DP for commands that require a DP. */
+            if (nlFamilyOps->cmds[i].validateDpIndex == TRUE) {
                 OvsAcquireCtrlLock();
-                if (ovsMsg->ovsHdr.dp_ifindex == (INT)gOvsSwitchContext->dpNo) {
+                if (ovsMsg->ovsHdr.dp_ifindex !=
+                    (INT)gOvsSwitchContext->dpNo) {
                     status = STATUS_INVALID_PARAMETER;
                     OvsReleaseCtrlLock();
                     goto done;
