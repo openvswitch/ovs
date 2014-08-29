@@ -123,6 +123,9 @@ struct mf_ctx {
 
 #if (FLOW_WC_SEQ != 27)
 #define MINIFLOW_ASSERT(X) ovs_assert(X)
+BUILD_MESSAGE("FLOW_WC_SEQ changed: miniflow_extract() will have runtime "
+               "assertions enabled. Consider updating FLOW_WC_SEQ after "
+               "testing")
 #else
 #define MINIFLOW_ASSERT(X)
 #endif
