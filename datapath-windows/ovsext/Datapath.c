@@ -98,6 +98,9 @@ typedef struct _NETLINK_FAMILY {
 static NTSTATUS OvsGetPidCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                     UINT32 *replyLen);
 
+static NTSTATUS OvsGetDpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                                   UINT32 *replyLen);
+
 /*
  * The various netlink families, along with the supported commands. Most of
  * these families and commands are part of the openvswitch specification for a
@@ -120,7 +123,20 @@ NETLINK_FAMILY nlControlFamilyOps = {
     .opsCount = ARRAY_SIZE(nlControlFamilyCmdOps)
 };
 
+/* Netlink datapath family. */
+NETLINK_CMD nlDatapathFamilyCmdOps[] = {
+    { OVS_DP_CMD_GET, OvsGetDpCmdHandler,
+      OVS_WRITE_DEV_OP | OVS_READ_DEV_OP, FALSE }
+};
 
+NETLINK_FAMILY nlDatapathFamilyOps = {
+    .name     = OVS_DATAPATH_FAMILY,
+    .id       = OVS_WIN_NL_DATAPATH_FAMILY_ID,
+    .version  = OVS_DATAPATH_VERSION,
+    .maxAttr  = OVS_DP_ATTR_MAX,
+    .cmds     = nlDatapathFamilyCmdOps,
+    .opsCount = ARRAY_SIZE(nlDatapathFamilyCmdOps)
+};
 
 /* Netlink packet family. */
 /* XXX: Add commands here. */
@@ -129,17 +145,6 @@ NETLINK_FAMILY nlPacketFamilyOps = {
     .id       = OVS_WIN_NL_PACKET_FAMILY_ID,
     .version  = OVS_PACKET_VERSION,
     .maxAttr  = OVS_PACKET_ATTR_MAX,
-    .cmds     = NULL, /* XXX: placeholder. */
-    .opsCount = 0
-};
-
-/* Netlink datapath family. */
-/* XXX: Add commands here. */
-NETLINK_FAMILY nlDatapathFamilyOps = {
-    .name     = OVS_DATAPATH_FAMILY,
-    .id       = OVS_WIN_NL_DATAPATH_FAMILY_ID,
-    .version  = OVS_DATAPATH_VERSION,
-    .maxAttr  = OVS_DP_ATTR_MAX,
     .cmds     = NULL, /* XXX: placeholder. */
     .opsCount = 0
 };
@@ -166,19 +171,17 @@ NETLINK_FAMILY nlFLowFamilyOps = {
     .opsCount = 0
 };
 
-static NTSTATUS
-MapIrpOutputBuffer(PIRP irp,
-                   UINT32 bufferLength,
-                   UINT32 requiredLength,
-                   PVOID *buffer);
-static NTSTATUS
-ValidateNetlinkCmd(UINT32 devOp,
-                   POVS_MESSAGE ovsMsg,
-                   NETLINK_FAMILY *nlFamilyOps);
-static NTSTATUS
-InvokeNetlinkCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
-                        NETLINK_FAMILY *nlFamilyOps,
-                        UINT32 *replyLen);
+static NTSTATUS MapIrpOutputBuffer(PIRP irp,
+                                   UINT32 bufferLength,
+                                   UINT32 requiredLength,
+                                   PVOID *buffer);
+static NTSTATUS ValidateNetlinkCmd(UINT32 devOp,
+                                   POVS_OPEN_INSTANCE instance,
+                                   POVS_MESSAGE ovsMsg,
+                                   NETLINK_FAMILY *nlFamilyOps);
+static NTSTATUS InvokeNetlinkCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                                        NETLINK_FAMILY *nlFamilyOps,
+                                        UINT32 *replyLen);
 
 
 /* Handles to the device object for communication with userspace. */
@@ -207,6 +210,7 @@ DRIVER_DISPATCH OvsDeviceControl;
  * each thread, and at least one descriptor per vport. Revisit this later.
  */
 #define OVS_MAX_OPEN_INSTANCES 512
+#define OVS_SYSTEM_DP_NAME     "ovs-system"
 
 POVS_OPEN_INSTANCE ovsOpenInstanceArray[OVS_MAX_OPEN_INSTANCES];
 UINT32 ovsNumberOfOpenInstances;
@@ -605,19 +609,28 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
          */
         inputBuffer = NULL;
         inputBufferLen = 0;
-        /* Create an NL message for consumption. */
-        ovsMsg = &ovsMsgReadOp;
-        devOp = OVS_READ_DEV_OP;
 
         /*
          * For implementing read (ioctl or otherwise), we need to store some
-         * state in the instance to indicate the previous command. The state can
-         * setup 'ovsMsgReadOp' appropriately.
+         * state in the instance to indicate the command that started the dump
+         * operation. The state can setup 'ovsMsgReadOp' appropriately. Note
+         * that 'ovsMsgReadOp' is needed only in this function to call into the
+         * appropraite handler. The handler itself can access the state in the
+         * instance.
          *
-         * XXX: Support for that will be added as the userspace code evolves.
+         * In the absence of a dump start, return 0 bytes.
          */
-        status = STATUS_NOT_IMPLEMENTED;
-        goto done;
+        if (instance->dumpState.ovsMsg == NULL) {
+            replyLen = 0;
+            status = STATUS_SUCCESS;
+            goto done;
+        }
+        RtlCopyMemory(&ovsMsgReadOp, instance->dumpState.ovsMsg,
+                      sizeof (ovsMsgReadOp));
+
+        /* Create an NL message for consumption. */
+        ovsMsg = &ovsMsgReadOp;
+        devOp = OVS_READ_DEV_OP;
 
         break;
 
@@ -642,8 +655,10 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
     case OVS_WIN_NL_CTRL_FAMILY_ID:
         nlFamilyOps = &nlControlFamilyOps;
         break;
-    case OVS_WIN_NL_PACKET_FAMILY_ID:
     case OVS_WIN_NL_DATAPATH_FAMILY_ID:
+        nlFamilyOps = &nlDatapathFamilyOps;
+        break;
+    case OVS_WIN_NL_PACKET_FAMILY_ID:
     case OVS_WIN_NL_FLOW_FAMILY_ID:
     case OVS_WIN_NL_VPORT_FAMILY_ID:
         status = STATUS_NOT_IMPLEMENTED;
@@ -659,7 +674,7 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
      * previously.
      */
     if (devOp != OVS_READ_DEV_OP) {
-        status = ValidateNetlinkCmd(devOp, ovsMsg, nlFamilyOps);
+        status = ValidateNetlinkCmd(devOp, instance, ovsMsg, nlFamilyOps);
         if (status != STATUS_SUCCESS) {
             goto done;
         }
@@ -683,10 +698,13 @@ done:
  * --------------------------------------------------------------------------
  * Function to validate a netlink command. Only certain combinations of
  * (device operation, netlink family, command) are valid.
+ *
+ * XXX: Take policy into consideration.
  * --------------------------------------------------------------------------
  */
 static NTSTATUS
 ValidateNetlinkCmd(UINT32 devOp,
+                   POVS_OPEN_INSTANCE instance,
                    POVS_MESSAGE ovsMsg,
                    NETLINK_FAMILY *nlFamilyOps)
 {
@@ -717,6 +735,14 @@ ValidateNetlinkCmd(UINT32 devOp,
                     goto done;
                 }
                 OvsReleaseCtrlLock();
+            }
+
+            /* Validate the PID. */
+            if (ovsMsg->genlMsg.cmd != OVS_CTRL_CMD_WIN_GET_PID) {
+                if (ovsMsg->nlMsg.nlmsgPid != instance->pid) {
+                    status = STATUS_INVALID_PARAMETER;
+                    goto done;
+                }
             }
 
             status = STATUS_SUCCESS;
@@ -786,6 +812,136 @@ OvsGetPidCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     return STATUS_SUCCESS;
 }
 
+/*
+ * --------------------------------------------------------------------------
+ *  Handler for the get dp command. The function handles the initial call to
+ *  setup the dump state, as well as subsequent calls to continue dumping data.
+ * --------------------------------------------------------------------------
+ */
+static NTSTATUS
+OvsGetDpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                   UINT32 *replyLen)
+{
+    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
+    POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
+    POVS_OPEN_INSTANCE instance =
+        (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
+
+    if (usrParamsCtx->devOp == OVS_WRITE_DEV_OP) {
+        NTSTATUS status;
+
+        /* input buffer has been validated while validating write dev op. */
+        ASSERT(msgIn != NULL && usrParamsCtx->inputLength >= sizeof *msgIn);
+
+        /* A write operation that does not indicate dump start is invalid. */
+        if ((msgIn->nlMsg.nlmsgFlags & NLM_F_DUMP) != NLM_F_DUMP) {
+            return STATUS_INVALID_PARAMETER;
+        }
+        /* XXX: Handle other NLM_F_* flags in the future. */
+
+        /*
+         * This operation should be setting up the dump state. If there's any
+         * previous state, clear it up so as to set it up afresh.
+         */
+        if (instance->dumpState.ovsMsg != NULL) {
+            FreeUserDumpState(instance);
+        }
+        status = InitUserDumpState(instance, msgIn);
+        if (status != STATUS_SUCCESS) {
+            return STATUS_NO_MEMORY;
+        }
+    } else {
+        ASSERT(usrParamsCtx->devOp == OVS_READ_DEV_OP);
+
+        if (instance->dumpState.ovsMsg == NULL) {
+            ASSERT(FALSE);
+            return STATUS_INVALID_DEVICE_STATE;
+        }
+
+        /* Dump state must have been deleted after previous dump operation. */
+        ASSERT(instance->dumpState.index[0] == 0);
+        /* Output buffer has been validated while validating read dev op. */
+        ASSERT(msgOut != NULL && usrParamsCtx->outputLength >= sizeof *msgOut);
+
+        /* XXX: Replace this with the netlink set API. */
+        msgIn = instance->dumpState.ovsMsg;
+        msgOut->nlMsg.nlmsgType = OVS_WIN_NL_DATAPATH_FAMILY_ID;
+        msgOut->nlMsg.nlmsgFlags = 0;  /* XXX: ? */
+        msgOut->nlMsg.nlmsgSeq = msgIn->nlMsg.nlmsgSeq;
+        msgOut->nlMsg.nlmsgPid = msgIn->nlMsg.nlmsgPid;
+        msgOut->nlMsg.nlmsgLen = sizeof *msgOut;
+
+        msgOut->genlMsg.cmd = OVS_DP_CMD_GET;
+        msgOut->genlMsg.version = nlDatapathFamilyOps.version;
+        msgOut->genlMsg.reserved = 0;
+
+        OvsAcquireCtrlLock();
+        if (gOvsSwitchContext) {
+            msgOut->ovsHdr.dp_ifindex = gOvsSwitchContext->dpNo;
+        } else {
+            /* Treat this as a dump done. */
+            OvsReleaseCtrlLock();
+            *replyLen = 0;
+            FreeUserDumpState(instance);
+            return STATUS_SUCCESS;
+        }
+
+        /* XXX: Replace this with the netlink set API. */
+        {
+            /*
+             * Assume that the output buffer is at least 512 bytes. Once the
+             * netlink set API is implemented, the netlink buffer manipulation
+             * API should provide for checking the remaining number of bytes as
+             * we write out the message.
+             */
+            if (usrParamsCtx->outputLength <= 512) {
+                OvsReleaseCtrlLock();
+                return STATUS_NDIS_INVALID_LENGTH;
+            }
+            UINT16 attrTotalSize = 0;
+            UINT16 attrSize = 0;
+            PNL_ATTR nlAttr = (PNL_ATTR) ((PCHAR)msgOut + sizeof (*msgOut));
+            struct ovs_dp_stats *dpStats;
+            OVS_DATAPATH *datapath = &gOvsSwitchContext->datapath;
+
+            nlAttr->nlaType = OVS_DP_ATTR_NAME;
+            /* 'nlaLen' must not include the pad. */
+            nlAttr->nlaLen = sizeof (*nlAttr) + sizeof (OVS_SYSTEM_DP_NAME);
+            attrSize = sizeof (*nlAttr) +
+                       NLA_ALIGN(sizeof (OVS_SYSTEM_DP_NAME));
+            attrTotalSize += attrSize;
+
+            PNL_ATTR nlAttrNext = NlAttrGet(nlAttr);
+            RtlCopyMemory((PCHAR)nlAttrNext, OVS_SYSTEM_DP_NAME,
+                          sizeof (OVS_SYSTEM_DP_NAME));
+
+            nlAttr = (PNL_ATTR)((PCHAR)nlAttr + attrSize);
+            nlAttr->nlaType = OVS_DP_ATTR_STATS;
+            nlAttr->nlaLen = sizeof (*nlAttr) + sizeof (*dpStats);
+            attrSize = sizeof (*nlAttr) + NLA_ALIGN(sizeof (*dpStats));
+            attrTotalSize += attrSize;
+
+            dpStats = NlAttrGet(nlAttr);
+            dpStats->n_hit = datapath->hits;
+            dpStats->n_missed = datapath->misses;
+            dpStats->n_lost = datapath->lost;
+            dpStats->n_flows = datapath->nFlows;
+
+            msgOut->nlMsg.nlmsgLen += attrTotalSize;
+        }
+        OvsReleaseCtrlLock();
+
+        /* Increment the dump index. */
+        instance->dumpState.index[0] = 1;
+        *replyLen = msgOut->nlMsg.nlmsgLen;
+        ASSERT(*replyLen <= 512);
+
+        /* Free up the dump state, since there's no more data to continue. */
+        FreeUserDumpState(instance);
+    }
+
+    return STATUS_SUCCESS;
+}
 
 /*
  * --------------------------------------------------------------------------
