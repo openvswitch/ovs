@@ -379,6 +379,39 @@ typedef ATOMIC(int8_t)    atomic_int8_t;
 typedef ATOMIC(int16_t)   atomic_int16_t;
 typedef ATOMIC(int32_t)   atomic_int32_t;
 
+/* Relaxed atomic operations.
+ *
+ * When an operation on an atomic variable is not expected to synchronize
+ * with operations on other (atomic or non-atomic) variables, no memory
+ * barriers are needed and the relaxed memory ordering can be used.  These
+ * macros make such uses less daunting, but not invisible. */
+#define atomic_store_relaxed(VAR, VALUE)                        \
+    atomic_store_explicit(VAR, VALUE, memory_order_relaxed)
+#define atomic_read_relaxed(VAR, DST)                                   \
+    atomic_read_explicit(VAR, DST, memory_order_relaxed)
+#define atomic_compare_exchange_strong_relaxed(DST, EXP, SRC)     \
+    atomic_compare_exchange_strong_explicit(DST, EXP, SRC,        \
+                                            memory_order_relaxed, \
+                                            memory_order_relaxed)
+#define atomic_compare_exchange_weak_relaxed(DST, EXP, SRC)       \
+    atomic_compare_exchange_weak_explicit(DST, EXP, SRC,          \
+                                          memory_order_relaxed,   \
+                                          memory_order_relaxed)
+#define atomic_add_relaxed(RMW, ARG, ORIG)                              \
+    atomic_add_explicit(RMW, ARG, ORIG, memory_order_relaxed)
+#define atomic_sub_relaxed(RMW, ARG, ORIG)                              \
+    atomic_sub_explicit(RMW, ARG, ORIG, memory_order_relaxed)
+#define atomic_or_relaxed(RMW, ARG, ORIG)                               \
+    atomic_or_explicit(RMW, ARG, ORIG, memory_order_relaxed)
+#define atomic_xor_relaxed(RMW, ARG, ORIG)                              \
+    atomic_xor_explicit(RMW, ARG, ORIG, memory_order_relaxed)
+#define atomic_and_relaxed(RMW, ARG, ORIG)                              \
+    atomic_and_explicit(RMW, ARG, ORIG, memory_order_relaxed)
+#define atomic_flag_test_and_set_relaxed(FLAG)                          \
+    atomic_flag_test_and_set_explicit(FLAG, memory_order_relaxed)
+#define atomic_flag_clear_relaxed(FLAG)                         \
+    atomic_flag_clear_explicit(FLAG, memory_order_relaxed)
+
 /* Reference count. */
 struct ovs_refcount {
     atomic_uint count;
