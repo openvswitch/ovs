@@ -266,7 +266,7 @@ void
 ovs_barrier_init(struct ovs_barrier *barrier, uint32_t size)
 {
     barrier->size = size;
-    atomic_init(&barrier->count, 0);
+    atomic_count_init(&barrier->count, 0);
     barrier->seq = seq_create();
 }
 
@@ -289,19 +289,19 @@ ovs_barrier_block(struct ovs_barrier *barrier)
     uint64_t seq = seq_read(barrier->seq);
     uint32_t orig;
 
-    atomic_add(&barrier->count, 1, &orig);
+    orig = atomic_count_inc(&barrier->count);
     if (orig + 1 == barrier->size) {
-        atomic_store(&barrier->count, 0);
+        atomic_count_set(&barrier->count, 0);
         /* seq_change() serves as a release barrier against the other threads,
          * so the zeroed count is visible to them as they continue. */
         seq_change(barrier->seq);
-    }
-
-    /* To prevent thread from waking up by other event,
-     * keeps waiting for the change of 'barrier->seq'. */
-    while (seq == seq_read(barrier->seq)) {
-        seq_wait(barrier->seq, seq);
-        poll_block();
+    } else {
+        /* To prevent thread from waking up by other event,
+         * keeps waiting for the change of 'barrier->seq'. */
+        while (seq == seq_read(barrier->seq)) {
+            seq_wait(barrier->seq, seq);
+            poll_block();
+        }
     }
 }
 
@@ -316,13 +316,13 @@ struct ovsthread_aux {
 static void *
 ovsthread_wrapper(void *aux_)
 {
-    static atomic_uint next_id = ATOMIC_VAR_INIT(1);
+    static atomic_count next_id = ATOMIC_COUNT_INIT(1);
 
     struct ovsthread_aux *auxp = aux_;
     struct ovsthread_aux aux;
     unsigned int id;
 
-    atomic_add(&next_id, 1, &id);
+    id = atomic_count_inc(&next_id);
     *ovsthread_id_get() = id;
 
     aux = *auxp;

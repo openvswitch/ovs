@@ -34,7 +34,7 @@ struct OVS_LOCKABLE ovs_mutex {
 /* Poll-block()-able barrier similar to pthread_barrier_t. */
 struct ovs_barrier {
     uint32_t size;            /* Number of threads to wait. */
-    atomic_uint32_t count;    /* Number of threads already hit the barrier. */
+    atomic_count count;       /* Number of threads already hit the barrier. */
     struct seq *seq;
 };
 
