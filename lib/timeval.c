@@ -147,7 +147,7 @@ time_timespec__(struct clock *c, struct timespec *ts)
 
     time_init();
 
-    atomic_read_explicit(&c->slow_path, &slow_path, memory_order_relaxed);
+    atomic_read_relaxed(&c->slow_path, &slow_path);
     if (!slow_path) {
         xclock_gettime(c->id, ts);
     } else {
@@ -682,7 +682,7 @@ timeval_stop_cb(struct unixctl_conn *conn,
                  void *aux OVS_UNUSED)
 {
     ovs_mutex_lock(&monotonic_clock.mutex);
-    atomic_store(&monotonic_clock.slow_path, true);
+    atomic_store_relaxed(&monotonic_clock.slow_path, true);
     monotonic_clock.stopped = true;
     xclock_gettime(monotonic_clock.id, &monotonic_clock.cache);
     ovs_mutex_unlock(&monotonic_clock.mutex);
@@ -717,7 +717,7 @@ timeval_warp_cb(struct unixctl_conn *conn,
         unixctl_command_reply_error(conn, "A previous warp in progress");
         return;
     }
-    atomic_store(&monotonic_clock.slow_path, true);
+    atomic_store_relaxed(&monotonic_clock.slow_path, true);
     monotonic_clock.large_warp.conn = conn;
     monotonic_clock.large_warp.total_warp = total_warp;
     monotonic_clock.large_warp.warp = msecs;
