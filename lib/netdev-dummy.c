@@ -625,11 +625,11 @@ netdev_dummy_alloc(void)
 static int
 netdev_dummy_construct(struct netdev *netdev_)
 {
-    static atomic_uint next_n = ATOMIC_VAR_INIT(0xaa550000);
+    static atomic_count next_n = ATOMIC_COUNT_INIT(0xaa550000);
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
     unsigned int n;
 
-    atomic_add(&next_n, 1, &n);
+    n = atomic_count_inc(&next_n);
 
     ovs_mutex_init(&netdev->mutex);
     ovs_mutex_lock(&netdev->mutex);
