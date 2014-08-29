@@ -14,23 +14,19 @@
  * limitations under the License.
  */
 
-#include <ndis.h>
-#include <netiodef.h>
-#include <intsafe.h>
-#include <ntintsafe.h>
-#include <ntstrsafe.h>
-#include <Strsafe.h>
+#ifndef __ATOMIC_H_
+#define __ATOMIC_H_ 1
 
-#include "Types.h"
-#include "..\include\OvsPub.h"
-#include "Util.h"
-#include "Netlink.h"
-#include "NetlinkProto.h"
-/*
- * Include openvswitch.h from userspace. Changing the location the file from
- * include/linux is pending discussion.
- */
-#include "..\include\OvsDpInterface.h"
-#if defined OVS_USE_NL_INTERFACE && OVS_USE_NL_INTERFACE == 1
-#include "..\include\OvsDpInterfaceExt.h"
-#endif
+static __inline UINT64
+atomic_add64(UINT64 *ptr, UINT32 val)
+{
+    return InterlockedAdd64((LONGLONG volatile *) ptr, (LONGLONG) val);
+}
+
+static __inline UINT64
+atomic_inc64(UINT64 *ptr)
+{
+    return InterlockedIncrement64((LONGLONG volatile *) ptr);
+}
+
+#endif /* __ATOMIC_H_ */

@@ -27,7 +27,7 @@
  * This header provides access to the Netlink message framing definitions
  * regardless of platform.
  */
-#include "OvsTypes.h"
+#include "Types.h"
 
 #define BUILD_ASSERT(EXPR) \
         typedef char AssertOnCompileFailed[(EXPR) ? 1: -1]
@@ -113,4 +113,4 @@ BUILD_ASSERT_DECL(sizeof(NL_ATTR) == 4);
 #define OVS_HDRLEN NLMSG_ALIGN(sizeof(OVS_HDR))
 #define NLA_HDRLEN ((INT) NLA_ALIGN(sizeof(NL_ATTR)))
 
-#endif /* NetlinProto.h */
+#endif /* __NETLINK_PROTO_H_ */

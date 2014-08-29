@@ -24,21 +24,21 @@
 
 #include "precomp.h"
 #include "Datapath.h"
-#include "OvsJhash.h"
-#include "OvsSwitch.h"
-#include "OvsVport.h"
-#include "OvsEvent.h"
-#include "OvsUser.h"
-#include "OvsPacketIO.h"
-#include "OvsNetProto.h"
-#include "OvsFlow.h"
-#include "OvsUser.h"
+#include "Jhash.h"
+#include "Switch.h"
+#include "Vport.h"
+#include "Event.h"
+#include "User.h"
+#include "PacketIO.h"
+#include "NetProto.h"
+#include "Flow.h"
+#include "User.h"
 
 #ifdef OVS_DBG_MOD
 #undef OVS_DBG_MOD
 #endif
 #define OVS_DBG_MOD OVS_DBG_DATAPATH
-#include "OvsDebug.h"
+#include "Debug.h"
 
 #define NETLINK_FAMILY_NAME_LEN 48
 

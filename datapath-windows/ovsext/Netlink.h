@@ -17,7 +17,7 @@
 #ifndef __NETLINK_H_
 #define __NETLINK_H_ 1
 
-#include "OvsTypes.h"
+#include "Types.h"
 #include "NetlinkProto.h"
 
 /* Netlink attribute types. */

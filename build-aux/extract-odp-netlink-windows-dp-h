@@ -14,7 +14,7 @@
 s/_LINUX_OPENVSWITCH_H/__OVS_DP_INTERFACE_H_/
 
 # and use the appropriate userspace header.
-s,<linux/types\.h>,"OvsTypes.h",
+s,<linux/types\.h>,"Types.h",
 
 # Add ETH_ADDR_LEN macro to avoid including userspace packet.h
 s,#include <linux/if_ether\.h>,\n#ifndef ETH_ADDR_LEN \

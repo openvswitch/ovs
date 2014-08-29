@@ -22,7 +22,7 @@
 #undef OVS_DBG_MOD
 #endif
 #define OVS_DBG_MOD OVS_DBG_NETLINK
-#include "OvsDebug.h"
+#include "Debug.h"
 
 /*
  * ---------------------------------------------------------------------------

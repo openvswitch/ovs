@@ -14,23 +14,13 @@
  * limitations under the License.
  */
 
-#include <ndis.h>
-#include <netiodef.h>
-#include <intsafe.h>
-#include <ntintsafe.h>
-#include <ntstrsafe.h>
-#include <Strsafe.h>
+#ifndef __OID_H_
+#define __OID_H_ 1
 
-#include "Types.h"
-#include "..\include\OvsPub.h"
-#include "Util.h"
-#include "Netlink.h"
-#include "NetlinkProto.h"
-/*
- * Include openvswitch.h from userspace. Changing the location the file from
- * include/linux is pending discussion.
- */
-#include "..\include\OvsDpInterface.h"
-#if defined OVS_USE_NL_INTERFACE && OVS_USE_NL_INTERFACE == 1
-#include "..\include\OvsDpInterfaceExt.h"
-#endif
+NDIS_STATUS OvsQuerySwitchActivationComplete(POVS_SWITCH_CONTEXT switchContext,
+                                             BOOLEAN *switchActive);
+NDIS_STATUS OvsGetPortsOnSwitch(POVS_SWITCH_CONTEXT switchContext,
+                                PNDIS_SWITCH_PORT_ARRAY *portArrayOut);
+NDIS_STATUS OvsGetNicsOnSwitch(POVS_SWITCH_CONTEXT switchContext,
+                               PNDIS_SWITCH_NIC_ARRAY *nicArrayOut);
+#endif /* __OID_H_ */

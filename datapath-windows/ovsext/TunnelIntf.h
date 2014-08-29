@@ -14,23 +14,12 @@
  * limitations under the License.
  */
 
-#include <ndis.h>
-#include <netiodef.h>
-#include <intsafe.h>
-#include <ntintsafe.h>
-#include <ntstrsafe.h>
-#include <Strsafe.h>
+#ifndef __TUNNEL_INTF_H_
+#define __TUNNEL_INTF_H_ 1
 
-#include "Types.h"
-#include "..\include\OvsPub.h"
-#include "Util.h"
-#include "Netlink.h"
-#include "NetlinkProto.h"
-/*
- * Include openvswitch.h from userspace. Changing the location the file from
- * include/linux is pending discussion.
- */
-#include "..\include\OvsDpInterface.h"
-#if defined OVS_USE_NL_INTERFACE && OVS_USE_NL_INTERFACE == 1
-#include "..\include\OvsDpInterfaceExt.h"
-#endif
+/* Tunnel callout driver load/unload functions */
+NTSTATUS OvsTunnelFilterInitialize(PDRIVER_OBJECT driverObject);
+
+VOID OvsTunnelFilterUninitialize(PDRIVER_OBJECT driverObject);
+
+#endif /* __TUNNEL_INTF_H_ */

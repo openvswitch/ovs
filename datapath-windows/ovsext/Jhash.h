@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 VMware, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2012, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,23 +14,17 @@
  * limitations under the License.
  */
 
-#include <ndis.h>
-#include <netiodef.h>
-#include <intsafe.h>
-#include <ntintsafe.h>
-#include <ntstrsafe.h>
-#include <Strsafe.h>
+#ifndef __JHASH_H_
+#define __JHASH_H_ 1
 
-#include "Types.h"
-#include "..\include\OvsPub.h"
-#include "Util.h"
-#include "Netlink.h"
-#include "NetlinkProto.h"
-/*
- * Include openvswitch.h from userspace. Changing the location the file from
- * include/linux is pending discussion.
- */
-#include "..\include\OvsDpInterface.h"
-#if defined OVS_USE_NL_INTERFACE && OVS_USE_NL_INTERFACE == 1
-#include "..\include\OvsDpInterfaceExt.h"
-#endif
+/* This is the public domain lookup3 hash by Bob Jenkins from
+ * http://burtleburtle.net/bob/c/lookup3.c, modified for style.
+ *
+ * Use the functions in hash.h instead if you can.  These are here just for
+ * places where we've exposed a hash function "on the wire" and don't want it
+ * to change. */
+
+uint32_t OvsJhashWords(const uint32_t *, size_t n_word, uint32_t basis);
+uint32_t OvsJhashBytes(const void *, size_t n_bytes, uint32_t basis);
+
+#endif /* __JHASH_H_ */

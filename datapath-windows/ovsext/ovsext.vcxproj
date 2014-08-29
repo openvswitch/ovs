@@ -71,31 +71,32 @@
   </ImportGroup>
   <ItemGroup Label="WrappedTaskItems">
     <ClInclude Include="..\include\OvsDpInterfaceExt.h" />
-    <ClInclude Include="OvsAtomic.h" />
-    <ClInclude Include="OvsBufferMgmt.h" />
-    <ClInclude Include="OvsChecksum.h" />
+    <ClInclude Include="Atomic.h" />
+    <ClInclude Include="BufferMgmt.h" />
+    <ClInclude Include="Checksum.h" />
     <ClInclude Include="Datapath.h" />
+    <ClInclude Include="Debug.h" />
+    <ClInclude Include="Ethernet.h" />
+    <ClInclude Include="Event.h" />
+    <ClInclude Include="Flow.h" />
+    <ClInclude Include="Ioctl.h" />
+    <ClInclude Include="IpHelper.h" />
+    <ClInclude Include="Jhash.h" />
     <ClInclude Include="Netlink.h" />
     <ClInclude Include="NetlinkProto.h" />
-    <ClInclude Include="OvsDebug.h" />
-    <ClInclude Include="OvsEth.h" />
-    <ClInclude Include="OvsEvent.h" />
-    <ClInclude Include="OvsFlow.h" />
-    <ClInclude Include="OvsIoctl.h" />
-    <ClInclude Include="OvsIpHelper.h" />
-    <ClInclude Include="OvsJhash.h" />
-    <ClInclude Include="OvsNetProto.h" />
-    <ClInclude Include="OvsOid.h" />
-    <ClInclude Include="OvsPacketParser.h" />
-    <ClInclude Include="OvsSwitch.h" />
-    <ClInclude Include="OvsTunnel.h" />
-    <ClInclude Include="OvsTunnelIntf.h" />
-    <ClInclude Include="OvsTypes.h" />
-    <ClInclude Include="OvsUser.h" />
-    <ClInclude Include="OvsUtil.h" />
-    <ClInclude Include="OvsVport.h" />
-    <ClInclude Include="OvsVxlan.h" />
+    <ClInclude Include="NetProto.h" />
+    <ClInclude Include="Oid.h" />
+    <ClInclude Include="PacketIO.h" />
+    <ClInclude Include="PacketParser.h" />
     <ClInclude Include="precomp.h" />
+    <ClInclude Include="Switch.h" />
+    <ClInclude Include="Tunnel.h" />
+    <ClInclude Include="TunnelIntf.h" />
+    <ClInclude Include="Types.h" />
+    <ClInclude Include="User.h" />
+    <ClInclude Include="Util.h" />
+    <ClInclude Include="Vport.h" />
+    <ClInclude Include="Vxlan.h" />
   </ItemGroup>
   <PropertyGroup>
     <TargetName>OVSExt</TargetName>
@@ -127,34 +128,34 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Actions.c" />
+    <ClCompile Include="BufferMgmt.c" />
+    <ClCompile Include="Checksum.c" />
+    <ClCompile Include="Debug.c" />
+    <ClCompile Include="Driver.c" />
+    <ClCompile Include="Event.c" />
+    <ClCompile Include="Flow.c" />
+    <ClCompile Include="Ioctl.c" />
+    <ClCompile Include="IpHelper.c" />
+    <ClCompile Include="Jhash.c" />
     <ClCompile Include="Netlink.c" />
     <ClCompile Include="Datapath.c" />
-    <ClCompile Include="OvsDriver.c" />
-    <ClCompile Include="OvsJhash.c" />
-    <ClCompile Include="OvsOid.c" />
-    <ClCompile Include="OvsPacketIO.c" />
-    <ClCompile Include="OvsPacketParser.c" />
-    <ClCompile Include="OvsBufferMgmt.c" />
-    <ClCompile Include="OvsChecksum.c" />
-    <ClCompile Include="OvsIpHelper.c" />
-    <ClCompile Include="OvsTunnel.c" />
-    <ClCompile Include="OvsTunnelFilter.c" />
-    <ClCompile Include="OvsVxlan.c" />
-    <ClCompile Include="OvsActions.c" />
-    <ClCompile Include="OvsDebug.c" />
-    <ClCompile Include="OvsEvent.c" />
-    <ClCompile Include="OvsFlow.c" />
-    <ClCompile Include="OvsUser.c" />
-    <ClCompile Include="OvsIoctl.c" />
-    <ClCompile Include="OvsSwitch.c" />
-    <ClCompile Include="OvsUtil.c" />
-    <ClCompile Include="OvsVport.c" />
+    <ClCompile Include="Oid.c" />
+    <ClCompile Include="PacketIO.c" />
+    <ClCompile Include="PacketParser.c" />
     <ClCompile Include="precompsrc.c">
       <AdditionalIncludeDirectories>;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreCompiledHeaderFile>precomp.h</PreCompiledHeaderFile>
       <PreCompiledHeader>Create</PreCompiledHeader>
       <PreCompiledHeaderOutputFile>$(IntDir)\precomp.h.pch</PreCompiledHeaderOutputFile>
     </ClCompile>
+    <ClCompile Include="Switch.c" />
+    <ClCompile Include="Tunnel.c" />
+    <ClCompile Include="TunnelFilter.c" />
+    <ClCompile Include="User.c" />
+    <ClCompile Include="Util.c" />
+    <ClCompile Include="Vport.c" />
+    <ClCompile Include="Vxlan.c" />
     <ResourceCompile Include="ovsext.rc" />
   </ItemGroup>
   <ItemGroup>
