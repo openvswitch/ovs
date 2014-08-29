@@ -435,8 +435,11 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
 /* Polling miimon status for all ports causes performance degradation when
  * handling a large number of ports. If there are no devices using miimon, then
- * we skip netdev_linux_miimon_run() and netdev_linux_miimon_wait(). */
-static atomic_int miimon_cnt = ATOMIC_VAR_INIT(0);
+ * we skip netdev_linux_miimon_run() and netdev_linux_miimon_wait().
+ *
+ * Readers do not depend on this variable synchronizing with the related
+ * changes in the device miimon status, so we can use atomic_count. */
+static atomic_count miimon_cnt = ATOMIC_COUNT_INIT(0);
 
 static void netdev_linux_run(void);
 
@@ -525,10 +528,7 @@ netdev_linux_notify_sock(void)
 static bool
 netdev_linux_miimon_enabled(void)
 {
-    int miimon;
-
-    atomic_read(&miimon_cnt, &miimon);
-    return miimon > 0;
+    return atomic_count_get(&miimon_cnt) > 0;
 }
 
 static void
@@ -758,8 +758,7 @@ netdev_linux_destruct(struct netdev *netdev_)
     }
 
     if (netdev->miimon_interval > 0) {
-        int junk;
-        atomic_sub(&miimon_cnt, 1, &junk);
+        atomic_count_dec(&miimon_cnt);
     }
 
     ovs_mutex_destroy(&netdev->mutex);
@@ -1416,12 +1415,10 @@ netdev_linux_set_miimon_interval(struct netdev *netdev_,
     ovs_mutex_lock(&netdev->mutex);
     interval = interval > 0 ? MAX(interval, 100) : 0;
     if (netdev->miimon_interval != interval) {
-        int junk;
-
         if (interval && !netdev->miimon_interval) {
-            atomic_add(&miimon_cnt, 1, &junk);
+            atomic_count_inc(&miimon_cnt);
         } else if (!interval && netdev->miimon_interval) {
-            atomic_sub(&miimon_cnt, 1, &junk);
+            atomic_count_dec(&miimon_cnt);
         }
 
         netdev->miimon_interval = interval;
