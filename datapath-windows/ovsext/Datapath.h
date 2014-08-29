@@ -85,6 +85,44 @@ POVS_OPEN_INSTANCE OvsGetOpenInstance(PFILE_OBJECT fileObject,
 
 NTSTATUS OvsCompleteIrpRequest(PIRP irp, ULONG_PTR infoPtr, NTSTATUS status);
 
+
+/*
+ * Utility structure and functions to collect in one place all the parameters
+ * passed during a call from userspace.
+ */
+typedef struct _OVS_USER_PARAMS_CONTEXT {
+    PIRP irp;            /* The IRP used for the userspace call. */
+    POVS_OPEN_INSTANCE ovsInstance; /* Private data of the device handle. */
+    UINT32 devOp;        /* Device operation of the userspace call. */
+    POVS_MESSAGE ovsMsg; /* OVS message that userspace passed down. */
+    PVOID inputBuffer;   /* Input data specified by userspace. Maybe NULL. */
+    UINT32 inputLength;  /* Length of input buffer. */
+    PVOID outputBuffer;  /* Output buffer specified by userspace for reading
+                          * data. Maybe NULL. */
+    UINT32 outputLength; /* Length of output buffer. */
+} OVS_USER_PARAMS_CONTEXT, *POVS_USER_PARAMS_CONTEXT;
+
+static __inline VOID
+InitUserParamsCtx(PIRP irp,
+                  POVS_OPEN_INSTANCE ovsInstance,
+                  UINT32 devOp,
+                  POVS_MESSAGE ovsMsg,
+                  PVOID inputBuffer,
+                  UINT32 inputLength,
+                  PVOID outputBuffer,
+                  UINT32 outputLength,
+                  POVS_USER_PARAMS_CONTEXT usrParamsCtx)
+{
+    usrParamsCtx->irp = irp;
+    usrParamsCtx->ovsInstance = ovsInstance;
+    usrParamsCtx->devOp = devOp;
+    usrParamsCtx->ovsMsg = ovsMsg;
+    usrParamsCtx->inputBuffer = inputBuffer;
+    usrParamsCtx->inputLength = inputLength;
+    usrParamsCtx->outputBuffer = outputBuffer;
+    usrParamsCtx->outputLength = outputLength;
+}
+
 static __inline NTSTATUS
 InitUserDumpState(POVS_OPEN_INSTANCE instance,
                   POVS_MESSAGE ovsMsg)

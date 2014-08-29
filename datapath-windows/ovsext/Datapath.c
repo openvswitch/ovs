@@ -64,9 +64,7 @@
  * Handler for a given netlink command. Not all the parameters are used by all
  * the handlers.
  */
-typedef NTSTATUS (*NetlinkCmdHandler)(PIRP irp, PFILE_OBJECT fileObject,
-                                      PVOID inputBuffer, UINT32 inputLength,
-                                      PVOID outputBuffer, UINT32 outputLength,
+typedef NTSTATUS (*NetlinkCmdHandler)(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                       UINT32 *replyLen);
 
 typedef struct _NETLINK_CMD {
@@ -97,9 +95,7 @@ typedef struct _NETLINK_FAMILY {
 #define OVS_TRANSACTION_DEV_OP   (1 << 2)
 
 /* Handlers for the various netlink commands. */
-static NTSTATUS OvsGetPidCmdHandler(PIRP irp, PFILE_OBJECT fileObject,
-                                    PVOID inputBuffer, UINT32 inputLength,
-                                    PVOID outputBuffer, UINT32 outputLength,
+static NTSTATUS OvsGetPidCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                     UINT32 *replyLen);
 
 /*
@@ -180,15 +176,8 @@ ValidateNetlinkCmd(UINT32 devOp,
                    POVS_MESSAGE ovsMsg,
                    NETLINK_FAMILY *nlFamilyOps);
 static NTSTATUS
-InvokeNetlinkCmdHandler(PIRP irp,
-                        PFILE_OBJECT fileObject,
-                        UINT32 devOp,
-                        POVS_MESSAGE ovsMsg,
-                        NETLINK_FAMILY *nlFamily,
-                        PVOID inputBuffer,
-                        UINT32 inputLength,
-                        PVOID outputBuffer,
-                        UINT32 outputLength,
+InvokeNetlinkCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                        NETLINK_FAMILY *nlFamilyOps,
                         UINT32 *replyLen);
 
 
@@ -541,6 +530,7 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
     OVS_MESSAGE ovsMsgReadOp;
     POVS_MESSAGE ovsMsg;
     NETLINK_FAMILY *nlFamilyOps;
+    OVS_USER_PARAMS_CONTEXT usrParamsCtx;
 
 #ifdef DBG
     POVS_DEVICE_EXTENSION ovsExt =
@@ -675,11 +665,12 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
         }
     }
 
-    status = InvokeNetlinkCmdHandler(irp, fileObject, devOp,
-                                     ovsMsg, nlFamilyOps,
-                                     inputBuffer, inputBufferLen,
-                                     outputBuffer, outputBufferLen,
-                                     &replyLen);
+    InitUserParamsCtx(irp, instance, devOp, ovsMsg,
+                      inputBuffer, inputBufferLen,
+                      outputBuffer, outputBufferLen,
+                      &usrParamsCtx);
+
+    status = InvokeNetlinkCmdHandler(&usrParamsCtx, nlFamilyOps, &replyLen);
 
 done:
     KeMemoryBarrier();
@@ -743,28 +734,16 @@ done:
  * --------------------------------------------------------------------------
  */
 static NTSTATUS
-InvokeNetlinkCmdHandler(PIRP irp,
-                        PFILE_OBJECT fileObject,
-                        UINT32 devOp,
-                        OVS_MESSAGE *ovsMsg,
+InvokeNetlinkCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                         NETLINK_FAMILY *nlFamilyOps,
-                        PVOID inputBuffer,
-                        UINT32 inputLength,
-                        PVOID outputBuffer,
-                        UINT32 outputLength,
                         UINT32 *replyLen)
 {
     NTSTATUS status = STATUS_INVALID_PARAMETER;
     UINT16 i;
 
-    UNREFERENCED_PARAMETER(devOp);
-
     for (i = 0; i < nlFamilyOps->opsCount; i++) {
-        if (nlFamilyOps->cmds[i].cmd == ovsMsg->genlMsg.cmd) {
-            status = nlFamilyOps->cmds[i].handler(irp, fileObject,
-                                                inputBuffer, inputLength,
-                                                outputBuffer, outputLength,
-                                                replyLen);
+        if (nlFamilyOps->cmds[i].cmd == usrParamsCtx->ovsMsg->genlMsg.cmd) {
+            status = nlFamilyOps->cmds[i].handler(usrParamsCtx, replyLen);
             break;
         }
     }
@@ -785,24 +764,15 @@ InvokeNetlinkCmdHandler(PIRP irp,
  * --------------------------------------------------------------------------
  */
 static NTSTATUS
-OvsGetPidCmdHandler(PIRP irp,
-                    PFILE_OBJECT fileObject,
-                    PVOID inputBuffer,
-                    UINT32 inputLength,
-                    PVOID outputBuffer,
-                    UINT32 outputLength,
+OvsGetPidCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                     UINT32 *replyLen)
 {
-    UNREFERENCED_PARAMETER(irp);
-    UNREFERENCED_PARAMETER(fileObject);
-    UNREFERENCED_PARAMETER(inputBuffer);
-    UNREFERENCED_PARAMETER(inputLength);
+    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
+    POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
 
-    POVS_MESSAGE msgIn = (POVS_MESSAGE)inputBuffer;
-    POVS_MESSAGE msgOut = (POVS_MESSAGE)outputBuffer;
-
-    if (outputLength >= sizeof *msgOut) {
-        POVS_OPEN_INSTANCE instance = (POVS_OPEN_INSTANCE)fileObject->FsContext;
+    if (usrParamsCtx->outputLength >= sizeof *msgOut) {
+        POVS_OPEN_INSTANCE instance =
+            (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
 
         RtlZeroMemory(msgOut, sizeof *msgOut);
         msgOut->nlMsg.nlmsgSeq = msgIn->nlMsg.nlmsgSeq;
@@ -813,7 +783,7 @@ OvsGetPidCmdHandler(PIRP irp,
         return STATUS_NDIS_INVALID_LENGTH;
     }
 
-    return NDIS_STATUS_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
 
