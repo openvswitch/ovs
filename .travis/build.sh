@@ -46,7 +46,7 @@ if [ $CC = "clang" ]; then
     make CFLAGS="-Werror -Wno-error=unused-command-line-argument"
 else
     make CFLAGS="-Werror" C=1
-    [ "$TESTSUITE" ] && make check
+    [ "$TESTSUITE" ] && make distcheck
 fi
 
 exit 0
