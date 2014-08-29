@@ -338,7 +338,7 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
               struct netdev *netdev) OVS_EXCLUDED(mutex)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
-    static atomic_uint16_t udp_src = ATOMIC_VAR_INIT(0);
+    static atomic_count udp_src = ATOMIC_COUNT_INIT(0);
 
     int decay_min_rx;
     long long int min_tx, min_rx;
@@ -385,16 +385,15 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
          * UDP source port number MUST be used for all BFD Control packets
          * associated with a particular session.  The source port number SHOULD
          * be unique among all BFD sessions on the system. */
-        atomic_add(&udp_src, 1, &bfd->udp_src);
-        bfd->udp_src = (bfd->udp_src % 16384) + 49152;
+        bfd->udp_src = (atomic_count_inc(&udp_src) % 16384) + 49152;
 
         bfd_set_state(bfd, STATE_DOWN, DIAG_NONE);
 
         bfd_status_changed(bfd);
     }
 
-    atomic_store(&bfd->check_tnl_key,
-                 smap_get_bool(cfg, "check_tnl_key", false));
+    atomic_store_relaxed(&bfd->check_tnl_key,
+                         smap_get_bool(cfg, "check_tnl_key", false));
     min_tx = smap_get_int(cfg, "min_tx", 100);
     min_tx = MAX(min_tx, 100);
     if (bfd->cfg_min_tx != min_tx) {
@@ -672,25 +671,33 @@ bfd_should_process_flow(const struct bfd *bfd_, const struct flow *flow,
                         struct flow_wildcards *wc)
 {
     struct bfd *bfd = CONST_CAST(struct bfd *, bfd_);
-    bool check_tnl_key;
 
-    memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
-    if (!eth_addr_is_zero(bfd->rmt_eth_dst)
-        && memcmp(bfd->rmt_eth_dst, flow->dl_dst, ETH_ADDR_LEN)) {
-        return false;
+    if (!eth_addr_is_zero(bfd->rmt_eth_dst)) {
+        memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
+
+        if (memcmp(bfd->rmt_eth_dst, flow->dl_dst, ETH_ADDR_LEN)) {
+            return false;
+        }
     }
 
-    memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
-    memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
+    if (flow->dl_type == htons(ETH_TYPE_IP)) {
+        memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
+        if (flow->nw_proto == IPPROTO_UDP) {
+            memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
+            if (flow->tp_dst == htons(BFD_DEST_PORT)) {
+                bool check_tnl_key;
 
-    atomic_read(&bfd->check_tnl_key, &check_tnl_key);
-    if (check_tnl_key) {
-        memset(&wc->masks.tunnel.tun_id, 0xff, sizeof wc->masks.tunnel.tun_id);
+                atomic_read_relaxed(&bfd->check_tnl_key, &check_tnl_key);
+                if (check_tnl_key) {
+                    memset(&wc->masks.tunnel.tun_id, 0xff,
+                           sizeof wc->masks.tunnel.tun_id);
+                    return flow->tunnel.tun_id == htonll(0);
+                }
+                return true;
+            }
+        }
     }
-    return (flow->dl_type == htons(ETH_TYPE_IP)
-            && flow->nw_proto == IPPROTO_UDP
-            && flow->tp_dst == htons(BFD_DEST_PORT)
-            && (!check_tnl_key || flow->tunnel.tun_id == htonll(0)));
+    return false;
 }
 
 void
