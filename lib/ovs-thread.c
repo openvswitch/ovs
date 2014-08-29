@@ -510,11 +510,11 @@ parse_cpuinfo(long int *n_cores)
                 break;
             }
 
-            if (cpu & (1 << id)) {
+            if (cpu & (1ULL << id)) {
                 /* We've already counted this package's cores. */
                 continue;
             }
-            cpu |= 1 << id;
+            cpu |= 1ULL << id;
 
             /* Find the number of cores for this package. */
             while (fgets(line, sizeof line, stream)) {
