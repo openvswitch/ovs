@@ -28,6 +28,16 @@
 #ifndef __DATAPATH_H_
 #define __DATAPATH_H_ 1
 
+/*
+ * Structure of any message passed between userspace and kernel.
+ */
+typedef struct _OVS_MESSAGE {
+    NL_MSG_HDR nlMsg;
+    GENL_MSG_HDR genlMsg;
+    OVS_HDR ovsHdr;
+    /* Variable length nl_attrs follow. */
+} OVS_MESSAGE, *POVS_MESSAGE;
+
 typedef struct _OVS_DEVICE_EXTENSION {
     INT numberOpenInstance;
     INT pidCount;
@@ -56,7 +66,15 @@ typedef struct _OVS_OPEN_INSTANCE {
      * the state in "state-aware" read calls which rely on previous state. This
      * restriction might go away as the userspace code gets implemented.
      */
-    INT inUse;
+     INT inUse;
+
+    struct {
+        POVS_MESSAGE ovsMsg;    /* OVS message passed during dump start. */
+        UINT32 index[2];        /* markers to continue dump from. One or more
+                                 * of them may be used. Eg. in flow dump, the
+                                 * markers can store the row and the column
+                                 * indices. */
+    } dumpState;                /* data to support dump commands. */
 } OVS_OPEN_INSTANCE, *POVS_OPEN_INSTANCE;
 
 NDIS_STATUS OvsCreateDeviceObject(NDIS_HANDLE ovsExtDriverHandle);
@@ -67,15 +85,35 @@ POVS_OPEN_INSTANCE OvsGetOpenInstance(PFILE_OBJECT fileObject,
 
 NTSTATUS OvsCompleteIrpRequest(PIRP irp, ULONG_PTR infoPtr, NTSTATUS status);
 
-/*
- * Structure of any message passed between userspace and kernel.
- */
-typedef struct _OVS_MESSAGE {
-    NL_MSG_HDR nlMsg;
-    GENL_MSG_HDR genlMsg;
-    struct ovs_header ovsHdr;
-    /* Variable length nl_attrs follow. */
-} OVS_MESSAGE, *POVS_MESSAGE;
+static __inline NTSTATUS
+InitUserDumpState(POVS_OPEN_INSTANCE instance,
+                  POVS_MESSAGE ovsMsg)
+{
+    /* Clear the dumpState from a previous dump sequence. */
+    ASSERT(instance->dumpState.ovsMsg == NULL);
+    ASSERT(ovsMsg);
+
+    instance->dumpState.ovsMsg =
+        (POVS_MESSAGE) OvsAllocateMemory(sizeof (OVS_MESSAGE));
+    if (instance->dumpState.ovsMsg == NULL) {
+        return STATUS_NO_MEMORY;
+    }
+    RtlCopyMemory(instance->dumpState.ovsMsg, ovsMsg,
+                  sizeof *instance->dumpState.ovsMsg);
+    RtlZeroMemory(instance->dumpState.index,
+                  sizeof instance->dumpState.index);
+
+    return STATUS_SUCCESS;
+}
+
+static __inline VOID
+FreeUserDumpState(POVS_OPEN_INSTANCE instance)
+{
+    if (instance->dumpState.ovsMsg != NULL) {
+        OvsFreeMemory(instance->dumpState.ovsMsg);
+        RtlZeroMemory(&instance->dumpState, sizeof instance->dumpState);
+    }
+}
 
 #endif /* __DATAPATH_H_ */
 
