@@ -1511,9 +1511,10 @@ query_tables(struct ofproto *ofproto,
         for (i = 0; i < ofproto->n_tables; i++) {
             unsigned long missed, matched;
 
-            atomic_read(&ofproto->tables[i].n_matched, &matched);
+            atomic_read_relaxed(&ofproto->tables[i].n_matched, &matched);
+            atomic_read_relaxed(&ofproto->tables[i].n_missed, &missed);
+
             stats[i].matched_count = matched;
-            atomic_read(&ofproto->tables[i].n_missed, &missed);
             stats[i].lookup_count = matched + missed;
         }
     }
@@ -3445,9 +3446,10 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
                                           take_ref);
         if (stats) {
             struct oftable *tbl = &ofproto->up.tables[next_id];
-            atomic_ulong *stat = *rule ? &tbl->n_matched : &tbl->n_missed;
             unsigned long orig;
-            atomic_add(stat, stats->n_packets, &orig);
+
+            atomic_add_relaxed(*rule ? &tbl->n_matched : &tbl->n_missed,
+                               stats->n_packets, &orig);
         }
         if (*rule) {
             return RULE_DPIF_LOOKUP_VERDICT_MATCH;

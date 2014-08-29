@@ -2812,7 +2812,7 @@ query_tables(struct ofproto *ofproto,
         sprintf(f->name, "table%d", i);
         f->metadata_match = OVS_BE64_MAX;
         f->metadata_write = OVS_BE64_MAX;
-        atomic_read(&ofproto->tables[i].miss_config, &f->miss_config);
+        atomic_read_relaxed(&ofproto->tables[i].miss_config, &f->miss_config);
         f->max_entries = 1000000;
 
         bitmap_set_multiple(f->nonmiss.next, i + 1,
@@ -5817,7 +5817,8 @@ enum ofputil_table_miss
 ofproto_table_get_miss_config(const struct ofproto *ofproto, uint8_t table_id)
 {
     enum ofputil_table_miss value;
-    atomic_read(&ofproto->tables[table_id].miss_config, &value);
+
+    atomic_read_relaxed(&ofproto->tables[table_id].miss_config, &value);
     return value;
 }
 
@@ -5830,11 +5831,12 @@ table_mod(struct ofproto *ofproto, const struct ofputil_table_mod *tm)
         if (tm->table_id == OFPTT_ALL) {
             int i;
             for (i = 0; i < ofproto->n_tables; i++) {
-                atomic_store(&ofproto->tables[i].miss_config, tm->miss_config);
+                atomic_store_relaxed(&ofproto->tables[i].miss_config,
+                                     tm->miss_config);
             }
         } else {
-            atomic_store(&ofproto->tables[tm->table_id].miss_config,
-                         tm->miss_config);
+            atomic_store_relaxed(&ofproto->tables[tm->table_id].miss_config,
+                                 tm->miss_config);
         }
     }
     return 0;
