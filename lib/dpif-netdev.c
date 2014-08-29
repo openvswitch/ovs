@@ -2221,7 +2221,7 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
                 recirc_md.recirc_id = nl_attr_get_u32(a);
 
                 /* Hash is private to each packet */
-                recirc_md.dp_hash = packets[i]->dp_hash;
+                recirc_md.dp_hash = dpif_packet_get_dp_hash(packets[i]);
 
                 dp_netdev_input(dp, &recirc_pkt, 1, &recirc_md);
             }

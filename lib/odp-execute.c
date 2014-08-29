@@ -136,7 +136,8 @@ odp_execute_set_action(struct dpif_packet *packet, const struct nlattr *a,
         break;
 
     case OVS_KEY_ATTR_DP_HASH:
-        packet->dp_hash = md->dp_hash = nl_attr_get_u32(a);
+        md->dp_hash = nl_attr_get_u32(a);
+        dpif_packet_set_dp_hash(packet, md->dp_hash);
         break;
 
     case OVS_KEY_ATTR_RECIRC_ID:
@@ -251,7 +252,7 @@ odp_execute_actions__(void *dp, struct dpif_packet **packets, int cnt,
                     }
 
                     /* We also store the hash value with each packet */
-                    packets[i]->dp_hash = hash ? hash : 1;
+                    dpif_packet_set_dp_hash(packets[i], hash ? hash : 1);
                 }
             } else {
                 /* Assert on unknown hash algorithm.  */

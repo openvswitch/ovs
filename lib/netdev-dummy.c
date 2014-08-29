@@ -808,6 +808,7 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dpif_packet **arr,
 
     /* This performs a (sometimes unnecessary) copy */
     arr[0] = dpif_packet_clone_from_ofpbuf(packet);
+    dpif_packet_set_dp_hash(arr[0], 0);
     ofpbuf_delete(packet);
     *c = 1;
     return 0;

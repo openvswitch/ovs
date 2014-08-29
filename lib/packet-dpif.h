@@ -27,7 +27,9 @@ extern "C" {
 
 struct dpif_packet {
     struct ofpbuf ofpbuf;       /* Packet data. */
+#ifndef DPDK_NETDEV
     uint32_t dp_hash;           /* Packet hash. */
+#endif
 };
 
 struct dpif_packet *dpif_packet_new_with_headroom(size_t size,
@@ -42,6 +44,25 @@ static inline void dpif_packet_delete(struct dpif_packet *p)
     struct ofpbuf *buf = &p->ofpbuf;
 
     ofpbuf_delete(buf);
+}
+
+static inline uint32_t dpif_packet_get_dp_hash(struct dpif_packet *p)
+{
+#ifdef DPDK_NETDEV
+    return p->ofpbuf.mbuf.pkt.hash.rss;
+#else
+    return p->dp_hash;
+#endif
+}
+
+static inline void dpif_packet_set_dp_hash(struct dpif_packet *p,
+                                           uint32_t hash)
+{
+#ifdef DPDK_NETDEV
+    p->ofpbuf.mbuf.pkt.hash.rss = hash;
+#else
+    p->dp_hash = hash;
+#endif
 }
 
 #ifdef  __cplusplus
