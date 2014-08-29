@@ -79,7 +79,7 @@ struct netflow_flow {
 };
 
 static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
-static atomic_uint netflow_count = ATOMIC_VAR_INIT(0);
+static atomic_count netflow_count = ATOMIC_COUNT_INIT(0);
 
 static struct netflow_flow *netflow_flow_lookup(const struct netflow *,
                                                 const struct flow *)
@@ -381,7 +381,6 @@ struct netflow *
 netflow_create(void)
 {
     struct netflow *nf = xzalloc(sizeof *nf);
-    int junk;
 
     nf->engine_type = 0;
     nf->engine_id = 0;
@@ -392,7 +391,7 @@ netflow_create(void)
     hmap_init(&nf->flows);
     ovs_refcount_init(&nf->ref_cnt);
     ofpbuf_init(&nf->packet, 1500);
-    atomic_add(&netflow_count, 1, &junk);
+    atomic_count_inc(&netflow_count);
     return nf;
 }
 
@@ -410,23 +409,21 @@ void
 netflow_unref(struct netflow *nf)
 {
     if (nf && ovs_refcount_unref_relaxed(&nf->ref_cnt) == 1) {
-        int orig;
-
-        atomic_sub(&netflow_count, 1, &orig);
+        atomic_count_dec(&netflow_count);
         collectors_destroy(nf->collectors);
         ofpbuf_uninit(&nf->packet);
         free(nf);
     }
 }
 
-/* Returns true if there exist any netflow objects, false otherwise. */
+/* Returns true if there exist any netflow objects, false otherwise.
+ * Callers must cope with transient false positives, i.e., there is no tight
+ * synchronization with the count and the actual existence of netflow objects.
+ */
 bool
 netflow_exists(void)
 {
-    int n;
-
-    atomic_read(&netflow_count, &n);
-    return n > 0;
+    return atomic_count_get(&netflow_count) > 0;
 }
 
 /* Helpers. */
