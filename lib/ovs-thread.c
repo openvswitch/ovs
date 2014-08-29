@@ -278,7 +278,11 @@ ovs_barrier_destroy(struct ovs_barrier *barrier)
 }
 
 /* Makes the calling thread block on the 'barrier' until all
- * 'barrier->size' threads hit the barrier. */
+ * 'barrier->size' threads hit the barrier.
+ * ovs_barrier provides the necessary acquire-release semantics to make
+ * the effects of prior memory accesses of all the participating threads
+ * visible on return and to prevent the following memory accesses to be
+ * reordered before the ovs_barrier_block(). */
 void
 ovs_barrier_block(struct ovs_barrier *barrier)
 {
@@ -288,6 +292,8 @@ ovs_barrier_block(struct ovs_barrier *barrier)
     atomic_add(&barrier->count, 1, &orig);
     if (orig + 1 == barrier->size) {
         atomic_store(&barrier->count, 0);
+        /* seq_change() serves as a release barrier against the other threads,
+         * so the zeroed count is visible to them as they continue. */
         seq_change(barrier->seq);
     }
 

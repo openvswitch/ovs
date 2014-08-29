@@ -107,7 +107,11 @@
  * Thread-safety
  * =============
  *
- * Fully thread safe.
+ * Fully thread safe.  seq_change() synchronizes with seq_read() and
+ * seq_wait() on the same variable in release-acquire fashion.  That
+ * is, all effects of the memory accesses performed by a thread prior
+ * to seq_change() are visible to the threads returning from
+ * seq_read() or seq_wait() observing that change.
  */
 
 #include <stdint.h>
