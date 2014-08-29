@@ -1150,7 +1150,8 @@ dpif_linux_flow_dump_destroy(struct dpif_flow_dump *dump_)
     unsigned int nl_status = nl_dump_done(&dump->nl_dump);
     int dump_status;
 
-    atomic_read(&dump->status, &dump_status);
+    /* No other thread has access to 'dump' at this point. */
+    atomic_read_relaxed(&dump->status, &dump_status);
     free(dump);
     return dump_status ? dump_status : nl_status;
 }
@@ -1237,7 +1238,7 @@ dpif_linux_flow_dump_next(struct dpif_flow_dump_thread *thread_,
         /* Convert the flow to our output format. */
         error = dpif_linux_flow_from_ofpbuf(&linux_flow, &nl_flow);
         if (error) {
-            atomic_store(&dump->status, error);
+            atomic_store_relaxed(&dump->status, error);
             break;
         }
 
@@ -1256,7 +1257,7 @@ dpif_linux_flow_dump_next(struct dpif_flow_dump_thread *thread_,
             } else if (error) {
                 VLOG_WARN("error fetching dumped flow: %s",
                           ovs_strerror(error));
-                atomic_store(&dump->status, error);
+                atomic_store_relaxed(&dump->status, error);
                 break;
             }
 
