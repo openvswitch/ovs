@@ -221,4 +221,14 @@
 #define OVS_PREFETCH_WRITE(addr)
 #endif
 
+/* Output a message (not an error) while compiling without failing the
+ * compilation process */
+#if HAVE_PRAGMA_MESSAGE
+#define DO_PRAGMA(x) _Pragma(#x)
+#define BUILD_MESSAGE(x) \
+    DO_PRAGMA(message(x))
+#else
+#define BUILD_MESSAGE(x)
+#endif
+
 #endif /* compiler.h */

@@ -457,3 +457,12 @@ dnl OVS_CHECK_INCLUDE_NEXT
 AC_DEFUN([OVS_CHECK_INCLUDE_NEXT],
   [AC_REQUIRE([gl_CHECK_NEXT_HEADERS])
    gl_CHECK_NEXT_HEADERS([$1])])
+
+dnl OVS_CHECK_PRAGMA_MESSAGE
+AC_DEFUN([OVS_CHECK_PRAGMA_MESSAGE],
+  [AC_COMPILE_IFELSE([AC_LANG_PROGRAM(
+   [[_Pragma("message(\"Checking for pragma message\")")
+   ]])],
+     [AC_DEFINE(HAVE_PRAGMA_MESSAGE,1,[Define if compiler supports #pragma
+     message directive])])
+  ])
