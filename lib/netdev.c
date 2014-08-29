@@ -77,9 +77,11 @@ static struct hmap netdev_classes OVS_GUARDED_BY(netdev_class_mutex)
     = HMAP_INITIALIZER(&netdev_classes);
 
 struct netdev_registered_class {
-    struct hmap_node hmap_node; /* In 'netdev_classes', by class->type. */
-    const struct netdev_class *class;
-    atomic_int ref_cnt;         /* Number of 'struct netdev's of this class. */
+    /* In 'netdev_classes', by class->type. */
+    struct hmap_node hmap_node OVS_GUARDED_BY(netdev_class_mutex);
+    const struct netdev_class *class OVS_GUARDED_BY(netdev_class_mutex);
+    /* Number of 'struct netdev's of this class. */
+    int ref_cnt OVS_GUARDED_BY(netdev_class_mutex);
 };
 
 /* This is set pretty low because we probably won't learn anything from the
@@ -219,7 +221,7 @@ netdev_register_provider(const struct netdev_class *new_class)
             hmap_insert(&netdev_classes, &rc->hmap_node,
                         hash_string(new_class->type, 0));
             rc->class = new_class;
-            atomic_init(&rc->ref_cnt, 0);
+            rc->ref_cnt = 0;
         } else {
             VLOG_ERR("failed to initialize %s network device class: %s",
                      new_class->type, ovs_strerror(error));
@@ -247,10 +249,7 @@ netdev_unregister_provider(const char *type)
                   "registered: %s", type);
         error = EAFNOSUPPORT;
     } else {
-        int ref_cnt;
-
-        atomic_read(&rc->ref_cnt, &ref_cnt);
-        if (!ref_cnt) {
+        if (!rc->ref_cnt) {
             hmap_remove(&netdev_classes, &rc->hmap_node);
             free(rc);
             error = 0;
@@ -366,9 +365,7 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
 
                 error = rc->class->construct(netdev);
                 if (!error) {
-                    int old_ref_cnt;
-
-                    atomic_add(&rc->ref_cnt, 1, &old_ref_cnt);
+                    rc->ref_cnt++;
                     netdev_change_seq_changed(netdev);
                 } else {
                     free(netdev->name);
@@ -486,7 +483,6 @@ netdev_unref(struct netdev *dev)
     if (!--dev->ref_cnt) {
         const struct netdev_class *class = dev->netdev_class;
         struct netdev_registered_class *rc;
-        int old_ref_cnt;
 
         dev->netdev_class->destruct(dev);
 
@@ -499,8 +495,8 @@ netdev_unref(struct netdev *dev)
 
         ovs_mutex_lock(&netdev_class_mutex);
         rc = netdev_lookup_class(class->type);
-        atomic_sub(&rc->ref_cnt, 1, &old_ref_cnt);
-        ovs_assert(old_ref_cnt > 0);
+        ovs_assert(rc->ref_cnt > 0);
+        rc->ref_cnt--;
         ovs_mutex_unlock(&netdev_class_mutex);
     } else {
         ovs_mutex_unlock(&netdev_mutex);
