@@ -126,7 +126,7 @@ struct udpif {
     atomic_uint flow_limit;            /* Datapath flow hard limit. */
 
     /* n_flows_mutex prevents multiple threads updating these concurrently. */
-    atomic_ulong n_flows;           /* Number of flows in the datapath. */
+    atomic_uint n_flows;               /* Number of flows in the datapath. */
     atomic_llong n_flows_timestamp;    /* Last time n_flows was updated. */
     struct ovs_mutex n_flows_mutex;
 
@@ -532,17 +532,17 @@ udpif_get_n_flows(struct udpif *udpif)
     unsigned long flow_count;
 
     now = time_msec();
-    atomic_read(&udpif->n_flows_timestamp, &time);
+    atomic_read_relaxed(&udpif->n_flows_timestamp, &time);
     if (time < now - 100 && !ovs_mutex_trylock(&udpif->n_flows_mutex)) {
         struct dpif_dp_stats stats;
 
-        atomic_store(&udpif->n_flows_timestamp, now);
+        atomic_store_relaxed(&udpif->n_flows_timestamp, now);
         dpif_get_dp_stats(udpif->dpif, &stats);
         flow_count = stats.n_flows;
-        atomic_store(&udpif->n_flows, flow_count);
+        atomic_store_relaxed(&udpif->n_flows, flow_count);
         ovs_mutex_unlock(&udpif->n_flows_mutex);
     } else {
-        atomic_read(&udpif->n_flows, &flow_count);
+        atomic_read_relaxed(&udpif->n_flows, &flow_count);
     }
     return flow_count;
 }
@@ -665,7 +665,6 @@ udpif_revalidator(void *arg)
     /* Used only by the leader. */
     long long int start_time = 0;
     uint64_t last_reval_seq = 0;
-    unsigned int flow_limit = 0;
     size_t n_flows = 0;
 
     revalidator->id = ovsthread_id_self();
@@ -707,13 +706,15 @@ udpif_revalidator(void *arg)
         ovs_barrier_block(&udpif->reval_barrier);
 
         if (leader) {
+            unsigned int flow_limit;
             long long int duration;
+
+            atomic_read_relaxed(&udpif->flow_limit, &flow_limit);
 
             dpif_flow_dump_destroy(udpif->dump);
             seq_change(udpif->dump_seq);
 
             duration = MAX(time_msec() - start_time, 1);
-            atomic_read(&udpif->flow_limit, &flow_limit);
             udpif->dump_duration = duration;
             if (duration > 2000) {
                 flow_limit /= duration / 1000;
@@ -724,7 +725,7 @@ udpif_revalidator(void *arg)
                 flow_limit += 1000;
             }
             flow_limit = MIN(ofproto_flow_limit, MAX(flow_limit, 1000));
-            atomic_store(&udpif->flow_limit, flow_limit);
+            atomic_store_relaxed(&udpif->flow_limit, flow_limit);
 
             if (duration > 2000) {
                 VLOG_INFO("Spent an unreasonably long %lldms dumping flows",
@@ -937,6 +938,9 @@ upcall_cb(const struct ofpbuf *packet, const struct flow *flow,
     bool megaflow;
     int error;
 
+    atomic_read_relaxed(&enable_megaflows, &megaflow);
+    atomic_read_relaxed(&udpif->flow_limit, &flow_limit);
+
     error = upcall_receive(&upcall, udpif->backer, packet, type, userdata,
                            flow);
     if (error) {
@@ -953,8 +957,7 @@ upcall_cb(const struct ofpbuf *packet, const struct flow *flow,
                    ofpbuf_size(&upcall.put_actions));
     }
 
-    if (wc) {
-        atomic_read(&enable_megaflows, &megaflow);
+    if (OVS_LIKELY(wc)) {
         if (megaflow) {
             /* XXX: This could be avoided with sufficient API changes. */
             *wc = upcall.xout.wc;
@@ -964,7 +967,6 @@ upcall_cb(const struct ofpbuf *packet, const struct flow *flow,
         }
     }
 
-    atomic_read(&udpif->flow_limit, &flow_limit);
     if (udpif_get_n_flows(udpif) >= flow_limit) {
         error = ENOSPC;
     }
@@ -1053,8 +1055,11 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
     unsigned int flow_limit;
     size_t n_ops, i;
     bool may_put;
+    bool megaflow;
 
-    atomic_read(&udpif->flow_limit, &flow_limit);
+    atomic_read_relaxed(&udpif->flow_limit, &flow_limit);
+    atomic_read_relaxed(&enable_megaflows, &megaflow);
+
     may_put = udpif_get_n_flows(udpif) < flow_limit;
 
     /* Handle the packets individually in order of arrival.
@@ -1096,10 +1101,9 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
          *      already. */
         if (may_put && upcall->type == DPIF_UC_MISS) {
             struct ofpbuf mask;
-            bool megaflow;
 
-            atomic_read(&enable_megaflows, &megaflow);
             ofpbuf_use_stack(&mask, &mask_bufs[i], sizeof mask_bufs[i]);
+
             if (megaflow) {
                 size_t max_mpls;
                 bool recirc;
@@ -1496,7 +1500,7 @@ revalidate(struct revalidator *revalidator)
     unsigned int flow_limit;
 
     dump_seq = seq_read(udpif->dump_seq);
-    atomic_read(&udpif->flow_limit, &flow_limit);
+    atomic_read_relaxed(&udpif->flow_limit, &flow_limit);
     dump_thread = dpif_flow_dump_thread_create(udpif->dump);
     for (;;) {
         struct dump_op ops[REVALIDATE_MAX_BATCH];
@@ -1663,7 +1667,7 @@ upcall_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         unsigned int flow_limit;
         size_t i;
 
-        atomic_read(&udpif->flow_limit, &flow_limit);
+        atomic_read_relaxed(&udpif->flow_limit, &flow_limit);
 
         ds_put_format(&ds, "%s:\n", dpif_name(udpif->dpif));
         ds_put_format(&ds, "\tflows         : (current %lu)"
@@ -1696,7 +1700,7 @@ upcall_unixctl_disable_megaflows(struct unixctl_conn *conn,
                                  const char *argv[] OVS_UNUSED,
                                  void *aux OVS_UNUSED)
 {
-    atomic_store(&enable_megaflows, false);
+    atomic_store_relaxed(&enable_megaflows, false);
     udpif_flush_all_datapaths();
     unixctl_command_reply(conn, "megaflows disabled");
 }
@@ -1711,7 +1715,7 @@ upcall_unixctl_enable_megaflows(struct unixctl_conn *conn,
                                 const char *argv[] OVS_UNUSED,
                                 void *aux OVS_UNUSED)
 {
-    atomic_store(&enable_megaflows, true);
+    atomic_store_relaxed(&enable_megaflows, true);
     udpif_flush_all_datapaths();
     unixctl_command_reply(conn, "megaflows enabled");
 }
@@ -1731,7 +1735,7 @@ upcall_unixctl_set_flow_limit(struct unixctl_conn *conn,
     unsigned int flow_limit = atoi(argv[1]);
 
     LIST_FOR_EACH (udpif, list_node, &all_udpifs) {
-        atomic_store(&udpif->flow_limit, flow_limit);
+        atomic_store_relaxed(&udpif->flow_limit, flow_limit);
     }
     ds_put_format(&ds, "set flow_limit to %u\n", flow_limit);
     unixctl_command_reply(conn, ds_cstr(&ds));
