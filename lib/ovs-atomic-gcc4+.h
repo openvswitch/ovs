@@ -83,7 +83,7 @@ atomic_signal_fence(memory_order order)
                                                         \
         if (IS_LOCKLESS_ATOMIC(*dst__)) {               \
             atomic_thread_fence(ORDER);                 \
-            *(typeof(*DST) volatile *)dst__ = src__;    \
+            *(typeof(*(DST)) volatile *)dst__ = src__;  \
             atomic_thread_fence_if_seq_cst(ORDER);      \
         } else {                                        \
             atomic_store_locked(dst__, src__);          \
@@ -99,7 +99,7 @@ atomic_signal_fence(memory_order order)
                                                         \
         if (IS_LOCKLESS_ATOMIC(*src__)) {               \
             atomic_thread_fence_if_seq_cst(ORDER);      \
-            *dst__ = *(typeof(*SRC) volatile *)src__;   \
+            *dst__ = *(typeof(*(SRC)) volatile *)src__; \
         } else {                                        \
             atomic_read_locked(src__, dst__);           \
         }                                               \
@@ -128,7 +128,6 @@ atomic_signal_fence(memory_order order)
 #define atomic_compare_exchange_weak_explicit   \
     atomic_compare_exchange_strong_explicit
 
-
 #define atomic_op__(RMW, OP, ARG, ORIG)                     \
     ({                                                      \
         typeof(RMW) rmw__ = (RMW);                          \
@@ -140,11 +139,12 @@ atomic_signal_fence(memory_order order)
         } else {                                            \
             atomic_op_locked(rmw__, OP, arg__, orig__);     \
         }                                                   \
+        (void) 0;                                           \
     })
 
 #define atomic_add(RMW, ARG, ORIG) atomic_op__(RMW, add, ARG, ORIG)
 #define atomic_sub(RMW, ARG, ORIG) atomic_op__(RMW, sub, ARG, ORIG)
-#define atomic_or( RMW, ARG, ORIG) atomic_op__(RMW, or,  ARG, ORIG)
+#define atomic_or(RMW, ARG, ORIG) atomic_op__(RMW, or,  ARG, ORIG)
 #define atomic_xor(RMW, ARG, ORIG) atomic_op__(RMW, xor, ARG, ORIG)
 #define atomic_and(RMW, ARG, ORIG) atomic_op__(RMW, and, ARG, ORIG)
 

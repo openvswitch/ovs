@@ -174,7 +174,7 @@ atomic_signal_fence(memory_order order)
 #define atomic_exchange__(DST, SRC, ORDER)        \
     ({                                            \
         typeof(DST) dst___ = (DST);               \
-        typeof(*DST) src___ = (SRC);              \
+        typeof(*(DST)) src___ = (SRC);            \
                                                   \
         if ((ORDER) > memory_order_consume) {           \
             asm volatile("xchg %1,%0 ; "                \
@@ -198,7 +198,7 @@ atomic_signal_fence(memory_order order)
 #define atomic_store_explicit(DST, SRC, ORDER)          \
     ({                                                  \
         typeof(DST) dst__ = (DST);                      \
-        typeof(*DST) src__ = (SRC);                     \
+        typeof(*(DST)) src__ = (SRC);                   \
                                                         \
         if ((ORDER) != memory_order_seq_cst) {          \
             atomic_compiler_barrier(ORDER);             \
@@ -248,8 +248,8 @@ atomic_signal_fence(memory_order order)
     ({                                                              \
         typeof(DST) dst__ = (DST);                                  \
         typeof(DST) expp__ = (EXP);                                 \
-        typeof(*DST) src__ = (SRC);                                 \
-        typeof(*DST) exp__ = *expp__;                               \
+        typeof(*(DST)) src__ = (SRC);                               \
+        typeof(*(DST)) exp__ = *expp__;                             \
         uint8_t res__;                                              \
         (void)ORD_FAIL;                                             \
                                                                     \
@@ -284,7 +284,7 @@ atomic_signal_fence(memory_order order)
 #define atomic_add_explicit(RMW, ARG, ORIG, ORDER)  \
     ({                                              \
         typeof(RMW) rmw__ = (RMW);                  \
-        typeof(*RMW) arg__ = (ARG);                 \
+        typeof(*(RMW)) arg__ = (ARG);               \
                                                     \
         if ((ORDER) > memory_order_consume) {       \
             atomic_add__(rmw__, arg__, "memory");   \
@@ -308,7 +308,7 @@ atomic_signal_fence(memory_order order)
         typeof(RMW) rmw__ = (RMW);                          \
         typeof(ARG) arg__ = (ARG);                                      \
                                                                         \
-        typeof(*RMW) val__;                                             \
+        typeof(*(RMW)) val__;                                           \
                                                                         \
         atomic_read_explicit(rmw__, &val__, memory_order_relaxed);      \
         do {                                                            \
@@ -321,7 +321,7 @@ atomic_signal_fence(memory_order order)
 
 #define atomic_or_explicit(RMW, ARG, ORIG, ORDER)       \
     atomic_op__(RMW, |, ARG, ORIG, ORDER)
-#define atomic_or( RMW, ARG, ORIG)                              \
+#define atomic_or(RMW, ARG, ORIG)                              \
     atomic_or_explicit(RMW, ARG, ORIG, memory_order_seq_cst)
 
 #define atomic_xor_explicit(RMW, ARG, ORIG, ORDER)      \

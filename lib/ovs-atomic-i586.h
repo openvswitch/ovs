@@ -209,10 +209,10 @@ atomic_signal_fence(memory_order order)
 #define atomic_exchange__(DST, SRC, ORDER)        \
     ({                                            \
         typeof(DST) dst___ = (DST);               \
-        typeof(*DST) src___ = (SRC);              \
+        typeof(*(DST)) src___ = (SRC);            \
                                                   \
         if ((ORDER) > memory_order_consume) {                  \
-            if (sizeof(*DST) == 8) {                           \
+            if (sizeof(*(DST)) == 8) {                         \
                 atomic_exchange_8__(dst___, src___, "memory"); \
             } else {                                           \
                 asm volatile("xchg %1,%0 ;       "             \
@@ -222,7 +222,7 @@ atomic_signal_fence(memory_order order)
                              :: "memory");                     \
             }                                                  \
         } else {                                               \
-            if (sizeof(*DST) == 8) {                           \
+            if (sizeof(*(DST)) == 8) {                         \
                 atomic_exchange_8__(dst___, src___, "cc");     \
             } else {                                           \
                 asm volatile("xchg %1,%0 ;       "             \
@@ -237,10 +237,10 @@ atomic_signal_fence(memory_order order)
 #define atomic_store_explicit(DST, SRC, ORDER)          \
     ({                                                  \
         typeof(DST) dst__ = (DST);                      \
-        typeof(*DST) src__ = (SRC);                     \
+        typeof(*(DST)) src__ = (SRC);                   \
                                                         \
         if ((ORDER) != memory_order_seq_cst             \
-            && sizeof(*DST) <= 4) {                     \
+            && sizeof(*(DST)) <= 4) {                   \
             atomic_compiler_barrier(ORDER);             \
             *dst__ = src__;                             \
         } else {                                        \
@@ -259,10 +259,10 @@ atomic_signal_fence(memory_order order)
         typeof(DST) dst__ = (DST);                      \
         typeof(SRC) src__ = (SRC);                      \
                                                         \
-        if (sizeof(*DST) <= 4) {                        \
+        if (sizeof(*(DST)) <= 4) {                      \
             *dst__ = *src__;                            \
         } else {                                        \
-            typeof(*DST) res__;                         \
+            typeof(*(DST)) res__;                       \
                                                         \
             asm volatile("      movl %%ebx,%%eax ; "    \
                          "      movl %%ecx,%%edx ; "    \
@@ -325,13 +325,13 @@ atomic_signal_fence(memory_order order)
     ({                                                                  \
         typeof(DST) dst__ = (DST);                                      \
         typeof(DST) expp__ = (EXP);                                     \
-        typeof(*DST) src__ = (SRC);                                     \
-        typeof(*DST) exp__ = *expp__;                                   \
+        typeof(*(DST)) src__ = (SRC);                                   \
+        typeof(*(DST)) exp__ = *expp__;                                 \
         uint8_t res__;                                                  \
         (void)ORD_FAIL;                                                 \
                                                                         \
         if ((ORDER) > memory_order_consume) {                           \
-            if (sizeof(*DST) <= 4) {                                    \
+            if (sizeof(*(DST)) <= 4) {                                  \
                 atomic_compare_exchange__(dst__, exp__, src__, res__,   \
                                           "memory");                    \
             } else {                                                    \
@@ -339,7 +339,7 @@ atomic_signal_fence(memory_order order)
                                             "memory");                  \
             }                                                           \
         } else {                                                        \
-            if (sizeof(*DST) <= 4) {                                    \
+            if (sizeof(*(DST)) <= 4) {                                  \
                 atomic_compare_exchange__(dst__, exp__, src__, res__,   \
                                           "cc");                        \
             } else {                                                    \
@@ -371,7 +371,7 @@ atomic_signal_fence(memory_order order)
 #define atomic_add_32__(RMW, ARG, ORIG, ORDER)     \
     ({                                             \
         typeof(RMW) rmw__ = (RMW);                 \
-        typeof(*RMW) arg__ = (ARG);                \
+        typeof(*(RMW)) arg__ = (ARG);              \
                                                    \
         if ((ORDER) > memory_order_consume) {      \
             atomic_add__(rmw__, arg__, "memory");  \
@@ -388,7 +388,7 @@ atomic_signal_fence(memory_order order)
         typeof(RMW) rmw__ = (RMW);                          \
         typeof(ARG) arg__ = (ARG);                                      \
                                                                         \
-        typeof(*RMW) val__;                                             \
+        typeof(*(RMW)) val__;                                           \
                                                                         \
         atomic_read_explicit(rmw__, &val__, memory_order_relaxed);      \
         do {                                                            \
@@ -400,14 +400,14 @@ atomic_signal_fence(memory_order order)
     })
 
 #define atomic_add_explicit(RMW, ARG, ORIG, ORDER)              \
-    (sizeof(*RMW) <= 4                                          \
+    (sizeof(*(RMW)) <= 4                                        \
      ? atomic_add_32__(RMW, ARG, ORIG, ORDER)                   \
      : atomic_op__(RMW, +, ARG, ORIG, ORDER))
 #define atomic_add(RMW, ARG, ORIG)                              \
     atomic_add_explicit(RMW, ARG, ORIG, memory_order_seq_cst)
 
 #define atomic_sub_explicit(RMW, ARG, ORIG, ORDER)              \
-    (sizeof(*RMW) <= 4                                          \
+    (sizeof(*(RMW)) <= 4                                        \
      ? atomic_add_32__(RMW, -(ARG), ORIG, ORDER)                \
      : atomic_op__(RMW, -, ARG, ORIG, ORDER))
 #define atomic_sub(RMW, ARG, ORIG)                              \
@@ -415,7 +415,7 @@ atomic_signal_fence(memory_order order)
 
 #define atomic_or_explicit(RMW, ARG, ORIG, ORDER)       \
     atomic_op__(RMW, |, ARG, ORIG, ORDER)
-#define atomic_or( RMW, ARG, ORIG)                              \
+#define atomic_or(RMW, ARG, ORIG)                              \
     atomic_or_explicit(RMW, ARG, ORIG, memory_order_seq_cst)
 
 #define atomic_xor_explicit(RMW, ARG, ORIG, ORDER)      \
