@@ -110,11 +110,9 @@ static enum ofperr ofpraw_from_ofphdrs(enum ofpraw *, const struct ofphdrs *);
 static ovs_be32
 alloc_xid(void)
 {
-    static atomic_uint32_t next_xid = ATOMIC_VAR_INIT(1);
-    uint32_t xid;
+    static atomic_count next_xid = ATOMIC_COUNT_INIT(1);
 
-    atomic_add(&next_xid, 1, &xid);
-    return htonl(xid);
+    return htonl(atomic_count_inc(&next_xid));
 }
 
 static uint32_t

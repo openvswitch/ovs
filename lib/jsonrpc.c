@@ -516,10 +516,10 @@ jsonrpc_create(enum jsonrpc_msg_type type, const char *method,
 static struct json *
 jsonrpc_create_id(void)
 {
-    static atomic_uint next_id = ATOMIC_VAR_INIT(0);
+    static atomic_count next_id = ATOMIC_COUNT_INIT(0);
     unsigned int id;
 
-    atomic_add(&next_id, 1, &id);
+    id = atomic_count_inc(&next_id);
     return json_integer_create(id);
 }
 

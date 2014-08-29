@@ -730,11 +730,11 @@ parse_flow_monitor_request__(struct ofputil_flow_monitor_request *fmr,
                              const char *str_, char *string,
                              enum ofputil_protocol *usable_protocols)
 {
-    static atomic_uint32_t id = ATOMIC_VAR_INIT(0);
+    static atomic_count id = ATOMIC_COUNT_INIT(0);
     char *save_ptr = NULL;
     char *name;
 
-    atomic_add(&id, 1, &fmr->id);
+    fmr->id = atomic_count_inc(&id);
 
     fmr->flags = (NXFMF_INITIAL | NXFMF_ADD | NXFMF_DELETE | NXFMF_MODIFY
                   | NXFMF_OWN | NXFMF_ACTIONS);
