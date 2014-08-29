@@ -367,17 +367,23 @@ bool
 ovsthread_once_start__(struct ovsthread_once *once)
 {
     ovs_mutex_lock(&once->mutex);
-    if (!ovsthread_once_is_done__(once)) {
-        return false;
+    /* Mutex synchronizes memory, so we get the current value of 'done'. */
+    if (!once->done) {
+        return true;
     }
     ovs_mutex_unlock(&once->mutex);
-    return true;
+    return false;
 }
 
 void
 ovsthread_once_done(struct ovsthread_once *once)
 {
-    atomic_store(&once->done, true);
+    /* We need release semantics here, so that the following store may not
+     * be moved ahead of any of the preceding initialization operations.
+     * A release atomic_thread_fence provides that prior memory accesses
+     * will not be reordered to take place after the following store. */
+    atomic_thread_fence(memory_order_release);
+    once->done = true;
     ovs_mutex_unlock(&once->mutex);
 }
 

@@ -533,13 +533,13 @@ void *ovsthread_getspecific(ovsthread_key_t);
  */
 
 struct ovsthread_once {
-    atomic_bool done;
+    bool done;               /* Non-atomic, false negatives possible. */
     struct ovs_mutex mutex;
 };
 
 #define OVSTHREAD_ONCE_INITIALIZER              \
     {                                           \
-        ATOMIC_VAR_INIT(false),                 \
+        false,                                  \
         OVS_MUTEX_INITIALIZER,                  \
     }
 
@@ -549,16 +549,7 @@ void ovsthread_once_done(struct ovsthread_once *once)
     OVS_RELEASES(once->mutex);
 
 bool ovsthread_once_start__(struct ovsthread_once *once)
-    OVS_TRY_LOCK(false, once->mutex);
-
-static inline bool
-ovsthread_once_is_done__(struct ovsthread_once *once)
-{
-    bool done;
-
-    atomic_read_relaxed(&once->done, &done);
-    return done;
-}
+    OVS_TRY_LOCK(true, once->mutex);
 
 /* Returns true if this is the first call to ovsthread_once_start() for
  * 'once'.  In this case, the caller should perform whatever initialization
@@ -570,8 +561,11 @@ ovsthread_once_is_done__(struct ovsthread_once *once)
 static inline bool
 ovsthread_once_start(struct ovsthread_once *once)
 {
-    return OVS_UNLIKELY(!ovsthread_once_is_done__(once)
-                        && !ovsthread_once_start__(once));
+    /* We may be reading 'done' at the same time as the first thread
+     * is writing on it, or we can be using a stale copy of it.  The
+     * worst that can happen is that we call ovsthread_once_start__()
+     * once when strictly not necessary. */
+    return OVS_UNLIKELY(!once->done && ovsthread_once_start__(once));
 }
 
 /* Thread ID.
