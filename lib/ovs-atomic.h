@@ -414,7 +414,10 @@ ovs_refcount_ref(struct ovs_refcount *refcount)
  * }
  *
  * Provides a release barrier making the preceding loads and stores to not be
- * reordered after the unref. */
+ * reordered after the unref, and in case of the last reference provides also
+ * an acquire barrier to keep all the following uninitialization from being
+ * reordered before the atomic decrement operation.  Together these synchronize
+ * any concurrent unref operations between each other. */
 static inline unsigned int
 ovs_refcount_unref(struct ovs_refcount *refcount)
 {
@@ -425,8 +428,7 @@ ovs_refcount_unref(struct ovs_refcount *refcount)
     ovs_assert(old_refcount > 0);
     if (old_refcount == 1) {
         /* 'memory_order_release' above means that there are no (reordered)
-         * accesses to the protected object from any other thread at this
-         * point.
+         * accesses to the protected object from any thread at this point.
          * An acquire barrier is needed to keep all subsequent access to the
          * object's memory from being reordered before the atomic operation
          * above. */
