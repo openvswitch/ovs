@@ -412,6 +412,63 @@ typedef ATOMIC(int32_t)   atomic_int32_t;
 #define atomic_flag_clear_relaxed(FLAG)                         \
     atomic_flag_clear_explicit(FLAG, memory_order_relaxed)
 
+/* A simplified atomic count.  Does not provide any synchronization with any
+ * other variables.
+ *
+ * Typically a counter is not used to synchronize the state of any other
+ * variables (with the notable exception of reference count, below).
+ * This abstraction releaves the user from the memory order considerations,
+ * and may make the code easier to read.
+ *
+ * We only support the unsigned int counters, as those are the most common. */
+typedef struct atomic_count {
+    atomic_uint count;
+} atomic_count;
+
+#define ATOMIC_COUNT_INIT(VALUE) { VALUE }
+
+static inline void
+atomic_count_init(atomic_count *count, unsigned int value)
+{
+    atomic_init(&count->count, value);
+}
+
+static inline unsigned int
+atomic_count_inc(atomic_count *count)
+{
+    unsigned int old;
+
+    atomic_add_relaxed(&count->count, 1, &old);
+
+    return old;
+}
+
+static inline unsigned int
+atomic_count_dec(atomic_count *count)
+{
+    unsigned int old;
+
+    atomic_sub_relaxed(&count->count, 1, &old);
+
+    return old;
+}
+
+static inline unsigned int
+atomic_count_get(atomic_count *count)
+{
+    unsigned int value;
+
+    atomic_read_relaxed(&count->count, &value);
+
+    return value;
+}
+
+static inline void
+atomic_count_set(atomic_count *count, unsigned int value)
+{
+    atomic_store_relaxed(&count->count, value);
+}
+
 /* Reference count. */
 struct ovs_refcount {
     atomic_uint count;
