@@ -4026,7 +4026,7 @@ tc_add_policer(struct netdev *netdev, int kbits_rate, int kbits_burst)
     memset(&tc_police, 0, sizeof tc_police);
     tc_police.action = TC_POLICE_SHOT;
     tc_police.mtu = mtu;
-    tc_fill_rate(&tc_police.rate, (kbits_rate * 1000)/8, mtu);
+    tc_fill_rate(&tc_police.rate, ((uint64_t) kbits_rate * 1000)/8, mtu);
     tc_police.burst = tc_bytes_to_ticks(tc_police.rate.rate,
                                         kbits_burst * 1024);
 
