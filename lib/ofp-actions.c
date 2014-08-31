@@ -4482,7 +4482,8 @@ ofpacts_execute_action_set(struct ofpbuf *action_list,
      * all the actions because there's no point in modifying a packet that will
      * not be sent anywhere. */
     if (!ofpacts_copy_last(action_list, action_set, OFPACT_GROUP) &&
-        !ofpacts_copy_last(action_list, action_set, OFPACT_OUTPUT)) {
+        !ofpacts_copy_last(action_list, action_set, OFPACT_OUTPUT) &&
+        !ofpacts_copy_last(action_list, action_set, OFPACT_RESUBMIT)) {
         ofpbuf_clear(action_list);
     }
 }

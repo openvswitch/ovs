@@ -1654,11 +1654,14 @@ modifications are applied.
 .IQ
 \fBoutput\fR
 .IQ
-If both actions are present, then \fBgroup\fR is executed and
-\fBoutput\fR is ignored, regardless of the order in which they were
-added to the action set.  (If neither action is present, the action
-set has no real effect, because the modified packet is not sent
-anywhere and thus the modifications are not visible.)
+\fBresubmit\fR
+.IQ
+If more than one of these actions is present, then the one listed
+earliest above is executed and the others are ignored, regardless of
+the order in which they were added to the action set.  (If none of these
+actions is present, the action set has no real effect, because the
+modified packet is not sent anywhere and thus the modifications are
+not visible.)
 .RE
 .IP
 Only the actions listed above may be written to the action set.
