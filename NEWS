@@ -22,6 +22,9 @@ Post-v2.3.0
    - test-controller has been renamed ovs-testcontroller at request of users
      who find it useful for testing basic OpenFlow setups.  It is still not
      a necessary or desirable part of most Open vSwitch deployments.
+   - Support for travis-ci.org based continuous integration builds has been
+     added. Build failures are reported to build@openvswitch.org. See INSTALL
+     file for additional details.
 
 
 v2.3.0 - 14 Aug 2014
