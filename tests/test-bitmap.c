@@ -56,6 +56,9 @@ test_bitmap_equal(void)
     assert(!bitmap_equal(a, b, 11 * BITMAP_ULONG_BITS - 1));
     assert(!bitmap_equal(a, b,
                          11 * BITMAP_ULONG_BITS - (BITMAP_ULONG_BITS - 1)));
+
+    free(b);
+    free(a);
 }
 
 /* Tests bitmap_scan. */
@@ -107,6 +110,8 @@ test_bitmap_scan(void)
     assert(bitmap_scan(a, false, 0, MAX_BITS - 1) == BITMAP_ULONG_BITS - 1);
     bitmap_set0(a, 0);
     assert(bitmap_scan(a, false, 0, MAX_BITS - 1) == 0);
+
+    free(a);
 }
 
 static void
