@@ -2263,10 +2263,10 @@ fast_path_processing(struct dp_netdev *dp, struct emc_cache *flow_cache,
                      struct dpif_packet **packets, size_t cnt,
                      struct pkt_metadata *md, struct netdev_flow_key *keys)
 {
-#ifndef __CHECKER__
+#if !defined(__CHECKER__) && !defined(_WIN32)
     const size_t PKT_ARRAY_SIZE = cnt;
 #else
-    /* Sparse doesn't like variable length array */
+    /* Sparse or MSVC doesn't like variable length array. */
     enum { PKT_ARRAY_SIZE = NETDEV_MAX_RX_BATCH };
 #endif
     struct packet_batch batches[PKT_ARRAY_SIZE];
@@ -2372,10 +2372,10 @@ static void
 dp_netdev_input(struct dp_netdev *dp, struct emc_cache *flow_cache,
                 struct dpif_packet **packets, int cnt, struct pkt_metadata *md)
 {
-#ifndef __CHECKER__
+#if !defined(__CHECKER__) && !defined(_WIN32)
     const size_t PKT_ARRAY_SIZE = cnt;
 #else
-    /* Sparse doesn't like variable length array */
+    /* Sparse or MSVC doesn't like variable length array. */
     enum { PKT_ARRAY_SIZE = NETDEV_MAX_RX_BATCH };
 #endif
     struct netdev_flow_key keys[PKT_ARRAY_SIZE];
