@@ -666,6 +666,7 @@ test_stp_main(int argc, char *argv[])
         free(bridge);
     }
     free(tc);
+    fclose(input_file);
 }
 
 OVSTEST_REGISTER("test-stp", test_stp_main);
