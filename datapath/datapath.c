@@ -394,7 +394,7 @@ static int queue_userspace_packet(struct datapath *dp, struct sk_buff *skb,
 {
 	struct ovs_header *upcall;
 	struct sk_buff *nskb = NULL;
-	struct sk_buff *user_skb; /* to be queued to userspace */
+	struct sk_buff *user_skb = NULL; /* to be queued to userspace */
 	struct sw_flow_key *pkt_key = OVS_CB(skb)->pkt_key;
 	struct nlattr *nla;
 	struct genl_info info = {
@@ -496,9 +496,12 @@ static int queue_userspace_packet(struct datapath *dp, struct sk_buff *skb,
 	((struct nlmsghdr *) user_skb->data)->nlmsg_len = user_skb->len;
 
 	err = genlmsg_unicast(ovs_dp_get_net(dp), user_skb, upcall_info->portid);
+	user_skb = NULL;
 out:
 	if (err)
 		skb_tx_error(skb);
+
+	kfree_skb(user_skb);
 	kfree_skb(nskb);
 	return err;
 }
