@@ -838,6 +838,9 @@ AT_CHECK([RUN_OVS_VSCTL([set port br1 name br2])],
 AT_CHECK([RUN_OVS_VSCTL([remove bridge br1 name br1])],
   [1], [], [ovs-vsctl: cannot modify read-only column name in table Bridge
 ], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([remove bridge br1 flood-vlans true])],
+  [1], [], [ovs-vsctl: "true" is not a valid integer
+], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([clear bridge br1 name])],
   [1], [], [ovs-vsctl: cannot modify read-only column name in table Bridge
 ], [OVS_VSCTL_CLEANUP])
