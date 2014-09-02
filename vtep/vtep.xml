@@ -360,6 +360,7 @@
           Set to an Ethernet address in the form
           <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
           to set the MAC expected as destination for received BFD packets.
+          The default is <code>00:23:20:00:00:01</code>.
         </column>
 
         <column name="bfd_config_local" key="bfd_dst_ip">
@@ -398,6 +399,7 @@
 
         <column name="bfd_params" key="enable" type='{"type": "boolean"}'>
           True to enable BFD on this tunnel.
+          The default is False.
         </column>
 
         <column name="bfd_params" key="min_rx"
@@ -459,6 +461,15 @@
         HSC clears all key-value pairs from <ref column="bfd_status"/>.
       </p>
 
+      <column name="bfd_status" key="enabled"
+        type='{"type": "boolean"}'>
+        Set to true if the BFD session has been successfully
+        enabled. Set to false if the VTEP cannot support BFD or has
+        insufficient resources to enable BFD on this tunnel. The NVC
+        will disable the BFD monitoring on the other side of the tunnel
+        once this value is set to false.
+      </column>
+
       <column name="bfd_status" key="state"
         type='{"type": "string",
               "enum": ["set", ["admin_down", "down", "init", "up"]]}'>
@@ -489,6 +500,11 @@
         In case of a problem, set to an error message that reports what the
         remote endpoint's BFD session thinks is wrong.  The error messages
         are defined in section 4.1 of [RFC 5880].
+      </column>
+
+      <column name="bfd_status" key="info">
+        A short message providing further information about the BFD status
+        (possibly including reasons why BFD could not be enabled).
       </column>
       </group>
     </group>
