@@ -3528,11 +3528,15 @@ cmd_remove(struct vsctl_context *ctx)
         rm_type.n_max = UINT_MAX;
         error = ovsdb_datum_from_string(&rm, &rm_type,
                                         ctx->argv[i], ctx->symtab);
-        if (error && ovsdb_type_is_map(&rm_type)) {
-            free(error);
-            rm_type.value.type = OVSDB_TYPE_VOID;
-            die_if_error(ovsdb_datum_from_string(&rm, &rm_type,
-                                                 ctx->argv[i], ctx->symtab));
+        if (error) {
+            if (ovsdb_type_is_map(&rm_type)) {
+                rm_type.value.type = OVSDB_TYPE_VOID;
+                free(error);
+                die_if_error(ovsdb_datum_from_string(
+                                 &rm, &rm_type, ctx->argv[i], ctx->symtab));
+            } else {
+                vsctl_fatal("%s", error);
+            }
         }
         ovsdb_datum_subtract(&old, type, &rm, &rm_type);
         ovsdb_datum_destroy(&rm, &rm_type);
