@@ -843,7 +843,7 @@ decode_bundle(bool load, const struct nx_action_bundle *nab,
     } else if (bundle->algorithm != NX_BD_ALG_HRW
                && bundle->algorithm != NX_BD_ALG_ACTIVE_BACKUP) {
         VLOG_WARN_RL(&rl, "unsupported algorithm %d", (int) bundle->algorithm);
-    } else if (slave_type != NXM_OF_IN_PORT) {
+    } else if (slave_type != mf_oxm_header(MFF_IN_PORT, 0)) {
         VLOG_WARN_RL(&rl, "unsupported slave type %"PRIu16, slave_type);
     } else {
         error = 0;
@@ -924,7 +924,7 @@ encode_BUNDLE(const struct ofpact_bundle *bundle,
     nab->algorithm = htons(bundle->algorithm);
     nab->fields = htons(bundle->fields);
     nab->basis = htons(bundle->basis);
-    nab->slave_type = htonl(NXM_OF_IN_PORT);
+    nab->slave_type = htonl(mf_oxm_header(MFF_IN_PORT, 0));
     nab->n_slaves = htons(bundle->n_slaves);
     if (bundle->dst.field) {
         nab->ofs_nbits = nxm_encode_ofs_nbits(bundle->dst.ofs,

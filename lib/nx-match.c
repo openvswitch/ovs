@@ -477,8 +477,9 @@ nxm_put_ipv6(struct ofpbuf *b, uint32_t header,
 }
 
 static void
-nxm_put_frag(struct ofpbuf *b, const struct match *match)
+nxm_put_frag(struct ofpbuf *b, const struct match *match, enum ofp_version oxm)
 {
+    uint32_t header = mf_oxm_header(MFF_IP_FRAG, oxm);
     uint8_t nw_frag = match->flow.nw_frag;
     uint8_t nw_frag_mask = match->wc.masks.nw_frag;
 
@@ -487,12 +488,11 @@ nxm_put_frag(struct ofpbuf *b, const struct match *match)
         break;
 
     case FLOW_NW_FRAG_MASK:
-        nxm_put_8(b, NXM_NX_IP_FRAG, nw_frag);
+        nxm_put_8(b, header, nw_frag);
         break;
 
     default:
-        nxm_put_8m(b, NXM_NX_IP_FRAG, nw_frag,
-                   nw_frag_mask & FLOW_NW_FRAG_MASK);
+        nxm_put_8m(b, header, nw_frag, nw_frag_mask & FLOW_NW_FRAG_MASK);
         break;
     }
 }
@@ -516,7 +516,7 @@ nxm_put_ip(struct ofpbuf *b, const struct match *match, enum ofp_version oxm)
                      &flow->ipv6_dst, &match->wc.masks.ipv6_dst);
     }
 
-    nxm_put_frag(b, match);
+    nxm_put_frag(b, match, oxm);
 
     if (match->wc.masks.nw_tos & IP_DSCP_MASK) {
         if (oxm) {
@@ -622,14 +622,15 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
     /* Metadata. */
     if (match->wc.masks.dp_hash) {
         if (!oxm) {
-            nxm_put_32m(b, NXM_NX_DP_HASH, htonl(flow->dp_hash),
-                        htonl(match->wc.masks.dp_hash));
+            nxm_put_32m(b, mf_oxm_header(MFF_DP_HASH, oxm),
+                        htonl(flow->dp_hash), htonl(match->wc.masks.dp_hash));
         }
     }
 
     if (match->wc.masks.recirc_id) {
         if (!oxm) {
-            nxm_put_32(b, NXM_NX_RECIRC_ID, htonl(flow->recirc_id));
+            nxm_put_32(b, mf_oxm_header(MFF_RECIRC_ID, oxm),
+                       htonl(flow->recirc_id));
         }
     }
 
