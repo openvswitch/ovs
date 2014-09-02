@@ -104,7 +104,7 @@ def extract_ofp_msgs(output_file_name):
         while not comment.endswith('*/'):
             get_line()
             if line.startswith('/*') or not line or line.isspace():
-                fatal("unexpected syntax within error")
+                fatal("unexpected syntax within message")
             comment += ' %s' % line.lstrip('* \t').rstrip(' \t\r\n')
         comment = comment[:-2].rstrip()
 
@@ -356,7 +356,7 @@ if __name__ == '__main__':
     if '--help' in sys.argv:
         usage()
     elif len(sys.argv) != 3:
-        sys.stderr.write("exactly one non-option arguments required; "
+        sys.stderr.write("exactly two non-option arguments required; "
                          "use --help for help\n")
         sys.exit(1)
     else:
