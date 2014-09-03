@@ -71,7 +71,8 @@
 static __inline VOID
 _NlBufCopyAtTailUnsafe(PNL_BUFFER nlBuf, PCHAR data, UINT32 len);
 static __inline VOID
-_NlBufCopyAtOffsetUnsafe(PNL_BUFFER nlBuf, PCHAR data, UINT32 len, UINT32 offset);
+_NlBufCopyAtOffsetUnsafe(PNL_BUFFER nlBuf, PCHAR data,
+                         UINT32 len, UINT32 offset);
 
 /*
  * --------------------------------------------------------------------------
@@ -134,7 +135,8 @@ done:
  * NlBufCopyAtHead --
  *
  *    Copies the data to the head of the buffer.
- *    It can be seen as special case of NlBufCopyAtOffset with input offset zero.
+ *    It can be seen as special case of NlBufCopyAtOffset with input
+ *    offset zero.
  * --------------------------------------------------------------------------
  */
 BOOLEAN
@@ -330,7 +332,8 @@ _NlBufCopyAtTailUnsafe(PNL_BUFFER nlBuf, PCHAR data, UINT32 len)
  * --------------------------------------------------------------------------
  */
 static __inline VOID
-_NlBufCopyAtOffsetUnsafe(PNL_BUFFER nlBuf, PCHAR data, UINT32 len, UINT32 offset)
+_NlBufCopyAtOffsetUnsafe(PNL_BUFFER nlBuf, PCHAR data,
+                         UINT32 len, UINT32 offset)
 {
     PCHAR dest = NULL;
 
