@@ -17,7 +17,7 @@
 #ifndef __OVS_PUB_H_
 #define __OVS_PUB_H_ 1
 
-#include "../ovsext/Netlink.h"
+#include "../ovsext/Netlink/Netlink.h"
 
 #define OVS_DRIVER_MAJOR_VER 1
 #define OVS_DRIVER_MINOR_VER 0

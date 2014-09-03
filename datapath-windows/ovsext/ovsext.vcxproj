@@ -82,8 +82,8 @@
     <ClInclude Include="Ioctl.h" />
     <ClInclude Include="IpHelper.h" />
     <ClInclude Include="Jhash.h" />
-    <ClInclude Include="Netlink.h" />
-    <ClInclude Include="NetlinkProto.h" />
+    <ClInclude Include="Netlink/Netlink.h" />
+    <ClInclude Include="Netlink/NetlinkProto.h" />
     <ClInclude Include="NetProto.h" />
     <ClInclude Include="Oid.h" />
     <ClInclude Include="PacketIO.h" />
@@ -138,7 +138,7 @@
     <ClCompile Include="Ioctl.c" />
     <ClCompile Include="IpHelper.c" />
     <ClCompile Include="Jhash.c" />
-    <ClCompile Include="Netlink.c" />
+    <ClCompile Include="Netlink/Netlink.c" />
     <ClCompile Include="Datapath.c" />
     <ClCompile Include="Oid.c" />
     <ClCompile Include="PacketIO.c" />

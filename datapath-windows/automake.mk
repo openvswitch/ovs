@@ -5,9 +5,6 @@ EXTRA_DIST += \
 	datapath-windows/Package/package.VcxProj.user \
 	datapath-windows/include/OvsDpInterfaceExt.h \
 	datapath-windows/include/OvsPub.h\
-	datapath-windows/ovsext/Netlink.c \
-	datapath-windows/ovsext/Netlink.h \
-	datapath-windows/ovsext/NetlinkProto.h \
 	datapath-windows/misc/install.cmd \
 	datapath-windows/misc/uninstall.cmd \
 	datapath-windows/ovsext.sln \
@@ -33,6 +30,9 @@ EXTRA_DIST += \
 	datapath-windows/ovsext/IpHelper.h \
 	datapath-windows/ovsext/Jhash.c \
 	datapath-windows/ovsext/Jhash.h \
+	datapath-windows/ovsext/Netlink/Netlink.c \
+	datapath-windows/ovsext/Netlink/Netlink.h \
+	datapath-windows/ovsext/Netlink/NetlinkProto.h \
 	datapath-windows/ovsext/NetProto.h \
 	datapath-windows/ovsext/Oid.c \
 	datapath-windows/ovsext/Oid.h \
