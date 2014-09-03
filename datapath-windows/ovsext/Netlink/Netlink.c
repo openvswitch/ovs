@@ -24,6 +24,402 @@
 #define OVS_DBG_MOD OVS_DBG_NETLINK
 #include "Debug.h"
 
+/* ==========================================================================
+ * This file provides simple netlink get, put and validation APIs.
+ * Most of the code is on similar lines as userspace netlink implementation.
+ *
+ * TODO: Convert these methods to inline.
+ * ==========================================================================
+ */
+
+/*
+ * ---------------------------------------------------------------------------
+ * Adds Netlink Header to the NL_BUF.
+ * ---------------------------------------------------------------------------
+ */
+BOOLEAN
+NlMsgPutNlHdr(PNL_BUFFER buf, PNL_MSG_HDR nlMsg)
+{
+    if ((NlBufCopyAtOffset(buf, (PCHAR)nlMsg, NLMSG_HDRLEN, 0))) {
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Adds Genl Header to the NL_BUF.
+ * ---------------------------------------------------------------------------
+ */
+BOOLEAN
+NlMsgPutGenlHdr(PNL_BUFFER buf, PGENL_MSG_HDR genlMsg)
+{
+    if ((NlBufCopyAtOffset(buf, (PCHAR)genlMsg, GENL_HDRLEN, NLMSG_HDRLEN))) {
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Adds OVS Header to the NL_BUF.
+ * ---------------------------------------------------------------------------
+ */
+BOOLEAN
+NlMsgPutOvsHdr(PNL_BUFFER buf, POVS_HDR ovsHdr)
+{
+    if ((NlBufCopyAtOffset(buf, (PCHAR)ovsHdr, OVS_HDRLEN,
+                           GENL_HDRLEN + NLMSG_HDRLEN))) {
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Adds data of length 'len' to the tail end of NL_BUF.
+ * Refer nl_msg_put for more details.
+ * ---------------------------------------------------------------------------
+ */
+BOOLEAN
+NlMsgPutTail(PNL_BUFFER buf, const PCHAR data, UINT32 len)
+{
+    len = NLMSG_ALIGN(len);
+    if (NlBufCopyAtTail(buf, data, len)) {
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * memsets length 'len' at tail end of NL_BUF.
+ * Refer nl_msg_put_uninit for more details.
+ * ---------------------------------------------------------------------------
+ */
+PCHAR
+NlMsgPutTailUninit(PNL_BUFFER buf, UINT32 len)
+{
+    len = NLMSG_ALIGN(len);
+    return NlBufCopyAtTailUninit(buf, len);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Adds an attribute to the tail end of buffer. It does
+ * not copy the attribute payload.
+ * Refer nl_msg_put_unspec_uninit for more details.
+ * ---------------------------------------------------------------------------
+ */
+PCHAR
+NlMsgPutTailUnspecUninit(PNL_BUFFER buf, UINT16 type, UINT16 len)
+{
+    PCHAR ret = NULL;
+    UINT16 totalLen = NLA_HDRLEN + len;
+    PNL_ATTR nla = (PNL_ATTR)(NlMsgPutTailUninit(buf, totalLen));
+
+    if (!nla) {
+        goto done;
+    }
+
+    ret = (PCHAR)(nla + 1);
+    nla->nlaLen = totalLen;
+    nla->nlaType = type;
+
+done:
+    return ret;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Adds an attribute to the tail end of buffer. It copies attribute
+ * payload as well.
+ * Refer nl_msg_put_unspec for more details.
+ * ---------------------------------------------------------------------------
+ */
+BOOLEAN
+NlMsgPutTailUnspec(PNL_BUFFER buf, UINT16 type, PCHAR data, UINT16 len)
+{
+    BOOLEAN ret = TRUE;
+    PCHAR nlaData = NlMsgPutTailUnspecUninit(buf, type, len);
+
+    if (!nlaData) {
+        ret = FALSE;
+        goto done;
+    }
+
+    RtlCopyMemory(nlaData, data, len);
+
+done:
+    return ret;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Adds an attribute of 'type' and no payload at the tail end of buffer.
+ * Refer nl_msg_put_flag for more details.
+ * ---------------------------------------------------------------------------
+ */
+BOOLEAN
+NlMsgPutTailFlag(PNL_BUFFER buf, UINT16 type)
+{
+    BOOLEAN ret = TRUE;
+    PCHAR nlaData = NlMsgPutTailUnspecUninit(buf, type, 0);
+
+    if (!nlaData) {
+        ret = FALSE;
+    }
+
+    return ret;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Adds an attribute of 'type' and 8 bit payload at the tail end of buffer.
+ * Refer nl_msg_put_u8 for more details.
+ * ---------------------------------------------------------------------------
+ */
+BOOLEAN
+NlMsgPutTailU8(PNL_BUFFER buf, UINT16 type, UINT8 value)
+{
+    return (NlMsgPutTailUnspec(buf, type, (PCHAR)(&value), sizeof(value)));
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Adds an attribute of 'type' and 16 bit payload at the tail end of buffer.
+ * Refer nl_msg_put_u16 for more details.
+ * ---------------------------------------------------------------------------
+ */
+BOOLEAN
+NlMsgPutTailU16(PNL_BUFFER buf, UINT16 type, UINT16 value)
+{
+    return (NlMsgPutTailUnspec(buf, type, (PCHAR)(&value), sizeof(value)));
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Adds an attribute of 'type' and 32 bit payload at the tail end of buffer.
+ * Refer nl_msg_put_u32 for more details.
+ * ---------------------------------------------------------------------------
+ */
+BOOLEAN
+NlMsgPutTailU32(PNL_BUFFER buf, UINT16 type, UINT32 value)
+{
+    return (NlMsgPutTailUnspec(buf, type, (PCHAR)(&value), sizeof(value)));
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Adds an attribute of 'type' and 64 bit payload at the tail end of buffer.
+ * Refer nl_msg_put_u64 for more details.
+ * ---------------------------------------------------------------------------
+ */
+BOOLEAN
+NlMsgPutTailU64(PNL_BUFFER buf, UINT16 type, UINT64 value)
+{
+    return (NlMsgPutTailUnspec(buf, type, (PCHAR)(&value), sizeof(value)));
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Adds an attribute of 'type' and string payload.
+ * Refer nl_msg_put_string for more details.
+ * ---------------------------------------------------------------------------
+ */
+BOOLEAN
+NlMsgPutTailString(PNL_BUFFER buf, UINT16 type, PCHAR value)
+{
+    size_t strLen = strlen(value) + 1;
+#ifdef DBG
+    /* Attribute length should come within 16 bits (NL_ATTR).
+     * Not a likely case, hence validation only in debug mode. */
+    if ((strLen + PAD_SIZE(strLen, NLA_ALIGNTO)) > MAXUINT16) {
+        return FALSE;
+    }
+#endif
+
+    /* typecast to keep compiler happy */
+    return (NlMsgPutTailUnspec(buf, type, value,
+                               (UINT16)strLen));
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Adds data of length 'len' to the head of NL_BUF.
+ * Refer nl_msg_push for more details.
+ * ---------------------------------------------------------------------------
+ */
+BOOLEAN
+NlMsgPutHead(PNL_BUFFER buf, const PCHAR data, UINT32 len)
+{
+    len = NLMSG_ALIGN(len);
+    if (NlBufCopyAtHead(buf, data, len)) {
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * memsets length 'len' at head of NL_BUF.
+ * Refer nl_msg_push_uninit for more details.
+ * ---------------------------------------------------------------------------
+ */
+PCHAR
+NlMsgPutHeadUninit(PNL_BUFFER buf, UINT32 len)
+{
+    len = NLMSG_ALIGN(len);
+    return NlBufCopyAtHeadUninit(buf, len);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Adds an attribute to the head of buffer. It does
+ * not copy the attribute payload.
+ * Refer nl_msg_push_unspec_uninit for more details.
+ * ---------------------------------------------------------------------------
+ */
+PCHAR
+NlMsgPutHeadUnspecUninit(PNL_BUFFER buf, UINT16 type, UINT16 len)
+{
+    PCHAR ret = NULL;
+    UINT16 totalLen = NLA_HDRLEN + len;
+    PNL_ATTR nla = (PNL_ATTR)(NlMsgPutHeadUninit(buf, totalLen));
+
+    if (!nla) {
+        goto done;
+    }
+
+    ret = (PCHAR)(nla + 1);
+    nla->nlaLen = totalLen;
+    nla->nlaType = type;
+
+done:
+    return ret;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Adds an attribute to the head of buffer. It copies attribute
+ * payload as well.
+ * Refer nl_msg_push_unspec for more details.
+ * ---------------------------------------------------------------------------
+ */
+BOOLEAN
+NlMsgPutHeadUnspec(PNL_BUFFER buf, UINT16 type, PCHAR data, UINT16 len)
+{
+    BOOLEAN ret = TRUE;
+    PCHAR nlaData = NlMsgPutHeadUnspecUninit(buf, type, len);
+
+    if (!nlaData) {
+        ret = FALSE;
+        goto done;
+    }
+
+    RtlCopyMemory(nlaData, data, len);
+
+done:
+    return ret;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Adds an attribute of 'type' and no payload at the head of buffer.
+ * Refer nl_msg_push_flag for more details.
+ * ---------------------------------------------------------------------------
+ */
+BOOLEAN
+NlMsgPutHeadFlag(PNL_BUFFER buf, UINT16 type)
+{
+    BOOLEAN ret = TRUE;
+    PCHAR nlaData = NlMsgPutHeadUnspecUninit(buf, type, 0);
+
+    if (!nlaData) {
+        ret = FALSE;
+    }
+
+    return ret;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Adds an attribute of 'type' and 8 bit payload at the head of buffer.
+ * Refer nl_msg_push_u8 for more details.
+ * ---------------------------------------------------------------------------
+ */
+BOOLEAN
+NlMsgPutHeadU8(PNL_BUFFER buf, UINT16 type, UINT8 value)
+{
+    return (NlMsgPutHeadUnspec(buf, type, (PCHAR)(&value), sizeof(value)));
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Adds an attribute of 'type' and 16 bit payload at the head of buffer.
+ * Refer nl_msg_push_u16 for more details.
+ * ---------------------------------------------------------------------------
+ */
+BOOLEAN
+NlMsgPutHeadU16(PNL_BUFFER buf, UINT16 type, UINT16 value)
+{
+    return (NlMsgPutHeadUnspec(buf, type, (PCHAR)(&value), sizeof(value)));
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Adds an attribute of 'type' and 32 bit payload at the head of buffer.
+ * Refer nl_msg_push_u32 for more details.
+ * ---------------------------------------------------------------------------
+ */
+BOOLEAN
+NlMsgPutHeadU32(PNL_BUFFER buf, UINT16 type, UINT32 value)
+{
+    return (NlMsgPutHeadUnspec(buf, type, (PCHAR)(&value), sizeof(value)));
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Adds an attribute of 'type' and 64 bit payload at the head of buffer.
+ * Refer nl_msg_push_u64 for more details.
+ * ---------------------------------------------------------------------------
+ */
+BOOLEAN
+NlMsgPutHeadU64(PNL_BUFFER buf, UINT16 type, UINT64 value)
+{
+    return (NlMsgPutHeadUnspec(buf, type, (PCHAR)(&value), sizeof(value)));
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Adds an attribute of 'type' and string payload.
+ * Refer nl_msg_push_string for more details.
+ * ---------------------------------------------------------------------------
+ */
+BOOLEAN
+NlMsgPutHeadString(PNL_BUFFER buf, UINT16 type, PCHAR value)
+{
+    size_t strLen = strlen(value) + 1;
+#ifdef DBG
+    /* Attribute length should come within 16 bits (NL_ATTR).
+     * Not a likely case, hence validation only in debug mode. */
+    if ((strLen + PAD_SIZE(strLen, NLA_ALIGNTO)) > MAXUINT16) {
+        return FALSE;
+    }
+#endif
+
+    /* typecast to keep compiler happy */
+    return (NlMsgPutHeadUnspec(buf, type, value,
+                               (UINT16)strLen));
+}
+
+/* Accessing netlink message payload */
+
 /*
  * ---------------------------------------------------------------------------
  * Netlink message accessing the payload.
@@ -173,7 +569,7 @@ NlAttrMaxLen(NL_ATTR_TYPE type)
     case NL_A_U16: return 2;
     case NL_A_U32: return 4;
     case NL_A_U64: return 8;
-    case NL_A_STRING: return SIZE_MAX;
+    case NL_A_STRING: return MAXUINT16;
     case NL_A_FLAG: return SIZE_MAX;
     case NL_A_NESTED: return SIZE_MAX;
     case N_NL_ATTR_TYPES:
@@ -408,8 +804,7 @@ NlAttrFindNested(const PNL_ATTR nla, UINT16 type)
  * attribute type validation parameters.
  * 'nla_offset' should be NLMSG_HDRLEN + GENL_HDRLEN + OVS_HEADER
  *
- * Returns NDIS_STATUS_SUCCESS normally.  Fails only if packet data cannot be accessed
- * (e.g. if Pkt_CopyBytesOut() returns an error).
+ * Returns BOOLEAN to indicate success/failure.
  *----------------------------------------------------------------------------
  */
 BOOLEAN NlAttrParse(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
@@ -421,7 +816,7 @@ BOOLEAN NlAttrParse(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
     UINT32 iter;
     BOOLEAN ret = FALSE;
 
-    memset(attrs, 0, n_attrs * sizeof *attrs);
+    RtlZeroMemory(attrs, n_attrs * sizeof *attrs);
 
     if ((NlMsgSize(nlMsg) < attrOffset) || (!(NlMsgAttrLen(nlMsg)))) {
         OVS_LOG_WARN("No attributes in nlMsg: %p at offset: %d",

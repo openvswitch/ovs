@@ -19,6 +19,7 @@
 
 #include "Types.h"
 #include "NetlinkProto.h"
+#include "NetlinkBuf.h"
 
 /* Netlink attribute types. */
 typedef enum
@@ -100,5 +101,32 @@ BOOLEAN NlAttrParse(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
 
 /* Netlink attribute validation */
 BOOLEAN NlAttrValidate(const PNL_ATTR, const PNL_POLICY);
+
+/* Put APis */
+BOOLEAN NlMsgPutNlHdr(PNL_BUFFER buf, PNL_MSG_HDR nlMsg);
+BOOLEAN NlMsgPutGenlHdr(PNL_BUFFER buf, PGENL_MSG_HDR genlMsg);
+BOOLEAN NlMsgPutOvsHdr(PNL_BUFFER buf, POVS_HDR ovsHdr);
+
+BOOLEAN NlMsgPutTail(PNL_BUFFER buf, const PCHAR data, UINT32 len);
+PCHAR NlMsgPutTailUninit(PNL_BUFFER buf, UINT32 len);
+PCHAR NlMsgPutTailUnspecUninit(PNL_BUFFER buf, UINT16 type, UINT16 len);
+BOOLEAN NlMsgPutTailUnspec(PNL_BUFFER buf, UINT16 type, PCHAR data, UINT16 len);
+BOOLEAN NlMsgPutTailFlag(PNL_BUFFER buf, UINT16 type);
+BOOLEAN NlMsgPutTailU8(PNL_BUFFER buf, UINT16 type, UINT8 value);
+BOOLEAN NlMsgPutTailU16(PNL_BUFFER buf, UINT16 type, UINT16 value);
+BOOLEAN NlMsgPutTailU32(PNL_BUFFER buf, UINT16 type, UINT32 value);
+BOOLEAN NlMsgPutTailU64(PNL_BUFFER buf, UINT16 type, UINT64 value);
+BOOLEAN NlMsgPutTailString(PNL_BUFFER buf, UINT16 type, PCHAR value);
+
+BOOLEAN NlMsgPutHead(PNL_BUFFER buf, const PCHAR data, UINT32 len);
+PCHAR NlMsgPutHeadUninit(PNL_BUFFER buf, UINT32 len);
+PCHAR NlMsgPutHeadUnspecUninit(PNL_BUFFER buf, UINT16 type, UINT16 len);
+BOOLEAN NlMsgPutHeadUnspec(PNL_BUFFER buf, UINT16 type, PCHAR data, UINT16 len);
+BOOLEAN NlMsgPutHeadFlag(PNL_BUFFER buf, UINT16 type);
+BOOLEAN NlMsgPutHeadU8(PNL_BUFFER buf, UINT16 type, UINT8 value);
+BOOLEAN NlMsgPutHeadU16(PNL_BUFFER buf, UINT16 type, UINT16 value);
+BOOLEAN NlMsgPutHeadU32(PNL_BUFFER buf, UINT16 type, UINT32 value);
+BOOLEAN NlMsgPutHeadU64(PNL_BUFFER buf, UINT16 type, UINT64 value);
+BOOLEAN NlMsgPutHeadString(PNL_BUFFER buf, UINT16 type, PCHAR value);
 
 #endif /* __NETLINK_H_ */
