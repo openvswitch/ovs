@@ -539,6 +539,8 @@ void bitwise_one(void *dst_, unsigned int dst_len, unsigned dst_ofs,
                  unsigned int n_bits);
 bool bitwise_is_all_zeros(const void *, unsigned int len, unsigned int ofs,
                           unsigned int n_bits);
+unsigned int bitwise_scan(const void *, unsigned int len,
+                          bool target, unsigned int start, unsigned int end);
 void bitwise_put(uint64_t value,
                  void *dst, unsigned int dst_len, unsigned int dst_ofs,
                  unsigned int n_bits);

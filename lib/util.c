@@ -1273,6 +1273,35 @@ bitwise_is_all_zeros(const void *p_, unsigned int len, unsigned int ofs,
     return true;
 }
 
+/* Scans the bits in 'p' that have bit offsets 'start' through 'end'
+ * (inclusive) for the first bit with value 'target'.  If one is found, returns
+ * its offset, otherwise 'end'.  'p' is 'len' bytes long.
+ *
+ * If you consider all of 'p' to be a single unsigned integer in network byte
+ * order, then bit N is the bit with value 2**N.  That is, bit 0 is the bit
+ * with value 1 in p[len - 1], bit 1 is the bit with value 2, bit 2 is the bit
+ * with value 4, ..., bit 8 is the bit with value 1 in p[len - 2], and so on.
+ *
+ * Required invariant:
+ *   start <= end
+ */
+unsigned int
+bitwise_scan(const void *p_, unsigned int len, bool target, unsigned int start,
+             unsigned int end)
+{
+    const uint8_t *p = p_;
+    unsigned int ofs;
+
+    for (ofs = start; ofs < end; ofs++) {
+        bool bit = (p[len - (ofs / 8 + 1)] & (1u << (ofs % 8))) != 0;
+        if (bit == target) {
+            break;
+        }
+    }
+    return ofs;
+}
+
+
 /* Copies the 'n_bits' low-order bits of 'value' into the 'n_bits' bits
  * starting at bit 'dst_ofs' in 'dst', which is 'dst_len' bytes long.
  *
