@@ -39,6 +39,9 @@
 /* Returns X rounded up to the nearest multiple of Y. */
 #define ROUND_UP(X, Y) (DIV_ROUND_UP(X, Y) * (Y))
 
+/* Returns the least number that, when added to X, yields a multiple of Y. */
+#define PAD_SIZE(X, Y) (ROUND_UP(X, Y) - (X))
+
 /* Netlink message */
 
 /* nlmsg_flags bits. */
@@ -92,7 +95,7 @@ typedef struct _GENL_MSG_HDR {
     UINT8 cmd;
     UINT8 version;
     UINT16 reserved;
-} GENL_MSG_HDR, *PGENL_MDG_HDR;
+} GENL_MSG_HDR, *PGENL_MSG_HDR;
 BUILD_ASSERT_DECL(sizeof(GENL_MSG_HDR) == 4);
 
 /* Netlink attributes */
