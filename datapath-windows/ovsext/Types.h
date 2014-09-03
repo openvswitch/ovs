@@ -31,6 +31,7 @@ typedef uint8 __u8;
 
 /* Defines the  userspace specific data types for file
  * included within kernel only. */
+typedef UINT16 BE16;
 typedef UINT32 BE32;
 typedef UINT64 BE64;
 
