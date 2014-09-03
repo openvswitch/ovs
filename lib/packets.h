@@ -609,6 +609,15 @@ struct ovs_16aligned_ip6_frag {
     ovs_16aligned_be32 ip6f_ident;
 };
 
+#define ICMP6_HEADER_LEN 4
+struct icmp6_header {
+    uint8_t icmp6_type;
+    uint8_t icmp6_code;
+    ovs_be16 icmp6_cksum;
+    uint8_t icmp6_data[0];
+};
+BUILD_ASSERT_DECL(ICMP6_HEADER_LEN == sizeof(struct icmp6_header));
+
 /* The IPv6 flow label is in the lower 20 bits of the first 32-bit word. */
 #define IPV6_LABEL_MASK 0x000fffff
 
