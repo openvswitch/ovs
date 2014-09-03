@@ -59,7 +59,6 @@ char    *optarg;		/* argument associated with option */
 
 #define	EMSG	""
 
-#define __UNCONST(a)    ((void *)(unsigned long)(const void *)(a))
 #define _DIAGASSERT(q) ovs_assert(q)
 
 #define warnx VLOG_WARN
@@ -258,7 +257,7 @@ start:
 	} else {				/* takes (optional) argument */
 		optarg = NULL;
 		if (*place)			/* no white space */
-			optarg = __UNCONST(place);
+			optarg = CONST_CAST(char *, place);
 		/* XXX: disable test for :: if PC? (GNU doesn't) */
 		else if (oli[1] != ':') {	/* arg not optional */
 			if (++optind >= nargc) {	/* no arg */
@@ -295,7 +294,7 @@ getopt(nargc, nargv, options)
 	_DIAGASSERT(nargv != NULL);
 	_DIAGASSERT(options != NULL);
 
-	retval = getopt_internal(nargc, __UNCONST(nargv), options);
+    retval = getopt_internal(nargc, CONST_CAST(char **, nargv), options);
 	if (retval == -2) {
 		++optind;
 		/*
@@ -334,13 +333,13 @@ getopt_long(int nargc, char * const *nargv, const char *options,
 	_DIAGASSERT(long_options != NULL);
 	/* idx may be NULL */
 
-	retval = getopt_internal(nargc, __UNCONST(nargv), options);
+    retval = getopt_internal(nargc, CONST_CAST(char **, nargv), options);
 	if (retval == -2) {
 		char *current_argv, *has_equal;
 		size_t current_argv_len;
 		int i, ambiguous, match;
 
-		current_argv = __UNCONST(place);
+        current_argv = CONST_CAST(char *, place);
 		match = -1;
 		ambiguous = 0;
 
@@ -354,7 +353,7 @@ getopt_long(int nargc, char * const *nargv, const char *options,
 			 */
 			if (nonopt_end != -1) {
 				permute_args(nonopt_start, nonopt_end,
-				    optind, __UNCONST(nargv));
+                    optind, CONST_CAST(char **, nargv));
 				optind -= nonopt_end - nonopt_start;
 			}
 			nonopt_start = nonopt_end = -1;
