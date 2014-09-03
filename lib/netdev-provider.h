@@ -52,6 +52,7 @@ struct netdev {
     uint64_t change_seq;
 
     /* The following are protected by 'netdev_mutex' (internal to netdev.c). */
+    int n_txq;
     int n_rxq;
     int ref_cnt;                        /* Times this devices was opened. */
     struct shash_node *node;            /* Pointer to element in global map. */
@@ -258,8 +259,8 @@ struct netdev_class {
     int (*get_numa_id)(const struct netdev *netdev);
 
     /* Sends buffers on 'netdev'.
-     * Returns 0 if successful (for every buffer), otherwise a positive errno value.
-     * Returns EAGAIN without blocking if one or more packets cannot be
+     * Returns 0 if successful (for every buffer), otherwise a positive errno
+     * value.  Returns EAGAIN without blocking if one or more packets cannot be
      * queued immediately. Returns EMSGSIZE if a partial packet was transmitted
      * or if a packet is too big or too small to transmit on the device.
      *
@@ -268,9 +269,11 @@ struct netdev_class {
      *
      * To retain ownership of 'buffers' caller can set may_steal to false.
      *
-     * The network device is expected to maintain a packet transmission queue,
-     * so that the caller does not ordinarily have to do additional queuing of
-     * packets.
+     * The network device is expected to maintain one or more packet
+     * transmission queues, so that the caller does not ordinarily have to
+     * do additional queuing of packets.  'qid' specifies the queue to use
+     * and can be ignored if the implementation does not support multiple
+     * queues.
      *
      * May return EOPNOTSUPP if a network device does not implement packet
      * transmission through this interface.  This function may be set to null
@@ -278,20 +281,22 @@ struct netdev_class {
      * network device from being usefully used by the netdev-based "userspace
      * datapath".  It will also prevent the OVS implementation of bonding from
      * working properly over 'netdev'.) */
-    int (*send)(struct netdev *netdev, struct dpif_packet **buffers, int cnt,
-                bool may_steal);
+    int (*send)(struct netdev *netdev, int qid, struct dpif_packet **buffers,
+                int cnt, bool may_steal);
 
     /* Registers with the poll loop to wake up from the next call to
      * poll_block() when the packet transmission queue for 'netdev' has
      * sufficient room to transmit a packet with netdev_send().
      *
-     * The network device is expected to maintain a packet transmission queue,
-     * so that the caller does not ordinarily have to do additional queuing of
-     * packets.  Thus, this function is unlikely to ever be useful.
+     * The network device is expected to maintain one or more packet
+     * transmission queues, so that the caller does not ordinarily have to
+     * do additional queuing of packets.  'qid' specifies the queue to use
+     * and can be ignored if the implementation does not support multiple
+     * queues.
      *
      * May be null if not needed, such as for a network device that does not
      * implement packet transmission through the 'send' member function. */
-    void (*send_wait)(struct netdev *netdev);
+    void (*send_wait)(struct netdev *netdev, int qid);
 
     /* Sets 'netdev''s Ethernet address to 'mac' */
     int (*set_etheraddr)(struct netdev *netdev, const uint8_t mac[6]);

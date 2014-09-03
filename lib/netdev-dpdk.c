@@ -495,6 +495,7 @@ netdev_dpdk_init(struct netdev *netdev_, unsigned int port_no) OVS_REQUIRES(dpdk
     if (err) {
         goto unlock;
     }
+    netdev_->n_txq = NR_QUEUE;
     netdev_->n_rxq = NR_QUEUE;
 
     list_push_back(&dpdk_list, &netdev->list_node);
@@ -792,8 +793,8 @@ dpdk_do_tx_copy(struct netdev *netdev, struct dpif_packet ** pkts, int cnt)
 }
 
 static int
-netdev_dpdk_send(struct netdev *netdev, struct dpif_packet **pkts, int cnt,
-                 bool may_steal)
+netdev_dpdk_send(struct netdev *netdev, int qid, struct dpif_packet **pkts,
+                 int cnt, bool may_steal)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     int ret;
@@ -808,7 +809,6 @@ netdev_dpdk_send(struct netdev *netdev, struct dpif_packet **pkts, int cnt,
             }
         }
     } else {
-        int qid;
         int next_tx_idx = 0;
         int dropped = 0;
 

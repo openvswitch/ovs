@@ -40,6 +40,8 @@ static inline void dp_packet_pad(struct ofpbuf *b)
     }
 }
 
+#define NETDEV_QID_NONE INT_MAX
+
 #define NR_QUEUE   1
 #define NR_PMD_THREADS 1
 

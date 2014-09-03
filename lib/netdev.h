@@ -135,6 +135,7 @@ void netdev_wait(void);
 void netdev_enumerate_types(struct sset *types);
 bool netdev_is_reserved_name(const char *name);
 
+int netdev_n_txq(const struct netdev *netdev);
 int netdev_n_rxq(const struct netdev *netdev);
 bool netdev_is_pmd(const struct netdev *netdev);
 
@@ -174,9 +175,9 @@ void netdev_rxq_wait(struct netdev_rxq *);
 int netdev_rxq_drain(struct netdev_rxq *);
 
 /* Packet transmission. */
-int netdev_send(struct netdev *, struct dpif_packet **, int cnt,
+int netdev_send(struct netdev *, int qid, struct dpif_packet **, int cnt,
                 bool may_steal);
-void netdev_send_wait(struct netdev *);
+void netdev_send_wait(struct netdev *, int qid);
 
 /* Hardware address. */
 int netdev_set_etheraddr(struct netdev *, const uint8_t mac[6]);

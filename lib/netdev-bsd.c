@@ -687,8 +687,8 @@ netdev_bsd_rxq_drain(struct netdev_rxq *rxq_)
  * system or a tap device.
  */
 static int
-netdev_bsd_send(struct netdev *netdev_, struct dpif_packet **pkts, int cnt,
-                bool may_steal)
+netdev_bsd_send(struct netdev *netdev_, int qid OVS_UNUSED,
+                struct dpif_packet **pkts, int cnt, bool may_steal)
 {
     struct netdev_bsd *dev = netdev_bsd_cast(netdev_);
     const char *name = netdev_get_name(netdev_);
@@ -750,7 +750,7 @@ netdev_bsd_send(struct netdev *netdev_, struct dpif_packet **pkts, int cnt,
  * with netdev_send().
  */
 static void
-netdev_bsd_send_wait(struct netdev *netdev_)
+netdev_bsd_send_wait(struct netdev *netdev_, int qid OVS_UNUSED)
 {
     struct netdev_bsd *dev = netdev_bsd_cast(netdev_);
 

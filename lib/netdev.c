@@ -92,6 +92,12 @@ static void restore_all_flags(void *aux OVS_UNUSED);
 void update_device_args(struct netdev *, const struct shash *args);
 
 int
+netdev_n_txq(const struct netdev *netdev)
+{
+    return netdev->n_txq;
+}
+
+int
 netdev_n_rxq(const struct netdev *netdev)
 {
     return netdev->n_rxq;
@@ -355,12 +361,10 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
                 netdev->change_seq = 1;
                 netdev->node = shash_add(&netdev_shash, name, netdev);
 
-                /* By default enable one rx queue per netdev. */
-                if (netdev->netdev_class->rxq_alloc) {
-                    netdev->n_rxq = 1;
-                } else {
-                    netdev->n_rxq = 0;
-                }
+                /* By default enable one tx and rx queue per netdev. */
+                netdev->n_txq = netdev->netdev_class->send ? 1 : 0;
+                netdev->n_rxq = netdev->netdev_class->rxq_alloc ? 1 : 0;
+
                 list_init(&netdev->saved_flags_list);
 
                 error = rc->class->construct(netdev);
@@ -670,19 +674,22 @@ netdev_rxq_drain(struct netdev_rxq *rx)
  *
  * To retain ownership of 'buffer' caller can set may_steal to false.
  *
- * The kernel maintains a packet transmission queue, so the caller is not
- * expected to do additional queuing of packets.
+ * The network device is expected to maintain one or more packet
+ * transmission queues, so that the caller does not ordinarily have to
+ * do additional queuing of packets.  'qid' specifies the queue to use
+ * and can be ignored if the implementation does not support multiple
+ * queues.
  *
  * Some network devices may not implement support for this function.  In such
  * cases this function will always return EOPNOTSUPP. */
 int
-netdev_send(struct netdev *netdev, struct dpif_packet **buffers, int cnt,
-            bool may_steal)
+netdev_send(struct netdev *netdev, int qid, struct dpif_packet **buffers,
+            int cnt, bool may_steal)
 {
     int error;
 
     error = (netdev->netdev_class->send
-             ? netdev->netdev_class->send(netdev, buffers, cnt, may_steal)
+             ? netdev->netdev_class->send(netdev, qid, buffers, cnt, may_steal)
              : EOPNOTSUPP);
     if (!error) {
         COVERAGE_INC(netdev_sent);
@@ -694,14 +701,16 @@ netdev_send(struct netdev *netdev, struct dpif_packet **buffers, int cnt,
  * when the packet transmission queue has sufficient room to transmit a packet
  * with netdev_send().
  *
- * The kernel maintains a packet transmission queue, so the client is not
- * expected to do additional queuing of packets.  Thus, this function is
- * unlikely to ever be used.  It is included for completeness. */
+ * The network device is expected to maintain one or more packet
+ * transmission queues, so that the caller does not ordinarily have to
+ * do additional queuing of packets.  'qid' specifies the queue to use
+ * and can be ignored if the implementation does not support multiple
+ * queues. */
 void
-netdev_send_wait(struct netdev *netdev)
+netdev_send_wait(struct netdev *netdev, int qid)
 {
     if (netdev->netdev_class->send_wait) {
-        netdev->netdev_class->send_wait(netdev);
+        netdev->netdev_class->send_wait(netdev, qid);
     }
 }
 

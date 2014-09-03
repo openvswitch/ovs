@@ -847,8 +847,8 @@ netdev_dummy_rxq_drain(struct netdev_rxq *rxq_)
 }
 
 static int
-netdev_dummy_send(struct netdev *netdev, struct dpif_packet **pkts, int cnt,
-                  bool may_steal)
+netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
+                  struct dpif_packet **pkts, int cnt, bool may_steal)
 {
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
     int error = 0;

@@ -1057,8 +1057,8 @@ netdev_linux_rxq_drain(struct netdev_rxq *rxq_)
  * The kernel maintains a packet transmission queue, so the caller is not
  * expected to do additional queuing of packets. */
 static int
-netdev_linux_send(struct netdev *netdev_, struct dpif_packet **pkts, int cnt,
-                  bool may_steal)
+netdev_linux_send(struct netdev *netdev_, int qid OVS_UNUSED,
+                  struct dpif_packet **pkts, int cnt, bool may_steal)
 {
     int i;
     int error = 0;
@@ -1161,7 +1161,7 @@ netdev_linux_send(struct netdev *netdev_, struct dpif_packet **pkts, int cnt,
  * expected to do additional queuing of packets.  Thus, this function is
  * unlikely to ever be used.  It is included for completeness. */
 static void
-netdev_linux_send_wait(struct netdev *netdev)
+netdev_linux_send_wait(struct netdev *netdev, int qid OVS_UNUSED)
 {
     if (is_tap_netdev(netdev)) {
         /* TAP device always accepts packets.*/

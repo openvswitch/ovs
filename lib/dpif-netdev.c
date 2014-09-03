@@ -2435,7 +2435,7 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
     case OVS_ACTION_ATTR_OUTPUT:
         p = dp_netdev_lookup_port(dp, u32_to_odp(nl_attr_get_u32(a)));
         if (OVS_LIKELY(p)) {
-            netdev_send(p->netdev, packets, cnt, may_steal);
+            netdev_send(p->netdev, NETDEV_QID_NONE, packets, cnt, may_steal);
         } else if (may_steal) {
             for (i = 0; i < cnt; i++) {
                 dpif_packet_delete(packets[i]);
