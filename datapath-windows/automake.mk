@@ -32,6 +32,8 @@ EXTRA_DIST += \
 	datapath-windows/ovsext/Jhash.h \
 	datapath-windows/ovsext/Netlink/Netlink.c \
 	datapath-windows/ovsext/Netlink/Netlink.h \
+	datapath-windows/ovsext/Netlink/NetlinkBuf.c \
+	datapath-windows/ovsext/Netlink/NetlinkBuf.h \
 	datapath-windows/ovsext/Netlink/NetlinkProto.h \
 	datapath-windows/ovsext/NetProto.h \
 	datapath-windows/ovsext/Oid.c \
