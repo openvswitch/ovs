@@ -36,6 +36,7 @@
 #include "odp-util.h"
 #include "ofp-print.h"
 #include "ofpbuf.h"
+#include "ovs-numa.h"
 #include "ovs-thread.h"
 #include "ovs-rcu.h"
 #include "packet-dpif.h"
@@ -158,6 +159,8 @@ struct dpdk_mp {
  * each cpu core. */
 struct dpdk_tx_queue {
     rte_spinlock_t tx_lock;
+    bool flush_tx;                 /* Set to true to flush queue everytime */
+                                   /* pkts are queued. */
     int count;
     uint64_t tsc;
     struct rte_mbuf *burst_pkts[MAX_TX_QUEUE_LEN];
@@ -469,8 +472,15 @@ netdev_dpdk_set_txq(struct netdev_dpdk *netdev, unsigned int n_txqs)
     int i;
 
     netdev->tx_q = dpdk_rte_mzalloc(n_txqs * sizeof *netdev->tx_q);
+    /* Each index is considered as a cpu core id, since there should
+     * be one tx queue for each cpu core. */
     for (i = 0; i < n_txqs; i++) {
+        int core_id = ovs_numa_get_numa_id(i);
+
         rte_spinlock_init(&netdev->tx_q[i].tx_lock);
+        /* If the corresponding core is not on the same numa node
+         * as 'netdev', flags the 'flush_tx'. */
+        netdev->tx_q[i].flush_tx = netdev->socket_id == core_id;
     }
 }
 
@@ -485,14 +495,13 @@ netdev_dpdk_init(struct netdev *netdev_, unsigned int port_no)
 
     ovs_mutex_lock(&netdev->mutex);
 
+    /* XXX: need to discover device node at run time. */
+    netdev->socket_id = SOCKET0;
     netdev_dpdk_set_txq(netdev, NR_QUEUE);
     netdev->port_id = port_no;
     netdev->flags = 0;
     netdev->mtu = ETHER_MTU;
     netdev->max_packet_len = MTU_TO_MAX_LEN(netdev->mtu);
-
-    /* XXX: need to discover device node at run time. */
-    netdev->socket_id = SOCKET0;
 
     netdev->dpdk_mp = dpdk_mp_get(netdev->socket_id, netdev->mtu);
     if (!netdev->dpdk_mp) {
@@ -767,7 +776,7 @@ dpdk_queue_pkts(struct netdev_dpdk *dev, int qid,
         txq->count += tocopy;
         i += tocopy;
 
-        if (txq->count == MAX_TX_QUEUE_LEN) {
+        if (txq->count == MAX_TX_QUEUE_LEN || txq->flush_tx) {
             dpdk_queue_flush__(dev, qid);
         }
         diff_tsc = rte_get_timer_cycles() - txq->tsc;
