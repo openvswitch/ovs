@@ -95,6 +95,7 @@ step 2 of the "Requirements" section.
 
     ovsdb-server --pidfile --detach --log-file \
       --remote punix:/var/run/openvswitch/db.sock \
+      --remote=db:hardware_vtep,Global,managers \
       /etc/openvswitch/ovs.db /etc/openvswitch/vtep.db
 
 3. Start OVS as normal:
