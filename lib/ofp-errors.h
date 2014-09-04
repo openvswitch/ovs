@@ -286,7 +286,8 @@ enum ofperr {
      * arbitrary network address mask. */
     OFPERR_OFPBMC_BAD_NW_ADDR_MASK,
 
-    /* OF1.1+(4,5).  Unsupported wildcard specified in the match. */
+    /* NX1.0(1,262), OF1.1+(4,5).  Unsupported wildcard specified in the
+     * match. */
     OFPERR_OFPBMC_BAD_WILDCARDS,
 
     /* OF1.1+(4,6).  Unsupported field in the match. */
