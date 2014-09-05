@@ -1080,26 +1080,38 @@ odp_mask_attr_is_wildcard(const struct nlattr *ma)
 static bool
 odp_mask_attr_is_exact(const struct nlattr *ma)
 {
-    bool is_exact = false;
+    bool is_exact;
     enum ovs_key_attr attr = nl_attr_type(ma);
 
-    if (attr == OVS_KEY_ATTR_TUNNEL) {
-        /* XXX this is a hack for now. Should change
-         * the exact match dection to per field
-         * instead of per attribute.
-         */
+    if (attr == OVS_KEY_ATTR_TCP_FLAGS) {
+        is_exact = TCP_FLAGS_BE16(nl_attr_get_be16(ma)) == htons(0x0fff);
+    } else if (attr == OVS_KEY_ATTR_IPV6) {
+        const struct ovs_key_ipv6 *mask = nl_attr_get(ma);
+
+        is_exact =
+            (mask->ipv6_label & htonl(IPV6_LABEL_MASK)) == htonl(IPV6_LABEL_MASK)
+            && mask->ipv6_proto == UINT8_MAX
+            && mask->ipv6_tclass == UINT8_MAX
+            && mask->ipv6_hlimit == UINT8_MAX
+            && mask->ipv6_frag == UINT8_MAX
+            && ipv6_mask_is_exact((const struct in6_addr *)mask->ipv6_src)
+            && ipv6_mask_is_exact((const struct in6_addr *)mask->ipv6_dst);
+    } else if (attr == OVS_KEY_ATTR_TUNNEL) {
         struct flow_tnl tun_mask;
+
         memset(&tun_mask, 0, sizeof tun_mask);
         odp_tun_key_from_attr(ma, &tun_mask);
-        if (tun_mask.flags == (FLOW_TNL_F_KEY
-                               | FLOW_TNL_F_DONT_FRAGMENT
-                               | FLOW_TNL_F_CSUM
-                               | FLOW_TNL_F_OAM)) {
-            /* The flags are exact match, check the remaining fields. */
-            tun_mask.flags = 0xffff;
-            is_exact = is_all_ones(&tun_mask,
-                                   offsetof(struct flow_tnl, ip_ttl));
-        }
+        is_exact = tun_mask.flags == (FLOW_TNL_F_KEY
+                                      | FLOW_TNL_F_DONT_FRAGMENT
+                                      | FLOW_TNL_F_CSUM
+                                      | FLOW_TNL_F_OAM)
+            && tun_mask.tun_id == OVS_BE64_MAX
+            && tun_mask.ip_src == OVS_BE32_MAX
+            && tun_mask.ip_dst == OVS_BE32_MAX
+            && tun_mask.ip_tos == UINT8_MAX
+            && tun_mask.ip_ttl == UINT8_MAX
+            && tun_mask.tp_src == OVS_BE16_MAX
+            && tun_mask.tp_dst == OVS_BE16_MAX;
     } else {
         is_exact = is_all_ones(nl_attr_get(ma), nl_attr_get_size(ma));
     }
