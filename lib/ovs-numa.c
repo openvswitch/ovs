@@ -143,13 +143,13 @@ ovs_numa_init(void)
 bool
 ovs_numa_numa_id_is_valid(int numa_id)
 {
-    return numa_id < ovs_numa_get_n_numas();
+    return found_numa_and_core && numa_id < ovs_numa_get_n_numas();
 }
 
 bool
 ovs_numa_core_id_is_valid(int core_id)
 {
-    return core_id < ovs_numa_get_n_cores();
+    return found_numa_and_core && core_id < ovs_numa_get_n_cores();
 }
 
 /* Returns the number of numa nodes. */
@@ -168,14 +168,14 @@ ovs_numa_get_n_cores(void)
                                : OVS_CORE_UNSPEC;
 }
 
-/* Returns the number of cpu cores on numa node. */
+/* Returns the number of cpu cores on numa node.  Returns OVS_CORE_UNSPEC
+ * if 'numa_id' is invalid. */
 int
 ovs_numa_get_n_cores_on_numa(int numa_id)
 {
-    if (found_numa_and_core) {
+    if (ovs_numa_numa_id_is_valid(numa_id)) {
         struct numa_node *numa;
 
-        ovs_assert(ovs_numa_numa_id_is_valid(numa_id));
         numa = CONTAINER_OF(hmap_first_with_hash(&all_numa_nodes,
                                                  hash_int(numa_id, 0)),
                             struct numa_node, hmap_node);
@@ -186,16 +186,16 @@ ovs_numa_get_n_cores_on_numa(int numa_id)
     return OVS_CORE_UNSPEC;
 }
 
-/* Returns the number of unpinned cpu cores on numa node. */
+/* Returns the number of unpinned cpu cores on numa node.  Returns
+ * OVS_CORE_UNSPEC if 'numa_id' is invalid. */
 int
 ovs_numa_get_n_unpinned_cores_on_numa(int numa_id)
 {
-    if (found_numa_and_core) {
+    if (ovs_numa_numa_id_is_valid(numa_id)) {
         struct numa_node *numa;
         struct cpu_core *core;
         int count = 0;
 
-        ovs_assert(ovs_numa_numa_id_is_valid(numa_id));
         numa = CONTAINER_OF(hmap_first_with_hash(&all_numa_nodes,
                                                  hash_int(numa_id, 0)),
                             struct numa_node, hmap_node);
@@ -212,27 +212,28 @@ ovs_numa_get_n_unpinned_cores_on_numa(int numa_id)
 }
 
 /* Given 'core_id', tries to pin that core.  Returns true, if succeeds.
- * False, if the core has already been pinned. */
+ * False, if the core has already been pinned or if 'core_id' is invalid. */
 bool
 ovs_numa_try_pin_core_specific(int core_id)
 {
-    struct cpu_core *core;
+    if (ovs_numa_core_id_is_valid(core_id)) {
+        struct cpu_core *core;
 
-    ovs_assert(ovs_numa_core_id_is_valid(core_id));
-
-    core = CONTAINER_OF(hmap_first_with_hash(&all_cpu_cores,
-                                             hash_int(core_id, 0)),
-                        struct cpu_core, hmap_node);
-    if (!core->pinned) {
-        core->pinned = true;
-        return true;
+        core = CONTAINER_OF(hmap_first_with_hash(&all_cpu_cores,
+                                                 hash_int(core_id, 0)),
+                            struct cpu_core, hmap_node);
+        if (!core->pinned) {
+            core->pinned = true;
+            return true;
+        }
     }
 
     return false;
 }
 
 /* Searches through all cores for an unpinned core.  Returns the core_id
- * if found and set the 'core->pinned' to true.  Otherwise, returns -1. */
+ * if found and set the 'core->pinned' to true.  Otherwise, returns
+ * OVS_CORE_UNSPEC. */
 int
 ovs_numa_get_unpinned_core_any(void)
 {
@@ -250,22 +251,22 @@ ovs_numa_get_unpinned_core_any(void)
 
 /* Searches through all cores on numa node with 'numa_id' for an unpinned
  * core.  Returns the core_id if found and sets the 'core->pinned' to true.
- * Otherwise, returns -1. */
+ * Otherwise, returns OVS_CORE_UNSPEC. */
 int
 ovs_numa_get_unpinned_core_on_numa(int numa_id)
 {
-    struct numa_node *numa;
-    struct cpu_core *core;
+    if (ovs_numa_numa_id_is_valid(numa_id)) {
+        struct numa_node *numa;
+        struct cpu_core *core;
 
-    ovs_assert(ovs_numa_numa_id_is_valid(numa_id));
-
-    numa = CONTAINER_OF(hmap_first_with_hash(&all_numa_nodes,
-                                             hash_int(numa_id, 0)),
-                        struct numa_node, hmap_node);
-    LIST_FOR_EACH(core, list_node, &numa->cores) {
-        if (!core->pinned) {
-            core->pinned = true;
-            return core->core_id;
+        numa = CONTAINER_OF(hmap_first_with_hash(&all_numa_nodes,
+                                                 hash_int(numa_id, 0)),
+                            struct numa_node, hmap_node);
+        LIST_FOR_EACH(core, list_node, &numa->cores) {
+            if (!core->pinned) {
+                core->pinned = true;
+                return core->core_id;
+            }
         }
     }
 
@@ -276,14 +277,14 @@ ovs_numa_get_unpinned_core_on_numa(int numa_id)
 void
 ovs_numa_unpin_core(int core_id)
 {
-    struct cpu_core *core;
+    if (ovs_numa_core_id_is_valid(core_id)) {
+        struct cpu_core *core;
 
-    ovs_assert(ovs_numa_core_id_is_valid(core_id));
-
-    core = CONTAINER_OF(hmap_first_with_hash(&all_cpu_cores,
-                                             hash_int(core_id, 0)),
-                        struct cpu_core, hmap_node);
-    core->pinned = false;
+        core = CONTAINER_OF(hmap_first_with_hash(&all_cpu_cores,
+                                                 hash_int(core_id, 0)),
+                            struct cpu_core, hmap_node);
+        core->pinned = false;
+    }
 }
 
 #endif /* __linux__ */
