@@ -81,7 +81,7 @@ def conf():
     if options.optimize is None:
         options.optimize = 0
 
-    cflags += " -O%d" % options.optimize
+    cflags += " -O%s" % str(options.optimize)
 
     ENV["CFLAGS"] = cflags
 
@@ -362,10 +362,13 @@ def main():
                      help="configure the man documentation install directory")
     group.add_option("--with-dpdk", dest="with_dpdk", metavar="DPDK_BUILD",
                      help="built with dpdk libraries located at DPDK_BUILD");
+    parser.add_option_group(group)
 
-    for i in range(4):
-        group.add_option("--O%d" % i, dest="optimize", action="store_const",
-                         const=i, help="compile with -O%d" % i)
+    group = optparse.OptionGroup(parser, "Optimization Flags")
+    for i in ["s", "g"] + range(4) + ["fast"]:
+        group.add_option("--O%s" % str(i), dest="optimize",
+                         action="store_const", const=i,
+                         help="compile with -O%s" % str(i))
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser, "check")
