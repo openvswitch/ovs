@@ -158,7 +158,6 @@ struct dpdk_mp {
 /* There should be one 'struct dpdk_tx_queue' created for
  * each cpu core. */
 struct dpdk_tx_queue {
-    rte_spinlock_t tx_lock;
     bool flush_tx;                 /* Set to true to flush queue everytime */
                                    /* pkts are queued. */
     int count;
@@ -477,7 +476,6 @@ netdev_dpdk_set_txq(struct netdev_dpdk *netdev, unsigned int n_txqs)
     for (i = 0; i < n_txqs; i++) {
         int core_id = ovs_numa_get_numa_id(i);
 
-        rte_spinlock_init(&netdev->tx_q[i].tx_lock);
         /* If the corresponding core is not on the same numa node
          * as 'netdev', flags the 'flush_tx'. */
         netdev->tx_q[i].flush_tx = netdev->socket_id == core_id;
@@ -723,9 +721,7 @@ dpdk_queue_flush(struct netdev_dpdk *dev, int qid)
     if (txq->count == 0) {
         return;
     }
-    rte_spinlock_lock(&txq->tx_lock);
     dpdk_queue_flush__(dev, qid);
-    rte_spinlock_unlock(&txq->tx_lock);
 }
 
 static int
@@ -765,7 +761,6 @@ dpdk_queue_pkts(struct netdev_dpdk *dev, int qid,
 
     int i = 0;
 
-    rte_spinlock_lock(&txq->tx_lock);
     while (i < cnt) {
         int freeslots = MAX_TX_QUEUE_LEN - txq->count;
         int tocopy = MIN(freeslots, cnt-i);
@@ -784,7 +779,6 @@ dpdk_queue_pkts(struct netdev_dpdk *dev, int qid,
             dpdk_queue_flush__(dev, qid);
         }
     }
-    rte_spinlock_unlock(&txq->tx_lock);
 }
 
 /* Tx function. Transmit packets indefinitely */
