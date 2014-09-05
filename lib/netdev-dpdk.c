@@ -493,8 +493,7 @@ netdev_dpdk_init(struct netdev *netdev_, unsigned int port_no)
 
     ovs_mutex_lock(&netdev->mutex);
 
-    /* XXX: need to discover device node at run time. */
-    netdev->socket_id = SOCKET0;
+    netdev->socket_id = rte_eth_dev_socket_id(port_no);
     netdev_dpdk_set_txq(netdev, NR_QUEUE);
     netdev->port_id = port_no;
     netdev->flags = 0;
@@ -859,8 +858,6 @@ netdev_dpdk_send(struct netdev *netdev, int qid, struct dpif_packet **pkts,
     } else {
         int next_tx_idx = 0;
         int dropped = 0;
-
-        qid = rte_lcore_id();
 
         for (i = 0; i < cnt; i++) {
             int size = ofpbuf_size(&pkts[i]->ofpbuf);
@@ -1518,7 +1515,8 @@ pmd_thread_setaffinity_cpu(int cpu)
         return err;
     }
     /* lcore_id 0 is reseved for use by non pmd threads. */
-    RTE_PER_LCORE(_lcore_id) = cpu + 1;
+    ovs_assert(cpu);
+    RTE_PER_LCORE(_lcore_id) = cpu;
 
     return 0;
 }
@@ -1526,9 +1524,6 @@ pmd_thread_setaffinity_cpu(int cpu)
 void
 thread_set_nonpmd(void)
 {
-    /* We cannot have RTE_MAX_LCORE pmd threads, because lcore_id 0 is reserved
-     * for non pmd threads */
-    BUILD_ASSERT(NR_PMD_THREADS < RTE_MAX_LCORE);
     /* We have to use 0 to allow non pmd threads to perform certain DPDK
      * operations, like rte_eth_dev_configure(). */
     RTE_PER_LCORE(_lcore_id) = 0;
