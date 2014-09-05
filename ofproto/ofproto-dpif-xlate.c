@@ -2630,7 +2630,8 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     if (out_port != ODPP_NONE) {
         ctx->xout->slow |= commit_odp_actions(flow, &ctx->base_flow,
                                               ctx->xout->odp_actions,
-                                              &ctx->xout->wc);
+                                              &ctx->xout->wc,
+                                              ctx->xbridge->masked_set_action);
 
         if (ctx->use_recirc) {
             struct ovs_action_hash *act_hash;
@@ -3020,7 +3021,8 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
 
     ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
                                           ctx->xout->odp_actions,
-                                          &ctx->xout->wc);
+                                          &ctx->xout->wc,
+                                          ctx->xbridge->masked_set_action);
 
     odp_execute_actions(NULL, &packet, 1, false, &md,
                         ofpbuf_data(ctx->xout->odp_actions),
@@ -3116,7 +3118,8 @@ compose_recirculate_action(struct xlate_ctx *ctx,
 
     ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
                                           ctx->xout->odp_actions,
-                                          &ctx->xout->wc);
+                                          &ctx->xout->wc,
+                                          ctx->xbridge->masked_set_action);
     nl_msg_put_u32(ctx->xout->odp_actions, OVS_ACTION_ATTR_RECIRC, id);
 }
 
@@ -3133,7 +3136,8 @@ compose_mpls_push_action(struct xlate_ctx *ctx, struct ofpact_push_mpls *mpls)
     if (!n) {
         ctx->xout->slow |= commit_odp_actions(flow, &ctx->base_flow,
                                               ctx->xout->odp_actions,
-                                              &ctx->xout->wc);
+                                              &ctx->xout->wc,
+                                              ctx->xbridge->masked_set_action);
     } else if (n >= FLOW_MAX_MPLS_LABELS) {
         if (ctx->xin->packet != NULL) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -3493,7 +3497,8 @@ xlate_sample_action(struct xlate_ctx *ctx,
 
   ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
                                         ctx->xout->odp_actions,
-                                        &ctx->xout->wc);
+                                        &ctx->xout->wc,
+                                        ctx->xbridge->masked_set_action);
 
   compose_flow_sample_cookie(os->probability, os->collector_set_id,
                              os->obs_domain_id, os->obs_point_id, &cookie);

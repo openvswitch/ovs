@@ -1167,43 +1167,67 @@ odp_mask_attr_is_wildcard(const struct nlattr *ma)
 }
 
 static bool
-odp_mask_attr_is_exact(const struct nlattr *ma)
+odp_mask_is_exact(enum ovs_key_attr attr, const void *mask, size_t size)
 {
-    bool is_exact;
-    enum ovs_key_attr attr = nl_attr_type(ma);
-
     if (attr == OVS_KEY_ATTR_TCP_FLAGS) {
-        is_exact = TCP_FLAGS(nl_attr_get_be16(ma)) == TCP_FLAGS(OVS_BE16_MAX);
-    } else if (attr == OVS_KEY_ATTR_IPV6) {
-        const struct ovs_key_ipv6 *mask = nl_attr_get(ma);
+        return TCP_FLAGS(*(ovs_be16 *)mask) == TCP_FLAGS(OVS_BE16_MAX);
+    }
+    if (attr == OVS_KEY_ATTR_IPV6) {
+        const struct ovs_key_ipv6 *ipv6_mask = mask;
 
-        is_exact =
-            ((mask->ipv6_label & htonl(IPV6_LABEL_MASK))
+        return
+            ((ipv6_mask->ipv6_label & htonl(IPV6_LABEL_MASK))
              == htonl(IPV6_LABEL_MASK))
-            && mask->ipv6_proto == UINT8_MAX
-            && mask->ipv6_tclass == UINT8_MAX
-            && mask->ipv6_hlimit == UINT8_MAX
-            && mask->ipv6_frag == UINT8_MAX
-            && ipv6_mask_is_exact((const struct in6_addr *)mask->ipv6_src)
-            && ipv6_mask_is_exact((const struct in6_addr *)mask->ipv6_dst);
-    } else if (attr == OVS_KEY_ATTR_TUNNEL) {
-        struct flow_tnl tun_mask;
+            && ipv6_mask->ipv6_proto == UINT8_MAX
+            && ipv6_mask->ipv6_tclass == UINT8_MAX
+            && ipv6_mask->ipv6_hlimit == UINT8_MAX
+            && ipv6_mask->ipv6_frag == UINT8_MAX
+            && ipv6_mask_is_exact((const struct in6_addr *)ipv6_mask->ipv6_src)
+            && ipv6_mask_is_exact((const struct in6_addr *)ipv6_mask->ipv6_dst);
+    }
+    if (attr == OVS_KEY_ATTR_TUNNEL) {
+        const struct flow_tnl *tun_mask = mask;
 
-        memset(&tun_mask, 0, sizeof tun_mask);
-        odp_tun_key_from_attr(ma, &tun_mask);
-        is_exact = tun_mask.flags == FLOW_TNL_F_MASK
-            && tun_mask.tun_id == OVS_BE64_MAX
-            && tun_mask.ip_src == OVS_BE32_MAX
-            && tun_mask.ip_dst == OVS_BE32_MAX
-            && tun_mask.ip_tos == UINT8_MAX
-            && tun_mask.ip_ttl == UINT8_MAX
-            && tun_mask.tp_src == OVS_BE16_MAX
-            && tun_mask.tp_dst == OVS_BE16_MAX;
-    } else {
-        is_exact = is_all_ones(nl_attr_get(ma), nl_attr_get_size(ma));
+        return tun_mask->flags == FLOW_TNL_F_MASK
+            && tun_mask->tun_id == OVS_BE64_MAX
+            && tun_mask->ip_src == OVS_BE32_MAX
+            && tun_mask->ip_dst == OVS_BE32_MAX
+            && tun_mask->ip_tos == UINT8_MAX
+            && tun_mask->ip_ttl == UINT8_MAX
+            && tun_mask->tp_src == OVS_BE16_MAX
+            && tun_mask->tp_dst == OVS_BE16_MAX;
     }
 
-    return is_exact;
+    if (attr == OVS_KEY_ATTR_ARP) {
+        /* ARP key has padding, ignore it. */
+        BUILD_ASSERT_DECL(sizeof(struct ovs_key_arp) == 24);
+        BUILD_ASSERT_DECL(offsetof(struct ovs_key_arp, arp_tha) == 10 + 6);
+        size = offsetof(struct ovs_key_arp, arp_tha) + ETH_ADDR_LEN;
+        ovs_assert(((uint16_t *)mask)[size/2] == 0);
+    }
+
+    return is_all_ones(mask, size);
+}
+
+static bool
+odp_mask_attr_is_exact(const struct nlattr *ma)
+{
+    struct flow_tnl tun_mask;
+    enum ovs_key_attr attr = nl_attr_type(ma);
+    const void *mask;
+    size_t size;
+
+    if (attr == OVS_KEY_ATTR_TUNNEL) {
+        memset(&tun_mask, 0, sizeof tun_mask);
+        odp_tun_key_from_attr(ma, &tun_mask);
+        mask = &tun_mask;
+        size = sizeof tun_mask;
+    } else {
+        mask = nl_attr_get(ma);
+        size = nl_attr_get_size(ma);
+    }
+
+    return odp_mask_is_exact(attr, mask, size);
 }
 
 void
@@ -3562,14 +3586,6 @@ commit_masked_set_action(struct ofpbuf *odp_actions,
     nl_msg_end_nested(odp_actions, offset);
 }
 
-void
-odp_put_pkt_mark_action(const uint32_t pkt_mark,
-                        struct ofpbuf *odp_actions)
-{
-    commit_set_action(odp_actions, OVS_KEY_ATTR_SKB_MARK, &pkt_mark,
-                      sizeof(pkt_mark));
-}
-
 /* If any of the flow key data that ODP actions can modify are different in
  * 'base->tunnel' and 'flow->tunnel', appends a set_tunnel ODP action to
  * 'odp_actions' that change the flow tunneling information in key from
@@ -3590,29 +3606,63 @@ commit_odp_tunnel_action(const struct flow *flow, struct flow *base,
     }
 }
 
-static void
-commit_set_ether_addr_action(const struct flow *flow, struct flow *base,
-                             struct ofpbuf *odp_actions,
-                             struct flow_wildcards *wc)
+static bool
+commit(enum ovs_key_attr attr, bool use_masked_set,
+       const void *key, void *base, void *mask, size_t size,
+       struct ofpbuf *odp_actions)
 {
-    struct ovs_key_ethernet eth_key;
+    if (memcmp(key, base, size)) {
+        bool fully_masked = odp_mask_is_exact(attr, mask, size);
 
-    if (eth_addr_equals(base->dl_src, flow->dl_src) &&
-        eth_addr_equals(base->dl_dst, flow->dl_dst)) {
-        return;
+        if (use_masked_set && !fully_masked) {
+            commit_masked_set_action(odp_actions, attr, key, mask, size);
+        } else {
+            if (!fully_masked) {
+                memset(mask, 0xff, size);
+            }
+            commit_set_action(odp_actions, attr, key, size);
+        }
+        memcpy(base, key, size);
+        return true;
+    } else {
+        /* Mask bits are set when we have either read or set the corresponding
+         * values.  Masked bits will be exact-matched, no need to set them
+         * if the value did not actually change. */
+        return false;
     }
+}
 
-    memset(&wc->masks.dl_src, 0xff, sizeof wc->masks.dl_src);
-    memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
+static void
+get_ethernet_key(const struct flow *flow, struct ovs_key_ethernet *eth)
+{
+    memcpy(eth->eth_src, flow->dl_src, ETH_ADDR_LEN);
+    memcpy(eth->eth_dst, flow->dl_dst, ETH_ADDR_LEN);
+}
 
-    memcpy(base->dl_src, flow->dl_src, ETH_ADDR_LEN);
-    memcpy(base->dl_dst, flow->dl_dst, ETH_ADDR_LEN);
+static void
+put_ethernet_key(const struct ovs_key_ethernet *eth, struct flow *flow)
+{
+    memcpy(flow->dl_src, eth->eth_src, ETH_ADDR_LEN);
+    memcpy(flow->dl_dst, eth->eth_dst, ETH_ADDR_LEN);
+}
 
-    memcpy(eth_key.eth_src, base->dl_src, ETH_ADDR_LEN);
-    memcpy(eth_key.eth_dst, base->dl_dst, ETH_ADDR_LEN);
+static void
+commit_set_ether_addr_action(const struct flow *flow, struct flow *base_flow,
+                             struct ofpbuf *odp_actions,
+                             struct flow_wildcards *wc,
+                             bool use_masked)
+{
+    struct ovs_key_ethernet key, base, mask;
 
-    commit_set_action(odp_actions, OVS_KEY_ATTR_ETHERNET,
-                      &eth_key, sizeof(eth_key));
+    get_ethernet_key(flow, &key);
+    get_ethernet_key(base_flow, &base);
+    get_ethernet_key(&wc->masks, &mask);
+
+    if (commit(OVS_KEY_ATTR_ETHERNET, use_masked,
+               &key, &base, &mask, sizeof key, odp_actions)) {
+        put_ethernet_key(&base, base_flow);
+        put_ethernet_key(&mask, &wc->masks);
+    }
 }
 
 static void
@@ -3714,115 +3764,157 @@ commit_mpls_action(const struct flow *flow, struct flow *base,
 }
 
 static void
-commit_set_ipv4_action(const struct flow *flow, struct flow *base,
-                     struct ofpbuf *odp_actions, struct flow_wildcards *wc)
+get_ipv4_key(const struct flow *flow, struct ovs_key_ipv4 *ipv4)
 {
-    struct ovs_key_ipv4 ipv4_key;
-
-    if (base->nw_src == flow->nw_src &&
-        base->nw_dst == flow->nw_dst &&
-        base->nw_tos == flow->nw_tos &&
-        base->nw_ttl == flow->nw_ttl &&
-        base->nw_frag == flow->nw_frag) {
-        return;
-    }
-
-    memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
-    memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
-    memset(&wc->masks.nw_tos, 0xff, sizeof wc->masks.nw_tos);
-    memset(&wc->masks.nw_ttl, 0xff, sizeof wc->masks.nw_ttl);
-    memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
-    memset(&wc->masks.nw_frag, 0xff, sizeof wc->masks.nw_frag);
-
-    ipv4_key.ipv4_src = base->nw_src = flow->nw_src;
-    ipv4_key.ipv4_dst = base->nw_dst = flow->nw_dst;
-    ipv4_key.ipv4_tos = base->nw_tos = flow->nw_tos;
-    ipv4_key.ipv4_ttl = base->nw_ttl = flow->nw_ttl;
-    ipv4_key.ipv4_proto = base->nw_proto;
-    ipv4_key.ipv4_frag = ovs_to_odp_frag(base->nw_frag);
-
-    commit_set_action(odp_actions, OVS_KEY_ATTR_IPV4,
-                      &ipv4_key, sizeof(ipv4_key));
+    ipv4->ipv4_src = flow->nw_src;
+    ipv4->ipv4_dst = flow->nw_dst;
+    ipv4->ipv4_proto = flow->nw_proto;
+    ipv4->ipv4_tos = flow->nw_tos;
+    ipv4->ipv4_ttl = flow->nw_ttl;
+    ipv4->ipv4_frag = ovs_to_odp_frag(flow->nw_frag);
 }
 
 static void
-commit_set_ipv6_action(const struct flow *flow, struct flow *base,
-                       struct ofpbuf *odp_actions, struct flow_wildcards *wc)
+put_ipv4_key(const struct ovs_key_ipv4 *ipv4, struct flow *flow)
 {
-    struct ovs_key_ipv6 ipv6_key;
+    flow->nw_src = ipv4->ipv4_src;
+    flow->nw_dst = ipv4->ipv4_dst;
+    flow->nw_proto = ipv4->ipv4_proto;
+    flow->nw_tos = ipv4->ipv4_tos;
+    flow->nw_ttl = ipv4->ipv4_ttl;
+    if (ipv4->ipv4_frag == 0xff) {
+        flow->nw_frag = 0xff;
+    } else {
+        odp_to_ovs_frag(ipv4->ipv4_frag, flow);
+   }
+}
 
-    if (ipv6_addr_equals(&base->ipv6_src, &flow->ipv6_src) &&
-        ipv6_addr_equals(&base->ipv6_dst, &flow->ipv6_dst) &&
-        base->ipv6_label == flow->ipv6_label &&
-        base->nw_tos == flow->nw_tos &&
-        base->nw_ttl == flow->nw_ttl &&
-        base->nw_frag == flow->nw_frag) {
-        return;
+static void
+commit_set_ipv4_action(const struct flow *flow, struct flow *base_flow,
+                       struct ofpbuf *odp_actions, struct flow_wildcards *wc,
+                       bool use_masked)
+{
+    struct ovs_key_ipv4 key, mask, base;
+
+    /* Check that nw_proto and nw_frag remain unchanged. */
+    ovs_assert(flow->nw_proto == base_flow->nw_proto &&
+               flow->nw_frag == base_flow->nw_frag);
+
+    get_ipv4_key(flow, &key);
+    get_ipv4_key(base_flow, &base);
+    get_ipv4_key(&wc->masks, &mask);
+    mask.ipv4_proto = 0;        /* Not writeable. */
+    mask.ipv4_frag = 0;         /* Not writable. */
+
+    if (commit(OVS_KEY_ATTR_IPV4, use_masked, &key, &base, &mask, sizeof key,
+               odp_actions)) {
+        put_ipv4_key(&base, base_flow);
+        if (mask.ipv4_proto != 0) { /* Mask was changed by commit(). */
+            put_ipv4_key(&mask, &wc->masks);
+        }
+   }
+}
+
+static void
+get_ipv6_key(const struct flow *flow, struct ovs_key_ipv6 *ipv6)
+{
+    memcpy(ipv6->ipv6_src, &flow->ipv6_src, sizeof ipv6->ipv6_src);
+    memcpy(ipv6->ipv6_dst, &flow->ipv6_dst, sizeof ipv6->ipv6_dst);
+    ipv6->ipv6_label = flow->ipv6_label;
+    ipv6->ipv6_proto = flow->nw_proto;
+    ipv6->ipv6_tclass = flow->nw_tos;
+    ipv6->ipv6_hlimit = flow->nw_ttl;
+    ipv6->ipv6_frag = ovs_to_odp_frag(flow->nw_frag);
+}
+
+static void
+put_ipv6_key(const struct ovs_key_ipv6 *ipv6, struct flow *flow)
+{
+    memcpy(&flow->ipv6_src, ipv6->ipv6_src, sizeof flow->ipv6_src);
+    memcpy(&flow->ipv6_dst, ipv6->ipv6_dst, sizeof flow->ipv6_dst);
+    flow->ipv6_label = ipv6->ipv6_label;
+    flow->nw_proto = ipv6->ipv6_proto;
+    flow->nw_tos = ipv6->ipv6_tclass;
+    flow->nw_ttl = ipv6->ipv6_hlimit;
+    if (ipv6->ipv6_frag == 0xff) {
+        flow->nw_frag = 0xff;
+    } else {
+        odp_to_ovs_frag(ipv6->ipv6_frag, flow);
+   }
+}
+
+static void
+commit_set_ipv6_action(const struct flow *flow, struct flow *base_flow,
+                       struct ofpbuf *odp_actions, struct flow_wildcards *wc,
+                       bool use_masked)
+{
+    struct ovs_key_ipv6 key, mask, base;
+
+    /* Check that nw_proto and nw_frag remain unchanged. */
+    ovs_assert(flow->nw_proto == base_flow->nw_proto &&
+               flow->nw_frag == base_flow->nw_frag);
+
+    get_ipv6_key(flow, &key);
+    get_ipv6_key(base_flow, &base);
+    get_ipv6_key(&wc->masks, &mask);
+    mask.ipv6_proto = 0;        /* Not writeable. */
+    mask.ipv6_frag = 0;         /* Not writable. */
+
+    if (commit(OVS_KEY_ATTR_IPV6, use_masked, &key, &base, &mask, sizeof key,
+               odp_actions)) {
+        put_ipv6_key(&base, base_flow);
+        if (mask.ipv6_proto != 0) { /* Mask was changed by commit(). */
+            put_ipv6_key(&mask, &wc->masks);
+        }
     }
+}
 
-    memset(&wc->masks.ipv6_src, 0xff, sizeof wc->masks.ipv6_src);
-    memset(&wc->masks.ipv6_dst, 0xff, sizeof wc->masks.ipv6_dst);
-    memset(&wc->masks.ipv6_label, 0xff, sizeof wc->masks.ipv6_label);
-    memset(&wc->masks.nw_tos, 0xff, sizeof wc->masks.nw_tos);
-    memset(&wc->masks.nw_ttl, 0xff, sizeof wc->masks.nw_ttl);
-    memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
-    memset(&wc->masks.nw_frag, 0xff, sizeof wc->masks.nw_frag);
+static void
+get_arp_key(const struct flow *flow, struct ovs_key_arp *arp)
+{
+    /* ARP key has padding, clear it. */
+    memset(arp, 0, sizeof *arp);
 
-    base->ipv6_src = flow->ipv6_src;
-    memcpy(&ipv6_key.ipv6_src, &base->ipv6_src, sizeof(ipv6_key.ipv6_src));
-    base->ipv6_dst = flow->ipv6_dst;
-    memcpy(&ipv6_key.ipv6_dst, &base->ipv6_dst, sizeof(ipv6_key.ipv6_dst));
+    arp->arp_sip = flow->nw_src;
+    arp->arp_tip = flow->nw_dst;
+    arp->arp_op = htons(flow->nw_proto);
+    memcpy(arp->arp_sha, flow->arp_sha, ETH_ADDR_LEN);
+    memcpy(arp->arp_tha, flow->arp_tha, ETH_ADDR_LEN);
+}
 
-    ipv6_key.ipv6_label = base->ipv6_label = flow->ipv6_label;
-    ipv6_key.ipv6_tclass = base->nw_tos = flow->nw_tos;
-    ipv6_key.ipv6_hlimit = base->nw_ttl = flow->nw_ttl;
-    ipv6_key.ipv6_proto = base->nw_proto;
-    ipv6_key.ipv6_frag = ovs_to_odp_frag(base->nw_frag);
-
-    commit_set_action(odp_actions, OVS_KEY_ATTR_IPV6,
-                      &ipv6_key, sizeof(ipv6_key));
+static void
+put_arp_key(const struct ovs_key_arp *arp, struct flow *flow)
+{
+    flow->nw_src = arp->arp_sip;
+    flow->nw_dst = arp->arp_tip;
+    flow->nw_proto = ntohs(arp->arp_op);
+    memcpy(flow->arp_sha, arp->arp_sha, ETH_ADDR_LEN);
+    memcpy(flow->arp_tha, arp->arp_tha, ETH_ADDR_LEN);
 }
 
 static enum slow_path_reason
-commit_set_arp_action(const struct flow *flow, struct flow *base,
+commit_set_arp_action(const struct flow *flow, struct flow *base_flow,
                       struct ofpbuf *odp_actions, struct flow_wildcards *wc)
 {
-    struct ovs_key_arp arp_key;
+    struct ovs_key_arp key, mask, base;
 
-    if (base->nw_src == flow->nw_src &&
-        base->nw_dst == flow->nw_dst &&
-        base->nw_proto == flow->nw_proto &&
-        eth_addr_equals(base->arp_sha, flow->arp_sha) &&
-        eth_addr_equals(base->arp_tha, flow->arp_tha)) {
-        return 0;
+    get_arp_key(flow, &key);
+    get_arp_key(base_flow, &base);
+    get_arp_key(&wc->masks, &mask);
+
+    if (commit(OVS_KEY_ATTR_ARP, true, &key, &base, &mask, sizeof key,
+               odp_actions)) {
+        put_arp_key(&base, base_flow);
+        put_arp_key(&mask, &wc->masks);
+        return SLOW_ACTION;
     }
-
-    memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
-    memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
-    memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
-    memset(&wc->masks.arp_sha, 0xff, sizeof wc->masks.arp_sha);
-    memset(&wc->masks.arp_tha, 0xff, sizeof wc->masks.arp_tha);
-
-    base->nw_src = flow->nw_src;
-    base->nw_dst = flow->nw_dst;
-    base->nw_proto = flow->nw_proto;
-    memcpy(base->arp_sha, flow->arp_sha, ETH_ADDR_LEN);
-    memcpy(base->arp_tha, flow->arp_tha, ETH_ADDR_LEN);
-
-    arp_key.arp_sip = base->nw_src;
-    arp_key.arp_tip = base->nw_dst;
-    arp_key.arp_op = htons(base->nw_proto);
-    memcpy(arp_key.arp_sha, flow->arp_sha, ETH_ADDR_LEN);
-    memcpy(arp_key.arp_tha, flow->arp_tha, ETH_ADDR_LEN);
-
-    commit_set_action(odp_actions, OVS_KEY_ATTR_ARP, &arp_key, sizeof arp_key);
-
-    return SLOW_ACTION;
+    return 0;
 }
 
 static enum slow_path_reason
 commit_set_nw_action(const struct flow *flow, struct flow *base,
-                     struct ofpbuf *odp_actions, struct flow_wildcards *wc)
+                     struct ofpbuf *odp_actions, struct flow_wildcards *wc,
+                     bool use_masked)
 {
     /* Check if 'flow' really has an L3 header. */
     if (!flow->nw_proto) {
@@ -3831,11 +3923,11 @@ commit_set_nw_action(const struct flow *flow, struct flow *base,
 
     switch (ntohs(base->dl_type)) {
     case ETH_TYPE_IP:
-        commit_set_ipv4_action(flow, base, odp_actions, wc);
+        commit_set_ipv4_action(flow, base, odp_actions, wc, use_masked);
         break;
 
     case ETH_TYPE_IPV6:
-        commit_set_ipv6_action(flow, base, odp_actions, wc);
+        commit_set_ipv6_action(flow, base, odp_actions, wc, use_masked);
         break;
 
     case ETH_TYPE_ARP:
@@ -3845,84 +3937,98 @@ commit_set_nw_action(const struct flow *flow, struct flow *base,
     return 0;
 }
 
+/* TCP, UDP, and SCTP keys have the same layout. */
+BUILD_ASSERT_DECL(sizeof(struct ovs_key_tcp) == sizeof(struct ovs_key_udp) &&
+                  sizeof(struct ovs_key_tcp) == sizeof(struct ovs_key_sctp));
+
 static void
-commit_set_port_action(const struct flow *flow, struct flow *base,
-                       struct ofpbuf *odp_actions, struct flow_wildcards *wc)
+get_tp_key(const struct flow *flow, struct ovs_key_tcp *tp)
 {
+    tp->tcp_src = flow->tp_src;
+    tp->tcp_dst = flow->tp_dst;
+}
+
+static void
+put_tp_key(const struct ovs_key_tcp *tp, struct flow *flow)
+{
+    flow->tp_src = tp->tcp_src;
+    flow->tp_dst = tp->tcp_dst;
+}
+
+static void
+commit_set_port_action(const struct flow *flow, struct flow *base_flow,
+                       struct ofpbuf *odp_actions, struct flow_wildcards *wc,
+                       bool use_masked)
+{
+    enum ovs_key_attr key_type;
+    struct ovs_key_tcp key, mask, base; /* Used for UDP and SCTP, too. */
+
     /* Check if 'flow' really has an L3 header. */
     if (!flow->nw_proto) {
         return;
     }
 
-    if (!is_ip_any(base) || (!base->tp_src && !base->tp_dst)) {
+    if (!is_ip_any(base_flow)) {
         return;
     }
-
-    if (base->tp_src == flow->tp_src &&
-        base->tp_dst == flow->tp_dst) {
-        return;
-    }
-
-    memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
-    memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
 
     if (flow->nw_proto == IPPROTO_TCP) {
-        struct ovs_key_tcp port_key;
-
-        port_key.tcp_src = base->tp_src = flow->tp_src;
-        port_key.tcp_dst = base->tp_dst = flow->tp_dst;
-
-        commit_set_action(odp_actions, OVS_KEY_ATTR_TCP,
-                          &port_key, sizeof(port_key));
-
+        key_type = OVS_KEY_ATTR_TCP;
     } else if (flow->nw_proto == IPPROTO_UDP) {
-        struct ovs_key_udp port_key;
-
-        port_key.udp_src = base->tp_src = flow->tp_src;
-        port_key.udp_dst = base->tp_dst = flow->tp_dst;
-
-        commit_set_action(odp_actions, OVS_KEY_ATTR_UDP,
-                          &port_key, sizeof(port_key));
+        key_type = OVS_KEY_ATTR_UDP;
     } else if (flow->nw_proto == IPPROTO_SCTP) {
-        struct ovs_key_sctp port_key;
+        key_type = OVS_KEY_ATTR_SCTP;
+    } else {
+        return;
+    }
 
-        port_key.sctp_src = base->tp_src = flow->tp_src;
-        port_key.sctp_dst = base->tp_dst = flow->tp_dst;
+    get_tp_key(flow, &key);
+    get_tp_key(base_flow, &base);
+    get_tp_key(&wc->masks, &mask);
 
-        commit_set_action(odp_actions, OVS_KEY_ATTR_SCTP,
-                          &port_key, sizeof(port_key));
+    if (commit(key_type, use_masked, &key, &base, &mask, sizeof key,
+               odp_actions)) {
+        put_tp_key(&base, base_flow);
+        put_tp_key(&mask, &wc->masks);
     }
 }
 
 static void
-commit_set_priority_action(const struct flow *flow, struct flow *base,
+commit_set_priority_action(const struct flow *flow, struct flow *base_flow,
                            struct ofpbuf *odp_actions,
-                           struct flow_wildcards *wc)
+                           struct flow_wildcards *wc,
+                           bool use_masked)
 {
-    if (base->skb_priority == flow->skb_priority) {
-        return;
+    uint32_t key, mask, base;
+
+    key = flow->skb_priority;
+    base = base_flow->skb_priority;
+    mask = wc->masks.skb_priority;
+
+    if (commit(OVS_KEY_ATTR_PRIORITY, use_masked, &key, &base, &mask,
+               sizeof key, odp_actions)) {
+        base_flow->skb_priority = base;
+        wc->masks.skb_priority = mask;
     }
-
-    memset(&wc->masks.skb_priority, 0xff, sizeof wc->masks.skb_priority);
-    base->skb_priority = flow->skb_priority;
-
-    commit_set_action(odp_actions, OVS_KEY_ATTR_PRIORITY,
-                      &base->skb_priority, sizeof(base->skb_priority));
 }
 
 static void
-commit_set_pkt_mark_action(const struct flow *flow, struct flow *base,
+commit_set_pkt_mark_action(const struct flow *flow, struct flow *base_flow,
                            struct ofpbuf *odp_actions,
-                           struct flow_wildcards *wc)
+                           struct flow_wildcards *wc,
+                           bool use_masked)
 {
-    if (base->pkt_mark == flow->pkt_mark) {
-        return;
+    uint32_t key, mask, base;
+
+    key = flow->pkt_mark;
+    base = base_flow->pkt_mark;
+    mask = wc->masks.pkt_mark;
+
+    if (commit(OVS_KEY_ATTR_SKB_MARK, use_masked, &key, &base, &mask,
+               sizeof key, odp_actions)) {
+        base_flow->pkt_mark = base;
+        wc->masks.pkt_mark = mask;
     }
-
-    memset(&wc->masks.pkt_mark, 0xff, sizeof wc->masks.pkt_mark);
-    base->pkt_mark = flow->pkt_mark;
-
-    odp_put_pkt_mark_action(base->pkt_mark, odp_actions);
 }
 
 /* If any of the flow key data that ODP actions can modify are different in
@@ -3936,17 +4042,18 @@ commit_set_pkt_mark_action(const struct flow *flow, struct flow *base,
  * slow path, if there is one, otherwise 0. */
 enum slow_path_reason
 commit_odp_actions(const struct flow *flow, struct flow *base,
-                   struct ofpbuf *odp_actions, struct flow_wildcards *wc)
+                   struct ofpbuf *odp_actions, struct flow_wildcards *wc,
+                   bool use_masked)
 {
     enum slow_path_reason slow;
 
-    commit_set_ether_addr_action(flow, base, odp_actions, wc);
-    slow = commit_set_nw_action(flow, base, odp_actions, wc);
-    commit_set_port_action(flow, base, odp_actions, wc);
+    commit_set_ether_addr_action(flow, base, odp_actions, wc, use_masked);
+    slow = commit_set_nw_action(flow, base, odp_actions, wc, use_masked);
+    commit_set_port_action(flow, base, odp_actions, wc, use_masked);
     commit_mpls_action(flow, base, odp_actions, wc);
     commit_vlan_action(flow->vlan_tci, base, odp_actions, wc);
-    commit_set_priority_action(flow, base, odp_actions, wc);
-    commit_set_pkt_mark_action(flow, base, odp_actions, wc);
+    commit_set_priority_action(flow, base, odp_actions, wc, use_masked);
+    commit_set_pkt_mark_action(flow, base, odp_actions, wc, use_masked);
 
     return slow;
 }

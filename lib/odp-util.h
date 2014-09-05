@@ -197,7 +197,8 @@ void commit_masked_set_action(struct ofpbuf *odp_actions,
 enum slow_path_reason commit_odp_actions(const struct flow *,
                                          struct flow *base,
                                          struct ofpbuf *odp_actions,
-                                         struct flow_wildcards *wc);
+                                         struct flow_wildcards *wc,
+                                         bool use_masked);
 
 /* ofproto-dpif interface.
  *
@@ -252,7 +253,5 @@ size_t odp_put_userspace_action(uint32_t pid,
                                 struct ofpbuf *odp_actions);
 void odp_put_tunnel_action(const struct flow_tnl *tunnel,
                            struct ofpbuf *odp_actions);
-void odp_put_pkt_mark_action(const uint32_t pkt_mark,
-                             struct ofpbuf *odp_actions);
 
 #endif /* odp-util.h */
