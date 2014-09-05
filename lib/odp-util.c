@@ -1318,19 +1318,26 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
             ds_put_format(ds, "tun_id=%#"PRIx64"/%#"PRIx64
                           ",src="IP_FMT"/"IP_FMT",dst="IP_FMT"/"IP_FMT
                           ",tos=%#"PRIx8"/%#"PRIx8",ttl=%"PRIu8"/%#"PRIx8
+                          ",tp_src=%"PRIu16"/%#"PRIx16
+                          ",tp_dst=%"PRIu16"/%#"PRIx16
                           ",flags(",
                           ntohll(tun_key.tun_id), ntohll(tun_mask.tun_id),
                           IP_ARGS(tun_key.ip_src), IP_ARGS(tun_mask.ip_src),
                           IP_ARGS(tun_key.ip_dst), IP_ARGS(tun_mask.ip_dst),
                           tun_key.ip_tos, tun_mask.ip_tos,
-                          tun_key.ip_ttl, tun_mask.ip_ttl);
+                          tun_key.ip_ttl, tun_mask.ip_ttl,
+                          tun_key.tp_src, tun_mask.tp_src,
+                          tun_key.tp_dst, tun_mask.tp_dst);
         } else {
             ds_put_format(ds, "tun_id=0x%"PRIx64",src="IP_FMT",dst="IP_FMT","
-                          "tos=0x%"PRIx8",ttl=%"PRIu8",flags(",
+                          "tos=0x%"PRIx8",ttl=%"PRIu8","
+                          "tp_src=%"PRIu16",tp_dst=%"PRIu16","
+                          "flags(",
                           ntohll(tun_key.tun_id),
                           IP_ARGS(tun_key.ip_src),
                           IP_ARGS(tun_key.ip_dst),
-                          tun_key.ip_tos, tun_key.ip_ttl);
+                          tun_key.ip_tos, tun_key.ip_ttl,
+                          tun_key.tp_src, tun_key.tp_dst);
         }
         if (ma && ~tun_mask.flags & FLOW_TNL_F_MASK) { /* Partially masked. */
             format_flags_masked(ds, NULL, flow_tun_flag_to_string,
@@ -1923,6 +1930,7 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
 
     {
         uint64_t tun_id, tun_id_mask;
+        int tp_src, tp_src_mask, tp_dst, tp_dst_mask;
         struct flow_tnl tun_key, tun_key_mask;
         int n = -1;
 
@@ -1930,21 +1938,29 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
         memset(&tun_key_mask, 0, sizeof tun_key_mask);
 
         if (mask && ovs_scan(s, "tunnel(tun_id=%"SCNi64"/%"SCNi64","
-                             "src="IP_SCAN_FMT"/"IP_SCAN_FMT",dst="IP_SCAN_FMT
-                             "/"IP_SCAN_FMT",tos=%"SCNi8"/%"SCNi8","
-                             "ttl=%"SCNi8"/%"SCNi8",flags%n",
+                             "src="IP_SCAN_FMT"/"IP_SCAN_FMT","
+                             "dst="IP_SCAN_FMT"/"IP_SCAN_FMT","
+                             "tos=%"SCNi8"/%"SCNi8","
+                             "ttl=%"SCNi8"/%"SCNi8","
+                             "tp_src=%i/%i,tp_dst=%i/%i,flags%n",
                              &tun_id, &tun_id_mask,
                              IP_SCAN_ARGS(&tun_key.ip_src),
                              IP_SCAN_ARGS(&tun_key_mask.ip_src),
                              IP_SCAN_ARGS(&tun_key.ip_dst),
                              IP_SCAN_ARGS(&tun_key_mask.ip_dst),
                              &tun_key.ip_tos, &tun_key_mask.ip_tos,
-                             &tun_key.ip_ttl, &tun_key_mask.ip_ttl, &n)) {
+                             &tun_key.ip_ttl, &tun_key_mask.ip_ttl,
+                             &tp_src, &tp_src_mask, &tp_dst, &tp_dst_mask,
+                             &n)) {
             int res;
             uint32_t flags, fmask;
 
             tun_key.tun_id = htonll(tun_id);
             tun_key_mask.tun_id = htonll(tun_id_mask);
+            tun_key.tp_src = htons(tp_src);
+            tun_key_mask.tp_src = htons(tp_src_mask);
+            tun_key.tp_dst = htons(tp_dst);
+            tun_key_mask.tp_dst = htons(tp_dst_mask);
             res = parse_flags(&s[n], flow_tun_flag_to_string, &flags,
                               FLOW_TNL_F_MASK, &fmask);
             tun_key.flags = flags;
@@ -1965,14 +1981,18 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
             return n;
         } else if (ovs_scan(s, "tunnel(tun_id=%"SCNi64","
                             "src="IP_SCAN_FMT",dst="IP_SCAN_FMT
-                            ",tos=%"SCNi8",ttl=%"SCNi8",flags%n", &tun_id,
+                            ",tos=%"SCNi8",ttl=%"SCNi8",tp_src=%i,tp_dst=%i,"
+                            "flags%n", &tun_id,
                             IP_SCAN_ARGS(&tun_key.ip_src),
                             IP_SCAN_ARGS(&tun_key.ip_dst),
-                            &tun_key.ip_tos, &tun_key.ip_ttl, &n)) {
+                            &tun_key.ip_tos, &tun_key.ip_ttl,
+                            &tp_src, &tp_dst, &n)) {
             int res;
             uint32_t flags;
 
             tun_key.tun_id = htonll(tun_id);
+            tun_key.tp_src = htons(tp_src);
+            tun_key.tp_dst = htons(tp_dst);
             res = parse_flags(&s[n], flow_tun_flag_to_string, &flags,
                               FLOW_TNL_F_MASK, NULL);
             tun_key.flags = flags;
