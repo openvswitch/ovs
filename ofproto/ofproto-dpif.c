@@ -273,6 +273,10 @@ struct dpif_backer {
      * False if the datapath supports only 8-byte (or shorter) userdata. */
     bool variable_length_userdata;
 
+    /* True if the datapath supports masked data in OVS_ACTION_ATTR_SET
+     * actions. */
+    bool masked_set_action;
+
     /* Maximum number of MPLS label stack entries that the datapath supports
      * in a match */
     size_t max_mpls_depth;
@@ -617,7 +621,8 @@ type_run(const char *type)
                               connmgr_has_in_band(ofproto->up.connmgr),
                               ofproto->backer->enable_recirc,
                               ofproto->backer->variable_length_userdata,
-                              ofproto->backer->max_mpls_depth);
+                              ofproto->backer->max_mpls_depth,
+                              ofproto->backer->masked_set_action);
 
             HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
                 xlate_bundle_set(ofproto, bundle, bundle->name,
@@ -843,6 +848,7 @@ struct odp_garbage {
 static bool check_variable_length_userdata(struct dpif_backer *backer);
 static size_t check_max_mpls_depth(struct dpif_backer *backer);
 static bool check_recirc(struct dpif_backer *backer);
+static bool check_masked_set_action(struct dpif_backer *backer);
 
 static int
 open_dpif_backer(const char *type, struct dpif_backer **backerp)
@@ -939,6 +945,7 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     backer->enable_recirc = check_recirc(backer);
     backer->variable_length_userdata = check_variable_length_userdata(backer);
     backer->max_mpls_depth = check_max_mpls_depth(backer);
+    backer->masked_set_action = check_masked_set_action(backer);
     backer->rid_pool = recirc_id_pool_create();
 
     error = dpif_recv_set(backer->dpif, backer->recv_set_enable);
@@ -1127,6 +1134,55 @@ check_max_mpls_depth(struct dpif_backer *backer)
     VLOG_INFO("%s: MPLS label stack length probed as %d",
               dpif_name(backer->dpif), n);
     return n;
+}
+
+/* Tests whether 'backer''s datapath supports masked data in
+ * OVS_ACTION_ATTR_SET actions.  We need to disable some features on older
+ * datapaths that don't support this feature. */
+static bool
+check_masked_set_action(struct dpif_backer *backer)
+{
+    struct eth_header *eth;
+    struct ofpbuf actions;
+    struct dpif_execute execute;
+    struct ofpbuf packet;
+    int error;
+    struct ovs_key_ethernet key, mask;
+
+    /* Compose a set action that will cause an EINVAL error on older
+     * datapaths that don't support masked set actions.
+     * Avoid using a full mask, as it could be translated to a non-masked
+     * set action instead. */
+    ofpbuf_init(&actions, 64);
+    memset(&key, 0x53, sizeof key);
+    memset(&mask, 0x7f, sizeof mask);
+    commit_masked_set_action(&actions, OVS_KEY_ATTR_ETHERNET, &key, &mask,
+                             sizeof key);
+
+    /* Compose a dummy ethernet packet. */
+    ofpbuf_init(&packet, ETH_HEADER_LEN);
+    eth = ofpbuf_put_zeros(&packet, ETH_HEADER_LEN);
+    eth->eth_type = htons(0x1234);
+
+    /* Execute the actions.  On older datapaths this fails with EINVAL, on
+     * newer datapaths it succeeds. */
+    execute.actions = ofpbuf_data(&actions);
+    execute.actions_len = ofpbuf_size(&actions);
+    execute.packet = &packet;
+    execute.md = PKT_METADATA_INITIALIZER(0);
+    execute.needs_help = false;
+
+    error = dpif_execute(backer->dpif, &execute);
+
+    ofpbuf_uninit(&packet);
+    ofpbuf_uninit(&actions);
+
+    if (error) {
+        /* Masked set action is not supported. */
+        VLOG_INFO("%s: datapath does not support masked set action feature.",
+                  dpif_name(backer->dpif));
+    }
+    return !error;
 }
 
 static int

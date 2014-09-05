@@ -153,7 +153,8 @@ void xlate_ofproto_set(struct ofproto_dpif *, const char *name,
                        enum ofp_config_flags, bool forward_bpdu,
                        bool has_in_band, bool enable_recirc,
                        bool variable_length_userdata,
-                       size_t mpls_label_stack_length);
+                       size_t mpls_label_stack_length,
+                       bool masked_set_action);
 void xlate_remove_ofproto(struct ofproto_dpif *);
 
 void xlate_bundle_set(struct ofproto_dpif *, struct ofbundle *,

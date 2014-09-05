@@ -107,6 +107,10 @@ struct xbridge {
     /* Number of MPLS label stack entries that the datapath supports
      * in matches. */
     size_t max_mpls_depth;
+
+    /* True if the datapath supports masked data in OVS_ACTION_ATTR_SET
+     * actions. */
+    bool masked_set_action;
 };
 
 struct xbundle {
@@ -367,7 +371,8 @@ static void xlate_xbridge_set(struct xbridge *, struct dpif *,
                               bool forward_bpdu, bool has_in_band,
                               bool enable_recirc,
                               bool variable_length_userdata,
-                              size_t max_mpls_depth);
+                              size_t max_mpls_depth,
+                              bool masked_set_action);
 static void xlate_xbundle_set(struct xbundle *xbundle,
                               enum port_vlan_mode vlan_mode, int vlan,
                               unsigned long *trunks, bool use_priority_tags,
@@ -432,7 +437,8 @@ xlate_xbridge_set(struct xbridge *xbridge,
                   bool forward_bpdu, bool has_in_band,
                   bool enable_recirc,
                   bool variable_length_userdata,
-                  size_t max_mpls_depth)
+                  size_t max_mpls_depth,
+                  bool masked_set_action)
 {
     if (xbridge->ml != ml) {
         mac_learning_unref(xbridge->ml);
@@ -483,6 +489,7 @@ xlate_xbridge_set(struct xbridge *xbridge,
     xbridge->enable_recirc = enable_recirc;
     xbridge->variable_length_userdata = variable_length_userdata;
     xbridge->max_mpls_depth = max_mpls_depth;
+    xbridge->masked_set_action = masked_set_action;
 }
 
 static void
@@ -565,7 +572,7 @@ xlate_xbridge_copy(struct xbridge *xbridge)
                       xbridge->frag, xbridge->forward_bpdu,
                       xbridge->has_in_band, xbridge->enable_recirc,
                       xbridge->variable_length_userdata,
-                      xbridge->max_mpls_depth);
+                      xbridge->max_mpls_depth, xbridge->masked_set_action);
     LIST_FOR_EACH (xbundle, list_node, &xbridge->xbundles) {
         xlate_xbundle_copy(new_xbridge, xbundle);
     }
@@ -718,7 +725,8 @@ xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
                   const struct dpif_ipfix *ipfix,
                   const struct netflow *netflow, enum ofp_config_flags frag,
                   bool forward_bpdu, bool has_in_band, bool enable_recirc,
-                  bool variable_length_userdata, size_t max_mpls_depth)
+                  bool variable_length_userdata, size_t max_mpls_depth,
+                  bool masked_set_action)
 {
     struct xbridge *xbridge;
 
@@ -738,7 +746,8 @@ xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
     xlate_xbridge_set(xbridge, dpif, miss_rule, no_packet_in_rule, ml, stp,
                       rstp, ms, mbridge, sflow, ipfix, netflow, frag,
                       forward_bpdu, has_in_band, enable_recirc,
-                      variable_length_userdata, max_mpls_depth);
+                      variable_length_userdata, max_mpls_depth,
+                      masked_set_action);
 }
 
 static void
