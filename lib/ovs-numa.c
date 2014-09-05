@@ -36,6 +36,24 @@
 
 VLOG_DEFINE_THIS_MODULE(ovs_numa);
 
+/* ovs-numa module
+ * ===============
+ *
+ * This module stores the affinity information of numa nodes and cpu cores.
+ * It also provides functions to bookkeep the pin of threads on cpu cores.
+ *
+ * It is assumed that the numa node ids and cpu core ids all start from 0 and
+ * range continuously.  So, for example, if 'ovs_numa_get_n_cores()' returns N,
+ * user can assume core ids from 0 to N-1 are all valid and there is a
+ * 'struct cpu_core' for each id.
+ *
+ * NOTE, the assumption above will fail when cpu hotplug is used.  In that
+ * case ovs-numa will not function correctly.  For now, add a TODO entry
+ * for addressing it in the future.
+ *
+ * TODO: Fix ovs-numa when cpu hotplug is used.
+ */
+
 #define MAX_NUMA_NODES 128
 
 /* numa node. */
