@@ -2229,7 +2229,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
             || fm->command == OFPFC_ADD) {
             ofm->cookie = fm->new_cookie;
         } else {
-            ofm->cookie = fm->cookie;
+            ofm->cookie = fm->cookie & fm->cookie_mask;
         }
         ofm->cookie_mask = fm->cookie_mask;
         if (fm->table_id != OFPTT_ALL

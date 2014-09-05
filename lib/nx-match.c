@@ -743,7 +743,7 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
                 flow->metadata, match->wc.masks.metadata);
 
     /* Cookie. */
-    nxm_put_64m(b, NXM_NX_COOKIE, cookie, cookie_mask);
+    nxm_put_64m(b, NXM_NX_COOKIE, cookie & cookie_mask, cookie_mask);
 
     match_len = ofpbuf_size(b) - start_len;
     return match_len;
