@@ -1182,9 +1182,16 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
     }
     if (is_ip_any(f) && f->nw_proto == IPPROTO_TCP && wc->masks.tcp_flags) {
         uint16_t mask = TCP_FLAGS(wc->masks.tcp_flags);
+
         if (mask == TCP_FLAGS(OVS_BE16_MAX)) {
-            ds_put_format(s, "tcp_flags=0x%03"PRIx16",", ntohs(f->tcp_flags));
-        } else {
+            ds_put_cstr(s, "tcp_flags=");
+            if (f->tcp_flags) {
+                format_flags(s, packet_tcp_flag_to_string, ntohs(f->tcp_flags),
+                             '|');
+            } else {
+                ds_put_cstr(s, "0"); /* Zero flags. */
+            }
+        } else if (mask) {
             format_flags_masked(s, "tcp_flags", packet_tcp_flag_to_string,
                                 ntohs(f->tcp_flags), mask);
         }

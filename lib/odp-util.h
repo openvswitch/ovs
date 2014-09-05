@@ -62,6 +62,14 @@ enum slow_path_reason {
 #undef SPR
 };
 
+/* Mask of all slow_path_reasons. */
+enum {
+    SLOW_PATH_REASON_MASK = 0
+#define SPR(ENUM, STRING, EXPLANATION) | 1 << ENUM##_INDEX 
+    SLOW_PATH_REASONS
+#undef SPR
+};
+
 const char *slow_path_reason_to_explanation(enum slow_path_reason);
 
 #define ODPP_LOCAL ODP_PORT_C(OVSP_LOCAL)

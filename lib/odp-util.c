@@ -207,22 +207,96 @@ slow_path_reason_to_explanation(enum slow_path_reason reason)
 
 static int
 parse_flags(const char *s, const char *(*bit_to_string)(uint32_t),
-            uint32_t *res)
+            uint32_t *res_flags, uint32_t allowed, uint32_t *res_mask)
 {
     uint32_t result = 0;
-    int n = 0;
+    int n;
 
-    if (s[n] != '(') {
+    /* Parse masked flags in numeric format? */
+    if (res_mask && ovs_scan(s, "%"SCNi32"/%"SCNi32")%n",
+                             res_flags, res_mask, &n) && n > 0) {
+        if (*res_flags & ~allowed || *res_mask & ~allowed) {
+            return -EINVAL;
+        }
+        return n;
+    }
+
+    if (*s != '(') {
         return -EINVAL;
     }
-    n++;
+    n = 1;
 
+    if (res_mask && (s[n] == '+' || s[n] == '-')) {
+        uint32_t flags = 0, mask = 0;
+
+        /* Parse masked flags. */
+        while (s[n] != ')') {
+            bool set;
+            uint32_t bit;
+            int name_len;
+
+            if (s[n] == '+') {
+                set = true;
+            } else if (s[n] == '-') {
+                set = false;
+            } else {
+                return -EINVAL;
+            }
+            n++;
+
+            name_len = strcspn(s + n, "+-)");
+
+            for (bit = 1; bit; bit <<= 1) {
+                const char *fname = bit_to_string(bit);
+                size_t len;
+
+                if (!fname) {
+                    continue;
+                }
+
+                len = strlen(fname);
+                if (len != name_len) {
+                    continue;
+                }
+                if (!strncmp(s + n, fname, len)) {
+                    if (mask & bit) {
+                        /* bit already set. */
+                        return -EINVAL;
+                    }
+                    if (!(bit & allowed)) {
+                        return -EINVAL;
+                    }
+                    if (set) {
+                        flags |= bit;
+                    }
+                    mask |= bit;
+                    break;
+                }
+            }
+
+            if (!bit) {
+                return -EINVAL; /* Unknown flag name */
+            }
+            s += name_len;
+        }
+        n++;
+
+        *res_flags = flags;
+        *res_mask = mask;
+        return n;
+    }
+
+    /* Parse unmasked flags.  If a flag is present, it is set, otherwise
+     * it is not set. */
     while (s[n] != ')') {
         unsigned long long int flags;
         uint32_t bit;
         int n0;
 
         if (ovs_scan(&s[n], "%lli%n", &flags, &n0)) {
+            if (flags & ~allowed) {
+                return -EINVAL;
+            }
             n += n0 + (s[n + n0] == ',');
             result |= flags;
             continue;
@@ -239,6 +313,9 @@ parse_flags(const char *s, const char *(*bit_to_string)(uint32_t),
             len = strlen(name);
             if (!strncmp(s + n, name, len) &&
                 (s[n + len] == ',' || s[n + len] == ')')) {
+                if (!(bit & allowed)) {
+                    return -EINVAL;
+                }
                 result |= bit;
                 n += len + (s[n + len] == ',');
                 break;
@@ -251,7 +328,10 @@ parse_flags(const char *s, const char *(*bit_to_string)(uint32_t),
     }
     n++;
 
-    *res = result;
+    *res_flags = result;
+    if (res_mask) {
+        *res_mask = UINT32_MAX;
+    }
     return n;
 }
 
@@ -590,7 +670,8 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
             cookie.slow_path.reason = 0;
 
             res = parse_flags(&s[n], slow_path_reason_to_string,
-                              &cookie.slow_path.reason);
+                              &cookie.slow_path.reason,
+                              SLOW_PATH_REASON_MASK, NULL);
             if (res < 0) {
                 return res;
             }
@@ -1084,12 +1165,13 @@ odp_mask_attr_is_exact(const struct nlattr *ma)
     enum ovs_key_attr attr = nl_attr_type(ma);
 
     if (attr == OVS_KEY_ATTR_TCP_FLAGS) {
-        is_exact = TCP_FLAGS_BE16(nl_attr_get_be16(ma)) == htons(0x0fff);
+        is_exact = TCP_FLAGS(nl_attr_get_be16(ma)) == TCP_FLAGS(OVS_BE16_MAX);
     } else if (attr == OVS_KEY_ATTR_IPV6) {
         const struct ovs_key_ipv6 *mask = nl_attr_get(ma);
 
         is_exact =
-            (mask->ipv6_label & htonl(IPV6_LABEL_MASK)) == htonl(IPV6_LABEL_MASK)
+            ((mask->ipv6_label & htonl(IPV6_LABEL_MASK))
+             == htonl(IPV6_LABEL_MASK))
             && mask->ipv6_proto == UINT8_MAX
             && mask->ipv6_tclass == UINT8_MAX
             && mask->ipv6_hlimit == UINT8_MAX
@@ -1101,10 +1183,7 @@ odp_mask_attr_is_exact(const struct nlattr *ma)
 
         memset(&tun_mask, 0, sizeof tun_mask);
         odp_tun_key_from_attr(ma, &tun_mask);
-        is_exact = tun_mask.flags == (FLOW_TNL_F_KEY
-                                      | FLOW_TNL_F_DONT_FRAGMENT
-                                      | FLOW_TNL_F_CSUM
-                                      | FLOW_TNL_F_OAM)
+        is_exact = tun_mask.flags == FLOW_TNL_F_MASK
             && tun_mask.tun_id == OVS_BE64_MAX
             && tun_mask.ip_src == OVS_BE32_MAX
             && tun_mask.ip_dst == OVS_BE32_MAX
@@ -1222,15 +1301,20 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         }
         break;
 
-    case OVS_KEY_ATTR_TUNNEL:
+    case OVS_KEY_ATTR_TUNNEL: {
+        struct flow_tnl tun_mask;
+
+        if (ma) {
+            memset(&tun_mask, 0, sizeof tun_mask);
+            odp_tun_key_from_attr(ma, &tun_mask);
+        }
+
         memset(&tun_key, 0, sizeof tun_key);
         if (odp_tun_key_from_attr(a, &tun_key) == ODP_FIT_ERROR) {
             ds_put_format(ds, "error");
-        } else if (!is_exact) {
-            struct flow_tnl tun_mask;
-
-            memset(&tun_mask, 0, sizeof tun_mask);
-            odp_tun_key_from_attr(ma, &tun_mask);
+            return;
+        }
+        if (!is_exact) {
             ds_put_format(ds, "tun_id=%#"PRIx64"/%#"PRIx64
                           ",src="IP_FMT"/"IP_FMT",dst="IP_FMT"/"IP_FMT
                           ",tos=%#"PRIx8"/%#"PRIx8",ttl=%"PRIu8"/%#"PRIx8
@@ -1240,16 +1324,6 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
                           IP_ARGS(tun_key.ip_dst), IP_ARGS(tun_mask.ip_dst),
                           tun_key.ip_tos, tun_mask.ip_tos,
                           tun_key.ip_ttl, tun_mask.ip_ttl);
-
-            format_flags(ds, flow_tun_flag_to_string, tun_key.flags, ',');
-
-            /* XXX This code is correct, but enabling it would break the unit
-               test. Disable it for now until the input parser is fixed.
-
-                ds_put_char(ds, '/');
-                format_flags(ds, flow_tun_flag_to_string, tun_mask.flags, ',');
-            */
-            ds_put_char(ds, ')');
         } else {
             ds_put_format(ds, "tun_id=0x%"PRIx64",src="IP_FMT",dst="IP_FMT","
                           "tos=0x%"PRIx8",ttl=%"PRIu8",flags(",
@@ -1257,12 +1331,16 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
                           IP_ARGS(tun_key.ip_src),
                           IP_ARGS(tun_key.ip_dst),
                           tun_key.ip_tos, tun_key.ip_ttl);
-
-            format_flags(ds, flow_tun_flag_to_string, tun_key.flags, ',');
-            ds_put_char(ds, ')');
         }
+        if (ma && ~tun_mask.flags & FLOW_TNL_F_MASK) { /* Partially masked. */
+            format_flags_masked(ds, NULL, flow_tun_flag_to_string,
+                                tun_key.flags, tun_mask.flags);
+        } else { /* Fully masked. */
+            format_flags(ds, flow_tun_flag_to_string, tun_key.flags, ',');
+        }
+        ds_put_char(ds, ')');
         break;
-
+    }
     case OVS_KEY_ATTR_IN_PORT:
         if (portno_names && verbose && is_exact) {
             char *name = odp_portno_names_get(portno_names,
@@ -1440,9 +1518,13 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         break;
 
     case OVS_KEY_ATTR_TCP_FLAGS:
-        ds_put_format(ds, "0x%03"PRIx16, ntohs(nl_attr_get_be16(a)));
         if (!is_exact) {
-            ds_put_format(ds, "/0x%03"PRIx16, ntohs(nl_attr_get_be16(ma)));
+            format_flags_masked(ds, NULL, packet_tcp_flag_to_string,
+                                ntohs(nl_attr_get_be16(a)),
+                                ntohs(nl_attr_get_be16(ma)));
+        } else {
+            format_flags(ds, packet_tcp_flag_to_string,
+                         ntohs(nl_attr_get_be16(a)), ',');
         }
         break;
 
@@ -1859,13 +1941,14 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
                              &tun_key.ip_tos, &tun_key_mask.ip_tos,
                              &tun_key.ip_ttl, &tun_key_mask.ip_ttl, &n)) {
             int res;
-            uint32_t flags;
+            uint32_t flags, fmask;
 
             tun_key.tun_id = htonll(tun_id);
             tun_key_mask.tun_id = htonll(tun_id_mask);
-            res = parse_flags(&s[n], flow_tun_flag_to_string, &flags);
+            res = parse_flags(&s[n], flow_tun_flag_to_string, &flags,
+                              FLOW_TNL_F_MASK, &fmask);
             tun_key.flags = flags;
-            tun_key_mask.flags = UINT16_MAX;
+            tun_key_mask.flags = fmask;
 
             if (res < 0) {
                 return res;
@@ -1890,7 +1973,8 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
             uint32_t flags;
 
             tun_key.tun_id = htonll(tun_id);
-            res = parse_flags(&s[n], flow_tun_flag_to_string, &flags);
+            res = parse_flags(&s[n], flow_tun_flag_to_string, &flags,
+                              FLOW_TNL_F_MASK, NULL);
             tun_key.flags = flags;
 
             if (res < 0) {
@@ -2266,21 +2350,21 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
     }
 
     {
-        uint16_t tcp_flags, tcp_flags_mask;
         int n = -1;
 
-        if (mask && ovs_scan(s, "tcp_flags(%"SCNi16"/%"SCNi16")%n",
-                             &tcp_flags, &tcp_flags_mask, &n) > 0 && n > 0) {
-            nl_msg_put_be16(key, OVS_KEY_ATTR_TCP_FLAGS, htons(tcp_flags));
-            nl_msg_put_be16(mask, OVS_KEY_ATTR_TCP_FLAGS, htons(tcp_flags_mask));
-            return n;
-        } else if (ovs_scan(s, "tcp_flags(%"SCNi16")%n", &tcp_flags, &n)) {
-            nl_msg_put_be16(key, OVS_KEY_ATTR_TCP_FLAGS, htons(tcp_flags));
-            if (mask) {
-                nl_msg_put_be16(mask, OVS_KEY_ATTR_TCP_FLAGS,
-                                htons(UINT16_MAX));
+        if (ovs_scan(s, "tcp_flags%n", &n) && n > 0) {
+            uint32_t flags, fmask;
+            int res = parse_flags(&s[n], packet_tcp_flag_to_string,
+                                  &flags, TCP_FLAGS(OVS_BE16_MAX), &fmask);
+
+            if (res < 0) {
+                return res;
             }
-            return n;
+            nl_msg_put_be16(key, OVS_KEY_ATTR_TCP_FLAGS, htons(flags));
+            if (mask) {
+                nl_msg_put_be16(mask, OVS_KEY_ATTR_TCP_FLAGS, htons(fmask));
+            }
+            return n + res;
         }
     }
 
