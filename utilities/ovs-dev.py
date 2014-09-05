@@ -26,14 +26,15 @@ OVS_SRC = HOME + "/ovs"
 ROOT = HOME + "/root"
 BUILD_GCC = OVS_SRC + "/_build-gcc"
 BUILD_CLANG = OVS_SRC + "/_build-clang"
-PATH = "%(ovs)s/utilities:%(ovs)s/ovsdb:%(ovs)s/vswitchd" % {"ovs": BUILD_GCC}
-
-ENV["PATH"] = PATH + ":" + ENV["PATH"]
 
 options = None
 parser = None
 commands = []
 
+def set_path(build):
+    PATH = "%(ovs)s/utilities:%(ovs)s/ovsdb:%(ovs)s/vswitchd" % {"ovs": build}
+
+    ENV["PATH"] = PATH + ":" + ENV["PATH"]
 
 def _sh(*args, **kwargs):
     print "------> " + " ".join(args)
@@ -236,7 +237,8 @@ def run():
     _sh("ovs-vsctl --no-wait set Open_vSwitch %s ovs_version=%s"
         % (root_uuid, version))
 
-    cmd = [BUILD_GCC + "/vswitchd/ovs-vswitchd"]
+    build = BUILD_CLANG if options.clang else BUILD_GCC
+    cmd = [build + "/vswitchd/ovs-vswitchd"]
 
     if options.dpdk:
         cmd.append("--dpdk")
@@ -387,6 +389,9 @@ def main():
     group.add_option("--dpdk", dest="dpdk", action="callback",
                      callback=parse_subargs,
                      help="run ovs-vswitchd with dpdk subopts (ended by --)")
+    group.add_option("--clang", dest="clang", action="store_true",
+                     help="Use binaries built by clang")
+
     parser.add_option_group(group)
 
     options, args = parser.parse_args()
@@ -395,6 +400,11 @@ def main():
         if arg not in cmd_names:
             print "Unknown argument " + arg
             doc()
+
+    if options.clang:
+        set_path(BUILD_CLANG)
+    else:
+        set_path(BUILD_GCC)
 
     try:
         os.chdir(OVS_SRC)
