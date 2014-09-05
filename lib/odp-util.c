@@ -2522,20 +2522,20 @@ odp_flow_from_string(const char *s, const struct simap *port_names,
 static uint8_t
 ovs_to_odp_frag(uint8_t nw_frag)
 {
-    return (nw_frag == 0 ? OVS_FRAG_TYPE_NONE
-          : nw_frag == FLOW_NW_FRAG_ANY ? OVS_FRAG_TYPE_FIRST
-          : OVS_FRAG_TYPE_LATER);
+    return !(nw_frag & FLOW_NW_FRAG_ANY) ? OVS_FRAG_TYPE_NONE
+        : nw_frag & FLOW_NW_FRAG_LATER ? OVS_FRAG_TYPE_LATER
+        : OVS_FRAG_TYPE_FIRST;
 }
 
+/*
+ * Netlink interface 'enum ovs_frag_type' is an 8-bit enumeration type, not a
+ * set of flags or bitfields. Hence, if the struct flow nw_frag mask, which is
+ * a set of bits, has the FLOW_NW_FRAG_ANY as zero, we must use a zero mask for
+ * the netlink frag field, and all ones mask otherwise. */
 static uint8_t
 ovs_to_odp_frag_mask(uint8_t nw_frag_mask)
 {
-    uint8_t frag_mask = ~(OVS_FRAG_TYPE_FIRST | OVS_FRAG_TYPE_LATER);
-
-    frag_mask |= (nw_frag_mask & FLOW_NW_FRAG_ANY) ? OVS_FRAG_TYPE_FIRST : 0;
-    frag_mask |= (nw_frag_mask & FLOW_NW_FRAG_LATER) ? OVS_FRAG_TYPE_LATER : 0;
-
-    return frag_mask;
+    return (nw_frag_mask & FLOW_NW_FRAG_ANY) ? UINT8_MAX : 0;
 }
 
 static void
@@ -2895,6 +2895,7 @@ odp_to_ovs_frag(uint8_t odp_frag, struct flow *flow)
         return false;
     }
 
+    flow->nw_frag = 0;
     if (odp_frag != OVS_FRAG_TYPE_NONE) {
         flow->nw_frag |= FLOW_NW_FRAG_ANY;
         if (odp_frag == OVS_FRAG_TYPE_LATER) {
