@@ -82,6 +82,7 @@ odp_action_len(uint16_t type)
     case OVS_ACTION_ATTR_RECIRC: return sizeof(uint32_t);
     case OVS_ACTION_ATTR_HASH: return sizeof(struct ovs_action_hash);
     case OVS_ACTION_ATTR_SET: return -2;
+    case OVS_ACTION_ATTR_SET_MASKED: return -2;
     case OVS_ACTION_ATTR_SAMPLE: return -2;
 
     case OVS_ACTION_ATTR_UNSPEC:
@@ -423,6 +424,7 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
     int expected_len;
     enum ovs_action_attr type = nl_attr_type(a);
     const struct ovs_action_push_vlan *vlan;
+    size_t size;
 
     expected_len = odp_action_len(nl_attr_type(a));
     if (expected_len != -2 && nl_attr_get_size(a) != expected_len) {
@@ -444,6 +446,28 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
         break;
     case OVS_ACTION_ATTR_HASH:
         format_odp_hash_action(ds, nl_attr_get(a));
+        break;
+    case OVS_ACTION_ATTR_SET_MASKED:
+        a = nl_attr_get(a);
+        size = nl_attr_get_size(a) / 2;
+        ds_put_cstr(ds, "set(");
+
+        /* Masked set action not supported for tunnel key, which is bigger. */
+        if (size <= sizeof(struct ovs_key_ipv6)) {
+            struct nlattr attr[1 + DIV_ROUND_UP(sizeof(struct ovs_key_ipv6),
+                                                sizeof(struct nlattr))];
+            struct nlattr mask[1 + DIV_ROUND_UP(sizeof(struct ovs_key_ipv6),
+                                                sizeof(struct nlattr))];
+
+            mask->nla_type = attr->nla_type = nl_attr_type(a);
+            mask->nla_len = attr->nla_len = NLA_HDRLEN + size;
+            memcpy(attr + 1, (char *)(a + 1), size);
+            memcpy(mask + 1, (char *)(a + 1) + size, size);
+            format_odp_key_attr(attr, mask, NULL, ds, true);
+        } else {
+            format_odp_key_attr(a, NULL, NULL, ds, true);
+        }
+        ds_put_cstr(ds, ")");
         break;
     case OVS_ACTION_ATTR_SET:
         ds_put_cstr(ds, "set(");
@@ -659,15 +683,38 @@ parse_odp_action(const char *s, const struct simap *port_names,
     if (!strncmp(s, "set(", 4)) {
         size_t start_ofs;
         int retval;
+        struct nlattr mask[128 / sizeof(struct nlattr)];
+        struct ofpbuf maskbuf;
+        struct nlattr *nested, *key;
+        size_t size;
+
+        /* 'mask' is big enough to hold any key. */
+        ofpbuf_use_stack(&maskbuf, mask, sizeof mask);
 
         start_ofs = nl_msg_start_nested(actions, OVS_ACTION_ATTR_SET);
-        retval = parse_odp_key_mask_attr(s + 4, port_names, actions, NULL);
+        retval = parse_odp_key_mask_attr(s + 4, port_names, actions, &maskbuf);
         if (retval < 0) {
             return retval;
         }
         if (s[retval + 4] != ')') {
             return -EINVAL;
         }
+
+        nested = ofpbuf_at_assert(actions, start_ofs, sizeof *nested);
+        key = nested + 1;
+
+        size = nl_attr_get_size(mask);
+        if (size == nl_attr_get_size(key)) {
+            /* Change to masked set action if not fully masked. */
+            if (!is_all_ones((uint8_t *)(mask + 1), size)) {
+                key->nla_len += size;
+                ofpbuf_put(actions, mask + 1, size);
+                /* 'actions' may have been reallocated by ofpbuf_put(). */
+                nested = ofpbuf_at_assert(actions, start_ofs, sizeof *nested);
+                nested->nla_type = OVS_ACTION_ATTR_SET_MASKED;
+            }
+        }
+
         nl_msg_end_nested(actions, start_ofs);
         return retval + 5;
     }
@@ -1265,16 +1312,15 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         size_t size = nl_attr_get_size(a);
 
         if (!size || size % sizeof *mpls_key) {
-            ds_put_format(ds, "(bad key length %"PRIuSIZE")",
-                          nl_attr_get_size(a));
+            ds_put_format(ds, "(bad key length %"PRIuSIZE")", size);
             return;
         }
         if (!is_exact) {
             mpls_mask = nl_attr_get(ma);
-            if (nl_attr_get_size(a) != nl_attr_get_size(ma)) {
+            if (size != nl_attr_get_size(ma)) {
                 ds_put_format(ds, "(key length %"PRIuSIZE" != "
                               "mask length %"PRIuSIZE")",
-                              nl_attr_get_size(a), nl_attr_get_size(ma));
+                              size, nl_attr_get_size(ma));
                 return;
             }
         }
@@ -3608,6 +3654,27 @@ commit_set_action(struct ofpbuf *odp_actions, enum ovs_key_attr key_type,
 {
     size_t offset = nl_msg_start_nested(odp_actions, OVS_ACTION_ATTR_SET);
     nl_msg_put_unspec(odp_actions, key_type, key, key_size);
+    nl_msg_end_nested(odp_actions, offset);
+}
+
+/* Masked set actions have a mask following the data within the netlink
+ * attribute.  The unmasked bits in the data will be cleared as the data
+ * is copied to the action. */
+void
+commit_masked_set_action(struct ofpbuf *odp_actions,
+                         enum ovs_key_attr key_type,
+                         const void *key_, const void *mask_, size_t key_size)
+{
+    size_t offset = nl_msg_start_nested(odp_actions,
+                                        OVS_ACTION_ATTR_SET_MASKED);
+    char *data = nl_msg_put_unspec_uninit(odp_actions, key_type, key_size * 2);
+    const char *key = key_, *mask = mask_;
+
+    memcpy(data + key_size, mask, key_size);
+    /* Clear unmasked bits while copying. */
+    while (key_size--) {
+        *data++ = *key++ & *mask++;
+    }
     nl_msg_end_nested(odp_actions, offset);
 }
 

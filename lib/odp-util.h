@@ -183,6 +183,9 @@ const char *odp_key_fitness_to_string(enum odp_key_fitness);
 
 void commit_odp_tunnel_action(const struct flow *, struct flow *base,
                               struct ofpbuf *odp_actions);
+void commit_masked_set_action(struct ofpbuf *odp_actions,
+                              enum ovs_key_attr key_type, const void *key,
+                              const void *mask, size_t key_size);
 enum slow_path_reason commit_odp_actions(const struct flow *,
                                          struct flow *base,
                                          struct ofpbuf *odp_actions,
