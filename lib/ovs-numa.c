@@ -168,6 +168,23 @@ ovs_numa_get_n_cores(void)
                                : OVS_CORE_UNSPEC;
 }
 
+/* Given 'core_id', returns the corresponding numa node id.  Returns
+ * OVS_NUMA_UNSPEC if 'core_id' is invalid. */
+int
+ovs_numa_get_numa_id(int core_id)
+{
+    if (ovs_numa_core_id_is_valid(core_id)) {
+        struct cpu_core *core;
+
+        core = CONTAINER_OF(hmap_first_with_hash(&all_cpu_cores,
+                                                 hash_int(core_id, 0)),
+                            struct cpu_core, hmap_node);
+
+        return core->numa->numa_id;
+    }
+    return OVS_NUMA_UNSPEC;
+}
+
 /* Returns the number of cpu cores on numa node.  Returns OVS_CORE_UNSPEC
  * if 'numa_id' is invalid. */
 int

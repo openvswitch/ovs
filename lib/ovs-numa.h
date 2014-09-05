@@ -32,6 +32,7 @@ bool ovs_numa_numa_id_is_valid(int numa_id);
 bool ovs_numa_core_id_is_valid(int core_id);
 int ovs_numa_get_n_numas(void);
 int ovs_numa_get_n_cores(void);
+int ovs_numa_get_numa_id(int core_id);
 int ovs_numa_get_n_cores_on_numa(int numa_id);
 int ovs_numa_get_n_unpinned_cores_on_numa(int numa_id);
 bool ovs_numa_try_pin_core_specific(int core_id);
@@ -69,6 +70,12 @@ static inline int
 ovs_numa_get_n_cores(void)
 {
     return OVS_CORE_UNSPEC;
+}
+
+static inline int
+ovs_numa_get_numa_id(int core_id OVS_UNUSED)
+{
+    return OVS_NUMA_UNSPEC;
 }
 
 static inline int
