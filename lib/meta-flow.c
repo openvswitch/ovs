@@ -1057,8 +1057,8 @@ mf_is_mask_valid(const struct mf_field *mf, const union mf_value *mask)
 {
     switch (mf->maskable) {
     case MFM_NONE:
-        return (is_all_zeros((const uint8_t *) mask, mf->n_bytes) ||
-                is_all_ones((const uint8_t *) mask, mf->n_bytes));
+        return (is_all_zeros(mask, mf->n_bytes) ||
+                is_all_ones(mask, mf->n_bytes));
 
     case MFM_FULLY:
         return true;
@@ -1904,7 +1904,7 @@ mf_is_zero(const struct mf_field *mf, const struct flow *flow)
     union mf_value value;
 
     mf_get_value(mf, flow, &value);
-    return is_all_zeros((const uint8_t *) &value, mf->n_bytes);
+    return is_all_zeros(&value, mf->n_bytes);
 }
 
 /* Makes 'match' wildcard field 'mf'.
@@ -2130,10 +2130,10 @@ mf_set(const struct mf_field *mf,
        const union mf_value *value, const union mf_value *mask,
        struct match *match)
 {
-    if (!mask || is_all_ones((const uint8_t *) mask, mf->n_bytes)) {
+    if (!mask || is_all_ones(mask, mf->n_bytes)) {
         mf_set_value(mf, value, match);
         return mf->usable_protocols;
-    } else if (is_all_zeros((const uint8_t *) mask, mf->n_bytes)) {
+    } else if (is_all_zeros(mask, mf->n_bytes)) {
         mf_set_wild(mf, match);
         return OFPUTIL_P_ANY;
     }
@@ -2861,10 +2861,10 @@ mf_format(const struct mf_field *mf,
           struct ds *s)
 {
     if (mask) {
-        if (is_all_zeros((const uint8_t *) mask, mf->n_bytes)) {
+        if (is_all_zeros(mask, mf->n_bytes)) {
             ds_put_cstr(s, "ANY");
             return;
-        } else if (is_all_ones((const uint8_t *) mask, mf->n_bytes)) {
+        } else if (is_all_ones(mask, mf->n_bytes)) {
             mask = NULL;
         }
     }

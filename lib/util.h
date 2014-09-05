@@ -485,8 +485,8 @@ leftmost_1bit_idx(uint32_t x)
     return x ? log_2_floor(x) : 32;
 }
 
-bool is_all_zeros(const uint8_t *, size_t);
-bool is_all_ones(const uint8_t *, size_t);
+bool is_all_zeros(const void *, size_t);
+bool is_all_ones(const void *, size_t);
 void bitwise_copy(const void *src, unsigned int src_len, unsigned int src_ofs,
                   void *dst, unsigned int dst_len, unsigned int dst_ofs,
                   unsigned int n_bits);

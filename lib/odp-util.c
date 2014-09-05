@@ -706,7 +706,7 @@ parse_odp_action(const char *s, const struct simap *port_names,
         size = nl_attr_get_size(mask);
         if (size == nl_attr_get_size(key)) {
             /* Change to masked set action if not fully masked. */
-            if (!is_all_ones((uint8_t *)(mask + 1), size)) {
+            if (!is_all_ones(mask + 1, size)) {
                 key->nla_len += size;
                 ofpbuf_put(actions, mask + 1, size);
                 /* 'actions' may have been reallocated by ofpbuf_put(). */
@@ -1097,7 +1097,7 @@ odp_mask_attr_is_exact(const struct nlattr *ma)
                                | FLOW_TNL_F_OAM)) {
             /* The flags are exact match, check the remaining fields. */
             tun_mask.flags = 0xffff;
-            is_exact = is_all_ones((uint8_t *)&tun_mask,
+            is_exact = is_all_ones(&tun_mask,
                                    offsetof(struct flow_tnl, ip_ttl));
         }
     } else {
@@ -3341,8 +3341,7 @@ parse_l2_5_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
                     memcpy(flow->arp_sha, nd_key->nd_sll, ETH_ADDR_LEN);
                     memcpy(flow->arp_tha, nd_key->nd_tll, ETH_ADDR_LEN);
                     if (is_mask) {
-                        if (!is_all_zeros((const uint8_t *) nd_key,
-                                          sizeof *nd_key) &&
+                        if (!is_all_zeros(nd_key, sizeof *nd_key) &&
                             (flow->tp_src != htons(0xffff) ||
                              flow->tp_dst != htons(0xffff))) {
                             return ODP_FIT_ERROR;
