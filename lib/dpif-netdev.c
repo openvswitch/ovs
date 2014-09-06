@@ -130,6 +130,7 @@ struct netdev_flow_key {
 
 struct emc_entry {
     uint32_t hash;
+    uint32_t mf_len;
     struct netdev_flow_key mf;
     struct dp_netdev_flow *flow;
 };
@@ -410,6 +411,7 @@ emc_cache_init(struct emc_cache *flow_cache)
     for (i = 0; i < ARRAY_SIZE(flow_cache->entries); i++) {
         flow_cache->entries[i].flow = NULL;
         flow_cache->entries[i].hash = 0;
+        flow_cache->entries[i].mf_len = 0;
         miniflow_initialize(&flow_cache->entries[i].mf.flow,
                             flow_cache->entries[i].mf.buf);
     }
@@ -1248,11 +1250,10 @@ netdev_flow_key_size(uint32_t flow_u32s)
 /* Used to compare 'netdev_flow_key's (miniflows) in the exact match cache. */
 static inline bool
 netdev_flow_key_equal(const struct netdev_flow_key *a,
-                      const struct netdev_flow_key *b)
+                      const struct netdev_flow_key *b,
+                      uint32_t size)
 {
-    uint32_t size = count_1bits(a->flow.map);
-
-    return !memcmp(a, b, netdev_flow_key_size(size));
+    return !memcmp(a, b, size);
 }
 
 static inline void
@@ -1260,7 +1261,7 @@ netdev_flow_key_clone(struct netdev_flow_key *dst,
                       const struct netdev_flow_key *src,
                       uint32_t size)
 {
-    memcpy(dst, src, netdev_flow_key_size(size));
+    memcpy(dst, src, size);
 }
 
 static inline bool
@@ -1294,8 +1295,11 @@ emc_change_entry(struct emc_entry *ce, struct dp_netdev_flow *flow,
         }
     }
     if (mf) {
-        netdev_flow_key_clone(&ce->mf, mf, count_1bits(mf->flow.map));
+        uint32_t mf_len = netdev_flow_key_size(count_1bits(mf->flow.map));
+
+        netdev_flow_key_clone(&ce->mf, mf, mf_len);
         ce->hash = hash;
+        ce->mf_len = mf_len;
     }
 }
 
@@ -1309,7 +1313,8 @@ emc_insert(struct emc_cache *cache, const struct miniflow *mf, uint32_t hash,
     EMC_FOR_EACH_POS_WITH_HASH(cache, current_entry, hash) {
         if (current_entry->hash == hash
             && netdev_flow_key_equal(&current_entry->mf,
-                                     miniflow_to_netdev_flow_key(mf))) {
+                                     miniflow_to_netdev_flow_key(mf),
+                                     current_entry->mf_len)) {
 
             /* We found the entry with the 'mf' miniflow */
             emc_change_entry(current_entry, flow, NULL, 0);
@@ -1340,7 +1345,8 @@ emc_lookup(struct emc_cache *cache, const struct miniflow *mf, uint32_t hash)
     EMC_FOR_EACH_POS_WITH_HASH(cache, current_entry, hash) {
         if (current_entry->hash == hash && emc_entry_alive(current_entry)
             && netdev_flow_key_equal(&current_entry->mf,
-                                     miniflow_to_netdev_flow_key(mf))) {
+                                     miniflow_to_netdev_flow_key(mf),
+                                     current_entry->mf_len)) {
 
             /* We found the entry with the 'mf' miniflow */
             return current_entry->flow;
