@@ -269,13 +269,19 @@ void ovs_dp_process_packet(struct sk_buff *skb)
 					 &n_mask_hit);
 	if (unlikely(!flow)) {
 		struct dp_upcall_info upcall;
+		int error;
 
 		upcall.cmd = OVS_PACKET_CMD_MISS;
 		upcall.userdata = NULL;
 		upcall.portid = ovs_vport_find_upcall_portid(p, skb);
 		upcall.egress_tun_info = NULL;
-		ovs_dp_upcall(dp, skb, &upcall);
-		consume_skb(skb);
+
+		error = ovs_dp_upcall(dp, skb, &upcall);
+		if (unlikely(error))
+			kfree_skb(skb);
+		else
+			consume_skb(skb);
+
 		stats_counter = &stats->n_missed;
 		goto out;
 	}
