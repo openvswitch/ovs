@@ -818,9 +818,10 @@ compose_slow_path(struct udpif *udpif, struct xlate_out *xout,
                              buf);
 }
 
-/* The upcall must be destroyed with upcall_uninit() before quiescing,
- * as the referred objects are guaranteed to exist only until the calling
- * thread quiesces. */
+/* If there is no error, the upcall must be destroyed with upcall_uninit()
+ * before quiescing, as the referred objects are guaranteed to exist only
+ * until the calling thread quiesces.  Otherwise, do not call upcall_uninit()
+ * since the 'upcall->put_actions' remains uninitialized. */
 static int
 upcall_receive(struct upcall *upcall, const struct dpif_backer *backer,
                const struct ofpbuf *packet, enum dpif_upcall_type type,
@@ -944,7 +945,7 @@ upcall_cb(const struct ofpbuf *packet, const struct flow *flow,
     error = upcall_receive(&upcall, udpif->backer, packet, type, userdata,
                            flow);
     if (error) {
-        goto out;
+        return error;
     }
 
     error = process_upcall(udpif, &upcall, actions);
