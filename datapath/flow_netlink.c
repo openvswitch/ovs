@@ -1103,7 +1103,7 @@ int ovs_nla_get_flow_metadata(const struct nlattr *attr,
 	return metadata_from_nlattrs(&match, &attrs, a, false);
 }
 
-int ovs_nla_put_flow(struct datapath *dp, const struct sw_flow_key *swkey,
+int ovs_nla_put_flow(const struct sw_flow_key *swkey,
 		     const struct sw_flow_key *output, struct sk_buff *skb)
 {
 	struct ovs_key_ethernet *eth_key;
