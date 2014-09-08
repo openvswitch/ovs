@@ -122,6 +122,7 @@ discover_numa_and_core(void)
                                 hash_int(core_id, 0));
                     list_insert(&n->cores, &c->list_node);
                     c->core_id = core_id;
+                    c->numa = n;
                     n_cpus++;
                 }
             }
