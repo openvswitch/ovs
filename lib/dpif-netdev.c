@@ -380,10 +380,9 @@ static void dp_netdev_execute_actions(struct dp_netdev *dp,
                                       struct emc_cache *flow_cache,
                                       const struct nlattr *actions,
                                       size_t actions_len);
-static void dp_netdev_port_input(struct dp_netdev *dp,
-                                 struct emc_cache *flow_cache,
-                                 struct dpif_packet **packets, int cnt,
-                                 odp_port_t port_no);
+static void dp_netdev_input(struct dp_netdev *, struct emc_cache *,
+                            struct dpif_packet **, int cnt,
+                            struct pkt_metadata *);
 
 static void dp_netdev_set_pmd_threads(struct dp_netdev *, int n);
 static void dp_netdev_disable_upcall(struct dp_netdev *);
@@ -560,7 +559,7 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
         return error;
     }
 
-    ovs_mutex_init(&dp->emc_mutex);
+    ovs_mutex_init_recursive(&dp->emc_mutex);
     emc_cache_init(&dp->flow_cache);
 
     *dpp = dp;
@@ -1799,14 +1798,15 @@ dp_netdev_process_rxq_port(struct dp_netdev *dp,
 
     error = netdev_rxq_recv(rxq, packets, &cnt);
     if (!error) {
-        dp_netdev_port_input(dp, flow_cache, packets, cnt, port->port_no);
+        struct pkt_metadata md = PKT_METADATA_INITIALIZER(port->port_no);
+
+        *recirc_depth_get() = 0;
+        dp_netdev_input(dp, flow_cache, packets, cnt, &md);
     } else if (error != EAGAIN && error != EOPNOTSUPP) {
-        static struct vlog_rate_limit rl
-            = VLOG_RATE_LIMIT_INIT(1, 5);
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
         VLOG_ERR_RL(&rl, "error receiving data from %s: %s",
-                    netdev_get_name(port->netdev),
-                    ovs_strerror(error));
+                    netdev_get_name(port->netdev), ovs_strerror(error));
     }
 }
 
@@ -2402,18 +2402,6 @@ dp_netdev_input(struct dp_netdev *dp, struct emc_cache *flow_cache,
     if (OVS_UNLIKELY(newcnt)) {
         fast_path_processing(dp, flow_cache, packets, newcnt, md, keys);
     }
-}
-
-
-static void
-dp_netdev_port_input(struct dp_netdev *dp, struct emc_cache *flow_cache,
-                     struct dpif_packet **packets, int cnt, odp_port_t port_no)
-{
-    uint32_t *recirc_depth = recirc_depth_get();
-    struct pkt_metadata md = PKT_METADATA_INITIALIZER(port_no);
-
-    *recirc_depth = 0;
-    dp_netdev_input(dp, flow_cache, packets, cnt, &md);
 }
 
 struct dp_netdev_execute_aux {
