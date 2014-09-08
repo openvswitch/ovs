@@ -2716,6 +2716,7 @@ netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
     NULL,                       /* set_config */                \
     NULL,                       /* get_tunnel_config */         \
     NULL,                       /* get_numa_id */               \
+    NULL,                       /* set_multiq */                \
                                                                 \
     netdev_linux_send,                                          \
     netdev_linux_send_wait,                                     \

@@ -398,13 +398,14 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev) OVS_REQUIRES(dpdk_mutex)
         return ENODEV;
     }
 
-    diag = rte_eth_dev_configure(dev->port_id, NR_QUEUE, NR_QUEUE,  &port_conf);
+    diag = rte_eth_dev_configure(dev->port_id, dev->up.n_rxq, dev->up.n_txq,
+                                 &port_conf);
     if (diag) {
         VLOG_ERR("eth dev config error %d",diag);
         return -diag;
     }
 
-    for (i = 0; i < NR_QUEUE; i++) {
+    for (i = 0; i < dev->up.n_txq; i++) {
         diag = rte_eth_tx_queue_setup(dev->port_id, i, NIC_PORT_TX_Q_SIZE,
                                       dev->socket_id, &tx_conf);
         if (diag) {
@@ -413,7 +414,7 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev) OVS_REQUIRES(dpdk_mutex)
         }
     }
 
-    for (i = 0; i < NR_QUEUE; i++) {
+    for (i = 0; i < dev->up.n_rxq; i++) {
         diag = rte_eth_rx_queue_setup(dev->port_id, i, NIC_PORT_RX_Q_SIZE,
                                       dev->socket_id,
                                       &rx_conf, dev->dpdk_mp->mp);
@@ -490,12 +491,12 @@ netdev_dpdk_init(struct netdev *netdev_, unsigned int port_no) OVS_REQUIRES(dpdk
         goto unlock;
     }
 
+    netdev_->n_txq = NR_QUEUE;
+    netdev_->n_rxq = NR_QUEUE;
     err = dpdk_eth_dev_init(netdev);
     if (err) {
         goto unlock;
     }
-    netdev_->n_txq = NR_QUEUE;
-    netdev_->n_rxq = NR_QUEUE;
 
     list_push_back(&dpdk_list, &netdev->list_node);
 
@@ -587,6 +588,30 @@ netdev_dpdk_get_numa_id(const struct netdev *netdev_)
     struct netdev_dpdk *netdev = netdev_dpdk_cast(netdev_);
 
     return netdev->socket_id;
+}
+
+/* Sets the number of tx queues and rx queues for the dpdk interface.
+ * If the configuration fails, do not try restoring its old configuration
+ * and just returns the error. */
+static int
+netdev_dpdk_set_multiq(struct netdev *netdev_, unsigned int n_txq,
+                       unsigned int n_rxq)
+{
+    struct netdev_dpdk *netdev = netdev_dpdk_cast(netdev_);
+    int err = 0;
+
+    if (netdev->up.n_txq == n_txq && netdev->up.n_rxq == n_rxq) {
+        return err;
+    }
+
+    ovs_mutex_lock(&netdev->mutex);
+    rte_eth_dev_stop(netdev->port_id);
+    netdev->up.n_txq = n_txq;
+    netdev->up.n_rxq = n_rxq;
+    err = dpdk_eth_dev_init(netdev);
+    ovs_mutex_unlock(&netdev->mutex);
+
+    return err;
 }
 
 static struct netdev_rxq *
@@ -686,7 +711,11 @@ netdev_dpdk_rxq_recv(struct netdev_rxq *rxq_, struct dpif_packet **packets,
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     int nb_rx;
 
-    dpdk_queue_flush(dev, rxq_->queue_id);
+    /* There is only one tx queue for this core.  Do not flush other
+     * queueus. */
+    if (rxq_->queue_id == rte_lcore_id()) {
+        dpdk_queue_flush(dev, rxq_->queue_id);
+    }
 
     nb_rx = rte_eth_rx_burst(rx->port_id, rxq_->queue_id,
                              (struct rte_mbuf **) packets,
@@ -1326,7 +1355,7 @@ unlock_dpdk:
     return err;
 }
 
-#define NETDEV_DPDK_CLASS(NAME, INIT, CONSTRUCT)              \
+#define NETDEV_DPDK_CLASS(NAME, INIT, CONSTRUCT, MULTIQ)      \
 {                                                             \
     NAME,                                                     \
     INIT,                       /* init */                    \
@@ -1341,6 +1370,7 @@ unlock_dpdk:
     NULL,                       /* netdev_dpdk_set_config */  \
     NULL,                       /* get_tunnel_config */       \
     netdev_dpdk_get_numa_id,    /* get_numa_id */             \
+    MULTIQ,                     /* set_multiq */              \
                                                               \
     netdev_dpdk_send,           /* send */                    \
     NULL,                       /* send_wait */               \
@@ -1427,13 +1457,15 @@ const struct netdev_class dpdk_class =
     NETDEV_DPDK_CLASS(
         "dpdk",
         dpdk_class_init,
-        netdev_dpdk_construct);
+        netdev_dpdk_construct,
+        netdev_dpdk_set_multiq);
 
 const struct netdev_class dpdk_ring_class =
     NETDEV_DPDK_CLASS(
         "dpdkr",
         NULL,
-        netdev_dpdk_ring_construct);
+        netdev_dpdk_ring_construct,
+        NULL);
 
 void
 netdev_dpdk_register(void)

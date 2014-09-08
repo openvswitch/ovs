@@ -258,6 +258,16 @@ struct netdev_class {
      * such info, returns NETDEV_NUMA_UNSPEC. */
     int (*get_numa_id)(const struct netdev *netdev);
 
+    /* Configures the number of tx queues and rx queues of 'netdev'.
+     * Return 0 if successful, otherwise a positive errno value.
+     *
+     * On error, the tx queue and rx queue configuration is indeterminant.
+     * Caller should make decision on whether to restore the previous or
+     * the default configuration.  Also, caller must make sure there is no
+     * other thread accessing the queues at the same time. */
+    int (*set_multiq)(struct netdev *netdev, unsigned int n_txq,
+                      unsigned int n_rxq);
+
     /* Sends buffers on 'netdev'.
      * Returns 0 if successful (for every buffer), otherwise a positive errno
      * value.  Returns EAGAIN without blocking if one or more packets cannot be

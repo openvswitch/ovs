@@ -663,6 +663,33 @@ netdev_rxq_drain(struct netdev_rxq *rx)
             : 0);
 }
 
+/* Configures the number of tx queues and rx queues of 'netdev'.
+ * Return 0 if successful, otherwise a positive errno value.
+ *
+ * On error, the tx queue and rx queue configuration is indeterminant.
+ * Caller should make decision on whether to restore the previous or
+ * the default configuration.  Also, caller must make sure there is no
+ * other thread accessing the queues at the same time. */
+int
+netdev_set_multiq(struct netdev *netdev, unsigned int n_txq,
+                  unsigned int n_rxq)
+{
+    int error;
+
+    error = (netdev->netdev_class->set_multiq
+             ? netdev->netdev_class->set_multiq(netdev,
+                                                MAX(n_txq, 1),
+                                                MAX(n_rxq, 1))
+             : EOPNOTSUPP);
+
+    if (error != EOPNOTSUPP) {
+        VLOG_DBG_RL(&rl, "failed to set tx/rx queue for network device %s:"
+                    "%s", netdev_get_name(netdev), ovs_strerror(error));
+    }
+
+    return error;
+}
+
 /* Sends 'buffers' on 'netdev'.  Returns 0 if successful (for every packet),
  * otherwise a positive errno value.  Returns EAGAIN without blocking if
  * at least one the packets cannot be queued immediately.  Returns EMSGSIZE
