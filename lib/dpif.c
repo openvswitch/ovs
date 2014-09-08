@@ -1300,6 +1300,24 @@ dpif_print_packet(struct dpif *dpif, struct dpif_upcall *upcall)
     }
 }
 
+/* If 'dpif' creates its own I/O polling threads, refreshes poll threads
+ * configuration. */
+int
+dpif_poll_threads_set(struct dpif *dpif, unsigned int n_rxqs,
+                      const char *cmask)
+{
+    int error = 0;
+
+    if (dpif->dpif_class->poll_threads_set) {
+        error = dpif->dpif_class->poll_threads_set(dpif, n_rxqs, cmask);
+        if (error) {
+            log_operation(dpif, "poll_threads_set", error);
+        }
+    }
+
+    return error;
+}
+
 /* Polls for an upcall from 'dpif' for an upcall handler.  Since there
  * there can be multiple poll loops, 'handler_id' is needed as index to
  * identify the corresponding poll loop.  If successful, stores the upcall

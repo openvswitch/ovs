@@ -206,6 +206,11 @@ struct dp_netdev {
     /* Each pmd thread will store its pointer to
      * 'struct dp_netdev_pmd_thread' in 'per_pmd_key'. */
     ovsthread_key_t per_pmd_key;
+
+    /* Number of rx queues for each dpdk interface and the cpu mask
+     * for pin of pmd threads. */
+    size_t n_dpdk_rxqs;
+    char *pmd_cmask;
 };
 
 static struct dp_netdev_port *dp_netdev_lookup_port(const struct dp_netdev *dp,
@@ -396,10 +401,12 @@ static void dp_netdev_disable_upcall(struct dp_netdev *);
 static void dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd,
                                     struct dp_netdev *dp, int index,
                                     int core_id, int numa_id);
+static void dp_netdev_set_nonpmd(struct dp_netdev *dp);
 static struct dp_netdev_pmd_thread *dp_netdev_get_nonpmd(struct dp_netdev *dp);
 static void dp_netdev_destroy_all_pmds(struct dp_netdev *dp);
 static void dp_netdev_del_pmds_on_numa(struct dp_netdev *dp, int numa_id);
 static void dp_netdev_set_pmds_on_numa(struct dp_netdev *dp, int numa_id);
+static void dp_netdev_reset_pmd_threads(struct dp_netdev *dp);
 
 static void emc_clear_entry(struct emc_entry *ce);
 
@@ -539,7 +546,6 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     OVS_REQUIRES(dp_netdev_mutex)
 {
     struct dp_netdev *dp;
-    struct dp_netdev_pmd_thread *non_pmd;
     int error;
 
     dp = xzalloc(sizeof *dp);
@@ -572,9 +578,8 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
 
     /* Reserves the core NON_PMD_CORE_ID for all non-pmd threads. */
     ovs_numa_try_pin_core_specific(NON_PMD_CORE_ID);
-    non_pmd = xzalloc(sizeof *non_pmd);
-    dp_netdev_configure_pmd(non_pmd, dp, 0, NON_PMD_CORE_ID,
-                            OVS_NUMA_UNSPEC);
+    dp_netdev_set_nonpmd(dp);
+    dp->n_dpdk_rxqs = NR_QUEUE;
 
     ovs_mutex_lock(&dp->port_mutex);
     error = do_add_port(dp, name, "internal", ODPP_LOCAL);
@@ -649,6 +654,7 @@ dp_netdev_free(struct dp_netdev *dp)
     cmap_destroy(&dp->ports);
     fat_rwlock_destroy(&dp->upcall_rwlock);
 
+    free(dp->pmd_cmask);
     free(CONST_CAST(char *, dp->name));
     free(dp);
 }
@@ -778,8 +784,8 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
             return ENOENT;
         }
         /* There can only be ovs_numa_get_n_cores() pmd threads,
-         * so creates a tx_q for each. */
-        error = netdev_set_multiq(netdev, n_cores, NR_QUEUE);
+         * so creates a txq for each. */
+        error = netdev_set_multiq(netdev, n_cores, dp->n_dpdk_rxqs);
         if (error) {
             VLOG_ERR("%s, cannot set multiq", devname);
             return errno;
@@ -1904,6 +1910,77 @@ dpif_netdev_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
     }
 }
 
+/* Returns true if the configuration for rx queues or cpu mask
+ * is changed. */
+static bool
+pmd_config_changed(const struct dp_netdev *dp, size_t rxqs, const char *cmask)
+{
+    if (dp->n_dpdk_rxqs != rxqs) {
+        return true;
+    } else {
+        if (dp->pmd_cmask != NULL && cmask != NULL) {
+            return strcmp(dp->pmd_cmask, cmask);
+        } else {
+            return (dp->pmd_cmask != NULL || cmask != NULL);
+        }
+    }
+}
+
+/* Resets pmd threads if the configuration for 'rxq's or cpu mask changes. */
+static int
+dpif_netdev_pmd_set(struct dpif *dpif, unsigned int n_rxqs, const char *cmask)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+
+    if (pmd_config_changed(dp, n_rxqs, cmask)) {
+        struct dp_netdev_port *port;
+
+        dp_netdev_destroy_all_pmds(dp);
+
+        CMAP_FOR_EACH (port, node, &dp->ports) {
+            if (netdev_is_pmd(port->netdev)) {
+                int i, err;
+
+                /* Closes the existing 'rxq's. */
+                for (i = 0; i < netdev_n_rxq(port->netdev); i++) {
+                    netdev_rxq_close(port->rxq[i]);
+                    port->rxq[i] = NULL;
+                }
+
+                /* Sets the new rx queue config.  */
+                err = netdev_set_multiq(port->netdev, ovs_numa_get_n_cores(),
+                                        n_rxqs);
+                if (err) {
+                    VLOG_ERR("Failed to set dpdk interface %s rx_queue to:"
+                             " %u", netdev_get_name(port->netdev),
+                             n_rxqs);
+                    return err;
+                }
+
+                /* If the set_multiq() above succeeds, reopens the 'rxq's. */
+                port->rxq = xrealloc(port->rxq, sizeof *port->rxq
+                                     * netdev_n_rxq(port->netdev));
+                for (i = 0; i < netdev_n_rxq(port->netdev); i++) {
+                    netdev_rxq_open(port->netdev, &port->rxq[i], i);
+                }
+            }
+        }
+        dp->n_dpdk_rxqs = n_rxqs;
+
+        /* Reconfigures the cpu mask. */
+        ovs_numa_set_cpu_mask(cmask);
+        free(dp->pmd_cmask);
+        dp->pmd_cmask = cmask ? xstrdup(cmask) : NULL;
+
+        /* Restores the non-pmd. */
+        dp_netdev_set_nonpmd(dp);
+        /* Restores all pmd threads. */
+        dp_netdev_reset_pmd_threads(dp);
+    }
+
+    return 0;
+}
+
 static int
 dpif_netdev_queue_to_priority(const struct dpif *dpif OVS_UNUSED,
                               uint32_t queue_id, uint32_t *priority)
@@ -2155,6 +2232,17 @@ dp_netdev_get_nonpmd(struct dp_netdev *dp)
     return pmd;
 }
 
+/* Sets the 'struct dp_netdev_pmd_thread' for non-pmd threads. */
+static void
+dp_netdev_set_nonpmd(struct dp_netdev *dp)
+{
+    struct dp_netdev_pmd_thread *non_pmd;
+
+    non_pmd = xzalloc(sizeof *non_pmd);
+    dp_netdev_configure_pmd(non_pmd, dp, 0, NON_PMD_CORE_ID,
+                            OVS_NUMA_UNSPEC);
+}
+
 /* Configures the 'pmd' based on the input argument. */
 static void
 dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
@@ -2247,8 +2335,9 @@ dp_netdev_set_pmds_on_numa(struct dp_netdev *dp, int numa_id)
             return;
         }
 
-        /* Tries creating NR_PMD_THREADS pmd threads on the numa node. */
-        can_have = MIN(n_unpinned, NR_PMD_THREADS);
+        /* If cpu mask is specified, uses all unpinned cores, otherwise
+         * tries creating NR_PMD_THREADS pmd threads. */
+        can_have = dp->pmd_cmask ? n_unpinned : MIN(n_unpinned, NR_PMD_THREADS);
         for (i = 0; i < can_have; i++) {
             struct dp_netdev_pmd_thread *pmd = xzalloc(sizeof *pmd);
             int core_id = ovs_numa_get_unpinned_core_on_numa(numa_id);
@@ -2269,6 +2358,22 @@ dp_netdev_flow_stats_new_cb(void)
     struct dp_netdev_flow_stats *bucket = xzalloc_cacheline(sizeof *bucket);
     ovs_mutex_init(&bucket->mutex);
     return bucket;
+}
+
+/* Called after pmd threads config change.  Restarts pmd threads with
+ * new configuration. */
+static void
+dp_netdev_reset_pmd_threads(struct dp_netdev *dp)
+{
+    struct dp_netdev_port *port;
+
+    CMAP_FOR_EACH (port, node, &dp->ports) {
+        if (netdev_is_pmd(port->netdev)) {
+            int numa_id = netdev_get_numa_id(port->netdev);
+
+            dp_netdev_set_pmds_on_numa(dp, numa_id);
+        }
+    }
 }
 
 static void
@@ -2834,6 +2939,7 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_operate,
     NULL,                       /* recv_set */
     NULL,                       /* handlers_set */
+    dpif_netdev_pmd_set,
     dpif_netdev_queue_to_priority,
     NULL,                       /* recv */
     NULL,                       /* recv_wait */

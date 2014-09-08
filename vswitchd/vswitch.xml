@@ -152,6 +152,33 @@
         </p>
       </column>
 
+      <column name="other_config" key="n-dpdk-rxqs"
+              type='{"type": "integer", "minInteger": 1}'>
+        <p>
+          Specifies the number of rx queues to be created for each dpdk
+          interface.  If not specified or specified to 0, one rx queue will
+          be created for each dpdk interface by default.
+        </p>
+      </column>
+
+      <column name="other_config" key="pmd-cpu-mask">
+        <p>
+          Specifies CPU mask for setting the cpu affinity of PMD (Poll
+          Mode Driver) threads.  Value should be in the form of hex string,
+          similar to the dpdk EAL '-c COREMASK' option input or the 'taskset'
+          mask input.
+        </p>
+        <p>
+          The lowest order bit corresponds to the first CPU core.  A set bit
+          means the corresponding core is available.  If the input does not
+          cover all cores, those uncovered cores are considered not set.
+        </p>
+        <p>
+          If not specified, one pmd thread will be created for each numa node
+          and pinned to any available core on the numa node by default.
+        </p>
+      </column>
+
       <column name="other_config" key="n-handler-threads"
               type='{"type": "integer", "minInteger": 1}'>
         <p>

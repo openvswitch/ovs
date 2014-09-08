@@ -532,6 +532,8 @@ type_run(const char *type)
         udpif_set_threads(backer->udpif, n_handlers, n_revalidators);
     }
 
+    dpif_poll_threads_set(backer->dpif, n_dpdk_rxqs, pmd_cpu_mask);
+
     if (backer->need_revalidate) {
         struct ofproto_dpif *ofproto;
         struct simap_node *node;

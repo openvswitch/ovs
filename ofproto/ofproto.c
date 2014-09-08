@@ -304,6 +304,8 @@ unsigned ofproto_flow_limit = OFPROTO_FLOW_LIMIT_DEFAULT;
 unsigned ofproto_max_idle = OFPROTO_MAX_IDLE_DEFAULT;
 
 size_t n_handlers, n_revalidators;
+size_t n_dpdk_rxqs;
+char *pmd_cpu_mask;
 
 /* Map from datapath name to struct ofproto, for use by unixctl commands. */
 static struct hmap all_ofprotos = HMAP_INITIALIZER(&all_ofprotos);
@@ -728,6 +730,20 @@ ofproto_port_set_mcast_snooping(struct ofproto *ofproto, void *aux, bool flood)
             ? ofproto->ofproto_class->set_mcast_snooping_port(ofproto, aux,
                                                               flood)
             : EOPNOTSUPP);
+}
+
+void
+ofproto_set_n_dpdk_rxqs(int n_rxqs)
+{
+    n_dpdk_rxqs = MAX(n_rxqs, 0);
+}
+
+void
+ofproto_set_cpu_mask(const char *cmask)
+{
+    free(pmd_cpu_mask);
+
+    pmd_cpu_mask = cmask ? xstrdup(cmask) : NULL;
 }
 
 void

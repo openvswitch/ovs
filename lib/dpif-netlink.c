@@ -1925,6 +1925,7 @@ const struct dpif_class dpif_netlink_class = {
     dpif_netlink_operate,
     dpif_netlink_recv_set,
     dpif_netlink_handlers_set,
+    NULL,                       /* poll_thread_set */
     dpif_netlink_queue_to_priority,
     dpif_netlink_recv,
     dpif_netlink_recv_wait,
