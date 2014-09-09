@@ -192,18 +192,16 @@ move_rstp__(struct rstp *rstp)
 
         rstp->changes = false;
         port_role_selection_sm(rstp);
-        if (rstp->ports_count > 0) {
-            LIST_FOR_EACH (p, node, &rstp->ports) {
-                if (p->rstp_state != RSTP_DISABLED) {
-                    port_receive_sm(p);
-                    bridge_detection_sm(p);
-                    port_information_sm(p);
-                    port_role_transition_sm(p);
-                    port_state_transition_sm(p);
-                    topology_change_sm(p);
-                    port_transmit_sm(p);
-                    port_protocol_migration_sm(p);
-                }
+        LIST_FOR_EACH (p, node, &rstp->ports) {
+            if (p->rstp_state != RSTP_DISABLED) {
+                port_receive_sm(p);
+                bridge_detection_sm(p);
+                port_information_sm(p);
+                port_role_transition_sm(p);
+                port_state_transition_sm(p);
+                topology_change_sm(p);
+                port_transmit_sm(p);
+                port_protocol_migration_sm(p);
             }
         }
         num_iterations++;
@@ -221,19 +219,17 @@ void decrease_rstp_port_timers__(struct rstp *r)
 {
     struct rstp_port *p;
 
-    if (r->ports_count > 0) {
-        LIST_FOR_EACH (p, node, &r->ports) {
-            decrement_timer(&p->hello_when);
-            decrement_timer(&p->tc_while);
-            decrement_timer(&p->fd_while);
-            decrement_timer(&p->rcvd_info_while);
-            decrement_timer(&p->rr_while);
-            decrement_timer(&p->rb_while);
-            decrement_timer(&p->mdelay_while);
-            decrement_timer(&p->edge_delay_while);
-            decrement_timer(&p->tx_count);
-            p->uptime += 1;
-        }
+    LIST_FOR_EACH (p, node, &r->ports) {
+        decrement_timer(&p->hello_when);
+        decrement_timer(&p->tc_while);
+        decrement_timer(&p->fd_while);
+        decrement_timer(&p->rcvd_info_while);
+        decrement_timer(&p->rr_while);
+        decrement_timer(&p->rb_while);
+        decrement_timer(&p->mdelay_while);
+        decrement_timer(&p->edge_delay_while);
+        decrement_timer(&p->tx_count);
+        p->uptime += 1;
     }
     r->changes = true;
     move_rstp__(r);
@@ -256,10 +252,8 @@ updt_role_disabled_tree(struct rstp *r)
 {
     struct rstp_port *p;
 
-    if (r->ports_count > 0) {
-        LIST_FOR_EACH (p, node, &r->ports) {
-            p->selected_role = ROLE_DISABLED;
-        }
+    LIST_FOR_EACH (p, node, &r->ports) {
+        p->selected_role = ROLE_DISABLED;
     }
 }
 
@@ -269,10 +263,8 @@ clear_reselect_tree(struct rstp *r)
 {
     struct rstp_port *p;
 
-    if (r->ports_count > 0) {
-        LIST_FOR_EACH (p, node, &r->ports) {
-            p->reselect = false;
-        }
+    LIST_FOR_EACH (p, node, &r->ports) {
+        p->reselect = false;
     }
 }
 
@@ -289,32 +281,30 @@ updt_roles_tree__(struct rstp *r)
     /* Letter c1) */
     r->root_times = r->bridge_times;
     /* Letters a) b) c) */
-    if (r->ports_count > 0) {
-        LIST_FOR_EACH (p, node, &r->ports) {
-            uint32_t old_root_path_cost;
-            uint32_t root_path_cost;
+    LIST_FOR_EACH (p, node, &r->ports) {
+        uint32_t old_root_path_cost;
+        uint32_t root_path_cost;
 
-            if (p->info_is != INFO_IS_RECEIVED) {
-                continue;
-            }
-            /* [17.6] */
-            candidate_vector = p->port_priority;
-            candidate_vector.bridge_port_id = p->port_id;
-            old_root_path_cost = candidate_vector.root_path_cost;
-            root_path_cost = old_root_path_cost + p->port_path_cost;
-            candidate_vector.root_path_cost = root_path_cost;
+        if (p->info_is != INFO_IS_RECEIVED) {
+            continue;
+        }
+        /* [17.6] */
+        candidate_vector = p->port_priority;
+        candidate_vector.bridge_port_id = p->port_id;
+        old_root_path_cost = candidate_vector.root_path_cost;
+        root_path_cost = old_root_path_cost + p->port_path_cost;
+        candidate_vector.root_path_cost = root_path_cost;
 
-            if ((candidate_vector.designated_bridge_id & 0xffffffffffffULL) ==
-                (r->bridge_priority.designated_bridge_id & 0xffffffffffffULL)) {
-                break;
-            }
-            if (compare_rstp_priority_vectors(
-                    &candidate_vector, &best_vector) == SUPERIOR) {
-                best_vector = candidate_vector;
-                r->root_times = p->port_times;
-                r->root_times.message_age++;
-                vsel = p->port_number;
-            }
+        if ((candidate_vector.designated_bridge_id & 0xffffffffffffULL) ==
+            (r->bridge_priority.designated_bridge_id & 0xffffffffffffULL)) {
+            break;
+        }
+        if (compare_rstp_priority_vectors(&candidate_vector,
+                                          &best_vector) == SUPERIOR) {
+            best_vector = candidate_vector;
+            r->root_times = p->port_times;
+            r->root_times.message_age++;
+            vsel = p->port_number;
         }
     }
     r->root_priority = best_vector;
@@ -322,64 +312,58 @@ updt_roles_tree__(struct rstp *r)
     VLOG_DBG("%s: new Root is "RSTP_ID_FMT, r->name,
              RSTP_ID_ARGS(r->root_priority.root_bridge_id));
     /* Letters d) e) */
-    if (r->ports_count > 0) {
-        LIST_FOR_EACH (p, node, &r->ports) {
-            p->designated_priority_vector.root_bridge_id =
-                r->root_priority.root_bridge_id;
-            p->designated_priority_vector.root_path_cost =
-                r->root_priority.root_path_cost;
-            p->designated_priority_vector.designated_bridge_id =
-                r->bridge_identifier;
-            p->designated_priority_vector.designated_port_id =
-                p->port_id;
-            p->designated_times = r->root_times;
-            p->designated_times.hello_time = r->bridge_times.hello_time;
-        }
+    LIST_FOR_EACH (p, node, &r->ports) {
+        p->designated_priority_vector.root_bridge_id =
+            r->root_priority.root_bridge_id;
+        p->designated_priority_vector.root_path_cost =
+            r->root_priority.root_path_cost;
+        p->designated_priority_vector.designated_bridge_id =
+            r->bridge_identifier;
+        p->designated_priority_vector.designated_port_id =
+            p->port_id;
+        p->designated_times = r->root_times;
+        p->designated_times.hello_time = r->bridge_times.hello_time;
     }
-    if (r->ports_count > 0) {
-        LIST_FOR_EACH (p, node, &r->ports) {
-            switch (p->info_is) {
-            case INFO_IS_DISABLED:
-                p->selected_role = ROLE_DISABLED;
-                break;
-            case INFO_IS_AGED:
+    LIST_FOR_EACH (p, node, &r->ports) {
+        switch (p->info_is) {
+        case INFO_IS_DISABLED:
+            p->selected_role = ROLE_DISABLED;
+            break;
+        case INFO_IS_AGED:
+            p->updt_info = true;
+            p->selected_role = ROLE_DESIGNATED;
+            break;
+        case INFO_IS_MINE:
+            p->selected_role = ROLE_DESIGNATED;
+            if (compare_rstp_priority_vectors(
+                    &p->port_priority, &p->designated_priority_vector) != SAME
+                || !rstp_times_equal(&p->designated_times, &r->root_times)) {
                 p->updt_info = true;
-                p->selected_role = ROLE_DESIGNATED;
-                break;
-            case INFO_IS_MINE:
-                p->selected_role = ROLE_DESIGNATED;
-                if (compare_rstp_priority_vectors(
-                        &p->port_priority,
-                        &p->designated_priority_vector) != SAME
-                    || !rstp_times_equal(&p->designated_times,
-                                         &r->root_times)) {
-                    p->updt_info = true;
-                }
-                break;
-            case INFO_IS_RECEIVED:
-                if (vsel == p->port_number) { /* Letter i) */
-                    p->selected_role = ROLE_ROOT;
-                    p->updt_info = false;
-                } else if (compare_rstp_priority_vectors(
-                               &p->designated_priority_vector,
-                               &p->port_priority) == INFERIOR) {
-                    if (p->port_priority.designated_bridge_id !=
-                            r->bridge_identifier) {
-                        p->selected_role = ROLE_ALTERNATE;
-                        p->updt_info = false;
-                    } else {
-                        p->selected_role = ROLE_BACKUP;
-                        p->updt_info = false;
-                    }
-                } else {
-                    p->selected_role = ROLE_DESIGNATED;
-                    p->updt_info = true;
-                }
-                break;
-            default:
-                OVS_NOT_REACHED();
-                /* no break */
             }
+            break;
+        case INFO_IS_RECEIVED:
+            if (vsel == p->port_number) { /* Letter i) */
+                p->selected_role = ROLE_ROOT;
+                p->updt_info = false;
+            } else if (compare_rstp_priority_vectors(
+                           &p->designated_priority_vector,
+                           &p->port_priority) == INFERIOR) {
+                if (p->port_priority.designated_bridge_id !=
+                    r->bridge_identifier) {
+                    p->selected_role = ROLE_ALTERNATE;
+                    p->updt_info = false;
+                } else {
+                    p->selected_role = ROLE_BACKUP;
+                    p->updt_info = false;
+                }
+            } else {
+                p->selected_role = ROLE_DESIGNATED;
+                p->updt_info = true;
+            }
+            break;
+        default:
+            OVS_NOT_REACHED();
+            /* no break */
         }
     }
     seq_change(connectivity_seq_get());
@@ -391,15 +375,13 @@ set_selected_tree(struct rstp *r)
 {
     struct rstp_port *p;
 
-    if (r->ports_count > 0) {
-        LIST_FOR_EACH (p, node, &r->ports) {
-            if (p->reselect) {
-                return;
-            }
+    LIST_FOR_EACH (p, node, &r->ports) {
+        if (p->reselect) {
+            return;
         }
-        LIST_FOR_EACH (p, node, &r->ports) {
-            p->selected = true;
-        }
+    }
+    LIST_FOR_EACH (p, node, &r->ports) {
+        p->selected = true;
     }
 }
 
@@ -435,13 +417,11 @@ port_role_selection_sm(struct rstp *r)
             PORT_ROLE_SELECTION_SM_ROLE_SELECTION;
         /* no break */
     case PORT_ROLE_SELECTION_SM_ROLE_SELECTION:
-        if (r->ports_count > 0) {
-            LIST_FOR_EACH (p, node, &r->ports) {
-                if (p->reselect) {
-                    r->port_role_selection_sm_state =
-                        PORT_ROLE_SELECTION_SM_ROLE_SELECTION_EXEC;
-                    break;
-                }
+        LIST_FOR_EACH (p, node, &r->ports) {
+            if (p->reselect) {
+                r->port_role_selection_sm_state =
+                    PORT_ROLE_SELECTION_SM_ROLE_SELECTION_EXEC;
+                break;
             }
         }
         break;
@@ -1279,10 +1259,8 @@ set_re_root_tree(struct rstp_port *p)
     struct rstp_port *p1;
 
     r = p->rstp;
-    if (r->ports_count > 0) {
-        LIST_FOR_EACH (p1, node, &r->ports) {
-            p1->re_root = true;
-        }
+    LIST_FOR_EACH (p1, node, &r->ports) {
+        p1->re_root = true;
     }
 }
 
@@ -1294,10 +1272,8 @@ set_sync_tree(struct rstp_port *p)
     struct rstp_port *p1;
 
     r = p->rstp;
-    if (r->ports_count > 0) {
-        LIST_FOR_EACH (p1, node, &r->ports) {
-            p1->sync = true;
-        }
+    LIST_FOR_EACH (p1, node, &r->ports) {
+        p1->sync = true;
     }
 }
 
@@ -1384,11 +1360,9 @@ re_rooted(struct rstp_port *p)
     struct rstp_port *p1;
 
     r = p->rstp;
-    if (r->ports_count > 0) {
-        LIST_FOR_EACH (p1, node, &r->ports) {
-            if ((p1 != p) && (p1->rr_while != 0)) {
-                return false;
-            }
+    LIST_FOR_EACH (p1, node, &r->ports) {
+        if ((p1 != p) && (p1->rr_while != 0)) {
+            return false;
         }
     }
     return true;
@@ -1400,12 +1374,10 @@ all_synced(struct rstp *r)
 {
     struct rstp_port *p;
 
-    if (r->ports_count > 0) {
-        LIST_FOR_EACH (p, node, &r->ports) {
-            if (!(p->selected && p->role == p->selected_role &&
-                        (p->role == ROLE_ROOT || p->synced == true))) {
-                return false;
-            }
+    LIST_FOR_EACH (p, node, &r->ports) {
+        if (!(p->selected && p->role == p->selected_role &&
+              (p->role == ROLE_ROOT || p->synced == true))) {
+            return false;
         }
     }
     return true;
@@ -1860,14 +1832,11 @@ set_tc_prop_tree(struct rstp_port *p)
     struct rstp_port *p1;
 
     r = p->rstp;
-    if (r->ports_count > 0) {
-        LIST_FOR_EACH (p1, node, &r->ports) {
-            /* Set tc_prop on every port, except the one calling this
-             * function.
-             */
-            if (p1->port_number != p->port_number) {
-                p1->tc_prop = true;
-            }
+    LIST_FOR_EACH (p1, node, &r->ports) {
+        /* Set tc_prop on every port, except the one calling this
+         * function. */
+        if (p1->port_number != p->port_number) {
+            p1->tc_prop = true;
         }
     }
 }

@@ -867,7 +867,6 @@ struct rstp {
 
     /* Ports */
     struct list ports OVS_GUARDED_BY(rstp_mutex);
-    uint16_t ports_count OVS_GUARDED_BY(rstp_mutex);
 
     struct ovs_refcount ref_cnt;
 
