@@ -110,8 +110,11 @@ static NTSTATUS OvsGetDpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
 /* Netlink control family: this is a Windows specific family. */
 NETLINK_CMD nlControlFamilyCmdOps[] = {
-    { OVS_CTRL_CMD_WIN_GET_PID, OvsGetPidCmdHandler,
-      OVS_TRANSACTION_DEV_OP, FALSE }
+    { .cmd             = OVS_CTRL_CMD_WIN_GET_PID,
+      .handler         = OvsGetPidCmdHandler,
+      .supportedDevOp  = OVS_TRANSACTION_DEV_OP,
+      .validateDpIndex = FALSE
+    }
 };
 
 NETLINK_FAMILY nlControlFamilyOps = {
@@ -125,8 +128,11 @@ NETLINK_FAMILY nlControlFamilyOps = {
 
 /* Netlink datapath family. */
 NETLINK_CMD nlDatapathFamilyCmdOps[] = {
-    { OVS_DP_CMD_GET, OvsGetDpCmdHandler,
-      OVS_WRITE_DEV_OP | OVS_READ_DEV_OP, FALSE }
+    { .cmd             = OVS_DP_CMD_GET,
+      .handler         = OvsGetDpCmdHandler,
+      .supportedDevOp  = OVS_WRITE_DEV_OP | OVS_READ_DEV_OP,
+      .validateDpIndex = FALSE
+    }
 };
 
 NETLINK_FAMILY nlDatapathFamilyOps = {
@@ -182,6 +188,7 @@ static NTSTATUS ValidateNetlinkCmd(UINT32 devOp,
 static NTSTATUS InvokeNetlinkCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                         NETLINK_FAMILY *nlFamilyOps,
                                         UINT32 *replyLen);
+static NTSTATUS OvsSetupDumpStart(POVS_USER_PARAMS_CONTEXT usrParamsCtx);
 
 
 /* Handles to the device object for communication with userspace. */
@@ -828,28 +835,8 @@ OvsGetDpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
 
     if (usrParamsCtx->devOp == OVS_WRITE_DEV_OP) {
-        NTSTATUS status;
-
-        /* input buffer has been validated while validating write dev op. */
-        ASSERT(msgIn != NULL && usrParamsCtx->inputLength >= sizeof *msgIn);
-
-        /* A write operation that does not indicate dump start is invalid. */
-        if ((msgIn->nlMsg.nlmsgFlags & NLM_F_DUMP) != NLM_F_DUMP) {
-            return STATUS_INVALID_PARAMETER;
-        }
-        /* XXX: Handle other NLM_F_* flags in the future. */
-
-        /*
-         * This operation should be setting up the dump state. If there's any
-         * previous state, clear it up so as to set it up afresh.
-         */
-        if (instance->dumpState.ovsMsg != NULL) {
-            FreeUserDumpState(instance);
-        }
-        status = InitUserDumpState(instance, msgIn);
-        if (status != STATUS_SUCCESS) {
-            return STATUS_NO_MEMORY;
-        }
+        *replyLen = 0;
+        OvsSetupDumpStart(usrParamsCtx);
     } else {
         ASSERT(usrParamsCtx->devOp == OVS_READ_DEV_OP);
 
@@ -941,6 +928,33 @@ OvsGetDpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     }
 
     return STATUS_SUCCESS;
+}
+
+static NTSTATUS
+OvsSetupDumpStart(POVS_USER_PARAMS_CONTEXT usrParamsCtx)
+{
+    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
+    POVS_OPEN_INSTANCE instance =
+        (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
+
+    /* input buffer has been validated while validating write dev op. */
+    ASSERT(msgIn != NULL && usrParamsCtx->inputLength >= sizeof *msgIn);
+
+    /* A write operation that does not indicate dump start is invalid. */
+    if ((msgIn->nlMsg.nlmsgFlags & NLM_F_DUMP) != NLM_F_DUMP) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    /* XXX: Handle other NLM_F_* flags in the future. */
+
+    /*
+     * This operation should be setting up the dump state. If there's any
+     * previous state, clear it up so as to set it up afresh.
+     */
+    if (instance->dumpState.ovsMsg != NULL) {
+        FreeUserDumpState(instance);
+    }
+
+    return InitUserDumpState(instance, msgIn);
 }
 
 /*
