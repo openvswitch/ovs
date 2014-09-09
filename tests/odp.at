@@ -19,9 +19,6 @@ in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1,dst=::2,label=0,proto=6,tclass=0,hlimit=128,frag=no),tcp(src=80,dst=8080)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1,dst=::2,label=0,proto=17,tclass=0,hlimit=128,frag=no),udp(src=6630,dst=22)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1,dst=::2,label=0,proto=58,tclass=0,hlimit=128,frag=no),icmpv6(type=1,code=2)
-in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1,dst=::2,label=0,proto=58,tclass=0,hlimit=128,frag=no),icmpv6(type=135,code=0),nd(target=::3)
-in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1,dst=::2,label=0,proto=58,tclass=0,hlimit=128,frag=no),icmpv6(type=135,code=0),nd(target=::3,sll=00:05:06:07:08:09)
-in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1,dst=::2,label=0,proto=58,tclass=0,hlimit=128,frag=no),icmpv6(type=136,code=0),nd(target=::3,tll=00:0a:0b:0c:0d:0e)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1,dst=::2,label=0,proto=58,tclass=0,hlimit=128,frag=no),icmpv6(type=136,code=0),nd(target=::3,sll=00:05:06:07:08:09,tll=00:0a:0b:0c:0d:0e)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0806),arp(sip=1.2.3.4,tip=5.6.7.8,op=1,sha=00:0f:10:11:12:13,tha=00:14:15:16:17:18)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1,dst=::2,label=0,proto=58,tclass=0,hlimit=128,frag=no),icmpv6(type=136,code=0),nd(target=::3,sll=00:05:06:07:08:09,tll=00:0a:0b:0c:0d:0e)
@@ -42,7 +39,7 @@ s/^/skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),/
 
  echo
  echo '# Valid forms with tunnel header.'
- sed 's/^/skb_priority(0),tunnel(tun_id=0x7f10354,src=10.10.10.10,dst=20.20.20.20,tos=0x0,ttl=64,tp_src=0,tp_dst=0,flags(csum,key)),skb_mark(0x1234),recirc_id(0),dp_hash(0),/' odp-base.txt
+ sed 's/^/skb_priority(0),tunnel(tun_id=0x7f10354,src=10.10.10.10,dst=20.20.20.20,tos=0,ttl=64,tp_src=0,tp_dst=0,flags(csum,key)),skb_mark(0x1234),recirc_id(0),dp_hash(0),/' odp-base.txt
 
  echo
  echo '# Valid forms with VLAN header.'
@@ -100,15 +97,15 @@ dnl We could add a test for invalid forms, but that's less important.
 AT_DATA([odp-base.txt], [dnl
 in_port(1/0xff),eth(src=00:01:02:03:04:05/ff:ff:ff:ff:ff:f0,dst=10:11:12:13:14:15/ff:ff:ff:ff:ff:f0)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x1234/0xfff0)
-in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41/255.255.255.0,dst=172.16.0.20/255.255.255.0,proto=5/0xf0,tos=0x80/0xf0,ttl=128/0xf0,frag=no/0xf0)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41/255.255.255.0,dst=172.16.0.20/255.255.255.0,proto=5/0xf0,tos=0x80/0xf0,ttl=128/0xf0,frag=no)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=6,tos=0,ttl=128,frag=no),tcp(src=80/0xff00,dst=8080/0xff)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=17,tos=0,ttl=128,frag=no),udp(src=81/0xff00,dst=6632/0xff)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=17,tos=0,ttl=128,frag=no),udp(src=81/0xff,dst=6632/0xff00)
-in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=1,tos=0,ttl=128,frag=no),icmp(type=1/0xf0,code=2/0xff)
-in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1/::255,dst=::2/::255,label=0/0xf0,proto=10/0xf0,tclass=0x70/0xf0,hlimit=128/0xf0,frag=no/0xf0)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=1,tos=0,ttl=128,frag=no),icmp(type=1/0xf0,code=2)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1/::255,dst=::2/::255,label=0/0xf0,proto=10/0xf0,tclass=0x70/0xf0,hlimit=128/0xf0,frag=no)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1,dst=::2,label=0,proto=6,tclass=0,hlimit=128,frag=no),tcp(src=80/0xff00,dst=8080/0xff)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1,dst=::2,label=0,proto=17,tclass=0,hlimit=128,frag=no),udp(src=6630/0xff00,dst=22/0xff)
-in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1,dst=::2,label=0,proto=58,tclass=0,hlimit=128,frag=no),icmpv6(type=1/0xf0,code=2/0xff)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1,dst=::2,label=0,proto=58,tclass=0,hlimit=128,frag=no),icmpv6(type=1/0xf0,code=2)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1,dst=::2,label=0,proto=58,tclass=0,hlimit=128,frag=no),icmpv6(type=135,code=0),nd(target=::3/::250)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1,dst=::2,label=0,proto=58,tclass=0,hlimit=128,frag=no),icmpv6(type=135,code=0),nd(target=::3/::250,sll=00:05:06:07:08:09/ff:ff:ff:ff:ff:00)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1,dst=::2,label=0,proto=58,tclass=0,hlimit=128,frag=no),icmpv6(type=136,code=0),nd(target=::3/::250,tll=00:0a:0b:0c:0d:0e/ff:ff:ff:ff:ff:00)
@@ -122,7 +119,7 @@ skb_mark(0x1234/0xfff0),in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:
 
  echo
  echo '# Valid forms with tunnel header.'
- sed 's/^/tunnel(tun_id=0x7f10354\/0xff,src=10.10.10.10\/255.255.255.0,dst=20.20.20.20\/255.255.255.0,tos=0\/0xff,ttl=64\/0xff,tp_src=0\/0xffff,tp_dst=0\/0xffff,flags(csum,key)),/' odp-base.txt
+ sed 's/^/tunnel(tun_id=0x7f10354\/0xff,src=10.10.10.10\/255.255.255.0,dst=20.20.20.20\/255.255.255.0,tos=0,ttl=64,tp_src=0,tp_dst=0,flags(csum,key)),/' odp-base.txt
 
  echo
  echo '# Valid forms with VLAN header.'
@@ -165,12 +162,12 @@ AT_SETUP([OVS datapath wildcarded key filtering.])
 dnl We could add a test for invalid forms, but that's less important.
 AT_DATA([odp-base.txt], [dnl
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x1234/0xfff0)
-in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41/255.255.255.0,dst=172.16.0.20/255.255.255.0,proto=5/0xf0,tos=0x80/0xf0,ttl=128/0xf0,frag=no/0xf0)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41/255.255.255.0,dst=172.16.0.20/255.255.255.0,proto=5/0xf0,tos=0x80/0xf0,ttl=128/0xf0,frag=no)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=6,tos=0,ttl=128,frag=no),tcp(src=80/0xff00,dst=8080/0xff)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=17,tos=0,ttl=128,frag=no),udp(src=81/0xff00,dst=6632/0xff)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=17,tos=0,ttl=128,frag=no),udp(src=81/0xff,dst=6632/0xff00)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=1,tos=0,ttl=128,frag=no),icmp(type=1/0xf0,code=2/0xff)
-in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1/::255,dst=::2/::255,label=0/0xf0,proto=10/0xf0,tclass=0x70/0xf0,hlimit=128/0xf0,frag=no/0xf0)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1/::255,dst=::2/::255,label=0/0xf0,proto=10/0xf0,tclass=0x70/0xf0,hlimit=128/0xf0,frag=no)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1,dst=::2,label=0,proto=6,tclass=0,hlimit=128,frag=no),tcp(src=80/0xff00,dst=8080/0xff)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0806),arp(sip=1.2.3.4/255.255.255.250,tip=5.6.7.8/255.255.255.250,op=1/0xf0,sha=00:0f:10:11:12:13/ff:ff:ff:ff:ff:00,tha=00:14:15:16:17:18/ff:ff:ff:ff:ff:00)
 ])
@@ -188,20 +185,20 @@ in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x8100),vla
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=17,tos=0,ttl=128,frag=no),udp(src=81/0xff00,dst=6632/0xff))
 ])
 AT_DATA([odp-ipv4.txt], [dnl
-in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41/255.255.255.0,dst=172.16.0.20/255.255.255.0,proto=5/0xf0,tos=0x80/0xf0,ttl=128/0xf0,frag=no/0xf0)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41/255.255.255.0,dst=172.16.0.20/255.255.255.0,proto=5/0xf0,tos=0x80/0xf0,ttl=128/0xf0,frag=no)
 ])
 AT_DATA([odp-icmp.txt], [dnl
-in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41/255.255.255.0,dst=172.16.0.20/255.255.255.0,proto=5/0xf0,tos=0x80/0xf0,ttl=128/0xf0,frag=no/0xf0)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41/255.255.255.0,dst=172.16.0.20/255.255.255.0,proto=5/0xf0,tos=0x80/0xf0,ttl=128/0xf0,frag=no)
 ])
 AT_DATA([odp-arp.txt], [dnl
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0806),arp(sip=1.2.3.4/255.255.255.250,tip=5.6.7.8/255.255.255.250,op=1/0xf0,sha=00:0f:10:11:12:13/ff:ff:ff:ff:ff:00,tha=00:14:15:16:17:18/ff:ff:ff:ff:ff:00)
 ])
 AT_DATA([odp-tcp.txt], [dnl
-in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41/255.255.255.0,dst=172.16.0.20/255.255.255.0,proto=5/0xf0,tos=0x80/0xf0,ttl=128/0xf0,frag=no/0xf0)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41/255.255.255.0,dst=172.16.0.20/255.255.255.0,proto=5/0xf0,tos=0x80/0xf0,ttl=128/0xf0,frag=no)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=6,tos=0,ttl=128,frag=no),tcp(src=80/0xff00,dst=8080/0xff)
 ])
 AT_DATA([odp-tcp6.txt], [dnl
-in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1/::255,dst=::2/::255,label=0/0xf0,proto=10/0xf0,tclass=0x70/0xf0,hlimit=128/0xf0,frag=no/0xf0)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1/::255,dst=::2/::255,label=0/0xf0,proto=10/0xf0,tclass=0x70/0xf0,hlimit=128/0xf0,frag=no)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1,dst=::2,label=0,proto=6,tclass=0,hlimit=128,frag=no),tcp(src=80/0xff00,dst=8080/0xff)
 ])
 AT_CHECK_UNQUOTED([ovstest test-odp parse-filter filter='dl_type=0x1235' < odp-base.txt], [0], [`cat odp-eth-type.txt`
@@ -245,35 +242,35 @@ userspace(pid=6633,ipfix(output_port=10))
 userspace(pid=6633,ipfix(output_port=10),tunnel_out_port=10)
 set(in_port(2))
 set(eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15))
-set(eth(src=00:01:02:03:04:05/ff:ff:ff:ff:ff:ff,dst=10:11:12:13:14:15/ff:ff:ff:00:00:00))
+set(eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15/ff:ff:ff:00:00:00))
 set(eth_type(0x1234))
 set(ipv4(src=35.8.2.41,dst=172.16.0.20,proto=5,tos=0x80,ttl=128,frag=no))
-set(ipv4(src=35.8.2.41/255.255.255.255,dst=172.16.0.20/255.255.255.255,proto=5/0xff,tos=0x80/0,ttl=128/0xff,frag=no/0xff))
-set(ipv4(src=35.8.2.41/255.255.255.0,dst=172.16.0.20/255.255.255.255,proto=5/0xff,tos=0x80/0xff,ttl=128/0xff,frag=no/0xff))
-set(ipv4(src=35.8.2.41/255.255.255.0,dst=172.16.0.20/0.0.0.0,proto=5/0,tos=0x80/0xff,ttl=128/0xff,frag=no/0xff))
-set(ipv4(src=35.8.2.41/0.0.0.0,dst=172.16.0.20/0.0.0.0,proto=5/0,tos=0x80/0x3,ttl=128/0,frag=no/0))
-set(ipv4(src=35.8.2.41/0.0.0.0,dst=172.16.0.20/0.0.0.0,proto=5/0,tos=0x80/0xfc,ttl=128/0,frag=no/0))
-set(ipv4(src=35.8.2.41/0.0.0.0,dst=172.16.0.20/0.0.0.0,proto=5/0,tos=0x80/0,ttl=128/0xff,frag=no/0x3))
-set(ipv4(src=35.8.2.41/0.0.0.0,dst=172.16.0.20/0.0.0.0,proto=5/0,tos=0x80/0,ttl=128/0,frag=no/0xff))
+set(ipv4(src=35.8.2.41,dst=172.16.0.20,proto=5,ttl=128,frag=no))
+set(ipv4(src=35.8.2.41/255.255.255.0,dst=172.16.0.20,proto=5,tos=0x80,ttl=128,frag=no))
+set(ipv4(src=35.8.2.41/255.255.255.0,tos=0x80,ttl=128,frag=no))
+set(ipv4(tos=0/0x3))
+set(ipv4(tos=0x80/0xfc))
+set(ipv4(ttl=128,frag=no))
+set(ipv4(frag=no))
 set(tcp(src=80,dst=8080))
-set(tcp(src=80/0xff00,dst=8080/0xffff))
-set(tcp(src=80/0xffff,dst=0/0))
-set(tcp(src=0/0,dst=8080/0xffff))
+set(tcp(src=80/0xff00,dst=8080))
+set(tcp(src=80))
+set(tcp(dst=8080))
 set(udp(src=81,dst=6632))
-set(udp(src=81/0xff00,dst=6632/0xffff))
-set(udp(src=81/0xffff,dst=0/0))
-set(udp(src=0/0,dst=6633/0xffff))
+set(udp(src=81/0xff00,dst=6632))
+set(udp(src=81))
+set(udp(dst=6633))
 set(sctp(src=82,dst=6633))
-set(sctp(src=82/0xff00,dst=6633/0xffff))
-set(sctp(src=82/0xffff,dst=0/0))
-set(sctp(src=0/0,dst=6632/0xffff))
+set(sctp(src=82/0xff00,dst=6633))
+set(sctp(src=82))
+set(sctp(dst=6632))
 set(icmp(type=1,code=2))
 set(ipv6(src=::1,dst=::2,label=0,proto=10,tclass=0x70,hlimit=128,frag=no))
-set(ipv6(src=::1/ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff,dst=::2/ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff,label=0/0,proto=10/0,tclass=0x70/0,hlimit=128/0,frag=no/0x3))
-set(ipv6(src=::/::,dst=::/::,label=0/0xfffff,proto=10/0xff,tclass=0x70/0xff,hlimit=128/0xff,frag=no/0x3))
-set(ipv6(src=::/::,dst=::/::,label=0/0xfffff,proto=10/0xff,tclass=0x70/0,hlimit=128/0xff,frag=no/0x3))
-set(ipv6(src=::/::,dst=::/::,label=0/0xfffff,proto=10/0xff,tclass=0x70/0,hlimit=128/0,frag=no/0x3))
-set(ipv6(src=::/::,dst=::/::,label=0/0xfffff,proto=10/0,tclass=0x70/0,hlimit=128/0,frag=no/0x3))
+set(ipv6(src=::1,dst=::2))
+set(ipv6(label=0,proto=10,tclass=0x70,hlimit=128,frag=no))
+set(ipv6(label=0,proto=10,hlimit=128))
+set(ipv6(label=0/0xfff,proto=10,tclass=0x70/0x70))
+set(ipv6(label=0))
 set(icmpv6(type=1,code=2))
 push_vlan(vid=12,pcp=0)
 push_vlan(vid=13,pcp=5,cfi=0)
@@ -281,8 +278,8 @@ push_vlan(tpid=0x9100,vid=13,pcp=5)
 push_vlan(tpid=0x9100,vid=13,pcp=5,cfi=0)
 pop_vlan
 sample(sample=9.7%,actions(1,2,3,push_vlan(vid=1,pcp=2)))
-set(tunnel(tun_id=0xabcdef1234567890,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,tp_src=0,tp_dst=0,flags(df,csum,key)))
-set(tunnel(tun_id=0xabcdef1234567890,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,tp_src=0,tp_dst=0,flags(key)))
+set(tunnel(tun_id=0xabcdef1234567890,src=1.1.1.1,dst=2.2.2.2,tos=0,ttl=64,tp_src=0,tp_dst=0,flags(df,csum,key)))
+set(tunnel(tun_id=0xabcdef1234567890,src=1.1.1.1,dst=2.2.2.2,tos=0,ttl=64,tp_src=0,tp_dst=0,flags(key)))
 ])
 AT_CHECK_UNQUOTED([ovstest test-odp parse-actions < actions.txt], [0],
   [`cat actions.txt`

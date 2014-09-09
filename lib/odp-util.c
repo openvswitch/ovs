@@ -213,7 +213,7 @@ parse_flags(const char *s, const char *(*bit_to_string)(uint32_t),
     int n;
 
     /* Parse masked flags in numeric format? */
-    if (res_mask && ovs_scan(s, "%"SCNi32"/%"SCNi32")%n",
+    if (res_mask && ovs_scan(s, "%"SCNi32"/%"SCNi32"%n",
                              res_flags, res_mask, &n) && n > 0) {
         if (*res_flags & ~allowed || *res_mask & ~allowed) {
             return -EINVAL;
@@ -221,12 +221,9 @@ parse_flags(const char *s, const char *(*bit_to_string)(uint32_t),
         return n;
     }
 
-    if (*s != '(') {
-        return -EINVAL;
-    }
-    n = 1;
+    n = 0;
 
-    if (res_mask && (s[n] == '+' || s[n] == '-')) {
+    if (res_mask && (*s == '+' || *s == '-')) {
         uint32_t flags = 0, mask = 0;
 
         /* Parse masked flags. */
@@ -279,7 +276,6 @@ parse_flags(const char *s, const char *(*bit_to_string)(uint32_t),
             }
             s += name_len;
         }
-        n++;
 
         *res_flags = flags;
         *res_mask = mask;
@@ -326,7 +322,6 @@ parse_flags(const char *s, const char *(*bit_to_string)(uint32_t),
             return -EINVAL;
         }
     }
-    n++;
 
     *res_flags = result;
     if (res_mask) {
@@ -425,14 +420,27 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
 }
 
 static void
-format_vlan_tci(struct ds *ds, ovs_be16 vlan_tci)
+format_vlan_tci(struct ds *ds, ovs_be16 tci, ovs_be16 mask, bool verbose)
 {
-    ds_put_format(ds, "vid=%"PRIu16",pcp=%d",
-                  vlan_tci_to_vid(vlan_tci),
-                  vlan_tci_to_pcp(vlan_tci));
-    if (!(vlan_tci & htons(VLAN_CFI))) {
-        ds_put_cstr(ds, ",cfi=0");
+    if (verbose || vlan_tci_to_vid(tci) || vlan_tci_to_vid(mask)) {
+        ds_put_format(ds, "vid=%"PRIu16, vlan_tci_to_vid(tci));
+        if (vlan_tci_to_vid(mask) != VLAN_VID_MASK) { /* Partially masked. */
+            ds_put_format(ds, "/0x%"PRIx16, vlan_tci_to_vid(mask));
+        };
+        ds_put_char(ds, ',');
     }
+    if (verbose || vlan_tci_to_pcp(tci) || vlan_tci_to_pcp(mask)) {
+        ds_put_format(ds, "pcp=%d", vlan_tci_to_pcp(tci));
+        if (vlan_tci_to_pcp(mask) != (VLAN_PCP_MASK >> VLAN_PCP_SHIFT)) {
+            ds_put_format(ds, "/0x%x", vlan_tci_to_pcp(mask));
+        }
+        ds_put_char(ds, ',');
+    }
+    if (!(tci & htons(VLAN_CFI))) {
+        ds_put_cstr(ds, "cfi=0");
+        ds_put_char(ds, ',');
+    }
+    ds_chomp(ds, ',');
 }
 
 static void
@@ -543,9 +551,9 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
             mask->nla_len = attr->nla_len = NLA_HDRLEN + size;
             memcpy(attr + 1, (char *)(a + 1), size);
             memcpy(mask + 1, (char *)(a + 1) + size, size);
-            format_odp_key_attr(attr, mask, NULL, ds, true);
+            format_odp_key_attr(attr, mask, NULL, ds, false);
         } else {
-            format_odp_key_attr(a, NULL, NULL, ds, true);
+            format_odp_key_attr(a, NULL, NULL, ds, false);
         }
         ds_put_cstr(ds, ")");
         break;
@@ -560,7 +568,7 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
         if (vlan->vlan_tpid != htons(ETH_TYPE_VLAN)) {
             ds_put_format(ds, "tpid=0x%04"PRIx16",", ntohs(vlan->vlan_tpid));
         }
-        format_vlan_tci(ds, vlan->vlan_tci);
+        format_vlan_tci(ds, vlan->vlan_tci, OVS_BE16_MAX, false);
         ds_put_char(ds, ')');
         break;
     case OVS_ACTION_ATTR_POP_VLAN:
@@ -660,7 +668,7 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
             cookie.sflow.output = output;
             user_data = &cookie;
             user_data_size = sizeof cookie.sflow;
-        } else if (ovs_scan(&s[n], ",slow_path%n",
+        } else if (ovs_scan(&s[n], ",slow_path(%n",
                             &n1)) {
             int res;
 
@@ -672,10 +680,10 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
             res = parse_flags(&s[n], slow_path_reason_to_string,
                               &cookie.slow_path.reason,
                               SLOW_PATH_REASON_MASK, NULL);
-            if (res < 0) {
+            if (res < 0 || s[n + res] != ')') {
                 return res;
             }
-            n += res;
+            n += res + 1;
 
             user_data = &cookie;
             user_data_size = sizeof cookie.slow_path;
@@ -1237,12 +1245,199 @@ odp_portno_names_destroy(struct hmap *portno_names)
     }
 }
 
+/* Format helpers. */
+
+static void
+format_eth(struct ds *ds, const char *name, const uint8_t key[ETH_ADDR_LEN],
+           const uint8_t (*mask)[ETH_ADDR_LEN], bool verbose)
+{
+    bool mask_empty = mask && eth_addr_is_zero(*mask);
+
+    if (verbose || !mask_empty) {
+        bool mask_full = !mask || eth_mask_is_exact(*mask);
+
+        if (mask_full) {
+            ds_put_format(ds, "%s="ETH_ADDR_FMT",", name, ETH_ADDR_ARGS(key));
+        } else {
+            ds_put_format(ds, "%s=", name);
+            eth_format_masked(key, *mask, ds);
+            ds_put_char(ds, ',');
+        }
+    }
+}
+
+static void
+format_be64(struct ds *ds, const char *name, ovs_be64 key,
+            const ovs_be64 *mask, bool verbose)
+{
+    bool mask_empty = mask && !*mask;
+
+    if (verbose || !mask_empty) {
+        bool mask_full = !mask || *mask == OVS_BE64_MAX;
+
+        ds_put_format(ds, "%s=0x%"PRIx64, name, ntohll(key));
+        if (!mask_full) { /* Partially masked. */
+            ds_put_format(ds, "/%#"PRIx64, ntohll(*mask));
+        }
+        ds_put_char(ds, ',');
+    }
+}
+
+static void
+format_ipv4(struct ds *ds, const char *name, ovs_be32 key,
+            const ovs_be32 *mask, bool verbose)
+{
+    bool mask_empty = mask && !*mask;
+
+    if (verbose || !mask_empty) {
+        bool mask_full = !mask || *mask == OVS_BE32_MAX;
+
+        ds_put_format(ds, "%s="IP_FMT, name, IP_ARGS(key));
+        if (!mask_full) { /* Partially masked. */
+            ds_put_format(ds, "/"IP_FMT, IP_ARGS(*mask));
+        }
+        ds_put_char(ds, ',');
+    }
+}
+
+static void
+format_ipv6(struct ds *ds, const char *name, const ovs_be32 key_[4],
+            const ovs_be32 (*mask_)[4], bool verbose)
+{
+    char buf[INET6_ADDRSTRLEN];
+    const struct in6_addr *key = (const struct in6_addr *)key_;
+    const struct in6_addr *mask = mask_ ? (const struct in6_addr *)*mask_
+        : NULL;
+    bool mask_empty = mask && ipv6_mask_is_any(mask);
+
+    if (verbose || !mask_empty) {
+        bool mask_full = !mask || ipv6_mask_is_exact(mask);
+
+        inet_ntop(AF_INET6, key, buf, sizeof buf);
+        ds_put_format(ds, "%s=%s", name, buf);
+        if (!mask_full) { /* Partially masked. */
+            inet_ntop(AF_INET6, mask, buf, sizeof buf);
+            ds_put_format(ds, "/%s", buf);
+        }
+        ds_put_char(ds, ',');
+    }
+}
+
+static void
+format_ipv6_label(struct ds *ds, const char *name, ovs_be32 key,
+                  const ovs_be32 *mask, bool verbose)
+{
+    bool mask_empty = mask && !*mask;
+
+    if (verbose || !mask_empty) {
+        bool mask_full = !mask
+            || (*mask & htonl(IPV6_LABEL_MASK)) == htonl(IPV6_LABEL_MASK);
+
+        ds_put_format(ds, "%s=%#"PRIx32, name, ntohl(key));
+        if (!mask_full) { /* Partially masked. */
+            ds_put_format(ds, "/%#"PRIx32, ntohl(*mask));
+        }
+        ds_put_char(ds, ',');
+    }
+}
+
+static void
+format_u8x(struct ds *ds, const char *name, uint8_t key,
+           const uint8_t *mask, bool verbose)
+{
+    bool mask_empty = mask && !*mask;
+
+    if (verbose || !mask_empty) {
+        bool mask_full = !mask || *mask == UINT8_MAX;
+
+        ds_put_format(ds, "%s=%#"PRIx8, name, key);
+        if (!mask_full) { /* Partially masked. */
+            ds_put_format(ds, "/%#"PRIx8, *mask);
+        }
+        ds_put_char(ds, ',');
+    }
+}
+
+static void
+format_u8u(struct ds *ds, const char *name, uint8_t key,
+           const uint8_t *mask, bool verbose)
+{
+    bool mask_empty = mask && !*mask;
+
+    if (verbose || !mask_empty) {
+        bool mask_full = !mask || *mask == UINT8_MAX;
+
+        ds_put_format(ds, "%s=%"PRIu8, name, key);
+        if (!mask_full) { /* Partially masked. */
+            ds_put_format(ds, "/%#"PRIx8, *mask);
+        }
+        ds_put_char(ds, ',');
+    }
+}
+
+static void
+format_be16(struct ds *ds, const char *name, ovs_be16 key,
+            const ovs_be16 *mask, bool verbose)
+{
+    bool mask_empty = mask && !*mask;
+
+    if (verbose || !mask_empty) {
+        bool mask_full = !mask || *mask == OVS_BE16_MAX;
+
+        ds_put_format(ds, "%s=%"PRIu16, name, ntohs(key));
+        if (!mask_full) { /* Partially masked. */
+            ds_put_format(ds, "/%#"PRIx16, ntohs(*mask));
+        }
+        ds_put_char(ds, ',');
+    }
+}
+
+static void
+format_tun_flags(struct ds *ds, const char *name, uint16_t key,
+                 const uint16_t *mask, bool verbose)
+{
+    bool mask_empty = mask && !*mask;
+
+    if (verbose || !mask_empty) {
+        bool mask_full = !mask || (*mask & FLOW_TNL_F_MASK) == FLOW_TNL_F_MASK;
+
+        ds_put_cstr(ds, name);
+        ds_put_char(ds, '(');
+        if (!mask_full) { /* Partially masked. */
+            format_flags_masked(ds, NULL, flow_tun_flag_to_string, key, *mask);
+        } else { /* Fully masked. */
+            format_flags(ds, flow_tun_flag_to_string, key, ',');
+        }
+        ds_put_cstr(ds, "),");
+    }
+}
+
+static void
+format_frag(struct ds *ds, const char *name, uint8_t key,
+            const uint8_t *mask, bool verbose)
+{
+    bool mask_empty = mask && !*mask;
+
+    /* ODP frag is an enumeration field; partial masks are not meaningful. */
+    if (verbose || !mask_empty) {
+        bool mask_full = !mask || *mask == UINT8_MAX;
+
+        if (!mask_full) { /* Partially masked. */
+            ds_put_format(ds, "error: partial mask not supported for frag (%#"
+                          PRIx8"),", *mask);
+        } else {
+            ds_put_format(ds, "%s=%s,", name, ovs_frag_type_to_string(key));
+        }
+    }
+}
+
+#define MASK(PTR, FIELD) PTR ? &PTR->FIELD : NULL
+
 static void
 format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
                     const struct hmap *portno_names, struct ds *ds,
                     bool verbose)
 {
-    struct flow_tnl tun_key;
     enum ovs_key_attr attr = nl_attr_type(a);
     char namebuf[OVS_KEY_ATTR_BUFSIZE];
     int expected_len;
@@ -1302,50 +1497,27 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         break;
 
     case OVS_KEY_ATTR_TUNNEL: {
-        struct flow_tnl tun_mask;
+        struct flow_tnl key, mask_;
+        struct flow_tnl *mask = ma ? &mask_ : NULL;
 
-        if (ma) {
-            memset(&tun_mask, 0, sizeof tun_mask);
-            odp_tun_key_from_attr(ma, &tun_mask);
+        if (mask) {
+            memset(mask, 0, sizeof *mask);
+            odp_tun_key_from_attr(ma, mask);
         }
-
-        memset(&tun_key, 0, sizeof tun_key);
-        if (odp_tun_key_from_attr(a, &tun_key) == ODP_FIT_ERROR) {
+        memset(&key, 0, sizeof key);
+        if (odp_tun_key_from_attr(a, &key) == ODP_FIT_ERROR) {
             ds_put_format(ds, "error");
             return;
         }
-        if (!is_exact) {
-            ds_put_format(ds, "tun_id=%#"PRIx64"/%#"PRIx64
-                          ",src="IP_FMT"/"IP_FMT",dst="IP_FMT"/"IP_FMT
-                          ",tos=%#"PRIx8"/%#"PRIx8",ttl=%"PRIu8"/%#"PRIx8
-                          ",tp_src=%"PRIu16"/%#"PRIx16
-                          ",tp_dst=%"PRIu16"/%#"PRIx16
-                          ",flags(",
-                          ntohll(tun_key.tun_id), ntohll(tun_mask.tun_id),
-                          IP_ARGS(tun_key.ip_src), IP_ARGS(tun_mask.ip_src),
-                          IP_ARGS(tun_key.ip_dst), IP_ARGS(tun_mask.ip_dst),
-                          tun_key.ip_tos, tun_mask.ip_tos,
-                          tun_key.ip_ttl, tun_mask.ip_ttl,
-                          tun_key.tp_src, tun_mask.tp_src,
-                          tun_key.tp_dst, tun_mask.tp_dst);
-        } else {
-            ds_put_format(ds, "tun_id=0x%"PRIx64",src="IP_FMT",dst="IP_FMT","
-                          "tos=0x%"PRIx8",ttl=%"PRIu8","
-                          "tp_src=%"PRIu16",tp_dst=%"PRIu16","
-                          "flags(",
-                          ntohll(tun_key.tun_id),
-                          IP_ARGS(tun_key.ip_src),
-                          IP_ARGS(tun_key.ip_dst),
-                          tun_key.ip_tos, tun_key.ip_ttl,
-                          tun_key.tp_src, tun_key.tp_dst);
-        }
-        if (ma && ~tun_mask.flags & FLOW_TNL_F_MASK) { /* Partially masked. */
-            format_flags_masked(ds, NULL, flow_tun_flag_to_string,
-                                tun_key.flags, tun_mask.flags);
-        } else { /* Fully masked. */
-            format_flags(ds, flow_tun_flag_to_string, tun_key.flags, ',');
-        }
-        ds_put_char(ds, ')');
+        format_be64(ds, "tun_id", key.tun_id, MASK(mask, tun_id), verbose);
+        format_ipv4(ds, "src", key.ip_src, MASK(mask, ip_src), verbose);
+        format_ipv4(ds, "dst", key.ip_dst, MASK(mask, ip_dst), verbose);
+        format_u8x(ds, "tos", key.ip_tos, MASK(mask, ip_tos), verbose);
+        format_u8u(ds, "ttl", key.ip_ttl, MASK(mask, ip_ttl), verbose);
+        format_be16(ds, "tp_src", key.tp_src, MASK(mask, tp_src), verbose);
+        format_be16(ds, "tp_dst", key.tp_dst, MASK(mask, tp_dst), verbose);
+        format_tun_flags(ds, "flags", key.flags, MASK(mask, flags), verbose);
+        ds_chomp(ds, ',');
         break;
     }
     case OVS_KEY_ATTR_IN_PORT:
@@ -1365,42 +1537,18 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         }
         break;
 
-    case OVS_KEY_ATTR_ETHERNET:
-        if (!is_exact) {
-            const struct ovs_key_ethernet *eth_mask = nl_attr_get(ma);
-            const struct ovs_key_ethernet *eth_key = nl_attr_get(a);
+    case OVS_KEY_ATTR_ETHERNET: {
+        const struct ovs_key_ethernet *mask = ma ? nl_attr_get(ma) : NULL;
+        const struct ovs_key_ethernet *key = nl_attr_get(a);
 
-            ds_put_format(ds, "src="ETH_ADDR_FMT"/"ETH_ADDR_FMT
-                          ",dst="ETH_ADDR_FMT"/"ETH_ADDR_FMT,
-                          ETH_ADDR_ARGS(eth_key->eth_src),
-                          ETH_ADDR_ARGS(eth_mask->eth_src),
-                          ETH_ADDR_ARGS(eth_key->eth_dst),
-                          ETH_ADDR_ARGS(eth_mask->eth_dst));
-        } else {
-            const struct ovs_key_ethernet *eth_key = nl_attr_get(a);
-
-            ds_put_format(ds, "src="ETH_ADDR_FMT",dst="ETH_ADDR_FMT,
-                          ETH_ADDR_ARGS(eth_key->eth_src),
-                          ETH_ADDR_ARGS(eth_key->eth_dst));
-        }
+        format_eth(ds, "src", key->eth_src, MASK(mask, eth_src), verbose);
+        format_eth(ds, "dst", key->eth_dst, MASK(mask, eth_dst), verbose);
+        ds_chomp(ds, ',');
         break;
-
+    }
     case OVS_KEY_ATTR_VLAN:
-        {
-            ovs_be16 vlan_tci = nl_attr_get_be16(a);
-            if (!is_exact) {
-                ovs_be16 mask = nl_attr_get_be16(ma);
-                ds_put_format(ds, "vid=%"PRIu16"/0x%"PRIx16",pcp=%d/0x%x,cfi=%d/%d",
-                              vlan_tci_to_vid(vlan_tci),
-                              vlan_tci_to_vid(mask),
-                              vlan_tci_to_pcp(vlan_tci),
-                              vlan_tci_to_pcp(mask),
-                              vlan_tci_to_cfi(vlan_tci),
-                              vlan_tci_to_cfi(mask));
-            } else {
-                format_vlan_tci(ds, vlan_tci);
-            }
-        }
+        format_vlan_tci(ds, nl_attr_get_be16(a),
+                        ma ? nl_attr_get_be16(ma) : OVS_BE16_MAX, verbose);
         break;
 
     case OVS_KEY_ATTR_MPLS: {
@@ -1424,7 +1572,6 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         format_mpls(ds, mpls_key, mpls_mask, size / sizeof *mpls_key);
         break;
     }
-
     case OVS_KEY_ATTR_ETHERTYPE:
         ds_put_format(ds, "0x%04"PRIx16, ntohs(nl_attr_get_be16(a)));
         if (!is_exact) {
@@ -1432,98 +1579,52 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         }
         break;
 
-    case OVS_KEY_ATTR_IPV4:
-        if (!is_exact) {
-            const struct ovs_key_ipv4 *ipv4_key = nl_attr_get(a);
-            const struct ovs_key_ipv4 *ipv4_mask = nl_attr_get(ma);
+    case OVS_KEY_ATTR_IPV4: {
+        const struct ovs_key_ipv4 *key = nl_attr_get(a);
+        const struct ovs_key_ipv4 *mask = ma ? nl_attr_get(ma) : NULL;
 
-            ds_put_format(ds, "src="IP_FMT"/"IP_FMT",dst="IP_FMT"/"IP_FMT
-                          ",proto=%"PRIu8"/%#"PRIx8",tos=%#"PRIx8"/%#"PRIx8
-                          ",ttl=%"PRIu8"/%#"PRIx8",frag=%s/%#"PRIx8,
-                          IP_ARGS(ipv4_key->ipv4_src),
-                          IP_ARGS(ipv4_mask->ipv4_src),
-                          IP_ARGS(ipv4_key->ipv4_dst),
-                          IP_ARGS(ipv4_mask->ipv4_dst),
-                          ipv4_key->ipv4_proto, ipv4_mask->ipv4_proto,
-                          ipv4_key->ipv4_tos, ipv4_mask->ipv4_tos,
-                          ipv4_key->ipv4_ttl, ipv4_mask->ipv4_ttl,
-                          ovs_frag_type_to_string(ipv4_key->ipv4_frag),
-                          ipv4_mask->ipv4_frag);
-        } else {
-            const struct ovs_key_ipv4 *ipv4_key = nl_attr_get(a);
-
-            ds_put_format(ds, "src="IP_FMT",dst="IP_FMT",proto=%"PRIu8
-                          ",tos=%#"PRIx8",ttl=%"PRIu8",frag=%s",
-                          IP_ARGS(ipv4_key->ipv4_src),
-                          IP_ARGS(ipv4_key->ipv4_dst),
-                          ipv4_key->ipv4_proto, ipv4_key->ipv4_tos,
-                          ipv4_key->ipv4_ttl,
-                          ovs_frag_type_to_string(ipv4_key->ipv4_frag));
-        }
+        format_ipv4(ds, "src", key->ipv4_src, MASK(mask, ipv4_src), verbose);
+        format_ipv4(ds, "dst", key->ipv4_dst, MASK(mask, ipv4_dst), verbose);
+        format_u8u(ds, "proto", key->ipv4_proto, MASK(mask, ipv4_proto),
+                      verbose);
+        format_u8x(ds, "tos", key->ipv4_tos, MASK(mask, ipv4_tos), verbose);
+        format_u8u(ds, "ttl", key->ipv4_ttl, MASK(mask, ipv4_ttl), verbose);
+        format_frag(ds, "frag", key->ipv4_frag, MASK(mask, ipv4_frag),
+                    verbose);
+        ds_chomp(ds, ',');
         break;
+    }
+    case OVS_KEY_ATTR_IPV6: {
+        const struct ovs_key_ipv6 *key = nl_attr_get(a);
+        const struct ovs_key_ipv6 *mask = ma ? nl_attr_get(ma) : NULL;
 
-    case OVS_KEY_ATTR_IPV6:
-        if (!is_exact) {
-            const struct ovs_key_ipv6 *ipv6_key, *ipv6_mask;
-            char src_str[INET6_ADDRSTRLEN];
-            char dst_str[INET6_ADDRSTRLEN];
-            char src_mask[INET6_ADDRSTRLEN];
-            char dst_mask[INET6_ADDRSTRLEN];
-
-            ipv6_key = nl_attr_get(a);
-            inet_ntop(AF_INET6, ipv6_key->ipv6_src, src_str, sizeof src_str);
-            inet_ntop(AF_INET6, ipv6_key->ipv6_dst, dst_str, sizeof dst_str);
-
-            ipv6_mask = nl_attr_get(ma);
-            inet_ntop(AF_INET6, ipv6_mask->ipv6_src, src_mask, sizeof src_mask);
-            inet_ntop(AF_INET6, ipv6_mask->ipv6_dst, dst_mask, sizeof dst_mask);
-
-            ds_put_format(ds, "src=%s/%s,dst=%s/%s,label=%#"PRIx32"/%#"PRIx32
-                          ",proto=%"PRIu8"/%#"PRIx8",tclass=%#"PRIx8"/%#"PRIx8
-                          ",hlimit=%"PRIu8"/%#"PRIx8",frag=%s/%#"PRIx8,
-                          src_str, src_mask, dst_str, dst_mask,
-                          ntohl(ipv6_key->ipv6_label),
-                          ntohl(ipv6_mask->ipv6_label),
-                          ipv6_key->ipv6_proto, ipv6_mask->ipv6_proto,
-                          ipv6_key->ipv6_tclass, ipv6_mask->ipv6_tclass,
-                          ipv6_key->ipv6_hlimit, ipv6_mask->ipv6_hlimit,
-                          ovs_frag_type_to_string(ipv6_key->ipv6_frag),
-                          ipv6_mask->ipv6_frag);
-        } else {
-            const struct ovs_key_ipv6 *ipv6_key;
-            char src_str[INET6_ADDRSTRLEN];
-            char dst_str[INET6_ADDRSTRLEN];
-
-            ipv6_key = nl_attr_get(a);
-            inet_ntop(AF_INET6, ipv6_key->ipv6_src, src_str, sizeof src_str);
-            inet_ntop(AF_INET6, ipv6_key->ipv6_dst, dst_str, sizeof dst_str);
-
-            ds_put_format(ds, "src=%s,dst=%s,label=%#"PRIx32",proto=%"PRIu8
-                          ",tclass=%#"PRIx8",hlimit=%"PRIu8",frag=%s",
-                          src_str, dst_str, ntohl(ipv6_key->ipv6_label),
-                          ipv6_key->ipv6_proto, ipv6_key->ipv6_tclass,
-                          ipv6_key->ipv6_hlimit,
-                          ovs_frag_type_to_string(ipv6_key->ipv6_frag));
-        }
+        format_ipv6(ds, "src", key->ipv6_src, MASK(mask, ipv6_src), verbose);
+        format_ipv6(ds, "dst", key->ipv6_dst, MASK(mask, ipv6_dst), verbose);
+        format_ipv6_label(ds, "label", key->ipv6_label, MASK(mask, ipv6_label),
+                          verbose);
+        format_u8u(ds, "proto", key->ipv6_proto, MASK(mask, ipv6_proto),
+                      verbose);
+        format_u8x(ds, "tclass", key->ipv6_tclass, MASK(mask, ipv6_tclass),
+                      verbose);
+        format_u8u(ds, "hlimit", key->ipv6_hlimit, MASK(mask, ipv6_hlimit),
+                      verbose);
+        format_frag(ds, "frag", key->ipv6_frag, MASK(mask, ipv6_frag),
+                    verbose);
+        ds_chomp(ds, ',');
         break;
-
+    }
+        /* These have the same structure and format. */
     case OVS_KEY_ATTR_TCP:
-        if (!is_exact) {
-            const struct ovs_key_tcp *tcp_mask = nl_attr_get(ma);
-            const struct ovs_key_tcp *tcp_key = nl_attr_get(a);
+    case OVS_KEY_ATTR_UDP:
+    case OVS_KEY_ATTR_SCTP: {
+        const struct ovs_key_tcp *key = nl_attr_get(a);
+        const struct ovs_key_tcp *mask = ma ? nl_attr_get(ma) : NULL;
 
-            ds_put_format(ds, "src=%"PRIu16"/%#"PRIx16
-                          ",dst=%"PRIu16"/%#"PRIx16,
-                          ntohs(tcp_key->tcp_src), ntohs(tcp_mask->tcp_src),
-                          ntohs(tcp_key->tcp_dst), ntohs(tcp_mask->tcp_dst));
-        } else {
-            const struct ovs_key_tcp *tcp_key = nl_attr_get(a);
-
-            ds_put_format(ds, "src=%"PRIu16",dst=%"PRIu16,
-                          ntohs(tcp_key->tcp_src), ntohs(tcp_key->tcp_dst));
-        }
+        format_be16(ds, "src", key->tcp_src, MASK(mask, tcp_src), verbose);
+        format_be16(ds, "dst", key->tcp_dst, MASK(mask, tcp_dst), verbose);
+        ds_chomp(ds, ',');
         break;
-
+    }
     case OVS_KEY_ATTR_TCP_FLAGS:
         if (!is_exact) {
             format_flags_masked(ds, NULL, packet_tcp_flag_to_string,
@@ -1535,134 +1636,48 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         }
         break;
 
-    case OVS_KEY_ATTR_UDP:
-        if (!is_exact) {
-            const struct ovs_key_udp *udp_mask = nl_attr_get(ma);
-            const struct ovs_key_udp *udp_key = nl_attr_get(a);
+    case OVS_KEY_ATTR_ICMP: {
+        const struct ovs_key_icmp *key = nl_attr_get(a);
+        const struct ovs_key_icmp *mask = ma ? nl_attr_get(ma) : NULL;
 
-            ds_put_format(ds, "src=%"PRIu16"/%#"PRIx16
-                          ",dst=%"PRIu16"/%#"PRIx16,
-                          ntohs(udp_key->udp_src), ntohs(udp_mask->udp_src),
-                          ntohs(udp_key->udp_dst), ntohs(udp_mask->udp_dst));
-        } else {
-            const struct ovs_key_udp *udp_key = nl_attr_get(a);
-
-            ds_put_format(ds, "src=%"PRIu16",dst=%"PRIu16,
-                          ntohs(udp_key->udp_src), ntohs(udp_key->udp_dst));
-        }
+        format_u8u(ds, "type", key->icmp_type, MASK(mask, icmp_type), verbose);
+        format_u8u(ds, "code", key->icmp_code, MASK(mask, icmp_code), verbose);
+        ds_chomp(ds, ',');
         break;
+    }
+    case OVS_KEY_ATTR_ICMPV6: {
+        const struct ovs_key_icmpv6 *key = nl_attr_get(a);
+        const struct ovs_key_icmpv6 *mask = ma ? nl_attr_get(ma) : NULL;
 
-    case OVS_KEY_ATTR_SCTP:
-        if (ma) {
-            const struct ovs_key_sctp *sctp_mask = nl_attr_get(ma);
-            const struct ovs_key_sctp *sctp_key = nl_attr_get(a);
-
-            ds_put_format(ds, "src=%"PRIu16"/%#"PRIx16
-                          ",dst=%"PRIu16"/%#"PRIx16,
-                          ntohs(sctp_key->sctp_src), ntohs(sctp_mask->sctp_src),
-                          ntohs(sctp_key->sctp_dst), ntohs(sctp_mask->sctp_dst));
-        } else {
-            const struct ovs_key_sctp *sctp_key = nl_attr_get(a);
-
-            ds_put_format(ds, "src=%"PRIu16",dst=%"PRIu16,
-                          ntohs(sctp_key->sctp_src), ntohs(sctp_key->sctp_dst));
-        }
+        format_u8u(ds, "type", key->icmpv6_type, MASK(mask, icmpv6_type),
+                   verbose);
+        format_u8u(ds, "code", key->icmpv6_code, MASK(mask, icmpv6_code),
+                   verbose);
+        ds_chomp(ds, ',');
         break;
+    }
+    case OVS_KEY_ATTR_ARP: {
+        const struct ovs_key_arp *mask = ma ? nl_attr_get(ma) : NULL;
+        const struct ovs_key_arp *key = nl_attr_get(a);
 
-    case OVS_KEY_ATTR_ICMP:
-        if (!is_exact) {
-            const struct ovs_key_icmp *icmp_mask = nl_attr_get(ma);
-            const struct ovs_key_icmp *icmp_key = nl_attr_get(a);
-
-            ds_put_format(ds, "type=%"PRIu8"/%#"PRIx8",code=%"PRIu8"/%#"PRIx8,
-                          icmp_key->icmp_type, icmp_mask->icmp_type,
-                          icmp_key->icmp_code, icmp_mask->icmp_code);
-        } else {
-            const struct ovs_key_icmp *icmp_key = nl_attr_get(a);
-
-            ds_put_format(ds, "type=%"PRIu8",code=%"PRIu8,
-                          icmp_key->icmp_type, icmp_key->icmp_code);
-        }
+        format_ipv4(ds, "sip", key->arp_sip, MASK(mask, arp_sip), verbose);
+        format_ipv4(ds, "tip", key->arp_tip, MASK(mask, arp_tip), verbose);
+        format_be16(ds, "op", key->arp_op, MASK(mask, arp_op), verbose);
+        format_eth(ds, "sha", key->arp_sha, MASK(mask, arp_sha), verbose);
+        format_eth(ds, "tha", key->arp_tha, MASK(mask, arp_tha), verbose);
+        ds_chomp(ds, ',');
         break;
-
-    case OVS_KEY_ATTR_ICMPV6:
-        if (!is_exact) {
-            const struct ovs_key_icmpv6 *icmpv6_mask = nl_attr_get(ma);
-            const struct ovs_key_icmpv6 *icmpv6_key = nl_attr_get(a);
-
-            ds_put_format(ds, "type=%"PRIu8"/%#"PRIx8",code=%"PRIu8"/%#"PRIx8,
-                          icmpv6_key->icmpv6_type, icmpv6_mask->icmpv6_type,
-                          icmpv6_key->icmpv6_code, icmpv6_mask->icmpv6_code);
-        } else {
-            const struct ovs_key_icmpv6 *icmpv6_key = nl_attr_get(a);
-
-            ds_put_format(ds, "type=%"PRIu8",code=%"PRIu8,
-                          icmpv6_key->icmpv6_type, icmpv6_key->icmpv6_code);
-        }
-        break;
-
-    case OVS_KEY_ATTR_ARP:
-        if (!is_exact) {
-            const struct ovs_key_arp *arp_mask = nl_attr_get(ma);
-            const struct ovs_key_arp *arp_key = nl_attr_get(a);
-
-            ds_put_format(ds, "sip="IP_FMT"/"IP_FMT",tip="IP_FMT"/"IP_FMT
-                          ",op=%"PRIu16"/%#"PRIx16
-                          ",sha="ETH_ADDR_FMT"/"ETH_ADDR_FMT
-                          ",tha="ETH_ADDR_FMT"/"ETH_ADDR_FMT,
-                          IP_ARGS(arp_key->arp_sip),
-                          IP_ARGS(arp_mask->arp_sip),
-                          IP_ARGS(arp_key->arp_tip),
-                          IP_ARGS(arp_mask->arp_tip),
-                          ntohs(arp_key->arp_op), ntohs(arp_mask->arp_op),
-                          ETH_ADDR_ARGS(arp_key->arp_sha),
-                          ETH_ADDR_ARGS(arp_mask->arp_sha),
-                          ETH_ADDR_ARGS(arp_key->arp_tha),
-                          ETH_ADDR_ARGS(arp_mask->arp_tha));
-        } else {
-            const struct ovs_key_arp *arp_key = nl_attr_get(a);
-
-            ds_put_format(ds, "sip="IP_FMT",tip="IP_FMT",op=%"PRIu16","
-                          "sha="ETH_ADDR_FMT",tha="ETH_ADDR_FMT,
-                          IP_ARGS(arp_key->arp_sip), IP_ARGS(arp_key->arp_tip),
-                          ntohs(arp_key->arp_op),
-                          ETH_ADDR_ARGS(arp_key->arp_sha),
-                          ETH_ADDR_ARGS(arp_key->arp_tha));
-        }
-        break;
-
+    }
     case OVS_KEY_ATTR_ND: {
-        const struct ovs_key_nd *nd_key, *nd_mask = NULL;
-        char target[INET6_ADDRSTRLEN];
+        const struct ovs_key_nd *mask = ma ? nl_attr_get(ma) : NULL;
+        const struct ovs_key_nd *key = nl_attr_get(a);
 
-        nd_key = nl_attr_get(a);
-        if (!is_exact) {
-            nd_mask = nl_attr_get(ma);
-        }
+        format_ipv6(ds, "target", key->nd_target, MASK(mask, nd_target),
+                    verbose);
+        format_eth(ds, "sll", key->nd_sll, MASK(mask, nd_sll), verbose);
+        format_eth(ds, "tll", key->nd_tll, MASK(mask, nd_tll), verbose);
 
-        inet_ntop(AF_INET6, nd_key->nd_target, target, sizeof target);
-        ds_put_format(ds, "target=%s", target);
-        if (!is_exact) {
-            inet_ntop(AF_INET6, nd_mask->nd_target, target, sizeof target);
-            ds_put_format(ds, "/%s", target);
-        }
-
-        if (!eth_addr_is_zero(nd_key->nd_sll)) {
-            ds_put_format(ds, ",sll="ETH_ADDR_FMT,
-                          ETH_ADDR_ARGS(nd_key->nd_sll));
-            if (!is_exact) {
-                ds_put_format(ds, "/"ETH_ADDR_FMT,
-                              ETH_ADDR_ARGS(nd_mask->nd_sll));
-            }
-        }
-        if (!eth_addr_is_zero(nd_key->nd_tll)) {
-            ds_put_format(ds, ",tll="ETH_ADDR_FMT,
-                          ETH_ADDR_ARGS(nd_key->nd_tll));
-            if (!is_exact) {
-                ds_put_format(ds, "/"ETH_ADDR_FMT,
-                              ETH_ADDR_ARGS(nd_mask->nd_tll));
-            }
-        }
+        ds_chomp(ds, ',');
         break;
     }
     case OVS_KEY_ATTR_UNSPEC:
@@ -1782,54 +1797,6 @@ odp_flow_key_format(const struct nlattr *key,
     odp_flow_format(key, key_len, NULL, 0, NULL, ds, true);
 }
 
-static void
-put_nd(struct ovs_key_nd* nd_key, const uint8_t *nd_sll,
-       const uint8_t *nd_tll, struct ofpbuf *key)
-{
-    if (nd_sll) {
-        memcpy(nd_key->nd_sll, nd_sll, ETH_ADDR_LEN);
-    }
-
-    if (nd_tll) {
-        memcpy(nd_key->nd_tll, nd_tll, ETH_ADDR_LEN);
-    }
-
-    nl_msg_put_unspec(key, OVS_KEY_ATTR_ND, nd_key, sizeof *nd_key);
-}
-
-static int
-put_nd_key(int n, const char *nd_target_s, const uint8_t *nd_sll,
-           const uint8_t *nd_tll, struct ofpbuf *key)
-{
-    struct ovs_key_nd nd_key;
-
-    memset(&nd_key, 0, sizeof nd_key);
-
-    if (inet_pton(AF_INET6, nd_target_s, nd_key.nd_target) != 1) {
-        return -EINVAL;
-    }
-
-    put_nd(&nd_key, nd_sll, nd_tll, key);
-    return n;
-}
-
-static int
-put_nd_mask(int n, const char *nd_target_s,
-           const uint8_t *nd_sll, const uint8_t *nd_tll, struct ofpbuf *mask)
-{
-    struct ovs_key_nd nd_mask;
-
-    memset(&nd_mask, 0xff, sizeof nd_mask);
-
-    if (strlen(nd_target_s) != 0 &&
-            inet_pton(AF_INET6, nd_target_s, nd_mask.nd_target) != 1) {
-        return -EINVAL;
-    }
-
-    put_nd(&nd_mask, nd_sll, nd_tll, mask);
-    return n;
-}
-
 static bool
 ovs_frag_type_from_string(const char *s, enum ovs_frag_type *type)
 {
@@ -1845,810 +1812,612 @@ ovs_frag_type_from_string(const char *s, enum ovs_frag_type *type)
     return true;
 }
 
-static ovs_be32
-mpls_lse_from_components(int mpls_label, int mpls_tc, int mpls_ttl, int mpls_bos)
+/* Parsing. */
+
+static int
+scan_eth(const char *s, uint8_t (*key)[ETH_ADDR_LEN],
+         uint8_t (*mask)[ETH_ADDR_LEN])
 {
-    return (htonl((mpls_label << MPLS_LABEL_SHIFT) |
-                  (mpls_tc << MPLS_TC_SHIFT)       |
-                  (mpls_ttl << MPLS_TTL_SHIFT)     |
-                  (mpls_bos << MPLS_BOS_SHIFT)));
+    int n;
+
+    if (ovs_scan(s, ETH_ADDR_SCAN_FMT"%n", ETH_ADDR_SCAN_ARGS(*key), &n)) {
+        int len = n;
+
+        if (mask) {
+            if (ovs_scan(s + len, "/"ETH_ADDR_SCAN_FMT"%n",
+                         ETH_ADDR_SCAN_ARGS(*mask), &n)) {
+                len += n;
+            } else {
+                memset(mask, 0xff, sizeof *mask);
+            }
+        }
+        return len;
+    }
+    return 0;
 }
+
+static int
+scan_ipv4(const char *s, ovs_be32 *key, ovs_be32 *mask)
+{
+    int n;
+
+    if (ovs_scan(s, IP_SCAN_FMT"%n", IP_SCAN_ARGS(key), &n)) {
+        int len = n;
+
+        if (mask) {
+            if (ovs_scan(s + len, "/"IP_SCAN_FMT"%n",
+                         IP_SCAN_ARGS(mask), &n)) {
+                len += n;
+            } else {
+                *mask = OVS_BE32_MAX;
+            }
+        }
+        return len;
+    }
+    return 0;
+}
+
+static int
+scan_ipv6(const char *s, ovs_be32 (*key)[4], ovs_be32 (*mask)[4])
+{
+    int n;
+    char ipv6_s[IPV6_SCAN_LEN + 1];
+
+    if (ovs_scan(s, IPV6_SCAN_FMT"%n", ipv6_s, &n)
+        && inet_pton(AF_INET6, ipv6_s, key) == 1) {
+        int len = n;
+
+        if (mask) {
+            if (ovs_scan(s + len, "/"IPV6_SCAN_FMT"%n", ipv6_s, &n)
+                && inet_pton(AF_INET6, ipv6_s, mask) == 1) {
+                len += n;
+            } else {
+                memset(mask, 0xff, sizeof *mask);
+            }
+        }
+        return len;
+    }
+    return 0;
+}
+
+static int
+scan_ipv6_label(const char *s, ovs_be32 *key, ovs_be32 *mask)
+{
+    int key_, mask_;
+    int n;
+
+    if (ovs_scan(s, "%i%n", &key_, &n)
+        && (key_ & ~IPV6_LABEL_MASK) == 0) {
+        int len = n;
+
+        *key = htonl(key_);
+        if (mask) {
+            if (ovs_scan(s + len, "/%i%n", &mask_, &n)
+                && (mask_ & ~IPV6_LABEL_MASK) == 0) {
+                len += n;
+                *mask = htonl(mask_);
+            } else {
+                *mask = htonl(IPV6_LABEL_MASK);
+            }
+        }
+        return len;
+    }
+    return 0;
+}
+
+static int
+scan_u8(const char *s, uint8_t *key, uint8_t *mask)
+{
+    int n;
+
+    if (ovs_scan(s, "%"SCNi8"%n", key, &n)) {
+        int len = n;
+
+        if (mask) {
+            if (ovs_scan(s + len, "/%"SCNi8"%n", mask, &n)) {
+                len += n;
+            } else {
+                *mask = UINT8_MAX;
+            }
+        }
+        return len;
+    }
+    return 0;
+}
+
+static int
+scan_u32(const char *s, uint32_t *key, uint32_t *mask)
+{
+    int n;
+
+    if (ovs_scan(s, "%"SCNi32"%n", key, &n)) {
+        int len = n;
+
+        if (mask) {
+            if (ovs_scan(s + len, "/%"SCNi32"%n", mask, &n)) {
+                len += n;
+            } else {
+                *mask = UINT32_MAX;
+            }
+        }
+        return len;
+    }
+    return 0;
+}
+
+static int
+scan_be16(const char *s, ovs_be16 *key, ovs_be16 *mask)
+{
+    uint16_t key_, mask_;
+    int n;
+
+    if (ovs_scan(s, "%"SCNi16"%n", &key_, &n)) {
+        int len = n;
+
+        *key = htons(key_);
+        if (mask) {
+            if (ovs_scan(s + len, "/%"SCNi16"%n", &mask_, &n)) {
+                len += n;
+                *mask = htons(mask_);
+            } else {
+                *mask = OVS_BE16_MAX;
+            }
+        }
+        return len;
+    }
+    return 0;
+}
+
+static int
+scan_be64(const char *s, ovs_be64 *key, ovs_be64 *mask)
+{
+    uint64_t key_, mask_;
+    int n;
+
+    if (ovs_scan(s, "%"SCNi64"%n", &key_, &n)) {
+        int len = n;
+
+        *key = htonll(key_);
+        if (mask) {
+            if (ovs_scan(s + len, "/%"SCNi64"%n", &mask_, &n)) {
+                len += n;
+                *mask = htonll(mask_);
+            } else {
+                *mask = OVS_BE64_MAX;
+            }
+        }
+        return len;
+    }
+    return 0;
+}
+
+static int
+scan_tun_flags(const char *s, uint16_t *key, uint16_t *mask)
+{
+    uint32_t flags, fmask;
+    int n;
+
+    n = parse_flags(s, flow_tun_flag_to_string, &flags,
+                    FLOW_TNL_F_MASK, mask ? &fmask : NULL);
+    if (n >= 0 && s[n] == ')') {
+        *key = flags;
+        if (mask) {
+            *mask = fmask;
+        }
+        return n + 1;
+    }
+    return 0;
+}
+
+static int
+scan_tcp_flags(const char *s, ovs_be16 *key, ovs_be16 *mask)
+{
+    uint32_t flags, fmask;
+    int n;
+
+    n = parse_flags(s, packet_tcp_flag_to_string, &flags,
+                    TCP_FLAGS(OVS_BE16_MAX), mask ? &fmask : NULL);
+    if (n >= 0) {
+        *key = htons(flags);
+        if (mask) {
+            *mask = htons(fmask);
+        }
+        return n;
+    }
+    return 0;
+}
+
+static int
+scan_frag(const char *s, uint8_t *key, uint8_t *mask)
+{
+    int n;
+    char frag[8];
+    enum ovs_frag_type frag_type;
+
+    if (ovs_scan(s, "%7[a-z]%n", frag, &n)
+        && ovs_frag_type_from_string(frag, &frag_type)) {
+        int len = n;
+
+        *key = frag_type;
+        if (mask) {
+            *mask = UINT8_MAX;
+        }
+        return len;
+    }
+    return 0;
+}
+
+static int
+scan_port(const char *s, uint32_t *key, uint32_t *mask,
+          const struct simap *port_names)
+{
+    int n;
+
+    if (ovs_scan(s, "%"SCNi32"%n", key, &n)) {
+        int len = n;
+
+        if (mask) {
+            if (ovs_scan(s + len, "/%"SCNi32"%n", mask, &n)) {
+                len += n;
+            } else {
+                *mask = UINT32_MAX;
+            }
+        }
+        return len;
+    } else if (port_names) {
+        const struct simap_node *node;
+        int len;
+
+        len = strcspn(s, ")");
+        node = simap_find_len(port_names, s, len);
+        if (node) {
+            *key = node->data;
+
+            if (mask) {
+                *mask = UINT32_MAX;
+            }
+            return len;
+        }
+    }
+    return 0;
+}
+
+/* Helper for vlan parsing. */
+struct ovs_key_vlan__ {
+    ovs_be16 tci;
+};
+
+static bool
+set_be16_bf(ovs_be16 *bf, uint8_t bits, uint8_t offset, uint16_t value)
+{
+    const uint16_t mask = ((1U << bits) - 1) << offset;
+
+    if (value >> bits) {
+        return false;
+    }
+
+    *bf = htons((ntohs(*bf) & ~mask) | (value << offset));
+    return true;
+}
+
+static int
+scan_be16_bf(const char *s, ovs_be16 *key, ovs_be16 *mask, uint8_t bits,
+             uint8_t offset)
+{
+    uint16_t key_, mask_;
+    int n;
+
+    if (ovs_scan(s, "%"SCNi16"%n", &key_, &n)) {
+        int len = n;
+
+        if (set_be16_bf(key, bits, offset, key_)) {
+            if (mask) {
+                if (ovs_scan(s + len, "/%"SCNi16"%n", &mask_, &n)) {
+                    len += n;
+
+                    if (!set_be16_bf(mask, bits, offset, mask_)) {
+                        return 0;
+                    }
+                } else {
+                    *mask |= htons(((1U << bits) - 1) << offset);
+                }
+            }
+            return len;
+        }
+    }
+    return 0;
+}
+
+static int
+scan_vid(const char *s, ovs_be16 *key, ovs_be16 *mask)
+{
+    return scan_be16_bf(s, key, mask, 12, VLAN_VID_SHIFT);
+}
+
+static int
+scan_pcp(const char *s, ovs_be16 *key, ovs_be16 *mask)
+{
+    return scan_be16_bf(s, key, mask, 3, VLAN_PCP_SHIFT);
+}
+
+static int
+scan_cfi(const char *s, ovs_be16 *key, ovs_be16 *mask)
+{
+    return scan_be16_bf(s, key, mask, 1, VLAN_CFI_SHIFT);
+}
+
+/* For MPLS. */
+static bool
+set_be32_bf(ovs_be32 *bf, uint8_t bits, uint8_t offset, uint32_t value)
+{
+    const uint32_t mask = ((1U << bits) - 1) << offset;
+
+    if (value >> bits) {
+        return false;
+    }
+
+    *bf = htonl((ntohl(*bf) & ~mask) | (value << offset));
+    return true;
+}
+
+static int
+scan_be32_bf(const char *s, ovs_be32 *key, ovs_be32 *mask, uint8_t bits,
+             uint8_t offset)
+{
+    uint32_t key_, mask_;
+    int n;
+
+    if (ovs_scan(s, "%"SCNi32"%n", &key_, &n)) {
+        int len = n;
+
+        if (set_be32_bf(key, bits, offset, key_)) {
+            if (mask) {
+                if (ovs_scan(s + len, "/%"SCNi32"%n", &mask_, &n)) {
+                    len += n;
+
+                    if (!set_be32_bf(mask, bits, offset, mask_)) {
+                        return 0;
+                    }
+                } else {
+                    *mask |= htonl(((1U << bits) - 1) << offset);
+                }
+            }
+            return len;
+        }
+    }
+    return 0;
+}
+
+static int
+scan_mpls_label(const char *s, ovs_be32 *key, ovs_be32 *mask)
+{
+    return scan_be32_bf(s, key, mask, 20, MPLS_LABEL_SHIFT);
+}
+
+static int
+scan_mpls_tc(const char *s, ovs_be32 *key, ovs_be32 *mask)
+{
+    return scan_be32_bf(s, key, mask, 3, MPLS_TC_SHIFT);
+}
+
+static int
+scan_mpls_ttl(const char *s, ovs_be32 *key, ovs_be32 *mask)
+{
+    return scan_be32_bf(s, key, mask, 8, MPLS_TTL_SHIFT);
+}
+
+static int
+scan_mpls_bos(const char *s, ovs_be32 *key, ovs_be32 *mask)
+{
+    return scan_be32_bf(s, key, mask, 1, MPLS_BOS_SHIFT);
+}
+
+/* ATTR is compile-time constant, so only the case with correct data type
+ * will be used.  However, the compiler complains about the data  type for
+ * the other cases, so we must cast to make the compiler silent. */
+#define SCAN_PUT_ATTR(BUF, ATTR, DATA)                          \
+    if ((ATTR) == OVS_KEY_ATTR_TUNNEL) {                              \
+        tun_key_to_attr(BUF, (const struct flow_tnl *)(void *)&(DATA)); \
+    } else {                                                    \
+        nl_msg_put_unspec(BUF, ATTR, &(DATA), sizeof (DATA));   \
+    }
+
+#define SCAN_IF(NAME)                           \
+    if (strncmp(s, NAME, strlen(NAME)) == 0) {  \
+        const char *start = s;                  \
+        int len;                                \
+                                                \
+        s += strlen(NAME)
+
+/* Usually no special initialization is needed. */
+#define SCAN_BEGIN(NAME, TYPE)                  \
+    SCAN_IF(NAME);                              \
+        TYPE skey, smask;                       \
+        memset(&skey, 0, sizeof skey);          \
+        memset(&smask, 0, sizeof smask);        \
+        do {                                    \
+            len = 0;
+
+/* VLAN needs special initialization. */
+#define SCAN_BEGIN_INIT(NAME, TYPE, KEY_INIT, MASK_INIT)  \
+    SCAN_IF(NAME);                                        \
+        TYPE skey = KEY_INIT;                       \
+        TYPE smask = MASK_INIT;                     \
+        do {                                        \
+            len = 0;
+
+/* Scan unnamed entry as 'TYPE' */
+#define SCAN_TYPE(TYPE, KEY, MASK)              \
+    len = scan_##TYPE(s, KEY, MASK);            \
+    if (len == 0) {                             \
+        return -EINVAL;                         \
+    }                                           \
+    s += len
+
+/* Scan named ('NAME') entry 'FIELD' as 'TYPE'. */
+#define SCAN_FIELD(NAME, TYPE, FIELD)                                   \
+    if (strncmp(s, NAME, strlen(NAME)) == 0) {                          \
+        s += strlen(NAME);                                              \
+        SCAN_TYPE(TYPE, &skey.FIELD, mask ? &smask.FIELD : NULL);       \
+        continue;                                                       \
+    }
+
+#define SCAN_FINISH()                           \
+        } while (*s++ == ',' && len != 0);      \
+        if (s[-1] != ')') {                     \
+            return -EINVAL;                     \
+        }
+
+#define SCAN_FINISH_SINGLE()                    \
+        } while (false);                        \
+        if (*s++ != ')') {                      \
+            return -EINVAL;                     \
+        }
+
+#define SCAN_PUT(ATTR)                                  \
+        if (!mask || !is_all_zeros(&smask, sizeof smask)) { \
+            SCAN_PUT_ATTR(key, ATTR, skey);             \
+            if (mask) {                                 \
+                SCAN_PUT_ATTR(mask, ATTR, smask);       \
+            }                                           \
+        }
+
+#define SCAN_END(ATTR)                                  \
+        SCAN_FINISH();                                  \
+        SCAN_PUT(ATTR);                                 \
+        return s - start;                               \
+    }
+
+#define SCAN_END_SINGLE(ATTR)                           \
+        SCAN_FINISH_SINGLE();                           \
+        SCAN_PUT(ATTR);                                 \
+        return s - start;                               \
+    }
+
+#define SCAN_SINGLE(NAME, TYPE, SCAN_AS, ATTR)       \
+    SCAN_BEGIN(NAME, TYPE) {                         \
+        SCAN_TYPE(SCAN_AS, &skey, &smask);           \
+    } SCAN_END_SINGLE(ATTR)
+
+#define SCAN_SINGLE_NO_MASK(NAME, TYPE, SCAN_AS, ATTR)       \
+    SCAN_BEGIN(NAME, TYPE) {                         \
+        SCAN_TYPE(SCAN_AS, &skey, NULL);           \
+    } SCAN_END_SINGLE(ATTR)
+
+/* scan_port needs one extra argument. */
+#define SCAN_SINGLE_PORT(NAME, TYPE, ATTR)  \
+    SCAN_BEGIN(NAME, TYPE) {                            \
+        len = scan_port(s, &skey, &smask, port_names);  \
+        if (len == 0) {                                 \
+            return -EINVAL;                             \
+        }                                               \
+        s += len;                                       \
+    } SCAN_END_SINGLE(ATTR)
 
 static int
 parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
                         struct ofpbuf *key, struct ofpbuf *mask)
 {
-    {
-        uint32_t priority;
-        uint32_t priority_mask;
-        int n = -1;
-
-        if (mask && ovs_scan(s, "skb_priority(%"SCNi32"/%"SCNi32")%n",
-                             &priority, &priority_mask, &n)) {
-            nl_msg_put_u32(key, OVS_KEY_ATTR_PRIORITY, priority);
-            nl_msg_put_u32(mask, OVS_KEY_ATTR_PRIORITY, priority_mask);
-            return n;
-        } else if (ovs_scan(s, "skb_priority(%"SCNi32")%n", &priority, &n)) {
-            nl_msg_put_u32(key, OVS_KEY_ATTR_PRIORITY, priority);
-            if (mask) {
-                nl_msg_put_u32(mask, OVS_KEY_ATTR_PRIORITY, UINT32_MAX);
-            }
-            return n;
-        }
-    }
-
-    {
-        uint32_t mark;
-        uint32_t mark_mask;
-        int n = -1;
-
-        if (mask && ovs_scan(s, "skb_mark(%"SCNi32"/%"SCNi32")%n", &mark,
-                             &mark_mask, &n)) {
-            nl_msg_put_u32(key, OVS_KEY_ATTR_SKB_MARK, mark);
-            nl_msg_put_u32(mask, OVS_KEY_ATTR_SKB_MARK, mark_mask);
-            return n;
-        } else if (ovs_scan(s, "skb_mark(%"SCNi32")%n", &mark, &n)) {
-            nl_msg_put_u32(key, OVS_KEY_ATTR_SKB_MARK, mark);
-            if (mask) {
-                nl_msg_put_u32(mask, OVS_KEY_ATTR_SKB_MARK, UINT32_MAX);
-            }
-            return n;
-        }
-    }
-
-    {
-        uint32_t recirc_id;
-        int n = -1;
-
-        if (ovs_scan(s, "recirc_id(%"SCNi32")%n", &recirc_id, &n)) {
-            nl_msg_put_u32(key, OVS_KEY_ATTR_RECIRC_ID, recirc_id);
-            if (mask) {
-                nl_msg_put_u32(mask, OVS_KEY_ATTR_RECIRC_ID, UINT32_MAX);
-            }
-            return n;
-        }
-    }
-
-    {
-        uint32_t dp_hash;
-        uint32_t dp_hash_mask;
-        int n = -1;
-
-        if (mask && ovs_scan(s, "dp_hash(%"SCNi32"/%"SCNi32")%n", &dp_hash,
-                             &dp_hash_mask, &n)) {
-            nl_msg_put_u32(key, OVS_KEY_ATTR_DP_HASH, dp_hash);
-            nl_msg_put_u32(mask, OVS_KEY_ATTR_DP_HASH, dp_hash_mask);
-            return n;
-        } else if (ovs_scan(s, "dp_hash(%"SCNi32")%n", &dp_hash, &n)) {
-            nl_msg_put_u32(key, OVS_KEY_ATTR_DP_HASH, dp_hash);
-            if (mask) {
-                nl_msg_put_u32(mask, OVS_KEY_ATTR_DP_HASH, UINT32_MAX);
-            }
-            return n;
-        }
-    }
-
-    {
-        uint64_t tun_id, tun_id_mask;
-        int tp_src, tp_src_mask, tp_dst, tp_dst_mask;
-        struct flow_tnl tun_key, tun_key_mask;
-        int n = -1;
-
-        memset(&tun_key, 0, sizeof tun_key);
-        memset(&tun_key_mask, 0, sizeof tun_key_mask);
-
-        if (mask && ovs_scan(s, "tunnel(tun_id=%"SCNi64"/%"SCNi64","
-                             "src="IP_SCAN_FMT"/"IP_SCAN_FMT","
-                             "dst="IP_SCAN_FMT"/"IP_SCAN_FMT","
-                             "tos=%"SCNi8"/%"SCNi8","
-                             "ttl=%"SCNi8"/%"SCNi8","
-                             "tp_src=%i/%i,tp_dst=%i/%i,flags%n",
-                             &tun_id, &tun_id_mask,
-                             IP_SCAN_ARGS(&tun_key.ip_src),
-                             IP_SCAN_ARGS(&tun_key_mask.ip_src),
-                             IP_SCAN_ARGS(&tun_key.ip_dst),
-                             IP_SCAN_ARGS(&tun_key_mask.ip_dst),
-                             &tun_key.ip_tos, &tun_key_mask.ip_tos,
-                             &tun_key.ip_ttl, &tun_key_mask.ip_ttl,
-                             &tp_src, &tp_src_mask, &tp_dst, &tp_dst_mask,
-                             &n)) {
-            int res;
-            uint32_t flags, fmask;
-
-            tun_key.tun_id = htonll(tun_id);
-            tun_key_mask.tun_id = htonll(tun_id_mask);
-            tun_key.tp_src = htons(tp_src);
-            tun_key_mask.tp_src = htons(tp_src_mask);
-            tun_key.tp_dst = htons(tp_dst);
-            tun_key_mask.tp_dst = htons(tp_dst_mask);
-            res = parse_flags(&s[n], flow_tun_flag_to_string, &flags,
-                              FLOW_TNL_F_MASK, &fmask);
-            tun_key.flags = flags;
-            tun_key_mask.flags = fmask;
-
-            if (res < 0) {
-                return res;
-            }
-            n += res;
-            if (s[n] != ')') {
-                return -EINVAL;
-            }
-            n++;
-            tun_key_to_attr(key, &tun_key);
-            if (mask) {
-                tun_key_to_attr(mask, &tun_key_mask);
-            }
-            return n;
-        } else if (ovs_scan(s, "tunnel(tun_id=%"SCNi64","
-                            "src="IP_SCAN_FMT",dst="IP_SCAN_FMT
-                            ",tos=%"SCNi8",ttl=%"SCNi8",tp_src=%i,tp_dst=%i,"
-                            "flags%n", &tun_id,
-                            IP_SCAN_ARGS(&tun_key.ip_src),
-                            IP_SCAN_ARGS(&tun_key.ip_dst),
-                            &tun_key.ip_tos, &tun_key.ip_ttl,
-                            &tp_src, &tp_dst, &n)) {
-            int res;
-            uint32_t flags;
-
-            tun_key.tun_id = htonll(tun_id);
-            tun_key.tp_src = htons(tp_src);
-            tun_key.tp_dst = htons(tp_dst);
-            res = parse_flags(&s[n], flow_tun_flag_to_string, &flags,
-                              FLOW_TNL_F_MASK, NULL);
-            tun_key.flags = flags;
-
-            if (res < 0) {
-                return res;
-            }
-            n += res;
-            if (s[n] != ')') {
-                return -EINVAL;
-            }
-            n++;
-            tun_key_to_attr(key, &tun_key);
-
-            if (mask) {
-                memset(&tun_key, 0xff, sizeof tun_key);
-                tun_key_to_attr(mask, &tun_key);
-            }
-            return n;
-        }
-    }
-
-    {
-        uint32_t in_port;
-        uint32_t in_port_mask;
-        int n = -1;
-
-        if (mask && ovs_scan(s, "in_port(%"SCNi32"/%"SCNi32")%n",
-                             &in_port, &in_port_mask, &n)) {
-            nl_msg_put_u32(key, OVS_KEY_ATTR_IN_PORT, in_port);
-            nl_msg_put_u32(mask, OVS_KEY_ATTR_IN_PORT, in_port_mask);
-            return n;
-        } else if (ovs_scan(s, "in_port(%"SCNi32")%n", &in_port, &n)) {
-            nl_msg_put_u32(key, OVS_KEY_ATTR_IN_PORT, in_port);
-            if (mask) {
-                nl_msg_put_u32(mask, OVS_KEY_ATTR_IN_PORT, UINT32_MAX);
-            }
-            return n;
-        }
-    }
-
-
-    if (port_names && !strncmp(s, "in_port(", 8)) {
-        const char *name;
-        const struct simap_node *node;
-        int name_len;
-
-        name = s + 8;
-        name_len = strcspn(name, ")");
-        node = simap_find_len(port_names, name, name_len);
-        if (node) {
-            nl_msg_put_u32(key, OVS_KEY_ATTR_IN_PORT, node->data);
-
-            if (mask) {
-                nl_msg_put_u32(mask, OVS_KEY_ATTR_IN_PORT, UINT32_MAX);
-            }
-            return 8 + name_len + 1;
-        }
-    }
-
-    {
-        struct ovs_key_ethernet eth_key;
-        struct ovs_key_ethernet eth_key_mask;
-        int n = -1;
-
-        if (mask && ovs_scan(s,
-                             "eth(src="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT","
-                             "dst="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT")%n",
-                             ETH_ADDR_SCAN_ARGS(eth_key.eth_src),
-                             ETH_ADDR_SCAN_ARGS(eth_key_mask.eth_src),
-                             ETH_ADDR_SCAN_ARGS(eth_key.eth_dst),
-                             ETH_ADDR_SCAN_ARGS(eth_key_mask.eth_dst), &n)) {
-            nl_msg_put_unspec(key, OVS_KEY_ATTR_ETHERNET,
-                              &eth_key, sizeof eth_key);
-            nl_msg_put_unspec(mask, OVS_KEY_ATTR_ETHERNET,
-                              &eth_key_mask, sizeof eth_key_mask);
-            return n;
-        } else if (ovs_scan(s, "eth(src="ETH_ADDR_SCAN_FMT","
-                            "dst="ETH_ADDR_SCAN_FMT")%n",
-                            ETH_ADDR_SCAN_ARGS(eth_key.eth_src),
-                            ETH_ADDR_SCAN_ARGS(eth_key.eth_dst), &n)) {
-            nl_msg_put_unspec(key, OVS_KEY_ATTR_ETHERNET,
-                              &eth_key, sizeof eth_key);
-
-            if (mask) {
-                memset(&eth_key, 0xff, sizeof eth_key);
-                nl_msg_put_unspec(mask, OVS_KEY_ATTR_ETHERNET,
-                              &eth_key, sizeof eth_key);
-            }
-            return n;
-        }
-    }
-
-    {
-        int vid, vid_mask;
-        int pcp, pcp_mask;
-        int cfi, cfi_mask;
-        int n = -1;
-
-        if (mask && ovs_scan(s, "vlan(vid=%i/%i,pcp=%i/%i)%n",
-                            &vid, &vid_mask, &pcp, &pcp_mask, &n)) {
-            nl_msg_put_be16(key, OVS_KEY_ATTR_VLAN,
-                            htons((vid << VLAN_VID_SHIFT) |
-                                  (pcp << VLAN_PCP_SHIFT) |
-                                  VLAN_CFI));
-            nl_msg_put_be16(mask, OVS_KEY_ATTR_VLAN,
-                            htons((vid_mask << VLAN_VID_SHIFT) |
-                                  (pcp_mask << VLAN_PCP_SHIFT) |
-                                  (1 << VLAN_CFI_SHIFT)));
-            return n;
-        } else if (ovs_scan(s, "vlan(vid=%i,pcp=%i)%n", &vid, &pcp, &n)) {
-            nl_msg_put_be16(key, OVS_KEY_ATTR_VLAN,
-                            htons((vid << VLAN_VID_SHIFT) |
-                                  (pcp << VLAN_PCP_SHIFT) |
-                                  VLAN_CFI));
-            if (mask) {
-                nl_msg_put_be16(mask, OVS_KEY_ATTR_VLAN, OVS_BE16_MAX);
-            }
-            return n;
-        } else if (mask
-                   && ovs_scan(s, "vlan(vid=%i/%i,pcp=%i/%i,cfi=%i/%i)%n",
-                               &vid, &vid_mask, &pcp, &pcp_mask,
-                               &cfi, &cfi_mask, &n)) {
-            nl_msg_put_be16(key, OVS_KEY_ATTR_VLAN,
-                            htons((vid << VLAN_VID_SHIFT) |
-                                  (pcp << VLAN_PCP_SHIFT) |
-                                  (cfi ? VLAN_CFI : 0)));
-            nl_msg_put_be16(mask, OVS_KEY_ATTR_VLAN,
-                            htons((vid_mask << VLAN_VID_SHIFT) |
-                                  (pcp_mask << VLAN_PCP_SHIFT) |
-                                  (cfi_mask << VLAN_CFI_SHIFT)));
-            return n;
-        } else if (ovs_scan(s, "vlan(vid=%i,pcp=%i,cfi=%i)%n",
-                            &vid, &pcp, &cfi, &n)) {
-            nl_msg_put_be16(key, OVS_KEY_ATTR_VLAN,
-                            htons((vid << VLAN_VID_SHIFT) |
-                                  (pcp << VLAN_PCP_SHIFT) |
-                                  (cfi ? VLAN_CFI : 0)));
-            if (mask) {
-                nl_msg_put_be16(mask, OVS_KEY_ATTR_VLAN, OVS_BE16_MAX);
-            }
-            return n;
-        }
-    }
-
-    {
-        int eth_type;
-        int eth_type_mask;
-        int n = -1;
-
-        if (mask && ovs_scan(s, "eth_type(%i/%i)%n",
-                             &eth_type, &eth_type_mask, &n)) {
-            if (eth_type != 0) {
-                nl_msg_put_be16(key, OVS_KEY_ATTR_ETHERTYPE, htons(eth_type));
-            }
-            nl_msg_put_be16(mask, OVS_KEY_ATTR_ETHERTYPE, htons(eth_type_mask));
-            return n;
-        } else if (ovs_scan(s, "eth_type(%i)%n", &eth_type, &n)) {
-            nl_msg_put_be16(key, OVS_KEY_ATTR_ETHERTYPE, htons(eth_type));
-            if (mask) {
-                nl_msg_put_be16(mask, OVS_KEY_ATTR_ETHERTYPE, OVS_BE16_MAX);
-            }
-            return n;
-        }
-    }
-
-    {
-        int label, tc, ttl, bos;
-        int label_mask, tc_mask, ttl_mask, bos_mask;
-        int n = -1;
-
-        if (mask && ovs_scan(s, "mpls(label=%i/%i,tc=%i/%i,"
-                             "ttl=%i/%i,bos=%i/%i)%n",
-                             &label, &label_mask, &tc, &tc_mask,
-                             &ttl, &ttl_mask, &bos, &bos_mask, &n)) {
-            struct ovs_key_mpls *mpls, *mpls_mask;
-
-            mpls = nl_msg_put_unspec_uninit(key, OVS_KEY_ATTR_MPLS,
-                                            sizeof *mpls);
-            mpls->mpls_lse = mpls_lse_from_components(label, tc, ttl, bos);
-
-            mpls_mask = nl_msg_put_unspec_uninit(mask, OVS_KEY_ATTR_MPLS,
-                                            sizeof *mpls_mask);
-            mpls_mask->mpls_lse = mpls_lse_from_components(
-                                  label_mask, tc_mask, ttl_mask, bos_mask);
-            return n;
-        } else if (ovs_scan(s, "mpls(label=%i,tc=%i,ttl=%i,bos=%i)%n",
-                            &label, &tc, &ttl, &bos, &n)) {
-            struct ovs_key_mpls *mpls;
-
-            mpls = nl_msg_put_unspec_uninit(key, OVS_KEY_ATTR_MPLS,
-                                            sizeof *mpls);
-            mpls->mpls_lse = mpls_lse_from_components(label, tc, ttl, bos);
-            if (mask) {
-                mpls = nl_msg_put_unspec_uninit(mask, OVS_KEY_ATTR_MPLS,
-                                            sizeof *mpls);
-                mpls->mpls_lse = OVS_BE32_MAX;
-            }
-            return n;
-        }
-    }
-
-
-    {
-        struct ovs_key_ipv4 ipv4_key;
-        struct ovs_key_ipv4 ipv4_mask;
-
-        char frag[8];
-        enum ovs_frag_type ipv4_frag;
-        int n = -1;
-
-        if (mask
-            && ovs_scan(s, "ipv4(src="IP_SCAN_FMT"/"IP_SCAN_FMT","
-                        "dst="IP_SCAN_FMT"/"IP_SCAN_FMT","
-                        "proto=%"SCNi8"/%"SCNi8","
-                        "tos=%"SCNi8"/%"SCNi8","
-                        "ttl=%"SCNi8"/%"SCNi8","
-                        "frag=%7[a-z]/%"SCNi8")%n",
-                        IP_SCAN_ARGS(&ipv4_key.ipv4_src),
-                        IP_SCAN_ARGS(&ipv4_mask.ipv4_src),
-                        IP_SCAN_ARGS(&ipv4_key.ipv4_dst),
-                        IP_SCAN_ARGS(&ipv4_mask.ipv4_dst),
-                        &ipv4_key.ipv4_proto, &ipv4_mask.ipv4_proto,
-                        &ipv4_key.ipv4_tos, &ipv4_mask.ipv4_tos,
-                        &ipv4_key.ipv4_ttl, &ipv4_mask.ipv4_ttl,
-                        frag, &ipv4_mask.ipv4_frag, &n)
-            && ovs_frag_type_from_string(frag, &ipv4_frag)) {
-            ipv4_key.ipv4_frag = ipv4_frag;
-            nl_msg_put_unspec(key, OVS_KEY_ATTR_IPV4,
-                              &ipv4_key, sizeof ipv4_key);
-
-            nl_msg_put_unspec(mask, OVS_KEY_ATTR_IPV4,
-                              &ipv4_mask, sizeof ipv4_mask);
-            return n;
-        } else if (ovs_scan(s, "ipv4(src="IP_SCAN_FMT",dst="IP_SCAN_FMT","
-                            "proto=%"SCNi8",tos=%"SCNi8",ttl=%"SCNi8","
-                            "frag=%7[a-z])%n",
-                            IP_SCAN_ARGS(&ipv4_key.ipv4_src),
-                            IP_SCAN_ARGS(&ipv4_key.ipv4_dst),
-                            &ipv4_key.ipv4_proto,
-                            &ipv4_key.ipv4_tos,
-                            &ipv4_key.ipv4_ttl,
-                            frag, &n) > 0
-                   && ovs_frag_type_from_string(frag, &ipv4_frag)) {
-            ipv4_key.ipv4_frag = ipv4_frag;
-            nl_msg_put_unspec(key, OVS_KEY_ATTR_IPV4,
-                              &ipv4_key, sizeof ipv4_key);
-
-            if (mask) {
-                memset(&ipv4_key, 0xff, sizeof ipv4_key);
-                nl_msg_put_unspec(mask, OVS_KEY_ATTR_IPV4,
-                              &ipv4_key, sizeof ipv4_key);
-            }
-            return n;
-        }
-    }
-
-    {
-        char ipv6_src_s[IPV6_SCAN_LEN + 1];
-        char ipv6_src_mask_s[IPV6_SCAN_LEN + 1];
-        char ipv6_dst_s[IPV6_SCAN_LEN + 1];
-        char ipv6_dst_mask_s[IPV6_SCAN_LEN + 1];
-        int ipv6_label, ipv6_label_mask;
-        int ipv6_proto, ipv6_proto_mask;
-        int ipv6_tclass, ipv6_tclass_mask;
-        int ipv6_hlimit, ipv6_hlimit_mask;
-        char frag[8];
-        enum ovs_frag_type ipv6_frag;
-        int ipv6_frag_mask;
-        int n = -1;
-
-        if (mask && ovs_scan(s, "ipv6(src="IPV6_SCAN_FMT"/"IPV6_SCAN_FMT",dst="
-                             IPV6_SCAN_FMT"/"IPV6_SCAN_FMT","
-                             "label=%i/%i,proto=%i/%i,tclass=%i/%i,"
-                             "hlimit=%i/%i,frag=%7[a-z]/%i)%n",
-                             ipv6_src_s, ipv6_src_mask_s,
-                             ipv6_dst_s, ipv6_dst_mask_s,
-                             &ipv6_label, &ipv6_label_mask, &ipv6_proto,
-                             &ipv6_proto_mask, &ipv6_tclass, &ipv6_tclass_mask,
-                             &ipv6_hlimit, &ipv6_hlimit_mask, frag,
-                             &ipv6_frag_mask, &n)
-            && ovs_frag_type_from_string(frag, &ipv6_frag)) {
-            struct ovs_key_ipv6 ipv6_key;
-            struct ovs_key_ipv6 ipv6_mask;
-
-            if (inet_pton(AF_INET6, ipv6_src_s, &ipv6_key.ipv6_src) != 1 ||
-                inet_pton(AF_INET6, ipv6_dst_s, &ipv6_key.ipv6_dst) != 1 ||
-                inet_pton(AF_INET6, ipv6_src_mask_s, &ipv6_mask.ipv6_src) != 1 ||
-                inet_pton(AF_INET6, ipv6_dst_mask_s, &ipv6_mask.ipv6_dst) != 1) {
-                return -EINVAL;
-            }
-
-            ipv6_key.ipv6_label = htonl(ipv6_label);
-            ipv6_key.ipv6_proto = ipv6_proto;
-            ipv6_key.ipv6_tclass = ipv6_tclass;
-            ipv6_key.ipv6_hlimit = ipv6_hlimit;
-            ipv6_key.ipv6_frag = ipv6_frag;
-            nl_msg_put_unspec(key, OVS_KEY_ATTR_IPV6,
-                              &ipv6_key, sizeof ipv6_key);
-
-            ipv6_mask.ipv6_label = htonl(ipv6_label_mask);
-            ipv6_mask.ipv6_proto = ipv6_proto_mask;
-            ipv6_mask.ipv6_tclass = ipv6_tclass_mask;
-            ipv6_mask.ipv6_hlimit = ipv6_hlimit_mask;
-            ipv6_mask.ipv6_frag = ipv6_frag_mask;
-            nl_msg_put_unspec(mask, OVS_KEY_ATTR_IPV6,
-                              &ipv6_mask, sizeof ipv6_mask);
-            return n;
-        } else if (ovs_scan(s, "ipv6(src="IPV6_SCAN_FMT",dst="IPV6_SCAN_FMT","
-                            "label=%i,proto=%i,tclass=%i,hlimit=%i,"
-                            "frag=%7[a-z])%n",
-                            ipv6_src_s, ipv6_dst_s, &ipv6_label,
-                            &ipv6_proto, &ipv6_tclass, &ipv6_hlimit, frag, &n)
-                   && ovs_frag_type_from_string(frag, &ipv6_frag)) {
-            struct ovs_key_ipv6 ipv6_key;
-
-            if (inet_pton(AF_INET6, ipv6_src_s, &ipv6_key.ipv6_src) != 1 ||
-                inet_pton(AF_INET6, ipv6_dst_s, &ipv6_key.ipv6_dst) != 1) {
-                return -EINVAL;
-            }
-            ipv6_key.ipv6_label = htonl(ipv6_label);
-            ipv6_key.ipv6_proto = ipv6_proto;
-            ipv6_key.ipv6_tclass = ipv6_tclass;
-            ipv6_key.ipv6_hlimit = ipv6_hlimit;
-            ipv6_key.ipv6_frag = ipv6_frag;
-            nl_msg_put_unspec(key, OVS_KEY_ATTR_IPV6,
-                              &ipv6_key, sizeof ipv6_key);
-
-            if (mask) {
-                memset(&ipv6_key, 0xff, sizeof ipv6_key);
-                nl_msg_put_unspec(mask, OVS_KEY_ATTR_IPV6,
-                              &ipv6_key, sizeof ipv6_key);
-            }
-            return n;
-        }
-    }
-
-    {
-        int tcp_src;
-        int tcp_dst;
-        int tcp_src_mask;
-        int tcp_dst_mask;
-        int n = -1;
-
-        if (mask && ovs_scan(s, "tcp(src=%i/%i,dst=%i/%i)%n",
-                             &tcp_src, &tcp_src_mask, &tcp_dst,
-                             &tcp_dst_mask, &n)) {
-            struct ovs_key_tcp tcp_key;
-            struct ovs_key_tcp tcp_mask;
-
-            tcp_key.tcp_src = htons(tcp_src);
-            tcp_key.tcp_dst = htons(tcp_dst);
-            nl_msg_put_unspec(key, OVS_KEY_ATTR_TCP, &tcp_key, sizeof tcp_key);
-
-            tcp_mask.tcp_src = htons(tcp_src_mask);
-            tcp_mask.tcp_dst = htons(tcp_dst_mask);
-            nl_msg_put_unspec(mask, OVS_KEY_ATTR_TCP,
-                              &tcp_mask, sizeof tcp_mask);
-            return n;
-        } else if (ovs_scan(s, "tcp(src=%i,dst=%i)%n",
-                            &tcp_src, &tcp_dst, &n)) {
-            struct ovs_key_tcp tcp_key;
-
-            tcp_key.tcp_src = htons(tcp_src);
-            tcp_key.tcp_dst = htons(tcp_dst);
-            nl_msg_put_unspec(key, OVS_KEY_ATTR_TCP, &tcp_key, sizeof tcp_key);
-
-            if (mask) {
-                memset(&tcp_key, 0xff, sizeof tcp_key);
-                nl_msg_put_unspec(mask, OVS_KEY_ATTR_TCP,
-                              &tcp_key, sizeof tcp_key);
-            }
-            return n;
-        }
-    }
-
-    {
-        int n = -1;
-
-        if (ovs_scan(s, "tcp_flags%n", &n) && n > 0) {
-            uint32_t flags, fmask;
-            int res = parse_flags(&s[n], packet_tcp_flag_to_string,
-                                  &flags, TCP_FLAGS(OVS_BE16_MAX), &fmask);
-
-            if (res < 0) {
-                return res;
-            }
-            nl_msg_put_be16(key, OVS_KEY_ATTR_TCP_FLAGS, htons(flags));
-            if (mask) {
-                nl_msg_put_be16(mask, OVS_KEY_ATTR_TCP_FLAGS, htons(fmask));
-            }
-            return n + res;
-        }
-    }
-
-    {
-        int udp_src;
-        int udp_dst;
-        int udp_src_mask;
-        int udp_dst_mask;
-        int n = -1;
-
-        if (mask && ovs_scan(s, "udp(src=%i/%i,dst=%i/%i)%n",
-                             &udp_src, &udp_src_mask,
-                             &udp_dst, &udp_dst_mask, &n)) {
-            struct ovs_key_udp udp_key;
-            struct ovs_key_udp udp_mask;
-
-            udp_key.udp_src = htons(udp_src);
-            udp_key.udp_dst = htons(udp_dst);
-            nl_msg_put_unspec(key, OVS_KEY_ATTR_UDP, &udp_key, sizeof udp_key);
-
-            udp_mask.udp_src = htons(udp_src_mask);
-            udp_mask.udp_dst = htons(udp_dst_mask);
-            nl_msg_put_unspec(mask, OVS_KEY_ATTR_UDP,
-                              &udp_mask, sizeof udp_mask);
-            return n;
-        }
-        if (ovs_scan(s, "udp(src=%i,dst=%i)%n", &udp_src, &udp_dst, &n)) {
-            struct ovs_key_udp udp_key;
-
-            udp_key.udp_src = htons(udp_src);
-            udp_key.udp_dst = htons(udp_dst);
-            nl_msg_put_unspec(key, OVS_KEY_ATTR_UDP, &udp_key, sizeof udp_key);
-
-            if (mask) {
-                memset(&udp_key, 0xff, sizeof udp_key);
-                nl_msg_put_unspec(mask, OVS_KEY_ATTR_UDP, &udp_key, sizeof udp_key);
-            }
-            return n;
-        }
-    }
-
-    {
-        int sctp_src;
-        int sctp_dst;
-        int sctp_src_mask;
-        int sctp_dst_mask;
-        int n = -1;
-
-        if (mask && ovs_scan(s, "sctp(src=%i/%i,dst=%i/%i)%n",
-                             &sctp_src, &sctp_src_mask,
-                             &sctp_dst, &sctp_dst_mask, &n)) {
-            struct ovs_key_sctp sctp_key;
-            struct ovs_key_sctp sctp_mask;
-
-            sctp_key.sctp_src = htons(sctp_src);
-            sctp_key.sctp_dst = htons(sctp_dst);
-            nl_msg_put_unspec(key, OVS_KEY_ATTR_SCTP, &sctp_key, sizeof sctp_key);
-
-            sctp_mask.sctp_src = htons(sctp_src_mask);
-            sctp_mask.sctp_dst = htons(sctp_dst_mask);
-            nl_msg_put_unspec(mask, OVS_KEY_ATTR_SCTP,
-                              &sctp_mask, sizeof sctp_mask);
-            return n;
-        }
-        if (ovs_scan(s, "sctp(src=%i,dst=%i)%n", &sctp_src, &sctp_dst, &n)) {
-            struct ovs_key_sctp sctp_key;
-
-            sctp_key.sctp_src = htons(sctp_src);
-            sctp_key.sctp_dst = htons(sctp_dst);
-            nl_msg_put_unspec(key, OVS_KEY_ATTR_SCTP, &sctp_key, sizeof sctp_key);
-
-            if (mask) {
-                memset(&sctp_key, 0xff, sizeof sctp_key);
-                nl_msg_put_unspec(mask, OVS_KEY_ATTR_SCTP, &sctp_key, sizeof sctp_key);
-            }
-            return n;
-        }
-    }
-
-    {
-        struct ovs_key_icmp icmp_key;
-        struct ovs_key_icmp icmp_mask;
-        int n = -1;
-
-        if (mask && ovs_scan(s, "icmp(type=%"SCNi8"/%"SCNi8","
-                             "code=%"SCNi8"/%"SCNi8")%n",
-                   &icmp_key.icmp_type, &icmp_mask.icmp_type,
-                   &icmp_key.icmp_code, &icmp_mask.icmp_code, &n)) {
-            nl_msg_put_unspec(key, OVS_KEY_ATTR_ICMP,
-                              &icmp_key, sizeof icmp_key);
-            nl_msg_put_unspec(mask, OVS_KEY_ATTR_ICMP,
-                              &icmp_mask, sizeof icmp_mask);
-            return n;
-        } else if (ovs_scan(s, "icmp(type=%"SCNi8",code=%"SCNi8")%n",
-                            &icmp_key.icmp_type, &icmp_key.icmp_code, &n)) {
-            nl_msg_put_unspec(key, OVS_KEY_ATTR_ICMP,
-                              &icmp_key, sizeof icmp_key);
-            if (mask) {
-                memset(&icmp_key, 0xff, sizeof icmp_key);
-                nl_msg_put_unspec(mask, OVS_KEY_ATTR_ICMP, &icmp_key,
-                              sizeof icmp_key);
-            }
-            return n;
-        }
-    }
-
-    {
-        struct ovs_key_icmpv6 icmpv6_key;
-        struct ovs_key_icmpv6 icmpv6_mask;
-        int n = -1;
-
-        if (mask && ovs_scan(s, "icmpv6(type=%"SCNi8"/%"SCNi8","
-                             "code=%"SCNi8"/%"SCNi8")%n",
-                             &icmpv6_key.icmpv6_type, &icmpv6_mask.icmpv6_type,
-                             &icmpv6_key.icmpv6_code, &icmpv6_mask.icmpv6_code,
-                             &n)) {
-            nl_msg_put_unspec(key, OVS_KEY_ATTR_ICMPV6,
-                              &icmpv6_key, sizeof icmpv6_key);
-            nl_msg_put_unspec(mask, OVS_KEY_ATTR_ICMPV6, &icmpv6_mask,
-                              sizeof icmpv6_mask);
-            return n;
-        } else if (ovs_scan(s, "icmpv6(type=%"SCNi8",code=%"SCNi8")%n",
-                            &icmpv6_key.icmpv6_type, &icmpv6_key.icmpv6_code,
-                            &n)) {
-            nl_msg_put_unspec(key, OVS_KEY_ATTR_ICMPV6,
-                              &icmpv6_key, sizeof icmpv6_key);
-
-            if (mask) {
-                memset(&icmpv6_key, 0xff, sizeof icmpv6_key);
-                nl_msg_put_unspec(mask, OVS_KEY_ATTR_ICMPV6, &icmpv6_key,
-                              sizeof icmpv6_key);
-            }
-            return n;
-        }
-    }
-
-    {
-        struct ovs_key_arp arp_key;
-        struct ovs_key_arp arp_mask;
-        uint16_t arp_op, arp_op_mask;
-        int n = -1;
-
-        if (mask && ovs_scan(s, "arp(sip="IP_SCAN_FMT"/"IP_SCAN_FMT","
-                             "tip="IP_SCAN_FMT"/"IP_SCAN_FMT","
-                             "op=%"SCNi16"/%"SCNi16","
-                             "sha="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT","
-                             "tha="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT")%n",
-                             IP_SCAN_ARGS(&arp_key.arp_sip),
-                             IP_SCAN_ARGS(&arp_mask.arp_sip),
-                             IP_SCAN_ARGS(&arp_key.arp_tip),
-                             IP_SCAN_ARGS(&arp_mask.arp_tip),
-                             &arp_op, &arp_op_mask,
-                             ETH_ADDR_SCAN_ARGS(arp_key.arp_sha),
-                             ETH_ADDR_SCAN_ARGS(arp_mask.arp_sha),
-                             ETH_ADDR_SCAN_ARGS(arp_key.arp_tha),
-                             ETH_ADDR_SCAN_ARGS(arp_mask.arp_tha), &n)) {
-            arp_key.arp_op = htons(arp_op);
-            nl_msg_put_unspec(key, OVS_KEY_ATTR_ARP, &arp_key, sizeof arp_key);
-            arp_mask.arp_op = htons(arp_op_mask);
-            nl_msg_put_unspec(mask, OVS_KEY_ATTR_ARP,
-                              &arp_mask, sizeof arp_mask);
-            return n;
-        } else if (ovs_scan(s, "arp(sip="IP_SCAN_FMT",tip="IP_SCAN_FMT","
-                            "op=%"SCNi16",sha="ETH_ADDR_SCAN_FMT","
-                            "tha="ETH_ADDR_SCAN_FMT")%n",
-                            IP_SCAN_ARGS(&arp_key.arp_sip),
-                            IP_SCAN_ARGS(&arp_key.arp_tip),
-                            &arp_op,
-                            ETH_ADDR_SCAN_ARGS(arp_key.arp_sha),
-                            ETH_ADDR_SCAN_ARGS(arp_key.arp_tha), &n)) {
-            arp_key.arp_op = htons(arp_op);
-            nl_msg_put_unspec(key, OVS_KEY_ATTR_ARP, &arp_key, sizeof arp_key);
-
-            if (mask) {
-                memset(&arp_key, 0xff, sizeof arp_key);
-                nl_msg_put_unspec(mask, OVS_KEY_ATTR_ARP,
-                                  &arp_key, sizeof arp_key);
-            }
-            return n;
-        }
-    }
-
-    {
-        char nd_target_s[IPV6_SCAN_LEN + 1];
-        char nd_target_mask_s[IPV6_SCAN_LEN + 1];
-        uint8_t nd_sll[ETH_ADDR_LEN];
-        uint8_t nd_sll_mask[ETH_ADDR_LEN];
-        uint8_t nd_tll[ETH_ADDR_LEN];
-        uint8_t nd_tll_mask[ETH_ADDR_LEN];
-        int n = -1;
-
-        nd_target_mask_s[0] = 0;
-        memset(nd_sll_mask, 0xff, sizeof nd_sll_mask);
-        memset(nd_tll_mask, 0xff, sizeof nd_tll_mask);
-
-        if (mask && ovs_scan(s, "nd(target="IPV6_SCAN_FMT"/"IPV6_SCAN_FMT")%n",
-                             nd_target_s, nd_target_mask_s, &n)) {
-                put_nd_key(n, nd_target_s, NULL, NULL, key);
-                put_nd_mask(n, nd_target_mask_s, NULL, NULL, mask);
-        } else if (ovs_scan(s, "nd(target="IPV6_SCAN_FMT")%n",
-                            nd_target_s, &n)) {
-                put_nd_key(n, nd_target_s, NULL, NULL, key);
-                if (mask) {
-                    put_nd_mask(n, nd_target_mask_s, NULL, NULL, mask);
-                }
-        } else if (mask &&
-                   ovs_scan(s, "nd(target="IPV6_SCAN_FMT"/"IPV6_SCAN_FMT
-                            ",sll="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT")%n",
-                            nd_target_s, nd_target_mask_s,
-                            ETH_ADDR_SCAN_ARGS(nd_sll),
-                            ETH_ADDR_SCAN_ARGS(nd_sll_mask), &n)) {
-            put_nd_key(n, nd_target_s, nd_sll, NULL, key);
-            put_nd_mask(n, nd_target_mask_s, nd_sll_mask, NULL, mask);
-        } else if (ovs_scan(s, "nd(target="IPV6_SCAN_FMT","
-                            "sll="ETH_ADDR_SCAN_FMT")%n",
-                            nd_target_s, ETH_ADDR_SCAN_ARGS(nd_sll), &n)) {
-            put_nd_key(n, nd_target_s, nd_sll, NULL, key);
-            if (mask) {
-                put_nd_mask(n, nd_target_mask_s, nd_sll_mask, NULL, mask);
-            }
-        } else if (mask &&
-                   ovs_scan(s, "nd(target="IPV6_SCAN_FMT"/"IPV6_SCAN_FMT
-                            ",tll="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT")%n",
-                            nd_target_s, nd_target_mask_s,
-                            ETH_ADDR_SCAN_ARGS(nd_tll),
-                            ETH_ADDR_SCAN_ARGS(nd_tll_mask), &n)) {
-            put_nd_key(n, nd_target_s, NULL, nd_tll, key);
-            put_nd_mask(n, nd_target_mask_s, NULL, nd_tll_mask, mask);
-        } else if (ovs_scan(s, "nd(target="IPV6_SCAN_FMT","
-                            "tll="ETH_ADDR_SCAN_FMT")%n",
-                            nd_target_s, ETH_ADDR_SCAN_ARGS(nd_tll), &n)) {
-            put_nd_key(n, nd_target_s, NULL, nd_tll, key);
-            if (mask) {
-                put_nd_mask(n, nd_target_mask_s, NULL, nd_tll_mask, mask);
-            }
-        } else if (mask &&
-                   ovs_scan(s, "nd(target="IPV6_SCAN_FMT"/"IPV6_SCAN_FMT
-                            ",sll="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT","
-                            "tll="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT")%n",
-                            nd_target_s, nd_target_mask_s,
-                            ETH_ADDR_SCAN_ARGS(nd_sll),
-                            ETH_ADDR_SCAN_ARGS(nd_sll_mask),
-                            ETH_ADDR_SCAN_ARGS(nd_tll),
-                            ETH_ADDR_SCAN_ARGS(nd_tll_mask),
-                   &n)) {
-            put_nd_key(n, nd_target_s, nd_sll, nd_tll, key);
-            put_nd_mask(n, nd_target_mask_s, nd_sll_mask, nd_tll_mask, mask);
-        } else if (ovs_scan(s, "nd(target="IPV6_SCAN_FMT","
-                            "sll="ETH_ADDR_SCAN_FMT","
-                            "tll="ETH_ADDR_SCAN_FMT")%n",
-                            nd_target_s, ETH_ADDR_SCAN_ARGS(nd_sll),
-                            ETH_ADDR_SCAN_ARGS(nd_tll), &n)) {
-            put_nd_key(n, nd_target_s, nd_sll, nd_tll, key);
-            if (mask) {
-                put_nd_mask(n, nd_target_mask_s,
-                            nd_sll_mask, nd_tll_mask, mask);
-            }
-        }
-
-        if (n != -1)
-            return n;
-
-    }
-
+    SCAN_SINGLE("skb_priority(", uint32_t, u32, OVS_KEY_ATTR_PRIORITY);
+    SCAN_SINGLE("skb_mark(", uint32_t, u32, OVS_KEY_ATTR_SKB_MARK);
+    SCAN_SINGLE_NO_MASK("recirc_id(", uint32_t, u32, OVS_KEY_ATTR_RECIRC_ID);
+    SCAN_SINGLE("dp_hash(", uint32_t, u32, OVS_KEY_ATTR_DP_HASH);
+
+    SCAN_BEGIN("tunnel(", struct flow_tnl) {
+        SCAN_FIELD("tun_id=", be64, tun_id);
+        SCAN_FIELD("src=", ipv4, ip_src);
+        SCAN_FIELD("dst=", ipv4, ip_dst);
+        SCAN_FIELD("tos=", u8, ip_tos);
+        SCAN_FIELD("ttl=", u8, ip_ttl);
+        SCAN_FIELD("tp_src=", be16, tp_src);
+        SCAN_FIELD("tp_dst=", be16, tp_dst);
+        SCAN_FIELD("flags(", tun_flags, flags);
+    } SCAN_END(OVS_KEY_ATTR_TUNNEL);
+
+    SCAN_SINGLE_PORT("in_port(", uint32_t, OVS_KEY_ATTR_IN_PORT);
+
+    SCAN_BEGIN("eth(", struct ovs_key_ethernet) {
+        SCAN_FIELD("src=", eth, eth_src);
+        SCAN_FIELD("dst=", eth, eth_dst);
+    } SCAN_END(OVS_KEY_ATTR_ETHERNET);
+
+    SCAN_BEGIN_INIT("vlan(", struct ovs_key_vlan__,
+                    { htons(VLAN_CFI) }, { htons(VLAN_CFI) }) {
+        SCAN_FIELD("vid=", vid, tci);
+        SCAN_FIELD("pcp=", pcp, tci);
+        SCAN_FIELD("cfi=", cfi, tci);
+    } SCAN_END(OVS_KEY_ATTR_VLAN);
+
+    SCAN_SINGLE("eth_type(", ovs_be16, be16, OVS_KEY_ATTR_ETHERTYPE);
+
+    SCAN_BEGIN("mpls(", struct ovs_key_mpls) {
+        SCAN_FIELD("label=", mpls_label, mpls_lse);
+        SCAN_FIELD("tc=", mpls_tc, mpls_lse);
+        SCAN_FIELD("ttl=", mpls_ttl, mpls_lse);
+        SCAN_FIELD("bos=", mpls_bos, mpls_lse);
+    } SCAN_END(OVS_KEY_ATTR_MPLS);
+
+    SCAN_BEGIN("ipv4(", struct ovs_key_ipv4) {
+        SCAN_FIELD("src=", ipv4, ipv4_src);
+        SCAN_FIELD("dst=", ipv4, ipv4_dst);
+        SCAN_FIELD("proto=", u8, ipv4_proto);
+        SCAN_FIELD("tos=", u8, ipv4_tos);
+        SCAN_FIELD("ttl=", u8, ipv4_ttl);
+        SCAN_FIELD("frag=", frag, ipv4_frag);
+    } SCAN_END(OVS_KEY_ATTR_IPV4);
+
+    SCAN_BEGIN("ipv6(", struct ovs_key_ipv6) {
+        SCAN_FIELD("src=", ipv6, ipv6_src);
+        SCAN_FIELD("dst=", ipv6, ipv6_dst);
+        SCAN_FIELD("label=", ipv6_label, ipv6_label);
+        SCAN_FIELD("proto=", u8, ipv6_proto);
+        SCAN_FIELD("tclass=", u8, ipv6_tclass);
+        SCAN_FIELD("hlimit=", u8, ipv6_hlimit);
+        SCAN_FIELD("frag=", frag, ipv6_frag);
+    } SCAN_END(OVS_KEY_ATTR_IPV6);
+
+    SCAN_BEGIN("tcp(", struct ovs_key_tcp) {
+        SCAN_FIELD("src=", be16, tcp_src);
+        SCAN_FIELD("dst=", be16, tcp_dst);
+    } SCAN_END(OVS_KEY_ATTR_TCP);
+
+    SCAN_SINGLE("tcp_flags(", ovs_be16, tcp_flags, OVS_KEY_ATTR_TCP_FLAGS);
+
+    SCAN_BEGIN("udp(", struct ovs_key_udp) {
+        SCAN_FIELD("src=", be16, udp_src);
+        SCAN_FIELD("dst=", be16, udp_dst);
+    } SCAN_END(OVS_KEY_ATTR_UDP);
+
+    SCAN_BEGIN("sctp(", struct ovs_key_sctp) {
+        SCAN_FIELD("src=", be16, sctp_src);
+        SCAN_FIELD("dst=", be16, sctp_dst);
+    } SCAN_END(OVS_KEY_ATTR_SCTP);
+
+    SCAN_BEGIN("icmp(", struct ovs_key_icmp) {
+        SCAN_FIELD("type=", u8, icmp_type);
+        SCAN_FIELD("code=", u8, icmp_code);
+    } SCAN_END(OVS_KEY_ATTR_ICMP);
+
+    SCAN_BEGIN("icmpv6(", struct ovs_key_icmpv6) {
+        SCAN_FIELD("type=", u8, icmpv6_type);
+        SCAN_FIELD("code=", u8, icmpv6_code);
+    } SCAN_END(OVS_KEY_ATTR_ICMPV6);
+
+    SCAN_BEGIN("arp(", struct ovs_key_arp) {
+        SCAN_FIELD("sip=", ipv4, arp_sip);
+        SCAN_FIELD("tip=", ipv4, arp_tip);
+        SCAN_FIELD("op=", be16, arp_op);
+        SCAN_FIELD("sha=", eth, arp_sha);
+        SCAN_FIELD("tha=", eth, arp_tha);
+    } SCAN_END(OVS_KEY_ATTR_ARP);
+
+    SCAN_BEGIN("nd(", struct ovs_key_nd) {
+        SCAN_FIELD("target=", ipv6, nd_target);
+        SCAN_FIELD("sll=", eth, nd_sll);
+        SCAN_FIELD("tll=", eth, nd_tll);
+    } SCAN_END(OVS_KEY_ATTR_ND);
+
+    /* Encap open-coded. */
     if (!strncmp(s, "encap(", 6)) {
         const char *start = s;
         size_t encap, encap_mask = 0;
