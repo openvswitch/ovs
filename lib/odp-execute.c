@@ -332,8 +332,9 @@ odp_execute_masked_set_action(struct dpif_packet *packet,
         break;
 
     case OVS_KEY_ATTR_DP_HASH:
-        packet->dp_hash = md->dp_hash = nl_attr_get_u32(a)
-            | (md->dp_hash & ~*get_mask(a, uint32_t));
+        md->dp_hash = nl_attr_get_u32(a)
+            | (dpif_packet_get_dp_hash(packet) & ~*get_mask(a, uint32_t));
+        dpif_packet_set_dp_hash(packet, md->dp_hash);
         break;
 
     case OVS_KEY_ATTR_RECIRC_ID:
