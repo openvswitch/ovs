@@ -127,8 +127,10 @@ const char *rstp_port_role_name(enum rstp_port_role);
 void rstp_init(void);
 
 struct rstp * rstp_create(const char *, rstp_identifier bridge_id,
-        void (*send_bpdu)(struct ofpbuf *, int port_no, void *),
-                void *);
+                          void (*send_bpdu)(struct ofpbuf *, int port_no,
+                                            void *aux),
+                          void *aux);
+
 struct rstp *rstp_ref(struct rstp *);
 void rstp_unref(struct rstp *);
 
@@ -140,7 +142,7 @@ void rstp_received_bpdu(struct rstp_port *, const void *, size_t);
 bool rstp_check_and_reset_fdb_flush(struct rstp *);
 bool rstp_get_changed_port(struct rstp *, struct rstp_port **);
 void rstp_port_set_mac_operational(struct rstp_port *,
-                                   bool  new_mac_operational);
+                                   bool new_mac_operational);
 bool rstp_port_get_mac_operational(struct rstp_port *);
 
 /* Bridge setters */
@@ -148,12 +150,12 @@ void rstp_set_bridge_address(struct rstp *, rstp_identifier bridge_address);
 void rstp_set_bridge_priority(struct rstp *, int new_priority);
 void rstp_set_bridge_ageing_time(struct rstp *, int new_ageing_time);
 void rstp_set_bridge_force_protocol_version(struct rstp *,
-                enum rstp_force_protocol_version new_force_protocol_version);
+                                            enum rstp_force_protocol_version);
 void rstp_set_bridge_hello_time(struct rstp *);
 void rstp_set_bridge_max_age(struct rstp *, int new_max_age);
 void rstp_set_bridge_forward_delay(struct rstp *, int new_forward_delay);
 void rstp_set_bridge_transmit_hold_count(struct rstp *,
-                                        int new_transmit_hold_count);
+                                         int new_transmit_hold_count);
 void rstp_set_bridge_migrate_time(struct rstp *);
 void rstp_set_bridge_times(struct rstp *, int new_forward_delay,
                            int new_hello_time, int new_max_age,

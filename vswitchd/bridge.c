@@ -1358,16 +1358,14 @@ port_configure_rstp(const struct ofproto *ofproto, struct port *port,
             return;
         }
         port_s->port_num = port_num;
-    }
-    else {
+    } else {
         if (*port_num_counter >= RSTP_MAX_PORTS) {
             VLOG_ERR("port %s: too many RSTP ports, disabling", port->name);
             port_s->enable = false;
             return;
         }
-        /* If rstp-port-num is not specified, use 0. rstp_port_set_port_number
-         * will look for the first free one.
-         */
+        /* If rstp-port-num is not specified, use 0.
+         * rstp_port_set_port_number() will look for the first free one. */
         port_s->port_num = 0;
     }
 
@@ -1403,6 +1401,7 @@ static void
 bridge_configure_stp(struct bridge *br)
 {
     struct ofproto_rstp_status rstp_status;
+
     ofproto_get_rstp_status(br->ofproto, &rstp_status);
     if (!br->cfg->stp_enable) {
         ofproto_set_stp(br->ofproto, NULL);
@@ -1504,6 +1503,7 @@ static void
 bridge_configure_rstp(struct bridge *br)
 {
     struct ofproto_stp_status stp_status;
+
     ofproto_get_stp_status(br->ofproto, &stp_status);
     if (!br->cfg->rstp_enable) {
         ofproto_set_rstp(br->ofproto, NULL);

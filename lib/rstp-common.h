@@ -205,18 +205,11 @@ struct rstp_priority_vector {
     uint16_t bridge_port_id;
 };
 
-struct rstp_priority_vector4 {
-    rstp_identifier root_bridge_id;
-    uint32_t root_path_cost;
-    rstp_identifier designated_bridge_id;
-    uint16_t designated_port_id;
-};
-
 enum rstp_bpdu_type {
     CONFIGURATION_BPDU = 0x0,
     TOPOLOGY_CHANGE_NOTIFICATION_BPDU = 0x80,
     RAPID_SPANNING_TREE_BPDU = 0x2
-} bpdu_type_t;
+};
 
 enum rstp_bpdu_flag {
     BPDU_FLAG_TOPCHANGE = 0x01,
@@ -225,7 +218,7 @@ enum rstp_bpdu_flag {
     BPDU_FLAG_FORWARDING = 0x20,
     BPDU_FLAG_AGREEMENT = 0x40,
     BPDU_FLAG_TOPCHANGEACK = 0x80
-} bpdu_flag;
+};
 
 /* Rapid Spanning Tree BPDU [9.3.3] */
 OVS_PACKED(

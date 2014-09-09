@@ -1917,15 +1917,16 @@ rstp_send_bpdu_cb(struct ofpbuf *pkt, int port_num, void *ofproto_)
 
     ofport = rstp_port_get_aux(rp);
     if (!ofport) {
-        VLOG_WARN_RL(&rl, "%s: cannot send BPDU on unknown port %d",
-                ofproto->up.name, port_num);
+        VLOG_WARN_RL(&rl, "%s: cannot send BPDU on unknown RSTP port %d",
+                     ofproto->up.name, port_num);
     } else {
         struct eth_header *eth = ofpbuf_l2(pkt);
 
         netdev_get_etheraddr(ofport->up.netdev, eth->eth_src);
         if (eth_addr_is_zero(eth->eth_src)) {
-            VLOG_WARN_RL(&rl, "%s: cannot send BPDU on port %d "
-                    "with unknown MAC", ofproto->up.name, port_num);
+            VLOG_WARN_RL(&rl, "%s port %d: cannot send BPDU on RSTP port %d "
+                         "with unknown MAC", ofproto->up.name,
+                         ofp_to_u16(ofport->up.ofp_port), port_num);
         } else {
             ofproto_dpif_send_packet(ofport, pkt);
         }
@@ -1972,7 +1973,7 @@ set_rstp(struct ofproto *ofproto_, const struct ofproto_rstp_settings *s)
     if (s) {
         if (!ofproto->rstp) {
             ofproto->rstp = rstp_create(ofproto_->name, s->address,
-              rstp_send_bpdu_cb, ofproto);
+                                        rstp_send_bpdu_cb, ofproto);
             ofproto->rstp_last_tick = time_msec();
         }
         rstp_set_bridge_address(ofproto->rstp, s->address);

@@ -110,7 +110,8 @@ process_received_bpdu(struct rstp_port *p, const void *bpdu, size_t bpdu_size)
         rstp->changes = true;
         move_rstp(rstp);
     } else {
-        VLOG_DBG("Bad BPDU received");
+        VLOG_DBG("%s, port %u: Bad BPDU received", p->rstp->name,
+                 p->port_number);
         p->error_count++;
     }
 }
@@ -296,7 +297,7 @@ updt_roles_tree(struct rstp *r)
     }
     r->root_priority = best_vector;
     r->root_port_id = best_vector.bridge_port_id;
-    VLOG_DBG("%s: new Root is "RSTP_ID_FMT"", r->name,
+    VLOG_DBG("%s: new Root is "RSTP_ID_FMT, r->name,
              RSTP_ID_ARGS(r->root_priority.root_bridge_id));
     /* Letters d) e) */
     if (r->ports_count > 0) {
@@ -423,8 +424,8 @@ port_role_selection_sm(struct rstp *r)
     }
     if (old_state != r->port_role_selection_sm_state) {
         r->changes = true;
-        VLOG_DBG("Port_role_selection_sm %d -> %d", old_state,
-            r->port_role_selection_sm_state);
+        VLOG_DBG("%s: Port_role_selection_sm %d -> %d", r->name,
+                 old_state, r->port_role_selection_sm_state);
     }
     return 0;
 }
@@ -823,10 +824,9 @@ tx_rstp(struct rstp_port *p)
         bpdu.flags = PORT_ALT_BACK << ROLE_FLAG_SHIFT;
         break;
     case ROLE_DISABLED:
-        /* should not happen! */
+        /* Should not happen! */
         VLOG_ERR("%s transmitting bpdu in disabled role on port "
-                 ""RSTP_PORT_ID_FMT"", p->rstp->name, p->port_id);
-        OVS_NOT_REACHED();
+                 RSTP_PORT_ID_FMT, p->rstp->name, p->port_id);
         break;
     }
     if (p->agree) {
@@ -899,6 +899,8 @@ port_transmit_sm(struct rstp_port *p)
         /* no break */
     case PORT_TRANSMIT_SM_IDLE:
         if (p->role == ROLE_DISABLED) {
+            VLOG_DBG("%s, port %u: port_transmit_sm ROLE == DISABLED.",
+                     p->rstp->name, p->port_number);
             break;
         }
         else if (p->send_rstp && p->new_info &&
@@ -1085,9 +1087,8 @@ port_information_sm(struct rstp_port *p)
     case PORT_INFORMATION_SM_DISABLED:
         if (p->port_enabled) {
             p->port_information_sm_state = PORT_INFORMATION_SM_AGED_EXEC;
-        }
-        else if (p->rcvd_msg) {
-        p->port_information_sm_state = PORT_INFORMATION_SM_DISABLED_EXEC;
+        } else if (p->rcvd_msg) {
+            p->port_information_sm_state = PORT_INFORMATION_SM_DISABLED_EXEC;
         }
         break;
     case PORT_INFORMATION_SM_AGED_EXEC:
@@ -1225,8 +1226,8 @@ port_information_sm(struct rstp_port *p)
     }
     if (old_state != p->port_information_sm_state) {
         r->changes = true;
-        VLOG_DBG("Port_information_sm %d -> %d", old_state,
-                 p->port_information_sm_state);
+        VLOG_DBG("%s, port %u: Port_information_sm %d -> %d", p->rstp->name,
+                 p->port_number, old_state, p->port_information_sm_state);
     }
     return 0;
 }
@@ -1945,8 +1946,8 @@ topology_change_sm(struct rstp_port *p)
     }
     if (old_state != p->topology_change_sm_state) {
         r->changes = true;
-        VLOG_DBG("Topology_change_sm %d -> %d",old_state,
-                 p->topology_change_sm_state);
+        VLOG_DBG("%s, port %u: Topology_change_sm %d -> %d", p->rstp->name,
+                 p->port_number, old_state, p->topology_change_sm_state);
     }
     return 0;
 }

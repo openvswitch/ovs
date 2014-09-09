@@ -27,6 +27,7 @@
  */
 
 #include <config.h>
+
 #include "rstp.h"
 #include "rstp-common.h"
 #include "rstp-state-machines.h"
@@ -58,7 +59,7 @@ static void set_bridge_priority__(struct rstp *);
 static void reinitialize_rstp__(struct rstp *);
 static bool is_port_number_taken__(struct rstp *, int, struct rstp_port *);
 static uint16_t rstp_first_free_number__(struct rstp *, struct rstp_port *);
-static void rstp_initialize_port(struct rstp_port *p);
+static void rstp_initialize_port__(struct rstp_port *);
 
 const char *
 rstp_state_name(enum rstp_state state)
@@ -96,12 +97,11 @@ rstp_port_role_name(enum rstp_port_role role)
     }
 }
 
+/* Caller has to hold a reference to prevent 'rstp' from being deleted
+ * while we are taking a new reference. */
 struct rstp *
-rstp_ref(struct rstp *rstp_)
+rstp_ref(struct rstp *rstp)
 {
-    struct rstp *rstp;
-
-    rstp = rstp_;
     if (rstp) {
         ovs_refcount_ref(&rstp->ref_cnt);
     }
@@ -112,11 +112,11 @@ rstp_ref(struct rstp *rstp_)
 void
 rstp_unref(struct rstp *rstp)
 {
-    struct rstp_port *p;
-
     if (rstp && ovs_refcount_unref(&rstp->ref_cnt) == 1) {
         ovs_mutex_lock(&mutex);
         if (rstp->ports_count > 0) {
+            struct rstp_port *p;
+
             LIST_FOR_EACH (p, node, &rstp->ports) {
                 rstp_delete_port(p);
             }
@@ -128,7 +128,9 @@ rstp_unref(struct rstp *rstp)
     }
 }
 
-/* Returns the port number. */
+/* Returns the port number.  Mutex is needed to guard against
+ * concurrent reinitialization (which can temporarily clear the
+ * port_number). */
 int
 rstp_port_number(const struct rstp_port *p)
 {
@@ -164,15 +166,15 @@ rstp_received_bpdu(struct rstp_port *p, const void *bpdu, size_t bpdu_size)
 void
 rstp_init(void)
 {
-     unixctl_command_register("rstp/tcn", "[bridge]", 0, 1, rstp_unixctl_tcn,
-                                     NULL);
+    unixctl_command_register("rstp/tcn", "[bridge]", 0, 1, rstp_unixctl_tcn,
+                             NULL);
 }
 
 /* Creates and returns a new RSTP instance that initially has no ports. */
 struct rstp *
 rstp_create(const char *name, rstp_identifier bridge_address,
-        void (*send_bpdu)(struct ofpbuf *bpdu, int port_no, void *aux),
-        void *aux)
+            void (*send_bpdu)(struct ofpbuf *bpdu, int port_no, void *aux),
+            void *aux)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
     struct rstp *rstp;
@@ -205,12 +207,14 @@ rstp_create(const char *name, rstp_identifier bridge_address,
     rstp->changes = false;
     rstp->begin = true;
 
-    ovs_mutex_lock(&mutex);
     /* Initialize the ports list. */
     list_init(&rstp->ports);
     ovs_refcount_init(&rstp->ref_cnt);
+
+    ovs_mutex_lock(&mutex);
     list_push_back(all_rstps, &rstp->node);
     ovs_mutex_unlock(&mutex);
+
     VLOG_DBG("RSTP instance creation done");
     return rstp;
 }
@@ -236,6 +240,7 @@ rstp_set_bridge_address(struct rstp *rstp, rstp_identifier bridge_address)
 
     VLOG_DBG("%s: set bridge address to: "RSTP_ID_FMT"", rstp->name,
              RSTP_ID_ARGS(bridge_address));
+
     ovs_mutex_lock(&mutex);
     rstp->address = bridge_address;
     rstp->bridge_identifier = bridge_address;
@@ -246,8 +251,8 @@ rstp_set_bridge_address(struct rstp *rstp, rstp_identifier bridge_address)
      */
     if (rstp->ports_count > 0) {
         LIST_FOR_EACH (p, node, &rstp->ports) {
-            p->selected = 0;
-            p->reselect = 1;
+            p->selected = false;
+            p->reselect = true;
         }
     }
     rstp->changes = true;
@@ -289,7 +294,7 @@ rstp_set_bridge_priority(struct rstp *rstp, int new_priority)
                  (new_priority / 4096) * 4096);
         ovs_mutex_lock(&mutex);
         rstp->priority = (new_priority / 4096) * 4096;
-        rstp->bridge_identifier &= 0xffffffffffffULL;
+        rstp->bridge_identifier &= 0x0000ffffffffffffULL;
         rstp->bridge_identifier |=
                               (uint64_t) ((new_priority / 4096) * 4096) << 48;
         set_bridge_priority__(rstp);
@@ -297,8 +302,8 @@ rstp_set_bridge_priority(struct rstp *rstp, int new_priority)
         /* [17.13] */
         if (rstp->ports_count > 0){
             LIST_FOR_EACH (p, node, &rstp->ports) {
-                p->selected = 0;
-                p->reselect = 1;
+                p->selected = false;
+                p->reselect = true;
             }
         }
         rstp->changes = true;
@@ -311,9 +316,10 @@ rstp_set_bridge_priority(struct rstp *rstp, int new_priority)
 void
 rstp_set_bridge_ageing_time(struct rstp *rstp, int new_ageing_time)
 {
-    if (new_ageing_time >= RSTP_MIN_AGEING_TIME &&
-            new_ageing_time <= RSTP_MAX_AGEING_TIME) {
+    if (new_ageing_time >= RSTP_MIN_AGEING_TIME
+        && new_ageing_time <= RSTP_MAX_AGEING_TIME) {
         VLOG_DBG("%s: set ageing time to %d", rstp->name, new_ageing_time);
+
         ovs_mutex_lock(&mutex);
         rstp->ageing_time = new_ageing_time;
         ovs_mutex_unlock(&mutex);
@@ -325,14 +331,15 @@ rstp_set_bridge_ageing_time(struct rstp *rstp, int new_ageing_time)
  */
 static void
 reinitialize_rstp__(struct rstp *rstp)
+    OVS_REQUIRES(mutex)
 {
     struct rstp temp;
-    struct rstp_port *p, temp_port;
     static struct list ports;
 
     /* Copy rstp in temp */
     temp = *rstp;
     ports = rstp->ports;
+
     /* stop and clear rstp */
     memset(rstp, 0, sizeof(struct rstp));
 
@@ -360,7 +367,10 @@ reinitialize_rstp__(struct rstp *rstp)
     rstp->begin = true;
     rstp->ports = ports;
     rstp->ports_count = temp.ports_count;
-    if (rstp->ports_count > 0){
+
+    if (rstp->ports_count > 0) {
+        struct rstp_port *p, temp_port;
+
         LIST_FOR_EACH (p, node, &rstp->ports) {
             temp_port = *p;
             memset(p, 0, sizeof(struct rstp_port));
@@ -442,8 +452,8 @@ rstp_set_bridge_max_age(struct rstp *rstp, int new_max_age)
     if (new_max_age >= RSTP_MIN_BRIDGE_MAX_AGE &&
         new_max_age <= RSTP_MAX_BRIDGE_MAX_AGE) {
         /* [17.13] */
-        if ((2*(rstp->bridge_forward_delay - 1) >= new_max_age) &&
-            (new_max_age >= 2*rstp->bridge_hello_time)) {
+        if ((2 * (rstp->bridge_forward_delay - 1) >= new_max_age)
+            && (new_max_age >= 2 * rstp->bridge_hello_time)) {
             VLOG_DBG("%s: set RSTP bridge Max Age to %d", rstp->name,
                      new_max_age);
             ovs_mutex_lock(&mutex);
@@ -458,8 +468,8 @@ rstp_set_bridge_max_age(struct rstp *rstp, int new_max_age)
 void
 rstp_set_bridge_forward_delay(struct rstp *rstp, int new_forward_delay)
 {
-    if (new_forward_delay >= RSTP_MIN_BRIDGE_FORWARD_DELAY &&
-            new_forward_delay <= RSTP_MAX_BRIDGE_FORWARD_DELAY) {
+    if (new_forward_delay >= RSTP_MIN_BRIDGE_FORWARD_DELAY
+        && new_forward_delay <= RSTP_MAX_BRIDGE_FORWARD_DELAY) {
         if (2 * (new_forward_delay - 1) >= rstp->bridge_max_age) {
             VLOG_DBG("%s: set RSTP Forward Delay to %d", rstp->name,
                      new_forward_delay);
@@ -478,16 +488,16 @@ rstp_set_bridge_transmit_hold_count(struct rstp *rstp,
 {
     struct rstp_port *p;
 
-    if (new_transmit_hold_count >= RSTP_MIN_TRANSMIT_HOLD_COUNT &&
-            new_transmit_hold_count <= RSTP_MAX_TRANSMIT_HOLD_COUNT) {
+    if (new_transmit_hold_count >= RSTP_MIN_TRANSMIT_HOLD_COUNT
+        && new_transmit_hold_count <= RSTP_MAX_TRANSMIT_HOLD_COUNT) {
         VLOG_DBG("%s: set RSTP Transmit Hold Count to %d", rstp->name,
                  new_transmit_hold_count);
         /* Resetting txCount on all ports [17.13]. */
         ovs_mutex_lock(&mutex);
         rstp->transmit_hold_count = new_transmit_hold_count;
-        if (rstp->ports_count > 0){
+        if (rstp->ports_count > 0) {
             LIST_FOR_EACH (p, node, &rstp->ports) {
-                p->tx_count=0;
+                p->tx_count = 0;
             }
         }
         ovs_mutex_unlock(&mutex);
@@ -514,14 +524,17 @@ rstp_set_bridge_times(struct rstp *rstp, int new_forward_delay,
 {
     VLOG_DBG("%s: set RSTP times to (%d, %d, %d, %d)", rstp->name,
              new_forward_delay, new_hello_time, new_max_age, new_message_age);
-    if (new_forward_delay >= RSTP_MIN_BRIDGE_FORWARD_DELAY &&
-            new_forward_delay <= RSTP_MAX_BRIDGE_FORWARD_DELAY)
+    if (new_forward_delay >= RSTP_MIN_BRIDGE_FORWARD_DELAY
+        && new_forward_delay <= RSTP_MAX_BRIDGE_FORWARD_DELAY) {
         rstp->bridge_times.forward_delay = new_forward_delay;
-    if (new_hello_time == RSTP_BRIDGE_HELLO_TIME)
+    }
+    if (new_hello_time == RSTP_BRIDGE_HELLO_TIME) {
         rstp->bridge_times.hello_time = new_hello_time;
-    if (new_max_age >= RSTP_MIN_BRIDGE_MAX_AGE &&
-            new_max_age <= RSTP_MAX_BRIDGE_MAX_AGE)
+    }
+    if (new_max_age >= RSTP_MIN_BRIDGE_MAX_AGE
+        && new_max_age <= RSTP_MAX_BRIDGE_MAX_AGE) {
         rstp->bridge_times.max_age = new_max_age;
+    }
     rstp->bridge_times.message_age = new_message_age;
 }
 
@@ -547,16 +560,16 @@ rstp_port_set_priority(struct rstp_port *rstp_port, int new_port_priority)
     struct rstp *rstp;
 
     rstp = rstp_port->rstp;
-    if (new_port_priority >= RSTP_MIN_PORT_PRIORITY &&
-            new_port_priority  <= RSTP_MAX_PORT_PRIORITY) {
+    if (new_port_priority >= RSTP_MIN_PORT_PRIORITY
+        && new_port_priority <= RSTP_MAX_PORT_PRIORITY) {
         VLOG_DBG("%s, port %u: set RSTP port priority to %d", rstp->name,
                  rstp_port->port_number, new_port_priority);
         ovs_mutex_lock(&mutex);
         new_port_priority -= new_port_priority % RSTP_STEP_PORT_PRIORITY;
         rstp_port->priority = new_port_priority;
         set_port_id__(rstp_port);
-        rstp_port->selected = 0;
-        rstp_port->reselect = 1;
+        rstp_port->selected = false;
+        rstp_port->reselect = true;
         ovs_mutex_unlock(&mutex);
     }
 }
@@ -623,10 +636,9 @@ rstp_port_set_port_number(struct rstp_port *rstp_port,
 
     set_port_id__(rstp_port);
     /* [17.13] is not clear. I suppose that a port number change
-     * should trigger reselection like a port priority change.
-     */
-    rstp_port->selected = 0;
-    rstp_port->reselect = 1;
+     * should trigger reselection like a port priority change. */
+    rstp_port->selected = false;
+    rstp_port->reselect = true;
     ovs_mutex_unlock(&mutex);
     VLOG_DBG("%s: set new RSTP port number %d", rstp->name,
              rstp_port->port_number);
@@ -656,17 +668,17 @@ void
 rstp_port_set_path_cost(struct rstp_port *rstp_port,
                         uint32_t new_port_path_cost)
 {
-    struct rstp *rstp;
-
-    rstp = rstp_port->rstp;
     if (new_port_path_cost >= RSTP_MIN_PORT_PATH_COST &&
             new_port_path_cost <= RSTP_MAX_PORT_PATH_COST) {
+        struct rstp *rstp;
+
+        ovs_mutex_lock(&mutex);
+        rstp = rstp_port->rstp;
         VLOG_DBG("%s, port %u, set RSTP port path cost to %d", rstp->name,
                  rstp_port->port_number, new_port_path_cost);
-        ovs_mutex_lock(&mutex);
         rstp_port->port_path_cost = new_port_path_cost;
-        rstp_port->selected = 0;
-        rstp_port->reselect = 1;
+        rstp_port->selected = false;
+        rstp_port->reselect = true;
         ovs_mutex_unlock(&mutex);
     }
 }
@@ -712,17 +724,21 @@ rstp_check_and_reset_fdb_flush(struct rstp *rstp)
 
 /* Finds a port whose state has changed.  If successful, stores the port whose
  * state changed in '*portp' and returns true.  If no port has changed, stores
- * NULL in '*portp' and returns false. */
+ * NULL in '*portp' and returns false.
+ *
+ * XXX: This function is only called by the main thread, which is also the one
+ * that creates and deletes ports.  Otherwise this function is not thread safe,
+ * as the returned '*portp' could become stale before it is referenced by the
+ * caller. */
 bool
 rstp_get_changed_port(struct rstp *rstp, struct rstp_port **portp)
 {
-    struct rstp_port *p;
-    bool changed;
-
-    changed = false;
+    bool changed = false;
 
     ovs_mutex_lock(&mutex);
-    if (rstp->ports_count > 0){
+    if (rstp->ports_count > 0) {
+        struct rstp_port *p;
+
         LIST_FOR_EACH (p, node, &rstp->ports) {
             if (p->state_changed) {
                 p->state_changed = false;
@@ -822,8 +838,8 @@ rstp_port_set_oper_point_to_point_mac(struct rstp_port *p,
 
 /* Initializes a port with the defaults values for its parameters. */
 static void
-rstp_initialize_port(struct rstp_port *p)
-OVS_REQUIRES(mutex)
+rstp_initialize_port__(struct rstp_port *p)
+    OVS_REQUIRES(mutex)
 {
     struct rstp *rstp;
 
@@ -916,7 +932,7 @@ rstp_add_port(struct rstp *rstp) {
 
     ovs_mutex_lock(&mutex);
     p->rstp = rstp;
-    rstp_initialize_port(p);
+    rstp_initialize_port__(p);
     rstp_port_set_state(p, RSTP_DISCARDING);
     list_push_back(&rstp->ports, &p->node);
     rstp->ports_count++;
