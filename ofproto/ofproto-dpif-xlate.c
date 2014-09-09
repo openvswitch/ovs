@@ -51,6 +51,7 @@
 
 COVERAGE_DEFINE(xlate_actions);
 COVERAGE_DEFINE(xlate_actions_oversize);
+COVERAGE_DEFINE(xlate_actions_too_many_output);
 COVERAGE_DEFINE(xlate_actions_mpls_overflow);
 
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif_xlate);
@@ -3183,6 +3184,77 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     ovs_rwlock_unlock(&xlate_rwlock);
 }
 
+/* Returns the maximum number of packets that the Linux kernel is willing to
+ * queue up internally to certain kinds of software-implemented ports, or the
+ * default (and rarely modified) value if it cannot be determined. */
+static int
+netdev_max_backlog(void)
+{
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+    static int max_backlog = 1000; /* The normal default value. */
+
+    if (ovsthread_once_start(&once)) {
+        static const char filename[] = "/proc/sys/net/core/netdev_max_backlog";
+        FILE *stream;
+        int n;
+
+        stream = fopen(filename, "r");
+        if (!stream) {
+            VLOG_WARN("%s: open failed (%s)", filename, ovs_strerror(errno));
+        } else {
+            if (fscanf(stream, "%d", &n) != 1) {
+                VLOG_WARN("%s: read error", filename);
+            } else if (n <= 100) {
+                VLOG_WARN("%s: unexpectedly small value %d", filename, n);
+            } else {
+                max_backlog = n;
+            }
+            fclose(stream);
+        }
+        ovsthread_once_done(&once);
+
+        VLOG_DBG("%s: using %d max_backlog", filename, max_backlog);
+    }
+
+    return max_backlog;
+}
+
+/* Counts and returns the number of OVS_ACTION_ATTR_OUTPUT actions in
+ * 'odp_actions'. */
+static int
+count_output_actions(const struct ofpbuf *odp_actions)
+{
+    const struct nlattr *a;
+    size_t left;
+    int n = 0;
+
+    NL_ATTR_FOR_EACH_UNSAFE (a, left, ofpbuf_data(odp_actions),
+                             ofpbuf_size(odp_actions)) {
+        if (a->nla_type == OVS_ACTION_ATTR_OUTPUT) {
+            n++;
+        }
+    }
+    return n;
+}
+
+/* Returns true if 'odp_actions' contains more output actions than the datapath
+ * can reliably handle in one go.  On Linux, this is the value of the
+ * net.core.netdev_max_backlog sysctl, which limits the maximum number of
+ * packets that the kernel is willing to queue up for processing while the
+ * datapath is processing a set of actions. */
+static bool
+too_many_output_actions(const struct ofpbuf *odp_actions)
+{
+#ifdef __linux__
+    return (ofpbuf_size(odp_actions) / NL_A_U32_SIZE > netdev_max_backlog()
+            && count_output_actions(odp_actions) > netdev_max_backlog());
+#else
+    /* OSes other than Linux might have similar limits, but we don't know how
+     * to determine them.*/
+    return false;
+#endif
+}
+
 /* Translates the 'ofpacts_len' bytes of "struct ofpacts" starting at 'ofpacts'
  * into datapath actions in 'odp_actions', using 'ctx'.
  *
@@ -3402,6 +3474,9 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
          * them one by one with help, so just mark the result as SLOW_ACTION to
          * prevent the flow from being installed. */
         COVERAGE_INC(xlate_actions_oversize);
+        ctx.xout->slow |= SLOW_ACTION;
+    } else if (too_many_output_actions(&ctx.xout->odp_actions)) {
+        COVERAGE_INC(xlate_actions_too_many_output);
         ctx.xout->slow |= SLOW_ACTION;
     }
 
