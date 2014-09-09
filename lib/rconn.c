@@ -137,8 +137,8 @@ struct rconn {
     uint8_t dscp;
 
     /* Messages sent or received are copied to the monitor connections. */
-#define MAX_MONITORS 8
-    struct vconn *monitors[8];
+#define MAXIMUM_MONITORS 8
+    struct vconn *monitors[MAXIMUM_MONITORS];
     size_t n_monitors;
 
     uint32_t allowed_versions;
