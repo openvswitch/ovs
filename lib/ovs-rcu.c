@@ -138,8 +138,13 @@ ovsrcu_quiesce_start(void)
 void
 ovsrcu_quiesce(void)
 {
-    ovsrcu_init_module();
-    ovsrcu_perthread_get()->seqno = seq_read(global_seqno);
+    struct ovsrcu_perthread *perthread;
+
+    perthread = ovsrcu_perthread_get();
+    perthread->seqno = seq_read(global_seqno);
+    if (perthread->cbset) {
+        ovsrcu_flush_cbset(perthread);
+    }
     seq_change(global_seqno);
 
     ovsrcu_quiesced();
