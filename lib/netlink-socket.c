@@ -1249,7 +1249,6 @@ static int
 do_lookup_genl_family(const char *name, struct nlattr **attrs,
                       struct ofpbuf **replyp)
 {
-    struct nl_sock *sock;
     struct nlmsghdr *nlmsg;
     struct ofpbuf *reply;
     int error;
@@ -1323,7 +1322,6 @@ do_lookup_genl_family(const char *name, struct nlattr **attrs,
     if (!nl_policy_parse(reply, NLMSG_HDRLEN + GENL_HDRLEN,
                          family_policy, attrs, ARRAY_SIZE(family_policy))
         || nl_attr_get_u16(attrs[CTRL_ATTR_FAMILY_ID]) == 0) {
-        nl_sock_destroy(sock);
         ofpbuf_delete(reply);
         return EPROTO;
     }
