@@ -147,16 +147,14 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
                               FILE_FLAG_OVERLAPPED, NULL);
 
     if (sock->handle == INVALID_HANDLE_VALUE) {
-        int last_error = GetLastError();
-        VLOG_ERR("fcntl: %s", ovs_strerror(last_error));
+        VLOG_ERR("fcntl: %s", ovs_lasterror_to_string());
         goto error;
     }
 
     memset(&sock->overlapped, 0, sizeof sock->overlapped);
     sock->overlapped.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
     if (sock->overlapped.hEvent == NULL) {
-        int last_error = GetLastError();
-        VLOG_ERR("fcntl: %s", ovs_strerror(last_error));
+        VLOG_ERR("fcntl: %s", ovs_lasterror_to_string());
         goto error;
     }
 
