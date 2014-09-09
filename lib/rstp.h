@@ -35,6 +35,12 @@
 #include "compiler.h"
 #include "util.h"
 
+/* Thread Safety: Callers passing in RSTP and RSTP port object
+ * pointers must hold a reference to the passed object to ensure that
+ * the object does not become stale while it is being accessed. */
+
+extern struct ovs_mutex rstp_mutex;
+
 #define RSTP_MAX_PORTS 4095
 
 struct ofpbuf;
@@ -119,86 +125,134 @@ struct rstp_port;
 struct ofproto_rstp_settings;
 
 const char *rstp_state_name(enum rstp_state);
+const char *rstp_port_role_name(enum rstp_port_role);
 static inline bool rstp_forward_in_state(enum rstp_state);
 static inline bool rstp_learn_in_state(enum rstp_state);
 static inline bool rstp_should_manage_bpdu(enum rstp_state state);
-const char *rstp_port_role_name(enum rstp_port_role);
 
-void rstp_init(void);
+/* Must be called before any other rstp function is called. */
+void rstp_init(void)
+    OVS_EXCLUDED(rstp_mutex);
 
 struct rstp * rstp_create(const char *, rstp_identifier bridge_id,
                           void (*send_bpdu)(struct ofpbuf *, int port_no,
                                             void *aux),
-                          void *aux);
+                          void *aux)
+    OVS_EXCLUDED(rstp_mutex);
 
-struct rstp *rstp_ref(struct rstp *);
-void rstp_unref(struct rstp *);
+struct rstp *rstp_ref(struct rstp *)
+    OVS_EXCLUDED(rstp_mutex);
+void rstp_unref(struct rstp *)
+    OVS_EXCLUDED(rstp_mutex);
 
 /* Functions used outside RSTP, to call functions defined in
    rstp-state-machines.h */
-void rstp_tick_timers(struct rstp *);
-void rstp_received_bpdu(struct rstp_port *, const void *, size_t);
-
-bool rstp_check_and_reset_fdb_flush(struct rstp *);
-bool rstp_get_changed_port(struct rstp *, struct rstp_port **);
+void rstp_tick_timers(struct rstp *)
+    OVS_EXCLUDED(rstp_mutex);
+void rstp_port_received_bpdu(struct rstp_port *, const void *bpdu,
+                             size_t bpdu_size)
+    OVS_EXCLUDED(rstp_mutex);
+bool rstp_check_and_reset_fdb_flush(struct rstp *)
+    OVS_EXCLUDED(rstp_mutex);
+void *rstp_get_next_changed_port_aux(struct rstp *, struct rstp_port **)
+    OVS_EXCLUDED(rstp_mutex);
 void rstp_port_set_mac_operational(struct rstp_port *,
-                                   bool new_mac_operational);
-bool rstp_port_get_mac_operational(struct rstp_port *);
+                                   bool new_mac_operational)
+    OVS_EXCLUDED(rstp_mutex);
 
 /* Bridge setters */
-void rstp_set_bridge_address(struct rstp *, rstp_identifier bridge_address);
-void rstp_set_bridge_priority(struct rstp *, int new_priority);
-void rstp_set_bridge_ageing_time(struct rstp *, int new_ageing_time);
+void rstp_set_bridge_address(struct rstp *, rstp_identifier bridge_address)
+    OVS_EXCLUDED(rstp_mutex);
+void rstp_set_bridge_priority(struct rstp *, int new_priority)
+    OVS_EXCLUDED(rstp_mutex);
+void rstp_set_bridge_ageing_time(struct rstp *, int new_ageing_time)
+    OVS_EXCLUDED(rstp_mutex);
 void rstp_set_bridge_force_protocol_version(struct rstp *,
-                                            enum rstp_force_protocol_version);
-void rstp_set_bridge_hello_time(struct rstp *);
-void rstp_set_bridge_max_age(struct rstp *, int new_max_age);
-void rstp_set_bridge_forward_delay(struct rstp *, int new_forward_delay);
+                                            enum rstp_force_protocol_version)
+    OVS_EXCLUDED(rstp_mutex);
+void rstp_set_bridge_max_age(struct rstp *, int new_max_age)
+    OVS_EXCLUDED(rstp_mutex);
+void rstp_set_bridge_forward_delay(struct rstp *, int new_forward_delay)
+    OVS_EXCLUDED(rstp_mutex);
 void rstp_set_bridge_transmit_hold_count(struct rstp *,
-                                         int new_transmit_hold_count);
-void rstp_set_bridge_migrate_time(struct rstp *);
-void rstp_set_bridge_times(struct rstp *, int new_forward_delay,
-                           int new_hello_time, int new_max_age,
-                           int new_message_age);
-
-struct rstp_port * rstp_add_port(struct rstp *);
-void reinitialize_port(struct rstp_port *p);
-void rstp_delete_port(struct rstp_port *);
-/* Port setters */
-void rstp_port_set_priority(struct rstp_port *, int new_port_priority);
-void rstp_port_set_port_number(struct rstp_port *, uint16_t new_port_number);
-uint32_t rstp_convert_speed_to_cost(unsigned int speed);
-void rstp_port_set_path_cost(struct rstp_port *, uint32_t new_port_path_cost);
-void rstp_port_set_admin_edge(struct rstp_port *, bool new_admin_edge);
-void rstp_port_set_auto_edge(struct rstp_port *, bool new_auto_edge);
-void rstp_port_set_state(struct rstp_port *, enum rstp_state new_state);
-void rstp_port_set_aux(struct rstp_port *, void *aux);
-void rstp_port_set_administrative_bridge_port(struct rstp_port *, uint8_t);
-void rstp_port_set_oper_point_to_point_mac(struct rstp_port *, uint8_t);
-void rstp_port_set_mcheck(struct rstp_port *, bool new_mcheck);
+                                         int new_transmit_hold_count)
+    OVS_EXCLUDED(rstp_mutex);
 
 /* Bridge getters */
-const char * rstp_get_name(const struct rstp *);
-rstp_identifier rstp_get_root_id(const struct rstp *);
-rstp_identifier rstp_get_bridge_id(const struct rstp *);
-rstp_identifier rstp_get_designated_id(const struct rstp *);
-uint32_t rstp_get_root_path_cost(const struct rstp *);
-uint16_t rstp_get_designated_port_id(const struct rstp *);
-uint16_t rstp_get_bridge_port_id(const struct rstp *);
-struct rstp_port * rstp_get_root_port(struct rstp *);
-rstp_identifier rstp_get_designated_root(const struct rstp *);
-bool rstp_is_root_bridge(const struct rstp *);
+const char * rstp_get_name(const struct rstp *)
+    OVS_EXCLUDED(rstp_mutex);
+rstp_identifier rstp_get_root_id(const struct rstp *)
+    OVS_EXCLUDED(rstp_mutex);
+rstp_identifier rstp_get_bridge_id(const struct rstp *)
+    OVS_EXCLUDED(rstp_mutex);
+rstp_identifier rstp_get_designated_id(const struct rstp *)
+    OVS_EXCLUDED(rstp_mutex);
+uint32_t rstp_get_root_path_cost(const struct rstp *)
+    OVS_EXCLUDED(rstp_mutex);
+uint16_t rstp_get_designated_port_id(const struct rstp *)
+    OVS_EXCLUDED(rstp_mutex);
+uint16_t rstp_get_bridge_port_id(const struct rstp *)
+    OVS_EXCLUDED(rstp_mutex);
+struct rstp_port * rstp_get_root_port(struct rstp *)
+    OVS_EXCLUDED(rstp_mutex);
+rstp_identifier rstp_get_designated_root(const struct rstp *)
+    OVS_EXCLUDED(rstp_mutex);
+bool rstp_is_root_bridge(const struct rstp *)
+    OVS_EXCLUDED(rstp_mutex);
 
-/* Port getters */
-int rstp_port_number(const struct rstp_port *);
-struct rstp_port *rstp_get_port(struct rstp *, int port_no);
-uint16_t rstp_port_get_id(const struct rstp_port *);
-enum rstp_state rstp_port_get_state(const struct rstp_port *);
-enum rstp_port_role rstp_port_get_role(const struct rstp_port *);
-void rstp_port_get_counts(const struct rstp_port *, int *tx_count,
-                          int *rx_count, int *error_count, int *uptime);
-void * rstp_port_get_aux(struct rstp_port *);
+/* RSTP ports */
+struct rstp_port * rstp_add_port(struct rstp *)
+    OVS_EXCLUDED(rstp_mutex);
+struct rstp_port *rstp_port_ref(const struct rstp_port *)
+    OVS_EXCLUDED(rstp_mutex);
+void rstp_port_unref(struct rstp_port *)
+    OVS_EXCLUDED(rstp_mutex);
 
+uint32_t rstp_convert_speed_to_cost(unsigned int speed);
+
+void rstp_port_set(struct rstp_port *, uint16_t port_num, int priority,
+                   uint32_t path_cost, bool is_admin_edge, bool is_auto_edge,
+                   bool do_mcheck, void *aux)
+    OVS_EXCLUDED(rstp_mutex);
+
+enum rstp_state rstp_port_get_state(const struct rstp_port *)
+    OVS_EXCLUDED(rstp_mutex);
+
+void rstp_port_get_status(const struct rstp_port *, uint16_t *id,
+                          enum rstp_state *state, enum rstp_port_role *role,
+                          int *tx_count, int *rx_count, int *error_count,
+                          int *uptime)
+    OVS_EXCLUDED(rstp_mutex);
+
+void * rstp_get_port_aux(struct rstp *rstp, uint16_t port_number)
+    OVS_EXCLUDED(rstp_mutex);
+
+
+/* Internal API for rstp-state-machines.c */
+
+void rstp_port_set_state__(struct rstp_port *, enum rstp_state state)
+    OVS_REQUIRES(rstp_mutex);
+
+
+/* Internal API for test-rstp.c */
+
+struct rstp_port *rstp_get_port(struct rstp *rstp, uint16_t port_number)
+    OVS_EXCLUDED(rstp_mutex);
+void reinitialize_port(struct rstp_port *p)
+    OVS_EXCLUDED(rstp_mutex);
+
+int rstp_port_get_number(const struct rstp_port *)
+    OVS_EXCLUDED(rstp_mutex);
+void rstp_port_set_priority(struct rstp_port *port, int priority)
+    OVS_EXCLUDED(rstp_mutex);
+void rstp_port_set_aux(struct rstp_port *p, void *aux)
+    OVS_EXCLUDED(rstp_mutex);
+void rstp_port_set_path_cost(struct rstp_port *port, uint32_t path_cost)
+    OVS_EXCLUDED(rstp_mutex);
+void rstp_port_set_state(struct rstp_port *p, enum rstp_state state)
+    OVS_EXCLUDED(rstp_mutex);
+
+
 /* Inline functions. */
 /* Returns true if 'state' is one in which BPDU packets should be received
  * and transmitted on a port, false otherwise.

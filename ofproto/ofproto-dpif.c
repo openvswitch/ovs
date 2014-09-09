@@ -631,16 +631,14 @@ type_run(const char *type)
                 int stp_port = ofport->stp_port
                     ? stp_port_no(ofport->stp_port)
                     : -1;
-                int rstp_port = ofport->rstp_port
-                    ? rstp_port_number(ofport->rstp_port)
-                    : -1;
                 xlate_ofport_set(ofproto, ofport->bundle, ofport,
                                  ofport->up.ofp_port, ofport->odp_port,
                                  ofport->up.netdev, ofport->cfm,
                                  ofport->bfd, ofport->peer, stp_port,
-                                 rstp_port, ofport->qdscp, ofport->n_qdscp,
-                                 ofport->up.pp.config, ofport->up.pp.state,
-                                 ofport->is_tunnel, ofport->may_enable);
+                                 ofport->rstp_port, ofport->qdscp,
+                                 ofport->n_qdscp, ofport->up.pp.config,
+                                 ofport->up.pp.state, ofport->is_tunnel,
+                                 ofport->may_enable);
             }
             xlate_txn_commit();
         }
@@ -1568,7 +1566,7 @@ port_construct(struct ofport *port_)
     port->bundle = NULL;
     port->cfm = NULL;
     port->bfd = NULL;
-    port->may_enable = true;
+    port->may_enable = false;
     port->stp_port = NULL;
     port->stp_state = STP_DISABLED;
     port->rstp_port = NULL;
@@ -1683,9 +1681,7 @@ port_destruct(struct ofport *port_)
     if (port->stp_port) {
         stp_port_disable(port->stp_port);
     }
-    if (port->rstp_port) {
-        rstp_delete_port(port->rstp_port);
-    }
+    set_rstp_port(port_, NULL);
     if (ofproto->sflow) {
         dpif_sflow_del_port(ofproto->sflow, port->odp_port);
     }
@@ -1912,10 +1908,9 @@ static void
 rstp_send_bpdu_cb(struct ofpbuf *pkt, int port_num, void *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_;
-    struct rstp_port *rp = rstp_get_port(ofproto->rstp, port_num);
     struct ofport_dpif *ofport;
 
-    ofport = rstp_port_get_aux(rp);
+    ofport = rstp_get_port_aux(ofproto->rstp, port_num);
     if (!ofport) {
         VLOG_WARN_RL(&rl, "%s: cannot send BPDU on unknown RSTP port %d",
                      ofproto->up.name, port_num);
@@ -2066,17 +2061,16 @@ rstp_run(struct ofproto_dpif *ofproto)
         long long int now = time_msec();
         long long int elapsed = now - ofproto->rstp_last_tick;
         struct rstp_port *rp;
+        struct ofport_dpif *ofport;
 
         /* Every second, decrease the values of the timers. */
         if (elapsed >= 1000) {
             rstp_tick_timers(ofproto->rstp);
             ofproto->rstp_last_tick = now;
         }
-        while (rstp_get_changed_port(ofproto->rstp, &rp)) {
-            struct ofport_dpif *ofport = rstp_port_get_aux(rp);
-            if (ofport) {
-                update_rstp_port_state(ofport);
-            }
+        rp = NULL;
+        while ((ofport = rstp_get_next_changed_port_aux(ofproto->rstp, &rp))) {
+            update_rstp_port_state(ofport);
         }
         /* FIXME: This check should be done on-event (i.e., when setting
          * p->fdb_flush) and not periodically.
@@ -2214,7 +2208,7 @@ set_stp_port(struct ofport *ofport_,
         }
         return 0;
     } else if (sp && stp_port_no(sp) != s->port_num
-            && ofport == stp_port_get_aux(sp)) {
+               && ofport == stp_port_get_aux(sp)) {
         /* The port-id changed, so disable the old one if it's not
          * already in use by another port. */
         stp_port_disable(sp);
@@ -2324,59 +2318,23 @@ set_rstp_port(struct ofport *ofport_,
     struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
     struct rstp_port *rp = ofport->rstp_port;
-    int stp_port;
 
     if (!s || !s->enable) {
         if (rp) {
+            rstp_port_unref(rp);
             ofport->rstp_port = NULL;
-            rstp_delete_port(rp);
             update_rstp_port_state(ofport);
         }
         return;
-    } else if (rp && rstp_port_number(rp) != s->port_num
-                  && ofport == rstp_port_get_aux(rp)) {
-        /* The port-id changed, so disable the old one if it's not
-         * already in use by another port. */
-        if (s->port_num != 0) {
-            xlate_txn_start();
-            stp_port = ofport->stp_port ? stp_port_no(ofport->stp_port) : -1;
-            xlate_ofport_set(ofproto, ofport->bundle, ofport,
-                    ofport->up.ofp_port, ofport->odp_port,
-                    ofport->up.netdev, ofport->cfm,
-                    ofport->bfd, ofport->peer, stp_port,
-                    s->port_num,
-                    ofport->qdscp, ofport->n_qdscp,
-                    ofport->up.pp.config, ofport->up.pp.state,
-                    ofport->is_tunnel, ofport->may_enable);
-            xlate_txn_commit();
-        }
-
-        rstp_port_set_aux(rp, ofport);
-        rstp_port_set_priority(rp, s->priority);
-        rstp_port_set_port_number(rp, s->port_num);
-        rstp_port_set_path_cost(rp, s->path_cost);
-        rstp_port_set_admin_edge(rp, s->admin_edge_port);
-        rstp_port_set_auto_edge(rp, s->auto_edge);
-        rstp_port_set_mcheck(rp, s->mcheck);
-
-        update_rstp_port_state(ofport);
-
-        return;
     }
-    rp = ofport->rstp_port = rstp_get_port(ofproto->rstp, s->port_num);
-    /* Enable RSTP on port */
+
+    /* Check if need to add a new port. */
     if (!rp) {
         rp = ofport->rstp_port = rstp_add_port(ofproto->rstp);
     }
-    /* Setters */
-    rstp_port_set_aux(rp, ofport);
-    rstp_port_set_priority(rp, s->priority);
-    rstp_port_set_port_number(rp, s->port_num);
-    rstp_port_set_path_cost(rp, s->path_cost);
-    rstp_port_set_admin_edge(rp, s->admin_edge_port);
-    rstp_port_set_auto_edge(rp, s->auto_edge);
-    rstp_port_set_mcheck(rp, s->mcheck);
 
+    rstp_port_set(rp, s->port_num, s->priority, s->path_cost,
+                  s->admin_edge_port, s->auto_edge, s->mcheck, ofport);
     update_rstp_port_state(ofport);
 }
 
@@ -2394,11 +2352,8 @@ get_rstp_port_status(struct ofport *ofport_,
     }
 
     s->enabled = true;
-    s->port_id = rstp_port_get_id(rp);
-    s->state = rstp_port_get_state(rp);
-    s->role = rstp_port_get_role(rp);
-    rstp_port_get_counts(rp, &s->tx_count, &s->rx_count,
-                         &s->error_count, &s->uptime);
+    rstp_port_get_status(rp, &s->port_id, &s->state, &s->role, &s->tx_count,
+                         &s->rx_count, &s->error_count, &s->uptime);
 }
 
 
@@ -3134,16 +3089,15 @@ port_run(struct ofport_dpif *ofport)
 
     if (ofport->may_enable != enable) {
         struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
+
         ofproto->backer->need_revalidate = REV_PORT_TOGGLED;
-    }
 
-    ofport->may_enable = enable;
-
-    if (ofport->rstp_port) {
-        if (rstp_port_get_mac_operational(ofport->rstp_port) != enable) {
+        if (ofport->rstp_port) {
             rstp_port_set_mac_operational(ofport->rstp_port, enable);
         }
     }
+
+    ofport->may_enable = enable;
 }
 
 static int

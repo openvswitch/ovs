@@ -66,6 +66,7 @@ static struct test_case *
 new_test_case(void)
 {
     struct test_case *tc = xmalloc(sizeof *tc);
+
     tc->n_bridges = 0;
     tc->n_lans = 0;
     return tc;
@@ -86,9 +87,11 @@ send_bpdu(struct ofpbuf *pkt, int port_no, void *b_)
 
         for (i = 0; i < lan->n_conns; i++) {
             struct lan_conn *conn = &lan->conns[i];
+
             if (conn->bridge != b || conn->port_no != port_no) {
                 struct bridge *dst = conn->bridge;
                 struct bpdu *bpdu = &dst->rxq[dst->rxq_head++ % RXQ_SIZE];
+
                 assert(dst->rxq_head - dst->rxq_tail <= RXQ_SIZE);
                 bpdu->data = xmemdup(data, size);
                 bpdu->size = size;
@@ -154,6 +157,7 @@ reconnect_port(struct bridge *b, int port_no, struct lan *new_lan)
     if (old_lan) {
         for (j = 0; j < old_lan->n_conns; j++) {
             struct lan_conn *c = &old_lan->conns[j];
+
             if (c->bridge == b && c->port_no == port_no) {
                 memmove(c, c + 1, sizeof *c * (old_lan->n_conns - j - 1));
                 old_lan->n_conns--;
@@ -166,6 +170,7 @@ reconnect_port(struct bridge *b, int port_no, struct lan *new_lan)
     b->ports[port_no] = new_lan;
     if (new_lan) {
         int conn_no = new_lan->n_conns++;
+
         assert(conn_no < ARRAY_SIZE(new_lan->conns));
         new_lan->conns[conn_no].bridge = b;
         new_lan->conns[conn_no].port_no = port_no;
@@ -241,6 +246,7 @@ dump_bridge_tree(struct test_case *tc, struct bridge *b, int level)
     for (i = 0; i < b->n_ports; i++) {
         struct lan *lan = b->ports[i];
         struct rstp_port *p = rstp_get_port(b->rstp, i);
+
         if (rstp_port_get_state(p) == RSTP_FORWARDING && lan) {
             dump_lan_tree(tc, lan, level + 1);
         }
@@ -262,6 +268,7 @@ dump_lan_tree(struct test_case *tc, struct lan *lan, int level)
     printf("%s\n", lan->name);
     for (i = 0; i < lan->n_conns; i++) {
         struct bridge *b = lan->conns[i].bridge;
+
         dump_bridge_tree(tc, b, level + 1);
     }
 }
@@ -273,15 +280,18 @@ tree(struct test_case *tc)
 
     for (i = 0; i < tc->n_bridges; i++) {
         struct bridge *b = tc->bridges[i];
+
         b->reached = false;
     }
     for (i = 0; i < tc->n_lans; i++) {
         struct lan *lan = tc->lans[i];
+
         lan->reached = false;
     }
     for (i = 0; i < tc->n_bridges; i++) {
         struct bridge *b = tc->bridges[i];
         struct rstp *rstp = b->rstp;
+
         if (rstp_is_root_bridge(rstp)) {
             dump_bridge_tree(tc, b, 0);
         }
@@ -292,6 +302,7 @@ static void
 simulate(struct test_case *tc, int granularity)
 {
     int time, i, round_trips;
+
     for (time = 0; time < 1000 * 180; time += granularity) {
 
         for (i = 0; i < tc->n_bridges; i++) {
@@ -299,12 +310,16 @@ simulate(struct test_case *tc, int granularity)
         }
         for (round_trips = 0; round_trips < granularity; round_trips++) {
             bool any = false;
+
             for (i = 0; i < tc->n_bridges; i++) {
                 struct bridge *b = tc->bridges[i];
+
                 for (; b->rxq_tail != b->rxq_head; b->rxq_tail++) {
                     struct bpdu *bpdu = &b->rxq[b->rxq_tail % RXQ_SIZE];
-                    rstp_received_bpdu(rstp_get_port(b->rstp, bpdu->port_no),
-                            bpdu->data, bpdu->size);
+
+                    rstp_port_received_bpdu(rstp_get_port(b->rstp,
+                                                          bpdu->port_no),
+                                            bpdu->data, bpdu->size);
                     free(bpdu->data);
                     any = true;
                 }
@@ -396,6 +411,7 @@ static bool
 get_int(int *intp)
 {
     char *save_pos = pos;
+
     if (token && isdigit((unsigned char) *token)) {
         *intp = strtol(token, NULL, 0);
         get_token();
@@ -421,6 +437,7 @@ static int
 must_get_int(void)
 {
     int x;
+
     if (!get_int(&x)) {
         err("expected integer");
     }
@@ -442,6 +459,8 @@ test_rstp_main(int argc, char *argv[])
     FILE *input_file;
     int i;
 
+    rstp_init();
+
     vlog_set_pattern(VLF_CONSOLE, "%c|%p|%m");
     vlog_set_levels(NULL, VLF_SYSLOG, VLL_OFF);
 
@@ -458,6 +477,7 @@ test_rstp_main(int argc, char *argv[])
     tc = new_test_case();
     for (i = 0; i < 26; i++) {
         char name[2];
+
         name[0] = 'a' + i;
         name[1] = '\0';
         new_lan(tc, name);
@@ -499,6 +519,7 @@ test_rstp_main(int argc, char *argv[])
             if (match("=")) {
                 for (port_no = 1; port_no < MAX_PORTS; port_no++) {
                     struct rstp_port *p = rstp_get_port(bridge->rstp, port_no);
+
                     if (!token || match("X")) {
                         /* Disable port. */
                         reinitialize_port(p);
@@ -565,6 +586,7 @@ test_rstp_main(int argc, char *argv[])
 
             if (match("rootid")) {
                 uint64_t rootid;
+
                 must_match(":");
                 rootid = must_get_int();
                 if (match("^")) {
@@ -594,6 +616,7 @@ test_rstp_main(int argc, char *argv[])
                 for (port_no = 1; port_no < b->n_active_ports; port_no++) {
                     struct rstp_port *p = rstp_get_port(rstp, port_no);
                     enum rstp_state state = rstp_port_get_state(p);
+
                     if (state != RSTP_DISABLED && state != RSTP_FORWARDING) {
                         warn("%s: root port %d in state %s",
                              rstp_get_name(b->rstp), port_no,
@@ -604,6 +627,7 @@ test_rstp_main(int argc, char *argv[])
                 for (port_no = 1; port_no < b->n_active_ports; port_no++) {
                     struct rstp_port *p = rstp_get_port(rstp, port_no);
                     enum rstp_state state;
+
                     if (token == NULL || match("D")) {
                         state = RSTP_DISABLED;
                     } else if (match("Di")) {
@@ -625,8 +649,10 @@ test_rstp_main(int argc, char *argv[])
                     }
                     if (state == RSTP_FORWARDING) {
                         struct rstp_port *root_port = rstp_get_root_port(rstp);
+
                         if (match(":")) {
                             int root_path_cost = must_get_int();
+
                             if (p != root_port) {
                                 warn("%s: port %d is not the root port",
                                      rstp_get_name(rstp), port_no);
@@ -636,7 +662,7 @@ test_rstp_main(int argc, char *argv[])
                                 } else {
                                     warn("%s: (port %d is the root port)",
                                          rstp_get_name(rstp),
-                                         rstp_port_number(root_port));
+                                         rstp_port_get_number(root_port));
                                 }
                             } else if (cost_value != root_path_cost) {
                                 warn("%s: root path cost is %d, should be %d",
@@ -666,14 +692,16 @@ test_rstp_main(int argc, char *argv[])
 
     for (i = 0; i < tc->n_lans; i++) {
         struct lan *lan = tc->lans[i];
+
         free(CONST_CAST(char *, lan->name));
         free(lan);
     }
     for (i = 0; i < tc->n_bridges; i++) {
         struct bridge *bridge = tc->bridges[i];
         int j;
+
         for (j = 1; j < MAX_PORTS; j++) {
-            rstp_delete_port(rstp_get_port(bridge->rstp, j));
+            rstp_port_unref(rstp_get_port(bridge->rstp, j));
         }
         rstp_unref(bridge->rstp);
         free(bridge);

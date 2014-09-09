@@ -150,7 +150,7 @@ struct xport {
     enum ofputil_port_config config; /* OpenFlow port configuration. */
     enum ofputil_port_state state;   /* OpenFlow port state. */
     int stp_port_no;                 /* STP port number or -1 if not in use. */
-    int rstp_port_no;                /* RSTP port number or -1 if not in use. */
+    struct rstp_port *rstp_port;     /* RSTP port or null. */
 
     struct hmap skb_priorities;      /* Map of 'skb_priority_to_dscp's. */
 
@@ -376,7 +376,7 @@ static void xlate_xbundle_set(struct xbundle *xbundle,
 static void xlate_xport_set(struct xport *xport, odp_port_t odp_port,
                             const struct netdev *netdev, const struct cfm *cfm,
                             const struct bfd *bfd, int stp_port_no,
-                            int rstp_port_no,
+                            const struct rstp_port *rstp_port,
                             enum ofputil_port_config config,
                             enum ofputil_port_state state, bool is_tunnel,
                             bool may_enable);
@@ -514,17 +514,22 @@ xlate_xbundle_set(struct xbundle *xbundle,
 static void
 xlate_xport_set(struct xport *xport, odp_port_t odp_port,
                 const struct netdev *netdev, const struct cfm *cfm,
-                const struct bfd *bfd, int stp_port_no, int rstp_port_no,
+                const struct bfd *bfd, int stp_port_no,
+                const struct rstp_port* rstp_port,
                 enum ofputil_port_config config, enum ofputil_port_state state,
                 bool is_tunnel, bool may_enable)
 {
     xport->config = config;
     xport->state = state;
     xport->stp_port_no = stp_port_no;
-    xport->rstp_port_no = rstp_port_no;
     xport->is_tunnel = is_tunnel;
     xport->may_enable = may_enable;
     xport->odp_port = odp_port;
+
+    if (xport->rstp_port != rstp_port) {
+        rstp_port_unref(xport->rstp_port);
+        xport->rstp_port = rstp_port_ref(rstp_port);
+    }
 
     if (xport->cfm != cfm) {
         cfm_unref(xport->cfm);
@@ -604,7 +609,7 @@ xlate_xport_copy(struct xbridge *xbridge, struct xbundle *xbundle,
     xlate_xport_init(new_xcfg, new_xport);
 
     xlate_xport_set(new_xport, xport->odp_port, xport->netdev, xport->cfm,
-                    xport->bfd, xport->stp_port_no, xport->rstp_port_no,
+                    xport->bfd, xport->stp_port_no, xport->rstp_port,
                     xport->config, xport->state, xport->is_tunnel,
                     xport->may_enable);
 
@@ -843,7 +848,8 @@ xlate_ofport_set(struct ofproto_dpif *ofproto, struct ofbundle *ofbundle,
                  struct ofport_dpif *ofport, ofp_port_t ofp_port,
                  odp_port_t odp_port, const struct netdev *netdev,
                  const struct cfm *cfm, const struct bfd *bfd,
-                 struct ofport_dpif *peer, int stp_port_no, int rstp_port_no,
+                 struct ofport_dpif *peer, int stp_port_no,
+                 const struct rstp_port *rstp_port,
                  const struct ofproto_port_queue *qdscp_list, size_t n_qdscp,
                  enum ofputil_port_config config,
                  enum ofputil_port_state state, bool is_tunnel,
@@ -867,7 +873,7 @@ xlate_ofport_set(struct ofproto_dpif *ofproto, struct ofbundle *ofbundle,
     ovs_assert(xport->ofp_port == ofp_port);
 
     xlate_xport_set(xport, odp_port, netdev, cfm, bfd, stp_port_no,
-                    rstp_port_no, config, state, is_tunnel, may_enable);
+                    rstp_port, config, state, is_tunnel, may_enable);
 
     if (xport->peer) {
         xport->peer->peer = NULL;
@@ -926,6 +932,7 @@ xlate_xport_remove(struct xlate_cfg *xcfg, struct xport *xport)
     hmap_remove(&xport->xbridge->xports, &xport->ofp_node);
 
     netdev_close(xport->netdev);
+    rstp_port_unref(xport->rstp_port);
     cfm_unref(xport->cfm);
     bfd_unref(xport->bfd);
     free(xport);
@@ -1156,45 +1163,40 @@ stp_process_packet(const struct xport *xport, const struct ofpbuf *packet)
     }
 }
 
-static struct rstp_port *
-xport_get_rstp_port(const struct xport *xport)
+static enum rstp_state
+xport_get_rstp_port_state(const struct xport *xport)
 {
-    return xport->xbridge->rstp && xport->rstp_port_no != -1
-        ? rstp_get_port(xport->xbridge->rstp, xport->rstp_port_no)
-        : NULL;
+    return xport->rstp_port
+        ? rstp_port_get_state(xport->rstp_port)
+        : RSTP_DISABLED;
 }
 
 static bool
 xport_rstp_learn_state(const struct xport *xport)
 {
-    struct rstp_port *rp = xport_get_rstp_port(xport);
-    return !rp || rstp_learn_in_state(rstp_port_get_state(rp));
+    return rstp_learn_in_state(xport_get_rstp_port_state(xport));
 }
 
 static bool
 xport_rstp_forward_state(const struct xport *xport)
 {
-    struct rstp_port *rp = xport_get_rstp_port(xport);
-    return !rp || rstp_forward_in_state(rstp_port_get_state(rp));
+    return rstp_forward_in_state(xport_get_rstp_port_state(xport));
 }
 
 static bool
 xport_rstp_should_manage_bpdu(const struct xport *xport)
 {
-    struct rstp_port *rp = xport_get_rstp_port(xport);
-    return rp && rstp_should_manage_bpdu(rstp_port_get_state(rp));
+    return rstp_should_manage_bpdu(xport_get_rstp_port_state(xport));
 }
 
 static void
 rstp_process_packet(const struct xport *xport, const struct ofpbuf *packet)
 {
-    struct rstp_port *rp = xport_get_rstp_port(xport);
     struct ofpbuf payload = *packet;
     struct eth_header *eth = ofpbuf_data(&payload);
 
-    /* Sink packets on ports that have RSTP disabled when the bridge has
-     * RSTP enabled. */
-    if (!rp || rstp_port_get_state(rp) == RSTP_DISABLED) {
+    /* Sink packets on ports that have no RSTP. */
+    if (!xport->rstp_port) {
         return;
     }
 
@@ -1204,7 +1206,8 @@ rstp_process_packet(const struct xport *xport, const struct ofpbuf *packet)
     }
 
     if (ofpbuf_try_pull(&payload, ETH_HEADER_LEN + LLC_HEADER_LEN)) {
-        rstp_received_bpdu(rp, ofpbuf_data(&payload), ofpbuf_size(&payload));
+        rstp_port_received_bpdu(xport->rstp_port, ofpbuf_data(&payload),
+                                ofpbuf_size(&payload));
     }
 }
 
@@ -2445,8 +2448,9 @@ process_special(struct xlate_ctx *ctx, const struct flow *flow,
     } else if ((xbridge->stp || xbridge->rstp) &&
                stp_should_process_flow(flow, wc)) {
         if (packet) {
-            xbridge->stp ? stp_process_packet(xport, packet) :
-                           rstp_process_packet(xport, packet);
+            xbridge->stp
+                ? stp_process_packet(xport, packet)
+                : rstp_process_packet(xport, packet);
         }
         return SLOW_STP;
     } else {

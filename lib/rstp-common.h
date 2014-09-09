@@ -261,10 +261,12 @@ enum rstp_rcvd_info {
 };
 
 struct rstp_port {
-    struct rstp *rstp;
-    struct list node; /* Node in rstp->ports list. */
-    void *aux;
-    struct rstp_bpdu received_bpdu_buffer;
+    struct ovs_refcount ref_cnt;
+
+    struct rstp *rstp OVS_GUARDED_BY(rstp_mutex);
+    struct list node OVS_GUARDED_BY(rstp_mutex); /* Node in rstp->ports list. */
+    void *aux OVS_GUARDED_BY(rstp_mutex);
+    struct rstp_bpdu received_bpdu_buffer OVS_GUARDED_BY(rstp_mutex);
     /*************************************************************************
      * MAC status parameters
      ************************************************************************/
@@ -273,10 +275,10 @@ struct rstp_port {
      * to transmit and/or receive frames, and its use is permitted by
      * management.
      */
-    bool mac_operational;
+    bool mac_operational OVS_GUARDED_BY(rstp_mutex);
 
     /* [14.8.2.2] Administrative Bridge Port State */
-    bool is_administrative_bridge_port;
+    bool is_administrative_bridge_port OVS_GUARDED_BY(rstp_mutex);
 
     /* [6.4.3 - operPointToPointMAC]
      *  a) True. The MAC is connected to a point-to-point LAN; i.e., there is
@@ -288,7 +290,7 @@ struct rstp_port {
      *  shall be set True. If adminPointToPointMAC is set to ForceFalse, then
      *  operPointToPointMAC shall be set False.
      */
-    bool oper_point_to_point_mac;
+    bool oper_point_to_point_mac OVS_GUARDED_BY(rstp_mutex);
 
     /* [6.4.3 - adminPointToPointMAC]
      *  a) ForceTrue. The administrator requires the MAC to be treated as if it
@@ -301,7 +303,7 @@ struct rstp_port {
      *     MAC to be determined in accordance with the specific MAC procedures
      *     defined in 6.5.
      */
-    enum rstp_admin_point_to_point_mac_state admin_point_to_point_mac;
+    enum rstp_admin_point_to_point_mac_state admin_point_to_point_mac OVS_GUARDED_BY(rstp_mutex);
 
 
     /*************************************************************************
@@ -312,12 +314,12 @@ struct rstp_port {
     /* [17.13.1 - Admin Edge Port]
      * The AdminEdgePort parameter for the Port (14.8.2).
      */
-    bool admin_edge;
+    bool admin_edge OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.13.3 - AutoEdge]
      *  The AutoEdgePort parameter for the Port (14.8.2).
      */
-    bool auto_edge;
+    bool auto_edge OVS_GUARDED_BY(rstp_mutex);
 
 
     /*************************************************************************
@@ -327,18 +329,18 @@ struct rstp_port {
     /* Port number and priority
      * >=1 (max 12 bits [9.2.7])
      */
-    uint16_t port_number;
+    uint16_t port_number OVS_GUARDED_BY(rstp_mutex);
 
     /* Port priority
      * Range: 0-240 in steps of 16 (table 17-2)
      */
-    uint8_t priority;
+    uint8_t priority OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.13.11 - PortPathCost]
      * The Port's contribution, when it is the Root Port, to the Root Path Cost
      * (17.3.1, 17.5, 17.6) for the Bridge.
      */
-    uint32_t port_path_cost;
+    uint32_t port_path_cost OVS_GUARDED_BY(rstp_mutex);
 
     /*************************************************************************
      * The following variables are defined in [17.17 - State machine timers]
@@ -347,19 +349,19 @@ struct rstp_port {
      * The Edge Delay timer. The time remaining, in the absence of a received
      * BPDU, before this port is identified as an operEdgePort.
      */
-    uint16_t edge_delay_while;
+    uint16_t edge_delay_while OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.17.2 - fdWhile]
      * The Forward Delay timer. Used to delay Port State transitions until
      * other Bridges have received spanning tree information.
      */
-    uint16_t fd_while;
+    uint16_t fd_while OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.17.3 - helloWhen]
      * The Hello timer. Used to ensure that at least one BPDU is transmitted by
      * a Designated Port in each HelloTime period.
      */
-    uint16_t hello_when;
+    uint16_t hello_when OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.17.4 - mdelayWhile]
      * The Migration Delay timer. Used by the Port Protocol Migration state
@@ -368,13 +370,13 @@ struct rstp_port {
      * BPDU can cause this Port to change the BPDU types it transmits.
      * Initialized to MigrateTime (17.13.9).
      */
-    uint16_t mdelay_while;
+    uint16_t mdelay_while OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.17.5 - rbWhile]
      * The Recent Backup timer. Maintained at its initial value, twice
      * HelloTime, while the Port is a Backup Port.
      */
-    uint16_t rb_while;
+    uint16_t rb_while OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.17.6 - rcvdInfoWhile]
      * The Received Info timer. The time remaining before the spanning tree
@@ -382,18 +384,18 @@ struct rstp_port {
      * (17.19.22)] is aged out if not refreshed by the receipt of a further
      * Configuration Message.
      */
-    uint16_t rcvd_info_while;
+    uint16_t rcvd_info_while OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.17.7 - rrWhile]
      * The Recent Root timer.
      */
-    uint16_t rr_while;
+    uint16_t rr_while OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.17.8 - tcWhile]
      * The Topology Change timer. TCN Messages are sent while this timer is
      * running.
      */
-    uint16_t tc_while;
+    uint16_t tc_while OVS_GUARDED_BY(rstp_mutex);
 
 
     /*************************************************************************
@@ -409,7 +411,7 @@ struct rstp_port {
      * fdbFlush (17.19.7) is set by the topology change state machine if
      * stpVersion (17.19.7) is TRUE.
      */
-    uint32_t ageing_time;
+    uint32_t ageing_time OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.2 - agree]
      * Set if synced is set for all other Ports. An RST BPDU with the Agreement
@@ -417,7 +419,7 @@ struct rstp_port {
      * and when proposed is set.
      * Initialized by Port Information state machine.
      */
-    bool agree;
+    bool agree OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.3 - agreed]
      * Set when an RST BPDU is received with a Port Role of Root, Alternate, or
@@ -427,7 +429,7 @@ struct rstp_port {
      * the Forwarding state without further delay.
      * Initialized by Port Information state machine.
      */
-    bool agreed;
+    bool agreed OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.4 - designatedPriority]
      * The first four components of the Port's designated priority vector
@@ -435,7 +437,7 @@ struct rstp_port {
      * priority vector value is portId (17.19.19).
      * (Fifth component of the structure must not be used)
      */
-    struct rstp_priority_vector designated_priority_vector;
+    struct rstp_priority_vector designated_priority_vector OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.5 - designatedTimes]
      * The designatedTimes variable comprises the set of timer parameter values
@@ -443,10 +445,10 @@ struct rstp_port {
      * update Port Times when updtInfo is set. Updated by the updtRolesTree()
      * procedure (17.21.25).
      */
-    struct rstp_times designated_times;
+    struct rstp_times designated_times OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.6 - disputed] */
-    bool disputed;
+    bool disputed OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.7 - fdbFlush]
      * A boolean. Set by the topology change state machine to instruct the
@@ -456,17 +458,17 @@ struct rstp_port {
      * entries are
      * removed if rstpVersion is TRUE, and immediately if stpVersion is TRUE.
      */
-    uint8_t fdb_flush;
+    uint8_t fdb_flush OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.8 - forward]
      * Initialized by Port State Transition state machine.
      */
-    bool forward;
+    bool forward OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.9 - forwarding]
      * Initialized by Port State Transition state machine.
      */
-    bool forwarding;
+    bool forwarding OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.10 - infoIs]
      * A variable that takes the values Mine, Aged, Received, or Disabled, to
@@ -487,17 +489,17 @@ struct rstp_port {
      *     received BPDU is specified.
      *  d) Finally if the port is disabled, infoIs is Disabled.
      */
-    enum rstp_info_is info_is;
+    enum rstp_info_is info_is OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.11 - learn]
      * Initialized by Port State Transition state machine.
      */
-    bool learn;
+    bool learn OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.12 - learning]
      * Initialized by Port State Transition state machine.
      */
-    bool learning;
+    bool learning OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.13 - mcheck]
      * A boolean. May be set by management to force the Port Protocol Migration
@@ -507,32 +509,32 @@ struct rstp_port {
      * has no effect if stpVersion (17.20.12) is TRUE, i.e., the Bridge is
      * operating in STP Compatibility mode.
      */
-    bool mcheck;
+    bool mcheck OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.14 - msgPriority]
      * The first four components of the message priority vector conveyed in a
      * received BPDU, as defined in 17.6.
      * (Fifth component of the structure must not be used).
      */
-    struct rstp_priority_vector msg_priority;
+    struct rstp_priority_vector msg_priority OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.15 - msgTimes]
      * The msgTimes variable comprises the timer parameter values (Message Age,
      * Max Age, Forward Delay, and Hello Time) conveyed in a received BPDU.
      */
-    struct rstp_times msg_times;
+    struct rstp_times msg_times OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.16 - newInfo]
      * A boolean. Set if a BPDU is to be transmitted. Reset by the Port
      * Transmit state machine.
      */
-    bool new_info;
+    bool new_info OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.17 - operEdge]
      * A boolean. The value of the operEdgePort parameter, as determined by the
      * operation of the Bridge Detection state machine (17.25).
      */
-    bool oper_edge;
+    bool oper_edge OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.18 - portEnabled]
      * A boolean. Set if the Bridge's MAC Relay Entity and Spanning Tree
@@ -545,41 +547,41 @@ struct rstp_port {
      *    c) AuthControlledPortStatus is Authorized [if the port is a network
      *       access port (IEEE Std 802.1X)].
      */
-    bool port_enabled;
+    bool port_enabled OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.19 - portId]
      * The Port Identifier. This variable forms the fifth component of the port
      * priority and designated priority vectors defined in 17.6.
      */
-    uint16_t port_id;
+    uint16_t port_id OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.21 - portPriority]
      * The first four components of the Port's port priority vector value, as
      * defined in 17.6.
      * (Fifth component of the structure must not be used)
      */
-    struct rstp_priority_vector port_priority;
+    struct rstp_priority_vector port_priority OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.22 - portTimes]
      * The portTimes variable comprises the Port's timer parameter values
      * (Message Age, Max Age, Forward Delay, and Hello Time). These timer
      * values are used in BPDUs transmitted from the Port.
      */
-    struct rstp_times port_times;
+    struct rstp_times port_times OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.23 - proposed]
      * Set when an RST BPDU with a Designated Port role and the Proposal flag
      * set is received. If agree is not set, proposed causes sync to be set for
      * all other Ports.of the Bridge.
      */
-    bool proposed;
+    bool proposed OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.24 - proposing]
      * Set by a Designated Port that is not Forwarding, and conveyed to the
      * Root Port or Alternate Port of a neighboring Bridge in the Proposal flag
      * of an RST BPDU (9.3.3).
      */
-    bool proposing;
+    bool proposing OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.25 - rcvdBPDU]
      * A boolean. Set by system dependent processes, this variable notifies the
@@ -587,84 +589,84 @@ struct rstp_port {
      * TCN, or RST BPDU (9.3.1, 9.3.2, 9.3.3) is received on the Port. Reset
      * by the Port Receive state machine.
      */
-    bool rcvd_bpdu;
+    bool rcvd_bpdu OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.26 - rcvdInfo]
      * Set to the result of the rcvInfo() procedure (17.21.8).
      */
-    enum rstp_rcvd_info rcvd_info;
+    enum rstp_rcvd_info rcvd_info OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.27 - rcvdMsg] */
-    bool rcvd_msg;
+    bool rcvd_msg OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.28 - rcvdRSTP] */
-    bool rcvd_rstp;
+    bool rcvd_rstp OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.29 - rcvdSTP] */
-    bool rcvd_stp;
+    bool rcvd_stp OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.30 - rcvdTc] */
-    bool rcvd_tc;
+    bool rcvd_tc OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.31 - rcvdTcAck] */
-    bool rcvd_tc_ack;
+    bool rcvd_tc_ack OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.32 - rcvdTcn] */
-    bool rcvd_tcn;
+    bool rcvd_tcn OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.33 - reRoot] */
-    bool re_root;
+    bool re_root OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.34 - reselect] */
-    bool reselect;
+    bool reselect OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.35 - role]
      * The assigned Port Role (17.7).
      */
-    enum rstp_port_role role;
+    enum rstp_port_role role OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.36 - selected]
      * A boolean. See 17.28, 17.21.16.
      */
-    bool selected;
+    bool selected OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.37 - selectedRole]
      * The newly computed role for the Port (17.7, 17.28, 17.21.25, 17.19.35).
      */
-    enum rstp_port_role selected_role;
+    enum rstp_port_role selected_role OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.38 - sendRSTP]
      * A boolean. See 17.24, 17.26.
      */
-    bool send_rstp;
+    bool send_rstp OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.39 - sync]
      * A boolean. See 17.10.
      */
-    bool sync;
+    bool sync OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.40 - synced]
      * A boolean. See 17.10.
      */
-    bool synced;
+    bool synced OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.41 - tcAck]
      * A boolean. Set if a Configuration Message with a topology change
      * acknowledge flag set is to be transmitted.
      */
-    bool tc_ack;
+    bool tc_ack OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.42 - tcProp]
      * A boolean. Set by the Topology Change state machine of any other Port,
      * to indicate that a topology change should be propagated through this
      * Port.
      */
-    bool tc_prop;
+    bool tc_prop OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.43 - tick]
      * A boolean. See 17.22.
      */
-    bool tick;
+    bool tick OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.44 - txCount]
      * A counter. Incremented by the Port Transmission (17.26) state machine on
@@ -672,58 +674,58 @@ struct rstp_port {
      * machine (17.22) once a second. Transmissions are delayed if txCount
      * reaches TxHoldCount (17.13.12).
      */
-    uint16_t tx_count;
+    uint16_t tx_count OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.19.45 - updtInfo]
      * A boolean. Set by the Port Role Selection state machine (17.28,
      * 17.21.25) to tell the Port Information state machine that it should copy
      * designatedPriority to portPriority and designatedTimes to portTimes.
      */
-    bool updt_info;
+    bool updt_info OVS_GUARDED_BY(rstp_mutex);
 
     /* Counter for RSTP received frames - for rstpd */
     uint32_t rx_rstp_bpdu_cnt;
 
     /* Counter for bad RSTP received frames */
-    uint32_t error_count;
+    uint32_t error_count OVS_GUARDED_BY(rstp_mutex);
 
     /* [14.8.2.1.3] Outputs
      * a) Uptime count in seconds of the time elapsed since the Port was last
      *    reset or initialized.
      */
-    uint32_t uptime;
+    uint32_t uptime OVS_GUARDED_BY(rstp_mutex);
 
-    enum rstp_state rstp_state;
-    bool state_changed;
+    enum rstp_state rstp_state OVS_GUARDED_BY(rstp_mutex);
+    bool state_changed OVS_GUARDED_BY(rstp_mutex);
 
     /* Per-port state machines state */
-    enum port_receive_state_machine port_receive_sm_state;
-    enum port_protocol_migration_state_machine port_protocol_migration_sm_state;
-    enum bridge_detection_state_machine bridge_detection_sm_state;
-    enum port_transmit_state_machine port_transmit_sm_state;
-    enum port_information_state_machine port_information_sm_state;
-    enum port_role_transition_state_machine port_role_transition_sm_state;
-    enum port_state_transition_state_machine port_state_transition_sm_state;
-    enum topology_change_state_machine topology_change_sm_state;
+    enum port_receive_state_machine port_receive_sm_state OVS_GUARDED_BY(rstp_mutex);
+    enum port_protocol_migration_state_machine port_protocol_migration_sm_state OVS_GUARDED_BY(rstp_mutex);
+    enum bridge_detection_state_machine bridge_detection_sm_state OVS_GUARDED_BY(rstp_mutex);
+    enum port_transmit_state_machine port_transmit_sm_state OVS_GUARDED_BY(rstp_mutex);
+    enum port_information_state_machine port_information_sm_state OVS_GUARDED_BY(rstp_mutex);
+    enum port_role_transition_state_machine port_role_transition_sm_state OVS_GUARDED_BY(rstp_mutex);
+    enum port_state_transition_state_machine port_state_transition_sm_state OVS_GUARDED_BY(rstp_mutex);
+    enum topology_change_state_machine topology_change_sm_state OVS_GUARDED_BY(rstp_mutex);
 };
 
 struct rstp {
-    struct list node;   /* Node in rstp instances list */
+    struct list node OVS_GUARDED_BY(rstp_mutex);   /* In rstp instances list */
     char *name;     /* Bridge name. */
 
     /* Changes in last SM execution. */
-    bool changes;
+    bool changes OVS_GUARDED_BY(rstp_mutex);
 
     /* Per-bridge state machines state */
-    enum port_role_selection_state_machine port_role_selection_sm_state;
+    enum port_role_selection_state_machine port_role_selection_sm_state OVS_GUARDED_BY(rstp_mutex);
 
     /* Bridge MAC address
      * (stored in the least significant 48 bits of rstp_identifier).
      */
-    rstp_identifier address; /* [7.12.5] */
+    rstp_identifier address OVS_GUARDED_BY(rstp_mutex); /* [7.12.5] */
 
     /* Bridge priority */
-    uint16_t priority;      /* Valid values: 0-61440 in steps of 4096 */
+    uint16_t priority OVS_GUARDED_BY(rstp_mutex);      /* Valid values: 0-61440 in steps of 4096 */
 
     /*************************************************************************
      * [17.3 - RSTP performance parameters]
@@ -755,45 +757,45 @@ struct rstp {
     /* [17.13.2 - Ageing Time]
      * The Ageing Time parameter for the Bridge (7.9.2, Table 7-5).
      */
-    uint32_t ageing_time;
+    uint32_t ageing_time OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.13.4 - Force Protocol Version]
      * The Force Protocol Version parameter for the Bridge (17.4, 14.8.1).
      * This can take the value 0 (STP Compatibility mode) or 2 (the default,
      * normal operation).
      */
-    enum rstp_force_protocol_version force_protocol_version;
+    enum rstp_force_protocol_version force_protocol_version OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.13.5 - Bridge Forward Delay]
      *  The delay used by STP Bridges (17.4) to transition Root and Designated
      * Ports to Forwarding (Table 17-1).
      */
-    uint16_t bridge_forward_delay;
+    uint16_t bridge_forward_delay OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.13.6 - Bridge Hello Time]
      *  The interval between periodic transmissions of Configuration Messages
      * by Designated Ports (Table 17-1).
      */
-    uint16_t bridge_hello_time;
+    uint16_t bridge_hello_time OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.13.8 - Bridge Max Age]
      * The maximum age of the information transmitted by the Bridge when it is
      * the Root Bridge (Table 17-1).
      */
-    uint16_t bridge_max_age;
+    uint16_t bridge_max_age OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.13.9 - Migrate Time]
      * The initial value of the mdelayWhile and edgeDelayWhile timers (17.17.4,
      * 17.17.1), fixed for all RSTP implementations conforming to this
      * specification (Table 17-1).
      */
-    uint16_t migrate_time;
+    uint16_t migrate_time OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.13.12 - Transmit Hold Count]
      * The Transmit Hold Count (Table 17-1) used by the Port Transmit state
      * machine to limit transmission rate.
      */
-    uint16_t transmit_hold_count;
+    uint16_t transmit_hold_count OVS_GUARDED_BY(rstp_mutex);
 
 
     /*************************************************************************
@@ -805,7 +807,7 @@ struct rstp {
      * causes all state machines, including per Port state machines, to
      * continuously execute their initial state.
      */
-    bool begin;
+    bool begin OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.18.2 BridgeIdentifier]
      * The unique Bridge Identifier assigned to this Bridge, comprising two
@@ -815,33 +817,33 @@ struct rstp {
      * Address (7.12.5), which guarantees uniqueness of the Bridge Identifiers
      * of different Bridges.
      */
-    rstp_identifier bridge_identifier;
+    rstp_identifier bridge_identifier OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.8.3 BridgePriority]
      * The bridge priority vector, as defined in 17.6. The first (RootBridgeID)
      * and third (DesignatedBridgeID) components are both equal to the value
      * of the Bridge Identifier (17.18.2). The other components are zero.
      */
-    struct rstp_priority_vector bridge_priority;
+    struct rstp_priority_vector bridge_priority OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.18.4 - BridgeTimes]
      * BridgeTimes comprises four components: the current values of Bridge
      * Forward Delay, Bridge Hello Time, Bridge Max Age (17.13, Table 17-1),
      * and a Message Age of zero.
      */
-    struct rstp_times bridge_times;
+    struct rstp_times bridge_times OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.18.6 - rootPriority]
      * The first four components of the Bridge's root priority vector, as
      * defined in 17.6.
      */
-    struct rstp_priority_vector root_priority;
+    struct rstp_priority_vector root_priority OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.18.5 - rootPortId]
      * The Port Identifier of the Root Port. This is the fifth component of
      * the root priority vector, as defined in 17.6.
      */
-    uint16_t root_port_id;
+    uint16_t root_port_id OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.18.7 - rootTimes]
      * The rootTimes variable comprises the Bridge's operational timer
@@ -849,23 +851,23 @@ struct rstp {
      * derived from the values stored in portTimes (17.19.22) for the Root Port
      * or from BridgeTimes (17.18.4).
      */
-    struct rstp_times root_times;
+    struct rstp_times root_times OVS_GUARDED_BY(rstp_mutex);
 
     /* 17.20 State machine conditions and parameters */
 
     /* [17.20.11] rstpVersion
      * TRUE if Force Protocol Version (17.13.4) is greater than or equal to 2.
      */
-    bool rstp_version;
+    bool rstp_version OVS_GUARDED_BY(rstp_mutex);
 
     /* [17.20.12] stpVersion
      * TRUE if Force Protocol Version (17.13.4) is less than 2.
      */
-    bool stp_version;
+    bool stp_version OVS_GUARDED_BY(rstp_mutex);
 
     /* Ports */
-    struct list ports;
-    uint16_t ports_count;
+    struct list ports OVS_GUARDED_BY(rstp_mutex);
+    uint16_t ports_count OVS_GUARDED_BY(rstp_mutex);
 
     struct ovs_refcount ref_cnt;
 
