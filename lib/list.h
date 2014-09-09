@@ -58,15 +58,15 @@ bool list_is_singleton(const struct list *);
 bool list_is_short(const struct list *);
 
 #define LIST_FOR_EACH(ITER, MEMBER, LIST)                               \
-    for (ASSIGN_CONTAINER(ITER, (LIST)->next, MEMBER);                  \
+    for (INIT_CONTAINER(ITER, (LIST)->next, MEMBER);                    \
          &(ITER)->MEMBER != (LIST);                                     \
          ASSIGN_CONTAINER(ITER, (ITER)->MEMBER.next, MEMBER))
 #define LIST_FOR_EACH_CONTINUE(ITER, MEMBER, LIST)                      \
-    for (ASSIGN_CONTAINER(ITER, (ITER)->MEMBER.next, MEMBER);           \
+    for (INIT_CONTAINER(ITER, (ITER)->MEMBER.next, MEMBER);             \
          &(ITER)->MEMBER != (LIST);                                     \
          ASSIGN_CONTAINER(ITER, (ITER)->MEMBER.next, MEMBER))
 #define LIST_FOR_EACH_REVERSE(ITER, MEMBER, LIST)                       \
-    for (ASSIGN_CONTAINER(ITER, (LIST)->prev, MEMBER);                  \
+    for (INIT_CONTAINER(ITER, (LIST)->prev, MEMBER);                    \
          &(ITER)->MEMBER != (LIST);                                     \
          ASSIGN_CONTAINER(ITER, (ITER)->MEMBER.prev, MEMBER))
 #define LIST_FOR_EACH_REVERSE_CONTINUE(ITER, MEMBER, LIST)              \
@@ -74,9 +74,9 @@ bool list_is_short(const struct list *);
          &(ITER)->MEMBER != (LIST);                                     \
          ASSIGN_CONTAINER(ITER, (ITER)->MEMBER.prev, MEMBER))
 #define LIST_FOR_EACH_SAFE(ITER, NEXT, MEMBER, LIST)               \
-    for (ASSIGN_CONTAINER(ITER, (LIST)->next, MEMBER);             \
+    for (INIT_CONTAINER(ITER, (LIST)->next, MEMBER);               \
          (&(ITER)->MEMBER != (LIST)                                \
-          ? ASSIGN_CONTAINER(NEXT, (ITER)->MEMBER.next, MEMBER), 1 \
+          ? INIT_CONTAINER(NEXT, (ITER)->MEMBER.next, MEMBER), 1   \
           : 0);                                                    \
          (ITER) = (NEXT))
 

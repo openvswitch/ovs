@@ -1561,7 +1561,7 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
               struct flow_wildcards *wc)
 {
     uint32_t basis = 0, hash;
-    struct cls_match *rule;
+    struct cls_match *rule = NULL;
     int i;
     struct range ofs;
 
@@ -1767,7 +1767,8 @@ static struct cls_match *
 next_rule_in_list__(struct cls_match *rule)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
-    struct cls_match *next = OBJECT_CONTAINING(rule->list.next, next, list);
+    struct cls_match *next = NULL;
+    next = OBJECT_CONTAINING(rule->list.next, next, list);
     return next;
 }
 

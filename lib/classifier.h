@@ -334,7 +334,7 @@ void cls_cursor_advance(struct cls_cursor *);
 #define CLS_FOR_EACH_TARGET(RULE, MEMBER, CLS, TARGET)                  \
     for (struct cls_cursor cursor__ = cls_cursor_start(CLS, TARGET, false); \
          (cursor__.rule                                                 \
-          ? (ASSIGN_CONTAINER(RULE, cursor__.rule, MEMBER),            \
+          ? (INIT_CONTAINER(RULE, cursor__.rule, MEMBER),               \
              true)                                                      \
           : false);                                                     \
          cls_cursor_advance(&cursor__))
@@ -345,7 +345,7 @@ void cls_cursor_advance(struct cls_cursor *);
 #define CLS_FOR_EACH_TARGET_SAFE(RULE, MEMBER, CLS, TARGET)             \
     for (struct cls_cursor cursor__ = cls_cursor_start(CLS, TARGET, true); \
          (cursor__.rule                                                 \
-          ? (ASSIGN_CONTAINER(RULE, cursor__.rule, MEMBER),            \
+          ? (INIT_CONTAINER(RULE, cursor__.rule, MEMBER),               \
              cls_cursor_advance(&cursor__),                             \
              true)                                                      \
           : false);                                                     \

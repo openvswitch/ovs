@@ -228,6 +228,13 @@ ovs_prefetch_range(const void *start, size_t size)
 #define ASSIGN_CONTAINER(OBJECT, POINTER, MEMBER) \
     ((OBJECT) = OBJECT_CONTAINING(POINTER, OBJECT, MEMBER), (void) 0)
 
+/* As explained in the comment above OBJECT_OFFSETOF(), non-GNUC compilers
+ * like MSVC will complain about un-initialized variables if OBJECT
+ * hasn't already been initialized. To prevent such warnings, INIT_CONTAINER()
+ * can be used as a wrapper around ASSIGN_CONTAINER. */
+#define INIT_CONTAINER(OBJECT, POINTER, MEMBER) \
+    ((OBJECT) = NULL, ASSIGN_CONTAINER(OBJECT, POINTER, MEMBER))
+
 /* Given ATTR, and TYPE, cast the ATTR to TYPE by first casting ATTR to
  * (void *). This is to suppress the alignment warning issued by clang. */
 #define ALIGNED_CAST(TYPE, ATTR) ((TYPE) (void *) (ATTR))

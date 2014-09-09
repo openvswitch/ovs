@@ -114,11 +114,11 @@ void cmap_replace(struct cmap *, struct cmap_node *old_node,
  * to change during iteration.  It may be very slightly faster.
  */
 #define CMAP_FOR_EACH_WITH_HASH(NODE, MEMBER, HASH, CMAP)       \
-    for (ASSIGN_CONTAINER(NODE, cmap_find(CMAP, HASH), MEMBER); \
+    for (INIT_CONTAINER(NODE, cmap_find(CMAP, HASH), MEMBER);   \
          (NODE) != OBJECT_CONTAINING(NULL, NODE, MEMBER);       \
          ASSIGN_CONTAINER(NODE, cmap_node_next(&(NODE)->MEMBER), MEMBER))
 #define CMAP_FOR_EACH_WITH_HASH_PROTECTED(NODE, MEMBER, HASH, CMAP)        \
-    for (ASSIGN_CONTAINER(NODE, cmap_find_locked(CMAP, HASH), MEMBER);  \
+    for (INIT_CONTAINER(NODE, cmap_find_locked(CMAP, HASH), MEMBER);    \
          (NODE) != OBJECT_CONTAINING(NULL, NODE, MEMBER);               \
          ASSIGN_CONTAINER(NODE, cmap_node_next_protected(&(NODE)->MEMBER), \
                           MEMBER))
@@ -174,7 +174,7 @@ struct cmap_node *cmap_find_protected(const struct cmap *, uint32_t hash);
 
 #define CMAP_CURSOR_FOR_EACH__(NODE, CURSOR, MEMBER)    \
     ((CURSOR)->node                                     \
-     ? (ASSIGN_CONTAINER(NODE, (CURSOR)->node, MEMBER), \
+     ? (INIT_CONTAINER(NODE, (CURSOR)->node, MEMBER),   \
         cmap_cursor_advance(CURSOR),                    \
         true)                                           \
      : false)

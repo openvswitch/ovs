@@ -68,7 +68,7 @@ void heap_rebuild(struct heap *);
  * element. */
 #define HEAP_FOR_EACH(NODE, MEMBER, HEAP)                           \
     for (((HEAP)->n > 0                                             \
-          ? ASSIGN_CONTAINER(NODE, (HEAP)->array[1], MEMBER)        \
+          ? INIT_CONTAINER(NODE, (HEAP)->array[1], MEMBER)          \
           : ((NODE) = NULL, (void) 0));                               \
          (NODE) != NULL;                                            \
          ((NODE)->MEMBER.idx < (HEAP)->n                            \
