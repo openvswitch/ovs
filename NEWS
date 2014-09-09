@@ -28,6 +28,9 @@ Post-v2.3.0
    - Support for travis-ci.org based continuous integration builds has been
      added. Build failures are reported to build@openvswitch.org. See INSTALL
      file for additional details.
+   - Experimental support for the Rapid Spanning Tree Protocol
+     (IEEE 802.1D-2004).  More conformance and interoperability testing is
+     still needed, so this should not be enabled on production environments.
 
 
 v2.3.0 - 14 Aug 2014
