@@ -1018,7 +1018,8 @@ static void
 ofctl_dump_flows(int argc, char *argv[])
 {
     if (!n_criteria) {
-        return ofctl_dump_flows__(argc, argv, false);
+        ofctl_dump_flows__(argc, argv, false);
+        return;
     } else {
         struct ofputil_flow_stats *fses;
         size_t n_fses, allocated_fses;
@@ -1077,7 +1078,7 @@ ofctl_dump_flows(int argc, char *argv[])
 static void
 ofctl_dump_aggregate(int argc, char *argv[])
 {
-    return ofctl_dump_flows__(argc, argv, true);
+    ofctl_dump_flows__(argc, argv, true);
 }
 
 static void
@@ -2894,7 +2895,7 @@ ofctl_parse_nxm__(bool oxm, enum ofp_version version)
 static void
 ofctl_parse_nxm(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
-    return ofctl_parse_nxm__(false, 0);
+    ofctl_parse_nxm__(false, 0);
 }
 
 /* "parse-oxm VERSION": reads a series of OXM nx_match specifications as
@@ -2909,7 +2910,7 @@ ofctl_parse_oxm(int argc OVS_UNUSED, char *argv[])
         ovs_fatal(0, "%s: not a valid version for OXM", argv[1]);
     }
 
-    return ofctl_parse_nxm__(true, version);
+    ofctl_parse_nxm__(true, version);
 }
 
 static void
