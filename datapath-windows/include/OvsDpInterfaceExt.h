@@ -70,6 +70,7 @@
 /* Commands available under the OVS_WIN_CONTROL_FAMILY. */
 enum ovs_win_control_cmd {
     OVS_CTRL_CMD_WIN_GET_PID,
+    OVS_CTRL_CMD_WIN_PEND_REQ
 };
 
 #endif /* __OVS_DP_INTERFACE_EXT_H_ */

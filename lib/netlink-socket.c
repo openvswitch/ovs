@@ -80,6 +80,7 @@ static int get_sock_pid_from_kernel(struct nl_sock *sock);
 struct nl_sock {
 #ifdef _WIN32
     HANDLE handle;
+    OVERLAPPED overlapped;
 #else
     int fd;
 #endif
@@ -139,18 +140,26 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
     sock = xmalloc(sizeof *sock);
 
 #ifdef _WIN32
-    sock->handle = CreateFileA("\\\\.\\OpenVSwitchDevice",
-                               GENERIC_READ | GENERIC_WRITE,
-                               FILE_SHARE_READ | FILE_SHARE_WRITE,
-                               NULL, OPEN_EXISTING,
-                               FILE_ATTRIBUTE_NORMAL, NULL);
-
-    int last_error = GetLastError();
+    sock->handle = CreateFile(OVS_DEVICE_NAME_USER,
+                              GENERIC_READ | GENERIC_WRITE,
+                              FILE_SHARE_READ | FILE_SHARE_WRITE,
+                              NULL, OPEN_EXISTING,
+                              FILE_FLAG_OVERLAPPED, NULL);
 
     if (sock->handle == INVALID_HANDLE_VALUE) {
+        int last_error = GetLastError();
         VLOG_ERR("fcntl: %s", ovs_strerror(last_error));
         goto error;
     }
+
+    memset(&sock->overlapped, 0, sizeof sock->overlapped);
+    sock->overlapped.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+    if (sock->overlapped.hEvent == NULL) {
+        int last_error = GetLastError();
+        VLOG_ERR("fcntl: %s", ovs_strerror(last_error));
+        goto error;
+    }
+
 #else
     sock->fd = socket(AF_NETLINK, SOCK_RAW, protocol);
     if (sock->fd < 0) {
@@ -221,6 +230,9 @@ error:
         }
     }
 #ifdef _WIN32
+    if (sock->overlapped.hEvent) {
+        CloseHandle(sock->overlapped.hEvent);
+    }
     if (sock->handle != INVALID_HANDLE_VALUE) {
         CloseHandle(sock->handle);
     }
@@ -248,6 +260,9 @@ nl_sock_destroy(struct nl_sock *sock)
 {
     if (sock) {
 #ifdef _WIN32
+        if (sock->overlapped.hEvent) {
+            CloseHandle(sock->overlapped.hEvent);
+        }
         CloseHandle(sock->handle);
 #else
         close(sock->fd);
@@ -1040,12 +1055,69 @@ nl_dump_done(struct nl_dump *dump)
     return status == EOF ? 0 : status;
 }
 
+#ifdef _WIN32
+/* Pend an I/O request in the driver. The driver completes the I/O whenever
+ * an event or a packet is ready to be read. Once the I/O is completed
+ * the overlapped structure event associated with the pending I/O will be set
+ */
+static int
+pend_io_request(const struct nl_sock *sock)
+{
+    struct ofpbuf request;
+    uint64_t request_stub[128];
+    struct ovs_header *ovs_header;
+    struct nlmsghdr *nlmsg;
+    uint32_t seq;
+    int retval;
+    int error;
+    DWORD bytes;
+    OVERLAPPED *overlapped = &sock->overlapped;
+
+    int ovs_msg_size = sizeof (struct nlmsghdr) + sizeof (struct genlmsghdr) +
+                               sizeof (struct ovs_header);
+
+    ofpbuf_use_stub(&request, request_stub, sizeof request_stub);
+
+    seq = nl_sock_allocate_seq(sock, 1);
+    nl_msg_put_genlmsghdr(&request, 0, OVS_WIN_NL_CTRL_FAMILY_ID, 0,
+                          OVS_CTRL_CMD_WIN_PEND_REQ, OVS_WIN_CONTROL_VERSION);
+    nlmsg = nl_msg_nlmsghdr(&request);
+    nlmsg->nlmsg_seq = seq;
+
+    ovs_header = ofpbuf_put_uninit(&request, sizeof *ovs_header);
+    ovs_header->dp_ifindex = 0;
+
+    if (!DeviceIoControl(sock->handle, OVS_IOCTL_WRITE,
+                         ofpbuf_data(&request), ofpbuf_size(&request),
+                         NULL, 0, &bytes, overlapped)) {
+        error = GetLastError();
+        /* Check if the I/O got pended */
+        if (error != ERROR_IO_INCOMPLETE && error != ERROR_IO_PENDING) {
+            VLOG_ERR("nl_sock_wait failed - %s\n", ovs_format_message(error));
+            retval = EINVAL;
+            goto done;
+        }
+    } else {
+        /* The I/O was completed synchronously */
+        poll_immediate_wake();
+    }
+    retval = 0;
+
+done:
+    ofpbuf_uninit(&request);
+    return retval;
+}
+#endif  /* _WIN32 */
+
 /* Causes poll_block() to wake up when any of the specified 'events' (which is
  * a OR'd combination of POLLIN, POLLOUT, etc.) occur on 'sock'. */
 void
 nl_sock_wait(const struct nl_sock *sock, short int events)
 {
 #ifdef _WIN32
+    if (sock->overlapped.Internal != STATUS_PENDING) {
+        pend_io_request(sock);
+    }
     poll_fd_wait(sock->handle, events);
 #else
     poll_fd_wait(sock->fd, events);
