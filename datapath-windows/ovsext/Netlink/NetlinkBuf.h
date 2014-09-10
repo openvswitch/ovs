@@ -38,4 +38,18 @@ PCHAR NlBufCopyAtOffsetUninit(PNL_BUFFER nlBuf, UINT32 len, UINT32 offset);
 
 PCHAR NlBufAt(PNL_BUFFER nlBuf, UINT32 offset, UINT32 len);
 
+/*
+ * --------------------------------------------------------------------------
+ * NlBufSize --
+ *
+ *    Returns the used size of buffer.
+ * --------------------------------------------------------------------------
+ */
+static __inline UINT32
+NlBufSize(PNL_BUFFER nlBuf)
+{
+    ASSERT(nlBuf);
+    return (nlBuf->bufLen - nlBuf->bufRemLen);
+}
+
 #endif /* __NETLINK_BUF_H_ */
