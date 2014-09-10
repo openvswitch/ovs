@@ -951,7 +951,8 @@ rstp_initialize_port_defaults__(struct rstp_port *p)
 {
     rstp_port_set_administrative_bridge_port__(p,
                                          RSTP_ADMIN_BRIDGE_PORT_STATE_ENABLED);
-    rstp_port_set_oper_point_to_point_mac__(p, 1);
+    rstp_port_set_oper_point_to_point_mac__(p,
+                                         RSTP_OPER_P2P_MAC_STATE_ENABLED);
     rstp_port_set_path_cost__(p, RSTP_DEFAULT_PORT_PATH_COST);
     rstp_port_set_admin_edge__(p, false);
     rstp_port_set_auto_edge__(p, true);
