@@ -168,7 +168,7 @@ void
 rstp_unref(struct rstp *rstp)
     OVS_EXCLUDED(rstp_mutex)
 {
-    if (rstp && ovs_refcount_unref(&rstp->ref_cnt) == 1) {
+    if (rstp && ovs_refcount_unref_relaxed(&rstp->ref_cnt) == 1) {
         ovs_mutex_lock(&rstp_mutex);
 
         /* Each RSTP port points back to struct rstp without holding a
@@ -1080,7 +1080,7 @@ void
 rstp_port_unref(struct rstp_port *rp)
     OVS_EXCLUDED(rstp_mutex)
 {
-    if (rp && ovs_refcount_unref(&rp->ref_cnt) == 1) {
+    if (rp && ovs_refcount_unref_relaxed(&rp->ref_cnt) == 1) {
         struct rstp *rstp;
 
         ovs_mutex_lock(&rstp_mutex);
