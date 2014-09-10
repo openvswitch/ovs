@@ -288,7 +288,9 @@ class Logical_Switch(object):
         for interface in self.ports.iterkeys():
             if not interface.endswith("-l"):
                 continue
-            vlan, pp_name, logical = interface.split("-")
+            # Physical ports can have a '-' as part of its name.
+            vlan, remainder = interface.split("-", 1)
+            pp_name, logical = remainder.rsplit("-", 1)
             uuid = vtep_ctl("get physical_port %s vlan_stats:%s"
                             % (pp_name, vlan))
             if not uuid:
@@ -308,7 +310,7 @@ class Logical_Switch(object):
 def add_binding(ps_name, binding, ls):
     vlog.info("adding binding %s" % binding)
 
-    vlan, pp_name = binding.split("-")
+    vlan, pp_name = binding.split("-", 1)
     pbinding = binding+"-p"
     lbinding = binding+"-l"
 
