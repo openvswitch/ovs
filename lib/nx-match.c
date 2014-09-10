@@ -52,7 +52,7 @@ enum ofp12_oxm_class {
 };
 
 /* Functions for extracting fields from OXM/NXM headers. */
-static int nxm_vendor(uint32_t header) { return header >> 16; }
+static int nxm_class(uint32_t header) { return header >> 16; }
 static int nxm_field(uint32_t header) { return (header >> 9) & 0x7f; }
 static bool nxm_hasmask(uint32_t header) { return (header & 0x100) != 0; }
 static int nxm_length(uint32_t header) { return header & 0xff; }
@@ -62,15 +62,15 @@ static int nxm_length(uint32_t header) { return header & 0xff; }
 static bool
 is_nxm_header(uint32_t header)
 {
-    return nxm_vendor(header) <= 1;
+    return nxm_class(header) <= 1;
 }
 
-#define NXM_HEADER(VENDOR, FIELD, HASMASK, LENGTH)                      \
-    (((VENDOR) << 16) | ((FIELD) << 9) | ((HASMASK) << 8) | (LENGTH))
+#define NXM_HEADER(CLASS, FIELD, HASMASK, LENGTH)                       \
+    (((CLASS) << 16) | ((FIELD) << 9) | ((HASMASK) << 8) | (LENGTH))
 
 #define NXM_HEADER_FMT "%d:%d:%d:%d"
 #define NXM_HEADER_ARGS(HEADER)                 \
-    nxm_vendor(HEADER), nxm_field(HEADER),      \
+    nxm_class(HEADER), nxm_field(HEADER),      \
     nxm_hasmask(HEADER), nxm_length(HEADER)
 
 /* Functions for turning the "hasmask" bit on or off.  (This also requires
@@ -78,13 +78,13 @@ is_nxm_header(uint32_t header)
 static uint32_t
 nxm_make_exact_header(uint32_t header)
 {
-    return NXM_HEADER(nxm_vendor(header), nxm_field(header), 0,
+    return NXM_HEADER(nxm_class(header), nxm_field(header), 0,
                       nxm_length(header) / 2);
 }
 static uint32_t
 nxm_make_wild_header(uint32_t header)
 {
-    return NXM_HEADER(nxm_vendor(header), nxm_field(header), 1,
+    return NXM_HEADER(nxm_class(header), nxm_field(header), 1,
                       nxm_length(header) * 2);
 }
 
@@ -1063,7 +1063,7 @@ format_nxm_field_name(struct ds *s, uint32_t header)
     } else if (header == NXM_NX_COOKIE_W) {
         ds_put_cstr(s, "NXM_NX_COOKIE_W");
     } else {
-        ds_put_format(s, "%d:%d", nxm_vendor(header), nxm_field(header));
+        ds_put_format(s, "%d:%d", nxm_class(header), nxm_field(header));
     }
 }
 
@@ -1535,10 +1535,10 @@ oxm_bitmap_from_mf_bitmap(const struct mf_bitmap *fields,
 
     BITMAP_FOR_EACH_1 (i, MFF_N_IDS, fields->bm) {
         uint32_t oxm = mf_oxm_header(i, version);
-        uint32_t vendor = nxm_vendor(oxm);
+        uint32_t class = nxm_class(oxm);
         int field = nxm_field(oxm);
 
-        if (vendor == OFPXMC12_OPENFLOW_BASIC && field < 64) {
+        if (class == OFPXMC12_OPENFLOW_BASIC && field < 64) {
             oxm_bitmap |= UINT64_C(1) << field;
         }
     }
@@ -1556,10 +1556,10 @@ oxm_bitmap_to_mf_bitmap(ovs_be64 oxm_bitmap, enum ofp_version version)
     for (enum mf_field_id id = 0; id < MFF_N_IDS; id++) {
         if (version >= mf_oxm_version(id)) {
             uint32_t oxm = mf_oxm_header(id, version);
-            uint32_t vendor = nxm_vendor(oxm);
+            uint32_t class = nxm_class(oxm);
             int field = nxm_field(oxm);
 
-            if (vendor == OFPXMC12_OPENFLOW_BASIC
+            if (class == OFPXMC12_OPENFLOW_BASIC
                 && field < 64
                 && oxm_bitmap & htonll(UINT64_C(1) << field)) {
                 bitmap_set1(fields.bm, id);
