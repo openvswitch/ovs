@@ -225,19 +225,19 @@ enum rstp_bpdu_flag {
 OVS_PACKED(
 struct rstp_bpdu {
     ovs_be16 protocol_identifier;
-    uint8_t  protocol_version_identifier;
-    uint8_t  bpdu_type;
-    uint8_t  flags;
+    uint8_t protocol_version_identifier;
+    uint8_t bpdu_type;
+    uint8_t flags;
     ovs_be64 root_bridge_id;
     ovs_be32 root_path_cost;
     ovs_be64 designated_bridge_id;
     ovs_be16 designated_port_id;
-    ovs_be16  message_age;
-    ovs_be16  max_age;
-    ovs_be16  hello_time;
-    ovs_be16  forward_delay;
-    uint8_t  version1_length;
-    uint8_t  padding[7];
+    ovs_be16 message_age;
+    ovs_be16 max_age;
+    ovs_be16 hello_time;
+    ovs_be16 forward_delay;
+    uint8_t version1_length;
+    uint8_t padding[7];
 });
 
 enum rstp_admin_point_to_point_mac_state {
