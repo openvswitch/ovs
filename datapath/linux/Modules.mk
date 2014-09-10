@@ -18,7 +18,6 @@ openvswitch_sources += \
 openvswitch_headers += \
 	linux/compat/gso.h \
 	linux/compat/include/asm/hash.h \
-	linux/compat/include/asm/percpu.h \
 	linux/compat/include/linux/percpu.h \
 	linux/compat/include/linux/bug.h \
 	linux/compat/include/linux/compiler.h \

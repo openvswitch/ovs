@@ -3,6 +3,10 @@
 
 #include_next <linux/percpu.h>
 
+#if !defined this_cpu_ptr
+#define this_cpu_ptr(ptr) per_cpu_ptr(ptr, smp_processor_id())
+#endif
+
 #if !defined this_cpu_read
 #define this_cpu_read(ptr) percpu_read(ptr)
 #endif
