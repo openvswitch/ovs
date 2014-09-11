@@ -418,6 +418,73 @@ NlMsgPutHeadString(PNL_BUFFER buf, UINT16 type, PCHAR value)
                                (UINT16)strLen));
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * Adds the header for nested netlink attributes. It
+ * returns the offset of this header. If addition of header fails
+ * then returned value of offset will be zero.
+ * Refer nl_msg_start_nested for more details.
+ * ---------------------------------------------------------------------------
+ */
+UINT32
+NlMsgStartNested(PNL_BUFFER buf, UINT16 type)
+{
+    UINT32 offset = NlBufSize(buf);
+    PCHAR nlaData = NULL;
+
+    nlaData = NlMsgPutTailUnspecUninit(buf, type, 0);
+
+    if (!nlaData) {
+        /* Value zero must be reated as error by the caller.
+         * This is because an attribute can never be added
+         * at offset zero, it will always come after NL_MSG_HDR,
+         * GENL_HDR and OVS_HEADER. */
+        offset = 0;
+    }
+
+    return offset;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Finalizes the nested netlink attribute by updating the nla_len.
+ * offset should be the one returned by NlMsgStartNested.
+ * Refer nl_msg_end_nested for more details.
+ * ---------------------------------------------------------------------------
+ */
+VOID
+NlMsgEndNested(PNL_BUFFER buf, UINT32 offset)
+{
+    PNL_ATTR attr = (PNL_ATTR)(NlBufAt(buf, offset, sizeof *attr));
+
+    /* Typecast to keep compiler happy.
+     * Attribute length would never exceed MAX UINT16.*/
+    attr->nlaLen = (UINT16)(NlBufSize(buf) - offset);
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * Appends a nested Netlink attribute of the given 'type', with the 'size'
+ * bytes of content starting at 'data', to 'msg'.
+ * Refer nl_msg_put_nested for more details.
+ * --------------------------------------------------------------------------
+ */
+VOID
+NlMsgPutNested(PNL_BUFFER buf, UINT16 type,
+               const PVOID data, UINT32 size)
+{
+    UINT32 offset = NlMsgStartNested(buf, type);
+    BOOLEAN ret = FALSE;
+
+    ASSERT(offset);
+
+    ret = NlMsgPutTail(buf, data, size);
+
+    ASSERT(ret);
+
+    NlMsgEndNested(buf, offset);
+}
+
 /* Accessing netlink message payload */
 
 /*
@@ -807,9 +874,10 @@ NlAttrFindNested(const PNL_ATTR nla, UINT16 type)
  * Returns BOOLEAN to indicate success/failure.
  *----------------------------------------------------------------------------
  */
-BOOLEAN NlAttrParse(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
-                    const NL_POLICY policy[],
-                    PNL_ATTR attrs[], UINT32 n_attrs)
+BOOLEAN
+NlAttrParse(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
+            const NL_POLICY policy[],
+            PNL_ATTR attrs[], UINT32 n_attrs)
 {
     PNL_ATTR nla;
     UINT32 left;
@@ -861,4 +929,22 @@ BOOLEAN NlAttrParse(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
 
 done:
     return ret;
+}
+
+/*
+ *----------------------------------------------------------------------------
+ * Parses the netlink message for nested attributes. attrOffset must be the
+ * offset of nla which is the header of the nested attribute series.
+ * Refer nl_parse_nested for more details.
+ *
+ * Returns BOOLEAN to indicate success/failure.
+ *----------------------------------------------------------------------------
+ */
+BOOLEAN
+NlAttrParseNested(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
+                  const NL_POLICY policy[],
+                  PNL_ATTR attrs[], UINT32 n_attrs)
+{
+    return NlAttrParse(nlMsg, attrOffset + NLA_HDRLEN,
+                       policy, attrs, n_attrs);
 }

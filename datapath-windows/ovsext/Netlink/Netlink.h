@@ -98,6 +98,8 @@ const PNL_ATTR NlAttrFindNested(const PNL_ATTR nla,
 BOOLEAN NlAttrParse(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
                     const NL_POLICY policy[],
                     PNL_ATTR attrs[], UINT32 n_attrs);
+BOOLEAN NlParseNested(const PNL_ATTR, const NL_POLICY policy[],
+                      PNL_ATTR attrs[], UINT32 n_attrs);
 
 /* Netlink attribute validation */
 BOOLEAN NlAttrValidate(const PNL_ATTR, const PNL_POLICY);
@@ -128,5 +130,15 @@ BOOLEAN NlMsgPutHeadU16(PNL_BUFFER buf, UINT16 type, UINT16 value);
 BOOLEAN NlMsgPutHeadU32(PNL_BUFFER buf, UINT16 type, UINT32 value);
 BOOLEAN NlMsgPutHeadU64(PNL_BUFFER buf, UINT16 type, UINT64 value);
 BOOLEAN NlMsgPutHeadString(PNL_BUFFER buf, UINT16 type, PCHAR value);
+UINT32 NlMsgStartNested(PNL_BUFFER buf, UINT16 type);
+VOID NlMsgEndNested(PNL_BUFFER buf, UINT32 offset);
+VOID NlMsgPutNested(PNL_BUFFER buf, UINT16 type,
+                    const PVOID data, UINT32 size);
+
+/* These variants are convenient for iterating nested attributes. */
+#define NL_NESTED_FOR_EACH(ITER, LEFT, A)                               \
+    NL_ATTR_FOR_EACH(ITER, LEFT, NlAttrGet(A), NlAttrGetSize(A))
+#define NL_NESTED_FOR_EACH_UNSAFE(ITER, LEFT, A)                        \
+    NL_ATTR_FOR_EACH_UNSAFE(ITER, LEFT, NlAttrGet(A), NlAttrGetSize(A))
 
 #endif /* __NETLINK_H_ */
