@@ -22,7 +22,7 @@ AC_DEFUN([OVS_ENABLE_WERROR],
      [], [enable_Werror=no])
    AC_CONFIG_COMMANDS_PRE(
      [if test "X$enable_Werror" = Xyes; then
-        CFLAGS="$CFLAGS -Werror"
+        OVS_CFLAGS="$OVS_CFLAGS -Werror"
       fi])])
 
 dnl OVS_CHECK_LINUX
@@ -172,6 +172,8 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     DPDK_LIB_DIR=$RTE_SDK/lib
     DPDK_LIB=-lintel_dpdk
 
+    ovs_save_CFLAGS="$CFLAGS"
+    ovs_save_LDFLAGS="$LDFLAGS"
     LDFLAGS="$LDFLAGS -L$DPDK_LIB_DIR"
     CFLAGS="$CFLAGS -I$DPDK_INCLUDE"
 
@@ -199,6 +201,10 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     if $found; then :; else
         AC_MSG_ERROR([cannot link with dpdk])
     fi
+    CFLAGS="$ovs_save_CFLAGS"
+    LDFLAGS="$ovs_save_LDFLAGS"
+    OVS_LDFLAGS="$OVS_LDFLAGS -L$DPDK_LIB_DIR"
+    OVS_CFLAGS="$OVS_CFLAGS -I$DPDK_INCLUDE"
 
     # DPDK 1.7.0 pmd drivers are not linked unless --whole-archive is used.
     #

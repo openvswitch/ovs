@@ -30,8 +30,8 @@ AC_DEFUN([OVS_CHECK_COVERAGE],
       esac],
      [coverage=false])
    if $coverage; then
-     CFLAGS="$CFLAGS -O0 --coverage"
-     LDFLAGS="$LDFLAGS --coverage"
+     OVS_CFLAGS="$OVS_CFLAGS -O0 --coverage"
+     OVS_LDFLAGS="$OVS_LDFLAGS --coverage"
    fi])
 
 dnl Checks for --enable-ndebug and defines NDEBUG if it is specified.

@@ -11,6 +11,7 @@ SUBDIRS = datapath
 
 AM_CPPFLAGS = $(SSL_CFLAGS)
 AM_LDFLAGS = $(SSL_LDFLAGS)
+AM_LDFLAGS += $(OVS_LDFLAGS)
 
 if WIN32
 AM_CPPFLAGS += -I $(top_srcdir)/include/windows
@@ -29,6 +30,7 @@ AM_CPPFLAGS += $(SSL_INCLUDES)
 
 AM_CFLAGS = -Wstrict-prototypes
 AM_CFLAGS += $(WARNING_FLAGS)
+AM_CFLAGS += $(OVS_CFLAGS)
 
 if NDEBUG
 AM_CPPFLAGS += -DNDEBUG
