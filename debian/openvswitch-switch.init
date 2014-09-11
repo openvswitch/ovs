@@ -31,7 +31,6 @@
 test -e /etc/default/openvswitch-switch && . /etc/default/openvswitch-switch
 
 network_interfaces () {
-    [ -z "${RUNLEVEL}" ] && return
     INTERFACES="/etc/network/interfaces"
     [ -e "${INTERFACES}" ] || return
     bridges=`awk '{ if ($1 == "allow-ovs") { print $2; } }' "${INTERFACES}"`
@@ -67,11 +66,13 @@ start () {
     fi
     set "$@" $OVS_CTL_OPTS
     "$@" || exit $?
-    [ "$2" = "start" ] && network_interfaces ifup
+    if [ "$2" = "start" ] && [ "$READ_INTERFACES" != "no" ]; then
+        network_interfaces ifup
+    fi
 }
 
 stop () {
-    network_interfaces ifdown
+    [ "$READ_INTERFACES" != "no" ] && network_interfaces ifdown
     ovs_ctl stop
 }
 
@@ -106,8 +107,8 @@ restart () {
             start restart
         fi
     else
-        stop
-        start
+        READ_INTERFACES="no" stop
+        READ_INTERFACES="no" start
     fi
 }
 
