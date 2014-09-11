@@ -943,7 +943,6 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     shash_add(&all_dpif_backers, type, backer);
 
     backer->enable_recirc = check_recirc(backer);
-    backer->variable_length_userdata = check_variable_length_userdata(backer);
     backer->max_mpls_depth = check_max_mpls_depth(backer);
     backer->masked_set_action = check_masked_set_action(backer);
     backer->rid_pool = recirc_id_pool_create();
@@ -959,6 +958,11 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     if (backer->recv_set_enable) {
         udpif_set_threads(backer->udpif, n_handlers, n_revalidators);
     }
+
+    /* This check fails if performed before udpif threads have been set,
+     * as the kernel module checks that the 'pid' in userspace action
+     * is non-zero. */
+    backer->variable_length_userdata = check_variable_length_userdata(backer);
 
     return error;
 }
@@ -1115,7 +1119,8 @@ check_max_mpls_depth(struct dpif_backer *backer)
         odp_flow_key_from_flow(&key, &flow, NULL, 0, false);
 
         error = dpif_flow_put(backer->dpif, DPIF_FP_CREATE,
-                              ofpbuf_data(&key), ofpbuf_size(&key), NULL, 0, NULL, 0, NULL);
+                              ofpbuf_data(&key), ofpbuf_size(&key), NULL, 0,
+                              NULL, 0, NULL);
         if (error && error != EEXIST) {
             if (error != EINVAL) {
                 VLOG_WARN("%s: MPLS stack length feature probe failed (%s)",
@@ -1124,7 +1129,8 @@ check_max_mpls_depth(struct dpif_backer *backer)
             break;
         }
 
-        error = dpif_flow_del(backer->dpif, ofpbuf_data(&key), ofpbuf_size(&key), NULL);
+        error = dpif_flow_del(backer->dpif, ofpbuf_data(&key),
+                              ofpbuf_size(&key), NULL);
         if (error) {
             VLOG_WARN("%s: failed to delete MPLS feature probe flow",
                       dpif_name(backer->dpif));
