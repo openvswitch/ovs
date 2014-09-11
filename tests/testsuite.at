@@ -18,6 +18,8 @@ AT_TESTED([ovs-vswitchd])
 AT_TESTED([ovs-vsctl])
 AT_TESTED([perl])
 
+m4_include([m4/compat.at])
+
 m4_divert_push([PREPARE_TESTS])
 [
 ovs_wait () {

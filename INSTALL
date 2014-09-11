@@ -85,7 +85,7 @@ If you are working from a Git tree or snapshot (instead of from a
 distribution tarball), or if you modify the Open vSwitch build system
 or the database schema, you will also need the following software:
 
-    - Autoconf version 2.64 or later.
+    - Autoconf version 2.63 or later.
 
     - Automake version 1.10 or later.
 

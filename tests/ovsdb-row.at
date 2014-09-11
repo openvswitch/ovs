@@ -1,7 +1,5 @@
 AT_BANNER([OVSDB -- rows])
 
-m4_define([RESERVED_COLUMNS], [["_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"]]])
-
 OVSDB_CHECK_POSITIVE([row with one string column],
   [[parse-rows \
     '{"columns": {"name": {"type": "string"}}}' \
@@ -9,14 +7,14 @@ OVSDB_CHECK_POSITIVE([row with one string column],
     '{"name": ""}' \
     '{"name": "longer string with spaces"}' \
     '{}']],
-  [{RESERVED_COLUMNS,"name":"value"}
+  [[{"_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"],"name":"value"}
 name
-{RESERVED_COLUMNS,"name":""}
+{"_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"],"name":""}
 name
-{RESERVED_COLUMNS,"name":"longer string with spaces"}
+{"_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"],"name":"longer string with spaces"}
 name
-{RESERVED_COLUMNS,"name":""}
-<none>], [])
+{"_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"],"name":""}
+<none>]], [])
 
 OVSDB_CHECK_POSITIVE([row with one integer column],
   [[parse-rows \
@@ -25,14 +23,14 @@ OVSDB_CHECK_POSITIVE([row with one integer column],
     '{"count": -1}' \
     '{"count": 2e10}' \
     '{}']],
-  [{RESERVED_COLUMNS,"count":1}
+  [[{"_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"],"count":1}
 count
-{RESERVED_COLUMNS,"count":-1}
+{"_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"],"count":-1}
 count
-{RESERVED_COLUMNS,"count":20000000000}
+{"_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"],"count":20000000000}
 count
-{RESERVED_COLUMNS,"count":0}
-<none>], [])
+{"_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"],"count":0}
+<none>]], [])
 
 OVSDB_CHECK_POSITIVE([row with one real column],
   [[parse-rows \
@@ -41,14 +39,14 @@ OVSDB_CHECK_POSITIVE([row with one real column],
     '{"cost": -2.0}' \
     '{"cost": 123000}' \
     '{}']],
-  [{RESERVED_COLUMNS,"cost":1}
+  [[{"_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"],"cost":1}
 cost
-{RESERVED_COLUMNS,"cost":-2}
+{"_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"],"cost":-2}
 cost
-{RESERVED_COLUMNS,"cost":123000}
+{"_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"],"cost":123000}
 cost
-{RESERVED_COLUMNS,"cost":0}
-<none>], [])
+{"_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"],"cost":0}
+<none>]], [])
 
 OVSDB_CHECK_POSITIVE([row with one boolean column],
   [[parse-rows \
@@ -56,12 +54,12 @@ OVSDB_CHECK_POSITIVE([row with one boolean column],
     '{"feasible": true}' \
     '{"feasible": false}' \
     '{}']],
-  [{RESERVED_COLUMNS,"feasible":true}
+  [[{"_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"],"feasible":true}
 feasible
-{RESERVED_COLUMNS,"feasible":false}
+{"_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"],"feasible":false}
 feasible
-{RESERVED_COLUMNS,"feasible":false}
-<none>], [])
+{"_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"],"feasible":false}
+<none>]], [])
 
 OVSDB_CHECK_POSITIVE([row with one uuid column],
   [[parse-rows \
@@ -69,26 +67,26 @@ OVSDB_CHECK_POSITIVE([row with one uuid column],
     '{"ref": ["uuid", "f707423d-bf5b-48b5-b6c0-797c900ba4b6"]}' \
     '{"ref": ["uuid", "33583cc5-d2f4-43de-b1ca-8aac14071b51"]}' \
     '{}']],
-  [{RESERVED_COLUMNS,"ref":[["uuid","f707423d-bf5b-48b5-b6c0-797c900ba4b6"]]}
+  [[{"_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"],"ref":["uuid","f707423d-bf5b-48b5-b6c0-797c900ba4b6"]}
 ref
-{RESERVED_COLUMNS,"ref":[["uuid","33583cc5-d2f4-43de-b1ca-8aac14071b51"]]}
+{"_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"],"ref":["uuid","33583cc5-d2f4-43de-b1ca-8aac14071b51"]}
 ref
-{RESERVED_COLUMNS,"ref":[["uuid","00000000-0000-0000-0000-000000000000"]]}
-<none>], [])
+{"_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"],"ref":["uuid","00000000-0000-0000-0000-000000000000"]}
+<none>]], [])
 
 OVSDB_CHECK_POSITIVE([row with set of 1 to 2 elements],
   [[parse-rows \
     '{"columns": {"myset": {"type": {"key": "integer", "min": 1, "max": 2}}}}' \
     '{}']],
-  [{RESERVED_COLUMNS,["myset":0]}
-<none>])
+  [[{"_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"],"myset":0}
+<none>]])
 
 OVSDB_CHECK_POSITIVE([row with map of 1 to 2 elements],
   [[parse-rows \
     '{"columns": {"mymap": {"type": {"key": "integer", "value": "uuid", "min": 1, "max": 2}}}}' \
     '{}']],
-  [{RESERVED_COLUMNS,["mymap":["map",[[0,["uuid","00000000-0000-0000-0000-000000000000"]]]]]}
-<none>], [])
+  [[{"_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"],"mymap":["map",[[0,["uuid","00000000-0000-0000-0000-000000000000"]]]]}
+<none>]], [])
 
 OVSDB_CHECK_POSITIVE([row with several columns],
   [[parse-rows \
@@ -107,10 +105,10 @@ OVSDB_CHECK_POSITIVE([row with several columns],
       "datapath_id": "000ae4256bb0",
       "hwaddr": "00:0a:e4:25:6b:b0"}' \
     '{}']],
- [{RESERVED_COLUMNS,["controller":["set",[]],"datapath_id":"000ae4256bb0","hwaddr":"00:0a:e4:25:6b:b0","listeners":["set",[]],"mirrors":["set",[]],"name":"br0","netflows":["set",[]],"snoops":["set",[]],"vswitch":["uuid","1a5c7280-0d4c-4e34-9ec7-c772339f7774"]]}
+ [[{"_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"],"controller":["set",[]],"datapath_id":"000ae4256bb0","hwaddr":"00:0a:e4:25:6b:b0","listeners":["set",[]],"mirrors":["set",[]],"name":"br0","netflows":["set",[]],"snoops":["set",[]],"vswitch":["uuid","1a5c7280-0d4c-4e34-9ec7-c772339f7774"]}
 datapath_id, hwaddr, name, vswitch
-{RESERVED_COLUMNS,["controller":["set",[]],"datapath_id":["set",[]],"hwaddr":"","listeners":["set",[]],"mirrors":["set",[]],"name":"","netflows":["set",[]],"snoops":["set",[]],"vswitch":["uuid","00000000-0000-0000-0000-000000000000"]]}
-<none>], [])
+{"_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"],"controller":["set",[]],"datapath_id":["set",[]],"hwaddr":"","listeners":["set",[]],"mirrors":["set",[]],"name":"","netflows":["set",[]],"snoops":["set",[]],"vswitch":["uuid","00000000-0000-0000-0000-000000000000"]}
+<none>]], [])
 
 OVSDB_CHECK_POSITIVE([row hashing (scalars)],
   [[compare-rows \
