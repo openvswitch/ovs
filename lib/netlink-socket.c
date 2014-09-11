@@ -332,6 +332,33 @@ done:
 }
 #endif  /* _WIN32 */
 
+#ifdef _WIN32
+static int __inline
+nl_sock_mcgroup(struct nl_sock *sock, unsigned int multicast_group, bool join)
+{
+    struct ofpbuf request;
+    uint64_t request_stub[128];
+    struct ovs_header *ovs_header;
+    struct nlmsghdr *nlmsg;
+    int error;
+
+    ofpbuf_use_stub(&request, request_stub, sizeof request_stub);
+
+    nl_msg_put_genlmsghdr(&request, 0, OVS_WIN_NL_CTRL_FAMILY_ID, 0,
+                          OVS_CTRL_CMD_MC_SUBSCRIBE_REQ,
+                          OVS_WIN_CONTROL_VERSION);
+
+    ovs_header = ofpbuf_put_uninit(&request, sizeof *ovs_header);
+    ovs_header->dp_ifindex = 0;
+
+    nl_msg_put_u32(&request, OVS_NL_ATTR_MCAST_GRP, multicast_group);
+    nl_msg_put_u8(&request, OVS_NL_ATTR_MCAST_JOIN, join ? 1 : 0);
+
+    error = nl_sock_send(sock, &request, true);
+    ofpbuf_uninit(&request);
+    return error;
+}
+#endif
 /* Tries to add 'sock' as a listener for 'multicast_group'.  Returns 0 if
  * successful, otherwise a positive errno value.
  *
@@ -347,31 +374,12 @@ int
 nl_sock_join_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
 {
 #ifdef _WIN32
-#define OVS_VPORT_MCGROUP_FALLBACK_ID 33
-    struct ofpbuf msg_buf;
-    struct message_multicast
-    {
-        struct nlmsghdr;
-        /* if true, join; if else, leave */
-        unsigned char join;
-        unsigned int groupId;
-    };
-
-    struct message_multicast msg = { 0 };
-
-    msg.nlmsg_len = sizeof(struct message_multicast);
-    msg.nlmsg_type = OVS_VPORT_MCGROUP_FALLBACK_ID;
-    msg.nlmsg_flags = 0;
-    msg.nlmsg_seq = 0;
-    msg.nlmsg_pid = sock->pid;
-
-    msg.join = 1;
-    msg.groupId = multicast_group;
-    msg_buf.base_ = &msg;
-    msg_buf.data_ = &msg;
-    msg_buf.size_ = msg.nlmsg_len;
-
-    nl_sock_send__(sock, &msg_buf, msg.nlmsg_seq, 0);
+    int error = nl_sock_mcgroup(sock, multicast_group, true);
+    if (error) {
+        VLOG_WARN("could not join multicast group %u (%s)",
+                  multicast_group, ovs_strerror(errno));
+        return errno;
+    }
 #else
     if (setsockopt(sock->fd, SOL_NETLINK, NETLINK_ADD_MEMBERSHIP,
                    &multicast_group, sizeof multicast_group) < 0) {
@@ -397,24 +405,12 @@ int
 nl_sock_leave_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
 {
 #ifdef _WIN32
-    struct ofpbuf msg_buf;
-    struct message_multicast
-    {
-        struct nlmsghdr;
-        /* if true, join; if else, leave*/
-        unsigned char join;
-    };
-
-    struct message_multicast msg = { 0 };
-    nl_msg_put_nlmsghdr(&msg, sizeof(struct message_multicast),
-                        multicast_group, 0);
-    msg.join = 0;
-
-    msg_buf.base_ = &msg;
-    msg_buf.data_ = &msg;
-    msg_buf.size_ = msg.nlmsg_len;
-
-    nl_sock_send__(sock, &msg_buf, msg.nlmsg_seq, 0);
+    int error = nl_sock_mcgroup(sock, multicast_group, false);
+    if (error) {
+        VLOG_WARN("could not leave multicast group %u (%s)",
+                   multicast_group, ovs_strerror(errno));
+        return errno;
+    }
 #else
     if (setsockopt(sock->fd, SOL_NETLINK, NETLINK_DROP_MEMBERSHIP,
                    &multicast_group, sizeof multicast_group) < 0) {

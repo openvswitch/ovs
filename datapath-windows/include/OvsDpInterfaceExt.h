@@ -70,7 +70,14 @@
 /* Commands available under the OVS_WIN_CONTROL_FAMILY. */
 enum ovs_win_control_cmd {
     OVS_CTRL_CMD_WIN_GET_PID,
-    OVS_CTRL_CMD_WIN_PEND_REQ
+    OVS_CTRL_CMD_WIN_PEND_REQ,
+    OVS_CTRL_CMD_MC_SUBSCRIBE_REQ,
+};
+
+/* NL Attributes for joining/unjoining an MC group */
+enum ovs_nl_mcast_attr {
+    OVS_NL_ATTR_MCAST_GRP,   /* (UINT32) Join an MC group */
+    OVS_NL_ATTR_MCAST_JOIN,  /* (UINT8) 1/0 - Join/Unjoin */
 };
 
 #endif /* __OVS_DP_INTERFACE_EXT_H_ */
