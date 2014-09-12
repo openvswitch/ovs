@@ -115,6 +115,7 @@ struct dpif_netlink_flow {
     const uint8_t *tcp_flags;           /* OVS_FLOW_ATTR_TCP_FLAGS. */
     const ovs_32aligned_u64 *used;      /* OVS_FLOW_ATTR_USED. */
     bool clear;                         /* OVS_FLOW_ATTR_CLEAR. */
+    bool probe;                         /* OVS_FLOW_ATTR_PROBE. */
 };
 
 static void dpif_netlink_flow_init(struct dpif_netlink_flow *);
@@ -1127,6 +1128,9 @@ dpif_netlink_init_flow_put(struct dpif_netlink *dpif,
     if (put->flags & DPIF_FP_ZERO_STATS) {
         request->clear = true;
     }
+    if (put->flags & DPIF_FP_PROBE) {
+        request->probe = true;
+    }
     request->nlmsg_flags = put->flags & DPIF_FP_MODIFY ? 0 : NLM_F_CREATE;
 }
 
@@ -1333,6 +1337,9 @@ dpif_netlink_encode_execute(int dp_ifindex, const struct dpif_execute *d_exec,
 
     nl_msg_put_unspec(buf, OVS_PACKET_ATTR_ACTIONS,
                       d_exec->actions, d_exec->actions_len);
+    if (d_exec->probe) {
+        nl_msg_put_flag(buf, OVS_FLOW_ATTR_PROBE);
+    }
 }
 
 #define MAX_OPS 50
@@ -2328,6 +2335,7 @@ dpif_netlink_flow_from_ofpbuf(struct dpif_netlink_flow *flow,
         [OVS_FLOW_ATTR_TCP_FLAGS] = { .type = NL_A_U8, .optional = true },
         [OVS_FLOW_ATTR_USED] = { .type = NL_A_U64, .optional = true },
         /* The kernel never uses OVS_FLOW_ATTR_CLEAR. */
+        /* The kernel never uses OVS_FLOW_ATTR_PROBE. */
     };
 
     struct nlattr *a[ARRAY_SIZE(ovs_flow_policy)];
@@ -2409,6 +2417,9 @@ dpif_netlink_flow_to_ofpbuf(const struct dpif_netlink_flow *flow,
 
     if (flow->clear) {
         nl_msg_put_flag(buf, OVS_FLOW_ATTR_CLEAR);
+    }
+    if (flow->probe) {
+        nl_msg_put_flag(buf, OVS_FLOW_ATTR_PROBE);
     }
 }
 

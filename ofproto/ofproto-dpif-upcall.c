@@ -1138,6 +1138,7 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
             op->u.execute.actions = ofpbuf_data(upcall->xout.odp_actions);
             op->u.execute.actions_len = ofpbuf_size(upcall->xout.odp_actions);
             op->u.execute.needs_help = (upcall->xout.slow & SLOW_ACTION) != 0;
+            op->u.execute.probe = false;
         }
     }
 

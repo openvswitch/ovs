@@ -1026,6 +1026,7 @@ dpif_execute_helper_cb(void *aux_, struct dpif_packet **packets, int cnt,
         execute.packet = packet;
         execute.md = *md;
         execute.needs_help = false;
+        execute.probe = false;
         aux->error = dpif_execute(aux->dpif, &execute);
         log_execute_message(aux->dpif, &execute, true, aux->error);
 
@@ -1502,7 +1503,7 @@ static void
 log_flow_put_message(struct dpif *dpif, const struct dpif_flow_put *put,
                      int error)
 {
-    if (should_log_flow_message(error)) {
+    if (should_log_flow_message(error) && !(put->flags & DPIF_FP_PROBE)) {
         struct ds s;
 
         ds_init(&s);
@@ -1554,7 +1555,8 @@ static void
 log_execute_message(struct dpif *dpif, const struct dpif_execute *execute,
                     bool subexecute, int error)
 {
-    if (!(error ? VLOG_DROP_WARN(&error_rl) : VLOG_DROP_DBG(&dpmsg_rl))) {
+    if (!(error ? VLOG_DROP_WARN(&error_rl) : VLOG_DROP_DBG(&dpmsg_rl))
+        && !execute->probe) {
         struct ds ds = DS_EMPTY_INITIALIZER;
         char *packet;
 

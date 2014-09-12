@@ -992,7 +992,7 @@ check_recirc(struct dpif_backer *backer)
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
     odp_flow_key_from_flow(&key, &flow, NULL, 0, true);
 
-    error = dpif_flow_put(backer->dpif, DPIF_FP_CREATE,
+    error = dpif_flow_put(backer->dpif, DPIF_FP_CREATE | DPIF_FP_PROBE,
                           ofpbuf_data(&key), ofpbuf_size(&key), NULL, 0, NULL,
                           0, NULL);
     if (error && error != EEXIST) {
@@ -1068,6 +1068,7 @@ check_variable_length_userdata(struct dpif_backer *backer)
     execute.packet = &packet;
     execute.md = PKT_METADATA_INITIALIZER(0);
     execute.needs_help = false;
+    execute.probe = true;
 
     error = dpif_execute(backer->dpif, &execute);
 
@@ -1120,7 +1121,7 @@ check_max_mpls_depth(struct dpif_backer *backer)
         ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
         odp_flow_key_from_flow(&key, &flow, NULL, 0, false);
 
-        error = dpif_flow_put(backer->dpif, DPIF_FP_CREATE,
+        error = dpif_flow_put(backer->dpif, DPIF_FP_CREATE | DPIF_FP_PROBE,
                               ofpbuf_data(&key), ofpbuf_size(&key), NULL, 0,
                               NULL, 0, NULL);
         if (error && error != EEXIST) {
@@ -1179,6 +1180,7 @@ check_masked_set_action(struct dpif_backer *backer)
     execute.packet = &packet;
     execute.md = PKT_METADATA_INITIALIZER(0);
     execute.needs_help = false;
+    execute.probe = true;
 
     error = dpif_execute(backer->dpif, &execute);
 
@@ -3482,6 +3484,7 @@ ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
     execute.packet = packet;
     execute.md = pkt_metadata_from_flow(flow);
     execute.needs_help = (xout.slow & SLOW_ACTION) != 0;
+    execute.probe = false;
 
     /* Fix up in_port. */
     in_port = flow->in_port.ofp_port;
