@@ -18,4 +18,11 @@ static inline void *ERR_CAST(const void *ptr)
 }
 #endif /* HAVE_ERR_CAST */
 
+#ifndef HAVE_IS_ERR_OR_NULL
+static inline bool __must_check IS_ERR_OR_NULL(__force const void *ptr)
+{
+	return !ptr || IS_ERR_VALUE((unsigned long)ptr);
+}
+#endif
+
 #endif
