@@ -15,6 +15,10 @@
 #define rcu_dereference_raw(p) rcu_dereference_check(p, 1)
 #endif
 
+#ifndef rcu_access_pointer
+#define rcu_access_pointer(p)	rcu_dereference(p)
+#endif
+
 #ifndef HAVE_RCU_READ_LOCK_HELD
 static inline int rcu_read_lock_held(void)
 {
