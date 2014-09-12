@@ -171,6 +171,7 @@ parse_options(int argc, char *argv[])
         {"rsort", optional_argument, NULL, OPT_RSORT},
         {"unixctl",     required_argument, NULL, OPT_UNIXCTL},
         {"help", no_argument, NULL, 'h'},
+        {"option", no_argument, NULL, 'o'},
         DAEMON_LONG_OPTIONS,
         OFP_VERSION_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
@@ -239,6 +240,10 @@ parse_options(int argc, char *argv[])
 
         case 'h':
             usage();
+
+        case 'o':
+            print_options(long_options);
+            exit(EXIT_SUCCESS);
 
         case OPT_STRICT:
             strict = true;

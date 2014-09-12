@@ -69,6 +69,7 @@ parse_options(int argc, char *argv[])
         {"more", no_argument, NULL, 'm'},
         {"verbose", optional_argument, NULL, 'v'},
         {"help", no_argument, NULL, 'h'},
+        {"option", no_argument, NULL, 'o'},
         {"version", no_argument, NULL, 'V'},
         {NULL, 0, NULL, 0},
     };
@@ -89,6 +90,10 @@ parse_options(int argc, char *argv[])
 
         case 'h':
             usage();
+
+        case 'o':
+            print_options(long_options);
+            exit(EXIT_SUCCESS);
 
         case 'V':
             ovs_print_version(0, 0);

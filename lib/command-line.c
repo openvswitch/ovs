@@ -19,6 +19,7 @@
 #include <getopt.h>
 #include <limits.h>
 #include <stdlib.h>
+#include "dynamic-string.h"
 #include "ovs-thread.h"
 #include "util.h"
 #include "vlog.h"
@@ -49,6 +50,26 @@ long_options_to_short_options(const struct option options[])
     *p = '\0';
 
     return xstrdup(short_options);
+}
+
+/* Given the GNU-style options in 'options', prints all options. */
+void
+print_options(const struct option options[])
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+
+    for (; options->name; options++) {
+        const struct option *o = options;
+        const char *arg = o->has_arg == required_argument ? "ARG" : "[ARG]";
+
+        ds_put_format(&ds, "--%s%s%s\n", o->name, o->has_arg ? "=" : "",
+                      o->has_arg ? arg : "");
+        if (o->flag == NULL && o->val > 0 && o->val <= UCHAR_MAX) {
+            ds_put_format(&ds, "-%c %s\n", o->val, o->has_arg ? arg : "");
+        }
+    }
+    printf("%s", ds.string);
+    ds_destroy(&ds);
 }
 
 /* Runs the command designated by argv[0] within the command table specified by
