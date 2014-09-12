@@ -207,6 +207,11 @@ bundle_parse__(const char *s, char **save_ptr,
         if (error) {
             return error;
         }
+
+        if (!mf_nxm_header(bundle->dst.field->id)) {
+            return xasprintf("%s: experimenter OXM field '%s' not supported",
+                             s, dst);
+        }
     }
 
     return NULL;

@@ -189,6 +189,10 @@ multipath_parse__(struct ofpact_multipath *mp, const char *s_, char *s)
     if (error) {
         return error;
     }
+    if (!mf_nxm_header(mp->dst.field->id)) {
+        return xasprintf("%s: experimenter OXM field '%s' not supported",
+                         s, dst);
+    }
     if (mp->dst.n_bits < 16 && n_links > (1u << mp->dst.n_bits)) {
         return xasprintf("%s: %d-bit destination field has %u possible "
                          "values, less than specified n_links %d",

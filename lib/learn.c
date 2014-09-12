@@ -221,6 +221,10 @@ learn_parse_load_immediate(const char *s, struct ofpact_learn_spec *spec)
     if (error) {
         return error;
     }
+    if (!mf_nxm_header(dst.field->id)) {
+        return xasprintf("%s: experimenter OXM field '%s' not supported",
+                         full_s, s);
+    }
 
     if (!bitwise_is_all_zeros(&imm, sizeof imm, dst.n_bits,
                               (8 * sizeof imm) - dst.n_bits)) {
@@ -268,6 +272,10 @@ learn_parse_spec(const char *orig, char *name, char *value,
         error = mf_parse_subfield(&spec->dst, name);
         if (error) {
             return error;
+        }
+        if (!mf_nxm_header(spec->dst.field->id)) {
+            return xasprintf("%s: experimenter OXM field '%s' not supported",
+                             orig, name);
         }
 
         /* Parse source and check prerequisites. */
