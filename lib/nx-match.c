@@ -621,17 +621,13 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
 
     /* Metadata. */
     if (match->wc.masks.dp_hash) {
-        if (!oxm) {
-            nxm_put_32m(b, mf_oxm_header(MFF_DP_HASH, oxm),
-                        htonl(flow->dp_hash), htonl(match->wc.masks.dp_hash));
-        }
+        nxm_put_32m(b, mf_oxm_header(MFF_DP_HASH, oxm),
+                    htonl(flow->dp_hash), htonl(match->wc.masks.dp_hash));
     }
 
     if (match->wc.masks.recirc_id) {
-        if (!oxm) {
-            nxm_put_32(b, mf_oxm_header(MFF_RECIRC_ID, oxm),
-                       htonl(flow->recirc_id));
-        }
+        nxm_put_32(b, mf_oxm_header(MFF_RECIRC_ID, oxm),
+                   htonl(flow->recirc_id));
     }
 
     if (match->wc.masks.in_port.ofp_port) {
