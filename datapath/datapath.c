@@ -529,6 +529,7 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	struct vport *input_vport;
 	int len;
 	int err;
+	bool log = !a[OVS_FLOW_ATTR_PROBE];
 
 	err = -EINVAL;
 	if (!a[OVS_PACKET_ATTR_PACKET] || !a[OVS_PACKET_ATTR_KEY] ||
@@ -562,12 +563,12 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 		goto err_kfree_skb;
 
 	err = ovs_flow_key_extract_userspace(a[OVS_PACKET_ATTR_KEY], packet,
-					     &flow->key);
+					     &flow->key, log);
 	if (err)
 		goto err_flow_free;
 
 	err = ovs_nla_copy_actions(a[OVS_PACKET_ATTR_ACTIONS],
-				   &flow->key, &acts);
+				   &flow->key, &acts, log);
 	if (err)
 		goto err_flow_free;
 
@@ -859,15 +860,17 @@ static int ovs_flow_cmd_new(struct sk_buff *skb, struct genl_info *info)
 	struct sw_flow_actions *acts;
 	struct sw_flow_match match;
 	int error;
+	bool log = !a[OVS_FLOW_ATTR_PROBE];
 
 	/* Must have key and actions. */
 	error = -EINVAL;
 	if (!a[OVS_FLOW_ATTR_KEY]) {
-		OVS_NLERR("Flow key attribute not present in new flow.\n");
+		OVS_NLERR(log, "Flow key attribute not present in new flow.");
 		goto error;
 	}
 	if (!a[OVS_FLOW_ATTR_ACTIONS]) {
-		OVS_NLERR("Flow actions attribute not present in new flow.\n");
+		OVS_NLERR(log,
+			  "Flow actions attribute not present in new flow.");
 		goto error;
 	}
 
@@ -881,8 +884,8 @@ static int ovs_flow_cmd_new(struct sk_buff *skb, struct genl_info *info)
 
 	/* Extract key. */
 	ovs_match_init(&match, &new_flow->unmasked_key, &mask);
-	error = ovs_nla_get_match(&match,
-				  a[OVS_FLOW_ATTR_KEY], a[OVS_FLOW_ATTR_MASK]);
+	error = ovs_nla_get_match(&match, a[OVS_FLOW_ATTR_KEY],
+				  a[OVS_FLOW_ATTR_MASK], log);
 	if (error)
 		goto err_kfree_flow;
 
@@ -890,9 +893,12 @@ static int ovs_flow_cmd_new(struct sk_buff *skb, struct genl_info *info)
 
 	/* Validate actions. */
 	error = ovs_nla_copy_actions(a[OVS_FLOW_ATTR_ACTIONS], &new_flow->key,
-				     &acts);
+				     &acts, log);
 	if (error) {
-		OVS_NLERR("Flow actions may not be safe on all matching packets.\n");
+		OVS_NLERR(
+			log,
+			"Flow actions may not be safe on all matching packets."
+			);
 		goto err_kfree_flow;
 	}
 
@@ -988,16 +994,18 @@ error:
 /* Factor out action copy to avoid "Wframe-larger-than=1024" warning. */
 static struct sw_flow_actions *get_flow_actions(const struct nlattr *a,
 						const struct sw_flow_key *key,
-						const struct sw_flow_mask *mask)
+						const struct sw_flow_mask *mask,
+						bool log)
 {
 	struct sw_flow_actions *acts;
 	struct sw_flow_key masked_key;
 	int error;
 
 	ovs_flow_mask_key(&masked_key, key, mask);
-	error = ovs_nla_copy_actions(a, &masked_key, &acts);
+	error = ovs_nla_copy_actions(a, &masked_key, &acts, log);
 	if (error) {
-		OVS_NLERR("Actions may not be safe on all matching packets.\n");
+		OVS_NLERR(log,
+			  "Actions may not be safe on all matching packets.");
 		return ERR_PTR(error);
 	}
 
@@ -1016,23 +1024,25 @@ static int ovs_flow_cmd_set(struct sk_buff *skb, struct genl_info *info)
 	struct sw_flow_actions *old_acts = NULL, *acts = NULL;
 	struct sw_flow_match match;
 	int error;
+	bool log = !a[OVS_FLOW_ATTR_PROBE];
 
 	/* Extract key. */
 	error = -EINVAL;
 	if (!a[OVS_FLOW_ATTR_KEY]) {
-		OVS_NLERR("Flow key attribute not present in set flow.\n");
+		OVS_NLERR(log, "Flow key attribute not present in set flow.");
 		goto error;
 	}
 
 	ovs_match_init(&match, &key, &mask);
-	error = ovs_nla_get_match(&match,
-				  a[OVS_FLOW_ATTR_KEY], a[OVS_FLOW_ATTR_MASK]);
+	error = ovs_nla_get_match(&match, a[OVS_FLOW_ATTR_KEY],
+				  a[OVS_FLOW_ATTR_MASK], log);
 	if (error)
 		goto error;
 
 	/* Validate actions. */
 	if (a[OVS_FLOW_ATTR_ACTIONS]) {
-		acts = get_flow_actions(a[OVS_FLOW_ATTR_ACTIONS], &key, &mask);
+		acts = get_flow_actions(a[OVS_FLOW_ATTR_ACTIONS], &key, &mask,
+					log);
 		if (IS_ERR(acts)) {
 			error = PTR_ERR(acts);
 			goto error;
@@ -1113,14 +1123,16 @@ static int ovs_flow_cmd_get(struct sk_buff *skb, struct genl_info *info)
 	struct datapath *dp;
 	struct sw_flow_match match;
 	int err;
+	bool log = !a[OVS_FLOW_ATTR_PROBE];
 
 	if (!a[OVS_FLOW_ATTR_KEY]) {
-		OVS_NLERR("Flow get message rejected, Key attribute missing.\n");
+		OVS_NLERR(log,
+			  "Flow get message rejected, Key attribute missing.");
 		return -EINVAL;
 	}
 
 	ovs_match_init(&match, &key, NULL);
-	err = ovs_nla_get_match(&match, a[OVS_FLOW_ATTR_KEY], NULL);
+	err = ovs_nla_get_match(&match, a[OVS_FLOW_ATTR_KEY], NULL, log);
 	if (err)
 		return err;
 
@@ -1161,10 +1173,12 @@ static int ovs_flow_cmd_del(struct sk_buff *skb, struct genl_info *info)
 	struct datapath *dp;
 	struct sw_flow_match match;
 	int err;
+	bool log = !a[OVS_FLOW_ATTR_PROBE];
 
 	if (likely(a[OVS_FLOW_ATTR_KEY])) {
 		ovs_match_init(&match, &key, NULL);
-		err = ovs_nla_get_match(&match, a[OVS_FLOW_ATTR_KEY], NULL);
+		err = ovs_nla_get_match(&match, a[OVS_FLOW_ATTR_KEY], NULL,
+					log);
 		if (unlikely(err))
 			return err;
 	}
@@ -1255,8 +1269,10 @@ static int ovs_flow_cmd_dump(struct sk_buff *skb, struct netlink_callback *cb)
 
 static const struct nla_policy flow_policy[OVS_FLOW_ATTR_MAX + 1] = {
 	[OVS_FLOW_ATTR_KEY] = { .type = NLA_NESTED },
+	[OVS_FLOW_ATTR_MASK] = { .type = NLA_NESTED },
 	[OVS_FLOW_ATTR_ACTIONS] = { .type = NLA_NESTED },
 	[OVS_FLOW_ATTR_CLEAR] = { .type = NLA_FLAG },
+	[OVS_FLOW_ATTR_PROBE] = { .type = NLA_FLAG },
 };
 
 static struct genl_ops dp_flow_genl_ops[] = {

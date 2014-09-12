@@ -257,7 +257,7 @@ int ovs_flow_key_extract(const struct ovs_tunnel_info *tun_info,
 /* Extract key from packet coming from userspace. */
 int ovs_flow_key_extract_userspace(const struct nlattr *attr,
 				   struct sk_buff *skb,
-				   struct sw_flow_key *key);
+				   struct sw_flow_key *key, bool log);
 /* Update the non-metadata part of the flow key using skb. */
 int ovs_flow_key_update(struct sk_buff *skb, struct sw_flow_key *key);
 
