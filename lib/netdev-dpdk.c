@@ -190,7 +190,6 @@ struct netdev_dpdk {
     int mtu;
     int socket_id;
     int buf_size;
-    struct netdev_stats stats_offset;
     struct netdev_stats stats;
 
     uint8_t hwaddr[ETH_ADDR_LEN];
@@ -950,29 +949,17 @@ netdev_dpdk_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     ovs_mutex_lock(&dev->mutex);
     rte_eth_stats_get(dev->port_id, &rte_stats);
 
-    *stats = dev->stats_offset;
+    memset(stats, 0, sizeof(*stats));
 
-    stats->rx_packets += rte_stats.ipackets;
-    stats->tx_packets += rte_stats.opackets;
-    stats->rx_bytes += rte_stats.ibytes;
-    stats->tx_bytes += rte_stats.obytes;
-    stats->rx_errors += rte_stats.ierrors;
-    stats->tx_errors += rte_stats.oerrors;
-    stats->multicast += rte_stats.imcasts;
+    stats->rx_packets = rte_stats.ipackets;
+    stats->tx_packets = rte_stats.opackets;
+    stats->rx_bytes = rte_stats.ibytes;
+    stats->tx_bytes = rte_stats.obytes;
+    stats->rx_errors = rte_stats.ierrors;
+    stats->tx_errors = rte_stats.oerrors;
+    stats->multicast = rte_stats.imcasts;
 
-    stats->tx_dropped += dev->stats.tx_dropped;
-    ovs_mutex_unlock(&dev->mutex);
-
-    return 0;
-}
-
-static int
-netdev_dpdk_set_stats(struct netdev *netdev, const struct netdev_stats *stats)
-{
-    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-
-    ovs_mutex_lock(&dev->mutex);
-    dev->stats_offset = *stats;
+    stats->tx_dropped = dev->stats.tx_dropped;
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
@@ -1367,7 +1354,6 @@ unlock_dpdk:
     netdev_dpdk_get_carrier_resets,                           \
     netdev_dpdk_set_miimon,                                   \
     netdev_dpdk_get_stats,                                    \
-    netdev_dpdk_set_stats,                                    \
     netdev_dpdk_get_features,                                 \
     NULL,                       /* set_advertisements */      \
                                                               \

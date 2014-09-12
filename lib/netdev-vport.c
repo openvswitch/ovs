@@ -789,7 +789,6 @@ get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     NULL,                       /* get_carrier_resets */    \
     NULL,                       /* get_miimon */            \
     get_stats,                                              \
-    NULL,                       /* set_stats */             \
                                                             \
     NULL,                       /* get_features */          \
     NULL,                       /* set_advertisements */    \

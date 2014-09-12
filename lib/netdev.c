@@ -1239,19 +1239,6 @@ netdev_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     return error;
 }
 
-/* Attempts to change the stats for 'netdev' to those provided in 'stats'.
- * Returns 0 if successful, otherwise a positive errno value.
- *
- * This will probably fail for most network devices.  Some devices might only
- * allow setting their stats to 0. */
-int
-netdev_set_stats(struct netdev *netdev, const struct netdev_stats *stats)
-{
-    return (netdev->netdev_class->set_stats
-             ? netdev->netdev_class->set_stats(netdev, stats)
-             : EOPNOTSUPP);
-}
-
 /* Attempts to set input rate limiting (policing) policy, such that up to
  * 'kbits_rate' kbps of traffic is accepted, with a maximum accumulative burst
  * size of 'kbits' kb. */

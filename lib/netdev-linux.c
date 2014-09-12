@@ -1691,41 +1691,6 @@ netdev_internal_get_stats(const struct netdev *netdev_,
     return error;
 }
 
-static int
-netdev_internal_set_stats(struct netdev *netdev,
-                          const struct netdev_stats *stats)
-{
-    struct ovs_vport_stats vport_stats;
-    struct dpif_linux_vport vport;
-    int err;
-
-    put_32aligned_u64(&vport_stats.rx_packets, stats->rx_packets);
-    put_32aligned_u64(&vport_stats.tx_packets, stats->tx_packets);
-    put_32aligned_u64(&vport_stats.rx_bytes, stats->rx_bytes);
-    put_32aligned_u64(&vport_stats.tx_bytes, stats->tx_bytes);
-    put_32aligned_u64(&vport_stats.rx_errors, stats->rx_errors);
-    put_32aligned_u64(&vport_stats.tx_errors, stats->tx_errors);
-    put_32aligned_u64(&vport_stats.rx_dropped, stats->rx_dropped);
-    put_32aligned_u64(&vport_stats.tx_dropped, stats->tx_dropped);
-
-    dpif_linux_vport_init(&vport);
-    vport.cmd = OVS_VPORT_CMD_SET;
-    vport.name = netdev_get_name(netdev);
-    vport.stats = &vport_stats;
-
-    err = dpif_linux_vport_transact(&vport, NULL, NULL);
-
-    /* If the vport layer doesn't know about the device, that doesn't mean it
-     * doesn't exist (after all were able to open it when netdev_open() was
-     * called), it just means that it isn't attached and we'll be getting
-     * stats a different way. */
-    if (err == ENODEV) {
-        err = EOPNOTSUPP;
-    }
-
-    return err;
-}
-
 static void
 netdev_linux_read_features(struct netdev_linux *netdev)
 {
@@ -2734,7 +2699,7 @@ netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
     return error;
 }
 
-#define NETDEV_LINUX_CLASS(NAME, CONSTRUCT, GET_STATS, SET_STATS,  \
+#define NETDEV_LINUX_CLASS(NAME, CONSTRUCT, GET_STATS,          \
                            GET_FEATURES, GET_STATUS)            \
 {                                                               \
     NAME,                                                       \
@@ -2764,7 +2729,6 @@ netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
     netdev_linux_get_carrier_resets,                            \
     netdev_linux_set_miimon_interval,                           \
     GET_STATS,                                                  \
-    SET_STATS,                                                  \
                                                                 \
     GET_FEATURES,                                               \
     netdev_linux_set_advertisements,                            \
@@ -2807,7 +2771,6 @@ const struct netdev_class netdev_linux_class =
         "system",
         netdev_linux_construct,
         netdev_linux_get_stats,
-        NULL,                    /* set_stats */
         netdev_linux_get_features,
         netdev_linux_get_status);
 
@@ -2816,7 +2779,6 @@ const struct netdev_class netdev_tap_class =
         "tap",
         netdev_linux_construct_tap,
         netdev_tap_get_stats,
-        NULL,                   /* set_stats */
         netdev_linux_get_features,
         netdev_linux_get_status);
 
@@ -2825,7 +2787,6 @@ const struct netdev_class netdev_internal_class =
         "internal",
         netdev_linux_construct,
         netdev_internal_get_stats,
-        netdev_internal_set_stats,
         NULL,                  /* get_features */
         netdev_internal_get_status);
 

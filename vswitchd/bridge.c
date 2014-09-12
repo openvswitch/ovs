@@ -3782,8 +3782,6 @@ port_configure_bond(struct port *port, struct bond_settings *s)
         s->rebalance_interval = 1000;
     }
 
-    s->fake_iface = port->cfg->bond_fake_iface;
-
     s->lacp_fallback_ab_cfg = smap_get_bool(&port->cfg->other_config,
                                        "lacp-fallback-ab", false);
 

@@ -970,18 +970,6 @@ netdev_dummy_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 }
 
 static int
-netdev_dummy_set_stats(struct netdev *netdev, const struct netdev_stats *stats)
-{
-    struct netdev_dummy *dev = netdev_dummy_cast(netdev);
-
-    ovs_mutex_lock(&dev->mutex);
-    dev->stats = *stats;
-    ovs_mutex_unlock(&dev->mutex);
-
-    return 0;
-}
-
-static int
 netdev_dummy_get_ifindex(const struct netdev *netdev)
 {
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
@@ -1058,7 +1046,6 @@ static const struct netdev_class dummy_class = {
     NULL,                       /* get_carrier_resets */
     NULL,                       /* get_miimon */
     netdev_dummy_get_stats,
-    netdev_dummy_set_stats,
 
     NULL,                       /* get_features */
     NULL,                       /* set_advertisements */

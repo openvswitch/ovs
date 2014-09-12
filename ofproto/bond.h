@@ -52,8 +52,6 @@ struct bond_settings {
     int up_delay;               /* ms before enabling an up slave. */
     int down_delay;             /* ms before disabling a down slave. */
 
-    /* Legacy compatibility. */
-    bool fake_iface;            /* Update fake stats for netdev 'name'? */
     bool lacp_fallback_ab_cfg;  /* Fallback to active-backup on LACP failure. */
 };
 

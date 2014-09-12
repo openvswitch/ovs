@@ -371,14 +371,6 @@ struct netdev_class {
      * (UINT64_MAX). */
     int (*get_stats)(const struct netdev *netdev, struct netdev_stats *);
 
-    /* Sets the device stats for 'netdev' to 'stats'.
-     *
-     * Most network devices won't support this feature and will set this
-     * function pointer to NULL, which is equivalent to returning EOPNOTSUPP.
-     *
-     * Some network devices might only allow setting their stats to 0. */
-    int (*set_stats)(struct netdev *netdev, const struct netdev_stats *);
-
     /* Stores the features supported by 'netdev' into each of '*current',
      * '*advertised', '*supported', and '*peer'.  Each value is a bitmap of
      * NETDEV_F_* bits.
