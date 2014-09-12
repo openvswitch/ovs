@@ -267,7 +267,7 @@ int ofproto_port_dump_done(struct ofproto_port_dump *);
         )
 
 #define OFPROTO_FLOW_LIMIT_DEFAULT 200000
-#define OFPROTO_MAX_IDLE_DEFAULT 1500
+#define OFPROTO_MAX_IDLE_DEFAULT 10000 /* ms */
 
 const char *ofproto_port_open_type(const char *datapath_type,
                                    const char *port_type);
