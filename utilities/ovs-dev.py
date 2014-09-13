@@ -216,7 +216,7 @@ def run():
         _sh("ovsdb-tool", "create", ROOT + "/conf.db",
             OVS_SRC + "/vswitchd/vswitch.ovsschema")
 
-    opts = ["--pidfile", "--log-file", "--enable-dummy"]
+    opts = ["--pidfile", "--log-file"]
 
     _sh(*(["ovsdb-server",
            "--remote=punix:%s/run/db.sock" % ROOT,
@@ -251,7 +251,7 @@ def run():
                "--suppressions=%s/tests/openssl.supp" % OVS_SRC] + cmd
     else:
         cmd = ["sudo"] + cmd
-        opts = opts + ["-vconsole:off", "--detach"]
+        opts = opts + ["-vconsole:off", "--detach", "--enable-dummy"]
     _sh(*(cmd + opts))
 commands.append(run)
 
