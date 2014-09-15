@@ -81,7 +81,8 @@ ovsdb_query_distinct(struct ovsdb_table *table,
 {
     if (!columns || ovsdb_column_set_contains(columns, OVSDB_COL_UUID)) {
         /* All the result rows are guaranteed to be distinct anyway. */
-        return ovsdb_query_row_set(table, condition, results);
+        ovsdb_query_row_set(table, condition, results);
+        return;
     } else {
         /* Use hash table to drop duplicates. */
         struct ovsdb_row_hash_node *node;
