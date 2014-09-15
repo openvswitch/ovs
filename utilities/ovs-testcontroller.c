@@ -91,7 +91,7 @@ static char *unixctl_path = NULL;
 
 static void new_switch(struct switch_ *, struct vconn *);
 static void parse_options(int argc, char *argv[]);
-static void usage(void) NO_RETURN;
+NO_RETURN static void usage(void);
 
 int
 main(int argc, char *argv[])

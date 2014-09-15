@@ -154,15 +154,17 @@ void vlog_valist(const struct vlog_module *, enum vlog_level,
                  const char *, va_list)
     PRINTF_FORMAT (3, 0);
 
-void vlog_fatal(const struct vlog_module *, const char *format, ...)
-    PRINTF_FORMAT (2, 3) NO_RETURN;
-void vlog_fatal_valist(const struct vlog_module *, const char *format, va_list)
-    PRINTF_FORMAT (2, 0) NO_RETURN;
+NO_RETURN void vlog_fatal(const struct vlog_module *, const char *format, ...)
+    PRINTF_FORMAT (2, 3);
+NO_RETURN void vlog_fatal_valist(const struct vlog_module *,
+                                 const char *format, va_list)
+    PRINTF_FORMAT (2, 0);
 
-void vlog_abort(const struct vlog_module *, const char *format, ...)
-    PRINTF_FORMAT (2, 3) NO_RETURN;
-void vlog_abort_valist(const struct vlog_module *, const char *format, va_list)
-    PRINTF_FORMAT (2, 0) NO_RETURN;
+NO_RETURN void vlog_abort(const struct vlog_module *, const char *format, ...)
+    PRINTF_FORMAT (2, 3);
+NO_RETURN void vlog_abort_valist(const struct vlog_module *,
+                                 const char *format, va_list)
+    PRINTF_FORMAT (2, 0);
 
 void vlog_rate_limit(const struct vlog_module *, enum vlog_level,
                      struct vlog_rate_limit *, const char *, ...)

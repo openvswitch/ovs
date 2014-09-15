@@ -28,7 +28,7 @@ stream_ssl_is_configured(void)
     return false;
 }
 
-static void NO_RETURN
+NO_RETURN static void
 nossl_option(const char *detail)
 {
     VLOG_FATAL("%s specified but Open vSwitch was built without SSL support",

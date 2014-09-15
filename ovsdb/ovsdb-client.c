@@ -74,7 +74,7 @@ static struct table_style table_style = TABLE_STYLE_DEFAULT;
 
 static const struct ovsdb_client_command *get_all_commands(void);
 
-static void usage(void) NO_RETURN;
+NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[]);
 static struct jsonrpc *open_jsonrpc(const char *server);
 static void fetch_dbs(struct jsonrpc *, struct svec *dbs);

@@ -51,7 +51,7 @@
 #include "util.h"
 #include "vlog.h"
 
-static void usage(void) NO_RETURN;
+NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[]);
 static struct command *get_all_commands(void);
 

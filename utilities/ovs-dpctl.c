@@ -44,7 +44,7 @@
 
 static struct dpctl_params dpctl_p;
 
-static void usage(void *userdata OVS_UNUSED) NO_RETURN;
+NO_RETURN static void usage(void *userdata OVS_UNUSED);
 static void parse_options(int argc, char *argv[]);
 
 static void

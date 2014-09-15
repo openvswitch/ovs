@@ -74,7 +74,7 @@
     if (!OVS_LIKELY(CONDITION)) {                                       \
         ovs_assert_failure(SOURCE_LOCATOR, __func__, #CONDITION);       \
     }
-void ovs_assert_failure(const char *, const char *, const char *) NO_RETURN;
+NO_RETURN void ovs_assert_failure(const char *, const char *, const char *);
 
 /* Casts 'pointer' to 'type' and issues a compiler warning if the cast changes
  * anything other than an outermost "const" or "volatile" qualifier.
@@ -275,7 +275,7 @@ void set_subprogram_name(const char *format, ...) PRINTF_FORMAT(1, 2);
 const char *get_program_version(void);
 void ovs_print_version(uint8_t min_ofp, uint8_t max_ofp);
 
-void out_of_memory(void) NO_RETURN;
+NO_RETURN void out_of_memory(void);
 void *xmalloc(size_t) MALLOC_LIKE;
 void *xcalloc(size_t, size_t) MALLOC_LIKE;
 void *xzalloc(size_t) MALLOC_LIKE;
@@ -294,14 +294,14 @@ void free_cacheline(void *);
 void ovs_strlcpy(char *dst, const char *src, size_t size);
 void ovs_strzcpy(char *dst, const char *src, size_t size);
 
-void ovs_abort(int err_no, const char *format, ...)
-    PRINTF_FORMAT(2, 3) NO_RETURN;
-void ovs_abort_valist(int err_no, const char *format, va_list)
-    PRINTF_FORMAT(2, 0) NO_RETURN;
-void ovs_fatal(int err_no, const char *format, ...)
-    PRINTF_FORMAT(2, 3) NO_RETURN;
-void ovs_fatal_valist(int err_no, const char *format, va_list)
-    PRINTF_FORMAT(2, 0) NO_RETURN;
+NO_RETURN void ovs_abort(int err_no, const char *format, ...)
+    PRINTF_FORMAT(2, 3);
+NO_RETURN void ovs_abort_valist(int err_no, const char *format, va_list)
+    PRINTF_FORMAT(2, 0);
+NO_RETURN void ovs_fatal(int err_no, const char *format, ...)
+    PRINTF_FORMAT(2, 3);
+NO_RETURN void ovs_fatal_valist(int err_no, const char *format, va_list)
+    PRINTF_FORMAT(2, 0);
 void ovs_error(int err_no, const char *format, ...) PRINTF_FORMAT(2, 3);
 void ovs_error_valist(int err_no, const char *format, va_list)
     PRINTF_FORMAT(2, 0);

@@ -106,7 +106,7 @@ static size_t n_criteria, allocated_criteria;
 
 static const struct command *get_all_commands(void);
 
-static void usage(void) NO_RETURN;
+NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[]);
 
 static bool recv_flow_stats_reply(struct vconn *, ovs_be32 send_xid,

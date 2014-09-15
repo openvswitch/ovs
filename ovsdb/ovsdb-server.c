@@ -97,7 +97,7 @@ static void close_db(struct db *db);
 static void parse_options(int *argc, char **argvp[],
                           struct sset *remotes, char **unixctl_pathp,
                           char **run_command);
-static void usage(void) NO_RETURN;
+NO_RETURN static void usage(void);
 
 static char *reconfigure_remotes(struct ovsdb_jsonrpc_server *,
                                  const struct shash *all_dbs,

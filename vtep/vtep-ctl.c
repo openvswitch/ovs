@@ -121,10 +121,10 @@ static struct table_style table_style = TABLE_STYLE_DEFAULT;
 static struct ovsdb_idl *the_idl;
 static struct ovsdb_idl_txn *the_idl_txn;
 
-static void vtep_ctl_exit(int status) NO_RETURN;
-static void vtep_ctl_fatal(const char *, ...) PRINTF_FORMAT(1, 2) NO_RETURN;
+NO_RETURN static void vtep_ctl_exit(int status);
+NO_RETURN static void vtep_ctl_fatal(const char *, ...) PRINTF_FORMAT(1, 2);
 static char *default_db(void);
-static void usage(void) NO_RETURN;
+NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[], struct shash *local_options);
 static bool might_write_to_db(char **argv);
 

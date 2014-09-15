@@ -38,7 +38,7 @@
 #include "vlog.h"
 #include "ovstest.h"
 
-static void usage(void) NO_RETURN;
+NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[]);
 
 static unixctl_cb_func test_sflow_exit;

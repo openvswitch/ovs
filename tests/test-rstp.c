@@ -335,10 +335,9 @@ simulate(struct test_case *tc, int granularity)
     }
 }
 
-static void
+NO_RETURN static void
 err(const char *message, ...)
-    PRINTF_FORMAT(1, 2)
-    NO_RETURN;
+    PRINTF_FORMAT(1, 2);
 
 static void
 err(const char *message, ...)
