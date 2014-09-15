@@ -80,4 +80,6 @@ enum ovs_nl_mcast_attr {
     OVS_NL_ATTR_MCAST_JOIN,  /* (UINT8) 1/0 - Join/Unjoin */
 };
 
+typedef struct ovs_dp_stats OVS_DP_STATS;
+
 #endif /* __OVS_DP_INTERFACE_EXT_H_ */

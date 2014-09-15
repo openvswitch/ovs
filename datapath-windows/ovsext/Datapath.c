@@ -821,6 +821,59 @@ OvsGetPidCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
 /*
  * --------------------------------------------------------------------------
+ * Utility function to fill up information about the datapath in a reply to
+ * userspace.
+ * Assumes that 'gOvsCtrlLock' lock is acquired.
+ * --------------------------------------------------------------------------
+ */
+static NTSTATUS
+OvsDpFillInfo(POVS_SWITCH_CONTEXT ovsSwitchContext,
+              POVS_MESSAGE msgIn,
+              PNL_BUFFER nlBuf)
+{
+    BOOLEAN writeOk;
+    OVS_MESSAGE msgOutTmp;
+    OVS_DATAPATH *datapath = &ovsSwitchContext->datapath;
+    PNL_MSG_HDR nlMsg;
+
+    /* XXX: Add API for nlBuf->bufRemLen. */
+    ASSERT(NlBufAt(nlBuf, 0, 0) != 0 && nlBuf->bufRemLen >= sizeof msgOutTmp);
+
+    msgOutTmp.nlMsg.nlmsgType = OVS_WIN_NL_DATAPATH_FAMILY_ID;
+    msgOutTmp.nlMsg.nlmsgFlags = 0;  /* XXX: ? */
+    msgOutTmp.nlMsg.nlmsgSeq = msgIn->nlMsg.nlmsgSeq;
+    msgOutTmp.nlMsg.nlmsgPid = msgIn->nlMsg.nlmsgPid;
+
+    msgOutTmp.genlMsg.cmd = OVS_DP_CMD_GET;
+    msgOutTmp.genlMsg.version = nlDatapathFamilyOps.version;
+    msgOutTmp.genlMsg.reserved = 0;
+
+    msgOutTmp.ovsHdr.dp_ifindex = ovsSwitchContext->dpNo;
+
+    writeOk = NlMsgPutHead(nlBuf, (PCHAR)&msgOutTmp, sizeof msgOutTmp);
+    if (writeOk) {
+        writeOk = NlMsgPutTailString(nlBuf, OVS_DP_ATTR_NAME,
+                                     OVS_SYSTEM_DP_NAME);
+    }
+    if (writeOk) {
+        OVS_DP_STATS dpStats;
+
+        dpStats.n_hit = datapath->hits;
+        dpStats.n_missed = datapath->misses;
+        dpStats.n_lost = datapath->lost;
+        dpStats.n_flows = datapath->nFlows;
+        writeOk = NlMsgPutTailUnspec(nlBuf, OVS_DP_ATTR_STATS,
+                                     (PCHAR)&dpStats, sizeof dpStats);
+    }
+    nlMsg = (PNL_MSG_HDR)NlBufAt(nlBuf, 0, 0);
+    nlMsg->nlmsgLen = NlBufSize(nlBuf);
+
+    return writeOk ? STATUS_SUCCESS : STATUS_INVALID_BUFFER_SIZE;
+}
+
+
+/*
+ * --------------------------------------------------------------------------
  *  Handler for the get dp command. The function handles the initial call to
  *  setup the dump state, as well as subsequent calls to continue dumping data.
  * --------------------------------------------------------------------------
@@ -829,7 +882,6 @@ static NTSTATUS
 OvsGetDpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                    UINT32 *replyLen)
 {
-    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
     POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
     POVS_OPEN_INSTANCE instance =
         (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
@@ -838,6 +890,10 @@ OvsGetDpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         *replyLen = 0;
         OvsSetupDumpStart(usrParamsCtx);
     } else {
+        NL_BUFFER nlBuf;
+        NTSTATUS status;
+        POVS_MESSAGE msgIn = instance->dumpState.ovsMsg;
+
         ASSERT(usrParamsCtx->devOp == OVS_READ_DEV_OP);
 
         if (instance->dumpState.ovsMsg == NULL) {
@@ -850,78 +906,29 @@ OvsGetDpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         /* Output buffer has been validated while validating read dev op. */
         ASSERT(msgOut != NULL && usrParamsCtx->outputLength >= sizeof *msgOut);
 
-        /* XXX: Replace this with the netlink set API. */
-        msgIn = instance->dumpState.ovsMsg;
-        msgOut->nlMsg.nlmsgType = OVS_WIN_NL_DATAPATH_FAMILY_ID;
-        msgOut->nlMsg.nlmsgFlags = 0;  /* XXX: ? */
-        msgOut->nlMsg.nlmsgSeq = msgIn->nlMsg.nlmsgSeq;
-        msgOut->nlMsg.nlmsgPid = msgIn->nlMsg.nlmsgPid;
-        msgOut->nlMsg.nlmsgLen = sizeof *msgOut;
-
-        msgOut->genlMsg.cmd = OVS_DP_CMD_GET;
-        msgOut->genlMsg.version = nlDatapathFamilyOps.version;
-        msgOut->genlMsg.reserved = 0;
+        NlBufInit(&nlBuf, usrParamsCtx->outputBuffer,
+                  usrParamsCtx->outputLength);
 
         OvsAcquireCtrlLock();
-        if (gOvsSwitchContext) {
-            msgOut->ovsHdr.dp_ifindex = gOvsSwitchContext->dpNo;
-        } else {
+        if (!gOvsSwitchContext) {
             /* Treat this as a dump done. */
             OvsReleaseCtrlLock();
             *replyLen = 0;
             FreeUserDumpState(instance);
             return STATUS_SUCCESS;
         }
-
-        /* XXX: Replace this with the netlink set API. */
-        {
-            /*
-             * Assume that the output buffer is at least 512 bytes. Once the
-             * netlink set API is implemented, the netlink buffer manipulation
-             * API should provide for checking the remaining number of bytes as
-             * we write out the message.
-             */
-            if (usrParamsCtx->outputLength <= 512) {
-                OvsReleaseCtrlLock();
-                return STATUS_NDIS_INVALID_LENGTH;
-            }
-            UINT16 attrTotalSize = 0;
-            UINT16 attrSize = 0;
-            PNL_ATTR nlAttr = (PNL_ATTR) ((PCHAR)msgOut + sizeof (*msgOut));
-            struct ovs_dp_stats *dpStats;
-            OVS_DATAPATH *datapath = &gOvsSwitchContext->datapath;
-
-            nlAttr->nlaType = OVS_DP_ATTR_NAME;
-            /* 'nlaLen' must not include the pad. */
-            nlAttr->nlaLen = sizeof (*nlAttr) + sizeof (OVS_SYSTEM_DP_NAME);
-            attrSize = sizeof (*nlAttr) +
-                       NLA_ALIGN(sizeof (OVS_SYSTEM_DP_NAME));
-            attrTotalSize += attrSize;
-
-            PNL_ATTR nlAttrNext = NlAttrGet(nlAttr);
-            RtlCopyMemory((PCHAR)nlAttrNext, OVS_SYSTEM_DP_NAME,
-                          sizeof (OVS_SYSTEM_DP_NAME));
-
-            nlAttr = (PNL_ATTR)((PCHAR)nlAttr + attrSize);
-            nlAttr->nlaType = OVS_DP_ATTR_STATS;
-            nlAttr->nlaLen = sizeof (*nlAttr) + sizeof (*dpStats);
-            attrSize = sizeof (*nlAttr) + NLA_ALIGN(sizeof (*dpStats));
-            attrTotalSize += attrSize;
-
-            dpStats = NlAttrGet(nlAttr);
-            dpStats->n_hit = datapath->hits;
-            dpStats->n_missed = datapath->misses;
-            dpStats->n_lost = datapath->lost;
-            dpStats->n_flows = datapath->nFlows;
-
-            msgOut->nlMsg.nlmsgLen += attrTotalSize;
-        }
+        status = OvsDpFillInfo(gOvsSwitchContext, msgIn, &nlBuf);
         OvsReleaseCtrlLock();
+
+        if (status != STATUS_SUCCESS) {
+            *replyLen = 0;
+            FreeUserDumpState(instance);
+            return status;
+        }
 
         /* Increment the dump index. */
         instance->dumpState.index[0] = 1;
         *replyLen = msgOut->nlMsg.nlmsgLen;
-        ASSERT(*replyLen <= 512);
 
         /* Free up the dump state, since there's no more data to continue. */
         FreeUserDumpState(instance);
