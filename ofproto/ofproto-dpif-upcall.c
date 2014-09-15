@@ -1750,7 +1750,7 @@ upcall_unixctl_dump_wait(struct unixctl_conn *conn,
                          void *aux OVS_UNUSED)
 {
     if (list_is_singleton(&all_udpifs)) {
-        struct udpif *udpif;
+        struct udpif *udpif = NULL;
         size_t len;
 
         udpif = OBJECT_CONTAINING(list_front(&all_udpifs), udpif, list_node);

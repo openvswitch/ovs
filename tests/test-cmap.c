@@ -78,7 +78,8 @@ check_cmap(struct cmap *cmap, const int values[], size_t n,
     /* Here we test iteration with cmap_next_position() */
     i = 0;
     while ((node = cmap_next_position(cmap, &pos))) {
-        struct element *e = OBJECT_CONTAINING(node, e, node);
+        struct element *e = NULL;
+        e = OBJECT_CONTAINING(node, e, node);
 
         assert(i < n);
         cmap_values2[i++] = e->value;
