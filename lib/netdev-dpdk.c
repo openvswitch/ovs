@@ -622,6 +622,7 @@ netdev_dpdk_set_multiq(struct netdev *netdev_, unsigned int n_txq,
         return err;
     }
 
+    ovs_mutex_lock(&dpdk_mutex);
     ovs_mutex_lock(&netdev->mutex);
     rte_eth_dev_stop(netdev->port_id);
     netdev->up.n_txq = n_txq;
@@ -632,6 +633,7 @@ netdev_dpdk_set_multiq(struct netdev *netdev_, unsigned int n_txq,
         netdev_dpdk_set_txq(netdev, n_txq);
     }
     ovs_mutex_unlock(&netdev->mutex);
+    ovs_mutex_unlock(&dpdk_mutex);
 
     return err;
 }
