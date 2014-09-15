@@ -213,15 +213,13 @@ done:
 PCHAR
 NlBufCopyAtTailUninit(PNL_BUFFER nlBuf, UINT32 len)
 {
-    PCHAR ret = NULL;
-
-    if ((NlBufCopyAtTail(nlBuf, NULL, len)) == FALSE) {
-        goto done;
-    }
+    PCHAR ret;
 
     ret = nlBuf->tail;
+    if ((NlBufCopyAtTail(nlBuf, NULL, len)) == FALSE) {
+        ret = NULL;
+    }
 
-done:
     return ret;
 }
 
