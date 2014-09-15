@@ -154,7 +154,10 @@ atomic_signal_fence(memory_order order)
     if (((size_t) (SRC) & (sizeof *(SRC) - 1)) == 0) {                     \
         *(DST) = *(SRC);                                                   \
     } else {                                                               \
+    __pragma (warning(push))                                               \
+    __pragma (warning(disable:4047))                                       \
        *(DST) = InterlockedOr64((int64_t volatile *) (SRC), 0);            \
+    __pragma (warning(pop))                                                \
     }
 
 #define atomic_read(SRC, DST)                               \
