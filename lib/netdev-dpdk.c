@@ -593,9 +593,8 @@ netdev_dpdk_get_config(const struct netdev *netdev_, struct smap *args)
 
     ovs_mutex_lock(&dev->mutex);
 
-    /* XXX: Allow to configure number of queues. */
-    smap_add_format(args, "configured_rx_queues", "%u", netdev_->n_rxq);
-    smap_add_format(args, "configured_tx_queues", "%u", netdev_->n_rxq);
+    smap_add_format(args, "configured_rx_queues", "%d", netdev_->n_rxq);
+    smap_add_format(args, "configured_tx_queues", "%d", netdev_->n_txq);
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
