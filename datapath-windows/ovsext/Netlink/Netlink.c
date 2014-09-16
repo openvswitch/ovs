@@ -761,6 +761,18 @@ NlAttrGetU8(const PNL_ATTR nla)
 
 /*
  * ---------------------------------------------------------------------------
+ * Returns the 16-bit host byte order value in 'nla''s payload.
+ * Asserts that 'nla''s payload is at least 2 bytes long.
+ * ---------------------------------------------------------------------------
+ */
+UINT16
+NlAttrGetU16(const PNL_ATTR nla)
+{
+    return NL_ATTR_GET_AS(nla, UINT16);
+}
+
+/*
+ * ---------------------------------------------------------------------------
  * Returns the 32-bit host byte order value in 'nla''s payload.
  * Asserts that 'nla''s payload is at least 4 bytes long.
  * ---------------------------------------------------------------------------
@@ -769,6 +781,18 @@ UINT32
 NlAttrGetU32(const PNL_ATTR nla)
 {
     return NL_ATTR_GET_AS(nla, UINT32);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Returns the 64-bit host byte order value in 'nla''s payload.
+ * Asserts that 'nla''s payload is at least 8 bytes long.
+ * ---------------------------------------------------------------------------
+ */
+UINT64
+NlAttrGetU64(const PNL_ATTR nla)
+{
+    return NL_ATTR_GET_AS(nla, UINT64);
 }
 
 /*
