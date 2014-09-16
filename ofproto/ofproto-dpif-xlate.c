@@ -4046,6 +4046,7 @@ actions_output_to_local_port(const struct xlate_ctx *ctx)
     return false;
 }
 
+#if defined(__linux__)
 /* Returns the maximum number of packets that the Linux kernel is willing to
  * queue up internally to certain kinds of software-implemented ports, or the
  * default (and rarely modified) value if it cannot be determined. */
@@ -4098,6 +4099,7 @@ count_output_actions(const struct ofpbuf *odp_actions)
     }
     return n;
 }
+#endif /* defined(__linux__) */
 
 /* Returns true if 'odp_actions' contains more output actions than the datapath
  * can reliably handle in one go.  On Linux, this is the value of the
@@ -4105,7 +4107,7 @@ count_output_actions(const struct ofpbuf *odp_actions)
  * packets that the kernel is willing to queue up for processing while the
  * datapath is processing a set of actions. */
 static bool
-too_many_output_actions(const struct ofpbuf *odp_actions)
+too_many_output_actions(const struct ofpbuf *odp_actions OVS_UNUSED)
 {
 #ifdef __linux__
     return (ofpbuf_size(odp_actions) / NL_A_U32_SIZE > netdev_max_backlog()
