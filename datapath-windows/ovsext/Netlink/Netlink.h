@@ -25,6 +25,7 @@
 typedef enum
 {
     NL_A_NO_ATTR = 0,
+    NL_A_VAR_LEN,
     NL_A_UNSPEC,
     NL_A_U8,
     NL_A_U16,

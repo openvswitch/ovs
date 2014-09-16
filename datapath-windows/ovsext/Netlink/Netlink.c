@@ -784,7 +784,9 @@ NlAttrValidate(const PNL_ATTR nla, const PNL_POLICY policy)
     UINT32 len;
     BOOLEAN ret = FALSE;
 
-    if (policy->type == NL_A_NO_ATTR) {
+    if ((policy->type == NL_A_NO_ATTR) ||
+        (policy->type == NL_A_VAR_LEN)) {
+        /* Do not validate anything for attributes of type var length */
         ret = TRUE;
         goto done;
     }
