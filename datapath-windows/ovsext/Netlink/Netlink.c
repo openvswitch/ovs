@@ -945,7 +945,7 @@ NlAttrParse(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
 
     for (iter = 0; iter < n_attrs; iter++) {
         const PNL_POLICY e = (const PNL_POLICY)(&policy[iter]);
-        if (e->type != NL_A_NO_ATTR && !attrs[iter]) {
+        if (!e->optional && e->type != NL_A_NO_ATTR && !attrs[iter]) {
             OVS_LOG_ERROR("Required attr:%d missing", iter);
             goto done;
         }

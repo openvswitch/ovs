@@ -47,6 +47,7 @@ typedef struct _NL_POLICY
     NL_ATTR_TYPE type;
     UINT32 minLen;
     UINT32 maxLen;
+    BOOLEAN optional;
 } NL_POLICY, *PNL_POLICY;
 
 /* This macro is careful to check for attributes with bad lengths. */
