@@ -1522,6 +1522,14 @@ ofproto_run(struct ofproto *p)
                 continue;
             }
 
+            if (classifier_count(&table->cls) > 100000) {
+                static struct vlog_rate_limit count_rl =
+                    VLOG_RATE_LIMIT_INIT(1, 1);
+                VLOG_WARN_RL(&count_rl, "Table %"PRIuSIZE" has an excessive"
+                             " number of rules: %d", i,
+                             classifier_count(&table->cls));
+            }
+
             ovs_mutex_lock(&ofproto_mutex);
             CLS_FOR_EACH (rule, cr, &table->cls) {
                 if (rule->idle_timeout || rule->hard_timeout) {
