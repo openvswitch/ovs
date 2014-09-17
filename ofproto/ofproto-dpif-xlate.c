@@ -352,6 +352,7 @@ static struct xport *get_ofp_port(const struct xbridge *, ofp_port_t ofp_port);
 static struct skb_priority_to_dscp *get_skb_priority(const struct xport *,
                                                      uint32_t skb_priority);
 static void clear_skb_priorities(struct xport *);
+static size_t count_skb_priorities(const struct xport *);
 static bool dscp_from_skb_priority(const struct xport *, uint32_t skb_priority,
                                    uint8_t *dscp);
 
@@ -2578,10 +2579,13 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     flow_pkt_mark = flow->pkt_mark;
     flow_nw_tos = flow->nw_tos;
 
-    if (dscp_from_skb_priority(xport, flow->skb_priority, &dscp)) {
-        wc->masks.nw_tos |= IP_DSCP_MASK;
-        flow->nw_tos &= ~IP_DSCP_MASK;
-        flow->nw_tos |= dscp;
+    if (count_skb_priorities(xport)) {
+        memset(&wc->masks.skb_priority, 0xff, sizeof wc->masks.skb_priority);
+        if (dscp_from_skb_priority(xport, flow->skb_priority, &dscp)) {
+            wc->masks.nw_tos |= IP_DSCP_MASK;
+            flow->nw_tos &= ~IP_DSCP_MASK;
+            flow->nw_tos |= dscp;
+        }
     }
 
     if (xport->is_tunnel) {
@@ -3671,6 +3675,8 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_ENQUEUE:
+            memset(&wc->masks.skb_priority, 0xff,
+                   sizeof wc->masks.skb_priority);
             xlate_enqueue_action(ctx, ofpact_get_ENQUEUE(a));
             break;
 
@@ -3777,10 +3783,14 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_SET_QUEUE:
+            memset(&wc->masks.skb_priority, 0xff,
+                   sizeof wc->masks.skb_priority);
             xlate_set_queue_action(ctx, ofpact_get_SET_QUEUE(a)->queue_id);
             break;
 
         case OFPACT_POP_QUEUE:
+            memset(&wc->masks.skb_priority, 0xff,
+                   sizeof wc->masks.skb_priority);
             flow->skb_priority = ctx->orig_skb_priority;
             break;
 
@@ -4018,6 +4028,12 @@ dscp_from_skb_priority(const struct xport *xport, uint32_t skb_priority,
     return pdscp != NULL;
 }
 
+static size_t
+count_skb_priorities(const struct xport *xport)
+{
+    return hmap_count(&xport->skb_priorities);
+}
+
 static void
 clear_skb_priorities(struct xport *xport)
 {
@@ -4195,7 +4211,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
     flow_wildcards_init_catchall(wc);
     memset(&wc->masks.in_port, 0xff, sizeof wc->masks.in_port);
-    memset(&wc->masks.skb_priority, 0xff, sizeof wc->masks.skb_priority);
     memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
     if (is_ip_any(flow)) {
         wc->masks.nw_frag |= FLOW_NW_FRAG_MASK;
