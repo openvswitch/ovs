@@ -94,10 +94,11 @@ def usage():
     argv0 = os.path.basename(sys.argv[0])
     print '''\
 %(argv0)s, for extracting OpenFlow field properties from meta-flow.h
-usage: %(argv0)s INPUT
+usage: %(argv0)s INPUT [--meta-flow | --nx-match]
   where INPUT points to lib/meta-flow.h in the source directory.
-The output written to stdout is intended to be saved as lib/meta-flow.inc,
-which lib/meta-flow.c \"#include\"s.\
+Depending on the option given, the output written to stdout is intended to be
+saved either as lib/meta-flow.inc or lib/nx-match.inc for the respective C
+file to #include.\
 ''' % {"argv0": argv0}
     sys.exit(0)
 
@@ -122,7 +123,7 @@ def parse_oxm(s, prefix, n_bytes):
     class_ = oxm_name_to_class(name)
     if class_ is None:
         fatal("unknown OXM class for %s" % name)
-    header = ("NXM_HEADER(0x%04x, %s, %d)" % (class_, code, n_bytes))
+    header = ("NXM_HEADER(0x%04x,%s,0,%d)" % (class_, code, n_bytes))
 
     if of_version:
         if of_version not in VERSION:
@@ -244,7 +245,97 @@ def protocols_to_c(protocols):
     else:
         assert False        
 
-def extract_ofp_fields():
+def make_meta_flow(fields):
+    output = []
+    for f in fields:
+        output += ["{"]
+        output += ["    %s," % f['mff']]
+        if f['extra_name']:
+            output += ["    \"%s\", \"%s\"," % (f['name'], f['extra_name'])]
+        else:
+            output += ["    \"%s\", NULL," % f['name']]
+        output += ["    %d, %d," % (f['n_bytes'], f['n_bits'])]
+
+        if f['writable']:
+            rw = 'true'
+        else:
+            rw = 'false'
+        output += ["    %s, %s, %s, %s,"
+                   % (f['mask'], f['string'], f['prereqs'], rw)]
+
+        nxm = f['NXM']
+        oxm = f['OXM']
+        if not nxm:
+            nxm = oxm
+        elif not oxm:
+            oxm = nxm
+
+        of10 = f['OF1.0']
+        of11 = f['OF1.1']
+        if f['mff'] in ('MFF_DL_VLAN', 'MFF_DL_VLAN_PCP'):
+            # MFF_DL_VLAN and MFF_DL_VLAN_PCP don't exactly correspond to
+            # OF1.1, nor do they have NXM or OXM assignments, but their
+            # meanings can be expressed in every protocol, which is the goal of
+            # this member.
+            protocols = set(["of10", "of11", "oxm"])
+        else:
+            protocols = set([])
+            if of10:
+                protocols |= set(["of10"])
+            if of11:
+                protocols |= set(["of11"])
+            if nxm or oxm:
+                protocols |= set(["oxm"])
+
+        if f['mask'] == 'MFM_FULLY':
+            cidr_protocols = protocols.copy()
+            bitwise_protocols = protocols.copy()
+
+            if of10 == 'exact match':
+                bitwise_protocols -= set(['of10'])
+                cidr_protocols -= set(['of10'])
+            elif of10 == 'CIDR mask':
+                bitwise_protocols -= set(['of10'])
+            else:
+                assert of10 is None
+
+            if of11 == 'exact match':
+                bitwise_protocols -= set(['of11'])
+                cidr_protocols -= set(['of11'])
+            else:
+                assert of11 in (None, 'bitwise mask')
+        else:
+            assert f['mask'] == 'MFM_NONE'
+            cidr_protocols = set([])
+            bitwise_protocols = set([])
+
+        output += ["    %s," % protocols_to_c(protocols)]
+        output += ["    %s," % protocols_to_c(cidr_protocols)]
+        output += ["    %s," % protocols_to_c(bitwise_protocols)]
+        
+        if f['prefix']:
+            output += ["    FLOW_U32OFS(%s)," % f['prefix']]
+        else:
+            output += ["    -1, /* not usable for prefix lookup */"]
+
+        output += ["},"]
+    return output
+
+def print_oxm_field(oxm, mff):
+    if oxm:
+        print """{ .nf = { %s, %d, "%s", %s } },""" % (
+            oxm[0], oxm[2], oxm[1], mff)
+
+def make_nx_match(fields):
+    output = []
+    print "static struct nxm_field_index all_nxm_fields[] = {";
+    for f in fields:
+        print_oxm_field(f['NXM'], f['mff'])
+        print_oxm_field(f['OXM'], f['mff'])
+    print "};"
+    return output
+
+def extract_ofp_fields(mode):
     global line
 
     fields = []
@@ -349,91 +440,16 @@ def extract_ofp_fields():
     if n_errors:
         sys.exit(1)
 
-    output = []
-    output += ["/* Generated automatically; do not modify!     "
-               "-*- buffer-read-only: t -*- */"]
-    output += [""]
+    print """\
+/* Generated automatically; do not modify!    "-*- buffer-read-only: t -*- */
+"""
 
-    for f in fields:
-        output += ["{"]
-        output += ["    %s," % f['mff']]
-        if f['extra_name']:
-            output += ["    \"%s\", \"%s\"," % (f['name'], f['extra_name'])]
-        else:
-            output += ["    \"%s\", NULL," % f['name']]
-        output += ["    %d, %d," % (f['n_bytes'], f['n_bits'])]
-
-        if f['writable']:
-            rw = 'true'
-        else:
-            rw = 'false'
-        output += ["    %s, %s, %s, %s,"
-                   % (f['mask'], f['string'], f['prereqs'], rw)]
-
-        nxm = f['NXM']
-        oxm = f['OXM']
-        if not nxm:
-            nxm = oxm
-        elif not oxm:
-            oxm = nxm
-        if nxm:
-            output += ["    %s, \"%s\"," % (nxm[0], nxm[1])]
-            output += ["    %s, \"%s\", %s," % (oxm[0], oxm[1], oxm[2])]
-        else:
-            output += ["    0, NULL, 0, NULL, 0, /* no NXM or OXM */"]
-
-        of10 = f['OF1.0']
-        of11 = f['OF1.1']
-        if f['mff'] in ('MFF_DL_VLAN', 'MFF_DL_VLAN_PCP'):
-            # MFF_DL_VLAN and MFF_DL_VLAN_PCP don't exactly correspond to
-            # OF1.1, nor do they have NXM or OXM assignments, but their
-            # meanings can be expressed in every protocol, which is the goal of
-            # this member.
-            protocols = set(["of10", "of11", "oxm"])
-        else:
-            protocols = set([])
-            if of10:
-                protocols |= set(["of10"])
-            if of11:
-                protocols |= set(["of11"])
-            if nxm or oxm:
-                protocols |= set(["oxm"])
-
-        if f['mask'] == 'MFM_FULLY':
-            cidr_protocols = protocols.copy()
-            bitwise_protocols = protocols.copy()
-
-            if of10 == 'exact match':
-                bitwise_protocols -= set(['of10'])
-                cidr_protocols -= set(['of10'])
-            elif of10 == 'CIDR mask':
-                bitwise_protocols -= set(['of10'])
-            else:
-                assert of10 is None
-
-            if of11 == 'exact match':
-                bitwise_protocols -= set(['of11'])
-                cidr_protocols -= set(['of11'])
-            else:
-                assert of11 in (None, 'bitwise mask')
-        else:
-            assert f['mask'] == 'MFM_NONE'
-            cidr_protocols = set([])
-            bitwise_protocols = set([])
-
-        output += ["    %s," % protocols_to_c(protocols)]
-        output += ["    %s," % protocols_to_c(cidr_protocols)]
-        output += ["    %s," % protocols_to_c(bitwise_protocols)]
-        
-        if f['prefix']:
-            output += ["    FLOW_U32OFS(%s)," % f['prefix']]
-        else:
-            output += ["    -1, /* not usable for prefix lookup */"]
-
-        output += ["},"]
-
-    if n_errors:
-        sys.exit(1)
+    if mode == '--meta-flow':
+        output = make_meta_flow(fields)
+    elif mode == '--nx-match':
+        output = make_nx_match(fields)
+    else:
+        assert False
 
     return output
 
@@ -441,11 +457,11 @@ def extract_ofp_fields():
 if __name__ == '__main__':
     if '--help' in sys.argv:
         usage()
-    elif len(sys.argv) != 2:
-        sys.stderr.write("exactly one non-option argument required; "
+    elif len(sys.argv) != 3:
+        sys.stderr.write("exactly two arguments required; "
                          "use --help for help\n")
         sys.exit(1)
-    else:
+    elif sys.argv[2] in ('--meta-flow', '--nx-match'):
         global file_name
         global input_file
         global line_number
@@ -453,6 +469,10 @@ if __name__ == '__main__':
         input_file = open(file_name)
         line_number = 0
 
-        for oline in extract_ofp_fields():
+        for oline in extract_ofp_fields(sys.argv[2]):
             print oline
+    else:
+        sys.stderr.write("invalid arguments; use --help for help\n")
+        sys.exit(1)
+
         

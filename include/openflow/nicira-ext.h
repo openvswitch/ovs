@@ -467,44 +467,12 @@ OFP_ASSERT(sizeof(struct nx_async_config) == 24);
  * nx_match error.
  */
 
-#define NXM_HEADER__(VENDOR, FIELD, HASMASK, LENGTH) \
-    (((VENDOR) << 16) | ((FIELD) << 9) | ((HASMASK) << 8) | (LENGTH))
-#define NXM_HEADER(VENDOR, FIELD, LENGTH) \
-    NXM_HEADER__(VENDOR, FIELD, 0, LENGTH)
-#define NXM_HEADER_W(VENDOR, FIELD, LENGTH) \
-    NXM_HEADER__(VENDOR, FIELD, 1, (LENGTH) * 2)
-#define NXM_VENDOR(HEADER) ((HEADER) >> 16)
-#define NXM_FIELD(HEADER) (((HEADER) >> 9) & 0x7f)
-#define NXM_TYPE(HEADER) (((HEADER) >> 9) & 0x7fffff)
-#define NXM_HASMASK(HEADER) (((HEADER) >> 8) & 1)
-#define NXM_LENGTH(HEADER) ((HEADER) & 0xff)
-
-#define NXM_MAKE_WILD_HEADER(HEADER) \
-        NXM_HEADER_W(NXM_VENDOR(HEADER), NXM_FIELD(HEADER), NXM_LENGTH(HEADER))
-
 /* Number of registers allocated NXM field IDs. */
 #define NXM_NX_MAX_REGS 16
 
 /* Bits in the value of NXM_NX_IP_FRAG. */
 #define NX_IP_FRAG_ANY   (1 << 0) /* Is this a fragment? */
 #define NX_IP_FRAG_LATER (1 << 1) /* Is this a fragment with nonzero offset? */
-
-/* Flow cookie.
- *
- * This may be used to gain the OpenFlow 1.1-like ability to restrict
- * certain NXM-based Flow Mod and Flow Stats Request messages to flows
- * with specific cookies.  See the "nx_flow_mod" and "nx_flow_stats_request"
- * structure definitions for more details.  This match is otherwise not
- * allowed.
- *
- * Prereqs: None.
- *
- * Format: 64-bit integer in network byte order.
- *
- * Masking: Arbitrary masks. */
-#define NXM_NX_COOKIE     NXM_HEADER  (0x0001, 30, 8)
-#define NXM_NX_COOKIE_W   NXM_HEADER_W(0x0001, 30, 8)
-
 
 /* ## --------------------- ## */
 /* ## Requests and replies. ## */

@@ -58,22 +58,6 @@
 /* Error type for experimenter error messages. */
 #define OFPET12_EXPERIMENTER 0xffff
 
-/*
- * OXM Class IDs.
- * The high order bit differentiate reserved classes from member classes.
- * Classes 0x0000 to 0x7FFF are member classes, allocated by ONF.
- * Classes 0x8000 to 0xFFFE are reserved classes, reserved for standardisation.
- */
-enum ofp12_oxm_class {
-    OFPXMC12_NXM_0          = 0x0000, /* Backward compatibility with NXM */
-    OFPXMC12_NXM_1          = 0x0001, /* Backward compatibility with NXM */
-    OFPXMC12_OPENFLOW_BASIC = 0x8000, /* Basic class for OpenFlow */
-    OFPXMC15_PACKET_REGS    = 0x8001, /* Packet registers (pipeline fields). */
-    OFPXMC12_EXPERIMENTER   = 0xffff, /* Experimenter class */
-};
-
-#define IS_OXM_HEADER(header) (NXM_VENDOR(header) == OFPXMC12_OPENFLOW_BASIC)
-
 /* The VLAN id is 12-bits, so we can use the entire 16 bits to indicate
  * special conditions.
  */

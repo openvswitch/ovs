@@ -2895,27 +2895,13 @@ query_tables(struct ofproto *ofproto,
              struct ofputil_table_features **featuresp,
              struct ofputil_table_stats **statsp)
 {
-    struct mf_bitmap rw_fields = MF_BITMAP_INITIALIZER;
-    struct mf_bitmap match = MF_BITMAP_INITIALIZER;
-    struct mf_bitmap mask = MF_BITMAP_INITIALIZER;
+    struct mf_bitmap rw_fields = oxm_writable_fields();
+    struct mf_bitmap match = oxm_matchable_fields();
+    struct mf_bitmap mask = oxm_maskable_fields();
 
     struct ofputil_table_features *features;
     struct ofputil_table_stats *stats;
     int i;
-
-    for (i = 0; i < MFF_N_IDS; i++) {
-        const struct mf_field *mf = mf_from_id(i);
-
-        if (mf->writable) {
-            bitmap_set1(rw_fields.bm, i);
-        }
-        if (mf->oxm_header || mf->nxm_header) {
-            bitmap_set1(match.bm, i);
-            if (mf->maskable == MFM_FULLY) {
-                bitmap_set1(mask.bm, i);
-            }
-        }
-    }
 
     features = *featuresp = xcalloc(ofproto->n_tables, sizeof *features);
     for (i = 0; i < ofproto->n_tables; i++) {

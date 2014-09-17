@@ -25,6 +25,7 @@
 
 #include "classifier.h"
 #include "dynamic-string.h"
+#include "nx-match.h"
 #include "ofp-errors.h"
 #include "ofp-util.h"
 #include "ovs-thread.h"
@@ -50,16 +51,6 @@ const struct mf_field mf_fields[MFF_N_IDS] = {
 #include "meta-flow.inc"
 };
 
-/* Maps an NXM or OXM header value to an mf_field. */
-struct nxm_field {
-    struct hmap_node hmap_node; /* In 'all_fields' hmap. */
-    uint32_t header;            /* NXM or OXM header value. */
-    const struct mf_field *mf;
-};
-
-/* Contains 'struct nxm_field's. */
-static struct hmap all_fields;
-
 /* Maps from an mf_field's 'name' or 'extra_name' to the mf_field. */
 static struct shash mf_by_name;
 
@@ -67,7 +58,6 @@ static struct shash mf_by_name;
  * controller and so there's not much point in showing a lot of them. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
-const struct mf_field *mf_from_nxm_header__(uint32_t header);
 static void nxm_init(void);
 
 /* Returns the field with the given 'name', or a null pointer if no field has
@@ -80,44 +70,15 @@ mf_from_name(const char *name)
 }
 
 static void
-add_nxm_field(uint32_t header, const struct mf_field *mf)
-{
-    struct nxm_field *f;
-
-    f = xmalloc(sizeof *f);
-    hmap_insert(&all_fields, &f->hmap_node, hash_int(header, 0));
-    f->header = header;
-    f->mf = mf;
-}
-
-static void
-nxm_init_add_field(const struct mf_field *mf, uint32_t header)
-{
-    if (header) {
-        ovs_assert(!mf_from_nxm_header__(header));
-        add_nxm_field(header, mf);
-        if (mf->maskable != MFM_NONE) {
-            add_nxm_field(NXM_MAKE_WILD_HEADER(header), mf);
-        }
-    }
-}
-
-static void
 nxm_do_init(void)
 {
     int i;
 
-    hmap_init(&all_fields);
     shash_init(&mf_by_name);
     for (i = 0; i < MFF_N_IDS; i++) {
         const struct mf_field *mf = &mf_fields[i];
 
         ovs_assert(mf->id == i); /* Fields must be in the enum order. */
-
-        nxm_init_add_field(mf, mf->nxm_header);
-        if (mf->oxm_header != mf->nxm_header) {
-            nxm_init_add_field(mf, mf->oxm_header);
-        }
 
         shash_add_once(&mf_by_name, mf->name, mf);
         if (mf->extra_name) {
@@ -131,37 +92,6 @@ nxm_init(void)
 {
     static pthread_once_t once = PTHREAD_ONCE_INIT;
     pthread_once(&once, nxm_do_init);
-}
-
-const struct mf_field *
-mf_from_nxm_header(uint32_t header)
-{
-    nxm_init();
-    return mf_from_nxm_header__(header);
-}
-
-const struct mf_field *
-mf_from_nxm_header__(uint32_t header)
-{
-    const struct nxm_field *f;
-
-    HMAP_FOR_EACH_IN_BUCKET (f, hmap_node, hash_int(header, 0), &all_fields) {
-        if (f->header == header) {
-            return f->mf;
-        }
-    }
-
-    return NULL;
-}
-
-uint32_t
-mf_oxm_header(enum mf_field_id id, enum ofp_version oxm_version)
-{
-    const struct mf_field *field = mf_from_id(id);
-
-    return (oxm_version >= field->oxm_version
-            ? field->oxm_header
-            : field->nxm_header);
 }
 
 /* Returns true if 'wc' wildcards all the bits in field 'mf', false if 'wc'
@@ -2228,144 +2158,6 @@ mf_get_subfield(const struct mf_subfield *sf, const struct flow *flow)
 
     mf_get_value(sf->field, flow, &value);
     return bitwise_get(&value, sf->field->n_bytes, sf->ofs, sf->n_bits);
-}
-
-/* Formats 'sf' into 's' in a format normally acceptable to
- * mf_parse_subfield().  (It won't be acceptable if sf->field is NULL or if
- * sf->field has no NXM name.) */
-void
-mf_format_subfield(const struct mf_subfield *sf, struct ds *s)
-{
-    if (!sf->field) {
-        ds_put_cstr(s, "<unknown>");
-    } else if (sf->field->nxm_name) {
-        ds_put_cstr(s, sf->field->nxm_name);
-    } else if (sf->field->nxm_header) {
-        uint32_t header = sf->field->nxm_header;
-        ds_put_format(s, "%d:%d", NXM_VENDOR(header), NXM_FIELD(header));
-    } else {
-        ds_put_cstr(s, sf->field->name);
-    }
-
-    if (sf->field && sf->ofs == 0 && sf->n_bits == sf->field->n_bits) {
-        ds_put_cstr(s, "[]");
-    } else if (sf->n_bits == 1) {
-        ds_put_format(s, "[%d]", sf->ofs);
-    } else {
-        ds_put_format(s, "[%d..%d]", sf->ofs, sf->ofs + sf->n_bits - 1);
-    }
-}
-
-static const struct mf_field *
-mf_parse_subfield_name(const char *name, int name_len, bool *wild)
-{
-    int i;
-
-    *wild = name_len > 2 && !memcmp(&name[name_len - 2], "_W", 2);
-    if (*wild) {
-        name_len -= 2;
-    }
-
-    for (i = 0; i < MFF_N_IDS; i++) {
-        const struct mf_field *mf = mf_from_id(i);
-
-        if (mf->nxm_name
-            && !strncmp(mf->nxm_name, name, name_len)
-            && mf->nxm_name[name_len] == '\0') {
-            return mf;
-        }
-        if (mf->oxm_name
-            && !strncmp(mf->oxm_name, name, name_len)
-            && mf->oxm_name[name_len] == '\0') {
-            return mf;
-        }
-    }
-
-    return NULL;
-}
-
-/* Parses a subfield from the beginning of '*sp' into 'sf'.  If successful,
- * returns NULL and advances '*sp' to the first byte following the parsed
- * string.  On failure, returns a malloc()'d error message, does not modify
- * '*sp', and does not properly initialize 'sf'.
- *
- * The syntax parsed from '*sp' takes the form "header[start..end]" where
- * 'header' is the name of an NXM field and 'start' and 'end' are (inclusive)
- * bit indexes.  "..end" may be omitted to indicate a single bit.  "start..end"
- * may both be omitted (the [] are still required) to indicate an entire
- * field. */
-char * WARN_UNUSED_RESULT
-mf_parse_subfield__(struct mf_subfield *sf, const char **sp)
-{
-    const struct mf_field *field;
-    const char *name;
-    int start, end;
-    const char *s;
-    int name_len;
-    bool wild;
-
-    s = *sp;
-    name = s;
-    name_len = strcspn(s, "[");
-    if (s[name_len] != '[') {
-        return xasprintf("%s: missing [ looking for field name", *sp);
-    }
-
-    field = mf_parse_subfield_name(name, name_len, &wild);
-    if (!field) {
-        return xasprintf("%s: unknown field `%.*s'", *sp, name_len, s);
-    }
-
-    s += name_len;
-    if (ovs_scan(s, "[%d..%d]", &start, &end)) {
-        /* Nothing to do. */
-    } else if (ovs_scan(s, "[%d]", &start)) {
-        end = start;
-    } else if (!strncmp(s, "[]", 2)) {
-        start = 0;
-        end = field->n_bits - 1;
-    } else {
-        return xasprintf("%s: syntax error expecting [] or [<bit>] or "
-                         "[<start>..<end>]", *sp);
-    }
-    s = strchr(s, ']') + 1;
-
-    if (start > end) {
-        return xasprintf("%s: starting bit %d is after ending bit %d",
-                         *sp, start, end);
-    } else if (start >= field->n_bits) {
-        return xasprintf("%s: starting bit %d is not valid because field is "
-                         "only %d bits wide", *sp, start, field->n_bits);
-    } else if (end >= field->n_bits){
-        return xasprintf("%s: ending bit %d is not valid because field is "
-                         "only %d bits wide", *sp, end, field->n_bits);
-    }
-
-    sf->field = field;
-    sf->ofs = start;
-    sf->n_bits = end - start + 1;
-
-    *sp = s;
-    return NULL;
-}
-
-/* Parses a subfield from the entirety of 's' into 'sf'.  Returns NULL if
- * successful, otherwise a malloc()'d string describing the error.  The caller
- * is responsible for freeing the returned string.
- *
- * The syntax parsed from 's' takes the form "header[start..end]" where
- * 'header' is the name of an NXM field and 'start' and 'end' are (inclusive)
- * bit indexes.  "..end" may be omitted to indicate a single bit.  "start..end"
- * may both be omitted (the [] are still required) to indicate an entire
- * field.  */
-char * WARN_UNUSED_RESULT
-mf_parse_subfield(struct mf_subfield *sf, const char *s)
-{
-    char *error = mf_parse_subfield__(sf, &s);
-    if (!error && s[0]) {
-        error = xstrdup("unexpected input following field syntax");
-    }
-    return error;
 }
 
 void

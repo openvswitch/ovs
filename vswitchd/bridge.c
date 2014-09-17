@@ -37,6 +37,7 @@
 #include "mcast-snooping.h"
 #include "meta-flow.h"
 #include "netdev.h"
+#include "nx-match.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"

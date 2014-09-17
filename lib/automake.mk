@@ -444,9 +444,12 @@ lib/dirs.c: lib/dirs.c.in Makefile
 	mv lib/dirs.c.tmp lib/dirs.c
 
 lib/meta-flow.inc: $(srcdir)/build-aux/extract-ofp-fields lib/meta-flow.h
-	$(AM_V_GEN)$(run_python) $^ > $@.tmp && mv $@.tmp $@
+	$(AM_V_GEN)$(run_python) $^ --meta-flow > $@.tmp && mv $@.tmp $@
 lib/meta-flow.lo: lib/meta-flow.inc
-CLEANFILES += lib/meta-flow.inc
+lib/nx-match.inc: $(srcdir)/build-aux/extract-ofp-fields lib/meta-flow.h
+	$(AM_V_GEN)$(run_python) $^ --nx-match > $@.tmp && mv $@.tmp $@
+lib/nx-match.lo: lib/nx-match.inc
+CLEANFILES += lib/meta-flow.inc lib/nx-match.inc
 EXTRA_DIST += build-aux/extract-ofp-fields
 
 lib/ofp-actions.inc1: $(srcdir)/build-aux/extract-ofp-actions lib/ofp-actions.c

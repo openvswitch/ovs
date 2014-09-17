@@ -4561,38 +4561,6 @@ parse_table_features_next_table(struct ofpbuf *payload,
 }
 
 static enum ofperr
-parse_oxm(struct ofpbuf *b, bool loose,
-          const struct mf_field **fieldp, bool *hasmask)
-{
-    ovs_be32 *oxmp;
-    uint32_t oxm;
-
-    oxmp = ofpbuf_try_pull(b, sizeof *oxmp);
-    if (!oxmp) {
-        return OFPERR_OFPBPC_BAD_LEN;
-    }
-    oxm = ntohl(*oxmp);
-
-    /* Determine '*hasmask'.  If 'oxm' is masked, convert it to the equivalent
-     * unmasked version, because the table of OXM fields we support only has
-     * masked versions of fields that we support with masks, but we should be
-     * able to parse the masked versions of those here. */
-    *hasmask = NXM_HASMASK(oxm);
-    if (*hasmask) {
-        if (NXM_LENGTH(oxm) & 1) {
-            return OFPERR_OFPBPC_BAD_VALUE;
-        }
-        oxm = NXM_HEADER(NXM_VENDOR(oxm), NXM_FIELD(oxm), NXM_LENGTH(oxm) / 2);
-    }
-
-    *fieldp = mf_from_nxm_header(oxm);
-    if (!*fieldp) {
-        log_property(loose, "unknown OXM field %#"PRIx32, ntohl(*oxmp));
-    }
-    return *fieldp ? 0 : OFPERR_OFPBMC_BAD_FIELD;
-}
-
-static enum ofperr
 parse_oxms(struct ofpbuf *payload, bool loose,
            struct mf_bitmap *exactp, struct mf_bitmap *maskedp)
 {
@@ -4604,7 +4572,7 @@ parse_oxms(struct ofpbuf *payload, bool loose,
         enum ofperr error;
         bool hasmask;
 
-        error = parse_oxm(payload, loose, &field, &hasmask);
+        error = nx_pull_header(payload, &field, &hasmask);
         if (!error) {
             bitmap_set1(hasmask ? masked.bm : exact.bm, field->id);
         } else if (error != OFPERR_OFPBMC_BAD_FIELD || !loose) {
@@ -4821,15 +4789,8 @@ put_fields_property(struct ofpbuf *reply,
 
     start_ofs = start_property(reply, property);
     BITMAP_FOR_EACH_1 (field, MFF_N_IDS, fields->bm) {
-        uint32_t h_oxm = mf_oxm_header(field, version);
-        ovs_be32 n_oxm;
-
-        if (masks && bitmap_is_set(masks->bm, field)) {
-            h_oxm = NXM_MAKE_WILD_HEADER(h_oxm);
-        }
-
-        n_oxm = htonl(h_oxm);
-        ofpbuf_put(reply, &n_oxm, sizeof n_oxm);
+        nx_put_header(reply, field, version,
+                      masks && bitmap_is_set(masks->bm, field));
     }
     end_property(reply, start_ofs);
 }
@@ -5357,46 +5318,6 @@ ofputil_put_ofp11_table_stats(const struct ofputil_table_stats *stats,
     out->matched_count = htonll(stats->matched_count);
 }
 
-static ovs_be64
-mf_bitmap_to_oxm_bitmap(const struct mf_bitmap *fields,
-                        enum ofp_version version)
-{
-    uint64_t oxm_bitmap = 0;
-    int i;
-
-    BITMAP_FOR_EACH_1 (i, MFF_N_IDS, fields->bm) {
-        uint32_t oxm = mf_oxm_header(i, version);
-        uint32_t vendor = NXM_VENDOR(oxm);
-        int field = NXM_FIELD(oxm);
-
-        if (vendor == OFPXMC12_OPENFLOW_BASIC && field < 64) {
-            oxm_bitmap |= UINT64_C(1) << field;
-        }
-    }
-    return htonll(oxm_bitmap);
-}
-
-static struct mf_bitmap
-mf_bitmap_from_oxm_bitmap(ovs_be64 oxm_bitmap, enum ofp_version version)
-{
-    struct mf_bitmap fields = MF_BITMAP_INITIALIZER;
-
-    for (enum mf_field_id id = 0; id < MFF_N_IDS; id++) {
-        const struct mf_field *f = mf_from_id(id);
-        uint32_t oxm = f->oxm_header;
-        uint32_t vendor = NXM_VENDOR(oxm);
-        int field = NXM_FIELD(oxm);
-
-        if (version >= f->oxm_version
-            && vendor == OFPXMC12_OPENFLOW_BASIC
-            && field < 64
-            && oxm_bitmap & htonll(UINT64_C(1) << field)) {
-            bitmap_set1(fields.bm, id);
-        }
-    }
-    return fields;
-}
-
 static void
 ofputil_put_ofp12_table_stats(const struct ofputil_table_stats *stats,
                               const struct ofputil_table_features *features,
@@ -5407,16 +5328,16 @@ ofputil_put_ofp12_table_stats(const struct ofputil_table_stats *stats,
     out = ofpbuf_put_zeros(buf, sizeof *out);
     out->table_id = features->table_id;
     ovs_strlcpy(out->name, features->name, sizeof out->name);
-    out->match = mf_bitmap_to_oxm_bitmap(&features->match, OFP12_VERSION);
-    out->wildcards = mf_bitmap_to_oxm_bitmap(&features->wildcard,
+    out->match = oxm_bitmap_from_mf_bitmap(&features->match, OFP12_VERSION);
+    out->wildcards = oxm_bitmap_from_mf_bitmap(&features->wildcard,
                                              OFP12_VERSION);
     out->write_actions = ofpact_bitmap_to_openflow(
         features->nonmiss.write.ofpacts, OFP12_VERSION);
     out->apply_actions = ofpact_bitmap_to_openflow(
         features->nonmiss.apply.ofpacts, OFP12_VERSION);
-    out->write_setfields = mf_bitmap_to_oxm_bitmap(
+    out->write_setfields = oxm_bitmap_from_mf_bitmap(
         &features->nonmiss.write.set_fields, OFP12_VERSION);
-    out->apply_setfields = mf_bitmap_to_oxm_bitmap(
+    out->apply_setfields = oxm_bitmap_from_mf_bitmap(
         &features->nonmiss.apply.set_fields, OFP12_VERSION);
     out->metadata_match = features->metadata_match;
     out->metadata_write = features->metadata_write;
@@ -5569,15 +5490,15 @@ ofputil_decode_ofp12_table_stats(struct ofpbuf *msg,
         ots->write_actions, OFP12_VERSION);
     features->nonmiss.apply.ofpacts = ofpact_bitmap_from_openflow(
         ots->apply_actions, OFP12_VERSION);
-    features->nonmiss.write.set_fields = mf_bitmap_from_oxm_bitmap(
+    features->nonmiss.write.set_fields = oxm_bitmap_to_mf_bitmap(
         ots->write_setfields, OFP12_VERSION);
-    features->nonmiss.apply.set_fields = mf_bitmap_from_oxm_bitmap(
+    features->nonmiss.apply.set_fields = oxm_bitmap_to_mf_bitmap(
         ots->apply_setfields, OFP12_VERSION);
     features->miss = features->nonmiss;
 
-    features->match = mf_bitmap_from_oxm_bitmap(ots->match, OFP12_VERSION);
-    features->wildcard = mf_bitmap_from_oxm_bitmap(ots->wildcards,
-                                                   OFP12_VERSION);
+    features->match = oxm_bitmap_to_mf_bitmap(ots->match, OFP12_VERSION);
+    features->wildcard = oxm_bitmap_to_mf_bitmap(ots->wildcards,
+                                                 OFP12_VERSION);
     bitmap_or(features->match.bm, features->wildcard.bm, MFF_N_IDS);
 
     stats->table_id = ots->table_id;
