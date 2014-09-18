@@ -64,12 +64,12 @@
  * Handler for a given netlink command. Not all the parameters are used by all
  * the handlers.
  */
-typedef NTSTATUS (*NetlinkCmdHandler)(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
-                                      UINT32 *replyLen);
+typedef NTSTATUS(NetlinkCmdHandler)(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                                    UINT32 *replyLen);
 
 typedef struct _NETLINK_CMD {
     UINT16 cmd;
-    NetlinkCmdHandler handler;
+    NetlinkCmdHandler *handler;
     UINT32 supportedDevOp;      /* Supported device operations. */
     BOOLEAN validateDpIndex;    /* Does command require a valid DP argument. */
 } NETLINK_CMD, *PNETLINK_CMD;
@@ -95,11 +95,10 @@ typedef struct _NETLINK_FAMILY {
 #define OVS_TRANSACTION_DEV_OP   (1 << 2)
 
 /* Handlers for the various netlink commands. */
-static NTSTATUS OvsGetPidCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
-                                    UINT32 *replyLen);
-
-static NTSTATUS OvsGetDpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
-                                   UINT32 *replyLen);
+static NetlinkCmdHandler OvsGetPidCmdHandler,
+                         OvsGetDpCmdHandler,
+                         OvsPendEventCmdHandler,
+                         OvsSubscribeEventCmdHandler;
 
 /*
  * The various netlink families, along with the supported commands. Most of
@@ -113,7 +112,17 @@ NETLINK_CMD nlControlFamilyCmdOps[] = {
     { .cmd             = OVS_CTRL_CMD_WIN_GET_PID,
       .handler         = OvsGetPidCmdHandler,
       .supportedDevOp  = OVS_TRANSACTION_DEV_OP,
-      .validateDpIndex = FALSE
+      .validateDpIndex = FALSE,
+    },
+    { .cmd = OVS_CTRL_CMD_WIN_PEND_REQ,
+      .handler = OvsPendEventCmdHandler,
+      .supportedDevOp = OVS_WRITE_DEV_OP,
+      .validateDpIndex = TRUE,
+    },
+    { .cmd = OVS_CTRL_CMD_MC_SUBSCRIBE_REQ,
+      .handler = OvsSubscribeEventCmdHandler,
+      .supportedDevOp = OVS_WRITE_DEV_OP,
+      .validateDpIndex = TRUE,
     }
 };
 
@@ -776,7 +785,11 @@ InvokeNetlinkCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
     for (i = 0; i < nlFamilyOps->opsCount; i++) {
         if (nlFamilyOps->cmds[i].cmd == usrParamsCtx->ovsMsg->genlMsg.cmd) {
-            status = nlFamilyOps->cmds[i].handler(usrParamsCtx, replyLen);
+            NetlinkCmdHandler *handler = nlFamilyOps->cmds[i].handler;
+            ASSERT(handler);
+            if (handler) {
+                status = handler(usrParamsCtx, replyLen);
+            }
             break;
         }
     }
@@ -869,6 +882,76 @@ OvsDpFillInfo(POVS_SWITCH_CONTEXT ovsSwitchContext,
     nlMsg->nlmsgLen = NlBufSize(nlBuf);
 
     return writeOk ? STATUS_SUCCESS : STATUS_INVALID_BUFFER_SIZE;
+}
+
+
+/*
+ * --------------------------------------------------------------------------
+ * Handler for queueing an IRP used for event notification. The IRP is
+ * completed when a port state changes. STATUS_PENDING is returned on
+ * success. User mode keep a pending IRP at all times.
+ * --------------------------------------------------------------------------
+ */
+static NTSTATUS
+OvsPendEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                       UINT32 *replyLen)
+{
+    NDIS_STATUS status;
+
+    UNREFERENCED_PARAMETER(replyLen);
+
+    POVS_OPEN_INSTANCE instance =
+        (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
+    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
+    OVS_EVENT_POLL poll;
+
+    poll.dpNo = msgIn->ovsHdr.dp_ifindex;
+    status = OvsWaitEventIoctl(usrParamsCtx->irp, instance->fileObject,
+                               &poll, sizeof poll);
+    return status;
+}
+
+/*
+ * --------------------------------------------------------------------------
+ *  Handler for the subscription for the event queue
+ * --------------------------------------------------------------------------
+ */
+static NTSTATUS
+OvsSubscribeEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                            UINT32 *replyLen)
+{
+    NDIS_STATUS status;
+    OVS_EVENT_SUBSCRIBE request;
+    BOOLEAN rc;
+    UINT8 join;
+    PNL_ATTR attrs[2];
+    const NL_POLICY policy[] =  {
+        [OVS_NL_ATTR_MCAST_GRP] = {.type = NL_A_U32 },
+        [OVS_NL_ATTR_MCAST_JOIN] = {.type = NL_A_U8 },
+        };
+
+    UNREFERENCED_PARAMETER(replyLen);
+
+    POVS_OPEN_INSTANCE instance =
+        (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
+    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
+
+    rc = NlAttrParse(&msgIn->nlMsg, sizeof (*msgIn),policy, attrs, 2);
+    if (!rc) {
+        status = STATUS_INVALID_PARAMETER;
+        goto done;
+    }
+
+    /* XXX Ignore the MC group for now */
+    join = NlAttrGetU8(attrs[OVS_NL_ATTR_MCAST_JOIN]);
+    request.dpNo = msgIn->ovsHdr.dp_ifindex;
+    request.subscribe = join;
+    request.mask = OVS_EVENT_MASK_ALL;
+
+    status = OvsSubscribeEventIoctl(instance->fileObject, &request,
+                                    sizeof request);
+done:
+    return status;
 }
 
 
