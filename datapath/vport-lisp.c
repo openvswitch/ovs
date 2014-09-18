@@ -171,17 +171,22 @@ static u16 get_src_port(struct net *net, struct sk_buff *skb)
 	int low;
 
 	if (!hash) {
-		struct sw_flow_key *pkt_key = OVS_CB(skb)->pkt_key;
+		if (skb->protocol == htons(ETH_P_IP)) {
+			struct iphdr *iph;
+			int size = (sizeof(iph->saddr) * 2) / sizeof(u32);
 
-		if (skb->protocol == htons(ETH_P_IP))
-			hash = jhash2((const u32 *)&pkt_key->ipv4.addr,
-				   sizeof(pkt_key->ipv4.addr) / sizeof(u32), 0);
-		else if (skb->protocol == htons(ETH_P_IPV6))
-			hash = jhash2((const u32 *)&pkt_key->ipv6.addr,
-				   sizeof(pkt_key->ipv6.addr) / sizeof(u32), 0);
-		else
+			iph = (struct iphdr *) skb_inner_network_header(skb);
+			hash = jhash2((const u32 *)&iph->saddr, size, 0);
+		} else if (skb->protocol == htons(ETH_P_IPV6)) {
+			struct ipv6hdr *ipv6hdr;
+
+			ipv6hdr = (struct ipv6hdr *) skb_inner_network_header(skb);
+			hash = jhash2((const u32 *)&ipv6hdr->saddr,
+				      (sizeof(struct in6_addr) * 2) / sizeof(u32), 0);
+		} else {
 			pr_warn_once("LISP inner protocol is not IP when "
 				     "calculating hash.\n");
+		}
 	}
 
 	inet_get_local_port_range(net, &low, &high);

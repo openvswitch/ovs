@@ -40,6 +40,10 @@
 #include "vlan.h"
 #include "vport.h"
 
+static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
+			      struct sw_flow_key *key,
+			      const struct nlattr *attr, int len);
+
 struct deferred_action {
 	struct sk_buff *skb;
 	const struct nlattr *actions;
@@ -72,8 +76,7 @@ static bool action_fifo_is_empty(struct action_fifo *fifo)
 	return (fifo->head == fifo->tail);
 }
 
-static struct deferred_action *
-action_fifo_get(struct action_fifo *fifo)
+static struct deferred_action *action_fifo_get(struct action_fifo *fifo)
 {
 	if (action_fifo_is_empty(fifo))
 		return NULL;
@@ -81,8 +84,7 @@ action_fifo_get(struct action_fifo *fifo)
 	return &fifo->fifo[fifo->tail++];
 }
 
-static struct deferred_action *
-action_fifo_put(struct action_fifo *fifo)
+static struct deferred_action *action_fifo_put(struct action_fifo *fifo)
 {
 	if (fifo->head >= DEFERRED_ACTION_FIFO_SIZE - 1)
 		return NULL;
@@ -90,15 +92,10 @@ action_fifo_put(struct action_fifo *fifo)
 	return &fifo->fifo[fifo->head++];
 }
 
-static void flow_key_clone(struct sk_buff *skb, struct sw_flow_key *new_key)
-{
-	*new_key = *OVS_CB(skb)->pkt_key;
-	OVS_CB(skb)->pkt_key = new_key;
-}
-
-/* Return true if fifo is not full */
-static bool add_deferred_actions(struct sk_buff *skb,
-				 const struct nlattr *attr)
+/* Return queue entry if fifo is not full */
+static struct deferred_action *add_deferred_actions(struct sk_buff *skb,
+						    struct sw_flow_key *key,
+						    const struct nlattr *attr)
 {
 	struct action_fifo *fifo;
 	struct deferred_action *da;
@@ -108,108 +105,21 @@ static bool add_deferred_actions(struct sk_buff *skb,
 	if (da) {
 		da->skb = skb;
 		da->actions = attr;
-		flow_key_clone(skb, &da->pkt_key);
+		da->pkt_key = *key;
 	}
 
-	return (da != NULL);
+	return da;
 }
 
-static void flow_key_set_recirc_id(struct sk_buff *skb, u32 recirc_id)
+static void invalidate_flow_key(struct sw_flow_key *key)
 {
-	OVS_CB(skb)->pkt_key->recirc_id = recirc_id;
+	key->eth.type = htons(0);
 }
 
-static void flow_key_set_priority(struct sk_buff *skb, u32 priority)
+static bool is_flow_key_valid(struct sw_flow_key *key)
 {
-	OVS_CB(skb)->pkt_key->phy.priority = priority;
+	return !!key->eth.type;
 }
-
-static void flow_key_set_skb_mark(struct sk_buff *skb, u32 skb_mark)
-{
-	OVS_CB(skb)->pkt_key->phy.skb_mark = skb_mark;
-}
-
-static void flow_key_set_eth_src(struct sk_buff *skb, const u8 addr[])
-{
-	ether_addr_copy(OVS_CB(skb)->pkt_key->eth.src, addr);
-}
-
-static void flow_key_set_eth_dst(struct sk_buff *skb, const u8 addr[])
-{
-	ether_addr_copy(OVS_CB(skb)->pkt_key->eth.dst, addr);
-}
-
-static void flow_key_set_vlan_tci(struct sk_buff *skb, __be16 tci)
-{
-	OVS_CB(skb)->pkt_key->eth.tci = tci;
-}
-
-static void flow_key_set_mpls_top_lse(struct sk_buff *skb, __be32 top_lse)
-{
-	OVS_CB(skb)->pkt_key->mpls.top_lse = top_lse;
-}
-
-static void flow_key_set_ipv4_src(struct sk_buff *skb, __be32 addr)
-{
-	OVS_CB(skb)->pkt_key->ipv4.addr.src = addr;
-}
-
-static void flow_key_set_ipv4_dst(struct sk_buff *skb, __be32 addr)
-{
-	OVS_CB(skb)->pkt_key->ipv4.addr.src = addr;
-}
-
-static void flow_key_set_ip_tos(struct sk_buff *skb, u8 tos)
-{
-	OVS_CB(skb)->pkt_key->ip.tos = tos;
-}
-
-static void flow_key_set_ip_ttl(struct sk_buff *skb, u8 ttl)
-{
-	OVS_CB(skb)->pkt_key->ip.ttl = ttl;
-}
-
-static void flow_key_set_ipv6_src(struct sk_buff *skb,
-				  const __be32 addr[4])
-{
-	memcpy(&OVS_CB(skb)->pkt_key->ipv6.addr.src, addr, sizeof(__be32[4]));
-}
-
-static void flow_key_set_ipv6_dst(struct sk_buff *skb,
-				  const __be32 addr[4])
-{
-	memcpy(&OVS_CB(skb)->pkt_key->ipv6.addr.dst, addr, sizeof(__be32[4]));
-}
-
-static void flow_key_set_ipv6_fl(struct sk_buff *skb,
-				 const struct ipv6hdr *nh)
-{
-	OVS_CB(skb)->pkt_key->ipv6.label = *(__be32 *)nh &
-					   htonl(IPV6_FLOWINFO_FLOWLABEL);
-}
-
-static void flow_key_set_tp_src(struct sk_buff *skb, __be16 port)
-{
-	OVS_CB(skb)->pkt_key->tp.src = port;
-}
-
-static void flow_key_set_tp_dst(struct sk_buff *skb, __be16 port)
-{
-	OVS_CB(skb)->pkt_key->tp.dst = port;
-}
-
-static void invalidate_skb_flow_key(struct sk_buff *skb)
-{
-	OVS_CB(skb)->pkt_key->eth.type = htons(0);
-}
-
-static bool is_skb_flow_key_valid(struct sk_buff *skb)
-{
-	return !!OVS_CB(skb)->pkt_key->eth.type;
-}
-
-static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
-			      const struct nlattr *attr, int len);
 
 static int make_writable(struct sk_buff *skb, int write_len)
 {
@@ -235,7 +145,7 @@ static unsigned char *mac_header_end(const struct sk_buff *skb)
 	return skb_mac_header(skb) + skb->mac_len;
 }
 
-static int push_mpls(struct sk_buff *skb,
+static int push_mpls(struct sk_buff *skb, struct sw_flow_key *key,
 		     const struct ovs_action_push_mpls *mpls)
 {
 	__be32 *new_mpls_lse;
@@ -261,11 +171,12 @@ static int push_mpls(struct sk_buff *skb,
 	if (!ovs_skb_get_inner_protocol(skb))
 		ovs_skb_set_inner_protocol(skb, skb->protocol);
 	skb->protocol = mpls->mpls_ethertype;
-	invalidate_skb_flow_key(skb);
+	invalidate_flow_key(key);
 	return 0;
 }
 
-static int pop_mpls(struct sk_buff *skb, const __be16 ethertype)
+static int pop_mpls(struct sk_buff *skb, struct sw_flow_key *key,
+		    const __be16 ethertype)
 {
 	struct ethhdr *hdr;
 	int err;
@@ -292,11 +203,12 @@ static int pop_mpls(struct sk_buff *skb, const __be16 ethertype)
 	hdr->h_proto = ethertype;
 	if (eth_p_mpls(skb->protocol))
 		skb->protocol = ethertype;
-	invalidate_skb_flow_key(skb);
+	invalidate_flow_key(key);
 	return 0;
 }
 
-static int set_mpls(struct sk_buff *skb, const __be32 *mpls_lse)
+static int set_mpls(struct sk_buff *skb, struct sw_flow_key *key,
+		    const __be32 *mpls_lse)
 {
 	__be32 *stack = (__be32 *)mac_header_end(skb);
 	int err;
@@ -312,7 +224,7 @@ static int set_mpls(struct sk_buff *skb, const __be32 *mpls_lse)
 	}
 
 	*stack = *mpls_lse;
-	flow_key_set_mpls_top_lse(skb, *stack);
+	key->mpls.top_lse = *mpls_lse;
 	return 0;
 }
 
@@ -344,7 +256,7 @@ static int __pop_vlan_tci(struct sk_buff *skb, __be16 *current_tci)
 	return 0;
 }
 
-static int pop_vlan(struct sk_buff *skb)
+static int pop_vlan(struct sk_buff *skb, struct sw_flow_key *key)
 {
 	__be16 tci;
 	int err;
@@ -363,11 +275,11 @@ static int pop_vlan(struct sk_buff *skb)
 	/* move next vlan tag to hw accel tag */
 	if (likely(skb->protocol != htons(ETH_P_8021Q) ||
 		   skb->len < VLAN_ETH_HLEN)) {
-		flow_key_set_vlan_tci(skb, 0);
+		key->eth.tci = 0;
 		return 0;
 	}
 
-	invalidate_skb_flow_key(skb);
+	invalidate_flow_key(key);
 	err = __pop_vlan_tci(skb, &tci);
 	if (unlikely(err))
 		return err;
@@ -376,7 +288,8 @@ static int pop_vlan(struct sk_buff *skb)
 	return 0;
 }
 
-static int push_vlan(struct sk_buff *skb, const struct ovs_action_push_vlan *vlan)
+static int push_vlan(struct sk_buff *skb, struct sw_flow_key *key,
+		     const struct ovs_action_push_vlan *vlan)
 {
 	if (unlikely(vlan_tx_tag_present(skb))) {
 		u16 current_tag;
@@ -394,15 +307,15 @@ static int push_vlan(struct sk_buff *skb, const struct ovs_action_push_vlan *vla
 			skb->csum = csum_add(skb->csum, csum_partial(skb->data
 					+ (2 * ETH_ALEN), VLAN_HLEN, 0));
 
-		invalidate_skb_flow_key(skb);
+		invalidate_flow_key(key);
 	} else {
-		flow_key_set_vlan_tci(skb,  vlan->vlan_tci);
+		key->eth.tci = vlan->vlan_tci;
 	}
 	__vlan_hwaccel_put_tag(skb, vlan->vlan_tpid, ntohs(vlan->vlan_tci) & ~VLAN_TAG_PRESENT);
 	return 0;
 }
 
-static int set_eth_addr(struct sk_buff *skb,
+static int set_eth_addr(struct sk_buff *skb, struct sw_flow_key *key,
 			const struct ovs_key_ethernet *eth_key)
 {
 	int err;
@@ -417,8 +330,8 @@ static int set_eth_addr(struct sk_buff *skb,
 
 	ovs_skb_postpush_rcsum(skb, eth_hdr(skb), ETH_ALEN * 2);
 
-	flow_key_set_eth_src(skb, eth_key->eth_src);
-	flow_key_set_eth_dst(skb, eth_key->eth_dst);
+	ether_addr_copy(key->eth.src, eth_key->eth_src);
+	ether_addr_copy(key->eth.dst, eth_key->eth_dst);
 	return 0;
 }
 
@@ -506,7 +419,8 @@ static void set_ip_ttl(struct sk_buff *skb, struct iphdr *nh, u8 new_ttl)
 	nh->ttl = new_ttl;
 }
 
-static int set_ipv4(struct sk_buff *skb, const struct ovs_key_ipv4 *ipv4_key)
+static int set_ipv4(struct sk_buff *skb, struct sw_flow_key *key,
+		    const struct ovs_key_ipv4 *ipv4_key)
 {
 	struct iphdr *nh;
 	int err;
@@ -520,28 +434,29 @@ static int set_ipv4(struct sk_buff *skb, const struct ovs_key_ipv4 *ipv4_key)
 
 	if (ipv4_key->ipv4_src != nh->saddr) {
 		set_ip_addr(skb, nh, &nh->saddr, ipv4_key->ipv4_src);
-		flow_key_set_ipv4_src(skb, ipv4_key->ipv4_src);
+		key->ipv4.addr.src = ipv4_key->ipv4_src;
 	}
 
 	if (ipv4_key->ipv4_dst != nh->daddr) {
 		set_ip_addr(skb, nh, &nh->daddr, ipv4_key->ipv4_dst);
-		flow_key_set_ipv4_dst(skb, ipv4_key->ipv4_dst);
+		key->ipv4.addr.dst = ipv4_key->ipv4_dst;
 	}
 
 	if (ipv4_key->ipv4_tos != nh->tos) {
 		ipv4_change_dsfield(nh, 0, ipv4_key->ipv4_tos);
-		flow_key_set_ip_tos(skb, nh->tos);
+		key->ip.tos = nh->tos;
 	}
 
 	if (ipv4_key->ipv4_ttl != nh->ttl) {
 		set_ip_ttl(skb, nh, ipv4_key->ipv4_ttl);
-		flow_key_set_ip_ttl(skb, ipv4_key->ipv4_ttl);
+		key->ip.ttl = ipv4_key->ipv4_ttl;
 	}
 
 	return 0;
 }
 
-static int set_ipv6(struct sk_buff *skb, const struct ovs_key_ipv6 *ipv6_key)
+static int set_ipv6(struct sk_buff *skb, struct sw_flow_key *key,
+		    const struct ovs_key_ipv6 *ipv6_key)
 {
 	struct ipv6hdr *nh;
 	int err;
@@ -560,7 +475,8 @@ static int set_ipv6(struct sk_buff *skb, const struct ovs_key_ipv6 *ipv6_key)
 	if (memcmp(ipv6_key->ipv6_src, saddr, sizeof(ipv6_key->ipv6_src))) {
 		set_ipv6_addr(skb, ipv6_key->ipv6_proto, saddr,
 			      ipv6_key->ipv6_src, true);
-		flow_key_set_ipv6_src(skb, ipv6_key->ipv6_src);
+		memcpy(&key->ipv6.addr.src, ipv6_key->ipv6_src,
+		       sizeof(ipv6_key->ipv6_src));
 	}
 
 	if (memcmp(ipv6_key->ipv6_dst, daddr, sizeof(ipv6_key->ipv6_dst))) {
@@ -575,17 +491,18 @@ static int set_ipv6(struct sk_buff *skb, const struct ovs_key_ipv6 *ipv6_key)
 
 		set_ipv6_addr(skb, ipv6_key->ipv6_proto, daddr,
 			      ipv6_key->ipv6_dst, recalc_csum);
-		flow_key_set_ipv6_dst(skb, ipv6_key->ipv6_dst);
+		memcpy(&key->ipv6.addr.dst, ipv6_key->ipv6_dst,
+		       sizeof(ipv6_key->ipv6_dst));
 	}
 
 	set_ipv6_tc(nh, ipv6_key->ipv6_tclass);
-	flow_key_set_ip_tos(skb, ipv6_get_dsfield(nh));
+	key->ip.tos = ipv6_get_dsfield(nh);
 
 	set_ipv6_fl(nh, ntohl(ipv6_key->ipv6_label));
-	flow_key_set_ipv6_fl(skb, nh);
+	key->ipv6.label = *(__be32 *)nh & htonl(IPV6_FLOWINFO_FLOWLABEL);
 
 	nh->hop_limit = ipv6_key->ipv6_hlimit;
-	flow_key_set_ip_ttl(skb, ipv6_key->ipv6_hlimit);
+	key->ip.ttl = ipv6_key->ipv6_hlimit;
 	return 0;
 }
 
@@ -613,7 +530,8 @@ static void set_udp_port(struct sk_buff *skb, __be16 *port, __be16 new_port)
 	}
 }
 
-static int set_udp(struct sk_buff *skb, const struct ovs_key_udp *udp_port_key)
+static int set_udp(struct sk_buff *skb, struct sw_flow_key *key,
+		   const struct ovs_key_udp *udp_port_key)
 {
 	struct udphdr *uh;
 	int err;
@@ -626,18 +544,19 @@ static int set_udp(struct sk_buff *skb, const struct ovs_key_udp *udp_port_key)
 	uh = udp_hdr(skb);
 	if (udp_port_key->udp_src != uh->source) {
 		set_udp_port(skb, &uh->source, udp_port_key->udp_src);
-		flow_key_set_tp_src(skb, udp_port_key->udp_src);
+		key->tp.src = udp_port_key->udp_src;
 	}
 
 	if (udp_port_key->udp_dst != uh->dest) {
 		set_udp_port(skb, &uh->dest, udp_port_key->udp_dst);
-		flow_key_set_tp_dst(skb, udp_port_key->udp_dst);
+		key->tp.dst = udp_port_key->udp_dst;
 	}
 
 	return 0;
 }
 
-static int set_tcp(struct sk_buff *skb, const struct ovs_key_tcp *tcp_port_key)
+static int set_tcp(struct sk_buff *skb, struct sw_flow_key *key,
+		   const struct ovs_key_tcp *tcp_port_key)
 {
 	struct tcphdr *th;
 	int err;
@@ -650,18 +569,18 @@ static int set_tcp(struct sk_buff *skb, const struct ovs_key_tcp *tcp_port_key)
 	th = tcp_hdr(skb);
 	if (tcp_port_key->tcp_src != th->source) {
 		set_tp_port(skb, &th->source, tcp_port_key->tcp_src, &th->check);
-		flow_key_set_tp_src(skb, tcp_port_key->tcp_src);
+		key->tp.src = tcp_port_key->tcp_src;
 	}
 
 	if (tcp_port_key->tcp_dst != th->dest) {
 		set_tp_port(skb, &th->dest, tcp_port_key->tcp_dst, &th->check);
-		flow_key_set_tp_dst(skb, tcp_port_key->tcp_dst);
+		key->tp.dst = tcp_port_key->tcp_dst;
 	}
 
 	return 0;
 }
 
-static int set_sctp(struct sk_buff *skb,
+static int set_sctp(struct sk_buff *skb, struct sw_flow_key *key,
 		    const struct ovs_key_sctp *sctp_port_key)
 {
 	struct sctphdr *sh;
@@ -689,8 +608,8 @@ static int set_sctp(struct sk_buff *skb,
 		sh->checksum = old_csum ^ old_correct_csum ^ new_csum;
 
 		skb_clear_hash(skb);
-		flow_key_set_tp_src(skb, sctp_port_key->sctp_src);
-		flow_key_set_tp_dst(skb, sctp_port_key->sctp_dst);
+		key->tp.src = sctp_port_key->sctp_src;
+		key->tp.dst = sctp_port_key->sctp_dst;
 	}
 
 	return 0;
@@ -707,7 +626,7 @@ static void do_output(struct datapath *dp, struct sk_buff *skb, int out_port)
 }
 
 static int output_userspace(struct datapath *dp, struct sk_buff *skb,
-			    const struct nlattr *attr)
+			    struct sw_flow_key *key, const struct nlattr *attr)
 {
 	struct dp_upcall_info upcall;
 	const struct nlattr *a;
@@ -749,7 +668,7 @@ static int output_userspace(struct datapath *dp, struct sk_buff *skb,
 		} /* End of switch. */
 	}
 
-	return ovs_dp_upcall(dp, skb, &upcall);
+	return ovs_dp_upcall(dp, skb, key, &upcall);
 }
 
 static bool last_action(const struct nlattr *a, int rem)
@@ -758,7 +677,7 @@ static bool last_action(const struct nlattr *a, int rem)
 }
 
 static int sample(struct datapath *dp, struct sk_buff *skb,
-		  const struct nlattr *attr)
+		  struct sw_flow_key *key, const struct nlattr *attr)
 {
 	const struct nlattr *acts_list = NULL;
 	const struct nlattr *a;
@@ -788,30 +707,30 @@ static int sample(struct datapath *dp, struct sk_buff *skb,
 	/* The only known usage of sample action is having a single user-space
 	 * action. Treat this usage as a special case.
 	 * The output_userspace() should clone the skb to be sent to the
-	 * user space. This skb will be consumed by its caller. */
+	 * user space. This skb will be consumed by its caller.
+	 */
 	if (likely(nla_type(a) == OVS_ACTION_ATTR_USERSPACE &&
 		   last_action(a, rem)))
-		return output_userspace(dp, skb, a);
+		return output_userspace(dp, skb, key, a);
 
 	skb = skb_clone(skb, GFP_ATOMIC);
 	if (!skb)
 		/* Skip the sample action when out of memory. */
 		return 0;
 
-	if (!add_deferred_actions(skb, a)) {
+	if (!add_deferred_actions(skb, key, a)) {
 		if (net_ratelimit())
 			pr_warn("%s: deferred actions limit reached, dropping sample action\n",
 				ovs_dp_name(dp));
 
 		kfree_skb(skb);
 	}
-
 	return 0;
 }
 
-static void execute_hash(struct sk_buff *skb, const struct nlattr *attr)
+static void execute_hash(struct sk_buff *skb, struct sw_flow_key *key,
+			 const struct nlattr *attr)
 {
-	struct sw_flow_key *key = OVS_CB(skb)->pkt_key;
 	struct ovs_action_hash *hash_act = nla_data(attr);
 	u32 hash = 0;
 
@@ -824,7 +743,7 @@ static void execute_hash(struct sk_buff *skb, const struct nlattr *attr)
 	key->ovs_flow_hash = hash;
 }
 
-static int execute_set_action(struct sk_buff *skb,
+static int execute_set_action(struct sk_buff *skb, struct sw_flow_key *key,
 			      const struct nlattr *nested_attr)
 {
 	int err = 0;
@@ -832,12 +751,12 @@ static int execute_set_action(struct sk_buff *skb,
 	switch (nla_type(nested_attr)) {
 	case OVS_KEY_ATTR_PRIORITY:
 		skb->priority = nla_get_u32(nested_attr);
-		flow_key_set_priority(skb, skb->priority);
+		key->phy.priority = skb->priority;
 		break;
 
 	case OVS_KEY_ATTR_SKB_MARK:
 		skb->mark = nla_get_u32(nested_attr);
-		flow_key_set_skb_mark(skb, skb->mark);
+		key->phy.skb_mark = skb->mark;
 		break;
 
 	case OVS_KEY_ATTR_TUNNEL_INFO:
@@ -845,31 +764,31 @@ static int execute_set_action(struct sk_buff *skb,
 		break;
 
 	case OVS_KEY_ATTR_ETHERNET:
-		err = set_eth_addr(skb, nla_data(nested_attr));
+		err = set_eth_addr(skb, key, nla_data(nested_attr));
 		break;
 
 	case OVS_KEY_ATTR_IPV4:
-		err = set_ipv4(skb, nla_data(nested_attr));
+		err = set_ipv4(skb, key, nla_data(nested_attr));
 		break;
 
 	case OVS_KEY_ATTR_IPV6:
-		err = set_ipv6(skb, nla_data(nested_attr));
+		err = set_ipv6(skb, key, nla_data(nested_attr));
 		break;
 
 	case OVS_KEY_ATTR_TCP:
-		err = set_tcp(skb, nla_data(nested_attr));
+		err = set_tcp(skb, key, nla_data(nested_attr));
 		break;
 
 	case OVS_KEY_ATTR_UDP:
-		err = set_udp(skb, nla_data(nested_attr));
+		err = set_udp(skb, key, nla_data(nested_attr));
 		break;
 
 	case OVS_KEY_ATTR_SCTP:
-		err = set_sctp(skb, nla_data(nested_attr));
+		err = set_sctp(skb, key, nla_data(nested_attr));
 		break;
 
 	case OVS_KEY_ATTR_MPLS:
-		err = set_mpls(skb, nla_data(nested_attr));
+		err = set_mpls(skb, key, nla_data(nested_attr));
 		break;
 	}
 
@@ -877,31 +796,36 @@ static int execute_set_action(struct sk_buff *skb,
 }
 
 static int execute_recirc(struct datapath *dp, struct sk_buff *skb,
-			  const struct nlattr *a, int rem)
+			  struct sw_flow_key *key, const struct nlattr *a, int rem)
 {
-	if (!is_skb_flow_key_valid(skb)) {
+	struct deferred_action *da;
+
+	if (!is_flow_key_valid(key)) {
 		int err;
 
-		err = ovs_flow_key_update(skb, OVS_CB(skb)->pkt_key);
+		err = ovs_flow_key_update(skb, key);
 		if (err)
 			return err;
 
 	}
-	BUG_ON(!is_skb_flow_key_valid(skb));
+	BUG_ON(!is_flow_key_valid(key));
 
 	if (!last_action(a, rem)) {
 		/* Recirc action is the not the last action
-		 * of the action list, need to clone the skb. */
+		 * of the action list, need to clone the skb.
+		 */
 		skb = skb_clone(skb, GFP_ATOMIC);
 
 		/* Skip the recirc action when out of memory, but
-		 * continue on with the rest of the action list. */
+		 * continue on with the rest of the action list.
+		 */
 		if (!skb)
 			return 0;
 	}
 
-	if (add_deferred_actions(skb, NULL)) {
-		flow_key_set_recirc_id(skb, nla_get_u32(a));
+	da = add_deferred_actions(skb, key, NULL);
+	if (da) {
+		da->pkt_key.recirc_id = nla_get_u32(a);
 	} else {
 		kfree_skb(skb);
 
@@ -915,12 +839,14 @@ static int execute_recirc(struct datapath *dp, struct sk_buff *skb,
 
 /* Execute a list of actions against 'skb'. */
 static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
-			       const struct nlattr *attr, int len)
+			      struct sw_flow_key *key,
+			      const struct nlattr *attr, int len)
 {
 	/* Every output action needs a separate clone of 'skb', but the common
 	 * case is just a single output action, so that doing a clone and
 	 * then freeing the original skbuff is wasteful.  So the following code
-	 * is slightly obscure just to avoid that. */
+	 * is slightly obscure just to avoid that.
+	 */
 	int prev_port = -1;
 	const struct nlattr *a;
 	int rem;
@@ -944,47 +870,48 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			break;
 
 		case OVS_ACTION_ATTR_USERSPACE:
-			output_userspace(dp, skb, a);
+			output_userspace(dp, skb, key, a);
 			break;
 
 		case OVS_ACTION_ATTR_HASH:
-			execute_hash(skb, a);
+			execute_hash(skb, key, a);
 			break;
 
 		case OVS_ACTION_ATTR_PUSH_MPLS:
-			err = push_mpls(skb, nla_data(a));
+			err = push_mpls(skb, key, nla_data(a));
 			break;
 
 		case OVS_ACTION_ATTR_POP_MPLS:
-			err = pop_mpls(skb, nla_get_be16(a));
+			err = pop_mpls(skb, key, nla_get_be16(a));
 			break;
 
 		case OVS_ACTION_ATTR_PUSH_VLAN:
-			err = push_vlan(skb, nla_data(a));
+			err = push_vlan(skb, key, nla_data(a));
 			if (unlikely(err)) /* skb already freed. */
 				return err;
 			break;
 
 		case OVS_ACTION_ATTR_POP_VLAN:
-			err = pop_vlan(skb);
+			err = pop_vlan(skb, key);
 			break;
 
 		case OVS_ACTION_ATTR_RECIRC:
-			err = execute_recirc(dp, skb, a, rem);
+			err = execute_recirc(dp, skb, key, a, rem);
 			if (last_action(a, rem)) {
 				/* If this is the last action, the skb has
 				 * been consumed or freed.
-				 * Return immediately. */
+				 * Return immediately.
+				 */
 				return err;
 			}
 			break;
 
 		case OVS_ACTION_ATTR_SET:
-			err = execute_set_action(skb, nla_data(a));
+			err = execute_set_action(skb, key, nla_data(a));
 			break;
 
 		case OVS_ACTION_ATTR_SAMPLE:
-			err = sample(dp, skb, a);
+			err = sample(dp, skb, key, a);
 			break;
 		}
 
@@ -1017,10 +944,10 @@ static void process_deferred_actions(struct datapath *dp)
 		const struct nlattr *actions = da->actions;
 
 		if (actions)
-			do_execute_actions(dp, skb, actions,
+			do_execute_actions(dp, skb, &da->pkt_key, actions,
 					   nla_len(actions));
 		else
-			ovs_dp_process_packet(skb);
+			ovs_dp_process_packet(skb, &da->pkt_key);
 	} while (!action_fifo_is_empty(fifo));
 
 	/* Reset FIFO for the next packet.  */
@@ -1029,7 +956,7 @@ static void process_deferred_actions(struct datapath *dp)
 
 /* Execute a list of actions against 'skb'. */
 int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb,
-			struct sw_flow_actions *acts)
+			struct sw_flow_key *key, struct sw_flow_actions *acts)
 {
 	int level = this_cpu_read(exec_actions_level);
 	int err;
@@ -1045,7 +972,7 @@ int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb,
 
 	this_cpu_inc(exec_actions_level);
 
-	err = do_execute_actions(dp, skb, acts->actions, acts->actions_len);
+	err = do_execute_actions(dp, skb, key, acts->actions, acts->actions_len);
 
 	if (!level)
 		process_deferred_actions(dp);
@@ -1054,7 +981,8 @@ int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb,
 
 	/* This return status currently does not reflect the errors
 	 * encounted during deferred actions execution. Probably needs to
-	 * be fixed in the future. */
+	 * be fixed in the future.
+	 */
 	return err;
 }
 

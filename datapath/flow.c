@@ -669,7 +669,6 @@ static int key_extract(struct sk_buff *skb, struct sw_flow_key *key)
 		}
 	}
 
-	OVS_CB(skb)->pkt_key = key;
 	return 0;
 }
 
