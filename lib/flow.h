@@ -83,8 +83,8 @@ const char *flow_tun_flag_to_string(uint32_t flags);
  *
  * The meaning of 'in_port' is context-dependent.  In most cases, it is a
  * 16-bit OpenFlow 1.0 port number.  In the software datapath interface (dpif)
- * layer and its implementations (e.g. dpif-linux, dpif-netdev), it is instead
- * a 32-bit datapath port number.
+ * layer and its implementations (e.g. dpif-netlink, dpif-netdev), it is
+ * instead a 32-bit datapath port number.
  *
  * The fields are organized in four segments to facilitate staged lookup, where
  * lower layer fields are first used to determine if the later fields need to

@@ -59,8 +59,8 @@ COVERAGE_DEFINE(dpif_purge);
 COVERAGE_DEFINE(dpif_execute_with_help);
 
 static const struct dpif_class *base_dpif_classes[] = {
-#ifdef __linux__
-    &dpif_linux_class,
+#if defined(__linux__) || defined(_WIN32)
+    &dpif_netlink_class,
 #endif
     &dpif_netdev_class,
 };
@@ -1524,7 +1524,7 @@ log_flow_del_message(struct dpif *dpif, const struct dpif_flow_del *del,
  * called after the dpif_provider's '->execute' function, which is allowed to
  * modify execute->packet and execute->md.  In practice, though:
  *
- *     - dpif-linux doesn't modify execute->packet or execute->md.
+ *     - dpif-netlink doesn't modify execute->packet or execute->md.
  *
  *     - dpif-netdev does modify them but it is less likely to have problems
  *       because it is built into ovs-vswitchd and cannot have version skew,

@@ -48,7 +48,7 @@
 #include <unistd.h>
 
 #include "coverage.h"
-#include "dpif-linux.h"
+#include "dpif-netlink.h"
 #include "dpif-netdev.h"
 #include "dynamic-string.h"
 #include "fatal-signal.h"
@@ -1523,11 +1523,11 @@ netdev_stats_from_ovs_vport_stats(struct netdev_stats *dst,
 static int
 get_stats_via_vport__(const struct netdev *netdev, struct netdev_stats *stats)
 {
-    struct dpif_linux_vport reply;
+    struct dpif_netlink_vport reply;
     struct ofpbuf *buf;
     int error;
 
-    error = dpif_linux_vport_get(netdev_get_name(netdev), &reply, &buf);
+    error = dpif_netlink_vport_get(netdev_get_name(netdev), &reply, &buf);
     if (error) {
         return error;
     } else if (!reply.stats) {

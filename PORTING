@@ -232,7 +232,7 @@ requirements are unclear, please report this as a bug.
 There are two existing dpif implementations that may serve as
 useful examples during a port:
 
-    * lib/dpif-linux.c is a Linux-specific dpif implementation that
+    * lib/dpif-netlink.c is a Linux-specific dpif implementation that
       talks to an Open vSwitch-specific kernel module (whose sources
       are in the "datapath" directory).  The kernel module performs
       all of the switching work, passing packets that do not match any

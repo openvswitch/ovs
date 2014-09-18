@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DPIF_LINUX_H
-#define DPIF_LINUX_H 1
+#ifndef DPIF_NETLINK_H
+#define DPIF_NETLINK_H 1
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -26,7 +26,7 @@
 
 struct ofpbuf;
 
-struct dpif_linux_vport {
+struct dpif_netlink_vport {
     /* Generic Netlink header. */
     uint8_t cmd;
 
@@ -48,14 +48,14 @@ struct dpif_linux_vport {
     size_t options_len;
 };
 
-void dpif_linux_vport_init(struct dpif_linux_vport *);
+void dpif_netlink_vport_init(struct dpif_netlink_vport *);
 
-int dpif_linux_vport_transact(const struct dpif_linux_vport *request,
-                              struct dpif_linux_vport *reply,
-                              struct ofpbuf **bufp);
-int dpif_linux_vport_get(const char *name, struct dpif_linux_vport *reply,
-                         struct ofpbuf **bufp);
+int dpif_netlink_vport_transact(const struct dpif_netlink_vport *request,
+                                struct dpif_netlink_vport *reply,
+                                struct ofpbuf **bufp);
+int dpif_netlink_vport_get(const char *name, struct dpif_netlink_vport *reply,
+                           struct ofpbuf **bufp);
 
-bool dpif_linux_is_internal_device(const char *name);
+bool dpif_netlink_is_internal_device(const char *name);
 
-#endif /* dpif-linux.h */
+#endif /* dpif-netlink.h */

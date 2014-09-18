@@ -20,7 +20,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-struct dpif_linux_vport;
+struct dpif_netlink_vport;
 struct dpif_flow_stats;
 struct netdev;
 struct netdev_class;

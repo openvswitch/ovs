@@ -307,8 +307,8 @@ endif
 
 if LINUX
 lib_libopenvswitch_la_SOURCES += \
-	lib/dpif-linux.c \
-	lib/dpif-linux.h \
+	lib/dpif-netlink.c \
+	lib/dpif-netlink.h \
 	lib/netdev-linux.c \
 	lib/netdev-linux.h \
 	lib/netlink-notifier.c \
@@ -332,6 +332,8 @@ endif
 
 if WIN32
 lib_libopenvswitch_la_SOURCES += \
+	lib/dpif-netlink.c \
+	lib/dpif-netlink.h \
 	lib/netlink-notifier.c \
 	lib/netlink-notifier.h \
 	lib/netlink-protocol.h \

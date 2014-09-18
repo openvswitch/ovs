@@ -358,7 +358,7 @@ struct dpif_class {
     void (*disable_upcall)(struct dpif *);
 };
 
-extern const struct dpif_class dpif_linux_class;
+extern const struct dpif_class dpif_netlink_class;
 extern const struct dpif_class dpif_netdev_class;
 
 #ifdef  __cplusplus
