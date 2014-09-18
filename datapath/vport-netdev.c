@@ -26,6 +26,7 @@
 #include <linux/rtnetlink.h>
 #include <linux/skbuff.h>
 #include <linux/openvswitch.h>
+#include <linux/netdevice.h>
 
 #include <net/llc.h>
 
@@ -255,7 +256,7 @@ struct vport *ovs_netdev_get_vport(struct net_device *dev)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36) || \
     defined HAVE_RHEL_OVS_HOOK
-#if IFF_OVS_DATAPATH != 0
+#ifdef HAVE_OVS_DATAPATH
 	if (likely(dev->priv_flags & IFF_OVS_DATAPATH))
 #else
 	if (likely(rcu_access_pointer(dev->rx_handler) == netdev_frame_hook))

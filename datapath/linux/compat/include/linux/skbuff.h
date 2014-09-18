@@ -6,6 +6,10 @@
 #include <linux/jhash.h>
 #include <linux/version.h>
 
+#ifndef HAVE_IGNORE_DF_RENAME
+#define ignore_df local_df
+#endif
+
 #ifndef HAVE_SKB_COPY_FROM_LINEAR_DATA_OFFSET
 static inline void skb_copy_from_linear_data_offset(const struct sk_buff *skb,
 						    const int offset, void *to,

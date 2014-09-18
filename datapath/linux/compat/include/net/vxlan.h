@@ -19,8 +19,13 @@ static inline int rpl_vxlan_xmit_skb(struct vxlan_sock *vs,
 		return -ENOSYS;
 	}
 
+#ifdef HAVE_VXLAN_XMIT_SKB_XNET_ARG
+	return vxlan_xmit_skb(vs, rt, skb, src, dst, tos, ttl, df,
+			      src_port, dst_port, vni, false);
+#else
 	return vxlan_xmit_skb(vs, rt, skb, src, dst, tos, ttl, df,
 			      src_port, dst_port, vni);
+#endif
 }
 
 #define vxlan_xmit_skb rpl_vxlan_xmit_skb

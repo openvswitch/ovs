@@ -151,7 +151,7 @@ static void do_setup(struct net_device *netdev)
 	netdev->priv_flags &= ~IFF_TX_SKB_SHARING;
 	netdev->priv_flags |= IFF_LIVE_ADDR_CHANGE;
 	netdev->destructor = internal_dev_destructor;
-	SET_ETHTOOL_OPS(netdev, &internal_dev_ethtool_ops);
+	netdev->ethtool_ops = &internal_dev_ethtool_ops;
 	netdev->tx_queue_len = 0;
 
 	netdev->features = NETIF_F_LLTX | NETIF_F_SG | NETIF_F_FRAGLIST |
@@ -189,7 +189,7 @@ static struct vport *internal_dev_create(const struct vport_parms *parms)
 	netdev_vport = netdev_vport_priv(vport);
 
 	netdev_vport->dev = alloc_netdev(sizeof(struct internal_dev),
-					 parms->name, do_setup);
+					 parms->name, NET_NAME_UNKNOWN, do_setup);
 	if (!netdev_vport->dev) {
 		err = -ENOMEM;
 		goto error_free_vport;

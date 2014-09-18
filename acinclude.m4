@@ -134,10 +134,10 @@ AC_DEFUN([OVS_CHECK_LINUX], [
     AC_MSG_RESULT([$kversion])
 
     if test "$version" -ge 3; then
-       if test "$version" = 3 && test "$patchlevel" -le 14; then
+       if test "$version" = 3 && test "$patchlevel" -le 17; then
           : # Linux 3.x
        else
-         AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 3.14.x is not supported (please refer to the FAQ for advice)])
+         AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 3.17.x is not supported (please refer to the FAQ for advice)])
        fi
     else
        if test "$version" -le 1 || test "$patchlevel" -le 5 || test "$sublevel" -le 31; then
@@ -370,6 +370,14 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
 
   OVS_GREP_IFELSE([$KSRC/include/linux/openvswitch.h], [openvswitch_handle_frame_hook],
                   [OVS_DEFINE([HAVE_RHEL_OVS_HOOK])])
+  OVS_GREP_IFELSE([$KSRC/include/net/vxlan.h], [bool xnet],
+                  [OVS_DEFINE([HAVE_VXLAN_XMIT_SKB_XNET_ARG])])
+  OVS_GREP_IFELSE([$KSRC/include/net/udp.h], [udp_flow_src_port],
+                  [OVS_DEFINE([HAVE_UDP_FLOW_SRC_PORT])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [ignore_df:1],
+                  [OVS_DEFINE([HAVE_IGNORE_DF_RENAME])])
+  OVS_GREP_IFELSE([$KSRC/include/uapi/linux/netdevice.h], [NET_NAME_UNKNOWN],
+                  [OVS_DEFINE([HAVE_NET_NAME_UNKNOWN])])
 
   OVS_CHECK_LOG2_H
 

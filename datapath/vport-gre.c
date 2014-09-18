@@ -192,9 +192,9 @@ static int __send(struct vport *vport, struct sk_buff *skb,
 	}
 
 	df = tun_key->tun_flags & TUNNEL_DONT_FRAGMENT ? htons(IP_DF) : 0;
-	skb->local_df = 1;
+	skb->ignore_df = 1;
 
-	return iptunnel_xmit(rt, skb, saddr,
+	return iptunnel_xmit(skb->sk, rt, skb, saddr,
 			     tun_key->ipv4_dst, IPPROTO_GRE,
 			     tun_key->ipv4_tos,
 			     tun_key->ipv4_ttl, df, false);

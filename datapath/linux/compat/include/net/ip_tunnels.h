@@ -4,6 +4,18 @@
 #include <linux/version.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,12,0)
 #include_next <net/ip_tunnels.h>
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,15,0)
+static inline int rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt,
+				    struct sk_buff *skb, __be32 src,
+				    __be32 dst, __u8 proto, __u8 tos,
+				    __u8 ttl, __be16 df, bool xnet)
+{
+	return iptunnel_xmit(rt, skb, src, dst, proto, tos, ttl, df, xnet);
+}
+#define iptunnel_xmit rpl_iptunnel_xmit
+#endif
+
 #else
 
 #include <linux/if_tunnel.h>
@@ -36,7 +48,7 @@ struct tnl_ptk_info {
 #define PACKET_RCVD	0
 #define PACKET_REJECT	1
 
-int iptunnel_xmit(struct rtable *rt,
+int iptunnel_xmit(struct sock *sk, struct rtable *rt,
 		  struct sk_buff *skb,
 		  __be32 src, __be32 dst, __u8 proto,
 		  __u8 tos, __u8 ttl, __be16 df, bool xnet);

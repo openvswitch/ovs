@@ -8,8 +8,29 @@ struct net;
 
 #include <linux/version.h>
 
+#ifndef IFF_TX_SKB_SHARING
+#define IFF_TX_SKB_SHARING 0
+#endif
+
+#ifndef IFF_OVS_DATAPATH
+#define IFF_OVS_DATAPATH 0
+#else
+#define HAVE_OVS_DATAPATH
+#endif
+
+#ifndef IFF_LIVE_ADDR_CHANGE
+#define IFF_LIVE_ADDR_CHANGE 0
+#endif
+
 #ifndef to_net_dev
 #define to_net_dev(class) container_of(class, struct net_device, NETDEV_DEV_MEMBER)
+#endif
+
+#ifndef HAVE_NET_NAME_UNKNOWN
+#undef alloc_netdev
+#define NET_NAME_UNKNOWN 0
+#define alloc_netdev(sizeof_priv, name, name_assign_type, setup) \
+        alloc_netdev_mqs(sizeof_priv, name, setup, 1, 1)
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,33)

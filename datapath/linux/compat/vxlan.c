@@ -226,7 +226,8 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 	if (err)
 		return err;
 
-	return iptunnel_xmit(rt, skb, src, dst, IPPROTO_UDP, tos, ttl, df, false);
+	return iptunnel_xmit(vs->sock->sk, rt, skb, src, dst, IPPROTO_UDP,
+			     tos, ttl, df, false);
 }
 
 static void rcu_free_vs(struct rcu_head *rcu)

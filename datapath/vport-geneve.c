@@ -132,12 +132,13 @@ static void geneve_build_header(const struct vport *vport,
 			      struct sk_buff *skb)
 {
 	struct geneve_port *geneve_port = geneve_vport(vport);
+	struct net *net = ovs_dp_get_net(vport->dp);
 	struct udphdr *udph = udp_hdr(skb);
 	struct genevehdr *geneveh = (struct genevehdr *)(udph + 1);
 	const struct ovs_tunnel_info *tun_info = OVS_CB(skb)->egress_tun_info;
 
 	udph->dest = inet_sport(geneve_port->sock->sk);
-	udph->source = vxlan_src_port(1, USHRT_MAX, skb);
+	udph->source = udp_flow_src_port(net, skb, 0, 0, true);
 	udph->check = 0;
 	udph->len = htons(skb->len - skb_transport_offset(skb));
 
@@ -423,7 +424,7 @@ static int geneve_send(struct vport *vport, struct sk_buff *skb)
 
 	df = tun_key->tun_flags & TUNNEL_DONT_FRAGMENT ? htons(IP_DF) : 0;
 
-	sent_len = iptunnel_xmit(rt, skb,
+	sent_len = iptunnel_xmit(skb->sk, rt, skb,
 			     saddr, tun_key->ipv4_dst,
 			     IPPROTO_UDP, tun_key->ipv4_tos,
 			     tun_key->ipv4_ttl,
@@ -447,6 +448,7 @@ static int geneve_get_egress_tun_info(struct vport *vport, struct sk_buff *skb,
 				      struct ovs_tunnel_info *egress_tun_info)
 {
 	struct geneve_port *geneve_port = geneve_vport(vport);
+	struct net *net = ovs_dp_get_net(vport->dp);
 
 	/*
 	 * Get tp_src and tp_dst, refert to geneve_build_header().
@@ -455,7 +457,7 @@ static int geneve_get_egress_tun_info(struct vport *vport, struct sk_buff *skb,
 					  ovs_dp_get_net(vport->dp),
 					  OVS_CB(skb)->egress_tun_info,
 					  IPPROTO_UDP, skb->mark,
-					  vxlan_src_port(1, USHRT_MAX, skb),
+					  udp_flow_src_port(net, skb, 0, 0, true),
 					  inet_sport(geneve_port->sock->sk));
 
 }
