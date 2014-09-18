@@ -47,6 +47,7 @@ struct jsonrpc {
 
     /* Output. */
     struct list output;         /* Contains "struct ofpbuf"s. */
+    size_t output_count;        /* Number of elements in "output". */
     size_t backlog;
 };
 
@@ -124,6 +125,7 @@ jsonrpc_run(struct jsonrpc *rpc)
             ofpbuf_pull(buf, retval);
             if (!ofpbuf_size(buf)) {
                 list_remove(&buf->list_node);
+                rpc->output_count--;
                 ofpbuf_delete(buf);
             }
         } else {
@@ -257,7 +259,14 @@ jsonrpc_send(struct jsonrpc *rpc, struct jsonrpc_msg *msg)
     ofpbuf_use(buf, s, length);
     ofpbuf_set_size(buf, length);
     list_push_back(&rpc->output, &buf->list_node);
+    rpc->output_count++;
     rpc->backlog += length;
+
+    if (rpc->output_count >= 50) {
+        VLOG_INFO_RL(&rl, "excessive sending backlog, jsonrpc: %s, num of"
+                     " msgs: %"PRIuSIZE", backlog: %"PRIuSIZE".", rpc->name,
+                     rpc->output_count, rpc->backlog);
+    }
 
     if (rpc->backlog == length) {
         jsonrpc_run(rpc);
@@ -496,6 +505,7 @@ jsonrpc_cleanup(struct jsonrpc *rpc)
 
     ofpbuf_list_delete(&rpc->output);
     rpc->backlog = 0;
+    rpc->output_count = 0;
 }
 
 static struct jsonrpc_msg *
