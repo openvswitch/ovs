@@ -192,6 +192,10 @@ static bool status_txn_try_again;
 static int stats_timer_interval;
 static long long int stats_timer = LLONG_MIN;
 
+/* Current stats database transaction, NULL if there is no ongoing
+ * transaction. */
+static struct ovsdb_idl_txn *stats_txn;
+
 /* In some datapaths, creating and destroying OpenFlow ports can be extremely
  * expensive.  This can cause bridge_reconfigure() to take a long time during
  * which no other work can be done.  To deal with this problem, we limit port
@@ -2747,35 +2751,39 @@ bridge_run(void)
 
     /* Refresh interface and mirror stats if necessary. */
     if (time_msec() >= stats_timer) {
-        if (cfg) {
-            struct ovsdb_idl_txn *txn;
+        enum ovsdb_idl_txn_status status;
 
-            txn = ovsdb_idl_txn_create(idl);
-            HMAP_FOR_EACH (br, node, &all_bridges) {
-                struct port *port;
-                struct mirror *m;
+        /* Rate limit the update.  Do not start a new update if the
+         * previous one is not done. */
+        if (!stats_txn) {
+            if (cfg) {
+                stats_txn = ovsdb_idl_txn_create(idl);
+                HMAP_FOR_EACH (br, node, &all_bridges) {
+                    struct port *port;
+                    struct mirror *m;
 
-                HMAP_FOR_EACH (port, hmap_node, &br->ports) {
-                    struct iface *iface;
+                    HMAP_FOR_EACH (port, hmap_node, &br->ports) {
+                        struct iface *iface;
 
-                    LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-                        iface_refresh_stats(iface);
+                        LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
+                            iface_refresh_stats(iface);
+                        }
+                        port_refresh_stp_stats(port);
                     }
-
-                    port_refresh_stp_stats(port);
+                    HMAP_FOR_EACH (m, hmap_node, &br->mirrors) {
+                        mirror_refresh_stats(m);
+                    }
                 }
-
-                HMAP_FOR_EACH (m, hmap_node, &br->mirrors) {
-                    mirror_refresh_stats(m);
-                }
-
+                refresh_controller_status();
             }
-            refresh_controller_status();
-            ovsdb_idl_txn_commit(txn);
-            ovsdb_idl_txn_destroy(txn); /* XXX */
         }
 
-        stats_timer = time_msec() + stats_timer_interval;
+        status = ovsdb_idl_txn_commit(stats_txn);
+        if (status != TXN_INCOMPLETE) {
+            stats_timer = time_msec() + stats_timer_interval;
+            ovsdb_idl_txn_destroy(stats_txn);
+            stats_txn = NULL;
+        }
     }
 
     if (!status_txn) {
