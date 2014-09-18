@@ -731,6 +731,32 @@ A: It depends on mechanisms and configurations you want to use.
    you want to use ebtables rules.)  On NetBSD, you might want to
    consider using the bridge(4) with BRIDGE_IPF option.
 
+Q: It seems that Open vSwitch does nothing when I removed a port and
+   then immediately put it back.  For example, consider that p1 is
+   a port of type=internal:
+
+       ovs-vsctl del-port br0 p1 -- \
+           add-port br0 p1 -- \
+           set interface p1 type=internal
+
+A: It's an expected behaviour.
+
+   If del-port and add-port happen in a single OVSDB transaction as                your example, Open vSwitch always "skips" the intermediate steps.
+   Even if they are done in multiple transactions, it's still allowed
+   for Open vSwitch to skip the intermediate steps and just implement
+   the overall effect.  In both cases, your example would be turned
+   into a no-op.
+
+   If you want to make Open vSwitch actually destroy and then re-create
+   the port for some side effects like resetting kernel setting for the
+   corresponding interface, you need to separate operations into multiple
+   OVSDB transactions and ensure that at least the first one does not have
+   --no-wait.  In the following example, the first ovs-vsctl will block
+   until Open vSwitch reloads the new configuration and removes the port:
+
+       ovs-vsctl del-port br0 p1
+       ovs-vsctl add-port br0 p1 -- \
+           set interface p1 type=internal
 
 Quality of Service (QoS)
 ------------------------
