@@ -192,10 +192,6 @@ static bool status_txn_try_again;
 static int stats_timer_interval;
 static long long int stats_timer = LLONG_MIN;
 
-/* Current stats database transaction, NULL if there is no ongoing
- * transaction. */
-static struct ovsdb_idl_txn *stats_txn;
-
 /* In some datapaths, creating and destroying OpenFlow ports can be extremely
  * expensive.  This can cause bridge_reconfigure() to take a long time during
  * which no other work can be done.  To deal with this problem, we limit port
@@ -2597,6 +2593,133 @@ refresh_controller_status(void)
     ofproto_free_ofproto_controller_info(&info);
 }
 
+/* Update interface and mirror statistics if necessary. */
+static void
+run_stats_update(void)
+{
+    static struct ovsdb_idl_txn *stats_txn;
+    const struct ovsrec_open_vswitch *cfg = ovsrec_open_vswitch_first(idl);
+    int stats_interval;
+
+    if (!cfg) {
+        return;
+    }
+
+    /* Statistics update interval should always be greater than or equal to
+     * 5000 ms. */
+    stats_interval = MAX(smap_get_int(&cfg->other_config,
+                                      "stats-update-interval",
+                                      5000), 5000);
+    if (stats_timer_interval != stats_interval) {
+        stats_timer_interval = stats_interval;
+        stats_timer = LLONG_MIN;
+    }
+
+    if (time_msec() >= stats_timer) {
+        enum ovsdb_idl_txn_status status;
+
+        /* Rate limit the update.  Do not start a new update if the
+         * previous one is not done. */
+        if (!stats_txn) {
+            struct bridge *br;
+
+            stats_txn = ovsdb_idl_txn_create(idl);
+            HMAP_FOR_EACH (br, node, &all_bridges) {
+                struct port *port;
+                struct mirror *m;
+
+                HMAP_FOR_EACH (port, hmap_node, &br->ports) {
+                    struct iface *iface;
+
+                    LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
+                        iface_refresh_stats(iface);
+                    }
+                    port_refresh_stp_stats(port);
+                }
+                HMAP_FOR_EACH (m, hmap_node, &br->mirrors) {
+                    mirror_refresh_stats(m);
+                }
+            }
+            refresh_controller_status();
+        }
+
+        status = ovsdb_idl_txn_commit(stats_txn);
+        if (status != TXN_INCOMPLETE) {
+            stats_timer = time_msec() + stats_timer_interval;
+            ovsdb_idl_txn_destroy(stats_txn);
+            stats_txn = NULL;
+        }
+    }
+}
+
+/* Update bridge/port/interface status if necessary. */
+static void
+run_status_update(void)
+{
+    uint64_t seq;
+
+    /* Check the need to update status. */
+    seq = seq_read(connectivity_seq_get());
+    if (seq != connectivity_seqno || status_txn_try_again) {
+        enum ovsdb_idl_txn_status status;
+
+        /* Rate limit the update.  Do not start a new update if the
+         * previous one is not done. */
+        if (!status_txn) {
+            struct bridge *br;
+
+            connectivity_seqno = seq;
+            status_txn = ovsdb_idl_txn_create(idl);
+            HMAP_FOR_EACH (br, node, &all_bridges) {
+                struct port *port;
+
+                br_refresh_stp_status(br);
+                br_refresh_rstp_status(br);
+                HMAP_FOR_EACH (port, hmap_node, &br->ports) {
+                    struct iface *iface;
+
+                    port_refresh_stp_status(port);
+                    port_refresh_rstp_status(port);
+                    LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
+                        iface_refresh_netdev_status(iface);
+                        iface_refresh_ofproto_status(iface);
+                    }
+                }
+            }
+        }
+
+        status = ovsdb_idl_txn_commit(status_txn);
+        if (status != TXN_INCOMPLETE) {
+            ovsdb_idl_txn_destroy(status_txn);
+            status_txn = NULL;
+
+            /* Sets the 'status_txn_try_again' if the transaction fails. */
+            if (status == TXN_SUCCESS || status == TXN_UNCHANGED) {
+                status_txn_try_again = false;
+            } else {
+                status_txn_try_again = true;
+            }
+        }
+    }
+}
+
+static void
+status_update_wait(void)
+{
+    /* If the 'status_txn' is non-null (transaction incomplete), waits for the
+     * transaction to complete.  If the status update to database needs to be
+     * run again (transaction fails), registers a timeout in
+     * 'STATUS_CHECK_AGAIN_MSEC'.  Otherwise, waits on the global connectivity
+     * sequence number. */
+    if (status_txn) {
+        ovsdb_idl_txn_wait(status_txn);
+    } else if (status_txn_try_again) {
+        poll_timer_wait_until(time_msec() + STATUS_CHECK_AGAIN_MSEC);
+    } else {
+        seq_wait(connectivity_seq_get(), connectivity_seqno);
+    }
+}
+
 static void
 bridge_run__(void)
 {
@@ -2625,8 +2748,6 @@ bridge_run(void)
     const struct ovsrec_open_vswitch *cfg;
 
     bool vlan_splinters_changed;
-    struct bridge *br;
-    int stats_interval;
 
     ovsrec_open_vswitch_init(&null_cfg);
 
@@ -2685,6 +2806,8 @@ bridge_run(void)
      * usage has changed. */
     vlan_splinters_changed = false;
     if (vlan_splinters_enabled_anywhere) {
+        struct bridge *br;
+
         HMAP_FOR_EACH (br, node, &all_bridges) {
             if (ofproto_has_vlan_usage_changed(br->ofproto)) {
                 vlan_splinters_changed = true;
@@ -2735,103 +2858,8 @@ bridge_run(void)
         }
     }
 
-    /* Statistics update interval should always be greater than or equal to
-     * 5000 ms. */
-    if (cfg) {
-        stats_interval = MAX(smap_get_int(&cfg->other_config,
-                                          "stats-update-interval",
-                                          5000), 5000);
-    } else {
-        stats_interval = 5000;
-    }
-    if (stats_timer_interval != stats_interval) {
-        stats_timer_interval = stats_interval;
-        stats_timer = LLONG_MIN;
-    }
-
-    /* Refresh interface and mirror stats if necessary. */
-    if (time_msec() >= stats_timer) {
-        enum ovsdb_idl_txn_status status;
-
-        /* Rate limit the update.  Do not start a new update if the
-         * previous one is not done. */
-        if (!stats_txn) {
-            if (cfg) {
-                stats_txn = ovsdb_idl_txn_create(idl);
-                HMAP_FOR_EACH (br, node, &all_bridges) {
-                    struct port *port;
-                    struct mirror *m;
-
-                    HMAP_FOR_EACH (port, hmap_node, &br->ports) {
-                        struct iface *iface;
-
-                        LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-                            iface_refresh_stats(iface);
-                        }
-                        port_refresh_stp_stats(port);
-                    }
-                    HMAP_FOR_EACH (m, hmap_node, &br->mirrors) {
-                        mirror_refresh_stats(m);
-                    }
-                }
-                refresh_controller_status();
-            }
-        }
-
-        status = ovsdb_idl_txn_commit(stats_txn);
-        if (status != TXN_INCOMPLETE) {
-            stats_timer = time_msec() + stats_timer_interval;
-            ovsdb_idl_txn_destroy(stats_txn);
-            stats_txn = NULL;
-        }
-    }
-
-    if (!status_txn) {
-        uint64_t seq;
-
-        /* Check the need to update status. */
-        seq = seq_read(connectivity_seq_get());
-        if (seq != connectivity_seqno || status_txn_try_again) {
-            connectivity_seqno = seq;
-            status_txn = ovsdb_idl_txn_create(idl);
-            HMAP_FOR_EACH (br, node, &all_bridges) {
-                struct port *port;
-
-                br_refresh_stp_status(br);
-                br_refresh_rstp_status(br);
-                HMAP_FOR_EACH (port, hmap_node, &br->ports) {
-                    struct iface *iface;
-
-                    port_refresh_stp_status(port);
-                    port_refresh_rstp_status(port);
-                    LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-                        iface_refresh_netdev_status(iface);
-                        iface_refresh_ofproto_status(iface);
-                    }
-                }
-            }
-        }
-    }
-
-    if (status_txn) {
-        enum ovsdb_idl_txn_status status;
-
-        status = ovsdb_idl_txn_commit(status_txn);
-        /* Do not destroy "status_txn" if the transaction is
-         * "TXN_INCOMPLETE". */
-        if (status != TXN_INCOMPLETE) {
-            ovsdb_idl_txn_destroy(status_txn);
-            status_txn = NULL;
-
-            /* Sets the 'status_txn_try_again' if the transaction fails. */
-            if (status == TXN_SUCCESS || status == TXN_UNCHANGED) {
-                status_txn_try_again = false;
-            } else {
-                status_txn_try_again = true;
-            }
-        }
-    }
-
+    run_stats_update();
+    run_status_update();
     run_system_stats();
 }
 
@@ -2863,19 +2891,7 @@ bridge_wait(void)
         poll_timer_wait_until(stats_timer);
     }
 
-    /* If the 'status_txn' is non-null (transaction incomplete), waits for the
-     * transaction to complete.  If the status update to database needs to be
-     * run again (transaction fails), registers a timeout in
-     * 'STATUS_CHECK_AGAIN_MSEC'.  Otherwise, waits on the global connectivity
-     * sequence number. */
-    if (status_txn) {
-        ovsdb_idl_txn_wait(status_txn);
-    } else if (status_txn_try_again) {
-        poll_timer_wait_until(time_msec() + STATUS_CHECK_AGAIN_MSEC);
-    } else {
-        seq_wait(connectivity_seq_get(), connectivity_seqno);
-    }
-
+    status_update_wait();
     system_stats_wait();
 }
 
