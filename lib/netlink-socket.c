@@ -438,8 +438,8 @@ nl_sock_send__(struct nl_sock *sock, const struct ofpbuf *msg,
         DWORD bytes;
 
         if (!DeviceIoControl(sock->handle, OVS_IOCTL_WRITE,
-                            ofpbuf_data(msg), ofpbuf_size(msg), NULL, 0,
-                            &bytes, NULL)) {
+                             ofpbuf_data(msg), ofpbuf_size(msg), NULL, 0,
+                             &bytes, NULL)) {
             retval = -1;
             /* XXX: Map to a more appropriate error based on GetLastError(). */
             errno = EINVAL;
@@ -659,34 +659,19 @@ nl_sock_transact_multiple__(struct nl_sock *sock,
         iovs[i].iov_len = ofpbuf_size(txn->request);
     }
 
+#ifndef _WIN32
     memset(&msg, 0, sizeof msg);
     msg.msg_iov = iovs;
     msg.msg_iovlen = n;
     do {
-#ifdef _WIN32
-    DWORD last_error = 0;
-    bool result = FALSE;
-    for (i = 0; i < n; i++) {
-        result = WriteFile((HANDLE)sock->handle, iovs[i].iov_base, iovs[i].iov_len,
-                           &error, NULL);
-        last_error = GetLastError();
-        if (last_error != ERROR_SUCCESS && !result) {
-            error = EAGAIN;
-            errno = EAGAIN;
-        } else {
-            error = 0;
-        }
-    }
-#else
         error = sendmsg(sock->fd, &msg, 0) < 0 ? errno : 0;
-#endif
     } while (error == EINTR);
 
     for (i = 0; i < n; i++) {
         struct nl_transaction *txn = transactions[i];
 
-        log_nlmsg(__func__, error, ofpbuf_data(txn->request), ofpbuf_size(txn->request),
-                  sock->protocol);
+        log_nlmsg(__func__, error, ofpbuf_data(txn->request),
+                  ofpbuf_size(txn->request), sock->protocol);
     }
     if (!error) {
         COVERAGE_ADD(netlink_sent, n);
@@ -765,6 +750,82 @@ nl_sock_transact_multiple__(struct nl_sock *sock,
         base_seq += i + 1;
     }
     ofpbuf_uninit(&tmp_reply);
+#else
+    error = 0;
+    for (i = 0; i < n; i++) {
+        DWORD reply_len;
+        uint8_t tail[65536];
+        struct nl_transaction *txn = transactions[i];
+        struct nlmsghdr *request_nlmsg, *reply_nlmsg;
+
+        if (!DeviceIoControl(sock->handle, OVS_IOCTL_TRANSACT,
+                             ofpbuf_data(txn->request),
+                             ofpbuf_size(txn->request),
+                             txn->reply ? tail : 0,
+                             txn->reply ? sizeof tail : 0,
+                             &reply_len, NULL)) {
+            /* XXX: Map to a more appropriate error. */
+            error = EINVAL;
+            break;
+        }
+
+        if (txn->reply) {
+            if (reply_len < sizeof *reply_nlmsg) {
+                VLOG_DBG_RL(&rl, "insufficient length of reply %#"PRIu32,
+                            reply_len);
+                break;
+            }
+
+            /* Validate the sequence number in the reply. */
+            request_nlmsg = nl_msg_nlmsghdr(txn->request);
+            reply_nlmsg = (struct nlmsghdr *)tail;
+
+            if (request_nlmsg->nlmsg_seq != reply_nlmsg->nlmsg_seq) {
+                ovs_assert(request_nlmsg->nlmsg_seq == reply_nlmsg->nlmsg_seq);
+                VLOG_DBG_RL(&rl, "mismatched seq request %#"PRIx32
+                    ", reply %#"PRIx32, request_nlmsg->nlmsg_seq,
+                    reply_nlmsg->nlmsg_seq);
+                break;
+            }
+
+            /* If reply was expected, verify if there was indeed a reply
+             * received. */
+            if (reply_len == 0) {
+                nl_sock_record_errors__(transactions, n, 0);
+                VLOG_DBG_RL(&rl, "reply not seen when expected seq %#"PRIx32,
+                            request_nlmsg->nlmsg_seq);
+                break;
+            }
+
+            /* Copy the reply to the buffer specified by the caller. */
+            if (reply_len > txn->reply->allocated) {
+                ofpbuf_reinit(txn->reply, reply_len);
+            }
+            memcpy(ofpbuf_data(txn->reply), tail, reply_len);
+            ofpbuf_set_size(txn->reply, reply_len);
+
+            /* Handle errors embedded within the netlink message. */
+            if (nl_msg_nlmsgerr(txn->reply, &txn->error)) {
+                if (txn->reply) {
+                    ofpbuf_clear(txn->reply);
+                }
+                if (txn->error) {
+                    VLOG_DBG_RL(&rl, "received NAK error=%d (%s)",
+                                error, ovs_strerror(txn->error));
+                }
+            } else {
+                txn->error = 0;
+            }
+        }
+
+        /* Count the number of successful transactions. */
+        (*done)++;
+    }
+
+    if (!error) {
+        COVERAGE_ADD(netlink_sent, n);
+    }
+#endif
 
     return error;
 }
