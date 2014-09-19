@@ -472,11 +472,11 @@ netdev_dpdk_set_txq(struct netdev_dpdk *netdev, unsigned int n_txqs)
     /* Each index is considered as a cpu core id, since there should
      * be one tx queue for each cpu core. */
     for (i = 0; i < n_txqs; i++) {
-        int core_id = ovs_numa_get_numa_id(i);
+        int numa_id = ovs_numa_get_numa_id(i);
 
         /* If the corresponding core is not on the same numa node
          * as 'netdev', flags the 'flush_tx'. */
-        netdev->tx_q[i].flush_tx = netdev->socket_id == core_id;
+        netdev->tx_q[i].flush_tx = netdev->socket_id == numa_id;
     }
 }
 
