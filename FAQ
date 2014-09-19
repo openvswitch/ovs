@@ -741,7 +741,8 @@ Q: It seems that Open vSwitch does nothing when I removed a port and
 
 A: It's an expected behaviour.
 
-   If del-port and add-port happen in a single OVSDB transaction as                your example, Open vSwitch always "skips" the intermediate steps.
+   If del-port and add-port happen in a single OVSDB transaction as
+   your example, Open vSwitch always "skips" the intermediate steps.
    Even if they are done in multiple transactions, it's still allowed
    for Open vSwitch to skip the intermediate steps and just implement
    the overall effect.  In both cases, your example would be turned
