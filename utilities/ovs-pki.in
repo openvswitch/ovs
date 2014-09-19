@@ -1,6 +1,6 @@
 #! /bin/sh
 
-# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -274,7 +274,7 @@ private_key    = $dir/private/cakey.pem# CA private key
 RANDFILE       = $dir/private/.rand    # random number file
 default_days   = 3650                  # how long to certify for
 default_crl_days= 30                   # how long before next CRL
-default_md     = md5                   # md to use
+default_md     = sha512                # message digest to use
 policy         = policy                # default policy
 email_in_dn    = no                    # Don't add the email into cert DN
 name_opt       = ca_default            # Subject name display option

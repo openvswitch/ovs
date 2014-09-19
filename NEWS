@@ -20,6 +20,9 @@ Post-v2.3.0
      * "resubmit" actions may now be included in action sets.  The resubmit
        is executed last, and only if the action set has no "output" or "group"
        action.
+   - ovs-pki: Changed message digest algorithm from MD5 to SHA-512 because
+     MD5 is no longer secure and some operating systems have started to disable
+     it in OpenSSL.
    - ovsdb-server: New OVSDB protocol extension allows inequality tests on
      "optional scalar" columns.  See ovsdb-server(1) for details.
    - test-controller has been renamed ovs-testcontroller at request of users
