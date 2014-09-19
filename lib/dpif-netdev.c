@@ -2681,7 +2681,7 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
             /* We can't allow the packet batching in the next loop to execute
              * the actions.  Otherwise, if there are any slow path actions,
              * we'll send the packet up twice. */
-            dp_netdev_execute_actions(pmd, &packets[i], 1, false, md,
+            dp_netdev_execute_actions(pmd, &packets[i], 1, true, md,
                                       ofpbuf_data(&actions),
                                       ofpbuf_size(&actions));
 
@@ -2707,6 +2707,17 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
         ofpbuf_uninit(&actions);
         ofpbuf_uninit(&put_actions);
         fat_rwlock_unlock(&dp->upcall_rwlock);
+    } else if (OVS_UNLIKELY(any_miss)) {
+        int dropped_cnt = 0;
+
+        for (i = 0; i < cnt; i++) {
+            if (OVS_UNLIKELY(!rules[i] && mfs[i])) {
+                dpif_packet_delete(packets[i]);
+                dropped_cnt++;
+            }
+        }
+
+        dp_netdev_count_packet(dp, DP_STAT_LOST, dropped_cnt);
     }
 
     n_batches = 0;
@@ -2763,6 +2774,18 @@ dpif_netdev_register_upcall_cb(struct dpif *dpif, upcall_callback *cb,
 }
 
 static void
+dp_netdev_drop_packets(struct dpif_packet ** packets, int cnt, bool may_steal)
+{
+    int i;
+
+    if (may_steal) {
+        for (i = 0; i < cnt; i++) {
+            dpif_packet_delete(packets[i]);
+        }
+    }
+}
+
+static void
 dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
               struct pkt_metadata *md,
               const struct nlattr *a, bool may_steal)
@@ -2781,10 +2804,7 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
         p = dp_netdev_lookup_port(dp, u32_to_odp(nl_attr_get_u32(a)));
         if (OVS_LIKELY(p)) {
             netdev_send(p->netdev, pmd->core_id, packets, cnt, may_steal);
-        } else if (may_steal) {
-            for (i = 0; i < cnt; i++) {
-                dpif_packet_delete(packets[i]);
-            }
+            return;
         }
         break;
 
@@ -2807,19 +2827,18 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
                                          DPIF_UC_ACTION, userdata, &actions,
                                          NULL);
                 if (!error || error == ENOSPC) {
-                    dp_netdev_execute_actions(pmd, &packets[i], 1, false, md,
-                                              ofpbuf_data(&actions),
+                    dp_netdev_execute_actions(pmd, &packets[i], 1, may_steal,
+                                              md, ofpbuf_data(&actions),
                                               ofpbuf_size(&actions));
-                }
-
-                if (may_steal) {
+                } else if (may_steal) {
                     dpif_packet_delete(packets[i]);
                 }
             }
             ofpbuf_uninit(&actions);
             fat_rwlock_unlock(&dp->upcall_rwlock);
-        }
 
+            return;
+        }
         break;
 
     case OVS_ACTION_ATTR_HASH: {
@@ -2850,7 +2869,7 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
             }
             dpif_packet_set_dp_hash(packets[i], hash);
         }
-        break;
+        return;
     }
 
     case OVS_ACTION_ATTR_RECIRC:
@@ -2874,15 +2893,10 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
             }
             (*depth)--;
 
-            break;
-        } else {
-            VLOG_WARN("Packet dropped. Max recirculation depth exceeded.");
-            if (may_steal) {
-                for (i = 0; i < cnt; i++) {
-                    dpif_packet_delete(packets[i]);
-                }
-            }
+            return;
         }
+
+        VLOG_WARN("Packet dropped. Max recirculation depth exceeded.");
         break;
 
     case OVS_ACTION_ATTR_PUSH_VLAN:
@@ -2896,6 +2910,8 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
     case __OVS_ACTION_ATTR_MAX:
         OVS_NOT_REACHED();
     }
+
+    dp_netdev_drop_packets(packets, cnt, may_steal);
 }
 
 static void
