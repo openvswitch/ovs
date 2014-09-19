@@ -464,7 +464,7 @@ netdev_dpdk_alloc(void)
 }
 
 static void
-netdev_dpdk_set_txq(struct netdev_dpdk *netdev, unsigned int n_txqs)
+netdev_dpdk_alloc_txq(struct netdev_dpdk *netdev, unsigned int n_txqs)
 {
     int i;
 
@@ -492,7 +492,7 @@ netdev_dpdk_init(struct netdev *netdev_, unsigned int port_no)
     ovs_mutex_lock(&netdev->mutex);
 
     netdev->socket_id = rte_eth_dev_socket_id(port_no);
-    netdev_dpdk_set_txq(netdev, NR_QUEUE);
+    netdev_dpdk_alloc_txq(netdev, NR_QUEUE);
     netdev->port_id = port_no;
     netdev->flags = 0;
     netdev->mtu = ETHER_MTU;
@@ -622,14 +622,15 @@ netdev_dpdk_set_multiq(struct netdev *netdev_, unsigned int n_txq,
 
     ovs_mutex_lock(&dpdk_mutex);
     ovs_mutex_lock(&netdev->mutex);
+
     rte_eth_dev_stop(netdev->port_id);
+
     netdev->up.n_txq = n_txq;
     netdev->up.n_rxq = n_rxq;
+    rte_free(netdev->tx_q);
+    netdev_dpdk_alloc_txq(netdev, n_txq);
     err = dpdk_eth_dev_init(netdev);
-    if (!err && netdev->up.n_txq != n_txq) {
-        rte_free(netdev->tx_q);
-        netdev_dpdk_set_txq(netdev, n_txq);
-    }
+
     ovs_mutex_unlock(&netdev->mutex);
     ovs_mutex_unlock(&dpdk_mutex);
 
