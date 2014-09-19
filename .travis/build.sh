@@ -52,7 +52,13 @@ if [ $CC = "clang" ]; then
     make CFLAGS="$CFLAGS -Wno-error=unused-command-line-argument"
 else
     make CFLAGS="$CFLAGS" C=1
-    [ "$TESTSUITE" ] && make distcheck
+    if [ $TESTSUITE ]; then
+        if ! make distcheck; then
+            # testsuite.log is necessary for debugging.
+            cat */_build/tests/testsuite.log
+            exit 1
+        fi
+    fi
 fi
 
 exit 0
