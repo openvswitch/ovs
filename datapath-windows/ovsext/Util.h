@@ -75,4 +75,6 @@ VOID OvsAppendList(PLIST_ENTRY dst, PLIST_ENTRY src);
 #define BIT16(_x)                       ((UINT16)0x1 << (_x))
 #define BIT32(_x)                       ((UINT32)0x1 << (_x))
 
+BOOLEAN OvsCompareString(PVOID string1, PVOID string2);
+
 #endif /* __UTIL_H_ */

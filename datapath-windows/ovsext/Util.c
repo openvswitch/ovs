@@ -87,3 +87,17 @@ OvsAppendList(PLIST_ENTRY dst, PLIST_ENTRY src)
     src->Flink = src;
     src->Blink = src;
 }
+
+BOOLEAN
+OvsCompareString(PVOID string1, PVOID string2)
+{
+    /*
+     * Not a super-efficient string compare since we walk over the strings
+     * twice: to initialize, and then to do the comparison.
+     */
+    STRING str1, str2;
+
+    RtlInitString(&str1, string1);
+    RtlInitString(&str2, string2);
+    return RtlEqualString(&str1, &str2, FALSE);
+}
