@@ -98,7 +98,15 @@ typedef struct _NETLINK_FAMILY {
 static NetlinkCmdHandler OvsGetPidCmdHandler,
                          OvsGetDpCmdHandler,
                          OvsPendEventCmdHandler,
-                         OvsSubscribeEventCmdHandler;
+                         OvsSubscribeEventCmdHandler,
+                         OvsSetDpCmdHandler;
+
+static NTSTATUS HandleGetDpTransaction(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                                       UINT32 *replyLen);
+static NTSTATUS HandleGetDpDump(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                                UINT32 *replyLen);
+static NTSTATUS HandleDpTransaction(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                                    UINT32 *replyLen);
 
 /*
  * The various netlink families, along with the supported commands. Most of
@@ -139,8 +147,15 @@ NETLINK_FAMILY nlControlFamilyOps = {
 NETLINK_CMD nlDatapathFamilyCmdOps[] = {
     { .cmd             = OVS_DP_CMD_GET,
       .handler         = OvsGetDpCmdHandler,
-      .supportedDevOp  = OVS_WRITE_DEV_OP | OVS_READ_DEV_OP,
+      .supportedDevOp  = OVS_WRITE_DEV_OP | OVS_READ_DEV_OP |
+                         OVS_TRANSACTION_DEV_OP,
       .validateDpIndex = FALSE
+    },
+    { .cmd             = OVS_DP_CMD_SET,
+      .handler         = OvsSetDpCmdHandler,
+      .supportedDevOp  = OVS_WRITE_DEV_OP | OVS_READ_DEV_OP |
+                         OVS_TRANSACTION_DEV_OP,
+      .validateDpIndex = TRUE
     }
 };
 
@@ -714,8 +729,6 @@ done:
  * --------------------------------------------------------------------------
  * Function to validate a netlink command. Only certain combinations of
  * (device operation, netlink family, command) are valid.
- *
- * XXX: Take policy into consideration.
  * --------------------------------------------------------------------------
  */
 static NTSTATUS
@@ -797,9 +810,10 @@ InvokeNetlinkCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     return status;
 }
 
-
 /*
  * --------------------------------------------------------------------------
+ *  Command Handler for 'OVS_CTRL_CMD_WIN_GET_PID'.
+ *
  *  Each handle on the device is assigned a unique PID when the handle is
  *  created. On platforms that support netlink natively, the PID is available
  *  to userspace when the netlink socket is created. However, without native
@@ -850,7 +864,7 @@ OvsDpFillInfo(POVS_SWITCH_CONTEXT ovsSwitchContext,
     PNL_MSG_HDR nlMsg;
 
     /* XXX: Add API for nlBuf->bufRemLen. */
-    ASSERT(NlBufAt(nlBuf, 0, 0) != 0 && nlBuf->bufRemLen >= sizeof msgOutTmp);
+    ASSERT(NlBufAt(nlBuf, 0, 0) != 0 && nlBuf->bufRemLen >= sizeof *msgIn);
 
     msgOutTmp.nlMsg.nlmsgType = OVS_WIN_NL_DATAPATH_FAMILY_ID;
     msgOutTmp.nlMsg.nlmsgFlags = 0;  /* XXX: ? */
@@ -883,7 +897,6 @@ OvsDpFillInfo(POVS_SWITCH_CONTEXT ovsSwitchContext,
 
     return writeOk ? STATUS_SUCCESS : STATUS_INVALID_BUFFER_SIZE;
 }
-
 
 /*
  * --------------------------------------------------------------------------
@@ -957,13 +970,46 @@ done:
 
 /*
  * --------------------------------------------------------------------------
- *  Handler for the get dp command. The function handles the initial call to
- *  setup the dump state, as well as subsequent calls to continue dumping data.
+ *  Command Handler for 'OVS_DP_CMD_GET'.
+ *
+ *  The function handles both the dump based as well as the transaction based
+ *  'OVS_DP_CMD_GET' command. In the dump command, it handles the initial
+ *  call to setup dump state, as well as subsequent calls to continue dumping
+ *  data.
  * --------------------------------------------------------------------------
  */
 static NTSTATUS
 OvsGetDpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                    UINT32 *replyLen)
+{
+    if (usrParamsCtx->devOp == OVS_TRANSACTION_DEV_OP) {
+        return HandleGetDpTransaction(usrParamsCtx, replyLen);
+    } else {
+        return HandleGetDpDump(usrParamsCtx, replyLen);
+    }
+}
+
+/*
+ * --------------------------------------------------------------------------
+ *  Function for handling the transaction based 'OVS_DP_CMD_GET' command.
+ * --------------------------------------------------------------------------
+ */
+static NTSTATUS
+HandleGetDpTransaction(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                       UINT32 *replyLen)
+{
+    return HandleDpTransaction(usrParamsCtx, replyLen);
+}
+
+
+/*
+ * --------------------------------------------------------------------------
+ *  Function for handling the dump-based 'OVS_DP_CMD_GET' command.
+ * --------------------------------------------------------------------------
+ */
+static NTSTATUS
+HandleGetDpDump(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                UINT32 *replyLen)
 {
     POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
     POVS_OPEN_INSTANCE instance =
@@ -1019,6 +1065,92 @@ OvsGetDpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
     return STATUS_SUCCESS;
 }
+
+
+/*
+ * --------------------------------------------------------------------------
+ *  Command Handler for 'OVS_DP_CMD_SET'.
+ * --------------------------------------------------------------------------
+ */
+static NTSTATUS
+OvsSetDpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                   UINT32 *replyLen)
+{
+    return HandleDpTransaction(usrParamsCtx, replyLen);
+}
+
+/*
+ * --------------------------------------------------------------------------
+ *  Function for handling transaction based 'OVS_DP_CMD_GET' and
+ *  'OVS_DP_CMD_SET' commands.
+ * --------------------------------------------------------------------------
+ */
+static NTSTATUS
+HandleDpTransaction(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                    UINT32 *replyLen)
+{
+    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
+    POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
+    NTSTATUS status = STATUS_SUCCESS;
+    NL_BUFFER nlBuf;
+    static const NL_POLICY ovsDatapathSetPolicy[] = {
+        [OVS_DP_ATTR_NAME] = { .type = NL_A_STRING, .maxLen = IFNAMSIZ },
+        [OVS_DP_ATTR_UPCALL_PID] = { .type = NL_A_U32, .optional = TRUE },
+        [OVS_DP_ATTR_USER_FEATURES] = { .type = NL_A_U32, .optional = TRUE },
+    };
+    PNL_ATTR dpAttrs[ARRAY_SIZE(ovsDatapathSetPolicy)];
+
+    /* input buffer has been validated while validating write dev op. */
+    ASSERT(msgIn != NULL && usrParamsCtx->inputLength >= sizeof *msgIn);
+
+    /* Parse any attributes in the request. */
+    if (usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_DP_CMD_SET) {
+        if (!NlAttrParse((PNL_MSG_HDR)msgIn,
+                        NLMSG_HDRLEN + GENL_HDRLEN + OVS_HDRLEN,
+                        ovsDatapathSetPolicy, dpAttrs, ARRAY_SIZE(dpAttrs))) {
+            return STATUS_INVALID_PARAMETER;
+        }
+
+        /*
+        * XXX: Not clear at this stage if there's any role for the
+        * OVS_DP_ATTR_UPCALL_PID and OVS_DP_ATTR_USER_FEATURES attributes passed
+        * from userspace.
+        */
+
+    } else {
+        RtlZeroMemory(dpAttrs, sizeof dpAttrs);
+    }
+
+    /* Output buffer is optional for OVS_TRANSACTION_DEV_OP. */
+    if (msgOut == NULL || usrParamsCtx->outputLength < sizeof *msgOut) {
+        return STATUS_NDIS_INVALID_LENGTH;
+    }
+    NlBufInit(&nlBuf, usrParamsCtx->outputBuffer, usrParamsCtx->outputLength);
+
+    OvsAcquireCtrlLock();
+    if (dpAttrs[OVS_DP_ATTR_NAME] != NULL) {
+        if (!gOvsSwitchContext &&
+            !OvsCompareString(NlAttrGet(dpAttrs[OVS_DP_ATTR_NAME]),
+                              OVS_SYSTEM_DP_NAME)) {
+            OvsReleaseCtrlLock();
+            status = STATUS_NOT_FOUND;
+            goto cleanup;
+        }
+    } else if ((UINT32)msgIn->ovsHdr.dp_ifindex != gOvsSwitchContext->dpNo) {
+        OvsReleaseCtrlLock();
+        status = STATUS_NOT_FOUND;
+        goto cleanup;
+    }
+
+    status = OvsDpFillInfo(gOvsSwitchContext, msgIn, &nlBuf);
+    OvsReleaseCtrlLock();
+
+    *replyLen = NlBufSize(&nlBuf);
+
+cleanup:
+    return status;
+}
+
 
 static NTSTATUS
 OvsSetupDumpStart(POVS_USER_PARAMS_CONTEXT usrParamsCtx)
