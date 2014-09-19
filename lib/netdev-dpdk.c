@@ -70,8 +70,6 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 #define MP_CACHE_SZ          (256 * 2)
 #define SOCKET0              0
 
-#define NON_PMD_THREAD_TX_QUEUE 0
-
 #define NIC_PORT_RX_Q_SIZE 2048  /* Size of Physical NIC RX Queue, Max (n+32<=4096)*/
 #define NIC_PORT_TX_Q_SIZE 2048  /* Size of Physical NIC TX Queue, Max (n+32<=4096)*/
 
@@ -783,7 +781,8 @@ dpdk_queue_pkts(struct netdev_dpdk *dev, int qid,
 
 /* Tx function. Transmit packets indefinitely */
 static void
-dpdk_do_tx_copy(struct netdev *netdev, struct dpif_packet ** pkts, int cnt)
+dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dpif_packet ** pkts,
+                int cnt)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
@@ -832,8 +831,8 @@ dpdk_do_tx_copy(struct netdev *netdev, struct dpif_packet ** pkts, int cnt)
         ovs_mutex_unlock(&dev->mutex);
     }
 
-    dpdk_queue_pkts(dev, NON_PMD_THREAD_TX_QUEUE, mbufs, newcnt);
-    dpdk_queue_flush(dev, NON_PMD_THREAD_TX_QUEUE);
+    dpdk_queue_pkts(dev, qid, mbufs, newcnt);
+    dpdk_queue_flush(dev, qid);
 
     if (!thread_is_pmd()) {
         ovs_mutex_unlock(&nonpmd_mempool_mutex);
@@ -849,7 +848,7 @@ netdev_dpdk_send(struct netdev *netdev, int qid, struct dpif_packet **pkts,
     int i;
 
     if (!may_steal || pkts[0]->ofpbuf.source != OFPBUF_DPDK) {
-        dpdk_do_tx_copy(netdev, pkts, cnt);
+        dpdk_do_tx_copy(netdev, qid, pkts, cnt);
 
         if (may_steal) {
             for (i = 0; i < cnt; i++) {
