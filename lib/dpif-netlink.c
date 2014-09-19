@@ -1234,15 +1234,15 @@ dpif_netlink_flow_dump_thread_destroy(struct dpif_flow_dump_thread *thread_)
 
 static void
 dpif_netlink_flow_to_dpif_flow(struct dpif_flow *dpif_flow,
-                               const struct dpif_netlink_flow *linux_flow)
+                               const struct dpif_netlink_flow *datapath_flow)
 {
-    dpif_flow->key = linux_flow->key;
-    dpif_flow->key_len = linux_flow->key_len;
-    dpif_flow->mask = linux_flow->mask;
-    dpif_flow->mask_len = linux_flow->mask_len;
-    dpif_flow->actions = linux_flow->actions;
-    dpif_flow->actions_len = linux_flow->actions_len;
-    dpif_netlink_flow_get_stats(linux_flow, &dpif_flow->stats);
+    dpif_flow->key = datapath_flow->key;
+    dpif_flow->key_len = datapath_flow->key_len;
+    dpif_flow->mask = datapath_flow->mask;
+    dpif_flow->mask_len = datapath_flow->mask_len;
+    dpif_flow->actions = datapath_flow->actions;
+    dpif_flow->actions_len = datapath_flow->actions_len;
+    dpif_netlink_flow_get_stats(datapath_flow, &dpif_flow->stats);
 }
 
 static int
@@ -1261,7 +1261,7 @@ dpif_netlink_flow_dump_next(struct dpif_flow_dump_thread *thread_,
     n_flows = 0;
     while (!n_flows
            || (n_flows < max_flows && ofpbuf_size(&thread->nl_flows))) {
-        struct dpif_netlink_flow linux_flow;
+        struct dpif_netlink_flow datapath_flow;
         struct ofpbuf nl_flow;
         int error;
 
@@ -1271,21 +1271,21 @@ dpif_netlink_flow_dump_next(struct dpif_flow_dump_thread *thread_,
         }
 
         /* Convert the flow to our output format. */
-        error = dpif_netlink_flow_from_ofpbuf(&linux_flow, &nl_flow);
+        error = dpif_netlink_flow_from_ofpbuf(&datapath_flow, &nl_flow);
         if (error) {
             atomic_store_relaxed(&dump->status, error);
             break;
         }
 
-        if (linux_flow.actions) {
+        if (datapath_flow.actions) {
             /* Common case: the flow includes actions. */
-            dpif_netlink_flow_to_dpif_flow(&flows[n_flows++], &linux_flow);
+            dpif_netlink_flow_to_dpif_flow(&flows[n_flows++], &datapath_flow);
         } else {
             /* Rare case: the flow does not include actions.  Retrieve this
              * individual flow again to get the actions. */
-            error = dpif_netlink_flow_get(dpif, linux_flow.key,
-                                          linux_flow.key_len, &linux_flow,
-                                          &thread->nl_actions);
+            error = dpif_netlink_flow_get(dpif, datapath_flow.key,
+                                          datapath_flow.key_len,
+                                          &datapath_flow, &thread->nl_actions);
             if (error == ENOENT) {
                 VLOG_DBG("dumped flow disappeared on get");
                 continue;
@@ -1298,7 +1298,7 @@ dpif_netlink_flow_dump_next(struct dpif_flow_dump_thread *thread_,
 
             /* Save this flow.  Then exit, because we only have one buffer to
              * handle this case. */
-            dpif_netlink_flow_to_dpif_flow(&flows[n_flows++], &linux_flow);
+            dpif_netlink_flow_to_dpif_flow(&flows[n_flows++], &datapath_flow);
             break;
         }
     }
