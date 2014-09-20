@@ -90,16 +90,9 @@ static struct vlog_rate_limit upcall_rl = VLOG_RATE_LIMIT_INIT(600, 600);
 
 /* Stores a miniflow with inline values */
 
-/* There are fields in the flow structure that we never use. Therefore we can
- * save a few words of memory */
-#define NETDEV_KEY_BUF_SIZE_U32 (FLOW_U32S                 \
-                                 - MINI_N_INLINE           \
-                                 - FLOW_U32_SIZE(regs)     \
-                                 - FLOW_U32_SIZE(metadata) \
-                                )
 struct netdev_flow_key {
     struct miniflow flow;
-    uint32_t buf[NETDEV_KEY_BUF_SIZE_U32];
+    uint32_t buf[FLOW_MAX_PACKET_U32S - MINI_N_INLINE];
 };
 
 /* Exact match cache for frequently used flows

@@ -138,6 +138,19 @@ BUILD_ASSERT_DECL(sizeof(struct flow) % 4 == 0);
 
 #define FLOW_U32S (sizeof(struct flow) / 4)
 
+/* Some flow fields are mutually exclusive or only appear within the flow
+ * pipeline.  IPv6 headers are bigger than IPv4 and MPLS, and IPv6 ND packets
+ * are bigger than TCP,UDP and IGMP packets. */
+#define FLOW_MAX_PACKET_U32S (FLOW_U32S                                   \
+    /* Unused in datapath */  - FLOW_U32_SIZE(regs)                       \
+                              - FLOW_U32_SIZE(metadata)                   \
+    /* L2.5/3 */              - FLOW_U32_SIZE(nw_src)                     \
+                              - FLOW_U32_SIZE(nw_dst)                     \
+                              - FLOW_U32_SIZE(mpls_lse)                   \
+    /* L4 */                  - FLOW_U32_SIZE(tcp_flags) /* incl. pad. */ \
+                              - FLOW_U32_SIZE(igmp_group_ip4)             \
+                             )
+
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
 BUILD_ASSERT_DECL(offsetof(struct flow, dp_hash) + sizeof(uint32_t)
                   == sizeof(struct flow_tnl) + 176
