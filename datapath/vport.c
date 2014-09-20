@@ -243,26 +243,6 @@ void ovs_vport_del(struct vport *vport)
 }
 
 /**
- *	ovs_vport_set_stats - sets offset device stats
- *
- * @vport: vport on which to set stats
- * @stats: stats to set
- *
- * Provides a set of transmit, receive, and error stats to be added as an
- * offset to the collected data when stats are retrieved.  Some devices may not
- * support setting the stats, in which case the result will always be
- * -EOPNOTSUPP.
- *
- * Must be called with ovs_mutex.
- */
-void ovs_vport_set_stats(struct vport *vport, struct ovs_vport_stats *stats)
-{
-	spin_lock_bh(&vport->stats_lock);
-	vport->offset_stats = *stats;
-	spin_unlock_bh(&vport->stats_lock);
-}
-
-/**
  *	ovs_vport_get_stats - retrieve device stats
  *
  * @vport: vport from which to retrieve the stats
@@ -276,27 +256,29 @@ void ovs_vport_get_stats(struct vport *vport, struct ovs_vport_stats *stats)
 {
 	int i;
 
-	/* We potentially have 3 sources of stats that need to be
+	/* We potentially have two surces of stats that need to be
 	 * combined: those we have collected (split into err_stats and
-	 * percpu_stats), offset_stats from set_stats(), and device
-	 * error stats from netdev->get_stats() (for errors that happen
-	 * downstream and therefore aren't reported through our
-	 * vport_record_error() function).
-	 * Stats from first two sources are merged and reported by ovs over
+	 * percpu_stats), and device error stats from netdev->get_stats()
+	 * (for errors that happen downstream and therefore aren't
+	 * reported through our vport_record_error() function).
+	 * Stats from first source are reported by ovs over
 	 * OVS_VPORT_ATTR_STATS.
 	 * netdev-stats can be directly read over netlink-ioctl.
 	 */
 
 	spin_lock_bh(&vport->stats_lock);
 
-	*stats = vport->offset_stats;
-
-	stats->rx_errors	+= vport->err_stats.rx_errors;
-	stats->tx_errors	+= vport->err_stats.tx_errors;
-	stats->tx_dropped	+= vport->err_stats.tx_dropped;
-	stats->rx_dropped	+= vport->err_stats.rx_dropped;
+	stats->rx_errors	= vport->err_stats.rx_errors;
+	stats->tx_errors	= vport->err_stats.tx_errors;
+	stats->tx_dropped	= vport->err_stats.tx_dropped;
+	stats->rx_dropped	= vport->err_stats.rx_dropped;
 
 	spin_unlock_bh(&vport->stats_lock);
+
+	stats->rx_bytes		= 0;
+	stats->rx_packets	= 0;
+	stats->tx_bytes		= 0;
+	stats->tx_packets	= 0;
 
 	for_each_possible_cpu(i) {
 		const struct pcpu_sw_netstats *percpu_stats;

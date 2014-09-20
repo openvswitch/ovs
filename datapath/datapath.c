@@ -1831,10 +1831,6 @@ static int ovs_vport_cmd_new(struct sk_buff *skb, struct genl_info *info)
 	if (IS_ERR(vport))
 		goto exit_unlock_free;
 
-	err = 0;
-	if (a[OVS_VPORT_ATTR_STATS])
-		ovs_vport_set_stats(vport, nla_data(a[OVS_VPORT_ATTR_STATS]));
-
 	err = ovs_vport_cmd_fill_info(vport, reply, info->snd_portid,
 				      info->snd_seq, 0, OVS_VPORT_CMD_NEW);
 	BUG_ON(err < 0);
@@ -1877,10 +1873,6 @@ static int ovs_vport_cmd_set(struct sk_buff *skb, struct genl_info *info)
 		if (err)
 			goto exit_unlock_free;
 	}
-
-	if (a[OVS_VPORT_ATTR_STATS])
-		ovs_vport_set_stats(vport, nla_data(a[OVS_VPORT_ATTR_STATS]));
-
 
 	if (a[OVS_VPORT_ATTR_UPCALL_PID]) {
 		err = ovs_vport_set_upcall_portids(vport,

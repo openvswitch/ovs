@@ -45,7 +45,6 @@ void ovs_vport_del(struct vport *);
 
 struct vport *ovs_vport_locate(struct net *net, const char *name);
 
-void ovs_vport_set_stats(struct vport *, struct ovs_vport_stats *);
 void ovs_vport_get_stats(struct vport *, struct ovs_vport_stats *);
 
 int ovs_vport_set_options(struct vport *, struct nlattr *options);
@@ -101,10 +100,8 @@ struct vport_portids {
  * @dp_hash_node: Element in @datapath->ports hash table in datapath.c.
  * @ops: Class structure.
  * @percpu_stats: Points to per-CPU statistics used and maintained by vport
- * @stats_lock: Protects @err_stats and @offset_stats.
+ * @stats_lock: Protects @err_stats.
  * @err_stats: Points to error statistics used and maintained by vport
- * @offset_stats: Added to actual statistics as a sop to compatibility with
- * XAPI for Citrix XenServer.  Deprecated.
  */
 struct vport {
 	struct rcu_head rcu;
@@ -120,7 +117,6 @@ struct vport {
 
 	spinlock_t stats_lock;
 	struct vport_err_stats err_stats;
-	struct ovs_vport_stats offset_stats;
 };
 
 /**
