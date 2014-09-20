@@ -145,10 +145,10 @@ struct pcpu_sw_netstats {
 ({								\
 	typeof(type) __percpu *pcpu_stats = alloc_percpu(type); \
 	if (pcpu_stats) {					\
-		int i;						\
-		for_each_possible_cpu(i) {			\
+		int ____i;					\
+		for_each_possible_cpu(____i) {			\
 			typeof(type) *stat;			\
-			stat = per_cpu_ptr(pcpu_stats, i);	\
+			stat = per_cpu_ptr(pcpu_stats, ____i);	\
 			u64_stats_init(&stat->syncp);		\
 		}						\
 	}							\
