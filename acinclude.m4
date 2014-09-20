@@ -353,6 +353,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/checksum.h], [csum_replace4])
   OVS_GREP_IFELSE([$KSRC/include/net/checksum.h], [csum_unfold])
 
+  OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [genl_has_listeners])
+  OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [mcgrp_offset])
   OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [parallel_ops])
   OVS_GREP_IFELSE([$KSRC/include/net/gre.h], [gre_cisco_register])
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_get_be16])

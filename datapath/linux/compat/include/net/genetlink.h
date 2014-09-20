@@ -105,4 +105,19 @@ static inline struct sk_buff *genlmsg_new_unicast(size_t payload,
 }
 #endif
 
+#ifndef HAVE_GENL_HAS_LISTENERS
+static inline int genl_has_listeners(struct genl_family *family,
+				     struct sock *sk, unsigned int group)
+{
+#ifdef HAVE_MCGRP_OFFSET
+	if (WARN_ON_ONCE(group >= family->n_mcgrps))
+		return -EINVAL;
+	group = family->mcgrp_offset + group;
+	return netlink_has_listeners(sk, group);
+#else
+	return netlink_has_listeners(sk, group);
+#endif
+}
+#endif
+
 #endif /* genetlink.h */
