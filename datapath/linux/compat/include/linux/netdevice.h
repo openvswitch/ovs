@@ -30,7 +30,7 @@ struct net;
 #undef alloc_netdev
 #define NET_NAME_UNKNOWN 0
 #define alloc_netdev(sizeof_priv, name, name_assign_type, setup) \
-        alloc_netdev_mqs(sizeof_priv, name, setup, 1, 1)
+        alloc_netdev_mq(sizeof_priv, name, setup, 1)
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,33)
