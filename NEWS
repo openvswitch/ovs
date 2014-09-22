@@ -1,7 +1,9 @@
 v2.3.1 - xx xxx xxxx
 ---------------------
    - Compatibility with autoconf 2.63 (previously >=2.64)
-
+   - ovs-pki: Changed message digest algorithm from MD5 to SHA-1 because
+     MD5 is no longer secure and some operating systems have started to disable
+     it in OpenSSL.
 
 v2.3.0 - 14 Aug 2014
 ---------------------
