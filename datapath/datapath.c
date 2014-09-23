@@ -135,9 +135,10 @@ int lockdep_ovsl_is_held(void)
 #endif
 
 static int queue_gso_packets(struct datapath *dp, struct sk_buff *,
-			     struct sw_flow_key *, const struct dp_upcall_info *);
+			     const struct sw_flow_key *,
+			     const struct dp_upcall_info *);
 static int queue_userspace_packet(struct datapath *dp, struct sk_buff *,
-				  struct sw_flow_key *key,
+				  const struct sw_flow_key *key,
 				  const struct dp_upcall_info *);
 
 /* Must be called with rcu_read_lock. */
@@ -175,7 +176,7 @@ const char *ovs_dp_name(const struct datapath *dp)
 	return vport->ops->get_name(vport);
 }
 
-static int get_dpifindex(struct datapath *dp)
+static int get_dpifindex(const struct datapath *dp)
 {
 	struct vport *local;
 	int ifindex;
@@ -300,7 +301,7 @@ out:
 }
 
 int ovs_dp_upcall(struct datapath *dp, struct sk_buff *skb,
-		  struct sw_flow_key *key,
+		  const struct sw_flow_key *key,
 		  const struct dp_upcall_info *upcall_info)
 {
 	struct dp_stats_percpu *stats;
@@ -331,7 +332,7 @@ err:
 }
 
 static int queue_gso_packets(struct datapath *dp, struct sk_buff *skb,
-			     struct sw_flow_key *key,
+			     const struct sw_flow_key *key,
 			     const struct dp_upcall_info *upcall_info)
 {
 	unsigned short gso_type = skb_shinfo(skb)->gso_type;
@@ -399,7 +400,7 @@ static size_t upcall_msg_size(const struct dp_upcall_info *upcall_info,
 }
 
 static int queue_userspace_packet(struct datapath *dp, struct sk_buff *skb,
-				  struct sw_flow_key *key,
+				  const struct sw_flow_key *key,
 				  const struct dp_upcall_info *upcall_info)
 {
 	struct ovs_header *upcall;
@@ -635,7 +636,7 @@ static struct genl_family dp_packet_genl_family = {
 	.n_ops = ARRAY_SIZE(dp_packet_genl_ops),
 };
 
-static void get_dp_stats(struct datapath *dp, struct ovs_dp_stats *stats,
+static void get_dp_stats(const struct datapath *dp, struct ovs_dp_stats *stats,
 			 struct ovs_dp_megaflow_stats *mega_stats)
 {
 	int i;
@@ -1356,7 +1357,7 @@ static struct sk_buff *ovs_dp_cmd_alloc_info(struct genl_info *info)
 
 /* Called with rcu_read_lock or ovs_mutex. */
 static struct datapath *lookup_datapath(struct net *net,
-					struct ovs_header *ovs_header,
+					const struct ovs_header *ovs_header,
 					struct nlattr *a[OVS_DP_ATTR_MAX + 1])
 {
 	struct datapath *dp;
@@ -1384,7 +1385,7 @@ static void ovs_dp_reset_user_features(struct sk_buff *skb, struct genl_info *in
 	dp->user_features = 0;
 }
 
-static void ovs_dp_change(struct datapath *dp, struct nlattr **a)
+static void ovs_dp_change(struct datapath *dp, struct nlattr *a[])
 {
 	if (a[OVS_DP_ATTR_USER_FEATURES])
 		dp->user_features = nla_get_u32(a[OVS_DP_ATTR_USER_FEATURES]);
@@ -1745,7 +1746,7 @@ struct sk_buff *ovs_vport_cmd_build_info(struct vport *vport, u32 portid,
 
 /* Called with ovs_mutex or RCU read lock. */
 static struct vport *lookup_vport(struct net *net,
-				  struct ovs_header *ovs_header,
+				  const struct ovs_header *ovs_header,
 				  struct nlattr *a[OVS_VPORT_ATTR_MAX + 1])
 {
 	struct datapath *dp;

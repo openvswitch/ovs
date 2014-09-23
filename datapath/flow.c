@@ -66,7 +66,7 @@ u64 ovs_flow_used_time(unsigned long flow_jiffies)
 #define TCP_FLAGS_BE16(tp) (*(__be16 *)&tcp_flag_word(tp) & htons(0x0FFF))
 
 void ovs_flow_stats_update(struct sw_flow *flow, __be16 tcp_flags,
-			   struct sk_buff *skb)
+			   const struct sk_buff *skb)
 {
 	struct flow_stats *stats;
 	int node = numa_node_id();

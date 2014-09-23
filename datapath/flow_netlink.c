@@ -1580,9 +1580,9 @@ static int validate_and_copy_set_tun(const struct nlattr *attr,
 		 * everything else will go away after flow setup. We can append
 		 * it to tun_info and then point there.
 		 */
-		tun_info->options = (struct geneve_opt *)(tun_info + 1);
-		memcpy(tun_info->options, GENEVE_OPTS(&key, key.tun_opts_len),
+		memcpy((tun_info + 1), GENEVE_OPTS(&key, key.tun_opts_len),
 			key.tun_opts_len);
+		tun_info->options = (struct geneve_opt *)(tun_info + 1);
 	} else {
 		tun_info->options = NULL;
 	}

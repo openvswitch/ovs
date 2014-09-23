@@ -85,7 +85,7 @@ static struct sk_buff *netdev_frame_hook(struct net_bridge_port *p,
 #error
 #endif
 
-static struct net_device *get_dpdev(struct datapath *dp)
+static struct net_device *get_dpdev(const struct datapath *dp)
 {
 	struct vport *local;
 

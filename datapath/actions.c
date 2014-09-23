@@ -71,7 +71,7 @@ static void action_fifo_init(struct action_fifo *fifo)
 	fifo->tail = 0;
 }
 
-static bool action_fifo_is_empty(struct action_fifo *fifo)
+static bool action_fifo_is_empty(const struct action_fifo *fifo)
 {
 	return (fifo->head == fifo->tail);
 }
@@ -94,7 +94,7 @@ static struct deferred_action *action_fifo_put(struct action_fifo *fifo)
 
 /* Return queue entry if fifo is not full */
 static struct deferred_action *add_deferred_actions(struct sk_buff *skb,
-						    struct sw_flow_key *key,
+						    const struct sw_flow_key *key,
 						    const struct nlattr *attr)
 {
 	struct action_fifo *fifo;
@@ -116,7 +116,7 @@ static void invalidate_flow_key(struct sw_flow_key *key)
 	key->eth.type = htons(0);
 }
 
-static bool is_flow_key_valid(struct sw_flow_key *key)
+static bool is_flow_key_valid(const struct sw_flow_key *key)
 {
 	return !!key->eth.type;
 }
@@ -956,7 +956,8 @@ static void process_deferred_actions(struct datapath *dp)
 
 /* Execute a list of actions against 'skb'. */
 int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb,
-			struct sw_flow_key *key, struct sw_flow_actions *acts)
+			struct sw_flow_key *key,
+			const struct sw_flow_actions *acts)
 {
 	int level = this_cpu_read(exec_actions_level);
 	int err;
