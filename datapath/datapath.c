@@ -311,15 +311,19 @@ static int queue_gso_packets(struct datapath *dp, struct sk_buff *skb,
 	struct dp_upcall_info later_info;
 	struct sw_flow_key later_key;
 	struct sk_buff *segs, *nskb;
+	struct ovs_skb_cb ovs_cb;
 	int err;
 
+	ovs_cb = *OVS_CB(skb);
 	segs = __skb_gso_segment(skb, NETIF_F_SG, false);
+	*OVS_CB(skb) = ovs_cb;
 	if (IS_ERR(segs))
 		return PTR_ERR(segs);
 
 	/* Queue all of the segments. */
 	skb = segs;
 	do {
+		*OVS_CB(skb) = ovs_cb;
 		err = queue_userspace_packet(dp, skb, upcall_info);
 		if (err)
 			break;
