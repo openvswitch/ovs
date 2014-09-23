@@ -888,7 +888,7 @@ static int ovs_flow_cmd_new(struct sk_buff *skb, struct genl_info *info)
 				     &acts);
 	if (error) {
 		OVS_NLERR("Flow actions may not be safe on all matching packets.\n");
-		goto err_kfree_acts;
+		goto err_kfree_flow;
 	}
 
 	reply = ovs_flow_cmd_alloc_info(acts, info, false);
