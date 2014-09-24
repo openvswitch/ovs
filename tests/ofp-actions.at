@@ -343,7 +343,7 @@ dnl Goto-Table 1 instruction non-zero padding
 0001 0008 01 000001
 
 dnl Goto-Table 1 instruction go back to the previous table.
-# bad OpenFlow11 instructions: OFPBRC_BAD_TABLE_ID
+# bad OpenFlow11 instructions: OFPBIC_BAD_TABLE_ID
 2,0001 0008 01 000000
 
 dnl Goto-Table 1
