@@ -165,10 +165,13 @@ BUILD_ASSERT_DECL(sizeof(struct cmap_impl) == CACHE_LINE_SIZE);
 
 static struct cmap_impl *cmap_rehash(struct cmap *, uint32_t mask);
 
+/* Explicit inline keywords in utility functions seem to be necessary
+ * to prevent performance regression on cmap_find(). */
+
 /* Given a rehashed value 'hash', returns the other hash for that rehashed
  * value.  This is symmetric: other_hash(other_hash(x)) == x.  (See also "Hash
  * Functions" at the top of this file.) */
-static uint32_t
+static inline uint32_t
 other_hash(uint32_t hash)
 {
     return (hash << 16) | (hash >> 16);
@@ -176,13 +179,14 @@ other_hash(uint32_t hash)
 
 /* Returns the rehashed value for 'hash' within 'impl'.  (See also "Hash
  * Functions" at the top of this file.) */
-static uint32_t
+static inline uint32_t
 rehash(const struct cmap_impl *impl, uint32_t hash)
 {
     return hash_finish(impl->basis, hash);
 }
 
-static struct cmap_impl *
+/* Not always without the inline keyword. */
+static inline struct cmap_impl *
 cmap_get_impl(const struct cmap *cmap)
 {
     return ovsrcu_get(struct cmap_impl *, &cmap->impl);
@@ -244,17 +248,19 @@ cmap_is_empty(const struct cmap *cmap)
     return cmap_count(cmap) == 0;
 }
 
-static uint32_t
-read_counter(struct cmap_bucket *bucket)
+static inline uint32_t
+read_counter(const struct cmap_bucket *bucket_)
 {
+    struct cmap_bucket *bucket = CONST_CAST(struct cmap_bucket *, bucket_);
     uint32_t counter;
 
     atomic_read_explicit(&bucket->counter, &counter, memory_order_acquire);
+
     return counter;
 }
 
-static uint32_t
-read_even_counter(struct cmap_bucket *bucket)
+static inline uint32_t
+read_even_counter(const struct cmap_bucket *bucket)
 {
     uint32_t counter;
 
@@ -265,9 +271,11 @@ read_even_counter(struct cmap_bucket *bucket)
     return counter;
 }
 
-static bool
-counter_changed(struct cmap_bucket *b, uint32_t c)
+static inline bool
+counter_changed(const struct cmap_bucket *b_, uint32_t c)
 {
+    struct cmap_bucket *b = CONST_CAST(struct cmap_bucket *, b_);
+
     /* Need to make sure the counter read is not moved up, before the hash and
      * cmap_node_next().  The atomic_read_explicit() with memory_order_acquire
      * in read_counter() still allows prior reads to be moved after the
@@ -276,6 +284,44 @@ counter_changed(struct cmap_bucket *b, uint32_t c)
     atomic_thread_fence(memory_order_acquire);
 
     return OVS_UNLIKELY(read_counter(b) != c);
+}
+
+static inline const struct cmap_node *
+cmap_find_in_bucket(const struct cmap_bucket *bucket, uint32_t hash)
+{
+    for (int i = 0; i < CMAP_K; i++) {
+        if (bucket->hashes[i] == hash) {
+            return cmap_node_next(&bucket->nodes[i]);
+        }
+    }
+    return NULL;
+}
+
+static inline const struct cmap_node *
+cmap_find__(const struct cmap_bucket *b1, const struct cmap_bucket *b2,
+            uint32_t hash)
+{
+    uint32_t c1, c2;
+    const struct cmap_node *node;
+
+    do {
+        do {
+            c1 = read_even_counter(b1);
+            node = cmap_find_in_bucket(b1, hash);
+        } while (OVS_UNLIKELY(counter_changed(b1, c1)));
+        if (node) {
+            break;
+        }
+        do {
+            c2 = read_even_counter(b2);
+            node = cmap_find_in_bucket(b2, hash);
+        } while (OVS_UNLIKELY(counter_changed(b2, c2)));
+        if (node) {
+            break;
+        }
+    } while (OVS_UNLIKELY(counter_changed(b1, c1)));
+
+    return node;
 }
 
 /* Searches 'cmap' for an element with the specified 'hash'.  If one or more is
@@ -287,58 +333,16 @@ counter_changed(struct cmap_bucket *b, uint32_t c)
  * not changing, then cmap_find_protected() is slightly faster.
  *
  * CMAP_FOR_EACH_WITH_HASH is usually more convenient. */
-struct cmap_node *
+const struct cmap_node *
 cmap_find(const struct cmap *cmap, uint32_t hash)
 {
-    struct cmap_impl *impl = cmap_get_impl(cmap);
+    const struct cmap_impl *impl = cmap_get_impl(cmap);
     uint32_t h1 = rehash(impl, hash);
     uint32_t h2 = other_hash(h1);
-    struct cmap_bucket *b1;
-    struct cmap_bucket *b2;
-    uint32_t c1, c2;
-    int i;
-    struct cmap_node *node;
 
-    b1 = &impl->buckets[h1 & impl->mask];
-    b2 = &impl->buckets[h2 & impl->mask];
-retry:
-    node = NULL;
-    c1 = read_even_counter(b1);
-    for (i = 0; i < CMAP_K; i++) {
-        if (b1->hashes[i] == hash) {
-            node = cmap_node_next(&b1->nodes[i]);
-            break;
-        }
-    }
-    if (OVS_UNLIKELY(counter_changed(b1, c1))) {
-        goto retry;
-    }
-    if (node) {
-        return node;
-    }
-
-retry2:
-    node = NULL;
-    c2 = read_even_counter(b2);
-    for (i = 0; i < CMAP_K; i++) {
-        if (b2->hashes[i] == hash) {
-            node = cmap_node_next(&b2->nodes[i]);
-            break;
-        }
-    }
-    if (OVS_UNLIKELY(counter_changed(b2, c2))) {
-        goto retry2;
-    }
-    if (node) {
-        return node;
-    }
-
-    /* We just got a stable reading on 'b2', but a node could have been moved
-     * to 'b1', so we need to chack the 'c1' again. */
-    if (counter_changed(b1, c1)) {
-        goto retry;
-    }
-    return NULL;
+    return cmap_find__(&impl->buckets[h1 & impl->mask],
+                       &impl->buckets[h2 & impl->mask],
+                       hash);
 }
 
 static int

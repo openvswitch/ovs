@@ -1573,7 +1573,7 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
     ofs.start = 0;
     /* Try to finish early by checking fields in segments. */
     for (i = 0; i < subtable->n_indices; i++) {
-        struct cmap_node *inode;
+        const struct cmap_node *inode;
 
         ofs.end = subtable->index_ofs[i];
 

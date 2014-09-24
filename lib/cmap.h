@@ -124,7 +124,7 @@ size_t cmap_replace(struct cmap *, struct cmap_node *old_node,
          ASSIGN_CONTAINER(NODE, cmap_node_next_protected(&(NODE)->MEMBER), \
                           MEMBER))
 
-struct cmap_node *cmap_find(const struct cmap *, uint32_t hash);
+const struct cmap_node *cmap_find(const struct cmap *, uint32_t hash);
 struct cmap_node *cmap_find_protected(const struct cmap *, uint32_t hash);
 
 /* Iteration.

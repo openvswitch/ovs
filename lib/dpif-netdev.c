@@ -2238,7 +2238,7 @@ static struct dp_netdev_pmd_thread *
 dp_netdev_get_nonpmd(struct dp_netdev *dp)
 {
     struct dp_netdev_pmd_thread *pmd;
-    struct cmap_node *pnode;
+    const struct cmap_node *pnode;
 
     pnode = cmap_find(&dp->poll_threads, hash_int(NON_PMD_CORE_ID, 0));
     ovs_assert(pnode);
