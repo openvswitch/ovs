@@ -134,7 +134,7 @@ struct cmap_bucket {
      * The slots are in no particular order.  A null pointer indicates that a
      * pair is unused.  In-use slots are not necessarily in the earliest
      * slots. */
-    atomic_uint32_t hashes[CMAP_K];
+    uint32_t hashes[CMAP_K];
     struct cmap_node nodes[CMAP_K];
 
     /* Padding to make cmap_bucket exactly one cache line long. */
@@ -162,20 +162,6 @@ struct cmap_impl {
     struct cmap_bucket buckets[];
 };
 BUILD_ASSERT_DECL(sizeof(struct cmap_impl) == CACHE_LINE_SIZE);
-
-static uint32_t cmap_get_hash__(const atomic_uint32_t *hash,
-                                memory_order order)
-{
-    uint32_t hash__;
-
-    atomic_read_explicit(CONST_CAST(ATOMIC(uint32_t) *, hash), &hash__, order);
-    return hash__;
-}
-
-#define cmap_get_hash(HASH) \
-    cmap_get_hash__(HASH, memory_order_acquire)
-#define cmap_get_hash_protected(HASH) \
-    cmap_get_hash__(HASH, memory_order_relaxed)
 
 static struct cmap_impl *cmap_rehash(struct cmap *, uint32_t mask);
 
@@ -282,6 +268,13 @@ read_even_counter(struct cmap_bucket *bucket)
 static bool
 counter_changed(struct cmap_bucket *b, uint32_t c)
 {
+    /* Need to make sure the counter read is not moved up, before the hash and
+     * cmap_node_next().  The atomic_read_explicit() with memory_order_acquire
+     * in read_counter() still allows prior reads to be moved after the
+     * barrier.  atomic_thread_fence prevents all following memory accesses
+     * from moving prior to preceding loads. */
+    atomic_thread_fence(memory_order_acquire);
+
     return OVS_UNLIKELY(read_counter(b) != c);
 }
 
@@ -312,7 +305,7 @@ retry:
     node = NULL;
     c1 = read_even_counter(b1);
     for (i = 0; i < CMAP_K; i++) {
-        if (cmap_get_hash(&b1->hashes[i]) == hash) {
+        if (b1->hashes[i] == hash) {
             node = cmap_node_next(&b1->nodes[i]);
             break;
         }
@@ -328,7 +321,7 @@ retry2:
     node = NULL;
     c2 = read_even_counter(b2);
     for (i = 0; i < CMAP_K; i++) {
-        if (cmap_get_hash(&b2->hashes[i]) == hash) {
+        if (b2->hashes[i] == hash) {
             node = cmap_node_next(&b2->nodes[i]);
             break;
         }
@@ -354,9 +347,7 @@ cmap_find_slot_protected(struct cmap_bucket *b, uint32_t hash)
     int i;
 
     for (i = 0; i < CMAP_K; i++) {
-        struct cmap_node *node = cmap_node_next_protected(&b->nodes[i]);
-
-        if (node && cmap_get_hash_protected(&b->hashes[i]) == hash) {
+        if (b->hashes[i] == hash && cmap_node_next_protected(&b->nodes[i])) {
             return i;
         }
     }
@@ -370,10 +361,8 @@ cmap_find_bucket_protected(struct cmap_impl *impl, uint32_t hash, uint32_t h)
     int i;
 
     for (i = 0; i < CMAP_K; i++) {
-        struct cmap_node *node = cmap_node_next_protected(&b->nodes[i]);
-
-        if (node && cmap_get_hash_protected(&b->hashes[i]) == hash) {
-            return node;
+        if (b->hashes[i] == hash) {
+            return cmap_node_next_protected(&b->nodes[i]);
         }
     }
     return NULL;
@@ -419,7 +408,7 @@ cmap_set_bucket(struct cmap_bucket *b, int i,
     atomic_read_explicit(&b->counter, &c, memory_order_acquire);
     atomic_store_explicit(&b->counter, c + 1, memory_order_release);
     ovsrcu_set(&b->nodes[i].next, node); /* Also atomic. */
-    atomic_store_explicit(&b->hashes[i], hash, memory_order_release);
+    b->hashes[i] = hash;
     atomic_store_explicit(&b->counter, c + 2, memory_order_release);
 }
 
@@ -433,9 +422,9 @@ cmap_insert_dup(struct cmap_node *new_node, uint32_t hash,
     int i;
 
     for (i = 0; i < CMAP_K; i++) {
-        struct cmap_node *node = cmap_node_next_protected(&b->nodes[i]);
+        if (b->hashes[i] == hash) {
+            struct cmap_node *node = cmap_node_next_protected(&b->nodes[i]);
 
-        if (cmap_get_hash_protected(&b->hashes[i]) == hash) {
             if (node) {
                 struct cmap_node *p;
 
@@ -500,7 +489,7 @@ cmap_insert_bucket(struct cmap_node *node, uint32_t hash,
 static struct cmap_bucket *
 other_bucket_protected(struct cmap_impl *impl, struct cmap_bucket *b, int slot)
 {
-    uint32_t h1 = rehash(impl, cmap_get_hash_protected(&b->hashes[slot]));
+    uint32_t h1 = rehash(impl, b->hashes[slot]);
     uint32_t h2 = other_hash(h1);
     uint32_t b_idx = b - impl->buckets;
     uint32_t other_h = (h1 & impl->mask) == b_idx ? h2 : h1;
@@ -617,9 +606,10 @@ cmap_insert_bfs(struct cmap_impl *impl, struct cmap_node *new_node,
                 for (k = path->n + 1; k > 0; k--) {
                     int slot = slots[k - 1];
 
-                    cmap_set_bucket(buckets[k], slots[k],
-                                    cmap_node_next_protected(&buckets[k - 1]->nodes[slot]),
-                                    cmap_get_hash_protected(&buckets[k - 1]->hashes[slot]));
+                    cmap_set_bucket(
+                        buckets[k], slots[k],
+                        cmap_node_next_protected(&buckets[k - 1]->nodes[slot]),
+                        buckets[k - 1]->hashes[slot]);
                 }
 
                 /* Finally, replace the first node on the path by
@@ -759,9 +749,7 @@ cmap_try_rehash(const struct cmap_impl *old, struct cmap_impl *new)
              * unique */
             struct cmap_node *node = cmap_node_next_protected(&b->nodes[i]);
 
-            if (node &&
-                !cmap_try_insert(new, node,
-                                 cmap_get_hash_protected(&b->hashes[i]))) {
+            if (node && !cmap_try_insert(new, node, b->hashes[i])) {
                 return false;
             }
         }
