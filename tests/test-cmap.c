@@ -291,17 +291,23 @@ search_cmap(void *aux_)
     struct cmap_aux *aux = aux_;
     size_t i;
 
-    for (i = 0; i < n_elems; i++) {
-        struct element *e;
+    if (mutation_frac) {
+        for (i = 0; i < n_elems; i++) {
+            struct element *e;
 
-        if (random_uint32() < mutation_frac) {
-            ovs_mutex_lock(&aux->mutex);
-            e = find(aux->cmap, i);
-            if (e) {
-                cmap_remove(aux->cmap, &e->node, hash_int(e->value, 0));
+            if (random_uint32() < mutation_frac) {
+                ovs_mutex_lock(&aux->mutex);
+                e = find(aux->cmap, i);
+                if (e) {
+                    cmap_remove(aux->cmap, &e->node, hash_int(e->value, 0));
+                }
+                ovs_mutex_unlock(&aux->mutex);
+            } else {
+                ignore(find(aux->cmap, i));
             }
-            ovs_mutex_unlock(&aux->mutex);
-        } else {
+        }
+    } else {
+        for (i = 0; i < n_elems; i++) {
             ignore(find(aux->cmap, i));
         }
     }
@@ -392,8 +398,8 @@ search_hmap(void *aux_)
     struct hmap_aux *aux = aux_;
     size_t i;
 
-    for (i = 0; i < n_elems; i++) {
-        if (mutation_frac) {
+    if (mutation_frac) {
+        for (i = 0; i < n_elems; i++) {
             if (random_uint32() < mutation_frac) {
                 struct helement *e;
 
@@ -408,8 +414,10 @@ search_hmap(void *aux_)
                 ignore(hfind(aux->hmap, i));
                 fat_rwlock_unlock(&aux->fatlock);
             }
-        } else {
-            hfind(aux->hmap, i);
+        }
+    } else {
+        for (i = 0; i < n_elems; i++) {
+            ignore(hfind(aux->hmap, i));
         }
     }
     return NULL;
