@@ -304,35 +304,45 @@ cmap_find(const struct cmap *cmap, uint32_t hash)
     struct cmap_bucket *b2;
     uint32_t c1, c2;
     int i;
+    struct cmap_node *node;
 
-retry:
     b1 = &impl->buckets[h1 & impl->mask];
+    b2 = &impl->buckets[h2 & impl->mask];
+retry:
+    node = NULL;
     c1 = read_even_counter(b1);
     for (i = 0; i < CMAP_K; i++) {
-        struct cmap_node *node = cmap_node_next(&b1->nodes[i]);
-
-        if (node && cmap_get_hash(&b1->hashes[i]) == hash) {
-            if (counter_changed(b1, c1)) {
-                goto retry;
-            }
-            return node;
+        if (cmap_get_hash(&b1->hashes[i]) == hash) {
+            node = cmap_node_next(&b1->nodes[i]);
+            break;
         }
     }
+    if (OVS_UNLIKELY(counter_changed(b1, c1))) {
+        goto retry;
+    }
+    if (node) {
+        return node;
+    }
 
-    b2 = &impl->buckets[h2 & impl->mask];
+retry2:
+    node = NULL;
     c2 = read_even_counter(b2);
     for (i = 0; i < CMAP_K; i++) {
-        struct cmap_node *node = cmap_node_next(&b2->nodes[i]);
-
-        if (node && cmap_get_hash(&b2->hashes[i]) == hash) {
-            if (counter_changed(b2, c2)) {
-                goto retry;
-            }
-            return node;
+        if (cmap_get_hash(&b2->hashes[i]) == hash) {
+            node = cmap_node_next(&b2->nodes[i]);
+            break;
         }
     }
+    if (OVS_UNLIKELY(counter_changed(b2, c2))) {
+        goto retry2;
+    }
+    if (node) {
+        return node;
+    }
 
-    if (counter_changed(b1, c1) || counter_changed(b2, c2)) {
+    /* We just got a stable reading on 'b2', but a node could have been moved
+     * to 'b1', so we need to chack the 'c1' again. */
+    if (counter_changed(b1, c1)) {
         goto retry;
     }
     return NULL;
