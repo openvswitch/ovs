@@ -2125,7 +2125,7 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
         uint8_t goto_table = ofpact_get_GOTO_TABLE(a)->table_id;
         if ((table_id != 255 && goto_table <= table_id)
             || (n_tables != 255 && goto_table >= n_tables)) {
-            return OFPERR_OFPBRC_BAD_TABLE_ID;
+            return OFPERR_OFPBIC_BAD_TABLE_ID;
         }
         return 0;
     }
