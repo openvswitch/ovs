@@ -157,7 +157,7 @@ rid_pool_alloc_id(struct rid_pool *rids)
     }
 
     for(id = rids->base; id < rids->base + rids->n_ids; id++) {
-        if (rid_pool_find(rids, id)) {
+        if (!rid_pool_find(rids, id)) {
             goto found_free_id;
         }
     }
