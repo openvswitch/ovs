@@ -334,7 +334,7 @@ usage(void)
            "                              print packets received from SWITCH\n"
            "  snoop SWITCH                snoop on SWITCH and its controller\n"
            "  add-group SWITCH GROUP      add group described by GROUP\n"
-           "  add-group SWITCH FILE       add group from FILE\n"
+           "  add-groups SWITCH FILE      add group from FILE\n"
            "  mod-group SWITCH GROUP      modify specific group\n"
            "  del-groups SWITCH [GROUP]   delete matching GROUPs\n"
            "  dump-group-features SWITCH  print group features\n"
