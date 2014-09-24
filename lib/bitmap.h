@@ -114,4 +114,13 @@ bool bitmap_is_all_zeros(const unsigned long *, size_t n);
     for ((IDX) = bitmap_scan(BITMAP, 1, 0, SIZE); (IDX) < (SIZE);    \
          (IDX) = bitmap_scan(BITMAP, 1, (IDX) + 1, SIZE))
 
+/* More efficient access to a map of single ulong. */
+#define ULONG_FOR_EACH_1(IDX, MAP)                  \
+    for (unsigned long map__ = (MAP);               \
+         map__ && (((IDX) = raw_ctz(map__)), true); \
+         map__ = zero_rightmost_1bit(map__))
+
+#define ULONG_SET0(MAP, OFFSET) ((MAP) &= ~(1UL << (OFFSET)))
+#define ULONG_SET1(MAP, OFFSET) ((MAP) |= 1UL << (OFFSET))
+
 #endif /* bitmap.h */

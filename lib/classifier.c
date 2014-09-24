@@ -980,26 +980,8 @@ miniflow_and_mask_matches_miniflow(const struct miniflow *flow,
     return true;
 }
 
-static inline struct cls_match *
-find_match_miniflow(const struct cls_subtable *subtable,
-                    const struct miniflow *flow,
-                    uint32_t hash)
-{
-    struct cls_match *rule;
-
-    CMAP_FOR_EACH_WITH_HASH (rule, cmap_node, hash, &subtable->rules) {
-        if (miniflow_and_mask_matches_miniflow(&rule->flow, &subtable->mask,
-                                               flow)) {
-            return rule;
-        }
-    }
-
-    return NULL;
-}
-
 /* For each miniflow in 'flows' performs a classifier lookup writing the result
- * into the corresponding slot in 'rules'.  If a particular entry in 'flows' is
- * NULL it is skipped.
+ * into the corresponding slot in 'rules'.
  *
  * This function is optimized for use in the userspace datapath and therefore
  * does not implement a lot of features available in the standard
@@ -1009,37 +991,79 @@ find_match_miniflow(const struct cls_subtable *subtable,
  * Returns true if all flows found a corresponding rule. */
 bool
 classifier_lookup_miniflow_batch(const struct classifier *cls,
-                                 const struct miniflow **flows,
-                                 struct cls_rule **rules, size_t len)
+                                 const struct miniflow *flows[],
+                                 struct cls_rule *rules[], const size_t cnt)
 {
+    /* The batch size 16 was experimentally found faster than 8 or 32. */
+    typedef uint16_t map_type;
+#define MAP_BITS (sizeof(map_type) * CHAR_BIT)
+
     struct cls_subtable *subtable;
-    size_t i, begin = 0;
+    const int n_maps = DIV_ROUND_UP(cnt, MAP_BITS);
 
-    memset(rules, 0, len * sizeof *rules);
+#if !defined(__CHECKER__) && !defined(_WIN32)
+    map_type maps[n_maps];
+#else
+    map_type maps[DIV_ROUND_UP(CLASSIFIER_MAX_BATCH, MAP_BITS)];
+    ovs_assert(n_maps <= CLASSIFIER_MAX_BATCH);
+#endif
+    BUILD_ASSERT_DECL(sizeof *maps * CHAR_BIT == MAP_BITS);
+
+    memset(maps, 0xff, sizeof maps);
+    if (cnt % MAP_BITS) {
+        maps[n_maps - 1] >>= MAP_BITS - cnt % MAP_BITS; /* Clear extra bits. */
+    }
+    memset(rules, 0, cnt * sizeof *rules);
+
     PVECTOR_FOR_EACH (subtable, &cls->subtables) {
-        for (i = begin; i < len; i++) {
-            struct cls_match *match;
-            uint32_t hash;
+        const struct miniflow **mfs = flows;
+        struct cls_rule **results = rules;
+        map_type remains = 0;
+        int m;
 
-            if (OVS_UNLIKELY(rules[i] || !flows[i])) {
-                continue;
+        BUILD_ASSERT_DECL(sizeof remains == sizeof *maps);
+
+        for (m = 0; m < n_maps; m++, mfs += MAP_BITS, results += MAP_BITS) {
+            uint32_t hashes[MAP_BITS];
+            const struct cmap_node *nodes[MAP_BITS];
+            unsigned long map = maps[m];
+            int i;
+
+            if (!map) {
+                continue; /* Skip empty ones. */
             }
 
-            hash = miniflow_hash_in_minimask(flows[i], &subtable->mask, 0);
-            match = find_match_miniflow(subtable, flows[i], hash);
-            if (OVS_UNLIKELY(match)) {
-                rules[i] = match->cls_rule;
+            /* Compute hashes for the unfound flows. */
+            ULONG_FOR_EACH_1(i, map) {
+                hashes[i] = miniflow_hash_in_minimask(mfs[i], &subtable->mask,
+                                                      0);
             }
-        }
+            /* Lookup. */
+            map = cmap_find_batch(&subtable->rules, map, hashes, nodes);
+            /* Check results. */
+            ULONG_FOR_EACH_1(i, map) {
+                struct cls_match *rule;
 
-        while (begin < len && (rules[begin] || !flows[begin])) {
-            begin++;
+                CMAP_NODE_FOR_EACH (rule, cmap_node, nodes[i]) {
+                    if (OVS_LIKELY(miniflow_and_mask_matches_miniflow(
+                                       &rule->flow, &subtable->mask,
+                                       mfs[i]))) {
+                        results[i] = rule->cls_rule;
+                        goto next;
+                    }
+                }
+                ULONG_SET0(map, i); /* Did not match. */
+            next:
+                ; /* Keep Sparse happy. */
+            }
+            maps[m] &= ~map; /* Clear the found rules. */
+            remains |= maps[m];
         }
-        if (begin >= len) {
-            return true;
+        if (!remains) {
+            return true; /* All found. */
         }
     }
-
+    /* Some misses. */
     return false;
 }
 

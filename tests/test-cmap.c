@@ -18,6 +18,7 @@
  * cmap.h. */
 
 #include <config.h>
+#include "bitmap.h"
 #include "cmap.h"
 #include <getopt.h>
 #include <string.h>
@@ -57,7 +58,7 @@ check_cmap(struct cmap *cmap, const int values[], size_t n,
 {
     int *sort_values, *cmap_values, *cmap_values2;
     const struct element *e;
-    size_t i;
+    size_t i, batch_size;
 
     struct cmap_position pos = { 0, 0, 0 };
     struct cmap_node *node;
@@ -108,6 +109,33 @@ check_cmap(struct cmap *cmap, const int values[], size_t n,
             count += e->value == values[i];
         }
         assert(count == 1);
+    }
+
+    /* Check that all the values are there in batched lookup. */
+    batch_size = n % BITMAP_ULONG_BITS + 1;
+    for (i = 0; i < n; i += batch_size) {
+        unsigned long map;
+        uint32_t hashes[sizeof map * CHAR_BIT];
+        const struct cmap_node *nodes[sizeof map * CHAR_BIT];
+        size_t count = 0;
+        int k, j;
+
+        j = MIN(n - i, batch_size); /* Actual batch size. */
+        map = ~0UL >> (BITMAP_ULONG_BITS - j);
+
+        for (k = 0; k < j; k++) {
+            hashes[k] = hash(values[i + k]);
+        }
+        map = cmap_find_batch(cmap, map, hashes, nodes);
+
+        ULONG_FOR_EACH_1(k, map) {
+            struct element *e;
+
+            CMAP_NODE_FOR_EACH (e, node, nodes[k]) {
+                count += e->value == values[i + k];
+            }
+        }
+        assert(count == j); /* j elements in a batch. */
     }
 
     /* Check that cmap_first() returns NULL only when cmap_is_empty(). */
@@ -237,8 +265,12 @@ run_tests(int argc, char *argv[])
 static int n_elems;             /* Number of elements to insert. */
 static int n_threads;           /* Number of threads to search and mutate. */
 static uint32_t mutation_frac;  /* % mutations, as fraction of UINT32_MAX. */
+static int n_batch;             /* Number of elements in each batch. */
+
+#define N_BATCH_MAX BITMAP_ULONG_BITS
 
 static void benchmark_cmap(void);
+static void benchmark_cmap_batched(void);
 static void benchmark_hmap(void);
 
 static int
@@ -251,15 +283,24 @@ elapsed(const struct timeval *start)
 }
 
 static void
-run_benchmarks(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+run_benchmarks(int argc, char *argv[] OVS_UNUSED)
 {
     n_elems = strtol(argv[1], NULL, 10);
     n_threads = strtol(argv[2], NULL, 10);
     mutation_frac = strtod(argv[3], NULL) / 100.0 * UINT32_MAX;
+    n_batch = argc > 4 ? strtol(argv[4], NULL, 10) : 1;
 
-    printf("Benchmarking with n=%d, %d threads, %.2f%% mutations:\n",
-           n_elems, n_threads, (double) mutation_frac / UINT32_MAX * 100.);
+    if (n_batch > N_BATCH_MAX) {
+        n_batch = N_BATCH_MAX;
+    }
+    printf("Benchmarking with n=%d, %d threads, %.2f%% mutations, batch size %d:\n",
+           n_elems, n_threads, (double) mutation_frac / UINT32_MAX * 100.,
+           n_batch);
 
+    if (n_batch > 0) {
+        benchmark_cmap_batched();
+    }
+    putchar('\n');
     benchmark_cmap();
     putchar('\n');
     benchmark_hmap();
@@ -356,6 +397,127 @@ benchmark_cmap(void)
     }
     free(threads);
     printf("cmap search:  %5d ms\n", elapsed(&start));
+
+    /* Destruction. */
+    xgettimeofday(&start);
+    CMAP_FOR_EACH (e, node, &cmap) {
+        cmap_remove(&cmap, &e->node, hash_int(e->value, 0));
+    }
+    cmap_destroy(&cmap);
+    printf("cmap destroy: %5d ms\n", elapsed(&start));
+
+    free(elements);
+}
+
+static size_t
+find_batch(const struct cmap *cmap, const int value)
+{
+    size_t i, ret;
+    const size_t end = MIN(n_batch, n_elems - value);
+    unsigned long map = ~0;
+    uint32_t hashes[N_BATCH_MAX];
+    const struct cmap_node *nodes[N_BATCH_MAX];
+
+    if (mutation_frac) {
+        for (i = 0; i < end; i++) {
+            if (random_uint32() < mutation_frac) {
+                break;
+            }
+            hashes[i] = hash_int(value + i, 0);
+        }
+    } else {
+        for (i = 0; i < end; i++) {
+            hashes[i] = hash_int(value + i, 0);
+        }
+    }
+
+    ret = i;
+
+    map >>= BITMAP_ULONG_BITS - i; /* Clear excess bits. */
+    map = cmap_find_batch(cmap, map, hashes, nodes);
+
+    ULONG_FOR_EACH_1(i, map) {
+        struct element *e;
+
+        CMAP_NODE_FOR_EACH (e, node, nodes[i]) {
+            if (OVS_LIKELY(e->value == value + i)) {
+                ignore(e); /* Found result. */
+                break;
+            }
+        }
+    }
+    return ret;
+}
+
+static void *
+search_cmap_batched(void *aux_)
+{
+    struct cmap_aux *aux = aux_;
+    size_t i = 0, j;
+
+    for (;;) {
+        struct element *e;
+
+        j = find_batch(aux->cmap, i);
+        i += j;
+        if (i >= n_elems) {
+            break;
+        }
+        if (j < n_batch) {
+            ovs_mutex_lock(&aux->mutex);
+            e = find(aux->cmap, i);
+            if (e) {
+                cmap_remove(aux->cmap, &e->node, hash_int(e->value, 0));
+            }
+            ovs_mutex_unlock(&aux->mutex);
+        }
+    }
+
+    return NULL;
+}
+
+static void
+benchmark_cmap_batched(void)
+{
+    struct element *elements;
+    struct cmap cmap;
+    struct element *e;
+    struct timeval start;
+    pthread_t *threads;
+    struct cmap_aux aux;
+    size_t i;
+
+    elements = xmalloc(n_elems * sizeof *elements);
+
+    /* Insertions. */
+    xgettimeofday(&start);
+    cmap_init(&cmap);
+    for (i = 0; i < n_elems; i++) {
+        elements[i].value = i;
+        cmap_insert(&cmap, &elements[i].node, hash_int(i, 0));
+    }
+    printf("cmap insert:  %5d ms\n", elapsed(&start));
+
+    /* Iteration. */
+    xgettimeofday(&start);
+    CMAP_FOR_EACH (e, node, &cmap) {
+        ignore(e);
+    }
+    printf("cmap iterate: %5d ms\n", elapsed(&start));
+
+    /* Search and mutation. */
+    xgettimeofday(&start);
+    aux.cmap = &cmap;
+    ovs_mutex_init(&aux.mutex);
+    threads = xmalloc(n_threads * sizeof *threads);
+    for (i = 0; i < n_threads; i++) {
+        threads[i] = ovs_thread_create("search", search_cmap_batched, &aux);
+    }
+    for (i = 0; i < n_threads; i++) {
+        xpthread_join(threads[i], NULL);
+    }
+    free(threads);
+    printf("batch search: %5d ms\n", elapsed(&start));
 
     /* Destruction. */
     xgettimeofday(&start);
@@ -477,7 +639,7 @@ benchmark_hmap(void)
 
 static const struct command commands[] = {
     {"check", 0, 1, run_tests},
-    {"benchmark", 3, 3, run_benchmarks},
+    {"benchmark", 3, 4, run_benchmarks},
     {NULL, 0, 0, NULL},
 };
 

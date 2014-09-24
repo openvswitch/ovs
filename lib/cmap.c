@@ -16,6 +16,7 @@
 
 #include <config.h>
 #include "cmap.h"
+#include "bitmap.h"
 #include "hash.h"
 #include "ovs-rcu.h"
 #include "random.h"
@@ -275,15 +276,17 @@ static inline bool
 counter_changed(const struct cmap_bucket *b_, uint32_t c)
 {
     struct cmap_bucket *b = CONST_CAST(struct cmap_bucket *, b_);
+    uint32_t counter;
 
     /* Need to make sure the counter read is not moved up, before the hash and
-     * cmap_node_next().  The atomic_read_explicit() with memory_order_acquire
-     * in read_counter() still allows prior reads to be moved after the
-     * barrier.  atomic_thread_fence prevents all following memory accesses
-     * from moving prior to preceding loads. */
+     * cmap_node_next().  Using atomic_read_explicit with memory_order_acquire
+     * would allow prior reads to be moved after the barrier.
+     * atomic_thread_fence prevents all following memory accesses from moving
+     * prior to preceding loads. */
     atomic_thread_fence(memory_order_acquire);
+    atomic_read_relaxed(&b->counter, &counter);
 
-    return OVS_UNLIKELY(read_counter(b) != c);
+    return OVS_UNLIKELY(counter != c);
 }
 
 static inline const struct cmap_node *
@@ -343,6 +346,92 @@ cmap_find(const struct cmap *cmap, uint32_t hash)
     return cmap_find__(&impl->buckets[h1 & impl->mask],
                        &impl->buckets[h2 & impl->mask],
                        hash);
+}
+
+/* Looks up multiple 'hashes', when the corresponding bit in 'map' is 1,
+ * and sets the corresponding pointer in 'nodes', if the hash value was
+ * found from the 'cmap'.  In other cases the 'nodes' values are not changed,
+ * i.e., no NULL pointers are stored there.
+ * Returns a map where a bit is set to 1 if the corresponding 'nodes' pointer
+ * was stored, 0 otherwise.
+ * Generally, the caller wants to use CMAP_NODE_FOR_EACH to verify for
+ * hash collisions. */
+unsigned long
+cmap_find_batch(const struct cmap *cmap, unsigned long map,
+                uint32_t hashes[], const struct cmap_node *nodes[])
+{
+    const struct cmap_impl *impl = cmap_get_impl(cmap);
+    unsigned long result = map;
+    int i;
+    uint32_t h1s[sizeof map * CHAR_BIT];
+    const struct cmap_bucket *b1s[sizeof map * CHAR_BIT];
+    const struct cmap_bucket *b2s[sizeof map * CHAR_BIT];
+    uint32_t c1s[sizeof map * CHAR_BIT];
+
+    /* Compute hashes and prefetch 1st buckets. */
+    ULONG_FOR_EACH_1(i, map) {
+        h1s[i] = rehash(impl, hashes[i]);
+        b1s[i] = &impl->buckets[h1s[i] & impl->mask];
+        OVS_PREFETCH(b1s[i]);
+    }
+    /* Lookups, Round 1. Only look up at the first bucket. */
+    ULONG_FOR_EACH_1(i, map) {
+        uint32_t c1;
+        const struct cmap_bucket *b1 = b1s[i];
+        const struct cmap_node *node;
+
+        do {
+            c1 = read_even_counter(b1);
+            node = cmap_find_in_bucket(b1, hashes[i]);
+        } while (OVS_UNLIKELY(counter_changed(b1, c1)));
+
+        if (!node) {
+            /* Not found (yet); Prefetch the 2nd bucket. */
+            b2s[i] = &impl->buckets[other_hash(h1s[i]) & impl->mask];
+            OVS_PREFETCH(b2s[i]);
+            c1s[i] = c1; /* We may need to check this after Round 2. */
+            continue;
+        }
+        /* Found. */
+        ULONG_SET0(map, i); /* Ignore this on round 2. */
+        OVS_PREFETCH(node);
+        nodes[i] = node;
+    }
+    /* Round 2. Look into the 2nd bucket, if needed. */
+    ULONG_FOR_EACH_1(i, map) {
+        uint32_t c2;
+        const struct cmap_bucket *b2 = b2s[i];
+        const struct cmap_node *node;
+
+        do {
+            c2 = read_even_counter(b2);
+            node = cmap_find_in_bucket(b2, hashes[i]);
+        } while (OVS_UNLIKELY(counter_changed(b2, c2)));
+
+        if (!node) {
+            /* Not found, but the node may have been moved from b2 to b1 right
+             * after we finished with b1 earlier.  We just got a clean reading
+             * of the 2nd bucket, so we check the counter of the 1st bucket
+             * only.  However, we need to check both buckets again, as the
+             * entry may be moved again to the 2nd bucket.  Basically, we
+             * need to loop as long as it takes to get stable readings of
+             * both buckets.  cmap_find__() does that, and now that we have
+             * fetched both buckets we can just use it. */
+            if (OVS_UNLIKELY(counter_changed(b1s[i], c1s[i]))) {
+                node = cmap_find__(b1s[i], b2s[i], hashes[i]);
+                if (node) {
+                    goto found;
+                }
+            }
+            /* Not found. */
+            ULONG_SET0(result, i); /* Fix the result. */
+            continue;
+        }
+found:
+        OVS_PREFETCH(node);
+        nodes[i] = node;
+    }
+    return result;
 }
 
 static int

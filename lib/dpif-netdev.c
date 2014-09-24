@@ -2644,7 +2644,7 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
     enum { PKT_ARRAY_SIZE = NETDEV_MAX_RX_BATCH };
 #endif
     struct packet_batch batches[PKT_ARRAY_SIZE];
-    const struct miniflow *mfs[PKT_ARRAY_SIZE]; /* NULL at bad packets. */
+    const struct miniflow *mfs[PKT_ARRAY_SIZE]; /* May NOT be NULL. */
     struct cls_rule *rules[PKT_ARRAY_SIZE];
     struct dp_netdev *dp = pmd->dp;
     struct emc_cache *flow_cache = &pmd->flow_cache;
@@ -2652,7 +2652,7 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
     bool any_miss;
 
     for (i = 0; i < cnt; i++) {
-        mfs[i] = &keys[i].flow;
+        mfs[i] = &keys[i].flow; /* No bad packets! */
     }
     any_miss = !classifier_lookup_miniflow_batch(&dp->cls, mfs, rules, cnt);
     if (OVS_UNLIKELY(any_miss) && !fat_rwlock_tryrdlock(&dp->upcall_rwlock)) {

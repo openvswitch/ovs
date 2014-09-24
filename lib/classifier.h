@@ -297,7 +297,9 @@ struct cls_rule *classifier_lookup(const struct classifier *,
                                    struct flow_wildcards *);
 bool classifier_lookup_miniflow_batch(const struct classifier *cls,
                                       const struct miniflow **flows,
-                                      struct cls_rule **rules, size_t len);
+                                      struct cls_rule **rules,
+                                      const size_t cnt);
+enum { CLASSIFIER_MAX_BATCH = 256 };
 bool classifier_rule_overlaps(const struct classifier *,
                               const struct cls_rule *);
 
