@@ -97,14 +97,22 @@ atomic_signal_fence(memory_order order)
         *(DST) = (SRC);                                                 \
     }
 
-/* 64 bit writes are atomic on i586 if 64 bit aligned. */
+/* MSVC converts 64 bit writes into two instructions. So there is
+ * a possibility that an interrupt can make a 64 bit write non-atomic even
+ * when 8 byte aligned. So use InterlockedExchange64().
+ *
+ * For atomic stores, 'consume' and 'acquire' semantics are not valid. But we
+ * are using 'Exchange' to get atomic stores here and we only have
+ * InterlockedExchange64(), InterlockedExchangeNoFence64() and
+ * InterlockedExchange64Acquire() available. So we are forced to use
+ * InterlockedExchange64() which uses full memory barrier for everything
+ * greater than 'memory_order_relaxed'. */
 #define atomic_store64(DST, SRC, ORDER)                                    \
-    if (((size_t) (DST) & (sizeof *(DST) - 1))                             \
-        || ORDER == memory_order_seq_cst) {                                \
-        InterlockedExchange64((int64_t volatile *) (DST),                  \
-                              (int64_t) (SRC));                            \
+    if (ORDER == memory_order_relaxed) {                                   \
+        InterlockedExchangeNoFence64((int64_t volatile *) (DST),           \
+                                     (int64_t) (SRC));                     \
     } else {                                                               \
-        *(DST) = (SRC);                                                    \
+        InterlockedExchange64((int64_t volatile *) (DST), (int64_t) (SRC));\
     }
 
 /* Used for 8 and 16 bit variations. */
@@ -149,16 +157,14 @@ atomic_signal_fence(memory_order order)
 #define atomic_readX(SRC, DST, ORDER)                                      \
     *(DST) = *(SRC);
 
-/* 64 bit reads are atomic on i586 if 64 bit aligned. */
+/* MSVC converts 64 bit reads into two instructions. So there is
+ * a possibility that an interrupt can make a 64 bit read non-atomic even
+ * when 8 byte aligned. So use fully memory barrier InterlockedOr64(). */
 #define atomic_read64(SRC, DST, ORDER)                                     \
-    if (((size_t) (SRC) & (sizeof *(SRC) - 1)) == 0) {                     \
-        *(DST) = *(SRC);                                                   \
-    } else {                                                               \
     __pragma (warning(push))                                               \
     __pragma (warning(disable:4047))                                       \
-       *(DST) = InterlockedOr64((int64_t volatile *) (SRC), 0);            \
-    __pragma (warning(pop))                                                \
-    }
+    *(DST) = InterlockedOr64((int64_t volatile *) (SRC), 0);               \
+    __pragma (warning(pop))
 
 #define atomic_read(SRC, DST)                               \
         atomic_read_explicit(SRC, DST, memory_order_seq_cst)
