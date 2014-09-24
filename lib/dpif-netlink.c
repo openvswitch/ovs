@@ -133,7 +133,7 @@ static int dpif_netlink_flow_transact(struct dpif_netlink_flow *request,
                                       struct ofpbuf **bufp);
 static void dpif_netlink_flow_get_stats(const struct dpif_netlink_flow *,
                                         struct dpif_flow_stats *);
-static void dpif_netlink_flow_to_dpif_flow(struct dpif_flow *,
+static void dpif_netlink_flow_to_dpif_flow(struct dpif *, struct dpif_flow *,
                                            const struct dpif_netlink_flow *);
 
 /* One of the dpif channels between the kernel and userspace. */
@@ -1364,7 +1364,7 @@ dpif_netlink_flow_dump_thread_destroy(struct dpif_flow_dump_thread *thread_)
 }
 
 static void
-dpif_netlink_flow_to_dpif_flow(struct dpif_flow *dpif_flow,
+dpif_netlink_flow_to_dpif_flow(struct dpif *dpif, struct dpif_flow *dpif_flow,
                                const struct dpif_netlink_flow *datapath_flow)
 {
     dpif_flow->key = datapath_flow->key;
@@ -1373,6 +1373,8 @@ dpif_netlink_flow_to_dpif_flow(struct dpif_flow *dpif_flow,
     dpif_flow->mask_len = datapath_flow->mask_len;
     dpif_flow->actions = datapath_flow->actions;
     dpif_flow->actions_len = datapath_flow->actions_len;
+    dpif_flow_hash(dpif, datapath_flow->key, datapath_flow->key_len,
+                   &dpif_flow->ufid);
     dpif_netlink_flow_get_stats(datapath_flow, &dpif_flow->stats);
 }
 
@@ -1410,7 +1412,8 @@ dpif_netlink_flow_dump_next(struct dpif_flow_dump_thread *thread_,
 
         if (datapath_flow.actions) {
             /* Common case: the flow includes actions. */
-            dpif_netlink_flow_to_dpif_flow(&flows[n_flows++], &datapath_flow);
+            dpif_netlink_flow_to_dpif_flow(&dpif->dpif, &flows[n_flows++],
+                                           &datapath_flow);
         } else {
             /* Rare case: the flow does not include actions.  Retrieve this
              * individual flow again to get the actions. */
@@ -1429,7 +1432,8 @@ dpif_netlink_flow_dump_next(struct dpif_flow_dump_thread *thread_,
 
             /* Save this flow.  Then exit, because we only have one buffer to
              * handle this case. */
-            dpif_netlink_flow_to_dpif_flow(&flows[n_flows++], &datapath_flow);
+            dpif_netlink_flow_to_dpif_flow(&dpif->dpif, &flows[n_flows++],
+                                           &datapath_flow);
             break;
         }
     }
@@ -1600,7 +1604,8 @@ dpif_netlink_operate__(struct dpif_netlink *dpif,
 
                 op->error = dpif_netlink_flow_from_ofpbuf(&reply, txn->reply);
                 if (!op->error) {
-                    dpif_netlink_flow_to_dpif_flow(get->flow, &reply);
+                    dpif_netlink_flow_to_dpif_flow(&dpif->dpif, get->flow,
+                                                   &reply);
                 }
             }
             break;
@@ -1853,8 +1858,8 @@ dpif_netlink_queue_to_priority(const struct dpif *dpif OVS_UNUSED,
 }
 
 static int
-parse_odp_packet(struct ofpbuf *buf, struct dpif_upcall *upcall,
-                 int *dp_ifindex)
+parse_odp_packet(const struct dpif_netlink *dpif, struct ofpbuf *buf,
+                 struct dpif_upcall *upcall, int *dp_ifindex)
 {
     static const struct nl_policy ovs_packet_policy[] = {
         /* Always present. */
@@ -1898,6 +1903,7 @@ parse_odp_packet(struct ofpbuf *buf, struct dpif_upcall *upcall,
     upcall->key = CONST_CAST(struct nlattr *,
                              nl_attr_get(a[OVS_PACKET_ATTR_KEY]));
     upcall->key_len = nl_attr_get_size(a[OVS_PACKET_ATTR_KEY]);
+    dpif_flow_hash(&dpif->dpif, upcall->key, upcall->key_len, &upcall->ufid);
     upcall->userdata = a[OVS_PACKET_ATTR_USERDATA];
     upcall->out_tun_key = a[OVS_PACKET_ATTR_EGRESS_TUN_KEY];
 
@@ -2046,7 +2052,7 @@ dpif_netlink_recv__(struct dpif_netlink *dpif, uint32_t handler_id,
                 return error;
             }
 
-            error = parse_odp_packet(buf, upcall, &dp_ifindex);
+            error = parse_odp_packet(dpif, buf, upcall, &dp_ifindex);
             if (!error && dp_ifindex == dpif->dp_ifindex) {
                 return 0;
             } else if (error) {

@@ -1563,24 +1563,44 @@ get_dpif_flow_stats(const struct dp_netdev_flow *netdev_flow,
     }
 }
 
+/* Converts to the dpif_flow format, using 'key_buf' and 'mask_buf' for
+ * storing the netlink-formatted key/mask. 'key_buf' may be the same as
+ * 'mask_buf'. Actions will be returned without copying, by relying on RCU to
+ * protect them. */
 static void
-dp_netdev_flow_to_dpif_flow(const struct dp_netdev_flow *netdev_flow,
-                            struct ofpbuf *buffer, struct dpif_flow *flow)
+dp_netdev_flow_to_dpif_flow(const struct dpif *dpif,
+                            const struct dp_netdev_flow *netdev_flow,
+                            struct ofpbuf *key_buf, struct ofpbuf *mask_buf,
+                            struct dpif_flow *flow)
 {
     struct flow_wildcards wc;
     struct dp_netdev_actions *actions;
+    size_t offset;
 
     miniflow_expand(&netdev_flow->cr.mask->mf, &wc.masks);
-    odp_flow_key_from_mask(buffer, &wc.masks, &netdev_flow->flow,
+
+    /* Key */
+    offset = ofpbuf_size(key_buf);
+    flow->key = ofpbuf_tail(key_buf);
+    odp_flow_key_from_flow(key_buf, &netdev_flow->flow, &wc.masks,
+                           netdev_flow->flow.in_port.odp_port, true);
+    flow->key_len = ofpbuf_size(key_buf) - offset;
+
+    /* Mask */
+    offset = ofpbuf_size(mask_buf);
+    flow->mask = ofpbuf_tail(mask_buf);
+    odp_flow_key_from_mask(mask_buf, &wc.masks, &netdev_flow->flow,
                            odp_to_u32(wc.masks.in_port.odp_port),
                            SIZE_MAX, true);
-    flow->mask = ofpbuf_data(buffer);
-    flow->mask_len = ofpbuf_size(buffer);
+    flow->mask_len = ofpbuf_size(mask_buf) - offset;
 
+    /* Actions */
     actions = dp_netdev_flow_get_actions(netdev_flow);
     flow->actions = actions->actions;
     flow->actions_len = actions->size;
 
+    dpif_flow_hash(dpif, &netdev_flow->flow, sizeof netdev_flow->flow,
+                   &flow->ufid);
     get_dpif_flow_stats(netdev_flow, &flow->stats);
 }
 
@@ -1692,7 +1712,8 @@ dpif_netdev_flow_get(const struct dpif *dpif, const struct dpif_flow_get *get)
     netdev_flow = dp_netdev_find_flow(dp, &key);
 
     if (netdev_flow) {
-        dp_netdev_flow_to_dpif_flow(netdev_flow, get->buffer, get->flow);
+        dp_netdev_flow_to_dpif_flow(dpif, netdev_flow, get->buffer,
+                                    get->buffer, get->flow);
      } else {
         error = ENOENT;
     }
@@ -1969,34 +1990,11 @@ dpif_netdev_flow_dump_next(struct dpif_flow_dump_thread *thread_,
         struct odputil_keybuf *keybuf = &thread->keybuf[i];
         struct dp_netdev_flow *netdev_flow = netdev_flows[i];
         struct dpif_flow *f = &flows[i];
-        struct dp_netdev_actions *dp_actions;
-        struct flow_wildcards wc;
-        struct ofpbuf buf;
+        struct ofpbuf key, mask;
 
-        miniflow_expand(&netdev_flow->cr.mask->mf, &wc.masks);
-
-        /* Key. */
-        ofpbuf_use_stack(&buf, keybuf, sizeof *keybuf);
-        odp_flow_key_from_flow(&buf, &netdev_flow->flow, &wc.masks,
-                               netdev_flow->flow.in_port.odp_port, true);
-        f->key = ofpbuf_data(&buf);
-        f->key_len = ofpbuf_size(&buf);
-
-        /* Mask. */
-        ofpbuf_use_stack(&buf, maskbuf, sizeof *maskbuf);
-        odp_flow_key_from_mask(&buf, &wc.masks, &netdev_flow->flow,
-                               odp_to_u32(wc.masks.in_port.odp_port),
-                               SIZE_MAX, true);
-        f->mask = ofpbuf_data(&buf);
-        f->mask_len = ofpbuf_size(&buf);
-
-        /* Actions. */
-        dp_actions = dp_netdev_flow_get_actions(netdev_flow);
-        f->actions = dp_actions->actions;
-        f->actions_len = dp_actions->size;
-
-        /* Stats. */
-        get_dpif_flow_stats(netdev_flow, &f->stats);
+        ofpbuf_use_stack(&key, keybuf, sizeof *keybuf);
+        ofpbuf_use_stack(&mask, maskbuf, sizeof *maskbuf);
+        dp_netdev_flow_to_dpif_flow(&dpif->dpif, netdev_flow, &key, &mask, f);
     }
 
     return n_flows;
@@ -2621,7 +2619,7 @@ dp_netdev_count_packet(struct dp_netdev *dp, enum dp_stat_type type, int cnt)
 
 static int
 dp_netdev_upcall(struct dp_netdev *dp, struct dpif_packet *packet_,
-                 struct flow *flow, struct flow_wildcards *wc,
+                 struct flow *flow, struct flow_wildcards *wc, ovs_u128 *ufid,
                  enum dpif_upcall_type type, const struct nlattr *userdata,
                  struct ofpbuf *actions, struct ofpbuf *put_actions)
 {
@@ -2657,7 +2655,7 @@ dp_netdev_upcall(struct dp_netdev *dp, struct dpif_packet *packet_,
         ds_destroy(&ds);
     }
 
-    return dp->upcall_cb(packet, flow, type, userdata, actions, wc,
+    return dp->upcall_cb(packet, flow, ufid, type, userdata, actions, wc,
                          put_actions, dp->upcall_aux);
 }
 
@@ -2842,6 +2840,7 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
     if (OVS_UNLIKELY(any_miss) && !fat_rwlock_tryrdlock(&dp->upcall_rwlock)) {
         uint64_t actions_stub[512 / 8], slow_stub[512 / 8];
         struct ofpbuf actions, put_actions;
+        ovs_u128 ufid;
 
         ofpbuf_use_stub(&actions, actions_stub, sizeof actions_stub);
         ofpbuf_use_stub(&put_actions, slow_stub, sizeof slow_stub);
@@ -2870,8 +2869,9 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
             ofpbuf_clear(&actions);
             ofpbuf_clear(&put_actions);
 
+            dpif_flow_hash(dp->dpif, &match.flow, sizeof match.flow, &ufid);
             error = dp_netdev_upcall(dp, packets[i], &match.flow, &match.wc,
-                                     DPIF_UC_MISS, NULL, &actions,
+                                     &ufid, DPIF_UC_MISS, NULL, &actions,
                                      &put_actions);
             if (OVS_UNLIKELY(error && error != ENOSPC)) {
                 continue;
@@ -3100,6 +3100,7 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
             const struct nlattr *userdata;
             struct ofpbuf actions;
             struct flow flow;
+            ovs_u128 ufid;
 
             userdata = nl_attr_find_nested(a, OVS_USERSPACE_ATTR_USERDATA);
             ofpbuf_init(&actions, 0);
@@ -3110,8 +3111,9 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
                 ofpbuf_clear(&actions);
 
                 flow_extract(&packets[i]->ofpbuf, &packets[i]->md, &flow);
-                error = dp_netdev_upcall(dp, packets[i], &flow, NULL,
-                                         DPIF_UC_ACTION, userdata, &actions,
+                dpif_flow_hash(dp->dpif, &flow, sizeof flow, &ufid);
+                error = dp_netdev_upcall(dp, packets[i], &flow, NULL, &ufid,
+                                         DPIF_UC_ACTION, userdata,&actions,
                                          NULL);
                 if (!error || error == ENOSPC) {
                     dp_netdev_execute_actions(pmd, &packets[i], 1, may_steal,

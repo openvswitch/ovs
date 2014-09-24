@@ -99,8 +99,6 @@ struct udpif {
     struct dpif *dpif;                 /* Datapath handle. */
     struct dpif_backer *backer;        /* Opaque dpif_backer pointer. */
 
-    uint32_t secret;                   /* Random seed for upcall hash. */
-
     struct handler *handlers;          /* Upcall handlers. */
     size_t n_handlers;
 
@@ -158,6 +156,7 @@ struct upcall {
      * dpif-netdev.  If a modification is absolutely necessary, a const cast
      * may be used with other datapaths. */
     const struct flow *flow;       /* Parsed representation of the packet. */
+    const ovs_u128 *ufid;          /* Unique identifier for 'flow'. */
     const struct ofpbuf *packet;   /* Packet associated with this upcall. */
     ofp_port_t in_port;            /* OpenFlow in port, or OFPP_NONE. */
 
@@ -208,6 +207,7 @@ struct udpif_key {
     const struct nlattr *mask;     /* Datapath flow mask. */
     size_t mask_len;               /* Length of 'mask'. */
     struct ofpbuf *actions;        /* Datapath flow actions as nlattrs. */
+    ovs_u128 ufid;                 /* Unique flow identifier. */
     uint32_t hash;                 /* Pre-computed hash for 'key'. */
 
     struct ovs_mutex mutex;                   /* Guards the following. */
@@ -263,15 +263,14 @@ static void upcall_unixctl_dump_wait(struct unixctl_conn *conn, int argc,
 static void upcall_unixctl_purge(struct unixctl_conn *conn, int argc,
                                  const char *argv[], void *aux);
 
-static struct udpif_key *ukey_create_from_upcall(const struct udpif *,
-                                                 const struct upcall *);
+static struct udpif_key *ukey_create_from_upcall(const struct upcall *);
 static struct udpif_key *ukey_create_from_dpif_flow(const struct udpif *,
                                                     const struct dpif_flow *);
 static bool ukey_install_start(struct udpif *, struct udpif_key *ukey);
 static bool ukey_install_finish(struct udpif_key *ukey, int error);
 static bool ukey_install(struct udpif *udpif, struct udpif_key *ukey);
-static struct udpif_key *ukey_lookup(struct udpif *udpif, uint32_t hash,
-                                     const struct nlattr *key, size_t key_len);
+static struct udpif_key *ukey_lookup(struct udpif *udpif,
+                                     const ovs_u128 *ufid);
 static int ukey_acquire(struct udpif *, const struct dpif_flow *,
                         struct udpif_key **result);
 static void ukey_delete__(struct udpif_key *);
@@ -281,7 +280,8 @@ static enum upcall_type classify_upcall(enum dpif_upcall_type type,
 
 static int upcall_receive(struct upcall *, const struct dpif_backer *,
                           const struct ofpbuf *packet, enum dpif_upcall_type,
-                          const struct nlattr *userdata, const struct flow *);
+                          const struct nlattr *userdata, const struct flow *,
+                          const ovs_u128 *ufid);
 static void upcall_uninit(struct upcall *);
 
 static upcall_callback upcall_cb;
@@ -313,7 +313,6 @@ udpif_create(struct dpif_backer *backer, struct dpif *dpif)
     udpif->dpif = dpif;
     udpif->backer = backer;
     atomic_init(&udpif->flow_limit, MIN(ofproto_flow_limit, 10000));
-    udpif->secret = random_uint32();
     udpif->reval_seq = seq_create();
     udpif->dump_seq = seq_create();
     latch_init(&udpif->exit_latch);
@@ -637,7 +636,8 @@ recv_upcalls(struct handler *handler)
         }
 
         error = upcall_receive(upcall, udpif->backer, &dupcall->packet,
-                               dupcall->type, dupcall->userdata, flow);
+                               dupcall->type, dupcall->userdata, flow,
+                               &dupcall->ufid);
         if (error) {
             if (error == ENODEV) {
                 /* Received packet on datapath port for which we couldn't
@@ -654,6 +654,7 @@ recv_upcalls(struct handler *handler)
 
         upcall->key = dupcall->key;
         upcall->key_len = dupcall->key_len;
+        upcall->ufid = &dupcall->ufid;
 
         upcall->out_tun_key = dupcall->out_tun_key;
 
@@ -861,7 +862,8 @@ compose_slow_path(struct udpif *udpif, struct xlate_out *xout,
 static int
 upcall_receive(struct upcall *upcall, const struct dpif_backer *backer,
                const struct ofpbuf *packet, enum dpif_upcall_type type,
-               const struct nlattr *userdata, const struct flow *flow)
+               const struct nlattr *userdata, const struct flow *flow,
+               const ovs_u128 *ufid)
 {
     int error;
 
@@ -873,6 +875,7 @@ upcall_receive(struct upcall *upcall, const struct dpif_backer *backer,
 
     upcall->flow = flow;
     upcall->packet = packet;
+    upcall->ufid = ufid;
     upcall->type = type;
     upcall->userdata = userdata;
     ofpbuf_init(&upcall->put_actions, 0);
@@ -955,7 +958,7 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
                           &upcall->put_actions);
     }
 
-    upcall->ukey = ukey_create_from_upcall(udpif, upcall);
+    upcall->ukey = ukey_create_from_upcall(upcall);
 }
 
 static void
@@ -973,7 +976,7 @@ upcall_uninit(struct upcall *upcall)
 }
 
 static int
-upcall_cb(const struct ofpbuf *packet, const struct flow *flow,
+upcall_cb(const struct ofpbuf *packet, const struct flow *flow, ovs_u128 *ufid,
           enum dpif_upcall_type type, const struct nlattr *userdata,
           struct ofpbuf *actions, struct flow_wildcards *wc,
           struct ofpbuf *put_actions, void *aux)
@@ -988,7 +991,7 @@ upcall_cb(const struct ofpbuf *packet, const struct flow *flow,
     atomic_read_relaxed(&udpif->flow_limit, &flow_limit);
 
     error = upcall_receive(&upcall, udpif->backer, packet, type, userdata,
-                           flow);
+                           flow, ufid);
     if (error) {
         return error;
     }
@@ -1156,6 +1159,7 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
 
             upcall->ukey_persists = true;
             op = &ops[n_ops++];
+
             op->ukey = ukey;
             op->dop.type = DPIF_OP_FLOW_PUT;
             op->dop.u.flow_put.flags = DPIF_FP_CREATE;
@@ -1210,15 +1214,21 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
     }
 }
 
+static uint32_t
+get_ufid_hash(const ovs_u128 *ufid)
+{
+    return ufid->u32[0];
+}
+
 static struct udpif_key *
-ukey_lookup(struct udpif *udpif, uint32_t hash, const struct nlattr *key,
-            size_t key_len)
+ukey_lookup(struct udpif *udpif, const ovs_u128 *ufid)
 {
     struct udpif_key *ukey;
-    struct cmap *cmap = &udpif->ukeys[hash % N_UMAPS].cmap;
+    int idx = get_ufid_hash(ufid) % N_UMAPS;
+    struct cmap *cmap = &udpif->ukeys[idx].cmap;
 
-    CMAP_FOR_EACH_WITH_HASH (ukey, cmap_node, hash, cmap) {
-        if (ukey->key_len == key_len && !memcmp(ukey->key, key, key_len)) {
+    CMAP_FOR_EACH_WITH_HASH (ukey, cmap_node, get_ufid_hash(ufid), cmap) {
+        if (ovs_u128_equal(&ukey->ufid, ufid)) {
             return ukey;
         }
     }
@@ -1226,10 +1236,9 @@ ukey_lookup(struct udpif *udpif, uint32_t hash, const struct nlattr *key,
 }
 
 static struct udpif_key *
-ukey_create__(const struct udpif *udpif,
-              const struct nlattr *key, size_t key_len,
+ukey_create__(const struct nlattr *key, size_t key_len,
               const struct nlattr *mask, size_t mask_len,
-              const struct ofpbuf *actions,
+              const ovs_u128 *ufid, const struct ofpbuf *actions,
               uint64_t dump_seq, uint64_t reval_seq, long long int used)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
@@ -1241,7 +1250,8 @@ ukey_create__(const struct udpif *udpif,
     memcpy(&ukey->maskbuf, mask, mask_len);
     ukey->mask = &ukey->maskbuf.nla;
     ukey->mask_len = mask_len;
-    ukey->hash = hash_bytes(ukey->key, ukey->key_len, udpif->secret);
+    ukey->ufid = *ufid;
+    ukey->hash = get_ufid_hash(&ukey->ufid);
     ukey->actions = ofpbuf_clone(actions);
 
     ovs_mutex_init(&ukey->mutex);
@@ -1257,7 +1267,7 @@ ukey_create__(const struct udpif *udpif,
 }
 
 static struct udpif_key *
-ukey_create_from_upcall(const struct udpif *udpif, const struct upcall *upcall)
+ukey_create_from_upcall(const struct upcall *upcall)
 {
     struct odputil_keybuf keystub, maskstub;
     struct ofpbuf keybuf, maskbuf;
@@ -1284,9 +1294,9 @@ ukey_create_from_upcall(const struct udpif *udpif, const struct upcall *upcall)
                                UINT32_MAX, max_mpls, recirc);
     }
 
-    return ukey_create__(udpif, ofpbuf_data(&keybuf), ofpbuf_size(&keybuf),
+    return ukey_create__(ofpbuf_data(&keybuf), ofpbuf_size(&keybuf),
                          ofpbuf_data(&maskbuf), ofpbuf_size(&maskbuf),
-                         &upcall->put_actions, upcall->dump_seq,
+                         upcall->ufid, &upcall->put_actions, upcall->dump_seq,
                          upcall->reval_seq, 0);
 }
 
@@ -1300,8 +1310,8 @@ ukey_create_from_dpif_flow(const struct udpif *udpif,
     dump_seq = seq_read(udpif->dump_seq);
     reval_seq = seq_read(udpif->reval_seq);
     ofpbuf_use_const(&actions, &flow->actions, flow->actions_len);
-    return ukey_create__(udpif, flow->key, flow->key_len,
-                         flow->mask, flow->mask_len, &actions,
+    return ukey_create__(flow->key, flow->key_len,
+                         flow->mask, flow->mask_len, &flow->ufid, &actions,
                          dump_seq, reval_seq, flow->stats.used);
 }
 
@@ -1321,8 +1331,7 @@ ukey_install_start(struct udpif *udpif, struct udpif_key *new_ukey)
     idx = new_ukey->hash % N_UMAPS;
     umap = &udpif->ukeys[idx];
     ovs_mutex_lock(&umap->mutex);
-    old_ukey = ukey_lookup(udpif, new_ukey->hash, new_ukey->key,
-                           new_ukey->key_len);
+    old_ukey = ukey_lookup(udpif, &new_ukey->ufid);
     if (old_ukey) {
         /* Uncommon case: A ukey is already installed with the same UFID. */
         if (old_ukey->key_len == new_ukey->key_len
@@ -1393,11 +1402,9 @@ ukey_acquire(struct udpif *udpif, const struct dpif_flow *flow,
     OVS_TRY_LOCK(true, (*result)->mutex)
 {
     struct udpif_key *ukey;
-    uint32_t hash;
     bool locked = false;
 
-    hash = hash_bytes(flow->key, flow->key_len, udpif->secret);
-    ukey = ukey_lookup(udpif, hash, flow->key, flow->key_len);
+    ukey = ukey_lookup(udpif, &flow->ufid);
     if (ukey) {
         if (!ovs_mutex_trylock(&ukey->mutex)) {
             locked = true;

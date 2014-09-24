@@ -831,6 +831,21 @@ dpif_flow_stats_format(const struct dpif_flow_stats *stats, struct ds *s)
     }
 }
 
+/* Places the hash of the 'key_len' bytes starting at 'key' into '*hash'. */
+void
+dpif_flow_hash(const struct dpif *dpif OVS_UNUSED,
+               const void *key, size_t key_len, ovs_u128 *hash)
+{
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+    static uint32_t secret;
+
+    if (ovsthread_once_start(&once)) {
+        secret = random_uint32();
+        ovsthread_once_done(&once);
+    }
+    hash_bytes128(key, key_len, secret, hash);
+}
+
 /* Deletes all flows from 'dpif'.  Returns 0 if successful, otherwise a
  * positive errno value.  */
 int
