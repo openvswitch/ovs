@@ -468,6 +468,28 @@ AT_CHECK([tail -1 stdout], [0], [Datapath actions: 2
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+dnl Tests that 1.5 set-field with mask in the metadata register.
+AT_SETUP([ofproto-dpif - masked set-field into metadata])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [2], [3])
+AT_DATA([flows.txt], [dnl
+table=0     actions=set_field:0xfafafafa5a5a5a5a->metadata,goto_table(1)
+table=1     actions=set_field:0x6b/0xff->metadata,goto_table(2)
+table=2,metadata=0xfafafafa5a5a5a6b  actions=2
+
+# These low-priority rules shouldn't match.  They're here only to make really
+# sure that the test fails if either of the above rules fails to match.
+table=0,priority=0                        actions=3
+table=1,priority=0                        actions=3
+table=2,priority=0                        actions=3
+])
+AT_CHECK([ovs-ofctl -O OpenFlow15 add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [Datapath actions: 2
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - push-pop])
 OVS_VSWITCHD_START
 ADD_OF_PORTS([br0], [20], [21], [22], [33], [90])
