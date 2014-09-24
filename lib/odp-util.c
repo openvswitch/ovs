@@ -1999,6 +1999,13 @@ generate_all_wildcard_mask(struct ofpbuf *ofp, const struct nlattr *key)
     return ofpbuf_base(ofp);
 }
 
+void
+odp_format_ufid(const ovs_u128 *ufid, struct ds *ds)
+{
+    ds_put_format(ds, "ufid:%016"PRIx64"%016"PRIx64, ufid->u64.lo,
+                  ufid->u64.hi);
+}
+
 /* Appends to 'ds' a string representation of the 'key_len' bytes of
  * OVS_KEY_ATTR_* attributes in 'key'. If non-null, additionally formats the
  * 'mask_len' bytes of 'mask' which apply to 'key'. If 'portno_names' is

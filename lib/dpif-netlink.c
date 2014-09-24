@@ -116,6 +116,9 @@ struct dpif_netlink_flow {
     size_t mask_len;
     const struct nlattr *actions;       /* OVS_FLOW_ATTR_ACTIONS. */
     size_t actions_len;
+    ovs_u128 ufid;                      /* OVS_FLOW_ATTR_FLOW_ID. */
+    bool ufid_present;                  /* Is there a UFID? */
+    bool ufid_terse;                    /* Skip serializing key/mask/acts? */
     const struct ovs_flow_stats *stats; /* OVS_FLOW_ATTR_STATS. */
     const uint8_t *tcp_flags;           /* OVS_FLOW_ATTR_TCP_FLAGS. */
     const ovs_32aligned_u64 *used;      /* OVS_FLOW_ATTR_USED. */
@@ -135,6 +138,7 @@ static void dpif_netlink_flow_get_stats(const struct dpif_netlink_flow *,
                                         struct dpif_flow_stats *);
 static void dpif_netlink_flow_to_dpif_flow(struct dpif *, struct dpif_flow *,
                                            const struct dpif_netlink_flow *);
+static bool dpif_netlink_check_ufid(struct dpif *dpif);
 
 /* One of the dpif channels between the kernel and userspace. */
 struct dpif_channel {
@@ -185,6 +189,11 @@ struct dpif_netlink {
     /* Change notification. */
     struct nl_sock *port_notifier; /* vport multicast group subscriber. */
     bool refresh_channels;
+
+    /* If the datapath supports indexing flows using unique identifiers, then
+     * we can reduce the size of netlink messages by omitting fields like the
+     * flow key during flow operations. */
+    bool ufid_supported;
 };
 
 static void report_loss(struct dpif_netlink *, struct dpif_channel *,
@@ -301,6 +310,7 @@ open_dpif(const struct dpif_netlink_dp *dp, struct dpif **dpifp)
               dp->dp_ifindex, dp->dp_ifindex);
 
     dpif->dp_ifindex = dp->dp_ifindex;
+    dpif->ufid_supported = dpif_netlink_check_ufid(&dpif->dpif);
     *dpifp = &dpif->dpif;
 
     return 0;
@@ -1210,26 +1220,61 @@ dpif_netlink_port_poll_wait(const struct dpif *dpif_)
 }
 
 static void
-dpif_netlink_init_flow_get(const struct dpif_netlink *dpif,
-                           const struct nlattr *key, size_t key_len,
-                           struct dpif_netlink_flow *request)
+dpif_netlink_flow_init_ufid(struct dpif_netlink_flow *request,
+                            const ovs_u128 *ufid, bool terse)
+{
+    if (ufid) {
+        request->ufid = *ufid;
+        request->ufid_present = true;
+    } else {
+        request->ufid_present = false;
+    }
+    request->ufid_terse = terse;
+}
+
+static void
+dpif_netlink_init_flow_get__(const struct dpif_netlink *dpif,
+                             const struct nlattr *key, size_t key_len,
+                             const ovs_u128 *ufid, bool terse,
+                             struct dpif_netlink_flow *request)
 {
     dpif_netlink_flow_init(request);
     request->cmd = OVS_FLOW_CMD_GET;
     request->dp_ifindex = dpif->dp_ifindex;
     request->key = key;
     request->key_len = key_len;
+    dpif_netlink_flow_init_ufid(request, ufid, terse);
+}
+
+static void
+dpif_netlink_init_flow_get(const struct dpif_netlink *dpif,
+                           const struct dpif_flow_get *get,
+                           struct dpif_netlink_flow *request)
+{
+    dpif_netlink_init_flow_get__(dpif, get->key, get->key_len, get->ufid,
+                                 false, request);
+}
+
+static int
+dpif_netlink_flow_get__(const struct dpif_netlink *dpif,
+                        const struct nlattr *key, size_t key_len,
+                        const ovs_u128 *ufid, bool terse,
+                        struct dpif_netlink_flow *reply, struct ofpbuf **bufp)
+{
+    struct dpif_netlink_flow request;
+
+    dpif_netlink_init_flow_get__(dpif, key, key_len, ufid, terse, &request);
+    return dpif_netlink_flow_transact(&request, reply, bufp);
 }
 
 static int
 dpif_netlink_flow_get(const struct dpif_netlink *dpif,
-                      const struct nlattr *key, size_t key_len,
+                      const struct dpif_netlink_flow *flow,
                       struct dpif_netlink_flow *reply, struct ofpbuf **bufp)
 {
-    struct dpif_netlink_flow request;
-
-    dpif_netlink_init_flow_get(dpif, key, key_len, &request);
-    return dpif_netlink_flow_transact(&request, reply, bufp);
+    return dpif_netlink_flow_get__(dpif, flow->key, flow->key_len,
+                                   flow->ufid_present ? &flow->ufid : NULL,
+                                   false, reply, bufp);
 }
 
 static void
@@ -1247,6 +1292,8 @@ dpif_netlink_init_flow_put(struct dpif_netlink *dpif,
     request->key_len = put->key_len;
     request->mask = put->mask;
     request->mask_len = put->mask_len;
+    dpif_netlink_flow_init_ufid(request, put->ufid, false);
+
     /* Ensure that OVS_FLOW_ATTR_ACTIONS will always be included. */
     request->actions = (put->actions
                         ? put->actions
@@ -1262,15 +1309,40 @@ dpif_netlink_init_flow_put(struct dpif_netlink *dpif,
 }
 
 static void
-dpif_netlink_init_flow_del(struct dpif_netlink *dpif,
-                           const struct dpif_flow_del *del,
-                           struct dpif_netlink_flow *request)
+dpif_netlink_init_flow_del__(struct dpif_netlink *dpif,
+                             const struct nlattr *key, size_t key_len,
+                             const ovs_u128 *ufid, bool terse,
+                             struct dpif_netlink_flow *request)
 {
     dpif_netlink_flow_init(request);
     request->cmd = OVS_FLOW_CMD_DEL;
     request->dp_ifindex = dpif->dp_ifindex;
-    request->key = del->key;
-    request->key_len = del->key_len;
+    request->key = key;
+    request->key_len = key_len;
+    dpif_netlink_flow_init_ufid(request, ufid, terse);
+}
+
+static void
+dpif_netlink_init_flow_del(struct dpif_netlink *dpif,
+                           const struct dpif_flow_del *del,
+                           struct dpif_netlink_flow *request)
+{
+    return dpif_netlink_init_flow_del__(dpif, del->key, del->key_len,
+                                        del->ufid, dpif->ufid_supported,
+                                        request);
+}
+
+static int
+dpif_netlink_flow_del(struct dpif_netlink *dpif,
+                      const struct nlattr *key, size_t key_len,
+                      const ovs_u128 *ufid, bool terse)
+{
+    struct dpif_netlink_flow request;
+
+    dpif_netlink_init_flow_del__(dpif, key, key_len, ufid, terse, &request);
+
+    /* Ignore stats */
+    return dpif_netlink_flow_transact(&request, NULL, NULL);
 }
 
 struct dpif_netlink_flow_dump {
@@ -1373,8 +1445,14 @@ dpif_netlink_flow_to_dpif_flow(struct dpif *dpif, struct dpif_flow *dpif_flow,
     dpif_flow->mask_len = datapath_flow->mask_len;
     dpif_flow->actions = datapath_flow->actions;
     dpif_flow->actions_len = datapath_flow->actions_len;
-    dpif_flow_hash(dpif, datapath_flow->key, datapath_flow->key_len,
-                   &dpif_flow->ufid);
+    dpif_flow->ufid_present = datapath_flow->ufid_present;
+    if (datapath_flow->ufid_present) {
+        dpif_flow->ufid = datapath_flow->ufid;
+    } else {
+        ovs_assert(datapath_flow->key && datapath_flow->key_len);
+        dpif_flow_hash(dpif, datapath_flow->key, datapath_flow->key_len,
+                       &dpif_flow->ufid);
+    }
     dpif_netlink_flow_get_stats(datapath_flow, &dpif_flow->stats);
 }
 
@@ -1417,8 +1495,7 @@ dpif_netlink_flow_dump_next(struct dpif_flow_dump_thread *thread_,
         } else {
             /* Rare case: the flow does not include actions.  Retrieve this
              * individual flow again to get the actions. */
-            error = dpif_netlink_flow_get(dpif, datapath_flow.key,
-                                          datapath_flow.key_len,
+            error = dpif_netlink_flow_get(dpif, &datapath_flow,
                                           &datapath_flow, &thread->nl_actions);
             if (error == ENOENT) {
                 VLOG_DBG("dumped flow disappeared on get");
@@ -1538,7 +1615,7 @@ dpif_netlink_operate__(struct dpif_netlink *dpif,
 
         case DPIF_OP_FLOW_GET:
             get = &op->u.flow_get;
-            dpif_netlink_init_flow_get(dpif, get->key, get->key_len, &flow);
+            dpif_netlink_init_flow_get(dpif, get, &flow);
             aux->txn.reply = get->buffer;
             dpif_netlink_flow_to_ofpbuf(&flow, &aux->request);
             break;
@@ -1659,6 +1736,61 @@ dpif_netlink_handler_uninit(struct dpif_handler *handler)
     close(handler->epoll_fd);
 }
 #endif
+
+/* Checks support for unique flow identifiers. */
+static bool
+dpif_netlink_check_ufid(struct dpif *dpif_)
+{
+    struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
+    struct flow flow;
+    struct odputil_keybuf keybuf;
+    struct ofpbuf key, *replybuf;
+    struct dpif_netlink_flow reply;
+    ovs_u128 ufid;
+    int error;
+    bool enable_ufid = false;
+
+    memset(&flow, 0, sizeof flow);
+    flow.dl_type = htons(0x1234);
+
+    ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
+    odp_flow_key_from_flow(&key, &flow, NULL, 0, true);
+    dpif_flow_hash(dpif_, ofpbuf_data(&key), ofpbuf_size(&key), &ufid);
+    error = dpif_flow_put(dpif_, DPIF_FP_CREATE | DPIF_FP_PROBE,
+                          ofpbuf_data(&key), ofpbuf_size(&key), NULL, 0, NULL,
+                          0, &ufid, NULL);
+
+    if (error && error != EEXIST) {
+        VLOG_WARN("%s: UFID feature probe failed (%s).",
+                  dpif_name(dpif_), ovs_strerror(error));
+        goto done;
+    }
+
+    error = dpif_netlink_flow_get__(dpif, NULL, 0, &ufid, true, &reply,
+                                    &replybuf);
+    if (!error && reply.ufid_present && ovs_u128_equal(&ufid, &reply.ufid)) {
+        enable_ufid = true;
+    }
+    ofpbuf_delete(replybuf);
+
+    error = dpif_netlink_flow_del(dpif, ofpbuf_data(&key), ofpbuf_size(&key),
+                                  &ufid, false);
+    if (error) {
+        VLOG_WARN("%s: failed to delete UFID feature probe flow",
+                  dpif_name(dpif_));
+    }
+
+done:
+    if (enable_ufid) {
+        VLOG_INFO("%s: Datapath supports userspace flow ids",
+                  dpif_name(dpif_));
+    } else {
+        VLOG_INFO("%s: Datapath does not support userspace flow ids",
+                  dpif_name(dpif_));
+    }
+
+    return enable_ufid;
+}
 
 /* Synchronizes 'channels' in 'dpif->handlers'  with the set of vports
  * currently in 'dpif' in the kernel, by adding a new set of channels for
@@ -2602,16 +2734,19 @@ static int
 dpif_netlink_flow_from_ofpbuf(struct dpif_netlink_flow *flow,
                               const struct ofpbuf *buf)
 {
-    static const struct nl_policy ovs_flow_policy[] = {
-        [OVS_FLOW_ATTR_KEY] = { .type = NL_A_NESTED },
+    static const struct nl_policy ovs_flow_policy[__OVS_FLOW_ATTR_MAX] = {
+        [OVS_FLOW_ATTR_KEY] = { .type = NL_A_NESTED, .optional = true },
         [OVS_FLOW_ATTR_MASK] = { .type = NL_A_NESTED, .optional = true },
         [OVS_FLOW_ATTR_ACTIONS] = { .type = NL_A_NESTED, .optional = true },
         [OVS_FLOW_ATTR_STATS] = { NL_POLICY_FOR(struct ovs_flow_stats),
                                   .optional = true },
         [OVS_FLOW_ATTR_TCP_FLAGS] = { .type = NL_A_U8, .optional = true },
         [OVS_FLOW_ATTR_USED] = { .type = NL_A_U64, .optional = true },
+        [OVS_FLOW_ATTR_UFID] = { .type = NL_A_UNSPEC, .optional = true,
+                                 .min_len = sizeof(ovs_u128) },
         /* The kernel never uses OVS_FLOW_ATTR_CLEAR. */
         /* The kernel never uses OVS_FLOW_ATTR_PROBE. */
+        /* The kernel never uses OVS_FLOW_ATTR_UFID_FLAGS. */
     };
 
     struct nlattr *a[ARRAY_SIZE(ovs_flow_policy)];
@@ -2632,12 +2767,25 @@ dpif_netlink_flow_from_ofpbuf(struct dpif_netlink_flow *flow,
                             ARRAY_SIZE(ovs_flow_policy))) {
         return EINVAL;
     }
+    if (!a[OVS_FLOW_ATTR_KEY] && !a[OVS_FLOW_ATTR_UFID]) {
+        return EINVAL;
+    }
 
     flow->nlmsg_flags = nlmsg->nlmsg_flags;
     flow->dp_ifindex = ovs_header->dp_ifindex;
-    flow->key = nl_attr_get(a[OVS_FLOW_ATTR_KEY]);
-    flow->key_len = nl_attr_get_size(a[OVS_FLOW_ATTR_KEY]);
+    if (a[OVS_FLOW_ATTR_KEY]) {
+        flow->key = nl_attr_get(a[OVS_FLOW_ATTR_KEY]);
+        flow->key_len = nl_attr_get_size(a[OVS_FLOW_ATTR_KEY]);
+    }
 
+    if (a[OVS_FLOW_ATTR_UFID]) {
+        const ovs_u128 *ufid;
+
+        ufid = nl_attr_get_unspec(a[OVS_FLOW_ATTR_UFID],
+                                  nl_attr_get_size(a[OVS_FLOW_ATTR_UFID]));
+        flow->ufid = *ufid;
+        flow->ufid_present = true;
+    }
     if (a[OVS_FLOW_ATTR_MASK]) {
         flow->mask = nl_attr_get(a[OVS_FLOW_ATTR_MASK]);
         flow->mask_len = nl_attr_get_size(a[OVS_FLOW_ATTR_MASK]);
@@ -2673,6 +2821,15 @@ dpif_netlink_flow_to_ofpbuf(const struct dpif_netlink_flow *flow,
     ovs_header = ofpbuf_put_uninit(buf, sizeof *ovs_header);
     ovs_header->dp_ifindex = flow->dp_ifindex;
 
+    if (flow->ufid_present) {
+        nl_msg_put_unspec(buf, OVS_FLOW_ATTR_UFID, &flow->ufid,
+                          sizeof flow->ufid);
+    }
+    if (flow->ufid_terse) {
+        nl_msg_put_u32(buf, OVS_FLOW_ATTR_UFID_FLAGS,
+                       OVS_UFID_F_OMIT_KEY | OVS_UFID_F_OMIT_MASK
+                       | OVS_UFID_F_OMIT_ACTIONS);
+    }
     if (flow->key_len) {
         nl_msg_put_unspec(buf, OVS_FLOW_ATTR_KEY, flow->key, flow->key_len);
     }

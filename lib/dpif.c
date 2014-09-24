@@ -91,6 +91,7 @@ static void log_flow_message(const struct dpif *dpif, int error,
                              const char *operation,
                              const struct nlattr *key, size_t key_len,
                              const struct nlattr *mask, size_t mask_len,
+                             const ovs_u128 *ufid,
                              const struct dpif_flow_stats *stats,
                              const struct nlattr *actions, size_t actions_len);
 static void log_operation(const struct dpif *, const char *operation,
@@ -862,7 +863,7 @@ dpif_flow_flush(struct dpif *dpif)
 /* A dpif_operate() wrapper for performing a single DPIF_OP_FLOW_GET. */
 int
 dpif_flow_get(struct dpif *dpif,
-              const struct nlattr *key, size_t key_len,
+              const struct nlattr *key, size_t key_len, const ovs_u128 *ufid,
               struct ofpbuf *buf, struct dpif_flow *flow)
 {
     struct dpif_op *opp;
@@ -871,10 +872,14 @@ dpif_flow_get(struct dpif *dpif,
     op.type = DPIF_OP_FLOW_GET;
     op.u.flow_get.key = key;
     op.u.flow_get.key_len = key_len;
+    op.u.flow_get.ufid = ufid;
     op.u.flow_get.buffer = buf;
+
+    memset(flow, 0, sizeof *flow);
     op.u.flow_get.flow = flow;
     op.u.flow_get.flow->key = key;
     op.u.flow_get.flow->key_len = key_len;
+    op.u.flow_get.flow->ufid = *ufid;
 
     opp = &op;
     dpif_operate(dpif, &opp, 1);
@@ -888,7 +893,7 @@ dpif_flow_put(struct dpif *dpif, enum dpif_flow_put_flags flags,
               const struct nlattr *key, size_t key_len,
               const struct nlattr *mask, size_t mask_len,
               const struct nlattr *actions, size_t actions_len,
-              struct dpif_flow_stats *stats)
+              const ovs_u128 *ufid, struct dpif_flow_stats *stats)
 {
     struct dpif_op *opp;
     struct dpif_op op;
@@ -901,6 +906,7 @@ dpif_flow_put(struct dpif *dpif, enum dpif_flow_put_flags flags,
     op.u.flow_put.mask_len = mask_len;
     op.u.flow_put.actions = actions;
     op.u.flow_put.actions_len = actions_len;
+    op.u.flow_put.ufid = ufid;
     op.u.flow_put.stats = stats;
 
     opp = &op;
@@ -912,7 +918,7 @@ dpif_flow_put(struct dpif *dpif, enum dpif_flow_put_flags flags,
 /* A dpif_operate() wrapper for performing a single DPIF_OP_FLOW_DEL. */
 int
 dpif_flow_del(struct dpif *dpif,
-              const struct nlattr *key, size_t key_len,
+              const struct nlattr *key, size_t key_len, const ovs_u128 *ufid,
               struct dpif_flow_stats *stats)
 {
     struct dpif_op *opp;
@@ -921,6 +927,7 @@ dpif_flow_del(struct dpif *dpif,
     op.type = DPIF_OP_FLOW_DEL;
     op.u.flow_del.key = key;
     op.u.flow_del.key_len = key_len;
+    op.u.flow_del.ufid = ufid;
     op.u.flow_del.stats = stats;
 
     opp = &op;
@@ -1002,7 +1009,7 @@ dpif_flow_dump_next(struct dpif_flow_dump_thread *thread,
         for (f = flows; f < &flows[n] && should_log_flow_message(0); f++) {
             log_flow_message(dpif, 0, "flow_dump",
                              f->key, f->key_len, f->mask, f->mask_len,
-                             &f->stats, f->actions, f->actions_len);
+                             &f->ufid, &f->stats, f->actions, f->actions_len);
         }
     } else {
         VLOG_DBG_RL(&dpmsg_rl, "%s: dumped all flows", dpif_name(dpif));
@@ -1522,7 +1529,7 @@ static void
 log_flow_message(const struct dpif *dpif, int error, const char *operation,
                  const struct nlattr *key, size_t key_len,
                  const struct nlattr *mask, size_t mask_len,
-                 const struct dpif_flow_stats *stats,
+                 const ovs_u128 *ufid, const struct dpif_flow_stats *stats,
                  const struct nlattr *actions, size_t actions_len)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
@@ -1533,6 +1540,10 @@ log_flow_message(const struct dpif *dpif, int error, const char *operation,
     ds_put_format(&ds, "%s ", operation);
     if (error) {
         ds_put_format(&ds, "(%s) ", ovs_strerror(error));
+    }
+    if (ufid) {
+        odp_format_ufid(ufid, &ds);
+        ds_put_cstr(&ds, " ");
     }
     odp_flow_format(key, key_len, mask, mask_len, NULL, &ds, true);
     if (stats) {
@@ -1567,7 +1578,8 @@ log_flow_put_message(struct dpif *dpif, const struct dpif_flow_put *put,
         }
         log_flow_message(dpif, error, ds_cstr(&s),
                          put->key, put->key_len, put->mask, put->mask_len,
-                         put->stats, put->actions, put->actions_len);
+                         put->ufid, put->stats, put->actions,
+                         put->actions_len);
         ds_destroy(&s);
     }
 }
@@ -1578,7 +1590,8 @@ log_flow_del_message(struct dpif *dpif, const struct dpif_flow_del *del,
 {
     if (should_log_flow_message(error)) {
         log_flow_message(dpif, error, "flow_del", del->key, del->key_len,
-                         NULL, 0, !error ? del->stats : NULL, NULL, 0);
+                         NULL, 0, del->ufid, !error ? del->stats : NULL,
+                         NULL, 0);
     }
 }
 
@@ -1634,7 +1647,7 @@ log_flow_get_message(const struct dpif *dpif, const struct dpif_flow_get *get,
         log_flow_message(dpif, error, "flow_get",
                          get->key, get->key_len,
                          get->flow->mask, get->flow->mask_len,
-                         &get->flow->stats,
+                         get->ufid, &get->flow->stats,
                          get->flow->actions, get->flow->actions_len);
     }
 }

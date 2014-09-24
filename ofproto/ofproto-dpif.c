@@ -1021,7 +1021,7 @@ check_recirc(struct dpif_backer *backer)
 
     error = dpif_flow_put(backer->dpif, DPIF_FP_CREATE | DPIF_FP_PROBE,
                           ofpbuf_data(&key), ofpbuf_size(&key), NULL, 0, NULL,
-                          0, NULL);
+                          0, NULL, NULL);
     if (error && error != EEXIST) {
         if (error != EINVAL) {
             VLOG_WARN("%s: Reciculation flow probe failed (%s)",
@@ -1031,7 +1031,7 @@ check_recirc(struct dpif_backer *backer)
     }
 
     error = dpif_flow_del(backer->dpif, ofpbuf_data(&key), ofpbuf_size(&key),
-                          NULL);
+                          NULL, NULL);
     if (error) {
         VLOG_WARN("%s: failed to delete recirculation feature probe flow",
                   dpif_name(backer->dpif));
@@ -1150,7 +1150,7 @@ check_max_mpls_depth(struct dpif_backer *backer)
 
         error = dpif_flow_put(backer->dpif, DPIF_FP_CREATE | DPIF_FP_PROBE,
                               ofpbuf_data(&key), ofpbuf_size(&key), NULL, 0,
-                              NULL, 0, NULL);
+                              NULL, 0, NULL, NULL);
         if (error && error != EEXIST) {
             if (error != EINVAL) {
                 VLOG_WARN("%s: MPLS stack length feature probe failed (%s)",
@@ -1160,7 +1160,7 @@ check_max_mpls_depth(struct dpif_backer *backer)
         }
 
         error = dpif_flow_del(backer->dpif, ofpbuf_data(&key),
-                              ofpbuf_size(&key), NULL);
+                              ofpbuf_size(&key), NULL, NULL);
         if (error) {
             VLOG_WARN("%s: failed to delete MPLS feature probe flow",
                       dpif_name(backer->dpif));
@@ -5001,6 +5001,10 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
             continue;
         }
 
+        if (verbosity) {
+            odp_format_ufid(&f.ufid, &ds);
+            ds_put_cstr(&ds, " ");
+        }
         odp_flow_format(f.key, f.key_len, f.mask, f.mask_len,
                         &portno_names, &ds, verbosity);
         ds_put_cstr(&ds, ", ");

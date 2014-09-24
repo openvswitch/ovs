@@ -771,6 +771,14 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
             minimatch_destroy(&minimatch);
         }
         ds_clear(&ds);
+        if (dpctl_p->verbosity) {
+            if (f.ufid_present) {
+                odp_format_ufid(&f.ufid, &ds);
+                ds_put_cstr(&ds, ", ");
+            } else {
+                ds_put_cstr(&ds, "ufid:<empty>, ");
+            }
+        }
         odp_flow_format(f.key, f.key_len, f.mask, f.mask_len,
                         &portno_names, &ds, dpctl_p->verbosity);
         ds_put_cstr(&ds, ", ");
@@ -852,7 +860,7 @@ dpctl_put_flow(int argc, const char *argv[], enum dpif_flow_put_flags flags,
                           ofpbuf_size(&mask) == 0 ? NULL : ofpbuf_data(&mask),
                           ofpbuf_size(&mask),
                           ofpbuf_data(&actions), ofpbuf_size(&actions),
-                          dpctl_p->print_statistics ? &stats : NULL);
+                          NULL, dpctl_p->print_statistics ? &stats : NULL);
     if (error) {
         dpctl_error(dpctl_p, error, "updating flow table");
         goto out_freeactions;
@@ -938,7 +946,7 @@ dpctl_del_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     }
 
     error = dpif_flow_del(dpif,
-                          ofpbuf_data(&key), ofpbuf_size(&key),
+                          ofpbuf_data(&key), ofpbuf_size(&key), NULL,
                           dpctl_p->print_statistics ? &stats : NULL);
     if (error) {
         dpctl_error(dpctl_p, error, "deleting flow");

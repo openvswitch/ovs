@@ -208,6 +208,7 @@ struct udpif_key {
     size_t mask_len;               /* Length of 'mask'. */
     struct ofpbuf *actions;        /* Datapath flow actions as nlattrs. */
     ovs_u128 ufid;                 /* Unique flow identifier. */
+    bool ufid_present;             /* True if 'ufid' is in datapath. */
     uint32_t hash;                 /* Pre-computed hash for 'key'. */
 
     struct ovs_mutex mutex;                   /* Guards the following. */
@@ -645,7 +646,8 @@ recv_upcalls(struct handler *handler)
                  * while traffic is being received.  Print a rate-limited
                  * message in case it happens frequently. */
                 dpif_flow_put(udpif->dpif, DPIF_FP_CREATE, dupcall->key,
-                              dupcall->key_len, NULL, 0, NULL, 0, NULL);
+                              dupcall->key_len, NULL, 0, NULL, 0,
+                              &dupcall->ufid, NULL);
                 VLOG_INFO_RL(&rl, "received packet on unassociated datapath "
                              "port %"PRIu32, flow->in_port.odp_port);
             }
@@ -1167,6 +1169,7 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
             op->dop.u.flow_put.key_len = ukey->key_len;
             op->dop.u.flow_put.mask = ukey->mask;
             op->dop.u.flow_put.mask_len = ukey->mask_len;
+            op->dop.u.flow_put.ufid = upcall->ufid;
             op->dop.u.flow_put.stats = NULL;
             op->dop.u.flow_put.actions = ofpbuf_data(ukey->actions);
             op->dop.u.flow_put.actions_len = ofpbuf_size(ukey->actions);
@@ -1238,7 +1241,8 @@ ukey_lookup(struct udpif *udpif, const ovs_u128 *ufid)
 static struct udpif_key *
 ukey_create__(const struct nlattr *key, size_t key_len,
               const struct nlattr *mask, size_t mask_len,
-              const ovs_u128 *ufid, const struct ofpbuf *actions,
+              bool ufid_present, const ovs_u128 *ufid,
+              const struct ofpbuf *actions,
               uint64_t dump_seq, uint64_t reval_seq, long long int used)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
@@ -1250,6 +1254,7 @@ ukey_create__(const struct nlattr *key, size_t key_len,
     memcpy(&ukey->maskbuf, mask, mask_len);
     ukey->mask = &ukey->maskbuf.nla;
     ukey->mask_len = mask_len;
+    ukey->ufid_present = ufid_present;
     ukey->ufid = *ufid;
     ukey->hash = get_ufid_hash(&ukey->ufid);
     ukey->actions = ofpbuf_clone(actions);
@@ -1296,8 +1301,8 @@ ukey_create_from_upcall(const struct upcall *upcall)
 
     return ukey_create__(ofpbuf_data(&keybuf), ofpbuf_size(&keybuf),
                          ofpbuf_data(&maskbuf), ofpbuf_size(&maskbuf),
-                         upcall->ufid, &upcall->put_actions, upcall->dump_seq,
-                         upcall->reval_seq, 0);
+                         true, upcall->ufid, &upcall->put_actions,
+                         upcall->dump_seq, upcall->reval_seq, 0);
 }
 
 static struct udpif_key *
@@ -1311,8 +1316,9 @@ ukey_create_from_dpif_flow(const struct udpif *udpif,
     reval_seq = seq_read(udpif->reval_seq);
     ofpbuf_use_const(&actions, &flow->actions, flow->actions_len);
     return ukey_create__(flow->key, flow->key_len,
-                         flow->mask, flow->mask_len, &flow->ufid, &actions,
-                         dump_seq, reval_seq, flow->stats.used);
+                         flow->mask, flow->mask_len, flow->ufid_present,
+                         &flow->ufid, &actions, dump_seq, reval_seq,
+                         flow->stats.used);
 }
 
 /* Attempts to insert a ukey into the shared ukey maps.
@@ -1340,8 +1346,12 @@ ukey_install_start(struct udpif *udpif, struct udpif_key *new_ukey)
         } else {
             struct ds ds = DS_EMPTY_INITIALIZER;
 
+            odp_format_ufid(&old_ukey->ufid, &ds);
+            ds_put_cstr(&ds, " ");
             odp_flow_key_format(old_ukey->key, old_ukey->key_len, &ds);
             ds_put_cstr(&ds, "\n");
+            odp_format_ufid(&new_ukey->ufid, &ds);
+            ds_put_cstr(&ds, " ");
             odp_flow_key_format(new_ukey->key, new_ukey->key_len, &ds);
 
             VLOG_WARN_RL(&rl, "Conflicting ukey for flows:\n%s", ds_cstr(&ds));
@@ -1629,6 +1639,7 @@ delete_op_init(struct ukey_op *op, struct udpif_key *ukey)
     op->dop.type = DPIF_OP_FLOW_DEL;
     op->dop.u.flow_del.key = ukey->key;
     op->dop.u.flow_del.key_len = ukey->key_len;
+    op->dop.u.flow_del.ufid = ukey->ufid_present ? &ukey->ufid : NULL;
     op->dop.u.flow_del.stats = &op->stats;
 }
 

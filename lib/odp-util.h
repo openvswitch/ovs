@@ -145,6 +145,7 @@ struct odputil_keybuf {
 enum odp_key_fitness odp_tun_key_from_attr(const struct nlattr *,
                                            struct flow_tnl *);
 
+void odp_format_ufid(const ovs_u128 *ufid, struct ds *);
 void odp_flow_format(const struct nlattr *key, size_t key_len,
                      const struct nlattr *mask, size_t mask_len,
                      const struct hmap *portno_names, struct ds *,

@@ -522,12 +522,14 @@ int dpif_flow_put(struct dpif *, enum dpif_flow_put_flags,
                   const struct nlattr *key, size_t key_len,
                   const struct nlattr *mask, size_t mask_len,
                   const struct nlattr *actions, size_t actions_len,
-                  struct dpif_flow_stats *);
+                  const ovs_u128 *ufid, struct dpif_flow_stats *);
+
 int dpif_flow_del(struct dpif *,
                   const struct nlattr *key, size_t key_len,
-                  struct dpif_flow_stats *);
+                  const ovs_u128 *ufid, struct dpif_flow_stats *);
 int dpif_flow_get(struct dpif *,
                   const struct nlattr *key, size_t key_len,
+                  const ovs_u128 *ufid,
                   struct ofpbuf *, struct dpif_flow *);
 
 /* Flow dumping interface
@@ -574,6 +576,7 @@ struct dpif_flow {
     const struct nlattr *actions; /* Actions, as OVS_ACTION_ATTR_ */
     size_t actions_len;           /* 'actions' length in bytes. */
     ovs_u128 ufid;                /* Unique flow identifier. */
+    bool ufid_present;            /* True if 'ufid' was provided by datapath.*/
     struct dpif_flow_stats stats; /* Flow statistics. */
 };
 int dpif_flow_dump_next(struct dpif_flow_dump_thread *,
@@ -625,6 +628,7 @@ struct dpif_flow_put {
     size_t mask_len;                /* Length of 'mask' in bytes. */
     const struct nlattr *actions;   /* Actions to perform on flow. */
     size_t actions_len;             /* Length of 'actions' in bytes. */
+    const ovs_u128 *ufid;           /* Optional unique flow identifier. */
 
     /* Output. */
     struct dpif_flow_stats *stats;  /* Optional flow statistics. */
@@ -633,8 +637,14 @@ struct dpif_flow_put {
 /* Delete a flow.
  *
  * The flow is specified by the Netlink attributes with types OVS_KEY_ATTR_* in
- * the 'key_len' bytes starting at 'key'.  Succeeds with status 0 if the flow
- * is deleted, or fails with ENOENT if the dpif does not contain such a flow.
+ * the 'key_len' bytes starting at 'key', or the unique identifier 'ufid'. If
+ * the flow was created using 'ufid', then 'ufid' must be specified to delete
+ * the flow. If both are specified, 'key' will be ignored for flow deletion.
+ * Succeeds with status 0 if the flow is deleted, or fails with ENOENT if the
+ * dpif does not contain such a flow.
+ *
+ * Callers should always provide the 'key' to improve dpif logging in the event
+ * of errors or unexpected behaviour.
  *
  * If the operation succeeds, then 'stats', if nonnull, will be set to the
  * flow's statistics before its deletion. */
@@ -642,6 +652,7 @@ struct dpif_flow_del {
     /* Input. */
     const struct nlattr *key;       /* Flow to delete. */
     size_t key_len;                 /* Length of 'key' in bytes. */
+    const ovs_u128 *ufid;           /* UID of flow to delete. */
 
     /* Output. */
     struct dpif_flow_stats *stats;  /* Optional flow statistics. */
@@ -676,14 +687,20 @@ struct dpif_execute {
 /* Queries the dpif for a flow entry.
  *
  * The flow is specified by the Netlink attributes with types OVS_KEY_ATTR_* in
- * the 'key_len' bytes starting at 'key'. 'buffer' must point to an initialized
- * buffer, with a recommended size of DPIF_FLOW_BUFSIZE bytes.
+ * the 'key_len' bytes starting at 'key', or the unique identifier 'ufid'. If
+ * the flow was created using 'ufid', then 'ufid' must be specified to fetch
+ * the flow. If both are specified, 'key' will be ignored for the flow query.
+ * 'buffer' must point to an initialized buffer, with a recommended size of
+ * DPIF_FLOW_BUFSIZE bytes.
  *
  * On success, 'flow' will be populated with the mask, actions and stats for
  * the datapath flow corresponding to 'key'. The mask and actions may point
  * within '*buffer', or may point at RCU-protected data. Therefore, callers
  * that wish to hold these over quiescent periods must make a copy of these
  * fields before quiescing.
+ *
+ * Callers should always provide 'key' to improve dpif logging in the event of
+ * errors or unexpected behaviour.
  *
  * Succeeds with status 0 if the flow is fetched, or fails with ENOENT if no
  * such flow exists. Other failures are indicated with a positive errno value.
@@ -692,6 +709,7 @@ struct dpif_flow_get {
     /* Input. */
     const struct nlattr *key;       /* Flow to get. */
     size_t key_len;                 /* Length of 'key' in bytes. */
+    const ovs_u128 *ufid;            /* UID of flow to get. */
     struct ofpbuf *buffer;          /* Storage for output parameters. */
 
     /* Output. */
