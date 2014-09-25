@@ -213,6 +213,7 @@ AT_CHECK([ovs-ofctl add-flow br1 "in_port=2 icmp actions=8"])
 
 AT_CHECK([ovs-vsctl set port p2 other_config:rstp-enable=true])
 
+OVS_WAIT_UNTIL([test `cat ovs-vswitchd.log | FILTER_STP_TOPOLOGY | wc -l` -ge 2])
 AT_CHECK([cat ovs-vswitchd.log | FILTER_STP_TOPOLOGY], [0], [dnl
 port p1: RSTP state changed from Disabled to Discarding
 port p2: RSTP state changed from Disabled to Discarding
@@ -232,6 +233,7 @@ AT_CHECK([ovs-appctl netdev-dummy/set-admin-state p2 up], [], [dnl
 OK
 ])
 
+OVS_WAIT_UNTIL([test `cat ovs-vswitchd.log | FILTER_STP_TOPOLOGY | wc -l` -ge 4])
 AT_CHECK([cat ovs-vswitchd.log | FILTER_STP_TOPOLOGY], [0], [dnl
 port p1: RSTP state changed from Disabled to Discarding
 port p2: RSTP state changed from Disabled to Discarding
