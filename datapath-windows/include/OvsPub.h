@@ -142,34 +142,19 @@ typedef struct _OVS_VPORT_GET {
     char     name[OVS_MAX_PORT_NAME_LENGTH];
 } OVS_VPORT_GET, *POVS_VPORT_GET;
 
-
-typedef enum {
-    OVSWIN_VPORT_TYPE_UNKNOWN,
-    OVSWIN_VPORT_TYPE_RESERVED,
-    OVSWIN_VPORT_TYPE_EXTERNAL,
-    OVSWIN_VPORT_TYPE_INTERNAL,
-    OVSWIN_VPORT_TYPE_SYNTHETIC,
-    OVSWIN_VPORT_TYPE_EMULATED,
-    OVSWIN_VPORT_TYPE_GRE,
-    OVSWIN_VPORT_TYPE_GRE64,
-    OVSWIN_VPORT_TYPE_VXLAN,
-    OVSWIN_VPORT_TYPE_LOCAL,    /* For bridge local port. */
-} OVS_VPORT_TYPE;
-
 static __inline const char *
 OvsVportTypeToStr(OVS_VPORT_TYPE t)
 {
     switch(t) {
-#define STR(t) case OVSWIN_VPORT_TYPE_##t : return "VPORT_##t";
-    STR(UNKNOWN)
-    STR(EXTERNAL)
+#define STR(t) case OVS_VPORT_TYPE_##t : return "VPORT_##t";
+    STR(UNSPEC)
+    STR(NETDEV)
     STR(INTERNAL)
-    STR(SYNTHETIC)
-    STR(EMULATED)
     STR(GRE)
     STR(GRE64)
     STR(VXLAN)
-    STR(LOCAL)
+    STR(GENEVE)
+    STR(LISP)
     }
 #undef STR
 

@@ -205,7 +205,7 @@ OvsDetectTunnelRxPkt(OvsForwardingContext *ovsFwdCtx,
     if (!flowKey->ipKey.nwFrag &&
         flowKey->ipKey.nwProto == IPPROTO_UDP &&
         flowKey->ipKey.l4.tpDst == VXLAN_UDP_PORT_NBO) {
-        tunnelVport = OvsGetTunnelVport(OVSWIN_VPORT_TYPE_VXLAN);
+        tunnelVport = OvsGetTunnelVport(OVS_VPORT_TYPE_VXLAN);
         ovsActionStats.rxVxlan++;
     }
 
@@ -616,7 +616,7 @@ OvsTunnelPortTx(OvsForwardingContext *ovsFwdCtx)
 
     /* Do the encap. Encap function does not consume the NBL. */
     switch(ovsFwdCtx->tunnelTxNic->ovsType) {
-    case OVSWIN_VPORT_TYPE_VXLAN:
+    case OVS_VPORT_TYPE_VXLAN:
         status = OvsEncapVxlan(ovsFwdCtx->curNbl, &ovsFwdCtx->tunKey,
                                ovsFwdCtx->switchContext,
                                (VOID *)ovsFwdCtx->completionList,
@@ -678,7 +678,7 @@ OvsTunnelPortRx(OvsForwardingContext *ovsFwdCtx)
     }
 
     switch(tunnelRxVport->ovsType) {
-    case OVSWIN_VPORT_TYPE_VXLAN:
+    case OVS_VPORT_TYPE_VXLAN:
         /*
          * OvsDoDecapVxlan should return a new NBL if it was copied, and
          * this new NBL should be setup as the ovsFwdCtx->curNbl.

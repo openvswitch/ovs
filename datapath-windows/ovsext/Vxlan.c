@@ -57,7 +57,7 @@ OvsInitVxlanTunnel(POVS_VPORT_ENTRY vport,
     POVS_VXLAN_VPORT vxlanPort;
     NTSTATUS status = STATUS_SUCCESS;
 
-    ASSERT(addReq->type == OVSWIN_VPORT_TYPE_VXLAN);
+    ASSERT(addReq->type == OVS_VPORT_TYPE_VXLAN);
 
     vxlanPort = OvsAllocateMemory(sizeof (*vxlanPort));
     if (vxlanPort == NULL) {
@@ -80,7 +80,7 @@ OvsInitVxlanTunnel(POVS_VPORT_ENTRY vport,
 VOID
 OvsCleanupVxlanTunnel(POVS_VPORT_ENTRY vport)
 {
-    if (vport->ovsType != OVSWIN_VPORT_TYPE_VXLAN ||
+    if (vport->ovsType != OVS_VPORT_TYPE_VXLAN ||
         vport->priv == NULL) {
         return;
     }

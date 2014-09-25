@@ -81,5 +81,6 @@ enum ovs_nl_mcast_attr {
 };
 
 typedef struct ovs_dp_stats OVS_DP_STATS;
+typedef enum ovs_vport_type OVS_VPORT_TYPE;
 
 #endif /* __OVS_DP_INTERFACE_EXT_H_ */

@@ -50,7 +50,8 @@ extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
 extern PNDIS_SPIN_LOCK gOvsCtrlLock;
 
 static UINT32 OvsGetVportNo(POVS_SWITCH_CONTEXT switchContext, UINT32 nicIndex,
-                            OVS_VPORT_TYPE ovsType);
+                            OVS_VPORT_TYPE ovsType,
+                            BOOLEAN isExternal);
 static POVS_VPORT_ENTRY OvsAllocateVport(VOID);
 static VOID OvsInitVportWithPortParam(POVS_VPORT_ENTRY vport,
                 PNDIS_SWITCH_PORT_PARAMETERS portParam);
@@ -380,7 +381,7 @@ OvsDisconnectNic(POVS_SWITCH_CONTEXT switchContext,
     vport->ovsState = OVS_STATE_NIC_CREATED;
     portNo = vport->portNo;
 
-    if (vport->ovsType == OVSWIN_VPORT_TYPE_INTERNAL) {
+    if (vport->ovsType == OVS_VPORT_TYPE_INTERNAL) {
         isInternalPort = TRUE;
     }
 
@@ -520,13 +521,13 @@ OvsFindVportByPortIdAndNicIndex(POVS_SWITCH_CONTEXT switchContext,
 static UINT32
 OvsGetVportNo(POVS_SWITCH_CONTEXT switchContext,
               UINT32 nicIndex,
-              OVS_VPORT_TYPE ovsType)
+              OVS_VPORT_TYPE ovsType,
+              BOOLEAN isExternal)
 {
     UINT32 index = 0xffffff, i = 0;
     UINT64 gen;
 
-    switch (ovsType) {
-    case OVSWIN_VPORT_TYPE_EXTERNAL:
+    if (isExternal) {
         if (nicIndex == 0) {
             return 0;  // not a valid portNo
         } else if (nicIndex > OVS_MAX_PHYS_ADAPTERS) {
@@ -534,12 +535,13 @@ OvsGetVportNo(POVS_SWITCH_CONTEXT switchContext,
         } else {
             index = nicIndex + OVS_EXTERNAL_VPORT_START;
         }
-        break;
-    case OVSWIN_VPORT_TYPE_INTERNAL:
+    }
+
+    switch (ovsType) {
+    case OVS_VPORT_TYPE_INTERNAL:
         index = OVS_INTERNAL_VPORT_DEFAULT_INDEX;
         break;
-    case OVSWIN_VPORT_TYPE_SYNTHETIC:
-    case OVSWIN_VPORT_TYPE_EMULATED:
+    case OVS_VPORT_TYPE_NETDEV:
         index = switchContext->lastPortIndex + 1;
         if (index == OVS_MAX_VPORT_ARRAY_SIZE) {
             index = OVS_VM_VPORT_START;
@@ -557,18 +559,17 @@ OvsGetVportNo(POVS_SWITCH_CONTEXT switchContext,
         }
         switchContext->lastPortIndex = index;
         break;
-    case OVSWIN_VPORT_TYPE_GRE:
+    case OVS_VPORT_TYPE_GRE:
         index = OVS_GRE_VPORT_INDEX;
         break;
-    case OVSWIN_VPORT_TYPE_GRE64:
+    case OVS_VPORT_TYPE_GRE64:
         index = OVS_GRE64_VPORT_INDEX;
         break;
-    case OVSWIN_VPORT_TYPE_VXLAN:
+    case OVS_VPORT_TYPE_VXLAN:
         index = OVS_VXLAN_VPORT_INDEX;
         break;
-    case OVSWIN_VPORT_TYPE_LOCAL:
     default:
-        ASSERT(0);
+        ASSERT(isExternal);
     }
     if (index > OVS_MAX_VPORT_ARRAY_SIZE) {
         return 0;
@@ -605,19 +606,19 @@ OvsInitVportWithPortParam(POVS_VPORT_ENTRY vport,
     vport->portState = portParam->PortState;
     vport->portId = portParam->PortId;
     vport->nicState = NdisSwitchNicStateUnknown;
+    vport->isExternal = FALSE;
 
     switch (vport->portType) {
     case NdisSwitchPortTypeExternal:
-        vport->ovsType = OVSWIN_VPORT_TYPE_EXTERNAL;
+        vport->isExternal = TRUE;
+        vport->ovsType = OVS_VPORT_TYPE_NETDEV;
         break;
     case NdisSwitchPortTypeInternal:
-        vport->ovsType = OVSWIN_VPORT_TYPE_INTERNAL;
+        vport->ovsType = OVS_VPORT_TYPE_INTERNAL;
         break;
     case NdisSwitchPortTypeSynthetic:
-        vport->ovsType = OVSWIN_VPORT_TYPE_SYNTHETIC;
-        break;
     case NdisSwitchPortTypeEmulated:
-        vport->ovsType = OVSWIN_VPORT_TYPE_EMULATED;
+        vport->ovsType = OVS_VPORT_TYPE_NETDEV;
         break;
     }
     RtlCopyMemory(&vport->portName, &portParam->PortName,
@@ -694,7 +695,8 @@ OvsInitPhysNicVport(POVS_VPORT_ENTRY vport,
     vport->portState = virtVport->portState;
     vport->portId = virtVport->portId;
     vport->nicState = NdisSwitchNicStateUnknown;
-    vport->ovsType = OVSWIN_VPORT_TYPE_EXTERNAL;
+    vport->ovsType = OVS_VPORT_TYPE_NETDEV;
+    vport->isExternal = TRUE;
     vport->nicIndex = (NDIS_SWITCH_NIC_INDEX)nicIndex;
     RtlCopyMemory(&vport->portName, &virtVport->portName,
                   sizeof (NDIS_SWITCH_PORT_NAME));
@@ -709,7 +711,7 @@ POVS_VPORT_ENTRY vport)
     if (vport->portType != NdisSwitchPortTypeExternal ||
         vport->nicIndex != 0) {
         vport->portNo = OvsGetVportNo(switchContext, vport->nicIndex,
-            vport->ovsType);
+            vport->ovsType, vport->portType == NdisSwitchPortTypeExternal);
         if (vport->portNo == 0) {
             return NDIS_STATUS_RESOURCES;
         }
@@ -769,8 +771,8 @@ OvsRemoveAndDeleteVport(POVS_SWITCH_CONTEXT switchContext,
                         POVS_VPORT_ENTRY vport)
 {
     UINT64 gen = vport->portNo >> 24;
-    switch (vport->ovsType) {
-    case OVSWIN_VPORT_TYPE_EXTERNAL:
+
+    if (vport->isExternal) {
         if (vport->nicIndex == 0) {
             ASSERT(switchContext->numPhysicalNics == 0);
             switchContext->externalPortId = 0;
@@ -781,20 +783,21 @@ OvsRemoveAndDeleteVport(POVS_SWITCH_CONTEXT switchContext,
             ASSERT(switchContext->numPhysicalNics);
             switchContext->numPhysicalNics--;
         }
-        break;
-    case OVSWIN_VPORT_TYPE_INTERNAL:
+    }
+
+    switch (vport->ovsType) {
+    case OVS_VPORT_TYPE_INTERNAL:
         switchContext->internalPortId = 0;
         switchContext->internalVport = NULL;
         OvsInternalAdapterDown();
         break;
-    case OVSWIN_VPORT_TYPE_VXLAN:
+    case OVS_VPORT_TYPE_VXLAN:
         OvsCleanupVxlanTunnel(vport);
         break;
-    case OVSWIN_VPORT_TYPE_GRE:
-    case OVSWIN_VPORT_TYPE_GRE64:
+    case OVS_VPORT_TYPE_GRE:
+    case OVS_VPORT_TYPE_GRE64:
         break;
-    case OVSWIN_VPORT_TYPE_EMULATED:
-    case OVSWIN_VPORT_TYPE_SYNTHETIC:
+    case OVS_VPORT_TYPE_NETDEV:
     default:
         break;
     }
@@ -1074,11 +1077,11 @@ OvsInitTunnelVport(POVS_VPORT_ENTRY vport,
     StringCbLengthA(vport->ovsName, OVS_MAX_PORT_NAME_LENGTH - 1, &len);
     vport->ovsNameLen = (UINT32)len;
     switch (addReq->type) {
-    case OVSWIN_VPORT_TYPE_GRE:
+    case OVS_VPORT_TYPE_GRE:
         break;
-    case OVSWIN_VPORT_TYPE_GRE64:
+    case OVS_VPORT_TYPE_GRE64:
         break;
-    case OVSWIN_VPORT_TYPE_VXLAN:
+    case OVS_VPORT_TYPE_VXLAN:
         status = OvsInitVxlanTunnel(vport, addReq);
         break;
     default:
@@ -1113,13 +1116,13 @@ OvsAddVportIoctl(PVOID inputBuffer,
     addReq->name[OVS_MAX_PORT_NAME_LENGTH - 1] = 0;
 
     switch (addReq->type) {
-    case OVSWIN_VPORT_TYPE_GRE:
+    case OVS_VPORT_TYPE_GRE:
         index = OVS_GRE_VPORT_INDEX;
         break;
-    case OVSWIN_VPORT_TYPE_GRE64:
+    case OVS_VPORT_TYPE_GRE64:
         index = OVS_GRE64_VPORT_INDEX;
         break;
-    case OVSWIN_VPORT_TYPE_VXLAN:
+    case OVS_VPORT_TYPE_VXLAN:
         index = OVS_VXLAN_VPORT_INDEX;
         break;
     default:
@@ -1338,8 +1341,7 @@ OvsGetExtInfoIoctl(PVOID inputBuffer,
                   sizeof (vport->currMacAddress));
     RtlCopyMemory(info->permMACAddress, vport->permMacAddress,
                   sizeof (vport->permMacAddress));
-    if (vport->ovsType == OVSWIN_VPORT_TYPE_SYNTHETIC ||
-        vport->ovsType == OVSWIN_VPORT_TYPE_EMULATED) {
+    if (vport->ovsType == OVS_VPORT_TYPE_NETDEV) {
         RtlCopyMemory(info->vmMACAddress, vport->vmMacAddress,
                       sizeof (vport->vmMacAddress));
     }
@@ -1357,8 +1359,7 @@ OvsGetExtInfoIoctl(PVOID inputBuffer,
     } else {
        info->status = OVS_EVENT_DISCONNECT;
     }
-    if ((info->type == OVSWIN_VPORT_TYPE_SYNTHETIC ||
-         info->type == OVSWIN_VPORT_TYPE_EMULATED) &&
+    if (info->type == OVS_VPORT_TYPE_NETDEV &&
         (vport->ovsState == OVS_STATE_NIC_CREATED  ||
          vport->ovsState == OVS_STATE_CONNECTED)) {
         RtlCopyMemory(&vmName, &vport->vmName, sizeof (NDIS_VM_NAME));

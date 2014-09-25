@@ -284,14 +284,14 @@ OvsInjectPacketThroughActions(PNET_BUFFER_LIST pNbl,
 
         SendFlags |= NDIS_SEND_FLAGS_DISPATCH_LEVEL;
 
-        vport = OvsGetTunnelVport(OVSWIN_VPORT_TYPE_VXLAN);
+        vport = OvsGetTunnelVport(OVS_VPORT_TYPE_VXLAN);
 
         if (vport == NULL){
             status = STATUS_UNSUCCESSFUL;
             goto unlockAndDrop;
         }
 
-        ASSERT(vport->ovsType == OVSWIN_VPORT_TYPE_VXLAN);
+        ASSERT(vport->ovsType == OVS_VPORT_TYPE_VXLAN);
 
         portNo = vport->portNo;
 

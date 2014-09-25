@@ -22,15 +22,15 @@
 #include <Strsafe.h>
 
 #include "Types.h"
-#include "..\include\OvsPub.h"
+
+#include "..\include\OvsDpInterface.h"
+
 #include "Util.h"
 #include "Netlink/Netlink.h"
 #include "Netlink/NetlinkProto.h"
-/*
- * Include openvswitch.h from userspace. Changing the location the file from
- * include/linux is pending discussion.
- */
-#include "..\include\OvsDpInterface.h"
+
 #if defined OVS_USE_NL_INTERFACE && OVS_USE_NL_INTERFACE == 1
 #include "..\include\OvsDpInterfaceExt.h"
 #endif
+
+#include "..\include\OvsPub.h"

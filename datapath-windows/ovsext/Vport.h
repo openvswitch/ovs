@@ -86,6 +86,7 @@ typedef struct _OVS_VPORT_ENTRY {
     NDIS_SWITCH_NIC_NAME   nicName;
     NDIS_VM_NAME           vmName;
     GUID                   netCfgInstanceId;
+    BOOLEAN                isExternal;
 } OVS_VPORT_ENTRY, *POVS_VPORT_ENTRY;
 
 struct _OVS_SWITCH_CONTEXT;
@@ -143,15 +144,15 @@ VOID OvsDisconnectNic(POVS_SWITCH_CONTEXT switchContext,
 static __inline BOOLEAN
 OvsIsTunnelVportType(OVS_VPORT_TYPE ovsType)
 {
-    return ovsType == OVSWIN_VPORT_TYPE_VXLAN ||
-           ovsType == OVSWIN_VPORT_TYPE_GRE ||
-           ovsType == OVSWIN_VPORT_TYPE_GRE64;
+    return ovsType == OVS_VPORT_TYPE_VXLAN ||
+           ovsType == OVS_VPORT_TYPE_GRE ||
+           ovsType == OVS_VPORT_TYPE_GRE64;
 }
 
 static __inline BOOLEAN
 OvsIsInternalVportType(OVS_VPORT_TYPE ovsType)
 {
-    return ovsType == OVSWIN_VPORT_TYPE_INTERNAL;
+    return ovsType == OVS_VPORT_TYPE_INTERNAL;
 }
 
 static __inline BOOLEAN
@@ -173,7 +174,7 @@ OvsGetTunnelVport(OVS_VPORT_TYPE type)
 {
     ASSERT(OvsIsTunnelVportType(type));
     switch(type) {
-    case OVSWIN_VPORT_TYPE_VXLAN:
+    case OVS_VPORT_TYPE_VXLAN:
         return (POVS_VPORT_ENTRY) OvsGetVportFromIndex(OVS_VXLAN_VPORT_INDEX);
     default:
         ASSERT(! "OvsGetTunnelVport not implemented for this tunnel.");
