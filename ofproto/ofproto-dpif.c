@@ -2394,6 +2394,8 @@ set_rstp_port(struct ofport *ofport_,
     rstp_port_set(rp, s->port_num, s->priority, s->path_cost,
                   s->admin_edge_port, s->auto_edge, s->mcheck, ofport);
     update_rstp_port_state(ofport);
+    /* Synchronize operational status. */
+    rstp_port_set_mac_operational(rp, ofport->may_enable);
 }
 
 static void
