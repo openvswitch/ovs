@@ -1425,6 +1425,83 @@ OvsGetVportDumpNext(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     return STATUS_SUCCESS;
 }
 
+static NTSTATUS
+OvsGetVport(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+            UINT32 *replyLen)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+    LOCK_STATE_EX lockState;
+
+    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
+    POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
+    POVS_VPORT_ENTRY vport = NULL;
+    NL_ERROR nlError = NL_ERROR_SUCCESS;
+
+    static const NL_POLICY ovsVportPolicy[] = {
+        [OVS_VPORT_ATTR_PORT_NO] = { .type = NL_A_U32, .optional = TRUE },
+        [OVS_VPORT_ATTR_NAME] = { .type = NL_A_STRING,
+                                  .maxLen = IFNAMSIZ,
+                                  .optional = TRUE},
+    };
+    PNL_ATTR vportAttrs[ARRAY_SIZE(ovsVportPolicy)];
+
+    /* input buffer has been validated while validating write dev op. */
+    ASSERT(usrParamsCtx->inputBuffer != NULL);
+
+    if (!NlAttrParse((PNL_MSG_HDR)msgIn,
+        NLMSG_HDRLEN + GENL_HDRLEN + OVS_HDRLEN,
+        ovsVportPolicy, vportAttrs, ARRAY_SIZE(vportAttrs))) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (msgOut == NULL || usrParamsCtx->outputLength < sizeof *msgOut) {
+        return STATUS_INVALID_BUFFER_SIZE;
+    }
+
+    OvsAcquireCtrlLock();
+    if (!gOvsSwitchContext) {
+        OvsReleaseCtrlLock();
+        return STATUS_INVALID_PARAMETER;
+    }
+    OvsReleaseCtrlLock();
+
+    if (vportAttrs[OVS_VPORT_ATTR_NAME] != NULL) {
+        vport = OvsFindVportByOvsName(gOvsSwitchContext,
+            NlAttrGet(vportAttrs[OVS_VPORT_ATTR_NAME]),
+            NlAttrGetSize(vportAttrs[OVS_VPORT_ATTR_NAME]));
+    } else if (vportAttrs[OVS_VPORT_ATTR_PORT_NO] != NULL) {
+        vport = OvsFindVportByPortNo(gOvsSwitchContext,
+            NlAttrGetU32(vportAttrs[OVS_VPORT_ATTR_PORT_NO]));
+    } else {
+        nlError = NL_ERROR_INVAL;
+        goto Cleanup;
+    }
+
+    if (!vport) {
+        nlError = NL_ERROR_NODEV;
+        goto Cleanup;
+    }
+
+    NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock, &lockState, 0);
+    status = OvsCreateMsgFromVport(vport, msgIn, usrParamsCtx->outputBuffer,
+                                   usrParamsCtx->outputLength,
+                                   gOvsSwitchContext->dpNo);
+    NdisReleaseRWLock(gOvsSwitchContext->dispatchLock, &lockState);
+
+    *replyLen = msgOut->nlMsg.nlmsgLen;
+
+Cleanup:
+    if (nlError != NL_ERROR_SUCCESS) {
+        POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
+            usrParamsCtx->outputBuffer;
+
+        BuildErrorMsg(msgIn, msgError, nlError);
+        *replyLen = msgError->nlMsg.nlmsgLen;
+    }
+
+    return STATUS_SUCCESS;
+}
+
 /*
  * --------------------------------------------------------------------------
  *  Handler for the get vport command. The function handles the initial call to
@@ -1435,14 +1512,18 @@ static NTSTATUS
 OvsGetVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                       UINT32 *replyLen)
 {
+    *replyLen = 0;
+
     switch (usrParamsCtx->devOp)
     {
     case OVS_WRITE_DEV_OP:
-        *replyLen = 0;
         return OvsSetupDumpStart(usrParamsCtx);
 
     case OVS_READ_DEV_OP:
         return OvsGetVportDumpNext(usrParamsCtx, replyLen);
+
+    case OVS_TRANSACTION_DEV_OP:
+        return OvsGetVport(usrParamsCtx, replyLen);
 
     default:
         return STATUS_INVALID_DEVICE_REQUEST;
