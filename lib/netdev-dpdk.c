@@ -485,13 +485,18 @@ netdev_dpdk_init(struct netdev *netdev_, unsigned int port_no)
     OVS_REQUIRES(dpdk_mutex)
 {
     struct netdev_dpdk *netdev = netdev_dpdk_cast(netdev_);
+    int sid;
     int err = 0;
 
     ovs_mutex_init(&netdev->mutex);
 
     ovs_mutex_lock(&netdev->mutex);
 
-    netdev->socket_id = rte_eth_dev_socket_id(port_no);
+    /* If the 'sid' is negative, it means that the kernel fails
+     * to obtain the pci numa info.  In that situation, always
+     * use 'SOCKET0'. */
+    sid = rte_eth_dev_socket_id(port_no);
+    netdev->socket_id = sid < 0 ? SOCKET0 : sid;
     netdev_dpdk_alloc_txq(netdev, NR_QUEUE);
     netdev->port_id = port_no;
     netdev->flags = 0;
