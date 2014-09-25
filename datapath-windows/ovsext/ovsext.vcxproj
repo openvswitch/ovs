@@ -85,6 +85,7 @@
     <ClInclude Include="Netlink/Netlink.h" />
     <ClInclude Include="Netlink/NetlinkBuf.h" />
     <ClInclude Include="Netlink/NetlinkProto.h" />
+    <ClInclude Include="Netlink\NetlinkError.h" />
     <ClInclude Include="NetProto.h" />
     <ClInclude Include="Oid.h" />
     <ClInclude Include="PacketIO.h" />

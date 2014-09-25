@@ -1211,6 +1211,16 @@ BuildReplyMsgFromMsgIn(POVS_MESSAGE msgIn, POVS_MESSAGE msgOut, UINT16 flags)
                 flags);
 }
 
+static VOID
+BuildErrorMsg(POVS_MESSAGE msgIn, POVS_MESSAGE_ERROR msgOut, UINT errorCode)
+{
+    BuildMsgOut(msgIn, (POVS_MESSAGE)msgOut, NLMSG_ERROR,
+                sizeof(OVS_MESSAGE_ERROR), 0);
+
+    msgOut->errorMsg.error = errorCode;
+    msgOut->errorMsg.nlMsg = msgIn->nlMsg;
+}
+
 static NTSTATUS
 OvsCreateMsgFromVport(POVS_VPORT_ENTRY vport,
                       POVS_MESSAGE msgIn,

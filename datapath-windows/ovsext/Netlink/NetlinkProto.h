@@ -87,7 +87,7 @@ BUILD_ASSERT_DECL(sizeof(NL_MSG_HDR) == 16);
 typedef struct _NlMsgErr
 {
     INT error;
-    NL_MSG_HDR msg;
+    NL_MSG_HDR nlMsg;
 } NL_MSG_ERR, *PNL_MSG_ERR;
 BUILD_ASSERT_DECL(sizeof(NL_MSG_ERR) == 20);
 

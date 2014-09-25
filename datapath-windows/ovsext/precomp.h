@@ -26,6 +26,7 @@
 #include "..\include\OvsDpInterface.h"
 
 #include "Util.h"
+#include "Netlink/NetlinkError.h"
 #include "Netlink/Netlink.h"
 #include "Netlink/NetlinkProto.h"
 
