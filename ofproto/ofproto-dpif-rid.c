@@ -47,7 +47,7 @@ static void rid_pool_uninit(struct rid_pool *pool);
 static uint32_t rid_pool_alloc_id(struct rid_pool *pool);
 static void rid_pool_free_id(struct rid_pool *rids, uint32_t rid);
 static struct rid_node *rid_pool_find(struct rid_pool *rids, uint32_t id);
-static struct rid_node *rid_pool_add(struct rid_pool *rids, uint32_t id);
+static void rid_pool_add(struct rid_pool *rids, uint32_t id);
 
 struct recirc_id_pool *
 recirc_id_pool_create(void)
@@ -126,7 +126,7 @@ rid_pool_find(struct rid_pool *rids, uint32_t id)
     return NULL;
 }
 
-static struct rid_node *
+static void
 rid_pool_add(struct rid_pool *rids, uint32_t id)
 {
     struct rid_node *rid = xmalloc(sizeof *rid);
@@ -135,7 +135,6 @@ rid_pool_add(struct rid_pool *rids, uint32_t id)
     rid->recirc_id = id;
     hash = hash_int(id, 0);
     hmap_insert(&rids->map, &rid->node, hash);
-    return rid;
 }
 
 static uint32_t
