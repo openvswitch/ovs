@@ -682,7 +682,7 @@ netdev_set_multiq(struct netdev *netdev, unsigned int n_txq,
                                                 MAX(n_rxq, 1))
              : EOPNOTSUPP);
 
-    if (error != EOPNOTSUPP) {
+    if (error && error != EOPNOTSUPP) {
         VLOG_DBG_RL(&rl, "failed to set tx/rx queue for network device %s:"
                     "%s", netdev_get_name(netdev), ovs_strerror(error));
     }
