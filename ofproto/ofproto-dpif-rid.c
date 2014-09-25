@@ -21,17 +21,13 @@
 #include "ovs-thread.h"
 #include "ofproto-dpif-rid.h"
 
-struct rid_map {
-    struct hmap map;
-};
-
 struct rid_node {
     struct hmap_node node;
     uint32_t recirc_id;
 };
 
 struct rid_pool {
-    struct rid_map ridmap;
+    struct hmap map;
     uint32_t base;         /* IDs in the range of [base, base + n_ids). */
     uint32_t n_ids;        /* Total number of ids in the pool. */
     uint32_t next_free_id; /* Possible next free id. */
@@ -99,7 +95,7 @@ rid_pool_init(struct rid_pool *rids, uint32_t base, uint32_t n_ids)
     rids->base = base;
     rids->n_ids = n_ids;
     rids->next_free_id = base;
-    hmap_init(&rids->ridmap.map);
+    hmap_init(&rids->map);
 }
 
 static void
@@ -107,12 +103,12 @@ rid_pool_uninit(struct rid_pool *rids)
 {
     struct rid_node *rid, *next;
 
-    HMAP_FOR_EACH_SAFE(rid, next, node, &rids->ridmap.map) {
-        hmap_remove(&rids->ridmap.map, &rid->node);
+    HMAP_FOR_EACH_SAFE(rid, next, node, &rids->map) {
+        hmap_remove(&rids->map, &rid->node);
         free(rid);
     }
 
-    hmap_destroy(&rids->ridmap.map);
+    hmap_destroy(&rids->map);
 }
 
 static struct rid_node *
@@ -122,7 +118,7 @@ rid_pool_find(struct rid_pool *rids, uint32_t id)
     struct rid_node *rid;
 
     hash = hash_int(id, 0);
-    HMAP_FOR_EACH_WITH_HASH(rid, node, hash, &rids->ridmap.map) {
+    HMAP_FOR_EACH_WITH_HASH(rid, node, hash, &rids->map) {
         if (id == rid->recirc_id) {
             return rid;
         }
@@ -138,7 +134,7 @@ rid_pool_add(struct rid_pool *rids, uint32_t id)
 
     rid->recirc_id = id;
     hash = hash_int(id, 0);
-    hmap_insert(&rids->ridmap.map, &rid->node, hash);
+    hmap_insert(&rids->map, &rid->node, hash);
     return rid;
 }
 
@@ -184,7 +180,7 @@ rid_pool_free_id(struct rid_pool *rids, uint32_t id)
     if (id > rids->base && (id <= rids->base + rids->n_ids)) {
         rid = rid_pool_find(rids, id);
         if (rid) {
-            hmap_remove(&rids->ridmap.map, &rid->node);
+            hmap_remove(&rids->map, &rid->node);
         }
     }
 }
