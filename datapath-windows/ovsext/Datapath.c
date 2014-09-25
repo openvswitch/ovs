@@ -99,7 +99,8 @@ static NetlinkCmdHandler OvsGetPidCmdHandler,
                          OvsGetDpCmdHandler,
                          OvsPendEventCmdHandler,
                          OvsSubscribeEventCmdHandler,
-                         OvsSetDpCmdHandler;
+                         OvsSetDpCmdHandler,
+                         OvsGetVportCmdHandler;
 
 static NTSTATUS HandleGetDpTransaction(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                        UINT32 *replyLen);
@@ -180,14 +181,22 @@ NETLINK_FAMILY nlPacketFamilyOps = {
 };
 
 /* Netlink vport family. */
-/* XXX: Add commands here. */
+NETLINK_CMD nlVportFamilyCmdOps[] = {
+    { .cmd = OVS_VPORT_CMD_GET,
+      .handler = OvsGetVportCmdHandler,
+      .supportedDevOp = OVS_WRITE_DEV_OP | OVS_READ_DEV_OP |
+                        OVS_TRANSACTION_DEV_OP,
+      .validateDpIndex = TRUE
+    }
+};
+
 NETLINK_FAMILY nlVportFamilyOps = {
     .name     = OVS_VPORT_FAMILY,
     .id       = OVS_WIN_NL_VPORT_FAMILY_ID,
     .version  = OVS_VPORT_VERSION,
     .maxAttr  = OVS_VPORT_ATTR_MAX,
-    .cmds     = NULL, /* XXX: placeholder. */
-    .opsCount = 0
+    .cmds     = nlVportFamilyCmdOps,
+    .opsCount = ARRAY_SIZE(nlVportFamilyCmdOps)
 };
 
 /* Netlink flow family. */
@@ -691,10 +700,11 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
         break;
     case OVS_WIN_NL_PACKET_FAMILY_ID:
     case OVS_WIN_NL_FLOW_FAMILY_ID:
-    case OVS_WIN_NL_VPORT_FAMILY_ID:
         status = STATUS_NOT_IMPLEMENTED;
         goto done;
-
+    case OVS_WIN_NL_VPORT_FAMILY_ID:
+        nlFamilyOps = &nlVportFamilyOps;
+        break;
     default:
         status = STATUS_INVALID_PARAMETER;
         goto done;
@@ -1177,6 +1187,257 @@ OvsSetupDumpStart(POVS_USER_PARAMS_CONTEXT usrParamsCtx)
     }
 
     return InitUserDumpState(instance, msgIn);
+}
+
+static VOID
+BuildMsgOut(POVS_MESSAGE msgIn, POVS_MESSAGE msgOut, UINT16 type,
+                     UINT32 length, UINT16 flags)
+{
+    msgOut->nlMsg.nlmsgType = type;
+    msgOut->nlMsg.nlmsgFlags = flags;
+    msgOut->nlMsg.nlmsgSeq = msgIn->nlMsg.nlmsgSeq;
+    msgOut->nlMsg.nlmsgPid = msgIn->nlMsg.nlmsgPid;
+    msgOut->nlMsg.nlmsgLen = length;
+
+    msgOut->genlMsg.cmd = msgIn->genlMsg.cmd;
+    msgOut->genlMsg.version = nlDatapathFamilyOps.version;
+    msgOut->genlMsg.reserved = 0;
+}
+
+static VOID
+BuildReplyMsgFromMsgIn(POVS_MESSAGE msgIn, POVS_MESSAGE msgOut, UINT16 flags)
+{
+    BuildMsgOut(msgIn, msgOut, msgIn->nlMsg.nlmsgType, sizeof(OVS_MESSAGE),
+                flags);
+}
+
+static NTSTATUS
+OvsCreateMsgFromVport(POVS_VPORT_ENTRY vport,
+                      POVS_MESSAGE msgIn,
+                      PVOID outBuffer,
+                      UINT32 outBufLen,
+                      int dpIfIndex)
+{
+    NL_BUFFER nlBuffer;
+    OVS_VPORT_FULL_STATS vportStats;
+    BOOLEAN ok;
+    OVS_MESSAGE msgOut;
+    PNL_MSG_HDR nlMsg;
+
+    NlBufInit(&nlBuffer, outBuffer, outBufLen);
+
+    BuildReplyMsgFromMsgIn(msgIn, &msgOut, NLM_F_MULTI);
+    msgOut.ovsHdr.dp_ifindex = dpIfIndex;
+
+    ok = NlMsgPutHead(&nlBuffer, (PCHAR)&msgOut, sizeof msgOut);
+    if (!ok) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    ok = NlMsgPutTailU32(&nlBuffer, OVS_VPORT_ATTR_PORT_NO, vport->portNo);
+    if (!ok) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    ok = NlMsgPutTailU32(&nlBuffer, OVS_VPORT_ATTR_TYPE, vport->ovsType);
+    if (!ok) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    ok = NlMsgPutTailString(&nlBuffer, OVS_VPORT_ATTR_NAME, vport->ovsName);
+    if (!ok) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    /*
+     * XXX: when we implement OVS_DP_ATTR_USER_FEATURES in datapath,
+     * we'll need to check the OVS_DP_F_VPORT_PIDS flag: if it is set,
+     * it means we have an array of pids, instead of a single pid.
+     * ATM we assume we have one pid only.
+    */
+
+    ok = NlMsgPutTailU32(&nlBuffer, OVS_VPORT_ATTR_UPCALL_PID,
+                         vport->upcallPid);
+    if (!ok) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    /*stats*/
+    vportStats.rxPackets = vport->stats.rxPackets;
+    vportStats.rxBytes = vport->stats.rxBytes;
+    vportStats.txPackets = vport->stats.txPackets;
+    vportStats.txBytes = vport->stats.txBytes;
+    vportStats.rxErrors = vport->errStats.rxErrors;
+    vportStats.txErrors = vport->errStats.txErrors;
+    vportStats.rxDropped = vport->errStats.rxDropped;
+    vportStats.txDropped = vport->errStats.txDropped;
+
+    ok = NlMsgPutTailUnspec(&nlBuffer, OVS_VPORT_ATTR_STATS,
+                            (PCHAR)&vportStats,
+                            sizeof(OVS_VPORT_FULL_STATS));
+    if (!ok) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    /*
+     * XXX: when vxlan udp dest port becomes configurable, we will also need
+     * to add vport options
+    */
+
+    nlMsg = (PNL_MSG_HDR)NlBufAt(&nlBuffer, 0, 0);
+    nlMsg->nlmsgLen = NlBufSize(&nlBuffer);
+
+    return STATUS_SUCCESS;
+}
+
+static NTSTATUS
+OvsGetVportDumpNext(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                    UINT32 *replyLen)
+{
+    POVS_MESSAGE msgIn;
+    POVS_OPEN_INSTANCE instance =
+        (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
+    LOCK_STATE_EX lockState;
+    UINT32 i = OVS_MAX_VPORT_ARRAY_SIZE;
+
+    /*
+     * XXX: this function shares some code with other dump command(s).
+     * In the future, we will need to refactor the dump functions
+    */
+
+    ASSERT(usrParamsCtx->devOp == OVS_READ_DEV_OP);
+
+    if (instance->dumpState.ovsMsg == NULL) {
+        ASSERT(FALSE);
+        return STATUS_INVALID_DEVICE_STATE;
+    }
+
+    /* Output buffer has been validated while validating read dev op. */
+    ASSERT(usrParamsCtx->outputBuffer != NULL);
+
+    msgIn = instance->dumpState.ovsMsg;
+
+    OvsAcquireCtrlLock();
+    if (!gOvsSwitchContext) {
+        /* Treat this as a dump done. */
+        OvsReleaseCtrlLock();
+        *replyLen = 0;
+        FreeUserDumpState(instance);
+        return STATUS_SUCCESS;
+    }
+
+    /*
+     * XXX: when we implement OVS_DP_ATTR_USER_FEATURES in datapath,
+     * we'll need to check the OVS_DP_F_VPORT_PIDS flag: if it is set,
+     * it means we have an array of pids, instead of a single pid.
+     * ATM we assume we have one pid only.
+    */
+
+    NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock, &lockState, 0);
+
+    if (gOvsSwitchContext->numVports > 0) {
+        /* inBucket: the bucket, used for lookup */
+        UINT32 inBucket = instance->dumpState.index[0];
+        /* inIndex: index within the given bucket, used for lookup */
+        UINT32 inIndex = instance->dumpState.index[1];
+        /* the bucket to be used for the next dump operation */
+        UINT32 outBucket = 0;
+        /* the index within the outBucket to be used for the next dump */
+        UINT32 outIndex = 0;
+
+        for (i = inBucket; i < OVS_MAX_VPORT_ARRAY_SIZE; i++) {
+            PLIST_ENTRY head, link;
+            head = &(gOvsSwitchContext->portHashArray[i]);
+            POVS_VPORT_ENTRY vport = NULL;
+
+            outIndex = 0;
+            LIST_FORALL(head, link) {
+
+                /*
+                 * if one or more dumps were previously done on this same bucket,
+                 * inIndex will be > 0, so we'll need to reply with the
+                 * inIndex + 1 vport from the bucket.
+                */
+                if (outIndex >= inIndex) {
+                    vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, portLink);
+
+                    if (vport->portNo != 0) {
+                        OvsCreateMsgFromVport(vport, msgIn,
+                                              usrParamsCtx->outputBuffer,
+                                              usrParamsCtx->outputLength,
+                                              gOvsSwitchContext->dpNo);
+                        ++outIndex;
+                        break;
+                    } else {
+                        vport = NULL;
+                    }
+                }
+
+                ++outIndex;
+            }
+
+            if (vport) {
+                break;
+            }
+
+            /*
+             * if no vport was found above, check the next bucket, beginning
+             * with the first (i.e. index 0) elem from within that bucket
+            */
+            inIndex = 0;
+        }
+
+        outBucket = i;
+
+        /* XXX: what about NLMSG_DONE (as msg type)? */
+        instance->dumpState.index[0] = outBucket;
+        instance->dumpState.index[1] = outIndex;
+    }
+
+    NdisReleaseRWLock(gOvsSwitchContext->dispatchLock, &lockState);
+
+    OvsReleaseCtrlLock();
+
+    /* if i < OVS_MAX_VPORT_ARRAY_SIZE => vport was found */
+    if (i < OVS_MAX_VPORT_ARRAY_SIZE) {
+        POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
+        *replyLen = msgOut->nlMsg.nlmsgLen;
+    } else {
+        /*
+         * if i >= OVS_MAX_VPORT_ARRAY_SIZE => vport was not found =>
+         * it's dump done
+         */
+        *replyLen = 0;
+        /* Free up the dump state, since there's no more data to continue. */
+        FreeUserDumpState(instance);
+    }
+
+    return STATUS_SUCCESS;
+}
+
+/*
+ * --------------------------------------------------------------------------
+ *  Handler for the get vport command. The function handles the initial call to
+ *  setup the dump state, as well as subsequent calls to continue dumping data.
+ * --------------------------------------------------------------------------
+*/
+static NTSTATUS
+OvsGetVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                      UINT32 *replyLen)
+{
+    switch (usrParamsCtx->devOp)
+    {
+    case OVS_WRITE_DEV_OP:
+        *replyLen = 0;
+        return OvsSetupDumpStart(usrParamsCtx);
+
+    case OVS_READ_DEV_OP:
+        return OvsGetVportDumpNext(usrParamsCtx, replyLen);
+
+    default:
+        return STATUS_INVALID_DEVICE_REQUEST;
+    }
+
 }
 
 /*

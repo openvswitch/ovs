@@ -39,10 +39,10 @@ typedef enum {
 } OVS_VPORT_STATE;
 
 typedef struct _OVS_VPORT_STATS {
-    UINT64 rxBytes;
     UINT64 rxPackets;
-    UINT64 txBytes;
     UINT64 txPackets;
+    UINT64 rxBytes;
+    UINT64 txBytes;
 } OVS_VPORT_STATS;
 
 typedef struct _OVS_VPORT_ERR_STATS {
@@ -51,6 +51,12 @@ typedef struct _OVS_VPORT_ERR_STATS {
     UINT64  rxDropped;
     UINT64  txDropped;
 } OVS_VPORT_ERR_STATS;
+
+/* used for vport netlink commands. */
+typedef struct _OVS_VPORT_FULL_STATS {
+    OVS_VPORT_STATS;
+    OVS_VPORT_ERR_STATS;
+}OVS_VPORT_FULL_STATS;
 /*
  * Each internal, external adapter or vritual adapter has
  * one vport entry. In addition, we have one vport for each
@@ -87,6 +93,7 @@ typedef struct _OVS_VPORT_ENTRY {
     NDIS_VM_NAME           vmName;
     GUID                   netCfgInstanceId;
     BOOLEAN                isExternal;
+    UINT32                 upcallPid; /* netlink upcall port id */
 } OVS_VPORT_ENTRY, *POVS_VPORT_ENTRY;
 
 struct _OVS_SWITCH_CONTEXT;
