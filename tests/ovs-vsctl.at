@@ -632,7 +632,8 @@ AT_SETUP([database commands -- positive checks])
 AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
 AT_CHECK(
-  [RUN_OVS_VSCTL_TOGETHER([--id=@br0 create bridge name=br0],
+  [RUN_OVS_VSCTL_TOGETHER([--id=@br0 create bridge name=br123],
+                          [set b br123 name=br0],
                           [set o . bridges=@br0])],
   [0], [stdout], [], [OVS_VSCTL_CLEANUP])
 cp stdout out1
@@ -641,6 +642,7 @@ AT_CHECK([RUN_OVS_VSCTL([list bridge], [get bridge br0 _uuid])],
 cp stdout out2
 AT_CHECK([${PERL} $srcdir/uuidfilt.pl out1 out2], [0],
   [[<0>
+
 
 _uuid               : <0>
 controller          : []
@@ -847,10 +849,10 @@ AT_CHECK([RUN_OVS_VSCTL([destroy bridge br2])],
 AT_CHECK([RUN_OVS_VSCTL([add in br1 name x])],
   [1], [], [ovs-vsctl: cannot modify read-only column name in table Interface
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([set port br1 name br2])],
+AT_CHECK([RUN_OVS_VSCTL([set port br0 name=br2])],
   [1], [], [ovs-vsctl: cannot modify read-only column name in table Port
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([remove bridge br1 name br1])],
+AT_CHECK([RUN_OVS_VSCTL([remove bridge br0 name br1])],
   [1], [], [ovs-vsctl: cannot modify read-only column name in table Bridge
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([remove bridge br1 flood-vlans true])],

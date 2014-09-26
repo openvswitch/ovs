@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1194,6 +1194,21 @@ ovsdb_idl_get(const struct ovsdb_idl_row *row,
     ovs_assert(column->type.value.type == value_type);
 
     return ovsdb_idl_read(row, column);
+}
+
+/* Returns true if the field represented by 'column' in 'row' may be modified,
+ * false if it is immutable.
+ *
+ * Normally, whether a field is mutable is controlled by its column's schema.
+ * However, an immutable column can be set to any initial value at the time of
+ * insertion, so if 'row' is a new row (one that is being added as part of the
+ * current transaction, supposing that a transaction is in progress) then even
+ * its "immutable" fields are actually mutable. */
+bool
+ovsdb_idl_is_mutable(const struct ovsdb_idl_row *row,
+                     const struct ovsdb_idl_column *column)
+{
+    return column->mutable || (row->new && !row->old);
 }
 
 /* Returns false if 'row' was obtained from the IDL, true if it was initialized

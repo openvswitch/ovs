@@ -25,6 +25,8 @@ Post-v2.3.0
      it in OpenSSL.
    - ovsdb-server: New OVSDB protocol extension allows inequality tests on
      "optional scalar" columns.  See ovsdb-server(1) for details.
+   - ovs-vsctl now permits immutable columns in a new row to be modified in
+     the same transaction that creates the row.
    - test-controller has been renamed ovs-testcontroller at request of users
      who find it useful for testing basic OpenFlow setups.  It is still not
      a necessary or desirable part of most Open vSwitch deployments.
