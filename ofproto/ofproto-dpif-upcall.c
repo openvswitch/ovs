@@ -45,7 +45,8 @@
 
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif_upcall);
 
-COVERAGE_DEFINE(upcall_duplicate_flow);
+COVERAGE_DEFINE(dumped_duplicate_flow);
+COVERAGE_DEFINE(dumped_new_flow);
 COVERAGE_DEFINE(revalidate_missed_dp_flow);
 
 /* A thread that reads upcalls from dpif, forwards each upcall's packet,
@@ -1548,15 +1549,19 @@ revalidate(struct revalidator *revalidator)
                 /* We couldn't acquire the ukey. This means that
                  * another revalidator is processing this flow
                  * concurrently, so don't bother processing it. */
-                COVERAGE_INC(upcall_duplicate_flow);
+                COVERAGE_INC(dumped_duplicate_flow);
                 continue;
             }
 
             already_dumped = ukey->dump_seq == dump_seq;
             if (already_dumped) {
-                /* The flow has already been dumped and handled by another
-                 * revalidator during this flow dump operation. Skip it. */
-                COVERAGE_INC(upcall_duplicate_flow);
+                /* The flow has already been handled during this flow dump
+                 * operation. Skip it. */
+                if (ukey->xcache) {
+                    COVERAGE_INC(dumped_duplicate_flow);
+                } else {
+                    COVERAGE_INC(dumped_new_flow);
+                }
                 ovs_mutex_unlock(&ukey->mutex);
                 continue;
             }
