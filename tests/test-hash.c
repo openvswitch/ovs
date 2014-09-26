@@ -129,7 +129,9 @@ test_hash_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
      * Given a random distribution, the probability of at least one collision
      * in any set of 11 bits is approximately
      *
-     *                      1 - ((2**11 - 1)/2**11)**C(33,2)
+     *                      1 - (proportion of same_bits)
+     *                          **(binomial_coefficient(n_bits_in_data + 1, 2))
+     *                   == 1 - ((2**11 - 1)/2**11)**C(33,2)
      *                   == 1 - (2047/2048)**528
      *                   =~ 0.22
      *
