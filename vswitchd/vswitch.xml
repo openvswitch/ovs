@@ -170,8 +170,9 @@
         </p>
         <p>
           The lowest order bit corresponds to the first CPU core.  A set bit
-          means the corresponding core is available.  If the input does not
-          cover all cores, those uncovered cores are considered not set.
+          means the corresponding core is available and a pmd thread will be
+          created and pinned to it.  If the input does not cover all cores,
+          those uncovered cores are considered not set.
         </p>
         <p>
           If not specified, one pmd thread will be created for each numa node

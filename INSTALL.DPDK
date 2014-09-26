@@ -159,43 +159,51 @@ nw_dst=1.1.1.1,idle_timeout=0,action=output:1
 
 ######################################
 
-Ideally for maximum throughput, the 100% task should not be scheduled out
-which temporarily halts the process. The following affinitization methods will
-help.
+With pmd multi-threading support, OVS creates one pmd thread for each
+numa node as default.  The pmd thread handles the I/O of all DPDK
+interfaces on the same numa node.  The following two commands can be used
+to configure the multi-threading behavior.
 
-At this time all ovs-vswitchd tasks end up being affinitized to cpu core 0
-but this may change. Lets pick a target core for 100% task to run on, i.e. core 7.
-Also assume a dual 8 core sandy bridge system with hyperthreading enabled
-where CPU1 has cores 0,...,7 and 16,...,23 & CPU2 cores 8,...,15 & 24,...,31.
-(A different cpu configuration will have different core mask requirements).
+    ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=<hex string>
 
-To give better ownership of 100%, isolation maybe useful.
-To kernel bootline add core isolation list for core 7 and associated hype core 23
-  e.g.  isolcpus=7,23
-Reboot system for isolation to take effect, restart everything
+The command above asks for a CPU mask for setting the affinity of pmd threads.
+A set bit in the mask means a pmd thread is created and pinned to the
+corresponding CPU core.  For more information, please refer to
+`man ovs-vswitchd.conf.db`
 
-List threads (and their pid) of ovs-vswitchd
-  top -p `pidof ovs-vswitchd` -H -d1
+    ovs-vsctl set Open_vSwitch . other_config:n-dpdk-rxqs=<integer>
 
-Look for pmd* thread which is polling dpdk devices, this will be the 100% CPU
-bound task. Using this thread pid, affinitize to core 7 (mask 0x080),
-example pid 1762
+The command above sets the number of rx queues of each DPDK interface.  The
+rx queues are assigned to pmd threads on the same numa node in round-robin
+fashion.  For more information, please refer to `man ovs-vswitchd.conf.db`
 
-taskset -p 080 1762
-  pid 1762's current affinity mask: 1
-  pid 1762's new affinity mask: 80
+Ideally for maximum throughput, the pmd thread should not be scheduled out
+which temporarily halts its execution. The following affinitization methods
+can help.
 
-Assume that all other ovs-vswitchd threads to be on other socket 0 cores.
-Affinitize the rest of the ovs-vswitchd thread ids to 0x07F007F
+Lets pick core 4,6,8,10 for pmd threads to run on.  Also assume a dual 8 core
+sandy bridge system with hyperthreading enabled where CPU1 has cores 0,...,7
+and 16,...,23 & CPU2 cores 8,...,15 & 24,...,31.  (A different cpu
+configuration could have different core mask requirements).
 
-taskset -p 0x07F007F {thread pid, e.g 1738}
-  pid 1738's current affinity mask: 1
-  pid 1738's new affinity mask: 7f007f
-. . .
+To kernel bootline add core isolation list for cores and associated hype cores
+(e.g.  isolcpus=4,20,6,22,8,24,10,26,).  Reboot system for isolation to take
+effect, restart everything.
 
-The core 23 is left idle, which allows core 7 to run at full rate.
+Configure pmd threads on core 4,6,8,10 using 'pmd-cpu-mask':
 
-Future changes may change the need for cpu core affinitization.
+    ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=00000550
+
+You should be able to check that pmd threads are pinned to the correct cores
+via:
+
+    top -p `pidof ovs-vswitchd` -H -d1
+
+Note, the pmd threads on a numa node are only created if there is at least
+one DPDK interface from the numa node that has been added to OVS.
+
+Note, core 0 is always reserved from non-pmd threads and should never be set
+in the cpu mask.
 
 DPDK Rings :
 ------------
@@ -243,12 +251,6 @@ Restrictions:
 -------------
 
   - This Support is for Physical NIC. I have tested with Intel NIC only.
-  - vswitchd userspace datapath does affine polling thread but it is
-    assumed that devices are on numa node 0. Therefore if device is
-    attached to non zero numa node switching performance would be
-    suboptimal.
-  - There are fixed number of polling thread and fixed number of per
-    device queues configured.
   - Work with 1500 MTU, needs few changes in DPDK lib to fix this issue.
   - Currently DPDK port does not make use any offload functionality.
   ivshmem
