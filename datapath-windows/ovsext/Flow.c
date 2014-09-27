@@ -212,7 +212,8 @@ static const NL_POLICY nlFlowActionPolicy[] = {
 /*
  *----------------------------------------------------------------------------
  *  OvsFlowNlNewCmdHandler --
- *    Handler for OVS_FLOW_CMD_NEW command.
+ *    Handler for OVS_FLOW_CMD_NEW/SET/DEL command.
+ *    It also handles FLUSH case (DEL w/o any key in input)
  *----------------------------------------------------------------------------
  */
 NTSTATUS
@@ -246,6 +247,13 @@ OvsFlowNlNewCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         OVS_LOG_ERROR("Attr Parsing failed for msg: %p",
                        nlMsgHdr);
         rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+    /* FLOW_DEL command w/o any key input is a flush case. */
+    if ((genlMsgHdr->cmd == OVS_FLOW_CMD_DEL) && 
+        (!(nlAttrs[OVS_FLOW_ATTR_KEY]))) {
+        rc = OvsFlushFlowIoctl(ovsHdr->dp_ifindex);
         goto done;
     }
 
@@ -1501,19 +1509,12 @@ unlock:
 }
 
 NTSTATUS
-OvsFlushFlowIoctl(PVOID inputBuffer,
-                  UINT32 inputLength)
+OvsFlushFlowIoctl(UINT32 dpNo)
 {
     NTSTATUS status = STATUS_SUCCESS;
     OVS_DATAPATH *datapath = NULL;
-    UINT32 dpNo;
     LOCK_STATE_EX dpLockState;
 
-    if (inputLength != sizeof(UINT32) || inputBuffer == NULL) {
-        return STATUS_INFO_LENGTH_MISMATCH;
-    }
-
-    dpNo = *(UINT32 *)inputBuffer;
     NdisAcquireSpinLock(gOvsCtrlLock);
     if (gOvsSwitchContext == NULL ||
         gOvsSwitchContext->dpNo != dpNo) {
