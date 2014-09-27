@@ -1440,6 +1440,7 @@ OvsGetVport(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     static const NL_POLICY ovsVportPolicy[] = {
         [OVS_VPORT_ATTR_PORT_NO] = { .type = NL_A_U32, .optional = TRUE },
         [OVS_VPORT_ATTR_NAME] = { .type = NL_A_STRING,
+                                  .minLen = 2,
                                   .maxLen = IFNAMSIZ,
                                   .optional = TRUE},
     };
@@ -1468,7 +1469,7 @@ OvsGetVport(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     if (vportAttrs[OVS_VPORT_ATTR_NAME] != NULL) {
         vport = OvsFindVportByOvsName(gOvsSwitchContext,
             NlAttrGet(vportAttrs[OVS_VPORT_ATTR_NAME]),
-            NlAttrGetSize(vportAttrs[OVS_VPORT_ATTR_NAME]));
+            NlAttrGetSize(vportAttrs[OVS_VPORT_ATTR_NAME]) - 1);
     } else if (vportAttrs[OVS_VPORT_ATTR_PORT_NO] != NULL) {
         vport = OvsFindVportByPortNo(gOvsSwitchContext,
             NlAttrGetU32(vportAttrs[OVS_VPORT_ATTR_PORT_NO]));
