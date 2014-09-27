@@ -47,4 +47,6 @@ NTSTATUS OvsPollEventIoctl(PFILE_OBJECT fileObject, PVOID inputBuffer,
                            UINT32 outputLength, UINT32 *replyLen);
 NTSTATUS OvsWaitEventIoctl(PIRP irp, PFILE_OBJECT fileObject,
                            PVOID inputBuffer, UINT32 inputLength);
+NTSTATUS OvsRemoveEventEntry(PVOID instance, POVS_EVENT_ENTRY entry);
+
 #endif /* __EVENT_H_ */

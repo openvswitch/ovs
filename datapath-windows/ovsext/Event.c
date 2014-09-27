@@ -292,6 +292,7 @@ done_event_subscribe:
     return status;
 }
 
+#if defined OVS_USE_NL_INTERFACE && OVS_USE_NL_INTERFACE == 0
 /*
  * --------------------------------------------------------------------------
  * Poll event queued in the event queue. always synchronous.
@@ -376,6 +377,7 @@ event_poll_done:
     OVS_LOG_TRACE("Exit: numEventPolled: %d", numEntry);
     return STATUS_SUCCESS;
 }
+#endif /* OVS_USE_NL_INTERFACE */
 
 
 /*
@@ -492,5 +494,45 @@ OvsWaitEventIoctl(PIRP irp,
         OVS_LOG_INFO("Event IRP cancelled: %p", irp);
     }
     OVS_LOG_TRACE("Exit: return status: %#x", status);
+    return status;
+}
+
+/*
+ *--------------------------------------------------------------------------
+ * Poll event queued in the event queue.always synchronous.
+ *
+ * Results:
+ *     STATUS_SUCCESS event was dequeued
+ *     STATUS_UNSUCCESSFUL the queue is empty.
+ * --------------------------------------------------------------------------
+ */
+NTSTATUS
+OvsRemoveEventEntry(POVS_OPEN_INSTANCE instance,
+                    POVS_EVENT_ENTRY entry)
+{
+    NTSTATUS status = STATUS_UNSUCCESSFUL;
+    POVS_EVENT_QUEUE queue;
+    POVS_EVENT_QUEUE_ELEM elem;
+
+    OvsAcquireEventQueueLock();
+
+    queue = (POVS_EVENT_QUEUE)instance->eventQueue;
+
+    if (queue == NULL) {
+        ASSERT(queue);
+        goto remove_event_done;
+    }
+
+    if (queue->numElems) {
+        elem = (POVS_EVENT_QUEUE_ELEM)RemoveHeadList(&queue->elemList);
+        entry->portNo = elem->portNo;
+        entry->status = elem->status;
+        OvsFreeMemory(elem);
+        queue->numElems--;
+        status = STATUS_SUCCESS;
+    }
+
+remove_event_done:
+    OvsReleaseEventQueueLock();
     return status;
 }

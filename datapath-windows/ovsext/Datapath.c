@@ -93,6 +93,7 @@ typedef struct _NETLINK_FAMILY {
 #define OVS_READ_DEV_OP          (1 << 0)
 #define OVS_WRITE_DEV_OP         (1 << 1)
 #define OVS_TRANSACTION_DEV_OP   (1 << 2)
+#define OVS_READ_EVENT_DEV_OP    (1 << 3)
 
 /* Handlers for the various netlink commands. */
 static NetlinkCmdHandler OvsGetPidCmdHandler,
@@ -100,6 +101,7 @@ static NetlinkCmdHandler OvsGetPidCmdHandler,
                          OvsPendEventCmdHandler,
                          OvsSubscribeEventCmdHandler,
                          OvsSetDpCmdHandler,
+                         OvsReadEventCmdHandler,
                          OvsGetVportCmdHandler;
 
 static NTSTATUS HandleGetDpTransaction(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
@@ -132,6 +134,11 @@ NETLINK_CMD nlControlFamilyCmdOps[] = {
       .handler = OvsSubscribeEventCmdHandler,
       .supportedDevOp = OVS_WRITE_DEV_OP,
       .validateDpIndex = TRUE,
+    },
+    { .cmd = OVS_CTRL_CMD_EVENT_NOTIFY,
+      .handler = OvsReadEventCmdHandler,
+      .supportedDevOp = OVS_READ_EVENT_DEV_OP,
+      .validateDpIndex = FALSE,
     }
 };
 
@@ -629,6 +636,29 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
         devOp = OVS_TRANSACTION_DEV_OP;
         break;
 
+    case OVS_IOCTL_READ_EVENT:
+        /* This IOCTL is used to read events */
+        if (outputBufferLen != 0) {
+            status = MapIrpOutputBuffer(irp, outputBufferLen,
+                                        sizeof *ovsMsg, &outputBuffer);
+            if (status != STATUS_SUCCESS) {
+                goto done;
+            }
+            ASSERT(outputBuffer);
+        } else {
+            status = STATUS_NDIS_INVALID_LENGTH;
+            goto done;
+        }
+        inputBuffer = NULL;
+        inputBufferLen = 0;
+
+        ovsMsg = &ovsMsgReadOp;
+        ovsMsg->nlMsg.nlmsgType = OVS_WIN_NL_CTRL_FAMILY_ID;
+        /* An "artificial" command so we can use NL family function table*/
+        ovsMsg->genlMsg.cmd = OVS_CTRL_CMD_EVENT_NOTIFY;
+        devOp = OVS_READ_DEV_OP;
+        break;
+
     case OVS_IOCTL_READ:
         /* Output buffer is mandatory. */
         if (outputBufferLen != 0) {
@@ -933,6 +963,7 @@ OvsPendEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                &poll, sizeof poll);
     return status;
 }
+
 
 /*
  * --------------------------------------------------------------------------
@@ -1567,4 +1598,131 @@ MapIrpOutputBuffer(PIRP irp,
     return STATUS_SUCCESS;
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * Utility function to fill up information about the state of a port in a reply
+ * to* userspace.
+ * Assumes that 'gOvsCtrlLock' lock is acquired.
+ * --------------------------------------------------------------------------
+ */
+static NTSTATUS
+OvsPortFillInfo(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                POVS_EVENT_ENTRY eventEntry,
+                PNL_BUFFER nlBuf)
+{
+    NTSTATUS status;
+    BOOLEAN rc;
+    OVS_MESSAGE msgOutTmp;
+    PNL_MSG_HDR nlMsg;
+    POVS_VPORT_ENTRY vport;
+
+    ASSERT(NlBufAt(nlBuf, 0, 0) != 0 && nlBuf->bufRemLen >= sizeof msgOutTmp);
+
+    msgOutTmp.nlMsg.nlmsgType = OVS_WIN_NL_VPORT_FAMILY_ID;
+    msgOutTmp.nlMsg.nlmsgFlags = 0;  /* XXX: ? */
+
+    /* driver intiated messages should have zerp seq number*/
+    msgOutTmp.nlMsg.nlmsgSeq = 0;
+    msgOutTmp.nlMsg.nlmsgPid = usrParamsCtx->ovsInstance->pid;
+
+    msgOutTmp.genlMsg.version = nlVportFamilyOps.version;
+    msgOutTmp.genlMsg.reserved = 0;
+
+    /* we don't have netdev yet, treat link up/down a adding/removing a port*/
+    if (eventEntry->status & (OVS_EVENT_LINK_UP | OVS_EVENT_CONNECT)) {
+        msgOutTmp.genlMsg.cmd = OVS_VPORT_CMD_NEW;
+    } else if (eventEntry->status &
+             (OVS_EVENT_LINK_DOWN | OVS_EVENT_DISCONNECT)) {
+        msgOutTmp.genlMsg.cmd = OVS_VPORT_CMD_DEL;
+    } else {
+        ASSERT(FALSE);
+        return STATUS_UNSUCCESSFUL;
+    }
+    msgOutTmp.ovsHdr.dp_ifindex = gOvsSwitchContext->dpNo;
+
+    rc = NlMsgPutHead(nlBuf, (PCHAR)&msgOutTmp, sizeof msgOutTmp);
+    if (!rc) {
+        status = STATUS_INVALID_BUFFER_SIZE;
+        goto cleanup;
+    }
+
+    vport = OvsFindVportByPortNo(gOvsSwitchContext, eventEntry->portNo);
+    if (!vport) {
+        status = STATUS_DEVICE_DOES_NOT_EXIST;
+        goto cleanup;
+    }
+
+    rc = NlMsgPutTailU32(nlBuf, OVS_VPORT_ATTR_PORT_NO, eventEntry->portNo) ||
+         NlMsgPutTailU32(nlBuf, OVS_VPORT_ATTR_TYPE, vport->ovsType) ||
+         NlMsgPutTailString(nlBuf, OVS_VPORT_ATTR_NAME, vport->ovsName);
+    if (!rc) {
+        status = STATUS_INVALID_BUFFER_SIZE;
+        goto cleanup;
+    }
+
+    /* XXXX Should we add the port stats attributes?*/
+    nlMsg = (PNL_MSG_HDR)NlBufAt(nlBuf, 0, 0);
+    nlMsg->nlmsgLen = NlBufSize(nlBuf);
+    status = STATUS_SUCCESS;
+
+cleanup:
+    return status;
+}
+
+
+/*
+ * --------------------------------------------------------------------------
+ * Handler for reading events from the driver event queue. This handler is
+ * executed when user modes issues a socket receive on a socket assocaited
+ * with the MC group for events.
+ * XXX user mode should read multiple events in one system call
+ * --------------------------------------------------------------------------
+ */
+static NTSTATUS
+OvsReadEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                       UINT32 *replyLen)
+{
+#ifdef DBG
+    POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
+    POVS_OPEN_INSTANCE instance =
+        (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
+#endif
+    NL_BUFFER nlBuf;
+    NTSTATUS status;
+    OVS_EVENT_ENTRY eventEntry;
+
+    ASSERT(usrParamsCtx->devOp == OVS_READ_DEV_OP);
+
+    /* Should never read events with a dump socket */
+    ASSERT(instance->dumpState.ovsMsg == NULL);
+
+    /* Must have an event queue */
+    ASSERT(instance->eventQueue != NULL);
+
+    /* Output buffer has been validated while validating read dev op. */
+    ASSERT(msgOut != NULL && usrParamsCtx->outputLength >= sizeof *msgOut);
+
+    NlBufInit(&nlBuf, usrParamsCtx->outputBuffer, usrParamsCtx->outputLength);
+
+    OvsAcquireCtrlLock();
+    if (!gOvsSwitchContext) {
+        status = STATUS_SUCCESS;
+        goto cleanup;
+    }
+
+    /* remove an event entry from the event queue */
+    status = OvsRemoveEventEntry(usrParamsCtx->ovsInstance, &eventEntry);
+    if (status != STATUS_SUCCESS) {
+        goto cleanup;
+    }
+
+    status = OvsPortFillInfo(usrParamsCtx, &eventEntry, &nlBuf);
+    if (status == NDIS_STATUS_SUCCESS) {
+        *replyLen = NlBufSize(&nlBuf);
+    }
+
+cleanup:
+    OvsReleaseCtrlLock();
+    return status;
+}
 #endif /* OVS_USE_NL_INTERFACE */
