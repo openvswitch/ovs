@@ -70,8 +70,8 @@ NTSTATUS OvsGetFlowIoctl(PVOID inputBuffer, UINT32 inputLength,
                          UINT32 *replyLen);
 NTSTATUS OvsFlushFlowIoctl(UINT32 dpNo);
 
-NTSTATUS OvsFlowNlNewCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
-                                UINT32 *replyLen);
+NTSTATUS OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                             UINT32 *replyLen);
 
 /* Flags for tunneling */
 #define OVS_TNL_F_DONT_FRAGMENT         (1 << 0)

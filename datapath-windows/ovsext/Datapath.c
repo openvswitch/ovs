@@ -210,17 +210,17 @@ NETLINK_FAMILY nlVportFamilyOps = {
 
 NETLINK_CMD nlFlowFamilyCmdOps[] = {
     { .cmd              = OVS_FLOW_CMD_NEW,
-      .handler          = OvsFlowNlNewCmdHandler,
+      .handler          = OvsFlowNlCmdHandler,
       .supportedDevOp   = OVS_TRANSACTION_DEV_OP,
       .validateDpIndex  = TRUE
     },
     { .cmd              = OVS_FLOW_CMD_SET, 
-      .handler          = OvsFlowNlNewCmdHandler,
+      .handler          = OvsFlowNlCmdHandler,
       .supportedDevOp   = OVS_TRANSACTION_DEV_OP,
       .validateDpIndex  = TRUE
     },
     { .cmd              = OVS_FLOW_CMD_DEL,
-      .handler          = OvsFlowNlNewCmdHandler,
+      .handler          = OvsFlowNlCmdHandler,
       .supportedDevOp   = OVS_TRANSACTION_DEV_OP,
       .validateDpIndex  = TRUE
     }

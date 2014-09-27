@@ -211,14 +211,14 @@ static const NL_POLICY nlFlowActionPolicy[] = {
 
 /*
  *----------------------------------------------------------------------------
- *  OvsFlowNlNewCmdHandler --
+ *  OvsFlowNewCmdHandler --
  *    Handler for OVS_FLOW_CMD_NEW/SET/DEL command.
  *    It also handles FLUSH case (DEL w/o any key in input)
  *----------------------------------------------------------------------------
  */
 NTSTATUS
-OvsFlowNlNewCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
-                       UINT32 *replyLen)
+OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                    UINT32 *replyLen)
 {
     NTSTATUS rc = STATUS_SUCCESS;
     POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
