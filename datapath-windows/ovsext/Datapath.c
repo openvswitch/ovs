@@ -157,7 +157,7 @@ NETLINK_CMD nlDatapathFamilyCmdOps[] = {
       .handler         = OvsGetDpCmdHandler,
       .supportedDevOp  = OVS_WRITE_DEV_OP | OVS_READ_DEV_OP |
                          OVS_TRANSACTION_DEV_OP,
-      .validateDpIndex = FALSE
+       .validateDpIndex = FALSE
     },
     { .cmd             = OVS_DP_CMD_SET,
       .handler         = OvsSetDpCmdHandler,

@@ -46,6 +46,20 @@ static VOID DeleteAllFlows(OVS_DATAPATH *datapath);
 static NTSTATUS AddFlow(OVS_DATAPATH *datapath, OvsFlow *flow);
 static VOID FreeFlow(OvsFlow *flow);
 static VOID __inline *GetStartAddrNBL(const NET_BUFFER_LIST *_pNB);
+static NTSTATUS _MapNlToFlowPut(POVS_MESSAGE msgIn, PNL_ATTR keyAttr,
+                                PNL_ATTR actionAttr,
+                                PNL_ATTR flowAttrClear,
+                                OvsFlowPut *mappedFlow);
+static VOID _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
+                                 PNL_ATTR *tunnelAttrs,
+                                 OvsFlowPut *mappedFlow);
+
+static VOID _MapTunAttrToFlowPut(PNL_ATTR *keyAttrs,
+                                 PNL_ATTR *tunnelAttrs,
+                                 OvsFlowKey *destKey);
+static VOID _MapNlToFlowPutFlags(PGENL_MSG_HDR genlMsgHdr,
+                                 PNL_ATTR flowAttrClear,
+                                 OvsFlowPut *mappedFlow);
 
 #define OVS_FLOW_TABLE_SIZE 2048
 #define OVS_FLOW_TABLE_MASK (OVS_FLOW_TABLE_SIZE -1)
@@ -194,16 +208,418 @@ static const NL_POLICY nlFlowActionPolicy[] = {
  * Netlink interface for flow commands.
  *----------------------------------------------------------------------------
  */
+
+/*
+ *----------------------------------------------------------------------------
+ *  OvsFlowNlNewCmdHandler --
+ *    Handler for OVS_FLOW_CMD_NEW command.
+ *----------------------------------------------------------------------------
+ */
 NTSTATUS
 OvsFlowNlNewCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                        UINT32 *replyLen)
 {
     NTSTATUS rc = STATUS_SUCCESS;
+    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
+    POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
+    PNL_MSG_HDR nlMsgHdr = &(msgIn->nlMsg);
+    PGENL_MSG_HDR genlMsgHdr = &(msgIn->genlMsg);
+    POVS_HDR ovsHdr = &(msgIn->ovsHdr);
+    PNL_ATTR nlAttrs[__OVS_FLOW_ATTR_MAX];
+    UINT32 attrOffset = NLMSG_HDRLEN + GENL_HDRLEN + OVS_HDRLEN;
+    OvsFlowPut mappedFlow;
+    OvsFlowStats stats;
+    struct ovs_flow_stats replyStats;
 
-    UNREFERENCED_PARAMETER(usrParamsCtx);
-    UNREFERENCED_PARAMETER(replyLen);
+    NL_BUFFER nlBuf;
 
+    RtlZeroMemory(&mappedFlow, sizeof(OvsFlowPut));
+    RtlZeroMemory(&stats, sizeof(stats));
+    RtlZeroMemory(&replyStats, sizeof(replyStats));
+
+    *replyLen = 0;
+
+    /* Get all the top level Flow attributes */
+    if ((NlAttrParse(nlMsgHdr, attrOffset, NlMsgAttrsLen(nlMsgHdr),
+                     nlFlowPolicy, nlAttrs, ARRAY_SIZE(nlAttrs)))
+                     != TRUE) {
+        OVS_LOG_ERROR("Attr Parsing failed for msg: %p",
+                       nlMsgHdr);
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+    if ((_MapNlToFlowPut(msgIn, nlAttrs[OVS_FLOW_ATTR_KEY],
+         nlAttrs[OVS_FLOW_ATTR_ACTIONS], nlAttrs[OVS_FLOW_ATTR_CLEAR],
+         &mappedFlow))
+        != STATUS_SUCCESS) {
+        OVS_LOG_ERROR("Conversion to OvsFlowPut failed");
+        goto done;
+    }
+
+    rc = OvsPutFlowIoctl(&mappedFlow, sizeof (struct OvsFlowPut),
+                         &stats);
+    if (rc != STATUS_SUCCESS) {
+        OVS_LOG_ERROR("OvsFlowPut failed.");
+        goto done;
+    }
+
+    if (!(usrParamsCtx->outputBuffer)) {
+        /* No output buffer */
+        OVS_LOG_ERROR("outputBuffer NULL.");
+        goto done;
+    }
+
+    replyStats.n_packets = stats.packetCount;
+    replyStats.n_bytes = stats.byteCount;
+
+    /* So far so good. Prepare the reply for userspace */
+    NlBufInit(&nlBuf, usrParamsCtx->outputBuffer,
+              usrParamsCtx->outputLength);
+
+    /* Prepare nl Msg headers */
+    rc = NlFillOvsMsg(&nlBuf, nlMsgHdr->nlmsgType, 0,
+                      nlMsgHdr->nlmsgSeq, nlMsgHdr->nlmsgPid,
+                      genlMsgHdr->cmd, OVS_FLOW_VERSION,
+                      ovsHdr->dp_ifindex);
+    ASSERT(rc);
+
+    /* Append OVS_FLOW_ATTR_STATS attribute */
+    if (!NlMsgPutTailUnspec(&nlBuf, OVS_FLOW_ATTR_STATS,
+        (PCHAR)(&replyStats), sizeof(replyStats))) {
+        OVS_LOG_ERROR("Adding OVS_FLOW_ATTR_STATS attribute failed.");
+        rc = STATUS_UNSUCCESSFUL;
+    }
+
+    *replyLen = msgOut->nlMsg.nlmsgLen;
+
+done:
     return rc;
+}
+
+/*
+ *----------------------------------------------------------------------------
+ *  _MapNlToFlowPut --
+ *    Maps input netlink message to OvsFlowPut.
+ *----------------------------------------------------------------------------
+ */
+static NTSTATUS
+_MapNlToFlowPut(POVS_MESSAGE msgIn, PNL_ATTR keyAttr,
+                PNL_ATTR actionAttr, PNL_ATTR flowAttrClear,
+                OvsFlowPut *mappedFlow)
+{
+    NTSTATUS rc = STATUS_SUCCESS;
+    PNL_MSG_HDR nlMsgHdr = &(msgIn->nlMsg);
+    PGENL_MSG_HDR genlMsgHdr = &(msgIn->genlMsg);
+    POVS_HDR ovsHdr = &(msgIn->ovsHdr);
+
+    UINT32 keyAttrOffset = (UINT32)((PCHAR)keyAttr - (PCHAR)nlMsgHdr);
+    UINT32 tunnelKeyAttrOffset;
+
+    PNL_ATTR keyAttrs[__OVS_KEY_ATTR_MAX] = {NULL};
+    PNL_ATTR tunnelAttrs[__OVS_TUNNEL_KEY_ATTR_MAX] = {NULL};
+
+    /* Get flow keys attributes */
+    if ((NlAttrParseNested(nlMsgHdr, keyAttrOffset, NlAttrLen(keyAttr),
+                           nlFlowKeyPolicy, keyAttrs, ARRAY_SIZE(keyAttrs)))
+                           != TRUE) {
+        OVS_LOG_ERROR("Key Attr Parsing failed for msg: %p",
+                       nlMsgHdr);
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+    if (keyAttrs[OVS_KEY_ATTR_TUNNEL]) {
+        tunnelKeyAttrOffset = (UINT32)((PCHAR)
+                              (keyAttrs[OVS_KEY_ATTR_TUNNEL])
+                              - (PCHAR)nlMsgHdr);
+
+        OVS_LOG_ERROR("Parse Flow Tunnel Key Policy");
+
+        /* Get tunnel keys attributes */
+        if ((NlAttrParseNested(nlMsgHdr, tunnelKeyAttrOffset,
+                               NlAttrLen(keyAttr), nlFlowTunnelKeyPolicy,
+                               tunnelAttrs, ARRAY_SIZE(tunnelAttrs)))
+                               != TRUE) {
+            OVS_LOG_ERROR("Tunnel key Attr Parsing failed for msg: %p",
+                           nlMsgHdr);
+            rc = STATUS_UNSUCCESSFUL;
+            goto done;
+        }
+    }
+
+    _MapKeyAttrToFlowPut(keyAttrs, tunnelAttrs,
+                         mappedFlow);
+
+    /* Map the action */
+    mappedFlow->actionsLen = NlAttrGetSize(actionAttr);
+    mappedFlow->actions = NlAttrGet(actionAttr);
+    mappedFlow->dpNo = ovsHdr->dp_ifindex;
+
+    _MapNlToFlowPutFlags(genlMsgHdr, flowAttrClear,
+                                mappedFlow);
+
+done:
+    return rc;
+}
+
+/*
+ *----------------------------------------------------------------------------
+ *  _MapNlToFlowPutFlags --
+ *    Maps netlink message to OvsFlowPut->flags.
+ *----------------------------------------------------------------------------
+ */
+static VOID
+_MapNlToFlowPutFlags(PGENL_MSG_HDR genlMsgHdr,
+                     PNL_ATTR flowAttrClear, OvsFlowPut *mappedFlow)
+{
+    uint32_t flags = 0;
+
+    switch (genlMsgHdr->cmd) {
+    case OVS_FLOW_CMD_NEW:
+         flags |= OVSWIN_FLOW_PUT_CREATE;
+         break;
+    case OVS_FLOW_CMD_DEL:
+         flags |= OVSWIN_FLOW_PUT_DELETE;
+         break;
+    case OVS_FLOW_CMD_SET:
+         flags |= OVSWIN_FLOW_PUT_MODIFY;
+         break;
+    default:
+         ASSERT(0);
+    }
+
+    if (flowAttrClear) {
+        flags |= OVSWIN_FLOW_PUT_CLEAR;
+    }
+
+    mappedFlow->flags = flags;
+}
+
+/*
+ *----------------------------------------------------------------------------
+ *  _MapKeyAttrToFlowPut --
+ *    Converts FLOW_KEY attribute to OvsFlowPut->key.
+ *----------------------------------------------------------------------------
+ */
+static VOID
+_MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
+                     PNL_ATTR *tunnelAttrs,
+                     OvsFlowPut *mappedFlow)
+{
+    const struct ovs_key_ethernet *eth_key;
+    OvsFlowKey *destKey = &(mappedFlow->key);
+
+    _MapTunAttrToFlowPut(keyAttrs, tunnelAttrs, destKey);
+
+    /* ===== L2 headers ===== */
+    destKey->l2.inPort = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_IN_PORT]);
+    eth_key = NlAttrGet(keyAttrs[OVS_KEY_ATTR_ETHERNET]);
+    RtlCopyMemory(destKey->l2.dlSrc, eth_key->eth_src, ETH_ADDR_LEN);
+    RtlCopyMemory(destKey->l2.dlDst, eth_key->eth_dst, ETH_ADDR_LEN);
+
+    destKey->l2.dlType = ntohs((NlAttrGetU16(keyAttrs
+                          [OVS_KEY_ATTR_ETHERTYPE])));
+
+    if (keyAttrs[OVS_KEY_ATTR_VLAN]) {
+        destKey->l2.vlanTci = NlAttrGetU16(keyAttrs
+                              [OVS_KEY_ATTR_VLAN]);
+    }
+
+    /* ==== L3 + L4. ==== */
+    destKey->l2.keyLen = OVS_WIN_TUNNEL_KEY_SIZE + OVS_L2_KEY_SIZE
+                         - destKey->l2.offset;
+
+    switch (destKey->l2.dlType) {
+    case ETH_TYPE_IPV4: {
+
+        if (keyAttrs[OVS_KEY_ATTR_IPV4]) {
+            const struct ovs_key_ipv4 *ipv4Key;
+
+            ipv4Key = NlAttrGet(keyAttrs[OVS_KEY_ATTR_IPV4]);
+            IpKey *ipv4FlowPutKey = &(destKey->ipKey);
+            ipv4FlowPutKey->nwSrc = ipv4Key->ipv4_src;
+            ipv4FlowPutKey->nwDst = ipv4Key->ipv4_dst;
+            ipv4FlowPutKey->nwProto = ipv4Key->ipv4_proto;
+            ipv4FlowPutKey->nwTos = ipv4Key->ipv4_tos;
+            ipv4FlowPutKey->nwTtl = ipv4Key->ipv4_ttl;
+            ipv4FlowPutKey->nwFrag = ipv4Key->ipv4_frag;
+
+            if (keyAttrs[OVS_KEY_ATTR_TCP]) {
+                const struct ovs_key_tcp *tcpKey;
+                tcpKey = NlAttrGet(keyAttrs[OVS_KEY_ATTR_TCP]);
+                ipv4FlowPutKey->l4.tpSrc = tcpKey->tcp_src;
+                ipv4FlowPutKey->l4.tpDst = tcpKey->tcp_dst;
+            }
+
+            if (keyAttrs[OVS_KEY_ATTR_UDP]) {
+                const struct ovs_key_udp *udpKey;
+                udpKey = NlAttrGet(keyAttrs[OVS_KEY_ATTR_UDP]);
+                ipv4FlowPutKey->l4.tpSrc = udpKey->udp_src;
+                ipv4FlowPutKey->l4.tpDst = udpKey->udp_dst;
+            }
+
+            if (keyAttrs[OVS_KEY_ATTR_SCTP]) {
+                const struct ovs_key_sctp *sctpKey;
+                sctpKey = NlAttrGet(keyAttrs[OVS_KEY_ATTR_SCTP]);
+                ipv4FlowPutKey->l4.tpSrc = sctpKey->sctp_src;
+                ipv4FlowPutKey->l4.tpDst = sctpKey->sctp_dst;
+            }
+
+            destKey->l2.keyLen += OVS_IP_KEY_SIZE;
+        }
+        break;
+    }
+    case ETH_TYPE_IPV6: {
+
+        if (keyAttrs[OVS_KEY_ATTR_IPV6]) {
+            const struct ovs_key_ipv6 *ipv6Key;
+
+            ipv6Key = NlAttrGet(keyAttrs[OVS_KEY_ATTR_IPV6]);
+            Ipv6Key *ipv6FlowPutKey = &(destKey->ipv6Key);
+
+            RtlCopyMemory(&ipv6FlowPutKey->ipv6Src, ipv6Key->ipv6_src,
+                          sizeof ipv6Key->ipv6_src);
+            RtlCopyMemory(&ipv6FlowPutKey->ipv6Dst, ipv6Key->ipv6_dst,
+                          sizeof ipv6Key->ipv6_dst);
+
+            ipv6FlowPutKey->ipv6Label = ipv6Key->ipv6_label;
+            ipv6FlowPutKey->nwProto  = ipv6Key->ipv6_proto;
+            ipv6FlowPutKey->nwTos = ipv6Key->ipv6_tclass;
+            ipv6FlowPutKey->nwTtl = ipv6Key->ipv6_hlimit;
+            ipv6FlowPutKey->nwFrag = ipv6Key->ipv6_frag;
+
+            if (keyAttrs[OVS_KEY_ATTR_TCP]) {
+                const struct ovs_key_tcp *tcpKey;
+                tcpKey = NlAttrGet(keyAttrs[OVS_KEY_ATTR_TCP]);
+                ipv6FlowPutKey->l4.tpSrc = tcpKey->tcp_src;
+                ipv6FlowPutKey->l4.tpDst = tcpKey->tcp_dst;
+            }
+
+            if (keyAttrs[OVS_KEY_ATTR_UDP]) {
+                const struct ovs_key_udp *udpKey;
+                udpKey = NlAttrGet(keyAttrs[OVS_KEY_ATTR_UDP]);
+                ipv6FlowPutKey->l4.tpSrc = udpKey->udp_src;
+                ipv6FlowPutKey->l4.tpDst = udpKey->udp_dst;
+            }
+
+            if (keyAttrs[OVS_KEY_ATTR_SCTP]) {
+                const struct ovs_key_sctp *sctpKey;
+                sctpKey = NlAttrGet(keyAttrs[OVS_KEY_ATTR_SCTP]);
+                ipv6FlowPutKey->l4.tpSrc = sctpKey->sctp_src;
+                ipv6FlowPutKey->l4.tpDst = sctpKey->sctp_dst;
+            }
+
+            if (keyAttrs[OVS_KEY_ATTR_ICMPV6]) {
+                const struct ovs_key_icmpv6 *icmpv6Key;
+
+                Icmp6Key *icmp6FlowPutKey= &(destKey->icmp6Key);
+
+                icmpv6Key = NlAttrGet(keyAttrs[OVS_KEY_ATTR_ICMPV6]);
+
+                icmp6FlowPutKey->l4.tpSrc = icmpv6Key->icmpv6_type;
+                icmp6FlowPutKey->l4.tpDst = icmpv6Key->icmpv6_code;
+
+                if (keyAttrs[OVS_KEY_ATTR_ND]) {
+                    const struct ovs_key_nd *ndKey;
+
+                    ndKey = NlAttrGet(keyAttrs[OVS_KEY_ATTR_ND]);
+                    RtlCopyMemory(&icmp6FlowPutKey->ndTarget,
+                                  ndKey->nd_target, sizeof (icmp6FlowPutKey->ndTarget));
+                    RtlCopyMemory(icmp6FlowPutKey->arpSha,
+                                  ndKey->nd_sll, ETH_ADDR_LEN);
+                    RtlCopyMemory(icmp6FlowPutKey->arpTha,
+                                  ndKey->nd_tll, ETH_ADDR_LEN);
+                }
+
+                destKey->l2.keyLen += OVS_ICMPV6_KEY_SIZE;
+
+            } else {
+
+                destKey->l2.keyLen += OVS_IPV6_KEY_SIZE;
+            }
+
+            ipv6FlowPutKey->pad = 0;
+        }
+        break;
+    }
+    case ETH_TYPE_ARP:
+    case ETH_TYPE_RARP: {
+        ArpKey *arpFlowPutKey = &destKey->arpKey;
+        const struct ovs_key_arp *arpKey;
+
+        arpKey = NlAttrGet(keyAttrs[OVS_KEY_ATTR_ARP]);
+
+        arpFlowPutKey->nwSrc = arpKey->arp_sip;
+        arpFlowPutKey->nwDst = arpKey->arp_tip;
+
+        RtlCopyMemory(arpFlowPutKey->arpSha, arpKey->arp_sha, ETH_ADDR_LEN);
+        RtlCopyMemory(arpFlowPutKey->arpTha, arpKey->arp_tha, ETH_ADDR_LEN);
+        arpFlowPutKey->nwProto = (UINT8)(arpKey->arp_op);
+        arpFlowPutKey->pad[0] = 0;
+        arpFlowPutKey->pad[1] = 0;
+        arpFlowPutKey->pad[2] = 0;
+        destKey->l2.keyLen += OVS_ARP_KEY_SIZE;
+        break;
+    }
+    }
+}
+
+/*
+ *----------------------------------------------------------------------------
+ *  _MapTunAttrToFlowPut --
+ *    Converts FLOW_TUNNEL_KEY attribute to OvsFlowKey->tunKey.
+ *----------------------------------------------------------------------------
+ */
+static VOID
+_MapTunAttrToFlowPut(PNL_ATTR *keyAttrs,
+                     PNL_ATTR *tunAttrs,
+                     OvsFlowKey *destKey)
+{
+    if (keyAttrs[OVS_KEY_ATTR_TUNNEL]) {
+
+        if (tunAttrs[OVS_TUNNEL_KEY_ATTR_ID]) {
+            destKey->tunKey.tunnelId = NlAttrGetU64
+                                       (tunAttrs[OVS_TUNNEL_KEY_ATTR_ID]);
+            destKey->tunKey.flags |= OVS_TNL_F_KEY;
+        }
+
+        if (tunAttrs[OVS_TUNNEL_KEY_ATTR_IPV4_DST]) {
+        destKey->tunKey.dst = NlAttrGetU32
+                              (tunAttrs[OVS_TUNNEL_KEY_ATTR_IPV4_DST]);
+        }
+
+        if (tunAttrs[OVS_TUNNEL_KEY_ATTR_IPV4_SRC]) {
+        destKey->tunKey.src = NlAttrGetU32
+                              (tunAttrs[OVS_TUNNEL_KEY_ATTR_IPV4_SRC]);
+        }
+
+        if (tunAttrs[OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT]) {
+            destKey->tunKey.flags |= OVS_TNL_F_DONT_FRAGMENT;
+        }
+
+        if (tunAttrs[OVS_TUNNEL_KEY_ATTR_CSUM]) {
+            destKey->tunKey.flags |= OVS_TNL_F_CSUM;
+        }
+
+        if (tunAttrs[OVS_TUNNEL_KEY_ATTR_TOS]) {
+        destKey->tunKey.tos = NlAttrGetU8
+                              (tunAttrs[OVS_TUNNEL_KEY_ATTR_TOS]);
+        }
+
+        if (tunAttrs[OVS_TUNNEL_KEY_ATTR_TTL]) {
+        destKey->tunKey.ttl = NlAttrGetU8
+                              (tunAttrs[OVS_TUNNEL_KEY_ATTR_TTL]);
+        }
+
+        destKey->tunKey.pad = 0;
+        destKey->l2.offset = 0;
+    } else {
+        destKey->tunKey.attr[0] = 0;
+        destKey->tunKey.attr[1] = 0;
+        destKey->tunKey.attr[2] = 0;
+        destKey->l2.offset = sizeof destKey->tunKey;
+    }
 }
 
 /*
@@ -840,13 +1256,10 @@ ReportFlowInfo(OvsFlow *flow,
 NTSTATUS
 OvsPutFlowIoctl(PVOID inputBuffer,
                 UINT32 inputLength,
-                PVOID outputBuffer,
-                UINT32 outputLength,
-                UINT32 *replyLen)
+                struct OvsFlowStats *stats)
 {
     NTSTATUS status = STATUS_SUCCESS;
     OVS_DATAPATH *datapath = NULL;
-    struct OvsFlowStats stats;
     ULONG actionsLen;
     OvsFlowPut *put;
     UINT32 dpNo;
@@ -856,18 +1269,11 @@ OvsPutFlowIoctl(PVOID inputBuffer,
         return STATUS_INFO_LENGTH_MISMATCH;
     }
 
-    if ((outputLength != sizeof(stats)) || (outputBuffer == NULL)) {
-        return STATUS_INFO_LENGTH_MISMATCH;
-    }
-
     put = (OvsFlowPut *)inputBuffer;
     if (put->actionsLen > 0) {
         actionsLen = put->actionsLen;
     } else {
         actionsLen = 0;
-    }
-    if (inputLength != actionsLen + sizeof(*put)) {
-        return STATUS_INFO_LENGTH_MISMATCH;
     }
 
     dpNo = put->dpNo;
@@ -880,16 +1286,9 @@ OvsPutFlowIoctl(PVOID inputBuffer,
 
     datapath = &gOvsSwitchContext->datapath;
     ASSERT(datapath);
-    RtlZeroMemory(&stats, sizeof(stats));
     OvsAcquireDatapathWrite(datapath, &dpLockState, FALSE);
-    status = HandleFlowPut(put, datapath, &stats);
+    status = HandleFlowPut(put, datapath, stats);
     OvsReleaseDatapath(datapath, &dpLockState);
-
-    if (status == STATUS_SUCCESS) {
-        // Copy stats to User mode app
-        NdisMoveMemory(outputBuffer, (PVOID)&stats, sizeof(stats));
-        *replyLen = sizeof stats;
-    }
 
 unlock:
     NdisReleaseSpinLock(gOvsCtrlLock);

@@ -405,7 +405,7 @@ typedef struct OvsFlowPut {
     uint32_t actionsLen;
     OvsFlowKey key;
     uint32_t flags;
-    NL_ATTR  actions[0];  /* Variable length indicated by actionsLen. */
+    PNL_ATTR  actions;
 } OvsFlowPut;
 
 #define OVS_MIN_PACKET_SIZE 60
