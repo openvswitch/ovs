@@ -875,12 +875,13 @@ NlAttrValidate(const PNL_ATTR nla, const PNL_POLICY policy)
     UINT32 minLen;
     UINT32 maxLen;
     UINT32 len;
-    BOOLEAN ret = TRUE;
+    BOOLEAN ret = FALSE;
 
     if ((policy->type == NL_A_NO_ATTR) ||
-        (policy->type == NL_A_VAR_LEN)) {
+        (policy->type == NL_A_VAR_LEN) ||
+        (policy->type == NL_A_NESTED)) {
         /* Do not validate anything for attributes of type var length */
-        ret = FALSE;
+        ret = TRUE;
         goto done;
     }
 
@@ -899,7 +900,6 @@ NlAttrValidate(const PNL_ATTR nla, const PNL_POLICY policy)
     if (len < minLen || len > maxLen) {
         OVS_LOG_WARN("Attribute: %p, len: %d, not in valid range, "
                      "min: %d, max: %d", nla, len, minLen, maxLen);
-        ret = FALSE;
         goto done;
     }
 
@@ -907,16 +907,16 @@ NlAttrValidate(const PNL_ATTR nla, const PNL_POLICY policy)
     if (policy->type == NL_A_STRING) {
         if (((PCHAR) nla)[nla->nlaLen - 1]) {
             OVS_LOG_WARN("Attributes %p lacks null at the end", nla);
-            ret = FALSE;
             goto done;
         }
 
         if (memchr(nla + 1, '\0', len - 1) != NULL) {
             OVS_LOG_WARN("Attributes %p has bad length", nla);
-            ret = FALSE;
             goto done;
         }
     }
+
+    ret = TRUE;
 
 done:
     return ret;
