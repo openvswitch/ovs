@@ -217,7 +217,12 @@ NETLINK_CMD nlFlowFamilyCmdOps[] = {
     { .cmd              = OVS_FLOW_CMD_SET, 
       .handler          = OvsFlowNlNewCmdHandler,
       .supportedDevOp   = OVS_TRANSACTION_DEV_OP,
-      .validateDpIndex  = FALSE
+      .validateDpIndex  = TRUE
+    },
+    { .cmd              = OVS_FLOW_CMD_DEL,
+      .handler          = OvsFlowNlNewCmdHandler,
+      .supportedDevOp   = OVS_TRANSACTION_DEV_OP,
+      .validateDpIndex  = TRUE
     }
 };
 

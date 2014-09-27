@@ -352,8 +352,11 @@ _MapNlToFlowPut(POVS_MESSAGE msgIn, PNL_ATTR keyAttr,
                          mappedFlow);
 
     /* Map the action */
-    mappedFlow->actionsLen = NlAttrGetSize(actionAttr);
-    mappedFlow->actions = NlAttrGet(actionAttr);
+    if (actionAttr) {
+        mappedFlow->actionsLen = NlAttrGetSize(actionAttr);
+        mappedFlow->actions = NlAttrGet(actionAttr);
+    }
+
     mappedFlow->dpNo = ovsHdr->dp_ifindex;
 
     _MapNlToFlowPutFlags(genlMsgHdr, flowAttrClear,
