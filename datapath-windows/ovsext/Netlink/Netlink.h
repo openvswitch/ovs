@@ -20,6 +20,17 @@
 #include "Types.h"
 #include "NetlinkProto.h"
 #include "NetlinkBuf.h"
+#include "..\..\include\OvsDpInterface.h"
+
+/*
+ * Structure of any message passed between userspace and kernel.
+ */
+typedef struct _OVS_MESSAGE {
+    NL_MSG_HDR nlMsg;
+    GENL_MSG_HDR genlMsg;
+    OVS_HDR ovsHdr;
+    /* Variable length nl_attrs follow. */
+} OVS_MESSAGE, *POVS_MESSAGE;
 
 /* Netlink attribute types. */
 typedef enum

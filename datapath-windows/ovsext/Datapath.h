@@ -29,16 +29,6 @@
 #define __DATAPATH_H_ 1
 
 /*
- * Structure of a general message passed between userspace and kernel.
- */
-typedef struct _OVS_MESSAGE {
-    NL_MSG_HDR nlMsg;
-    GENL_MSG_HDR genlMsg;
-    OVS_HDR ovsHdr;
-    /* Variable length nl_attrs follow. */
-} OVS_MESSAGE, *POVS_MESSAGE;
-
-/*
  * Structure of an error message sent as a reply from kernel.
  */
 typedef struct _OVS_MESSAGE_ERROR {
