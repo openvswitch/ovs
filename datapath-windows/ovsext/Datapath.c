@@ -990,7 +990,8 @@ OvsSubscribeEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
     POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
 
-    rc = NlAttrParse(&msgIn->nlMsg, sizeof (*msgIn),policy, attrs, 2);
+    rc = NlAttrParse(&msgIn->nlMsg, sizeof (*msgIn),
+         NlMsgAttrsLen((PNL_MSG_HDR)msgIn), policy, attrs, 2);
     if (!rc) {
         status = STATUS_INVALID_PARAMETER;
         goto done;
@@ -1148,6 +1149,7 @@ HandleDpTransaction(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     if (usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_DP_CMD_SET) {
         if (!NlAttrParse((PNL_MSG_HDR)msgIn,
                         NLMSG_HDRLEN + GENL_HDRLEN + OVS_HDRLEN,
+                        NlMsgAttrsLen((PNL_MSG_HDR)msgIn),
                         ovsDatapathSetPolicy, dpAttrs, ARRAY_SIZE(dpAttrs))) {
             return STATUS_INVALID_PARAMETER;
         }

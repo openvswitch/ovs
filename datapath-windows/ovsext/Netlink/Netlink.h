@@ -86,10 +86,10 @@ NTSTATUS NlFillOvsMsg(PNL_BUFFER nlBuf,
 /* Netlink message accessing the payload */
 PVOID NlMsgAt(const PNL_MSG_HDR nlh, UINT32 offset);
 UINT32 NlMsgSize(const PNL_MSG_HDR nlh);
-PCHAR NlMsgPayload(const PNL_MSG_HDR nlh);
-UINT32 NlMsgPayloadLen(const PNL_MSG_HDR nlh);
+PCHAR NlHdrPayload(const PNL_MSG_HDR nlh);
+UINT32 NlHdrPayloadLen(const PNL_MSG_HDR nlh);
 PNL_ATTR NlMsgAttrs(const PNL_MSG_HDR nlh);
-UINT32 NlMsgAttrLen(const PNL_MSG_HDR nlh);
+UINT32 NlMsgAttrsLen(const PNL_MSG_HDR nlh);
 
 /* Netlink message parse */
 PNL_MSG_HDR NlMsgNext(const PNL_MSG_HDR nlh);
@@ -116,11 +116,11 @@ const PNL_ATTR NlAttrFind__(const PNL_ATTR attrs,
 const PNL_ATTR NlAttrFindNested(const PNL_ATTR nla,
                                 UINT16 type);
 BOOLEAN NlAttrParse(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
-                    const NL_POLICY policy[],
+                    UINT32 totalAttrLen, const NL_POLICY policy[],
                     PNL_ATTR attrs[], UINT32 n_attrs);
-BOOLEAN NlParseNested(const PNL_ATTR, const NL_POLICY policy[],
-                      PNL_ATTR attrs[], UINT32 n_attrs);
-
+BOOLEAN NlAttrParseNested(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
+                          UINT32 totalAttrLen, const NL_POLICY policy[],
+                          PNL_ATTR attrs[], UINT32 n_attrs);
 /*
  * --------------------------------------------------------------------------
  * Returns the length of attribute.

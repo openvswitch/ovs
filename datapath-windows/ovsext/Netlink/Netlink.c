@@ -558,7 +558,7 @@ NlMsgSize(const PNL_MSG_HDR nlh)
  * ---------------------------------------------------------------------------
  */
 PCHAR
-NlMsgPayload(const PNL_MSG_HDR nlh)
+NlHdrPayload(const PNL_MSG_HDR nlh)
 {
     return ((PCHAR)nlh + NLMSG_HDRLEN);
 }
@@ -569,7 +569,7 @@ NlMsgPayload(const PNL_MSG_HDR nlh)
  * ---------------------------------------------------------------------------
  */
 UINT32
-NlMsgPayloadLen(const PNL_MSG_HDR nlh)
+NlHdrPayloadLen(const PNL_MSG_HDR nlh)
 {
     return nlh->nlmsgLen - NLMSG_HDRLEN;
 }
@@ -582,7 +582,7 @@ NlMsgPayloadLen(const PNL_MSG_HDR nlh)
 PNL_ATTR
 NlMsgAttrs(const PNL_MSG_HDR nlh)
 {
-    return (PNL_ATTR) (NlMsgPayload(nlh) + GENL_HDRLEN + OVS_HDRLEN);
+    return (PNL_ATTR) (NlHdrPayload(nlh) + GENL_HDRLEN + OVS_HDRLEN);
 }
 
 /*
@@ -591,9 +591,9 @@ NlMsgAttrs(const PNL_MSG_HDR nlh)
  * ---------------------------------------------------------------------------
  */
 UINT32
-NlMsgAttrLen(const PNL_MSG_HDR nlh)
+NlMsgAttrsLen(const PNL_MSG_HDR nlh)
 {
-    return NlMsgPayloadLen(nlh) - GENL_HDRLEN - OVS_HDRLEN;
+    return NlHdrPayloadLen(nlh) - GENL_HDRLEN - OVS_HDRLEN;
 }
 
 /* Netlink message parse. */
@@ -974,6 +974,7 @@ NlAttrFindNested(const PNL_ATTR nla, UINT16 type)
  */
 BOOLEAN
 NlAttrParse(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
+            UINT32 totalAttrLen,
             const NL_POLICY policy[],
             PNL_ATTR attrs[], UINT32 n_attrs)
 {
@@ -984,14 +985,21 @@ NlAttrParse(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
 
     RtlZeroMemory(attrs, n_attrs * sizeof *attrs);
 
-    if ((NlMsgSize(nlMsg) < attrOffset) || (!(NlMsgAttrLen(nlMsg)))) {
+
+    /* There is nothing to parse */
+    if (!(NlMsgAttrsLen(nlMsg))) {
+        ret = TRUE;
+        goto done;
+    }
+
+    if ((NlMsgSize(nlMsg) < attrOffset)) {
         OVS_LOG_WARN("No attributes in nlMsg: %p at offset: %d",
                      nlMsg, attrOffset);
         goto done;
     }
 
     NL_ATTR_FOR_EACH (nla, left, NlMsgAt(nlMsg, attrOffset),
-                      NlMsgSize(nlMsg) - attrOffset)
+                      totalAttrLen)
     {
         UINT16 type = NlAttrType(nla);
         if (type < n_attrs && policy[type].type != NL_A_NO_ATTR) {
@@ -1040,9 +1048,10 @@ done:
  */
 BOOLEAN
 NlAttrParseNested(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
+                  UINT32 totalAttrLen,
                   const NL_POLICY policy[],
                   PNL_ATTR attrs[], UINT32 n_attrs)
 {
     return NlAttrParse(nlMsg, attrOffset + NLA_HDRLEN,
-                       policy, attrs, n_attrs);
+                       totalAttrLen - NLA_HDRLEN, policy, attrs, n_attrs);
 }
