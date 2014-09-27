@@ -590,7 +590,7 @@ NlMsgAttrs(const PNL_MSG_HDR nlh)
  * Returns size of to nlmsg attributes.
  * ---------------------------------------------------------------------------
  */
-INT
+UINT32
 NlMsgAttrLen(const PNL_MSG_HDR nlh)
 {
     return NlMsgPayloadLen(nlh) - GENL_HDRLEN - OVS_HDRLEN;
@@ -789,6 +789,32 @@ BE32
 NlAttrGetBe32(const PNL_ATTR nla)
 {
     return NL_ATTR_GET_AS(nla, BE32);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Returns the 16-bit network byte order value in 'nla''s payload.
+ *
+ * Asserts that 'nla''s payload is at least 2 bytes long.
+ * ---------------------------------------------------------------------------
+ */
+BE16
+NlAttrGetBe16(const PNL_ATTR nla)
+{
+    return NL_ATTR_GET_AS(nla, BE16);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Returns the 8-bit network byte order value in 'nla''s payload.
+ *
+ * Asserts that 'nla''s payload is at least 1 byte long.
+ * ---------------------------------------------------------------------------
+ */
+BE8
+NlAttrGetBe8(const PNL_ATTR nla)
+{
+    return NL_ATTR_GET_AS(nla, BE8);
 }
 
 /*
