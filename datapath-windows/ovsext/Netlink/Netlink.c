@@ -34,6 +34,49 @@
 
 /*
  * ---------------------------------------------------------------------------
+ * Prepare netlink message headers. Attributes should be added by caller.
+ * ---------------------------------------------------------------------------
+ */
+NTSTATUS
+NlFillOvsMsg(PNL_BUFFER nlBuf, UINT16 nlmsgType,
+             UINT16 nlmsgFlags, UINT32 nlmsgSeq,
+             UINT32 nlmsgPid, UINT8 genlCmd,
+             UINT8 genlVer, UINT32 dpNo)
+{
+    BOOLEAN writeOk;
+    PNL_MSG_HDR nlMsg;
+    OVS_MESSAGE msgOut;
+    UINT32 offset = NlBufSize(nlBuf);
+
+    ASSERT(NlBufAt(nlBuf, offset, sizeof(struct _OVS_MESSAGE)) != 0);
+
+    msgOut.nlMsg.nlmsgType = nlmsgType;
+    msgOut.nlMsg.nlmsgFlags = nlmsgFlags;
+    msgOut.nlMsg.nlmsgSeq = nlmsgSeq;
+    msgOut.nlMsg.nlmsgPid = nlmsgPid;
+
+    msgOut.genlMsg.cmd = genlCmd;
+    msgOut.genlMsg.version = genlVer;
+    msgOut.genlMsg.reserved = 0;
+
+    msgOut.ovsHdr.dp_ifindex = dpNo;
+
+    writeOk = NlMsgPutTail(nlBuf, (PCHAR)(&msgOut),
+                           sizeof (struct _OVS_MESSAGE));
+
+    if (!writeOk) {
+        goto done;
+    }
+
+    nlMsg = (PNL_MSG_HDR)NlBufAt(nlBuf, offset, sizeof(struct _NL_MSG_HDR));
+    nlMsg->nlmsgLen = sizeof(struct _OVS_MESSAGE);
+
+done:
+    return writeOk ? STATUS_SUCCESS : STATUS_INVALID_BUFFER_SIZE;
+}
+
+/*
+ * ---------------------------------------------------------------------------
  * Adds Netlink Header to the NL_BUF.
  * ---------------------------------------------------------------------------
  */
