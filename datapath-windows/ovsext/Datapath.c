@@ -207,14 +207,22 @@ NETLINK_FAMILY nlVportFamilyOps = {
 };
 
 /* Netlink flow family. */
-/* XXX: Add commands here. */
+
+NETLINK_CMD nlFlowFamilyCmdOps[] = {
+    { .cmd              = OVS_FLOW_CMD_NEW,
+      .handler          = OvsFlowNlNewCmdHandler,
+      .supportedDevOp   = OVS_TRANSACTION_DEV_OP,
+      .validateDpIndex  = TRUE
+    }
+};
+
 NETLINK_FAMILY nlFLowFamilyOps = {
     .name     = OVS_FLOW_FAMILY,
     .id       = OVS_WIN_NL_FLOW_FAMILY_ID,
     .version  = OVS_FLOW_VERSION,
     .maxAttr  = OVS_FLOW_ATTR_MAX,
-    .cmds     = NULL, /* XXX: placeholder. */
-    .opsCount = 0
+    .cmds     = nlFlowFamilyCmdOps,
+    .opsCount = ARRAY_SIZE(nlFlowFamilyCmdOps)
 };
 
 static NTSTATUS MapIrpOutputBuffer(PIRP irp,
@@ -728,8 +736,10 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
     case OVS_WIN_NL_DATAPATH_FAMILY_ID:
         nlFamilyOps = &nlDatapathFamilyOps;
         break;
-    case OVS_WIN_NL_PACKET_FAMILY_ID:
     case OVS_WIN_NL_FLOW_FAMILY_ID:
+         nlFamilyOps = &nlFLowFamilyOps;
+         break;
+    case OVS_WIN_NL_PACKET_FAMILY_ID:
         status = STATUS_NOT_IMPLEMENTED;
         goto done;
     case OVS_WIN_NL_VPORT_FAMILY_ID:

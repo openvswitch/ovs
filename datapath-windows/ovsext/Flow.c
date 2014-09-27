@@ -51,6 +51,161 @@ static VOID __inline *GetStartAddrNBL(const NET_BUFFER_LIST *_pNB);
 #define OVS_FLOW_TABLE_MASK (OVS_FLOW_TABLE_SIZE -1)
 #define HASH_BUCKET(hash) ((hash) & OVS_FLOW_TABLE_MASK)
 
+/* Flow family related netlink policies */
+
+/* For Parsing attributes in FLOW_* commands */
+static const NL_POLICY nlFlowPolicy[] = {
+    [OVS_FLOW_ATTR_KEY] = {.type = NL_A_NESTED, .optional = FALSE},
+    [OVS_FLOW_ATTR_MASK] = {.type = NL_A_NESTED, .optional = TRUE},
+    [OVS_FLOW_ATTR_ACTIONS] = {.type = NL_A_NESTED, .optional = TRUE},
+    [OVS_FLOW_ATTR_STATS] = {.type = NL_A_UNSPEC,
+                             .minLen = sizeof(struct ovs_flow_stats),
+                             .maxLen = sizeof(struct ovs_flow_stats),
+                             .optional = TRUE},
+    [OVS_FLOW_ATTR_TCP_FLAGS] = {NL_A_U8, .optional = TRUE},
+    [OVS_FLOW_ATTR_USED] = {NL_A_U64, .optional = TRUE}
+};
+
+/* For Parsing nested OVS_FLOW_ATTR_KEY attributes.
+ * Some of the attributes like OVS_KEY_ATTR_RECIRC_ID
+ * & OVS_KEY_ATTR_MPLS are not supported yet. */
+
+static const NL_POLICY nlFlowKeyPolicy[] = {
+    [OVS_KEY_ATTR_ENCAP] = {.type = NL_A_VAR_LEN, .optional = TRUE},
+    [OVS_KEY_ATTR_PRIORITY] = {.type = NL_A_UNSPEC, .minLen = 4,
+                               .maxLen = 4, .optional = TRUE},
+    [OVS_KEY_ATTR_IN_PORT] = {.type = NL_A_UNSPEC, .minLen = 4,
+                              .maxLen = 4, .optional = FALSE},
+    [OVS_KEY_ATTR_ETHERNET] = {.type = NL_A_UNSPEC,
+                               .minLen = sizeof(struct ovs_key_ethernet),
+                               .maxLen = sizeof(struct ovs_key_ethernet),
+                               .optional = FALSE},
+    [OVS_KEY_ATTR_VLAN] = {.type = NL_A_UNSPEC, .minLen = 2,
+                           .maxLen = 2, .optional = TRUE},
+    [OVS_KEY_ATTR_ETHERTYPE] = {.type = NL_A_UNSPEC, .minLen = 2,
+                                .maxLen = 2, .optional = TRUE},
+    [OVS_KEY_ATTR_IPV4] = {.type = NL_A_UNSPEC,
+                           .minLen = sizeof(struct ovs_key_ipv4),
+                           .maxLen = sizeof(struct ovs_key_ipv4),
+                           .optional = TRUE},
+    [OVS_KEY_ATTR_IPV6] = {.type = NL_A_UNSPEC,
+                           .minLen = sizeof(struct ovs_key_ipv6),
+                           .maxLen = sizeof(struct ovs_key_ipv6),
+                           .optional = TRUE},
+    [OVS_KEY_ATTR_TCP] = {.type = NL_A_UNSPEC,
+                          .minLen = sizeof(struct ovs_key_tcp),
+                          .maxLen = sizeof(struct ovs_key_tcp),
+                          .optional = TRUE},
+    [OVS_KEY_ATTR_UDP] = {.type = NL_A_UNSPEC,
+                          .minLen = sizeof(struct ovs_key_udp),
+                          .maxLen = sizeof(struct ovs_key_udp),
+                          .optional = TRUE},
+    [OVS_KEY_ATTR_ICMP] = {.type = NL_A_UNSPEC,
+                           .minLen = sizeof(struct ovs_key_icmp),
+                           .maxLen = sizeof(struct ovs_key_icmp),
+                           .optional = TRUE},
+    [OVS_KEY_ATTR_ICMPV6] = {.type = NL_A_UNSPEC,
+                             .minLen = sizeof(struct ovs_key_icmpv6),
+                             .maxLen = sizeof(struct ovs_key_icmpv6),
+                             .optional = TRUE},
+    [OVS_KEY_ATTR_ARP] = {.type = NL_A_UNSPEC,
+                          .minLen = sizeof(struct ovs_key_arp),
+                          .maxLen = sizeof(struct ovs_key_arp),
+                          .optional = TRUE},
+    [OVS_KEY_ATTR_ND] = {.type = NL_A_UNSPEC,
+                         .minLen = sizeof(struct ovs_key_nd),
+                         .maxLen = sizeof(struct ovs_key_nd),
+                         .optional = TRUE},
+    [OVS_KEY_ATTR_SKB_MARK] = {.type = NL_A_UNSPEC, .minLen = 4,
+                               .maxLen = 4, .optional = TRUE},
+    [OVS_KEY_ATTR_TUNNEL] = {.type = NL_A_VAR_LEN, .optional = TRUE},
+    [OVS_KEY_ATTR_SCTP] = {.type = NL_A_UNSPEC,
+                           .minLen = sizeof(struct ovs_key_sctp),
+                           .maxLen = sizeof(struct ovs_key_sctp),
+                           .optional = TRUE},
+    [OVS_KEY_ATTR_TCP_FLAGS] = {.type = NL_A_UNSPEC,
+                                .minLen = 2, .maxLen = 2,
+                                .optional = TRUE},
+    [OVS_KEY_ATTR_DP_HASH] = {.type = NL_A_UNSPEC, .minLen = 4,
+                              .maxLen = 4, .optional = TRUE},
+    [OVS_KEY_ATTR_RECIRC_ID] = {.type = NL_A_UNSPEC, .minLen = 4,
+                                .maxLen = 4, .optional = TRUE},
+    [OVS_KEY_ATTR_MPLS] = {.type = NL_A_VAR_LEN, .optional = TRUE}
+};
+
+/* For Parsing nested OVS_KEY_ATTR_TUNNEL attributes */
+static const NL_POLICY nlFlowTunnelKeyPolicy[] = {
+    [OVS_TUNNEL_KEY_ATTR_ID] = {.type = NL_A_UNSPEC, .minLen = 8,
+                                .maxLen = 8, .optional = TRUE},
+    [OVS_TUNNEL_KEY_ATTR_IPV4_SRC] = {.type = NL_A_UNSPEC, .minLen = 4,
+                                      .maxLen = 4, .optional = TRUE},
+    [OVS_TUNNEL_KEY_ATTR_IPV4_DST] = {.type = NL_A_UNSPEC, .minLen = 4 ,
+                                      .maxLen = 4, .optional = FALSE},
+    [OVS_TUNNEL_KEY_ATTR_TOS] = {.type = NL_A_UNSPEC, .minLen = 1,
+                                 .maxLen = 1, .optional = TRUE},
+    [OVS_TUNNEL_KEY_ATTR_TTL] = {.type = NL_A_UNSPEC, .minLen = 1,
+                                 .maxLen = 1, .optional = TRUE},
+    [OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT] = {.type = NL_A_UNSPEC, .minLen = 0,
+                                           .maxLen = 0, .optional = TRUE},
+    [OVS_TUNNEL_KEY_ATTR_CSUM] = {.type = NL_A_UNSPEC, .minLen = 0,
+                                  .maxLen = 0, .optional = TRUE},
+    [OVS_TUNNEL_KEY_ATTR_OAM] = {.type = NL_A_UNSPEC, .minLen = 0,
+                                 .maxLen = 0, .optional = TRUE},
+    [OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS] = {.type = NL_A_VAR_LEN,
+                                         .optional = TRUE}
+};
+
+/* For Parsing nested OVS_FLOW_ATTR_ACTIONS attributes */
+static const NL_POLICY nlFlowActionPolicy[] = {
+    [OVS_ACTION_ATTR_OUTPUT] = {.type = NL_A_UNSPEC, .minLen = sizeof(UINT32),
+                                .maxLen = sizeof(UINT32), .optional = TRUE},
+    [OVS_ACTION_ATTR_USERSPACE] = {.type = NL_A_VAR_LEN, .optional = TRUE},
+    [OVS_ACTION_ATTR_PUSH_VLAN] = {.type = NL_A_UNSPEC,
+                                   .minLen =
+                                   sizeof(struct ovs_action_push_vlan),
+                                   .maxLen =
+                                   sizeof(struct ovs_action_push_vlan),
+                                   .optional = TRUE},
+    [OVS_ACTION_ATTR_POP_VLAN] = {.type = NL_A_UNSPEC, .optional = TRUE},
+    [OVS_ACTION_ATTR_PUSH_MPLS] = {.type = NL_A_UNSPEC,
+                                   .minLen =
+                                   sizeof(struct ovs_action_push_mpls),
+                                   .maxLen =
+                                   sizeof(struct ovs_action_push_mpls),
+                                   .optional = TRUE},
+    [OVS_ACTION_ATTR_POP_MPLS] = {.type = NL_A_UNSPEC,
+                                  .minLen = sizeof(UINT16),
+                                  .maxLen = sizeof(UINT16),
+                                  .optional = TRUE},
+    [OVS_ACTION_ATTR_RECIRC] = {.type = NL_A_UNSPEC,
+                                .minLen = sizeof(UINT32),
+                                .maxLen = sizeof(UINT32),
+                                .optional = TRUE},
+    [OVS_ACTION_ATTR_HASH] = {.type = NL_A_UNSPEC,
+                              .minLen = sizeof(struct ovs_action_hash),
+                              .maxLen = sizeof(struct ovs_action_hash),
+                              .optional = TRUE},
+    [OVS_ACTION_ATTR_SET] = {.type = NL_A_VAR_LEN, .optional = TRUE},
+    [OVS_ACTION_ATTR_SAMPLE] = {.type = NL_A_VAR_LEN, .optional = TRUE}
+};
+
+/*
+ *----------------------------------------------------------------------------
+ * Netlink interface for flow commands.
+ *----------------------------------------------------------------------------
+ */
+NTSTATUS
+OvsFlowNlNewCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                       UINT32 *replyLen)
+{
+    NTSTATUS rc = STATUS_SUCCESS;
+
+    UNREFERENCED_PARAMETER(usrParamsCtx);
+    UNREFERENCED_PARAMETER(replyLen);
+
+    return rc;
+}
+
 /*
  *----------------------------------------------------------------------------
  * OvsDeleteFlowTable --

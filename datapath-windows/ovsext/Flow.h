@@ -21,6 +21,7 @@
 #include "Switch.h"
 #include "User.h"
 #include "NetProto.h"
+#include "Datapath.h"
 
 typedef struct _OvsFlow {
     LIST_ENTRY ListEntry;            // In Datapath's flowTable.
@@ -69,6 +70,10 @@ NTSTATUS OvsGetFlowIoctl(PVOID inputBuffer, UINT32 inputLength,
                          PVOID outputBuffer, UINT32 outputLength,
                          UINT32 *replyLen);
 NTSTATUS OvsFlushFlowIoctl(PVOID inputBuffer, UINT32 inputLength);
+
+NTSTATUS OvsFlowNlNewCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                                 UINT32 *replyLen);
+
 
 /* Flags for tunneling */
 #define OVS_TNL_F_DONT_FRAGMENT         (1 << 0)
