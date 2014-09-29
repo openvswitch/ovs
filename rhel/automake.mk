@@ -1,4 +1,4 @@
-# Copyright (C) 2009, 2010, 2011, 2012 Nicira, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012, 2014 Nicira, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -27,7 +27,7 @@ EXTRA_DIST += \
 	rhel/usr_lib_systemd_system_openvswitch-nonetwork.service
 
 update_rhel_spec = \
-  ($(ro_shell) && sed -e 's,[@]VERSION[@],$(VERSION),g') \
+  $(AM_V_GEN)($(ro_shell) && sed -e 's,[@]VERSION[@],$(VERSION),g') \
     < $(srcdir)/rhel/$(@F).in > $(@F).tmp || exit 1; \
   if cmp -s $(@F).tmp $@; then touch $@; rm $(@F).tmp; else mv $(@F).tmp $@; fi
 

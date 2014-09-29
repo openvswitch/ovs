@@ -30,9 +30,9 @@ pkgdata_DATA += vswitchd/vswitch.ovsschema
 if HAVE_PYTHON
 if HAVE_DOT
 vswitchd/vswitch.gv: ovsdb/ovsdb-dot.in vswitchd/vswitch.ovsschema
-	$(OVSDB_DOT) --no-arrows $(srcdir)/vswitchd/vswitch.ovsschema > $@
+	$(AM_V_GEN)$(OVSDB_DOT) --no-arrows $(srcdir)/vswitchd/vswitch.ovsschema > $@
 vswitchd/vswitch.pic: vswitchd/vswitch.gv ovsdb/dot2pic
-	(dot -T plain < vswitchd/vswitch.gv | $(PERL) $(srcdir)/ovsdb/dot2pic -f 3) > $@.tmp;
+	$(AM_V_GEN)(dot -T plain < vswitchd/vswitch.gv | $(PERL) $(srcdir)/ovsdb/dot2pic -f 3) > $@.tmp && \
 	mv $@.tmp $@
 VSWITCH_PIC = vswitchd/vswitch.pic
 VSWITCH_DOT_DIAGRAM_ARG = --er-diagram=$(VSWITCH_PIC)
@@ -47,12 +47,12 @@ man_MANS += vswitchd/ovs-vswitchd.conf.db.5
 vswitchd/ovs-vswitchd.conf.db.5: \
 	ovsdb/ovsdb-doc vswitchd/vswitch.xml vswitchd/vswitch.ovsschema \
 	$(VSWITCH_PIC)
-	$(OVSDB_DOC) \
+	$(AM_V_GEN)$(OVSDB_DOC) \
 		--title="ovs-vswitchd.conf.db" \
 		$(VSWITCH_DOT_DIAGRAM_ARG) \
 		--version=$(VERSION) \
 		$(srcdir)/vswitchd/vswitch.ovsschema \
-		$(srcdir)/vswitchd/vswitch.xml > $@.tmp
+		$(srcdir)/vswitchd/vswitch.xml > $@.tmp && \
 	mv $@.tmp $@
 
 # Version checking for vswitch.ovsschema.

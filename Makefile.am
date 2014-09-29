@@ -137,7 +137,7 @@ ro_shell = printf '\043 Generated automatically -- do not modify!    -*- buffer-
 
 SUFFIXES += .in
 .in:
-	$(PERL) $(srcdir)/build-aux/soexpand.pl -I$(srcdir) < $< | \
+	$(AM_V_GEN)$(PERL) $(srcdir)/build-aux/soexpand.pl -I$(srcdir) < $< | \
 	    sed \
 		-e 's,[@]PKIDIR[@],$(PKIDIR),g' \
                 -e 's,[@]LOGDIR[@],$(LOGDIR),g' \
@@ -156,7 +156,7 @@ SUFFIXES += .in
 	@if head -n 1 $@.tmp | grep '#!' > /dev/null; then \
 	    chmod +x $@.tmp; \
 	fi
-	$(AM_V_GEN) mv $@.tmp $@
+	$(AM_V_at) mv $@.tmp $@
 
 .PHONY: clean-pycov
 clean-pycov:

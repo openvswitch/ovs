@@ -134,9 +134,9 @@ valgrind_wrappers = \
 
 $(valgrind_wrappers): tests/valgrind-wrapper.in
 	@test -d tests/valgrind || mkdir tests/valgrind
-	sed -e 's,[@]wrap_program[@],$@,' \
-		$(top_srcdir)/tests/valgrind-wrapper.in > $@.tmp
-	chmod +x $@.tmp
+	$(AM_V_GEN) sed -e 's,[@]wrap_program[@],$@,' \
+		$(top_srcdir)/tests/valgrind-wrapper.in > $@.tmp && \
+	chmod +x $@.tmp && \
 	mv $@.tmp $@
 CLEANFILES += $(valgrind_wrappers)
 EXTRA_DIST += tests/valgrind-wrapper.in
@@ -156,12 +156,12 @@ check-valgrind: all tests/atconfig tests/atlocal $(TESTSUITE) \
 # OFTest support.
 
 check-oftest: all
-	srcdir='$(srcdir)' $(SHELL) $(srcdir)/tests/run-oftest
+	$(AM_V_at)srcdir='$(srcdir)' $(SHELL) $(srcdir)/tests/run-oftest
 EXTRA_DIST += tests/run-oftest
 
 # Ryu support.
 check-ryu: all
-	srcdir='$(srcdir)' $(SHELL) $(srcdir)/tests/run-ryu
+	$(AM_V_at)srcdir='$(srcdir)' $(SHELL) $(srcdir)/tests/run-ryu
 EXTRA_DIST += tests/run-ryu
 
 clean-local:
@@ -169,12 +169,12 @@ clean-local:
 
 AUTOTEST = $(AUTOM4TE) --language=autotest
 $(TESTSUITE): package.m4 $(TESTSUITE_AT)
-	$(AUTOTEST) -I '$(srcdir)' -o $@.tmp $@.at
-	mv $@.tmp $@
+	$(AM_V_GEN)$(AUTOTEST) -I '$(srcdir)' -o $@.tmp $@.at
+	$(AM_V_at)mv $@.tmp $@
 
 # The `:;' works around a Bash 3.2 bug when the output is not writeable.
 $(srcdir)/package.m4: $(top_srcdir)/configure.ac
-	:;{ \
+	$(AM_V_GEN):;{ \
 	  echo '# Signature of the current package.' && \
 	  echo 'm4_define([AT_PACKAGE_NAME],      [$(PACKAGE_NAME)])' && \
 	  echo 'm4_define([AT_PACKAGE_TARNAME],   [$(PACKAGE_TARNAME)])' && \
@@ -196,7 +196,7 @@ OVSIDL_BUILT += tests/idltest.c tests/idltest.h tests/idltest.ovsidl
 IDLTEST_IDL_FILES = tests/idltest.ovsschema tests/idltest.ann
 EXTRA_DIST += $(IDLTEST_IDL_FILES)
 tests/idltest.ovsidl: $(IDLTEST_IDL_FILES)
-	$(OVSDB_IDLC) -C $(srcdir) annotate $(IDLTEST_IDL_FILES) > $@.tmp
+	$(AM_V_GEN)$(OVSDB_IDLC) -C $(srcdir) annotate $(IDLTEST_IDL_FILES) > $@.tmp && \
 	mv $@.tmp $@
 
 tests/idltest.c: tests/idltest.h
@@ -284,21 +284,28 @@ TESTPKI_FILES = \
 check_DATA += $(TESTPKI_FILES)
 CLEANFILES += $(TESTPKI_FILES)
 
-tests/testpki-cacert.pem: tests/pki/stamp; cp tests/pki/switchca/cacert.pem $@
-tests/testpki-cert.pem: tests/pki/stamp; cp tests/pki/test-cert.pem $@
-tests/testpki-req.pem: tests/pki/stamp; cp tests/pki/test-req.pem $@
-tests/testpki-privkey.pem: tests/pki/stamp; cp tests/pki/test-privkey.pem $@
-tests/testpki-cert2.pem: tests/pki/stamp; cp tests/pki/test2-cert.pem $@
-tests/testpki-req2.pem: tests/pki/stamp; cp tests/pki/test2-req.pem $@
-tests/testpki-privkey2.pem: tests/pki/stamp; cp tests/pki/test2-privkey.pem $@
+tests/testpki-cacert.pem: tests/pki/stamp
+	$(AM_V_GEN)cp tests/pki/switchca/cacert.pem $@
+tests/testpki-cert.pem: tests/pki/stamp
+	$(AM_V_GEN)cp tests/pki/test-cert.pem $@
+tests/testpki-req.pem: tests/pki/stamp
+	$(AM_V_GEN)cp tests/pki/test-req.pem $@
+tests/testpki-privkey.pem: tests/pki/stamp
+	$(AM_V_GEN)cp tests/pki/test-privkey.pem $@
+tests/testpki-cert2.pem: tests/pki/stamp
+	$(AM_V_GEN)cp tests/pki/test2-cert.pem $@
+tests/testpki-req2.pem: tests/pki/stamp
+	$(AM_V_GEN)cp tests/pki/test2-req.pem $@
+tests/testpki-privkey2.pem: tests/pki/stamp
+	$(AM_V_GEN)cp tests/pki/test2-privkey.pem $@
 
 OVS_PKI = $(SHELL) $(srcdir)/utilities/ovs-pki.in --dir=tests/pki --log=tests/ovs-pki.log
 tests/pki/stamp:
-	rm -f tests/pki/stamp
-	rm -rf tests/pki
-	$(OVS_PKI) init
-	$(OVS_PKI) req+sign tests/pki/test
-	$(OVS_PKI) req+sign tests/pki/test2
+	$(AM_V_at)rm -f tests/pki/stamp
+	$(AM_V_at)rm -rf tests/pki
+	$(AM_V_GEN)$(OVS_PKI) init && \
+	$(OVS_PKI) req+sign tests/pki/test && \
+	$(OVS_PKI) req+sign tests/pki/test2 && \
 	: > tests/pki/stamp
 CLEANFILES += tests/ovs-pki.log
 

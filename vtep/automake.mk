@@ -32,9 +32,9 @@ pkgdata_DATA += vtep/vtep.ovsschema
 if HAVE_PYTHON
 if HAVE_DOT
 vtep/vtep.gv: ovsdb/ovsdb-dot.in vtep/vtep.ovsschema
-	$(OVSDB_DOT) --no-arrows $(srcdir)/vtep/vtep.ovsschema > $@
+	$(AM_V_GEN)$(OVSDB_DOT) --no-arrows $(srcdir)/vtep/vtep.ovsschema > $@
 vtep/vtep.pic: vtep/vtep.gv ovsdb/dot2pic
-	(dot -T plain < vtep/vtep.gv | $(PERL) $(srcdir)/ovsdb/dot2pic -f 3) > $@.tmp;
+	$(AM_V_GEN)(dot -T plain < vtep/vtep.gv | $(PERL) $(srcdir)/ovsdb/dot2pic -f 3) > $@.tmp && \
 	mv $@.tmp $@
 VTEP_PIC = vtep/vtep.pic
 VTEP_DOT_DIAGRAM_ARG = --er-diagram=$(VTEP_PIC)
@@ -48,12 +48,12 @@ DISTCLEANFILES += vtep/vtep.5
 man_MANS += vtep/vtep.5
 vtep/vtep.5: \
 	ovsdb/ovsdb-doc vtep/vtep.xml vtep/vtep.ovsschema $(VTEP_PIC)
-	$(OVSDB_DOC) \
+	$(AM_V_GEN)$(OVSDB_DOC) \
 		--title="vtep" \
 		$(VTEP_DOT_DIAGRAM_ARG) \
 		--version=$(VERSION) \
 		$(srcdir)/vtep/vtep.ovsschema \
-		$(srcdir)/vtep/vtep.xml > $@.tmp
+		$(srcdir)/vtep/vtep.xml > $@.tmp && \
 	mv $@.tmp $@
 
 # Version checking for vtep.ovsschema.

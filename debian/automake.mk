@@ -71,6 +71,7 @@ ALL_LOCAL += check-debian-changelog-version
 DIST_HOOKS += check-debian-changelog-version
 
 $(srcdir)/debian/copyright: AUTHORS debian/copyright.in
+	$(AM_V_GEN) \
 	{ sed -n -e '/%AUTHORS%/q' -e p < $(srcdir)/debian/copyright.in;   \
 	  sed '1,/^$$/d' $(srcdir)/AUTHORS |				   \
 		sed -n -e '/^$$/q' -e 's/^/  /p';			   \

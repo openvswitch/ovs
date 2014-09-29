@@ -364,11 +364,11 @@ if HAVE_OPENSSL
 lib_libopenvswitch_la_SOURCES += lib/stream-ssl.c
 nodist_lib_libopenvswitch_la_SOURCES += lib/dhparams.c
 lib/dhparams.c: lib/dh1024.pem lib/dh2048.pem lib/dh4096.pem
-	(echo '#include "lib/dhparams.h"' &&				\
+	$(AM_V_GEN)(echo '#include "lib/dhparams.h"' &&                 \
 	 openssl dhparam -C -in $(srcdir)/lib/dh1024.pem -noout &&	\
 	 openssl dhparam -C -in $(srcdir)/lib/dh2048.pem -noout &&	\
 	 openssl dhparam -C -in $(srcdir)/lib/dh4096.pem -noout)	\
-	| sed 's/\(get_dh[0-9]*\)()/\1(void)/' > lib/dhparams.c.tmp
+	| sed 's/\(get_dh[0-9]*\)()/\1(void)/' > lib/dhparams.c.tmp &&  \
 	mv lib/dhparams.c.tmp lib/dhparams.c
 else
 lib_libopenvswitch_la_SOURCES += lib/stream-nossl.c
@@ -420,7 +420,7 @@ VSWITCH_IDL_FILES = \
 	$(srcdir)/vswitchd/vswitch.ovsschema \
 	$(srcdir)/lib/vswitch-idl.ann
 $(srcdir)/lib/vswitch-idl.ovsidl: $(VSWITCH_IDL_FILES)
-	$(OVSDB_IDLC) annotate $(VSWITCH_IDL_FILES) > $@.tmp
+	$(AM_V_GEN)$(OVSDB_IDLC) annotate $(VSWITCH_IDL_FILES) > $@.tmp && \
 	mv $@.tmp $@
 
 EXTRA_DIST += $(srcdir)/lib/vtep-idl.ann
@@ -428,11 +428,11 @@ VTEP_IDL_FILES = \
 	$(srcdir)/vtep/vtep.ovsschema \
 	$(srcdir)/lib/vtep-idl.ann
 $(srcdir)/lib/vtep-idl.ovsidl: $(VTEP_IDL_FILES)
-	$(OVSDB_IDLC) annotate $(VTEP_IDL_FILES) > $@.tmp
+	$(AM_V_GEN)$(OVSDB_IDLC) annotate $(VTEP_IDL_FILES) > $@.tmp && \
 	mv $@.tmp $@
 
 lib/dirs.c: lib/dirs.c.in Makefile
-	($(ro_c) && sed < $(srcdir)/lib/dirs.c.in \
+	$(AM_V_GEN)($(ro_c) && sed < $(srcdir)/lib/dirs.c.in \
 		-e 's,[@]srcdir[@],$(srcdir),g' \
 		-e 's,[@]LOGDIR[@],"$(LOGDIR)",g' \
 		-e 's,[@]RUNDIR[@],"$(RUNDIR)",g' \
@@ -440,13 +440,13 @@ lib/dirs.c: lib/dirs.c.in Makefile
 		-e 's,[@]bindir[@],"$(bindir)",g' \
 		-e 's,[@]sysconfdir[@],"$(sysconfdir)",g' \
 		-e 's,[@]pkgdatadir[@],"$(pkgdatadir)",g') \
-	     > lib/dirs.c.tmp
+	     > lib/dirs.c.tmp && \
 	mv lib/dirs.c.tmp lib/dirs.c
 
 lib/ofp-actions.inc1: $(srcdir)/build-aux/extract-ofp-actions lib/ofp-actions.c
-	$(run_python) $^ --prototypes > $@.tmp && mv $@.tmp $@
+	$(AM_V_GEN)$(run_python) $^ --prototypes > $@.tmp && mv $@.tmp $@
 lib/ofp-actions.inc2: $(srcdir)/build-aux/extract-ofp-actions lib/ofp-actions.c
-	$(run_python) $^ --definitions > $@.tmp && mv $@.tmp $@
+	$(AM_V_GEN)$(run_python) $^ --definitions > $@.tmp && mv $@.tmp $@
 lib/ofp-actions.lo: lib/ofp-actions.inc1 lib/ofp-actions.inc2
 CLEANFILES += lib/ofp-actions.inc1 lib/ofp-actions.inc2
 EXTRA_DIST += build-aux/extract-ofp-actions lib/ofp-errors.inc
@@ -454,16 +454,16 @@ EXTRA_DIST += build-aux/extract-ofp-actions lib/ofp-errors.inc
 $(srcdir)/lib/ofp-errors.inc: \
 	lib/ofp-errors.h include/openflow/openflow-common.h \
 	$(srcdir)/build-aux/extract-ofp-errors
-	$(run_python) $(srcdir)/build-aux/extract-ofp-errors \
+	$(AM_V_GEN)$(run_python) $(srcdir)/build-aux/extract-ofp-errors \
 		$(srcdir)/lib/ofp-errors.h \
-		$(srcdir)/include/openflow/openflow-common.h > $@.tmp
+		$(srcdir)/include/openflow/openflow-common.h > $@.tmp && \
 	mv $@.tmp $@
 $(srcdir)/lib/ofp-errors.c: $(srcdir)/lib/ofp-errors.inc
 EXTRA_DIST += build-aux/extract-ofp-errors lib/ofp-errors.inc
 
 $(srcdir)/lib/ofp-msgs.inc: \
 	lib/ofp-msgs.h $(srcdir)/build-aux/extract-ofp-msgs
-	$(run_python) $(srcdir)/build-aux/extract-ofp-msgs \
+	$(AM_V_GEN)$(run_python) $(srcdir)/build-aux/extract-ofp-msgs \
 		$(srcdir)/lib/ofp-msgs.h $@ > $@.tmp && mv $@.tmp $@
 $(srcdir)/lib/ofp-msgs.c: $(srcdir)/lib/ofp-msgs.inc
 EXTRA_DIST += build-aux/extract-ofp-msgs lib/ofp-msgs.inc

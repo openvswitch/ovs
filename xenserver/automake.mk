@@ -1,4 +1,4 @@
-# Copyright (C) 2009, 2010, 2011, 2012 Nicira, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012, 2014 Nicira, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -27,6 +27,6 @@ EXTRA_DIST += \
 	xenserver/usr_share_openvswitch_scripts_sysconfig.template
 
 $(srcdir)/xenserver/openvswitch-xen.spec: xenserver/openvswitch-xen.spec.in $(top_builddir)/config.status
-	($(ro_shell) && sed -e 's,[@]VERSION[@],$(VERSION),g') \
+	$(AM_V_GEN)($(ro_shell) && sed -e 's,[@]VERSION[@],$(VERSION),g') \
 		< $(srcdir)/xenserver/$(@F).in > $(@F).tmp || exit 1; \
 	if cmp -s $(@F).tmp $@; then touch $@; rm $(@F).tmp; else mv $(@F).tmp $@; fi

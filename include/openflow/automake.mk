@@ -12,7 +12,7 @@ if HAVE_PYTHON
 SUFFIXES += .h .hstamp
 
 .h.hstamp:
-	$(run_python) $(srcdir)/build-aux/check-structs -I$(srcdir)/include $<
+	$(AM_V_GEN)$(run_python) $(srcdir)/build-aux/check-structs -I$(srcdir)/include $< && \
 	touch $@
 
 HSTAMP_FILES = \

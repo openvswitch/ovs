@@ -1,4 +1,4 @@
-# Copyright (C) 2009, 2010, 2011, 2012 Nicira, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012, 2014 Nicira, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -71,7 +71,7 @@ MAN_FRAGMENTS += ofproto/ofproto-unixctl.man ofproto/ofproto-dpif-unixctl.man
 EXTRA_DIST += ofproto/ipfix.xml
 dist_noinst_SCRIPTS = ofproto/ipfix-gen-entities
 ofproto/ipfix-entities.def: ofproto/ipfix.xml ofproto/ipfix-gen-entities
-	$(run_python) $(srcdir)/ofproto/ipfix-gen-entities $< > $@.tmp
+	$(AM_V_GEN)$(run_python) $(srcdir)/ofproto/ipfix-gen-entities $< > $@.tmp && \
 	mv $@.tmp $@
 
 # IPFIX enterprise entity definition macros.
