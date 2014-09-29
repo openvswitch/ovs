@@ -563,6 +563,14 @@ OvsCreateQueuePacket(UINT32 queueId,
     NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
     NDIS_NET_BUFFER_LIST_8021Q_INFO vlanInfo;
 
+    if (!OvsGetQueue(queueId)) {
+        /*
+         * There is no userspace queue created yet, so there is no point for
+         * creating a new packet to be queued.
+         */
+        return NULL;
+    }
+
     csumInfo.Value = NET_BUFFER_LIST_INFO(nbl, TcpIpChecksumNetBufferListInfo);
 
     if (isRecv && (csumInfo.Receive.TcpChecksumFailed ||

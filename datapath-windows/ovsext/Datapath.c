@@ -453,6 +453,7 @@ OvsAddOpenInstance(POVS_DEVICE_EXTENSION ovsExt,
     for (i = 0; i < OVS_MAX_OPEN_INSTANCES; i++) {
         if (ovsOpenInstanceArray[i] == NULL) {
             ovsOpenInstanceArray[i] = instance;
+            ovsNumberOfOpenInstances++;
             instance->cookie = i;
             break;
         }
@@ -491,6 +492,7 @@ OvsRemoveOpenInstance(PFILE_OBJECT fileObject)
     fileObject->FsContext = NULL;
     ASSERT(ovsOpenInstanceArray[instance->cookie] == instance);
     ovsOpenInstanceArray[instance->cookie] = NULL;
+    ovsNumberOfOpenInstances--;
     OvsReleaseCtrlLock();
     ASSERT(instance->eventQueue == NULL);
     ASSERT (instance->packetQueue == NULL);
