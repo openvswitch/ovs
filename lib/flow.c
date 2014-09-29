@@ -1770,7 +1770,7 @@ miniflow_get(const struct miniflow *flow, unsigned int u32_ofs)
         : 0;
 }
 
-/* Returns true if 'a' and 'b' are the same flow, false otherwise.  */
+/* Returns true if 'a' and 'b' are the equal miniflow, false otherwise. */
 bool
 miniflow_equal(const struct miniflow *a, const struct miniflow *b)
 {
