@@ -2656,16 +2656,13 @@ run_stats_update(void)
 static void
 run_status_update(void)
 {
-    uint64_t seq;
-
-    /* Check the need to update status. */
-    seq = seq_read(connectivity_seq_get());
-    if (seq != connectivity_seqno || status_txn_try_again) {
-        enum ovsdb_idl_txn_status status;
+    if (!status_txn) {
+        uint64_t seq;
 
         /* Rate limit the update.  Do not start a new update if the
          * previous one is not done. */
-        if (!status_txn) {
+        seq = seq_read(connectivity_seq_get());
+        if (seq != connectivity_seqno || status_txn_try_again) {
             struct bridge *br;
 
             connectivity_seqno = seq;
@@ -2687,6 +2684,13 @@ run_status_update(void)
                 }
             }
         }
+    }
+
+    /* Commit the transaction and get the status. If the transaction finishes,
+     * then destroy the transaction. Otherwise, keep it so that we can check
+     * progress the next time that this function is called. */
+    if (status_txn) {
+        enum ovsdb_idl_txn_status status;
 
         status = ovsdb_idl_txn_commit(status_txn);
         if (status != TXN_INCOMPLETE) {
