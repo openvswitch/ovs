@@ -7,6 +7,7 @@ EXTRA_DIST += \
 	datapath-windows/include/OvsPub.h\
 	datapath-windows/misc/install.cmd \
 	datapath-windows/misc/uninstall.cmd \
+	datapath-windows/misc/OVS.psm1 \
 	datapath-windows/ovsext.sln \
 	datapath-windows/ovsext/Datapath.c \
 	datapath-windows/ovsext/Datapath.h \
