@@ -2389,32 +2389,30 @@ bridge_run(void)
     }
 
     /* Refresh interface and mirror stats if necessary. */
-    if (time_msec() >= stats_timer) {
+    if (time_msec() >= stats_timer && cfg) {
         enum ovsdb_idl_txn_status status;
 
         /* Rate limit the update.  Do not start a new update if the
          * previous one is not done. */
         if (!stats_txn) {
-            if (cfg) {
-                stats_txn = ovsdb_idl_txn_create(idl);
-                HMAP_FOR_EACH (br, node, &all_bridges) {
-                    struct port *port;
-                    struct mirror *m;
+            stats_txn = ovsdb_idl_txn_create(idl);
+            HMAP_FOR_EACH (br, node, &all_bridges) {
+                struct port *port;
+                struct mirror *m;
 
-                    HMAP_FOR_EACH (port, hmap_node, &br->ports) {
-                        struct iface *iface;
+                HMAP_FOR_EACH (port, hmap_node, &br->ports) {
+                    struct iface *iface;
 
-                        LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-                            iface_refresh_stats(iface);
-                        }
-                        port_refresh_stp_stats(port);
+                    LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
+                        iface_refresh_stats(iface);
                     }
-                    HMAP_FOR_EACH (m, hmap_node, &br->mirrors) {
-                        mirror_refresh_stats(m);
-                    }
+                    port_refresh_stp_stats(port);
                 }
-                refresh_controller_status();
+                HMAP_FOR_EACH (m, hmap_node, &br->mirrors) {
+                    mirror_refresh_stats(m);
+                }
             }
+            refresh_controller_status();
         }
 
         status = ovsdb_idl_txn_commit(stats_txn);
