@@ -402,6 +402,11 @@ static int handle_offloads(struct sk_buff *skb)
 #else
 static int handle_offloads(struct sk_buff *skb)
 {
+	if (skb->encapsulation && skb_is_gso(skb)) {
+		kfree_skb(skb);
+		return -ENOSYS;
+	}
+
 	if (skb_is_gso(skb)) {
 		int err = skb_unclone(skb, GFP_ATOMIC);
 		if (unlikely(err))
