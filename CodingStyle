@@ -541,6 +541,11 @@ C DIALECT
     * bool and <stdbool.h>, but don't assume that bool or _Bool can
       only take on the values 0 or 1, because this behavior can't be
       simulated on C89 compilers.
+      Also, don't assume that a conversion to bool or _Bool follows
+      C99 semantics.  I.e. use "(bool)(some_value != 0)" rather than
+      "(bool)some_value".  The latter might produce unexpected results
+      on non-C99 environments.  For example, if bool is implemented as
+      a typedef of char and some_value = 0x10000000.
 
     * Designated initializers (e.g. "struct foo foo = {.a = 1};" and
       "int a[] = {[2] = 5};").
