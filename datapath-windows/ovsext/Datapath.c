@@ -1506,6 +1506,7 @@ OvsGetVport(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
     if (!NlAttrParse((PNL_MSG_HDR)msgIn,
         NLMSG_HDRLEN + GENL_HDRLEN + OVS_HDRLEN,
+        NlMsgAttrsLen((PNL_MSG_HDR)msgIn),
         ovsVportPolicy, vportAttrs, ARRAY_SIZE(vportAttrs))) {
         return STATUS_INVALID_PARAMETER;
     }
