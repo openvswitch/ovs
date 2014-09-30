@@ -87,11 +87,12 @@ void cmap_destroy(struct cmap *);
 size_t cmap_count(const struct cmap *);
 bool cmap_is_empty(const struct cmap *);
 
-/* Insertion and deletion. */
-void cmap_insert(struct cmap *, struct cmap_node *, uint32_t hash);
-void cmap_remove(struct cmap *, struct cmap_node *, uint32_t hash);
-void cmap_replace(struct cmap *, struct cmap_node *old_node,
-                  struct cmap_node *new_node, uint32_t hash);
+/* Insertion and deletion.  Return the current count after the operation. */
+size_t cmap_insert(struct cmap *, struct cmap_node *, uint32_t hash);
+static inline size_t cmap_remove(struct cmap *, struct cmap_node *,
+                                 uint32_t hash);
+size_t cmap_replace(struct cmap *, struct cmap_node *old_node,
+                    struct cmap_node *new_node, uint32_t hash);
 
 /* Search.
  *
@@ -223,6 +224,21 @@ cmap_first(const struct cmap *cmap)
     struct cmap_position pos = { 0, 0, 0 };
 
     return cmap_next_position(cmap, &pos);
+}
+
+/* Removes 'node' from 'cmap'.  The caller must ensure that 'cmap' cannot
+ * change concurrently (from another thread).
+ *
+ * 'node' must not be destroyed or modified or inserted back into 'cmap' or
+ * into any other concurrent hash map while any other thread might be accessing
+ * it.  One correct way to do this is to free it from an RCU callback with
+ * ovsrcu_postpone().
+ *
+ * Returns the current number of nodes in the cmap after the removal. */
+static inline size_t
+cmap_remove(struct cmap *cmap, struct cmap_node *node, uint32_t hash)
+{
+    return cmap_replace(cmap, node, NULL, hash);
 }
 
 #endif /* cmap.h */

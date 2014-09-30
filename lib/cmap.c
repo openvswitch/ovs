@@ -654,8 +654,10 @@ cmap_try_insert(struct cmap_impl *impl, struct cmap_node *node, uint32_t hash)
 /* Inserts 'node', with the given 'hash', into 'cmap'.  The caller must ensure
  * that 'cmap' cannot change concurrently (from another thread).  If duplicates
  * are undesirable, the caller must have already verified that 'cmap' does not
- * contain a duplicate of 'node'. */
-void
+ * contain a duplicate of 'node'.
+ *
+ * Returns the current number of nodes in the cmap after the insertion. */
+size_t
 cmap_insert(struct cmap *cmap, struct cmap_node *node, uint32_t hash)
 {
     struct cmap_impl *impl = cmap_get_impl(cmap);
@@ -669,7 +671,7 @@ cmap_insert(struct cmap *cmap, struct cmap_node *node, uint32_t hash)
     while (OVS_UNLIKELY(!cmap_try_insert(impl, node, hash))) {
         impl = cmap_rehash(cmap, impl->mask);
     }
-    impl->n++;
+    return ++impl->n;
 }
 
 static bool
@@ -705,28 +707,17 @@ cmap_replace__(struct cmap_impl *impl, struct cmap_node *node,
     }
 }
 
-/* Removes 'node' from 'cmap'.  The caller must ensure that 'cmap' cannot
- * change concurrently (from another thread).
- *
- * 'node' must not be destroyed or modified or inserted back into 'cmap' or
- * into any other concurrent hash map while any other thread might be accessing
- * it.  One correct way to do this is to free it from an RCU callback with
- * ovsrcu_postpone(). */
-void
-cmap_remove(struct cmap *cmap, struct cmap_node *node, uint32_t hash)
-{
-    cmap_replace(cmap, node, NULL, hash);
-    cmap_get_impl(cmap)->n--;
-}
-
 /* Replaces 'old_node' in 'cmap' with 'new_node'.  The caller must
  * ensure that 'cmap' cannot change concurrently (from another thread).
  *
  * 'old_node' must not be destroyed or modified or inserted back into 'cmap' or
  * into any other concurrent hash map while any other thread might be accessing
  * it.  One correct way to do this is to free it from an RCU callback with
- * ovsrcu_postpone(). */
-void
+ * ovsrcu_postpone().
+ *
+ * Returns the current number of nodes in the cmap after the replacement.  The
+ * number of nodes decreases by one if 'new_node' is NULL. */
+size_t
 cmap_replace(struct cmap *cmap, struct cmap_node *old_node,
              struct cmap_node *new_node, uint32_t hash)
 {
@@ -738,6 +729,11 @@ cmap_replace(struct cmap *cmap, struct cmap_node *old_node,
     ok = cmap_replace__(impl, old_node, new_node, hash, h1)
         || cmap_replace__(impl, old_node, new_node, hash, h2);
     ovs_assert(ok);
+
+    if (!new_node) {
+        impl->n--;
+    }
+    return impl->n;
 }
 
 static bool
