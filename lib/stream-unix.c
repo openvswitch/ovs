@@ -93,7 +93,7 @@ punix_open(const char *name OVS_UNUSED, char *suffix,
         return errno;
     }
 
-    if (listen(fd, 10) < 0) {
+    if (listen(fd, 64) < 0) {
         error = errno;
         VLOG_ERR("%s: listen: %s", name, ovs_strerror(error));
         close(fd);
