@@ -215,6 +215,7 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
             exit(EXIT_FAILURE);
 
         case OPT_DPDK:
+            ovs_fatal(0, "--dpdk must be given at beginning of command line.");
             break;
 
         default:

@@ -28,9 +28,14 @@ void thread_set_nonpmd(void);
 
 #else
 
+#include "util.h"
+
 static inline int
-dpdk_init(int arg1 OVS_UNUSED, char **arg2 OVS_UNUSED)
+dpdk_init(int argc, char **argv)
 {
+    if (argc >= 2 && !strcmp(argv[1], "--dpdk")) {
+        ovs_fatal(0, "DPDK support not built into this copy of Open vSwitch.");
+    }
     return 0;
 }
 
