@@ -1097,8 +1097,11 @@ parse_nxm_field_name(const char *name, int name_len)
     /* Check whether it's a 32-bit field header value as hex.
      * (This isn't ordinarily useful except for testing error behavior.) */
     if (name_len == 8) {
-        uint32_t header = hexits_value(name, name_len, NULL);
-        if (header != UINT_MAX) {
+        uint32_t header;
+        bool ok;
+
+        header = hexits_value(name, name_len, &ok);
+        if (ok) {
             return header;
         }
     }

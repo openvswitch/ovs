@@ -319,7 +319,7 @@ bool ovs_scan(const char *s, const char *format, ...) SCANF_FORMAT(2, 3);
 bool str_to_double(const char *, double *);
 
 int hexit_value(int c);
-unsigned int hexits_value(const char *s, size_t n, bool *ok);
+uintmax_t hexits_value(const char *s, size_t n, bool *ok);
 
 const char *english_list_delimiter(size_t index, size_t total);
 
