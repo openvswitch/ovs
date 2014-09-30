@@ -2311,6 +2311,9 @@ bridge_run(void)
          * with the current situation of multiple ovs-vswitchd daemons,
          * disable system stats collection. */
         system_stats_enable(false);
+        /* This prevents the process from constantly waking up on
+         * connectivity seq. */
+        connectivity_seqno = seq_read(connectivity_seq_get());
         return;
     } else if (!ovsdb_idl_has_lock(idl)) {
         return;
