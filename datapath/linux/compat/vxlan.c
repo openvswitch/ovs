@@ -19,7 +19,6 @@
  */
 
 #include <linux/version.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0)
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
@@ -43,6 +42,7 @@
 #include <net/arp.h>
 #include <net/ndisc.h>
 #include <net/ip.h>
+#include <net/gre.h>
 #include <net/ip_tunnels.h>
 #include <net/icmp.h>
 #include <net/udp.h>
@@ -58,6 +58,7 @@
 #include "datapath.h"
 #include "gso.h"
 #include "vlan.h"
+#ifndef GRE_USE_KERNEL_GRE_HANDLE_OFFLOADS
 
 #define VXLAN_HLEN (sizeof(struct udphdr) + sizeof(struct vxlanhdr))
 

@@ -49,6 +49,7 @@ skb_zerocopy_headlen(const struct sk_buff *from)
 	return hlen;
 }
 
+#ifndef HAVE_SKB_ZEROCOPY
 /**
  *	skb_zerocopy - Zero copy skb to skb
  *	@to: destination buffer
@@ -121,4 +122,5 @@ skb_zerocopy(struct sk_buff *to, struct sk_buff *from, int len, int hlen)
 
 	return 0;
 }
+#endif
 #endif

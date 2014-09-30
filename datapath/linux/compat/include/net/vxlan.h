@@ -4,9 +4,10 @@
 #include <linux/skbuff.h>
 #include <linux/netdevice.h>
 #include <linux/udp.h>
+#include <net/gre.h>
 
 #include <linux/version.h>
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,12,0)
+#ifdef GRE_USE_KERNEL_GRE_HANDLE_OFFLOADS
 #include_next <net/vxlan.h>
 
 static inline int rpl_vxlan_xmit_skb(struct vxlan_sock *vs,
@@ -23,8 +24,14 @@ static inline int rpl_vxlan_xmit_skb(struct vxlan_sock *vs,
 	return vxlan_xmit_skb(vs, rt, skb, src, dst, tos, ttl, df,
 			      src_port, dst_port, vni, false);
 #else
+#ifndef HAVE_IPTUNNEL_XMIT_NET
 	return vxlan_xmit_skb(vs, rt, skb, src, dst, tos, ttl, df,
 			      src_port, dst_port, vni);
+#else
+	return vxlan_xmit_skb(NULL, vs, rt, skb, src, dst, tos, ttl, df,
+			      src_port, dst_port, vni);
+#endif
+
 #endif
 }
 

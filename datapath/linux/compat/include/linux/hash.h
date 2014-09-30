@@ -2,10 +2,9 @@
 #define _LINUX_HASH_WRAPPER_H
 
 #include_next <linux/hash.h>
-
-#include <linux/version.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
 #include <asm/hash.h>
+
+#ifndef HAVE_FAST_HASH_OPS
 
 struct fast_hash_ops {
 	u32 (*hash)(const void *data, u32 len, u32 seed);
@@ -40,6 +39,6 @@ extern u32 arch_fast_hash(const void *data, u32 len, u32 seed);
  *	Returns 32bit hash.
  */
 extern u32 arch_fast_hash2(const u32 *data, u32 len, u32 seed);
-#endif /* < 3.14 */
+#endif /* !HASH_FAST_HASH_OPS */
 
 #endif /* _LINUX_HASH_WRAPPER_H */
