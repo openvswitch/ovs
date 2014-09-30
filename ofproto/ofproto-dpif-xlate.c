@@ -3242,24 +3242,23 @@ static bool
 compose_dec_mpls_ttl_action(struct xlate_ctx *ctx)
 {
     struct flow *flow = &ctx->xin->flow;
-    uint8_t ttl = mpls_lse_to_ttl(flow->mpls_lse[0]);
     struct flow_wildcards *wc = &ctx->xout->wc;
 
-    memset(&wc->masks.mpls_lse, 0xff, sizeof wc->masks.mpls_lse);
     if (eth_type_mpls(flow->dl_type)) {
+        uint8_t ttl = mpls_lse_to_ttl(flow->mpls_lse[0]);
+
+        wc->masks.mpls_lse[0] |= htonl(MPLS_TTL_MASK);
         if (ttl > 1) {
             ttl--;
             set_mpls_lse_ttl(&flow->mpls_lse[0], ttl);
             return false;
         } else {
             execute_controller_action(ctx, UINT16_MAX, OFPR_INVALID_TTL, 0);
-
-            /* Stop processing for current table. */
-            return true;
         }
-    } else {
-        return true;
     }
+
+    /* Stop processing for current table. */
+    return true;
 }
 
 static void

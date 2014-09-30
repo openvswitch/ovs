@@ -4674,11 +4674,10 @@ for dl_src in 00 01; do
     AT_CHECK([ovs-appctl netdev-dummy/receive p1 "505400000007 6066666666$dl_src 8847 00014020 00014120 45 00 00 2c 00 00 00 00 40 06 3b 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45"])
 done
 sleep 1  # wait for the datapath flow installed
-for dl_src in 00 01; do
-    AT_CHECK_UNQUOTED([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | grep "$dl_src," | STRIP_USED], [0], [dnl
-recirc_id=0,mpls,in_port=1,dl_src=60:66:66:66:66:$dl_src,mpls_label=20,mpls_tc=0,mpls_ttl=32,mpls_bos=0,mpls_lse1=82208,mpls_lse2=0, actions:userspace(pid=0,slow_path(controller))
+AT_CHECK_UNQUOTED([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_USED], [0], [dnl
+recirc_id=0,mpls,in_port=1,dl_src=60:66:66:66:66:00,mpls_label=20,mpls_tc=0,mpls_ttl=32,mpls_bos=0,mpls_lse1=82208, actions:userspace(pid=0,slow_path(controller))
+recirc_id=0,mpls,in_port=1,dl_src=60:66:66:66:66:01,mpls_bos=0,mpls_lse1=82208, actions:userspace(pid=0,slow_path(controller))
 ])
-done
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -4714,11 +4713,10 @@ for dl_src in 00 01; do
     AT_CHECK([ovs-appctl netdev-dummy/receive p1 "505400000007 6066666666$dl_src 8847 00014020 00014120 45 00 00 2c 00 00 00 00 40 06 3b 78 c0 a8 00 01 c0 a8 00 02 00 50 00 00 00 00 00 2a 00 00 00 2a 50 00 27 10 77 44 00 00 48 4f 47 45"])
 done
 sleep 1  # wait for the datapath flow installed
-for dl_src in 00 01; do
-    AT_CHECK_UNQUOTED([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | grep "$dl_src," | STRIP_USED], [0], [dnl
-recirc_id=0,mpls,in_port=1,dl_src=60:66:66:66:66:$dl_src,mpls_label=20,mpls_tc=0,mpls_ttl=32,mpls_bos=0,mpls_lse1=82208,mpls_lse2=0, actions:userspace(pid=0,slow_path(controller))
+AT_CHECK_UNQUOTED([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_USED], [0], [dnl
+recirc_id=0,mpls,in_port=1,dl_src=60:66:66:66:66:00,mpls_label=20,mpls_tc=0,mpls_ttl=32,mpls_bos=0,mpls_lse1=82208, actions:userspace(pid=0,slow_path(controller))
+recirc_id=0,mpls,in_port=1,dl_src=60:66:66:66:66:01,mpls_bos=0,mpls_lse1=82208, actions:userspace(pid=0,slow_path(controller))
 ])
-done
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -4936,8 +4934,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0a),eth_type(0x8847),mpls(label=11,tc=3,ttl=64,bos=1)'])
 sleep 1
 AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
-recirc_id=0,mpls,in_port=1,dl_src=50:54:00:00:00:09,mpls_label=11,mpls_tc=3,mpls_ttl=64,mpls_bos=1,mpls_lse1=0,mpls_lse2=0, actions: <del>
-recirc_id=0,mpls,in_port=1,dl_src=50:54:00:00:00:0b,mpls_label=11,mpls_tc=3,mpls_ttl=64,mpls_bos=1,mpls_lse1=0,mpls_lse2=0, actions: <del>
+recirc_id=0,mpls,in_port=1,dl_src=50:54:00:00:00:09,mpls_label=11,mpls_tc=3,mpls_ttl=64,mpls_bos=1, actions: <del>
+recirc_id=0,mpls,in_port=1,dl_src=50:54:00:00:00:0b,mpls_bos=1, actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

@@ -3687,14 +3687,15 @@ commit_vlan_action(ovs_be16 vlan_tci, struct flow *base,
     base->vlan_tci = vlan_tci;
 }
 
+/* Wildcarding already done at action translation time. */
 static void
 commit_mpls_action(const struct flow *flow, struct flow *base,
-                   struct ofpbuf *odp_actions, struct flow_wildcards *wc)
+                   struct ofpbuf *odp_actions)
 {
-    int base_n = flow_count_mpls_labels(base, wc);
-    int flow_n = flow_count_mpls_labels(flow, wc);
+    int base_n = flow_count_mpls_labels(base, NULL);
+    int flow_n = flow_count_mpls_labels(flow, NULL);
     int common_n = flow_count_common_mpls_labels(flow, flow_n, base, base_n,
-                                                 wc);
+                                                 NULL);
 
     while (base_n > common_n) {
         if (base_n - 1 == common_n && flow_n > common_n) {
@@ -3731,7 +3732,7 @@ commit_mpls_action(const struct flow *flow, struct flow *base,
                 dl_type = flow->dl_type;
             }
             nl_msg_put_be16(odp_actions, OVS_ACTION_ATTR_POP_MPLS, dl_type);
-            popped = flow_pop_mpls(base, base_n, flow->dl_type, wc);
+            popped = flow_pop_mpls(base, base_n, flow->dl_type, NULL);
             ovs_assert(popped);
             base_n--;
         }
@@ -3747,7 +3748,7 @@ commit_mpls_action(const struct flow *flow, struct flow *base,
                                       sizeof *mpls);
         mpls->mpls_ethertype = flow->dl_type;
         mpls->mpls_lse = flow->mpls_lse[flow_n - base_n - 1];
-        flow_push_mpls(base, base_n, mpls->mpls_ethertype, wc);
+        flow_push_mpls(base, base_n, mpls->mpls_ethertype, NULL);
         flow_set_mpls_lse(base, 0, mpls->mpls_lse);
         base_n++;
     }
@@ -4032,7 +4033,7 @@ commit_odp_actions(const struct flow *flow, struct flow *base,
     commit_set_ether_addr_action(flow, base, odp_actions, wc, use_masked);
     slow = commit_set_nw_action(flow, base, odp_actions, wc, use_masked);
     commit_set_port_action(flow, base, odp_actions, wc, use_masked);
-    commit_mpls_action(flow, base, odp_actions, wc);
+    commit_mpls_action(flow, base, odp_actions);
     commit_vlan_action(flow->vlan_tci, base, odp_actions, wc);
     commit_set_priority_action(flow, base, odp_actions, wc, use_masked);
     commit_set_pkt_mark_action(flow, base, odp_actions, wc, use_masked);

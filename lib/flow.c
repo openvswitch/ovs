@@ -1334,9 +1334,7 @@ flow_set_vlan_pcp(struct flow *flow, uint8_t pcp)
 int
 flow_count_mpls_labels(const struct flow *flow, struct flow_wildcards *wc)
 {
-    if (wc) {
-        wc->masks.dl_type = OVS_BE16_MAX;
-    }
+    /* dl_type is always masked. */
     if (eth_type_mpls(flow->dl_type)) {
         int i;
         int len = FLOW_MAX_MPLS_LABELS;
@@ -1405,7 +1403,7 @@ flow_count_common_mpls_labels(const struct flow *a, int an,
  *
  *     - BoS: 1.
  *
- * If the new label is the second or label MPLS label in 'flow', it is
+ * If the new label is the second or later label MPLS label in 'flow', it is
  * generated as;
  *
  *     - label: Copied from outer label.
@@ -1426,15 +1424,16 @@ flow_push_mpls(struct flow *flow, int n, ovs_be16 mpls_eth_type,
     ovs_assert(eth_type_mpls(mpls_eth_type));
     ovs_assert(n < FLOW_MAX_MPLS_LABELS);
 
-    memset(wc->masks.mpls_lse, 0xff, sizeof wc->masks.mpls_lse);
     if (n) {
         int i;
 
+        if (wc) {
+            memset(&wc->masks.mpls_lse, 0xff, sizeof *wc->masks.mpls_lse * n);
+        }
         for (i = n; i >= 1; i--) {
             flow->mpls_lse[i] = flow->mpls_lse[i - 1];
         }
-        flow->mpls_lse[0] = (flow->mpls_lse[1]
-                             & htonl(~MPLS_BOS_MASK));
+        flow->mpls_lse[0] = (flow->mpls_lse[1] & htonl(~MPLS_BOS_MASK));
     } else {
         int label = 0;          /* IPv4 Explicit Null. */
         int tc = 0;
@@ -1446,12 +1445,14 @@ flow_push_mpls(struct flow *flow, int n, ovs_be16 mpls_eth_type,
 
         if (is_ip_any(flow)) {
             tc = (flow->nw_tos & IP_DSCP_MASK) >> 2;
-            wc->masks.nw_tos |= IP_DSCP_MASK;
+            if (wc) {
+                wc->masks.nw_tos |= IP_DSCP_MASK;
+                wc->masks.nw_ttl = 0xff;
+            }
 
             if (flow->nw_ttl) {
                 ttl = flow->nw_ttl;
             }
-            wc->masks.nw_ttl = 0xff;
         }
 
         flow->mpls_lse[0] = set_mpls_lse_values(ttl, tc, 1, htonl(label));
@@ -1478,13 +1479,20 @@ flow_pop_mpls(struct flow *flow, int n, ovs_be16 eth_type,
     if (n == 0) {
         /* Nothing to pop. */
         return false;
-    } else if (n == FLOW_MAX_MPLS_LABELS
-               && !(flow->mpls_lse[n - 1] & htonl(MPLS_BOS_MASK))) {
-        /* Can't pop because we don't know what to fill in mpls_lse[n - 1]. */
-        return false;
+    } else if (n == FLOW_MAX_MPLS_LABELS) {
+        if (wc) {
+            wc->masks.mpls_lse[n - 1] |= htonl(MPLS_BOS_MASK);
+        }
+        if (!(flow->mpls_lse[n - 1] & htonl(MPLS_BOS_MASK))) {
+            /* Can't pop because don't know what to fill in mpls_lse[n - 1]. */
+            return false;
+        }
     }
 
-    memset(wc->masks.mpls_lse, 0xff, sizeof wc->masks.mpls_lse);
+    if (wc) {
+        memset(&wc->masks.mpls_lse[1], 0xff,
+               sizeof *wc->masks.mpls_lse * (n - 1));
+    }
     for (i = 1; i < n; i++) {
         flow->mpls_lse[i - 1] = flow->mpls_lse[i];
     }
