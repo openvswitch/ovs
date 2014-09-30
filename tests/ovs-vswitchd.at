@@ -66,3 +66,40 @@ OVS_VSCTL_CHECK_RX_PKT([p1], [7])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+dnl ----------------------------------------------------------------------
+AT_SETUP([ovs-vswitchd -- start additional ovs-vswitchd process])
+OVS_VSWITCHD_START
+
+# start another ovs-vswitchd process.
+ovs-vswitchd --log-file=fakelog &
+pid=`echo $!`
+
+# sleep for a while
+sleep 5
+
+# stop the process.
+kill $pid
+
+# check the fakelog, should only see one ERR for reporting
+# the existing ovs-vswitchd process and one WARN for killing
+# the process.
+AT_CHECK([grep ERR fakelog | wc -l], [0], [dnl
+1
+])
+
+AT_CHECK([grep WARN fakelog | wc -l], [0], [dnl
+1
+])
+
+AT_CHECK([grep ERR fakelog | sed -e 's/^.*ERR|//; s/pid [[0-9]]*//'], [0], [dnl
+another ovs-vswitchd process is running, disabling this process () until it goes away
+])
+
+# check the fakelog, the ERR log should be the last line.
+AT_CHECK([tail -n 2 fakelog | head -n 1 | sed -e 's/^.*ERR|//; s/pid [[0-9]]*//'], [0], [dnl
+another ovs-vswitchd process is running, disabling this process () until it goes away
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
