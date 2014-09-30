@@ -206,7 +206,7 @@ enum ofp_raw_action_type {
     /* NX1.0+(7): struct nx_action_reg_load. */
     NXAST_RAW_REG_LOAD,
 
-    /* OF1.5+(28): struct ofp15_action_copy_field. */
+    /* OF1.5+(28): struct ofp15_action_copy_field, ... */
     OFPAT_RAW15_COPY_FIELD,
     /* NX1.0-1.4(6): struct nx_action_reg_move. */
     NXAST_RAW_REG_MOVE,
@@ -1633,17 +1633,14 @@ struct ofp15_action_copy_field {
     ovs_be16 src_offset;        /* Starting bit offset in source. */
     ovs_be16 dst_offset;        /* Starting bit offset in destination. */
     ovs_be16 oxm_id_len;        /* Length of oxm_ids. */
-
-    /* OpenFlow allows for experimenter OXM fields whose expression is longer
-     * than a standard 32-bit OXM.  Thus, in the OpenFlow specification, the
-     * following is variable-length.  Open vSwitch does not yet support
-     * experimenter OXM fields, so until it does we leave these as fixed
-     * size. */
-    ovs_be32 src;               /* OXM for source field. */
-    ovs_be32 dst;               /* OXM for destination field. */
-    uint8_t pad[4];             /* Must be zero. */
+    /* Followed by:
+     * - OXM header for source field.
+     * - OXM header for destination field.
+     * - Padding with 0-bytes to a multiple of 8 bytes.
+     * The "pad" member is the beginning of the above. */
+    uint8_t pad[4];
 };
-OFP_ASSERT(sizeof(struct ofp15_action_copy_field) == 24);
+OFP_ASSERT(sizeof(struct ofp15_action_copy_field) == 16);
 
 /* Action structure for NXAST_REG_MOVE.
  *
@@ -1755,19 +1752,34 @@ decode_OFPAT_RAW15_COPY_FIELD(const struct ofp15_action_copy_field *oacf,
                               struct ofpbuf *ofpacts)
 {
     struct ofpact_reg_move *move;
+    enum ofperr error;
+    size_t orig_size;
+    struct ofpbuf b;
 
-    if (oacf->oxm_id_len != htons(8)) {
-        /* We only support 4-byte OXM IDs so far. */
+    move = ofpact_put_REG_MOVE(ofpacts);
+    move->src.ofs = ntohs(oacf->src_offset);
+    move->src.n_bits = ntohs(oacf->n_bits);
+    move->dst.ofs = ntohs(oacf->dst_offset);
+    move->dst.n_bits = ntohs(oacf->n_bits);
+
+    ofpbuf_use_const(&b, oacf, ntohs(oacf->len));
+    ofpbuf_pull(&b, offsetof(struct ofp15_action_copy_field, pad));
+    orig_size = ofpbuf_size(&b);
+    error = nx_pull_header(&b, &move->src.field, NULL);
+    if (error) {
+        return error;
+    }
+    error = nx_pull_header(&b, &move->dst.field, NULL);
+    if (error) {
+        return error;
+    }
+    if (orig_size - ofpbuf_size(&b) != ntohs(oacf->oxm_id_len)) {
         return OFPERR_OFPBAC_BAD_LEN;
     }
 
-    move = ofpact_put_REG_MOVE(ofpacts);
-    move->src.field = mf_from_nxm_header(ntohl(oacf->src));
-    move->src.ofs = ntohs(oacf->src_offset);
-    move->src.n_bits = ntohs(oacf->n_bits);
-    move->dst.field = mf_from_nxm_header(ntohl(oacf->dst));
-    move->dst.ofs = ntohs(oacf->dst_offset);
-    move->dst.n_bits = ntohs(oacf->n_bits);
+    if (!is_all_zeros(ofpbuf_data(&b), ofpbuf_size(&b))) {
+        return OFPERR_NXBRC_MUST_BE_ZERO;
+    }
 
     return nxm_reg_move_check(move, NULL);
 }
@@ -1795,14 +1807,17 @@ encode_REG_MOVE(const struct ofpact_reg_move *move,
 {
     if (ofp_version >= OFP15_VERSION) {
         struct ofp15_action_copy_field *copy;
+        size_t start_ofs = ofpbuf_size(out);
 
         copy = put_OFPAT15_COPY_FIELD(out);
         copy->n_bits = htons(move->dst.n_bits);
         copy->src_offset = htons(move->src.ofs);
         copy->dst_offset = htons(move->dst.ofs);
         copy->oxm_id_len = htons(8);
-        copy->src = htonl(mf_oxm_header(move->src.field->id, ofp_version));
-        copy->dst = htonl(mf_oxm_header(move->dst.field->id, ofp_version));
+        ofpbuf_set_size(out, ofpbuf_size(out) - sizeof copy->pad);
+        nx_put_header(out, move->src.field->id, ofp_version, false);
+        nx_put_header(out, move->dst.field->id, ofp_version, false);
+        pad_ofpat(out, start_ofs);
     } else {
         struct nx_action_reg_move *narm;
 
