@@ -535,6 +535,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     if (error) {
         VLOG_ERR("failed to open datapath %s: %s",
                  datapath_name, ovs_strerror(error));
+        connmgr_destroy(ofproto->connmgr);
         ofproto_destroy__(ofproto);
         return error;
     }
@@ -1390,8 +1391,6 @@ ofproto_destroy__(struct ofproto *ofproto)
     ovs_rwlock_destroy(&ofproto->groups_rwlock);
     hmap_destroy(&ofproto->groups);
 
-    connmgr_destroy(ofproto->connmgr);
-
     hmap_remove(&all_ofprotos, &ofproto->hmap_node);
     free(ofproto->name);
     free(ofproto->type);
@@ -1450,6 +1449,12 @@ ofproto_destroy(struct ofproto *p)
     }
 
     p->ofproto_class->destruct(p);
+
+    /* We should not postpone this because it involves deleting a listening
+     * socket which we may want to reopen soon. 'connmgr' should not be used
+     * by other threads */
+    connmgr_destroy(p->connmgr);
+
     /* Destroying rules is deferred, must have 'ofproto' around for them. */
     ovsrcu_postpone(ofproto_destroy__, p);
 }
