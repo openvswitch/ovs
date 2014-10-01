@@ -111,6 +111,8 @@ static const struct nxm_field *nxm_field_by_name(const char *name, size_t len);
 static const struct nxm_field *nxm_field_by_mf_id(enum mf_field_id);
 static const struct nxm_field *oxm_field_by_mf_id(enum mf_field_id);
 
+static void nx_put_header__(struct ofpbuf *, uint32_t header, bool masked);
+
 /* Rate limit for nx_match parse errors.  These always indicate a bug in the
  * peer and so there's not much point in showing a lot of them. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -501,192 +503,103 @@ oxm_pull_match_loose(struct ofpbuf *b, struct match *match)
  */
 
 static void
-nxm_put_header(struct ofpbuf *b, uint32_t header)
+nxm_put_unmasked(struct ofpbuf *b, enum mf_field_id field,
+                 enum ofp_version version, const void *value, size_t n_bytes)
 {
-    ovs_be32 n_header = htonl(header);
-    ofpbuf_put(b, &n_header, sizeof n_header);
+    nx_put_header(b, field, version, false);
+    ofpbuf_put(b, value, n_bytes);
 }
 
 static void
-nxm_put_8(struct ofpbuf *b, uint32_t header, uint8_t value)
+nxm_put(struct ofpbuf *b, enum mf_field_id field, enum ofp_version version,
+        const void *value, const void *mask, size_t n_bytes)
 {
-    nxm_put_header(b, header);
-    ofpbuf_put(b, &value, sizeof value);
-}
-
-static void
-nxm_put_8m(struct ofpbuf *b, uint32_t header, uint8_t value, uint8_t mask)
-{
-    switch (mask) {
-    case 0:
-        break;
-
-    case UINT8_MAX:
-        nxm_put_8(b, header, value);
-        break;
-
-    default:
-        nxm_put_header(b, nxm_make_wild_header(header));
-        ofpbuf_put(b, &value, sizeof value);
-        ofpbuf_put(b, &mask, sizeof mask);
-    }
-}
-
-static void
-nxm_put_16(struct ofpbuf *b, uint32_t header, ovs_be16 value)
-{
-    nxm_put_header(b, header);
-    ofpbuf_put(b, &value, sizeof value);
-}
-
-static void
-nxm_put_16w(struct ofpbuf *b, uint32_t header, ovs_be16 value, ovs_be16 mask)
-{
-    nxm_put_header(b, header);
-    ofpbuf_put(b, &value, sizeof value);
-    ofpbuf_put(b, &mask, sizeof mask);
-}
-
-static void
-nxm_put_16m(struct ofpbuf *b, uint32_t header, ovs_be16 value, ovs_be16 mask)
-{
-    switch (mask) {
-    case 0:
-        break;
-
-    case OVS_BE16_MAX:
-        nxm_put_16(b, header, value);
-        break;
-
-    default:
-        nxm_put_16w(b, nxm_make_wild_header(header), value, mask);
-        break;
-    }
-}
-
-static void
-nxm_put_32(struct ofpbuf *b, uint32_t header, ovs_be32 value)
-{
-    nxm_put_header(b, header);
-    ofpbuf_put(b, &value, sizeof value);
-}
-
-static void
-nxm_put_32w(struct ofpbuf *b, uint32_t header, ovs_be32 value, ovs_be32 mask)
-{
-    nxm_put_header(b, header);
-    ofpbuf_put(b, &value, sizeof value);
-    ofpbuf_put(b, &mask, sizeof mask);
-}
-
-static void
-nxm_put_32m(struct ofpbuf *b, uint32_t header, ovs_be32 value, ovs_be32 mask)
-{
-    switch (mask) {
-    case 0:
-        break;
-
-    case OVS_BE32_MAX:
-        nxm_put_32(b, header, value);
-        break;
-
-    default:
-        nxm_put_32w(b, nxm_make_wild_header(header), value, mask);
-        break;
-    }
-}
-
-static void
-nxm_put_64(struct ofpbuf *b, uint32_t header, ovs_be64 value)
-{
-    nxm_put_header(b, header);
-    ofpbuf_put(b, &value, sizeof value);
-}
-
-static void
-nxm_put_64w(struct ofpbuf *b, uint32_t header, ovs_be64 value, ovs_be64 mask)
-{
-    nxm_put_header(b, header);
-    ofpbuf_put(b, &value, sizeof value);
-    ofpbuf_put(b, &mask, sizeof mask);
-}
-
-static void
-nxm_put_64m(struct ofpbuf *b, uint32_t header, ovs_be64 value, ovs_be64 mask)
-{
-    switch (mask) {
-    case 0:
-        break;
-
-    case OVS_BE64_MAX:
-        nxm_put_64(b, header, value);
-        break;
-
-    default:
-        nxm_put_64w(b, nxm_make_wild_header(header), value, mask);
-        break;
-    }
-}
-
-static void
-nxm_put_eth(struct ofpbuf *b, uint32_t header,
-            const uint8_t value[ETH_ADDR_LEN])
-{
-    nxm_put_header(b, header);
-    ofpbuf_put(b, value, ETH_ADDR_LEN);
-}
-
-static void
-nxm_put_eth_masked(struct ofpbuf *b, uint32_t header,
-                   const uint8_t value[ETH_ADDR_LEN],
-                   const uint8_t mask[ETH_ADDR_LEN])
-{
-    if (!eth_addr_is_zero(mask)) {
-        if (eth_mask_is_exact(mask)) {
-            nxm_put_eth(b, header, value);
-        } else {
-            nxm_put_header(b, nxm_make_wild_header(header));
-            ofpbuf_put(b, value, ETH_ADDR_LEN);
-            ofpbuf_put(b, mask, ETH_ADDR_LEN);
+    if (!is_all_zeros(mask, n_bytes)) {
+        bool masked = !is_all_ones(mask, n_bytes);
+        nx_put_header(b, field, version, masked);
+        ofpbuf_put(b, value, n_bytes);
+        if (masked) {
+            ofpbuf_put(b, mask, n_bytes);
         }
     }
 }
 
 static void
-nxm_put_ipv6(struct ofpbuf *b, uint32_t header,
-             const struct in6_addr *value, const struct in6_addr *mask)
+nxm_put_8m(struct ofpbuf *b, enum mf_field_id field, enum ofp_version version,
+           uint8_t value, uint8_t mask)
 {
-    if (ipv6_mask_is_any(mask)) {
-        return;
-    } else if (ipv6_mask_is_exact(mask)) {
-        nxm_put_header(b, header);
-        ofpbuf_put(b, value, sizeof *value);
-    } else {
-        nxm_put_header(b, nxm_make_wild_header(header));
-        ofpbuf_put(b, value, sizeof *value);
-        ofpbuf_put(b, mask, sizeof *mask);
-    }
+    nxm_put(b, field, version, &value, &mask, sizeof value);
 }
 
 static void
-nxm_put_frag(struct ofpbuf *b, const struct match *match, enum ofp_version oxm)
+nxm_put_8(struct ofpbuf *b, enum mf_field_id field, enum ofp_version version,
+          uint8_t value)
 {
-    uint32_t header = mf_oxm_header(MFF_IP_FRAG, oxm);
-    uint8_t nw_frag = match->flow.nw_frag;
-    uint8_t nw_frag_mask = match->wc.masks.nw_frag;
+    nxm_put_unmasked(b, field, version, &value, sizeof value);
+}
 
-    switch (nw_frag_mask) {
-    case 0:
-        break;
+static void
+nxm_put_16m(struct ofpbuf *b, enum mf_field_id field, enum ofp_version version,
+            ovs_be16 value, ovs_be16 mask)
+{
+    nxm_put(b, field, version, &value, &mask, sizeof value);
+}
 
-    case FLOW_NW_FRAG_MASK:
-        nxm_put_8(b, header, nw_frag);
-        break;
+static void
+nxm_put_16(struct ofpbuf *b, enum mf_field_id field, enum ofp_version version,
+           ovs_be16 value)
+{
+    nxm_put_unmasked(b, field, version, &value, sizeof value);
+}
 
-    default:
-        nxm_put_8m(b, header, nw_frag, nw_frag_mask & FLOW_NW_FRAG_MASK);
-        break;
-    }
+static void
+nxm_put_32m(struct ofpbuf *b, enum mf_field_id field, enum ofp_version version,
+            ovs_be32 value, ovs_be32 mask)
+{
+    nxm_put(b, field, version, &value, &mask, sizeof value);
+}
+
+static void
+nxm_put_32(struct ofpbuf *b, enum mf_field_id field, enum ofp_version version,
+           ovs_be32 value)
+{
+    nxm_put_unmasked(b, field, version, &value, sizeof value);
+}
+
+static void
+nxm_put_64m(struct ofpbuf *b, enum mf_field_id field, enum ofp_version version,
+            ovs_be64 value, ovs_be64 mask)
+{
+    nxm_put(b, field, version, &value, &mask, sizeof value);
+}
+
+static void
+nxm_put_eth_masked(struct ofpbuf *b,
+                   enum mf_field_id field, enum ofp_version version,
+                   const uint8_t value[ETH_ADDR_LEN],
+                   const uint8_t mask[ETH_ADDR_LEN])
+{
+    nxm_put(b, field, version, value, mask, ETH_ADDR_LEN);
+}
+
+static void
+nxm_put_ipv6(struct ofpbuf *b,
+             enum mf_field_id field, enum ofp_version version,
+             const struct in6_addr *value, const struct in6_addr *mask)
+{
+    nxm_put(b, field, version, value->s6_addr, mask->s6_addr,
+            sizeof value->s6_addr);
+}
+
+static void
+nxm_put_frag(struct ofpbuf *b, const struct match *match,
+             enum ofp_version version)
+{
+    uint8_t nw_frag = match->flow.nw_frag & FLOW_NW_FRAG_MASK;
+    uint8_t nw_frag_mask = match->wc.masks.nw_frag & FLOW_NW_FRAG_MASK;
+
+    nxm_put_8m(b, MFF_IP_FRAG, version, nw_frag,
+               nw_frag_mask == FLOW_NW_FRAG_MASK ? UINT8_MAX : nw_frag_mask);
 }
 
 /* Appends to 'b' a set of OXM or NXM matches for the IPv4 or IPv6 fields in
@@ -697,14 +610,14 @@ nxm_put_ip(struct ofpbuf *b, const struct match *match, enum ofp_version oxm)
     const struct flow *flow = &match->flow;
 
     if (flow->dl_type == htons(ETH_TYPE_IP)) {
-        nxm_put_32m(b, mf_oxm_header(MFF_IPV4_SRC, oxm),
+        nxm_put_32m(b, MFF_IPV4_SRC, oxm,
                     flow->nw_src, match->wc.masks.nw_src);
-        nxm_put_32m(b, mf_oxm_header(MFF_IPV4_DST, oxm),
+        nxm_put_32m(b, MFF_IPV4_DST, oxm,
                     flow->nw_dst, match->wc.masks.nw_dst);
     } else {
-        nxm_put_ipv6(b, mf_oxm_header(MFF_IPV6_SRC, oxm),
+        nxm_put_ipv6(b, MFF_IPV6_SRC, oxm,
                      &flow->ipv6_src, &match->wc.masks.ipv6_src);
-        nxm_put_ipv6(b, mf_oxm_header(MFF_IPV6_DST, oxm),
+        nxm_put_ipv6(b, MFF_IPV6_DST, oxm,
                      &flow->ipv6_dst, &match->wc.masks.ipv6_dst);
     }
 
@@ -712,74 +625,74 @@ nxm_put_ip(struct ofpbuf *b, const struct match *match, enum ofp_version oxm)
 
     if (match->wc.masks.nw_tos & IP_DSCP_MASK) {
         if (oxm) {
-            nxm_put_8(b, mf_oxm_header(MFF_IP_DSCP_SHIFTED, oxm),
+            nxm_put_8(b, MFF_IP_DSCP_SHIFTED, oxm,
                       flow->nw_tos >> 2);
         } else {
-            nxm_put_8(b, mf_oxm_header(MFF_IP_DSCP, oxm),
+            nxm_put_8(b, MFF_IP_DSCP, oxm,
                       flow->nw_tos & IP_DSCP_MASK);
         }
     }
 
     if (match->wc.masks.nw_tos & IP_ECN_MASK) {
-        nxm_put_8(b, mf_oxm_header(MFF_IP_ECN, oxm),
+        nxm_put_8(b, MFF_IP_ECN, oxm,
                   flow->nw_tos & IP_ECN_MASK);
     }
 
     if (!oxm && match->wc.masks.nw_ttl) {
-        nxm_put_8(b, mf_oxm_header(MFF_IP_TTL, oxm), flow->nw_ttl);
+        nxm_put_8(b, MFF_IP_TTL, oxm, flow->nw_ttl);
     }
 
-    nxm_put_32m(b, mf_oxm_header(MFF_IPV6_LABEL, oxm),
+    nxm_put_32m(b, MFF_IPV6_LABEL, oxm,
                 flow->ipv6_label, match->wc.masks.ipv6_label);
 
     if (match->wc.masks.nw_proto) {
-        nxm_put_8(b, mf_oxm_header(MFF_IP_PROTO, oxm), flow->nw_proto);
+        nxm_put_8(b, MFF_IP_PROTO, oxm, flow->nw_proto);
 
         if (flow->nw_proto == IPPROTO_TCP) {
-            nxm_put_16m(b, mf_oxm_header(MFF_TCP_SRC, oxm),
+            nxm_put_16m(b, MFF_TCP_SRC, oxm,
                         flow->tp_src, match->wc.masks.tp_src);
-            nxm_put_16m(b, mf_oxm_header(MFF_TCP_DST, oxm),
+            nxm_put_16m(b, MFF_TCP_DST, oxm,
                         flow->tp_dst, match->wc.masks.tp_dst);
-            nxm_put_16m(b, mf_oxm_header(MFF_TCP_FLAGS, oxm),
+            nxm_put_16m(b, MFF_TCP_FLAGS, oxm,
                         flow->tcp_flags, match->wc.masks.tcp_flags);
         } else if (flow->nw_proto == IPPROTO_UDP) {
-            nxm_put_16m(b, mf_oxm_header(MFF_UDP_SRC, oxm),
+            nxm_put_16m(b, MFF_UDP_SRC, oxm,
                         flow->tp_src, match->wc.masks.tp_src);
-            nxm_put_16m(b, mf_oxm_header(MFF_UDP_DST, oxm),
+            nxm_put_16m(b, MFF_UDP_DST, oxm,
                         flow->tp_dst, match->wc.masks.tp_dst);
         } else if (flow->nw_proto == IPPROTO_SCTP) {
-            nxm_put_16m(b, mf_oxm_header(MFF_SCTP_SRC, oxm), flow->tp_src,
+            nxm_put_16m(b, MFF_SCTP_SRC, oxm, flow->tp_src,
                         match->wc.masks.tp_src);
-            nxm_put_16m(b, mf_oxm_header(MFF_SCTP_DST, oxm), flow->tp_dst,
+            nxm_put_16m(b, MFF_SCTP_DST, oxm, flow->tp_dst,
                         match->wc.masks.tp_dst);
         } else if (is_icmpv4(flow)) {
             if (match->wc.masks.tp_src) {
-                nxm_put_8(b, mf_oxm_header(MFF_ICMPV4_TYPE, oxm),
+                nxm_put_8(b, MFF_ICMPV4_TYPE, oxm,
                           ntohs(flow->tp_src));
             }
             if (match->wc.masks.tp_dst) {
-                nxm_put_8(b, mf_oxm_header(MFF_ICMPV4_CODE, oxm),
+                nxm_put_8(b, MFF_ICMPV4_CODE, oxm,
                           ntohs(flow->tp_dst));
             }
         } else if (is_icmpv6(flow)) {
             if (match->wc.masks.tp_src) {
-                nxm_put_8(b, mf_oxm_header(MFF_ICMPV6_TYPE, oxm),
+                nxm_put_8(b, MFF_ICMPV6_TYPE, oxm,
                           ntohs(flow->tp_src));
             }
             if (match->wc.masks.tp_dst) {
-                nxm_put_8(b, mf_oxm_header(MFF_ICMPV6_CODE, oxm),
+                nxm_put_8(b, MFF_ICMPV6_CODE, oxm,
                           ntohs(flow->tp_dst));
             }
             if (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT) ||
                 flow->tp_src == htons(ND_NEIGHBOR_ADVERT)) {
-                nxm_put_ipv6(b, mf_oxm_header(MFF_ND_TARGET, oxm),
+                nxm_put_ipv6(b, MFF_ND_TARGET, oxm,
                              &flow->nd_target, &match->wc.masks.nd_target);
                 if (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT)) {
-                    nxm_put_eth_masked(b, mf_oxm_header(MFF_ND_SLL, oxm),
+                    nxm_put_eth_masked(b, MFF_ND_SLL, oxm,
                                        flow->arp_sha, match->wc.masks.arp_sha);
                 }
                 if (flow->tp_src == htons(ND_NEIGHBOR_ADVERT)) {
-                    nxm_put_eth_masked(b, mf_oxm_header(MFF_ND_TLL, oxm),
+                    nxm_put_eth_masked(b, MFF_ND_TLL, oxm,
                                        flow->arp_tha, match->wc.masks.arp_tha);
                 }
             }
@@ -813,32 +726,31 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
 
     /* Metadata. */
     if (match->wc.masks.dp_hash) {
-        nxm_put_32m(b, mf_oxm_header(MFF_DP_HASH, oxm),
+        nxm_put_32m(b, MFF_DP_HASH, oxm,
                     htonl(flow->dp_hash), htonl(match->wc.masks.dp_hash));
     }
 
     if (match->wc.masks.recirc_id) {
-        nxm_put_32(b, mf_oxm_header(MFF_RECIRC_ID, oxm),
-                   htonl(flow->recirc_id));
+        nxm_put_32(b, MFF_RECIRC_ID, oxm, htonl(flow->recirc_id));
     }
 
     if (match->wc.masks.in_port.ofp_port) {
         ofp_port_t in_port = flow->in_port.ofp_port;
         if (oxm) {
-            nxm_put_32(b, mf_oxm_header(MFF_IN_PORT_OXM, oxm),
+            nxm_put_32(b, MFF_IN_PORT_OXM, oxm,
                        ofputil_port_to_ofp11(in_port));
         } else {
-            nxm_put_16(b, mf_oxm_header(MFF_IN_PORT, oxm),
+            nxm_put_16(b, MFF_IN_PORT, oxm,
                        htons(ofp_to_u16(in_port)));
         }
     }
 
     /* Ethernet. */
-    nxm_put_eth_masked(b, mf_oxm_header(MFF_ETH_SRC, oxm),
+    nxm_put_eth_masked(b, MFF_ETH_SRC, oxm,
                        flow->dl_src, match->wc.masks.dl_src);
-    nxm_put_eth_masked(b, mf_oxm_header(MFF_ETH_DST, oxm),
+    nxm_put_eth_masked(b, MFF_ETH_DST, oxm,
                        flow->dl_dst, match->wc.masks.dl_dst);
-    nxm_put_16m(b, mf_oxm_header(MFF_ETH_TYPE, oxm),
+    nxm_put_16m(b, MFF_ETH_TYPE, oxm,
                 ofputil_dl_type_to_openflow(flow->dl_type),
                 match->wc.masks.dl_type);
 
@@ -849,35 +761,35 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
         ovs_be16 mask = match->wc.masks.vlan_tci & VID_CFI_MASK;
 
         if (mask == htons(VLAN_VID_MASK | VLAN_CFI)) {
-            nxm_put_16(b, mf_oxm_header(MFF_VLAN_VID, oxm), vid);
+            nxm_put_16(b, MFF_VLAN_VID, oxm, vid);
         } else if (mask) {
-            nxm_put_16m(b, mf_oxm_header(MFF_VLAN_VID, oxm), vid, mask);
+            nxm_put_16m(b, MFF_VLAN_VID, oxm, vid, mask);
         }
 
         if (vid && vlan_tci_to_pcp(match->wc.masks.vlan_tci)) {
-            nxm_put_8(b, mf_oxm_header(MFF_VLAN_PCP, oxm),
+            nxm_put_8(b, MFF_VLAN_PCP, oxm,
                       vlan_tci_to_pcp(flow->vlan_tci));
         }
 
     } else {
-        nxm_put_16m(b, mf_oxm_header(MFF_VLAN_TCI, oxm), flow->vlan_tci,
+        nxm_put_16m(b, MFF_VLAN_TCI, oxm, flow->vlan_tci,
                     match->wc.masks.vlan_tci);
     }
 
     /* MPLS. */
     if (eth_type_mpls(flow->dl_type)) {
         if (match->wc.masks.mpls_lse[0] & htonl(MPLS_TC_MASK)) {
-            nxm_put_8(b, mf_oxm_header(MFF_MPLS_TC, oxm),
+            nxm_put_8(b, MFF_MPLS_TC, oxm,
                       mpls_lse_to_tc(flow->mpls_lse[0]));
         }
 
         if (match->wc.masks.mpls_lse[0] & htonl(MPLS_BOS_MASK)) {
-            nxm_put_8(b, mf_oxm_header(MFF_MPLS_BOS, oxm),
+            nxm_put_8(b, MFF_MPLS_BOS, oxm,
                       mpls_lse_to_bos(flow->mpls_lse[0]));
         }
 
         if (match->wc.masks.mpls_lse[0] & htonl(MPLS_LABEL_MASK)) {
-            nxm_put_32(b, mf_oxm_header(MFF_MPLS_LABEL, oxm),
+            nxm_put_32(b, MFF_MPLS_LABEL, oxm,
                        htonl(mpls_lse_to_label(flow->mpls_lse[0])));
         }
     }
@@ -889,53 +801,62 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
                flow->dl_type == htons(ETH_TYPE_RARP)) {
         /* ARP. */
         if (match->wc.masks.nw_proto) {
-            nxm_put_16(b, mf_oxm_header(MFF_ARP_OP, oxm),
+            nxm_put_16(b, MFF_ARP_OP, oxm,
                        htons(flow->nw_proto));
         }
-        nxm_put_32m(b, mf_oxm_header(MFF_ARP_SPA, oxm),
+        nxm_put_32m(b, MFF_ARP_SPA, oxm,
                     flow->nw_src, match->wc.masks.nw_src);
-        nxm_put_32m(b, mf_oxm_header(MFF_ARP_TPA, oxm),
+        nxm_put_32m(b, MFF_ARP_TPA, oxm,
                     flow->nw_dst, match->wc.masks.nw_dst);
-        nxm_put_eth_masked(b, mf_oxm_header(MFF_ARP_SHA, oxm),
+        nxm_put_eth_masked(b, MFF_ARP_SHA, oxm,
                            flow->arp_sha, match->wc.masks.arp_sha);
-        nxm_put_eth_masked(b, mf_oxm_header(MFF_ARP_THA, oxm),
+        nxm_put_eth_masked(b, MFF_ARP_THA, oxm,
                            flow->arp_tha, match->wc.masks.arp_tha);
     }
 
     /* Tunnel ID. */
-    nxm_put_64m(b, mf_oxm_header(MFF_TUN_ID, oxm),
+    nxm_put_64m(b, MFF_TUN_ID, oxm,
                 flow->tunnel.tun_id, match->wc.masks.tunnel.tun_id);
 
     /* Other tunnel metadata. */
-    nxm_put_32m(b, mf_oxm_header(MFF_TUN_SRC, oxm),
+    nxm_put_32m(b, MFF_TUN_SRC, oxm,
                 flow->tunnel.ip_src, match->wc.masks.tunnel.ip_src);
-    nxm_put_32m(b, mf_oxm_header(MFF_TUN_DST, oxm),
+    nxm_put_32m(b, MFF_TUN_DST, oxm,
                 flow->tunnel.ip_dst, match->wc.masks.tunnel.ip_dst);
 
     /* Registers. */
     if (oxm < OFP15_VERSION) {
         for (i = 0; i < FLOW_N_REGS; i++) {
-            nxm_put_32m(b, mf_oxm_header(MFF_REG0 + i, oxm),
+            nxm_put_32m(b, MFF_REG0 + i, oxm,
                         htonl(flow->regs[i]), htonl(match->wc.masks.regs[i]));
         }
     } else {
         for (i = 0; i < FLOW_N_XREGS; i++) {
-            nxm_put_64m(b, mf_oxm_header(MFF_XREG0 + i, oxm),
+            nxm_put_64m(b, MFF_XREG0 + i, oxm,
                         htonll(flow_get_xreg(flow, i)),
                         htonll(flow_get_xreg(&match->wc.masks, i)));
         }
     }
 
     /* Mark. */
-    nxm_put_32m(b, mf_oxm_header(MFF_PKT_MARK, oxm), htonl(flow->pkt_mark),
+    nxm_put_32m(b, MFF_PKT_MARK, oxm, htonl(flow->pkt_mark),
                 htonl(match->wc.masks.pkt_mark));
 
     /* OpenFlow 1.1+ Metadata. */
-    nxm_put_64m(b, mf_oxm_header(MFF_METADATA, oxm),
+    nxm_put_64m(b, MFF_METADATA, oxm,
                 flow->metadata, match->wc.masks.metadata);
 
     /* Cookie. */
-    nxm_put_64m(b, NXM_NX_COOKIE, cookie & cookie_mask, cookie_mask);
+    if (cookie_mask) {
+        bool masked = cookie_mask != OVS_BE64_MAX;
+
+        cookie &= cookie_mask;
+        nx_put_header__(b, NXM_NX_COOKIE, masked);
+        ofpbuf_put(b, &cookie, sizeof cookie);
+        if (masked) {
+            ofpbuf_put(b, &cookie_mask, sizeof cookie_mask);
+        }
+    }
 
     match_len = ofpbuf_size(b) - start_len;
     return match_len;
@@ -993,12 +914,20 @@ oxm_put_match(struct ofpbuf *b, const struct match *match,
     return match_len;
 }
 
+static void
+nx_put_header__(struct ofpbuf *b, uint32_t header, bool masked)
+{
+    uint32_t masked_header = masked ? nxm_make_wild_header(header) : header;
+    ovs_be32 network_header = htonl(masked_header);
+
+    ofpbuf_put(b, &network_header, sizeof network_header);
+}
+
 void
 nx_put_header(struct ofpbuf *b, enum mf_field_id field,
               enum ofp_version version, bool masked)
 {
-    uint32_t header = mf_oxm_header(field, version);
-    nxm_put_header(b, masked ? nxm_make_wild_header(header) : header);
+    nx_put_header__(b, mf_oxm_header(field, version), masked);
 }
 
 void
@@ -1210,7 +1139,7 @@ nx_match_from_string_raw(const char *s, struct ofpbuf *b)
 
         s += name_len + 1;
 
-        nxm_put_header(b, header);
+        nx_put_header__(b, header, false);
         s = ofpbuf_put_hex(b, s, &n);
         if (n != nxm_field_bytes(header)) {
             ovs_fatal(0, "%.2s: hex digits expected", s);
