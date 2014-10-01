@@ -240,7 +240,7 @@ void
 cmap_destroy(struct cmap *cmap)
 {
     if (cmap) {
-        free_cacheline(cmap_get_impl(cmap));
+        ovsrcu_postpone(free_cacheline, cmap_get_impl(cmap));
     }
 }
 
