@@ -81,6 +81,7 @@ struct nl_sock {
 #ifdef _WIN32
     HANDLE handle;
     OVERLAPPED overlapped;
+    DWORD read_ioctl;
 #else
     int fd;
 #endif
@@ -157,7 +158,8 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
         VLOG_ERR("fcntl: %s", ovs_lasterror_to_string());
         goto error;
     }
-
+    /* Initialize the type/ioctl to Generic */
+    sock->read_ioctl = OVS_IOCTL_READ;
 #else
     sock->fd = socket(AF_NETLINK, SOCK_RAW, protocol);
     if (sock->fd < 0) {
@@ -374,8 +376,11 @@ int
 nl_sock_join_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
 {
 #ifdef _WIN32
+    /* Set the socket type as a "multicast" socket */
+    sock->read_ioctl = OVS_IOCTL_READ_EVENT;
     int error = nl_sock_mcgroup(sock, multicast_group, true);
     if (error) {
+        sock->read_ioctl = OVS_IOCTL_READ;
         VLOG_WARN("could not join multicast group %u (%s)",
                   multicast_group, ovs_strerror(errno));
         return errno;
@@ -411,6 +416,7 @@ nl_sock_leave_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
                    multicast_group, ovs_strerror(errno));
         return errno;
     }
+    sock->read_ioctl = OVS_IOCTL_READ;
 #else
     if (setsockopt(sock->fd, SOL_NETLINK, NETLINK_DROP_MEMBERSHIP,
                    &multicast_group, sizeof multicast_group) < 0) {
@@ -530,7 +536,7 @@ nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, bool wait)
         nlmsghdr->nlmsg_len = UINT32_MAX;
 #ifdef _WIN32
         DWORD bytes;
-        if (!DeviceIoControl(sock->handle, OVS_IOCTL_READ,
+        if (!DeviceIoControl(sock->handle, sock->read_ioctl,
                              NULL, 0, tail, sizeof tail, &bytes, NULL)) {
             retval = -1;
             errno = EINVAL;
@@ -1126,7 +1132,7 @@ pend_io_request(const struct nl_sock *sock)
     int retval;
     int error;
     DWORD bytes;
-    OVERLAPPED *overlapped = &sock->overlapped;
+    OVERLAPPED *overlapped = CONST_CAST(OVERLAPPED *, &sock->overlapped);
 
     int ovs_msg_size = sizeof (struct nlmsghdr) + sizeof (struct genlmsghdr) +
                                sizeof (struct ovs_header);
