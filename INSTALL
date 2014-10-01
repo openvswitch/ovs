@@ -51,7 +51,7 @@ at some cost in features and performance (see INSTALL.userspace for
 details).  To compile the kernel module on Linux, you must also
 install the following:
 
-    - A supported Linux kernel version.  Please refer to README for a
+    - A supported Linux kernel version.  Please refer to README.md for a
       list of supported versions.
 
       The Open vSwitch datapath requires bridging support

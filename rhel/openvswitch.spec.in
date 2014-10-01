@@ -174,7 +174,7 @@ exit 0
 /usr/share/openvswitch/scripts/sysconfig.template
 /usr/share/openvswitch/vswitch.ovsschema
 /usr/share/openvswitch/vtep.ovsschema
-%doc COPYING DESIGN INSTALL.SSL NOTICE README WHY-OVS FAQ NEWS
+%doc COPYING DESIGN INSTALL.SSL NOTICE README.md WHY-OVS FAQ NEWS
 %doc INSTALL.DPDK rhel/README.RHEL
 /var/lib/openvswitch
 /var/log/openvswitch
