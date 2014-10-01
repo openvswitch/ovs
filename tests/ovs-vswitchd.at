@@ -84,13 +84,8 @@ kill $pid
 # check the fakelog, should only see one ERR for reporting
 # the existing ovs-vswitchd process and one WARN for killing
 # the process.
-AT_CHECK([grep ERR fakelog | wc -l], [0], [dnl
-1
-])
-
-AT_CHECK([grep WARN fakelog | wc -l], [0], [dnl
-1
-])
+AT_CHECK([test `grep ERR fakelog | wc -l` -eq 1])
+AT_CHECK([test `grep WARN fakelog | wc -l` -eq 1])
 
 AT_CHECK([grep ERR fakelog | sed -e 's/^.*ERR|//; s/pid [[0-9]]*//'], [0], [dnl
 another ovs-vswitchd process is running, disabling this process () until it goes away
