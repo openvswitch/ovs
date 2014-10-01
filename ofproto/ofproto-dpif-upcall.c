@@ -964,8 +964,7 @@ upcall_cb(const struct ofpbuf *packet, const struct flow *flow,
             /* XXX: This could be avoided with sufficient API changes. */
             *wc = upcall.xout.wc;
         } else {
-            memset(wc, 0xff, sizeof *wc);
-            flow_wildcards_clear_non_packet_fields(wc);
+            flow_wildcards_init_for_packet(wc, flow);
         }
     }
 

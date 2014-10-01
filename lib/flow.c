@@ -757,8 +757,34 @@ void
 flow_format(struct ds *ds, const struct flow *flow)
 {
     struct match match;
+    struct flow_wildcards *wc = &match.wc;
 
     match_wc_init(&match, flow);
+
+    /* As this function is most often used for formatting a packet in a
+     * packet-in message, skip formatting the packet context fields that are
+     * all-zeroes (Openflow spec encourages leaving out all-zeroes context
+     * fields from the packet-in messages).  We make an exception with the
+     * 'in_port' field, which we always format, as packets usually have an
+     * in_port, and 0 is a port just like any other port. */
+    if (!flow->skb_priority) {
+        WC_UNMASK_FIELD(wc, skb_priority);
+    }
+    if (!flow->pkt_mark) {
+        WC_UNMASK_FIELD(wc, pkt_mark);
+    }
+    if (!flow->recirc_id) {
+        WC_UNMASK_FIELD(wc, recirc_id);
+    }
+    for (int i = 0; i < FLOW_N_REGS; i++) {
+        if (!flow->regs[i]) {
+            WC_UNMASK_FIELD(wc, regs[i]);
+        }
+    }
+    if (!flow->metadata) {
+        WC_UNMASK_FIELD(wc, metadata);
+    }
+
     match_format(&match, ds, OFP_DEFAULT_PRIORITY);
 }
 
@@ -777,6 +803,99 @@ void
 flow_wildcards_init_catchall(struct flow_wildcards *wc)
 {
     memset(&wc->masks, 0, sizeof wc->masks);
+}
+
+/* Converts a flow into flow wildcards.  It sets the wildcard masks based on
+ * the packet headers extracted to 'flow'.  It will not set the mask for fields
+ * that do not make sense for the packet type.  OpenFlow-only metadata is
+ * wildcarded, but other metadata is unconditionally exact-matched. */
+void flow_wildcards_init_for_packet(struct flow_wildcards *wc,
+                                    const struct flow *flow)
+{
+    memset(&wc->masks, 0x0, sizeof wc->masks);
+
+    if (flow->tunnel.ip_dst) {
+        if (flow->tunnel.flags & FLOW_TNL_F_KEY) {
+            WC_MASK_FIELD(wc, tunnel.tun_id);
+        }
+        WC_MASK_FIELD(wc, tunnel.ip_src);
+        WC_MASK_FIELD(wc, tunnel.ip_dst);
+        WC_MASK_FIELD(wc, tunnel.flags);
+        WC_MASK_FIELD(wc, tunnel.ip_tos);
+        WC_MASK_FIELD(wc, tunnel.ip_ttl);
+        WC_MASK_FIELD(wc, tunnel.tp_src);
+        WC_MASK_FIELD(wc, tunnel.tp_dst);
+    } else if (flow->tunnel.tun_id) {
+        WC_MASK_FIELD(wc, tunnel.tun_id);
+    }
+
+    /* metadata and regs wildcarded. */
+
+    WC_MASK_FIELD(wc, skb_priority);
+    WC_MASK_FIELD(wc, pkt_mark);
+    WC_MASK_FIELD(wc, recirc_id);
+    WC_MASK_FIELD(wc, dp_hash);
+    WC_MASK_FIELD(wc, in_port);
+
+    WC_MASK_FIELD(wc, dl_dst);
+    WC_MASK_FIELD(wc, dl_src);
+    WC_MASK_FIELD(wc, dl_type);
+    WC_MASK_FIELD(wc, vlan_tci);
+
+    if (flow->dl_type == htons(ETH_TYPE_IP)) {
+        WC_MASK_FIELD(wc, nw_src);
+        WC_MASK_FIELD(wc, nw_dst);
+    } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
+        WC_MASK_FIELD(wc, ipv6_src);
+        WC_MASK_FIELD(wc, ipv6_dst);
+        WC_MASK_FIELD(wc, ipv6_label);
+    } else if (flow->dl_type == htons(ETH_TYPE_ARP) ||
+               flow->dl_type == htons(ETH_TYPE_RARP)) {
+        WC_MASK_FIELD(wc, nw_src);
+        WC_MASK_FIELD(wc, nw_dst);
+        WC_MASK_FIELD(wc, nw_proto);
+        WC_MASK_FIELD(wc, arp_sha);
+        WC_MASK_FIELD(wc, arp_tha);
+        return;
+    } else if (eth_type_mpls(flow->dl_type)) {
+        for (int i = 0; i < FLOW_MAX_MPLS_LABELS; i++) {
+            WC_MASK_FIELD(wc, mpls_lse[i]);
+            if (flow->mpls_lse[i] & htonl(MPLS_BOS_MASK)) {
+                break;
+            }
+        }
+        return;
+    } else {
+        return; /* Unknown ethertype. */
+    }
+
+    /* IPv4 or IPv6. */
+    WC_MASK_FIELD(wc, nw_frag);
+    WC_MASK_FIELD(wc, nw_tos);
+    WC_MASK_FIELD(wc, nw_ttl);
+    WC_MASK_FIELD(wc, nw_proto);
+
+    /* No transport layer header in later fragments. */
+    if (!(flow->nw_frag & FLOW_NW_FRAG_LATER) &&
+        (flow->nw_proto == IPPROTO_ICMP ||
+         flow->nw_proto == IPPROTO_ICMPV6 ||
+         flow->nw_proto == IPPROTO_TCP ||
+         flow->nw_proto == IPPROTO_UDP ||
+         flow->nw_proto == IPPROTO_SCTP ||
+         flow->nw_proto == IPPROTO_IGMP)) {
+        WC_MASK_FIELD(wc, tp_src);
+        WC_MASK_FIELD(wc, tp_dst);
+
+        if (flow->nw_proto == IPPROTO_TCP) {
+            WC_MASK_FIELD(wc, tcp_flags);
+        } else if (flow->nw_proto == IPPROTO_ICMPV6) {
+            WC_MASK_FIELD(wc, arp_sha);
+            WC_MASK_FIELD(wc, arp_tha);
+            WC_MASK_FIELD(wc, nd_target);
+        } else if (flow->nw_proto == IPPROTO_IGMP) {
+            WC_MASK_FIELD(wc, igmp_group_ip4);
+        }
+    }
 }
 
 /* Clear the metadata and register wildcard masks. They are not packet

@@ -39,108 +39,11 @@ match_init(struct match *match,
 void
 match_wc_init(struct match *match, const struct flow *flow)
 {
-    struct flow_wildcards *wc;
-    int i;
-
     match->flow = *flow;
-    wc = &match->wc;
-    memset(&wc->masks, 0x0, sizeof wc->masks);
 
-    memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
-
-    if (flow->nw_proto) {
-        memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
-    }
-
-    if (flow->skb_priority) {
-        memset(&wc->masks.skb_priority, 0xff, sizeof wc->masks.skb_priority);
-    }
-
-    if (flow->pkt_mark) {
-        memset(&wc->masks.pkt_mark, 0xff, sizeof wc->masks.pkt_mark);
-    }
-
-    for (i = 0; i < FLOW_N_REGS; i++) {
-        if (flow->regs[i]) {
-            memset(&wc->masks.regs[i], 0xff, sizeof wc->masks.regs[i]);
-        }
-    }
-
-    if (flow->tunnel.ip_dst) {
-        if (flow->tunnel.flags & FLOW_TNL_F_KEY) {
-            memset(&wc->masks.tunnel.tun_id, 0xff, sizeof wc->masks.tunnel.tun_id);
-        }
-        memset(&wc->masks.tunnel.ip_src, 0xff, sizeof wc->masks.tunnel.ip_src);
-        memset(&wc->masks.tunnel.ip_dst, 0xff, sizeof wc->masks.tunnel.ip_dst);
-        memset(&wc->masks.tunnel.flags, 0xff, sizeof wc->masks.tunnel.flags);
-        memset(&wc->masks.tunnel.ip_tos, 0xff, sizeof wc->masks.tunnel.ip_tos);
-        memset(&wc->masks.tunnel.ip_ttl, 0xff, sizeof wc->masks.tunnel.ip_ttl);
-    } else if (flow->tunnel.tun_id) {
-        memset(&wc->masks.tunnel.tun_id, 0xff, sizeof wc->masks.tunnel.tun_id);
-    }
-
-    memset(&wc->masks.metadata, 0xff, sizeof wc->masks.metadata);
-    memset(&wc->masks.in_port, 0xff, sizeof wc->masks.in_port);
-    memset(&wc->masks.vlan_tci, 0xff, sizeof wc->masks.vlan_tci);
-    memset(&wc->masks.dl_src, 0xff, sizeof wc->masks.dl_src);
-    memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
-
-    if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
-        memset(&wc->masks.ipv6_src, 0xff, sizeof wc->masks.ipv6_src);
-        memset(&wc->masks.ipv6_dst, 0xff, sizeof wc->masks.ipv6_dst);
-        memset(&wc->masks.ipv6_label, 0xff, sizeof wc->masks.ipv6_label);
-    } else if (flow->dl_type == htons(ETH_TYPE_IP) ||
-               (flow->dl_type == htons(ETH_TYPE_ARP)) ||
-               (flow->dl_type == htons(ETH_TYPE_RARP))) {
-        memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
-        memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
-    } else if (eth_type_mpls(flow->dl_type)) {
-        int i;
-
-        for (i = 0; i < FLOW_MAX_MPLS_LABELS; i++) {
-            wc->masks.mpls_lse[i] = OVS_BE32_MAX;
-            if (flow->mpls_lse[i] & htonl(MPLS_BOS_MASK)) {
-                break;
-            }
-        }
-    }
-
-    if (flow->dl_type == htons(ETH_TYPE_ARP) ||
-        flow->dl_type == htons(ETH_TYPE_RARP)) {
-        memset(&wc->masks.arp_sha, 0xff, sizeof wc->masks.arp_sha);
-        memset(&wc->masks.arp_tha, 0xff, sizeof wc->masks.arp_tha);
-    }
-
-    if (is_ip_any(flow)) {
-        memset(&wc->masks.nw_tos, 0xff, sizeof wc->masks.nw_tos);
-        memset(&wc->masks.nw_ttl, 0xff, sizeof wc->masks.nw_ttl);
-
-        if (flow->nw_frag) {
-            memset(&wc->masks.nw_frag, 0xff, sizeof wc->masks.nw_frag);
-            if (flow->nw_frag & FLOW_NW_FRAG_LATER) {
-                /* No transport layer header in later fragments. */
-                return;
-            }
-        }
-
-        if (flow->nw_proto == IPPROTO_ICMP ||
-            flow->nw_proto == IPPROTO_ICMPV6 ||
-            (flow->tp_src || flow->tp_dst)) {
-            memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
-            memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
-        }
-        if (flow->nw_proto == IPPROTO_TCP) {
-            memset(&wc->masks.tcp_flags, 0xff, sizeof wc->masks.tcp_flags);
-        }
-
-        if (flow->nw_proto == IPPROTO_ICMPV6) {
-            memset(&wc->masks.arp_sha, 0xff, sizeof wc->masks.arp_sha);
-            memset(&wc->masks.arp_tha, 0xff, sizeof wc->masks.arp_tha);
-            memset(&wc->masks.nd_target, 0xff, sizeof wc->masks.nd_target);
-        }
-    }
-
-    return;
+    flow_wildcards_init_for_packet(&match->wc, flow);
+    WC_MASK_FIELD(&match->wc, regs);
+    WC_MASK_FIELD(&match->wc, metadata);
 }
 
 /* Initializes 'match' as a "catch-all" match that matches every packet. */
@@ -1125,19 +1028,19 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
     }
     if (wc->masks.mpls_lse[0] & htonl(MPLS_LABEL_MASK)) {
         ds_put_format(s, "mpls_label=%"PRIu32",",
-                 mpls_lse_to_label(f->mpls_lse[0]));
+                      mpls_lse_to_label(f->mpls_lse[0]));
     }
     if (wc->masks.mpls_lse[0] & htonl(MPLS_TC_MASK)) {
         ds_put_format(s, "mpls_tc=%"PRIu8",",
-                 mpls_lse_to_tc(f->mpls_lse[0]));
+                      mpls_lse_to_tc(f->mpls_lse[0]));
     }
     if (wc->masks.mpls_lse[0] & htonl(MPLS_TTL_MASK)) {
         ds_put_format(s, "mpls_ttl=%"PRIu8",",
-                 mpls_lse_to_ttl(f->mpls_lse[0]));
+                      mpls_lse_to_ttl(f->mpls_lse[0]));
     }
     if (wc->masks.mpls_lse[0] & htonl(MPLS_BOS_MASK)) {
         ds_put_format(s, "mpls_bos=%"PRIu8",",
-                 mpls_lse_to_bos(f->mpls_lse[0]));
+                      mpls_lse_to_bos(f->mpls_lse[0]));
     }
     format_be32_masked(s, "mpls_lse1", f->mpls_lse[1], wc->masks.mpls_lse[1]);
     format_be32_masked(s, "mpls_lse2", f->mpls_lse[2], wc->masks.mpls_lse[2]);

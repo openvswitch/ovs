@@ -31,7 +31,7 @@ for args in '9 p2' '11 p3' '15 p4'; do
     AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port($splinter_port)"],
              [0], [stdout])
     AT_CHECK_UNQUOTED([sed -n '/^Flow/p; /^Datapath/p' stdout], [0], [dnl
-Flow: metadata=0,in_port=$p1,dl_vlan=$vlan,dl_vlan_pcp=0,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x05ff
+Flow: in_port=$p1,dl_vlan=$vlan,dl_vlan_pcp=0,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x05ff
 Datapath actions: $access_port
 ])
 

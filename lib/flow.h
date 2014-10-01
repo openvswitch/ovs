@@ -305,7 +305,15 @@ struct flow_wildcards {
     struct flow masks;
 };
 
+#define WC_MASK_FIELD(WC, FIELD) \
+    memset(&(WC)->masks.FIELD, 0xff, sizeof (WC)->masks.FIELD)
+#define WC_UNMASK_FIELD(WC, FIELD) \
+    memset(&(WC)->masks.FIELD, 0, sizeof (WC)->masks.FIELD)
+
 void flow_wildcards_init_catchall(struct flow_wildcards *);
+
+void flow_wildcards_init_for_packet(struct flow_wildcards *,
+                                    const struct flow *);
 
 void flow_wildcards_clear_non_packet_fields(struct flow_wildcards *);
 
