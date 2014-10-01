@@ -154,8 +154,8 @@ static int ptcp_accept(int fd, const struct sockaddr_storage *,
                        size_t, struct stream **streamp);
 
 static int
-new_pstream(char *suffix, struct pstream **pstreamp, int dscp,
-            char *unlink_path, bool kernel_print_port)
+new_pstream(char *suffix, const char *name, struct pstream **pstreamp,
+            int dscp, char *unlink_path, bool kernel_print_port)
 {
     char bound_name[SS_NTOP_BUFSIZE + 16];
     char addrbuf[SS_NTOP_BUFSIZE];
@@ -163,6 +163,7 @@ new_pstream(char *suffix, struct pstream **pstreamp, int dscp,
     int error;
     uint16_t port;
     int fd;
+    char *conn_name = CONST_CAST(char *, name);
 
     fd = inet_open_passive(SOCK_STREAM, suffix, -1, &ss, dscp,
                            kernel_print_port);
@@ -171,10 +172,13 @@ new_pstream(char *suffix, struct pstream **pstreamp, int dscp,
     }
 
     port = ss_get_port(&ss);
-    snprintf(bound_name, sizeof bound_name, "ptcp:%"PRIu16":%s",
-             port, ss_format_address(&ss, addrbuf, sizeof addrbuf));
+    if (!conn_name) {
+        snprintf(bound_name, sizeof bound_name, "ptcp:%"PRIu16":%s",
+                 port, ss_format_address(&ss, addrbuf, sizeof addrbuf));
+        conn_name = bound_name;
+    }
 
-    error = new_fd_pstream(bound_name, fd, ptcp_accept, set_dscp, unlink_path,
+    error = new_fd_pstream(conn_name, fd, ptcp_accept, set_dscp, unlink_path,
                            pstreamp);
     if (!error) {
         pstream_set_bound_port(*pstreamp, htons(port));
@@ -186,7 +190,7 @@ static int
 ptcp_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp,
           uint8_t dscp)
 {
-    return new_pstream(suffix, pstreamp, dscp, NULL, true);
+    return new_pstream(suffix, NULL, pstreamp, dscp, NULL, true);
 }
 
 static int
@@ -214,8 +218,8 @@ const struct pstream_class ptcp_pstream_class = {
 
 #ifdef _WIN32
 static int
-pwindows_open(const char *name OVS_UNUSED, char *suffix,
-              struct pstream **pstreamp, uint8_t dscp)
+pwindows_open(const char *name, char *suffix, struct pstream **pstreamp,
+              uint8_t dscp)
 {
     int error;
     char *suffix_new, *path;
@@ -232,7 +236,7 @@ pwindows_open(const char *name OVS_UNUSED, char *suffix,
         path = xstrdup(suffix);
     }
 
-    error = new_pstream(suffix_new, pstreamp, dscp, path, false);
+    error = new_pstream(suffix_new, name, pstreamp, dscp, path, false);
     if (error) {
         goto exit;
     }
