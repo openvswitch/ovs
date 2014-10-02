@@ -98,3 +98,44 @@ another ovs-vswitchd process is running, disabling this process () until it goes
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+dnl ----------------------------------------------------------------------
+AT_SETUP([ovs-vswitchd -- switch over to another ovs-vswitchd process])
+OVS_VSWITCHD_START
+
+# start a new ovs-vswitchd process.
+ovs-vswitchd --log-file=fakelog --enable-dummy &
+pid=`echo $!`
+
+# sleep for a while.
+sleep 5
+
+# kill the current active ovs-vswitchd process.
+kill `cat ovs-vswitchd.pid`
+
+sleep 5
+
+# check the creation of br0 on the new ovs-vswitchd process.
+AT_CHECK([grep "bridge br0" fakelog | sed -e 's/port [[0-9]]*$/port/;
+s/datapath ID [[a-z0-9]]*$/datapath ID/;s/^.*INFO|//'], [0], [dnl
+bridge br0: added interface br0 on port
+bridge br0: using datapath ID
+])
+
+# stop the process.
+kill $pid
+
+# check the fakelog, should not see WARN/ERR/EMER log other than the one
+# for reporting the existing ovs-vswitchd process and the one for killing
+# the process.
+AT_CHECK([sed -n "
+/|ERR|another ovs-vswitchd process is running/d
+/|WARN|terminating with signal/d
+/|WARN|/p
+/|ERR|/p
+/|EMER|/p" fakelog
+])
+
+# cleanup.
+kill `cat ovsdb-server.pid`
+AT_CLEANUP
