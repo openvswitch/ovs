@@ -92,8 +92,11 @@
  * significant when the TYPE is a pointer type.  In that case we want the
  * pointer to be declared volatile, not the data type that is being pointed
  * at!
- */
-#define ATOMIC(TYPE) TYPE volatile
+ *
+ * Attribute aligned is used to tell the compiler to align 64-bit data
+ * on a 8-byte boundary.  This allows more efficient atomic access, as the
+ * the CPU guarantees such memory accesses to be atomic. */
+#define ATOMIC(TYPE) TYPE volatile __attribute__((aligned(sizeof(TYPE))))
 
 /* Memory ordering.  Must be passed in as a constant. */
 typedef enum {
@@ -234,49 +237,85 @@ atomic_signal_fence(memory_order order)
         src___;                                                \
     })
 
+#if defined(__SSE__)
+/* SSE registers are 128-bit wide, and moving the lowest 64-bits of an SSE
+ * register to proerly aligned memory is atomic.  See ATOMIC(TYPE) above. */
+#define atomic_store_8__(DST, SRC)                 \
+    asm volatile("movq %1,%0 ; # atomic_store_8__" \
+                 : "=m" (*DST)   /* 0 */           \
+                 : "x" (SRC))    /* 1, SSE */
+#else
+/* Locked 64-bit exchange is available on all i586 CPUs. */
+#define atomic_store_8__(DST, SRC)          \
+    atomic_exchange_8__(DST, SRC, "cc")
+#endif
+
 #define atomic_store_explicit(DST, SRC, ORDER)          \
     ({                                                  \
         typeof(DST) dst__ = (DST);                      \
         typeof(*(DST)) src__ = (SRC);                   \
                                                         \
-        if ((ORDER) != memory_order_seq_cst             \
-            && sizeof(*(DST)) <= 4) {                   \
+        if ((ORDER) != memory_order_seq_cst) {          \
             atomic_compiler_barrier(ORDER);             \
-            *dst__ = src__;                             \
+            if (sizeof(*(DST)) == 8) {                  \
+                atomic_store_8__(dst__, src__);         \
+            } else {                                    \
+                *dst__ = src__;                         \
+            }                                           \
         } else {                                        \
             atomic_exchange__(dst__, src__, ORDER);     \
         }                                               \
         (void) 0;                                       \
     })
-#define atomic_store(DST, SRC)                                  \
+#define atomic_store(DST, SRC)                              \
     atomic_store_explicit(DST, SRC, memory_order_seq_cst)
 
-/* The 8-byte variant compares '*DST' to a random value in bx:cx and
- * returns the actual value in ax:dx.  The registers bx and cx are
- * only read, so they are not clobbered. */
-#define atomic_read_explicit(SRC, DST, ORDER)           \
-    ({                                                  \
-        typeof(DST) dst__ = (DST);                      \
-        typeof(SRC) src__ = (SRC);                      \
-                                                        \
-        if (sizeof(*(DST)) <= 4) {                      \
-            *dst__ = *src__;                            \
-        } else {                                        \
-            typeof(*(DST)) res__;                       \
-                                                        \
-            asm volatile("      movl %%ebx,%%eax ; "    \
-                         "      movl %%ecx,%%edx ; "    \
-                         "lock; cmpxchg8b %1 ;     "    \
-                         "# atomic_read_explicit   "    \
-                         : "=&A" (res__), /* 0 */       \
-                           "+m" (*src__)  /* 1 */       \
-                         : : "cc");                     \
-            *dst__ = res__;                             \
-        }                                               \
-        atomic_compiler_barrier(ORDER);                 \
-        (void) 0;                                       \
+#if defined(__SSE__)
+/* SSE registers are 128-bit wide, and moving 64-bits from properly aligned
+ * memory to an SSE register is atomic.  See ATOMIC(TYPE) above. */
+#define atomic_read_8__(SRC, DST)               \
+    ({                                          \
+        typeof(*(DST)) res__;                   \
+                                                \
+        asm ("movq %1,%0 ; # atomic_read_8__"   \
+             : "=x" (res__)   /* 0, SSE. */     \
+             : "m" (*SRC));   /* 1 */           \
+        *(DST) = res__;                         \
     })
-#define atomic_read(SRC, DST)                                   \
+#else
+/* Must use locked cmpxchg8b (available on all i586 CPUs) if compiled w/o sse
+ * support.  Compare '*DST' to a random value in bx:cx and returns the actual
+ * value in ax:dx.  The registers bx and cx are only read, so they are not
+ * clobbered. */
+#define atomic_read_8__(SRC, DST)               \
+    ({                                          \
+        typeof(*(DST)) res__;                   \
+                                                \
+        asm ("      movl %%ebx,%%eax ; "        \
+             "      movl %%ecx,%%edx ; "        \
+             "lock; cmpxchg8b %1 ;     "        \
+             "# atomic_read_8__        "        \
+             : "=&A" (res__), /* 0 */           \
+               "+m"  (*SRC)   /* 1 */           \
+             : : "cc");                         \
+        *(DST) = res__;                         \
+    })
+#endif
+
+#define atomic_read_explicit(SRC, DST, ORDER)   \
+    ({                                          \
+        typeof(DST) dst__ = (DST);              \
+        typeof(SRC) src__ = (SRC);              \
+                                                \
+        if (sizeof(*(DST)) <= 4) {              \
+            *dst__ = *src__;                    \
+        } else {                                \
+            atomic_read_8__(SRC, DST);          \
+        }                                       \
+        atomic_compiler_barrier(ORDER);         \
+        (void) 0;                               \
+    })
+#define atomic_read(SRC, DST)                               \
     atomic_read_explicit(SRC, DST, memory_order_seq_cst)
 
 #if defined(__PIC__)

@@ -170,9 +170,10 @@ test_atomic_flag(void)
 static uint32_t a;
 
 struct atomic_aux {
-    atomic_uint32_t count;
+    ATOMIC(uint64_t) count;
     uint32_t b;
     ATOMIC(uint32_t *) data;
+    ATOMIC(uint64_t) data64;
 };
 
 static ATOMIC(struct atomic_aux *) paux = ATOMIC_VAR_INIT(NULL);
@@ -184,7 +185,7 @@ static void *
 atomic_consumer(void * arg1 OVS_UNUSED)
 {
     struct atomic_aux *old_aux = NULL;
-    uint32_t count;
+    uint64_t count;
 
     do {
         struct atomic_aux *aux;
@@ -246,24 +247,24 @@ static void *
 atomic_reader(void *aux_)
 {
     struct atomic_aux *aux = aux_;
-    uint32_t count;
-    uint32_t *data;
+    uint64_t count;
+    uint64_t data;
 
     do {
         /* Non-synchronized add. */
         atomic_add_explicit(&aux->count, 1, &count, memory_order_relaxed);
 
         do {
-            atomic_read_explicit(&aux->data, &data, memory_order_acquire);
+            atomic_read_explicit(&aux->data64, &data, memory_order_acquire);
         } while (!data);
 
-        ovs_assert(*data == a && *data == aux->b && a == aux->b);
+        ovs_assert(data == a && data == aux->b && a == aux->b);
 
         atomic_read_explicit(&aux->count, &count, memory_order_relaxed);
 
-        ovs_assert(count == 2 * a && count == 2 * aux->b && count == 2 * *data);
+        ovs_assert(count == 2 * a && count == 2 * aux->b && count == 2 * data);
 
-        atomic_store_explicit(&aux->data, NULL, memory_order_release);
+        atomic_store_explicit(&aux->data64, UINT64_C(0), memory_order_release);
     } while (count < 2 * ATOMIC_ITEM_COUNT);
 
     return NULL;
@@ -273,21 +274,21 @@ static void *
 atomic_writer(void *aux_)
 {
     struct atomic_aux *aux = aux_;
-    uint32_t old_count;
-    uint32_t *data;
+    uint64_t old_count;
+    uint64_t data;
     size_t i;
 
     for (i = 0; i < ATOMIC_ITEM_COUNT; i++) {
         /* Wait for the reader to be done with the data. */
         do {
-            atomic_read_explicit(&aux->data, &data, memory_order_acquire);
+            atomic_read_explicit(&aux->data64, &data, memory_order_acquire);
         } while (data);
 
         a = i + 1;
         atomic_add_explicit(&aux->count, 1, &old_count, memory_order_relaxed);
         aux->b++;
-        atomic_store_explicit(&aux->data,
-                              (i & 1) ? &aux->b : &a, memory_order_release);
+        atomic_store_explicit(&aux->data64,
+                              (i & 1) ? (uint64_t)aux->b : a, memory_order_release);
     }
 
     return NULL;
@@ -304,6 +305,7 @@ test_acq_rel(void)
 
     aux->count = ATOMIC_VAR_INIT(0);
     atomic_init(&aux->data, NULL);
+    aux->data64 = ATOMIC_VAR_INIT(0);
 
     reader = ovs_thread_create("reader", atomic_reader, aux);
     writer = ovs_thread_create("writer", atomic_writer, aux);
