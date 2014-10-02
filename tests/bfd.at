@@ -684,6 +684,9 @@ OVS_VSWITCHD_START([add-br br1 -- \
                     set Interface p1 bfd:enable=true bfd:min_tx=100 bfd:min_rx=100])
 
 ovs-appctl time/stop
+# Disable the stats update to prevent the race between ovsdb updating
+# stats and ovs-vsctl cmd closing the jsonrpc session.
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:stats-update-interval=50000000])
 
 # Part-1 wait for a while to stablize bfd.
 ovs-appctl time/warp 10100 100
