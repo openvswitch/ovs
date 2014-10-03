@@ -76,7 +76,7 @@ Open vSwitch Linux kernel module compiled against kernel version
 %setup -q -n openvswitch-%{openvswitch_version}
 
 %build
-./configure --prefix=/usr --sysconfdir=/etc --localstatedir=%{_localstatedir} --with-linux=/lib/modules/%{xen_version}/build --enable-ssl
+./configure --prefix=/usr --sysconfdir=/etc --localstatedir=%{_localstatedir} --with-linux=/lib/modules/%{xen_version}/build --enable-ssl CFLAGS='-g -O2 -msse -msse2'
 make %{_smp_mflags}
 
 %install
