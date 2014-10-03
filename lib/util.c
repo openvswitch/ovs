@@ -949,7 +949,7 @@ english_list_delimiter(size_t index, size_t total)
 }
 
 /* Returns the number of trailing 0-bits in 'n'.  Undefined if 'n' == 0. */
-#if __GNUC__ >= 4
+#if __GNUC__ >= 4 || _MSC_VER
 /* Defined inline in util.h. */
 #else
 /* Returns the number of trailing 0-bits in 'n'.  Undefined if 'n' == 0. */
