@@ -82,10 +82,15 @@ NTSTATUS NlFillOvsMsg(PNL_BUFFER nlBuf,
                       UINT16 nlmsgType, UINT16 nlmsgFlags,
                       UINT32 nlmsgSeq, UINT32 nlmsgPid,
                       UINT8 genlCmd, UINT8 genlVer, UINT32 dpNo);
+NTSTATUS NlFillNlHdr(PNL_BUFFER nlBuf,
+                     UINT16 nlmsgType, UINT16 nlmsgFlags,
+                     UINT32 nlmsgSeq, UINT32 nlmsgPid);
 
 /* Netlink message accessing the payload */
 PVOID NlMsgAt(const PNL_MSG_HDR nlh, UINT32 offset);
 UINT32 NlMsgSize(const PNL_MSG_HDR nlh);
+VOID NlMsgAlignSize(const PNL_MSG_HDR nlh);
+VOID NlMsgSetSize(const PNL_MSG_HDR nlh, UINT32 msgLen);
 PCHAR NlHdrPayload(const PNL_MSG_HDR nlh);
 UINT32 NlHdrPayloadLen(const PNL_MSG_HDR nlh);
 PNL_ATTR NlMsgAttrs(const PNL_MSG_HDR nlh);

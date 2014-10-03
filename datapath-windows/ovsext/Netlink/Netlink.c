@@ -34,7 +34,9 @@
 
 /*
  * ---------------------------------------------------------------------------
- * Prepare netlink message headers. Attributes should be added by caller.
+ * Prepare netlink message headers. This API adds
+ * NL_MSG_HDR + GENL_HDR + OVS_HDR to the tail of input NLBuf.
+ * Attributes should be added by caller.
  * ---------------------------------------------------------------------------
  */
 NTSTATUS
@@ -44,16 +46,18 @@ NlFillOvsMsg(PNL_BUFFER nlBuf, UINT16 nlmsgType,
              UINT8 genlVer, UINT32 dpNo)
 {
     BOOLEAN writeOk;
-    PNL_MSG_HDR nlMsg;
     OVS_MESSAGE msgOut;
     UINT32 offset = NlBufSize(nlBuf);
 
+    /* To keep compiler happy for release build. */
+    UNREFERENCED_PARAMETER(offset);
     ASSERT(NlBufAt(nlBuf, offset, sizeof(struct _OVS_MESSAGE)) != 0);
 
     msgOut.nlMsg.nlmsgType = nlmsgType;
     msgOut.nlMsg.nlmsgFlags = nlmsgFlags;
     msgOut.nlMsg.nlmsgSeq = nlmsgSeq;
     msgOut.nlMsg.nlmsgPid = nlmsgPid;
+    msgOut.nlMsg.nlmsgLen = sizeof(struct _OVS_MESSAGE);
 
     msgOut.genlMsg.cmd = genlCmd;
     msgOut.genlMsg.version = genlVer;
@@ -64,14 +68,37 @@ NlFillOvsMsg(PNL_BUFFER nlBuf, UINT16 nlmsgType,
     writeOk = NlMsgPutTail(nlBuf, (PCHAR)(&msgOut),
                            sizeof (struct _OVS_MESSAGE));
 
-    if (!writeOk) {
-        goto done;
-    }
+    return writeOk ? STATUS_SUCCESS : STATUS_INVALID_BUFFER_SIZE;
+}
 
-    nlMsg = (PNL_MSG_HDR)NlBufAt(nlBuf, offset, sizeof(struct _NL_MSG_HDR));
-    nlMsg->nlmsgLen = sizeof(struct _OVS_MESSAGE);
+/*
+ * ---------------------------------------------------------------------------
+ * Prepare NL_MSG_HDR only. This API appends a NL_MSG_HDR to the tail of
+ * input NlBuf.
+ * ---------------------------------------------------------------------------
+ */
+NTSTATUS
+NlFillNlHdr(PNL_BUFFER nlBuf, UINT16 nlmsgType,
+            UINT16 nlmsgFlags, UINT32 nlmsgSeq,
+            UINT32 nlmsgPid)
+{
+    BOOLEAN writeOk;
+    NL_MSG_HDR msgOut;
+    UINT32 offset = NlBufSize(nlBuf);
 
-done:
+    /* To keep compiler happy for release build. */
+    UNREFERENCED_PARAMETER(offset);
+    ASSERT(NlBufAt(nlBuf, offset, sizeof(struct _NL_MSG_HDR)) != 0);
+
+    msgOut.nlmsgType = nlmsgType;
+    msgOut.nlmsgFlags = nlmsgFlags;
+    msgOut.nlmsgSeq = nlmsgSeq;
+    msgOut.nlmsgPid = nlmsgPid;
+    msgOut.nlmsgLen = sizeof(struct _NL_MSG_HDR);
+
+    writeOk = NlMsgPutTail(nlBuf, (PCHAR)(&msgOut),
+                           sizeof(struct _NL_MSG_HDR));
+
     return writeOk ? STATUS_SUCCESS : STATUS_INVALID_BUFFER_SIZE;
 }
 
@@ -550,6 +577,29 @@ UINT32
 NlMsgSize(const PNL_MSG_HDR nlh)
 {
     return nlh->nlmsgLen;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Aligns the size of Netlink message.
+ * ---------------------------------------------------------------------------
+ */
+VOID
+NlMsgAlignSize(const PNL_MSG_HDR nlh)
+{
+    nlh->nlmsgLen = NLMSG_ALIGN(nlh->nlmsgLen);
+    return;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Sets the size of Netlink message.
+ * ---------------------------------------------------------------------------
+ */
+VOID
+NlMsgSetSize(const PNL_MSG_HDR nlh, UINT32 msgLen)
+{
+    nlh->nlmsgLen = msgLen;
 }
 
 /*
