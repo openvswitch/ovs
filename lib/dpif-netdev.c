@@ -618,6 +618,18 @@ dpif_netdev_open(const struct dpif_class *class, const char *name,
     return error;
 }
 
+static void
+dp_netdev_destroy_upcall_lock(struct dp_netdev *dp)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
+{
+    /* Check that upcalls are disabled, i.e. that the rwlock is taken */
+    ovs_assert(fat_rwlock_tryrdlock(&dp->upcall_rwlock));
+
+    /* Before freeing a lock we should release it */
+    fat_rwlock_unlock(&dp->upcall_rwlock);
+    fat_rwlock_destroy(&dp->upcall_rwlock);
+}
+
 /* Requires dp_netdev_mutex so that we can't get a new reference to 'dp'
  * through the 'dp_netdevs' shash while freeing 'dp'. */
 static void
@@ -652,7 +664,9 @@ dp_netdev_free(struct dp_netdev *dp)
     ovs_mutex_destroy(&dp->flow_mutex);
     seq_destroy(dp->port_seq);
     cmap_destroy(&dp->ports);
-    fat_rwlock_destroy(&dp->upcall_rwlock);
+
+    /* Upcalls must be disabled at this point */
+    dp_netdev_destroy_upcall_lock(dp);
 
     free(dp->pmd_cmask);
     free(CONST_CAST(char *, dp->name));
