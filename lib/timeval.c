@@ -114,7 +114,6 @@ init_clock(struct clock *c, clockid_t id)
     ovs_mutex_init(&c->mutex);
     atomic_init(&c->slow_path, false);
     xclock_gettime(c->id, &c->cache);
-    timewarp_seq = seq_create();
     memset(&c->large_warp, 0, sizeof(c->large_warp));
 }
 
@@ -125,6 +124,7 @@ do_init_time(void)
 
     coverage_init();
 
+    timewarp_seq = seq_create();
     init_clock(&monotonic_clock, (!clock_gettime(CLOCK_MONOTONIC, &ts)
                                   ? CLOCK_MONOTONIC
                                   : CLOCK_REALTIME));
