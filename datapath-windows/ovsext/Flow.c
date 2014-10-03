@@ -20,6 +20,7 @@
 #include "Jhash.h"
 #include "Flow.h"
 #include "PacketParser.h"
+#include "Datapath.h"
 
 #ifdef OVS_DBG_MOD
 #undef OVS_DBG_MOD
@@ -35,7 +36,7 @@ extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
 extern UINT64 ovsTimeIncrementPerTick;
 
 static NTSTATUS ReportFlowInfo(OvsFlow *flow, UINT32 getFlags,
-                               UINT32 getActionsLen, OvsFlowInfo *info);
+                               OvsFlowInfo *info);
 static NTSTATUS HandleFlowPut(OvsFlowPut *put,
                                   OVS_DATAPATH *datapath,
                                   struct OvsFlowStats *stats);
@@ -60,6 +61,35 @@ static VOID _MapTunAttrToFlowPut(PNL_ATTR *keyAttrs,
 static VOID _MapNlToFlowPutFlags(PGENL_MSG_HDR genlMsgHdr,
                                  PNL_ATTR flowAttrClear,
                                  OvsFlowPut *mappedFlow);
+
+static NTSTATUS _FlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                                     UINT32 *replyLen);
+static NTSTATUS _FlowNlDumpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                                      UINT32 *replyLen);
+static NTSTATUS _MapFlowInfoToNl(PNL_BUFFER nlBuf,
+                                 OvsFlowInfo *flowInfo);
+static NTSTATUS _MapFlowKeyToNlKey(PNL_BUFFER nlBuf,
+                                   OvsFlowKey *flowKey);
+static NTSTATUS _MapFlowTunKeyToNlKey(PNL_BUFFER nlBuf,
+                                      OvsIPv4TunnelKey *tunKey);
+static NTSTATUS _MapFlowStatsToNlStats(PNL_BUFFER nlBuf,
+                                       OvsFlowStats *flowStats);
+static NTSTATUS _MapFlowActionToNlAction(PNL_BUFFER nlBuf,
+                                         uint32_t actionsLen,
+                                         PNL_ATTR actions);
+
+static NTSTATUS _MapFlowIpv4KeyToNlKey(PNL_BUFFER nlBuf,
+                                       IpKey *ipv4FlowPutKey);
+static NTSTATUS _MapFlowIpv6KeyToNlKey(PNL_BUFFER nlBuf,
+                                       Ipv6Key *ipv6FlowPutKey,
+                                       Icmp6Key *ipv6FlowPutIcmpKey);
+static NTSTATUS _MapFlowArpKeyToNlKey(PNL_BUFFER nlBuf,
+                                      ArpKey *arpFlowPutKey);
+
+static NTSTATUS OvsDoDumpFlows(OvsFlowDumpInput *dumpInput,
+                               OvsFlowDumpOutput *dumpOutput,
+                               UINT32 *replyLen);
+
 
 #define OVS_FLOW_TABLE_SIZE 2048
 #define OVS_FLOW_TABLE_MASK (OVS_FLOW_TABLE_SIZE -1)
@@ -251,7 +281,7 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     }
 
     /* FLOW_DEL command w/o any key input is a flush case. */
-    if ((genlMsgHdr->cmd == OVS_FLOW_CMD_DEL) && 
+    if ((genlMsgHdr->cmd == OVS_FLOW_CMD_DEL) &&
         (!(nlAttrs[OVS_FLOW_ATTR_KEY]))) {
         rc = OvsFlushFlowIoctl(ovsHdr->dp_ifindex);
         goto done;
@@ -297,8 +327,10 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         (PCHAR)(&replyStats), sizeof(replyStats))) {
         OVS_LOG_ERROR("Adding OVS_FLOW_ATTR_STATS attribute failed.");
         rc = STATUS_UNSUCCESSFUL;
+        goto done;
     }
 
+    msgOut->nlMsg.nlmsgLen = NLMSG_ALIGN(NlBufSize(&nlBuf));
     *replyLen = msgOut->nlMsg.nlmsgLen;
 
 done:
@@ -318,9 +350,571 @@ OvsFlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     NTSTATUS rc = STATUS_SUCCESS;
     *replyLen = 0;
 
-    UNREFERENCED_PARAMETER(usrParamsCtx);
-    UNREFERENCED_PARAMETER(replyLen);
+    if (usrParamsCtx->devOp == OVS_TRANSACTION_DEV_OP) {
+        rc = _FlowNlGetCmdHandler(usrParamsCtx, replyLen);
+    } else {
+        rc = _FlowNlDumpCmdHandler(usrParamsCtx, replyLen);
+    }
 
+    return rc;
+}
+
+NTSTATUS
+_FlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                     UINT32 *replyLen)
+{
+    NTSTATUS rc = STATUS_SUCCESS;
+
+    UNREFERENCED_PARAMETER(usrParamsCtx);
+
+    *replyLen = 0;
+
+    return rc;
+}
+
+NTSTATUS
+_FlowNlDumpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                      UINT32 *replyLen)
+{
+    NTSTATUS rc = STATUS_SUCCESS;
+    UINT32  temp = 0;   /* To keep compiler happy for calling OvsDoDumpFlows */
+
+    POVS_OPEN_INSTANCE instance = (POVS_OPEN_INSTANCE)
+                                  (usrParamsCtx->ovsInstance);
+
+    if (usrParamsCtx->devOp == OVS_WRITE_DEV_OP) {
+        /* Dump Start */
+        OvsSetupDumpStart(usrParamsCtx);
+        goto done;
+    }
+
+    POVS_MESSAGE msgIn = instance->dumpState.ovsMsg;
+    PNL_MSG_HDR nlMsgHdr = &(msgIn->nlMsg);
+    PGENL_MSG_HDR genlMsgHdr = &(msgIn->genlMsg);
+    POVS_HDR ovsHdr = &(msgIn->ovsHdr);
+    PNL_MSG_HDR nlMsgOutHdr = NULL;
+    UINT32 hdrOffset = 0;
+
+    /* Get Next */
+    OvsFlowDumpOutput dumpOutput;
+    OvsFlowDumpInput dumpInput;
+    NL_BUFFER nlBuf;
+
+    NlBufInit(&nlBuf, usrParamsCtx->outputBuffer,
+              usrParamsCtx->outputLength);
+
+    ASSERT(usrParamsCtx->devOp == OVS_READ_DEV_OP);
+    ASSERT(usrParamsCtx->outputLength);
+
+    RtlZeroMemory(&dumpInput, sizeof(OvsFlowDumpInput));
+    RtlZeroMemory(&dumpOutput, sizeof(OvsFlowDumpOutput));
+
+    dumpInput.dpNo = ovsHdr->dp_ifindex;
+    dumpInput.getFlags = FLOW_GET_KEY | FLOW_GET_STATS | FLOW_GET_ACTIONS;
+
+    /* Lets provide as many flows to userspace as possible. */
+    do {
+        dumpInput.position[0] = instance->dumpState.index[0];
+        dumpInput.position[1] = instance->dumpState.index[1];
+
+        rc = OvsDoDumpFlows(&dumpInput, &dumpOutput, &temp);
+        if (rc != STATUS_SUCCESS) {
+            OVS_LOG_ERROR("OvsDoDumpFlows failed with rc: %d", rc);
+            break;
+        }
+
+        /* Done with Dump, send NLMSG_DONE */
+        if (!(dumpOutput.n)) {
+            OVS_LOG_INFO("Dump Done");
+
+            nlMsgOutHdr = (PNL_MSG_HDR)(NlBufAt(&nlBuf, NlBufSize(&nlBuf), 0));
+            rc = NlFillNlHdr(&nlBuf, NLMSG_DONE, NLM_F_MULTI,
+                             nlMsgHdr->nlmsgSeq, nlMsgHdr->nlmsgPid);
+
+            if (rc != STATUS_SUCCESS) {
+                OVS_LOG_ERROR("Unable to prepare DUMP_DONE reply.");
+                break;
+            }
+
+            NlMsgAlignSize(nlMsgOutHdr);
+            *replyLen += NlMsgSize(nlMsgOutHdr);
+
+            FreeUserDumpState(instance);
+            break;
+        } else {
+
+            hdrOffset = NlBufSize(&nlBuf);
+            nlMsgOutHdr = (PNL_MSG_HDR)(NlBufAt(&nlBuf, hdrOffset, 0));
+
+            /* Netlink header */
+            rc = NlFillOvsMsg(&nlBuf, nlMsgHdr->nlmsgType, NLM_F_MULTI,
+                              nlMsgHdr->nlmsgSeq, nlMsgHdr->nlmsgPid,
+                              genlMsgHdr->cmd, genlMsgHdr->version,
+                              ovsHdr->dp_ifindex);
+
+            if (rc != STATUS_SUCCESS) {
+                /* Reset rc to success so that we can
+                 * send already added messages to user space. */
+                rc = STATUS_SUCCESS;
+                break;
+            }
+
+            /* Time to add attributes */
+            rc = _MapFlowInfoToNl(&nlBuf, &(dumpOutput.flow));
+            if (rc != STATUS_SUCCESS) {
+                /* Adding the attribute failed, we are out of
+                   space in the buffer, remove the appended OVS header */
+                NlMsgSetSize(nlMsgOutHdr,
+                             NlMsgSize(nlMsgOutHdr) -
+                             sizeof(struct _OVS_MESSAGE));
+
+                /* Reset rc to success so that we can
+                 * send already added messages to user space. */
+                rc = STATUS_SUCCESS;
+                break;
+            }
+
+            NlMsgSetSize(nlMsgOutHdr, NlBufSize(&nlBuf) - hdrOffset);
+            NlMsgAlignSize(nlMsgOutHdr);
+            *replyLen += NlMsgSize(nlMsgOutHdr);
+            instance->dumpState.index[0] = dumpOutput.position[0];
+            instance->dumpState.index[1] = dumpOutput.position[1];
+        }
+    } while(TRUE);
+
+done:
+    return rc;
+}
+
+static NTSTATUS
+_MapFlowInfoToNl(PNL_BUFFER nlBuf, OvsFlowInfo *flowInfo)
+{
+    NTSTATUS rc = STATUS_SUCCESS;
+
+    rc = _MapFlowKeyToNlKey(nlBuf, &(flowInfo->key));
+    if (rc != STATUS_SUCCESS) {
+        goto done;
+    }
+
+    rc = _MapFlowStatsToNlStats(nlBuf, &(flowInfo->stats));
+    if (rc != STATUS_SUCCESS) {
+        goto done;
+    }
+
+    rc = _MapFlowActionToNlAction(nlBuf, flowInfo->actionsLen,
+                                  flowInfo->actions);
+    if (rc != STATUS_SUCCESS) {
+        goto done;
+    }
+
+done:
+    return rc;
+}
+
+static NTSTATUS
+_MapFlowStatsToNlStats(PNL_BUFFER nlBuf, OvsFlowStats *flowStats)
+{
+    NTSTATUS rc = STATUS_SUCCESS;
+    struct ovs_flow_stats replyStats;
+
+    replyStats.n_packets = flowStats->packetCount;
+    replyStats.n_bytes = flowStats->byteCount;
+
+    if (!NlMsgPutTailU64(nlBuf, OVS_FLOW_ATTR_USED, flowStats->used)) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+    if (!NlMsgPutTailUnspec(nlBuf, OVS_FLOW_ATTR_STATS,
+                           (PCHAR)(&replyStats),
+                           sizeof(struct ovs_flow_stats))) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+    if (!NlMsgPutTailU8(nlBuf, OVS_FLOW_ATTR_TCP_FLAGS, flowStats->tcpFlags)) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+done:
+    return rc;
+}
+
+static NTSTATUS
+_MapFlowActionToNlAction(PNL_BUFFER nlBuf, uint32_t actionsLen,
+                         PNL_ATTR actions)
+{
+    NTSTATUS rc = STATUS_SUCCESS;
+    UINT32 offset = 0;
+
+    offset = NlMsgStartNested(nlBuf, OVS_FLOW_ATTR_ACTIONS);
+    if (!offset) {
+        /* Starting the nested attribute failed. */
+        rc = STATUS_UNSUCCESSFUL;
+        goto error_nested_start;
+    }
+
+    if (!NlBufCopyAtTail(nlBuf, (PCHAR)actions, actionsLen)) {
+        /* Adding a nested attribute failed. */
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+done:
+    NlMsgEndNested(nlBuf, offset);
+error_nested_start:
+    return rc;
+
+}
+
+static NTSTATUS
+_MapFlowKeyToNlKey(PNL_BUFFER nlBuf, OvsFlowKey *flowKey)
+{
+    NTSTATUS rc = STATUS_SUCCESS;
+    struct ovs_key_ethernet ethKey;
+    UINT32 offset = 0;
+
+    offset = NlMsgStartNested(nlBuf, OVS_FLOW_ATTR_KEY);
+    if (!offset) {
+        /* Starting the nested attribute failed. */
+        rc = STATUS_UNSUCCESSFUL;
+        goto error_nested_start;
+    }
+
+    /* Ethernet header */
+    RtlCopyMemory(&(ethKey.eth_src), flowKey->l2.dlSrc, ETH_ADDR_LEN);
+    RtlCopyMemory(&(ethKey.eth_dst), flowKey->l2.dlDst, ETH_ADDR_LEN);
+
+    if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_ETHERNET,
+                           (PCHAR)(&ethKey),
+                           sizeof(struct ovs_key_ethernet))) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+    if (!NlMsgPutTailU32(nlBuf, OVS_KEY_ATTR_IN_PORT,
+                         flowKey->l2.inPort)) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+    if (!NlMsgPutTailU16(nlBuf, OVS_KEY_ATTR_ETHERTYPE,
+                         htons(flowKey->l2.dlType))) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+    if (flowKey->l2.vlanTci) {
+        if (!NlMsgPutTailU16(nlBuf, OVS_KEY_ATTR_VLAN,
+                             flowKey->l2.vlanTci)) {
+            rc = STATUS_UNSUCCESSFUL;
+            goto done;
+        }
+    }
+
+    /* ==== L3 + L4 ==== */
+    switch (flowKey->l2.dlType) {
+        case ETH_TYPE_IPV4: {
+        IpKey *ipv4FlowPutKey = &(flowKey->ipKey);
+        rc = _MapFlowIpv4KeyToNlKey(nlBuf, ipv4FlowPutKey);
+        break;
+        }
+
+        case ETH_TYPE_IPV6: {
+        Ipv6Key *ipv6FlowPutKey = &(flowKey->ipv6Key);
+        Icmp6Key *icmpv6FlowPutKey = &(flowKey->icmp6Key);
+        rc = _MapFlowIpv6KeyToNlKey(nlBuf, ipv6FlowPutKey,
+                                    icmpv6FlowPutKey);
+        break;
+        }
+
+        case ETH_TYPE_ARP:
+        case ETH_TYPE_RARP: {
+        ArpKey *arpFlowPutKey = &(flowKey->arpKey);
+        rc = _MapFlowArpKeyToNlKey(nlBuf, arpFlowPutKey);
+        break;
+        }
+
+        default:
+        break;
+    }
+
+    if (rc != STATUS_SUCCESS) {
+        goto done;
+    }
+
+    if (flowKey->tunKey.dst) {
+        rc = _MapFlowTunKeyToNlKey(nlBuf, &(flowKey->tunKey));
+        if (rc != STATUS_SUCCESS) {
+            goto done;
+        }
+    }
+
+done:
+    NlMsgEndNested(nlBuf, offset);
+error_nested_start:
+    return rc;
+}
+
+static NTSTATUS
+_MapFlowTunKeyToNlKey(PNL_BUFFER nlBuf, OvsIPv4TunnelKey *tunKey)
+{
+    NTSTATUS rc = STATUS_SUCCESS;
+    UINT32 offset = 0;
+
+    offset = NlMsgStartNested(nlBuf, OVS_KEY_ATTR_TUNNEL);
+    if (!offset) {
+        /* Starting the nested attribute failed. */
+        rc = STATUS_UNSUCCESSFUL;
+        goto error_nested_start;
+    }
+
+    if (!NlMsgPutTailU64(nlBuf, OVS_TUNNEL_KEY_ATTR_ID,
+                         tunKey->tunnelId)) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+    if (!NlMsgPutTailU32(nlBuf, OVS_TUNNEL_KEY_ATTR_IPV4_DST,
+                         tunKey->dst)) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+    if (!NlMsgPutTailU32(nlBuf, OVS_TUNNEL_KEY_ATTR_IPV4_SRC,
+                         tunKey->src)) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+    if (!NlMsgPutTailU8(nlBuf, OVS_TUNNEL_KEY_ATTR_TOS,
+                        tunKey->tos)) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+    if (!NlMsgPutTailU8(nlBuf, OVS_TUNNEL_KEY_ATTR_TTL,
+                         tunKey->ttl)) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+done:
+    NlMsgEndNested(nlBuf, offset);
+error_nested_start:
+    return rc;
+}
+
+static NTSTATUS
+_MapFlowIpv4KeyToNlKey(PNL_BUFFER nlBuf, IpKey *ipv4FlowPutKey)
+{
+    NTSTATUS rc = STATUS_SUCCESS;
+    struct ovs_key_ipv4 ipv4Key;
+
+    ipv4Key.ipv4_src = ipv4FlowPutKey->nwSrc;
+    ipv4Key.ipv4_dst = ipv4FlowPutKey->nwDst;
+    ipv4Key.ipv4_proto = ipv4FlowPutKey->nwProto;
+    ipv4Key.ipv4_tos = ipv4FlowPutKey->nwTos;
+    ipv4Key.ipv4_ttl = ipv4FlowPutKey->nwTtl;
+    ipv4Key.ipv4_frag = ipv4FlowPutKey->nwFrag;
+
+    if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_IPV4,
+                           (PCHAR)(&ipv4Key),
+                           sizeof(struct ovs_key_ipv4))) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+    switch (ipv4Key.ipv4_proto) {
+        case IPPROTO_TCP: {
+            struct ovs_key_tcp tcpKey;
+            tcpKey.tcp_src = ipv4FlowPutKey->l4.tpSrc;
+            tcpKey.tcp_dst = ipv4FlowPutKey->l4.tpDst;
+            if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_TCP,
+                                   (PCHAR)(&tcpKey),
+                                   sizeof(tcpKey))) {
+                rc = STATUS_UNSUCCESSFUL;
+                goto done;
+            }
+            break;
+        }
+
+        case IPPROTO_UDP: {
+            struct ovs_key_udp udpKey;
+            udpKey.udp_src = ipv4FlowPutKey->l4.tpSrc;
+            udpKey.udp_dst = ipv4FlowPutKey->l4.tpDst;
+            if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_UDP,
+                                   (PCHAR)(&udpKey),
+                                   sizeof(udpKey))) {
+                rc = STATUS_UNSUCCESSFUL;
+                goto done;
+            }
+            break;
+        }
+
+        case IPPROTO_SCTP: {
+            struct ovs_key_sctp sctpKey;
+            sctpKey.sctp_src = ipv4FlowPutKey->l4.tpSrc;
+            sctpKey.sctp_dst = ipv4FlowPutKey->l4.tpDst;
+            if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_SCTP,
+                                   (PCHAR)(&sctpKey),
+                                   sizeof(sctpKey))) {
+                rc = STATUS_UNSUCCESSFUL;
+                goto done;
+            }
+            break;
+        }
+
+        case IPPROTO_ICMP: {
+            struct ovs_key_icmp icmpKey;
+            /* XXX: revisit to see if htons is needed */
+            icmpKey.icmp_type = (__u8)(ipv4FlowPutKey->l4.tpSrc);
+            icmpKey.icmp_code = (__u8)(ipv4FlowPutKey->l4.tpDst);
+
+            if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_ICMP,
+                                   (PCHAR)(&icmpKey),
+                                   sizeof(icmpKey))) {
+                rc = STATUS_UNSUCCESSFUL;
+                goto done;
+            }
+            break;
+        }
+
+        default:
+            break;
+    }
+
+done:
+    return rc;
+}
+
+static NTSTATUS
+_MapFlowIpv6KeyToNlKey(PNL_BUFFER nlBuf, Ipv6Key *ipv6FlowPutKey,
+                       Icmp6Key *icmpv6FlowPutKey)
+{
+    NTSTATUS rc = STATUS_SUCCESS;
+    struct ovs_key_ipv6 ipv6Key;
+
+    RtlCopyMemory(&(ipv6Key.ipv6_src), &ipv6FlowPutKey->ipv6Src,
+                  sizeof ipv6Key.ipv6_src);
+    RtlCopyMemory(&(ipv6Key.ipv6_dst), &ipv6FlowPutKey->ipv6Dst,
+                  sizeof ipv6Key.ipv6_dst);
+
+    ipv6Key.ipv6_label = ipv6FlowPutKey->ipv6Label;
+    ipv6Key.ipv6_proto = ipv6FlowPutKey->nwProto;
+    ipv6Key.ipv6_tclass = ipv6FlowPutKey->nwTos;
+    ipv6Key.ipv6_hlimit = ipv6FlowPutKey->nwTtl;
+    ipv6Key.ipv6_frag = ipv6FlowPutKey->nwFrag;
+
+    if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_IPV6,
+                           (PCHAR)(&ipv6Key),
+                           sizeof(ipv6Key))) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+    switch (ipv6Key.ipv6_proto) {
+        case IPPROTO_TCP: {
+            struct ovs_key_tcp tcpKey;
+            tcpKey.tcp_src = ipv6FlowPutKey->l4.tpSrc;
+            tcpKey.tcp_dst = ipv6FlowPutKey->l4.tpDst;
+            if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_TCP,
+                                   (PCHAR)(&tcpKey),
+                                   sizeof(tcpKey))) {
+                rc = STATUS_UNSUCCESSFUL;
+                goto done;
+            }
+            break;
+        }
+
+        case IPPROTO_UDP: {
+            struct ovs_key_udp udpKey;
+            udpKey.udp_src = ipv6FlowPutKey->l4.tpSrc;
+            udpKey.udp_dst = ipv6FlowPutKey->l4.tpDst;
+            if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_UDP,
+                                   (PCHAR)(&udpKey),
+                                   sizeof(udpKey))) {
+                rc = STATUS_UNSUCCESSFUL;
+                goto done;
+            }
+            break;
+        }
+
+        case IPPROTO_SCTP: {
+            struct ovs_key_sctp sctpKey;
+            sctpKey.sctp_src = ipv6FlowPutKey->l4.tpSrc;
+            sctpKey.sctp_dst = ipv6FlowPutKey->l4.tpDst;
+            if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_SCTP,
+                                   (PCHAR)(&sctpKey),
+                                   sizeof(sctpKey))) {
+                rc = STATUS_UNSUCCESSFUL;
+                goto done;
+            }
+            break;
+        }
+
+        case IPPROTO_ICMPV6: {
+            struct ovs_key_icmpv6 icmpV6Key;
+            struct ovs_key_nd ndKey;
+
+            /* XXX: revisit to see if htons is needed */
+            icmpV6Key.icmpv6_type = (__u8)(icmpv6FlowPutKey->l4.tpSrc);
+            icmpV6Key.icmpv6_code = (__u8)(icmpv6FlowPutKey->l4.tpDst);
+
+            if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_ICMPV6,
+                                   (PCHAR)(&icmpV6Key),
+                                   sizeof(icmpV6Key))) {
+                rc = STATUS_UNSUCCESSFUL;
+                goto done;
+            }
+
+            RtlCopyMemory(&(ndKey.nd_target), &icmpv6FlowPutKey->ndTarget,
+                          sizeof(icmpv6FlowPutKey->ndTarget));
+            RtlCopyMemory(&(ndKey.nd_sll), &icmpv6FlowPutKey->arpSha,
+                          ETH_ADDR_LEN);
+            RtlCopyMemory(&(ndKey.nd_tll), &icmpv6FlowPutKey->arpTha,
+                          ETH_ADDR_LEN);
+            if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_ND,
+                                   (PCHAR)(&ndKey),
+                                   sizeof(ndKey))) {
+                rc = STATUS_UNSUCCESSFUL;
+                goto done;
+            }
+
+            break;
+        }
+
+        default:
+            break;
+    }
+
+done:
+    return rc;
+}
+
+static NTSTATUS
+_MapFlowArpKeyToNlKey(PNL_BUFFER nlBuf, ArpKey *arpFlowPutKey)
+{
+    NTSTATUS rc = STATUS_SUCCESS;
+    struct ovs_key_arp arpKey;
+
+    arpKey.arp_sip = arpFlowPutKey->nwSrc;
+    arpKey.arp_tip = arpFlowPutKey->nwDst;
+
+    RtlCopyMemory(&(arpKey.arp_sha), arpFlowPutKey->arpSha, ETH_ADDR_LEN);
+    RtlCopyMemory(&(arpKey.arp_tha), arpFlowPutKey->arpTha, ETH_ADDR_LEN);
+
+    arpKey.arp_op = arpFlowPutKey->nwProto;
+
+    if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_ARP,
+                           (PCHAR)(&arpKey),
+                           sizeof(arpKey))) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+done:
     return rc;
 }
 
@@ -1202,8 +1796,7 @@ OvsDoDumpFlows(OvsFlowDumpInput *dumpInput,
     ASSERT(rowIndex < OVS_FLOW_TABLE_SIZE);
 
     flow = CONTAINING_RECORD(node, OvsFlow, ListEntry);
-    status = ReportFlowInfo(flow, dumpInput->getFlags, dumpInput->actionsLen,
-                                                            &dumpOutput->flow);
+    status = ReportFlowInfo(flow, dumpInput->getFlags, &dumpOutput->flow);
 
     if (status == STATUS_BUFFER_TOO_SMALL) {
         dumpOutput->n = sizeof(OvsFlowDumpOutput) + flow->actionsLen;
@@ -1249,7 +1842,6 @@ OvsDumpFlowIoctl(PVOID inputBuffer,
 static NTSTATUS
 ReportFlowInfo(OvsFlow *flow,
                UINT32 getFlags,
-               UINT32 getActionsLen,
                OvsFlowInfo *info)
 {
     NTSTATUS status = STATUS_SUCCESS;
@@ -1271,11 +1863,8 @@ ReportFlowInfo(OvsFlow *flow,
     if (getFlags & FLOW_GET_ACTIONS) {
         if (flow->actionsLen == 0) {
             info->actionsLen = 0;
-        } else if (flow->actionsLen > getActionsLen) {
-            info->actionsLen = 0;
-            status = STATUS_BUFFER_TOO_SMALL;
         } else {
-            RtlCopyMemory(info->actions, flow->actions, flow->actionsLen);
+            info->actions = flow->actions;
             info->actionsLen = flow->actionsLen;
         }
     }
@@ -1518,7 +2107,7 @@ OvsGetFlowIoctl(PVOID inputBuffer,
     // XXX: can be optimized to return only how much is written out
     *replyLen = outputLength;
     getOutput = (OvsFlowGetOutput *)outputBuffer;
-    ReportFlowInfo(flow, getFlags, getActionsLen, &getOutput->info);
+    ReportFlowInfo(flow, getFlags, &getOutput->info);
 
 dp_unlock:
     OvsReleaseDatapath(datapath, &dpLockState);
