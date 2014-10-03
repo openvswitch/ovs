@@ -422,8 +422,7 @@ odp_execute_actions__(void *dp, struct dpif_packet **packets, int cnt,
                 /* Allow 'dp_execute_action' to steal the packet data if we do
                  * not need it any more. */
                 bool may_steal = steal && (!more_actions
-                                           && left <= NLA_ALIGN(a->nla_len)
-                                           && type != OVS_ACTION_ATTR_RECIRC);
+                                           && left <= NLA_ALIGN(a->nla_len));
                 dp_execute_action(dp, packets, cnt, md, a, may_steal);
             }
             break;
