@@ -925,8 +925,7 @@ OvsDpFillInfo(POVS_SWITCH_CONTEXT ovsSwitchContext,
     OVS_DATAPATH *datapath = &ovsSwitchContext->datapath;
     PNL_MSG_HDR nlMsg;
 
-    /* XXX: Add API for nlBuf->bufRemLen. */
-    ASSERT(NlBufAt(nlBuf, 0, 0) != 0 && nlBuf->bufRemLen >= sizeof *msgIn);
+    ASSERT(NlBufAt(nlBuf, 0, 0) != 0 && NlBufRemLen(nlBuf) >= sizeof *msgIn);
 
     msgOutTmp.nlMsg.nlmsgType = OVS_WIN_NL_DATAPATH_FAMILY_ID;
     msgOutTmp.nlMsg.nlmsgFlags = 0;  /* XXX: ? */

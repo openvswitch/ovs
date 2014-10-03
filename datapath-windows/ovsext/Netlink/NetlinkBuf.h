@@ -52,4 +52,18 @@ NlBufSize(PNL_BUFFER nlBuf)
     return (nlBuf->bufLen - nlBuf->bufRemLen);
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * NlBufRemLen --
+ *
+ *    Returns the unused size of buffer.
+ * --------------------------------------------------------------------------
+ */
+static __inline UINT32
+NlBufRemLen(PNL_BUFFER nlBuf)
+{
+    ASSERT(nlBuf);
+    return (nlBuf->bufRemLen);
+}
+
 #endif /* __NETLINK_BUF_H_ */

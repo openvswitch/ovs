@@ -277,7 +277,8 @@ done:
  *
  *    Returns pointer to buffer at input offset.
  *    bufLen is used to verify that expected data length
- *    is within valid boundaries.
+ *    is within valid boundaries. Here by boundaries we mean
+ *    within head and tail.
  * --------------------------------------------------------------------------
  */
 PCHAR
@@ -291,6 +292,7 @@ NlBufAt(PNL_BUFFER nlBuf, UINT32 offset, UINT32 bufLen)
         goto done;
     }
 
+    /* Check if requested buffer is within head and tail */
     if ((offset + bufLen) > NL_BUF_USED_SPACE(nlBuf)) {
         goto done;
     }
