@@ -359,15 +359,9 @@ odp_execute_masked_set_action(struct dpif_packet *packet,
 }
 
 static void
-odp_execute_actions__(void *dp, struct dpif_packet **packets, int cnt,
-                      bool steal, struct pkt_metadata *,
-                      const struct nlattr *actions, size_t actions_len,
-                      odp_execute_cb dp_execute_action, bool more_actions);
-
-static void
 odp_execute_sample(void *dp, struct dpif_packet *packet, bool steal,
                    struct pkt_metadata *md, const struct nlattr *action,
-                   odp_execute_cb dp_execute_action, bool more_actions)
+                   odp_execute_cb dp_execute_action)
 {
     const struct nlattr *subactions = NULL;
     const struct nlattr *a;
@@ -379,6 +373,9 @@ odp_execute_sample(void *dp, struct dpif_packet *packet, bool steal,
         switch ((enum ovs_sample_attr) type) {
         case OVS_SAMPLE_ATTR_PROBABILITY:
             if (random_uint32() >= nl_attr_get_u32(a)) {
+                if (steal) {
+                    dpif_packet_delete(packet);
+                }
                 return;
             }
             break;
@@ -394,24 +391,23 @@ odp_execute_sample(void *dp, struct dpif_packet *packet, bool steal,
         }
     }
 
-    odp_execute_actions__(dp, &packet, 1, steal, md, nl_attr_get(subactions),
-                          nl_attr_get_size(subactions), dp_execute_action,
-                          more_actions);
+    odp_execute_actions(dp, &packet, 1, steal, md, nl_attr_get(subactions),
+                        nl_attr_get_size(subactions), dp_execute_action);
 }
 
-static void
-odp_execute_actions__(void *dp, struct dpif_packet **packets, int cnt,
-                      bool steal, struct pkt_metadata *md,
-                      const struct nlattr *actions, size_t actions_len,
-                      odp_execute_cb dp_execute_action, bool more_actions)
+void
+odp_execute_actions(void *dp, struct dpif_packet **packets, int cnt,
+                    bool steal, struct pkt_metadata *md,
+                    const struct nlattr *actions, size_t actions_len,
+                    odp_execute_cb dp_execute_action)
 {
     const struct nlattr *a;
     unsigned int left;
-
     int i;
 
     NL_ATTR_FOR_EACH_UNSAFE (a, left, actions, actions_len) {
         int type = nl_attr_type(a);
+        bool last_action = (left <= NLA_ALIGN(a->nla_len));
 
         switch ((enum ovs_action_attr) type) {
             /* These only make sense in the context of a datapath. */
@@ -421,9 +417,15 @@ odp_execute_actions__(void *dp, struct dpif_packet **packets, int cnt,
             if (dp_execute_action) {
                 /* Allow 'dp_execute_action' to steal the packet data if we do
                  * not need it any more. */
-                bool may_steal = steal && (!more_actions
-                                           && left <= NLA_ALIGN(a->nla_len));
+                bool may_steal = steal && last_action;
+
                 dp_execute_action(dp, packets, cnt, md, a, may_steal);
+
+                if (last_action) {
+                    /* We do not need to free the packets. dp_execute_actions()
+                     * has stolen them */
+                    return;
+                }
             }
             break;
 
@@ -511,10 +513,14 @@ odp_execute_actions__(void *dp, struct dpif_packet **packets, int cnt,
 
         case OVS_ACTION_ATTR_SAMPLE:
             for (i = 0; i < cnt; i++) {
-                odp_execute_sample(dp, packets[i], steal, md, a,
-                                   dp_execute_action,
-                                   more_actions ||
-                                   left > NLA_ALIGN(a->nla_len));
+                odp_execute_sample(dp, packets[i], steal && last_action, md, a,
+                                   dp_execute_action);
+            }
+
+            if (last_action) {
+                /* We do not need to free the packets. odp_execute_sample() has
+                 * stolen them*/
+                return;
             }
             break;
 
@@ -523,21 +529,8 @@ odp_execute_actions__(void *dp, struct dpif_packet **packets, int cnt,
             OVS_NOT_REACHED();
         }
     }
-}
 
-void
-odp_execute_actions(void *dp, struct dpif_packet **packets, int cnt,
-                    bool steal, struct pkt_metadata *md,
-                    const struct nlattr *actions, size_t actions_len,
-                    odp_execute_cb dp_execute_action)
-{
-    odp_execute_actions__(dp, packets, cnt, steal, md, actions, actions_len,
-                          dp_execute_action, false);
-
-    if (!actions_len && steal) {
-        /* Drop action. */
-        int i;
-
+    if (steal) {
         for (i = 0; i < cnt; i++) {
             dpif_packet_delete(packets[i]);
         }
