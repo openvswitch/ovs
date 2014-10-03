@@ -433,7 +433,7 @@ static int queue_userspace_packet(struct datapath *dp, struct sk_buff *skb,
 	struct sk_buff *user_skb; /* to be queued to userspace */
 	struct nlattr *nla;
 	struct genl_info info = {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,14,0)
+#ifdef HAVE_GENLMSG_NEW_UNICAST
 		.dst_sk = ovs_dp_get_net(dp)->genl_sock,
 #endif
 		.snd_portid = upcall_info->portid,

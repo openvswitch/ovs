@@ -16,8 +16,6 @@
  * 02110-1301, USA
  */
 
-#include <linux/version.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0)
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
@@ -30,6 +28,7 @@
 #include <linux/version.h>
 #include <linux/workqueue.h>
 #include <linux/rculist.h>
+#include <net/gre.h>
 #include <net/ip_tunnels.h>
 #include <net/route.h>
 #include <net/xfrm.h>
@@ -37,6 +36,7 @@
 #include "compat.h"
 #include "gso.h"
 
+#ifndef GRE_USE_KERNEL_GRE_HANDLE_OFFLOADS
 int iptunnel_xmit(struct rtable *rt,
 		  struct sk_buff *skb,
 		  __be32 src, __be32 dst, __u8 proto,
@@ -117,4 +117,4 @@ int iptunnel_pull_header(struct sk_buff *skb, int hdr_len, __be16 inner_proto)
 	return 0;
 }
 
-#endif /* 3.12 */
+#endif

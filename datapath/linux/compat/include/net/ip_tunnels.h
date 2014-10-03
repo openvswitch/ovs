@@ -2,7 +2,15 @@
 #define __NET_IP_TUNNELS_WRAPPER_H 1
 
 #include <linux/version.h>
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,12,0)
+#if defined(HAVE_GRE_HANDLE_OFFLOADS) && \
+     LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
+/* RHEL6 and RHEL7 both has backported tunnel API but RHEL6 has
+ * older version, so avoid using RHEL6 backports.
+ */
+#define GRE_USE_KERNEL_GRE_HANDLE_OFFLOADS
+#endif
+
+#ifdef GRE_USE_KERNEL_GRE_HANDLE_OFFLOADS
 #include_next <net/ip_tunnels.h>
 #else
 

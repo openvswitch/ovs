@@ -284,6 +284,10 @@ static inline void skb_tx_error(struct sk_buff *skb)
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
 unsigned int skb_zerocopy_headlen(const struct sk_buff *from);
+#endif
+
+#ifndef HAVE_SKB_ZEROCOPY
+#define skb_zerocopy rpl_skb_zerocopy
 int skb_zerocopy(struct sk_buff *to, struct sk_buff *from, int len,
 		  int hlen);
 #endif
