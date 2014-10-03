@@ -765,6 +765,16 @@ parse_odp_action(const char *s, const struct simap *port_names,
         }
     }
 
+    {
+        uint32_t recirc_id;
+        int n = -1;
+
+        if (ovs_scan(s, "recirc(%"PRIu32")%n", &recirc_id, &n)) {
+            nl_msg_put_u32(actions, OVS_ACTION_ATTR_RECIRC, recirc_id);
+            return n;
+        }
+    }
+
     if (!strncmp(s, "userspace(", 10)) {
         return parse_odp_userspace_action(s, actions);
     }
