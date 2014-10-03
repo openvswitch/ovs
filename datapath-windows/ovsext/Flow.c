@@ -307,6 +307,25 @@ done:
 
 /*
  *----------------------------------------------------------------------------
+ *  OvsFlowNlGetCmdHandler --
+ *    Handler for OVS_FLOW_CMD_GET/DUMP commands.
+ *----------------------------------------------------------------------------
+ */
+NTSTATUS
+OvsFlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                       UINT32 *replyLen)
+{
+    NTSTATUS rc = STATUS_SUCCESS;
+    *replyLen = 0;
+
+    UNREFERENCED_PARAMETER(usrParamsCtx);
+    UNREFERENCED_PARAMETER(replyLen);
+
+    return rc;
+}
+
+/*
+ *----------------------------------------------------------------------------
  *  _MapNlToFlowPut --
  *    Maps input netlink message to OvsFlowPut.
  *----------------------------------------------------------------------------

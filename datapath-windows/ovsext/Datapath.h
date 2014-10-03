@@ -36,11 +36,20 @@ typedef struct _OVS_MESSAGE_ERROR {
     NL_MSG_ERR errorMsg;
 } OVS_MESSAGE_ERROR, *POVS_MESSAGE_ERROR;
 
+/*
+ * Device operations to tag netlink commands with. This is a bitmask since it
+ * is possible that a particular command can be invoked via different device
+ * operations.
+ */
+#define OVS_READ_DEV_OP          (1 << 0)
+#define OVS_WRITE_DEV_OP         (1 << 1)
+#define OVS_TRANSACTION_DEV_OP   (1 << 2)
+#define OVS_READ_EVENT_DEV_OP    (1 << 3)
+
 typedef struct _OVS_DEVICE_EXTENSION {
     INT numberOpenInstance;
     INT pidCount;
 } OVS_DEVICE_EXTENSION, *POVS_DEVICE_EXTENSION;
-
 
 /*
  * Private context for each handle on the device.
@@ -82,7 +91,6 @@ POVS_OPEN_INSTANCE OvsGetOpenInstance(PFILE_OBJECT fileObject,
                                       UINT32 dpNo);
 
 NTSTATUS OvsCompleteIrpRequest(PIRP irp, ULONG_PTR infoPtr, NTSTATUS status);
-
 
 /*
  * Utility structure and functions to collect in one place all the parameters
@@ -150,6 +158,8 @@ FreeUserDumpState(POVS_OPEN_INSTANCE instance)
         RtlZeroMemory(&instance->dumpState, sizeof instance->dumpState);
     }
 }
+
+NTSTATUS OvsSetupDumpStart(POVS_USER_PARAMS_CONTEXT usrParamsCtx);
 
 #endif /* __DATAPATH_H_ */
 

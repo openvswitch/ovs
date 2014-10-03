@@ -85,16 +85,6 @@ typedef struct _NETLINK_FAMILY {
     UINT16 opsCount;
 } NETLINK_FAMILY, *PNETLINK_FAMILY;
 
-/*
- * Device operations to tag netlink commands with. This is a bitmask since it is
- * possible that a particular command can be invoked via different device
- * operations.
- */
-#define OVS_READ_DEV_OP          (1 << 0)
-#define OVS_WRITE_DEV_OP         (1 << 1)
-#define OVS_TRANSACTION_DEV_OP   (1 << 2)
-#define OVS_READ_EVENT_DEV_OP    (1 << 3)
-
 /* Handlers for the various netlink commands. */
 static NetlinkCmdHandler OvsGetPidCmdHandler,
                          OvsGetDpCmdHandler,
@@ -157,7 +147,7 @@ NETLINK_CMD nlDatapathFamilyCmdOps[] = {
       .handler         = OvsGetDpCmdHandler,
       .supportedDevOp  = OVS_WRITE_DEV_OP | OVS_READ_DEV_OP |
                          OVS_TRANSACTION_DEV_OP,
-       .validateDpIndex = FALSE
+      .validateDpIndex = FALSE
     },
     { .cmd             = OVS_DP_CMD_SET,
       .handler         = OvsSetDpCmdHandler,
@@ -214,7 +204,7 @@ NETLINK_CMD nlFlowFamilyCmdOps[] = {
       .supportedDevOp   = OVS_TRANSACTION_DEV_OP,
       .validateDpIndex  = TRUE
     },
-    { .cmd              = OVS_FLOW_CMD_SET, 
+    { .cmd              = OVS_FLOW_CMD_SET,
       .handler          = OvsFlowNlCmdHandler,
       .supportedDevOp   = OVS_TRANSACTION_DEV_OP,
       .validateDpIndex  = TRUE
@@ -223,7 +213,13 @@ NETLINK_CMD nlFlowFamilyCmdOps[] = {
       .handler          = OvsFlowNlCmdHandler,
       .supportedDevOp   = OVS_TRANSACTION_DEV_OP,
       .validateDpIndex  = TRUE
-    }
+    },
+    { .cmd              = OVS_FLOW_CMD_GET,
+      .handler          = OvsFlowNlGetCmdHandler,
+      .supportedDevOp   = OVS_TRANSACTION_DEV_OP |
+                          OVS_WRITE_DEV_OP | OVS_READ_DEV_OP,
+      .validateDpIndex  = TRUE
+    },
 };
 
 NETLINK_FAMILY nlFLowFamilyOps = {
@@ -246,8 +242,6 @@ static NTSTATUS ValidateNetlinkCmd(UINT32 devOp,
 static NTSTATUS InvokeNetlinkCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                         NETLINK_FAMILY *nlFamilyOps,
                                         UINT32 *replyLen);
-static NTSTATUS OvsSetupDumpStart(POVS_USER_PARAMS_CONTEXT usrParamsCtx);
-
 
 /* Handles to the device object for communication with userspace. */
 NDIS_HANDLE gOvsDeviceHandle;
@@ -985,7 +979,6 @@ OvsPendEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     return status;
 }
 
-
 /*
  * --------------------------------------------------------------------------
  *  Handler for the subscription for the event queue
@@ -1216,7 +1209,7 @@ cleanup:
 }
 
 
-static NTSTATUS
+NTSTATUS
 OvsSetupDumpStart(POVS_USER_PARAMS_CONTEXT usrParamsCtx)
 {
     POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;

@@ -349,7 +349,7 @@ typedef struct OvsFlowInfo {
     OvsFlowKey key;
     struct OvsFlowStats stats;
     uint32_t actionsLen;
-    NL_ATTR actions[0];
+    PNL_ATTR actions;
 } OvsFlowInfo;
 
 enum GetFlags {
