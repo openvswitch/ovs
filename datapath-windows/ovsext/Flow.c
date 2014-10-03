@@ -53,7 +53,7 @@ static NTSTATUS _MapNlToFlowPut(POVS_MESSAGE msgIn, PNL_ATTR keyAttr,
                                 OvsFlowPut *mappedFlow);
 static VOID _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
                                  PNL_ATTR *tunnelAttrs,
-                                 OvsFlowPut *mappedFlow);
+                                 OvsFlowKey *destKey);
 
 static VOID _MapTunAttrToFlowPut(PNL_ATTR *keyAttrs,
                                  PNL_ATTR *tunnelAttrs,
@@ -359,19 +359,143 @@ OvsFlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     return rc;
 }
 
+/*
+ *----------------------------------------------------------------------------
+ *  _FlowNlGetCmdHandler --
+ *    Handler for OVS_FLOW_CMD_GET command.
+ *----------------------------------------------------------------------------
+ */
 NTSTATUS
 _FlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                      UINT32 *replyLen)
 {
     NTSTATUS rc = STATUS_SUCCESS;
+    POVS_OPEN_INSTANCE instance = (POVS_OPEN_INSTANCE)
+                                  (usrParamsCtx->ovsInstance);
+    POVS_MESSAGE msgIn = instance->dumpState.ovsMsg;
+    PNL_MSG_HDR nlMsgHdr = &(msgIn->nlMsg);
+    POVS_HDR ovsHdr = &(msgIn->ovsHdr);
+    PNL_MSG_HDR nlMsgOutHdr = NULL;
+    UINT32 attrOffset = NLMSG_HDRLEN + GENL_HDRLEN + OVS_HDRLEN;
+    PNL_ATTR nlAttrs[__OVS_FLOW_ATTR_MAX];
 
-    UNREFERENCED_PARAMETER(usrParamsCtx);
+    OvsFlowGetInput getInput;
+    OvsFlowGetOutput getOutput;
+    NL_BUFFER nlBuf;
+    PNL_ATTR keyAttrs[__OVS_KEY_ATTR_MAX];
+    PNL_ATTR tunnelAttrs[__OVS_TUNNEL_KEY_ATTR_MAX];
+
+    NlBufInit(&nlBuf, usrParamsCtx->outputBuffer,
+              usrParamsCtx->outputLength);
+    RtlZeroMemory(&getInput, sizeof(OvsFlowGetInput));
+    RtlZeroMemory(&getOutput, sizeof(OvsFlowGetOutput));
+    UINT32 keyAttrOffset = 0;
+    UINT32 tunnelKeyAttrOffset = 0;
 
     *replyLen = 0;
 
+    if (usrParamsCtx->inputLength > usrParamsCtx->outputLength) {
+        /* Should not be the case.
+         * We'll be copying the flow keys back from
+         * input buffer to output buffer. */
+        rc = STATUS_INVALID_PARAMETER;
+        OVS_LOG_ERROR("inputLength: %d GREATER THEN outputLength: %d",
+                      usrParamsCtx->inputLength, usrParamsCtx->outputLength);
+        goto done;
+    }
+
+    /* Get all the top level Flow attributes */
+    if ((NlAttrParse(nlMsgHdr, attrOffset, NlMsgAttrsLen(nlMsgHdr),
+                     nlFlowPolicy, nlAttrs, ARRAY_SIZE(nlAttrs)))
+                     != TRUE) {
+        OVS_LOG_ERROR("Attr Parsing failed for msg: %p",
+                       nlMsgHdr);
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+    keyAttrOffset = (UINT32)((PCHAR) nlAttrs[OVS_FLOW_ATTR_KEY] -
+                    (PCHAR)nlMsgHdr);
+
+    /* Get flow keys attributes */
+    if ((NlAttrParseNested(nlMsgHdr, keyAttrOffset,
+                           NlAttrLen(nlAttrs[OVS_FLOW_ATTR_KEY]),
+                           nlFlowKeyPolicy, keyAttrs, ARRAY_SIZE(keyAttrs)))
+                           != TRUE) {
+        OVS_LOG_ERROR("Key Attr Parsing failed for msg: %p",
+                       nlMsgHdr);
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+    if (keyAttrs[OVS_KEY_ATTR_TUNNEL]) {
+        tunnelKeyAttrOffset = (UINT32)((PCHAR)
+                              (keyAttrs[OVS_KEY_ATTR_TUNNEL])
+                              - (PCHAR)nlMsgHdr);
+
+        /* Get tunnel keys attributes */
+        if ((NlAttrParseNested(nlMsgHdr, tunnelKeyAttrOffset,
+                               NlAttrLen(keyAttrs[OVS_KEY_ATTR_TUNNEL]),
+                               nlFlowTunnelKeyPolicy,
+                               tunnelAttrs, ARRAY_SIZE(tunnelAttrs)))
+                               != TRUE) {
+            OVS_LOG_ERROR("Tunnel key Attr Parsing failed for msg: %p",
+                           nlMsgHdr);
+            rc = STATUS_UNSUCCESSFUL;
+            goto done;
+        }
+    }
+
+    _MapKeyAttrToFlowPut(keyAttrs, tunnelAttrs,
+                         &(getInput.key));
+
+    getInput.dpNo = ovsHdr->dp_ifindex;
+    getInput.getFlags = FLOW_GET_STATS | FLOW_GET_ACTIONS;
+
+    /* 4th argument is a no op.
+     * We are keeping this argument to be compatible
+     * with our dpif-windows based interface. */
+    rc = OvsGetFlowIoctl(&getInput, &getOutput);
+    if (rc != STATUS_SUCCESS) {
+        OVS_LOG_ERROR("OvsGetFlowIoctl failed.");
+        goto done;
+    }
+
+    /* Lets prepare the reply. */
+    nlMsgOutHdr = (PNL_MSG_HDR)(NlBufAt(&nlBuf, 0, 0));
+
+    /* Input already has all the attributes for the flow key.
+     * Lets copy the values back. */
+    RtlCopyMemory(usrParamsCtx->outputBuffer, usrParamsCtx->inputBuffer,
+                  usrParamsCtx->inputLength);
+
+    rc = _MapFlowStatsToNlStats(&nlBuf, &((getOutput.info).stats));
+    if (rc != STATUS_SUCCESS) {
+        OVS_LOG_ERROR("_OvsFlowMapFlowKeyToNlStats failed.");
+        goto done;
+    }
+
+    rc = _MapFlowActionToNlAction(&nlBuf, ((getOutput.info).actionsLen),
+                                  getOutput.info.actions);
+    if (rc != STATUS_SUCCESS) {
+        OVS_LOG_ERROR("_MapFlowActionToNlAction failed.");
+        goto done;
+    }
+
+    NlMsgSetSize(nlMsgOutHdr, NlBufSize(&nlBuf));
+    NlMsgAlignSize(nlMsgOutHdr);
+    *replyLen += NlMsgSize(nlMsgOutHdr);
+
+done:
     return rc;
 }
 
+/*
+ *----------------------------------------------------------------------------
+ *  _FlowNlDumpCmdHandler --
+ *    Handler for OVS_FLOW_CMD_GET command.
+ *----------------------------------------------------------------------------
+ */
 NTSTATUS
 _FlowNlDumpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                       UINT32 *replyLen)
@@ -486,6 +610,12 @@ done:
     return rc;
 }
 
+/*
+ *----------------------------------------------------------------------------
+ *  _MapFlowInfoToNl --
+ *    Maps OvsFlowInfo to Netlink attributes.
+ *----------------------------------------------------------------------------
+ */
 static NTSTATUS
 _MapFlowInfoToNl(PNL_BUFFER nlBuf, OvsFlowInfo *flowInfo)
 {
@@ -511,6 +641,12 @@ done:
     return rc;
 }
 
+/*
+ *----------------------------------------------------------------------------
+ *  _MapFlowStatsToNlStats --
+ *    Maps OvsFlowStats to OVS_FLOW_ATTR_STATS attribute.
+ *----------------------------------------------------------------------------
+ */
 static NTSTATUS
 _MapFlowStatsToNlStats(PNL_BUFFER nlBuf, OvsFlowStats *flowStats)
 {
@@ -541,6 +677,12 @@ done:
     return rc;
 }
 
+/*
+ *----------------------------------------------------------------------------
+ *  _MapFlowActionToNlAction --
+ *    Maps flow actions to OVS_FLOW_ATTR_ACTION attribute.
+ *----------------------------------------------------------------------------
+ */
 static NTSTATUS
 _MapFlowActionToNlAction(PNL_BUFFER nlBuf, uint32_t actionsLen,
                          PNL_ATTR actions)
@@ -568,6 +710,12 @@ error_nested_start:
 
 }
 
+/*
+ *----------------------------------------------------------------------------
+ *  _MapFlowKeyToNlKey --
+ *    Maps OvsFlowKey to OVS_FLOW_ATTR_KEY attribute.
+ *----------------------------------------------------------------------------
+ */
 static NTSTATUS
 _MapFlowKeyToNlKey(PNL_BUFFER nlBuf, OvsFlowKey *flowKey)
 {
@@ -657,6 +805,12 @@ error_nested_start:
     return rc;
 }
 
+/*
+ *----------------------------------------------------------------------------
+ *  _MapFlowTunKeyToNlKey --
+ *    Maps OvsIPv4TunnelKey to OVS_TUNNEL_KEY_ATTR_ID attribute.
+ *----------------------------------------------------------------------------
+ */
 static NTSTATUS
 _MapFlowTunKeyToNlKey(PNL_BUFFER nlBuf, OvsIPv4TunnelKey *tunKey)
 {
@@ -706,6 +860,12 @@ error_nested_start:
     return rc;
 }
 
+/*
+ *----------------------------------------------------------------------------
+ *  _MapFlowTunKeyToNlKey --
+ *    Maps OvsIPv4FlowPutKey to OVS_KEY_ATTR_IPV4 attribute.
+ *----------------------------------------------------------------------------
+ */
 static NTSTATUS
 _MapFlowIpv4KeyToNlKey(PNL_BUFFER nlBuf, IpKey *ipv4FlowPutKey)
 {
@@ -789,6 +949,12 @@ done:
     return rc;
 }
 
+/*
+ *----------------------------------------------------------------------------
+ *  _MapFlowIpv6KeyToNlKey --
+ *    Maps _MapFlowIpv6KeyToNlKey to OVS_KEY_ATTR_IPV6 attribute.
+ *----------------------------------------------------------------------------
+ */
 static NTSTATUS
 _MapFlowIpv6KeyToNlKey(PNL_BUFFER nlBuf, Ipv6Key *ipv6FlowPutKey,
                        Icmp6Key *icmpv6FlowPutKey)
@@ -893,6 +1059,12 @@ done:
     return rc;
 }
 
+/*
+ *----------------------------------------------------------------------------
+ *  _MapFlowArpKeyToNlKey --
+ *    Maps _MapFlowArpKeyToNlKey to OVS_KEY_ATTR_ARP attribute.
+ *----------------------------------------------------------------------------
+ */
 static NTSTATUS
 _MapFlowArpKeyToNlKey(PNL_BUFFER nlBuf, ArpKey *arpFlowPutKey)
 {
@@ -959,7 +1131,8 @@ _MapNlToFlowPut(POVS_MESSAGE msgIn, PNL_ATTR keyAttr,
 
         /* Get tunnel keys attributes */
         if ((NlAttrParseNested(nlMsgHdr, tunnelKeyAttrOffset,
-                               NlAttrLen(keyAttr), nlFlowTunnelKeyPolicy,
+                               NlAttrLen(keyAttrs[OVS_KEY_ATTR_TUNNEL]),
+                               nlFlowTunnelKeyPolicy,
                                tunnelAttrs, ARRAY_SIZE(tunnelAttrs)))
                                != TRUE) {
             OVS_LOG_ERROR("Tunnel key Attr Parsing failed for msg: %p",
@@ -970,7 +1143,7 @@ _MapNlToFlowPut(POVS_MESSAGE msgIn, PNL_ATTR keyAttr,
     }
 
     _MapKeyAttrToFlowPut(keyAttrs, tunnelAttrs,
-                         mappedFlow);
+                         &(mappedFlow->key));
 
     /* Map the action */
     if (actionAttr) {
@@ -1029,10 +1202,9 @@ _MapNlToFlowPutFlags(PGENL_MSG_HDR genlMsgHdr,
 static VOID
 _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
                      PNL_ATTR *tunnelAttrs,
-                     OvsFlowPut *mappedFlow)
+                     OvsFlowKey *destKey)
 {
     const struct ovs_key_ethernet *eth_key;
-    OvsFlowKey *destKey = &(mappedFlow->key);
 
     _MapTunAttrToFlowPut(keyAttrs, tunnelAttrs, destKey);
 
@@ -2054,10 +2226,7 @@ OvsPrepareFlow(OvsFlow **flow,
 
 NTSTATUS
 OvsGetFlowIoctl(PVOID inputBuffer,
-                UINT32 inputLength,
-                PVOID outputBuffer,
-                UINT32 outputLength,
-                UINT32 *replyLen)
+                PVOID outputBuffer)
 {
     NTSTATUS status = STATUS_SUCCESS;
     OVS_DATAPATH *datapath = NULL;
@@ -2069,21 +2238,11 @@ OvsGetFlowIoctl(PVOID inputBuffer,
     UINT32 dpNo;
     LOCK_STATE_EX dpLockState;
 
-    if (inputLength != sizeof(OvsFlowGetInput)
-        || inputBuffer == NULL) {
-        return STATUS_INFO_LENGTH_MISMATCH;
-    }
-
     getInput = (OvsFlowGetInput *) inputBuffer;
     getFlags = getInput->getFlags;
     getActionsLen = getInput->actionsLen;
-    if (getInput->getFlags & FLOW_GET_KEY) {
-        return STATUS_INVALID_PARAMETER;
-    }
 
-    if (outputBuffer == NULL
-        || outputLength != (sizeof *getOutput +
-                            getInput->actionsLen)) {
+    if (outputBuffer == NULL) {
         return STATUS_INFO_LENGTH_MISMATCH;
     }
 
@@ -2104,8 +2263,6 @@ OvsGetFlowIoctl(PVOID inputBuffer,
         goto dp_unlock;
     }
 
-    // XXX: can be optimized to return only how much is written out
-    *replyLen = outputLength;
     getOutput = (OvsFlowGetOutput *)outputBuffer;
     ReportFlowInfo(flow, getFlags, &getOutput->info);
 

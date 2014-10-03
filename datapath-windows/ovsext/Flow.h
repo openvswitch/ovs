@@ -65,9 +65,7 @@ NTSTATUS OvsDumpFlowIoctl(PVOID inputBuffer, UINT32 inputLength,
                           UINT32 *replyLen);
 NTSTATUS OvsPutFlowIoctl(PVOID inputBuffer, UINT32 inputLength,
                          struct OvsFlowStats *stats);
-NTSTATUS OvsGetFlowIoctl(PVOID inputBuffer, UINT32 inputLength,
-                         PVOID outputBuffer, UINT32 outputLength,
-                         UINT32 *replyLen);
+NTSTATUS OvsGetFlowIoctl(PVOID inputBuffer, PVOID outputBuffer);
 NTSTATUS OvsFlushFlowIoctl(UINT32 dpNo);
 
 NTSTATUS OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,

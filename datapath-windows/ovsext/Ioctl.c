@@ -654,9 +654,14 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
         outputBuffer = MmGetSystemAddressForMdlSafe(irp->MdlAddress,
                                                     NormalPagePriority);
         if (outputBuffer) {
+            /* Commenting out the call.
+             * Post netlink implementation,
+             * we'll get rid of this file itself. */
+#if 0
             status = OvsGetFlowIoctl(inputBuffer, inputBufferLen,
                                      outputBuffer, outputBufferLen,
                                      &replyLen);
+#endif
         } else {
             status = STATUS_INSUFFICIENT_RESOURCES;
         }
