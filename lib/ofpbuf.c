@@ -313,8 +313,8 @@ ofpbuf_prealloc_headroom(struct ofpbuf *b, size_t size)
     }
 }
 
-/* Trims the size of 'b' to fit its actual content, reducing its tailroom to
- * 0.  Its headroom, if any, is preserved.
+/* Trims the size of 'b' to fit its actual content, reducing its headroom and
+ * tailroom to 0, if any.
  *
  * Buffers not obtained from malloc() are not resized, since that wouldn't save
  * any memory. */
