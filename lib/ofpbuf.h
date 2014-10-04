@@ -203,14 +203,14 @@ static inline void *ofpbuf_at_assert(const struct ofpbuf *b, size_t offset,
     return ((char *) ofpbuf_data(b)) + offset;
 }
 
-/* Returns the byte following the last byte of data in use in 'b'. */
+/* Returns a pointer to byte following the last byte of data in use in 'b'. */
 static inline void *ofpbuf_tail(const struct ofpbuf *b)
 {
     return (char *) ofpbuf_data(b) + ofpbuf_size(b);
 }
 
-/* Returns the byte following the last byte allocated for use (but not
- * necessarily in use) by 'b'. */
+/* Returns a pointer to byte following the last byte allocated for use (but
+ * not necessarily in use) in 'b'. */
 static inline void *ofpbuf_end(const struct ofpbuf *b)
 {
     return (char *) ofpbuf_base(b) + b->allocated;
