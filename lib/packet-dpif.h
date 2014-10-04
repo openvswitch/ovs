@@ -30,6 +30,7 @@ struct dpif_packet {
 #ifndef DPDK_NETDEV
     uint32_t dp_hash;           /* Packet hash. */
 #endif
+    struct pkt_metadata md;
 };
 
 struct dpif_packet *dpif_packet_new_with_headroom(size_t size,

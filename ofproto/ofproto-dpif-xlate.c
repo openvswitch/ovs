@@ -3015,7 +3015,6 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
 {
     struct ofproto_packet_in *pin;
     struct dpif_packet *packet;
-    struct pkt_metadata md = PKT_METADATA_INITIALIZER(0);
 
     ctx->xout->slow |= SLOW_CONTROLLER;
     if (!ctx->xin->packet) {
@@ -3029,7 +3028,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
                                           &ctx->xout->wc,
                                           ctx->xbridge->masked_set_action);
 
-    odp_execute_actions(NULL, &packet, 1, false, &md,
+    odp_execute_actions(NULL, &packet, 1, false,
                         ofpbuf_data(ctx->xout->odp_actions),
                         ofpbuf_size(ctx->xout->odp_actions), NULL);
 

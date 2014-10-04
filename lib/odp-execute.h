@@ -28,7 +28,6 @@ struct dpif_packet;
 struct pkt_metadata;
 
 typedef void (*odp_execute_cb)(void *dp, struct dpif_packet **packets, int cnt,
-                               struct pkt_metadata *,
                                const struct nlattr *action, bool may_steal);
 
 /* Actions that need to be executed in the context of a datapath are handed
@@ -36,7 +35,7 @@ typedef void (*odp_execute_cb)(void *dp, struct dpif_packet **packets, int cnt,
  * actions OVS_ACTION_ATTR_OUTPUT and OVS_ACTION_ATTR_USERSPACE so
  * 'dp_execute_action' needs to handle only these. */
 void odp_execute_actions(void *dp, struct dpif_packet **packets, int cnt,
-                         bool steal, struct pkt_metadata *,
+                         bool steal,
                          const struct nlattr *actions, size_t actions_len,
                          odp_execute_cb dp_execute_action);
 #endif

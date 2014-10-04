@@ -27,6 +27,7 @@ dpif_packet_new_with_headroom(size_t size, size_t headroom)
 
     ofpbuf_init(b, size + headroom);
     ofpbuf_reserve(b, headroom);
+    p->md = PKT_METADATA_INITIALIZER(0);
 
     return p;
 }
@@ -38,6 +39,7 @@ dpif_packet_clone_from_ofpbuf(const struct ofpbuf *b)
     size_t headroom = ofpbuf_headroom(b);
 
     ofpbuf_init(&p->ofpbuf, ofpbuf_size(b) + headroom);
+    p->md = PKT_METADATA_INITIALIZER(0);
     ofpbuf_reserve(&p->ofpbuf, headroom);
 
     ofpbuf_put(&p->ofpbuf, ofpbuf_data(b), ofpbuf_size(b));
@@ -61,6 +63,7 @@ dpif_packet_clone(struct dpif_packet *p)
     struct dpif_packet *newp;
 
     newp = dpif_packet_clone_from_ofpbuf(&p->ofpbuf);
+    memcpy(&newp->md, &p->md, sizeof p->md);
 
     dpif_packet_set_dp_hash(newp, dpif_packet_get_dp_hash(p));
 

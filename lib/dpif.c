@@ -991,12 +991,12 @@ struct dpif_execute_helper_aux {
  * meaningful. */
 static void
 dpif_execute_helper_cb(void *aux_, struct dpif_packet **packets, int cnt,
-                       struct pkt_metadata *md,
                        const struct nlattr *action, bool may_steal OVS_UNUSED)
 {
     struct dpif_execute_helper_aux *aux = aux_;
     int type = nl_attr_type(action);
-    struct ofpbuf * packet = &packets[0]->ofpbuf;
+    struct ofpbuf *packet = &packets[0]->ofpbuf;
+    struct pkt_metadata *md = &packets[0]->md;
 
     ovs_assert(cnt == 1);
 
@@ -1064,15 +1064,17 @@ dpif_execute_with_help(struct dpif *dpif, struct dpif_execute *execute)
     COVERAGE_INC(dpif_execute_with_help);
 
     packet.ofpbuf = *execute->packet;
+    packet.md = execute->md;
     pp = &packet;
 
-    odp_execute_actions(&aux, &pp, 1, false, &execute->md, execute->actions,
+    odp_execute_actions(&aux, &pp, 1, false, execute->actions,
                         execute->actions_len, dpif_execute_helper_cb);
 
     /* Even though may_steal is set to false, some actions could modify or
      * reallocate the ofpbuf memory. We need to pass those changes to the
      * caller */
     *execute->packet = packet.ofpbuf;
+    execute->md = packet.md;
 
     return aux.error;
 }

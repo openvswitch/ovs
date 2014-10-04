@@ -175,8 +175,7 @@ set_arp(struct ofpbuf *packet, const struct ovs_key_arp *key,
 }
 
 static void
-odp_execute_set_action(struct dpif_packet *packet, const struct nlattr *a,
-                       struct pkt_metadata *md)
+odp_execute_set_action(struct dpif_packet *packet, const struct nlattr *a)
 {
     enum ovs_key_attr type = nl_attr_type(a);
     const struct ovs_key_ipv4 *ipv4_key;
@@ -184,6 +183,7 @@ odp_execute_set_action(struct dpif_packet *packet, const struct nlattr *a,
     const struct ovs_key_tcp *tcp_key;
     const struct ovs_key_udp *udp_key;
     const struct ovs_key_sctp *sctp_key;
+    struct pkt_metadata *md = &packet->md;
 
     switch (type) {
     case OVS_KEY_ATTR_PRIORITY:
@@ -271,8 +271,9 @@ odp_execute_set_action(struct dpif_packet *packet, const struct nlattr *a,
 
 static void
 odp_execute_masked_set_action(struct dpif_packet *packet,
-                              const struct nlattr *a, struct pkt_metadata *md)
+                              const struct nlattr *a)
 {
+    struct pkt_metadata *md = &packet->md;
     enum ovs_key_attr type = nl_attr_type(a);
     struct mpls_hdr *mh;
 
@@ -360,7 +361,7 @@ odp_execute_masked_set_action(struct dpif_packet *packet,
 
 static void
 odp_execute_sample(void *dp, struct dpif_packet *packet, bool steal,
-                   struct pkt_metadata *md, const struct nlattr *action,
+                   const struct nlattr *action,
                    odp_execute_cb dp_execute_action)
 {
     const struct nlattr *subactions = NULL;
@@ -391,13 +392,12 @@ odp_execute_sample(void *dp, struct dpif_packet *packet, bool steal,
         }
     }
 
-    odp_execute_actions(dp, &packet, 1, steal, md, nl_attr_get(subactions),
+    odp_execute_actions(dp, &packet, 1, steal, nl_attr_get(subactions),
                         nl_attr_get_size(subactions), dp_execute_action);
 }
 
 void
-odp_execute_actions(void *dp, struct dpif_packet **packets, int cnt,
-                    bool steal, struct pkt_metadata *md,
+odp_execute_actions(void *dp, struct dpif_packet **packets, int cnt, bool steal,
                     const struct nlattr *actions, size_t actions_len,
                     odp_execute_cb dp_execute_action)
 {
@@ -419,7 +419,7 @@ odp_execute_actions(void *dp, struct dpif_packet **packets, int cnt,
                  * not need it any more. */
                 bool may_steal = steal && last_action;
 
-                dp_execute_action(dp, packets, cnt, md, a, may_steal);
+                dp_execute_action(dp, packets, cnt, a, may_steal);
 
                 if (last_action) {
                     /* We do not need to free the packets. dp_execute_actions()
@@ -441,15 +441,8 @@ odp_execute_actions(void *dp, struct dpif_packet **packets, int cnt,
                 uint32_t hash;
 
                 for (i = 0; i < cnt; i++) {
-                    struct ofpbuf *buf = &packets[i]->ofpbuf;
-
-                    flow_extract(buf, md, &flow);
+                    flow_extract(&packets[i]->ofpbuf, &packets[i]->md, &flow);
                     hash = flow_hash_5tuple(&flow, hash_act->hash_basis);
-
-                    /* The hash of the first packet is in shared metadata */
-                    if (i == 0) {
-                        md->dp_hash = hash ? hash : 1;
-                    }
 
                     /* We also store the hash value with each packet */
                     dpif_packet_set_dp_hash(packets[i], hash ? hash : 1);
@@ -501,19 +494,19 @@ odp_execute_actions(void *dp, struct dpif_packet **packets, int cnt,
 
         case OVS_ACTION_ATTR_SET:
             for (i = 0; i < cnt; i++) {
-                odp_execute_set_action(packets[i], nl_attr_get(a), md);
+                odp_execute_set_action(packets[i], nl_attr_get(a));
             }
             break;
 
         case OVS_ACTION_ATTR_SET_MASKED:
             for (i = 0; i < cnt; i++) {
-                odp_execute_masked_set_action(packets[i], nl_attr_get(a), md);
+                odp_execute_masked_set_action(packets[i], nl_attr_get(a));
             }
             break;
 
         case OVS_ACTION_ATTR_SAMPLE:
             for (i = 0; i < cnt; i++) {
-                odp_execute_sample(dp, packets[i], steal && last_action, md, a,
+                odp_execute_sample(dp, packets[i], steal && last_action, a,
                                    dp_execute_action);
             }
 

@@ -384,12 +384,12 @@ static int dpif_netdev_open(const struct dpif_class *, const char *name,
                             bool create, struct dpif **);
 static void dp_netdev_execute_actions(struct dp_netdev_pmd_thread *pmd,
                                       struct dpif_packet **, int c,
-                                      bool may_steal, struct pkt_metadata *,
+                                      bool may_steal,
                                       const struct nlattr *actions,
                                       size_t actions_len);
 static void dp_netdev_input(struct dp_netdev_pmd_thread *,
-                            struct dpif_packet **, int cnt,
-                            struct pkt_metadata *);
+                            struct dpif_packet **, int cnt);
+
 static void dp_netdev_disable_upcall(struct dp_netdev *);
 static void dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd,
                                     struct dp_netdev *dp, int index,
@@ -1853,7 +1853,6 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_pmd_thread *pmd;
     struct dpif_packet packet, *pp;
-    struct pkt_metadata *md = &execute->md;
 
     if (ofpbuf_size(execute->packet) < ETH_HEADER_LEN ||
         ofpbuf_size(execute->packet) > UINT16_MAX) {
@@ -1861,6 +1860,7 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
     }
 
     packet.ofpbuf = *execute->packet;
+    packet.md = execute->md;
     pp = &packet;
 
     /* Tries finding the 'pmd'.  If NULL is returned, that means
@@ -1876,7 +1876,7 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
     if (pmd->core_id == NON_PMD_CORE_ID) {
         ovs_mutex_lock(&dp->non_pmd_mutex);
     }
-    dp_netdev_execute_actions(pmd, &pp, 1, false, md, execute->actions,
+    dp_netdev_execute_actions(pmd, &pp, 1, false, execute->actions,
                               execute->actions_len);
     if (pmd->core_id == NON_PMD_CORE_ID) {
         ovs_mutex_unlock(&dp->non_pmd_mutex);
@@ -1886,7 +1886,7 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
      * reallocate the ofpbuf memory. We need to pass those changes to the
      * caller */
     *execute->packet = packet.ofpbuf;
-
+    execute->md = packet.md;
     return 0;
 }
 
@@ -2037,10 +2037,15 @@ dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
 
     error = netdev_rxq_recv(rxq, packets, &cnt);
     if (!error) {
-        struct pkt_metadata md = PKT_METADATA_INITIALIZER(port->port_no);
+        int i;
 
         *recirc_depth_get() = 0;
-        dp_netdev_input(pmd, packets, cnt, &md);
+
+        /* XXX: initialize md in netdev implementation. */
+        for (i = 0; i < cnt; i++) {
+            packets[i]->md = PKT_METADATA_INITIALIZER(port->port_no);
+        }
+        dp_netdev_input(pmd, packets, cnt);
     } else if (error != EAGAIN && error != EOPNOTSUPP) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
@@ -2486,7 +2491,6 @@ struct packet_batch {
     struct dp_netdev_flow *flow;
 
     struct dpif_packet *packets[NETDEV_MAX_RX_BATCH];
-    struct pkt_metadata md;
 };
 
 static inline void
@@ -2499,11 +2503,9 @@ packet_batch_update(struct packet_batch *batch, struct dpif_packet *packet,
 }
 
 static inline void
-packet_batch_init(struct packet_batch *batch, struct dp_netdev_flow *flow,
-                  struct pkt_metadata *md)
+packet_batch_init(struct packet_batch *batch, struct dp_netdev_flow *flow)
 {
     batch->flow = flow;
-    batch->md = *md;
 
     batch->packet_count = 0;
     batch->byte_count = 0;
@@ -2523,13 +2525,13 @@ packet_batch_execute(struct packet_batch *batch,
     actions = dp_netdev_flow_get_actions(flow);
 
     dp_netdev_execute_actions(pmd, batch->packets, batch->packet_count, true,
-                              &batch->md, actions->actions, actions->size);
+                              actions->actions, actions->size);
 
     dp_netdev_count_packet(pmd->dp, DP_STAT_HIT, batch->packet_count);
 }
 
 static inline bool
-dp_netdev_queue_batches(struct dpif_packet *pkt, struct pkt_metadata *md,
+dp_netdev_queue_batches(struct dpif_packet *pkt,
                         struct dp_netdev_flow *flow, const struct miniflow *mf,
                         struct packet_batch *batches, size_t *n_batches,
                         size_t max_batches)
@@ -2558,7 +2560,7 @@ dp_netdev_queue_batches(struct dpif_packet *pkt, struct pkt_metadata *md,
     }
 
     batch = &batches[(*n_batches)++];
-    packet_batch_init(batch, flow, md);
+    packet_batch_init(batch, flow);
     packet_batch_update(batch, pkt, mf);
     return true;
 }
@@ -2581,8 +2583,7 @@ dpif_packet_swap(struct dpif_packet **a, struct dpif_packet **b)
  */
 static inline size_t
 emc_processing(struct dp_netdev_pmd_thread *pmd, struct dpif_packet **packets,
-               size_t cnt, struct pkt_metadata *md,
-               struct netdev_flow_key *keys)
+               size_t cnt, struct netdev_flow_key *keys)
 {
     struct netdev_flow_key key;
     struct packet_batch batches[4];
@@ -2601,12 +2602,12 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dpif_packet **packets,
             continue;
         }
 
-        miniflow_extract(&packets[i]->ofpbuf, md, &key.flow);
+        miniflow_extract(&packets[i]->ofpbuf, &packets[i]->md, &key.flow);
 
         hash = dpif_netdev_packet_get_dp_hash(packets[i], &key.flow);
 
         flow = emc_lookup(flow_cache, &key.flow, hash);
-        if (OVS_UNLIKELY(!dp_netdev_queue_batches(packets[i], md,
+        if (OVS_UNLIKELY(!dp_netdev_queue_batches(packets[i],
                                                   flow,  &key.flow,
                                                   batches, &n_batches,
                                                   ARRAY_SIZE(batches)))) {
@@ -2628,7 +2629,7 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dpif_packet **packets,
 static inline void
 fast_path_processing(struct dp_netdev_pmd_thread *pmd,
                      struct dpif_packet **packets, size_t cnt,
-                     struct pkt_metadata *md, struct netdev_flow_key *keys)
+                     struct netdev_flow_key *keys)
 {
 #if !defined(__CHECKER__) && !defined(_WIN32)
     const size_t PKT_ARRAY_SIZE = cnt;
@@ -2689,7 +2690,7 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
             /* We can't allow the packet batching in the next loop to execute
              * the actions.  Otherwise, if there are any slow path actions,
              * we'll send the packet up twice. */
-            dp_netdev_execute_actions(pmd, &packets[i], 1, true, md,
+            dp_netdev_execute_actions(pmd, &packets[i], 1, true,
                                       ofpbuf_data(&actions),
                                       ofpbuf_size(&actions));
 
@@ -2740,7 +2741,7 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
         flow = dp_netdev_flow_cast(rules[i]);
         emc_insert(flow_cache, mfs[i], dpif_packet_get_dp_hash(packet),
                    flow);
-        dp_netdev_queue_batches(packet, md, flow, mfs[i], batches, &n_batches,
+        dp_netdev_queue_batches(packet, flow, mfs[i], batches, &n_batches,
                                 ARRAY_SIZE(batches));
     }
 
@@ -2751,7 +2752,7 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
 
 static void
 dp_netdev_input(struct dp_netdev_pmd_thread *pmd,
-                struct dpif_packet **packets, int cnt, struct pkt_metadata *md)
+                struct dpif_packet **packets, int cnt)
 {
 #if !defined(__CHECKER__) && !defined(_WIN32)
     const size_t PKT_ARRAY_SIZE = cnt;
@@ -2762,9 +2763,9 @@ dp_netdev_input(struct dp_netdev_pmd_thread *pmd,
     struct netdev_flow_key keys[PKT_ARRAY_SIZE];
     size_t newcnt;
 
-    newcnt = emc_processing(pmd, packets, cnt, md, keys);
+    newcnt = emc_processing(pmd, packets, cnt, keys);
     if (OVS_UNLIKELY(newcnt)) {
-        fast_path_processing(pmd, packets, newcnt, md, keys);
+        fast_path_processing(pmd, packets, newcnt, keys);
     }
 }
 
@@ -2795,7 +2796,6 @@ dp_netdev_drop_packets(struct dpif_packet ** packets, int cnt, bool may_steal)
 
 static void
 dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
-              struct pkt_metadata *md,
               const struct nlattr *a, bool may_steal)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
@@ -2830,13 +2830,13 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
 
                 ofpbuf_clear(&actions);
 
-                flow_extract(&packets[i]->ofpbuf, md, &flow);
+                flow_extract(&packets[i]->ofpbuf, &packets[i]->md, &flow);
                 error = dp_netdev_upcall(dp, packets[i], &flow, NULL,
                                          DPIF_UC_ACTION, userdata, &actions,
                                          NULL);
                 if (!error || error == ENOSPC) {
                     dp_netdev_execute_actions(pmd, &packets[i], 1, may_steal,
-                                              md, ofpbuf_data(&actions),
+                                              ofpbuf_data(&actions),
                                               ofpbuf_size(&actions));
                 } else if (may_steal) {
                     dpif_packet_delete(packets[i]);
@@ -2872,9 +2872,6 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
                 hash = 1; /* 0 is not valid */
             }
 
-            if (i == 0) {
-                md->dp_hash = hash;
-            }
             dpif_packet_set_dp_hash(packets[i], hash);
         }
         return;
@@ -2886,18 +2883,16 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
             (*depth)++;
             for (i = 0; i < cnt; i++) {
                 struct dpif_packet *recirc_pkt;
-                struct pkt_metadata recirc_md = *md;
 
                 recirc_pkt = (may_steal) ? packets[i]
                                     : dpif_packet_clone(packets[i]);
 
-                recirc_md.recirc_id = nl_attr_get_u32(a);
+                recirc_pkt->md.recirc_id = nl_attr_get_u32(a);
 
                 /* Hash is private to each packet */
-                recirc_md.dp_hash = dpif_packet_get_dp_hash(packets[i]);
+                recirc_pkt->md.dp_hash = dpif_packet_get_dp_hash(packets[i]);
 
-                dp_netdev_input(pmd, &recirc_pkt, 1,
-                                &recirc_md);
+                dp_netdev_input(pmd, &recirc_pkt, 1);
             }
             (*depth)--;
 
@@ -2925,12 +2920,12 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
 static void
 dp_netdev_execute_actions(struct dp_netdev_pmd_thread *pmd,
                           struct dpif_packet **packets, int cnt,
-                          bool may_steal, struct pkt_metadata *md,
+                          bool may_steal,
                           const struct nlattr *actions, size_t actions_len)
 {
-    struct dp_netdev_execute_aux aux = {pmd};
+    struct dp_netdev_execute_aux aux = { pmd };
 
-    odp_execute_actions(&aux, packets, cnt, may_steal, md, actions,
+    odp_execute_actions(&aux, packets, cnt, may_steal, actions,
                         actions_len, dp_execute_cb);
 }
 
