@@ -1,0 +1,6 @@
+libopenvswitch_1 {
+global:
+        *;
+local:
+        *;
+};
