@@ -40,8 +40,20 @@ AC_USE_SYSTEM_EXTENSIONS
 AC_C_BIGENDIAN
 AC_SYS_LARGEFILE
 
-LT_INIT([disable-shared])
+dnl LT_INIT([disable-shared])
+LT_INIT
 m4_pattern_forbid([LT_INIT]) dnl Make autoconf fail if libtool is missing.
+
+m4_define([libopenvswitch_lt_current],    [1])
+m4_define([libopenvswitch_lt_revision],   [0])
+m4_define([libopenvswitch_lt_age],        [0])
+
+LT_CURRENT=libopenvswitch_lt_current
+AC_SUBST(LT_CURRENT)
+LT_REVISION=libopenvswitch_lt_revision
+AC_SUBST(LT_REVISION)
+LT_AGE=libopenvswitch_lt_age
+AC_SUBST(LT_AGE)
 
 AC_SEARCH_LIBS([pow], [m])
 AC_SEARCH_LIBS([clock_gettime], [rt])
@@ -94,7 +106,7 @@ OVS_CHECK_LINUX_HOST
 AX_FUNC_POSIX_MEMALIGN
 
 OVS_CHECK_INCLUDE_NEXT([stdio.h string.h])
-AC_CONFIG_FILES([lib/stdio.h lib/string.h])
+AC_CONFIG_FILES([lib/stdio.h lib/string.h lib/libopenvswitch.sym])
 
 OVS_ENABLE_OPTION([-Wall])
 OVS_ENABLE_OPTION([-Wextra])
