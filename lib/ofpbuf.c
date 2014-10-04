@@ -429,8 +429,9 @@ ofpbuf_reserve(struct ofpbuf *b, size_t size)
     ofpbuf_set_data(b, (char*)ofpbuf_data(b) + size);
 }
 
-/* Reserves 'size' bytes of headroom so that they can be later allocated with
- * ofpbuf_push_uninit() without reallocating the ofpbuf. */
+/* Reserves 'headroom' bytes at the head and 'tailroom' at the end so that
+ * they can be later allocated with ofpbuf_push_uninit() or
+ * ofpbuf_put_uninit() without reallocating the ofpbuf. */
 void
 ofpbuf_reserve_with_tailroom(struct ofpbuf *b, size_t headroom,
                              size_t tailroom)
