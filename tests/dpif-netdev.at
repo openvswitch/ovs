@@ -94,6 +94,8 @@ OVS_VSWITCHD_START(
   [add-port br0 p1 -- set interface p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p0.sock
    set bridge br0 datapath-type=dummy other-config:datapath-id=1234 \
                   fail-mode=secure])
+AT_CHECK([ovs-appctl upcall/disable-ufid], [0], [Datapath dumping tersely using UFID disabled
+], [])
 AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
 
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
@@ -110,6 +112,8 @@ skb_priority(0/0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:
 # Now, the same again without megaflows.
 AT_CHECK([ovs-appctl upcall/disable-megaflows], [0], [megaflows disabled
 ])
+AT_CHECK([ovs-appctl upcall/disable-ufid], [0], [Datapath dumping tersely using UFID disabled
+], [])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 

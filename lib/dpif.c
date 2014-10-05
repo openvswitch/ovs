@@ -860,6 +860,20 @@ dpif_flow_flush(struct dpif *dpif)
     return error;
 }
 
+/* Tests whether 'dpif' supports userspace flow ids. We can skip serializing
+ * some flow attributes for datapaths that support this feature.
+ *
+ * Returns true if 'dpif' supports UFID for flow operations.
+ * Returns false if  'dpif' does not support UFID. */
+bool
+dpif_get_enable_ufid(struct dpif *dpif)
+{
+    if (dpif->dpif_class->get_ufid_support) {
+        return dpif->dpif_class->get_ufid_support(dpif);
+    }
+    return false;
+}
+
 /* A dpif_operate() wrapper for performing a single DPIF_OP_FLOW_GET. */
 int
 dpif_flow_get(struct dpif *dpif,
@@ -937,14 +951,15 @@ dpif_flow_del(struct dpif *dpif,
 }
 
 /* Creates and returns a new 'struct dpif_flow_dump' for iterating through the
- * flows in 'dpif'.
+ * flows in 'dpif'. If 'terse' is true, then only UFID and statistics will
+ * be returned in the dump. Otherwise, all fields will be returned.
  *
  * This function always successfully returns a dpif_flow_dump.  Error
  * reporting is deferred to dpif_flow_dump_destroy(). */
 struct dpif_flow_dump *
-dpif_flow_dump_create(const struct dpif *dpif)
+dpif_flow_dump_create(const struct dpif *dpif, bool terse)
 {
-    return dpif->dpif_class->flow_dump_create(dpif);
+    return dpif->dpif_class->flow_dump_create(dpif, terse);
 }
 
 /* Destroys 'dump', which must have been created with dpif_flow_dump_create().

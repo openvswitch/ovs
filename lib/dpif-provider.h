@@ -53,6 +53,7 @@ static inline void dpif_assert_class(const struct dpif *dpif,
 
 struct dpif_flow_dump {
     struct dpif *dpif;
+    bool terse;         /* If true, key/mask/actions may be omitted. */
 };
 
 static inline void
@@ -257,8 +258,12 @@ struct dpif_class {
      *
      * 'flow_dump_create' and 'flow_dump_thread_create' must initialize the
      * structures that they return with dpif_flow_dump_init() and
-     * dpif_flow_dump_thread_init(), respectively. */
-    struct dpif_flow_dump *(*flow_dump_create)(const struct dpif *dpif);
+     * dpif_flow_dump_thread_init(), respectively.
+     *
+     * If 'terse' is true, then only UID and statistics will
+     * be returned in the dump. Otherwise, all fields will be returned. */
+    struct dpif_flow_dump *(*flow_dump_create)(const struct dpif *dpif,
+                                               bool terse);
     int (*flow_dump_destroy)(struct dpif_flow_dump *dump);
 
     struct dpif_flow_dump_thread *(*flow_dump_thread_create)(
@@ -368,6 +373,10 @@ struct dpif_class {
     /* Get datapath version. Caller is responsible for freeing the string
      * returned.  */
     char *(*get_datapath_version)(void);
+
+    /* Returns whether 'dpif' supports unique flow identifiers for flow
+     * operations. */
+    bool (*get_ufid_support)(struct dpif *);
 };
 
 extern const struct dpif_class dpif_netlink_class;

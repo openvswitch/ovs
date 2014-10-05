@@ -138,6 +138,7 @@ static void dpif_netlink_flow_get_stats(const struct dpif_netlink_flow *,
                                         struct dpif_flow_stats *);
 static void dpif_netlink_flow_to_dpif_flow(struct dpif *, struct dpif_flow *,
                                            const struct dpif_netlink_flow *);
+static bool dpif_netlink_check_ufid__(struct dpif *dpif);
 static bool dpif_netlink_check_ufid(struct dpif *dpif);
 
 /* One of the dpif channels between the kernel and userspace. */
@@ -310,7 +311,7 @@ open_dpif(const struct dpif_netlink_dp *dp, struct dpif **dpifp)
               dp->dp_ifindex, dp->dp_ifindex);
 
     dpif->dp_ifindex = dp->dp_ifindex;
-    dpif->ufid_supported = dpif_netlink_check_ufid(&dpif->dpif);
+    dpif->ufid_supported = dpif_netlink_check_ufid__(&dpif->dpif);
     *dpifp = &dpif->dpif;
 
     return 0;
@@ -1358,7 +1359,7 @@ dpif_netlink_flow_dump_cast(struct dpif_flow_dump *dump)
 }
 
 static struct dpif_flow_dump *
-dpif_netlink_flow_dump_create(const struct dpif *dpif_)
+dpif_netlink_flow_dump_create(const struct dpif *dpif_, bool terse)
 {
     const struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
     struct dpif_netlink_flow_dump *dump;
@@ -1371,12 +1372,15 @@ dpif_netlink_flow_dump_create(const struct dpif *dpif_)
     dpif_netlink_flow_init(&request);
     request.cmd = OVS_FLOW_CMD_GET;
     request.dp_ifindex = dpif->dp_ifindex;
+    request.ufid_present = false;
+    request.ufid_terse = terse;
 
     buf = ofpbuf_new(1024);
     dpif_netlink_flow_to_ofpbuf(&request, buf);
     nl_dump_start(&dump->nl_dump, NETLINK_GENERIC, buf);
     ofpbuf_delete(buf);
     atomic_init(&dump->status, 0);
+    dump->up.terse = terse;
 
     return &dump->up;
 }
@@ -1488,8 +1492,9 @@ dpif_netlink_flow_dump_next(struct dpif_flow_dump_thread *thread_,
             break;
         }
 
-        if (datapath_flow.actions) {
-            /* Common case: the flow includes actions. */
+        if (dump->up.terse || datapath_flow.actions) {
+            /* Common case: we don't want actions, or the flow includes
+             * actions. */
             dpif_netlink_flow_to_dpif_flow(&dpif->dpif, &flows[n_flows++],
                                            &datapath_flow);
         } else {
@@ -1739,7 +1744,7 @@ dpif_netlink_handler_uninit(struct dpif_handler *handler)
 
 /* Checks support for unique flow identifiers. */
 static bool
-dpif_netlink_check_ufid(struct dpif *dpif_)
+dpif_netlink_check_ufid__(struct dpif *dpif_)
 {
     struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
     struct flow flow;
@@ -1763,7 +1768,7 @@ dpif_netlink_check_ufid(struct dpif *dpif_)
     if (error && error != EEXIST) {
         VLOG_WARN("%s: UFID feature probe failed (%s).",
                   dpif_name(dpif_), ovs_strerror(error));
-        goto done;
+        return false;
     }
 
     error = dpif_netlink_flow_get__(dpif, NULL, 0, &ufid, true, &reply,
@@ -1780,16 +1785,22 @@ dpif_netlink_check_ufid(struct dpif *dpif_)
                   dpif_name(dpif_));
     }
 
-done:
-    if (enable_ufid) {
+    return enable_ufid;
+}
+
+static bool
+dpif_netlink_check_ufid(struct dpif *dpif_)
+{
+    const struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
+
+    if (dpif->ufid_supported) {
         VLOG_INFO("%s: Datapath supports userspace flow ids",
                   dpif_name(dpif_));
     } else {
         VLOG_INFO("%s: Datapath does not support userspace flow ids",
                   dpif_name(dpif_));
     }
-
-    return enable_ufid;
+    return dpif->ufid_supported;
 }
 
 /* Synchronizes 'channels' in 'dpif->handlers'  with the set of vports
@@ -2348,6 +2359,7 @@ const struct dpif_class dpif_netlink_class = {
     NULL,                       /* enable_upcall */
     NULL,                       /* disable_upcall */
     dpif_netlink_get_datapath_version, /* get_datapath_version */
+    dpif_netlink_check_ufid,
 };
 
 static int
@@ -2830,17 +2842,20 @@ dpif_netlink_flow_to_ofpbuf(const struct dpif_netlink_flow *flow,
                        OVS_UFID_F_OMIT_KEY | OVS_UFID_F_OMIT_MASK
                        | OVS_UFID_F_OMIT_ACTIONS);
     }
-    if (flow->key_len) {
-        nl_msg_put_unspec(buf, OVS_FLOW_ATTR_KEY, flow->key, flow->key_len);
-    }
+    if (!flow->ufid_terse || !flow->ufid_present) {
+        if (flow->key_len) {
+            nl_msg_put_unspec(buf, OVS_FLOW_ATTR_KEY,
+                              flow->key, flow->key_len);
+        }
 
-    if (flow->mask_len) {
-        nl_msg_put_unspec(buf, OVS_FLOW_ATTR_MASK, flow->mask, flow->mask_len);
-    }
-
-    if (flow->actions || flow->actions_len) {
-        nl_msg_put_unspec(buf, OVS_FLOW_ATTR_ACTIONS,
-                          flow->actions, flow->actions_len);
+        if (flow->mask_len) {
+            nl_msg_put_unspec(buf, OVS_FLOW_ATTR_MASK,
+                              flow->mask, flow->mask_len);
+        }
+        if (flow->actions || flow->actions_len) {
+            nl_msg_put_unspec(buf, OVS_FLOW_ATTR_ACTIONS,
+                              flow->actions, flow->actions_len);
+        }
     }
 
     /* We never need to send these to the kernel. */

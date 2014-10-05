@@ -515,6 +515,7 @@ enum dpif_flow_put_flags {
     DPIF_FP_PROBE = 1 << 3      /* Suppress error messages, if any. */
 };
 
+bool dpif_get_enable_ufid(struct dpif *);
 void dpif_flow_hash(const struct dpif *, const void *key, size_t key_len,
                     ovs_u128 *hash);
 int dpif_flow_flush(struct dpif *);
@@ -560,7 +561,7 @@ int dpif_flow_get(struct dpif *,
  *
  * All error reporting is deferred to the call to dpif_flow_dump_destroy().
  */
-struct dpif_flow_dump *dpif_flow_dump_create(const struct dpif *);
+struct dpif_flow_dump *dpif_flow_dump_create(const struct dpif *, bool terse);
 int dpif_flow_dump_destroy(struct dpif_flow_dump *);
 
 struct dpif_flow_dump_thread *dpif_flow_dump_thread_create(
@@ -652,7 +653,7 @@ struct dpif_flow_del {
     /* Input. */
     const struct nlattr *key;       /* Flow to delete. */
     size_t key_len;                 /* Length of 'key' in bytes. */
-    const ovs_u128 *ufid;           /* UID of flow to delete. */
+    const ovs_u128 *ufid;           /* Unique identifier of flow to delete. */
 
     /* Output. */
     struct dpif_flow_stats *stats;  /* Optional flow statistics. */
@@ -709,7 +710,7 @@ struct dpif_flow_get {
     /* Input. */
     const struct nlattr *key;       /* Flow to get. */
     size_t key_len;                 /* Length of 'key' in bytes. */
-    const ovs_u128 *ufid;            /* UID of flow to get. */
+    const ovs_u128 *ufid;           /* Unique identifier of flow to get. */
     struct ofpbuf *buffer;          /* Storage for output parameters. */
 
     /* Output. */

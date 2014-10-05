@@ -1584,6 +1584,12 @@ get_dpif_flow_stats(const struct dp_netdev_flow *netdev_flow,
     }
 }
 
+static bool
+dpif_netdev_check_ufid(struct dpif *dpif OVS_UNUSED)
+{
+    return true;
+}
+
 /* Converts to the dpif_flow format, using 'key_buf' and 'mask_buf' for
  * storing the netlink-formatted key/mask. 'key_buf' may be the same as
  * 'mask_buf'. Actions will be returned without copying, by relying on RCU to
@@ -1591,33 +1597,37 @@ get_dpif_flow_stats(const struct dp_netdev_flow *netdev_flow,
 static void
 dp_netdev_flow_to_dpif_flow(const struct dp_netdev_flow *netdev_flow,
                             struct ofpbuf *key_buf, struct ofpbuf *mask_buf,
-                            struct dpif_flow *flow)
+                            struct dpif_flow *flow, bool terse)
 {
-    struct flow_wildcards wc;
-    struct dp_netdev_actions *actions;
-    size_t offset;
+    if (terse) {
+        memset(flow, 0, sizeof *flow);
+    } else {
+        struct flow_wildcards wc;
+        struct dp_netdev_actions *actions;
+        size_t offset;
 
-    miniflow_expand(&netdev_flow->cr.mask->mf, &wc.masks);
+        miniflow_expand(&netdev_flow->cr.mask->mf, &wc.masks);
 
-    /* Key */
-    offset = ofpbuf_size(key_buf);
-    flow->key = ofpbuf_tail(key_buf);
-    odp_flow_key_from_flow(key_buf, &netdev_flow->flow, &wc.masks,
-                           netdev_flow->flow.in_port.odp_port, true);
-    flow->key_len = ofpbuf_size(key_buf) - offset;
+        /* Key */
+        offset = ofpbuf_size(key_buf);
+        flow->key = ofpbuf_tail(key_buf);
+        odp_flow_key_from_flow(key_buf, &netdev_flow->flow, &wc.masks,
+                               netdev_flow->flow.in_port.odp_port, true);
+        flow->key_len = ofpbuf_size(key_buf) - offset;
 
-    /* Mask */
-    offset = ofpbuf_size(mask_buf);
-    flow->mask = ofpbuf_tail(mask_buf);
-    odp_flow_key_from_mask(mask_buf, &wc.masks, &netdev_flow->flow,
-                           odp_to_u32(wc.masks.in_port.odp_port),
-                           SIZE_MAX, true);
-    flow->mask_len = ofpbuf_size(mask_buf) - offset;
+        /* Mask */
+        offset = ofpbuf_size(mask_buf);
+        flow->mask = ofpbuf_tail(mask_buf);
+        odp_flow_key_from_mask(mask_buf, &wc.masks, &netdev_flow->flow,
+                               odp_to_u32(wc.masks.in_port.odp_port),
+                               SIZE_MAX, true);
+        flow->mask_len = ofpbuf_size(mask_buf) - offset;
 
-    /* Actions */
-    actions = dp_netdev_flow_get_actions(netdev_flow);
-    flow->actions = actions->actions;
-    flow->actions_len = actions->size;
+        /* Actions */
+        actions = dp_netdev_flow_get_actions(netdev_flow);
+        flow->actions = actions->actions;
+        flow->actions_len = actions->size;
+    }
 
     flow->ufid = netdev_flow->ufid;
     flow->ufid_present = true;
@@ -1726,7 +1736,7 @@ dpif_netdev_flow_get(const struct dpif *dpif, const struct dpif_flow_get *get)
     netdev_flow = dp_netdev_find_flow(dp, get->ufid, get->key, get->key_len);
     if (netdev_flow) {
         dp_netdev_flow_to_dpif_flow(netdev_flow, get->buffer, get->buffer,
-                                    get->flow);
+                                    get->flow, false);
     } else {
         error = ENOENT;
     }
@@ -1917,7 +1927,7 @@ dpif_netdev_flow_dump_cast(struct dpif_flow_dump *dump)
 }
 
 static struct dpif_flow_dump *
-dpif_netdev_flow_dump_create(const struct dpif *dpif_)
+dpif_netdev_flow_dump_create(const struct dpif *dpif_, bool terse)
 {
     struct dpif_netdev_flow_dump *dump;
 
@@ -1925,6 +1935,7 @@ dpif_netdev_flow_dump_create(const struct dpif *dpif_)
     dpif_flow_dump_init(&dump->up, dpif_);
     memset(&dump->pos, 0, sizeof dump->pos);
     dump->status = 0;
+    dump->up.terse = terse;
     ovs_mutex_init(&dump->mutex);
 
     return &dump->up;
@@ -2013,7 +2024,8 @@ dpif_netdev_flow_dump_next(struct dpif_flow_dump_thread *thread_,
 
         ofpbuf_use_stack(&key, keybuf, sizeof *keybuf);
         ofpbuf_use_stack(&mask, maskbuf, sizeof *maskbuf);
-        dp_netdev_flow_to_dpif_flow(netdev_flow, &key, &mask, f);
+        dp_netdev_flow_to_dpif_flow(netdev_flow, &key, &mask, f,
+                                    dump->up.terse);
     }
 
     return n_flows;
@@ -3242,6 +3254,7 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_enable_upcall,
     dpif_netdev_disable_upcall,
     dpif_netdev_get_datapath_version,
+    dpif_netdev_check_ufid,
 };
 
 static void

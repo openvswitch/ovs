@@ -5165,6 +5165,8 @@ OVS_VSWITCHD_START([add-br br1 \
 ADD_OF_PORTS([br0], [2])
 ADD_OF_PORTS([br1], [3])
 
+AT_CHECK([ovs-appctl upcall/disable-ufid], [0], [Datapath dumping tersely using UFID disabled
+], [])
 AT_CHECK([ovs-appctl time/stop])
 AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
 
@@ -5739,6 +5741,8 @@ table=0 in_port=1,ip,nw_dst=10.0.0.1 actions=output(2)
 table=0 in_port=1,ip,nw_dst=10.0.0.3 actions=drop
 ])
 AT_CHECK([ovs-appctl upcall/disable-megaflows], [0], [megaflows disabled
+], [])
+AT_CHECK([ovs-appctl upcall/disable-ufid], [0], [Datapath dumping tersely using UFID disabled
 ], [])
 AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg], [0], [], [])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
