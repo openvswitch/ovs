@@ -60,6 +60,7 @@
 #include "vlog.h"
 #include "sflow_api.h"
 #include "vlan-bitmap.h"
+#include "packets.h"
 
 VLOG_DEFINE_THIS_MODULE(bridge);
 
@@ -385,6 +386,7 @@ bridge_init(const char *remote)
 
     ovsdb_idl_omit_alert(idl, &ovsrec_port_col_status);
     ovsdb_idl_omit_alert(idl, &ovsrec_port_col_statistics);
+    ovsdb_idl_omit_alert(idl, &ovsrec_port_col_bond_active_slave);
     ovsdb_idl_omit(idl, &ovsrec_port_col_external_ids);
 
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_admin_state);
@@ -2140,6 +2142,26 @@ port_refresh_stp_stats(struct port *port)
                                ARRAY_SIZE(int_values));
 }
 
+static void
+port_refresh_bond_status(struct port *port, bool force_update)
+{
+    uint8_t mac[6];
+
+    /* Return if port is not a bond */
+    if (list_is_singleton(&port->ifaces)) {
+        return;
+    }
+
+    if (bond_get_changed_active_slave(port->name, mac, force_update)) {
+        struct ds mac_s;
+
+        ds_init(&mac_s);
+        ds_put_format(&mac_s, ETH_ADDR_FMT, ETH_ADDR_ARGS(mac));
+        ovsrec_port_set_bond_active_slave(port->cfg, ds_cstr(&mac_s));
+        ds_destroy(&mac_s);
+    }
+}
+
 static bool
 enable_system_stats(const struct ovsrec_open_vswitch *cfg)
 {
@@ -2238,7 +2260,7 @@ refresh_controller_status(void)
 
     ofproto_free_ofproto_controller_info(&info);
 }
-
+
 static void
 bridge_run__(void)
 {
@@ -2439,6 +2461,7 @@ bridge_run(void)
                     struct iface *iface;
 
                     port_refresh_stp_status(port);
+                    port_refresh_bond_status(port, force_status_commit);
                     LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
                         iface_refresh_netdev_status(iface);
                         iface_refresh_ofproto_status(iface);
@@ -3362,6 +3385,7 @@ port_configure_bond(struct port *port, struct bond_settings *s)
 {
     const char *detect_s;
     struct iface *iface;
+    const char *mac_s;
     int miimon_interval;
 
     s->name = port->name;
@@ -3419,6 +3443,13 @@ port_configure_bond(struct port *port, struct bond_settings *s)
 
     LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
         netdev_set_miimon_interval(iface->netdev, miimon_interval);
+    }
+
+    mac_s = port->cfg->bond_active_slave;
+    if (!mac_s || !ovs_scan(mac_s, ETH_ADDR_SCAN_FMT,
+                            ETH_ADDR_SCAN_ARGS(s->active_slave_mac))) {
+        /* OVSDB did not store the last active interface */
+        memset(s->active_slave_mac, 0, sizeof(s->active_slave_mac));
     }
 }
 

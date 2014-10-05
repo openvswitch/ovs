@@ -55,6 +55,10 @@ struct bond_settings {
     /* Legacy compatibility. */
     bool fake_iface;            /* Update fake stats for netdev 'name'? */
     bool lacp_fallback_ab_cfg;  /* Fallback to active-backup on LACP failure. */
+
+    uint8_t active_slave_mac[6];/* The MAC address of the interface
+                                   that was active during the last
+                                   ovs run. */
 };
 
 /* Program startup. */
@@ -81,6 +85,8 @@ bool bond_should_send_learning_packets(struct bond *);
 struct ofpbuf *bond_compose_learning_packet(struct bond *,
                                             const uint8_t eth_src[ETH_ADDR_LEN],
                                             uint16_t vlan, void **port_aux);
+bool bond_get_changed_active_slave(const char *name, uint8_t mac[6],
+                                        bool force);
 
 /* Packet processing. */
 enum bond_verdict {

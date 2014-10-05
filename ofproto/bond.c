@@ -132,6 +132,15 @@ struct bond {
     uint32_t recirc_id;          /* Non zero if recirculation can be used.*/
     struct hmap pr_rule_ops;     /* Helps to maintain post recirculation rules.*/
 
+    /* Store active slave to OVSDB. */
+    bool active_slave_changed; /* Set to true whenever the bond changes
+                                   active slave. It will be reset to false
+                                   after it is stored into OVSDB */
+
+    /* Interface name may not be persistent across an OS reboot, use
+     * MAC address for identifing the active slave */
+    uint8_t active_slave_mac[ETH_ADDR_LEN];
+                               /* The MAC address of the active interface. */
     /* Legacy compatibility. */
     long long int next_fake_iface_update; /* LLONG_MAX if disabled. */
     bool lacp_fallback_ab; /* Fallback to active-backup on LACP failure. */
@@ -459,8 +468,45 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
         bond_entry_reset(bond);
     }
 
+    memcpy(bond->active_slave_mac, s->active_slave_mac,
+           sizeof s->active_slave_mac);
+
+    bond->active_slave_changed = false;
+
     ovs_rwlock_unlock(&rwlock);
     return revalidate;
+}
+
+static struct bond_slave *
+bond_find_slave_by_mac(const struct bond *bond, const uint8_t mac[6])
+{
+    struct bond_slave *slave;
+
+    /* Find the last active slave */
+    HMAP_FOR_EACH(slave, hmap_node, &bond->slaves) {
+        uint8_t slave_mac[6];
+
+        if (netdev_get_etheraddr(slave->netdev, slave_mac)) {
+            continue;
+        }
+
+        if (!memcmp(slave_mac, mac, sizeof(slave_mac))) {
+            return slave;
+        }
+    }
+
+    return NULL;
+}
+
+static void
+bond_active_slave_changed(struct bond *bond)
+{
+    uint8_t mac[6];
+
+    netdev_get_etheraddr(bond->active_slave->netdev, mac);
+    memcpy(bond->active_slave_mac, mac, sizeof bond->active_slave_mac);
+    bond->active_slave_changed = true;
+    seq_change(connectivity_seq_get());
 }
 
 static void
@@ -1293,6 +1339,11 @@ bond_print_details(struct ds *ds, const struct bond *bond)
         break;
     }
 
+    ds_put_cstr(ds, "active slave mac: ");
+    ds_put_format(ds, ETH_ADDR_FMT, ETH_ADDR_ARGS(bond->active_slave_mac));
+    slave = bond_find_slave_by_mac(bond, bond->active_slave_mac);
+    ds_put_format(ds,"(%s)\n", slave ? slave->name : "none");
+
     HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
         shash_add(&slave_shash, slave->name, slave);
     }
@@ -1463,6 +1514,7 @@ bond_unixctl_set_active_slave(struct unixctl_conn *conn,
                   bond->name, slave->name);
         bond->send_learning_packets = true;
         unixctl_command_reply(conn, "done");
+        bond_active_slave_changed(bond);
     } else {
         unixctl_command_reply(conn, "no change");
     }
@@ -1770,6 +1822,12 @@ bond_choose_slave(const struct bond *bond)
 {
     struct bond_slave *slave, *best;
 
+    /* Find the last active slave. */
+    slave = bond_find_slave_by_mac(bond, bond->active_slave_mac);
+    if (slave && slave->enabled) {
+        return slave;
+    }
+
     /* Find an enabled slave. */
     HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
         if (slave->enabled) {
@@ -1810,6 +1868,10 @@ bond_choose_active_slave(struct bond *bond)
         }
 
         bond->send_learning_packets = true;
+
+        if (bond->active_slave != old_active_slave) {
+            bond_active_slave_changed(bond);
+        }
     } else if (old_active_slave) {
         VLOG_INFO_RL(&rl, "bond %s: all interfaces disabled", bond->name);
     }
@@ -1850,4 +1912,28 @@ bond_update_fake_slave_stats(struct bond *bond)
         netdev_set_stats(bond_dev, &bond_stats);
         netdev_close(bond_dev);
     }
+}
+
+/*
+ * Return true if bond has unstored active slave change.
+ * If return true, 'mac' will store the bond's current active slave's
+ * MAC address.  */
+bool
+bond_get_changed_active_slave(const char *name, uint8_t* mac, bool force)
+{
+    struct bond *bond;
+
+    ovs_rwlock_wrlock(&rwlock);
+    bond = bond_find(name);
+    if (bond) {
+        if (bond->active_slave_changed || force) {
+            memcpy(mac, bond->active_slave_mac, ETH_ADDR_LEN);
+            bond->active_slave_changed = false;
+            ovs_rwlock_unlock(&rwlock);
+            return true;
+        }
+    }
+    ovs_rwlock_unlock(&rwlock);
+
+    return false;
 }
