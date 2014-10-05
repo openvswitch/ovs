@@ -35,6 +35,7 @@ Post-v2.3.0
      (IEEE 802.1D-2004).  More conformance and interoperability testing is
      still needed, so this should not be enabled on production environments.
    - Stats are no longer updated on fake bond interface.
+   - Keep active bond slave selection across OVS restart.
 
 
 v2.3.0 - 14 Aug 2014

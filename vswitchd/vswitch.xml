@@ -1438,6 +1438,13 @@
           STP role of the port.
         </p>
       </column>
+
+      <column name="status" key="bond_active_slave">
+        <p>
+          For a bonded port, record the mac address of the current active slave.
+        </p>
+      </column>
+
     </group>
 
     <group title="Port Statistics">
