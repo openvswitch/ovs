@@ -128,9 +128,6 @@ NTSTATUS OvsAddVportIoctl(PVOID inputBuffer, UINT32 inputLength,
                           UINT32 *replyLen);
 NTSTATUS OvsDelVportIoctl(PVOID inputBuffer, UINT32 inputLength,
                           UINT32 *replyLen);
-NTSTATUS OvsGetExtInfoIoctl(PVOID inputBuffer, UINT32 inputLength,
-                            PVOID outputBuffer, UINT32 outputLength,
-                            UINT32 *replyLen);
 NDIS_STATUS OvsCreateNic(POVS_SWITCH_CONTEXT switchContext,
                          PNDIS_SWITCH_NIC_PARAMETERS nicParam);
 NDIS_STATUS OvsCreatePort(POVS_SWITCH_CONTEXT switchContext,

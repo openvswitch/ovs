@@ -68,6 +68,13 @@ static VOID OvsRemoveAndDeleteVport(POVS_SWITCH_CONTEXT switchContext,
                 POVS_VPORT_ENTRY vport);
 static __inline VOID OvsWaitActivate(POVS_SWITCH_CONTEXT switchContext,
                                      ULONG sleepMicroSec);
+static NTSTATUS OvsGetExtInfoIoctl(POVS_VPORT_GET vportGet,
+                                   POVS_VPORT_EXT_INFO extInfo);
+static NTSTATUS CreateNetlinkMesgForNetdev(POVS_VPORT_EXT_INFO info,
+                                           POVS_MESSAGE msgIn,
+                                           PVOID outBuffer,
+                                           UINT32 outBufLen,
+                                           int dpIfIndex);
 
 /*
  * Functions implemented in relaton to NDIS port manipulation.
@@ -1280,14 +1287,9 @@ OvsConvertIfCountedStrToAnsiStr(PIF_COUNTED_STRING wStr,
 
 
 NTSTATUS
-OvsGetExtInfoIoctl(PVOID inputBuffer,
-                     UINT32 inputLength,
-                     PVOID outputBuffer,
-                     UINT32 outputLength,
-                     UINT32 *replyLen)
+OvsGetExtInfoIoctl(POVS_VPORT_GET vportGet,
+                   POVS_VPORT_EXT_INFO extInfo)
 {
-    POVS_VPORT_GET get;
-    POVS_VPORT_EXT_INFO info;
     POVS_VPORT_ENTRY vport;
     size_t len;
     LOCK_STATE_EX lockState;
@@ -1296,71 +1298,53 @@ OvsGetExtInfoIoctl(PVOID inputBuffer,
     NDIS_VM_NAME vmName;
     BOOLEAN doConvert = FALSE;
 
-    OVS_LOG_TRACE("Enter: inputLength: %u, outputLength: %u",
-                  inputLength, outputLength);
-
-    if (inputLength < sizeof (OVS_VPORT_GET) ||
-        outputLength < sizeof (OVS_VPORT_EXT_INFO)) {
-        status = STATUS_INVALID_PARAMETER;
-        goto ext_info_done;
-    }
-    get = (POVS_VPORT_GET)inputBuffer;
-    info = (POVS_VPORT_EXT_INFO)outputBuffer;
-    RtlZeroMemory(info, sizeof (POVS_VPORT_EXT_INFO));
-
-    NdisAcquireSpinLock(gOvsCtrlLock);
-    if (gOvsSwitchContext == NULL ||
-        gOvsSwitchContext->dpNo != get->dpNo) {
-        NdisReleaseSpinLock(gOvsCtrlLock);
-        status = STATUS_INVALID_PARAMETER;
-        goto ext_info_done;
-    }
+    RtlZeroMemory(extInfo, sizeof (POVS_VPORT_EXT_INFO));
     NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock, &lockState,
                           NDIS_RWL_AT_DISPATCH_LEVEL);
-    if (get->portNo == 0) {
-        StringCbLengthA(get->name, OVS_MAX_PORT_NAME_LENGTH - 1, &len);
-        vport = OvsFindVportByOvsName(gOvsSwitchContext, get->name,
+    if (vportGet->portNo == 0) {
+        StringCbLengthA(vportGet->name, OVS_MAX_PORT_NAME_LENGTH - 1, &len);
+        vport = OvsFindVportByOvsName(gOvsSwitchContext, vportGet->name,
                                       (UINT32)len);
     } else {
-        vport = OvsFindVportByPortNo(gOvsSwitchContext, get->portNo);
+        vport = OvsFindVportByPortNo(gOvsSwitchContext, vportGet->portNo);
     }
     if (vport == NULL || (vport->ovsState != OVS_STATE_CONNECTED &&
                           vport->ovsState != OVS_STATE_NIC_CREATED)) {
         NdisReleaseRWLock(gOvsSwitchContext->dispatchLock, &lockState);
         NdisReleaseSpinLock(gOvsCtrlLock);
-        if (get->portNo) {
-            OVS_LOG_WARN("vport %u does not exist any more", get->portNo);
+        if (vportGet->portNo) {
+            OVS_LOG_WARN("vport %u does not exist any more", vportGet->portNo);
         } else {
-            OVS_LOG_WARN("vport %s does not exist any more", get->name);
+            OVS_LOG_WARN("vport %s does not exist any more", vportGet->name);
         }
         status = STATUS_DEVICE_DOES_NOT_EXIST;
         goto ext_info_done;
     }
-    info->dpNo = get->dpNo;
-    info->portNo = vport->portNo;
-    RtlCopyMemory(info->macAddress, vport->currMacAddress,
+    extInfo->dpNo = vportGet->dpNo;
+    extInfo->portNo = vport->portNo;
+    RtlCopyMemory(extInfo->macAddress, vport->currMacAddress,
                   sizeof (vport->currMacAddress));
-    RtlCopyMemory(info->permMACAddress, vport->permMacAddress,
+    RtlCopyMemory(extInfo->permMACAddress, vport->permMacAddress,
                   sizeof (vport->permMacAddress));
     if (vport->ovsType == OVS_VPORT_TYPE_NETDEV) {
-        RtlCopyMemory(info->vmMACAddress, vport->vmMacAddress,
+        RtlCopyMemory(extInfo->vmMACAddress, vport->vmMacAddress,
                       sizeof (vport->vmMacAddress));
     }
-    info->nicIndex = vport->nicIndex;
-    info->portId = vport->portId;
-    info->type = vport->ovsType;
-    info->mtu = vport->mtu;
+    extInfo->nicIndex = vport->nicIndex;
+    extInfo->portId = vport->portId;
+    extInfo->type = vport->ovsType;
+    extInfo->mtu = vport->mtu;
     /*
      * TO be revisit XXX
      */
     if (vport->ovsState == OVS_STATE_NIC_CREATED) {
-       info->status = OVS_EVENT_CONNECT | OVS_EVENT_LINK_DOWN;
+       extInfo->status = OVS_EVENT_CONNECT | OVS_EVENT_LINK_DOWN;
     } else if (vport->ovsState == OVS_STATE_CONNECTED) {
-       info->status = OVS_EVENT_CONNECT | OVS_EVENT_LINK_UP;
+       extInfo->status = OVS_EVENT_CONNECT | OVS_EVENT_LINK_UP;
     } else {
-       info->status = OVS_EVENT_DISCONNECT;
+       extInfo->status = OVS_EVENT_DISCONNECT;
     }
-    if (info->type == OVS_VPORT_TYPE_NETDEV &&
+    if (extInfo->type == OVS_VPORT_TYPE_NETDEV &&
         (vport->ovsState == OVS_STATE_NIC_CREATED  ||
          vport->ovsState == OVS_STATE_CONNECTED)) {
         RtlCopyMemory(&vmName, &vport->vmName, sizeof (NDIS_VM_NAME));
@@ -1368,41 +1352,39 @@ OvsGetExtInfoIoctl(PVOID inputBuffer,
                       (NDIS_SWITCH_NIC_NAME));
         doConvert = TRUE;
     } else {
-        info->vmUUID[0] = 0;
-        info->vifUUID[0] = 0;
+        extInfo->vmUUID[0] = 0;
+        extInfo->vifUUID[0] = 0;
     }
 
-    RtlCopyMemory(info->name, vport->ovsName, vport->ovsNameLen + 1);
+    RtlCopyMemory(extInfo->name, vport->ovsName, vport->ovsNameLen + 1);
     NdisReleaseRWLock(gOvsSwitchContext->dispatchLock, &lockState);
     NdisReleaseSpinLock(gOvsCtrlLock);
     if (doConvert) {
         status = OvsConvertIfCountedStrToAnsiStr(&vmName,
-                                                 info->vmUUID,
+                                                 extInfo->vmUUID,
                                                  OVS_MAX_VM_UUID_LEN);
         if (status != STATUS_SUCCESS) {
             OVS_LOG_INFO("Fail to convert VM name.");
-            info->vmUUID[0] = 0;
+            extInfo->vmUUID[0] = 0;
         }
 
         status = OvsConvertIfCountedStrToAnsiStr(&nicName,
-                                                 info->vifUUID,
+                                                 extInfo->vifUUID,
                                                  OVS_MAX_VIF_UUID_LEN);
         if (status != STATUS_SUCCESS) {
             OVS_LOG_INFO("Fail to convert nic name");
-            info->vifUUID[0] = 0;
+            extInfo->vifUUID[0] = 0;
         }
         /*
          * for now ignore status
          */
         status = STATUS_SUCCESS;
     }
-    *replyLen = sizeof (OVS_VPORT_EXT_INFO);
 
 ext_info_done:
-    OVS_LOG_TRACE("Exit: byteReturned: %u, status: %x",
-                  *replyLen, status);
     return status;
 }
+
 /*
  * --------------------------------------------------------------------------
  *  Command Handler for 'OVS_WIN_NETDEV_CMD_GET'.
@@ -1412,11 +1394,153 @@ NTSTATUS
 OvsGetNetdevCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                        UINT32 *replyLen)
 {
-    UNREFERENCED_PARAMETER(usrParamsCtx);
-    UNREFERENCED_PARAMETER(replyLen);
-    return STATUS_NOT_IMPLEMENTED;
+    NTSTATUS status = STATUS_SUCCESS;
+    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
+    POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
+    NL_ERROR nlError = NL_ERROR_SUCCESS;
+    OVS_VPORT_GET vportGet;
+    OVS_VPORT_EXT_INFO info;
+    LOCK_STATE_EX lockState;
+
+    static const NL_POLICY ovsNetdevPolicy[] = {
+        [OVS_WIN_NETDEV_ATTR_NAME] = { .type = NL_A_STRING,
+                                       .minLen = 2,
+                                       .maxLen = IFNAMSIZ },
+    };
+    PNL_ATTR netdevAttrs[ARRAY_SIZE(ovsNetdevPolicy)];
+
+    /* input buffer has been validated while validating transaction dev op. */
+    ASSERT(usrParamsCtx->inputBuffer != NULL &&
+           usrParamsCtx->inputLength > sizeof *msgIn);
+
+    if (msgOut == NULL || usrParamsCtx->outputLength < sizeof *msgOut) {
+        return STATUS_INVALID_BUFFER_SIZE;
+    }
+
+    if (!NlAttrParse((PNL_MSG_HDR)msgIn,
+        NLMSG_HDRLEN + GENL_HDRLEN + OVS_HDRLEN,
+        NlMsgAttrsLen((PNL_MSG_HDR)msgIn),
+        ovsNetdevPolicy, netdevAttrs, ARRAY_SIZE(netdevAttrs))) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    OvsAcquireCtrlLock();
+    if (!gOvsSwitchContext) {
+        OvsReleaseCtrlLock();
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    vportGet.portNo = 0;
+    RtlCopyMemory(&vportGet.name, NlAttrGet(netdevAttrs[OVS_VPORT_ATTR_NAME]),
+                  NlAttrGetSize(netdevAttrs[OVS_VPORT_ATTR_NAME]));
+
+    NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock, &lockState, 0);
+    status = OvsGetExtInfoIoctl(&vportGet, &info);
+    if (status == STATUS_DEVICE_DOES_NOT_EXIST) {
+        nlError = NL_ERROR_NODEV;
+        NdisReleaseRWLock(gOvsSwitchContext->dispatchLock, &lockState);
+        OvsReleaseCtrlLock();
+        goto cleanup;
+    }
+    NdisReleaseRWLock(gOvsSwitchContext->dispatchLock, &lockState);
+
+    status = CreateNetlinkMesgForNetdev(&info, msgIn,
+                 usrParamsCtx->outputBuffer, usrParamsCtx->outputLength,
+                 gOvsSwitchContext->dpNo);
+    if (status == STATUS_SUCCESS) {
+        *replyLen = msgOut->nlMsg.nlmsgLen;
+    }
+    OvsReleaseCtrlLock();
+
+cleanup:
+    if (nlError != NL_ERROR_SUCCESS) {
+        POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
+            usrParamsCtx->outputBuffer;
+
+        BuildErrorMsg(msgIn, msgError, nlError);
+        *replyLen = msgError->nlMsg.nlmsgLen;
+    }
+
+    return STATUS_SUCCESS;
 }
 
+
+/*
+ * --------------------------------------------------------------------------
+ *  Utility function to construct an OVS_MESSAGE for the specified vport. The
+ *  OVS_MESSAGE contains the output of a netdev command.
+ * --------------------------------------------------------------------------
+ */
+static NTSTATUS
+CreateNetlinkMesgForNetdev(POVS_VPORT_EXT_INFO info,
+                           POVS_MESSAGE msgIn,
+                           PVOID outBuffer,
+                           UINT32 outBufLen,
+                           int dpIfIndex)
+{
+    NL_BUFFER nlBuffer;
+    BOOLEAN ok;
+    OVS_MESSAGE msgOut;
+    PNL_MSG_HDR nlMsg;
+    UINT32 netdevFlags = 0;
+
+    NlBufInit(&nlBuffer, outBuffer, outBufLen);
+
+    BuildReplyMsgFromMsgIn(msgIn, &msgOut, 0);
+    msgOut.ovsHdr.dp_ifindex = dpIfIndex;
+
+    ok = NlMsgPutHead(&nlBuffer, (PCHAR)&msgOut, sizeof msgOut);
+    if (!ok) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    ok = NlMsgPutTailU32(&nlBuffer, OVS_WIN_NETDEV_ATTR_PORT_NO,
+                         info->portNo);
+    if (!ok) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    ok = NlMsgPutTailU32(&nlBuffer, OVS_WIN_NETDEV_ATTR_TYPE, info->type);
+    if (!ok) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    ok = NlMsgPutTailString(&nlBuffer, OVS_WIN_NETDEV_ATTR_NAME,
+                            info->name);
+    if (!ok) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    ok = NlMsgPutTailUnspec(&nlBuffer, OVS_WIN_NETDEV_ATTR_MAC_ADDR,
+             (PCHAR)info->macAddress, sizeof (info->macAddress));
+    if (!ok) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    ok = NlMsgPutTailU32(&nlBuffer, OVS_WIN_NETDEV_ATTR_MTU, info->mtu);
+    if (!ok) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    if (info->status != OVS_EVENT_CONNECT) {
+        netdevFlags = OVS_WIN_NETDEV_IFF_UP;
+    }
+    ok = NlMsgPutTailU32(&nlBuffer, OVS_WIN_NETDEV_ATTR_IF_FLAGS,
+                         netdevFlags);
+    if (!ok) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    /*
+     * XXX: add netdev_stats when we have the definition available in the
+     * kernel.
+     */
+
+    nlMsg = (PNL_MSG_HDR)NlBufAt(&nlBuffer, 0, 0);
+    nlMsg->nlmsgLen = NlBufSize(&nlBuffer);
+
+    return STATUS_SUCCESS;
+}
 
 static __inline VOID
 OvsWaitActivate(POVS_SWITCH_CONTEXT switchContext, ULONG sleepMicroSec)
