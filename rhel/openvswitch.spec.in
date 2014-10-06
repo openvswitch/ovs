@@ -22,7 +22,7 @@ License: ASL 2.0
 Release: 1
 Source: openvswitch-%{version}.tar.gz
 Buildroot: /tmp/openvswitch-rpm
-Requires: openvswitch-kmod, logrotate, python
+Requires: logrotate, python
 BuildRequires: openssl-devel
 
 %bcond_without check
