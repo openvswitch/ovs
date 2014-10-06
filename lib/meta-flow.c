@@ -976,9 +976,9 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_MPLS_LABEL:
         return !(wc->masks.mpls_lse[0] & htonl(MPLS_LABEL_MASK));
     case MFF_MPLS_TC:
-        return !(wc->masks.mpls_lse[1] & htonl(MPLS_TC_MASK));
+        return !(wc->masks.mpls_lse[0] & htonl(MPLS_TC_MASK));
     case MFF_MPLS_BOS:
-        return !(wc->masks.mpls_lse[2] & htonl(MPLS_BOS_MASK));
+        return !(wc->masks.mpls_lse[0] & htonl(MPLS_BOS_MASK));
 
     case MFF_IPV4_SRC:
         return !wc->masks.nw_src;
