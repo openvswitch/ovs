@@ -705,12 +705,15 @@ struct netdev_class {
 int netdev_register_provider(const struct netdev_class *);
 int netdev_unregister_provider(const char *type);
 
-extern const struct netdev_class netdev_linux_class;
-extern const struct netdev_class netdev_internal_class;
-extern const struct netdev_class netdev_tap_class;
 #if defined(__FreeBSD__) || defined(__NetBSD__)
 extern const struct netdev_class netdev_bsd_class;
+#elif defined(_WIN32)
+extern const struct netdev_class netdev_windows_class;
+#else
+extern const struct netdev_class netdev_linux_class;
 #endif
+extern const struct netdev_class netdev_internal_class;
+extern const struct netdev_class netdev_tap_class;
 
 #ifdef  __cplusplus
 }
