@@ -87,12 +87,14 @@ typedef struct _NETLINK_FAMILY {
 
 /* Handlers for the various netlink commands. */
 static NetlinkCmdHandler OvsGetPidCmdHandler,
-                         OvsGetDpCmdHandler,
                          OvsPendEventCmdHandler,
                          OvsSubscribeEventCmdHandler,
-                         OvsSetDpCmdHandler,
                          OvsReadEventCmdHandler,
+                         OvsGetDpCmdHandler,
+                         OvsSetDpCmdHandler,
                          OvsGetVportCmdHandler;
+
+NetlinkCmdHandler        OvsGetNetdevCmdHandler;
 
 static NTSTATUS HandleGetDpTransaction(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                        UINT32 *replyLen);
@@ -229,6 +231,24 @@ NETLINK_FAMILY nlFLowFamilyOps = {
     .maxAttr  = OVS_FLOW_ATTR_MAX,
     .cmds     = nlFlowFamilyCmdOps,
     .opsCount = ARRAY_SIZE(nlFlowFamilyCmdOps)
+};
+
+/* Netlink netdev family. */
+NETLINK_CMD nlNetdevFamilyCmdOps[] = {
+    { .cmd = OVS_WIN_NETDEV_CMD_GET,
+      .handler = OvsGetNetdevCmdHandler,
+      .supportedDevOp = OVS_TRANSACTION_DEV_OP,
+      .validateDpIndex = FALSE
+    },
+};
+
+NETLINK_FAMILY nlNetdevFamilyOps = {
+    .name     = OVS_WIN_NETDEV_FAMILY,
+    .id       = OVS_WIN_NL_NETDEV_FAMILY_ID,
+    .version  = OVS_WIN_NETDEV_VERSION,
+    .maxAttr  = OVS_WIN_NETDEV_ATTR_MAX,
+    .cmds     = nlNetdevFamilyCmdOps,
+    .opsCount = ARRAY_SIZE(nlNetdevFamilyCmdOps)
 };
 
 static NTSTATUS MapIrpOutputBuffer(PIRP irp,
@@ -750,6 +770,9 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
         goto done;
     case OVS_WIN_NL_VPORT_FAMILY_ID:
         nlFamilyOps = &nlVportFamilyOps;
+        break;
+    case OVS_WIN_NL_NETDEV_FAMILY_ID:
+        nlFamilyOps = &nlNetdevFamilyOps;
         break;
     default:
         status = STATUS_INVALID_PARAMETER;

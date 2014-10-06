@@ -23,6 +23,7 @@
 #include "Vxlan.h"
 #include "IpHelper.h"
 #include "Oid.h"
+#include "Datapath.h"
 
 #ifdef OVS_DBG_MOD
 #undef OVS_DBG_MOD
@@ -1401,6 +1402,19 @@ ext_info_done:
     OVS_LOG_TRACE("Exit: byteReturned: %u, status: %x",
                   *replyLen, status);
     return status;
+}
+/*
+ * --------------------------------------------------------------------------
+ *  Command Handler for 'OVS_WIN_NETDEV_CMD_GET'.
+ * --------------------------------------------------------------------------
+ */
+NTSTATUS
+OvsGetNetdevCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                       UINT32 *replyLen)
+{
+    UNREFERENCED_PARAMETER(usrParamsCtx);
+    UNREFERENCED_PARAMETER(replyLen);
+    return STATUS_NOT_IMPLEMENTED;
 }
 
 
