@@ -1351,6 +1351,11 @@ do_lookup_genl_family(const char *name, struct nlattr **attrs,
         family_name = OVS_FLOW_FAMILY;
         family_version = OVS_FLOW_VERSION;
         family_attrmax = OVS_FLOW_ATTR_MAX;
+    } else if (!strcmp(name, OVS_WIN_NETDEV_FAMILY)) {
+        family_id = OVS_WIN_NL_NETDEV_FAMILY_ID;
+        family_name = OVS_WIN_NETDEV_FAMILY;
+        family_version = OVS_WIN_NETDEV_VERSION;
+        family_attrmax = OVS_WIN_NETDEV_ATTR_MAX;
     } else {
         ofpbuf_delete(reply);
         return EINVAL;
