@@ -92,6 +92,15 @@ POVS_OPEN_INSTANCE OvsGetOpenInstance(PFILE_OBJECT fileObject,
 
 NTSTATUS OvsCompleteIrpRequest(PIRP irp, ULONG_PTR infoPtr, NTSTATUS status);
 
+VOID OvsAcquireCtrlLock();
+VOID OvsReleaseCtrlLock();
+
+/* XXX: Move this to netlink.[ch] eventually. */
+VOID BuildReplyMsgFromMsgIn(POVS_MESSAGE msgIn, POVS_MESSAGE msgOut,
+                            UINT16 flags);
+VOID BuildErrorMsg(POVS_MESSAGE msgIn, POVS_MESSAGE_ERROR msgOut,
+                   UINT errorCode);
+
 /*
  * Utility structure and functions to collect in one place all the parameters
  * passed during a call from userspace.

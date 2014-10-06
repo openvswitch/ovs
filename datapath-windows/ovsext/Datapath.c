@@ -1261,7 +1261,7 @@ OvsSetupDumpStart(POVS_USER_PARAMS_CONTEXT usrParamsCtx)
 
 static VOID
 BuildMsgOut(POVS_MESSAGE msgIn, POVS_MESSAGE msgOut, UINT16 type,
-                     UINT32 length, UINT16 flags)
+            UINT32 length, UINT16 flags)
 {
     msgOut->nlMsg.nlmsgType = type;
     msgOut->nlMsg.nlmsgFlags = flags;
@@ -1270,18 +1270,23 @@ BuildMsgOut(POVS_MESSAGE msgIn, POVS_MESSAGE msgOut, UINT16 type,
     msgOut->nlMsg.nlmsgLen = length;
 
     msgOut->genlMsg.cmd = msgIn->genlMsg.cmd;
-    msgOut->genlMsg.version = nlDatapathFamilyOps.version;
+    msgOut->genlMsg.version = msgIn->genlMsg.version;
     msgOut->genlMsg.reserved = 0;
 }
 
-static VOID
+/*
+ * XXX: should move out these functions to a Netlink.c or to a OvsMessage.c
+ * or even make them inlined functions in Datapath.h. Can be done after the
+ * first sprint once we have more code to refactor.
+ */
+VOID
 BuildReplyMsgFromMsgIn(POVS_MESSAGE msgIn, POVS_MESSAGE msgOut, UINT16 flags)
 {
     BuildMsgOut(msgIn, msgOut, msgIn->nlMsg.nlmsgType, sizeof(OVS_MESSAGE),
                 flags);
 }
 
-static VOID
+VOID
 BuildErrorMsg(POVS_MESSAGE msgIn, POVS_MESSAGE_ERROR msgOut, UINT errorCode)
 {
     BuildMsgOut(msgIn, (POVS_MESSAGE)msgOut, NLMSG_ERROR,
@@ -1538,6 +1543,7 @@ OvsGetVport(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     }
     OvsReleaseCtrlLock();
 
+    NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock, &lockState, 0);
     if (vportAttrs[OVS_VPORT_ATTR_NAME] != NULL) {
         vport = OvsFindVportByOvsName(gOvsSwitchContext,
             NlAttrGet(vportAttrs[OVS_VPORT_ATTR_NAME]),
@@ -1547,15 +1553,16 @@ OvsGetVport(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
             NlAttrGetU32(vportAttrs[OVS_VPORT_ATTR_PORT_NO]));
     } else {
         nlError = NL_ERROR_INVAL;
+        NdisReleaseRWLock(gOvsSwitchContext->dispatchLock, &lockState);
         goto Cleanup;
     }
 
     if (!vport) {
         nlError = NL_ERROR_NODEV;
+        NdisReleaseRWLock(gOvsSwitchContext->dispatchLock, &lockState);
         goto Cleanup;
     }
 
-    NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock, &lockState, 0);
     status = OvsCreateMsgFromVport(vport, msgIn, usrParamsCtx->outputBuffer,
                                    usrParamsCtx->outputLength,
                                    gOvsSwitchContext->dpNo);
