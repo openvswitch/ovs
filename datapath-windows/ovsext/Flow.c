@@ -1935,7 +1935,8 @@ OvsDoDumpFlows(OvsFlowDumpInput *dumpInput,
 
     datapath = &gOvsSwitchContext->datapath;
     ASSERT(datapath);
-    OvsAcquireDatapathRead(datapath, &dpLockState, FALSE);
+    ASSERT(KeGetCurrentIrql() == DISPATCH_LEVEL);
+    OvsAcquireDatapathRead(datapath, &dpLockState, TRUE);
 
     head = &datapath->flowTable[rowIndex];
     node = head->Flink;
@@ -2077,7 +2078,8 @@ OvsPutFlowIoctl(PVOID inputBuffer,
 
     datapath = &gOvsSwitchContext->datapath;
     ASSERT(datapath);
-    OvsAcquireDatapathWrite(datapath, &dpLockState, FALSE);
+    ASSERT(KeGetCurrentIrql() == DISPATCH_LEVEL);
+    OvsAcquireDatapathWrite(datapath, &dpLockState, TRUE);
     status = HandleFlowPut(put, datapath, stats);
     OvsReleaseDatapath(datapath, &dpLockState);
 
@@ -2256,7 +2258,8 @@ OvsGetFlowIoctl(PVOID inputBuffer,
 
     datapath = &gOvsSwitchContext->datapath;
     ASSERT(datapath);
-    OvsAcquireDatapathRead(datapath, &dpLockState, FALSE);
+    ASSERT(KeGetCurrentIrql() == DISPATCH_LEVEL);
+    OvsAcquireDatapathRead(datapath, &dpLockState, TRUE);
     flow = OvsLookupFlow(datapath, &getInput->key, &hash, FALSE);
     if (!flow) {
         status = STATUS_INVALID_PARAMETER;
@@ -2289,7 +2292,8 @@ OvsFlushFlowIoctl(UINT32 dpNo)
 
     datapath = &gOvsSwitchContext->datapath;
     ASSERT(datapath);
-    OvsAcquireDatapathWrite(datapath, &dpLockState, FALSE);
+    ASSERT(KeGetCurrentIrql() == DISPATCH_LEVEL);
+    OvsAcquireDatapathWrite(datapath, &dpLockState, TRUE);
     DeleteAllFlows(datapath);
     OvsReleaseDatapath(datapath, &dpLockState);
 

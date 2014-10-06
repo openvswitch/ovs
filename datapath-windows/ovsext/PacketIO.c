@@ -268,7 +268,7 @@ OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
             }
 
             ASSERT(KeGetCurrentIrql() == DISPATCH_LEVEL);
-            OvsAcquireDatapathRead(datapath, &dpLockState, dispatch);
+            OvsAcquireDatapathRead(datapath, &dpLockState, TRUE);
 
             flow = OvsLookupFlow(datapath, &key, &hash, FALSE);
             if (flow) {

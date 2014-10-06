@@ -1389,8 +1389,9 @@ OvsGetVportDumpNext(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
      * it means we have an array of pids, instead of a single pid.
      * ATM we assume we have one pid only.
     */
-
-    NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock, &lockState, 0);
+    ASSERT(KeGetCurrentIrql() == DISPATCH_LEVEL);
+    NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock, &lockState,
+        NDIS_RWL_AT_DISPATCH_LEVEL);
 
     if (gOvsSwitchContext->numVports > 0) {
         /* inBucket: the bucket, used for lookup */
