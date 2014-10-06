@@ -246,6 +246,7 @@ vswitchd/ovs-vswitchd.8: \
 	lib/service.man \
 	lib/ssl-bootstrap.man \
 	lib/ssl.man \
+	lib/unixctl.man \
 	lib/vlog-unixctl.man \
 	lib/vlog.man \
 	ofproto/ofproto-dpif-unixctl.man \
@@ -261,6 +262,7 @@ lib/memory-unixctl.man:
 lib/service.man:
 lib/ssl-bootstrap.man:
 lib/ssl.man:
+lib/unixctl.man:
 lib/vlog-unixctl.man:
 lib/vlog.man:
 ofproto/ofproto-dpif-unixctl.man:
