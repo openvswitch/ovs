@@ -59,6 +59,7 @@
 #define OVS_WIN_NL_PACKET_FAMILY_ID          (NLMSG_MIN_TYPE + 3)
 #define OVS_WIN_NL_VPORT_FAMILY_ID           (NLMSG_MIN_TYPE + 4)
 #define OVS_WIN_NL_FLOW_FAMILY_ID            (NLMSG_MIN_TYPE + 5)
+#define OVS_WIN_NL_NETDEV_FAMILY_ID          (NLMSG_MIN_TYPE + 6)
 
 #define OVS_WIN_NL_INVALID_MCGRP_ID          0
 #define OVS_WIN_NL_MCGRP_START_ID            100
@@ -71,7 +72,6 @@
 #define OVS_WIN_CONTROL_FAMILY   "ovs_win_control"
 #define OVS_WIN_CONTROL_MCGROUP  "ovs_win_control"
 #define OVS_WIN_CONTROL_VERSION  1
-#define OVS_WIN_CONTROL_ATTR_MAX (__OVS_FLOW_ATTR_MAX - 1)
 
 /* Commands available under the OVS_WIN_CONTROL_FAMILY. */
 enum ovs_win_control_cmd {
@@ -87,7 +87,65 @@ enum ovs_win_control_cmd {
 enum ovs_nl_mcast_attr {
     OVS_NL_ATTR_MCAST_GRP,   /* (UINT32) Join an MC group */
     OVS_NL_ATTR_MCAST_JOIN,  /* (UINT8) 1/0 - Join/Unjoin */
+    __OVS_NL_ATTR_CTRL_MAX
 };
+#define OVS_WIN_CONTROL_ATTR_MAX (__OVS_NL_ATTR_CTRL_MAX - 1)
+
+/*
+ * Netdev family of commands specific to Windows.
+ */
+#define OVS_WIN_NETDEV_FAMILY   "ovs_win_netdev"
+#define OVS_WIN_NETDEV_MCGROUP  "ovs_win_netdev"
+#define OVS_WIN_NETDEV_VERSION  1
+
+enum ovs_win_netdev_cmd {
+    OVS_WIN_NETDEV_CMD_UNSPEC,
+    OVS_WIN_NETDEV_CMD_GET,     /* information about the netdev. */
+};
+
+#define OVS_WIN_NETDEV_ATTR_MAX (__OVS_WIN_NETDEV_ATTR_MAX - 1)
+
+/**
+ * For every vport on the datapath, there is a corresponding netdev.  General
+ * network device attributes of a vport that are not specific to OVS, such as
+ * MTU are represented using a netdev.  For convenience, some of the vport
+ * attributes are also included as netdev attributes.
+ *
+ * enum ovs_win_netdev_attr - attributes for %OVS_WIN_NETDEV_* commands.
+ * @OVS_WIN_NETDEV_ATTR_PORT_NO: 32-bit port number of the vport within the
+ * datapath.
+ * @OVS_WIN_NETDEV_ATTR_TYPE: 32-bit %OVS_VPORT_TYPE_* constant describing
+ * the type of vport.
+ * @OVS_WIN_NETDEV_ATTR_NAME: Name of vport.  Maximum length %IFNAMSIZ-1 bytes
+ * plus a null terminator.
+ * @OVS_WIN_NETDEV_ATTR_MAC_ADDR: MAC address of the vport.  %ETH_ADDR_LEN bytes
+ * long.
+ * @OVS_WIN_NETDEV_ATTR_MTU : 32-bit MTU of the vport.
+ * @OVS_WIN_NETDEV_ATTR_IF_FLAGS: 32-bit %OVS_WIN_NETDEV_IFF_* interface flags
+ * of the vport.
+ *
+ * These attributes follow the &struct ovs_header within the Generic Netlink
+ * payload for %OVS_WIN_NETDEV_* commands.
+ *
+ * For all requests, if %OVS_WIN_NETDEV_ATTR_NAME is specified then it is used
+ * to look up the netdev to operate on; dp_idx from the &struct
+ * ovs_header is not relevant for the look up.
+ */
+enum ovs_win_netdev_attr {
+    OVS_WIN_NETDEV_ATTR_UNSPEC,
+    OVS_WIN_NETDEV_ATTR_PORT_NO,     /* u32 port number within datapath. */
+    OVS_WIN_NETDEV_ATTR_TYPE,        /* u32 OVS_NETDEV_TYPE_* constant. */
+    OVS_WIN_NETDEV_ATTR_NAME,        /* string name, up to IFNAMSIZ bytes long. */
+    OVS_WIN_NETDEV_ATTR_MAC_ADDR,    /* MAC address of the vport. */
+    OVS_WIN_NETDEV_ATTR_MTU,         /* MTU of the vport. */
+    OVS_WIN_NETDEV_ATTR_IF_FLAGS,    /* Interface flags o the vport. */
+    __OVS_WIN_NETDEV_ATTR_MAX
+};
+
+#define OVS_WIN_NETDEV_IFF_UP                   (1 << 0)
+#define OVS_WIN_NETDEV_IFF_PROMISC              (1 << 1)
+
+#define OVS_WIN_NETDEV_ATTR_MAX (__OVS_WIN_NETDEV_ATTR_MAX - 1)
 
 typedef struct ovs_dp_stats OVS_DP_STATS;
 typedef enum ovs_vport_type OVS_VPORT_TYPE;
