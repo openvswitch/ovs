@@ -396,7 +396,7 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
     atomic_store(&bfd->check_tnl_key,
                  smap_get_bool(cfg, "check_tnl_key", false));
     min_tx = smap_get_int(cfg, "min_tx", 100);
-    min_tx = MAX(min_tx, 100);
+    min_tx = MAX(min_tx, 1);
     if (bfd->cfg_min_tx != min_tx) {
         bfd->cfg_min_tx = min_tx;
         if (bfd->state != STATE_UP
@@ -407,7 +407,7 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
     }
 
     min_rx = smap_get_int(cfg, "min_rx", 1000);
-    min_rx = MAX(min_rx, 100);
+    min_rx = MAX(min_rx, 1);
     if (bfd->cfg_min_rx != min_rx) {
         bfd->cfg_min_rx = min_rx;
         if (bfd->state != STATE_UP
