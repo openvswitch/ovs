@@ -29,116 +29,1310 @@
 struct ds;
 struct match;
 
-/* The comment on each of these indicates the member in "union mf_value" used
- * to represent its value. */
+/* Open vSwitch fields
+ * ===================
+ *
+ * A "field" is a property of a packet.  Most familiarly, "data fields" are
+ * fields that can be extracted from a packet.
+ *
+ * Some data fields are always present as a consequence of the basic networking
+ * technology in use.  Ethernet is the assumed base technology for current
+ * versions of OpenFlow and Open vSwitch, so Ethernet header fields are always
+ * available.
+ *
+ * Other data fields are not always present.  A packet contains ARP fields, for
+ * example, only when its Ethernet header indicates the Ethertype for ARP,
+ * 0x0806.  We say that a field is "applicable" when it is it present in a
+ * packet, and "inapplicable" when it is not, and refer to the conditions that
+ * determine whether a field is applicable as "prerequisites".  Some
+ * VLAN-related fields are a special case: these fields are always applicable,
+ * but have a designated value or bit that indicates whether a VLAN header is
+ * present, with the remaining values or bits indicating the VLAN header's
+ * content (if it is present).  See MFF_VLAN_TCI for an example.
+ *
+ * Conceptually, an inapplicable field does not have a value, not even a
+ * nominal ``value'' such as all-zero-bits.  In many circumstances, OpenFlow
+ * and Open vSwitch allow references only to applicable fields.  For example,
+ * one may match a given field only if the match includes the field's
+ * prerequisite, e.g. matching an ARP field is only allowed if one also matches
+ * on Ethertype 0x0806.
+ *
+ * (Practically, however, OVS represents a field's value as some fixed member
+ * in its "struct flow", so accessing that member will obtain some value.  Some
+ * members are used for more than one purpose, e.g. the "tp_src" member
+ * represents the TCP, UDP, and SCTP source port, so the value read may not
+ * even make sense.  For this reason, it is important to know whether a field's
+ * prerequisites are satisfied before attempting to read it.)
+ *
+ * Sometimes a packet may contain multiple instances of a header.  For example,
+ * a packet may contain multiple VLAN or MPLS headers, and tunnels can cause
+ * any data field to recur.  OpenFlow and Open vSwitch do not address these
+ * cases uniformly.  For VLAN and MPLS headers, only the outermost header is
+ * accessible, so that inner headers may be accessed only by ``popping''
+ * (removing) the outer header.  (Open vSwitch supports only a single VLAN
+ * header in any case.)  For tunnels, e.g. GRE or VXLAN, the outer header and
+ * inner headers are treated as different data fields.
+ *
+ * OpenFlow and Open vSwitch support some fields other than data fields.
+ * "Metadata fields" relate to the origin or treatment of a packet, but they
+ * are not extracted from the packet data itself.  One example is the physical
+ * port on which a packet arrived at the switch.  "Register fields" act like
+ * variables: they give an OpenFlow switch space for temporary storage while
+ * processing a packet.  Existing metadata and register fields have no
+ * prerequisites.
+ *
+ * A field's value consists of an integral number of bytes.  Most data fields
+ * are copied directly from protocol headers, e.g. at layer 2, MFF_ETH_SRC is
+ * copied from the Ethernet source address and MFF_ETH_DST from the destination
+ * address.  Other data fields are copied from a packet with padding, usually
+ * with zeros and in the most significant positions (see e.g. MFF_MPLS_LABEL)
+ * but not always (see e.g. MFF_IP_DSCP).  A final category of data fields is
+ * transformed in other ways as they are copied from the packets, to make them
+ * more useful for matching, e.g. MFF_IP_FRAG describes whether a packet is a
+ * fragment but it is not copied directly from the IP header.
+ *
+ *
+ * Field specifications
+ * ====================
+ *
+ * Each of the enumeration values below represents a field.  The comments
+ * preceding each enum must be in a stylized form that is parsed at compile
+ * time by the extract-ofp-fields program.  The comment itself consists of a
+ * series of paragraphs separate by blank lines.  The paragraphs consist of:
+ *
+ *     - The first paragraph gives the user-visible name of the field as a
+ *       quoted string.  This is the name used for parsing and formatting the
+ *       field.
+ *
+ *       For historical reasons, some fields have an additional name that is
+ *       accepted as an alternative in parsing.  This name, when there is one,
+ *       is given as a quoted string in parentheses along with "aka".  For
+ *       example:
+ *
+ *           "tun_id" (aka "tunnel_id").
+ *
+ *       New fields should have only one name.
+ *
+ *     - Any number of paragraphs of free text that describe the field.  This
+ *       is meant for human readers, so extract-ofp-fields ignores it.
+ *
+ *     - A final paragraph that consists of a series of key-value pairs, one
+ *       per line, in the form "key: value." where the period at the end of the
+ *       line is a mandatory part of the syntax.
+ *
+ * Every field must specify the following key-value pairs:
+ *
+ *   Type:
+ *
+ *     The format and size of the field's value.  Some possible values are
+ *     generic:
+ *
+ *         u8: A one-byte field.
+ *         be16: A two-byte field.
+ *         be32: A four-byte field.
+ *         be64: An eight-byte field.
+ *
+ *     The remaining values imply more about the value's semantics, though OVS
+ *     does not currently take advantage of this additional information:
+ *
+ *         MAC: A six-byte field whose value is an Ethernet address.
+ *         IPv6: A 16-byte field whose value is an IPv6 address.
+ *
+ *   Maskable:
+ *
+ *     Either "bitwise", if OVS supports matching any subset of bits in the
+ *     field, or "no", if OVS only supports matching or wildcarding the entire
+ *     field.
+ *
+ *   Formatting:
+ *
+ *     Explains how a field's value is formatted and parsed for human
+ *     consumption.  Some of the options are fairly generally useful:
+ *
+ *       decimal: Formats the value as a decimal number.  On parsing, accepts
+ *         decimal (with no prefix), hexadecimal with 0x prefix, or octal
+ *         with 0 prefix.
+ *
+ *       hexadecimal: Same as decimal except nonzero values are formatted in
+ *         hex with 0x prefix.  The default for parsing is *not* hexadecimal:
+ *         only with a 0x prefix is the input in hexadecimal.
+ *
+ *       Ethernet: Formats and accepts the common format xx:xx:xx:xx:xx:xx.
+ *         6-byte fields only.
+ *
+ *       IPv4: Formats and accepts the common format w.x.y.z.  4-byte fields
+ *         only.
+ *
+ *       IPv6: Formats and accepts the common IPv6 formats.  16-byte fields
+ *         only.
+ *
+ *       OpenFlow 1.0 port: Accepts an OpenFlow well-known port name
+ *         (e.g. "IN_PORT") in uppercase or lowercase, or a 16-bit port
+ *         number in decimal.  Formats ports using their well-known names in
+ *         uppercase, or in decimal otherwise.  2-byte fields only.
+ *
+ *       OpenFlow 1.1+ port: Same syntax as for OpenFlow 1.0 ports but for
+ *         4-byte OpenFlow 1.1+ port number fields.
+ *
+ *     Others are very specific to particular fields:
+ *
+ *       frag: One of the strings "no", "first", "later", "yes", "not_later"
+ *         describing which IPv4/v6 fragments are matched.
+ *
+ *       tunnel flags: Any number of the strings "df", "csum", "key", or
+ *         "oam" separated by "|".
+ *
+ *       TCP flags: See the description of tcp_flags in ovs-ofctl(8).
+ *
+ *   Prerequisites:
+ *
+ *     The field's prerequisites.  The values should be straightfoward.
+ *
+ *   Access:
+ *
+ *     Either "read-only", for a field that cannot be changed via OpenFlow, or
+ *     "read/write" for a modifiable field.
+ *
+ *   NXM:
+ *
+ *     If the field has an NXM field assignment, then this specifies the NXM
+ *     name of the field (e.g. "NXM_OF_ETH_SRC"), followed by its nxm_type in
+ *     parentheses, followed by "since v<x>.<y>" specifying the version of Open
+ *     vSwitch that first supported this field in NXM (e.g. "since v1.1" if it
+ *     was introduced in Open vSwitch 1.1).
+ *
+ *     The NXM name must begin with NXM_OF_ or NXM_NX_.  This allows OVS to
+ *     determine the correct NXM class.
+ *
+ *     If the field does not have an NXM field assignment, specify "none".
+ *
+ *   OXM:
+ *
+ *     If the field has an OXM field assignment, then this specifies the OXM
+ *     name of the field (e.g. "OXM_OF_ETH_SRC"), followed by its nxm_type in
+ *     parentheses, followed by "since OF<a>.<b> v<x>.<y>" specifying the
+ *     versions of OpenFlow and Open vSwitch that first supported this field in
+ *     OXM (e.g. "since OF1.3 and v1.10" if it was introduced in OpenFlow 1.3
+ *     and first supported by Open vSwitch in version 1.10).
+ *
+ *     OVS uses the start of the OXM field name to determine the correct OXM
+ *     class.  To support a new OXM class, edit the mapping table in
+ *     build-aux/extract-ofp-fields.
+ *
+ *     If the field does not have an OXM field assignment, specify "none".
+ *
+ * The following key-value pairs are optional.  Open vSwitch already supports
+ * all the fields to which they apply, so new fields should probably not
+ * include these pairs:
+ *
+ *   OF1.0:
+ *
+ *     Specify this as "exact match" if OpenFlow 1.0 can match or wildcard the
+ *     entire field, or as "CIDR mask" if OpenFlow 1.0 can match any CIDR
+ *     prefix of the field.  (OpenFlow 1.0 did not support bitwise matching.)
+ *     Omit, if OpenFlow 1.0 did not support this field.
+ *
+ *   OF1.1:
+ *
+ *     Specify this as "exact match" if OpenFlow 1.1 can match or wildcard the
+ *     entire field, or as "bitwise" if OpenFlow 1.1 can match any subset of
+ *     bits in the field.  Omit, if OpenFlow 1.1 did not support this field.
+ *
+ * The following key-value pair is optional:
+ *
+ *   Prefix lookup member:
+ *
+ *     If this field makes sense for use with classifier_set_prefix_fields(),
+ *     specify the name of the "struct flow" member that corresponds to the
+ *     field.
+ *
+ * Finally, a few "register" fields have very similar names and purposes,
+ * e.g. MFF_REG0 through MFF_REG7.  For these, the comments may be merged
+ * together using <N> as a metasyntactic variable for the numeric suffix.
+ * Lines in the comment that are specific to one of the particular fields by
+ * writing, e.g. <1>, to consider that line only for e.g. MFF_REG1.
+ */
+
 enum OVS_PACKED_ENUM mf_field_id {
-    /* Metadata. */
-    MFF_DP_HASH,                /* be32 */
-    MFF_RECIRC_ID,              /* be32 */
-    MFF_TUN_ID,                 /* be64 */
-    MFF_TUN_SRC,                /* be32 */
-    MFF_TUN_DST,                /* be32 */
-    MFF_TUN_FLAGS,              /* be16 */
-    MFF_TUN_TTL,                /* u8 */
-    MFF_TUN_TOS,                /* u8 */
-    MFF_METADATA,               /* be64 */
-    MFF_IN_PORT,                /* be16 */
-    MFF_IN_PORT_OXM,            /* be32 */
-    MFF_SKB_PRIORITY,           /* be32 */
-    MFF_PKT_MARK,               /* be32 */
+/* ## -------- ## */
+/* ## Metadata ## */
+/* ## -------- ## */
+
+    /* "dp_hash".
+     *
+     * Flow hash computed in the datapath.  Internal use only, not programmable
+     * from controller.
+     *
+     * Type: be32.
+     * Maskable: bitwise.
+     * Formatting: hexadecimal.
+     * Prerequisites: none.
+     * Access: read-only.
+     * NXM: NXM_NX_DP_HASH(35) since v2.2.
+     * OXM: none.
+     */
+    MFF_DP_HASH,
+
+    /* "recirc_id".
+     *
+     * ID for recirculation.  The value 0 is reserved for initially received
+     * packets.  Internal use only, not programmable from controller.
+     *
+     * Type: be32.
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: none.
+     * Access: read-only.
+     * NXM: NXM_NX_RECIRC_ID(36) since v2.2.
+     * OXM: none.
+     */
+    MFF_RECIRC_ID,
+
+    /* "tun_id" (aka "tunnel_id").
+     *
+     * The "key" or "tunnel ID" or "VNI" in a packet received via a keyed
+     * tunnel.  For protocols in which the key is shorter than 64 bits, the key
+     * is stored in the low bits and the high bits are zeroed.  For non-keyed
+     * tunnels and packets not received via a tunnel, the value is 0.
+     *
+     * Type: be64.
+     * Maskable: bitwise.
+     * Formatting: hexadecimal.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: NXM_NX_TUN_ID(16) since v1.1.
+     * OXM: OXM_OF_TUNNEL_ID(38) since OF1.3 and v1.10.
+     * Prefix lookup member: tunnel.tun_id.
+     */
+    MFF_TUN_ID,
+
+    /* "tun_src".
+     *
+     * The IPv4 source address in the outer IP header of a tunneled packet.
+     *
+     * For non-tunneled packets, the value is 0.
+     *
+     * Type: be32.
+     * Maskable: bitwise.
+     * Formatting: IPv4.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: NXM_NX_TUN_IPV4_SRC(31) since v2.0.
+     * OXM: none.
+     * Prefix lookup member: tunnel.ip_src.
+     */
+    MFF_TUN_SRC,
+
+    /* "tun_dst".
+     *
+     * The IPv4 destination address in the outer IP header of a tunneled
+     * packet.
+     *
+     * For non-tunneled packets, the value is 0.
+     *
+     * Type: be32.
+     * Maskable: bitwise.
+     * Formatting: IPv4.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: NXM_NX_TUN_IPV4_DST(32) since v2.0.
+     * OXM: none.
+     * Prefix lookup member: tunnel.ip_dst.
+     */
+    MFF_TUN_DST,
+
+    /* "tun_flags".
+     *
+     * Combination of FLOW_TNL_F_* bitmapped flags that indicate properties of
+     * a tunneled packet.  Internal use only, not programmable from controller.
+     *
+     * For non-tunneled packets, the value is 0.
+     *
+     * Type: be16.
+     * Maskable: no.
+     * Formatting: tunnel flags.
+     * Prerequisites: none.
+     * Access: read-only.
+     * NXM: none.
+     * OXM: none.
+     */
+    MFF_TUN_FLAGS,
+
+    /* "tun_ttl".
+     *
+     * The TTL in the outer IP header of a tunneled packet.  Internal use only,
+     * not programmable from controller.
+     *
+     * For non-tunneled packets, the value is 0.
+     *
+     * Type: u8.
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: none.
+     * Access: read-only.
+     * NXM: none.
+     * OXM: none.
+     */
+    MFF_TUN_TTL,
+
+    /* "tun_tos".
+     *
+     * The ToS value in the outer IP header of a tunneled packet.  Internal use
+     * only, not programmable from controller.
+     *
+     * Type: u8.
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: none.
+     * Access: read-only.
+     * NXM: none.
+     * OXM: none.
+     */
+    MFF_TUN_TOS,
+
+    /* "metadata".
+     *
+     * A scratch pad value standardized in OpenFlow 1.1+.  Initially zero, at
+     * the beginning of the pipeline.
+     *
+     * Type: be64.
+     * Maskable: bitwise.
+     * Formatting: hexadecimal.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: OXM_OF_METADATA(2) since OF1.2 and v1.8.
+     * OF1.1: bitwise mask.
+     */
+    MFF_METADATA,
+
+    /* "in_port".
+     *
+     * 16-bit (OpenFlow 1.0) view of the physical or virtual port on which the
+     * packet was received.
+     *
+     * Type: be16.
+     * Maskable: no.
+     * Formatting: OpenFlow 1.0 port.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: NXM_OF_IN_PORT(0) since v1.1.
+     * OXM: none.
+     * OF1.0: exact match.
+     * OF1.1: exact match.
+     */
+    MFF_IN_PORT,
+
+    /* "in_port_oxm".
+     *
+     * 32-bit (OpenFlow 1.1+) view of the physical or virtual port on which the
+     * packet was received.
+     *
+     * Type: be32.
+     * Maskable: no.
+     * Formatting: OpenFlow 1.1+ port.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: OXM_OF_IN_PORT(0) since OF1.2 and v1.7.
+     * OF1.1: exact match.
+     */
+    MFF_IN_PORT_OXM,
+
+    /* "skb_priority".
+     *
+     * Designates the queue to which output will be directed.  The value in
+     * this field is not necessarily the OpenFlow queue number; with the Linux
+     * kernel switch, it instead has a pair of subfields designating the
+     * "major" and "minor" numbers of a Linux kernel qdisc handle.
+     *
+     * This field is "semi-internal" in that it can be set with the "set_queue"
+     * action but not matched or read or written other ways.
+     *
+     * Type: be32.
+     * Maskable: no.
+     * Formatting: hexadecimal.
+     * Prerequisites: none.
+     * Access: read-only.
+     * NXM: none.
+     * OXM: none.
+     */
+    MFF_SKB_PRIORITY,
+
+    /* "pkt_mark".
+     *
+     * Packet metadata mark.  The mark may be passed into other system
+     * components in order to facilitate interaction between subsystems.  On
+     * Linux this corresponds to struct sk_buff's "skb_mark" member but the
+     * exact implementation is platform-dependent.
+     *
+     * Type: be32.
+     * Maskable: bitwise.
+     * Formatting: hexadecimal.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: NXM_NX_PKT_MARK(33) since v2.0.
+     * OXM: none.
+     */
+    MFF_PKT_MARK,
 
 #if FLOW_N_REGS == 8
-    MFF_REG0,                   /* be32 */
-    MFF_REG1,                   /* be32 */
-    MFF_REG2,                   /* be32 */
-    MFF_REG3,                   /* be32 */
-    MFF_REG4,                   /* be32 */
-    MFF_REG5,                   /* be32 */
-    MFF_REG6,                   /* be32 */
-    MFF_REG7,                   /* be32 */
+    /* "reg<N>".
+     *
+     * Nicira extension scratch pad register with initial value 0.
+     *
+     * Type: be32.
+     * Maskable: bitwise.
+     * Formatting: hexadecimal.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: NXM_NX_REG0(0) since v1.1.        <0>
+     * NXM: NXM_NX_REG1(1) since v1.1.        <1>
+     * NXM: NXM_NX_REG2(2) since v1.1.        <2>
+     * NXM: NXM_NX_REG3(3) since v1.1.        <3>
+     * NXM: NXM_NX_REG4(4) since v1.3.        <4>
+     * NXM: NXM_NX_REG5(5) since v1.7.        <5>
+     * NXM: NXM_NX_REG6(6) since v1.7.        <6>
+     * NXM: NXM_NX_REG7(7) since v1.7.        <7>
+     * OXM: none.
+     */
+    MFF_REG0,
+    MFF_REG1,
+    MFF_REG2,
+    MFF_REG3,
+    MFF_REG4,
+    MFF_REG5,
+    MFF_REG6,
+    MFF_REG7,
 #else
 #error "Need to update MFF_REG* to match FLOW_N_REGS"
 #endif
 
 #if FLOW_N_XREGS == 4
-    MFF_XREG0,                  /* be64 */
-    MFF_XREG1,                  /* be64 */
-    MFF_XREG2,                  /* be64 */
-    MFF_XREG3,                  /* be64 */
+    /* "xreg<N>".
+     *
+     * OpenFlow 1.5 (draft) ``extended register".  Each extended register
+     * overlays two of the Nicira extension 32-bit registers: xreg0 overlays
+     * reg0 and reg1, with reg0 supplying the most-significant bits of xreg0
+     * and reg1 the least-significant.  xreg1 similarly overlays reg2 and reg3,
+     * and so on.
+     *
+     * Type: be64.
+     * Maskable: bitwise.
+     * Formatting: hexadecimal.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: OXM_OF_PKT_REG<N>(<N>) since OF1.5 and v2.4.
+     */
+    MFF_XREG0,
+    MFF_XREG1,
+    MFF_XREG2,
+    MFF_XREG3,
 #else
 #error "Need to update MFF_REG* to match FLOW_N_XREGS"
 #endif
 
-    /* L2. */
-    MFF_ETH_SRC,                /* mac */
-    MFF_ETH_DST,                /* mac */
-    MFF_ETH_TYPE,               /* be16 */
+/* ## -------- ## */
+/* ## Ethernet ## */
+/* ## -------- ## */
 
-    MFF_VLAN_TCI,               /* be16 */
-    MFF_DL_VLAN,                /* be16 (OpenFlow 1.0 compatibility) */
-    MFF_VLAN_VID,               /* be16 (OpenFlow 1.2 compatibility) */
-    MFF_DL_VLAN_PCP,            /* u8 (OpenFlow 1.0 compatibility) */
-    MFF_VLAN_PCP,               /* be16 (OpenFlow 1.2 compatibility) */
-
-    /* L2.5 */
-    MFF_MPLS_LABEL,             /* be32 */
-    MFF_MPLS_TC,                /* u8 */
-    MFF_MPLS_BOS,               /* u8 */
-
-    /* L3. */
-    /* Update mf_is_l3_or_higher() if MFF_IPV4_SRC is
-     * no longer the first element for a field of layer 3 or higher */
-    MFF_IPV4_SRC,               /* be32 */
-    MFF_IPV4_DST,               /* be32 */
-
-    MFF_IPV6_SRC,               /* ipv6 */
-    MFF_IPV6_DST,               /* ipv6 */
-    MFF_IPV6_LABEL,             /* be32 */
-
-    /* The IPv4/IPv6 DSCP field has two different views:
+    /* "eth_src" (aka "dl_src").
      *
-     *   - MFF_IP_DSCP has the DSCP in bits 2-7, their bit positions in the
-     *     IPv4 and IPv6 "traffic class" field, as used in OpenFlow 1.0 and 1.1
-     *     flow format and in NXM's NXM_OF_IP_TOS
+     * Source address in Ethernet header.
      *
-     *   - MFF_IP_DSCP has the DSCP in bits 0-5, shifted right two bits from
-     *     their positions in the IPv4 and IPv6 "traffic class" field, as used
-     *     in OpenFlow 1.2+ OXM's OXM_OF_IP_DSCP. */
-    MFF_IP_PROTO,               /* u8 (used for IPv4 or IPv6) */
-    MFF_IP_DSCP,                /* u8 (used for IPv4 or IPv6) */
-    MFF_IP_DSCP_SHIFTED,        /* u8 (used for IPv4 or IPv6) (OF1.2 compat) */
-    MFF_IP_ECN,                 /* u8 (used for IPv4 or IPv6) */
-    MFF_IP_TTL,                 /* u8 (used for IPv4 or IPv6) */
-    MFF_IP_FRAG,                /* u8 (used for IPv4 or IPv6) */
+     * This field was not maskable before Open vSwitch 1.8.
+     *
+     * Type: MAC.
+     * Maskable: bitwise.
+     * Formatting: Ethernet.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: NXM_OF_ETH_SRC(2) since v1.1.
+     * OXM: OXM_OF_ETH_SRC(4) since OF1.2 and v1.7.
+     * OF1.0: exact match.
+     * OF1.1: bitwise mask.
+     */
+    MFF_ETH_SRC,
 
-    MFF_ARP_OP,                 /* be16 */
-    MFF_ARP_SPA,                /* be32 */
-    MFF_ARP_TPA,                /* be32 */
-    MFF_ARP_SHA,                /* mac */
-    MFF_ARP_THA,                /* mac */
+    /* "eth_dst" (aka "dl_dst").
+     *
+     * Destination address in Ethernet header.
+     *
+     * Before Open vSwitch 1.8, the allowed masks were restricted to
+     * 00:00:00:00:00:00, fe:ff:ff:ff:ff:ff, 01:00:00:00:00:00,
+     * ff:ff:ff:ff:ff:ff.
+     *
+     * Type: MAC.
+     * Maskable: bitwise.
+     * Formatting: Ethernet.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: NXM_OF_ETH_DST(1) since v1.1.
+     * OXM: OXM_OF_ETH_DST(3) since OF1.2 and v1.7.
+     * OF1.0: exact match.
+     * OF1.1: bitwise mask.
+     */
+    MFF_ETH_DST,
 
-    /* L4. */
-    MFF_TCP_SRC,                /* be16 (used for IPv4 or IPv6) */
-    MFF_TCP_DST,                /* be16 (used for IPv4 or IPv6) */
-    MFF_TCP_FLAGS,              /* be16, 12 bits (4 MSB zeroed,
-                                 * used for IPv4 or IPv6) */
+    /* "eth_type" (aka "dl_type").
+     *
+     * Packet's Ethernet type.
+     *
+     * For an Ethernet II packet this is taken from the Ethernet header.  For
+     * an 802.2 LLC+SNAP header with OUI 00-00-00 this is taken from the SNAP
+     * header.  A packet that has neither format has value 0x05ff
+     * (OFP_DL_TYPE_NOT_ETH_TYPE).
+     *
+     * For a packet with an 802.1Q header, this is the type of the encapsulated
+     * frame.
+     *
+     * Type: be16.
+     * Maskable: no.
+     * Formatting: hexadecimal.
+     * Prerequisites: none.
+     * Access: read-only.
+     * NXM: NXM_OF_ETH_TYPE(3) since v1.1.
+     * OXM: OXM_OF_ETH_TYPE(5) since OF1.2 and v1.7.
+     * OF1.0: exact match.
+     * OF1.1: exact match.
+     */
+    MFF_ETH_TYPE,
 
-    MFF_UDP_SRC,                /* be16 (used for IPv4 or IPv6) */
-    MFF_UDP_DST,                /* be16 (used for IPv4 or IPv6) */
+/* ## ---- ## */
+/* ## VLAN ## */
+/* ## ---- ## */
 
-    MFF_SCTP_SRC,               /* be16 (used for IPv4 or IPv6) */
-    MFF_SCTP_DST,               /* be16 (used for IPv4 or IPv6) */
+/* It looks odd for vlan_tci, vlan_vid, and vlan_pcp to say that they are
+ * supported in OF1.0 and OF1.1, since the detailed semantics of these fields
+ * only apply to NXM or OXM.  They are marked as supported for exact matches in
+ * OF1.0 and OF1.1 because exact matches on those fields can be successfully
+ * translated into the OF1.0 and OF1.1 flow formats. */
 
-    MFF_ICMPV4_TYPE,            /* u8 */
-    MFF_ICMPV4_CODE,            /* u8 */
+    /* "vlan_tci".
+     *
+     * 802.1Q TCI.
+     *
+     * For a packet with an 802.1Q header, this is the Tag Control Information
+     * (TCI) field, with the CFI bit forced to 1.  For a packet with no 802.1Q
+     * header, this has value 0.
+     *
+     * This field can be used in various ways:
+     *
+     *   - If it is not constrained at all, the nx_match matches packets
+     *     without an 802.1Q header or with an 802.1Q header that has any TCI
+     *     value.
+     *
+     *   - Testing for an exact match with 0 matches only packets without an
+     *     802.1Q header.
+     *
+     *   - Testing for an exact match with a TCI value with CFI=1 matches
+     *     packets that have an 802.1Q header with a specified VID and PCP.
+     *
+     *   - Testing for an exact match with a nonzero TCI value with CFI=0 does
+     *     not make sense.  The switch may reject this combination.
+     *
+     *   - Testing with a specific VID and CFI=1, with nxm_mask=0x1fff, matches
+     *     packets that have an 802.1Q header with that VID (and any PCP).
+     *
+     *   - Testing with a specific PCP and CFI=1, with nxm_mask=0xf000, matches
+     *     packets that have an 802.1Q header with that PCP (and any VID).
+     *
+     *   - Testing with nxm_value=0, nxm_mask=0x0fff matches packets with no
+     *     802.1Q header or with an 802.1Q header with a VID of 0.
+     *
+     *   - Testing with nxm_value=0, nxm_mask=0xe000 matches packets with no
+     *     802.1Q header or with an 802.1Q header with a PCP of 0.
+     *
+     *   - Testing with nxm_value=0, nxm_mask=0xefff matches packets with no
+     *     802.1Q header or with an 802.1Q header with both VID and PCP of 0.
+     *
+     * Type: be16.
+     * Maskable: bitwise.
+     * Formatting: hexadecimal.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: NXM_OF_VLAN_TCI(4) since v1.1.
+     * OXM: none.
+     * OF1.0: exact match.
+     * OF1.1: exact match.
+     */
+    MFF_VLAN_TCI,
 
-    MFF_ICMPV6_TYPE,            /* u8 */
-    MFF_ICMPV6_CODE,            /* u8 */
+    /* "dl_vlan" (OpenFlow 1.0).
+     *
+     * VLAN ID field.  Zero if no 802.1Q header is present.
+     *
+     * Type: be16 (low 12 bits).
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: none.
+     * OF1.0: exact match.
+     * OF1.1: exact match.
+     */
+    MFF_DL_VLAN,
 
-    /* ICMPv6 Neighbor Discovery. */
-    MFF_ND_TARGET,              /* ipv6 */
-    MFF_ND_SLL,                 /* mac */
-    MFF_ND_TLL,                 /* mac */
+    /* "vlan_vid" (OpenFlow 1.2+).
+     *
+     * If an 802.1Q header is present, this field's value is 0x1000
+     * bitwise-or'd with the VLAN ID.  If no 802.1Q is present, this field's
+     * value is 0.
+     *
+     * Type: be16 (low 12 bits).
+     * Maskable: bitwise.
+     * Formatting: decimal.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: OXM_OF_VLAN_VID(6) since OF1.2 and v1.7.
+     * OF1.0: exact match.
+     * OF1.1: exact match.
+     */
+    MFF_VLAN_VID,
+
+    /* "dl_vlan_pcp" (OpenFlow 1.0).
+     *
+     * VLAN priority (PCP) field.  Zero if no 802.1Q header is present.
+     *
+     * Type: u8 (low 3 bits).
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: none.
+     * OF1.0: exact match.
+     * OF1.1: exact match.
+     */
+    MFF_DL_VLAN_PCP,
+
+    /* "vlan_pcp" (OpenFlow 1.2+).
+     *
+     * VLAN priority (PCP) field.  Zero if no 802.1Q header is present.
+     *
+     * Type: u8 (low 3 bits).
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: VLAN VID.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: OXM_OF_VLAN_PCP(7) since OF1.2 and v1.7.
+     * OF1.0: exact match.
+     * OF1.1: exact match.
+     */
+    MFF_VLAN_PCP,
+
+/* ## ---- ## */
+/* ## MPLS ## */
+/* ## ---- ## */
+
+    /* "mpls_label".
+     *
+     * The outermost MPLS label, or 0 if no MPLS labels are present.
+     *
+     * Type: be32 (low 20 bits).
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: MPLS.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: OXM_OF_MPLS_LABEL(34) since OF1.2 and v1.11.
+     * OF1.1: exact match.
+     */
+    MFF_MPLS_LABEL,
+
+    /* "mpls_tc".
+     *
+     * The outermost MPLS label's traffic control (TC) field, or 0 if no MPLS
+     * labels are present.
+     *
+     * Type: u8 (low 3 bits).
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: MPLS.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: OXM_OF_MPLS_TC(35) since OF1.2 and v1.11.
+     * OF1.1: exact match.
+     */
+    MFF_MPLS_TC,
+
+    /* "mpls_bos".
+     *
+     * The outermost MPLS label's bottom of stack (BoS) field, or 0 if no MPLS
+     * labels are present.
+     *
+     * Type: u8 (low 1 bits).
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: MPLS.
+     * Access: read-only.
+     * NXM: none.
+     * OXM: OXM_OF_MPLS_BOS(36) since OF1.3 and v1.11.
+     */
+    MFF_MPLS_BOS,
+
+/* ## ---- ## */
+/* ## IPv4 ## */
+/* ## ---- ## */
+
+/* Update mf_is_l3_or_higher() if MFF_IPV4_SRC is no longer the first element
+ * for a field of layer 3 or higher */
+
+    /* "ip_src" (aka "nw_src").
+     *
+     * The source address in the IPv4 header.
+     *
+     * Before Open vSwitch 1.8, only CIDR masks were supported.
+     *
+     * Type: be32.
+     * Maskable: bitwise.
+     * Formatting: IPv4.
+     * Prerequisites: IPv4.
+     * Access: read/write.
+     * NXM: NXM_OF_IP_SRC(7) since v1.1.
+     * OXM: OXM_OF_IPV4_SRC(11) since OF1.2 and v1.7.
+     * OF1.0: CIDR mask.
+     * OF1.1: bitwise mask.
+     * Prefix lookup member: nw_src.
+     */
+    MFF_IPV4_SRC,
+
+    /* "ip_dst" (aka "nw_dst").
+     *
+     * The destination address in the IPv4 header.
+     *
+     * Before Open vSwitch 1.8, only CIDR masks were supported.
+     *
+     * Type: be32.
+     * Maskable: bitwise.
+     * Formatting: IPv4.
+     * Prerequisites: IPv4.
+     * Access: read/write.
+     * NXM: NXM_OF_IP_DST(8) since v1.1.
+     * OXM: OXM_OF_IPV4_DST(12) since OF1.2 and v1.7.
+     * OF1.0: CIDR mask.
+     * OF1.1: bitwise mask.
+     * Prefix lookup member: nw_dst.
+     */
+    MFF_IPV4_DST,
+
+/* ## ---- ## */
+/* ## IPv6 ## */
+/* ## ---- ## */
+
+    /* "ipv6_src".
+     *
+     * The source address in the IPv6 header.
+     *
+     * Type: IPv6.
+     * Maskable: bitwise.
+     * Formatting: IPv6.
+     * Prerequisites: IPv6.
+     * Access: read/write.
+     * NXM: NXM_NX_IPV6_SRC(19) since v1.1.
+     * OXM: OXM_OF_IPV6_SRC(26) since OF1.2 and v1.1.
+     * Prefix lookup member: ipv6_src.
+     */
+    MFF_IPV6_SRC,
+
+    /* "ipv6_dst".
+     *
+     * The destination address in the IPv6 header.
+     *
+     * Type: IPv6.
+     * Maskable: bitwise.
+     * Formatting: IPv6.
+     * Prerequisites: IPv6.
+     * Access: read/write.
+     * NXM: NXM_NX_IPV6_DST(20) since v1.1.
+     * OXM: OXM_OF_IPV6_DST(27) since OF1.2 and v1.1.
+     * Prefix lookup member: ipv6_dst.
+     */
+    MFF_IPV6_DST,
+
+    /* "ipv6_label".
+     *
+     * The flow label in the IPv6 header.
+     *
+     * Type: be32 (low 20 bits).
+     * Maskable: bitwise.
+     * Formatting: hexadecimal.
+     * Prerequisites: IPv6.
+     * Access: read-only.
+     * NXM: NXM_NX_IPV6_LABEL(27) since v1.4.
+     * OXM: OXM_OF_IPV6_FLABEL(28) since OF1.2 and v1.7.
+     */
+    MFF_IPV6_LABEL,
+
+/* ## ----------------------- ## */
+/* ## IPv4/IPv6 common fields ## */
+/* ## ----------------------- ## */
+
+    /* "nw_proto" (aka "ip_proto").
+     *
+     * The "protocol" byte in the IPv4 or IPv6 header.
+     *
+     * Type: u8.
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: IPv4/IPv6.
+     * Access: read-only.
+     * NXM: NXM_OF_IP_PROTO(6) since v1.1.
+     * OXM: OXM_OF_IP_PROTO(10) since OF1.2 and v1.7.
+     * OF1.0: exact match.
+     * OF1.1: exact match.
+     */
+    MFF_IP_PROTO,
+
+/* Both views of the DSCP below are marked as supported in all of the versions
+ * of OpenFlow because a match on either view can be successfully translated
+ * into every OpenFlow flow format. */
+
+    /* "nw_tos" (OpenFlow 1.0/1.1).
+     *
+     * The DSCP byte in the IPv4 header or the traffic class byte from the IPv6
+     * header, with the ECN bits forced to 0.  (That is, bits 2-7 contain the
+     * type of service and bits 0-1 are zero.)
+     *
+     * Type: u8.
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: IPv4/IPv6.
+     * Access: read/write.
+     * NXM: NXM_OF_IP_TOS(5) since v1.1.
+     * OXM: none.
+     * OF1.0: exact match.
+     * OF1.1: exact match.
+     */
+    MFF_IP_DSCP,
+
+    /* "ip_dscp" (OpenFlow 1.2+).
+     *
+     * The DSCP byte in the IPv4 header or the traffic class byte from the IPv6
+     * header, shifted right 2 bits.  (That is, bits 0-5 contain the type of
+     * service and bits 6-7 are zero.)
+     *
+     * Type: u8 (low 6 bits).
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: IPv4/IPv6.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: OXM_OF_IP_DSCP(8) since OF1.2 and v1.7.
+     * OF1.0: exact match.
+     * OF1.1: exact match.
+     */
+    MFF_IP_DSCP_SHIFTED,
+
+    /* "nw_ecn" (aka "ip_ecn").
+     *
+     * The ECN bits in the IPv4 or IPv6 header.
+     *
+     * Type: u8 (low 2 bits).
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: IPv4/IPv6.
+     * Access: read/write.
+     * NXM: NXM_NX_IP_ECN(28) since v1.4.
+     * OXM: OXM_OF_IP_ECN(9) since OF1.2 and v1.7.
+     */
+    MFF_IP_ECN,
+
+    /* "nw_ttl".
+     *
+     * The time-to-live (TTL) in the IPv4 header or hop limit in the IPv6
+     * header.
+     *
+     * Type: u8.
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: IPv4/IPv6.
+     * Access: read/write.
+     * NXM: NXM_NX_IP_TTL(29) since v1.4.
+     * OXM: none.
+     */
+    MFF_IP_TTL,
+
+    /* "ip_frag".
+     *
+     * IP fragment information.
+     *
+     * This field has three possible values:
+     *
+     *   - A packet that is not an IP fragment has value 0.
+     *
+     *   - A packet that is an IP fragment with offset 0 (the first fragment)
+     *     has bit 0 set and thus value 1.
+     *
+     *   - A packet that is an IP fragment with nonzero offset has bits 0 and 1
+     *     set and thus value 3.
+     *
+     * NX_IP_FRAG_ANY and NX_IP_FRAG_LATER are declared to symbolically
+     * represent the meanings of bits 0 and 1.
+     *
+     * The switch may reject matches against values that can never appear.
+     *
+     * It is important to understand how this field interacts with the OpenFlow
+     * IP fragment handling mode:
+     *
+     *   - In OFPC_FRAG_DROP mode, the OpenFlow switch drops all IP fragments
+     *     before they reach the flow table, so every packet that is available
+     *     for matching will have value 0 in this field.
+     *
+     *   - Open vSwitch does not implement OFPC_FRAG_REASM mode, but if it did
+     *     then IP fragments would be reassembled before they reached the flow
+     *     table and again every packet available for matching would always
+     *     have value 0.
+     *
+     *   - In OFPC_FRAG_NORMAL mode, all three values are possible, but
+     *     OpenFlow 1.0 says that fragments' transport ports are always 0, even
+     *     for the first fragment, so this does not provide much extra
+     *     information.
+     *
+     *   - In OFPC_FRAG_NX_MATCH mode, all three values are possible.  For
+     *     fragments with offset 0, Open vSwitch makes L4 header information
+     *     available.
+     *
+     * Type: u8 (low 2 bits).
+     * Maskable: bitwise.
+     * Formatting: frag.
+     * Prerequisites: IPv4/IPv6.
+     * Access: read-only.
+     * NXM: NXM_NX_IP_FRAG(26) since v1.3.
+     * OXM: none.
+     */
+    MFF_IP_FRAG,
+
+/* ## --- ## */
+/* ## ARP ## */
+/* ## --- ## */
+
+    /* "arp_op".
+     *
+     * ARP opcode.
+     *
+     * For an Ethernet+IP ARP packet, the opcode in the ARP header.  Always 0
+     * otherwise.  Only ARP opcodes between 1 and 255 should be specified for
+     * matching.
+     *
+     * Type: be16.
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: ARP.
+     * Access: read/write.
+     * NXM: NXM_OF_ARP_OP(15) since v1.1.
+     * OXM: OXM_OF_ARP_OP(21) since OF1.2 and v1.7.
+     * OF1.0: exact match.
+     * OF1.1: exact match.
+     */
+    MFF_ARP_OP,
+
+    /* "arp_spa".
+     *
+     * For an Ethernet+IP ARP packet, the source protocol (IPv4) address in the
+     * ARP header.  Always 0 otherwise.
+     *
+     * Before Open vSwitch 1.8, only CIDR masks were supported.
+     *
+     * Type: be32.
+     * Maskable: bitwise.
+     * Formatting: IPv4.
+     * Prerequisites: ARP.
+     * Access: read/write.
+     * NXM: NXM_OF_ARP_SPA(16) since v1.1.
+     * OXM: OXM_OF_ARP_SPA(22) since OF1.2 and v1.7.
+     * OF1.0: CIDR mask.
+     * OF1.1: bitwise mask.
+     */
+    MFF_ARP_SPA,
+
+    /* "arp_tpa".
+     *
+     * For an Ethernet+IP ARP packet, the target protocol (IPv4) address in the
+     * ARP header.  Always 0 otherwise.
+     *
+     * Before Open vSwitch 1.8, only CIDR masks were supported.
+     *
+     * Type: be32.
+     * Maskable: bitwise.
+     * Formatting: IPv4.
+     * Prerequisites: ARP.
+     * Access: read/write.
+     * NXM: NXM_OF_ARP_TPA(17) since v1.1.
+     * OXM: OXM_OF_ARP_TPA(23) since OF1.2 and v1.7.
+     * OF1.0: CIDR mask.
+     * OF1.1: bitwise mask.
+     */
+    MFF_ARP_TPA,
+
+    /* "arp_sha".
+     *
+     * For an Ethernet+IP ARP packet, the source hardware (Ethernet) address in
+     * the ARP header.  Always 0 otherwise.
+     *
+     * Type: MAC.
+     * Maskable: bitwise.
+     * Formatting: Ethernet.
+     * Prerequisites: ARP.
+     * Access: read/write.
+     * NXM: NXM_NX_ARP_SHA(17) since v1.1.
+     * OXM: OXM_OF_ARP_SHA(24) since OF1.2 and v1.7.
+     */
+    MFF_ARP_SHA,
+
+    /* "arp_tha".
+     *
+     * For an Ethernet+IP ARP packet, the target hardware (Ethernet) address in
+     * the ARP header.  Always 0 otherwise.
+     *
+     * Type: MAC.
+     * Maskable: bitwise.
+     * Formatting: Ethernet.
+     * Prerequisites: ARP.
+     * Access: read/write.
+     * NXM: NXM_NX_ARP_THA(18) since v1.1.
+     * OXM: OXM_OF_ARP_THA(25) since OF1.2 and v1.7.
+     */
+    MFF_ARP_THA,
+
+/* ## --- ## */
+/* ## TCP ## */
+/* ## --- ## */
+
+    /* "tcp_src" (aka "tp_src").
+     *
+     * TCP source port.
+     *
+     * Type: be16.
+     * Maskable: bitwise.
+     * Formatting: decimal.
+     * Prerequisites: TCP.
+     * Access: read/write.
+     * NXM: NXM_OF_TCP_SRC(9) since v1.1.
+     * OXM: OXM_OF_TCP_SRC(13) since OF1.2 and v1.7.
+     * OF1.0: exact match.
+     * OF1.1: exact match.
+     */
+    MFF_TCP_SRC,
+
+    /* "tcp_dst" (aka "tp_dst").
+     *
+     * TCP destination port.
+     *
+     * Type: be16.
+     * Maskable: bitwise.
+     * Formatting: decimal.
+     * Prerequisites: TCP.
+     * Access: read/write.
+     * NXM: NXM_OF_TCP_DST(10) since v1.1.
+     * OXM: OXM_OF_TCP_DST(14) since OF1.2 and v1.7.
+     * OF1.0: exact match.
+     * OF1.1: exact match.
+     */
+    MFF_TCP_DST,
+
+    /* "tcp_flags".
+     *
+     * Flags in the TCP header.
+     *
+     * TCP currently defines 9 flag bits, and additional 3 bits are reserved
+     * (must be transmitted as zero).  See RFCs 793, 3168, and 3540.
+     *
+     * Type: be16 (low 12 bits).
+     * Maskable: bitwise.
+     * Formatting: TCP flags.
+     * Prerequisites: TCP.
+     * Access: read-only.
+     * NXM: NXM_NX_TCP_FLAGS(34) since v2.1.
+     * OXM: OXM_OF_TCP_FLAGS(42) since OF1.5 and v2.3.
+     */
+    MFF_TCP_FLAGS,
+
+/* ## --- ## */
+/* ## UDP ## */
+/* ## --- ## */
+
+    /* "udp_src".
+     *
+     * UDP source port.
+     *
+     * Type: be16.
+     * Maskable: bitwise.
+     * Formatting: decimal.
+     * Prerequisites: UDP.
+     * Access: read/write.
+     * NXM: NXM_OF_UDP_SRC(11) since v1.1.
+     * OXM: OXM_OF_UDP_SRC(15) since OF1.2 and v1.7.
+     * OF1.0: exact match.
+     * OF1.1: exact match.
+     */
+    MFF_UDP_SRC,
+
+    /* "udp_dst".
+     *
+     * UDP destination port
+     *
+     * Type: be16.
+     * Maskable: bitwise.
+     * Formatting: decimal.
+     * Prerequisites: UDP.
+     * Access: read/write.
+     * NXM: NXM_OF_UDP_DST(12) since v1.1.
+     * OXM: OXM_OF_UDP_DST(16) since OF1.2 and v1.7.
+     * OF1.0: exact match.
+     * OF1.1: exact match.
+     */
+    MFF_UDP_DST,
+
+/* ## ---- ## */
+/* ## SCTP ## */
+/* ## ---- ## */
+
+    /* "sctp_src".
+     *
+     * SCTP source port.
+     *
+     * Type: be16.
+     * Maskable: bitwise.
+     * Formatting: decimal.
+     * Prerequisites: SCTP.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: OXM_OF_SCTP_SRC(17) since OF1.2 and v2.0.
+     * OF1.1: exact match.
+     */
+    MFF_SCTP_SRC,
+
+    /* "sctp_dst".
+     *
+     * SCTP destination port.
+     *
+     * Type: be16.
+     * Maskable: bitwise.
+     * Formatting: decimal.
+     * Prerequisites: SCTP.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: OXM_OF_SCTP_DST(18) since OF1.2 and v2.0.
+     * OF1.1: exact match.
+     */
+    MFF_SCTP_DST,
+
+/* ## ---- ## */
+/* ## ICMP ## */
+/* ## ---- ## */
+
+    /* "icmp_type".
+     *
+     * ICMPv4 type.
+     *
+     * Type: u8.
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: ICMPv4.
+     * Access: read-only.
+     * NXM: NXM_OF_ICMP_TYPE(13) since v1.1.
+     * OXM: OXM_OF_ICMPV4_TYPE(19) since OF1.2 and v1.7.
+     * OF1.0: exact match.
+     * OF1.1: exact match.
+     */
+    MFF_ICMPV4_TYPE,
+
+    /* "icmp_code".
+     *
+     * ICMPv4 code.
+     *
+     * Type: u8.
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: ICMPv4.
+     * Access: read-only.
+     * NXM: NXM_OF_ICMP_CODE(14) since v1.1.
+     * OXM: OXM_OF_ICMPV4_CODE(20) since OF1.2 and v1.7.
+     * OF1.0: exact match.
+     * OF1.1: exact match.
+     */
+    MFF_ICMPV4_CODE,
+
+    /* "icmpv6_type".
+     *
+     * ICMPv6 type.
+     *
+     * Type: u8.
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: ICMPv6.
+     * Access: read-only.
+     * NXM: NXM_NX_ICMPV6_TYPE(21) since v1.1.
+     * OXM: OXM_OF_ICMPV6_TYPE(29) since OF1.2 and v1.7.
+     */
+    MFF_ICMPV6_TYPE,
+
+    /* "icmpv6_code".
+     *
+     * ICMPv6 code.
+     *
+     * Type: u8.
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: ICMPv6.
+     * Access: read-only.
+     * NXM: NXM_NX_ICMPV6_CODE(22) since v1.1.
+     * OXM: OXM_OF_ICMPV6_CODE(30) since OF1.2 and v1.7.
+     */
+    MFF_ICMPV6_CODE,
+
+/* ## ------------------------- ## */
+/* ## ICMPv6 Neighbor Discovery ## */
+/* ## ------------------------- ## */
+
+    /* "nd_target".
+     *
+     * The target address in an IPv6 Neighbor Discovery message.
+     *
+     * Before Open vSwitch 1.8, only CIDR masks were supported.
+     *
+     * Type: IPv6.
+     * Maskable: bitwise.
+     * Formatting: IPv6.
+     * Prerequisites: ND.
+     * Access: read-only.
+     * NXM: NXM_NX_ND_TARGET(23) since v1.1.
+     * OXM: OXM_OF_IPV6_ND_TARGET(31) since OF1.2 and v1.7.
+     */
+    MFF_ND_TARGET,
+
+    /* "nd_sll".
+     *
+     * The source link layer address in an IPv6 Neighbor Discovery message.
+     *
+     * Type: MAC.
+     * Maskable: bitwise.
+     * Formatting: Ethernet.
+     * Prerequisites: ND solicit.
+     * Access: read-only.
+     * NXM: NXM_NX_ND_SLL(24) since v1.1.
+     * OXM: OXM_OF_IPV6_ND_SLL(32) since OF1.2 and v1.7.
+     */
+    MFF_ND_SLL,
+
+    /* "nd_tll".
+     *
+     * The target link layer address in an IPv6 Neighbor Discovery message.
+     *
+     * Type: MAC.
+     * Maskable: bitwise.
+     * Formatting: Ethernet.
+     * Prerequisites: ND advert.
+     * Access: read-only.
+     * NXM: NXM_NX_ND_TLL(25) since v1.1.
+     * OXM: OXM_OF_IPV6_ND_TLL(33) since OF1.2 and v1.7.
+     */
+    MFF_ND_TLL,
 
     MFF_N_IDS
 };
@@ -220,8 +1414,8 @@ enum OVS_PACKED_ENUM mf_string {
     MFS_ETHERNET,
     MFS_IPV4,
     MFS_IPV6,
-    MFS_OFP_PORT,               /* An OpenFlow port number or name. */
-    MFS_OFP_PORT_OXM,           /* An OpenFlow port number or name (32-bit). */
+    MFS_OFP_PORT,               /* 16-bit OpenFlow 1.0 port number or name. */
+    MFS_OFP_PORT_OXM,           /* 32-bit OpenFlow 1.1+ port number or name. */
     MFS_FRAG,                   /* no, yes, first, later, not_later */
     MFS_TNL_FLAGS,              /* FLOW_TNL_F_* flags */
     MFS_TCP_FLAGS,              /* TCP_* flags */
@@ -299,8 +1493,9 @@ struct mf_field {
      * These are combinations of OFPUTIL_P_*.  (They are not declared as type
      * enum ofputil_protocol because that would give meta-flow.h and ofp-util.h
      * a circular dependency.) */
-    uint32_t usable_protocols;         /* If fully/CIDR masked. */
-    uint32_t usable_protocols_bitwise; /* If partially/non-CIDR masked. */
+    uint32_t usable_protocols_exact;   /* Matching or setting whole field. */
+    uint32_t usable_protocols_cidr;    /* Matching a CIDR mask in field. */
+    uint32_t usable_protocols_bitwise; /* Matching arbitrary bits in field. */
 
     int flow_be32ofs;  /* Field's be32 offset in "struct flow", if prefix tree
                         * lookup is supported for the field, or -1. */

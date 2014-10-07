@@ -2232,7 +2232,7 @@ set_field_parse__(char *arg, struct ofpbuf *ofpacts,
         return xasprintf("%s is not a valid value for field %s", value, key);
     }
 
-    *usable_protocols &= mf->usable_protocols;
+    *usable_protocols &= mf->usable_protocols_exact;
     return NULL;
 }
 

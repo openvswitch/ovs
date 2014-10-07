@@ -443,13 +443,19 @@ lib/dirs.c: lib/dirs.c.in Makefile
 	     > lib/dirs.c.tmp && \
 	mv lib/dirs.c.tmp lib/dirs.c
 
+lib/meta-flow.inc: $(srcdir)/build-aux/extract-ofp-fields lib/meta-flow.h
+	$(AM_V_GEN)$(run_python) $^ > $@.tmp && mv $@.tmp $@
+lib/meta-flow.lo: lib/meta-flow.inc
+CLEANFILES += lib/meta-flow.inc
+EXTRA_DIST += build-aux/extract-ofp-fields
+
 lib/ofp-actions.inc1: $(srcdir)/build-aux/extract-ofp-actions lib/ofp-actions.c
 	$(AM_V_GEN)$(run_python) $^ --prototypes > $@.tmp && mv $@.tmp $@
 lib/ofp-actions.inc2: $(srcdir)/build-aux/extract-ofp-actions lib/ofp-actions.c
 	$(AM_V_GEN)$(run_python) $^ --definitions > $@.tmp && mv $@.tmp $@
 lib/ofp-actions.lo: lib/ofp-actions.inc1 lib/ofp-actions.inc2
 CLEANFILES += lib/ofp-actions.inc1 lib/ofp-actions.inc2
-EXTRA_DIST += build-aux/extract-ofp-actions lib/ofp-errors.inc
+EXTRA_DIST += build-aux/extract-ofp-actions
 
 $(srcdir)/lib/ofp-errors.inc: \
 	lib/ofp-errors.h include/openflow/openflow-common.h \
