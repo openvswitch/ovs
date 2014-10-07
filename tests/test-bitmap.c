@@ -82,12 +82,12 @@ test_bitmap_scan(void)
     bitmap_set1(a, MAX_BITS - 1);
     assert(bitmap_scan(a, true, 0, MAX_BITS) == MAX_BITS - 1);
     bitmap_set1(a, MAX_BITS - BITMAP_ULONG_BITS + 1);
-    assert(bitmap_scan(a, true, 0, MAX_BITS - 1)
+    assert(bitmap_scan(a, true, 3, MAX_BITS)
            == MAX_BITS - BITMAP_ULONG_BITS + 1);
     bitmap_set1(a, BITMAP_ULONG_BITS - 1);
-    assert(bitmap_scan(a, true, 0, MAX_BITS - 1) == BITMAP_ULONG_BITS - 1);
+    assert(bitmap_scan(a, true, 7, MAX_BITS - 1) == BITMAP_ULONG_BITS - 1);
     bitmap_set1(a, 0);
-    assert(bitmap_scan(a, true, 0, MAX_BITS - 1) == 0);
+    assert(bitmap_scan(a, true, 0, MAX_BITS - 7) == 0);
 
     bitmap_set_multiple(a, 0, MAX_BITS, true);
 
@@ -104,12 +104,12 @@ test_bitmap_scan(void)
     bitmap_set0(a, MAX_BITS - 1);
     assert(bitmap_scan(a, false, 0, MAX_BITS) == MAX_BITS - 1);
     bitmap_set0(a, MAX_BITS - BITMAP_ULONG_BITS + 1);
-    assert(bitmap_scan(a, false, 0, MAX_BITS - 1)
+    assert(bitmap_scan(a, false, 3, MAX_BITS)
            == MAX_BITS - BITMAP_ULONG_BITS + 1);
     bitmap_set0(a, BITMAP_ULONG_BITS - 1);
-    assert(bitmap_scan(a, false, 0, MAX_BITS - 1) == BITMAP_ULONG_BITS - 1);
+    assert(bitmap_scan(a, false, 7, MAX_BITS - 1) == BITMAP_ULONG_BITS - 1);
     bitmap_set0(a, 0);
-    assert(bitmap_scan(a, false, 0, MAX_BITS - 1) == 0);
+    assert(bitmap_scan(a, false, 0, MAX_BITS - 7) == 0);
 
     free(a);
 }

@@ -23,7 +23,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/backtrace.h \
 	lib/bfd.c \
 	lib/bfd.h \
-	lib/bitmap.c \
 	lib/bitmap.h \
 	lib/bundle.c \
 	lib/bundle.h \

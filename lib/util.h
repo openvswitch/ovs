@@ -512,7 +512,7 @@ zero_rightmost_1bit(uintmax_t x)
  *
  * Unlike the other functions for rightmost 1-bits, this function only works
  * with 32-bit integers. */
-static inline uint32_t
+static inline int
 rightmost_1bit_idx(uint32_t x)
 {
     return ctz32(x);
