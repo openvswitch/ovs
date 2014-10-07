@@ -12,6 +12,19 @@
 
 #ifdef GRE_USE_KERNEL_GRE_HANDLE_OFFLOADS
 #include_next <net/ip_tunnels.h>
+static inline int rpl_iptunnel_xmit(struct rtable *rt,
+                                    struct sk_buff *skb, __be32 src,
+                                    __be32 dst, __u8 proto, __u8 tos,
+                                    __u8 ttl, __be16 df, bool xnet)
+{
+#ifdef HAVE_IPTUNNEL_XMIT_NET
+	return iptunnel_xmit(NULL, rt, skb, src, dst, proto, tos, ttl, df);
+#else
+	return iptunnel_xmit(rt, skb, src, dst, proto, tos, ttl, df, xnet);
+#endif
+}
+#define iptunnel_xmit rpl_iptunnel_xmit
+
 #else
 
 #include <linux/if_tunnel.h>
