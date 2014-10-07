@@ -537,8 +537,8 @@ if it also specifies particular L2 and L3 protocol types.  For
 example, if the L2 protocol type \fBdl_type\fR is wildcarded, then L3
 fields \fBnw_src\fR, \fBnw_dst\fR, and \fBnw_proto\fR must also be
 wildcarded.  Similarly, if \fBdl_type\fR or \fBnw_proto\fR (the L3
-protocol type) is wildcarded, so must be \fBtp_dst\fR and
-\fBtp_src\fR, which are L4 fields.  \fBovs\-ofctl\fR will warn about
+protocol type) is wildcarded, so must be the L4 fields \fBtcp_dst\fR and
+\fBtcp_src\fR.  \fBovs\-ofctl\fR will warn about
 flows not in normal form.
 .PP
 The following field assignments describe how a flow matches a packet.
@@ -688,21 +688,27 @@ When \fBdl_type\fR is wildcarded or set to a value other than 0x0800 or
 above).
 .IP
 .
-.IP \fBtp_src=\fIport\fR
-.IQ \fBtp_dst=\fIport\fR
-When \fBdl_type\fR and \fBnw_proto\fR specify TCP or UDP or SCTP, \fBtp_src\fR
-and \fBtp_dst\fR match the UDP or TCP or SCTP source or destination port
-\fIport\fR, respectively, which is specified as a decimal number
-between 0 and 65535, inclusive (e.g. 80 to match packets originating
-from a HTTP server).
+.IP \fBtcp_src=\fIport\fR
+.IQ \fBtcp_dst=\fIport\fR
+.IQ \fBudp_src=\fIport\fR
+.IQ \fBudp_dst=\fIport\fR
+.IQ \fBsctp_src=\fIport\fR
+.IQ \fBsctp_dst=\fIport\fR
+Matches a TCP, UDP, or SCTP source or destination port \fIport\fR,
+which is specified as a decimal number between 0 and 65535, inclusive.
 .IP
-When \fBdl_type\fR and \fBnw_proto\fR take other values, the values of
-these settings are ignored (see \fBFlow Syntax\fR above).
+When \fBdl_type\fR and \fBnw_proto\fR are wildcarded or set to values
+that do not indicate an appropriate protocol, the values of these
+settings are ignored (see \fBFlow Syntax\fR above).
 .
-.IP \fBtp_src=\fIport\fB/\fImask\fR
-.IQ \fBtp_dst=\fIport\fB/\fImask\fR
-Bitwise match on TCP (or UDP or SCTP) source or destination port,
-respectively.  The \fIport\fR and \fImask\fR are 16-bit numbers
+.IP \fBtcp_src=\fIport\fB/\fImask\fR
+.IQ \fBtcp_dst=\fIport\fB/\fImask\fR
+.IQ \fBudp_src=\fIport\fB/\fImask\fR
+.IQ \fBudp_dst=\fIport\fB/\fImask\fR
+.IQ \fBsctp_src=\fIport\fB/\fImask\fR
+.IQ \fBsctp_dst=\fIport\fB/\fImask\fR
+Bitwise match on TCP (or UDP or SCTP) source or destination port.
+The \fIport\fR and \fImask\fR are 16-bit numbers
 written in decimal or in hexadecimal prefixed by \fB0x\fR.  Each 1-bit
 in \fImask\fR requires that the corresponding bit in \fIport\fR must
 match.  Each 0-bit in \fImask\fR causes the corresponding bit to be
@@ -740,26 +746,31 @@ accomplish the same results:
 which become the following when written in the syntax required by
 \fBovs\-ofctl\fR:
 .br
-.B "tcp,tp_src=0x03e8/0xfff8"
+.B "tcp,tcp_src=0x03e8/0xfff8"
 .br
-.B "tcp,tp_src=0x03f0/0xfff0"
+.B "tcp,tcp_src=0x03f0/0xfff0"
 .br
-.B "tcp,tp_src=0x0400/0xfe00"
+.B "tcp,tcp_src=0x0400/0xfe00"
 .br
-.B "tcp,tp_src=0x0600/0xff00"
+.B "tcp,tcp_src=0x0600/0xff00"
 .br
-.B "tcp,tp_src=0x0700/0xff80"
+.B "tcp,tcp_src=0x0700/0xff80"
 .br
-.B "tcp,tp_src=0x0780/0xffc0"
+.B "tcp,tcp_src=0x0780/0xffc0"
 .br
-.B "tcp,tp_src=0x07c0/0xfff0"
+.B "tcp,tcp_src=0x07c0/0xfff0"
 .IP
 Only Open vSwitch 1.6 and later supports bitwise matching on transport
 ports.
 .IP
-Like the exact-match forms of \fBtp_src\fR and \fBtp_dst\fR described
+Like the exact-match forms described
 above, the bitwise match forms apply only when \fBdl_type\fR and
 \fBnw_proto\fR specify TCP or UDP or SCTP.
+.
+.IP \fBtp_src=\fIport\fR
+.IQ \fBtp_dst=\fIport\fR
+These are deprecated generic forms of L4 port matches.  In new code,
+please use the TCP-, UDP-, or SCTP-specific forms described above.
 .
 .IP \fBtcp_flags=\fIflags\fB/\fImask\fR
 .IQ \fBtcp_flags=\fR[\fB+\fIflag\fR...][\fB-\fIflag\fR...]
