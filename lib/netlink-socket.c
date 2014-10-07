@@ -758,74 +758,68 @@ nl_sock_transact_multiple__(struct nl_sock *sock,
     ofpbuf_uninit(&tmp_reply);
 #else
     error = 0;
+    uint8_t reply_buf[65536];
     for (i = 0; i < n; i++) {
         DWORD reply_len;
-        uint8_t tail[65536];
         struct nl_transaction *txn = transactions[i];
         struct nlmsghdr *request_nlmsg, *reply_nlmsg;
 
         if (!DeviceIoControl(sock->handle, OVS_IOCTL_TRANSACT,
                              ofpbuf_data(txn->request),
                              ofpbuf_size(txn->request),
-                             txn->reply ? tail : 0,
-                             txn->reply ? sizeof tail : 0,
+                             reply_buf, sizeof reply_buf,
                              &reply_len, NULL)) {
             /* XXX: Map to a more appropriate error. */
             error = EINVAL;
             break;
         }
 
-        if (txn->reply) {
-            if (reply_len < sizeof *reply_nlmsg) {
-                VLOG_DBG_RL(&rl, "insufficient length of reply %#"PRIu32,
-                            reply_len);
-                break;
+        if (reply_len < sizeof *reply_nlmsg) {
+            nl_sock_record_errors__(transactions, n, 0);
+            VLOG_DBG_RL(&rl, "insufficient length of reply %#"PRIu32
+                " for seq: %#"PRIx32, reply_len, request_nlmsg->nlmsg_seq);
+            break;
+        }
+
+        /* Validate the sequence number in the reply. */
+        request_nlmsg = nl_msg_nlmsghdr(txn->request);
+        reply_nlmsg = (struct nlmsghdr *)reply_buf;
+
+        if (request_nlmsg->nlmsg_seq != reply_nlmsg->nlmsg_seq) {
+            ovs_assert(request_nlmsg->nlmsg_seq == reply_nlmsg->nlmsg_seq);
+            VLOG_DBG_RL(&rl, "mismatched seq request %#"PRIx32
+                ", reply %#"PRIx32, request_nlmsg->nlmsg_seq,
+                reply_nlmsg->nlmsg_seq);
+            break;
+        }
+
+        /* Handle errors embedded within the netlink message. */
+        ofpbuf_use_stub(&tmp_reply, reply_buf, sizeof reply_buf);
+        ofpbuf_set_size(&tmp_reply, sizeof reply_buf);
+        if (nl_msg_nlmsgerr(&tmp_reply, &txn->error)) {
+            if (txn->reply) {
+                ofpbuf_clear(txn->reply);
             }
-
-            /* Validate the sequence number in the reply. */
-            request_nlmsg = nl_msg_nlmsghdr(txn->request);
-            reply_nlmsg = (struct nlmsghdr *)tail;
-
-            if (request_nlmsg->nlmsg_seq != reply_nlmsg->nlmsg_seq) {
-                ovs_assert(request_nlmsg->nlmsg_seq == reply_nlmsg->nlmsg_seq);
-                VLOG_DBG_RL(&rl, "mismatched seq request %#"PRIx32
-                    ", reply %#"PRIx32, request_nlmsg->nlmsg_seq,
-                    reply_nlmsg->nlmsg_seq);
-                break;
+            if (txn->error) {
+                VLOG_DBG_RL(&rl, "received NAK error=%d (%s)",
+                            error, ovs_strerror(txn->error));
             }
-
-            /* If reply was expected, verify if there was indeed a reply
-             * received. */
-            if (reply_len == 0) {
-                nl_sock_record_errors__(transactions, n, 0);
-                VLOG_DBG_RL(&rl, "reply not seen when expected seq %#"PRIx32,
-                            request_nlmsg->nlmsg_seq);
-                break;
-            }
-
-            /* Copy the reply to the buffer specified by the caller. */
-            if (reply_len > txn->reply->allocated) {
-                ofpbuf_reinit(txn->reply, reply_len);
-            }
-            memcpy(ofpbuf_data(txn->reply), tail, reply_len);
-            ofpbuf_set_size(txn->reply, reply_len);
-
-            /* Handle errors embedded within the netlink message. */
-            if (nl_msg_nlmsgerr(txn->reply, &txn->error)) {
-                if (txn->reply) {
-                    ofpbuf_clear(txn->reply);
+        } else {
+            txn->error = 0;
+            if (txn->reply) {
+                /* Copy the reply to the buffer specified by the caller. */
+                if (reply_len > txn->reply->allocated) {
+                    ofpbuf_reinit(txn->reply, reply_len);
                 }
-                if (txn->error) {
-                    VLOG_DBG_RL(&rl, "received NAK error=%d (%s)",
-                                error, ovs_strerror(txn->error));
-                }
-            } else {
-                txn->error = 0;
+                memcpy(ofpbuf_data(txn->reply), reply_buf, reply_len);
+                ofpbuf_set_size(txn->reply, reply_len);
             }
         }
+        ofpbuf_uninit(&tmp_reply);
 
         /* Count the number of successful transactions. */
         (*done)++;
+
     }
 
     if (!error) {
