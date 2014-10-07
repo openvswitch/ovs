@@ -1286,6 +1286,11 @@ OvsConvertIfCountedStrToAnsiStr(PIF_COUNTED_STRING wStr,
 }
 
 
+/*
+ * XXX: Get rid of USE_NEW_VPORT_ADD_WORKFLOW while checking in the code for
+ * new vport add workflow, or set USE_NEW_VPORT_ADD_WORKFLOW to 1.
+ */
+#define USE_NEW_VPORT_ADD_WORKFLOW 0
 NTSTATUS
 OvsGetExtInfoIoctl(POVS_VPORT_GET vportGet,
                    POVS_VPORT_EXT_INFO extInfo)
@@ -1294,8 +1299,6 @@ OvsGetExtInfoIoctl(POVS_VPORT_GET vportGet,
     size_t len;
     LOCK_STATE_EX lockState;
     NTSTATUS status = STATUS_SUCCESS;
-    NDIS_SWITCH_NIC_NAME nicName;
-    NDIS_VM_NAME vmName;
     BOOLEAN doConvert = FALSE;
 
     RtlZeroMemory(extInfo, sizeof (POVS_VPORT_EXT_INFO));
@@ -1303,8 +1306,12 @@ OvsGetExtInfoIoctl(POVS_VPORT_GET vportGet,
                           NDIS_RWL_AT_DISPATCH_LEVEL);
     if (vportGet->portNo == 0) {
         StringCbLengthA(vportGet->name, OVS_MAX_PORT_NAME_LENGTH - 1, &len);
+#if USE_NEW_VPORT_ADD_WORKFLOW == 0
         vport = OvsFindVportByOvsName(gOvsSwitchContext, vportGet->name,
                                       (UINT32)len);
+#else
+        vport = OvsFindVportByHvName(gOvsSwitchContext, vportGet->name);
+#endif
     } else {
         vport = OvsFindVportByPortNo(gOvsSwitchContext, vportGet->portNo);
     }
@@ -1347,20 +1354,28 @@ OvsGetExtInfoIoctl(POVS_VPORT_GET vportGet,
     if (extInfo->type == OVS_VPORT_TYPE_NETDEV &&
         (vport->ovsState == OVS_STATE_NIC_CREATED  ||
          vport->ovsState == OVS_STATE_CONNECTED)) {
-        RtlCopyMemory(&vmName, &vport->vmName, sizeof (NDIS_VM_NAME));
-        RtlCopyMemory(&nicName, &vport->nicName, sizeof
-                      (NDIS_SWITCH_NIC_NAME));
         doConvert = TRUE;
     } else {
         extInfo->vmUUID[0] = 0;
         extInfo->vifUUID[0] = 0;
     }
-
+#if USE_NEW_VPORT_ADD_WORKFLOW == 0
     RtlCopyMemory(extInfo->name, vport->ovsName, vport->ovsNameLen + 1);
+#endif
     NdisReleaseRWLock(gOvsSwitchContext->dispatchLock, &lockState);
     NdisReleaseSpinLock(gOvsCtrlLock);
     if (doConvert) {
-        status = OvsConvertIfCountedStrToAnsiStr(&vmName,
+#if USE_NEW_VPORT_ADD_WORKFLOW == 1
+        status = OvsConvertIfCountedStrToAnsiStr(&vport->portFriendlyName,
+                                                 extInfo->name,
+                                                 OVS_MAX_PORT_NAME_LENGTH);
+        if (status != STATUS_SUCCESS) {
+            OVS_LOG_INFO("Fail to convert NIC name.");
+            extInfo->vmUUID[0] = 0;
+        }
+#endif
+
+        status = OvsConvertIfCountedStrToAnsiStr(&vport->vmName,
                                                  extInfo->vmUUID,
                                                  OVS_MAX_VM_UUID_LEN);
         if (status != STATUS_SUCCESS) {
@@ -1368,11 +1383,11 @@ OvsGetExtInfoIoctl(POVS_VPORT_GET vportGet,
             extInfo->vmUUID[0] = 0;
         }
 
-        status = OvsConvertIfCountedStrToAnsiStr(&nicName,
+        status = OvsConvertIfCountedStrToAnsiStr(&vport->nicName,
                                                  extInfo->vifUUID,
                                                  OVS_MAX_VIF_UUID_LEN);
         if (status != STATUS_SUCCESS) {
-            OVS_LOG_INFO("Fail to convert nic name");
+            OVS_LOG_INFO("Fail to convert nic UUID");
             extInfo->vifUUID[0] = 0;
         }
         /*
