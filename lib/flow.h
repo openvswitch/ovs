@@ -507,31 +507,45 @@ flow_get_next_in_map(const struct flow *flow, uint64_t map, uint32_t *value)
     (((UINT64_C(1) << FLOW_U32_SIZE(FIELD)) - 1)  \
      << (offsetof(struct flow, FIELD) / 4))
 
-static inline uint32_t
-mf_get_next_in_map(uint64_t *fmap, uint64_t rm1bit, const uint32_t **fp,
-                   uint32_t *value)
-{
-    *value = 0;
-    if (*fmap & rm1bit) {
-        uint64_t trash = *fmap & (rm1bit - 1);
+struct mf_for_each_in_map_aux {
+    const uint32_t *values;
+    uint64_t fmap;
+    uint64_t map;
+};
 
-        if (trash) {
-            *fmap -= trash;
-            *fp += count_1bits(trash);
+static inline bool
+mf_get_next_in_map(struct mf_for_each_in_map_aux *aux, uint32_t *value)
+{
+    if (aux->map) {
+        uint64_t rm1bit = rightmost_1bit(aux->map);
+        aux->map -= rm1bit;
+
+        if (aux->fmap & rm1bit) {
+            /* Advance 'aux->values' to point to the value for 'rm1bit'. */
+            uint64_t trash = aux->fmap & (rm1bit - 1);
+            if (trash) {
+                aux->fmap -= trash;
+                aux->values += count_1bits(trash);
+            }
+
+            /* Retrieve the value for 'rm1bit' then advance past it. */
+            aux->fmap -= rm1bit;
+            *value = *aux->values++;
+        } else {
+            *value = 0;
         }
-        *value = **fp;
+        return true;
+    } else {
+        return false;
     }
-    return rm1bit != 0;
 }
 
-/* Iterate through all miniflow u32 values specified by 'MAP'.
- * This works as the first statement in a block.*/
+/* Iterate through all miniflow u32 values specified by 'MAP'. */
 #define MINIFLOW_FOR_EACH_IN_MAP(VALUE, FLOW, MAP)                      \
-    const uint32_t *fp_ = miniflow_get_u32_values(FLOW);                \
-    uint64_t rm1bit_, fmap_, map_;                                      \
-    for (fmap_ = (FLOW)->map, map_ = (MAP), rm1bit_ = rightmost_1bit(map_); \
-         mf_get_next_in_map(&fmap_, rm1bit_, &fp_, &(VALUE));           \
-         map_ -= rm1bit_, rm1bit_ = rightmost_1bit(map_))
+    for (struct mf_for_each_in_map_aux aux__                            \
+             = { miniflow_get_u32_values(FLOW), (FLOW)->map, MAP };     \
+         mf_get_next_in_map(&aux__, &(VALUE));                          \
+        )
 
 /* Get the value of 'FIELD' of an up to 4 byte wide integer type 'TYPE' of
  * a miniflow. */
