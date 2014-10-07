@@ -77,7 +77,6 @@
     OFPACT(SET_L4_SRC_PORT, ofpact_l4_port,     ofpact, "mod_tp_src")   \
     OFPACT(SET_L4_DST_PORT, ofpact_l4_port,     ofpact, "mod_tp_dst")   \
     OFPACT(REG_MOVE,        ofpact_reg_move,    ofpact, "move")         \
-    OFPACT(REG_LOAD,        ofpact_reg_load,    ofpact, "load")         \
     OFPACT(STACK_PUSH,      ofpact_stack,       ofpact, "push")         \
     OFPACT(STACK_POP,       ofpact_stack,       ofpact, "pop")          \
     OFPACT(DEC_TTL,         ofpact_cnt_ids,     cnt_ids, "dec_ttl")     \
@@ -383,23 +382,15 @@ struct ofpact_stack {
     struct mf_subfield subfield;
 };
 
-/* OFPACT_REG_LOAD.
- *
- * Used for NXAST_REG_LOAD. */
-struct ofpact_reg_load {
-    struct ofpact ofpact;
-    struct mf_subfield dst;
-    union mf_subvalue subvalue; /* Least-significant bits are used. */
-};
-
 /* OFPACT_SET_FIELD.
  *
- * Used for OFPAT12_SET_FIELD. */
+ * Used for NXAST_REG_LOAD and OFPAT12_SET_FIELD. */
 struct ofpact_set_field {
     struct ofpact ofpact;
     const struct mf_field *field;
     bool flow_has_vlan;   /* VLAN present at action validation time. */
     union mf_value value;
+    union mf_value mask;
 };
 
 /* OFPACT_PUSH_VLAN/MPLS/PBB
@@ -843,6 +834,9 @@ OFPACTS
 /* Functions to use after adding ofpacts to a buffer. */
 void ofpact_update_len(struct ofpbuf *, struct ofpact *);
 void ofpact_pad(struct ofpbuf *);
+
+/* Additional functions for composing ofpacts. */
+struct ofpact_set_field *ofpact_put_reg_load(struct ofpbuf *ofpacts);
 
 /* OpenFlow 1.1 instructions.
  * The order is sorted in execution order. Not in the value of OFPIT11_xxx.

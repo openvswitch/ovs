@@ -539,10 +539,7 @@ AT_DATA([test-data], [dnl
 # actions=move:NXM_OF_IN_PORT[]->NXM_OF_VLAN_TCI[]
 001c 0018 0010 0000 0000 0008 00000002 00000802 00000000
 
-# bad OpenFlow15 actions: OFPBAC_BAD_SET_MASK
-& ofp_actions|WARN|bad action at offset 0 (OFPBAC_BAD_SET_MASK):
-& 00000000  00 19 00 18 80 00 09 0c-00 00 00 00 12 34 00 00
-& 00000010  00 00 ff ff 00 00 00 00-
+# actions=set_field:00:00:00:00:12:34/00:00:00:00:ff:ff->eth_src
 0019 0018 8000090c 000000001234 00000000ffff 00000000
 
 ])

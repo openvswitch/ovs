@@ -1295,39 +1295,8 @@ nxm_parse_reg_move(struct ofpact_reg_move *move, const char *s)
     }
     return NULL;
 }
-
-/* Parses 's' as a "load" action, in the form described in ovs-ofctl(8), into
- * '*load'.
- *
- * Returns NULL if successful, otherwise a malloc()'d string describing the
- * error.  The caller is responsible for freeing the returned string. */
-char * WARN_UNUSED_RESULT
-nxm_parse_reg_load(struct ofpact_reg_load *load, const char *s)
-{
-    const char *full_s = s;
-    uint64_t value = strtoull(s, (char **) &s, 0);
-    char *error;
-
-    if (strncmp(s, "->", 2)) {
-        return xasprintf("%s: missing `->' following value", full_s);
-    }
-    s += 2;
-    error = mf_parse_subfield(&load->dst, s);
-    if (error) {
-        return error;
-    }
-
-    if (load->dst.n_bits < 64 && (value >> load->dst.n_bits) != 0) {
-        return xasprintf("%s: value %"PRIu64" does not fit into %d bits",
-                         full_s, value, load->dst.n_bits);
-    }
-
-    load->subvalue.be64[0] = htonll(0);
-    load->subvalue.be64[1] = htonll(value);
-    return NULL;
-}
 
-/* nxm_format_reg_move(), nxm_format_reg_load(). */
+/* nxm_format_reg_move(). */
 
 void
 nxm_format_reg_move(const struct ofpact_reg_move *move, struct ds *s)
@@ -1338,14 +1307,6 @@ nxm_format_reg_move(const struct ofpact_reg_move *move, struct ds *s)
     mf_format_subfield(&move->dst, s);
 }
 
-void
-nxm_format_reg_load(const struct ofpact_reg_load *load, struct ds *s)
-{
-    ds_put_cstr(s, "load:");
-    mf_format_subvalue(&load->subvalue, s);
-    ds_put_cstr(s, "->");
-    mf_format_subfield(&load->dst, s);
-}
 
 enum ofperr
 nxm_reg_move_check(const struct ofpact_reg_move *move, const struct flow *flow)
@@ -1359,15 +1320,8 @@ nxm_reg_move_check(const struct ofpact_reg_move *move, const struct flow *flow)
 
     return mf_check_dst(&move->dst, NULL);
 }
-
-enum ofperr
-nxm_reg_load_check(const struct ofpact_reg_load *load, const struct flow *flow)
-{
-    return mf_check_dst(&load->dst, flow);
-}
 
-
-/* nxm_execute_reg_move(), nxm_execute_reg_load(). */
+/* nxm_execute_reg_move(). */
 
 void
 nxm_execute_reg_move(const struct ofpact_reg_move *move,
@@ -1385,37 +1339,6 @@ nxm_execute_reg_move(const struct ofpact_reg_move *move,
                  &dst_value, move->dst.field->n_bytes, move->dst.ofs,
                  move->src.n_bits);
     mf_set_flow_value(move->dst.field, &dst_value, flow);
-}
-
-void
-nxm_execute_reg_load(const struct ofpact_reg_load *load, struct flow *flow,
-                     struct flow_wildcards *wc)
-{
-    /* Since at the datapath interface we do not have set actions for
-     * individual fields, but larger sets of fields for a given protocol
-     * layer, the set action will in practice only ever apply to exactly
-     * matched flows for the given protocol layer.  For example, if the
-     * reg_load changes the IP TTL, the corresponding datapath action will
-     * rewrite also the IP addresses and TOS byte.  Since these other field
-     * values may not be explicitly set, they depend on the incoming flow field
-     * values, and are hence all of them are set in the wildcards masks, when
-     * the action is committed to the datapath.  For the rare case, where the
-     * reg_load action does not actually change the value, and no other flow
-     * field values are set (or loaded), the datapath action is skipped, and
-     * no mask bits are set.  Such a datapath flow should, however, be
-     * dependent on the specific field value, so the corresponding wildcard
-     * mask bits must be set, lest the datapath flow be applied to packets
-     * containing some other value in the field and the field value remain
-     * unchanged regardless of the incoming value.
-     *
-     * We set the masks here for the whole fields, and their prerequisities.
-     * Even if only the lower byte of a TCP destination port is set,
-     * we set the mask for the whole field, and also the ip_proto in the IP
-     * header, so that the kernel flow would not be applied on, e.g., a UDP
-     * packet, or any other IP protocol in addition to TCP packets.
-     */
-    mf_mask_field_and_prereqs(load->dst.field, &wc->masks);
-    mf_write_subfield_flow(&load->dst, &load->subvalue, flow);
 }
 
 void

@@ -88,20 +88,13 @@ void nx_format_field_name(enum mf_field_id, enum ofp_version, struct ds *);
 
 char *nxm_parse_reg_move(struct ofpact_reg_move *, const char *)
     WARN_UNUSED_RESULT;
-char *nxm_parse_reg_load(struct ofpact_reg_load *, const char *)
-    WARN_UNUSED_RESULT;
 
 void nxm_format_reg_move(const struct ofpact_reg_move *, struct ds *);
-void nxm_format_reg_load(const struct ofpact_reg_load *, struct ds *);
 
 enum ofperr nxm_reg_move_check(const struct ofpact_reg_move *,
                                const struct flow *);
-enum ofperr nxm_reg_load_check(const struct ofpact_reg_load *,
-                               const struct flow *);
 
 void nxm_execute_reg_move(const struct ofpact_reg_move *, struct flow *,
-                          struct flow_wildcards *);
-void nxm_execute_reg_load(const struct ofpact_reg_load *, struct flow *,
                           struct flow_wildcards *);
 void nxm_reg_load(const struct mf_subfield *, uint64_t src_data,
                   struct flow *, struct flow_wildcards *);

@@ -1538,6 +1538,10 @@ void mf_set_value(const struct mf_field *, const union mf_value *value,
                   struct match *);
 void mf_set_flow_value(const struct mf_field *, const union mf_value *value,
                        struct flow *);
+void mf_set_flow_value_masked(const struct mf_field *,
+                              const union mf_value *value,
+                              const union mf_value *mask,
+                              struct flow *);
 bool mf_is_zero(const struct mf_field *, const struct flow *);
 void mf_mask_field(const struct mf_field *, struct flow *);
 

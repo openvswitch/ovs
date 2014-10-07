@@ -1076,6 +1076,36 @@ mf_set_flow_value(const struct mf_field *mf,
     }
 }
 
+/* Consider each of 'src', 'mask', and 'dst' as if they were arrays of 8*n
+ * bits.  Then, for each 0 <= i < 8 * n such that mask[i] == 1, sets dst[i] =
+ * src[i].  */
+static void
+apply_mask(const uint8_t *src, const uint8_t *mask, uint8_t *dst, size_t n)
+{
+    size_t i;
+
+    for (i = 0; i < n; i++) {
+        dst[i] = (src[i] & mask[i]) | (dst[i] & ~mask[i]);
+    }
+}
+
+/* Sets 'flow' member field described by 'field' to 'value', except that bits
+ * for which 'mask' has a 0-bit keep their existing values.  The caller is
+ * responsible for ensuring that 'flow' meets 'field''s prerequisites.*/
+void
+mf_set_flow_value_masked(const struct mf_field *field,
+                         const union mf_value *value,
+                         const union mf_value *mask,
+                         struct flow *flow)
+{
+    union mf_value tmp;
+
+    mf_get_value(field, flow, &tmp);
+    apply_mask((const uint8_t *) value, (const uint8_t *) mask,
+               (uint8_t *) &tmp, field->n_bytes);
+    mf_set_flow_value(field, &tmp, flow);
+}
+
 /* Returns true if 'mf' has a zero value in 'flow', false if it is nonzero.
  *
  * The caller is responsible for ensuring that 'flow' meets 'mf''s

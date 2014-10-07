@@ -3610,9 +3610,6 @@ ofpact_needs_recirculation_after_mpls(const struct xlate_ctx *ctx,
         return (mf_is_l3_or_higher(ofpact_get_REG_MOVE(a)->dst.field) ||
                 mf_is_l3_or_higher(ofpact_get_REG_MOVE(a)->src.field));
 
-    case OFPACT_REG_LOAD:
-        return mf_is_l3_or_higher(ofpact_get_REG_LOAD(a)->dst.field);
-
     case OFPACT_SET_FIELD:
         return mf_is_l3_or_higher(ofpact_get_SET_FIELD(a)->field);
 
@@ -3797,10 +3794,6 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             nxm_execute_reg_move(ofpact_get_REG_MOVE(a), flow, wc);
             break;
 
-        case OFPACT_REG_LOAD:
-            nxm_execute_reg_load(ofpact_get_REG_LOAD(a), flow, wc);
-            break;
-
         case OFPACT_SET_FIELD:
             set_field = ofpact_get_SET_FIELD(a);
             mf = set_field->field;
@@ -3819,7 +3812,8 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             }
 
             mf_mask_field_and_prereqs(mf, &wc->masks);
-            mf_set_flow_value(mf, &set_field->value, flow);
+            mf_set_flow_value_masked(mf, &set_field->value, &set_field->mask,
+                                     flow);
             break;
 
         case OFPACT_STACK_PUSH:

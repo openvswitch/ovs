@@ -120,8 +120,8 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
     }
 
     for (spec = learn->specs; spec < &learn->specs[learn->n_specs]; spec++) {
+        struct ofpact_set_field *sf;
         union mf_subvalue value;
-        int chunk, ofs;
 
         if (spec->src_type == NX_LEARN_SRC_FIELD) {
             mf_read_subfield(&spec->src, flow, &value);
@@ -135,19 +135,13 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
             break;
 
         case NX_LEARN_DST_LOAD:
-            for (ofs = 0; ofs < spec->n_bits; ofs += chunk) {
-                struct ofpact_reg_load *load;
-
-                chunk = MIN(spec->n_bits - ofs, 64);
-
-                load = ofpact_put_REG_LOAD(ofpacts);
-                load->dst.field = spec->dst.field;
-                load->dst.ofs = spec->dst.ofs + ofs;
-                load->dst.n_bits = chunk;
-                bitwise_copy(&value, sizeof value, ofs,
-                             &load->subvalue, sizeof load->subvalue, 0,
-                             chunk);
-            }
+            sf = ofpact_put_reg_load(ofpacts);
+            sf->field = spec->dst.field;
+            bitwise_copy(&value, sizeof value, 0,
+                         &sf->value, spec->dst.field->n_bytes, spec->dst.ofs,
+                         spec->n_bits);
+            bitwise_one(&sf->mask, spec->dst.field->n_bytes, spec->dst.ofs,
+                        spec->n_bits);
             break;
 
         case NX_LEARN_DST_OUTPUT:
