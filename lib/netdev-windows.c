@@ -77,11 +77,12 @@ static int refresh_port_status(struct netdev_windows *netdev);
 static int query_netdev(const char *devname,
                         struct netdev_windows_netdev_info *reply,
                         struct ofpbuf **bufp);
-static int netdev_windows_init(void);
+static struct netdev *netdev_windows_alloc(void);
+static int netdev_windows_init_(void);
 
 /* Generic Netlink family numbers for OVS.
  *
- * Initialized by netdev_windows_init(). */
+ * Initialized by netdev_windows_init_(). */
 static int ovs_win_netdev_family;
 struct nl_sock *ovs_win_netdev_sock;
 
@@ -89,7 +90,7 @@ struct nl_sock *ovs_win_netdev_sock;
 static bool
 is_netdev_windows_class(const struct netdev_class *netdev_class)
 {
-    return netdev_class->init == netdev_windows_init;
+    return netdev_class->alloc == netdev_windows_alloc;
 }
 
 static struct netdev_windows *
@@ -100,7 +101,7 @@ netdev_windows_cast(const struct netdev *netdev_)
 }
 
 static int
-netdev_windows_init(void)
+netdev_windows_init_(void)
 {
     int error = 0;
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
@@ -250,7 +251,7 @@ query_netdev(const char *devname,
     ovs_assert(info != NULL);
     netdev_windows_info_init(info);
 
-    error = netdev_windows_init();
+    error = netdev_windows_init_();
     if (error) {
         if (info) {
             *bufp = NULL;
@@ -337,7 +338,6 @@ netdev_windows_internal_construct(struct netdev *netdev_)
 #define NETDEV_WINDOWS_CLASS(NAME, CONSTRUCT)                           \
 {                                                                       \
     .type               = NAME,                                         \
-    .init               = netdev_windows_init,                          \
     .alloc              = netdev_windows_alloc,                         \
     .construct          = CONSTRUCT,                                    \
     .destruct           = netdev_windows_destruct,                      \
