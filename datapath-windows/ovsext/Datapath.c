@@ -90,6 +90,7 @@ static NetlinkCmdHandler OvsGetPidCmdHandler,
                          OvsPendEventCmdHandler,
                          OvsSubscribeEventCmdHandler,
                          OvsReadEventCmdHandler,
+                         OvsNewDpCmdHandler,
                          OvsGetDpCmdHandler,
                          OvsSetDpCmdHandler,
                          OvsGetVportCmdHandler;
@@ -100,8 +101,8 @@ static NTSTATUS HandleGetDpTransaction(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                        UINT32 *replyLen);
 static NTSTATUS HandleGetDpDump(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                 UINT32 *replyLen);
-static NTSTATUS HandleDpTransaction(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
-                                    UINT32 *replyLen);
+static NTSTATUS HandleDpTransactionCommon(
+                    POVS_USER_PARAMS_CONTEXT usrParamsCtx, UINT32 *replyLen);
 
 /*
  * The various netlink families, along with the supported commands. Most of
@@ -145,6 +146,11 @@ NETLINK_FAMILY nlControlFamilyOps = {
 
 /* Netlink datapath family. */
 NETLINK_CMD nlDatapathFamilyCmdOps[] = {
+    { .cmd             = OVS_DP_CMD_NEW,
+      .handler         = OvsNewDpCmdHandler,
+      .supportedDevOp  = OVS_TRANSACTION_DEV_OP,
+      .validateDpIndex = FALSE
+    },
     { .cmd             = OVS_DP_CMD_GET,
       .handler         = OvsGetDpCmdHandler,
       .supportedDevOp  = OVS_WRITE_DEV_OP | OVS_READ_DEV_OP |
@@ -1046,6 +1052,17 @@ done:
     return status;
 }
 
+/*
+ * --------------------------------------------------------------------------
+ *  Command Handler for 'OVS_DP_CMD_NEW'.
+ * --------------------------------------------------------------------------
+ */
+static NTSTATUS
+OvsNewDpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                   UINT32 *replyLen)
+{
+    return HandleDpTransactionCommon(usrParamsCtx, replyLen);
+}
 
 /*
  * --------------------------------------------------------------------------
@@ -1062,7 +1079,7 @@ OvsGetDpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                    UINT32 *replyLen)
 {
     if (usrParamsCtx->devOp == OVS_TRANSACTION_DEV_OP) {
-        return HandleGetDpTransaction(usrParamsCtx, replyLen);
+        return HandleDpTransactionCommon(usrParamsCtx, replyLen);
     } else {
         return HandleGetDpDump(usrParamsCtx, replyLen);
     }
@@ -1077,7 +1094,7 @@ static NTSTATUS
 HandleGetDpTransaction(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                        UINT32 *replyLen)
 {
-    return HandleDpTransaction(usrParamsCtx, replyLen);
+    return HandleDpTransactionCommon(usrParamsCtx, replyLen);
 }
 
 
@@ -1155,23 +1172,27 @@ static NTSTATUS
 OvsSetDpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                    UINT32 *replyLen)
 {
-    return HandleDpTransaction(usrParamsCtx, replyLen);
+    return HandleDpTransactionCommon(usrParamsCtx, replyLen);
 }
 
 /*
  * --------------------------------------------------------------------------
- *  Function for handling transaction based 'OVS_DP_CMD_GET' and
- *  'OVS_DP_CMD_SET' commands.
+ *  Function for handling transaction based 'OVS_DP_CMD_NEW', 'OVS_DP_CMD_GET'
+ *  and 'OVS_DP_CMD_SET' commands.
+ *
+ * 'OVS_DP_CMD_NEW' is implemented to keep userspace code happy. Creation of a
+ * new datapath is not supported currently.
  * --------------------------------------------------------------------------
  */
 static NTSTATUS
-HandleDpTransaction(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
-                    UINT32 *replyLen)
+HandleDpTransactionCommon(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                          UINT32 *replyLen)
 {
     POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
     POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
     NTSTATUS status = STATUS_SUCCESS;
     NL_BUFFER nlBuf;
+    NL_ERROR nlError = NL_ERROR_SUCCESS;
     static const NL_POLICY ovsDatapathSetPolicy[] = {
         [OVS_DP_ATTR_NAME] = { .type = NL_A_STRING, .maxLen = IFNAMSIZ },
         [OVS_DP_ATTR_UPCALL_PID] = { .type = NL_A_U32, .optional = TRUE },
@@ -1183,7 +1204,8 @@ HandleDpTransaction(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     ASSERT(msgIn != NULL && usrParamsCtx->inputLength >= sizeof *msgIn);
 
     /* Parse any attributes in the request. */
-    if (usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_DP_CMD_SET) {
+    if (usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_DP_CMD_SET ||
+        usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_DP_CMD_NEW) {
         if (!NlAttrParse((PNL_MSG_HDR)msgIn,
                         NLMSG_HDRLEN + GENL_HDRLEN + OVS_HDRLEN,
                         NlMsgAttrsLen((PNL_MSG_HDR)msgIn),
@@ -1213,12 +1235,25 @@ HandleDpTransaction(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
             !OvsCompareString(NlAttrGet(dpAttrs[OVS_DP_ATTR_NAME]),
                               OVS_SYSTEM_DP_NAME)) {
             OvsReleaseCtrlLock();
-            status = STATUS_NOT_FOUND;
+
+            /* Creation of new datapaths is not supported. */
+            if (usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_DP_CMD_SET) {
+                nlError = NL_ERROR_NOTSUPP;
+                goto cleanup;
+            }
+
+            nlError = NL_ERROR_NODEV;
             goto cleanup;
         }
     } else if ((UINT32)msgIn->ovsHdr.dp_ifindex != gOvsSwitchContext->dpNo) {
         OvsReleaseCtrlLock();
-        status = STATUS_NOT_FOUND;
+        nlError = NL_ERROR_NODEV;
+        goto cleanup;
+    }
+
+    if (usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_DP_CMD_NEW) {
+        OvsReleaseCtrlLock();
+        nlError = NL_ERROR_EXIST;
         goto cleanup;
     }
 
@@ -1228,7 +1263,15 @@ HandleDpTransaction(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     *replyLen = NlBufSize(&nlBuf);
 
 cleanup:
-    return status;
+    if (nlError != NL_ERROR_SUCCESS) {
+        POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
+            usrParamsCtx->outputBuffer;
+
+        BuildErrorMsg(msgIn, msgError, nlError);
+        *replyLen = msgError->nlMsg.nlmsgLen;
+    }
+
+    return STATUS_SUCCESS;
 }
 
 
