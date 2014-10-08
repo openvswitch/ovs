@@ -736,7 +736,7 @@ encode_OUTPUT_REG(const struct ofpact_output_reg *output_reg,
 
     naor->ofs_nbits = nxm_encode_ofs_nbits(output_reg->src.ofs,
                                            output_reg->src.n_bits);
-    naor->src = htonl(mf_oxm_header(output_reg->src.field->id, 0));
+    naor->src = htonl(mf_nxm_header(output_reg->src.field->id));
     naor->max_len = htons(output_reg->max_len);
 }
 
@@ -849,7 +849,7 @@ decode_bundle(bool load, const struct nx_action_bundle *nab,
     } else if (bundle->algorithm != NX_BD_ALG_HRW
                && bundle->algorithm != NX_BD_ALG_ACTIVE_BACKUP) {
         VLOG_WARN_RL(&rl, "unsupported algorithm %d", (int) bundle->algorithm);
-    } else if (slave_type != mf_oxm_header(MFF_IN_PORT, 0)) {
+    } else if (slave_type != mf_nxm_header(MFF_IN_PORT)) {
         VLOG_WARN_RL(&rl, "unsupported slave type %"PRIu16, slave_type);
     } else {
         error = 0;
@@ -930,12 +930,12 @@ encode_BUNDLE(const struct ofpact_bundle *bundle,
     nab->algorithm = htons(bundle->algorithm);
     nab->fields = htons(bundle->fields);
     nab->basis = htons(bundle->basis);
-    nab->slave_type = htonl(mf_oxm_header(MFF_IN_PORT, 0));
+    nab->slave_type = htonl(mf_nxm_header(MFF_IN_PORT));
     nab->n_slaves = htons(bundle->n_slaves);
     if (bundle->dst.field) {
         nab->ofs_nbits = nxm_encode_ofs_nbits(bundle->dst.ofs,
                                               bundle->dst.n_bits);
-        nab->dst = htonl(mf_oxm_header(bundle->dst.field->id, 0));
+        nab->dst = htonl(mf_nxm_header(bundle->dst.field->id));
     }
 
     slaves = ofpbuf_put_zeros(out, slaves_len);
@@ -1830,8 +1830,8 @@ encode_REG_MOVE(const struct ofpact_reg_move *move,
         narm->n_bits = htons(move->dst.n_bits);
         narm->src_ofs = htons(move->src.ofs);
         narm->dst_ofs = htons(move->dst.ofs);
-        narm->src = htonl(mf_oxm_header(move->src.field->id, 0));
-        narm->dst = htonl(mf_oxm_header(move->dst.field->id, 0));
+        narm->src = htonl(mf_nxm_header(move->src.field->id));
+        narm->dst = htonl(mf_nxm_header(move->dst.field->id));
     }
 }
 
@@ -2076,7 +2076,7 @@ set_field_to_nxast(const struct ofpact_set_field *sf, struct ofpbuf *openflow)
     while (next_load_segment(sf, &dst, &value)) {
         struct nx_action_reg_load *narl = put_NXAST_REG_LOAD(openflow);
         narl->ofs_nbits = nxm_encode_ofs_nbits(dst.ofs, dst.n_bits);
-        narl->dst = htonl(mf_oxm_header(dst.field->id, 0));
+        narl->dst = htonl(mf_nxm_header(dst.field->id));
         narl->value = htonll(value);
     }
 }
@@ -2418,7 +2418,7 @@ encode_STACK_op(const struct ofpact_stack *stack_action,
 {
     nasp->offset = htons(stack_action->subfield.ofs);
     nasp->n_bits = htons(stack_action->subfield.n_bits);
-    nasp->field = htonl(mf_oxm_header(stack_action->subfield.field->id, 0));
+    nasp->field = htonl(mf_nxm_header(stack_action->subfield.field->id));
 }
 
 static void
@@ -3637,7 +3637,7 @@ encode_LEARN(const struct ofpact_learn *learn,
         put_u16(out, spec->n_bits | spec->dst_type | spec->src_type);
 
         if (spec->src_type == NX_LEARN_SRC_FIELD) {
-            put_u32(out, mf_oxm_header(spec->src.field->id, 0));
+            put_u32(out, mf_nxm_header(spec->src.field->id));
             put_u16(out, spec->src.ofs);
         } else {
             size_t n_dst_bytes = 2 * DIV_ROUND_UP(spec->n_bits, 16);
@@ -3649,7 +3649,7 @@ encode_LEARN(const struct ofpact_learn *learn,
 
         if (spec->dst_type == NX_LEARN_DST_MATCH ||
             spec->dst_type == NX_LEARN_DST_LOAD) {
-            put_u32(out, mf_oxm_header(spec->dst.field->id, 0));
+            put_u32(out, mf_nxm_header(spec->dst.field->id));
             put_u16(out, spec->dst.ofs);
         }
     }
@@ -3774,7 +3774,7 @@ encode_MULTIPATH(const struct ofpact_multipath *mp,
     nam->max_link = htons(mp->max_link);
     nam->arg = htonl(mp->arg);
     nam->ofs_nbits = nxm_encode_ofs_nbits(mp->dst.ofs, mp->dst.n_bits);
-    nam->dst = htonl(mf_oxm_header(mp->dst.field->id, 0));
+    nam->dst = htonl(mf_nxm_header(mp->dst.field->id));
 }
 
 static char * WARN_UNUSED_RESULT

@@ -890,6 +890,20 @@ OFPT_FLOW_MOD (OF1.2) (xid=0x52334507): ADD priority=255,sctp actions=set_field:
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPT_FLOW_MOD - OF1.2 - experimenter OXM])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print "\
+03 0e 00 48 52 33 45 07 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ff \
+ff ff ff ff ff ff ff ff ff ff ff ff 00 00 00 00 \
+00 01 00 14 ff ff 01 0c 00 00 23 20 01 23 45 67 \
+0f ff ff ff 00 00 00 00
+" 2], [0], [dnl
+OFPT_FLOW_MOD (OF1.2) (xid=0x52334507): ADD priority=255,dp_hash=0x1234567/0xfffffff actions=drop
+], [dnl
+])
+AT_CLEANUP
+
 dnl This triggered a buggy "instructions out of order" message earlier.
 AT_SETUP([OFPT_FLOW_MOD - OF1.3 - meter])
 AT_KEYWORDS([ofp-print])

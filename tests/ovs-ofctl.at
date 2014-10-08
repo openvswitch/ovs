@@ -797,8 +797,16 @@ NXM_NX_REG0_W(a0e0d050/f0f0f0f0)
 NXM_NX_REG0_W(a0e0d050/ffffffff)
 NXM_NX_REG0_W(00000000/00000000)
 
+# dp_hash (testing experimenter OXM).
+NXM_NX_DP_HASH(01234567)
+NXOXM_ET_DP_HASH(01234567)
+
 # Invalid field number.
 01020304(1111/3333)
+
+# Invalid field numbers (experimenter OXM).
+ffff020800002320(11112222)
+ffff030800002320(1111/3333)
 
 # Unimplemented registers.
 #
@@ -1080,7 +1088,15 @@ NXM_NX_REG0_W(a0e0d050/f0f0f0f0)
 NXM_NX_REG0(a0e0d050)
 <any>
 
+# dp_hash (testing experimenter OXM).
+NXM_NX_DP_HASH(01234567)
+NXM_NX_DP_HASH(01234567)
+
 # Invalid field number.
+nx_pull_match() returned error OFPBMC_BAD_FIELD
+
+# Invalid field numbers (experimenter OXM).
+nx_pull_match() returned error OFPBMC_BAD_FIELD
 nx_pull_match() returned error OFPBMC_BAD_FIELD
 
 # Unimplemented registers.
@@ -1096,7 +1112,7 @@ nx_pull_match() returned error OFPBMC_BAD_FIELD
 # Check that at least the first warning made it.  (It's rate-limited
 # so a variable number could show up, especially under valgrind etc.)
 AT_CHECK([grep '1-bits in value' stderr | sed 1q], [0], [dnl
-nx_match|WARN|Rejecting NXM/OXM entry 0:1:1:12 with 1-bits in value for bits wildcarded by the mask.
+nx_match|WARN|Rejecting NXM/OXM entry 0:0:1:1:12 with 1-bits in value for bits wildcarded by the mask.
 ])
 
 # Check that there wasn't any other stderr output.
@@ -1648,15 +1664,20 @@ AT_SETUP([ovs-ofctl parse-nx-match loose])
 AT_KEYWORDS([nx-match])
 AT_DATA([nx-match.txt], [dnl
 NXM_OF_IN_PORT(0001), 01020304(1111/3333), NXM_OF_ETH_TYPE(0800)
+NXM_OF_IN_PORT(0001), ffff020800002320(11112222), NXM_OF_ETH_TYPE(0800)
+NXM_OF_IN_PORT(0001), ffff030800002320(1111/3333), NXM_OF_ETH_TYPE(0800)
 ])
 
 AT_CHECK([ovs-ofctl --strict parse-nx-match < nx-match.txt], [0], [dnl
 nx_pull_match() returned error OFPBMC_BAD_FIELD
+nx_pull_match() returned error OFPBMC_BAD_FIELD
+nx_pull_match() returned error OFPBMC_BAD_FIELD
 ])
 
-AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' -vnx_match parse-nx-match < nx-match.txt], [0], [dnl
+AT_CHECK([ovs-ofctl parse-nx-match < nx-match.txt], [0], [dnl
 NXM_OF_IN_PORT(0001), NXM_OF_ETH_TYPE(0800)
-], [nx_match|DBG|OXM header 258:1:1:4 is unknown
+NXM_OF_IN_PORT(0001), NXM_OF_ETH_TYPE(0800)
+NXM_OF_IN_PORT(0001), NXM_OF_ETH_TYPE(0800)
 ])
 AT_CLEANUP
 
@@ -1897,6 +1918,10 @@ OXM_OF_PKT_REG0_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG1_W(a0e0d050
 
 # Invalid field number.
 01020304(1111/3333)
+
+# Invalid field numbers (experimenter OXM).
+ffff020800002320(11112222)
+ffff030800002320(1111/3333)
 ])
 AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' --strict parse-oxm OpenFlow12 < oxm.txt],
   [0], [dnl
@@ -2134,12 +2159,16 @@ NXM_NX_REG1_W(a0e0d050/f0f0f0f0), NXM_NX_REG2(a0e0d050)
 
 # Invalid field number.
 nx_pull_match() returned error OFPBMC_BAD_FIELD
+
+# Invalid field numbers (experimenter OXM).
+nx_pull_match() returned error OFPBMC_BAD_FIELD
+nx_pull_match() returned error OFPBMC_BAD_FIELD
 ], [stderr])
 
 # Check that at least the first warning made it.  (It's rate-limited
 # so a variable number could show up, especially under valgrind etc.)
 AT_CHECK([grep '1-bits in value' stderr | sed 1q], [0], [dnl
-nx_match|WARN|Rejecting NXM/OXM entry 32768:2:1:16 with 1-bits in value for bits wildcarded by the mask.
+nx_match|WARN|Rejecting NXM/OXM entry 0:32768:2:1:16 with 1-bits in value for bits wildcarded by the mask.
 ])
 
 # Check that there wasn't any other stderr output.
@@ -2199,14 +2228,67 @@ AT_SETUP([ovs-ofctl parse-oxm loose])
 AT_KEYWORDS([oxm])
 AT_DATA([oxm.txt], [dnl
 OXM_OF_IN_PORT(00000001), 01020304(1111/3333), OXM_OF_ETH_TYPE(0800)
+OXM_OF_IN_PORT(00000001), ffff020800002320(11112222), OXM_OF_ETH_TYPE(0800)
+OXM_OF_IN_PORT(00000001), ffff030800002320(1111/3333), OXM_OF_ETH_TYPE(0800)
 ])
 
 AT_CHECK([ovs-ofctl --strict parse-oxm OpenFlow12 < oxm.txt], [0], [dnl
+nx_pull_match() returned error OFPBMC_BAD_FIELD
+nx_pull_match() returned error OFPBMC_BAD_FIELD
 nx_pull_match() returned error OFPBMC_BAD_FIELD
 ])
 
 AT_CHECK([ovs-ofctl parse-oxm OpenFlow12 < oxm.txt], [0], [dnl
 OXM_OF_IN_PORT(00000001), OXM_OF_ETH_TYPE(0800)
+OXM_OF_IN_PORT(00000001), OXM_OF_ETH_TYPE(0800)
+OXM_OF_IN_PORT(00000001), OXM_OF_ETH_TYPE(0800)
+])
+AT_CLEANUP
+
+AT_SETUP([experimenter OXM encoding])
+AT_DATA([oxm.txt], [dnl
+NXM_NX_DP_HASH(01234567)
+NXOXM_ET_DP_HASH(01234567)
+
+NXM_NX_DP_HASH_W(01234567/0fffffff)
+NXOXM_ET_DP_HASH_W(01234567/0fffffff)
+])
+
+# To allow for testing experimenter OXM, which doesn't really have many
+# examples in the wild, we've defined a variant of NXM_NX_DP_HASH that uses
+# the experimenter OXM mechanism, called NXOXM_ET_DP_HASH.  We've defined
+# it as if it were introduced with OpenFlow 1.5, which gives us the
+# opportunity to see that both forms are accepted in all OpenFlow versions
+# but the experimenter form is used for encoding in OF1.5+.
+#
+# First verify that both forms are accepted and NXOXM_ET_DP_HASH is encoded
+# in OF1.5.
+AT_CHECK([ovs-ofctl -m --strict parse-oxm OpenFlow15 < oxm.txt], [0], [dnl
+NXOXM_ET_DP_HASH(01234567)
+00000000  00 01 00 10 ff ff 00 08-00 00 23 20 01 23 45 67 @&t@
+NXOXM_ET_DP_HASH(01234567)
+00000000  00 01 00 10 ff ff 00 08-00 00 23 20 01 23 45 67 @&t@
+
+NXOXM_ET_DP_HASH_W(01234567/0fffffff)
+00000000  00 01 00 14 ff ff 01 0c-00 00 23 20 01 23 45 67 @&t@
+00000010  0f ff ff ff 00 00 00 00-
+NXOXM_ET_DP_HASH_W(01234567/0fffffff)
+00000000  00 01 00 14 ff ff 01 0c-00 00 23 20 01 23 45 67 @&t@
+00000010  0f ff ff ff 00 00 00 00-
+])
+
+# Then verify that both forms are accepted and NXM_NX_DP_HASH is encoded
+# in OF1.2.
+AT_CHECK([ovs-ofctl -m --strict parse-oxm OpenFlow12 < oxm.txt], [0], [dnl
+NXM_NX_DP_HASH(01234567)
+00000000  00 01 00 0c 00 01 46 04-01 23 45 67 00 00 00 00 @&t@
+NXM_NX_DP_HASH(01234567)
+00000000  00 01 00 0c 00 01 46 04-01 23 45 67 00 00 00 00 @&t@
+
+NXM_NX_DP_HASH_W(01234567/0fffffff)
+00000000  00 01 00 10 00 01 47 08-01 23 45 67 0f ff ff ff @&t@
+NXM_NX_DP_HASH_W(01234567/0fffffff)
+00000000  00 01 00 10 00 01 47 08-01 23 45 67 0f ff ff ff @&t@
 ])
 AT_CLEANUP
 

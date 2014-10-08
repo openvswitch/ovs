@@ -48,12 +48,24 @@ PREREQS = {"none": "MFP_NONE",
           "ND solicit": "MFP_ND_SOLICIT",
           "ND advert": "MFP_ND_ADVERT"}
 
-# Maps a name prefix to an oxm_class.
+# Maps a name prefix into an (experimenter ID, class) pair, so:
+#
+#      - Standard OXM classes are written as (0, <oxm_class>)
+#
+#      - Experimenter OXM classes are written as (<oxm_vender>, 0xffff)
+#
 # If a name matches more than one prefix, the longest one is used.
-OXM_CLASSES = {"NXM_OF_": 0x0000,
-               "NXM_NX_": 0x0001,
-               "OXM_OF_": 0x8000,
-               "OXM_OF_PKT_REG": 0x8001}
+OXM_CLASSES = {"NXM_OF_":        (0,          0x0000),
+               "NXM_NX_":        (0,          0x0001),
+               "OXM_OF_":        (0,          0x8000),
+               "OXM_OF_PKT_REG": (0,          0x8001),
+
+               # This is the experimenter OXM class for Nicira, which is the
+               # one that OVS would be using instead of NXM_OF_ and NXM_NX_
+               # if OVS didn't have those grandfathered in.  It is currently
+               # used only to test support for experimenter OXM, since there
+               # are barely any real uses of experimenter OXM in the wild.
+               "NXOXM_ET_":      (0x00002320, 0xffff)}
 def oxm_name_to_class(name):
     prefix = ''
     class_ = None
@@ -118,12 +130,21 @@ def parse_oxm(s, prefix, n_bytes):
     if not m:
         fatal("%s: syntax error parsing %s" % (s, prefix))
         
-    name, code, of_version, ovs_version = m.groups()
+    name, oxm_type, of_version, ovs_version = m.groups()
 
     class_ = oxm_name_to_class(name)
     if class_ is None:
         fatal("unknown OXM class for %s" % name)
-    header = ("NXM_HEADER(0x%04x,%s,0,%d)" % (class_, code, n_bytes))
+    oxm_vendor, oxm_class = class_
+
+    # Normally the oxm_length is the size of the field, but for experimenter
+    # OXMs oxm_length also includes the 4-byte experimenter ID.
+    oxm_length = n_bytes
+    if oxm_class == 0xffff:
+        oxm_length += 4
+
+    header = ("NXM_HEADER(0x%x,0x%x,%s,0,%d)"
+              % (oxm_vendor, oxm_class, oxm_type, oxm_length))
 
     if of_version:
         if of_version not in VERSION:

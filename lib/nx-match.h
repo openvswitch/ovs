@@ -76,7 +76,7 @@ void nx_put_header(struct ofpbuf *, enum mf_field_id, enum ofp_version,
  * nx_put_entry/header() for decoding and encoding OXM/NXM.  In those cases,
  * the nx_*() functions should be preferred because they can support the 64-bit
  * "experimenter" OXM format (even though it is not yet implemented). */
-uint32_t mf_oxm_header(enum mf_field_id, enum ofp_version oxm_version);
+uint32_t mf_nxm_header(enum mf_field_id);
 const struct mf_field *mf_from_nxm_header(uint32_t nxm_header);
 
 char *nx_match_to_string(const uint8_t *, unsigned int match_len);

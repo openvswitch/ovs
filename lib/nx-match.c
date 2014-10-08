@@ -37,6 +37,46 @@
 
 VLOG_DEFINE_THIS_MODULE(nx_match);
 
+/* OXM headers.
+ *
+ *
+ * Standard OXM/NXM
+ * ================
+ *
+ * The header is 32 bits long.  It looks like this:
+ *
+ * |31                              16 15            9| 8 7                0
+ * +----------------------------------+---------------+--+------------------+
+ * |            oxm_class             |   oxm_field   |hm|    oxm_length    |
+ * +----------------------------------+---------------+--+------------------+
+ *
+ * where hm stands for oxm_hasmask.  It is followed by oxm_length bytes of
+ * payload.  When oxm_hasmask is 0, the payload is the value of the field
+ * identified by the header; when oxm_hasmask is 1, the payload is a value for
+ * the field followed by a mask of equal length.
+ *
+ * Internally, we represent a standard OXM header as a 64-bit integer with the
+ * above information in the most-significant bits.
+ *
+ *
+ * Experimenter OXM
+ * ================
+ *
+ * The header is 64 bits long.  It looks like the diagram above except that a
+ * 32-bit experimenter ID, which we call oxm_vendor and which identifies a
+ * vendor, is inserted just before the payload.  Experimenter OXMs are
+ * identified by an all-1-bits oxm_class (OFPXMC12_EXPERIMENTER).  The
+ * oxm_length value *includes* the experimenter ID, so that the real payload is
+ * only oxm_length - 4 bytes long.
+ *
+ * Internally, we represent an experimenter OXM header as a 64-bit integer with
+ * the standard header in the upper 32 bits and the experimenter ID in the
+ * lower 32 bits.  (It would be more convenient to swap the positions of the
+ * two 32-bit words, but this would be more error-prone because experimenter
+ * OXMs are very rarely used, so accidentally passing one through a 32-bit type
+ * somewhere in the OVS code would be hard to find.)
+ */
+
 /*
  * OXM Class IDs.
  * The high order bit differentiate reserved classes from member classes.
@@ -51,41 +91,90 @@ enum ofp12_oxm_class {
     OFPXMC12_EXPERIMENTER   = 0xffff, /* Experimenter class */
 };
 
-/* Functions for extracting fields from OXM/NXM headers. */
-static int nxm_class(uint32_t header) { return header >> 16; }
-static int nxm_field(uint32_t header) { return (header >> 9) & 0x7f; }
-static bool nxm_hasmask(uint32_t header) { return (header & 0x100) != 0; }
-static int nxm_length(uint32_t header) { return header & 0xff; }
+/* Functions for extracting raw field values from OXM/NXM headers. */
+static uint32_t nxm_vendor(uint64_t header) { return header; }
+static int nxm_class(uint64_t header) { return header >> 48; }
+static int nxm_field(uint64_t header) { return (header >> 41) & 0x7f; }
+static bool nxm_hasmask(uint64_t header) { return (header >> 40) & 1; }
+static int nxm_length(uint64_t header) { return (header >> 32) & 0xff; }
+
+static bool
+is_experimenter_oxm(uint64_t header)
+{
+    return nxm_class(header) == OFPXMC12_EXPERIMENTER;
+}
+
+/* The OXM header "length" field is somewhat tricky:
+ *
+ *     - For a standard OXM header, the length is the number of bytes of the
+ *       payload, and the payload consists of just the value (and mask, if
+ *       present).
+ *
+ *     - For an experimenter OXM header, the length is the number of bytes in
+ *       the payload plus 4 (the length of the experimenter ID).  That is, the
+ *       experimenter ID is included in oxm_length.
+ *
+ * This function returns the length of the experimenter ID field in 'header'.
+ * That is, for an experimenter OXM (when an experimenter ID is present), it
+ * returns 4, and for a standard OXM (when no experimenter ID is present), it
+ * returns 0. */
+static int
+nxm_experimenter_len(uint64_t header)
+{
+    return is_experimenter_oxm(header) ? 4 : 0;
+}
+
+/* Returns the number of bytes that follow the header for an NXM/OXM entry
+ * with the given 'header'. */
+static int
+nxm_payload_len(uint64_t header)
+{
+    return nxm_length(header) - nxm_experimenter_len(header);
+}
+
+/* Returns the number of bytes in the header for an NXM/OXM entry with the
+ * given 'header'. */
+static int
+nxm_header_len(uint64_t header)
+{
+    return 4 + nxm_experimenter_len(header);
+}
 
 /* Returns true if 'header' is a legacy NXM header, false if it is an OXM
  * header.*/
 static bool
-is_nxm_header(uint32_t header)
+is_nxm_header(uint64_t header)
 {
     return nxm_class(header) <= 1;
 }
 
-#define NXM_HEADER(CLASS, FIELD, HASMASK, LENGTH)                       \
-    (((CLASS) << 16) | ((FIELD) << 9) | ((HASMASK) << 8) | (LENGTH))
+#define NXM_HEADER(VENDOR, CLASS, FIELD, HASMASK, LENGTH)       \
+    (((uint64_t) (CLASS) << 48) |                               \
+     ((uint64_t) (FIELD) << 41) |                               \
+     ((uint64_t) (HASMASK) << 40) |                             \
+     ((uint64_t) (LENGTH) << 32) |                              \
+     (VENDOR))
 
-#define NXM_HEADER_FMT "%d:%d:%d:%d"
-#define NXM_HEADER_ARGS(HEADER)                 \
-    nxm_class(HEADER), nxm_field(HEADER),      \
+#define NXM_HEADER_FMT "%#"PRIx32":%d:%d:%d:%d"
+#define NXM_HEADER_ARGS(HEADER)                                 \
+    nxm_vendor(HEADER), nxm_class(HEADER), nxm_field(HEADER),   \
     nxm_hasmask(HEADER), nxm_length(HEADER)
 
 /* Functions for turning the "hasmask" bit on or off.  (This also requires
  * adjusting the length.) */
-static uint32_t
-nxm_make_exact_header(uint32_t header)
+static uint64_t
+nxm_make_exact_header(uint64_t header)
 {
-    return NXM_HEADER(nxm_class(header), nxm_field(header), 0,
-                      nxm_length(header) / 2);
+    int new_len = nxm_payload_len(header) / 2 + nxm_experimenter_len(header);
+    return NXM_HEADER(nxm_vendor(header), nxm_class(header),
+                      nxm_field(header), 0, new_len);
 }
-static uint32_t
-nxm_make_wild_header(uint32_t header)
+static uint64_t
+nxm_make_wild_header(uint64_t header)
 {
-    return NXM_HEADER(nxm_class(header), nxm_field(header), 1,
-                      nxm_length(header) * 2);
+    int new_len = nxm_payload_len(header) * 2 + nxm_experimenter_len(header);
+    return NXM_HEADER(nxm_vendor(header), nxm_class(header),
+                      nxm_field(header), 1, new_len);
 }
 
 /* Flow cookie.
@@ -95,23 +184,23 @@ nxm_make_wild_header(uint32_t header)
  * with specific cookies.  See the "nx_flow_mod" and "nx_flow_stats_request"
  * structure definitions for more details.  This match is otherwise not
  * allowed. */
-#define NXM_NX_COOKIE     NXM_HEADER  (0x0001, 30, 0, 8)
+#define NXM_NX_COOKIE     NXM_HEADER  (0, 0x0001, 30, 0, 8)
 #define NXM_NX_COOKIE_W   nxm_make_wild_header(NXM_NX_COOKIE)
 
 struct nxm_field {
-    uint32_t header;
+    uint64_t header;
     enum ofp_version version;
     const char *name;           /* e.g. "NXM_OF_IN_PORT". */
 
     enum mf_field_id id;
 };
 
-static const struct nxm_field *nxm_field_by_header(uint32_t header);
+static const struct nxm_field *nxm_field_by_header(uint64_t header);
 static const struct nxm_field *nxm_field_by_name(const char *name, size_t len);
 static const struct nxm_field *nxm_field_by_mf_id(enum mf_field_id);
 static const struct nxm_field *oxm_field_by_mf_id(enum mf_field_id);
 
-static void nx_put_header__(struct ofpbuf *, uint32_t header, bool masked);
+static void nx_put_header__(struct ofpbuf *, uint64_t header, bool masked);
 
 /* Rate limit for nx_match parse errors.  These always indicate a bug in the
  * peer and so there's not much point in showing a lot of them. */
@@ -132,11 +221,31 @@ nxm_field_from_mf_field(enum mf_field_id id, enum ofp_version version)
  * 'version'.  Specify 0 for 'version' if an NXM legacy header should be
  * preferred over any standardized OXM header.  Returns 0 if field 'id' cannot
  * be expressed in NXM or OXM. */
-uint32_t
+static uint64_t
 mf_oxm_header(enum mf_field_id id, enum ofp_version version)
 {
     const struct nxm_field *f = nxm_field_from_mf_field(id, version);
     return f ? f->header : 0;
+}
+
+/* Returns the 32-bit OXM or NXM header to use for field 'id', preferring an
+ * NXM legacy header over any standardized OXM header.  Returns 0 if field 'id'
+ * cannot be expressed with a 32-bit NXM or OXM header.
+ *
+ * Whenever possible, use nx_pull_header() instead of this function, because
+ * this function cannot support 64-bit experimenter OXM headers. */
+uint32_t
+mf_nxm_header(enum mf_field_id id)
+{
+    uint64_t oxm = mf_oxm_header(id, 0);
+    return is_experimenter_oxm(oxm) ? 0 : oxm >> 32;
+}
+
+static const struct mf_field *
+mf_from_oxm_header(uint64_t header)
+{
+    const struct nxm_field *f = nxm_field_by_header(header);
+    return f ? mf_from_id(f->id) : NULL;
 }
 
 /* Returns the "struct mf_field" that corresponds to NXM or OXM header
@@ -144,16 +253,15 @@ mf_oxm_header(enum mf_field_id id, enum ofp_version version)
 const struct mf_field *
 mf_from_nxm_header(uint32_t header)
 {
-    const struct nxm_field *f = nxm_field_by_header(header);
-    return f ? mf_from_id(f->id) : NULL;
+    return mf_from_oxm_header((uint64_t) header << 32);
 }
 
 /* Returns the width of the data for a field with the given 'header', in
  * bytes. */
 static int
-nxm_field_bytes(uint32_t header)
+nxm_field_bytes(uint64_t header)
 {
-    unsigned int length = nxm_length(header);
+    unsigned int length = nxm_payload_len(header);
     return nxm_hasmask(header) ? length / 2 : length;
 }
 
@@ -172,7 +280,7 @@ mf_oxm_version(enum mf_field_id id)
  * for any 1-bit in the value where there is a 0-bit in the mask.  Returns 0 if
  * none, otherwise an error code. */
 static bool
-is_mask_consistent(uint32_t header, const uint8_t *value, const uint8_t *mask)
+is_mask_consistent(uint64_t header, const uint8_t *value, const uint8_t *mask)
 {
     unsigned int width = nxm_field_bytes(header);
     unsigned int i;
@@ -191,28 +299,37 @@ is_mask_consistent(uint32_t header, const uint8_t *value, const uint8_t *mask)
 }
 
 static bool
-is_cookie_pseudoheader(uint32_t header)
+is_cookie_pseudoheader(uint64_t header)
 {
     return header == NXM_NX_COOKIE || header == NXM_NX_COOKIE_W;
 }
 
 static enum ofperr
-nx_pull_header__(struct ofpbuf *b, bool allow_cookie, uint32_t *header,
+nx_pull_header__(struct ofpbuf *b, bool allow_cookie, uint64_t *header,
                  const struct mf_field **field)
 {
     if (ofpbuf_size(b) < 4) {
-        VLOG_DBG_RL(&rl, "encountered partial (%"PRIu32"-byte) OXM entry",
-                    ofpbuf_size(b));
+        goto bad_len;
+    }
+
+    *header = ((uint64_t) ntohl(get_unaligned_be32(ofpbuf_data(b)))) << 32;
+    if (is_experimenter_oxm(*header)) {
+        if (ofpbuf_size(b) < 8) {
+            goto bad_len;
+        }
+        *header = ntohll(get_unaligned_be64(ofpbuf_data(b)));
+    }
+    if (nxm_length(*header) <= nxm_experimenter_len(*header)) {
+        VLOG_WARN_RL(&rl, "OXM header "NXM_HEADER_FMT" has invalid length %d "
+                     "(minimum is %d)",
+                     NXM_HEADER_ARGS(*header), nxm_length(*header),
+                     nxm_header_len(*header) + 1);
         goto error;
     }
-    *header = ntohl(get_unaligned_be32(ofpbuf_pull(b, 4)));
-    if (nxm_length(*header) == 0) {
-        VLOG_WARN_RL(&rl, "OXM header "NXM_HEADER_FMT" has zero length",
-                     NXM_HEADER_ARGS(*header));
-        goto error;
-    }
+    ofpbuf_pull(b, nxm_header_len(*header));
+
     if (field) {
-        *field = mf_from_nxm_header(*header);
+        *field = mf_from_oxm_header(*header);
         if (!*field && !(allow_cookie && is_cookie_pseudoheader(*header))) {
             VLOG_DBG_RL(&rl, "OXM header "NXM_HEADER_FMT" is unknown",
                         NXM_HEADER_ARGS(*header));
@@ -222,6 +339,9 @@ nx_pull_header__(struct ofpbuf *b, bool allow_cookie, uint32_t *header,
 
     return 0;
 
+bad_len:
+    VLOG_DBG_RL(&rl, "encountered partial (%"PRIu32"-byte) OXM entry",
+                ofpbuf_size(b));
 error:
     *header = 0;
     *field = NULL;
@@ -229,7 +349,7 @@ error:
 }
 
 static enum ofperr
-nx_pull_entry__(struct ofpbuf *b, bool allow_cookie, uint32_t *header,
+nx_pull_entry__(struct ofpbuf *b, bool allow_cookie, uint64_t *header,
                 const struct mf_field **field,
                 union mf_value *value, union mf_value *mask)
 {
@@ -243,7 +363,7 @@ nx_pull_entry__(struct ofpbuf *b, bool allow_cookie, uint32_t *header,
         return header_error;
     }
 
-    payload_len = nxm_length(*header);
+    payload_len = nxm_payload_len(*header);
     payload = ofpbuf_try_pull(b, payload_len);
     if (!payload) {
         VLOG_DBG_RL(&rl, "OXM header "NXM_HEADER_FMT" calls for %u-byte "
@@ -289,7 +409,7 @@ enum ofperr
 nx_pull_entry(struct ofpbuf *b, const struct mf_field **field,
               union mf_value *value, union mf_value *mask)
 {
-    uint32_t header;
+    uint64_t header;
 
     return nx_pull_entry__(b, false, &header, field, value, mask);
 }
@@ -308,7 +428,7 @@ enum ofperr
 nx_pull_header(struct ofpbuf *b, const struct mf_field **field, bool *masked)
 {
     enum ofperr error;
-    uint32_t header;
+    uint64_t header;
 
     error = nx_pull_header__(b, false, &header, field);
     if (masked) {
@@ -325,7 +445,7 @@ nx_pull_match_entry(struct ofpbuf *b, bool allow_cookie,
                     union mf_value *value, union mf_value *mask)
 {
     enum ofperr error;
-    uint32_t header;
+    uint64_t header;
 
     error = nx_pull_entry__(b, allow_cookie, &header, field, value, mask);
     if (error) {
@@ -915,12 +1035,12 @@ oxm_put_match(struct ofpbuf *b, const struct match *match,
 }
 
 static void
-nx_put_header__(struct ofpbuf *b, uint32_t header, bool masked)
+nx_put_header__(struct ofpbuf *b, uint64_t header, bool masked)
 {
-    uint32_t masked_header = masked ? nxm_make_wild_header(header) : header;
-    ovs_be32 network_header = htonl(masked_header);
+    uint64_t masked_header = masked ? nxm_make_wild_header(header) : header;
+    ovs_be64 network_header = htonll(masked_header);
 
-    ofpbuf_put(b, &network_header, sizeof network_header);
+    ofpbuf_put(b, &network_header, nxm_header_len(header));
 }
 
 void
@@ -947,7 +1067,7 @@ nx_put_entry(struct ofpbuf *b,
 
 /* nx_match_to_string() and helpers. */
 
-static void format_nxm_field_name(struct ds *, uint32_t header);
+static void format_nxm_field_name(struct ds *, uint64_t header);
 
 char *
 nx_match_to_string(const uint8_t *p, unsigned int match_len)
@@ -965,7 +1085,7 @@ nx_match_to_string(const uint8_t *p, unsigned int match_len)
         union mf_value value;
         union mf_value mask;
         enum ofperr error;
-        uint32_t header;
+        uint64_t header;
         int value_len;
 
         error = nx_pull_entry__(&b, true, &header, NULL, &value, &mask);
@@ -1050,7 +1170,7 @@ nx_format_field_name(enum mf_field_id id, enum ofp_version version,
 }
 
 static void
-format_nxm_field_name(struct ds *s, uint32_t header)
+format_nxm_field_name(struct ds *s, uint64_t header)
 {
     const struct nxm_field *f = nxm_field_by_header(header);
     if (f) {
@@ -1073,7 +1193,7 @@ streq_len(const char *a, size_t a_len, const char *b)
     return strlen(b) == a_len && !memcmp(a, b, a_len);
 }
 
-static uint32_t
+static uint64_t
 parse_nxm_field_name(const char *name, int name_len)
 {
     const struct nxm_field *f;
@@ -1094,14 +1214,22 @@ parse_nxm_field_name(const char *name, int name_len)
         return NXM_NX_COOKIE_W;
     }
 
-    /* Check whether it's a 32-bit field header value as hex.
+    /* Check whether it's a field header value as hex.
      * (This isn't ordinarily useful except for testing error behavior.) */
     if (name_len == 8) {
-        uint32_t header;
+        uint64_t header;
+        bool ok;
+
+        header = hexits_value(name, name_len, &ok) << 32;
+        if (ok) {
+            return header;
+        }
+    } else if (name_len == 16) {
+        uint64_t header;
         bool ok;
 
         header = hexits_value(name, name_len, &ok);
-        if (ok) {
+        if (ok && is_experimenter_oxm(header)) {
             return header;
         }
     }
@@ -1125,7 +1253,7 @@ nx_match_from_string_raw(const char *s, struct ofpbuf *b)
 
     for (s += strspn(s, ", "); *s; s += strspn(s, ", ")) {
         const char *name;
-        uint32_t header;
+        uint64_t header;
         int name_len;
         size_t n;
 
@@ -1537,7 +1665,7 @@ oxm_bitmap_from_mf_bitmap(const struct mf_bitmap *fields,
     int i;
 
     BITMAP_FOR_EACH_1 (i, MFF_N_IDS, fields->bm) {
-        uint32_t oxm = mf_oxm_header(i, version);
+        uint64_t oxm = mf_oxm_header(i, version);
         uint32_t class = nxm_class(oxm);
         int field = nxm_field(oxm);
 
@@ -1558,7 +1686,7 @@ oxm_bitmap_to_mf_bitmap(ovs_be64 oxm_bitmap, enum ofp_version version)
 
     for (enum mf_field_id id = 0; id < MFF_N_IDS; id++) {
         if (version >= mf_oxm_version(id)) {
-            uint32_t oxm = mf_oxm_header(id, version);
+            uint64_t oxm = mf_oxm_header(id, version);
             uint32_t class = nxm_class(oxm);
             int field = nxm_field(oxm);
 
@@ -1657,7 +1785,7 @@ nxm_init(void)
 }
 
 static const struct nxm_field *
-nxm_field_by_header(uint32_t header)
+nxm_field_by_header(uint64_t header)
 {
     const struct nxm_field_index *nfi;
 

@@ -263,13 +263,19 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Flow hash computed in the datapath.  Internal use only, not programmable
      * from controller.
      *
+     * The OXM code point for this is an attempt to test OXM experimenter
+     * support, which is otherwise difficult to test due to the dearth of use
+     * out in the wild.  Because controllers can't add flows that match on
+     * dp_hash, this doesn't commit OVS to supporting this OXM experimenter
+     * code point in the future.
+     *
      * Type: be32.
      * Maskable: bitwise.
      * Formatting: hexadecimal.
      * Prerequisites: none.
      * Access: read-only.
      * NXM: NXM_NX_DP_HASH(35) since v2.2.
-     * OXM: none.
+     * OXM: NXOXM_ET_DP_HASH(0) since OF1.5 and v2.4.
      */
     MFF_DP_HASH,
 

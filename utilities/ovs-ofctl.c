@@ -2879,6 +2879,11 @@ ofctl_parse_nxm__(bool oxm, enum ofp_version version)
 
             puts(out);
             free(out);
+
+            if (verbosity > 0) {
+                ovs_hex_dump(stdout, ofpbuf_data(&nx_match),
+                             ofpbuf_size(&nx_match), 0, false);
+            }
         } else {
             printf("nx_pull_match() returned error %s\n",
                    ofperr_get_name(error));
