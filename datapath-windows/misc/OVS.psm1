@@ -14,6 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 #>
 
+$WMI_JOB_STATUS_STARTED = 4096
+$WMI_JOB_STATE_RUNNING = 4
+$WMI_JOB_STATE_COMPLETED = 7
+
 $hvassembly = [System.Reflection.Assembly]::LoadWithPartialName("Microsoft.HyperV.PowerShell")
 
 function Set-VMNetworkAdapterOVSPort
@@ -25,12 +29,23 @@ function Set-VMNetworkAdapterOVSPort
         [Microsoft.HyperV.PowerShell.VMNetworkAdapter]$VMNetworkAdapter,
 
         [parameter(Mandatory=$true)]
+        [ValidateLength(1, 16)]
         [string]$OVSPortName
     )
     process
     {
         $ns = "root\virtualization\v2"
         $EscapedId = $VMNetworkAdapter.Id.Replace('\', '\\')
+
+        $sd = gwmi -namespace $ns -class Msvm_EthernetPortAllocationSettingData -Filter "ElementName = '$OVSPortName'"
+        if($sd)
+        {
+            if($sd.InstanceId.Contains($VMNetworkAdapter.Id)){
+                throw "The OVS port name '$OVSPortName' is already assigned to this port."
+            }
+            throw "Cannot assign the OVS port name '$OVSPortName' as it is already assigned to an other port."
+        }
+
         $sd = gwmi -namespace $ns -class Msvm_EthernetPortAllocationSettingData -Filter "InstanceId like '$EscapedId%'"
 
         if($sd)
@@ -51,26 +66,89 @@ function Set-VMNetworkAdapterOVSPort
     }
 }
 
+function Get-VMNetworkAdapterByOVSPort
+{
+    [CmdletBinding()]
+    param
+    (
+
+        [parameter(Mandatory=$true)]
+        [ValidateLength(1, 16)]
+        [string]$OVSPortName
+    )
+    process
+    {
+        $ns = "root\virtualization\v2"
+
+        $sd = gwmi -namespace $ns -class Msvm_EthernetPortAllocationSettingData -Filter "ElementName = '$OVSPortName'"
+        if($sd)
+        {
+            return $sd
+        }
+    }
+}
+
+function Get-VMByOVSPort
+{
+    [CmdletBinding()]
+    param
+    (
+        [parameter(Mandatory=$true)]
+        [ValidateLength(1, 16)]
+        [string]$OVSPortName
+    )
+    process
+    {
+        $ns = "root\virtualization\v2"
+
+        $vms = gwmi -namespace $ns -class Msvm_VirtualSystemSettingData
+        ForEach($vm in $vms)
+        {
+            $ports = gwmi -Namespace $ns -Query "
+                Associators of {$vm} Where
+                ResultClass = Msvm_EthernetPortAllocationSettingData"
+            if ($ports.ElementName -eq $OVSPortName){
+                return $vm
+            }
+        }
+    }
+}
+
 function Check-WMIReturnValue($retVal)
 {
     if ($retVal.ReturnValue -ne 0)
     {
-        if ($retVal.ReturnValue -eq 4096)
+        if ($retVal.ReturnValue -eq $WMI_JOB_STATUS_STARTED)
         {
             do
             {
                 $job = [wmi]$retVal.Job
             }
-            while ($job.JobState -eq 4)
+            while ($job.JobState -eq $WMI_JOB_STATE_RUNNING)
 
-            if ($job.JobState -ne 7)
+            if ($job.JobState -ne $WMI_JOB_STATE_COMPLETED)
             {
-                throw "Job Failed"
+                echo $job.ReturnValue
+                $errorString = "Job Failed. Job State: " + $job.JobState.ToString()
+                if ($job.__CLASS -eq "Msvm_ConcreteJob")
+                {
+                    $errorString += " Error Code: " + $job.ErrorCode.ToString()
+                    $errorString += " Error Details: " + $job.ErrorDescription
+                }
+                else
+                {
+                    $error = $job.GetError()
+                    if ($error.Error)
+                    {
+                        $errorString += " Error:" + $error.Error
+                    }
+                }
+                throw $errorString
             }
         }
         else
         {
-            throw "Job Failed"
+            throw "Job Failed. Return Value: {0}" -f $job.ReturnValue
         }
     }
 }
