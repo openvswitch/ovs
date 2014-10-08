@@ -1966,8 +1966,8 @@ decode_ofpat_set_field(const struct ofp12_action_set_field *oasf,
      * a 1-bit in oxm_value and in oxm_mask." */
     if (!mf_is_value_valid(sf->field, &sf->value)
         || (sf->field->id == MFF_VLAN_VID
-            && (!(sf->mask.be16 & htons(OFPVID12_PRESENT)
-                  || !(sf->value.be16 & htons(OFPVID12_PRESENT)))))) {
+            && (!(sf->mask.be16 & htons(OFPVID12_PRESENT))
+                || !(sf->value.be16 & htons(OFPVID12_PRESENT))))) {
         struct ds ds = DS_EMPTY_INITIALIZER;
         mf_format(sf->field, &sf->value, NULL, &ds);
         VLOG_WARN_RL(&rl, "Invalid value for set field %s: %s",
