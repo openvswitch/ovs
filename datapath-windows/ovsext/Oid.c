@@ -161,13 +161,13 @@ OvsProcessSetOidPort(POVS_SWITCH_CONTEXT switchObject,
 
     switch(setInfo->Oid) {
     case OID_SWITCH_PORT_CREATE:
-        status = OvsCreatePort(switchObject, portParam);
+        status = HvCreatePort(switchObject, portParam);
         break;
     case OID_SWITCH_PORT_TEARDOWN:
-        OvsTeardownPort(switchObject, portParam);
+        HvTeardownPort(switchObject, portParam);
         break;
     case OID_SWITCH_PORT_DELETE:
-        OvsDeletePort(switchObject, portParam);
+        HvDeletePort(switchObject, portParam);
         break;
     default:
         break;
@@ -193,19 +193,19 @@ OvsProcessSetOidNic(POVS_SWITCH_CONTEXT switchObject,
 
     switch(setInfo->Oid) {
     case OID_SWITCH_NIC_CREATE:
-        status = OvsCreateNic(switchObject, nicParam);
+        status = HvCreateNic(switchObject, nicParam);
         break;
     case OID_SWITCH_NIC_CONNECT:
-        OvsConnectNic(switchObject, nicParam);
+        HvConnectNic(switchObject, nicParam);
         break;
     case OID_SWITCH_NIC_UPDATED:
-        OvsUpdateNic(switchObject, nicParam);
+        HvUpdateNic(switchObject, nicParam);
         break;
     case OID_SWITCH_NIC_DISCONNECT:
-        OvsDisconnectNic(switchObject, nicParam);
+        HvDisconnectNic(switchObject, nicParam);
         break;
     case OID_SWITCH_NIC_DELETE:
-        OvsDeleteNic(switchObject, nicParam);
+        HvDeleteNic(switchObject, nicParam);
         break;
     default:
         break;
@@ -518,12 +518,12 @@ OvsOidRequestCompleteSetInfo(POVS_SWITCH_CONTEXT switchObject,
 
         switch(setInfo->Oid) {
         case OID_SWITCH_PORT_CREATE:
-            OvsDeletePort(switchObject,
+            HvDeletePort(switchObject,
                          (PNDIS_SWITCH_PORT_PARAMETERS)origHeader);
             break;
 
         case OID_SWITCH_NIC_CREATE:
-            OvsDeleteNic(switchObject,
+            HvDeleteNic(switchObject,
                         (PNDIS_SWITCH_NIC_PARAMETERS)origHeader);
             break;
 

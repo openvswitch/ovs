@@ -80,8 +80,8 @@ static NTSTATUS CreateNetlinkMesgForNetdev(POVS_VPORT_EXT_INFO info,
  * Functions implemented in relaton to NDIS port manipulation.
  */
 NDIS_STATUS
-OvsCreatePort(POVS_SWITCH_CONTEXT switchContext,
-              PNDIS_SWITCH_PORT_PARAMETERS portParam)
+HvCreatePort(POVS_SWITCH_CONTEXT switchContext,
+             PNDIS_SWITCH_PORT_PARAMETERS portParam)
 {
     POVS_VPORT_ENTRY vport;
     LOCK_STATE_EX lockState;
@@ -111,8 +111,8 @@ create_port_done:
 }
 
 VOID
-OvsTeardownPort(POVS_SWITCH_CONTEXT switchContext,
-                PNDIS_SWITCH_PORT_PARAMETERS portParam)
+HvTeardownPort(POVS_SWITCH_CONTEXT switchContext,
+               PNDIS_SWITCH_PORT_PARAMETERS portParam)
 {
     POVS_VPORT_ENTRY vport;
     LOCK_STATE_EX lockState;
@@ -138,8 +138,8 @@ OvsTeardownPort(POVS_SWITCH_CONTEXT switchContext,
 
 
 VOID
-OvsDeletePort(POVS_SWITCH_CONTEXT switchContext,
-              PNDIS_SWITCH_PORT_PARAMETERS portParam)
+HvDeletePort(POVS_SWITCH_CONTEXT switchContext,
+             PNDIS_SWITCH_PORT_PARAMETERS portParam)
 {
     POVS_VPORT_ENTRY vport;
     LOCK_STATE_EX lockState;
@@ -164,8 +164,8 @@ OvsDeletePort(POVS_SWITCH_CONTEXT switchContext,
  * Functions implemented in relaton to NDIS NIC manipulation.
  */
 NDIS_STATUS
-OvsCreateNic(POVS_SWITCH_CONTEXT switchContext,
-             PNDIS_SWITCH_NIC_PARAMETERS nicParam)
+HvCreateNic(POVS_SWITCH_CONTEXT switchContext,
+            PNDIS_SWITCH_NIC_PARAMETERS nicParam)
 {
     POVS_VPORT_ENTRY vport;
     UINT32 portNo = 0;
@@ -236,8 +236,8 @@ done:
 
 /* Mark already created NIC as connected. */
 VOID
-OvsConnectNic(POVS_SWITCH_CONTEXT switchContext,
-              PNDIS_SWITCH_NIC_PARAMETERS nicParam)
+HvConnectNic(POVS_SWITCH_CONTEXT switchContext,
+             PNDIS_SWITCH_NIC_PARAMETERS nicParam)
 {
     LOCK_STATE_EX lockState;
     POVS_VPORT_ENTRY vport;
@@ -282,8 +282,8 @@ done:
 }
 
 VOID
-OvsUpdateNic(POVS_SWITCH_CONTEXT switchContext,
-             PNDIS_SWITCH_NIC_PARAMETERS nicParam)
+HvUpdateNic(POVS_SWITCH_CONTEXT switchContext,
+            PNDIS_SWITCH_NIC_PARAMETERS nicParam)
 {
     POVS_VPORT_ENTRY vport;
     LOCK_STATE_EX lockState;
@@ -356,8 +356,8 @@ update_nic_done:
 
 
 VOID
-OvsDisconnectNic(POVS_SWITCH_CONTEXT switchContext,
-                 PNDIS_SWITCH_NIC_PARAMETERS nicParam)
+HvDisconnectNic(POVS_SWITCH_CONTEXT switchContext,
+                PNDIS_SWITCH_NIC_PARAMETERS nicParam)
 {
     POVS_VPORT_ENTRY vport;
     UINT32 portNo = 0;
@@ -407,8 +407,8 @@ done:
 
 
 VOID
-OvsDeleteNic(POVS_SWITCH_CONTEXT switchContext,
-             PNDIS_SWITCH_NIC_PARAMETERS nicParam)
+HvDeleteNic(POVS_SWITCH_CONTEXT switchContext,
+            PNDIS_SWITCH_NIC_PARAMETERS nicParam)
 {
     LOCK_STATE_EX lockState;
     POVS_VPORT_ENTRY vport;

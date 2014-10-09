@@ -117,22 +117,22 @@ NDIS_STATUS OvsInitConfiguredSwitchNics(struct _OVS_SWITCH_CONTEXT *switchContex
 
 VOID OvsClearAllSwitchVports(struct _OVS_SWITCH_CONTEXT *switchContext);
 
-NDIS_STATUS OvsCreateNic(POVS_SWITCH_CONTEXT switchContext,
-                         PNDIS_SWITCH_NIC_PARAMETERS nicParam);
-NDIS_STATUS OvsCreatePort(POVS_SWITCH_CONTEXT switchContext,
-                          PNDIS_SWITCH_PORT_PARAMETERS portParam);
-VOID OvsTeardownPort(POVS_SWITCH_CONTEXT switchContext,
-                     PNDIS_SWITCH_PORT_PARAMETERS portParam);
-VOID OvsDeletePort(POVS_SWITCH_CONTEXT switchContext,
-                   PNDIS_SWITCH_PORT_PARAMETERS portParam);
-VOID OvsConnectNic(POVS_SWITCH_CONTEXT switchContext,
-                   PNDIS_SWITCH_NIC_PARAMETERS nicParam);
-VOID OvsUpdateNic(POVS_SWITCH_CONTEXT switchContext,
+NDIS_STATUS HvCreateNic(POVS_SWITCH_CONTEXT switchContext,
+                        PNDIS_SWITCH_NIC_PARAMETERS nicParam);
+NDIS_STATUS HvCreatePort(POVS_SWITCH_CONTEXT switchContext,
+                         PNDIS_SWITCH_PORT_PARAMETERS portParam);
+VOID HvTeardownPort(POVS_SWITCH_CONTEXT switchContext,
+                    PNDIS_SWITCH_PORT_PARAMETERS portParam);
+VOID HvDeletePort(POVS_SWITCH_CONTEXT switchContext,
+                  PNDIS_SWITCH_PORT_PARAMETERS portParam);
+VOID HvConnectNic(POVS_SWITCH_CONTEXT switchContext,
                   PNDIS_SWITCH_NIC_PARAMETERS nicParam);
-VOID OvsDeleteNic(POVS_SWITCH_CONTEXT switchContext,
-                  PNDIS_SWITCH_NIC_PARAMETERS nicParam);
-VOID OvsDisconnectNic(POVS_SWITCH_CONTEXT switchContext,
-                      PNDIS_SWITCH_NIC_PARAMETERS nicParam);
+VOID HvUpdateNic(POVS_SWITCH_CONTEXT switchContext,
+                 PNDIS_SWITCH_NIC_PARAMETERS nicParam);
+VOID HvDeleteNic(POVS_SWITCH_CONTEXT switchContext,
+                 PNDIS_SWITCH_NIC_PARAMETERS nicParam);
+VOID HvDisconnectNic(POVS_SWITCH_CONTEXT switchContext,
+                     PNDIS_SWITCH_NIC_PARAMETERS nicParam);
 
 static __inline BOOLEAN
 OvsIsTunnelVportType(OVS_VPORT_TYPE ovsType)
