@@ -19,6 +19,8 @@
 
 #include "Switch.h"
 
+#define OVS_DPPORT_NUMBER_INVALID 0
+
 /*
  * A Vport, or Virtual Port, is a port on the OVS. It can be one of the
  * following types. Some of the Vports are "real" ports on the hyper-v switch,

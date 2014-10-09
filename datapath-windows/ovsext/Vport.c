@@ -718,7 +718,7 @@ POVS_VPORT_ENTRY vport)
         vport->nicIndex != 0) {
         vport->portNo = OvsGetVportNo(switchContext, vport->nicIndex,
             vport->ovsType, vport->portType == NdisSwitchPortTypeExternal);
-        if (vport->portNo == 0) {
+        if (vport->portNo == OVS_DPPORT_NUMBER_INVALID) {
             return NDIS_STATUS_RESOURCES;
         }
         ASSERT(OVS_IS_VPORT_ENTRY_NULL(switchContext,

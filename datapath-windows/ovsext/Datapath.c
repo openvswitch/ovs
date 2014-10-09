@@ -1462,7 +1462,7 @@ OvsGetVportDumpNext(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     */
     ASSERT(KeGetCurrentIrql() == DISPATCH_LEVEL);
     NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock, &lockState,
-        NDIS_RWL_AT_DISPATCH_LEVEL);
+                          NDIS_RWL_AT_DISPATCH_LEVEL);
 
     if (gOvsSwitchContext->numVports > 0) {
         /* inBucket: the bucket, used for lookup */
@@ -1490,7 +1490,7 @@ OvsGetVportDumpNext(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                 if (outIndex >= inIndex) {
                     vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, portLink);
 
-                    if (vport->portNo != 0) {
+                    if (vport->portNo != OVS_DPPORT_NUMBER_INVALID) {
                         OvsCreateMsgFromVport(vport, msgIn,
                                               usrParamsCtx->outputBuffer,
                                               usrParamsCtx->outputLength,
