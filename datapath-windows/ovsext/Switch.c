@@ -356,7 +356,7 @@ OvsInitSwitchContext(POVS_SWITCH_CONTEXT switchContext)
 
     switchContext->vportArray =
         (PVOID *)OvsAllocateMemory(sizeof (PVOID) * OVS_MAX_VPORT_ARRAY_SIZE);
-    switchContext->nameHashArray = (PLIST_ENTRY)
+    switchContext->ovsPortNameHashArray = (PLIST_ENTRY)
          OvsAllocateMemory(sizeof (LIST_ENTRY) * OVS_MAX_VPORT_ARRAY_SIZE);
     switchContext->portHashArray = (PLIST_ENTRY)
        OvsAllocateMemory(sizeof (LIST_ENTRY) * OVS_MAX_VPORT_ARRAY_SIZE);
@@ -368,7 +368,7 @@ OvsInitSwitchContext(POVS_SWITCH_CONTEXT switchContext)
     if (status != NDIS_STATUS_SUCCESS ||
         switchContext->dispatchLock == NULL ||
         switchContext->vportArray == NULL ||
-        switchContext->nameHashArray == NULL ||
+        switchContext->ovsPortNameHashArray == NULL ||
         switchContext->portHashArray == NULL) {
         if (switchContext->dispatchLock) {
             NdisFreeRWLock(switchContext->dispatchLock);
@@ -376,8 +376,8 @@ OvsInitSwitchContext(POVS_SWITCH_CONTEXT switchContext)
         if (switchContext->vportArray) {
             OvsFreeMemory(switchContext->vportArray);
         }
-        if (switchContext->nameHashArray) {
-            OvsFreeMemory(switchContext->nameHashArray);
+        if (switchContext->ovsPortNameHashArray) {
+            OvsFreeMemory(switchContext->ovsPortNameHashArray);
         }
         if (switchContext->portHashArray) {
             OvsFreeMemory(switchContext->portHashArray);
@@ -390,7 +390,7 @@ OvsInitSwitchContext(POVS_SWITCH_CONTEXT switchContext)
     }
 
     for (i = 0; i < OVS_MAX_VPORT_ARRAY_SIZE; i++) {
-        InitializeListHead(&switchContext->nameHashArray[i]);
+        InitializeListHead(&switchContext->ovsPortNameHashArray[i]);
     }
     for (i = 0; i < OVS_MAX_VPORT_ARRAY_SIZE; i++) {
         InitializeListHead(&switchContext->portHashArray[i]);
@@ -417,7 +417,7 @@ OvsCleanupSwitchContext(POVS_SWITCH_CONTEXT switchContext)
     ASSERT(switchContext->numVports == 0);
 
     NdisFreeRWLock(switchContext->dispatchLock);
-    OvsFreeMemory(switchContext->nameHashArray);
+    OvsFreeMemory(switchContext->ovsPortNameHashArray);
     OvsFreeMemory(switchContext->portHashArray);
     OvsFreeMemory(switchContext->vportArray);
     OvsDeleteFlowTable(&switchContext->datapath);

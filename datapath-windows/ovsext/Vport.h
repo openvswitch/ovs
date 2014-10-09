@@ -65,7 +65,7 @@ typedef struct _OVS_VPORT_FULL_STATS {
  * tunnel type, such as vxlan, gre, gre64
  */
 typedef struct _OVS_VPORT_ENTRY {
-    LIST_ENTRY             nameLink;
+    LIST_ENTRY             ovsNameLink;
     LIST_ENTRY             portLink;
 
     OVS_VPORT_STATE        ovsState;

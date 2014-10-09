@@ -476,9 +476,9 @@ OvsFindVportByOvsName(POVS_SWITCH_CONTEXT switchContext,
     POVS_VPORT_ENTRY vport;
     PLIST_ENTRY head, link;
     UINT32 hash = OvsJhashBytes((const VOID *)name, length, OVS_HASH_BASIS);
-    head = &(switchContext->nameHashArray[hash & OVS_VPORT_MASK]);
+    head = &(switchContext->ovsPortNameHashArray[hash & OVS_VPORT_MASK]);
     LIST_FORALL(head, link) {
-        vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, nameLink);
+        vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, ovsNameLink);
         if (vport->ovsNameLen == length &&
             RtlEqualMemory(name, vport->ovsName, length)) {
             return vport;
@@ -759,11 +759,11 @@ POVS_VPORT_ENTRY vport)
         return NDIS_STATUS_SUCCESS;
     }
     hash = OvsJhashBytes(vport->ovsName, vport->ovsNameLen, OVS_HASH_BASIS);
-    InsertHeadList(&switchContext->nameHashArray[hash & OVS_VPORT_MASK],
-        &vport->nameLink);
+    InsertHeadList(&switchContext->ovsPortNameHashArray[hash & OVS_VPORT_MASK],
+                   &vport->ovsNameLink);
     hash = OvsJhashWords(&vport->portId, 1, OVS_HASH_BASIS);
     InsertHeadList(&switchContext->portHashArray[hash & OVS_VPORT_MASK],
-        &vport->portLink);
+                   &vport->portLink);
     switchContext->numVports++;
     return NDIS_STATUS_SUCCESS;
 }
@@ -805,7 +805,7 @@ OvsRemoveAndDeleteVport(POVS_SWITCH_CONTEXT switchContext,
         break;
     }
 
-    RemoveEntryList(&vport->nameLink);
+    RemoveEntryList(&vport->ovsNameLink);
     RemoveEntryList(&vport->portLink);
     gen = (gen + 1) & 0xff;
     switchContext->vportArray[OVS_VPORT_INDEX(vport->portNo)] =

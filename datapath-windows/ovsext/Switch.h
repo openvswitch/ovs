@@ -110,7 +110,7 @@ typedef struct _OVS_SWITCH_CONTEXT
     POVS_VPORT_ENTRY        internalVport;
 
     PVOID                  *vportArray;
-    PLIST_ENTRY             nameHashArray;  // based on ovsName
+    PLIST_ENTRY             ovsPortNameHashArray;  // based on ovsName
     PLIST_ENTRY             portHashArray;  // based on portId
 
     UINT32                  numPhysicalNics;
