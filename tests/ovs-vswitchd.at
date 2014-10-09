@@ -129,3 +129,27 @@ AT_CHECK([sed -n "
 # cleanup.
 kill `cat ovsdb-server.pid`
 AT_CLEANUP
+
+dnl ----------------------------------------------------------------------
+AT_SETUP([ovs-vswitchd -- invalid database path])
+
+# start an ovs-vswitchd process with invalid db path.
+ovs-vswitchd unix:invalid.db.sock --log-file=fakelog --enable-dummy --unixctl="`pwd`"/unixctl &
+
+# sleep for a while.
+sleep 10
+
+# stop the process.
+ovs-appctl -t `pwd`/unixctl exit
+
+# should not see this log (which indicates high cpu utilization).
+AT_CHECK([grep "wakeup due to" fakelog], [ignore])
+
+# check the fakelog, should not see any WARN/ERR/EMER log.
+AT_CHECK([sed -n "
+/|WARN|/p
+/|ERR|/p
+/|EMER|/p" fakelog
+])
+
+AT_CLEANUP
