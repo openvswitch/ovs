@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,27 @@ static inline ovs_be64 get_unaligned_be64(const ovs_be64 *);
 static inline void put_unaligned_be16(ovs_be16 *, ovs_be16);
 static inline void put_unaligned_be32(ovs_be32 *, ovs_be32);
 static inline void put_unaligned_be64(ovs_be64 *, ovs_be64);
+
+/* uint64_t get_unaligned_u64(uint64_t *p);
+ *
+ * Returns the value of the possibly misaligned uint64_t at 'p'.  'p' may
+ * actually be any type that points to a 64-bit integer.  That is, on Unix-like
+ * 32-bit ABIs, it may point to an "unsigned long long int", and on Unix-like
+ * 64-bit ABIs, it may point to an "unsigned long int" or an "unsigned long
+ * long int".
+ *
+ * This is special-cased because on some Linux targets, the kernel __u64 is
+ * unsigned long long int and the userspace uint64_t is unsigned long int, so
+ * that any single function prototype would fail to accept one or the other.
+ *
+ * Below, "sizeof (*(P) % 1)" verifies that *P has an integer type, since
+ * operands to % must be integers.
+ */
+#define get_unaligned_u64(P)                                \
+    (BUILD_ASSERT(sizeof *(P) == 8),                        \
+     BUILD_ASSERT_GCCONLY(!TYPE_IS_SIGNED(typeof(*(P)))),   \
+     (void) sizeof (*(P) % 1),                              \
+     get_unaligned_u64__((const uint64_t *) (P)))
 
 #ifdef __GNUC__
 /* GCC implementations. */
@@ -136,32 +157,23 @@ static inline void put_unaligned_u64__(uint64_t *p_, uint64_t x_)
  * accessors. */
 #define get_unaligned_be16 get_unaligned_u16
 #define get_unaligned_be32 get_unaligned_u32
-#define get_unaligned_be64 get_unaligned_u64
 #define put_unaligned_be16 put_unaligned_u16
 #define put_unaligned_be32 put_unaligned_u32
 #define put_unaligned_be64 put_unaligned_u64
-#endif
 
-/* uint64_t get_unaligned_u64(uint64_t *p);
- *
- * Returns the value of the possibly misaligned uint64_t at 'p'.  'p' may
- * actually be any type that points to a 64-bit integer.  That is, on Unix-like
- * 32-bit ABIs, it may point to an "unsigned long long int", and on Unix-like
- * 64-bit ABIs, it may point to an "unsigned long int" or an "unsigned long
- * long int".
- *
- * This is special-cased because on some Linux targets, the kernel __u64 is
- * unsigned long long int and the userspace uint64_t is unsigned long int, so
- * that any single function prototype would fail to accept one or the other.
- *
- * Below, "sizeof (*(P) % 1)" verifies that *P has an integer type, since
- * operands to % must be integers.
- */
-#define get_unaligned_u64(P)                                \
-    (BUILD_ASSERT(sizeof *(P) == 8),                        \
-     BUILD_ASSERT_GCCONLY(!TYPE_IS_SIGNED(typeof(*(P)))),   \
-     (void) sizeof (*(P) % 1),                              \
-     get_unaligned_u64__((const uint64_t *) (P)))
+/* We do not #define get_unaligned_be64 as for the other be<N> functions above,
+ * because such a definition would mean that get_unaligned_be64() would have a
+ * different interface in each branch of the #if: with GCC it would take a
+ * "ovs_be64 *", with other compilers any pointer-to-64-bit-type (but not void
+ * *).  The latter means code like "get_unaligned_be64(ofpbuf_data(b))" would
+ * work with GCC but not with other compilers, which is surprising and
+ * undesirable.  Hence this wrapper function. */
+static inline ovs_be64
+get_unaligned_be64(const ovs_be64 *p)
+{
+    return get_unaligned_u64(p);
+}
+#endif
 
 /* Stores 'x' at possibly misaligned address 'p'.
  *
