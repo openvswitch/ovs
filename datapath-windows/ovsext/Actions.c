@@ -205,7 +205,7 @@ OvsDetectTunnelRxPkt(OvsForwardingContext *ovsFwdCtx,
     if (!flowKey->ipKey.nwFrag &&
         flowKey->ipKey.nwProto == IPPROTO_UDP &&
         flowKey->ipKey.l4.tpDst == VXLAN_UDP_PORT_NBO) {
-        tunnelVport = OvsGetTunnelVport(OVS_VPORT_TYPE_VXLAN);
+        tunnelVport = ovsFwdCtx->switchContext->vxlanVport;
         ovsActionStats.rxVxlan++;
     }
 
@@ -271,9 +271,14 @@ OvsDetectTunnelPkt(OvsForwardingContext *ovsFwdCtx,
          * If the packet will not be encapsulated, consume the tunnel context
          * by clearing it.
          */
-        if (ovsFwdCtx->srcVportNo != OVS_DEFAULT_PORT_NO &&
-            !OvsIsVifVportNo(ovsFwdCtx->srcVportNo)) {
-            ovsFwdCtx->tunKey.dst = 0;
+        if (ovsFwdCtx->srcVportNo != OVS_DEFAULT_PORT_NO) {
+
+            POVS_VPORT_ENTRY vport = OvsFindVportByPortNo(
+                ovsFwdCtx->switchContext, ovsFwdCtx->srcVportNo);
+
+            if (!vport || vport->ovsType != OVS_VPORT_TYPE_NETDEV) {
+                ovsFwdCtx->tunKey.dst = 0;
+            }
         }
 
         /* Tunnel the packet only if tunnel context is set. */
@@ -1468,9 +1473,17 @@ OvsActionsExecute(POVS_SWITCH_CONTEXT switchContext,
             PNL_ATTR queueAttr;
             POVS_PACKET_QUEUE_ELEM elem;
             UINT32 queueId = OVS_DEFAULT_PACKET_QUEUE;
-            //XXX confusing that portNo is actually portId for external port.
-            BOOLEAN isRecv = (portNo == switchContext->externalPortId)
-                            || OvsIsTunnelVportNo(portNo);
+            BOOLEAN isRecv = FALSE;
+
+            POVS_VPORT_ENTRY vport = OvsFindVportByPortNo(switchContext,
+                portNo);
+
+            if (vport) {
+                if (vport->isExternal ||
+                    OvsIsTunnelVportType(vport->ovsType)) {
+                    isRecv = TRUE;
+                }
+            }
 
             queueAttr = NlAttrFindNested(a, OVS_USERSPACE_ATTR_PID);
             userdataAttr = NlAttrFindNested(a, OVS_USERSPACE_ATTR_USERDATA);

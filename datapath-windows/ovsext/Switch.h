@@ -37,17 +37,6 @@
 #define OVS_GRE64_VPORT_INDEX    4
 #define OVS_TUNNEL_INDEX_END OVS_GRE64_VPORT_INDEX
 
-#define OVS_EXTERNAL_VPORT_START 8
-#define OVS_EXTERNAL_VPORT_END   40
-#define OVS_INTERNAL_VPORT_START 40
-#define OVS_INTERNAL_VPOR_END    72
-#define OVS_VM_VPORT_START       72
-#define OVS_VM_VPORT_MAX         0xffff
-#define OVS_VPORT_INDEX(_portNo)    ((_portNo) & 0xffffff)
-#define OVS_VPORT_PORT_NO(_index, _gen) \
-          (((_index) & 0xffffff) | ((UINT32)(_gen) << 24))
-#define OVS_VPORT_GEN(portNo) (portNo >> 24)
-
 #define OVS_MAX_PHYS_ADAPTERS    32
 #define OVS_MAX_IP_VPOR          32
 
@@ -109,9 +98,15 @@ typedef struct _OVS_SWITCH_CONTEXT
     POVS_VPORT_ENTRY        externalVport;  // the virtual adapter vport
     POVS_VPORT_ENTRY        internalVport;
 
-    PVOID                  *vportArray;
-    PLIST_ENTRY             ovsPortNameHashArray;  // based on ovsName
-    PLIST_ENTRY             portIdHashArray;  // based on portId
+    /*
+     * XXX when we support multiple VXLAN ports, we will need a list entry
+     * instead
+     */
+    POVS_VPORT_ENTRY        vxlanVport;
+
+    PLIST_ENTRY             ovsPortNameHashArray;   // based on ovsName
+    PLIST_ENTRY             portIdHashArray;        // based on portId
+    PLIST_ENTRY             portNoHashArray;        // based on ovs port number
 
     UINT32                  numPhysicalNics;
     UINT32                  numVports;     // include validation port
@@ -165,7 +160,6 @@ OvsReleaseDatapath(OVS_DATAPATH *datapath,
 }
 
 
-PVOID OvsGetVportFromIndex(UINT16 index);
 PVOID OvsGetExternalVport();
 
 #endif /* __SWITCH_H_ */

@@ -354,12 +354,12 @@ OvsInitSwitchContext(POVS_SWITCH_CONTEXT switchContext)
     switchContext->dispatchLock =
         NdisAllocateRWLock(switchContext->NdisFilterHandle);
 
-    switchContext->vportArray =
-        (PVOID *)OvsAllocateMemory(sizeof (PVOID) * OVS_MAX_VPORT_ARRAY_SIZE);
+    switchContext->portNoHashArray = (PLIST_ENTRY)
+        OvsAllocateMemory(sizeof(LIST_ENTRY) * OVS_MAX_VPORT_ARRAY_SIZE);
     switchContext->ovsPortNameHashArray = (PLIST_ENTRY)
-         OvsAllocateMemory(sizeof (LIST_ENTRY) * OVS_MAX_VPORT_ARRAY_SIZE);
+        OvsAllocateMemory(sizeof (LIST_ENTRY) * OVS_MAX_VPORT_ARRAY_SIZE);
     switchContext->portIdHashArray= (PLIST_ENTRY)
-       OvsAllocateMemory(sizeof (LIST_ENTRY) * OVS_MAX_VPORT_ARRAY_SIZE);
+        OvsAllocateMemory(sizeof (LIST_ENTRY) * OVS_MAX_VPORT_ARRAY_SIZE);
     status = OvsAllocateFlowTable(&switchContext->datapath, switchContext);
 
     if (status == NDIS_STATUS_SUCCESS) {
@@ -367,14 +367,14 @@ OvsInitSwitchContext(POVS_SWITCH_CONTEXT switchContext)
     }
     if (status != NDIS_STATUS_SUCCESS ||
         switchContext->dispatchLock == NULL ||
-        switchContext->vportArray == NULL ||
+        switchContext->portNoHashArray == NULL ||
         switchContext->ovsPortNameHashArray == NULL ||
         switchContext->portIdHashArray== NULL) {
         if (switchContext->dispatchLock) {
             NdisFreeRWLock(switchContext->dispatchLock);
         }
-        if (switchContext->vportArray) {
-            OvsFreeMemory(switchContext->vportArray);
+        if (switchContext->portNoHashArray) {
+            OvsFreeMemory(switchContext->portNoHashArray);
         }
         if (switchContext->ovsPortNameHashArray) {
             OvsFreeMemory(switchContext->ovsPortNameHashArray);
@@ -395,13 +395,13 @@ OvsInitSwitchContext(POVS_SWITCH_CONTEXT switchContext)
     for (i = 0; i < OVS_MAX_VPORT_ARRAY_SIZE; i++) {
         InitializeListHead(&switchContext->portIdHashArray[i]);
     }
-    RtlZeroMemory(switchContext->vportArray,
-                  sizeof (PVOID) * OVS_MAX_VPORT_ARRAY_SIZE);
+    for (i = 0; i < OVS_MAX_VPORT_ARRAY_SIZE; i++) {
+        InitializeListHead(&switchContext->portNoHashArray[i]);
+    }
 
     switchContext->isActivated = FALSE;
     switchContext->isActivateFailed = FALSE;
     switchContext->dpNo = OVS_DP_NUMBER;
-    switchContext->lastPortIndex = OVS_MAX_VPORT_ARRAY_SIZE -1;
     ovsTimeIncrementPerTick = KeQueryTimeIncrement() / 10000;
     OVS_LOG_TRACE("Exit: Succesfully initialized switchContext: %p",
                   switchContext);
@@ -419,7 +419,7 @@ OvsCleanupSwitchContext(POVS_SWITCH_CONTEXT switchContext)
     NdisFreeRWLock(switchContext->dispatchLock);
     OvsFreeMemory(switchContext->ovsPortNameHashArray);
     OvsFreeMemory(switchContext->portIdHashArray);
-    OvsFreeMemory(switchContext->vportArray);
+    OvsFreeMemory(switchContext->portNoHashArray);
     OvsDeleteFlowTable(&switchContext->datapath);
     OvsCleanupBufferPool(switchContext);
     OVS_LOG_TRACE("Exit: Delete switchContext: %p", switchContext);
@@ -466,16 +466,6 @@ cleanup:
                   switchContext,
                   (switchContext->isActivated ? "TRUE" : "FALSE"), status);
     return status;
-}
-
-PVOID
-OvsGetVportFromIndex(UINT16 index)
-{
-    if (index < OVS_MAX_VPORT_ARRAY_SIZE &&
-            !OVS_IS_VPORT_ENTRY_NULL(gOvsSwitchContext, index)) {
-        return gOvsSwitchContext->vportArray[index];
-    }
-    return NULL;
 }
 
 PVOID

@@ -19,7 +19,18 @@
 
 #include "Switch.h"
 
-#define OVS_DPPORT_NUMBER_INVALID 0
+#define OVS_MAX_DPPORTS             MAXUINT16
+#define OVS_DPPORT_NUMBER_INVALID   OVS_MAX_DPPORTS
+/*
+ * The local port (0) is a reserved port, that is not allowed to be be
+ * created by the netlink command vport add. On linux, this port is created
+ * at netlink command datapath new. However, on windows, we do not need to
+ * create it, and more, we shouldn't. The userspace attempts to create two
+ * internal vports, the LOCAL port (0) and the internal port (with any other
+ * port number). The non-LOCAL internal port is used in the userspace when it
+ * requests the internal port.
+ */
+#define OVS_DPPORT_NUMBER_LOCAL    0
 
 /*
  * A Vport, or Virtual Port, is a port on the OVS. It can be one of the
@@ -67,6 +78,7 @@ typedef struct _OVS_VPORT_FULL_STATS {
 typedef struct _OVS_VPORT_ENTRY {
     LIST_ENTRY             ovsNameLink;
     LIST_ENTRY             portIdLink;
+    LIST_ENTRY             portNoLink;
 
     OVS_VPORT_STATE        ovsState;
     OVS_VPORT_TYPE         ovsType;
@@ -98,9 +110,6 @@ typedef struct _OVS_VPORT_ENTRY {
 } OVS_VPORT_ENTRY, *POVS_VPORT_ENTRY;
 
 struct _OVS_SWITCH_CONTEXT;
-
-#define OVS_IS_VPORT_ENTRY_NULL(_SwitchContext, _i) \
-   ((UINT64)(_SwitchContext)->vportArray[_i] <= 0xff)
 
 POVS_VPORT_ENTRY
 OvsFindVportByPortNo(struct _OVS_SWITCH_CONTEXT *switchContext,
@@ -135,11 +144,6 @@ VOID HvDeleteNic(POVS_SWITCH_CONTEXT switchContext,
 VOID HvDisconnectNic(POVS_SWITCH_CONTEXT switchContext,
                      PNDIS_SWITCH_NIC_PARAMETERS nicParam);
 
-UINT32 OvsComputeVportNo(POVS_SWITCH_CONTEXT switchContext,
-                         UINT32 nicIndex,
-                         OVS_VPORT_TYPE ovsType,
-                         BOOLEAN isExternal);
-
 static __inline BOOLEAN
 OvsIsTunnelVportType(OVS_VPORT_TYPE ovsType)
 {
@@ -152,40 +156,6 @@ static __inline BOOLEAN
 OvsIsInternalVportType(OVS_VPORT_TYPE ovsType)
 {
     return ovsType == OVS_VPORT_TYPE_INTERNAL;
-}
-
-static __inline BOOLEAN
-OvsIsTunnelVportNo(UINT32 portNo)
-{
-    UINT32 idx = OVS_VPORT_INDEX(portNo);
-    return (idx >= OVS_TUNNEL_INDEX_START && idx <= OVS_TUNNEL_INDEX_END);
-}
-
-static __inline BOOLEAN
-OvsIsVifVportNo(UINT32 portNo)
-{
-    UINT32 idx = OVS_VPORT_INDEX(portNo);
-    return (idx >= OVS_VM_VPORT_START && idx <= OVS_VM_VPORT_MAX);
-}
-
-static __inline POVS_VPORT_ENTRY
-OvsGetTunnelVport(OVS_VPORT_TYPE type)
-{
-    ASSERT(OvsIsTunnelVportType(type));
-    switch(type) {
-    case OVS_VPORT_TYPE_VXLAN:
-        return (POVS_VPORT_ENTRY) OvsGetVportFromIndex(OVS_VXLAN_VPORT_INDEX);
-    default:
-        ASSERT(! "OvsGetTunnelVport not implemented for this tunnel.");
-    }
-
-    return NULL;
-}
-
-static __inline PVOID
-OvsGetVportPriv(OVS_VPORT_TYPE type)
-{
-    return OvsGetTunnelVport(type)->priv;
 }
 
 static __inline UINT32
