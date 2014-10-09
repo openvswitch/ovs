@@ -148,6 +148,10 @@ EOF
         #ignore warnings
         ;;
 
+    -fno-strict-aliasing*)
+        #ignore aliasing
+        ;;
+
     -isystem)
         shift
         clopt="$clopt -I$1"
