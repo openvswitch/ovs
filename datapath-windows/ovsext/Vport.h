@@ -117,17 +117,6 @@ NDIS_STATUS OvsInitConfiguredSwitchNics(struct _OVS_SWITCH_CONTEXT *switchContex
 
 VOID OvsClearAllSwitchVports(struct _OVS_SWITCH_CONTEXT *switchContext);
 
-NTSTATUS OvsDumpVportIoctl(PVOID inputBuffer, UINT32 inputLength,
-                           PVOID outputBuffer, UINT32 outputLength,
-                           UINT32 *replyLen);
-NTSTATUS OvsGetVportIoctl(PVOID inputBuffer, UINT32 inputLength,
-                          PVOID outputBuffer, UINT32 outputLength,
-                          UINT32 *replyLen);
-NTSTATUS OvsAddVportIoctl(PVOID inputBuffer, UINT32 inputLength,
-                          PVOID outputBuffer, UINT32 outputLength,
-                          UINT32 *replyLen);
-NTSTATUS OvsDelVportIoctl(PVOID inputBuffer, UINT32 inputLength,
-                          UINT32 *replyLen);
 NDIS_STATUS OvsCreateNic(POVS_SWITCH_CONTEXT switchContext,
                          PNDIS_SWITCH_NIC_PARAMETERS nicParam);
 NDIS_STATUS OvsCreatePort(POVS_SWITCH_CONTEXT switchContext,
