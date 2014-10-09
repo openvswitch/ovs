@@ -1476,7 +1476,7 @@ OvsGetVportDumpNext(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
         for (i = inBucket; i < OVS_MAX_VPORT_ARRAY_SIZE; i++) {
             PLIST_ENTRY head, link;
-            head = &(gOvsSwitchContext->portHashArray[i]);
+            head = &(gOvsSwitchContext->portIdHashArray[i]);
             POVS_VPORT_ENTRY vport = NULL;
 
             outIndex = 0;
@@ -1488,7 +1488,7 @@ OvsGetVportDumpNext(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                  * inIndex + 1 vport from the bucket.
                 */
                 if (outIndex >= inIndex) {
-                    vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, portLink);
+                    vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, portIdLink);
 
                     if (vport->portNo != OVS_DPPORT_NUMBER_INVALID) {
                         OvsCreateMsgFromVport(vport, msgIn,

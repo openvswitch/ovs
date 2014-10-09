@@ -512,9 +512,9 @@ OvsFindVportByPortIdAndNicIndex(POVS_SWITCH_CONTEXT switchContext,
         POVS_VPORT_ENTRY vport;
         UINT32 hash;
         hash = OvsJhashWords((UINT32 *)&portId, 1, OVS_HASH_BASIS);
-        head = &(switchContext->portHashArray[hash & OVS_VPORT_MASK]);
+        head = &(switchContext->portIdHashArray[hash & OVS_VPORT_MASK]);
         LIST_FORALL(head, link) {
-            vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, portLink);
+            vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, portIdLink);
             if (portId == vport->portId && index == vport->nicIndex) {
                 return vport;
             }
@@ -762,8 +762,8 @@ POVS_VPORT_ENTRY vport)
     InsertHeadList(&switchContext->ovsPortNameHashArray[hash & OVS_VPORT_MASK],
                    &vport->ovsNameLink);
     hash = OvsJhashWords(&vport->portId, 1, OVS_HASH_BASIS);
-    InsertHeadList(&switchContext->portHashArray[hash & OVS_VPORT_MASK],
-                   &vport->portLink);
+    InsertHeadList(&switchContext->portIdHashArray[hash & OVS_VPORT_MASK],
+                   &vport->portIdLink);
     switchContext->numVports++;
     return NDIS_STATUS_SUCCESS;
 }
@@ -806,7 +806,7 @@ OvsRemoveAndDeleteVport(POVS_SWITCH_CONTEXT switchContext,
     }
 
     RemoveEntryList(&vport->ovsNameLink);
-    RemoveEntryList(&vport->portLink);
+    RemoveEntryList(&vport->portIdLink);
     gen = (gen + 1) & 0xff;
     switchContext->vportArray[OVS_VPORT_INDEX(vport->portNo)] =
                      (PVOID)(UINT64)gen;

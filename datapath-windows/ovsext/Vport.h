@@ -66,7 +66,7 @@ typedef struct _OVS_VPORT_FULL_STATS {
  */
 typedef struct _OVS_VPORT_ENTRY {
     LIST_ENTRY             ovsNameLink;
-    LIST_ENTRY             portLink;
+    LIST_ENTRY             portIdLink;
 
     OVS_VPORT_STATE        ovsState;
     OVS_VPORT_TYPE         ovsType;

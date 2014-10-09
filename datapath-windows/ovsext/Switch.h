@@ -111,7 +111,7 @@ typedef struct _OVS_SWITCH_CONTEXT
 
     PVOID                  *vportArray;
     PLIST_ENTRY             ovsPortNameHashArray;  // based on ovsName
-    PLIST_ENTRY             portHashArray;  // based on portId
+    PLIST_ENTRY             portIdHashArray;  // based on portId
 
     UINT32                  numPhysicalNics;
     UINT32                  numVports;     // include validation port
