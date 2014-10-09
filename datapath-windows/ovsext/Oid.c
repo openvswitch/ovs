@@ -159,6 +159,14 @@ OvsProcessSetOidPort(POVS_SWITCH_CONTEXT switchObject,
         goto done;
     }
 
+    if (portParam->IsValidationPort) {
+        /* Validation ports are used internally by the Hyper-V switch
+         * to validate and verify settings. We must skip handling them,
+         * and return STATUS_SUCCESS as the OID result
+         */
+        return NDIS_STATUS_SUCCESS;
+    }
+
     switch(setInfo->Oid) {
     case OID_SWITCH_PORT_CREATE:
         status = HvCreatePort(switchObject, portParam);

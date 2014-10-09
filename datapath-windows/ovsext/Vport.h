@@ -82,7 +82,6 @@ typedef struct _OVS_VPORT_ENTRY {
     NDIS_SWITCH_PORT_STATE portState;
     NDIS_SWITCH_NIC_STATE  nicState;
     NDIS_SWITCH_PORT_TYPE  portType;
-    BOOLEAN                isValidationPort;
 
     UINT8                  permMacAddress[MAC_ADDRESS_LEN];
     UINT8                  currMacAddress[MAC_ADDRESS_LEN];

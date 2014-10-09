@@ -609,7 +609,6 @@ static VOID
 OvsInitVportWithPortParam(POVS_VPORT_ENTRY vport,
                           PNDIS_SWITCH_PORT_PARAMETERS portParam)
 {
-    vport->isValidationPort = portParam->IsValidationPort;
     vport->portType = portParam->PortType;
     vport->portState = portParam->PortState;
     vport->portId = portParam->PortId;
@@ -698,7 +697,6 @@ OvsInitPhysNicVport(POVS_VPORT_ENTRY vport,
                     POVS_VPORT_ENTRY virtVport,
                     UINT32 nicIndex)
 {
-    vport->isValidationPort = virtVport->isValidationPort;
     vport->portType = virtVport->portType;
     vport->portState = virtVport->portState;
     vport->portId = virtVport->portId;
@@ -838,6 +836,11 @@ OvsAddConfiguredSwitchPorts(POVS_SWITCH_CONTEXT switchContext)
 
     for (arrIndex = 0; arrIndex < portArray->NumElements; arrIndex++) {
          portParam = NDIS_SWITCH_PORT_AT_ARRAY_INDEX(portArray, arrIndex);
+
+         if (portParam->IsValidationPort) {
+             continue;
+         }
+
          vport = (POVS_VPORT_ENTRY)OvsAllocateVport();
          if (vport == NULL) {
              status = NDIS_STATUS_RESOURCES;
@@ -954,7 +957,6 @@ OvsInitTunnelVport(POVS_VPORT_ENTRY vport,
     size_t len;
     NTSTATUS status = STATUS_SUCCESS;
 
-    vport->isValidationPort = FALSE;
     vport->ovsType = addReq->type;
     vport->ovsState = OVS_STATE_PORT_CREATED;
     RtlCopyMemory(vport->ovsName, addReq->name, OVS_MAX_PORT_NAME_LENGTH);
