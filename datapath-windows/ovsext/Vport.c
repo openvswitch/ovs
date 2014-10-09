@@ -491,6 +491,51 @@ OvsFindVportByOvsName(POVS_SWITCH_CONTEXT switchContext,
     return NULL;
 }
 
+/* OvsFindVportByHvName: "name" is assumed to be null-terminated */
+POVS_VPORT_ENTRY
+OvsFindVportByHvName(POVS_SWITCH_CONTEXT switchContext,
+                     PSTR name)
+{
+    POVS_VPORT_ENTRY vport = NULL;
+    PLIST_ENTRY head, link;
+    /* 'portFriendlyName' is not NUL-terminated. */
+    SIZE_T length = strlen(name);
+    SIZE_T wstrSize = length * sizeof(WCHAR);
+
+    PWSTR wsName = OvsAllocateMemory(wstrSize);
+    if (!wsName) {
+        return NULL;
+    }
+    for (UINT i = 0; i < length; i) {
+        wsName[i] = name[i];
+    }
+
+    for (UINT32 i = 0; i < OVS_MAX_VPORT_ARRAY_SIZE; i) {
+        head = &(switchContext->portIdHashArray[i]);
+        LIST_FORALL(head, link) {
+            vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, portIdLink);
+
+            /*
+             * NOTE about portFriendlyName:
+             * If the string is NULL-terminated, the Length member does not
+             * include the terminating NULL character.
+             */
+            if (vport->portFriendlyName.Length == wstrSize &&
+                RtlEqualMemory(wsName, vport->portFriendlyName.String,
+                               vport->portFriendlyName.Length)) {
+                goto Cleanup;
+            }
+
+            vport = NULL;
+        }
+    }
+
+Cleanup:
+    OvsFreeMemory(wsName);
+
+    return vport;
+}
+
 POVS_VPORT_ENTRY
 OvsFindVportByPortIdAndNicIndex(POVS_SWITCH_CONTEXT switchContext,
                                 NDIS_SWITCH_PORT_ID portId,
@@ -558,8 +603,12 @@ OvsInitVportWithPortParam(POVS_VPORT_ENTRY vport,
         vport->ovsType = OVS_VPORT_TYPE_NETDEV;
         break;
     }
-    RtlCopyMemory(&vport->portName, &portParam->PortName,
+    RtlCopyMemory(&vport->hvPortName, &portParam->PortName,
                   sizeof (NDIS_SWITCH_PORT_NAME));
+
+    RtlCopyMemory(&vport->portFriendlyName, &portParam->PortFriendlyName,
+                  sizeof(NDIS_SWITCH_PORT_FRIENDLYNAME));
+
     switch (vport->portState) {
     case NdisSwitchPortStateCreated:
         vport->ovsState = OVS_STATE_PORT_CREATED;
@@ -634,8 +683,13 @@ OvsInitPhysNicVport(POVS_VPORT_ENTRY vport,
     vport->ovsType = OVS_VPORT_TYPE_NETDEV;
     vport->isExternal = TRUE;
     vport->nicIndex = (NDIS_SWITCH_NIC_INDEX)nicIndex;
-    RtlCopyMemory(&vport->portName, &virtVport->portName,
+
+    RtlCopyMemory(&vport->hvPortName, &virtVport->hvPortName,
                   sizeof (NDIS_SWITCH_PORT_NAME));
+
+    RtlCopyMemory(&vport->portFriendlyName, &virtVport->portFriendlyName,
+                  sizeof(NDIS_SWITCH_PORT_FRIENDLYNAME));
+
     vport->ovsState = OVS_STATE_PORT_CREATED;
 }
 static NDIS_STATUS

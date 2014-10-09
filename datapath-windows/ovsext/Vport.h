@@ -101,7 +101,8 @@ typedef struct _OVS_VPORT_ENTRY {
     UINT8                  currMacAddress[MAC_ADDRESS_LEN];
     UINT8                  vmMacAddress[MAC_ADDRESS_LEN];
 
-    NDIS_SWITCH_PORT_NAME  portName;
+    NDIS_SWITCH_PORT_NAME  hvPortName;
+    IF_COUNTED_STRING      portFriendlyName;
     NDIS_SWITCH_NIC_NAME   nicName;
     NDIS_VM_NAME           vmName;
     GUID                   netCfgInstanceId;
@@ -117,6 +118,8 @@ OvsFindVportByPortNo(struct _OVS_SWITCH_CONTEXT *switchContext,
 POVS_VPORT_ENTRY
 OvsFindVportByOvsName(struct _OVS_SWITCH_CONTEXT *switchContext,
                       CHAR *name, UINT32 length);
+POVS_VPORT_ENTRY
+OvsFindVportByHvName(POVS_SWITCH_CONTEXT switchContext, PSTR name);
 POVS_VPORT_ENTRY
 OvsFindVportByPortIdAndNicIndex(struct _OVS_SWITCH_CONTEXT *switchContext,
                                 NDIS_SWITCH_PORT_ID portId,
