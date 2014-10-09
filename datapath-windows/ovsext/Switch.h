@@ -53,6 +53,8 @@
 
 #define OVS_HASH_BASIS   0x13578642
 
+typedef struct _OVS_VPORT_ENTRY *POVS_VPORT_ENTRY;
+
 typedef struct _OVS_DATAPATH
 {
    PLIST_ENTRY             flowTable;       // Contains OvsFlows.
@@ -104,8 +106,8 @@ typedef struct _OVS_SWITCH_CONTEXT
 
     NDIS_SWITCH_PORT_ID     externalPortId;
     NDIS_SWITCH_PORT_ID     internalPortId;
-    PVOID                   externalVport;  // the virtual adapter vport
-    PVOID                   internalVport;
+    POVS_VPORT_ENTRY        externalVport;  // the virtual adapter vport
+    POVS_VPORT_ENTRY        internalVport;
 
     PVOID                  *vportArray;
     PLIST_ENTRY             nameHashArray;  // based on ovsName
