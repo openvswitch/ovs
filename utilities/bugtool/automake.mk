@@ -17,6 +17,7 @@ bugtool_scripts = \
 	utilities/bugtool/ovs-bugtool-bfd-show \
 	utilities/bugtool/ovs-bugtool-cfm-show \
 	utilities/bugtool/ovs-bugtool-coverage-show \
+	utilities/bugtool/ovs-bugtool-fdb-show \
 	utilities/bugtool/ovs-bugtool-lacp-show \
 	utilities/bugtool/ovs-bugtool-list-dbs \
 	utilities/bugtool/ovs-bugtool-memory-show \

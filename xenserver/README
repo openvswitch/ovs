@@ -83,6 +83,7 @@ debugging.  The sources for the extensions are in
 
             * ovs-bugtool-bfd-show
             * ovs-bugtool-cfm-show
+            * ovs-bugtool-fdb-show
             * ovs-bugtool-lacp-show
             * ovs-bugtool-list-dbs
             * ovs-bugtool-ovsdb-dump
@@ -120,6 +121,10 @@ scripts are located in ../utilities/bugtool:
     ovs-bugtool-cfm-show
 
         Script to dump detailed CFM information for all enabled interfaces.
+
+    ovs-bugtool-fdb-show
+
+        Script to collect a summary of learned MACs for each bridge.
 
     ovs-bugtool-lacp-show
 
