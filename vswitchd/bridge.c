@@ -2311,9 +2311,6 @@ bridge_run(void)
          * with the current situation of multiple ovs-vswitchd daemons,
          * disable system stats collection. */
         system_stats_enable(false);
-        /* This prevents the process from constantly waking up on
-         * connectivity seq. */
-        connectivity_seqno = seq_read(connectivity_seq_get());
         return;
     } else if (!ovsdb_idl_has_lock(idl)) {
         return;
@@ -2528,14 +2525,19 @@ bridge_wait(void)
         poll_timer_wait_until(stats_timer);
     }
 
-    /* If the status database transaction is 'TXN_INCOMPLETE' or is
-     * unsuccessful, register a timeout in 'STATUS_CHECK_AGAIN_MSEC'.  Else,
-     * wait on the global connectivity sequence number.  Note, this also helps
-     * batch multiple status changes into one transaction. */
-    if (force_status_commit) {
-        poll_timer_wait_until(time_msec() + STATUS_CHECK_AGAIN_MSEC);
-    } else {
-        seq_wait(connectivity_seq_get(), connectivity_seqno);
+    /* This prevents the process from constantly waking up on
+     * connectivity seq, when there is no connection to ovsdb. */
+    if (ovsdb_idl_has_lock(idl)) {
+        /* If the status database transaction is 'TXN_INCOMPLETE' or is
+         * unsuccessful, register a timeout in 'STATUS_CHECK_AGAIN_MSEC'.
+         * Else, wait on the global connectivity sequence number.  Note,
+         * this also helps batch multiple status changes into one
+         * transaction. */
+        if (force_status_commit) {
+            poll_timer_wait_until(time_msec() + STATUS_CHECK_AGAIN_MSEC);
+        } else {
+            seq_wait(connectivity_seq_get(), connectivity_seqno);
+        }
     }
 
     system_stats_wait();
