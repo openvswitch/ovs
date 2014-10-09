@@ -135,6 +135,11 @@ VOID HvDeleteNic(POVS_SWITCH_CONTEXT switchContext,
 VOID HvDisconnectNic(POVS_SWITCH_CONTEXT switchContext,
                      PNDIS_SWITCH_NIC_PARAMETERS nicParam);
 
+UINT32 OvsComputeVportNo(POVS_SWITCH_CONTEXT switchContext,
+                         UINT32 nicIndex,
+                         OVS_VPORT_TYPE ovsType,
+                         BOOLEAN isExternal);
+
 static __inline BOOLEAN
 OvsIsTunnelVportType(OVS_VPORT_TYPE ovsType)
 {

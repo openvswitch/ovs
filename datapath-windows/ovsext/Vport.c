@@ -50,9 +50,6 @@
 extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
 extern PNDIS_SPIN_LOCK gOvsCtrlLock;
 
-static UINT32 OvsGetVportNo(POVS_SWITCH_CONTEXT switchContext, UINT32 nicIndex,
-                            OVS_VPORT_TYPE ovsType,
-                            BOOLEAN isExternal);
 static POVS_VPORT_ENTRY OvsAllocateVport(VOID);
 static VOID OvsInitVportWithPortParam(POVS_VPORT_ENTRY vport,
                 PNDIS_SWITCH_PORT_PARAMETERS portParam);
@@ -526,11 +523,11 @@ OvsFindVportByPortIdAndNicIndex(POVS_SWITCH_CONTEXT switchContext,
     }
 }
 
-static UINT32
-OvsGetVportNo(POVS_SWITCH_CONTEXT switchContext,
-              UINT32 nicIndex,
-              OVS_VPORT_TYPE ovsType,
-              BOOLEAN isExternal)
+UINT32
+OvsComputeVportNo(POVS_SWITCH_CONTEXT switchContext,
+                  UINT32 nicIndex,
+                  OVS_VPORT_TYPE ovsType,
+                  BOOLEAN isExternal)
 {
     UINT32 index = 0xffffff, i = 0;
     UINT64 gen;
@@ -716,7 +713,7 @@ POVS_VPORT_ENTRY vport)
     size_t len;
     if (vport->portType != NdisSwitchPortTypeExternal ||
         vport->nicIndex != 0) {
-        vport->portNo = OvsGetVportNo(switchContext, vport->nicIndex,
+        vport->portNo = OvsComputeVportNo(switchContext, vport->nicIndex,
             vport->ovsType, vport->portType == NdisSwitchPortTypeExternal);
         if (vport->portNo == OVS_DPPORT_NUMBER_INVALID) {
             return NDIS_STATUS_RESOURCES;
