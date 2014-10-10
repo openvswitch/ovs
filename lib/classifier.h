@@ -291,7 +291,7 @@ int classifier_count(const struct classifier *);
 void classifier_insert(struct classifier *, struct cls_rule *);
 struct cls_rule *classifier_replace(struct classifier *, struct cls_rule *);
 
-void classifier_remove(struct classifier *, struct cls_rule *);
+struct cls_rule *classifier_remove(struct classifier *, struct cls_rule *);
 struct cls_rule *classifier_lookup(const struct classifier *,
                                    const struct flow *,
                                    struct flow_wildcards *);

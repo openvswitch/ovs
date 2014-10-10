@@ -770,22 +770,31 @@ classifier_insert(struct classifier *cls, struct cls_rule *rule)
 
 /* Removes 'rule' from 'cls'.  It is the caller's responsibility to destroy
  * 'rule' with cls_rule_destroy(), freeing the memory block in which 'rule'
- * resides, etc., as necessary. */
-void
+ * resides, etc., as necessary.
+ *
+ * Does nothing if 'rule' has been already removed, or was never inserted.
+ *
+ * Returns the removed rule, or NULL, if it was already removed.
+ */
+struct cls_rule *
 classifier_remove(struct classifier *cls, struct cls_rule *rule)
     OVS_EXCLUDED(cls->mutex)
 {
     struct cls_partition *partition;
-    struct cls_match *cls_match = rule->cls_match;
+    struct cls_match *cls_match;
     struct cls_match *head;
     struct cls_subtable *subtable;
     int i;
     uint32_t basis = 0, hash, ihash[CLS_MAX_INDICES];
     uint8_t prev_be32ofs = 0;
 
-    ovs_assert(cls_match);
-
     ovs_mutex_lock(&cls->mutex);
+    cls_match = rule->cls_match;
+    if (!cls_match) {
+        rule = NULL;
+        goto unlock; /* Already removed. */
+    }
+
     subtable = find_subtable(cls, &rule->match.mask);
     ovs_assert(subtable);
 
@@ -858,9 +867,12 @@ classifier_remove(struct classifier *cls, struct cls_rule *rule)
 
     cls->n_rules--;
 
-    rule->cls_match = NULL;
     ovsrcu_postpone(free, cls_match);
+    rule->cls_match = NULL;
+unlock:
     ovs_mutex_unlock(&cls->mutex);
+
+    return rule;
 }
 
 /* Prefix tree context.  Valid when 'lookup_done' is true.  Can skip all
