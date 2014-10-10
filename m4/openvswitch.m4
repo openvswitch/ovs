@@ -244,7 +244,7 @@ AC_DEFUN([OVS_CHECK_PYTHON],
         ovs_cv_python=$PYTHON
       else
         ovs_cv_python=no
-        for binary in python python2.4 python2.5; do
+        for binary in python python2.4 python2.5 python2.7; do
           ovs_save_IFS=$IFS; IFS=$PATH_SEPARATOR
           for dir in $PATH; do
             IFS=$ovs_save_IFS
