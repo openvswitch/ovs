@@ -140,14 +140,6 @@ nxm_header_len(uint64_t header)
     return 4 + nxm_experimenter_len(header);
 }
 
-/* Returns true if 'header' is a legacy NXM header, false if it is an OXM
- * header.*/
-static bool
-is_nxm_header(uint64_t header)
-{
-    return nxm_class(header) <= 1;
-}
-
 #define NXM_HEADER(VENDOR, CLASS, FIELD, HASMASK, LENGTH)       \
     (((uint64_t) (CLASS) << 48) |                               \
      ((uint64_t) (FIELD) << 41) |                               \
@@ -197,8 +189,8 @@ struct nxm_field {
 
 static const struct nxm_field *nxm_field_by_header(uint64_t header);
 static const struct nxm_field *nxm_field_by_name(const char *name, size_t len);
-static const struct nxm_field *nxm_field_by_mf_id(enum mf_field_id);
-static const struct nxm_field *oxm_field_by_mf_id(enum mf_field_id);
+static const struct nxm_field *nxm_field_by_mf_id(enum mf_field_id,
+                                                  enum ofp_version);
 
 static void nx_put_header__(struct ofpbuf *, uint64_t header, bool masked);
 
@@ -209,14 +201,6 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 static const struct nxm_field *
 mf_parse_subfield_name(const char *name, int name_len, bool *wild);
 
-static const struct nxm_field *
-nxm_field_from_mf_field(enum mf_field_id id, enum ofp_version version)
-{
-    const struct nxm_field *oxm = oxm_field_by_mf_id(id);
-    const struct nxm_field *nxm = nxm_field_by_mf_id(id);
-    return oxm && (version >= oxm->version || !nxm) ? oxm : nxm;
-}
-
 /* Returns the preferred OXM header to use for field 'id' in OpenFlow version
  * 'version'.  Specify 0 for 'version' if an NXM legacy header should be
  * preferred over any standardized OXM header.  Returns 0 if field 'id' cannot
@@ -224,7 +208,7 @@ nxm_field_from_mf_field(enum mf_field_id id, enum ofp_version version)
 static uint64_t
 mf_oxm_header(enum mf_field_id id, enum ofp_version version)
 {
-    const struct nxm_field *f = nxm_field_from_mf_field(id, version);
+    const struct nxm_field *f = nxm_field_by_mf_id(id, version);
     return f ? f->header : 0;
 }
 
@@ -264,16 +248,7 @@ nxm_field_bytes(uint64_t header)
     unsigned int length = nxm_payload_len(header);
     return nxm_hasmask(header) ? length / 2 : length;
 }
-
-/* Returns the earliest version of OpenFlow that standardized an OXM header for
- * field 'id', or UINT8_MAX if no version of OpenFlow does. */
-static enum ofp_version
-mf_oxm_version(enum mf_field_id id)
-{
-    const struct nxm_field *oxm = oxm_field_by_mf_id(id);
-    return oxm ? oxm->version : UINT8_MAX;
-}
- 
+
 /* nx_pull_match() and helpers. */
 
 /* Given NXM/OXM value 'value' and mask 'mask' associated with 'header', checks
@@ -1541,7 +1516,7 @@ mf_format_subfield(const struct mf_subfield *sf, struct ds *s)
     if (!sf->field) {
         ds_put_cstr(s, "<unknown>");
     } else {
-        const struct nxm_field *f = nxm_field_from_mf_field(sf->field->id, 0);
+        const struct nxm_field *f = nxm_field_by_mf_id(sf->field->id, 0);
         ds_put_cstr(s, f ? f->name : sf->field->name);
     }
 
@@ -1685,8 +1660,8 @@ oxm_bitmap_to_mf_bitmap(ovs_be64 oxm_bitmap, enum ofp_version version)
     struct mf_bitmap fields = MF_BITMAP_INITIALIZER;
 
     for (enum mf_field_id id = 0; id < MFF_N_IDS; id++) {
-        if (version >= mf_oxm_version(id)) {
-            uint64_t oxm = mf_oxm_header(id, version);
+        uint64_t oxm = mf_oxm_header(id, version);
+        if (oxm && version >= nxm_field_by_header(oxm)->version) {
             uint32_t class = nxm_class(oxm);
             int field = nxm_field(oxm);
 
@@ -1749,17 +1724,17 @@ oxm_maskable_fields(void)
 }
 
 struct nxm_field_index {
-    struct hmap_node header_node;
-    struct hmap_node name_node;
-    struct nxm_field nf;
+    struct hmap_node header_node; /* In nxm_header_map. */
+    struct hmap_node name_node;   /* In nxm_name_map. */
+    struct list mf_node;          /* In mf_mf_map[nf.id]. */
+    const struct nxm_field nf;
 };
 
 #include "nx-match.inc"
 
 static struct hmap nxm_header_map;
 static struct hmap nxm_name_map;
-static struct nxm_field *nxm_fields[MFF_N_IDS];
-static struct nxm_field *oxm_fields[MFF_N_IDS];
+static struct list nxm_mf_map[MFF_N_IDS];
 
 static void
 nxm_init(void)
@@ -1768,17 +1743,16 @@ nxm_init(void)
     if (ovsthread_once_start(&once)) {
         hmap_init(&nxm_header_map);
         hmap_init(&nxm_name_map);
+        for (int i = 0; i < MFF_N_IDS; i++) {
+            list_init(&nxm_mf_map[i]);
+        }
         for (struct nxm_field_index *nfi = all_nxm_fields;
              nfi < &all_nxm_fields[ARRAY_SIZE(all_nxm_fields)]; nfi++) {
             hmap_insert(&nxm_header_map, &nfi->header_node,
                         hash_int(nfi->nf.header, 0));
             hmap_insert(&nxm_name_map, &nfi->name_node,
                         hash_string(nfi->nf.name, 0));
-            if (is_nxm_header(nfi->nf.header)) {
-                nxm_fields[nfi->nf.id] = &nfi->nf;
-            } else {
-                oxm_fields[nfi->nf.id] = &nfi->nf;
-            }
+            list_push_back(&nxm_mf_map[nfi->nf.id], &nfi->mf_node);
         }
         ovsthread_once_done(&once);
     }
@@ -1819,16 +1793,18 @@ nxm_field_by_name(const char *name, size_t len)
 }
 
 static const struct nxm_field *
-nxm_field_by_mf_id(enum mf_field_id id)
+nxm_field_by_mf_id(enum mf_field_id id, enum ofp_version version)
 {
-    nxm_init();
-    return nxm_fields[id];
-}
+    const struct nxm_field_index *nfi;
+    const struct nxm_field *f;
 
-static const struct nxm_field *
-oxm_field_by_mf_id(enum mf_field_id id)
-{
     nxm_init();
-    return oxm_fields[id];
-}
 
+    f = NULL;
+    LIST_FOR_EACH (nfi, mf_node, &nxm_mf_map[id]) {
+        if (!f || version >= nfi->nf.version) {
+            f = &nfi->nf;
+        }
+    }
+    return f;
+}

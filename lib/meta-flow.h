@@ -215,6 +215,11 @@ struct match;
  *     OXM (e.g. "since OF1.3 and v1.10" if it was introduced in OpenFlow 1.3
  *     and first supported by Open vSwitch in version 1.10).
  *
+ *     Some fields have more than one OXM field assignment.  For example,
+ *     actset_output has an experimenter OXM assignment in OpenFlow 1.3 and a
+ *     standard OXM assignment in OpenFlow 1.5.  In such a case, specify both,
+ *     separated by commas.
+ *
  *     OVS uses the start of the OXM field name to determine the correct OXM
  *     class.  To support a new OXM class, edit the mapping table in
  *     build-aux/extract-ofp-fields.

@@ -122,10 +122,13 @@ def make_sizeof(s):
     else:
         return "sizeof(%s)" % s
 
-def parse_oxm(s, prefix, n_bytes):
+def parse_oxms(s, prefix, n_bytes):
     if s == 'none':
-        return None
+        return ()
 
+    return tuple(parse_oxm(s2.strip(), prefix, n_bytes) for s2 in s.split(','))
+
+def parse_oxm(s, prefix, n_bytes):
     m = re.match('([A-Z0-9_]+)\(([0-9]+)\) since(?: OF(1\.[0-9]+) and)? v([12]\.[0-9]+)$', s)
     if not m:
         fatal("%s: syntax error parsing %s" % (s, prefix))
@@ -247,8 +250,8 @@ def parse_field(mff, comment):
     if not d['OF1.1'] in (None, 'exact match', 'bitwise mask'):
         fatal("%s: unknown OF1.1 match type %s" % (mff, d['OF1.1']))
 
-    f['OXM'] = parse_oxm(d['OXM'], 'OXM', f['n_bytes'])
-    f['NXM'] = parse_oxm(d['NXM'], 'NXM', f['n_bytes'])
+    f['OXM'] = (parse_oxms(d['OXM'], 'OXM', f['n_bytes']) +
+                parse_oxms(d['NXM'], 'NXM', f['n_bytes']))
 
     f['prefix'] = d["Prefix lookup member"]
 
@@ -284,13 +287,7 @@ def make_meta_flow(fields):
         output += ["    %s, %s, %s, %s,"
                    % (f['mask'], f['string'], f['prereqs'], rw)]
 
-        nxm = f['NXM']
         oxm = f['OXM']
-        if not nxm:
-            nxm = oxm
-        elif not oxm:
-            oxm = nxm
-
         of10 = f['OF1.0']
         of11 = f['OF1.1']
         if f['mff'] in ('MFF_DL_VLAN', 'MFF_DL_VLAN_PCP'):
@@ -305,7 +302,7 @@ def make_meta_flow(fields):
                 protocols |= set(["of10"])
             if of11:
                 protocols |= set(["of11"])
-            if nxm or oxm:
+            if oxm:
                 protocols |= set(["oxm"])
 
         if f['mask'] == 'MFM_FULLY':
@@ -342,17 +339,14 @@ def make_meta_flow(fields):
         output += ["},"]
     return output
 
-def print_oxm_field(oxm, mff):
-    if oxm:
-        print """{ .nf = { %s, %d, "%s", %s } },""" % (
-            oxm[0], oxm[2], oxm[1], mff)
-
 def make_nx_match(fields):
     output = []
     print "static struct nxm_field_index all_nxm_fields[] = {";
     for f in fields:
-        print_oxm_field(f['NXM'], f['mff'])
-        print_oxm_field(f['OXM'], f['mff'])
+        # Sort by OpenFlow version number (nx-match.c depends on this).
+        for oxm in sorted(f['OXM'], key=lambda x: x[2]):
+            print """{ .nf = { %s, %d, "%s", %s } },""" % (
+                oxm[0], oxm[2], oxm[1], f['mff'])
     print "};"
     return output
 
