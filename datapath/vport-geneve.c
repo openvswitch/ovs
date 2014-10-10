@@ -31,7 +31,6 @@
 #include <net/ip.h>
 #include <net/route.h>
 #include <net/udp.h>
-#include <net/vxlan.h>
 #include <net/xfrm.h>
 
 #include "datapath.h"

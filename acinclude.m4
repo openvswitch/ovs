@@ -379,6 +379,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
 
   OVS_GREP_IFELSE([$KSRC/include/linux/openvswitch.h], [openvswitch_handle_frame_hook],
                   [OVS_DEFINE([HAVE_RHEL_OVS_HOOK])])
+  OVS_GREP_IFELSE([$KSRC/include/net/vxlan.h], [vxlan_xmit_skb])
   OVS_GREP_IFELSE([$KSRC/include/net/vxlan.h], [bool xnet],
                   [OVS_DEFINE([HAVE_VXLAN_XMIT_SKB_XNET_ARG])])
   OVS_GREP_IFELSE([$KSRC/include/net/udp.h], [udp_flow_src_port],
