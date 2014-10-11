@@ -338,7 +338,10 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                       nlMsgHdr->nlmsgSeq, nlMsgHdr->nlmsgPid,
                       genlMsgHdr->cmd, OVS_FLOW_VERSION,
                       ovsHdr->dp_ifindex);
-    ASSERT(rc);
+
+    if (rc != STATUS_SUCCESS) {
+        goto done;
+    }
 
     /* Append OVS_FLOW_ATTR_STATS attribute */
     if (!NlMsgPutTailUnspec(&nlBuf, OVS_FLOW_ATTR_STATS,
