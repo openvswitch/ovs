@@ -269,8 +269,6 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     RtlZeroMemory(&stats, sizeof(stats));
     RtlZeroMemory(&replyStats, sizeof(replyStats));
 
-    *replyLen = 0;
-
     if (!(usrParamsCtx->outputBuffer)) {
         /* No output buffer */
         rc = STATUS_INVALID_BUFFER_SIZE;
@@ -387,8 +385,6 @@ OvsFlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
     NL_BUFFER nlBuf;
 
-    *replyLen = 0;
-
     if (!(usrParamsCtx->outputBuffer)) {
         /* No output buffer */
         rc = STATUS_INVALID_BUFFER_SIZE;
@@ -462,8 +458,6 @@ _FlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     RtlZeroMemory(&getOutput, sizeof(OvsFlowGetOutput));
     UINT32 keyAttrOffset = 0;
     UINT32 tunnelKeyAttrOffset = 0;
-
-    *replyLen = 0;
 
     if (usrParamsCtx->inputLength > usrParamsCtx->outputLength) {
         /* Should not be the case.
