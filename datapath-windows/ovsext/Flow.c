@@ -261,6 +261,7 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     OvsFlowPut mappedFlow;
     OvsFlowStats stats;
     struct ovs_flow_stats replyStats;
+    NL_ERROR nlError = NL_ERROR_SUCCESS;
 
     NL_BUFFER nlBuf;
 
@@ -270,13 +271,19 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
     *replyLen = 0;
 
+    if (!(usrParamsCtx->outputBuffer)) {
+        /* No output buffer */
+        rc = STATUS_INVALID_BUFFER_SIZE;
+        goto done;
+    }
+
     /* Get all the top level Flow attributes */
     if ((NlAttrParse(nlMsgHdr, attrOffset, NlMsgAttrsLen(nlMsgHdr),
                      nlFlowPolicy, nlAttrs, ARRAY_SIZE(nlAttrs)))
                      != TRUE) {
         OVS_LOG_ERROR("Attr Parsing failed for msg: %p",
                        nlMsgHdr);
-        rc = STATUS_UNSUCCESSFUL;
+        rc = STATUS_INVALID_PARAMETER;
         goto done;
     }
 
@@ -287,7 +294,7 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         goto done;
     }
 
-    if ((_MapNlToFlowPut(msgIn, nlAttrs[OVS_FLOW_ATTR_KEY],
+    if ((rc = _MapNlToFlowPut(msgIn, nlAttrs[OVS_FLOW_ATTR_KEY],
          nlAttrs[OVS_FLOW_ATTR_ACTIONS], nlAttrs[OVS_FLOW_ATTR_CLEAR],
          &mappedFlow))
         != STATUS_SUCCESS) {
@@ -299,12 +306,6 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                          &stats);
     if (rc != STATUS_SUCCESS) {
         OVS_LOG_ERROR("OvsFlowPut failed.");
-        goto done;
-    }
-
-    if (!(usrParamsCtx->outputBuffer)) {
-        /* No output buffer */
-        OVS_LOG_ERROR("outputBuffer NULL.");
         goto done;
     }
 
@@ -326,7 +327,7 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     if (!NlMsgPutTailUnspec(&nlBuf, OVS_FLOW_ATTR_STATS,
         (PCHAR)(&replyStats), sizeof(replyStats))) {
         OVS_LOG_ERROR("Adding OVS_FLOW_ATTR_STATS attribute failed.");
-        rc = STATUS_UNSUCCESSFUL;
+        rc = STATUS_INVALID_BUFFER_SIZE;
         goto done;
     }
 
@@ -334,6 +335,15 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     *replyLen = msgOut->nlMsg.nlmsgLen;
 
 done:
+
+    if ((nlError != NL_ERROR_SUCCESS) &&
+        (usrParamsCtx->outputBuffer)) {
+        POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
+                                       usrParamsCtx->outputBuffer;
+        BuildErrorMsg(msgIn, msgError, nlError);
+        *replyLen = msgError->nlMsg.nlmsgLen;
+    }
+
     return rc;
 }
 
@@ -348,7 +358,16 @@ OvsFlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                        UINT32 *replyLen)
 {
     NTSTATUS rc = STATUS_SUCCESS;
+    NL_ERROR nlError = NL_ERROR_SUCCESS;
+    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
+
     *replyLen = 0;
+
+    if (!(usrParamsCtx->outputBuffer)) {
+        /* No output buffer */
+        rc = STATUS_INVALID_BUFFER_SIZE;
+        goto done;
+    }
 
     if (usrParamsCtx->devOp == OVS_TRANSACTION_DEV_OP) {
         rc = _FlowNlGetCmdHandler(usrParamsCtx, replyLen);
@@ -356,6 +375,15 @@ OvsFlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         rc = _FlowNlDumpCmdHandler(usrParamsCtx, replyLen);
     }
 
+    if ((nlError != NL_ERROR_SUCCESS) &&
+        (usrParamsCtx->outputBuffer)) {
+        POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
+                                       usrParamsCtx->outputBuffer;
+        BuildErrorMsg(msgIn, msgError, nlError);
+        *replyLen = msgError->nlMsg.nlmsgLen;
+    }
+
+done:
     return rc;
 }
 
@@ -410,7 +438,7 @@ _FlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                      != TRUE) {
         OVS_LOG_ERROR("Attr Parsing failed for msg: %p",
                        nlMsgHdr);
-        rc = STATUS_UNSUCCESSFUL;
+        rc = STATUS_INVALID_PARAMETER;
         goto done;
     }
 
@@ -424,7 +452,7 @@ _FlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                            != TRUE) {
         OVS_LOG_ERROR("Key Attr Parsing failed for msg: %p",
                        nlMsgHdr);
-        rc = STATUS_UNSUCCESSFUL;
+        rc = STATUS_INVALID_PARAMETER;
         goto done;
     }
 
@@ -441,7 +469,7 @@ _FlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                != TRUE) {
             OVS_LOG_ERROR("Tunnel key Attr Parsing failed for msg: %p",
                            nlMsgHdr);
-            rc = STATUS_UNSUCCESSFUL;
+            rc = STATUS_INVALID_PARAMETER;
             goto done;
         }
     }
@@ -657,19 +685,19 @@ _MapFlowStatsToNlStats(PNL_BUFFER nlBuf, OvsFlowStats *flowStats)
     replyStats.n_bytes = flowStats->byteCount;
 
     if (!NlMsgPutTailU64(nlBuf, OVS_FLOW_ATTR_USED, flowStats->used)) {
-        rc = STATUS_UNSUCCESSFUL;
+        rc = STATUS_INVALID_BUFFER_SIZE;
         goto done;
     }
 
     if (!NlMsgPutTailUnspec(nlBuf, OVS_FLOW_ATTR_STATS,
                            (PCHAR)(&replyStats),
                            sizeof(struct ovs_flow_stats))) {
-        rc = STATUS_UNSUCCESSFUL;
+        rc = STATUS_INVALID_BUFFER_SIZE;
         goto done;
     }
 
     if (!NlMsgPutTailU8(nlBuf, OVS_FLOW_ATTR_TCP_FLAGS, flowStats->tcpFlags)) {
-        rc = STATUS_UNSUCCESSFUL;
+        rc = STATUS_INVALID_BUFFER_SIZE;
         goto done;
     }
 
@@ -693,13 +721,13 @@ _MapFlowActionToNlAction(PNL_BUFFER nlBuf, uint32_t actionsLen,
     offset = NlMsgStartNested(nlBuf, OVS_FLOW_ATTR_ACTIONS);
     if (!offset) {
         /* Starting the nested attribute failed. */
-        rc = STATUS_UNSUCCESSFUL;
+        rc = STATUS_INVALID_BUFFER_SIZE;
         goto error_nested_start;
     }
 
     if (!NlBufCopyAtTail(nlBuf, (PCHAR)actions, actionsLen)) {
         /* Adding a nested attribute failed. */
-        rc = STATUS_UNSUCCESSFUL;
+        rc = STATUS_INVALID_BUFFER_SIZE;
         goto done;
     }
 
@@ -1118,7 +1146,7 @@ _MapNlToFlowPut(POVS_MESSAGE msgIn, PNL_ATTR keyAttr,
                            != TRUE) {
         OVS_LOG_ERROR("Key Attr Parsing failed for msg: %p",
                        nlMsgHdr);
-        rc = STATUS_UNSUCCESSFUL;
+        rc = STATUS_INVALID_PARAMETER;
         goto done;
     }
 
@@ -1137,7 +1165,7 @@ _MapNlToFlowPut(POVS_MESSAGE msgIn, PNL_ATTR keyAttr,
                                != TRUE) {
             OVS_LOG_ERROR("Tunnel key Attr Parsing failed for msg: %p",
                            nlMsgHdr);
-            rc = STATUS_UNSUCCESSFUL;
+            rc = STATUS_INVALID_PARAMETER;
             goto done;
         }
     }
