@@ -123,7 +123,7 @@ static const NL_POLICY nlFlowKeyPolicy[] = {
     [OVS_KEY_ATTR_ETHERNET] = {.type = NL_A_UNSPEC,
                                .minLen = sizeof(struct ovs_key_ethernet),
                                .maxLen = sizeof(struct ovs_key_ethernet),
-                               .optional = FALSE},
+                               .optional = TRUE},
     [OVS_KEY_ATTR_VLAN] = {.type = NL_A_UNSPEC, .minLen = 2,
                            .maxLen = 2, .optional = TRUE},
     [OVS_KEY_ATTR_ETHERTYPE] = {.type = NL_A_UNSPEC, .minLen = 2,
@@ -1232,18 +1232,26 @@ _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
                      PNL_ATTR *tunnelAttrs,
                      OvsFlowKey *destKey)
 {
-    const struct ovs_key_ethernet *eth_key;
-
     _MapTunAttrToFlowPut(keyAttrs, tunnelAttrs, destKey);
 
     /* ===== L2 headers ===== */
     destKey->l2.inPort = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_IN_PORT]);
-    eth_key = NlAttrGet(keyAttrs[OVS_KEY_ATTR_ETHERNET]);
-    RtlCopyMemory(destKey->l2.dlSrc, eth_key->eth_src, ETH_ADDR_LEN);
-    RtlCopyMemory(destKey->l2.dlDst, eth_key->eth_dst, ETH_ADDR_LEN);
 
+    if (keyAttrs[OVS_KEY_ATTR_ETHERNET]) {
+        const struct ovs_key_ethernet *eth_key;
+        eth_key = NlAttrGet(keyAttrs[OVS_KEY_ATTR_ETHERNET]);
+        RtlCopyMemory(destKey->l2.dlSrc, eth_key->eth_src, ETH_ADDR_LEN);
+        RtlCopyMemory(destKey->l2.dlDst, eth_key->eth_dst, ETH_ADDR_LEN);
+    }
+
+    /* TODO: Ideally ETHERTYPE should not be optional.
+     * But during vswitchd bootup we are seeing FLOW_ADD
+     * requests with no ETHERTYPE attributes.
+     * Need to verify this. */
+    if (keyAttrs[OVS_KEY_ATTR_ETHERTYPE]) {
     destKey->l2.dlType = ntohs((NlAttrGetU16(keyAttrs
-                          [OVS_KEY_ATTR_ETHERTYPE])));
+                               [OVS_KEY_ATTR_ETHERTYPE])));
+    }
 
     if (keyAttrs[OVS_KEY_ATTR_VLAN]) {
         destKey->l2.vlanTci = NlAttrGetU16(keyAttrs
