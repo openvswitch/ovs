@@ -290,8 +290,27 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     /* FLOW_DEL command w/o any key input is a flush case. */
     if ((genlMsgHdr->cmd == OVS_FLOW_CMD_DEL) &&
         (!(nlAttrs[OVS_FLOW_ATTR_KEY]))) {
+
         rc = OvsFlushFlowIoctl(ovsHdr->dp_ifindex);
-        goto done;
+
+       if (rc == STATUS_SUCCESS) {
+            /* XXX: refactor this code. */
+            /* So far so good. Prepare the reply for userspace */
+            NlBufInit(&nlBuf, usrParamsCtx->outputBuffer,
+                      usrParamsCtx->outputLength);
+
+            /* Prepare nl Msg headers */
+            rc = NlFillOvsMsg(&nlBuf, nlMsgHdr->nlmsgType, 0,
+                              nlMsgHdr->nlmsgSeq, nlMsgHdr->nlmsgPid,
+                              genlMsgHdr->cmd, OVS_FLOW_VERSION,
+                              ovsHdr->dp_ifindex);
+
+            if (rc == STATUS_SUCCESS) {
+                *replyLen = msgOut->nlMsg.nlmsgLen;
+            }
+       }
+
+       goto done;
     }
 
     if ((rc = _MapNlToFlowPut(msgIn, nlAttrs[OVS_FLOW_ATTR_KEY],
@@ -342,6 +361,7 @@ done:
                                        usrParamsCtx->outputBuffer;
         BuildErrorMsg(msgIn, msgError, nlError);
         *replyLen = msgError->nlMsg.nlmsgLen;
+        rc = STATUS_SUCCESS;
     }
 
     return rc;
@@ -360,6 +380,12 @@ OvsFlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     NTSTATUS rc = STATUS_SUCCESS;
     NL_ERROR nlError = NL_ERROR_SUCCESS;
     POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
+    POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
+    PNL_MSG_HDR nlMsgHdr = &(msgIn->nlMsg);
+    PGENL_MSG_HDR genlMsgHdr = &(msgIn->genlMsg);
+    POVS_HDR ovsHdr = &(msgIn->ovsHdr);
+
+    NL_BUFFER nlBuf;
 
     *replyLen = 0;
 
@@ -381,6 +407,23 @@ OvsFlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                        usrParamsCtx->outputBuffer;
         BuildErrorMsg(msgIn, msgError, nlError);
         *replyLen = msgError->nlMsg.nlmsgLen;
+        rc = STATUS_SUCCESS;
+        goto done;
+    }
+
+    if (rc == STATUS_SUCCESS) {
+        NlBufInit(&nlBuf, usrParamsCtx->outputBuffer,
+                  usrParamsCtx->outputLength);
+
+        /* Prepare nl Msg headers */
+        rc = NlFillOvsMsg(&nlBuf, nlMsgHdr->nlmsgType, 0,
+                          nlMsgHdr->nlmsgSeq, nlMsgHdr->nlmsgPid,
+                          genlMsgHdr->cmd, OVS_FLOW_VERSION,
+                          ovsHdr->dp_ifindex);
+
+        if (rc == STATUS_SUCCESS) {
+            *replyLen = msgOut->nlMsg.nlmsgLen;
+        }
     }
 
 done:
