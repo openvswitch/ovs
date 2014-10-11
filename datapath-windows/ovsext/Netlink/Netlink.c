@@ -51,7 +51,7 @@ NlFillOvsMsg(PNL_BUFFER nlBuf, UINT16 nlmsgType,
 
     /* To keep compiler happy for release build. */
     UNREFERENCED_PARAMETER(offset);
-    ASSERT(NlBufAt(nlBuf, offset, sizeof(struct _OVS_MESSAGE)) != 0);
+    ASSERT(NlBufAt(nlBuf, offset, 0) != 0);
 
     msgOut.nlMsg.nlmsgType = nlmsgType;
     msgOut.nlMsg.nlmsgFlags = nlmsgFlags;
@@ -88,7 +88,7 @@ NlFillNlHdr(PNL_BUFFER nlBuf, UINT16 nlmsgType,
 
     /* To keep compiler happy for release build. */
     UNREFERENCED_PARAMETER(offset);
-    ASSERT(NlBufAt(nlBuf, offset, sizeof(struct _NL_MSG_HDR)) != 0);
+    ASSERT(NlBufAt(nlBuf, offset, 0) != 0);
 
     msgOut.nlmsgType = nlmsgType;
     msgOut.nlmsgFlags = nlmsgFlags;
