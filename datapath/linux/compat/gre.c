@@ -268,7 +268,7 @@ int gre_cisco_unregister(struct gre_cisco_protocol *proto)
 
 #endif /* !HAVE_GRE_CISCO_REGISTER */
 
-#ifndef GRE_USE_KERNEL_GRE_HANDLE_OFFLOADS
+#ifndef USE_KERNEL_TUNNEL_API
 
 /* GRE TX side. */
 static void gre_csum_fix(struct sk_buff *skb)

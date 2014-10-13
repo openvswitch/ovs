@@ -58,7 +58,7 @@
 #include "datapath.h"
 #include "gso.h"
 #include "vlan.h"
-#ifndef GRE_USE_KERNEL_GRE_HANDLE_OFFLOADS
+#ifndef USE_KERNEL_TUNNEL_API
 
 #define VXLAN_HLEN (sizeof(struct udphdr) + sizeof(struct vxlanhdr))
 

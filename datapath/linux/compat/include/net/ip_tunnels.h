@@ -3,14 +3,15 @@
 
 #include <linux/version.h>
 #if defined(HAVE_GRE_HANDLE_OFFLOADS) && \
-     LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
+     LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0) && \
+     defined(HAVE_VXLAN_XMIT_SKB)
 /* RHEL6 and RHEL7 both has backported tunnel API but RHEL6 has
  * older version, so avoid using RHEL6 backports.
  */
-#define GRE_USE_KERNEL_GRE_HANDLE_OFFLOADS
+#define USE_KERNEL_TUNNEL_API
 #endif
 
-#ifdef GRE_USE_KERNEL_GRE_HANDLE_OFFLOADS
+#ifdef USE_KERNEL_TUNNEL_API
 #include_next <net/ip_tunnels.h>
 static inline int rpl_iptunnel_xmit(struct rtable *rt,
                                     struct sk_buff *skb, __be32 src,

@@ -7,7 +7,7 @@
 #include <net/gre.h>
 
 #include <linux/version.h>
-#ifdef GRE_USE_KERNEL_GRE_HANDLE_OFFLOADS
+#ifdef USE_KERNEL_TUNNEL_API
 #include_next <net/vxlan.h>
 
 static inline int rpl_vxlan_xmit_skb(struct vxlan_sock *vs,

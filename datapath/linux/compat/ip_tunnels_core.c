@@ -36,7 +36,7 @@
 #include "compat.h"
 #include "gso.h"
 
-#ifndef GRE_USE_KERNEL_GRE_HANDLE_OFFLOADS
+#ifndef USE_KERNEL_TUNNEL_API
 int iptunnel_xmit(struct rtable *rt,
 		  struct sk_buff *skb,
 		  __be32 src, __be32 dst, __u8 proto,
