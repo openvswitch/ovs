@@ -95,7 +95,8 @@ static NetlinkCmdHandler OvsGetPidCmdHandler,
                          OvsGetDpCmdHandler,
                          OvsSetDpCmdHandler,
                          OvsGetVportCmdHandler,
-                         OvsNewVportCmdHandler;
+                         OvsNewVportCmdHandler,
+                         OvsDeleteVportCmdHandler;
 
 NetlinkCmdHandler        OvsGetNetdevCmdHandler;
 
@@ -199,7 +200,12 @@ NETLINK_CMD nlVportFamilyCmdOps[] = {
       .handler = OvsNewVportCmdHandler,
       .supportedDevOp = OVS_TRANSACTION_DEV_OP,
       .validateDpIndex = TRUE
-    }
+    },
+    { .cmd = OVS_VPORT_CMD_DEL,
+      .handler = OvsDeleteVportCmdHandler,
+      .supportedDevOp = OVS_TRANSACTION_DEV_OP,
+      .validateDpIndex = TRUE
+    },
 };
 
 NETLINK_FAMILY nlVportFamilyOps = {
@@ -1879,6 +1885,108 @@ Cleanup:
 
     return STATUS_SUCCESS;
 }
+
+
+static NTSTATUS
+OvsDeleteVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                         UINT32 *replyLen)
+{
+    NDIS_STATUS status = STATUS_SUCCESS;
+    LOCK_STATE_EX lockState;
+
+    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
+    POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
+    POVS_VPORT_ENTRY vport = NULL;
+    NL_ERROR nlError = NL_ERROR_SUCCESS;
+    PSTR portName = NULL;
+    UINT32 portNameLen = 0;
+
+    static const NL_POLICY ovsVportPolicy[] = {
+        [OVS_VPORT_ATTR_PORT_NO] = { .type = NL_A_U32, .optional = TRUE },
+        [OVS_VPORT_ATTR_NAME] = { .type = NL_A_STRING, .maxLen = IFNAMSIZ, .optional = TRUE },
+    };
+    PNL_ATTR vportAttrs[ARRAY_SIZE(ovsVportPolicy)];
+
+    ASSERT(usrParamsCtx->inputBuffer != NULL);
+
+    if (!NlAttrParse((PNL_MSG_HDR)msgIn,
+        NLMSG_HDRLEN + GENL_HDRLEN + OVS_HDRLEN,
+        NlMsgAttrsLen((PNL_MSG_HDR)msgIn),
+        ovsVportPolicy, vportAttrs, ARRAY_SIZE(vportAttrs))) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (msgOut == NULL || usrParamsCtx->outputLength < sizeof *msgOut) {
+        return STATUS_NDIS_INVALID_LENGTH;
+    }
+
+    OvsAcquireCtrlLock();
+    if (!gOvsSwitchContext) {
+        OvsReleaseCtrlLock();
+        return STATUS_INVALID_PARAMETER;
+    }
+    OvsReleaseCtrlLock();
+
+    NdisAcquireRWLockWrite(gOvsSwitchContext->dispatchLock, &lockState, 0);
+    if (vportAttrs[OVS_VPORT_ATTR_NAME] != NULL) {
+        portName = NlAttrGet(vportAttrs[OVS_VPORT_ATTR_NAME]);
+        portNameLen = NlAttrGetSize(vportAttrs[OVS_VPORT_ATTR_NAME]);
+
+        /* the port name is expected to be null-terminated */
+        ASSERT(portName[portNameLen - 1] == '\0');
+
+        vport = OvsFindVportByOvsName(gOvsSwitchContext, portName);
+    }
+    else if (vportAttrs[OVS_VPORT_ATTR_PORT_NO] != NULL) {
+        vport = OvsFindVportByPortNo(gOvsSwitchContext,
+            NlAttrGetU32(vportAttrs[OVS_VPORT_ATTR_PORT_NO]));
+    }
+
+    if (!vport) {
+        nlError = NL_ERROR_NODEV;
+        goto Cleanup;
+    }
+
+    status = OvsCreateMsgFromVport(vport, msgIn, usrParamsCtx->outputBuffer,
+                                   usrParamsCtx->outputLength,
+                                   gOvsSwitchContext->dpNo);
+
+    if (vport->hvDeleted || OvsIsTunnelVportType(vport->ovsType)) {
+        /*
+         * The associated hyper-v switch port is not in created state, or,
+         * there is no hyper-v switch port counterpart (for logical ports).
+         * This means that this datapath port is not mapped to a living
+         * hyper-v switc hport. We can destroy and remove the vport from the
+         * list.
+        */
+        OvsRemoveAndDeleteVport(gOvsSwitchContext, vport);
+    } else {
+        /* The associated hyper-v switch port is in the created state, and the
+         * datapath port is mapped to a living hyper-v switch port. We cannot
+         * destroy the vport and cannot remove it from the list of vports.
+         * Instead, we mark the datapath (ovs) part of the vport as
+         * "not created", i.e. we set vport->portNo = OVS_PORT_NUMBER_INVALID.
+        */
+        vport->portNo = OVS_DPPORT_NUMBER_INVALID;
+        vport->ovsName[0] = '\0';
+    }
+
+    *replyLen = msgOut->nlMsg.nlmsgLen;
+
+Cleanup:
+    NdisReleaseRWLock(gOvsSwitchContext->dispatchLock, &lockState);
+
+    if (nlError != NL_ERROR_SUCCESS) {
+        POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
+            usrParamsCtx->outputBuffer;
+
+        BuildErrorMsg(msgIn, msgError, nlError);
+        *replyLen = msgError->nlMsg.nlmsgLen;
+    }
+
+    return STATUS_SUCCESS;
+}
+
 
 /*
  * --------------------------------------------------------------------------

@@ -133,24 +133,35 @@ HvTeardownPort(POVS_SWITCH_CONTEXT switchContext,
 
 VOID
 HvDeletePort(POVS_SWITCH_CONTEXT switchContext,
-             PNDIS_SWITCH_PORT_PARAMETERS portParam)
+             PNDIS_SWITCH_PORT_PARAMETERS portParams)
 {
     POVS_VPORT_ENTRY vport;
     LOCK_STATE_EX lockState;
 
-    VPORT_PORT_ENTER(portParam);
+    VPORT_PORT_ENTER(portParams);
 
     NdisAcquireRWLockWrite(switchContext->dispatchLock, &lockState, 0);
     vport = OvsFindVportByPortIdAndNicIndex(switchContext,
-                                            portParam->PortId, 0);
+                                            portParams->PortId, 0);
+
+    /*
+     * XXX: we can only destroy and remove the port if its datapath port
+     * counterpart was deleted. If the datapath port counterpart is present,
+     * we only mark the vport for deletion, so that a netlink command vport
+     * delete will delete the vport.
+    */
     if (vport) {
-        OvsRemoveAndDeleteVport(switchContext, vport);
+        if (vport->portNo == OVS_DPPORT_NUMBER_INVALID) {
+            OvsRemoveAndDeleteVport(switchContext, vport);
+        } else {
+            vport->hvDeleted = TRUE;
+        }
     } else {
         OVS_LOG_WARN("Vport not present.");
     }
     NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
 
-    VPORT_PORT_EXIT(portParam);
+    VPORT_PORT_EXIT(portParams);
 }
 
 
