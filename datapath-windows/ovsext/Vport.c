@@ -512,16 +512,17 @@ OvsFindVportByHvName(POVS_SWITCH_CONTEXT switchContext,
     /* 'portFriendlyName' is not NUL-terminated. */
     SIZE_T length = strlen(name);
     SIZE_T wstrSize = length * sizeof(WCHAR);
+    UINT i;
 
     PWSTR wsName = OvsAllocateMemory(wstrSize);
     if (!wsName) {
         return NULL;
     }
-    for (UINT i = 0; i < length; i) {
+    for (i = 0; i < length; i++) {
         wsName[i] = name[i];
     }
 
-    for (UINT32 i = 0; i < OVS_MAX_VPORT_ARRAY_SIZE; i) {
+    for (i = 0; i < OVS_MAX_VPORT_ARRAY_SIZE; i++) {
         head = &(switchContext->portIdHashArray[i]);
         LIST_FORALL(head, link) {
             vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, portIdLink);
@@ -912,7 +913,7 @@ cleanup:
 VOID
 OvsClearAllSwitchVports(POVS_SWITCH_CONTEXT switchContext)
 {
-    for (UINT hash = 0; hash < OVS_MAX_VPORT_ARRAY_SIZE; hash) {
+    for (UINT hash = 0; hash < OVS_MAX_VPORT_ARRAY_SIZE; hash++) {
         PLIST_ENTRY head, link, next;
 
         head = &(switchContext->portIdHashArray[hash & OVS_VPORT_MASK]);
