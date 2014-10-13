@@ -31,6 +31,7 @@
 #include "dirs.h"
 #include "dpctl.h"
 #include "dpif.h"
+#include "dpif-netdev.h"
 #include "dynamic-string.h"
 #include "flow.h"
 #include "match.h"
@@ -39,6 +40,7 @@
 #include "odp-util.h"
 #include "ofp-parse.h"
 #include "ofpbuf.h"
+#include "ovs-numa.h"
 #include "packets.h"
 #include "shash.h"
 #include "simap.h"
@@ -729,7 +731,7 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     struct dpif_flow_dump_thread *flow_dump_thread;
     struct dpif_flow_dump *flow_dump;
     struct dpif_flow f;
-
+    int pmd_id = PMD_ID_NULL;
     int error;
 
     if (argc > 1 && !strncmp(argv[argc - 1], "filter=", 7)) {
@@ -792,6 +794,18 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
             minimatch_destroy(&minimatch);
         }
         ds_clear(&ds);
+        /* If 'pmd_id' is specified, overlapping flows could be dumped from
+         * different pmd threads.  So, separates dumps from different pmds
+         * by printing a title line. */
+        if (pmd_id != f.pmd_id) {
+            if (f.pmd_id == NON_PMD_CORE_ID) {
+                ds_put_format(&ds, "flow-dump from non-dpdk interfaces:\n");
+            } else {
+                ds_put_format(&ds, "flow-dump from pmd on cpu core: %d\n",
+                              f.pmd_id);
+            }
+            pmd_id = f.pmd_id;
+        }
         format_dpif_flow(&ds, &f, &portno_names, dpctl_p);
         dpctl_print(dpctl_p, "%s\n", ds_cstr(&ds));
     }
@@ -813,12 +827,43 @@ out_freefilter:
     return error;
 }
 
+/* Extracts the in_port from the parsed keys, and returns the reference
+ * to the 'struct netdev *' of the dpif port.  On error, returns NULL.
+ * Users must call 'netdev_close()' after finish using the returned
+ * reference. */
+static struct netdev *
+get_in_port_netdev_from_key(struct dpif *dpif, const struct ofpbuf *key)
+{
+    const struct nlattr *in_port_nla;
+    struct netdev *dev = NULL;
+
+    in_port_nla = nl_attr_find(key, 0, OVS_KEY_ATTR_IN_PORT);
+    if (in_port_nla) {
+        struct dpif_port dpif_port;
+        odp_port_t port_no;
+        int error;
+
+        port_no = ODP_PORT_C(nl_attr_get_u32(in_port_nla));
+        error = dpif_port_query_by_number(dpif, port_no, &dpif_port);
+        if (error) {
+            goto out;
+        }
+
+        netdev_open(dpif_port.name, dpif_port.type, &dev);
+        dpif_port_destroy(&dpif_port);
+    }
+
+out:
+    return dev;
+}
+
 static int
 dpctl_put_flow(int argc, const char *argv[], enum dpif_flow_put_flags flags,
                struct dpctl_params *dpctl_p)
 {
     const char *key_s = argv[argc - 2];
     const char *actions_s = argv[argc - 1];
+    struct netdev *in_port_netdev = NULL;
     struct dpif_flow_stats stats;
     struct dpif_port dpif_port;
     struct dpif_port_dump port_dump;
@@ -873,13 +918,40 @@ dpctl_put_flow(int argc, const char *argv[], enum dpif_flow_put_flags flags,
         dpctl_error(dpctl_p, error, "parsing actions");
         goto out_freeactions;
     }
-    error = dpif_flow_put(dpif, flags,
-                          ofpbuf_data(&key), ofpbuf_size(&key),
-                          ofpbuf_size(&mask) == 0 ? NULL : ofpbuf_data(&mask),
-                          ofpbuf_size(&mask),
-                          ofpbuf_data(&actions), ofpbuf_size(&actions),
-                          ufid_present ? &ufid : NULL,
-                          dpctl_p->print_statistics ? &stats : NULL);
+
+    /* For DPDK interface, applies the operation to all pmd threads
+     * on the same numa node. */
+    in_port_netdev = get_in_port_netdev_from_key(dpif, &key);
+    if (in_port_netdev && netdev_is_pmd(in_port_netdev)) {
+        int numa_id;
+
+        numa_id = netdev_get_numa_id(in_port_netdev);
+        if (ovs_numa_numa_id_is_valid(numa_id)) {
+            struct ovs_numa_dump *dump = ovs_numa_dump_cores_on_numa(numa_id);
+            struct ovs_numa_info *iter;
+
+            FOR_EACH_CORE_ON_NUMA (iter, dump) {
+                if (ovs_numa_core_is_pinned(iter->core_id)) {
+                    error = dpif_flow_put(dpif, flags,
+                                          ofpbuf_data(&key), ofpbuf_size(&key),
+                                          ofpbuf_size(&mask) == 0 ? NULL : ofpbuf_data(&mask),
+                                          ofpbuf_size(&mask), ofpbuf_data(&actions),
+                                          ofpbuf_size(&actions), ufid_present ? &ufid : NULL,
+                                          iter->core_id, dpctl_p->print_statistics ? &stats : NULL);
+                }
+            }
+            ovs_numa_dump_destroy(dump);
+        } else {
+            error = EINVAL;
+        }
+    } else {
+        error = dpif_flow_put(dpif, flags,
+                              ofpbuf_data(&key), ofpbuf_size(&key),
+                              ofpbuf_size(&mask) == 0 ? NULL : ofpbuf_data(&mask),
+                              ofpbuf_size(&mask), ofpbuf_data(&actions),
+                              ofpbuf_size(&actions), ufid_present ? &ufid : NULL,
+                              PMD_ID_NULL, dpctl_p->print_statistics ? &stats : NULL);
+    }
     if (error) {
         dpctl_error(dpctl_p, error, "updating flow table");
         goto out_freeactions;
@@ -900,6 +972,7 @@ out_freekeymask:
     ofpbuf_uninit(&mask);
     ofpbuf_uninit(&key);
     dpif_close(dpif);
+    netdev_close(in_port_netdev);
     return error;
 }
 
@@ -964,7 +1037,9 @@ dpctl_get_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
         goto out;
     }
 
-    error = dpif_flow_get(dpif, NULL, 0, &ufid, &buf, &flow);
+    /* Does not work for DPDK, since do not know which 'pmd' to apply the
+     * operation.  So, just uses PMD_ID_NULL. */
+    error = dpif_flow_get(dpif, NULL, 0, &ufid, PMD_ID_NULL, &buf, &flow);
     if (error) {
         dpctl_error(dpctl_p, error, "getting flow");
         goto out;
@@ -987,6 +1062,7 @@ static int
 dpctl_del_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
 {
     const char *key_s = argv[argc - 1];
+    struct netdev *in_port_netdev = NULL;
     struct dpif_flow_stats stats;
     struct dpif_port dpif_port;
     struct dpif_port_dump port_dump;
@@ -1034,10 +1110,33 @@ dpctl_del_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
         goto out;
     }
 
-    error = dpif_flow_del(dpif,
-                          ofpbuf_data(&key), ofpbuf_size(&key),
-                          ufid_present ? &ufid : NULL,
-                          dpctl_p->print_statistics ? &stats : NULL);
+    /* For DPDK interface, applies the operation to all pmd threads
+     * on the same numa node. */
+    in_port_netdev = get_in_port_netdev_from_key(dpif, &key);
+    if (in_port_netdev && netdev_is_pmd(in_port_netdev)) {
+        int numa_id;
+
+        numa_id = netdev_get_numa_id(in_port_netdev);
+        if (ovs_numa_numa_id_is_valid(numa_id)) {
+            struct ovs_numa_dump *dump = ovs_numa_dump_cores_on_numa(numa_id);
+            struct ovs_numa_info *iter;
+
+            FOR_EACH_CORE_ON_NUMA (iter, dump) {
+                if (ovs_numa_core_is_pinned(iter->core_id)) {
+                    error = dpif_flow_del(dpif, ofpbuf_data(&key),
+                                          ofpbuf_size(&key), ufid_present ? &ufid : NULL,
+                                          iter->core_id, dpctl_p->print_statistics ? &stats : NULL);
+                }
+            }
+            ovs_numa_dump_destroy(dump);
+        } else {
+            error = EINVAL;
+        }
+    } else {
+        error = dpif_flow_del(dpif, ofpbuf_data(&key), ofpbuf_size(&key),
+                              ufid_present ? &ufid : NULL, PMD_ID_NULL,
+                              dpctl_p->print_statistics ? &stats : NULL);
+    }
     if (error) {
         dpctl_error(dpctl_p, error, "deleting flow");
         if (error == ENOENT && !ufid_present) {
@@ -1065,6 +1164,7 @@ out:
     ofpbuf_uninit(&key);
     simap_destroy(&port_names);
     dpif_close(dpif);
+    netdev_close(in_port_netdev);
     return error;
 }
 

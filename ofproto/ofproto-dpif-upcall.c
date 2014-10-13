@@ -158,6 +158,7 @@ struct upcall {
      * may be used with other datapaths. */
     const struct flow *flow;       /* Parsed representation of the packet. */
     const ovs_u128 *ufid;          /* Unique identifier for 'flow'. */
+    int pmd_id;                    /* Datapath poll mode driver id. */
     const struct ofpbuf *packet;   /* Packet associated with this upcall. */
     ofp_port_t in_port;            /* OpenFlow in port, or OFPP_NONE. */
 
@@ -211,6 +212,7 @@ struct udpif_key {
     ovs_u128 ufid;                 /* Unique flow identifier. */
     bool ufid_present;             /* True if 'ufid' is in datapath. */
     uint32_t hash;                 /* Pre-computed hash for 'key'. */
+    int pmd_id;                    /* Datapath poll mode driver id. */
 
     struct ovs_mutex mutex;                   /* Guards the following. */
     struct dpif_flow_stats stats OVS_GUARDED; /* Last known stats.*/
@@ -288,7 +290,7 @@ static enum upcall_type classify_upcall(enum dpif_upcall_type type,
 static int upcall_receive(struct upcall *, const struct dpif_backer *,
                           const struct ofpbuf *packet, enum dpif_upcall_type,
                           const struct nlattr *userdata, const struct flow *,
-                          const ovs_u128 *ufid);
+                          const ovs_u128 *ufid, const int pmd_id);
 static void upcall_uninit(struct upcall *);
 
 static upcall_callback upcall_cb;
@@ -652,7 +654,7 @@ recv_upcalls(struct handler *handler)
 
         error = upcall_receive(upcall, udpif->backer, &dupcall->packet,
                                dupcall->type, dupcall->userdata, flow,
-                               &dupcall->ufid);
+                               &dupcall->ufid, PMD_ID_NULL);
         if (error) {
             if (error == ENODEV) {
                 /* Received packet on datapath port for which we couldn't
@@ -661,7 +663,7 @@ recv_upcalls(struct handler *handler)
                  * message in case it happens frequently. */
                 dpif_flow_put(udpif->dpif, DPIF_FP_CREATE, dupcall->key,
                               dupcall->key_len, NULL, 0, NULL, 0,
-                              &dupcall->ufid, NULL);
+                              &dupcall->ufid, PMD_ID_NULL, NULL);
                 VLOG_INFO_RL(&rl, "received packet on unassociated datapath "
                              "port %"PRIu32, flow->in_port.odp_port);
             }
@@ -882,7 +884,7 @@ static int
 upcall_receive(struct upcall *upcall, const struct dpif_backer *backer,
                const struct ofpbuf *packet, enum dpif_upcall_type type,
                const struct nlattr *userdata, const struct flow *flow,
-               const ovs_u128 *ufid)
+               const ovs_u128 *ufid, const int pmd_id)
 {
     int error;
 
@@ -895,6 +897,7 @@ upcall_receive(struct upcall *upcall, const struct dpif_backer *backer,
     upcall->flow = flow;
     upcall->packet = packet;
     upcall->ufid = ufid;
+    upcall->pmd_id = pmd_id;
     upcall->type = type;
     upcall->userdata = userdata;
     ofpbuf_init(&upcall->put_actions, 0);
@@ -996,9 +999,9 @@ upcall_uninit(struct upcall *upcall)
 
 static int
 upcall_cb(const struct ofpbuf *packet, const struct flow *flow, ovs_u128 *ufid,
-          enum dpif_upcall_type type, const struct nlattr *userdata,
-          struct ofpbuf *actions, struct flow_wildcards *wc,
-          struct ofpbuf *put_actions, void *aux)
+          int pmd_id, enum dpif_upcall_type type,
+          const struct nlattr *userdata, struct ofpbuf *actions,
+          struct flow_wildcards *wc, struct ofpbuf *put_actions, void *aux)
 {
     struct udpif *udpif = aux;
     unsigned int flow_limit;
@@ -1010,7 +1013,7 @@ upcall_cb(const struct ofpbuf *packet, const struct flow *flow, ovs_u128 *ufid,
     atomic_read_relaxed(&udpif->flow_limit, &flow_limit);
 
     error = upcall_receive(&upcall, udpif->backer, packet, type, userdata,
-                           flow, ufid);
+                           flow, ufid, pmd_id);
     if (error) {
         return error;
     }
@@ -1259,7 +1262,7 @@ static struct udpif_key *
 ukey_create__(const struct nlattr *key, size_t key_len,
               const struct nlattr *mask, size_t mask_len,
               bool ufid_present, const ovs_u128 *ufid,
-              const struct ofpbuf *actions,
+              const int pmd_id, const struct ofpbuf *actions,
               uint64_t dump_seq, uint64_t reval_seq, long long int used)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
@@ -1273,6 +1276,7 @@ ukey_create__(const struct nlattr *key, size_t key_len,
     ukey->mask_len = mask_len;
     ukey->ufid_present = ufid_present;
     ukey->ufid = *ufid;
+    ukey->pmd_id = pmd_id;
     ukey->hash = get_ufid_hash(&ukey->ufid);
     ukey->actions = ofpbuf_clone(actions);
 
@@ -1318,8 +1322,9 @@ ukey_create_from_upcall(const struct upcall *upcall)
 
     return ukey_create__(ofpbuf_data(&keybuf), ofpbuf_size(&keybuf),
                          ofpbuf_data(&maskbuf), ofpbuf_size(&maskbuf),
-                         true, upcall->ufid, &upcall->put_actions,
-                         upcall->dump_seq, upcall->reval_seq, 0);
+                         true, upcall->ufid, upcall->pmd_id,
+                         &upcall->put_actions, upcall->dump_seq,
+                         upcall->reval_seq, 0);
 }
 
 static int
@@ -1338,8 +1343,8 @@ ukey_create_from_dpif_flow(const struct udpif *udpif,
 
         /* If the key was not provided by the datapath, fetch the full flow. */
         ofpbuf_use_stack(&buf, &stub, sizeof stub);
-        err = dpif_flow_get(udpif->dpif, NULL, 0, &flow->ufid, &buf,
-                            &full_flow);
+        err = dpif_flow_get(udpif->dpif, NULL, 0, &flow->ufid,
+                            flow->pmd_id, &buf, &full_flow);
         if (err) {
             return err;
         }
@@ -1350,8 +1355,9 @@ ukey_create_from_dpif_flow(const struct udpif *udpif,
     ofpbuf_use_const(&actions, &flow->actions, flow->actions_len);
     *ukey = ukey_create__(flow->key, flow->key_len,
                           flow->mask, flow->mask_len, flow->ufid_present,
-                          &flow->ufid, &actions, dump_seq, reval_seq,
-                          flow->stats.used);
+                          &flow->ufid, flow->pmd_id, &actions, dump_seq,
+                          reval_seq, flow->stats.used);
+
     return 0;
 }
 
@@ -1683,6 +1689,7 @@ delete_op_init__(struct udpif *udpif, struct ukey_op *op,
     op->dop.u.flow_del.key = flow->key;
     op->dop.u.flow_del.key_len = flow->key_len;
     op->dop.u.flow_del.ufid = flow->ufid_present ? &flow->ufid : NULL;
+    op->dop.u.flow_del.pmd_id = flow->pmd_id;
     op->dop.u.flow_del.stats = &op->stats;
     atomic_read_relaxed(&udpif->enable_ufid, &op->dop.u.flow_del.terse);
 }
@@ -1695,6 +1702,7 @@ delete_op_init(struct udpif *udpif, struct ukey_op *op, struct udpif_key *ukey)
     op->dop.u.flow_del.key = ukey->key;
     op->dop.u.flow_del.key_len = ukey->key_len;
     op->dop.u.flow_del.ufid = ukey->ufid_present ? &ukey->ufid : NULL;
+    op->dop.u.flow_del.pmd_id = ukey->pmd_id;
     op->dop.u.flow_del.stats = &op->stats;
     atomic_read_relaxed(&udpif->enable_ufid, &op->dop.u.flow_del.terse);
 }

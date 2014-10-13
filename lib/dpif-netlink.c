@@ -1430,6 +1430,7 @@ dpif_netlink_flow_to_dpif_flow(struct dpif *dpif, struct dpif_flow *dpif_flow,
     dpif_flow->ufid_present = datapath_flow->ufid_present;
     if (datapath_flow->ufid_present) {
         dpif_flow->ufid = datapath_flow->ufid;
+    dpif_flow->pmd_id = PMD_ID_NULL;
     } else {
         ovs_assert(datapath_flow->key && datapath_flow->key_len);
         dpif_flow_hash(dpif, datapath_flow->key, datapath_flow->key_len,

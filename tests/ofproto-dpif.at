@@ -3645,6 +3645,7 @@ for type in no first later; do
 done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows], [0], [dnl
+flow-dump from non-dpdk interfaces:
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),1
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),5
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:0, bytes:0, used:never, actions:6
@@ -3662,6 +3663,7 @@ for type in no first later; do
 done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows], [0], [dnl
+flow-dump from non-dpdk interfaces:
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),1
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(frag=first), packets:0, bytes:0, used:never, actions:drop
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(frag=later), packets:0, bytes:0, used:never, actions:drop
@@ -3679,6 +3681,7 @@ for type in no first later; do
 done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows], [0], [dnl
+flow-dump from non-dpdk interfaces:
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),1
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),2
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:0, bytes:0, used:never, actions:6
@@ -3750,6 +3753,7 @@ for frag in 4000 6000 6008 4010; do
 done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
+flow-dump from non-dpdk interfaces:
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=33419), packets:0, bytes:0, used:never, actions:set(tcp(src=33322)),1
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=33419), packets:0, bytes:0, used:never, actions:set(tcp(src=33322)),1
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:74, used:0.001s, actions:1
@@ -3764,6 +3768,7 @@ for frag in 4000 6000 6008 4010; do
 done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
+flow-dump from non-dpdk interfaces:
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=0), packets:0, bytes:0, used:never, actions:set(tcp(src=42)),1
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=0), packets:0, bytes:0, used:never, actions:set(tcp(src=42)),1
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:60, used:0.001s, actions:1
@@ -3778,6 +3783,7 @@ for frag in 4000 6000 6001 4002; do
 done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
+flow-dump from non-dpdk interfaces:
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=0), packets:0, bytes:0, used:never, actions:set(tcp(src=42)),1
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=0), packets:0, bytes:0, used:never, actions:set(tcp(src=42)),1
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:60, used:0.001s, actions:1
