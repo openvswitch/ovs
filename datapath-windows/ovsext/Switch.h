@@ -138,7 +138,8 @@ OvsAcquireDatapathRead(OVS_DATAPATH *datapath,
                        BOOLEAN dispatch)
 {
     ASSERT(datapath);
-    NdisAcquireRWLockRead(datapath->lock, lockState, dispatch);
+    NdisAcquireRWLockRead(datapath->lock, lockState,
+                          dispatch ? NDIS_RWL_AT_DISPATCH_LEVEL : 0);
 }
 
 static __inline VOID
@@ -147,7 +148,8 @@ OvsAcquireDatapathWrite(OVS_DATAPATH *datapath,
                         BOOLEAN dispatch)
 {
     ASSERT(datapath);
-    NdisAcquireRWLockWrite(datapath->lock, lockState, dispatch);
+    NdisAcquireRWLockWrite(datapath->lock, lockState,
+                           dispatch ? NDIS_RWL_AT_DISPATCH_LEVEL : 0);
 }
 
 
