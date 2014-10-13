@@ -206,7 +206,7 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     OVS_LDFLAGS="$OVS_LDFLAGS -L$DPDK_LIB_DIR"
     OVS_CFLAGS="$OVS_CFLAGS -I$DPDK_INCLUDE"
 
-    # DPDK 1.7.0 pmd drivers are not linked unless --whole-archive is used.
+    # DPDK 1.7 pmd drivers are not linked unless --whole-archive is used.
     #
     # This happens because the rest of the DPDK code doesn't use any symbol in
     # the pmd driver objects, and the drivers register themselves using an

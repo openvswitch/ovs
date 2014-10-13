@@ -14,10 +14,10 @@ and "make".
 Building and Installing:
 ------------------------
 
-Required DPDK 1.7.
+Required DPDK 1.7
 
 DPDK:
-Set dir i.g.:   export DPDK_DIR=/usr/src/dpdk-1.7.0
+Set dir i.g.:   export DPDK_DIR=/usr/src/dpdk-1.7.1
 cd $DPDK_DIR
 update config/common_linuxapp so that dpdk generate single lib file.
 (modification also required for IVSHMEM build)
