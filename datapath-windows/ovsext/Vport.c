@@ -913,12 +913,12 @@ VOID
 OvsClearAllSwitchVports(POVS_SWITCH_CONTEXT switchContext)
 {
     for (UINT hash = 0; hash < OVS_MAX_VPORT_ARRAY_SIZE; hash) {
-        PLIST_ENTRY head, link;
+        PLIST_ENTRY head, link, next;
 
-        head = &(switchContext->portNoHashArray[hash & OVS_VPORT_MASK]);
-        LIST_FORALL(head, link) {
+        head = &(switchContext->portIdHashArray[hash & OVS_VPORT_MASK]);
+        LIST_FORALL_SAFE(head, link, next) {
             POVS_VPORT_ENTRY vport;
-            vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, portNoLink);
+            vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, portIdLink);
             OvsRemoveAndDeleteVport(switchContext, vport);
         }
     }
