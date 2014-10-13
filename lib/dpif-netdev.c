@@ -431,7 +431,8 @@ static void dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd,
                                     struct dp_netdev *dp, int index,
                                     int core_id, int numa_id);
 static void dp_netdev_set_nonpmd(struct dp_netdev *dp);
-static struct dp_netdev_pmd_thread *dp_netdev_get_nonpmd(struct dp_netdev *dp);
+static struct dp_netdev_pmd_thread *dp_netdev_get_pmd(struct dp_netdev *dp,
+                                                      int core_id);
 static void dp_netdev_destroy_all_pmds(struct dp_netdev *dp);
 static void dp_netdev_del_pmds_on_numa(struct dp_netdev *dp, int numa_id);
 static void dp_netdev_set_pmds_on_numa(struct dp_netdev *dp, int numa_id);
@@ -2044,10 +2045,10 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
 
     /* Tries finding the 'pmd'.  If NULL is returned, that means
      * the current thread is a non-pmd thread and should use
-     * dp_netdev_get_nonpmd(). */
+     * dp_netdev_get_pmd(dp, NON_PMD_CORE_ID). */
     pmd = ovsthread_getspecific(dp->per_pmd_key);
     if (!pmd) {
-        pmd = dp_netdev_get_nonpmd(dp);
+        pmd = dp_netdev_get_pmd(dp, NON_PMD_CORE_ID);
     }
 
     /* If the current thread is non-pmd thread, acquires
@@ -2241,7 +2242,8 @@ dpif_netdev_run(struct dpif *dpif)
 {
     struct dp_netdev_port *port;
     struct dp_netdev *dp = get_dp_netdev(dpif);
-    struct dp_netdev_pmd_thread *non_pmd = dp_netdev_get_nonpmd(dp);
+    struct dp_netdev_pmd_thread *non_pmd = dp_netdev_get_pmd(dp,
+                                                             NON_PMD_CORE_ID);
     uint64_t new_tnl_seq;
 
     ovs_mutex_lock(&dp->non_pmd_mutex);
@@ -2440,12 +2442,12 @@ dp_netdev_pmd_reload_done(struct dp_netdev_pmd_thread *pmd)
 
 /* Returns the pointer to the dp_netdev_pmd_thread for non-pmd threads. */
 static struct dp_netdev_pmd_thread *
-dp_netdev_get_nonpmd(struct dp_netdev *dp)
+dp_netdev_get_pmd(struct dp_netdev *dp, int core_id)
 {
     struct dp_netdev_pmd_thread *pmd;
     const struct cmap_node *pnode;
 
-    pnode = cmap_find(&dp->poll_threads, hash_int(NON_PMD_CORE_ID, 0));
+    pnode = cmap_find(&dp->poll_threads, hash_int(core_id, 0));
     ovs_assert(pnode);
     pmd = CONTAINER_OF(pnode, struct dp_netdev_pmd_thread, node);
 
