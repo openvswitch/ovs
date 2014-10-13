@@ -1967,6 +1967,8 @@ OvsDeleteVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
          * Instead, we mark the datapath (ovs) part of the vport as
          * "not created", i.e. we set vport->portNo = OVS_PORT_NUMBER_INVALID.
         */
+        RemoveEntryList(&vport->ovsNameLink);
+        RemoveEntryList(&vport->portNoLink);
         vport->portNo = OVS_DPPORT_NUMBER_INVALID;
         vport->ovsName[0] = '\0';
     }
