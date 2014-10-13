@@ -26,7 +26,6 @@
 #include "PacketIO.h"
 #include "Flow.h"
 #include "PacketParser.h"
-#include "Checksum.h"
 
 #pragma warning( push )
 #pragma warning( disable:4127 )
@@ -50,30 +49,43 @@
 /* Move to a header file */
 extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
 
-NTSTATUS
+/*
+ * udpDestPort: the vxlan is set as payload to a udp frame. If the destination
+ * port of an udp frame is udpDestPort, we understand it to be vxlan.
+*/
+NL_ERROR
 OvsInitVxlanTunnel(POVS_VPORT_ENTRY vport,
-                   POVS_VPORT_ADD_REQUEST addReq)
+                   UINT16 udpDestPort)
 {
     POVS_VXLAN_VPORT vxlanPort;
-    NTSTATUS status = STATUS_SUCCESS;
-
-    ASSERT(addReq->type == OVS_VPORT_TYPE_VXLAN);
+    NTSTATUS status;
 
     vxlanPort = OvsAllocateMemory(sizeof (*vxlanPort));
     if (vxlanPort == NULL) {
-        status =  STATUS_INSUFFICIENT_RESOURCES;
-    } else {
-        RtlZeroMemory(vxlanPort, sizeof (*vxlanPort));
-        vxlanPort->dstPort = addReq->dstPort;
-        /*
-         * since we are installing the WFP filter before the port is created
-         * We need to check if it is the same number
-         * XXX should be removed later
-         */
-        ASSERT(vxlanPort->dstPort == VXLAN_UDP_PORT);
-        vport->priv = (PVOID)vxlanPort;
+        return NL_ERROR_NOMEM;
     }
-    return status;
+
+    RtlZeroMemory(vxlanPort, sizeof(*vxlanPort));
+    vxlanPort->dstPort = udpDestPort;
+    /*
+    * since we are installing the WFP filter before the port is created
+    * We need to check if it is the same number
+    * XXX should be removed later
+    */
+    ASSERT(vxlanPort->dstPort == VXLAN_UDP_PORT);
+    vport->priv = (PVOID)vxlanPort;
+
+    status = OvsInitVportCommon(gOvsSwitchContext, vport);
+    ASSERT(status == NDIS_STATUS_SUCCESS);
+
+    vport->ovsState = OVS_STATE_CONNECTED;
+    vport->nicState = NdisSwitchNicStateConnected;
+    /*
+     * allow the vport to be deleted, because there is no hyper-v switch part
+     */
+    vport->hvDeleted = TRUE;
+
+    return NL_ERROR_SUCCESS;
 }
 
 

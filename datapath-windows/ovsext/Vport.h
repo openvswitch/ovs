@@ -86,8 +86,8 @@ typedef struct _OVS_VPORT_ENTRY {
     OVS_VPORT_ERR_STATS    errStats;
     UINT32                 portNo;
     UINT32                 mtu;
+    /* ovsName is the ovs (datapath) port name - it is null terminated. */
     CHAR                   ovsName[OVS_MAX_PORT_NAME_LENGTH];
-    UINT32                 ovsNameLen;
 
     PVOID                  priv;
     NDIS_SWITCH_PORT_ID    portId;
@@ -108,6 +108,8 @@ typedef struct _OVS_VPORT_ENTRY {
     GUID                   netCfgInstanceId;
     BOOLEAN                isExternal;
     UINT32                 upcallPid; /* netlink upcall port id */
+    PNL_ATTR               portOptions;
+    BOOLEAN                hvDeleted; /* is the hyper-v switch port deleted? */
 } OVS_VPORT_ENTRY, *POVS_VPORT_ENTRY;
 
 struct _OVS_SWITCH_CONTEXT;
@@ -115,9 +117,11 @@ struct _OVS_SWITCH_CONTEXT;
 POVS_VPORT_ENTRY
 OvsFindVportByPortNo(struct _OVS_SWITCH_CONTEXT *switchContext,
                      UINT32 portNo);
+
+/* "name" is null-terminated */
 POVS_VPORT_ENTRY
-OvsFindVportByOvsName(struct _OVS_SWITCH_CONTEXT *switchContext,
-                      CHAR *name, UINT32 length);
+OvsFindVportByOvsName(POVS_SWITCH_CONTEXT switchContext,
+                      PSTR name);
 POVS_VPORT_ENTRY
 OvsFindVportByHvName(POVS_SWITCH_CONTEXT switchContext, PSTR name);
 POVS_VPORT_ENTRY
@@ -166,5 +170,13 @@ OvsGetExternalMtu()
 {
     return ((POVS_VPORT_ENTRY) OvsGetExternalVport())->mtu;
 }
+
+VOID OvsRemoveAndDeleteVport(POVS_SWITCH_CONTEXT switchContext,
+                             POVS_VPORT_ENTRY vport);
+
+NDIS_STATUS OvsInitVportCommon(POVS_SWITCH_CONTEXT switchContext,
+                               POVS_VPORT_ENTRY vport);
+
+POVS_VPORT_ENTRY OvsAllocateVport(VOID);
 
 #endif /* __VPORT_H_ */

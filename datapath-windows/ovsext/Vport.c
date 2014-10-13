@@ -50,7 +50,6 @@
 extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
 extern PNDIS_SPIN_LOCK gOvsCtrlLock;
 
-static POVS_VPORT_ENTRY OvsAllocateVport(VOID);
 static VOID OvsInitVportWithPortParam(POVS_VPORT_ENTRY vport,
                 PNDIS_SWITCH_PORT_PARAMETERS portParam);
 static VOID OvsInitVportWithNicParam(POVS_SWITCH_CONTEXT switchContext,
@@ -59,10 +58,6 @@ static VOID OvsInitPhysNicVport(POVS_VPORT_ENTRY vport, POVS_VPORT_ENTRY
                 virtVport, UINT32 nicIndex);
 static VOID OvsInitPhysNicVport(POVS_VPORT_ENTRY vport, POVS_VPORT_ENTRY
                 virtVport, UINT32 nicIndex);
-static NDIS_STATUS OvsInitVportCommon(POVS_SWITCH_CONTEXT switchContext,
-                POVS_VPORT_ENTRY vport);
-static VOID OvsRemoveAndDeleteVport(POVS_SWITCH_CONTEXT switchContext,
-                POVS_VPORT_ENTRY vport);
 static __inline VOID OvsWaitActivate(POVS_SWITCH_CONTEXT switchContext,
                                      ULONG sleepMicroSec);
 static NTSTATUS OvsGetExtInfoIoctl(POVS_VPORT_GET vportGet,
@@ -89,15 +84,17 @@ HvCreatePort(POVS_SWITCH_CONTEXT switchContext,
     NdisAcquireRWLockWrite(switchContext->dispatchLock, &lockState, 0);
     vport = OvsFindVportByPortIdAndNicIndex(switchContext,
                                             portParam->PortId, 0);
-    if (vport != NULL) {
+    if (vport != NULL && !vport->hvDeleted) {
         status = STATUS_DATA_NOT_ACCEPTED;
         goto create_port_done;
+    } else if (!vport) {
+        vport = (POVS_VPORT_ENTRY)OvsAllocateVport();
+        if (vport == NULL) {
+            status = NDIS_STATUS_RESOURCES;
+            goto create_port_done;
+        }
     }
-    vport = (POVS_VPORT_ENTRY)OvsAllocateVport();
-    if (vport == NULL) {
-        status = NDIS_STATUS_RESOURCES;
-        goto create_port_done;
-    }
+
     OvsInitVportWithPortParam(vport, portParam);
     OvsInitVportCommon(switchContext, vport);
 
@@ -474,20 +471,23 @@ OvsFindVportByPortNo(POVS_SWITCH_CONTEXT switchContext,
 
 POVS_VPORT_ENTRY
 OvsFindVportByOvsName(POVS_SWITCH_CONTEXT switchContext,
-                      CHAR *name,
-                      UINT32 length)
+                      PSTR name)
 {
     POVS_VPORT_ENTRY vport;
     PLIST_ENTRY head, link;
-    UINT32 hash = OvsJhashBytes((const VOID *)name, length, OVS_HASH_BASIS);
+    UINT32 hash;
+    SIZE_T length = strlen(name) + 1;
+
+    hash = OvsJhashBytes((const VOID *)name, length, OVS_HASH_BASIS);
     head = &(switchContext->ovsPortNameHashArray[hash & OVS_VPORT_MASK]);
+
     LIST_FORALL(head, link) {
         vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, ovsNameLink);
-        if (vport->ovsNameLen == length &&
-            RtlEqualMemory(name, vport->ovsName, length)) {
+        if (!strcmp(name, vport->ovsName)) {
             return vport;
         }
     }
+
     return NULL;
 }
 
@@ -561,7 +561,7 @@ OvsFindVportByPortIdAndNicIndex(POVS_SWITCH_CONTEXT switchContext,
     }
 }
 
-static POVS_VPORT_ENTRY
+POVS_VPORT_ENTRY
 OvsAllocateVport(VOID)
 {
     POVS_VPORT_ENTRY vport;
@@ -571,6 +571,7 @@ OvsAllocateVport(VOID)
     }
     RtlZeroMemory(vport, sizeof (OVS_VPORT_ENTRY));
     vport->ovsState = OVS_STATE_UNKNOWN;
+    vport->hvDeleted = FALSE;
     vport->portNo = OVS_DPPORT_NUMBER_INVALID;
 
     InitializeListHead(&vport->ovsNameLink);
@@ -692,7 +693,8 @@ OvsInitPhysNicVport(POVS_VPORT_ENTRY vport,
 
     vport->ovsState = OVS_STATE_PORT_CREATED;
 }
-static NDIS_STATUS
+
+NDIS_STATUS
 OvsInitVportCommon(POVS_SWITCH_CONTEXT switchContext,
                    POVS_VPORT_ENTRY vport)
 {
@@ -739,8 +741,7 @@ OvsInitVportCommon(POVS_SWITCH_CONTEXT switchContext,
     return NDIS_STATUS_SUCCESS;
 }
 
-
-static VOID
+VOID
 OvsRemoveAndDeleteVport(POVS_SWITCH_CONTEXT switchContext,
                         POVS_VPORT_ENTRY vport)
 {
@@ -917,32 +918,6 @@ OvsClearAllSwitchVports(POVS_SWITCH_CONTEXT switchContext)
     }
 }
 
-NTSTATUS
-OvsInitTunnelVport(POVS_VPORT_ENTRY vport,
-                   POVS_VPORT_ADD_REQUEST addReq)
-{
-    size_t len;
-    NTSTATUS status = STATUS_SUCCESS;
-
-    vport->ovsType = addReq->type;
-    vport->ovsState = OVS_STATE_PORT_CREATED;
-    RtlCopyMemory(vport->ovsName, addReq->name, OVS_MAX_PORT_NAME_LENGTH);
-    vport->ovsName[OVS_MAX_PORT_NAME_LENGTH - 1] = 0;
-    StringCbLengthA(vport->ovsName, OVS_MAX_PORT_NAME_LENGTH - 1, &len);
-    vport->ovsNameLen = (UINT32)len;
-    switch (addReq->type) {
-    case OVS_VPORT_TYPE_GRE:
-        break;
-    case OVS_VPORT_TYPE_GRE64:
-        break;
-    case OVS_VPORT_TYPE_VXLAN:
-        status = OvsInitVxlanTunnel(vport, addReq);
-        break;
-    default:
-        ASSERT(0);
-    }
-    return status;
-}
 
 NTSTATUS
 OvsConvertIfCountedStrToAnsiStr(PIF_COUNTED_STRING wStr,
@@ -983,7 +958,7 @@ OvsConvertIfCountedStrToAnsiStr(PIF_COUNTED_STRING wStr,
  * XXX: Get rid of USE_NEW_VPORT_ADD_WORKFLOW while checking in the code for
  * new vport add workflow, or set USE_NEW_VPORT_ADD_WORKFLOW to 1.
  */
-#define USE_NEW_VPORT_ADD_WORKFLOW 0
+#define USE_NEW_VPORT_ADD_WORKFLOW 1
 NTSTATUS
 OvsGetExtInfoIoctl(POVS_VPORT_GET vportGet,
                    POVS_VPORT_EXT_INFO extInfo)
