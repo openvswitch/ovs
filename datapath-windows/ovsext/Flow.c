@@ -352,8 +352,7 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
 done:
 
-    if ((nlError != NL_ERROR_SUCCESS) &&
-        (usrParamsCtx->outputBuffer)) {
+    if (nlError != NL_ERROR_SUCCESS) {
         POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
                                        usrParamsCtx->outputBuffer;
         BuildErrorMsg(msgIn, msgError, nlError);
@@ -374,55 +373,31 @@ NTSTATUS
 OvsFlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                        UINT32 *replyLen)
 {
-    NTSTATUS rc = STATUS_SUCCESS;
+    NTSTATUS status = STATUS_SUCCESS;
     NL_ERROR nlError = NL_ERROR_SUCCESS;
     POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
-    POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
-    PNL_MSG_HDR nlMsgHdr = &(msgIn->nlMsg);
-    PGENL_MSG_HDR genlMsgHdr = &(msgIn->genlMsg);
-    POVS_HDR ovsHdr = &(msgIn->ovsHdr);
-
-    NL_BUFFER nlBuf;
-
-    if (!(usrParamsCtx->outputBuffer)) {
-        /* No output buffer */
-        rc = STATUS_INVALID_BUFFER_SIZE;
-        goto done;
-    }
 
     if (usrParamsCtx->devOp == OVS_TRANSACTION_DEV_OP) {
-        rc = _FlowNlGetCmdHandler(usrParamsCtx, replyLen);
-    } else {
-        rc = _FlowNlDumpCmdHandler(usrParamsCtx, replyLen);
-    }
+        status = _FlowNlGetCmdHandler(usrParamsCtx, replyLen);
 
-    if ((nlError != NL_ERROR_SUCCESS) &&
-        (usrParamsCtx->outputBuffer)) {
-        POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
-                                       usrParamsCtx->outputBuffer;
-        BuildErrorMsg(msgIn, msgError, nlError);
-        *replyLen = msgError->nlMsg.nlmsgLen;
-        rc = STATUS_SUCCESS;
-        goto done;
-    }
-
-    if (rc == STATUS_SUCCESS) {
-        NlBufInit(&nlBuf, usrParamsCtx->outputBuffer,
-                  usrParamsCtx->outputLength);
-
-        /* Prepare nl Msg headers */
-        rc = NlFillOvsMsg(&nlBuf, nlMsgHdr->nlmsgType, 0,
-                          nlMsgHdr->nlmsgSeq, nlMsgHdr->nlmsgPid,
-                          genlMsgHdr->cmd, OVS_FLOW_VERSION,
-                          ovsHdr->dp_ifindex);
-
-        if (rc == STATUS_SUCCESS) {
-            *replyLen = msgOut->nlMsg.nlmsgLen;
+        /* No trasanctional errors as of now.
+         * If we have something then we need to convert rc to
+         * nlError. */
+        if ((nlError != NL_ERROR_SUCCESS) &&
+            (usrParamsCtx->outputBuffer)) {
+            POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
+                                           usrParamsCtx->outputBuffer;
+            BuildErrorMsg(msgIn, msgError, nlError);
+            *replyLen = msgError->nlMsg.nlmsgLen;
+            status = STATUS_SUCCESS;
+            goto done;
         }
+    } else {
+        status = _FlowNlDumpCmdHandler(usrParamsCtx, replyLen);
     }
 
 done:
-    return rc;
+    return status;
 }
 
 /*
