@@ -287,6 +287,9 @@ OFP_ASSERT(sizeof(struct nx_async_config) == 24);
  * short, that is also supported by Open vSwitch.  This section also defines a
  * replacement for each OpenFlow message that includes struct ofp10_match.
  *
+ * OpenFlow 1.2+ introduced OpenFlow Extensible Match (OXM), adapting
+ * the design of NXM.  The format of NXM and OXM are compatible.
+ *
  *
  * Format
  * ======
@@ -307,10 +310,12 @@ OFP_ASSERT(sizeof(struct nx_async_config) == 24);
  * +----------------------------------+---------------+--+------------------+
  *
  * The most-significant 23 bits of the header are collectively "nxm_type".
- * Bits 16...31 are "nxm_vendor", one of the NXM_VENDOR_* values below.  Bits
- * 9...15 are "nxm_field", which is a vendor-specific value.  nxm_type normally
- * designates a protocol header, such as the Ethernet type, but it can also
- * refer to packet metadata, such as the switch port on which a packet arrived.
+ * Bits 16...31 are "nxm_vendor", one of OFPXMC12_* values.  In case of
+ * NXM, it's either OFPXMC12_NXM_0 or OFPXMC12_NXM_1.
+ * Bits 9...15 are "nxm_field", which is a vendor-specific value.  nxm_type
+ * normally designates a protocol header, such as the Ethernet type, but it
+ * can also refer to packet metadata, such as the switch port on which a packet
+ * arrived.
  *
  * Bit 8 is "nxm_hasmask" (labeled "hm" above for space reasons).  The meaning
  * of this bit is explained later.
