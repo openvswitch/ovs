@@ -1,5 +1,6 @@
 usr/bin/ovs-appctl
 usr/bin/ovs-benchmark
+usr/bin/ovs-docker
 usr/bin/ovs-ofctl
 usr/bin/ovs-parse-backtrace
 usr/bin/ovs-pki

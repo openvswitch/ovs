@@ -130,6 +130,7 @@ exit 0
 /usr/bin/ovs-benchmark
 /usr/bin/ovs-dpctl
 /usr/bin/ovs-dpctl-top
+/usr/bin/ovs-docker
 /usr/bin/ovs-ofctl
 /usr/bin/ovs-parse-backtrace
 /usr/bin/ovs-pcap

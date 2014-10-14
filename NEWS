@@ -39,6 +39,8 @@ Post-v2.3.0
      still needed, so this should not be enabled on production environments.
    - Stats are no longer updated on fake bond interface.
    - Keep active bond slave selection across OVS restart.
+   - A simple wrapper script, 'ovs-docker', to integrate OVS with Docker
+     containers.
 
 
 v2.3.0 - 14 Aug 2014

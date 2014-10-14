@@ -68,6 +68,7 @@ EXTRA_DIST = \
 	FAQ \
 	INSTALL \
 	INSTALL.Debian \
+	INSTALL.Docker \
         INSTALL.DPDK \
 	INSTALL.Fedora \
 	INSTALL.KVM \

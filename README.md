@@ -88,6 +88,8 @@ platform, please see one of these files:
 
 To use Open vSwitch...
 
+- ...with Docker on Linux, read INSTALL.Docker.
+
 - ...with KVM on Linux, read INSTALL, read INSTALL.KVM.
 
 - ...with Libvirt, read INSTALL.Libvirt.

@@ -4,7 +4,8 @@ bin_PROGRAMS += \
 	utilities/ovs-dpctl \
 	utilities/ovs-ofctl \
 	utilities/ovs-vsctl
-bin_SCRIPTS += utilities/ovs-pki
+bin_SCRIPTS += utilities/ovs-docker \
+	utilities/ovs-pki
 if HAVE_PYTHON
 bin_SCRIPTS += \
 	utilities/ovs-dpctl-top \
@@ -27,6 +28,7 @@ EXTRA_DIST += \
 	utilities/ovs-check-dead-ifs.in \
 	utilities/ovs-ctl.in \
 	utilities/ovs-dev.py \
+	utilities/ovs-docker \
 	utilities/ovs-dpctl-top.in \
 	utilities/ovs-l3ping.in \
 	utilities/ovs-lib.in \
