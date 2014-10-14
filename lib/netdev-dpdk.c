@@ -202,6 +202,7 @@ struct netdev_dpdk {
 
     /* In dpdk_list. */
     struct list list_node OVS_GUARDED_BY(dpdk_mutex);
+    rte_spinlock_t dpdkr_tx_lock;
 };
 
 struct netdev_rxq_dpdk {
@@ -502,6 +503,7 @@ netdev_dpdk_init(struct netdev *netdev_, unsigned int port_no)
     netdev->flags = 0;
     netdev->mtu = ETHER_MTU;
     netdev->max_packet_len = MTU_TO_MAX_LEN(netdev->mtu);
+    rte_spinlock_init(&netdev->dpdkr_tx_lock);
 
     netdev->dpdk_mp = dpdk_mp_get(netdev->socket_id, netdev->mtu);
     if (!netdev->dpdk_mp) {
@@ -845,15 +847,16 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dpif_packet ** pkts,
     }
 }
 
-static int
-netdev_dpdk_send(struct netdev *netdev, int qid, struct dpif_packet **pkts,
-                 int cnt, bool may_steal)
+static inline void
+netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
+                   struct dpif_packet **pkts, int cnt, bool may_steal)
 {
-    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    int ret;
     int i;
 
-    if (!may_steal || pkts[0]->ofpbuf.source != OFPBUF_DPDK) {
+    if (OVS_UNLIKELY(!may_steal ||
+                     pkts[0]->ofpbuf.source != OFPBUF_DPDK)) {
+        struct netdev *netdev = &dev->up;
+
         dpdk_do_tx_copy(netdev, qid, pkts, cnt);
 
         if (may_steal) {
@@ -894,9 +897,16 @@ netdev_dpdk_send(struct netdev *netdev, int qid, struct dpif_packet **pkts,
             ovs_mutex_unlock(&dev->mutex);
         }
     }
-    ret = 0;
+}
 
-    return ret;
+static int
+netdev_dpdk_eth_send(struct netdev *netdev, int qid,
+                     struct dpif_packet **pkts, int cnt, bool may_steal)
+{
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+
+    netdev_dpdk_send__(dev, qid, pkts, cnt, may_steal);
+    return 0;
 }
 
 static int
@@ -1291,12 +1301,15 @@ dpdk_ring_create(const char dev_name[], unsigned int port_no,
         return ENOMEM;
     }
 
+    /* XXX: Add support for multiquque ring. */
     err = snprintf(ring_name, 10, "%s_tx", dev_name);
     if (err < 0) {
         return -err;
     }
 
-    ivshmem->cring_tx = rte_ring_create(ring_name, DPDK_RING_SIZE, SOCKET0, 0);
+    /* Create single consumer/producer rings, netdev does explicit locking. */
+    ivshmem->cring_tx = rte_ring_create(ring_name, DPDK_RING_SIZE, SOCKET0,
+                                        RING_F_SP_ENQ | RING_F_SC_DEQ);
     if (ivshmem->cring_tx == NULL) {
         rte_free(ivshmem);
         return ENOMEM;
@@ -1307,7 +1320,9 @@ dpdk_ring_create(const char dev_name[], unsigned int port_no,
         return -err;
     }
 
-    ivshmem->cring_rx = rte_ring_create(ring_name, DPDK_RING_SIZE, SOCKET0, 0);
+    /* Create single consumer/producer rings, netdev does explicit locking. */
+    ivshmem->cring_rx = rte_ring_create(ring_name, DPDK_RING_SIZE, SOCKET0,
+                                        RING_F_SP_ENQ | RING_F_SC_DEQ);
     if (ivshmem->cring_rx == NULL) {
         rte_free(ivshmem);
         return ENOMEM;
@@ -1355,6 +1370,19 @@ dpdk_ring_open(const char dev_name[], unsigned int *eth_port_id) OVS_REQUIRES(dp
 }
 
 static int
+netdev_dpdk_ring_send(struct netdev *netdev, int qid OVS_UNUSED,
+                      struct dpif_packet **pkts, int cnt, bool may_steal)
+{
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+
+    /* DPDK Rings have a single TX queue, Therefore needs locking. */
+    rte_spinlock_lock(&dev->dpdkr_tx_lock);
+    netdev_dpdk_send__(dev, 0, pkts, cnt, may_steal);
+    rte_spinlock_unlock(&dev->dpdkr_tx_lock);
+    return 0;
+}
+
+static int
 netdev_dpdk_ring_construct(struct netdev *netdev)
 {
     unsigned int port_no = 0;
@@ -1378,7 +1406,7 @@ unlock_dpdk:
     return err;
 }
 
-#define NETDEV_DPDK_CLASS(NAME, INIT, CONSTRUCT, MULTIQ)      \
+#define NETDEV_DPDK_CLASS(NAME, INIT, CONSTRUCT, MULTIQ, SEND)      \
 {                                                             \
     NAME,                                                     \
     INIT,                       /* init */                    \
@@ -1395,7 +1423,7 @@ unlock_dpdk:
     netdev_dpdk_get_numa_id,    /* get_numa_id */             \
     MULTIQ,                     /* set_multiq */              \
                                                               \
-    netdev_dpdk_send,           /* send */                    \
+    SEND,                       /* send */                    \
     NULL,                       /* send_wait */               \
                                                               \
     netdev_dpdk_set_etheraddr,                                \
@@ -1481,14 +1509,16 @@ const struct netdev_class dpdk_class =
         "dpdk",
         dpdk_class_init,
         netdev_dpdk_construct,
-        netdev_dpdk_set_multiq);
+        netdev_dpdk_set_multiq,
+        netdev_dpdk_eth_send);
 
 const struct netdev_class dpdk_ring_class =
     NETDEV_DPDK_CLASS(
         "dpdkr",
         NULL,
         netdev_dpdk_ring_construct,
-        NULL);
+        NULL,
+        netdev_dpdk_ring_send);
 
 void
 netdev_dpdk_register(void)

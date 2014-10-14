@@ -822,7 +822,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
         /* There can only be ovs_numa_get_n_cores() pmd threads,
          * so creates a txq for each. */
         error = netdev_set_multiq(netdev, n_cores, dp->n_dpdk_rxqs);
-        if (error) {
+        if (error && (error != EOPNOTSUPP)) {
             VLOG_ERR("%s, cannot set multiq", devname);
             return errno;
         }
@@ -2089,7 +2089,7 @@ dpif_netdev_pmd_set(struct dpif *dpif, unsigned int n_rxqs, const char *cmask)
                 /* Sets the new rx queue config.  */
                 err = netdev_set_multiq(port->netdev, ovs_numa_get_n_cores(),
                                         n_rxqs);
-                if (err) {
+                if (err && (err != EOPNOTSUPP)) {
                     VLOG_ERR("Failed to set dpdk interface %s rx_queue to:"
                              " %u", netdev_get_name(port->netdev),
                              n_rxqs);
