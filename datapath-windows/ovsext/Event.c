@@ -28,15 +28,15 @@
 #include "Debug.h"
 
 LIST_ENTRY ovsEventQueue;
+static NDIS_SPIN_LOCK eventQueueLock;
 UINT32 ovsNumEventQueue;
 UINT32 ovsNumPollAll;
-
-extern PNDIS_SPIN_LOCK gOvsCtrlLock;
 
 NTSTATUS
 OvsInitEventQueue()
 {
     InitializeListHead(&ovsEventQueue);
+    NdisAllocateSpinLock(&eventQueueLock);
     return STATUS_SUCCESS;
 }
 
@@ -45,18 +45,19 @@ OvsCleanupEventQueue()
 {
     ASSERT(IsListEmpty(&ovsEventQueue));
     ASSERT(ovsNumEventQueue == 0);
+    NdisFreeSpinLock(&eventQueueLock);
 }
 
 static __inline VOID
 OvsAcquireEventQueueLock()
 {
-    NdisAcquireSpinLock(gOvsCtrlLock);
+    NdisAcquireSpinLock(&eventQueueLock);
 }
 
 static __inline VOID
 OvsReleaseEventQueueLock()
 {
-   NdisReleaseSpinLock(gOvsCtrlLock);
+   NdisReleaseSpinLock(&eventQueueLock);
 }
 
 /*
