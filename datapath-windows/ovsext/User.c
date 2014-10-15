@@ -46,6 +46,9 @@ extern PNDIS_SPIN_LOCK gOvsCtrlLock;
 extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
 OVS_USER_STATS ovsUserStats;
 
+static VOID _MapNlAttrToOvsPktExec(PNL_ATTR *nlAttrs, PNL_ATTR *keyAttrs,
+                                   OvsPacketExecute  *execute);
+extern NL_POLICY nlFlowKeyPolicy[];
 
 NTSTATUS
 OvsUserInit()
@@ -310,12 +313,112 @@ NTSTATUS
 OvsNlExecuteCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                        UINT32 *replyLen)
 {
-    NTSTATUS rc = STATUS_SUCCESS;
+    NTSTATUS status = STATUS_SUCCESS;
+    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
+    POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
+    PNL_MSG_HDR nlMsgHdr = &(msgIn->nlMsg);
+    PGENL_MSG_HDR genlMsgHdr = &(msgIn->genlMsg);
+    POVS_HDR ovsHdr = &(msgIn->ovsHdr);
 
-    UNREFERENCED_PARAMETER(usrParamsCtx);
-    UNREFERENCED_PARAMETER(replyLen);
+    PNL_ATTR nlAttrs[__OVS_PACKET_ATTR_MAX];
+    PNL_ATTR keyAttrs[__OVS_KEY_ATTR_MAX] = {NULL};
 
-    return rc;
+    UINT32 attrOffset = NLMSG_HDRLEN + GENL_HDRLEN + OVS_HDRLEN;
+    UINT32 keyAttrOffset = 0;
+    OvsPacketExecute execute;
+    NL_ERROR nlError = NL_ERROR_SUCCESS;
+    NL_BUFFER nlBuf;
+
+    static const NL_POLICY nlPktExecPolicy[] = {
+        [OVS_PACKET_ATTR_PACKET] = {.type = NL_A_UNSPEC, .optional = FALSE},
+        [OVS_PACKET_ATTR_KEY] = {.type = NL_A_UNSPEC, .optional = FALSE},
+        [OVS_PACKET_ATTR_ACTIONS] = {.type = NL_A_UNSPEC, .optional = FALSE},
+        [OVS_PACKET_ATTR_USERDATA] = {.type = NL_A_UNSPEC, .optional = TRUE},
+        [OVS_PACKET_ATTR_EGRESS_TUN_KEY] = {.type = NL_A_UNSPEC,
+                                            .optional = TRUE}
+    };
+
+    RtlZeroMemory(&execute, sizeof(OvsPacketExecute));
+
+    /* Get all the top level Flow attributes */
+    if ((NlAttrParse(nlMsgHdr, attrOffset, NlMsgAttrsLen(nlMsgHdr),
+                     nlPktExecPolicy, nlAttrs, ARRAY_SIZE(nlAttrs)))
+                     != TRUE) {
+        OVS_LOG_ERROR("Attr Parsing failed for msg: %p",
+                       nlMsgHdr);
+        status = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+    keyAttrOffset = (UINT32)((PCHAR)nlAttrs[OVS_PACKET_ATTR_KEY] -
+                    (PCHAR)nlMsgHdr);
+
+    /* Get flow keys attributes */
+    if ((NlAttrParseNested(nlMsgHdr, keyAttrOffset,
+                           NlAttrLen(nlAttrs[OVS_PACKET_ATTR_KEY]),
+                           nlFlowKeyPolicy, keyAttrs,
+                           ARRAY_SIZE(keyAttrs))) != TRUE) {
+        OVS_LOG_ERROR("Key Attr Parsing failed for msg: %p", nlMsgHdr);
+        status = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+    execute.dpNo = ovsHdr->dp_ifindex;
+
+    _MapNlAttrToOvsPktExec(nlAttrs, keyAttrs, &execute);
+
+    status = OvsExecuteDpIoctl(&execute);
+
+    if (status == STATUS_SUCCESS) {
+        NlBufInit(&nlBuf, usrParamsCtx->outputBuffer,
+                  usrParamsCtx->outputLength);
+
+        /* Prepare nl Msg headers */
+        status = NlFillOvsMsg(&nlBuf, nlMsgHdr->nlmsgType, 0,
+                 nlMsgHdr->nlmsgSeq, nlMsgHdr->nlmsgPid,
+                 genlMsgHdr->cmd, OVS_PACKET_VERSION,
+                 ovsHdr->dp_ifindex);
+
+        if (status == STATUS_SUCCESS) {
+            *replyLen = msgOut->nlMsg.nlmsgLen;
+        }
+    }
+
+    /* As of now there are no transactional errors in the implementation.
+     * Once we have them then we need to map status to correct
+     * nlError value, so that below mentioned code gets hit. */
+    if ((nlError != NL_ERROR_SUCCESS) &&
+        (usrParamsCtx->outputBuffer)) {
+
+        POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
+                                       usrParamsCtx->outputBuffer;
+        BuildErrorMsg(msgIn, msgError, nlError);
+        *replyLen = msgError->nlMsg.nlmsgLen;
+        status = STATUS_SUCCESS;
+        goto done;
+    }
+
+done:
+    return status;
+}
+
+/*
+ *----------------------------------------------------------------------------
+ *  _MapNlAttrToOvsPktExec --
+ *    Maps input Netlink attributes to OvsPacketExecute.
+ *----------------------------------------------------------------------------
+ */
+static VOID
+_MapNlAttrToOvsPktExec(PNL_ATTR *nlAttrs, PNL_ATTR *keyAttrs,
+                       OvsPacketExecute *execute)
+{
+    execute->packetBuf = NlAttrGet(nlAttrs[OVS_PACKET_ATTR_PACKET]);
+    execute->packetLen = NlAttrGetSize(nlAttrs[OVS_PACKET_ATTR_PACKET]);
+
+    execute->actions = NlAttrGet(nlAttrs[OVS_PACKET_ATTR_ACTIONS]);
+    execute->actionsLen = NlAttrGetSize(nlAttrs[OVS_PACKET_ATTR_ACTIONS]);
+
+    execute->inPort = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_IN_PORT]);
 }
 
 NTSTATUS
