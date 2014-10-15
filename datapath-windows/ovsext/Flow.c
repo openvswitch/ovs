@@ -94,7 +94,7 @@ static NTSTATUS OvsDoDumpFlows(OvsFlowDumpInput *dumpInput,
 /* Flow family related netlink policies */
 
 /* For Parsing attributes in FLOW_* commands */
-static const NL_POLICY nlFlowPolicy[] = {
+const NL_POLICY nlFlowPolicy[] = {
     [OVS_FLOW_ATTR_KEY] = {.type = NL_A_NESTED, .optional = FALSE},
     [OVS_FLOW_ATTR_MASK] = {.type = NL_A_NESTED, .optional = TRUE},
     [OVS_FLOW_ATTR_ACTIONS] = {.type = NL_A_NESTED, .optional = TRUE},
@@ -110,7 +110,7 @@ static const NL_POLICY nlFlowPolicy[] = {
  * Some of the attributes like OVS_KEY_ATTR_RECIRC_ID
  * & OVS_KEY_ATTR_MPLS are not supported yet. */
 
-static const NL_POLICY nlFlowKeyPolicy[] = {
+const NL_POLICY nlFlowKeyPolicy[] = {
     [OVS_KEY_ATTR_ENCAP] = {.type = NL_A_VAR_LEN, .optional = TRUE},
     [OVS_KEY_ATTR_PRIORITY] = {.type = NL_A_UNSPEC, .minLen = 4,
                                .maxLen = 4, .optional = TRUE},
@@ -174,7 +174,7 @@ static const NL_POLICY nlFlowKeyPolicy[] = {
 };
 
 /* For Parsing nested OVS_KEY_ATTR_TUNNEL attributes */
-static const NL_POLICY nlFlowTunnelKeyPolicy[] = {
+const NL_POLICY nlFlowTunnelKeyPolicy[] = {
     [OVS_TUNNEL_KEY_ATTR_ID] = {.type = NL_A_UNSPEC, .minLen = 8,
                                 .maxLen = 8, .optional = TRUE},
     [OVS_TUNNEL_KEY_ATTR_IPV4_SRC] = {.type = NL_A_UNSPEC, .minLen = 4,
@@ -196,7 +196,7 @@ static const NL_POLICY nlFlowTunnelKeyPolicy[] = {
 };
 
 /* For Parsing nested OVS_FLOW_ATTR_ACTIONS attributes */
-static const NL_POLICY nlFlowActionPolicy[] = {
+const NL_POLICY nlFlowActionPolicy[] = {
     [OVS_ACTION_ATTR_OUTPUT] = {.type = NL_A_UNSPEC, .minLen = sizeof(UINT32),
                                 .maxLen = sizeof(UINT32), .optional = TRUE},
     [OVS_ACTION_ATTR_USERSPACE] = {.type = NL_A_VAR_LEN, .optional = TRUE},
