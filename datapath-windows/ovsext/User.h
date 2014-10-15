@@ -71,24 +71,22 @@ VOID OvsUserCleanup();
 
 VOID OvsCleanupPacketQueue(struct _OVS_OPEN_INSTANCE *instance);
 
-POVS_PACKET_QUEUE_ELEM OvsCreateQueuePacket(UINT32 queueId,
-                                            PVOID userData,
-                                            UINT32 userDataLen,
-                                            UINT32 cmd, UINT32 inPort,
-                                            OvsIPv4TunnelKey *tunnelKey,
-                                            PNET_BUFFER_LIST nbl,
-                                            PNET_BUFFER nb,
-                                            BOOLEAN isRecv,
-                                            POVS_PACKET_HDR_INFO hdrInfo);
+POVS_PACKET_QUEUE_ELEM OvsCreateQueueNlPacket(PVOID userData,
+                                              UINT32 userDataLen,
+                                              UINT32 cmd, UINT32 inPort,
+                                              OvsFlowKey *key,
+                                              PNET_BUFFER_LIST nbl,
+                                              PNET_BUFFER nb,
+                                              BOOLEAN isRecv,
+                                              POVS_PACKET_HDR_INFO hdrInfo);
 
 VOID OvsQueuePackets(UINT32 queueId, PLIST_ENTRY packetList,
                      UINT32 numElems);
-NTSTATUS OvsCreateAndAddPackets(UINT32 queueId,
-                                PVOID userData,
+NTSTATUS OvsCreateAndAddPackets(PVOID userData,
                                 UINT32 userDataLen,
                                 UINT32 cmd,
                                 UINT32 inPort,
-                                OvsIPv4TunnelKey *tunnelKey,
+                                OvsFlowKey *key,
                                 PNET_BUFFER_LIST nbl,
                                 BOOLEAN isRecv,
                                 POVS_PACKET_HDR_INFO hdrInfo,

@@ -287,12 +287,9 @@ OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
                 OvsReleaseDatapath(datapath, &dpLockState);
 
                 datapath->misses++;
-                status = OvsCreateAndAddPackets(OVS_DEFAULT_PACKET_QUEUE,
-                                                NULL, 0, OVS_PACKET_CMD_MISS,
+                status = OvsCreateAndAddPackets(NULL, 0, OVS_PACKET_CMD_MISS,
                                                 portNo,
-                                                key.tunKey.dst != 0 ?
-                                                (OvsIPv4TunnelKey *)&key.tunKey :
-                                                NULL, curNbl,
+                                                &key, curNbl,
                                                 sourcePort ==
                                                 switchContext->externalPortId,
                                                 &layers, switchContext,

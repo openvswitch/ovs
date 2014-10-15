@@ -517,247 +517,6 @@ OvsGetQueue(UINT32 queueId)
     return queue->instance != NULL ? queue : NULL;
 }
 
-/*
- *----------------------------------------------------------------------------
- * OvsCreateQueuePacket --
- *
- *  Create a packet which will be forwarded to user space.
- *
- * InputParameter:
- *   queueId Identify the queue the packet to be inserted
- *      This will be used when multiple queues is supported
- *      in userspace
- *   userData: when cmd is user action, this field contain
- *      user action data.
- *   userDataLen: as name indicated
- *   cmd: either miss or user action
- *   inPort: datapath port id from which the packet is received.
- *   tunnelKey: tunnelKey for tunneled packet
- *   nbl:  the NET_BUFFER_LIST which contain the packet
- *   nb: the packet
- *   isRecv: This is used to decide how to interprete the csum info
- *   hdrInfo: include hdr info initialized during flow extraction.
- *
- * Results:
- *    NULL if fail to create the packet
- *    The packet element otherwise
- *----------------------------------------------------------------------------
- */
-POVS_PACKET_QUEUE_ELEM
-OvsCreateQueuePacket(UINT32 queueId,
-                     PVOID userData,
-                     UINT32 userDataLen,
-                     UINT32 cmd,
-                     UINT32 inPort,
-                     OvsIPv4TunnelKey *tunnelKey,
-                     PNET_BUFFER_LIST nbl,
-                     PNET_BUFFER nb,
-                     BOOLEAN isRecv,
-                     POVS_PACKET_HDR_INFO hdrInfo)
-{
-#define VLAN_TAG_SIZE 4
-    UINT32 allocLen, dataLen, extraLen = 0;
-    POVS_PACKET_QUEUE_ELEM elem;
-    PMDL mdl;
-    UINT8 *src, *dst;
-    NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
-    NDIS_NET_BUFFER_LIST_8021Q_INFO vlanInfo;
-
-    if (!OvsGetQueue(queueId)) {
-        /*
-         * There is no userspace queue created yet, so there is no point for
-         * creating a new packet to be queued.
-         */
-        return NULL;
-    }
-
-    csumInfo.Value = NET_BUFFER_LIST_INFO(nbl, TcpIpChecksumNetBufferListInfo);
-
-    if (isRecv && (csumInfo.Receive.TcpChecksumFailed ||
-                   (csumInfo.Receive.UdpChecksumFailed &&
-                    !hdrInfo->udpCsumZero) ||
-                   csumInfo.Receive.IpChecksumFailed)) {
-        OVS_LOG_INFO("Packet dropped due to checksum failure.");
-        ovsUserStats.dropDuetoChecksum++;
-        return NULL;
-    }
-
-    vlanInfo.Value = NET_BUFFER_LIST_INFO(nbl, Ieee8021QNetBufferListInfo);
-    if (vlanInfo.TagHeader.VlanId) {
-        /*
-         * We may also need to check priority XXX
-         */
-        extraLen = VLAN_TAG_SIZE;
-    }
-
-    dataLen = NET_BUFFER_DATA_LENGTH(nb);
-    allocLen = sizeof (OVS_PACKET_QUEUE_ELEM) + userDataLen + dataLen +
-           extraLen;
-
-    elem = (POVS_PACKET_QUEUE_ELEM)OvsAllocateMemory(allocLen);
-    if (elem == NULL) {
-        ovsUserStats.dropDuetoResource++;
-        return NULL;
-    }
-    elem->hdrInfo.value = hdrInfo->value;
-    elem->packet.totalLen = sizeof (OVS_PACKET_INFO) + userDataLen + dataLen +
-       extraLen;
-    elem->packet.queue = queueId;
-    elem->packet.userDataLen = userDataLen;
-    elem->packet.inPort = inPort;
-    elem->packet.cmd = cmd;
-    if (cmd == (UINT32)OVS_PACKET_CMD_MISS) {
-        ovsUserStats.miss++;
-    } else {
-        ovsUserStats.action++;
-    }
-    elem->packet.packetLen = dataLen + extraLen;
-    if (tunnelKey) {
-        RtlCopyMemory(&elem->packet.tunnelKey, tunnelKey,
-                      sizeof (*tunnelKey));
-    } else {
-        RtlZeroMemory(&elem->packet.tunnelKey,
-                      sizeof (elem->packet.tunnelKey));
-    }
-
-    dst = elem->packet.data;
-    if (userDataLen) {
-        RtlCopyMemory(dst, userData, userDataLen);
-        dst = dst + userDataLen;
-    }
-    dst += extraLen;
-
-    mdl = NET_BUFFER_CURRENT_MDL(nb);
-    src = NdisGetDataBuffer(nb, dataLen, dst, 1, 0);
-    if (src == NULL) {
-        OvsFreeMemory(elem);
-        ovsUserStats.dropDuetoResource++;
-        return NULL;
-    } else if (src != dst) {
-        /* Copy the data from the NDIS buffer to dst. */
-        RtlCopyMemory(dst, src, dataLen);
-    }
-
-    dst =  elem->packet.data + userDataLen + extraLen;
-    /*
-     * Fix IP hdr if necessary
-     */
-    if ((isRecv && csumInfo.Receive.IpChecksumValueInvalid) ||
-        (!isRecv && csumInfo.Transmit.IsIPv4 &&
-         csumInfo.Transmit.IpHeaderChecksum)) {
-        PIPV4_HEADER ipHdr = (PIPV4_HEADER)(dst + hdrInfo->l3Offset);
-        ASSERT(elem->hdrInfo.isIPv4);
-        ASSERT(ipHdr->Version == 4);
-        ipHdr->HeaderChecksum = IPChecksum((UINT8 *)ipHdr,
-                                           ipHdr->HeaderLength << 2,
-                                           (UINT16)~ipHdr->HeaderChecksum);
-        ovsUserStats.ipCsum++;
-    }
-    ASSERT(elem->hdrInfo.tcpCsumNeeded == 0 &&
-           elem->hdrInfo.udpCsumNeeded == 0);
-    /*
-     * Fow now, we will not do verification
-     * There is no correctness issue here.
-     * XXX
-     */
-    /*
-     * calculate TCP/UDP pseudo checksum
-     */
-    if (isRecv && csumInfo.Receive.TcpChecksumValueInvalid) {
-        /*
-         * Only this case, we need to reclaculate pseudo checksum
-         * all other cases, it is assumed the pseudo checksum is
-         * filled already.
-         *
-         */
-        PTCP_HDR tcpHdr = (PTCP_HDR)(dst + hdrInfo->l4Offset);
-        if (hdrInfo->isIPv4) {
-            PIPV4_HEADER ipHdr = (PIPV4_HEADER)(dst + hdrInfo->l3Offset);
-            elem->hdrInfo.l4PayLoad = (UINT16)(ntohs(ipHdr->TotalLength) -
-                                               (ipHdr->HeaderLength << 2));
-            tcpHdr->th_sum =
-                 IPPseudoChecksum((UINT32 *)&ipHdr->SourceAddress,
-                                  (UINT32 *)&ipHdr->DestinationAddress,
-                                  IPPROTO_TCP, elem->hdrInfo.l4PayLoad);
-        } else {
-            PIPV6_HEADER ipv6Hdr = (PIPV6_HEADER)(dst + hdrInfo->l3Offset);
-            elem->hdrInfo.l4PayLoad =
-                  (UINT16)(ntohs(ipv6Hdr->PayloadLength) +
-                           hdrInfo->l3Offset + sizeof(IPV6_HEADER) -
-                           hdrInfo->l4Offset);
-            ASSERT(hdrInfo->isIPv6);
-            tcpHdr->th_sum =
-                IPv6PseudoChecksum((UINT32 *)&ipv6Hdr->SourceAddress,
-                                   (UINT32 *)&ipv6Hdr->DestinationAddress,
-                                   IPPROTO_TCP, elem->hdrInfo.l4PayLoad);
-        }
-        elem->hdrInfo.tcpCsumNeeded = 1;
-        ovsUserStats.recalTcpCsum++;
-    } else if (!isRecv) {
-        if (csumInfo.Transmit.TcpChecksum) {
-            elem->hdrInfo.tcpCsumNeeded = 1;
-        } else if (csumInfo.Transmit.UdpChecksum) {
-            elem->hdrInfo.udpCsumNeeded = 1;
-        }
-        if (elem->hdrInfo.tcpCsumNeeded || elem->hdrInfo.udpCsumNeeded) {
-#ifdef DBG
-            UINT16 sum, *ptr;
-            UINT8 proto =
-               elem->hdrInfo.tcpCsumNeeded ? IPPROTO_TCP : IPPROTO_UDP;
-#endif
-            if (hdrInfo->isIPv4) {
-                PIPV4_HEADER ipHdr = (PIPV4_HEADER)(dst + hdrInfo->l3Offset);
-                elem->hdrInfo.l4PayLoad = (UINT16)(ntohs(ipHdr->TotalLength) -
-                                                   (ipHdr->HeaderLength << 2));
-#ifdef DBG
-                sum = IPPseudoChecksum((UINT32 *)&ipHdr->SourceAddress,
-                                       (UINT32 *)&ipHdr->DestinationAddress,
-                                       proto, elem->hdrInfo.l4PayLoad);
-#endif
-            } else {
-                PIPV6_HEADER ipv6Hdr = (PIPV6_HEADER)(dst +
-                                                      hdrInfo->l3Offset);
-                elem->hdrInfo.l4PayLoad =
-                       (UINT16)(ntohs(ipv6Hdr->PayloadLength) +
-                                hdrInfo->l3Offset + sizeof(IPV6_HEADER) -
-                                hdrInfo->l4Offset);
-                ASSERT(hdrInfo->isIPv6);
-#ifdef DBG
-                sum = IPv6PseudoChecksum((UINT32 *)&ipv6Hdr->SourceAddress,
-                                         (UINT32 *)&ipv6Hdr->DestinationAddress,
-                                         proto, elem->hdrInfo.l4PayLoad);
-#endif
-            }
-#ifdef DBG
-            ptr = (UINT16 *)(dst + hdrInfo->l4Offset +
-                             (elem->hdrInfo.tcpCsumNeeded ?
-                              TCP_CSUM_OFFSET : UDP_CSUM_OFFSET));
-            ASSERT(*ptr == sum);
-#endif
-        }
-    }
-    /*
-     * Finally insert VLAN tag
-     */
-    if (extraLen) {
-        dst = elem->packet.data + userDataLen;
-        src = dst + extraLen;
-        ((UINT32 *)dst)[0] = ((UINT32 *)src)[0];
-        ((UINT32 *)dst)[1] = ((UINT32 *)src)[1];
-        ((UINT32 *)dst)[2] = ((UINT32 *)src)[2];
-        dst += 12;
-        ((UINT16 *)dst)[0] = htons(0x8100);
-        ((UINT16 *)dst)[1] = htons(vlanInfo.TagHeader.VlanId |
-                                   (vlanInfo.TagHeader.UserPriority << 13));
-        elem->hdrInfo.l3Offset += VLAN_TAG_SIZE;
-        elem->hdrInfo.l4Offset += VLAN_TAG_SIZE;
-        ovsUserStats.vlanInsert++;
-    }
-
-    return elem;
-}
-
-
 VOID
 OvsQueuePackets(UINT32 queueId,
                 PLIST_ENTRY packetList,
@@ -819,12 +578,11 @@ cleanup:
  *----------------------------------------------------------------------------
  */
 NTSTATUS
-OvsCreateAndAddPackets(UINT32 queueId,
-                       PVOID userData,
+OvsCreateAndAddPackets(PVOID userData,
                        UINT32 userDataLen,
                        UINT32 cmd,
                        UINT32 inPort,
-                       OvsIPv4TunnelKey *tunnelKey,
+                       OvsFlowKey *key,
                        PNET_BUFFER_LIST nbl,
                        BOOLEAN isRecv,
                        POVS_PACKET_HDR_INFO hdrInfo,
@@ -859,8 +617,8 @@ OvsCreateAndAddPackets(UINT32 queueId,
 
     nb = NET_BUFFER_LIST_FIRST_NB(nbl);
     while (nb) {
-        elem = OvsCreateQueuePacket(queueId, userData, userDataLen,
-                                    cmd, inPort, tunnelKey, nbl, nb,
+        elem = OvsCreateQueueNlPacket(userData, userDataLen,
+                                    cmd, inPort, key, nbl, nb,
                                     isRecv, hdrInfo);
         if (elem) {
             InsertTailList(list, &elem->link);

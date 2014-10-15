@@ -558,14 +558,11 @@ OvsDoFlowLookupOutput(OvsForwardingContext *ovsFwdCtx)
         UINT32 num = 0;
         ovsFwdCtx->switchContext->datapath.misses++;
         InitializeListHead(&missedPackets);
-        status = OvsCreateAndAddPackets(
-                OVS_DEFAULT_PACKET_QUEUE, NULL, 0, OVS_PACKET_CMD_MISS,
-                ovsFwdCtx->srcVportNo,
-                key.tunKey.dst != 0 ?
-                    (OvsIPv4TunnelKey *)&key.tunKey : NULL,
-                ovsFwdCtx->curNbl,
-                ovsFwdCtx->tunnelRxNic != NULL, &ovsFwdCtx->layers,
-                ovsFwdCtx->switchContext, &missedPackets, &num);
+        status = OvsCreateAndAddPackets(NULL, 0, OVS_PACKET_CMD_MISS,
+                          ovsFwdCtx->srcVportNo,
+                          &key,ovsFwdCtx->curNbl,
+                          ovsFwdCtx->tunnelRxNic != NULL, &ovsFwdCtx->layers,
+                          ovsFwdCtx->switchContext, &missedPackets, &num);
         if (num) {
             OvsQueuePackets(OVS_DEFAULT_PACKET_QUEUE, &missedPackets, num);
         }
@@ -1472,7 +1469,6 @@ OvsActionsExecute(POVS_SWITCH_CONTEXT switchContext,
             PNL_ATTR userdataAttr;
             PNL_ATTR queueAttr;
             POVS_PACKET_QUEUE_ELEM elem;
-            UINT32 queueId = OVS_DEFAULT_PACKET_QUEUE;
             BOOLEAN isRecv = FALSE;
 
             POVS_VPORT_ENTRY vport = OvsFindVportByPortNo(switchContext,
@@ -1488,14 +1484,13 @@ OvsActionsExecute(POVS_SWITCH_CONTEXT switchContext,
             queueAttr = NlAttrFindNested(a, OVS_USERSPACE_ATTR_PID);
             userdataAttr = NlAttrFindNested(a, OVS_USERSPACE_ATTR_USERDATA);
 
-            elem = OvsCreateQueuePacket(queueId, (PVOID)userdataAttr,
-                                        userdataAttr->nlaLen,
-                                        OVS_PACKET_CMD_ACTION,
-                                        portNo, (OvsIPv4TunnelKey *)&key->tunKey,
-                                        ovsFwdCtx.curNbl,
-                                        NET_BUFFER_LIST_FIRST_NB(ovsFwdCtx.curNbl),
-                                        isRecv,
-                                        layers);
+            elem = OvsCreateQueueNlPacket((PVOID)userdataAttr,
+                                    userdataAttr->nlaLen,
+                                    OVS_PACKET_CMD_ACTION,
+                                    portNo, key,ovsFwdCtx.curNbl,
+                                    NET_BUFFER_LIST_FIRST_NB(ovsFwdCtx.curNbl),
+                                    isRecv,
+                                    layers);
             if (elem) {
                 LIST_ENTRY missedPackets;
                 InitializeListHead(&missedPackets);
