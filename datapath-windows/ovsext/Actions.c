@@ -1526,10 +1526,8 @@ OvsActionsExecute(POVS_SWITCH_CONTEXT switchContext,
             break;
         }
         case OVS_ACTION_ATTR_SAMPLE:
-            break;
-        case OVS_ACTION_ATTR_UNSPEC:
-        case __OVS_ACTION_ATTR_MAX:
         default:
+            status = NDIS_STATUS_NOT_SUPPORTED;
             break;
         }
     }

@@ -198,3 +198,20 @@ typedef enum _NL_ERROR_
     /*the operation would block */
     NL_ERROR_WOULDBLOCK = ((ULONG)-140),
 } NL_ERROR;
+
+static __inline
+NlMapStatusToNlErr(NTSTATUS status)
+{
+    NL_ERROR ret = NL_ERROR_SUCCESS;
+
+    switch (status)
+    {
+    case STATUS_NOT_SUPPORTED:
+      ret = NL_ERROR_NOTSUPP;
+      break;
+    default:
+      break;
+    }
+
+    return ret;
+}

@@ -369,6 +369,7 @@ OvsNlExecuteCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
     status = OvsExecuteDpIoctl(&execute);
 
+    /* Default reply that we want to send */
     if (status == STATUS_SUCCESS) {
         NlBufInit(&nlBuf, usrParamsCtx->outputBuffer,
                   usrParamsCtx->outputLength);
@@ -382,20 +383,23 @@ OvsNlExecuteCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         if (status == STATUS_SUCCESS) {
             *replyLen = msgOut->nlMsg.nlmsgLen;
         }
-    }
+    } else {
+        /* Map NTSTATUS to NL_ERROR */
+        nlError = NlMapStatusToNlErr(status);
 
-    /* As of now there are no transactional errors in the implementation.
-     * Once we have them then we need to map status to correct
-     * nlError value, so that below mentioned code gets hit. */
-    if ((nlError != NL_ERROR_SUCCESS) &&
-        (usrParamsCtx->outputBuffer)) {
+        /* As of now there are no transactional errors in the implementation.
+         * Once we have them then we need to map status to correct
+         * nlError value, so that below mentioned code gets hit. */
+        if ((nlError != NL_ERROR_SUCCESS) &&
+            (usrParamsCtx->outputBuffer)) {
 
-        POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
-                                       usrParamsCtx->outputBuffer;
-        BuildErrorMsg(msgIn, msgError, nlError);
-        *replyLen = msgError->nlMsg.nlmsgLen;
-        status = STATUS_SUCCESS;
-        goto done;
+            POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
+                                           usrParamsCtx->outputBuffer;
+            BuildErrorMsg(msgIn, msgError, nlError);
+            *replyLen = msgError->nlMsg.nlmsgLen;
+            status = STATUS_SUCCESS;
+            goto done;
+        }
     }
 
 done:
@@ -487,7 +491,11 @@ OvsExecuteDpIoctl(OvsPacketExecute *execute)
         NdisReleaseRWLock(gOvsSwitchContext->dispatchLock, &lockState);
     }
     if (ndisStatus != NDIS_STATUS_SUCCESS) {
-        status = STATUS_UNSUCCESSFUL;
+        if (ndisStatus == NDIS_STATUS_NOT_SUPPORTED) {
+            status = STATUS_NOT_SUPPORTED;
+        } else {
+            status = STATUS_UNSUCCESSFUL;
+        }
     }
 
     if (pNbl) {
