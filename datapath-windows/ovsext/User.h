@@ -21,6 +21,8 @@
 #ifndef __USER_H_
 #define __USER_H_ 1
 
+#include "Datapath.h"
+
 /*
  * Even we have more cores, I don't think we need
  * more than 32 queues for processing packets to
@@ -108,5 +110,8 @@ NTSTATUS OvsExecuteDpIoctl(PVOID inputBuffer,
 NTSTATUS OvsPurgeDpIoctl(PFILE_OBJECT fileObject);
 
 NTSTATUS OvsWaitDpIoctl(PIRP irp, PFILE_OBJECT fileObject);
+
+NTSTATUS OvsNlExecuteCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                                UINT32 *replyLen);
 
 #endif /* __USER_H_ */

@@ -300,6 +300,24 @@ OvsAllocateNBLForUserBuffer(POVS_SWITCH_CONTEXT switchContext,
     return nbl;
 }
 
+/*
+ *----------------------------------------------------------------------------
+ *  OvsNlExecuteCmdHandler --
+ *    Handler for OVS_PACKET_CMD_EXECUTE command.
+ *----------------------------------------------------------------------------
+ */
+NTSTATUS
+OvsNlExecuteCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                       UINT32 *replyLen)
+{
+    NTSTATUS rc = STATUS_SUCCESS;
+
+    UNREFERENCED_PARAMETER(usrParamsCtx);
+    UNREFERENCED_PARAMETER(replyLen);
+
+    return rc;
+}
+
 NTSTATUS
 OvsExecuteDpIoctl(PVOID inputBuffer,
                   UINT32 inputLength,

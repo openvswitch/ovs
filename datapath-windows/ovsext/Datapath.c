@@ -178,14 +178,22 @@ NETLINK_FAMILY nlDatapathFamilyOps = {
 };
 
 /* Netlink packet family. */
-/* XXX: Add commands here. */
+
+NETLINK_CMD nlPacketFamilyCmdOps[] = {
+    { .cmd             = OVS_PACKET_CMD_EXECUTE,
+      .handler         = OvsNlExecuteCmdHandler,
+      .supportedDevOp  = OVS_TRANSACTION_DEV_OP,
+      .validateDpIndex = TRUE
+    }
+};
+
 NETLINK_FAMILY nlPacketFamilyOps = {
     .name     = OVS_PACKET_FAMILY,
     .id       = OVS_WIN_NL_PACKET_FAMILY_ID,
     .version  = OVS_PACKET_VERSION,
     .maxAttr  = OVS_PACKET_ATTR_MAX,
-    .cmds     = NULL, /* XXX: placeholder. */
-    .opsCount = 0
+    .cmds     = nlPacketFamilyCmdOps,
+    .opsCount = ARRAY_SIZE(nlPacketFamilyCmdOps)
 };
 
 /* Netlink vport family. */
@@ -785,8 +793,8 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
          nlFamilyOps = &nlFLowFamilyOps;
          break;
     case OVS_WIN_NL_PACKET_FAMILY_ID:
-        status = STATUS_NOT_IMPLEMENTED;
-        goto done;
+         nlFamilyOps = &nlPacketFamilyOps;
+         break;
     case OVS_WIN_NL_VPORT_FAMILY_ID:
         nlFamilyOps = &nlVportFamilyOps;
         break;
