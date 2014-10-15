@@ -4142,7 +4142,7 @@
         <dt>tunnelType:</dt>
         <dd>
           <p>ID: 891, and enterprise ID 6876 (VMware).</p>
-          <p>type: unsigned 8-bit interger.</p>
+          <p>type: unsigned 8-bit integer.</p>
           <p>data type semantics: identifier.</p>
           <p>description: Identifier of the layer 2 network overlay network
           encapsulation type: 0x01 VxLAN, 0x02 GRE, 0x03 LISP, 0x05 IPsec+GRE,
@@ -4162,7 +4162,7 @@
         <dt>tunnelSourceIPv4Address:</dt>
         <dd>
           <p>ID: 893, and enterprise ID 6876 (VMware).</p>
-          <p>type: unsigned 32-bit interger.</p>
+          <p>type: unsigned 32-bit integer.</p>
           <p>data type semantics: identifier.</p>
           <p>description: The IPv4 source address in the tunnel IP packet
           header.</p>
