@@ -891,8 +891,8 @@ ValidateNetlinkCmd(UINT32 devOp,
             /* Validate the DP for commands that require a DP. */
             if (nlFamilyOps->cmds[i].validateDpIndex == TRUE) {
                 OvsAcquireCtrlLock();
-                if (ovsMsg->ovsHdr.dp_ifindex !=
-                    (INT)gOvsSwitchContext->dpNo) {
+                if (!gOvsSwitchContext || ovsMsg->ovsHdr.dp_ifindex !=
+                                          (INT)gOvsSwitchContext->dpNo) {
                     status = STATUS_INVALID_PARAMETER;
                     OvsReleaseCtrlLock();
                     goto done;
