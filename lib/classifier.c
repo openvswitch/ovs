@@ -114,7 +114,8 @@ cls_match_alloc(struct cls_rule *rule)
 }
 
 static struct cls_subtable *find_subtable(const struct classifier *cls,
-                                          const struct minimask *);
+                                          const struct minimask *)
+    OVS_REQUIRES(cls->mutex);
 static struct cls_subtable *insert_subtable(struct classifier *cls,
                                             const struct minimask *)
     OVS_REQUIRES(cls->mutex);
@@ -1089,26 +1090,28 @@ classifier_find_rule_exactly(const struct classifier *cls,
     struct cls_match *head, *rule;
     struct cls_subtable *subtable;
 
+    ovs_mutex_lock(&cls->mutex);
     subtable = find_subtable(cls, &target->match.mask);
-    if (!subtable || target->priority > subtable->max_priority) {
-        return NULL;
+    if (!subtable) {
+        goto out;
+    }
+
+    /* Skip if there is no hope. */
+    if (target->priority > subtable->max_priority) {
+        goto out;
     }
 
     head = find_equal(subtable, &target->match.flow,
                       miniflow_hash_in_minimask(&target->match.flow,
                                                 &target->match.mask, 0));
-
-
-    /* Use RCU list instead of locking when one is available. */
-    ovs_mutex_lock(&cls->mutex);
     FOR_EACH_RULE_IN_LIST (rule, head) {
         if (target->priority >= rule->priority) {
             ovs_mutex_unlock(&cls->mutex);
             return target->priority == rule->priority ? rule->cls_rule : NULL;
         }
     }
+out:
     ovs_mutex_unlock(&cls->mutex);
-
     return NULL;
 }
 
@@ -1336,6 +1339,7 @@ cls_cursor_advance(struct cls_cursor *cursor)
 
 static struct cls_subtable *
 find_subtable(const struct classifier *cls, const struct minimask *mask)
+    OVS_REQUIRES(cls->mutex)
 {
     struct cls_subtable *subtable;
 
