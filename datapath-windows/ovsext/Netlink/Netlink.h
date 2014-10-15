@@ -137,6 +137,28 @@ NlAttrLen(const PNL_ATTR nla)
     return nla->nlaLen;
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * Default maximum payload size for each type of attribute.
+ * ---------------------------------------------------------------------------
+ */
+UINT32
+static __inline NlAttrSize(UINT32 payloadSize)
+{
+    return NLA_HDRLEN + payloadSize;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Total length including padding.
+ * ---------------------------------------------------------------------------
+ */
+UINT32
+static __inline NlAttrTotalSize(UINT32 payloadSize)
+{
+    return NLA_ALIGN(NlAttrSize(payloadSize));
+}
+
 /* Netlink attribute validation */
 BOOLEAN NlAttrValidate(const PNL_ATTR, const PNL_POLICY);
 
