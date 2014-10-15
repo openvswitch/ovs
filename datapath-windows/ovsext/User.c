@@ -319,13 +319,10 @@ OvsNlExecuteCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 }
 
 NTSTATUS
-OvsExecuteDpIoctl(PVOID inputBuffer,
-                  UINT32 inputLength,
-                  UINT32 outputLength)
+OvsExecuteDpIoctl(OvsPacketExecute *execute)
 {
     NTSTATUS                    status = STATUS_SUCCESS;
     NTSTATUS                    ndisStatus;
-    OvsPacketExecute            *execute;
     LOCK_STATE_EX               lockState;
     PNET_BUFFER_LIST pNbl;
     PNL_ATTR actions;
@@ -334,35 +331,26 @@ OvsExecuteDpIoctl(PVOID inputBuffer,
     OVS_PACKET_HDR_INFO layers;
     POVS_VPORT_ENTRY vport;
 
-    if (inputLength < sizeof(*execute) || outputLength != 0) {
-        return STATUS_INFO_LENGTH_MISMATCH;
-    }
-
     NdisAcquireSpinLock(gOvsCtrlLock);
     if (gOvsSwitchContext == NULL) {
         status = STATUS_INVALID_PARAMETER;
         goto unlock;
     }
 
-    execute = (struct OvsPacketExecute *) inputBuffer;
-
     if (execute->packetLen == 0) {
         status = STATUS_INVALID_PARAMETER;
         goto unlock;
     }
 
-    if (inputLength != sizeof (*execute) +
-                       execute->actionsLen + execute->packetLen) {
-        status = STATUS_INFO_LENGTH_MISMATCH;
-        goto unlock;
-    }
-    actions = (PNL_ATTR)((PCHAR)&execute->actions + execute->packetLen);
+    actions = execute->actions;
+
+    ASSERT(actions);
 
     /*
      * Allocate the NBL, copy the data from the userspace buffer. Allocate
      * also, the forwarding context for the packet.
      */
-    pNbl = OvsAllocateNBLForUserBuffer(gOvsSwitchContext, &execute->packetBuf,
+    pNbl = OvsAllocateNBLForUserBuffer(gOvsSwitchContext, execute->packetBuf,
                                        execute->packetLen);
     if (pNbl == NULL) {
         status = STATUS_NO_MEMORY;

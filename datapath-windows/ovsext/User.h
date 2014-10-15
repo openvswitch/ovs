@@ -104,9 +104,7 @@ NTSTATUS OvsReadDpIoctl(PFILE_OBJECT fileObject,
                               PVOID outputBuffer,
                               UINT32 outputLength,
                               UINT32 *replyLen);
-NTSTATUS OvsExecuteDpIoctl(PVOID inputBuffer,
-                           UINT32 inputLength,
-                           UINT32 outputLength);
+NTSTATUS OvsExecuteDpIoctl(OvsPacketExecute *execute);
 NTSTATUS OvsPurgeDpIoctl(PFILE_OBJECT fileObject);
 
 NTSTATUS OvsWaitDpIoctl(PIRP irp, PFILE_OBJECT fileObject);

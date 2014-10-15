@@ -429,12 +429,8 @@ typedef struct OvsPacketExecute {
 
    uint32_t packetLen;
    uint32_t actionsLen;
-   union {
-       /* Variable size blob with packet data first, followed by action
-        * attrs. */
-       char packetBuf[0];
-       NL_ATTR  actions[0];
-   };
+   PCHAR packetBuf;
+   PNL_ATTR actions;
 } OvsPacketExecute;
 
 
