@@ -417,6 +417,7 @@ typedef struct _OVS_PACKET_INFO {
     uint32_t inPort;
     uint32_t cmd;
     OvsIPv4TunnelKey tunnelKey;
+    uint8_t *payload;
     /* Includes user data defined as chain of netlink attributes followed by the
      * packet data. */
     uint8_t  data[0];

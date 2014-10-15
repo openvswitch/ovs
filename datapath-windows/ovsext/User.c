@@ -873,3 +873,325 @@ OvsCreateAndAddPackets(UINT32 queueId,
     }
     return NDIS_STATUS_SUCCESS;
 }
+
+static __inline UINT32
+OvsGetUpcallMsgSize(PVOID userData,
+                    UINT32 userDataLen,
+                    OvsIPv4TunnelKey *tunnelKey,
+                    UINT32 payload)
+{
+    UINT32 size = NLMSG_ALIGN(sizeof(struct ovs_header)) +
+                  NlAttrSize(payload) +
+                  NlAttrSize(OvsFlowKeyAttrSize());
+
+    /* OVS_PACKET_ATTR_USERDATA */
+    if (userData) {
+        size += NlAttrTotalSize(userDataLen);
+    }
+    /* OVS_PACKET_ATTR_EGRESS_TUN_KEY */
+    /* Is it included in the the flwo key attr XXX */
+    if (tunnelKey) {
+        size += NlAttrTotalSize(OvsTunKeyAttrSize());
+    }
+    return size;
+}
+
+/*
+ *----------------------------------------------------------------------------
+ * This function completes the IP Header csum. record the L4 payload offset and
+ * if there is a need to calculate the TCP or UDP csum. The actual csum will be
+ * caluculated simopultaneossly with the copy of the payload to the destination
+ * buffer when the packet is read.
+ *----------------------------------------------------------------------------
+ */
+static VOID
+OvsCompletePacketHeader(UINT8 *packet,
+                        BOOLEAN isRecv,
+                        NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo,
+                        POVS_PACKET_HDR_INFO hdrInfoIn,
+                        POVS_PACKET_HDR_INFO hdrInfoOut)
+{
+    if ((isRecv && csumInfo.Receive.IpChecksumValueInvalid) ||
+        (!isRecv && csumInfo.Transmit.IsIPv4 &&
+        csumInfo.Transmit.IpHeaderChecksum)) {
+        PIPV4_HEADER ipHdr = (PIPV4_HEADER)(packet + hdrInfoOut->l3Offset);
+        ASSERT(hdrInfoIn->isIPv4);
+        ASSERT(ipHdr->Version == 4);
+        ipHdr->HeaderChecksum = IPChecksum((UINT8 *)ipHdr,
+            ipHdr->HeaderLength << 2,
+            (UINT16)~ipHdr->HeaderChecksum);
+        ovsUserStats.ipCsum++;
+    }
+    ASSERT(hdrInfoIn->tcpCsumNeeded == 0 && hdrInfoOut->udpCsumNeeded == 0);
+    /*
+     * calculate TCP/UDP pseudo checksum
+     */
+    if (isRecv && csumInfo.Receive.TcpChecksumValueInvalid) {
+        /*
+         * Only this case, we need to reclaculate pseudo checksum
+         * all other cases, it is assumed the pseudo checksum is
+         * filled already.
+         *
+         */
+        PTCP_HDR tcpHdr = (PTCP_HDR)(packet + hdrInfoIn->l4Offset);
+        if (hdrInfoIn->isIPv4) {
+            PIPV4_HEADER ipHdr = (PIPV4_HEADER)(packet + hdrInfoIn->l3Offset);
+            hdrInfoOut->l4PayLoad = (UINT16)(ntohs(ipHdr->TotalLength) -
+                                    (ipHdr->HeaderLength << 2));
+            tcpHdr->th_sum = IPPseudoChecksum((UINT32 *)&ipHdr->SourceAddress,
+                                         (UINT32 *)&ipHdr->DestinationAddress,
+                                         IPPROTO_TCP, hdrInfoOut->l4PayLoad);
+        } else {
+            PIPV6_HEADER ipv6Hdr = (PIPV6_HEADER)(packet + hdrInfoIn->l3Offset);
+            hdrInfoOut->l4PayLoad =
+                (UINT16)(ntohs(ipv6Hdr->PayloadLength) +
+                hdrInfoIn->l3Offset + sizeof(IPV6_HEADER)-
+                hdrInfoIn->l4Offset);
+            ASSERT(hdrInfoIn->isIPv6);
+            tcpHdr->th_sum =
+                IPv6PseudoChecksum((UINT32 *)&ipv6Hdr->SourceAddress,
+                (UINT32 *)&ipv6Hdr->DestinationAddress,
+                IPPROTO_TCP, hdrInfoOut->l4PayLoad);
+        }
+        hdrInfoOut->tcpCsumNeeded = 1;
+        ovsUserStats.recalTcpCsum++;
+    } else if (!isRecv) {
+        if (csumInfo.Transmit.TcpChecksum) {
+            hdrInfoOut->tcpCsumNeeded = 1;
+        } else if (csumInfo.Transmit.UdpChecksum) {
+            hdrInfoOut->udpCsumNeeded = 1;
+        }
+        if (hdrInfoOut->tcpCsumNeeded || hdrInfoOut->udpCsumNeeded) {
+#ifdef DBG
+            UINT16 sum, *ptr;
+            UINT8 proto =
+                hdrInfoOut->tcpCsumNeeded ? IPPROTO_TCP : IPPROTO_UDP;
+#endif
+            if (hdrInfoIn->isIPv4) {
+                PIPV4_HEADER ipHdr = (PIPV4_HEADER)(packet + hdrInfoIn->l3Offset);
+                hdrInfoOut->l4PayLoad = (UINT16)(ntohs(ipHdr->TotalLength) -
+                    (ipHdr->HeaderLength << 2));
+#ifdef DBG
+                sum = IPPseudoChecksum((UINT32 *)&ipHdr->SourceAddress,
+                    (UINT32 *)&ipHdr->DestinationAddress,
+                    proto, hdrInfoOut->l4PayLoad);
+#endif
+            } else {
+                PIPV6_HEADER ipv6Hdr = (PIPV6_HEADER)(packet +
+                    hdrInfoIn->l3Offset);
+                hdrInfoOut->l4PayLoad =
+                    (UINT16)(ntohs(ipv6Hdr->PayloadLength) +
+                    hdrInfoIn->l3Offset + sizeof(IPV6_HEADER)-
+                    hdrInfoIn->l4Offset);
+                ASSERT(hdrInfoIn->isIPv6);
+#ifdef DBG
+                sum = IPv6PseudoChecksum((UINT32 *)&ipv6Hdr->SourceAddress,
+                    (UINT32 *)&ipv6Hdr->DestinationAddress,
+                    proto, hdrInfoOut->l4PayLoad);
+#endif
+            }
+#ifdef DBG
+            ptr = (UINT16 *)(packet + hdrInfoIn->l4Offset +
+                (hdrInfoOut->tcpCsumNeeded ?
+            TCP_CSUM_OFFSET : UDP_CSUM_OFFSET));
+            ASSERT(*ptr == sum);
+#endif
+        }
+    }
+}
+
+static NTSTATUS
+OvsGetPid(POVS_VPORT_ENTRY vport, PNET_BUFFER nb, UINT32 *pid)
+{
+    UNREFERENCED_PARAMETER(nb);
+
+    /* XXX select a pid from an array of pids using a flow based hash */
+    *pid = vport->upcallPid;
+    return STATUS_SUCCESS;
+}
+
+/*
+ *----------------------------------------------------------------------------
+ * OvsCreateQueueNlPacket --
+ *
+ *  Create a packet which will be forwarded to user space.
+ *
+ * InputParameter:
+ *   userData: when cmd is user action, this field contain
+ *      user action data.
+ *   userDataLen: as name indicated
+ *   cmd: either miss or user action
+ *   inPort: datapath port id from which the packet is received.
+ *   key: flow Key with a tunnel key if available
+ *   nbl:  the NET_BUFFER_LIST which contain the packet
+ *   nb: the packet
+ *   isRecv: This is used to decide how to interprete the csum info
+ *   hdrInfo: include hdr info initialized during flow extraction.
+ *
+ * Results:
+ *    NULL if fail to create the packet
+ *    The packet element otherwise
+ *----------------------------------------------------------------------------
+ */
+POVS_PACKET_QUEUE_ELEM
+OvsCreateQueueNlPacket(PVOID userData,
+                       UINT32 userDataLen,
+                       UINT32 cmd,
+                       UINT32 inPort,
+                       OvsFlowKey *key,
+                       PNET_BUFFER_LIST nbl,
+                       PNET_BUFFER nb,
+                       BOOLEAN isRecv,
+                       POVS_PACKET_HDR_INFO hdrInfo)
+{
+#define VLAN_TAG_SIZE 4
+    UINT32 allocLen, dataLen, extraLen;
+    POVS_PACKET_QUEUE_ELEM elem;
+    UINT8 *src, *dst;
+    NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
+    NDIS_NET_BUFFER_LIST_8021Q_INFO vlanInfo;
+    OvsIPv4TunnelKey *tunnelKey = (OvsIPv4TunnelKey *)&key->tunKey;
+    UINT32 pid;
+    UINT32 nlMsgSize;
+    NL_BUFFER nlBuf;
+
+    /* XXX pass vport in the stack rather than portNo */
+    POVS_VPORT_ENTRY vport =
+        OvsFindVportByPortNo(gOvsSwitchContext, inPort);
+
+    if (vport == NULL){
+        /* Should never happen as dispatch lock is held */
+        ASSERT(vport);
+        return NULL;
+    }
+
+    if (!OvsGetPid(vport, nb, &pid)) {
+        /*
+         * There is no userspace queue created yet, so there is no point for
+         * creating a new packet to be queued.
+         */
+        return NULL;
+    }
+
+    csumInfo.Value = NET_BUFFER_LIST_INFO(nbl, TcpIpChecksumNetBufferListInfo);
+
+    if (isRecv && (csumInfo.Receive.TcpChecksumFailed ||
+                  (csumInfo.Receive.UdpChecksumFailed && !hdrInfo->udpCsumZero) ||
+                  csumInfo.Receive.IpChecksumFailed)) {
+        OVS_LOG_INFO("Packet dropped due to checksum failure.");
+        ovsUserStats.dropDuetoChecksum++;
+        return NULL;
+    }
+
+    vlanInfo.Value = NET_BUFFER_LIST_INFO(nbl, Ieee8021QNetBufferListInfo);
+    extraLen = vlanInfo.TagHeader.VlanId ? VLAN_TAG_SIZE : 0;
+
+    dataLen = NET_BUFFER_DATA_LENGTH(nb);
+
+    if (NlAttrSize(dataLen) > MAXUINT16) {
+        return NULL;
+    }
+
+    nlMsgSize = OvsGetUpcallMsgSize(userData, userDataLen, tunnelKey,
+                                    dataLen + extraLen);
+
+    allocLen = sizeof (OVS_PACKET_QUEUE_ELEM) + nlMsgSize;
+    elem = (POVS_PACKET_QUEUE_ELEM)OvsAllocateMemory(allocLen);
+    if (elem == NULL) {
+        ovsUserStats.dropDuetoResource++;
+        return NULL;
+    }
+    elem->hdrInfo.value = hdrInfo->value;
+    elem->packet.totalLen = nlMsgSize;
+    /* XXX remove queueid */
+    elem->packet.queue = 0;
+    /* XXX  no need as the length is already in the NL attrib */
+    elem->packet.userDataLen = userDataLen;
+    elem->packet.inPort = inPort;
+    elem->packet.cmd = cmd;
+    if (cmd == (UINT32)OVS_PACKET_CMD_MISS) {
+        ovsUserStats.miss++;
+    } else if (cmd == (UINT32)OVS_PACKET_CMD_ACTION) {
+        ovsUserStats.action++;
+    } else {
+        ASSERT(FALSE);
+        goto fail;
+    }
+    /* XXX Should we have both packetLen and TotalLen*/
+    elem->packet.packetLen = dataLen + extraLen;
+
+    NlBufInit(&nlBuf, (PCHAR)elem->packet.data, nlMsgSize);
+
+    /*
+     * Initialize the OVS header
+     * Since we are pre allocating memory for the NL buffer
+     * the attribute settings should not fail
+     */
+    if (NlFillOvsMsg(&nlBuf, OVS_WIN_NL_PACKET_FAMILY_ID, 0,
+                      0, pid, (UINT8)cmd, OVS_PACKET_VERSION,
+                      gOvsSwitchContext->dpNo) != STATUS_SUCCESS) {
+        goto fail;
+    }
+
+    if (MapFlowKeyToNlKey(&nlBuf, key, OVS_PACKET_ATTR_KEY,
+                          OVS_KEY_ATTR_TUNNEL) != STATUS_SUCCESS) {
+        goto fail;
+    }
+
+    /* XXX must send OVS_PACKET_ATTR_EGRESS_TUN_KEY if set by vswtchd */
+    if (userData){
+        if (!NlMsgPutTailUnspec(&nlBuf, OVS_PACKET_ATTR_USERDATA,
+                                userData, (UINT16)userDataLen)) {
+            goto fail;
+        }
+    }
+
+    /*
+     * Make space for the payload to be copied and set the attribute
+     * XXX Uninit set initilizes the buffer with xero, we don't actually need
+     * that the payload to be initailized
+     */
+    dst = (UINT8 *)NlMsgPutTailUnspecUninit(&nlBuf, OVS_PACKET_ATTR_PACKET,
+                                            (UINT16)(dataLen + extraLen));
+    if (!dst) {
+        goto fail;
+    }
+
+    /* Store the payload for csum calculation when packet is read */
+    elem->packet.payload = dst;
+    dst += extraLen;
+
+    src = NdisGetDataBuffer(nb, dataLen, dst, 1, 0);
+    if (src == NULL) {
+        ovsUserStats.dropDuetoResource++;
+        goto fail;
+    }    else if (src != dst) {
+        /* Copy the data from the NDIS buffer to dst. */
+        RtlCopyMemory(dst, src, dataLen);
+    }
+
+    /* Set csum if was offloaded */
+    OvsCompletePacketHeader(dst, isRecv, csumInfo, hdrInfo, &elem->hdrInfo);
+
+    /*
+     * Finally insert VLAN tag
+     */
+    if (extraLen) {
+        dst = elem->packet.payload;
+        src = dst + extraLen;
+        ((UINT32 *)dst)[0] = ((UINT32 *)src)[0];
+        ((UINT32 *)dst)[1] = ((UINT32 *)src)[1];
+        ((UINT32 *)dst)[2] = ((UINT32 *)src)[2];
+        dst += 12;
+        ((UINT16 *)dst)[0] = htons(0x8100);
+        ((UINT16 *)dst)[1] = htons(vlanInfo.TagHeader.VlanId |
+            (vlanInfo.TagHeader.UserPriority << 13));
+        elem->hdrInfo.l3Offset += VLAN_TAG_SIZE;
+        elem->hdrInfo.l4Offset += VLAN_TAG_SIZE;
+        ovsUserStats.vlanInsert++;
+    }
+    return elem;
+fail:
+    OvsFreeMemory(elem);
+    return NULL;
+}
