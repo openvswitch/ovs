@@ -68,10 +68,6 @@ static NTSTATUS _FlowNlDumpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                       UINT32 *replyLen);
 static NTSTATUS _MapFlowInfoToNl(PNL_BUFFER nlBuf,
                                  OvsFlowInfo *flowInfo);
-static NTSTATUS _MapFlowKeyToNlKey(PNL_BUFFER nlBuf,
-                                   OvsFlowKey *flowKey);
-static NTSTATUS _MapFlowTunKeyToNlKey(PNL_BUFFER nlBuf,
-                                      OvsIPv4TunnelKey *tunKey);
 static NTSTATUS _MapFlowStatsToNlStats(PNL_BUFFER nlBuf,
                                        OvsFlowStats *flowStats);
 static NTSTATUS _MapFlowActionToNlAction(PNL_BUFFER nlBuf,
@@ -689,7 +685,8 @@ _MapFlowInfoToNl(PNL_BUFFER nlBuf, OvsFlowInfo *flowInfo)
 {
     NTSTATUS rc = STATUS_SUCCESS;
 
-    rc = _MapFlowKeyToNlKey(nlBuf, &(flowInfo->key));
+    rc = MapFlowKeyToNlKey(nlBuf, &(flowInfo->key), OVS_FLOW_ATTR_KEY,
+                           OVS_KEY_ATTR_TUNNEL);
     if (rc != STATUS_SUCCESS) {
         goto done;
     }
@@ -780,18 +777,21 @@ error_nested_start:
 
 /*
  *----------------------------------------------------------------------------
- *  _MapFlowKeyToNlKey --
- *    Maps OvsFlowKey to OVS_FLOW_ATTR_KEY attribute.
+ *  MapFlowKeyToNlKey --
+ *   Maps OvsFlowKey to OVS_FLOW_ATTR_KEY attribute.
  *----------------------------------------------------------------------------
  */
-static NTSTATUS
-_MapFlowKeyToNlKey(PNL_BUFFER nlBuf, OvsFlowKey *flowKey)
+NTSTATUS
+MapFlowKeyToNlKey(PNL_BUFFER nlBuf,
+                  OvsFlowKey *flowKey,
+                  UINT16 keyType,
+                  UINT16 tunKeyType)
 {
     NTSTATUS rc = STATUS_SUCCESS;
     struct ovs_key_ethernet ethKey;
     UINT32 offset = 0;
 
-    offset = NlMsgStartNested(nlBuf, OVS_FLOW_ATTR_KEY);
+    offset = NlMsgStartNested(nlBuf, keyType);
     if (!offset) {
         /* Starting the nested attribute failed. */
         rc = STATUS_UNSUCCESSFUL;
@@ -861,7 +861,8 @@ _MapFlowKeyToNlKey(PNL_BUFFER nlBuf, OvsFlowKey *flowKey)
     }
 
     if (flowKey->tunKey.dst) {
-        rc = _MapFlowTunKeyToNlKey(nlBuf, &(flowKey->tunKey));
+        rc = MapFlowTunKeyToNlKey(nlBuf, &(flowKey->tunKey),
+                                  tunKeyType);
         if (rc != STATUS_SUCCESS) {
             goto done;
         }
@@ -875,17 +876,19 @@ error_nested_start:
 
 /*
  *----------------------------------------------------------------------------
- *  _MapFlowTunKeyToNlKey --
- *    Maps OvsIPv4TunnelKey to OVS_TUNNEL_KEY_ATTR_ID attribute.
+ *  MapFlowTunKeyToNlKey --
+ *   Maps OvsIPv4TunnelKey to OVS_TUNNEL_KEY_ATTR_ID attribute.
  *----------------------------------------------------------------------------
  */
-static NTSTATUS
-_MapFlowTunKeyToNlKey(PNL_BUFFER nlBuf, OvsIPv4TunnelKey *tunKey)
+NTSTATUS
+MapFlowTunKeyToNlKey(PNL_BUFFER nlBuf,
+                     OvsIPv4TunnelKey *tunKey,
+                     UINT16 tunKeyType)
 {
     NTSTATUS rc = STATUS_SUCCESS;
     UINT32 offset = 0;
 
-    offset = NlMsgStartNested(nlBuf, OVS_KEY_ATTR_TUNNEL);
+    offset = NlMsgStartNested(nlBuf, tunKeyType);
     if (!offset) {
         /* Starting the nested attribute failed. */
         rc = STATUS_UNSUCCESSFUL;
@@ -2376,6 +2379,45 @@ OvsFlushFlowIoctl(UINT32 dpNo)
 unlock:
     NdisReleaseSpinLock(gOvsCtrlLock);
     return status;
+}
+
+UINT32
+OvsFlowKeyAttrSize(void)
+{
+    return NlAttrTotalSize(4)   /* OVS_KEY_ATTR_PRIORITY */
+         + NlAttrTotalSize(0)   /* OVS_KEY_ATTR_TUNNEL */
+         + OvsTunKeyAttrSize()
+         + NlAttrTotalSize(4)   /* OVS_KEY_ATTR_IN_PORT */
+         + NlAttrTotalSize(4)   /* OVS_KEY_ATTR_SKB_MARK */
+         + NlAttrTotalSize(4)   /* OVS_KEY_ATTR_DP_HASH */
+         + NlAttrTotalSize(4)   /* OVS_KEY_ATTR_RECIRC_ID */
+         + NlAttrTotalSize(12)  /* OVS_KEY_ATTR_ETHERNET */
+         + NlAttrTotalSize(2)   /* OVS_KEY_ATTR_ETHERTYPE */
+         + NlAttrTotalSize(4)   /* OVS_KEY_ATTR_VLAN */
+         + NlAttrTotalSize(0)   /* OVS_KEY_ATTR_ENCAP */
+         + NlAttrTotalSize(2)   /* OVS_KEY_ATTR_ETHERTYPE */
+         + NlAttrTotalSize(40)  /* OVS_KEY_ATTR_IPV6 */
+         + NlAttrTotalSize(2)   /* OVS_KEY_ATTR_ICMPV6 */
+         + NlAttrTotalSize(28); /* OVS_KEY_ATTR_ND */
+}
+
+UINT32
+OvsTunKeyAttrSize(void)
+{
+    /* Whenever adding new OVS_TUNNEL_KEY_ FIELDS, we should consider
+     * updating this function.
+     */
+    return NlAttrTotalSize(8)    /* OVS_TUNNEL_KEY_ATTR_ID */
+         + NlAttrTotalSize(4)    /* OVS_TUNNEL_KEY_ATTR_IPV4_SRC */
+         + NlAttrTotalSize(4)    /* OVS_TUNNEL_KEY_ATTR_IPV4_DST */
+         + NlAttrTotalSize(1)    /* OVS_TUNNEL_KEY_ATTR_TOS */
+         + NlAttrTotalSize(1)    /* OVS_TUNNEL_KEY_ATTR_TTL */
+         + NlAttrTotalSize(0)    /* OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT */
+         + NlAttrTotalSize(0)    /* OVS_TUNNEL_KEY_ATTR_CSUM */
+         + NlAttrTotalSize(0)    /* OVS_TUNNEL_KEY_ATTR_OAM */
+         + NlAttrTotalSize(256)  /* OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS */
+         + NlAttrTotalSize(2)    /* OVS_TUNNEL_KEY_ATTR_TP_SRC */
+         + NlAttrTotalSize(2);   /* OVS_TUNNEL_KEY_ATTR_TP_DST */
 }
 
 #pragma warning( pop )

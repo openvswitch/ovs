@@ -72,6 +72,12 @@ NTSTATUS OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                              UINT32 *replyLen);
 NTSTATUS OvsFlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                 UINT32 *replyLen);
+NTSTATUS MapFlowKeyToNlKey(PNL_BUFFER nlBuf, OvsFlowKey *flowKey,
+                           UINT16 keyType, UINT16 tunKeyType);
+NTSTATUS MapFlowTunKeyToNlKey(PNL_BUFFER nlBuf, OvsIPv4TunnelKey *tunKey,
+                              UINT16 tunKeyType);
+UINT32 OvsFlowKeyAttrSize(void);
+UINT32 OvsTunKeyAttrSize(void);
 
 /* Flags for tunneling */
 #define OVS_TNL_F_DONT_FRAGMENT         (1 << 0)
