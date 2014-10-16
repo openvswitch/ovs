@@ -1707,6 +1707,11 @@ OvsComputeVportNo(POVS_SWITCH_CONTEXT switchContext)
     return OVS_DPPORT_NUMBER_INVALID;
 }
 
+/*
+ * --------------------------------------------------------------------------
+ *  Command Handler for 'OVS_VPORT_CMD_NEW'.
+ * --------------------------------------------------------------------------
+ */
 static NTSTATUS
 OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                       UINT32 *replyLen)
@@ -1900,14 +1905,18 @@ Cleanup:
     return STATUS_SUCCESS;
 }
 
+
+/*
+ * --------------------------------------------------------------------------
+ *  Command Handler for 'OVS_VPORT_CMD_SET'.
+ * --------------------------------------------------------------------------
+ */
 static NTSTATUS
 OvsSetVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                       UINT32 *replyLen)
 {
     NDIS_STATUS status = STATUS_SUCCESS;
     LOCK_STATE_EX lockState;
-
-    /*XXX: this function is dummy */
 
     POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
     POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
@@ -1947,8 +1956,8 @@ OvsSetVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         OvsReleaseCtrlLock();
         return STATUS_INVALID_PARAMETER;
     }
-    OvsReleaseCtrlLock();
 
+    NdisAcquireRWLockWrite(gOvsSwitchContext->dispatchLock, &lockState, 0);
     if (vportAttrs[OVS_VPORT_ATTR_NAME] != NULL) {
         PSTR portName = NlAttrGet(vportAttrs[OVS_VPORT_ATTR_NAME]);
         UINT32 portNameLen = NlAttrGetSize(vportAttrs[OVS_VPORT_ATTR_NAME]);
@@ -1957,10 +1966,9 @@ OvsSetVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         ASSERT(portName[portNameLen - 1] == '\0');
 
         vport = OvsFindVportByOvsName(gOvsSwitchContext, portName);
-    }
-    else if (vportAttrs[OVS_VPORT_ATTR_PORT_NO] != NULL) {
+    } else if (vportAttrs[OVS_VPORT_ATTR_PORT_NO] != NULL) {
         vport = OvsFindVportByPortNo(gOvsSwitchContext,
-            NlAttrGetU32(vportAttrs[OVS_VPORT_ATTR_PORT_NO]));
+                    NlAttrGetU32(vportAttrs[OVS_VPORT_ATTR_PORT_NO]));
     }
 
     if (!vport) {
@@ -1968,14 +1976,12 @@ OvsSetVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         goto Cleanup;
     }
 
-    NdisAcquireRWLockWrite(gOvsSwitchContext->dispatchLock, &lockState, 0);
-
     /*
-    * XXX: when we implement OVS_DP_ATTR_USER_FEATURES in datapath,
-    * we'll need to check the OVS_DP_F_VPORT_PIDS flag: if it is set,
-    * it means we have an array of pids, instead of a single pid.
-    * ATM we assume we have one pid only.
-    */
+     * XXX: when we implement OVS_DP_ATTR_USER_FEATURES in datapath,
+     * we'll need to check the OVS_DP_F_VPORT_PIDS flag: if it is set,
+     * it means we have an array of pids, instead of a single pid.
+     * Currently, we support only one pid.
+     */
     if (vportAttrs[OVS_VPORT_ATTR_UPCALL_PID]) {
         vport->upcallPid = NlAttrGetU32(vportAttrs[OVS_VPORT_ATTR_UPCALL_PID]);
     }
@@ -1989,9 +1995,9 @@ OvsSetVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     }
 
     if (vportAttrs[OVS_VPORT_ATTR_OPTIONS]) {
-        /* XXX: port options not implemented!*/
-        ASSERT(0);
+        OVS_LOG_ERROR("Vport options not supported");
         nlError = NL_ERROR_NOTSUPP;
+        goto Cleanup;
     }
 
     status = OvsCreateMsgFromVport(vport, msgIn, usrParamsCtx->outputBuffer,
@@ -2002,6 +2008,7 @@ OvsSetVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
 Cleanup:
     NdisReleaseRWLock(gOvsSwitchContext->dispatchLock, &lockState);
+    OvsReleaseCtrlLock();
 
     if (nlError != NL_ERROR_SUCCESS) {
         POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
@@ -2014,6 +2021,11 @@ Cleanup:
     return STATUS_SUCCESS;
 }
 
+/*
+ * --------------------------------------------------------------------------
+ *  Command Handler for 'OVS_VPORT_CMD_DEL'.
+ * --------------------------------------------------------------------------
+ */
 static NTSTATUS
 OvsDeleteVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                          UINT32 *replyLen)
