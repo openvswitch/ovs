@@ -21,6 +21,9 @@
 #include "compiler.h"
 
 struct dpctl_params {
+    /* True if it is called by ovs-appctl command. */
+    bool is_appctl;
+
     /* -s, --statistics: Print port/flow statistics? */
     bool print_statistics;
 

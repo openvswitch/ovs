@@ -62,6 +62,7 @@ main(int argc, char *argv[])
     parse_options(argc, argv);
     fatal_ignore_sigpipe();
 
+    dpctl_p.is_appctl = false;
     dpctl_p.output = dpctl_print;
     dpctl_p.usage = usage;
 

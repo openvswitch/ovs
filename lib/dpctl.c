@@ -48,6 +48,17 @@
 #include "unixctl.h"
 #include "util.h"
 
+typedef int dpctl_command_handler(int argc, const char *argv[],
+                                  struct dpctl_params *);
+struct dpctl_command {
+    const char *name;
+    const char *usage;
+    int min_args;
+    int max_args;
+    dpctl_command_handler *handler;
+};
+static const struct dpctl_command *get_all_dpctl_commands(void);
+
 static void
 dpctl_puts(struct dpctl_params *dpctl_p, bool error, const char *string)
 {
@@ -984,6 +995,27 @@ dpctl_help(int argc OVS_UNUSED, const char *argv[] OVS_UNUSED,
     if (dpctl_p->usage) {
         dpctl_p->usage(dpctl_p->aux);
     }
+
+    return 0;
+}
+
+static int
+dpctl_list_commands(int argc OVS_UNUSED, const char *argv[] OVS_UNUSED,
+                    struct dpctl_params *dpctl_p)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    const struct dpctl_command *commands = get_all_dpctl_commands();
+
+    ds_put_cstr(&ds, "The available commands are:\n");
+    for (; commands->name; commands++) {
+        const struct dpctl_command *c = commands;
+
+        ds_put_format(&ds, "  %s%-23s %s\n", dpctl_p->is_appctl ? "dpctl/" : "",
+                      c->name, c->usage);
+    }
+    dpctl_puts(dpctl_p, false, ds.string);
+    ds_destroy(&ds);
+
     return 0;
 }
 
@@ -1255,36 +1287,33 @@ out:
     return error;
 }
 
-typedef int dpctl_command_handler(int argc, const char *argv[],
-                                  struct dpctl_params *);
-struct dpctl_command {
-    const char *name;
-    int min_args;
-    int max_args;
-    dpctl_command_handler *handler;
-};
-
 static const struct dpctl_command all_commands[] = {
-    { "add-dp", 1, INT_MAX, dpctl_add_dp },
-    { "del-dp", 1, 1, dpctl_del_dp },
-    { "add-if", 2, INT_MAX, dpctl_add_if },
-    { "del-if", 2, INT_MAX, dpctl_del_if },
-    { "set-if", 2, INT_MAX, dpctl_set_if },
-    { "dump-dps", 0, 0, dpctl_dump_dps },
-    { "show", 0, INT_MAX, dpctl_show },
-    { "dump-flows", 0, 2, dpctl_dump_flows },
-    { "add-flow", 2, 3, dpctl_add_flow },
-    { "mod-flow", 2, 3, dpctl_mod_flow },
-    { "del-flow", 1, 2, dpctl_del_flow },
-    { "del-flows", 0, 1, dpctl_del_flows },
-    { "help", 0, INT_MAX, dpctl_help },
+    { "add-dp", "add-dp dp [iface...]", 1, INT_MAX, dpctl_add_dp },
+    { "del-dp", "del-dp dp", 1, 1, dpctl_del_dp },
+    { "add-if", "add-if dp iface...", 2, INT_MAX, dpctl_add_if },
+    { "del-if", "del-if dp iface...", 2, INT_MAX, dpctl_del_if },
+    { "set-if", "set-if dp iface...", 2, INT_MAX, dpctl_set_if },
+    { "dump-dps", "", 0, 0, dpctl_dump_dps },
+    { "show", "[dp...]", 0, INT_MAX, dpctl_show },
+    { "dump-flows", "[dp]", 0, 2, dpctl_dump_flows },
+    { "add-flow", "add-flow [dp] flow actions", 2, 3, dpctl_add_flow },
+    { "mod-flow", "mod-flow [dp] flow actions", 2, 3, dpctl_mod_flow },
+    { "del-flow", "del-flow [dp] flow", 1, 2, dpctl_del_flow },
+    { "del-flows", "[dp]", 0, 1, dpctl_del_flows },
+    { "help", "", 0, INT_MAX, dpctl_help },
+    { "list-commands", "", 0, INT_MAX, dpctl_list_commands },
 
     /* Undocumented commands for testing. */
-    { "parse-actions", 1, INT_MAX, dpctl_parse_actions },
-    { "normalize-actions", 2, INT_MAX, dpctl_normalize_actions },
+    { "parse-actions", "actions", 1, INT_MAX, dpctl_parse_actions },
+    { "normalize-actions", "actions", 2, INT_MAX, dpctl_normalize_actions },
 
-    { NULL, 0, 0, NULL },
+    { NULL, NULL, 0, 0, NULL },
 };
+
+static const struct dpctl_command *get_all_dpctl_commands(void)
+{
+    return all_commands;
+}
 
 /* Runs the command designated by argv[0] within the command table specified by
  * 'commands', which must be terminated by a command whose 'name' member is a
@@ -1396,7 +1425,7 @@ dpctl_unixctl_handler(struct unixctl_conn *conn, int argc, const char *argv[],
     }
 
     if (!opt_parse_err) {
-        dpctl_p.usage = NULL;
+        dpctl_p.is_appctl = true;
         dpctl_p.output = dpctl_unixctl_print;
         dpctl_p.aux = &ds;
 
