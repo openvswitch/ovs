@@ -41,6 +41,7 @@ struct route_data {
 
     /* Extracted from Netlink attributes. */
     ovs_be32 rta_dst; /* 0 if missing. */
+    ovs_be32 rta_gw;
     char ifname[IFNAMSIZ]; /* Interface name. */
 };
 
@@ -205,6 +206,7 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
     static const struct nl_policy policy[] = {
         [RTA_DST] = { .type = NL_A_U32, .optional = true  },
         [RTA_OIF] = { .type = NL_A_U32, .optional = false },
+        [RTA_GATEWAY] = { .type = NL_A_U32, .optional = true },
     };
 
     struct nlattr *attrs[ARRAY_SIZE(policy)];
@@ -251,6 +253,10 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
         if (attrs[RTA_DST]) {
             change->rd.rta_dst = nl_attr_get_be32(attrs[RTA_DST]);
         }
+        if (attrs[RTA_GATEWAY]) {
+            change->rd.rta_gw = nl_attr_get_be32(attrs[RTA_GATEWAY]);
+        }
+
 
     } else {
         VLOG_DBG_RL(&rl, "received unparseable rtnetlink route message");
@@ -272,7 +278,8 @@ route_table_handle_msg(const struct route_table_msg *change)
     if (change->relevant && change->nlmsg_type == RTM_NEWROUTE) {
         const struct route_data *rd = &change->rd;
 
-        ovs_router_insert(rd->rta_dst, rd->rtm_dst_len, rd->ifname, 0);
+        ovs_router_insert(rd->rta_dst, rd->rtm_dst_len,
+                          rd->ifname, rd->rta_gw);
     }
 }
 
