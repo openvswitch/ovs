@@ -1246,21 +1246,8 @@ ofp_port_to_odp_port(const struct xbridge *xbridge, ofp_port_t ofp_port)
 static bool
 odp_port_is_alive(const struct xlate_ctx *ctx, ofp_port_t ofp_port)
 {
-    struct xport *xport;
-    struct bfd *bfd;
-
-    xport = get_ofp_port(ctx->xbridge, ofp_port);
-    if (!xport || xport->config & OFPUTIL_PC_PORT_DOWN ||
-        xport->state & OFPUTIL_PS_LINK_DOWN) {
-        return false;
-    }
-
-    bfd = xport->bfd;
-    if (bfd && !bfd_forwarding(bfd)) {
-        return false;
-    }
-
-    return true;
+    struct xport *xport = get_ofp_port(ctx->xbridge, ofp_port);
+    return xport && xport->may_enable;
 }
 
 static struct ofputil_bucket *
