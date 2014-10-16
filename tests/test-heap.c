@@ -465,16 +465,17 @@ test_heap_raw_delete(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 }
 
 static const struct command commands[] = {
-    { "insert-delete-same-order", 0, 0, test_heap_insert_delete_same_order, },
-    { "insert-delete-reverse-order", 0, 0,
+    { "insert-delete-same-order", NULL, 0, 0,
+      test_heap_insert_delete_same_order, },
+    { "insert-delete-reverse-order", NULL, 0, 0,
       test_heap_insert_delete_reverse_order, },
-    { "insert-delete-every-order", 0, 0,
+    { "insert-delete-every-order", NULL, 0, 0,
       test_heap_insert_delete_every_order, },
-    { "insert-delete-same-order-with-dups", 0, 0,
+    { "insert-delete-same-order-with-dups", NULL, 0, 0,
       test_heap_insert_delete_same_order_with_dups, },
-    { "raw-insert", 0, 0, test_heap_raw_insert, },
-    { "raw-delete", 0, 0, test_heap_raw_delete, },
-    { NULL, 0, 0, NULL, },
+    { "raw-insert", NULL, 0, 0, test_heap_raw_insert, },
+    { "raw-delete", NULL, 0, 0, test_heap_raw_delete, },
+    { NULL, NULL, 0, 0, NULL, },
 };
 
 static void

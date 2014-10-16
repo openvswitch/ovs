@@ -25,6 +25,7 @@ struct option;
 
 struct command {
     const char *name;
+    const char *usage;
     int min_args;
     int max_args;
     void (*handler)(int argc, char *argv[]);
@@ -32,6 +33,7 @@ struct command {
 
 char *long_options_to_short_options(const struct option *options);
 void print_options(const struct option *options);
+void print_commands(const struct command *commands);
 void run_command(int argc, char *argv[], const struct command[]);
 
 void proctitle_init(int argc, char **argv);

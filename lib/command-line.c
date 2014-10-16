@@ -52,6 +52,21 @@ long_options_to_short_options(const struct option options[])
     return xstrdup(short_options);
 }
 
+/* Given the 'struct command' array, prints the usage of all commands. */
+void
+print_commands(const struct command commands[])
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+
+    ds_put_cstr(&ds, "The available commands are:\n");
+    for (; commands->name; commands++) {
+        const struct command *c = commands;
+        ds_put_format(&ds, "  %-23s %s\n", c->name, c->usage ? c->usage : "");
+    }
+    printf("%s", ds.string);
+    ds_destroy(&ds);
+}
+
 /* Given the GNU-style options in 'options', prints all options. */
 void
 print_options(const struct option options[])

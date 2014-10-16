@@ -150,9 +150,9 @@ run_benchmarks(int argc OVS_UNUSED, char *argv[])
 }
 
 static const struct command commands[] = {
-    {"check", 0, 0, run_tests},
-    {"benchmark", 1, 1, run_benchmarks},
-    {NULL, 0, 0, NULL},
+    {"check", NULL, 0, 0, run_tests},
+    {"benchmark", NULL, 1, 1, run_benchmarks},
+    {NULL, NULL, 0, 0, NULL},
 };
 
 static void

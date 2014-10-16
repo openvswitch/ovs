@@ -1403,21 +1403,21 @@ test_minimask_combine(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
 static const struct command commands[] = {
     /* Classifier tests. */
-    {"empty", 0, 0, test_empty},
-    {"destroy-null", 0, 0, test_destroy_null},
-    {"single-rule", 0, 0, test_single_rule},
-    {"rule-replacement", 0, 0, test_rule_replacement},
-    {"many-rules-in-one-list", 0, 0, test_many_rules_in_one_list},
-    {"many-rules-in-one-table", 0, 0, test_many_rules_in_one_table},
-    {"many-rules-in-two-tables", 0, 0, test_many_rules_in_two_tables},
-    {"many-rules-in-five-tables", 0, 0, test_many_rules_in_five_tables},
+    {"empty", NULL, 0, 0, test_empty},
+    {"destroy-null", NULL, 0, 0, test_destroy_null},
+    {"single-rule", NULL, 0, 0, test_single_rule},
+    {"rule-replacement", NULL, 0, 0, test_rule_replacement},
+    {"many-rules-in-one-list", NULL, 0, 0, test_many_rules_in_one_list},
+    {"many-rules-in-one-table", NULL, 0, 0, test_many_rules_in_one_table},
+    {"many-rules-in-two-tables", NULL, 0, 0, test_many_rules_in_two_tables},
+    {"many-rules-in-five-tables", NULL, 0, 0, test_many_rules_in_five_tables},
 
     /* Miniflow and minimask tests. */
-    {"miniflow", 0, 0, test_miniflow},
-    {"minimask_has_extra", 0, 0, test_minimask_has_extra},
-    {"minimask_combine", 0, 0, test_minimask_combine},
+    {"miniflow", NULL, 0, 0, test_miniflow},
+    {"minimask_has_extra", NULL, 0, 0, test_minimask_has_extra},
+    {"minimask_combine", NULL, 0, 0, test_minimask_combine},
 
-    {NULL, 0, 0, NULL},
+    {NULL, NULL, 0, 0, NULL},
 };
 
 static void

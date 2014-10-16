@@ -563,20 +563,27 @@ do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     usage();
 }
 
+static void
+do_list_commands(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+     print_commands(get_all_commands());
+}
+
 static const struct command all_commands[] = {
-    { "create", 0, 2, do_create },
-    { "compact", 0, 2, do_compact },
-    { "convert", 0, 3, do_convert },
-    { "needs-conversion", 0, 2, do_needs_conversion },
-    { "db-version", 0, 1, do_db_version },
-    { "db-cksum", 0, 1, do_db_cksum },
-    { "schema-version", 0, 1, do_schema_version },
-    { "schema-cksum", 0, 1, do_schema_cksum },
-    { "query", 1, 2, do_query },
-    { "transact", 1, 2, do_transact },
-    { "show-log", 0, 1, do_show_log },
-    { "help", 0, INT_MAX, do_help },
-    { NULL, 0, 0, NULL },
+    { "create", "[db [schema]]", 0, 2, do_create },
+    { "compact", "[db [dst]]", 0, 2, do_compact },
+    { "convert", "[db [schema [dst]]]", 0, 3, do_convert },
+    { "needs-conversion", NULL, 0, 2, do_needs_conversion },
+    { "db-version", "[db]",  0, 1, do_db_version },
+    { "db-cksum", "[db]", 0, 1, do_db_cksum },
+    { "schema-version", "[schema]", 0, 1, do_schema_version },
+    { "schema-cksum", "[schema]", 0, 1, do_schema_cksum },
+    { "query", "[db] trns", 1, 2, do_query },
+    { "transact", "[db] trns", 1, 2, do_transact },
+    { "show-log", "[db]", 0, 1, do_show_log },
+    { "help", NULL, 0, INT_MAX, do_help },
+    { "list-commands", NULL, 0, INT_MAX, do_list_commands },
+    { NULL, NULL, 0, 0, NULL },
 };
 
 static const struct command *get_all_commands(void)

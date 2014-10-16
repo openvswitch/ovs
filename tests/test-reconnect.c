@@ -271,22 +271,22 @@ do_listen_error(int argc OVS_UNUSED, char *argv[])
 }
 
 static const struct command all_commands[] = {
-    { "enable", 0, 0, do_enable },
-    { "disable", 0, 0, do_disable },
-    { "force-reconnect", 0, 0, do_force_reconnect },
-    { "disconnected", 0, 1, do_disconnected },
-    { "connecting", 0, 0, do_connecting },
-    { "connect-failed", 0, 1, do_connect_failed },
-    { "connected", 0, 0, do_connected },
-    { "activity", 0, 0, do_activity },
-    { "run", 0, 1, do_run },
-    { "advance", 1, 1, do_advance },
-    { "timeout", 0, 0, do_timeout },
-    { "set-max-tries", 1, 1, do_set_max_tries },
-    { "passive", 0, 0, do_set_passive },
-    { "listening", 0, 0, do_listening },
-    { "listen-error", 1, 1, do_listen_error },
-    { NULL, 0, 0, NULL },
+    { "enable", NULL, 0, 0, do_enable },
+    { "disable", NULL, 0, 0, do_disable },
+    { "force-reconnect", NULL, 0, 0, do_force_reconnect },
+    { "disconnected", NULL, 0, 1, do_disconnected },
+    { "connecting", NULL, 0, 0, do_connecting },
+    { "connect-failed", NULL, 0, 1, do_connect_failed },
+    { "connected", NULL, 0, 0, do_connected },
+    { "activity", NULL, 0, 0, do_activity },
+    { "run", NULL, 0, 1, do_run },
+    { "advance", NULL, 1, 1, do_advance },
+    { "timeout", NULL, 0, 0, do_timeout },
+    { "set-max-tries", NULL, 1, 1, do_set_max_tries },
+    { "passive", NULL, 0, 0, do_set_passive },
+    { "listening", NULL, 0, 0, do_listening },
+    { "listen-error", NULL, 1, 1, do_listen_error },
+    { NULL, NULL, 0, 0, NULL },
 };
 
 static const struct command *

@@ -1053,24 +1053,24 @@ test_file_name(int argc, char *argv[])
 #endif /* _WIN32 */
 
 static const struct command commands[] = {
-    {"ctz", 0, 0, test_ctz},
-    {"clz", 0, 0, test_clz},
-    {"round_up_pow2", 0, 0, test_round_up_pow2},
-    {"round_down_pow2", 0, 0, test_round_down_pow2},
-    {"count_1bits", 0, 0, test_count_1bits},
-    {"log_2_floor", 0, 0, test_log_2_floor},
-    {"bitwise_copy", 0, 0, test_bitwise_copy},
-    {"bitwise_zero", 0, 0, test_bitwise_zero},
-    {"bitwise_one", 0, 0, test_bitwise_one},
-    {"bitwise_is_all_zeros", 0, 0, test_bitwise_is_all_zeros},
-    {"follow-symlinks", 1, INT_MAX, test_follow_symlinks},
-    {"assert", 0, 0, test_assert},
-    {"ovs_scan", 0, 0, test_ovs_scan},
-    {"snprintf", 0, 0, test_snprintf},
+    {"ctz", NULL, 0, 0, test_ctz},
+    {"clz", NULL, 0, 0, test_clz},
+    {"round_up_pow2", NULL, 0, 0, test_round_up_pow2},
+    {"round_down_pow2", NULL, 0, 0, test_round_down_pow2},
+    {"count_1bits", NULL, 0, 0, test_count_1bits},
+    {"log_2_floor", NULL, 0, 0, test_log_2_floor},
+    {"bitwise_copy", NULL, 0, 0, test_bitwise_copy},
+    {"bitwise_zero", NULL, 0, 0, test_bitwise_zero},
+    {"bitwise_one", NULL, 0, 0, test_bitwise_one},
+    {"bitwise_is_all_zeros", NULL, 0, 0, test_bitwise_is_all_zeros},
+    {"follow-symlinks", NULL, 1, INT_MAX, test_follow_symlinks},
+    {"assert", NULL, 0, 0, test_assert},
+    {"ovs_scan", NULL, 0, 0, test_ovs_scan},
+    {"snprintf", NULL, 0, 0, test_snprintf},
 #ifndef _WIN32
-    {"file_name", 1, INT_MAX, test_file_name},
+    {"file_name", NULL, 1, INT_MAX, test_file_name},
 #endif
-    {NULL, 0, 0, NULL},
+    {NULL, NULL, 0, 0, NULL},
 };
 
 static void

@@ -638,9 +638,9 @@ benchmark_hmap(void)
 }
 
 static const struct command commands[] = {
-    {"check", 0, 1, run_tests},
-    {"benchmark", 3, 4, run_benchmarks},
-    {NULL, 0, 0, NULL},
+    {"check", NULL, 0, 1, run_tests},
+    {"benchmark", NULL, 3, 4, run_benchmarks},
+    {NULL, NULL, 0, 0, NULL},
 };
 
 static void

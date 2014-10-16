@@ -617,11 +617,11 @@ cmd_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 }
 
 static const struct command all_commands[] = {
-    { "listen", 0, 0, cmd_listen },
-    { "rate", 0, 0, cmd_rate },
-    { "latency", 0, 0, cmd_latency },
-    { "help", 0, 0, cmd_help },
-    { NULL, 0, 0, NULL },
+    { "listen", NULL, 0, 0, cmd_listen },
+    { "rate", NULL, 0, 0, cmd_rate },
+    { "latency", NULL, 0, 0, cmd_latency },
+    { "help", NULL, 0, 0, cmd_help },
+    { NULL, NULL, 0, 0, NULL },
 };
 
 static const struct command *get_all_commands(void)

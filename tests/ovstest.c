@@ -32,7 +32,7 @@ static size_t allocated_commands = 0;
 static void
 add_command(struct command *cmd)
 {
-    const struct command nil = {NULL, 0, 0, NULL};
+    const struct command nil = {NULL, NULL, 0, 0, NULL};
 
     while (n_commands + 1 >= allocated_commands) {
         commands = x2nrealloc(commands, &allocated_commands,
@@ -85,7 +85,7 @@ help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 static void
 add_top_level_commands(void)
 {
-    struct command help_cmd = {"--help", 0, 0, help};
+    struct command help_cmd = {"--help", NULL, 0, 0, help};
 
     add_command(&help_cmd);
 }
@@ -96,6 +96,7 @@ ovstest_register(const char *test_name, ovstest_func f)
     struct command test_cmd;
 
     test_cmd.name = test_name;
+    test_cmd.usage = NULL;
     test_cmd.min_args = 0;
     test_cmd.max_args = INT_MAX;
     test_cmd.handler = f;

@@ -330,11 +330,11 @@ do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 }
 
 static struct command all_commands[] = {
-    { "listen", 1, 1, do_listen },
-    { "request", 3, 3, do_request },
-    { "notify", 3, 3, do_notify },
-    { "help", 0, INT_MAX, do_help },
-    { NULL, 0, 0, NULL },
+    { "listen", NULL, 1, 1, do_listen },
+    { "request", NULL, 3, 3, do_request },
+    { "notify", NULL, 3, 3, do_notify },
+    { "help", NULL, 0, INT_MAX, do_help },
+    { NULL, NULL, 0, 0, NULL },
 };
 
 static struct command *
