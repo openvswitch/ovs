@@ -18,6 +18,7 @@
 
 #include "route-table.h"
 
+#include <errno.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <linux/rtnetlink.h>
@@ -40,7 +41,7 @@ struct route_data {
 
     /* Extracted from Netlink attributes. */
     uint32_t rta_dst; /* Destination in host byte order. 0 if missing. */
-    int rta_oif;      /* Output interface index. */
+    char ifname[IFNAMSIZ]; /* Interface name. */
 };
 
 /* A digested version of a route message sent down by the kernel to indicate
@@ -54,13 +55,6 @@ struct route_table_msg {
 struct route_node {
     struct hmap_node node; /* Node in route_map. */
     struct route_data rd;  /* Data associated with this node. */
-};
-
-struct name_node {
-    struct hmap_node node; /* Node in name_map. */
-    uint32_t ifi_index;    /* Kernel interface index. */
-
-    char ifname[IFNAMSIZ]; /* Interface name. */
 };
 
 static struct ovs_mutex route_table_mutex = OVS_MUTEX_INITIALIZER;
@@ -77,13 +71,9 @@ static struct nln_notifier *route_notifier = NULL;
 static struct nln_notifier *name_notifier = NULL;
 
 static bool route_table_valid = false;
-static bool name_table_valid = false;
 static struct hmap route_map;
-static struct hmap name_map;
 
 static int route_table_reset(void);
-static bool route_table_get_ifindex(ovs_be32 ip, int *)
-    OVS_REQUIRES(route_table_mutex);
 static void route_table_handle_msg(const struct route_table_msg *);
 static bool route_table_parse(struct ofpbuf *, struct route_table_msg *);
 static void route_table_change(const struct route_table_msg *, void *);
@@ -94,57 +84,21 @@ static uint32_t hash_route_data(const struct route_data *);
 
 static void name_table_init(void);
 static void name_table_uninit(void);
-static int name_table_reset(void);
 static void name_table_change(const struct rtnetlink_link_change *, void *);
-static void name_map_clear(void);
-static struct name_node *name_node_lookup(int ifi_index);
 
 /* Populates 'name' with the name of the interface traffic destined for 'ip'
- * is likely to egress out of (see route_table_get_ifindex).
+ * is likely to egress out of.
  *
  * Returns true if successful, otherwise false. */
 bool
-route_table_get_name(ovs_be32 ip, char name[IFNAMSIZ])
-    OVS_EXCLUDED(route_table_mutex)
-{
-    int ifindex;
-
-    ovs_mutex_lock(&route_table_mutex);
-
-    if (!name_table_valid) {
-        name_table_reset();
-    }
-
-    if (route_table_get_ifindex(ip, &ifindex)) {
-        struct name_node *nn;
-
-        nn = name_node_lookup(ifindex);
-        if (nn) {
-            ovs_strlcpy(name, nn->ifname, IFNAMSIZ);
-            ovs_mutex_unlock(&route_table_mutex);
-            return true;
-        }
-    }
-
-    ovs_mutex_unlock(&route_table_mutex);
-    return false;
-}
-
-/* Populates 'ifindex' with the interface index traffic destined for 'ip' is
- * likely to egress.  There is no hard guarantee that traffic destined for 'ip'
- * will egress out the specified interface.  'ifindex' may refer to an
- * interface which is not physical (such as a bridge port).
- *
- * Returns true if successful, otherwise false. */
-static bool
-route_table_get_ifindex(ovs_be32 ip_, int *ifindex)
+route_table_get_name(ovs_be32 ip_, char name[IFNAMSIZ])
     OVS_REQUIRES(route_table_mutex)
 {
     struct route_node *rn;
     uint32_t ip = ntohl(ip_);
+    bool res = false;
 
-    *ifindex = 0;
-
+    ovs_mutex_lock(&route_table_mutex);
     if (!route_table_valid) {
         route_table_reset();
     }
@@ -152,19 +106,23 @@ route_table_get_ifindex(ovs_be32 ip_, int *ifindex)
     rn = route_node_lookup_by_ip(ip);
 
     if (rn) {
-        *ifindex = rn->rd.rta_oif;
-        return true;
+        ovs_strlcpy(name, rn->rd.ifname, IFNAMSIZ);
+        res = true;
+        goto out;
     }
 
     /* Choose a default route. */
     HMAP_FOR_EACH(rn, node, &route_map) {
         if (rn->rd.rta_dst == 0 && rn->rd.rtm_dst_len == 0) {
-            *ifindex = rn->rd.rta_oif;
-            return true;
+            ovs_strlcpy(name, rn->rd.ifname, IFNAMSIZ);
+            res = true;
+            break;
         }
     }
 
-    return false;
+out:
+    ovs_mutex_unlock(&route_table_mutex);
+    return res;
 }
 
 uint64_t
@@ -307,6 +265,7 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
     if (parsed) {
         const struct rtmsg *rtm;
         const struct nlmsghdr *nlmsg;
+        int rta_oif;      /* Output interface index. */
 
         nlmsg = ofpbuf_data(buf);
         rtm = ofpbuf_at(buf, NLMSG_HDRLEN, sizeof *rtm);
@@ -327,10 +286,17 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
             rtm->rtm_type != RTN_LOCAL) {
             change->relevant = false;
         }
-
         change->nlmsg_type     = nlmsg->nlmsg_type;
         change->rd.rtm_dst_len = rtm->rtm_dst_len;
-        change->rd.rta_oif     = nl_attr_get_u32(attrs[RTA_OIF]);
+        rta_oif = nl_attr_get_u32(attrs[RTA_OIF]);
+
+        if (!if_indextoname(rta_oif, change->rd.ifname)) {
+            int error = errno;
+
+            VLOG_DBG_RL(&rl, "Could not find interface name[%u]: %s",
+                        rta_oif, ovs_strerror(error));
+            return false;
+        }
 
         if (attrs[RTA_DST]) {
             change->rd.rta_dst = ntohl(nl_attr_get_be32(attrs[RTA_DST]));
@@ -427,9 +393,7 @@ hash_route_data(const struct route_data *rd)
 static void
 name_table_init(void)
 {
-    hmap_init(&name_map);
     name_notifier = rtnetlink_link_notifier_create(name_table_change, NULL);
-    name_table_valid = false;
 }
 
 static void
@@ -437,46 +401,6 @@ name_table_uninit(void)
 {
     rtnetlink_link_notifier_destroy(name_notifier);
     name_notifier = NULL;
-    name_map_clear();
-    hmap_destroy(&name_map);
-}
-
-static int
-name_table_reset(void)
-{
-    struct nl_dump dump;
-    struct rtgenmsg *rtmsg;
-    uint64_t reply_stub[NL_DUMP_BUFSIZE / 8];
-    struct ofpbuf request, reply, buf;
-
-    name_table_valid = true;
-    name_map_clear();
-
-    ofpbuf_init(&request, 0);
-    nl_msg_put_nlmsghdr(&request, sizeof *rtmsg, RTM_GETLINK, NLM_F_REQUEST);
-    rtmsg = ofpbuf_put_zeros(&request, sizeof *rtmsg);
-    rtmsg->rtgen_family = AF_INET;
-
-    nl_dump_start(&dump, NETLINK_ROUTE, &request);
-    ofpbuf_uninit(&request);
-
-    ofpbuf_use_stub(&buf, reply_stub, sizeof reply_stub);
-    while (nl_dump_next(&dump, &reply, &buf)) {
-        struct rtnetlink_link_change change;
-
-        if (rtnetlink_link_parse(&reply, &change)
-            && change.nlmsg_type == RTM_NEWLINK
-            && !name_node_lookup(change.ifi_index)) {
-            struct name_node *nn;
-
-            nn = xzalloc(sizeof *nn);
-            nn->ifi_index = change.ifi_index;
-            ovs_strlcpy(nn->ifname, change.ifname, IFNAMSIZ);
-            hmap_insert(&name_map, &nn->node, hash_int(nn->ifi_index, 0));
-        }
-    }
-    ofpbuf_uninit(&buf);
-    return nl_dump_done(&dump);
 }
 
 static void
@@ -486,30 +410,4 @@ name_table_change(const struct rtnetlink_link_change *change OVS_UNUSED,
     /* Changes to interface status can cause routing table changes that some
      * versions of the linux kernel do not advertise for some reason. */
     route_table_valid = false;
-    name_table_valid = false;
-}
-
-static struct name_node *
-name_node_lookup(int ifi_index)
-{
-    struct name_node *nn;
-
-    HMAP_FOR_EACH_WITH_HASH(nn, node, hash_int(ifi_index, 0), &name_map) {
-        if (nn->ifi_index == ifi_index) {
-            return nn;
-        }
-    }
-
-    return NULL;
-}
-
-static void
-name_map_clear(void)
-{
-    struct name_node *nn, *nn_next;
-
-    HMAP_FOR_EACH_SAFE(nn, nn_next, node, &name_map) {
-        hmap_remove(&name_map, &nn->node);
-        free(nn);
-    }
 }
