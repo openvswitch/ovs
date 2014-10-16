@@ -1659,6 +1659,19 @@ struct ofproto_class {
 
     enum ofperr (*group_get_stats)(const struct ofgroup *,
                                    struct ofputil_group_stats *);
+
+/* ## --------------------- ## */
+/* ## Datapath information  ## */
+/* ## --------------------- ## */
+    /* Retrieve the version string of the datapath. The version
+     * string can be NULL if it can not be determined.
+     *
+     * The version retuned is read only. The caller should not
+     * free it.
+     *
+     * This function should be NULL if an implementation does not support it.
+     */
+    const char *(*get_datapath_version)(const struct ofproto *);
 };
 
 extern const struct ofproto_class ofproto_dpif_class;

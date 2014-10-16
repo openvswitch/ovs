@@ -1379,6 +1379,22 @@ dpif_recv_wait(struct dpif *dpif, uint32_t handler_id)
     }
 }
 
+/*
+ * Return the datapath version. Caller is responsible for freeing
+ * the string.
+ */
+char *
+dpif_get_dp_version(const struct dpif *dpif)
+{
+    char *version = NULL;
+
+    if (dpif->dpif_class->get_datapath_version) {
+        version = dpif->dpif_class->get_datapath_version();
+    }
+
+    return version;
+}
+
 /* Obtains the NetFlow engine type and engine ID for 'dpif' into '*engine_type'
  * and '*engine_id', respectively. */
 void

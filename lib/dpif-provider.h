@@ -363,6 +363,10 @@ struct dpif_class {
 
     /* Disables upcalls if 'dpif' directly executes upcall functions. */
     void (*disable_upcall)(struct dpif *);
+
+    /* Get datapath version. Caller is responsible for freeing the string
+     * returned.  */
+    char *(*get_datapath_version)(void);
 };
 
 extern const struct dpif_class dpif_netlink_class;

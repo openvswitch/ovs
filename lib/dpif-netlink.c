@@ -2141,6 +2141,36 @@ dpif_netlink_recv_purge(struct dpif *dpif_)
     fat_rwlock_unlock(&dpif->upcall_lock);
 }
 
+static char *
+dpif_netlink_get_datapath_version(void)
+{
+    char *version_str = NULL;
+
+#ifdef __linux__
+
+#define MAX_VERSION_STR_SIZE 80
+#define LINUX_DATAPATH_VERSION_FILE  "/sys/module/openvswitch/version"
+    FILE *f;
+
+    f = fopen(LINUX_DATAPATH_VERSION_FILE, "r");
+    if (f) {
+        char *newline;
+        char version[MAX_VERSION_STR_SIZE];
+
+        if (fgets(version, MAX_VERSION_STR_SIZE, f)) {
+            newline = strchr(version, '\n');
+            if (newline) {
+                *newline = '\0';
+            }
+            version_str = xstrdup(version);
+        }
+        fclose(f);
+    }
+#endif
+
+    return version_str;
+}
+
 const struct dpif_class dpif_netlink_class = {
     "system",
     dpif_netlink_enumerate,
@@ -2178,6 +2208,7 @@ const struct dpif_class dpif_netlink_class = {
     NULL,                       /* register_upcall_cb */
     NULL,                       /* enable_upcall */
     NULL,                       /* disable_upcall */
+    dpif_netlink_get_datapath_version, /* get_datapath_version */
 };
 
 static int

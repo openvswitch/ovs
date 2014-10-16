@@ -281,6 +281,9 @@ struct dpif_backer {
     /* Maximum number of MPLS label stack entries that the datapath supports
      * in a match */
     size_t max_mpls_depth;
+
+    /* Version string of the datapath stored in OVSDB. */
+    char *dp_version_string;
 };
 
 /* All existing ofproto_backer instances, indexed by ofproto->up.type. */
@@ -839,6 +842,7 @@ close_dpif_backer(struct dpif_backer *backer)
     shash_find_and_delete(&all_dpif_backers, backer->type);
     recirc_id_pool_destroy(backer->rid_pool);
     free(backer->type);
+    free(backer->dp_version_string);
     dpif_close(backer->dpif);
     free(backer);
 }
@@ -967,6 +971,7 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
      * as the kernel module checks that the 'pid' in userspace action
      * is non-zero. */
     backer->variable_length_userdata = check_variable_length_userdata(backer);
+    backer->dp_version_string = dpif_get_dp_version(backer->dpif);
 
     return error;
 }
@@ -4087,6 +4092,17 @@ ofproto_dpif_send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet
     return error;
 }
 
+/* Return the version string of the datapath that backs up
+ * this 'ofproto'.
+ */
+static const char *
+get_datapath_version(const struct ofproto *ofproto_)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+
+    return ofproto->backer->dp_version_string;
+}
+
 static bool
 set_frag_handling(struct ofproto *ofproto_,
                   enum ofp_config_flags frag_handling)
@@ -5436,4 +5452,5 @@ const struct ofproto_class ofproto_dpif_class = {
     group_dealloc,              /* group_dealloc */
     group_modify,               /* group_modify */
     group_get_stats,            /* group_get_stats */
+    get_datapath_version,       /* get_datapath_version */
 };

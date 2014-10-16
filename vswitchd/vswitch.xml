@@ -582,6 +582,56 @@
         column="other-config" key="datapath-id"/> instead.)
       </column>
 
+      <column name="datapath_version">
+        <p>
+          Reports the version number of the Open vSwitch datapath in use.
+          This allows management software to detect and report discrepancies
+          between Open vSwitch userspace and datapath versions.  (The <ref
+          column="ovs_version" table="Open_vSwitch"/> column in the <ref
+          table="Open_vSwitch"/> reports the Open vSwitch userspace version.)
+          The version reported depends on the datapath in use:
+        </p>
+
+        <ul>
+          <li>
+            When the kernel module included in the Open vSwitch source tree is
+            used, this column reports the Open vSwitch version from which the
+            module was taken.
+          </li>
+
+          <li>
+            When the kernel module that is part of the upstream Linux kernel is
+            used, this column reports <code>&lt;unknown&gt;</code>.
+          </li>
+
+          <li>
+            When the datapath is built into the <code>ovs-vswitchd</code>
+            binary, this column reports <code>&lt;built-in&gt;</code>.  A
+            built-in datapath is by definition the same version as the rest of
+            the Open VSwitch userspace.
+          </li>
+
+          <li>
+            Other datapaths (such as the Hyper-V kernel datapath) currently
+            report <code>&lt;unknown&gt;</code>.
+          </li>
+        </ul>
+
+        <p>
+          A version discrepancy between <code>ovs-vswitchd</code> and the
+          datapath in use is not normally cause for alarm.  The Open vSwitch
+          kernel datapaths for Linux and Hyper-V, in particular, are designed
+          for maximum inter-version compatibility: any userspace version works
+          with with any kernel version.  Some reasons do exist to insist on
+          particular user/kernel pairings.  First, newer kernel versions add
+          new features, that can only be used by new-enough userspace, e.g.
+          VXLAN tunneling requires certain minimal userspace and kernel
+          versions.  Second, as an extension to the first reason, some newer
+          kernel versions add new features for enhancing performance that only
+          new-enough userspace versions can take advantage of.
+        </p>
+      </column>
+
       <column name="other_config" key="datapath-id">
         Exactly 16 hex digits to set the OpenFlow datapath ID to a specific
         value.  May not be all-zero.

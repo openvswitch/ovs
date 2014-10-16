@@ -2520,6 +2520,12 @@ dp_netdev_reset_pmd_threads(struct dp_netdev *dp)
     }
 }
 
+static char *
+dpif_netdev_get_datapath_version(void)
+{
+     return xstrdup("<built-in>");
+}
+
 static void
 dp_netdev_flow_used(struct dp_netdev_flow *netdev_flow,
                     int cnt, int size,
@@ -3100,6 +3106,7 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_register_upcall_cb,
     dpif_netdev_enable_upcall,
     dpif_netdev_disable_upcall,
+    dpif_netdev_get_datapath_version,
 };
 
 static void

@@ -381,6 +381,7 @@ bridge_init(const char *remote)
     ovsdb_idl_omit(idl, &ovsrec_open_vswitch_col_system_version);
 
     ovsdb_idl_omit_alert(idl, &ovsrec_bridge_col_datapath_id);
+    ovsdb_idl_omit_alert(idl, &ovsrec_bridge_col_datapath_version);
     ovsdb_idl_omit_alert(idl, &ovsrec_bridge_col_status);
     ovsdb_idl_omit_alert(idl, &ovsrec_bridge_col_rstp_status);
     ovsdb_idl_omit_alert(idl, &ovsrec_bridge_col_stp_enable);
@@ -595,6 +596,9 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                          ovs_strerror(error));
                 shash_destroy(&br->wanted_ports);
                 bridge_destroy(br);
+            } else {
+                /* Trigger storing datapath version. */
+                seq_change(connectivity_seq_get());
             }
         }
     }
@@ -2320,6 +2324,19 @@ iface_refresh_stats(struct iface *iface)
 }
 
 static void
+br_refresh_datapath_info(struct bridge *br)
+{
+    const char *version;
+
+    version = (br->ofproto && br->ofproto->ofproto_class->get_datapath_version
+               ? br->ofproto->ofproto_class->get_datapath_version(br->ofproto)
+               : NULL);
+
+    ovsrec_bridge_set_datapath_version(br->cfg,
+                                       version ? version : "<unknown>");
+}
+
+static void
 br_refresh_stp_status(struct bridge *br)
 {
     struct smap smap = SMAP_INITIALIZER(&smap);
@@ -2695,6 +2712,7 @@ run_status_update(void)
 
                 br_refresh_stp_status(br);
                 br_refresh_rstp_status(br);
+                br_refresh_datapath_info(br);
                 HMAP_FOR_EACH (port, hmap_node, &br->ports) {
                     struct iface *iface;
 

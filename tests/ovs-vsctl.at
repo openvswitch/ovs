@@ -648,6 +648,7 @@ _uuid               : <0>
 controller          : []
 datapath_id         : []
 datapath_type       : ""
+datapath_version    : ""
 external_ids        : {}
 fail_mode           : []
 flood_vlans         : []
@@ -1146,6 +1147,7 @@ _uuid               : <1>
 controller          : []
 datapath_id         : []
 datapath_type       : ""
+datapath_version    : ""
 external_ids        : {}
 fail_mode           : []
 flood_vlans         : []

@@ -790,6 +790,7 @@ void dpif_get_netflow_ids(const struct dpif *,
 int dpif_queue_to_priority(const struct dpif *, uint32_t queue_id,
                            uint32_t *priority);
 
+char *dpif_get_dp_version(const struct dpif *);
 #ifdef  __cplusplus
 }
 #endif
