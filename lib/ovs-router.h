@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,21 +14,30 @@
  * limitations under the License.
  */
 
-#ifndef ROUTE_TABLE_H
-#define ROUTE_TABLE_H 1
+#ifndef OVS_TNL_ROUTER_H
+#define OVS_TNL_ROUTER_H 1
 
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <net/if.h>
-#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
+#include <net/if.h>
 
-#include "openvswitch/types.h"
+#include "packets.h"
+#include "timeval.h"
+#include "unixctl.h"
+#include "util.h"
 
-uint64_t route_table_get_change_seq(void);
-void route_table_register(void);
-void route_table_unregister(void);
-void route_table_run(void);
-void route_table_wait(void);
+#ifdef  __cplusplus
+extern "C" {
+#endif
 
-#endif /* route-table.h */
+bool ovs_router_lookup(ovs_be32 ip_dst, char out_dev[], ovs_be32 *gw);
+void ovs_router_insert(ovs_be32 ip_dst, uint8_t plen, const char output_bridge[],
+                       ovs_be32 gw);
+void ovs_router_flush(void);
+
+void ovs_router_unixctl_register(void);
+#ifdef  __cplusplus
+}
+#endif
+
+#endif

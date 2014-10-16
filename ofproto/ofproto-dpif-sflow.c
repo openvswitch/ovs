@@ -32,6 +32,7 @@
 #include "ofproto.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "ovs-router.h"
 #include "route-table.h"
 #include "sflow_api.h"
 #include "socket-util.h"
@@ -261,7 +262,9 @@ sflow_choose_agent_address(const char *agent_device,
 
         if (inet_parse_active(target, SFL_DEFAULT_COLLECTOR_PORT, &sa.ss)
             && sa.ss.ss_family == AF_INET) {
-            if (route_table_get_name(sa.sin.sin_addr.s_addr, name)
+            ovs_be32 gw;
+
+            if (ovs_router_lookup(sa.sin.sin_addr.s_addr, name, &gw)
                 && !netdev_get_in4_by_name(name, &in4)) {
                 goto success;
             }

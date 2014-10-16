@@ -25,11 +25,11 @@
 #include <net/if.h>
 
 #include "hash.h"
-#include "hmap.h"
 #include "netlink.h"
 #include "netlink-notifier.h"
 #include "netlink-socket.h"
 #include "ofpbuf.h"
+#include "ovs-router.h"
 #include "rtnetlink-link.h"
 #include "vlog.h"
 
@@ -40,7 +40,7 @@ struct route_data {
     unsigned char rtm_dst_len;
 
     /* Extracted from Netlink attributes. */
-    uint32_t rta_dst; /* Destination in host byte order. 0 if missing. */
+    ovs_be32 rta_dst; /* 0 if missing. */
     char ifname[IFNAMSIZ]; /* Interface name. */
 };
 
@@ -50,11 +50,6 @@ struct route_table_msg {
     bool relevant;        /* Should this message be processed? */
     int nlmsg_type;       /* e.g. RTM_NEWROUTE, RTM_DELROUTE. */
     struct route_data rd; /* Data parsed from this message. */
-};
-
-struct route_node {
-    struct hmap_node node; /* Node in route_map. */
-    struct route_data rd;  /* Data associated with this node. */
 };
 
 static struct ovs_mutex route_table_mutex = OVS_MUTEX_INITIALIZER;
@@ -71,59 +66,16 @@ static struct nln_notifier *route_notifier = NULL;
 static struct nln_notifier *name_notifier = NULL;
 
 static bool route_table_valid = false;
-static struct hmap route_map;
 
 static int route_table_reset(void);
 static void route_table_handle_msg(const struct route_table_msg *);
 static bool route_table_parse(struct ofpbuf *, struct route_table_msg *);
 static void route_table_change(const struct route_table_msg *, void *);
-static struct route_node *route_node_lookup(const struct route_data *);
-static struct route_node *route_node_lookup_by_ip(uint32_t ip);
 static void route_map_clear(void);
-static uint32_t hash_route_data(const struct route_data *);
 
 static void name_table_init(void);
 static void name_table_uninit(void);
 static void name_table_change(const struct rtnetlink_link_change *, void *);
-
-/* Populates 'name' with the name of the interface traffic destined for 'ip'
- * is likely to egress out of.
- *
- * Returns true if successful, otherwise false. */
-bool
-route_table_get_name(ovs_be32 ip_, char name[IFNAMSIZ])
-    OVS_REQUIRES(route_table_mutex)
-{
-    struct route_node *rn;
-    uint32_t ip = ntohl(ip_);
-    bool res = false;
-
-    ovs_mutex_lock(&route_table_mutex);
-    if (!route_table_valid) {
-        route_table_reset();
-    }
-
-    rn = route_node_lookup_by_ip(ip);
-
-    if (rn) {
-        ovs_strlcpy(name, rn->rd.ifname, IFNAMSIZ);
-        res = true;
-        goto out;
-    }
-
-    /* Choose a default route. */
-    HMAP_FOR_EACH(rn, node, &route_map) {
-        if (rn->rd.rta_dst == 0 && rn->rd.rtm_dst_len == 0) {
-            ovs_strlcpy(name, rn->rd.ifname, IFNAMSIZ);
-            res = true;
-            break;
-        }
-    }
-
-out:
-    ovs_mutex_unlock(&route_table_mutex);
-    return res;
-}
 
 uint64_t
 route_table_get_change_seq(void)
@@ -149,7 +101,6 @@ route_table_register(void)
             nln_notifier_create(nln, (nln_notify_func *) route_table_change,
                                 NULL);
 
-        hmap_init(&route_map);
         route_table_reset();
         name_table_init();
     }
@@ -175,7 +126,6 @@ route_table_unregister(void)
         nln = NULL;
 
         route_map_clear();
-        hmap_destroy(&route_map);
         name_table_uninit();
     }
     ovs_mutex_unlock(&route_table_mutex);
@@ -299,7 +249,7 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
         }
 
         if (attrs[RTA_DST]) {
-            change->rd.rta_dst = ntohl(nl_attr_get_be32(attrs[RTA_DST]));
+            change->rd.rta_dst = nl_attr_get_be32(attrs[RTA_DST]);
         }
 
     } else {
@@ -319,74 +269,19 @@ route_table_change(const struct route_table_msg *change OVS_UNUSED,
 static void
 route_table_handle_msg(const struct route_table_msg *change)
 {
-    if (change->relevant && change->nlmsg_type == RTM_NEWROUTE &&
-        !route_node_lookup(&change->rd)) {
-        struct route_node *rn;
+    if (change->relevant && change->nlmsg_type == RTM_NEWROUTE) {
+        const struct route_data *rd = &change->rd;
 
-        rn = xzalloc(sizeof *rn);
-        memcpy(&rn->rd, &change->rd, sizeof change->rd);
-
-        hmap_insert(&route_map, &rn->node, hash_route_data(&rn->rd));
+        ovs_router_insert(rd->rta_dst, rd->rtm_dst_len, rd->ifname, 0);
     }
-}
-
-static struct route_node *
-route_node_lookup(const struct route_data *rd)
-{
-    struct route_node *rn;
-
-    HMAP_FOR_EACH_WITH_HASH(rn, node, hash_route_data(rd), &route_map) {
-        if (!memcmp(&rn->rd, rd, sizeof *rd)) {
-            return rn;
-        }
-    }
-
-    return NULL;
-}
-
-static struct route_node *
-route_node_lookup_by_ip(uint32_t ip)
-{
-    int dst_len;
-    struct route_node *rn, *rn_ret;
-
-    dst_len = -1;
-    rn_ret  = NULL;
-
-    HMAP_FOR_EACH(rn, node, &route_map) {
-        uint32_t mask = 0xffffffff << (32 - rn->rd.rtm_dst_len);
-
-        if (rn->rd.rta_dst == 0 && rn->rd.rtm_dst_len == 0) {
-            /* Default route. */
-            continue;
-        }
-
-        if (rn->rd.rtm_dst_len > dst_len &&
-            (ip & mask) == (rn->rd.rta_dst & mask)) {
-            rn_ret  = rn;
-            dst_len = rn->rd.rtm_dst_len;
-        }
-    }
-
-    return rn_ret;
 }
 
 static void
 route_map_clear(void)
 {
-    struct route_node *rn, *rn_next;
-
-    HMAP_FOR_EACH_SAFE(rn, rn_next, node, &route_map) {
-        hmap_remove(&route_map, &rn->node);
-        free(rn);
-    }
+    ovs_router_flush();
 }
 
-static uint32_t
-hash_route_data(const struct route_data *rd)
-{
-    return hash_bytes(rd, sizeof *rd, 0);
-}
 
 /* name_table . */
 

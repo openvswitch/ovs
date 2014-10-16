@@ -35,7 +35,7 @@ static int pid;
 static unsigned int register_count = 0;
 
 bool
-route_table_get_name(ovs_be32 ip, char name[IFNAMSIZ])
+ovs_router_lookup(ovs_be32 ip, char name[], ovs_be32 *gw)
 {
     struct {
         struct rt_msghdr rtm;
@@ -93,6 +93,7 @@ route_table_get_name(ovs_be32 ip, char name[IFNAMSIZ])
                     namelen = IFNAMSIZ - 1;
                 memcpy(name, ifp->sdl_data, namelen);
                 name[namelen] = '\0';
+                *gw = 0;
                 return true;
             }
 #if defined(__FreeBSD__)

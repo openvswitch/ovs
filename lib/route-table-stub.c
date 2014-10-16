@@ -18,8 +18,9 @@
 #include "compiler.h"
 
 bool
-route_table_get_name(ovs_be32 ip OVS_UNUSED, char name[IFNAMSIZ] OVS_UNUSED)
+ovs_router_lookup(ovs_be32 ip_dst OVS_UNUSED, char output_bridge[], ovs_be32 *gw)
 {
+    *gw = 0;
     name[0] = '\0';
     return false;
 }

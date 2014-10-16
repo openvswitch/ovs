@@ -58,6 +58,7 @@
 #include "ofproto-dpif-sflow.h"
 #include "ofproto-dpif-upcall.h"
 #include "ofproto-dpif-xlate.h"
+#include "ovs-router.h"
 #include "poll-loop.h"
 #include "seq.h"
 #include "simap.h"
@@ -1225,6 +1226,7 @@ construct(struct ofproto *ofproto_)
     guarded_list_init(&ofproto->pins);
 
     ofproto_dpif_unixctl_init();
+    ovs_router_unixctl_register();
 
     hmap_init(&ofproto->vlandev_map);
     hmap_init(&ofproto->realdev_vid_map);

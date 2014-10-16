@@ -33,6 +33,7 @@
 #include "list.h"
 #include "netdev-provider.h"
 #include "ofpbuf.h"
+#include "ovs-router.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "route-table.h"
@@ -284,10 +285,11 @@ tunnel_check_status_change__(struct netdev_vport *netdev)
     char iface[IFNAMSIZ];
     bool status = false;
     ovs_be32 route;
+    ovs_be32 gw;
 
     iface[0] = '\0';
     route = netdev->tnl_cfg.ip_dst;
-    if (route_table_get_name(route, iface)) {
+    if (ovs_router_lookup(route, iface, &gw)) {
         struct netdev *egress_netdev;
 
         if (!netdev_open(iface, "system", &egress_netdev)) {
