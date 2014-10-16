@@ -95,6 +95,7 @@ static NetlinkCmdHandler OvsGetPidCmdHandler,
                          OvsGetDpCmdHandler,
                          OvsSetDpCmdHandler,
                          OvsGetVportCmdHandler,
+                         OvsSetVportCmdHandler,
                          OvsNewVportCmdHandler,
                          OvsDeleteVportCmdHandler;
 
@@ -206,6 +207,11 @@ NETLINK_CMD nlVportFamilyCmdOps[] = {
     },
     { .cmd = OVS_VPORT_CMD_NEW,
       .handler = OvsNewVportCmdHandler,
+      .supportedDevOp = OVS_TRANSACTION_DEV_OP,
+      .validateDpIndex = TRUE
+    },
+    { .cmd = OVS_VPORT_CMD_SET,
+      .handler = OvsSetVportCmdHandler,
       .supportedDevOp = OVS_TRANSACTION_DEV_OP,
       .validateDpIndex = TRUE
     },
@@ -1894,6 +1900,119 @@ Cleanup:
     return STATUS_SUCCESS;
 }
 
+static NTSTATUS
+OvsSetVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                      UINT32 *replyLen)
+{
+    NDIS_STATUS status = STATUS_SUCCESS;
+    LOCK_STATE_EX lockState;
+
+    /*XXX: this function is dummy */
+
+    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
+    POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
+    POVS_VPORT_ENTRY vport = NULL;
+    NL_ERROR nlError = NL_ERROR_SUCCESS;
+
+    static const NL_POLICY ovsVportPolicy[] = {
+        [OVS_VPORT_ATTR_PORT_NO] = { .type = NL_A_U32, .optional = TRUE },
+        [OVS_VPORT_ATTR_TYPE] = { .type = NL_A_U32, .optional = TRUE },
+        [OVS_VPORT_ATTR_NAME] = { .type = NL_A_STRING, .maxLen = IFNAMSIZ,
+                                  .optional = TRUE },
+        [OVS_VPORT_ATTR_UPCALL_PID] = { .type = NL_A_UNSPEC,
+                                        .optional = TRUE },
+        [OVS_VPORT_ATTR_STATS] = { .type = NL_A_UNSPEC,
+                                   .minLen = sizeof(OVS_VPORT_FULL_STATS),
+                                   .maxLen = sizeof(OVS_VPORT_FULL_STATS),
+                                   .optional = TRUE },
+        [OVS_VPORT_ATTR_OPTIONS] = { .type = NL_A_NESTED, .optional = TRUE },
+    };
+    PNL_ATTR vportAttrs[ARRAY_SIZE(ovsVportPolicy)];
+
+    ASSERT(usrParamsCtx->inputBuffer != NULL);
+
+    if (!NlAttrParse((PNL_MSG_HDR)msgIn,
+        NLMSG_HDRLEN + GENL_HDRLEN + OVS_HDRLEN,
+        NlMsgAttrsLen((PNL_MSG_HDR)msgIn),
+        ovsVportPolicy, vportAttrs, ARRAY_SIZE(vportAttrs))) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (msgOut == NULL || usrParamsCtx->outputLength < sizeof *msgOut) {
+        return STATUS_NDIS_INVALID_LENGTH;
+    }
+
+    OvsAcquireCtrlLock();
+    if (!gOvsSwitchContext) {
+        OvsReleaseCtrlLock();
+        return STATUS_INVALID_PARAMETER;
+    }
+    OvsReleaseCtrlLock();
+
+    if (vportAttrs[OVS_VPORT_ATTR_NAME] != NULL) {
+        PSTR portName = NlAttrGet(vportAttrs[OVS_VPORT_ATTR_NAME]);
+        UINT32 portNameLen = NlAttrGetSize(vportAttrs[OVS_VPORT_ATTR_NAME]);
+
+        /* the port name is expected to be null-terminated */
+        ASSERT(portName[portNameLen - 1] == '\0');
+
+        vport = OvsFindVportByOvsName(gOvsSwitchContext, portName);
+    }
+    else if (vportAttrs[OVS_VPORT_ATTR_PORT_NO] != NULL) {
+        vport = OvsFindVportByPortNo(gOvsSwitchContext,
+            NlAttrGetU32(vportAttrs[OVS_VPORT_ATTR_PORT_NO]));
+    }
+
+    if (!vport) {
+        nlError = NL_ERROR_NODEV;
+        goto Cleanup;
+    }
+
+    NdisAcquireRWLockWrite(gOvsSwitchContext->dispatchLock, &lockState, 0);
+
+    /*
+    * XXX: when we implement OVS_DP_ATTR_USER_FEATURES in datapath,
+    * we'll need to check the OVS_DP_F_VPORT_PIDS flag: if it is set,
+    * it means we have an array of pids, instead of a single pid.
+    * ATM we assume we have one pid only.
+    */
+    if (vportAttrs[OVS_VPORT_ATTR_UPCALL_PID]) {
+        vport->upcallPid = NlAttrGetU32(vportAttrs[OVS_VPORT_ATTR_UPCALL_PID]);
+    }
+
+    if (vportAttrs[OVS_VPORT_ATTR_TYPE]) {
+        OVS_VPORT_TYPE type = NlAttrGetU32(vportAttrs[OVS_VPORT_ATTR_TYPE]);
+        if (type != vport->ovsType) {
+            nlError = NL_ERROR_INVAL;
+            goto Cleanup;
+        }
+    }
+
+    if (vportAttrs[OVS_VPORT_ATTR_OPTIONS]) {
+        /* XXX: port options not implemented!*/
+        ASSERT(0);
+        nlError = NL_ERROR_NOTSUPP;
+    }
+
+    status = OvsCreateMsgFromVport(vport, msgIn, usrParamsCtx->outputBuffer,
+                                   usrParamsCtx->outputLength,
+                                   gOvsSwitchContext->dpNo);
+
+    *replyLen = msgOut->nlMsg.nlmsgLen;
+
+Cleanup:
+    NdisReleaseRWLock(gOvsSwitchContext->dispatchLock, &lockState);
+
+    if (nlError != NL_ERROR_SUCCESS) {
+        POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
+            usrParamsCtx->outputBuffer;
+
+        BuildErrorMsg(msgIn, msgError, nlError);
+        *replyLen = msgError->nlMsg.nlmsgLen;
+    }
+
+    return STATUS_SUCCESS;
+}
 
 static NTSTATUS
 OvsDeleteVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
