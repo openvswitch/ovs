@@ -52,6 +52,10 @@ typedef struct _OVS_DEVICE_EXTENSION {
     INT pidCount;
 } OVS_DEVICE_EXTENSION, *POVS_DEVICE_EXTENSION;
 
+// forward declaration
+typedef struct _OVS_USER_PACKET_QUEUE OVS_USER_PACKET_QUEUE,
+                                      *POVS_USER_PACKET_QUEUE;
+
 /*
  * Private context for each handle on the device.
  */
@@ -59,7 +63,7 @@ typedef struct _OVS_OPEN_INSTANCE {
     UINT32 cookie;
     PFILE_OBJECT fileObject;
     PVOID eventQueue;
-    PVOID packetQueue;
+    POVS_USER_PACKET_QUEUE packetQueue;
     UINT32 pid;
 
     /*

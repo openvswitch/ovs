@@ -16,6 +16,7 @@
 
 #include "precomp.h"
 #include "Switch.h"
+#include "User.h"
 #include "Datapath.h"
 
 #ifdef OVS_DBG_MOD

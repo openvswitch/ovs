@@ -23,6 +23,8 @@
 #if defined OVS_USE_NL_INTERFACE && OVS_USE_NL_INTERFACE == 1
 
 #include "precomp.h"
+#include "Switch.h"
+#include "User.h"
 #include "Datapath.h"
 #include "Jhash.h"
 #include "Switch.h"
@@ -90,6 +92,7 @@ typedef struct _NETLINK_FAMILY {
 static NetlinkCmdHandler OvsGetPidCmdHandler,
                          OvsPendEventCmdHandler,
                          OvsSubscribeEventCmdHandler,
+                         OvsSubscribePacketCmdHandler,
                          OvsReadEventCmdHandler,
                          OvsReadPacketCmdHandler,
                          OvsNewDpCmdHandler,
@@ -130,6 +133,11 @@ NETLINK_CMD nlControlFamilyCmdOps[] = {
     },
     { .cmd = OVS_CTRL_CMD_MC_SUBSCRIBE_REQ,
       .handler = OvsSubscribeEventCmdHandler,
+      .supportedDevOp = OVS_WRITE_DEV_OP,
+      .validateDpIndex = TRUE,
+    },
+    { .cmd = OVS_CTRL_CMD_PACKET_SUBSCRIBE_REQ,
+      .handler = OvsSubscribePacketCmdHandler,
       .supportedDevOp = OVS_WRITE_DEV_OP,
       .validateDpIndex = TRUE,
     },
@@ -344,7 +352,6 @@ OvsInit()
     gOvsCtrlLock = &ovsCtrlLockObj;
     NdisAllocateSpinLock(gOvsCtrlLock);
     OvsInitEventQueue();
-    OvsUserInit();
 }
 
 VOID
@@ -355,7 +362,6 @@ OvsCleanup()
         NdisFreeSpinLock(gOvsCtrlLock);
         gOvsCtrlLock = NULL;
     }
-    OvsUserCleanup();
 }
 
 VOID
@@ -1070,7 +1076,7 @@ OvsSubscribeEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
 
     rc = NlAttrParse(&msgIn->nlMsg, sizeof (*msgIn),
-         NlMsgAttrsLen((PNL_MSG_HDR)msgIn), policy, attrs, 2);
+         NlMsgAttrsLen((PNL_MSG_HDR)msgIn), policy, attrs, ARRAY_SIZE(attrs));
     if (!rc) {
         status = STATUS_INVALID_PARAMETER;
         goto done;
@@ -2341,6 +2347,56 @@ OvsReadPacketCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     /* Read a packet from the instance queue */
     status = OvsReadDpIoctl(instance->fileObject, usrParamsCtx->outputBuffer,
                             usrParamsCtx->outputLength, replyLen);
+    return status;
+}
+
+/*
+ * --------------------------------------------------------------------------
+ *  Handler for the subscription for a packet queue
+ * --------------------------------------------------------------------------
+ */
+static NTSTATUS
+OvsSubscribePacketCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                            UINT32 *replyLen)
+{
+    NDIS_STATUS status;
+    BOOLEAN rc;
+    UINT8 join;
+    UINT32 pid;
+    const NL_POLICY policy[] =  {
+        [OVS_NL_ATTR_PACKET_PID] = {.type = NL_A_U32 },
+        [OVS_NL_ATTR_PACKET_SUBSCRIBE] = {.type = NL_A_U8 }
+        };
+    PNL_ATTR attrs[ARRAY_SIZE(policy)];
+
+    UNREFERENCED_PARAMETER(replyLen);
+
+    POVS_OPEN_INSTANCE instance =
+        (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
+    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
+
+    rc = NlAttrParse(&msgIn->nlMsg, sizeof (*msgIn),
+         NlMsgAttrsLen((PNL_MSG_HDR)msgIn), policy, attrs, ARRAY_SIZE(attrs));
+    if (!rc) {
+        status = STATUS_INVALID_PARAMETER;
+        goto done;
+    }
+
+    join = NlAttrGetU8(attrs[OVS_NL_ATTR_PACKET_PID]);
+    pid = NlAttrGetU32(attrs[OVS_NL_ATTR_PACKET_PID]);
+
+    /* The socket subscribed with must be the same socket we perform receive*/
+    ASSERT(pid == instance->pid);
+
+    status = OvsSubscribeDpIoctl(instance, pid, join);
+
+    /*
+     * XXX Need to add this instance to a global data structure
+     * which hold all packet based instances. The data structure (hash)
+     * should be searched through the pid field of the instance for
+     * placing the missed packet into the correct queue
+     */
+done:
     return status;
 }
 #endif /* OVS_USE_NL_INTERFACE */

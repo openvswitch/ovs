@@ -21,6 +21,7 @@
 #ifndef __USER_H_
 #define __USER_H_ 1
 
+
 #include "Datapath.h"
 
 /*
@@ -28,7 +29,6 @@
  * more than 32 queues for processing packets to
  * userspace
  */
-#define OVS_MAX_NUM_PACKET_QUEUES 32
 #define OVS_DEFAULT_PACKET_QUEUE 1
 #define OVS_MAX_PACKET_QUEUE_LEN  4096
 
@@ -40,7 +40,7 @@
 #define OVS_MAX_PACKETS_PER_TUNNEL 1024
 
 typedef struct _OVS_USER_PACKET_QUEUE {
-    UINT32 queueId;
+    UINT32 pid;
     UINT32 numPackets;
     LIST_ENTRY  packetList;
     PVOID instance;
@@ -67,10 +67,6 @@ typedef struct _OVS_USER_STATS {
     UINT32 l4Csum;
 } OVS_USER_STATS, *POVS_USER_STATS;
 
-
-NTSTATUS OvsUserInit();
-VOID OvsUserCleanup();
-
 VOID OvsCleanupPacketQueue(struct _OVS_OPEN_INSTANCE *instance);
 
 POVS_PACKET_QUEUE_ELEM OvsCreateQueueNlPacket(PVOID userData,
@@ -96,14 +92,14 @@ NTSTATUS OvsCreateAndAddPackets(PVOID userData,
                                 LIST_ENTRY *list,
                                 UINT32 *num);
 
-NTSTATUS OvsSubscribeDpIoctl(PFILE_OBJECT fileObject,
-                             PVOID inputBuffer,
-                             UINT32 inputLength);
+NTSTATUS OvsSubscribeDpIoctl(PVOID instanceP,
+                             UINT32 pid,
+                             UINT8 join);
 
 NTSTATUS OvsReadDpIoctl(PFILE_OBJECT fileObject,
-                              PVOID outputBuffer,
-                              UINT32 outputLength,
-                              UINT32 *replyLen);
+                        PVOID outputBuffer,
+                        UINT32 outputLength,
+                        UINT32 *replyLen);
 NTSTATUS OvsExecuteDpIoctl(OvsPacketExecute *execute);
 NTSTATUS OvsPurgeDpIoctl(PFILE_OBJECT fileObject);
 

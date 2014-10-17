@@ -109,7 +109,6 @@ OvsInit()
 {
     OvsInitIoctl();
     OvsInitEventQueue();
-    OvsUserInit();
 }
 
 VOID
@@ -117,7 +116,6 @@ OvsCleanup()
 {
     OvsCleanupEventQueue();
     OvsCleanupIoctl();
-    OvsUserCleanup();
 }
 
 VOID

@@ -22,11 +22,11 @@
 
 #include "precomp.h"
 
-#include "Datapath.h"
 #include "Switch.h"
 #include "Vport.h"
 #include "Event.h"
 #include "User.h"
+#include "Datapath.h"
 #include "PacketIO.h"
 #include "Checksum.h"
 #include "NetProto.h"
@@ -39,8 +39,6 @@
 #define OVS_DBG_MOD OVS_DBG_USER
 #include "Debug.h"
 
-OVS_USER_PACKET_QUEUE ovsPacketQueues[OVS_MAX_NUM_PACKET_QUEUES];
-
 POVS_PACKET_QUEUE_ELEM OvsGetNextPacket(POVS_OPEN_INSTANCE instance);
 extern PNDIS_SPIN_LOCK gOvsCtrlLock;
 extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
@@ -49,34 +47,6 @@ OVS_USER_STATS ovsUserStats;
 static VOID _MapNlAttrToOvsPktExec(PNL_ATTR *nlAttrs, PNL_ATTR *keyAttrs,
                                    OvsPacketExecute  *execute);
 extern NL_POLICY nlFlowKeyPolicy[];
-
-NTSTATUS
-OvsUserInit()
-{
-    UINT32 i;
-    POVS_USER_PACKET_QUEUE queue;
-    for (i = 0; i < OVS_MAX_NUM_PACKET_QUEUES; i++) {
-        queue = &ovsPacketQueues[i];
-        RtlZeroMemory(queue, sizeof (*queue));
-        InitializeListHead(&queue->packetList);
-        NdisAllocateSpinLock(&queue->queueLock);
-    }
-    return STATUS_SUCCESS;
-}
-
-VOID
-OvsUserCleanup()
-{
-    UINT32 i;
-    POVS_USER_PACKET_QUEUE queue;
-    for (i = 0; i < OVS_MAX_NUM_PACKET_QUEUES; i++) {
-        queue = &ovsPacketQueues[i];
-        ASSERT(IsListEmpty(&queue->packetList));
-        ASSERT(queue->instance == NULL);
-        ASSERT(queue->pendingIrp == NULL);
-        NdisFreeSpinLock(&queue->queueLock);
-    }
-}
 
 static VOID
 OvsPurgePacketQueue(POVS_USER_PACKET_QUEUE queue,
@@ -105,7 +75,6 @@ OvsPurgePacketQueue(POVS_USER_PACKET_QUEUE queue,
     }
 }
 
-
 VOID
 OvsCleanupPacketQueue(POVS_OPEN_INSTANCE instance)
 {
@@ -120,8 +89,11 @@ OvsCleanupPacketQueue(POVS_OPEN_INSTANCE instance)
     if (queue) {
         PDRIVER_CANCEL cancelRoutine;
         NdisAcquireSpinLock(&queue->queueLock);
+        ASSERT(queue->instance == instance);
+        /* XXX Should not happen */
         if (queue->instance != instance) {
             NdisReleaseSpinLock(&queue->queueLock);
+            NdisFreeSpinLock(&queue->queueLock);
             return;
         }
 
@@ -130,7 +102,6 @@ OvsCleanupPacketQueue(POVS_OPEN_INSTANCE instance)
             queue->numPackets = 0;
         }
         queue->instance = NULL;
-        queue->queueId = OVS_MAX_NUM_PACKET_QUEUES;
         instance->packetQueue = NULL;
         irp = queue->pendingIrp;
         queue->pendingIrp = NULL;
@@ -141,6 +112,7 @@ OvsCleanupPacketQueue(POVS_OPEN_INSTANCE instance)
             }
         }
         NdisReleaseSpinLock(&queue->queueLock);
+        NdisFreeSpinLock(&queue->queueLock);
     }
     LIST_FORALL_SAFE(&tmp, link, next) {
         RemoveEntryList(link);
@@ -150,44 +122,38 @@ OvsCleanupPacketQueue(POVS_OPEN_INSTANCE instance)
     if (irp) {
         OvsCompleteIrpRequest(irp, 0, STATUS_SUCCESS);
     }
+    if (queue) {
+        OvsFreeMemory(queue);
+    }
 }
 
 NTSTATUS
-OvsSubscribeDpIoctl(PFILE_OBJECT fileObject,
-                    PVOID inputBuffer,
-                    UINT32 inputLength)
+OvsSubscribeDpIoctl(PVOID instanceP,
+                    UINT32 pid,
+                    UINT8 join)
 {
-    POVS_OPEN_INSTANCE instance = (POVS_OPEN_INSTANCE)fileObject->FsContext;
-    UINT32 queueId;
     POVS_USER_PACKET_QUEUE queue;
-    if (inputLength < sizeof (UINT32)) {
-        return STATUS_INVALID_PARAMETER;
-    }
-    queueId = *(UINT32 *)inputBuffer;
-    if (instance->packetQueue && queueId >= OVS_MAX_NUM_PACKET_QUEUES) {
-        /*
-         * unsubscribe
-         */
+    POVS_OPEN_INSTANCE instance = (POVS_OPEN_INSTANCE)instanceP;
+
+    if (instance->packetQueue && !join) {
+        /* unsubscribe */
         OvsCleanupPacketQueue(instance);
-    } else if (instance->packetQueue == NULL &&
-               queueId < OVS_MAX_NUM_PACKET_QUEUES) {
-        queue = &ovsPacketQueues[queueId];
-        NdisAcquireSpinLock(&queue->queueLock);
-        if (ovsPacketQueues[queueId].instance) {
-             if (ovsPacketQueues[queueId].instance != instance) {
-                 NdisReleaseSpinLock(&queue->queueLock);
-                 return STATUS_INSUFFICIENT_RESOURCES;
-             } else {
-                 NdisReleaseSpinLock(&queue->queueLock);
-                 return STATUS_SUCCESS;
-             }
+    } else if (instance->packetQueue == NULL && join) {
+        queue = (POVS_USER_PACKET_QUEUE) OvsAllocateMemory(sizeof *queue);
+        if (queue == NULL) {
+            return STATUS_NO_MEMORY;
         }
-        queue->queueId = queueId;
+        instance->packetQueue = queue;
+        RtlZeroMemory(queue, sizeof (*queue));
+        NdisAllocateSpinLock(&queue->queueLock);
+        NdisAcquireSpinLock(&queue->queueLock);
+        InitializeListHead(&queue->packetList);
+        queue->pid = pid;
         queue->instance = instance;
         instance->packetQueue = queue;
-        ASSERT(IsListEmpty(&queue->packetList));
         NdisReleaseSpinLock(&queue->queueLock);
     } else {
+        /* user mode should call only once for subscribe */
         return STATUS_INVALID_PARAMETER;
     }
     return STATUS_SUCCESS;
@@ -623,14 +589,12 @@ OvsGetNextPacket(POVS_OPEN_INSTANCE instance)
 
 
 POVS_USER_PACKET_QUEUE
-OvsGetQueue(UINT32 queueId)
+OvsGetQueue(UINT32 pid)
 {
-    POVS_USER_PACKET_QUEUE queue;
-    if (queueId >= OVS_MAX_NUM_PACKET_QUEUES) {
-        return NULL;
-    }
-    queue = &ovsPacketQueues[queueId];
-    return queue->instance != NULL ? queue : NULL;
+    /* XXX To be implemented. Return the queue assoiated with the pid*/
+    UNREFERENCED_PARAMETER(pid);
+    ASSERT(FALSE);
+    return NULL;
 }
 
 VOID

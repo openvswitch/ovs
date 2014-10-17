@@ -78,6 +78,7 @@ enum ovs_win_control_cmd {
     OVS_CTRL_CMD_WIN_GET_PID,
     OVS_CTRL_CMD_WIN_PEND_REQ,
     OVS_CTRL_CMD_MC_SUBSCRIBE_REQ,
+    OVS_CTRL_CMD_PACKET_SUBSCRIBE_REQ,
 
     /* This command is logically belong to the Vport family */
     OVS_CTRL_CMD_EVENT_NOTIFY,
@@ -86,8 +87,10 @@ enum ovs_win_control_cmd {
 
 /* NL Attributes for joining/unjoining an MC group */
 enum ovs_nl_mcast_attr {
-    OVS_NL_ATTR_MCAST_GRP,   /* (UINT32) Join an MC group */
-    OVS_NL_ATTR_MCAST_JOIN,  /* (UINT8) 1/0 - Join/Unjoin */
+    OVS_NL_ATTR_MCAST_GRP,        /* (UINT32) Join an MC group */
+    OVS_NL_ATTR_MCAST_JOIN,       /* (UINT8) 1/0 - Join/Unjoin */
+    OVS_NL_ATTR_PACKET_SUBSCRIBE, /* (UNINT8): 1/0 - subscribe/unsubscribe */
+    OVS_NL_ATTR_PACKET_PID,       /* (UNINT32) netlink PID to receive upcalls */
     __OVS_NL_ATTR_CTRL_MAX
 };
 #define OVS_WIN_CONTROL_ATTR_MAX (__OVS_NL_ATTR_CTRL_MAX - 1)
