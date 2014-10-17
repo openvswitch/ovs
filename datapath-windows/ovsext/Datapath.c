@@ -91,6 +91,7 @@ static NetlinkCmdHandler OvsGetPidCmdHandler,
                          OvsPendEventCmdHandler,
                          OvsSubscribeEventCmdHandler,
                          OvsReadEventCmdHandler,
+                         OvsReadPacketCmdHandler,
                          OvsNewDpCmdHandler,
                          OvsGetDpCmdHandler,
                          OvsSetDpCmdHandler,
@@ -135,6 +136,11 @@ NETLINK_CMD nlControlFamilyCmdOps[] = {
     { .cmd = OVS_CTRL_CMD_EVENT_NOTIFY,
       .handler = OvsReadEventCmdHandler,
       .supportedDevOp = OVS_READ_EVENT_DEV_OP,
+      .validateDpIndex = FALSE,
+    },
+    { .cmd = OVS_CTRL_CMD_READ_NOTIFY,
+      .handler = OvsReadPacketCmdHandler,
+      .supportedDevOp = OVS_READ_PACKET_DEV_OP,
       .validateDpIndex = FALSE,
     }
 };
@@ -704,6 +710,7 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
         break;
 
     case OVS_IOCTL_READ_EVENT:
+    case OVS_IOCTL_READ_PACKET:
         /* This IOCTL is used to read events */
         if (outputBufferLen != 0) {
             status = MapIrpOutputBuffer(irp, outputBufferLen,
@@ -722,7 +729,9 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
         ovsMsg = &ovsMsgReadOp;
         ovsMsg->nlMsg.nlmsgType = OVS_WIN_NL_CTRL_FAMILY_ID;
         /* An "artificial" command so we can use NL family function table*/
-        ovsMsg->genlMsg.cmd = OVS_CTRL_CMD_EVENT_NOTIFY;
+        ovsMsg->genlMsg.cmd = (code == OVS_IOCTL_READ_EVENT) ?
+                              OVS_CTRL_CMD_EVENT_NOTIFY :
+                              OVS_CTRL_CMD_READ_NOTIFY;
         devOp = OVS_READ_DEV_OP;
         break;
 
@@ -2290,6 +2299,48 @@ OvsReadEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
 cleanup:
     OvsReleaseCtrlLock();
+    return status;
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * Handler for reading missed pacckets from the driver event queue. This
+ * handler is executed when user modes issues a socket receive on a socket
+ * --------------------------------------------------------------------------
+ */
+static NTSTATUS
+OvsReadPacketCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                       UINT32 *replyLen)
+{
+#ifdef DBG
+    POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
+#endif
+    POVS_OPEN_INSTANCE instance =
+        (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
+    NTSTATUS status;
+
+    ASSERT(usrParamsCtx->devOp == OVS_READ_DEV_OP);
+
+    /* Should never read events with a dump socket */
+    ASSERT(instance->dumpState.ovsMsg == NULL);
+
+    /* Must have an packet queue */
+    ASSERT(instance->packetQueue != NULL);
+
+    /* Output buffer has been validated while validating read dev op. */
+    ASSERT(msgOut != NULL && usrParamsCtx->outputLength >= sizeof *msgOut);
+
+    OvsAcquireCtrlLock();
+    if (!gOvsSwitchContext) {
+        status = STATUS_SUCCESS;
+        OvsReleaseCtrlLock();
+        return status;
+    }
+    OvsReleaseCtrlLock();
+
+    /* Read a packet from the instance queue */
+    status = OvsReadDpIoctl(instance->fileObject, usrParamsCtx->outputBuffer,
+                            usrParamsCtx->outputLength, replyLen);
     return status;
 }
 #endif /* OVS_USE_NL_INTERFACE */

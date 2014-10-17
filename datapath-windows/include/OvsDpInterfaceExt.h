@@ -80,7 +80,8 @@ enum ovs_win_control_cmd {
     OVS_CTRL_CMD_MC_SUBSCRIBE_REQ,
 
     /* This command is logically belong to the Vport family */
-    OVS_CTRL_CMD_EVENT_NOTIFY
+    OVS_CTRL_CMD_EVENT_NOTIFY,
+    OVS_CTRL_CMD_READ_NOTIFY
 };
 
 /* NL Attributes for joining/unjoining an MC group */

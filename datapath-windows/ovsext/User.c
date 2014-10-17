@@ -226,13 +226,12 @@ OvsReadDpIoctl(PFILE_OBJECT fileObject,
         if ((elem->hdrInfo.tcpCsumNeeded || elem->hdrInfo.udpCsumNeeded) &&
             len == elem->packet.totalLen) {
             UINT16 sum, *ptr;
-            UINT16 size = (UINT16)(elem->packet.userDataLen +
-                                   elem->hdrInfo.l4Offset +
-                                   (UINT16)sizeof (OVS_PACKET_INFO));
-            RtlCopyMemory(outputBuffer, &elem->packet, size);
-            ASSERT(len - size >=  elem->hdrInfo.l4PayLoad);
+            UINT16 size = (UINT16)(elem->packet.payload - elem->packet.data +
+                                  elem->hdrInfo.l4Offset);
+            RtlCopyMemory(outputBuffer, &elem->packet.data, size);
+            ASSERT(len - size >= elem->hdrInfo.l4PayLoad);
             sum = CopyAndCalculateChecksum((UINT8 *)outputBuffer + size,
-                                           (UINT8 *)&elem->packet + size,
+                                           (UINT8 *)&elem->packet.data + size,
                                            elem->hdrInfo.l4PayLoad, 0);
             ptr =(UINT16 *)((UINT8 *)outputBuffer + size +
                             (elem->hdrInfo.tcpCsumNeeded ?
