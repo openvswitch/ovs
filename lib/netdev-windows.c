@@ -326,7 +326,33 @@ netdev_windows_get_mtu(const struct netdev *netdev_, int *mtup)
     }
     return 0;
 }
-
+
+/* This functionality is not really required by the datapath.
+ * But vswitchd bringup expects this to be implemented. */
+static int
+netdev_windows_set_etheraddr(const struct netdev *netdev_, uint8_t mac[6])
+{
+    return 0;
+}
+
+/* We do not really have to update anything in kernel. */
+static int
+netdev_win_set_flag(const char *name, uint32_t flags)
+{
+    return 0;
+}
+
+/* This functionality is not really required by the datapath.
+ * But vswitchd bringup expects this to be implemented. */
+static int
+netdev_win_update_flags_system(struct netdev *netdev_,
+                               enum netdev_flags off,
+                               enum netdev_flags on,
+                               enum netdev_flags *old_flagsp)
+{
+    return 0;
+}
+
 
 static int
 netdev_windows_internal_construct(struct netdev *netdev_)
@@ -343,6 +369,8 @@ netdev_windows_internal_construct(struct netdev *netdev_)
     .destruct           = netdev_windows_destruct,                      \
     .dealloc            = netdev_windows_dealloc,                       \
     .get_etheraddr      = netdev_windows_get_etheraddr,                 \
+    .set_etheraddr      = netdev_windows_set_etheraddr,                 \
+    .update_flags       = netdev_win_update_flags_system,               \
 }
 
 const struct netdev_class netdev_windows_class =
