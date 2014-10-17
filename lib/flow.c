@@ -814,6 +814,9 @@ void flow_wildcards_init_for_packet(struct flow_wildcards *wc,
 {
     memset(&wc->masks, 0x0, sizeof wc->masks);
 
+    /* Update this function whenever struct flow changes. */
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 27);
+
     if (flow->tunnel.ip_dst) {
         if (flow->tunnel.flags & FLOW_TNL_F_KEY) {
             WC_MASK_FIELD(wc, tunnel.tun_id);
@@ -898,11 +901,69 @@ void flow_wildcards_init_for_packet(struct flow_wildcards *wc,
     }
 }
 
+/* Return a map of possible fields for a packet of the same type as 'flow'.
+ * Including extra bits in the returned mask is not wrong, it is just less
+ * optimal.
+ *
+ * This is a less precise version of flow_wildcards_init_for_packet() above. */
+uint64_t
+flow_wc_map(const struct flow *flow)
+{
+    /* Update this function whenever struct flow changes. */
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 27);
+
+    uint64_t map = (flow->tunnel.ip_dst) ? MINIFLOW_MAP(tunnel) : 0;
+
+    /* Metadata fields that can appear on packet input. */
+    map |= MINIFLOW_MAP(skb_priority) | MINIFLOW_MAP(pkt_mark)
+        | MINIFLOW_MAP(recirc_id) | MINIFLOW_MAP(dp_hash)
+        | MINIFLOW_MAP(in_port)
+        | MINIFLOW_MAP(dl_dst) | MINIFLOW_MAP(dl_src)
+        | MINIFLOW_MAP(dl_type) | MINIFLOW_MAP(vlan_tci);
+
+    /* Ethertype-dependent fields. */
+    if (OVS_LIKELY(flow->dl_type == htons(ETH_TYPE_IP))) {
+        map |= MINIFLOW_MAP(nw_src) | MINIFLOW_MAP(nw_dst)
+            | MINIFLOW_MAP(nw_proto) | MINIFLOW_MAP(nw_frag)
+            | MINIFLOW_MAP(nw_tos) | MINIFLOW_MAP(nw_ttl);
+        if (OVS_UNLIKELY(flow->nw_proto == IPPROTO_IGMP)) {
+            map |= MINIFLOW_MAP(igmp_group_ip4);
+        } else {
+            map |= MINIFLOW_MAP(tcp_flags)
+                | MINIFLOW_MAP(tp_src) | MINIFLOW_MAP(tp_dst);
+        }
+    } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
+        map |= MINIFLOW_MAP(ipv6_src) | MINIFLOW_MAP(ipv6_dst)
+            | MINIFLOW_MAP(ipv6_label)
+            | MINIFLOW_MAP(nw_proto) | MINIFLOW_MAP(nw_frag)
+            | MINIFLOW_MAP(nw_tos) | MINIFLOW_MAP(nw_ttl);
+        if (OVS_UNLIKELY(flow->nw_proto == IPPROTO_ICMPV6)) {
+            map |= MINIFLOW_MAP(nd_target)
+                | MINIFLOW_MAP(arp_sha) | MINIFLOW_MAP(arp_tha);
+        } else {
+            map |= MINIFLOW_MAP(tcp_flags)
+                | MINIFLOW_MAP(tp_src) | MINIFLOW_MAP(tp_dst);
+        }
+    } else if (eth_type_mpls(flow->dl_type)) {
+        map |= MINIFLOW_MAP(mpls_lse);
+    } else if (flow->dl_type == htons(ETH_TYPE_ARP) ||
+               flow->dl_type == htons(ETH_TYPE_RARP)) {
+        map |= MINIFLOW_MAP(nw_src) | MINIFLOW_MAP(nw_dst)
+            | MINIFLOW_MAP(nw_proto)
+            | MINIFLOW_MAP(arp_sha) | MINIFLOW_MAP(arp_tha);
+    }
+
+    return map;
+}
+
 /* Clear the metadata and register wildcard masks. They are not packet
  * header fields. */
 void
 flow_wildcards_clear_non_packet_fields(struct flow_wildcards *wc)
 {
+    /* Update this function whenever struct flow changes. */
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 27);
+
     memset(&wc->masks.metadata, 0, sizeof wc->masks.metadata);
     memset(&wc->masks.regs, 0, sizeof wc->masks.regs);
 }

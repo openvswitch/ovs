@@ -94,7 +94,7 @@ const char *flow_tun_flag_to_string(uint32_t flags);
  * reflected in miniflow_extract()!
  */
 struct flow {
-    /* L1 */
+    /* Metadata */
     struct flow_tnl tunnel;     /* Encapsulating tunnel parameters. */
     ovs_be64 metadata;          /* OpenFlow Metadata. */
     uint32_t regs[FLOW_N_REGS]; /* Registers. */
@@ -327,6 +327,7 @@ void flow_wildcards_init_catchall(struct flow_wildcards *);
 
 void flow_wildcards_init_for_packet(struct flow_wildcards *,
                                     const struct flow *);
+uint64_t flow_wc_map(const struct flow *);
 
 void flow_wildcards_clear_non_packet_fields(struct flow_wildcards *);
 
