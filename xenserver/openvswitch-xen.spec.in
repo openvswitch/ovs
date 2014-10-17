@@ -446,6 +446,7 @@ exit 0
 /usr/bin/ovs-appctl
 /usr/bin/ovs-dpctl
 /usr/bin/ovs-dpctl-top
+/usr/bin/ovs-docker
 /usr/bin/ovs-ofctl
 /usr/bin/ovs-parse-backtrace
 /usr/bin/ovs-pcap
