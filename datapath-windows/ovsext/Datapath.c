@@ -1960,8 +1960,9 @@ OvsSetVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     NdisAcquireRWLockWrite(gOvsSwitchContext->dispatchLock, &lockState, 0);
     if (vportAttrs[OVS_VPORT_ATTR_NAME] != NULL) {
         PSTR portName = NlAttrGet(vportAttrs[OVS_VPORT_ATTR_NAME]);
+#ifdef DBG
         UINT32 portNameLen = NlAttrGetSize(vportAttrs[OVS_VPORT_ATTR_NAME]);
-
+#endif
         /* the port name is expected to be null-terminated */
         ASSERT(portName[portNameLen - 1] == '\0');
 
