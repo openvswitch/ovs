@@ -77,7 +77,7 @@ static void
 fd_close(struct stream *stream)
 {
     struct stream_fd *s = stream_fd_cast(stream);
-    close(s->fd);
+    closesocket(s->fd);
     free(s);
 }
 
@@ -93,9 +93,22 @@ fd_recv(struct stream *stream, void *buffer, size_t n)
 {
     struct stream_fd *s = stream_fd_cast(stream);
     ssize_t retval;
+    int error;
 
-    retval = read(s->fd, buffer, n);
-    return retval >= 0 ? retval : -errno;
+    retval = recv(s->fd, buffer, n, 0);
+    if (retval < 0) {
+        error = sock_errno();
+#ifdef _WIN32
+        if (error == WSAEWOULDBLOCK) {
+           error = EAGAIN;
+        }
+#endif
+        if (error != EAGAIN) {
+            VLOG_DBG_RL(&rl, "recv: %s", sock_strerror(error));
+        }
+        return -error;
+    }
+    return retval;
 }
 
 static ssize_t
@@ -103,11 +116,22 @@ fd_send(struct stream *stream, const void *buffer, size_t n)
 {
     struct stream_fd *s = stream_fd_cast(stream);
     ssize_t retval;
+    int error;
 
-    retval = write(s->fd, buffer, n);
-    return (retval > 0 ? retval
-            : retval == 0 ? -EAGAIN
-            : -errno);
+    retval = send(s->fd, buffer, n, 0);
+    if (retval < 0) {
+        error = sock_errno();
+#ifdef _WIN32
+        if (error == WSAEWOULDBLOCK) {
+           error = EAGAIN;
+        }
+#endif
+        if (error != EAGAIN) {
+            VLOG_DBG_RL(&rl, "recv: %s", sock_strerror(error));
+        }
+        return -error;
+    }
+    return (retval > 0 ? retval : -EAGAIN);
 }
 
 static void
@@ -198,7 +222,7 @@ static void
 pfd_close(struct pstream *pstream)
 {
     struct fd_pstream *ps = fd_pstream_cast(pstream);
-    close(ps->fd);
+    closesocket(ps->fd);
     maybe_unlink_and_free(ps->unlink_path);
     free(ps);
 }
@@ -214,16 +238,21 @@ pfd_accept(struct pstream *pstream, struct stream **new_streamp)
 
     new_fd = accept(ps->fd, (struct sockaddr *) &ss, &ss_len);
     if (new_fd < 0) {
-        retval = errno;
+        retval = sock_errno();
+#ifdef _WIN32
+        if (retval == WSAEWOULDBLOCK) {
+            retval = EAGAIN;
+        }
+#endif
         if (retval != EAGAIN) {
-            VLOG_DBG_RL(&rl, "accept: %s", ovs_strerror(retval));
+            VLOG_DBG_RL(&rl, "accept: %s", sock_strerror(retval));
         }
         return retval;
     }
 
     retval = set_nonblocking(new_fd);
     if (retval) {
-        close(new_fd);
+        closesocket(new_fd);
         return retval;
     }
 

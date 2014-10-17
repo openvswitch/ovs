@@ -212,6 +212,7 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/sset.h \
 	lib/stp.c \
 	lib/stp.h \
+	lib/stream-fd.c \
 	lib/stream-fd.h \
 	lib/stream-provider.h \
 	lib/stream-ssl.h \
@@ -265,8 +266,7 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/getrusage-windows.c \
 	lib/latch-windows.c \
 	lib/route-table-stub.c \
-	lib/strsep.c \
-	lib/stream-fd-windows.c
+	lib/strsep.c
 else
 lib_libopenvswitch_la_SOURCES += \
 	lib/daemon-unix.c \
@@ -274,7 +274,6 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/signals.c \
 	lib/signals.h \
 	lib/socket-util-unix.c \
-	lib/stream-fd-unix.c \
 	lib/stream-unix.c
 endif
 
