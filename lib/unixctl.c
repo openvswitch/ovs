@@ -63,8 +63,8 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
 static struct shash commands = SHASH_INITIALIZER(&commands);
 
 static void
-unixctl_help(struct unixctl_conn *conn, int argc OVS_UNUSED,
-             const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
+unixctl_list_commands(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                      const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     const struct shash_node **nodes = shash_sort(&commands);
@@ -93,7 +93,7 @@ unixctl_version(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
 /* Registers a unixctl command with the given 'name'.  'usage' describes the
  * arguments to the command; it is used only for presentation to the user in
- * "help" output.
+ * "list-commands" output.
  *
  * 'cb' is called when the command is received.  It is passed an array
  * containing the command name and arguments, plus a copy of 'aux'.  Normally
@@ -243,7 +243,8 @@ unixctl_server_create(const char *path, struct unixctl_server **serverp)
         goto exit;
     }
 
-    unixctl_command_register("help", "", 0, 0, unixctl_help, NULL);
+    unixctl_command_register("list-commands", "", 0, 0, unixctl_list_commands,
+                             NULL);
     unixctl_command_register("version", "", 0, 0, unixctl_version, NULL);
 
     server = xmalloc(sizeof *server);

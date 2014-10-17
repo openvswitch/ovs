@@ -14,16 +14,16 @@ AT_CHECK([PYAPPCTL -t ovsdb-server exit], [0], [])
 OVS_WAIT_WHILE([test -s ovsdb-server.pid])
 AT_CLEANUP
 
-AT_SETUP([unixctl ovs-vswitchd help - Python])
+AT_SETUP([unixctl ovs-vswitchd list-commands - Python])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 OVS_VSWITCHD_START
 
-AT_CHECK([APPCTL help], [0], [stdout])
+AT_CHECK([APPCTL list-commands], [0], [stdout])
 AT_CHECK([head -1 stdout], [0], [dnl
 The available commands are:
 ])
 mv stdout expout
-AT_CHECK([PYAPPCTL help], [0], [expout])
+AT_CHECK([PYAPPCTL list-commands], [0], [expout])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP

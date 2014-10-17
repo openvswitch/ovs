@@ -89,7 +89,7 @@ usage: %s [TARGET] COMMAND [ARG...]\n\
 Targets:\n\
   -t, --target=TARGET  pidfile or socket to contact\n\
 Common commands:\n\
-  help               List commands supported by the target\n\
+  list-commands      List commands supported by the target\n\
   version            Print version of the target\n\
   vlog/list          List current logging levels\n\
   vlog/set [SPEC]\n\

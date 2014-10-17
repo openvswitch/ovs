@@ -73,7 +73,7 @@ Note that these commands are different from the \fB\-\-help\fR and
 \fB\-\-version\fR options that return information about the
 \fBovs\-appctl\fR utility itself.
 .
-.IP "\fBhelp\fR"
+.IP "\fBlist-commands\fR"
 Lists the commands supported by the target.
 .
 .IP "\fBversion\fR"
