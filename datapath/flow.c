@@ -539,15 +539,16 @@ static int key_extract(struct sk_buff *skb, struct sw_flow_key *key)
 
 	} else if ((key->eth.type == htons(ETH_P_ARP) ||
 		   key->eth.type == htons(ETH_P_RARP)) && arphdr_ok(skb)) {
+		bool arp_available = arphdr_ok(skb);
 		struct arp_eth_header *arp;
 
 		arp = (struct arp_eth_header *)skb_network_header(skb);
 
-		if (arp->ar_hrd == htons(ARPHRD_ETHER)
-				&& arp->ar_pro == htons(ETH_P_IP)
-				&& arp->ar_hln == ETH_ALEN
-				&& arp->ar_pln == 4) {
-
+		if (arp_available &&
+		    arp->ar_hrd == htons(ARPHRD_ETHER) &&
+		    arp->ar_pro == htons(ETH_P_IP) &&
+		    arp->ar_hln == ETH_ALEN &&
+		    arp->ar_pln == 4) {
 			/* We only match on the lower 8 bits of the opcode. */
 			if (ntohs(arp->ar_op) <= 0xff)
 				key->ip.proto = ntohs(arp->ar_op);
