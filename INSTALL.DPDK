@@ -11,6 +11,8 @@ It has not been thoroughly tested.
 This version of Open vSwitch should be built manually with "configure"
 and "make".
 
+OVS needs a system with 1GB hugepages support.
+
 Building and Installing:
 ------------------------
 
@@ -44,6 +46,12 @@ cd $(OVS_DIR)/openvswitch
 ./configure --with-dpdk=$DPDK_BUILD
 make
 
+To have better performance one can enable aggressive compiler optimizations and
+use the special instructions(popcnt, crc32) that may not be available on all
+machines. Instead of typing 'make', type:
+
+make CFLAGS='-O3 -march=native'
+
 Refer to INSTALL.userspace for general requirements of building
 userspace OVS.
 
@@ -60,24 +68,6 @@ First setup DPDK devices:
     e.g. insmod $DPDK_BUILD/kmod/igb_uio.ko
   - Bind network device to igb_uio.
     e.g. $DPDK_DIR/tools/dpdk_nic_bind.py --bind=igb_uio eth1
-    Alternate binding method:
-     Find target Ethernet devices
-      lspci -nn|grep Ethernet
-     Bring Down (e.g. eth2, eth3)
-      ifconfig eth2 down
-      ifconfig eth3 down
-     Look at current devices (e.g ixgbe devices)
-      ls /sys/bus/pci/drivers/ixgbe/
-      0000:02:00.0  0000:02:00.1  bind  module  new_id  remove_id  uevent  unbind
-     Unbind target pci devices from current driver (e.g. 02:00.0 ...)
-      echo 0000:02:00.0 > /sys/bus/pci/drivers/ixgbe/unbind
-      echo 0000:02:00.1 > /sys/bus/pci/drivers/ixgbe/unbind
-     Bind to target driver (e.g. igb_uio)
-      echo 0000:02:00.0 > /sys/bus/pci/drivers/igb_uio/bind
-      echo 0000:02:00.1 > /sys/bus/pci/drivers/igb_uio/bind
-     Check binding for listed devices
-      ls /sys/bus/pci/drivers/igb_uio
-      0000:02:00.0  0000:02:00.1  bind  module  new_id  remove_id  uevent  unbind
 
 Prepare system:
   - mount hugetlbfs
@@ -124,11 +114,11 @@ node 0 memory:
 To use ovs-vswitchd with DPDK, create a bridge with datapath_type
 "netdev" in the configuration database.  For example:
 
-    ovs-vsctl add-br br0
-    ovs-vsctl set bridge br0 datapath_type=netdev
+    ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev
 
 Now you can add dpdk devices. OVS expect DPDK device name start with dpdk
-and end with portid. vswitchd should print number of dpdk devices found.
+and end with portid. vswitchd should print (in the log file) the number of dpdk
+devices found.
 
     ovs-vsctl add-port br0 dpdk0 -- set Interface dpdk0 type=dpdk
     ovs-vsctl add-port br0 dpdk1 -- set Interface dpdk1 type=dpdk
@@ -138,8 +128,6 @@ polls dpdk device in continuous loop. Therefore CPU utilization
 for that thread is always 100%.
 
 Test flow script across NICs (assuming ovs in /usr/src/ovs):
-  Assume 1.1.1.1 on NIC port 1 (dpdk0)
-  Assume 1.1.1.2 on NIC port 2 (dpdk1)
   Execute script:
 
 ############################# Script:
@@ -152,10 +140,8 @@ cd /usr/src/ovs/utilities/
 ./ovs-ofctl del-flows br0
 
 # Add flows between port 1 (dpdk0) to port 2 (dpdk1)
-./ovs-ofctl add-flow br0 in_port=1,dl_type=0x800,nw_src=1.1.1.1,\
-nw_dst=1.1.1.2,idle_timeout=0,action=output:2
-./ovs-ofctl add-flow br0 in_port=2,dl_type=0x800,nw_src=1.1.1.2,\
-nw_dst=1.1.1.1,idle_timeout=0,action=output:1
+./ovs-ofctl add-flow br0 in_port=1,action=output:2
+./ovs-ofctl add-flow br0 in_port=2,action=output:1
 
 ######################################
 
@@ -253,11 +239,12 @@ Restrictions:
   - This Support is for Physical NIC. I have tested with Intel NIC only.
   - Work with 1500 MTU, needs few changes in DPDK lib to fix this issue.
   - Currently DPDK port does not make use any offload functionality.
-  ivshmem
-  - The shared memory is currently restricted to the use of a 1GB
-   huge pages.
-  - All huge pages are shared amongst the host, clients, virtual
-   machines etc.
+
+  ivshmem:
+     - The shared memory is currently restricted to the use of a 1GB
+       huge pages.
+     - All huge pages are shared amongst the host, clients, virtual
+       machines etc.
 
 Bug Reporting:
 --------------
