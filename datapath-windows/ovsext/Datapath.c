@@ -740,6 +740,7 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
 
         ovsMsg = &ovsMsgReadOp;
         ovsMsg->nlMsg.nlmsgType = OVS_WIN_NL_CTRL_FAMILY_ID;
+        ovsMsg->nlMsg.nlmsgPid = instance->pid;
         /* An "artificial" command so we can use NL family function table*/
         ovsMsg->genlMsg.cmd = (code == OVS_IOCTL_READ_EVENT) ?
                               OVS_CTRL_CMD_EVENT_NOTIFY :
@@ -2301,6 +2302,9 @@ OvsReadEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     /* remove an event entry from the event queue */
     status = OvsRemoveEventEntry(usrParamsCtx->ovsInstance, &eventEntry);
     if (status != STATUS_SUCCESS) {
+        /* If there were not elements, read should return no data. */
+        status = STATUS_SUCCESS;
+        *replyLen = 0;
         goto cleanup;
     }
 
