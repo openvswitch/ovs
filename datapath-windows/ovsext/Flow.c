@@ -791,7 +791,7 @@ MapFlowKeyToNlKey(PNL_BUFFER nlBuf,
     }
 
     if (!NlMsgPutTailU16(nlBuf, OVS_KEY_ATTR_ETHERTYPE,
-                         htons(flowKey->l2.dlType))) {
+                         flowKey->l2.dlType)) {
         rc = STATUS_UNSUCCESSFUL;
         goto done;
     }
@@ -805,7 +805,7 @@ MapFlowKeyToNlKey(PNL_BUFFER nlBuf,
     }
 
     /* ==== L3 + L4 ==== */
-    switch (flowKey->l2.dlType) {
+    switch (ntohs(flowKey->l2.dlType)) {
         case ETH_TYPE_IPV4: {
         IpKey *ipv4FlowPutKey = &(flowKey->ipKey);
         rc = _MapFlowIpv4KeyToNlKey(nlBuf, ipv4FlowPutKey);
@@ -1123,7 +1123,18 @@ _MapFlowArpKeyToNlKey(PNL_BUFFER nlBuf, ArpKey *arpFlowPutKey)
     RtlCopyMemory(&(arpKey.arp_sha), arpFlowPutKey->arpSha, ETH_ADDR_LEN);
     RtlCopyMemory(&(arpKey.arp_tha), arpFlowPutKey->arpTha, ETH_ADDR_LEN);
 
-    arpKey.arp_op = arpFlowPutKey->nwProto;
+    /*
+     * Flow_Extract() stores 'nwProto' in host order for ARP since 'nwProto' is
+     * 1 byte field and the ARP opcode is 2 bytes, and all of the kernel code
+     * understand this while looking at an ARP key.
+     * While we pass up the ARP key to userspace, convert from host order to
+     * network order. Likewise, when processing an ARP key from userspace,
+     * convert from network order to host order.
+     *
+     * It is important to note that the flow table stores the ARP opcode field
+     * in host order.
+     */
+    arpKey.arp_op = htons(arpFlowPutKey->nwProto);
 
     if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_ARP,
                            (PCHAR)(&arpKey),
@@ -1267,20 +1278,19 @@ _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
      * requests with no ETHERTYPE attributes.
      * Need to verify this. */
     if (keyAttrs[OVS_KEY_ATTR_ETHERTYPE]) {
-    destKey->l2.dlType = ntohs((NlAttrGetU16(keyAttrs
-                               [OVS_KEY_ATTR_ETHERTYPE])));
+        destKey->l2.dlType = (NlAttrGetU16(keyAttrs
+                                        [OVS_KEY_ATTR_ETHERTYPE]));
     }
 
     if (keyAttrs[OVS_KEY_ATTR_VLAN]) {
-        destKey->l2.vlanTci = NlAttrGetU16(keyAttrs
-                              [OVS_KEY_ATTR_VLAN]);
+        destKey->l2.vlanTci = NlAttrGetU16(keyAttrs[OVS_KEY_ATTR_VLAN]);
     }
 
     /* ==== L3 + L4. ==== */
     destKey->l2.keyLen = OVS_WIN_TUNNEL_KEY_SIZE + OVS_L2_KEY_SIZE
                          - destKey->l2.offset;
 
-    switch (destKey->l2.dlType) {
+    switch (ntohs(destKey->l2.dlType)) {
     case ETH_TYPE_IPV4: {
 
         if (keyAttrs[OVS_KEY_ATTR_IPV4]) {
@@ -1395,22 +1405,27 @@ _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
     }
     case ETH_TYPE_ARP:
     case ETH_TYPE_RARP: {
-        ArpKey *arpFlowPutKey = &destKey->arpKey;
-        const struct ovs_key_arp *arpKey;
 
-        arpKey = NlAttrGet(keyAttrs[OVS_KEY_ATTR_ARP]);
+        if (keyAttrs[OVS_KEY_ATTR_ARP]) {
+            ArpKey *arpFlowPutKey = &destKey->arpKey;
+            const struct ovs_key_arp *arpKey;
 
-        arpFlowPutKey->nwSrc = arpKey->arp_sip;
-        arpFlowPutKey->nwDst = arpKey->arp_tip;
+            arpKey = NlAttrGet(keyAttrs[OVS_KEY_ATTR_ARP]);
 
-        RtlCopyMemory(arpFlowPutKey->arpSha, arpKey->arp_sha, ETH_ADDR_LEN);
-        RtlCopyMemory(arpFlowPutKey->arpTha, arpKey->arp_tha, ETH_ADDR_LEN);
-        arpFlowPutKey->nwProto = (UINT8)(arpKey->arp_op);
-        arpFlowPutKey->pad[0] = 0;
-        arpFlowPutKey->pad[1] = 0;
-        arpFlowPutKey->pad[2] = 0;
-        destKey->l2.keyLen += OVS_ARP_KEY_SIZE;
-        break;
+            arpFlowPutKey->nwSrc = arpKey->arp_sip;
+            arpFlowPutKey->nwDst = arpKey->arp_tip;
+
+            RtlCopyMemory(arpFlowPutKey->arpSha, arpKey->arp_sha, ETH_ADDR_LEN);
+            RtlCopyMemory(arpFlowPutKey->arpTha, arpKey->arp_tha, ETH_ADDR_LEN);
+            /* Kernel datapath assumes 'arpFlowPutKey->nwProto' to be in host
+             * order. */
+            arpFlowPutKey->nwProto = (UINT8)ntohs((arpKey->arp_op));
+            arpFlowPutKey->pad[0] = 0;
+            arpFlowPutKey->pad[1] = 0;
+            arpFlowPutKey->pad[2] = 0;
+            destKey->l2.keyLen += OVS_ARP_KEY_SIZE;
+            break;
+        }
     }
     }
 }
