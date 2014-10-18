@@ -89,8 +89,8 @@ static struct vlog_rate_limit upcall_rl = VLOG_RATE_LIMIT_INIT(600, 600);
 /* Stores a miniflow with inline values */
 
 struct netdev_flow_key {
-    uint32_t hash;       /* hash function differs for different users. */
-    uint32_t len;
+    uint32_t hash;       /* Hash function differs for different users. */
+    uint32_t len;        /* Length of the following miniflow (incl. map). */
     struct miniflow mf;
     uint32_t buf[FLOW_MAX_PACKET_U32S - MINI_N_INLINE];
 };
@@ -433,10 +433,13 @@ emc_cache_init(struct emc_cache *flow_cache)
 {
     int i;
 
+    BUILD_ASSERT(offsetof(struct miniflow, inline_values) == sizeof(uint64_t));
+
     for (i = 0; i < ARRAY_SIZE(flow_cache->entries); i++) {
         flow_cache->entries[i].flow = NULL;
         flow_cache->entries[i].key.hash = 0;
-        flow_cache->entries[i].key.len = 0;
+        flow_cache->entries[i].key.len
+            = offsetof(struct miniflow, inline_values);
         miniflow_initialize(&flow_cache->entries[i].key.mf,
                             flow_cache->entries[i].key.buf);
     }
@@ -1269,11 +1272,11 @@ BUILD_ASSERT_DECL(offsetof(struct miniflow, inline_values)
                   == sizeof(uint64_t));
 
 /* Given the number of bits set in the miniflow map, returns the size of the
- * netdev_flow key */
+ * 'netdev_flow_key.mf' */
 static inline uint32_t
 netdev_flow_key_size(uint32_t flow_u32s)
 {
-    return offsetof(struct netdev_flow_key, mf.inline_values) +
+    return offsetof(struct miniflow, inline_values) +
         MINIFLOW_VALUES_SIZE(flow_u32s);
 }
 
@@ -1281,8 +1284,8 @@ static inline bool
 netdev_flow_key_equal(const struct netdev_flow_key *a,
                       const struct netdev_flow_key *b)
 {
-    /* 'b's size and hash may be not set yet. */
-    return !memcmp(a, b, a->len);
+    /* 'b->len' may be not set yet. */
+    return a->hash == b->hash && !memcmp(&a->mf, &b->mf, a->len);
 }
 
 /* Used to compare 'netdev_flow_key' in the exact match cache to a miniflow.
@@ -1292,15 +1295,15 @@ static inline bool
 netdev_flow_key_equal_mf(const struct netdev_flow_key *key,
                          const struct miniflow *mf)
 {
-    return !memcmp(&key->mf, mf,
-                   key->len - offsetof(struct netdev_flow_key, mf));
+    return !memcmp(&key->mf, mf, key->len);
 }
 
 static inline void
 netdev_flow_key_clone(struct netdev_flow_key *dst,
                       const struct netdev_flow_key *src)
 {
-    memcpy(dst, src, src->len);
+    memcpy(dst, src,
+           offsetof(struct netdev_flow_key, mf) + src->len);
 }
 
 /* Slow. */
@@ -1685,7 +1688,7 @@ dp_netdev_flow_add(struct dp_netdev *dp, struct match *match,
     ovs_assert(!(mask.mf.map & (MINIFLOW_MAP(metadata) | MINIFLOW_MAP(regs))));
 
     /* Do not allocate extra space. */
-    flow = xmalloc(sizeof *flow - sizeof flow->cr.flow + mask.len);
+    flow = xmalloc(sizeof *flow - sizeof flow->cr.flow.mf + mask.len);
     flow->dead = false;
     *CONST_CAST(struct flow *, &flow->flow) = match->flow;
     ovs_refcount_init(&flow->ref_cnt);
@@ -2840,8 +2843,6 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
                 }
                 ovs_mutex_unlock(&dp->flow_mutex);
 
-                /* EMC uses different hash. */
-                keys[i].hash = dpif_packet_get_dp_hash(packets[i]);
                 emc_insert(flow_cache, &keys[i], netdev_flow);
             }
         }
@@ -2873,7 +2874,6 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
 
         flow = dp_netdev_flow_cast(rules[i]);
 
-        keys[i].hash = dpif_packet_get_dp_hash(packet);
         emc_insert(flow_cache, &keys[i], flow);
         dp_netdev_queue_batches(packet, flow, &keys[i].mf, batches,
                                 &n_batches, ARRAY_SIZE(batches));
@@ -3277,7 +3277,8 @@ dpcls_create_subtable(struct dpcls *cls, const struct netdev_flow_key *mask)
     struct dpcls_subtable *subtable;
 
     /* Need to add one. */
-    subtable = xmalloc(sizeof *subtable - sizeof subtable->mask + mask->len);
+    subtable = xmalloc(sizeof *subtable
+                       - sizeof subtable->mask.mf + mask->len);
     cmap_init(&subtable->rules);
     netdev_flow_key_clone(&subtable->mask, mask);
     cmap_insert(&cls->subtables_map, &subtable->cmap_node, mask->hash);
