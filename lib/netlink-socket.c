@@ -382,8 +382,8 @@ nl_sock_join_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
     if (error) {
         sock->read_ioctl = OVS_IOCTL_READ;
         VLOG_WARN("could not join multicast group %u (%s)",
-                  multicast_group, ovs_strerror(errno));
-        return errno;
+                  multicast_group, ovs_strerror(error));
+        return error;
     }
 #else
     if (setsockopt(sock->fd, SOL_NETLINK, NETLINK_ADD_MEMBERSHIP,
@@ -413,8 +413,8 @@ nl_sock_leave_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
     int error = nl_sock_mcgroup(sock, multicast_group, false);
     if (error) {
         VLOG_WARN("could not leave multicast group %u (%s)",
-                   multicast_group, ovs_strerror(errno));
-        return errno;
+                   multicast_group, ovs_strerror(error));
+        return error;
     }
     sock->read_ioctl = OVS_IOCTL_READ;
 #else
@@ -548,6 +548,8 @@ nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, bool wait)
             } else {
                 if (retval >= buf->allocated) {
                     ofpbuf_reinit(buf, retval);
+                    nlmsghdr = ofpbuf_base(buf);
+                    nlmsghdr->nlmsg_len = UINT32_MAX;
                 }
                 memcpy(ofpbuf_data(buf), tail, retval);
                 ofpbuf_set_size(buf, retval);
