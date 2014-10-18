@@ -1155,11 +1155,11 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
                     struct dpif_flow_get *get = &op->u.flow_get;
 
                     COVERAGE_INC(dpif_flow_get);
-                    log_flow_get_message(dpif, get, error);
-
                     if (error) {
                         memset(get->flow, 0, sizeof *get->flow);
                     }
+                    log_flow_get_message(dpif, get, error);
+
                     break;
                 }
 
