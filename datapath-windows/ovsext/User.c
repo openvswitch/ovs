@@ -205,7 +205,7 @@ OvsReadDpIoctl(PFILE_OBJECT fileObject,
             *ptr = sum;
             ovsUserStats.l4Csum++;
         } else {
-            RtlCopyMemory(outputBuffer, &elem->packet, len);
+            RtlCopyMemory(outputBuffer, &elem->packet.data, len);
         }
 
         *replyLen = len;
@@ -892,14 +892,14 @@ OvsCreateQueueNlPacket(PVOID userData,
     UINT32 pid;
     UINT32 nlMsgSize;
     NL_BUFFER nlBuf;
+    PNL_MSG_HDR nlMsg;
 
     /* XXX pass vport in the stack rather than portNo */
     POVS_VPORT_ENTRY vport =
         OvsFindVportByPortNo(gOvsSwitchContext, inPort);
 
     if (vport == NULL){
-        /* Should never happen as dispatch lock is held */
-        ASSERT(vport);
+        /* No vport is not fatal. */
         return NULL;
     }
 
@@ -1028,6 +1028,12 @@ OvsCreateQueueNlPacket(PVOID userData,
         elem->hdrInfo.l4Offset += VLAN_TAG_SIZE;
         ovsUserStats.vlanInsert++;
     }
+
+    nlMsg = (PNL_MSG_HDR)NlBufAt(&nlBuf, 0, 0);
+    nlMsg->nlmsgLen = NlBufSize(&nlBuf);
+    /* 'totalLen' should be size of valid data. */
+    elem->packet.totalLen = nlMsg->nlmsgLen;
+
     return elem;
 fail:
     OvsFreeMemory(elem);
