@@ -166,7 +166,7 @@ struct vport *ovs_vport_alloc(int priv_size, const struct vport_ops *ops,
  */
 void ovs_vport_free(struct vport *vport)
 {
-	kfree((struct vport_portids __force *)vport->upcall_portids);
+	kfree(rcu_dereference_raw(vport->upcall_portids));
 	free_percpu(vport->percpu_stats);
 	kfree(vport);
 }

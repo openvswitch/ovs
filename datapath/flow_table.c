@@ -146,11 +146,11 @@ static void flow_free(struct sw_flow *flow)
 {
 	int node;
 
-	kfree((struct sw_flow_actions __force *)flow->sf_acts);
+	kfree(rcu_dereference_raw(flow->sf_acts));
 	for_each_node(node)
 		if (flow->stats[node])
 			kmem_cache_free(flow_stats_cache,
-					(struct flow_stats __force *)flow->stats[node]);
+					rcu_dereference_raw(flow->stats[node]));
 	kmem_cache_free(flow_cache, flow);
 }
 
@@ -334,10 +334,10 @@ skip_flows:
  * error path. */
 void ovs_flow_tbl_destroy(struct flow_table *table)
 {
-	struct table_instance *ti = (struct table_instance __force *)table->ti;
+	struct table_instance *ti = rcu_dereference_raw(table->ti);
 
 	free_percpu(table->mask_cache);
-	kfree((struct mask_array __force *)table->mask_array);
+	kfree(rcu_dereference_raw(table->mask_array));
 	table_instance_destroy(ti, false);
 }
 

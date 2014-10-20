@@ -1204,7 +1204,7 @@ static int ovs_flow_cmd_del(struct sk_buff *skb, struct genl_info *info)
 	ovs_flow_tbl_remove(&dp->table, flow);
 	ovs_unlock();
 
-	reply = ovs_flow_cmd_alloc_info((const struct sw_flow_actions __force *)flow->sf_acts,
+	reply = ovs_flow_cmd_alloc_info(rcu_dereference_raw(flow->sf_acts),
 					info, false);
 
 	if (likely(reply)) {
