@@ -2,6 +2,7 @@
 #include <linux/version.h>
 #include <net/ipv6.h>
 
+#ifndef HAVE_IP6_FH_F_SKIP_RH
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,3,0)
 int rpl_ipv6_skip_exthdr(const struct sk_buff *skb, int start,
 			 u8 *nexthdrp, __be16 *frag_offp)
@@ -68,9 +69,9 @@ int rpl_ipv6_skip_exthdr(const struct sk_buff *skb, int start,
  * isn't NULL.
  *
  * if flags is not NULL and it's a fragment, then the frag flag
- * OVS_IP6T_FH_F_FRAG will be set. If it's an AH header, the
- * OVS_IP6T_FH_F_AUTH flag is set and target < 0, then this function will
- * stop at the AH header. If OVS_IP6T_FH_F_SKIP_RH flag was passed, then this
+ * IP6_FH_F_FRAG will be set. If it's an AH header, the
+ * IP6_FH_F_AUTH flag is set and target < 0, then this function will
+ * stop at the AH header. If IP6_FH_F_SKIP_RH flag was passed, then this
  * function will skip all those routing headers, where segements_left was 0.
  */
 int rpl_ipv6_find_hdr(const struct sk_buff *skb, unsigned int *offset,
@@ -103,7 +104,7 @@ int rpl_ipv6_find_hdr(const struct sk_buff *skb, unsigned int *offset,
 		found = (nexthdr == target);
 
 		if ((!ipv6_ext_hdr(nexthdr)) || nexthdr == NEXTHDR_NONE) {
-			if (target < 0)
+			if (target < 0 || found)
 				break;
 			return -ENOENT;
 		}
@@ -120,7 +121,7 @@ int rpl_ipv6_find_hdr(const struct sk_buff *skb, unsigned int *offset,
 			if (rh == NULL)
 				return -EBADMSG;
 
-			if (flags && (*flags & OVS_IP6T_FH_F_SKIP_RH) &&
+			if (flags && (*flags & IP6_FH_F_SKIP_RH) &&
 			    rh->segments_left == 0)
 				found = false;
 		}
@@ -130,7 +131,7 @@ int rpl_ipv6_find_hdr(const struct sk_buff *skb, unsigned int *offset,
 			__be16 *fp;
 
 			if (flags)	/* Indicate that this is a fragment */
-				*flags |= OVS_IP6T_FH_F_FRAG;
+				*flags |= IP6_FH_F_FRAG;
 			fp = skb_header_pointer(skb,
 						start+offsetof(struct frag_hdr,
 							       frag_off),
@@ -152,8 +153,7 @@ int rpl_ipv6_find_hdr(const struct sk_buff *skb, unsigned int *offset,
 			}
 			hdrlen = 8;
 		} else if (nexthdr == NEXTHDR_AUTH) {
-			if (flags && (*flags & OVS_IP6T_FH_F_AUTH) &&
-			    (target < 0))
+			if (flags && (*flags & IP6_FH_F_AUTH) && (target < 0))
 				break;
 			hdrlen = (hp->hdrlen + 2) << 2;
 		} else
@@ -169,3 +169,5 @@ int rpl_ipv6_find_hdr(const struct sk_buff *skb, unsigned int *offset,
 	*offset = start;
 	return nexthdr;
 }
+
+#endif
