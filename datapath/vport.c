@@ -40,7 +40,8 @@ static void ovs_vport_record_error(struct vport *,
 				   enum vport_err_type err_type);
 
 /* List of statically compiled vport implementations.  Don't forget to also
- * add yours to the list at the bottom of vport.h. */
+ * add yours to the list at the bottom of vport.h.
+ */
 static const struct vport_ops *vport_ops_list[] = {
 	&ovs_netdev_vport_ops,
 	&ovs_internal_vport_ops,

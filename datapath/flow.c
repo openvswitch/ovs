@@ -467,7 +467,8 @@ static int key_extract(struct sk_buff *skb, struct sw_flow_key *key)
 
 	__skb_pull(skb, 2 * ETH_ALEN);
 	/* We are going to push all headers that we pull, so no need to
- 	 * update skb->csum here. */
+	 * update skb->csum here.
+	 */
 
 	key->eth.tci = 0;
 	if (vlan_tx_tag_present(skb))
@@ -550,7 +551,8 @@ static int key_extract(struct sk_buff *skb, struct sw_flow_key *key)
 				struct icmphdr *icmp = icmp_hdr(skb);
 				/* The ICMP type and code fields use the 16-bit
 				 * transport port fields, so we need to store
-				 * them in 16-bit network byte order. */
+				 * them in 16-bit network byte order.
+				 */
 				key->tp.src = htons(icmp->type);
 				key->tp.dst = htons(icmp->code);
 			} else {

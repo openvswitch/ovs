@@ -59,7 +59,8 @@ static struct net_device_stats *internal_dev_sys_stats(struct net_device *netdev
 	ovs_vport_get_stats(vport, &vport_stats);
 
 	/* The tx and rx stats need to be swapped because the
-	 * switch and host OS have opposite perspectives. */
+	 * switch and host OS have opposite perspectives.
+	 */
 	stats->rx_packets	= vport_stats.tx_packets;
 	stats->tx_packets	= vport_stats.rx_packets;
 	stats->rx_bytes		= vport_stats.tx_bytes;

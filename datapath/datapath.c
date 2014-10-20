@@ -79,7 +79,8 @@ struct genl_multicast_group ovs_dp_vport_multicast_group = {
 };
 
 /* Check if need to build a reply message.
- * OVS userspace sets the NLM_F_ECHO flag if it needs the reply. */
+ * OVS userspace sets the NLM_F_ECHO flag if it needs the reply.
+ */
 static bool ovs_must_notify(struct genl_family *family, struct genl_info *info,
 			    unsigned int group)
 {
@@ -156,7 +157,8 @@ static struct datapath *get_dp_rcu(struct net *net, int dp_ifindex)
 }
 
 /* The caller must hold either ovs_mutex or rcu_read_lock to keep the
- * returned dp pointer valid. */
+ * returned dp pointer valid.
+ */
 static inline struct datapath *get_dp(struct net *net, int dp_ifindex)
 {
 	struct datapath *dp;
@@ -486,7 +488,8 @@ static int queue_userspace_packet(struct datapath *dp, struct sk_buff *skb,
 	}
 
 	/* Only reserve room for attribute header, packet data is added
-	 * in skb_zerocopy() */
+	 * in skb_zerocopy()
+	 */
 	if (!(nla = nla_reserve(user_skb, OVS_PACKET_ATTR_PACKET, 0))) {
 		err = -ENOBUFS;
 		goto out;
@@ -552,7 +555,8 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 
 	/* Normally, setting the skb 'protocol' field would be handled by a
 	 * call to eth_type_trans(), but it assumes there's a sending
-	 * device, which we may not have. */
+	 * device, which we may not have.
+	 */
 	if (ntohs(eth->h_proto) >= ETH_P_802_3_MIN)
 		packet->protocol = eth->h_proto;
 	else
@@ -877,7 +881,8 @@ static int ovs_flow_cmd_new(struct sk_buff *skb, struct genl_info *info)
 	}
 
 	/* Most of the time we need to allocate a new flow, do it before
-	 * locking. */
+	 * locking.
+	 */
 	new_flow = ovs_flow_alloc();
 	if (IS_ERR(new_flow)) {
 		error = PTR_ERR(new_flow);

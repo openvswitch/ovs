@@ -62,7 +62,8 @@ struct action_fifo {
 
 static struct action_fifo __percpu *action_fifos;
 #define EXEC_ACTIONS_LEVEL_LIMIT 4   /* limit used to detect packet
-					looping by the network stack */
+				      *	looping by the network stack
+				      */
 static DEFINE_PER_CPU(int, exec_actions_level);
 
 static void action_fifo_init(struct action_fifo *fifo)

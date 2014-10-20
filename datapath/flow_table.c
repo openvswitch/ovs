@@ -331,7 +331,8 @@ skip_flows:
 }
 
 /* No need for locking this function is called from RCU callback or
- * error path. */
+ * error path.
+ */
 void ovs_flow_tbl_destroy(struct flow_table *table)
 {
 	struct table_instance *ti = rcu_dereference_raw(table->ti);
@@ -564,7 +565,7 @@ static struct sw_flow *flow_lookup(struct flow_table *tbl,
  * cache entry in mask cache.
  * This is per cpu cache and is divided in MC_HASH_SEGS segments.
  * In case of a hash collision the entry is hashed in next segment.
- * */
+ */
 struct sw_flow *ovs_flow_tbl_lookup_stats(struct flow_table *tbl,
 					  const struct sw_flow_key *key,
 					  u32 skb_hash,
@@ -715,7 +716,8 @@ void ovs_flow_tbl_remove(struct flow_table *table, struct sw_flow *flow)
 	table->count--;
 
 	/* RCU delete the mask. 'flow->mask' is not NULLed, as it should be
-	 * accessible as long as the RCU read lock is held. */
+	 * accessible as long as the RCU read lock is held.
+	 */
 	flow_mask_remove(table, flow->mask);
 }
 
@@ -845,7 +847,8 @@ int ovs_flow_tbl_insert(struct flow_table *table, struct sw_flow *flow,
 }
 
 /* Initializes the flow module.
- * Returns zero if successful or a negative error code. */
+ * Returns zero if successful or a negative error code.
+ */
 int ovs_flow_init(void)
 {
 	BUILD_BUG_ON(__alignof__(struct sw_flow_key) % __alignof__(long));

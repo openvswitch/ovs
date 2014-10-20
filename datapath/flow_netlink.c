@@ -118,7 +118,8 @@ static bool match_validate(const struct sw_flow_match *match,
 	u64 mask_allowed = key_attrs;  /* At most allow all key attributes */
 
 	/* The following mask attributes allowed only if they
-	 * pass the validation tests. */
+	 * pass the validation tests.
+	 */
 	mask_allowed &= ~((1ULL << OVS_KEY_ATTR_IPV4)
 			| (1ULL << OVS_KEY_ATTR_IPV6)
 			| (1ULL << OVS_KEY_ATTR_TCP)
@@ -253,7 +254,8 @@ static bool match_validate(const struct sw_flow_match *match,
 size_t ovs_tun_key_attr_size(void)
 {
 	/* Whenever adding new OVS_TUNNEL_KEY_ FIELDS, we should consider
-	 * updating this function.  */
+	 * updating this function.
+	 */
 	return    nla_total_size(8)    /* OVS_TUNNEL_KEY_ATTR_ID */
 		+ nla_total_size(4)    /* OVS_TUNNEL_KEY_ATTR_IPV4_SRC */
 		+ nla_total_size(4)    /* OVS_TUNNEL_KEY_ATTR_IPV4_DST */
@@ -270,7 +272,8 @@ size_t ovs_tun_key_attr_size(void)
 size_t ovs_key_attr_size(void)
 {
 	/* Whenever adding new OVS_KEY_ FIELDS, we should consider
-	 * updating this function.  */
+	 * updating this function.
+	 */
 	BUILD_BUG_ON(OVS_KEY_ATTR_TUNNEL_INFO != 22);
 
 	return    nla_total_size(4)   /* OVS_KEY_ATTR_PRIORITY */
@@ -1388,7 +1391,8 @@ static void rcu_free_acts_callback(struct rcu_head *rcu)
 }
 
 /* Schedules 'sf_acts' to be freed after the next RCU grace period.
- * The caller must hold rcu_read_lock for this to be sensible. */
+ * The caller must hold rcu_read_lock for this to be sensible.
+ */
 void ovs_nla_free_flow_actions(struct sw_flow_actions *sf_acts)
 {
 	call_rcu(&sf_acts->rcu, rcu_free_acts_callback);
