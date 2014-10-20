@@ -1,5 +1,8 @@
 Post-v2.3.0
 ---------------------
+   - Add bash command-line completion support for ovs-appctl/ovs-dpctl/
+     ovs-ofctl/ovsdb-tool commands.  Please check
+     utilities/ovs-command-compgen.INSTALL.md for how to use.
    - The "learn" action supports a new flag "delete_learned" that causes
      the learned flows to be deleted when the flow with the "learn" action
      is deleted.
