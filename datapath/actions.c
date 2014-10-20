@@ -482,7 +482,7 @@ static int set_ipv6(struct sk_buff *skb, struct sw_flow_key *key,
 
 	if (memcmp(ipv6_key->ipv6_dst, daddr, sizeof(ipv6_key->ipv6_dst))) {
 		unsigned int offset = 0;
-		int flags = OVS_IP6T_FH_F_SKIP_RH;
+		int flags = IP6_FH_F_SKIP_RH;
 		bool recalc_csum = true;
 
 		if (ipv6_ext_hdr(nh->nexthdr))
