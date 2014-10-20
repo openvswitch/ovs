@@ -69,7 +69,7 @@ EXTRA_DIST = \
 	INSTALL \
 	INSTALL.Debian \
 	INSTALL.Docker \
-        INSTALL.DPDK \
+	INSTALL.DPDK \
 	INSTALL.Fedora \
 	INSTALL.KVM \
 	INSTALL.Libvirt \
