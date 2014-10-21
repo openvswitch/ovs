@@ -2255,7 +2255,9 @@ HandleFlowPut(OvsFlowPut *put,
                     RemoveFlow(datapath, &KernelFlow);
                 }
             } else {
-                return STATUS_UNSUCCESSFUL;
+                /* Return success if an identical flow already exists. */
+                /* XXX: should we return EEXIST in a netlink error? */
+                return STATUS_SUCCESS;
             }
         }
     }
