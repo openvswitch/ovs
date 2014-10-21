@@ -91,6 +91,7 @@ typedef struct _NETLINK_FAMILY {
 /* Handlers for the various netlink commands. */
 static NetlinkCmdHandler OvsGetPidCmdHandler,
                          OvsPendEventCmdHandler,
+                         OvsPendPacketCmdHandler,
                          OvsSubscribeEventCmdHandler,
                          OvsSubscribePacketCmdHandler,
                          OvsReadEventCmdHandler,
@@ -128,6 +129,11 @@ NETLINK_CMD nlControlFamilyCmdOps[] = {
     },
     { .cmd = OVS_CTRL_CMD_WIN_PEND_REQ,
       .handler = OvsPendEventCmdHandler,
+      .supportedDevOp = OVS_WRITE_DEV_OP,
+      .validateDpIndex = TRUE,
+    },
+    { .cmd = OVS_CTRL_CMD_WIN_PEND_PACKET_REQ,
+      .handler = OvsPendPacketCmdHandler,
       .supportedDevOp = OVS_WRITE_DEV_OP,
       .validateDpIndex = TRUE,
     },
@@ -2399,4 +2405,28 @@ OvsSubscribePacketCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 done:
     return status;
 }
+
+/*
+ * --------------------------------------------------------------------------
+ * Handler for queueing an IRP used for missed packet notification. The IRP is
+ * completed when a packet received and mismatched. STATUS_PENDING is returned
+ * on success. User mode keep a pending IRP at all times.
+ * --------------------------------------------------------------------------
+ */
+static NTSTATUS
+OvsPendPacketCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                       UINT32 *replyLen)
+{
+    UNREFERENCED_PARAMETER(replyLen);
+
+    POVS_OPEN_INSTANCE instance =
+        (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
+
+    /*
+     * XXX access to packet queue must be through acquiring a lock as user mode
+     * could unsubscribe and the instnace will be freed.
+     */
+    return OvsWaitDpIoctl(usrParamsCtx->irp, instance->fileObject);
+}
+
 #endif /* OVS_USE_NL_INTERFACE */
