@@ -1174,8 +1174,9 @@ nl_sock_wait(const struct nl_sock *sock, short int events)
 #ifdef _WIN32
     if (sock->overlapped.Internal != STATUS_PENDING) {
         pend_io_request(sock);
+       /* XXX: poll_wevent_wait(sock->overlapped.hEvent); */
     }
-    poll_fd_wait(sock->handle, events);
+    poll_immediate_wake(); /* XXX: temporary. */
 #else
     poll_fd_wait(sock->fd, events);
 #endif
