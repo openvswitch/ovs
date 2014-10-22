@@ -405,7 +405,7 @@ tnl_port_send(const struct ofport_dpif *ofport, struct flow *flow,
     }
 
     if (cfg->tos_inherit && is_ip_any(flow)) {
-        wc->masks.nw_tos = IP_DSCP_MASK;
+        wc->masks.nw_tos |= IP_DSCP_MASK;
         flow->tunnel.ip_tos = flow->nw_tos & IP_DSCP_MASK;
     } else {
         flow->tunnel.ip_tos = cfg->tos;
