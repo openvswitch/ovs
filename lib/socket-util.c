@@ -21,6 +21,7 @@
 #include <fcntl.h>
 #include <net/if.h>
 #include <netdb.h>
+#include <netinet/tcp.h>
 #include <poll.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -84,6 +85,19 @@ xset_nonblocking(int fd)
 {
     if (set_nonblocking(fd)) {
         exit(EXIT_FAILURE);
+    }
+}
+
+void
+setsockopt_tcp_nodelay(int fd)
+{
+    int on = 1;
+    int retval;
+
+    retval = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &on, sizeof on);
+    if (retval) {
+        retval = sock_errno();
+        VLOG_ERR("setsockopt(TCP_NODELAY): %s", sock_strerror(retval));
     }
 }
 

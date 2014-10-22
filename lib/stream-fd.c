@@ -39,6 +39,7 @@ struct stream_fd
 {
     struct stream stream;
     int fd;
+    int fd_type;
 };
 
 static const struct stream_class stream_fd_class;
@@ -49,12 +50,13 @@ static void maybe_unlink_and_free(char *path);
 
 /* Creates a new stream named 'name' that will send and receive data on 'fd'
  * and stores a pointer to the stream in '*streamp'.  Initial connection status
- * 'connect_status' is interpreted as described for stream_init().
+ * 'connect_status' is interpreted as described for stream_init(). 'fd_type'
+ * tells whether the socket is TCP or Unix domain socket.
  *
  * Returns 0 if successful, otherwise a positive errno value.  (The current
  * implementation never fails.) */
 int
-new_fd_stream(const char *name, int fd, int connect_status,
+new_fd_stream(const char *name, int fd, int connect_status, int fd_type,
               struct stream **streamp)
 {
     struct stream_fd *s;
@@ -62,6 +64,7 @@ new_fd_stream(const char *name, int fd, int connect_status,
     s = xmalloc(sizeof *s);
     stream_init(&s->stream, &stream_fd_class, connect_status, name);
     s->fd = fd;
+    s->fd_type = fd_type;
     *streamp = &s->stream;
     return 0;
 }
@@ -85,7 +88,11 @@ static int
 fd_connect(struct stream *stream)
 {
     struct stream_fd *s = stream_fd_cast(stream);
-    return check_connection_completion(s->fd);
+    int retval = check_connection_completion(s->fd);
+    if (retval == 0 && s->fd_type == AF_INET) {
+        setsockopt_tcp_nodelay(s->fd);
+    }
+    return retval;
 }
 
 static ssize_t

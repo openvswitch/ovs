@@ -20,7 +20,6 @@
 #include <inttypes.h>
 #include <sys/types.h>
 #include <netinet/in.h>
-#include <netinet/tcp.h>
 #include <netdb.h>
 #include <stdlib.h>
 #include <string.h>
@@ -42,19 +41,11 @@ static int
 new_tcp_stream(const char *name, int fd, int connect_status,
                struct stream **streamp)
 {
-    int on = 1;
-    int retval;
-
-    retval = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &on, sizeof on);
-    if (retval) {
-        int error = sock_errno();
-        VLOG_ERR("%s: setsockopt(TCP_NODELAY): %s",
-                 name, sock_strerror(error));
-        closesocket(fd);
-        return error;
+    if (connect_status == 0) {
+        setsockopt_tcp_nodelay(fd);
     }
 
-    return new_fd_stream(name, fd, connect_status, streamp);
+    return new_fd_stream(name, fd, connect_status, AF_INET, streamp);
 }
 
 static int

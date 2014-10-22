@@ -29,6 +29,7 @@
 
 int set_nonblocking(int fd);
 void xset_nonblocking(int fd);
+void setsockopt_tcp_nodelay(int fd);
 int set_dscp(int fd, uint8_t dscp);
 
 int lookup_ip(const char *host_name, struct in_addr *address);
