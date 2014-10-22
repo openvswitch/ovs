@@ -924,7 +924,9 @@ OvsCreateQueueNlPacket(PVOID userData,
         return NULL;
     }
 
-    if (!OvsGetPid(vport, nb, &pid)) {
+    OvsGetPid(vport, nb, &pid);
+
+    if (!pid) {
         /*
          * There is no userspace queue created yet, so there is no point for
          * creating a new packet to be queued.
