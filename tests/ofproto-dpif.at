@@ -496,7 +496,7 @@ OVS_VSWITCHD_START
 ADD_OF_PORTS(
   [br0], [1], [2], [3], [4], [5], [6], [7], [8], [9], [10], [11], [12], [13])
 AT_DATA([flows.txt], [dnl
-table=0     actions=write_actions(output(2)),goto_table(1)
+table=0,actset_output=unset     actions=write_actions(output(2)),goto_table(1)
 table=1     actions=move:ONFOXM_ET_ACTSET_OUTPUT[[0..31]]->OXM_OF_PKT_REG0[[0..31]],goto_table(2)
 
 # Verify that actset_output got set.
