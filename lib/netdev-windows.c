@@ -24,6 +24,7 @@
 #include "fatal-signal.h"
 #include "netdev-provider.h"
 #include "ofpbuf.h"
+#include "packets.h"
 #include "poll-loop.h"
 #include "shash.h"
 #include "svec.h"
@@ -300,7 +301,8 @@ netdev_windows_dealloc(struct netdev *netdev_)
 }
 
 static int
-netdev_windows_get_etheraddr(const struct netdev *netdev_, uint8_t mac[6])
+netdev_windows_get_etheraddr(const struct netdev *netdev_,
+                             uint8_t mac[ETH_ADDR_LEN])
 {
     struct netdev_windows *netdev = netdev_windows_cast(netdev_);
 
@@ -330,7 +332,8 @@ netdev_windows_get_mtu(const struct netdev *netdev_, int *mtup)
 /* This functionality is not really required by the datapath.
  * But vswitchd bringup expects this to be implemented. */
 static int
-netdev_windows_set_etheraddr(const struct netdev *netdev_, uint8_t mac[6])
+netdev_windows_set_etheraddr(const struct netdev *netdev_,
+                             uint8_t mac[ETH_ADDR_LEN])
 {
     return 0;
 }

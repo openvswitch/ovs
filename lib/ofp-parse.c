@@ -145,7 +145,7 @@ str_to_be64(const char *str, ovs_be64 *valuep)
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
 char * WARN_UNUSED_RESULT
-str_to_mac(const char *str, uint8_t mac[6])
+str_to_mac(const char *str, uint8_t mac[ETH_ADDR_LEN])
 {
     if (!ovs_scan(str, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))) {
         return xasprintf("invalid mac address %s", str);

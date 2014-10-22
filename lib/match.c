@@ -736,8 +736,9 @@ match_init_hidden_fields(struct match *m)
 }
 
 static void
-format_eth_masked(struct ds *s, const char *name, const uint8_t eth[6],
-                  const uint8_t mask[6])
+format_eth_masked(struct ds *s, const char *name,
+                  const uint8_t eth[ETH_ADDR_LEN],
+                  const uint8_t mask[ETH_ADDR_LEN])
 {
     if (!eth_addr_is_zero(mask)) {
         ds_put_format(s, "%s=", name);

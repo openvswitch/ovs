@@ -465,13 +465,13 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
 }
 
 static struct bond_slave *
-bond_find_slave_by_mac(const struct bond *bond, const uint8_t mac[6])
+bond_find_slave_by_mac(const struct bond *bond, const uint8_t mac[ETH_ADDR_LEN])
 {
     struct bond_slave *slave;
 
     /* Find the last active slave */
     HMAP_FOR_EACH(slave, hmap_node, &bond->slaves) {
-        uint8_t slave_mac[6];
+        uint8_t slave_mac[ETH_ADDR_LEN];
 
         if (netdev_get_etheraddr(slave->netdev, slave_mac)) {
             continue;
@@ -488,7 +488,7 @@ bond_find_slave_by_mac(const struct bond *bond, const uint8_t mac[6])
 static void
 bond_active_slave_changed(struct bond *bond)
 {
-    uint8_t mac[6];
+    uint8_t mac[ETH_ADDR_LEN];
 
     netdev_get_etheraddr(bond->active_slave->netdev, mac);
     memcpy(bond->active_slave_mac, mac, sizeof bond->active_slave_mac);

@@ -2510,7 +2510,7 @@ port_refresh_rstp_status(struct port *port)
 static void
 port_refresh_bond_status(struct port *port, bool force_update)
 {
-    uint8_t mac[6];
+    uint8_t mac[ETH_ADDR_LEN];
 
     /* Return if port is not a bond */
     if (list_is_singleton(&port->ifaces)) {

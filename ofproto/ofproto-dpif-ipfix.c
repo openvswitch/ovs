@@ -228,8 +228,8 @@ OVS_PACKED(
 struct ipfix_data_record_flow_key_common {
     ovs_be32 observation_point_id;  /* OBSERVATION_POINT_ID */
     uint8_t flow_direction;  /* FLOW_DIRECTION */
-    uint8_t source_mac_address[6];  /* SOURCE_MAC_ADDRESS */
-    uint8_t destination_mac_address[6];  /* DESTINATION_MAC_ADDRESS */
+    uint8_t source_mac_address[ETH_ADDR_LEN]; /* SOURCE_MAC_ADDRESS */
+    uint8_t destination_mac_address[ETH_ADDR_LEN]; /* DESTINATION_MAC_ADDRESS */
     ovs_be16 ethernet_type;  /* ETHERNET_TYPE */
     uint8_t ethernet_header_length;  /* ETHERNET_HEADER_LENGTH */
 });

@@ -311,9 +311,11 @@ static ovs_be16 dl_type_values[]
 static ovs_be16 tp_src_values[] = { CONSTANT_HTONS(49362),
                                     CONSTANT_HTONS(80) };
 static ovs_be16 tp_dst_values[] = { CONSTANT_HTONS(6667), CONSTANT_HTONS(22) };
-static uint8_t dl_src_values[][6] = { { 0x00, 0x02, 0xe3, 0x0f, 0x80, 0xa4 },
+static uint8_t dl_src_values[][ETH_ADDR_LEN] = {
+                                      { 0x00, 0x02, 0xe3, 0x0f, 0x80, 0xa4 },
                                       { 0x5e, 0x33, 0x7f, 0x5f, 0x1e, 0x99 } };
-static uint8_t dl_dst_values[][6] = { { 0x4a, 0x27, 0x71, 0xae, 0x64, 0xc1 },
+static uint8_t dl_dst_values[][ETH_ADDR_LEN] = {
+                                      { 0x4a, 0x27, 0x71, 0xae, 0x64, 0xc1 },
                                       { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff } };
 static uint8_t nw_proto_values[] = { IPPROTO_TCP, IPPROTO_ICMP };
 static uint8_t nw_dscp_values[] = { 48, 0 };

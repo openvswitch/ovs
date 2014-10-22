@@ -21,6 +21,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "openvswitch/types.h"
+#include "packets.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -181,8 +182,8 @@ int netdev_send(struct netdev *, int qid, struct dpif_packet **, int cnt,
 void netdev_send_wait(struct netdev *, int qid);
 
 /* Hardware address. */
-int netdev_set_etheraddr(struct netdev *, const uint8_t mac[6]);
-int netdev_get_etheraddr(const struct netdev *, uint8_t mac[6]);
+int netdev_set_etheraddr(struct netdev *, const uint8_t mac[ETH_ADDR_LEN]);
+int netdev_get_etheraddr(const struct netdev *, uint8_t mac[ETH_ADDR_LEN]);
 
 /* PHY interface. */
 bool netdev_get_carrier(const struct netdev *);
@@ -246,7 +247,8 @@ int netdev_add_router(struct netdev *, struct in_addr router);
 int netdev_get_next_hop(const struct netdev *, const struct in_addr *host,
                         struct in_addr *next_hop, char **);
 int netdev_get_status(const struct netdev *, struct smap *);
-int netdev_arp_lookup(const struct netdev *, ovs_be32 ip, uint8_t mac[6]);
+int netdev_arp_lookup(const struct netdev *, ovs_be32 ip,
+                      uint8_t mac[ETH_ADDR_LEN]);
 
 struct netdev *netdev_find_dev_by_in4(const struct in_addr *);
 

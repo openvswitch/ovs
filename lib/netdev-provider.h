@@ -23,6 +23,7 @@
 #include "netdev.h"
 #include "list.h"
 #include "ovs-numa.h"
+#include "packets.h"
 #include "seq.h"
 #include "shash.h"
 #include "smap.h"
@@ -309,13 +310,15 @@ struct netdev_class {
     void (*send_wait)(struct netdev *netdev, int qid);
 
     /* Sets 'netdev''s Ethernet address to 'mac' */
-    int (*set_etheraddr)(struct netdev *netdev, const uint8_t mac[6]);
+    int (*set_etheraddr)(struct netdev *netdev,
+                         const uint8_t mac[ETH_ADDR_LEN]);
 
     /* Retrieves 'netdev''s Ethernet address into 'mac'.
      *
      * This address will be advertised as 'netdev''s MAC address through the
      * OpenFlow protocol, among other uses. */
-    int (*get_etheraddr)(const struct netdev *netdev, uint8_t mac[6]);
+    int (*get_etheraddr)(const struct netdev *netdev,
+                         uint8_t mac[ETH_ADDR_LEN]);
 
     /* Retrieves 'netdev''s MTU into '*mtup'.
      *
@@ -653,7 +656,7 @@ struct netdev_class {
      * This function may be set to null if it would always return EOPNOTSUPP
      * anyhow. */
     int (*arp_lookup)(const struct netdev *netdev, ovs_be32 ip,
-                      uint8_t mac[6]);
+                      uint8_t mac[ETH_ADDR_LEN]);
 
     /* Retrieves the current set of flags on 'netdev' into '*old_flags'.  Then,
      * turns off the flags that are set to 1 in 'off' and turns on the flags

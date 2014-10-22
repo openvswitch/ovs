@@ -43,8 +43,9 @@ VLOG_DEFINE_THIS_MODULE(cfm);
 #define CFM_MAX_RMPS 256
 
 /* Ethernet destination address of CCM packets. */
-static const uint8_t eth_addr_ccm[6] = { 0x01, 0x80, 0xC2, 0x00, 0x00, 0x30 };
-static const uint8_t eth_addr_ccm_x[6] = {
+static const uint8_t eth_addr_ccm[ETH_ADDR_LEN] = {
+    0x01, 0x80, 0xC2, 0x00, 0x00, 0x30 };
+static const uint8_t eth_addr_ccm_x[ETH_ADDR_LEN] = {
     0x01, 0x23, 0x20, 0x00, 0x00, 0x30
 };
 

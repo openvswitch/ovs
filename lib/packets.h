@@ -83,23 +83,23 @@ static const uint8_t eth_addr_lacp[ETH_ADDR_LEN] OVS_UNUSED
 static const uint8_t eth_addr_bfd[ETH_ADDR_LEN] OVS_UNUSED
     = { 0x00, 0x23, 0x20, 0x00, 0x00, 0x01 };
 
-static inline bool eth_addr_is_broadcast(const uint8_t ea[6])
+static inline bool eth_addr_is_broadcast(const uint8_t ea[ETH_ADDR_LEN])
 {
     return (ea[0] & ea[1] & ea[2] & ea[3] & ea[4] & ea[5]) == 0xff;
 }
 
-static inline bool eth_addr_is_multicast(const uint8_t ea[6])
+static inline bool eth_addr_is_multicast(const uint8_t ea[ETH_ADDR_LEN])
 {
     return ea[0] & 1;
 }
-static inline bool eth_addr_is_local(const uint8_t ea[6])
+static inline bool eth_addr_is_local(const uint8_t ea[ETH_ADDR_LEN])
 {
     /* Local if it is either a locally administered address or a Nicira random
      * address. */
     return ea[0] & 2
        || (ea[0] == 0x00 && ea[1] == 0x23 && ea[2] == 0x20 && ea[3] & 0x80);
 }
-static inline bool eth_addr_is_zero(const uint8_t ea[6])
+static inline bool eth_addr_is_zero(const uint8_t ea[ETH_ADDR_LEN])
 {
     return !(ea[0] | ea[1] | ea[2] | ea[3] | ea[4] | ea[5]);
 }

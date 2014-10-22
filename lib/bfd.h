@@ -21,6 +21,8 @@
 #include <stdbool.h>
 #include <inttypes.h>
 
+#include "packets.h"
+
 struct bfd;
 struct dpif_flow_stats;
 struct flow;
@@ -34,7 +36,7 @@ void bfd_run(struct bfd *);
 
 bool bfd_should_send_packet(const struct bfd *);
 void bfd_put_packet(struct bfd *bfd, struct ofpbuf *packet,
-                    uint8_t eth_src[6]);
+                    uint8_t eth_src[ETH_ADDR_LEN]);
 
 bool bfd_should_process_flow(const struct bfd *, const struct flow *,
                              struct flow_wildcards *);

@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include "compiler.h"
 #include "openvswitch/types.h"
+#include "packets.h"
 
 struct flow;
 struct ofpbuf;
@@ -90,7 +91,7 @@ char *str_to_u16(const char *str, const char *name, uint16_t *valuep)
 char *str_to_u32(const char *str, uint32_t *valuep) WARN_UNUSED_RESULT;
 char *str_to_u64(const char *str, uint64_t *valuep) WARN_UNUSED_RESULT;
 char *str_to_be64(const char *str, ovs_be64 *valuep) WARN_UNUSED_RESULT;
-char *str_to_mac(const char *str, uint8_t mac[6]) WARN_UNUSED_RESULT;
+char *str_to_mac(const char *str, uint8_t mac[ETH_ADDR_LEN]) WARN_UNUSED_RESULT;
 char *str_to_ip(const char *str, ovs_be32 *ip) WARN_UNUSED_RESULT;
 
 #endif /* ofp-parse.h */
