@@ -24,8 +24,10 @@
 #include "NetProto.h"
 #include "BufferMgmt.h"
 #define OVS_MAX_VPORT_ARRAY_SIZE 1024
+#define OVS_MAX_PID_ARRAY_SIZE   1024
 
 #define OVS_VPORT_MASK (OVS_MAX_VPORT_ARRAY_SIZE - 1)
+#define OVS_PID_MASK (OVS_MAX_PID_ARRAY_SIZE - 1)
 
 #define OVS_INTERNAL_VPORT_DEFAULT_INDEX 0
 
@@ -107,6 +109,7 @@ typedef struct _OVS_SWITCH_CONTEXT
     PLIST_ENTRY             ovsPortNameHashArray;   // based on ovsName
     PLIST_ENTRY             portIdHashArray;        // based on portId
     PLIST_ENTRY             portNoHashArray;        // based on ovs port number
+    PLIST_ENTRY             pidHashArray;           // based on packet pids
 
     UINT32                  numPhysicalNics;
     UINT32                  numVports;     // include validation port

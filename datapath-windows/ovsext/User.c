@@ -143,6 +143,7 @@ OvsSubscribeDpIoctl(PVOID instanceP,
         if (queue == NULL) {
             return STATUS_NO_MEMORY;
         }
+        InitializeListHead(&(instance->pidLink));
         instance->packetQueue = queue;
         RtlZeroMemory(queue, sizeof (*queue));
         NdisAllocateSpinLock(&queue->queueLock);

@@ -87,6 +87,8 @@ typedef struct _OVS_OPEN_INSTANCE {
                                  * markers can store the row and the column
                                  * indices. */
     } dumpState;                /* data to support dump commands. */
+    LIST_ENTRY             pidLink; /* Links the instance to
+                                     * pidHashArray */
 } OVS_OPEN_INSTANCE, *POVS_OPEN_INSTANCE;
 
 NDIS_STATUS OvsCreateDeviceObject(NDIS_HANDLE ovsExtDriverHandle);
