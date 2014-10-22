@@ -135,9 +135,22 @@ OvsSubscribeDpIoctl(PVOID instanceP,
     POVS_USER_PACKET_QUEUE queue;
     POVS_OPEN_INSTANCE instance = (POVS_OPEN_INSTANCE)instanceP;
 
+    OvsAcquireCtrlLock();
+    if (!gOvsSwitchContext) {
+        OvsReleaseCtrlLock();
+        return STATUS_INVALID_PARAMETER;
+    }
+    OvsReleaseCtrlLock();
+
     if (instance->packetQueue && !join) {
         /* unsubscribe */
         OvsCleanupPacketQueue(instance);
+
+        OvsAcquireCtrlLock();
+        /* Remove the instance from pidHashArray */
+        OvsDelPidInstance(gOvsSwitchContext, pid);
+        OvsReleaseCtrlLock();
+
     } else if (instance->packetQueue == NULL && join) {
         queue = (POVS_USER_PACKET_QUEUE) OvsAllocateMemory(sizeof *queue);
         if (queue == NULL) {
@@ -153,10 +166,17 @@ OvsSubscribeDpIoctl(PVOID instanceP,
         queue->instance = instance;
         instance->packetQueue = queue;
         NdisReleaseSpinLock(&queue->queueLock);
+
+        OvsAcquireCtrlLock();
+        /* Insert the instance to pidHashArray */
+        OvsAddPidInstance(gOvsSwitchContext, pid, instance);
+        OvsReleaseCtrlLock();
+
     } else {
         /* user mode should call only once for subscribe */
         return STATUS_INVALID_PARAMETER;
     }
+
     return STATUS_SUCCESS;
 }
 
