@@ -42,16 +42,8 @@ static int
 new_tcp_stream(const char *name, int fd, int connect_status,
                struct stream **streamp)
 {
-    struct sockaddr_storage local;
-    socklen_t local_len = sizeof local;
     int on = 1;
     int retval;
-
-    /* Get the local IP and port information */
-    retval = getsockname(fd, (struct sockaddr *) &local, &local_len);
-    if (retval) {
-        memset(&local, 0, sizeof local);
-    }
 
     retval = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &on, sizeof on);
     if (retval) {

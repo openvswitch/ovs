@@ -236,8 +236,6 @@ static int
 new_ssl_stream(const char *name, int fd, enum session_type type,
                enum ssl_state state, struct stream **streamp)
 {
-    struct sockaddr_storage local;
-    socklen_t local_len = sizeof local;
     struct ssl_stream *sslv;
     SSL *ssl = NULL;
     int retval;
@@ -263,12 +261,6 @@ new_ssl_stream(const char *name, int fd, enum session_type type,
     }
     if (retval) {
         goto error;
-    }
-
-    /* Get the local IP and port information */
-    retval = getsockname(fd, (struct sockaddr *) &local, &local_len);
-    if (retval) {
-        memset(&local, 0, sizeof local);
     }
 
     /* Disable Nagle.
