@@ -49,6 +49,19 @@ static VOID _MapNlAttrToOvsPktExec(PNL_ATTR *nlAttrs, PNL_ATTR *keyAttrs,
                                    OvsPacketExecute  *execute);
 extern NL_POLICY nlFlowKeyPolicy[];
 
+static __inline VOID
+OvsAcquirePidHashLock()
+{
+    NdisAcquireSpinLock(&(gOvsSwitchContext->pidHashLock));
+}
+
+static __inline VOID
+OvsReleasePidHashLock()
+{
+    NdisReleaseSpinLock(&(gOvsSwitchContext->pidHashLock));
+}
+
+
 static VOID
 OvsPurgePacketQueue(POVS_USER_PACKET_QUEUE queue,
                     POVS_OPEN_INSTANCE instance)
@@ -147,10 +160,10 @@ OvsSubscribeDpIoctl(PVOID instanceP,
         /* unsubscribe */
         OvsCleanupPacketQueue(instance);
 
-        OvsAcquireCtrlLock();
+        OvsAcquirePidHashLock();
         /* Remove the instance from pidHashArray */
         OvsDelPidInstance(gOvsSwitchContext, pid);
-        OvsReleaseCtrlLock();
+        OvsReleasePidHashLock();
 
     } else if (instance->packetQueue == NULL && join) {
         queue = (POVS_USER_PACKET_QUEUE) OvsAllocateMemory(sizeof *queue);
@@ -168,10 +181,10 @@ OvsSubscribeDpIoctl(PVOID instanceP,
         instance->packetQueue = queue;
         NdisReleaseSpinLock(&queue->queueLock);
 
-        OvsAcquireCtrlLock();
+        OvsAcquirePidHashLock();
         /* Insert the instance to pidHashArray */
         OvsAddPidInstance(gOvsSwitchContext, pid, instance);
-        OvsReleaseCtrlLock();
+        OvsReleasePidHashLock();
 
     } else {
         /* user mode should call only once for subscribe */
@@ -633,7 +646,7 @@ OvsGetQueue(UINT32 pid)
 /*
  * ---------------------------------------------------------------------------
  * Given a pid, returns the corresponding instance.
- * gOvsCtrlLock must be acquired before calling this API.
+ * pidHashLock must be acquired before calling this API.
  * ---------------------------------------------------------------------------
  */
 POVS_OPEN_INSTANCE
@@ -656,7 +669,7 @@ OvsGetPidInstance(POVS_SWITCH_CONTEXT switchContext, UINT32 pid)
 /*
  * ---------------------------------------------------------------------------
  * Given a pid and an instance. This API adds instance to pidHashArray.
- * gOvsCtrlLock must be acquired before calling this API.
+ * pidHashLock must be acquired before calling this API.
  * ---------------------------------------------------------------------------
  */
 VOID
@@ -673,7 +686,7 @@ OvsAddPidInstance(POVS_SWITCH_CONTEXT switchContext, UINT32 pid,
 /*
  * ---------------------------------------------------------------------------
  * Given a pid and an instance. This API removes instance from pidHashArray.
- * gOvsCtrlLock must be acquired before calling this API.
+ * pidHashLock must be acquired before calling this API.
  * ---------------------------------------------------------------------------
  */
 VOID
@@ -687,54 +700,70 @@ OvsDelPidInstance(POVS_SWITCH_CONTEXT switchContext, UINT32 pid)
 }
 
 VOID
-OvsQueuePackets(UINT32 queueId,
-                PLIST_ENTRY packetList,
+OvsQueuePackets(PLIST_ENTRY packetList,
                 UINT32 numElems)
 {
-    POVS_USER_PACKET_QUEUE queue = OvsGetQueue(queueId);
+    POVS_USER_PACKET_QUEUE upcallQueue = NULL;
     POVS_PACKET_QUEUE_ELEM elem;
     PIRP irp = NULL;
     PLIST_ENTRY  link;
     UINT32 num = 0;
+    LIST_ENTRY dropPackets;
 
-    OVS_LOG_LOUD("Enter: queueId %u, numELems: %u",
-                  queueId, numElems);
-    if (queue == NULL) {
-        goto cleanup;
-    }
+    OVS_LOG_LOUD("Enter: numELems: %u", numElems);
 
-    NdisAcquireSpinLock(&queue->queueLock);
-    if (queue->instance == NULL) {
-        NdisReleaseSpinLock(&queue->queueLock);
-        goto cleanup;
-    } else {
-        OvsAppendList(&queue->packetList, packetList);
-        queue->numPackets += numElems;
-    }
-    if (queue->pendingIrp) {
-        PDRIVER_CANCEL cancelRoutine;
-        irp = queue->pendingIrp;
-        queue->pendingIrp = NULL;
-        cancelRoutine = IoSetCancelRoutine(irp, NULL);
-        if (cancelRoutine == NULL) {
-            irp = NULL;
-        }
-    }
-    NdisReleaseSpinLock(&queue->queueLock);
-    if (irp) {
-        OvsCompleteIrpRequest(irp, 0, STATUS_SUCCESS);
-    }
+    InitializeListHead(&dropPackets);
 
-cleanup:
     while (!IsListEmpty(packetList)) {
         link = RemoveHeadList(packetList);
+        elem = CONTAINING_RECORD(link, OVS_PACKET_QUEUE_ELEM, link);
+
+        ASSERT(elem);
+
+        OvsAcquirePidHashLock();
+
+        upcallQueue = OvsGetQueue(elem->upcallPid);
+        if (!upcallQueue) {
+            /* No upcall queue found, drop this packet. */
+            InsertTailList(&dropPackets, &elem->link);
+        } else {
+            NdisAcquireSpinLock(&upcallQueue->queueLock);
+
+            if (upcallQueue->instance == NULL) {
+                InsertTailList(&dropPackets, &elem->link);
+            } else {
+                InsertTailList(&upcallQueue->packetList, &elem->link);
+                upcallQueue->numPackets++;
+                if (upcallQueue->pendingIrp) {
+                    PDRIVER_CANCEL cancelRoutine;
+                    irp = upcallQueue->pendingIrp;
+                    upcallQueue->pendingIrp = NULL;
+                    cancelRoutine = IoSetCancelRoutine(irp, NULL);
+                    if (cancelRoutine == NULL) {
+                        irp = NULL;
+                    }
+                }
+            }
+
+            if (irp) {
+                OvsCompleteIrpRequest(irp, 0, STATUS_SUCCESS);
+            }
+
+            NdisReleaseSpinLock(&upcallQueue->queueLock);
+        }
+
+        OvsReleasePidHashLock();
+    }
+
+    while (!IsListEmpty(&dropPackets)) {
+        link = RemoveHeadList(&dropPackets);
         elem = CONTAINING_RECORD(link, OVS_PACKET_QUEUE_ELEM, link);
         OvsFreeMemory(elem);
         num++;
     }
+
     OVS_LOG_LOUD("Exit: drop %u packets", num);
 }
-
 
 /*
  *----------------------------------------------------------------------------
@@ -932,6 +961,8 @@ OvsGetPid(POVS_VPORT_ENTRY vport, PNET_BUFFER nb, UINT32 *pid)
 {
     UNREFERENCED_PARAMETER(nb);
 
+    ASSERT(vport);
+
     /* XXX select a pid from an array of pids using a flow based hash */
     *pid = vport->upcallPid;
     return STATUS_SUCCESS;
@@ -1031,6 +1062,7 @@ OvsCreateQueueNlPacket(PVOID userData,
         return NULL;
     }
     elem->hdrInfo.value = hdrInfo->value;
+    elem->upcallPid = pid;
     elem->packet.totalLen = nlMsgSize;
     /* XXX remove queueid */
     elem->packet.queue = 0;

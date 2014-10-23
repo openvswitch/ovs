@@ -564,7 +564,7 @@ OvsDoFlowLookupOutput(OvsForwardingContext *ovsFwdCtx)
                           ovsFwdCtx->tunnelRxNic != NULL, &ovsFwdCtx->layers,
                           ovsFwdCtx->switchContext, &missedPackets, &num);
         if (num) {
-            OvsQueuePackets(OVS_DEFAULT_PACKET_QUEUE, &missedPackets, num);
+            OvsQueuePackets(&missedPackets, num);
         }
         if (status == NDIS_STATUS_SUCCESS) {
             /* Complete the packet since it was copied to user buffer. */
@@ -1495,7 +1495,7 @@ OvsActionsExecute(POVS_SWITCH_CONTEXT switchContext,
                 LIST_ENTRY missedPackets;
                 InitializeListHead(&missedPackets);
                 InsertTailList(&missedPackets, &elem->link);
-                OvsQueuePackets(OVS_DEFAULT_PACKET_QUEUE, &missedPackets, 1);
+                OvsQueuePackets(&missedPackets, 1);
                 dropReason = L"OVS-Completed since packet was copied to "
                              L"userspace";
             } else {

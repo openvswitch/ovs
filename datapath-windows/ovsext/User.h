@@ -49,6 +49,7 @@ typedef struct _OVS_USER_PACKET_QUEUE {
 } OVS_USER_PACKET_QUEUE, *POVS_USER_PACKET_QUEUE;
 
 typedef struct _OVS_PACKET_QUEUE_ELEM {
+    UINT32  upcallPid;
     LIST_ENTRY link;
     OVS_PACKET_HDR_INFO hdrInfo;
     OVS_PACKET_INFO packet;
@@ -78,8 +79,7 @@ POVS_PACKET_QUEUE_ELEM OvsCreateQueueNlPacket(PVOID userData,
                                               BOOLEAN isRecv,
                                               POVS_PACKET_HDR_INFO hdrInfo);
 
-VOID OvsQueuePackets(UINT32 queueId, PLIST_ENTRY packetList,
-                     UINT32 numElems);
+VOID OvsQueuePackets(PLIST_ENTRY packetList, UINT32 numElems);
 NTSTATUS OvsCreateAndAddPackets(PVOID userData,
                                 UINT32 userDataLen,
                                 UINT32 cmd,

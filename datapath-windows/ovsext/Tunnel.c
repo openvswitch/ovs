@@ -320,7 +320,7 @@ OvsInjectPacketThroughActions(PNET_BUFFER_LIST pNbl,
             if (elem) {
                 /* Complete the packet since it was copied to user buffer. */
                 InsertTailList(&missedPackets, &elem->link);
-                OvsQueuePackets(OVS_DEFAULT_PACKET_QUEUE, &missedPackets, 1);
+                OvsQueuePackets(&missedPackets, 1);
             } else {
                 status = STATUS_INSUFFICIENT_RESOURCES;
             }

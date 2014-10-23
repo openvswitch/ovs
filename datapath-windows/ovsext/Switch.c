@@ -411,6 +411,7 @@ OvsInitSwitchContext(POVS_SWITCH_CONTEXT switchContext)
         InitializeListHead(&switchContext->pidHashArray[i]);
     }
 
+    NdisAllocateSpinLock(&(switchContext->pidHashLock));
     switchContext->isActivated = FALSE;
     switchContext->isActivateFailed = FALSE;
     switchContext->dpNo = OVS_DP_NUMBER;
@@ -429,6 +430,7 @@ OvsCleanupSwitchContext(POVS_SWITCH_CONTEXT switchContext)
     ASSERT(switchContext->numVports == 0);
 
     NdisFreeRWLock(switchContext->dispatchLock);
+    NdisFreeSpinLock(&(switchContext->pidHashLock));
     OvsFreeMemory(switchContext->ovsPortNameHashArray);
     OvsFreeMemory(switchContext->portIdHashArray);
     OvsFreeMemory(switchContext->portNoHashArray);

@@ -110,6 +110,7 @@ typedef struct _OVS_SWITCH_CONTEXT
     PLIST_ENTRY             portIdHashArray;        // based on portId
     PLIST_ENTRY             portNoHashArray;        // based on ovs port number
     PLIST_ENTRY             pidHashArray;           // based on packet pids
+    NDIS_SPIN_LOCK          pidHashLock;            // Lock for pidHash table
 
     UINT32                  numPhysicalNics;
     UINT32                  numVports;     // include validation port

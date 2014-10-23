@@ -314,7 +314,7 @@ dropit:
     }
 
     /* Queue the missed packets. */
-    OvsQueuePackets(OVS_DEFAULT_PACKET_QUEUE, &missedPackets, num);
+    OvsQueuePackets(&missedPackets, num);
     OvsFinalizeCompletionList(&completionList);
 }
 
