@@ -469,6 +469,11 @@ OvsWaitEventIoctl(PIRP irp,
     }
 
     queue = (POVS_EVENT_QUEUE)instance->eventQueue;
+    if (queue == NULL) {
+        OvsReleaseEventQueueLock();
+        OVS_LOG_TRACE("Exit: Event queue does not exist");
+        return STATUS_INVALID_PARAMETER;
+    }
     if (queue->pendingIrp) {
         OvsReleaseEventQueueLock();
         OVS_LOG_TRACE("Exit: Event queue already in pending state");
