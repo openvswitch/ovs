@@ -32,6 +32,7 @@
 #include "NetProto.h"
 #include "Flow.h"
 #include "TunnelIntf.h"
+#include "Jhash.h"
 
 #ifdef OVS_DBG_MOD
 #undef OVS_DBG_MOD
@@ -616,6 +617,62 @@ OvsGetQueue(UINT32 pid)
     UNREFERENCED_PARAMETER(pid);
     ASSERT(FALSE);
     return NULL;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Given a pid, returns the corresponding instance.
+ * gOvsCtrlLock must be acquired before calling this API.
+ * ---------------------------------------------------------------------------
+ */
+POVS_OPEN_INSTANCE
+OvsGetPidInstance(POVS_SWITCH_CONTEXT switchContext, UINT32 pid)
+{
+    POVS_OPEN_INSTANCE instance;
+    PLIST_ENTRY head, link;
+    UINT32 hash = OvsJhashBytes((const VOID *)&pid, sizeof(pid),
+                                OVS_HASH_BASIS);
+    head = &(switchContext->pidHashArray[hash & OVS_PID_MASK]);
+    LIST_FORALL(head, link) {
+        instance = CONTAINING_RECORD(link, OVS_OPEN_INSTANCE, pidLink);
+        if (instance->pid == pid) {
+            return instance;
+        }
+    }
+    return NULL;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Given a pid and an instance. This API adds instance to pidHashArray.
+ * gOvsCtrlLock must be acquired before calling this API.
+ * ---------------------------------------------------------------------------
+ */
+VOID
+OvsAddPidInstance(POVS_SWITCH_CONTEXT switchContext, UINT32 pid,
+                  POVS_OPEN_INSTANCE instance)
+{
+    PLIST_ENTRY head;
+    UINT32 hash = OvsJhashBytes((const VOID *)&pid, sizeof(pid),
+                                OVS_HASH_BASIS);
+    head = &(switchContext->pidHashArray[hash & OVS_PID_MASK]);
+    InsertHeadList(head, &(instance->pidLink));
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Given a pid and an instance. This API removes instance from pidHashArray.
+ * gOvsCtrlLock must be acquired before calling this API.
+ * ---------------------------------------------------------------------------
+ */
+VOID
+OvsDelPidInstance(POVS_SWITCH_CONTEXT switchContext, UINT32 pid)
+{
+    POVS_OPEN_INSTANCE instance = OvsGetPidInstance(switchContext, pid);
+
+    if (instance) {
+        RemoveEntryList(&(instance->pidLink));
+    }
 }
 
 VOID

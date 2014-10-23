@@ -108,4 +108,14 @@ NTSTATUS OvsWaitDpIoctl(PIRP irp, PFILE_OBJECT fileObject);
 NTSTATUS OvsNlExecuteCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                 UINT32 *replyLen);
 
+POVS_OPEN_INSTANCE
+OvsGetPidInstance(POVS_SWITCH_CONTEXT switchContext, UINT32 pid);
+
+VOID
+OvsAddPidInstance(POVS_SWITCH_CONTEXT switchContext, UINT32 pid,
+                  POVS_OPEN_INSTANCE instance);
+
+VOID
+OvsDelPidInstance(POVS_SWITCH_CONTEXT switchContext, UINT32 pid);
+
 #endif /* __USER_H_ */
