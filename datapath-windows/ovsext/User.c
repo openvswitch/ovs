@@ -609,14 +609,25 @@ OvsGetNextPacket(POVS_OPEN_INSTANCE instance)
     return CONTAINING_RECORD(link, OVS_PACKET_QUEUE_ELEM, link);
 }
 
-
+/*
+ * ---------------------------------------------------------------------------
+ * Given a pid, returns the corresponding USER_PACKET_QUEUE.
+ * gOvsCtrlLock must be acquired before calling this API.
+ * ---------------------------------------------------------------------------
+ */
 POVS_USER_PACKET_QUEUE
 OvsGetQueue(UINT32 pid)
 {
-    /* XXX To be implemented. Return the queue assoiated with the pid*/
-    UNREFERENCED_PARAMETER(pid);
-    ASSERT(FALSE);
-    return NULL;
+    POVS_OPEN_INSTANCE instance;
+    POVS_USER_PACKET_QUEUE ret = NULL;
+
+    instance = OvsGetPidInstance(gOvsSwitchContext, pid);
+
+    if (instance) {
+        ret = instance->packetQueue;
+    }
+
+    return ret;
 }
 
 /*
