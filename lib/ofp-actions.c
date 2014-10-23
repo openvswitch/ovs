@@ -6406,6 +6406,11 @@ ofpact_pull_raw(struct ofpbuf *buf, enum ofp_version ofp_version,
     }
 
     length = ntohs(oah->len);
+    if (length > ofpbuf_size(buf)) {
+        VLOG_WARN_RL(&rl, "OpenFlow action %s length %u exceeds action buffer "
+                     "length %"PRIu32, action->name, length, ofpbuf_size(buf));
+        return OFPERR_OFPBAC_BAD_LEN;
+    }
     if (length < action->min_length || length > action->max_length) {
         VLOG_WARN_RL(&rl, "OpenFlow action %s length %u not in valid range "
                      "[%hu,%hu]", action->name, length,
