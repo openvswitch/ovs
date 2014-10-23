@@ -396,6 +396,68 @@ nl_sock_join_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
     return 0;
 }
 
+#ifdef _WIN32
+int
+nl_sock_subscribe_packets(struct nl_sock *sock)
+{
+    int error;
+
+    if (sock->read_ioctl != OVS_IOCTL_READ) {
+        return EINVAL;
+    }
+
+    error = nl_sock_subscribe_packet__(sock, true);
+    if (error) {
+        VLOG_WARN("could not unsubscribe packets (%s)",
+                  ovs_strerror(errno));
+        return error;
+    }
+    sock->read_ioctl = OVS_IOCTL_READ_PACKET;
+
+    return 0;
+}
+
+int
+nl_sock_unsubscribe_packets(struct nl_sock *sock)
+{
+    ovs_assert(sock->read_ioctl == OVS_IOCTL_READ_PACKET);
+
+    int error = nl_sock_subscribe_packet__(sock, false);
+    if (error) {
+        VLOG_WARN("could not subscribe to packets (%s)",
+                  ovs_strerror(errno));
+        return error;
+    }
+
+    sock->read_ioctl = OVS_IOCTL_READ;
+    return 0;
+}
+
+int
+nl_sock_subscribe_packet__(struct nl_sock *sock, bool subscribe)
+{
+    struct ofpbuf request;
+    uint64_t request_stub[128];
+    struct ovs_header *ovs_header;
+    struct nlmsghdr *nlmsg;
+    int error;
+
+    ofpbuf_use_stub(&request, request_stub, sizeof request_stub);
+    nl_msg_put_genlmsghdr(&request, 0, OVS_WIN_NL_CTRL_FAMILY_ID, 0,
+                          OVS_CTRL_CMD_PACKET_SUBSCRIBE_REQ,
+                          OVS_WIN_CONTROL_VERSION);
+
+    ovs_header = ofpbuf_put_uninit(&request, sizeof *ovs_header);
+    ovs_header->dp_ifindex = 0;
+    nl_msg_put_u8(&request, OVS_NL_ATTR_PACKET_SUBSCRIBE, subscribe ? 1 : 0);
+    nl_msg_put_u32(&request, OVS_NL_ATTR_PACKET_PID, sock->pid);
+
+    error = nl_sock_send(sock, &request, true);
+    ofpbuf_uninit(&request);
+    return error;
+}
+#endif
+
 /* Tries to make 'sock' stop listening to 'multicast_group'.  Returns 0 if
  * successful, otherwise a positive errno value.
  *

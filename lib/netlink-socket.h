@@ -151,6 +151,14 @@
  *
  *       nl_sock_recv() reads notifications sent this way.
  *
+ *       Specifically on Windows platform, the datapath needs to allocate a
+ *       queue for packets, and it does so only when userspace "subscribe"'s to
+ *       packets on that netlink socket.  Before closing the netlink socket,
+ *       userspace needs to "unsubscribe" packets on that netlink socket.
+ *
+ *       nl_sock_subscribe_packets() and nl_sock_unsubscribe_packets() are
+ *       Windows specific.
+ *
  *       Messages received this way can overflow, just like multicast
  *       subscription messages, and they are reported the same way.  Because
  *       packet notification messages do not report the state of a table, there
@@ -204,6 +212,11 @@ void nl_sock_destroy(struct nl_sock *);
 
 int nl_sock_join_mcgroup(struct nl_sock *, unsigned int multicast_group);
 int nl_sock_leave_mcgroup(struct nl_sock *, unsigned int multicast_group);
+
+#ifdef _WIN32
+int nl_sock_subscribe_packets(struct nl_sock *sock);
+int nl_sock_unsubscribe_packets(struct nl_sock *sock);
+#endif
 
 int nl_sock_send(struct nl_sock *, const struct ofpbuf *, bool wait);
 int nl_sock_send_seq(struct nl_sock *, const struct ofpbuf *,
