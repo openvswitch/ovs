@@ -2065,7 +2065,8 @@ OvsDeleteVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
     static const NL_POLICY ovsVportPolicy[] = {
         [OVS_VPORT_ATTR_PORT_NO] = { .type = NL_A_U32, .optional = TRUE },
-        [OVS_VPORT_ATTR_NAME] = { .type = NL_A_STRING, .maxLen = IFNAMSIZ, .optional = TRUE },
+        [OVS_VPORT_ATTR_NAME] = { .type = NL_A_STRING, .maxLen = IFNAMSIZ,
+                                  .optional = TRUE },
     };
     PNL_ATTR vportAttrs[ARRAY_SIZE(ovsVportPolicy)];
 
@@ -2130,7 +2131,9 @@ OvsDeleteVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
          * "not created", i.e. we set vport->portNo = OVS_PORT_NUMBER_INVALID.
         */
         RemoveEntryList(&vport->ovsNameLink);
+        InitializeListHead(&vport->ovsNameLink);
         RemoveEntryList(&vport->portNoLink);
+        InitializeListHead(&vport->portNoLink);
         vport->portNo = OVS_DPPORT_NUMBER_INVALID;
         vport->ovsName[0] = '\0';
     }
