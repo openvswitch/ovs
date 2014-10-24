@@ -133,20 +133,28 @@ typedef struct _OVS_SWITCH_CONTEXT
 
     POVS_VPORT_ENTRY        vxlanVport;
 
-    PLIST_ENTRY             ovsPortNameHashArray;   // based on ovsName
+    /*
+     * 'portIdHashArray' ONLY contains ports that exist on the Hyper-V switch,
+     * namely: VIF (vNIC) ports, external port and Hyper-V internal port.
+     * 'numHvVports' counts the ports in 'portIdHashArray'.
+     *
+     * 'portNoHashArray' ONLY contains ports that are added from OVS userspace,
+     * regardless of whether that port exists on the Hyper-V switch or not.
+     * Tunnel ports and bridge-internal ports are examples of ports that do not
+     * exist on the Hyper-V switch, and 'numNonHvVports' counts such ports in
+     * 'portNoHashArray'.
+     *
+     * 'ovsPortNameHashArray' contains the same entries as 'portNoHashArray' but
+     * hashed on a different key.
+     */
     PLIST_ENTRY             portIdHashArray;        // based on Hyper-V portId
     PLIST_ENTRY             portNoHashArray;        // based on ovs port number
+    PLIST_ENTRY             ovsPortNameHashArray;   // based on ovsName
     PLIST_ENTRY             pidHashArray;           // based on packet pids
     NDIS_SPIN_LOCK          pidHashLock;            // Lock for pidHash table
 
-    /*
-     * 'numPhysicalNics' is the number of physical external NICs.
-     * 'numHvVports' is the number of Hyper-V switch ports added to OVS
-     * via the NDIS callbacks.
-     * 'numNonHvVports' is the number of ports added from userspace that are
-     * not on the Hyper-V switch. Eg. tunnel ports.
-     */
-    UINT32                  numPhysicalNics;
+    UINT32                  numPhysicalNics;        // the number of physical
+                                                    // external NICs.
     UINT32                  numHvVports;
     UINT32                  numNonHvVports;
 

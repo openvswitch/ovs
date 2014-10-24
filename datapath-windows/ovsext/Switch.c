@@ -433,6 +433,7 @@ OvsUninitSwitchContext(POVS_SWITCH_CONTEXT switchContext)
 
     /* We need to do cleanup for tunnel port here. */
     ASSERT(switchContext->numHvVports == 0);
+    ASSERT(switchContext->numNonHvVports == 0);
 
     NdisFreeRWLock(switchContext->dispatchLock);
     switchContext->dispatchLock = NULL;
@@ -491,12 +492,6 @@ cleanup:
                   switchContext,
                   (switchContext->isActivated ? "TRUE" : "FALSE"), status);
     return status;
-}
-
-PVOID
-OvsGetExternalVport()
-{
-    return gOvsSwitchContext->virtualExternalVport;
 }
 
 

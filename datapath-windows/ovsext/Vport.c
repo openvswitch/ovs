@@ -728,8 +728,6 @@ OvsInitTunnelVport(POVS_VPORT_ENTRY vport,
 {
     NTSTATUS status = STATUS_SUCCESS;
 
-    UNREFERENCED_PARAMETER(dstPort);
-
     vport->isBridgeInternal = FALSE;
     vport->ovsType = ovsType;
     vport->ovsState = OVS_STATE_PORT_CREATED;
@@ -739,8 +737,7 @@ OvsInitTunnelVport(POVS_VPORT_ENTRY vport,
     case OVS_VPORT_TYPE_GRE64:
         break;
     case OVS_VPORT_TYPE_VXLAN:
-        /* Will be enabled in later. */
-        /* status = OvsInitVxlanTunnel(vport, dstPort); */
+        status = OvsInitVxlanTunnel(vport, dstPort);
         break;
     default:
         ASSERT(0);
@@ -889,6 +886,10 @@ InitOvsVportCommon(POVS_SWITCH_CONTEXT switchContext,
         switchContext->vxlanVport = vport;
         switchContext->numNonHvVports++;
         break;
+    case OVS_VPORT_TYPE_INTERNAL:
+        if (vport->isBridgeInternal) {
+            switchContext->numNonHvVports++;
+        }
     default:
         break;
     }
@@ -1055,6 +1056,7 @@ OvsInitConfiguredSwitchNics(POVS_SWITCH_CONTEXT switchContext)
             nicParam->NicIndex != 0) {
             POVS_VPORT_ENTRY virtExtVport =
                    (POVS_VPORT_ENTRY)switchContext->virtualExternalVport;
+
             vport = OvsAllocateVport();
             if (vport) {
                 OvsInitPhysNicVport(vport, virtExtVport,
@@ -1125,7 +1127,7 @@ OvsClearAllSwitchVports(POVS_SWITCH_CONTEXT switchContext)
         LIST_FORALL_SAFE(head, link, next) {
             POVS_VPORT_ENTRY vport;
             vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, portNoLink);
-            ASSERT(OvsIsTunnelVportType(vport->portType) ||
+            ASSERT(OvsIsTunnelVportType(vport->ovsType) ||
                    (vport->ovsType == OVS_VPORT_TYPE_INTERNAL &&
                     vport->isBridgeInternal));
             OvsRemoveAndDeleteVport(switchContext, vport);

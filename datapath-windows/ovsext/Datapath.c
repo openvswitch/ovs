@@ -1513,7 +1513,8 @@ OvsGetVportDumpNext(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock, &lockState,
                           NDIS_RWL_AT_DISPATCH_LEVEL);
 
-    if (gOvsSwitchContext->numHvVports > 0) {
+    if (gOvsSwitchContext->numHvVports > 0 ||
+            gOvsSwitchContext->numNonHvVports > 0) {
         /* inBucket: the bucket, used for lookup */
         UINT32 inBucket = instance->dumpState.index[0];
         /* inIndex: index within the given bucket, used for lookup */
@@ -1525,7 +1526,7 @@ OvsGetVportDumpNext(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
         for (i = inBucket; i < OVS_MAX_VPORT_ARRAY_SIZE; i++) {
             PLIST_ENTRY head, link;
-            head = &(gOvsSwitchContext->portIdHashArray[i]);
+            head = &(gOvsSwitchContext->portNoHashArray[i]);
             POVS_VPORT_ENTRY vport = NULL;
 
             outIndex = 0;
@@ -1537,18 +1538,15 @@ OvsGetVportDumpNext(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                  * inIndex + 1 vport from the bucket.
                 */
                 if (outIndex >= inIndex) {
-                    vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, portIdLink);
+                    vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, portNoLink);
 
-                    if (vport->portNo != OVS_DPPORT_NUMBER_INVALID) {
-                        OvsCreateMsgFromVport(vport, msgIn,
-                                              usrParamsCtx->outputBuffer,
-                                              usrParamsCtx->outputLength,
-                                              gOvsSwitchContext->dpNo);
-                        ++outIndex;
-                        break;
-                    } else {
-                        vport = NULL;
-                    }
+                    ASSERT(vport->portNo != OVS_DPPORT_NUMBER_INVALID);
+                    OvsCreateMsgFromVport(vport, msgIn,
+                                          usrParamsCtx->outputBuffer,
+                                          usrParamsCtx->outputLength,
+                                          gOvsSwitchContext->dpNo);
+                    ++outIndex;
+                    break;
                 }
 
                 ++outIndex;
@@ -1748,7 +1746,9 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     PCHAR portName;
     ULONG portNameLen;
     UINT32 portType;
-    UINT32 hash;
+    BOOLEAN isBridgeInternal = FALSE;
+    BOOLEAN vportAllocated = FALSE;
+    BOOLEAN addInternalPortAsNetdev = FALSE;
 
     static const NL_POLICY ovsVportPolicy[] = {
         [OVS_VPORT_ATTR_PORT_NO] = { .type = NL_A_U32, .optional = TRUE },
@@ -1798,38 +1798,49 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         goto Cleanup;
     }
 
-    if (portType == OVS_VPORT_TYPE_INTERNAL) {
+    if (portName && portType == OVS_VPORT_TYPE_NETDEV &&
+        !strcmp(OVS_DPPORT_INTERNAL_NAME_A, portName)) {
+        addInternalPortAsNetdev = TRUE;
+    }
+
+    if (portName && portType == OVS_VPORT_TYPE_INTERNAL &&
+        strcmp(OVS_DPPORT_INTERNAL_NAME_A, portName)) {
+        isBridgeInternal = TRUE;
+    }
+
+    if (portType == OVS_VPORT_TYPE_INTERNAL && !isBridgeInternal) {
         vport = gOvsSwitchContext->internalVport;
     } else if (portType == OVS_VPORT_TYPE_NETDEV) {
-        if (!strcmp(portName, "external")) {
-            vport = gOvsSwitchContext->virtualExternalVport;
-        } else {
-            vport = OvsFindVportByHvName(gOvsSwitchContext, portName);
-        }
+        /* External ports can also be looked up like VIF ports. */
+        vport = OvsFindVportByHvName(gOvsSwitchContext, portName);
     } else {
-        /* XXX: change when other tunneling ports are added */
-        ASSERT(portType == OVS_VPORT_TYPE_VXLAN);
-
-        if (gOvsSwitchContext->vxlanVport) {
-            nlError = NL_ERROR_EXIST;
-            goto Cleanup;
-        }
+        ASSERT(OvsIsTunnelVportType(portType) ||
+               (portType == OVS_VPORT_TYPE_INTERNAL && isBridgeInternal));
+        ASSERT(OvsGetTunnelVport(gOvsSwitchContext, portType) == NULL ||
+               !OvsIsTunnelVportType(portType));
 
         vport = (POVS_VPORT_ENTRY)OvsAllocateVport();
         if (vport == NULL) {
             nlError = NL_ERROR_NOMEM;
             goto Cleanup;
         }
+        vportAllocated = TRUE;
 
-        vport->ovsState = OVS_STATE_PORT_CREATED;
+        if (OvsIsTunnelVportType(portType)) {
+            nlError = OvsInitTunnelVport(vport, portType, VXLAN_UDP_PORT);
+        } else {
+            OvsInitBridgeInternalVport(vport);
+        }
 
-        /*
-         * XXX: when we allow configuring the vxlan udp port, we should read
-         * this from vport->options instead!
-        */
-        nlError = OvsInitVxlanTunnel(vport, VXLAN_UDP_PORT);
-        if (nlError != NL_ERROR_SUCCESS) {
-            goto Cleanup;
+        if (nlError == NL_ERROR_SUCCESS) {
+            vport->ovsState = OVS_STATE_CONNECTED;
+            vport->nicState = NdisSwitchNicStateConnected;
+
+            /*
+             * Allow the vport to be deleted, because there is no
+             * corresponding hyper-v switch part.
+             */
+            vport->hvDeleted = TRUE;
         }
     }
 
@@ -1837,21 +1848,21 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         nlError = NL_ERROR_INVAL;
         goto Cleanup;
     }
-
     if (vport->portNo != OVS_DPPORT_NUMBER_INVALID) {
         nlError = NL_ERROR_EXIST;
         goto Cleanup;
     }
 
-    /* Fill the data in vport */
-    vport->ovsType = portType;
-
+    /* Initialize the vport with OVS specific properties. */
+    if (addInternalPortAsNetdev != TRUE) {
+        vport->ovsType = portType;
+    }
     if (vportAttrs[OVS_VPORT_ATTR_PORT_NO] != NULL) {
         /*
-        * XXX: when we implement the limit for ovs port number to be
-        * MAXUINT16, we'll need to check the port number received from the
-        * userspace.
-        */
+         * XXX: when we implement the limit for ovs port number to be
+         * MAXUINT16, we'll need to check the port number received from the
+         * userspace.
+         */
         vport->portNo = NlAttrGetU32(vportAttrs[OVS_VPORT_ATTR_PORT_NO]);
     } else {
         vport->portNo = OvsComputeVportNo(gOvsSwitchContext);
@@ -1866,42 +1877,19 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     ASSERT(portNameLen <= OVS_MAX_PORT_NAME_LENGTH);
 
     RtlCopyMemory(vport->ovsName, portName, portNameLen);
-
     /* if we don't have options, then vport->portOptions will be NULL */
     vport->portOptions = vportAttrs[OVS_VPORT_ATTR_OPTIONS];
 
     /*
-    * XXX: when we implement OVS_DP_ATTR_USER_FEATURES in datapath,
-    * we'll need to check the OVS_DP_F_VPORT_PIDS flag: if it is set,
-    * it means we have an array of pids, instead of a single pid.
-    * ATM we assume we have one pid only.
-    */
+     * XXX: when we implement OVS_DP_ATTR_USER_FEATURES in datapath,
+     * we'll need to check the OVS_DP_F_VPORT_PIDS flag: if it is set,
+     * it means we have an array of pids, instead of a single pid.
+     * ATM we assume we have one pid only.
+     */
     vport->upcallPid = NlAttrGetU32(vportAttrs[OVS_VPORT_ATTR_UPCALL_PID]);
 
-    if (vport->ovsType == OVS_VPORT_TYPE_VXLAN) {
-        gOvsSwitchContext->vxlanVport = vport;
-    } else if (vport->ovsType == OVS_VPORT_TYPE_INTERNAL) {
-        gOvsSwitchContext->internalVport = vport;
-        gOvsSwitchContext->internalPortId = vport->portId;
-    } else if (vport->ovsType == OVS_VPORT_TYPE_NETDEV &&
-               vport->isExternal) {
-        gOvsSwitchContext->virtualExternalVport = vport;
-        gOvsSwitchContext->virtualExternalPortId = vport->portId;
-    }
-
-    /*
-     * insert the port into the hash array of ports: by port number and ovs
-     * and ovs (datapath) port name.
-     * NOTE: OvsJhashWords has portNo as "1" word. This is ok, because the
-     * portNo is stored in 2 bytes only (max port number = MAXUINT16).
-    */
-    hash = OvsJhashWords(&vport->portNo, 1, OVS_HASH_BASIS);
-    InsertHeadList(&gOvsSwitchContext->portNoHashArray[hash & OVS_VPORT_MASK],
-                   &vport->portNoLink);
-
-    hash = OvsJhashBytes(vport->ovsName, portNameLen, OVS_HASH_BASIS);
-    InsertHeadList(&gOvsSwitchContext->ovsPortNameHashArray[hash & OVS_VPORT_MASK],
-                   &vport->ovsNameLink);
+    status = InitOvsVportCommon(gOvsSwitchContext, vport);
+    ASSERT(status == STATUS_SUCCESS);
 
     status = OvsCreateMsgFromVport(vport, msgIn, usrParamsCtx->outputBuffer,
                                    usrParamsCtx->outputLength,
@@ -1916,7 +1904,7 @@ Cleanup:
         POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
             usrParamsCtx->outputBuffer;
 
-        if (vport && vport->ovsType == OVS_VPORT_TYPE_VXLAN) {
+        if (vport && vportAllocated == TRUE) {
             OvsRemoveAndDeleteVport(gOvsSwitchContext, vport);
         }
 

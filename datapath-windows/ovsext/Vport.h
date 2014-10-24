@@ -179,6 +179,18 @@ OvsIsTunnelVportType(OVS_VPORT_TYPE ovsType)
            ovsType == OVS_VPORT_TYPE_GRE64;
 }
 
+static __inline POVS_VPORT_ENTRY
+OvsGetTunnelVport(POVS_SWITCH_CONTEXT switchContext,
+                  OVS_VPORT_TYPE ovsType)
+{
+    switch(ovsType) {
+    case OVS_VPORT_TYPE_VXLAN:
+        return switchContext->vxlanVport;
+    default:
+        return NULL;
+    }
+}
+
 static __inline BOOLEAN
 OvsIsInternalVportType(OVS_VPORT_TYPE ovsType)
 {
@@ -192,12 +204,6 @@ OvsIsBridgeInternalVport(POVS_VPORT_ENTRY vport)
        ASSERT(vport->ovsType == OVS_VPORT_TYPE_INTERNAL);
     }
     return vport->isBridgeInternal == TRUE;
-}
-
-static __inline UINT32
-OvsGetExternalMtu()
-{
-    return ((POVS_VPORT_ENTRY) OvsGetExternalVport())->mtu;
 }
 
 VOID OvsRemoveAndDeleteVport(POVS_SWITCH_CONTEXT switchContext,
