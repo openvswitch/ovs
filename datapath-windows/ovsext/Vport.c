@@ -552,9 +552,13 @@ OvsFindVportByPortIdAndNicIndex(POVS_SWITCH_CONTEXT switchContext,
                                 NDIS_SWITCH_PORT_ID portId,
                                 NDIS_SWITCH_NIC_INDEX index)
 {
-    if (portId == switchContext->virtualExternalPortId) {
+    if (switchContext->virtualExternalVport &&
+            portId == switchContext->virtualExternalPortId &&
+            index == switchContext->virtualExternalVport->nicIndex) {
         return (POVS_VPORT_ENTRY)switchContext->virtualExternalVport;
-    } else if (switchContext->internalPortId == portId) {
+    } else if (switchContext->internalVport &&
+               portId == switchContext->internalPortId &&
+               index == switchContext->internalVport->nicIndex) {
         return (POVS_VPORT_ENTRY)switchContext->internalVport;
     } else {
         PLIST_ENTRY head, link;
