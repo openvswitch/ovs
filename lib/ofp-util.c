@@ -7420,6 +7420,20 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
         return err;
     }
 
+    switch (gm->type) {
+    case OFPGT11_INDIRECT:
+        if (!list_is_singleton(&gm->buckets)) {
+            return OFPERR_OFPGMFC_INVALID_GROUP;
+        }
+        break;
+    case OFPGT11_ALL:
+    case OFPGT11_SELECT:
+    case OFPGT11_FF:
+        break;
+    default:
+        OVS_NOT_REACHED();
+    }
+
     LIST_FOR_EACH (bucket, list_node, &gm->buckets) {
         switch (gm->type) {
         case OFPGT11_ALL:

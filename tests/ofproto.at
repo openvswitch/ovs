@@ -298,6 +298,22 @@ AT_CLEANUP
 
 dnl This is really bare-bones.
 dnl It at least checks request and reply serialization and deserialization.
+dnl Actions definition listed in both supported formats (w/ actions=)
+AT_SETUP([ofproto - add indirect group])
+OVS_VSWITCHD_START
+dnl indirect group must have exactly one bucket
+AT_DATA([stderr], [dnl
+OFPT_ERROR (OF1.1) (xid=0x2): OFPGMFC_INVALID_GROUP
+OFPT_GROUP_MOD (OF1.1) (xid=0x2): ***decode error: OFPGMFC_INVALID_GROUP***
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-group br0 'group_id=1234,type=indirect'], [1], , [stderr])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-group br0 'group_id=1235,type=indirect,bucket=output:10'])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-group br0 'group_id=1236,type=indirect,bucket=output:10,bucket=output:11'], [1], , [stderr])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl This is really bare-bones.
+dnl It at least checks request and reply serialization and deserialization.
 AT_SETUP([ofproto - del group deletes flows])
 OVS_VSWITCHD_START
 AT_DATA([groups.txt], [dnl
