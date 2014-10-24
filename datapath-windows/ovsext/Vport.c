@@ -204,7 +204,7 @@ HvCreateNic(POVS_SWITCH_CONTEXT switchContext,
     if (nicParam->NicType == NdisSwitchNicTypeExternal &&
         nicParam->NicIndex != 0) {
         POVS_VPORT_ENTRY virtVport =
-            (POVS_VPORT_ENTRY)switchContext->externalVport;
+            (POVS_VPORT_ENTRY)switchContext->virtualExternalVport;
         vport = (POVS_VPORT_ENTRY)OvsAllocateVport();
         if (vport == NULL) {
             status = NDIS_STATUS_RESOURCES;
@@ -553,8 +553,8 @@ OvsFindVportByPortIdAndNicIndex(POVS_SWITCH_CONTEXT switchContext,
                                 NDIS_SWITCH_PORT_ID portId,
                                 NDIS_SWITCH_NIC_INDEX index)
 {
-    if (portId == switchContext->externalPortId) {
-        return (POVS_VPORT_ENTRY)switchContext->externalVport;
+    if (portId == switchContext->virtualExternalPortId) {
+        return (POVS_VPORT_ENTRY)switchContext->virtualExternalVport;
     } else if (switchContext->internalPortId == portId) {
         return (POVS_VPORT_ENTRY)switchContext->internalVport;
     } else {
@@ -716,8 +716,8 @@ OvsInitVportCommon(POVS_SWITCH_CONTEXT switchContext,
     switch (vport->portType) {
     case NdisSwitchPortTypeExternal:
         if (vport->nicIndex == 0) {
-            switchContext->externalPortId = vport->portId;
-            switchContext->externalVport = vport;
+            switchContext->virtualExternalPortId = vport->portId;
+            switchContext->virtualExternalVport = vport;
             RtlStringCbPrintfA(vport->ovsName, OVS_MAX_PORT_NAME_LENGTH - 1,
                 "external.virtualAdapter");
         } else {
@@ -749,7 +749,7 @@ OvsInitVportCommon(POVS_SWITCH_CONTEXT switchContext,
     hash = OvsJhashWords(&vport->portId, 1, OVS_HASH_BASIS);
     InsertHeadList(&switchContext->portIdHashArray[hash & OVS_VPORT_MASK],
                    &vport->portIdLink);
-    switchContext->numVports++;
+    switchContext->numHvVports++;
     return NDIS_STATUS_SUCCESS;
 }
 
@@ -760,8 +760,8 @@ OvsRemoveAndDeleteVport(POVS_SWITCH_CONTEXT switchContext,
     if (vport->isExternal) {
         if (vport->nicIndex == 0) {
             ASSERT(switchContext->numPhysicalNics == 0);
-            switchContext->externalPortId = 0;
-            switchContext->externalVport = NULL;
+            switchContext->virtualExternalPortId = 0;
+            switchContext->virtualExternalVport = NULL;
             OvsFreeMemory(vport);
             return;
         } else {
@@ -790,7 +790,7 @@ OvsRemoveAndDeleteVport(POVS_SWITCH_CONTEXT switchContext,
     RemoveEntryList(&vport->ovsNameLink);
     RemoveEntryList(&vport->portIdLink);
     RemoveEntryList(&vport->portNoLink);
-    switchContext->numVports--;
+    switchContext->numHvVports--;
     OvsFreeMemory(vport);
 }
 
@@ -877,7 +877,7 @@ OvsInitConfiguredSwitchNics(POVS_SWITCH_CONTEXT switchContext)
         if (nicParam->NicType == NdisSwitchNicTypeExternal &&
             nicParam->NicIndex != 0) {
             POVS_VPORT_ENTRY virtVport =
-                   (POVS_VPORT_ENTRY)switchContext->externalVport;
+                   (POVS_VPORT_ENTRY)switchContext->virtualExternalVport;
             vport = OvsAllocateVport();
             if (vport) {
                 OvsInitPhysNicVport(vport, virtVport, nicParam->NicIndex);
@@ -924,9 +924,9 @@ OvsClearAllSwitchVports(POVS_SWITCH_CONTEXT switchContext)
         }
     }
 
-    if (switchContext->externalVport) {
+    if (switchContext->virtualExternalVport) {
         OvsRemoveAndDeleteVport(switchContext,
-                        (POVS_VPORT_ENTRY)switchContext->externalVport);
+                        (POVS_VPORT_ENTRY)switchContext->virtualExternalVport);
     }
 }
 

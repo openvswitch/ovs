@@ -95,26 +95,60 @@ typedef struct _OVS_SWITCH_CONTEXT
 
     UINT32                  dpNo;
 
-    NDIS_SWITCH_PORT_ID     externalPortId;
+    /*
+     * 'virtualExternalVport' represents default external interface. This is
+     * a virtual interface. The friendly name of such an interface has
+     * been observed to be: "Microsoft Default External Interface". This NIC
+     * has 'NicIndex' == 0.
+     *
+     * The "real" physical external NIC has 'NicIndex' > 0. For each
+     * external interface, virtual or physical, NDIS gives an NIC level
+     * OID callback. Note that, even though there are multile "NICs",
+     * there's only one underlying Hyper-V port. Thus, we get a single
+     * NDIS port-level callback, but multiple NDIS NIC-level callbacks.
+     *
+     * The virtual external NIC can be accessed at 'virtualExternalVport', and
+     * is assigned the name "external.defaultAdapter". The virtual external
+     * NIC is not inserted into the 'portIdHashArray' since the port must not
+     * be exposed to OVS userspace.
+     *
+     * The physical external NICs are assigned names "external.%INDEX%",
+     * where '%INDEX%' represents the 'NicIndex' of the NIC.
+     *
+     * While adding a physical external NIC in OvsInitConfiguredSwitchNics(),
+     * some required properties of the vport are available only at the
+     * NDIS port-level. So, these are copied from 'virtualExternalVport'.
+     * The vport created for the physical external NIC is inserted into the
+     * 'portIdHashArray'.
+     *
+     * When the virtual external NIC is torn down or deleted, the
+     * corresponding physical external ports are also torn down or
+     * deleted. The number of physical external NICs is tracked by
+     * 'numPhysicalNics'.
+     */
+    NDIS_SWITCH_PORT_ID     virtualExternalPortId;
     NDIS_SWITCH_PORT_ID     internalPortId;
-    POVS_VPORT_ENTRY        externalVport;  // the virtual adapter vport
+    POVS_VPORT_ENTRY        virtualExternalVport;   // the virtual adapter vport
     POVS_VPORT_ENTRY        internalVport;
 
-    /*
-     * XXX when we support multiple VXLAN ports, we will need a list entry
-     * instead
-     */
     POVS_VPORT_ENTRY        vxlanVport;
 
     PLIST_ENTRY             ovsPortNameHashArray;   // based on ovsName
-    PLIST_ENTRY             portIdHashArray;        // based on portId
+    PLIST_ENTRY             portIdHashArray;        // based on Hyper-V portId
     PLIST_ENTRY             portNoHashArray;        // based on ovs port number
     PLIST_ENTRY             pidHashArray;           // based on packet pids
     NDIS_SPIN_LOCK          pidHashLock;            // Lock for pidHash table
 
+    /*
+     * 'numPhysicalNics' is the number of physical external NICs.
+     * 'numHvVports' is the number of Hyper-V switch ports added to OVS
+     * via the NDIS callbacks.
+     * 'numNonHvVports' is the number of ports added from userspace that are
+     * not on the Hyper-V switch. Eg. tunnel ports.
+     */
     UINT32                  numPhysicalNics;
-    UINT32                  numVports;     // include validation port
-    UINT32                  lastPortIndex;
+    UINT32                  numHvVports;
+    UINT32                  numNonHvVports;
 
     /* Lock taken over the switch. This protects the ports on the switch. */
     PNDIS_RW_LOCK_EX        dispatchLock;

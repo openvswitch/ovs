@@ -236,7 +236,7 @@ OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
                                   dispatch);
 
             ctx = OvsInitExternalNBLContext(switchContext, curNbl,
-                                  sourcePort == switchContext->externalPortId);
+                                  sourcePort == switchContext->virtualExternalPortId);
             if (ctx == NULL) {
                 RtlInitUnicodeString(&filterReason,
                                      L"Cannot allocate external NBL context.");
@@ -291,7 +291,7 @@ OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
                                                 portNo,
                                                 &key, curNbl,
                                                 sourcePort ==
-                                                switchContext->externalPortId,
+                                                switchContext->virtualExternalPortId,
                                                 &layers, switchContext,
                                                 &missedPackets, &num);
                 if (status == NDIS_STATUS_SUCCESS) {

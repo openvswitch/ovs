@@ -1513,7 +1513,7 @@ OvsGetVportDumpNext(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock, &lockState,
                           NDIS_RWL_AT_DISPATCH_LEVEL);
 
-    if (gOvsSwitchContext->numVports > 0) {
+    if (gOvsSwitchContext->numHvVports > 0) {
         /* inBucket: the bucket, used for lookup */
         UINT32 inBucket = instance->dumpState.index[0];
         /* inIndex: index within the given bucket, used for lookup */
@@ -1802,7 +1802,7 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         vport = gOvsSwitchContext->internalVport;
     } else if (portType == OVS_VPORT_TYPE_NETDEV) {
         if (!strcmp(portName, "external")) {
-            vport = gOvsSwitchContext->externalVport;
+            vport = gOvsSwitchContext->virtualExternalVport;
         } else {
             vport = OvsFindVportByHvName(gOvsSwitchContext, portName);
         }
@@ -1885,8 +1885,8 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         gOvsSwitchContext->internalPortId = vport->portId;
     } else if (vport->ovsType == OVS_VPORT_TYPE_NETDEV &&
                vport->isExternal) {
-        gOvsSwitchContext->externalVport = vport;
-        gOvsSwitchContext->externalPortId = vport->portId;
+        gOvsSwitchContext->virtualExternalVport = vport;
+        gOvsSwitchContext->virtualExternalPortId = vport->portId;
     }
 
     /*

@@ -432,7 +432,7 @@ OvsUninitSwitchContext(POVS_SWITCH_CONTEXT switchContext)
     OVS_LOG_TRACE("Enter: Delete switchContext:%p", switchContext);
 
     /* We need to do cleanup for tunnel port here. */
-    ASSERT(switchContext->numVports == 0);
+    ASSERT(switchContext->numHvVports == 0);
 
     NdisFreeRWLock(switchContext->dispatchLock);
     switchContext->dispatchLock = NULL;
@@ -496,7 +496,7 @@ cleanup:
 PVOID
 OvsGetExternalVport()
 {
-    return gOvsSwitchContext->externalVport;
+    return gOvsSwitchContext->virtualExternalVport;
 }
 
 

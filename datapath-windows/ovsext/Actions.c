@@ -249,7 +249,7 @@ OvsDetectTunnelPkt(OvsForwardingContext *ovsFwdCtx,
          * default port.
          */
         BOOLEAN validSrcPort = (ovsFwdCtx->fwdDetail->SourcePortId ==
-                                ovsFwdCtx->switchContext->externalPortId) ||
+                                ovsFwdCtx->switchContext->virtualExternalPortId) ||
                                (ovsFwdCtx->fwdDetail->SourcePortId ==
                                 NDIS_SWITCH_DEFAULT_PORT_ID);
 
