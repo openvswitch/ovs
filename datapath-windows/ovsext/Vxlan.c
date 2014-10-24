@@ -52,13 +52,12 @@ extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
 /*
  * udpDestPort: the vxlan is set as payload to a udp frame. If the destination
  * port of an udp frame is udpDestPort, we understand it to be vxlan.
-*/
+ */
 NL_ERROR
 OvsInitVxlanTunnel(POVS_VPORT_ENTRY vport,
                    UINT16 udpDestPort)
 {
     POVS_VXLAN_VPORT vxlanPort;
-    NTSTATUS status;
 
     vxlanPort = OvsAllocateMemory(sizeof (*vxlanPort));
     if (vxlanPort == NULL) {
@@ -68,22 +67,12 @@ OvsInitVxlanTunnel(POVS_VPORT_ENTRY vport,
     RtlZeroMemory(vxlanPort, sizeof(*vxlanPort));
     vxlanPort->dstPort = udpDestPort;
     /*
-    * since we are installing the WFP filter before the port is created
-    * We need to check if it is the same number
-    * XXX should be removed later
-    */
+     * since we are installing the WFP filter before the port is created
+     * We need to check if it is the same number
+     * XXX should be removed later
+     */
     ASSERT(vxlanPort->dstPort == VXLAN_UDP_PORT);
     vport->priv = (PVOID)vxlanPort;
-
-    status = OvsInitVportCommon(gOvsSwitchContext, vport);
-    ASSERT(status == NDIS_STATUS_SUCCESS);
-
-    vport->ovsState = OVS_STATE_CONNECTED;
-    vport->nicState = NdisSwitchNicStateConnected;
-    /*
-     * allow the vport to be deleted, because there is no hyper-v switch part
-     */
-    vport->hvDeleted = TRUE;
 
     return NL_ERROR_SUCCESS;
 }

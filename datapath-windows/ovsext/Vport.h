@@ -203,7 +203,9 @@ OvsGetExternalMtu()
 VOID OvsRemoveAndDeleteVport(POVS_SWITCH_CONTEXT switchContext,
                              POVS_VPORT_ENTRY vport);
 
-NDIS_STATUS OvsInitVportCommon(POVS_SWITCH_CONTEXT switchContext,
+NDIS_STATUS InitHvVportCommon(POVS_SWITCH_CONTEXT switchContext,
+                              POVS_VPORT_ENTRY vport);
+NDIS_STATUS InitOvsVportCommon(POVS_SWITCH_CONTEXT switchContext,
                                POVS_VPORT_ENTRY vport);
 NTSTATUS OvsInitTunnelVport(POVS_VPORT_ENTRY vport, OVS_VPORT_TYPE ovsType,
                             UINT16 dstport);
