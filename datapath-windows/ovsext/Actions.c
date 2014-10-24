@@ -266,8 +266,10 @@ OvsDetectTunnelPkt(OvsForwardingContext *ovsFwdCtx,
         /*
          * Tx:
          * The destination port is a tunnel port. Encapsulation must be
-         * performed only on packets that originate from a VIF port or from
-         * userspace (default port)
+         * performed only on packets that originate from:
+         * - a VIF port
+         * - a bridge-internal port (packets generated from userspace)
+         * - no port.
          *
          * If the packet will not be encapsulated, consume the tunnel context
          * by clearing it.
@@ -277,7 +279,9 @@ OvsDetectTunnelPkt(OvsForwardingContext *ovsFwdCtx,
             POVS_VPORT_ENTRY vport = OvsFindVportByPortNo(
                 ovsFwdCtx->switchContext, ovsFwdCtx->srcVportNo);
 
-            if (!vport || vport->ovsType != OVS_VPORT_TYPE_NETDEV) {
+            if (!vport ||
+                (vport->ovsType != OVS_VPORT_TYPE_NETDEV &&
+                 !OvsIsBridgeInternalVport(vport))) {
                 ovsFwdCtx->tunKey.dst = 0;
             }
         }
