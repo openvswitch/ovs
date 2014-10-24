@@ -248,10 +248,11 @@ OvsDetectTunnelPkt(OvsForwardingContext *ovsFwdCtx,
          * port or if it is being executed from userspace, the source port is
          * default port.
          */
-        BOOLEAN validSrcPort = (ovsFwdCtx->fwdDetail->SourcePortId ==
-                                ovsFwdCtx->switchContext->virtualExternalPortId) ||
-                               (ovsFwdCtx->fwdDetail->SourcePortId ==
-                                NDIS_SWITCH_DEFAULT_PORT_ID);
+        BOOLEAN validSrcPort =
+            (ovsFwdCtx->fwdDetail->SourcePortId ==
+                 ovsFwdCtx->switchContext->virtualExternalPortId) ||
+            (ovsFwdCtx->fwdDetail->SourcePortId ==
+                 NDIS_SWITCH_DEFAULT_PORT_ID);
 
         if (validSrcPort && OvsDetectTunnelRxPkt(ovsFwdCtx, flowKey)) {
             ASSERT(ovsFwdCtx->tunnelTxNic == NULL);
@@ -342,6 +343,10 @@ OvsAddPorts(OvsForwardingContext *ovsFwdCtx,
     vport->stats.txPackets++;
     vport->stats.txBytes +=
         NET_BUFFER_DATA_LENGTH(NET_BUFFER_LIST_FIRST_NB(ovsFwdCtx->curNbl));
+
+    if (OvsIsBridgeInternalVport(vport)) {
+        return NDIS_STATUS_SUCCESS;
+    }
 
     if (OvsDetectTunnelPkt(ovsFwdCtx, vport, flowKey)) {
         return NDIS_STATUS_SUCCESS;
