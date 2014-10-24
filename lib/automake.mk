@@ -33,6 +33,7 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/cfm.h \
 	lib/classifier.c \
 	lib/classifier.h \
+	lib/classifier-private.h \
 	lib/cmap.c \
 	lib/cmap.h \
 	lib/command-line.c \
