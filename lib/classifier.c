@@ -702,7 +702,7 @@ classifier_lookup(const struct classifier *cls, const struct flow *flow,
                                   hash_metadata(flow->metadata)));
     tags = partition ? partition->tags : TAG_ARBITRARY;
 
-    /* Initialize trie contexts for match_find_wc(). */
+    /* Initialize trie contexts for find_match_wc(). */
     for (int i = 0; i < cls->n_tries; i++) {
         trie_ctx_init(&trie_ctx[i], &cls->tries[i]);
     }
