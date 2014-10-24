@@ -56,8 +56,6 @@ static VOID OvsInitVportWithNicParam(POVS_SWITCH_CONTEXT switchContext,
                 POVS_VPORT_ENTRY vport, PNDIS_SWITCH_NIC_PARAMETERS nicParam);
 static VOID OvsInitPhysNicVport(POVS_VPORT_ENTRY vport, POVS_VPORT_ENTRY
                 virtVport, UINT32 nicIndex);
-static VOID OvsInitPhysNicVport(POVS_VPORT_ENTRY vport, POVS_VPORT_ENTRY
-                virtVport, UINT32 nicIndex);
 static __inline VOID OvsWaitActivate(POVS_SWITCH_CONTEXT switchContext,
                                      ULONG sleepMicroSec);
 static NTSTATUS OvsGetExtInfoIoctl(POVS_VPORT_GET vportGet,
@@ -704,6 +702,55 @@ OvsInitPhysNicVport(POVS_VPORT_ENTRY vport,
                   sizeof(NDIS_SWITCH_PORT_FRIENDLYNAME));
 
     vport->ovsState = OVS_STATE_PORT_CREATED;
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * Initializes a tunnel vport.
+ * --------------------------------------------------------------------------
+ */
+NTSTATUS
+OvsInitTunnelVport(POVS_VPORT_ENTRY vport,
+                   OVS_VPORT_TYPE ovsType,
+                   UINT16 dstPort)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+
+    UNREFERENCED_PARAMETER(dstPort);
+
+    vport->isBridgeInternal = FALSE;
+    vport->ovsType = ovsType;
+    vport->ovsState = OVS_STATE_PORT_CREATED;
+    switch (ovsType) {
+    case OVS_VPORT_TYPE_GRE:
+        break;
+    case OVS_VPORT_TYPE_GRE64:
+        break;
+    case OVS_VPORT_TYPE_VXLAN:
+        /* Will be enabled in later. */
+        /* status = OvsInitVxlanTunnel(vport, dstPort); */
+        break;
+    default:
+        ASSERT(0);
+    }
+    return status;
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * Initializes a bridge internal vport ie. a port of type
+ * OVS_VPORT_TYPE_INTERNAL but not present on the Hyper-V switch.
+ * --------------------------------------------------------------------------
+ */
+NTSTATUS
+OvsInitBridgeInternalVport(POVS_VPORT_ENTRY vport)
+{
+    vport->isBridgeInternal = TRUE;
+    vport->ovsType = OVS_VPORT_TYPE_INTERNAL;
+    /* Mark the status to be connected, since there is no other initialization
+     * for this port. */
+    vport->ovsState = OVS_STATE_CONNECTED;
+    return STATUS_SUCCESS;
 }
 
 NDIS_STATUS
