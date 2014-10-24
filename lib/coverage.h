@@ -28,7 +28,6 @@
  * a useful debugging tool. */
 
 #include "ovs-thread.h"
-#include "vlog.h"
 #include "compiler.h"
 
 /* Makes coverage_run run every 5000 ms (5 seconds).

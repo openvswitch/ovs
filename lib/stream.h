@@ -22,11 +22,12 @@
 #include <stdint.h>
 #include <sys/types.h>
 #include "openvswitch/types.h"
-#include "vlog.h"
 #include "socket-util.h"
+#include "util.h"
 
 struct pstream;
 struct stream;
+struct vlog_module;
 
 void stream_usage(const char *name, bool active, bool passive, bool bootstrap);
 
