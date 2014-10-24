@@ -1180,7 +1180,7 @@ nl_dump_done(struct nl_dump *dump)
  * the overlapped structure event associated with the pending I/O will be set
  */
 static int
-pend_io_request(const struct nl_sock *sock)
+pend_io_request(struct nl_sock *sock)
 {
     struct ofpbuf request;
     uint64_t request_stub[128];
@@ -1229,13 +1229,14 @@ done:
 #endif  /* _WIN32 */
 
 /* Causes poll_block() to wake up when any of the specified 'events' (which is
- * a OR'd combination of POLLIN, POLLOUT, etc.) occur on 'sock'. */
+ * a OR'd combination of POLLIN, POLLOUT, etc.) occur on 'sock'.
+ * On Windows, 'sock' is not treated as const, and may be modified. */
 void
 nl_sock_wait(const struct nl_sock *sock, short int events)
 {
 #ifdef _WIN32
     if (sock->overlapped.Internal != STATUS_PENDING) {
-        pend_io_request(sock);
+        pend_io_request(CONST_CAST(struct nl_sock *, sock));
        /* XXX: poll_wevent_wait(sock->overlapped.hEvent); */
     }
     poll_immediate_wake(); /* XXX: temporary. */
@@ -1255,7 +1256,8 @@ int
 nl_sock_fd(const struct nl_sock *sock)
 {
 #ifdef _WIN32
-    return sock->handle;
+    BUILD_ASSERT_DECL(sizeof sock->handle == sizeof(int));
+    return (int)sock->handle;
 #else
     return sock->fd;
 #endif
