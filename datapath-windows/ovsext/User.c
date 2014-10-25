@@ -98,6 +98,7 @@ OvsCleanupPacketQueue(POVS_OPEN_INSTANCE instance)
     LIST_ENTRY tmp;
     PIRP irp = NULL;
 
+    ASSERT(instance);
     InitializeListHead(&tmp);
     queue = (POVS_USER_PACKET_QUEUE)instance->packetQueue;
     if (queue) {
@@ -139,6 +140,11 @@ OvsCleanupPacketQueue(POVS_OPEN_INSTANCE instance)
     if (queue) {
         OvsFreeMemory(queue);
     }
+
+    /* Remove the instance from pidHashArray */
+    OvsAcquirePidHashLock();
+    OvsDelPidInstance(gOvsSwitchContext, instance->pid);
+    OvsReleasePidHashLock();
 }
 
 NTSTATUS
