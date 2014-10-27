@@ -33,22 +33,22 @@ struct cls_subtable {
     /* The fields are only used by writers. */
     int n_rules OVS_GUARDED;                /* Number of rules, including
                                              * duplicates. */
-    int max_priority OVS_GUARDED; /* Max priority of any rule in subtable. */
+    int max_priority OVS_GUARDED;  /* Max priority of any rule in subtable. */
     unsigned int max_count OVS_GUARDED;     /* Count of max_priority rules. */
 
     /* These fields are accessed by readers who care about wildcarding. */
-    tag_type tag;       /* Tag generated from mask for partitioning (const). */
-    uint8_t n_indices;                   /* How many indices to use (const). */
-    uint8_t index_ofs[CLS_MAX_INDICES];   /* u32 segment boundaries (const). */
+    const tag_type tag;       /* Tag generated from mask for partitioning. */
+    const uint8_t n_indices;                   /* How many indices to use. */
+    const uint8_t index_ofs[CLS_MAX_INDICES];  /* u32 segment boundaries. */
     unsigned int trie_plen[CLS_MAX_TRIES];  /* Trie prefix length in 'mask'
                                              * (runtime configurable). */
-    int ports_mask_len;                     /* (const) */
+    const int ports_mask_len;
     struct cmap indices[CLS_MAX_INDICES];   /* Staged lookup indices. */
     rcu_trie_ptr ports_trie;                /* NULL if none. */
 
     /* These fields are accessed by all readers. */
-    struct cmap rules;                      /* Contains "struct cls_rule"s. */
-    struct minimask mask;                   /* Wildcards for fields (const). */
+    struct cmap rules;                      /* Contains 'cls_match'es. */
+    const struct minimask mask;             /* Wildcards for fields. */
     /* 'mask' must be the last field. */
 };
 
@@ -64,20 +64,20 @@ struct cls_partition {
 
 /* Internal representation of a rule in a "struct cls_subtable". */
 struct cls_match {
-    /* Accessed only by writers and iterators. */
+    /* Accessed by everybody. */
     struct rculist list OVS_GUARDED; /* Identical, lower-priority rules. */
 
     /* Accessed only by writers. */
     struct cls_partition *partition OVS_GUARDED;
 
     /* Accessed by readers interested in wildcarding. */
-    int priority;               /* Larger numbers are higher priorities. */
+    const int priority;         /* Larger numbers are higher priorities. */
     struct cmap_node index_nodes[CLS_MAX_INDICES]; /* Within subtable's
                                                     * 'indices'. */
     /* Accessed by all readers. */
     struct cmap_node cmap_node; /* Within struct cls_subtable 'rules'. */
-    struct cls_rule *cls_rule;
-    struct miniflow flow;       /* Matching rule. Mask is in the subtable. */
+    const struct cls_rule *cls_rule;
+    const struct miniflow flow; /* Matching rule. Mask is in the subtable. */
     /* 'flow' must be the last field. */
 };
 

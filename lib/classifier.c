@@ -44,9 +44,10 @@ cls_match_alloc(struct cls_rule *rule)
         = xmalloc(sizeof *cls_match - sizeof cls_match->flow.inline_values
                   + MINIFLOW_VALUES_SIZE(count));
 
-    cls_match->cls_rule = rule;
-    miniflow_clone_inline(&cls_match->flow, &rule->match.flow, count);
-    cls_match->priority = rule->priority;
+    *CONST_CAST(const struct cls_rule **, &cls_match->cls_rule) = rule;
+    *CONST_CAST(int *, &cls_match->priority) = rule->priority;
+    miniflow_clone_inline(CONST_CAST(struct miniflow *, &cls_match->flow),
+                          &rule->match.flow, count);
     rule->cls_match = cls_match;
 
     return cls_match;
@@ -1027,7 +1028,8 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
     subtable = xzalloc(sizeof *subtable - sizeof mask->masks.inline_values
                        + MINIFLOW_VALUES_SIZE(count));
     cmap_init(&subtable->rules);
-    miniflow_clone_inline(&subtable->mask.masks, &mask->masks, count);
+    miniflow_clone_inline(CONST_CAST(struct miniflow *, &subtable->mask.masks),
+                          &mask->masks, count);
 
     /* Init indices for segmented lookup, if any. */
     flow_wildcards_init_catchall(&new);
@@ -1039,7 +1041,8 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
         /* Add an index if it adds mask bits. */
         if (!flow_wildcards_equal(&new, &old)) {
             cmap_init(&subtable->indices[index]);
-            subtable->index_ofs[index] = cls->flow_segments[i];
+            *CONST_CAST(uint8_t *, &subtable->index_ofs[index])
+                = cls->flow_segments[i];
             index++;
             old = new;
         }
@@ -1051,15 +1054,16 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
         flow_wildcards_fold_minimask_range(&new, mask, prev, FLOW_U32S);
         if (flow_wildcards_equal(&new, &old)) {
             --index;
-            subtable->index_ofs[index] = 0;
+            *CONST_CAST(uint8_t *, &subtable->index_ofs[index]) = 0;
             cmap_destroy(&subtable->indices[index]);
         }
     }
-    subtable->n_indices = index;
+    *CONST_CAST(uint8_t *, &subtable->n_indices) = index;
 
-    subtable->tag = (minimask_get_metadata_mask(mask) == OVS_BE64_MAX
-                     ? tag_create_deterministic(hash)
-                     : TAG_ALL);
+    *CONST_CAST(tag_type *, &subtable->tag) =
+        (minimask_get_metadata_mask(mask) == OVS_BE64_MAX
+         ? tag_create_deterministic(hash)
+         : TAG_ALL);
 
     for (i = 0; i < cls->n_tries; i++) {
         subtable->trie_plen[i] = minimask_get_prefix_len(mask,
@@ -1068,7 +1072,7 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
 
     /* Ports trie. */
     ovsrcu_set_hidden(&subtable->ports_trie, NULL);
-    subtable->ports_mask_len
+    *CONST_CAST(int *, &subtable->ports_mask_len)
         = 32 - ctz32(ntohl(MINIFLOW_GET_BE32(&mask->masks, tp_src)));
 
     cmap_insert(&cls->subtables_map, &subtable->cmap_node, hash);
@@ -1090,7 +1094,6 @@ destroy_subtable(struct classifier *cls, struct cls_subtable *subtable)
     }
     cmap_remove(&cls->subtables_map, &subtable->cmap_node,
                 minimask_hash(&subtable->mask, 0));
-    minimask_destroy(&subtable->mask);
     cmap_destroy(&subtable->rules);
     ovsrcu_postpone(free, subtable);
 }
