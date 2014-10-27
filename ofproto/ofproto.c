@@ -4336,8 +4336,6 @@ modify_flows__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
 
         long long int now = time_msec();
 
-        /* FIXME: Implement OFPFUTIL_FF_RESET_COUNTS */
-
         if (change_cookie) {
             cookies_remove(ofproto, rule);
         }
