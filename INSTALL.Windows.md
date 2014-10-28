@@ -1,5 +1,5 @@
-        How to Build the Kernel module & userspace daemons for Windows
-        ==============================================================
+How to Build the Kernel module & userspace daemons for Windows
+==============================================================
 
 Autoconf, Automake and Visual C++:
 ---------------------------------
@@ -52,16 +52,16 @@ or from a distribution tar ball.
 * If you pulled the sources directly from an Open vSwitch Git tree,
   run boot.sh in the top source directory:
 
-  % ./boot.sh
+    % ./boot.sh
 
 * In the top source directory, configure the package by running the
   configure script.  You should provide some configure options to choose
   the right compiler, linker, libraries, Open vSwitch component installation
   directories, etc. For example,
 
-  % ./configure CC=./build-aux/cccl LD="`which link`" LIBS="-lws2_32" \
-    --prefix="C:/openvswitch/usr" --localstatedir="C:/openvswitch/var" \
-    --sysconfdir="C:/openvswitch/etc" --with-pthread="C:/pthread"
+    % ./configure CC=./build-aux/cccl LD="`which link`" LIBS="-lws2_32" \
+      --prefix="C:/openvswitch/usr" --localstatedir="C:/openvswitch/var" \
+      --sysconfdir="C:/openvswitch/etc" --with-pthread="C:/pthread"
 
     By default, the above enables compiler optimization for fast code.
     For default compiler optimization, pass the "--with-debug" configure
@@ -69,11 +69,11 @@ or from a distribution tar ball.
 
 * Run make for the ported executables in the top source directory, e.g.:
 
-  % make
+    % make
 
 * To run all the unit tests:
 
-  % make check
+    % make check
 
 OpenSSL, Open vSwitch and Visual C++
 ------------------------------------
@@ -90,10 +90,10 @@ Note down the directory where OpenSSL is installed (e.g.: C:/OpenSSL-Win32).
 * While configuring the package, specify the OpenSSL directory path.
 For example,
 
-  % ./configure CC=./build-aux/cccl LD="`which link`" LIBS="-lws2_32" \
-  --prefix="C:/openvswitch/usr" --localstatedir="C:/openvswitch/var" \
-  --sysconfdir="C:/openvswitch/etc" --with-pthread="C:/pthread" --enable-ssl \
-  --with-openssl="C:/OpenSSL-Win32"
+    % ./configure CC=./build-aux/cccl LD="`which link`" LIBS="-lws2_32" \
+    --prefix="C:/openvswitch/usr" --localstatedir="C:/openvswitch/var" \
+    --sysconfdir="C:/openvswitch/etc" --with-pthread="C:/pthread" \
+    --enable-ssl --with-openssl="C:/OpenSSL-Win32"
 
 * Run make for the ported executables.
 

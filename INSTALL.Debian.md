@@ -1,9 +1,9 @@
-	    How to Build Debian Packages for Open vSwitch
-            =============================================
+How to Build Debian Packages for Open vSwitch
+=============================================
 
 This document describes how to build Debian packages for Open vSwitch.
 To install Open vSwitch on Debian without building Debian packages,
-see INSTALL instead.
+see [INSTALL](INSTALL.md) instead.
 
 These instructions should also work on Ubuntu and other Debian
 derivative distributions.
@@ -28,33 +28,33 @@ Open vSwitch Git tree with these instructions.
 You do not need to be the superuser to build the Debian packages.
 
 1. Install the "build-essential" and "fakeroot" packages, e.g. with
-   "apt-get install build-essential fakeroot".
+   `apt-get install build-essential fakeroot`.
 
-2. Obtain and unpack an Open vSwitch source distribution and "cd" into
+2. Obtain and unpack an Open vSwitch source distribution and `cd` into
    its top level directory.
 
 3. Install the build dependencies listed under "Build-Depends:" near
    the top of debian/control.  You can install these any way you like,
-   e.g. with "apt-get install".
+   e.g. with `apt-get install`.
 
-   Check your work by running "dpkg-checkbuilddeps" in the top level of
+   Check your work by running `dpkg-checkbuilddeps` in the top level of
    your ovs directory.  If you've installed all the dependencies
    properly, dpkg-checkbuilddeps will exit without printing anything.
    If you forgot to install some dependencies, it will tell you which ones.
 
 4. Run:
 
-       fakeroot debian/rules binary
+       `fakeroot debian/rules binary`
 
    This will do a serial build that runs the unit tests. This will take
    approximately 8 to 10 minutes. If you prefer, you can run a faster
    parallel build, e.g.:
 
-       DEB_BUILD_OPTIONS='parallel=8' fakeroot debian/rules binary
+       `DEB_BUILD_OPTIONS='parallel=8' fakeroot debian/rules binary`
 
    If you are in a big hurry, you can even skip the unit tests:
 
-       DEB_BUILD_OPTIONS='parallel=8 nocheck' fakeroot debian/rules binary
+       `DEB_BUILD_OPTIONS='parallel=8 nocheck' fakeroot debian/rules binary`
 
 5. The generated .deb files will be in the parent directory of the
    Open vSwitch source distribution.
@@ -66,9 +66,9 @@ Installing .deb Packages
 These instructions apply to installing from Debian packages that you
 built yourself, as described in the previous section, or from packages
 provided by Debian or a Debian derivative distribution such as Ubuntu.
-In the former case, use a command such as "dpkg -i" to install the
+In the former case, use a command such as `dpkg -i` to install the
 .deb files that you build, and in the latter case use a program such
-as "apt-get" or "aptitude" to download and install the provided
+as `apt-get` or `aptitude` to download and install the provided
 packages.
 
 You must be superuser to install Debian packages.

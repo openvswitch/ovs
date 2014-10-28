@@ -1,12 +1,12 @@
-                 Open vSwitch <http://openvswitch.org>
-
 Frequently Asked Questions
 ==========================
+
+Open vSwitch <http://openvswitch.org>
 
 General
 -------
 
-Q: What is Open vSwitch?
+### Q: What is Open vSwitch?
 
 A: Open vSwitch is a production quality open source software switch
    designed to be used as a vswitch in virtualized server
@@ -24,7 +24,7 @@ A: Open vSwitch is a production quality open source software switch
    Open vSwitch will be able to take advantage of on-NIC switching
    chipsets as their functionality matures.
 
-Q: What virtualization platforms can use Open vSwitch?
+### Q: What virtualization platforms can use Open vSwitch?
 
 A: Open vSwitch can currently run on any Linux-based virtualization
    platform (kernel 2.6.32 and newer), including: KVM, VirtualBox, Xen,
@@ -34,7 +34,7 @@ A: Open vSwitch can currently run on any Linux-based virtualization
    inquires about integrating Open vSwitch with other virtualization
    platforms.
 
-Q: How can I try Open vSwitch?
+### Q: How can I try Open vSwitch?
 
 A: The Open vSwitch source code can be built on a Linux system.  You can
    build and experiment with Open vSwitch on any Linux machine.
@@ -47,7 +47,7 @@ A: The Open vSwitch source code can be built on a Linux system.  You can
    integrated with a particular platform may not be the most recent Open
    vSwitch release.
 
-Q: Does Open vSwitch only work on Linux?
+### Q: Does Open vSwitch only work on Linux?
 
 A: No, Open vSwitch has been ported to a number of different operating
    systems and hardware platforms.  Most of the development work occurs
@@ -59,22 +59,20 @@ A: No, Open vSwitch has been ported to a number of different operating
    Linux and will provide the highest performance.  However, a userspace
    datapath is available that should be very portable.
 
-Q: What's involved with porting Open vSwitch to a new platform or
-   switching ASIC?
+### Q: What's involved with porting Open vSwitch to a new platform or switching ASIC?
 
-A: The PORTING document describes how one would go about porting Open
-   vSwitch to a new operating system or hardware platform.
+A: The [PORTING](PORTING.md) document describes how one would go about
+   porting Open vSwitch to a new operating system or hardware platform.
 
-Q: Why would I use Open vSwitch instead of the Linux bridge?
+### Q: Why would I use Open vSwitch instead of the Linux bridge?
 
 A: Open vSwitch is specially designed to make it easier to manage VM
    network configuration and monitor state spread across many physical
-   hosts in dynamic virtualized environments.  Please see WHY-OVS for a
-   more detailed description of how Open vSwitch relates to the Linux
-   Bridge.
+   hosts in dynamic virtualized environments.  Please see
+   [WHY-OVS](WHY-OVS.md) for a more detailed description of how Open
+   vSwitch relates to the Linux Bridge.
 
-Q: How is Open vSwitch related to distributed virtual switches like the
-   VMware vNetwork distributed switch or the Cisco Nexus 1000V?
+### Q: How is Open vSwitch related to distributed virtual switches like the VMware vNetwork distributed switch or the Cisco Nexus 1000V?
 
 A: Distributed vswitch applications (e.g., VMware vNetwork distributed
    switch, Cisco Nexus 1000V) provide a centralized way to configure and
@@ -93,7 +91,7 @@ A: Distributed vswitch applications (e.g., VMware vNetwork distributed
    extend to provide distributed vswitch capabilities that are closely
    integrated with their virtualization management platform.
 
-Q: Why doesn't Open vSwitch support distribution?
+### Q: Why doesn't Open vSwitch support distribution?
 
 A: Open vSwitch is intended to be a useful component for building
    flexible network infrastructure. There are many different approaches
@@ -103,21 +101,20 @@ A: Open vSwitch is intended to be a useful component for building
    support all as a primitive building block rather than choose a
    particular point in the distributed design space.
 
-Q: How can I contribute to the Open vSwitch Community?
+### Q: How can I contribute to the Open vSwitch Community?
 
 A: You can start by joining the mailing lists and helping to answer
    questions.  You can also suggest improvements to documentation.  If
    you have a feature or bug you would like to work on, send a mail to
    one of the mailing lists:
 
-       http://openvswitch.org/mlists/
+   http://openvswitch.org/mlists/
 
 
 Releases
 --------
 
-Q: What does it mean for an Open vSwitch release to be LTS (long-term
-   support)?
+### Q: What does it mean for an Open vSwitch release to be LTS (long-term support)?
 
 A: All official releases have been through a comprehensive testing
    process and are suitable for production use.  Planned releases will
@@ -127,7 +124,7 @@ A: All official releases have been through a comprehensive testing
    supplanted by the next major release.  The current LTS release is
    1.9.x.
 
-Q: What Linux kernel versions does each Open vSwitch release work with?
+### Q: What Linux kernel versions does each Open vSwitch release work with?
 
 A: The following table lists the Linux kernel versions against which the
    given versions of the Open vSwitch kernel module will successfully
@@ -137,19 +134,19 @@ A: The following table lists the Linux kernel versions against which the
    most notably true of Red Hat Enterprise Linux (RHEL) kernels, which
    are extensively modified from upstream.
 
-   Open vSwitch   Linux kernel
-   ------------   -------------
-       1.4.x      2.6.18 to 3.2
-       1.5.x      2.6.18 to 3.2
-       1.6.x      2.6.18 to 3.2
-       1.7.x      2.6.18 to 3.3
-       1.8.x      2.6.18 to 3.4
-       1.9.x      2.6.18 to 3.8
-       1.10.x     2.6.18 to 3.8
-       1.11.x     2.6.18 to 3.8
-       2.0.x      2.6.32 to 3.10
-       2.1.x      2.6.32 to 3.11
-       2.3.x      2.6.32 to 3.14
+| Open vSwitch | Linux kernel
+|:------------:|:-------------:
+|    1.4.x     | 2.6.18 to 3.2
+|    1.5.x     | 2.6.18 to 3.2
+|    1.6.x     | 2.6.18 to 3.2
+|    1.7.x     | 2.6.18 to 3.3
+|    1.8.x     | 2.6.18 to 3.4
+|    1.9.x     | 2.6.18 to 3.8
+|    1.10.x    | 2.6.18 to 3.8
+|    1.11.x    | 2.6.18 to 3.8
+|    2.0.x     | 2.6.32 to 3.10
+|    2.1.x     | 2.6.32 to 3.11
+|    2.3.x     | 2.6.32 to 3.14
 
    Open vSwitch userspace should also work with the Linux kernel module
    built into Linux 3.3 and later.
@@ -158,7 +155,7 @@ A: The following table lists the Linux kernel versions against which the
    It should build against almost any kernel, certainly against 2.6.32
    and later.
 
-Q: I get an error like this when I configure Open vSwitch:
+### Q: I get an error like this when I configure Open vSwitch:
 
        configure: error: Linux kernel in <dir> is version <x>, but
        version newer than <y> is not supported (please refer to the
@@ -175,8 +172,7 @@ A: If there is a newer version of Open vSwitch, consider building that
    compatible with all versions of the Open vSwitch kernel module, so
    this will also work.  See also the following question.
 
-Q: What features are not available in the Open vSwitch kernel datapath
-   that ships as part of the upstream Linux kernel?
+### Q: What features are not available in the Open vSwitch kernel datapath that ships as part of the upstream Linux kernel?
 
 A: The kernel module in upstream Linux does not include support for
    LISP. Work is in progress to add support for LISP to the upstream
@@ -190,19 +186,18 @@ A: The kernel module in upstream Linux does not include support for
    Linux release or using the kernel module paired with the userspace
    distribution.
 
-Q: Why do tunnels not work when using a kernel module other than the
-   one packaged with Open vSwitch?
+### Q: Why do tunnels not work when using a kernel module other than the one packaged with Open vSwitch?
 
 A: Support for tunnels was added to the upstream Linux kernel module
    after the rest of Open vSwitch. As a result, some kernels may contain
    support for Open vSwitch but not tunnels. The minimum kernel version
    that supports each tunnel protocol is:
 
-   Protocol    Linux Kernel
-   --------    ------------
-     GRE           3.11
-     VXLAN         3.12
-     LISP      <not upstream>
+| Protocol |  Linux Kernel
+|:--------:|:-------------:
+| GRE      |    3.11
+| VXLAN    |    3.12
+| LISP     | <not upstream>
 
    If you are using a version of the kernel that is older than the one
    listed above, it is still possible to use that tunnel protocol. However,
@@ -211,19 +206,19 @@ A: Support for tunnels was added to the upstream Linux kernel module
    persist after doing this, check to make sure that the module that is
    loaded is the one you expect.
 
-Q: What features are not available when using the userspace datapath?
+### Q: What features are not available when using the userspace datapath?
 
 A: Tunnel virtual ports are not supported, as described in the
    previous answer.  It is also not possible to use queue-related
    actions.  On Linux kernels before 2.6.39, maximum-sized VLAN packets
    may not be transmitted.
 
-Q: What Linux kernel versions does IPFIX flow monitoring work with?
+### Q: What Linux kernel versions does IPFIX flow monitoring work with?
 
 A: IPFIX flow monitoring requires the Linux kernel module from Open
    vSwitch version 1.10.90 or later.
 
-Q: Should userspace or kernel be upgraded first to minimize downtime?
+### Q: Should userspace or kernel be upgraded first to minimize downtime?
 
    In general, the Open vSwitch userspace should be used with the
    kernel version included in the same release or with the version
@@ -231,7 +226,7 @@ Q: Should userspace or kernel be upgraded first to minimize downtime?
    of Open vSwitch it is best to migrate userspace first to reduce
    the possibility of incompatibilities.
 
-Q: What happened to the bridge compatibility feature?
+### Q: What happened to the bridge compatibility feature?
 
 A: Bridge compatibility was a feature of Open vSwitch 1.9 and earlier.
    When it was enabled, Open vSwitch imitated the interface of the
@@ -254,14 +249,13 @@ A: Bridge compatibility was a feature of Open vSwitch 1.9 and earlier.
 Terminology
 -----------
 
-Q: I thought Open vSwitch was a virtual Ethernet switch, but the
-   documentation keeps talking about bridges.  What's a bridge?
+### Q: I thought Open vSwitch was a virtual Ethernet switch, but the documentation keeps talking about bridges.  What's a bridge?
 
 A: In networking, the terms "bridge" and "switch" are synonyms.  Open
    vSwitch implements an Ethernet switch, which means that it is also
    an Ethernet bridge.
 
-Q: What's a VLAN?
+### Q: What's a VLAN?
 
 A: See the "VLAN" section below.
 
@@ -269,7 +263,7 @@ A: See the "VLAN" section below.
 Basic Configuration
 -------------------
 
-Q: How do I configure a port as an access port?
+### Q: How do I configure a port as an access port?
 
 A: Add "tag=VLAN" to your "ovs-vsctl add-port" command.  For example,
    the following commands configure br0 with eth0 as a trunk port (the
@@ -284,8 +278,7 @@ A: Add "tag=VLAN" to your "ovs-vsctl add-port" command.  For example,
 
        ovs-vsctl set port tap0 tag=9
 
-Q: How do I configure a port as a SPAN port, that is, enable mirroring
-   of all traffic to that port?
+### Q: How do I configure a port as a SPAN port, that is, enable mirroring of all traffic to that port?
 
 A: The following commands configure br0 with eth0 and tap0 as trunk
    ports.  All traffic coming in or going out on eth0 or tap0 is also
@@ -303,42 +296,41 @@ A: The following commands configure br0 with eth0 and tap0 as trunk
 
        ovs-vsctl clear bridge br0 mirrors
 
-Q: Does Open vSwitch support configuring a port in promiscuous mode?
+### Q: Does Open vSwitch support configuring a port in promiscuous mode?
 
 A: Yes.  How you configure it depends on what you mean by "promiscuous
    mode":
 
-      - Conventionally, "promiscuous mode" is a feature of a network
-        interface card.  Ordinarily, a NIC passes to the CPU only the
-        packets actually destined to its host machine.  It discards
-        the rest to avoid wasting memory and CPU cycles.  When
-        promiscuous mode is enabled, however, it passes every packet
-        to the CPU.  On an old-style shared-media or hub-based
-        network, this allows the host to spy on all packets on the
-        network.  But in the switched networks that are almost
-        everywhere these days, promiscuous mode doesn't have much
-        effect, because few packets not destined to a host are
-        delivered to the host's NIC.
+  - Conventionally, "promiscuous mode" is a feature of a network
+    interface card.  Ordinarily, a NIC passes to the CPU only the
+    packets actually destined to its host machine.  It discards
+    the rest to avoid wasting memory and CPU cycles.  When
+    promiscuous mode is enabled, however, it passes every packet
+    to the CPU.  On an old-style shared-media or hub-based
+    network, this allows the host to spy on all packets on the
+    network.  But in the switched networks that are almost
+    everywhere these days, promiscuous mode doesn't have much
+    effect, because few packets not destined to a host are
+    delivered to the host's NIC.
 
-        This form of promiscuous mode is configured in the guest OS of
-        the VMs on your bridge, e.g. with "ifconfig".
+    This form of promiscuous mode is configured in the guest OS of
+    the VMs on your bridge, e.g. with "ifconfig".
 
-      - The VMware vSwitch uses a different definition of "promiscuous
-        mode".  When you configure promiscuous mode on a VMware vNIC,
-        the vSwitch sends a copy of every packet received by the
-        vSwitch to that vNIC.  That has a much bigger effect than just
-        enabling promiscuous mode in a guest OS.  Rather than getting
-        a few stray packets for which the switch does not yet know the
-        correct destination, the vNIC gets every packet.  The effect
-        is similar to replacing the vSwitch by a virtual hub.
+  - The VMware vSwitch uses a different definition of "promiscuous
+    mode".  When you configure promiscuous mode on a VMware vNIC,
+    the vSwitch sends a copy of every packet received by the
+    vSwitch to that vNIC.  That has a much bigger effect than just
+    enabling promiscuous mode in a guest OS.  Rather than getting
+    a few stray packets for which the switch does not yet know the
+    correct destination, the vNIC gets every packet.  The effect
+    is similar to replacing the vSwitch by a virtual hub.
 
-        This "promiscuous mode" is what switches normally call "port
-        mirroring" or "SPAN".  For information on how to configure
-        SPAN, see "How do I configure a port as a SPAN port, that is,
-        enable mirroring of all traffic to that port?"
+    This "promiscuous mode" is what switches normally call "port
+    mirroring" or "SPAN".  For information on how to configure
+    SPAN, see "How do I configure a port as a SPAN port, that is,
+    enable mirroring of all traffic to that port?"
 
-Q: How do I configure a VLAN as an RSPAN VLAN, that is, enable
-   mirroring of all traffic to that VLAN?
+### Q: How do I configure a VLAN as an RSPAN VLAN, that is, enable mirroring of all traffic to that VLAN?
 
 A: The following commands configure br0 with eth0 as a trunk port and
    tap0 as an access port for VLAN 10.  All traffic coming in or going
@@ -364,7 +356,7 @@ A: The following commands configure br0 with eth0 as a trunk port and
    GRE tunnel has fewer caveats than mirroring to a VLAN and should
    generally be preferred.
 
-Q: Can I mirror more than one input VLAN to an RSPAN VLAN?
+### Q: Can I mirror more than one input VLAN to an RSPAN VLAN?
 
 A: Yes, but mirroring to a VLAN strips the original VLAN tag in favor
    of the specified output-vlan.  This loss of information may make
@@ -388,7 +380,7 @@ A: Yes, but mirroring to a VLAN strips the original VLAN tag in favor
    GRE tunnel has fewer caveats than mirroring to a VLAN and should
    generally be preferred.
 
-Q: How do I configure mirroring of all traffic to a GRE tunnel?
+### Q: How do I configure mirroring of all traffic to a GRE tunnel?
 
 A: The following commands configure br0 with eth0 and tap0 as trunk
    ports.  All traffic coming in or going out on eth0 or tap0 is also
@@ -409,13 +401,13 @@ A: The following commands configure br0 with eth0 and tap0 as trunk
        ovs-vsctl clear bridge br0 mirrors
        ovs-vcstl del-port br0 gre0
 
-Q: Does Open vSwitch support ERSPAN?
+### Q: Does Open vSwitch support ERSPAN?
 
 A: No.  ERSPAN is an undocumented proprietary protocol.  As an
    alternative, Open vSwitch supports mirroring to a GRE tunnel (see
    above).
 
-Q: How do I connect two bridges?
+### Q: How do I connect two bridges?
 
 A: First, why do you want to do this?  Two connected bridges are not
    much different from a single bridge, so you might as well just have
@@ -452,8 +444,7 @@ A: First, why do you want to do this?  Two connected bridges are not
    ports will not work with the userspace datapath, only with the
    kernel module.
 
-Q: How do I configure a bridge without an OpenFlow local port?
-   (Local port in the sense of OFPP_LOCAL)
+### Q: How do I configure a bridge without an OpenFlow local port?  (Local port in the sense of OFPP_LOCAL)
 
 A: Open vSwitch does not support such a configuration.
    Bridges always have their local ports.
@@ -462,65 +453,65 @@ A: Open vSwitch does not support such a configuration.
 Implementation Details
 ----------------------
 
-Q: I hear OVS has a couple of kinds of flows.  Can you tell me about them?
+### Q: I hear OVS has a couple of kinds of flows.  Can you tell me about them?
 
 A: Open vSwitch uses different kinds of flows for different purposes:
 
-      - OpenFlow flows are the most important kind of flow.  OpenFlow
-        controllers use these flows to define a switch's policy.
-        OpenFlow flows support wildcards, priorities, and multiple
-        tables.
+  - OpenFlow flows are the most important kind of flow.  OpenFlow
+    controllers use these flows to define a switch's policy.
+    OpenFlow flows support wildcards, priorities, and multiple
+    tables.
 
-        When in-band control is in use, Open vSwitch sets up a few
-        "hidden" flows, with priority higher than a controller or the
-        user can configure, that are not visible via OpenFlow.  (See
-        the "Controller" section of the FAQ for more information
-        about hidden flows.)
+    When in-band control is in use, Open vSwitch sets up a few
+    "hidden" flows, with priority higher than a controller or the
+    user can configure, that are not visible via OpenFlow.  (See
+    the "Controller" section of the FAQ for more information
+    about hidden flows.)
 
-      - The Open vSwitch software switch implementation uses a second
-        kind of flow internally.  These flows, called "datapath" or
-        "kernel" flows, do not support priorities and comprise only a
-        single table, which makes them suitable for caching.  (Like
-        OpenFlow flows, datapath flows do support wildcarding, in Open
-        vSwitch 1.11 and later.)  OpenFlow flows and datapath flows
-        also support different actions and number ports differently.
+  - The Open vSwitch software switch implementation uses a second
+    kind of flow internally.  These flows, called "datapath" or
+    "kernel" flows, do not support priorities and comprise only a
+    single table, which makes them suitable for caching.  (Like
+    OpenFlow flows, datapath flows do support wildcarding, in Open
+    vSwitch 1.11 and later.)  OpenFlow flows and datapath flows
+    also support different actions and number ports differently.
 
-        Datapath flows are an implementation detail that is subject to
-        change in future versions of Open vSwitch.  Even with the
-        current version of Open vSwitch, hardware switch
-        implementations do not necessarily use this architecture.
+    Datapath flows are an implementation detail that is subject to
+    change in future versions of Open vSwitch.  Even with the
+    current version of Open vSwitch, hardware switch
+    implementations do not necessarily use this architecture.
 
    Users and controllers directly control only the OpenFlow flow
    table.  Open vSwitch manages the datapath flow table itself, so
    users should not normally be concerned with it.
 
-Q: Why are there so many different ways to dump flows?
+### Q: Why are there so many different ways to dump flows?
 
 A: Open vSwitch has two kinds of flows (see the previous question), so
    it has commands with different purposes for dumping each kind of
    flow:
 
-      - "ovs-ofctl dump-flows <br>" dumps OpenFlow flows, excluding
-        hidden flows.  This is the most commonly useful form of flow
-        dump.  (Unlike the other commands, this should work with any
-        OpenFlow switch, not just Open vSwitch.)
+  - `ovs-ofctl dump-flows <br>` dumps OpenFlow flows, excluding
+    hidden flows.  This is the most commonly useful form of flow
+    dump.  (Unlike the other commands, this should work with any
+    OpenFlow switch, not just Open vSwitch.)
 
-      - "ovs-appctl bridge/dump-flows <br>" dumps OpenFlow flows,
-        including hidden flows.  This is occasionally useful for
-        troubleshooting suspected issues with in-band control.
+  - `ovs-appctl bridge/dump-flows <br>` dumps OpenFlow flows,
+    including hidden flows.  This is occasionally useful for
+    troubleshooting suspected issues with in-band control.
 
-      - "ovs-dpctl dump-flows [dp]" dumps the datapath flow table
-        entries for a Linux kernel-based datapath.  In Open vSwitch
-        1.10 and later, ovs-vswitchd merges multiple switches into a
-        single datapath, so it will show all the flows on all your
-        kernel-based switches.  This command can occasionally be
-        useful for debugging.
+  - `ovs-dpctl dump-flows [dp]` dumps the datapath flow table
+    entries for a Linux kernel-based datapath.  In Open vSwitch
+    1.10 and later, ovs-vswitchd merges multiple switches into a
+    single datapath, so it will show all the flows on all your
+    kernel-based switches.  This command can occasionally be
+    useful for debugging.
 
-      - "ovs-appctl dpif/dump-flows <br>", new in Open vSwitch 1.10,
-        dumps datapath flows for only the specified bridge, regardless
-        of the type.
+  - `ovs-appctl dpif/dump-flows <br>`, new in Open vSwitch 1.10,
+    dumps datapath flows for only the specified bridge, regardless
+    of the type.
 
-Q: How does multicast snooping works with VLANs?
+### Q: How does multicast snooping works with VLANs?
 
 A: Open vSwitch maintains snooping tables for each VLAN.
 
@@ -528,7 +519,7 @@ A: Open vSwitch maintains snooping tables for each VLAN.
 Performance
 -----------
 
-Q: I just upgraded and I see a performance drop.  Why?
+### Q: I just upgraded and I see a performance drop.  Why?
 
 A: The OVS kernel datapath may have been updated to a newer version than
    the OVS userspace components.  Sometimes new versions of OVS kernel
@@ -549,7 +540,7 @@ A: The OVS kernel datapath may have been updated to a newer version than
 Configuration Problems
 ----------------------
 
-Q: I created a bridge and added my Ethernet port to it, using commands
+### Q: I created a bridge and added my Ethernet port to it, using commands
    like these:
 
        ovs-vsctl add-br br0
@@ -594,8 +585,8 @@ A: A physical Ethernet device that is part of an Open vSwitch bridge
    devices.  It applies to all network devices except Open vSwitch
    "internal" devices.
 
-Q: I created a bridge and added a couple of Ethernet ports to it,
-   using commands like these:
+### Q: I created a bridge and added a couple of Ethernet ports to it,
+### using commands like these:
 
        ovs-vsctl add-br br0
        ovs-vsctl add-port br0 eth0
@@ -616,52 +607,52 @@ A: More than likely, you've looped your network.  Probably, eth0 and
 
    The solution depends on what you are trying to do:
 
-       - If you added eth0 and eth1 to get higher bandwidth or higher
-         reliability between OVS and your physical Ethernet switch,
-         use a bond.  The following commands create br0 and then add
-         eth0 and eth1 as a bond:
+   - If you added eth0 and eth1 to get higher bandwidth or higher
+     reliability between OVS and your physical Ethernet switch,
+     use a bond.  The following commands create br0 and then add
+     eth0 and eth1 as a bond:
 
-             ovs-vsctl add-br br0
-             ovs-vsctl add-bond br0 bond0 eth0 eth1
+         ovs-vsctl add-br br0
+         ovs-vsctl add-bond br0 bond0 eth0 eth1
 
-         Bonds have tons of configuration options.  Please read the
-         documentation on the Port table in ovs-vswitchd.conf.db(5)
-         for all the details.
+     Bonds have tons of configuration options.  Please read the
+     documentation on the Port table in ovs-vswitchd.conf.db(5)
+     for all the details.
 
-       - Perhaps you don't actually need eth0 and eth1 to be on the
-         same bridge.  For example, if you simply want to be able to
-         connect each of them to virtual machines, then you can put
-         each of them on a bridge of its own:
+   - Perhaps you don't actually need eth0 and eth1 to be on the
+     same bridge.  For example, if you simply want to be able to
+     connect each of them to virtual machines, then you can put
+     each of them on a bridge of its own:
 
-             ovs-vsctl add-br br0
-             ovs-vsctl add-port br0 eth0
+         ovs-vsctl add-br br0
+         ovs-vsctl add-port br0 eth0
 
-             ovs-vsctl add-br br1
-             ovs-vsctl add-port br1 eth1
+         ovs-vsctl add-br br1
+         ovs-vsctl add-port br1 eth1
 
-         and then connect VMs to br0 and br1.  (A potential
-         disadvantage is that traffic cannot directly pass between br0
-         and br1.  Instead, it will go out eth0 and come back in eth1,
-         or vice versa.)
+     and then connect VMs to br0 and br1.  (A potential
+     disadvantage is that traffic cannot directly pass between br0
+     and br1.  Instead, it will go out eth0 and come back in eth1,
+     or vice versa.)
 
-       - If you have a redundant or complex network topology and you
-         want to prevent loops, turn on spanning tree protocol (STP).
-         The following commands create br0, enable STP, and add eth0
-         and eth1 to the bridge.  The order is important because you
-         don't want have to have a loop in your network even
-         transiently:
+   - If you have a redundant or complex network topology and you
+     want to prevent loops, turn on spanning tree protocol (STP).
+     The following commands create br0, enable STP, and add eth0
+     and eth1 to the bridge.  The order is important because you
+     don't want have to have a loop in your network even
+     transiently:
 
-             ovs-vsctl add-br br0
-             ovs-vsctl set bridge br0 stp_enable=true
-             ovs-vsctl add-port br0 eth0
-             ovs-vsctl add-port br0 eth1
+         ovs-vsctl add-br br0
+         ovs-vsctl set bridge br0 stp_enable=true
+         ovs-vsctl add-port br0 eth0
+         ovs-vsctl add-port br0 eth1
 
-         The Open vSwitch implementation of STP is not well tested.
-         Please report any bugs you observe, but if you'd rather avoid
-         acting as a beta tester then another option might be your
-         best shot.
+     The Open vSwitch implementation of STP is not well tested.
+     Please report any bugs you observe, but if you'd rather avoid
+     acting as a beta tester then another option might be your
+     best shot.
 
-Q: I can't seem to use Open vSwitch in a wireless network.
+### Q: I can't seem to use Open vSwitch in a wireless network.
 
 A: Wireless base stations generally only allow packets with the source
    MAC address of NIC that completed the initial handshake.
@@ -672,17 +663,17 @@ A: Wireless base stations generally only allow packets with the source
    point, so the same problems will show up with the Linux bridge or
    any other way to do bridging.
 
-Q: I can't seem to add my PPP interface to an Open vSwitch bridge.
+### Q: I can't seem to add my PPP interface to an Open vSwitch bridge.
 
 A: PPP most commonly carries IP packets, but Open vSwitch works only
    with Ethernet frames.  The correct way to interface PPP to an
    Ethernet network is usually to use routing instead of switching.
 
-Q: Is there any documentation on the database tables and fields?
+### Q: Is there any documentation on the database tables and fields?
 
 A: Yes.  ovs-vswitchd.conf.db(5) is a comprehensive reference.
 
-Q: When I run ovs-dpctl I no longer see the bridges I created.  Instead,
+### Q: When I run ovs-dpctl I no longer see the bridges I created.  Instead,
    I only see a datapath called "ovs-system".  How can I see datapath
    information about a particular bridge?
 
@@ -690,7 +681,7 @@ A: In version 1.9.0, OVS switched to using a single datapath that is
    shared by all bridges of that type.  The "ovs-appctl dpif/*"
    commands provide similar functionality that is scoped by the bridge.
 
-Q: I created a GRE port using ovs-vsctl so why can't I send traffic or
+### Q: I created a GRE port using ovs-vsctl so why can't I send traffic or
    see the port in the datapath?
 
 A: On Linux kernels before 3.11, the OVS GRE module and Linux GRE module
@@ -698,10 +689,10 @@ A: On Linux kernels before 3.11, the OVS GRE module and Linux GRE module
    Linux GRE module is already loaded and blocking OVS (to confirm, check
    dmesg for errors regarding GRE registration). To fix this, unload all
    GRE modules that appear in lsmod as well as the OVS kernel module. You
-   can then reload the OVS module following the directions in INSTALL,
-   which will ensure that dependencies are satisfied.
+   can then reload the OVS module following the directions in
+   [INSTALL](INSTALL.md), which will ensure that dependencies are satisfied.
 
-Q: Open vSwitch does not seem to obey my packet filter rules.
+### Q: Open vSwitch does not seem to obey my packet filter rules.
 
 A: It depends on mechanisms and configurations you want to use.
 
@@ -731,7 +722,7 @@ A: It depends on mechanisms and configurations you want to use.
    you want to use ebtables rules.)  On NetBSD, you might want to
    consider using the bridge(4) with BRIDGE_IPF option.
 
-Q: It seems that Open vSwitch does nothing when I removed a port and
+### Q: It seems that Open vSwitch does nothing when I removed a port and
    then immediately put it back.  For example, consider that p1 is
    a port of type=internal:
 
@@ -762,7 +753,7 @@ A: It's an expected behaviour.
 Quality of Service (QoS)
 ------------------------
 
-Q: How do I configure Quality of Service (QoS)?
+### Q: How do I configure Quality of Service (QoS)?
 
 A: Suppose that you want to set up bridge br0 connected to physical
    Ethernet port eth0 (a 1 Gbps device) and virtual machine interfaces
@@ -824,7 +815,7 @@ A: Suppose that you want to set up bridge br0 connected to physical
    --all option), then you will have to destroy QoS and Queue records
    individually.
 
-Q: I configured Quality of Service (QoS) in my OpenFlow network by
+### Q: I configured Quality of Service (QoS) in my OpenFlow network by
    adding records to the QoS and Queue table, but the results aren't
    what I expect.
 
@@ -835,7 +826,7 @@ A: Did you install OpenFlow flows that use your queues?  This is the
 
    Refer to the previous question for an example.
 
-Q: I'd like to take advantage of some QoS feature that Open vSwitch
+### Q: I'd like to take advantage of some QoS feature that Open vSwitch
    doesn't yet support.  How do I do that?
 
 A: Open vSwitch does not implement QoS itself.  Instead, it can
@@ -848,27 +839,27 @@ A: Open vSwitch does not implement QoS itself.  Instead, it can
    Linux QoS doesn't support the feature you want, then first you have
    to add that support to Linux.)
 
-Q: I configured QoS, correctly, but my measurements show that it isn't
+### Q: I configured QoS, correctly, but my measurements show that it isn't
    working as well as I expect.
 
 A: With the Linux kernel, the Open vSwitch implementation of QoS has
    two aspects:
 
-       - Open vSwitch configures a subset of Linux kernel QoS
-         features, according to what is in OVSDB.  It is possible that
-         this code has bugs.  If you believe that this is so, then you
-         can configure the Linux traffic control (QoS) stack directly
-         with the "tc" program.  If you get better results that way,
-         you can send a detailed bug report to bugs@openvswitch.org.
+   - Open vSwitch configures a subset of Linux kernel QoS
+     features, according to what is in OVSDB.  It is possible that
+     this code has bugs.  If you believe that this is so, then you
+     can configure the Linux traffic control (QoS) stack directly
+     with the "tc" program.  If you get better results that way,
+     you can send a detailed bug report to bugs@openvswitch.org.
 
-         It is certain that Open vSwitch cannot configure every Linux
-         kernel QoS feature.  If you need some feature that OVS cannot
-         configure, then you can also use "tc" directly (or add that
-         feature to OVS).
+     It is certain that Open vSwitch cannot configure every Linux
+     kernel QoS feature.  If you need some feature that OVS cannot
+     configure, then you can also use "tc" directly (or add that
+     feature to OVS).
 
-       - The Open vSwitch implementation of OpenFlow allows flows to
-         be directed to particular queues.  This is pretty simple and
-         unlikely to have serious bugs at this point.
+   - The Open vSwitch implementation of OpenFlow allows flows to
+     be directed to particular queues.  This is pretty simple and
+     unlikely to have serious bugs at this point.
 
    However, most problems with QoS on Linux are not bugs in Open
    vSwitch at all.  They tend to be either configuration errors
@@ -880,7 +871,7 @@ A: With the Linux kernel, the Open vSwitch implementation of QoS has
    tc-htb(8), tc-hfsc(8)), web resources (e.g. http://lartc.org/), or
    mailing lists (e.g. http://vger.kernel.org/vger-lists.html#netdev).
 
-Q: Does Open vSwitch support OpenFlow meters?
+### Q: Does Open vSwitch support OpenFlow meters?
 
 A: Since version 2.0, Open vSwitch has OpenFlow protocol support for
    OpenFlow meters.  There is no implementation of meters in the Open
@@ -891,7 +882,7 @@ A: Since version 2.0, Open vSwitch has OpenFlow protocol support for
 VLANs
 -----
 
-Q: What's a VLAN?
+### Q: What's a VLAN?
 
 A: At the simplest level, a VLAN (short for "virtual LAN") is a way to
    partition a single switch into multiple switches.  Suppose, for
@@ -945,40 +936,40 @@ A: At the simplest level, a VLAN (short for "virtual LAN") is a way to
    numbers.  (That said, VLAN 0 is usually synonymous with a packet
    that has no VLAN header, and VLAN 4095 is reserved.)
 
-Q: VLANs don't work.
+### Q: VLANs don't work.
 
 A: Many drivers in Linux kernels before version 3.3 had VLAN-related
    bugs.  If you are having problems with VLANs that you suspect to be
    driver related, then you have several options:
 
-       - Upgrade to Linux 3.3 or later.
+   - Upgrade to Linux 3.3 or later.
 
-       - Build and install a fixed version of the particular driver
-         that is causing trouble, if one is available.
+   - Build and install a fixed version of the particular driver
+     that is causing trouble, if one is available.
 
-       - Use a NIC whose driver does not have VLAN problems.
+   - Use a NIC whose driver does not have VLAN problems.
 
-       - Use "VLAN splinters", a feature in Open vSwitch 1.4 and later
-         that works around bugs in kernel drivers.  To enable VLAN
-         splinters on interface eth0, use the command:
+   - Use "VLAN splinters", a feature in Open vSwitch 1.4 and later
+     that works around bugs in kernel drivers.  To enable VLAN
+     splinters on interface eth0, use the command:
 
-           ovs-vsctl set interface eth0 other-config:enable-vlan-splinters=true
+       ovs-vsctl set interface eth0 other-config:enable-vlan-splinters=true
 
-         For VLAN splinters to be effective, Open vSwitch must know
-         which VLANs are in use.  See the "VLAN splinters" section in
-         the Interface table in ovs-vswitchd.conf.db(5) for details on
-         how Open vSwitch infers in-use VLANs.
+     For VLAN splinters to be effective, Open vSwitch must know
+     which VLANs are in use.  See the "VLAN splinters" section in
+     the Interface table in ovs-vswitchd.conf.db(5) for details on
+     how Open vSwitch infers in-use VLANs.
 
-         VLAN splinters increase memory use and reduce performance, so
-         use them only if needed.
+     VLAN splinters increase memory use and reduce performance, so
+     use them only if needed.
 
-       - Apply the "vlan workaround" patch from the XenServer kernel
-         patch queue, build Open vSwitch against this patched kernel,
-         and then use ovs-vlan-bug-workaround(8) to enable the VLAN
-         workaround for each interface whose driver is buggy.
+   - Apply the "vlan workaround" patch from the XenServer kernel
+     patch queue, build Open vSwitch against this patched kernel,
+     and then use ovs-vlan-bug-workaround(8) to enable the VLAN
+     workaround for each interface whose driver is buggy.
 
-         (This is a nontrivial exercise, so this option is included
-         only for completeness.)
+     (This is a nontrivial exercise, so this option is included
+     only for completeness.)
 
    It is not always easy to tell whether a Linux kernel driver has
    buggy VLAN support.  The ovs-vlan-test(8) and ovs-test(8) utilities
@@ -986,13 +977,13 @@ A: Many drivers in Linux kernels before version 3.3 had VLAN-related
    utilities, ovs-test(8) is newer and more thorough, but
    ovs-vlan-test(8) may be easier to use.
 
-Q: VLANs still don't work.  I've tested the driver so I know that it's OK.
+### Q: VLANs still don't work.  I've tested the driver so I know that it's OK.
 
 A: Do you have VLANs enabled on the physical switch that OVS is
    attached to?  Make sure that the port is configured to trunk the
    VLAN or VLANs that you are using with OVS.
 
-Q: Outgoing VLAN-tagged traffic goes through OVS to my physical switch
+### Q: Outgoing VLAN-tagged traffic goes through OVS to my physical switch
    and to its destination host, but OVS seems to drop incoming return
    traffic.
 
@@ -1004,22 +995,22 @@ A: It's possible that you have the VLAN configured on your physical
 
    If this is the case, you have two choices:
 
-       - Change the physical switch port configuration to tag packets
-         it forwards to OVS with the native VLAN instead of forwarding
-         them untagged.
+   - Change the physical switch port configuration to tag packets
+     it forwards to OVS with the native VLAN instead of forwarding
+     them untagged.
 
-       - Change the OVS configuration for the physical port to a
-         native VLAN mode.  For example, the following sets up a
-         bridge with port eth0 in "native-tagged" mode in VLAN 9:
+   - Change the OVS configuration for the physical port to a
+     native VLAN mode.  For example, the following sets up a
+     bridge with port eth0 in "native-tagged" mode in VLAN 9:
 
-             ovs-vsctl add-br br0
-             ovs-vsctl add-port br0 eth0 tag=9 vlan_mode=native-tagged
+         ovs-vsctl add-br br0
+         ovs-vsctl add-port br0 eth0 tag=9 vlan_mode=native-tagged
 
-         In this situation, "native-untagged" mode will probably work
-         equally well.  Refer to the documentation for the Port table
-         in ovs-vswitchd.conf.db(5) for more information.
+     In this situation, "native-untagged" mode will probably work
+     equally well.  Refer to the documentation for the Port table
+     in ovs-vswitchd.conf.db(5) for more information.
 
-Q: I added a pair of VMs on different VLANs, like this:
+### Q: I added a pair of VMs on different VLANs, like this:
 
        ovs-vsctl add-br br0
        ovs-vsctl add-port br0 eth0
@@ -1038,7 +1029,7 @@ A: It is to be expected that the VMs can't access each other.  VLANs
    the machines you are trying to access are not on VLAN 9 (or 10) and
    that the Internet is not available on VLAN 9 (or 10).
 
-Q: I added a pair of VMs on the same VLAN, like this:
+### Q: I added a pair of VMs on the same VLAN, like this:
 
        ovs-vsctl add-br br0
        ovs-vsctl add-port br0 eth0
@@ -1053,7 +1044,7 @@ A: It seems likely that the machines you are trying to access in the
    available on VLAN 9.  Also, ensure VLAN 9 is set up as an allowed
    trunk VLAN on the upstream switch port to which eth0 is connected.
 
-Q: Can I configure an IP address on a VLAN?
+### Q: Can I configure an IP address on a VLAN?
 
 A: Yes.  Use an "internal port" configured as an access port.  For
    example, the following configures IP address 192.168.0.7 on VLAN 9.
@@ -1069,7 +1060,7 @@ A: Yes.  Use an "internal port" configured as an access port.  For
 
    See also the following question.
 
-Q: I configured one IP address on VLAN 0 and another on VLAN 9, like
+### Q: I configured one IP address on VLAN 0 and another on VLAN 9, like
    this:
 
        ovs-vsctl add-br br0
@@ -1084,20 +1075,20 @@ Q: I configured one IP address on VLAN 0 and another on VLAN 9, like
 A: RFC 1122 section 3.3.4.2 "Multihoming Requirements" describes two
    approaches to IP address handling in Internet hosts:
 
-       - In the "Strong ES Model", where an ES is a host ("End
-         System"), an IP address is primarily associated with a
-         particular interface.  The host discards packets that arrive
-         on interface A if they are destined for an IP address that is
-         configured on interface B.  The host never sends packets from
-         interface A using a source address configured on interface B.
+   - In the "Strong ES Model", where an ES is a host ("End
+     System"), an IP address is primarily associated with a
+     particular interface.  The host discards packets that arrive
+     on interface A if they are destined for an IP address that is
+     configured on interface B.  The host never sends packets from
+     interface A using a source address configured on interface B.
 
-       - In the "Weak ES Model", an IP address is primarily associated
-         with a host.  The host accepts packets that arrive on any
-         interface if they are destined for any of the host's IP
-         addresses, even if the address is configured on some
-         interface other than the one on which it arrived.  The host
-         does not restrict itself to sending packets from an IP
-         address associated with the originating interface.
+   - In the "Weak ES Model", an IP address is primarily associated
+     with a host.  The host accepts packets that arrive on any
+     interface if they are destined for any of the host's IP
+     addresses, even if the address is configured on some
+     interface other than the one on which it arrived.  The host
+     does not restrict itself to sending packets from an IP
+     address associated with the originating interface.
 
    Linux uses the weak ES model.  That means that when packets
    destined to the VLAN 9 IP address arrive on eth0 and are bridged to
@@ -1111,7 +1102,7 @@ A: RFC 1122 section 3.3.4.2 "Multihoming Requirements" describes two
 
    BSD uses the strong ES model.
 
-Q: My OpenFlow controller doesn't see the VLANs that I expect.
+### Q: My OpenFlow controller doesn't see the VLANs that I expect.
 
 A: The configuration for VLANs in the Open vSwitch database (e.g. via
    ovs-vsctl) only affects traffic that goes through Open vSwitch's
@@ -1129,15 +1120,15 @@ A: The configuration for VLANs in the Open vSwitch database (e.g. via
    controller.  In situations where this is not suitable, you can
    implement VLAN handling yourself, e.g.:
 
-       - If a packet comes in on an access port, and the flow table
-         needs to send it out on a trunk port, then the flow can add
-         the appropriate VLAN tag with the "mod_vlan_vid" action.
+   - If a packet comes in on an access port, and the flow table
+     needs to send it out on a trunk port, then the flow can add
+     the appropriate VLAN tag with the "mod_vlan_vid" action.
 
-       - If a packet comes in on a trunk port, and the flow table
-         needs to send it out on an access port, then the flow can
-         strip the VLAN tag with the "strip_vlan" action.
+   - If a packet comes in on a trunk port, and the flow table
+     needs to send it out on an access port, then the flow can
+     strip the VLAN tag with the "strip_vlan" action.
 
-Q: I configured ports on a bridge as access ports with different VLAN
+### Q: I configured ports on a bridge as access ports with different VLAN
    tags, like this:
 
        ovs-vsctl add-br br0
@@ -1155,7 +1146,7 @@ A: Do you have a controller configured on br0 (as the commands above
    OpenFlow controller doesn't see the VLANs that I expect," and you
    can refer to the answer there for more information.
 
-Q: How MAC learning works with VLANs?
+### Q: How MAC learning works with VLANs?
 
 A: Open vSwitch implements Independent VLAN Learning (IVL) for
    OFPP_NORMAL action.  I.e. it logically has separate learning tables
@@ -1165,7 +1156,7 @@ A: Open vSwitch implements Independent VLAN Learning (IVL) for
 VXLANs
 -----
 
-Q: What's a VXLAN?
+### Q: What's a VXLAN?
 
 A: VXLAN stands for Virtual eXtensible Local Area Network, and is a means
    to solve the scaling challenges of VLAN networks in a multi-tenant
@@ -1175,7 +1166,7 @@ A: VXLAN stands for Virtual eXtensible Local Area Network, and is a means
 
    http://tools.ietf.org/html/draft-mahalingam-dutt-dcops-vxlan-03
 
-Q: How much of the VXLAN protocol does Open vSwitch currently support?
+### Q: How much of the VXLAN protocol does Open vSwitch currently support?
 
 A: Open vSwitch currently supports the framing format for packets on the
    wire. There is currently no support for the multicast aspects of VXLAN.
@@ -1183,7 +1174,7 @@ A: Open vSwitch currently supports the framing format for packets on the
    pre-provision MAC to IP address mappings either manually or from a
    controller.
 
-Q: What destination UDP port does the VXLAN implementation in Open vSwitch
+### Q: What destination UDP port does the VXLAN implementation in Open vSwitch
    use?
 
 A: By default, Open vSwitch will use the assigned IANA port for VXLAN, which
@@ -1200,13 +1191,13 @@ A: By default, Open vSwitch will use the assigned IANA port for VXLAN, which
 Using OpenFlow (Manually or Via Controller)
 -------------------------------------------
 
-Q: What versions of OpenFlow does Open vSwitch support?
+### Q: What versions of OpenFlow does Open vSwitch support?
 
 A: The following table lists the versions of OpenFlow supported by
    each version of Open vSwitch:
 
        Open vSwitch      OF1.0  OF1.1  OF1.2  OF1.3  OF1.4  OF1.5
-       ===============   =====  =====  =====  =====  =====  =====
+       ###============   =====  =====  =====  =====  =====  =====
        1.9 and earlier    yes    ---    ---    ---    ---    ---
        1.10               yes    ---    [*]    [*]    ---    ---
        1.11               yes    ---    [*]    [*]    ---    ---
@@ -1225,17 +1216,17 @@ A: The following table lists the versions of OpenFlow supported by
    vSwitch 2.3 and later, but not enabled by default.  In any case,
    the user may override the default:
 
-       - To enable OpenFlow 1.0, 1.1, 1.2, and 1.3 on bridge br0:
+   - To enable OpenFlow 1.0, 1.1, 1.2, and 1.3 on bridge br0:
 
-         ovs-vsctl set bridge br0 protocols=OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13
+     ovs-vsctl set bridge br0 protocols=OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13
 
-       - To enable OpenFlow 1.0, 1.1, 1.2, 1.3, 1.4, and 1.5 on bridge br0:
+   - To enable OpenFlow 1.0, 1.1, 1.2, 1.3, 1.4, and 1.5 on bridge br0:
 
-         ovs-vsctl set bridge br0 protocols=OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13,OpenFlow14,OpenFlow15
+     ovs-vsctl set bridge br0 protocols=OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13,OpenFlow14,OpenFlow15
 
-       - To enable only OpenFlow 1.0 on bridge br0:
+   - To enable only OpenFlow 1.0 on bridge br0:
 
-         ovs-vsctl set bridge br0 protocols=OpenFlow10
+     ovs-vsctl set bridge br0 protocols=OpenFlow10
 
    All current versions of ovs-ofctl enable only OpenFlow 1.0 by
    default.  Use the -O option to enable support for later versions of
@@ -1252,7 +1243,7 @@ A: The following table lists the versions of OpenFlow supported by
    by default.  Also, the OpenFlow 1.5 specification is still under
    development and thus subject to change.
 
-Q: Does Open vSwitch support MPLS?
+### Q: Does Open vSwitch support MPLS?
 
 A: Before version 1.11, Open vSwitch did not support MPLS.  That is,
    these versions can match on MPLS Ethernet types, but they cannot
@@ -1275,7 +1266,7 @@ A: Before version 1.11, Open vSwitch did not support MPLS.  That is,
    Open vSwitch version 2.4 will have kernel support for MPLS,
    yielding improved performance.
 
-Q: I'm getting "error type 45250 code 0".  What's that?
+### Q: I'm getting "error type 45250 code 0".  What's that?
 
 A: This is a Open vSwitch extension to OpenFlow error codes.  Open
    vSwitch uses this extension when it must report an error to an
@@ -1329,7 +1320,7 @@ A: By default, Open vSwitch assumes that OpenFlow controllers are
 
        ovs-vsctl set controller br0 connection-mode=out-of-band
 
-Q: I configured all my controllers for out-of-band control mode but
+### Q: I configured all my controllers for out-of-band control mode but
    "ovs-appctl bridge/dump-flows" still shows some hidden flows.
 
 A: You probably have a remote manager configured (e.g. with "ovs-vsctl
@@ -1343,11 +1334,11 @@ A: You probably have a remote manager configured (e.g. with "ovs-vsctl
    if all the bridge's controllers were configured for out-of-band
    control.
 
-Q: My OpenFlow controller doesn't see the VLANs that I expect.
+### Q: My OpenFlow controller doesn't see the VLANs that I expect.
 
 A: See answer under "VLANs", above.
 
-Q: I ran "ovs-ofctl add-flow br0 nw_dst=192.168.0.1,actions=drop"
+### Q: I ran "ovs-ofctl add-flow br0 nw_dst=192.168.0.1,actions=drop"
    but I got a funny message like this:
 
        ofp_util|INFO|normalization changed ofp_match, details:
@@ -1378,7 +1369,7 @@ A: The term "normalization" in the log message means that a flow
    TCP source port 1234, write "tcp,tp_src=1234", or to match UDP
    source port 1234, write "udp,tp_src=1234".
 
-Q: How can I figure out the OpenFlow port number for a given port?
+### Q: How can I figure out the OpenFlow port number for a given port?
 
 A: The OFPT_FEATURES_REQUEST message requests an OpenFlow switch to
    respond with an OFPT_FEATURES_REPLY that, among other information,
@@ -1406,32 +1397,32 @@ A: The OFPT_FEATURES_REQUEST message requests an OpenFlow switch to
    normally an intermittent condition (unless ovs-vswitchd is not
    running).
 
-Q: I added some flows with my controller or with ovs-ofctl, but when I
+### Q: I added some flows with my controller or with ovs-ofctl, but when I
    run "ovs-dpctl dump-flows" I don't see them.
 
 A: ovs-dpctl queries a kernel datapath, not an OpenFlow switch.  It
    won't display the information that you want.  You want to use
    "ovs-ofctl dump-flows" instead.
 
-Q: It looks like each of the interfaces in my bonded port shows up
+### Q: It looks like each of the interfaces in my bonded port shows up
    as an individual OpenFlow port.  Is that right?
 
 A: Yes, Open vSwitch makes individual bond interfaces visible as
    OpenFlow ports, rather than the bond as a whole.  The interfaces
    are treated together as a bond for only a few purposes:
 
-       - Sending a packet to the OFPP_NORMAL port.  (When an OpenFlow
-         controller is not configured, this happens implicitly to
-         every packet.)
+   - Sending a packet to the OFPP_NORMAL port.  (When an OpenFlow
+     controller is not configured, this happens implicitly to
+     every packet.)
 
-       - Mirrors configured for output to a bonded port.
+   - Mirrors configured for output to a bonded port.
 
    It would make a lot of sense for Open vSwitch to present a bond as
    a single OpenFlow port.  If you want to contribute an
    implementation of such a feature, please bring it up on the Open
    vSwitch development mailing list at dev@openvswitch.org.
 
-Q: I have a sophisticated network setup involving Open vSwitch, VMs or
+### Q: I have a sophisticated network setup involving Open vSwitch, VMs or
    multiple hosts, and other components.  The behavior isn't what I
    expect.  Help!
 
@@ -1449,71 +1440,71 @@ A: To debug network behavior problems, trace the path of a packet,
 
    Tools available for tracing include the following:
 
-       - "tcpdump" and "wireshark" for observing hops across network
-         devices, such as Open vSwitch internal devices and physical
-         wires.
+   - "tcpdump" and "wireshark" for observing hops across network
+     devices, such as Open vSwitch internal devices and physical
+     wires.
 
-       - "ovs-appctl dpif/dump-flows <br>" in Open vSwitch 1.10 and
-         later or "ovs-dpctl dump-flows <br>" in earlier versions.
-         These tools allow one to observe the actions being taken on
-         packets in ongoing flows.
+   - "ovs-appctl dpif/dump-flows <br>" in Open vSwitch 1.10 and
+     later or "ovs-dpctl dump-flows <br>" in earlier versions.
+     These tools allow one to observe the actions being taken on
+     packets in ongoing flows.
 
-         See ovs-vswitchd(8) for "ovs-appctl dpif/dump-flows"
-         documentation, ovs-dpctl(8) for "ovs-dpctl dump-flows"
-         documentation, and "Why are there so many different ways to
-         dump flows?" above for some background.
+     See ovs-vswitchd(8) for "ovs-appctl dpif/dump-flows"
+     documentation, ovs-dpctl(8) for "ovs-dpctl dump-flows"
+     documentation, and "Why are there so many different ways to
+     dump flows?" above for some background.
 
-       - "ovs-appctl ofproto/trace" to observe the logic behind how
-         ovs-vswitchd treats packets.  See ovs-vswitchd(8) for
-         documentation.  You can out more details about a given flow
-         that "ovs-dpctl dump-flows" displays, by cutting and pasting
-         a flow from the output into an "ovs-appctl ofproto/trace"
-         command.
+   - "ovs-appctl ofproto/trace" to observe the logic behind how
+     ovs-vswitchd treats packets.  See ovs-vswitchd(8) for
+     documentation.  You can out more details about a given flow
+     that "ovs-dpctl dump-flows" displays, by cutting and pasting
+     a flow from the output into an "ovs-appctl ofproto/trace"
+     command.
 
-       - SPAN, RSPAN, and ERSPAN features of physical switches, to
-         observe what goes on at these physical hops.
+   - SPAN, RSPAN, and ERSPAN features of physical switches, to
+     observe what goes on at these physical hops.
 
    Starting at the origin of a given packet, observe the packet at
    each hop in turn.  For example, in one plausible scenario, you
    might:
 
-       1. "tcpdump" the "eth" interface through which an ARP egresses
-          a VM, from inside the VM.
+   1. "tcpdump" the "eth" interface through which an ARP egresses
+      a VM, from inside the VM.
 
-       2. "tcpdump" the "vif" or "tap" interface through which the ARP
-          ingresses the host machine.
+   2. "tcpdump" the "vif" or "tap" interface through which the ARP
+      ingresses the host machine.
 
-       3. Use "ovs-dpctl dump-flows" to spot the ARP flow and observe
-          the host interface through which the ARP egresses the
-          physical machine.  You may need to use "ovs-dpctl show" to
-          interpret the port numbers.  If the output seems surprising,
-          you can use "ovs-appctl ofproto/trace" to observe details of
-          how ovs-vswitchd determined the actions in the "ovs-dpctl
-          dump-flows" output.
+   3. Use "ovs-dpctl dump-flows" to spot the ARP flow and observe
+      the host interface through which the ARP egresses the
+      physical machine.  You may need to use "ovs-dpctl show" to
+      interpret the port numbers.  If the output seems surprising,
+      you can use "ovs-appctl ofproto/trace" to observe details of
+      how ovs-vswitchd determined the actions in the "ovs-dpctl
+      dump-flows" output.
 
-       4. "tcpdump" the "eth" interface through which the ARP egresses
-          the physical machine.
+   4. "tcpdump" the "eth" interface through which the ARP egresses
+      the physical machine.
 
-       5. "tcpdump" the "eth" interface through which the ARP
-          ingresses the physical machine, at the remote host that
-          receives the ARP.
+   5. "tcpdump" the "eth" interface through which the ARP
+      ingresses the physical machine, at the remote host that
+      receives the ARP.
 
-       6. Use "ovs-dpctl dump-flows" to spot the ARP flow on the
-          remote host that receives the ARP and observe the VM "vif"
-          or "tap" interface to which the flow is directed.  Again,
-          "ovs-dpctl show" and "ovs-appctl ofproto/trace" might help.
+   6. Use "ovs-dpctl dump-flows" to spot the ARP flow on the
+      remote host that receives the ARP and observe the VM "vif"
+      or "tap" interface to which the flow is directed.  Again,
+      "ovs-dpctl show" and "ovs-appctl ofproto/trace" might help.
 
-       7. "tcpdump" the "vif" or "tap" interface to which the ARP is
-          directed.
+   7. "tcpdump" the "vif" or "tap" interface to which the ARP is
+      directed.
 
-       8. "tcpdump" the "eth" interface through which the ARP
-          ingresses a VM, from inside the VM.
+   8. "tcpdump" the "eth" interface through which the ARP
+      ingresses a VM, from inside the VM.
 
    It is likely that during one of these steps you will figure out the
    problem.  If not, then follow the ARP reply back to the origin, in
    reverse.
 
-Q: How do I make a flow drop packets?
+### Q: How do I make a flow drop packets?
 
 A: To drop a packet is to receive it without forwarding it.  OpenFlow
    explicitly specifies forwarding actions.  Thus, a flow with an
@@ -1534,7 +1525,7 @@ A: To drop a packet is to receive it without forwarding it.  OpenFlow
    "drop" is not an action, either in OpenFlow or Open vSwitch.
    Rather, it is only a way to say that there are no actions.
 
-Q: I added a flow to send packets out the ingress port, like this:
+### Q: I added a flow to send packets out the ingress port, like this:
 
        ovs-ofctl add-flow br0 in_port=2,actions=2
 
@@ -1584,7 +1575,7 @@ A: Yes, OpenFlow requires a switch to ignore attempts to send a packet
                                        2,3,4,5,6,\
                                        pop:NXM_OF_IN_PORT[]
 
-Q: My bridge br0 has host 192.168.0.1 on port 1 and host 192.168.0.2
+### Q: My bridge br0 has host 192.168.0.1 on port 1 and host 192.168.0.2
    on port 2.  I set up flows to forward only traffic destined to the
    other host and drop other traffic, like this:
 
@@ -1618,7 +1609,7 @@ A: These flows drop the ARP packets that IP hosts use to establish IP
       priority=5,in_port=1,dl_dst=01:00:00:00:00:00/01:00:00:00:00:00,actions=2
       priority=5,in_port=2,dl_dst=01:00:00:00:00:00/01:00:00:00:00:00,actions=1
 
-Q: My bridge disconnects from my controller on add-port/del-port.
+### Q: My bridge disconnects from my controller on add-port/del-port.
 
 A: Reconfiguring your bridge can change your bridge's datapath-id because
    Open vSwitch generates datapath-id from the MAC address of one of its ports.
@@ -1633,13 +1624,14 @@ A: Reconfiguring your bridge can change your bridge's datapath-id because
 Development
 -----------
 
-Q: How do I implement a new OpenFlow message?
+### Q: How do I implement a new OpenFlow message?
 
 A: Add your new message to "enum ofpraw" and "enum ofptype" in
    lib/ofp-msgs.h, following the existing pattern.  Then recompile and
    fix all of the new warnings, implementing new functionality for the
    new message as needed.  (If you configure with --enable-Werror, as
-   described in INSTALL, then it is impossible to miss any warnings.)
+   described in [INSTALL](INSTALL.md), then it is impossible to miss
+   any warnings.)
 
    If you need to add an OpenFlow vendor extension message for a
    vendor that doesn't yet have any extension messages, then you will

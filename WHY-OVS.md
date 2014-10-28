@@ -1,5 +1,5 @@
-                          Why Open vSwitch?
-                          =================
+Why Open vSwitch?
+=================
 
 Hypervisors need the ability to bridge traffic between VMs and with the
 outside world.  On Linux-based hypervisors, this used to mean using the

@@ -4,7 +4,7 @@ How to Submit Patches for Open vSwitch
 Send changes to Open vSwitch as patches to dev@openvswitch.org.
 One patch per email, please.  More details are included below.
 
-If you are using Git, then "git format-patch" takes care of most of
+If you are using Git, then `git format-patch` takes care of most of
 the mechanics described below for you.
 
 Before You Start
@@ -13,59 +13,59 @@ Before You Start
 Before you send patches at all, make sure that each patch makes sense.
 In particular:
 
-        - A given patch should not break anything, even if later
-          patches fix the problems that it causes.  The source tree
-          should still build and work after each patch is applied.
-          (This enables "git bisect" to work best.)
+  - A given patch should not break anything, even if later
+    patches fix the problems that it causes.  The source tree
+    should still build and work after each patch is applied.
+    (This enables `git bisect` to work best.)
 
-        - A patch should make one logical change.  Don't make
-          multiple, logically unconnected changes to disparate
-          subsystems in a single patch.
+  - A patch should make one logical change.  Don't make
+    multiple, logically unconnected changes to disparate
+    subsystems in a single patch.
 
-        - A patch that adds or removes user-visible features should
-          also update the appropriate user documentation or manpages.
+  - A patch that adds or removes user-visible features should
+    also update the appropriate user documentation or manpages.
 
 Testing is also important:
 
-        - A patch that adds or deletes files should be tested with
-          "make distcheck" before submission.
+  - A patch that adds or deletes files should be tested with
+    `make distcheck` before submission.
 
-        - A patch that modifies Linux kernel code should be at least
-          build-tested on various Linux kernel versions before
-          submission.  I suggest versions 2.6.32 and whatever
-          the current latest release version is at the time.
+  - A patch that modifies Linux kernel code should be at least
+    build-tested on various Linux kernel versions before
+    submission.  I suggest versions 2.6.32 and whatever
+    the current latest release version is at the time.
 
-        - A patch that modifies the ofproto or vswitchd code should be
-          tested in at least simple cases before submission.
+  - A patch that modifies the ofproto or vswitchd code should be
+    tested in at least simple cases before submission.
 
-        - A patch that modifies xenserver code should be tested on
-          XenServer before submission.
+  - A patch that modifies xenserver code should be tested on
+    XenServer before submission.
 
 If you are using GitHub, then you may utilize the travis-ci.org CI build
 system by linking your GitHub repository to it. This will run some of
 the above tests automatically when you push changes to your repository.
-See the "Continuous Integration with Travis-CI" in the INSTALL file for
-details on how to set it up.
+See the "Continuous Integration with Travis-CI" in the [INSTALL](INSTALL.md)
+file for details on how to set it up.
 
 Email Subject
 -------------
 
 The subject line of your email should be in the following format:
-[PATCH <n>/<m>] <area>: <summary>
+`[PATCH <n>/<m>] <area>: <summary>`
 
-        - [PATCH <n>/<m>] indicates that this is the nth of a series
-          of m patches.  It helps reviewers to read patches in the
-          correct order.  You may omit this prefix if you are sending
-          only one patch.
+  - `[PATCH <n>/<m>]` indicates that this is the nth of a series
+    of m patches.  It helps reviewers to read patches in the
+    correct order.  You may omit this prefix if you are sending
+    only one patch.
 
-        - <area>: indicates the area of the Open vSwitch to which the
-          change applies (often the name of a source file or a
-          directory).  You may omit it if the change crosses multiple
-          distinct pieces of code.
+  - `<area>:` indicates the area of the Open vSwitch to which the
+    change applies (often the name of a source file or a
+    directory).  You may omit it if the change crosses multiple
+    distinct pieces of code.
 
-        - <summary> briefly describes the change.
+  - `<summary>` briefly describes the change.
 
-The subject, minus the [PATCH <n>/<m>] prefix, becomes the first line
+The subject, minus the `[PATCH <n>/<m>]` prefix, becomes the first line
 of the commit's change log message.
 
 Description
@@ -80,15 +80,15 @@ Please limit lines in the description to 79 characters in width.
 
 The description should include:
 
-        - The rationale for the change.
+  - The rationale for the change.
 
-        - Design description and rationale (but this might be better
-          added as code comments).
+  - Design description and rationale (but this might be better
+    added as code comments).
 
-        - Testing that you performed (or testing that should be done
-          but you could not for whatever reason).
+  - Testing that you performed (or testing that should be done
+    but you could not for whatever reason).
 
-        - Tags (see below).
+  - Tags (see below).
 
 There is no need to describe what the patch actually changed, if the
 reader can see it for himself.
@@ -100,7 +100,7 @@ datapath names.)'.
 
 If you, the person sending the patch, did not write the patch
 yourself, then the very first line of the body should take the form
-"From: <author name> <author email>", followed by a blank line.  This
+`From: <author name> <author email>`, followed by a blank line.  This
 will automatically cause the named author to be credited with
 authorship in the repository.
 
@@ -254,7 +254,7 @@ Comments
 
 If you want to include any comments in your email that should not be
 part of the commit's change log message, put them after the
-description, separated by a line that contains just "---".  It may be
+description, separated by a line that contains just `---`.  It may be
 helpful to include a diffstat here for changes that touch multiple
 files.
 
@@ -264,9 +264,9 @@ Patch
 The patch should be in the body of the email following the description,
 separated by a blank line.
 
-Patches should be in "diff -up" format.  We recommend that you use Git
-to produce your patches, in which case you should use the -M -C
-options to "git diff" (or other Git tools) if your patch renames or
+Patches should be in `diff -up` format.  We recommend that you use Git
+to produce your patches, in which case you should use the `-M -C`
+options to `git diff` (or other Git tools) if your patch renames or
 copies files.  Quilt (http://savannah.nongnu.org/projects/quilt) might
 be useful if you do not want to use Git.
 
@@ -278,12 +278,13 @@ If you cannot convince your email client not to mangle patches, then
 sending the patch as an attachment is a second choice.
 
 Please follow the style used in the code that you are modifying.  The
-CodingStyle file describes the coding style used in most of Open
-vSwitch.  Use Linux kernel coding style for Linux kernel code.
+[CodingStyle](CodingStyle.md) file describes the coding style used in
+most of Open vSwitch. Use Linux kernel coding style for Linux kernel code.
 
 Example
 -------
 
+```
 From fa29a1c2c17682879e79a21bb0cdd5bbe67fa7c0 Mon Sep 17 00:00:00 2001
 From: Jesse Gross <jesse@nicira.com>
 Date: Thu, 8 Dec 2011 13:17:24 -0800
@@ -313,4 +314,5 @@ index fdd952e..f6cb88e 100644
  both_modules += brcompat
 -- 
 1.7.7.3
+```
 

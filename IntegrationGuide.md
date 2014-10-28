@@ -1,5 +1,5 @@
-                 Integration Guide for Centralized Control
-                 =========================================
+Integration Guide for Centralized Control
+=========================================
 
 This document describes how to integrate Open vSwitch onto a new
 platform to expose the state of the switch and attached devices for
@@ -90,13 +90,13 @@ distinguish between multiple hypervisors.
 Most of this configuration can be done with the ovs-ctl command at
 startup.  For example:
 
-  ovs-ctl --system-type="XenServer" --system-version="6.0.0-50762p" \
-          --system-id="${UUID}" "${other_options}" start
+    ovs-ctl --system-type="XenServer" --system-version="6.0.0-50762p" \
+            --system-id="${UUID}" "${other_options}" start
 
 Alternatively, the ovs-vsctl command may be used to set a particular
 value at runtime.  For example:
 
-  ovs-vsctl set open_vswitch . external-ids:system-id='"${UUID}"'
+    ovs-vsctl set open_vswitch . external-ids:system-id='"${UUID}"'
 
 The 'other_config:enable-statistics' key may be set to "true" to have OVS
 populate the database with statistics (e.g., number of CPUs, memory,
@@ -113,12 +113,12 @@ UUID returned by 'xe network-list' for that particular bridge.
 For example, to set the identifier for bridge "br0", the following
 command can be used:
 
-  ovs-vsctl set Bridge br0 external-ids:bridge-id='"${UUID}"'
+    ovs-vsctl set Bridge br0 external-ids:bridge-id='"${UUID}"'
 
 The MAC address of the bridge may be manually configured by setting it
 with the "other_config:hwaddr" key.  For example:
 
-  ovs-vsctl set Bridge br0 other_config:hwaddr="12:34:56:78:90:ab"
+    ovs-vsctl set Bridge br0 other_config:hwaddr="12:34:56:78:90:ab"
 
 
 Interface table
@@ -165,5 +165,5 @@ As in the previous tables, the ovs-vsctl command may be used to
 configure the values.  For example, to set the 'iface-id' on eth0, the
 following command can be used:
 
-  ovs-vsctl set Interface eth0 external-ids:iface-id='"${UUID}"'
+    ovs-vsctl set Interface eth0 external-ids:iface-id='"${UUID}"'
 

@@ -41,25 +41,25 @@ flow key that it parsed from the packet.  Userspace then extracts its
 own notion of a flow key from the packet and compares it against the
 kernel-provided version:
 
-    - If userspace's notion of the flow key for the packet matches the
-      kernel's, then nothing special is necessary.
+  - If userspace's notion of the flow key for the packet matches the
+    kernel's, then nothing special is necessary.
 
-    - If the kernel's flow key includes more fields than the userspace
-      version of the flow key, for example if the kernel decoded IPv6
-      headers but userspace stopped at the Ethernet type (because it
-      does not understand IPv6), then again nothing special is
-      necessary.  Userspace can still set up a flow in the usual way,
-      as long as it uses the kernel-provided flow key to do it.
+  - If the kernel's flow key includes more fields than the userspace
+    version of the flow key, for example if the kernel decoded IPv6
+    headers but userspace stopped at the Ethernet type (because it
+    does not understand IPv6), then again nothing special is
+    necessary.  Userspace can still set up a flow in the usual way,
+    as long as it uses the kernel-provided flow key to do it.
 
-    - If the userspace flow key includes more fields than the
-      kernel's, for example if userspace decoded an IPv6 header but
-      the kernel stopped at the Ethernet type, then userspace can
-      forward the packet manually, without setting up a flow in the
-      kernel.  This case is bad for performance because every packet
-      that the kernel considers part of the flow must go to userspace,
-      but the forwarding behavior is correct.  (If userspace can
-      determine that the values of the extra fields would not affect
-      forwarding behavior, then it could set up a flow anyway.)
+  - If the userspace flow key includes more fields than the
+    kernel's, for example if userspace decoded an IPv6 header but
+    the kernel stopped at the Ethernet type, then userspace can
+    forward the packet manually, without setting up a flow in the
+    kernel.  This case is bad for performance because every packet
+    that the kernel considers part of the flow must go to userspace,
+    but the forwarding behavior is correct.  (If userspace can
+    determine that the values of the extra fields would not affect
+    forwarding behavior, then it could set up a flow anyway.)
 
 How flow keys evolve over time is important to making this work, so
 the following sections go into detail.
@@ -225,11 +225,11 @@ Other rules
 
 The other rules for flow keys are much less subtle:
 
-    - Duplicate attributes are not allowed at a given nesting level.
+  - Duplicate attributes are not allowed at a given nesting level.
 
-    - Ordering of attributes is not significant.
+  - Ordering of attributes is not significant.
 
-    - When the kernel sends a given flow key to userspace, it always
-      composes it the same way.  This allows userspace to hash and
-      compare entire flow keys that it may not be able to fully
-      interpret.
+  - When the kernel sends a given flow key to userspace, it always
+    composes it the same way.  This allows userspace to hash and
+    compare entire flow keys that it may not be able to fully
+    interpret.

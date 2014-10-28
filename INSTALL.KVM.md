@@ -1,15 +1,16 @@
-                 How to Use Open vSwitch with KVM
-                 =================================
+How to Use Open vSwitch with KVM
+=================================
 
 This document describes how to use Open vSwitch with the Kernel-based
 Virtual Machine (KVM). This document assumes that you have read and
-followed INSTALL to get Open vSwitch setup on your Linux system.
+followed [INSTALL](INSTALL.md) to get Open vSwitch setup on your Linux
+system.
 
 Setup
 -----
 
-First, follow the setup instructions in INSTALL to get a working
-Open vSwitch installation.
+First, follow the setup instructions in [INSTALL](INSTALL.md) to get a
+working Open vSwitch installation.
 
 KVM uses tunctl to handle various bridging modes, which you can 
 install with the Debian/Ubuntu package uml-utilities.
@@ -26,24 +27,26 @@ Create the following two files and store them in known locations.
 For example /etc/ovs-ifup and /etc/ovs-ifdown
 
 /etc/ovs-ifup
---------------------------------------------------------------------
+
+```
 #!/bin/sh
 
 switch='br0'
 /sbin/ifconfig $1 0.0.0.0 up
 ovs-vsctl add-port ${switch} $1
---------------------------------------------------------------------
+```
 
 /etc/ovs-ifdown
---------------------------------------------------------------------
+
+```
 #!/bin/sh
 
 switch='br0'
 /sbin/ifconfig $1 0.0.0.0 down
 ovs-vsctl del-port ${switch} $1
---------------------------------------------------------------------
+```
 
-At the end of INSTALL, it describes basic usage of creating
+At the end of [INSTALL](INSTALL.md), it describes basic usage of creating
 bridges and ports. If you haven't already, create a bridge named
 br0 with the following command:
 
@@ -59,8 +62,8 @@ Please refer to ovs-vsctl(8) for more details.
 Next, we'll start a guest that will use our ifup and ifdown scripts.
 
       % kvm -m 512 -net nic,macaddr=00:11:22:EE:EE:EE -net \
-tap,script=/etc/ovs-ifup,downscript=/etc/ovs-ifdown -drive \
-file=/path/to/disk-image,boot=on
+        tap,script=/etc/ovs-ifup,downscript=/etc/ovs-ifdown -drive \
+        file=/path/to/disk-image,boot=on
 
 This will start the guest and associate a tap device with it. The 
 ovs-ifup script will add a port on the br0 bridge so that the

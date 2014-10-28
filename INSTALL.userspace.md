@@ -1,5 +1,5 @@
-              Using Open vSwitch without kernel support
-              =========================================
+Using Open vSwitch without kernel support
+=========================================
 
 Open vSwitch can operate, at a cost in performance, entirely in
 userspace, without assistance from a kernel module.  This file
@@ -8,8 +8,8 @@ explains how to install Open vSwitch in such a mode.
 The userspace-only mode of Open vSwitch is considered experimental.
 It has not been thoroughly tested.
 
-This version of Open vSwitch should be built manually with "configure"
-and "make".  Debian packaging for Open vSwitch is also included, but
+This version of Open vSwitch should be built manually with `configure`
+and `make`.  Debian packaging for Open vSwitch is also included, but
 it has not been recently tested, and so Debian packages are not a
 recommended way to use this version of Open vSwitch.
 
@@ -25,11 +25,11 @@ On Linux, the userspace switch additionally requires the kernel
 TUN/TAP driver to be available, either built into the kernel or loaded
 as a module.  If you are not sure, check for a directory named
 /sys/class/misc/tun.  If it does not exist, then attempt to load the
-module with "modprobe tun".
+module with `modprobe tun`.
 
-The tun device must also exist as /dev/net/tun.  If it does not exist,
-then create /dev/net (if necessary) with "mkdir /dev/net", then create
-/dev/net/tun with "mknod /dev/net/tun c 10 200".
+The tun device must also exist as `/dev/net/tun`.  If it does not exist,
+then create /dev/net (if necessary) with `mkdir /dev/net`, then create
+`/dev/net/tun` with `mknod /dev/net/tun c 10 200`.
 
 On FreeBSD and NetBSD, the userspace switch additionally requires the
 kernel tap(4) driver to be available, either built into the kernel or
@@ -76,7 +76,7 @@ Other settings
 On NetBSD, depending on your network topology and applications, the
 following configuration might help.  See sysctl(7).
 
-	sysctl net.inet.ip.checkinterface=1
+    sysctl net.inet.ip.checkinterface=1
 
 Bug Reporting
 -------------

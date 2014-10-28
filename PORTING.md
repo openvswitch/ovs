@@ -1,5 +1,5 @@
-         How to Port Open vSwitch to New Software or Hardware
-         ====================================================
+How to Port Open vSwitch to New Software or Hardware
+====================================================
 
 Open vSwitch (OVS) is intended to be easily ported to new software and
 hardware platforms.  This document describes the types of changes that
@@ -44,22 +44,22 @@ vSwitch from a porter's perspective.
 Some of the components are generic.  Modulo bugs or inadequacies,
 these components should not need to be modified as part of a port:
 
-    - "ovs-vswitchd" is the main Open vSwitch userspace program, in
-      vswitchd/.  It reads the desired Open vSwitch configuration from
-      the ovsdb-server program over an IPC channel and passes this
-      configuration down to the "ofproto" library.  It also passes
-      certain status and statistical information from ofproto back
-      into the database.
+  - "ovs-vswitchd" is the main Open vSwitch userspace program, in
+    vswitchd/.  It reads the desired Open vSwitch configuration from
+    the ovsdb-server program over an IPC channel and passes this
+    configuration down to the "ofproto" library.  It also passes
+    certain status and statistical information from ofproto back
+    into the database.
 
-    - "ofproto" is the Open vSwitch library, in ofproto/, that
-      implements an OpenFlow switch.  It talks to OpenFlow controllers
-      over the network and to switch hardware or software through an
-      "ofproto provider", explained further below.
+  - "ofproto" is the Open vSwitch library, in ofproto/, that
+    implements an OpenFlow switch.  It talks to OpenFlow controllers
+    over the network and to switch hardware or software through an
+    "ofproto provider", explained further below.
 
-    - "netdev" is the Open vSwitch library, in lib/netdev.c, that
-      abstracts interacting with network devices, that is, Ethernet
-      interfaces.  The netdev library is a thin layer over "netdev
-      provider" code, explained further below.
+  - "netdev" is the Open vSwitch library, in lib/netdev.c, that
+    abstracts interacting with network devices, that is, Ethernet
+    interfaces.  The netdev library is a thin layer over "netdev
+    provider" code, explained further below.
 
 The other components may need attention during a port.  You will
 almost certainly have to implement a "netdev provider".  Depending on
@@ -87,35 +87,35 @@ this as a bug.
 
 The netdev interface can be divided into a few rough categories:
 
-    * Functions required to properly implement OpenFlow features.  For
-      example, OpenFlow requires the ability to report the Ethernet
-      hardware address of a port.  These functions must be implemented
-      for minimally correct operation.
+  * Functions required to properly implement OpenFlow features.  For
+    example, OpenFlow requires the ability to report the Ethernet
+    hardware address of a port.  These functions must be implemented
+    for minimally correct operation.
 
-    * Functions required to implement optional Open vSwitch features.
-      For example, the Open vSwitch support for in-band control
-      requires netdev support for inspecting the TCP/IP stack's ARP
-      table.  These functions must be implemented if the corresponding
-      OVS features are to work, but may be omitted initially.
+  * Functions required to implement optional Open vSwitch features.
+    For example, the Open vSwitch support for in-band control
+    requires netdev support for inspecting the TCP/IP stack's ARP
+    table.  These functions must be implemented if the corresponding
+    OVS features are to work, but may be omitted initially.
 
-    * Functions needed in some implementations but not in others.  For
-      example, most kinds of ports (see below) do not need
-      functionality to receive packets from a network device.
+  * Functions needed in some implementations but not in others.  For
+    example, most kinds of ports (see below) do not need
+    functionality to receive packets from a network device.
 
 The existing netdev implementations may serve as useful examples
 during a port:
 
-    * lib/netdev-linux.c implements netdev functionality for Linux
-      network devices, using Linux kernel calls.  It may be a good
-      place to start for full-featured netdev implementations.
+  * lib/netdev-linux.c implements netdev functionality for Linux
+    network devices, using Linux kernel calls.  It may be a good
+    place to start for full-featured netdev implementations.
 
-    * lib/netdev-vport.c provides support for "virtual ports"
-      implemented by the Open vSwitch datapath module for the Linux
-      kernel.  This may serve as a model for minimal netdev
-      implementations.
+  * lib/netdev-vport.c provides support for "virtual ports"
+    implemented by the Open vSwitch datapath module for the Linux
+    kernel.  This may serve as a model for minimal netdev
+    implementations.
 
-    * lib/netdev-dummy.c is a fake netdev implementation useful only
-      for testing.
+  * lib/netdev-dummy.c is a fake netdev implementation useful only
+    for testing.
 
 
 Porting Strategies
@@ -129,28 +129,28 @@ implementation built into Open vSwitch.  This ought to work, without
 writing any more code, as long as the netdev provider that you
 implemented supports receiving packets.  It yields poor performance,
 however, because every packet passes through the ovs-vswitchd process.
-See INSTALL.userspace for instructions on how to configure a userspace
-switch.
+See [INSTALL.userspace](INSTALL.userspace.md) for instructions on how
+to configure a userspace switch.
 
 If the userspace switch is not the right choice for your port, then
 you will have to write more code.  You may implement either an
 "ofproto provider" or a "dpif provider".  Which you should choose
 depends on a few different factors:
 
-    * Only an ofproto provider can take full advantage of hardware
-      with built-in support for wildcards (e.g. an ACL table or a
-      TCAM).
+  * Only an ofproto provider can take full advantage of hardware
+    with built-in support for wildcards (e.g. an ACL table or a
+    TCAM).
 
-    * A dpif provider can take advantage of the Open vSwitch built-in
-      implementations of bonding, LACP, 802.1ag, 802.1Q VLANs, and
-      other features.  An ofproto provider has to provide its own
-      implementations, if the hardware can support them at all.
+  * A dpif provider can take advantage of the Open vSwitch built-in
+    implementations of bonding, LACP, 802.1ag, 802.1Q VLANs, and
+    other features.  An ofproto provider has to provide its own
+    implementations, if the hardware can support them at all.
 
-    * A dpif provider is usually easier to implement, but most
-      appropriate for software switching.  It "explodes" wildcard
-      rules into exact-match entries (with an optional wildcard mask).
-      This allows fast hash lookups in software, but makes
-      inefficient use of TCAMs in hardware that support wildcarding.
+  * A dpif provider is usually easier to implement, but most
+    appropriate for software switching.  It "explodes" wildcard
+    rules into exact-match entries (with an optional wildcard mask).
+    This allows fast hash lookups in software, but makes
+    inefficient use of TCAMs in hardware that support wildcarding.
 
 The following sections describe how to implement each kind of port.
 
@@ -232,16 +232,16 @@ requirements are unclear, please report this as a bug.
 There are two existing dpif implementations that may serve as
 useful examples during a port:
 
-    * lib/dpif-netlink.c is a Linux-specific dpif implementation that
-      talks to an Open vSwitch-specific kernel module (whose sources
-      are in the "datapath" directory).  The kernel module performs
-      all of the switching work, passing packets that do not match any
-      flow table entry up to userspace.  This dpif implementation is
-      essentially a wrapper around calls into the kernel module.
+  * lib/dpif-netlink.c is a Linux-specific dpif implementation that
+    talks to an Open vSwitch-specific kernel module (whose sources
+    are in the "datapath" directory).  The kernel module performs
+    all of the switching work, passing packets that do not match any
+    flow table entry up to userspace.  This dpif implementation is
+    essentially a wrapper around calls into the kernel module.
 
-    * lib/dpif-netdev.c is a generic dpif implementation that performs
-      all switching internally.  This is how the Open vSwitch
-      userspace switch is implemented.
+  * lib/dpif-netdev.c is a generic dpif implementation that performs
+    all switching internally.  This is how the Open vSwitch
+    userspace switch is implemented.
 
 
 Miscellaneous Notes

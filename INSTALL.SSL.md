@@ -1,5 +1,5 @@
-                   Configuring Open vSwitch for SSL
-                   ================================
+Configuring Open vSwitch for SSL
+================================
 
 If you plan to configure Open vSwitch to connect across the network to
 an OpenFlow controller, then we recommend that you build Open vSwitch
@@ -29,21 +29,21 @@ private/public key pair and a certificate that signs that public key.
 Typically, the Open vSwitch generates its own public/private key pair.
 There are two common ways to obtain a certificate for a switch:
 
-    * Self-signed certificates: The Open vSwitch signs its certificate
-      with its own private key.  In this case, each switch must be
-      individually approved by the OpenFlow controller(s), since there
-      is no central authority.
+  * Self-signed certificates: The Open vSwitch signs its certificate
+    with its own private key.  In this case, each switch must be
+    individually approved by the OpenFlow controller(s), since there
+    is no central authority.
 
-      This is the only switch PKI model currently supported by NOX
-      (http://noxrepo.org).
+    This is the only switch PKI model currently supported by NOX
+    (http://noxrepo.org).
 
-    * Switch certificate authority: A certificate authority (the
-      "switch CA") signs each Open vSwitch's public key.  The OpenFlow
-      controllers then check that any connecting switches'
-      certificates are signed by that certificate authority.
+  * Switch certificate authority: A certificate authority (the
+    "switch CA") signs each Open vSwitch's public key.  The OpenFlow
+    controllers then check that any connecting switches'
+    certificates are signed by that certificate authority.
 
-      This is the only switch PKI model supported by the simple
-      OpenFlow controller included with Open vSwitch.
+    This is the only switch PKI model supported by the simple
+    OpenFlow controller included with Open vSwitch.
 
 Each Open vSwitch must also have a copy of the CA certificate for the
 certificate authority that signs OpenFlow controllers' keys (the
@@ -52,15 +52,15 @@ certificate is installed on all of the switches within a given
 administrative unit.  There are two common ways for a switch to obtain
 the controller CA certificate:
 
-    * Manually copy the certificate to the switch through some secure
-      means, e.g. using a USB flash drive, or over the network with
-      "scp", or even FTP or HTTP followed by manual verification.
+  * Manually copy the certificate to the switch through some secure
+    means, e.g. using a USB flash drive, or over the network with
+    "scp", or even FTP or HTTP followed by manual verification.
 
-    * Open vSwitch "bootstrap" mode, in which Open vSwitch accepts and
-      saves the controller CA certificate that it obtains from the
-      OpenFlow controller on its first connection.  Thereafter the
-      switch will only connect to controllers signed by the same CA
-      certificate.
+  * Open vSwitch "bootstrap" mode, in which Open vSwitch accepts and
+    saves the controller CA certificate that it obtains from the
+    OpenFlow controller on its first connection.  Thereafter the
+    switch will only connect to controllers signed by the same CA
+    certificate.
 
 Establishing a Public Key Infrastructure
 ----------------------------------------
@@ -82,24 +82,24 @@ The pki directory contains two important subdirectories.  The
 controllerca subdirectory contains controller CA files, including the
 following:
 
-    - cacert.pem: Root certificate for the controller certificate
-      authority.  Each Open vSwitch must have a copy of this file to
-      allow it to authenticate valid controllers.
+  - cacert.pem: Root certificate for the controller certificate
+    authority.  Each Open vSwitch must have a copy of this file to
+    allow it to authenticate valid controllers.
 
-    - private/cakey.pem: Private signing key for the controller
-      certificate authority.  This file must be kept secret.  There is
-      no need for switches or controllers to have a copy of it.
+  - private/cakey.pem: Private signing key for the controller
+    certificate authority.  This file must be kept secret.  There is
+    no need for switches or controllers to have a copy of it.
 
 The switchca subdirectory contains switch CA files, analogous to those
 in the controllerca subdirectory:
 
-    - cacert.pem: Root certificate for the switch certificate
-      authority.  The OpenFlow controller must have this file to
-      enable it to authenticate valid switches.
+  - cacert.pem: Root certificate for the switch certificate
+    authority.  The OpenFlow controller must have this file to
+    enable it to authenticate valid switches.
 
-    - private/cakey.pem: Private signing key for the switch
-      certificate authority.  This file must be kept secret.  There is
-      no need for switches or controllers to have a copy of it.
+  - private/cakey.pem: Private signing key for the switch
+    certificate authority.  This file must be kept secret.  There is
+    no need for switches or controllers to have a copy of it.
 
 After you create the initial structure, you can create keys and
 certificates for switches and controllers with ovs-pki.  Refer to the
@@ -141,12 +141,12 @@ your controller to approve.
 
    The "ovs-pki self-sign" command has the following output:
 
-       * sc-privkey.pem, the switch private key file.  For security,
-         the contents of this file must remain secret.  There is
-         ordinarily no need to copy this file off the Open vSwitch.
+     * sc-privkey.pem, the switch private key file.  For security,
+       the contents of this file must remain secret.  There is
+       ordinarily no need to copy this file off the Open vSwitch.
 
-       * sc-cert.pem, the switch certificate, signed by the switch's
-         own private key.  Its contents are not a secret.
+     * sc-cert.pem, the switch certificate, signed by the switch's
+       own private key.  Its contents are not a secret.
 
 2. Optionally, copy controllerca/cacert.pem from the machine that has
    the OpenFlow PKI structure and verify that it is correct.
@@ -170,11 +170,11 @@ from the machine hosting the PKI to the switch.
 
    This command has the following output:
 
-       * sc-privkey.pem, the switch private key file.  For
-         security, the contents of this file must remain secret.
+     * sc-privkey.pem, the switch private key file.  For
+       security, the contents of this file must remain secret.
 
-       * sc-cert.pem, the switch certificate.  Its contents are
-         not a secret.
+     * sc-cert.pem, the switch certificate.  Its contents are
+       not a secret.
 
 2. Copy sc-privkey.pem and sc-cert.pem, plus controllerca/cacert.pem,
    to the Open vSwitch.
@@ -211,15 +211,15 @@ more secure.
 
    The "ovs-pki req" command has the following output:
 
-       * sc-privkey.pem, the switch private key file.  For security,
-         the contents of this file must remain secret.  There is
-         ordinarily no need to copy this file off the Open vSwitch.
+     * sc-privkey.pem, the switch private key file.  For security,
+       the contents of this file must remain secret.  There is
+       ordinarily no need to copy this file off the Open vSwitch.
 
-       * sc-req.pem, the switch "certificate request", which is
-         essentially the switch's public key.  Its contents are not a
-         secret.
+     * sc-req.pem, the switch "certificate request", which is
+       essentially the switch's public key.  Its contents are not a
+       secret.
 
-       * A fingerprint, on stdout.
+     * A fingerprint, on stdout.
 
 2. Write the fingerprint down on a slip of paper and copy sc-req.pem
    to the machine that contains the PKI structure.
@@ -280,10 +280,10 @@ switches in a given administrative unit.  If you used the
 instructions above to build your PKI, then this file will be named
 cacert.pem:
 
-    - The root certificate for the controller certificate authority.
-      The Open vSwitch verifies it that is authorized to connect to an
-      OpenFlow controller by verifying a signature against this CA
-      certificate.
+  - The root certificate for the controller certificate authority.
+    The Open vSwitch verifies it that is authorized to connect to an
+    OpenFlow controller by verifying a signature against this CA
+    certificate.
 
 Once you have these files, configure ovs-vswitchd to use them using
 the ovs-vsctl "set-ssl" command, e.g.:

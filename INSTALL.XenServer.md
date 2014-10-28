@@ -1,9 +1,9 @@
-           How to Install Open vSwitch on Citrix XenServer
-           ===============================================
+How to Install Open vSwitch on Citrix XenServer
+===============================================
 
 This document describes how to build and install Open vSwitch on a
 Citrix XenServer host.  If you want to install Open vSwitch on a
-generic Linux or BSD host, see INSTALL instead.
+generic Linux or BSD host, see [INSTALL](INSTALL.md) instead.
 
 These instructions have been tested with XenServer 5.6 FP1.
 
@@ -15,12 +15,12 @@ Open vSwitch Git tree.  The recommended build environment to build
 RPMs for Citrix XenServer is the DDK VM available from Citrix.
 
 1. If you are building from an Open vSwitch Git tree, then you will
-   need to first create a distribution tarball by running "./boot.sh;
-   ./configure; make dist" in the Git tree.  You cannot run this in
+   need to first create a distribution tarball by running `./boot.sh;
+   ./configure; make dist` in the Git tree.  You cannot run this in
    the DDK VM, because it lacks tools that are necessary to bootstrap
    the Open vSwitch distribution.  Instead, you must run this on a
-   machine that has the tools listed in INSTALL as prerequisites for
-   building from a Git tree.
+   machine that has the tools listed in [INSTALL](INSTALL.md) as
+   prerequisites for building from a Git tree.
 
 2. Copy the distribution tarball into /usr/src/redhat/SOURCES inside
    the DDK VM.
@@ -30,7 +30,7 @@ RPMs for Citrix XenServer is the DDK VM available from Citrix.
 
 4. To build Open vSwitch userspace, run:
 
-       rpmbuild -bb xenserver/openvswitch-xen.spec
+       `rpmbuild -bb xenserver/openvswitch-xen.spec`
 
    This produces three RPMs in /usr/src/redhat/RPMS/i386:
    "openvswitch", "openvswitch-modules-xen", and
@@ -39,7 +39,7 @@ RPMs for Citrix XenServer is the DDK VM available from Citrix.
    The above command automatically runs the Open vSwitch unit tests.
    To disable the unit tests, run:
 
-       rpmbuild -bb --without check xenserver/openvswitch-xen.spec
+       `rpmbuild -bb --without check xenserver/openvswitch-xen.spec`
 
 Build Parameters
 ----------------
@@ -50,6 +50,7 @@ itself, but if it does not do it correctly then you can specify them
 yourself as parameters to the build.  Thus, the final "rpmbuild" step
 above can be elaborated as:
 
+   ```
    VERSION=<Open vSwitch version>
    KERNEL_NAME=<Xen Kernel name>
    KERNEL_VERSION=<Xen Kernel version>
@@ -60,21 +61,22 @@ above can be elaborated as:
         -D "kernel_version $KERNEL_VERSION" \
         -D "kernel_flavor $KERNEL_FLAVOR" \
         -bb xenserver/openvswitch-xen.spec
+   ```
 
 where:
 
-    <openvswitch version> is the version number that appears in the
+    `<openvswitch version>` is the version number that appears in the
     name of the Open vSwitch tarball, e.g. 0.90.0.
 
-    <Xen Kernel name> is the name of the XenServer kernel package,
+    `<Xen Kernel name>` is the name of the XenServer kernel package,
     e.g. kernel-xen or kernel-NAME-xen, without the "kernel-" prefix.
 
-    <Xen Kernel version> is the output of:
+    `<Xen Kernel version>` is the output of:
     rpm -q --queryformat "%{Version}-%{Release}" <kernel-devel-package>,
     e.g. 2.6.32.12-0.7.1.xs5.6.100.323.170596, where <kernel-devel-package> is
     the name of the -devel package corresponding to <Xen Kernel name>.
 
-    <Xen Kernel flavor (suffix) > is either "xen" or "kdump".
+    `<Xen Kernel flavor (suffix) >` is either "xen" or "kdump".
     The "xen" flavor is the main running kernel flavor and the "kdump" flavor is
     the crashdump kernel flavor. Commonly, one would specify "xen" here.
 
@@ -85,6 +87,7 @@ To install Open vSwitch on a XenServer host, or to upgrade to a newer version,
 copy the "openvswitch" and "openvswitch-modules-xen" RPMs to that host with
 "scp", then install them with "rpm -U", e.g.:
 
+     ```
      scp openvswitch-$VERSION-1.i386.rpm \
          openvswitch-modules-xen-$XEN_KERNEL_VERSION-$VERSION-1.i386.rpm \
          root@<host>:
@@ -93,12 +96,13 @@ copy the "openvswitch" and "openvswitch-modules-xen" RPMs to that host with
 (At this point you will have to enter <host>'s root password again.)
      rpm -U openvswitch-$VERSION-1.i386.rpm \
          openvswitch-modules-xen-$XEN_KERNEL_VERSION-$VERSION-1.i386.rpm
+     ```
 
 To uninstall Open vSwitch from a XenServer host, remove the packages:
 
-     ssh root@<host>
+     `ssh root@<host>`
 (At this point you will have to enter <host>'s root password again.)
-     rpm -e openvswitch openvswitch-modules-xen-$XEN_KERNEL_VERSION
+     `rpm -e openvswitch openvswitch-modules-xen-$XEN_KERNEL_VERSION`
 
 After installing or uninstalling Open vSwitch, the XenServer should be
 rebooted as soon as possible.

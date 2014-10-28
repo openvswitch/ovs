@@ -1,5 +1,5 @@
-                      Open vSwitch Coding Style
-                      =========================
+Open vSwitch Coding Style
+=========================
 
 This file describes the coding style used in most C files in the Open
 vSwitch distribution.  However, Linux kernel code datapath directory
@@ -14,7 +14,7 @@ The following GNU indent options approximate this style:
     -di1 -lp -il0 -hnl
 
 
-BASICS
+## BASICS
 
   Limit lines to 79 characters.
 
@@ -26,35 +26,35 @@ pieces.  A form feed should appear as the only character on a line.
   Avoid trailing spaces on lines.
 
 
-NAMING
+## NAMING
 
-  Use names that explain the purpose of a function or object.
+  - Use names that explain the purpose of a function or object.
 
-  Use underscores to separate words in an identifier: multi_word_name. 
+  - Use underscores to separate words in an identifier: multi_word_name. 
 
-  Use lowercase for most names.  Use uppercase for macros, macro
-parameters, and members of enumerations.
+  - Use lowercase for most names.  Use uppercase for macros, macro
+    parameters, and members of enumerations.
 
-  Give arrays names that are plural.
+  - Give arrays names that are plural.
 
-  Pick a unique name prefix (ending with an underscore) for each
-module, and apply that prefix to all of that module's externally
-visible names.  Names of macro parameters, struct and union members,
-and parameters in function prototypes are not considered externally
-visible for this purpose.
+  - Pick a unique name prefix (ending with an underscore) for each
+    module, and apply that prefix to all of that module's externally
+    visible names.  Names of macro parameters, struct and union members,
+    and parameters in function prototypes are not considered externally
+    visible for this purpose.
 
-  Do not use names that begin with _.  If you need a name for
-"internal use only", use __ as a suffix instead of a prefix.
+  - Do not use names that begin with _.  If you need a name for
+    "internal use only", use __ as a suffix instead of a prefix.
 
-  Avoid negative names: "found" is a better name than "not_found".
+  - Avoid negative names: "found" is a better name than "not_found".
 
-  In names, a "size" is a count of bytes, a "length" is a count of
-characters.  A buffer has size, but a string has length.  The length
-of a string does not include the null terminator, but the size of the
-buffer that contains the string does.
+  - In names, a "size" is a count of bytes, a "length" is a count of
+    characters.  A buffer has size, but a string has length.  The length
+    of a string does not include the null terminator, but the size of the
+    buffer that contains the string does.
 
 
-COMMENTS
+## COMMENTS
 
   Comments should be written as full sentences that start with a
 capital letter and end with a period.  Put two spaces between
@@ -97,13 +97,13 @@ e.g.:
 
   Use XXX or FIXME comments to mark code that needs work.
 
-  Don't use // comments.
+  Don't use `//` comments.
 
   Don't comment out or #if 0 out code.  Just remove it.  The code that
 was there will still be in version control history.
 
 
-FUNCTIONS
+## FUNCTIONS
 
   Put the return type, function name, and the braces that surround the
 function's code on separate lines, all starting in column 0.
@@ -143,15 +143,16 @@ appropriate.
 parameter order is preferred.  One notable exception is that data
 parameters and their corresponding size parameters should be paired.
 
-    1. The primary object being manipulated, if any (equivalent to the
-       "this" pointer in C++).
-    2. Input-only parameters.
-    3. Input/output parameters.
-    4. Output-only parameters.
-    5. Status parameter. 
+  1. The primary object being manipulated, if any (equivalent to the
+     "this" pointer in C++).
+  2. Input-only parameters.
+  3. Input/output parameters.
+  4. Output-only parameters.
+  5. Status parameter. 
 
   Example:
 
+    ```
     /* Stores the features supported by 'netdev' into each of '*current',
      * '*advertised', '*supported', and '*peer' that are non-null.  Each value
      * is a bitmap of "enum ofp_port_features" bits, in host byte order.
@@ -164,6 +165,7 @@ parameters and their corresponding size parameters should be paired.
     {
         ...
     }
+    ```
 
 Functions that destroy an instance of a dynamically-allocated type
 should accept and ignore a null pointer argument.  Code that calls
@@ -177,7 +179,7 @@ compilers warnings about unused functions.  (Functions defined in .h
 usually should be marked inline.)
 
 
-FUNCTION PROTOTYPES
+## FUNCTION PROTOTYPES
 
   Put the return type and function name on the same line in a function
 prototype:
@@ -191,7 +193,7 @@ give useful information, e.g.:
     int netdev_get_mtu(const struct netdev *, int *mtup);
 
 
-STATEMENTS
+## STATEMENTS
 
   Indent each level of code with 4 spaces.  Use BSD-style brace
 placement:
@@ -263,19 +265,19 @@ details.  (Some compilers also assume that the "if" branch is the more
 common case, so this can be a real form of optimization as well.)
 
 
-RETURN VALUES
+## RETURN VALUES
 
   For functions that return a success or failure indication, prefer
 one of the following return value conventions:
 
-    * An "int" where 0 indicates success and a positive errno value
-      indicates a reason for failure.
+* An "int" where 0 indicates success and a positive errno value
+  indicates a reason for failure.
 
-    * A "bool" where true indicates success and false indicates
-      failure.
+* A "bool" where true indicates success and false indicates
+  failure.
 
 
-MACROS
+## MACROS
 
   Don't define an object-like macro if an enum can be used instead.
 
@@ -312,7 +314,7 @@ the name of each enum.  For example:
     };
 
 
-THREAD SAFETY ANNOTATIONS
+## THREAD SAFETY ANNOTATIONS
 
   Use the macros in lib/compiler.h to annotate locking requirements.
 For example:
@@ -327,7 +329,7 @@ For example:
 (Thus we have OVS_REQUIRES(mutex) above, not OVS_REQUIRES(&mutex).)
 
 
-SOURCE FILES
+## SOURCE FILES
 
   Each source file should state its license in a comment at the very
 top, followed by a comment explaining the purpose of the code that is
@@ -339,24 +341,24 @@ quickly figure out where a given module fits into the larger system.
 
     #include <config.h>
 
-#include directives should appear in the following order:
+`#include` directives should appear in the following order:
 
-    1. #include <config.h>
+1. `#include <config.h>`
 
-    2. The module's own headers, if any.  Including this before any
-       other header (besides <config.h>) ensures that the module's
-       header file is self-contained (see HEADER FILES) below.
+2. The module's own headers, if any.  Including this before any
+   other header (besides <config.h>) ensures that the module's
+   header file is self-contained (see HEADER FILES) below.
 
-    3. Standard C library headers and other system headers, preferably
-       in alphabetical order.  (Occasionally one encounters a set of
-       system headers that must be included in a particular order, in
-       which case that order must take precedence.)
+3. Standard C library headers and other system headers, preferably
+   in alphabetical order.  (Occasionally one encounters a set of
+   system headers that must be included in a particular order, in
+   which case that order must take precedence.)
 
-    4. Open vSwitch headers, in alphabetical order.  Use "", not <>,
-       to specify Open vSwitch header names.
+4. Open vSwitch headers, in alphabetical order.  Use "", not <>,
+   to specify Open vSwitch header names.
 
 
-HEADER FILES
+## HEADER FILES
 
   Each header file should start with its license, as described under
 SOURCE FILES above, followed by a "header guard" to make the header
@@ -384,7 +386,7 @@ the tag yourself.  This reduces the number of header file
 dependencies.
 
 
-TYPES
+## TYPES
 
   Use typedefs sparingly.  Code is clearer if the actual type is
 visible at the point of declaration.  Do not, in general, declare a
@@ -410,11 +412,11 @@ integer types.  Use the PRId<N>, PRIu<N>, and PRIx<N> macros from
 
   For compatibility with antique printf() implementations:
 
-    - Instead of "%zu", use "%"PRIuSIZE.
+  - Instead of "%zu", use "%"PRIuSIZE.
 
-    - Instead of "%td", use "%"PRIdPTR.
+  - Instead of "%td", use "%"PRIdPTR.
 
-    - Instead of "%ju", use "%"PRIuMAX.
+  - Instead of "%ju", use "%"PRIuMAX.
 
 Other variants exist for different radixes.  For example, use
 "%"PRIxSIZE instead of "%zx" or "%x" instead of "%hhx".
@@ -442,7 +444,7 @@ are convinced there is a size or speed benefit.
 Write "int *x", not "int* x" and definitely not "int * x".
 
 
-EXPRESSIONS
+## EXPRESSIONS
 
   Put one space on each side of infix binary and ternary operators:
 
@@ -519,46 +521,46 @@ or variable argument on the left and a constant argument on the
 right, e.g. "x == 0", *not* "0 == x".
 
 
-BLANK LINES
+## BLANK LINES
 
   Put one blank line between top-level definitions of functions and
 global variables.
 
 
-C DIALECT
+## C DIALECT
 
   Most C99 features are OK because they are widely implemented:
 
-    * Flexible array members (e.g. struct { int foo[]; }).
+  * Flexible array members (e.g. struct { int foo[]; }).
 
-    * "static inline" functions (but no other forms of "inline", for
-      which GCC and C99 have differing interpretations).
+  * "static inline" functions (but no other forms of "inline", for
+    which GCC and C99 have differing interpretations).
 
-    * "long long"
+  * "long long"
 
-    * <stdint.h> and <inttypes.h>.
+  * <stdint.h> and <inttypes.h>.
 
-    * bool and <stdbool.h>, but don't assume that bool or _Bool can
-      only take on the values 0 or 1, because this behavior can't be
-      simulated on C89 compilers.
-      Also, don't assume that a conversion to bool or _Bool follows
-      C99 semantics.  I.e. use "(bool)(some_value != 0)" rather than
-      "(bool)some_value".  The latter might produce unexpected results
-      on non-C99 environments.  For example, if bool is implemented as
-      a typedef of char and some_value = 0x10000000.
+  * bool and <stdbool.h>, but don't assume that bool or _Bool can
+    only take on the values 0 or 1, because this behavior can't be
+    simulated on C89 compilers.
+    Also, don't assume that a conversion to bool or _Bool follows
+    C99 semantics.  I.e. use "(bool)(some_value != 0)" rather than
+    "(bool)some_value".  The latter might produce unexpected results
+    on non-C99 environments.  For example, if bool is implemented as
+    a typedef of char and some_value = 0x10000000.
 
-    * Designated initializers (e.g. "struct foo foo = {.a = 1};" and
-      "int a[] = {[2] = 5};").
+  * Designated initializers (e.g. "struct foo foo = {.a = 1};" and
+    "int a[] = {[2] = 5};").
 
-    * Mixing of declarations and code within a block.  Please use this
-      judiciously; keep declarations nicely grouped together in the
-      beginning of a block if possible.
+  * Mixing of declarations and code within a block.  Please use this
+    judiciously; keep declarations nicely grouped together in the
+    beginning of a block if possible.
 
-    * Use of declarations in iteration statements (e.g.
-      "for (int i = 0; i < 10; i++)").
+  * Use of declarations in iteration statements (e.g.
+    "for (int i = 0; i < 10; i++)").
 
-    * Use of a trailing comma in an enum declaration (e.g.
-      "enum { x = 1, };").
+  * Use of a trailing comma in an enum declaration (e.g.
+    "enum { x = 1, };").
 
   As a matter of style, avoid // comments.
 

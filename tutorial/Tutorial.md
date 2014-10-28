@@ -28,7 +28,7 @@ include/openflow/nicira-ext.h header file.
 
 
 Getting Started
-===============
+---------------
 
 This is a hands-on tutorial.  To get the most out of it, you will need
 Open vSwitch binaries.  You do not, on the other hand, need any
@@ -37,48 +37,48 @@ system.  Instead, we will use a script called "ovs-sandbox", which
 accompanies the tutorial, that constructs a software simulated network
 environment based on Open vSwitch.
 
-You can use "ovs-sandbox" three ways:
+You can use `ovs-sandbox` three ways:
 
-    * If you have already installed Open vSwitch on your system, then
-      you should be able to just run "ovs-sandbox" from this directory
-      without any options.
+  * If you have already installed Open vSwitch on your system, then
+    you should be able to just run `ovs-sandbox` from this directory
+    without any options.
 
-    * If you have not installed Open vSwitch (and you do not want to
-      install it), then you can build Open vSwitch according to the
-      instructions in INSTALL, without installing it.  Then run
-      "./ovs-sandbox -b DIRECTORY" from this directory, substituting
-      the Open vSwitch build directory for DIRECTORY.
+  * If you have not installed Open vSwitch (and you do not want to
+    install it), then you can build Open vSwitch according to the
+    instructions in INSTALL, without installing it.  Then run
+    `./ovs-sandbox -b DIRECTORY` from this directory, substituting
+    the Open vSwitch build directory for DIRECTORY.
 
-    * As a slight variant on the latter, you can run "make sandbox"
-      from an Open vSwitch build directory.
+  * As a slight variant on the latter, you can run `make sandbox`
+    from an Open vSwitch build directory.
 
 When you run ovs-sandbox, it does the following:
 
-    1. CAUTION: Deletes any subdirectory of the current directory
-       named "sandbox" and any files in that directory.
+  1. CAUTION: Deletes any subdirectory of the current directory
+     named "sandbox" and any files in that directory.
 
-    2. Creates a new directory "sandbox" in the current directory.
+  2. Creates a new directory "sandbox" in the current directory.
 
-    3. Sets up special environment variables that ensure that Open
-       vSwitch programs will look inside the "sandbox" directory
-       instead of in the Open vSwitch installation directory.
+  3. Sets up special environment variables that ensure that Open
+     vSwitch programs will look inside the "sandbox" directory
+     instead of in the Open vSwitch installation directory.
 
-    4. If you are using a built but not installed Open vSwitch,
-       installs the Open vSwitch manpages in a subdirectory of
-       "sandbox" and adjusts the MANPATH environment variable to point
-       to this directory.  This means that you can use, for example,
-       "man ovs-vsctl" to see a manpage for the ovs-vsctl program that
-       you built.
+  4. If you are using a built but not installed Open vSwitch,
+     installs the Open vSwitch manpages in a subdirectory of
+     "sandbox" and adjusts the MANPATH environment variable to point
+     to this directory.  This means that you can use, for example,
+     `man ovs-vsctl` to see a manpage for the ovs-vsctl program that
+     you built.
 
-    5. Creates an empty Open vSwitch configuration database under
-       "sandbox".
+  5. Creates an empty Open vSwitch configuration database under
+     "sandbox".
 
-    6. Starts ovsdb-server running under "sandbox".
+  6. Starts ovsdb-server running under "sandbox".
 
-    7. Starts ovs-vswitchd running under "sandbox", passing special
-       options that enable a special "dummy" mode for testing.
+  7. Starts ovs-vswitchd running under "sandbox", passing special
+     options that enable a special "dummy" mode for testing.
 
-    8. Starts a nested interactive shell inside "sandbox".
+  8. Starts a nested interactive shell inside "sandbox".
 
 At this point, you can run all the usual Open vSwitch utilities from
 the nested shell environment.  You can, for example, use ovs-vsctl to
@@ -107,7 +107,7 @@ or after you exit.
 
 
 Motivation
-==========
+----------
 
 The goal of this tutorial is to demonstrate the power of Open vSwitch
 flow tables.  The tutorial works through the implementation of a
@@ -115,16 +115,16 @@ MAC-learning switch with VLAN trunk and access ports.  Outside of the
 Open vSwitch features that we will discuss, OpenFlow provides at least
 two ways to implement such a switch:
 
-    1. An OpenFlow controller to implement MAC learning in a
-       "reactive" fashion.  Whenever a new MAC appears on the switch,
-       or a MAC moves from one switch port to another, the controller
-       adjusts the OpenFlow flow table to match.
+  1. An OpenFlow controller to implement MAC learning in a
+     "reactive" fashion.  Whenever a new MAC appears on the switch,
+     or a MAC moves from one switch port to another, the controller
+     adjusts the OpenFlow flow table to match.
 
-    2. The "normal" action.  OpenFlow defines this action to submit a
-       packet to "the traditional non-OpenFlow pipeline of the
-       switch".  That is, if a flow uses this action, then the packets
-       in the flow go through the switch in the same way that they
-       would if OpenFlow was not configured on the switch.
+  2. The "normal" action.  OpenFlow defines this action to submit a
+     packet to "the traditional non-OpenFlow pipeline of the
+     switch".  That is, if a flow uses this action, then the packets
+     in the flow go through the switch in the same way that they
+     would if OpenFlow was not configured on the switch.
 
 Each of these approaches has unfortunate pitfalls.  In the first
 approach, using an OpenFlow controller to implement MAC learning, has
@@ -147,17 +147,17 @@ features.
 
 
 Scenario
-========
+--------
 
 We will construct Open vSwitch flow tables for a VLAN-capable,
 MAC-learning switch that has four ports:
 
-    * p1, a trunk port that carries all VLANs, on OpenFlow port 1.
+  * p1, a trunk port that carries all VLANs, on OpenFlow port 1.
 
-    * p2, an access port for VLAN 20, on OpenFlow port 2.
+  * p2, an access port for VLAN 20, on OpenFlow port 2.
 
-    * p3 and p4, both access ports for VLAN 30, on OpenFlow ports 3
-      and 4, respectively.
+  * p3 and p4, both access ports for VLAN 30, on OpenFlow ports 3
+    and 4, respectively.
 
 >>> The ports' names are not significant.  You could call them eth1
     through eth4, or any other names you like.
@@ -168,15 +168,15 @@ MAC-learning switch that has four ports:
 Our switch design will consist of five main flow tables, each of which
 implements one stage in the switch pipeline:
 
-    Table 0: Admission control.
+  Table 0: Admission control.
 
-    Table 1: VLAN input processing.
+  Table 1: VLAN input processing.
 
-    Table 2: Learn source MAC and VLAN for ingress port.
+  Table 2: Learn source MAC and VLAN for ingress port.
 
-    Table 3: Look up learned port for destination MAC and VLAN.
+  Table 3: Look up learned port for destination MAC and VLAN.
 
-    Table 4: Output processing.
+  Table 4: Output processing.
 
 The section below describes how to set up the scenario, followed by a
 section for each OpenFlow table.
@@ -189,7 +189,7 @@ for cutting and pasting and are not supplied separately.
 
 
 Setup
-=====
+-----
 
 To get started, start "ovs-sandbox".  Inside the interactive shell
 that it starts, run this command:
@@ -212,7 +212,7 @@ do it:
 
     for i in 1 2 3 4; do
         ovs-vsctl add-port br0 p$i -- set Interface p$i ofport_request=$i
-	ovs-ofctl mod-port br0 p$i up
+	      ovs-ofctl mod-port br0 p$i up
     done
 
 In addition to adding a port, the ovs-vsctl command above sets its
@@ -238,7 +238,7 @@ command like "ovs-vsctl show" or "ovs-ofctl show br0".
 
 
 Implementing Table 0: Admission control
-=======================================
+---------------------------------------
 
 Table 0 is where packets enter the switch.  We use this stage to
 discard packets that for one reason or another are invalid.  For
@@ -267,8 +267,7 @@ to pipeline stage 1 in OpenFlow table 1:
 (The "resubmit" action is an Open vSwitch extension to OpenFlow.)
 
 
-Testing Table 0
----------------
+### Testing Table 0
 
 If we were using Open vSwitch to set up a physical or a virtual
 switch, then we would naturally test it by sending packets through it
@@ -283,7 +282,7 @@ the specification of a flow, "ofproto/trace" shows, step-by-step, how
 such a flow would be treated as it goes through the switch.
 
 
-== EXAMPLE 1 ==
+### EXAMPLE 1
 
 Try this command:
 
@@ -311,7 +310,7 @@ The second block of lines summarizes the results, which are not very
 interesting here.
 
 
-== EXAMPLE 2 ==
+### EXAMPLE 2
 
 Try another command:
 
@@ -343,7 +342,7 @@ identical to our first example.
 
 
 Implementing Table 1: VLAN Input Processing
-===========================================
+-------------------------------------------
 
 A packet that enters table 1 has already passed basic validation in
 table 0.  The purpose of table 1 is validate the packet's VLAN, based
@@ -372,10 +371,10 @@ header, tag it with the access port's VLAN number, and then pass it
 along to the next stage:
 
     ovs-ofctl add-flows br0 - <<'EOF'
-	table=1, priority=99, in_port=2, vlan_tci=0, actions=mod_vlan_vid:20, resubmit(,2)
-	table=1, priority=99, in_port=3, vlan_tci=0, actions=mod_vlan_vid:30, resubmit(,2)
-	table=1, priority=99, in_port=4, vlan_tci=0, actions=mod_vlan_vid:30, resubmit(,2)
-EOF
+	  table=1, priority=99, in_port=2, vlan_tci=0, actions=mod_vlan_vid:20, resubmit(,2)
+	  table=1, priority=99, in_port=3, vlan_tci=0, actions=mod_vlan_vid:30, resubmit(,2)
+	  table=1, priority=99, in_port=4, vlan_tci=0, actions=mod_vlan_vid:30, resubmit(,2)
+    EOF
 
 We don't write any rules that match packets with 802.1Q that enter
 this stage on any of the access ports, so the "default drop" rule we
@@ -387,14 +386,13 @@ want for access ports.
     packets, replace "vlan_tci=0" by "vlan_tci=0/0xfff" above.
 
 
-Testing Table 1
----------------
+### Testing Table 1
 
 "ofproto/trace" allows us to test the ingress VLAN rules that we added
 above.
 
 
-== EXAMPLE 1: Packet on Trunk Port ==
+### EXAMPLE 1: Packet on Trunk Port
 
 Here's a test of a packet coming in on the trunk port:
 
@@ -423,7 +421,7 @@ anything there yet):
     Datapath actions: drop
 
 
-== EXAMPLE 2: Valid Packet on Access Port ==
+### EXAMPLE 2: Valid Packet on Access Port
 
 Here's a test of a valid packet (a packet without an 802.1Q header)
 coming in on access port p2:
@@ -453,7 +451,7 @@ along to table 2:
     Datapath actions: drop
 
 
-== EXAMPLE 3: Invalid Packet on Access Port ==
+### EXAMPLE 3: Invalid Packet on Access Port
 
 This tests an invalid packet (one that includes an 802.1Q header)
 coming in on access port p2:
@@ -477,7 +475,7 @@ The output shows the packet matching the default drop rule:
 
 
 Implementing Table 2: MAC+VLAN Learning for Ingress Port
-========================================================
+--------------------------------------------------------
 
 This table allows the switch we're implementing to learn that the
 packet's source MAC is located on the packet's ingress port in the
@@ -539,10 +537,9 @@ Here's how you can interpret each part of the "learn" action above:
 This definitely calls for examples.
 
 
-Testing Table 2
----------------
+### Testing Table 2
 
-== EXAMPLE 1 ==
+### EXAMPLE 1
 
 Try the following test command:
 
@@ -573,7 +570,7 @@ hexadecimal) and destination MAC 50:00:00:00:00:01.  The flow loads
 port number 1, the input port for the flow we tested, into register 0.
 
 
-== EXAMPLE 2 ==
+### EXAMPLE 2
 
 Here's a second test command:
 
@@ -593,7 +590,7 @@ that the learned port is port 2, as we would expect:
 
 
 Implementing Table 3: Look Up Destination Port
-==============================================
+----------------------------------------------
 
 This table figures out what port we should send the packet to based on
 the destination MAC and VLAN.  That is, if we've learned the location
@@ -630,10 +627,9 @@ multicast and broadcast packets, since those should always be flooded:
     have a multicast source address.)
 
 
-Testing Table 3
----------------
+### Testing Table 3
 
-== EXAMPLE ==
+### EXAMPLE
 
 Here's a command that should cause OVS to learn that f0:00:00:00:00:01
 is on p1 in VLAN 20:
@@ -705,7 +701,7 @@ then we see in the output that the destination has now been learned:
 
 
 Implementing Table 4: Output Processing
-=======================================
+---------------------------------------
 
 At entry to stage 4, we know that register 0 contains either the
 desired output port or is zero if the packet should be flooded.  We
@@ -721,10 +717,10 @@ For output to the access ports, we just have to strip the VLAN header
 before outputting the packet:
 
     ovs-ofctl add-flows br0 - <<'EOF'
-        table=4 reg0=2 actions=strip_vlan,2
-        table=4 reg0=3 actions=strip_vlan,3
-        table=4 reg0=4 actions=strip_vlan,4
-EOF
+    table=4 reg0=2 actions=strip_vlan,2
+    table=4 reg0=3 actions=strip_vlan,3
+    table=4 reg0=4 actions=strip_vlan,4
+    EOF
 
 The only slightly tricky part is flooding multicast and broadcast
 packets and unicast packets with unlearned destinations.  For those,
@@ -734,10 +730,10 @@ copy output to the trunk port but not in copies output to access
 ports:
 
     ovs-ofctl add-flows br0 - <<'EOF'
-        table=4 reg0=0 priority=99 dl_vlan=20 actions=1,strip_vlan,2
-        table=4 reg0=0 priority=99 dl_vlan=30 actions=1,strip_vlan,3,4
-        table=4 reg0=0 priority=50            actions=1
-EOF
+    table=4 reg0=0 priority=99 dl_vlan=20 actions=1,strip_vlan,2
+    table=4 reg0=0 priority=99 dl_vlan=30 actions=1,strip_vlan,3,4
+    table=4 reg0=0 priority=50            actions=1
+    EOF
 
 >>> Our rules rely on the standard OpenFlow behavior that an output
     action will not forward a packet back out the port it came in on.
@@ -748,10 +744,9 @@ EOF
     destination cases above also rely on this behavior.
 
 
-Testing Table 4
----------------
+### Testing Table 4
 
-== EXAMPLE 1: Broadcast, Multicast, and Unknown Destination ==
+### EXAMPLE 1: Broadcast, Multicast, and Unknown Destination
 
 Try tracing a broadcast packet arriving on p1 in VLAN 30:
 
@@ -795,7 +790,7 @@ packets whose destination has not been learned, e.g.:
     ovs-appctl ofproto/trace br0 in_port=1,dl_dst=90:12:34:56:78:90,dl_vlan=30
 
 
-== EXAMPLE 2: MAC Learning ==
+### EXAMPLE 2: MAC Learning
 
 Let's follow the same pattern as we did for table 3.  First learn a
 MAC on port p1 in VLAN 30:

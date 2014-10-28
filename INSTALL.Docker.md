@@ -1,10 +1,11 @@
-                 How to Use Open vSwitch with Docker
-                 ====================================
+How to Use Open vSwitch with Docker
+====================================
 
 This document describes how to use Open vSwitch with Docker 1.2.0 or
-later.  This document assumes that you followed INSTALL or installed
-Open vSwitch from distribution packaging such as a .deb or .rpm.
-Consult www.docker.com for instructions on how to install Docker.
+later.  This document assumes that you followed [INSTALL](INSTALL.md)
+or installed Open vSwitch from distribution packaging such as a .deb
+or .rpm.  Consult www.docker.com for instructions on how to install
+Docker.
 
 Limitations
 -----------
@@ -19,8 +20,10 @@ Setup
 -----
 * Create your container, e.g.:
 
+```
 % docker run -d ubuntu:14.04 /bin/sh -c \
 "while true; do echo hello world; sleep 1; done"
+```
 
 The above command creates a container with one network interface 'eth0'
 and attaches it to a Linux bridge called 'docker0'.  'eth0' by default
@@ -31,8 +34,10 @@ connected to the same bridge.  If you prefer that no network interface be
 created by default, you can start your container with
 the option '--net=none', e,g.:
 
+```
 % docker run -d --net=none ubuntu:14.04 /bin/sh -c \
 "while true; do echo hello world; sleep 1; done"
+```
 
 The above commands will return a container id.  You will need to pass this
 value to the utility 'ovs-docker' to create network interfaces attached to an
@@ -42,7 +47,7 @@ as $CONTAINER_ID in the next steps.
 * Add a new network interface to the container and attach it to an Open vSwitch
   bridge.  e.g.:
 
-% ovs-docker add-port br-int eth1 $CONTAINER_ID
+`% ovs-docker add-port br-int eth1 $CONTAINER_ID`
 
 The above command will create a network interface 'eth1' inside the container
 and then attaches it to the Open vSwitch bridge 'br-int'.  This is done by
@@ -51,16 +56,16 @@ container and the other end attaches to 'br-int'.
 
 The script also lets one to add an IP address to the interface.  e.g.:
 
-% ovs-docker add-port br-int eth1 $CONTAINER_ID 192.168.1.1/24
+`% ovs-docker add-port br-int eth1 $CONTAINER_ID 192.168.1.1/24`
 
 * A previously added network interface can be deleted.  e.g.:
 
-% ovs-docker del-port br-int eth1 $CONTAINER_ID
+`% ovs-docker del-port br-int eth1 $CONTAINER_ID`
 
 All the previously added Open vSwitch interfaces inside a container can be
 deleted.  e.g.:
 
-% ovs-docker del-ports br-int $CONTAINER_ID
+`% ovs-docker del-ports br-int $CONTAINER_ID`
 
 It is important that the same $CONTAINER_ID be passed to both add-port
 and del-port[s] commands.

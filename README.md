@@ -81,24 +81,27 @@ To install Open vSwitch on a regular Linux or FreeBSD host, please
 read INSTALL.  For specifics around installation on a specific
 platform, please see one of these files:
 
-- INSTALL.Debian
-- INSTALL.Fedora
-- INSTALL.RHEL
-- INSTALL.XenServer
+- [INSTALL.Debian](INSTALL.Debian.md)
+- [INSTALL.Fedora](INSTALL.Fedora.md)
+- [INSTALL.RHEL](INSTALL.RHEL.md)
+- [INSTALL.XenServer](INSTALL.XenServer.md)
 
 To use Open vSwitch...
 
-- ...with Docker on Linux, read INSTALL.Docker.
+- ...with Docker on Linux, read [INSTALL.Docker](INSTALL.Docker.md)
 
-- ...with KVM on Linux, read INSTALL, read INSTALL.KVM.
+- ...with KVM on Linux, read [INSTALL](INSTALL.md), read
+  [INSTALL.KVM](INSTALL.KVM.md)
 
-- ...with Libvirt, read INSTALL.Libvirt.
+- ...with Libvirt, read [INSTALL.Libvirt](INSTALL.Libvirt.md).
 
-- ...without using a kernel module, read INSTALL.userspace.
+- ...without using a kernel module, read
+[INSTALL.userspace](INSTALL.userspace.md).
 
 For answers to common questions, read FAQ.
 
-To learn how to set up SSL support for Open vSwitch, read INSTALL.SSL.
+To learn how to set up SSL support for Open vSwitch, read
+[INSTALL.SSL](INSTALL.SSL.md).
 
 To learn about some advanced features of the Open vSwitch software
 switch, read the tutorial in tutorial/Tutorial.

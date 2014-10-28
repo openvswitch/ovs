@@ -1,21 +1,21 @@
-                       How to Use the VTEP Emulator
-                       ============================
+How to Use the VTEP Emulator
+============================
 
 This document explains how to use ovs-vtep, a VTEP emulator that uses
 Open vSwitch for forwarding.
 
 Requirements
-============
+------------
 
 The VTEP emulator is a Python script that invokes calls to tools like
 vtep-ctl and ovs-vsctl and is useful only when OVS daemons like ovsdb-server
 and ovs-vswitchd are running. So those components should be installed. This
 can be done by either of the following methods.
 
-1. Follow the instructions in the INSTALL file of the Open vSwitch repository
+1. Follow the instructions in the INSTALL.md file of the Open vSwitch repository
 (don't start any daemons yet).
 
-2. Follow the instructions in INSTALL.Debian file and then install the
+2. Follow the instructions in INSTALL.Debian.md file and then install the
 "openvswitch-vtep" package (if operating on a debian based machine). This
 will automatically start the daemons.
 
@@ -79,7 +79,7 @@ Notes:
    and is included in the diagram for reference purposes only.
 
 Startup
-=======
+-------
 
 These instructions describe how to run with a single ovsdb-server
 instance that handles both the OVS and VTEP schema. You can skip
@@ -115,7 +115,8 @@ step 2 of the "Requirements" section.
     vtep-ctl set Physical_Switch br0 tunnel_ips=10.2.2.1
 
 6. Start the VTEP emulator. If you installed the components by reading the
-   INSTALL file, run the following from the same directory as this README:
+   INSTALL.md file, run the following from the same directory as this
+   README.md:
 
     ./ovs-vtep --log-file=/var/log/openvswitch/ovs-vtep.log \
       --pidfile=/var/run/openvswitch/ovs-vtep.pid \
@@ -132,7 +133,7 @@ step 2 of the "Requirements" section.
    via the Host Machine's eth0 interface.
 
 Simulating an NVC
-=================
+-----------------
 
 A VTEP implementation expects to be driven by a Network Virtualization
 Controller (NVC), such as NSX.  If one does not exist, it's possible to

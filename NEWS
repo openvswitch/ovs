@@ -32,7 +32,7 @@ Post-v2.3.0
      who find it useful for testing basic OpenFlow setups.  It is still not
      a necessary or desirable part of most Open vSwitch deployments.
    - Support for travis-ci.org based continuous integration builds has been
-     added. Build failures are reported to build@openvswitch.org. See INSTALL
+     added. Build failures are reported to build@openvswitch.org. See INSTALL.md
      file for additional details.
    - Experimental support for the Rapid Spanning Tree Protocol
      (IEEE 802.1D-2004).  More conformance and interoperability testing is
@@ -71,7 +71,7 @@ v2.2.0 - Internal Release
    - The "ovsdbmonitor" graphical tool has been removed, because it was
      poorly maintained and not widely used.
    - New "check-ryu" Makefile target for running Ryu tests for OpenFlow
-     controllers against Open vSwitch.  See INSTALL for details.
+     controllers against Open vSwitch.  See INSTALL.md for details.
    - Added IPFIX support for SCTP flows and templates for ICMPv4/v6 flows.
    - Upon the receipt of a SIGHUP signal, ovs-vswitchd no longer reopens its
      log file (it will terminate instead). Please use 'ovs-appctl vlog/reopen'

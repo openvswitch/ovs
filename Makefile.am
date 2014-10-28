@@ -62,35 +62,35 @@ CLEAN_LOCAL =
 DISTCLEANFILES =
 PYCOV_CLEAN_FILES = build-aux/check-structs,cover
 EXTRA_DIST = \
-	CONTRIBUTING \
-	CodingStyle \
-	DESIGN \
-	FAQ \
-	INSTALL \
-	INSTALL.Debian \
-	INSTALL.Docker \
-	INSTALL.DPDK \
-	INSTALL.Fedora \
-	INSTALL.KVM \
-	INSTALL.Libvirt \
-	INSTALL.NetBSD \
-	INSTALL.RHEL \
-	INSTALL.SSL \
-	INSTALL.XenServer \
-	INSTALL.userspace \
-	INSTALL.Windows \
-	IntegrationGuide \
+	CONTRIBUTING.md \
+	CodingStyle.md \
+	DESIGN.md \
+	FAQ.md \
+	INSTALL.md \
+	INSTALL.Debian.md \
+	INSTALL.Docker.md \
+	INSTALL.DPDK.md \
+	INSTALL.Fedora.md \
+	INSTALL.KVM.md \
+	INSTALL.Libvirt.md \
+	INSTALL.NetBSD.md \
+	INSTALL.RHEL.md \
+	INSTALL.SSL.md \
+	INSTALL.XenServer.md \
+	INSTALL.userspace.md \
+	INSTALL.Windows.md \
+	IntegrationGuide.md \
 	NOTICE \
-	OPENFLOW-1.1+ \
-	PORTING \
+	OPENFLOW-1.1+.md \
+	PORTING.md \
 	README.md \
-	README-lisp \
-	REPORTING-BUGS \
-	TODO \
+	README-lisp.md \
+	REPORTING-BUGS.md \
+	TODO.md \
 	.travis.yml \
 	.travis/build.sh \
 	.travis/prepare.sh \
-	WHY-OVS \
+	WHY-OVS.md \
 	boot.sh \
 	build-aux/cccl \
 	build-aux/sodepends.pl \
@@ -225,7 +225,7 @@ printf-check:
 	then \
 	    echo "See above for list of violations of the rule that"; \
 	    echo "'z', 't', 'j', 'hh' printf() type modifiers are"; \
-	    echo "forbidden.  See CodingStyle for replacements."; \
+	    echo "forbidden.  See CodingStyle.md for replacements."; \
 	    exit 1; \
 	fi
 .PHONY: printf-check

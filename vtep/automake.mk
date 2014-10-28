@@ -19,7 +19,7 @@ scripts_SCRIPTS += \
 
 EXTRA_DIST += \
     vtep/ovs-vtep \
-    vtep/README.ovs-vtep
+    vtep/README.ovs-vtep.md
 
 # VTEP schema and IDL
 EXTRA_DIST += vtep/vtep.ovsschema
