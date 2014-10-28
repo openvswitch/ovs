@@ -74,7 +74,6 @@ struct netdev_windows_netdev_info {
     uint32_t ifi_flags;
 };
 
-static int refresh_port_status(struct netdev_windows *netdev);
 static int query_netdev(const char *devname,
                         struct netdev_windows_netdev_info *reply,
                         struct ofpbuf **bufp);
@@ -133,6 +132,22 @@ netdev_windows_alloc(void)
     return netdev ? &netdev->up : NULL;
 }
 
+static uint32_t
+dp_to_netdev_ifi_flags(uint32_t dp_flags)
+{
+    uint32_t nd_flags = 0;
+
+    if (dp_flags && OVS_WIN_NETDEV_IFF_UP) {
+        nd_flags |= NETDEV_UP;
+    }
+
+    if (dp_flags && OVS_WIN_NETDEV_IFF_PROMISC) {
+        nd_flags |= NETDEV_PROMISC;
+    }
+
+    return nd_flags;
+}
+
 static int
 netdev_windows_system_construct(struct netdev *netdev_)
 {
@@ -160,7 +175,7 @@ netdev_windows_system_construct(struct netdev *netdev_)
     netdev->mtu = info.mtu;
     netdev->cache_valid |= VALID_MTU;
 
-    netdev->ifi_flags = info.ifi_flags;
+    netdev->ifi_flags = dp_to_netdev_ifi_flags(info.ifi_flags);
     netdev->cache_valid |= VALID_IFFLAG;
 
     VLOG_DBG("construct device %s, ovs_type: %u.",
@@ -233,8 +248,8 @@ netdev_windows_netdev_from_ofpbuf(struct netdev_windows_netdev_info *info,
     info->port_no = nl_attr_get_odp_port(a[OVS_WIN_NETDEV_ATTR_PORT_NO]);
     info->ovs_type = nl_attr_get_u32(a[OVS_WIN_NETDEV_ATTR_TYPE]);
     info->name = nl_attr_get_string(a[OVS_WIN_NETDEV_ATTR_NAME]);
-    memcpy(info->mac_address, nl_attr_get_string(a[OVS_WIN_NETDEV_ATTR_NAME]),
-           sizeof(info->mac_address));
+    memcpy(info->mac_address, nl_attr_get_unspec(a[OVS_WIN_NETDEV_ATTR_MAC_ADDR],
+               sizeof(info->mac_address)), sizeof(info->mac_address));
     info->mtu = nl_attr_get_u32(a[OVS_WIN_NETDEV_ATTR_MTU]);
     info->ifi_flags = nl_attr_get_u32(a[OVS_WIN_NETDEV_ATTR_IF_FLAGS]);
 
@@ -338,24 +353,25 @@ netdev_windows_set_etheraddr(const struct netdev *netdev_,
     return 0;
 }
 
-/* We do not really have to update anything in kernel. */
-static int
-netdev_win_set_flag(const char *name, uint32_t flags)
-{
-    return 0;
-}
-
 /* This functionality is not really required by the datapath.
  * But vswitchd bringup expects this to be implemented. */
 static int
-netdev_win_update_flags_system(struct netdev *netdev_,
-                               enum netdev_flags off,
-                               enum netdev_flags on,
-                               enum netdev_flags *old_flagsp)
+netdev_windows_update_flags(struct netdev *netdev_,
+                            enum netdev_flags off,
+                            enum netdev_flags on,
+                            enum netdev_flags *old_flagsp)
 {
+    struct netdev_windows *netdev = netdev_windows_cast(netdev_);
+
+    ovs_assert((netdev->cache_valid & VALID_IFFLAG) != 0);
+    if (netdev->cache_valid & VALID_IFFLAG) {
+        *old_flagsp = netdev->ifi_flags;
+        /* Setting the interface flags is not supported. */
+    } else {
+        return EINVAL;
+    }
     return 0;
 }
-
 
 static int
 netdev_windows_internal_construct(struct netdev *netdev_)
@@ -373,7 +389,7 @@ netdev_windows_internal_construct(struct netdev *netdev_)
     .dealloc            = netdev_windows_dealloc,                       \
     .get_etheraddr      = netdev_windows_get_etheraddr,                 \
     .set_etheraddr      = netdev_windows_set_etheraddr,                 \
-    .update_flags       = netdev_win_update_flags_system,               \
+    .update_flags       = netdev_windows_update_flags,                  \
 }
 
 const struct netdev_class netdev_windows_class =
