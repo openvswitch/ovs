@@ -1179,11 +1179,6 @@ OvsConvertIfCountedStrToAnsiStr(PIF_COUNTED_STRING wStr,
 }
 
 
-/*
- * XXX: Get rid of USE_NEW_VPORT_ADD_WORKFLOW while checking in the code for
- * new vport add workflow, or set USE_NEW_VPORT_ADD_WORKFLOW to 1.
- */
-#define USE_NEW_VPORT_ADD_WORKFLOW 1
 NTSTATUS
 OvsGetExtInfoIoctl(POVS_VPORT_GET vportGet,
                    POVS_VPORT_EXT_INFO extInfo)
@@ -1199,12 +1194,7 @@ OvsGetExtInfoIoctl(POVS_VPORT_GET vportGet,
                           NDIS_RWL_AT_DISPATCH_LEVEL);
     if (vportGet->portNo == 0) {
         StringCbLengthA(vportGet->name, OVS_MAX_PORT_NAME_LENGTH - 1, &len);
-#if USE_NEW_VPORT_ADD_WORKFLOW == 0
-        vport = OvsFindVportByOvsName(gOvsSwitchContext, vportGet->name,
-                                      (UINT32)len);
-#else
         vport = OvsFindVportByHvName(gOvsSwitchContext, vportGet->name);
-#endif
     } else {
         vport = OvsFindVportByPortNo(gOvsSwitchContext, vportGet->portNo);
     }
@@ -1252,13 +1242,9 @@ OvsGetExtInfoIoctl(POVS_VPORT_GET vportGet,
         extInfo->vmUUID[0] = 0;
         extInfo->vifUUID[0] = 0;
     }
-#if USE_NEW_VPORT_ADD_WORKFLOW == 0
-    RtlCopyMemory(extInfo->name, vport->ovsName, vport->ovsNameLen + 1);
-#endif
     NdisReleaseRWLock(gOvsSwitchContext->dispatchLock, &lockState);
     NdisReleaseSpinLock(gOvsCtrlLock);
     if (doConvert) {
-#if USE_NEW_VPORT_ADD_WORKFLOW == 1
         status = OvsConvertIfCountedStrToAnsiStr(&vport->portFriendlyName,
                                                  extInfo->name,
                                                  OVS_MAX_PORT_NAME_LENGTH);
@@ -1266,7 +1252,6 @@ OvsGetExtInfoIoctl(POVS_VPORT_GET vportGet,
             OVS_LOG_INFO("Fail to convert NIC name.");
             extInfo->vmUUID[0] = 0;
         }
-#endif
 
         status = OvsConvertIfCountedStrToAnsiStr(&vport->vmName,
                                                  extInfo->vmUUID,
