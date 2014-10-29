@@ -14,7 +14,9 @@ one cannot use the Docker client to automatically add a container's
 network interface to an Open vSwitch bridge during the creation of the
 container.  This document describes addition of new network interfaces to an
 already created container and in turn attaching that interface as a port to an
-Open vSwitch bridge.
+Open vSwitch bridge.  If and when there is a native integration of Open vSwitch
+with Docker, the ovs-docker utility described in this document is expected to
+be retired.
 
 Setup
 -----
