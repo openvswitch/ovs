@@ -17,6 +17,8 @@
 #ifndef __OVS_PUB_H_
 #define __OVS_PUB_H_ 1
 
+#include <netioapi.h>
+#define IFNAMSIZ IF_NAMESIZE
 #include "../ovsext/Netlink/Netlink.h"
 
 #define OVS_DRIVER_MAJOR_VER 1
@@ -132,9 +134,7 @@ typedef struct _OVS_VERSION {
     uint8_t mnrDrvVer;
 } OVS_VERSION, *POVS_VERSION;
 
-
-
-#define OVS_MAX_PORT_NAME_LENGTH 32
+#define OVS_MAX_PORT_NAME_LENGTH IFNAMSIZ
 
 typedef struct _OVS_VPORT_GET {
     uint32_t dpNo;

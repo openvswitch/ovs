@@ -108,8 +108,6 @@ enum ovs_win_netdev_cmd {
     OVS_WIN_NETDEV_CMD_GET,     /* information about the netdev. */
 };
 
-#define OVS_WIN_NETDEV_ATTR_MAX (__OVS_WIN_NETDEV_ATTR_MAX - 1)
-
 /**
  * For every vport on the datapath, there is a corresponding netdev.  General
  * network device attributes of a vport that are not specific to OVS, such as
@@ -146,11 +144,10 @@ enum ovs_win_netdev_attr {
     OVS_WIN_NETDEV_ATTR_IF_FLAGS,    /* Interface flags o the vport. */
     __OVS_WIN_NETDEV_ATTR_MAX
 };
+#define OVS_WIN_NETDEV_ATTR_MAX (__OVS_WIN_NETDEV_ATTR_MAX - 1)
 
 #define OVS_WIN_NETDEV_IFF_UP                   (1 << 0)
 #define OVS_WIN_NETDEV_IFF_PROMISC              (1 << 1)
-
-#define OVS_WIN_NETDEV_ATTR_MAX (__OVS_WIN_NETDEV_ATTR_MAX - 1)
 
 typedef struct ovs_dp_stats OVS_DP_STATS;
 typedef enum ovs_vport_type OVS_VPORT_TYPE;

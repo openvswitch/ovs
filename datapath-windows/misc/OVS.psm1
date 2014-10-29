@@ -29,7 +29,7 @@ function Set-VMNetworkAdapterOVSPort
         [Microsoft.HyperV.PowerShell.VMNetworkAdapter]$VMNetworkAdapter,
 
         [parameter(Mandatory=$true)]
-        [ValidateLength(1, 16)]
+        [ValidateLength(1, 48)]
         [string]$OVSPortName
     )
     process
@@ -73,7 +73,7 @@ function Get-VMNetworkAdapterByOVSPort
     (
 
         [parameter(Mandatory=$true)]
-        [ValidateLength(1, 16)]
+        [ValidateLength(1, 48)]
         [string]$OVSPortName
     )
     process
@@ -94,7 +94,7 @@ function Get-VMByOVSPort
     param
     (
         [parameter(Mandatory=$true)]
-        [ValidateLength(1, 16)]
+        [ValidateLength(1, 48)]
         [string]$OVSPortName
     )
     process
