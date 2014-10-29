@@ -4083,38 +4083,53 @@
   </table>
 
   <table name="IPFIX">
-    <p>A set of IPFIX collectors.  IPFIX is a protocol that exports a
-    number of details about flows.</p>
+    <p>Configuration for sending packets to IPFIX collectors.</p>
+
+    <p>
+      IPFIX is a protocol that exports a number of details about flows.  The
+      IPFIX implementation in Open vSwitch samples packets at a configurable
+      rate, extracts flow information from those packets, optionally caches and
+      aggregates the flow information, and sends the result to one or more
+      collectors.
+    </p>
+
+    <p>
+      IPFIX in Open vSwitch can be configured two different ways:
+    </p>
+
+    <ul>
+      <li>
+        With <em>per-bridge sampling</em>, Open vSwitch performs IPFIX sampling
+        automatically on all packets that pass through a bridge.  To configure
+        per-bridge sampling, create an <ref table="IPFIX"/> record and point a
+        <ref table="Bridge"/> table's <ref table="Bridge" column="ipfix"/>
+        column to it.  The <ref table="Flow_Sample_Collector_Set"/> table is
+        not used for per-bridge sampling.
+      </li>
+
+      <li>
+        <p>
+          With <em>flow-based sampling</em>, <code>sample</code> actions in the
+          OpenFlow flow table drive IPFIX sampling.  See
+          <code>ovs-ofctl</code>(8) for a description of the
+          <code>sample</code> action.
+        </p>
+
+        <p>
+          Flow-based sampling also requires database configuration: create a
+          <ref table="IPFIX"/> record that describes the IPFIX configuration
+          and a <ref table="Flow_Sample_Collector_Set"/> record that points to
+          the <ref table="Bridge"/> whose flow table holds the
+          <code>sample</code> actions and to <ref table="IPFIX"/> record.  The
+          <ref table="Bridge" column="ipfix"/> in the <ref table="Bridge"/>
+          table is not used for flow-based sampling.
+        </p>
+      </li>
+    </ul>
 
     <column name="targets">
       IPFIX target collectors in the form
       <code><var>ip</var>:<var>port</var></code>.
-    </column>
-
-    <column name="sampling">
-      For per-bridge packet sampling, i.e. when this row is referenced
-      from a <ref table="Bridge"/>, the rate at which packets should
-      be sampled and sent to each target collector.  If not specified,
-      defaults to 400, which means one out of 400 packets, on average,
-      will be sent to each target collector.  Ignored for per-flow
-      sampling, i.e. when this row is referenced from a <ref
-      table="Flow_Sample_Collector_Set"/>.
-    </column>
-
-    <column name="obs_domain_id">
-      For per-bridge packet sampling, i.e. when this row is referenced
-      from a <ref table="Bridge"/>, the IPFIX Observation Domain ID
-      sent in each IPFIX packet.  If not specified, defaults to 0.
-      Ignored for per-flow sampling, i.e. when this row is referenced
-      from a <ref table="Flow_Sample_Collector_Set"/>.
-    </column>
-
-    <column name="obs_point_id">
-      For per-bridge packet sampling, i.e. when this row is referenced
-      from a <ref table="Bridge"/>, the IPFIX Observation Point ID
-      sent in each IPFIX flow record.  If not specified, defaults to
-      0.  Ignored for per-flow sampling, i.e. when this row is
-      referenced from a <ref table="Flow_Sample_Collector_Set"/>.
     </column>
 
     <column name="cache_active_timeout">
@@ -4129,100 +4144,123 @@
       disabled.
     </column>
 
-    <column name="other_config" key="enable-tunnel-sampling"
-            type='{"type": "boolean"}'>
-      <p>For per-bridge packet sampling, i.e. when this row is referenced
-      from a <ref table="Bridge"/>, enable sampling and reporting tunnel
-      header 7-tuples in IPFIX flow records. Disabled by default.
-      Ignored for per-flow sampling, i.e. when this row is referenced
-      from a <ref table="Flow_Sample_Collector_Set"/>.</p>
-      <p><em>Please note:</em> The following enterprise entities are
-      currently used when exporting the sampled tunnel info.</p>
-      <dl>
-        <dt>tunnelType:</dt>
-        <dd>
-          <p>ID: 891, and enterprise ID 6876 (VMware).</p>
-          <p>type: unsigned 8-bit integer.</p>
-          <p>data type semantics: identifier.</p>
-          <p>description: Identifier of the layer 2 network overlay network
-          encapsulation type: 0x01 VxLAN, 0x02 GRE, 0x03 LISP, 0x05 IPsec+GRE,
-          0x07 GENEVE.</p>
-        </dd>
-        <dt>tunnelKey:</dt>
-        <dd>
-          <p>ID: 892, and enterprise ID 6876 (VMware).</p>
-          <p>type: variable-length octetarray.</p>
-          <p>data type semantics: identifier.</p>
-          <p>description: Key which is used for identifying an individual
-          traffic flow within a VxLAN (24-bit VNI), GENEVE(24-bit VNI),
-          GRE (32- or 64-bit key), or LISP (24-bit instance ID) tunnel. The
-          key is encoded in this octetarray as a 3-, 4-, or 8-byte integer
-          ID in network byte order.</p>
-        </dd>
-        <dt>tunnelSourceIPv4Address:</dt>
-        <dd>
-          <p>ID: 893, and enterprise ID 6876 (VMware).</p>
-          <p>type: unsigned 32-bit integer.</p>
-          <p>data type semantics: identifier.</p>
-          <p>description: The IPv4 source address in the tunnel IP packet
-          header.</p>
-        </dd>
-        <dt>tunnelDestinationIPv4Address:</dt>
-        <dd>
-          <p>ID: 894, and enterprise ID 6876 (VMware).</p>
-          <p>type: unsigned 32-bit integer.</p>
-          <p>data type semantics: identifier.</p>
-          <p>description: The IPv4 destination address in the tunnel IP
-          packet header.</p>
-        </dd>
-        <dt>tunnelProtocolIdentifier:</dt>
-        <dd>
-          <p>ID: 895, and enterprise ID 6876 (VMware).</p>
-          <p>type: unsigned 8-bit integer.</p>
-          <p>data type semantics: identifier.</p>
-          <p>description: The value of the protocol number in the tunnel
-          IP packet header. The protocol number identifies the tunnel IP
-          packet payload type.</p>
-        </dd>
-        <dt>tunnelSourceTransportPort:</dt>
-        <dd>
-          <p>ID: 896, and enterprise ID 6876 (VMware).</p>
-          <p>type: unsigned 16-bit integer.</p>
-          <p>data type semantics: identifier.</p>
-          <p>description: The source port identifier in the tunnel transport
-          header. For the transport protocols UDP, TCP, and SCTP, this is
-          the source port number given in the respective header.</p>
-        </dd>
-        <dt>tunnelDestinationTransportPort:</dt>
-        <dd>
-          <p>ID: 897, and enterprise ID 6876 (VMware).</p>
-          <p>type: unsigned 16-bit integer.</p>
-          <p>data type semantics: identifier.</p>
-          <p>description: The destination port identifier in the tunnel
-          transport header. For the transport protocols UDP, TCP, and SCTP,
-          this is the destination port number given in the respective header.
-          </p>
-        </dd>
-      </dl>
-    </column>
+    <group title="Per-Bridge Sampling">
+      <p>
+        These values affect only per-bridge sampling.  See above for a
+        description of the differences between per-bridge and flow-based
+        sampling.
+      </p>
 
-    <column name="other_config" key="enable-input-sampling"
-            type='{"type": "boolean"}'>
-      For per-bridge packet sampling, i.e. when this row is referenced
-      from a <ref table="Bridge"/>, enable sampling and reporting flows
-      at bridge port input in IPFIX flow records. Enabled by default.
-      Ignored for per-flow sampling, i.e. when this row is referenced
-      from a <ref table="Flow_Sample_Collector_Set"/>.
-    </column>
+      <column name="sampling">
+        The rate at which packets should be sampled and sent to each target
+        collector.  If not specified, defaults to 400, which means one out of
+        400 packets, on average, will be sent to each target collector.
+      </column>
 
-    <column name="other_config" key="enable-output-sampling"
-            type='{"type": "boolean"}'>
-      For per-bridge packet sampling, i.e. when this row is referenced
-      from a <ref table="Bridge"/>, enable sampling and reporting flows
-      at bridge port output in IPFIX flow records. Enabled by default.
-      Ignored for per-flow sampling, i.e. when this row is referenced
-      from a <ref table="Flow_Sample_Collector_Set"/>.
-    </column>
+      <column name="obs_domain_id">
+        The IPFIX Observation Domain ID sent in each IPFIX packet.  If not
+        specified, defaults to 0.
+      </column>
+
+      <column name="obs_point_id">
+        The IPFIX Observation Point ID sent in each IPFIX flow record.  If not
+        specified, defaults to 0.
+      </column>
+
+      <column name="other_config" key="enable-tunnel-sampling"
+              type='{"type": "boolean"}'>
+        <p>
+          Set to <code>true</code> to enable sampling and reporting tunnel
+          header 7-tuples in IPFIX flow records.  Tunnel sampling is disabled
+          by default.
+        </p>
+
+        <p>
+          The following enterprise entities report the sampled tunnel info:
+        </p>
+
+        <dl>
+          <dt>tunnelType:</dt>
+          <dd>
+            <p>ID: 891, and enterprise ID 6876 (VMware).</p>
+            <p>type: unsigned 8-bit integer.</p>
+            <p>data type semantics: identifier.</p>
+            <p>description: Identifier of the layer 2 network overlay network
+            encapsulation type: 0x01 VxLAN, 0x02 GRE, 0x03 LISP, 0x05 IPsec+GRE,
+            0x07 GENEVE.</p>
+          </dd>
+          <dt>tunnelKey:</dt>
+          <dd>
+            <p>ID: 892, and enterprise ID 6876 (VMware).</p>
+            <p>type: variable-length octetarray.</p>
+            <p>data type semantics: identifier.</p>
+            <p>description: Key which is used for identifying an individual
+            traffic flow within a VxLAN (24-bit VNI), GENEVE (24-bit VNI),
+            GRE (32- or 64-bit key), or LISP (24-bit instance ID) tunnel. The
+            key is encoded in this octetarray as a 3-, 4-, or 8-byte integer
+            ID in network byte order.</p>
+          </dd>
+          <dt>tunnelSourceIPv4Address:</dt>
+          <dd>
+            <p>ID: 893, and enterprise ID 6876 (VMware).</p>
+            <p>type: unsigned 32-bit integer.</p>
+            <p>data type semantics: identifier.</p>
+            <p>description: The IPv4 source address in the tunnel IP packet
+            header.</p>
+          </dd>
+          <dt>tunnelDestinationIPv4Address:</dt>
+          <dd>
+            <p>ID: 894, and enterprise ID 6876 (VMware).</p>
+            <p>type: unsigned 32-bit integer.</p>
+            <p>data type semantics: identifier.</p>
+            <p>description: The IPv4 destination address in the tunnel IP
+            packet header.</p>
+          </dd>
+          <dt>tunnelProtocolIdentifier:</dt>
+          <dd>
+            <p>ID: 895, and enterprise ID 6876 (VMware).</p>
+            <p>type: unsigned 8-bit integer.</p>
+            <p>data type semantics: identifier.</p>
+            <p>description: The value of the protocol number in the tunnel
+            IP packet header. The protocol number identifies the tunnel IP
+            packet payload type.</p>
+          </dd>
+          <dt>tunnelSourceTransportPort:</dt>
+          <dd>
+            <p>ID: 896, and enterprise ID 6876 (VMware).</p>
+            <p>type: unsigned 16-bit integer.</p>
+            <p>data type semantics: identifier.</p>
+            <p>description: The source port identifier in the tunnel transport
+            header. For the transport protocols UDP, TCP, and SCTP, this is
+            the source port number given in the respective header.</p>
+          </dd>
+          <dt>tunnelDestinationTransportPort:</dt>
+          <dd>
+            <p>ID: 897, and enterprise ID 6876 (VMware).</p>
+            <p>type: unsigned 16-bit integer.</p>
+            <p>data type semantics: identifier.</p>
+            <p>description: The destination port identifier in the tunnel
+            transport header. For the transport protocols UDP, TCP, and SCTP,
+            this is the destination port number given in the respective header.
+            </p>
+          </dd>
+        </dl>
+      </column>
+
+      <column name="other_config" key="enable-input-sampling"
+              type='{"type": "boolean"}'>
+        By default, Open vSwitch samples and reports flows at bridge port input
+        in IPFIX flow records.  Set this column to <code>false</code> to
+        disable input sampling.
+      </column>
+
+      <column name="other_config" key="enable-output-sampling"
+              type='{"type": "boolean"}'>
+        By default, Open vSwitch samples and reports flows at bridge port
+        output in IPFIX flow records.  Set this column to <code>false</code> to
+        disable output sampling.
+      </column>
+    </group>
 
     <group title="Common Columns">
       The overall purpose of these columns is described under <code>Common
@@ -4233,8 +4271,12 @@
   </table>
 
   <table name="Flow_Sample_Collector_Set">
-    <p>A set of IPFIX collectors of packet samples generated by
-    OpenFlow <code>sample</code> actions.</p>
+    <p>
+      A set of IPFIX collectors of packet samples generated by OpenFlow
+      <code>sample</code> actions.  This table is used only for IPFIX
+      flow-based sampling, not for per-bridge sampling (see the <ref
+      table="IPFIX"/> table for a description of the two forms).
+    </p>
 
     <column name="id">
       The ID of this collector set, unique among the bridge's
