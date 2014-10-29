@@ -187,6 +187,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/random.h \
 	lib/rconn.c \
 	lib/rconn.h \
+	lib/rculist.c \
+	lib/rculist.h \
 	lib/reconnect.c \
 	lib/reconnect.h \
 	lib/rstp.c \
