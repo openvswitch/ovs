@@ -1285,3 +1285,21 @@ AT_CHECK([sed "/|bridge|WARN|/d" ovs-vswitchd.log > ovs-vswitchd.log], [0], [], 
 AT_CHECK([ovs-vsctl del-port br0 reserved_name], [0], [], [])])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([naming in db commands])
+OVS_VSCTL_SETUP
+
+dnl First check that the database commands can refer to row by database UUID.
+AT_CHECK([RUN_OVS_VSCTL([add-br br0])])
+uuid=`[]RUN_OVS_VSCTL(get port br0 _uuid)`
+AT_CHECK([RUN_OVS_VSCTL([get port $uuid name])], [0], ["br0"
+])
+
+dnl Next check that, if a database row is given a name that has the same form
+dnl as the database UUIDs, the name can still be used to refer to rows.
+AT_CHECK([RUN_OVS_VSCTL([add-br 0fcd11a1-2ba8-4b38-a358-4bccf2bf3057])])
+AT_CHECK([RUN_OVS_VSCTL([get interface 0fcd11a1-2ba8-4b38-a358-4bccf2bf3057 type])], [0], [internal
+])
+
+OVS_VSCTL_CLEANUP
+AT_CLEANUP

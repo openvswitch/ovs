@@ -2744,9 +2744,11 @@ get_row (struct vsctl_context *ctx,
     const struct ovsdb_idl_row *row;
     struct uuid uuid;
 
+    row = NULL;
     if (uuid_from_string(&uuid, record_id)) {
         row = ovsdb_idl_get_row_for_uuid(ctx->idl, table->class, &uuid);
-    } else {
+    }
+    if (!row) {
         int i;
 
         for (i = 0; i < ARRAY_SIZE(table->row_ids); i++) {
