@@ -21,15 +21,29 @@
 #include <stdbool.h>
 
 #include "compiler.h"
+#include "list.h"
 
 #define OVS_CORE_UNSPEC INT_MAX
 #define OVS_NUMA_UNSPEC INT_MAX
+
+/* Dump of a list of 'struct ovs_numa_info'. */
+struct ovs_numa_dump {
+    struct ovs_list dump;
+};
+
+/* A numa_id - core_id pair. */
+struct ovs_numa_info {
+    struct ovs_list list_node;
+    int numa_id;
+    int core_id;
+};
 
 #ifdef __linux__
 
 void ovs_numa_init(void);
 bool ovs_numa_numa_id_is_valid(int numa_id);
 bool ovs_numa_core_id_is_valid(int core_id);
+bool ovs_numa_core_is_pinned(int core_id);
 int ovs_numa_get_n_numas(void);
 void ovs_numa_set_cpu_mask(const char *cmask);
 int ovs_numa_get_n_cores(void);
@@ -40,6 +54,11 @@ bool ovs_numa_try_pin_core_specific(int core_id);
 int ovs_numa_get_unpinned_core_any(void);
 int ovs_numa_get_unpinned_core_on_numa(int numa_id);
 void ovs_numa_unpin_core(int core_id);
+struct ovs_numa_dump *ovs_numa_dump_cores_on_numa(int numa_id);
+void ovs_numa_dump_destroy(struct ovs_numa_dump *);
+
+#define FOR_EACH_CORE_ON_NUMA(ITER, DUMP)                    \
+    LIST_FOR_EACH((ITER), list_node, &(DUMP)->dump)
 
 #else
 
@@ -57,6 +76,12 @@ ovs_numa_numa_id_is_valid(int numa_id OVS_UNUSED)
 
 static inline bool
 ovs_numa_core_id_is_valid(int core_id OVS_UNUSED)
+{
+    return false;
+}
+
+static inline bool
+ovs_numa_core_is_pinned(int core_id OVS_UNUSED)
 {
     return false;
 }
@@ -120,6 +145,22 @@ ovs_numa_unpin_core(int core_id OVS_UNUSED)
 {
     /* Nothing */
 }
+
+static inline struct ovs_numa_dump *
+ovs_numa_dump_cores_on_numa(int numa_id)
+{
+    return NULL;
+}
+
+static inline void
+ovs_numa_dump_destroy(struct ovs_numa_dump *dump OVS_UNUSED)
+{
+    /* Nothing */
+}
+
+/* No loop. */
+#define FOR_EACH_CORE_ON_NUMA(ITER, DUMP)                    \
+    for ((ITER) = NULL; (ITER);)
 
 #endif /* __linux__ */
 #endif /* ovs-thead.h */

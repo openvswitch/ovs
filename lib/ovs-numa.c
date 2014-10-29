@@ -47,6 +47,8 @@ VLOG_DEFINE_THIS_MODULE(ovs_numa);
  * user can assume core ids from 0 to N-1 are all valid and there is a
  * 'struct cpu_core' for each id.
  *
+ * NOTE, this module should only be used by the main thread.
+ *
  * NOTE, the assumption above will fail when cpu hotplug is used.  In that
  * case ovs-numa will not function correctly.  For now, add a TODO entry
  * for addressing it in the future.
@@ -149,6 +151,37 @@ discover_numa_and_core(void)
     }
 }
 
+/* Gets 'struct cpu_core' by 'core_id'. */
+static struct cpu_core*
+get_core_by_core_id(int core_id)
+{
+    struct cpu_core *core = NULL;
+
+    if (ovs_numa_core_id_is_valid(core_id)) {
+        core = CONTAINER_OF(hmap_first_with_hash(&all_cpu_cores,
+                                                 hash_int(core_id, 0)),
+                            struct cpu_core, hmap_node);
+    }
+
+    return core;
+}
+
+/* Gets 'struct numa_node' by 'numa_id'. */
+static struct numa_node*
+get_numa_by_numa_id(int numa_id)
+{
+    struct numa_node *numa = NULL;
+
+    if (ovs_numa_numa_id_is_valid(numa_id)) {
+        numa = CONTAINER_OF(hmap_first_with_hash(&all_numa_nodes,
+                                                 hash_int(numa_id, 0)),
+                            struct numa_node, hmap_node);
+    }
+
+    return numa;
+}
+
+
 /* Extracts the numa node and core info from the 'sysfs'. */
 void
 ovs_numa_init(void)
@@ -173,6 +206,18 @@ ovs_numa_core_id_is_valid(int core_id)
     return found_numa_and_core && core_id < ovs_numa_get_n_cores();
 }
 
+bool
+ovs_numa_core_is_pinned(int core_id)
+{
+    struct cpu_core *core = get_core_by_core_id(core_id);
+
+    if (core) {
+        return core->pinned;
+    }
+
+    return false;
+}
+
 /* Returns the number of numa nodes. */
 int
 ovs_numa_get_n_numas(void)
@@ -194,15 +239,12 @@ ovs_numa_get_n_cores(void)
 int
 ovs_numa_get_numa_id(int core_id)
 {
-    if (ovs_numa_core_id_is_valid(core_id)) {
-        struct cpu_core *core;
+    struct cpu_core *core = get_core_by_core_id(core_id);
 
-        core = CONTAINER_OF(hmap_first_with_hash(&all_cpu_cores,
-                                                 hash_int(core_id, 0)),
-                            struct cpu_core, hmap_node);
-
+    if (core) {
         return core->numa->numa_id;
     }
+
     return OVS_NUMA_UNSPEC;
 }
 
@@ -211,13 +253,9 @@ ovs_numa_get_numa_id(int core_id)
 int
 ovs_numa_get_n_cores_on_numa(int numa_id)
 {
-    if (ovs_numa_numa_id_is_valid(numa_id)) {
-        struct numa_node *numa;
+    struct numa_node *numa = get_numa_by_numa_id(numa_id);
 
-        numa = CONTAINER_OF(hmap_first_with_hash(&all_numa_nodes,
-                                                 hash_int(numa_id, 0)),
-                            struct numa_node, hmap_node);
-
+    if (numa) {
         return list_size(&numa->cores);
     }
 
@@ -229,20 +267,17 @@ ovs_numa_get_n_cores_on_numa(int numa_id)
 int
 ovs_numa_get_n_unpinned_cores_on_numa(int numa_id)
 {
-    if (ovs_numa_numa_id_is_valid(numa_id)) {
-        struct numa_node *numa;
+    struct numa_node *numa = get_numa_by_numa_id(numa_id);
+
+    if (numa) {
         struct cpu_core *core;
         int count = 0;
 
-        numa = CONTAINER_OF(hmap_first_with_hash(&all_numa_nodes,
-                                                 hash_int(numa_id, 0)),
-                            struct numa_node, hmap_node);
         LIST_FOR_EACH(core, list_node, &numa->cores) {
             if (core->available && !core->pinned) {
                 count++;
             }
         }
-
         return count;
     }
 
@@ -255,12 +290,9 @@ ovs_numa_get_n_unpinned_cores_on_numa(int numa_id)
 bool
 ovs_numa_try_pin_core_specific(int core_id)
 {
-    if (ovs_numa_core_id_is_valid(core_id)) {
-        struct cpu_core *core;
+    struct cpu_core *core = get_core_by_core_id(core_id);
 
-        core = CONTAINER_OF(hmap_first_with_hash(&all_cpu_cores,
-                                                 hash_int(core_id, 0)),
-                            struct cpu_core, hmap_node);
+    if (core) {
         if (core->available && !core->pinned) {
             core->pinned = true;
             return true;
@@ -294,13 +326,11 @@ ovs_numa_get_unpinned_core_any(void)
 int
 ovs_numa_get_unpinned_core_on_numa(int numa_id)
 {
-    if (ovs_numa_numa_id_is_valid(numa_id)) {
-        struct numa_node *numa;
+    struct numa_node *numa = get_numa_by_numa_id(numa_id);
+
+    if (numa) {
         struct cpu_core *core;
 
-        numa = CONTAINER_OF(hmap_first_with_hash(&all_numa_nodes,
-                                                 hash_int(numa_id, 0)),
-                            struct numa_node, hmap_node);
         LIST_FOR_EACH(core, list_node, &numa->cores) {
             if (core->available && !core->pinned) {
                 core->pinned = true;
@@ -316,14 +346,48 @@ ovs_numa_get_unpinned_core_on_numa(int numa_id)
 void
 ovs_numa_unpin_core(int core_id)
 {
-    if (ovs_numa_core_id_is_valid(core_id)) {
-        struct cpu_core *core;
+    struct cpu_core *core = get_core_by_core_id(core_id);
 
-        core = CONTAINER_OF(hmap_first_with_hash(&all_cpu_cores,
-                                                 hash_int(core_id, 0)),
-                            struct cpu_core, hmap_node);
+    if (core) {
         core->pinned = false;
     }
+}
+
+/* Given the 'numa_id', returns dump of all cores on the numa node. */
+struct ovs_numa_dump *
+ovs_numa_dump_cores_on_numa(int numa_id)
+{
+    struct ovs_numa_dump *dump = NULL;
+    struct numa_node *numa = get_numa_by_numa_id(numa_id);
+
+    if (numa) {
+        struct cpu_core *core;
+
+        dump = xmalloc(sizeof *dump);
+        list_init(&dump->dump);
+        LIST_FOR_EACH(core, list_node, &numa->cores) {
+            struct ovs_numa_info *info = xmalloc(sizeof *info);
+
+            info->numa_id = numa->numa_id;
+            info->core_id = core->core_id;
+            list_insert(&dump->dump, &info->list_node);
+        }
+    }
+
+    return dump;
+}
+
+void
+ovs_numa_dump_destroy(struct ovs_numa_dump *dump)
+{
+    struct ovs_numa_info *iter, *next;
+
+    LIST_FOR_EACH_SAFE (iter, next, list_node, &dump->dump) {
+        list_remove(&iter->list_node);
+        free(iter);
+    }
+
+    free(dump);
 }
 
 /* Reads the cpu mask configuration from 'cmask' and sets the
