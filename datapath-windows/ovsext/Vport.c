@@ -1201,7 +1201,6 @@ OvsGetExtInfoIoctl(POVS_VPORT_GET vportGet,
     if (vport == NULL || (vport->ovsState != OVS_STATE_CONNECTED &&
                           vport->ovsState != OVS_STATE_NIC_CREATED)) {
         NdisReleaseRWLock(gOvsSwitchContext->dispatchLock, &lockState);
-        NdisReleaseSpinLock(gOvsCtrlLock);
         if (vportGet->portNo) {
             OVS_LOG_WARN("vport %u does not exist any more", vportGet->portNo);
         } else {
@@ -1293,7 +1292,6 @@ OvsGetNetdevCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     NL_ERROR nlError = NL_ERROR_SUCCESS;
     OVS_VPORT_GET vportGet;
     OVS_VPORT_EXT_INFO info;
-    LOCK_STATE_EX lockState;
 
     static const NL_POLICY ovsNetdevPolicy[] = {
         [OVS_WIN_NETDEV_ATTR_NAME] = { .type = NL_A_STRING,
@@ -1327,15 +1325,12 @@ OvsGetNetdevCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     RtlCopyMemory(&vportGet.name, NlAttrGet(netdevAttrs[OVS_VPORT_ATTR_NAME]),
                   NlAttrGetSize(netdevAttrs[OVS_VPORT_ATTR_NAME]));
 
-    NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock, &lockState, 0);
     status = OvsGetExtInfoIoctl(&vportGet, &info);
     if (status == STATUS_DEVICE_DOES_NOT_EXIST) {
         nlError = NL_ERROR_NODEV;
-        NdisReleaseRWLock(gOvsSwitchContext->dispatchLock, &lockState);
         OvsReleaseCtrlLock();
         goto cleanup;
     }
-    NdisReleaseRWLock(gOvsSwitchContext->dispatchLock, &lockState);
 
     status = CreateNetlinkMesgForNetdev(&info, msgIn,
                  usrParamsCtx->outputBuffer, usrParamsCtx->outputLength,
