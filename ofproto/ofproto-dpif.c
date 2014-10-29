@@ -1009,8 +1009,7 @@ check_recirc(struct dpif_backer *backer)
     struct flow flow;
     struct odputil_keybuf keybuf;
     struct ofpbuf key;
-    int error;
-    bool enable_recirc = false;
+    bool enable_recirc;
 
     memset(&flow, 0, sizeof flow);
     flow.recirc_id = 1;
@@ -1018,28 +1017,9 @@ check_recirc(struct dpif_backer *backer)
 
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
     odp_flow_key_from_flow(&key, &flow, NULL, 0, true);
+    enable_recirc = dpif_probe_feature(backer->dpif, "recirculation", &key,
+                                       NULL);
 
-    error = dpif_flow_put(backer->dpif, DPIF_FP_CREATE | DPIF_FP_PROBE,
-                          ofpbuf_data(&key), ofpbuf_size(&key), NULL, 0, NULL,
-                          0, NULL, NULL);
-    if (error && error != EEXIST) {
-        if (error != EINVAL) {
-            VLOG_WARN("%s: Reciculation flow probe failed (%s)",
-                      dpif_name(backer->dpif), ovs_strerror(error));
-        }
-        goto done;
-    }
-
-    error = dpif_flow_del(backer->dpif, ofpbuf_data(&key), ofpbuf_size(&key),
-                          NULL, NULL);
-    if (error) {
-        VLOG_WARN("%s: failed to delete recirculation feature probe flow",
-                  dpif_name(backer->dpif));
-    }
-
-    enable_recirc = true;
-
-done:
     if (enable_recirc) {
         VLOG_INFO("%s: Datapath supports recirculation",
                   dpif_name(backer->dpif));
@@ -1139,7 +1119,6 @@ check_max_mpls_depth(struct dpif_backer *backer)
     for (n = 0; n < FLOW_MAX_MPLS_LABELS; n++) {
         struct odputil_keybuf keybuf;
         struct ofpbuf key;
-        int error;
 
         memset(&flow, 0, sizeof flow);
         flow.dl_type = htons(ETH_TYPE_MPLS);
@@ -1147,23 +1126,8 @@ check_max_mpls_depth(struct dpif_backer *backer)
 
         ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
         odp_flow_key_from_flow(&key, &flow, NULL, 0, false);
-
-        error = dpif_flow_put(backer->dpif, DPIF_FP_CREATE | DPIF_FP_PROBE,
-                              ofpbuf_data(&key), ofpbuf_size(&key), NULL, 0,
-                              NULL, 0, NULL, NULL);
-        if (error && error != EEXIST) {
-            if (error != EINVAL) {
-                VLOG_WARN("%s: MPLS stack length feature probe failed (%s)",
-                          dpif_name(backer->dpif), ovs_strerror(error));
-            }
+        if (!dpif_probe_feature(backer->dpif, "MPLS", &key, NULL)) {
             break;
-        }
-
-        error = dpif_flow_del(backer->dpif, ofpbuf_data(&key),
-                              ofpbuf_size(&key), NULL, NULL);
-        if (error) {
-            VLOG_WARN("%s: failed to delete MPLS feature probe flow",
-                      dpif_name(backer->dpif));
         }
     }
 

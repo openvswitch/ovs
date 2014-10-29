@@ -515,6 +515,8 @@ enum dpif_flow_put_flags {
     DPIF_FP_PROBE = 1 << 3      /* Suppress error messages, if any. */
 };
 
+bool dpif_probe_feature(struct dpif *, const char *name,
+                        const struct ofpbuf *key, const ovs_u128 *ufid);
 bool dpif_get_enable_ufid(struct dpif *);
 void dpif_flow_hash(const struct dpif *, const void *key, size_t key_len,
                     ovs_u128 *hash);

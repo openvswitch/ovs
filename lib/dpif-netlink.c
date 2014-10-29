@@ -1333,19 +1333,6 @@ dpif_netlink_init_flow_del(struct dpif_netlink *dpif,
                                         request);
 }
 
-static int
-dpif_netlink_flow_del(struct dpif_netlink *dpif,
-                      const struct nlattr *key, size_t key_len,
-                      const ovs_u128 *ufid, bool terse)
-{
-    struct dpif_netlink_flow request;
-
-    dpif_netlink_init_flow_del__(dpif, key, key_len, ufid, terse, &request);
-
-    /* Ignore stats */
-    return dpif_netlink_flow_transact(&request, NULL, NULL);
-}
-
 struct dpif_netlink_flow_dump {
     struct dpif_flow_dump up;
     struct nl_dump nl_dump;
@@ -1746,14 +1733,10 @@ dpif_netlink_handler_uninit(struct dpif_handler *handler)
 static bool
 dpif_netlink_check_ufid__(struct dpif *dpif_)
 {
-    struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
     struct flow flow;
     struct odputil_keybuf keybuf;
-    struct ofpbuf key, *replybuf;
-    struct dpif_netlink_flow reply;
+    struct ofpbuf key;
     ovs_u128 ufid;
-    int error;
-    bool enable_ufid = false;
 
     memset(&flow, 0, sizeof flow);
     flow.dl_type = htons(0x1234);
@@ -1761,31 +1744,8 @@ dpif_netlink_check_ufid__(struct dpif *dpif_)
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
     odp_flow_key_from_flow(&key, &flow, NULL, 0, true);
     dpif_flow_hash(dpif_, ofpbuf_data(&key), ofpbuf_size(&key), &ufid);
-    error = dpif_flow_put(dpif_, DPIF_FP_CREATE | DPIF_FP_PROBE,
-                          ofpbuf_data(&key), ofpbuf_size(&key), NULL, 0, NULL,
-                          0, &ufid, NULL);
 
-    if (error && error != EEXIST) {
-        VLOG_WARN("%s: UFID feature probe failed (%s).",
-                  dpif_name(dpif_), ovs_strerror(error));
-        return false;
-    }
-
-    error = dpif_netlink_flow_get__(dpif, NULL, 0, &ufid, true, &reply,
-                                    &replybuf);
-    if (!error && reply.ufid_present && ovs_u128_equal(&ufid, &reply.ufid)) {
-        enable_ufid = true;
-    }
-    ofpbuf_delete(replybuf);
-
-    error = dpif_netlink_flow_del(dpif, ofpbuf_data(&key), ofpbuf_size(&key),
-                                  &ufid, false);
-    if (error) {
-        VLOG_WARN("%s: failed to delete UFID feature probe flow",
-                  dpif_name(dpif_));
-    }
-
-    return enable_ufid;
+    return dpif_probe_feature(dpif_, "UFID", &key, &ufid);
 }
 
 static bool
