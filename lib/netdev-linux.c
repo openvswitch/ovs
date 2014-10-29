@@ -138,6 +138,39 @@ struct tpacket_auxdata {
     uint16_t tp_vlan_tpid;
 };
 
+/* Linux 2.6.35 introduced IFLA_STATS64 and rtnl_link_stats64. */
+#ifndef HAVE_STRUCT_RTNL_LINK_STATS64
+#define IFLA_STATS64 23
+struct rtnl_link_stats64 {
+    uint64_t rx_packets;
+    uint64_t tx_packets;
+    uint64_t rx_bytes;
+    uint64_t tx_bytes;
+    uint64_t rx_errors;
+    uint64_t tx_errors;
+    uint64_t rx_dropped;
+    uint64_t tx_dropped;
+    uint64_t multicast;
+    uint64_t collisions;
+
+    uint64_t rx_length_errors;
+    uint64_t rx_over_errors;
+    uint64_t rx_crc_errors;
+    uint64_t rx_frame_errors;
+    uint64_t rx_fifo_errors;
+    uint64_t rx_missed_errors;
+
+    uint64_t tx_aborted_errors;
+    uint64_t tx_carrier_errors;
+    uint64_t tx_fifo_errors;
+    uint64_t tx_heartbeat_errors;
+    uint64_t tx_window_errors;
+
+    uint64_t rx_compressed;
+    uint64_t tx_compressed;
+};
+#endif  /* !HAVE_STRUCT_RTNL_LINK_STATS64 */
+
 enum {
     VALID_IFINDEX           = 1 << 0,
     VALID_ETHERADDR         = 1 << 1,
@@ -4575,6 +4608,34 @@ netdev_stats_from_rtnl_link_stats(struct netdev_stats *dst,
     dst->tx_window_errors = src->tx_window_errors;
 }
 
+/* Copies 'src' into 'dst', performing format conversion in the process. */
+static void
+netdev_stats_from_rtnl_link_stats64(struct netdev_stats *dst,
+                                    const struct rtnl_link_stats64 *src)
+{
+    dst->rx_packets = src->rx_packets;
+    dst->tx_packets = src->tx_packets;
+    dst->rx_bytes = src->rx_bytes;
+    dst->tx_bytes = src->tx_bytes;
+    dst->rx_errors = src->rx_errors;
+    dst->tx_errors = src->tx_errors;
+    dst->rx_dropped = src->rx_dropped;
+    dst->tx_dropped = src->tx_dropped;
+    dst->multicast = src->multicast;
+    dst->collisions = src->collisions;
+    dst->rx_length_errors = src->rx_length_errors;
+    dst->rx_over_errors = src->rx_over_errors;
+    dst->rx_crc_errors = src->rx_crc_errors;
+    dst->rx_frame_errors = src->rx_frame_errors;
+    dst->rx_fifo_errors = src->rx_fifo_errors;
+    dst->rx_missed_errors = src->rx_missed_errors;
+    dst->tx_aborted_errors = src->tx_aborted_errors;
+    dst->tx_carrier_errors = src->tx_carrier_errors;
+    dst->tx_fifo_errors = src->tx_fifo_errors;
+    dst->tx_heartbeat_errors = src->tx_heartbeat_errors;
+    dst->tx_window_errors = src->tx_window_errors;
+}
+
 static int
 get_stats_via_netlink(const struct netdev *netdev_, struct netdev_stats *stats)
 {
@@ -4595,13 +4656,19 @@ get_stats_via_netlink(const struct netdev *netdev_, struct netdev_stats *stats)
     }
 
     if (ofpbuf_try_pull(reply, NLMSG_HDRLEN + sizeof(struct ifinfomsg))) {
-        const struct nlattr *a = nl_attr_find(reply, 0, IFLA_STATS);
-        if (a && nl_attr_get_size(a) >= sizeof(struct rtnl_link_stats)) {
-            netdev_stats_from_rtnl_link_stats(stats, nl_attr_get(a));
+        const struct nlattr *a = nl_attr_find(reply, 0, IFLA_STATS64);
+        if (a && nl_attr_get_size(a) >= sizeof(struct rtnl_link_stats64)) {
+            netdev_stats_from_rtnl_link_stats64(stats, nl_attr_get(a));
             error = 0;
         } else {
-            VLOG_WARN_RL(&rl, "RTM_GETLINK reply lacks stats");
-            error = EPROTO;
+            const struct nlattr *a = nl_attr_find(reply, 0, IFLA_STATS);
+            if (a && nl_attr_get_size(a) >= sizeof(struct rtnl_link_stats)) {
+                netdev_stats_from_rtnl_link_stats(stats, nl_attr_get(a));
+                error = 0;
+            } else {
+                VLOG_WARN_RL(&rl, "RTM_GETLINK reply lacks stats");
+                error = EPROTO;
+            }
         }
     } else {
         VLOG_WARN_RL(&rl, "short RTM_GETLINK reply");
