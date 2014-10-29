@@ -155,7 +155,7 @@ tcls_insert(struct tcls *tcls, const struct test_rule *rule)
         const struct cls_rule *pos = &tcls->rules[i]->cls_rule;
         if (cls_rule_equal(pos, &rule->cls_rule)) {
             /* Exact match. */
-            free_rule(tcls->rules[i]);
+            ovsrcu_postpone(free_rule, tcls->rules[i]);
             tcls->rules[i] = clone_rule(rule);
             return tcls->rules[i];
         } else if (pos->priority < rule->cls_rule.priority) {
@@ -455,8 +455,9 @@ destroy_classifier(struct classifier *cls)
     struct test_rule *rule;
 
     CLS_FOR_EACH_SAFE (rule, cls_rule, cls) {
-        classifier_remove(cls, &rule->cls_rule);
-        free_rule(rule);
+        if (classifier_remove(cls, &rule->cls_rule)) {
+            ovsrcu_postpone(free_rule, rule);
+        }
     }
     classifier_destroy(cls);
 }
@@ -752,7 +753,7 @@ test_single_rule(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         assert(tcls_is_empty(&tcls));
         compare_classifiers(&cls, &tcls);
 
-        free_rule(rule);
+        ovsrcu_postpone(free_rule, rule);
         classifier_destroy(&cls);
         tcls_destroy(&tcls);
     }
@@ -789,9 +790,10 @@ test_rule_replacement(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
         assert(test_rule_from_cls_rule(
                    classifier_replace(&cls, &rule2->cls_rule)) == rule1);
-        free_rule(rule1);
+        ovsrcu_postpone(free_rule, rule1);
         compare_classifiers(&cls, &tcls);
         check_tables(&cls, 1, 1, 0);
+        classifier_remove(&cls, &rule2->cls_rule);
 
         tcls_destroy(&tcls);
         destroy_classifier(&cls);
@@ -928,10 +930,9 @@ test_many_rules_in_one_list (int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
             }
 
             for (i = 0; i < N_RULES; i++) {
-                if (rules[i]->cls_rule.cls_match) {
-                    classifier_remove(&cls, &rules[i]->cls_rule);
+                if (classifier_remove(&cls, &rules[i]->cls_rule)) {
+                    ovsrcu_postpone(free_rule, rules[i]);
                 }
-                free_rule(rules[i]);
             }
             classifier_destroy(&cls);
             tcls_destroy(&tcls);
@@ -1014,7 +1015,7 @@ test_many_rules_in_one_table(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
             tcls_remove(&tcls, tcls_rules[i]);
             classifier_remove(&cls, &rules[i]->cls_rule);
             compare_classifiers(&cls, &tcls);
-            free_rule(rules[i]);
+            ovsrcu_postpone(free_rule, rules[i]);
 
             check_tables(&cls, i < N_RULES - 1, N_RULES - (i + 1), 0);
         }
@@ -1076,8 +1077,9 @@ test_many_rules_in_n_tables(int n_tables)
 
             CLS_FOR_EACH_TARGET_SAFE (rule, cls_rule, &cls,
                                       &target->cls_rule) {
-                classifier_remove(&cls, &rule->cls_rule);
-                free_rule(rule);
+                if (classifier_remove(&cls, &rule->cls_rule)) {
+                    ovsrcu_postpone(free_rule, rule);
+                }
             }
 
             tcls_delete_matches(&tcls, &target->cls_rule);
