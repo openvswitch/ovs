@@ -27,20 +27,20 @@
 
 #include <config.h>
 #undef NDEBUG
+#include "classifier.h"
 #include <assert.h>
 #include <errno.h>
 #include <limits.h>
 #include "byte-order.h"
-#include "classifier.h"
 #include "classifier-private.h"
 #include "command-line.h"
 #include "flow.h"
 #include "ofp-util.h"
+#include "ovstest.h"
 #include "packets.h"
 #include "random.h"
 #include "unaligned.h"
 #include "util.h"
-#include "ovstest.h"
 
 /* Fields in a rule. */
 #define CLS_FIELDS                        \

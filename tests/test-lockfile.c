@@ -15,20 +15,18 @@
  */
 
 #include <config.h>
-
+#undef NDEBUG
 #include "lockfile.h"
-
 #include <errno.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
-
+#include "ovstest.h"
 #include "process.h"
 #include "timeval.h"
 #include "util.h"
 #include "vlog.h"
-#include "ovstest.h"
 
 struct test {
     const char *name;

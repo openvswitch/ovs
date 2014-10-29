@@ -15,25 +15,23 @@
  */
 
 #include <config.h>
-
+#undef NDEBUG
 #include "jsonrpc.h"
-
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
-
 #include "command-line.h"
 #include "daemon.h"
 #include "json.h"
+#include "ovstest.h"
 #include "poll-loop.h"
 #include "stream-ssl.h"
 #include "stream.h"
 #include "timeval.h"
 #include "util.h"
 #include "vlog.h"
-#include "ovstest.h"
 
 NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[]);

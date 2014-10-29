@@ -15,15 +15,13 @@
  */
 
 #include <config.h>
+#undef NDEBUG
 #include "packets.h"
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "ovstest.h"
-
-#undef NDEBUG
-#include <assert.h>
-
 
 static void
 test_ipv4_cidr(void)

@@ -65,15 +65,16 @@
 #define BUILD_ASSERT_DECL_GCCONLY(EXPR) ((void) 0)
 #endif
 
-/* Like the standard assert macro, except:
- *
- *   - Writes the failure message to the log.
- *
- *   - Not affected by NDEBUG. */
+/* Like the standard assert macro, except writes the failure message to the
+ * log. */
+#ifndef NDEBUG
 #define ovs_assert(CONDITION)                                           \
     if (!OVS_LIKELY(CONDITION)) {                                       \
         ovs_assert_failure(SOURCE_LOCATOR, __func__, #CONDITION);       \
     }
+#else
+#define ovs_assert(CONDITION) ((void) (CONDITION))
+#endif
 NO_RETURN void ovs_assert_failure(const char *, const char *, const char *);
 
 /* Casts 'pointer' to 'type' and issues a compiler warning if the cast changes

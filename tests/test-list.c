@@ -18,12 +18,11 @@
  * list.h. */
 
 #include <config.h>
+#undef NDEBUG
 #include "list.h"
+#include <assert.h>
 #include <string.h>
 #include "ovstest.h"
-
-#undef NDEBUG
-#include <assert.h>
 
 /* Sample list element. */
 struct element {

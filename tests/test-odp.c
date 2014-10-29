@@ -15,18 +15,17 @@
  */
 
 #include <config.h>
-
+#undef NDEBUG
+#include "odp-util.h"
 #include <stdio.h>
-
 #include "dynamic-string.h"
 #include "flow.h"
 #include "match.h"
-#include "odp-util.h"
 #include "ofp-parse.h"
 #include "ofpbuf.h"
+#include "ovstest.h"
 #include "util.h"
 #include "vlog.h"
-#include "ovstest.h"
 
 static int
 parse_keys(bool wc_keys)

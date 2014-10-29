@@ -14,18 +14,15 @@
  */
 
 #include <config.h>
-
+#undef NDEBUG
 #include "bundle.h"
-
 #include <math.h>
 #include <stdlib.h>
-
 #include "flow.h"
 #include "ofp-actions.h"
 #include "ofpbuf.h"
-
-#include "util.h"
 #include "ovstest.h"
+#include "util.h"
 
 #define N_FLOWS  50000
 #define MAX_SLAVES 8 /* Maximum supported by this test framework. */

@@ -16,7 +16,8 @@
  */
 
 #include <config.h>
-
+#undef NDEBUG
+#include "netflow.h"
 #include <arpa/inet.h>
 #include <errno.h>
 #include <getopt.h>
@@ -24,19 +25,17 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <setjmp.h>
-
 #include "command-line.h"
 #include "daemon.h"
 #include "dynamic-string.h"
-#include "netflow.h"
 #include "ofpbuf.h"
+#include "ovstest.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "socket-util.h"
 #include "unixctl.h"
 #include "util.h"
 #include "vlog.h"
-#include "ovstest.h"
 
 NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[]);

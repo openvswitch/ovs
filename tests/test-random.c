@@ -15,11 +15,11 @@
  */
 
 #include <config.h>
-
+#undef NDEBUG
 #include "random.h"
-#include "ovstest.h"
 #include <stdio.h>
 #include <string.h>
+#include "ovstest.h"
 
 static void
 test_random_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)

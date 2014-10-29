@@ -15,14 +15,13 @@
  */
 
 #include <config.h>
-
+#undef NDEBUG
+#include "socket-util.h"
 #include <errno.h>
 #include <signal.h>
 #include <unistd.h>
-
-#include "util.h"
-#include "socket-util.h"
 #include "ovstest.h"
+#include "util.h"
 
 static void
 test_unix_socket_main(int argc, char *argv[])

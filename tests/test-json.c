@@ -15,16 +15,15 @@
  */
 
 #include <config.h>
-
+#undef NDEBUG
 #include "json.h"
-
 #include <ctype.h>
 #include <errno.h>
 #include <getopt.h>
 #include <stdio.h>
-
-#include "util.h"
 #include "ovstest.h"
+#include "util.h"
+
 /* --pretty: If set, the JSON output is pretty-printed, instead of printed as
  * compactly as possible.  */
 static int pretty = 0;

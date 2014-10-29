@@ -15,6 +15,7 @@
  */
 
 #include <config.h>
+#undef NDEBUG
 #include "byte-order.h"
 #include <assert.h>
 #include <inttypes.h>

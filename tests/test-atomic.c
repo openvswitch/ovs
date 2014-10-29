@@ -15,7 +15,7 @@
  */
 
 #include <config.h>
-
+#undef NDEBUG
 #include "ovs-atomic.h"
 #include "util.h"
 #include "ovstest.h"

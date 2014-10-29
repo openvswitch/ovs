@@ -15,10 +15,11 @@
  */
 
 #include <config.h>
-#include <ctype.h>
+#undef NDEBUG
 #include "aes128.h"
-#include "util.h"
+#include <ctype.h>
 #include "ovstest.h"
+#include "util.h"
 
 static void
 hex_to_uint8(const char *input, uint8_t *output, size_t n)

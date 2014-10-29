@@ -17,12 +17,13 @@
 /* The mother of all test programs that links with libopevswitch.la */
 
 #include <config.h>
+#undef NDEBUG
 #include <inttypes.h>
 #include <limits.h>
 #include <stdlib.h>
 #include "command-line.h"
-#include "ovstest.h"
 #include "dynamic-string.h"
+#include "ovstest.h"
 #include "util.h"
 
 static struct command *commands = NULL;

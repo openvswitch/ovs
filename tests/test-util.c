@@ -15,22 +15,19 @@
  */
 
 #include <config.h>
-
+#undef NDEBUG
+#include "util.h"
+#include <assert.h>
 #include <getopt.h>
 #include <inttypes.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
-
 #include "byte-order.h"
 #include "command-line.h"
-#include "random.h"
-#include "util.h"
-#include "vlog.h"
 #include "ovstest.h"
-
-#undef NDEBUG
-#include <assert.h>
+#include "random.h"
+#include "vlog.h"
 
 static void
 check_log_2_floor(uint32_t x, int n)

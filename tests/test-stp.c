@@ -15,7 +15,7 @@
  */
 
 #include <config.h>
-
+#undef NDEBUG
 #include "stp.h"
 #include <assert.h>
 #include <ctype.h>
@@ -24,9 +24,9 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include "ofpbuf.h"
+#include "ovstest.h"
 #include "packets.h"
 #include "vlog.h"
-#include "ovstest.h"
 
 struct bpdu {
     int port_no;

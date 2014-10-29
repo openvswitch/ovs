@@ -15,13 +15,12 @@
  */
 
 #include <config.h>
+#undef NDEBUG
 #include "bitmap.h"
+#include <assert.h>
+#include "command-line.h"
 #include "ovstest.h"
 #include "timeval.h"
-#include "command-line.h"
-
-#undef NDEBUG
-#include <assert.h>
 
 enum { MAX_BITS = 20 * BITMAP_ULONG_BITS };
 

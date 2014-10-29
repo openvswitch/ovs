@@ -15,7 +15,9 @@
  */
 
 #include <config.h>
+#undef NDEBUG
 #include "vconn.h"
+#include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <signal.h>
@@ -27,6 +29,7 @@
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
+#include "ovstest.h"
 #include "poll-loop.h"
 #include "socket-util.h"
 #include "stream.h"
@@ -34,10 +37,6 @@
 #include "timeval.h"
 #include "util.h"
 #include "vlog.h"
-#include "ovstest.h"
-
-#undef NDEBUG
-#include <assert.h>
 
 struct fake_pvconn {
     const char *type;

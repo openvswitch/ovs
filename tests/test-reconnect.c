@@ -15,20 +15,18 @@
  */
 
 #include <config.h>
-
+#undef NDEBUG
 #include "reconnect.h"
-
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
 #include "command-line.h"
 #include "compiler.h"
+#include "ovstest.h"
 #include "svec.h"
 #include "util.h"
 #include "vlog.h"
-#include "ovstest.h"
 
 static struct reconnect *reconnect;
 static int now;

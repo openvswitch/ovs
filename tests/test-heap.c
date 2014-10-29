@@ -17,17 +17,16 @@
 /* A test for for functions and macros declared in heap.h. */
 
 #include <config.h>
+#undef NDEBUG
 #include "heap.h"
+#include <assert.h>
 #include <inttypes.h>
 #include <limits.h>
 #include <stdlib.h>
 #include "command-line.h"
+#include "ovstest.h"
 #include "random.h"
 #include "util.h"
-#include "ovstest.h"
-
-#undef NDEBUG
-#include <assert.h>
 
 /* Sample heap element. */
 struct element {

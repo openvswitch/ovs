@@ -18,10 +18,12 @@
  * cmap.h. */
 
 #include <config.h>
-#include "bitmap.h"
+#undef NDEBUG
 #include "cmap.h"
+#include <assert.h>
 #include <getopt.h>
 #include <string.h>
+#include "bitmap.h"
 #include "command-line.h"
 #include "fat-rwlock.h"
 #include "hash.h"
@@ -31,9 +33,6 @@
 #include "random.h"
 #include "timeval.h"
 #include "util.h"
-
-#undef NDEBUG
-#include <assert.h>
 
 /* Sample cmap element. */
 struct element {

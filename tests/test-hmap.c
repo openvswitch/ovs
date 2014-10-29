@@ -18,15 +18,14 @@
  * hmap.h. */
 
 #include <config.h>
+#undef NDEBUG
 #include "hmap.h"
+#include <assert.h>
 #include <string.h>
 #include "hash.h"
+#include "ovstest.h"
 #include "random.h"
 #include "util.h"
-#include "ovstest.h"
-
-#undef NDEBUG
-#include <assert.h>
 
 /* Sample hmap element. */
 struct element {

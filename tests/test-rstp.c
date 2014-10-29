@@ -1,5 +1,5 @@
 #include <config.h>
-
+#undef NDEBUG
 #include "rstp-common.h"
 #include <assert.h>
 #include <ctype.h>

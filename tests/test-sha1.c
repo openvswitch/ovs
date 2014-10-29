@@ -15,17 +15,16 @@
  */
 
 #include <config.h>
+#undef NDEBUG
 #include "sha1.h"
+#include <assert.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "ovstest.h"
 #include "random.h"
 #include "util.h"
-#include "ovstest.h"
-
-#undef NDEBUG
-#include <assert.h>
 
 struct test_vector {
     char *data;

@@ -15,23 +15,22 @@
  */
 
 #include <config.h>
+#undef NDEBUG
 #include "flow.h"
+#include <assert.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include "classifier.h"
-#include "openflow/openflow.h"
-#include "timeval.h"
 #include "ofpbuf.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
+#include "openflow/openflow.h"
+#include "ovstest.h"
 #include "pcap-file.h"
+#include "timeval.h"
 #include "util.h"
 #include "vlog.h"
-#include "ovstest.h"
-
-#undef NDEBUG
-#include <assert.h>
 
 static void
 test_flows_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
