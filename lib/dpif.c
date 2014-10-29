@@ -873,10 +873,13 @@ dpif_probe_feature(struct dpif *dpif, const char *name,
     bool enable_feature = false;
     int error;
 
-    error = dpif_flow_put(dpif, DPIF_FP_CREATE | DPIF_FP_PROBE,
+    /* Use DPIF_FP_MODIFY to cover the case where ovs-vswitchd is killed (and
+     * restarted) at just the right time such that feature probes from the
+     * previous run are still present in the datapath. */
+    error = dpif_flow_put(dpif, DPIF_FP_CREATE | DPIF_FP_MODIFY | DPIF_FP_PROBE,
                           ofpbuf_data(key), ofpbuf_size(key), NULL, 0, NULL, 0,
                           ufid, NULL);
-    if (error && error != EEXIST) {
+    if (error) {
         if (error != EINVAL) {
             VLOG_WARN("%s: %s flow probe failed (%s)",
                       dpif_name(dpif), name, ovs_strerror(error));
