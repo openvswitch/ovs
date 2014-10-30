@@ -2,8 +2,8 @@ How to Use Open vSwitch with Libvirt
 ====================================
 
 This document describes how to use Open vSwitch with Libvirt 0.9.11 or
-later. This document assumes that you followed INSTALL or installed
-Open vSwitch from distribution packaging such as a .deb or .rpm. The Open
+later. This document assumes that you followed [INSTALL.md] or installed
+Open vSwitch from distribution packaging such as a .deb or .rpm.  The Open
 vSwitch support is included by default in Libvirt 0.9.11. Consult
 www.libvirt.org for instructions on how to build the latest Libvirt, if your
 Linux distribution by default comes with an older Libvirt release.
@@ -68,3 +68,5 @@ Bug Reporting
 -------------
 
 Please report problems to bugs@openvswitch.org.
+
+[INSTALL.md]:INSTALL.md

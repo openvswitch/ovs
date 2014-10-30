@@ -17,7 +17,7 @@ Building and Installing
 -----------------------
 
 The requirements and procedure for building, installing, and
-configuring Open vSwitch are the same as those given in INSTALL.
+configuring Open vSwitch are the same as those given in [INSTALL.md].
 You may omit configuring, building, and installing the kernel module,
 and the related requirements.
 
@@ -82,3 +82,5 @@ Bug Reporting
 -------------
 
 Please report problems to bugs@openvswitch.org.
+
+[INSTALL.md]:INSTALL.md

@@ -2,10 +2,10 @@ How to Use Open vSwitch with Docker
 ====================================
 
 This document describes how to use Open vSwitch with Docker 1.2.0 or
-later.  This document assumes that you followed [INSTALL](INSTALL.md)
-or installed Open vSwitch from distribution packaging such as a .deb
-or .rpm.  Consult www.docker.com for instructions on how to install
-Docker.
+later.  This document assumes that you followed [INSTALL.md] or installed
+Open vSwitch from distribution packaging such as a .deb or .rpm.  Consult
+www.docker.com for instructions on how to install or .rpm.  Consult
+www.docker.com for instructions on how to install Docker.
 
 Limitations
 -----------
@@ -87,3 +87,5 @@ Bug Reporting
 -------------
 
 Please report problems to bugs@openvswitch.org.
+
+[INSTALL.md]:INSTALL.md

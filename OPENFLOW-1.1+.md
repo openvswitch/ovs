@@ -218,10 +218,10 @@ Please consider the following:
     should document it in the appropriate manpage and mention it in
     NEWS as well.
 
-  * Coding style (see the [CodingStyle](CodingStyle.md) file at the
-    top of the source tree).
+  * Coding style (see the [CodingStyle.md] file at the top of the
+    source tree).
 
-  * The patch submission guidelines (see CONTRIBUTING).  I
+  * The patch submission guidelines (see [CONTRIBUTING.md]).  I
     recommend using "git send-email", which automatically follows a
     lot of those guidelines.
 
@@ -229,3 +229,6 @@ Bug Reporting
 -------------
 
 Please report problems to bugs@openvswitch.org.
+
+[CONTRIBUTING.md]:CONTRIBUTING.md
+[CodingStyle.md]:CodingStyle.md

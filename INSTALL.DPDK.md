@@ -70,8 +70,7 @@ machines. Instead of typing `make`, type:
 
 `make CFLAGS='-O3 -march=native'`
 
-Refer to [INSTALL.userspace](INSTALL.userspace.md) for general requirements of
-building userspace OVS.
+Refer to [INSTALL.userspace.md] for general requirements of building userspace OVS.
 
 Using the DPDK with ovs-vswitchd:
 ---------------------------------
@@ -92,7 +91,7 @@ Using the DPDK with ovs-vswitchd:
 
    Ref to http://www.dpdk.org/doc/quick-start for verifying DPDK setup.
 
-4. Start ovsdb-server as discussed in [INSTALL](INSTALL.md) doc:
+4. Start ovsdb-server as discussed in [INSTALL.md] doc:
    1. First time only db creation (or clearing):
 
         ```
@@ -282,3 +281,6 @@ Bug Reporting:
 --------------
 
 Please report problems to bugs@openvswitch.org.
+
+[INSTALL.userspace.md]:INSTALL.userspace.md
+[INSTALL.md]:INSTALL.md

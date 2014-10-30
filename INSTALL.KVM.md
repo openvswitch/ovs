@@ -3,14 +3,13 @@ How to Use Open vSwitch with KVM
 
 This document describes how to use Open vSwitch with the Kernel-based
 Virtual Machine (KVM). This document assumes that you have read and
-followed [INSTALL](INSTALL.md) to get Open vSwitch setup on your Linux
-system.
+followed [INSTALL.md] to get Open vSwitch setup on your Linux system.
 
 Setup
 -----
 
-First, follow the setup instructions in [INSTALL](INSTALL.md) to get a
-working Open vSwitch installation.
+First, follow the setup instructions in [INSTALL.md] to get a working
+Open vSwitch installation.
 
 KVM uses tunctl to handle various bridging modes, which you can 
 install with the Debian/Ubuntu package uml-utilities.
@@ -46,7 +45,7 @@ switch='br0'
 ovs-vsctl del-port ${switch} $1
 ```
 
-At the end of [INSTALL](INSTALL.md), it describes basic usage of creating
+At the end of [INSTALL.md], it describes basic usage of creating
 bridges and ports. If you haven't already, create a bridge named
 br0 with the following command:
 
@@ -84,3 +83,5 @@ Bug Reporting
 -------------
 
 Please report problems to bugs@openvswitch.org.
+
+[INSTALL.md]:INSTALL.md

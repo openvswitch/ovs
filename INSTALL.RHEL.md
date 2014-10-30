@@ -3,7 +3,7 @@ How to Install Open vSwitch on Red Hat Enterprise Linux
 
 This document describes how to build and install Open vSwitch on a Red
 Hat Enterprise Linux (RHEL) host.  If you want to install Open vSwitch
-on a generic Linux host, see [INSTALL](INSTALL.md) instead.
+on a generic Linux host, see [INSTALL.md] instead.
 
 We have tested these instructions with RHEL 5.6 and RHEL 6.0.
 
@@ -51,8 +51,8 @@ $HOME/rpmbuild/SOURCES.
      b. Create a distribution tarball on some other machine, by
         running "./boot.sh; ./configure; make dist" in the Git tree.
         You must run this on a machine that has the tools listed in
-        [INSTALL](INSTALL.md) as prerequisites for building from a Git
-		tree. Afterward, proceed with the rest of the instructions using
+        [INSTALL.md] as prerequisites for building from a Git tree.
+        Afterward, proceed with the rest of the instructions using
 		the distribution tarball.
 
 3. Some versions of the RHEL 6 kernel-devel package contain a broken
@@ -153,7 +153,7 @@ Red Hat Network Scripts Integration
 -----------------------------------
 
 Simple integration with Red Hat network scripts has been implemented.
-Please read rhel/README.RHEL in the source tree or
+Please read [rhel/README.RHEL] in the source tree or
 /usr/share/doc/openvswitch/README.RHEL in the installed openvswitch
 package for details.
 
@@ -161,3 +161,6 @@ Reporting Bugs
 --------------
 
 Please report problems to bugs@openvswitch.org.
+
+[INSTALL.md]:INSTALL.md
+[rhel/README.RHEL]:rhel/README.RHEL

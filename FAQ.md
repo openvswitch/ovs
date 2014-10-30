@@ -61,7 +61,7 @@ A: No, Open vSwitch has been ported to a number of different operating
 
 ### Q: What's involved with porting Open vSwitch to a new platform or switching ASIC?
 
-A: The [PORTING](PORTING.md) document describes how one would go about
+A: The [PORTING.md] document describes how one would go about
    porting Open vSwitch to a new operating system or hardware platform.
 
 ### Q: Why would I use Open vSwitch instead of the Linux bridge?
@@ -69,8 +69,8 @@ A: The [PORTING](PORTING.md) document describes how one would go about
 A: Open vSwitch is specially designed to make it easier to manage VM
    network configuration and monitor state spread across many physical
    hosts in dynamic virtualized environments.  Please see
-   [WHY-OVS](WHY-OVS.md) for a more detailed description of how Open
-   vSwitch relates to the Linux Bridge.
+   [WHY-OVS.md] for a more detailed description of how Open vSwitch
+   relates to the Linux Bridge.
 
 ### Q: How is Open vSwitch related to distributed virtual switches like the VMware vNetwork distributed switch or the Cisco Nexus 1000V?
 
@@ -690,7 +690,7 @@ A: On Linux kernels before 3.11, the OVS GRE module and Linux GRE module
    dmesg for errors regarding GRE registration). To fix this, unload all
    GRE modules that appear in lsmod as well as the OVS kernel module. You
    can then reload the OVS module following the directions in
-   [INSTALL](INSTALL.md), which will ensure that dependencies are satisfied.
+   [INSTALL.md], which will ensure that dependencies are satisfied.
 
 ### Q: Open vSwitch does not seem to obey my packet filter rules.
 
@@ -1237,7 +1237,7 @@ A: The following table lists the versions of OpenFlow supported by
    (Open vSwitch 2.2 had an experimental implementation of OpenFlow
    1.4 that could cause crashes.  We don't recommend enabling it.)
 
-   OPENFLOW-1.1+ in the Open vSwitch source tree tracks support for
+   [OPENFLOW-1.1+.md] in the Open vSwitch source tree tracks support for
    OpenFlow 1.1 and later features.  When support for OpenFlow 1.4 and
    1.5 is solidly implemented, Open vSwitch will enable those version
    by default.  Also, the OpenFlow 1.5 specification is still under
@@ -1630,8 +1630,7 @@ A: Add your new message to "enum ofpraw" and "enum ofptype" in
    lib/ofp-msgs.h, following the existing pattern.  Then recompile and
    fix all of the new warnings, implementing new functionality for the
    new message as needed.  (If you configure with --enable-Werror, as
-   described in [INSTALL](INSTALL.md), then it is impossible to miss
-   any warnings.)
+   described in [INSTALL.md], then it is impossible to miss any warnings.)
 
    If you need to add an OpenFlow vendor extension message for a
    vendor that doesn't yet have any extension messages, then you will
@@ -1643,3 +1642,8 @@ Contact
 
 bugs@openvswitch.org
 http://openvswitch.org/
+
+[PORTING.md]:PORTING.md
+[WHY-OVS.md]:WHY-OVS.md
+[INSTALL.md]:INSTALL.md
+[OPENFLOW-1.1+.md]:OPENFLOW-1.1+.md

@@ -78,33 +78,30 @@ What other documentation is available?
 --------------------------------------
 
 To install Open vSwitch on a regular Linux or FreeBSD host, please
-read INSTALL.  For specifics around installation on a specific
+read [INSTALL.md]. For specifics around installation on a specific
 platform, please see one of these files:
 
-- [INSTALL.Debian](INSTALL.Debian.md)
-- [INSTALL.Fedora](INSTALL.Fedora.md)
-- [INSTALL.RHEL](INSTALL.RHEL.md)
-- [INSTALL.XenServer](INSTALL.XenServer.md)
+- [INSTALL.Debian.md]
+- [INSTALL.Fedora.md]
+- [INSTALL.RHEL.md]
+- [INSTALL.XenServer.md]
 
 To use Open vSwitch...
 
-- ...with Docker on Linux, read [INSTALL.Docker](INSTALL.Docker.md)
+- ...with Docker on Linux, read [INSTALL.Docker.md]
 
-- ...with KVM on Linux, read [INSTALL](INSTALL.md), read
-  [INSTALL.KVM](INSTALL.KVM.md)
+- ...with KVM on Linux, read [INSTALL.md], read [INSTALL.KVM.md]
 
-- ...with Libvirt, read [INSTALL.Libvirt](INSTALL.Libvirt.md).
+- ...with Libvirt, read [INSTALL.Libvirt.md].
 
-- ...without using a kernel module, read
-[INSTALL.userspace](INSTALL.userspace.md).
+- ...without using a kernel module, read [INSTALL.userspace.md].
 
-For answers to common questions, read FAQ.
+For answers to common questions, read [FAQ.md].
 
-To learn how to set up SSL support for Open vSwitch, read
-[INSTALL.SSL](INSTALL.SSL.md).
+To learn how to set up SSL support for Open vSwitch, read [INSTALL.SSL.md].
 
 To learn about some advanced features of the Open vSwitch software
-switch, read the tutorial in tutorial/Tutorial.
+switch, read the [tutorial/Tutorial.md].
 
 Each Open vSwitch userspace program is accompanied by a manpage.  Many
 of the manpages are customized to your configuration as part of the
@@ -115,3 +112,16 @@ Contact
 -------
 
 bugs@openvswitch.org
+
+[INSTALL.md]:INSTALL.md
+[INSTALL.Debian.md]:INSTALL.Debian.md
+[INSTALL.Docker.md]:INSTALL.Docker.md
+[INSTALL.Fedora.md]:INSTALL.Fedora.md
+[INSTALL.KVM.md]:INSTALL.KVM.md
+[INSTALL.Libvirt.md]:INSTALL.Libvirt.md
+[INSTALL.RHEL.md]:INSTALL.RHEL.md
+[INSTALL.SSL.md]:INSTALL.SSL.md
+[INSTALL.userspace.md]:INSTALL.userspace.md
+[INSTALL.XenServer.md]:INSTALL.XenServer.md
+[FAQ.md]:FAQ.md
+[tutorial/Tutorial.md]:tutorial/Tutorial.md

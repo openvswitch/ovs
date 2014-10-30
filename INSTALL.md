@@ -5,12 +5,12 @@ This document describes how to build and install Open vSwitch on a
 generic Linux, FreeBSD, or NetBSD host. For specifics around installation
 on a specific platform, please see one of these files:
 
-  - [INSTALL.Debian](INSTALL.Debian.md)
-  - [INSTALL.Fedora](INSTALL.Fedora.md)
-  - [INSTALL.RHEL](INSTALL.RHEL.md)
-  - [INSTALL.XenServer](INSTALL.XenServer.md)
-  - [INSTALL.NetBSD](INSTALL.NetBSD.md)
-  - [INSTALL.DPDK](INSTALL.DPDK.md)
+  - [INSTALL.Debian.md]
+  - [INSTALL.Fedora.md]
+  - [INSTALL.RHEL.md]
+  - [INSTALL.XenServer.md]
+  - [INSTALL.NetBSD.md]
+  - [INSTALL.DPDK.md]
 
 Build Requirements
 ------------------
@@ -43,15 +43,15 @@ you will need the following software:
 
 On Linux, you may choose to compile the kernel module that comes with
 the Open vSwitch distribution or to use the kernel module built into
-the Linux kernel (version 3.3 or later).  See the FAQ question "What
-features are not available in the Open vSwitch kernel datapath that
+the Linux kernel (version 3.3 or later).  See the [FAQ.md] question
+"What features are not available in the Open vSwitch kernel datapath that
 ships as part of the upstream Linux kernel?" for more information on
 this trade-off.  You may also use the userspace-only implementation,
-at some cost in features and performance (see INSTALL.userspace for
-details).  To compile the kernel module on Linux, you must also
+at some cost in features and performance (see [INSTALL.userspace.md]
+for details).  To compile the kernel module on Linux, you must also
 install the following:
 
-  - A supported Linux kernel version.  Please refer to README.md for a
+  - A supported Linux kernel version.  Please refer to [README.md] for a
     list of supported versions.
 
     The Open vSwitch datapath requires bridging support
@@ -184,7 +184,7 @@ Prerequisites section, follow the procedure below to build.
 
    If --with-linux requests building for an unsupported version of
    Linux, then "configure" will fail with an error message.  Please
-   refer to the FAQ for advice in that case.
+   refer to the [FAQ.md] for advice in that case.
 
    If you wish to build the kernel module for an architecture other
    than the architecture of the machine used for the build, you may
@@ -604,3 +604,13 @@ Bug Reporting
 =============
 
 Please report problems to bugs@openvswitch.org.
+
+[README.md]:README.md
+[INSTALL.Debian.md]:INSTALL.Debian.md
+[INSTALL.Fedora.md]:INSTALL.Fedora.md
+[INSTALL.RHEL.md]:INSTALL.RHEL.md
+[INSTALL.XenServer.md]:INSTALL.XenServer.md
+[INSTALL.NetBSD.md]:INSTALL.NetBSD.md
+[INSTALL.DPDK.md]:INSTALL.DPDK.md
+[INSTALL.userspace.md]:INSTALL.userspace.md
+[FAQ.md]:FAQ.md

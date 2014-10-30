@@ -3,7 +3,7 @@ How to Install Open vSwitch on Fedora Linux
 
 This document describes how to build and install Open vSwitch on a Fedora
 Linux host.  If you want to install Open vSwitch on a generic Linux host,
-see [INSTALL.Linux](INSTALL.Linux.md) instead.
+see [INSTALL.md] instead.
 
 We have tested these instructions with Fedora 16 and Fedora 17.
 
@@ -87,3 +87,5 @@ Reporting Bugs
 --------------
 
 Please report problems to bugs@openvswitch.org.
+
+[INSTALL.md]:INSTALL.md

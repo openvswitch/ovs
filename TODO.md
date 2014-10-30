@@ -2,7 +2,7 @@ Open vSwitch Project Ideas
 ==========================
 
 This file lists a number of project ideas for Open vSwitch.  The ideas
-here overlap somewhat with those in the OPENFLOW-1.1+ file.
+here overlap somewhat with those in the [OPENFLOW-1.1+.md] file.
 
 
 Programming Project Ideas
@@ -11,10 +11,10 @@ Programming Project Ideas
 Each of these projects would ideally result in a patch or a short
 series of them posted to ovs-dev.
 
-Please read [CONTRIBUTING](CONTRIBUTING.md) and [CodingStyle](CodingStyle.md)
-in the top of the source tree before you begin work.  The OPENFLOW-1.1+
-file also has an introduction to how OpenFlow is implemented in Open vSwitch.
-It is also a good idea to look around the source tree for related code, and
+Please read [CONTRIBUTING.md] and [CodingStyle.md] in the top of the
+source tree before you begin work. The [OPENFLOW-1.1+.md] file also has
+an introduction to how OpenFlow is implemented in Open vSwitch. It is
+also a good idea to look around the source tree for related code, and
 back through the Git history for commits on related subjects, to allow
 you to follow existing patterns and conventions.
 
@@ -266,11 +266,11 @@ Please consider the following:
     should document it in the appropriate manpage and mention it in
     NEWS as well.
 
-  * Coding style (see the [CodingStyle](CodingStyle.md) file at the top
-	of the source tree).
+  * Coding style (see the [CodingStyle.md] file at the top of the
+    source tree).
 
-  * The patch submission guidelines (see [CONTRIBUTING](CONTRIBUTING.md)).
-    I recommend using "git send-email", which automatically follows a
+  * The patch submission guidelines (see [CONTRIBUTING.md]).  I
+    recommend using "git send-email", which automatically follows a
     lot of those guidelines.
 
 
@@ -283,3 +283,7 @@ Please report problems to bugs@openvswitch.org.
 Local Variables:
 mode: text
 End:
+
+[OPENFLOW-1.1+.md]:OPENFLOW-1.1+.md
+[CONTRIBUTING.md]:CONTRIBUTING.md
+[CodingStyle.md]:CodingStyle.md
