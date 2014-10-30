@@ -107,8 +107,7 @@ test_rule_destroy(struct test_rule *rule)
     }
 }
 
-static struct test_rule *make_rule(int wc_fields, unsigned int priority,
-                                   int value_pat);
+static struct test_rule *make_rule(int wc_fields, int priority, int value_pat);
 static void free_rule(struct test_rule *);
 static struct test_rule *clone_rule(const struct test_rule *);
 
@@ -466,10 +465,10 @@ static void
 pvector_verify(const struct pvector *pvec)
 {
     void *ptr OVS_UNUSED;
-    unsigned int priority, prev_priority = UINT_MAX;
+    int prev_priority = INT_MAX;
 
     PVECTOR_FOR_EACH (ptr, pvec) {
-        priority = cursor__.vector[cursor__.entry_idx].priority;
+        int priority = cursor__.vector[cursor__.entry_idx].priority;
         if (priority > prev_priority) {
             ovs_abort(0, "Priority vector is out of order (%u > %u)",
                       priority, prev_priority);
@@ -524,7 +523,7 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
     pvector_verify(&cls->subtables);
     CMAP_FOR_EACH (table, cmap_node, &cls->subtables_map) {
         const struct cls_match *head;
-        unsigned int max_priority = 0;
+        int max_priority = INT_MIN;
         unsigned int max_count = 0;
         bool found = false;
         const struct cls_subtable *iter;
@@ -552,7 +551,7 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
 
         found_tables++;
         CMAP_FOR_EACH (head, cmap_node, &table->rules) {
-            unsigned int prev_priority = UINT_MAX;
+            int prev_priority = INT_MAX;
             const struct cls_match *rule;
 
             if (head->priority > max_priority) {
@@ -597,7 +596,7 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
 }
 
 static struct test_rule *
-make_rule(int wc_fields, unsigned int priority, int value_pat)
+make_rule(int wc_fields, int priority, int value_pat)
 {
     const struct cls_field *f;
     struct test_rule *rule;
@@ -642,7 +641,7 @@ make_rule(int wc_fields, unsigned int priority, int value_pat)
     }
 
     rule = xzalloc(sizeof *rule);
-    cls_rule_init(&rule->cls_rule, &match, wc_fields ? priority : UINT_MAX);
+    cls_rule_init(&rule->cls_rule, &match, wc_fields ? priority : INT_MAX);
     return rule;
 }
 
@@ -665,11 +664,11 @@ free_rule(struct test_rule *rule)
 }
 
 static void
-shuffle(unsigned int *p, size_t n)
+shuffle(int *p, size_t n)
 {
     for (; n > 1; n--, p++) {
-        unsigned int *q = &p[random_range(n)];
-        unsigned int tmp = *p;
+        int *q = &p[random_range(n)];
+        int tmp = *p;
         *p = *q;
         *q = tmp;
     }
@@ -996,7 +995,7 @@ test_many_rules_in_one_table(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         tcls_init(&tcls);
 
         for (i = 0; i < N_RULES; i++) {
-            unsigned int priority = random_uint32();
+            int priority = random_range(INT_MAX);
 
             do {
                 value_pats[i] = random_uint32() & value_mask;
@@ -1043,13 +1042,13 @@ test_many_rules_in_n_tables(int n_tables)
     }
 
     for (iteration = 0; iteration < 30; iteration++) {
-        unsigned int priorities[MAX_RULES];
+        int priorities[MAX_RULES];
         struct classifier cls;
         struct tcls tcls;
 
         random_set_seed(iteration + 1);
         for (i = 0; i < MAX_RULES; i++) {
-            priorities[i] = i * 129;
+            priorities[i] = (i * 129) & INT_MAX;
         }
         shuffle(priorities, ARRAY_SIZE(priorities));
 
@@ -1059,7 +1058,7 @@ test_many_rules_in_n_tables(int n_tables)
 
         for (i = 0; i < MAX_RULES; i++) {
             struct test_rule *rule;
-            unsigned int priority = priorities[i];
+            int priority = priorities[i];
             int wcf = wcfs[random_range(n_tables)];
             int value_pat = random_uint32() & ((1u << CLS_N_FIELDS) - 1);
             rule = make_rule(wcf, priority, value_pat);

@@ -258,14 +258,13 @@ struct classifier {
 /* A rule to be inserted to the classifier. */
 struct cls_rule {
     struct minimatch match;      /* Matching rule. */
-    unsigned int priority;       /* Larger numbers are higher priorities. */
+    int priority;                /* Larger numbers are higher priorities. */
     struct cls_match *cls_match; /* NULL if rule is not in a classifier. */
 };
 
-void cls_rule_init(struct cls_rule *, const struct match *,
-                   unsigned int priority);
+void cls_rule_init(struct cls_rule *, const struct match *, int priority);
 void cls_rule_init_from_minimatch(struct cls_rule *, const struct minimatch *,
-                                  unsigned int priority);
+                                  int priority);
 void cls_rule_clone(struct cls_rule *, const struct cls_rule *);
 void cls_rule_move(struct cls_rule *dst, struct cls_rule *src);
 void cls_rule_destroy(struct cls_rule *);
@@ -303,7 +302,7 @@ struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
 
 struct cls_rule *classifier_find_match_exactly(const struct classifier *,
                                                const struct match *,
-                                               unsigned int priority);
+                                               int priority);
 
 /* Iteration. */
 

@@ -1668,12 +1668,10 @@ int ofproto_class_unregister(const struct ofproto_class *);
 
 int ofproto_flow_mod(struct ofproto *, struct ofputil_flow_mod *)
     OVS_EXCLUDED(ofproto_mutex);
-void ofproto_add_flow(struct ofproto *, const struct match *,
-                      unsigned int priority,
+void ofproto_add_flow(struct ofproto *, const struct match *, int priority,
                       const struct ofpact *ofpacts, size_t ofpacts_len)
     OVS_EXCLUDED(ofproto_mutex);
-void ofproto_delete_flow(struct ofproto *,
-                         const struct match *, unsigned int priority)
+void ofproto_delete_flow(struct ofproto *, const struct match *, int priority)
     OVS_EXCLUDED(ofproto_mutex);
 void ofproto_flush_flows(struct ofproto *);
 

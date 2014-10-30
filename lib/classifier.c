@@ -114,11 +114,10 @@ static bool mask_prefix_bits_set(const struct flow_wildcards *,
  *
  * The caller must eventually destroy 'rule' with cls_rule_destroy().
  *
- * (OpenFlow uses priorities between 0 and UINT16_MAX, inclusive, but
- * internally Open vSwitch supports a wider range.) */
+ * Clients should not use priority INT_MIN.  (OpenFlow uses priorities between
+ * 0 and UINT16_MAX, inclusive.) */
 void
-cls_rule_init(struct cls_rule *rule,
-              const struct match *match, unsigned int priority)
+cls_rule_init(struct cls_rule *rule, const struct match *match, int priority)
 {
     minimatch_init(&rule->match, match);
     rule->priority = priority;
@@ -128,8 +127,7 @@ cls_rule_init(struct cls_rule *rule,
 /* Same as cls_rule_init() for initialization from a "struct minimatch". */
 void
 cls_rule_init_from_minimatch(struct cls_rule *rule,
-                             const struct minimatch *match,
-                             unsigned int priority)
+                             const struct minimatch *match, int priority)
 {
     minimatch_clone(&rule->match, match);
     rule->priority = priority;
@@ -607,7 +605,7 @@ classifier_remove(struct classifier *cls, struct cls_rule *rule)
                && --subtable->max_count == 0) {
         /* Find the new 'max_priority' and 'max_count'. */
         struct cls_match *head;
-        unsigned int max_priority = 0;
+        int max_priority = INT_MIN;
 
         CMAP_FOR_EACH (head, cmap_node, &subtable->rules) {
             if (head->priority > max_priority) {
@@ -668,7 +666,7 @@ classifier_lookup(const struct classifier *cls, const struct flow *flow,
 {
     const struct cls_partition *partition;
     tag_type tags;
-    int64_t best_priority = -1;
+    int best_priority = INT_MIN;
     const struct cls_match *best;
     struct trie_ctx trie_ctx[CLS_MAX_TRIES];
     struct cls_subtable *subtable;
@@ -717,8 +715,8 @@ classifier_lookup(const struct classifier *cls, const struct flow *flow,
         }
 
         rule = find_match_wc(subtable, flow, trie_ctx, cls->n_tries, wc);
-        if (rule && (int64_t)rule->priority > best_priority) {
-            best_priority = (int64_t)rule->priority;
+        if (rule && rule->priority > best_priority) {
+            best_priority = rule->priority;
             best = rule;
         }
     }
@@ -767,8 +765,7 @@ out:
  * contain an exact match. */
 struct cls_rule *
 classifier_find_match_exactly(const struct classifier *cls,
-                              const struct match *target,
-                              unsigned int priority)
+                              const struct match *target, int priority)
 {
     struct cls_rule *retval;
     struct cls_rule cr;
@@ -789,11 +786,10 @@ classifier_rule_overlaps(const struct classifier *cls,
     OVS_EXCLUDED(cls->mutex)
 {
     struct cls_subtable *subtable;
-    int64_t stop_at_priority = (int64_t)target->priority - 1;
 
     ovs_mutex_lock(&cls->mutex);
     /* Iterate subtables in the descending max priority order. */
-    PVECTOR_FOR_EACH_PRIORITY (subtable, stop_at_priority, 2,
+    PVECTOR_FOR_EACH_PRIORITY (subtable, target->priority - 1, 2,
                                sizeof(struct cls_subtable), &cls->subtables) {
         uint32_t storage[FLOW_U32S];
         struct minimask mask;

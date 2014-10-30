@@ -69,8 +69,10 @@ pvector_destroy(struct pvector *pvec)
 static int
 pvector_entry_cmp(const void *a_, const void *b_)
 {
-    unsigned int a = ((const struct pvector_entry *)a_)->priority;
-    unsigned int b = ((const struct pvector_entry *)b_)->priority;
+    const struct pvector_entry *ap = a_;
+    const struct pvector_entry *bp = b_;
+    int a = ap->priority;
+    int b = bp->priority;
 
     return a > b ? -1 : a < b;
 }
@@ -85,7 +87,7 @@ pvector_impl_sort(struct pvector_impl *impl)
  * which will be one past the vector if none exists. */
 static int
 pvector_impl_find_priority(struct pvector_impl *impl,
-                           unsigned int target_priority)
+                           int target_priority)
 {
     const struct pvector_entry *entry;
     int index;
@@ -114,7 +116,7 @@ pvector_impl_find(struct pvector_impl *impl, void *target)
 }
 
 void
-pvector_insert(struct pvector *pvec, void *ptr, unsigned int priority)
+pvector_insert(struct pvector *pvec, void *ptr, int priority)
 {
     struct pvector_impl *old, *new;
     int index;
@@ -182,7 +184,7 @@ pvector_remove(struct pvector *pvec, void *ptr)
 
 /* Change entry's 'priority' and keep the vector ordered. */
 void
-pvector_change_priority(struct pvector *pvec, void *ptr, unsigned int priority)
+pvector_change_priority(struct pvector *pvec, void *ptr, int priority)
 {
     struct pvector_impl *old = pvector_impl_get(pvec);
     int index = pvector_impl_find(old, ptr);

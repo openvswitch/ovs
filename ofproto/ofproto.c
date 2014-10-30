@@ -153,8 +153,7 @@ struct rule_criteria {
 };
 
 static void rule_criteria_init(struct rule_criteria *, uint8_t table_id,
-                               const struct match *match,
-                               unsigned int priority,
+                               const struct match *match, int priority,
                                ovs_be64 cookie, ovs_be64 cookie_mask,
                                ofp_port_t out_port, uint32_t out_group);
 static void rule_criteria_require_rw(struct rule_criteria *,
@@ -1882,7 +1881,7 @@ ofproto_port_del(struct ofproto *ofproto, ofp_port_t ofp_port)
 
 static void
 flow_mod_init(struct ofputil_flow_mod *fm,
-              const struct match *match, unsigned int priority,
+              const struct match *match, int priority,
               const struct ofpact *ofpacts, size_t ofpacts_len,
               enum ofp_flow_mod_command command)
 {
@@ -1907,7 +1906,7 @@ flow_mod_init(struct ofputil_flow_mod *fm,
 
 static int
 simple_flow_mod(struct ofproto *ofproto,
-                const struct match *match, unsigned int priority,
+                const struct match *match, int priority,
                 const struct ofpact *ofpacts, size_t ofpacts_len,
                 enum ofp_flow_mod_command command)
 {
@@ -1931,7 +1930,7 @@ simple_flow_mod(struct ofproto *ofproto,
  * This is a helper function for in-band control and fail-open. */
 void
 ofproto_add_flow(struct ofproto *ofproto, const struct match *match,
-                 unsigned int priority,
+                 int priority,
                  const struct ofpact *ofpacts, size_t ofpacts_len)
     OVS_EXCLUDED(ofproto_mutex)
 {
@@ -2018,7 +2017,7 @@ ofproto_flow_mod(struct ofproto *ofproto, struct ofputil_flow_mod *fm)
  * This is a helper function for in-band control and fail-open. */
 void
 ofproto_delete_flow(struct ofproto *ofproto,
-                    const struct match *target, unsigned int priority)
+                    const struct match *target, int priority)
     OVS_EXCLUDED(ofproto_mutex)
 {
     struct classifier *cls = &ofproto->tables[0].cls;
@@ -3510,7 +3509,7 @@ next_matching_table(const struct ofproto *ofproto,
  * supplied as 0. */
 static void
 rule_criteria_init(struct rule_criteria *criteria, uint8_t table_id,
-                   const struct match *match, unsigned int priority,
+                   const struct match *match, int priority,
                    ovs_be64 cookie, ovs_be64 cookie_mask,
                    ofp_port_t out_port, uint32_t out_group)
 {

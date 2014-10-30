@@ -33,8 +33,7 @@ struct cls_subtable {
     /* The fields are only used by writers. */
     int n_rules OVS_GUARDED;                /* Number of rules, including
                                              * duplicates. */
-    unsigned int max_priority OVS_GUARDED;  /* Max priority of any rule in
-                                             * the subtable. */
+    int max_priority OVS_GUARDED; /* Max priority of any rule in subtable. */
     unsigned int max_count OVS_GUARDED;     /* Count of max_priority rules. */
 
     /* These fields are accessed by readers who care about wildcarding. */
@@ -72,7 +71,7 @@ struct cls_match {
     struct cls_partition *partition OVS_GUARDED;
 
     /* Accessed by readers interested in wildcarding. */
-    unsigned int priority;      /* Larger numbers are higher priorities. */
+    int priority;               /* Larger numbers are higher priorities. */
     struct cmap_node index_nodes[CLS_MAX_INDICES]; /* Within subtable's
                                                     * 'indices'. */
     /* Accessed by all readers. */

@@ -271,7 +271,7 @@ struct ofputil_flow_mod {
     struct list list_node;    /* For queuing flow_mods. */
 
     struct match match;
-    unsigned int priority;
+    int priority;
 
     /* Cookie matching.  The flow_mod affects only flows that have cookies that
      * bitwise match 'cookie' bits in positions where 'cookie_mask has 1-bits.

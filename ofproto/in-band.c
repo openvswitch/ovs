@@ -83,7 +83,7 @@ enum in_band_op {
 struct in_band_rule {
     struct hmap_node hmap_node; /* In struct in_band's "rules" hmap. */
     struct match match;
-    unsigned int priority;
+    int priority;
     enum in_band_op op;
 };
 
@@ -236,7 +236,7 @@ in_band_must_output_to_local_port(const struct flow *flow)
 }
 
 static void
-add_rule(struct in_band *ib, const struct match *match, unsigned int priority)
+add_rule(struct in_band *ib, const struct match *match, int priority)
 {
     uint32_t hash = match_hash(match, 0);
     struct in_band_rule *rule;

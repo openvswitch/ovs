@@ -989,8 +989,8 @@ compare_flows(const void *afs_, const void *bfs_)
         int ret;
 
         if (!f) {
-            unsigned int a_pri = afs->priority;
-            unsigned int b_pri = bfs->priority;
+            int a_pri = afs->priority;
+            int b_pri = bfs->priority;
             ret = a_pri < b_pri ? -1 : a_pri > b_pri;
         } else {
             bool ina, inb;
@@ -2355,7 +2355,7 @@ fte_free_all(struct classifier *cls)
  * Takes ownership of 'version'. */
 static void
 fte_insert(struct classifier *cls, const struct match *match,
-           unsigned int priority, struct fte_version *version, int index)
+           int priority, struct fte_version *version, int index)
 {
     struct fte *old, *fte;
 

@@ -46,10 +46,12 @@
  * 'size', or update the 'priority' value of an entry, but only if that does
  * not change the ordering of the entries.  Writers will never change the 'ptr'
  * values, or decrement the 'size' on a copy that readers have access to.
+ *
+ * Clients should not use priority INT_MIN.
  */
 
 struct pvector_entry {
-    unsigned int priority;
+    int priority;
     void *ptr;
 };
 
@@ -77,8 +79,8 @@ static inline size_t pvector_count(const struct pvector *);
 static inline bool pvector_is_empty(const struct pvector *);
 
 /* Insertion and deletion. */
-void pvector_insert(struct pvector *, void *, unsigned int);
-void pvector_change_priority(struct pvector *, void *, unsigned int);
+void pvector_insert(struct pvector *, void *, int priority);
+void pvector_change_priority(struct pvector *, void *, int priority);
 void pvector_remove(struct pvector *, void *);
 
 /* Iteration.
@@ -135,14 +137,14 @@ static inline struct pvector_cursor pvector_cursor_init(const struct pvector *,
                                                         size_t n_ahead,
                                                         size_t obj_size);
 static inline void *pvector_cursor_next(struct pvector_cursor *,
-                                        int64_t stop_at_priority,
+                                        int stop_at_priority,
                                         size_t n_ahead, size_t obj_size);
 static inline void pvector_cursor_lookahead(const struct pvector_cursor *,
                                             int n, size_t size);
 
 #define PVECTOR_FOR_EACH(PTR, PVECTOR)                                  \
     for (struct pvector_cursor cursor__ = pvector_cursor_init(PVECTOR, 0, 0); \
-         ((PTR) = pvector_cursor_next(&cursor__, -1, 0, 0)) != NULL; )
+         ((PTR) = pvector_cursor_next(&cursor__, INT_MIN, 0, 0)) != NULL; )
 
 /* Loop while priority is higher than 'PRIORITY' and prefetch objects
  * of size 'SZ' 'N' objects ahead from the current object. */
@@ -176,7 +178,7 @@ pvector_cursor_init(const struct pvector *pvec,
 }
 
 static inline void *pvector_cursor_next(struct pvector_cursor *cursor,
-                                        int64_t stop_at_priority,
+                                        int stop_at_priority,
                                         size_t n_ahead, size_t obj_size)
 {
     if (++cursor->entry_idx < cursor->size &&

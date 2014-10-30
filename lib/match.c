@@ -853,7 +853,7 @@ format_flow_tunnel(struct ds *s, const struct match *match)
 /* Appends a string representation of 'match' to 's'.  If 'priority' is
  * different from OFP_DEFAULT_PRIORITY, includes it in 's'. */
 void
-match_format(const struct match *match, struct ds *s, unsigned int priority)
+match_format(const struct match *match, struct ds *s, int priority)
 {
     const struct flow_wildcards *wc = &match->wc;
     size_t start_len = s->length;
@@ -866,7 +866,7 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 27);
 
     if (priority != OFP_DEFAULT_PRIORITY) {
-        ds_put_format(s, "priority=%u,", priority);
+        ds_put_format(s, "priority=%d,", priority);
     }
 
     format_uint32_masked(s, "pkt_mark", f->pkt_mark, wc->masks.pkt_mark);
@@ -1110,7 +1110,7 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
  * different from OFP_DEFAULT_PRIORITY, includes it in the string.  The caller
  * must free the string (with free()). */
 char *
-match_to_string(const struct match *match, unsigned int priority)
+match_to_string(const struct match *match, int priority)
 {
     struct ds s = DS_EMPTY_INITIALIZER;
     match_format(match, &s, priority);
@@ -1204,8 +1204,7 @@ minimatch_matches_flow(const struct minimatch *match,
 /* Appends a string representation of 'match' to 's'.  If 'priority' is
  * different from OFP_DEFAULT_PRIORITY, includes it in 's'. */
 void
-minimatch_format(const struct minimatch *match, struct ds *s,
-                 unsigned int priority)
+minimatch_format(const struct minimatch *match, struct ds *s, int priority)
 {
     struct match megamatch;
 
@@ -1217,7 +1216,7 @@ minimatch_format(const struct minimatch *match, struct ds *s,
  * different from OFP_DEFAULT_PRIORITY, includes it in the string.  The caller
  * must free the string (with free()). */
 char *
-minimatch_to_string(const struct minimatch *match, unsigned int priority)
+minimatch_to_string(const struct minimatch *match, int priority)
 {
     struct match megamatch;
 
