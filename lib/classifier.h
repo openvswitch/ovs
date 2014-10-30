@@ -295,7 +295,7 @@ static inline void classifier_publish(struct classifier *);
 /* Lookups.  These are RCU protected and may run concurrently with modifiers
  * and each other. */
 const struct cls_rule *classifier_lookup(const struct classifier *,
-                                         const struct flow *,
+                                         struct flow *,
                                          struct flow_wildcards *);
 bool classifier_rule_overlaps(const struct classifier *,
                               const struct cls_rule *);

@@ -134,8 +134,10 @@ tnl_port_map_delete(ovs_be32 ip_dst, ovs_be16 udp_port)
     tnl_port_unref(cr);
 }
 
+/* 'flow' is non-const to allow for temporary modifications during the lookup.
+ * Any changes are restored before returning. */
 odp_port_t
-tnl_port_map_lookup(const struct flow *flow, struct flow_wildcards *wc)
+tnl_port_map_lookup(struct flow *flow, struct flow_wildcards *wc)
 {
     const struct cls_rule *cr = classifier_lookup(&cls, flow, wc);
 

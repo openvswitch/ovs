@@ -816,9 +816,12 @@ trie_ctx_init(struct trie_ctx *ctx, const struct cls_trie *trie)
  * If a rule is found and 'wc' is non-null, bitwise-OR's 'wc' with the
  * set of bits that were significant in the lookup.  At some point
  * earlier, 'wc' should have been initialized (e.g., by
- * flow_wildcards_init_catchall()). */
+ * flow_wildcards_init_catchall()).
+ *
+ * 'flow' is non-const to allow for temporary modifications during the lookup.
+ * Any changes are restored before returning. */
 const struct cls_rule *
-classifier_lookup(const struct classifier *cls, const struct flow *flow,
+classifier_lookup(const struct classifier *cls, struct flow *flow,
                   struct flow_wildcards *wc)
 {
     const struct cls_partition *partition;
