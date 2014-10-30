@@ -1478,6 +1478,9 @@ ofproto_run(struct ofproto *p)
                 continue;
             }
 
+            ovs_mutex_lock(&ofproto_mutex);
+            fat_rwlock_rdlock(&table->cls.rwlock);
+
             if (classifier_count(&table->cls) > 100000) {
                 static struct vlog_rate_limit count_rl =
                     VLOG_RATE_LIMIT_INIT(1, 1);
@@ -1486,8 +1489,6 @@ ofproto_run(struct ofproto *p)
                              classifier_count(&table->cls));
             }
 
-            ovs_mutex_lock(&ofproto_mutex);
-            fat_rwlock_rdlock(&table->cls.rwlock);
             cls_cursor_init(&cursor, &table->cls, NULL);
             CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
                 if (rule->idle_timeout || rule->hard_timeout) {
