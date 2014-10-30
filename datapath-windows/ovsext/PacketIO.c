@@ -218,7 +218,12 @@ OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
         curNb = NET_BUFFER_LIST_FIRST_NB(curNbl);
         if (curNb->Next != NULL) {
             /* XXX: This case is not handled yet. */
-            ASSERT(FALSE);
+            RtlInitUnicodeString(&filterReason,
+                L"Dropping NBLs with multiple NBs");
+            OvsStartNBLIngressError(switchContext, curNbl,
+                                    sendCompleteFlags, &filterReason,
+                                    NDIS_STATUS_RESOURCES);
+            continue;
         } else {
             POVS_BUFFER_CONTEXT ctx;
             OvsFlow *flow;
