@@ -5,6 +5,7 @@ noinst_HEADERS += \
 	include/openflow/openflow-1.2.h \
 	include/openflow/openflow-1.3.h \
 	include/openflow/openflow-1.4.h \
+	include/openflow/openflow-1.5.h \
 	include/openflow/openflow-common.h \
 	include/openflow/openflow.h
 
@@ -22,6 +23,7 @@ HSTAMP_FILES = \
 	include/openflow/openflow-1.2.hstamp \
 	include/openflow/openflow-1.3.hstamp \
 	include/openflow/openflow-1.4.hstamp \
+	include/openflow/openflow-1.5.hstamp \
 	include/openflow/openflow-common.hstamp \
 	include/openflow/openflow.hstamp
 CLEANFILES += $(HSTAMP_FILES)
@@ -41,6 +43,8 @@ include/openflow/openflow-1.3.hstamp: \
 	include/openflow/openflow-1.2.h
 include/openflow/openflow-1.4.hstamp: \
 	include/openflow/openflow-1.4.h
+include/openflow/openflow-1.5.hstamp: \
+	include/openflow/openflow-1.5.h
 include/openflow/nicira-ext.hstamp: \
 	include/openflow/openflow.h \
 	include/openflow/openflow-common.h \
