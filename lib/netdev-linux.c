@@ -138,9 +138,17 @@ struct tpacket_auxdata {
     uint16_t tp_vlan_tpid;
 };
 
-/* Linux 2.6.35 introduced IFLA_STATS64 and rtnl_link_stats64. */
-#ifndef HAVE_STRUCT_RTNL_LINK_STATS64
+/* Linux 2.6.35 introduced IFLA_STATS64 and rtnl_link_stats64.
+ *
+ * Tests for rtnl_link_stats64 don't seem to consistently work, e.g. on
+ * 2.6.32-431.29.2.el6.x86_64 (see report at
+ * http://openvswitch.org/pipermail/dev/2014-October/047978.html).  Maybe
+ * if_link.h is not self-contained on those kernels.  It is easiest to
+ * unconditionally define a replacement. */
+#ifndef IFLA_STATS64
 #define IFLA_STATS64 23
+#endif
+#define rtnl_link_stats64 rpl_rtnl_link_stats64
 struct rtnl_link_stats64 {
     uint64_t rx_packets;
     uint64_t tx_packets;
@@ -169,7 +177,6 @@ struct rtnl_link_stats64 {
     uint64_t rx_compressed;
     uint64_t tx_compressed;
 };
-#endif  /* !HAVE_STRUCT_RTNL_LINK_STATS64 */
 
 enum {
     VALID_IFINDEX           = 1 << 0,
