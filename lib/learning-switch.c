@@ -660,7 +660,7 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
         memset(&fm, 0, sizeof fm);
         match_init(&fm.match, &flow, &sw->wc);
         ofputil_normalize_match_quiet(&fm.match);
-        fm.priority = 0;
+        fm.priority = 1; /* Must be > 0 because of table-miss flow entry. */
         fm.table_id = 0xff;
         fm.command = OFPFC_ADD;
         fm.idle_timeout = sw->max_idle;
