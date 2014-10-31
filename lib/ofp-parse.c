@@ -588,7 +588,8 @@ parse_ofp_meter_mod_str__(struct ofputil_meter_mod *mm, char *string,
                     if (error) {
                         return error;
                     }
-                    if (mm->meter.meter_id > OFPM13_MAX) {
+                    if (mm->meter.meter_id > OFPM13_MAX
+                        || !mm->meter.meter_id) {
                         return xasprintf("invalid value for %s", name);
                     }
                 }
