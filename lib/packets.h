@@ -694,16 +694,16 @@ static inline bool dl_type_is_ip_any(ovs_be16 dl_type)
 struct geneve_opt {
     ovs_be16  opt_class;
     uint8_t   type;
-#ifdef LITTLE_ENDIAN
-    uint8_t   length:5;
-    uint8_t   r3:1;
-    uint8_t   r2:1;
+#ifdef WORDS_BIGENDIAN
     uint8_t   r1:1;
+    uint8_t   r2:1;
+    uint8_t   r3:1;
+    uint8_t   length:5;
 #else
-    uint8_t   r1:1;
-    uint8_t   r2:1;
-    uint8_t   r3:1;
     uint8_t   length:5;
+    uint8_t   r3:1;
+    uint8_t   r2:1;
+    uint8_t   r1:1;
 #endif
     uint8_t   opt_data[];
 };
