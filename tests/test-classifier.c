@@ -641,7 +641,9 @@ make_rule(int wc_fields, int priority, int value_pat)
     }
 
     rule = xzalloc(sizeof *rule);
-    cls_rule_init(&rule->cls_rule, &match, wc_fields ? priority : INT_MAX);
+    cls_rule_init(&rule->cls_rule, &match, wc_fields
+                  ? (priority == INT_MIN ? priority + 1 : priority)
+                  : INT_MAX);
     return rule;
 }
 
