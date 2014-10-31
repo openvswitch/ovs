@@ -3038,47 +3038,42 @@ parse_l2_5_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
     enum ovs_key_attr expected_bit = 0xff;
 
     if (eth_type_mpls(src_flow->dl_type)) {
-        size_t size = nl_attr_get_size(attrs[OVS_KEY_ATTR_MPLS]);
-        const ovs_be32 *mpls_lse = nl_attr_get(attrs[OVS_KEY_ATTR_MPLS]);
-        int n = size / sizeof(ovs_be32);
-        int i;
-
-        if (!size || size % sizeof(ovs_be32)) {
-            return ODP_FIT_ERROR;
-        }
-
-        if (!is_mask) {
+        if (!is_mask || present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_MPLS)) {
             expected_attrs |= (UINT64_C(1) << OVS_KEY_ATTR_MPLS);
+        }
+        if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_MPLS)) {
+            size_t size = nl_attr_get_size(attrs[OVS_KEY_ATTR_MPLS]);
+            const ovs_be32 *mpls_lse = nl_attr_get(attrs[OVS_KEY_ATTR_MPLS]);
+            int n = size / sizeof(ovs_be32);
+            int i;
 
-            if (!(present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_MPLS))) {
-                return ODP_FIT_TOO_LITTLE;
+            if (!size || size % sizeof(ovs_be32)) {
+                return ODP_FIT_ERROR;
             }
-        } else if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_MPLS)) {
             if (flow->mpls_lse[0] && flow->dl_type != htons(0xffff)) {
                 return ODP_FIT_ERROR;
             }
-            expected_attrs |= (UINT64_C(1) << OVS_KEY_ATTR_MPLS);
-        }
 
-        for (i = 0; i < n && i < FLOW_MAX_MPLS_LABELS; i++) {
-            flow->mpls_lse[i] = mpls_lse[i];
-        }
-        if (n > FLOW_MAX_MPLS_LABELS) {
-            return ODP_FIT_TOO_MUCH;
-        }
-
-        if (!is_mask) {
-            /* BOS may be set only in the innermost label. */
-            for (i = 0; i < n - 1; i++) {
-                if (flow->mpls_lse[i] & htonl(MPLS_BOS_MASK)) {
-                    return ODP_FIT_ERROR;
-                }
+            for (i = 0; i < n && i < FLOW_MAX_MPLS_LABELS; i++) {
+                flow->mpls_lse[i] = mpls_lse[i];
+            }
+            if (n > FLOW_MAX_MPLS_LABELS) {
+                return ODP_FIT_TOO_MUCH;
             }
 
-            /* BOS must be set in the innermost label. */
-            if (n < FLOW_MAX_MPLS_LABELS
-                && !(flow->mpls_lse[n - 1] & htonl(MPLS_BOS_MASK))) {
-                return ODP_FIT_TOO_LITTLE;
+            if (!is_mask) {
+                /* BOS may be set only in the innermost label. */
+                for (i = 0; i < n - 1; i++) {
+                    if (flow->mpls_lse[i] & htonl(MPLS_BOS_MASK)) {
+                        return ODP_FIT_ERROR;
+                    }
+                }
+
+                /* BOS must be set in the innermost label. */
+                if (n < FLOW_MAX_MPLS_LABELS
+                    && !(flow->mpls_lse[n - 1] & htonl(MPLS_BOS_MASK))) {
+                    return ODP_FIT_TOO_LITTLE;
+                }
             }
         }
 
