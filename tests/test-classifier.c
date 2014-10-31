@@ -563,7 +563,7 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
 
             found_rules++;
             ovs_mutex_lock(&cls->mutex);
-            LIST_FOR_EACH (rule, list, &head->list) {
+            RCULIST_FOR_EACH (rule, list, &head->list) {
                 assert(rule->priority < prev_priority);
                 assert(rule->priority <= table->max_priority);
 

@@ -17,10 +17,10 @@
 #ifndef CLASSIFIER_PRIVATE_H
 #define CLASSIFIER_PRIVATE_H 1
 
+#include "cmap.h"
 #include "flow.h"
 #include "hash.h"
-#include "cmap.h"
-#include "list.h"
+#include "rculist.h"
 #include "tag.h"
 
 /* Classifier internal definitions, subject to change at any time. */
@@ -65,7 +65,7 @@ struct cls_partition {
 /* Internal representation of a rule in a "struct cls_subtable". */
 struct cls_match {
     /* Accessed only by writers and iterators. */
-    struct list list OVS_GUARDED; /* List of identical, lower-priority rules. */
+    struct rculist list OVS_GUARDED; /* Identical, lower-priority rules. */
 
     /* Accessed only by writers. */
     struct cls_partition *partition OVS_GUARDED;

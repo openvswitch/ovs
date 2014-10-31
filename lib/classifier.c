@@ -71,6 +71,22 @@ static struct cls_match *find_match_wc(const struct cls_subtable *,
 static struct cls_match *find_equal(struct cls_subtable *,
                                     const struct miniflow *, uint32_t hash);
 
+static inline struct cls_match *
+next_rule_in_list__(struct cls_match *rule)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
+{
+    struct cls_match *next = NULL;
+    next = OBJECT_CONTAINING(rculist_next(&rule->list), next, list);
+    return next;
+}
+
+static inline struct cls_match *
+next_rule_in_list(struct cls_match *rule)
+{
+    struct cls_match *next = next_rule_in_list__(rule);
+    return next->priority < rule->priority ? next : NULL;
+}
+
 /* Iterates RULE over HEAD and all of the cls_rules on HEAD->list.
  * Classifier's mutex must be held while iterating, as the list is
  * protoceted by it. */
@@ -576,14 +592,13 @@ classifier_remove(struct classifier *cls, struct cls_rule *rule)
 
     head = find_equal(subtable, &rule->match.flow, hash);
     if (head != cls_match) {
-        list_remove(&cls_match->list);
-    } else if (list_is_empty(&cls_match->list)) {
+        rculist_remove(&cls_match->list);
+    } else if (rculist_is_empty(&cls_match->list)) {
         cmap_remove(&subtable->rules, &cls_match->cmap_node, hash);
     } else {
-        struct cls_match *next = CONTAINER_OF(cls_match->list.next,
-                                              struct cls_match, list);
+        struct cls_match *next = next_rule_in_list(cls_match);
 
-        list_remove(&cls_match->list);
+        rculist_remove(&cls_match->list);
         cmap_replace(&subtable->rules, &cls_match->cmap_node,
                      &next->cmap_node, hash);
     }
@@ -1387,7 +1402,7 @@ insert_rule(struct classifier *cls, struct cls_subtable *subtable,
     head = find_equal(subtable, &new_rule->match.flow, hash);
     if (!head) {
         cmap_insert(&subtable->rules, &new->cmap_node, hash);
-        list_init(&new->list);
+        rculist_init(&new->list);
         goto out;
     } else {
         /* Scan the list for the insertion point that will keep the list in
@@ -1403,17 +1418,17 @@ insert_rule(struct classifier *cls, struct cls_subtable *subtable,
                 }
 
                 if (new->priority == rule->priority) {
-                    list_replace(&new->list, &rule->list);
+                    rculist_replace(&new->list, &rule->list);
                     old = rule;
                 } else {
-                    list_insert(&rule->list, &new->list);
+                    rculist_insert(&rule->list, &new->list);
                 }
                 goto out;
             }
         }
 
         /* Insert 'new' at the end of the list. */
-        list_push_back(&head->list, &new->list);
+        rculist_push_back(&head->list, &new->list);
     }
 
  out:
@@ -1440,22 +1455,6 @@ insert_rule(struct classifier *cls, struct cls_subtable *subtable,
         }
     }
     return old;
-}
-
-static struct cls_match *
-next_rule_in_list__(struct cls_match *rule)
-    OVS_NO_THREAD_SAFETY_ANALYSIS
-{
-    struct cls_match *next = NULL;
-    next = OBJECT_CONTAINING(rule->list.next, next, list);
-    return next;
-}
-
-static struct cls_match *
-next_rule_in_list(struct cls_match *rule)
-{
-    struct cls_match *next = next_rule_in_list__(rule);
-    return next->priority < rule->priority ? next : NULL;
 }
 
 /* A longest-prefix match tree. */
