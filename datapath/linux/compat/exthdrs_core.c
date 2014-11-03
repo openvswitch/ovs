@@ -2,7 +2,6 @@
 #include <linux/version.h>
 #include <net/ipv6.h>
 
-#ifndef HAVE_IP6_FH_F_SKIP_RH
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,3,0)
 int rpl_ipv6_skip_exthdr(const struct sk_buff *skb, int start,
 			 u8 *nexthdrp, __be16 *frag_offp)
@@ -48,6 +47,7 @@ int rpl_ipv6_skip_exthdr(const struct sk_buff *skb, int start,
 }
 #endif /* Kernel version < 3.3 */
 
+#ifndef HAVE_IP6_FH_F_SKIP_RH
 /*
  * find the offset to specified header or the protocol number of last header
  * if target < 0. "last header" is transport protocol header, ESP, or
