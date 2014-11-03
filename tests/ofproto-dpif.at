@@ -3323,7 +3323,7 @@ do
     if test $mode = drop && test $type != no; then
         echo 'Packets dropped because they are IP fragments and the fragment handling mode is "drop".' >> expout
         echo "Datapath actions: $exp_output" >> expout
-    elif test $mode = normal && test $type != no; then
+    elif test $mode = normal && test $type = later; then
         echo "Datapath actions: $exp_output" >> expout
     elif test $mode = nx-match && test $type = later; then
         echo "Datapath actions: $exp_output" >> expout

@@ -4255,29 +4255,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         orig_flow = *flow;
     }
 
-    if (flow->nw_frag & FLOW_NW_FRAG_ANY) {
-        switch (ctx.xbridge->frag) {
-        case OFPC_FRAG_NORMAL:
-            /* We must pretend that transport ports are unavailable. */
-            flow->tp_src = ctx.base_flow.tp_src = htons(0);
-            flow->tp_dst = ctx.base_flow.tp_dst = htons(0);
-            break;
-
-        case OFPC_FRAG_DROP:
-            return;
-
-        case OFPC_FRAG_REASM:
-            OVS_NOT_REACHED();
-
-        case OFPC_FRAG_NX_MATCH:
-            /* Nothing to do. */
-            break;
-
-        case OFPC_INVALID_TTL_TO_CONTROLLER:
-            OVS_NOT_REACHED();
-        }
-    }
-
     in_port = get_ofp_port(ctx.xbridge, flow->in_port.ofp_port);
     if (in_port && in_port->is_tunnel) {
         if (ctx.xin->resubmit_stats) {
