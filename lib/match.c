@@ -119,6 +119,13 @@ match_set_xreg_masked(struct match *match, unsigned int xreg_idx,
 }
 
 void
+match_set_actset_output(struct match *match, ofp_port_t actset_output)
+{
+    match->wc.masks.actset_output = u16_to_ofp(UINT16_MAX);
+    match->flow.actset_output = actset_output;
+}
+
+void
 match_set_metadata(struct match *match, ovs_be64 metadata)
 {
     match_set_metadata_masked(match, metadata, OVS_BE64_MAX);
@@ -863,7 +870,7 @@ match_format(const struct match *match, struct ds *s, int priority)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 27);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 28);
 
     if (priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%d,", priority);
@@ -883,6 +890,12 @@ match_format(const struct match *match, struct ds *s, int priority)
 
     if (wc->masks.skb_priority) {
         ds_put_format(s, "skb_priority=%#"PRIx32",", f->skb_priority);
+    }
+
+    if (wc->masks.actset_output) {
+        ds_put_cstr(s, "actset_output=");
+        ofputil_format_port(f->actset_output, s);
+        ds_put_char(s, ',');
     }
 
     if (wc->masks.dl_type) {

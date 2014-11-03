@@ -38,7 +38,7 @@ struct pkt_metadata;
 /* This sequence number should be incremented whenever anything involving flows
  * or the wildcarding of flows changes.  This will cause build assertion
  * failures in places which likely need to be updated. */
-#define FLOW_WC_SEQ 27
+#define FLOW_WC_SEQ 28
 
 /* Number of Open vSwitch extension 32-bit registers. */
 #define FLOW_N_REGS 8
@@ -102,6 +102,8 @@ struct flow {
     uint32_t pkt_mark;          /* Packet mark. */
     uint32_t recirc_id;         /* Must be exact match. */
     union flow_in_port in_port; /* Input port.*/
+    ofp_port_t actset_output;   /* Output port in action set. */
+    ovs_be16 pad1;              /* Pad to 32 bits. */
 
     /* L2, Order the same as in the Ethernet header! */
     uint8_t dl_dst[ETH_ADDR_LEN]; /* Ethernet destination address. */
@@ -124,7 +126,7 @@ struct flow {
     uint8_t arp_tha[ETH_ADDR_LEN]; /* ARP/ND target hardware address. */
     struct in6_addr nd_target;  /* IPv6 neighbor discovery (ND) target. */
     ovs_be16 tcp_flags;         /* TCP flags. With L3 to avoid matching L4. */
-    ovs_be16 pad;               /* Padding. */
+    ovs_be16 pad2;              /* Pad to 32 bits. */
 
     /* L4 */
     ovs_be16 tp_src;            /* TCP/UDP/SCTP source port. */
@@ -144,6 +146,7 @@ BUILD_ASSERT_DECL(sizeof(struct flow) % 4 == 0);
 #define FLOW_MAX_PACKET_U32S (FLOW_U32S                                   \
     /* Unused in datapath */  - FLOW_U32_SIZE(regs)                       \
                               - FLOW_U32_SIZE(metadata)                   \
+                              - FLOW_U32_SIZE(actset_output)              \
     /* L2.5/3 */              - FLOW_U32_SIZE(nw_src)                     \
                               - FLOW_U32_SIZE(nw_dst)                     \
                               - FLOW_U32_SIZE(mpls_lse)                   \
@@ -153,8 +156,8 @@ BUILD_ASSERT_DECL(sizeof(struct flow) % 4 == 0);
 
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
 BUILD_ASSERT_DECL(offsetof(struct flow, dp_hash) + sizeof(uint32_t)
-                  == sizeof(struct flow_tnl) + 176
-                  && FLOW_WC_SEQ == 27);
+                  == sizeof(struct flow_tnl) + 180
+                  && FLOW_WC_SEQ == 28);
 
 /* Incremental points at which flow classification may be performed in
  * segments.

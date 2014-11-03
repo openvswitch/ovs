@@ -450,6 +450,19 @@ enum OVS_PACKED_ENUM mf_field_id {
      */
     MFF_IN_PORT_OXM,
 
+    /* "actset_output".
+     *
+     * Type: be32.
+     * Maskable: no.
+     * Formatting: OpenFlow 1.1+ port.
+     * Prerequisites: none.
+     * Access: read-only.
+     * NXM: none.
+     * OXM: ONFOXM_ET_ACTSET_OUTPUT(43) since OF1.3 and v2.4,
+     *      OXM_OF_ACTSET_OUTPUT(43) since OF1.5 and v2.4.
+     */
+    MFF_ACTSET_OUTPUT,
+
     /* "skb_priority".
      *
      * Designates the queue to which output will be directed.  The value in

@@ -54,6 +54,7 @@ void match_set_reg_masked(struct match *, unsigned int reg_idx,
 void match_set_xreg(struct match *, unsigned int xreg_idx, uint64_t value);
 void match_set_xreg_masked(struct match *, unsigned int xreg_idx,
                            uint64_t value, uint64_t mask);
+void match_set_actset_output(struct match *, ofp_port_t actset_output);
 void match_set_metadata(struct match *, ovs_be64 metadata);
 void match_set_metadata_masked(struct match *,
                                ovs_be64 metadata, ovs_be64 mask);

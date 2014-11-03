@@ -219,6 +219,7 @@ struct xlate_ctx {
      * When translation is otherwise complete, ofpacts_execute_action_set()
      * converts it to a set of "struct ofpact"s that can be translated into
      * datapath actions.   */
+    bool action_set_has_group;  /* Action set contains OFPACT_GROUP? */
     struct ofpbuf action_set;   /* Action set. */
     uint64_t action_set_stub[1024 / 8];
 };
@@ -2477,7 +2478,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
 
     /* If 'struct flow' gets additional metadata, we'll need to zero it out
      * before traversing a patch port. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 27);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 28);
 
     if (!xport) {
         xlate_report(ctx, "Nonexistent output port");
@@ -2526,6 +2527,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         flow->metadata = htonll(0);
         memset(&flow->tunnel, 0, sizeof flow->tunnel);
         memset(flow->regs, 0, sizeof flow->regs);
+        flow->actset_output = OFPP_UNSET;
 
         special = process_special(ctx, &ctx->xin->flow, peer,
                                   ctx->xin->packet);
@@ -3527,8 +3529,31 @@ may_receive(const struct xport *xport, struct xlate_ctx *ctx)
 static void
 xlate_write_actions(struct xlate_ctx *ctx, const struct ofpact *a)
 {
-    struct ofpact_nest *on = ofpact_get_WRITE_ACTIONS(a);
-    ofpbuf_put(&ctx->action_set, on->actions, ofpact_nest_get_action_len(on));
+    const struct ofpact_nest *on = ofpact_get_WRITE_ACTIONS(a);
+    size_t on_len = ofpact_nest_get_action_len(on);
+    const struct ofpact *inner;
+
+    /* Maintain actset_output depending on the contents of the action set:
+     *
+     *   - OFPP_UNSET, if there is no "output" action.
+     *
+     *   - The output port, if there is an "output" action and no "group"
+     *     action.
+     *
+     *   - OFPP_UNSET, if there is a "group" action.
+     */
+    if (!ctx->action_set_has_group) {
+        OFPACT_FOR_EACH (inner, on->actions, on_len) {
+            if (inner->type == OFPACT_OUTPUT) {
+                ctx->xin->flow.actset_output = ofpact_get_OUTPUT(inner)->port;
+            } else if (inner->type == OFPACT_GROUP) {
+                ctx->xin->flow.actset_output = OFPP_UNSET;
+                ctx->action_set_has_group = true;
+            }
+        }
+    }
+
+    ofpbuf_put(&ctx->action_set, on->actions, on_len);
     ofpact_pad(&ctx->action_set);
 }
 
@@ -3884,6 +3909,8 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         case OFPACT_CLEAR_ACTIONS:
             ofpbuf_clear(&ctx->action_set);
+            ctx->xin->flow.actset_output = OFPP_UNSET;
+            ctx->action_set_has_group = false;
             break;
 
         case OFPACT_WRITE_ACTIONS:
@@ -3930,6 +3957,7 @@ xlate_in_init(struct xlate_in *xin, struct ofproto_dpif *ofproto,
     xin->ofproto = ofproto;
     xin->flow = *flow;
     xin->flow.in_port.ofp_port = in_port;
+    xin->flow.actset_output = OFPP_UNSET;
     xin->packet = packet;
     xin->may_learn = packet != NULL;
     xin->rule = rule;
@@ -4246,6 +4274,8 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     }
 
     ofpbuf_use_stub(&ctx.stack, ctx.init_stack, sizeof ctx.init_stack);
+
+    ctx.action_set_has_group = false;
     ofpbuf_use_stub(&ctx.action_set,
                     ctx.action_set_stub, sizeof ctx.action_set_stub);
 

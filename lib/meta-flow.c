@@ -129,6 +129,8 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
         return !wc->masks.regs[mf->id - MFF_REG0];
     CASE_MFF_XREGS:
         return !flow_get_xreg(&wc->masks, mf->id - MFF_XREG0);
+    case MFF_ACTSET_OUTPUT:
+        return !wc->masks.actset_output;
 
     case MFF_ETH_SRC:
         return eth_addr_is_zero(wc->masks.dl_src);
@@ -397,7 +399,8 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_ND_TLL:
         return true;
 
-    case MFF_IN_PORT_OXM: {
+    case MFF_IN_PORT_OXM:
+    case MFF_ACTSET_OUTPUT: {
         ofp_port_t port;
         return !ofputil_port_from_ofp11(value->be32, &port);
     }
@@ -484,6 +487,9 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         break;
     case MFF_IN_PORT_OXM:
         value->be32 = ofputil_port_to_ofp11(flow->in_port.ofp_port);
+        break;
+    case MFF_ACTSET_OUTPUT:
+        value->be32 = ofputil_port_to_ofp11(flow->actset_output);
         break;
 
     case MFF_SKB_PRIORITY:
@@ -689,6 +695,12 @@ mf_set_value(const struct mf_field *mf,
         ofp_port_t port;
         ofputil_port_from_ofp11(value->be32, &port);
         match_set_in_port(match, port);
+        break;
+    }
+    case MFF_ACTSET_OUTPUT: {
+        ofp_port_t port;
+        ofputil_port_from_ofp11(value->be32, &port);
+        match_set_actset_output(match, port);
         break;
     }
 
@@ -908,12 +920,12 @@ mf_set_flow_value(const struct mf_field *mf,
         flow->in_port.ofp_port = u16_to_ofp(ntohs(value->be16));
         break;
 
-    case MFF_IN_PORT_OXM: {
-        ofp_port_t port;
-        ofputil_port_from_ofp11(value->be32, &port);
-        flow->in_port.ofp_port = port;
+    case MFF_IN_PORT_OXM:
+        ofputil_port_from_ofp11(value->be32, &flow->in_port.ofp_port);
         break;
-    }
+    case MFF_ACTSET_OUTPUT:
+        ofputil_port_from_ofp11(value->be32, &flow->actset_output);
+        break;
 
     case MFF_SKB_PRIORITY:
         flow->skb_priority = ntohl(value->be32);
@@ -1163,6 +1175,10 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
         match->flow.in_port.ofp_port = 0;
         match->wc.masks.in_port.ofp_port = 0;
         break;
+    case MFF_ACTSET_OUTPUT:
+        match->flow.actset_output = 0;
+        match->wc.masks.actset_output = 0;
+        break;
 
     case MFF_SKB_PRIORITY:
         match->flow.skb_priority = 0;
@@ -1354,6 +1370,7 @@ mf_set(const struct mf_field *mf,
     case MFF_RECIRC_ID:
     case MFF_IN_PORT:
     case MFF_IN_PORT_OXM:
+    case MFF_ACTSET_OUTPUT:
     case MFF_SKB_PRIORITY:
     case MFF_ETH_TYPE:
     case MFF_DL_VLAN:

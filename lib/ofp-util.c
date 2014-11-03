@@ -185,7 +185,7 @@ ofputil_netmask_to_wcbits(ovs_be32 netmask)
 void
 ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 27);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 28);
 
     /* Initialize most of wc. */
     flow_wildcards_init_catchall(wc);
@@ -6020,7 +6020,8 @@ ofputil_port_to_ofp11(ofp_port_t ofp10_port)
         OFPUTIL_NAMED_PORT(ALL)                 \
         OFPUTIL_NAMED_PORT(CONTROLLER)          \
         OFPUTIL_NAMED_PORT(LOCAL)               \
-        OFPUTIL_NAMED_PORT(ANY)
+        OFPUTIL_NAMED_PORT(ANY)                 \
+        OFPUTIL_NAMED_PORT(UNSET)
 
 /* For backwards compatibility, so that "none" is recognized as OFPP_ANY */
 #define OFPUTIL_NAMED_PORTS_WITH_NONE           \

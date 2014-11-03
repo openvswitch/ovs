@@ -25,16 +25,17 @@
  * ---------------  --------------------------------------
  * 0x0000           not assigned a meaning by OpenFlow 1.0
  * 0x0001...0xfeff  "physical" ports
- * 0xff00...0xfff7  "reserved" but not assigned a meaning by OpenFlow 1.0
- * 0xfff8...0xffff  "reserved" OFPP_* ports with assigned meanings
+ * 0xff00...0xfff6  "reserved" but not assigned a meaning by OpenFlow 1.x
+ * 0xfff7...0xffff  "reserved" OFPP_* ports with assigned meanings
  */
 
 /* Ranges. */
 #define OFPP_MAX        OFP_PORT_C(0xff00) /* Max # of switch ports. */
-#define OFPP_FIRST_RESV OFP_PORT_C(0xfff8) /* First assigned reserved port. */
+#define OFPP_FIRST_RESV OFP_PORT_C(0xfff7) /* First assigned reserved port. */
 #define OFPP_LAST_RESV  OFP_PORT_C(0xffff) /* Last assigned reserved port. */
 
 /* Reserved output "ports". */
+#define OFPP_UNSET      OFP_PORT_C(0xfff7) /* For OXM_OF_ACTSET_OUTPUT only. */
 #define OFPP_IN_PORT    OFP_PORT_C(0xfff8) /* Where the packet came in. */
 #define OFPP_TABLE      OFP_PORT_C(0xfff9) /* Perform actions in flow table. */
 #define OFPP_NORMAL     OFP_PORT_C(0xfffa) /* Process with normal L2/L3. */

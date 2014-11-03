@@ -1681,7 +1681,7 @@ NXM_OF_IN_PORT(0001), NXM_OF_ETH_TYPE(0800)
 ])
 AT_CLEANUP
 
-AT_SETUP([ovs-ofctl parse-oxm (OpenFlow 1.5)])
+AT_SETUP([ovs-ofctl parse-oxm (OpenFlow 1.2)])
 AT_KEYWORDS([oxm])
 AT_DATA([oxm.txt], [dnl
 <any>
@@ -2175,6 +2175,29 @@ nx_match|WARN|Rejecting NXM/OXM entry 0:32768:2:1:16 with 1-bits in value for bi
 AT_CHECK([grep -v '1-bits in value' stderr], [1])
 AT_CLEANUP
 
+AT_SETUP([ovs-ofctl parse-oxm (OpenFlow 1.3)])
+AT_KEYWORDS([oxm])
+AT_DATA([oxm.txt], [dnl
+# actset_output
+ONFOXM_ET_ACTSET_OUTPUT(00000000)
+ONFOXM_ET_ACTSET_OUTPUT(fffffffe)
+ONFOXM_ET_ACTSET_OUTPUT(fffffff7)
+OXM_OF_ACTSET_OUTPUT(00000000)
+OXM_OF_ACTSET_OUTPUT(fffffffe)
+OXM_OF_ACTSET_OUTPUT(fffffff7)
+])
+AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' --strict parse-oxm OpenFlow13 < oxm.txt],
+  [0], [dnl
+# actset_output
+ONFOXM_ET_ACTSET_OUTPUT(00000000)
+ONFOXM_ET_ACTSET_OUTPUT(fffffffe)
+ONFOXM_ET_ACTSET_OUTPUT(fffffff7)
+ONFOXM_ET_ACTSET_OUTPUT(00000000)
+ONFOXM_ET_ACTSET_OUTPUT(fffffffe)
+ONFOXM_ET_ACTSET_OUTPUT(fffffff7)
+], [])
+AT_CLEANUP
+
 AT_SETUP([ovs-ofctl parse-oxm (OpenFlow 1.5)])
 AT_KEYWORDS([oxm])
 AT_DATA([oxm.txt], [dnl
@@ -2198,6 +2221,14 @@ NXM_NX_REG0_W(a0e0d050/f0f0f0f0), NXM_NX_REG1_W(a0e0d050/f0f0f0f0)
 NXM_NX_REG0_W(a0e0d050/f0f0f0f0), NXM_NX_REG1(a0e0d050)
 NXM_NX_REG1_W(a0e0d050/f0f0f0f0), NXM_NX_REG2_W(a0e0d050/f0f0f0f0)
 NXM_NX_REG1_W(a0e0d050/f0f0f0f0), NXM_NX_REG2(a0e0d050)
+
+# actset_output
+ONFOXM_ET_ACTSET_OUTPUT(00000000)
+ONFOXM_ET_ACTSET_OUTPUT(fffffffe)
+ONFOXM_ET_ACTSET_OUTPUT(fffffff7)
+OXM_OF_ACTSET_OUTPUT(00000000)
+OXM_OF_ACTSET_OUTPUT(fffffffe)
+OXM_OF_ACTSET_OUTPUT(fffffff7)
 ])
 AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' --strict parse-oxm OpenFlow15 < oxm.txt],
   [0], [dnl
@@ -2221,6 +2252,14 @@ OXM_OF_PKT_REG0_W(a0e0d050a0e0d050/f0f0f0f0f0f0f0f0)
 OXM_OF_PKT_REG0_W(a0e0d050a0e0d050/f0f0f0f0ffffffff)
 OXM_OF_PKT_REG0_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG1_W(a0e0d05000000000/f0f0f0f000000000)
 OXM_OF_PKT_REG0_W(00000000a0e0d050/00000000f0f0f0f0), OXM_OF_PKT_REG1_W(a0e0d05000000000/ffffffff00000000)
+
+# actset_output
+OXM_OF_ACTSET_OUTPUT(00000000)
+OXM_OF_ACTSET_OUTPUT(fffffffe)
+OXM_OF_ACTSET_OUTPUT(fffffff7)
+OXM_OF_ACTSET_OUTPUT(00000000)
+OXM_OF_ACTSET_OUTPUT(fffffffe)
+OXM_OF_ACTSET_OUTPUT(fffffff7)
 ], [])
 AT_CLEANUP
 

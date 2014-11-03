@@ -1119,6 +1119,16 @@ system components in order to facilitate interaction between subsystems.
 On Linux this corresponds to the skb mark but the exact implementation is
 platform-dependent.
 .
+.IP \fBactset_output=\fIport\fR
+Matches the output port currently in the OpenFlow action set, where
+\fIport\fR may be an OpenFlow port number or keyword
+(e.g. \fBLOCAL\fR).  If there is no output port in the OpenFlow action
+set, or if the output port will be ignored (e.g. because there is an
+output group in the OpenFlow action set), then the value will be
+\fBUNSET\fR.
+.IP
+This field was introduced in Open vSwitch 2.4 to conform with the
+OpenFlow 1.5 (draft) specification.
 .PP
 Defining IPv6 flows (those with \fBdl_type\fR equal to 0x86dd) requires
 support for NXM.  The following shorthand notations are available for

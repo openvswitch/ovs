@@ -1193,6 +1193,7 @@ OVS_VSWITCHD_START
       metadata: arbitrary mask
       in_port: exact match or wildcard
       in_port_oxm: exact match or wildcard
+      actset_output: exact match or wildcard
       pkt_mark: arbitrary mask
       reg0: arbitrary mask
       reg1: arbitrary mask
@@ -1263,7 +1264,7 @@ AT_CHECK(
 # Check that the configuration was updated.
 mv expout orig-expout
 sed 's/classifier/main/
-73s/1000000/1024/' < orig-expout > expout
+74s/1000000/1024/' < orig-expout > expout
 AT_CHECK([ovs-ofctl -O OpenFlow13 dump-table-features br0 | sed '/^$/d
 /^OFPST_TABLE_FEATURES/d'], [0], [expout])
 OVS_VSWITCHD_STOP
