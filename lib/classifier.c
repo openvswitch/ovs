@@ -755,33 +755,26 @@ classifier_lookup(const struct classifier *cls, const struct flow *flow,
 const struct cls_rule *
 classifier_find_rule_exactly(const struct classifier *cls,
                              const struct cls_rule *target)
-    OVS_EXCLUDED(cls->mutex)
 {
     const struct cls_match *head, *rule;
     const struct cls_subtable *subtable;
 
-    ovs_mutex_lock(&cls->mutex);
     subtable = find_subtable(cls, &target->match.mask);
     if (!subtable) {
-        goto out;
-    }
-
-    /* Skip if there is no hope. */
-    if (target->priority > subtable->max_priority) {
-        goto out;
+        return NULL;
     }
 
     head = find_equal(subtable, &target->match.flow,
                       miniflow_hash_in_minimask(&target->match.flow,
                                                 &target->match.mask, 0));
+    if (!head) {
+        return NULL;
+    }
     FOR_EACH_RULE_IN_LIST (rule, head) {
         if (target->priority >= rule->priority) {
-            ovs_mutex_unlock(&cls->mutex);
             return target->priority == rule->priority ? rule->cls_rule : NULL;
         }
     }
-out:
-    ovs_mutex_unlock(&cls->mutex);
     return NULL;
 }
 
