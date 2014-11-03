@@ -1080,6 +1080,7 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
     return subtable;
 }
 
+/* RCU readers may still access the subtable before it is actually freed. */
 static void
 destroy_subtable(struct classifier *cls, struct cls_subtable *subtable)
     OVS_REQUIRES(cls->mutex)
@@ -1087,13 +1088,16 @@ destroy_subtable(struct classifier *cls, struct cls_subtable *subtable)
     int i;
 
     pvector_remove(&cls->subtables, subtable);
-    trie_destroy(&subtable->ports_trie);
+    cmap_remove(&cls->subtables_map, &subtable->cmap_node,
+                minimask_hash(&subtable->mask, 0));
+
+    ovs_assert(ovsrcu_get_protected(struct trie_node *, &subtable->ports_trie)
+               == NULL);
+    ovs_assert(cmap_is_empty(&subtable->rules));
 
     for (i = 0; i < subtable->n_indices; i++) {
         cmap_destroy(&subtable->indices[i]);
     }
-    cmap_remove(&cls->subtables_map, &subtable->cmap_node,
-                minimask_hash(&subtable->mask, 0));
     cmap_destroy(&subtable->rules);
     ovsrcu_postpone(free, subtable);
 }
