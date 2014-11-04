@@ -159,7 +159,7 @@ scan_ipv4_route(const char *s, ovs_be32 *addr, unsigned int *plen)
     int slen = strlen(s);
     uint8_t *ip = (uint8_t *)addr;
 
-    *addr = htons(0);
+    *addr = htonl(0);
     if (!ovs_scan(s, "%"SCNu8"%n", &ip[0], &n)) {
         return false;
     }
