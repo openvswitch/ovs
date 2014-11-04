@@ -121,7 +121,6 @@ gen_netflow_rec(struct netflow *nf, struct netflow_flow *nf_flow,
         nf_hdr->sysuptime = htonl(time_msec() - nf->boot_time);
         nf_hdr->unix_secs = htonl(now.tv_sec);
         nf_hdr->unix_nsecs = htonl(now.tv_nsec);
-        nf_hdr->flow_seq = htonl(nf->netflow_cnt++);
         nf_hdr->engine_type = nf->engine_type;
         nf_hdr->engine_id = nf->engine_id;
         nf_hdr->sampling_interval = htons(0);
@@ -129,6 +128,7 @@ gen_netflow_rec(struct netflow *nf, struct netflow_flow *nf_flow,
 
     nf_hdr = ofpbuf_data(&nf->packet);
     nf_hdr->count = htons(ntohs(nf_hdr->count) + 1);
+    nf_hdr->flow_seq = htonl(nf->netflow_cnt++);
 
     nf_rec = ofpbuf_put_zeros(&nf->packet, sizeof *nf_rec);
     nf_rec->src_addr = nf_flow->nw_src;
