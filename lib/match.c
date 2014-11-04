@@ -1114,8 +1114,8 @@ match_format(const struct match *match, struct ds *s, int priority)
         }
     }
 
-    if (s->length > start_len && ds_last(s) == ',') {
-        s->length--;
+    if (s->length > start_len) {
+        ds_chomp(s, ',');
     }
 }
 
