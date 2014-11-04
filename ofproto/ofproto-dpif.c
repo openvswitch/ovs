@@ -4410,11 +4410,13 @@ trace_resubmit(struct xlate_in *xin, struct rule_dpif *rule, int recurse)
     struct ds *result = trace->result;
 
     ds_put_char(result, '\n');
-    trace_format_flow(result, recurse + 1, "Resubmitted flow", trace);
-    trace_format_regs(result, recurse + 1, "Resubmitted regs", trace);
-    trace_format_odp(result,  recurse + 1, "Resubmitted  odp", trace);
-    trace_format_megaflow(result, recurse + 1, "Resubmitted megaflow", trace);
-    trace_format_rule(result, recurse + 1, rule);
+    if (recurse) {
+        trace_format_flow(result, recurse, "Resubmitted flow", trace);
+        trace_format_regs(result, recurse, "Resubmitted regs", trace);
+        trace_format_odp(result,  recurse, "Resubmitted  odp", trace);
+        trace_format_megaflow(result, recurse, "Resubmitted megaflow", trace);
+    }
+    trace_format_rule(result, recurse, rule);
 }
 
 static void
@@ -4701,7 +4703,6 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
               const struct ofpact ofpacts[], size_t ofpacts_len,
               struct ds *ds)
 {
-    struct rule_dpif *rule;
     struct trace_ctx trace;
 
     ds_put_format(ds, "Bridge: %s\n", ofproto->up.name);
@@ -4710,65 +4711,45 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
     ds_put_char(ds, '\n');
 
     flow_wildcards_init_catchall(&trace.wc);
-    if (ofpacts) {
-        rule = NULL;
-    } else {
-        rule_dpif_lookup(ofproto, flow, &trace.wc, &rule, false, NULL);
 
-        trace_format_rule(ds, 0, rule);
-        if (rule == ofproto->miss_rule) {
-            ds_put_cstr(ds, "\nNo match, flow generates \"packet in\"s.\n");
-        } else if (rule == ofproto->no_packet_in_rule) {
-            ds_put_cstr(ds, "\nNo match, packets dropped because "
-                        "OFPPC_NO_PACKET_IN is set on in_port.\n");
-        } else if (rule == ofproto->drop_frags_rule) {
-            ds_put_cstr(ds, "\nPackets dropped because they are IP fragments "
-                        "and the fragment handling mode is \"drop\".\n");
+    trace.result = ds;
+    trace.key = flow; /* Original flow key, used for megaflow. */
+    trace.flow = *flow; /* May be modified by actions. */
+    xlate_in_init(&trace.xin, ofproto, flow, flow->in_port.ofp_port, NULL,
+                  ntohs(flow->tcp_flags), packet);
+    trace.xin.ofpacts = ofpacts;
+    trace.xin.ofpacts_len = ofpacts_len;
+    trace.xin.resubmit_hook = trace_resubmit;
+    trace.xin.report_hook = trace_report;
+
+    xlate_actions(&trace.xin, &trace.xout);
+
+    ds_put_char(ds, '\n');
+    trace_format_flow(ds, 0, "Final flow", &trace);
+    trace_format_megaflow(ds, 0, "Megaflow", &trace);
+
+    ds_put_cstr(ds, "Datapath actions: ");
+    format_odp_actions(ds, ofpbuf_data(trace.xout.odp_actions),
+                       ofpbuf_size(trace.xout.odp_actions));
+
+    if (trace.xout.slow) {
+        enum slow_path_reason slow;
+
+        ds_put_cstr(ds, "\nThis flow is handled by the userspace "
+                    "slow path because it:");
+
+        slow = trace.xout.slow;
+        while (slow) {
+            enum slow_path_reason bit = rightmost_1bit(slow);
+
+            ds_put_format(ds, "\n\t- %s.",
+                          slow_path_reason_to_explanation(bit));
+
+            slow &= ~bit;
         }
     }
 
-    if (rule || ofpacts) {
-        trace.result = ds;
-        trace.key = flow; /* Original flow key, used for megaflow. */
-        trace.flow = *flow; /* May be modified by actions. */
-        xlate_in_init(&trace.xin, ofproto, flow, flow->in_port.ofp_port, rule,
-                      ntohs(flow->tcp_flags), packet);
-        if (ofpacts) {
-            trace.xin.ofpacts = ofpacts;
-            trace.xin.ofpacts_len = ofpacts_len;
-        }
-        trace.xin.resubmit_hook = trace_resubmit;
-        trace.xin.report_hook = trace_report;
-
-        xlate_actions(&trace.xin, &trace.xout);
-
-        ds_put_char(ds, '\n');
-        trace_format_flow(ds, 0, "Final flow", &trace);
-        trace_format_megaflow(ds, 0, "Megaflow", &trace);
-
-        ds_put_cstr(ds, "Datapath actions: ");
-        format_odp_actions(ds, ofpbuf_data(trace.xout.odp_actions),
-                           ofpbuf_size(trace.xout.odp_actions));
-
-        if (trace.xout.slow) {
-            enum slow_path_reason slow;
-
-            ds_put_cstr(ds, "\nThis flow is handled by the userspace "
-                        "slow path because it:");
-
-            slow = trace.xout.slow;
-            while (slow) {
-                enum slow_path_reason bit = rightmost_1bit(slow);
-
-                ds_put_format(ds, "\n\t- %s.",
-                              slow_path_reason_to_explanation(bit));
-
-                slow &= ~bit;
-            }
-        }
-
-        xlate_out_uninit(&trace.xout);
-    }
+    xlate_out_uninit(&trace.xout);
 }
 
 /* Store the current ofprotos in 'ofproto_shash'.  Returns a sorted list

@@ -2746,8 +2746,8 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
                                               ctx->xin->resubmit_stats);
         ctx->xin->flow.in_port.ofp_port = old_in_port;
 
-        if (ctx->xin->resubmit_hook) {
-            ctx->xin->resubmit_hook(ctx->xin, rule, ctx->recurse);
+        if (OVS_UNLIKELY(ctx->xin->resubmit_hook)) {
+            ctx->xin->resubmit_hook(ctx->xin, rule, ctx->recurse + 1);
         }
 
         switch (verdict) {
@@ -4256,6 +4256,18 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
                                         !xin->skip_wildcards ? wc : NULL,
                                         &rule, ctx.xin->xcache != NULL,
                                         ctx.xin->resubmit_stats);
+        if (OVS_UNLIKELY(ctx.xin->report_hook)) {
+            if (rule == ctx.xbridge->miss_rule) {
+                xlate_report(&ctx, "No match, flow generates \"packet in\"s.");
+            } else if (rule == ctx.xbridge->no_packet_in_rule) {
+                xlate_report(&ctx, "No match, packets dropped because "
+                             "OFPPC_NO_PACKET_IN is set on in_port.");
+            } else if (rule == ctx.xbridge->drop_frags_rule) {
+                xlate_report(&ctx, "Packets dropped because they are IP "
+                             "fragments and the fragment handling mode is "
+                             "\"drop\".");
+            }
+        }
         if (ctx.xin->resubmit_stats) {
             rule_dpif_credit_stats(rule, ctx.xin->resubmit_stats);
         }
@@ -4266,6 +4278,10 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             entry->u.rule = rule;
         }
         ctx.rule = rule;
+
+        if (OVS_UNLIKELY(ctx.xin->resubmit_hook)) {
+            ctx.xin->resubmit_hook(ctx.xin, rule, 0);
+        }
     }
     xout->fail_open = ctx.rule && rule_dpif_is_fail_open(ctx.rule);
 
