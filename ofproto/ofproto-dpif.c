@@ -616,7 +616,8 @@ type_run(const char *type)
             xlate_txn_start();
             xlate_ofproto_set(ofproto, ofproto->up.name,
                               ofproto->backer->dpif, ofproto->miss_rule,
-                              ofproto->no_packet_in_rule, ofproto->ml,
+                              ofproto->no_packet_in_rule,
+                              ofproto->drop_frags_rule, ofproto->ml,
                               ofproto->stp, ofproto->rstp, ofproto->ms,
                               ofproto->mbridge, ofproto->sflow, ofproto->ipfix,
                               ofproto->netflow, ofproto->up.frag_handling,

@@ -92,6 +92,7 @@ struct xbridge {
     /* Special rules installed by ofproto-dpif. */
     struct rule_dpif *miss_rule;
     struct rule_dpif *no_packet_in_rule;
+    struct rule_dpif *drop_frags_rule;
 
     enum ofp_config_flags frag;   /* Fragmentation handling. */
     bool has_in_band;             /* Bridge has in band control? */
@@ -365,6 +366,7 @@ static void xlate_xport_init(struct xlate_cfg *, struct xport *);
 static void xlate_xbridge_set(struct xbridge *, struct dpif *,
                               struct rule_dpif *miss_rule,
                               struct rule_dpif *no_packet_in_rule,
+                              struct rule_dpif *drop_frags_rule,
                               const struct mac_learning *, struct stp *,
                               struct rstp *, const struct mcast_snooping *,
                               const struct mbridge *,
@@ -431,6 +433,7 @@ xlate_xbridge_set(struct xbridge *xbridge,
                   struct dpif *dpif,
                   struct rule_dpif *miss_rule,
                   struct rule_dpif *no_packet_in_rule,
+                  struct rule_dpif *drop_frags_rule,
                   const struct mac_learning *ml, struct stp *stp,
                   struct rstp *rstp, const struct mcast_snooping *ms,
                   const struct mbridge *mbridge,
@@ -489,6 +492,7 @@ xlate_xbridge_set(struct xbridge *xbridge,
     xbridge->frag = frag;
     xbridge->miss_rule = miss_rule;
     xbridge->no_packet_in_rule = no_packet_in_rule;
+    xbridge->drop_frags_rule = drop_frags_rule;
     xbridge->enable_recirc = enable_recirc;
     xbridge->variable_length_userdata = variable_length_userdata;
     xbridge->max_mpls_depth = max_mpls_depth;
@@ -569,7 +573,8 @@ xlate_xbridge_copy(struct xbridge *xbridge)
 
     xlate_xbridge_set(new_xbridge,
                       xbridge->dpif, xbridge->miss_rule,
-                      xbridge->no_packet_in_rule, xbridge->ml, xbridge->stp,
+                      xbridge->no_packet_in_rule, xbridge->drop_frags_rule,
+                      xbridge->ml, xbridge->stp,
                       xbridge->rstp, xbridge->ms, xbridge->mbridge,
                       xbridge->sflow, xbridge->ipfix, xbridge->netflow,
                       xbridge->frag, xbridge->forward_bpdu,
@@ -721,6 +726,7 @@ void
 xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
                   struct dpif *dpif, struct rule_dpif *miss_rule,
                   struct rule_dpif *no_packet_in_rule,
+                  struct rule_dpif *drop_frags_rule,
                   const struct mac_learning *ml, struct stp *stp,
                   struct rstp *rstp, const struct mcast_snooping *ms,
                   const struct mbridge *mbridge,
@@ -746,7 +752,8 @@ xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
     free(xbridge->name);
     xbridge->name = xstrdup(name);
 
-    xlate_xbridge_set(xbridge, dpif, miss_rule, no_packet_in_rule, ml, stp,
+    xlate_xbridge_set(xbridge, dpif, miss_rule, no_packet_in_rule,
+                      drop_frags_rule, ml, stp,
                       rstp, ms, mbridge, sflow, ipfix, netflow, frag,
                       forward_bpdu, has_in_band, enable_recirc,
                       variable_length_userdata, max_mpls_depth,
