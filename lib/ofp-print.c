@@ -687,9 +687,7 @@ ofp10_match_to_string(const struct ofp10_match *om, int verbosity)
         print_wild(&f, "tp_dst=", w & OFPFW10_TP_DST, verbosity,
                    "%d", ntohs(om->tp_dst));
     }
-    if (ds_last(&f) == ',') {
-        f.length--;
-    }
+    ds_chomp(&f, ',');
     return ds_cstr(&f);
 }
 
