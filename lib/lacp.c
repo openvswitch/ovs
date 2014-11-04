@@ -999,7 +999,7 @@ lacp_get_slave_stats(const struct lacp *lacp, const void *slave_, struct lacp_sl
     ovs_mutex_lock(&mutex);
 
     slave = slave_lookup(lacp, slave_);
-    if(slave) {
+    if (slave) {
 	ret = true;
 	slave_get_actor(slave, &actor);
 	memcpy(&stats->dot3adAggPortActorSystemID,
@@ -1014,10 +1014,10 @@ lacp_get_slave_stats(const struct lacp *lacp, const void *slave_, struct lacp_sl
 
 	/* Construct my admin-state.  Assume aggregation is configured on. */
 	stats->dot3adAggPortActorAdminState = LACP_STATE_AGG;
-	if(lacp->active) {
+	if (lacp->active) {
 	    stats->dot3adAggPortActorAdminState |= LACP_STATE_ACT;
 	}
-	if(lacp->fast) {
+	if (lacp->fast) {
 	    stats->dot3adAggPortActorAdminState |= LACP_STATE_TIME;
 	}
 	/* XXX Not sure how to know the partner admin state. It
@@ -1033,9 +1033,8 @@ lacp_get_slave_stats(const struct lacp *lacp, const void *slave_, struct lacp_sl
 	stats->dot3adAggPortStatsLACPDUsRx = slave->count_rx_pdus;
 	stats->dot3adAggPortStatsIllegalRx = slave->count_rx_pdus_bad;
 	stats->dot3adAggPortStatsLACPDUsTx = slave->count_tx_pdus;
-    }
-    else {
-	ret = false;
+    } else {
+        ret = false;
     }
     ovs_mutex_unlock(&mutex);
     return ret;

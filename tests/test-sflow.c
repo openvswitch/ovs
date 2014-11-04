@@ -238,10 +238,10 @@ process_counter_sample(struct sflow_xdr *x)
         printf(" promiscuous=%"PRIu32, sflowxdr_next(x));
         printf("\n");
     }
-    if(x->offset.LACPCOUNTERS) {
+    if (x->offset.LACPCOUNTERS) {
 	uint8_t *mac;
 	union {
-	    uint32_t all;
+	    ovs_be32 all;
 	    struct {
 		uint8_t actorAdmin;
 		uint8_t actorOper;
@@ -274,14 +274,14 @@ process_counter_sample(struct sflow_xdr *x)
 	printf(" markerRespPDUsTx=%"PRIu32, sflowxdr_next(x));
         printf("\n");
     }
-    if(x->offset.OPENFLOWPORT) {
+    if (x->offset.OPENFLOWPORT) {
         sflowxdr_setc(x, x->offset.OPENFLOWPORT);
         printf("OPENFLOWPORT");
         printf(" datapath_id=%"PRIu64, sflowxdr_next_int64(x));
         printf(" port_no=%"PRIu32, sflowxdr_next(x));
 	printf("\n");
     }
-    if(x->offset.PORTNAME) {
+    if (x->offset.PORTNAME) {
 	uint32_t pnLen;
 	const char *pnBytes;
 	char portName[SFL_MAX_PORTNAME_LEN + 1];
@@ -328,7 +328,7 @@ print_hex(const char *a, int len, char *buf, int bufLen)
 static void
 print_struct_ipv4(struct sflow_xdr *x, const char *prefix)
 {
-    uint32_t src, dst;
+    ovs_be32 src, dst;
 
     printf(" %s_length=%"PRIu32,    prefix, sflowxdr_next(x));
     printf(" %s_protocol=%"PRIu32,  prefix, sflowxdr_next(x));

@@ -228,7 +228,7 @@ sflow_agent_get_counters(void *ds_, SFLPoller *poller,
     SFLADD_ELEMENT(cs, &elem);
 
     /* Include LACP counters and identifiers if this port is part of a LAG. */
-    if(ofproto_port_get_lacp_stats(dsp->ofport, &lacp_stats) == 0) {
+    if (ofproto_port_get_lacp_stats(dsp->ofport, &lacp_stats) == 0) {
 	memset(&lacp_elem, 0, sizeof lacp_elem);
 	lacp_elem.tag = SFLCOUNTERS_LACP;
 	memcpy(&lacp_elem.counterBlock.lacp.actorSystemID,
@@ -262,7 +262,7 @@ sflow_agent_get_counters(void *ds_, SFLPoller *poller,
     }
 
     /* Include Port name. */
-    if((ifName = netdev_get_name(dsp->ofport->netdev)) != NULL) {
+    if ((ifName = netdev_get_name(dsp->ofport->netdev)) != NULL) {
 	memset(&name_elem, 0, sizeof name_elem);
 	name_elem.tag = SFLCOUNTERS_PORTNAME;
 	name_elem.counterBlock.portName.portName.str = (char *)ifName;
@@ -275,7 +275,8 @@ sflow_agent_get_counters(void *ds_, SFLPoller *poller,
     of_elem.tag = SFLCOUNTERS_OPENFLOWPORT;
     of_elem.counterBlock.ofPort.datapath_id =		\
 	ofproto_get_datapath_id(dsp->ofport->ofproto);
-    of_elem.counterBlock.ofPort.port_no = dsp->ofport->ofp_port;
+    of_elem.counterBlock.ofPort.port_no =		\
+      (OVS_FORCE uint32_t)dsp->ofport->ofp_port;
     SFLADD_ELEMENT(cs, &of_elem);
 
     sfl_poller_writeCountersSample(poller, cs);
