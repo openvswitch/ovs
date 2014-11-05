@@ -1184,8 +1184,6 @@ _MapNlToFlowPut(POVS_MESSAGE msgIn, PNL_ATTR keyAttr,
                               (keyAttrs[OVS_KEY_ATTR_TUNNEL])
                               - (PCHAR)nlMsgHdr);
 
-        OVS_LOG_ERROR("Parse Flow Tunnel Key Policy");
-
         /* Get tunnel keys attributes */
         if ((NlAttrParseNested(nlMsgHdr, tunnelKeyAttrOffset,
                                NlAttrLen(keyAttrs[OVS_KEY_ATTR_TUNNEL]),
