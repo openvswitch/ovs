@@ -25,6 +25,11 @@ ovs_router_lookup(ovs_be32 ip_dst OVS_UNUSED, char output_bridge[] OVS_UNUSED,
     return false;
 }
 
+void
+ovs_router_unixctl_register(void)
+{
+}
+
 uint64_t
 route_table_get_change_seq(void)
 {
