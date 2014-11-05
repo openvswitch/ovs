@@ -3324,16 +3324,15 @@ OFPST_FLOW reply (OF1.2):
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto-dpif - fragment handling])
+AT_SETUP([ofproto-dpif - fragment handling - trace])
 OVS_VSWITCHD_START
 ADD_OF_PORTS([br0], [1], [2], [3], [4], [5], [6], [90])
 AT_DATA([flows.txt], [dnl
 priority=75 tcp ip_frag=no    tp_dst=80 actions=move:OXM_OF_TCP_DST[[]]->OXM_OF_TCP_SRC[[]],output:1
 priority=75 tcp ip_frag=first tp_dst=80 actions=move:OXM_OF_TCP_DST[[]]->OXM_OF_TCP_SRC[[]],output:2
-priority=75 tcp ip_frag=later tp_dst=80 actions=move:OXM_OF_TCP_DST[[]]->OXM_OF_TCP_SRC[[]],output:3
 priority=50 tcp ip_frag=no              actions=move:OXM_OF_TCP_DST[[]]->OXM_OF_TCP_SRC[[]],output:4
 priority=50 tcp ip_frag=first           actions=move:OXM_OF_TCP_DST[[]]->OXM_OF_TCP_SRC[[]],output:5
-priority=50 tcp ip_frag=later           actions=move:OXM_OF_TCP_DST[[]]->OXM_OF_TCP_SRC[[]],output:6
+priority=50 tcp ip_frag=later           actions=output:6
 ])
 AT_CHECK([ovs-ofctl replace-flows br0 flows.txt])
 
@@ -3363,9 +3362,7 @@ do
     if test $mode = drop && test $type != no; then
         echo 'Packets dropped because they are IP fragments and the fragment handling mode is "drop".' >> expout
         echo "Datapath actions: $exp_output" >> expout
-    elif test $mode = normal && test $type = later; then
-        echo "Datapath actions: $exp_output" >> expout
-    elif test $mode = nx-match && test $type = later; then
+    elif test $type = later; then
         echo "Datapath actions: $exp_output" >> expout
     else
         echo "Datapath actions: set(tcp(src=80,dst=80)),$exp_output" >> expout
@@ -3373,6 +3370,177 @@ do
     AT_CHECK([grep 'IP fragments' stdout; tail -1 stdout], [0], [expout])
   done
 done
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - fragment handling - upcall])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [2], [3], [4], [5], [6], [90])
+AT_DATA([flows.txt], [dnl
+priority=75 tcp ip_frag=no    tp_dst=80 actions=set_field:81->tcp_dst,output:1
+priority=75 tcp ip_frag=first tp_dst=80 actions=set_field:81->tcp_dst,output:2
+priority=50 tcp ip_frag=no              actions=set_field:81->tcp_dst,output:4
+priority=50 tcp ip_frag=first           actions=set_field:81->tcp_dst,output:5
+priority=50 tcp ip_frag=later           actions=output:6
+])
+AT_CHECK([ovs-ofctl replace-flows br0 flows.txt])
+
+base_flow="in_port(90),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=128"
+no_flow="$base_flow,frag=no),tcp(src=12345,dst=80)"
+first_flow="$base_flow,frag=first),tcp(src=12345,dst=80)"
+later_flow="$base_flow,frag=later)"
+
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+
+mode=normal
+
+AT_CHECK([ovs-ofctl set-frags br0 $mode])
+for type in no first later; do
+  eval flow=\$${type}_flow
+  printf "\n%s\n" "----$mode $type-----"
+
+  AT_CHECK([ovs-appctl netdev-dummy/receive p90 "$flow"], [0], [stdout])
+done
+
+AT_CHECK([ovs-appctl dpctl/dump-flows], [0], [dnl
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),1
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),5
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:0, bytes:0, used:never, actions:6
+])
+
+mode=drop
+
+AT_CHECK([ovs-appctl dpctl/del-flows], [0])
+AT_CHECK([ovs-ofctl set-frags br0 $mode])
+for type in no first later; do
+  eval flow=\$${type}_flow
+  printf "\n%s\n" "----$mode $type-----"
+
+  AT_CHECK([ovs-appctl netdev-dummy/receive p90 "$flow"], [0], [stdout])
+done
+
+AT_CHECK([ovs-appctl dpctl/dump-flows], [0], [dnl
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),1
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(frag=first), packets:0, bytes:0, used:never, actions:drop
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(frag=later), packets:0, bytes:0, used:never, actions:drop
+])
+
+mode=nx-match
+
+AT_CHECK([ovs-appctl dpctl/del-flows], [0])
+AT_CHECK([ovs-ofctl set-frags br0 $mode])
+for type in no first later; do
+  eval flow=\$${type}_flow
+  printf "\n%s\n" "----$mode $type-----"
+
+  AT_CHECK([ovs-appctl netdev-dummy/receive p90 "$flow"], [0], [stdout])
+done
+
+AT_CHECK([ovs-appctl dpctl/dump-flows], [0], [dnl
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),1
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),2
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:0, bytes:0, used:never, actions:6
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - fragment handling - actions])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [2], [3], [4], [5], [6], [90])
+
+AT_CHECK([ovs-ofctl add-flow br0 "tcp,ip_frag=later actions=move:OXM_OF_TCP_DST[[0..7]]->OXM_OF_TCP_SRC[[0..7]],output:1"], [1], [], [stderr])
+AT_CHECK([tail -2 stderr | sed 's/^.*|WARN|//'], [0], [dnl
+source field tcp_dst lacks correct prerequisites
+ovs-ofctl: actions are invalid with specified match (OFPBAC_MATCH_INCONSISTENT)
+])
+
+AT_CHECK([ovs-ofctl -O OpenFlow15 add-flow br0 "tcp,ip_frag=later actions=move:OXM_OF_PKT_REG0[[0..7]]->OXM_OF_TCP_SRC[[0..7]],output:1"], [1], [], [stderr])
+AT_CHECK([tail -2 stderr | sed 's/^.*|WARN|//'], [0], [dnl
+destination field tcp_src lacks correct prerequisites
+ovs-ofctl: actions are invalid with specified match (OFPBAC_MATCH_INCONSISTENT)
+])
+
+AT_CHECK([ovs-ofctl add-flow br0 "udp,ip_frag=later actions=set_field:8888->udp_src,output:1"], [1], [], [stderr])
+AT_CHECK([tail -2 stderr | sed 's/^.*|WARN|//'], [0], [dnl
+set_field udp_src lacks correct prerequisities
+ovs-ofctl: actions are invalid with specified match (OFPBAC_MATCH_INCONSISTENT)
+])
+
+AT_CHECK([ovs-ofctl add-flow br0 "udp,ip_frag=later actions=load:8888->NXM_OF_UDP_DST[[]],output:1"], [1], [], [stderr])
+AT_CHECK([tail -2 stderr | sed 's/^.*|WARN|//'], [0], [dnl
+set_field udp_dst lacks correct prerequisities
+ovs-ofctl: actions are invalid with specified match (OFPBAC_MATCH_INCONSISTENT)
+])
+
+AT_CHECK([ovs-ofctl add-flow br0 "sctp,ip_frag=later actions=set_field:8888->sctp_src,output:1"], [1], [], [stderr])
+AT_CHECK([tail -2 stderr | sed 's/^.*|WARN|//'], [0], [dnl
+set_field sctp_src lacks correct prerequisities
+ovs-ofctl: actions are invalid with specified match (OFPBAC_MATCH_INCONSISTENT)
+])
+
+AT_CHECK([ovs-ofctl add-flow br0 "sctp,ip_frag=later actions=set_field:8888->sctp_dst,output:1"], [1], [], [stderr])
+AT_CHECK([tail -2 stderr | sed 's/^.*|WARN|//'], [0], [dnl
+set_field sctp_dst lacks correct prerequisities
+ovs-ofctl: actions are invalid with specified match (OFPBAC_MATCH_INCONSISTENT)
+])
+
+AT_CHECK([ovs-ofctl add-flow br0 "tcp,ip_frag=later actions=learn(table=1,hard_timeout=60,eth_type=0x800,nw_proto=6,NXM_OF_IP_SRC[[]]=NXM_OF_IP_DST[[]],NXM_OF_TCP_SRC[[]]=NXM_OF_TCP_DST[[]],output:NXM_NX_REG0[[0..15]]),output:1"], [1], [], [stderr])
+AT_CHECK([tail -2 stderr | sed 's/^.*|WARN|//'], [0], [dnl
+source field tcp_dst lacks correct prerequisites
+ovs-ofctl: actions are invalid with specified match (OFPBAC_MATCH_INCONSISTENT)
+])
+
+AT_DATA([flows.txt], [dnl
+priority=75 tcp actions=load:42->OXM_OF_TCP_SRC[[0..7]],output:1
+])
+AT_CHECK([ovs-ofctl -O OpenFlow12 replace-flows br0 flows.txt])
+
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+
+mode=normal
+
+AT_CHECK([ovs-ofctl set-frags br0 $mode])
+for frag in 4000 6000 6008 4010; do
+  printf "\n%s\n" "----$mode $frag-----"
+
+  AT_CHECK([ovs-appctl netdev-dummy/receive p90 "0021853763af 0026b98cb0f9 0800 4500 003c 2e24 $frag 40 06 465d ac11370d ac11370b 828b 0016 751e267b 00000000 a002 16d0 1736 0000 02 04 05 b4 04 02 08 0a 2d 25 08 5f 00 00 00 00 01 03 03 07"])
+done
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=33419), packets:0, bytes:0, used:never, actions:set(tcp(src=33322)),1
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=33419), packets:0, bytes:0, used:never, actions:set(tcp(src=33322)),1
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:74, used:0.001s, actions:1
+])
+
+AT_CHECK([ovs-appctl dpctl/del-flows], [0])
+AT_CHECK([ovs-ofctl set-frags br0 $mode])
+for frag in 4000 6000 6008 4010; do
+  printf "\n%s\n" "----$mode $frag truncated transport header -----"
+
+  AT_CHECK([ovs-appctl netdev-dummy/receive p90 "0021853763af 0026b98cb0f9 0800 4500 0018 2e24 $frag 40 06 465d ac11370d ac11370b 828b 0016"])
+done
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=0), packets:0, bytes:0, used:never, actions:set(tcp(src=42)),1
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=0), packets:0, bytes:0, used:never, actions:set(tcp(src=42)),1
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:60, used:0.001s, actions:1
+])
+
+AT_CHECK([ovs-appctl dpctl/del-flows], [0])
+AT_CHECK([ovs-ofctl set-frags br0 $mode])
+for frag in 4000 6000 6001 4002; do
+  printf "\n%s\n" "----$mode $frag missing transport header-----"
+
+  AT_CHECK([ovs-appctl netdev-dummy/receive p90 "0021853763af 0026b98cb0f9 0800 4500 0014 2e24 $frag 40 06 465d ac11370d ac11370b"])
+done
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=0), packets:0, bytes:0, used:never, actions:set(tcp(src=42)),1
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=0), packets:0, bytes:0, used:never, actions:set(tcp(src=42)),1
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:60, used:0.001s, actions:1
+])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 

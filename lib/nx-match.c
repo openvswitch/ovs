@@ -1357,7 +1357,7 @@ nxm_reg_move_check(const struct ofpact_reg_move *move, const struct flow *flow)
         return error;
     }
 
-    return mf_check_dst(&move->dst, NULL);
+    return mf_check_dst(&move->dst, flow);
 }
 
 /* nxm_execute_reg_move(). */
@@ -1372,12 +1372,18 @@ nxm_execute_reg_move(const struct ofpact_reg_move *move,
     mf_mask_field_and_prereqs(move->dst.field, &wc->masks);
     mf_mask_field_and_prereqs(move->src.field, &wc->masks);
 
-    mf_get_value(move->dst.field, flow, &dst_value);
-    mf_get_value(move->src.field, flow, &src_value);
-    bitwise_copy(&src_value, move->src.field->n_bytes, move->src.ofs,
-                 &dst_value, move->dst.field->n_bytes, move->dst.ofs,
-                 move->src.n_bits);
-    mf_set_flow_value(move->dst.field, &dst_value, flow);
+    /* A flow may wildcard nw_frag.  Do nothing if setting a transport
+     * header field on a packet that does not have them. */
+    if (mf_are_prereqs_ok(move->dst.field, flow)
+        && mf_are_prereqs_ok(move->src.field, flow)) {
+
+        mf_get_value(move->dst.field, flow, &dst_value);
+        mf_get_value(move->src.field, flow, &src_value);
+        bitwise_copy(&src_value, move->src.field->n_bytes, move->src.ofs,
+                     &dst_value, move->dst.field->n_bytes, move->dst.ofs,
+                     move->src.n_bits);
+        mf_set_flow_value(move->dst.field, &dst_value, flow);
+    }
 }
 
 void

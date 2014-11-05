@@ -4643,7 +4643,7 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
 
     /* Do the same checks as handle_packet_out() in ofproto.c.
      *
-     * We pass a 'table_id' of 0 to ofproto_check_ofpacts(), which isn't
+     * We pass a 'table_id' of 0 to ofpacts_check(), which isn't
      * strictly correct because these actions aren't in any table, but it's OK
      * because it 'table_id' is used only to check goto_table instructions, but
      * packet-outs take a list of actions and therefore it can't include

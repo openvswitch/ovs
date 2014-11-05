@@ -3725,7 +3725,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_SET_L4_SRC_PORT:
-            if (is_ip_any(flow)) {
+            if (is_ip_any(flow) && !(flow->nw_frag & FLOW_NW_FRAG_LATER)) {
                 memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
                 memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
                 flow->tp_src = htons(ofpact_get_SET_L4_SRC_PORT(a)->port);
@@ -3733,7 +3733,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_SET_L4_DST_PORT:
-            if (is_ip_any(flow)) {
+            if (is_ip_any(flow) && !(flow->nw_frag & FLOW_NW_FRAG_LATER)) {
                 memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
                 memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
                 flow->tp_dst = htons(ofpact_get_SET_L4_DST_PORT(a)->port);
@@ -3780,10 +3780,13 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
                        && !eth_type_mpls(flow->dl_type)) {
                 break;
             }
-
+            /* A flow may wildcard nw_frag.  Do nothing if setting a trasport
+             * header field on a packet that does not have them. */
             mf_mask_field_and_prereqs(mf, &wc->masks);
-            mf_set_flow_value_masked(mf, &set_field->value, &set_field->mask,
-                                     flow);
+            if (mf_are_prereqs_ok(mf, flow)) {
+                mf_set_flow_value_masked(mf, &set_field->value,
+                                         &set_field->mask, flow);
+            }
             break;
 
         case OFPACT_STACK_PUSH:

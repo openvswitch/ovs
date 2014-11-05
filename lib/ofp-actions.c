@@ -5333,19 +5333,8 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
         return 0;
 
     case OFPACT_SET_L4_SRC_PORT:
-        if (!is_ip_any(flow) ||
-            (flow->nw_proto != IPPROTO_TCP && flow->nw_proto != IPPROTO_UDP
-             && flow->nw_proto != IPPROTO_SCTP)) {
-            inconsistent_match(usable_protocols);
-        }
-        /* Note on which transport protocol the port numbers are set.
-         * This allows this set action to be converted to an OF1.2 set field
-         * action. */
-        ofpact_get_SET_L4_SRC_PORT(a)->flow_ip_proto = flow->nw_proto;
-        return 0;
-
     case OFPACT_SET_L4_DST_PORT:
-        if (!is_ip_any(flow) ||
+        if (!is_ip_any(flow) || (flow->nw_frag & FLOW_NW_FRAG_LATER) ||
             (flow->nw_proto != IPPROTO_TCP && flow->nw_proto != IPPROTO_UDP
              && flow->nw_proto != IPPROTO_SCTP)) {
             inconsistent_match(usable_protocols);
@@ -5353,7 +5342,11 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
         /* Note on which transport protocol the port numbers are set.
          * This allows this set action to be converted to an OF1.2 set field
          * action. */
-        ofpact_get_SET_L4_DST_PORT(a)->flow_ip_proto = flow->nw_proto;
+        if (a->type == OFPACT_SET_L4_SRC_PORT) {
+            ofpact_get_SET_L4_SRC_PORT(a)->flow_ip_proto = flow->nw_proto;
+        } else {
+            ofpact_get_SET_L4_DST_PORT(a)->flow_ip_proto = flow->nw_proto;
+        }
         return 0;
 
     case OFPACT_REG_MOVE:

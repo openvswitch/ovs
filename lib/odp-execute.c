@@ -112,9 +112,11 @@ odp_set_tcp(struct ofpbuf *packet, const struct ovs_key_tcp *key,
 {
     struct tcp_header *th = ofpbuf_l4(packet);
 
-    packet_set_tcp_port(packet,
-                        key->tcp_src | (th->tcp_src & ~mask->tcp_src),
-                        key->tcp_dst | (th->tcp_dst & ~mask->tcp_dst));
+    if (OVS_LIKELY(th && ofpbuf_get_tcp_payload(packet))) {
+        packet_set_tcp_port(packet,
+                            key->tcp_src | (th->tcp_src & ~mask->tcp_src),
+                            key->tcp_dst | (th->tcp_dst & ~mask->tcp_dst));
+    }
 }
 
 static void
@@ -123,9 +125,11 @@ odp_set_udp(struct ofpbuf *packet, const struct ovs_key_udp *key,
 {
     struct udp_header *uh = ofpbuf_l4(packet);
 
-    packet_set_udp_port(packet,
-                        key->udp_src | (uh->udp_src & ~mask->udp_src),
-                        key->udp_dst | (uh->udp_dst & ~mask->udp_dst));
+    if (OVS_LIKELY(uh && ofpbuf_get_udp_payload(packet))) {
+        packet_set_udp_port(packet,
+                            key->udp_src | (uh->udp_src & ~mask->udp_src),
+                            key->udp_dst | (uh->udp_dst & ~mask->udp_dst));
+    }
 }
 
 static void
@@ -134,9 +138,11 @@ odp_set_sctp(struct ofpbuf *packet, const struct ovs_key_sctp *key,
 {
     struct sctp_header *sh = ofpbuf_l4(packet);
 
-    packet_set_sctp_port(packet,
-                         key->sctp_src | (sh->sctp_src & ~mask->sctp_src),
-                         key->sctp_dst | (sh->sctp_dst & ~mask->sctp_dst));
+    if (OVS_LIKELY(sh && ofpbuf_get_sctp_payload(packet))) {
+        packet_set_sctp_port(packet,
+                             key->sctp_src | (sh->sctp_src & ~mask->sctp_src),
+                             key->sctp_dst | (sh->sctp_dst & ~mask->sctp_dst));
+    }
 }
 
 static void
@@ -180,9 +186,6 @@ odp_execute_set_action(struct dpif_packet *packet, const struct nlattr *a)
     enum ovs_key_attr type = nl_attr_type(a);
     const struct ovs_key_ipv4 *ipv4_key;
     const struct ovs_key_ipv6 *ipv6_key;
-    const struct ovs_key_tcp *tcp_key;
-    const struct ovs_key_udp *udp_key;
-    const struct ovs_key_sctp *sctp_key;
     struct pkt_metadata *md = &packet->md;
 
     switch (type) {
@@ -218,21 +221,33 @@ odp_execute_set_action(struct dpif_packet *packet, const struct nlattr *a)
         break;
 
     case OVS_KEY_ATTR_TCP:
-        tcp_key = nl_attr_get_unspec(a, sizeof(struct ovs_key_tcp));
-        packet_set_tcp_port(&packet->ofpbuf, tcp_key->tcp_src,
-                            tcp_key->tcp_dst);
+        if (OVS_LIKELY(ofpbuf_get_tcp_payload(&packet->ofpbuf))) {
+            const struct ovs_key_tcp *tcp_key
+                = nl_attr_get_unspec(a, sizeof(struct ovs_key_tcp));
+
+            packet_set_tcp_port(&packet->ofpbuf, tcp_key->tcp_src,
+                                tcp_key->tcp_dst);
+        }
         break;
 
     case OVS_KEY_ATTR_UDP:
-        udp_key = nl_attr_get_unspec(a, sizeof(struct ovs_key_udp));
-        packet_set_udp_port(&packet->ofpbuf, udp_key->udp_src,
-                            udp_key->udp_dst);
+        if (OVS_LIKELY(ofpbuf_get_udp_payload(&packet->ofpbuf))) {
+            const struct ovs_key_udp *udp_key
+                = nl_attr_get_unspec(a, sizeof(struct ovs_key_udp));
+
+            packet_set_udp_port(&packet->ofpbuf, udp_key->udp_src,
+                                udp_key->udp_dst);
+        }
         break;
 
     case OVS_KEY_ATTR_SCTP:
-        sctp_key = nl_attr_get_unspec(a, sizeof(struct ovs_key_sctp));
-        packet_set_sctp_port(&packet->ofpbuf, sctp_key->sctp_src,
-                             sctp_key->sctp_dst);
+        if (OVS_LIKELY(ofpbuf_get_sctp_payload(&packet->ofpbuf))) {
+            const struct ovs_key_sctp *sctp_key
+                = nl_attr_get_unspec(a, sizeof(struct ovs_key_sctp));
+
+            packet_set_sctp_port(&packet->ofpbuf, sctp_key->sctp_src,
+                                 sctp_key->sctp_dst);
+        }
         break;
 
     case OVS_KEY_ATTR_MPLS:

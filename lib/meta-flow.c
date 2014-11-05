@@ -274,11 +274,14 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow)
         return is_ip_any(flow);
 
     case MFP_TCP:
-        return is_ip_any(flow) && flow->nw_proto == IPPROTO_TCP;
+        return is_ip_any(flow) && flow->nw_proto == IPPROTO_TCP
+            && !(flow->nw_frag & FLOW_NW_FRAG_LATER);
     case MFP_UDP:
-        return is_ip_any(flow) && flow->nw_proto == IPPROTO_UDP;
+        return is_ip_any(flow) && flow->nw_proto == IPPROTO_UDP
+            && !(flow->nw_frag & FLOW_NW_FRAG_LATER);
     case MFP_SCTP:
-        return is_ip_any(flow) && flow->nw_proto == IPPROTO_SCTP;
+        return is_ip_any(flow) && flow->nw_proto == IPPROTO_SCTP
+            && !(flow->nw_frag & FLOW_NW_FRAG_LATER);
     case MFP_ICMPV4:
         return is_icmpv4(flow);
     case MFP_ICMPV6:
@@ -324,6 +327,7 @@ mf_mask_field_and_prereqs(const struct mf_field *mf, struct flow *mask)
     case MFP_SCTP:
     case MFP_ICMPV4:
     case MFP_ICMPV6:
+        /* nw_frag always unwildcarded. */
         mask->nw_proto = 0xff;
         /* Fall through. */
     case MFP_ARP:
