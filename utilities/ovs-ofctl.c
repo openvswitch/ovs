@@ -2083,19 +2083,22 @@ ofctl_benchmark(int argc OVS_UNUSED, char *argv[])
 
 static void
 ofctl_group_mod__(const char *remote, struct ofputil_group_mod *gms,
-                 size_t n_gms)
+                  size_t n_gms, enum ofputil_protocol usable_protocols)
 {
+    enum ofputil_protocol protocol;
     struct ofputil_group_mod *gm;
+    enum ofp_version version;
     struct ofpbuf *request;
 
     struct vconn *vconn;
     size_t i;
 
-    open_vconn(remote, &vconn);
+    protocol = open_vconn_for_flow_mod(remote, &vconn, usable_protocols);
+    version = ofputil_protocol_to_ofp_version(protocol);
 
     for (i = 0; i < n_gms; i++) {
         gm = &gms[i];
-        request = ofputil_encode_group_mod(vconn_get_version(vconn), gm);
+        request = ofputil_encode_group_mod(version, gm);
         if (request) {
             transact_noreply(vconn, request);
         }
@@ -2120,7 +2123,7 @@ ofctl_group_mod_file(int argc OVS_UNUSED, char *argv[], uint16_t command)
     if (error) {
         ovs_fatal(0, "%s", error);
     }
-    ofctl_group_mod__(argv[1], gms, n_gms);
+    ofctl_group_mod__(argv[1], gms, n_gms, usable_protocols);
     for (i = 0; i < n_gms; i++) {
         ofputil_bucket_list_destroy(&gms[i].buckets);
     }
@@ -2142,7 +2145,7 @@ ofctl_group_mod(int argc, char *argv[], uint16_t command)
         if (error) {
             ovs_fatal(0, "%s", error);
         }
-        ofctl_group_mod__(argv[1], &gm, 1);
+        ofctl_group_mod__(argv[1], &gm, 1, usable_protocols);
         ofputil_bucket_list_destroy(&gm.buckets);
     }
 }
