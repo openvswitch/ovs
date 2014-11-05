@@ -18,10 +18,10 @@
 #include "compiler.h"
 
 bool
-ovs_router_lookup(ovs_be32 ip_dst OVS_UNUSED, char output_bridge[], ovs_be32 *gw)
+ovs_router_lookup(ovs_be32 ip_dst OVS_UNUSED, char output_bridge[] OVS_UNUSED,
+                  ovs_be32 *gw)
 {
     *gw = 0;
-    name[0] = '\0';
     return false;
 }
 
