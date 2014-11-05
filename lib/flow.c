@@ -423,6 +423,7 @@ miniflow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
     if (OVS_LIKELY(dl_type == htons(ETH_TYPE_IP))) {
         const struct ip_header *nh = data;
         int ip_len;
+        uint16_t tot_len;
 
         if (OVS_UNLIKELY(size < IP_HEADER_LEN)) {
             goto out;
@@ -432,6 +433,18 @@ miniflow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
         if (OVS_UNLIKELY(ip_len < IP_HEADER_LEN)) {
             goto out;
         }
+        if (OVS_UNLIKELY(size < ip_len)) {
+            goto out;
+        }
+        tot_len = ntohs(nh->ip_tot_len);
+        if (OVS_UNLIKELY(tot_len > size)) {
+            goto out;
+        }
+        if (OVS_UNLIKELY(size - tot_len > UINT8_MAX)) {
+            goto out;
+        }
+        ofpbuf_set_l2_pad_size(packet, size - tot_len);
+        size = tot_len;   /* Never pull padding. */
 
         /* Push both source and destination address at once. */
         miniflow_push_words(mf, nw_src, &nh->ip_src, 2);
@@ -445,19 +458,27 @@ miniflow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
                 nw_frag |= FLOW_NW_FRAG_LATER;
             }
         }
-        if (OVS_UNLIKELY(size < ip_len)) {
-            goto out;
-        }
         data_pull(&data, &size, ip_len);
-
     } else if (dl_type == htons(ETH_TYPE_IPV6)) {
         const struct ovs_16aligned_ip6_hdr *nh;
         ovs_be32 tc_flow;
+        uint16_t plen;
 
         if (OVS_UNLIKELY(size < sizeof *nh)) {
             goto out;
         }
         nh = data_pull(&data, &size, sizeof *nh);
+
+        plen = ntohs(nh->ip6_plen);
+        if (OVS_UNLIKELY(plen > size)) {
+            goto out;
+        }
+        /* Jumbo Payload option not supported yet. */
+        if (OVS_UNLIKELY(size - plen > UINT8_MAX)) {
+            goto out;
+        }
+        ofpbuf_set_l2_pad_size(packet, size - plen);
+        size = plen;   /* Never pull padding. */
 
         miniflow_push_words(mf, ipv6_src, &nh->ip6_src,
                             sizeof nh->ip6_src / 4);

@@ -67,13 +67,15 @@ struct ofpbuf {
     uint32_t allocated;         /* Number of bytes allocated. */
 
     void *frame;                /* Packet frame start, or NULL. */
+    enum ofpbuf_source source;  /* Source of memory allocated as 'base'. */
+    uint8_t l2_pad_size;        /* Detected l2 padding size.
+                                 * Padding is non-pullable. */
     uint16_t l2_5_ofs;          /* MPLS label stack offset from 'frame', or
                                  * UINT16_MAX */
     uint16_t l3_ofs;            /* Network-level header offset from 'frame',
                                    or UINT16_MAX. */
     uint16_t l4_ofs;            /* Transport-level header offset from 'frame',
                                    or UINT16_MAX. */
-    enum ofpbuf_source source;  /* Source of memory allocated as 'base'. */
     struct list list_node;      /* Private list element for use by owner. */
 };
 
@@ -89,6 +91,8 @@ void * ofpbuf_resize_l2(struct ofpbuf *, int increment);
 void * ofpbuf_resize_l2_5(struct ofpbuf *, int increment);
 static inline void * ofpbuf_l2(const struct ofpbuf *);
 static inline void ofpbuf_set_frame(struct ofpbuf *, void *);
+static inline uint8_t ofpbuf_l2_pad_size(const struct ofpbuf *);
+static inline void ofpbuf_set_l2_pad_size(struct ofpbuf *, uint8_t);
 static inline void * ofpbuf_l2_5(const struct ofpbuf *);
 static inline void ofpbuf_set_l2_5(struct ofpbuf *, void *);
 static inline void * ofpbuf_l3(const struct ofpbuf *);
@@ -244,7 +248,7 @@ static inline void ofpbuf_clear(struct ofpbuf *b)
 static inline void *ofpbuf_pull(struct ofpbuf *b, size_t size)
 {
     void *data = ofpbuf_data(b);
-    ovs_assert(ofpbuf_size(b) >= size);
+    ovs_assert(ofpbuf_size(b) - ofpbuf_l2_pad_size(b) >= size);
     ofpbuf_set_data(b, (char*)ofpbuf_data(b) + size);
     ofpbuf_set_size(b, ofpbuf_size(b) - size);
     return data;
@@ -255,7 +259,8 @@ static inline void *ofpbuf_pull(struct ofpbuf *b, size_t size)
  * null pointer without modifying 'b'. */
 static inline void *ofpbuf_try_pull(struct ofpbuf *b, size_t size)
 {
-    return ofpbuf_size(b) >= size ? ofpbuf_pull(b, size) : NULL;
+    return ofpbuf_size(b) - ofpbuf_l2_pad_size(b) >= size
+        ? ofpbuf_pull(b, size) : NULL;
 }
 
 static inline struct ofpbuf *ofpbuf_from_list(const struct list *list)
@@ -281,9 +286,21 @@ static inline void * ofpbuf_l2(const struct ofpbuf *b)
 static inline void ofpbuf_set_frame(struct ofpbuf *b, void *packet)
 {
     b->frame = packet;
+    b->l2_pad_size = 0;
     b->l2_5_ofs = UINT16_MAX;
     b->l3_ofs = UINT16_MAX;
     b->l4_ofs = UINT16_MAX;
+}
+
+static inline uint8_t ofpbuf_l2_pad_size(const struct ofpbuf *b)
+{
+    return b->l2_pad_size;
+}
+
+static inline void ofpbuf_set_l2_pad_size(struct ofpbuf *b, uint8_t pad_size)
+{
+    ovs_assert(pad_size <= ofpbuf_size(b));
+    b->l2_pad_size = pad_size;
 }
 
 static inline void * ofpbuf_l2_5(const struct ofpbuf *b)
@@ -319,7 +336,9 @@ static inline void ofpbuf_set_l4(struct ofpbuf *b, void *l4)
 static inline size_t ofpbuf_l4_size(const struct ofpbuf *b)
 {
     return b->l4_ofs != UINT16_MAX
-        ? (const char *)ofpbuf_tail(b) - (const char *)ofpbuf_l4(b) : 0;
+        ? (const char *)ofpbuf_tail(b) - (const char *)ofpbuf_l4(b)
+        - ofpbuf_l2_pad_size(b)
+        : 0;
 }
 
 static inline const void *ofpbuf_get_tcp_payload(const struct ofpbuf *b)

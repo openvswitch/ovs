@@ -28,6 +28,7 @@ ofpbuf_init__(struct ofpbuf *b, size_t allocated, enum ofpbuf_source source)
     b->allocated = allocated;
     b->source = source;
     b->frame = NULL;
+    b->l2_pad_size = 0;
     b->l2_5_ofs = b->l3_ofs = b->l4_ofs = UINT16_MAX;
     list_poison(&b->list_node);
 }
@@ -199,6 +200,7 @@ ofpbuf_clone_with_headroom(const struct ofpbuf *buffer, size_t headroom)
 
         new_buffer->frame = (char *) buffer->frame + data_delta;
     }
+    new_buffer->l2_pad_size = buffer->l2_pad_size;
     new_buffer->l2_5_ofs = buffer->l2_5_ofs;
     new_buffer->l3_ofs = buffer->l3_ofs;
     new_buffer->l4_ofs = buffer->l4_ofs;
