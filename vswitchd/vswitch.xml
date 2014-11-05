@@ -4024,10 +4024,20 @@
     </column>
 
     <column name="active_timeout">
-      The interval at which NetFlow records are sent for flows that are
-      still active, in seconds.  A value of <code>0</code> requests the
-      default timeout (currently 600 seconds); a value of <code>-1</code>
-      disables active timeouts.
+      <p>
+	The interval at which NetFlow records are sent for flows that
+	are still active, in seconds.  A value of <code>0</code>
+	requests the default timeout (currently 600 seconds); a value
+	of <code>-1</code> disables active timeouts.
+      </p>
+
+      <p>
+	The NetFlow passive timeout, for flows that become inactive,
+	is not configurable.  It will vary depending on the Open
+	vSwitch version, the forms and contents of the OpenFlow flow
+	tables, CPU and memory usage, and network activity.  A typical
+	passive timeout is about a second.
+      </p>
     </column>
 
     <column name="add_id_to_interface">
