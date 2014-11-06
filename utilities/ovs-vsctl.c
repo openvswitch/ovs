@@ -814,6 +814,9 @@ struct vsctl_iface {
     struct vsctl_port *port;
 };
 
+static struct vsctl_bridge *find_vlan_bridge(struct vsctl_bridge *parent,
+                                             int vlan);
+
 static char *
 vsctl_context_to_string(const struct vsctl_context *ctx)
 {
@@ -870,7 +873,15 @@ add_bridge_to_cache(struct vsctl_context *ctx,
     br->vlan = vlan;
     hmap_init(&br->children);
     if (parent) {
-        hmap_insert(&parent->children, &br->children_node, hash_int(vlan, 0));
+        struct vsctl_bridge *conflict = find_vlan_bridge(parent, vlan);
+        if (conflict) {
+            VLOG_WARN("%s: bridge has multiple VLAN bridges (%s and %s) "
+                      "for VLAN %d, but only one is allowed",
+                      parent->name, name, conflict->name, vlan);
+        } else {
+            hmap_insert(&parent->children, &br->children_node,
+                        hash_int(vlan, 0));
+        }
     }
     shash_add(&ctx->bridges, br->name, br);
     return br;
@@ -1660,6 +1671,7 @@ cmd_add_br(struct vsctl_context *ctx)
 
         ovs_insert_bridge(ctx->ovs, br);
     } else {
+        struct vsctl_bridge *conflict;
         struct vsctl_bridge *parent;
         struct ovsrec_port *port;
         struct ovsrec_bridge *br;
@@ -1671,6 +1683,11 @@ cmd_add_br(struct vsctl_context *ctx)
         }
         if (!parent) {
             vsctl_fatal("parent bridge %s does not exist", parent_name);
+        }
+        conflict = find_vlan_bridge(parent, vlan);
+        if (conflict) {
+            vsctl_fatal("bridge %s already has a child VLAN bridge %s "
+                        "on VLAN %d", parent_name, conflict->name, vlan);
         }
         br = parent->br_cfg;
 

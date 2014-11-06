@@ -483,6 +483,9 @@ AT_CHECK([RUN_OVS_VSCTL([--may-exist add-br xapi1 xxx $1])], [1], [],
 AT_CHECK([RUN_OVS_VSCTL([--may-exist add-br xapi1 xenbr0 10])], [1], [],
   [ovs-vsctl: "--may-exist add-br xapi1 xenbr0 10" but xapi1 is a VLAN bridge for the wrong VLAN $1
 ], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([--may-exist add-br dup xenbr0 $1])], [1], [],
+  [ovs-vsctl: bridge xenbr0 already has a child VLAN bridge xapi1 on VLAN $1
+], [OVS_VSCTL_CLEANUP])
 CHECK_BRIDGES([xapi1, xenbr0, $1], [xenbr0, xenbr0, 0])
 CHECK_PORTS([xenbr0], [eth0])
 CHECK_IFACES([xenbr0], [eth0])
