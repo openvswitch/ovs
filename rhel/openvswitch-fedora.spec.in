@@ -26,7 +26,6 @@ Version: @VERSION@
 License: ASL 2.0 and LGPLv2+ and SISSL
 Release: 1%{?dist}
 Source: openvswitch-%{version}.tar.gz
-#Source1: openvswitch-init
 
 Requires(post):  systemd-units
 Requires(preun): systemd-units
