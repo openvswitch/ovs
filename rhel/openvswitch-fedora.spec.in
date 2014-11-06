@@ -25,7 +25,7 @@ Version: @VERSION@
 # python/compat is Python (although not built into any of the binary packages)
 License: ASL 2.0 and LGPLv2+ and SISSL
 Release: 1%{?dist}
-Source: openvswitch-%{version}.tar.gz
+Source: http://openvswitch.org/releases/%{name}-%{version}.tar.gz
 
 Requires(post):  systemd-units
 Requires(preun): systemd-units
