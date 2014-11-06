@@ -207,13 +207,14 @@ systemctl start openvswitch.service
 %{_datadir}/openvswitch/scripts/openvswitch.init
 %{_sysconfdir}/sysconfig/network-scripts/ifup-ovs
 %{_sysconfdir}/sysconfig/network-scripts/ifdown-ovs
-/usr/share/openvswitch/bugtool-plugins/
-/usr/share/openvswitch/scripts/ovs-bugtool-*
-/usr/share/openvswitch/scripts/ovs-check-dead-ifs
-/usr/share/openvswitch/scripts/ovs-lib
-/usr/share/openvswitch/scripts/ovs-vtep
-%config /usr/share/openvswitch/vswitch.ovsschema
-%config /usr/share/openvswitch/vtep.ovsschema
+%{_datadir}/openvswitch/bugtool-plugins/
+%{_datadir}/openvswitch/scripts/ovs-bugtool-*
+%{_datadir}/openvswitch/scripts/ovs-check-dead-ifs
+%{_datadir}/openvswitch/scripts/ovs-lib
+%{_datadir}/openvswitch/scripts/ovs-vtep
+%{_datadir}/openvswitch/scripts/ovs-ctl
+%config %{_datadir}/openvswitch/vswitch.ovsschema
+%config %{_datadir}/openvswitch/vtep.ovsschema
 %{_bindir}/ovs-appctl
 %{_bindir}/ovs-docker
 %{_bindir}/ovs-dpctl
@@ -252,7 +253,6 @@ systemctl start openvswitch.service
 %doc FAQ.md NEWS INSTALL.DPDK.md rhel/README.RHEL
 /var/lib/openvswitch
 /var/log/openvswitch
-/usr/share/openvswitch/scripts/ovs-ctl
 %exclude %{_bindir}/ovs-benchmark
 %exclude %{_bindir}/ovs-parse-backtrace
 %exclude %{_bindir}/ovs-pcap
@@ -262,7 +262,7 @@ systemctl start openvswitch.service
 %exclude /usr/share/man/man1/ovs-pcap.1.gz
 %exclude /usr/share/man/man1/ovs-tcpundump.1.gz
 %exclude /usr/share/man/man8/ovs-vlan-bug-workaround.8.gz
-%exclude /usr/share/openvswitch/scripts/ovs-save
+%exclude %{_datadir}/openvswitch/scripts/ovs-save
 
 %changelog
 * Wed Jan 12 2011 Ralf Spenneberg <ralf@os-s.net>
