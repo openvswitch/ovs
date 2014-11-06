@@ -322,10 +322,12 @@ rstp_set_bridge_address__(struct rstp *rstp, rstp_identifier bridge_address)
 {
     VLOG_DBG("%s: set bridge address to: "RSTP_ID_FMT"", rstp->name,
              RSTP_ID_ARGS(bridge_address));
-
-    rstp->address = bridge_address;
-    rstp->bridge_identifier = bridge_address;
-    set_bridge_priority__(rstp);
+    if (rstp->address != bridge_address) {
+        rstp->address = bridge_address;
+        rstp->bridge_identifier &= 0xffff000000000000ULL;
+        rstp->bridge_identifier |= bridge_address;
+        set_bridge_priority__(rstp);
+    }
 }
 
 /* Sets the bridge address. */
@@ -370,7 +372,8 @@ rstp_set_bridge_priority__(struct rstp *rstp, int new_priority)
 {
     new_priority = ROUND_DOWN(new_priority, RSTP_PRIORITY_STEP);
 
-    if (new_priority >= RSTP_MIN_PRIORITY
+    if (rstp->priority != new_priority
+        && new_priority >= RSTP_MIN_PRIORITY
         && new_priority <= RSTP_MAX_PRIORITY) {
         VLOG_DBG("%s: set bridge priority to %d", rstp->name, new_priority);
 
@@ -584,7 +587,8 @@ rstp_set_bridge_transmit_hold_count__(struct rstp *rstp,
                                       int new_transmit_hold_count)
     OVS_REQUIRES(rstp_mutex)
 {
-    if (new_transmit_hold_count >= RSTP_MIN_TRANSMIT_HOLD_COUNT
+    if (rstp->transmit_hold_count != new_transmit_hold_count
+        && new_transmit_hold_count >= RSTP_MIN_TRANSMIT_HOLD_COUNT
         && new_transmit_hold_count <= RSTP_MAX_TRANSMIT_HOLD_COUNT) {
         struct rstp_port *p;
 
@@ -664,7 +668,8 @@ static void
 rstp_port_set_priority__(struct rstp_port *port, int priority)
     OVS_REQUIRES(rstp_mutex)
 {
-    if (priority >= RSTP_MIN_PORT_PRIORITY
+    if (port->priority != priority
+        && priority >= RSTP_MIN_PORT_PRIORITY
         && priority <= RSTP_MAX_PORT_PRIORITY) {
         VLOG_DBG("%s, port %u: set RSTP port priority to %d", port->rstp->name,
                  port->port_number, priority);
@@ -715,27 +720,29 @@ rstp_port_set_port_number__(struct rstp_port *port, uint16_t port_number)
 
     /* If new_port_number is available, use it, otherwise use the first free
      * available port number. */
-    port->port_number =
-        is_port_number_available__(port->rstp, port_number, port)
-        ? port_number
-        : rstp_first_free_number__(port->rstp, port);
+    if (port->port_number != port_number || port_number == 0) {
+        port->port_number =
+            is_port_number_available__(port->rstp, port_number, port)
+            ? port_number
+            : rstp_first_free_number__(port->rstp, port);
 
-    if (port->port_number != old_port_number) {
-        set_port_id__(port);
-        /* [17.13] is not clear. I suppose that a port number change
-         * should trigger reselection like a port priority change. */
-        port->selected = false;
-        port->reselect = true;
+        if (port->port_number != old_port_number) {
+            set_port_id__(port);
+            /* [17.13] is not clear. I suppose that a port number change
+             * should trigger reselection like a port priority change. */
+            port->selected = false;
+            port->reselect = true;
 
-        /* Adjust the ports hmap. */
-        if (!hmap_node_is_null(&port->node)) {
-            hmap_remove(&port->rstp->ports, &port->node);
+            /* Adjust the ports hmap. */
+            if (!hmap_node_is_null(&port->node)) {
+                hmap_remove(&port->rstp->ports, &port->node);
+            }
+            hmap_insert(&port->rstp->ports, &port->node,
+                        hash_int(port->port_number, 0));
+
+            VLOG_DBG("%s: set new RSTP port number %d", port->rstp->name,
+                     port->port_number);
         }
-        hmap_insert(&port->rstp->ports, &port->node,
-                    hash_int(port->port_number, 0));
-
-        VLOG_DBG("%s: set new RSTP port number %d", port->rstp->name,
-                 port->port_number);
     }
 }
 
@@ -763,7 +770,8 @@ static void
 rstp_port_set_path_cost__(struct rstp_port *port, uint32_t path_cost)
     OVS_REQUIRES(rstp_mutex)
 {
-    if (path_cost >= RSTP_MIN_PORT_PATH_COST
+    if (port->port_path_cost != path_cost
+        && path_cost >= RSTP_MIN_PORT_PATH_COST
         && path_cost <= RSTP_MAX_PORT_PATH_COST) {
         VLOG_DBG("%s, port %u, set RSTP port path cost to %d",
                  port->rstp->name, port->port_number, path_cost);
@@ -1015,9 +1023,9 @@ rstp_port_set_administrative_bridge_port__(struct rstp_port *p,
     VLOG_DBG("%s, port %u: set RSTP port admin-port-state to %d",
              p->rstp->name, p->port_number, admin_port_state);
 
-    if (admin_port_state == RSTP_ADMIN_BRIDGE_PORT_STATE_DISABLED
-        || admin_port_state == RSTP_ADMIN_BRIDGE_PORT_STATE_ENABLED) {
-
+    if (p->is_administrative_bridge_port != admin_port_state
+        && (admin_port_state == RSTP_ADMIN_BRIDGE_PORT_STATE_DISABLED
+            || admin_port_state == RSTP_ADMIN_BRIDGE_PORT_STATE_ENABLED)) {
         p->is_administrative_bridge_port = admin_port_state;
         update_port_enabled__(p);
 
@@ -1036,8 +1044,9 @@ rstp_port_set_oper_point_to_point_mac__(struct rstp_port *p,
                                         uint8_t new_oper_p2p_mac)
     OVS_REQUIRES(rstp_mutex)
 {
-    if (new_oper_p2p_mac == RSTP_OPER_P2P_MAC_STATE_DISABLED
-        || new_oper_p2p_mac == RSTP_OPER_P2P_MAC_STATE_ENABLED) {
+    if (p->oper_point_to_point_mac != new_oper_p2p_mac
+        && (new_oper_p2p_mac == RSTP_OPER_P2P_MAC_STATE_DISABLED
+            || new_oper_p2p_mac == RSTP_OPER_P2P_MAC_STATE_ENABLED)) {
 
         p->oper_point_to_point_mac = new_oper_p2p_mac;
         update_port_enabled__(p);
@@ -1228,28 +1237,29 @@ static void rstp_port_set_admin_point_to_point_mac__(struct rstp_port *port,
 {
     VLOG_DBG("%s, port %u: set RSTP port admin-point-to-point-mac to %d",
             port->rstp->name, port->port_number, admin_p2p_mac_state);
-
-    if (admin_p2p_mac_state == RSTP_ADMIN_P2P_MAC_FORCE_TRUE) {
-        port->admin_point_to_point_mac = admin_p2p_mac_state;
-        rstp_port_set_oper_point_to_point_mac__(port,
-                RSTP_OPER_P2P_MAC_STATE_ENABLED);
-    } else if (admin_p2p_mac_state == RSTP_ADMIN_P2P_MAC_FORCE_FALSE) {
-        port->admin_point_to_point_mac = admin_p2p_mac_state;
-        rstp_port_set_oper_point_to_point_mac__(port,
-                RSTP_OPER_P2P_MAC_STATE_DISABLED);
-    } else if (admin_p2p_mac_state == RSTP_ADMIN_P2P_MAC_AUTO) {
-        /* If adminPointToPointMAC is set to Auto, then the value of
-         * operPointToPointMAC is determined in accordance with the
-         * specific procedures defined for the MAC entity concerned, as
-         * defined in 6.5. If these procedures determine that the MAC
-         * entity is connected to a point-to-point LAN, then
-         * operPointToPointMAC is set TRUE; otherwise it is set FALSE.
-         * In the absence of a specific definition of how to determine
-         * whether the MAC is connected to a point-to-point LAN or not,
-         * the value of operPointToPointMAC shall be FALSE. */
-        port->admin_point_to_point_mac = admin_p2p_mac_state;
-        rstp_port_set_oper_point_to_point_mac__(
-            port, RSTP_OPER_P2P_MAC_STATE_DISABLED);
+    if (port->admin_point_to_point_mac != admin_p2p_mac_state) {
+        if (admin_p2p_mac_state == RSTP_ADMIN_P2P_MAC_FORCE_TRUE) {
+            port->admin_point_to_point_mac = admin_p2p_mac_state;
+            rstp_port_set_oper_point_to_point_mac__(
+                port, RSTP_OPER_P2P_MAC_STATE_ENABLED);
+        } else if (admin_p2p_mac_state == RSTP_ADMIN_P2P_MAC_FORCE_FALSE) {
+            port->admin_point_to_point_mac = admin_p2p_mac_state;
+            rstp_port_set_oper_point_to_point_mac__(
+                port, RSTP_OPER_P2P_MAC_STATE_DISABLED);
+        } else if (admin_p2p_mac_state == RSTP_ADMIN_P2P_MAC_AUTO) {
+            /* If adminPointToPointMAC is set to Auto, then the value of
+             * operPointToPointMAC is determined in accordance with the
+             * specific procedures defined for the MAC entity concerned, as
+             * defined in 6.5. If these procedures determine that the MAC
+             * entity is connected to a point-to-point LAN, then
+             * operPointToPointMAC is set TRUE; otherwise it is set FALSE.
+             * In the absence of a specific definition of how to determine
+             * whether the MAC is connected to a point-to-point LAN or not,
+             * the value of operPointToPointMAC shall be FALSE. */
+            port->admin_point_to_point_mac = admin_p2p_mac_state;
+            rstp_port_set_oper_point_to_point_mac__(
+                port, RSTP_OPER_P2P_MAC_STATE_DISABLED);
+        }
     }
 }
 
