@@ -93,7 +93,6 @@ make %{?_smp_mflags}
 rm -rf $RPM_BUILD_ROOT
 make install DESTDIR=$RPM_BUILD_ROOT
 
-install -d -m 0755 $RPM_BUILD_ROOT/%{_sysconfdir}
 install -d -m 0755 $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch
 
 install -p -D -m 0644 rhel/usr_lib_systemd_system_openvswitch.service \
@@ -104,18 +103,11 @@ install -p -D -m 0644 rhel/usr_lib_systemd_system_openvswitch-nonetwork.service 
 install -m 0755 rhel/etc_init.d_openvswitch \
         $RPM_BUILD_ROOT%{_datadir}/openvswitch/scripts/openvswitch.init
 
-install -d -m 0755 $RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig
-
-install -d -m 0755 $RPM_BUILD_ROOT/%{_sysconfdir}/logrotate.d
-install -m 0755 rhel/etc_logrotate.d_openvswitch \
+install -p -D -m 0644 rhel/etc_logrotate.d_openvswitch \
         $RPM_BUILD_ROOT/%{_sysconfdir}/logrotate.d/openvswitch
-
-install -d -m 0755 $RPM_BUILD_ROOT/%{_sysconfdir}/profile.d
 
 install -m 0644 vswitchd/vswitch.ovsschema \
         $RPM_BUILD_ROOT/%{_datadir}/openvswitch/vswitch.ovsschema
-
-install -d -m 0755 $RPM_BUILD_ROOT/%{_datadir}/openvswitch/scripts
 
 install -d -m 0755 $RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig/network-scripts/
 install -p -m 0755 rhel/etc_sysconfig_network-scripts_ifdown-ovs \
@@ -125,8 +117,6 @@ install -p -m 0755 rhel/etc_sysconfig_network-scripts_ifup-ovs \
 
 install -p -D -m 0644 rhel/usr_share_openvswitch_scripts_systemd_sysconfig.template \
         $RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig/openvswitch
-
-install -d -m 0755 $RPM_BUILD_ROOT/%{_datadir}/openvswitch/scripts
 
 install -d -m 0755 $RPM_BUILD_ROOT%{python_sitelib}
 mv $RPM_BUILD_ROOT/%{_datadir}/openvswitch/python/* $RPM_BUILD_ROOT%{python_sitelib}
