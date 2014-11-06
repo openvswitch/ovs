@@ -1636,6 +1636,29 @@ A: Add your new message to "enum ofpraw" and "enum ofptype" in
    vendor that doesn't yet have any extension messages, then you will
    also need to edit build-aux/extract-ofp-msgs.
 
+### Q: How do I add support for a new field or header?
+
+A: Add new members for your field to "struct flow" in lib/flow.h, and
+   add new enumerations for your new field to "enum mf_field_id" in
+   lib/meta-flow.h, following the existing pattern.  Then recompile
+   and fix all of the new warnings, implementing new functionality for
+   the new field or header as needed.  (If you configure with
+   --enable-Werror, as described in [INSTALL.md], then it is
+   impossible to miss any warnings.)
+
+### Q: How do I add support for a new OpenFlow action?
+
+A: Add your new action to "enum ofp_raw_action_type" in
+   lib/ofp-actions.c, following the existing pattern.  Then recompile
+   and fix all of the new warnings, implementing new functionality for
+   the new action as needed.  (If you configure with --enable-Werror,
+   as described in [INSTALL.md], then it is impossible to miss any
+   warnings.)
+
+   If you need to add an OpenFlow vendor extension action for a vendor
+   that doesn't yet have any extension actions, then you will also
+   need to edit build-aux/extract-ofp-actions.
+
 
 Contact 
 -------
