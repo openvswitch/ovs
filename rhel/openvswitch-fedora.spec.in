@@ -43,6 +43,7 @@ Requires: kernel >= 3.15.0-0
 Requires(post): systemd-units
 Requires(preun): systemd-units
 Requires(postun): systemd-units
+Obsoletes: openvswitch-controller <= 0:2.1.0-1
 
 %bcond_without check
 
