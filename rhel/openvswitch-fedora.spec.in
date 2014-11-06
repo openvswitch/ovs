@@ -93,7 +93,7 @@ make %{?_smp_mflags}
 rm -rf $RPM_BUILD_ROOT
 make install DESTDIR=$RPM_BUILD_ROOT
 install -d -m 755 $RPM_BUILD_ROOT/etc
-install -d -m 755 $RPM_BUILD_ROOT/etc/openvswitch
+install -d -m 0755 $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch
 install -p -D -m 0644 rhel/usr_lib_systemd_system_openvswitch.service \
         $RPM_BUILD_ROOT%{_unitdir}/openvswitch.service
 install -p -D -m 0644 rhel/usr_lib_systemd_system_openvswitch-nonetwork.service \
@@ -135,6 +135,9 @@ install -p -D -m 0644 lib/*.h \
 install -d -m 0755 $RPM_BUILD_ROOT%{_includedir}/openflow
 install -p -D -m 0644 include/openflow/*.h \
 	-t $RPM_BUILD_ROOT%{_includedir}/openflow
+
+touch $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch/conf.db
+touch $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch/system-id.conf
 
 %check
 %if %{with check}
@@ -194,7 +197,10 @@ systemctl start openvswitch.service
 
 %files
 %defattr(-,root,root)
-%config /etc/sysconfig/openvswitch
+%dir %{_sysconfdir}/openvswitch
+%config %ghost %{_sysconfdir}/openvswitch/conf.db
+%config %ghost %{_sysconfdir}/openvswitch/system-id.conf
+%config(noreplace) %{_sysconfdir}/sysconfig/openvswitch
 %config /etc/logrotate.d/openvswitch
 %{_unitdir}/openvswitch.service
 %{_unitdir}/openvswitch-nonetwork.service
@@ -243,7 +249,6 @@ systemctl start openvswitch.service
 /var/lib/openvswitch
 /var/log/openvswitch
 /usr/share/openvswitch/scripts/ovs-ctl
-%exclude /etc/openvswitch
 %exclude /usr/bin/ovs-benchmark
 %exclude /usr/bin/ovs-parse-backtrace
 %exclude /usr/bin/ovs-pcap
