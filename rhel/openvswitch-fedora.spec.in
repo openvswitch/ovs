@@ -68,6 +68,16 @@ Requires: python python-twisted-core python-twisted-web
 Utilities that are useful to diagnose performance and connectivity
 issues in Open vSwitch setup.
 
+%package devel
+Summary: Open vSwitch OpenFlow development package (library, headers)
+License: ASL 2.0
+Provides: openvswitch-static = %{version}-%{release}
+
+%description devel
+This provides static library, libopenswitch.a and the openvswitch header
+files needed to build an external application.
+
+
 %prep
 %setup -q -n openvswitch-%{version}
 
@@ -109,8 +119,18 @@ rmdir $RPM_BUILD_ROOT/%{_datadir}/openvswitch/python/
 
 install -d -m 755 $RPM_BUILD_ROOT/var/lib/openvswitch
 
-# Get rid of stuff we don't want to make RPM happy.
-(cd "$RPM_BUILD_ROOT" && rm -f usr/lib/lib*)
+install -d -m 0755 $RPM_BUILD_ROOT%{_includedir}/openvswitch
+install -p -D -m 0644 include/openvswitch/*.h \
+	-t $RPM_BUILD_ROOT%{_includedir}/openvswitch
+install -p -D -m 0644 config.h -t $RPM_BUILD_ROOT%{_includedir}/openvswitch
+
+install -d -m 0755 $RPM_BUILD_ROOT%{_includedir}/openvswitch/lib
+install -p -D -m 0644 lib/*.h \
+	-t $RPM_BUILD_ROOT%{_includedir}/openvswitch/lib
+
+install -d -m 0755 $RPM_BUILD_ROOT%{_includedir}/openflow
+install -p -D -m 0644 include/openflow/*.h \
+	-t $RPM_BUILD_ROOT%{_includedir}/openflow
 
 %check
 %if %{with check}
@@ -161,6 +181,12 @@ systemctl start openvswitch.service
 %{_mandir}/man8/ovs-vlan-test.8*
 %{_mandir}/man8/ovs-l3ping.8*
 %{python_sitelib}/ovstest
+
+%files devel
+%{_libdir}/*.a
+%{_libdir}/*.la
+%{_includedir}/openvswitch/*
+%{_includedir}/openflow/*
 
 %files
 %defattr(-,root,root)
