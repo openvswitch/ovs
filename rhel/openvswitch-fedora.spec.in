@@ -83,7 +83,7 @@ files needed to build an external application.
 
 
 %prep
-%setup -q -n openvswitch-%{version}
+%setup -q
 
 %build
 %configure --enable-ssl --with-pkidir=%{_sharedstatedir}/openvswitch/pki
