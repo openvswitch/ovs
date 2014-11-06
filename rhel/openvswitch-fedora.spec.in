@@ -201,7 +201,7 @@ systemctl start openvswitch.service
 %config %ghost %{_sysconfdir}/openvswitch/conf.db
 %config %ghost %{_sysconfdir}/openvswitch/system-id.conf
 %config(noreplace) %{_sysconfdir}/sysconfig/openvswitch
-%config /etc/logrotate.d/openvswitch
+%config(noreplace) %{_sysconfdir}/logrotate.d/openvswitch
 %{_unitdir}/openvswitch.service
 %{_unitdir}/openvswitch-nonetwork.service
 %{_datadir}/openvswitch/scripts/openvswitch.init
