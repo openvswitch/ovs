@@ -87,7 +87,7 @@ files needed to build an external application.
 
 %build
 %configure --enable-ssl --with-pkidir=%{_sharedstatedir}/openvswitch/pki
-make %{_smp_mflags}
+make %{?_smp_mflags}
 
 %install
 rm -rf $RPM_BUILD_ROOT
