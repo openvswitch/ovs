@@ -52,7 +52,7 @@ traffic.
 %setup -q -n openvswitch-%{version}
 
 %build
-./configure --prefix=/usr --sysconfdir=/etc --localstatedir=%{_localstatedir} --enable-ssl
+%configure --enable-ssl --with-pkidir=%{_sharedstatedir}/openvswitch/pki
 make %{_smp_mflags}
 
 %install
