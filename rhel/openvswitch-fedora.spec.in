@@ -214,17 +214,17 @@ systemctl start openvswitch.service
 /usr/share/openvswitch/scripts/ovs-vtep
 %config /usr/share/openvswitch/vswitch.ovsschema
 %config /usr/share/openvswitch/vtep.ovsschema
-/usr/bin/ovs-appctl
-/usr/bin/ovs-docker
-/usr/bin/ovs-dpctl
-/usr/bin/ovs-dpctl-top
-/usr/bin/ovs-ofctl
-/usr/bin/ovs-vsctl
-/usr/bin/ovsdb-client
-/usr/bin/ovsdb-tool
-/usr/bin/ovs-testcontroller
-/usr/bin/ovs-pki
-/usr/bin/vtep-ctl
+%{_bindir}/ovs-appctl
+%{_bindir}/ovs-docker
+%{_bindir}/ovs-dpctl
+%{_bindir}/ovs-dpctl-top
+%{_bindir}/ovs-ofctl
+%{_bindir}/ovs-vsctl
+%{_bindir}/ovsdb-client
+%{_bindir}/ovsdb-tool
+%{_bindir}/ovs-testcontroller
+%{_bindir}/ovs-pki
+%{_bindir}/vtep-ctl
 %{_sbindir}/ovs-bugtool
 %{_sbindir}/ovs-vswitchd
 %{_sbindir}/ovsdb-server
@@ -253,10 +253,10 @@ systemctl start openvswitch.service
 /var/lib/openvswitch
 /var/log/openvswitch
 /usr/share/openvswitch/scripts/ovs-ctl
-%exclude /usr/bin/ovs-benchmark
-%exclude /usr/bin/ovs-parse-backtrace
-%exclude /usr/bin/ovs-pcap
-%exclude /usr/bin/ovs-tcpundump
+%exclude %{_bindir}/ovs-benchmark
+%exclude %{_bindir}/ovs-parse-backtrace
+%exclude %{_bindir}/ovs-pcap
+%exclude %{_bindir}/ovs-tcpundump
 %exclude %{_sbindir}/ovs-vlan-bug-workaround
 %exclude /usr/share/man/man1/ovs-benchmark.1.gz
 %exclude /usr/share/man/man1/ovs-pcap.1.gz
