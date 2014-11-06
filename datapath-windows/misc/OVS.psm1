@@ -152,3 +152,29 @@ function Check-WMIReturnValue($retVal)
         }
     }
 }
+
+function Set-VMNetworkAdapterOVSPortDirect
+{
+    [CmdletBinding()]
+    param
+    (
+        [parameter(Mandatory=$true)]
+        [ValidateLength(1, 1024)]
+        [string]$vmName,
+
+        [parameter(Mandatory=$true)]
+        [ValidateLength(1, 48)]
+        [string]$OVSPortName
+    )
+    process
+    {
+        $vnic = 0
+
+        if ($vmName)
+        {
+            $vnic = Get-VMNetworkAdapter -VMName $vmName
+        }
+        # XXX the vnic index should be provided by the caller
+        $vnic[0] | Set-VMNetworkAdapterOVSPort -OVSPortName $OVSPortName
+    }
+}
