@@ -92,22 +92,22 @@ make %{?_smp_mflags}
 %install
 rm -rf $RPM_BUILD_ROOT
 make install DESTDIR=$RPM_BUILD_ROOT
-install -d -m 755 $RPM_BUILD_ROOT/%{_sysconfdir}
+install -d -m 0755 $RPM_BUILD_ROOT/%{_sysconfdir}
 install -d -m 0755 $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch
 install -p -D -m 0644 rhel/usr_lib_systemd_system_openvswitch.service \
         $RPM_BUILD_ROOT%{_unitdir}/openvswitch.service
 install -p -D -m 0644 rhel/usr_lib_systemd_system_openvswitch-nonetwork.service \
         $RPM_BUILD_ROOT%{_unitdir}/openvswitch-nonetwork.service
-install -m 755 rhel/etc_init.d_openvswitch \
+install -m 0755 rhel/etc_init.d_openvswitch \
         $RPM_BUILD_ROOT%{_datadir}/openvswitch/scripts/openvswitch.init
-install -d -m 755 $RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig
-install -d -m 755 $RPM_BUILD_ROOT/%{_sysconfdir}/logrotate.d
-install -m 755 rhel/etc_logrotate.d_openvswitch \
+install -d -m 0755 $RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig
+install -d -m 0755 $RPM_BUILD_ROOT/%{_sysconfdir}/logrotate.d
+install -m 0755 rhel/etc_logrotate.d_openvswitch \
         $RPM_BUILD_ROOT/%{_sysconfdir}/logrotate.d/openvswitch
-install -d -m 755 $RPM_BUILD_ROOT/%{_sysconfdir}/profile.d
-install -m 644 vswitchd/vswitch.ovsschema \
+install -d -m 0755 $RPM_BUILD_ROOT/%{_sysconfdir}/profile.d
+install -m 0644 vswitchd/vswitch.ovsschema \
         $RPM_BUILD_ROOT/%{_datadir}/openvswitch/vswitch.ovsschema
-install -d -m 755 $RPM_BUILD_ROOT/%{_datadir}/openvswitch/scripts
+install -d -m 0755 $RPM_BUILD_ROOT/%{_datadir}/openvswitch/scripts
 install -d -m 0755 $RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig/network-scripts/
 install -p -m 0755 rhel/etc_sysconfig_network-scripts_ifdown-ovs \
         $RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig/network-scripts/ifdown-ovs
@@ -115,13 +115,13 @@ install -p -m 0755 rhel/etc_sysconfig_network-scripts_ifup-ovs \
         $RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig/network-scripts/ifup-ovs
 install -p -D -m 0644 rhel/usr_share_openvswitch_scripts_systemd_sysconfig.template \
         $RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig/openvswitch
-install -d -m 755 $RPM_BUILD_ROOT/%{_datadir}/openvswitch/scripts
+install -d -m 0755 $RPM_BUILD_ROOT/%{_datadir}/openvswitch/scripts
 
 install -d -m 0755 $RPM_BUILD_ROOT%{python_sitelib}
 mv $RPM_BUILD_ROOT/%{_datadir}/openvswitch/python/* $RPM_BUILD_ROOT%{python_sitelib}
 rmdir $RPM_BUILD_ROOT/%{_datadir}/openvswitch/python/
 
-install -d -m 755 $RPM_BUILD_ROOT/%{_sharedstatedir}/openvswitch
+install -d -m 0755 $RPM_BUILD_ROOT/%{_sharedstatedir}/openvswitch
 
 install -d -m 0755 $RPM_BUILD_ROOT%{_includedir}/openvswitch
 install -p -D -m 0644 include/openvswitch/*.h \
