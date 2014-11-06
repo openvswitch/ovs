@@ -258,10 +258,10 @@ systemctl start openvswitch.service
 %exclude %{_bindir}/ovs-pcap
 %exclude %{_bindir}/ovs-tcpundump
 %exclude %{_sbindir}/ovs-vlan-bug-workaround
-%exclude /usr/share/man/man1/ovs-benchmark.1.gz
-%exclude /usr/share/man/man1/ovs-pcap.1.gz
-%exclude /usr/share/man/man1/ovs-tcpundump.1.gz
-%exclude /usr/share/man/man8/ovs-vlan-bug-workaround.8.gz
+%exclude %{_mandir}/man1/ovs-benchmark.1.gz
+%exclude %{_mandir}/man1/ovs-pcap.1.gz
+%exclude %{_mandir}/man1/ovs-tcpundump.1.gz
+%exclude %{_mandir}/man8/ovs-vlan-bug-workaround.8.gz
 %exclude %{_datadir}/openvswitch/scripts/ovs-save
 
 %changelog
