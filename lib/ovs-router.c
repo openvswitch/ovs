@@ -130,7 +130,7 @@ ovs_router_insert(ovs_be32 ip_dst, uint8_t plen, const char output_bridge[],
 static bool
 rt_entry_delete(uint8_t priority, ovs_be32 ip_dst, uint8_t plen)
 {
-    struct cls_rule *cr;
+    const struct cls_rule *cr;
     struct cls_rule rule;
     struct match match;
 

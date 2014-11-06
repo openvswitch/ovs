@@ -53,8 +53,7 @@ cls_match_alloc(struct cls_rule *rule)
 }
 
 static struct cls_subtable *find_subtable(const struct classifier *cls,
-                                          const struct minimask *)
-    OVS_REQUIRES(cls->mutex);
+                                          const struct minimask *);
 static struct cls_subtable *insert_subtable(struct classifier *cls,
                                             const struct minimask *)
     OVS_REQUIRES(cls->mutex);
@@ -64,26 +63,41 @@ static struct cls_match *insert_rule(struct classifier *cls,
                                      struct cls_subtable *, struct cls_rule *)
     OVS_REQUIRES(cls->mutex);
 
-static struct cls_match *find_match_wc(const struct cls_subtable *,
-                                       const struct flow *, struct trie_ctx *,
-                                       unsigned int n_tries,
-                                       struct flow_wildcards *);
-static struct cls_match *find_equal(struct cls_subtable *,
+static const struct cls_match *find_match_wc(const struct cls_subtable *,
+                                             const struct flow *,
+                                             struct trie_ctx *,
+                                             unsigned int n_tries,
+                                             struct flow_wildcards *);
+static struct cls_match *find_equal(const struct cls_subtable *,
                                     const struct miniflow *, uint32_t hash);
 
-static inline struct cls_match *
-next_rule_in_list__(struct cls_match *rule)
-    OVS_NO_THREAD_SAFETY_ANALYSIS
+static inline const struct cls_match *
+next_rule_in_list__(const struct cls_match *rule)
 {
-    struct cls_match *next = NULL;
+    const struct cls_match *next = NULL;
     next = OBJECT_CONTAINING(rculist_next(&rule->list), next, list);
     return next;
 }
 
-static inline struct cls_match *
-next_rule_in_list(struct cls_match *rule)
+static inline const struct cls_match *
+next_rule_in_list(const struct cls_match *rule)
 {
-    struct cls_match *next = next_rule_in_list__(rule);
+    const struct cls_match *next = next_rule_in_list__(rule);
+    return next->priority < rule->priority ? next : NULL;
+}
+
+static inline struct cls_match *
+next_rule_in_list_protected__(struct cls_match *rule)
+{
+    struct cls_match *next = NULL;
+    next = OBJECT_CONTAINING(rculist_next_protected(&rule->list), next, list);
+    return next;
+}
+
+static inline struct cls_match *
+next_rule_in_list_protected(struct cls_match *rule)
+{
+    struct cls_match *next = next_rule_in_list_protected__(rule);
     return next->priority < rule->priority ? next : NULL;
 }
 
@@ -92,13 +106,9 @@ next_rule_in_list(struct cls_match *rule)
  * protoceted by it. */
 #define FOR_EACH_RULE_IN_LIST(RULE, HEAD)                               \
     for ((RULE) = (HEAD); (RULE) != NULL; (RULE) = next_rule_in_list(RULE))
-#define FOR_EACH_RULE_IN_LIST_SAFE(RULE, NEXT, HEAD)                    \
-    for ((RULE) = (HEAD);                                               \
-         (RULE) != NULL && ((NEXT) = next_rule_in_list(RULE), true);    \
-         (RULE) = (NEXT))
-
-static struct cls_match *next_rule_in_list__(struct cls_match *);
-static struct cls_match *next_rule_in_list(struct cls_match *);
+#define FOR_EACH_RULE_IN_LIST_PROTECTED(RULE, HEAD)     \
+    for ((RULE) = (HEAD); (RULE) != NULL;               \
+         (RULE) = next_rule_in_list_protected(RULE))
 
 static unsigned int minimask_get_prefix_len(const struct minimask *,
                                             const struct mf_field *);
@@ -379,7 +389,7 @@ trie_init(struct classifier *cls, int trie_idx, const struct mf_field *field)
             CMAP_FOR_EACH (head, cmap_node, &subtable->rules) {
                 struct cls_match *match;
 
-                FOR_EACH_RULE_IN_LIST (match, head) {
+                FOR_EACH_RULE_IN_LIST_PROTECTED (match, head) {
                     trie_insert(trie, match->cls_rule, plen);
                 }
             }
@@ -468,13 +478,13 @@ static inline ovs_be32 minimatch_get_ports(const struct minimatch *match)
  * inserting the new rule.  In this case, no rules are displaced by the new
  * rule, even rules that cannot have any effect because the new rule matches a
  * superset of their flows and has higher priority. */
-struct cls_rule *
+const struct cls_rule *
 classifier_replace(struct classifier *cls, struct cls_rule *rule)
     OVS_EXCLUDED(cls->mutex)
 {
     struct cls_match *old_rule;
     struct cls_subtable *subtable;
-    struct cls_rule *old_cls_rule = NULL;
+    const struct cls_rule *old_cls_rule = NULL;
 
     ovs_mutex_lock(&cls->mutex);
     subtable = find_subtable(cls, &rule->match.mask);
@@ -515,7 +525,7 @@ classifier_replace(struct classifier *cls, struct cls_rule *rule)
     } else {
         old_cls_rule = old_rule->cls_rule;
         rule->cls_match->partition = old_rule->partition;
-        old_cls_rule->cls_match = NULL;
+        CONST_CAST(struct cls_rule *, old_cls_rule)->cls_match = NULL;
 
         /* 'old_rule' contains a cmap_node, which may not be freed
          * immediately. */
@@ -534,7 +544,7 @@ classifier_replace(struct classifier *cls, struct cls_rule *rule)
 void
 classifier_insert(struct classifier *cls, struct cls_rule *rule)
 {
-    struct cls_rule *displaced_rule = classifier_replace(cls, rule);
+    const struct cls_rule *displaced_rule = classifier_replace(cls, rule);
     ovs_assert(!displaced_rule);
 }
 
@@ -546,8 +556,8 @@ classifier_insert(struct classifier *cls, struct cls_rule *rule)
  *
  * Returns the removed rule, or NULL, if it was already removed.
  */
-struct cls_rule *
-classifier_remove(struct classifier *cls, struct cls_rule *rule)
+const struct cls_rule *
+classifier_remove(struct classifier *cls, const struct cls_rule *rule)
     OVS_EXCLUDED(cls->mutex)
 {
     struct cls_partition *partition;
@@ -596,7 +606,7 @@ classifier_remove(struct classifier *cls, struct cls_rule *rule)
     } else if (rculist_is_empty(&cls_match->list)) {
         cmap_remove(&subtable->rules, &cls_match->cmap_node, hash);
     } else {
-        struct cls_match *next = next_rule_in_list(cls_match);
+        struct cls_match *next = next_rule_in_list_protected(cls_match);
 
         rculist_remove(&cls_match->list);
         cmap_replace(&subtable->rules, &cls_match->cmap_node,
@@ -637,7 +647,7 @@ classifier_remove(struct classifier *cls, struct cls_rule *rule)
     cls->n_rules--;
 
     ovsrcu_postpone(free, cls_match);
-    rule->cls_match = NULL;
+    CONST_CAST(struct cls_rule *, rule)->cls_match = NULL;
 unlock:
     ovs_mutex_unlock(&cls->mutex);
 
@@ -675,7 +685,7 @@ trie_ctx_init(struct trie_ctx *ctx, const struct cls_trie *trie)
  * set of bits that were significant in the lookup.  At some point
  * earlier, 'wc' should have been initialized (e.g., by
  * flow_wildcards_init_catchall()). */
-struct cls_rule *
+const struct cls_rule *
 classifier_lookup(const struct classifier *cls, const struct flow *flow,
                   struct flow_wildcards *wc)
 {
@@ -723,7 +733,7 @@ classifier_lookup(const struct classifier *cls, const struct flow *flow,
     best = NULL;
     PVECTOR_FOR_EACH_PRIORITY(subtable, best_priority, 2,
                               sizeof(struct cls_subtable), &cls->subtables) {
-        struct cls_match *rule;
+        const struct cls_match *rule;
 
         if (!tag_intersects(tags, subtable->tag)) {
             continue;
@@ -742,13 +752,13 @@ classifier_lookup(const struct classifier *cls, const struct flow *flow,
 /* Finds and returns a rule in 'cls' with exactly the same priority and
  * matching criteria as 'target'.  Returns a null pointer if 'cls' doesn't
  * contain an exact match. */
-struct cls_rule *
+const struct cls_rule *
 classifier_find_rule_exactly(const struct classifier *cls,
                              const struct cls_rule *target)
     OVS_EXCLUDED(cls->mutex)
 {
-    struct cls_match *head, *rule;
-    struct cls_subtable *subtable;
+    const struct cls_match *head, *rule;
+    const struct cls_subtable *subtable;
 
     ovs_mutex_lock(&cls->mutex);
     subtable = find_subtable(cls, &target->match.mask);
@@ -778,11 +788,11 @@ out:
 /* Finds and returns a rule in 'cls' with priority 'priority' and exactly the
  * same matching criteria as 'target'.  Returns a null pointer if 'cls' doesn't
  * contain an exact match. */
-struct cls_rule *
+const struct cls_rule *
 classifier_find_match_exactly(const struct classifier *cls,
                               const struct match *target, int priority)
 {
-    struct cls_rule *retval;
+    const struct cls_rule *retval;
     struct cls_rule cr;
 
     cls_rule_init(&cr, target, priority);
@@ -814,7 +824,7 @@ classifier_rule_overlaps(const struct classifier *cls,
         CMAP_FOR_EACH (head, cmap_node, &subtable->rules) {
             struct cls_match *rule;
 
-            FOR_EACH_RULE_IN_LIST (rule, head) {
+            FOR_EACH_RULE_IN_LIST_PROTECTED (rule, head) {
                 if (rule->priority < target->priority) {
                     break; /* Rules in descending priority order. */
                 }
@@ -885,13 +895,13 @@ rule_matches(const struct cls_match *rule, const struct cls_rule *target)
                                           &target->match.mask));
 }
 
-static struct cls_match *
+static const struct cls_match *
 search_subtable(const struct cls_subtable *subtable,
                 struct cls_cursor *cursor)
 {
     if (!cursor->target
         || !minimask_has_extra(&subtable->mask, &cursor->target->match.mask)) {
-        struct cls_match *rule;
+        const struct cls_match *rule;
 
         CMAP_CURSOR_FOR_EACH (rule, cmap_node, &cursor->rules,
                               &subtable->rules) {
@@ -929,7 +939,7 @@ struct cls_cursor cls_cursor_start(const struct classifier *cls,
     ovs_mutex_lock(&cursor.cls->mutex);
     CMAP_CURSOR_FOR_EACH (subtable, cmap_node, &cursor.subtables,
                           &cursor.cls->subtables_map) {
-        struct cls_match *rule = search_subtable(subtable, &cursor);
+        const struct cls_match *rule = search_subtable(subtable, &cursor);
 
         if (rule) {
             cursor.subtable = subtable;
@@ -945,13 +955,13 @@ struct cls_cursor cls_cursor_start(const struct classifier *cls,
     return cursor;
 }
 
-static struct cls_rule *
+static const struct cls_rule *
 cls_cursor_next(struct cls_cursor *cursor)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
-    struct cls_match *rule = cursor->rule->cls_match;
+    const struct cls_match *rule = cursor->rule->cls_match;
     const struct cls_subtable *subtable;
-    struct cls_match *next;
+    const struct cls_match *next;
 
     next = next_rule_in_list__(rule);
     if (next->priority < rule->priority) {
@@ -997,7 +1007,6 @@ cls_cursor_advance(struct cls_cursor *cursor)
 
 static struct cls_subtable *
 find_subtable(const struct classifier *cls, const struct minimask *mask)
-    OVS_REQUIRES(cls->mutex)
 {
     struct cls_subtable *subtable;
 
@@ -1187,11 +1196,11 @@ miniflow_and_mask_matches_flow(const struct miniflow *flow,
     return true;
 }
 
-static inline struct cls_match *
+static inline const struct cls_match *
 find_match(const struct cls_subtable *subtable, const struct flow *flow,
            uint32_t hash)
 {
-    struct cls_match *rule;
+    const struct cls_match *rule;
 
     CMAP_FOR_EACH_WITH_HASH (rule, cmap_node, hash, &subtable->rules) {
         if (miniflow_and_mask_matches_flow(&rule->flow, &subtable->mask,
@@ -1249,13 +1258,13 @@ fill_range_wc(const struct cls_subtable *subtable, struct flow_wildcards *wc,
     }
 }
 
-static struct cls_match *
+static const struct cls_match *
 find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
               struct trie_ctx trie_ctx[CLS_MAX_TRIES], unsigned int n_tries,
               struct flow_wildcards *wc)
 {
     uint32_t basis = 0, hash;
-    struct cls_match *rule = NULL;
+    const struct cls_match *rule = NULL;
     int i;
     struct range ofs;
 
@@ -1338,7 +1347,7 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
 }
 
 static struct cls_match *
-find_equal(struct cls_subtable *subtable, const struct miniflow *flow,
+find_equal(const struct cls_subtable *subtable, const struct miniflow *flow,
            uint32_t hash)
 {
     struct cls_match *head;
@@ -1409,7 +1418,7 @@ insert_rule(struct classifier *cls, struct cls_subtable *subtable,
          * order of decreasing priority. */
         struct cls_match *rule;
 
-        FOR_EACH_RULE_IN_LIST (rule, head) {
+        FOR_EACH_RULE_IN_LIST_PROTECTED (rule, head) {
             if (new->priority >= rule->priority) {
                 if (rule == head) {
                     /* 'new' is the new highest-priority flow in the list. */

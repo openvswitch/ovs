@@ -288,21 +288,22 @@ bool classifier_set_prefix_fields(struct classifier *,
 bool classifier_is_empty(const struct classifier *);
 int classifier_count(const struct classifier *);
 void classifier_insert(struct classifier *, struct cls_rule *);
-struct cls_rule *classifier_replace(struct classifier *, struct cls_rule *);
-
-struct cls_rule *classifier_remove(struct classifier *, struct cls_rule *);
-struct cls_rule *classifier_lookup(const struct classifier *,
-                                   const struct flow *,
-                                   struct flow_wildcards *);
+const struct cls_rule *classifier_replace(struct classifier *,
+                                          struct cls_rule *);
+const struct cls_rule *classifier_remove(struct classifier *,
+                                         const struct cls_rule *);
+const struct cls_rule *classifier_lookup(const struct classifier *,
+                                         const struct flow *,
+                                         struct flow_wildcards *);
 bool classifier_rule_overlaps(const struct classifier *,
                               const struct cls_rule *);
 
-struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
-                                              const struct cls_rule *);
+const struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
+                                                    const struct cls_rule *);
 
-struct cls_rule *classifier_find_match_exactly(const struct classifier *,
-                                               const struct match *,
-                                               int priority);
+const struct cls_rule *classifier_find_match_exactly(const struct classifier *,
+                                                     const struct match *,
+                                                     int priority);
 
 /* Iteration. */
 
@@ -312,7 +313,7 @@ struct cls_cursor {
     const struct cls_rule *target;
     struct cmap_cursor subtables;
     struct cmap_cursor rules;
-    struct cls_rule *rule;
+    const struct cls_rule *rule;
     bool safe;
 };
 
