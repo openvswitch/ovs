@@ -13,6 +13,9 @@
 
 #%define kernel 2.6.40.4-5.fc15.x86_64
 
+# Enable PIE, bz#955181
+%global _hardened_build 1
+
 Name: openvswitch
 Summary: Open vSwitch
 Group: System Environment/Daemons
