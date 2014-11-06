@@ -57,6 +57,17 @@ Requires: python
 %description -n python-openvswitch
 Python bindings for the Open vSwitch database
 
+%package test
+Summary: Open vSwitch testing utilities
+License: ASL 2.0
+BuildArch: noarch
+Requires: python-openvswitch = %{version}-%{release}
+Requires: python python-twisted-core python-twisted-web
+
+%description test
+Utilities that are useful to diagnose performance and connectivity
+issues in Open vSwitch setup.
+
 %prep
 %setup -q -n openvswitch-%{version}
 
@@ -142,6 +153,15 @@ systemctl start openvswitch.service
 %{python_sitelib}/ovs
 %doc COPYING
 
+%files test
+%{_bindir}/ovs-test
+%{_bindir}/ovs-vlan-test
+%{_bindir}/ovs-l3ping
+%{_mandir}/man8/ovs-test.8*
+%{_mandir}/man8/ovs-vlan-test.8*
+%{_mandir}/man8/ovs-l3ping.8*
+%{python_sitelib}/ovstest
+
 %files
 %defattr(-,root,root)
 %config /etc/sysconfig/openvswitch
@@ -152,7 +172,6 @@ systemctl start openvswitch.service
 %{_sysconfdir}/sysconfig/network-scripts/ifup-ovs
 %{_sysconfdir}/sysconfig/network-scripts/ifdown-ovs
 /usr/share/openvswitch/bugtool-plugins/
-%{python_sitelib}/ovstest
 /usr/share/openvswitch/scripts/ovs-bugtool-*
 /usr/share/openvswitch/scripts/ovs-check-dead-ifs
 /usr/share/openvswitch/scripts/ovs-lib
@@ -172,8 +191,6 @@ systemctl start openvswitch.service
 /usr/bin/ovsdb-tool
 /usr/bin/ovs-testcontroller
 /usr/bin/ovs-pki
-/usr/bin/ovs-test
-/usr/bin/ovs-l3ping
 /usr/bin/vtep-ctl
 %doc /usr/share/man/man8/ovs-testcontroller.8.gz
 %doc /usr/share/man/man8/ovs-pki.8.gz
@@ -191,8 +208,6 @@ systemctl start openvswitch.service
 %doc /usr/share/man/man8/ovs-parse-backtrace.8.gz
 %doc /usr/share/man/man8/ovs-vsctl.8.gz
 %doc /usr/share/man/man8/ovs-vswitchd.8.gz
-%doc /usr/share/man/man8/ovs-test.8.gz
-%doc /usr/share/man/man8/ovs-l3ping.8.gz
 %doc /usr/share/man/man8/vtep-ctl.8.gz
 %doc COPYING DESIGN.md INSTALL.SSL.md NOTICE README.md WHY-OVS.md FAQ.md NEWS INSTALL.DPDK.md
 /var/lib/openvswitch
@@ -203,13 +218,11 @@ systemctl start openvswitch.service
 %exclude /usr/bin/ovs-parse-backtrace
 %exclude /usr/bin/ovs-pcap
 %exclude /usr/bin/ovs-tcpundump
-%exclude /usr/bin/ovs-vlan-test
 %exclude /usr/sbin/ovs-vlan-bug-workaround
 %exclude /usr/share/man/man1/ovs-benchmark.1.gz
 %exclude /usr/share/man/man1/ovs-pcap.1.gz
 %exclude /usr/share/man/man1/ovs-tcpundump.1.gz
 %exclude /usr/share/man/man8/ovs-vlan-bug-workaround.8.gz
-%exclude /usr/share/man/man8/ovs-vlan-test.8.gz
 %exclude /usr/share/openvswitch/scripts/ovs-save
 
 %changelog
