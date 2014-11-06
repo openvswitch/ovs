@@ -33,7 +33,7 @@ BuildRequires: python python-twisted-core python-zope-interface PyQt4
 BuildRequires: desktop-file-utils
 BuildRequires: groff graphviz
 
-Requires(post):  systemd-units
+Requires(post): systemd-units
 Requires(preun): systemd-units
 Requires(postun): systemd-units
 
