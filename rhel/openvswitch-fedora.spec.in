@@ -44,7 +44,7 @@ Requires(postun): systemd-units
 %bcond_without check
 
 %description
-Open vSwitch provides standard network bridging functions augmented with
+Open vSwitch provides standard network bridging functions and
 support for the OpenFlow protocol for remote per-flow control of
 traffic.
 
