@@ -214,9 +214,6 @@ systemctl start openvswitch.service
 /usr/share/openvswitch/scripts/ovs-vtep
 %config /usr/share/openvswitch/vswitch.ovsschema
 %config /usr/share/openvswitch/vtep.ovsschema
-/usr/sbin/ovs-bugtool
-/usr/sbin/ovs-vswitchd
-/usr/sbin/ovsdb-server
 /usr/bin/ovs-appctl
 /usr/bin/ovs-docker
 /usr/bin/ovs-dpctl
@@ -228,6 +225,9 @@ systemctl start openvswitch.service
 /usr/bin/ovs-testcontroller
 /usr/bin/ovs-pki
 /usr/bin/vtep-ctl
+%{_sbindir}/ovs-bugtool
+%{_sbindir}/ovs-vswitchd
+%{_sbindir}/ovsdb-server
 %{_mandir}/man1/ovs-benchmark.1*
 %{_mandir}/man1/ovs-pcap.1*
 %{_mandir}/man1/ovs-tcpundump.1*
@@ -257,7 +257,7 @@ systemctl start openvswitch.service
 %exclude /usr/bin/ovs-parse-backtrace
 %exclude /usr/bin/ovs-pcap
 %exclude /usr/bin/ovs-tcpundump
-%exclude /usr/sbin/ovs-vlan-bug-workaround
+%exclude %{_sbindir}/ovs-vlan-bug-workaround
 %exclude /usr/share/man/man1/ovs-benchmark.1.gz
 %exclude /usr/share/man/man1/ovs-pcap.1.gz
 %exclude /usr/share/man/man1/ovs-tcpundump.1.gz
