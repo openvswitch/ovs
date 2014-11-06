@@ -1503,7 +1503,9 @@ union mf_value {
 };
 BUILD_ASSERT_DECL(sizeof(union mf_value) == 16);
 
+/* An all-1-bits mf_value.  Needs to be updated if struct mf_value grows.*/
 #define MF_EXACT_MASK_INITIALIZER { IN6ADDR_EXACT_INIT }
+BUILD_ASSERT_DECL(sizeof(union mf_value) == sizeof(struct in6_addr));
 
 /* Part of a field. */
 struct mf_subfield {

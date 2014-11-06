@@ -147,7 +147,8 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
         case NX_LEARN_DST_OUTPUT:
             if (spec->n_bits <= 16
                 || is_all_zeros(value.u8, sizeof value - 2)) {
-                ofp_port_t port = u16_to_ofp(ntohs(value.be16[7]));
+                ovs_be16 *last_be16 = &value.be16[ARRAY_SIZE(value.be16) - 1];
+                ofp_port_t port = u16_to_ofp(ntohs(*last_be16));
 
                 if (ofp_to_u16(port) < ofp_to_u16(OFPP_MAX)
                     || port == OFPP_IN_PORT
@@ -209,7 +210,8 @@ learn_parse_load_immediate(const char *s, struct ofpact_learn_spec *spec)
         }
         s = arrow;
     } else {
-        imm.be64[1] = htonll(strtoull(s, (char **) &s, 0));
+        ovs_be64 *last_be64 = &imm.be64[ARRAY_SIZE(imm.be64) - 1];
+        *last_be64 = htonll(strtoull(s, (char **) &s, 0));
     }
 
     if (strncmp(s, "->", 2)) {
