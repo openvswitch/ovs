@@ -248,6 +248,7 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
     enum {
         F_OUT_PORT = 1 << 0,
         F_ACTIONS = 1 << 1,
+        F_IMPORTANCE = 1 << 2,
         F_TIMEOUT = 1 << 3,
         F_PRIORITY = 1 << 4,
         F_FLAGS = 1 << 5,
@@ -264,7 +265,7 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
         break;
 
     case OFPFC_ADD:
-        fields = F_ACTIONS | F_TIMEOUT | F_PRIORITY | F_FLAGS;
+        fields = F_ACTIONS | F_TIMEOUT | F_PRIORITY | F_FLAGS | F_IMPORTANCE;
         break;
 
     case OFPFC_DELETE:
@@ -305,6 +306,7 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
     fm->buffer_id = UINT32_MAX;
     fm->out_port = OFPP_ANY;
     fm->flags = 0;
+    fm->importance = 0;
     fm->out_group = OFPG11_ANY;
     fm->delete_reason = OFPRR_DELETE;
     if (fields & F_ACTIONS) {
@@ -366,6 +368,8 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
                 error = str_to_u16(value, name, &fm->idle_timeout);
             } else if (fields & F_TIMEOUT && !strcmp(name, "hard_timeout")) {
                 error = str_to_u16(value, name, &fm->hard_timeout);
+            } else if (fields & F_IMPORTANCE && !strcmp(name, "importance")) {
+                error = str_to_u16(value, name, &fm->importance);
             } else if (!strcmp(name, "cookie")) {
                 char *mask = strchr(value, '/');
 

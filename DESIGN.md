@@ -277,8 +277,11 @@ The table for 1.3 is the same as the one shown above for 1.2.
 OpenFlow 1.4
 ------------
 
-OpenFlow 1.4 does not change flow_mod semantics.
-
+OpenFlow 1.4 adds the "importance" field to flow_mods, but it does not
+explicitly specify which kinds of flow_mods set the importance.For
+consistency, Open vSwitch uses the same rule for importance as for
+idle_timeout and hard_timeout, that is, only an "ADD" flow_mod sets
+the importance.  (This issue has been filed with the ONF as EXT-496.)
 
 OFPT_PACKET_IN
 ==============

@@ -2267,6 +2267,7 @@ struct fte_version {
     ovs_be64 cookie;
     uint16_t idle_timeout;
     uint16_t hard_timeout;
+    uint16_t importance;
     uint16_t flags;
     struct ofpact *ofpacts;
     size_t ofpacts_len;
@@ -2292,6 +2293,7 @@ fte_version_equals(const struct fte_version *a, const struct fte_version *b)
     return (a->cookie == b->cookie
             && a->idle_timeout == b->idle_timeout
             && a->hard_timeout == b->hard_timeout
+            && a->importance == b->importance
             && ofpacts_equal(a->ofpacts, a->ofpacts_len,
                              b->ofpacts, b->ofpacts_len));
 }
@@ -2317,6 +2319,9 @@ fte_version_format(const struct fte *fte, int index, struct ds *s)
     }
     if (version->hard_timeout != OFP_FLOW_PERMANENT) {
         ds_put_format(s, " hard_timeout=%"PRIu16, version->hard_timeout);
+    }
+    if (version->importance != 0) {
+        ds_put_format(s, " importance=%"PRIu16, version->importance);
     }
 
     ds_put_cstr(s, " actions=");
@@ -2415,6 +2420,7 @@ read_flows_from_file(const char *filename, struct classifier *cls, int index)
         version->cookie = fm.new_cookie;
         version->idle_timeout = fm.idle_timeout;
         version->hard_timeout = fm.hard_timeout;
+        version->importance = fm.importance;
         version->flags = fm.flags & (OFPUTIL_FF_SEND_FLOW_REM
                                      | OFPUTIL_FF_EMERG);
         version->ofpacts = fm.ofpacts;
@@ -2517,6 +2523,7 @@ read_flows_from_switch(struct vconn *vconn,
         version->cookie = fs.cookie;
         version->idle_timeout = fs.idle_timeout;
         version->hard_timeout = fs.hard_timeout;
+        version->importance = fs.importance;
         version->flags = 0;
         version->ofpacts_len = fs.ofpacts_len;
         version->ofpacts = xmemdup(fs.ofpacts, fs.ofpacts_len);
@@ -2544,6 +2551,7 @@ fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
     fm.command = command;
     fm.idle_timeout = version->idle_timeout;
     fm.hard_timeout = version->hard_timeout;
+    fm.importance = version->importance;
     fm.buffer_id = UINT32_MAX;
     fm.out_port = OFPP_ANY;
     fm.flags = version->flags;

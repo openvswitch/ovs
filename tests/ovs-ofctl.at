@@ -2751,3 +2751,57 @@ AT_CHECK([tail -1 stdout], [0],
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+dnl Check importance parameter added in OF1.4.
+dnl It validates whether importance set via add-flow via OpenFlow1.4+ gets
+dnl set or not by validating it againt the dump-flows output via OpenFlow1.4+
+dnl If add-flow or dump-flows is used with later version of OpenFlow prior to 1.4+
+dnl then the importance will be considered zero whether provided as an argument.
+
+AT_SETUP([ovs-ofctl rule with importance])
+OVS_VSWITCHD_START
+dnl Flow with importance parameter added via OF1.4+ and later version
+AT_CHECK([ovs-ofctl -O OpenFlow14 add-flow br0 priority=21,importance=21,actions=normal])
+AT_CHECK([ovs-ofctl add-flow br0 priority=22,importance=22,actions=normal])
+
+dnl Importance parameter will only be visible of flows that are added via OF1.4+ if dumped via OF1.4+
+AT_CHECK([ovs-ofctl -O OpenFlow14 dump-flows br0 | ofctl_strip], [0], [dnl
+OFPST_FLOW reply (OF1.4):
+ priority=22 actions=NORMAL
+ importance=21, priority=21 actions=NORMAL
+])
+
+dnl Importance parameter will not be visible if flow is dumped with previous version prior to OF1.4+ whether added via OF1.4+
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip], [0], [dnl
+NXST_FLOW reply:
+ priority=22 actions=NORMAL
+ priority=21 actions=NORMAL
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
+dnl Importance parameter added in OF1.4.
+dnl This validates whether flows with importance
+dnl parameter are getting replaced with "replace-flows" or
+dnl not by validating dump-flows output after replace with the expected output.
+
+AT_SETUP([ovs-ofctl replace-flows with importance])
+OVS_VSWITCHD_START
+
+dnl Add flows to br0 with importance via OF1.4+. For more details refer "ovs-ofctl rule with importance" test case.
+for i in {1..8}; do echo "dl_vlan=$i,importance=$i,actions=drop"; done > add-flows.txt
+AT_CHECK([ovs-ofctl -O OpenFlow14 add-flows br0 add-flows.txt])
+
+dnl Replace some flows in the bridge.
+for i in {1..8..2}; do echo "dl_vlan=$i,importance=`expr $i + 10`,actions=drop"; done > replace-flows.txt
+AT_CHECK([ovs-ofctl -O OpenFlow14 replace-flows br0 replace-flows.txt])
+
+dnl Dump them and compare the dump flows output against the expected output.
+for i in `seq 1 8`; do if [[ `expr $i % 2` -eq 1 ]]; then importance=`expr $i + 10`; else importance=$i; fi; echo " importance=$importance, dl_vlan=$i actions=drop"; done | sort > expout
+AT_CHECK([ovs-ofctl -O OpenFlow14 dump-flows br0 | ofctl_strip | sed '/OFPST_FLOW/d' | sort],
+  [0], [expout])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP

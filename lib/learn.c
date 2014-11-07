@@ -101,6 +101,7 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
     fm->command = OFPFC_MODIFY_STRICT;
     fm->idle_timeout = learn->idle_timeout;
     fm->hard_timeout = learn->hard_timeout;
+    fm->importance = 0;
     fm->buffer_id = UINT32_MAX;
     fm->out_port = OFPP_NONE;
     fm->flags = 0;

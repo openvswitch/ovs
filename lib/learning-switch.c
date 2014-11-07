@@ -202,6 +202,7 @@ lswitch_handshake(struct lswitch *sw)
         fm.command = OFPFC_ADD;
         fm.idle_timeout = 0;
         fm.hard_timeout = 0;
+        fm.importance = 0;
         fm.buffer_id = UINT32_MAX;
         fm.out_port = OFPP_NONE;
         fm.out_group = OFPG_ANY;

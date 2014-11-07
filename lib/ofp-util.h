@@ -306,6 +306,7 @@ struct ofputil_flow_mod {
     ofp_port_t out_port;
     uint32_t out_group;
     enum ofputil_flow_mod_flags flags;
+    uint16_t importance;     /* Eviction precedence. */
     struct ofpact *ofpacts;  /* Series of "struct ofpact"s. */
     size_t ofpacts_len;      /* Length of ofpacts, in bytes. */
 
@@ -355,6 +356,7 @@ struct ofputil_flow_stats {
     const struct ofpact *ofpacts;
     size_t ofpacts_len;
     enum ofputil_flow_mod_flags flags;
+    uint16_t importance;        /* Eviction precedence. */
 };
 
 int ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *,

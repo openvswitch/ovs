@@ -1847,6 +1847,14 @@ Causes the flow to expire after the given number of seconds,
 regardless of activity.  A value of 0 (the default) gives the flow no
 hard expiration deadline.
 .
+.IP "\fBimportance=\fIvalue\fR"
+Sets the importance of a flow.  The flow entry eviction mechanism can
+use importance as a factor in deciding which flow to evict.  A value
+of 0 (the default) makes the flow non-evictable on the basis of
+importance.  Specify a value between 0 and 65535.
+.IP
+Only OpenFlow 1.4 and later support \fBimportance\fR.
+.
 .IP "\fBsend_flow_rem\fR"
 Marks the flow with a flag that causes the switch to generate a ``flow
 removed'' message and send it to interested controllers when the flow

@@ -346,6 +346,9 @@ struct rule {
     uint16_t hard_timeout OVS_GUARDED; /* In seconds from ->modified. */
     uint16_t idle_timeout OVS_GUARDED; /* In seconds from ->used. */
 
+    /* Eviction precedence. */
+    uint16_t importance OVS_GUARDED;
+
     /* Eviction groups (see comment on struct eviction_group for explanation) .
      *
      * 'eviction_group' is this rule's eviction group, or NULL if it is not in

@@ -1895,6 +1895,7 @@ flow_mod_init(struct ofputil_flow_mod *fm,
     fm->command = command;
     fm->idle_timeout = 0;
     fm->hard_timeout = 0;
+    fm->importance = 0;
     fm->buffer_id = UINT32_MAX;
     fm->out_port = OFPP_ANY;
     fm->out_group = OFPG_ANY;
@@ -1991,6 +1992,7 @@ ofproto_flow_mod(struct ofproto *ofproto, struct ofputil_flow_mod *fm)
             actions = rule_get_actions(rule);
             if (rule->idle_timeout == fm->idle_timeout
                 && rule->hard_timeout == fm->hard_timeout
+                && rule->importance == fm->importance
                 && rule->flags == (fm->flags & OFPUTIL_FF_STATE)
                 && (!fm->modify_cookie || (fm->new_cookie == rule->flow_cookie))
                 && ofpacts_equal(fm->ofpacts, fm->ofpacts_len,
@@ -3809,6 +3811,7 @@ handle_flow_stats_request(struct ofconn *ofconn,
         fs.cookie = rule->flow_cookie;
         fs.idle_timeout = rule->idle_timeout;
         fs.hard_timeout = rule->hard_timeout;
+        fs.importance = rule->importance;
         created = rule->created;
         modified = rule->modified;
         actions = rule_get_actions(rule);
@@ -4238,6 +4241,7 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     ovs_mutex_lock(&rule->mutex);
     rule->idle_timeout = fm->idle_timeout;
     rule->hard_timeout = fm->hard_timeout;
+    rule->importance = fm->importance;
     ovs_mutex_unlock(&rule->mutex);
 
     *CONST_CAST(uint8_t *, &rule->table_id) = table - ofproto->tables;
@@ -4353,6 +4357,7 @@ modify_flows__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
         if (fm->command == OFPFC_ADD) {
             rule->idle_timeout = fm->idle_timeout;
             rule->hard_timeout = fm->hard_timeout;
+            rule->importance = fm->importance;
             rule->flags = fm->flags & OFPUTIL_FF_STATE;
             rule->created = now;
         }
@@ -4366,7 +4371,7 @@ modify_flows__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
             cookies_insert(ofproto, rule);
         }
         if (fm->command == OFPFC_ADD) {
-            if (fm->idle_timeout || fm->hard_timeout) {
+            if (fm->idle_timeout || fm->hard_timeout || fm->importance) {
                 if (!rule->eviction_group) {
                     eviction_group_add_rule(rule);
                 }

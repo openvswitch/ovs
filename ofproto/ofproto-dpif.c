@@ -5313,6 +5313,7 @@ ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
     fm.command = OFPFC_ADD;
     fm.idle_timeout = idle_timeout;
     fm.hard_timeout = 0;
+    fm.importance = 0;
     fm.buffer_id = 0;
     fm.out_port = 0;
     fm.flags = OFPUTIL_FF_HIDDEN_FIELDS | OFPUTIL_FF_NO_READONLY;

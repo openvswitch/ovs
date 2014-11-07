@@ -805,6 +805,9 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh, int verbosity)
     if (fm.hard_timeout != OFP_FLOW_PERMANENT) {
         ds_put_format(s, "hard:%"PRIu16" ", fm.hard_timeout);
     }
+    if (fm.importance != 0) {
+        ds_put_format(s, "importance:%"PRIu16" ", fm.importance);
+    }
     if (fm.priority != OFP_DEFAULT_PRIORITY && need_priority) {
         ds_put_format(s, "pri:%"PRIu16" ", fm.priority);
     }
@@ -1428,6 +1431,9 @@ ofp_print_flow_stats(struct ds *string, struct ofputil_flow_stats *fs)
     }
     if (fs->flags) {
         ofp_print_flow_flags(string, fs->flags);
+    }
+    if (fs->importance != 0) {
+        ds_put_format(string, "importance=%"PRIu16", ", fs->importance);
     }
     if (fs->idle_age >= 0) {
         ds_put_format(string, "idle_age=%d, ", fs->idle_age);
