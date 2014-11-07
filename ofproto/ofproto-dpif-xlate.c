@@ -672,8 +672,8 @@ xlate_txn_commit(void)
     struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
 
     ovsrcu_set(&xcfgp, new_xcfg);
-    ovsrcu_postpone(xlate_xcfg_free, xcfg);
-
+    ovsrcu_synchronize();
+    xlate_xcfg_free(xcfg);
     new_xcfg = NULL;
 }
 
