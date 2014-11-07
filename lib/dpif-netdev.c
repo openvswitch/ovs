@@ -372,6 +372,10 @@ static void dp_netdev_actions_free(struct dp_netdev_actions *);
 struct dp_netdev_pmd_thread {
     struct dp_netdev *dp;
     struct cmap_node node;          /* In 'dp->poll_threads'. */
+
+    pthread_cond_t cond;            /* For synchronizing pmd thread reload. */
+    struct ovs_mutex cond_mutex;    /* Mutex for condition variable. */
+
     /* Per thread exact-match cache.  Note, the instance for cpu core
      * NON_PMD_CORE_ID can be accessed by multiple threads, and thusly
      * need to be protected (e.g. by 'dp_netdev_mutex').  All other
@@ -418,6 +422,7 @@ static void dp_netdev_input(struct dp_netdev_pmd_thread *,
                             struct dpif_packet **, int cnt);
 
 static void dp_netdev_disable_upcall(struct dp_netdev *);
+void dp_netdev_pmd_reload_done(struct dp_netdev_pmd_thread *pmd);
 static void dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd,
                                     struct dp_netdev *dp, int index,
                                     int core_id, int numa_id);
@@ -764,7 +769,14 @@ dp_netdev_reload_pmd__(struct dp_netdev_pmd_thread *pmd)
 {
     int old_seq;
 
+    if (pmd->core_id == NON_PMD_CORE_ID) {
+        return;
+    }
+
+    ovs_mutex_lock(&pmd->cond_mutex);
     atomic_add_relaxed(&pmd->change_seq, 1, &old_seq);
+    ovs_mutex_cond_wait(&pmd->cond, &pmd->cond_mutex);
+    ovs_mutex_unlock(&pmd->cond_mutex);
 }
 
 /* Causes all pmd threads to reload its tx/rx devices.
@@ -975,27 +987,21 @@ port_try_ref(struct dp_netdev_port *port)
 }
 
 static void
-port_destroy__(struct dp_netdev_port *port)
-{
-    int n_rxq = netdev_n_rxq(port->netdev);
-    int i;
-
-    netdev_close(port->netdev);
-    netdev_restore_flags(port->sf);
-
-    for (i = 0; i < n_rxq; i++) {
-        netdev_rxq_close(port->rxq[i]);
-    }
-    free(port->rxq);
-    free(port->type);
-    free(port);
-}
-
-static void
 port_unref(struct dp_netdev_port *port)
 {
     if (port && ovs_refcount_unref_relaxed(&port->ref_cnt) == 1) {
-        ovsrcu_postpone(port_destroy__, port);
+        int n_rxq = netdev_n_rxq(port->netdev);
+        int i;
+
+        netdev_close(port->netdev);
+        netdev_restore_flags(port->sf);
+
+        for (i = 0; i < n_rxq; i++) {
+            netdev_rxq_close(port->rxq[i]);
+        }
+        free(port->rxq);
+        free(port->type);
+        free(port);
     }
 }
 
@@ -2310,6 +2316,10 @@ reload:
     emc_cache_init(&pmd->flow_cache);
     poll_cnt = pmd_load_queues(pmd, &poll_list, poll_cnt);
 
+    /* Signal here to make sure the pmd finishes
+     * reloading the updated configuration. */
+    dp_netdev_pmd_reload_done(pmd);
+
     for (;;) {
         int i;
 
@@ -2341,6 +2351,8 @@ reload:
     for (i = 0; i < poll_cnt; i++) {
          port_unref(poll_list[i].port);
     }
+
+    dp_netdev_pmd_reload_done(pmd);
 
     free(poll_list);
     return NULL;
@@ -2374,6 +2386,14 @@ dpif_netdev_enable_upcall(struct dpif *dpif)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     dp_netdev_enable_upcall(dp);
+}
+
+void
+dp_netdev_pmd_reload_done(struct dp_netdev_pmd_thread *pmd)
+{
+    ovs_mutex_lock(&pmd->cond_mutex);
+    xpthread_cond_signal(&pmd->cond);
+    ovs_mutex_unlock(&pmd->cond_mutex);
 }
 
 /* Returns the pointer to the dp_netdev_pmd_thread for non-pmd threads. */
@@ -2412,6 +2432,8 @@ dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
     pmd->numa_id = numa_id;
     latch_init(&pmd->exit_latch);
     atomic_init(&pmd->change_seq, PMD_INITIAL_SEQ);
+    xpthread_cond_init(&pmd->cond, NULL);
+    ovs_mutex_init(&pmd->cond_mutex);
     /* init the 'flow_cache' since there is no
      * actual thread created for NON_PMD_CORE_ID. */
     if (core_id == NON_PMD_CORE_ID) {
@@ -2438,6 +2460,8 @@ dp_netdev_del_pmd(struct dp_netdev_pmd_thread *pmd)
     }
     cmap_remove(&pmd->dp->poll_threads, &pmd->node, hash_int(pmd->core_id, 0));
     latch_destroy(&pmd->exit_latch);
+    xpthread_cond_destroy(&pmd->cond);
+    ovs_mutex_destroy(&pmd->cond_mutex);
     free(pmd);
 }
 
