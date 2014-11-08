@@ -785,7 +785,8 @@ static int execute_set_action(struct sk_buff *skb, struct sw_flow_key *key,
 }
 
 static int execute_recirc(struct datapath *dp, struct sk_buff *skb,
-			  struct sw_flow_key *key, const struct nlattr *a, int rem)
+			  struct sw_flow_key *key,
+			  const struct nlattr *a, int rem)
 {
 	struct deferred_action *da;
 
@@ -795,7 +796,6 @@ static int execute_recirc(struct datapath *dp, struct sk_buff *skb,
 		err = ovs_flow_key_update(skb, key);
 		if (err)
 			return err;
-
 	}
 	BUG_ON(!is_flow_key_valid(key));
 
@@ -930,13 +930,14 @@ static void process_deferred_actions(struct datapath *dp)
 	do {
 		struct deferred_action *da = action_fifo_get(fifo);
 		struct sk_buff *skb = da->skb;
+		struct sw_flow_key *key = &da->pkt_key;
 		const struct nlattr *actions = da->actions;
 
 		if (actions)
-			do_execute_actions(dp, skb, &da->pkt_key, actions,
+			do_execute_actions(dp, skb, key, actions,
 					   nla_len(actions));
 		else
-			ovs_dp_process_packet(skb, &da->pkt_key);
+			ovs_dp_process_packet(skb, key);
 	} while (!action_fifo_is_empty(fifo));
 
 	/* Reset FIFO for the next packet.  */
@@ -945,8 +946,8 @@ static void process_deferred_actions(struct datapath *dp)
 
 /* Execute a list of actions against 'skb'. */
 int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb,
-			struct sw_flow_key *key,
-			const struct sw_flow_actions *acts)
+			const struct sw_flow_actions *acts,
+			struct sw_flow_key *key)
 {
 	int level = this_cpu_read(exec_actions_level);
 	int err;
@@ -961,8 +962,8 @@ int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb,
 	}
 
 	this_cpu_inc(exec_actions_level);
-
-	err = do_execute_actions(dp, skb, key, acts->actions, acts->actions_len);
+	err = do_execute_actions(dp, skb, key,
+				 acts->actions, acts->actions_len);
 
 	if (!level)
 		process_deferred_actions(dp);

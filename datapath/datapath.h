@@ -32,8 +32,8 @@
 #include "vlan.h"
 #include "vport.h"
 
-#define DP_MAX_PORTS		USHRT_MAX
-#define DP_VPORT_HASH_BUCKETS	1024
+#define DP_MAX_PORTS           USHRT_MAX
+#define DP_VPORT_HASH_BUCKETS  1024
 
 #define SAMPLE_ACTION_DEPTH 3
 
@@ -112,16 +112,16 @@ struct ovs_skb_cb {
  * @cmd: One of %OVS_PACKET_CMD_*.
  * @userdata: If nonnull, its variable-length value is passed to userspace as
  * %OVS_PACKET_ATTR_USERDATA.
- * @portid: Netlink PID to which packet should be sent.  If @portid is 0 then no
- * packet is sent and the packet is accounted in the datapath's @n_lost
+ * @portid: Netlink portid to which packet should be sent.  If @portid is 0
+ * then no packet is sent and the packet is accounted in the datapath's @n_lost
  * counter.
  * @egress_tun_info: If nonnull, becomes %OVS_PACKET_ATTR_EGRESS_TUN_KEY.
  */
 struct dp_upcall_info {
+	const struct ovs_tunnel_info *egress_tun_info;
 	const struct nlattr *userdata;
 	u32 portid;
 	u8 cmd;
-	const struct ovs_tunnel_info *egress_tun_info;
 };
 
 /**
@@ -132,8 +132,8 @@ struct dp_upcall_info {
  */
 struct ovs_net {
 	struct list_head dps;
-	struct vport_net vport_net;
 	struct work_struct dp_notify_work;
+	struct vport_net vport_net;
 };
 
 extern int ovs_net_id;
@@ -186,18 +186,18 @@ extern struct notifier_block ovs_dp_device_notifier;
 extern struct genl_family dp_vport_genl_family;
 extern struct genl_multicast_group ovs_dp_vport_multicast_group;
 
-void ovs_dp_process_packet(struct sk_buff *, struct sw_flow_key *key);
+void ovs_dp_process_packet(struct sk_buff *skb, struct sw_flow_key *key);
 void ovs_dp_detach_port(struct vport *);
 int ovs_dp_upcall(struct datapath *, struct sk_buff *,
 		  const struct sw_flow_key *, const struct dp_upcall_info *);
 
 const char *ovs_dp_name(const struct datapath *dp);
-struct sk_buff *ovs_vport_cmd_build_info(struct vport *, u32 portid, u32 seq,
+struct sk_buff *ovs_vport_cmd_build_info(struct vport *, u32 pid, u32 seq,
 					 u8 cmd);
 
 int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb,
-			struct sw_flow_key *key,
-			const struct sw_flow_actions *acts);
+			const struct sw_flow_actions *, struct sw_flow_key *);
+
 void ovs_dp_notify_wq(struct work_struct *work);
 
 int action_fifos_init(void);

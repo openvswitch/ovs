@@ -403,13 +403,13 @@ static int parse_icmpv6(struct sk_buff *skb, struct sw_flow_key *key,
 				if (unlikely(!is_zero_ether_addr(key->ipv6.nd.sll)))
 					goto invalid;
 				ether_addr_copy(key->ipv6.nd.sll,
-				    &nd->opt[offset+sizeof(*nd_opt)]);
+						&nd->opt[offset+sizeof(*nd_opt)]);
 			} else if (nd_opt->nd_opt_type == ND_OPT_TARGET_LL_ADDR
 				   && opt_len == 8) {
 				if (unlikely(!is_zero_ether_addr(key->ipv6.nd.tll)))
 					goto invalid;
 				ether_addr_copy(key->ipv6.nd.tll,
-				    &nd->opt[offset+sizeof(*nd_opt)]);
+						&nd->opt[offset+sizeof(*nd_opt)]);
 			}
 
 			icmp_len -= opt_len;
@@ -454,7 +454,7 @@ static int key_extract(struct sk_buff *skb, struct sw_flow_key *key)
 	int error;
 	struct ethhdr *eth;
 
-	/* Flags are always used as part of stats. */
+	/* Flags are always used as part of stats */
 	key->tp.flags = 0;
 
 	skb_reset_mac_header(skb);
@@ -516,7 +516,7 @@ static int key_extract(struct sk_buff *skb, struct sw_flow_key *key)
 			return 0;
 		}
 		if (nh->frag_off & htons(IP_MF) ||
-			 skb_shinfo(skb)->gso_type & SKB_GSO_UDP)
+			skb_shinfo(skb)->gso_type & SKB_GSO_UDP)
 			key->ip.frag = OVS_FRAG_TYPE_FIRST;
 		else
 			key->ip.frag = OVS_FRAG_TYPE_NONE;
@@ -531,6 +531,7 @@ static int key_extract(struct sk_buff *skb, struct sw_flow_key *key)
 			} else {
 				memset(&key->tp, 0, sizeof(key->tp));
 			}
+
 		} else if (key->ip.proto == IPPROTO_UDP) {
 			if (udphdr_ok(skb)) {
 				struct udphdr *udp = udp_hdr(skb);
@@ -672,7 +673,6 @@ static int key_extract(struct sk_buff *skb, struct sw_flow_key *key)
 			}
 		}
 	}
-
 	return 0;
 }
 
@@ -682,8 +682,7 @@ int ovs_flow_key_update(struct sk_buff *skb, struct sw_flow_key *key)
 }
 
 int ovs_flow_key_extract(const struct ovs_tunnel_info *tun_info,
-			 struct sk_buff *skb,
-			 struct sw_flow_key *key)
+			 struct sk_buff *skb, struct sw_flow_key *key)
 {
 	/* Extract metadata from packet. */
 	if (tun_info) {
@@ -694,7 +693,7 @@ int ovs_flow_key_extract(const struct ovs_tunnel_info *tun_info,
 
 		if (tun_info->options) {
 			memcpy(GENEVE_OPTS(key, tun_info->options_len),
-				tun_info->options, tun_info->options_len);
+			       tun_info->options, tun_info->options_len);
 			key->tun_opts_len = tun_info->options_len;
 		} else {
 			key->tun_opts_len = 0;

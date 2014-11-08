@@ -113,6 +113,7 @@ struct vport {
 	const struct vport_ops *ops;
 
 	struct pcpu_sw_netstats __percpu *percpu_stats;
+
 	struct vport_err_stats err_stats;
 };
 
@@ -153,7 +154,8 @@ struct vport_parms {
  * @get_name: Get the device's name.
  * @send: Send a packet on the device.  Returns the length of the packet sent,
  * zero for dropped packets or negative for error.
- * @get_egress_tun_info: Get the egress tunnel 5-tuple and other info for a packet.
+ * @get_egress_tun_info: Get the egress tunnel 5-tuple and other info for
+ * a packet.
  */
 struct vport_ops {
 	enum ovs_vport_type type;
@@ -169,7 +171,6 @@ struct vport_ops {
 	const char *(*get_name)(const struct vport *);
 
 	int (*send)(struct vport *, struct sk_buff *);
-
 	int (*get_egress_tun_info)(struct vport *, struct sk_buff *,
 				   struct ovs_tunnel_info *);
 };

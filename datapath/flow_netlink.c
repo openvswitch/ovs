@@ -144,7 +144,6 @@ static bool match_validate(const struct sw_flow_match *match,
 			mask_allowed |= 1ULL << OVS_KEY_ATTR_ARP;
 	}
 
-
 	if (eth_p_mpls(match->key->eth.type)) {
 		key_expected |= 1ULL << OVS_KEY_ATTR_MPLS;
 		if (match->mask && (match->mask->key.eth.type == htons(0xffff)))
@@ -231,8 +230,7 @@ static bool match_validate(const struct sw_flow_match *match,
 
 	if ((key_attrs & key_expected) != key_expected) {
 		/* Key attributes check failed. */
-		OVS_NLERR(log,
-			  "Missing expected key attributes (key_attrs=%llx, expected=%llx).",
+		OVS_NLERR(log, "Missing key (keys=%llx, expected=%llx)",
 			  (unsigned long long)key_attrs,
 			  (unsigned long long)key_expected);
 		return false;
@@ -240,8 +238,7 @@ static bool match_validate(const struct sw_flow_match *match,
 
 	if ((mask_attrs & mask_allowed) != mask_attrs) {
 		/* Mask attributes check failed. */
-		OVS_NLERR(log,
-			  "Contain more than allowed mask fields (mask_attrs=%llx, mask_allowed=%llx).",
+		OVS_NLERR(log, "Unexpected mask (mask=%llx, allowed=%llx)",
 			  (unsigned long long)mask_attrs,
 			  (unsigned long long)mask_allowed);
 		return false;
@@ -311,8 +308,8 @@ static const int ovs_key_lens[OVS_KEY_ATTR_MAX + 1] = {
 	[OVS_KEY_ATTR_ICMPV6] = sizeof(struct ovs_key_icmpv6),
 	[OVS_KEY_ATTR_ARP] = sizeof(struct ovs_key_arp),
 	[OVS_KEY_ATTR_ND] = sizeof(struct ovs_key_nd),
-	[OVS_KEY_ATTR_DP_HASH] = sizeof(u32),
 	[OVS_KEY_ATTR_RECIRC_ID] = sizeof(u32),
+	[OVS_KEY_ATTR_DP_HASH] = sizeof(u32),
 	[OVS_KEY_ATTR_TUNNEL] = -1,
 	[OVS_KEY_ATTR_MPLS] = sizeof(struct ovs_key_mpls),
 };
@@ -345,23 +342,20 @@ static int __parse_flow_nlattrs(const struct nlattr *attr,
 		int expected_len;
 
 		if (type > OVS_KEY_ATTR_MAX) {
-			OVS_NLERR(log,
-				  "Unknown key attribute (type=%d, max=%d).",
+			OVS_NLERR(log, "Key type %d is out of range max %d",
 				  type, OVS_KEY_ATTR_MAX);
 			return -EINVAL;
 		}
 
 		if (attrs & (1ULL << type)) {
-			OVS_NLERR(log, "Duplicate key attribute (type %d).",
-				  type);
+			OVS_NLERR(log, "Duplicate key (type %d).", type);
 			return -EINVAL;
 		}
 
 		expected_len = ovs_key_lens[type];
 		if (nla_len(nla) != expected_len && expected_len != -1) {
-			OVS_NLERR(log, "Key attribute has unexpected length "
-				  "(type=%d, length=%d, expected=%d).", type,
-				  nla_len(nla), expected_len);
+			OVS_NLERR(log, "Key %d has unexpected len %d expected %d",
+				  type, nla_len(nla), expected_len);
 			return -EINVAL;
 		}
 
@@ -393,6 +387,58 @@ static int parse_flow_nlattrs(const struct nlattr *attr,
 	return __parse_flow_nlattrs(attr, a, attrsp, log, false);
 }
 
+static int genev_tun_opt_from_nlattr(const struct nlattr *a,
+				     struct sw_flow_match *match, bool is_mask,
+				     bool log)
+{
+	unsigned long opt_key_offset;
+
+	if (nla_len(a) > sizeof(match->key->tun_opts)) {
+		OVS_NLERR(log, "Geneve option length err (len %d, max %zu).",
+			  nla_len(a), sizeof(match->key->tun_opts));
+		return -EINVAL;
+	}
+
+	if (nla_len(a) % 4 != 0) {
+		OVS_NLERR(log, "Geneve opt len %d is not a multiple of 4.",
+			  nla_len(a));
+		return -EINVAL;
+	}
+
+	/* We need to record the length of the options passed
+	 * down, otherwise packets with the same format but
+	 * additional options will be silently matched.
+	 */
+	if (!is_mask) {
+		SW_FLOW_KEY_PUT(match, tun_opts_len, nla_len(a),
+				false);
+	} else {
+		/* This is somewhat unusual because it looks at
+		 * both the key and mask while parsing the
+		 * attributes (and by extension assumes the key
+		 * is parsed first). Normally, we would verify
+		 * that each is the correct length and that the
+		 * attributes line up in the validate function.
+		 * However, that is difficult because this is
+		 * variable length and we won't have the
+		 * information later.
+		 */
+		if (match->key->tun_opts_len != nla_len(a)) {
+			OVS_NLERR(log, "Geneve option len %d != mask len %d",
+				  match->key->tun_opts_len, nla_len(a));
+			return -EINVAL;
+		}
+
+		SW_FLOW_KEY_PUT(match, tun_opts_len, 0xff, true);
+	}
+
+	opt_key_offset = (unsigned long)GENEVE_OPTS((struct sw_flow_key *)0,
+						    nla_len(a));
+	SW_FLOW_KEY_MEMCPY_OFFSET(match, opt_key_offset, nla_data(a),
+				  nla_len(a), is_mask);
+	return 0;
+}
+
 static int ipv4_tun_from_nlattr(const struct nlattr *attr,
 				struct sw_flow_match *match, bool is_mask,
 				bool log)
@@ -404,6 +450,8 @@ static int ipv4_tun_from_nlattr(const struct nlattr *attr,
 
 	nla_for_each_nested(a, attr, rem) {
 		int type = nla_type(a);
+		int err;
+
 		static const u32 ovs_tunnel_key_lens[OVS_TUNNEL_KEY_ATTR_MAX + 1] = {
 			[OVS_TUNNEL_KEY_ATTR_ID] = sizeof(u64),
 			[OVS_TUNNEL_KEY_ATTR_IPV4_SRC] = sizeof(u32),
@@ -419,19 +467,15 @@ static int ipv4_tun_from_nlattr(const struct nlattr *attr,
 		};
 
 		if (type > OVS_TUNNEL_KEY_ATTR_MAX) {
-			OVS_NLERR(log,
-				  "Unknown tunnel attribute (type=%d, max=%d).",
+			OVS_NLERR(log, "Tunnel attr %d out of range max %d",
 				  type, OVS_TUNNEL_KEY_ATTR_MAX);
 			return -EINVAL;
 		}
 
 		if (ovs_tunnel_key_lens[type] != nla_len(a) &&
 		    ovs_tunnel_key_lens[type] != -1) {
-			OVS_NLERR(log,
-				  "Tunnel attribute has unexpected length "
-				  "(type=%d, length=%d, expected=%d).",
-				  type, nla_len(a),
-				  ovs_tunnel_key_lens[type]);
+			OVS_NLERR(log, "Tunnel attr %d has unexpected len %d expected %d",
+				  type, nla_len(a), ovs_tunnel_key_lens[type]);
 			return -EINVAL;
 		}
 
@@ -476,60 +520,14 @@ static int ipv4_tun_from_nlattr(const struct nlattr *attr,
 			tun_flags |= TUNNEL_OAM;
 			break;
 		case OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS:
+			err = genev_tun_opt_from_nlattr(a, match, is_mask, log);
+			if (err)
+				return err;
+
 			tun_flags |= TUNNEL_OPTIONS_PRESENT;
-			if (nla_len(a) > sizeof(match->key->tun_opts)) {
-				OVS_NLERR(log, "Geneve option too long "
-					  "(len %d, max %zu).",
-					  nla_len(a),
-					  sizeof(match->key->tun_opts));
-				return -EINVAL;
-			}
-
-			if (nla_len(a) % 4 != 0) {
-				OVS_NLERR(log, "Geneve option length is not "
-					  "a multiple of 4 (len %d).",
-					  nla_len(a));
-				return -EINVAL;
-			}
-
-			/* We need to record the length of the options passed
-			 * down, otherwise packets with the same format but
-			 * additional options will be silently matched.
-			 */
-			if (!is_mask) {
-				SW_FLOW_KEY_PUT(match, tun_opts_len, nla_len(a),
-						false);
-			} else {
-				/* This is somewhat unusual because it looks at
-				 * both the key and mask while parsing the
-				 * attributes (and by extension assumes the key
-				 * is parsed first). Normally, we would verify
-				 * that each is the correct length and that the
-				 * attributes line up in the validate function.
-				 * However, that is difficult because this is
-				 * variable length and we won't have the
-				 * information later.
-				 */
-				if (match->key->tun_opts_len != nla_len(a)) {
-					OVS_NLERR(log,
-						  "Geneve option key length (%d)"
-						  " is different from mask length (%d).",
-						  match->key->tun_opts_len,
-						  nla_len(a));
-					return -EINVAL;
-				}
-
-				SW_FLOW_KEY_PUT(match, tun_opts_len, 0xff,
-						true);
-			}
-
-			SW_FLOW_KEY_MEMCPY_OFFSET(match,
-				(unsigned long)GENEVE_OPTS((struct sw_flow_key *)0,
-							   nla_len(a)),
-				nla_data(a), nla_len(a), is_mask);
 			break;
 		default:
-			OVS_NLERR(log, "Unknown IPv4 tunnel attribute (%d).",
+			OVS_NLERR(log, "Unknown IPv4 tunnel attribute %d",
 				  type);
 			return -EINVAL;
 		}
@@ -545,8 +543,7 @@ static int ipv4_tun_from_nlattr(const struct nlattr *attr,
 
 	if (!is_mask) {
 		if (!match->key->tun_key.ipv4_dst) {
-			OVS_NLERR(log,
-				  "IPv4 tunnel destination address is zero.");
+			OVS_NLERR(log, "IPv4 tunnel dst address is zero");
 			return -EINVAL;
 		}
 
@@ -568,30 +565,30 @@ static int __ipv4_tun_to_nlattr(struct sk_buff *skb,
 	    nla_put_be64(skb, OVS_TUNNEL_KEY_ATTR_ID, output->tun_id))
 		return -EMSGSIZE;
 	if (output->ipv4_src &&
-		nla_put_be32(skb, OVS_TUNNEL_KEY_ATTR_IPV4_SRC, output->ipv4_src))
+	    nla_put_be32(skb, OVS_TUNNEL_KEY_ATTR_IPV4_SRC, output->ipv4_src))
 		return -EMSGSIZE;
 	if (output->ipv4_dst &&
-		nla_put_be32(skb, OVS_TUNNEL_KEY_ATTR_IPV4_DST, output->ipv4_dst))
+	    nla_put_be32(skb, OVS_TUNNEL_KEY_ATTR_IPV4_DST, output->ipv4_dst))
 		return -EMSGSIZE;
 	if (output->ipv4_tos &&
-		nla_put_u8(skb, OVS_TUNNEL_KEY_ATTR_TOS, output->ipv4_tos))
+	    nla_put_u8(skb, OVS_TUNNEL_KEY_ATTR_TOS, output->ipv4_tos))
 		return -EMSGSIZE;
 	if (nla_put_u8(skb, OVS_TUNNEL_KEY_ATTR_TTL, output->ipv4_ttl))
 		return -EMSGSIZE;
 	if ((output->tun_flags & TUNNEL_DONT_FRAGMENT) &&
-		nla_put_flag(skb, OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT))
+	    nla_put_flag(skb, OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT))
 		return -EMSGSIZE;
 	if ((output->tun_flags & TUNNEL_CSUM) &&
-		nla_put_flag(skb, OVS_TUNNEL_KEY_ATTR_CSUM))
+	    nla_put_flag(skb, OVS_TUNNEL_KEY_ATTR_CSUM))
 		return -EMSGSIZE;
 	if (output->tp_src &&
-		nla_put_be16(skb, OVS_TUNNEL_KEY_ATTR_TP_SRC, output->tp_src))
+	    nla_put_be16(skb, OVS_TUNNEL_KEY_ATTR_TP_SRC, output->tp_src))
 		return -EMSGSIZE;
 	if (output->tp_dst &&
-		nla_put_be16(skb, OVS_TUNNEL_KEY_ATTR_TP_DST, output->tp_dst))
+	    nla_put_be16(skb, OVS_TUNNEL_KEY_ATTR_TP_DST, output->tp_dst))
 		return -EMSGSIZE;
 	if ((output->tun_flags & TUNNEL_OAM) &&
-		nla_put_flag(skb, OVS_TUNNEL_KEY_ATTR_OAM))
+	    nla_put_flag(skb, OVS_TUNNEL_KEY_ATTR_OAM))
 		return -EMSGSIZE;
 	if (tun_opts &&
 	    nla_put(skb, OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS,
@@ -600,7 +597,6 @@ static int __ipv4_tun_to_nlattr(struct sk_buff *skb,
 
 	return 0;
 }
-
 
 static int ipv4_tun_to_nlattr(struct sk_buff *skb,
 			      const struct ovs_key_ipv4_tunnel *output,
@@ -660,8 +656,7 @@ static int metadata_from_nlattrs(struct sw_flow_match *match,  u64 *attrs,
 		if (is_mask) {
 			in_port = 0xffffffff; /* Always exact match in_port. */
 		} else if (in_port >= DP_MAX_PORTS) {
-			OVS_NLERR(log,
-				  "Input port (%d) exceeds maximum allowable (%d).",
+			OVS_NLERR(log, "Port %d exceeds max allowable %d",
 				  in_port, DP_MAX_PORTS);
 			return -EINVAL;
 		}
@@ -714,11 +709,9 @@ static int ovs_key_from_nlattrs(struct sw_flow_match *match, u64 attrs,
 		tci = nla_get_be16(a[OVS_KEY_ATTR_VLAN]);
 		if (!(tci & htons(VLAN_TAG_PRESENT))) {
 			if (is_mask)
-				OVS_NLERR(log,
-					  "VLAN TCI mask does not have exact match for VLAN_TAG_PRESENT bit.");
+				OVS_NLERR(log, "VLAN TCI mask does not have exact match for VLAN_TAG_PRESENT bit.");
 			else
-				OVS_NLERR(log,
-					  "VLAN TCI does not have VLAN_TAG_PRESENT bit set.");
+				OVS_NLERR(log, "VLAN TCI does not have VLAN_TAG_PRESENT bit set.");
 
 			return -EINVAL;
 		}
@@ -735,8 +728,7 @@ static int ovs_key_from_nlattrs(struct sw_flow_match *match, u64 attrs,
 			/* Always exact match EtherType. */
 			eth_type = htons(0xffff);
 		} else if (ntohs(eth_type) < ETH_P_802_3_MIN) {
-			OVS_NLERR(log,
-				  "EtherType is less than minimum (type=%x, min=%x).",
+			OVS_NLERR(log, "EtherType %x is less than min %x",
 				  ntohs(eth_type), ETH_P_802_3_MIN);
 			return -EINVAL;
 		}
@@ -752,8 +744,7 @@ static int ovs_key_from_nlattrs(struct sw_flow_match *match, u64 attrs,
 
 		ipv4_key = nla_data(a[OVS_KEY_ATTR_IPV4]);
 		if (!is_mask && ipv4_key->ipv4_frag > OVS_FRAG_TYPE_MAX) {
-			OVS_NLERR(log,
-				  "Unknown IPv4 fragment type (value=%d, max=%d).",
+			OVS_NLERR(log, "IPv4 frag type %d is out of range max %d",
 				  ipv4_key->ipv4_frag, OVS_FRAG_TYPE_MAX);
 			return -EINVAL;
 		}
@@ -777,8 +768,7 @@ static int ovs_key_from_nlattrs(struct sw_flow_match *match, u64 attrs,
 
 		ipv6_key = nla_data(a[OVS_KEY_ATTR_IPV6]);
 		if (!is_mask && ipv6_key->ipv6_frag > OVS_FRAG_TYPE_MAX) {
-			OVS_NLERR(log,
-				  "Unknown IPv6 fragment type (value=%d, max=%d).",
+			OVS_NLERR(log, "IPv6 frag type %d is out of range max %d",
 				  ipv6_key->ipv6_frag, OVS_FRAG_TYPE_MAX);
 			return -EINVAL;
 		}
@@ -916,7 +906,7 @@ static int ovs_key_from_nlattrs(struct sw_flow_match *match, u64 attrs,
 	}
 
 	if (attrs != 0) {
-		OVS_NLERR(log, "Unknown key attributes (%llx).",
+		OVS_NLERR(log, "Unknown key attributes %llx",
 			  (unsigned long long)attrs);
 		return -EINVAL;
 	}
@@ -1002,13 +992,11 @@ int ovs_nla_get_match(struct sw_flow_match *match,
 		} else if (!tci) {
 			/* Corner case for truncated 802.1Q header. */
 			if (nla_len(encap)) {
-				OVS_NLERR(log,
-					  "Truncated 802.1Q header has non-zero encap attribute.");
+				OVS_NLERR(log, "Truncated 802.1Q header has non-zero encap attribute.");
 				return -EINVAL;
 			}
 		} else {
-			OVS_NLERR(log,
-				  "Encap attribute is set for a non-VLAN frame.");
+			OVS_NLERR(log, "Encap attr is set for non-VLAN frame");
 			return  -EINVAL;
 		}
 	}
@@ -1018,7 +1006,6 @@ int ovs_nla_get_match(struct sw_flow_match *match,
 		return err;
 
 	if (match->mask) {
-
 		if (!nla_mask) {
 			/* Create an exact match mask. We need to set to 0xff
 			 * all the 'match->mask' fields that have been touched
@@ -1026,9 +1013,9 @@ int ovs_nla_get_match(struct sw_flow_match *match,
 			 * 'match->mask', because padding bytes and fields not
 			 * specified in 'match->key' should be left to 0.
 			 * Instead, we use a stream of netlink attributes,
-			 * copied from 'key' and set to 0xff: ovs_key_from_nlattrs()
-			 * will take care of filling 'match->mask'
-			 * appropriately.
+			 * copied from 'key' and set to 0xff.
+			 * ovs_key_from_nlattrs() will take care of filling
+			 * 'match->mask' appropriately.
 			 */
 			newmask = kmemdup(nla_key,
 					  nla_total_size(nla_len(nla_key)),
@@ -1060,8 +1047,7 @@ int ovs_nla_get_match(struct sw_flow_match *match,
 			__be16 tci = 0;
 
 			if (!encap_valid) {
-				OVS_NLERR(log,
-					  "Encap mask attribute is set for non-VLAN frame.");
+				OVS_NLERR(log, "Encap mask attribute is set for non-VLAN frame.");
 				err = -EINVAL;
 				goto free_newmask;
 			}
@@ -1078,8 +1064,7 @@ int ovs_nla_get_match(struct sw_flow_match *match,
 				if (err)
 					goto free_newmask;
 			} else {
-				OVS_NLERR(log,
-					  "VLAN frames must have an exact match on the TPID (mask=%x).",
+				OVS_NLERR(log, "VLAN frames must have an exact match on the TPID (mask=%x).",
 					  ntohs(eth_type));
 				err = -EINVAL;
 				goto free_newmask;
@@ -1089,8 +1074,7 @@ int ovs_nla_get_match(struct sw_flow_match *match,
 				tci = nla_get_be16(a[OVS_KEY_ATTR_VLAN]);
 
 			if (!(tci & htons(VLAN_TAG_PRESENT))) {
-				OVS_NLERR(log,
-					  "VLAN tag present bit must have an exact match (tci_mask=%x).",
+				OVS_NLERR(log, "VLAN tag present bit must have an exact match (tci_mask=%x).",
 					  ntohs(tci));
 				err = -EINVAL;
 				goto free_newmask;
@@ -1124,6 +1108,7 @@ free_newmask:
  * get the metadata, that is, the parts of the flow key that cannot be
  * extracted from the packet itself.
  */
+
 int ovs_nla_get_flow_metadata(const struct nlattr *attr,
 			      struct sw_flow_key *key,
 			      bool log)
@@ -1153,10 +1138,10 @@ int ovs_nla_put_flow(const struct sw_flow_key *swkey,
 	struct nlattr *nla, *encap;
 	bool is_mask = (swkey != output);
 
-	if (nla_put_u32(skb, OVS_KEY_ATTR_DP_HASH, output->ovs_flow_hash))
+	if (nla_put_u32(skb, OVS_KEY_ATTR_RECIRC_ID, output->recirc_id))
 		goto nla_put_failure;
 
-	if (nla_put_u32(skb, OVS_KEY_ATTR_RECIRC_ID, output->recirc_id))
+	if (nla_put_u32(skb, OVS_KEY_ATTR_DP_HASH, output->ovs_flow_hash))
 		goto nla_put_failure;
 
 	if (nla_put_u32(skb, OVS_KEY_ATTR_PRIORITY, output->phy.priority))
@@ -1169,7 +1154,7 @@ int ovs_nla_put_flow(const struct sw_flow_key *swkey,
 			opts = GENEVE_OPTS(output, swkey->tun_opts_len);
 
 		if (ipv4_tun_to_nlattr(skb, &output->tun_key, opts,
-					swkey->tun_opts_len))
+				       swkey->tun_opts_len))
 			goto nla_put_failure;
 	}
 
@@ -1368,8 +1353,7 @@ static struct sw_flow_actions *nla_alloc_flow_actions(int size, bool log)
 	struct sw_flow_actions *sfa;
 
 	if (size > MAX_ACTIONS_BUFSIZE) {
-		OVS_NLERR(log, "Flow action size (%u bytes) exceeds maximum "
-			  "(%u bytes)", size, MAX_ACTIONS_BUFSIZE);
+		OVS_NLERR(log, "Flow action size %u bytes exceeds max", size);
 		return ERR_PTR(-EINVAL);
 	}
 
@@ -1432,8 +1416,8 @@ out:
 	return  (struct nlattr *) ((unsigned char *)(*sfa) + next_offset);
 }
 
-static struct nlattr *__add_action(struct sw_flow_actions **sfa, int attrtype,
-				   void *data, int len, bool log)
+static struct nlattr *__add_action(struct sw_flow_actions **sfa,
+				   int attrtype, void *data, int len, bool log)
 {
 	struct nlattr *a;
 
@@ -1625,7 +1609,7 @@ static int validate_and_copy_set_tun(const struct nlattr *attr,
 		 * it to tun_info and then point there.
 		 */
 		memcpy((tun_info + 1), GENEVE_OPTS(&key, key.tun_opts_len),
-			key.tun_opts_len);
+		       key.tun_opts_len);
 		tun_info->options = (struct geneve_opt *)(tun_info + 1);
 	} else {
 		tun_info->options = NULL;
@@ -1824,6 +1808,7 @@ static int __ovs_nla_copy_actions(const struct nlattr *attr,
 			if (nla_get_u32(a) >= DP_MAX_PORTS)
 				return -EINVAL;
 			out_tnl_port = false;
+
 			break;
 
 		case OVS_ACTION_ATTR_HASH: {
@@ -1902,6 +1887,7 @@ static int __ovs_nla_copy_actions(const struct nlattr *attr,
 					   &out_tnl_port, eth_type, log);
 			if (err)
 				return err;
+
 			skip_copy = out_tnl_port;
 			break;
 
@@ -1914,6 +1900,7 @@ static int __ovs_nla_copy_actions(const struct nlattr *attr,
 			break;
 
 		default:
+			OVS_NLERR(log, "Unknown Action type %d", type);
 			return -EINVAL;
 		}
 		if (!skip_copy) {

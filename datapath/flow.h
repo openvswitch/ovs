@@ -31,9 +31,7 @@
 #include <linux/jiffies.h>
 #include <linux/time.h>
 #include <linux/flex_array.h>
-
 #include <net/inet_ecn.h>
-#include <net/ip_tunnels.h>
 
 struct sk_buff;
 
@@ -63,10 +61,10 @@ struct ovs_tunnel_info {
  * maximum size. This allows us to get the benefits of variable length
  * matching for small options.
  */
-#define GENEVE_OPTS(flow_key, opt_len) (struct geneve_opt *) \
-					((flow_key)->tun_opts + \
-					FIELD_SIZEOF(struct sw_flow_key, tun_opts) - \
-					   opt_len)
+#define GENEVE_OPTS(flow_key, opt_len)	\
+	((struct geneve_opt *)((flow_key)->tun_opts + \
+			       FIELD_SIZEOF(struct sw_flow_key, tun_opts) - \
+			       opt_len))
 
 static inline void __ovs_flow_tun_info_init(struct ovs_tunnel_info *tun_info,
 					    __be32 saddr, __be32 daddr,
@@ -94,9 +92,8 @@ static inline void __ovs_flow_tun_info_init(struct ovs_tunnel_info *tun_info,
 
 	/* Clear struct padding. */
 	if (sizeof(tun_info->tunnel) != OVS_TUNNEL_KEY_SIZE)
-		memset((unsigned char *) &tun_info->tunnel +
-					 OVS_TUNNEL_KEY_SIZE,
-			0, sizeof(tun_info->tunnel) - OVS_TUNNEL_KEY_SIZE);
+		memset((unsigned char *)&tun_info->tunnel + OVS_TUNNEL_KEY_SIZE,
+		       0, sizeof(tun_info->tunnel) - OVS_TUNNEL_KEY_SIZE);
 
 	tun_info->options = opts;
 	tun_info->options_len = opts_len;
@@ -141,13 +138,13 @@ struct sw_flow_key {
 	} eth;
 	union {
 		struct {
-			__be32 top_lse;		/* top label stack entry */
+			__be32 top_lse;	/* top label stack entry */
 		} mpls;
 		struct {
-			u8     proto;		/* IP protocol or lower 8 bits of ARP opcode. */
-			u8     tos;		    /* IP ToS. */
-			u8     ttl;		    /* IP TTL/hop limit. */
-			u8     frag;		/* One of OVS_FRAG_TYPE_*. */
+			u8     proto;	/* IP protocol or lower 8 bits of ARP opcode. */
+			u8     tos;	    /* IP ToS. */
+			u8     ttl;	    /* IP TTL/hop limit. */
+			u8     frag;	/* One of OVS_FRAG_TYPE_*. */
 		} ip;
 	};
 	struct {
@@ -252,13 +249,14 @@ void ovs_flow_stats_get(const struct sw_flow *, struct ovs_flow_stats *,
 void ovs_flow_stats_clear(struct sw_flow *);
 u64 ovs_flow_used_time(unsigned long flow_jiffies);
 
+/* Update the non-metadata part of the flow key using skb. */
+int ovs_flow_key_update(struct sk_buff *skb, struct sw_flow_key *key);
 int ovs_flow_key_extract(const struct ovs_tunnel_info *tun_info,
-			 struct sk_buff *skb, struct sw_flow_key *key);
+			 struct sk_buff *skb,
+			 struct sw_flow_key *key);
 /* Extract key from packet coming from userspace. */
 int ovs_flow_key_extract_userspace(const struct nlattr *attr,
 				   struct sk_buff *skb,
 				   struct sw_flow_key *key, bool log);
-/* Update the non-metadata part of the flow key using skb. */
-int ovs_flow_key_update(struct sk_buff *skb, struct sw_flow_key *key);
 
 #endif /* flow.h */
