@@ -1,0 +1,4 @@
+libofproto_@LT_CURRENT@ {
+global:
+        *;
+};

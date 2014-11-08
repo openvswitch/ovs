@@ -6,7 +6,9 @@
 # without warranty of any kind.
 
 lib_LTLIBRARIES += ofproto/libofproto.la
-ofproto_libofproto_la_LDFLAGS = -release $(VERSION)
+ofproto_libofproto_la_LDFLAGS = \
+        -version-info $(LT_CURRENT):$(LT_REVISION):$(LT_AGE) \
+        -Wl,--version-script=$(top_builddir)/ofproto/libofproto.sym
 ofproto_libofproto_la_SOURCES = \
 	ofproto/bond.c \
 	ofproto/bond.h \

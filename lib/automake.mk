@@ -13,7 +13,9 @@ if WIN32
 lib_libopenvswitch_la_LIBADD += ${PTHREAD_LIBS}
 endif
 
-lib_libopenvswitch_la_LDFLAGS = -release $(VERSION)
+lib_libopenvswitch_la_LDFLAGS = \
+        -version-info $(LT_CURRENT):$(LT_REVISION):$(LT_AGE) \
+        -Wl,--version-script=$(top_builddir)/lib/libopenvswitch.sym
 
 lib_libopenvswitch_la_SOURCES = \
 	lib/aes128.c \
@@ -291,7 +293,9 @@ nodist_lib_libopenvswitch_la_SOURCES = \
 CLEANFILES += $(nodist_lib_libopenvswitch_la_SOURCES)
 
 lib_LTLIBRARIES += lib/libsflow.la
-lib_libsflow_la_LDFLAGS = -release $(VERSION)
+lib_libsflow_la_LDFLAGS = \
+        -version-info $(LT_CURRENT):$(LT_REVISION):$(LT_AGE) \
+        -Wl,--version-script=$(top_builddir)/lib/libsflow.sym
 lib_libsflow_la_SOURCES = \
 	lib/sflow_api.h \
 	lib/sflow.h \

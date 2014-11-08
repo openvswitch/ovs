@@ -16,6 +16,7 @@
 *.pyc
 *.so
 *.suo
+**/*.sym
 *~
 *,cover
 .#*

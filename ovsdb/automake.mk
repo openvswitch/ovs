@@ -1,6 +1,8 @@
 # libovsdb
 lib_LTLIBRARIES += ovsdb/libovsdb.la
-ovsdb_libovsdb_la_LDFLAGS = -release $(VERSION)
+ovsdb_libovsdb_la_LDFLAGS = \
+        -version-info $(LT_CURRENT):$(LT_REVISION):$(LT_AGE) \
+        -Wl,--version-script=$(top_builddir)/ovsdb/libovsdb.sym
 ovsdb_libovsdb_la_SOURCES = \
 	ovsdb/column.c \
 	ovsdb/column.h \

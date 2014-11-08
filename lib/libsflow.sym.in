@@ -1,0 +1,4 @@
+libsflow_@LT_CURRENT@ {
+global:
+        *;
+};

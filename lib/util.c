@@ -471,9 +471,15 @@ set_program_name__(const char *argv0, const char *version, const char *date,
 
     assert_single_threaded();
     free(program_name);
+    /* Remove libtool prefix, if it is there */
+    if (strncmp(basename, "lt-", 3) == 0) {
+        char *tmp_name = basename;
+        basename = xstrdup(basename + 3);
+        free(tmp_name);
+    }
     program_name = basename;
-    free(program_version);
 
+    free(program_version);
     if (!strcmp(version, VERSION)) {
         program_version = xasprintf("%s (Open vSwitch) "VERSION"\n"
                                     "Compiled %s %s\n",
