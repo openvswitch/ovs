@@ -76,4 +76,14 @@ static inline struct rtable *find_route(struct net *net,
 	return rt;
 #endif
 }
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
+static inline bool skb_encapsulation(struct sk_buff *skb)
+{
+	return skb->encapsulation;
+}
+#else
+#define skb_encapsulation(skb) false
+#endif
+
 #endif /* compat.h */

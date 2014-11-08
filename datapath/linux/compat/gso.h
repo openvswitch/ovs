@@ -102,11 +102,19 @@ static inline void ovs_skb_init_inner_protocol(struct sk_buff *skb) {
 	 */
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
 static inline void ovs_skb_set_inner_protocol(struct sk_buff *skb,
 					      __be16 ethertype)
 {
 	skb->inner_protocol = ethertype;
 }
+#else
+static inline void ovs_skb_set_inner_protocol(struct sk_buff *skb,
+					      __be16 ethertype)
+{
+	skb_set_inner_protocol(skb, ethertype);
+}
+#endif
 
 static inline __be16 ovs_skb_get_inner_protocol(struct sk_buff *skb)
 {

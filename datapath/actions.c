@@ -32,11 +32,11 @@
 #include <net/ipv6.h>
 #include <net/checksum.h>
 #include <net/dsfield.h>
+#include <net/mpls.h>
 #include <net/sctp/checksum.h>
 
 #include "datapath.h"
 #include "gso.h"
-#include "mpls.h"
 #include "vlan.h"
 #include "vport.h"
 
@@ -133,24 +133,15 @@ static int make_writable(struct sk_buff *skb, int write_len)
 	return pskb_expand_head(skb, 0, 0, GFP_ATOMIC);
 }
 
-/* The end of the mac header.
- *
- * For non-MPLS skbs this will correspond to the network header.
- * For MPLS skbs it will be before the network_header as the MPLS
- * label stack lies between the end of the mac header and the network
- * header. That is, for MPLS skbs the end of the mac header
- * is the top of the MPLS label stack.
- */
-static unsigned char *mac_header_end(const struct sk_buff *skb)
-{
-	return skb_mac_header(skb) + skb->mac_len;
-}
-
 static int push_mpls(struct sk_buff *skb, struct sw_flow_key *key,
 		     const struct ovs_action_push_mpls *mpls)
 {
 	__be32 *new_mpls_lse;
 	struct ethhdr *hdr;
+
+	/* Networking stack do not allow simultaneous Tunnel and MPLS GSO. */
+	if (skb_encapsulation(skb))
+		return -ENOTSUPP;
 
 	if (skb_cow_head(skb, MPLS_HLEN) < 0)
 		return -ENOMEM;
@@ -160,7 +151,7 @@ static int push_mpls(struct sk_buff *skb, struct sw_flow_key *key,
 		skb->mac_len);
 	skb_reset_mac_header(skb);
 
-	new_mpls_lse = (__be32 *)mac_header_end(skb);
+	new_mpls_lse = (__be32 *)skb_mpls_header(skb);
 	*new_mpls_lse = mpls->mpls_lse;
 
 	if (skb->ip_summed == CHECKSUM_COMPLETE)
@@ -172,6 +163,7 @@ static int push_mpls(struct sk_buff *skb, struct sw_flow_key *key,
 	if (!ovs_skb_get_inner_protocol(skb))
 		ovs_skb_set_inner_protocol(skb, skb->protocol);
 	skb->protocol = mpls->mpls_ethertype;
+
 	invalidate_flow_key(key);
 	return 0;
 }
@@ -188,7 +180,7 @@ static int pop_mpls(struct sk_buff *skb, struct sw_flow_key *key,
 
 	if (skb->ip_summed == CHECKSUM_COMPLETE)
 		skb->csum = csum_sub(skb->csum,
-				     csum_partial(mac_header_end(skb),
+				     csum_partial(skb_mpls_header(skb),
 						  MPLS_HLEN, 0));
 
 	memmove(skb_mac_header(skb) + MPLS_HLEN, skb_mac_header(skb),
@@ -197,13 +189,14 @@ static int pop_mpls(struct sk_buff *skb, struct sw_flow_key *key,
 	__skb_pull(skb, MPLS_HLEN);
 	skb_reset_mac_header(skb);
 
-	/* mac_header_end() is used to locate the ethertype
+	/* skb_mpls_header() is used to locate the ethertype
 	 * field correctly in the presence of VLAN tags.
 	 */
-	hdr = (struct ethhdr *)(mac_header_end(skb) - ETH_HLEN);
+	hdr = (struct ethhdr *)(skb_mpls_header(skb) - ETH_HLEN);
 	hdr->h_proto = ethertype;
 	if (eth_p_mpls(skb->protocol))
 		skb->protocol = ethertype;
+
 	invalidate_flow_key(key);
 	return 0;
 }
@@ -211,13 +204,14 @@ static int pop_mpls(struct sk_buff *skb, struct sw_flow_key *key,
 static int set_mpls(struct sk_buff *skb, struct sw_flow_key *key,
 		    const __be32 *mpls_lse)
 {
-	__be32 *stack = (__be32 *)mac_header_end(skb);
+	__be32 *stack;
 	int err;
 
 	err = make_writable(skb, skb->mac_len + MPLS_HLEN);
 	if (unlikely(err))
 		return err;
 
+	stack = (__be32 *)skb_mpls_header(skb);
 	if (skb->ip_summed == CHECKSUM_COMPLETE) {
 		__be32 diff[] = { ~(*stack), *mpls_lse };
 		skb->csum = ~csum_partial((char *)diff, sizeof(diff),
@@ -300,7 +294,6 @@ static int push_vlan(struct sk_buff *skb, struct sw_flow_key *key,
 
 		if (!__vlan_put_tag(skb, skb->vlan_proto, current_tag))
 			return -ENOMEM;
-
 		/* Update mac_len for subsequent MPLS actions */
 		skb->mac_len += VLAN_HLEN;
 
@@ -629,10 +622,10 @@ static void do_output(struct datapath *dp, struct sk_buff *skb, int out_port)
 static int output_userspace(struct datapath *dp, struct sk_buff *skb,
 			    struct sw_flow_key *key, const struct nlattr *attr)
 {
+	struct ovs_tunnel_info info;
 	struct dp_upcall_info upcall;
 	const struct nlattr *a;
 	int rem;
-	struct ovs_tunnel_info info;
 
 	upcall.cmd = OVS_PACKET_CMD_ACTION;
 	upcall.userdata = NULL;

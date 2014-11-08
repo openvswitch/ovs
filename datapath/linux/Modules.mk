@@ -41,6 +41,7 @@ openvswitch_headers += \
 	linux/compat/include/linux/kernel.h \
 	linux/compat/include/linux/list.h \
 	linux/compat/include/linux/log2.h \
+	linux/compat/include/linux/mpls.h \
 	linux/compat/include/linux/net.h \
 	linux/compat/include/linux/random.h \
 	linux/compat/include/linux/netdevice.h \
@@ -70,6 +71,7 @@ openvswitch_headers += \
 	linux/compat/include/net/ip.h \
 	linux/compat/include/net/ip_tunnels.h \
 	linux/compat/include/net/ipv6.h \
+	linux/compat/include/net/mpls.h \
 	linux/compat/include/net/net_namespace.h \
 	linux/compat/include/net/netlink.h \
 	linux/compat/include/net/udp.h \

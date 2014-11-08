@@ -34,12 +34,12 @@
 
 #include <net/gre.h>
 #include <net/icmp.h>
+#include <net/mpls.h>
 #include <net/protocol.h>
 #include <net/route.h>
 #include <net/xfrm.h>
 
 #include "gso.h"
-#include "mpls.h"
 #include "vlan.h"
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37) && \

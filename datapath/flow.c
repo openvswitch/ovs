@@ -32,6 +32,7 @@
 #include <linux/if_arp.h>
 #include <linux/ip.h>
 #include <linux/ipv6.h>
+#include <linux/mpls.h>
 #include <linux/sctp.h>
 #include <linux/smp.h>
 #include <linux/tcp.h>
@@ -41,13 +42,13 @@
 #include <linux/rculist.h>
 #include <net/ip.h>
 #include <net/ipv6.h>
+#include <net/mpls.h>
 #include <net/ndisc.h>
 
 #include "datapath.h"
 #include "flow.h"
 #include "flow_netlink.h"
 
-#include "mpls.h"
 #include "vlan.h"
 
 u64 ovs_flow_used_time(unsigned long flow_jiffies)
@@ -609,7 +610,7 @@ static int key_extract(struct sk_buff *skb, struct sw_flow_key *key)
 				memcpy(&key->mpls.top_lse, &lse, MPLS_HLEN);
 
 			skb_set_network_header(skb, skb->mac_len + stack_len);
-			if (lse & htonl(MPLS_BOS_MASK))
+			if (lse & htonl(MPLS_LS_S_MASK))
 				break;
 
 			stack_len += MPLS_HLEN;

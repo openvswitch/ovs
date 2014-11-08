@@ -1,7 +1,7 @@
 #include <linux/netdevice.h>
 #include <linux/if_vlan.h>
+#include <net/mpls.h>
 
-#include "mpls.h"
 #include "gso.h"
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38)
