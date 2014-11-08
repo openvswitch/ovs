@@ -862,13 +862,13 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     }
     port->sf = sf;
 
+    ovs_refcount_init(&port->ref_cnt);
+    cmap_insert(&dp->ports, &port->node, hash_port_no(port_no));
+
     if (netdev_is_pmd(netdev)) {
         dp_netdev_set_pmds_on_numa(dp, netdev_get_numa_id(netdev));
         dp_netdev_reload_pmds(dp);
     }
-    ovs_refcount_init(&port->ref_cnt);
-
-    cmap_insert(&dp->ports, &port->node, hash_port_no(port_no));
     seq_change(dp->port_seq);
 
     return 0;
