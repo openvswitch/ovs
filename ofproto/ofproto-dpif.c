@@ -618,9 +618,7 @@ type_run(const char *type)
 
             xlate_txn_start();
             xlate_ofproto_set(ofproto, ofproto->up.name,
-                              ofproto->backer->dpif, ofproto->miss_rule,
-                              ofproto->no_packet_in_rule,
-                              ofproto->drop_frags_rule, ofproto->ml,
+                              ofproto->backer->dpif, ofproto->ml,
                               ofproto->stp, ofproto->rstp, ofproto->ms,
                               ofproto->mbridge, ofproto->sflow, ofproto->ipfix,
                               ofproto->netflow,
@@ -3576,24 +3574,24 @@ rule_set_recirc_id(struct rule *rule_, uint32_t id)
 
 /* Lookup 'flow' in table 0 of 'ofproto''s classifier.
  * If 'wc' is non-null, sets the fields that were relevant as part of
- * the lookup. Returns the table_id where a match or miss occurred.
- *
- * The return value will be zero unless there was a miss and
+ * the lookup. Returns the table id where a match or miss occurred via
+ * 'table_id'.  This will be zero unless there was a miss and
  * OFPTC11_TABLE_MISS_CONTINUE is in effect for the sequence of tables
- * where misses occur.
+ * where misses occur, or TBL_INTERNAL if the rule has a non-zero
+ * recirculation ID, and a match was found in the internal table, or if
+ * there was no match and one of the special rules (drop_frags_rule,
+ * miss_rule, or no_packet_in_rule) was returned.
  *
- * The rule is returned in '*rule', which is valid at least until the next
- * RCU quiescent period.  If the '*rule' needs to stay around longer,
+ * The return value is the found rule, which is valid at least until the next
+ * RCU quiescent period.  If the rule needs to stay around longer,
  * a non-zero 'take_ref' must be passed in to cause a reference to be taken
  * on it before this returns. */
-uint8_t
+struct rule_dpif *
 rule_dpif_lookup(struct ofproto_dpif *ofproto, struct flow *flow,
-                 struct flow_wildcards *wc, struct rule_dpif **rule,
-                 bool take_ref, const struct dpif_flow_stats *stats)
+                 struct flow_wildcards *wc, bool take_ref,
+                 const struct dpif_flow_stats *stats, uint8_t *table_id)
 {
-    enum rule_dpif_lookup_verdict verdict;
-    enum ofputil_port_config config = 0;
-    uint8_t table_id = 0;
+    *table_id = 0;
 
     if (ofproto_dpif_get_enable_recirc(ofproto)) {
         /* Always exactly match recirc_id since datapath supports
@@ -3604,47 +3602,18 @@ rule_dpif_lookup(struct ofproto_dpif *ofproto, struct flow *flow,
         if (flow->recirc_id) {
             /* Start looking up from internal table for post recirculation
              * flows or packets. */
-            table_id = TBL_INTERNAL;
+            *table_id = TBL_INTERNAL;
         }
     }
 
-    verdict = rule_dpif_lookup_from_table(ofproto, flow, wc, true,
-                                          &table_id, rule, take_ref, stats);
-
-    switch (verdict) {
-    case RULE_DPIF_LOOKUP_VERDICT_MATCH:
-        return table_id;
-    case RULE_DPIF_LOOKUP_VERDICT_CONTROLLER: {
-        struct ofport_dpif *port;
-
-        port = get_ofp_port(ofproto, flow->in_port.ofp_port);
-        if (!port) {
-            VLOG_WARN_RL(&rl, "packet-in on unknown OpenFlow port %"PRIu16,
-                         flow->in_port.ofp_port);
-        }
-        config = port ? port->up.pp.config : 0;
-        break;
-    }
-    case RULE_DPIF_LOOKUP_VERDICT_DROP:
-        config = OFPUTIL_PC_NO_PACKET_IN;
-        break;
-    case RULE_DPIF_LOOKUP_VERDICT_DEFAULT:
-        if (!connmgr_wants_packet_in_on_miss(ofproto->up.connmgr)) {
-            config = OFPUTIL_PC_NO_PACKET_IN;
-        }
-        break;
-    default:
-        OVS_NOT_REACHED();
-    }
-
-    choose_miss_rule(config, ofproto->miss_rule,
-                     ofproto->no_packet_in_rule, rule, take_ref);
-    return table_id;
+    return rule_dpif_lookup_from_table(ofproto, flow, wc, take_ref, stats,
+                                       table_id, flow->in_port.ofp_port, true,
+                                       true);
 }
 
-/* The returned rule is valid at least until the next RCU quiescent period.
- * If the '*rule' needs to stay around longer, a non-zero 'take_ref' must be
- * passed in to cause a reference to be taken on it before this returns. */
+/* The returned rule (if any) is valid at least until the next RCU quiescent
+ * period.  If the rule needs to stay around longer, a non-zero 'take_ref'
+ * must be passed in to cause a reference to be taken on it. */
 static struct rule_dpif *
 rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, uint8_t table_id,
                           const struct flow *flow, struct flow_wildcards *wc,
@@ -3666,7 +3635,9 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, uint8_t table_id,
 }
 
 /* Look up 'flow' in 'ofproto''s classifier starting from table '*table_id'.
- * Stores the rule that was found in '*rule', or NULL if none was found.
+ * Returns the rule that was found, which may be one of the special rules
+ * according to packet miss hadling.  If 'may_packet_in' is false, returning of
+ * the miss_rule (which issues packet ins for the controller) is avoided.
  * Updates 'wc', if nonnull, to reflect the fields that were used during the
  * lookup.
  *
@@ -3679,35 +3650,24 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, uint8_t table_id,
  * If 'honor_table_miss' is false, then only one table lookup occurs, in
  * '*table_id'.
  *
- * Returns:
- *
- *    - RULE_DPIF_LOOKUP_VERDICT_MATCH if a rule (in '*rule') was found.
- *
- *    - RULE_OFPTC_TABLE_MISS_CONTROLLER if no rule was found and either:
- *      + 'honor_table_miss' is false
- *      + a table miss configuration specified that the packet should be
- *        sent to the controller in this case.
- *
- *    - RULE_DPIF_LOOKUP_VERDICT_DROP if no rule was found, 'honor_table_miss'
- *      is true and a table miss configuration specified that the packet
- *      should be dropped in this case.
- *
- *    - RULE_DPIF_LOOKUP_VERDICT_DEFAULT if no rule was found,
- *      'honor_table_miss' is true and a table miss configuration has
- *      not been specified in this case.
- *
  * The rule is returned in '*rule', which is valid at least until the next
  * RCU quiescent period.  If the '*rule' needs to stay around longer,
  * a non-zero 'take_ref' must be passed in to cause a reference to be taken
- * on it before this returns. */
-enum rule_dpif_lookup_verdict
+ * on it before this returns.
+ *
+ * 'in_port' allows the lookup to take place as if the in port had the value
+ * 'in_port'.  This is needed for resubmit action support. */
+struct rule_dpif *
 rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto, struct flow *flow,
-                            struct flow_wildcards *wc, bool honor_table_miss,
-                            uint8_t *table_id, struct rule_dpif **rule,
-                            bool take_ref, const struct dpif_flow_stats *stats)
+                            struct flow_wildcards *wc, bool take_ref,
+                            const struct dpif_flow_stats *stats,
+                            uint8_t *table_id, ofp_port_t in_port,
+                            bool may_packet_in, bool honor_table_miss)
 {
     ovs_be16 old_tp_src = flow->tp_src, old_tp_dst = flow->tp_dst;
-    enum rule_dpif_lookup_verdict verdict;
+    ofp_port_t old_in_port = flow->in_port.ofp_port;
+    enum ofputil_table_miss miss_config;
+    struct rule_dpif *rule;
     uint8_t next_id;
 
     /* We always unwildcard nw_frag (for IP), so they
@@ -3721,9 +3681,9 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto, struct flow *flow,
         } else {
             /* Must be OFPC_FRAG_DROP (we don't have OFPC_FRAG_REASM).
              * Use the drop_frags_rule (which cannot disappear). */
-            *rule = ofproto->drop_frags_rule;
+            rule = ofproto->drop_frags_rule;
             if (take_ref) {
-                rule_dpif_ref(*rule);
+                rule_dpif_ref(rule);
             }
             if (stats) {
                 struct oftable *tbl = &ofproto->up.tables[*table_id];
@@ -3731,74 +3691,76 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto, struct flow *flow,
 
                 atomic_add_relaxed(&tbl->n_matched, stats->n_packets, &orig);
             }
-            return RULE_DPIF_LOOKUP_VERDICT_MATCH;
+            return rule;
         }
     }
 
-    verdict = RULE_DPIF_LOOKUP_VERDICT_CONTROLLER;
+    /* Look up a flow with 'in_port' as the input port.  Then restore the
+     * original input port (otherwise OFPP_NORMAL and OFPP_IN_PORT will
+     * have surprising behavior). */
+    flow->in_port.ofp_port = in_port;
+
+    /* Our current implementation depends on n_tables == N_TABLES, and
+     * TBL_INTERNAL being the last table. */
+    BUILD_ASSERT_DECL(N_TABLES == TBL_INTERNAL + 1);
+
+    miss_config = OFPUTIL_TABLE_MISS_CONTINUE;
 
     for (next_id = *table_id;
          next_id < ofproto->up.n_tables;
          next_id++, next_id += (next_id == TBL_INTERNAL))
     {
         *table_id = next_id;
-        *rule = rule_dpif_lookup_in_table(ofproto, *table_id, flow, wc,
-                                          take_ref);
+        rule = rule_dpif_lookup_in_table(ofproto, next_id, flow, wc, take_ref);
         if (stats) {
             struct oftable *tbl = &ofproto->up.tables[next_id];
             unsigned long orig;
 
-            atomic_add_relaxed(*rule ? &tbl->n_matched : &tbl->n_missed,
+            atomic_add_relaxed(rule ? &tbl->n_matched : &tbl->n_missed,
                                stats->n_packets, &orig);
         }
-        if (*rule) {
-            verdict = RULE_DPIF_LOOKUP_VERDICT_MATCH;
-            goto out;
-        } else if (!honor_table_miss) {
-            goto out;
-        } else {
-            switch (ofproto_table_get_miss_config(&ofproto->up, *table_id)) {
-            case OFPUTIL_TABLE_MISS_CONTINUE:
-                break;
-
-            case OFPUTIL_TABLE_MISS_CONTROLLER:
-                goto out;
-
-            case OFPUTIL_TABLE_MISS_DROP:
-                verdict = RULE_DPIF_LOOKUP_VERDICT_DROP;
-                goto out;
-
-            case OFPUTIL_TABLE_MISS_DEFAULT:
-                verdict = RULE_DPIF_LOOKUP_VERDICT_DEFAULT;
-                goto out;
+        if (rule) {
+            goto out;   /* Match. */
+        }
+        if (honor_table_miss) {
+            miss_config = ofproto_table_get_miss_config(&ofproto->up,
+                                                        *table_id);
+            if (miss_config == OFPUTIL_TABLE_MISS_CONTINUE) {
+                continue;
             }
         }
+        break;
+    }
+    /* Miss. */
+    rule = ofproto->no_packet_in_rule;
+    if (may_packet_in) {
+        if (miss_config == OFPUTIL_TABLE_MISS_CONTINUE
+            || miss_config == OFPUTIL_TABLE_MISS_CONTROLLER) {
+            struct ofport_dpif *port;
+
+            port = get_ofp_port(ofproto, old_in_port);
+            if (!port) {
+                VLOG_WARN_RL(&rl, "packet-in on unknown OpenFlow port %"PRIu16,
+                             old_in_port);
+            } else if (!(port->up.pp.config & OFPUTIL_PC_NO_PACKET_IN)) {
+                rule = ofproto->miss_rule;
+            }
+        } else if (miss_config == OFPUTIL_TABLE_MISS_DEFAULT &&
+                   connmgr_wants_packet_in_on_miss(ofproto->up.connmgr)) {
+            rule = ofproto->miss_rule;
+        }
+    }
+    if (take_ref) {
+        rule_dpif_ref(rule);
     }
 out:
     /* Restore port numbers, as they may have been modified above. */
     flow->tp_src = old_tp_src;
     flow->tp_dst = old_tp_dst;
+    /* Restore the old in port. */
+    flow->in_port.ofp_port = old_in_port;
 
-    return verdict;
-}
-
-/* Given a port configuration (specified as zero if there's no port), chooses
- * which of 'miss_rule' and 'no_packet_in_rule' should be used in case of a
- * flow table miss.
- *
- * The rule is returned in '*rule', which is valid at least until the next
- * RCU quiescent period.  If the '*rule' needs to stay around longer,
- * a reference must be taken on it (rule_dpif_ref()).
- */
-void
-choose_miss_rule(enum ofputil_port_config config, struct rule_dpif *miss_rule,
-                 struct rule_dpif *no_packet_in_rule, struct rule_dpif **rule,
-                 bool take_ref)
-{
-    *rule = config & OFPUTIL_PC_NO_PACKET_IN ? no_packet_in_rule : miss_rule;
-    if (take_ref) {
-        rule_dpif_ref(*rule);
-    }
+    return rule;
 }
 
 static void
@@ -4420,11 +4382,27 @@ trace_format_megaflow(struct ds *result, int level, const char *title,
     ds_put_char(result, '\n');
 }
 
+static void trace_report(struct xlate_in *xin, const char *s, int recurse);
+
 static void
 trace_resubmit(struct xlate_in *xin, struct rule_dpif *rule, int recurse)
 {
     struct trace_ctx *trace = CONTAINER_OF(xin, struct trace_ctx, xin);
     struct ds *result = trace->result;
+
+    if (!recurse) {
+        if (rule == xin->ofproto->miss_rule) {
+            trace_report(xin, "No match, flow generates \"packet in\"s.",
+                         recurse);
+        } else if (rule == xin->ofproto->no_packet_in_rule) {
+            trace_report(xin, "No match, packets dropped because "
+                         "OFPPC_NO_PACKET_IN is set on in_port.", recurse);
+        } else if (rule == xin->ofproto->drop_frags_rule) {
+            trace_report(xin, "Packets dropped because they are IP "
+                         "fragments and the fragment handling mode is "
+                         "\"drop\".", recurse);
+        }
+    }
 
     ds_put_char(result, '\n');
     if (recurse) {

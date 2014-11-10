@@ -143,10 +143,7 @@ struct xlate_in {
     struct ofpbuf *odp_actions;
 };
 
-void xlate_ofproto_set(struct ofproto_dpif *, const char *name,
-                       struct dpif *, struct rule_dpif *miss_rule,
-                       struct rule_dpif *no_packet_in_rule,
-                       struct rule_dpif *drop_frags_rule,
+void xlate_ofproto_set(struct ofproto_dpif *, const char *name, struct dpif *,
                        const struct mac_learning *, struct stp *,
                        struct rstp *, const struct mcast_snooping *,
                        const struct mbridge *, const struct dpif_sflow *,

@@ -40,23 +40,6 @@ struct dpif_backer;
 struct OVS_LOCKABLE rule_dpif;
 struct OVS_LOCKABLE group_dpif;
 
-enum rule_dpif_lookup_verdict {
-    RULE_DPIF_LOOKUP_VERDICT_MATCH,         /* A match occurred. */
-    RULE_DPIF_LOOKUP_VERDICT_CONTROLLER,    /* A miss occurred and the packet
-                                             * should be passed to
-                                             * the controller. */
-    RULE_DPIF_LOOKUP_VERDICT_DROP,          /* A miss occurred and the packet
-                                             * should be dropped. */
-    RULE_DPIF_LOOKUP_VERDICT_DEFAULT,       /* A miss occurred and the packet
-                                             * should handled by the default
-                                             * miss behaviour.
-                                             * For pre-OF1.3 it should be
-                                             * forwarded to the controller.
-                                             * For OF1.3+ it should be
-                                             * dropped. */
-};
-
-
 /* Ofproto-dpif -- DPIF based ofproto implementation.
  *
  * Ofproto-dpif provides an ofproto implementation for those platforms which
@@ -88,14 +71,20 @@ enum rule_dpif_lookup_verdict {
 size_t ofproto_dpif_get_max_mpls_depth(const struct ofproto_dpif *);
 bool ofproto_dpif_get_enable_recirc(const struct ofproto_dpif *);
 
-uint8_t rule_dpif_lookup(struct ofproto_dpif *, struct flow *,
-                         struct flow_wildcards *, struct rule_dpif **rule,
-                         bool take_ref, const struct dpif_flow_stats *);
+struct rule_dpif *rule_dpif_lookup(struct ofproto_dpif *, struct flow *,
+                                   struct flow_wildcards *, bool take_ref,
+                                   const struct dpif_flow_stats *,
+                                   uint8_t *table_id);
 
-enum rule_dpif_lookup_verdict rule_dpif_lookup_from_table(
-    struct ofproto_dpif *, struct flow *, struct flow_wildcards *,
-    bool force_controller_on_miss, uint8_t *table_id, struct rule_dpif **rule,
-    bool take_ref, const struct dpif_flow_stats *);
+struct rule_dpif *rule_dpif_lookup_from_table(struct ofproto_dpif *,
+                                              struct flow *,
+                                              struct flow_wildcards *,
+                                              bool take_ref,
+                                              const struct dpif_flow_stats *,
+                                              uint8_t *table_id,
+                                              ofp_port_t in_port,
+                                              bool may_packet_in,
+                                              bool honor_table_miss);
 
 static inline void rule_dpif_ref(struct rule_dpif *);
 static inline void rule_dpif_unref(struct rule_dpif *);

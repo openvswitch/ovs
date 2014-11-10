@@ -89,11 +89,6 @@ struct xbridge {
     struct stp *stp;              /* STP or null if disabled. */
     struct rstp *rstp;            /* RSTP or null if disabled. */
 
-    /* Special rules installed by ofproto-dpif. */
-    struct rule_dpif *miss_rule;
-    struct rule_dpif *no_packet_in_rule;
-    struct rule_dpif *drop_frags_rule;
-
     bool has_in_band;             /* Bridge has in band control? */
     bool forward_bpdu;            /* Bridge forwards STP BPDUs? */
 
@@ -333,7 +328,7 @@ static bool may_receive(const struct xport *, struct xlate_ctx *);
 static void do_xlate_actions(const struct ofpact *, size_t ofpacts_len,
                              struct xlate_ctx *);
 static void xlate_normal(struct xlate_ctx *);
-static void xlate_report(struct xlate_ctx *, const char *);
+static inline void xlate_report(struct xlate_ctx *, const char *);
 static void xlate_table_action(struct xlate_ctx *, ofp_port_t in_port,
                                uint8_t table_id, bool may_packet_in,
                                bool honor_table_miss);
@@ -363,9 +358,6 @@ static void xlate_xbridge_init(struct xlate_cfg *, struct xbridge *);
 static void xlate_xbundle_init(struct xlate_cfg *, struct xbundle *);
 static void xlate_xport_init(struct xlate_cfg *, struct xport *);
 static void xlate_xbridge_set(struct xbridge *, struct dpif *,
-                              struct rule_dpif *miss_rule,
-                              struct rule_dpif *no_packet_in_rule,
-                              struct rule_dpif *drop_frags_rule,
                               const struct mac_learning *, struct stp *,
                               struct rstp *, const struct mcast_snooping *,
                               const struct mbridge *,
@@ -398,6 +390,13 @@ static void xlate_xport_copy(struct xbridge *, struct xbundle *,
                              struct xport *);
 static void xlate_xcfg_free(struct xlate_cfg *);
 
+static inline void
+xlate_report(struct xlate_ctx *ctx, const char *s)
+{
+    if (OVS_UNLIKELY(ctx->xin->report_hook)) {
+        ctx->xin->report_hook(ctx->xin, s, ctx->recurse);
+    }
+}
 
 static void
 xlate_xbridge_init(struct xlate_cfg *xcfg, struct xbridge *xbridge)
@@ -430,9 +429,6 @@ xlate_xport_init(struct xlate_cfg *xcfg, struct xport *xport)
 static void
 xlate_xbridge_set(struct xbridge *xbridge,
                   struct dpif *dpif,
-                  struct rule_dpif *miss_rule,
-                  struct rule_dpif *no_packet_in_rule,
-                  struct rule_dpif *drop_frags_rule,
                   const struct mac_learning *ml, struct stp *stp,
                   struct rstp *rstp, const struct mcast_snooping *ms,
                   const struct mbridge *mbridge,
@@ -488,9 +484,6 @@ xlate_xbridge_set(struct xbridge *xbridge,
     xbridge->dpif = dpif;
     xbridge->forward_bpdu = forward_bpdu;
     xbridge->has_in_band = has_in_band;
-    xbridge->miss_rule = miss_rule;
-    xbridge->no_packet_in_rule = no_packet_in_rule;
-    xbridge->drop_frags_rule = drop_frags_rule;
     xbridge->enable_recirc = enable_recirc;
     xbridge->variable_length_userdata = variable_length_userdata;
     xbridge->max_mpls_depth = max_mpls_depth;
@@ -570,9 +563,7 @@ xlate_xbridge_copy(struct xbridge *xbridge)
     xlate_xbridge_init(new_xcfg, new_xbridge);
 
     xlate_xbridge_set(new_xbridge,
-                      xbridge->dpif, xbridge->miss_rule,
-                      xbridge->no_packet_in_rule, xbridge->drop_frags_rule,
-                      xbridge->ml, xbridge->stp,
+                      xbridge->dpif, xbridge->ml, xbridge->stp,
                       xbridge->rstp, xbridge->ms, xbridge->mbridge,
                       xbridge->sflow, xbridge->ipfix, xbridge->netflow,
                       xbridge->forward_bpdu,
@@ -722,9 +713,7 @@ xlate_xcfg_free(struct xlate_cfg *xcfg)
 
 void
 xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
-                  struct dpif *dpif, struct rule_dpif *miss_rule,
-                  struct rule_dpif *no_packet_in_rule,
-                  struct rule_dpif *drop_frags_rule,
+                  struct dpif *dpif,
                   const struct mac_learning *ml, struct stp *stp,
                   struct rstp *rstp, const struct mcast_snooping *ms,
                   const struct mbridge *mbridge,
@@ -750,10 +739,8 @@ xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
     free(xbridge->name);
     xbridge->name = xstrdup(name);
 
-    xlate_xbridge_set(xbridge, dpif, miss_rule, no_packet_in_rule,
-                      drop_frags_rule, ml, stp,
-                      rstp, ms, mbridge, sflow, ipfix, netflow,
-                      forward_bpdu, has_in_band, enable_recirc,
+    xlate_xbridge_set(xbridge, dpif, ml, stp, rstp, ms, mbridge, sflow, ipfix,
+                      netflow, forward_bpdu, has_in_band, enable_recirc,
                       variable_length_userdata, max_mpls_depth,
                       masked_set_action);
 }
@@ -2721,63 +2708,24 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
                    bool may_packet_in, bool honor_table_miss)
 {
     if (xlate_resubmit_resource_check(ctx)) {
-        ofp_port_t old_in_port = ctx->xin->flow.in_port.ofp_port;
-        bool skip_wildcards = ctx->xin->skip_wildcards;
+        struct flow_wildcards *wc;
         uint8_t old_table_id = ctx->table_id;
         struct rule_dpif *rule;
-        enum rule_dpif_lookup_verdict verdict;
-        enum ofputil_port_config config = 0;
 
         ctx->table_id = table_id;
+        wc = (ctx->xin->skip_wildcards) ? NULL : &ctx->xout->wc;
 
-        /* Look up a flow with 'in_port' as the input port.  Then restore the
-         * original input port (otherwise OFPP_NORMAL and OFPP_IN_PORT will
-         * have surprising behavior). */
-        ctx->xin->flow.in_port.ofp_port = in_port;
-        verdict = rule_dpif_lookup_from_table(ctx->xbridge->ofproto,
-                                              &ctx->xin->flow,
-                                              !skip_wildcards
-                                              ? &ctx->xout->wc : NULL,
-                                              honor_table_miss,
-                                              &ctx->table_id, &rule,
-                                              ctx->xin->xcache != NULL,
-                                              ctx->xin->resubmit_stats);
-        ctx->xin->flow.in_port.ofp_port = old_in_port;
+        rule = rule_dpif_lookup_from_table(ctx->xbridge->ofproto,
+                                           &ctx->xin->flow, wc,
+                                           ctx->xin->xcache != NULL,
+                                           ctx->xin->resubmit_stats,
+                                           &ctx->table_id, in_port,
+                                           may_packet_in, honor_table_miss);
 
         if (OVS_UNLIKELY(ctx->xin->resubmit_hook)) {
             ctx->xin->resubmit_hook(ctx->xin, rule, ctx->recurse + 1);
         }
 
-        switch (verdict) {
-        case RULE_DPIF_LOOKUP_VERDICT_MATCH:
-           goto match;
-        case RULE_DPIF_LOOKUP_VERDICT_CONTROLLER:
-            if (may_packet_in) {
-                struct xport *xport;
-
-                xport = get_ofp_port(ctx->xbridge,
-                                     ctx->xin->flow.in_port.ofp_port);
-                config = xport ? xport->config : 0;
-                break;
-            }
-            /* Fall through to drop */
-        case RULE_DPIF_LOOKUP_VERDICT_DROP:
-            config = OFPUTIL_PC_NO_PACKET_IN;
-            break;
-        case RULE_DPIF_LOOKUP_VERDICT_DEFAULT:
-            if (!ofproto_dpif_wants_packet_in_on_miss(ctx->xbridge->ofproto)) {
-                config = OFPUTIL_PC_NO_PACKET_IN;
-            }
-            break;
-        default:
-            OVS_NOT_REACHED();
-        }
-
-        choose_miss_rule(config, ctx->xbridge->miss_rule,
-                         ctx->xbridge->no_packet_in_rule, &rule,
-                         ctx->xin->xcache != NULL);
-
-match:
         if (rule) {
             /* Fill in the cache entry here instead of xlate_recursively
              * to make the reference counting more explicit.  We take a
@@ -3996,14 +3944,6 @@ xlate_actions_for_side_effects(struct xlate_in *xin)
     xlate_out_uninit(&xout);
 }
 
-static void
-xlate_report(struct xlate_ctx *ctx, const char *s)
-{
-    if (ctx->xin->report_hook) {
-        ctx->xin->report_hook(ctx->xin, s, ctx->recurse);
-    }
-}
-
 void
 xlate_out_copy(struct xlate_out *dst, const struct xlate_out *src)
 {
@@ -4249,22 +4189,10 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     ctx.was_mpls = false;
 
     if (!xin->ofpacts && !ctx.rule) {
-        ctx.table_id = rule_dpif_lookup(ctx.xbridge->ofproto, flow,
-                                        !xin->skip_wildcards ? wc : NULL,
-                                        &rule, ctx.xin->xcache != NULL,
-                                        ctx.xin->resubmit_stats);
-        if (OVS_UNLIKELY(ctx.xin->report_hook)) {
-            if (rule == ctx.xbridge->miss_rule) {
-                xlate_report(&ctx, "No match, flow generates \"packet in\"s.");
-            } else if (rule == ctx.xbridge->no_packet_in_rule) {
-                xlate_report(&ctx, "No match, packets dropped because "
-                             "OFPPC_NO_PACKET_IN is set on in_port.");
-            } else if (rule == ctx.xbridge->drop_frags_rule) {
-                xlate_report(&ctx, "Packets dropped because they are IP "
-                             "fragments and the fragment handling mode is "
-                             "\"drop\".");
-            }
-        }
+        rule = rule_dpif_lookup(ctx.xbridge->ofproto, flow,
+                                xin->skip_wildcards ? NULL : wc,
+                                ctx.xin->xcache != NULL,
+                                ctx.xin->resubmit_stats, &ctx.table_id);
         if (ctx.xin->resubmit_stats) {
             rule_dpif_credit_stats(rule, ctx.xin->resubmit_stats);
         }
