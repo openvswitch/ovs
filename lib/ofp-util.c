@@ -7420,13 +7420,28 @@ ofputil_encode_group_mod(enum ofp_version ofp_version,
     }
 }
 
+static enum ofperr
+ofputil_pull_ofp11_group_mod(struct ofpbuf *msg, enum ofp_version ofp_version,
+                             struct ofputil_group_mod *gm)
+{
+    const struct ofp11_group_mod *ogm;
+
+    ogm = ofpbuf_pull(msg, sizeof *ogm);
+    gm->command = ntohs(ogm->command);
+    gm->type = ogm->type;
+    gm->group_id = ntohl(ogm->group_id);
+
+    return ofputil_pull_ofp11_buckets(msg, ofpbuf_size(msg), ofp_version,
+                                      &gm->buckets);
+}
+
 /* Converts OpenFlow group mod message 'oh' into an abstract group mod in
  * 'gm'.  Returns 0 if successful, otherwise an OpenFlow error code. */
 enum ofperr
 ofputil_decode_group_mod(const struct ofp_header *oh,
                          struct ofputil_group_mod *gm)
 {
-    const struct ofp11_group_mod *ogm;
+    enum ofp_version ofp_version = oh->version;
     struct ofpbuf msg;
     struct ofputil_bucket *bucket;
     enum ofperr err;
@@ -7434,13 +7449,21 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
     ofpbuf_use_const(&msg, oh, ntohs(oh->length));
     ofpraw_pull_assert(&msg);
 
-    ogm = ofpbuf_pull(&msg, sizeof *ogm);
-    gm->command = ntohs(ogm->command);
-    gm->type = ogm->type;
-    gm->group_id = ntohl(ogm->group_id);
+    switch (ofp_version)
+    {
+    case OFP11_VERSION:
+    case OFP12_VERSION:
+    case OFP13_VERSION:
+    case OFP14_VERSION:
+    case OFP15_VERSION:
+        err = ofputil_pull_ofp11_group_mod(&msg, ofp_version, gm);
+        break;
 
-    err = ofputil_pull_ofp11_buckets(&msg, ofpbuf_size(&msg), oh->version,
-                                     &gm->buckets);
+    case OFP10_VERSION:
+    default:
+        OVS_NOT_REACHED();
+    }
+
     if (err) {
         return err;
     }
