@@ -1869,10 +1869,10 @@ s/time [0-9]*\.\.\.[0-9]*/time <range>/
 ' netflow.log | sort]], [0],
   [
 header: v5, seq 0, engine 2,1
-header: v5, seq 1, engine 2,1
+header: v5, seq 2, engine 2,1
 seq 0: 192.168.0.1 > 192.168.0.2, if 1 > 65535, 1 pkts, 60 bytes, ICMP 8:0, time <moment>
-seq 1: 192.168.0.1 > 192.168.0.2, if 1 > 2, 1 pkts, 60 bytes, ICMP 8:0, time <moment>
-seq 1: 192.168.0.2 > 192.168.0.1, if 2 > 1, 2 pkts, 120 bytes, ICMP 0:0, time <range>
+seq 2: 192.168.0.1 > 192.168.0.2, if 1 > 2, 1 pkts, 60 bytes, ICMP 8:0, time <moment>
+seq 2: 192.168.0.2 > 192.168.0.1, if 2 > 1, 2 pkts, 120 bytes, ICMP 0:0, time <range>
 ])
 AT_CLEANUP
 
