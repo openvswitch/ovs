@@ -34,6 +34,7 @@
 #include "netdev.h"
 #include "packets.h"
 #include "ovs-router.h"
+#include "ovs-router-linux.h"
 #include "unixctl.h"
 #include "util.h"
 

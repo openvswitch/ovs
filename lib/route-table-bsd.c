@@ -29,6 +29,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "ovs-router.h"
 #include "util.h"
 
 static int pid;

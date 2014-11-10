@@ -13,9 +13,10 @@
  * limitations under the License. */
 
 #include <config.h>
-#include "route-table.h"
 
 #include "compiler.h"
+#include "ovs-router.h"
+#include "route-table.h"
 
 bool
 ovs_router_lookup(ovs_be32 ip_dst OVS_UNUSED, char output_bridge[] OVS_UNUSED,

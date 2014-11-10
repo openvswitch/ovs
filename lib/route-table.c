@@ -30,6 +30,7 @@
 #include "netlink-socket.h"
 #include "ofpbuf.h"
 #include "ovs-router.h"
+#include "ovs-router-linux.h"
 #include "rtnetlink-link.h"
 #include "vlog.h"
 
