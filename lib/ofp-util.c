@@ -7213,6 +7213,24 @@ ofputil_decode_group_stats_reply(struct ofpbuf *msg,
     return 0;
 }
 
+static void
+ofputil_put_ofp11_bucket(const struct ofputil_bucket *bucket,
+                         struct ofpbuf *openflow, enum ofp_version ofp_version)
+{
+    struct ofp11_bucket *ob;
+    size_t start;
+
+    start = ofpbuf_size(openflow);
+    ofpbuf_put_zeros(openflow, sizeof *ob);
+    ofpacts_put_openflow_actions(bucket->ofpacts, bucket->ofpacts_len,
+                                openflow, ofp_version);
+    ob = ofpbuf_at_assert(openflow, start, sizeof *ob);
+    ob->len = htons(ofpbuf_size(openflow) - start);
+    ob->weight = htons(bucket->weight);
+    ob->watch_port = ofputil_port_to_ofp11(bucket->watch_port);
+    ob->watch_group = htonl(bucket->watch_group);
+}
+
 /* Appends a group stats reply that contains the data in 'gds' to those already
  * present in the list of ofpbufs in 'replies'.  'replies' should have been
  * initialized with ofpmp_init(). */
@@ -7230,18 +7248,7 @@ ofputil_append_group_desc_reply(const struct ofputil_group_desc *gds,
     start_ogds = ofpbuf_size(reply);
     ofpbuf_put_zeros(reply, sizeof *ogds);
     LIST_FOR_EACH (bucket, list_node, buckets) {
-        struct ofp11_bucket *ob;
-        size_t start_ob;
-
-        start_ob = ofpbuf_size(reply);
-        ofpbuf_put_zeros(reply, sizeof *ob);
-        ofpacts_put_openflow_actions(bucket->ofpacts, bucket->ofpacts_len,
-                                     reply, version);
-        ob = ofpbuf_at_assert(reply, start_ob, sizeof *ob);
-        ob->len = htons(ofpbuf_size(reply) - start_ob);
-        ob->weight = htons(bucket->weight);
-        ob->watch_port = ofputil_port_to_ofp11(bucket->watch_port);
-        ob->watch_group = htonl(bucket->watch_group);
+        ofputil_put_ofp11_bucket(bucket, reply, version);
     }
     ogds = ofpbuf_at_assert(reply, start_ogds, sizeof *ogds);
     ogds->length = htons(ofpbuf_size(reply) - start_ogds);
@@ -7366,9 +7373,7 @@ ofputil_encode_group_mod(enum ofp_version ofp_version,
     struct ofpbuf *b;
     struct ofp11_group_mod *ogm;
     size_t start_ogm;
-    size_t start_bucket;
     struct ofputil_bucket *bucket;
-    struct ofp11_bucket *ob;
 
     switch (ofp_version) {
     case OFP10_VERSION: {
@@ -7394,18 +7399,7 @@ ofputil_encode_group_mod(enum ofp_version ofp_version,
         ofpbuf_put_zeros(b, sizeof *ogm);
 
         LIST_FOR_EACH (bucket, list_node, &gm->buckets) {
-            start_bucket = ofpbuf_size(b);
-            ofpbuf_put_zeros(b, sizeof *ob);
-            if (bucket->ofpacts && bucket->ofpacts_len) {
-                ofpacts_put_openflow_actions(bucket->ofpacts,
-                                             bucket->ofpacts_len, b,
-                                             ofp_version);
-            }
-            ob = ofpbuf_at_assert(b, start_bucket, sizeof *ob);
-            ob->len = htons(ofpbuf_size(b) - start_bucket);;
-            ob->weight = htons(bucket->weight);
-            ob->watch_port = ofputil_port_to_ofp11(bucket->watch_port);
-            ob->watch_group = htonl(bucket->watch_group);
+            ofputil_put_ofp11_bucket(bucket, b, ofp_version);
         }
         ogm = ofpbuf_at_assert(b, start_ogm, sizeof *ogm);
         ogm->command = htons(gm->command);
