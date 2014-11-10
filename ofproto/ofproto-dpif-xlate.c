@@ -94,7 +94,6 @@ struct xbridge {
     struct rule_dpif *no_packet_in_rule;
     struct rule_dpif *drop_frags_rule;
 
-    enum ofp_config_flags frag;   /* Fragmentation handling. */
     bool has_in_band;             /* Bridge has in band control? */
     bool forward_bpdu;            /* Bridge forwards STP BPDUs? */
 
@@ -372,7 +371,7 @@ static void xlate_xbridge_set(struct xbridge *, struct dpif *,
                               const struct mbridge *,
                               const struct dpif_sflow *,
                               const struct dpif_ipfix *,
-                              const struct netflow *, enum ofp_config_flags,
+                              const struct netflow *,
                               bool forward_bpdu, bool has_in_band,
                               bool enable_recirc,
                               bool variable_length_userdata,
@@ -439,7 +438,7 @@ xlate_xbridge_set(struct xbridge *xbridge,
                   const struct mbridge *mbridge,
                   const struct dpif_sflow *sflow,
                   const struct dpif_ipfix *ipfix,
-                  const struct netflow *netflow, enum ofp_config_flags frag,
+                  const struct netflow *netflow,
                   bool forward_bpdu, bool has_in_band,
                   bool enable_recirc,
                   bool variable_length_userdata,
@@ -489,7 +488,6 @@ xlate_xbridge_set(struct xbridge *xbridge,
     xbridge->dpif = dpif;
     xbridge->forward_bpdu = forward_bpdu;
     xbridge->has_in_band = has_in_band;
-    xbridge->frag = frag;
     xbridge->miss_rule = miss_rule;
     xbridge->no_packet_in_rule = no_packet_in_rule;
     xbridge->drop_frags_rule = drop_frags_rule;
@@ -577,7 +575,7 @@ xlate_xbridge_copy(struct xbridge *xbridge)
                       xbridge->ml, xbridge->stp,
                       xbridge->rstp, xbridge->ms, xbridge->mbridge,
                       xbridge->sflow, xbridge->ipfix, xbridge->netflow,
-                      xbridge->frag, xbridge->forward_bpdu,
+                      xbridge->forward_bpdu,
                       xbridge->has_in_band, xbridge->enable_recirc,
                       xbridge->variable_length_userdata,
                       xbridge->max_mpls_depth, xbridge->masked_set_action);
@@ -732,7 +730,7 @@ xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
                   const struct mbridge *mbridge,
                   const struct dpif_sflow *sflow,
                   const struct dpif_ipfix *ipfix,
-                  const struct netflow *netflow, enum ofp_config_flags frag,
+                  const struct netflow *netflow,
                   bool forward_bpdu, bool has_in_band, bool enable_recirc,
                   bool variable_length_userdata, size_t max_mpls_depth,
                   bool masked_set_action)
@@ -754,7 +752,7 @@ xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
 
     xlate_xbridge_set(xbridge, dpif, miss_rule, no_packet_in_rule,
                       drop_frags_rule, ml, stp,
-                      rstp, ms, mbridge, sflow, ipfix, netflow, frag,
+                      rstp, ms, mbridge, sflow, ipfix, netflow,
                       forward_bpdu, has_in_band, enable_recirc,
                       variable_length_userdata, max_mpls_depth,
                       masked_set_action);

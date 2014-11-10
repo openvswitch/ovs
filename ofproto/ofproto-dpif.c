@@ -623,7 +623,7 @@ type_run(const char *type)
                               ofproto->drop_frags_rule, ofproto->ml,
                               ofproto->stp, ofproto->rstp, ofproto->ms,
                               ofproto->mbridge, ofproto->sflow, ofproto->ipfix,
-                              ofproto->netflow, ofproto->up.frag_handling,
+                              ofproto->netflow,
                               ofproto->up.forward_bpdu,
                               connmgr_has_in_band(ofproto->up.connmgr),
                               ofproto->backer->enable_recirc,
