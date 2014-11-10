@@ -7231,16 +7231,13 @@ ofputil_put_ofp11_bucket(const struct ofputil_bucket *bucket,
     ob->watch_group = htonl(bucket->watch_group);
 }
 
-/* Appends a group stats reply that contains the data in 'gds' to those already
- * present in the list of ofpbufs in 'replies'.  'replies' should have been
- * initialized with ofpmp_init(). */
-void
-ofputil_append_group_desc_reply(const struct ofputil_group_desc *gds,
-                                struct list *buckets,
-                                struct list *replies)
+static void
+ofputil_append_ofp11_group_desc_reply(const struct ofputil_group_desc *gds,
+                                      struct list *buckets,
+                                      struct list *replies,
+                                      enum ofp_version version)
 {
     struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
-    enum ofp_version version = ofpmp_version(replies);
     struct ofp11_group_desc_stats *ogds;
     struct ofputil_bucket *bucket;
     size_t start_ogds;
@@ -7256,6 +7253,32 @@ ofputil_append_group_desc_reply(const struct ofputil_group_desc *gds,
     ogds->group_id = htonl(gds->group_id);
 
     ofpmp_postappend(replies, start_ogds);
+}
+
+/* Appends a group stats reply that contains the data in 'gds' to those already
+ * present in the list of ofpbufs in 'replies'.  'replies' should have been
+ * initialized with ofpmp_init(). */
+void
+ofputil_append_group_desc_reply(const struct ofputil_group_desc *gds,
+                                struct list *buckets,
+                                struct list *replies)
+{
+    enum ofp_version version = ofpmp_version(replies);
+
+    switch (version)
+    {
+    case OFP11_VERSION:
+    case OFP12_VERSION:
+    case OFP13_VERSION:
+    case OFP14_VERSION:
+    case OFP15_VERSION:
+        ofputil_append_ofp11_group_desc_reply(gds, buckets, replies, version);
+        break;
+
+    case OFP10_VERSION:
+    default:
+        OVS_NOT_REACHED();
+    }
 }
 
 static enum ofperr
