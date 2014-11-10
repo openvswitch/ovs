@@ -7342,19 +7342,10 @@ ofputil_pull_ofp11_buckets(struct ofpbuf *msg, size_t buckets_length,
     return 0;
 }
 
-/* Converts a group description reply in 'msg' into an abstract
- * ofputil_group_desc in 'gd'.
- *
- * Multiple group description replies can be packed into a single OpenFlow
- * message.  Calling this function multiple times for a single 'msg' iterates
- * through the replies.  The caller must initially leave 'msg''s layer pointers
- * null and not modify them between calls.
- *
- * Returns 0 if successful, EOF if no replies were left in this 'msg',
- * otherwise a positive errno value. */
-int
-ofputil_decode_group_desc_reply(struct ofputil_group_desc *gd,
-                                struct ofpbuf *msg, enum ofp_version version)
+static int
+ofputil_decode_ofp11_group_desc_reply(struct ofputil_group_desc *gd,
+                                      struct ofpbuf *msg,
+                                      enum ofp_version version)
 {
     struct ofp11_group_desc_stats *ogds;
     size_t length;
@@ -7385,6 +7376,35 @@ ofputil_decode_group_desc_reply(struct ofputil_group_desc *gd,
 
     return ofputil_pull_ofp11_buckets(msg, length - sizeof *ogds, version,
                                       &gd->buckets);
+}
+
+/* Converts a group description reply in 'msg' into an abstract
+ * ofputil_group_desc in 'gd'.
+ *
+ * Multiple group description replies can be packed into a single OpenFlow
+ * message.  Calling this function multiple times for a single 'msg' iterates
+ * through the replies.  The caller must initially leave 'msg''s layer pointers
+ * null and not modify them between calls.
+ *
+ * Returns 0 if successful, EOF if no replies were left in this 'msg',
+ * otherwise a positive errno value. */
+int
+ofputil_decode_group_desc_reply(struct ofputil_group_desc *gd,
+                                struct ofpbuf *msg, enum ofp_version version)
+{
+    switch (version)
+    {
+    case OFP11_VERSION:
+    case OFP12_VERSION:
+    case OFP13_VERSION:
+    case OFP14_VERSION:
+    case OFP15_VERSION:
+        return ofputil_decode_ofp11_group_desc_reply(gd, msg, version);
+
+    case OFP10_VERSION:
+    default:
+        OVS_NOT_REACHED();
+    }
 }
 
 static struct ofpbuf *
