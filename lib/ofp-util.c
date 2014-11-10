@@ -7364,17 +7364,36 @@ ofputil_decode_group_desc_reply(struct ofputil_group_desc *gd,
                                 &gd->buckets);
 }
 
-/* Converts abstract group mod 'gm' into a message for OpenFlow version
- * 'ofp_version' and returns the message. */
-struct ofpbuf *
-ofputil_encode_group_mod(enum ofp_version ofp_version,
-                         const struct ofputil_group_mod *gm)
+static struct ofpbuf *
+ofputil_encode_ofp11_group_mod(enum ofp_version ofp_version,
+                               const struct ofputil_group_mod *gm)
 {
     struct ofpbuf *b;
     struct ofp11_group_mod *ogm;
     size_t start_ogm;
     struct ofputil_bucket *bucket;
 
+    b = ofpraw_alloc(OFPRAW_OFPT11_GROUP_MOD, ofp_version, 0);
+    start_ogm = ofpbuf_size(b);
+    ofpbuf_put_zeros(b, sizeof *ogm);
+
+    LIST_FOR_EACH (bucket, list_node, &gm->buckets) {
+        ofputil_put_ofp11_bucket(bucket, b, ofp_version);
+    }
+    ogm = ofpbuf_at_assert(b, start_ogm, sizeof *ogm);
+    ogm->command = htons(gm->command);
+    ogm->type = gm->type;
+    ogm->group_id = htonl(gm->group_id);
+
+    return b;
+}
+
+/* Converts abstract group mod 'gm' into a message for OpenFlow version
+ * 'ofp_version' and returns the message. */
+struct ofpbuf *
+ofputil_encode_group_mod(enum ofp_version ofp_version,
+                         const struct ofputil_group_mod *gm)
+{
     switch (ofp_version) {
     case OFP10_VERSION: {
         if (gm->command == OFPGC11_ADD) {
@@ -7394,25 +7413,11 @@ ofputil_encode_group_mod(enum ofp_version ofp_version,
     case OFP13_VERSION:
     case OFP14_VERSION:
     case OFP15_VERSION:
-        b = ofpraw_alloc(OFPRAW_OFPT11_GROUP_MOD, ofp_version, 0);
-        start_ogm = ofpbuf_size(b);
-        ofpbuf_put_zeros(b, sizeof *ogm);
-
-        LIST_FOR_EACH (bucket, list_node, &gm->buckets) {
-            ofputil_put_ofp11_bucket(bucket, b, ofp_version);
-        }
-        ogm = ofpbuf_at_assert(b, start_ogm, sizeof *ogm);
-        ogm->command = htons(gm->command);
-        ogm->type = gm->type;
-        ogm->group_id = htonl(gm->group_id);
-
-        break;
+        return ofputil_encode_ofp11_group_mod(ofp_version, gm);
 
     default:
         OVS_NOT_REACHED();
     }
-
-    return b;
 }
 
 /* Converts OpenFlow group mod message 'oh' into an abstract group mod in
