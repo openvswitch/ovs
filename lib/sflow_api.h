@@ -281,6 +281,7 @@ void sfl_agent_set_agentSubId(SFLAgent *agent, u_int32_t subId);
    to get counters if it is not the same as the global ifIndex */
 void sfl_poller_set_bridgePort(SFLPoller *poller, u_int32_t port_no);
 u_int32_t sfl_poller_get_bridgePort(SFLPoller *poller);
+SFLPoller *sfl_agent_getPollerByBridgePort(SFLAgent *agent, u_int32_t port_no);
 
 /* call this to indicate a discontinuity with a counter like samplePool so that the
    sflow collector will ignore the next delta */

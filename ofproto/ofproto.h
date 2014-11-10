@@ -31,6 +31,7 @@
 #include "smap.h"
 #include "sset.h"
 #include "stp.h"
+#include "lacp.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -330,6 +331,7 @@ bool ofproto_port_bfd_status_changed(struct ofproto *, ofp_port_t ofp_port);
 int ofproto_port_get_bfd_status(struct ofproto *, ofp_port_t ofp_port,
                                 struct smap *);
 int ofproto_port_is_lacp_current(struct ofproto *, ofp_port_t ofp_port);
+int ofproto_port_get_lacp_stats(const struct ofport *, struct lacp_slave_stats *);
 int ofproto_port_set_stp(struct ofproto *, ofp_port_t ofp_port,
                          const struct ofproto_port_stp_settings *);
 int ofproto_port_get_stp_status(struct ofproto *, ofp_port_t ofp_port,
