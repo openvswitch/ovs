@@ -28,6 +28,7 @@
 struct ofport_dpif;
 struct netdev;
 
+void ofproto_tunnel_init(void);
 bool tnl_port_reconfigure(const struct ofport_dpif *, const struct netdev *,
                           odp_port_t);
 

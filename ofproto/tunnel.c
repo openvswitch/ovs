@@ -20,6 +20,7 @@
 #include "byte-order.h"
 #include "connectivity.h"
 #include "dynamic-string.h"
+#include "fat-rwlock.h"
 #include "hash.h"
 #include "hmap.h"
 #include "netdev.h"
@@ -58,7 +59,7 @@ struct tnl_port {
     struct tnl_match match;
 };
 
-static struct ovs_rwlock rwlock = OVS_RWLOCK_INITIALIZER;
+static struct fat_rwlock rwlock;
 
 /* Tunnel matches.
  *
@@ -122,6 +123,17 @@ static const char *tnl_port_get_name(const struct tnl_port *)
     OVS_REQ_RDLOCK(rwlock);
 static void tnl_port_del__(const struct ofport_dpif *) OVS_REQ_WRLOCK(rwlock);
 
+void
+ofproto_tunnel_init(void)
+{
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+
+    if (ovsthread_once_start(&once)) {
+        fat_rwlock_init(&rwlock);
+        ovsthread_once_done(&once);
+    }
+}
+
 static bool
 tnl_port_add__(const struct ofport_dpif *ofport, const struct netdev *netdev,
                odp_port_t odp_port, bool warn)
@@ -183,9 +195,9 @@ void
 tnl_port_add(const struct ofport_dpif *ofport, const struct netdev *netdev,
              odp_port_t odp_port) OVS_EXCLUDED(rwlock)
 {
-    ovs_rwlock_wrlock(&rwlock);
+    fat_rwlock_wrlock(&rwlock);
     tnl_port_add__(ofport, netdev, odp_port, true);
-    ovs_rwlock_unlock(&rwlock);
+    fat_rwlock_unlock(&rwlock);
 }
 
 /* Checks if the tunnel represented by 'ofport' reconfiguration due to changes
@@ -200,7 +212,7 @@ tnl_port_reconfigure(const struct ofport_dpif *ofport,
     struct tnl_port *tnl_port;
     bool changed = false;
 
-    ovs_rwlock_wrlock(&rwlock);
+    fat_rwlock_wrlock(&rwlock);
     tnl_port = tnl_find_ofport(ofport);
     if (!tnl_port) {
         changed = tnl_port_add__(ofport, netdev, odp_port, false);
@@ -212,7 +224,7 @@ tnl_port_reconfigure(const struct ofport_dpif *ofport,
         tnl_port_add__(ofport, netdev, odp_port, true);
         changed = true;
     }
-    ovs_rwlock_unlock(&rwlock);
+    fat_rwlock_unlock(&rwlock);
     return changed;
 }
 
@@ -247,9 +259,9 @@ tnl_port_del__(const struct ofport_dpif *ofport) OVS_REQ_WRLOCK(rwlock)
 void
 tnl_port_del(const struct ofport_dpif *ofport) OVS_EXCLUDED(rwlock)
 {
-    ovs_rwlock_wrlock(&rwlock);
+    fat_rwlock_wrlock(&rwlock);
     tnl_port_del__(ofport);
-    ovs_rwlock_unlock(&rwlock);
+    fat_rwlock_unlock(&rwlock);
 }
 
 /* Looks in the table of tunnels for a tunnel matching the metadata in 'flow'.
@@ -265,7 +277,7 @@ tnl_port_receive(const struct flow *flow) OVS_EXCLUDED(rwlock)
     const struct ofport_dpif *ofport;
     struct tnl_port *tnl_port;
 
-    ovs_rwlock_rdlock(&rwlock);
+    fat_rwlock_rdlock(&rwlock);
     tnl_port = tnl_find(flow);
     ofport = tnl_port ? tnl_port->ofport : NULL;
     if (!tnl_port) {
@@ -294,7 +306,7 @@ tnl_port_receive(const struct flow *flow) OVS_EXCLUDED(rwlock)
     }
 
 out:
-    ovs_rwlock_unlock(&rwlock);
+    fat_rwlock_unlock(&rwlock);
     return ofport;
 }
 
@@ -371,7 +383,7 @@ tnl_port_send(const struct ofport_dpif *ofport, struct flow *flow,
     char *pre_flow_str = NULL;
     odp_port_t out_port;
 
-    ovs_rwlock_rdlock(&rwlock);
+    fat_rwlock_rdlock(&rwlock);
     tnl_port = tnl_find_ofport(ofport);
     out_port = tnl_port ? tnl_port->match.odp_port : ODPP_NONE;
     if (!tnl_port) {
@@ -440,7 +452,7 @@ tnl_port_send(const struct ofport_dpif *ofport, struct flow *flow,
     }
 
 out:
-    ovs_rwlock_unlock(&rwlock);
+    fat_rwlock_unlock(&rwlock);
     return out_port;
 }
 

@@ -1224,6 +1224,7 @@ construct(struct ofproto *ofproto_)
     ofproto->mbridge = mbridge_create();
     ofproto->has_bonded_bundles = false;
     ofproto->lacp_enabled = false;
+    ofproto_tunnel_init();
     ovs_mutex_init_adaptive(&ofproto->stats_mutex);
     ovs_mutex_init(&ofproto->vsp_mutex);
 
