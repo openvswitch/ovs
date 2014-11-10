@@ -67,11 +67,11 @@ id_pool_init(struct id_pool *pool, uint32_t base, uint32_t n_ids)
 static void
 id_pool_uninit(struct id_pool *pool)
 {
-    struct id_node *rid, *next;
+    struct id_node *id_node, *next;
 
-    HMAP_FOR_EACH_SAFE(rid, next, node, &pool->map) {
-        hmap_remove(&pool->map, &rid->node);
-        free(rid);
+    HMAP_FOR_EACH_SAFE(id_node, next, node, &pool->map) {
+        hmap_remove(&pool->map, &id_node->node);
+        free(id_node);
     }
 
     hmap_destroy(&pool->map);
@@ -81,12 +81,12 @@ static struct id_node *
 id_pool_find(struct id_pool *pool, uint32_t id)
 {
     size_t hash;
-    struct id_node *rid;
+    struct id_node *id_node;
 
     hash = hash_int(id, 0);
-    HMAP_FOR_EACH_WITH_HASH(rid, node, hash, &pool->map) {
-        if (id == rid->id) {
-            return rid;
+    HMAP_FOR_EACH_WITH_HASH(id_node, node, hash, &pool->map) {
+        if (id == id_node->id) {
+            return id_node;
         }
     }
     return NULL;
@@ -95,21 +95,21 @@ id_pool_find(struct id_pool *pool, uint32_t id)
 void
 id_pool_add(struct id_pool *pool, uint32_t id)
 {
-    struct id_node *rid = xmalloc(sizeof *rid);
+    struct id_node *id_node = xmalloc(sizeof *id_node);
     size_t hash;
 
-    rid->id = id;
+    id_node->id = id;
     hash = hash_int(id, 0);
-    hmap_insert(&pool->map, &rid->node, hash);
+    hmap_insert(&pool->map, &id_node->node, hash);
 }
 
-uint32_t
-id_pool_alloc_id(struct id_pool *pool)
+bool
+id_pool_alloc_id(struct id_pool *pool, uint32_t *id_)
 {
     uint32_t id;
 
     if (pool->n_ids == 0) {
-        return 0;
+        return false;
     }
 
     if (!(id_pool_find(pool, pool->next_free_id))) {
@@ -118,13 +118,13 @@ id_pool_alloc_id(struct id_pool *pool)
     }
 
     for(id = pool->base; id < pool->base + pool->n_ids; id++) {
-        if (id_pool_find(pool, id)) {
+        if (!id_pool_find(pool, id)) {
             goto found_free_id;
         }
     }
 
     /* Not available. */
-    return 0;
+    return false;
 
 found_free_id:
     id_pool_add(pool, id);
@@ -135,17 +135,18 @@ found_free_id:
         pool->next_free_id = pool->base;
     }
 
-    return id;
+    *id_ = id;
+    return true;
 }
 
 void
 id_pool_free_id(struct id_pool *pool, uint32_t id)
 {
-    struct id_node *rid;
+    struct id_node *id_node;
     if (id > pool->base && (id <= pool->base + pool->n_ids)) {
-        rid = id_pool_find(pool, id);
-        if (rid) {
-            hmap_remove(&pool->map, &rid->node);
+        id_node = id_pool_find(pool, id);
+        if (id_node) {
+            hmap_remove(&pool->map, &id_node->node);
         }
     }
 }

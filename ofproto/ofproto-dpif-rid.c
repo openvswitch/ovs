@@ -52,10 +52,15 @@ uint32_t
 recirc_id_alloc(struct recirc_id_pool *pool)
 {
     uint32_t id;
+    bool ret;
 
     ovs_mutex_lock(&pool->lock);
-    id = id_pool_alloc_id(pool->rids);
+    ret = id_pool_alloc_id(pool->rids, &id);
     ovs_mutex_unlock(&pool->lock);
+
+    if (!ret) {
+        return 0;
+    }
 
     return id;
 }
