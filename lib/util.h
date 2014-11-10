@@ -317,6 +317,7 @@ bool str_to_llong(const char *, int base, long long *);
 bool str_to_uint(const char *, int base, unsigned int *);
 
 bool ovs_scan(const char *s, const char *format, ...) SCANF_FORMAT(2, 3);
+bool ovs_scan_len(const char *s, int *n, const char *format, ...);
 
 bool str_to_double(const char *, double *);
 

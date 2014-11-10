@@ -1613,34 +1613,13 @@ scan_chars(const char *s, const struct scan_spec *spec, va_list *args)
     return s + n;
 }
 
-/* This is an implementation of the standard sscanf() function, with the
- * following exceptions:
- *
- *   - It returns true if the entire format was successfully scanned and
- *     converted, false if any conversion failed.
- *
- *   - The standard doesn't define sscanf() behavior when an out-of-range value
- *     is scanned, e.g. if a "%"PRIi8 conversion scans "-1" or "0x1ff".  Some
- *     implementations consider this an error and stop scanning.  This
- *     implementation never considers an out-of-range value an error; instead,
- *     it stores the least-significant bits of the converted value in the
- *     destination, e.g. the value 255 for both examples earlier.
- *
- *   - Only single-byte characters are supported, that is, the 'l' modifier
- *     on %s, %[, and %c is not supported.  The GNU extension 'a' modifier is
- *     also not supported.
- *
- *   - %p is not supported.
- */
-bool
-ovs_scan(const char *s, const char *format, ...)
+static bool
+ovs_scan__(const char *s, int *n, const char *format, va_list *args)
 {
     const char *const start = s;
     bool ok = false;
     const char *p;
-    va_list args;
 
-    va_start(args, format);
     p = format;
     while (*p != '\0') {
         struct scan_spec spec;
@@ -1735,24 +1714,24 @@ ovs_scan(const char *s, const char *format, ...)
         }
         switch (c) {
         case 'd':
-            s = scan_int(s, &spec, 10, &args);
+            s = scan_int(s, &spec, 10, args);
             break;
 
         case 'i':
-            s = scan_int(s, &spec, 0, &args);
+            s = scan_int(s, &spec, 0, args);
             break;
 
         case 'o':
-            s = scan_int(s, &spec, 8, &args);
+            s = scan_int(s, &spec, 8, args);
             break;
 
         case 'u':
-            s = scan_int(s, &spec, 10, &args);
+            s = scan_int(s, &spec, 10, args);
             break;
 
         case 'x':
         case 'X':
-            s = scan_int(s, &spec, 16, &args);
+            s = scan_int(s, &spec, 16, args);
             break;
 
         case 'e':
@@ -1760,24 +1739,24 @@ ovs_scan(const char *s, const char *format, ...)
         case 'g':
         case 'E':
         case 'G':
-            s = scan_float(s, &spec, &args);
+            s = scan_float(s, &spec, args);
             break;
 
         case 's':
-            s = scan_string(s, &spec, &args);
+            s = scan_string(s, &spec, args);
             break;
 
         case '[':
-            s = scan_set(s, &spec, &p, &args);
+            s = scan_set(s, &spec, &p, args);
             break;
 
         case 'c':
-            s = scan_chars(s, &spec, &args);
+            s = scan_chars(s, &spec, args);
             break;
 
         case 'n':
             if (spec.type != SCAN_DISCARD) {
-                *va_arg(args, int *) = s - start;
+                *va_arg(*args, int *) = s - start;
             }
             break;
         }
@@ -1786,11 +1765,64 @@ ovs_scan(const char *s, const char *format, ...)
             goto exit;
         }
     }
-    ok = true;
+    if (n) {
+        *n = s - start;
+    }
 
+    ok = true;
 exit:
-    va_end(args);
     return ok;
+}
+
+/* This is an implementation of the standard sscanf() function, with the
+ * following exceptions:
+ *
+ *   - It returns true if the entire format was successfully scanned and
+ *     converted, false if any conversion failed.
+ *
+ *   - The standard doesn't define sscanf() behavior when an out-of-range value
+ *     is scanned, e.g. if a "%"PRIi8 conversion scans "-1" or "0x1ff".  Some
+ *     implementations consider this an error and stop scanning.  This
+ *     implementation never considers an out-of-range value an error; instead,
+ *     it stores the least-significant bits of the converted value in the
+ *     destination, e.g. the value 255 for both examples earlier.
+ *
+ *   - Only single-byte characters are supported, that is, the 'l' modifier
+ *     on %s, %[, and %c is not supported.  The GNU extension 'a' modifier is
+ *     also not supported.
+ *
+ *   - %p is not supported.
+ */
+bool
+ovs_scan(const char *s, const char *format, ...)
+{
+    va_list args;
+    bool res;
+
+    va_start(args, format);
+    res = ovs_scan__(s, NULL, format, &args);
+    va_end(args);
+    return res;
+}
+
+/*
+ * This function is similar to ocs_scan(), extra parameter `n` is added to
+ * return number of scanned characters.
+ */
+bool
+ovs_scan_len(const char *s, int *n, const char *format, ...)
+{
+    va_list args;
+    bool success;
+    int n1;
+
+    va_start(args, format);
+    success = ovs_scan__(s + *n, &n1, format, &args);
+    va_end(args);
+    if (success) {
+        *n = *n + n1;
+    }
+    return success;
 }
 
 void
