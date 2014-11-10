@@ -92,14 +92,10 @@ uint8_t rule_dpif_lookup(struct ofproto_dpif *, struct flow *,
                          struct flow_wildcards *, struct rule_dpif **rule,
                          bool take_ref, const struct dpif_flow_stats *);
 
-enum rule_dpif_lookup_verdict rule_dpif_lookup_from_table(struct ofproto_dpif *,
-                                                          const struct flow *,
-                                                          struct flow_wildcards *,
-                                                          bool force_controller_on_miss,
-                                                          uint8_t *table_id,
-                                                          struct rule_dpif **rule, 
-                                                          bool take_ref,
-                                                          const struct dpif_flow_stats *);
+enum rule_dpif_lookup_verdict rule_dpif_lookup_from_table(
+    struct ofproto_dpif *, struct flow *, struct flow_wildcards *,
+    bool force_controller_on_miss, uint8_t *table_id, struct rule_dpif **rule,
+    bool take_ref, const struct dpif_flow_stats *);
 
 static inline void rule_dpif_ref(struct rule_dpif *);
 static inline void rule_dpif_unref(struct rule_dpif *);

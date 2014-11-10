@@ -4168,7 +4168,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     struct flow *flow = &xin->flow;
     struct rule_dpif *rule = NULL;
 
-    const struct rule_actions *actions = NULL;
     enum slow_path_reason special;
     const struct ofpact *ofpacts;
     struct xport *in_port;
@@ -4289,7 +4288,8 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         ofpacts = xin->ofpacts;
         ofpacts_len = xin->ofpacts_len;
     } else if (ctx.rule) {
-        actions = rule_dpif_get_actions(ctx.rule);
+        const struct rule_actions *actions = rule_dpif_get_actions(ctx.rule);
+
         ofpacts = actions->ofpacts;
         ofpacts_len = actions->ofpacts_len;
     } else {

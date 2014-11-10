@@ -3533,9 +3533,8 @@ rule_dpif_reduce_timeouts(struct rule_dpif *rule, uint16_t idle_timeout,
     ofproto_rule_reduce_timeouts(&rule->up, idle_timeout, hard_timeout);
 }
 
-/* Returns 'rule''s actions.  The caller owns a reference on the returned
- * actions and must eventually release it (with rule_actions_unref()) to avoid
- * a memory leak. */
+/* Returns 'rule''s actions.  The returned actions are RCU-protected, and can
+ * be read until the calling thread quiesces. */
 const struct rule_actions *
 rule_dpif_get_actions(const struct rule_dpif *rule)
 {
@@ -3594,7 +3593,7 @@ rule_dpif_lookup(struct ofproto_dpif *ofproto, struct flow *flow,
 {
     enum rule_dpif_lookup_verdict verdict;
     enum ofputil_port_config config = 0;
-    uint8_t table_id;
+    uint8_t table_id = 0;
 
     if (ofproto_dpif_get_enable_recirc(ofproto)) {
         /* Always exactly match recirc_id since datapath supports
@@ -3602,18 +3601,11 @@ rule_dpif_lookup(struct ofproto_dpif *ofproto, struct flow *flow,
         if (wc) {
             wc->masks.recirc_id = UINT32_MAX;
         }
-
-        /* Start looking up from internal table for post recirculation flows
-         * or packets. We can also simply send all, including normal flows
-         * or packets to the internal table. They will not match any post
-         * recirculation rules except the 'catch all' rule that resubmit
-         * them to table 0.
-         *
-         * As an optimization, we send normal flows and packets to table 0
-         * directly, saving one table lookup.  */
-        table_id = flow->recirc_id ? TBL_INTERNAL : 0;
-    } else {
-        table_id = 0;
+        if (flow->recirc_id) {
+            /* Start looking up from internal table for post recirculation
+             * flows or packets. */
+            table_id = TBL_INTERNAL;
+        }
     }
 
     verdict = rule_dpif_lookup_from_table(ofproto, flow, wc, true,
@@ -3661,31 +3653,6 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, uint8_t table_id,
     struct classifier *cls = &ofproto->up.tables[table_id].cls;
     const struct cls_rule *cls_rule;
     struct rule_dpif *rule;
-    struct flow ofpc_normal_flow;
-
-    if (ofproto->up.frag_handling != OFPC_FRAG_NX_MATCH) {
-        /* We always unwildcard dl_type and nw_frag (for IP), so they
-         * need not be unwildcarded here. */
-
-        if (flow->nw_frag & FLOW_NW_FRAG_ANY) {
-            if (ofproto->up.frag_handling == OFPC_FRAG_NORMAL) {
-                /* We must pretend that transport ports are unavailable. */
-                ofpc_normal_flow = *flow;
-                ofpc_normal_flow.tp_src = htons(0);
-                ofpc_normal_flow.tp_dst = htons(0);
-                flow = &ofpc_normal_flow;
-            } else {
-                /* Must be OFPC_FRAG_DROP (we don't have OFPC_FRAG_REASM).
-                 * Use the drop_frags_rule (which cannot disappear). */
-                cls_rule = &ofproto->drop_frags_rule->up.cr;
-                rule = rule_dpif_cast(rule_from_cls_rule(cls_rule));
-                if (take_ref) {
-                    rule_dpif_ref(rule);
-                }
-                return rule;
-            }
-        }
-    }
 
     do {
         cls_rule = classifier_lookup(cls, flow, wc);
@@ -3734,14 +3701,41 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, uint8_t table_id,
  * a non-zero 'take_ref' must be passed in to cause a reference to be taken
  * on it before this returns. */
 enum rule_dpif_lookup_verdict
-rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
-                            const struct flow *flow,
-                            struct flow_wildcards *wc,
-                            bool honor_table_miss,
+rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto, struct flow *flow,
+                            struct flow_wildcards *wc, bool honor_table_miss,
                             uint8_t *table_id, struct rule_dpif **rule,
                             bool take_ref, const struct dpif_flow_stats *stats)
 {
+    ovs_be16 old_tp_src = flow->tp_src, old_tp_dst = flow->tp_dst;
+    enum rule_dpif_lookup_verdict verdict;
     uint8_t next_id;
+
+    /* We always unwildcard nw_frag (for IP), so they
+     * need not be unwildcarded here. */
+    if (flow->nw_frag & FLOW_NW_FRAG_ANY
+        && ofproto->up.frag_handling != OFPC_FRAG_NX_MATCH) {
+        if (ofproto->up.frag_handling == OFPC_FRAG_NORMAL) {
+            /* We must pretend that transport ports are unavailable. */
+            flow->tp_src = htons(0);
+            flow->tp_dst = htons(0);
+        } else {
+            /* Must be OFPC_FRAG_DROP (we don't have OFPC_FRAG_REASM).
+             * Use the drop_frags_rule (which cannot disappear). */
+            *rule = ofproto->drop_frags_rule;
+            if (take_ref) {
+                rule_dpif_ref(*rule);
+            }
+            if (stats) {
+                struct oftable *tbl = &ofproto->up.tables[*table_id];
+                unsigned long orig;
+
+                atomic_add_relaxed(&tbl->n_matched, stats->n_packets, &orig);
+            }
+            return RULE_DPIF_LOOKUP_VERDICT_MATCH;
+        }
+    }
+
+    verdict = RULE_DPIF_LOOKUP_VERDICT_CONTROLLER;
 
     for (next_id = *table_id;
          next_id < ofproto->up.n_tables;
@@ -3758,27 +3752,34 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
                                stats->n_packets, &orig);
         }
         if (*rule) {
-            return RULE_DPIF_LOOKUP_VERDICT_MATCH;
+            verdict = RULE_DPIF_LOOKUP_VERDICT_MATCH;
+            goto out;
         } else if (!honor_table_miss) {
-            return RULE_DPIF_LOOKUP_VERDICT_CONTROLLER;
+            goto out;
         } else {
             switch (ofproto_table_get_miss_config(&ofproto->up, *table_id)) {
             case OFPUTIL_TABLE_MISS_CONTINUE:
                 break;
 
             case OFPUTIL_TABLE_MISS_CONTROLLER:
-                return RULE_DPIF_LOOKUP_VERDICT_CONTROLLER;
+                goto out;
 
             case OFPUTIL_TABLE_MISS_DROP:
-                return RULE_DPIF_LOOKUP_VERDICT_DROP;
+                verdict = RULE_DPIF_LOOKUP_VERDICT_DROP;
+                goto out;
 
             case OFPUTIL_TABLE_MISS_DEFAULT:
-                return RULE_DPIF_LOOKUP_VERDICT_DEFAULT;
+                verdict = RULE_DPIF_LOOKUP_VERDICT_DEFAULT;
+                goto out;
             }
         }
     }
+out:
+    /* Restore port numbers, as they may have been modified above. */
+    flow->tp_src = old_tp_src;
+    flow->tp_dst = old_tp_dst;
 
-    return RULE_DPIF_LOOKUP_VERDICT_CONTROLLER;
+    return verdict;
 }
 
 /* Given a port configuration (specified as zero if there's no port), chooses
