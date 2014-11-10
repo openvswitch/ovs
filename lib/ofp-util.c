@@ -7259,8 +7259,8 @@ ofputil_append_group_desc_reply(const struct ofputil_group_desc *gds,
 }
 
 static enum ofperr
-ofputil_pull_buckets(struct ofpbuf *msg, size_t buckets_length,
-                     enum ofp_version version, struct list *buckets)
+ofputil_pull_ofp11_buckets(struct ofpbuf *msg, size_t buckets_length,
+                           enum ofp_version version, struct list *buckets)
 {
     struct ofp11_bucket *ob;
 
@@ -7360,8 +7360,8 @@ ofputil_decode_group_desc_reply(struct ofputil_group_desc *gd,
         return OFPERR_OFPBRC_BAD_LEN;
     }
 
-    return ofputil_pull_buckets(msg, length - sizeof *ogds, version,
-                                &gd->buckets);
+    return ofputil_pull_ofp11_buckets(msg, length - sizeof *ogds, version,
+                                      &gd->buckets);
 }
 
 static struct ofpbuf *
@@ -7439,7 +7439,8 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
     gm->type = ogm->type;
     gm->group_id = ntohl(ogm->group_id);
 
-    err = ofputil_pull_buckets(&msg, ofpbuf_size(&msg), oh->version, &gm->buckets);
+    err = ofputil_pull_ofp11_buckets(&msg, ofpbuf_size(&msg), oh->version,
+                                     &gm->buckets);
     if (err) {
         return err;
     }
