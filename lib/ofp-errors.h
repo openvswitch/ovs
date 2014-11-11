@@ -411,6 +411,14 @@ enum ofperr {
     /* OF1.2+(6,14).  Permissions error. */
     OFPERR_OFPGMFC_EPERM,
 
+    /* OF1.5+(6,15).  Invalid bucket identifier used in
+     * INSERT BUCKET or REMOVE BUCKET command. */
+    OFPERR_OFPGMFC_UNKNOWN_BUCKET,
+
+    /* OF1.5+(6,16).  Can't insert bucket because a bucket
+     * already exist with that bucket-id. */
+    OFPERR_OFPGMFC_BUCKET_EXISTS,
+
 /* ## --------------------- ## */
 /* ## OFPET_PORT_MOD_FAILED ## */
 /* ## --------------------- ## */
