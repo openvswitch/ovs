@@ -523,6 +523,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ovs_rwlock_init(&ofproto->groups_rwlock);
     hmap_init(&ofproto->groups);
     ovs_mutex_unlock(&ofproto_mutex);
+    ofproto->ogf.types = 0xf;
     ofproto->ogf.capabilities = OFPGFC_CHAINING | OFPGFC_SELECT_LIVENESS |
                                 OFPGFC_SELECT_WEIGHT;
     for (i = 0; i < 4; i++) {
