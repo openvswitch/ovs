@@ -397,8 +397,20 @@ AT_CHECK([ovs-ofctl -O OpenFlow12 -vwarn dump-group-features br0], [0], [stdout]
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_GROUP_FEATURES reply (OF1.2):
  Group table:
-    Types:  0x0
+    Types:  0xf
     Capabilities:  0x7
+    all group:
+       max_groups=0xffffff00
+       actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
+    select group:
+       max_groups=0xffffff00
+       actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
+    indirect group:
+       max_groups=0xffffff00
+       actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
+    fast failover group:
+       max_groups=0xffffff00
+       actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
