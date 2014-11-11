@@ -1965,6 +1965,14 @@ comma-separated list of actions.
 The fields for \fIbucket_parameters\fR are:
 .
 .RS
+.IP \fBbucket_id=\fIid\fR
+The 32-bit integer group id of the bucket.  Values greater than
+0xffffff00 are reserved.
+.
+This field was added in Open vSwitch 2.4 to conform with the OpenFlow
+1.5 (draft) specification. It is not supported when earlier versions
+of OpenFlow are used.  Open vSwitch will automatically allocate bucket
+ids when they are not specified.
 .IP \fBactions=\fR[\fIaction\fR][\fB,\fIaction\fR...]\fR
 The syntax of actions are identical to the \fBactions=\fR field described in
 \fBFlow Syntax\fR above. Specyfing \fBactions=\fR is optional, any unknown

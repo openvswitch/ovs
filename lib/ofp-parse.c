@@ -1120,6 +1120,13 @@ parse_bucket_str(struct ofputil_bucket *bucket, char *str_,
                 error = xasprintf("invalid watch_group id %"PRIu32,
                                   bucket->watch_group);
             }
+        } else if (!strcasecmp(key, "bucket_id")) {
+            error = str_to_u32(value, &bucket->bucket_id);
+            if (!error && bucket->bucket_id > OFPG15_BUCKET_MAX) {
+                error = xasprintf("invalid bucket_id id %"PRIu32,
+                                  bucket->bucket_id);
+            }
+            *usable_protocols &= OFPUTIL_P_OF15_UP;
         } else if (!strcasecmp(key, "action") || !strcasecmp(key, "actions")) {
             ds_put_format(&actions, "%s,", value);
         } else {
@@ -1198,7 +1205,7 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
     *usable_protocols = OFPUTIL_P_OF11_UP;
 
     if (fields & F_BUCKETS) {
-        char *bkt_str = strstr(string, "bucket");
+        char *bkt_str = strstr(string, "bucket=");
 
         if (bkt_str) {
             *bkt_str = '\0';
@@ -1214,7 +1221,7 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
             }
             bkt_str++;
 
-            next_bkt_str = strstr(bkt_str, "bucket");
+            next_bkt_str = strstr(bkt_str, "bucket=");
             if (next_bkt_str) {
                 *next_bkt_str = '\0';
             }
