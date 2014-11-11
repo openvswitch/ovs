@@ -40,7 +40,8 @@ function Set-VMNetworkAdapterOVSPort
         $sd = gwmi -namespace $ns -class Msvm_EthernetPortAllocationSettingData -Filter "ElementName = '$OVSPortName'"
         if($sd)
         {
-            if($sd.InstanceId.Contains($VMNetworkAdapter.Id)){
+            if($sd.InstanceId.Contains($VMNetworkAdapter.Id))
+            {
                 throw "The OVS port name '$OVSPortName' is already assigned to this port."
             }
             throw "Cannot assign the OVS port name '$OVSPortName' as it is already assigned to an other port."
@@ -107,10 +108,37 @@ function Get-VMByOVSPort
             $ports = gwmi -Namespace $ns -Query "
                 Associators of {$vm} Where
                 ResultClass = Msvm_EthernetPortAllocationSettingData"
-            if ($ports.ElementName -eq $OVSPortName){
+            if ($ports.ElementName -eq $OVSPortName)
+            {
                 return $vm
             }
         }
+    }
+}
+
+#This function returns the Msvm_VirtualSystemSettingData given a VMName
+function Get-VMNetworkAdapterWithOVSPort
+{
+    [CmdletBinding()]
+    param
+    (
+        [parameter(Mandatory=$true)]
+        [ValidateLength(1, 1024)]
+        [string]$vmName
+    )
+    process
+    {
+        $ns = "root\virtualization\v2"
+        $vm = {}
+        $ports = {}
+
+        $vm = gwmi -namespace $ns -class Msvm_VirtualSystemSettingData -Filter "ElementName = '$VMName'"
+
+        $ports = gwmi -Namespace $ns -Query "
+                 Associators of {$vm} Where
+                 ResultClass = Msvm_EthernetPortAllocationSettingData"
+
+        return $ports
     }
 }
 
