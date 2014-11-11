@@ -39,11 +39,14 @@ if [ "$KERNEL" ] || [ "$DPDK" ]; then
     install_kernel
 fi
 
-[ "$DPDK" ] && {
+if [ "$DPDK" ]; then
     install_dpdk
     # Disregard bad function cassts until DPDK is fixed
     CFLAGS="$CFLAGS -Wno-error=bad-function-cast -Wno-error=cast-align"
-}
+elif [ $CC != "clang" ]; then
+    # DPDK headers currently trigger sparse errors
+    CFLAGS="$CFLAGS -Wsparse-error"
+fi
 
 configure_ovs $*
 
