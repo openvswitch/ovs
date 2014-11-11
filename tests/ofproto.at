@@ -264,17 +264,18 @@ AT_CLEANUP
 dnl This is really bare-bones.
 dnl It at least checks request and reply serialization and deserialization.
 dnl Actions definition listed in both supported formats (w/ actions=)
-AT_SETUP([ofproto - del group])
+AT_SETUP([ofproto - del group (OpenFlow 1.1)])
 OVS_VSWITCHD_START
 AT_DATA([groups.txt], [dnl
 group_id=1234,type=all,bucket=output:10
 group_id=1235,type=all,bucket=actions=output:10
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-groups br0 groups.txt])
-AT_CHECK([ovs-ofctl -F OXM-OpenFlow15 -O OpenFlow15 -vwarn dump-groups br0 1234], [0], [stdout])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-groups br0 ], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
-OFPST_GROUP_DESC reply (OF1.5):
- group_id=1234,type=all,bucket=bucket_id:0,actions=output:10
+OFPST_GROUP_DESC reply (OF1.1):
+ group_id=1234,type=all,bucket=actions=output:10
+ group_id=1235,type=all,bucket=actions=output:10
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn del-groups br0 group_id=1234])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-groups br0], [0], [stdout])
@@ -309,6 +310,41 @@ OFPT_GROUP_MOD (OF1.1) (xid=0x2): ***decode error: OFPGMFC_INVALID_GROUP***
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-group br0 'group_id=1234,type=indirect'], [1], , [stderr])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-group br0 'group_id=1235,type=indirect,bucket=output:10'])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-group br0 'group_id=1236,type=indirect,bucket=output:10,bucket=output:11'], [1], , [stderr])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl This is really bare-bones.
+dnl It at least checks request and reply serialization and deserialization.
+dnl Actions definition listed in both supported formats (w/ actions=)
+AT_SETUP([ofproto - del group (OpenFlow 1.5)])
+OVS_VSWITCHD_START
+AT_DATA([groups.txt], [dnl
+group_id=1234,type=all,bucket=output:10,bucket=output:11
+group_id=1235,type=all,bucket=actions=output:12,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn add-groups br0 groups.txt])
+AT_CHECK([ovs-ofctl -F OXM-OpenFlow15 -O OpenFlow15 -vwarn dump-groups br0 1234], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.5):
+ group_id=1234,type=all,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn del-groups br0 group_id=1234])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.5):
+ group_id=1235,type=all,bucket=bucket_id:2,actions=output:12,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn del-groups br0 group_id=1234])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.5):
+ group_id=1235,type=all,bucket=bucket_id:2,actions=output:12,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn del-groups br0], [0])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.5):
+])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -476,6 +512,30 @@ AT_CHECK([STRIP_XIDS stdout | sed 's/duration=[[0-9.]]*s/duration=?s/' | sort], 
  group_id=1234,duration=?s,ref_count=1,packet_count=0,byte_count=0,bucket0:packet_count=0,byte_count=0
  group_id=1235,duration=?s,ref_count=0,packet_count=0,byte_count=0,bucket0:packet_count=0,byte_count=0
 OFPST_GROUP reply (OF1.3):
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl This is really bare-bones.
+dnl It at least checks request and reply serialization and deserialization.
+AT_SETUP([ofproto - group stats (OpenFlow 1.5)])
+OVS_VSWITCHD_START
+AT_DATA([groups.txt], [dnl
+group_id=1234,type=all,bucket=output:10
+group_id=1235,type=all,bucket=output:10
+])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn add-groups br0 groups.txt])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn add-flow br0 'tcp actions=group:1234'])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-group-stats br0 group_id=1234], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout | sed 's/duration=[[0-9.]]*s/duration=?s/' | sort], [0], [dnl
+ group_id=1234,duration=?s,ref_count=1,packet_count=0,byte_count=0,bucket0:packet_count=0,byte_count=0
+OFPST_GROUP reply (OF1.5):
+])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-group-stats br0], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout | sed 's/duration=[[0-9.]]*s/duration=?s/' | sort], [0], [dnl
+ group_id=1234,duration=?s,ref_count=1,packet_count=0,byte_count=0,bucket0:packet_count=0,byte_count=0
+ group_id=1235,duration=?s,ref_count=0,packet_count=0,byte_count=0,bucket0:packet_count=0,byte_count=0
+OFPST_GROUP reply (OF1.5):
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
