@@ -2110,14 +2110,14 @@ ofp_header_to_string__(const struct ofp_header *oh, enum ofpraw raw,
 }
 
 static void
-ofp_print_bucket_id(struct ds *s, uint32_t bucket_id,
+ofp_print_bucket_id(struct ds *s, const char *label, uint32_t bucket_id,
                     enum ofp_version ofp_version)
 {
     if (ofp_version < OFP15_VERSION) {
         return;
     }
 
-    ds_put_cstr(s, "bucket_id:");
+    ds_put_cstr(s, label);
 
     switch (bucket_id) {
     case OFPG15_BUCKET_FIRST:
@@ -2139,22 +2139,29 @@ ofp_print_bucket_id(struct ds *s, uint32_t bucket_id,
 
 static void
 ofp_print_group(struct ds *s, uint32_t group_id, uint8_t type,
-                struct list *p_buckets, enum ofp_version ofp_version)
+                struct list *p_buckets, enum ofp_version ofp_version,
+                bool suppress_type)
 {
-    static const char *type_str[] = { "all", "select", "indirect",
-                                      "ff", "unknown" };
     struct ofputil_bucket *bucket;
 
-    ds_put_format(s, "group_id=%"PRIu32",type=%s",
-                  group_id, type_str[type > 4 ? 4 : type]);
+    ds_put_format(s, "group_id=%"PRIu32, group_id);
+
+    if (!suppress_type) {
+        static const char *type_str[] = { "all", "select", "indirect",
+                                          "ff", "unknown" };
+        ds_put_format(s, ",type=%s", type_str[type > 4 ? 4 : type]);
+    }
+
     if (!p_buckets) {
         return;
     }
 
-    LIST_FOR_EACH (bucket, list_node, p_buckets) {
-        ds_put_cstr(s, ",bucket=");
+    ds_put_char(s, ',');
 
-        ofp_print_bucket_id(s, bucket->bucket_id, ofp_version);
+    LIST_FOR_EACH (bucket, list_node, p_buckets) {
+        ds_put_cstr(s, "bucket=");
+
+        ofp_print_bucket_id(s, "bucket_id:", bucket->bucket_id, ofp_version);
         if (bucket->weight != 1) {
             ds_put_format(s, "weight:%"PRIu16",", bucket->weight);
         }
@@ -2167,7 +2174,10 @@ ofp_print_group(struct ds *s, uint32_t group_id, uint8_t type,
 
         ds_put_cstr(s, "actions=");
         ofpacts_format(bucket->ofpacts, bucket->ofpacts_len, s);
+        ds_put_char(s, ',');
     }
+
+    ds_chomp(s, ',');
 }
 
 static void
@@ -2199,7 +2209,8 @@ ofp_print_group_desc(struct ds *s, const struct ofp_header *oh)
 
         ds_put_char(s, '\n');
         ds_put_char(s, ' ');
-        ofp_print_group(s, gd.group_id, gd.type, &gd.buckets, oh->version);
+        ofp_print_group(s, gd.group_id, gd.type, &gd.buckets, oh->version,
+                        false);
         ofputil_bucket_list_destroy(&gd.buckets);
      }
 }
@@ -2308,6 +2319,7 @@ ofp_print_group_mod(struct ds *s, const struct ofp_header *oh)
 {
     struct ofputil_group_mod gm;
     int error;
+    bool bucket_command = false;
 
     error = ofputil_decode_group_mod(oh, &gm);
     if (error) {
@@ -2331,12 +2343,28 @@ ofp_print_group_mod(struct ds *s, const struct ofp_header *oh)
         ds_put_cstr(s, "DEL");
         break;
 
+    case OFPGC15_INSERT_BUCKET:
+        ds_put_cstr(s, "INSERT_BUCKET");
+        bucket_command = true;
+        break;
+
+    case OFPGC15_REMOVE_BUCKET:
+        ds_put_cstr(s, "REMOVE_BUCKET");
+        bucket_command = true;
+        break;
+
     default:
         ds_put_format(s, "cmd:%"PRIu16"", gm.command);
     }
     ds_put_char(s, ' ');
 
-    ofp_print_group(s, gm.group_id, gm.type, &gm.buckets, oh->version);
+    if (bucket_command) {
+        ofp_print_bucket_id(s, "command_bucket_id:",
+                            gm.command_bucket_id, oh->version);
+    }
+
+    ofp_print_group(s, gm.group_id, gm.type, &gm.buckets, oh->version,
+                    bucket_command);
     ofputil_bucket_list_destroy(&gm.buckets);
 }
 

@@ -1959,7 +1959,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 ])
 AT_CLEANUP
 
-AT_SETUP([OFPST_GROUP_DESC reply])
+AT_SETUP([OFPST_GROUP_DESC reply - OF1.1])
 AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
 AT_CHECK([ovs-ofctl ofp-print "\
 02 13 00 78 00 00 00 02 00 07 00 00 00 00 00 00 \
@@ -1973,6 +1973,26 @@ AT_CHECK([ovs-ofctl ofp-print "\
 "], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.1) (xid=0x2):
  group_id=8192,type=select,bucket=weight:100,watch_port:1,actions=output:1,bucket=weight:200,watch_port:2,actions=output:2,bucket=weight:200,watch_port:3,actions=output:3
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_GROUP_DESC reply - OF1.5])
+AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
+AT_CHECK([ovs-ofctl ofp-print "\
+06 13 00 98 00 00 00 02 00 07 00 00 00 00 00 00 \
+00 88 01 00 00 00 20 00 00 78 00 00 00 00 00 00 \
+00 28 00 10 00 00 00 00 00 00 00 10 00 00 00 01 \
+00 00 00 00 00 00 00 00 00 00 00 08 00 64 00 00 \
+00 01 00 08 00 00 00 01 \
+00 28 00 10 00 00 00 01 00 00 00 10 00 00 00 02 \
+00 00 00 00 00 00 00 00 00 00 00 08 00 c8 00 00 \
+00 01 00 08 00 00 00 02 \
+00 28 00 10 00 00 00 02 00 00 00 10 00 00 00 03 \
+00 00 00 00 00 00 00 00 00 00 00 08 00 c8 00 00 \
+00 01 00 08 00 00 00 03 \
+"], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.5) (xid=0x2):
+ group_id=8192,type=select,bucket=bucket_id:0,weight:100,watch_port:1,actions=output:1,bucket=bucket_id:1,weight:200,watch_port:2,actions=output:2,bucket=bucket_id:2,weight:200,watch_port:3,actions=output:3
 ])
 AT_CLEANUP
 
@@ -2759,7 +2779,7 @@ NXT_FLOW_MOD (xid=0x2): ADD NXM_NX_TUN_ID(00000000000001c8), NXM_NX_REG0(0000007
 ])
 AT_CLEANUP
 
-AT_SETUP([OFPT_GROUP_MOD])
+AT_SETUP([OFPT_GROUP_MOD - OF1.1])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
 02 0f 00 70 11 22 33 44 00 00 01 00 87 65 43 21 \
@@ -2772,6 +2792,42 @@ AT_CHECK([ovs-ofctl ofp-print "\
 "], [0], [dnl
 OFPT_GROUP_MOD (OF1.1) (xid=0x11223344):
  ADD group_id=2271560481,type=select,bucket=weight:100,watch_port:1,actions=output:1,bucket=weight:200,watch_port:2,actions=output:2,bucket=weight:200,watch_port:3,actions=output:3
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_GROUP_MOD add - OF1.5])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+06 0f 00 90 11 22 33 44 00 00 01 00 87 65 43 21 \
+00 78 00 00 ff ff ff ff 00 28 00 10 00 00 00 00 \
+00 00 00 10 00 00 00 01 00 00 00 00 00 00 00 00 \
+00 00 00 08 00 64 00 00 00 01 00 08 00 00 00 01 \
+00 28 00 10 00 00 00 01 00 00 00 10 00 00 00 02 \
+00 00 00 00 00 00 00 00 00 00 00 08 00 c8 00 00 \
+00 01 00 08 00 00 00 02 00 28 00 10 00 00 00 02 \
+00 00 00 10 00 00 00 03 00 00 00 00 00 00 00 00 \
+00 00 00 08 00 c8 00 00 00 01 00 08 00 00 00 03 \
+"], [0], [dnl
+OFPT_GROUP_MOD (OF1.5) (xid=0x11223344):
+ ADD group_id=2271560481,type=select,bucket=bucket_id:0,weight:100,watch_port:1,actions=output:1,bucket=bucket_id:1,weight:200,watch_port:2,actions=output:2,bucket=bucket_id:2,weight:200,watch_port:3,actions=output:3
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_GROUP_MOD insert bucket - OF1.5])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+06 0f 00 90 11 22 33 44 00 03 01 00 87 65 43 21 \
+00 78 00 00 ff ff ff fd 00 28 00 10 00 00 00 00 \
+00 00 00 10 00 00 00 01 00 00 00 00 00 00 00 00 \
+00 00 00 08 00 64 00 00 00 01 00 08 00 00 00 01 \
+00 28 00 10 00 00 00 01 00 00 00 10 00 00 00 02 \
+00 00 00 00 00 00 00 00 00 00 00 08 00 c8 00 00 \
+00 01 00 08 00 00 00 02 00 28 00 10 00 00 00 02 \
+00 00 00 10 00 00 00 03 00 00 00 00 00 00 00 00 \
+00 00 00 08 00 c8 00 00 00 01 00 08 00 00 00 03 \
+"], [0], [dnl
+OFPT_GROUP_MOD (OF1.5) (xid=0x11223344):
+ INSERT_BUCKET command_bucket_id:first,group_id=2271560481,bucket=bucket_id:0,weight:100,watch_port:1,actions=output:1,bucket=bucket_id:1,weight:200,watch_port:2,actions=output:2,bucket=bucket_id:2,weight:200,watch_port:3,actions=output:3
 ])
 AT_CLEANUP
 
