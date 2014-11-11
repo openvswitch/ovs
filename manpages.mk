@@ -250,6 +250,7 @@ vswitchd/ovs-vswitchd.8: \
 	lib/vlog-unixctl.man \
 	lib/vlog.man \
 	ofproto/ofproto-dpif-unixctl.man \
+	ofproto/ofproto-tnl-unixctl.man \
 	ofproto/ofproto-unixctl.man \
 	ovsdb/remote-active.man \
 	ovsdb/remote-passive.man
@@ -266,6 +267,7 @@ lib/unixctl.man:
 lib/vlog-unixctl.man:
 lib/vlog.man:
 ofproto/ofproto-dpif-unixctl.man:
+ofproto/ofproto-tnl-unixctl.man:
 ofproto/ofproto-unixctl.man:
 ovsdb/remote-active.man:
 ovsdb/remote-passive.man:

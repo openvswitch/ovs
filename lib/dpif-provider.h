@@ -132,8 +132,9 @@ struct dpif_class {
      * the 'close' member function. */
     int (*destroy)(struct dpif *dpif);
 
-    /* Performs periodic work needed by 'dpif', if any is necessary. */
-    void (*run)(struct dpif *dpif);
+    /* Performs periodic work needed by 'dpif', if any is necessary.
+     * Returns true if need to revalidate. */
+    bool (*run)(struct dpif *dpif);
 
     /* Arranges for poll_block() to wake up if the "run" member function needs
      * to be called for 'dpif'. */

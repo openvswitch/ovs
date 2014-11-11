@@ -24,6 +24,7 @@
 #include <netinet/icmp6.h>
 #include <stdlib.h>
 #include <string.h>
+
 #include "byte-order.h"
 #include "coverage.h"
 #include "dpif.h"
@@ -34,6 +35,7 @@
 #include "packets.h"
 #include "simap.h"
 #include "timeval.h"
+#include "unaligned.h"
 #include "util.h"
 #include "vlog.h"
 
@@ -74,6 +76,8 @@ odp_action_len(uint16_t type)
 
     switch ((enum ovs_action_attr) type) {
     case OVS_ACTION_ATTR_OUTPUT: return sizeof(uint32_t);
+    case OVS_ACTION_ATTR_TUNNEL_PUSH: return -2;
+    case OVS_ACTION_ATTR_TUNNEL_POP: return sizeof(uint32_t);
     case OVS_ACTION_ATTR_USERSPACE: return -2;
     case OVS_ACTION_ATTR_PUSH_VLAN: return sizeof(struct ovs_action_push_vlan);
     case OVS_ACTION_ATTR_POP_VLAN: return 0;
@@ -507,6 +511,89 @@ format_odp_hash_action(struct ds *ds, const struct ovs_action_hash *hash_act)
 }
 
 static void
+format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
+{
+    const struct eth_header *eth;
+    const struct ip_header *ip;
+    const void *l3;
+
+    eth = (const struct eth_header *)data->header;
+
+    l3 = eth + 1;
+    ip = (const struct ip_header *)l3;
+
+    /* Ethernet */
+    ds_put_format(ds, "header(size=%"PRIu8",type=%"PRIu8",eth(dst=",
+                  data->header_len, data->tnl_type);
+    ds_put_format(ds, ETH_ADDR_FMT, ETH_ADDR_ARGS(eth->eth_dst));
+    ds_put_format(ds, ",src=");
+    ds_put_format(ds, ETH_ADDR_FMT, ETH_ADDR_ARGS(eth->eth_src));
+    ds_put_format(ds, ",dl_type=0x%04"PRIx16"),", ntohs(eth->eth_type));
+
+    /* IPv4 */
+    ds_put_format(ds, "ipv4(src="IP_FMT",dst="IP_FMT",proto=%"PRIu8
+                  ",tos=%#"PRIx8",ttl=%"PRIu8",frag=0x%"PRIx16"),",
+                  IP_ARGS(get_16aligned_be32(&ip->ip_src)),
+                  IP_ARGS(get_16aligned_be32(&ip->ip_dst)),
+                  ip->ip_proto, ip->ip_tos,
+                  ip->ip_ttl,
+                  ip->ip_frag_off);
+
+    if (data->tnl_type == OVS_VPORT_TYPE_VXLAN) {
+        const struct vxlanhdr *vxh;
+        const struct udp_header *udp;
+
+        /* UDP */
+        udp = (const struct udp_header *) (ip + 1);
+        ds_put_format(ds, "udp(src=%"PRIu16",dst=%"PRIu16"),",
+                      ntohs(udp->udp_src), ntohs(udp->udp_dst));
+
+        /* VxLan */
+        vxh = (const struct vxlanhdr *)   (udp + 1);
+        ds_put_format(ds, "vxlan(flags=0x%"PRIx32",vni=0x%"PRIx32")",
+                      ntohl(get_16aligned_be32(&vxh->vx_flags)),
+                      ntohl(get_16aligned_be32(&vxh->vx_vni)));
+    } else if (data->tnl_type == OVS_VPORT_TYPE_GRE) {
+        const struct gre_base_hdr *greh;
+        ovs_16aligned_be32 *options;
+        void *l4;
+
+        l4 = ((uint8_t *)l3  + sizeof(struct ip_header));
+        greh = (const struct gre_base_hdr *) l4;
+
+        ds_put_format(ds, "gre((flags=0x%"PRIx16",proto=0x%"PRIx16")",
+                           greh->flags, ntohs(greh->protocol));
+        options = (ovs_16aligned_be32 *)(greh + 1);
+        if (greh->flags & htons(GRE_CSUM)) {
+            ds_put_format(ds, ",csum=0x%"PRIx32, ntohl(get_16aligned_be32(options)));
+            options++;
+        }
+        if (greh->flags & htons(GRE_KEY)) {
+            ds_put_format(ds, ",key=0x%"PRIx32, ntohl(get_16aligned_be32(options)));
+            options++;
+        }
+        if (greh->flags & htons(GRE_SEQ)) {
+            ds_put_format(ds, ",seq=0x%"PRIx32, ntohl(get_16aligned_be32(options)));
+            options++;
+        }
+        ds_put_format(ds, ")");
+    }
+    ds_put_format(ds, ")");
+}
+
+static void
+format_odp_tnl_push_action(struct ds *ds, const struct nlattr *attr)
+{
+    struct ovs_action_push_tnl *data;
+
+    data = (struct ovs_action_push_tnl *) nl_attr_get(attr);
+
+    ds_put_format(ds, "tnl_push(tnl_port(%"PRIu32"),", data->tnl_port);
+    format_odp_tnl_push_header(ds, data);
+    ds_put_format(ds, ",out_port(%"PRIu32"))", data->out_port);
+}
+
+static void
 format_odp_action(struct ds *ds, const struct nlattr *a)
 {
     int expected_len;
@@ -525,6 +612,12 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
     switch (type) {
     case OVS_ACTION_ATTR_OUTPUT:
         ds_put_format(ds, "%"PRIu32, nl_attr_get_u32(a));
+        break;
+    case OVS_ACTION_ATTR_TUNNEL_POP:
+        ds_put_format(ds, "tnl_pop(%"PRIu32")", nl_attr_get_u32(a));
+        break;
+    case OVS_ACTION_ATTR_TUNNEL_PUSH:
+        format_odp_tnl_push_action(ds, a);
         break;
     case OVS_ACTION_ATTR_USERSPACE:
         format_odp_userspace_action(ds, a);
@@ -741,6 +834,140 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
 }
 
 static int
+ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
+{
+    struct eth_header *eth;
+    struct ip_header *ip;
+    struct udp_header *udp;
+    struct gre_base_hdr *greh;
+    uint16_t gre_proto, dl_type, udp_src, udp_dst;
+    ovs_be32 sip, dip;
+    uint32_t tnl_type = 0, header_len = 0;
+    void *l3, *l4;
+    int n = 0;
+
+    if (!ovs_scan_len(s, &n, "tnl_push(tnl_port(%"SCNi32"),", &data->tnl_port)) {
+        return -EINVAL;
+    }
+    eth = (struct eth_header *) data->header;
+    l3 = (data->header + sizeof *eth);
+    l4 = ((uint8_t *) l3 + sizeof (struct ip_header));
+    ip = (struct ip_header *) l3;
+    if (!ovs_scan_len(s, &n, "header(size=%"SCNi32",type=%"SCNi32","
+                         "eth(dst="ETH_ADDR_SCAN_FMT",",
+                         &data->header_len,
+                         &data->tnl_type,
+                         ETH_ADDR_SCAN_ARGS(eth->eth_dst))) {
+        return -EINVAL;
+    }
+
+    if (!ovs_scan_len(s, &n, "src="ETH_ADDR_SCAN_FMT",",
+                  ETH_ADDR_SCAN_ARGS(eth->eth_src))) {
+        return -EINVAL;
+    }
+    if (!ovs_scan_len(s, &n, "dl_type=0x%"SCNx16"),", &dl_type)) {
+        return -EINVAL;
+    }
+    eth->eth_type = htons(dl_type);
+
+    /* IPv4 */
+    if (!ovs_scan_len(s, &n, "ipv4(src="IP_SCAN_FMT",dst="IP_SCAN_FMT",proto=%"SCNi8
+                         ",tos=%"SCNi8",ttl=%"SCNi8",frag=0x%"SCNx16"),",
+                         IP_SCAN_ARGS(&sip),
+                         IP_SCAN_ARGS(&dip),
+                         &ip->ip_proto, &ip->ip_tos,
+                         &ip->ip_ttl, &ip->ip_frag_off)) {
+        return -EINVAL;
+    }
+    put_16aligned_be32(&ip->ip_src, sip);
+    put_16aligned_be32(&ip->ip_dst, dip);
+
+    /* Tunnel header */
+    udp = (struct udp_header *) l4;
+    greh = (struct gre_base_hdr *) l4;
+    if (ovs_scan_len(s, &n, "udp(src=%"SCNi16",dst=%"SCNi16"),",
+                         &udp_src, &udp_dst)) {
+        struct vxlanhdr *vxh;
+        uint32_t vx_flags, vx_vni;
+
+        udp->udp_src = htons(udp_src);
+        udp->udp_dst = htons(udp_dst);
+        udp->udp_len = 0;
+        udp->udp_csum = 0;
+
+        vxh = (struct vxlanhdr *) (udp + 1);
+        if (!ovs_scan_len(s, &n, "vxlan(flags=0x%"SCNx32",vni=0x%"SCNx32"))",
+                            &vx_flags, &vx_vni)) {
+            return -EINVAL;
+        }
+        put_16aligned_be32(&vxh->vx_flags, htonl(vx_flags));
+        put_16aligned_be32(&vxh->vx_vni, htonl(vx_vni));
+        tnl_type = OVS_VPORT_TYPE_VXLAN;
+        header_len = sizeof *eth + sizeof *ip +
+                     sizeof *udp + sizeof *vxh;
+    } else if (ovs_scan_len(s, &n, "gre((flags=0x%"SCNx16",proto=0x%"SCNx16")",
+                         &greh->flags, &gre_proto)){
+
+        tnl_type = OVS_VPORT_TYPE_GRE;
+        greh->protocol = htons(gre_proto);
+        ovs_16aligned_be32 *options = (ovs_16aligned_be32 *) (greh + 1);
+
+        if (greh->flags & htons(GRE_CSUM)) {
+            uint32_t csum;
+
+            if (!ovs_scan_len(s, &n, ",csum=0x%"SCNx32, &csum)) {
+                return -EINVAL;
+            }
+            put_16aligned_be32(options, htonl(csum));
+            options++;
+        }
+        if (greh->flags & htons(GRE_KEY)) {
+            uint32_t key;
+
+            if (!ovs_scan_len(s, &n, ",key=0x%"SCNx32, &key)) {
+                return -EINVAL;
+            }
+
+            put_16aligned_be32(options, htonl(key));
+            options++;
+        }
+        if (greh->flags & htons(GRE_SEQ)) {
+            uint32_t seq;
+
+            if (!ovs_scan_len(s, &n, ",seq=0x%"SCNx32, &seq)) {
+                return -EINVAL;
+            }
+            put_16aligned_be32(options, htonl(seq));
+            options++;
+        }
+
+        if (!ovs_scan_len(s, &n, "))")) {
+            return -EINVAL;
+        }
+
+        header_len = sizeof *eth + sizeof *ip +
+                     ((uint8_t *) options - (uint8_t *) greh);
+    } else {
+        return -EINVAL;
+    }
+
+    /* check tunnel meta data. */
+    if (data->tnl_type != tnl_type) {
+        return -EINVAL;
+    }
+    if (data->header_len != header_len) {
+        return -EINVAL;
+    }
+
+    /* Out port */
+    if (!ovs_scan_len(s, &n, ",out_port(%"SCNi32"))", &data->out_port)) {
+        return -EINVAL;
+    }
+
+    return n;
+}
+
+static int
 parse_odp_action(const char *s, const struct simap *port_names,
                  struct ofpbuf *actions)
 {
@@ -887,6 +1114,28 @@ parse_odp_action(const char *s, const struct simap *port_names,
         }
     }
 
+    {
+        uint32_t port;
+        int n;
+
+        if (ovs_scan(s, "tnl_pop(%"SCNi32")%n", &port, &n)) {
+            nl_msg_put_u32(actions, OVS_ACTION_ATTR_TUNNEL_POP, port);
+            return n;
+        }
+    }
+
+    {
+        struct ovs_action_push_tnl data;
+        int n;
+
+        n = ovs_parse_tnl_push(s, &data);
+        if (n > 0) {
+            odp_put_tnl_push_action(actions, &data);
+            return n;
+        } else if (n < 0) {
+            return n;
+        }
+    }
     return -EINVAL;
 }
 
@@ -3538,6 +3787,17 @@ odp_put_tunnel_action(const struct flow_tnl *tunnel,
     tun_key_to_attr(odp_actions, tunnel);
     nl_msg_end_nested(odp_actions, offset);
 }
+
+void
+odp_put_tnl_push_action(struct ofpbuf *odp_actions,
+                        struct ovs_action_push_tnl *data)
+{
+    int size = offsetof(struct ovs_action_push_tnl, header);
+
+    size += data->header_len;
+    nl_msg_put_unspec(odp_actions, OVS_ACTION_ATTR_TUNNEL_PUSH, data, size);
+}
+
 
 /* The commit_odp_actions() function and its helpers. */
 

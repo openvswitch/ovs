@@ -254,4 +254,6 @@ size_t odp_put_userspace_action(uint32_t pid,
 void odp_put_tunnel_action(const struct flow_tnl *tunnel,
                            struct ofpbuf *odp_actions);
 
+void odp_put_tnl_push_action(struct ofpbuf *odp_actions,
+                             struct ovs_action_push_tnl *data);
 #endif /* odp-util.h */

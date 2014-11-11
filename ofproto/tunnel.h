@@ -25,15 +25,16 @@
  * These functions emulate tunnel virtual ports based on the outer
  * header information from the kernel. */
 
+struct ovs_action_push_tnl;
 struct ofport_dpif;
 struct netdev;
 
 void ofproto_tunnel_init(void);
 bool tnl_port_reconfigure(const struct ofport_dpif *, const struct netdev *,
-                          odp_port_t);
+                          odp_port_t, bool native_tnl, const char name[]);
 
 void tnl_port_add(const struct ofport_dpif *, const struct netdev *,
-                  odp_port_t odp_port);
+                  odp_port_t odp_port, bool native_tnl, const char name[]);
 void tnl_port_del(const struct ofport_dpif *);
 
 const struct ofport_dpif *tnl_port_receive(const struct flow *);
@@ -48,5 +49,11 @@ tnl_port_should_receive(const struct flow *flow)
 {
     return flow->tunnel.ip_dst != 0;
 }
+
+int tnl_port_build_header(const struct ofport_dpif *ofport,
+                          const struct flow *tnl_flow,
+                          uint8_t dmac[ETH_ADDR_LEN],
+                          uint8_t smac[ETH_ADDR_LEN],
+                          ovs_be32 ip_src, struct ovs_action_push_tnl *data);
 
 #endif /* tunnel.h */

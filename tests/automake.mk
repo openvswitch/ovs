@@ -34,6 +34,7 @@ TESTSUITE_AT = \
 	tests/jsonrpc.at \
 	tests/jsonrpc-py.at \
 	tests/tunnel.at \
+	tests/tunnel-push-pop.at \
 	tests/lockfile.at \
 	tests/reconnect.at \
 	tests/ovs-vswitchd.at \

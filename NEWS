@@ -49,6 +49,8 @@ Post-v2.3.0
    - A simple wrapper script, 'ovs-docker', to integrate OVS with Docker
      containers. If and when there is a native integration of Open vSwitch
      with Docker, the wrapper script will be retired.
+   - Added support for DPDK Tunneling. VXLAN and GRE are supported protocols.
+     This is generic tunneling mechanism for userspace datapath.
 
 
 v2.3.0 - 14 Aug 2014

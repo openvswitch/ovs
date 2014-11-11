@@ -85,6 +85,7 @@ EXTRA_DIST = \
 	PORTING.md \
 	README.md \
 	README-lisp.md \
+	README-native-tunneling.md \
 	REPORTING-BUGS.md \
 	TODO.md \
 	.travis.yml \

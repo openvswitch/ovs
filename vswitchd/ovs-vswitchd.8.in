@@ -244,6 +244,7 @@ type).
 .so lib/vlog-unixctl.man
 .so lib/memory-unixctl.man
 .so lib/coverage-unixctl.man
+.so ofproto/ofproto-tnl-unixctl.man
 .
 .SH "OPENFLOW IMPLEMENTATION"
 .

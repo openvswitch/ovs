@@ -41,6 +41,8 @@
 #include "shash.h"
 #include "sset.h"
 #include "timeval.h"
+#include "tnl-arp-cache.h"
+#include "tnl-ports.h"
 #include "util.h"
 #include "valgrind.h"
 #include "vlog.h"
@@ -114,6 +116,8 @@ dp_initialize(void)
         }
         dpctl_unixctl_register();
         ovsthread_once_done(&once);
+        tnl_port_map_init();
+        tnl_arp_cache_init();
     }
 }
 
@@ -402,12 +406,13 @@ dpif_close(struct dpif *dpif)
 }
 
 /* Performs periodic work needed by 'dpif'. */
-void
+bool
 dpif_run(struct dpif *dpif)
 {
     if (dpif->dpif_class->run) {
-        dpif->dpif_class->run(dpif);
+        return dpif->dpif_class->run(dpif);
     }
+    return false;
 }
 
 /* Arranges for poll_block() to wake up when dp_run() needs to be called for
@@ -1002,6 +1007,8 @@ dpif_execute_helper_cb(void *aux_, struct dpif_packet **packets, int cnt,
 
     switch ((enum ovs_action_attr)type) {
     case OVS_ACTION_ATTR_OUTPUT:
+    case OVS_ACTION_ATTR_TUNNEL_PUSH:
+    case OVS_ACTION_ATTR_TUNNEL_POP:
     case OVS_ACTION_ATTR_USERSPACE:
     case OVS_ACTION_ATTR_RECIRC: {
         struct dpif_execute execute;
@@ -1607,4 +1614,11 @@ log_flow_get_message(const struct dpif *dpif, const struct dpif_flow_get *get,
                          &get->flow->stats,
                          get->flow->actions, get->flow->actions_len);
     }
+}
+
+bool
+dpif_supports_tnl_push_pop(const struct dpif *dpif)
+{
+   return !strcmp(dpif->dpif_class->type, "netdev") ||
+          !strcmp(dpif->dpif_class->type, "dummy");
 }

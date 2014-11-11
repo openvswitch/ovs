@@ -421,7 +421,7 @@ int dpif_create(const char *name, const char *type, struct dpif **);
 int dpif_create_and_open(const char *name, const char *type, struct dpif **);
 void dpif_close(struct dpif *);
 
-void dpif_run(struct dpif *);
+bool dpif_run(struct dpif *);
 void dpif_wait(struct dpif *);
 
 const char *dpif_name(const struct dpif *);
@@ -791,6 +791,7 @@ int dpif_queue_to_priority(const struct dpif *, uint32_t queue_id,
                            uint32_t *priority);
 
 char *dpif_get_dp_version(const struct dpif *);
+bool dpif_supports_tnl_push_pop(const struct dpif *);
 #ifdef  __cplusplus
 }
 #endif

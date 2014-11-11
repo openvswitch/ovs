@@ -70,6 +70,7 @@ struct in_addr;
 struct in6_addr;
 struct smap;
 struct sset;
+struct ovs_action_push_tnl;
 
 /* Network device statistics.
  *
@@ -180,6 +181,13 @@ int netdev_rxq_drain(struct netdev_rxq *);
 int netdev_send(struct netdev *, int qid, struct dpif_packet **, int cnt,
                 bool may_steal);
 void netdev_send_wait(struct netdev *, int qid);
+
+int netdev_build_header(const struct netdev *, struct ovs_action_push_tnl *data);
+int netdev_push_header(const struct netdev *netdev,
+                       struct dpif_packet **buffers, int cnt,
+                       const struct ovs_action_push_tnl *data);
+int netdev_pop_header(struct netdev *netdev, struct dpif_packet **buffers,
+                      int cnt);
 
 /* Hardware address. */
 int netdev_set_etheraddr(struct netdev *, const uint8_t mac[ETH_ADDR_LEN]);
@@ -327,6 +335,7 @@ int netdev_dump_queue_stats(const struct netdev *,
                             netdev_dump_queue_stats_cb *, void *aux);
 
 enum { NETDEV_MAX_RX_BATCH = 256 };     /* Maximum number packets in rx_recv() batch. */
+extern struct seq *tnl_conf_seq;
 
 #ifdef  __cplusplus
 }

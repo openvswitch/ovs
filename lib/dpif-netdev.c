@@ -63,6 +63,7 @@
 #include "shash.h"
 #include "sset.h"
 #include "timeval.h"
+#include "tnl-arp-cache.h"
 #include "unixctl.h"
 #include "util.h"
 #include "vlog.h"
@@ -226,6 +227,7 @@ struct dp_netdev {
      * for pin of pmd threads. */
     size_t n_dpdk_rxqs;
     char *pmd_cmask;
+    uint64_t last_tnl_conf_seq;
 };
 
 static struct dp_netdev_port *dp_netdev_lookup_port(const struct dp_netdev *dp,
@@ -610,6 +612,7 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
         return error;
     }
 
+    dp->last_tnl_conf_seq = seq_read(tnl_conf_seq);
     *dpp = dp;
     return 0;
 }
@@ -2185,12 +2188,14 @@ dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
     }
 }
 
-static void
+/* Return true if needs to revalidate datapath flows. */
+static bool
 dpif_netdev_run(struct dpif *dpif)
 {
     struct dp_netdev_port *port;
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_pmd_thread *non_pmd = dp_netdev_get_nonpmd(dp);
+    uint64_t new_tnl_seq;
 
     ovs_mutex_lock(&dp->non_pmd_mutex);
     CMAP_FOR_EACH (port, node, &dp->ports) {
@@ -2203,6 +2208,14 @@ dpif_netdev_run(struct dpif *dpif)
         }
     }
     ovs_mutex_unlock(&dp->non_pmd_mutex);
+    tnl_arp_cache_run();
+    new_tnl_seq = seq_read(tnl_conf_seq);
+
+    if (dp->last_tnl_conf_seq != new_tnl_seq) {
+        dp->last_tnl_conf_seq = new_tnl_seq;
+        return true;
+    }
+    return false;
 }
 
 static void
@@ -2222,6 +2235,7 @@ dpif_netdev_wait(struct dpif *dpif)
         }
     }
     ovs_mutex_unlock(&dp_netdev_mutex);
+    seq_wait(tnl_conf_seq, dp->last_tnl_conf_seq);
 }
 
 struct rxq_poll {
@@ -2925,12 +2939,42 @@ dpif_netdev_register_upcall_cb(struct dpif *dpif, upcall_callback *cb,
 static void
 dp_netdev_drop_packets(struct dpif_packet ** packets, int cnt, bool may_steal)
 {
-    int i;
-
     if (may_steal) {
+        int i;
+
         for (i = 0; i < cnt; i++) {
             dpif_packet_delete(packets[i]);
         }
+    }
+}
+
+static int
+push_tnl_action(const struct dp_netdev *dp,
+                   const struct nlattr *attr,
+                   struct dpif_packet **packets, int cnt)
+{
+    struct dp_netdev_port *tun_port;
+    const struct ovs_action_push_tnl *data;
+
+    data = nl_attr_get(attr);
+
+    tun_port = dp_netdev_lookup_port(dp, u32_to_odp(data->tnl_port));
+    if (!tun_port) {
+        return -EINVAL;
+    }
+    netdev_push_header(tun_port->netdev, packets, cnt, data);
+
+    return 0;
+}
+
+static void
+dp_netdev_clone_pkt_batch(struct dpif_packet **tnl_pkt,
+                          struct dpif_packet **packets, int cnt)
+{
+    int i;
+
+    for (i = 0; i < cnt; i++) {
+        tnl_pkt[i] = dpif_packet_clone(packets[i]);
     }
 }
 
@@ -2953,6 +2997,60 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
         if (OVS_LIKELY(p)) {
             netdev_send(p->netdev, pmd->core_id, packets, cnt, may_steal);
             return;
+        }
+        break;
+
+    case OVS_ACTION_ATTR_TUNNEL_PUSH:
+        if (*depth < MAX_RECIRC_DEPTH) {
+            struct dpif_packet *tnl_pkt[NETDEV_MAX_RX_BATCH];
+            int err;
+
+            if (!may_steal) {
+                dp_netdev_clone_pkt_batch(tnl_pkt, packets, cnt);
+                packets = tnl_pkt;
+            }
+
+            err = push_tnl_action(dp, a, packets, cnt);
+            if (!err) {
+                (*depth)++;
+                dp_netdev_input(pmd, packets, cnt);
+                (*depth)--;
+            } else {
+                dp_netdev_drop_packets(tnl_pkt, cnt, !may_steal);
+            }
+            return;
+        }
+        break;
+
+    case OVS_ACTION_ATTR_TUNNEL_POP:
+        if (*depth < MAX_RECIRC_DEPTH) {
+            odp_port_t portno = u32_to_odp(nl_attr_get_u32(a));
+
+            p = dp_netdev_lookup_port(dp, portno);
+            if (p) {
+                struct dpif_packet *tnl_pkt[NETDEV_MAX_RX_BATCH];
+                int err;
+
+                if (!may_steal) {
+                   dp_netdev_clone_pkt_batch(tnl_pkt, packets, cnt);
+                   packets = tnl_pkt;
+                }
+
+                err = netdev_pop_header(p->netdev, packets, cnt);
+                if (!err) {
+
+                    for (i = 0; i < cnt; i++) {
+                        packets[i]->md.in_port.odp_port = portno;
+                    }
+
+                    (*depth)++;
+                    dp_netdev_input(pmd, packets, cnt);
+                    (*depth)--;
+                } else {
+                    dp_netdev_drop_packets(tnl_pkt, cnt, !may_steal);
+                }
+                return;
+            }
         }
         break;
 

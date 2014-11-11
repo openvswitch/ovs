@@ -25,27 +25,41 @@
 #include <sys/ioctl.h>
 
 #include "byte-order.h"
+#include "csum.h"
 #include "daemon.h"
 #include "dirs.h"
 #include "dpif.h"
+#include "dynamic-string.h"
+#include "flow.h"
 #include "hash.h"
 #include "hmap.h"
 #include "list.h"
 #include "netdev-provider.h"
+#include "odp-netlink.h"
 #include "ofpbuf.h"
 #include "ovs-router.h"
 #include "packets.h"
+#include "packet-dpif.h"
 #include "poll-loop.h"
 #include "route-table.h"
 #include "shash.h"
 #include "socket-util.h"
 #include "vlog.h"
+#include "unaligned.h"
+#include "unixctl.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_vport);
+static struct vlog_rate_limit err_rl = VLOG_RATE_LIMIT_INIT(60, 5);
 
 #define GENEVE_DST_PORT 6081
 #define VXLAN_DST_PORT 4789
 #define LISP_DST_PORT 4341
+
+#define VXLAN_HLEN   (sizeof(struct eth_header) +         \
+                      sizeof(struct ip_header)  +         \
+                      sizeof(struct udp_header) +         \
+                      sizeof(struct vxlanhdr))
 
 #define DEFAULT_TTL 64
 
@@ -79,6 +93,9 @@ static int netdev_vport_construct(struct netdev *);
 static int get_patch_config(const struct netdev *netdev, struct smap *args);
 static int get_tunnel_config(const struct netdev *, struct smap *args);
 static bool tunnel_check_status_change__(struct netdev_vport *);
+
+static uint16_t tnl_udp_port_min = 32768;
+static uint16_t tnl_udp_port_max = 61000;
 
 static bool
 is_vport_class(const struct netdev_class *class)
@@ -222,10 +239,20 @@ netdev_vport_alloc(void)
 static int
 netdev_vport_construct(struct netdev *netdev_)
 {
-    struct netdev_vport *netdev = netdev_vport_cast(netdev_);
+    struct netdev_vport *dev = netdev_vport_cast(netdev_);
+    const char *type = netdev_get_type(netdev_);
 
-    ovs_mutex_init(&netdev->mutex);
-    eth_addr_random(netdev->etheraddr);
+    ovs_mutex_init(&dev->mutex);
+    eth_addr_random(dev->etheraddr);
+
+    /* Add a default destination port for tunnel ports if none specified. */
+    if (!strcmp(type, "geneve")) {
+        dev->tnl_cfg.dst_port = htons(GENEVE_DST_PORT);
+    } else if (!strcmp(type, "vxlan")) {
+        dev->tnl_cfg.dst_port = htons(VXLAN_DST_PORT);
+    } else if (!strcmp(type, "lisp")) {
+        dev->tnl_cfg.dst_port = htons(LISP_DST_PORT);
+    }
 
     route_table_register();
 
@@ -406,6 +433,19 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
     ipsec_mech_set = false;
     memset(&tnl_cfg, 0, sizeof tnl_cfg);
 
+    /* Add a default destination port for tunnel ports if none specified. */
+    if (!strcmp(type, "geneve")) {
+        tnl_cfg.dst_port = htons(GENEVE_DST_PORT);
+    }
+
+    if (!strcmp(type, "vxlan")) {
+        tnl_cfg.dst_port = htons(VXLAN_DST_PORT);
+    }
+
+    if (!strcmp(type, "lisp")) {
+        tnl_cfg.dst_port = htons(LISP_DST_PORT);
+    }
+
     needs_dst_port = netdev_vport_needs_dst_port(dev_);
     tnl_cfg.ipsec = strstr(type, "ipsec");
     tnl_cfg.dont_fragment = true;
@@ -498,19 +538,6 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
         } else {
             VLOG_WARN("%s: unknown %s argument '%s'", name, type, node->key);
         }
-    }
-
-    /* Add a default destination port for tunnel ports if none specified. */
-    if (!strcmp(type, "geneve") && !tnl_cfg.dst_port) {
-        tnl_cfg.dst_port = htons(GENEVE_DST_PORT);
-    }
-
-    if (!strcmp(type, "vxlan") && !tnl_cfg.dst_port) {
-        tnl_cfg.dst_port = htons(VXLAN_DST_PORT);
-    }
-
-    if (!strcmp(type, "lisp") && !tnl_cfg.dst_port) {
-        tnl_cfg.dst_port = htons(LISP_DST_PORT);
     }
 
     if (tnl_cfg.ipsec) {
@@ -763,9 +790,424 @@ get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 
     return 0;
 }
+
+
+/* Tunnel push pop ops. */
+
+static struct ip_header *
+ip_hdr(void *eth)
+{
+    return (void *)((char *)eth + sizeof (struct eth_header));
+}
+
+static struct gre_base_hdr *
+gre_hdr(struct ip_header *ip)
+{
+     return (void *)((char *)ip + sizeof (struct ip_header));
+}
+
+static void *
+ip_extract_tnl_md(struct ofpbuf *packet, struct flow_tnl *tnl)
+{
+    struct ip_header *nh;
+    void *l4;
+
+    nh = ofpbuf_l3(packet);
+    l4 = ofpbuf_l4(packet);
+
+    if (!nh || !l4) {
+        return NULL;
+    }
+
+    tnl->ip_src = get_16aligned_be32(&nh->ip_src);
+    tnl->ip_dst = get_16aligned_be32(&nh->ip_dst);
+    tnl->ip_tos = nh->ip_tos;
+
+    return l4;
+}
+
+/* Pushes the 'size' bytes of 'header' into the headroom of 'packet',
+ * reallocating the packet if necessary.  'header' should contain an Ethernet
+ * header, followed by an IPv4 header (without options), and an L4 header.
+ *
+ * This function sets the IP header's ip_tot_len field (which should be zeroed
+ * as part of 'header') and puts its value into '*ip_tot_size' as well.  Also
+ * updates IP header checksum.
+ *
+ * Return pointer to the L4 header added to 'packet'. */
+static void *
+push_ip_header(struct ofpbuf *packet,
+               const void *header, int size, int *ip_tot_size)
+{
+    struct eth_header *eth;
+    struct ip_header *ip;
+
+    eth = ofpbuf_push_uninit(packet, size);
+    *ip_tot_size = ofpbuf_size(packet) - sizeof (struct eth_header);
+
+    memcpy(eth, header, size);
+    ip = ip_hdr(eth);
+    ip->ip_tot_len = htons(*ip_tot_size);
+
+
+    ip->ip_csum = recalc_csum16(ip->ip_csum, 0, ip->ip_tot_len);
+
+    return ip + 1;
+}
+
+static int
+gre_header_len(ovs_be16 flags)
+{
+    int hlen = sizeof(struct eth_header) +
+               sizeof(struct ip_header) + 4;
+
+    if (flags & htons(GRE_CSUM)) {
+        hlen += 4;
+    }
+    if (flags & htons(GRE_KEY)) {
+        hlen += 4;
+    }
+    if (flags & htons(GRE_SEQ)) {
+        hlen += 4;
+    }
+    return hlen;
+}
+
+static int
+parse_gre_header(struct ofpbuf *packet,
+                 struct flow_tnl *tnl)
+{
+    const struct gre_base_hdr *greh;
+    ovs_16aligned_be32 *options;
+    int hlen;
+
+    greh = ip_extract_tnl_md(packet, tnl);
+    if (!greh) {
+        return -EINVAL;
+    }
+
+    if (greh->flags & ~(htons(GRE_CSUM | GRE_KEY | GRE_SEQ))) {
+        return -EINVAL;
+    }
+
+    hlen = gre_header_len(greh->flags);
+    if (hlen > ofpbuf_size(packet)) {
+        return -EINVAL;
+    }
+
+    options = (ovs_16aligned_be32 *)(greh + 1);
+    if (greh->flags & htons(GRE_CSUM)) {
+        ovs_be16 pkt_csum;
+
+        pkt_csum = csum(greh, ofpbuf_size(packet) -
+                              ((const unsigned char *)greh -
+                               (const unsigned char *)ofpbuf_l2(packet)));
+        if (pkt_csum) {
+            return -EINVAL;
+        }
+        tnl->flags = FLOW_TNL_F_CSUM;
+        options++;
+    }
+
+    if (greh->flags & htons(GRE_KEY)) {
+        tnl->tun_id = (OVS_FORCE ovs_be64) ((OVS_FORCE uint64_t)(get_16aligned_be32(options)) << 32);
+        tnl->flags |= FLOW_TNL_F_KEY;
+        options++;
+    }
+
+    if (greh->flags & htons(GRE_SEQ)) {
+        options++;
+    }
+
+    return hlen;
+}
+
+static void
+reset_tnl_md(struct pkt_metadata *md)
+{
+    memset(&md->tunnel, 0, sizeof(md->tunnel));
+}
+
+static void
+gre_extract_md(struct dpif_packet *dpif_pkt)
+{
+    struct ofpbuf *packet = &dpif_pkt->ofpbuf;
+    struct pkt_metadata *md = &dpif_pkt->md;
+    struct flow_tnl *tnl = &md->tunnel;
+    int hlen = sizeof(struct eth_header) +
+               sizeof(struct ip_header) + 4;
+
+    memset(md, 0, sizeof *md);
+    if (hlen > ofpbuf_size(packet)) {
+        return;
+    }
+
+    hlen = parse_gre_header(packet, tnl);
+    if (hlen < 0) {
+        reset_tnl_md(md);
+    }
+
+    ofpbuf_reset_packet(packet, hlen);
+}
+
+static int
+netdev_gre_pop_header(struct netdev *netdev_ OVS_UNUSED,
+                      struct dpif_packet **pkt, int cnt)
+{
+    int i;
+
+    for (i = 0; i < cnt; i++) {
+        gre_extract_md(pkt[i]);
+    }
+    return 0;
+}
+
+static void
+netdev_gre_push_header__(struct ofpbuf *packet,
+                         const void *header, int size)
+{
+    struct gre_base_hdr *greh;
+    int ip_tot_size;
+
+    greh = push_ip_header(packet, header, size,  &ip_tot_size);
+
+    if (greh->flags & htons(GRE_CSUM)) {
+        ovs_16aligned_be32 *options = (ovs_16aligned_be32 *) (greh + 1);
+
+        put_16aligned_be32(options,
+                           (OVS_FORCE ovs_be32) csum(greh, ip_tot_size - sizeof (struct ip_header)));
+    }
+}
+
+static int
+netdev_gre_push_header(const struct netdev *netdev OVS_UNUSED,
+                       struct dpif_packet **packets, int cnt,
+                       const struct ovs_action_push_tnl *data)
+{
+    int i;
+
+    for (i = 0; i < cnt; i++) {
+        netdev_gre_push_header__(&packets[i]->ofpbuf,
+                                   data->header, data->header_len);
+        packets[i]->md = PKT_METADATA_INITIALIZER(u32_to_odp(data->out_port));
+    }
+    return 0;
+}
+
+
+static int
+netdev_gre_build_header(const struct netdev *netdev,
+                        struct ovs_action_push_tnl *data)
+{
+    struct netdev_vport *dev = netdev_vport_cast(netdev);
+    struct netdev_tunnel_config *tnl_cfg;
+    struct ip_header *ip;
+    struct gre_base_hdr *greh;
+    ovs_16aligned_be32 *options;
+    int hlen;
+
+    /* XXX: RCUfy tnl_cfg. */
+    ovs_mutex_lock(&dev->mutex);
+    tnl_cfg = &dev->tnl_cfg;
+
+    ip = ip_hdr(data->header);
+    ip->ip_proto = IPPROTO_GRE;
+
+    greh = gre_hdr(ip);
+    greh->protocol = htons(ETH_TYPE_TEB);
+    greh->flags = 0;
+
+    options = (ovs_16aligned_be32 *) (greh + 1);
+    if (tnl_cfg->csum) {
+        greh->flags |= htons(GRE_CSUM);
+        put_16aligned_be32(options, 0);
+        options++;
+    }
+
+    if (tnl_cfg->out_key_present) {
+        greh->flags |= htons(GRE_KEY);
+        put_16aligned_be32(options, (OVS_FORCE ovs_be32)
+                                    ((OVS_FORCE uint64_t) tnl_cfg->out_key >> 32));
+        options++;
+    }
+
+    ovs_mutex_unlock(&dev->mutex);
+
+    hlen = (uint8_t *) options - (uint8_t *) greh;
+
+    data->header_len = sizeof(struct eth_header) +
+                       sizeof(struct ip_header)  + hlen;
+    data->tnl_type = OVS_VPORT_TYPE_GRE;
+    return 0;
+}
+
+static void
+vxlan_extract_md(struct dpif_packet *dpif_pkt)
+{
+    struct ofpbuf *packet = &dpif_pkt->ofpbuf;
+    struct pkt_metadata *md = &dpif_pkt->md;
+    struct flow_tnl *tnl = &md->tunnel;
+    struct udp_header *udp;
+    struct vxlanhdr *vxh;
+
+    memset(md, 0, sizeof *md);
+    if (VXLAN_HLEN > ofpbuf_size(packet)) {
+        return;
+    }
+
+    udp = ip_extract_tnl_md(packet, tnl);
+    if (!udp) {
+        return;
+    }
+    vxh = (struct vxlanhdr *) (udp + 1);
+
+    if (get_16aligned_be32(&vxh->vx_flags) != htonl(VXLAN_FLAGS) ||
+       (get_16aligned_be32(&vxh->vx_vni) & htonl(0xff))) {
+        VLOG_WARN_RL(&err_rl, "invalid vxlan flags=%#x vni=%#x\n",
+                     ntohl(get_16aligned_be32(&vxh->vx_flags)),
+                     ntohl(get_16aligned_be32(&vxh->vx_vni)));
+        reset_tnl_md(md);
+        return;
+    }
+    tnl->tp_src = udp->udp_src;
+    tnl->tp_dst = udp->udp_dst;
+    tnl->tun_id = htonll(ntohl(get_16aligned_be32(&vxh->vx_vni)) >> 8);
+
+    ofpbuf_reset_packet(packet, VXLAN_HLEN);
+}
+
+static int
+netdev_vxlan_pop_header(struct netdev *netdev_ OVS_UNUSED,
+                        struct dpif_packet **pkt, int cnt)
+{
+    int i;
+
+    for (i = 0; i < cnt; i++) {
+        vxlan_extract_md(pkt[i]);
+    }
+    return 0;
+}
+
+static int
+netdev_vxlan_build_header(const struct netdev *netdev,
+                          struct ovs_action_push_tnl *data)
+{
+    struct netdev_vport *dev = netdev_vport_cast(netdev);
+    struct netdev_tunnel_config *tnl_cfg;
+    struct ip_header *ip;
+    struct udp_header *udp;
+    struct vxlanhdr *vxh;
+
+    /* XXX: RCUfy tnl_cfg. */
+    ovs_mutex_lock(&dev->mutex);
+    tnl_cfg = &dev->tnl_cfg;
+
+    ip = ip_hdr(data->header);
+    ip->ip_proto = IPPROTO_UDP;
+
+    udp = (struct udp_header *) (ip + 1);
+    udp->udp_dst = tnl_cfg->dst_port;
+
+    vxh = (struct vxlanhdr *) (udp + 1);
+    put_16aligned_be32(&vxh->vx_flags, htonl(VXLAN_FLAGS));
+    put_16aligned_be32(&vxh->vx_vni, htonl(ntohll(tnl_cfg->out_key) << 8));
+
+    ovs_mutex_unlock(&dev->mutex);
+    data->header_len = VXLAN_HLEN;
+    data->tnl_type = OVS_VPORT_TYPE_VXLAN;
+    return 0;
+}
+
+static ovs_be16
+get_src_port(struct dpif_packet *packet)
+{
+    uint32_t hash;
+
+    hash = dpif_packet_get_dp_hash(packet);
+
+    return htons((((uint64_t) hash * (tnl_udp_port_max - tnl_udp_port_min)) >> 32) +
+                 tnl_udp_port_min);
+}
+
+static void
+netdev_vxlan_push_header__(struct dpif_packet *packet,
+                           const void *header, int size)
+{
+    struct udp_header *udp;
+    int ip_tot_size;
+
+    udp = push_ip_header(&packet->ofpbuf, header, size, &ip_tot_size);
+
+    /* set udp src port */
+    udp->udp_src = get_src_port(packet);
+    udp->udp_len = htons(ip_tot_size - sizeof (struct ip_header));
+    /* udp_csum is zero */
+}
+
+static int
+netdev_vxlan_push_header(const struct netdev *netdev OVS_UNUSED,
+                         struct dpif_packet **packets, int cnt,
+                         const struct ovs_action_push_tnl *data)
+{
+    int i;
+
+    for (i = 0; i < cnt; i++) {
+        netdev_vxlan_push_header__(packets[i],
+                                   data->header, VXLAN_HLEN);
+        packets[i]->md = PKT_METADATA_INITIALIZER(u32_to_odp(data->out_port));
+    }
+    return 0;
+}
+
+static void
+netdev_vport_range(struct unixctl_conn *conn, int argc,
+                   const char *argv[], void *aux OVS_UNUSED)
+{
+    int val1, val2;
+
+    if (argc < 3) {
+        struct ds ds = DS_EMPTY_INITIALIZER;
+
+        ds_put_format(&ds, "Tunnel UDP source port range: %"PRIu16"-%"PRIu16"\n",
+                            tnl_udp_port_min, tnl_udp_port_max);
+
+        unixctl_command_reply(conn, ds_cstr(&ds));
+        ds_destroy(&ds);
+        return;
+    }
+
+    if (argc != 3) {
+        return;
+    }
+
+    val1 = atoi(argv[1]);
+    if (val1 <= 0 || val1 > UINT16_MAX) {
+        unixctl_command_reply(conn, "Invalid min.");
+        return;
+    }
+    val2 = atoi(argv[2]);
+    if (val2 <= 0 || val2 > UINT16_MAX) {
+        unixctl_command_reply(conn, "Invalid max.");
+        return;
+    }
+
+    if (val1 > val2) {
+        tnl_udp_port_min = val2;
+        tnl_udp_port_max = val1;
+    } else {
+        tnl_udp_port_min = val1;
+        tnl_udp_port_max = val2;
+    }
+    seq_change(tnl_conf_seq);
+
+    unixctl_command_reply(conn, "OK");
+}
+
 
 #define VPORT_FUNCTIONS(GET_CONFIG, SET_CONFIG,             \
-                        GET_TUNNEL_CONFIG, GET_STATUS)      \
+                        GET_TUNNEL_CONFIG, GET_STATUS,      \
+                        BUILD_HEADER,                       \
+                        PUSH_HEADER, POP_HEADER)            \
     NULL,                                                   \
     netdev_vport_run,                                       \
     netdev_vport_wait,                                      \
@@ -777,6 +1219,9 @@ get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     GET_CONFIG,                                             \
     SET_CONFIG,                                             \
     GET_TUNNEL_CONFIG,                                      \
+    BUILD_HEADER,                                           \
+    PUSH_HEADER,                                            \
+    POP_HEADER,                                             \
     NULL,                       /* get_numa_id */           \
     NULL,                       /* set_multiq */            \
                                                             \
@@ -828,12 +1273,14 @@ get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     NULL,                   /* rx_wait */                   \
     NULL,                   /* rx_drain */
 
-#define TUNNEL_CLASS(NAME, DPIF_PORT)                       \
-    { DPIF_PORT,                                            \
-        { NAME, VPORT_FUNCTIONS(get_tunnel_config,          \
-                                set_tunnel_config,          \
-                                get_netdev_tunnel_config,   \
-                                tunnel_get_status) }}
+
+#define TUNNEL_CLASS(NAME, DPIF_PORT, BUILD_HEADER, PUSH_HEADER, POP_HEADER)   \
+    { DPIF_PORT,                                                               \
+        { NAME, VPORT_FUNCTIONS(get_tunnel_config,                             \
+                                set_tunnel_config,                             \
+                                get_netdev_tunnel_config,                      \
+                                tunnel_get_status,                             \
+                                BUILD_HEADER, PUSH_HEADER, POP_HEADER) }}
 
 void
 netdev_vport_tunnel_register(void)
@@ -841,13 +1288,17 @@ netdev_vport_tunnel_register(void)
     /* The name of the dpif_port should be short enough to accomodate adding
      * a port number to the end if one is necessary. */
     static const struct vport_class vport_classes[] = {
-        TUNNEL_CLASS("geneve", "genev_sys"),
-        TUNNEL_CLASS("gre", "gre_sys"),
-        TUNNEL_CLASS("ipsec_gre", "gre_sys"),
-        TUNNEL_CLASS("gre64", "gre64_sys"),
-        TUNNEL_CLASS("ipsec_gre64", "gre64_sys"),
-        TUNNEL_CLASS("vxlan", "vxlan_sys"),
-        TUNNEL_CLASS("lisp", "lisp_sys")
+        TUNNEL_CLASS("geneve", "genev_sys", NULL, NULL, NULL),
+        TUNNEL_CLASS("gre", "gre_sys", netdev_gre_build_header,
+                                       netdev_gre_push_header,
+                                       netdev_gre_pop_header),
+        TUNNEL_CLASS("ipsec_gre", "gre_sys", NULL, NULL, NULL),
+        TUNNEL_CLASS("gre64", "gre64_sys", NULL,  NULL, NULL),
+        TUNNEL_CLASS("ipsec_gre64", "gre64_sys", NULL, NULL, NULL),
+        TUNNEL_CLASS("vxlan", "vxlan_sys", netdev_vxlan_build_header,
+                                           netdev_vxlan_push_header,
+                                           netdev_vxlan_pop_header),
+        TUNNEL_CLASS("lisp", "lisp_sys", NULL, NULL, NULL)
     };
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
 
@@ -857,6 +1308,10 @@ netdev_vport_tunnel_register(void)
         for (i = 0; i < ARRAY_SIZE(vport_classes); i++) {
             netdev_register_provider(&vport_classes[i].netdev_class);
         }
+
+        unixctl_command_register("tnl/egress_port_range", "min max", 0, 2,
+                                 netdev_vport_range, NULL);
+
         ovsthread_once_done(&once);
     }
 }
@@ -869,6 +1324,6 @@ netdev_vport_patch_register(void)
             { "patch", VPORT_FUNCTIONS(get_patch_config,
                                        set_patch_config,
                                        NULL,
-                                       NULL) }};
+                                       NULL, NULL, NULL, NULL) }};
     netdev_register_provider(&patch_class.netdev_class);
 }

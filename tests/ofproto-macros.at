@@ -114,6 +114,13 @@ m4_define([OVS_VSWITCHD_STOP],
    AT_CHECK([ovs-appctl -t ovs-vswitchd exit])
    AT_CHECK([ovs-appctl -t ovsdb-server exit])])
 
+m4_define([OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP],
+  [AT_CHECK([ovs-appctl ofproto/tnl-push-pop off], [0], [dnl
+Tunnel push-pop off
+])])
+
+  [AT_CHECK([ovs-appctl ofproto/tnl-push-pop off])])
+
 # ADD_OF_PORTS(BRIDGE, OF_PORT[, OF_PORT...])
 #
 # Creates a dummy interface with an OpenFlow port number of OF_PORT and

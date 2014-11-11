@@ -2755,6 +2755,9 @@ netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
     NULL,                       /* get_config */                \
     NULL,                       /* set_config */                \
     NULL,                       /* get_tunnel_config */         \
+    NULL,                       /* build header */              \
+    NULL,                       /* push header */               \
+    NULL,                       /* pop header */                \
     NULL,                       /* get_numa_id */               \
     NULL,                       /* set_multiq */                \
                                                                 \

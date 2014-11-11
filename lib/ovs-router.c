@@ -33,6 +33,7 @@
 #include "dynamic-string.h"
 #include "netdev.h"
 #include "packets.h"
+#include "seq.h"
 #include "ovs-router.h"
 #include "ovs-router-linux.h"
 #include "unixctl.h"
@@ -119,6 +120,7 @@ ovs_router_insert__(uint8_t priority, ovs_be32 ip_dst, uint8_t plen,
         /* An old rule with the same match was displaced. */
         ovsrcu_postpone(rt_entry_free, ovs_router_entry_cast(cr));
     }
+    seq_change(tnl_conf_seq);
 }
 
 void
@@ -216,6 +218,7 @@ ovs_router_del(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
         if (rt_entry_delete(plen + 32, ip, plen)) {
             unixctl_command_reply(conn, "OK");
+            seq_change(tnl_conf_seq);
         } else {
             unixctl_command_reply(conn, "Not found");
         }
@@ -260,6 +263,7 @@ ovs_router_flush(void)
             classifier_remove(&cls, &rt->cr);
         }
     }
+    seq_change(tnl_conf_seq);
 }
 
 /* May not be called more than once. */
@@ -267,10 +271,9 @@ void
 ovs_router_unixctl_register(void)
 {
     classifier_init(&cls, NULL);
-    /* XXX: Add documentation for these commands. */
-    unixctl_command_register("ovs/route/add", "ip mask dev gw", 2, 3,
+    unixctl_command_register("ovs/route/add", "ipv4_addr/prefix_len out_br_name gw", 2, 3,
                              ovs_router_add, NULL);
     unixctl_command_register("ovs/route/show", "", 0, 0, ovs_router_show, NULL);
-    unixctl_command_register("ovs/route/del", "ip mask", 1, 1, ovs_router_del,
+    unixctl_command_register("ovs/route/del", "ipv4_addr/prefix_len", 1, 1, ovs_router_del,
                              NULL);
 }

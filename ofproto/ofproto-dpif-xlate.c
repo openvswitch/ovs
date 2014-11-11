@@ -17,7 +17,12 @@
 #include "ofproto/ofproto-dpif-xlate.h"
 
 #include <errno.h>
+#include <arpa/inet.h>
+#include <net/if.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 
+#include "tnl-arp-cache.h"
 #include "bfd.h"
 #include "bitmap.h"
 #include "bond.h"
@@ -48,6 +53,8 @@
 #include "ofproto/ofproto-dpif.h"
 #include "ofproto/ofproto-provider.h"
 #include "packet-dpif.h"
+#include "ovs-router.h"
+#include "tnl-ports.h"
 #include "tunnel.h"
 #include "vlog.h"
 
@@ -249,6 +256,7 @@ enum xc_type {
     XC_NORMAL,
     XC_FIN_TIMEOUT,
     XC_GROUP,
+    XC_TNL_ARP,
 };
 
 /* xlate_cache entries hold enough information to perform the side effects of
@@ -298,6 +306,10 @@ struct xc_entry {
             struct group_dpif *group;
             struct ofputil_bucket *bucket;
         } group;
+        struct {
+            char br_name[IFNAMSIZ];
+            ovs_be32 d_ip;
+        } tnl_arp_cache;
     } u;
 };
 
@@ -2455,6 +2467,125 @@ process_special(struct xlate_ctx *ctx, const struct flow *flow,
     }
 }
 
+static int
+tnl_route_lookup_flow(const struct flow *oflow,
+                      ovs_be32 *ip, struct xport **out_port)
+{
+    char out_dev[IFNAMSIZ];
+    struct xbridge *xbridge;
+    struct xlate_cfg *xcfg;
+    ovs_be32 gw;
+
+    if (!ovs_router_lookup(oflow->tunnel.ip_dst, out_dev, &gw)) {
+        return -ENOENT;
+    }
+
+    if (gw) {
+        *ip = gw;
+    } else {
+        *ip = oflow->tunnel.ip_dst;
+    }
+
+    xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
+    ovs_assert(xcfg);
+
+    HMAP_FOR_EACH (xbridge, hmap_node, &xcfg->xbridges) {
+        if (!strncmp(xbridge->name, out_dev, IFNAMSIZ)) {
+            struct xport *port;
+
+            HMAP_FOR_EACH (port, ofp_node, &xbridge->xports) {
+                if (!strncmp(netdev_get_name(port->netdev), out_dev, IFNAMSIZ)) {
+                    *out_port = port;
+                    return 0;
+                }
+            }
+        }
+    }
+    return -ENOENT;
+}
+
+static int
+xlate_flood_packet(struct xbridge *xbridge, struct ofpbuf *packet)
+{
+    struct ofpact_output output;
+    struct flow flow;
+
+    ofpact_init(&output.ofpact, OFPACT_OUTPUT, sizeof output);
+    /* Use OFPP_NONE as the in_port to avoid special packet processing. */
+    flow_extract(packet, NULL, &flow);
+    flow.in_port.ofp_port = OFPP_NONE;
+    output.port = OFPP_FLOOD;
+    output.max_len = 0;
+
+    return ofproto_dpif_execute_actions(xbridge->ofproto, &flow, NULL,
+                                        &output.ofpact, sizeof output,
+                                        packet);
+}
+
+static void
+tnl_send_arp_request(const struct xport *out_dev, const uint8_t eth_src[ETH_ADDR_LEN],
+                     ovs_be32 ip_src, ovs_be32 ip_dst)
+{
+    struct xbridge *xbridge = out_dev->xbridge;
+    struct ofpbuf packet;
+
+    ofpbuf_init(&packet, 0);
+    compose_arp(&packet, eth_src, ip_src, ip_dst);
+
+    xlate_flood_packet(xbridge, &packet);
+    ofpbuf_uninit(&packet);
+}
+
+static int
+build_tunnel_send(const struct xlate_ctx *ctx, const struct xport *xport,
+                  const struct flow *flow, odp_port_t tunnel_odp_port)
+{
+    struct ovs_action_push_tnl tnl_push_data;
+    struct xport *out_dev = NULL;
+    ovs_be32 s_ip, d_ip = 0;
+    uint8_t smac[ETH_ADDR_LEN];
+    uint8_t dmac[ETH_ADDR_LEN];
+    int err;
+
+    err = tnl_route_lookup_flow(flow, &d_ip, &out_dev);
+    if (err) {
+        return err;
+    }
+
+    /* Use mac addr of bridge port of the peer. */
+    err = netdev_get_etheraddr(out_dev->netdev, smac);
+    if (err) {
+        return err;
+    }
+
+    err = netdev_get_in4(out_dev->netdev, (struct in_addr *) &s_ip, NULL);
+    if (err) {
+        return err;
+    }
+
+    err = tnl_arp_lookup(out_dev->xbridge->name, d_ip, dmac);
+    if (err) {
+        tnl_send_arp_request(out_dev, smac, s_ip, d_ip);
+        return err;
+    }
+    if (ctx->xin->xcache) {
+        struct xc_entry *entry;
+
+        entry = xlate_cache_add_entry(ctx->xin->xcache, XC_TNL_ARP);
+        strncpy(entry->u.tnl_arp_cache.br_name, out_dev->xbridge->name, IFNAMSIZ);
+        entry->u.tnl_arp_cache.d_ip = d_ip;
+    }
+    err = tnl_port_build_header(xport->ofport, flow,
+                                dmac, smac, s_ip, &tnl_push_data);
+    if (err) {
+        return err;
+    }
+    tnl_push_data.tnl_port = odp_to_u32(tunnel_odp_port);
+    tnl_push_data.out_port = odp_to_u32(out_dev->odp_port);
+    odp_put_tnl_push_action(ctx->xout->odp_actions, &tnl_push_data);
+    return 0;
+}
+
 static void
 compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                         bool check_stp)
@@ -2462,15 +2593,18 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     const struct xport *xport = get_ofp_port(ctx->xbridge, ofp_port);
     struct flow_wildcards *wc = &ctx->xout->wc;
     struct flow *flow = &ctx->xin->flow;
+    struct flow_tnl flow_tnl;
     ovs_be16 flow_vlan_tci;
     uint32_t flow_pkt_mark;
     uint8_t flow_nw_tos;
     odp_port_t out_port, odp_port;
+    bool tnl_push_pop_send = false;
     uint8_t dscp;
 
     /* If 'struct flow' gets additional metadata, we'll need to zero it out
      * before traversing a patch port. */
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 28);
+    memset(&flow_tnl, 0, sizeof flow_tnl);
 
     if (!xport) {
         xlate_report(ctx, "Nonexistent output port");
@@ -2580,7 +2714,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
           * the Logical (tunnel) Port are not visible for any further
           * matches, while explicit set actions on tunnel metadata are.
           */
-        struct flow_tnl flow_tnl = flow->tunnel;
+        flow_tnl = flow->tunnel;
         odp_port = tnl_port_send(xport->ofport, flow, &ctx->xout->wc);
         if (odp_port == ODPP_NONE) {
             xlate_report(ctx, "Tunneling decided against output");
@@ -2600,9 +2734,13 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
             entry->u.dev.tx = netdev_ref(xport->netdev);
         }
         out_port = odp_port;
-        commit_odp_tunnel_action(flow, &ctx->base_flow,
-                                 ctx->xout->odp_actions);
-        flow->tunnel = flow_tnl; /* Restore tunnel metadata */
+        if (ovs_native_tunneling_is_on(ctx->xbridge->ofproto)) {
+            tnl_push_pop_send = true;
+        } else {
+            commit_odp_tunnel_action(flow, &ctx->base_flow,
+                                     ctx->xout->odp_actions);
+            flow->tunnel = flow_tnl; /* Restore tunnel metadata */
+        }
     } else {
         odp_port = xport->odp_port;
         out_port = odp_port;
@@ -2622,7 +2760,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     if (out_port != ODPP_NONE) {
         ctx->xout->slow |= commit_odp_actions(flow, &ctx->base_flow,
                                               ctx->xout->odp_actions,
-                                              &ctx->xout->wc,
+                                              wc,
                                               ctx->xbridge->masked_set_action);
 
         if (ctx->use_recirc) {
@@ -2640,9 +2778,34 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
             nl_msg_put_u32(ctx->xout->odp_actions, OVS_ACTION_ATTR_RECIRC,
                            xr->recirc_id);
         } else {
-            add_ipfix_output_action(ctx, out_port);
-            nl_msg_put_odp_port(ctx->xout->odp_actions, OVS_ACTION_ATTR_OUTPUT,
-                                out_port);
+
+            if (tnl_push_pop_send) {
+                build_tunnel_send(ctx, xport, flow, odp_port);
+                flow->tunnel = flow_tnl; /* Restore tunnel metadata */
+            } else {
+                odp_port_t odp_tnl_port = ODPP_NONE;
+
+                /* XXX: Write better Filter for tunnel port. We can use inport
+                * int tunnel-port flow to avoid these checks completely. */
+                if (ofp_port == OFPP_LOCAL &&
+                    ovs_native_tunneling_is_on(ctx->xbridge->ofproto)) {
+
+                    odp_tnl_port = tnl_port_map_lookup(flow, wc);
+                }
+
+                if (odp_tnl_port != ODPP_NONE) {
+                    nl_msg_put_odp_port(ctx->xout->odp_actions,
+                                        OVS_ACTION_ATTR_TUNNEL_POP,
+                                        odp_tnl_port);
+                } else {
+                    /* Tunnel push-pop action is not compatible with
+                     * IPFIX action. */
+                    add_ipfix_output_action(ctx, out_port);
+                    nl_msg_put_odp_port(ctx->xout->odp_actions,
+                                        OVS_ACTION_ATTR_OUTPUT,
+                                        out_port);
+               }
+           }
         }
 
         ctx->sflow_odp_port = odp_port;
@@ -3604,6 +3767,9 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
     struct flow *flow = &ctx->xin->flow;
     const struct ofpact *a;
 
+    if (ovs_native_tunneling_is_on(ctx->xbridge->ofproto)) {
+        tnl_arp_snoop(flow, wc, ctx->xbridge->name);
+    }
     /* dl_type already in the mask, not set below. */
 
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
@@ -4464,6 +4630,7 @@ xlate_push_stats(struct xlate_cache *xcache,
 {
     struct xc_entry *entry;
     struct ofpbuf entries = xcache->entries;
+    uint8_t dmac[ETH_ADDR_LEN];
 
     if (!stats->n_packets) {
         return;
@@ -4504,6 +4671,10 @@ xlate_push_stats(struct xlate_cache *xcache,
         case XC_GROUP:
             group_dpif_credit_stats(entry->u.group.group, entry->u.group.bucket,
                                     stats);
+            break;
+        case XC_TNL_ARP:
+            /* Lookup arp to avoid arp timeout. */
+            tnl_arp_lookup(entry->u.tnl_arp_cache.br_name, entry->u.tnl_arp_cache.d_ip, dmac);
             break;
         default:
             OVS_NOT_REACHED();
@@ -4574,6 +4745,8 @@ xlate_cache_clear(struct xlate_cache *xcache)
             break;
         case XC_GROUP:
             group_dpif_unref(entry->u.group.group);
+            break;
+        case XC_TNL_ARP:
             break;
         default:
             OVS_NOT_REACHED();

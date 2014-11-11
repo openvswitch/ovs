@@ -11,6 +11,7 @@ OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
 AT_DATA([flows.txt], [dnl
 actions=IN_PORT
 ])
+OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
 
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
@@ -118,6 +119,7 @@ AT_DATA([flows.txt], [dnl
 actions=output:1
 ])
 
+OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
@@ -150,6 +152,7 @@ AT_DATA([flows.txt], [dnl
 actions=output:1
 ])
 
+OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
@@ -192,6 +195,7 @@ AT_DATA([flows.txt], [dnl
 actions=set_tunnel:1,output:1,set_tunnel:2,output:2,set_tunnel:3,output:3,set_tunnel:5,output:4
 ])
 
+OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
@@ -224,6 +228,7 @@ AT_DATA([flows.txt], [dnl
 actions=IN_PORT,output:1,output:2,output:3
 ])
 
+OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
@@ -276,6 +281,7 @@ tun_id=3,actions=output:4,set_tunnel:2,resubmit:99,set_tunnel:4,output:2,resubmi
 tun_id=4,actions=output:5
 ])
 
+OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
@@ -387,6 +393,8 @@ OVS_VSWITCHD_START([dnl
         options:remote_ip=flow ofport_request=4 \
     -- add-port br0 p5 -- set Interface p5 type=gre options:key=flow \
         options:remote_ip=5.5.5.5 ofport_request=5])
+
+OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
 ADD_OF_PORTS([br0], [90])
 AT_DATA([flows.txt], [dnl
 in_port=90 actions=resubmit:1,resubmit:2,resubmit:3,resubmit:4,resubmit:5

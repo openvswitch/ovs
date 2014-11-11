@@ -1,0 +1,27 @@
+.SS "OPENVSWITCH TUNNELING COMMANDS"
+These commands query and modify OVS tunnel components. Ref to
+README-native-tunneling.md for more info.
+.
+.IP "\fBovs/route/add ipv4_address/plen output_bridge [GW]\fR"
+Adds ipv4_address/plen route to vswitchd routing table. output_bridge
+needs to be OVS bridge name.  This command is useful if OVS cached
+routes does not look right.
+.
+.IP "\fBovs/route/show\fR"
+Print all routes in OVS routing table, This includes routes cached
+from system routing table and user configured routes.
+.
+.IP "\fBovs/route/del ipv4_address/plen\fR"
+Delete ipv4_address/plen route from OVS routing table.
+.
+.IP "\fBtnl/arp/show\fR"
+OVS builds ARP cache by snooping are messages. This command shows
+ARP cache table.
+.
+.IP "\fBtnl/arp/flush\fR"
+Flush ARP table.
+.
+.IP "\fBtnl/egress_port_range [num1] [num2]\fR"
+Set range for UDP source port used for UDP based Tunnels. For
+example VxLAN. If case of zero arguments this command prints
+current range in use.

@@ -19,18 +19,26 @@
 
 #include "byte-order.h"
 #include "connectivity.h"
+#include "csum.h"
+#include "dpif.h"
 #include "dynamic-string.h"
 #include "fat-rwlock.h"
 #include "hash.h"
 #include "hmap.h"
 #include "netdev.h"
 #include "odp-util.h"
+#include "ofpbuf.h"
 #include "packets.h"
+#include "route-table.h"
 #include "seq.h"
 #include "smap.h"
 #include "socket-util.h"
+#include "tnl-arp-cache.h"
+#include "tnl-ports.h"
 #include "tunnel.h"
 #include "vlog.h"
+#include "unaligned.h"
+#include "ofproto-dpif.h"
 
 VLOG_DEFINE_THIS_MODULE(tunnel);
 
@@ -136,7 +144,7 @@ ofproto_tunnel_init(void)
 
 static bool
 tnl_port_add__(const struct ofport_dpif *ofport, const struct netdev *netdev,
-               odp_port_t odp_port, bool warn)
+               odp_port_t odp_port, bool warn, bool native_tnl, const char name[])
     OVS_REQ_WRLOCK(rwlock)
 {
     const struct netdev_tunnel_config *cfg;
@@ -185,6 +193,11 @@ tnl_port_add__(const struct ofport_dpif *ofport, const struct netdev *netdev,
     }
     hmap_insert(*map, &tnl_port->match_node, tnl_hash(&tnl_port->match));
     tnl_port_mod_log(tnl_port, "adding");
+
+    if (native_tnl) {
+        tnl_port_map_insert(odp_port, tnl_port->match.ip_dst,
+                            cfg->dst_port, name);
+    }
     return true;
 }
 
@@ -193,10 +206,10 @@ tnl_port_add__(const struct ofport_dpif *ofport, const struct netdev *netdev,
  * tunnel. */
 void
 tnl_port_add(const struct ofport_dpif *ofport, const struct netdev *netdev,
-             odp_port_t odp_port) OVS_EXCLUDED(rwlock)
+             odp_port_t odp_port, bool native_tnl, const char name[]) OVS_EXCLUDED(rwlock)
 {
     fat_rwlock_wrlock(&rwlock);
-    tnl_port_add__(ofport, netdev, odp_port, true);
+    tnl_port_add__(ofport, netdev, odp_port, true, native_tnl, name);
     fat_rwlock_unlock(&rwlock);
 }
 
@@ -206,7 +219,8 @@ tnl_port_add(const struct ofport_dpif *ofport, const struct netdev *netdev,
  * tnl_port_add(). */
 bool
 tnl_port_reconfigure(const struct ofport_dpif *ofport,
-                     const struct netdev *netdev, odp_port_t odp_port)
+                     const struct netdev *netdev, odp_port_t odp_port,
+                     bool native_tnl, const char name[])
     OVS_EXCLUDED(rwlock)
 {
     struct tnl_port *tnl_port;
@@ -215,13 +229,13 @@ tnl_port_reconfigure(const struct ofport_dpif *ofport,
     fat_rwlock_wrlock(&rwlock);
     tnl_port = tnl_find_ofport(ofport);
     if (!tnl_port) {
-        changed = tnl_port_add__(ofport, netdev, odp_port, false);
+        changed = tnl_port_add__(ofport, netdev, odp_port, false, native_tnl, name);
     } else if (tnl_port->netdev != netdev
                || tnl_port->match.odp_port != odp_port
                || tnl_port->change_seq != seq_read(connectivity_seq_get())) {
         VLOG_DBG("reconfiguring %s", tnl_port_get_name(tnl_port));
         tnl_port_del__(ofport);
-        tnl_port_add__(ofport, netdev, odp_port, true);
+        tnl_port_add__(ofport, netdev, odp_port, true, native_tnl, name);
         changed = true;
     }
     fat_rwlock_unlock(&rwlock);
@@ -239,8 +253,11 @@ tnl_port_del__(const struct ofport_dpif *ofport) OVS_REQ_WRLOCK(rwlock)
 
     tnl_port = tnl_find_ofport(ofport);
     if (tnl_port) {
+        const struct netdev_tunnel_config *cfg =
+            netdev_get_tunnel_config(tnl_port->netdev);
         struct hmap **map;
 
+        tnl_port_map_delete(tnl_port->match.ip_dst, cfg->dst_port);
         tnl_port_mod_log(tnl_port, "removing");
         map = tnl_match_map(&tnl_port->match);
         hmap_remove(*map, &tnl_port->match_node);
@@ -650,4 +667,48 @@ static const char *
 tnl_port_get_name(const struct tnl_port *tnl_port) OVS_REQ_RDLOCK(rwlock)
 {
     return netdev_get_name(tnl_port->netdev);
+}
+
+int
+tnl_port_build_header(const struct ofport_dpif *ofport,
+                      const struct flow *tnl_flow,
+                      uint8_t dmac[ETH_ADDR_LEN],
+                      uint8_t smac[ETH_ADDR_LEN],
+                      ovs_be32 ip_src, struct ovs_action_push_tnl *data)
+{
+    struct tnl_port *tnl_port;
+    struct eth_header *eth;
+    struct ip_header *ip;
+    void *l3;
+    int res;
+
+    fat_rwlock_rdlock(&rwlock);
+    tnl_port = tnl_find_ofport(ofport);
+    ovs_assert(tnl_port);
+
+    /* Build Ethernet and IP headers. */
+    memset(data->header, 0, sizeof data->header);
+
+    eth = (struct eth_header *)data->header;
+    memcpy(eth->eth_dst, dmac, ETH_ADDR_LEN);
+    memcpy(eth->eth_src, smac, ETH_ADDR_LEN);
+    eth->eth_type = htons(ETH_TYPE_IP);
+
+    l3 = (eth + 1);
+    ip = (struct ip_header *) l3;
+
+    ip->ip_ihl_ver = IP_IHL_VER(5, 4);
+    ip->ip_tos = tnl_flow->tunnel.ip_tos;
+    ip->ip_ttl = tnl_flow->tunnel.ip_ttl;
+    ip->ip_frag_off = (tnl_flow->tunnel.flags & FLOW_TNL_F_DONT_FRAGMENT) ?
+                      htons(IP_DF) : 0;
+
+    put_16aligned_be32(&ip->ip_src, ip_src);
+    put_16aligned_be32(&ip->ip_dst, tnl_flow->tunnel.ip_dst);
+
+    res = netdev_build_header(tnl_port->netdev, data);
+    ip->ip_csum = csum(ip, sizeof *ip);
+    fat_rwlock_unlock(&rwlock);
+
+    return res;
 }

@@ -1420,6 +1420,9 @@ unlock_dpdk:
     netdev_dpdk_get_config,                                   \
     NULL,                       /* netdev_dpdk_set_config */  \
     NULL,                       /* get_tunnel_config */       \
+    NULL, /* build header */                                  \
+    NULL, /* push header */                                   \
+    NULL, /* pop header */                                    \
     netdev_dpdk_get_numa_id,    /* get_numa_id */             \
     MULTIQ,                     /* set_multiq */              \
                                                               \

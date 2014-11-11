@@ -689,7 +689,7 @@ dpif_netlink_destroy(struct dpif *dpif_)
     return dpif_netlink_dp_transact(&dp, NULL, NULL);
 }
 
-static void
+static bool
 dpif_netlink_run(struct dpif *dpif_)
 {
     struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
@@ -700,6 +700,7 @@ dpif_netlink_run(struct dpif *dpif_)
         dpif_netlink_refresh_channels(dpif, dpif->n_handlers);
         fat_rwlock_unlock(&dpif->upcall_lock);
     }
+    return false;
 }
 
 static int

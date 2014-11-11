@@ -68,7 +68,8 @@ BUILT_SOURCES += ofproto/ipfix-entities.def
 
 CLEANFILES += ofproto/ipfix-entities.def
 
-MAN_FRAGMENTS += ofproto/ofproto-unixctl.man ofproto/ofproto-dpif-unixctl.man
+MAN_FRAGMENTS += ofproto/ofproto-unixctl.man ofproto/ofproto-dpif-unixctl.man \
+		 ofproto/ofproto-tnl-unixctl.man
 
 # IPFIX entity definition macros generation from IANA's XML definition.
 EXTRA_DIST += ofproto/ipfix.xml

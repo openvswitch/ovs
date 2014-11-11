@@ -427,6 +427,8 @@ odp_execute_actions(void *dp, struct dpif_packet **packets, int cnt, bool steal,
         switch ((enum ovs_action_attr) type) {
             /* These only make sense in the context of a datapath. */
         case OVS_ACTION_ATTR_OUTPUT:
+        case OVS_ACTION_ATTR_TUNNEL_PUSH:
+        case OVS_ACTION_ATTR_TUNNEL_POP:
         case OVS_ACTION_ATTR_USERSPACE:
         case OVS_ACTION_ATTR_RECIRC:
             if (dp_execute_action) {

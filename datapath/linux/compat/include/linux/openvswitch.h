@@ -582,6 +582,28 @@ struct ovs_action_hash {
 	uint32_t  hash_basis;
 };
 
+#ifndef __KERNEL__
+#define TNL_PUSH_HEADER_SIZE 128
+
+/*
+ * struct ovs_action_push_tnl - %OVS_ACTION_ATTR_TUNNEL_PUSH
+ * @tnl_port: To identify tunnel port to pass header info.
+ * @out_port: Physical port to send encapsulated packet.
+ * @header_len: Length of the header to be pushed.
+ * @tnl_type: This is only required to format this header.  Otherwise
+ * ODP layer can not parse %header.
+ * @header: Partial header for the tunnel. Tunnel push action can use
+ * this header to build final header according to actual packet parameters.
+ */
+struct ovs_action_push_tnl {
+	uint32_t tnl_port;
+	uint32_t out_port;
+	uint32_t header_len;
+	uint32_t tnl_type;     /* For logging. */
+	uint8_t  header[TNL_PUSH_HEADER_SIZE];
+};
+#endif
+
 /**
  * enum ovs_action_attr - Action types.
  *
@@ -617,6 +639,11 @@ struct ovs_action_hash {
  * Only a single header can be set with a single %OVS_ACTION_ATTR_SET.  Not all
  * fields within a header are modifiable, e.g. the IPv4 protocol and fragment
  * type may not be changed.
+ *
+ * @OVS_ACTION_ATTR_TUNNEL_PUSH: Push tunnel header described by struct
+ * ovs_action_push_tnl.
+ * @OVS_ACTION_ATTR_TUNNEL_POP: Lookup tunnel port by port-no passed and pop
+ * tunnel header.
  */
 
 enum ovs_action_attr {
@@ -636,6 +663,10 @@ enum ovs_action_attr {
 				       * The data must be zero for the unmasked
 				       * bits. */
 
+#ifndef __KERNEL__
+	OVS_ACTION_ATTR_TUNNEL_PUSH,   /* struct ovs_action_push_tnl*/
+	OVS_ACTION_ATTR_TUNNEL_POP,    /* u32 port number. */
+#endif
 	__OVS_ACTION_ATTR_MAX
 };
 

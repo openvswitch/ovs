@@ -58,8 +58,8 @@
 #include "ofproto-dpif-sflow.h"
 #include "ofproto-dpif-upcall.h"
 #include "ofproto-dpif-xlate.h"
-#include "ovs-router.h"
 #include "poll-loop.h"
+#include "ovs-router.h"
 #include "seq.h"
 #include "simap.h"
 #include "smap.h"
@@ -284,6 +284,10 @@ struct dpif_backer {
 
     /* Version string of the datapath stored in OVSDB. */
     char *dp_version_string;
+
+    /* True if the datapath supports tnl_push and pop actions. */
+    bool enable_tnl_push_pop;
+    struct atomic_count tnl_count;
 };
 
 /* All existing ofproto_backer instances, indexed by ofproto->up.type. */
@@ -345,7 +349,8 @@ struct ofproto_dpif {
 /* All existing ofproto_dpif instances, indexed by ->up.name. */
 static struct hmap all_ofproto_dpifs = HMAP_INITIALIZER(&all_ofproto_dpifs);
 
-static void ofproto_dpif_unixctl_init(void);
+static bool ofproto_use_tnl_push_pop = true;
+static void ofproto_unixctl_init(void);
 
 static inline struct ofproto_dpif *
 ofproto_dpif_cast(const struct ofproto *ofproto)
@@ -512,7 +517,11 @@ type_run(const char *type)
         return 0;
     }
 
-    dpif_run(backer->dpif);
+
+    if (dpif_run(backer->dpif)) {
+        backer->need_revalidate = REV_RECONFIGURE;
+    }
+
     udpif_run(backer->udpif);
 
     /* If vswitchd started with other_config:flow_restore_wait set as "true",
@@ -585,7 +594,8 @@ type_run(const char *type)
 
                 iter->odp_port = node ? u32_to_odp(node->data) : ODPP_NONE;
                 if (tnl_port_reconfigure(iter, iter->up.netdev,
-                                         iter->odp_port)) {
+                                         iter->odp_port,
+                                         ovs_native_tunneling_is_on(ofproto), dp_port)) {
                     backer->need_revalidate = REV_RECONFIGURE;
                 }
             }
@@ -953,6 +963,9 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     backer->masked_set_action = check_masked_set_action(backer);
     backer->rid_pool = recirc_id_pool_create();
 
+    backer->enable_tnl_push_pop = dpif_supports_tnl_push_pop(backer->dpif);
+    atomic_count_init(&backer->tnl_count, 0);
+
     error = dpif_recv_set(backer->dpif, backer->recv_set_enable);
     if (error) {
         VLOG_ERR("failed to listen on datapath of type %s: %s",
@@ -972,6 +985,13 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     backer->dp_version_string = dpif_get_dp_version(backer->dpif);
 
     return error;
+}
+
+bool
+ovs_native_tunneling_is_on(struct ofproto_dpif *ofproto)
+{
+    return ofproto_use_tnl_push_pop && ofproto->backer->enable_tnl_push_pop &&
+           atomic_count_get(&ofproto->backer->tnl_count);
 }
 
 /* Tests whether 'backer''s datapath supports recirculation.  Only newer
@@ -1230,7 +1250,7 @@ construct(struct ofproto *ofproto_)
 
     guarded_list_init(&ofproto->pins);
 
-    ofproto_dpif_unixctl_init();
+    ofproto_unixctl_init();
     ovs_router_unixctl_register();
 
     hmap_init(&ofproto->vlandev_map);
@@ -1523,7 +1543,6 @@ run(struct ofproto *ofproto_)
             }
         }
     }
-
     return 0;
 }
 
@@ -1675,7 +1694,9 @@ port_construct(struct ofport *port_)
     port->odp_port = dpif_port.port_no;
 
     if (netdev_get_tunnel_config(netdev)) {
-        tnl_port_add(port, port->up.netdev, port->odp_port);
+        atomic_count_inc(&ofproto->backer->tnl_count);
+        tnl_port_add(port, port->up.netdev, port->odp_port,
+                     ovs_native_tunneling_is_on(ofproto), namebuf);
         port->is_tunnel = true;
         if (ofproto->ipfix) {
            dpif_ipfix_add_tunnel_port(ofproto->ipfix, port_, port->odp_port);
@@ -1741,6 +1762,10 @@ port_destruct(struct ofport *port_)
         ovs_rwlock_unlock(&ofproto->backer->odp_to_ofport_lock);
     }
 
+    if (port->is_tunnel) {
+        atomic_count_dec(&ofproto->backer->tnl_count);
+    }
+
     if (port->is_tunnel && ofproto->ipfix) {
        dpif_ipfix_del_tunnel_port(ofproto->ipfix, port->odp_port);
     }
@@ -1766,26 +1791,33 @@ static void
 port_modified(struct ofport *port_)
 {
     struct ofport_dpif *port = ofport_dpif_cast(port_);
+    char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
+    struct netdev *netdev = port->up.netdev;
 
     if (port->bundle && port->bundle->bond) {
-        bond_slave_set_netdev(port->bundle->bond, port, port->up.netdev);
+        bond_slave_set_netdev(port->bundle->bond, port, netdev);
     }
 
     if (port->cfm) {
-        cfm_set_netdev(port->cfm, port->up.netdev);
+        cfm_set_netdev(port->cfm, netdev);
     }
 
     if (port->bfd) {
-        bfd_set_netdev(port->bfd, port->up.netdev);
+        bfd_set_netdev(port->bfd, netdev);
     }
 
     ofproto_dpif_monitor_port_update(port, port->bfd, port->cfm,
                                      port->up.pp.hw_addr);
 
-    if (port->is_tunnel && tnl_port_reconfigure(port, port->up.netdev,
-                                                port->odp_port)) {
-        ofproto_dpif_cast(port->up.ofproto)->backer->need_revalidate =
-            REV_RECONFIGURE;
+    netdev_vport_get_dpif_port(netdev, namebuf, sizeof namebuf);
+
+    if (port->is_tunnel) {
+        struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
+
+        if (tnl_port_reconfigure(port, netdev, port->odp_port,
+                                 ovs_native_tunneling_is_on(ofproto), namebuf)) {
+            ofproto->backer->need_revalidate = REV_RECONFIGURE;
+        }
     }
 
     ofport_update_peer(port);
@@ -3500,6 +3532,7 @@ ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
 
     execute.actions = ofpbuf_data(xout.odp_actions);
     execute.actions_len = ofpbuf_size(xout.odp_actions);
+
     execute.packet = packet;
     execute.md = pkt_metadata_from_flow(flow);
     execute.needs_help = (xout.slow & SLOW_ACTION) != 0;
@@ -4956,7 +4989,36 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
 }
 
 static void
-ofproto_dpif_unixctl_init(void)
+ofproto_revalidate_all_backers(void)
+{
+    const struct shash_node **backers;
+    int i;
+
+    backers = shash_sort(&all_dpif_backers);
+    for (i = 0; i < shash_count(&all_dpif_backers); i++) {
+        struct dpif_backer *backer = backers[i]->data;
+        backer->need_revalidate = REV_RECONFIGURE;
+    }
+    free(backers);
+}
+
+static void
+disable_tnl_push_pop(struct unixctl_conn *conn OVS_UNUSED, int argc OVS_UNUSED,
+                     const char *argv[], void *aux OVS_UNUSED)
+{
+    if (!strcasecmp(argv[1], "off")) {
+        ofproto_use_tnl_push_pop = false;
+        unixctl_command_reply(conn, "Tunnel push-pop off");
+        ofproto_revalidate_all_backers();
+    } else if (!strcasecmp(argv[1], "on")) {
+        ofproto_use_tnl_push_pop = true;
+        unixctl_command_reply(conn, "Tunnel push-pop on");
+        ofproto_revalidate_all_backers();
+    }
+}
+
+static void
+ofproto_unixctl_init(void)
 {
     static bool registered;
     if (registered) {
@@ -4986,6 +5048,9 @@ ofproto_dpif_unixctl_init(void)
                              NULL);
     unixctl_command_register("dpif/dump-flows", "[-m] bridge", 1, 2,
                              ofproto_unixctl_dpif_dump_flows, NULL);
+
+    unixctl_command_register("ofproto/tnl-push-pop", "[on]|[off]", 1, 1,
+                             disable_tnl_push_pop, NULL);
 }
 
 /* Returns true if 'table' is the table used for internal rules,

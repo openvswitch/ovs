@@ -37,6 +37,7 @@
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "seq.h"
 #include "shash.h"
 #include "smap.h"
 #include "sset.h"
@@ -75,6 +76,9 @@ static struct ovs_mutex netdev_class_mutex OVS_ACQ_BEFORE(netdev_mutex);
 /* Contains 'struct netdev_registered_class'es. */
 static struct hmap netdev_classes OVS_GUARDED_BY(netdev_class_mutex)
     = HMAP_INITIALIZER(&netdev_classes);
+
+/* Incremented whenever tnl route, arp, etc changes. */
+struct seq *tnl_conf_seq;
 
 struct netdev_registered_class {
     /* In 'netdev_classes', by class->type. */
@@ -151,6 +155,7 @@ netdev_initialize(void)
 #endif
         netdev_dpdk_register();
 
+        tnl_conf_seq = seq_create();
         ovsthread_once_done(&once);
     }
 }
@@ -727,6 +732,35 @@ netdev_send(struct netdev *netdev, int qid, struct dpif_packet **buffers,
         COVERAGE_INC(netdev_sent);
     }
     return error;
+}
+
+int
+netdev_pop_header(struct netdev *netdev, struct dpif_packet **buffers, int cnt)
+{
+    return (netdev->netdev_class->pop_header
+             ? netdev->netdev_class->pop_header(netdev, buffers, cnt)
+             : EOPNOTSUPP);
+}
+
+int
+netdev_build_header(const struct netdev *netdev, struct ovs_action_push_tnl *data)
+{
+    if (netdev->netdev_class->build_header) {
+        return netdev->netdev_class->build_header(netdev, data);
+    }
+    return EOPNOTSUPP;
+}
+
+int
+netdev_push_header(const struct netdev *netdev,
+                   struct dpif_packet **buffers, int cnt,
+                   const struct ovs_action_push_tnl *data)
+{
+    if (netdev->netdev_class->push_header) {
+        return netdev->netdev_class->push_header(netdev, buffers, cnt, data);
+    } else {
+        return -EINVAL;
+    }
 }
 
 /* Registers with the poll loop to wake up from the next call to poll_block()

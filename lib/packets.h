@@ -236,6 +236,7 @@ ovs_be32 set_mpls_lse_values(uint8_t ttl, uint8_t tc, uint8_t bos,
 
 #define ETH_TYPE_IP            0x0800
 #define ETH_TYPE_ARP           0x0806
+#define ETH_TYPE_TEB           0x6558
 #define ETH_TYPE_VLAN_8021Q    0x8100
 #define ETH_TYPE_VLAN          ETH_TYPE_VLAN_8021Q
 #define ETH_TYPE_VLAN_8021AD   0x88a8
@@ -498,6 +499,7 @@ struct ip_header {
     ovs_16aligned_be32 ip_src;
     ovs_16aligned_be32 ip_dst;
 };
+
 BUILD_ASSERT_DECL(IP_HEADER_LEN == sizeof(struct ip_header));
 
 #define ICMP_HEADER_LEN 8
@@ -690,6 +692,7 @@ static inline bool dl_type_is_ip_any(ovs_be16 dl_type)
         || dl_type == htons(ETH_TYPE_IPV6);
 }
 
+/* Tunnel header */
 #define GENEVE_CRIT_OPT_TYPE (1 << 7)
 struct geneve_opt {
     ovs_be16  opt_class;
@@ -707,6 +710,29 @@ struct geneve_opt {
 #endif
     uint8_t   opt_data[];
 };
+
+/* GRE protocol header */
+struct gre_base_hdr {
+    ovs_be16 flags;
+    ovs_be16 protocol;
+};
+
+#define GRE_CSUM        0x8000
+#define GRE_ROUTING     0x4000
+#define GRE_KEY         0x2000
+#define GRE_SEQ         0x1000
+#define GRE_STRICT      0x0800
+#define GRE_REC         0x0700
+#define GRE_FLAGS       0x00F8
+#define GRE_VERSION     0x0007
+
+/* VXLAN protocol header */
+struct vxlanhdr {
+    ovs_16aligned_be32 vx_flags;
+    ovs_16aligned_be32 vx_vni;
+};
+
+#define VXLAN_FLAGS 0x08000000  /* struct vxlanhdr.vx_flags required value. */
 
 void format_ipv6_addr(char *addr_str, const struct in6_addr *addr);
 void print_ipv6_addr(struct ds *string, const struct in6_addr *addr);
@@ -735,5 +761,7 @@ void packet_set_sctp_port(struct ofpbuf *, ovs_be16 src, ovs_be16 dst);
 
 void packet_format_tcp_flags(struct ds *, uint16_t);
 const char *packet_tcp_flag_to_string(uint32_t flag);
+void compose_arp(struct ofpbuf *b, const uint8_t eth_src[ETH_ADDR_LEN],
+                 ovs_be32 ip_src, ovs_be32 ip_dst);
 
 #endif /* packets.h */

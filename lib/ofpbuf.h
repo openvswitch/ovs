@@ -441,6 +441,14 @@ static inline void ofpbuf_set_size(struct ofpbuf *b, uint32_t v)
 }
 #endif
 
+static inline void ofpbuf_reset_packet(struct ofpbuf *b, int off)
+{
+    ofpbuf_set_size(b, ofpbuf_size(b) - off);
+    ofpbuf_set_data(b, (void *) ((unsigned char *) b->frame + off));
+    b->frame = NULL;
+    b->l2_5_ofs = b->l3_ofs = b->l4_ofs = UINT16_MAX;
+}
+
 #ifdef  __cplusplus
 }
 #endif
