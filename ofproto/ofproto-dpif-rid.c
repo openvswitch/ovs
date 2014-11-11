@@ -185,6 +185,7 @@ rid_pool_free_id(struct rid_pool *rids, uint32_t id)
         rid = rid_pool_find(rids, id);
         if (rid) {
             hmap_remove(&rids->ridmap.map, &rid->node);
+            free(rid);
         }
     }
 }
