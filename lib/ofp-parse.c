@@ -1097,6 +1097,7 @@ parse_bucket_str(struct ofputil_bucket *bucket, char *str_,
     char *error;
 
     bucket->weight = 1;
+    bucket->bucket_id = OFPG15_BUCKET_ALL;
     bucket->watch_port = OFPP_ANY;
     bucket->watch_group = OFPG11_ANY;
 
@@ -1187,6 +1188,7 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
     memset(gm, 0, sizeof *gm);
     gm->command = command;
     gm->group_id = OFPG_ANY;
+    gm->command_bucket_id = OFPG15_BUCKET_ALL;
     list_init(&gm->buckets);
     if (command == OFPGC11_DELETE && string[0] == '\0') {
         gm->group_id = OFPG_ALL;

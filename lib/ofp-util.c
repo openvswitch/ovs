@@ -32,6 +32,7 @@
 #include "multipath.h"
 #include "netdev.h"
 #include "nx-match.h"
+#include "id-pool.h"
 #include "ofp-actions.h"
 #include "ofp-errors.h"
 #include "ofp-msgs.h"
@@ -6873,6 +6874,25 @@ ofputil_bucket_list_destroy(struct list *buckets)
     }
 }
 
+bool
+ofputil_bucket_check_duplicate_id(const struct list *buckets)
+{
+    struct ofputil_bucket *i, *j;
+
+    LIST_FOR_EACH (i, list_node, buckets) {
+        LIST_FOR_EACH_REVERSE (j, list_node, buckets) {
+            if (i == j) {
+                break;
+            }
+            if (i->bucket_id == j->bucket_id) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 /* Returns an OpenFlow group stats request for OpenFlow version 'ofp_version',
  * that requests stats for group 'group_id'.  (Use OFPG_ALL to request stats
  * for all groups.)
@@ -7232,6 +7252,73 @@ ofputil_put_ofp11_bucket(const struct ofputil_bucket *bucket,
 }
 
 static void
+ofputil_put_ofp15_group_bucket_prop_weight(ovs_be16 weight,
+                                           struct ofpbuf *openflow)
+{
+    size_t start_ofs;
+    struct ofp15_group_bucket_prop_weight *prop;
+
+    start_ofs = start_property(openflow, OFPGBPT15_WEIGHT);
+    ofpbuf_put_zeros(openflow, sizeof *prop - sizeof(struct ofp_prop_header));
+    prop = ofpbuf_at_assert(openflow, start_ofs, sizeof *prop);
+    prop->weight = weight;
+    end_property(openflow, start_ofs);
+}
+
+static void
+ofputil_put_ofp15_group_bucket_prop_watch(ovs_be32 watch, uint16_t type,
+                                          struct ofpbuf *openflow)
+{
+    size_t start_ofs;
+    struct ofp15_group_bucket_prop_watch *prop;
+
+    start_ofs = start_property(openflow, type);
+    ofpbuf_put_zeros(openflow, sizeof *prop - sizeof(struct ofp_prop_header));
+    prop = ofpbuf_at_assert(openflow, start_ofs, sizeof *prop);
+    prop->watch = watch;
+    end_property(openflow, start_ofs);
+}
+
+static void
+ofputil_put_ofp15_bucket(const struct ofputil_bucket *bucket,
+                         uint32_t bucket_id, enum ofp11_group_type group_type,
+                         struct ofpbuf *openflow, enum ofp_version ofp_version)
+{
+    struct ofp15_bucket *ob;
+    size_t start, actions_start, actions_len;
+
+    start = ofpbuf_size(openflow);
+    ofpbuf_put_zeros(openflow, sizeof *ob);
+
+    actions_start = ofpbuf_size(openflow);
+    ofpacts_put_openflow_actions(bucket->ofpacts, bucket->ofpacts_len,
+                                 openflow, ofp_version);
+    actions_len = ofpbuf_size(openflow) - actions_start;
+
+    if (group_type == OFPGT11_SELECT) {
+        ofputil_put_ofp15_group_bucket_prop_weight(htons(bucket->weight),
+                                                   openflow);
+    }
+    if (bucket->watch_port != OFPP_ANY) {
+        ovs_be32 port = ofputil_port_to_ofp11(bucket->watch_port);
+        ofputil_put_ofp15_group_bucket_prop_watch(port,
+                                                  OFPGBPT15_WATCH_PORT,
+                                                  openflow);
+    }
+    if (bucket->watch_group != OFPG_ANY) {
+        ovs_be32 group = htonl(bucket->watch_group);
+        ofputil_put_ofp15_group_bucket_prop_watch(group,
+                                                  OFPGBPT15_WATCH_GROUP,
+                                                  openflow);
+    }
+
+    ob = ofpbuf_at_assert(openflow, start, sizeof *ob);
+    ob->len = htons(ofpbuf_size(openflow) - start);
+    ob->actions_len = htons(actions_len);
+    ob->bucket_id = htonl(bucket_id);
+}
+
+static void
 ofputil_append_ofp11_group_desc_reply(const struct ofputil_group_desc *gds,
                                       struct list *buckets,
                                       struct list *replies,
@@ -7255,6 +7342,33 @@ ofputil_append_ofp11_group_desc_reply(const struct ofputil_group_desc *gds,
     ofpmp_postappend(replies, start_ogds);
 }
 
+static void
+ofputil_append_ofp15_group_desc_reply(const struct ofputil_group_desc *gds,
+                                      struct list *buckets,
+                                      struct list *replies,
+                                      enum ofp_version version)
+{
+    struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
+    struct ofp15_group_desc_stats *ogds;
+    struct ofputil_bucket *bucket;
+    size_t start_ogds, start_buckets;
+
+    start_ogds = ofpbuf_size(reply);
+    ofpbuf_put_zeros(reply, sizeof *ogds);
+    start_buckets = ofpbuf_size(reply);
+    LIST_FOR_EACH (bucket, list_node, buckets) {
+        ofputil_put_ofp15_bucket(bucket, bucket->bucket_id,
+                                 gds->type, reply, version);
+    }
+    ogds = ofpbuf_at_assert(reply, start_ogds, sizeof *ogds);
+    ogds->length = htons(ofpbuf_size(reply) - start_ogds);
+    ogds->type = gds->type;
+    ogds->group_id = htonl(gds->group_id);
+    ogds->bucket_list_len =  htons(ofpbuf_size(reply) - start_buckets);
+
+    ofpmp_postappend(replies, start_ogds);
+}
+
 /* Appends a group stats reply that contains the data in 'gds' to those already
  * present in the list of ofpbufs in 'replies'.  'replies' should have been
  * initialized with ofpmp_init(). */
@@ -7271,8 +7385,11 @@ ofputil_append_group_desc_reply(const struct ofputil_group_desc *gds,
     case OFP12_VERSION:
     case OFP13_VERSION:
     case OFP14_VERSION:
-    case OFP15_VERSION:
         ofputil_append_ofp11_group_desc_reply(gds, buckets, replies, version);
+        break;
+
+    case OFP15_VERSION:
+        ofputil_append_ofp15_group_desc_reply(gds, buckets, replies, version);
         break;
 
     case OFP10_VERSION:
@@ -7286,6 +7403,7 @@ ofputil_pull_ofp11_buckets(struct ofpbuf *msg, size_t buckets_length,
                            enum ofp_version version, struct list *buckets)
 {
     struct ofp11_bucket *ob;
+    uint32_t bucket_id = 0;
 
     list_init(buckets);
     while (buckets_length > 0) {
@@ -7334,9 +7452,177 @@ ofputil_pull_ofp11_buckets(struct ofpbuf *msg, size_t buckets_length,
             return OFPERR_OFPGMFC_BAD_WATCH;
         }
         bucket->watch_group = ntohl(ob->watch_group);
+        bucket->bucket_id = bucket_id++;
+
         bucket->ofpacts = ofpbuf_steal_data(&ofpacts);
         bucket->ofpacts_len = ofpbuf_size(&ofpacts);
         list_push_back(buckets, &bucket->list_node);
+    }
+
+    return 0;
+}
+
+static enum ofperr
+parse_ofp15_group_bucket_prop_weight(const struct ofpbuf *payload,
+                                     ovs_be16 *weight)
+{
+    struct ofp15_group_bucket_prop_weight *prop = ofpbuf_data(payload);
+
+    if (ofpbuf_size(payload) != sizeof *prop) {
+        log_property(false, "OpenFlow bucket weight property length "
+                     "%u is not valid", ofpbuf_size(payload));
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+
+    *weight = prop->weight;
+
+    return 0;
+}
+
+static enum ofperr
+parse_ofp15_group_bucket_prop_watch(const struct ofpbuf *payload,
+                                    ovs_be32 *watch)
+{
+    struct ofp15_group_bucket_prop_watch *prop = ofpbuf_data(payload);
+
+    if (ofpbuf_size(payload) != sizeof *prop) {
+        log_property(false, "OpenFlow bucket watch port or group "
+                     "property length %u is not valid", ofpbuf_size(payload));
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+
+    *watch = prop->watch;
+
+    return 0;
+}
+
+static enum ofperr
+ofputil_pull_ofp15_buckets(struct ofpbuf *msg, size_t buckets_length,
+                           enum ofp_version version, struct list *buckets)
+{
+    struct ofp15_bucket *ob;
+
+    list_init(buckets);
+    while (buckets_length > 0) {
+        struct ofputil_bucket *bucket = NULL;
+        struct ofpbuf ofpacts;
+        enum ofperr err = OFPERR_OFPGMFC_BAD_BUCKET;
+        struct ofpbuf properties;
+        size_t ob_len, actions_len, properties_len;
+        ovs_be32 watch_port = ofputil_port_to_ofp11(OFPP_ANY);
+        ovs_be32 watch_group = htonl(OFPG_ANY);
+        ovs_be16 weight = htons(1);
+
+        ofpbuf_init(&ofpacts, 0);
+
+        ob = ofpbuf_try_pull(msg, sizeof *ob);
+        if (!ob) {
+            VLOG_WARN_RL(&bad_ofmsg_rl, "buckets end with %"PRIuSIZE
+                         " leftover bytes", buckets_length);
+            goto err;
+        }
+
+        ob_len = ntohs(ob->len);
+        actions_len = ntohs(ob->actions_len);
+
+        if (ob_len < sizeof *ob) {
+            VLOG_WARN_RL(&bad_ofmsg_rl, "OpenFlow message bucket length "
+                         "%"PRIuSIZE" is not valid", ob_len);
+            goto err;
+        } else if (ob_len > buckets_length) {
+            VLOG_WARN_RL(&bad_ofmsg_rl, "OpenFlow message bucket length "
+                         "%"PRIuSIZE" exceeds remaining buckets data size %"
+                         PRIuSIZE, ob_len, buckets_length);
+            goto err;
+        } else if (actions_len > ob_len - sizeof *ob) {
+            VLOG_WARN_RL(&bad_ofmsg_rl, "OpenFlow message bucket actions "
+                         "length %"PRIuSIZE" exceeds remaining bucket "
+                         "data size %"PRIuSIZE, actions_len,
+                         ob_len - sizeof *ob);
+            goto err;
+        }
+        buckets_length -= ob_len;
+
+        err = ofpacts_pull_openflow_actions(msg, actions_len, version,
+                                            &ofpacts);
+        if (err) {
+            goto err;
+        }
+
+        properties_len = ob_len - sizeof *ob - actions_len;
+        ofpbuf_use_const(&properties, ofpbuf_pull(msg, properties_len),
+                         properties_len);
+
+        while (ofpbuf_size(&properties) > 0) {
+            struct ofpbuf payload;
+            uint16_t type;
+
+            err = ofputil_pull_property(&properties, &payload, &type);
+            if (err) {
+                goto err;
+            }
+
+            switch (type) {
+            case OFPGBPT15_WEIGHT:
+                err = parse_ofp15_group_bucket_prop_weight(&payload, &weight);
+                break;
+
+            case OFPGBPT15_WATCH_PORT:
+                err = parse_ofp15_group_bucket_prop_watch(&payload,
+                                                          &watch_port);
+                break;
+
+            case OFPGBPT15_WATCH_GROUP:
+                err = parse_ofp15_group_bucket_prop_watch(&payload,
+                                                          &watch_group);
+                break;
+
+            default:
+                log_property(false, "unknown group bucket property %"PRIu16,
+                             type);
+                err = OFPERR_OFPBPC_BAD_TYPE;
+                break;
+            }
+
+            if (err) {
+                goto err;
+            }
+        }
+
+        bucket = xzalloc(sizeof *bucket);
+
+        bucket->weight = ntohs(weight);
+        err = ofputil_port_from_ofp11(watch_port, &bucket->watch_port);
+        if (err) {
+            err = OFPERR_OFPGMFC_BAD_WATCH;
+            goto err;
+        }
+        bucket->watch_group = ntohl(watch_group);
+        bucket->bucket_id = ntohl(ob->bucket_id);
+        if (bucket->bucket_id > OFPG15_BUCKET_MAX) {
+            VLOG_WARN_RL(&bad_ofmsg_rl, "bucket id (%u) is out of range",
+                         bucket->bucket_id);
+            err = OFPERR_OFPGMFC_BAD_BUCKET;
+            goto err;
+        }
+
+        bucket->ofpacts = ofpbuf_steal_data(&ofpacts);
+        bucket->ofpacts_len = ofpbuf_size(&ofpacts);
+        list_push_back(buckets, &bucket->list_node);
+
+        continue;
+
+    err:
+        free(bucket);
+        ofpbuf_uninit(&ofpacts);
+        ofputil_bucket_list_destroy(buckets);
+        return err;
+    }
+
+    if (ofputil_bucket_check_duplicate_id(buckets)) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "Duplicate bucket id");
+        ofputil_bucket_list_destroy(buckets);
+        return OFPERR_OFPGMFC_BAD_BUCKET;
     }
 
     return 0;
@@ -7378,6 +7664,49 @@ ofputil_decode_ofp11_group_desc_reply(struct ofputil_group_desc *gd,
                                       &gd->buckets);
 }
 
+static int
+ofputil_decode_ofp15_group_desc_reply(struct ofputil_group_desc *gd,
+                                      struct ofpbuf *msg,
+                                      enum ofp_version version)
+{
+    struct ofp15_group_desc_stats *ogds;
+    uint16_t length, bucket_list_len;
+
+    if (!msg->frame) {
+        ofpraw_pull_assert(msg);
+    }
+
+    if (!ofpbuf_size(msg)) {
+        return EOF;
+    }
+
+    ogds = ofpbuf_try_pull(msg, sizeof *ogds);
+    if (!ogds) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST11_GROUP_DESC reply has %"PRIu32" "
+                     "leftover bytes at end", ofpbuf_size(msg));
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+    gd->type = ogds->type;
+    gd->group_id = ntohl(ogds->group_id);
+
+    length = ntohs(ogds->length);
+    if (length < sizeof *ogds || length - sizeof *ogds > ofpbuf_size(msg)) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST11_GROUP_DESC reply claims invalid "
+                     "length %u", length);
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+
+    bucket_list_len = ntohs(ogds->bucket_list_len);
+    if (length < bucket_list_len + sizeof *ogds) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST11_GROUP_DESC reply claims invalid "
+                     "bucket list length %u", bucket_list_len);
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+
+    return ofputil_pull_ofp15_buckets(msg, bucket_list_len, version,
+                                      &gd->buckets);
+}
+
 /* Converts a group description reply in 'msg' into an abstract
  * ofputil_group_desc in 'gd'.
  *
@@ -7398,8 +7727,10 @@ ofputil_decode_group_desc_reply(struct ofputil_group_desc *gd,
     case OFP12_VERSION:
     case OFP13_VERSION:
     case OFP14_VERSION:
-    case OFP15_VERSION:
         return ofputil_decode_ofp11_group_desc_reply(gd, msg, version);
+
+    case OFP15_VERSION:
+        return ofputil_decode_ofp15_group_desc_reply(gd, msg, version);
 
     case OFP10_VERSION:
     default:
@@ -7431,6 +7762,62 @@ ofputil_encode_ofp11_group_mod(enum ofp_version ofp_version,
     return b;
 }
 
+static struct ofpbuf *
+ofputil_encode_ofp15_group_mod(enum ofp_version ofp_version,
+                               const struct ofputil_group_mod *gm)
+{
+    struct ofpbuf *b;
+    struct ofp15_group_mod *ogm;
+    size_t start_ogm;
+    struct ofputil_bucket *bucket;
+    struct id_pool *bucket_ids = NULL;
+
+    b = ofpraw_alloc(OFPRAW_OFPT15_GROUP_MOD, ofp_version, 0);
+    start_ogm = ofpbuf_size(b);
+    ofpbuf_put_zeros(b, sizeof *ogm);
+
+    LIST_FOR_EACH (bucket, list_node, &gm->buckets) {
+        uint32_t bucket_id;
+
+        /* Generate a bucket id if none was supplied */
+        if (bucket->bucket_id > OFPG15_BUCKET_MAX) {
+            if (!bucket_ids) {
+                const struct ofputil_bucket *bkt;
+
+                bucket_ids = id_pool_create(0, OFPG15_BUCKET_MAX + 1);
+
+                /* Mark all bucket_ids that are present in gm
+                 * as used in the pool. */
+                LIST_FOR_EACH_REVERSE (bkt, list_node, &gm->buckets) {
+                    if (bkt == bucket) {
+                        break;
+                    }
+                    if (bkt->bucket_id <= OFPG15_BUCKET_MAX) {
+                        id_pool_add(bucket_ids, bkt->bucket_id);
+                    }
+                }
+            }
+
+            if (!id_pool_alloc_id(bucket_ids, &bucket_id)) {
+                OVS_NOT_REACHED();
+            }
+        } else {
+            bucket_id = bucket->bucket_id;
+        }
+
+        ofputil_put_ofp15_bucket(bucket, bucket_id, gm->type, b, ofp_version);
+    }
+    ogm = ofpbuf_at_assert(b, start_ogm, sizeof *ogm);
+    ogm->command = htons(gm->command);
+    ogm->type = gm->type;
+    ogm->group_id = htonl(gm->group_id);
+    ogm->command_bucket_id = htonl(gm->command_bucket_id);
+    ogm->bucket_list_len = htons(ofpbuf_size(b) - start_ogm - sizeof *ogm);
+
+    id_pool_destroy(bucket_ids);
+    return b;
+}
+
 /* Converts abstract group mod 'gm' into a message for OpenFlow version
  * 'ofp_version' and returns the message. */
 struct ofpbuf *
@@ -7455,8 +7842,10 @@ ofputil_encode_group_mod(enum ofp_version ofp_version,
     case OFP12_VERSION:
     case OFP13_VERSION:
     case OFP14_VERSION:
-    case OFP15_VERSION:
         return ofputil_encode_ofp11_group_mod(ofp_version, gm);
+
+    case OFP15_VERSION:
+        return ofputil_encode_ofp15_group_mod(ofp_version, gm);
 
     default:
         OVS_NOT_REACHED();
@@ -7473,8 +7862,64 @@ ofputil_pull_ofp11_group_mod(struct ofpbuf *msg, enum ofp_version ofp_version,
     gm->command = ntohs(ogm->command);
     gm->type = ogm->type;
     gm->group_id = ntohl(ogm->group_id);
+    gm->command_bucket_id = OFPG15_BUCKET_ALL;
 
     return ofputil_pull_ofp11_buckets(msg, ofpbuf_size(msg), ofp_version,
+                                      &gm->buckets);
+}
+
+static enum ofperr
+ofputil_pull_ofp15_group_mod(struct ofpbuf *msg, enum ofp_version ofp_version,
+                             struct ofputil_group_mod *gm)
+{
+    const struct ofp15_group_mod *ogm;
+    uint16_t bucket_list_len;
+    enum ofperr error = OFPERR_OFPGMFC_BAD_BUCKET;
+
+    ogm = ofpbuf_pull(msg, sizeof *ogm);
+    gm->command = ntohs(ogm->command);
+    gm->type = ogm->type;
+    gm->group_id = ntohl(ogm->group_id);
+
+    gm->command_bucket_id = ntohl(ogm->command_bucket_id);
+    switch (gm->command) {
+    case OFPGC15_REMOVE_BUCKET:
+        if (gm->command_bucket_id == OFPG15_BUCKET_ALL) {
+            error = 0;
+        }
+        /* Fall through */
+    case OFPGC15_INSERT_BUCKET:
+        if (gm->command_bucket_id <= OFPG15_BUCKET_MAX ||
+            gm->command_bucket_id == OFPG15_BUCKET_FIRST
+            || gm->command_bucket_id == OFPG15_BUCKET_LAST) {
+            error = 0;
+        }
+        break;
+
+    case OFPGC11_ADD:
+    case OFPGC11_MODIFY:
+    case OFPGC11_DELETE:
+    default:
+        if (gm->command_bucket_id == OFPG15_BUCKET_ALL) {
+            error = 0;
+        }
+        break;
+    }
+    if (error) {
+        VLOG_WARN_RL(&bad_ofmsg_rl,
+                     "group command bucket id (%u) is out of range",
+                     gm->command_bucket_id);
+        return OFPERR_OFPGMFC_BAD_BUCKET;
+    }
+
+    bucket_list_len = ntohs(ogm->bucket_list_len);
+    if (bucket_list_len < ofpbuf_size(msg)) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "group has %u trailing bytes",
+                     ofpbuf_size(msg) - bucket_list_len);
+        return OFPERR_OFPGMFC_BAD_BUCKET;
+    }
+
+    return ofputil_pull_ofp15_buckets(msg, bucket_list_len, ofp_version,
                                       &gm->buckets);
 }
 
@@ -7498,8 +7943,11 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
     case OFP12_VERSION:
     case OFP13_VERSION:
     case OFP14_VERSION:
-    case OFP15_VERSION:
         err = ofputil_pull_ofp11_group_mod(&msg, ofp_version, gm);
+        break;
+
+    case OFP15_VERSION:
+        err = ofputil_pull_ofp15_group_mod(&msg, ofp_version, gm);
         break;
 
     case OFP10_VERSION:

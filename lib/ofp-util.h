@@ -986,6 +986,7 @@ struct ofputil_bucket {
     uint32_t watch_group;       /* Group whose state affects whether this
                                  * bucket is live. Only required for fast
                                  * failover groups. */
+    uint32_t bucket_id;         /* Bucket Id used to identify bucket*/
     struct ofpact *ofpacts;     /* Series of "struct ofpact"s. */
     size_t ofpacts_len;         /* Length of ofpacts, in bytes. */
 
@@ -994,9 +995,13 @@ struct ofputil_bucket {
 
 /* Protocol-independent group_mod. */
 struct ofputil_group_mod {
-    uint16_t command;             /* One of OFPGC11_*. */
+    uint16_t command;             /* One of OFPGC15_*. */
     uint8_t type;                 /* One of OFPGT11_*. */
     uint32_t group_id;            /* Group identifier. */
+    uint32_t command_bucket_id;   /* Bucket Id used as part of
+                                   * OFPGC15_INSERT_BUCKET and
+                                   * OFPGC15_REMOVE_BUCKET commands
+                                   * execution.*/
     struct list buckets;          /* Contains "struct ofputil_bucket"s. */
 };
 
@@ -1030,6 +1035,7 @@ struct ofputil_group_desc {
 };
 
 void ofputil_bucket_list_destroy(struct list *buckets);
+bool ofputil_bucket_check_duplicate_id(const struct list *);
 
 static inline bool
 ofputil_bucket_has_liveness(const struct ofputil_bucket *bucket)

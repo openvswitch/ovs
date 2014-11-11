@@ -51,8 +51,10 @@ id_pool_create(uint32_t base, uint32_t n_ids)
 void
 id_pool_destroy(struct id_pool *pool)
 {
-    id_pool_uninit(pool);
-    free(pool);
+    if (pool) {
+        id_pool_uninit(pool);
+        free(pool);
+    }
 }
 
 static void
