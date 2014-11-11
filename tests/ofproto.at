@@ -274,7 +274,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-groups br0 groups.txt])
 AT_CHECK([ovs-ofctl -F OXM-OpenFlow15 -O OpenFlow15 -vwarn dump-groups br0 1234], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
- group_id=1234,type=all,bucket=actions=output:10
+ group_id=1234,type=all,bucket=bucket_id:0,actions=output:10
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn del-groups br0 group_id=1234])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-groups br0], [0], [stdout])

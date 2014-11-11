@@ -2110,8 +2110,36 @@ ofp_header_to_string__(const struct ofp_header *oh, enum ofpraw raw,
 }
 
 static void
+ofp_print_bucket_id(struct ds *s, uint32_t bucket_id,
+                    enum ofp_version ofp_version)
+{
+    if (ofp_version < OFP15_VERSION) {
+        return;
+    }
+
+    ds_put_cstr(s, "bucket_id:");
+
+    switch (bucket_id) {
+    case OFPG15_BUCKET_FIRST:
+        ds_put_cstr(s, "first");
+        break;
+    case OFPG15_BUCKET_LAST:
+        ds_put_cstr(s, "last");
+        break;
+    case OFPG15_BUCKET_ALL:
+        ds_put_cstr(s, "all");
+        break;
+    default:
+        ds_put_format(s, "%"PRIu32, bucket_id);
+        break;
+    }
+
+    ds_put_char(s, ',');
+}
+
+static void
 ofp_print_group(struct ds *s, uint32_t group_id, uint8_t type,
-                struct list *p_buckets)
+                struct list *p_buckets, enum ofp_version ofp_version)
 {
     static const char *type_str[] = { "all", "select", "indirect",
                                       "ff", "unknown" };
@@ -2126,6 +2154,7 @@ ofp_print_group(struct ds *s, uint32_t group_id, uint8_t type,
     LIST_FOR_EACH (bucket, list_node, p_buckets) {
         ds_put_cstr(s, ",bucket=");
 
+        ofp_print_bucket_id(s, bucket->bucket_id, ofp_version);
         if (bucket->weight != 1) {
             ds_put_format(s, "weight:%"PRIu16",", bucket->weight);
         }
@@ -2170,7 +2199,7 @@ ofp_print_group_desc(struct ds *s, const struct ofp_header *oh)
 
         ds_put_char(s, '\n');
         ds_put_char(s, ' ');
-        ofp_print_group(s, gd.group_id, gd.type, &gd.buckets);
+        ofp_print_group(s, gd.group_id, gd.type, &gd.buckets, oh->version);
         ofputil_bucket_list_destroy(&gd.buckets);
      }
 }
@@ -2307,7 +2336,7 @@ ofp_print_group_mod(struct ds *s, const struct ofp_header *oh)
     }
     ds_put_char(s, ' ');
 
-    ofp_print_group(s, gm.group_id, gm.type, &gm.buckets);
+    ofp_print_group(s, gm.group_id, gm.type, &gm.buckets, oh->version);
     ofputil_bucket_list_destroy(&gm.buckets);
 }
 
