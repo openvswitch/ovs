@@ -34,6 +34,7 @@
 #include "shash.h"
 #include "socket-util.h"
 #include "unaligned.h"
+#include "util.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(meta_flow);
@@ -1669,13 +1670,10 @@ mf_from_ipv4_string(const struct mf_field *mf, const char *s,
         /* OK. */
     } else if (ovs_scan(s, IP_SCAN_FMT"/%d", IP_SCAN_ARGS(ip), &prefix)) {
         if (prefix <= 0 || prefix > 32) {
-            return xasprintf("%s: network prefix bits not between 1 and "
+            return xasprintf("%s: network prefix bits not between 0 and "
                              "32", s);
-        } else if (prefix == 32) {
-            *mask = OVS_BE32_MAX;
-        } else {
-            *mask = htonl(((1u << prefix) - 1) << (32 - prefix));
         }
+        *mask = be32_prefix_mask(prefix);
     } else if (ovs_scan(s, IP_SCAN_FMT, IP_SCAN_ARGS(ip))) {
         *mask = OVS_BE32_MAX;
     } else {

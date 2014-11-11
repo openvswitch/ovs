@@ -1333,7 +1333,7 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
         mbits = trie_lookup_value(&subtable->ports_trie, &value, &plens, 32);
 
         ((OVS_FORCE ovs_be32 *)&wc->masks)[TP_PORTS_OFS32] |=
-            mask & htonl(~0 << (32 - mbits));
+            mask & be32_prefix_mask(mbits);
 
         /* Unwildcard all bits in the mask upto the ports, as they were used
          * to determine there is no match. */

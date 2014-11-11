@@ -87,7 +87,7 @@ static void rt_init_match(struct match *match, ovs_be32 ip_dst, uint8_t plen)
 {
     ovs_be32 mask;
 
-    mask = htonl(UINT32_MAX << (32 - plen));
+    mask = be32_prefix_mask(plen);
 
     ip_dst &= mask; /* Clear out insignificant bits. */
     memset(match, 0, sizeof *match);
