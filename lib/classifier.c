@@ -1829,7 +1829,7 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
         trie_lookup_value(subtable->ports_trie, &value, 32, &mbits);
 
         ((OVS_FORCE ovs_be32 *)&wc->masks)[TP_PORTS_OFS32] |=
-            mask & htonl(~0 << (32 - mbits));
+            mask & be32_prefix_mask(mbits);
 
         ofs.start = TP_PORTS_OFS32;
         goto range_out;

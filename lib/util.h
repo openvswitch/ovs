@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "byte-order.h"
 #include "compiler.h"
 #include "openvswitch/types.h"
 
@@ -477,6 +478,14 @@ static inline uint32_t
 leftmost_1bit_idx(uint32_t x)
 {
     return x ? log_2_floor(x) : 32;
+}
+
+/* Return a ovs_be32 prefix in network byte order with 'plen' highest bits set.
+ * Shift with 32 is undefined behavior, but we rather use 64-bit shift than
+ * compare. */
+static inline ovs_be32 be32_prefix_mask(int plen)
+{
+    return htonl((uint64_t)UINT32_MAX << (32 - plen));
 }
 
 bool is_all_zeros(const uint8_t *, size_t);
