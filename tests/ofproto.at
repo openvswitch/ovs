@@ -399,18 +399,14 @@ OFPST_GROUP_FEATURES reply (OF1.2):
  Group table:
     Types:  0xf
     Capabilities:  0x7
-    all group:
-       max_groups=0xffffff00
-       actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
-    select group:
-       max_groups=0xffffff00
-       actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
-    indirect group:
-       max_groups=0xffffff00
-       actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
-    fast failover group:
-       max_groups=0xffffff00
-       actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
+    All group :
+        max_groups = 0xffffff00 actions=0x03ff9801
+    Select group :
+        max_groups = 0xffffff00 actions=0x00000000
+    Indirect group :
+        max_groups = 0xffffff00 actions=0x00000000
+    Fast Failover group :
+        max_groups = 0xffffff00 actions=0x00000000
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
