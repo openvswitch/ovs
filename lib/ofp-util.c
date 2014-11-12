@@ -4071,7 +4071,7 @@ BUILD_ASSERT_DECL((int) OFPUTIL_C_ARP_MATCH_IP == OFPC_ARP_MATCH_IP);
 static uint32_t
 ofputil_capabilities_mask(enum ofp_version ofp_version)
 {
-    /* Handle capabilities whose bit is unique for all Open Flow versions */
+    /* Handle capabilities whose bit is unique for all OpenFlow versions */
     switch (ofp_version) {
     case OFP10_VERSION:
     case OFP11_VERSION:
@@ -6450,7 +6450,7 @@ ofputil_parse_key_value(char **stringp, char **keyp, char **valuep)
 }
 
 /* Encode a dump ports request for 'port', the encoded message
- * will be for Open Flow version 'ofp_version'. Returns message
+ * will be for OpenFlow version 'ofp_version'. Returns message
  * as a struct ofpbuf. Returns encoded message on success, NULL on error */
 struct ofpbuf *
 ofputil_encode_dump_ports_request(enum ofp_version ofp_version, ofp_port_t port)
@@ -8173,9 +8173,9 @@ ofputil_decode_queue_stats_request(const struct ofp_header *request,
     }
 }
 
-/* Encode a queue statsrequest for 'oqsr', the encoded message
- * will be fore Open Flow version 'ofp_version'. Returns message
- * as a struct ofpbuf. Returns encoded message on success, NULL on error */
+/* Encode a queue stats request for 'oqsr', the encoded message
+ * will be for OpenFlow version 'ofp_version'. Returns message
+ * as a struct ofpbuf. Returns encoded message on success, NULL on error. */
 struct ofpbuf *
 ofputil_encode_queue_stats_request(enum ofp_version ofp_version,
                                    const struct ofputil_queue_stats_request *oqsr)

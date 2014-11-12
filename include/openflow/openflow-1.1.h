@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2011, 2012, 2013 The Board of Trustees of The Leland Stanford
+/* Copyright (c) 2008, 2011, 2012, 2013, 2014 The Board of Trustees of The Leland Stanford
  * Junior University
  *
  * We are making the OpenFlow specification and associated documentation
@@ -456,7 +456,7 @@ struct ofp11_flow_stats {
     ovs_be64 cookie;           /* Opaque controller-issued identifier. */
     ovs_be64 packet_count;     /* Number of packets in flow. */
     ovs_be64 byte_count;       /* Number of bytes in flow. */
-    /* Open Flow version specific match */
+    /* OpenFlow version specific match */
     /* struct ofp11_instruction instructions[0];  Instruction set. */
 };
 OFP_ASSERT(sizeof(struct ofp11_flow_stats) == 48);

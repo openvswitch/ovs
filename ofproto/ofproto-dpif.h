@@ -178,13 +178,13 @@ struct ofport_dpif *odp_port_to_ofport(const struct dpif_backer *, odp_port_t);
  * nested, data path implementation limits the number of recirculation executed
  * to prevent unreasonable nesting depth or infinite loop.
  *
- * Both flow fields and the RECIRC action are exposed as open flow fields via
+ * Both flow fields and the RECIRC action are exposed as OpenFlow fields via
  * Nicira extensions.
  *
  * Post recirculation flow
  * ------------------------
  *
- * At the open flow level, post recirculation rules are always hidden from the
+ * At the OpenFlow level, post recirculation rules are always hidden from the
  * controller.  They are installed in table 254 which is set up as a hidden
  * table during boot time. Those rules are managed by the local user space
  * program only.

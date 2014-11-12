@@ -164,8 +164,8 @@ void ofputil_format_version_name(struct ds *, enum ofp_version);
 /* A bitmap of version numbers
  *
  * Bit offsets correspond to ofp_version numbers which in turn correspond to
- * wire-protocol numbers for Open Flow versions..  E.g. (1u << OFP11_VERSION)
- * is the mask for Open Flow 1.1.  If the bit for a version is set then it is
+ * wire-protocol numbers for OpenFlow versions, e.g. (1u << OFP11_VERSION)
+ * is the mask for OpenFlow 1.1.  If the bit for a version is set then it is
  * allowed, otherwise it is disallowed. */
 
 void ofputil_format_version_bitmap(struct ds *msg, uint32_t bitmap);

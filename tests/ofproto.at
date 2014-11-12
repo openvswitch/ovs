@@ -1556,7 +1556,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dn
  in_port=5 actions=drop
 OFPST_FLOW reply (OF1.2):
 ])
-# In Open Flow 1.2 a mod-flow does not ever add a flow and thus
+# In OpenFlow 1.2 a mod-flow does not ever add a flow and thus
 # has no effect on eviction
 AT_CHECK([ovs-ofctl -O OpenFlow12 mod-flows br0 in_port=6,actions=drop])
 AT_CHECK([ovs-ofctl -O OpenFlow12 add-flow br0 in_port=4,actions=normal])
