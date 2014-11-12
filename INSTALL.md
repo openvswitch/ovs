@@ -166,6 +166,11 @@ Prerequisites section, follow the procedure below to build.
 
       `% ./configure --prefix=/usr --localstatedir=/var`
 
+   By default, static libraries are built and linked against. If you
+   want to use shared libraries instead:
+
+      % ./configure --enable-shared
+
    To use a specific C compiler for compiling Open vSwitch user
    programs, also specify it on the configure command line, like so:
 
