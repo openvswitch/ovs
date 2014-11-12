@@ -102,6 +102,63 @@ create_port_done:
     return status;
 }
 
+
+/*
+ * Function updating the port properties
+ */
+NDIS_STATUS
+HvUpdatePort(POVS_SWITCH_CONTEXT switchContext,
+             PNDIS_SWITCH_PORT_PARAMETERS portParam)
+{
+    POVS_VPORT_ENTRY vport;
+    LOCK_STATE_EX lockState;
+    OVS_VPORT_STATE ovsState;
+    NDIS_SWITCH_NIC_STATE nicState;
+
+    VPORT_PORT_ENTER(portParam);
+
+    NdisAcquireRWLockWrite(switchContext->dispatchLock, &lockState, 0);
+    vport = OvsFindVportByPortIdAndNicIndex(switchContext,
+                                            portParam->PortId, 0);
+    /*
+     * Update properties only for NETDEV ports for supprting PS script
+     * We don't allow changing the names of the internal or external ports
+     */
+    if (vport == NULL || ( vport->portType != NdisSwitchPortTypeSynthetic) || 
+        ( vport->portType != NdisSwitchPortTypeEmulated)) {
+        goto update_port_done;
+    }
+
+    /* Store the nic and the OVS states as Nic Create won't be called */
+    ovsState = vport->ovsState;
+    nicState = vport->nicState;
+    
+    /*
+     * Currently only the port friendly name is being updated
+     * Make sure that no other properties are changed
+     */
+    ASSERT(portParam->PortId == vport->portId);
+    ASSERT(portParam->PortState == vport->portState);
+    ASSERT(portParam->PortType == vport->portType);
+
+    /*
+     * Call the set parameters function the handle all properties
+     * change in a single place in case future version supports change of
+     * other properties
+     */
+    OvsInitVportWithPortParam(vport, portParam);
+    /* Retore the nic and OVS states */
+    vport->nicState = nicState;
+    vport->ovsState = ovsState;
+
+update_port_done:
+    NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
+    VPORT_PORT_EXIT(portParam);
+
+    /* Must always return success */
+    return NDIS_STATUS_SUCCESS;
+}
+
 VOID
 HvTeardownPort(POVS_SWITCH_CONTEXT switchContext,
                PNDIS_SWITCH_PORT_PARAMETERS portParam)

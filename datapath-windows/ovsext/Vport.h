@@ -158,6 +158,8 @@ NDIS_STATUS HvCreateNic(POVS_SWITCH_CONTEXT switchContext,
                         PNDIS_SWITCH_NIC_PARAMETERS nicParam);
 NDIS_STATUS HvCreatePort(POVS_SWITCH_CONTEXT switchContext,
                          PNDIS_SWITCH_PORT_PARAMETERS portParam);
+NDIS_STATUS HvUpdatePort(POVS_SWITCH_CONTEXT switchContext,
+                         PNDIS_SWITCH_PORT_PARAMETERS portParam);
 VOID HvTeardownPort(POVS_SWITCH_CONTEXT switchContext,
                     PNDIS_SWITCH_PORT_PARAMETERS portParam);
 VOID HvDeletePort(POVS_SWITCH_CONTEXT switchContext,

@@ -171,6 +171,9 @@ OvsProcessSetOidPort(POVS_SWITCH_CONTEXT switchObject,
     case OID_SWITCH_PORT_CREATE:
         status = HvCreatePort(switchObject, portParam);
         break;
+    case OID_SWITCH_PORT_UPDATED:
+        status = HvUpdatePort(switchObject, portParam);
+       break;
     case OID_SWITCH_PORT_TEARDOWN:
         HvTeardownPort(switchObject, portParam);
         break;
