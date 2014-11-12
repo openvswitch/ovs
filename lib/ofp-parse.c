@@ -1164,11 +1164,14 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
                           enum ofputil_protocol *usable_protocols)
 {
     enum {
-        F_GROUP_TYPE  = 1 << 0,
-        F_BUCKETS     = 1 << 1,
+        F_GROUP_TYPE            = 1 << 0,
+        F_BUCKETS               = 1 << 1,
+        F_COMMAND_BUCKET_ID     = 1 << 2,
+        F_COMMAND_BUCKET_ID_ALL = 1 << 3,
     } fields;
     char *save_ptr = NULL;
     bool had_type = false;
+    bool had_command_bucket_id = false;
     char *name;
     struct ofputil_bucket *bucket;
     char *error = NULL;
@@ -1186,6 +1189,16 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
 
     case OFPGC11_MODIFY:
         fields = F_GROUP_TYPE | F_BUCKETS;
+        break;
+
+    case OFPGC15_INSERT_BUCKET:
+        fields = F_BUCKETS | F_COMMAND_BUCKET_ID;
+        *usable_protocols &= OFPUTIL_P_OF15_UP;
+        break;
+
+    case OFPGC15_REMOVE_BUCKET:
+        fields = F_COMMAND_BUCKET_ID | F_COMMAND_BUCKET_ID_ALL;
+        *usable_protocols &= OFPUTIL_P_OF15_UP;
         break;
 
     default:
@@ -1248,7 +1261,38 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
             goto out;
         }
 
-        if (!strcmp(name, "group_id")) {
+        if (!strcmp(name, "command_bucket_id")) {
+            if (!(fields & F_COMMAND_BUCKET_ID)) {
+                error = xstrdup("command bucket id is not needed");
+                goto out;
+            }
+            if (!strcmp(value, "all")) {
+                gm->command_bucket_id = OFPG15_BUCKET_ALL;
+            } else if (!strcmp(value, "first")) {
+                gm->command_bucket_id = OFPG15_BUCKET_FIRST;
+            } else if (!strcmp(value, "last")) {
+                gm->command_bucket_id = OFPG15_BUCKET_LAST;
+            } else {
+                char *error = str_to_u32(value, &gm->command_bucket_id);
+                if (error) {
+                    goto out;
+                }
+                if (gm->command_bucket_id > OFPG15_BUCKET_MAX
+                    && (gm->command_bucket_id != OFPG15_BUCKET_FIRST
+                        && gm->command_bucket_id != OFPG15_BUCKET_LAST
+                        && gm->command_bucket_id != OFPG15_BUCKET_ALL)) {
+                    error = xasprintf("invalid command bucket id %"PRIu32,
+                                      gm->command_bucket_id);
+                    goto out;
+                }
+            }
+            if (gm->command_bucket_id == OFPG15_BUCKET_ALL
+                && !(fields & F_COMMAND_BUCKET_ID_ALL)) {
+                error = xstrdup("command_bucket_id=all is not permitted");
+                goto out;
+            }
+            had_command_bucket_id = true;
+        } else if (!strcmp(name, "group_id")) {
             if(!strcmp(value, "all")) {
                 gm->group_id = OFPG_ALL;
             } else {
@@ -1295,6 +1339,16 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
     }
     if (fields & F_GROUP_TYPE && !had_type) {
         error = xstrdup("must specify a type");
+        goto out;
+    }
+
+    if (fields & F_COMMAND_BUCKET_ID) {
+        if (!(fields & F_COMMAND_BUCKET_ID_ALL || had_command_bucket_id)) {
+            error = xstrdup("must specify a command bucket id");
+            goto out;
+        }
+    } else if (had_command_bucket_id) {
+        error = xstrdup("command bucket id is not needed");
         goto out;
     }
 
