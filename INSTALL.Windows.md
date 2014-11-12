@@ -252,12 +252,9 @@ disabling TX/RX offloads for both the VM's as well as the HyperV.
 TODO
 ----
 
-* OVS currently has no native support for atomics on Windows.  Pthreads
-are used as a fallback, but some features, such as OVS-RCU are really
-slow without native atomics support. Atomics support for Windows has to
-be brought in.
-
 * Investigate the working of sFlow on Windows and re-enable the unit tests.
+
+* Investigate and add the feature to provide QOS.
 
 * Sign the driver & create an MSI for installing the different OpenvSwitch
 components on windows.
