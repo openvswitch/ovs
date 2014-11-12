@@ -15,7 +15,8 @@ endif
 
 lib_libopenvswitch_la_LDFLAGS = \
         -version-info $(LT_CURRENT):$(LT_REVISION):$(LT_AGE) \
-        -Wl,--version-script=$(top_builddir)/lib/libopenvswitch.sym
+        -Wl,--version-script=$(top_builddir)/lib/libopenvswitch.sym \
+        $(AM_LDFLAGS)
 
 lib_libopenvswitch_la_SOURCES = \
 	lib/aes128.c \
@@ -295,7 +296,8 @@ CLEANFILES += $(nodist_lib_libopenvswitch_la_SOURCES)
 lib_LTLIBRARIES += lib/libsflow.la
 lib_libsflow_la_LDFLAGS = \
         -version-info $(LT_CURRENT):$(LT_REVISION):$(LT_AGE) \
-        -Wl,--version-script=$(top_builddir)/lib/libsflow.sym
+        -Wl,--version-script=$(top_builddir)/lib/libsflow.sym \
+        $(AM_LDFLAGS)
 lib_libsflow_la_SOURCES = \
 	lib/sflow_api.h \
 	lib/sflow.h \
