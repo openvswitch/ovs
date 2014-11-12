@@ -9,6 +9,8 @@ env:
   - OPTS="--disable-ssl"
   - TESTSUITE=1 KERNEL=1 OPTS="--with-linux=./linux-3.16.2"
   - KERNEL=1 DPDK=1 OPTS="--with-dpdk=./dpdk-1.7.1/build"
+  - TESTSUITE=1 OPTS="--enable-shared"
+  - DPDK=1 OPTS="--enable-shared"
 
 script: ./.travis/build.sh $OPTS
 
