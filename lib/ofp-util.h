@@ -1035,7 +1035,13 @@ struct ofputil_group_desc {
 };
 
 void ofputil_bucket_list_destroy(struct list *buckets);
+void ofputil_bucket_clone_list(struct list *dest, const struct list *src,
+                               const struct ofputil_bucket *);
+struct ofputil_bucket *ofputil_bucket_find(const struct list *,
+                                           uint32_t bucket_id);
 bool ofputil_bucket_check_duplicate_id(const struct list *);
+struct ofputil_bucket *ofputil_bucket_list_front(const struct list *);
+struct ofputil_bucket *ofputil_bucket_list_back(const struct list *);
 
 static inline bool
 ofputil_bucket_has_liveness(const struct ofputil_bucket *bucket)

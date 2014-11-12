@@ -6874,6 +6874,64 @@ ofputil_bucket_list_destroy(struct list *buckets)
     }
 }
 
+/* Clones 'bucket' and its ofpacts data */
+static struct ofputil_bucket *
+ofputil_bucket_clone_data(const struct ofputil_bucket *bucket)
+{
+    struct ofputil_bucket *new;
+
+    new = xmemdup(bucket, sizeof *bucket);
+    new->ofpacts = xmemdup(bucket->ofpacts, bucket->ofpacts_len);
+
+    return new;
+}
+
+/* Clones each of the buckets in the list 'src' appending them
+ * in turn to 'dest' which should be an initialised list.
+ * An exception is that if the pointer value of a bucket in 'src'
+ * matches 'skip' then it is not cloned or appended to 'dest'.
+ * This allows all of 'src' or 'all of 'src' except 'skip' to
+ * be cloned and appended to 'dest'. */
+void
+ofputil_bucket_clone_list(struct list *dest, const struct list *src,
+                          const struct ofputil_bucket *skip)
+{
+    struct ofputil_bucket *bucket;
+
+    LIST_FOR_EACH (bucket, list_node, src) {
+        struct ofputil_bucket *new_bucket;
+
+        if (bucket == skip) {
+            continue;
+        }
+
+        new_bucket = ofputil_bucket_clone_data(bucket);
+        list_push_back(dest, &new_bucket->list_node);
+    }
+}
+
+/* Find a bucket in the list 'buckets' whose bucket id is 'bucket_id'
+ * Returns the first bucket found or NULL if no buckets are found. */
+struct ofputil_bucket *
+ofputil_bucket_find(const struct list *buckets, uint32_t bucket_id)
+{
+    struct ofputil_bucket *bucket;
+
+    if (bucket_id > OFPG15_BUCKET_MAX) {
+        return NULL;
+    }
+
+    LIST_FOR_EACH (bucket, list_node, buckets) {
+        if (bucket->bucket_id == bucket_id) {
+            return bucket;
+        }
+    }
+
+    return NULL;
+}
+
+/* Returns true if more than one bucket in the list 'buckets'
+ * have the same bucket id. Returns false otherwise. */
 bool
 ofputil_bucket_check_duplicate_id(const struct list *buckets)
 {
@@ -6891,6 +6949,30 @@ ofputil_bucket_check_duplicate_id(const struct list *buckets)
     }
 
     return false;
+}
+
+/* Returns the bucket at the front of the list 'buckets'.
+ * Undefined if 'buckets is empty. */
+struct ofputil_bucket *
+ofputil_bucket_list_front(const struct list *buckets)
+{
+    static struct ofputil_bucket *bucket;
+
+    ASSIGN_CONTAINER(bucket, list_front(buckets), list_node);
+
+    return bucket;
+}
+
+/* Returns the bucket at the back of the list 'buckets'.
+ * Undefined if 'buckets is empty. */
+struct ofputil_bucket *
+ofputil_bucket_list_back(const struct list *buckets)
+{
+    static struct ofputil_bucket *bucket;
+
+    ASSIGN_CONTAINER(bucket, list_back(buckets), list_node);
+
+    return bucket;
 }
 
 /* Returns an OpenFlow group stats request for OpenFlow version 'ofp_version',
