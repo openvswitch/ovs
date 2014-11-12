@@ -1999,6 +1999,41 @@ generate_all_wildcard_mask(struct ofpbuf *ofp, const struct nlattr *key)
     return ofpbuf_base(ofp);
 }
 
+int
+odp_ufid_from_string(const char *s_, ovs_u128 *ufid)
+{
+    const char *s = s_;
+
+    if (ovs_scan(s, "ufid:")) {
+        size_t n;
+
+        s += 5;
+        if (ovs_scan(s, "0x")) {
+            s += 2;
+        }
+
+        n = strspn(s, "0123456789abcdefABCDEF");
+        if (n != 32) {
+            return -EINVAL;
+        }
+
+        if (!ovs_scan(s, "%"SCNx64, &ufid->u64.hi)) {
+            return -EINVAL;
+        }
+        s += 16;
+
+        if (!ovs_scan(s, "%"SCNx64, &ufid->u64.lo)) {
+            return -EINVAL;
+        }
+        s += 16;
+        s += strspn(s, delimiters);
+
+        return s - s_;
+    }
+
+    return 0;
+}
+
 void
 odp_format_ufid(const ovs_u128 *ufid, struct ds *ds)
 {

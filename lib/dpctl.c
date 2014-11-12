@@ -819,9 +819,11 @@ dpctl_put_flow(int argc, const char *argv[], enum dpif_flow_put_flags flags,
     struct ofpbuf key;
     struct ofpbuf mask;
     struct dpif *dpif;
+    ovs_u128 ufid;
+    bool ufid_present;
     char *dp_name;
     struct simap port_names;
-    int error;
+    int n, error;
 
     dp_name = argc == 4 ? xstrdup(argv[1]) : get_one_dp(dpctl_p);
     if (!dp_name) {
@@ -834,6 +836,15 @@ dpctl_put_flow(int argc, const char *argv[], enum dpif_flow_put_flags flags,
         return error;
     }
 
+    ufid_present = false;
+    n = odp_ufid_from_string(key_s, &ufid);
+    if (n < 0) {
+        dpctl_error(dpctl_p, -n, "parsing flow ufid");
+        return -n;
+    } else if (n) {
+        key_s += n;
+        ufid_present = true;
+    }
 
     simap_init(&port_names);
     DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, dpif) {
@@ -860,7 +871,8 @@ dpctl_put_flow(int argc, const char *argv[], enum dpif_flow_put_flags flags,
                           ofpbuf_size(&mask) == 0 ? NULL : ofpbuf_data(&mask),
                           ofpbuf_size(&mask),
                           ofpbuf_data(&actions), ofpbuf_size(&actions),
-                          NULL, dpctl_p->print_statistics ? &stats : NULL);
+                          ufid_present ? &ufid : NULL,
+                          dpctl_p->print_statistics ? &stats : NULL);
     if (error) {
         dpctl_error(dpctl_p, error, "updating flow table");
         goto out_freeactions;
@@ -916,9 +928,11 @@ dpctl_del_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     struct ofpbuf key;
     struct ofpbuf mask; /* To be ignored. */
     struct dpif *dpif;
+    ovs_u128 ufid;
+    bool ufid_present;
     char *dp_name;
     struct simap port_names;
-    int error;
+    int n, error;
 
     dp_name = argc == 3 ? xstrdup(argv[1]) : get_one_dp(dpctl_p);
     if (!dp_name) {
@@ -929,6 +943,16 @@ dpctl_del_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     if (error) {
         dpctl_error(dpctl_p, error, "opening datapath");
         return error;
+    }
+
+    ufid_present = false;
+    n = odp_ufid_from_string(key_s, &ufid);
+    if (n < 0) {
+        dpctl_error(dpctl_p, -n, "parsing flow ufid");
+        return -n;
+    } else if (n) {
+        key_s += n;
+        ufid_present = true;
     }
 
     simap_init(&port_names);
@@ -946,10 +970,19 @@ dpctl_del_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     }
 
     error = dpif_flow_del(dpif,
-                          ofpbuf_data(&key), ofpbuf_size(&key), NULL,
+                          ofpbuf_data(&key), ofpbuf_size(&key),
+                          ufid_present ? &ufid : NULL,
                           dpctl_p->print_statistics ? &stats : NULL);
     if (error) {
         dpctl_error(dpctl_p, error, "deleting flow");
+        if (error == ENOENT && !ufid_present) {
+            struct ds s;
+
+            ds_init(&s);
+            ds_put_format(&s, "Perhaps you need to specify a UFID?");
+            dpctl_print(dpctl_p, "%s\n", ds_cstr(&s));
+            ds_destroy(&s);
+        }
         goto out;
     }
 
