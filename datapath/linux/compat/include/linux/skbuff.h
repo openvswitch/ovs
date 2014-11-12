@@ -302,7 +302,7 @@ static inline void skb_clear_hash(struct sk_buff *skb)
 #ifdef HAVE_RXHASH
 	skb->rxhash = 0;
 #endif
-#ifdef HAVE_L4_RXHASH
+#if defined(HAVE_L4_RXHASH) && !defined(HAVE_RHEL_OVS_HOOK)
 	skb->l4_rxhash = 0;
 #endif
 }
