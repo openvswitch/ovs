@@ -7818,30 +7818,77 @@ ofputil_encode_ofp15_group_mod(enum ofp_version ofp_version,
     return b;
 }
 
+static void
+bad_group_cmd(enum ofp15_group_mod_command cmd) {
+    const char *opt_version;
+    const char *version;
+    const char *cmd_str;
+
+    switch (cmd) {
+    case OFPGC15_ADD:
+    case OFPGC15_MODIFY:
+    case OFPGC15_DELETE:
+        version = "1.1";
+        opt_version = "11";
+        break;
+
+    case OFPGC15_INSERT_BUCKET:
+    case OFPGC15_REMOVE_BUCKET:
+        version = "1.5";
+        opt_version = "15";
+
+    default:
+        OVS_NOT_REACHED();
+    }
+
+    switch (cmd) {
+    case OFPGC15_ADD:
+        cmd_str = "add-group";
+        break;
+
+    case OFPGC15_MODIFY:
+        cmd_str = "mod-group";
+        break;
+
+    case OFPGC15_DELETE:
+        cmd_str = "del-group";
+        break;
+
+    case OFPGC15_INSERT_BUCKET:
+        cmd_str = "insert-bucket";
+        break;
+
+    case OFPGC15_REMOVE_BUCKET:
+        cmd_str = "insert-bucket";
+        break;
+
+    default:
+        OVS_NOT_REACHED();
+    }
+
+    ovs_fatal(0, "%s needs OpenFlow %s or later (\'-O OpenFlow%s\')",
+              cmd_str, version, opt_version);
+
+}
+
 /* Converts abstract group mod 'gm' into a message for OpenFlow version
  * 'ofp_version' and returns the message. */
 struct ofpbuf *
 ofputil_encode_group_mod(enum ofp_version ofp_version,
                          const struct ofputil_group_mod *gm)
 {
+
     switch (ofp_version) {
-    case OFP10_VERSION: {
-        if (gm->command == OFPGC11_ADD) {
-            ovs_fatal(0, "add-group needs OpenFlow 1.1 or later "
-                         "(\'-O OpenFlow11\')");
-        } else if (gm->command == OFPGC11_MODIFY) {
-            ovs_fatal(0, "mod-group needs OpenFlow 1.1 or later "
-                         "(\'-O OpenFlow11\')");
-        } else {
-            ovs_fatal(0, "del-groups needs OpenFlow 1.1 or later "
-                         "(\'-O OpenFlow11\')");
-        }
-    }
+    case OFP10_VERSION:
+        bad_group_cmd(gm->command);
 
     case OFP11_VERSION:
     case OFP12_VERSION:
     case OFP13_VERSION:
     case OFP14_VERSION:
+        if (gm->command > OFPGC11_DELETE) {
+            bad_group_cmd(gm->command);
+        }
         return ofputil_encode_ofp11_group_mod(ofp_version, gm);
 
     case OFP15_VERSION:
