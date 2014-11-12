@@ -7973,6 +7973,21 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
         OVS_NOT_REACHED();
     }
 
+    switch (gm->command) {
+    case OFPGC11_ADD:
+    case OFPGC11_MODIFY:
+    case OFPGC11_DELETE:
+    case OFPGC15_INSERT_BUCKET:
+        break;
+    case OFPGC15_REMOVE_BUCKET:
+        if (!list_is_empty(&gm->buckets)) {
+            return OFPERR_OFPGMFC_BAD_BUCKET;
+        }
+        break;
+    default:
+        OVS_NOT_REACHED();
+    }
+
     LIST_FOR_EACH (bucket, list_node, &gm->buckets) {
         switch (gm->type) {
         case OFPGT11_ALL:
