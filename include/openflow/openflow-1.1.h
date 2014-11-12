@@ -52,7 +52,7 @@
 #ifndef OPENFLOW_11_H
 #define OPENFLOW_11_H 1
 
-#include "openflow/openflow-common.h"
+#include <openflow/openflow-common.h>
 
 /* OpenFlow 1.1 uses 32-bit port numbers.  Open vSwitch, for now, uses OpenFlow
  * 1.0 port numbers internally.  We map them to OpenFlow 1.0 as follows:

@@ -17,8 +17,8 @@
 #ifndef OPENFLOW_NICIRA_EXT_H
 #define OPENFLOW_NICIRA_EXT_H 1
 
-#include "openflow/openflow.h"
-#include "openvswitch/types.h"
+#include <openflow/openflow.h>
+#include <openvswitch/types.h>
 
 /* The following vendor extensions, proposed by Nicira, are not yet
  * standardized, so they are not included in openflow.h.  Some of them may be

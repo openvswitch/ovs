@@ -37,7 +37,7 @@
 #ifndef OPENFLOW_15_H
 #define OPENFLOW_15_H 1
 
-#include "openflow/openflow-common.h"
+#include <openflow/openflow-common.h>
 
 /* Group commands */
 enum ofp15_group_mod_command {

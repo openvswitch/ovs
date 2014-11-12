@@ -53,7 +53,7 @@
 #ifndef OPENFLOW_12_H
 #define OPENFLOW_12_H 1
 
-#include "openflow/openflow-1.1.h"
+#include <openflow/openflow-1.1.h>
 
 /* Error type for experimenter error messages. */
 #define OFPET12_EXPERIMENTER 0xffff

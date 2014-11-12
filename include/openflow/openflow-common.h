@@ -50,7 +50,7 @@
 #ifndef OPENFLOW_COMMON_H
 #define OPENFLOW_COMMON_H 1
 
-#include "openvswitch/types.h"
+#include <openvswitch/types.h>
 
 #ifdef SWIG
 #define OFP_ASSERT(EXPR)        /* SWIG can't handle OFP_ASSERT. */

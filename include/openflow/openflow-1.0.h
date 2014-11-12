@@ -19,7 +19,7 @@
 #ifndef OPENFLOW_OPENFLOW10_H
 #define OPENFLOW_OPENFLOW10_H 1
 
-#include "openflow/openflow-common.h"
+#include <openflow/openflow-common.h>
 
 /* Port number(s)   meaning
  * ---------------  --------------------------------------

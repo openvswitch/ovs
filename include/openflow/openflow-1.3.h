@@ -37,7 +37,7 @@
 #ifndef OPENFLOW_13_H
 #define OPENFLOW_13_H 1
 
-#include "openflow/openflow-1.2.h"
+#include <openflow/openflow-1.2.h>
 
 /*
  * OpenFlow 1.3 modifies the syntax of the following message types:
