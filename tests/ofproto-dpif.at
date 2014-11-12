@@ -4548,6 +4548,7 @@ CHECK_SFLOW_SAMPLING_PACKET([[[::1]]], [IPv6])
 
 dnl Test sFlow LAG structures
 AT_SETUP([ofproto-dpif - sFlow LACP structures])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 OVS_VSWITCHD_START([dnl
 		    add-bond br0 bond p1 p2 --				\
 		    set Port bond lacp=active bond-mode=active-backup	\
