@@ -264,6 +264,25 @@ AT_CLEANUP
 dnl This is really bare-bones.
 dnl It at least checks request and reply serialization and deserialization.
 dnl Actions definition listed in both supported formats (w/ actions=)
+AT_SETUP([ofproto - no group support (OpenFlow 1.0)])
+OVS_VSWITCHD_START
+AT_DATA([groups.txt], [dnl
+group_id=1234,type=all,bucket=output:10
+group_id=1235,type=all,bucket=actions=output:10
+])
+AT_DATA([stderr], [dnl
+ovs-ofctl: none of the usable flow formats (OXM,OpenFlow11) is among the allowed flow formats (OpenFlow10,NXM)
+])
+AT_CHECK([ovs-ofctl -O OpenFlow10 -vwarn add-groups br0 groups.txt], [1], ,[stderr])
+AT_CHECK([ovs-ofctl -O OpenFlow10 -vwarn mod-group br0 'group_id=1234,type=all,bucket=output:10'], [1], ,[stderr])
+AT_CHECK([ovs-ofctl -O OpenFlow10 -vwarn del-groups br0], [1], ,[stderr])
+AT_CHECK([ovs-ofctl -O OpenFlow10 -vwarn dump-groups br0 ], [1], ,[stderr])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl This is really bare-bones.
+dnl It at least checks request and reply serialization and deserialization.
+dnl Actions definition listed in both supported formats (w/ actions=)
 AT_SETUP([ofproto - del group (OpenFlow 1.1)])
 OVS_VSWITCHD_START
 AT_DATA([groups.txt], [dnl
