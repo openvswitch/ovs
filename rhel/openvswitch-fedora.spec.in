@@ -127,20 +127,6 @@ rmdir $RPM_BUILD_ROOT/%{_datadir}/openvswitch/python/
 
 install -d -m 0755 $RPM_BUILD_ROOT/%{_sharedstatedir}/openvswitch
 
-install -d -m 0755 $RPM_BUILD_ROOT%{_includedir}/openvswitch
-install -p -D -m 0644 include/openvswitch/*.h \
-        -t $RPM_BUILD_ROOT%{_includedir}/openvswitch
-install -p -D -m 0644 config.h \
-        -t $RPM_BUILD_ROOT%{_includedir}/openvswitch
-
-install -d -m 0755 $RPM_BUILD_ROOT%{_includedir}/openvswitch/lib
-install -p -D -m 0644 lib/*.h \
-        -t $RPM_BUILD_ROOT%{_includedir}/openvswitch/lib
-
-install -d -m 0755 $RPM_BUILD_ROOT%{_includedir}/openflow
-install -p -D -m 0644 include/openflow/*.h \
-        -t $RPM_BUILD_ROOT%{_includedir}/openflow
-
 touch $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch/conf.db
 touch $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch/system-id.conf
 
@@ -208,6 +194,7 @@ rm -rf $RPM_BUILD_ROOT
 %files devel
 %{_libdir}/*.a
 %{_libdir}/*.la
+%{_libdir}/pkgconfig/*.pc
 %{_includedir}/openvswitch/*
 %{_includedir}/openflow/*
 
