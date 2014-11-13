@@ -385,6 +385,18 @@ Deletes entries from \fIswitch\fR's group table.  With only a
 \fIswitch\fR argument, deletes all groups.  Otherwise, deletes the group
 for each group entry.
 .
+.IP "\fBinsert\-buckets \fIswitch group\fR"
+.IQ "\fBinsert\-buckets \fIswitch \fB\- < \fIfile\fR"
+Add buckets to an existing group present in the \fIswitch\fR's group table.
+If no \fIcommand_bucket_id\fR is present in the group specification then all
+buckets of the group are removed.
+.
+.IP "\fBremove\-buckets \fIswitch group\fR"
+.IQ "\fBremove\-buckets \fIswitch \fB\- < \fIfile\fR"
+Remove buckets to an existing group present in the \fIswitch\fR's group table.
+If no \fIcommand_bucket_id\fR is present in the group specification then all
+buckets of the group are removed.
+.
 .SS "OpenFlow Switch Monitoring Commands"
 .
 .IP "\fBsnoop \fIswitch\fR"
@@ -1930,9 +1942,9 @@ This field is required.
 
 
 .IP \fBtype=\fItype\fR
-The type of the group.  This \fBadd-group\fR, \fBadd-groups\fR and
-\fBdel-groups\fR command require this field.  The following keywords
-designated the allowed types:
+The type of the group.  The \fBadd-group\fR, \fBadd-groups\fR and
+\fBdel-groups\fR commands require this field.  It is prohibited for
+other commands. The following keywords designated the allowed types:
 .RS
 .IP \fBall\fR
 Execute all buckets in the group.
@@ -1948,6 +1960,45 @@ Executes the one bucket in the group.
 Executes the first live bucket in the group which is associated with
 a live port or group.
 .RE
+
+.IP \fBcommand_bucket_id=\fIid\fR
+The bucket to operate on.  The \fBinsert-buckets\fR and \fBremove-buckets\fR
+commands require this field.  It is prohibited for other commands.
+\fIid\fR may be an integer or one of the following keywords:
+.RS
+.IP \fBall\fR
+Operate on all buckets in the group.
+Only valid when used with the \fBremove-buckets\fR command in which
+case the effect is to remove all buckets from the group.
+.IP \fBfirst\fR
+Operate on the first bucket present in the group.
+In the case of the \fBinsert-buckets\fR command the effect is to
+insert new bucets just before the first bucket already present in the group;
+or to replace the buckets of the group if there are no buckets already present
+in the group.
+In the case of the \fBremove-buckets\fR command the effect is to
+remove the first bucket of the group; or do nothing if there are no
+buckets present in the group.
+.IP \fBlast\fR
+Operate on the last bucket present in the group.
+In the case of the \fBinsert-buckets\fR command the effect is to
+insert new bucets just after the last bucket already present in the group;
+or to replace the buckets of the group if there are no buckets already present
+in the group.
+In the case of the \fBremove-buckets\fR command the effect is to
+remove the last bucket of the group; or do nothing if there are no
+buckets present in the group.
+.RE
+.IP
+If \fIid\fR is an integer then it should correspond to the \fBbucket_id\fR
+of a bucket present in the group.
+In case of the \fBinsert-buckets\fR command the effect is to
+insert buckets just before the bucket in the group whose \fBbucket_id\fR is
+\fIid\fR.
+In case of the \fBiremove-buckets\fR command the effect is to
+remove the in the group whose \fBbucket_id\fR is \fIid\fR.
+It is an error if there is no bucket persent group in whose \fBbucket_id\fR is
+\fIid\fR.
 
 .IP \fBbucket\fR=\fIbucket_parameters\fR
 The \fBadd-group\fR, \fBadd-groups\fR and \fBmod-group\fR commands

@@ -342,6 +342,8 @@ usage(void)
            "  add-groups SWITCH FILE      add group from FILE\n"
            "  mod-group SWITCH GROUP      modify specific group\n"
            "  del-groups SWITCH [GROUP]   delete matching GROUPs\n"
+           "  insert-buckets SWITCH [GROUP] add buckets to GROUP\n"
+           "  remove-buckets SWITCH [GROUP] remove buckets from GROUP\n"
            "  dump-group-features SWITCH  print group features\n"
            "  dump-groups SWITCH [GROUP]  print group description\n"
            "  dump-group-stats SWITCH [GROUP]  print group statistics\n"
@@ -2175,6 +2177,18 @@ ofctl_del_groups(int argc, char *argv[])
 }
 
 static void
+ofctl_insert_bucket(int argc, char *argv[])
+{
+    ofctl_group_mod(argc, argv, OFPGC15_INSERT_BUCKET);
+}
+
+static void
+ofctl_remove_bucket(int argc, char *argv[])
+{
+    ofctl_group_mod(argc, argv, OFPGC15_REMOVE_BUCKET);
+}
+
+static void
 ofctl_dump_group_stats(int argc, char *argv[])
 {
     enum ofputil_protocol usable_protocols;
@@ -3547,6 +3561,10 @@ static const struct command all_commands[] = {
       1, 2, ofctl_mod_group },
     { "del-groups", "switch [group]",
       1, 2, ofctl_del_groups },
+    { "insert-buckets", "switch [group]",
+      1, 2, ofctl_insert_bucket },
+    { "remove-buckets", "switch [group]",
+      1, 2, ofctl_remove_bucket },
     { "dump-groups", "switch [group]",
       1, 2, ofctl_dump_group_desc },
     { "dump-group-stats", "switch [group]",
