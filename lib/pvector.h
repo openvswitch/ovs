@@ -19,6 +19,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include "ovs-rcu.h"
 #include "util.h"
 
@@ -47,6 +48,13 @@
  * not change the ordering of the entries.  Writers will never change the 'ptr'
  * values, or decrement the 'size' on a copy that readers have access to.
  *
+ * Most modifications are internally staged at the 'temp' vector, from which
+ * they can be published at 'impl' by calling pvector_publish().  This saves
+ * unnecessary memory allocations when many changes are done back-to-back.
+ * 'temp' may contain NULL pointers and it may be in unsorted order.  It is
+ * sorted before it is published at 'impl', which also removes the NULLs from
+ * the published vector.
+ *
  * Clients should not use priority INT_MIN.
  */
 
@@ -68,20 +76,24 @@ struct pvector_impl {
 /* Concurrent priority vector. */
 struct pvector {
     OVSRCU_TYPE(struct pvector_impl *) impl;
+    struct pvector_impl *temp;
 };
 
 /* Initialization. */
 void pvector_init(struct pvector *);
 void pvector_destroy(struct pvector *);
 
-/* Count. */
-static inline size_t pvector_count(const struct pvector *);
-static inline bool pvector_is_empty(const struct pvector *);
-
-/* Insertion and deletion. */
+/* Insertion and deletion.  These work on 'temp'.  */
 void pvector_insert(struct pvector *, void *, int priority);
 void pvector_change_priority(struct pvector *, void *, int priority);
 void pvector_remove(struct pvector *, void *);
+
+/* Make the modified pvector available for iteration. */
+static inline void pvector_publish(struct pvector *);
+
+/* Count.  These operate on the published pvector. */
+static inline size_t pvector_count(const struct pvector *);
+static inline bool pvector_is_empty(const struct pvector *);
 
 /* Iteration.
  *
@@ -214,6 +226,16 @@ static inline size_t pvector_count(const struct pvector *pvec)
 static inline bool pvector_is_empty(const struct pvector *pvec)
 {
     return pvector_count(pvec) == 0;
+}
+
+void pvector_publish__(struct pvector *);
+
+/* Make the modified pvector available for iteration. */
+static inline void pvector_publish(struct pvector *pvec)
+{
+    if (pvec->temp) {
+        pvector_publish__(pvec);
+    }
 }
 
 #endif /* pvector.h */

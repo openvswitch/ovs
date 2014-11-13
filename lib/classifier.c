@@ -248,6 +248,7 @@ classifier_init(struct classifier *cls, const uint8_t *flow_segments)
     for (int i = 0; i < CLS_MAX_TRIES; i++) {
         trie_init(cls, i, NULL);
     }
+    cls->publish = true;
 }
 
 /* Destroys 'cls'.  Rules within 'cls', if any, are not freed; this is the
@@ -634,6 +635,11 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule)
 
     /* Nothing was replaced. */
     cls->n_rules++;
+
+    if (cls->publish) {
+        pvector_publish(&cls->subtables);
+    }
+
     return NULL;
 }
 
@@ -767,6 +773,11 @@ check_priority:
             pvector_change_priority(&cls->subtables, subtable, max_priority);
         }
     }
+
+    if (cls->publish) {
+        pvector_publish(&cls->subtables);
+    }
+
 free:
     ovsrcu_postpone(free, cls_match);
     cls->n_rules--;

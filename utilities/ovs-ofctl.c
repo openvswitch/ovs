@@ -2368,6 +2368,7 @@ fte_free_all(struct classifier *cls)
 {
     struct fte *fte;
 
+    classifier_defer(cls);
     CLS_FOR_EACH (fte, rule, cls) {
         classifier_remove(cls, &fte->rule);
         ovsrcu_postpone(fte_free, fte);
@@ -2418,6 +2419,7 @@ read_flows_from_file(const char *filename, struct classifier *cls, int index)
     ds_init(&s);
     usable_protocols = OFPUTIL_P_ANY;
     line_number = 0;
+    classifier_defer(cls);
     while (!ds_get_preprocessed_line(&s, file, &line_number)) {
         struct fte_version *version;
         struct ofputil_flow_mod fm;
@@ -2442,6 +2444,7 @@ read_flows_from_file(const char *filename, struct classifier *cls, int index)
 
         fte_insert(cls, &fm.match, fm.priority, version, index);
     }
+    classifier_publish(cls);
     ds_destroy(&s);
 
     if (file != stdin) {
@@ -2530,6 +2533,7 @@ read_flows_from_switch(struct vconn *vconn,
 
     reply = NULL;
     ofpbuf_init(&ofpacts, 0);
+    classifier_defer(cls);
     while (recv_flow_stats_reply(vconn, send_xid, &reply, &fs, &ofpacts)) {
         struct fte_version *version;
 
@@ -2544,6 +2548,7 @@ read_flows_from_switch(struct vconn *vconn,
 
         fte_insert(cls, &fs.match, fs.priority, version, index);
     }
+    classifier_publish(cls);
     ofpbuf_uninit(&ofpacts);
 }
 

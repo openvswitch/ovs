@@ -453,6 +453,7 @@ destroy_classifier(struct classifier *cls)
 {
     struct test_rule *rule;
 
+    classifier_defer(cls);
     CLS_FOR_EACH (rule, cls_rule, cls) {
         if (classifier_remove(cls, &rule->cls_rule)) {
             ovsrcu_postpone(free_rule, rule);
@@ -785,6 +786,7 @@ test_rule_replacement(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         ovsrcu_postpone(free_rule, rule1);
         compare_classifiers(&cls, &tcls);
         check_tables(&cls, 1, 1, 0);
+        classifier_defer(&cls);
         classifier_remove(&cls, &rule2->cls_rule);
 
         tcls_destroy(&tcls);
@@ -921,6 +923,7 @@ test_many_rules_in_one_list (int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
                 check_tables(&cls, n > 0, n, n - 1);
             }
 
+            classifier_defer(&cls);
             for (i = 0; i < N_RULES; i++) {
                 if (classifier_remove(&cls, &rules[i]->cls_rule)) {
                     ovsrcu_postpone(free_rule, rules[i]);

@@ -252,6 +252,7 @@ struct classifier {
     struct cmap partitions;         /* Contains "struct cls_partition"s. */
     struct cls_trie tries[CLS_MAX_TRIES]; /* Prefix tries. */
     unsigned int n_tries;
+    bool publish;                   /* Make changes visible to lookups? */
 };
 
 /* A rule to be inserted to the classifier. */
@@ -288,6 +289,8 @@ const struct cls_rule *classifier_replace(struct classifier *,
                                           const struct cls_rule *);
 const struct cls_rule *classifier_remove(struct classifier *,
                                          const struct cls_rule *);
+static inline void classifier_defer(struct classifier *);
+static inline void classifier_publish(struct classifier *);
 
 /* Lookups.  These are RCU protected and may run concurrently with modifiers
  * and each other. */
@@ -343,4 +346,17 @@ void cls_cursor_advance(struct cls_cursor *);
 }
 #endif
 
+
+static inline void
+classifier_defer(struct classifier *cls)
+{
+    cls->publish = false;
+}
+
+static inline void
+classifier_publish(struct classifier *cls)
+{
+    cls->publish = true;
+    pvector_publish(&cls->subtables);
+}
 #endif /* classifier.h */

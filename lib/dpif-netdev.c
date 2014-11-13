@@ -3412,6 +3412,7 @@ dpcls_create_subtable(struct dpcls *cls, const struct netdev_flow_key *mask)
     netdev_flow_key_clone(&subtable->mask, mask);
     cmap_insert(&cls->subtables_map, &subtable->cmap_node, mask->hash);
     pvector_insert(&cls->subtables, subtable, 0);
+    pvector_publish(&cls->subtables);
 
     return subtable;
 }
@@ -3454,6 +3455,7 @@ dpcls_remove(struct dpcls *cls, struct dpcls_rule *rule)
     if (cmap_remove(&subtable->rules, &rule->cmap_node, rule->flow.hash)
         == 0) {
         dpcls_destroy_subtable(cls, subtable);
+        pvector_publish(&cls->subtables);
     }
 }
 

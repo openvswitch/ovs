@@ -265,15 +265,17 @@ ovs_router_flush(void)
 {
     struct ovs_router_entry *rt;
 
+    ovs_mutex_lock(&mutex);
+    classifier_defer(&cls);
     CLS_FOR_EACH(rt, cr, &cls) {
         if (rt->priority == rt->plen) {
-            ovs_mutex_lock(&mutex);
             if (classifier_remove(&cls, &rt->cr)) {
                 ovsrcu_postpone(rt_entry_free, rt);
             }
-            ovs_mutex_unlock(&mutex);
         }
     }
+    classifier_publish(&cls);
+    ovs_mutex_unlock(&mutex);
     seq_change(tnl_conf_seq);
 }
 

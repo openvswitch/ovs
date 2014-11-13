@@ -38,7 +38,14 @@ pvector_impl_alloc(size_t size)
 static struct pvector_impl *
 pvector_impl_dup(struct pvector_impl *old)
 {
-    return xmemdup(old, sizeof *old + old->allocated * sizeof old->vector[0]);
+    struct pvector_impl *impl;
+    size_t alloc = old->size + PVECTOR_EXTRA_ALLOC;
+
+    impl = xmalloc(sizeof *impl + alloc * sizeof impl->vector[0]);
+    impl->allocated = alloc;
+    impl->size = old->size;
+    memcpy(impl->vector, old->vector, old->size * sizeof old->vector[0]);
+    return impl;
 }
 
 /* Initializes 'pvec' as an empty concurrent priority vector. */
@@ -46,6 +53,7 @@ void
 pvector_init(struct pvector *pvec)
 {
     ovsrcu_set(&pvec->impl, pvector_impl_alloc(PVECTOR_EXTRA_ALLOC));
+    pvec->temp = NULL;
 }
 
 /* Destroys 'pvec'.
@@ -55,6 +63,8 @@ pvector_init(struct pvector *pvec)
 void
 pvector_destroy(struct pvector *pvec)
 {
+    free(pvec->temp);
+    pvec->temp = NULL;
     ovsrcu_postpone(free, pvector_impl_get(pvec));
     ovsrcu_set(&pvec->impl, NULL); /* Poison. */
 }
@@ -81,23 +91,10 @@ static void
 pvector_impl_sort(struct pvector_impl *impl)
 {
     qsort(impl->vector, impl->size, sizeof *impl->vector, pvector_entry_cmp);
-}
-
-/* Returns the index with priority equal or lower than 'target_priority',
- * which will be one past the vector if none exists. */
-static int
-pvector_impl_find_priority(struct pvector_impl *impl,
-                           int target_priority)
-{
-    const struct pvector_entry *entry;
-    int index;
-
-    PVECTOR_IMPL_FOR_EACH (entry, index, impl) {
-        if (entry->priority <= target_priority) {
-            break;
-        }
+    /* Trim gaps. */
+    while (impl->size && impl->vector[impl->size - 1].priority == INT_MIN) {
+        impl->size = impl->size - 1;
     }
-    return index;
 }
 
 /* Returns the index of the 'ptr' in the vector, or -1 if none is found. */
@@ -118,15 +115,13 @@ pvector_impl_find(struct pvector_impl *impl, void *target)
 void
 pvector_insert(struct pvector *pvec, void *ptr, int priority)
 {
-    struct pvector_impl *old, *new;
-    int index;
+    struct pvector_impl *temp = pvec->temp;
+    struct pvector_impl *old = pvector_impl_get(pvec);
 
     ovs_assert(ptr != NULL);
 
-    old = pvector_impl_get(pvec);
-
     /* Check if can add to the end without reallocation. */
-    if (old->allocated > old->size &&
+    if (!temp && old->allocated > old->size &&
         (!old->size || priority <= old->vector[old->size - 1].priority)) {
         old->vector[old->size].ptr = ptr;
         old->vector[old->size].priority = priority;
@@ -135,78 +130,80 @@ pvector_insert(struct pvector *pvec, void *ptr, int priority)
         atomic_thread_fence(memory_order_release);
         ++old->size;
     } else {
-        new = pvector_impl_alloc(old->size + 1 + PVECTOR_EXTRA_ALLOC);
-
-        index = pvector_impl_find_priority(old, priority);
-        /* Now at the insertion index. */
-        memcpy(new->vector, old->vector, index * sizeof old->vector[0]);
-        new->vector[index].ptr = ptr;
-        new->vector[index].priority = priority;
-        memcpy(&new->vector[index + 1], &old->vector[index],
-               (old->size - index) * sizeof old->vector[0]);
-        new->size = old->size + 1;
-
-        ovsrcu_set(&pvec->impl, new);
-        ovsrcu_postpone(free, old);
+        if (!temp) {
+            temp = pvector_impl_dup(old);
+            pvec->temp = temp;
+        } else if (temp->size == temp->allocated) {
+            temp = pvector_impl_dup(temp);
+            free(pvec->temp);
+            pvec->temp = temp;
+        }
+        /* Insert at the end, publish will sort. */
+        temp->vector[temp->size].ptr = ptr;
+        temp->vector[temp->size].priority = priority;
+        temp->size += 1;
     }
 }
 
 void
 pvector_remove(struct pvector *pvec, void *ptr)
 {
-    struct pvector_impl *old, *new;
+    struct pvector_impl *temp = pvec->temp;
     int index;
 
-    old = pvector_impl_get(pvec);
-
-    ovs_assert(old->size > 0);
-
-    index = pvector_impl_find(old, ptr);
+    if (!temp) {
+        temp = pvector_impl_dup(pvector_impl_get(pvec));
+        pvec->temp = temp;
+    }
+    ovs_assert(temp->size > 0);
+    index = pvector_impl_find(temp, ptr);
     ovs_assert(index >= 0);
-    /* Now at the index of the entry to be deleted. */
-
-    /* We do not try to delete the last entry without reallocation so that
-     * the readers can read the 'size' once in the beginning of each iteration.
-     */
-
-    /* Keep extra space for insertions to the end. */
-    new = pvector_impl_alloc(old->size - 1 + PVECTOR_EXTRA_ALLOC);
-
-    memcpy(new->vector, old->vector, index * sizeof old->vector[0]);
-    memcpy(&new->vector[index], &old->vector[index + 1],
-           (old->size - (index + 1)) * sizeof old->vector[0]);
-
-    new->size = old->size - 1;
-
-    ovsrcu_set(&pvec->impl, new);
-    ovsrcu_postpone(free, old);
+    /* Now at the index of the entry to be deleted.
+     * Clear in place, publish will sort and clean these off. */
+    temp->vector[index].ptr = NULL;
+    temp->vector[index].priority = INT_MIN;
 }
 
 /* Change entry's 'priority' and keep the vector ordered. */
 void
 pvector_change_priority(struct pvector *pvec, void *ptr, int priority)
 {
-    struct pvector_impl *old = pvector_impl_get(pvec);
-    int index = pvector_impl_find(old, ptr);
+    struct pvector_impl *old = pvec->temp;
+    int index;
+
+    if (!old) {
+        old = pvector_impl_get(pvec);
+    }
+
+    index = pvector_impl_find(old, ptr);
 
     ovs_assert(index >= 0);
     /* Now at the index of the entry to be updated. */
 
+    /* Check if can not update in place. */
     if ((priority > old->vector[index].priority && index > 0
          && priority > old->vector[index - 1].priority)
         || (priority < old->vector[index].priority && index < old->size - 1
             && priority < old->vector[index + 1].priority)) {
-        /* Have to reallocate to reorder. */
-        struct pvector_impl *new = pvector_impl_dup(old);
-
-        new->vector[index].priority = priority;
-        pvector_impl_sort(new);
-
-        ovsrcu_set(&pvec->impl, new);
-        ovsrcu_postpone(free, old);
-    } else {
-        /* Can update in place. Readers are free to use either value,
-         * so we do not try to synchronize here. */
-        old->vector[index].priority = priority;
+        /* Have to use a temp. */
+        if (!pvec->temp) {
+            /* Have to reallocate to reorder. */
+            pvec->temp = pvector_impl_dup(old);
+            old = pvec->temp;
+            /* Publish will sort. */
+        }
     }
+    old->vector[index].priority = priority;
+}
+
+/* Make the modified pvector available for iteration. */
+void pvector_publish__(struct pvector *pvec)
+{
+    struct pvector_impl *temp = pvec->temp;
+
+    pvec->temp = NULL;
+    pvector_impl_sort(temp); /* Also removes gaps. */
+    ovsrcu_postpone(free, ovsrcu_get_protected(struct pvector_impl *,
+                                               &pvec->impl));
+    ovsrcu_set(&pvec->impl, temp);
 }

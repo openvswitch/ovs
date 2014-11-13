@@ -89,8 +89,6 @@ static void oftable_enable_eviction(struct oftable *,
                                     size_t n_fields);
 
 static void oftable_remove_rule(struct rule *rule) OVS_REQUIRES(ofproto_mutex);
-static void oftable_remove_rule__(struct ofproto *, struct rule *)
-    OVS_REQUIRES(ofproto_mutex);
 
 /* A set of rules within a single OpenFlow table (oftable) that have the same
  * values for the oftable's eviction_fields.  A rule to be evicted, when one is
@@ -237,6 +235,8 @@ struct ofport_usage {
 /* rule. */
 static void ofproto_rule_send_removed(struct rule *, uint8_t reason);
 static bool rule_is_readonly(const struct rule *);
+static void ofproto_rule_remove__(struct ofproto *, struct rule *)
+    OVS_REQUIRES(ofproto_mutex);
 
 /* The source of a flow_mod request, in the code that processes flow_mods.
  *
@@ -1332,18 +1332,6 @@ ofproto_get_snoops(const struct ofproto *ofproto, struct sset *snoops)
     connmgr_get_snoops(ofproto->connmgr, snoops);
 }
 
-static void
-ofproto_rule_delete__(struct rule *rule, uint8_t reason)
-    OVS_REQUIRES(ofproto_mutex)
-{
-    struct rule_collection rules;
-
-    rules.rules = rules.stub;
-    rules.n = 1;
-    rules.stub[0] = rule;
-    delete_flows__(&rules, reason, NULL);
-}
-
 /* Deletes 'rule' from 'ofproto'.
  *
  * Within an ofproto implementation, this function allows an ofproto
@@ -1361,7 +1349,7 @@ ofproto_rule_delete(struct ofproto *ofproto, struct rule *rule)
      * switch is being deleted and any OpenFlow channels have been or soon will
      * be killed. */
     ovs_mutex_lock(&ofproto_mutex);
-    oftable_remove_rule__(ofproto, rule);
+    oftable_remove_rule(rule);
     ofproto->ofproto_class->rule_delete(rule);
     ovs_mutex_unlock(&ofproto_mutex);
 }
@@ -1385,15 +1373,20 @@ ofproto_flush__(struct ofproto *ofproto)
 
     ovs_mutex_lock(&ofproto_mutex);
     OFPROTO_FOR_EACH_TABLE (table, ofproto) {
+        struct rule_collection rules;
         struct rule *rule;
 
         if (table->flags & OFTABLE_HIDDEN) {
             continue;
         }
 
+        rule_collection_init(&rules);
+
         CLS_FOR_EACH (rule, cr, &table->cls) {
-            ofproto_rule_delete__(rule, OFPRR_DELETE);
+            rule_collection_add(&rules, rule);
         }
+        delete_flows__(&rules, OFPRR_DELETE, NULL);
+        rule_collection_destroy(&rules);
     }
     /* XXX: Concurrent handler threads may insert new learned flows based on
      * learn actions of the now deleted flows right after we release
@@ -4117,29 +4110,32 @@ handle_queue_stats_request(struct ofconn *ofconn,
     return error;
 }
 
-static bool
-should_evict_a_rule(struct oftable *table, unsigned int extra_space)
-    OVS_REQUIRES(ofproto_mutex)
-    OVS_NO_THREAD_SAFETY_ANALYSIS
-{
-    return classifier_count(&table->cls) + extra_space > table->max_flows;
-}
-
 static enum ofperr
 evict_rules_from_table(struct oftable *table, unsigned int extra_space)
     OVS_REQUIRES(ofproto_mutex)
 {
-    while (should_evict_a_rule(table, extra_space)) {
+    enum ofperr error = 0;
+    struct rule_collection rules;
+    unsigned int count = classifier_count(&table->cls) + extra_space;
+    unsigned int max_flows = table->max_flows;
+
+    rule_collection_init(&rules);
+
+    while (count-- > max_flows) {
         struct rule *rule;
 
         if (!choose_rule_to_evict(table, &rule)) {
-            return OFPERR_OFPFMFC_TABLE_FULL;
+            error = OFPERR_OFPFMFC_TABLE_FULL;
+            break;
         } else {
-            ofproto_rule_delete__(rule, OFPRR_EVICTION);
+            eviction_group_remove_rule(rule);
+            rule_collection_add(&rules, rule);
         }
     }
+    delete_flows__(&rules, OFPRR_EVICTION, NULL);
+    rule_collection_destroy(&rules);
 
-    return 0;
+    return error;
 }
 
 /* Implements OFPFC_ADD and the cases for OFPFC_MODIFY and OFPFC_MODIFY_STRICT
@@ -4287,6 +4283,7 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
         meter_insert_rule(rule);
     }
 
+    classifier_defer(&table->cls);
     classifier_insert(&table->cls, &rule->cr);
 
     error = ofproto->ofproto_class->rule_insert(rule);
@@ -4295,6 +4292,8 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
         ofproto_rule_unref(rule);
         return error;
     }
+    classifier_publish(&table->cls);
+
     learned_cookies_inc(ofproto, actions);
 
     if (minimask_get_vid_mask(&rule->cr.match.mask) == VLAN_VID_MASK) {
@@ -4513,21 +4512,34 @@ delete_flows__(const struct rule_collection *rules,
     if (rules->n) {
         struct list dead_cookies = LIST_INITIALIZER(&dead_cookies);
         struct ofproto *ofproto = rules->rules[0]->ofproto;
+        struct rule *rule, *next;
         size_t i;
 
-        for (i = 0; i < rules->n; i++) {
-            struct rule *rule = rules->rules[i];
-            const struct rule_actions *actions = rule_get_actions(rule);
+        for (i = 0, next = rules->rules[0];
+             rule = next, next = (++i < rules->n) ? rules->rules[i] : NULL,
+                 rule; ) {
+            struct classifier *cls = &ofproto->tables[rule->table_id].cls;
+            uint8_t next_table = next ? next->table_id : UINT8_MAX;
 
             ofproto_rule_send_removed(rule, reason);
 
             ofmonitor_report(ofproto->connmgr, rule, NXFME_DELETED, reason,
                              req ? req->ofconn : NULL, req ? req->xid : 0,
                              NULL);
-            oftable_remove_rule(rule);
+
+            if (next_table == rule->table_id) {
+                classifier_defer(cls);
+            }
+            classifier_remove(cls, &rule->cr);
+            if (next_table != rule->table_id) {
+                classifier_publish(cls);
+            }
+            ofproto_rule_remove__(ofproto, rule);
+
             ofproto->ofproto_class->rule_delete(rule);
 
-            learned_cookies_dec(ofproto, actions, &dead_cookies);
+            learned_cookies_dec(ofproto, rule_get_actions(rule),
+                                &dead_cookies);
         }
         learned_cookies_flush(ofproto, &dead_cookies);
         ofmonitor_flush(ofproto->connmgr);
@@ -4553,7 +4565,7 @@ delete_flows_loose(struct ofproto *ofproto,
     error = collect_rules_loose(ofproto, &criteria, &rules);
     rule_criteria_destroy(&criteria);
 
-    if (!error && rules.n > 0) {
+    if (!error) {
         delete_flows__(&rules, fm->delete_reason, req);
     }
     rule_collection_destroy(&rules);
@@ -4579,7 +4591,7 @@ delete_flow_strict(struct ofproto *ofproto, const struct ofputil_flow_mod *fm,
     error = collect_rules_strict(ofproto, &criteria, &rules);
     rule_criteria_destroy(&criteria);
 
-    if (!error && rules.n > 0) {
+    if (!error) {
         delete_flows__(&rules, fm->delete_reason, req);
     }
     rule_collection_destroy(&rules);
@@ -4626,7 +4638,12 @@ void
 ofproto_rule_expire(struct rule *rule, uint8_t reason)
     OVS_REQUIRES(ofproto_mutex)
 {
-    ofproto_rule_delete__(rule, reason);
+    struct rule_collection rules;
+
+    rules.rules = rules.stub;
+    rules.n = 1;
+    rules.stub[0] = rule;
+    delete_flows__(&rules, reason, NULL);
 }
 
 /* Reduces '*timeout' to no more than 'max'.  A value of zero in either case
@@ -5308,9 +5325,7 @@ handle_delete_meter(struct ofconn *ofconn, struct ofputil_meter_mod *mm)
             }
         }
     }
-    if (rules.n > 0) {
-        delete_flows__(&rules, OFPRR_METER_DELETE, NULL);
-    }
+    delete_flows__(&rules, OFPRR_METER_DELETE, NULL);
 
     /* Delete the meters. */
     meter_delete(ofproto, first, last);
@@ -6770,15 +6785,12 @@ oftable_enable_eviction(struct oftable *table,
     }
 }
 
-/* Removes 'rule' from the oftable that contains it. */
+/* Removes 'rule' from the ofproto data structures AFTER caller has removed
+ * it from the classifier. */
 static void
-oftable_remove_rule__(struct ofproto *ofproto, struct rule *rule)
+ofproto_rule_remove__(struct ofproto *ofproto, struct rule *rule)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct classifier *cls = &ofproto->tables[rule->table_id].cls;
-
-    classifier_remove(cls, &rule->cr);
-
     cookies_remove(ofproto, rule);
 
     eviction_group_remove_rule(rule);
@@ -6795,7 +6807,11 @@ static void
 oftable_remove_rule(struct rule *rule)
     OVS_REQUIRES(ofproto_mutex)
 {
-    oftable_remove_rule__(rule->ofproto, rule);
+    struct classifier *cls = &rule->ofproto->tables[rule->table_id].cls;
+
+    if (classifier_remove(cls, &rule->cr)) {
+        ofproto_rule_remove__(rule->ofproto, rule);
+    }
 }
 
 /* unixctl commands. */
