@@ -7,3 +7,4 @@
 /ovsdb-server.1
 /ovsdb-tool
 /ovsdb-tool.1
+/libovsdb.pc

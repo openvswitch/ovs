@@ -35,6 +35,9 @@ ovsdb_libovsdb_la_SOURCES = \
 ovsdb_libovsdb_la_CFLAGS = $(AM_CFLAGS)
 ovsdb_libovsdb_la_CPPFLAGS = $(AM_CPPFLAGS)
 
+pkgconfig_DATA += \
+	$(srcdir)/ovsdb/libovsdb.pc
+
 MAN_FRAGMENTS += \
 	ovsdb/remote-active.man \
 	ovsdb/remote-passive.man
