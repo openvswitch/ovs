@@ -4287,7 +4287,7 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
         meter_insert_rule(rule);
     }
 
-    classifier_insert(&table->cls, CONST_CAST(struct cls_rule *, &rule->cr));
+    classifier_insert(&table->cls, &rule->cr);
 
     error = ofproto->ofproto_class->rule_insert(rule);
     if (error) {
@@ -6777,7 +6777,7 @@ oftable_remove_rule__(struct ofproto *ofproto, struct rule *rule)
 {
     struct classifier *cls = &ofproto->tables[rule->table_id].cls;
 
-    classifier_remove(cls, CONST_CAST(struct cls_rule *, &rule->cr));
+    classifier_remove(cls, &rule->cr);
 
     cookies_remove(ofproto, rule);
 

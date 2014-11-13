@@ -283,9 +283,9 @@ void classifier_destroy(struct classifier *);
 bool classifier_set_prefix_fields(struct classifier *,
                                   const enum mf_field_id *trie_fields,
                                   unsigned int n_trie_fields);
-void classifier_insert(struct classifier *, struct cls_rule *);
+void classifier_insert(struct classifier *, const struct cls_rule *);
 const struct cls_rule *classifier_replace(struct classifier *,
-                                          struct cls_rule *);
+                                          const struct cls_rule *);
 const struct cls_rule *classifier_remove(struct classifier *,
                                          const struct cls_rule *);
 

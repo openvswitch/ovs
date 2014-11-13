@@ -36,7 +36,7 @@ struct trie_ctx;
 BUILD_ASSERT_DECL(TP_PORTS_OFS32 == offsetof(struct flow, tp_dst) / 4);
 
 static struct cls_match *
-cls_match_alloc(struct cls_rule *rule)
+cls_match_alloc(const struct cls_rule *rule)
 {
     int count = count_1bits(rule->match.flow.map);
 
@@ -485,7 +485,7 @@ subtable_replace_head_rule(struct classifier *cls OVS_UNUSED,
  * superset of their flows and has higher priority.
  */
 const struct cls_rule *
-classifier_replace(struct classifier *cls, struct cls_rule *rule)
+classifier_replace(struct classifier *cls, const struct cls_rule *rule)
 {
     struct cls_match *new = cls_match_alloc(rule);
     struct cls_subtable *subtable;
@@ -497,7 +497,7 @@ classifier_replace(struct classifier *cls, struct cls_rule *rule)
     uint32_t hash;
     int i;
 
-    rule->cls_match = new;
+    CONST_CAST(struct cls_rule *, rule)->cls_match = new;
 
     subtable = find_subtable(cls, &rule->match.mask);
     if (!subtable) {
@@ -598,7 +598,8 @@ classifier_replace(struct classifier *cls, struct cls_rule *rule)
                 /* No change in subtable's max priority or max count. */
 
                 /* Make rule visible to iterators. */
-                rculist_replace(&rule->node, &old->node);
+                rculist_replace(CONST_CAST(struct rculist *, &rule->node),
+                                &old->node);
 
                 /* Return displaced rule.  Caller is responsible for keeping it
                  * around until all threads quiesce. */
@@ -610,7 +611,8 @@ classifier_replace(struct classifier *cls, struct cls_rule *rule)
     }
 
     /* Make rule visible to iterators. */
-    rculist_push_back(&subtable->rules_list, &rule->node);
+    rculist_push_back(&subtable->rules_list,
+                      CONST_CAST(struct rculist *, &rule->node));
 
     /* Rule was added, not replaced.  Update 'subtable's 'max_priority' and
      * 'max_count', if necessary.
@@ -642,7 +644,7 @@ classifier_replace(struct classifier *cls, struct cls_rule *rule)
  * fixed fields, and priority).  Use classifier_find_rule_exactly() to find
  * such a rule. */
 void
-classifier_insert(struct classifier *cls, struct cls_rule *rule)
+classifier_insert(struct classifier *cls, const struct cls_rule *rule)
 {
     const struct cls_rule *displaced_rule = classifier_replace(cls, rule);
     ovs_assert(!displaced_rule);
@@ -677,7 +679,7 @@ classifier_remove(struct classifier *cls, const struct cls_rule *rule)
     CONST_CAST(struct cls_rule *, rule)->cls_match = NULL;
 
     /* Remove 'rule' from the subtable's rules list. */
-    rculist_remove(&CONST_CAST(struct cls_rule *, rule)->node);
+    rculist_remove(CONST_CAST(struct rculist *, &rule->node));
 
     INIT_CONTAINER(prev, rculist_back_protected(&cls_match->list), list);
     INIT_CONTAINER(next, rculist_next(&cls_match->list), list);
