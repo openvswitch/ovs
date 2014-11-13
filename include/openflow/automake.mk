@@ -1,4 +1,5 @@
-noinst_HEADERS += \
+openflowincludedir = $(includedir)/openflow
+openflowinclude_HEADERS = \
 	include/openflow/nicira-ext.h \
 	include/openflow/openflow-1.0.h \
 	include/openflow/openflow-1.1.h \
