@@ -219,8 +219,10 @@ enum rstp_state rstp_port_get_state(const struct rstp_port *)
 
 void rstp_port_get_status(const struct rstp_port *, uint16_t *id,
                           enum rstp_state *state, enum rstp_port_role *role,
-                          int *tx_count, int *rx_count, int *error_count,
-                          int *uptime)
+                          rstp_identifier *designated_bridge_id,
+                          uint16_t *designated_port_id,
+                          uint32_t *designated_path_cost, int *tx_count,
+                          int *rx_count, int *error_count, int *uptime)
     OVS_EXCLUDED(rstp_mutex);
 
 void * rstp_get_port_aux(struct rstp *rstp, uint16_t port_number)

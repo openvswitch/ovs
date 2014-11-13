@@ -1264,14 +1264,20 @@ rstp_port_get_state(const struct rstp_port *p)
 void
 rstp_port_get_status(const struct rstp_port *p, uint16_t *id,
                      enum rstp_state *state, enum rstp_port_role *role,
-                     int *tx_count, int *rx_count, int *error_count,
-                     int *uptime)
+                     rstp_identifier *designated_bridge_id,
+                     uint16_t *designated_port_id,
+                     uint32_t *designated_path_cost, int *tx_count,
+                     int *rx_count, int *error_count, int *uptime)
     OVS_EXCLUDED(rstp_mutex)
 {
     ovs_mutex_lock(&rstp_mutex);
     *id = p->port_id;
     *state = p->rstp_state;
     *role = p->role;
+
+    *designated_bridge_id = p->port_priority.designated_bridge_id;
+    *designated_port_id = p->port_priority.designated_port_id;
+    *designated_path_cost = p->port_priority.root_path_cost;
 
     *tx_count = p->tx_count;
     *rx_count = p->rx_rstp_bpdu_cnt;

@@ -2453,7 +2453,9 @@ get_rstp_port_status(struct ofport *ofport_,
     }
 
     s->enabled = true;
-    rstp_port_get_status(rp, &s->port_id, &s->state, &s->role, &s->tx_count,
+    rstp_port_get_status(rp, &s->port_id, &s->state, &s->role,
+                         &s->designated_bridge_id, &s->designated_port_id,
+                         &s->designated_path_cost, &s->tx_count,
                          &s->rx_count, &s->error_count, &s->uptime);
 }
 

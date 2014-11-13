@@ -2456,7 +2456,7 @@ br_refresh_rstp_status(struct bridge *br)
     }
     smap_add_format(&smap, "rstp_bridge_id", RSTP_ID_FMT,
                     RSTP_ID_ARGS(status.bridge_id));
-    smap_add_format(&smap, "rstp_root_path_cost", "%d",
+    smap_add_format(&smap, "rstp_root_path_cost", "%"PRIu32,
                     status.root_path_cost);
     smap_add_format(&smap, "rstp_root_id", RSTP_ID_FMT,
                     RSTP_ID_ARGS(status.root_id));
@@ -2509,6 +2509,12 @@ port_refresh_rstp_status(struct port *port)
                     rstp_port_role_name(status.role));
     smap_add_format(&smap, "rstp_port_state", "%s",
                     rstp_state_name(status.state));
+    smap_add_format(&smap, "rstp_designated_bridge_id", RSTP_ID_FMT,
+                    RSTP_ID_ARGS(status.designated_bridge_id));
+    smap_add_format(&smap, "rstp_designated_port_id", RSTP_PORT_ID_FMT,
+                    status.designated_port_id);
+    smap_add_format(&smap, "rstp_designated_path_cost", "%"PRIu32,
+                    status.designated_path_cost);
 
     ovsrec_port_set_rstp_status(port->cfg, &smap);
     smap_destroy(&smap);

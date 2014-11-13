@@ -110,6 +110,9 @@ struct ofproto_port_rstp_status {
     uint16_t port_id;
     enum rstp_port_role role;
     enum rstp_state state;
+    rstp_identifier designated_bridge_id;
+    uint16_t designated_port_id;
+    uint32_t designated_path_cost;
     int tx_count;               /* Number of BPDUs transmitted. */
     int rx_count;               /* Number of valid BPDUs received. */
     int error_count;            /* Number of bad BPDUs received. */
