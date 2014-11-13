@@ -126,8 +126,10 @@ scripts_SCRIPTS =
 scripts_DATA =
 SUFFIXES =
 check_DATA =
+pkgconfig_DATA =
 
 scriptsdir = $(pkgdatadir)/scripts
+pkgconfigdir = $(libdir)/pkgconfig
 
 # This ensures that files added to EXTRA_DIST are always distributed,
 # even if they are inside an Automake if...endif conditional block that is

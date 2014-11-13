@@ -17,3 +17,4 @@
 /vtep-idl.c
 /vtep-idl.h
 /vtep-idl.ovsidl
+/libopenvswitch.pc
