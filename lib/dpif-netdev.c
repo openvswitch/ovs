@@ -3128,34 +3128,6 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
         }
         break;
 
-    case OVS_ACTION_ATTR_HASH: {
-        const struct ovs_action_hash *hash_act;
-        uint32_t hash;
-
-        hash_act = nl_attr_get(a);
-
-        for (i = 0; i < cnt; i++) {
-
-            if (hash_act->hash_alg == OVS_HASH_ALG_L4) {
-                /* Hash need not be symmetric, nor does it need to include
-                 * L2 fields. */
-                hash = hash_2words(dpif_packet_get_dp_hash(packets[i]),
-                                   hash_act->hash_basis);
-            } else {
-                VLOG_WARN("Unknown hash algorithm specified "
-                          "for the hash action.");
-                hash = 2;
-            }
-
-            if (!hash) {
-                hash = 1; /* 0 is not valid */
-            }
-
-            dpif_packet_set_dp_hash(packets[i], hash);
-        }
-        return;
-    }
-
     case OVS_ACTION_ATTR_RECIRC:
         if (*depth < MAX_RECIRC_DEPTH) {
 
@@ -3188,6 +3160,7 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
     case OVS_ACTION_ATTR_SET:
     case OVS_ACTION_ATTR_SET_MASKED:
     case OVS_ACTION_ATTR_SAMPLE:
+    case OVS_ACTION_ATTR_HASH:
     case OVS_ACTION_ATTR_UNSPEC:
     case __OVS_ACTION_ATTR_MAX:
         OVS_NOT_REACHED();
