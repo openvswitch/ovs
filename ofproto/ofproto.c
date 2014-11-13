@@ -5795,7 +5795,102 @@ add_group(struct ofproto *ofproto, struct ofputil_group_mod *gm)
     return error;
 }
 
-/* Implements OFPGC11_MODIFY.  Returns 0 on success or an OpenFlow error code
+/* Adds all of the buckets from 'ofgroup' to 'new_ofgroup'.  The buckets
+ * already in 'new_ofgroup' will be placed just after the (copy of the) bucket
+ * in 'ofgroup' with bucket ID 'command_bucket_id'.  Special
+ * 'command_bucket_id' values OFPG15_BUCKET_FIRST and OFPG15_BUCKET_LAST are
+ * also honored. */
+static enum ofperr
+copy_buckets_for_insert_bucket(const struct ofgroup *ofgroup,
+                               struct ofgroup *new_ofgroup,
+                               uint32_t command_bucket_id)
+{
+    struct ofputil_bucket *last = NULL;
+
+    if (command_bucket_id <= OFPG15_BUCKET_MAX) {
+        /* Check here to ensure that a bucket corresponding to
+         * command_bucket_id exists in the old bucket list.
+         *
+         * The subsequent search of below of new_ofgroup covers
+         * both buckets in the old bucket list and buckets added
+         * by the insert buckets group mod message this function processes. */
+        if (!ofputil_bucket_find(&ofgroup->buckets, command_bucket_id)) {
+            return OFPERR_OFPGMFC_UNKNOWN_BUCKET;
+        }
+
+        if (!list_is_empty(&new_ofgroup->buckets)) {
+            last = ofputil_bucket_list_back(&new_ofgroup->buckets);
+        }
+    }
+
+    ofputil_bucket_clone_list(&new_ofgroup->buckets, &ofgroup->buckets, NULL);
+
+    if (ofputil_bucket_check_duplicate_id(&ofgroup->buckets)) {
+            VLOG_WARN_RL(&rl, "Duplicate bucket id");
+            return OFPERR_OFPGMFC_BUCKET_EXISTS;
+    }
+
+    /* Rearrange list according to command_bucket_id */
+    if (command_bucket_id == OFPG15_BUCKET_LAST) {
+        struct ofputil_bucket *new_first;
+        const struct ofputil_bucket *first;
+
+        first = ofputil_bucket_list_front(&ofgroup->buckets);
+        new_first = ofputil_bucket_find(&new_ofgroup->buckets,
+                                        first->bucket_id);
+
+        list_splice(new_ofgroup->buckets.next, &new_first->list_node,
+                    &new_ofgroup->buckets);
+    } else if (command_bucket_id <= OFPG15_BUCKET_MAX && last) {
+        struct ofputil_bucket *after;
+
+        /* Presence of bucket is checked above so after should never be NULL */
+        after = ofputil_bucket_find(&new_ofgroup->buckets, command_bucket_id);
+
+        list_splice(after->list_node.next, new_ofgroup->buckets.next,
+                    last->list_node.next);
+    }
+
+    return 0;
+}
+
+/* Appends all of the a copy of all the buckets from 'ofgroup' to 'new_ofgroup'
+ * with the exception of the bucket whose bucket id is 'command_bucket_id'.
+ * Special 'command_bucket_id' values OFPG15_BUCKET_FIRST, OFPG15_BUCKET_LAST
+ * and OFPG15_BUCKET_ALL are also honored. */
+static enum ofperr
+copy_buckets_for_remove_bucket(const struct ofgroup *ofgroup,
+                               struct ofgroup *new_ofgroup,
+                               uint32_t command_bucket_id)
+{
+    const struct ofputil_bucket *skip = NULL;
+
+    if (command_bucket_id == OFPG15_BUCKET_ALL) {
+        return 0;
+    }
+
+    if (command_bucket_id == OFPG15_BUCKET_FIRST) {
+        if (!list_is_empty(&ofgroup->buckets)) {
+            skip = ofputil_bucket_list_front(&ofgroup->buckets);
+        }
+    } else if (command_bucket_id == OFPG15_BUCKET_LAST) {
+        if (!list_is_empty(&ofgroup->buckets)) {
+            skip = ofputil_bucket_list_back(&ofgroup->buckets);
+        }
+    } else {
+        skip = ofputil_bucket_find(&ofgroup->buckets, command_bucket_id);
+        if (!skip) {
+            return OFPERR_OFPGMFC_UNKNOWN_BUCKET;
+        }
+    }
+
+    ofputil_bucket_clone_list(&new_ofgroup->buckets, &ofgroup->buckets, skip);
+
+    return 0;
+}
+
+/* Implements OFPGC11_MODIFY, OFPGC15_INSERT_BUCKET and
+ * OFPGC15_REMOVE_BUCKET.  Returns 0 on success or an OpenFlow error code
  * on failure.
  *
  * Note that the group is re-created and then replaces the old group in
@@ -5824,6 +5919,18 @@ modify_group(struct ofproto *ofproto, struct ofputil_group_mod *gm)
     if (ofgroup->type != gm->type
         && ofproto->n_groups[gm->type] >= ofproto->ogf.max_groups[gm->type]) {
         error = OFPERR_OFPGMFC_OUT_OF_GROUPS;
+        goto out;
+    }
+
+    /* Manipulate bucket list for bucket commands */
+    if (gm->command == OFPGC15_INSERT_BUCKET) {
+        error = copy_buckets_for_insert_bucket(ofgroup, new_ofgroup,
+                                               gm->command_bucket_id);
+    } else if (gm->command == OFPGC15_REMOVE_BUCKET) {
+        error = copy_buckets_for_remove_bucket(ofgroup, new_ofgroup,
+                                               gm->command_bucket_id);
+    }
+    if (error) {
         goto out;
     }
 
@@ -5931,6 +6038,12 @@ handle_group_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     case OFPGC11_DELETE:
         delete_group(ofproto, gm.group_id);
         return 0;
+
+    case OFPGC15_INSERT_BUCKET:
+        return modify_group(ofproto, &gm);
+
+    case OFPGC15_REMOVE_BUCKET:
+        return modify_group(ofproto, &gm);
 
     default:
         if (gm.command > OFPGC11_DELETE) {
