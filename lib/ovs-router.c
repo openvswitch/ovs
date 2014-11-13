@@ -258,7 +258,7 @@ ovs_router_flush(void)
 {
     struct ovs_router_entry *rt;
 
-    CLS_FOR_EACH_SAFE(rt, cr, &cls) {
+    CLS_FOR_EACH(rt, cr, &cls) {
         if (rt->priority == rt->plen) {
             classifier_remove(&cls, &rt->cr);
         }

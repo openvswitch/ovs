@@ -453,7 +453,7 @@ destroy_classifier(struct classifier *cls)
 {
     struct test_rule *rule;
 
-    CLS_FOR_EACH_SAFE (rule, cls_rule, cls) {
+    CLS_FOR_EACH (rule, cls_rule, cls) {
         if (classifier_remove(cls, &rule->cls_rule)) {
             ovsrcu_postpone(free_rule, rule);
         }
@@ -562,20 +562,18 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
             }
 
             found_rules++;
-            ovs_mutex_lock(&cls->mutex);
             RCULIST_FOR_EACH (rule, list, &head->list) {
                 assert(rule->priority < prev_priority);
+                ovs_mutex_lock(&cls->mutex);
                 assert(rule->priority <= table->max_priority);
+                ovs_mutex_unlock(&cls->mutex);
 
                 prev_priority = rule->priority;
                 found_rules++;
                 found_dups++;
-                ovs_mutex_unlock(&cls->mutex);
                 assert(classifier_find_rule_exactly(cls, rule->cls_rule)
                        == rule->cls_rule);
-                ovs_mutex_lock(&cls->mutex);
             }
-            ovs_mutex_unlock(&cls->mutex);
         }
         ovs_mutex_lock(&cls->mutex);
         assert(table->max_priority == max_priority);
@@ -1076,8 +1074,7 @@ test_many_rules_in_n_tables(int n_tables)
 
             target = clone_rule(tcls.rules[random_range(tcls.n_rules)]);
 
-            CLS_FOR_EACH_TARGET_SAFE (rule, cls_rule, &cls,
-                                      &target->cls_rule) {
+            CLS_FOR_EACH_TARGET (rule, cls_rule, &cls, &target->cls_rule) {
                 if (classifier_remove(&cls, &rule->cls_rule)) {
                     ovsrcu_postpone(free_rule, rule);
                 }

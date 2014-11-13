@@ -152,6 +152,13 @@ static inline void pvector_cursor_lookahead(const struct pvector_cursor *,
     for (struct pvector_cursor cursor__ = pvector_cursor_init(PVECTOR, N, SZ); \
          ((PTR) = pvector_cursor_next(&cursor__, PRIORITY, N, SZ)) != NULL; )
 
+#define PVECTOR_CURSOR_FOR_EACH(PTR, CURSOR, PVECTOR)                \
+    for (*(CURSOR) = pvector_cursor_init(PVECTOR, 0, 0);             \
+         ((PTR) = pvector_cursor_next(CURSOR, INT_MIN, 0, 0)) != NULL; )
+
+#define PVECTOR_CURSOR_FOR_EACH_CONTINUE(PTR, CURSOR)                   \
+    for (; ((PTR) = pvector_cursor_next(CURSOR, INT_MIN, 0, 0)) != NULL; )
+
 
 /* Inline implementations. */
 

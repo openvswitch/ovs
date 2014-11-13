@@ -27,12 +27,14 @@
 
 /* A set of rules that all have the same fields wildcarded. */
 struct cls_subtable {
-    /* The fields are only used by writers and iterators. */
-    struct cmap_node cmap_node; /* Within struct classifier 'subtables_map'. */
-
-    /* The fields are only used by writers. */
+    struct cmap_node cmap_node OVS_GUARDED; /* Within struct classifier's
+                                             * 'subtables_map'. */
+    /* These fields are only used by writers. */
     int max_priority OVS_GUARDED;  /* Max priority of any rule in subtable. */
     unsigned int max_count OVS_GUARDED;     /* Count of max_priority rules. */
+
+    /* Accessed by iterators. */
+    struct rculist rules_list;              /* Unordered. */
 
     /* Identical, but lower priority rules are not inserted to any of the
      * following data structures. */

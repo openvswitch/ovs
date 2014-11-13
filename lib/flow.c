@@ -2012,8 +2012,8 @@ miniflow_equal(const struct miniflow *a, const struct miniflow *b)
     return true;
 }
 
-/* Returns true if 'a' and 'b' are equal at the places where there are 1-bits
- * in 'mask', false if they differ. */
+/* Returns false if 'a' and 'b' differ at the places where there are 1-bits
+ * in 'mask', true otherwise. */
 bool
 miniflow_equal_in_minimask(const struct miniflow *a, const struct miniflow *b,
                            const struct minimask *mask)

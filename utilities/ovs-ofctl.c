@@ -2368,9 +2368,9 @@ fte_free_all(struct classifier *cls)
 {
     struct fte *fte;
 
-    CLS_FOR_EACH_SAFE (fte, rule, cls) {
+    CLS_FOR_EACH (fte, rule, cls) {
         classifier_remove(cls, &fte->rule);
-        fte_free(fte);
+        ovsrcu_postpone(fte_free, fte);
     }
     classifier_destroy(cls);
 }
@@ -2392,10 +2392,10 @@ fte_insert(struct classifier *cls, const struct match *match,
 
     old = fte_from_cls_rule(classifier_replace(cls, &fte->rule));
     if (old) {
-        fte_version_free(old->versions[index]);
         fte->versions[!index] = old->versions[!index];
-        cls_rule_destroy(&old->rule);
-        free(old);
+        old->versions[!index] = NULL;
+
+        ovsrcu_postpone(fte_free, old);
     }
 }
 

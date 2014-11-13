@@ -132,6 +132,15 @@ static bool mask_prefix_bits_set(const struct flow_wildcards *,
 
 /* cls_rule. */
 
+static inline void
+cls_rule_init__(struct cls_rule *rule, unsigned int priority)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
+{
+    rculist_init(&rule->node);
+    rule->priority = priority;
+    rule->cls_match = NULL;
+}
+
 /* Initializes 'rule' to match packets specified by 'match' at the given
  * 'priority'.  'match' must satisfy the invariant described in the comment at
  * the definition of struct match.
@@ -143,9 +152,8 @@ static bool mask_prefix_bits_set(const struct flow_wildcards *,
 void
 cls_rule_init(struct cls_rule *rule, const struct match *match, int priority)
 {
+    cls_rule_init__(rule, priority);
     minimatch_init(&rule->match, match);
-    rule->priority = priority;
-    rule->cls_match = NULL;
 }
 
 /* Same as cls_rule_init() for initialization from a "struct minimatch". */
@@ -153,9 +161,8 @@ void
 cls_rule_init_from_minimatch(struct cls_rule *rule,
                              const struct minimatch *match, int priority)
 {
+    cls_rule_init__(rule, priority);
     minimatch_clone(&rule->match, match);
-    rule->priority = priority;
-    rule->cls_match = NULL;
 }
 
 /* Initializes 'dst' as a copy of 'src'.
@@ -164,20 +171,21 @@ cls_rule_init_from_minimatch(struct cls_rule *rule,
 void
 cls_rule_clone(struct cls_rule *dst, const struct cls_rule *src)
 {
+    cls_rule_init__(dst, src->priority);
     minimatch_clone(&dst->match, &src->match);
-    dst->priority = src->priority;
-    dst->cls_match = NULL;
 }
 
 /* Initializes 'dst' with the data in 'src', destroying 'src'.
+ * 'src' must be a cls_rule NOT in a classifier.
  *
  * The caller must eventually destroy 'dst' with cls_rule_destroy(). */
 void
 cls_rule_move(struct cls_rule *dst, struct cls_rule *src)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
+    ovs_assert(!src->cls_match);   /* Must not be in a classifier. */
+    cls_rule_init__(dst, src->priority);
     minimatch_move(&dst->match, &src->match);
-    dst->priority = src->priority;
-    dst->cls_match = NULL;
 }
 
 /* Frees memory referenced by 'rule'.  Doesn't free 'rule' itself (it's
@@ -186,8 +194,16 @@ cls_rule_move(struct cls_rule *dst, struct cls_rule *src)
  * ('rule' must not currently be in a classifier.) */
 void
 cls_rule_destroy(struct cls_rule *rule)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
-    ovs_assert(!rule->cls_match);
+    ovs_assert(!rule->cls_match);   /* Must not be in a classifier. */
+
+    /* Check that the rule has been properly removed from the classifier and
+     * that the destruction only happens after the RCU grace period, or that
+     * the rule was never inserted to the classifier in the first place. */
+    ovs_assert(rculist_next_protected(&rule->node) == RCULIST_POISON
+               || rculist_is_empty(&rule->node));
+
     minimatch_destroy(&rule->match);
 }
 
@@ -607,6 +623,9 @@ classifier_replace(struct classifier *cls, struct cls_rule *rule)
 
                 /* No change in subtable's max priority or max count. */
 
+                /* Make rule visible to iterators. */
+                rculist_replace(&rule->node, &old->node);
+
                 /* Return displaced rule.  Caller is responsible for keeping it
                  * around until all threads quiesce. */
                 ovs_mutex_unlock(&cls->mutex);
@@ -616,6 +635,9 @@ classifier_replace(struct classifier *cls, struct cls_rule *rule)
             rculist_push_back(&head->list, &new->list);
         }
     }
+
+    /* Make rule visible to iterators. */
+    rculist_push_back(&subtable->rules_list, &rule->node);
 
     /* Rule was added, not replaced.  Update 'subtable's 'max_priority' and
      * 'max_count', if necessary.
@@ -684,6 +706,9 @@ classifier_remove(struct classifier *cls, const struct cls_rule *rule)
     }
     /* Mark as removed. */
     CONST_CAST(struct cls_rule *, rule)->cls_match = NULL;
+
+    /* Remove 'rule' from the subtable's rules list. */
+    rculist_remove(&CONST_CAST(struct cls_rule *, rule)->node);
 
     INIT_CONTAINER(prev, rculist_back_protected(&cls_match->list), list);
     INIT_CONTAINER(next, rculist_next(&cls_match->list), list);
@@ -923,41 +948,35 @@ classifier_find_match_exactly(const struct classifier *cls,
 
 /* Checks if 'target' would overlap any other rule in 'cls'.  Two rules are
  * considered to overlap if both rules have the same priority and a packet
- * could match both. */
+ * could match both.
+ *
+ * A trivial example of overlapping rules is two rules matching disjoint sets
+ * of fields. E.g., if one rule matches only on port number, while another only
+ * on dl_type, any packet from that specific port and with that specific
+ * dl_type could match both, if the rules also have the same priority. */
 bool
 classifier_rule_overlaps(const struct classifier *cls,
                          const struct cls_rule *target)
-    OVS_EXCLUDED(cls->mutex)
 {
     struct cls_subtable *subtable;
 
-    ovs_mutex_lock(&cls->mutex);
     /* Iterate subtables in the descending max priority order. */
     PVECTOR_FOR_EACH_PRIORITY (subtable, target->priority - 1, 2,
                                sizeof(struct cls_subtable), &cls->subtables) {
         uint32_t storage[FLOW_U32S];
         struct minimask mask;
-        struct cls_match *head;
+        const struct cls_rule *rule;
 
         minimask_combine(&mask, &target->match.mask, &subtable->mask, storage);
-        CMAP_FOR_EACH (head, cmap_node, &subtable->rules) {
-            struct cls_match *rule;
 
-            FOR_EACH_RULE_IN_LIST_PROTECTED (rule, head) {
-                if (rule->priority < target->priority) {
-                    break; /* Rules in descending priority order. */
-                }
-                if (rule->priority == target->priority
-                    && miniflow_equal_in_minimask(&target->match.flow,
-                                                  &rule->flow, &mask)) {
-                    ovs_mutex_unlock(&cls->mutex);
-                    return true;
-                }
+        RCULIST_FOR_EACH (rule, node, &subtable->rules_list) {
+            if (rule->priority == target->priority
+                && miniflow_equal_in_minimask(&target->match.flow,
+                                              &rule->match.flow, &mask)) {
+                return true;
             }
         }
     }
-
-    ovs_mutex_unlock(&cls->mutex);
     return false;
 }
 
@@ -1006,24 +1025,23 @@ cls_rule_is_loose_match(const struct cls_rule *rule,
 /* Iteration. */
 
 static bool
-rule_matches(const struct cls_match *rule, const struct cls_rule *target)
+rule_matches(const struct cls_rule *rule, const struct cls_rule *target)
 {
     return (!target
-            || miniflow_equal_in_minimask(&rule->flow,
+            || miniflow_equal_in_minimask(&rule->match.flow,
                                           &target->match.flow,
                                           &target->match.mask));
 }
 
-static const struct cls_match *
+static const struct cls_rule *
 search_subtable(const struct cls_subtable *subtable,
                 struct cls_cursor *cursor)
 {
     if (!cursor->target
         || !minimask_has_extra(&subtable->mask, &cursor->target->match.mask)) {
-        const struct cls_match *rule;
+        const struct cls_rule *rule;
 
-        CMAP_CURSOR_FOR_EACH (rule, cmap_node, &cursor->rules,
-                              &subtable->rules) {
+        RCULIST_FOR_EACH (rule, node, &subtable->rules_list) {
             if (rule_matches(rule, cursor->target)) {
                 return rule;
             }
@@ -1042,67 +1060,49 @@ search_subtable(const struct cls_subtable *subtable,
  *
  * Ignores target->priority. */
 struct cls_cursor cls_cursor_start(const struct classifier *cls,
-                                   const struct cls_rule *target,
-                                   bool safe)
-    OVS_NO_THREAD_SAFETY_ANALYSIS
+                                   const struct cls_rule *target)
 {
     struct cls_cursor cursor;
     struct cls_subtable *subtable;
 
-    cursor.safe = safe;
     cursor.cls = cls;
     cursor.target = target && !cls_rule_is_catchall(target) ? target : NULL;
     cursor.rule = NULL;
 
     /* Find first rule. */
-    ovs_mutex_lock(&cursor.cls->mutex);
-    CMAP_CURSOR_FOR_EACH (subtable, cmap_node, &cursor.subtables,
-                          &cursor.cls->subtables_map) {
-        const struct cls_match *rule = search_subtable(subtable, &cursor);
+    PVECTOR_CURSOR_FOR_EACH (subtable, &cursor.subtables,
+                             &cursor.cls->subtables) {
+        const struct cls_rule *rule = search_subtable(subtable, &cursor);
 
         if (rule) {
             cursor.subtable = subtable;
-            cursor.rule = rule->cls_rule;
+            cursor.rule = rule;
             break;
         }
     }
 
-    /* Leave locked if requested and have a rule. */
-    if (safe || !cursor.rule) {
-        ovs_mutex_unlock(&cursor.cls->mutex);
-    }
     return cursor;
 }
 
 static const struct cls_rule *
 cls_cursor_next(struct cls_cursor *cursor)
-    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
-    const struct cls_match *rule = cursor->rule->cls_match;
+    const struct cls_rule *rule;
     const struct cls_subtable *subtable;
-    const struct cls_match *next;
 
-    next = next_rule_in_list__(rule);
-    if (next->priority < rule->priority) {
-        return next->cls_rule;
-    }
-
-    /* 'next' is the head of the list, that is, the rule that is included in
-     * the subtable's map.  (This is important when the classifier contains
-     * rules that differ only in priority.) */
-    rule = next;
-    CMAP_CURSOR_FOR_EACH_CONTINUE (rule, cmap_node, &cursor->rules) {
+    rule = cursor->rule;
+    subtable = cursor->subtable;
+    RCULIST_FOR_EACH_CONTINUE (rule, node, &subtable->rules_list) {
         if (rule_matches(rule, cursor->target)) {
-            return rule->cls_rule;
+            return rule;
         }
     }
 
-    subtable = cursor->subtable;
-    CMAP_CURSOR_FOR_EACH_CONTINUE (subtable, cmap_node, &cursor->subtables) {
+    PVECTOR_CURSOR_FOR_EACH_CONTINUE (subtable, &cursor->subtables) {
         rule = search_subtable(subtable, cursor);
         if (rule) {
             cursor->subtable = subtable;
-            return rule->cls_rule;
+            return rule;
         }
     }
 
@@ -1113,15 +1113,8 @@ cls_cursor_next(struct cls_cursor *cursor)
  * or to null if all matching rules have been visited. */
 void
 cls_cursor_advance(struct cls_cursor *cursor)
-    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
-    if (cursor->safe) {
-        ovs_mutex_lock(&cursor->cls->mutex);
-    }
     cursor->rule = cls_cursor_next(cursor);
-    if (cursor->safe || !cursor->rule) {
-        ovs_mutex_unlock(&cursor->cls->mutex);
-    }
 }
 
 static struct cls_subtable *
@@ -1200,6 +1193,9 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
     *CONST_CAST(int *, &subtable->ports_mask_len)
         = 32 - ctz32(ntohl(MINIFLOW_GET_BE32(&mask->masks, tp_src)));
 
+    /* List of rules. */
+    rculist_init(&subtable->rules_list);
+
     cmap_insert(&cls->subtables_map, &subtable->cmap_node, hash);
 
     return subtable;
@@ -1219,6 +1215,7 @@ destroy_subtable(struct classifier *cls, struct cls_subtable *subtable)
     ovs_assert(ovsrcu_get_protected(struct trie_node *, &subtable->ports_trie)
                == NULL);
     ovs_assert(cmap_is_empty(&subtable->rules));
+    ovs_assert(rculist_is_empty(&subtable->rules_list));
 
     for (i = 0; i < subtable->n_indices; i++) {
         cmap_destroy(&subtable->indices[i]);

@@ -1391,7 +1391,7 @@ ofproto_flush__(struct ofproto *ofproto)
             continue;
         }
 
-        CLS_FOR_EACH_SAFE (rule, cr, &table->cls) {
+        CLS_FOR_EACH (rule, cr, &table->cls) {
             ofproto_rule_delete__(rule, OFPRR_DELETE);
         }
     }
