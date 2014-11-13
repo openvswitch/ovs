@@ -3606,6 +3606,12 @@ ofputil_packet_in_reason_to_string(enum ofp_packet_in_reason reason,
         return "action";
     case OFPR_INVALID_TTL:
         return "invalid_ttl";
+    case OFPR_ACTION_SET:
+        return "action_set";
+    case OFPR_GROUP:
+        return "group";
+    case OFPR_PACKET_OUT:
+        return "packet_out";
 
     case OFPR_N_REASONS:
     default:
