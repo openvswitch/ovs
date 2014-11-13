@@ -3410,7 +3410,8 @@ recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:0, b
 
 mode=drop
 
-AT_CHECK([ovs-appctl dpctl/del-flows], [0])
+ovs-appctl revalidator/wait
+AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl set-frags br0 $mode])
 for type in no first later; do
   eval flow=\$${type}_flow
@@ -3427,7 +3428,8 @@ recirc_id(0),in_port(90),eth_type(0x0800),ipv4(frag=later), packets:0, bytes:0, 
 
 mode=nx-match
 
-AT_CHECK([ovs-appctl dpctl/del-flows], [0])
+ovs-appctl revalidator/wait
+AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl set-frags br0 $mode])
 for type in no first later; do
   eval flow=\$${type}_flow
@@ -3513,7 +3515,8 @@ recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=33419
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:74, used:0.001s, actions:1
 ])
 
-AT_CHECK([ovs-appctl dpctl/del-flows], [0])
+ovs-appctl revalidator/wait
+AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl set-frags br0 $mode])
 for frag in 4000 6000 6008 4010; do
   printf "\n%s\n" "----$mode $frag truncated transport header -----"
@@ -3527,7 +3530,8 @@ recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=0), p
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:60, used:0.001s, actions:1
 ])
 
-AT_CHECK([ovs-appctl dpctl/del-flows], [0])
+ovs-appctl revalidator/wait
+AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl set-frags br0 $mode])
 for frag in 4000 6000 6001 4002; do
   printf "\n%s\n" "----$mode $frag missing transport header-----"

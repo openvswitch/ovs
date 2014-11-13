@@ -234,6 +234,8 @@ static void upcall_unixctl_set_flow_limit(struct unixctl_conn *conn, int argc,
                                             const char *argv[], void *aux);
 static void upcall_unixctl_dump_wait(struct unixctl_conn *conn, int argc,
                                      const char *argv[], void *aux);
+static void upcall_unixctl_purge(struct unixctl_conn *conn, int argc,
+                                 const char *argv[], void *aux);
 
 static struct udpif_key *ukey_create(const struct nlattr *key, size_t key_len,
                                      long long int used);
@@ -273,6 +275,8 @@ udpif_create(struct dpif_backer *backer, struct dpif *dpif)
                                  upcall_unixctl_set_flow_limit, NULL);
         unixctl_command_register("revalidator/wait", "", 0, 0,
                                  upcall_unixctl_dump_wait, NULL);
+        unixctl_command_register("revalidator/purge", "", 0, 0,
+                                 upcall_unixctl_purge, NULL);
         ovsthread_once_done(&once);
     }
 
@@ -1767,4 +1771,20 @@ upcall_unixctl_dump_wait(struct unixctl_conn *conn,
     } else {
         unixctl_command_reply_error(conn, "can't wait on multiple udpifs.");
     }
+}
+
+static void
+upcall_unixctl_purge(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                     const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
+{
+    struct udpif *udpif;
+
+    LIST_FOR_EACH (udpif, list_node, &all_udpifs) {
+        int n;
+
+        for (n = 0; n < udpif->n_revalidators; n++) {
+            revalidator_purge(&udpif->revalidators[n]);
+        }
+    }
+    unixctl_command_reply(conn, "");
 }
