@@ -93,13 +93,19 @@ FreeBSD|NetBSD)
     ;;
 esac
 
-# Check for MINGW platform.
+# Check for platform.
 case `uname` in
 MINGW*)
     IS_WIN32="yes"
+    IS_BSD="no"
+    ;;
+FreeBSD|NetBSD)
+    IS_WIN32="no"
+    IS_BSD="yes"
     ;;
 *)
     IS_WIN32="no"
+    IS_BSD="no"
     ;;
 esac
 
