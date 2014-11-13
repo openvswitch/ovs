@@ -3527,7 +3527,7 @@ ofputil_encode_ofp12_packet_in(const struct ofputil_packet_in *pin,
         packet_in_size = sizeof (struct ofp12_packet_in);
     } else {
         packet_in_raw = OFPRAW_OFPT13_PACKET_IN;
-        packet_in_version = OFP13_VERSION;
+        packet_in_version = ofputil_protocol_to_ofp_version(protocol);
         packet_in_size = sizeof (struct ofp13_packet_in);
     }
 
@@ -3547,7 +3547,7 @@ ofputil_encode_ofp12_packet_in(const struct ofputil_packet_in *pin,
     opi->pi.total_len = htons(pin->total_len);
     opi->pi.reason = pin->reason;
     opi->pi.table_id = pin->table_id;
-    if (protocol == OFPUTIL_P_OF13_OXM) {
+    if (protocol != OFPUTIL_P_OF12_OXM) {
         opi->cookie = pin->cookie;
     }
 
