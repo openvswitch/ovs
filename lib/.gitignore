@@ -18,3 +18,4 @@
 /vtep-idl.h
 /vtep-idl.ovsidl
 /libopenvswitch.pc
+/libsflow.pc

@@ -173,6 +173,7 @@ AC_CONFIG_FILES(datapath/linux/Makefile)
 AC_CONFIG_FILES(datapath/linux/Makefile.main)
 AC_CONFIG_FILES(tests/atlocal)
 AC_CONFIG_FILES(lib/libopenvswitch.pc)
+AC_CONFIG_FILES(lib/libsflow.pc)
 AC_CONFIG_FILES(ofproto/libofproto.pc)
 AC_CONFIG_FILES(ovsdb/libovsdb.pc)
 

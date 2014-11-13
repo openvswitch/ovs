@@ -1,0 +1,11 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: libofproto
+Description: sFlow library of Open vSwitch
+Version: @VERSION@
+Libs: -L${libdir} -lsflow
+Libs.private: @LIBS@
+Cflags: -I${includedir}/openvswitch
