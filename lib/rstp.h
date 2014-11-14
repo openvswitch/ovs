@@ -274,26 +274,20 @@ rstp_should_manage_bpdu(enum rstp_state state)
 
 /* Returns true if 'state' is one in which packets received on a port should
  * be forwarded, false otherwise.
- *
- * Returns true if 'state' is RSTP_DISABLED, since presumably in that case the
- * port should still work, just not have RSTP applied to it.
  */
 static inline bool
 rstp_forward_in_state(enum rstp_state state)
 {
-    return (state == RSTP_DISABLED || state == RSTP_FORWARDING);
+    return (state == RSTP_FORWARDING);
 }
 
 /* Returns true if 'state' is one in which MAC learning should be done on
  * packets received on a port, false otherwise.
- *
- * Returns true if 'state' is RSTP_DISABLED, since presumably in that case the
- * port should still work, just not have RSTP applied to it. */
+ */
 static inline bool
 rstp_learn_in_state(enum rstp_state state)
 {
-    return (state == RSTP_DISABLED || state == RSTP_LEARNING ||
-            state == RSTP_FORWARDING);
+    return (state == RSTP_LEARNING || state == RSTP_FORWARDING);
 }
 
 #endif /* rstp.h */

@@ -1129,14 +1129,18 @@ static bool
 xport_stp_learn_state(const struct xport *xport)
 {
     struct stp_port *sp = xport_get_stp_port(xport);
-    return stp_learn_in_state(sp ? stp_port_get_state(sp) : STP_DISABLED);
+    return sp
+        ? stp_learn_in_state(stp_port_get_state(sp))
+        : true;
 }
 
 static bool
 xport_stp_forward_state(const struct xport *xport)
 {
     struct stp_port *sp = xport_get_stp_port(xport);
-    return stp_forward_in_state(sp ? stp_port_get_state(sp) : STP_DISABLED);
+    return sp
+        ? stp_forward_in_state(stp_port_get_state(sp))
+        : true;
 }
 
 static bool
@@ -1190,13 +1194,17 @@ xport_get_rstp_port_state(const struct xport *xport)
 static bool
 xport_rstp_learn_state(const struct xport *xport)
 {
-    return rstp_learn_in_state(xport_get_rstp_port_state(xport));
+    return xport->xbridge->rstp && xport->rstp_port
+        ? rstp_learn_in_state(xport_get_rstp_port_state(xport))
+        : true;
 }
 
 static bool
 xport_rstp_forward_state(const struct xport *xport)
 {
-    return rstp_forward_in_state(xport_get_rstp_port_state(xport));
+    return xport->xbridge->rstp && xport->rstp_port
+        ? rstp_forward_in_state(xport_get_rstp_port_state(xport))
+        : true;
 }
 
 static bool

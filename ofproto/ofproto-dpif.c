@@ -2551,7 +2551,8 @@ bundle_update(struct ofbundle *bundle)
     LIST_FOR_EACH (port, bundle_node, &bundle->ports) {
         if (port->up.pp.config & OFPUTIL_PC_NO_FLOOD
             || port->is_layer3
-            || !stp_forward_in_state(port->stp_state)) {
+            || (bundle->ofproto->stp && !stp_forward_in_state(port->stp_state))
+            || (bundle->ofproto->rstp && !rstp_forward_in_state(port->rstp_state))) {
             bundle->floodable = false;
             break;
         }
@@ -2599,7 +2600,8 @@ bundle_add_port(struct ofbundle *bundle, ofp_port_t ofp_port,
         list_push_back(&bundle->ports, &port->bundle_node);
         if (port->up.pp.config & OFPUTIL_PC_NO_FLOOD
             || port->is_layer3
-            || !stp_forward_in_state(port->stp_state)) {
+            || (bundle->ofproto->stp && !stp_forward_in_state(port->stp_state))
+            || (bundle->ofproto->rstp && !rstp_forward_in_state(port->rstp_state))) {
             bundle->floodable = false;
         }
     }

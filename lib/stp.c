@@ -673,24 +673,20 @@ stp_state_name(enum stp_state state)
 
 /* Returns true if 'state' is one in which packets received on a port should
  * be forwarded, false otherwise.
- *
- * Returns true if 'state' is STP_DISABLED, since presumably in that case the
- * port should still work, just not have STP applied to it. */
+ */
 bool
 stp_forward_in_state(enum stp_state state)
 {
-    return (state & (STP_DISABLED | STP_FORWARDING)) != 0;
+    return (state & STP_FORWARDING) != 0;
 }
 
 /* Returns true if 'state' is one in which MAC learning should be done on
  * packets received on a port, false otherwise.
- *
- * Returns true if 'state' is STP_DISABLED, since presumably in that case the
- * port should still work, just not have STP applied to it. */
+ */
 bool
 stp_learn_in_state(enum stp_state state)
 {
-    return (state & (STP_DISABLED | STP_LEARNING | STP_FORWARDING)) != 0;
+    return (state & (STP_LEARNING | STP_FORWARDING)) != 0;
 }
 
 /* Returns true if 'state' is one in which bpdus should be forwarded on a
