@@ -987,8 +987,8 @@ Set the multicast snooping table size \fBbr0\fR to 2048 entries:
 .B "ovs\-vsctl set Bridge br0 other_config:mcast-snooping-table-size=2048"
 .PP
 Disable flooding of unregistered multicast packets to all ports. When
-set to true, the switch will send unregistered multicast packets only
-to ports connected to multicast routers. When it is set to false, the
+set to \fBtrue\fR, the switch will send unregistered multicast packets only
+to ports connected to multicast routers. When it is set to \fBfalse\fR, the
 switch will send them to all ports. This command disables the flood of
 unregistered packets on bridge \fBbr0\fR.
 .IP
@@ -1043,15 +1043,15 @@ Set the bridge transmit hold count of \fBbr0\fR to 7 s. This value should be bet
 .IP
 .B "ovs\-vsctl set Bridge br0 other_config:rstp-transmit-hold-count=7"
 .PP
-Enable RSTP on the Port \fBeth0\fR.
+Enable RSTP on the Port \fBeth0\fR:
 .IP
 .B "ovs\-vsctl set Port eth0 other_config:rstp-enable=true"
 .PP
-Disable RSTP on the Port \fBeth0\fR.
+Disable RSTP on the Port \fBeth0\fR:
 .IP
 .B "ovs\-vsctl set Port eth0 other_config:rstp-enable=false"
 .PP
-Set the priority of port \fBeth0\fR to 20. The value must be specified in
+Set the priority of port \fBeth0\fR to 32. The value must be specified in
 decimal notation and should be a multiple of 16 (if not, it is rounded down to the
 nearest multiple of 16). The default priority value is 0x80 (128).
 .IP
@@ -1072,6 +1072,17 @@ Set the admin edge value of port \fBeth0\fR:
 Set the auto edge value of port \fBeth0\fR:
 .IP
 .B "ovs\-vsctl set Port eth0 other_config:rstp-port-auto-edge=true"
+.PP
+Set the admin point to point mac value of port \fBeth0\fR.  Acceptable
+values are 0 (force \fBfalse\fR), 1 (force \fBtrue\fR, the default value) or
+2 (\fBauto\fR).
+.IP
+.B "ovs\-vsctl set Port eth0 other_config:rstp-admin-p2p-mac=1"
+.PP
+Set the admin port state value of port \fBeth0\fR.  \fBtrue\fR is the
+default value.
+.IP
+.B "ovs\-vsctl set Port eth0 other_config:rstp-admin-port-state=false"
 .PP
 Set the mcheck value of port \fBeth0\fR:
 .IP

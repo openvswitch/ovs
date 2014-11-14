@@ -127,6 +127,8 @@ struct ofproto_port_rstp_settings {
     bool admin_edge_port;
     bool auto_edge;
     bool mcheck;
+    uint8_t admin_p2p_mac_state;
+    bool admin_port_state;
 };
 
 struct ofproto_stp_settings {

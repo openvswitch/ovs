@@ -120,6 +120,12 @@ enum rstp_port_role {
     ROLE_DISABLED
 };
 
+enum rstp_admin_point_to_point_mac_state {
+    RSTP_ADMIN_P2P_MAC_FORCE_FALSE,
+    RSTP_ADMIN_P2P_MAC_FORCE_TRUE,
+    RSTP_ADMIN_P2P_MAC_AUTO
+};
+
 struct rstp;
 struct rstp_port;
 struct ofproto_rstp_settings;
@@ -211,7 +217,8 @@ uint32_t rstp_convert_speed_to_cost(unsigned int speed);
 
 void rstp_port_set(struct rstp_port *, uint16_t port_num, int priority,
                    uint32_t path_cost, bool is_admin_edge, bool is_auto_edge,
-                   bool do_mcheck, void *aux)
+                   enum rstp_admin_point_to_point_mac_state admin_p2p_mac_state,
+                   bool admin_port_state, bool do_mcheck, void *aux)
     OVS_EXCLUDED(rstp_mutex);
 
 enum rstp_state rstp_port_get_state(const struct rstp_port *)

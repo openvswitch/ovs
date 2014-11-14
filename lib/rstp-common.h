@@ -240,12 +240,6 @@ struct rstp_bpdu {
     uint8_t padding[7];
 });
 
-enum rstp_admin_point_to_point_mac_state {
-    RSTP_ADMIN_P2P_MAC_FORCE_TRUE,
-    RSTP_ADMIN_P2P_MAC_FORCE_FALSE,
-    RSTP_ADMIN_P2P_MAC_FORCE_AUTO
-};
-
 enum rstp_info_is {
     INFO_IS_DISABLED,
     INFO_IS_RECEIVED,
