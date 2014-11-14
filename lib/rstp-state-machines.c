@@ -1951,7 +1951,7 @@ topology_change_sm(struct rstp_port *p)
         break;
     case TOPOLOGY_CHANGE_SM_NOTIFIED_TCN_EXEC:
         new_tc_while(p);
-        p->topology_change_sm_state = TOPOLOGY_CHANGE_SM_ACTIVE;
+        p->topology_change_sm_state = TOPOLOGY_CHANGE_SM_NOTIFIED_TC_EXEC;
         break;
     default:
         OVS_NOT_REACHED();
