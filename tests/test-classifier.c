@@ -496,6 +496,7 @@ trie_verify(const rcu_trie_ptr *trie, unsigned int ofs, unsigned int n_bits)
 
 static void
 verify_tries(struct classifier *cls)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     unsigned int n_rules = 0;
     int i;
@@ -504,14 +505,13 @@ verify_tries(struct classifier *cls)
         n_rules += trie_verify(&cls->tries[i].root, 0,
                                cls->tries[i].field->n_bits);
     }
-    ovs_mutex_lock(&cls->mutex);
     assert(n_rules <= cls->n_rules);
-    ovs_mutex_unlock(&cls->mutex);
 }
 
 static void
 check_tables(const struct classifier *cls, int n_tables, int n_rules,
              int n_dups)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     const struct cls_subtable *table;
     struct test_rule *test_rule;
@@ -543,11 +543,8 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
         }
 
         assert(!cmap_is_empty(&table->rules));
-
-        ovs_mutex_lock(&cls->mutex);
         assert(trie_verify(&table->ports_trie, 0, table->ports_mask_len)
                == (table->ports_mask_len ? cmap_count(&table->rules) : 0));
-        ovs_mutex_unlock(&cls->mutex);
 
         found_tables++;
         CMAP_FOR_EACH (head, cmap_node, &table->rules) {
@@ -564,9 +561,7 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
             found_rules++;
             RCULIST_FOR_EACH (rule, list, &head->list) {
                 assert(rule->priority < prev_priority);
-                ovs_mutex_lock(&cls->mutex);
                 assert(rule->priority <= table->max_priority);
-                ovs_mutex_unlock(&cls->mutex);
 
                 prev_priority = rule->priority;
                 found_rules++;
@@ -575,10 +570,8 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
                        == rule->cls_rule);
             }
         }
-        ovs_mutex_lock(&cls->mutex);
         assert(table->max_priority == max_priority);
         assert(table->max_count == max_count);
-        ovs_mutex_unlock(&cls->mutex);
     }
 
     assert(found_tables == cmap_count(&cls->subtables_map));

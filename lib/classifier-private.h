@@ -27,11 +27,11 @@
 
 /* A set of rules that all have the same fields wildcarded. */
 struct cls_subtable {
-    struct cmap_node cmap_node OVS_GUARDED; /* Within struct classifier's
-                                             * 'subtables_map'. */
+    struct cmap_node cmap_node;    /* Within classifier's 'subtables_map'. */
+
     /* These fields are only used by writers. */
-    int max_priority OVS_GUARDED;  /* Max priority of any rule in subtable. */
-    unsigned int max_count OVS_GUARDED;     /* Count of max_priority rules. */
+    int max_priority;              /* Max priority of any rule in subtable. */
+    unsigned int max_count;        /* Count of max_priority rules. */
 
     /* Accessed by iterators. */
     struct rculist rules_list;              /* Unordered. */
@@ -62,16 +62,16 @@ struct cls_partition {
     struct cmap_node cmap_node; /* In struct classifier's 'partitions' map. */
     ovs_be64 metadata;          /* metadata value for this partition. */
     tag_type tags;              /* OR of each flow's cls_subtable tag. */
-    struct tag_tracker tracker OVS_GUARDED; /* Tracks the bits in 'tags'. */
+    struct tag_tracker tracker; /* Tracks the bits in 'tags'. */
 };
 
 /* Internal representation of a rule in a "struct cls_subtable". */
 struct cls_match {
     /* Accessed by everybody. */
-    struct rculist list OVS_GUARDED; /* Identical, lower-priority rules. */
+    struct rculist list; /* Identical, lower-priority rules. */
 
     /* Accessed only by writers. */
-    struct cls_partition *partition OVS_GUARDED;
+    struct cls_partition *partition;
 
     /* Accessed by readers interested in wildcarding. */
     const int priority;         /* Larger numbers are higher priorities. */

@@ -216,7 +216,6 @@
 #include "cmap.h"
 #include "match.h"
 #include "meta-flow.h"
-#include "ovs-thread.h"
 #include "pvector.h"
 #include "rculist.h"
 
@@ -244,8 +243,7 @@ enum {
 
 /* A flow classifier. */
 struct classifier {
-    struct ovs_mutex mutex;
-    int n_rules OVS_GUARDED;        /* Total number of rules. */
+    int n_rules;                    /* Total number of rules. */
     uint8_t n_flow_segments;
     uint8_t flow_segments[CLS_MAX_INDICES]; /* Flow segment boundaries to use
                                              * for staged lookup. */
@@ -260,7 +258,7 @@ struct classifier {
 struct cls_rule {
     struct rculist node;         /* In struct cls_subtable 'rules_list'. */
     int priority;                /* Larger numbers are higher priorities. */
-    struct cls_match *cls_match OVS_GUARDED; /* NULL if not in a classifier. */
+    struct cls_match *cls_match; /* NULL if not in a classifier. */
     struct minimatch match;      /* Matching rule. */
 };
 
@@ -270,42 +268,41 @@ void cls_rule_init_from_minimatch(struct cls_rule *, const struct minimatch *,
 void cls_rule_clone(struct cls_rule *, const struct cls_rule *);
 void cls_rule_move(struct cls_rule *dst, struct cls_rule *src);
 void cls_rule_destroy(struct cls_rule *);
-
 bool cls_rule_equal(const struct cls_rule *, const struct cls_rule *);
 uint32_t cls_rule_hash(const struct cls_rule *, uint32_t basis);
-
 void cls_rule_format(const struct cls_rule *, struct ds *);
-
 bool cls_rule_is_catchall(const struct cls_rule *);
-
 bool cls_rule_is_loose_match(const struct cls_rule *rule,
                              const struct minimatch *criteria);
 
+/* Constructor/destructor.  Must run single-threaded. */
 void classifier_init(struct classifier *, const uint8_t *flow_segments);
 void classifier_destroy(struct classifier *);
+
+/* Modifiers.  Caller MUST exclude concurrent calls from other threads. */
 bool classifier_set_prefix_fields(struct classifier *,
                                   const enum mf_field_id *trie_fields,
                                   unsigned int n_trie_fields);
-
-bool classifier_is_empty(const struct classifier *);
-int classifier_count(const struct classifier *);
 void classifier_insert(struct classifier *, struct cls_rule *);
 const struct cls_rule *classifier_replace(struct classifier *,
                                           struct cls_rule *);
 const struct cls_rule *classifier_remove(struct classifier *,
                                          const struct cls_rule *);
+
+/* Lookups.  These are RCU protected and may run concurrently with modifiers
+ * and each other. */
 const struct cls_rule *classifier_lookup(const struct classifier *,
                                          const struct flow *,
                                          struct flow_wildcards *);
 bool classifier_rule_overlaps(const struct classifier *,
                               const struct cls_rule *);
-
 const struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
                                                     const struct cls_rule *);
-
 const struct cls_rule *classifier_find_match_exactly(const struct classifier *,
                                                      const struct match *,
                                                      int priority);
+bool classifier_is_empty(const struct classifier *);
+int classifier_count(const struct classifier *);
 
 /* Iteration.
  *

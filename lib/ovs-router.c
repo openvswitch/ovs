@@ -36,9 +36,11 @@
 #include "seq.h"
 #include "ovs-router.h"
 #include "ovs-router-linux.h"
+#include "ovs-thread.h"
 #include "unixctl.h"
 #include "util.h"
 
+static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
 static struct classifier cls;
 
 struct ovs_router_entry {
@@ -115,7 +117,10 @@ ovs_router_insert__(uint8_t priority, ovs_be32 ip_dst, uint8_t plen,
     p->priority = priority;
     cls_rule_init(&p->cr, &match, priority); /* Longest prefix matches first. */
 
+    ovs_mutex_lock(&mutex);
     cr = classifier_replace(&cls, &p->cr);
+    ovs_mutex_unlock(&mutex);
+
     if (cr) {
         /* An old rule with the same match was displaced. */
         ovsrcu_postpone(rt_entry_free, ovs_router_entry_cast(cr));
@@ -145,9 +150,11 @@ rt_entry_delete(uint8_t priority, ovs_be32 ip_dst, uint8_t plen)
     cr = classifier_find_rule_exactly(&cls, &rule);
     if (cr) {
         /* Remove it. */
+        ovs_mutex_lock(&mutex);
         cr = classifier_remove(&cls, cr);
-        if (cr) {
+        ovs_mutex_unlock(&mutex);
 
+        if (cr) {
             ovsrcu_postpone(rt_entry_free, ovs_router_entry_cast(cr));
             return true;
         }
@@ -260,7 +267,11 @@ ovs_router_flush(void)
 
     CLS_FOR_EACH(rt, cr, &cls) {
         if (rt->priority == rt->plen) {
-            classifier_remove(&cls, &rt->cr);
+            ovs_mutex_lock(&mutex);
+            if (classifier_remove(&cls, &rt->cr)) {
+                ovsrcu_postpone(rt_entry_free, rt);
+            }
+            ovs_mutex_unlock(&mutex);
         }
     }
     seq_change(tnl_conf_seq);

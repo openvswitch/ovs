@@ -26,9 +26,11 @@
 #include "odp-util.h"
 #include "tnl-arp-cache.h"
 #include "tnl-ports.h"
+#include "ovs-thread.h"
 #include "unixctl.h"
 #include "util.h"
 
+static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
 static struct classifier cls;   /* Tunnel ports. */
 
 struct tnl_port_in {
@@ -80,30 +82,30 @@ tnl_port_map_insert(odp_port_t port, ovs_be32 ip_dst, ovs_be16 udp_port,
     memset(&match, 0, sizeof match);
     tnl_port_init_flow(&match.flow, ip_dst, udp_port);
 
+    ovs_mutex_lock(&mutex);
     do {
         cr = classifier_lookup(&cls, &match.flow, NULL);
         p = tnl_port_cast(cr);
         /* Try again if the rule was released before we get the reference. */
     } while (p && !ovs_refcount_try_ref_rcu(&p->ref_cnt));
 
-    if (p) {
-        return; /* Added refcount of an existing port. */
+    if (!p) {
+        p = xzalloc(sizeof *p);
+        p->portno = port;
+
+        match.wc.masks.dl_type = OVS_BE16_MAX;
+        match.wc.masks.nw_proto = 0xff;
+        match.wc.masks.nw_frag = 0xff;      /* XXX: No fragments support. */
+        match.wc.masks.tp_dst = OVS_BE16_MAX;
+        match.wc.masks.nw_src = OVS_BE32_MAX;
+
+        cls_rule_init(&p->cr, &match, 0);   /* Priority == 0. */
+        ovs_refcount_init(&p->ref_cnt);
+        strncpy(p->dev_name, dev_name, IFNAMSIZ);
+
+        classifier_insert(&cls, &p->cr);
     }
-
-    p = xzalloc(sizeof *p);
-    p->portno = port;
-
-    match.wc.masks.dl_type = OVS_BE16_MAX;
-    match.wc.masks.nw_proto = 0xff;
-    match.wc.masks.nw_frag = 0xff;      /* XXX: No fragments support. */
-    match.wc.masks.tp_dst = OVS_BE16_MAX;
-    match.wc.masks.nw_src = OVS_BE32_MAX;
-
-    cls_rule_init(&p->cr, &match, 0);   /* Priority == 0. */
-    ovs_refcount_init(&p->ref_cnt);
-    strncpy(p->dev_name, dev_name, IFNAMSIZ);
-
-    classifier_insert(&cls, &p->cr);
+    ovs_mutex_unlock(&mutex);
 }
 
 static void
@@ -112,9 +114,11 @@ tnl_port_unref(const struct cls_rule *cr)
     struct tnl_port_in *p = tnl_port_cast(cr);
 
     if (cr && ovs_refcount_unref_relaxed(&p->ref_cnt) == 1) {
+        ovs_mutex_lock(&mutex);
         if (classifier_remove(&cls, cr)) {
             ovsrcu_postpone(tnl_port_free, p);
         }
+        ovs_mutex_unlock(&mutex);
     }
 }
 
