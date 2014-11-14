@@ -1373,10 +1373,6 @@ OvsGetNetdevCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     }
 
     OvsAcquireCtrlLock();
-    if (!gOvsSwitchContext) {
-        OvsReleaseCtrlLock();
-        return STATUS_INVALID_PARAMETER;
-    }
 
     vportGet.portNo = 0;
     RtlCopyMemory(&vportGet.name, NlAttrGet(netdevAttrs[OVS_VPORT_ATTR_NAME]),

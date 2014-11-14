@@ -155,13 +155,6 @@ OvsSubscribeDpIoctl(PVOID instanceP,
     POVS_USER_PACKET_QUEUE queue;
     POVS_OPEN_INSTANCE instance = (POVS_OPEN_INSTANCE)instanceP;
 
-    OvsAcquireCtrlLock();
-    if (!gOvsSwitchContext) {
-        OvsReleaseCtrlLock();
-        return STATUS_INVALID_PARAMETER;
-    }
-    OvsReleaseCtrlLock();
-
     if (instance->packetQueue && !join) {
         /* unsubscribe */
         OvsCleanupPacketQueue(instance);
@@ -445,10 +438,6 @@ OvsExecuteDpIoctl(OvsPacketExecute *execute)
     POVS_VPORT_ENTRY vport;
 
     NdisAcquireSpinLock(gOvsCtrlLock);
-    if (gOvsSwitchContext == NULL) {
-        status = STATUS_INVALID_PARAMETER;
-        goto unlock;
-    }
 
     if (execute->packetLen == 0) {
         status = STATUS_INVALID_PARAMETER;

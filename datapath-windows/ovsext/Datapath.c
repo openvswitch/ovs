@@ -470,8 +470,7 @@ OvsGetOpenInstance(PFILE_OBJECT fileObject,
     POVS_OPEN_INSTANCE instance = (POVS_OPEN_INSTANCE)fileObject->FsContext;
     ASSERT(instance);
     ASSERT(instance->fileObject == fileObject);
-    if (gOvsSwitchContext == NULL ||
-        gOvsSwitchContext->dpNo != dpNo) {
+    if (gOvsSwitchContext->dpNo != dpNo) {
         return NULL;
     }
     return instance;
@@ -653,7 +652,6 @@ NTSTATUS
 OvsDeviceControl(PDEVICE_OBJECT deviceObject,
                  PIRP irp)
 {
-
     PIO_STACK_LOCATION irpSp;
     NTSTATUS status = STATUS_SUCCESS;
     PFILE_OBJECT fileObject;
@@ -689,6 +687,12 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
     inputBufferLen = irpSp->Parameters.DeviceIoControl.InputBufferLength;
     outputBufferLen = irpSp->Parameters.DeviceIoControl.OutputBufferLength;
     inputBuffer = irp->AssociatedIrp.SystemBuffer;
+
+    /* Check if the extension is enabled. */
+    if (NULL == gOvsSwitchContext) {
+        status = STATUS_DEVICE_NOT_READY;
+        goto done;
+    }
 
     /* Concurrent netlink operations are not supported. */
     if (InterlockedCompareExchange((LONG volatile *)&instance->inUse, 1, 0)) {
@@ -891,7 +895,7 @@ ValidateNetlinkCmd(UINT32 devOp,
             /* Validate the DP for commands that require a DP. */
             if (nlFamilyOps->cmds[i].validateDpIndex == TRUE) {
                 OvsAcquireCtrlLock();
-                if (!gOvsSwitchContext || ovsMsg->ovsHdr.dp_ifindex !=
+                if (ovsMsg->ovsHdr.dp_ifindex !=
                                           (INT)gOvsSwitchContext->dpNo) {
                     status = STATUS_INVALID_PARAMETER;
                     OvsReleaseCtrlLock();
@@ -1184,13 +1188,6 @@ HandleGetDpDump(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                   usrParamsCtx->outputLength);
 
         OvsAcquireCtrlLock();
-        if (!gOvsSwitchContext) {
-            /* Treat this as a dump done. */
-            OvsReleaseCtrlLock();
-            *replyLen = 0;
-            FreeUserDumpState(instance);
-            return STATUS_SUCCESS;
-        }
         status = OvsDpFillInfo(gOvsSwitchContext, msgIn, &nlBuf);
         OvsReleaseCtrlLock();
 
@@ -1280,8 +1277,7 @@ HandleDpTransactionCommon(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
     OvsAcquireCtrlLock();
     if (dpAttrs[OVS_DP_ATTR_NAME] != NULL) {
-        if (!gOvsSwitchContext &&
-            !OvsCompareString(NlAttrGet(dpAttrs[OVS_DP_ATTR_NAME]),
+        if (!OvsCompareString(NlAttrGet(dpAttrs[OVS_DP_ATTR_NAME]),
                               OVS_SYSTEM_DP_NAME)) {
             OvsReleaseCtrlLock();
 
@@ -1495,13 +1491,6 @@ OvsGetVportDumpNext(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     msgIn = instance->dumpState.ovsMsg;
 
     OvsAcquireCtrlLock();
-    if (!gOvsSwitchContext) {
-        /* Treat this as a dump done. */
-        OvsReleaseCtrlLock();
-        *replyLen = 0;
-        FreeUserDumpState(instance);
-        return STATUS_SUCCESS;
-    }
 
     /*
      * XXX: when we implement OVS_DP_ATTR_USER_FEATURES in datapath,
@@ -1628,13 +1617,6 @@ OvsGetVport(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     if (msgOut == NULL || usrParamsCtx->outputLength < sizeof *msgOut) {
         return STATUS_INVALID_BUFFER_SIZE;
     }
-
-    OvsAcquireCtrlLock();
-    if (!gOvsSwitchContext) {
-        OvsReleaseCtrlLock();
-        return STATUS_INVALID_PARAMETER;
-    }
-    OvsReleaseCtrlLock();
 
     NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock, &lockState, 0);
     if (vportAttrs[OVS_VPORT_ATTR_NAME] != NULL) {
@@ -1775,13 +1757,6 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         ovsVportPolicy, vportAttrs, ARRAY_SIZE(vportAttrs))) {
         return STATUS_INVALID_PARAMETER;
     }
-
-    OvsAcquireCtrlLock();
-    if (!gOvsSwitchContext) {
-        OvsReleaseCtrlLock();
-        return STATUS_INVALID_PARAMETER;
-    }
-    OvsReleaseCtrlLock();
 
     portName = NlAttrGet(vportAttrs[OVS_VPORT_ATTR_NAME]);
     portNameLen = NlAttrGetSize(vportAttrs[OVS_VPORT_ATTR_NAME]);
@@ -1962,10 +1937,6 @@ OvsSetVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     }
 
     OvsAcquireCtrlLock();
-    if (!gOvsSwitchContext) {
-        OvsReleaseCtrlLock();
-        return STATUS_INVALID_PARAMETER;
-    }
 
     NdisAcquireRWLockWrite(gOvsSwitchContext->dispatchLock, &lockState, 0);
     if (vportAttrs[OVS_VPORT_ATTR_NAME] != NULL) {
@@ -2070,13 +2041,6 @@ OvsDeleteVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     if (msgOut == NULL || usrParamsCtx->outputLength < sizeof *msgOut) {
         return STATUS_NDIS_INVALID_LENGTH;
     }
-
-    OvsAcquireCtrlLock();
-    if (!gOvsSwitchContext) {
-        OvsReleaseCtrlLock();
-        return STATUS_INVALID_PARAMETER;
-    }
-    OvsReleaseCtrlLock();
 
     NdisAcquireRWLockWrite(gOvsSwitchContext->dispatchLock, &lockState, 0);
     if (vportAttrs[OVS_VPORT_ATTR_NAME] != NULL) {
@@ -2285,10 +2249,6 @@ OvsReadEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     NlBufInit(&nlBuf, usrParamsCtx->outputBuffer, usrParamsCtx->outputLength);
 
     OvsAcquireCtrlLock();
-    if (!gOvsSwitchContext) {
-        status = STATUS_SUCCESS;
-        goto cleanup;
-    }
 
     /* remove an event entry from the event queue */
     status = OvsRemoveEventEntry(usrParamsCtx->ovsInstance, &eventEntry);
@@ -2336,14 +2296,6 @@ OvsReadPacketCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
     /* Output buffer has been validated while validating read dev op. */
     ASSERT(msgOut != NULL && usrParamsCtx->outputLength >= sizeof *msgOut);
-
-    OvsAcquireCtrlLock();
-    if (!gOvsSwitchContext) {
-        status = STATUS_SUCCESS;
-        OvsReleaseCtrlLock();
-        return status;
-    }
-    OvsReleaseCtrlLock();
 
     /* Read a packet from the instance queue */
     status = OvsReadDpIoctl(instance->fileObject, usrParamsCtx->outputBuffer,

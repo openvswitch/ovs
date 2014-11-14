@@ -1985,8 +1985,7 @@ OvsDoDumpFlows(OvsFlowDumpInput *dumpInput,
 
     dpNo = dumpInput->dpNo;
     NdisAcquireSpinLock(gOvsCtrlLock);
-    if (gOvsSwitchContext == NULL ||
-        gOvsSwitchContext->dpNo != dpNo) {
+    if (gOvsSwitchContext->dpNo != dpNo) {
         status = STATUS_INVALID_PARAMETER;
         goto unlock;
     }
@@ -2137,8 +2136,7 @@ OvsPutFlowIoctl(PVOID inputBuffer,
 
     dpNo = put->dpNo;
     NdisAcquireSpinLock(gOvsCtrlLock);
-    if (gOvsSwitchContext == NULL ||
-        gOvsSwitchContext->dpNo != dpNo) {
+    if (gOvsSwitchContext->dpNo != dpNo) {
         status = STATUS_INVALID_PARAMETER;
         goto unlock;
     }
@@ -2319,8 +2317,7 @@ OvsGetFlowIoctl(PVOID inputBuffer,
 
     dpNo = getInput->dpNo;
     NdisAcquireSpinLock(gOvsCtrlLock);
-    if (gOvsSwitchContext == NULL ||
-        gOvsSwitchContext->dpNo != dpNo) {
+    if (gOvsSwitchContext->dpNo != dpNo) {
         status = STATUS_INVALID_PARAMETER;
         goto unlock;
     }
@@ -2353,8 +2350,7 @@ OvsFlushFlowIoctl(UINT32 dpNo)
     LOCK_STATE_EX dpLockState;
 
     NdisAcquireSpinLock(gOvsCtrlLock);
-    if (gOvsSwitchContext == NULL ||
-        gOvsSwitchContext->dpNo != dpNo) {
+    if (gOvsSwitchContext->dpNo != dpNo) {
         status = STATUS_INVALID_PARAMETER;
         goto unlock;
     }
