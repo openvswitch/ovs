@@ -1644,11 +1644,11 @@ port_role_transition_sm(struct rstp_port *p)
             } else if ((all_synced(r) && !p->agree)
                        || (p->proposed && p->agree)) {
                 p->port_role_transition_sm_state =
-                    PORT_ROLE_TRANSITION_SM_ALTERNATE_AGREED;
+                    PORT_ROLE_TRANSITION_SM_ALTERNATE_AGREED_EXEC;
             }
         }
         break;
-    case PORT_ROLE_TRANSITION_SM_ALTERNATE_AGREED:
+    case PORT_ROLE_TRANSITION_SM_ALTERNATE_AGREED_EXEC:
         p->proposed = false;
         p->agree = true;
         p->new_info = true;
