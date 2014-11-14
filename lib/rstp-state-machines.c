@@ -1029,8 +1029,13 @@ rcv_info(struct rstp_port *p)
 
     cp = compare_rstp_priority_vectors(&p->msg_priority, &p->port_priority);
     ct = rstp_times_equal(&p->port_times, &p->msg_times);
-    role =
-        (p->received_bpdu_buffer.flags & ROLE_FLAG_MASK) >> ROLE_FLAG_SHIFT;
+    /* Configuration BPDU conveys a Designated Port Role. */
+    if (p->received_bpdu_buffer.bpdu_type == CONFIGURATION_BPDU) {
+        role = PORT_DES;
+    } else {
+        role =
+            (p->received_bpdu_buffer.flags & ROLE_FLAG_MASK) >> ROLE_FLAG_SHIFT;
+    }
 
     /* 802.1D-2004 does not report this behaviour.
      * 802.1Q-2008 says set rcvdTcn. */
@@ -1050,9 +1055,7 @@ rcv_info(struct rstp_port *p)
      *     17.19.22).
      * NOTE: Configuration BPDU explicitly conveys a Designated Port Role.
      */
-    if ((role == PORT_DES
-         || p->received_bpdu_buffer.bpdu_type == CONFIGURATION_BPDU)
-        && (cp == SUPERIOR || (cp == SAME && ct == false))) {
+    if (role == PORT_DES && (cp == SUPERIOR || (cp == SAME && ct == false))) {
         return SUPERIOR_DESIGNATED_INFO;
 
         /* Returns RepeatedDesignatedInfo if:
