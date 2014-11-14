@@ -157,7 +157,7 @@ void rstp_tick_timers(struct rstp *)
 void rstp_port_received_bpdu(struct rstp_port *, const void *bpdu,
                              size_t bpdu_size)
     OVS_EXCLUDED(rstp_mutex);
-bool rstp_check_and_reset_fdb_flush(struct rstp *)
+void *rstp_check_and_reset_fdb_flush(struct rstp *, struct rstp_port **)
     OVS_EXCLUDED(rstp_mutex);
 void *rstp_get_next_changed_port_aux(struct rstp *, struct rstp_port **)
     OVS_EXCLUDED(rstp_mutex);

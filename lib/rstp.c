@@ -775,31 +775,51 @@ rstp_get_root_path_cost(const struct rstp *rstp)
     return cost;
 }
 
-/* Returns true if something has happened to 'rstp' which necessitates
- * flushing the client's MAC learning table.
- */
-bool
-rstp_check_and_reset_fdb_flush(struct rstp *rstp)
+/* Finds a port which needs to flush its own MAC learning table.  A NULL
+ * pointer is returned if no port needs to flush its MAC learning table.
+ * '*port' needs to be NULL in the first call to start the iteration.  If
+ * '*port' is passed as non-NULL, it must be the value set by the last
+ * invocation of this function. */
+void *
+rstp_check_and_reset_fdb_flush(struct rstp *rstp, struct rstp_port **port)
     OVS_EXCLUDED(rstp_mutex)
 {
-    bool needs_flush;
-    struct rstp_port *p;
-
-    needs_flush = false;
+    void *aux = NULL;
 
     ovs_mutex_lock(&rstp_mutex);
-    HMAP_FOR_EACH (p, node, &rstp->ports) {
-        if (p->fdb_flush) {
-            needs_flush = true;
-            /* fdb_flush should be reset by the filtering database
-             * once the entries are removed if rstp_version is TRUE, and
-             * immediately if stp_version is TRUE.*/
-            p->fdb_flush = false;
+    if (*port == NULL) {
+        struct rstp_port *p;
+
+        HMAP_FOR_EACH (p, node, &rstp->ports) {
+            if (p->fdb_flush) {
+                aux = p->aux;
+                *port = p;
+                goto out;
+            }
+        }
+    } else { /* continue */
+        struct rstp_port *p = *port;
+
+        HMAP_FOR_EACH_CONTINUE (p, node, &rstp->ports) {
+            if (p->fdb_flush) {
+                aux = p->aux;
+                *port = p;
+                goto out;
+            }
         }
     }
+    /* No port needs flushing. */
+    *port = NULL;
+out:
+    /* fdb_flush should be reset by the filtering database
+     * once the entries are removed if rstp_version is TRUE, and
+     * immediately if stp_version is TRUE.*/
+    if (*port != NULL) {
+        (*port)->fdb_flush = false;
+    }
     ovs_mutex_unlock(&rstp_mutex);
-    return needs_flush;
-}
+    return aux;
+    }
 
 /* Finds a port whose state has changed, and returns the aux pointer set for
  * the port.  A NULL pointer is returned when no changed port is found.  On

@@ -140,6 +140,7 @@ static void bundle_destroy(struct ofbundle *);
 static void bundle_del_port(struct ofport_dpif *);
 static void bundle_run(struct ofbundle *);
 static void bundle_wait(struct ofbundle *);
+static void bundle_flush_macs(struct ofbundle *, bool);
 
 static void stp_run(struct ofproto_dpif *ofproto);
 static void stp_wait(struct ofproto_dpif *ofproto);
@@ -2127,11 +2128,11 @@ update_rstp_port_state(struct ofport_dpif *ofport)
                  rstp_state_name(ofport->rstp_state),
                  rstp_state_name(state));
         if (rstp_learn_in_state(ofport->rstp_state)
-                != rstp_learn_in_state(state)) {
-            /* xxx Learning action flows should also be flushed. */
-            ovs_rwlock_wrlock(&ofproto->ml->rwlock);
-            mac_learning_flush(ofproto->ml);
-            ovs_rwlock_unlock(&ofproto->ml->rwlock);
+            != rstp_learn_in_state(state)) {
+            /* XXX: Learning action flows should also be flushed. */
+            if (ofport->bundle) {
+                bundle_flush_macs(ofport->bundle, false);
+            }
         }
         fwd_change = rstp_forward_in_state(ofport->rstp_state)
             != rstp_forward_in_state(state);
@@ -2171,16 +2172,13 @@ rstp_run(struct ofproto_dpif *ofproto)
         while ((ofport = rstp_get_next_changed_port_aux(ofproto->rstp, &rp))) {
             update_rstp_port_state(ofport);
         }
+        rp = NULL;
+        ofport = NULL;
         /* FIXME: This check should be done on-event (i.e., when setting
          * p->fdb_flush) and not periodically.
          */
-        if (rstp_check_and_reset_fdb_flush(ofproto->rstp)) {
-            ovs_rwlock_wrlock(&ofproto->ml->rwlock);
-            /* FIXME: RSTP should be able to flush the entries pertaining to a
-             * single port, not the whole table.
-             */
-            mac_learning_flush(ofproto->ml);
-            ovs_rwlock_unlock(&ofproto->ml->rwlock);
+        while ((ofport = rstp_check_and_reset_fdb_flush(ofproto->rstp, &rp))) {
+            bundle_flush_macs(ofport->bundle, false);
         }
     }
 }
