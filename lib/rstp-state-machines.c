@@ -1032,6 +1032,14 @@ rcv_info(struct rstp_port *p)
     role =
         (p->received_bpdu_buffer.flags & ROLE_FLAG_MASK) >> ROLE_FLAG_SHIFT;
 
+    /* 802.1D-2004 does not report this behaviour.
+     * 802.1Q-2008 says set rcvdTcn. */
+    if (p->received_bpdu_buffer.bpdu_type ==
+            TOPOLOGY_CHANGE_NOTIFICATION_BPDU) {
+        p->rcvd_tcn = true;
+        return OTHER_INFO;
+    }
+
     /* Returns SuperiorDesignatedInfo if:
      * a) The received message conveys a Designated Port Role, and
      *  1) The message priority is superior (17.6) to the Port.s port priority
