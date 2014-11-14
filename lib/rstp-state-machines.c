@@ -1981,12 +1981,14 @@ static enum vector_comparison
 compare_rstp_priority_vectors(const struct rstp_priority_vector *v1,
                              const struct rstp_priority_vector *v2)
 {
-    VLOG_DBG("v1: "RSTP_ID_FMT", %u, "RSTP_ID_FMT", %d",
+    VLOG_DBG("v1: "RSTP_ID_FMT", %u, "RSTP_ID_FMT", %d, %d",
              RSTP_ID_ARGS(v1->root_bridge_id), v1->root_path_cost,
-             RSTP_ID_ARGS(v1->designated_bridge_id), v1->designated_port_id);
-    VLOG_DBG("v2: "RSTP_ID_FMT", %u, "RSTP_ID_FMT", %d",
+             RSTP_ID_ARGS(v1->designated_bridge_id), v1->designated_port_id,
+             v1->bridge_port_id);
+    VLOG_DBG("v2: "RSTP_ID_FMT", %u, "RSTP_ID_FMT", %d, %d",
              RSTP_ID_ARGS(v2->root_bridge_id), v2->root_path_cost,
-             RSTP_ID_ARGS(v2->designated_bridge_id), v2->designated_port_id);
+             RSTP_ID_ARGS(v2->designated_bridge_id), v2->designated_port_id,
+             v2->bridge_port_id);
 
     /* [17.6]
      * This message priority vector is superior to the port priority vector and
@@ -2021,6 +2023,14 @@ compare_rstp_priority_vectors(const struct rstp_priority_vector *v1,
             && v1->root_path_cost == v2->root_path_cost
             && v1->designated_bridge_id == v2->designated_bridge_id
             && v1->designated_port_id == v2->designated_port_id) {
+            if (v1->bridge_port_id < v2->bridge_port_id) {
+                VLOG_DBG("superior");
+                return SUPERIOR;
+            }
+            else if (v1->bridge_port_id > v2->bridge_port_id) {
+                VLOG_DBG("inferior");
+                return INFERIOR;
+            }
             VLOG_DBG("superior_same");
             return SAME;
         }
