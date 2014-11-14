@@ -129,6 +129,7 @@ struct emc_entry {
 
 struct emc_cache {
     struct emc_entry entries[EM_FLOW_HASH_ENTRIES];
+    int sweep_idx;                /* For emc_cache_slow_sweep(). */
 };
 
 /* Iterate in the exact match cache through every entry that might contain a
@@ -433,6 +434,7 @@ static void dp_netdev_del_pmds_on_numa(struct dp_netdev *dp, int numa_id);
 static void dp_netdev_set_pmds_on_numa(struct dp_netdev *dp, int numa_id);
 static void dp_netdev_reset_pmd_threads(struct dp_netdev *dp);
 
+static inline bool emc_entry_alive(struct emc_entry *ce);
 static void emc_clear_entry(struct emc_entry *ce);
 
 static void
@@ -442,6 +444,7 @@ emc_cache_init(struct emc_cache *flow_cache)
 
     BUILD_ASSERT(offsetof(struct miniflow, inline_values) == sizeof(uint64_t));
 
+    flow_cache->sweep_idx = 0;
     for (i = 0; i < ARRAY_SIZE(flow_cache->entries); i++) {
         flow_cache->entries[i].flow = NULL;
         flow_cache->entries[i].key.hash = 0;
@@ -460,6 +463,19 @@ emc_cache_uninit(struct emc_cache *flow_cache)
     for (i = 0; i < ARRAY_SIZE(flow_cache->entries); i++) {
         emc_clear_entry(&flow_cache->entries[i]);
     }
+}
+
+/* Check and clear dead flow references slowly (one entry at each
+ * invocation).  */
+static void
+emc_cache_slow_sweep(struct emc_cache *flow_cache)
+{
+    struct emc_entry *entry = &flow_cache->entries[flow_cache->sweep_idx];
+
+    if (!emc_entry_alive(entry)) {
+        emc_clear_entry(entry);
+    }
+    flow_cache->sweep_idx = (flow_cache->sweep_idx + 1) & EM_FLOW_HASH_MASK;
 }
 
 static struct dpif_netdev *
@@ -2332,6 +2348,7 @@ reload:
 
             lc = 0;
 
+            emc_cache_slow_sweep(&pmd->flow_cache);
             ovsrcu_quiesce();
 
             atomic_read_relaxed(&pmd->change_seq, &seq);
