@@ -523,8 +523,9 @@ static void
 rstp_set_bridge_max_age__(struct rstp *rstp, int new_max_age)
     OVS_REQUIRES(rstp_mutex)
 {
-    if (new_max_age >= RSTP_MIN_BRIDGE_MAX_AGE &&
-        new_max_age <= RSTP_MAX_BRIDGE_MAX_AGE) {
+    if (rstp->bridge_max_age != new_max_age
+        && new_max_age >= RSTP_MIN_BRIDGE_MAX_AGE
+        && new_max_age <= RSTP_MAX_BRIDGE_MAX_AGE) {
         /* [17.13] */
         if ((2 * (rstp->bridge_forward_delay - 1) >= new_max_age)
             && (new_max_age >= 2 * rstp->bridge_hello_time)) {
@@ -533,6 +534,8 @@ rstp_set_bridge_max_age__(struct rstp *rstp, int new_max_age)
 
             rstp->bridge_max_age = new_max_age;
             rstp->bridge_times.max_age = new_max_age;
+            rstp->changes = true;
+            updt_roles_tree__(rstp);
         }
     }
 }
@@ -551,13 +554,16 @@ static void
 rstp_set_bridge_forward_delay__(struct rstp *rstp, int new_forward_delay)
     OVS_REQUIRES(rstp_mutex)
 {
-    if (new_forward_delay >= RSTP_MIN_BRIDGE_FORWARD_DELAY
-        && new_forward_delay <= RSTP_MAX_BRIDGE_FORWARD_DELAY) {
+    if (rstp->bridge_forward_delay != new_forward_delay
+            && new_forward_delay >= RSTP_MIN_BRIDGE_FORWARD_DELAY
+            && new_forward_delay <= RSTP_MAX_BRIDGE_FORWARD_DELAY) {
         if (2 * (new_forward_delay - 1) >= rstp->bridge_max_age) {
             VLOG_DBG("%s: set RSTP Forward Delay to %d", rstp->name,
                      new_forward_delay);
             rstp->bridge_forward_delay = new_forward_delay;
             rstp->bridge_times.forward_delay = new_forward_delay;
+            rstp->changes = true;
+            updt_roles_tree__(rstp);
         }
     }
 }
