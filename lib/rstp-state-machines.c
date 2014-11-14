@@ -312,7 +312,7 @@ updt_roles_tree__(struct rstp *r)
 
         if ((candidate_vector.designated_bridge_id & 0xffffffffffffULL) ==
             (r->bridge_priority.designated_bridge_id & 0xffffffffffffULL)) {
-            break;
+            continue;
         }
         if (compare_rstp_priority_vectors(&candidate_vector,
                                           &best_vector) == SUPERIOR) {
