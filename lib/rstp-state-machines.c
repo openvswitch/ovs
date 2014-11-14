@@ -105,11 +105,12 @@ static int topology_change_sm(struct rstp_port *)
 /* port_timers_sm() not defined as a state machine */
 
 void
-process_received_bpdu__(struct rstp_port *p, const void *bpdu,
+process_received_bpdu__(struct rstp_port *p, const void *bpdu_,
                         size_t bpdu_size)
     OVS_REQUIRES(rstp_mutex)
 {
-    struct rstp *rstp =  p->rstp;
+    struct rstp *rstp = p->rstp;
+    struct rstp_bpdu *bpdu = (struct rstp_bpdu *)bpdu_;
 
     if (!p->port_enabled) {
         return;
@@ -117,6 +118,20 @@ process_received_bpdu__(struct rstp_port *p, const void *bpdu,
     if (p->rcvd_bpdu) {
         return;
     }
+
+    /* [9.2.9 Encoding of Port Role values]
+     * NOTE. If the Unknown value of the Port Role parameter is received, the
+     * state machines will effectively treat the RST BPDU as if it were a
+     * Configuration BPDU.
+     */
+    if (bpdu->bpdu_type == RAPID_SPANNING_TREE_BPDU) {
+        uint8_t role = (bpdu->flags & ROLE_FLAG_MASK) >> ROLE_FLAG_SHIFT;
+
+        if (role == PORT_UNKN) {
+            bpdu->bpdu_type = CONFIGURATION_BPDU;
+        }
+    }
+
     if (validate_received_bpdu(p, bpdu, bpdu_size) == 0) {
         p->rcvd_bpdu = true;
         p->rx_rstp_bpdu_cnt++;
