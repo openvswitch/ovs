@@ -233,6 +233,11 @@ AT_CHECK([ovs-appctl netdev-dummy/set-admin-state p2 up], [], [dnl
 OK
 ])
 
+# give time for RSTP to move initially
+
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
+
 OVS_WAIT_UNTIL([test `cat ovs-vswitchd.log | FILTER_STP_TOPOLOGY | wc -l` -ge 4])
 AT_CHECK([cat ovs-vswitchd.log | FILTER_STP_TOPOLOGY], [0], [dnl
 port p1: RSTP state changed from Disabled to Discarding

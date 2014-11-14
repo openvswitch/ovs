@@ -104,7 +104,8 @@ static void rstp_port_set_port_number__(struct rstp_port *,
 static void rstp_port_set_path_cost__(struct rstp_port *, uint32_t path_cost)
     OVS_REQUIRES(rstp_mutex);
 static void rstp_port_set_administrative_bridge_port__(struct rstp_port *,
-                                                       uint8_t admin_port_state)
+                                                       uint8_t admin_port_state,
+                                                       bool initializing)
     OVS_REQUIRES(rstp_mutex);
 static void rstp_port_set_admin_edge__(struct rstp_port *, bool admin_edge)
     OVS_REQUIRES(rstp_mutex);
@@ -948,7 +949,8 @@ rstp_port_set_mac_operational(struct rstp_port *p, bool new_mac_operational)
 /* Sets the port Administrative Bridge Port parameter. */
 static void
 rstp_port_set_administrative_bridge_port__(struct rstp_port *p,
-                                           uint8_t admin_port_state)
+                                           uint8_t admin_port_state,
+                                           bool initializing)
     OVS_REQUIRES(rstp_mutex)
 {
     VLOG_DBG("%s, port %u: set RSTP port admin-port-state to %d",
@@ -959,6 +961,13 @@ rstp_port_set_administrative_bridge_port__(struct rstp_port *p,
 
         p->is_administrative_bridge_port = admin_port_state;
         update_port_enabled__(p);
+
+        if (!initializing) {
+            struct rstp *rstp = p->rstp;
+
+            rstp->changes = true;
+            move_rstp__(rstp);
+        }
     }
 }
 
@@ -982,7 +991,8 @@ rstp_initialize_port_defaults__(struct rstp_port *p)
     OVS_REQUIRES(rstp_mutex)
 {
     rstp_port_set_administrative_bridge_port__(p,
-                                         RSTP_ADMIN_BRIDGE_PORT_STATE_ENABLED);
+                                               RSTP_ADMIN_BRIDGE_PORT_STATE_ENABLED,
+                                               true);
     rstp_port_set_oper_point_to_point_mac__(p,
                                          RSTP_OPER_P2P_MAC_STATE_ENABLED);
     rstp_port_set_path_cost__(p, RSTP_DEFAULT_PORT_PATH_COST);
@@ -1365,7 +1375,7 @@ rstp_port_set(struct rstp_port *port, uint16_t port_num, int priority,
     rstp_port_set_admin_edge__(port, is_admin_edge);
     rstp_port_set_auto_edge__(port, is_auto_edge);
     rstp_port_set_admin_point_to_point_mac__(port, admin_p2p_mac_state);
-    rstp_port_set_administrative_bridge_port__(port, admin_port_state);
+    rstp_port_set_administrative_bridge_port__(port, admin_port_state, false);
     rstp_port_set_mcheck__(port, do_mcheck);
     ovs_mutex_unlock(&rstp_mutex);
 }
