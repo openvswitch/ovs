@@ -546,7 +546,7 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
 
         ovs_mutex_lock(&cls->mutex);
         assert(trie_verify(&table->ports_trie, 0, table->ports_mask_len)
-               == (table->ports_mask_len ? table->n_rules : 0));
+               == (table->ports_mask_len ? cmap_count(&table->rules) : 0));
         ovs_mutex_unlock(&cls->mutex);
 
         found_tables++;

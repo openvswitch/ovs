@@ -44,11 +44,11 @@ cls_match_alloc(struct cls_rule *rule)
         = xmalloc(sizeof *cls_match - sizeof cls_match->flow.inline_values
                   + MINIFLOW_VALUES_SIZE(count));
 
+    rculist_init(&cls_match->list);
     *CONST_CAST(const struct cls_rule **, &cls_match->cls_rule) = rule;
     *CONST_CAST(int *, &cls_match->priority) = rule->priority;
     miniflow_clone_inline(CONST_CAST(struct miniflow *, &cls_match->flow),
                           &rule->match.flow, count);
-    rule->cls_match = cls_match;
 
     return cls_match;
 }
@@ -385,11 +385,7 @@ trie_init(struct classifier *cls, int trie_idx, const struct mf_field *field)
             struct cls_match *head;
 
             CMAP_FOR_EACH (head, cmap_node, &subtable->rules) {
-                struct cls_match *match;
-
-                FOR_EACH_RULE_IN_LIST_PROTECTED (match, head) {
-                    trie_insert(trie, match->cls_rule, plen);
-                }
+                trie_insert(trie, head->cls_rule, plen);
             }
         }
         /* Initialize subtable's prefix length on this field.  This will
@@ -463,14 +459,33 @@ static inline ovs_be32 minimatch_get_ports(const struct minimatch *match)
         & MINIFLOW_GET_BE32(&match->mask.masks, tp_src);
 }
 
+static void
+subtable_replace_head_rule(struct classifier *cls OVS_UNUSED,
+                           struct cls_subtable *subtable,
+                           struct cls_match *head, struct cls_match *new,
+                           uint32_t hash, uint32_t ihash[CLS_MAX_INDICES])
+    OVS_REQUIRES(cls->mutex)
+{
+    /* Rule's data is already in the tries. */
+
+    new->partition = head->partition; /* Steal partition, if any. */
+    head->partition = NULL;
+
+    for (int i = 0; i < subtable->n_indices; i++) {
+        cmap_replace(&subtable->indices[i], &head->index_nodes[i],
+                     &new->index_nodes[i], ihash[i]);
+    }
+    cmap_replace(&subtable->rules, &head->cmap_node, &new->cmap_node, hash);
+}
+
 /* Inserts 'rule' into 'cls'.  Until 'rule' is removed from 'cls', the caller
  * must not modify or free it.
  *
  * If 'cls' already contains an identical rule (including wildcards, values of
  * fixed fields, and priority), replaces the old rule by 'rule' and returns the
  * rule that was replaced.  The caller takes ownership of the returned rule and
- * is thus responsible for destroying it with cls_rule_destroy(), freeing the
- * memory block in which it resides, etc., as necessary.
+ * is thus responsible for destroying it with cls_rule_destroy(), after RCU
+ * grace period has passed (see ovsrcu_postpone()).
  *
  * Returns NULL if 'cls' does not contain a rule with an identical key, after
  * inserting the new rule.  In this case, no rules are displaced by the new
@@ -482,109 +497,39 @@ classifier_replace(struct classifier *cls, struct cls_rule *rule)
     OVS_EXCLUDED(cls->mutex)
 {
     struct cls_match *new = cls_match_alloc(rule);
-    struct cls_match *old_rule = NULL;
     struct cls_subtable *subtable;
-    const struct cls_rule *old_cls_rule = NULL;
     uint32_t ihash[CLS_MAX_INDICES];
     uint8_t prev_be32ofs = 0;
     struct cls_match *head;
+    size_t n_rules = 0;
     uint32_t basis;
     uint32_t hash;
     int i;
 
     ovs_mutex_lock(&cls->mutex);
+    rule->cls_match = new;
+
     subtable = find_subtable(cls, &rule->match.mask);
     if (!subtable) {
         subtable = insert_subtable(cls, &rule->match.mask);
     }
 
-    /* Add new node to segment indices.
-     *
-     * Readers may find the rule in the indices before the rule is visible in
-     * the subtables 'rules' map.  This may result in us losing the opportunity
-     * to quit lookups earlier, resulting in sub-optimal wildcarding.  This
-     * will be fixed later by revalidation (always scheduled after flow table
-     * changes). */
+    /* Compute hashes in segments. */
     basis = 0;
     for (i = 0; i < subtable->n_indices; i++) {
         ihash[i] = minimatch_hash_range(&rule->match, prev_be32ofs,
                                         subtable->index_ofs[i], &basis);
-        cmap_insert(&subtable->indices[i], &new->index_nodes[i], ihash[i]);
         prev_be32ofs = subtable->index_ofs[i];
     }
     hash = minimatch_hash_range(&rule->match, prev_be32ofs, FLOW_U32S, &basis);
+
     head = find_equal(subtable, &rule->match.flow, hash);
     if (!head) {
-        cmap_insert(&subtable->rules, &new->cmap_node, hash);
-        rculist_init(&new->list);
-    } else {
-        /* Scan the list for the insertion point that will keep the list in
-         * order of decreasing priority. */
-        struct cls_match *iter;
-
-        FOR_EACH_RULE_IN_LIST_PROTECTED (iter, head) {
-            if (new->priority >= iter->priority) {
-                if (iter == head) {
-                    /* 'new' is the new highest-priority flow in the list. */
-                    cmap_replace(&subtable->rules, &iter->cmap_node,
-                                 &new->cmap_node, hash);
-                }
-
-                if (new->priority == iter->priority) {
-                    rculist_replace(&new->list, &iter->list);
-                    old_rule = iter;
-                } else {
-                    rculist_insert(&iter->list, &new->list);
-                }
-                goto out;
-            }
-        }
-
-        /* Insert 'new' at the end of the list. */
-        rculist_push_back(&head->list, &new->list);
-    out:;
-    }
-
-    if (!old_rule) {
-        old_cls_rule = NULL;
-        subtable->n_rules++;
-
-        /* Rule was added, not replaced.  Update 'subtable's 'max_priority'
-         * and 'max_count', if necessary.
-         *
-         * The rule was already inserted, but concurrent readers may not see
-         * the rule yet as the subtables vector is not updated yet.
-         * This will have to be fixed by revalidation later. */
-        if (subtable->n_rules == 1) {
-            subtable->max_priority = new->priority;
-            subtable->max_count = 1;
-            pvector_insert(&cls->subtables, subtable, new->priority);
-        } else if (subtable->max_priority == new->priority) {
-            ++subtable->max_count;
-        } else if (new->priority > subtable->max_priority) {
-            subtable->max_priority = new->priority;
-            subtable->max_count = 1;
-            pvector_change_priority(&cls->subtables, subtable, new->priority);
-        }
-
-        /* Add rule to partitions.
-         *
-         * Concurrent readers might miss seeing the rule until this update,
-         * which might require being fixed up by revalidation later. */
-        rule->cls_match->partition = NULL;
-        if (minimask_get_metadata_mask(&rule->match.mask) == OVS_BE64_MAX) {
-            ovs_be64 metadata = miniflow_get_metadata(&rule->match.flow);
-            rule->cls_match->partition = create_partition(cls, subtable,
-                                                          metadata);
-        }
-
-        cls->n_rules++;
-
         /* Add rule to tries.
          *
          * Concurrent readers might miss seeing the rule until this update,
          * which might require being fixed up by revalidation later. */
-        for (int i = 0; i < cls->n_tries; i++) {
+        for (i = 0; i < cls->n_tries; i++) {
             if (subtable->trie_plen[i]) {
                 trie_insert(&cls->tries[i], rule, subtable->trie_plen[i]);
             }
@@ -601,29 +546,99 @@ classifier_replace(struct classifier *cls, struct cls_rule *rule)
             trie_insert_prefix(&subtable->ports_trie, &masked_ports,
                                subtable->ports_mask_len);
         }
-    } else {
-        old_cls_rule = old_rule->cls_rule;
 
-        /* Remove old node from indices.
+        /* Add rule to partitions.
          *
-         * The effect of this late removal of a duplicate rule on concurrent
-         * readers is similar to that of adding the new rule to the segment
-         * indices early (at the beginning of this function.) */
-        for (i = 0; i < subtable->n_indices; i++) {
-            cmap_remove(&subtable->indices[i], &old_rule->index_nodes[i],
-                        ihash[i]);
+         * Concurrent readers might miss seeing the rule until this update,
+         * which might require being fixed up by revalidation later. */
+        new->partition = NULL;
+        if (minimask_get_metadata_mask(&rule->match.mask) == OVS_BE64_MAX) {
+            ovs_be64 metadata = miniflow_get_metadata(&rule->match.flow);
+
+            new->partition = create_partition(cls, subtable, metadata);
         }
 
-        rule->cls_match->partition = old_rule->partition;
-        CONST_CAST(struct cls_rule *, old_cls_rule)->cls_match = NULL;
+        /* Make rule visible to lookups. */
 
-        /* 'old_rule' contains a cmap_node, which may not be freed
-         * immediately. */
-        ovsrcu_postpone(free, old_rule);
+        /* Add new node to segment indices.
+         *
+         * Readers may find the rule in the indices before the rule is visible
+         * in the subtables 'rules' map.  This may result in us losing the
+         * opportunity to quit lookups earlier, resulting in sub-optimal
+         * wildcarding.  This will be fixed later by revalidation (always
+         * scheduled after flow table changes). */
+        for (i = 0; i < subtable->n_indices; i++) {
+            cmap_insert(&subtable->indices[i], &new->index_nodes[i], ihash[i]);
+        }
+        n_rules = cmap_insert(&subtable->rules, &new->cmap_node, hash);
+    } else {   /* Equal rules exist in the classifier already. */
+        struct cls_match *iter;
+
+        /* Scan the list for the insertion point that will keep the list in
+         * order of decreasing priority. */
+        FOR_EACH_RULE_IN_LIST_PROTECTED (iter, head) {
+            if (rule->priority >= iter->priority) {
+                break;
+            }
+        }
+
+        /* 'iter' now at the insertion point or NULL it at end. */
+        if (iter) {
+            struct cls_rule *old;
+
+            if (rule->priority == iter->priority) {
+                rculist_replace(&new->list, &iter->list);
+                old = CONST_CAST(struct cls_rule *, iter->cls_rule);
+            } else {
+                rculist_insert(&iter->list, &new->list);
+                old = NULL;
+            }
+
+            /* Replace the existing head in data structures, if rule is the new
+             * head. */
+            if (iter == head) {
+                subtable_replace_head_rule(cls, subtable, head, new, hash,
+                                           ihash);
+            }
+
+            if (old) {
+                ovsrcu_postpone(free, iter);
+                old->cls_match = NULL;
+
+                /* No change in subtable's max priority or max count. */
+
+                /* Return displaced rule.  Caller is responsible for keeping it
+                 * around until all threads quiesce. */
+                ovs_mutex_unlock(&cls->mutex);
+                return old;
+            }
+        } else {
+            rculist_push_back(&head->list, &new->list);
+        }
     }
 
+    /* Rule was added, not replaced.  Update 'subtable's 'max_priority' and
+     * 'max_count', if necessary.
+     *
+     * The rule was already inserted, but concurrent readers may not see the
+     * rule yet as the subtables vector is not updated yet.  This will have to
+     * be fixed by revalidation later. */
+    if (n_rules == 1) {
+        subtable->max_priority = rule->priority;
+        subtable->max_count = 1;
+        pvector_insert(&cls->subtables, subtable, rule->priority);
+    } else if (rule->priority == subtable->max_priority) {
+        ++subtable->max_count;
+    } else if (rule->priority > subtable->max_priority) {
+        subtable->max_priority = rule->priority;
+        subtable->max_count = 1;
+        pvector_change_priority(&cls->subtables, subtable, rule->priority);
+    }
+
+    /* Nothing was replaced. */
+    cls->n_rules++;
     ovs_mutex_unlock(&cls->mutex);
-    return old_cls_rule;
+    return NULL;
 }
 
 /* Inserts 'rule' into 'cls'.  Until 'rule' is removed from 'cls', the caller
@@ -653,11 +668,13 @@ classifier_remove(struct classifier *cls, const struct cls_rule *rule)
 {
     struct cls_partition *partition;
     struct cls_match *cls_match;
-    struct cls_match *head;
     struct cls_subtable *subtable;
+    struct cls_match *prev;
+    struct cls_match *next;
     int i;
     uint32_t basis = 0, hash, ihash[CLS_MAX_INDICES];
     uint8_t prev_be32ofs = 0;
+    size_t n_rules;
 
     ovs_mutex_lock(&cls->mutex);
     cls_match = rule->cls_match;
@@ -665,9 +682,42 @@ classifier_remove(struct classifier *cls, const struct cls_rule *rule)
         rule = NULL;
         goto unlock; /* Already removed. */
     }
+    /* Mark as removed. */
+    CONST_CAST(struct cls_rule *, rule)->cls_match = NULL;
+
+    INIT_CONTAINER(prev, rculist_back_protected(&cls_match->list), list);
+    INIT_CONTAINER(next, rculist_next(&cls_match->list), list);
+
+    /* Remove from the list of equal rules. */
+    rculist_remove(&cls_match->list);
+
+    /* Check if this is NOT a head rule. */
+    if (prev->priority > rule->priority) {
+        /* Not the highest priority rule, no need to check subtable's
+         * 'max_priority'. */
+        goto free;
+    }
 
     subtable = find_subtable(cls, &rule->match.mask);
     ovs_assert(subtable);
+
+    for (i = 0; i < subtable->n_indices; i++) {
+        ihash[i] = minimatch_hash_range(&rule->match, prev_be32ofs,
+                                        subtable->index_ofs[i], &basis);
+        prev_be32ofs = subtable->index_ofs[i];
+    }
+    hash = minimatch_hash_range(&rule->match, prev_be32ofs, FLOW_U32S, &basis);
+
+    /* Head rule.  Check if 'next' is an identical, lower-priority rule that
+     * will replace 'rule' in the data structures. */
+    if (next->priority < rule->priority) {
+        subtable_replace_head_rule(cls, subtable, cls_match, next, hash,
+                                   ihash);
+        goto check_priority;
+    }
+
+    /* 'rule' is last of the kind in the classifier, must remove from all the
+     * data structures. */
 
     if (subtable->ports_mask_len) {
         ovs_be32 masked_ports = minimatch_get_ports(&rule->match);
@@ -683,26 +733,10 @@ classifier_remove(struct classifier *cls, const struct cls_rule *rule)
 
     /* Remove rule node from indices. */
     for (i = 0; i < subtable->n_indices; i++) {
-        ihash[i] = minimatch_hash_range(&rule->match, prev_be32ofs,
-                                        subtable->index_ofs[i], &basis);
         cmap_remove(&subtable->indices[i], &cls_match->index_nodes[i],
                     ihash[i]);
-        prev_be32ofs = subtable->index_ofs[i];
     }
-    hash = minimatch_hash_range(&rule->match, prev_be32ofs, FLOW_U32S, &basis);
-
-    head = find_equal(subtable, &rule->match.flow, hash);
-    if (head != cls_match) {
-        rculist_remove(&cls_match->list);
-    } else if (rculist_is_empty(&cls_match->list)) {
-        cmap_remove(&subtable->rules, &cls_match->cmap_node, hash);
-    } else {
-        struct cls_match *next = next_rule_in_list_protected(cls_match);
-
-        rculist_remove(&cls_match->list);
-        cmap_replace(&subtable->rules, &cls_match->cmap_node,
-                     &next->cmap_node, hash);
-    }
+    n_rules = cmap_remove(&subtable->rules, &cls_match->cmap_node, hash);
 
     partition = cls_match->partition;
     if (partition) {
@@ -715,30 +749,31 @@ classifier_remove(struct classifier *cls, const struct cls_rule *rule)
         }
     }
 
-    if (--subtable->n_rules == 0) {
+    if (n_rules == 0) {
         destroy_subtable(cls, subtable);
-    } else if (subtable->max_priority == cls_match->priority
-               && --subtable->max_count == 0) {
-        /* Find the new 'max_priority' and 'max_count'. */
-        struct cls_match *head;
-        int max_priority = INT_MIN;
+    } else {
+check_priority:
+        if (subtable->max_priority == rule->priority
+            && --subtable->max_count == 0) {
+            /* Find the new 'max_priority' and 'max_count'. */
+            struct cls_match *head;
+            int max_priority = INT_MIN;
 
-        CMAP_FOR_EACH (head, cmap_node, &subtable->rules) {
-            if (head->priority > max_priority) {
-                max_priority = head->priority;
-                subtable->max_count = 1;
-            } else if (head->priority == max_priority) {
-                ++subtable->max_count;
+            CMAP_FOR_EACH (head, cmap_node, &subtable->rules) {
+                if (head->priority > max_priority) {
+                    max_priority = head->priority;
+                    subtable->max_count = 1;
+                } else if (head->priority == max_priority) {
+                    ++subtable->max_count;
+                }
             }
+            subtable->max_priority = max_priority;
+            pvector_change_priority(&cls->subtables, subtable, max_priority);
         }
-        subtable->max_priority = max_priority;
-        pvector_change_priority(&cls->subtables, subtable, max_priority);
     }
-
-    cls->n_rules--;
-
+free:
     ovsrcu_postpone(free, cls_match);
-    CONST_CAST(struct cls_rule *, rule)->cls_match = NULL;
+    cls->n_rules--;
 unlock:
     ovs_mutex_unlock(&cls->mutex);
 

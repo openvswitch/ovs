@@ -250,7 +250,8 @@ rculist_move(struct rculist *dst, struct rculist *src)
 }
 
 /* Removes 'elem' from its list and returns the element that followed it.
- * Undefined behavior if 'elem' is not in a list.
+ * Has no effect when 'elem' is initialized, but not in a list.
+ * Undefined behavior if 'elem' is not initialized.
  *
  * Afterward, 'elem' is not linked to from the list any more, but still links
  * to the nodes in the list, and may still be referenced by other threads until
@@ -318,16 +319,12 @@ rculist_front(const struct rculist *list)
 }
 
 /* Returns the back element in 'list_'.
- * Undefined behavior if 'list_' is empty. */
+ * Returns the 'list_' itself, if 'list_' is empty. */
 static inline struct rculist *
-rculist_back_protected(const struct rculist *list_)
+rculist_back_protected(const struct rculist *list)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
-    struct rculist *list = CONST_CAST(struct rculist *, list_);
-
-    ovs_assert(!rculist_is_empty(list));
-
-    return list->prev;
+    return CONST_CAST(struct rculist *, list)->prev;
 }
 
 /* Returns the number of elements in 'list'.

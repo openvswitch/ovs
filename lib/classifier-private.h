@@ -31,10 +31,11 @@ struct cls_subtable {
     struct cmap_node cmap_node; /* Within struct classifier 'subtables_map'. */
 
     /* The fields are only used by writers. */
-    int n_rules OVS_GUARDED;                /* Number of rules, including
-                                             * duplicates. */
     int max_priority OVS_GUARDED;  /* Max priority of any rule in subtable. */
     unsigned int max_count OVS_GUARDED;     /* Count of max_priority rules. */
+
+    /* Identical, but lower priority rules are not inserted to any of the
+     * following data structures. */
 
     /* These fields are accessed by readers who care about wildcarding. */
     const tag_type tag;       /* Tag generated from mask for partitioning. */
