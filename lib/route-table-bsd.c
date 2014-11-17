@@ -47,6 +47,7 @@ route_table_fallback_lookup(ovs_be32 ip, char name[], ovs_be32 *gw)
     static int seq;
     int i, len, namelen, rtsock;
     const pid_t pid = getpid();
+    bool got_ifp = false;
 
     rtsock = socket(PF_ROUTE, SOCK_RAW, 0);
     if (rtsock < 0)
@@ -81,6 +82,7 @@ route_table_fallback_lookup(ovs_be32 ip, char name[], ovs_be32 *gw)
         return false;
     }
 
+    *gw = 0;
     sa = (struct sockaddr *)(rtm + 1);
     for (i = 1; i; i <<= 1) {
         if (rtm->rtm_addrs & i) {
@@ -92,8 +94,12 @@ route_table_fallback_lookup(ovs_be32 ip, char name[], ovs_be32 *gw)
                     namelen = IFNAMSIZ - 1;
                 memcpy(name, ifp->sdl_data, namelen);
                 name[namelen] = '\0';
-                *gw = 0;
-                return true;
+                got_ifp = true;
+            } else if (i == RTA_GATEWAY && sa->sa_family == AF_INET) {
+                const struct sockaddr_in *sin_dst =
+                    ALIGNED_CAST(struct sockaddr_in *, sa);
+
+                *gw = sin_dst->sin_addr.s_addr;
             }
 #if defined(__FreeBSD__)
             sa = (struct sockaddr *)((char *)sa + SA_SIZE(sa));
@@ -104,7 +110,7 @@ route_table_fallback_lookup(ovs_be32 ip, char name[], ovs_be32 *gw)
 #endif
         }
     }
-    return false;
+    return got_ifp;
 }
 
 uint64_t
