@@ -51,8 +51,6 @@ There are following commands that shows internal tables:
 Tunneling related commands:
 ===========================
 Tunnel routing table:
-    These commands are only available on Linux platform.
-
     To Add route:
        ovs-appctl ovs/route/add <IP address>/<prefix length> <output-bridge-name> <gw>
     To see all routes configured:

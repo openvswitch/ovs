@@ -35,8 +35,8 @@
 #include "packets.h"
 #include "seq.h"
 #include "ovs-router.h"
-#include "ovs-router-linux.h"
 #include "ovs-thread.h"
+#include "route-table.h"
 #include "unixctl.h"
 #include "util.h"
 
@@ -76,7 +76,7 @@ ovs_router_lookup(ovs_be32 ip_dst, char output_bridge[], ovs_be32 *gw)
         *gw = p->gw;
         return true;
     }
-    return false;
+    return route_table_fallback_lookup(ip_dst, output_bridge, gw);
 }
 
 static void

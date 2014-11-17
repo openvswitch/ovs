@@ -25,6 +25,9 @@ extern "C" {
 
 bool ovs_router_lookup(ovs_be32 ip_dst, char out_dev[], ovs_be32 *gw);
 void ovs_router_init(void);
+void ovs_router_insert(ovs_be32 ip_dst, uint8_t plen,
+                       const char output_bridge[], ovs_be32 gw);
+void ovs_router_flush(void);
 #ifdef  __cplusplus
 }
 #endif
