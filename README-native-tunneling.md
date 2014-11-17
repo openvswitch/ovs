@@ -57,6 +57,8 @@ Tunnel routing table:
        ovs-appctl ovs/route/show
     To del route:
        ovs-appctl ovs/route/del <IP address>/<prefix length>
+    To look up and display the route for a destination:
+       ovs-appctl ovs/route/lookup <IP address>
 
 ARP:
     To see arp cache content:
