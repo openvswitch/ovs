@@ -783,7 +783,7 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
          * state in the instance to indicate the command that started the dump
          * operation. The state can setup 'ovsMsgReadOp' appropriately. Note
          * that 'ovsMsgReadOp' is needed only in this function to call into the
-         * appropraite handler. The handler itself can access the state in the
+         * appropriate handler. The handler itself can access the state in the
          * instance.
          *
          * In the absence of a dump start, return 0 bytes.
@@ -1350,9 +1350,7 @@ OvsSetupDumpStart(POVS_USER_PARAMS_CONTEXT usrParamsCtx)
      * This operation should be setting up the dump state. If there's any
      * previous state, clear it up so as to set it up afresh.
      */
-    if (instance->dumpState.ovsMsg != NULL) {
-        FreeUserDumpState(instance);
-    }
+    FreeUserDumpState(instance);
 
     return InitUserDumpState(instance, msgIn);
 }
