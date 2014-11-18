@@ -413,7 +413,7 @@ _FlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     NTSTATUS rc = STATUS_SUCCESS;
     POVS_OPEN_INSTANCE instance = (POVS_OPEN_INSTANCE)
                                   (usrParamsCtx->ovsInstance);
-    POVS_MESSAGE msgIn = instance->dumpState.ovsMsg;
+    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
     PNL_MSG_HDR nlMsgHdr = &(msgIn->nlMsg);
     POVS_HDR ovsHdr = &(msgIn->ovsHdr);
     PNL_MSG_HDR nlMsgOutHdr = NULL;
@@ -532,7 +532,7 @@ done:
 /*
  *----------------------------------------------------------------------------
  *  _FlowNlDumpCmdHandler --
- *    Handler for OVS_FLOW_CMD_GET command.
+ *    Handler for OVS_FLOW_CMD_DUMP command.
  *----------------------------------------------------------------------------
  */
 NTSTATUS
