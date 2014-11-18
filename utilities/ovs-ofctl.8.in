@@ -1943,7 +1943,7 @@ This field is required.
 
 .IP \fBtype=\fItype\fR
 The type of the group.  The \fBadd-group\fR, \fBadd-groups\fR and
-\fBdel-groups\fR commands require this field.  It is prohibited for
+\fBmod-groups\fR commands require this field.  It is prohibited for
 other commands. The following keywords designated the allowed types:
 .RS
 .IP \fBall\fR
