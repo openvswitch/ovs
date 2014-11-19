@@ -202,12 +202,18 @@ typedef enum _NL_ERROR_
 static __inline
 NlMapStatusToNlErr(NTSTATUS status)
 {
-    NL_ERROR ret = NL_ERROR_SUCCESS;
+    NL_ERROR ret = NL_ERROR_INVAL;
 
     switch (status)
     {
     case STATUS_NOT_SUPPORTED:
       ret = NL_ERROR_NOTSUPP;
+      break;
+    case STATUS_INSUFFICIENT_RESOURCES:
+      ret = NL_ERROR_NOMEM;
+      break;
+    case STATUS_SUCCESS:
+      ret = NL_ERROR_SUCCESS;
       break;
     default:
       break;

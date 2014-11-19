@@ -47,7 +47,7 @@ typedef struct VXLANHdr {
     UINT32   reserved2:8;
 } VXLANHdr;
 
-NL_ERROR OvsInitVxlanTunnel(POVS_VPORT_ENTRY vport,
+NTSTATUS OvsInitVxlanTunnel(POVS_VPORT_ENTRY vport,
                             UINT16 udpDestPort);
 
 VOID OvsCleanupVxlanTunnel(POVS_VPORT_ENTRY vport);

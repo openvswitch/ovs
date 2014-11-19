@@ -1802,7 +1802,8 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         vportAllocated = TRUE;
 
         if (OvsIsTunnelVportType(portType)) {
-            nlError = OvsInitTunnelVport(vport, portType, VXLAN_UDP_PORT);
+            status = OvsInitTunnelVport(vport, portType, VXLAN_UDP_PORT);
+            nlError = NlMapStatusToNlErr(status);
         } else {
             OvsInitBridgeInternalVport(vport);
         }

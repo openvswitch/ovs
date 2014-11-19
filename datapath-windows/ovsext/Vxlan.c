@@ -53,7 +53,7 @@ extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
  * udpDestPort: the vxlan is set as payload to a udp frame. If the destination
  * port of an udp frame is udpDestPort, we understand it to be vxlan.
  */
-NL_ERROR
+NTSTATUS
 OvsInitVxlanTunnel(POVS_VPORT_ENTRY vport,
                    UINT16 udpDestPort)
 {
@@ -61,7 +61,7 @@ OvsInitVxlanTunnel(POVS_VPORT_ENTRY vport,
 
     vxlanPort = OvsAllocateMemory(sizeof (*vxlanPort));
     if (vxlanPort == NULL) {
-        return NL_ERROR_NOMEM;
+        return STATUS_INSUFFICIENT_RESOURCES;
     }
 
     RtlZeroMemory(vxlanPort, sizeof(*vxlanPort));
@@ -74,7 +74,7 @@ OvsInitVxlanTunnel(POVS_VPORT_ENTRY vport,
     ASSERT(vxlanPort->dstPort == VXLAN_UDP_PORT);
     vport->priv = (PVOID)vxlanPort;
 
-    return NL_ERROR_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
 
