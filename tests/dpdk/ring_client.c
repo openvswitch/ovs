@@ -58,9 +58,6 @@
  */
 static uint8_t client_id = 0;
 
-int no_pkt;
-int pkt;
-
 /*
  * Given the rx queue name template above, get the queue name.
  */
@@ -209,18 +206,10 @@ main(int argc, char *argv[])
         }
 
         if (rx_pkts > 0) {
-            pkt++;
             /* blocking enqueue */
             do {
                 rslt = rte_ring_enqueue_bulk(tx_ring, pkts, rx_pkts);
             } while (rslt == -ENOBUFS);
-        } else {
-               no_pkt++;
-        }
-
-        if (!(pkt %  100000)) {
-            printf("pkt %d %d\n", pkt, no_pkt);
-            pkt = no_pkt = 0;
         }
     }
 }

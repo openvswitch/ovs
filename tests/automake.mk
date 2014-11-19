@@ -203,10 +203,10 @@ tests/idltest.ovsidl: $(IDLTEST_IDL_FILES)
 tests/idltest.c: tests/idltest.h
 
 if DPDK_NETDEV
-noinst_PROGRAMS += tests/ovsclient
-tests_ovsclient_SOURCES = \
-	tests/ovs_client/ovs_client.c
-tests_ovsclient_LDADD = lib/libopenvswitch.la $(LIBS)
+noinst_PROGRAMS += tests/test-dpdkr
+tests_test_dpdkr_SOURCES = \
+	tests/dpdk/ring_client.c
+tests_test_dpdkr_LDADD = lib/libopenvswitch.la $(LIBS)
 endif
 
 noinst_PROGRAMS += tests/ovstest
