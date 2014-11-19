@@ -1787,7 +1787,7 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         vport = gOvsSwitchContext->internalVport;
     } else if (portType == OVS_VPORT_TYPE_NETDEV) {
         /* External ports can also be looked up like VIF ports. */
-        vport = OvsFindVportByHvName(gOvsSwitchContext, portName);
+        vport = OvsFindVportByHvNameA(gOvsSwitchContext, portName);
     } else {
         ASSERT(OvsIsTunnelVportType(portType) ||
                (portType == OVS_VPORT_TYPE_INTERNAL && isBridgeInternal));

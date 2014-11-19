@@ -65,6 +65,8 @@ static NTSTATUS CreateNetlinkMesgForNetdev(POVS_VPORT_EXT_INFO info,
                                            PVOID outBuffer,
                                            UINT32 outBufLen,
                                            int dpIfIndex);
+static POVS_VPORT_ENTRY OvsFindVportByHvNameW(POVS_SWITCH_CONTEXT switchContext,
+                                              PWSTR wsName, SIZE_T wstrSize);
 
 /*
  * Functions implemented in relaton to NDIS port manipulation.
@@ -560,23 +562,12 @@ OvsFindVportByOvsName(POVS_SWITCH_CONTEXT switchContext,
 
 /* OvsFindVportByHvName: "name" is assumed to be null-terminated */
 POVS_VPORT_ENTRY
-OvsFindVportByHvName(POVS_SWITCH_CONTEXT switchContext,
-                     PSTR name)
+OvsFindVportByHvNameW(POVS_SWITCH_CONTEXT switchContext,
+                      PWSTR wsName, SIZE_T wstrSize)
 {
     POVS_VPORT_ENTRY vport = NULL;
     PLIST_ENTRY head, link;
-    /* 'portFriendlyName' is not NUL-terminated. */
-    SIZE_T length = strlen(name);
-    SIZE_T wstrSize = length * sizeof(WCHAR);
     UINT i;
-
-    PWSTR wsName = OvsAllocateMemory(wstrSize);
-    if (!wsName) {
-        return NULL;
-    }
-    for (i = 0; i < length; i++) {
-        wsName[i] = name[i];
-    }
 
     for (i = 0; i < OVS_MAX_VPORT_ARRAY_SIZE; i++) {
         head = &(switchContext->portIdHashArray[i]);
@@ -604,6 +595,27 @@ Cleanup:
     return vport;
 }
 
+POVS_VPORT_ENTRY
+OvsFindVportByHvNameA(POVS_SWITCH_CONTEXT switchContext,
+                      PSTR name)
+{
+    POVS_VPORT_ENTRY vport = NULL;
+    /* 'portFriendlyName' is not NUL-terminated. */
+    SIZE_T length = strlen(name);
+    SIZE_T wstrSize = length * sizeof(WCHAR);
+    UINT i;
+
+    PWSTR wsName = OvsAllocateMemory(wstrSize);
+    if (!wsName) {
+        return NULL;
+    }
+    for (i = 0; i < length; i++) {
+        wsName[i] = name[i];
+    }
+    vport = OvsFindVportByHvNameW(switchContext, wsName, wstrSize);
+    OvsFreeMemory(wsName);
+    return vport;
+}
 POVS_VPORT_ENTRY
 OvsFindVportByPortIdAndNicIndex(POVS_SWITCH_CONTEXT switchContext,
                                 NDIS_SWITCH_PORT_ID portId,
@@ -1259,7 +1271,7 @@ OvsGetExtInfoIoctl(POVS_VPORT_GET vportGet,
                           NDIS_RWL_AT_DISPATCH_LEVEL);
     if (vportGet->portNo == 0) {
         StringCbLengthA(vportGet->name, OVS_MAX_PORT_NAME_LENGTH - 1, &len);
-        vport = OvsFindVportByHvName(gOvsSwitchContext, vportGet->name);
+        vport = OvsFindVportByHvNameA(gOvsSwitchContext, vportGet->name);
         if (vport != NULL) {
             /* If the port is not a Hyper-V port and it has been added earlier,
              * we'll find it in 'ovsPortNameHashArray'. */

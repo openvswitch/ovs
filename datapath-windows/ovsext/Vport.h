@@ -139,15 +139,13 @@ OvsFindVportByPortNo(struct _OVS_SWITCH_CONTEXT *switchContext,
                      UINT32 portNo);
 
 /* "name" is null-terminated */
-POVS_VPORT_ENTRY
-OvsFindVportByOvsName(POVS_SWITCH_CONTEXT switchContext,
-                      PSTR name);
-POVS_VPORT_ENTRY
-OvsFindVportByHvName(POVS_SWITCH_CONTEXT switchContext, PSTR name);
-POVS_VPORT_ENTRY
-OvsFindVportByPortIdAndNicIndex(struct _OVS_SWITCH_CONTEXT *switchContext,
-                                NDIS_SWITCH_PORT_ID portId,
-                                NDIS_SWITCH_NIC_INDEX index);
+POVS_VPORT_ENTRY OvsFindVportByOvsName(POVS_SWITCH_CONTEXT switchContext,
+                                       PSTR name);
+POVS_VPORT_ENTRY OvsFindVportByHvNameA(POVS_SWITCH_CONTEXT switchContext,
+                                       PSTR name);
+POVS_VPORT_ENTRY OvsFindVportByPortIdAndNicIndex(POVS_SWITCH_CONTEXT switchContext,
+                                                 NDIS_SWITCH_PORT_ID portId,
+                                                 NDIS_SWITCH_NIC_INDEX index);
 
 NDIS_STATUS OvsAddConfiguredSwitchPorts(struct _OVS_SWITCH_CONTEXT *switchContext);
 NDIS_STATUS OvsInitConfiguredSwitchNics(struct _OVS_SWITCH_CONTEXT *switchContext);
