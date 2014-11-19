@@ -1235,7 +1235,14 @@ OvsConvertIfCountedStrToAnsiStr(PIF_COUNTED_STRING wStr,
     return STATUS_SUCCESS;
 }
 
-
+/*
+ * --------------------------------------------------------------------------
+ * Utility function that populates a 'OVS_VPORT_EXT_INFO' structure for the
+ * specified vport.
+ *
+ * Assumes that 'gOvsCtrlLock' is held.
+ * --------------------------------------------------------------------------
+ */
 NTSTATUS
 OvsGetExtInfoIoctl(POVS_VPORT_GET vportGet,
                    POVS_VPORT_EXT_INFO extInfo)
@@ -1247,11 +1254,17 @@ OvsGetExtInfoIoctl(POVS_VPORT_GET vportGet,
     BOOLEAN doConvert = FALSE;
 
     RtlZeroMemory(extInfo, sizeof (POVS_VPORT_EXT_INFO));
+    ASSERT(KeGetCurrentIrql() == DISPATCH_LEVEL);
     NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock, &lockState,
                           NDIS_RWL_AT_DISPATCH_LEVEL);
     if (vportGet->portNo == 0) {
         StringCbLengthA(vportGet->name, OVS_MAX_PORT_NAME_LENGTH - 1, &len);
         vport = OvsFindVportByHvName(gOvsSwitchContext, vportGet->name);
+        if (vport != NULL) {
+            /* If the port is not a Hyper-V port and it has been added earlier,
+             * we'll find it in 'ovsPortNameHashArray'. */
+            vport = OvsFindVportByOvsName(gOvsSwitchContext, vportGet->name);
+        }
     } else {
         vport = OvsFindVportByPortNo(gOvsSwitchContext, vportGet->portNo);
     }
@@ -1299,7 +1312,6 @@ OvsGetExtInfoIoctl(POVS_VPORT_GET vportGet,
         extInfo->vifUUID[0] = 0;
     }
     NdisReleaseRWLock(gOvsSwitchContext->dispatchLock, &lockState);
-    NdisReleaseSpinLock(gOvsCtrlLock);
     if (doConvert) {
         status = OvsConvertIfCountedStrToAnsiStr(&vport->portFriendlyName,
                                                  extInfo->name,
