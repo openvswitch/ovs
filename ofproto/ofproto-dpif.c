@@ -2190,8 +2190,8 @@ rstp_run(struct ofproto_dpif *ofproto)
         }
 
         if (rstp_shift_root_learned_address(ofproto->rstp)) {
-            bundle_move(rstp_get_old_root_aux(ofproto->rstp),
-                        rstp_get_new_root_aux(ofproto->rstp));
+            bundle_move(((struct ofport_dpif *)rstp_get_old_root_aux(ofproto->rstp))->bundle,
+                        ((struct ofport_dpif *)rstp_get_new_root_aux(ofproto->rstp))->bundle);
             rstp_reset_root_changed(ofproto->rstp);
         }
     }
