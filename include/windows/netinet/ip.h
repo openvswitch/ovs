@@ -21,5 +21,6 @@
 #define MAXTTL 255
 #define IPTOS_LOWDELAY 0x10
 #define IPTOS_THROUGHPUT 0x08
+#define IP_DF 0x4000                    /* dont fragment flag */
 
 #endif /* netinet/ip.h */
