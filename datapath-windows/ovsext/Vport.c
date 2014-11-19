@@ -67,6 +67,9 @@ static NTSTATUS CreateNetlinkMesgForNetdev(POVS_VPORT_EXT_INFO info,
                                            int dpIfIndex);
 static POVS_VPORT_ENTRY OvsFindVportByHvNameW(POVS_SWITCH_CONTEXT switchContext,
                                               PWSTR wsName, SIZE_T wstrSize);
+static NDIS_STATUS InitHvVportCommon(POVS_SWITCH_CONTEXT switchContext,
+                                     POVS_VPORT_ENTRY vport,
+                                     BOOLEAN newPort);
 
 /*
  * Functions implemented in relaton to NDIS port manipulation.
@@ -96,7 +99,8 @@ HvCreatePort(POVS_SWITCH_CONTEXT switchContext,
     }
 
     OvsInitVportWithPortParam(vport, portParam);
-    InitHvVportCommon(switchContext, vport);
+    /* XXX: Dummy argument to InitHvVportCommon(). */
+    InitHvVportCommon(switchContext, vport, TRUE);
 
 create_port_done:
     NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
@@ -263,7 +267,7 @@ HvCreateNic(POVS_SWITCH_CONTEXT switchContext,
             goto add_nic_done;
         }
         OvsInitPhysNicVport(vport, virtExtVport, nicParam->NicIndex);
-        status = InitHvVportCommon(switchContext, vport);
+        status = InitHvVportCommon(switchContext, vport, TRUE);
         if (status != NDIS_STATUS_SUCCESS) {
             OvsFreeMemory(vport);
             goto add_nic_done;
@@ -610,6 +614,7 @@ OvsFindVportByHvNameA(POVS_SWITCH_CONTEXT switchContext,
     OvsFreeMemory(wsName);
     return vport;
 }
+
 POVS_VPORT_ENTRY
 OvsFindVportByPortIdAndNicIndex(POVS_SWITCH_CONTEXT switchContext,
                                 NDIS_SWITCH_PORT_ID portId,
@@ -875,12 +880,12 @@ AssignNicNameSpecial(POVS_VPORT_ENTRY vport)
  * For external NIC, assigns the name for the NIC.
  * --------------------------------------------------------------------------
  */
-NDIS_STATUS
+static NDIS_STATUS
 InitHvVportCommon(POVS_SWITCH_CONTEXT switchContext,
-                  POVS_VPORT_ENTRY vport)
+                  POVS_VPORT_ENTRY vport,
+                  BOOLEAN newPort)
 {
     UINT32 hash;
-    ASSERT(vport->portNo == OVS_DPPORT_NUMBER_INVALID);
 
     switch (vport->portType) {
     case NdisSwitchPortTypeExternal:
@@ -929,7 +934,9 @@ InitHvVportCommon(POVS_SWITCH_CONTEXT switchContext,
     hash = OvsJhashWords(&vport->portId, 1, OVS_HASH_BASIS);
     InsertHeadList(&switchContext->portIdHashArray[hash & OVS_VPORT_MASK],
                    &vport->portIdLink);
-    switchContext->numHvVports++;
+    if (newPort) {
+        switchContext->numHvVports++;
+    }
     return NDIS_STATUS_SUCCESS;
 }
 
@@ -973,8 +980,9 @@ InitOvsVportCommon(POVS_SWITCH_CONTEXT switchContext,
 
     hash = OvsJhashBytes(vport->ovsName, strlen(vport->ovsName) + 1,
                          OVS_HASH_BASIS);
-    InsertHeadList(&gOvsSwitchContext->ovsPortNameHashArray[hash & OVS_VPORT_MASK],
-                   &vport->ovsNameLink);
+    InsertHeadList(
+        &gOvsSwitchContext->ovsPortNameHashArray[hash & OVS_VPORT_MASK],
+        &vport->ovsNameLink);
 
     return STATUS_SUCCESS;
 }
@@ -1124,7 +1132,7 @@ OvsAddConfiguredSwitchPorts(POVS_SWITCH_CONTEXT switchContext)
              goto cleanup;
          }
          OvsInitVportWithPortParam(vport, portParam);
-         status = InitHvVportCommon(switchContext, vport);
+         status = InitHvVportCommon(switchContext, vport, TRUE);
          if (status != NDIS_STATUS_SUCCESS) {
              OvsFreeMemory(vport);
              goto cleanup;
@@ -1183,7 +1191,7 @@ OvsInitConfiguredSwitchNics(POVS_SWITCH_CONTEXT switchContext)
             if (vport) {
                 OvsInitPhysNicVport(vport, virtExtVport,
                                     nicParam->NicIndex);
-                status = InitHvVportCommon(switchContext, vport);
+                status = InitHvVportCommon(switchContext, vport, TRUE);
                 if (status != NDIS_STATUS_SUCCESS) {
                     OvsFreeMemory(vport);
                     vport = NULL;

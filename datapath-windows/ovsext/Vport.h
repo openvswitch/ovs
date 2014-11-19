@@ -211,8 +211,6 @@ VOID OvsRemoveAndDeleteVport(POVS_SWITCH_CONTEXT switchContext,
                              BOOLEAN hvDelete, BOOLEAN ovsDelete,
                              BOOLEAN *vportDeallocated);
 
-NDIS_STATUS InitHvVportCommon(POVS_SWITCH_CONTEXT switchContext,
-                              POVS_VPORT_ENTRY vport);
 NDIS_STATUS InitOvsVportCommon(POVS_SWITCH_CONTEXT switchContext,
                                POVS_VPORT_ENTRY vport);
 NTSTATUS OvsInitTunnelVport(POVS_VPORT_ENTRY vport, OVS_VPORT_TYPE ovsType,
