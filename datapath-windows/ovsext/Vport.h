@@ -207,7 +207,9 @@ OvsIsBridgeInternalVport(POVS_VPORT_ENTRY vport)
 }
 
 VOID OvsRemoveAndDeleteVport(POVS_SWITCH_CONTEXT switchContext,
-                             POVS_VPORT_ENTRY vport);
+                             POVS_VPORT_ENTRY vport,
+                             BOOLEAN hvDelete, BOOLEAN ovsDelete,
+                             BOOLEAN *vportDeallocated);
 
 NDIS_STATUS InitHvVportCommon(POVS_SWITCH_CONTEXT switchContext,
                               POVS_VPORT_ENTRY vport);

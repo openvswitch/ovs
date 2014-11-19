@@ -1729,7 +1729,7 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     ULONG portNameLen;
     UINT32 portType;
     BOOLEAN isBridgeInternal = FALSE;
-    BOOLEAN vportAllocated = FALSE;
+    BOOLEAN vportAllocated = FALSE, vportInitialized = FALSE;
     BOOLEAN addInternalPortAsNetdev = FALSE;
 
     static const NL_POLICY ovsVportPolicy[] = {
@@ -1806,6 +1806,7 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         } else {
             OvsInitBridgeInternalVport(vport);
         }
+        vportInitialized = TRUE;
 
         if (nlError == NL_ERROR_SUCCESS) {
             vport->ovsState = OVS_STATE_CONNECTED;
@@ -1880,7 +1881,12 @@ Cleanup:
             usrParamsCtx->outputBuffer;
 
         if (vport && vportAllocated == TRUE) {
-            OvsRemoveAndDeleteVport(gOvsSwitchContext, vport);
+            if (vportInitialized == TRUE) {
+                if (OvsIsTunnelVportType(portType)) {
+                    OvsCleanupVxlanTunnel(vport);
+                }
+            }
+            OvsFreeMemory(vport);
         }
 
         BuildErrorMsg(msgIn, msgError, nlError);
@@ -2066,29 +2072,11 @@ OvsDeleteVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                    usrParamsCtx->outputLength,
                                    gOvsSwitchContext->dpNo);
 
-    if (vport->hvDeleted || OvsIsTunnelVportType(vport->ovsType)) {
-        /*
-         * The associated hyper-v switch port is not in created state, or,
-         * there is no hyper-v switch port counterpart (for logical ports).
-         * This means that this datapath port is not mapped to a living
-         * hyper-v switc hport. We can destroy and remove the vport from the
-         * list.
-        */
-        OvsRemoveAndDeleteVport(gOvsSwitchContext, vport);
-    } else {
-        /* The associated hyper-v switch port is in the created state, and the
-         * datapath port is mapped to a living hyper-v switch port. We cannot
-         * destroy the vport and cannot remove it from the list of vports.
-         * Instead, we mark the datapath (ovs) part of the vport as
-         * "not created", i.e. we set vport->portNo = OVS_PORT_NUMBER_INVALID.
-        */
-        RemoveEntryList(&vport->ovsNameLink);
-        InitializeListHead(&vport->ovsNameLink);
-        RemoveEntryList(&vport->portNoLink);
-        InitializeListHead(&vport->portNoLink);
-        vport->portNo = OVS_DPPORT_NUMBER_INVALID;
-        vport->ovsName[0] = '\0';
-    }
+    /*
+     * Mark the port as deleted from OVS userspace. If the port does not exist
+     * on the Hyper-V switch, it gets deallocated. Otherwise, it stays.
+     */
+    OvsRemoveAndDeleteVport(gOvsSwitchContext, vport, FALSE, TRUE, NULL);
 
     *replyLen = msgOut->nlMsg.nlmsgLen;
 

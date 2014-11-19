@@ -174,8 +174,7 @@ HvTeardownPort(POVS_SWITCH_CONTEXT switchContext,
     vport = OvsFindVportByPortIdAndNicIndex(switchContext,
                                             portParam->PortId, 0);
     if (vport) {
-        /* add assertion here
-         */
+        /* add assertion here */
         vport->portState = NdisSwitchPortStateTeardown;
         vport->ovsState = OVS_STATE_PORT_TEAR_DOWN;
     } else {
@@ -185,7 +184,6 @@ HvTeardownPort(POVS_SWITCH_CONTEXT switchContext,
 
     VPORT_PORT_EXIT(portParam);
 }
-
 
 
 VOID
@@ -208,11 +206,7 @@ HvDeletePort(POVS_SWITCH_CONTEXT switchContext,
      * delete will delete the vport.
     */
     if (vport) {
-        if (vport->portNo == OVS_DPPORT_NUMBER_INVALID) {
-            OvsRemoveAndDeleteVport(switchContext, vport);
-        } else {
-            vport->hvDeleted = TRUE;
-        }
+        OvsRemoveAndDeleteVport(switchContext, vport, TRUE, FALSE, NULL);
     } else {
         OVS_LOG_WARN("Vport not present.");
     }
@@ -502,7 +496,7 @@ HvDeleteNic(POVS_SWITCH_CONTEXT switchContext,
     portNo = vport->portNo;
     if (vport->portType == NdisSwitchPortTypeExternal &&
         vport->nicIndex != 0) {
-        OvsRemoveAndDeleteVport(switchContext, vport);
+        OvsRemoveAndDeleteVport(switchContext, vport, TRUE, FALSE, NULL);
     }
     vport->nicState = NdisSwitchNicStateUnknown;
     vport->ovsState = OVS_STATE_PORT_CREATED;
@@ -990,13 +984,26 @@ InitOvsVportCommon(POVS_SWITCH_CONTEXT switchContext,
  * --------------------------------------------------------------------------
  * Provides functionality that is partly complementatry to
  * InitOvsVportCommon()/InitHvVportCommon().
+ *
+ * 'hvDelete' indicates if caller is removing the vport as a result of the
+ * port being removed on the Hyper-V switch.
+ * 'ovsDelete' indicates if caller is removing the vport as a result of the
+ * port being removed from OVS userspace.
  * --------------------------------------------------------------------------
  */
 VOID
 OvsRemoveAndDeleteVport(POVS_SWITCH_CONTEXT switchContext,
-                        POVS_VPORT_ENTRY vport)
+                        POVS_VPORT_ENTRY vport,
+                        BOOLEAN hvDelete,
+                        BOOLEAN ovsDelete,
+                        BOOLEAN *vportDeallocated)
 {
     BOOLEAN hvSwitchPort = FALSE;
+    BOOLEAN deletedOnOvs = FALSE, deletedOnHv = FALSE;
+
+    if (vportDeallocated) {
+        *vportDeallocated = FALSE;
+    }
 
     if (vport->isExternal) {
         if (vport->nicIndex == 0) {
@@ -1004,6 +1011,9 @@ OvsRemoveAndDeleteVport(POVS_SWITCH_CONTEXT switchContext,
             switchContext->virtualExternalPortId = 0;
             switchContext->virtualExternalVport = NULL;
             OvsFreeMemory(vport);
+            if (vportDeallocated) {
+                *vportDeallocated = TRUE;
+            }
             return;
         } else {
             ASSERT(switchContext->numPhysicalNics);
@@ -1034,17 +1044,56 @@ OvsRemoveAndDeleteVport(POVS_SWITCH_CONTEXT switchContext,
         break;
     }
 
-    RemoveEntryList(&vport->ovsNameLink);
-    RemoveEntryList(&vport->portIdLink);
-    RemoveEntryList(&vport->portNoLink);
-    if (hvSwitchPort) {
-        switchContext->numHvVports--;
-    } else {
-        switchContext->numNonHvVports--;
+    /*
+     * 'hvDelete' == TRUE indicates that the port should be removed from the
+     * 'portIdHashArray', while 'ovsDelete' == TRUE indicates that the port
+     * should be removed from 'portNoHashArray' and the 'ovsPortNameHashArray'.
+     *
+     * Both 'hvDelete' and 'ovsDelete' can be set to TRUE by the caller.
+     */
+    if (vport->hvDeleted == TRUE) {
+        deletedOnHv = TRUE;
     }
-    OvsFreeMemory(vport);
-}
+    if (vport->portNo == OVS_DPPORT_NUMBER_INVALID) {
+        deletedOnOvs = TRUE;
+    }
 
+    if (hvDelete && !deletedOnHv) {
+        vport->hvDeleted = TRUE;
+
+        /* Remove the port from the relevant lists. */
+        RemoveEntryList(&vport->portIdLink);
+        InitializeListHead(&vport->portIdLink);
+        deletedOnHv = TRUE;
+    }
+    if (ovsDelete && !deletedOnOvs) {
+        vport->portNo = OVS_DPPORT_NUMBER_INVALID;
+        vport->ovsName[0] = '\0';
+
+        /* Remove the port from the relevant lists. */
+        RemoveEntryList(&vport->ovsNameLink);
+        InitializeListHead(&vport->ovsNameLink);
+        RemoveEntryList(&vport->portNoLink);
+        InitializeListHead(&vport->portNoLink);
+        deletedOnOvs = TRUE;
+    }
+
+    /*
+     * Deallocate the port if it has been deleted on the Hyper-V switch as well
+     * as OVS userspace.
+     */
+    if (deletedOnHv && deletedOnOvs) {
+        if (hvSwitchPort) {
+            switchContext->numHvVports--;
+        } else {
+            switchContext->numNonHvVports--;
+        }
+        OvsFreeMemory(vport);
+        if (vportDeallocated) {
+            *vportDeallocated = TRUE;
+        }
+    }
+}
 
 NDIS_STATUS
 OvsAddConfiguredSwitchPorts(POVS_SWITCH_CONTEXT switchContext)
@@ -1181,7 +1230,7 @@ OvsClearAllSwitchVports(POVS_SWITCH_CONTEXT switchContext)
         LIST_FORALL_SAFE(head, link, next) {
             POVS_VPORT_ENTRY vport;
             vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, portIdLink);
-            OvsRemoveAndDeleteVport(switchContext, vport);
+            OvsRemoveAndDeleteVport(switchContext, vport, TRUE, TRUE, NULL);
         }
     }
     /*
@@ -1190,7 +1239,8 @@ OvsClearAllSwitchVports(POVS_SWITCH_CONTEXT switchContext)
      */
     if (switchContext->virtualExternalVport) {
         OvsRemoveAndDeleteVport(switchContext,
-            (POVS_VPORT_ENTRY)switchContext->virtualExternalVport);
+            (POVS_VPORT_ENTRY)switchContext->virtualExternalVport, TRUE, TRUE,
+            NULL);
     }
 
     for (UINT hash = 0; hash < OVS_MAX_VPORT_ARRAY_SIZE; hash++) {
@@ -1202,8 +1252,8 @@ OvsClearAllSwitchVports(POVS_SWITCH_CONTEXT switchContext)
             vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, portNoLink);
             ASSERT(OvsIsTunnelVportType(vport->ovsType) ||
                    (vport->ovsType == OVS_VPORT_TYPE_INTERNAL &&
-                    vport->isBridgeInternal));
-            OvsRemoveAndDeleteVport(switchContext, vport);
+                    vport->isBridgeInternal) || vport->hvDeleted == TRUE);
+            OvsRemoveAndDeleteVport(switchContext, vport, TRUE, TRUE, NULL);
         }
     }
 
