@@ -25,8 +25,6 @@ EXTRA_DIST += \
 	datapath-windows/ovsext/Event.h \
 	datapath-windows/ovsext/Flow.c \
 	datapath-windows/ovsext/Flow.h \
-	datapath-windows/ovsext/Ioctl.c \
-	datapath-windows/ovsext/Ioctl.h \
 	datapath-windows/ovsext/IpHelper.c \
 	datapath-windows/ovsext/IpHelper.h \
 	datapath-windows/ovsext/Jhash.c \

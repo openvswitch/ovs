@@ -29,9 +29,5 @@
 #include "Netlink/NetlinkError.h"
 #include "Netlink/Netlink.h"
 #include "Netlink/NetlinkProto.h"
-
-#if defined OVS_USE_NL_INTERFACE && OVS_USE_NL_INTERFACE == 1
 #include "..\include\OvsDpInterfaceExt.h"
-#endif
-
 #include "..\include\OvsPub.h"

@@ -79,7 +79,6 @@
     <ClInclude Include="Ethernet.h" />
     <ClInclude Include="Event.h" />
     <ClInclude Include="Flow.h" />
-    <ClInclude Include="Ioctl.h" />
     <ClInclude Include="IpHelper.h" />
     <ClInclude Include="Jhash.h" />
     <ClInclude Include="Netlink/Netlink.h" />
@@ -105,7 +104,7 @@
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
-      <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1;OVS_WIN_DP=1;OVS_USE_NL_INTERFACE=1</PreprocessorDefinitions>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1</PreprocessorDefinitions>
     </ClCompile>
     <Midl>
       <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1</PreprocessorDefinitions>
@@ -137,7 +136,6 @@
     <ClCompile Include="Driver.c" />
     <ClCompile Include="Event.c" />
     <ClCompile Include="Flow.c" />
-    <ClCompile Include="Ioctl.c" />
     <ClCompile Include="IpHelper.c" />
     <ClCompile Include="Jhash.c" />
     <ClCompile Include="Netlink/Netlink.c" />

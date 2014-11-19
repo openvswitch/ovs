@@ -20,7 +20,6 @@
  * OVS_USE_NL_INTERFACE = 0 => legacy inteface to use with dpif-windows.c
  * OVS_USE_NL_INTERFACE = 1 => netlink inteface to use with ported dpif-linux.c
  */
-#if defined OVS_USE_NL_INTERFACE && OVS_USE_NL_INTERFACE == 1
 
 #include "precomp.h"
 #include "Switch.h"
@@ -2364,5 +2363,3 @@ OvsPendPacketCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
      */
     return OvsWaitDpIoctl(usrParamsCtx->irp, instance->fileObject);
 }
-
-#endif /* OVS_USE_NL_INTERFACE */

@@ -20,10 +20,6 @@
  * OVS_USE_NL_INTERFACE = 0 => legacy inteface to use with dpif-windows.c
  * OVS_USE_NL_INTERFACE = 1 => netlink inteface to use with ported dpif-linux.c
  */
-#if defined OVS_USE_NL_INTERFACE && OVS_USE_NL_INTERFACE == 0
-#include "Ioctl.h"
-
-#else
 
 #ifndef __DATAPATH_H_
 #define __DATAPATH_H_ 1
@@ -178,5 +174,3 @@ FreeUserDumpState(POVS_OPEN_INSTANCE instance)
 NTSTATUS OvsSetupDumpStart(POVS_USER_PARAMS_CONTEXT usrParamsCtx);
 
 #endif /* __DATAPATH_H_ */
-
-#endif /* OVS_USE_NL_INTERFACE */
