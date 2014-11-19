@@ -4,13 +4,13 @@ EXTRA_DIST += \
 	datapath-windows/Package/package.VcxProj \
 	datapath-windows/Package/package.VcxProj.user \
 	datapath-windows/include/OvsDpInterfaceExt.h \
-	datapath-windows/include/OvsPub.h\
 	datapath-windows/misc/install.cmd \
 	datapath-windows/misc/uninstall.cmd \
 	datapath-windows/misc/OVS.psm1 \
 	datapath-windows/ovsext.sln \
 	datapath-windows/ovsext/Datapath.c \
 	datapath-windows/ovsext/Datapath.h \
+	datapath-windows/ovsext/DpInternal.h\
 	datapath-windows/ovsext/Actions.c \
 	datapath-windows/ovsext/Atomic.h \
 	datapath-windows/ovsext/BufferMgmt.c \

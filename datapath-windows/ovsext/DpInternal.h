@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef __OVS_PUB_H_
-#define __OVS_PUB_H_ 1
+#ifndef __DP_INTERNAL_H_
+#define __DP_INTERNAL_H_ 1
 
 #include <netioapi.h>
 #define IFNAMSIZ IF_NAMESIZE
@@ -472,4 +472,4 @@ typedef struct _OVS_EVENT_STATUS {
 
 #pragma pack(pop)
 
-#endif /* __OVS_PUB_H_ */
+#endif /* __DP_INTERNAL_H_ */
