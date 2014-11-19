@@ -81,26 +81,63 @@ HvCreatePort(POVS_SWITCH_CONTEXT switchContext,
     POVS_VPORT_ENTRY vport;
     LOCK_STATE_EX lockState;
     NDIS_STATUS status = NDIS_STATUS_SUCCESS;
+    BOOLEAN newPort = FALSE;
 
     VPORT_PORT_ENTER(portParam);
 
     NdisAcquireRWLockWrite(switchContext->dispatchLock, &lockState, 0);
+    /* Lookup by port ID. */
     vport = OvsFindVportByPortIdAndNicIndex(switchContext,
                                             portParam->PortId, 0);
-    if (vport != NULL && !vport->hvDeleted) {
+    if (vport != NULL) {
+        OVS_LOG_ERROR("Port add failed due to duplicate port name, "
+                      "port Id: %u", portParam->PortId);
         status = STATUS_DATA_NOT_ACCEPTED;
         goto create_port_done;
-    } else if (!vport) {
+    }
+
+    /*
+     * Lookup by port name to see if this port with this name had been added
+     * (and deleted) previously.
+     */
+    vport = OvsFindVportByHvNameW(gOvsSwitchContext,
+                                  portParam->PortFriendlyName.String,
+                                  portParam->PortFriendlyName.Length);
+    if (vport && vport->hvDeleted == FALSE) {
+        OVS_LOG_ERROR("Port add failed since a port already exists on "
+                      "the specified port Id: %u, ovsName: %s",
+                      portParam->PortId, vport->ovsName);
+        status = STATUS_DATA_NOT_ACCEPTED;
+        goto create_port_done;
+    }
+
+    if (vport != NULL) {
+        ASSERT(vport->hvDeleted);
+        ASSERT(vport->portNo != OVS_DPPORT_NUMBER_INVALID);
+
+        /*
+         * It should be possible to simply just mark this port as "not deleted"
+         * given that the port Id and the name are the same and also provided
+         * that the other properties that we cache have not changed.
+         */
+        if (vport->portType != portParam->PortType) {
+            OVS_LOG_INFO("Port add failed due to PortType change, port Id: %u"
+                         " old: %u, new: %u", portParam->PortId,
+                         vport->portType, portParam->PortType);
+            status = STATUS_DATA_NOT_ACCEPTED;
+            goto create_port_done;
+        }
+        vport->hvDeleted = FALSE;
+    } else {
         vport = (POVS_VPORT_ENTRY)OvsAllocateVport();
         if (vport == NULL) {
             status = NDIS_STATUS_RESOURCES;
             goto create_port_done;
         }
+        newPort = TRUE;
     }
-
     OvsInitVportWithPortParam(vport, portParam);
-    /* XXX: Dummy argument to InitHvVportCommon(). */
-    InitHvVportCommon(switchContext, vport, TRUE);
+    InitHvVportCommon(switchContext, vport, newPort);
 
 create_port_done:
     NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
@@ -587,9 +624,27 @@ OvsFindVportByHvNameW(POVS_SWITCH_CONTEXT switchContext,
         }
     }
 
-Cleanup:
-    OvsFreeMemory(wsName);
+    /*
+     * Look in the list of ports that were added from the Hyper-V switch and
+     * deleted.
+     */
+    if (vport == NULL) {
+        for (i = 0; i < OVS_MAX_VPORT_ARRAY_SIZE; i++) {
+            head = &(switchContext->portNoHashArray[i]);
+            LIST_FORALL(head, link) {
+                vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, portNoLink);
+                if (vport->portFriendlyName.Length == wstrSize &&
+                    RtlEqualMemory(wsName, vport->portFriendlyName.String,
+                                   vport->portFriendlyName.Length)) {
+                    goto Cleanup;
+                }
 
+                vport = NULL;
+            }
+        }
+    }
+
+Cleanup:
     return vport;
 }
 
