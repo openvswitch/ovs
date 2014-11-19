@@ -290,7 +290,14 @@ updt_roles_tree__(struct rstp *r)
     struct rstp_port *p;
     int vsel;
     struct rstp_priority_vector best_vector, candidate_vector;
+    enum rstp_port_role new_root_old_role = ROLE_DESIGNATED;
+    uint16_t old_root_port_number = 0;
+    uint16_t new_root_port_number = 0;
 
+    old_root_port_number = r->root_port_id & 0x00ff;
+    if (old_root_port_number) {
+        r->old_root_aux = rstp_get_port_aux__(r, old_root_port_number);
+    }
     vsel = -1;
     best_vector = r->bridge_priority;
     /* Letter c1) */
@@ -320,12 +327,26 @@ updt_roles_tree__(struct rstp *r)
             r->root_times = p->port_times;
             r->root_times.message_age++;
             vsel = p->port_number;
+            new_root_old_role = p->role;
         }
     }
     r->root_priority = best_vector;
     r->root_port_id = best_vector.bridge_port_id;
     VLOG_DBG("%s: new Root is "RSTP_ID_FMT, r->name,
              RSTP_ID_ARGS(r->root_priority.root_bridge_id));
+    new_root_port_number = r->root_port_id & 0x00ff;
+    if (new_root_port_number) {
+        r->new_root_aux = rstp_get_port_aux__(r, new_root_port_number);
+    }
+    /* Shift learned MAC addresses from an old Root Port to an existing
+     * Alternate Port. */
+    if (!r->root_changed
+        && new_root_old_role == ROLE_ALTERNATE
+        && new_root_port_number
+        && old_root_port_number
+        && new_root_port_number != old_root_port_number) {
+        r->root_changed = true;
+    }
     /* Letters d) e) */
     HMAP_FOR_EACH (p, node, &r->ports) {
         p->designated_priority_vector.root_bridge_id =

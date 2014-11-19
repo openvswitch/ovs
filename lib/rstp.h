@@ -164,6 +164,14 @@ void *rstp_get_next_changed_port_aux(struct rstp *, struct rstp_port **)
 void rstp_port_set_mac_operational(struct rstp_port *,
                                    bool new_mac_operational)
     OVS_EXCLUDED(rstp_mutex);
+bool rstp_shift_root_learned_address(struct rstp *)
+    OVS_EXCLUDED(rstp_mutex);
+void *rstp_get_old_root_aux(struct rstp *)
+    OVS_EXCLUDED(rstp_mutex);
+void *rstp_get_new_root_aux(struct rstp *)
+    OVS_EXCLUDED(rstp_mutex);
+void rstp_reset_root_changed(struct rstp *)
+    OVS_EXCLUDED(rstp_mutex);
 
 /* Bridge setters */
 void rstp_set_bridge_address(struct rstp *, rstp_identifier bridge_address)
@@ -232,8 +240,8 @@ void rstp_port_get_status(const struct rstp_port *, uint16_t *id,
                           int *rx_count, int *error_count, int *uptime)
     OVS_EXCLUDED(rstp_mutex);
 
-void * rstp_get_port_aux(struct rstp *rstp, uint16_t port_number)
-    OVS_EXCLUDED(rstp_mutex);
+void * rstp_get_port_aux__(struct rstp *rstp, uint16_t port_number)
+    OVS_REQUIRES(rstp_mutex);
 
 
 /* Internal API for rstp-state-machines.c */

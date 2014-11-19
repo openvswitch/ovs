@@ -711,6 +711,8 @@ static void
 rstp_port_set_port_number__(struct rstp_port *port, uint16_t port_number)
     OVS_REQUIRES(rstp_mutex)
 {
+    int old_port_number = port->port_number;
+
     /* If new_port_number is available, use it, otherwise use the first free
      * available port number. */
     port->port_number =
@@ -718,14 +720,23 @@ rstp_port_set_port_number__(struct rstp_port *port, uint16_t port_number)
         ? port_number
         : rstp_first_free_number__(port->rstp, port);
 
-    set_port_id__(port);
-    /* [17.13] is not clear. I suppose that a port number change
-     * should trigger reselection like a port priority change. */
-    port->selected = false;
-    port->reselect = true;
+    if (port->port_number != old_port_number) {
+        set_port_id__(port);
+        /* [17.13] is not clear. I suppose that a port number change
+         * should trigger reselection like a port priority change. */
+        port->selected = false;
+        port->reselect = true;
 
-    VLOG_DBG("%s: set new RSTP port number %d", port->rstp->name,
-             port->port_number);
+        /* Adjust the ports hmap. */
+        if (!hmap_node_is_null(&port->node)) {
+            hmap_remove(&port->rstp->ports, &port->node);
+        }
+        hmap_insert(&port->rstp->ports, &port->node,
+                    hash_int(port->port_number, 0));
+
+        VLOG_DBG("%s: set new RSTP port number %d", port->rstp->name,
+                 port->port_number);
+    }
 }
 
 /* Converts the link speed to a port path cost [Table 17-3]. */
@@ -780,7 +791,11 @@ rstp_get_root_path_cost(const struct rstp *rstp)
  * pointer is returned if no port needs to flush its MAC learning table.
  * '*port' needs to be NULL in the first call to start the iteration.  If
  * '*port' is passed as non-NULL, it must be the value set by the last
- * invocation of this function. */
+ * invocation of this function.
+ *
+ * This function may only be called by the thread that creates and deletes
+ * ports.  Otherwise this function is not thread safe, as the returned
+ * '*port' could become stale before it is used in the next invocation. */
 void *
 rstp_check_and_reset_fdb_flush(struct rstp *rstp, struct rstp_port **port)
     OVS_EXCLUDED(rstp_mutex)
@@ -819,8 +834,9 @@ out:
         (*port)->fdb_flush = false;
     }
     ovs_mutex_unlock(&rstp_mutex);
+
     return aux;
-    }
+}
 
 /* Finds a port whose state has changed, and returns the aux pointer set for
  * the port.  A NULL pointer is returned when no changed port is found.  On
@@ -866,7 +882,52 @@ rstp_get_next_changed_port_aux(struct rstp *rstp, struct rstp_port **portp)
     *portp = NULL;
 out:
     ovs_mutex_unlock(&rstp_mutex);
+
     return aux;
+}
+
+bool
+rstp_shift_root_learned_address(struct rstp *rstp)
+{
+    bool ret;
+
+    ovs_mutex_lock(&rstp_mutex);
+    ret = rstp->root_changed;
+    ovs_mutex_unlock(&rstp_mutex);
+
+    return ret;
+}
+
+void *
+rstp_get_old_root_aux(struct rstp *rstp)
+{
+    void *aux;
+
+    ovs_mutex_lock(&rstp_mutex);
+    aux = rstp->old_root_aux;
+    ovs_mutex_unlock(&rstp_mutex);
+
+    return aux;
+}
+
+void *
+rstp_get_new_root_aux(struct rstp *rstp)
+{
+    void *aux;
+
+    ovs_mutex_lock(&rstp_mutex);
+    aux = rstp->new_root_aux;
+    ovs_mutex_unlock(&rstp_mutex);
+
+    return aux;
+}
+
+void
+rstp_reset_root_changed(struct rstp *rstp)
+{
+    ovs_mutex_lock(&rstp_mutex);
+    rstp->root_changed = false;
+    ovs_mutex_unlock(&rstp_mutex);
 }
 
 /* Returns the port in 'rstp' with number 'port_number'.
@@ -902,17 +963,15 @@ rstp_get_port(struct rstp *rstp, uint16_t port_number)
 }
 
 void *
-rstp_get_port_aux(struct rstp *rstp, uint16_t port_number)
-    OVS_EXCLUDED(rstp_mutex)
+rstp_get_port_aux__(struct rstp *rstp, uint16_t port_number)
+    OVS_REQUIRES(rstp_mutex)
 {
     struct rstp_port *p;
-    void *aux;
-
-    ovs_mutex_lock(&rstp_mutex);
     p = rstp_get_port__(rstp, port_number);
-    aux = p->aux;
-    ovs_mutex_unlock(&rstp_mutex);
-    return aux;
+    if (p) {
+        return p->aux;
+    }
+    return NULL;
 }
 
 /* Updates the port_enabled parameter. */
@@ -1084,6 +1143,7 @@ rstp_add_port(struct rstp *rstp)
     struct rstp_port *p = xzalloc(sizeof *p);
 
     ovs_refcount_init(&p->ref_cnt);
+    hmap_node_nullify(&p->node);
 
     ovs_mutex_lock(&rstp_mutex);
     p->rstp = rstp;
@@ -1095,7 +1155,6 @@ rstp_add_port(struct rstp *rstp)
              p->port_id);
 
     rstp_port_set_state__(p, RSTP_DISCARDING);
-    hmap_insert(&rstp->ports, &p->node, hash_int(p->port_number, 0));
     rstp->changes = true;
     move_rstp__(rstp);
     VLOG_DBG("%s: added port "RSTP_PORT_ID_FMT"", rstp->name, p->port_id);
@@ -1324,6 +1383,7 @@ rstp_get_root_port(struct rstp *rstp)
 /* Returns the state of port 'p'. */
 enum rstp_state
 rstp_port_get_state(const struct rstp_port *p)
+    OVS_EXCLUDED(rstp_mutex)
 {
     enum rstp_state state;
 

@@ -868,6 +868,10 @@ struct rstp {
     /* Interface to client. */
     void (*send_bpdu)(struct ofpbuf *bpdu, void *port_aux, void *rstp_aux);
     void *aux;
+
+    bool root_changed;
+    void *old_root_aux;
+    void *new_root_aux;
 };
 
 #endif /* rstp-common.h */
