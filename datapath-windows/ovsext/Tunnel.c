@@ -224,9 +224,10 @@ OvsInjectPacketThroughActions(PNET_BUFFER_LIST pNbl,
     OvsCompletionList completionList;
     KIRQL irql;
     ULONG SendFlags = NDIS_SEND_FLAGS_SWITCH_DESTINATION_GROUP;
-    OVS_DATAPATH *datapath = &gOvsSwitchContext->datapath;
+    OVS_DATAPATH *datapath = NULL;
 
     ASSERT(gOvsSwitchContext);
+    datapath = &gOvsSwitchContext->datapath;
 
     /* Fill the tunnel key */
     status = OvsSlowPathDecapVxlan(pNbl, &tunnelKey);

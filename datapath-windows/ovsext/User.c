@@ -141,10 +141,15 @@ OvsCleanupPacketQueue(POVS_OPEN_INSTANCE instance)
         OvsFreeMemory(queue);
     }
 
-    /* Remove the instance from pidHashArray */
-    OvsAcquirePidHashLock();
-    OvsDelPidInstance(gOvsSwitchContext, instance->pid);
-    OvsReleasePidHashLock();
+    /* Verify if gOvsSwitchContext exists. */
+    OvsAcquireCtrlLock();
+    if (gOvsSwitchContext) {
+        /* Remove the instance from pidHashArray */
+        OvsAcquirePidHashLock();
+        OvsDelPidInstance(gOvsSwitchContext, instance->pid);
+        OvsReleasePidHashLock();
+    }
+    OvsReleaseCtrlLock();
 }
 
 NTSTATUS
