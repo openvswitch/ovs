@@ -136,7 +136,10 @@ typedef struct _OVS_SWITCH_CONTEXT
     /*
      * 'portIdHashArray' ONLY contains ports that exist on the Hyper-V switch,
      * namely: VIF (vNIC) ports, external port and Hyper-V internal port.
-     * 'numHvVports' counts the ports in 'portIdHashArray'.
+     * 'numHvVports' counts the ports in 'portIdHashArray'. If a port got
+     * deleted on the Hyper-V switch, it gets deleted from 'portIdHashArray'.
+     * The port itself will not get deallocated if it has been added from OVS
+     * userspace. 'numHvVports' is decremented when the port is deallocated.
      *
      * 'portNoHashArray' ONLY contains ports that are added from OVS userspace,
      * regardless of whether that port exists on the Hyper-V switch or not.
