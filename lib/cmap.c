@@ -16,11 +16,15 @@
 
 #include <config.h>
 #include "cmap.h"
+#include "coverage.h"
 #include "bitmap.h"
 #include "hash.h"
 #include "ovs-rcu.h"
 #include "random.h"
 #include "util.h"
+
+COVERAGE_DEFINE(cmap_expand);
+COVERAGE_DEFINE(cmap_shrink);
 
 /* Optimistic Concurrent Cuckoo Hash
  * =================================
@@ -53,6 +57,10 @@
  * of about 93%.  The current implementation is conservative, expanding the
  * hash table when it is over 85% full.
  *
+ * When the load factor is below 20%, the hash table will be shrinked by half.
+ * This is to reduce the memory utilization of the hash table and to avoid
+ * the hash table occupying the top of heap chunk which prevents the trimming
+ * of heap.
  *
  * Hash Functions
  * ==============
@@ -150,15 +158,21 @@ BUILD_ASSERT_DECL(sizeof(struct cmap_bucket) == CACHE_LINE_SIZE);
  * values waste memory; larger values increase the average insertion time. */
 #define CMAP_MAX_LOAD ((uint32_t) (UINT32_MAX * .85))
 
+/* Default minimum load factor (as a fraction of UINT32_MAX + 1) before
+ * shrinking a cmap.  Currently, the value is chosen to be 20%, this
+ * means cmap will have a 40% load factor after shrink. */
+#define CMAP_MIN_LOAD ((uint32_t) (UINT32_MAX * .20))
+
 /* The implementation of a concurrent hash map. */
 struct cmap_impl {
     unsigned int n;             /* Number of in-use elements. */
     unsigned int max_n;         /* Max elements before enlarging. */
+    unsigned int min_n;         /* Min elements before shrinking. */
     uint32_t mask;              /* Number of 'buckets', minus one. */
     uint32_t basis;             /* Basis for rehashing client's hash values. */
 
     /* Padding to make cmap_impl exactly one cache line long. */
-    uint8_t pad[CACHE_LINE_SIZE - sizeof(unsigned int) * 4];
+    uint8_t pad[CACHE_LINE_SIZE - sizeof(unsigned int) * 5];
 
     struct cmap_bucket buckets[];
 };
@@ -199,6 +213,12 @@ calc_max_n(uint32_t mask)
     return ((uint64_t) (mask + 1) * CMAP_K * CMAP_MAX_LOAD) >> 32;
 }
 
+static uint32_t
+calc_min_n(uint32_t mask)
+{
+    return ((uint64_t) (mask + 1) * CMAP_K * CMAP_MIN_LOAD) >> 32;
+}
+
 static struct cmap_impl *
 cmap_impl_create(uint32_t mask)
 {
@@ -210,6 +230,7 @@ cmap_impl_create(uint32_t mask)
                              + (mask + 1) * sizeof *impl->buckets);
     impl->n = 0;
     impl->max_n = calc_max_n(mask);
+    impl->min_n = calc_min_n(mask);
     impl->mask = mask;
     impl->basis = random_uint32();
 
@@ -758,6 +779,7 @@ cmap_insert(struct cmap *cmap, struct cmap_node *node, uint32_t hash)
     ovsrcu_set_hidden(&node->next, NULL);
 
     if (OVS_UNLIKELY(impl->n >= impl->max_n)) {
+        COVERAGE_INC(cmap_expand);
         impl = cmap_rehash(cmap, (impl->mask << 1) | 1);
     }
 
@@ -825,6 +847,10 @@ cmap_replace(struct cmap *cmap, struct cmap_node *old_node,
 
     if (!new_node) {
         impl->n--;
+        if (OVS_UNLIKELY(impl->n < impl->min_n)) {
+            COVERAGE_INC(cmap_shrink);
+            impl = cmap_rehash(cmap, impl->mask >> 1);
+        }
     }
     return impl->n;
 }
