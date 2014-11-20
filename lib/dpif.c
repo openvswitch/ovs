@@ -38,6 +38,7 @@
 #include "packet-dpif.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "route-table.h"
 #include "shash.h"
 #include "sset.h"
 #include "timeval.h"
@@ -115,9 +116,11 @@ dp_initialize(void)
             dp_register_provider(base_dpif_classes[i]);
         }
         dpctl_unixctl_register();
-        ovsthread_once_done(&once);
         tnl_port_map_init();
         tnl_arp_cache_init();
+        route_table_register();
+
+        ovsthread_once_done(&once);
     }
 }
 

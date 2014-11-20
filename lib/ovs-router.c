@@ -281,7 +281,7 @@ ovs_router_flush(void)
 
 /* May not be called more than once. */
 void
-ovs_router_unixctl_register(void)
+ovs_router_init(void)
 {
     classifier_init(&cls, NULL);
     unixctl_command_register("ovs/route/add", "ipv4_addr/prefix_len out_br_name gw", 2, 3,

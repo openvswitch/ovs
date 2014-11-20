@@ -24,7 +24,7 @@ extern "C" {
 #endif
 
 bool ovs_router_lookup(ovs_be32 ip_dst, char out_dev[], ovs_be32 *gw);
-void ovs_router_unixctl_register(void);
+void ovs_router_init(void);
 #ifdef  __cplusplus
 }
 #endif

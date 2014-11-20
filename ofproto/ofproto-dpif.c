@@ -1253,7 +1253,6 @@ construct(struct ofproto *ofproto_)
     guarded_list_init(&ofproto->pins);
 
     ofproto_unixctl_init();
-    ovs_router_unixctl_register();
 
     hmap_init(&ofproto->vlandev_map);
     hmap_init(&ofproto->realdev_vid_map);

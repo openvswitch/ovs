@@ -96,6 +96,7 @@ route_table_register(void)
         ovs_assert(!nln);
         ovs_assert(!route_notifier);
 
+        ovs_router_init();
         nln = nln_create(NETLINK_ROUTE, RTNLGRP_IPV4_ROUTE,
                          (nln_parse_func *) route_table_parse, &rtmsg);
 

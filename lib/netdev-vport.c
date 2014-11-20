@@ -254,8 +254,6 @@ netdev_vport_construct(struct netdev *netdev_)
         dev->tnl_cfg.dst_port = htons(LISP_DST_PORT);
     }
 
-    route_table_register();
-
     return 0;
 }
 
