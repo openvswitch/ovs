@@ -41,9 +41,9 @@ Post-v2.3.0
    - Support for travis-ci.org based continuous integration builds has been
      added. Build failures are reported to build@openvswitch.org. See INSTALL.md
      file for additional details.
-   - Experimental support for the Rapid Spanning Tree Protocol
-     (IEEE 802.1D-2004).  More conformance and interoperability testing is
-     still needed, so this should not be enabled on production environments.
+   - Support for the Rapid Spanning Tree Protocol (IEEE 802.1D-2004).
+     The implementation has been tested successfully against the Ixia Automated
+     Network Validation Library (ANVL).
    - Stats are no longer updated on fake bond interface.
    - Keep active bond slave selection across OVS restart.
    - A simple wrapper script, 'ovs-docker', to integrate OVS with Docker
