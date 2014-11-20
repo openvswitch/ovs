@@ -102,9 +102,9 @@ typedef struct _OVS_VPORT_ENTRY {
     NDIS_SWITCH_NIC_STATE  nicState;
     NDIS_SWITCH_PORT_TYPE  portType;
 
-    UINT8                  permMacAddress[MAC_ADDRESS_LEN];
-    UINT8                  currMacAddress[MAC_ADDRESS_LEN];
-    UINT8                  vmMacAddress[MAC_ADDRESS_LEN];
+    UINT8                  permMacAddress[ETH_ADDR_LEN];
+    UINT8                  currMacAddress[ETH_ADDR_LEN];
+    UINT8                  vmMacAddress[ETH_ADDR_LEN];
 
     NDIS_SWITCH_PORT_NAME  hvPortName;
     IF_COUNTED_STRING      portFriendlyName;

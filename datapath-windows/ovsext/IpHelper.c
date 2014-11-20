@@ -787,7 +787,7 @@ OvsCreateIPNeighEntry(PMIB_IPNET_ROW2 ipNeigh)
     KeQuerySystemTime((LARGE_INTEGER *)&timeVal);
     entry->timeout = timeVal + OVS_IPNEIGH_TIMEOUT;
     RtlCopyMemory(entry->macAddr, ipNeigh->PhysicalAddress,
-                  MAC_ADDRESS_LEN);
+                  ETH_ADDR_LEN);
     InitializeListHead(&entry->fwdList);
 
     return entry;
@@ -1305,9 +1305,9 @@ fwd_request_done:
      */
     fwdInfo.dstIpAddr = request->fwdReq.tunnelKey.dst;
     fwdInfo.srcIpAddr = srcAddr;
-    RtlCopyMemory(fwdInfo.dstMacAddr, ipn->macAddr, MAC_ADDRESS_LEN);
+    RtlCopyMemory(fwdInfo.dstMacAddr, ipn->macAddr, ETH_ADDR_LEN);
     RtlCopyMemory(fwdInfo.srcMacAddr, ovsInternalRow.PhysicalAddress,
-                  MAC_ADDRESS_LEN);
+                  ETH_ADDR_LEN);
     fwdInfo.srcPortNo = request->fwdReq.inPort;
 
     fwdEntry = OvsCreateFwdEntry(&fwdInfo);
@@ -1386,7 +1386,7 @@ OvsUpdateIPNeighEntry(UINT32 ipAddr,
 
     if (memcmp((const PVOID)ipn->macAddr,
                (const PVOID)ipNeigh->PhysicalAddress,
-               (size_t)MAC_ADDRESS_LEN)) {
+               (size_t)ETH_ADDR_LEN)) {
         PLIST_ENTRY link;
         POVS_FWD_ENTRY fwdEntry;
         NdisReleaseRWLock(ovsTableLock, &lockState);
@@ -1406,7 +1406,7 @@ OvsUpdateIPNeighEntry(UINT32 ipAddr,
         LIST_FORALL(&ipn->fwdList, link) {
             fwdEntry = CONTAINING_RECORD(link, OVS_FWD_ENTRY, ipnLink);
             RtlCopyMemory(fwdEntry->info.dstMacAddr,
-                          ipNeigh->PhysicalAddress, MAC_ADDRESS_LEN);
+                          ipNeigh->PhysicalAddress, ETH_ADDR_LEN);
         }
     }
     /*

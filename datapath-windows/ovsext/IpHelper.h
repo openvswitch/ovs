@@ -33,7 +33,7 @@
 
 
 typedef struct _OVS_IPNEIGH_ENTRY {
-    UINT8             macAddr[MAC_ADDRESS_LEN];
+    UINT8             macAddr[ETH_ADDR_LEN];
     UINT16            refCount;
     UINT32            ipAddr;
     UINT32            pad;
@@ -55,8 +55,8 @@ typedef union  _OVS_FWD_INFO {
     struct {
         UINT32        dstIpAddr;
         UINT32        srcIpAddr;
-        UINT8         dstMacAddr[MAC_ADDRESS_LEN];
-        UINT8         srcMacAddr[MAC_ADDRESS_LEN];
+        UINT8         dstMacAddr[ETH_ADDR_LEN];
+        UINT8         srcMacAddr[ETH_ADDR_LEN];
         UINT32        srcPortNo;
     };
     UINT64            value[3];
