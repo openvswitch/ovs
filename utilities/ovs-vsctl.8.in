@@ -1073,9 +1073,11 @@ Set the auto edge value of port \fBeth0\fR:
 .IP
 .B "ovs\-vsctl set Port eth0 other_config:rstp-port-auto-edge=true"
 .PP
-Set the admin point to point mac value of port \fBeth0\fR.  Acceptable
-values are 0 (force \fBfalse\fR), 1 (force \fBtrue\fR, the default value) or
-2 (\fBauto\fR).
+Set the admin point to point MAC value of port \fBeth0\fR.  Acceptable
+values are \fB0\fR (not point-to-point), \fB1\fR (point-to-point, the
+default value) or \fB2\fR (automatic detection).  The auto-detection
+mode is not currently implemented, and the value \fB2\fR has the same
+effect of \fB0\fR (not point-to-point).
 .IP
 .B "ovs\-vsctl set Port eth0 other_config:rstp-admin-p2p-mac=1"
 .PP
