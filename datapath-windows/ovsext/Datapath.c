@@ -705,7 +705,7 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
      */
     switch (code) {
     case OVS_IOCTL_TRANSACT:
-        /* Input buffer is mandatory, output buffer is optional. */
+        /* Both input buffer and output buffer are mandatory. */
         if (outputBufferLen != 0) {
             status = MapIrpOutputBuffer(irp, outputBufferLen,
                                         sizeof *ovsMsg, &outputBuffer);
@@ -713,6 +713,9 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
                 goto done;
             }
             ASSERT(outputBuffer);
+        } else {
+            status = STATUS_NDIS_INVALID_LENGTH;
+            goto done;
         }
 
         if (inputBufferLen < sizeof (*ovsMsg)) {
@@ -726,7 +729,10 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
 
     case OVS_IOCTL_READ_EVENT:
     case OVS_IOCTL_READ_PACKET:
-        /* This IOCTL is used to read events */
+        /*
+         * Output buffer is mandatory. These IOCTLs are used to read events and
+         * packets respectively. It is convenient to have separate ioctls.
+         */
         if (outputBufferLen != 0) {
             status = MapIrpOutputBuffer(irp, outputBufferLen,
                                         sizeof *ovsMsg, &outputBuffer);
@@ -1180,6 +1186,7 @@ HandleGetDpDump(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
         /* Dump state must have been deleted after previous dump operation. */
         ASSERT(instance->dumpState.index[0] == 0);
+
         /* Output buffer has been validated while validating read dev op. */
         ASSERT(msgOut != NULL && usrParamsCtx->outputLength >= sizeof *msgOut);
 
@@ -1268,10 +1275,9 @@ HandleDpTransactionCommon(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         RtlZeroMemory(dpAttrs, sizeof dpAttrs);
     }
 
-    /* Output buffer is optional for OVS_TRANSACTION_DEV_OP. */
-    if (msgOut == NULL || usrParamsCtx->outputLength < sizeof *msgOut) {
-        return STATUS_NDIS_INVALID_LENGTH;
-    }
+    /* Output buffer has been validated while validating transact dev op. */
+    ASSERT(msgOut != NULL && usrParamsCtx->outputLength >= sizeof *msgOut);
+
     NlBufInit(&nlBuf, usrParamsCtx->outputBuffer, usrParamsCtx->outputLength);
 
     OvsAcquireCtrlLock();
@@ -1613,9 +1619,8 @@ OvsGetVport(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         return STATUS_INVALID_PARAMETER;
     }
 
-    if (msgOut == NULL || usrParamsCtx->outputLength < sizeof *msgOut) {
-        return STATUS_INVALID_BUFFER_SIZE;
-    }
+    /* Output buffer has been validated while validating transact dev op. */
+    ASSERT(msgOut != NULL && usrParamsCtx->outputLength >= sizeof *msgOut);
 
     NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock, &lockState, 0);
     if (vportAttrs[OVS_VPORT_ATTR_NAME] != NULL) {
@@ -1746,9 +1751,8 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     /* input buffer has been validated while validating write dev op. */
     ASSERT(usrParamsCtx->inputBuffer != NULL);
 
-    if (msgOut == NULL || usrParamsCtx->outputLength < sizeof *msgOut) {
-        return STATUS_INVALID_BUFFER_SIZE;
-    }
+    /* Output buffer has been validated while validating transact dev op. */
+    ASSERT(msgOut != NULL && usrParamsCtx->outputLength >= sizeof *msgOut);
 
     if (!NlAttrParse((PNL_MSG_HDR)msgIn,
         NLMSG_HDRLEN + GENL_HDRLEN + OVS_HDRLEN,
@@ -1938,9 +1942,8 @@ OvsSetVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         return STATUS_INVALID_PARAMETER;
     }
 
-    if (msgOut == NULL || usrParamsCtx->outputLength < sizeof *msgOut) {
-        return STATUS_NDIS_INVALID_LENGTH;
-    }
+    /* Output buffer has been validated while validating transact dev op. */
+    ASSERT(msgOut != NULL && usrParamsCtx->outputLength >= sizeof *msgOut);
 
     OvsAcquireCtrlLock();
 
@@ -2044,9 +2047,8 @@ OvsDeleteVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         return STATUS_INVALID_PARAMETER;
     }
 
-    if (msgOut == NULL || usrParamsCtx->outputLength < sizeof *msgOut) {
-        return STATUS_NDIS_INVALID_LENGTH;
-    }
+    /* Output buffer has been validated while validating transact dev op. */
+    ASSERT(msgOut != NULL && usrParamsCtx->outputLength >= sizeof *msgOut);
 
     NdisAcquireRWLockWrite(gOvsSwitchContext->dispatchLock, &lockState, 0);
     if (vportAttrs[OVS_VPORT_ATTR_NAME] != NULL) {
