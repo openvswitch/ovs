@@ -51,6 +51,7 @@ Post-v2.3.0
      with Docker, the wrapper script will be retired.
    - Added support for DPDK Tunneling. VXLAN and GRE are supported protocols.
      This is generic tunneling mechanism for userspace datapath.
+   - Support for multicast snooping (IGMPv1 and IGMPv2)
 
 
 v2.3.0 - 14 Aug 2014
@@ -66,7 +67,6 @@ v2.3.0 - 14 Aug 2014
      packets with the larger number of masks, but when paired with an
      older kernel module, some workloads may perform worse with the
      new userspace.
-   - Support for multicast snooping (IGMPv1 and IGMPv2)
    - Compatibility with autoconf 2.63 (previously >=2.64)
 
 v2.2.0 - Internal Release
