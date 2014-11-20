@@ -1820,7 +1820,7 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
              * Allow the vport to be deleted, because there is no
              * corresponding hyper-v switch part.
              */
-            vport->hvDeleted = TRUE;
+            vport->isPresentOnHv = TRUE;
         }
     }
 

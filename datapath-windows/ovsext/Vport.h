@@ -129,7 +129,8 @@ typedef struct _OVS_VPORT_ENTRY {
     BOOLEAN                isExternal;
     UINT32                 upcallPid; /* netlink upcall port id */
     PNL_ATTR               portOptions;
-    BOOLEAN                hvDeleted; /* is the hyper-v switch port deleted? */
+    BOOLEAN                isPresentOnHv; /* Is this port present on the
+                                             Hyper-V switch? */
 } OVS_VPORT_ENTRY, *POVS_VPORT_ENTRY;
 
 struct _OVS_SWITCH_CONTEXT;
