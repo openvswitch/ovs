@@ -49,6 +49,7 @@ enum ofp15_group_mod_command {
     /* New in OpenFlow 1.5 */
     OFPGC15_INSERT_BUCKET = 3,/* Insert action buckets to the already available
                                  list of action buckets in a matching group */
+    /* OFPGCXX_YYY = 4, */    /* Reserved for future use. */
     OFPGC15_REMOVE_BUCKET = 5,/* Remove all action buckets or any specific
                                  action bucket from matching group */
 };
