@@ -85,11 +85,11 @@ struct ofp15_bucket {
     ovs_be16 len;                   /* Length the bucket in bytes, including
                                        this header and any padding to make it
                                        64-bit aligned. */
-    ovs_be16 actions_len;           /* Length of all actions in bytes. */
+    ovs_be16 action_array_len;      /* Length of all actions in bytes. */
     ovs_be32 bucket_id;             /* Bucket Id used to identify bucket*/
     /* Followed by exactly len - 8 bytes of group bucket properties. */
     /* Followed by:
-     *   - Exactly 'actions_len' bytes containing an array of
+     *   - Exactly 'action_array_len' bytes containing an array of
      *     struct ofp_action_*.
      *   - Zero or more bytes of group bucket properties to fill out the
      *     overall length in header.length. */
@@ -123,14 +123,14 @@ struct ofp15_group_mod {
     uint8_t type;                 /* One of OFPGT11_*. */
     uint8_t pad;                  /* Pad to 64 bits. */
     ovs_be32 group_id;            /* Group identifier. */
-    ovs_be16 bucket_list_len;     /* Length of action buckets data. */
+    ovs_be16 bucket_array_len;    /* Length of action buckets data. */
     uint8_t pad1[2];              /* Pad to 64 bits. */
     ovs_be32 command_bucket_id;   /* Bucket Id used as part of
                                    * OFPGC15_INSERT_BUCKET and
                                    * OFPGC15_REMOVE_BUCKET commands
                                    * execution.*/
     /* Followed by:
-     *   - Exactly 'bucket_list_len' bytes containing an array of
+     *   - Exactly 'bucket_array_len' bytes containing an array of
      *     struct ofp15_bucket.
      *   - Zero or more bytes of group properties to fill out the overall
      *     length in header.length. */

@@ -7402,7 +7402,7 @@ ofputil_put_ofp15_bucket(const struct ofputil_bucket *bucket,
 
     ob = ofpbuf_at_assert(openflow, start, sizeof *ob);
     ob->len = htons(ofpbuf_size(openflow) - start);
-    ob->actions_len = htons(actions_len);
+    ob->action_array_len = htons(actions_len);
     ob->bucket_id = htonl(bucket_id);
 }
 
@@ -7611,7 +7611,7 @@ ofputil_pull_ofp15_buckets(struct ofpbuf *msg, size_t buckets_length,
         }
 
         ob_len = ntohs(ob->len);
-        actions_len = ntohs(ob->actions_len);
+        actions_len = ntohs(ob->action_array_len);
 
         if (ob_len < sizeof *ob) {
             VLOG_WARN_RL(&bad_ofmsg_rl, "OpenFlow message bucket length "
@@ -7900,7 +7900,7 @@ ofputil_encode_ofp15_group_mod(enum ofp_version ofp_version,
     ogm->type = gm->type;
     ogm->group_id = htonl(gm->group_id);
     ogm->command_bucket_id = htonl(gm->command_bucket_id);
-    ogm->bucket_list_len = htons(ofpbuf_size(b) - start_ogm - sizeof *ogm);
+    ogm->bucket_array_len = htons(ofpbuf_size(b) - start_ogm - sizeof *ogm);
 
     id_pool_destroy(bucket_ids);
     return b;
@@ -8047,7 +8047,7 @@ ofputil_pull_ofp15_group_mod(struct ofpbuf *msg, enum ofp_version ofp_version,
         return OFPERR_OFPGMFC_BAD_BUCKET;
     }
 
-    bucket_list_len = ntohs(ogm->bucket_list_len);
+    bucket_list_len = ntohs(ogm->bucket_array_len);
     if (bucket_list_len < ofpbuf_size(msg)) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "group has %u trailing bytes",
                      ofpbuf_size(msg) - bucket_list_len);
