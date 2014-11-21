@@ -499,9 +499,9 @@ flow_get_next_in_map(const struct flow *flow, uint64_t map, uint32_t *value)
          map__ = zero_rightmost_1bit(map__))
 
 /* Iterate through all struct flow u32 indices specified by 'MAP'. */
-#define MAP_FOR_EACH_INDEX(U32IDX, MAP)         \
-    for (uint64_t map__ = (MAP);                \
-         ((U32IDX) = ctz64(map__)) < FLOW_U32S; \
+#define MAP_FOR_EACH_INDEX(U32IDX, MAP)                 \
+    for (uint64_t map__ = (MAP);                        \
+         map__ && ((U32IDX) = raw_ctz(map__), true);    \
          map__ = zero_rightmost_1bit(map__))
 
 #define FLOW_U32_SIZE(FIELD)                                            \
