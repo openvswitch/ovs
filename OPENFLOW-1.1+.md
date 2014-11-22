@@ -110,19 +110,26 @@ didn't compare the specs carefully yet.)
     optimization in some cases for the software switch.
     [optional for OF1.3+]
 
-ONF OpenFlow Exensions for 1.3.X Pack1
---------------------------------------
+OpenFlow 1.4 & ONF Extensions for 1.3.X Pack1
+---------------------------------------------
 
-OpenFlow 1.3 has a bunch of ONF extentions.
-Many of them are necessary for OpenFlow 1.4 as well.
+The following features are both defined as a set of ONF Extensions
+for 1.3 and integrated in 1.4.
+When defined as an ONF Extension for 1.3, the feature is using the
+Experimenter mechanism with the ONF Experimenter ID.
+When defined integrated in 1.4, the feature use the standard OpenFlow
+structures (for example defined in openflow-1.4.h).
+The two definitions for each feature are independant and can exist in
+parallel in OVS.
 
   * Flow entry notifications
     This seems to be modelled after OVS's NXST_FLOW_MONITOR.
     (Simon Horman is working on this.)
     [EXT-187]
-    [required for OF1.4+]
+    [optional for OF1.4+]
 
   * Role Status
+    Already implemented as a 1.4 feature.
     [EXT-191]
     [required for OF1.4+]
 
@@ -139,16 +146,17 @@ Many of them are necessary for OpenFlow 1.4 as well.
 
   * Bundle
     Transactional modification.  OpenFlow 1.4 requires to support
-    flow_mods and port_mods in a bundle.
+    flow_mods and port_mods in a bundle if bundle is supported.
     (Not related to OVS's 'ofbundle' stuff.)
     [EXT-230]
-    [required for OF1.4+]
+    [optional for OF1.4+]
 
   * Table synchronisation
+    Probably not so useful to the software switch.
     [EXT-232]
     [optional for OF1.4+]
 
-  * Group notifications
+  * Group and Meter change notifications
     [EXT-235]
     [optional for OF1.4+]
 
@@ -162,6 +170,7 @@ Many of them are necessary for OpenFlow 1.4 as well.
     [optional for OF1.4+]
 
   * PBB UCA header field
+    See comment on Provider Backbone Bridge in section about OpenFlow 1.3.
     [EXT-256]
     [optional for OF1.4+]
 
@@ -169,11 +178,19 @@ Many of them are necessary for OpenFlow 1.4 as well.
     [EXT-264]
     [required for OF1.4+]
 
-OpenFlow 1.4
-------------
+OpenFlow 1.4 only
+-----------------
+
+Those features are those only available in OpenFlow 1.4, other
+OpenFlow 1.4 features are listed in the previous section.
 
   * More extensible wire protocol
     Many on-wire structures got TLVs.
+    Already implemented: port desc properties, port mod properties,
+                         port stats properties, table mod properties,
+                         queue stats, unified property errors.
+    Remaining required: set-async, queue desc
+    Remaining optional: table desc, table-status
     [EXT-262]
     [required for OF1.4+]
 
@@ -185,10 +202,6 @@ OpenFlow 1.4
 
   * Optical port properties
     [EXT-154]
-    [optional for OF1.4+]
-
-  * Meter notifications
-    [EXT-235]
     [optional for OF1.4+]
 
 General
