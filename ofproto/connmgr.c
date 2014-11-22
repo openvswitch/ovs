@@ -1677,7 +1677,7 @@ connmgr_send_packet_in(struct connmgr *mgr,
         enum ofp_packet_in_reason reason = wire_reason(ofconn, pin);
 
         if (ofconn_wants_packet_in_on_miss(ofconn, pin)
-            && ofconn_receives_async_msg(ofconn, OAM_PACKET_IN, pin->up.reason)
+            && ofconn_receives_async_msg(ofconn, OAM_PACKET_IN, reason)
             && ofconn->controller_id == pin->controller_id) {
             schedule_packet_in(ofconn, *pin, reason);
         }
