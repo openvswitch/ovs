@@ -864,6 +864,11 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
 done:
     KeMemoryBarrier();
     instance->inUse = 0;
+
+    /* Should not complete a pending IRP unless proceesing is completed */
+    if (status == STATUS_PENDING) {
+        return status;
+    }
     return OvsCompleteIrpRequest(irp, (ULONG_PTR)replyLen, status);
 }
 
