@@ -1202,6 +1202,7 @@ pend_io_request(struct nl_sock *sock)
                           OVS_CTRL_CMD_WIN_PEND_REQ, OVS_WIN_CONTROL_VERSION);
     nlmsg = nl_msg_nlmsghdr(&request);
     nlmsg->nlmsg_seq = seq;
+    nlmsg->nlmsg_pid = sock->pid;
 
     ovs_header = ofpbuf_put_uninit(&request, sizeof *ovs_header);
     ovs_header->dp_ifindex = 0;
