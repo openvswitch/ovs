@@ -6253,15 +6253,20 @@ struct ofp_action_header {
 };
 OFP_ASSERT(sizeof(struct ofp_action_header) == 8);
 
-/* Header for Nicira-defined actions. */
-struct nx_action_header {
+/* Header for Nicira-defined actions and for ONF vendor extensions.
+ *
+ * This cannot be used as an entirely generic vendor extension action header,
+ * because OpenFlow does not specify the location or size of the action
+ * subtype; it just happens that ONF extensions and Nicira extensions share
+ * this format. */
+struct ext_action_header {
     ovs_be16 type;                  /* OFPAT_VENDOR. */
     ovs_be16 len;                   /* At least 16. */
-    ovs_be32 vendor;                /* NX_VENDOR_ID. */
+    ovs_be32 vendor;                /* NX_VENDOR_ID or ONF_VENDOR_ID. */
     ovs_be16 subtype;               /* See enum ofp_raw_action_type. */
     uint8_t pad[6];
 };
-OFP_ASSERT(sizeof(struct nx_action_header) == 16);
+OFP_ASSERT(sizeof(struct ext_action_header) == 16);
 
 static bool
 ofpact_hdrs_equal(const struct ofpact_hdrs *a,
@@ -6339,11 +6344,11 @@ ofpact_decode_raw(enum ofp_version ofp_version,
     if (oah->type == htons(OFPAT_VENDOR)) {
         /* Get vendor. */
         hdrs.vendor = ntohl(oah->vendor);
-        if (hdrs.vendor == NX_VENDOR_ID) {
-            /* Get Nicira action type. */
-            const struct nx_action_header *nah;
+        if (hdrs.vendor == NX_VENDOR_ID || hdrs.vendor == ONF_VENDOR_ID) {
+            /* Get extension subtype. */
+            const struct ext_action_header *nah;
 
-            nah = ALIGNED_CAST(const struct nx_action_header *, oah);
+            nah = ALIGNED_CAST(const struct ext_action_header *, oah);
             if (length < sizeof *nah) {
                 return OFPERR_OFPBAC_BAD_LEN;
             }
@@ -6462,8 +6467,9 @@ ofpact_put_raw(struct ofpbuf *buf, enum ofp_version ofp_version,
     case 0:
         break;
 
-    case NX_VENDOR_ID: {
-        struct nx_action_header *nah = (struct nx_action_header *) oah;
+    case NX_VENDOR_ID:
+    case ONF_VENDOR_ID: {
+        struct ext_action_header *nah = (struct ext_action_header *) oah;
         nah->subtype = htons(hdrs->type);
         break;
     }
