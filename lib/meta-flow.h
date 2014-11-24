@@ -541,13 +541,17 @@ enum OVS_PACKED_ENUM mf_field_id {
      * and reg1 the least-significant.  xreg1 similarly overlays reg2 and reg3,
      * and so on.
      *
+     * These registers were introduced in OpenFlow 1.5, but EXT-244 in the ONF
+     * JIRA also publishes them as a (draft) OpenFlow extension to OpenFlow
+     * 1.3.
+     *
      * Type: be64.
      * Maskable: bitwise.
      * Formatting: hexadecimal.
      * Prerequisites: none.
      * Access: read/write.
      * NXM: none.
-     * OXM: OXM_OF_PKT_REG<N>(<N>) since OF1.5 and v2.4.
+     * OXM: OXM_OF_PKT_REG<N>(<N>) since OF1.3 and v2.4.
      */
     MFF_XREG0,
     MFF_XREG1,
