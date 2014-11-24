@@ -77,9 +77,6 @@ static struct ovs_mutex netdev_class_mutex OVS_ACQ_BEFORE(netdev_mutex);
 static struct hmap netdev_classes OVS_GUARDED_BY(netdev_class_mutex)
     = HMAP_INITIALIZER(&netdev_classes);
 
-/* Incremented whenever tnl route, arp, etc changes. */
-struct seq *tnl_conf_seq;
-
 struct netdev_registered_class {
     /* In 'netdev_classes', by class->type. */
     struct hmap_node hmap_node OVS_GUARDED_BY(netdev_class_mutex);
@@ -155,7 +152,6 @@ netdev_initialize(void)
 #endif
         netdev_dpdk_register();
 
-        tnl_conf_seq = seq_create();
         ovsthread_once_done(&once);
     }
 }

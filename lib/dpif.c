@@ -39,6 +39,7 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "route-table.h"
+#include "seq.h"
 #include "shash.h"
 #include "sset.h"
 #include "timeval.h"
@@ -104,6 +105,9 @@ static void log_execute_message(struct dpif *, const struct dpif_execute *,
 static void log_flow_get_message(const struct dpif *,
                                  const struct dpif_flow_get *, int error);
 
+/* Incremented whenever tnl route, arp, etc changes. */
+struct seq *tnl_conf_seq;
+
 static void
 dp_initialize(void)
 {
@@ -112,13 +116,15 @@ dp_initialize(void)
     if (ovsthread_once_start(&once)) {
         int i;
 
-        for (i = 0; i < ARRAY_SIZE(base_dpif_classes); i++) {
-            dp_register_provider(base_dpif_classes[i]);
-        }
+        tnl_conf_seq = seq_create();
         dpctl_unixctl_register();
         tnl_port_map_init();
         tnl_arp_cache_init();
         route_table_register();
+
+        for (i = 0; i < ARRAY_SIZE(base_dpif_classes); i++) {
+            dp_register_provider(base_dpif_classes[i]);
+        }
 
         ovsthread_once_done(&once);
     }
