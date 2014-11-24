@@ -88,7 +88,7 @@ static void
 unixctl_version(struct unixctl_conn *conn, int argc OVS_UNUSED,
                 const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
-    unixctl_command_reply(conn, get_program_version());
+    unixctl_command_reply(conn, ovs_get_program_version());
 }
 
 /* Registers a unixctl command with the given 'name'.  'usage' describes the

@@ -29,6 +29,7 @@
 #include "byte-order.h"
 #include "compiler.h"
 #include "openvswitch/types.h"
+#include "openvswitch/util.h"
 
 #ifndef va_copy
 #ifdef __va_copy
@@ -266,15 +267,12 @@ typedef uint32_t HANDLE;
 extern "C" {
 #endif
 
-void set_program_name__(const char *name, const char *version,
-                        const char *date, const char *time);
 #define set_program_name(name) \
-        set_program_name__(name, VERSION, __DATE__, __TIME__)
+        ovs_set_program_name(name, OVS_PACKAGE_VERSION)
 
 const char *get_subprogram_name(void);
 void set_subprogram_name(const char *format, ...) PRINTF_FORMAT(1, 2);
 
-const char *get_program_version(void);
 void ovs_print_version(uint8_t min_ofp, uint8_t max_ofp);
 
 NO_RETURN void out_of_memory(void);

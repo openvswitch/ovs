@@ -448,12 +448,12 @@ ovs_strerror(int error)
  *
  * The 'date' and 'time' arguments should likely be called with
  * "__DATE__" and "__TIME__" to use the time the binary was built.
- * Alternatively, the "set_program_name" macro may be called to do this
+ * Alternatively, the "ovs_set_program_name" macro may be called to do this
  * automatically.
  */
 void
-set_program_name__(const char *argv0, const char *version, const char *date,
-                   const char *time)
+ovs_set_program_name__(const char *argv0, const char *version, const char *date,
+                       const char *time)
 {
     char *basename;
 #ifdef _WIN32
@@ -533,9 +533,18 @@ set_subprogram_name(const char *format, ...)
  * caller must not modify or free the returned string.
  */
 const char *
-get_program_version(void)
+ovs_get_program_version(void)
 {
     return program_version;
+}
+
+/* Returns a pointer to a string describing the program name.  The
+ * caller must not modify or free the returned string.
+ */
+const char *
+ovs_get_program_name(void)
+{
+    return program_name;
 }
 
 /* Print the version information for the program.  */
