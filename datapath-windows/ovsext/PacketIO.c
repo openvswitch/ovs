@@ -193,6 +193,10 @@ OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
     LIST_ENTRY missedPackets;
     UINT32 num = 0;
     OvsCompletionList completionList;
+    PNET_BUFFER_LIST ovsForwardedNbls = NULL;
+    PNET_BUFFER_LIST nativeForwardedNbls = NULL;
+    PNET_BUFFER_LIST *nextOvsForwardNbl = &ovsForwardedNbls;
+    PNET_BUFFER_LIST *nextNativeForwardedNbl = &nativeForwardedNbls;
 
     dispatch = NDIS_TEST_SEND_AT_DISPATCH_LEVEL(SendFlags)?
                                             NDIS_RWL_AT_DISPATCH_LEVEL : 0;
@@ -202,7 +206,48 @@ OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
     InitializeListHead(&missedPackets);
     OvsInitCompletionList(&completionList, switchContext, sendCompleteFlags);
 
+#if (NDIS_SUPPORT_NDIS640)
+    /*
+     * Split NBL list into NBLs to be forwarded by us, and those that require
+     * native forwarding.
+     */
     for (curNbl = netBufferLists; curNbl != NULL; curNbl = nextNbl) {
+        nextNbl = curNbl->Next;
+        curNbl->Next = NULL;
+        fwdDetail = NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(curNbl);
+
+        if (fwdDetail->NativeForwardingRequired) {
+            POVS_BUFFER_CONTEXT ctx;
+
+            *nextNativeForwardedNbl = curNbl;
+            nextNativeForwardedNbl = &(curNbl->Next);
+
+            ctx = OvsInitExternalNBLContext(switchContext, curNbl,
+                sourcePort == switchContext->virtualExternalPortId);
+            if (ctx == NULL) {
+                RtlInitUnicodeString(&filterReason,
+                    L"Cannot allocate native NBL context.");
+
+                OvsStartNBLIngressError(switchContext, curNbl,
+                    sendCompleteFlags, &filterReason,
+                    NDIS_STATUS_RESOURCES);
+
+                continue;
+            }
+        } else {
+            *nextOvsForwardNbl = curNbl;
+            nextOvsForwardNbl = &(curNbl->Next);
+        }
+    }
+#else
+    UNREFERENCED_PARAMETER(nativeForwardedNbls);
+    UNREFERENCED_PARAMETER(nextNativeForwardedNbl);
+    UNREFERENCED_PARAMETER(nextOvsForwardNbl);
+
+    ovsForwardedNbls = netBufferLists;
+#endif
+
+    for (curNbl = ovsForwardedNbls; curNbl != NULL; curNbl = nextNbl) {
         POVS_VPORT_ENTRY vport;
         UINT32 portNo;
         OVS_DATAPATH *datapath = &switchContext->datapath;
@@ -313,6 +358,12 @@ dropit:
                                     &filterReason);
             NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
         }
+    }
+
+    if (nativeForwardedNbls) {
+        /* This is NVGRE encapsulated traffic and is forwarded to NDIS
+         * in order to be handled by the HNV module. */
+        OvsSendNBLIngress(switchContext, nativeForwardedNbls, SendFlags);
     }
 
     /* Queue the missed packets. */
