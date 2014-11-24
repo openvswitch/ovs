@@ -1710,13 +1710,13 @@ struct ofp15_action_copy_field {
     ovs_be16 n_bits;            /* Number of bits to copy. */
     ovs_be16 src_offset;        /* Starting bit offset in source. */
     ovs_be16 dst_offset;        /* Starting bit offset in destination. */
-    ovs_be16 oxm_id_len;        /* Length of oxm_ids. */
+    uint8_t pad[2];
     /* Followed by:
      * - OXM header for source field.
      * - OXM header for destination field.
      * - Padding with 0-bytes to a multiple of 8 bytes.
-     * The "pad" member is the beginning of the above. */
-    uint8_t pad[4];
+     * The "pad2" member is the beginning of the above. */
+    uint8_t pad2[4];
 };
 OFP_ASSERT(sizeof(struct ofp15_action_copy_field) == 16);
 
@@ -1833,7 +1833,6 @@ decode_OFPAT_RAW15_COPY_FIELD(const struct ofp15_action_copy_field *oacf,
 {
     struct ofpact_reg_move *move;
     enum ofperr error;
-    size_t orig_size;
     struct ofpbuf b;
 
     move = ofpact_put_REG_MOVE(ofpacts);
@@ -1843,8 +1842,7 @@ decode_OFPAT_RAW15_COPY_FIELD(const struct ofp15_action_copy_field *oacf,
     move->dst.n_bits = ntohs(oacf->n_bits);
 
     ofpbuf_use_const(&b, oacf, ntohs(oacf->len));
-    ofpbuf_pull(&b, offsetof(struct ofp15_action_copy_field, pad));
-    orig_size = ofpbuf_size(&b);
+    ofpbuf_pull(&b, offsetof(struct ofp15_action_copy_field, pad2));
     error = nx_pull_header(&b, &move->src.field, NULL);
     if (error) {
         return error;
@@ -1852,9 +1850,6 @@ decode_OFPAT_RAW15_COPY_FIELD(const struct ofp15_action_copy_field *oacf,
     error = nx_pull_header(&b, &move->dst.field, NULL);
     if (error) {
         return error;
-    }
-    if (orig_size - ofpbuf_size(&b) != ntohs(oacf->oxm_id_len)) {
-        return OFPERR_OFPBAC_BAD_LEN;
     }
 
     if (!is_all_zeros(ofpbuf_data(&b), ofpbuf_size(&b))) {
@@ -1905,8 +1900,7 @@ encode_REG_MOVE(const struct ofpact_reg_move *move,
         copy->n_bits = htons(move->dst.n_bits);
         copy->src_offset = htons(move->src.ofs);
         copy->dst_offset = htons(move->dst.ofs);
-        copy->oxm_id_len = htons(8);
-        ofpbuf_set_size(out, ofpbuf_size(out) - sizeof copy->pad);
+        ofpbuf_set_size(out, ofpbuf_size(out) - sizeof copy->pad2);
         nx_put_header(out, move->src.field->id, ofp_version, false);
         nx_put_header(out, move->dst.field->id, ofp_version, false);
     } else {
