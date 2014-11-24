@@ -204,6 +204,72 @@ OpenFlow 1.4 features are listed in the previous section.
     [EXT-154]
     [optional for OF1.4+]
 
+OpenFlow 1.5 & ONF Extensions for 1.3.X Pack2
+---------------------------------------------
+
+The following features are both defined as a set of ONF Extensions for
+1.3 and integrated in 1.5. Note that this list is not definitive as
+those are not yet published.
+When defined as an ONF Extension for 1.3, the feature is using the
+Experimenter mechanism with the ONF Experimenter ID.
+When defined integrated in 1.5, the feature use the standard OpenFlow
+structures (for example defined in openflow-1.5.h).
+The two definitions for each feature are independant and can exist in
+parallel in OVS.
+
+  * Time scheduled bundles
+    [EXT-340]
+    [optional for OF1.5+]
+
+OpenFlow 1.5 only
+-----------------
+
+Those features are those only available in OpenFlow 1.5, other
+OpenFlow 1.5 features are listed in the previous section.
+Note that this list is not definitive as OpenFlow 1.5 is not yet
+published.
+
+  * Egress Tables
+    [EXT-306]
+    [optional for OF1.5+]
+
+  * Packet Type aware pipeline
+    Prototype for OVS was done during specification.
+    [EXT-112]
+    [optional for OF1.5+]
+
+  * Extensible Flow Entry Statistics
+    [EXT-334]
+    [required for OF1.5+]
+
+  * Flow Entry Statistics Trigger
+    [EXT-335]
+    [optional for OF1.5+]
+
+  * Controller connection status
+    Prototype for OVS was done during specification.
+    [EXT-454]
+    [optional for OF1.5+]
+
+  * Meter action
+    [EXT-379]
+    [required for OF1.5+ if metering is supported]
+
+  * Enable setting all pipeline fields in packet-out
+    Prototype for OVS was done during specification.
+    [EXT-427]
+    [required for OF1.5+]
+
+  * Port properties for pipeline fields
+    Prototype for OVS was done during specification.
+    [EXT-388]
+    [optional for OF1.5+]
+
+  * Port property for recirculation
+    Prototype for OVS was done during specification.
+    [EXT-399]
+    [optional for OF1.5+]
+
 General
 -----
 
