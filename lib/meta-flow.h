@@ -1176,7 +1176,8 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Prerequisites: TCP.
      * Access: read-only.
      * NXM: NXM_NX_TCP_FLAGS(34) since v2.1.
-     * OXM: OXM_OF_TCP_FLAGS(42) since OF1.5 and v2.3.
+     * OXM: ONFOXM_ET_TCP_FLAGS(42) since OF1.3 and v2.4,
+     *      OXM_OF_TCP_FLAGS(42) since OF1.5 and v2.3.
      */
     MFF_TCP_FLAGS,
 
