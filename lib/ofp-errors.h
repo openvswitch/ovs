@@ -222,8 +222,8 @@ enum ofperr {
      * unsupported value, or modifies a read-only field. */
     OFPERR_OFPBAC_BAD_SET_ARGUMENT,
 
-    /* NX1.3-1.4(14), OF1.5+(2,16).  Field in Set-Field action has Has-Mask bit
-     * set to 1. */
+    /* ONF1.3-1.4(4250), OF1.5+(2,16).  Field in Set-Field action has Has-Mask
+     * bit set to 1. */
     OFPERR_OFPBAC_BAD_SET_MASK,
 
     /* NX1.0-1.1(2,256), NX1.2+(11).  Must-be-zero action argument had nonzero
