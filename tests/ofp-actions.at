@@ -544,6 +544,34 @@ AT_CHECK(
   [0], [expout], [experr])
 AT_CLEANUP
 
+dnl Our primary goal here is to verify OpenFlow 1.3-specific changes,
+dnl so the list of tests is short.
+AT_SETUP([OpenFlow 1.3 action translation])
+AT_KEYWORDS([ofp-actions OF1.3])
+AT_DATA([test-data], [dnl
+# actions=LOCAL
+0000 0010 fffffffe 04d2 000000000000
+
+dnl Check the Nicira extension form of "move".
+# actions=move:NXM_OF_IN_PORT[]->NXM_OF_VLAN_TCI[]
+ffff 0018 00002320 0006 0010 0000 0000 00000002 00000802
+
+dnl Check the ONF extension form of "copy_field".
+# actions=move:NXM_OF_IN_PORT[]->NXM_OF_VLAN_TCI[]
+ffff 0020 4f4e4600 0c80 0000 0010 0000 0000 0000 00000002 00000802 00000000
+
+])
+sed '/^[[#&]]/d' < test-data > input.txt
+sed -n 's/^# //p; /^$/p' < test-data > expout
+sed -n 's/^& //p' < test-data > experr
+AT_CAPTURE_FILE([input.txt])
+AT_CAPTURE_FILE([expout])
+AT_CAPTURE_FILE([experr])
+AT_CHECK(
+  [ovs-ofctl '-vPATTERN:console:%c|%p|%m' parse-actions OpenFlow13 < input.txt],
+  [0], [expout], [experr])
+AT_CLEANUP
+
 dnl Our primary goal here is to verify that OpenFlow 1.5-specific changes,
 dnl so the list of tests is short.
 AT_SETUP([OpenFlow 1.5 action translation])

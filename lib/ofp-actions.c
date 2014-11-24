@@ -218,6 +218,8 @@ enum ofp_raw_action_type {
 
     /* OF1.5+(28): struct ofp15_action_copy_field, ... */
     OFPAT_RAW15_COPY_FIELD,
+    /* ONF1.3-1.4(3200): struct onf_action_copy_field, ... */
+    ONFACT_RAW13_COPY_FIELD,
     /* NX1.0-1.4(6): struct nx_action_reg_move, ... */
     NXAST_RAW_REG_MOVE,
 
@@ -1720,6 +1722,26 @@ struct ofp15_action_copy_field {
 };
 OFP_ASSERT(sizeof(struct ofp15_action_copy_field) == 16);
 
+/* Action structure for OpenFlow 1.3 extension copy-field action.. */
+struct onf_action_copy_field {
+    ovs_be16 type;              /* OFPAT_EXPERIMENTER. */
+    ovs_be16 len;               /* Length is padded to 64 bits. */
+    ovs_be32 experimenter;      /* ONF_VENDOR_ID. */
+    ovs_be16 exp_type;          /* 3200. */
+    uint8_t pad[2];             /* Not used. */
+    ovs_be16 n_bits;            /* Number of bits to copy. */
+    ovs_be16 src_offset;        /* Starting bit offset in source. */
+    ovs_be16 dst_offset;        /* Starting bit offset in destination. */
+    uint8_t pad2[2];            /* Not used. */
+    /* Followed by:
+     * - OXM header for source field.
+     * - OXM header for destination field.
+     * - Padding with 0-bytes (either 0 or 4 of them) to a multiple of 8 bytes.
+     * The "pad3" member is the beginning of the above. */
+    uint8_t pad3[4];            /* Not used. */
+};
+OFP_ASSERT(sizeof(struct onf_action_copy_field) == 24);
+
 /* Action structure for NXAST_REG_MOVE.
  *
  * Copies src[src_ofs:src_ofs+n_bits] to dst[dst_ofs:dst_ofs+n_bits], where
@@ -1828,21 +1850,23 @@ struct nx_action_reg_move {
 OFP_ASSERT(sizeof(struct nx_action_reg_move) == 16);
 
 static enum ofperr
-decode_OFPAT_RAW15_COPY_FIELD(const struct ofp15_action_copy_field *oacf,
-                              struct ofpbuf *ofpacts)
+decode_copy_field__(ovs_be16 src_offset, ovs_be16 dst_offset, ovs_be16 n_bits,
+                    const void *action, ovs_be16 action_len, size_t oxm_offset,
+                    struct ofpbuf *ofpacts)
 {
     struct ofpact_reg_move *move;
     enum ofperr error;
     struct ofpbuf b;
 
     move = ofpact_put_REG_MOVE(ofpacts);
-    move->src.ofs = ntohs(oacf->src_offset);
-    move->src.n_bits = ntohs(oacf->n_bits);
-    move->dst.ofs = ntohs(oacf->dst_offset);
-    move->dst.n_bits = ntohs(oacf->n_bits);
+    move->ofpact.raw = ONFACT_RAW13_COPY_FIELD;
+    move->src.ofs = ntohs(src_offset);
+    move->src.n_bits = ntohs(n_bits);
+    move->dst.ofs = ntohs(dst_offset);
+    move->dst.n_bits = ntohs(n_bits);
 
-    ofpbuf_use_const(&b, oacf, ntohs(oacf->len));
-    ofpbuf_pull(&b, offsetof(struct ofp15_action_copy_field, pad2));
+    ofpbuf_use_const(&b, action, ntohs(action_len));
+    ofpbuf_pull(&b, oxm_offset);
     error = nx_pull_header(&b, &move->src.field, NULL);
     if (error) {
         return error;
@@ -1860,6 +1884,24 @@ decode_OFPAT_RAW15_COPY_FIELD(const struct ofp15_action_copy_field *oacf,
 }
 
 static enum ofperr
+decode_OFPAT_RAW15_COPY_FIELD(const struct ofp15_action_copy_field *oacf,
+                              struct ofpbuf *ofpacts)
+{
+    return decode_copy_field__(oacf->src_offset, oacf->dst_offset,
+                               oacf->n_bits, oacf, oacf->len,
+                               OBJECT_OFFSETOF(oacf, pad2), ofpacts);
+}
+
+static enum ofperr
+decode_ONFACT_RAW13_COPY_FIELD(const struct onf_action_copy_field *oacf,
+                               struct ofpbuf *ofpacts)
+{
+    return decode_copy_field__(oacf->src_offset, oacf->dst_offset,
+                               oacf->n_bits, oacf, oacf->len,
+                               OBJECT_OFFSETOF(oacf, pad3), ofpacts);
+}
+
+static enum ofperr
 decode_NXAST_RAW_REG_MOVE(const struct nx_action_reg_move *narm,
                           struct ofpbuf *ofpacts)
 {
@@ -1868,6 +1910,7 @@ decode_NXAST_RAW_REG_MOVE(const struct nx_action_reg_move *narm,
     struct ofpbuf b;
 
     move = ofpact_put_REG_MOVE(ofpacts);
+    move->ofpact.raw = NXAST_RAW_REG_MOVE;
     move->src.ofs = ntohs(narm->src_ofs);
     move->src.n_bits = ntohs(narm->n_bits);
     move->dst.ofs = ntohs(narm->dst_ofs);
@@ -1894,6 +1937,12 @@ static void
 encode_REG_MOVE(const struct ofpact_reg_move *move,
                 enum ofp_version ofp_version, struct ofpbuf *out)
 {
+    /* For OpenFlow 1.3, the choice of ONFACT_RAW13_COPY_FIELD versus
+     * NXAST_RAW_REG_MOVE is somewhat difficult.  Neither one is guaranteed to
+     * be supported by every OpenFlow 1.3 implementation.  It would be ideal to
+     * probe for support.  Until we have that ability, we currently prefer
+     * NXAST_RAW_REG_MOVE for backward compatibility with older Open vSwitch
+     * versions.  */
     size_t start_ofs = ofpbuf_size(out);
     if (ofp_version >= OFP15_VERSION) {
         struct ofp15_action_copy_field *copy = put_OFPAT15_COPY_FIELD(out);
@@ -1901,6 +1950,15 @@ encode_REG_MOVE(const struct ofpact_reg_move *move,
         copy->src_offset = htons(move->src.ofs);
         copy->dst_offset = htons(move->dst.ofs);
         ofpbuf_set_size(out, ofpbuf_size(out) - sizeof copy->pad2);
+        nx_put_header(out, move->src.field->id, ofp_version, false);
+        nx_put_header(out, move->dst.field->id, ofp_version, false);
+    } else if (ofp_version == OFP13_VERSION
+               && move->ofpact.raw == ONFACT_RAW13_COPY_FIELD) {
+        struct onf_action_copy_field *copy = put_ONFACT13_COPY_FIELD(out);
+        copy->n_bits = htons(move->dst.n_bits);
+        copy->src_offset = htons(move->src.ofs);
+        copy->dst_offset = htons(move->dst.ofs);
+        ofpbuf_set_size(out, ofpbuf_size(out) - sizeof copy->pad3);
         nx_put_header(out, move->src.field->id, ofp_version, false);
         nx_put_header(out, move->dst.field->id, ofp_version, false);
     } else {

@@ -1442,9 +1442,13 @@ through 31, inclusive;
 \fBmove:NXM_NX_REG0[0..15]\->NXM_OF_VLAN_TCI[]\fR copies the least
 significant 16 bits of register 0 into the VLAN TCI field.
 .IP
-In OpenFlow 1.0 through 1.4, \fBmove\fR uses an Open vSwitch extension
-to OpenFlow.  In OpenFlow 1.5, \fBmove\fR uses the OpenFlow 1.5
-(draft) standard \fBcopy_field\fR action.
+In OpenFlow 1.0 through 1.4, \fBmove\fR ordinarily uses an Open
+vSwitch extension to OpenFlow.  In OpenFlow 1.5, \fBmove\fR uses the
+OpenFlow 1.5 (draft) standard \fBcopy_field\fR action.  The ONF has
+also made \fBcopy_field\fR available as an extension to OpenFlow 1.3.
+Open vSwitch 2.4 and later understands this extension and uses it if a
+controller uses it, but for backward compatibility with older versions
+of Open vSwitch, \fBovs\-ofctl\fR does not use it.
 .
 .IP "\fBset_field:\fIvalue\fR[/\fImask\fR]\fB\->\fIdst"
 .IQ "\fBload:\fIvalue\fB\->\fIdst\fB[\fIstart\fB..\fIend\fB]"
