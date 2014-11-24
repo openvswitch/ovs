@@ -1257,6 +1257,8 @@ HandleDpTransactionCommon(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     };
     PNL_ATTR dpAttrs[ARRAY_SIZE(ovsDatapathSetPolicy)];
 
+    UNREFERENCED_PARAMETER(msgOut);
+
     /* input buffer has been validated while validating write dev op. */
     ASSERT(msgIn != NULL && usrParamsCtx->inputLength >= sizeof *msgIn);
 
