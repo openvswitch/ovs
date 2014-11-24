@@ -102,7 +102,7 @@
   <PropertyGroup>
     <TargetName>OVSExt</TargetName>
   </PropertyGroup>
-  <ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win8 Release|x64'">
     <ClCompile>
       <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1</PreprocessorDefinitions>
     </ClCompile>
@@ -111,6 +111,39 @@
     </Midl>
     <ResourceCompile>
       <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS640=1</PreprocessorDefinitions>
+    </ClCompile>
+    <Midl>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS640=1</PreprocessorDefinitions>
+    </Midl>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS640=1</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1</PreprocessorDefinitions>
+    </ClCompile>
+    <Midl>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1</PreprocessorDefinitions>
+    </Midl>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS640=1</PreprocessorDefinitions>
+    </ClCompile>
+    <Midl>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS640=1</PreprocessorDefinitions>
+    </Midl>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS640=1</PreprocessorDefinitions>
     </ResourceCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup>
