@@ -134,6 +134,7 @@ scripts_SCRIPTS =
 scripts_DATA =
 SUFFIXES =
 check_DATA =
+check_SCRIPTS =
 pkgconfig_DATA =
 
 scriptsdir = $(pkgdatadir)/scripts

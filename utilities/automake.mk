@@ -22,13 +22,15 @@ scripts_SCRIPTS += \
 	utilities/ovs-save
 scripts_DATA += utilities/ovs-lib
 
+check_SCRIPTS += utilities/ovs-command-compgen.bash
+
 utilities/ovs-lib: $(top_builddir)/config.status
 
 docs += utilities/ovs-command-compgen.INSTALL.md
 EXTRA_DIST += \
 	utilities/ovs-check-dead-ifs.in \
 	utilities/ovs-command-compgen.bash \
-	utilities/ovs-command-compgen-test.bash \
+	utilities/ovs-command-compgen.INSTALL.md \
 	utilities/ovs-ctl.in \
 	utilities/ovs-dev.py \
 	utilities/ovs-docker \
