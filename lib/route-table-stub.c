@@ -27,7 +27,7 @@ ovs_router_lookup(ovs_be32 ip_dst OVS_UNUSED, char output_bridge[] OVS_UNUSED,
 }
 
 void
-ovs_router_unixctl_register(void)
+ovs_router_init(void)
 {
 }
 
