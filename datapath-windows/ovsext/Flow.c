@@ -411,8 +411,6 @@ _FlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                      UINT32 *replyLen)
 {
     NTSTATUS rc = STATUS_SUCCESS;
-    POVS_OPEN_INSTANCE instance = (POVS_OPEN_INSTANCE)
-                                  (usrParamsCtx->ovsInstance);
     POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
     PNL_MSG_HDR nlMsgHdr = &(msgIn->nlMsg);
     POVS_HDR ovsHdr = &(msgIn->ovsHdr);
