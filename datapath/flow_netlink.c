@@ -772,7 +772,7 @@ static int ovs_key_from_nlattrs(struct sw_flow_match *match, u64 attrs,
 				  ipv6_key->ipv6_frag, OVS_FRAG_TYPE_MAX);
 			return -EINVAL;
 		}
-		if (ipv6_key->ipv6_label & htonl(0xFFF00000)) {
+		if (!is_mask && ipv6_key->ipv6_label & htonl(0xFFF00000)) {
 			OVS_NLERR(log,
 				  "Invalid IPv6 flow label value (value=%x, max=%x).",
 				  ntohl(ipv6_key->ipv6_label), (1 << 20) - 1);
