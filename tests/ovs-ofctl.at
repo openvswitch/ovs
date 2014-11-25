@@ -2340,14 +2340,20 @@ AT_CHECK([echo "$tcp_flags" | ovs-ofctl parse-nxm], [0],
   [NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(06), NXM_NX_TCP_FLAGS(0fff)
 ])
 
-# Check that marshaling in OXM for OF1.2 through OF1.4 gives OXM
-# headers except for TCP flags, which didn't have an OXM definition until
-# OF1.5.
-for version in OpenFlow12 OpenFlow13 OpenFlow14; do
-    AT_CHECK([echo "$tcp_flags" | ovs-ofctl parse-oxm $version], [0],
-      [OXM_OF_ETH_TYPE(0800), OXM_OF_IP_PROTO(06), NXM_NX_TCP_FLAGS(0fff)
+# Check that marshaling in OXM for OF1.2 gives OXM headers except for
+# TCP flags, which didn't have an OXM definition.
+AT_CHECK([echo "$tcp_flags" | ovs-ofctl parse-oxm OpenFlow12], [0],
+    [OXM_OF_ETH_TYPE(0800), OXM_OF_IP_PROTO(06), NXM_NX_TCP_FLAGS(0fff)
 ])
-done
+
+# Check that marshaling in OXM for OF1.3 and OF1.4 gives OXM headers,
+# including the ONF extension for TCP flags introduced in OF1.3.
+AT_CHECK([echo "$tcp_flags" | ovs-ofctl parse-oxm OpenFlow13], [0],
+    [OXM_OF_ETH_TYPE(0800), OXM_OF_IP_PROTO(06), ONFOXM_ET_TCP_FLAGS(0fff)
+])
+AT_CHECK([echo "$tcp_flags" | ovs-ofctl parse-oxm OpenFlow14], [0],
+    [OXM_OF_ETH_TYPE(0800), OXM_OF_IP_PROTO(06), ONFOXM_ET_TCP_FLAGS(0fff)
+])
 
 # OpenFlow 1.5 added an OXM header for TCP flags:
 AT_CHECK([echo "$tcp_flags" | ovs-ofctl parse-oxm OpenFlow15], [0],
