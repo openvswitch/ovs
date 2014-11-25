@@ -258,6 +258,23 @@ check-assert-h-usage:
 	 fi
 .PHONY: check-assert-h-usage
 
+# Check that LITTLE_ENDIAN and BIG_ENDIAN are not used unless BYTE_ORDER is
+# also mentioned.  (<endian.h> always defines the former two constants.  They
+# must be compared to BYTE_ORDER to get the machine's correct endianness.  But
+# it is better to use WORDS_BIGENDIAN.)
+ALL_LOCAL += check-endian
+check-endian:
+	@if test -e $(srcdir)/.git && (git --version) >/dev/null 2>&1 && \
+	    (cd $(srcdir) && git --no-pager grep -l -E \
+             -e 'BIG_ENDIAN|LITTLE_ENDIAN' --and --not -e 'BYTE_ORDER' | \
+	    $(EGREP) -v '^datapath/'); \
+         then \
+	    echo "See above for list of files that misuse LITTLE""_ENDIAN"; \
+	    echo "or BIG""_ENDIAN.  Please use WORDS_BIGENDIAN instead."; \
+	    exit 1; \
+	 fi
+.PHONY: check-endian
+
 ALL_LOCAL += thread-safety-check
 thread-safety-check:
 	@cd $(srcdir); \
