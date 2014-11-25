@@ -2054,13 +2054,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:01:01,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=30,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:01:01,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=30,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:01:01,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=30,mpls_bos=1
 ])
 
@@ -2108,13 +2108,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
 tcp,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:02:00,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0 tcp_csum:7744
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
 tcp,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:02:00,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0 tcp_csum:7744
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
 tcp,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:02:00,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0 tcp_csum:7744
 ])
 
@@ -2190,13 +2190,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mplsm,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:03:00,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=30,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mplsm,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:03:00,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=30,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mplsm,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:03:00,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=30,mpls_bos=1
 ])
 
@@ -2218,13 +2218,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:03:01,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=29,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:03:01,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=29,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:03:01,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=29,mpls_bos=1
 ])
 
@@ -2246,13 +2246,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mplsm,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:03:10,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=29,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mplsm,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:03:10,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=29,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mplsm,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:03:10,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=29,mpls_bos=1
 ])
 
@@ -2376,13 +2376,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mplsm,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:05:01,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=31,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mplsm,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:05:01,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=31,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mplsm,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:05:01,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=31,mpls_bos=1
 ])
 
@@ -2402,13 +2402,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:05:10,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=31,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:05:10,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=31,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=254 cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,in_port=0,vlan_tci=0x0000,dl_src=60:66:66:66:05:10,dl_dst=50:54:00:00:00:07,mpls_label=20,mpls_tc=0,mpls_ttl=31,mpls_bos=1
 ])
 

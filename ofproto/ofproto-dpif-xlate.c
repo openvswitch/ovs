@@ -3274,9 +3274,6 @@ compose_mpls_push_action(struct xlate_ctx *ctx, struct ofpact_push_mpls *mpls)
         }
         ctx->exit = true;
         return;
-    } else if (n >= ctx->xbridge->max_mpls_depth) {
-        COVERAGE_INC(xlate_actions_mpls_overflow);
-        ctx->xout->slow |= SLOW_ACTION;
     }
 
     flow_push_mpls(flow, n, mpls->ethertype, wc);
@@ -3290,7 +3287,7 @@ compose_mpls_pop_action(struct xlate_ctx *ctx, ovs_be16 eth_type)
     int n = flow_count_mpls_labels(flow, wc);
 
     if (flow_pop_mpls(flow, n, eth_type, wc)) {
-        if (ctx->xbridge->enable_recirc && !eth_type_mpls(eth_type)) {
+        if (ctx->xbridge->enable_recirc) {
             ctx->was_mpls = true;
         }
     } else if (n >= FLOW_MAX_MPLS_LABELS) {
@@ -3698,11 +3695,14 @@ xlate_action_set(struct xlate_ctx *ctx)
 }
 
 static bool
-ofpact_needs_recirculation_after_mpls(const struct xlate_ctx *ctx,
-                                      const struct ofpact *a)
+ofpact_needs_recirculation_after_mpls(const struct ofpact *a, struct xlate_ctx *ctx)
 {
     struct flow_wildcards *wc = &ctx->xout->wc;
     struct flow *flow = &ctx->xin->flow;
+
+    if (!ctx->was_mpls) {
+        return false;
+    }
 
     switch (a->type) {
     case OFPACT_OUTPUT:
@@ -3718,11 +3718,6 @@ ofpact_needs_recirculation_after_mpls(const struct xlate_ctx *ctx,
     case OFPACT_SET_TUNNEL:
     case OFPACT_SET_QUEUE:
     case OFPACT_POP_QUEUE:
-    case OFPACT_POP_MPLS:
-    case OFPACT_DEC_MPLS_TTL:
-    case OFPACT_SET_MPLS_TTL:
-    case OFPACT_SET_MPLS_TC:
-    case OFPACT_SET_MPLS_LABEL:
     case OFPACT_NOTE:
     case OFPACT_OUTPUT_REG:
     case OFPACT_EXIT:
@@ -3733,6 +3728,11 @@ ofpact_needs_recirculation_after_mpls(const struct xlate_ctx *ctx,
     case OFPACT_SAMPLE:
         return false;
 
+    case OFPACT_POP_MPLS:
+    case OFPACT_DEC_MPLS_TTL:
+    case OFPACT_SET_MPLS_TTL:
+    case OFPACT_SET_MPLS_TC:
+    case OFPACT_SET_MPLS_LABEL:
     case OFPACT_SET_IPV4_SRC:
     case OFPACT_SET_IPV4_DST:
     case OFPACT_SET_IP_DSCP:
@@ -3794,7 +3794,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
         }
 
-        if (ctx->was_mpls && ofpact_needs_recirculation_after_mpls(ctx, a)) {
+        if (ofpact_needs_recirculation_after_mpls(a, ctx)) {
             compose_recirculate_action(ctx, ofpacts, a, ofpacts_len);
             return;
         }

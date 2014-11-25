@@ -20,6 +20,7 @@ TESTSUITE_AT = \
 	tests/ofp-errors.at \
 	tests/ovs-ofctl.at \
 	tests/odp.at \
+	tests/mpls-xlate.at \
 	tests/multipath.at \
 	tests/bfd.at \
 	tests/cfm.at \

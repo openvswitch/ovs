@@ -84,8 +84,6 @@ dnl Internally a stack of 3 LSEs will be used with the trailing LSEs
 dnl set to zero. This is reflected when the key is formated
 sed '/bos=0/{
 s/^/ODP_FIT_TOO_LITTLE: /
-s/mpls(label=100,tc=7,ttl=100,bos=0)/mpls(lse0=0x64e64,lse1=0,lse2=0)/
-s/mpls(label=1000,tc=4,ttl=200,bos=0)/mpls(lse0=0x3e88c8,lse1=0,lse2=0)/
 }' < odp-in.txt > odp-out.txt
 
 AT_CHECK_UNQUOTED([ovstest test-odp parse-keys < odp-in.txt], [0], [`cat odp-out.txt`

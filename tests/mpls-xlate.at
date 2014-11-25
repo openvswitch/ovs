@@ -1,0 +1,50 @@
+AT_BANNER([mpls_xlate])
+
+AT_SETUP([MPLS xlate action])
+
+OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 type=dummy ofport_request=1])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+dummy@ovs-dummy: hit:0 missed:0
+	br0:
+		br0 65534/100: (dummy)
+		p0 1/1: (dummy)
+])
+
+dnl Setup single MPLS tags.
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 in_port=local,dl_type=0x0800,action=push_mpls:0x8847,set_field:10-\>mpls_label,output:1])
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 dl_type=0x8847,in_port=1,mpls_label=20,action=pop_mpls:0x0800,output:LOCAL])
+
+dnl Test MPLS push
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(100),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x0800),ipv4(src=1.1.2.92,dst=1.1.2.88,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: push_mpls(label=10,tc=0,ttl=64,bos=1,eth_type=0x8847),1
+])
+
+dnl Test MPLS pop
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x8847),mpls(label=20,tc=0,ttl=64,bos=1)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: pop_mpls(eth_type=0x800),100
+])
+
+dnl Setup multiple MPLS tags.
+AT_CHECK([ovs-ofctl del-flows br0])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 in_port=local,dl_type=0x0800,action=push_mpls:0x8847,set_field:10-\>mpls_label,push_mpls:0x8847,set_field:20-\>mpls_label,output:1])
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 table=0,dl_type=0x8847,in_port=1,mpls_label=60,action=pop_mpls:0x8847,goto_table:1])
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 table=1,dl_type=0x8847,in_port=1,mpls_label=50,action=pop_mpls:0x0800,output:LOCAL])
+
+dnl Double MPLS push
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(100),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x0800),ipv4(src=1.1.2.92,dst=1.1.2.88,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: push_mpls(label=10,tc=0,ttl=64,bos=1,eth_type=0x8847),push_mpls(label=20,tc=0,ttl=64,bos=0,eth_type=0x8847),1
+])
+
+dnl Double MPLS pop
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x8847),mpls(label=60,tc=0/0,ttl=64,bos=0)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: pop_mpls(eth_type=0x8847),recirc(300)
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
