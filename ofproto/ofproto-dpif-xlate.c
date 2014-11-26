@@ -3405,7 +3405,8 @@ xlate_output_action(struct xlate_ctx *ctx,
         flood_packets(ctx, true);
         break;
     case OFPP_CONTROLLER:
-        execute_controller_action(ctx, max_len, OFPR_ACTION, 0);
+        execute_controller_action(ctx, max_len,
+                                  ctx->in_group ? OFPR_GROUP : OFPR_ACTION, 0);
         break;
     case OFPP_NONE:
         break;

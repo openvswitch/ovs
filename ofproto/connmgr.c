@@ -996,6 +996,14 @@ void
 ofconn_set_protocol(struct ofconn *ofconn, enum ofputil_protocol protocol)
 {
     ofconn->protocol = protocol;
+    if (!(protocol & OFPUTIL_P_OF14_UP)) {
+        uint32_t *master = ofconn->master_async_config;
+        uint32_t *slave = ofconn->slave_async_config;
+
+        /* OFPR_GROUP is not supported before OF1.4 */
+        master[OAM_PACKET_IN] &= ~(1u << OFPR_GROUP);
+        slave [OAM_PACKET_IN] &= ~(1u << OFPR_GROUP);
+    }
 }
 
 /* Returns the currently configured packet in format for 'ofconn', one of
@@ -1056,6 +1064,13 @@ ofconn_get_async_config(struct ofconn *ofconn,
                         uint32_t *master_masks, uint32_t *slave_masks)
 {
     size_t size = sizeof ofconn->master_async_config;
+
+    /* Make sure we know the protocol version and the async_config
+     * masks are properly updated by calling ofconn_get_protocol() */
+    if (OFPUTIL_P_NONE == ofconn_get_protocol(ofconn)){
+        OVS_NOT_REACHED();
+    }
+
     memcpy(master_masks, ofconn->master_async_config, size);
     memcpy(slave_masks, ofconn->slave_async_config, size);
 }
@@ -1235,7 +1250,9 @@ ofconn_flush(struct ofconn *ofconn)
         /* "master" and "other" roles get all asynchronous messages by default,
          * except that the controller needs to enable nonstandard "packet-in"
          * reasons itself. */
-        master[OAM_PACKET_IN] = (1u << OFPR_NO_MATCH) | (1u << OFPR_ACTION);
+        master[OAM_PACKET_IN] = ((1u << OFPR_NO_MATCH)
+                                 | (1u << OFPR_ACTION)
+                                 | (1u << OFPR_GROUP));
         master[OAM_PORT_STATUS] = ((1u << OFPPR_ADD)
                                    | (1u << OFPPR_DELETE)
                                    | (1u << OFPPR_MODIFY));
@@ -1651,16 +1668,31 @@ connmgr_send_flow_removed(struct connmgr *mgr,
 static enum ofp_packet_in_reason
 wire_reason(struct ofconn *ofconn, const struct ofproto_packet_in *pin)
 {
-    if (pin->miss_type == OFPROTO_PACKET_IN_MISS_FLOW
-        && pin->up.reason == OFPR_ACTION) {
-        enum ofputil_protocol protocol = ofconn_get_protocol(ofconn);
+    enum ofputil_protocol protocol = ofconn_get_protocol(ofconn);
 
-        if (protocol != OFPUTIL_P_NONE
-            && ofputil_protocol_to_ofp_version(protocol) >= OFP13_VERSION) {
-            return OFPR_NO_MATCH;
-        }
+    if (pin->miss_type == OFPROTO_PACKET_IN_MISS_FLOW
+        && pin->up.reason == OFPR_ACTION
+        && protocol != OFPUTIL_P_NONE
+        && ofputil_protocol_to_ofp_version(protocol) >= OFP13_VERSION) {
+        return OFPR_NO_MATCH;
     }
-    return pin->up.reason;
+
+    switch (pin->up.reason) {
+    case OFPR_ACTION_SET:
+    case OFPR_GROUP:
+    case OFPR_PACKET_OUT:
+        if (!(protocol & OFPUTIL_P_OF14_UP)) {
+            /* Only supported in OF1.4+ */
+            return OFPR_ACTION;
+        }
+        /* Fall through. */
+	case OFPR_NO_MATCH:
+	case OFPR_ACTION:
+	case OFPR_INVALID_TTL:
+	case OFPR_N_REASONS:
+    default:
+        return pin->up.reason;
+    }
 }
 
 /* Given 'pin', sends an OFPT_PACKET_IN message to each OpenFlow controller as
