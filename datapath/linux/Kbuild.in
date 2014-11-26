@@ -7,11 +7,11 @@ export VERSION = @VERSION@
 include $(srcdir)/../Modules.mk
 include $(srcdir)/Modules.mk
 
-EXTRA_CFLAGS := -DVERSION=\"$(VERSION)\"
-EXTRA_CFLAGS += -I$(srcdir)/..
-EXTRA_CFLAGS += -I$(builddir)/..
-EXTRA_CFLAGS += -g
-EXTRA_CFLAGS += -include $(builddir)/kcompat.h
+ccflags-y := -DVERSION=\"$(VERSION)\"
+ccflags-y += -I$(srcdir)/..
+ccflags-y += -I$(builddir)/..
+ccflags-y += -g
+ccflags-y += -include $(builddir)/kcompat.h
 
 # These include directories have to go before -I$(KSRC)/include.
 # NOSTDINC_FLAGS just happens to be a variable that goes in the
