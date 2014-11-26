@@ -706,10 +706,10 @@ flow_union_with_miniflow(struct flow *dst, const struct miniflow *src)
 {
     uint32_t *dst_u32 = (uint32_t *) dst;
     const uint32_t *p = miniflow_get_u32_values(src);
-    uint64_t map;
+    int idx;
 
-    for (map = src->map; map; map = zero_rightmost_1bit(map)) {
-        dst_u32[raw_ctz(map)] |= *p++;
+    MAP_FOR_EACH_INDEX(idx, src->map) {
+        dst_u32[idx] |= *p++;
     }
 }
 

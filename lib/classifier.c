@@ -1283,7 +1283,7 @@ miniflow_and_mask_matches_flow(const struct miniflow *flow,
 {
     const uint32_t *flowp = miniflow_get_u32_values(flow);
     const uint32_t *maskp = miniflow_get_u32_values(&mask->masks);
-    uint32_t idx;
+    int idx;
 
     MAP_FOR_EACH_INDEX(idx, mask->masks.map) {
         uint32_t diff = (*flowp++ ^ flow_u32_value(target, idx)) & *maskp++;
@@ -1326,7 +1326,7 @@ miniflow_and_mask_matches_flow_wc(const struct miniflow *flow,
 {
     const uint32_t *flowp = miniflow_get_u32_values(flow);
     const uint32_t *maskp = miniflow_get_u32_values(&mask->masks);
-    uint32_t idx;
+    int idx;
 
     MAP_FOR_EACH_INDEX(idx, mask->masks.map) {
         uint32_t mask = *maskp++;

@@ -1203,10 +1203,10 @@ minimatch_matches_flow(const struct minimatch *match,
     const uint32_t *target_u32 = (const uint32_t *) target;
     const uint32_t *flowp = miniflow_get_u32_values(&match->flow);
     const uint32_t *maskp = miniflow_get_u32_values(&match->mask.masks);
-    uint64_t map;
+    int idx;
 
-    for (map = match->flow.map; map; map = zero_rightmost_1bit(map)) {
-        if ((*flowp++ ^ target_u32[raw_ctz(map)]) & *maskp++) {
+    MAP_FOR_EACH_INDEX(idx, match->flow.map) {
+        if ((*flowp++ ^ target_u32[idx]) & *maskp++) {
             return false;
         }
     }
