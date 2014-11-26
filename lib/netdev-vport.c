@@ -262,7 +262,6 @@ netdev_vport_destruct(struct netdev *netdev_)
 {
     struct netdev_vport *netdev = netdev_vport_cast(netdev_);
 
-    route_table_unregister();
     free(netdev->peer);
     ovs_mutex_destroy(&netdev->mutex);
 }

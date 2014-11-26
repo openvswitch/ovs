@@ -120,7 +120,7 @@ dp_initialize(void)
         dpctl_unixctl_register();
         tnl_port_map_init();
         tnl_arp_cache_init();
-        route_table_register();
+        route_table_init();
 
         for (i = 0; i < ARRAY_SIZE(base_dpif_classes); i++) {
             dp_register_provider(base_dpif_classes[i]);

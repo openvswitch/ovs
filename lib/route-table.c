@@ -61,7 +61,6 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
  * every time route_table_reset() is called.  */
 static uint64_t rt_change_seq;
 
-static unsigned int register_count = 0;
 static struct nln *nln = NULL;
 static struct route_table_msg rtmsg;
 static struct nln_notifier *route_notifier = NULL;
@@ -76,7 +75,6 @@ static void route_table_change(const struct route_table_msg *, void *);
 static void route_map_clear(void);
 
 static void name_table_init(void);
-static void name_table_uninit(void);
 static void name_table_change(const struct rtnetlink_link_change *, void *);
 
 uint64_t
@@ -88,49 +86,24 @@ route_table_get_change_seq(void)
 /* Users of the route_table module should register themselves with this
  * function before making any other route_table function calls. */
 void
-route_table_register(void)
+route_table_init(void)
     OVS_EXCLUDED(route_table_mutex)
 {
     ovs_mutex_lock(&route_table_mutex);
-    if (!register_count) {
-        ovs_assert(!nln);
-        ovs_assert(!route_notifier);
+    ovs_assert(!nln);
+    ovs_assert(!route_notifier);
 
-        ovs_router_init();
-        nln = nln_create(NETLINK_ROUTE, RTNLGRP_IPV4_ROUTE,
-                         (nln_parse_func *) route_table_parse, &rtmsg);
+    ovs_router_init();
+    nln = nln_create(NETLINK_ROUTE, RTNLGRP_IPV4_ROUTE,
+                     (nln_parse_func *) route_table_parse, &rtmsg);
 
-        route_notifier =
-            nln_notifier_create(nln, (nln_notify_func *) route_table_change,
-                                NULL);
+    route_notifier =
+        nln_notifier_create(nln, (nln_notify_func *) route_table_change,
+                            NULL);
 
-        route_table_reset();
-        name_table_init();
-    }
+    route_table_reset();
+    name_table_init();
 
-    register_count++;
-    ovs_mutex_unlock(&route_table_mutex);
-}
-
-/* Users of the route_table module should unregister themselves with this
- * function when they will no longer be making any more route_table fuction
- * calls. */
-void
-route_table_unregister(void)
-    OVS_EXCLUDED(route_table_mutex)
-{
-    ovs_mutex_lock(&route_table_mutex);
-    register_count--;
-
-    if (!register_count) {
-        nln_notifier_destroy(route_notifier);
-        route_notifier = NULL;
-        nln_destroy(nln);
-        nln = NULL;
-
-        route_map_clear();
-        name_table_uninit();
-    }
     ovs_mutex_unlock(&route_table_mutex);
 }
 
@@ -300,12 +273,6 @@ name_table_init(void)
     name_notifier = rtnetlink_link_notifier_create(name_table_change, NULL);
 }
 
-static void
-name_table_uninit(void)
-{
-    rtnetlink_link_notifier_destroy(name_notifier);
-    name_notifier = NULL;
-}
 
 static void
 name_table_change(const struct rtnetlink_link_change *change OVS_UNUSED,

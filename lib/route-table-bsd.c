@@ -33,7 +33,6 @@
 #include "util.h"
 
 static int pid;
-static unsigned int register_count = 0;
 
 bool
 ovs_router_lookup(ovs_be32 ip, char name[], ovs_be32 *gw)
@@ -116,20 +115,9 @@ route_table_get_change_seq(void)
 }
 
 void
-route_table_register(void)
+route_table_init(void)
 {
-    if (!register_count)
-    {
-        pid = getpid();
-    }
-
-    register_count++;
-}
-
-void
-route_table_unregister(void)
-{
-    register_count--;
+    pid = getpid();
 }
 
 void

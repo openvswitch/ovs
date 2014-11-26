@@ -26,8 +26,7 @@
 #include "openvswitch/types.h"
 
 uint64_t route_table_get_change_seq(void);
-void route_table_register(void);
-void route_table_unregister(void);
+void route_table_init(void);
 void route_table_run(void);
 void route_table_wait(void);
 

@@ -390,7 +390,6 @@ dpif_sflow_create(void)
     ds->next_tick = time_now() + 1;
     hmap_init(&ds->ports);
     ds->probability = 0;
-    route_table_register();
     ovs_refcount_init(&ds->ref_cnt);
 
     return ds;
@@ -425,7 +424,6 @@ dpif_sflow_unref(struct dpif_sflow *ds) OVS_EXCLUDED(mutex)
     if (ds && ovs_refcount_unref_relaxed(&ds->ref_cnt) == 1) {
         struct dpif_sflow_port *dsp, *next;
 
-        route_table_unregister();
         dpif_sflow_clear(ds);
         HMAP_FOR_EACH_SAFE (dsp, next, hmap_node, &ds->ports) {
             dpif_sflow_del_port__(ds, dsp);

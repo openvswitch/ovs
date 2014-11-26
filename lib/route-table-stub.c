@@ -38,12 +38,7 @@ route_table_get_change_seq(void)
 }
 
 void
-route_table_register(void)
-{
-}
-
-void
-route_table_unregister(void)
+route_table_init(void)
 {
 }
 
