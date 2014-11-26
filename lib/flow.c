@@ -2131,11 +2131,16 @@ minimask_get(const struct minimask *mask, unsigned int u32_ofs)
     return miniflow_get(&mask->masks, u32_ofs);
 }
 
-/* Returns true if 'a' and 'b' are the same flow mask, false otherwise.  */
+/* Returns true if 'a' and 'b' are the same flow mask, false otherwise.
+ * Minimasks may not have zero data values, so for the minimasks to be the
+ * same, they need to have the same map and the same data values. */
 bool
 minimask_equal(const struct minimask *a, const struct minimask *b)
 {
-    return miniflow_equal(&a->masks, &b->masks);
+    return a->masks.map == b->masks.map &&
+        !memcmp(miniflow_get_u32_values(&a->masks),
+                miniflow_get_u32_values(&b->masks),
+                count_1bits(a->masks.map) * sizeof *a->masks.inline_values);
 }
 
 /* Returns true if at least one bit matched by 'b' is wildcarded by 'a',
@@ -2143,15 +2148,19 @@ minimask_equal(const struct minimask *a, const struct minimask *b)
 bool
 minimask_has_extra(const struct minimask *a, const struct minimask *b)
 {
-    const uint32_t *p = miniflow_get_u32_values(&b->masks);
-    uint64_t map;
+    const uint32_t *ap = miniflow_get_u32_values(&a->masks);
+    const uint32_t *bp = miniflow_get_u32_values(&b->masks);
+    int idx;
 
-    for (map = b->masks.map; map; map = zero_rightmost_1bit(map)) {
-        uint32_t a_u32 = minimask_get(a, raw_ctz(map));
-        uint32_t b_u32 = *p++;
+    MAP_FOR_EACH_INDEX(idx, b->masks.map) {
+        uint32_t b_u32 = *bp++;
 
-        if ((a_u32 & b_u32) != b_u32) {
-            return true;
+        /* 'b_u32' is non-zero, check if the data in 'a' is either zero
+         * or misses some of the bits in 'b_u32'. */
+        if (!(a->masks.map & (UINT64_C(1) << idx))
+            || ((miniflow_values_get__(ap, a->masks.map, idx) & b_u32)
+                != b_u32)) {
+            return true; /* 'a' wildcards some bits 'b' doesn't. */
         }
     }
 
