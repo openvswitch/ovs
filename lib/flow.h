@@ -551,6 +551,15 @@ mf_get_next_in_map(struct mf_for_each_in_map_aux *aux, uint32_t *value)
          mf_get_next_in_map(&aux__, &(VALUE));                          \
         )
 
+/* This can be used when it is known that 'u32_idx' is set in
+ * the map of 'mf'. */
+static inline uint32_t
+miniflow_get__(const struct miniflow *mf, int u32_idx)
+{
+    return miniflow_get_u32_values(mf)
+        [count_1bits(mf->map & ((UINT64_C(1) << u32_idx) - 1))];
+}
+
 /* Get the value of 'FIELD' of an up to 4 byte wide integer type 'TYPE' of
  * a miniflow. */
 #define MINIFLOW_GET_TYPE(MF, TYPE, OFS)                                \

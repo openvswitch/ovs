@@ -1976,10 +1976,8 @@ miniflow_expand(const struct miniflow *src, struct flow *dst)
 static uint32_t
 miniflow_get(const struct miniflow *flow, unsigned int u32_ofs)
 {
-    return (flow->map & UINT64_C(1) << u32_ofs)
-        ? *(miniflow_get_u32_values(flow) +
-            count_1bits(flow->map & ((UINT64_C(1) << u32_ofs) - 1)))
-        : 0;
+    return flow->map & (UINT64_C(1) << u32_ofs)
+        ? miniflow_get__(flow, u32_ofs) : 0;
 }
 
 /* Returns true if 'a' and 'b' are the equal miniflow, false otherwise. */
@@ -2100,7 +2098,8 @@ minimask_combine(struct minimask *dst_,
     dst->map = 0;
     for (map = a->map & b->map; map; map = zero_rightmost_1bit(map)) {
         int ofs = raw_ctz(map);
-        uint32_t mask = miniflow_get(a, ofs) & miniflow_get(b, ofs);
+        /* Both 'a' and 'b' have non-zero data at 'idx'. */
+        uint32_t mask = miniflow_get__(a, ofs) & miniflow_get__(b, ofs);
 
         if (mask) {
             dst->map |= rightmost_1bit(map);
