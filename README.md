@@ -1,4 +1,5 @@
-# Open vSwitch
+Open vSwitch
+============
 
 Build Status:
 -------------

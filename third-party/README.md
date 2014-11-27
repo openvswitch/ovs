@@ -1,3 +1,6 @@
+Third-party software integration
+================================
+
 This directory contains third-party software that may be useful for
 debugging.
 
