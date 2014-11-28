@@ -7,10 +7,16 @@ before_install: ./.travis/prepare.sh
 
 env:
   - OPTS="--disable-ssl"
-  - TESTSUITE=1 KERNEL=1 OPTS="--with-linux=./linux-3.16.2"
-  - KERNEL=1 DPDK=1 OPTS="--with-dpdk=./dpdk-1.7.1/build"
+  - TESTSUITE=1 KERNEL=3.17.4
+  - KERNEL=3.17.4 DPDK=1 OPTS="--with-dpdk=./dpdk-1.7.1/build"
   - TESTSUITE=1 OPTS="--enable-shared"
-  - DPDK=1 OPTS="--enable-shared"
+  - KERNEL=3.17.4 DPDK=1 OPTS="--enable-shared"
+  - KERNEL=3.16.7
+  - KERNEL=3.14.25
+  - KERNEL=3.12.33
+  - KERNEL=3.10.61
+  - KERNEL=3.4.104
+  - KERNEL=2.6.32.64
 
 script: ./.travis/build.sh $OPTS
 
