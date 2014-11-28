@@ -80,7 +80,7 @@ else
     make CFLAGS="$CFLAGS" C=1
 fi
 
-if [ $TESTSUITE ]; then
+if [ $TESTSUITE ] && [ $CC != "clang" ]; then
     if ! make distcheck; then
         # testsuite.log is necessary for debugging.
         cat */_build/tests/testsuite.log
