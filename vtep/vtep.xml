@@ -36,7 +36,22 @@
     exactly one record in the <ref table="Global"/> table.
 
     <column name="switches">
-      The physical switches managed by the VTEP.
+      <p>
+        The physical switch or switches managed by the VTEP.
+      </p>
+
+      <p>
+        When a physical switch integrates support for this VTEP schema, which
+        is expected to be the most common case, this column should point to one
+        <ref table="Physical_Switch"/> record that represents the switch
+        itself.  In another possible implementation, a server or a VM presents
+        a VTEP schema front-end interface to one or more physical switches,
+        presumably communicating with those physical switches over a
+        proprietary protocol.  In that case, this column would point to one
+        <ref table="Physical_Switch"/> for each physical switch, and the set
+        might change over time as the front-end server comes to represent a
+        differing set of switches.
+      </p>
     </column>
 
     <group title="Database Configuration">
