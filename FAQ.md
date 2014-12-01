@@ -541,7 +541,7 @@ Configuration Problems
 ----------------------
 
 ### Q: I created a bridge and added my Ethernet port to it, using commands
-   like these:
+### like these:
 
        ovs-vsctl add-br br0
        ovs-vsctl add-port br0 eth0
