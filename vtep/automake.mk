@@ -17,9 +17,8 @@ vtep_vtep_ctl_LDADD = lib/libopenvswitch.la
 scripts_SCRIPTS += \
     vtep/ovs-vtep
 
-EXTRA_DIST += \
-    vtep/ovs-vtep \
-    vtep/README.ovs-vtep.md
+docs += vtep/README.ovs-vtep.md
+EXTRA_DIST += vtep/ovs-vtep
 
 # VTEP schema and IDL
 EXTRA_DIST += vtep/vtep.ovsschema

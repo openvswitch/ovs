@@ -61,7 +61,10 @@ CLEANFILES =
 CLEAN_LOCAL =
 DISTCLEANFILES =
 PYCOV_CLEAN_FILES = build-aux/check-structs,cover
-EXTRA_DIST = \
+
+# A list of Markdown-formatted documentation that will automatically be
+# included in the "make dist-docs" output.
+docs = \
 	CONTRIBUTING.md \
 	CodingStyle.md \
 	DESIGN.md \
@@ -80,7 +83,6 @@ EXTRA_DIST = \
 	INSTALL.userspace.md \
 	INSTALL.Windows.md \
 	IntegrationGuide.md \
-	NOTICE \
 	OPENFLOW-1.1+.md \
 	PORTING.md \
 	README.md \
@@ -88,12 +90,16 @@ EXTRA_DIST = \
 	README-native-tunneling.md \
 	REPORTING-BUGS.md \
 	TODO.md \
+	WHY-OVS.md
+EXTRA_DIST = \
+	$(docs) \
+	NOTICE \
 	.travis.yml \
 	.travis/build.sh \
 	.travis/prepare.sh \
-	WHY-OVS.md \
 	boot.sh \
 	build-aux/cccl \
+	build-aux/dist-docs \
 	build-aux/sodepends.pl \
 	build-aux/soexpand.pl \
 	$(MAN_FRAGMENTS) \
@@ -336,6 +342,10 @@ modules_install:
 if LINUX_ENABLED
 	cd datapath/linux && $(MAKE) modules_install
 endif
+
+dist-docs:
+	VERSION=$(VERSION) $(srcdir)/build-aux/dist-docs $(srcdir) $(docs)
+.PHONY: dist-docs
 
 include m4/automake.mk
 include lib/automake.mk

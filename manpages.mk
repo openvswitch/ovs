@@ -174,6 +174,7 @@ utilities/ovs-testcontroller.8: \
 	utilities/ovs-testcontroller.8.in \
 	lib/common.man \
 	lib/daemon.man \
+	lib/ofp-version.man \
 	lib/ssl-peer-ca-cert.man \
 	lib/ssl.man \
 	lib/unixctl.man \
@@ -183,6 +184,7 @@ utilities/ovs-testcontroller.8: \
 utilities/ovs-testcontroller.8.in:
 lib/common.man:
 lib/daemon.man:
+lib/ofp-version.man:
 lib/ssl-peer-ca-cert.man:
 lib/ssl.man:
 lib/unixctl.man:
