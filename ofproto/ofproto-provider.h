@@ -629,9 +629,10 @@ struct ofproto_class {
      * may choose to remove it all. */
     void (*init)(const struct shash *iface_hints);
 
-    /* Enumerates the types of all support ofproto types into 'types'.  The
-     * caller has already initialized 'types' and other ofproto classes might
-     * already have added names to it. */
+    /* Enumerates the types of all supported ofproto types into 'types'.  The
+     * caller has already initialized 'types'.  The implementation should add
+     * its own types to 'types' but not remove any existing ones, because other
+     * ofproto classes might already have added names to it. */
     void (*enumerate_types)(struct sset *types);
 
     /* Enumerates the names of all existing datapath of the specified 'type'

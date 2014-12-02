@@ -225,15 +225,14 @@ dp_blacklist_provider(const char *type)
     ovs_mutex_unlock(&dpif_mutex);
 }
 
-/* Clears 'types' and enumerates the types of all currently registered datapath
- * providers into it.  The caller must first initialize the sset. */
+/* Adds the types of all currently registered datapath providers to 'types'.
+ * The caller must first initialize the sset. */
 void
 dp_enumerate_types(struct sset *types)
 {
     struct shash_node *node;
 
     dp_initialize();
-    sset_clear(types);
 
     ovs_mutex_lock(&dpif_mutex);
     SHASH_FOR_EACH(node, &dpif_classes) {
