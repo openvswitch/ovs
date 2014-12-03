@@ -30,7 +30,11 @@
 #include <unistd.h>
 
 #include "ovs-router.h"
+#include "packets.h"
+#include "vlog.h"
 #include "util.h"
+
+VLOG_DEFINE_THIS_MODULE(route_table_bsd);
 
 bool
 route_table_fallback_lookup(ovs_be32 ip, char name[], ovs_be32 *gw)
@@ -71,8 +75,15 @@ route_table_fallback_lookup(ovs_be32 ip, char name[], ovs_be32 *gw)
         return false;
     }
 
+    VLOG_DBG("looking route up for " IP_FMT " pid %" PRIuMAX,
+        IP_ARGS(ip), (uintmax_t)pid);
     do {
         len = read(rtsock, (char *)&rtmsg, sizeof(rtmsg));
+        if (len > 0) {
+            VLOG_DBG("got rtmsg pid %" PRIuMAX " seq %d",
+                (uintmax_t)rtmsg.rtm.rtm_pid,
+                rtmsg.rtm.rtm_seq);
+        }
     } while (len > 0 && (rtmsg.rtm.rtm_seq != seq ||
         rtmsg.rtm.rtm_pid != pid));
 
@@ -94,12 +105,14 @@ route_table_fallback_lookup(ovs_be32 ip, char name[], ovs_be32 *gw)
                     namelen = IFNAMSIZ - 1;
                 memcpy(name, ifp->sdl_data, namelen);
                 name[namelen] = '\0';
+                VLOG_DBG("got ifp %s", name);
                 got_ifp = true;
             } else if (i == RTA_GATEWAY && sa->sa_family == AF_INET) {
                 const struct sockaddr_in *sin_dst =
                     ALIGNED_CAST(struct sockaddr_in *, sa);
 
                 *gw = sin_dst->sin_addr.s_addr;
+                VLOG_DBG("got gateway " IP_FMT, IP_ARGS(*gw));
             }
 #if defined(__FreeBSD__)
             sa = (struct sockaddr *)((char *)sa + SA_SIZE(sa));
