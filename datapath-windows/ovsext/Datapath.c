@@ -1406,7 +1406,7 @@ OvsPortFillInfo(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                 PNL_BUFFER nlBuf)
 {
     NTSTATUS status;
-    BOOLEAN rc;
+    BOOLEAN ok;
     OVS_MESSAGE msgOutTmp;
     PNL_MSG_HDR nlMsg;
     POVS_VPORT_ENTRY vport;
@@ -1435,8 +1435,8 @@ OvsPortFillInfo(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     }
     msgOutTmp.ovsHdr.dp_ifindex = gOvsSwitchContext->dpNo;
 
-    rc = NlMsgPutHead(nlBuf, (PCHAR)&msgOutTmp, sizeof msgOutTmp);
-    if (!rc) {
+    ok = NlMsgPutHead(nlBuf, (PCHAR)&msgOutTmp, sizeof msgOutTmp);
+    if (!ok) {
         status = STATUS_INVALID_BUFFER_SIZE;
         goto cleanup;
     }
@@ -1447,10 +1447,12 @@ OvsPortFillInfo(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         goto cleanup;
     }
 
-    rc = NlMsgPutTailU32(nlBuf, OVS_VPORT_ATTR_PORT_NO, eventEntry->portNo) ||
-         NlMsgPutTailU32(nlBuf, OVS_VPORT_ATTR_TYPE, vport->ovsType) ||
+    ok = NlMsgPutTailU32(nlBuf, OVS_VPORT_ATTR_PORT_NO, eventEntry->portNo) &&
+         NlMsgPutTailU32(nlBuf, OVS_VPORT_ATTR_TYPE, vport->ovsType) &&
+         NlMsgPutTailU32(nlBuf, OVS_VPORT_ATTR_UPCALL_PID,
+                         vport->upcallPid) &&
          NlMsgPutTailString(nlBuf, OVS_VPORT_ATTR_NAME, vport->ovsName);
-    if (!rc) {
+    if (!ok) {
         status = STATUS_INVALID_BUFFER_SIZE;
         goto cleanup;
     }
