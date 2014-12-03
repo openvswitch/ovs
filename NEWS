@@ -52,6 +52,7 @@ Post-v2.3.0
    - Added support for DPDK Tunneling. VXLAN and GRE are supported protocols.
      This is generic tunneling mechanism for userspace datapath.
    - Support for multicast snooping (IGMPv1 and IGMPv2)
+   - Support for Linux kernels up to 3.18.x
 
 
 v2.3.0 - 14 Aug 2014
