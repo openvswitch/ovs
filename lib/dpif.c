@@ -893,7 +893,6 @@ dpif_flow_get(struct dpif *dpif,
     op.u.flow_get.flow = flow;
     op.u.flow_get.flow->key = key;
     op.u.flow_get.flow->key_len = key_len;
-    op.u.flow_get.flow->ufid = *ufid;
 
     opp = &op;
     dpif_operate(dpif, &opp, 1);
