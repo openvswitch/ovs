@@ -8,8 +8,8 @@ table works, please go read a basic tutorial and then continue reading
 here afterward.
 
 It is also important to understand the basics of Open vSwitch before
-you begin.  If you have never used ovs-vsctl or ovs-ofctl before, you
-should learn a little about them before proceeding.
+you begin.  If you have never used `ovs-vsctl` or `ovs-ofctl` before,
+you should learn a little about them before proceeding.
 
 Most of the features covered in this tutorial are Open vSwitch
 extensions to OpenFlow.  Also, most of the features in this tutorial
@@ -19,13 +19,12 @@ tutorial will not help you.
 
 This tutorial does not cover every aspect of the features that it
 mentions.  You can find the details elsewhere in the Open vSwitch
-documentation, especially ovs-ofctl(8) and the comments in the
-include/openflow/nicira-ext.h header file.
+documentation, especially `ovs-ofctl(8)` and the comments in the
+`include/openflow/nicira-ext.h` header file.
 
->>> In this tutorial, paragraphs set off like this designate notes
-    with additional information that readers may wish to skip on a
-    first read.
-
+> In this tutorial, paragraphs set off like this designate notes
+> with additional information that readers may wish to skip on a
+> first read.
 
 Getting Started
 ---------------
@@ -33,7 +32,7 @@ Getting Started
 This is a hands-on tutorial.  To get the most out of it, you will need
 Open vSwitch binaries.  You do not, on the other hand, need any
 physical networking hardware or even supervisor privilege on your
-system.  Instead, we will use a script called "ovs-sandbox", which
+system.  Instead, we will use a script called `ovs-sandbox`, which
 accompanies the tutorial, that constructs a software simulated network
 environment based on Open vSwitch.
 
@@ -45,16 +44,16 @@ You can use `ovs-sandbox` three ways:
 
   * If you have not installed Open vSwitch (and you do not want to
     install it), then you can build Open vSwitch according to the
-    instructions in INSTALL, without installing it.  Then run
+    instructions in [INSTALL.md], without installing it.  Then run
     `./ovs-sandbox -b DIRECTORY` from this directory, substituting
-    the Open vSwitch build directory for DIRECTORY.
+    the Open vSwitch build directory for `DIRECTORY`.
 
   * As a slight variant on the latter, you can run `make sandbox`
     from an Open vSwitch build directory.
 
-When you run ovs-sandbox, it does the following:
+When you run `ovs-sandbox`, it does the following:
 
-  1. CAUTION: Deletes any subdirectory of the current directory
+  1. **CAUTION:** Deletes any subdirectory of the current directory
      named "sandbox" and any files in that directory.
 
   2. Creates a new directory "sandbox" in the current directory.
@@ -65,40 +64,40 @@ When you run ovs-sandbox, it does the following:
 
   4. If you are using a built but not installed Open vSwitch,
      installs the Open vSwitch manpages in a subdirectory of
-     "sandbox" and adjusts the MANPATH environment variable to point
+     "sandbox" and adjusts the `MANPATH` environment variable to point
      to this directory.  This means that you can use, for example,
-     `man ovs-vsctl` to see a manpage for the ovs-vsctl program that
+     `man ovs-vsctl` to see a manpage for the `ovs-vsctl` program that
      you built.
 
   5. Creates an empty Open vSwitch configuration database under
      "sandbox".
 
-  6. Starts ovsdb-server running under "sandbox".
+  6. Starts `ovsdb-server` running under "sandbox".
 
-  7. Starts ovs-vswitchd running under "sandbox", passing special
+  7. Starts `ovs-vswitchd` running under "sandbox", passing special
      options that enable a special "dummy" mode for testing.
 
   8. Starts a nested interactive shell inside "sandbox".
 
 At this point, you can run all the usual Open vSwitch utilities from
-the nested shell environment.  You can, for example, use ovs-vsctl to
-create a bridge:
+the nested shell environment.  You can, for example, use `ovs-vsctl`
+to create a bridge:
 
     ovs-vsctl add-br br0
 
 From Open vSwitch's perspective, the bridge that you create this way
 is as real as any other.  You can, for example, connect it to an
-OpenFlow controller or use "ovs-ofctl" to examine and modify it and
+OpenFlow controller or use `ovs-ofctl` to examine and modify it and
 its OpenFlow flow table.  On the other hand, the bridge is not visible
-to the operating system's network stack, so "ifconfig" or "ip" cannot
-see it or affect it, which means that utilities like "ping" and
-"tcpdump" will not work either.  (That has its good side, too: you
+to the operating system's network stack, so `ifconfig` or `ip` cannot
+see it or affect it, which means that utilities like `ping` and
+`tcpdump` will not work either.  (That has its good side, too: you
 can't screw up your computer's network stack by manipulating a
 sandboxed OVS.)
 
 When you're done using OVS from the sandbox, exit the nested shell (by
 entering the "exit" shell command or pressing Control+D).  This will
-kill the daemons that ovs-sandbox started, but it leaves the "sandbox"
+kill the daemons that `ovs-sandbox` started, but it leaves the "sandbox"
 directory and its contents in place.
 
 The sandbox directory contains log files for the Open vSwitch dameons.
@@ -159,11 +158,11 @@ MAC-learning switch that has four ports:
   * p3 and p4, both access ports for VLAN 30, on OpenFlow ports 3
     and 4, respectively.
 
->>> The ports' names are not significant.  You could call them eth1
-    through eth4, or any other names you like.
+> The ports' names are not significant.  You could call them eth1
+> through eth4, or any other names you like.
 
->>> An OpenFlow switch always has a "local" port as well.  This
-    scenario won't use the local port.
+> An OpenFlow switch always has a "local" port as well.  This
+> scenario won't use the local port.
 
 Our switch design will consist of five main flow tables, each of which
 implements one stage in the switch pipeline:
@@ -181,17 +180,17 @@ implements one stage in the switch pipeline:
 The section below describes how to set up the scenario, followed by a
 section for each OpenFlow table.
 
-You can cut and paste the "ovs-vsctl" and "ovs-ofctl" commands in each
-of the sections below into your "ovs-sandbox" shell.  They are also
-available as shell scripts in this directory, named t-setup, t-stage0,
-t-stage1, ..., t-stage4.  The "ovs-appctl" test commands are intended
+You can cut and paste the `ovs-vsctl` and `ovs-ofctl` commands in each
+of the sections below into your `ovs-sandbox` shell.  They are also
+available as shell scripts in this directory, named `t-setup`, `t-stage0`,
+`t-stage1`, ..., `t-stage4`.  The `ovs-appctl` test commands are intended
 for cutting and pasting and are not supplied separately.
 
 
 Setup
 -----
 
-To get started, start "ovs-sandbox".  Inside the interactive shell
+To get started, start `ovs-sandbox`.  Inside the interactive shell
 that it starts, run this command:
 
     ovs-vsctl add-br br0 -- set Bridge br0 fail-mode=secure
@@ -200,11 +199,11 @@ This command creates a new bridge "br0" and puts "br0" into so-called
 "fail-secure" mode.  For our purpose, this just means that the
 OpenFlow flow table starts out empty.
 
->>> If we did not do this, then the flow table would start out with a
-    single flow that executes the "normal" action.  We could use that
-    feature to yield a switch that behaves the same as the switch we
-    are currently building, but with the caveats described under
-    "Motivation" above.)
+> If we did not do this, then the flow table would start out with a
+> single flow that executes the "normal" action.  We could use that
+> feature to yield a switch that behaves the same as the switch we
+> are currently building, but with the caveats described under
+> "Motivation" above.)
 
 The new bridge has only one port on it so far, the "local port" br0.
 We need to add p1, p2, p3, and p4.  A shell "for" loop is one way to
@@ -215,26 +214,26 @@ do it:
 	      ovs-ofctl mod-port br0 p$i up
     done
 
-In addition to adding a port, the ovs-vsctl command above sets its
+In addition to adding a port, the `ovs-vsctl` command above sets its
 "ofport_request" column to ensure that port p1 is assigned OpenFlow
 port 1, p2 is assigned OpenFlow port 2, and so on.
 
->>> We could omit setting the ofport_request and let Open vSwitch
-    choose port numbers for us, but it's convenient for the purposes
-    of this tutorial because we can talk about OpenFlow port 1 and
-    know that it corresponds to p1.
+> We could omit setting the ofport_request and let Open vSwitch
+> choose port numbers for us, but it's convenient for the purposes
+> of this tutorial because we can talk about OpenFlow port 1 and
+> know that it corresponds to p1.
 
-The ovs-ofctl command above brings up the simulated interfaces, which
+The `ovs-ofctl` command above brings up the simulated interfaces, which
 are down initially, using an OpenFlow request.  The effect is similar
-to "ifconfig up", but the sandbox's interfaces are not visible to the
-operating system and therefore "ifconfig" would not affect them.
+to `ifconfig up`, but the sandbox's interfaces are not visible to the
+operating system and therefore `ifconfig` would not affect them.
 
 We have not configured anything related to VLANs or MAC learning.
 That's because we're going to implement those features in the flow
 table.
 
 To see what we've done so far to set up the scenario, you can run a
-command like "ovs-vsctl show" or "ovs-ofctl show br0".
+command like `ovs-vsctl show` or `ovs-ofctl show br0`.
 
 
 Implementing Table 0: Admission control
@@ -272,13 +271,13 @@ to pipeline stage 1 in OpenFlow table 1:
 If we were using Open vSwitch to set up a physical or a virtual
 switch, then we would naturally test it by sending packets through it
 one way or another, perhaps with common network testing tools like
-"ping" and "tcpdump" or more specialized tools like Scapy.  That's
+`ping` and `tcpdump` or more specialized tools like Scapy.  That's
 difficult with our simulated switch, since it's not visible to the
 operating system.
 
 But our simulated switch has a few specialized testing tools.  The
-most powerful of these tools is "ofproto/trace".  Given a switch and
-the specification of a flow, "ofproto/trace" shows, step-by-step, how
+most powerful of these tools is `ofproto/trace`.  Given a switch and
+the specification of a flow, `ofproto/trace` shows, step-by-step, how
 such a flow would be treated as it goes through the switch.
 
 
@@ -330,7 +329,7 @@ The output should be:
     Final flow: unchanged
     Datapath actions: drop
 
-This time the flow we handed to "ofproto/trace" doesn't match any of
+This time the flow we handed to `ofproto/trace` doesn't match any of
 our "drop" rules, so it falls through to the low-priority "resubmit"
 rule, which we see in the rule and the actions selected in the first
 block.  The "resubmit" causes a second lookup in OpenFlow table 1,
@@ -381,14 +380,14 @@ this stage on any of the access ports, so the "default drop" rule we
 added earlier causes them to be dropped, which is ordinarily what we
 want for access ports.
 
->>> Another variation of access ports allows ingress of packets tagged
-    with VLAN 0 (aka 802.1p priority tagged packets).  To allow such
-    packets, replace "vlan_tci=0" by "vlan_tci=0/0xfff" above.
+> Another variation of access ports allows ingress of packets tagged
+> with VLAN 0 (aka 802.1p priority tagged packets).  To allow such
+> packets, replace "vlan_tci=0" by "vlan_tci=0/0xfff" above.
 
 
 ### Testing Table 1
 
-"ofproto/trace" allows us to test the ingress VLAN rules that we added
+`ofproto/trace` allows us to test the ingress VLAN rules that we added
 above.
 
 
@@ -481,11 +480,11 @@ This table allows the switch we're implementing to learn that the
 packet's source MAC is located on the packet's ingress port in the
 packet's VLAN.
 
->>> This table is a good example why table 1 added a VLAN tag to
-    packets that entered the switch through an access port.  We want
-    to associate a MAC+VLAN with a port regardless of whether the VLAN
-    in question was originally part of the packet or whether it was an
-    assumed VLAN associated with an access port.
+> This table is a good example why table 1 added a VLAN tag to
+> packets that entered the switch through an access port.  We want
+> to associate a MAC+VLAN with a port regardless of whether the VLAN
+> in question was originally part of the packet or whether it was an
+> assumed VLAN associated with an access port.
 
 It only takes a single flow to do this.  The following command adds
 it:
@@ -525,14 +524,14 @@ Here's how you can interpret each part of the "learn" action above:
         number of the current packet into register 0 (a special field
         that is an Open vSwitch extension to OpenFlow).
 
->>> A real use of "learn" for MAC learning would probably involve two
-    additional elements.  First, the "learn" action would specify a
-    hard_timeout for the new flow, to enable a learned MAC to
-    eventually expire if no new packets were seen from a given source
-    within a reasonable interval.  Second, one would usually want to
-    limit resource consumption by using the Flow_Table table in the
-    Open vSwitch configuration database to specify a maximum number of
-    flows in table 10.
+> A real use of "learn" for MAC learning would probably involve two
+> additional elements.  First, the "learn" action would specify a
+> hard_timeout for the new flow, to enable a learned MAC to
+> eventually expire if no new packets were seen from a given source
+> within a reasonable interval.  Second, one would usually want to
+> limit resource consumption by using the Flow_Table table in the
+> Open vSwitch configuration database to specify a maximum number of
+> flows in table 10.
 
 This definitely calls for examples.
 
@@ -548,10 +547,10 @@ Try the following test command:
 The output shows that "learn" was executed, but it isn't otherwise
 informative, so we won't include it here.
 
-The "-generate" keyword is new.  Ordinarily, "ofproto/trace" has no
+The `-generate` keyword is new.  Ordinarily, `ofproto/trace` has no
 side effects: "output" actions do not actually output packets, "learn"
 actions do not actually modify the flow table, and so on.  With
-"-generate", though, "ofproto/trace" does execute "learn" actions.
+`-generate`, though, `ofproto/trace` does execute "learn" actions.
 That's important now, because we want to see the effect of the "learn"
 action on table 10.  You can see that by running:
 
@@ -621,10 +620,10 @@ multicast and broadcast packets, since those should always be flooded:
         "table=3 priority=99 dl_dst=01:00:00:00:00:00/01:00:00:00:00:00 \
           actions=resubmit(,4)"
 
->>> We don't strictly need to add this flow, because multicast
-    addresses will never show up in our learning table.  (In turn,
-    that's because we put a flow into table 0 to drop packets that
-    have a multicast source address.)
+> We don't strictly need to add this flow, because multicast
+> addresses will never show up in our learning table.  (In turn,
+> that's because we put a flow into table 0 to drop packets that
+> have a multicast source address.)
 
 
 ### Testing Table 3
@@ -661,10 +660,10 @@ removed:
 
     table=10, vlan_tci=0x0014/0x0fff,dl_dst=f0:00:00:00:00:01 actions=load:0x1->NXM_NX_REG0[0..15]
 
->>> If you tried the examples for the previous step, or if you did
-    some of your own experiments, then you might see additional flows
-    there.  These additional flows are harmless.  If they bother you,
-    then you can remove them with "ovs-ofctl del-flows br0 table=10".
+> If you tried the examples for the previous step, or if you did
+> some of your own experiments, then you might see additional flows
+> there.  These additional flows are harmless.  If they bother you,
+> then you can remove them with `ovs-ofctl del-flows br0 table=10`.
 
 The other way is to inject a packet to take advantage of the learning
 entry.  For example, we can inject a packet on p2 whose destination is
@@ -686,7 +685,7 @@ number for the learned port p1 into register 0:
 
 If you read the commands above carefully, then you might have noticed
 that they simply have the Ethernet source and destination addresses
-exchanged.  That means that if we now rerun the first ovs-appctl
+exchanged.  That means that if we now rerun the first `ovs-appctl`
 command above, e.g.:
 
     ovs-appctl ofproto/trace br0 in_port=1,dl_vlan=20,dl_src=f0:00:00:00:00:01,dl_dst=90:00:00:00:00:01 -generate
@@ -735,13 +734,13 @@ ports:
     table=4 reg0=0 priority=50            actions=1
     EOF
 
->>> Our rules rely on the standard OpenFlow behavior that an output
-    action will not forward a packet back out the port it came in on.
-    That is, if a packet comes in on p1, and we've learned that the
-    packet's destination MAC is also on p1, so that we end up with
-    "actions=1" as our actions, the switch will not forward the packet
-    back out its input port.  The multicast/broadcast/unknown
-    destination cases above also rely on this behavior.
+> Our rules rely on the standard OpenFlow behavior that an output
+> action will not forward a packet back out the port it came in on.
+> That is, if a packet comes in on p1, and we've learned that the
+> packet's destination MAC is also on p1, so that we end up with
+> "actions=1" as our actions, the switch will not forward the packet
+> back out its input port.  The multicast/broadcast/unknown
+> destination cases above also rely on this behavior.
 
 
 ### Testing Table 4
@@ -767,8 +766,8 @@ without one:
 
     Datapath actions: push_vlan(vid=30,pcp=0),1,pop_vlan,4
 
->>> Open vSwitch could simplify the datapath actions here to just
-    "4,push_vlan(vid=30,pcp=0),1" but it is not smart enough to do so.
+> Open vSwitch could simplify the datapath actions here to just
+> "4,push_vlan(vid=30,pcp=0),1" but it is not smart enough to do so.
 
 The following are also broadcasts, but the result is to drop the
 packets because the VLAN only belongs to the input port:
@@ -828,3 +827,5 @@ Contact
 
 bugs@openvswitch.org
 http://openvswitch.org/
+
+[INSTALL.md]:../INSTALL.md
