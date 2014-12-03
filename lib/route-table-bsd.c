@@ -32,8 +32,6 @@
 #include "ovs-router.h"
 #include "util.h"
 
-static int pid;
-
 bool
 ovs_router_lookup(ovs_be32 ip, char name[], ovs_be32 *gw)
 {
@@ -48,6 +46,7 @@ ovs_router_lookup(ovs_be32 ip, char name[], ovs_be32 *gw)
     struct sockaddr *sa;
     static int seq;
     int i, len, namelen, rtsock;
+    const pid_t pid = getpid();
 
     rtsock = socket(PF_ROUTE, SOCK_RAW, 0);
     if (rtsock < 0)
@@ -117,7 +116,6 @@ route_table_get_change_seq(void)
 void
 route_table_init(void)
 {
-    pid = getpid();
 }
 
 void
