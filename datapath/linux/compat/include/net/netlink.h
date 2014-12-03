@@ -63,7 +63,7 @@ static inline struct nlattr *nla_find_nested(struct nlattr *nla, int attrtype)
 }
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
+#ifndef HAVE_NLA_IS_LAST
 static inline bool nla_is_last(const struct nlattr *nla, int rem)
 {
 	return nla->nla_len == rem;
