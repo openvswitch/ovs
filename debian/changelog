@@ -1,9 +1,13 @@
 openvswitch (2.3.1-1) unstable; urgency=low
    [ Open vSwitch team ]
    * New upstream version
-   - Nothing yet!
+   - Compatibility with autoconf 2.63 (previously >=2.64)
+   - ovs-pki: Changed message digest algorithm from MD5 to SHA-1 because
+     MD5 is no longer secure and some operating systems have started to disable
+     it in OpenSSL.
+   - Keep active bond slave selection across OVS restart.
 
- -- Open vSwitch team <dev@openvswitch.org>  Thu, 14 Aug 2014 11:03:32 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Wed, 03 Dec 2014 21:25:42 -0700
 
 openvswitch (2.3.0-1) unstable; urgency=low
    [ Open vSwitch team ]
