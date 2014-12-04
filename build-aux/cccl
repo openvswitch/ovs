@@ -202,6 +202,8 @@ else
     opts=$linkopt
 fi
 
-echo "$prog $opts"
+if test x$V = x1 ; then
+    echo "$prog $opts"
+fi
 exec $prog $opts
 exit 0
