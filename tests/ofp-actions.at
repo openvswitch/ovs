@@ -581,3 +581,18 @@ ovs-ofctl: none of the usable flow formats (OpenFlow10,NXM) is among the allowed
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([reg_load <-> set_field translation corner case])
+AT_KEYWORDS([ofp-actions])
+OVS_VSWITCHD_START
+dnl In OpenFlow 1.3, set_field always sets all the bits in the field,
+dnl but when we translate to NXAST_LOAD we need to only set the bits that
+dnl actually exist (e.g. mpls_label only has 20 bits) otherwise OVS rejects
+dnl the "load" action as invalid.  Check that we do this correctly.
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 mpls,actions=set_field:10-\>mpls_label])
+AT_CHECK([ovs-ofctl -O OpenFlow10 dump-flows br0 | ofctl_strip], [0], [dnl
+NXST_FLOW reply:
+ mpls actions=load:0xa->OXM_OF_MPLS_LABEL[[]]
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
