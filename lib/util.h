@@ -17,6 +17,7 @@
 #ifndef UTIL_H
 #define UTIL_H 1
 
+#include <arpa/inet.h>
 #include <inttypes.h>
 #include <limits.h>
 #include <stdarg.h>
@@ -26,7 +27,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "byte-order.h"
 #include "compiler.h"
 #include "openvswitch/types.h"
 
