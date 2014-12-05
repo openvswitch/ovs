@@ -88,46 +88,60 @@ step 2 of the "Requirements" section.
 
 1. Create the initial OVS and VTEP schemas:
 
-    ovsdb-tool create /etc/openvswitch/ovs.db vswitchd/vswitch.ovsschema
-    ovsdb-tool create /etc/openvswitch/vtep.db vtep/vtep.ovsschema
+      ```
+ovsdb-tool create /etc/openvswitch/ovs.db vswitchd/vswitch.ovsschema
+ovsdb-tool create /etc/openvswitch/vtep.db vtep/vtep.ovsschema
+      ```
 
 2. Start ovsdb-server and have it handle both databases:
 
-    ovsdb-server --pidfile --detach --log-file \
-      --remote punix:/var/run/openvswitch/db.sock \
-      --remote=db:hardware_vtep,Global,managers \
-      /etc/openvswitch/ovs.db /etc/openvswitch/vtep.db
+      ```
+ovsdb-server --pidfile --detach --log-file \
+--remote punix:/var/run/openvswitch/db.sock \
+--remote=db:hardware_vtep,Global,managers \
+/etc/openvswitch/ovs.db /etc/openvswitch/vtep.db
+      ```
 
 3. Start OVS as normal:
 
-    ovs-vswitchd --log-file --detach --pidfile \
-      unix:/var/run/openvswitch/db.sock
+      ```
+ovs-vswitchd --log-file --detach --pidfile \
+unix:/var/run/openvswitch/db.sock
+      ```
 
 4. Create a "physical" switch and its ports in OVS:
 
-    ovs-vsctl add-br br0
-    ovs-vsctl add-port br0 p0
-    ovs-vsctl add-port br0 p1
+      ```
+ovs-vsctl add-br br0
+ovs-vsctl add-port br0 p0
+ovs-vsctl add-port br0 p1
+      ```
 
 5. Configure the physical switch in the VTEP database:
 
-    vtep-ctl add-ps br0
-    vtep-ctl set Physical_Switch br0 tunnel_ips=10.2.2.1
-
+      ```
+vtep-ctl add-ps br0
+vtep-ctl set Physical_Switch br0 tunnel_ips=10.2.2.1
+      ```
+      
 6. Start the VTEP emulator. If you installed the components by reading the
    INSTALL.md file, run the following from the same directory as this
    README.md:
 
-    ./ovs-vtep --log-file=/var/log/openvswitch/ovs-vtep.log \
-      --pidfile=/var/run/openvswitch/ovs-vtep.pid \
-      --detach br0
+      ```
+./ovs-vtep --log-file=/var/log/openvswitch/ovs-vtep.log \
+--pidfile=/var/run/openvswitch/ovs-vtep.pid \
+--detach br0
+      ```
 
-    If the installation was done by installing the openvswitch-vtep
-    package, you can find ovs-vtep at /usr/share/openvswitch/scripts.
+  If the installation was done by installing the openvswitch-vtep
+  package, you can find ovs-vtep at /usr/share/openvswitch/scripts.
 
 7. Configure the VTEP database's manager to point at an NVC:
 
-    vtep-ctl set-manager tcp:<CONTROLLER IP>:6632
+      ```
+vtep-ctl set-manager tcp:<CONTROLLER IP>:6632
+      ```
 
    Where CONTROLLER IP is your controller's IP address that is accessible
    via the Host Machine's eth0 interface.
@@ -141,17 +155,24 @@ use vtep-ctl to simulate one:
 
 1. Create a logical switch:
 
-    vtep-ctl add-ls ls0
+      ```
+vtep-ctl add-ls ls0
+      ```
 
 2. Bind the logical switch to a port:
 
-    vtep-ctl bind-ls br0 p0 0 ls0
-    vtep-ctl set Logical_Switch ls0 tunnel_key=33
+      ```
+vtep-ctl bind-ls br0 p0 0 ls0
+vtep-ctl set Logical_Switch ls0 tunnel_key=33
+      ```
 
 3. Direct unknown destinations out a tunnel:
 
-    vtep-ctl add-mcast-remote ls0 unknown-dst 10.2.2.2
+      ```
+vtep-ctl add-mcast-remote ls0 unknown-dst 10.2.2.2
+      ```
 
 4. Direct unicast destinations out a different tunnel:
-
-    vtep-ctl add-ucast-remote ls0 00:11:22:33:44:55 10.2.2.3
+      ```
+vtep-ctl add-ucast-remote ls0 00:11:22:33:44:55 10.2.2.3
+      ```
