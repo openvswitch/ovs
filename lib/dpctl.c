@@ -689,6 +689,27 @@ dpctl_dump_dps(int argc OVS_UNUSED, const char *argv[] OVS_UNUSED,
     return lasterror;
 }
 
+static void
+format_dpif_flow(struct ds *ds, const struct dpif_flow *f, struct hmap *ports,
+                 struct dpctl_params *dpctl_p)
+{
+    if (dpctl_p->verbosity) {
+        if (f->ufid_present) {
+            odp_format_ufid(&f->ufid, ds);
+            ds_put_cstr(ds, ", ");
+        } else {
+            ds_put_cstr(ds, "ufid:<empty>, ");
+        }
+    }
+    odp_flow_format(f->key, f->key_len, f->mask, f->mask_len, ports, ds,
+                    dpctl_p->verbosity);
+    ds_put_cstr(ds, ", ");
+
+    dpif_flow_stats_format(&f->stats, ds);
+    ds_put_cstr(ds, ", actions:");
+    format_odp_actions(ds, f->actions, f->actions_len);
+}
+
 static int
 dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
 {
@@ -771,21 +792,7 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
             minimatch_destroy(&minimatch);
         }
         ds_clear(&ds);
-        if (dpctl_p->verbosity) {
-            if (f.ufid_present) {
-                odp_format_ufid(&f.ufid, &ds);
-                ds_put_cstr(&ds, ", ");
-            } else {
-                ds_put_cstr(&ds, "ufid:<empty>, ");
-            }
-        }
-        odp_flow_format(f.key, f.key_len, f.mask, f.mask_len,
-                        &portno_names, &ds, dpctl_p->verbosity);
-        ds_put_cstr(&ds, ", ");
-
-        dpif_flow_stats_format(&f.stats, &ds);
-        ds_put_cstr(&ds, ", actions:");
-        format_odp_actions(&ds, f.actions, f.actions_len);
+        format_dpif_flow(&ds, &f, &portno_names, dpctl_p);
         dpctl_print(dpctl_p, "%s\n", ds_cstr(&ds));
     }
     dpif_flow_dump_thread_destroy(flow_dump_thread);
@@ -916,6 +923,64 @@ dpctl_mod_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     }
 
     return dpctl_put_flow(argc, argv, flags, dpctl_p);
+}
+
+static int
+dpctl_get_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
+{
+    const char *key_s = argv[argc - 1];
+    struct dpif_flow flow;
+    struct dpif_port dpif_port;
+    struct dpif_port_dump port_dump;
+    struct dpif *dpif;
+    char *dp_name;
+    struct hmap portno_names;
+    ovs_u128 ufid;
+    struct ofpbuf buf;
+    uint64_t stub[DPIF_FLOW_BUFSIZE / 8];
+    struct ds ds;
+    int n, error;
+
+    dp_name = argc == 3 ? xstrdup(argv[1]) : get_one_dp(dpctl_p);
+    if (!dp_name) {
+        return EINVAL;
+    }
+    error = parsed_dpif_open(dp_name, false, &dpif);
+    free(dp_name);
+    if (error) {
+        dpctl_error(dpctl_p, error, "opening datapath");
+        return error;
+    }
+
+    ofpbuf_use_stub(&buf, &stub, sizeof stub);
+    hmap_init(&portno_names);
+    DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, dpif) {
+        odp_portno_names_set(&portno_names, dpif_port.port_no, dpif_port.name);
+    }
+
+    n = odp_ufid_from_string(key_s, &ufid);
+    if (n <= 0) {
+        dpctl_error(dpctl_p, -n, "parsing flow ufid");
+        goto out;
+    }
+
+    error = dpif_flow_get(dpif, NULL, 0, &ufid, &buf, &flow);
+    if (error) {
+        dpctl_error(dpctl_p, error, "getting flow");
+        goto out;
+    }
+
+    ds_init(&ds);
+    format_dpif_flow(&ds, &flow, &portno_names, dpctl_p);
+    dpctl_print(dpctl_p, "%s\n", ds_cstr(&ds));
+    ds_destroy(&ds);
+
+out:
+    odp_portno_names_destroy(&portno_names);
+    hmap_destroy(&portno_names);
+    ofpbuf_uninit(&buf);
+    dpif_close(dpif);
+    return error;
 }
 
 static int
@@ -1339,6 +1404,7 @@ static const struct dpctl_command all_commands[] = {
     { "dump-flows", "[dp]", 0, 2, dpctl_dump_flows },
     { "add-flow", "add-flow [dp] flow actions", 2, 3, dpctl_add_flow },
     { "mod-flow", "mod-flow [dp] flow actions", 2, 3, dpctl_mod_flow },
+    { "get-flow", "get-flow [dp] ufid", 1, 2, dpctl_get_flow },
     { "del-flow", "del-flow [dp] flow", 1, 2, dpctl_del_flow },
     { "del-flows", "[dp]", 0, 1, dpctl_del_flows },
     { "help", "", 0, INT_MAX, dpctl_help },

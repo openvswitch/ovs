@@ -168,6 +168,7 @@ usage(void *userdata OVS_UNUSED)
            "  dump-flows [DP]          display flows in DP\n"
            "  add-flow [DP] FLOW ACTIONS add FLOW with ACTIONS to DP\n"
            "  mod-flow [DP] FLOW ACTIONS change FLOW actions to ACTIONS in DP\n"
+           "  get-flow [DP] ufid:UFID    fetch flow corresponding to UFID\n"
            "  del-flow [DP] FLOW         delete FLOW from DP\n"
            "  del-flows [DP]             delete all flows from DP\n"
            "Each IFACE on add-dp, add-if, and set-if may be followed by\n"

@@ -143,5 +143,9 @@ Deletes the flow from \fIdp\fR's flow table that matches \fIflow\fR.
 If \fB\-s\fR or \fB\-\-statistics\fR is specified, then
 \fBmod\-flows\fR prints the deleted flow's statistics.
 .
+.IP "\*(DX\fBget\-flow\fR [\fIdp\fR] ufid:\fIufid\fR"
+Fetches the flow from \fIdp\fR's flow table with unique identifier \fIufid\fR.
+\fIufid\fR must be specified as a string of 32 hexadecimal characters.
+.
 .IP "\*(DX\fBdel\-flows\fR [\fIdp\fR]"
 Deletes all flow entries from datapath \fIdp\fR's flow table.
