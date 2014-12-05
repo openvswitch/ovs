@@ -102,6 +102,43 @@ NlFillNlHdr(PNL_BUFFER nlBuf, UINT16 nlmsgType,
     return writeOk ? STATUS_SUCCESS : STATUS_INVALID_BUFFER_SIZE;
 }
 
+static VOID
+BuildMsgOut(POVS_MESSAGE msgIn, POVS_MESSAGE msgOut, UINT16 type,
+            UINT32 length, UINT16 flags)
+{
+    msgOut->nlMsg.nlmsgType = type;
+    msgOut->nlMsg.nlmsgFlags = flags;
+    msgOut->nlMsg.nlmsgSeq = msgIn->nlMsg.nlmsgSeq;
+    msgOut->nlMsg.nlmsgPid = msgIn->nlMsg.nlmsgPid;
+    msgOut->nlMsg.nlmsgLen = length;
+
+    msgOut->genlMsg.cmd = msgIn->genlMsg.cmd;
+    msgOut->genlMsg.version = msgIn->genlMsg.version;
+    msgOut->genlMsg.reserved = 0;
+}
+
+/*
+ * XXX: should move out these functions to a Netlink.c or to a OvsMessage.c
+ * or even make them inlined functions in Datapath.h. Can be done after the
+ * first sprint once we have more code to refactor.
+ */
+VOID
+BuildReplyMsgFromMsgIn(POVS_MESSAGE msgIn, POVS_MESSAGE msgOut, UINT16 flags)
+{
+    BuildMsgOut(msgIn, msgOut, msgIn->nlMsg.nlmsgType, sizeof(OVS_MESSAGE),
+                flags);
+}
+
+VOID
+BuildErrorMsg(POVS_MESSAGE msgIn, POVS_MESSAGE_ERROR msgOut, UINT errorCode)
+{
+    BuildMsgOut(msgIn, (POVS_MESSAGE)msgOut, NLMSG_ERROR,
+                sizeof(OVS_MESSAGE_ERROR), 0);
+
+    msgOut->errorMsg.error = errorCode;
+    msgOut->errorMsg.nlMsg = msgIn->nlMsg;
+}
+
 /*
  * ---------------------------------------------------------------------------
  * Adds Netlink Header to the NL_BUF.

@@ -2054,28 +2054,6 @@ unlock:
     return status;
 }
 
-NTSTATUS
-OvsDumpFlowIoctl(PVOID inputBuffer,
-                 UINT32 inputLength,
-                 PVOID outputBuffer,
-                 UINT32 outputLength,
-                 UINT32 *replyLen)
-{
-    OvsFlowDumpOutput *dumpOutput = (OvsFlowDumpOutput *)outputBuffer;
-    OvsFlowDumpInput *dumpInput = (OvsFlowDumpInput *)inputBuffer;
-
-    if (inputBuffer == NULL || outputBuffer == NULL) {
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    if ((inputLength != sizeof(OvsFlowDumpInput))
-        || (outputLength != sizeof *dumpOutput + dumpInput->actionsLen)) {
-        return STATUS_INFO_LENGTH_MISMATCH;
-    }
-
-    return OvsDoDumpFlows(dumpInput, dumpOutput, replyLen);
-}
-
 static NTSTATUS
 ReportFlowInfo(OvsFlow *flow,
                UINT32 getFlags,

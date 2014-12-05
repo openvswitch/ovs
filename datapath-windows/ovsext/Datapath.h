@@ -25,14 +25,6 @@
 #define __DATAPATH_H_ 1
 
 /*
- * Structure of an error message sent as a reply from kernel.
- */
-typedef struct _OVS_MESSAGE_ERROR {
-    NL_MSG_HDR nlMsg;
-    NL_MSG_ERR errorMsg;
-} OVS_MESSAGE_ERROR, *POVS_MESSAGE_ERROR;
-
-/*
  * Device operations to tag netlink commands with. This is a bitmask since it
  * is possible that a particular command can be invoked via different device
  * operations.
@@ -97,12 +89,6 @@ NTSTATUS OvsCompleteIrpRequest(PIRP irp, ULONG_PTR infoPtr, NTSTATUS status);
 
 VOID OvsAcquireCtrlLock();
 VOID OvsReleaseCtrlLock();
-
-/* XXX: Move this to netlink.[ch] eventually. */
-VOID BuildReplyMsgFromMsgIn(POVS_MESSAGE msgIn, POVS_MESSAGE msgOut,
-                            UINT16 flags);
-VOID BuildErrorMsg(POVS_MESSAGE msgIn, POVS_MESSAGE_ERROR msgOut,
-                   UINT errorCode);
 
 /*
  * Utility structure and functions to collect in one place all the parameters

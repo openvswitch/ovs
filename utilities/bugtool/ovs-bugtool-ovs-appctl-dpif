@@ -20,7 +20,7 @@ for bridge in `ovs-vsctl -- --real list-br`
 do
     echo "ovs-appctl dpif/show ${bridge}"
     ovs-appctl dpif/show "${bridge}"
-    echo "ovs-appctl dpif/dump-flows ${bridge}"
-    ovs-appctl dpif/dump-flows "$bridge"
+    echo "ovs-appctl dpif/dump-flows -m ${bridge}"
+    ovs-appctl dpif/dump-flows -m "$bridge"
     echo ""
 done
