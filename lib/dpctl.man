@@ -126,13 +126,13 @@ With \fB\-\-may\-create\fR, \fBmod\-flow\fR will add a new flow or
 modify an existing one.
 .IP
 If \fB\-s\fR or \fB\-\-statistics\fR is specified, then
-\fBmod\-flows\fR prints the modified flow's statistics.  A flow's
+\fBmod\-flow\fR prints the modified flow's statistics.  A flow's
 statistics are the number of packets and bytes that have passed
 through the flow, the elapsed time since the flow last processed a
 packet (if ever), and (for TCP flows) the union of the TCP flags
 processed through the flow.
 .IP
-With \fB\-\-clear\fR, \fBmod\-flows\fR zeros out the flow's
+With \fB\-\-clear\fR, \fBmod\-flow\fR zeros out the flow's
 statistics.  The statistics printed if \fB\-s\fR or
 \fB\-\-statistics\fR is also specified are those from just before
 clearing the statistics.
@@ -141,7 +141,7 @@ clearing the statistics.
 .DO "[\fB\-s\fR | \fB\-\-statistics\fR]" "\*(DX\fBdel\-flow\fR" "[\fIdp\fR] \fIflow\fR"
 Deletes the flow from \fIdp\fR's flow table that matches \fIflow\fR.
 If \fB\-s\fR or \fB\-\-statistics\fR is specified, then
-\fBmod\-flows\fR prints the deleted flow's statistics.
+\fBdel\-flow\fR prints the deleted flow's statistics.
 .
 .IP "\*(DX\fBget\-flow\fR [\fIdp\fR] ufid:\fIufid\fR"
 Fetches the flow from \fIdp\fR's flow table with unique identifier \fIufid\fR.
