@@ -1182,8 +1182,8 @@ A: By default, Open vSwitch will use the assigned IANA port for VXLAN, which
    manually on a per-VXLAN tunnel basis. An example of this configuration is
    provided below.
 
-   ovs-vsctl add-br br0
-   ovs-vsctl add-port br0 vxlan1 -- set interface vxlan1
+       ovs-vsctl add-br br0
+       ovs-vsctl add-port br0 vxlan1 -- set interface vxlan1
        type=vxlan options:remote_ip=192.168.1.2 options:key=flow
        options:dst_port=8472
 
