@@ -1324,7 +1324,7 @@ cleanup:
         POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
             usrParamsCtx->outputBuffer;
 
-        BuildErrorMsg(msgIn, msgError, nlError);
+        NlBuildErrorMsg(msgIn, msgError, nlError);
         *replyLen = msgError->nlMsg.nlmsgLen;
     }
 

@@ -94,10 +94,8 @@ NTSTATUS NlFillNlHdr(PNL_BUFFER nlBuf,
                      UINT16 nlmsgType, UINT16 nlmsgFlags,
                      UINT32 nlmsgSeq, UINT32 nlmsgPid);
 
-VOID BuildReplyMsgFromMsgIn(POVS_MESSAGE msgIn, POVS_MESSAGE msgOut,
-                            UINT16 flags);
-VOID BuildErrorMsg(POVS_MESSAGE msgIn, POVS_MESSAGE_ERROR msgOut,
-                   UINT errorCode);
+VOID NlBuildErrorMsg(POVS_MESSAGE msgIn, POVS_MESSAGE_ERROR msgOut,
+                     UINT errorCode);
 
 /* Netlink message accessing the payload */
 PVOID NlMsgAt(const PNL_MSG_HDR nlh, UINT32 offset);

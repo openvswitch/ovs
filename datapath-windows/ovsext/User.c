@@ -399,7 +399,7 @@ OvsNlExecuteCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
             POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
                                            usrParamsCtx->outputBuffer;
-            BuildErrorMsg(msgIn, msgError, nlError);
+            NlBuildErrorMsg(msgIn, msgError, nlError);
             *replyLen = msgError->nlMsg.nlmsgLen;
             status = STATUS_SUCCESS;
             goto done;

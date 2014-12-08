@@ -1535,7 +1535,7 @@ cleanup:
         POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
             usrParamsCtx->outputBuffer;
 
-        BuildErrorMsg(msgIn, msgError, nlError);
+        NlBuildErrorMsg(msgIn, msgError, nlError);
         *replyLen = msgError->nlMsg.nlmsgLen;
     }
 
@@ -1558,16 +1558,15 @@ CreateNetlinkMesgForNetdev(POVS_VPORT_EXT_INFO info,
 {
     NL_BUFFER nlBuffer;
     BOOLEAN ok;
-    OVS_MESSAGE msgOut;
     PNL_MSG_HDR nlMsg;
     UINT32 netdevFlags = 0;
 
     NlBufInit(&nlBuffer, outBuffer, outBufLen);
 
-    BuildReplyMsgFromMsgIn(msgIn, &msgOut, 0);
-    msgOut.ovsHdr.dp_ifindex = dpIfIndex;
-
-    ok = NlMsgPutHead(&nlBuffer, (PCHAR)&msgOut, sizeof msgOut);
+    ok = NlFillOvsMsg(&nlBuffer, msgIn->nlMsg.nlmsgType, NLM_F_MULTI,
+                      msgIn->nlMsg.nlmsgSeq, msgIn->nlMsg.nlmsgPid,
+                      msgIn->genlMsg.cmd, msgIn->genlMsg.version,
+                      dpIfIndex) == STATUS_SUCCESS ? TRUE : FALSE;
     if (!ok) {
         return STATUS_INSUFFICIENT_RESOURCES;
     }
@@ -1641,15 +1640,14 @@ OvsCreateMsgFromVport(POVS_VPORT_ENTRY vport,
     NL_BUFFER nlBuffer;
     OVS_VPORT_FULL_STATS vportStats;
     BOOLEAN ok;
-    OVS_MESSAGE msgOut;
     PNL_MSG_HDR nlMsg;
 
     NlBufInit(&nlBuffer, outBuffer, outBufLen);
 
-    BuildReplyMsgFromMsgIn(msgIn, &msgOut, NLM_F_MULTI);
-    msgOut.ovsHdr.dp_ifindex = dpIfIndex;
-
-    ok = NlMsgPutHead(&nlBuffer, (PCHAR)&msgOut, sizeof msgOut);
+    ok = NlFillOvsMsg(&nlBuffer, msgIn->nlMsg.nlmsgType, NLM_F_MULTI,
+                      msgIn->nlMsg.nlmsgSeq, msgIn->nlMsg.nlmsgPid,
+                      msgIn->genlMsg.cmd, msgIn->genlMsg.version,
+                      dpIfIndex) == STATUS_SUCCESS ? TRUE : FALSE;
     if (!ok) {
         return STATUS_INSUFFICIENT_RESOURCES;
     }
@@ -1901,7 +1899,7 @@ Cleanup:
         POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
             usrParamsCtx->outputBuffer;
 
-        BuildErrorMsg(msgIn, msgError, nlError);
+        NlBuildErrorMsg(msgIn, msgError, nlError);
         *replyLen = msgError->nlMsg.nlmsgLen;
     }
 
@@ -2134,7 +2132,7 @@ Cleanup:
             OvsFreeMemory(vport);
         }
 
-        BuildErrorMsg(msgIn, msgError, nlError);
+        NlBuildErrorMsg(msgIn, msgError, nlError);
         *replyLen = msgError->nlMsg.nlmsgLen;
     }
 
@@ -2246,7 +2244,7 @@ Cleanup:
         POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
             usrParamsCtx->outputBuffer;
 
-        BuildErrorMsg(msgIn, msgError, nlError);
+        NlBuildErrorMsg(msgIn, msgError, nlError);
         *replyLen = msgError->nlMsg.nlmsgLen;
     }
 
@@ -2330,7 +2328,7 @@ Cleanup:
         POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
             usrParamsCtx->outputBuffer;
 
-        BuildErrorMsg(msgIn, msgError, nlError);
+        NlBuildErrorMsg(msgIn, msgError, nlError);
         *replyLen = msgError->nlMsg.nlmsgLen;
     }
 

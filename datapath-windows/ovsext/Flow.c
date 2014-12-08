@@ -355,7 +355,7 @@ done:
     if (nlError != NL_ERROR_SUCCESS) {
         POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
                                        usrParamsCtx->outputBuffer;
-        BuildErrorMsg(msgIn, msgError, nlError);
+        NlBuildErrorMsg(msgIn, msgError, nlError);
         *replyLen = msgError->nlMsg.nlmsgLen;
         rc = STATUS_SUCCESS;
     }
@@ -387,7 +387,7 @@ OvsFlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
             (usrParamsCtx->outputBuffer)) {
             POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
                                            usrParamsCtx->outputBuffer;
-            BuildErrorMsg(msgIn, msgError, nlError);
+            NlBuildErrorMsg(msgIn, msgError, nlError);
             *replyLen = msgError->nlMsg.nlmsgLen;
             status = STATUS_SUCCESS;
             goto done;
