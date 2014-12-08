@@ -247,6 +247,7 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                     UINT32 *replyLen)
 {
     NTSTATUS rc = STATUS_SUCCESS;
+    BOOLEAN ok;
     POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
     POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
     PNL_MSG_HDR nlMsgHdr = &(msgIn->nlMsg);
@@ -258,7 +259,6 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     OvsFlowStats stats;
     struct ovs_flow_stats replyStats;
     NL_ERROR nlError = NL_ERROR_SUCCESS;
-
     NL_BUFFER nlBuf;
 
     RtlZeroMemory(&mappedFlow, sizeof(OvsFlowPut));
@@ -294,13 +294,14 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                       usrParamsCtx->outputLength);
 
             /* Prepare nl Msg headers */
-            rc = NlFillOvsMsg(&nlBuf, nlMsgHdr->nlmsgType, 0,
+            ok = NlFillOvsMsg(&nlBuf, nlMsgHdr->nlmsgType, 0,
                               nlMsgHdr->nlmsgSeq, nlMsgHdr->nlmsgPid,
                               genlMsgHdr->cmd, OVS_FLOW_VERSION,
                               ovsHdr->dp_ifindex);
-
-            if (rc == STATUS_SUCCESS) {
+            if (ok) {
                 *replyLen = msgOut->nlMsg.nlmsgLen;
+            } else {
+                rc = STATUS_INVALID_BUFFER_SIZE;
             }
        }
 
@@ -330,13 +331,15 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
               usrParamsCtx->outputLength);
 
     /* Prepare nl Msg headers */
-    rc = NlFillOvsMsg(&nlBuf, nlMsgHdr->nlmsgType, 0,
+    ok = NlFillOvsMsg(&nlBuf, nlMsgHdr->nlmsgType, 0,
                       nlMsgHdr->nlmsgSeq, nlMsgHdr->nlmsgPid,
                       genlMsgHdr->cmd, OVS_FLOW_VERSION,
                       ovsHdr->dp_ifindex);
-
-    if (rc != STATUS_SUCCESS) {
+    if (!ok) {
+        rc = STATUS_INVALID_BUFFER_SIZE;
         goto done;
+    } else {
+        rc = STATUS_SUCCESS;
     }
 
     /* Append OVS_FLOW_ATTR_STATS attribute */
@@ -586,15 +589,20 @@ _FlowNlDumpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
         /* Done with Dump, send NLMSG_DONE */
         if (!(dumpOutput.n)) {
+            BOOLEAN ok;
+
             OVS_LOG_INFO("Dump Done");
 
             nlMsgOutHdr = (PNL_MSG_HDR)(NlBufAt(&nlBuf, NlBufSize(&nlBuf), 0));
-            rc = NlFillNlHdr(&nlBuf, NLMSG_DONE, NLM_F_MULTI,
+            ok = NlFillNlHdr(&nlBuf, NLMSG_DONE, NLM_F_MULTI,
                              nlMsgHdr->nlmsgSeq, nlMsgHdr->nlmsgPid);
 
-            if (rc != STATUS_SUCCESS) {
+            if (!ok) {
+                rc = STATUS_INVALID_BUFFER_SIZE;
                 OVS_LOG_ERROR("Unable to prepare DUMP_DONE reply.");
                 break;
+            } else {
+                rc = STATUS_SUCCESS;
             }
 
             NlMsgAlignSize(nlMsgOutHdr);
@@ -603,17 +611,18 @@ _FlowNlDumpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
             FreeUserDumpState(instance);
             break;
         } else {
+            BOOLEAN ok;
 
             hdrOffset = NlBufSize(&nlBuf);
             nlMsgOutHdr = (PNL_MSG_HDR)(NlBufAt(&nlBuf, hdrOffset, 0));
 
             /* Netlink header */
-            rc = NlFillOvsMsg(&nlBuf, nlMsgHdr->nlmsgType, NLM_F_MULTI,
+            ok = NlFillOvsMsg(&nlBuf, nlMsgHdr->nlmsgType, NLM_F_MULTI,
                               nlMsgHdr->nlmsgSeq, nlMsgHdr->nlmsgPid,
                               genlMsgHdr->cmd, genlMsgHdr->version,
                               ovsHdr->dp_ifindex);
 
-            if (rc != STATUS_SUCCESS) {
+            if (!ok) {
                 /* Reset rc to success so that we can
                  * send already added messages to user space. */
                 rc = STATUS_SUCCESS;

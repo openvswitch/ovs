@@ -86,13 +86,13 @@ typedef struct _NL_POLICY
 #define NL_ATTR_GET_AS(NLA, TYPE) \
         (*(TYPE*) NlAttrGetUnspec(nla, sizeof(TYPE)))
 
-NTSTATUS NlFillOvsMsg(PNL_BUFFER nlBuf,
-                      UINT16 nlmsgType, UINT16 nlmsgFlags,
-                      UINT32 nlmsgSeq, UINT32 nlmsgPid,
-                      UINT8 genlCmd, UINT8 genlVer, UINT32 dpNo);
-NTSTATUS NlFillNlHdr(PNL_BUFFER nlBuf,
+BOOLEAN NlFillOvsMsg(PNL_BUFFER nlBuf,
                      UINT16 nlmsgType, UINT16 nlmsgFlags,
-                     UINT32 nlmsgSeq, UINT32 nlmsgPid);
+                     UINT32 nlmsgSeq, UINT32 nlmsgPid,
+                     UINT8 genlCmd, UINT8 genlVer, UINT32 dpNo);
+BOOLEAN NlFillNlHdr(PNL_BUFFER nlBuf,
+                    UINT16 nlmsgType, UINT16 nlmsgFlags,
+                    UINT32 nlmsgSeq, UINT32 nlmsgPid);
 
 VOID NlBuildErrorMsg(POVS_MESSAGE msgIn, POVS_MESSAGE_ERROR msgOut,
                      UINT errorCode);

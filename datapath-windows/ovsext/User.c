@@ -375,17 +375,21 @@ OvsNlExecuteCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
     /* Default reply that we want to send */
     if (status == STATUS_SUCCESS) {
+        BOOLEAN ok;
+
         NlBufInit(&nlBuf, usrParamsCtx->outputBuffer,
                   usrParamsCtx->outputLength);
 
         /* Prepare nl Msg headers */
-        status = NlFillOvsMsg(&nlBuf, nlMsgHdr->nlmsgType, 0,
+        ok = NlFillOvsMsg(&nlBuf, nlMsgHdr->nlmsgType, 0,
                  nlMsgHdr->nlmsgSeq, nlMsgHdr->nlmsgPid,
                  genlMsgHdr->cmd, OVS_PACKET_VERSION,
                  ovsHdr->dp_ifindex);
 
-        if (status == STATUS_SUCCESS) {
+        if (ok) {
             *replyLen = msgOut->nlMsg.nlmsgLen;
+        } else {
+            status = STATUS_INVALID_BUFFER_SIZE;
         }
     } else {
         /* Map NTSTATUS to NL_ERROR */
@@ -1088,9 +1092,9 @@ OvsCreateQueueNlPacket(PVOID userData,
      * Since we are pre allocating memory for the NL buffer
      * the attribute settings should not fail
      */
-    if (NlFillOvsMsg(&nlBuf, OVS_WIN_NL_PACKET_FAMILY_ID, 0,
+    if (!NlFillOvsMsg(&nlBuf, OVS_WIN_NL_PACKET_FAMILY_ID, 0,
                       0, pid, (UINT8)cmd, OVS_PACKET_VERSION,
-                      gOvsSwitchContext->dpNo) != STATUS_SUCCESS) {
+                      gOvsSwitchContext->dpNo)) {
         goto fail;
     }
 

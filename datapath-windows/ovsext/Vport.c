@@ -1566,37 +1566,37 @@ CreateNetlinkMesgForNetdev(POVS_VPORT_EXT_INFO info,
     ok = NlFillOvsMsg(&nlBuffer, msgIn->nlMsg.nlmsgType, NLM_F_MULTI,
                       msgIn->nlMsg.nlmsgSeq, msgIn->nlMsg.nlmsgPid,
                       msgIn->genlMsg.cmd, msgIn->genlMsg.version,
-                      dpIfIndex) == STATUS_SUCCESS ? TRUE : FALSE;
+                      dpIfIndex);
     if (!ok) {
-        return STATUS_INSUFFICIENT_RESOURCES;
+        return STATUS_INVALID_BUFFER_SIZE;
     }
 
     ok = NlMsgPutTailU32(&nlBuffer, OVS_WIN_NETDEV_ATTR_PORT_NO,
                          info->portNo);
     if (!ok) {
-        return STATUS_INSUFFICIENT_RESOURCES;
+        return STATUS_INVALID_BUFFER_SIZE;
     }
 
     ok = NlMsgPutTailU32(&nlBuffer, OVS_WIN_NETDEV_ATTR_TYPE, info->type);
     if (!ok) {
-        return STATUS_INSUFFICIENT_RESOURCES;
+        return STATUS_INVALID_BUFFER_SIZE;
     }
 
     ok = NlMsgPutTailString(&nlBuffer, OVS_WIN_NETDEV_ATTR_NAME,
                             info->name);
     if (!ok) {
-        return STATUS_INSUFFICIENT_RESOURCES;
+        return STATUS_INVALID_BUFFER_SIZE;
     }
 
     ok = NlMsgPutTailUnspec(&nlBuffer, OVS_WIN_NETDEV_ATTR_MAC_ADDR,
              (PCHAR)info->macAddress, sizeof (info->macAddress));
     if (!ok) {
-        return STATUS_INSUFFICIENT_RESOURCES;
+        return STATUS_INVALID_BUFFER_SIZE;
     }
 
     ok = NlMsgPutTailU32(&nlBuffer, OVS_WIN_NETDEV_ATTR_MTU, info->mtu);
     if (!ok) {
-        return STATUS_INSUFFICIENT_RESOURCES;
+        return STATUS_INVALID_BUFFER_SIZE;
     }
 
     if (info->status != OVS_EVENT_CONNECT) {
@@ -1605,7 +1605,7 @@ CreateNetlinkMesgForNetdev(POVS_VPORT_EXT_INFO info,
     ok = NlMsgPutTailU32(&nlBuffer, OVS_WIN_NETDEV_ATTR_IF_FLAGS,
                          netdevFlags);
     if (!ok) {
-        return STATUS_INSUFFICIENT_RESOURCES;
+        return STATUS_INVALID_BUFFER_SIZE;
     }
 
     /*
@@ -1647,24 +1647,24 @@ OvsCreateMsgFromVport(POVS_VPORT_ENTRY vport,
     ok = NlFillOvsMsg(&nlBuffer, msgIn->nlMsg.nlmsgType, NLM_F_MULTI,
                       msgIn->nlMsg.nlmsgSeq, msgIn->nlMsg.nlmsgPid,
                       msgIn->genlMsg.cmd, msgIn->genlMsg.version,
-                      dpIfIndex) == STATUS_SUCCESS ? TRUE : FALSE;
+                      dpIfIndex);
     if (!ok) {
-        return STATUS_INSUFFICIENT_RESOURCES;
+        return STATUS_INVALID_BUFFER_SIZE;
     }
 
     ok = NlMsgPutTailU32(&nlBuffer, OVS_VPORT_ATTR_PORT_NO, vport->portNo);
     if (!ok) {
-        return STATUS_INSUFFICIENT_RESOURCES;
+        return STATUS_INVALID_BUFFER_SIZE;
     }
 
     ok = NlMsgPutTailU32(&nlBuffer, OVS_VPORT_ATTR_TYPE, vport->ovsType);
     if (!ok) {
-        return STATUS_INSUFFICIENT_RESOURCES;
+        return STATUS_INVALID_BUFFER_SIZE;
     }
 
     ok = NlMsgPutTailString(&nlBuffer, OVS_VPORT_ATTR_NAME, vport->ovsName);
     if (!ok) {
-        return STATUS_INSUFFICIENT_RESOURCES;
+        return STATUS_INVALID_BUFFER_SIZE;
     }
 
     /*
@@ -1677,7 +1677,7 @@ OvsCreateMsgFromVport(POVS_VPORT_ENTRY vport,
     ok = NlMsgPutTailU32(&nlBuffer, OVS_VPORT_ATTR_UPCALL_PID,
                          vport->upcallPid);
     if (!ok) {
-        return STATUS_INSUFFICIENT_RESOURCES;
+        return STATUS_INVALID_BUFFER_SIZE;
     }
 
     /*stats*/
@@ -1694,7 +1694,7 @@ OvsCreateMsgFromVport(POVS_VPORT_ENTRY vport,
                             (PCHAR)&vportStats,
                             sizeof(OVS_VPORT_FULL_STATS));
     if (!ok) {
-        return STATUS_INSUFFICIENT_RESOURCES;
+        return STATUS_INVALID_BUFFER_SIZE;
     }
 
     /*

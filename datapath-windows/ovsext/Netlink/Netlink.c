@@ -39,7 +39,7 @@
  * Attributes should be added by caller.
  * ---------------------------------------------------------------------------
  */
-NTSTATUS
+BOOLEAN
 NlFillOvsMsg(PNL_BUFFER nlBuf, UINT16 nlmsgType,
              UINT16 nlmsgFlags, UINT32 nlmsgSeq,
              UINT32 nlmsgPid, UINT8 genlCmd,
@@ -68,7 +68,7 @@ NlFillOvsMsg(PNL_BUFFER nlBuf, UINT16 nlmsgType,
     writeOk = NlMsgPutTail(nlBuf, (PCHAR)(&msgOut),
                            sizeof (struct _OVS_MESSAGE));
 
-    return writeOk ? STATUS_SUCCESS : STATUS_INVALID_BUFFER_SIZE;
+    return writeOk;
 }
 
 /*
@@ -77,7 +77,7 @@ NlFillOvsMsg(PNL_BUFFER nlBuf, UINT16 nlmsgType,
  * input NlBuf.
  * ---------------------------------------------------------------------------
  */
-NTSTATUS
+BOOLEAN
 NlFillNlHdr(PNL_BUFFER nlBuf, UINT16 nlmsgType,
             UINT16 nlmsgFlags, UINT32 nlmsgSeq,
             UINT32 nlmsgPid)
@@ -99,7 +99,7 @@ NlFillNlHdr(PNL_BUFFER nlBuf, UINT16 nlmsgType,
     writeOk = NlMsgPutTail(nlBuf, (PCHAR)(&msgOut),
                            sizeof(struct _NL_MSG_HDR));
 
-    return writeOk ? STATUS_SUCCESS : STATUS_INVALID_BUFFER_SIZE;
+    return writeOk;
 }
 
 /*
