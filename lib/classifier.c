@@ -1336,7 +1336,8 @@ miniflow_and_mask_matches_flow_wc(const struct miniflow *flow,
             /* Only unwildcard if none of the differing bits is already
              * exact-matched. */
             if (!(flow_u32_value(&wc->masks, idx) & diff)) {
-                /* Keep one bit of the difference. */
+                /* Keep one bit of the difference.  The selected bit may be
+                 * different in big-endian v.s. little-endian systems. */
                 *flow_u32_lvalue(&wc->masks, idx) |= rightmost_1bit(diff);
             }
             return false;
