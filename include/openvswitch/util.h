@@ -19,6 +19,10 @@
 
 #include <openvswitch/version.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void ovs_set_program_name__(const char *name, const char *version,
                             const char *date, const char *time);
 
@@ -27,5 +31,9 @@ void ovs_set_program_name__(const char *name, const char *version,
 
 const char *ovs_get_program_name(void);
 const char *ovs_get_program_version(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
