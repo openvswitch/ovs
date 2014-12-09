@@ -1675,6 +1675,7 @@ exit:
 static void
 delete_op_init__(struct ukey_op *op, const struct dpif_flow *flow)
 {
+    op->ukey = NULL;
     op->dop.type = DPIF_OP_FLOW_DEL;
     op->dop.u.flow_del.key = flow->key;
     op->dop.u.flow_del.key_len = flow->key_len;
