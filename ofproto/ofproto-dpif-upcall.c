@@ -1857,7 +1857,9 @@ revalidate(struct revalidator *revalidator)
                     COVERAGE_INC(upcall_ukey_contention);
                 } else {
                     log_unexpected_flow(f, error);
-                    delete_op_init__(&ops[n_ops++], f);
+                    if (error != ENOENT) {
+                        delete_op_init__(&ops[n_ops++], f);
+                    }
                 }
                 continue;
             }
