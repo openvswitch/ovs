@@ -26,7 +26,6 @@
 #include "User.h"
 #include "Datapath.h"
 #include "Jhash.h"
-#include "Switch.h"
 #include "Vport.h"
 #include "Event.h"
 #include "User.h"

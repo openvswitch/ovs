@@ -1882,7 +1882,6 @@ RemoveFlow(OVS_DATAPATH *datapath,
 {
     OvsFlow *f = *flow;
     *flow = NULL;
-    UNREFERENCED_PARAMETER(datapath);
 
     ASSERT(datapath->nFlows);
     datapath->nFlows--;

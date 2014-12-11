@@ -764,6 +764,7 @@ OvsOutputForwardingCtx(OvsForwardingContext *ovsFwdCtx)
 {
     NDIS_STATUS status = STATUS_SUCCESS;
     POVS_SWITCH_CONTEXT switchContext = ovsFwdCtx->switchContext;
+    PCWSTR dropReason;
 
     /*
      * Handle the case where the some of the destination ports are tunneled
@@ -792,6 +793,7 @@ OvsOutputForwardingCtx(OvsForwardingContext *ovsFwdCtx)
             if (newNbl == NULL) {
                 status = NDIS_STATUS_RESOURCES;
                 ovsActionStats.noCopiedNbl++;
+                dropReason = L"Dropped due to failure to create NBL copy.";
                 goto dropit;
             }
         }
@@ -804,6 +806,7 @@ OvsOutputForwardingCtx(OvsForwardingContext *ovsFwdCtx)
         if (status != NDIS_STATUS_SUCCESS) {
             OvsCompleteNBL(ovsFwdCtx->switchContext, newNbl, TRUE);
             ovsActionStats.cannotGrowDest++;
+            dropReason = L"Dropped due to failure to update destinations.";
             goto dropit;
         }
 
@@ -819,8 +822,7 @@ OvsOutputForwardingCtx(OvsForwardingContext *ovsFwdCtx)
                                           ovsFwdCtx->completionList,
                                           &ovsFwdCtx->layers, FALSE);
             if (status != NDIS_STATUS_SUCCESS) {
-                OvsCompleteNBLForwardingCtx(ovsFwdCtx,
-                                            L"Dropped due to resouces");
+                dropReason = L"Dropped due to resouces.";
                 goto dropit;
             }
         }
@@ -841,7 +843,7 @@ OvsOutputForwardingCtx(OvsForwardingContext *ovsFwdCtx)
 
 dropit:
     if (status != NDIS_STATUS_SUCCESS) {
-        OvsCompleteNBLForwardingCtx(ovsFwdCtx, L"Dropped due to XXX");
+        OvsCompleteNBLForwardingCtx(ovsFwdCtx, dropReason);
     }
 
     return status;
