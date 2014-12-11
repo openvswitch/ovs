@@ -182,6 +182,11 @@ struct ofproto_mcast_snooping_settings {
     unsigned int max_entries;   /* Size of the multicast snooping table. */
 };
 
+struct ofproto_mcast_snooping_port_settings {
+    bool flood;                 /* If true, flood multicast traffic */
+    bool flood_reports;         /* If true, flood Reports traffic */
+};
+
 /* How the switch should act if the controller cannot be contacted. */
 enum ofproto_fail_mode {
     OFPROTO_FAIL_SECURE,        /* Preserve flow table. */
@@ -303,7 +308,7 @@ void ofproto_set_mac_table_config(struct ofproto *, unsigned idle_time,
 int ofproto_set_mcast_snooping(struct ofproto *ofproto,
                               const struct ofproto_mcast_snooping_settings *s);
 int ofproto_port_set_mcast_snooping(struct ofproto *ofproto, void *aux,
-                                    bool flood);
+                          const struct ofproto_mcast_snooping_port_settings *s);
 void ofproto_set_threads(int n_handlers, int n_revalidators);
 void ofproto_set_n_dpdk_rxqs(int n_rxqs);
 void ofproto_set_cpu_mask(const char *cmask);

@@ -3144,16 +3144,19 @@ set_mcast_snooping(struct ofproto *ofproto_,
     return 0;
 }
 
-/* Configures multicast snooping port's flood setting on 'ofproto'. */
+/* Configures multicast snooping port's flood settings on 'ofproto'. */
 static int
-set_mcast_snooping_port(struct ofproto *ofproto_, void *aux, bool flood)
+set_mcast_snooping_port(struct ofproto *ofproto_, void *aux,
+                        const struct ofproto_mcast_snooping_port_settings *s)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct ofbundle *bundle = bundle_lookup(ofproto, aux);
 
-    if (ofproto->ms) {
+    if (ofproto->ms && s) {
         ovs_rwlock_wrlock(&ofproto->ms->rwlock);
-        mcast_snooping_set_port_flood(ofproto->ms, bundle, flood);
+        mcast_snooping_set_port_flood(ofproto->ms, bundle, s->flood);
+        mcast_snooping_set_port_flood_reports(ofproto->ms, bundle,
+                                              s->flood_reports);
         ovs_rwlock_unlock(&ofproto->ms->rwlock);
     }
     return 0;

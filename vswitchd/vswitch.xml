@@ -1419,7 +1419,14 @@
       <column name="other_config" key="mcast-snooping-flood"
               type='{"type": "boolean"}'>
         <p>
-          If set to <code>true</code>, multicast packets are unconditionally
+          If set to <code>true</code>, multicast packets (except Reports) are
+          unconditionally forwarded to the specific port.
+        </p>
+      </column>
+      <column name="other_config" key="mcast-snooping-flood-reports"
+              type='{"type": "boolean"}'>
+        <p>
+          If set to <code>true</code>, multicast Reports are unconditionally
           forwarded to the specific port.
         </p>
       </column>

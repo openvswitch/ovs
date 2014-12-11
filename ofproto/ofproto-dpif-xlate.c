@@ -2083,6 +2083,31 @@ xlate_normal_mcast_send_fports(struct xlate_ctx *ctx,
     }
 }
 
+/* forward the Reports to configured ports */
+static void
+xlate_normal_mcast_send_rports(struct xlate_ctx *ctx,
+                               struct mcast_snooping *ms,
+                               struct xbundle *in_xbundle, uint16_t vlan)
+    OVS_REQ_RDLOCK(ms->rwlock)
+{
+    struct xlate_cfg *xcfg;
+    struct mcast_port_bundle *rport;
+    struct xbundle *mcast_xbundle;
+
+    xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
+    LIST_FOR_EACH(rport, node, &ms->rport_list) {
+        mcast_xbundle = xbundle_lookup(xcfg, rport->port);
+        if (mcast_xbundle && mcast_xbundle != in_xbundle) {
+            xlate_report(ctx, "forwarding Report to mcast flagged port");
+            output_normal(ctx, mcast_xbundle, vlan);
+        } else if (!mcast_xbundle) {
+            xlate_report(ctx, "mcast port is unknown, dropping the Report");
+        } else {
+            xlate_report(ctx, "mcast port is input port, dropping the Report");
+        }
+    }
+}
+
 static void
 xlate_normal_flood(struct xlate_ctx *ctx, struct xbundle *in_xbundle,
                    uint16_t vlan)
@@ -2197,6 +2222,15 @@ xlate_normal(struct xlate_ctx *ctx)
             if (mcast_snooping_is_membership(flow->tp_src)) {
                 ovs_rwlock_rdlock(&ms->rwlock);
                 xlate_normal_mcast_send_mrouters(ctx, ms, in_xbundle, vlan);
+                /* RFC4541: section 2.1.1, item 1: A snooping switch should
+                 * forward IGMP Membership Reports only to those ports where
+                 * multicast routers are attached.  Alternatively stated: a
+                 * snooping switch should not forward IGMP Membership Reports
+                 * to ports on which only hosts are attached.
+                 * An administrative control may be provided to override this
+                 * restriction, allowing the report messages to be flooded to
+                 * other ports. */
+                xlate_normal_mcast_send_rports(ctx, ms, in_xbundle, vlan);
                 ovs_rwlock_unlock(&ms->rwlock);
             } else {
                 xlate_report(ctx, "multicast traffic, flooding");
