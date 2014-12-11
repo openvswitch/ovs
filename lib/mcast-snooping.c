@@ -160,6 +160,7 @@ mcast_snooping_create(void)
     list_init(&ms->group_lru);
     list_init(&ms->mrouter_lru);
     list_init(&ms->fport_list);
+    list_init(&ms->rport_list);
     ms->secret = random_uint32();
     ms->idle_time = MCAST_ENTRY_DEFAULT_IDLE_TIME;
     ms->max_entries = MCAST_DEFAULT_MAX_ENTRIES;
@@ -423,6 +424,13 @@ mcast_snooping_leave_group(struct mcast_snooping *ms, ovs_be32 ip4,
 {
     struct mcast_group *grp;
 
+    /* Ports flagged to forward Reports usually have more
+     * than one host behind it, so don't leave the group
+     * on the first message and just let it expire */
+    if (mcast_snooping_port_lookup(&ms->rport_list, port)) {
+        return false;
+    }
+
     grp = mcast_snooping_lookup(ms, ip4, vlan);
     if (grp && mcast_group_delete_bundle(ms, grp, port)) {
         ms->need_revalidate = true;
@@ -589,6 +597,25 @@ mcast_snooping_set_port_flood(struct mcast_snooping *ms, void *port,
     }
 }
 
+/* Flood Reports ports. */
+
+void
+mcast_snooping_set_port_flood_reports(struct mcast_snooping *ms, void *port,
+                                      bool flood)
+    OVS_REQ_WRLOCK(ms->rwlock)
+{
+    struct mcast_port_bundle *pbundle;
+
+    pbundle = mcast_snooping_port_lookup(&ms->rport_list, port);
+    if (flood && !pbundle) {
+        mcast_snooping_add_port(&ms->rport_list, port);
+        ms->need_revalidate = true;
+    } else if (!flood && pbundle) {
+        mcast_snooping_flush_port(pbundle);
+        ms->need_revalidate = true;
+    }
+}
+
 /* Run and flush. */
 
 static void
@@ -636,11 +663,18 @@ mcast_snooping_flush__(struct mcast_snooping *ms)
 
     hmap_shrink(&ms->table);
 
+    /* flush multicast routers */
     while (mrouter_get_lru(ms, &mrouter)) {
         mcast_snooping_flush_mrouter(mrouter);
     }
 
+    /* flush flood ports */
     while (mcast_snooping_port_get(&ms->fport_list, &pbundle)) {
+        mcast_snooping_flush_port(pbundle);
+    }
+
+    /* flush flood report ports */
+    while (mcast_snooping_port_get(&ms->rport_list, &pbundle)) {
         mcast_snooping_flush_port(pbundle);
     }
 }

@@ -87,7 +87,7 @@ struct mcast_mrouter_bundle {
     void *port OVS_GUARDED;
 };
 
-/* The bundle to send multicast traffic.
+/* The bundle to send multicast traffic or Reports.
  * Guarded by owning 'mcast_snooping''s rwlock */
 struct mcast_port_bundle {
     /* Node in parent struct mcast_snooping. */
@@ -116,6 +116,10 @@ struct mcast_snooping {
     /* Contains struct mcast_port_bundle to be flooded with multicast
      * packets in no special order. */
     struct ovs_list fport_list OVS_GUARDED;
+
+    /* Contains struct mcast_port_bundle to forward Reports in
+     * no special order. */
+    struct ovs_list rport_list OVS_GUARDED;
 
     /* Secret for randomizing hash table. */
     uint32_t secret;
@@ -162,6 +166,9 @@ mcast_snooping_set_flood_unreg(struct mcast_snooping *ms, bool enable)
     OVS_REQ_WRLOCK(ms->rwlock);
 void mcast_snooping_set_port_flood(struct mcast_snooping *ms, void *port,
                                    bool flood)
+    OVS_REQ_WRLOCK(ms->rwlock);
+void mcast_snooping_set_port_flood_reports(struct mcast_snooping *ms,
+                                           void *port, bool flood)
     OVS_REQ_WRLOCK(ms->rwlock);
 
 /* Lookup. */

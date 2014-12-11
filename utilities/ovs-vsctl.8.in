@@ -995,9 +995,13 @@ unregistered packets on bridge \fBbr0\fR.
 .IP
 .B "ovs\-vsctl set Bridge br0 other_config:mcast-snooping-disable-flood-unregistered=true"
 .PP
-Enable flooding of multicast packets on a specific port.
+Enable flooding of multicast packets (except Reports) on a specific port.
 .IP
 .B "ovs\-vsctl set Port eth1 other_config:mcast-snooping-flood=true"
+.PP
+Enable flooding of Reports on a specific port.
+.IP
+.B "ovs\-vsctl set Port eth1 other_config:mcast-snooping-flood-reports=true"
 .PP
 Deconfigure multicasting snooping from above:
 .IP

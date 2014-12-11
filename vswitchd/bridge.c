@@ -1896,9 +1896,12 @@ bridge_configure_mcast_snooping(struct bridge *br)
         }
 
         HMAP_FOR_EACH (port, hmap_node, &br->ports) {
-            bool flood = smap_get_bool(&port->cfg->other_config,
+            struct ofproto_mcast_snooping_port_settings port_s;
+            port_s.flood = smap_get_bool(&port->cfg->other_config,
                                        "mcast-snooping-flood", false);
-            if (ofproto_port_set_mcast_snooping(br->ofproto, port, flood)) {
+            port_s.flood_reports = smap_get_bool(&port->cfg->other_config,
+                                       "mcast-snooping-flood-reports", false);
+            if (ofproto_port_set_mcast_snooping(br->ofproto, port, &port_s)) {
                 VLOG_ERR("port %s: could not configure mcast snooping",
                          port->name);
             }

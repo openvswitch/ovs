@@ -1588,14 +1588,15 @@ struct ofproto_class {
 
     /* Configures multicast snooping port's flood setting on 'ofproto'.
      *
-     * All multicast traffic is sent to struct port 'aux' in 'ofproto'
-     * if 'flood' is true. Otherwise, struct port 'aux' is an ordinary
-     * switch port.
+     * If 's' is nonnull, this function updates multicast snooping
+     * configuration to 's' in 'ofproto'.
+     *
+     * If 's' is NULL, this function doesn't change anything.
      *
      * An implementation that does not support multicast snooping may set
      * it to NULL or return EOPNOTSUPP. */
     int (*set_mcast_snooping_port)(struct ofproto *ofproto_, void *aux,
-                                   bool flood);
+                          const struct ofproto_mcast_snooping_port_settings *s);
 
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
  *
