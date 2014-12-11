@@ -1982,7 +1982,7 @@ update_mcast_snooping_table(const struct xbridge *xbridge,
     struct mcast_snooping *ms = xbridge->ms;
     struct xlate_cfg *xcfg;
     struct xbundle *mcast_xbundle;
-    struct mcast_fport_bundle *fport;
+    struct mcast_port_bundle *fport;
 
     /* Don't learn the OFPP_NONE port. */
     if (in_xbundle == &ofpp_none_bundle) {
@@ -1993,7 +1993,7 @@ update_mcast_snooping_table(const struct xbridge *xbridge,
     mcast_xbundle = NULL;
     ovs_rwlock_wrlock(&ms->rwlock);
     xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
-    LIST_FOR_EACH(fport, fport_node, &ms->fport_list) {
+    LIST_FOR_EACH(fport, node, &ms->fport_list) {
         mcast_xbundle = xbundle_lookup(xcfg, fport->port);
         if (mcast_xbundle == in_xbundle) {
             break;
@@ -2066,11 +2066,11 @@ xlate_normal_mcast_send_fports(struct xlate_ctx *ctx,
     OVS_REQ_RDLOCK(ms->rwlock)
 {
     struct xlate_cfg *xcfg;
-    struct mcast_fport_bundle *fport;
+    struct mcast_port_bundle *fport;
     struct xbundle *mcast_xbundle;
 
     xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
-    LIST_FOR_EACH(fport, fport_node, &ms->fport_list) {
+    LIST_FOR_EACH(fport, node, &ms->fport_list) {
         mcast_xbundle = xbundle_lookup(xcfg, fport->port);
         if (mcast_xbundle && mcast_xbundle != in_xbundle) {
             xlate_report(ctx, "forwarding to mcast flood port");
