@@ -38,6 +38,8 @@
 COVERAGE_DEFINE(mcast_snooping_learned);
 COVERAGE_DEFINE(mcast_snooping_expired);
 
+static struct mcast_port_bundle *
+mcast_snooping_port_lookup(struct ovs_list *list, void *port);
 static struct mcast_mrouter_bundle *
 mcast_snooping_mrouter_lookup(struct mcast_snooping *ms, uint16_t vlan,
                               void *port)
@@ -382,7 +384,7 @@ mcast_snooping_add_group(struct mcast_snooping *ms, ovs_be32 ip4,
 
     /* Avoid duplicate packets. */
     if (mcast_snooping_mrouter_lookup(ms, vlan, port)
-        || mcast_snooping_fport_lookup(ms, vlan, port)) {
+        || mcast_snooping_port_lookup(&ms->fport_list, port)) {
         return false;
     }
 
@@ -488,7 +490,7 @@ mcast_snooping_add_mrouter(struct mcast_snooping *ms, uint16_t vlan,
     struct mcast_mrouter_bundle *mrouter;
 
     /* Avoid duplicate packets. */
-    if (mcast_snooping_fport_lookup(ms, vlan, port)) {
+    if (mcast_snooping_port_lookup(&ms->fport_list, port)) {
         return false;
     }
 
@@ -515,22 +517,22 @@ mcast_snooping_flush_mrouter(struct mcast_mrouter_bundle *mrouter)
     free(mrouter);
 }
 
-/* Flood ports. */
+/* Ports */
 
-static struct mcast_fport_bundle *
-mcast_fport_from_list_node(struct ovs_list *list)
+static struct mcast_port_bundle *
+mcast_port_from_list_node(struct ovs_list *list)
 {
-    return CONTAINER_OF(list, struct mcast_fport_bundle, fport_node);
+    return CONTAINER_OF(list, struct mcast_port_bundle, node);
 }
 
 /* If the list is not empty, stores the fport in '*f' and returns true.
  * Otherwise, if the list is empty, stores NULL in '*f' and return false. */
 static bool
-fport_get(const struct mcast_snooping *ms, struct mcast_fport_bundle **f)
-    OVS_REQ_RDLOCK(ms->rwlock)
+mcast_snooping_port_get(const struct ovs_list *list,
+                        struct mcast_port_bundle **f)
 {
-    if (!list_is_empty(&ms->fport_list)) {
-        *f = mcast_fport_from_list_node(ms->fport_list.next);
+    if (!list_is_empty(list)) {
+        *f = mcast_port_from_list_node(list->next);
         return true;
     } else {
         *f = NULL;
@@ -538,53 +540,51 @@ fport_get(const struct mcast_snooping *ms, struct mcast_fport_bundle **f)
     }
 }
 
-struct mcast_fport_bundle *
-mcast_snooping_fport_lookup(struct mcast_snooping *ms, uint16_t vlan,
-                            void *port)
-    OVS_REQ_RDLOCK(ms->rwlock)
+static struct mcast_port_bundle *
+mcast_snooping_port_lookup(struct ovs_list *list, void *port)
 {
-    struct mcast_fport_bundle *fport;
+    struct mcast_port_bundle *pbundle;
 
-    LIST_FOR_EACH (fport, fport_node, &ms->fport_list) {
-        if (fport->vlan == vlan && fport->port == port) {
-            return fport;
+    LIST_FOR_EACH (pbundle, node, list) {
+        if (pbundle->port == port) {
+            return pbundle;
         }
     }
     return NULL;
 }
 
 static void
-mcast_snooping_add_fport(struct mcast_snooping *ms, uint16_t vlan, void *port)
-    OVS_REQ_WRLOCK(ms->rwlock)
+mcast_snooping_add_port(struct ovs_list *list, void *port)
 {
-    struct mcast_fport_bundle *fport;
+    struct mcast_port_bundle *pbundle;
 
-    fport = xmalloc(sizeof *fport);
-    fport->vlan = vlan;
-    fport->port = port;
-    list_insert(&ms->fport_list, &fport->fport_node);
+    pbundle = xmalloc(sizeof *pbundle);
+    pbundle->port = port;
+    list_insert(list, &pbundle->node);
 }
 
 static void
-mcast_snooping_flush_fport(struct mcast_fport_bundle *fport)
+mcast_snooping_flush_port(struct mcast_port_bundle *pbundle)
 {
-    list_remove(&fport->fport_node);
-    free(fport);
+    list_remove(&pbundle->node);
+    free(pbundle);
 }
 
+
+/* Flood ports. */
 void
-mcast_snooping_set_port_flood(struct mcast_snooping *ms, uint16_t vlan,
-                              void *port, bool flood)
+mcast_snooping_set_port_flood(struct mcast_snooping *ms, void *port,
+                              bool flood)
     OVS_REQ_WRLOCK(ms->rwlock)
 {
-    struct mcast_fport_bundle *fport;
+    struct mcast_port_bundle *fbundle;
 
-    fport = mcast_snooping_fport_lookup(ms, vlan, port);
-    if (flood && !fport) {
-        mcast_snooping_add_fport(ms, vlan, port);
+    fbundle = mcast_snooping_port_lookup(&ms->fport_list, port);
+    if (flood && !fbundle) {
+        mcast_snooping_add_port(&ms->fport_list, port);
         ms->need_revalidate = true;
-    } else if (!flood && fport) {
-        mcast_snooping_flush_fport(fport);
+    } else if (!flood && fbundle) {
+        mcast_snooping_flush_port(fbundle);
         ms->need_revalidate = true;
     }
 }
@@ -628,7 +628,7 @@ mcast_snooping_flush__(struct mcast_snooping *ms)
 {
     struct mcast_group *grp;
     struct mcast_mrouter_bundle *mrouter;
-    struct mcast_fport_bundle *fport;
+    struct mcast_port_bundle *pbundle;
 
     while (group_get_lru(ms, &grp)) {
         mcast_snooping_flush_group(ms, grp);
@@ -640,8 +640,8 @@ mcast_snooping_flush__(struct mcast_snooping *ms)
         mcast_snooping_flush_mrouter(mrouter);
     }
 
-    while (fport_get(ms, &fport)) {
-        mcast_snooping_flush_fport(fport);
+    while (mcast_snooping_port_get(&ms->fport_list, &pbundle)) {
+        mcast_snooping_flush_port(pbundle);
     }
 }
 

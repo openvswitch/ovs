@@ -3156,8 +3156,7 @@ set_mcast_snooping_port(struct ofproto *ofproto_, void *aux, bool flood)
 
     if (ofproto->ms) {
         ovs_rwlock_wrlock(&ofproto->ms->rwlock);
-        mcast_snooping_set_port_flood(ofproto->ms, bundle->vlan, bundle,
-                                      flood);
+        mcast_snooping_set_port_flood(ofproto->ms, bundle, flood);
         ovs_rwlock_unlock(&ofproto->ms->rwlock);
     }
     return 0;
