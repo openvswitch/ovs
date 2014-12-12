@@ -47,6 +47,7 @@ add_port () {
     INTERFACE="$2"
     CONTAINER="$3"
     ADDRESS="$4"
+    GATEWAY="$5"
 
     if [ "$#" -lt 3 ]; then
         usage
@@ -89,6 +90,10 @@ add_port () {
 
     if [ -n "$ADDRESS" ]; then
         ip netns exec "$PID" ip addr add "$ADDRESS" dev "$INTERFACE"
+    fi
+
+    if [ -n "$GATEWAY" ]; then
+        ip netns exec "$PID" ip route add default via "$GATEWAY"
     fi
 }
 
@@ -142,12 +147,14 @@ ${UTIL}: Performs integration of Open vSwitch with Docker.
 usage: ${UTIL} COMMAND
 
 Commands:
-  add-port BRIDGE INTERFACE CONTAINER [ADDRESS]
+  add-port BRIDGE INTERFACE CONTAINER [ADDRESS [GATEWAY]]
                     Adds INTERFACE inside CONTAINER and connects it as a port
                     in Open vSwitch BRIDGE. Optionally, sets ADDRESS on
                     INTERFACE. ADDRESS can include a '/' to represent network
-                    prefix length. e.g.:
-                    ${UTIL} add-port br-int eth1 c474a0e2830e 192.168.1.2/24
+                    prefix length. Along with ADDRESS, optionally set the
+                    default gateway for the container. e.g.:
+                    ${UTIL} add-port br-int eth1 c474a0e2830e 192.168.1.2/24 \
+                        192.168.1.1
   del-port BRIDGE INTERFACE CONTAINER
                     Deletes INTERFACE inside CONTAINER and removes its
                     connection to Open vSwitch BRIDGE. e.g.:
