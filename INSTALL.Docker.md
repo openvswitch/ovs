@@ -76,8 +76,22 @@ and del-port[s] commands.
 
 Once a container interface is added to an Open vSwitch bridge, one can
 set VLANs, create Tunnels, add OpenFlow rules etc for more network control.
+Many times, it is important that the underlying network infrastructure is
+plumbed (or programmed) before the application inside the container starts.
+To handle this, one can create a micro-container, attach an Open vSwitch
+interface to that container, set the UUIDS in OVSDB as mentioned in
+[IntegrationGuide.md] and then program the bridge to handle traffic coming out
+of that container. Now, you can start the main container asking it
+to share the network of the micro-container. When your application starts,
+the underlying network infrastructure would be ready. e.g.:
+
+```
+% docker run -d --net=container:$MICROCONTAINER_ID ubuntu:14.04 /bin/sh -c \
+"while true; do echo hello world; sleep 1; done"
+```
+
 Please read the man pages of ovs-vsctl, ovs-ofctl, ovs-vswitchd,
-ovsdb-server ovs-vswitchd.conf.db etc for more details.
+ovsdb-server and ovs-vswitchd.conf.db etc for more details about Open vSwitch.
 
 Docker networking is quite flexible and can be used in multiple ways.  For more
 information, please read:
@@ -89,3 +103,4 @@ Bug Reporting
 Please report problems to bugs@openvswitch.org.
 
 [INSTALL.md]:INSTALL.md
+[IntegrationGuide.md]:IntegrationGuide.md
