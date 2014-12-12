@@ -42,6 +42,20 @@ delete_netns_link () {
     rm -f /var/run/netns/"$PID"
 }
 
+get_port_for_container_interface () {
+    CONTAINER="$1"
+    INTERFACE="$2"
+
+    PORT=`ovs_vsctl --data=bare --no-heading --columns=name find interface \
+             external_ids:container_id="$CONTAINER"  \
+             external_ids:container_iface="$INTERFACE"`
+    if [ -z "$PORT" ]; then
+        echo >&2 "$UTIL: Failed to find any attached port" \
+                 "for CONTAINER=$CONTAINER and INTERFACE=$INTERFACE"
+    fi
+    echo "$PORT"
+}
+
 add_port () {
     BRIDGE="$1"
     INTERFACE="$2"
@@ -107,12 +121,8 @@ del_port () {
         exit 1
     fi
 
-    PORT=`ovs_vsctl --data=bare --no-heading --columns=name find interface \
-             external_ids:container_id="$CONTAINER"  \
-             external_ids:container_iface="$INTERFACE"`
+    PORT=`get_port_for_container_interface "$CONTAINER" "$INTERFACE"`
     if [ -z "$PORT" ]; then
-        echo >&2 "$UTIL: Failed to find any attached port in $BRIDGE" \
-                 "for CONTAINER=$CONTAINER and INTERFACE=$INTERFACE"
         exit 1
     fi
 
@@ -141,6 +151,24 @@ del_ports () {
     done
 }
 
+set_vlan () {
+    BRIDGE="$1"
+    INTERFACE="$2"
+    CONTAINER_ID="$3"
+    VLAN="$4"
+
+    if [ "$#" -lt 4 ]; then
+        usage
+        exit 1
+    fi
+
+    PORT=`get_port_for_container_interface "$CONTAINER_ID" "$INTERFACE"`
+    if [ -z "$PORT" ]; then
+        exit 1
+    fi
+    ovs_vsctl set port "$PORT" tag="$VLAN"
+}
+
 usage() {
     cat << EOF
 ${UTIL}: Performs integration of Open vSwitch with Docker.
@@ -162,6 +190,10 @@ Commands:
   del-ports BRIDGE CONTAINER
                     Removes all Open vSwitch interfaces from CONTAINER. e.g.:
                     ${UTIL} del-ports br-int c474a0e2830e
+  set-vlan BRIDGE INTERFACE CONTAINER VLAN
+                    Configures the INTERFACE of CONTAINER attached to BRIDGE
+                    to become an access port of VLAN. e.g.:
+                    ${UTIL} set-vlan br-int eth1 c474a0e2830e 5
 Options:
   -h, --help        display this help message.
 EOF
@@ -195,6 +227,11 @@ case $1 in
     "del-ports")
         shift
         del_ports "$@"
+        exit 0
+        ;;
+    "set-vlan")
+        shift
+        set_vlan "$@"
         exit 0
         ;;
     -h | --help)
