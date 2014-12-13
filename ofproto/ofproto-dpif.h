@@ -53,6 +53,11 @@ enum rule_dpif_lookup_verdict {
                                              * dropped. */
 };
 
+/* Number of implemented OpenFlow tables. */
+enum { N_TABLES = 255 };
+enum { TBL_INTERNAL = N_TABLES - 1 };    /* Used for internal hidden rules. */
+BUILD_ASSERT_DECL(N_TABLES >= 2 && N_TABLES <= 255);
+
 /* For lock annotation below only. */
 extern struct ovs_rwlock xlate_rwlock;
 
@@ -90,6 +95,14 @@ bool ofproto_dpif_get_enable_recirc(const struct ofproto_dpif *);
 uint8_t rule_dpif_lookup(struct ofproto_dpif *, struct flow *,
                          struct flow_wildcards *, struct rule_dpif **rule,
                          bool take_ref);
+
+/* If 'recirc_id' is set, starts looking up from internal table for
+ * post recirculation flows or packets.  Otherwise, starts from table 0. */
+static inline uint8_t
+rule_dpif_lookup_get_init_table_id(const struct flow *flow)
+{
+    return flow->recirc_id ? TBL_INTERNAL : 0;
+}
 
 enum rule_dpif_lookup_verdict rule_dpif_lookup_from_table(struct ofproto_dpif *,
                                                           const struct flow *,
@@ -223,12 +236,6 @@ int ofproto_dpif_add_internal_flow(struct ofproto_dpif *,
                                    struct rule **rulep);
 int ofproto_dpif_delete_internal_flow(struct ofproto_dpif *, struct match *,
                                       int priority);
-
-/* Number of implemented OpenFlow tables. */
-enum { N_TABLES = 255 };
-enum { TBL_INTERNAL = N_TABLES - 1 };    /* Used for internal hidden rules. */
-BUILD_ASSERT_DECL(N_TABLES >= 2 && N_TABLES <= 255);
-
 
 /* struct rule_dpif has struct rule as it's first member. */
 #define RULE_CAST(RULE) ((struct rule *)RULE)

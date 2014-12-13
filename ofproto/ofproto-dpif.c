@@ -1236,9 +1236,23 @@ add_internal_flows(struct ofproto_dpif *ofproto)
         return error;
     }
 
-    /* Continue non-recirculation rule lookups from table 0.
+    /* Drop any run away non-recirc rule lookups. Recirc_id has to be
+     * zero when reaching this rule.
      *
-     * (priority=2), recirc=0, actions=resubmit(, 0)
+     * (priority=2), recirc_id=0, actions=drop
+     */
+    ofpbuf_clear(&ofpacts);
+    match_init_catchall(&match);
+    match_set_recirc_id(&match, 0);
+    error = ofproto_dpif_add_internal_flow(ofproto, &match, 2, &ofpacts,
+                                           &unused_rulep);
+    if (error) {
+        return error;
+    }
+
+    /* Continue rule lookups for not-matched recirc rules from table 0.
+     *
+     * (priority=1), actions=resubmit(, 0)
      */
     resubmit = ofpact_put_RESUBMIT(&ofpacts);
     resubmit->ofpact.compat = 0;
@@ -1246,21 +1260,7 @@ add_internal_flows(struct ofproto_dpif *ofproto)
     resubmit->table_id = 0;
 
     match_init_catchall(&match);
-    match_set_recirc_id(&match, 0);
 
-    error = ofproto_dpif_add_internal_flow(ofproto, &match, 2, &ofpacts,
-                                           &unused_rulep);
-    if (error) {
-        return error;
-    }
-
-    /* Drop any run away recirc rule lookups. Recirc_id has to be
-     * non-zero when reaching this rule.
-     *
-     * (priority=1), *, actions=drop
-     */
-    ofpbuf_clear(&ofpacts);
-    match_init_catchall(&match);
     error = ofproto_dpif_add_internal_flow(ofproto, &match, 1, &ofpacts,
                                            &unused_rulep);
 
@@ -3200,16 +3200,7 @@ rule_dpif_lookup(struct ofproto_dpif *ofproto, struct flow *flow,
         if (wc) {
             wc->masks.recirc_id = UINT32_MAX;
         }
-
-        /* Start looking up from internal table for post recirculation flows
-         * or packets. We can also simply send all, including normal flows
-         * or packets to the internal table. They will not match any post
-         * recirculation rules except the 'catch all' rule that resubmit
-         * them to table 0.
-         *
-         * As an optimization, we send normal flows and packets to table 0
-         * directly, saving one table lookup.  */
-        table_id = flow->recirc_id ? TBL_INTERNAL : 0;
+        table_id = rule_dpif_lookup_get_init_table_id(flow);
     } else {
         table_id = 0;
     }
