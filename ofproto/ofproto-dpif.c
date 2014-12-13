@@ -1316,29 +1316,28 @@ add_internal_flows(struct ofproto_dpif *ofproto)
         return error;
     }
 
-    /* Continue non-recirculation rule lookups from table 0.
+    /* Drop any run away non-recirc rule lookups. Recirc_id has to be
+     * zero when reaching this rule.
      *
-     * (priority=2), recirc=0, actions=resubmit(, 0)
+     * (priority=2), recirc_id=0, actions=drop
      */
-    resubmit = ofpact_put_RESUBMIT(&ofpacts);
-    resubmit->in_port = OFPP_IN_PORT;
-    resubmit->table_id = 0;
-
+    ofpbuf_clear(&ofpacts);
     match_init_catchall(&match);
     match_set_recirc_id(&match, 0);
-
     error = ofproto_dpif_add_internal_flow(ofproto, &match, 2, 0, &ofpacts,
                                            &unused_rulep);
     if (error) {
         return error;
     }
 
-    /* Drop any run away recirc rule lookups. Recirc_id has to be
-     * non-zero when reaching this rule.
+    /* Continue rule lookups for not-matched recirc rules from table 0.
      *
-     * (priority=1), *, actions=drop
+     * (priority=1), actions=resubmit(, 0)
      */
-    ofpbuf_clear(&ofpacts);
+    resubmit = ofpact_put_RESUBMIT(&ofpacts);
+    resubmit->in_port = OFPP_IN_PORT;
+    resubmit->table_id = 0;
+
     match_init_catchall(&match);
     error = ofproto_dpif_add_internal_flow(ofproto, &match, 1, 0, &ofpacts,
                                            &unused_rulep);
@@ -3645,11 +3644,7 @@ rule_dpif_lookup(struct ofproto_dpif *ofproto, struct flow *flow,
         if (wc) {
             wc->masks.recirc_id = UINT32_MAX;
         }
-        if (flow->recirc_id) {
-            /* Start looking up from internal table for post recirculation
-             * flows or packets. */
-            *table_id = TBL_INTERNAL;
-        }
+        *table_id = rule_dpif_lookup_get_init_table_id(flow);
     }
 
     return rule_dpif_lookup_from_table(ofproto, flow, wc, take_ref, stats,

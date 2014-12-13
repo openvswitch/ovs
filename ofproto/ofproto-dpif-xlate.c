@@ -2655,6 +2655,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         const struct xport *peer = xport->peer;
         struct flow old_flow = ctx->xin->flow;
         enum slow_path_reason special;
+        uint8_t table_id = rule_dpif_lookup_get_init_table_id(&ctx->xin->flow);
 
         ctx->xbridge = peer->xbridge;
         flow->in_port.ofp_port = peer->ofp_port;
@@ -2669,14 +2670,16 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
             ctx->xout->slow |= special;
         } else if (may_receive(peer, ctx)) {
             if (xport_stp_forward_state(peer) && xport_rstp_forward_state(peer)) {
-                xlate_table_action(ctx, flow->in_port.ofp_port, 0, true, true);
+                xlate_table_action(ctx, flow->in_port.ofp_port, table_id,
+                                   true, true);
             } else {
                 /* Forwarding is disabled by STP and RSTP.  Let OFPP_NORMAL and
                  * the learning action look at the packet, then drop it. */
                 struct flow old_base_flow = ctx->base_flow;
                 size_t old_size = ofpbuf_size(ctx->xout->odp_actions);
                 mirror_mask_t old_mirrors = ctx->xout->mirrors;
-                xlate_table_action(ctx, flow->in_port.ofp_port, 0, true, true);
+                xlate_table_action(ctx, flow->in_port.ofp_port, table_id,
+                                   true, true);
                 ctx->xout->mirrors = old_mirrors;
                 ctx->base_flow = old_base_flow;
                 ofpbuf_set_size(ctx->xout->odp_actions, old_size);

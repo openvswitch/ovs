@@ -40,6 +40,11 @@ struct dpif_backer;
 struct OVS_LOCKABLE rule_dpif;
 struct OVS_LOCKABLE group_dpif;
 
+/* Number of implemented OpenFlow tables. */
+enum { N_TABLES = 255 };
+enum { TBL_INTERNAL = N_TABLES - 1 };    /* Used for internal hidden rules. */
+BUILD_ASSERT_DECL(N_TABLES >= 2 && N_TABLES <= 255);
+
 /* Ofproto-dpif -- DPIF based ofproto implementation.
  *
  * Ofproto-dpif provides an ofproto implementation for those platforms which
@@ -85,6 +90,14 @@ struct rule_dpif *rule_dpif_lookup_from_table(struct ofproto_dpif *,
                                               ofp_port_t in_port,
                                               bool may_packet_in,
                                               bool honor_table_miss);
+
+/* If 'recirc_id' is set, starts looking up from internal table for
+ * post recirculation flows or packets.  Otherwise, starts from table 0. */
+static inline uint8_t
+rule_dpif_lookup_get_init_table_id(const struct flow *flow)
+{
+    return flow->recirc_id ? TBL_INTERNAL : 0;
+}
 
 static inline void rule_dpif_ref(struct rule_dpif *);
 static inline void rule_dpif_unref(struct rule_dpif *);
@@ -214,12 +227,6 @@ int ofproto_dpif_add_internal_flow(struct ofproto_dpif *,
                                    struct rule **rulep);
 int ofproto_dpif_delete_internal_flow(struct ofproto_dpif *, struct match *,
                                       int priority);
-
-/* Number of implemented OpenFlow tables. */
-enum { N_TABLES = 255 };
-enum { TBL_INTERNAL = N_TABLES - 1 };    /* Used for internal hidden rules. */
-BUILD_ASSERT_DECL(N_TABLES >= 2 && N_TABLES <= 255);
-
 
 /* struct rule_dpif has struct rule as it's first member. */
 #define RULE_CAST(RULE) ((struct rule *)RULE)
