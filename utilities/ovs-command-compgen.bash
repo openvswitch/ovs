@@ -371,7 +371,7 @@ kwords_to_args() {
                 match=
                 ;;
         esac
-        match=$(echo "$match" | tr '\n' ' ' | sed -e 's/^[ \t]*//')
+        match=$(echo "$match" | tr '\n' ' ' | tr -s ' ' | sed -e 's/^[ \t]*//')
         args+=( $match )
         if [ -n "$_PRINTF_ENABLE" ]; then
             local output_stderr=
