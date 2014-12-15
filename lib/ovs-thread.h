@@ -21,15 +21,10 @@
 #include <stddef.h>
 #include <sys/types.h>
 #include "ovs-atomic.h"
+#include "openvswitch/thread.h"
 #include "util.h"
 
 struct seq;
-
-/* Mutex. */
-struct OVS_LOCKABLE ovs_mutex {
-    pthread_mutex_t lock;
-    const char *where;          /* NULL if and only if uninitialized. */
-};
 
 /* Poll-block()-able barrier similar to pthread_barrier_t. */
 struct ovs_barrier {
@@ -37,43 +32,6 @@ struct ovs_barrier {
     atomic_count count;       /* Number of threads already hit the barrier. */
     struct seq *seq;
 };
-
-/* "struct ovs_mutex" initializer. */
-#ifdef PTHREAD_ERRORCHECK_MUTEX_INITIALIZER_NP
-#define OVS_MUTEX_INITIALIZER { PTHREAD_ERRORCHECK_MUTEX_INITIALIZER_NP, \
-                                "<unlocked>" }
-#else
-#define OVS_MUTEX_INITIALIZER { PTHREAD_MUTEX_INITIALIZER, "<unlocked>" }
-#endif
-
-#ifdef PTHREAD_ADAPTIVE_MUTEX_INITIALIZER_NP
-#define OVS_ADAPTIVE_MUTEX_INITIALIZER                  \
-    { PTHREAD_ADAPTIVE_MUTEX_INITIALIZER_NP, "<unlocked>" }
-#else
-#define OVS_ADAPTIVE_MUTEX_INITIALIZER OVS_MUTEX_INITIALIZER
-#endif
-
-/* ovs_mutex functions analogous to pthread_mutex_*() functions.
- *
- * Most of these functions abort the process with an error message on any
- * error.  ovs_mutex_trylock() is an exception: it passes through a 0 or EBUSY
- * return value to the caller and aborts on any other error. */
-void ovs_mutex_init(const struct ovs_mutex *);
-void ovs_mutex_init_recursive(const struct ovs_mutex *);
-void ovs_mutex_init_adaptive(const struct ovs_mutex *);
-void ovs_mutex_destroy(const struct ovs_mutex *);
-void ovs_mutex_unlock(const struct ovs_mutex *mutex) OVS_RELEASES(mutex);
-void ovs_mutex_lock_at(const struct ovs_mutex *mutex, const char *where)
-    OVS_ACQUIRES(mutex);
-#define ovs_mutex_lock(mutex) \
-        ovs_mutex_lock_at(mutex, OVS_SOURCE_LOCATOR)
-
-int ovs_mutex_trylock_at(const struct ovs_mutex *mutex, const char *where)
-    OVS_TRY_LOCK(0, mutex);
-#define ovs_mutex_trylock(mutex) \
-        ovs_mutex_trylock_at(mutex, OVS_SOURCE_LOCATOR)
-
-void ovs_mutex_cond_wait(pthread_cond_t *, const struct ovs_mutex *);
 
 /* Wrappers for pthread_mutex_*() that abort the process on any error.
  * This is still needed when ovs-atomic-pthreads.h is used. */
@@ -499,74 +457,6 @@ void ovsthread_key_delete(ovsthread_key_t);
 
 void ovsthread_setspecific(ovsthread_key_t, const void *);
 void *ovsthread_getspecific(ovsthread_key_t);
-
-/* Convenient once-only execution.
- *
- *
- * Problem
- * =======
- *
- * POSIX provides pthread_once_t and pthread_once() as primitives for running a
- * set of code only once per process execution.  They are used like this:
- *
- *     static void run_once(void) { ...initialization... }
- *     static pthread_once_t once = PTHREAD_ONCE_INIT;
- * ...
- *     pthread_once(&once, run_once);
- *
- * pthread_once() does not allow passing any parameters to the initialization
- * function, which is often inconvenient, because it means that the function
- * can only access data declared at file scope.
- *
- *
- * Solution
- * ========
- *
- * Use ovsthread_once, like this, instead:
- *
- *     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
- *
- *     if (ovsthread_once_start(&once)) {
- *         ...initialization...
- *         ovsthread_once_done(&once);
- *     }
- */
-
-struct ovsthread_once {
-    bool done;               /* Non-atomic, false negatives possible. */
-    struct ovs_mutex mutex;
-};
-
-#define OVSTHREAD_ONCE_INITIALIZER              \
-    {                                           \
-        false,                                  \
-        OVS_MUTEX_INITIALIZER,                  \
-    }
-
-static inline bool ovsthread_once_start(struct ovsthread_once *once)
-    OVS_TRY_LOCK(true, once->mutex);
-void ovsthread_once_done(struct ovsthread_once *once)
-    OVS_RELEASES(once->mutex);
-
-bool ovsthread_once_start__(struct ovsthread_once *once)
-    OVS_TRY_LOCK(true, once->mutex);
-
-/* Returns true if this is the first call to ovsthread_once_start() for
- * 'once'.  In this case, the caller should perform whatever initialization
- * actions it needs to do, then call ovsthread_once_done() for 'once'.
- *
- * Returns false if this is not the first call to ovsthread_once_start() for
- * 'once'.  In this case, the call will not return until after
- * ovsthread_once_done() has been called. */
-static inline bool
-ovsthread_once_start(struct ovsthread_once *once)
-{
-    /* We may be reading 'done' at the same time as the first thread
-     * is writing on it, or we can be using a stale copy of it.  The
-     * worst that can happen is that we call ovsthread_once_start__()
-     * once when strictly not necessary. */
-    return OVS_UNLIKELY(!once->done && ovsthread_once_start__(once));
-}
 
 /* Thread ID.
  *
