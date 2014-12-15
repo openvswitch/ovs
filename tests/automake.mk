@@ -24,6 +24,7 @@ TESTSUITE_AT = \
 	tests/bfd.at \
 	tests/cfm.at \
 	tests/lacp.at \
+	tests/lib.at \
 	tests/learn.at \
 	tests/vconn.at \
 	tests/file_name.at \
@@ -191,6 +192,11 @@ tests_test_ovsdb_SOURCES = \
 	tests/idltest.h
 EXTRA_DIST += tests/uuidfilt.pl tests/ovsdb-monitor-sort.pl
 tests_test_ovsdb_LDADD = ovsdb/libovsdb.la lib/libopenvswitch.la
+
+noinst_PROGRAMS += tests/test-lib
+tests_test_lib_SOURCES = \
+	tests/test-lib.c
+tests_test_lib_LDADD = lib/libopenvswitch.la
 
 # idltest schema and IDL
 OVSIDL_BUILT += tests/idltest.c tests/idltest.h tests/idltest.ovsidl

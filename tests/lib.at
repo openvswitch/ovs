@@ -1,0 +1,9 @@
+AT_BANNER([Library -- basic])
+
+AT_SETUP([successful linking])
+AT_KEYWORDS([libopenvswitch])
+AT_CAPTURE_FILE([log])
+AT_CHECK(
+  [test-lib], [0],
+  [], [ignore])
+AT_CLEANUP
