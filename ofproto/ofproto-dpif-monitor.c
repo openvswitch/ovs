@@ -57,7 +57,7 @@ struct mport {
  * 'ofport_dpif'.  Note, the pointed object is not protected, so
  * users should always use the mport_find() to convert it to 'mport'. */
 struct send_soon_entry {
-    struct list list_node;            /* In send_soon. */
+    struct ovs_list list_node;        /* In send_soon. */
     const struct ofport_dpif *ofport;
 };
 

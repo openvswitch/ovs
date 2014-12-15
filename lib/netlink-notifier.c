@@ -36,7 +36,7 @@ static void nln_report(struct nln *nln, void *change);
 
 struct nln {
     struct nl_sock *notify_sock; /* Netlink socket. */
-    struct list all_notifiers;   /* All nln notifiers. */
+    struct ovs_list all_notifiers;   /* All nln notifiers. */
     bool has_run;                /* Guard for run and wait functions. */
 
     /* Passed in by nln_create(). */
@@ -49,7 +49,7 @@ struct nln {
 struct nln_notifier {
     struct nln *nln;             /* Parent nln. */
 
-    struct list node;
+    struct ovs_list node;
     nln_notify_func *cb;
     void *aux;
 };

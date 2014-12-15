@@ -60,7 +60,7 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 struct ofconn {
 /* Configuration that persists from one connection to the next. */
 
-    struct list node;           /* In struct connmgr's "all_conns" list. */
+    struct ovs_list node;       /* In struct connmgr's "all_conns" list. */
     struct hmap_node hmap_node; /* In struct connmgr's "controllers" map. */
 
     struct connmgr *connmgr;    /* Connection's manager. */
@@ -131,7 +131,7 @@ struct ofconn {
      *
      * When 'updates' is nonempty, 'sent_abbrev_update' is true if 'updates'
      * contains an update event of type NXFME_ABBREV and false otherwise.. */
-    struct list updates OVS_GUARDED_BY(ofproto_mutex);
+    struct ovs_list updates OVS_GUARDED_BY(ofproto_mutex);
     bool sent_abbrev_update OVS_GUARDED_BY(ofproto_mutex);
 
     /* Active bundles. Contains "struct ofp_bundle"s. */
@@ -162,7 +162,7 @@ static void ofconn_set_rate_limit(struct ofconn *, int rate, int burst);
 static void ofconn_send(const struct ofconn *, struct ofpbuf *,
                         struct rconn_packet_counter *);
 
-static void do_send_packet_ins(struct ofconn *, struct list *txq);
+static void do_send_packet_ins(struct ofconn *, struct ovs_list *txq);
 
 /* A listener for incoming OpenFlow "service" connections. */
 struct ofservice {
@@ -195,8 +195,8 @@ struct connmgr {
     char *local_port_name;
 
     /* OpenFlow connections. */
-    struct hmap controllers;   /* All OFCONN_PRIMARY controllers. */
-    struct list all_conns;     /* All controllers. */
+    struct hmap controllers;     /* All OFCONN_PRIMARY controllers. */
+    struct ovs_list all_conns;   /* All controllers. */
     uint64_t master_election_id; /* monotonically increasing sequence number
                                   * for master election */
     bool master_election_id_defined;
@@ -1088,7 +1088,7 @@ ofconn_send_reply(const struct ofconn *ofconn, struct ofpbuf *msg)
 /* Sends each of the messages in list 'replies' on 'ofconn' in order,
  * accounting them as replies. */
 void
-ofconn_send_replies(const struct ofconn *ofconn, struct list *replies)
+ofconn_send_replies(const struct ofconn *ofconn, struct ovs_list *replies)
 {
     struct ofpbuf *reply, *next;
 
@@ -1351,7 +1351,7 @@ ofconn_run(struct ofconn *ofconn,
     size_t i;
 
     for (i = 0; i < N_SCHEDULERS; i++) {
-        struct list txq;
+        struct ovs_list txq;
 
         pinsched_run(ofconn->schedulers[i], &txq);
         do_send_packet_ins(ofconn, &txq);
@@ -1717,7 +1717,7 @@ connmgr_send_packet_in(struct connmgr *mgr,
 }
 
 static void
-do_send_packet_ins(struct ofconn *ofconn, struct list *txq)
+do_send_packet_ins(struct ofconn *ofconn, struct ovs_list *txq)
 {
     struct ofpbuf *pin, *next_pin;
 
@@ -1742,7 +1742,7 @@ schedule_packet_in(struct ofconn *ofconn, struct ofproto_packet_in pin,
 {
     struct connmgr *mgr = ofconn->connmgr;
     uint16_t controller_max_len;
-    struct list txq;
+    struct ovs_list txq;
 
     pin.up.total_len = pin.up.packet_len;
 
@@ -2261,7 +2261,7 @@ ofmonitor_resume(struct ofconn *ofconn)
     struct rule_collection rules;
     struct ofpbuf *resumed;
     struct ofmonitor *m;
-    struct list msgs;
+    struct ovs_list msgs;
 
     rule_collection_init(&rules);
     HMAP_FOR_EACH (m, ofconn_node, &ofconn->monitors) {

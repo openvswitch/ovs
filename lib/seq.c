@@ -39,15 +39,15 @@ struct seq_waiter {
     struct hmap_node hmap_node OVS_GUARDED; /* In 'seq->waiters'. */
     unsigned int ovsthread_id OVS_GUARDED;  /* Key in 'waiters' hmap. */
 
-    struct seq_thread *thread OVS_GUARDED; /* Thread preparing to wait. */
-    struct list list_node OVS_GUARDED;     /* In 'thread->waiters'. */
+    struct seq_thread *thread OVS_GUARDED;  /* Thread preparing to wait. */
+    struct ovs_list list_node OVS_GUARDED;  /* In 'thread->waiters'. */
 
     uint64_t value OVS_GUARDED; /* seq->value we're waiting to change. */
 };
 
 /* A thread that might be waiting on one or more seqs. */
 struct seq_thread {
-    struct list waiters OVS_GUARDED; /* Contains 'struct seq_waiter's. */
+    struct ovs_list waiters OVS_GUARDED; /* Contains 'struct seq_waiter's. */
     struct latch latch OVS_GUARDED;  /* Wakeup latch for this thread. */
     bool waiting OVS_GUARDED;        /* True if latch_wait() already called. */
 };

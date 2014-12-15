@@ -79,7 +79,7 @@ enum vlog_facility vlog_get_facility_val(const char *name);
 
 /* A log module. */
 struct vlog_module {
-    struct list list;
+    struct ovs_list list;
     const char *name;             /* User-visible name. */
     int levels[VLF_N_FACILITIES]; /* Minimum log level for each facility. */
     int min_level;                /* Minimum log level for any facility. */
@@ -87,7 +87,7 @@ struct vlog_module {
 };
 
 /* Global list of all logging modules */
-extern struct list vlog_modules;
+extern struct ovs_list vlog_modules;
 
 /* Creates and initializes a global instance of a module named MODULE. */
 #define VLOG_DEFINE_MODULE(MODULE)                                      \

@@ -167,7 +167,7 @@ static enum ofperr collect_rules_loose(struct ofproto *,
  * (We can't do this immediately from ofopgroup_complete() because that holds
  * ofproto_mutex, which rule_execute() needs released.) */
 struct rule_execute {
-    struct list list_node;      /* In struct ofproto's "rule_executes" list. */
+    struct ovs_list list_node;  /* In struct ofproto's "rule_executes" list. */
     struct rule *rule;          /* Owns a reference to the rule. */
     ofp_port_t in_port;
     struct ofpbuf *packet;      /* Owns the packet. */
@@ -182,7 +182,7 @@ struct learned_cookie {
         struct hmap_node hmap_node OVS_GUARDED_BY(ofproto_mutex);
 
         /* In 'dead_cookies' list when removed from hmap. */
-        struct list list_node;
+        struct ovs_list list_node;
     } u;
 
     /* Key. */
@@ -202,9 +202,9 @@ static const struct ofpact_learn *next_learn_with_delete(
 static void learned_cookies_inc(struct ofproto *, const struct rule_actions *)
     OVS_REQUIRES(ofproto_mutex);
 static void learned_cookies_dec(struct ofproto *, const struct rule_actions *,
-                                struct list *dead_cookies)
+                                struct ovs_list *dead_cookies)
     OVS_REQUIRES(ofproto_mutex);
-static void learned_cookies_flush(struct ofproto *, struct list *dead_cookies)
+static void learned_cookies_flush(struct ofproto *, struct ovs_list *dead_cookies)
     OVS_REQUIRES(ofproto_mutex);
 
 /* ofport. */
@@ -2751,7 +2751,7 @@ run_rule_executes(struct ofproto *ofproto)
     OVS_EXCLUDED(ofproto_mutex)
 {
     struct rule_execute *e, *next;
-    struct list executes;
+    struct ovs_list executes;
 
     guarded_list_pop_all(&ofproto->rule_executes, &executes);
     LIST_FOR_EACH_SAFE (e, next, list_node, &executes) {
@@ -2771,7 +2771,7 @@ static void
 destroy_rule_executes(struct ofproto *ofproto)
 {
     struct rule_execute *e, *next;
-    struct list executes;
+    struct ovs_list executes;
 
     guarded_list_pop_all(&ofproto->rule_executes, &executes);
     LIST_FOR_EACH_SAFE (e, next, list_node, &executes) {
@@ -2797,7 +2797,7 @@ hash_learned_cookie(ovs_be64 cookie_, uint8_t table_id)
 static void
 learned_cookies_update_one__(struct ofproto *ofproto,
                              const struct ofpact_learn *learn,
-                             int delta, struct list *dead_cookies)
+                             int delta, struct ovs_list *dead_cookies)
     OVS_REQUIRES(ofproto_mutex)
 {
     uint32_t hash = hash_learned_cookie(learn->cookie, learn->table_id);
@@ -2848,7 +2848,7 @@ next_learn_with_delete(const struct rule_actions *actions,
 static void
 learned_cookies_update__(struct ofproto *ofproto,
                          const struct rule_actions *actions,
-                         int delta, struct list *dead_cookies)
+                         int delta, struct ovs_list *dead_cookies)
     OVS_REQUIRES(ofproto_mutex)
 {
     if (actions->has_learn_with_delete) {
@@ -2872,14 +2872,14 @@ learned_cookies_inc(struct ofproto *ofproto,
 static void
 learned_cookies_dec(struct ofproto *ofproto,
                     const struct rule_actions *actions,
-                    struct list *dead_cookies)
+                    struct ovs_list *dead_cookies)
     OVS_REQUIRES(ofproto_mutex)
 {
     learned_cookies_update__(ofproto, actions, -1, dead_cookies);
 }
 
 static void
-learned_cookies_flush(struct ofproto *ofproto, struct list *dead_cookies)
+learned_cookies_flush(struct ofproto *ofproto, struct ovs_list *dead_cookies)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct learned_cookie *c, *next;
@@ -3315,7 +3315,7 @@ handle_table_features_request(struct ofconn *ofconn,
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct ofputil_table_features *features;
-    struct list replies;
+    struct ovs_list replies;
     struct ofpbuf msg;
     size_t i;
 
@@ -3341,7 +3341,7 @@ handle_table_features_request(struct ofconn *ofconn,
 }
 
 static void
-append_port_stat(struct ofport *port, struct list *replies)
+append_port_stat(struct ofport *port, struct ovs_list *replies)
 {
     struct ofputil_port_stats ops = { .port_no = port->pp.port_no };
 
@@ -3359,11 +3359,11 @@ append_port_stat(struct ofport *port, struct list *replies)
 static void
 handle_port_request(struct ofconn *ofconn,
                     const struct ofp_header *request, ofp_port_t port_no,
-                    void (*cb)(struct ofport *, struct list *replies))
+                    void (*cb)(struct ofport *, struct ovs_list *replies))
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct ofport *port;
-    struct list replies;
+    struct ovs_list replies;
 
     ofpmp_init(&replies, request);
     if (port_no != OFPP_ANY) {
@@ -3395,7 +3395,7 @@ handle_port_stats_request(struct ofconn *ofconn,
 }
 
 static void
-append_port_desc(struct ofport *port, struct list *replies)
+append_port_desc(struct ofport *port, struct ovs_list *replies)
 {
     ofputil_append_port_desc_stats_reply(&port->pp, replies);
 }
@@ -3783,7 +3783,7 @@ handle_flow_stats_request(struct ofconn *ofconn,
     struct ofputil_flow_stats_request fsr;
     struct rule_criteria criteria;
     struct rule_collection rules;
-    struct list replies;
+    struct ovs_list replies;
     enum ofperr error;
     size_t i;
 
@@ -4014,7 +4014,7 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
 
 struct queue_stats_cbdata {
     struct ofport *ofport;
-    struct list replies;
+    struct ovs_list replies;
     long long int now;
 };
 
@@ -4329,7 +4329,7 @@ modify_flows__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
                const struct flow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct list dead_cookies = LIST_INITIALIZER(&dead_cookies);
+    struct ovs_list dead_cookies = LIST_INITIALIZER(&dead_cookies);
     enum nx_flow_update_event event;
     size_t i;
 
@@ -4510,7 +4510,7 @@ delete_flows__(const struct rule_collection *rules,
     OVS_REQUIRES(ofproto_mutex)
 {
     if (rules->n) {
-        struct list dead_cookies = LIST_INITIALIZER(&dead_cookies);
+        struct ovs_list dead_cookies = LIST_INITIALIZER(&dead_cookies);
         struct ofproto *ofproto = rules->rules[0]->ofproto;
         struct rule *rule, *next;
         size_t i;
@@ -4927,7 +4927,7 @@ handle_barrier_request(struct ofconn *ofconn, const struct ofp_header *oh)
 static void
 ofproto_compose_flow_refresh_update(const struct rule *rule,
                                     enum nx_flow_monitor_flags flags,
-                                    struct list *msgs)
+                                    struct ovs_list *msgs)
     OVS_REQUIRES(ofproto_mutex)
 {
     const struct rule_actions *actions;
@@ -4959,7 +4959,7 @@ ofproto_compose_flow_refresh_update(const struct rule *rule,
 
 void
 ofmonitor_compose_refresh_updates(struct rule_collection *rules,
-                                  struct list *msgs)
+                                  struct ovs_list *msgs)
     OVS_REQUIRES(ofproto_mutex)
 {
     size_t i;
@@ -5076,7 +5076,7 @@ handle_flow_monitor_request(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofmonitor **monitors;
     size_t n_monitors, allocated_monitors;
     struct rule_collection rules;
-    struct list replies;
+    struct ovs_list replies;
     enum ofperr error;
     struct ofpbuf b;
     size_t i;
@@ -5169,7 +5169,7 @@ handle_flow_monitor_cancel(struct ofconn *ofconn, const struct ofp_header *oh)
  */
 struct meter {
     long long int created;      /* Time created. */
-    struct list rules;          /* List of "struct rule_dpif"s. */
+    struct ovs_list rules;      /* List of "struct rule_dpif"s. */
     ofproto_meter_id provider_meter_id;
     uint16_t flags;             /* Meter flags. */
     uint16_t n_bands;           /* Number of meter bands. */
@@ -5422,7 +5422,7 @@ handle_meter_request(struct ofconn *ofconn, const struct ofp_header *request,
                      enum ofptype type)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    struct list replies;
+    struct ovs_list replies;
     uint64_t bands_stub[256 / 8];
     struct ofpbuf bands;
     uint32_t meter_id, first, last;
@@ -5572,7 +5572,7 @@ group_get_ref_count(struct ofgroup *group)
 }
 
 static void
-append_group_stats(struct ofgroup *group, struct list *replies)
+append_group_stats(struct ofgroup *group, struct ovs_list *replies)
 {
     struct ofputil_group_stats ogs;
     const struct ofproto *ofproto = group->ofproto;
@@ -5606,11 +5606,11 @@ append_group_stats(struct ofgroup *group, struct list *replies)
 static void
 handle_group_request(struct ofconn *ofconn,
                      const struct ofp_header *request, uint32_t group_id,
-                     void (*cb)(struct ofgroup *, struct list *replies))
+                     void (*cb)(struct ofgroup *, struct ovs_list *replies))
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct ofgroup *group;
-    struct list replies;
+    struct ovs_list replies;
 
     ofpmp_init(&replies, request);
     if (group_id == OFPG_ALL) {
@@ -5645,7 +5645,7 @@ handle_group_stats_request(struct ofconn *ofconn,
 }
 
 static void
-append_group_desc(struct ofgroup *group, struct list *replies)
+append_group_desc(struct ofgroup *group, struct ovs_list *replies)
 {
     struct ofputil_group_desc gds;
 

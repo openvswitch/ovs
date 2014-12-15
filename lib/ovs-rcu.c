@@ -32,13 +32,13 @@ struct ovsrcu_cb {
 };
 
 struct ovsrcu_cbset {
-    struct list list_node;
+    struct ovs_list list_node;
     struct ovsrcu_cb cbs[16];
     int n_cbs;
 };
 
 struct ovsrcu_perthread {
-    struct list list_node;      /* In global list. */
+    struct ovs_list list_node;  /* In global list. */
 
     struct ovs_mutex mutex;
     uint64_t seqno;
@@ -49,7 +49,7 @@ struct ovsrcu_perthread {
 static struct seq *global_seqno;
 
 static pthread_key_t perthread_key;
-static struct list ovsrcu_threads;
+static struct ovs_list ovsrcu_threads;
 static struct ovs_mutex ovsrcu_threads_mutex;
 
 static struct guarded_list flushed_cbsets;
@@ -240,7 +240,7 @@ static bool
 ovsrcu_call_postponed(void)
 {
     struct ovsrcu_cbset *cbset, *next_cbset;
-    struct list cbsets;
+    struct ovs_list cbsets;
 
     guarded_list_pop_all(&flushed_cbsets, &cbsets);
     if (list_is_empty(&cbsets)) {

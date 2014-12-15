@@ -56,11 +56,11 @@ bool ovsdb_schema_equal(const struct ovsdb_schema *,
 /* Database. */
 struct ovsdb {
     struct ovsdb_schema *schema;
-    struct list replicas;       /* Contains "struct ovsdb_replica"s. */
+    struct ovs_list replicas;   /* Contains "struct ovsdb_replica"s. */
     struct shash tables;        /* Contains "struct ovsdb_table *"s. */
 
     /* Triggers. */
-    struct list triggers;       /* Contains "struct ovsdb_trigger"s. */
+    struct ovs_list triggers;   /* Contains "struct ovsdb_trigger"s. */
     bool run_triggers;
 };
 
@@ -79,7 +79,7 @@ struct json *ovsdb_execute(struct ovsdb *, const struct ovsdb_session *,
 /* Database replication. */
 
 struct ovsdb_replica {
-    struct list node;           /* Element in "struct ovsdb" replicas list. */
+    struct ovs_list node;       /* Element in "struct ovsdb" replicas list. */
     const struct ovsdb_replica_class *class;
 };
 

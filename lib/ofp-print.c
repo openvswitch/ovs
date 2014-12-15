@@ -2139,7 +2139,7 @@ ofp_print_bucket_id(struct ds *s, const char *label, uint32_t bucket_id,
 
 static void
 ofp_print_group(struct ds *s, uint32_t group_id, uint8_t type,
-                struct list *p_buckets, enum ofp_version ofp_version,
+                struct ovs_list *p_buckets, enum ofp_version ofp_version,
                 bool suppress_type)
 {
     struct ofputil_bucket *bucket;

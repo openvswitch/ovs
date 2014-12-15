@@ -82,7 +82,7 @@ struct xbridge {
     struct hmap_node hmap_node;   /* Node in global 'xbridges' map. */
     struct ofproto_dpif *ofproto; /* Key in global 'xbridges' map. */
 
-    struct list xbundles;         /* Owned xbundles. */
+    struct ovs_list xbundles;     /* Owned xbundles. */
     struct hmap xports;           /* Indexed by ofp_port. */
 
     char *name;                   /* Name used in log messages. */
@@ -120,10 +120,10 @@ struct xbundle {
     struct hmap_node hmap_node;    /* In global 'xbundles' map. */
     struct ofbundle *ofbundle;     /* Key in global 'xbundles' map. */
 
-    struct list list_node;         /* In parent 'xbridges' list. */
+    struct ovs_list list_node;     /* In parent 'xbridges' list. */
     struct xbridge *xbridge;       /* Parent xbridge. */
 
-    struct list xports;            /* Contains "struct xport"s. */
+    struct ovs_list xports;        /* Contains "struct xport"s. */
 
     char *name;                    /* Name used in log messages. */
     struct bond *bond;             /* Nonnull iff more than one port. */
@@ -146,7 +146,7 @@ struct xport {
 
     odp_port_t odp_port;             /* Datapath port number or ODPP_NONE. */
 
-    struct list bundle_node;         /* In parent xbundle (if it exists). */
+    struct ovs_list bundle_node;     /* In parent xbundle (if it exists). */
     struct xbundle *xbundle;         /* Parent xbundle or null. */
 
     struct netdev *netdev;           /* 'ofport''s netdev. */
@@ -1309,7 +1309,7 @@ group_first_live_bucket(const struct xlate_ctx *ctx,
                         const struct group_dpif *group, int depth)
 {
     struct ofputil_bucket *bucket;
-    const struct list *buckets;
+    const struct ovs_list *buckets;
 
     group_dpif_get_buckets(group, &buckets);
     LIST_FOR_EACH (bucket, list_node, buckets) {
@@ -1331,7 +1331,7 @@ group_best_live_bucket(const struct xlate_ctx *ctx,
     int i = 0;
 
     struct ofputil_bucket *bucket;
-    const struct list *buckets;
+    const struct ovs_list *buckets;
 
     group_dpif_get_buckets(group, &buckets);
     LIST_FOR_EACH (bucket, list_node, buckets) {
@@ -2959,7 +2959,7 @@ static void
 xlate_all_group(struct xlate_ctx *ctx, struct group_dpif *group)
 {
     struct ofputil_bucket *bucket;
-    const struct list *buckets;
+    const struct ovs_list *buckets;
     struct flow old_flow = ctx->xin->flow;
 
     group_dpif_get_buckets(group, &buckets);

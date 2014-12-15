@@ -92,7 +92,7 @@ enum slave_status {
 };
 
 struct lacp {
-    struct list node;             /* Node in all_lacps list. */
+    struct ovs_list node;         /* Node in all_lacps list. */
     char *name;                   /* Name of this lacp object. */
     uint8_t sys_id[ETH_ADDR_LEN]; /* System ID. */
     uint16_t sys_priority;        /* System Priority. */
@@ -132,8 +132,8 @@ struct slave {
 };
 
 static struct ovs_mutex mutex;
-static struct list all_lacps__ = LIST_INITIALIZER(&all_lacps__);
-static struct list *const all_lacps OVS_GUARDED_BY(mutex) = &all_lacps__;
+static struct ovs_list all_lacps__ = LIST_INITIALIZER(&all_lacps__);
+static struct ovs_list *const all_lacps OVS_GUARDED_BY(mutex) = &all_lacps__;
 
 static void lacp_update_attached(struct lacp *) OVS_REQUIRES(mutex);
 

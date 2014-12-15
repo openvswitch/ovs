@@ -76,7 +76,7 @@ struct ofpbuf {
                                    or UINT16_MAX. */
     uint16_t l4_ofs;            /* Transport-level header offset from 'frame',
                                    or UINT16_MAX. */
-    struct list list_node;      /* Private list element for use by owner. */
+    struct ovs_list list_node;  /* Private list element for use by owner. */
 };
 
 static inline void * ofpbuf_data(const struct ofpbuf *);
@@ -160,8 +160,8 @@ static inline void *ofpbuf_try_pull(struct ofpbuf *, size_t);
 void *ofpbuf_steal_data(struct ofpbuf *);
 
 char *ofpbuf_to_string(const struct ofpbuf *, size_t maxbytes);
-static inline struct ofpbuf *ofpbuf_from_list(const struct list *);
-void ofpbuf_list_delete(struct list *);
+static inline struct ofpbuf *ofpbuf_from_list(const struct ovs_list *);
+void ofpbuf_list_delete(struct ovs_list *);
 static inline bool ofpbuf_equal(const struct ofpbuf *, const struct ofpbuf *);
 
 
@@ -263,7 +263,7 @@ static inline void *ofpbuf_try_pull(struct ofpbuf *b, size_t size)
         ? ofpbuf_pull(b, size) : NULL;
 }
 
-static inline struct ofpbuf *ofpbuf_from_list(const struct list *list)
+static inline struct ofpbuf *ofpbuf_from_list(const struct ovs_list *list)
 {
     return CONTAINER_OF(list, struct ofpbuf, list_node);
 }

@@ -33,7 +33,7 @@ struct OVS_LOCKABLE fat_rwlock {
 
     /* Contains "struct fat_rwlock_slot"s, one for each thread that has taken
      * this lock.  Guarded by 'mutex'. */
-    struct list threads OVS_GUARDED;
+    struct ovs_list threads OVS_GUARDED;
     struct ovs_mutex mutex;
 };
 

@@ -134,10 +134,10 @@ static int rte_eal_init_ret = ENODEV;
 static struct ovs_mutex dpdk_mutex = OVS_MUTEX_INITIALIZER;
 
 /* Contains all 'struct dpdk_dev's. */
-static struct list dpdk_list OVS_GUARDED_BY(dpdk_mutex)
+static struct ovs_list dpdk_list OVS_GUARDED_BY(dpdk_mutex)
     = LIST_INITIALIZER(&dpdk_list);
 
-static struct list dpdk_mp_list OVS_GUARDED_BY(dpdk_mutex)
+static struct ovs_list dpdk_mp_list OVS_GUARDED_BY(dpdk_mutex)
     = LIST_INITIALIZER(&dpdk_mp_list);
 
 /* This mutex must be used by non pmd threads when allocating or freeing
@@ -150,7 +150,7 @@ struct dpdk_mp {
     int mtu;
     int socket_id;
     int refcount;
-    struct list list_node OVS_GUARDED_BY(dpdk_mutex);
+    struct ovs_list list_node OVS_GUARDED_BY(dpdk_mutex);
 };
 
 /* There should be one 'struct dpdk_tx_queue' created for
@@ -167,7 +167,7 @@ struct dpdk_tx_queue {
    so we have to keep them around once they've been created
 */
 
-static struct list dpdk_ring_list OVS_GUARDED_BY(dpdk_mutex)
+static struct ovs_list dpdk_ring_list OVS_GUARDED_BY(dpdk_mutex)
     = LIST_INITIALIZER(&dpdk_ring_list);
 
 struct dpdk_ring {
@@ -176,7 +176,7 @@ struct dpdk_ring {
     struct rte_ring *cring_rx;
     int user_port_id; /* User given port no, parsed from port name */
     int eth_port_id; /* ethernet device port id */
-    struct list list_node OVS_GUARDED_BY(dpdk_mutex);
+    struct ovs_list list_node OVS_GUARDED_BY(dpdk_mutex);
 };
 
 struct netdev_dpdk {
@@ -201,7 +201,7 @@ struct netdev_dpdk {
     int link_reset_cnt;
 
     /* In dpdk_list. */
-    struct list list_node OVS_GUARDED_BY(dpdk_mutex);
+    struct ovs_list list_node OVS_GUARDED_BY(dpdk_mutex);
     rte_spinlock_t dpdkr_tx_lock;
 };
 

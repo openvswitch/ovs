@@ -49,7 +49,7 @@ struct reconnect;
 struct dummy_packet_stream {
     struct stream *stream;
     struct ofpbuf rxbuf;
-    struct list txq;
+    struct ovs_list txq;
 };
 
 enum dummy_packet_conn_type {
@@ -87,14 +87,14 @@ struct dummy_packet_conn {
 static struct ovs_mutex dummy_list_mutex = OVS_MUTEX_INITIALIZER;
 
 /* Contains all 'struct dummy_dev's. */
-static struct list dummy_list OVS_GUARDED_BY(dummy_list_mutex)
+static struct ovs_list dummy_list OVS_GUARDED_BY(dummy_list_mutex)
     = LIST_INITIALIZER(&dummy_list);
 
 struct netdev_dummy {
     struct netdev up;
 
     /* In dummy_list. */
-    struct list list_node OVS_GUARDED_BY(dummy_list_mutex);
+    struct ovs_list list_node OVS_GUARDED_BY(dummy_list_mutex);
 
     /* Protects all members below. */
     struct ovs_mutex mutex OVS_ACQ_AFTER(dummy_list_mutex);
@@ -110,7 +110,7 @@ struct netdev_dummy {
     FILE *tx_pcap, *rxq_pcap OVS_GUARDED;
 
     struct in_addr address, netmask;
-    struct list rxes OVS_GUARDED; /* List of child "netdev_rxq_dummy"s. */
+    struct ovs_list rxes OVS_GUARDED; /* List of child "netdev_rxq_dummy"s. */
 };
 
 /* Max 'recv_queue_len' in struct netdev_dummy. */
@@ -118,8 +118,8 @@ struct netdev_dummy {
 
 struct netdev_rxq_dummy {
     struct netdev_rxq up;
-    struct list node;           /* In netdev_dummy's "rxes" list. */
-    struct list recv_queue;
+    struct ovs_list node;       /* In netdev_dummy's "rxes" list. */
+    struct ovs_list recv_queue;
     int recv_queue_len;         /* list_size(&recv_queue). */
     struct seq *seq;            /* Reports newly queued packets. */
 };

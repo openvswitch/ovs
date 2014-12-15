@@ -268,7 +268,7 @@ enum ofputil_flow_mod_flags {
  * The handling of cookies across multiple versions of OpenFlow is a bit
  * confusing.  See DESIGN for the details. */
 struct ofputil_flow_mod {
-    struct list list_node;    /* For queuing flow_mods. */
+    struct ovs_list list_node; /* For queuing flow_mods. */
 
     struct match match;
     int priority;
@@ -364,7 +364,7 @@ int ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *,
                                     bool flow_age_extension,
                                     struct ofpbuf *ofpacts);
 void ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *,
-                                     struct list *replies);
+                                     struct ovs_list *replies);
 
 /* Aggregate stats reply, independent of protocol. */
 struct ofputil_aggregate_stats {
@@ -684,7 +684,7 @@ int ofputil_decode_table_features(struct ofpbuf *,
 struct ofpbuf *ofputil_encode_table_features_request(enum ofp_version);
 
 void ofputil_append_table_features_reply(
-    const struct ofputil_table_features *tf, struct list *replies);
+    const struct ofputil_table_features *tf, struct ovs_list *replies);
 
 /* Meter band configuration for all supported band types. */
 struct ofputil_meter_band {
@@ -746,10 +746,10 @@ struct ofpbuf *ofputil_encode_meter_features_reply(const struct
 void ofputil_decode_meter_request(const struct ofp_header *,
                                   uint32_t *meter_id);
 
-void ofputil_append_meter_config(struct list *replies,
+void ofputil_append_meter_config(struct ovs_list *replies,
                                  const struct ofputil_meter_config *);
 
-void ofputil_append_meter_stats(struct list *replies,
+void ofputil_append_meter_stats(struct ovs_list *replies,
                                 const struct ofputil_meter_stats *);
 
 enum ofputil_meter_request_type {
@@ -883,9 +883,9 @@ struct ofputil_flow_update {
 
 int ofputil_decode_flow_update(struct ofputil_flow_update *,
                                struct ofpbuf *msg, struct ofpbuf *ofpacts);
-void ofputil_start_flow_update(struct list *replies);
+void ofputil_start_flow_update(struct ovs_list *replies);
 void ofputil_append_flow_update(const struct ofputil_flow_update *,
-                                struct list *replies);
+                                struct ovs_list *replies);
 
 /* Abstract nx_flow_monitor_cancel. */
 uint32_t ofputil_decode_flow_monitor_cancel(const struct ofp_header *);
@@ -898,7 +898,7 @@ struct ofpbuf *ofputil_encode_port_desc_stats_request(
     enum ofp_version ofp_version, ofp_port_t);
 
 void ofputil_append_port_desc_stats_reply(const struct ofputil_phy_port *pp,
-                                          struct list *replies);
+                                          struct ovs_list *replies);
 
 /* Encoding simple OpenFlow messages. */
 struct ofpbuf *make_echo_request(enum ofp_version);
@@ -933,7 +933,7 @@ struct ofputil_port_stats {
 
 struct ofpbuf *ofputil_encode_dump_ports_request(enum ofp_version ofp_version,
                                                  ofp_port_t port);
-void ofputil_append_port_stat(struct list *replies,
+void ofputil_append_port_stat(struct ovs_list *replies,
                               const struct ofputil_port_stats *ops);
 size_t ofputil_count_port_stats(const struct ofp_header *);
 int ofputil_decode_port_stats(struct ofputil_port_stats *, struct ofpbuf *msg);
@@ -968,7 +968,7 @@ struct ofputil_queue_stats {
 
 size_t ofputil_count_queue_stats(const struct ofp_header *);
 int ofputil_decode_queue_stats(struct ofputil_queue_stats *qs, struct ofpbuf *msg);
-void ofputil_append_queue_stat(struct list *replies,
+void ofputil_append_queue_stat(struct ovs_list *replies,
                                const struct ofputil_queue_stats *oqs);
 
 struct bucket_counter {
@@ -978,7 +978,7 @@ struct bucket_counter {
 
 /* Bucket for use in groups. */
 struct ofputil_bucket {
-    struct list list_node;
+    struct ovs_list list_node;
     uint16_t weight;            /* Relative weight, for "select" groups. */
     ofp_port_t watch_port;      /* Port whose state affects whether this bucket
                                  * is live. Only required for fast failover
@@ -1002,7 +1002,7 @@ struct ofputil_group_mod {
                                    * OFPGC15_INSERT_BUCKET and
                                    * OFPGC15_REMOVE_BUCKET commands
                                    * execution.*/
-    struct list buckets;          /* Contains "struct ofputil_bucket"s. */
+    struct ovs_list buckets;      /* Contains "struct ofputil_bucket"s. */
 };
 
 /* Group stats reply, independent of protocol. */
@@ -1031,17 +1031,18 @@ struct ofputil_group_features {
 struct ofputil_group_desc {
     uint8_t type;               /* One of OFPGT_*. */
     uint32_t group_id;          /* Group identifier. */
-    struct list buckets;        /* Contains "struct ofputil_bucket"s. */
+    struct ovs_list buckets;    /* Contains "struct ofputil_bucket"s. */
 };
 
-void ofputil_bucket_list_destroy(struct list *buckets);
-void ofputil_bucket_clone_list(struct list *dest, const struct list *src,
+void ofputil_bucket_list_destroy(struct ovs_list *buckets);
+void ofputil_bucket_clone_list(struct ovs_list *dest,
+                               const struct ovs_list *src,
                                const struct ofputil_bucket *);
-struct ofputil_bucket *ofputil_bucket_find(const struct list *,
+struct ofputil_bucket *ofputil_bucket_find(const struct ovs_list *,
                                            uint32_t bucket_id);
-bool ofputil_bucket_check_duplicate_id(const struct list *);
-struct ofputil_bucket *ofputil_bucket_list_front(const struct list *);
-struct ofputil_bucket *ofputil_bucket_list_back(const struct list *);
+bool ofputil_bucket_check_duplicate_id(const struct ovs_list *);
+struct ofputil_bucket *ofputil_bucket_list_front(const struct ovs_list *);
+struct ofputil_bucket *ofputil_bucket_list_back(const struct ovs_list *);
 
 static inline bool
 ofputil_bucket_has_liveness(const struct ofputil_bucket *bucket)
@@ -1054,7 +1055,7 @@ struct ofpbuf *ofputil_encode_group_stats_request(enum ofp_version,
                                                   uint32_t group_id);
 enum ofperr ofputil_decode_group_stats_request(
     const struct ofp_header *request, uint32_t *group_id);
-void ofputil_append_group_stats(struct list *replies,
+void ofputil_append_group_stats(struct ovs_list *replies,
                                 const struct ofputil_group_stats *);
 struct ofpbuf *ofputil_encode_group_features_request(enum ofp_version);
 struct ofpbuf *ofputil_encode_group_features_reply(
@@ -1078,8 +1079,8 @@ int ofputil_decode_group_desc_reply(struct ofputil_group_desc *,
                                     struct ofpbuf *, enum ofp_version);
 
 void ofputil_append_group_desc_reply(const struct ofputil_group_desc *,
-                                     struct list *buckets,
-                                     struct list *replies);
+                                     struct ovs_list *buckets,
+                                     struct ovs_list *replies);
 
 struct ofputil_bundle_ctrl_msg {
     uint32_t    bundle_id;

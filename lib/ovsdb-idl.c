@@ -65,8 +65,8 @@ COVERAGE_DEFINE(txn_error);
  * tables.
  */
 struct ovsdb_idl_arc {
-    struct list src_node;       /* In src->src_arcs list. */
-    struct list dst_node;       /* In dst->dst_arcs list. */
+    struct ovs_list src_node;   /* In src->src_arcs list. */
+    struct ovs_list dst_node;   /* In dst->dst_arcs list. */
     struct ovsdb_idl_row *src;  /* Source row. */
     struct ovsdb_idl_row *dst;  /* Destination row. */
 };

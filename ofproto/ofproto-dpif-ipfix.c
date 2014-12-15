@@ -81,7 +81,7 @@ struct dpif_ipfix_exporter {
     uint32_t seq_number;
     time_t last_template_set_time;
     struct hmap cache_flow_key_map;  /* ipfix_flow_cache_entry. */
-    struct list cache_flow_start_timestamp_list;  /* ipfix_flow_cache_entry. */
+    struct ovs_list cache_flow_start_timestamp_list;  /* ipfix_flow_cache_entry. */
     uint32_t cache_active_timeout;  /* In seconds. */
     uint32_t cache_max_flows;
 };
@@ -395,7 +395,7 @@ struct ipfix_flow_key {
 /* Flow cache entry. */
 struct ipfix_flow_cache_entry {
     struct hmap_node flow_key_map_node;
-    struct list cache_flow_start_timestamp_list_node;
+    struct ovs_list cache_flow_start_timestamp_list_node;
     struct ipfix_flow_key flow_key;
     /* Common aggregated elements. */
     uint64_t flow_start_timestamp_usec;

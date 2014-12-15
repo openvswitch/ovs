@@ -44,7 +44,7 @@ struct rtbsd_change {
 typedef void rtbsd_notify_func(const struct rtbsd_change *, void *aux);
 
 struct rtbsd_notifier {
-    struct list node;
+    struct ovs_list node;
     rtbsd_notify_func *cb;
     void *aux;
 };

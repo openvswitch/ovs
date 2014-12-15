@@ -23,7 +23,7 @@ struct ovsdb;
 struct ovsdb_trigger {
     struct ovsdb_session *session; /* Session that owns this trigger. */
     struct ovsdb *db;           /* Database on which trigger acts. */
-    struct list node;           /* !result: in db->triggers;
+    struct ovs_list node;       /* !result: in db->triggers;
                                  * result: in session->completions. */
     struct json *request;       /* Database request. */
     struct json *result;        /* Result (null if none yet). */

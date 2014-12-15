@@ -83,7 +83,7 @@ e.g.:
     /* An event that will wake the following call to poll_block(). */
     struct poll_waiter {
         /* Set when the waiter is created. */
-        struct list node;           /* Element in global waiters list. */
+        struct ovs_list node;       /* Element in global waiters list. */
         int fd;                     /* File descriptor. */
         short int events;           /* Events to wait for (POLLIN, POLLOUT). */
         poll_fd_func *function;     /* Callback function, if any, or null. */

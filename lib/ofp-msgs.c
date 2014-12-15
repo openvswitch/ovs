@@ -860,7 +860,7 @@ static ovs_be16 *ofpmp_flags__(const struct ofp_header *);
  * use calls to the other ofpmp_*() functions to add to the body and split the
  * message into multiple parts, if necessary. */
 void
-ofpmp_init(struct list *replies, const struct ofp_header *request)
+ofpmp_init(struct ovs_list *replies, const struct ofp_header *request)
 {
     struct ofpbuf *msg;
 
@@ -878,7 +878,7 @@ ofpmp_init(struct list *replies, const struct ofp_header *request)
  * have not actually been allocated, so the caller must do so with
  * e.g. ofpbuf_put_uninit(). */
 struct ofpbuf *
-ofpmp_reserve(struct list *replies, size_t len)
+ofpmp_reserve(struct ovs_list *replies, size_t len)
 {
     struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
 
@@ -908,7 +908,7 @@ ofpmp_reserve(struct list *replies, size_t len)
 /* Appends 'len' bytes to the series of statistics replies in 'replies', and
  * returns the first byte. */
 void *
-ofpmp_append(struct list *replies, size_t len)
+ofpmp_append(struct ovs_list *replies, size_t len)
 {
     return ofpbuf_put_uninit(ofpmp_reserve(replies, len), len);
 }
@@ -924,7 +924,7 @@ ofpmp_append(struct list *replies, size_t len)
  * the first 'start_ofs' bytes, the second one containing the bytes from that
  * offset onward. */
 void
-ofpmp_postappend(struct list *replies, size_t start_ofs)
+ofpmp_postappend(struct ovs_list *replies, size_t start_ofs)
 {
     struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
 
@@ -940,7 +940,7 @@ ofpmp_postappend(struct list *replies, size_t start_ofs)
 /* Returns the OpenFlow version of the replies being constructed in 'replies',
  * which should have been initialized by ofpmp_init(). */
 enum ofp_version
-ofpmp_version(struct list *replies)
+ofpmp_version(struct ovs_list *replies)
 {
     struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
     const struct ofp_header *oh = ofpbuf_data(msg);
@@ -951,7 +951,7 @@ ofpmp_version(struct list *replies)
 /* Determines the OFPRAW_* type of the OpenFlow messages in 'replies', which
  * should have been initialized by ofpmp_init(). */
 enum ofpraw
-ofpmp_decode_raw(struct list *replies)
+ofpmp_decode_raw(struct ovs_list *replies)
 {
     struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
     enum ofperr error;

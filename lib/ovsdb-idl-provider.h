@@ -26,8 +26,8 @@
 struct ovsdb_idl_row {
     struct hmap_node hmap_node; /* In struct ovsdb_idl_table's 'rows'. */
     struct uuid uuid;           /* Row "_uuid" field. */
-    struct list src_arcs;       /* Forward arcs (ovsdb_idl_arc.src_node). */
-    struct list dst_arcs;       /* Backward arcs (ovsdb_idl_arc.dst_node). */
+    struct ovs_list src_arcs;   /* Forward arcs (ovsdb_idl_arc.src_node). */
+    struct ovs_list dst_arcs;   /* Backward arcs (ovsdb_idl_arc.dst_node). */
     struct ovsdb_idl_table *table; /* Containing table. */
     struct ovsdb_datum *old;    /* Committed data (null if orphaned). */
 

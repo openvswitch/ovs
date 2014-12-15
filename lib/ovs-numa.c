@@ -59,14 +59,14 @@ VLOG_DEFINE_THIS_MODULE(ovs_numa);
 /* numa node. */
 struct numa_node {
     struct hmap_node hmap_node;     /* In the 'all_numa_nodes'. */
-    struct list cores;              /* List of cpu cores on the numa node. */
+    struct ovs_list cores;          /* List of cpu cores on the numa node. */
     int numa_id;                    /* numa node id. */
 };
 
 /* Cpu core on a numa node. */
 struct cpu_core {
     struct hmap_node hmap_node;/* In the 'all_cpu_cores'. */
-    struct list list_node;     /* In 'numa_node->cores' list. */
+    struct ovs_list list_node; /* In 'numa_node->cores' list. */
     struct numa_node *numa;    /* numa node containing the core. */
     int core_id;               /* Core id. */
     bool available;            /* If the core can be pinned. */

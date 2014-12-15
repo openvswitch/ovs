@@ -121,7 +121,7 @@ struct ofbundle {
     char *name;                 /* Identifier for log messages. */
 
     /* Configuration. */
-    struct list ports;          /* Contains "struct ofport"s. */
+    struct ovs_list ports;      /* Contains "struct ofport"s. */
     enum port_vlan_mode vlan_mode; /* VLAN mode */
     int vlan;                   /* -1=trunk port, else a 12-bit VLAN ID. */
     unsigned long *trunks;      /* Bitmap of trunked VLANs, if 'vlan' == -1.
@@ -158,7 +158,7 @@ struct ofport_dpif {
 
     odp_port_t odp_port;
     struct ofbundle *bundle;    /* Bundle that contains this port, if any. */
-    struct list bundle_node;    /* In struct ofbundle's "ports" list. */
+    struct ovs_list bundle_node;/* In struct ofbundle's "ports" list. */
     struct cfm *cfm;            /* Connectivity Fault Management, if any. */
     struct bfd *bfd;            /* BFD, if any. */
     bool may_enable;            /* May be enabled in bonds. */
@@ -859,7 +859,7 @@ close_dpif_backer(struct dpif_backer *backer)
 
 /* Datapath port slated for removal from datapath. */
 struct odp_garbage {
-    struct list list_node;
+    struct ovs_list list_node;
     odp_port_t odp_port;
 };
 
@@ -875,7 +875,7 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     struct dpif_port_dump port_dump;
     struct dpif_port port;
     struct shash_node *node;
-    struct list garbage_list;
+    struct ovs_list garbage_list;
     struct odp_garbage *garbage, *next;
 
     struct sset names;
@@ -1352,7 +1352,7 @@ destruct(struct ofproto *ofproto_)
     struct ofproto_packet_in *pin, *next_pin;
     struct rule_dpif *rule;
     struct oftable *table;
-    struct list pins;
+    struct ovs_list pins;
 
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
     xlate_txn_start();
@@ -1427,7 +1427,7 @@ run(struct ofproto *ofproto_)
      * waiting for flow restore to complete. */
     if (!ofproto_get_flow_restore_wait()) {
         struct ofproto_packet_in *pin, *next_pin;
-        struct list pins;
+        struct ovs_list pins;
 
         guarded_list_pop_all(&ofproto->pins, &pins);
         LIST_FOR_EACH_SAFE (pin, next_pin, list_node, &pins) {
@@ -2869,7 +2869,7 @@ bundle_send_learning_packets(struct ofbundle *bundle)
     struct ofpbuf *learning_packet;
     int error, n_packets, n_errors;
     struct mac_entry *e;
-    struct list packets;
+    struct ovs_list packets;
 
     list_init(&packets);
     ovs_rwlock_rdlock(&ofproto->ml->rwlock);
@@ -3947,7 +3947,7 @@ group_construct_stats(struct group_dpif *group)
     OVS_REQUIRES(group->stats_mutex)
 {
     struct ofputil_bucket *bucket;
-    const struct list *buckets;
+    const struct ovs_list *buckets;
 
     group->packet_count = 0;
     group->byte_count = 0;
@@ -3971,7 +3971,7 @@ group_dpif_credit_stats(struct group_dpif *group,
         bucket->stats.packet_count += stats->n_packets;
         bucket->stats.byte_count += stats->n_bytes;
     } else { /* Credit to all buckets */
-        const struct list *buckets;
+        const struct ovs_list *buckets;
 
         group_dpif_get_buckets(group, &buckets);
         LIST_FOR_EACH (bucket, list_node, buckets) {
@@ -4029,7 +4029,7 @@ group_get_stats(const struct ofgroup *group_, struct ofputil_group_stats *ogs)
 {
     struct group_dpif *group = group_dpif_cast(group_);
     struct ofputil_bucket *bucket;
-    const struct list *buckets;
+    const struct ovs_list *buckets;
     struct bucket_counter *bucket_stats;
 
     ovs_mutex_lock(&group->stats_mutex);
@@ -4067,7 +4067,7 @@ group_dpif_lookup(struct ofproto_dpif *ofproto, uint32_t group_id,
 
 void
 group_dpif_get_buckets(const struct group_dpif *group,
-                       const struct list **buckets)
+                       const struct ovs_list **buckets)
 {
     *buckets = &group->up.buckets;
 }

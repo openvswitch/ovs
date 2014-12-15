@@ -51,18 +51,18 @@ struct mcast_group {
     uint16_t vlan;
 
     /* Node in parent struct mcast_snooping group_lru. */
-    struct list group_node OVS_GUARDED;
+    struct ovs_list group_node OVS_GUARDED;
 
     /* Contains struct mcast_group_bundle (ports), least recently used
      * at the front, most recently used at the back. */
-    struct list bundle_lru OVS_GUARDED;
+    struct ovs_list bundle_lru OVS_GUARDED;
 };
 
 /* The bundle associated to the multicast group.
  * Guarded by owning 'mcast_snooping''s rwlock. */
 struct mcast_group_bundle {
     /* Node in parent struct mcast_group bundle_lru list. */
-    struct list bundle_node OVS_GUARDED;
+    struct ovs_list bundle_node OVS_GUARDED;
 
     /* When this node expires. */
     time_t expires;
@@ -75,7 +75,7 @@ struct mcast_group_bundle {
  * Guarded by owning 'mcast_snooping''s rwlock. */
 struct mcast_mrouter_bundle {
     /* Node in parent struct mcast_group mrouter_lru list. */
-    struct list mrouter_node OVS_GUARDED;
+    struct ovs_list mrouter_node OVS_GUARDED;
 
     /* When this node expires. */
     time_t expires;
@@ -91,7 +91,7 @@ struct mcast_mrouter_bundle {
  * Guarded by owning 'mcast_snooping''s rwlock */
 struct mcast_fport_bundle {
     /* Node in parent struct mcast_snooping fport_list. */
-    struct list fport_node;
+    struct ovs_list fport_node;
 
     /* VLAN tag. */
     uint16_t vlan;
@@ -107,15 +107,15 @@ struct mcast_snooping {
 
     /* Contains struct mcast_group, least recently used at the front,
      * most recently used at the back. */
-    struct list group_lru OVS_GUARDED;
+    struct ovs_list group_lru OVS_GUARDED;
 
     /* Contains struct mcast_mrouter_bundle, least recently used at the
      * front, most recently used at the back. */
-    struct list mrouter_lru OVS_GUARDED;
+    struct ovs_list mrouter_lru OVS_GUARDED;
 
     /* Contains struct mcast_fport_bundle to be flooded with multicast
      * packets in no special order. */
-    struct list fport_list OVS_GUARDED;
+    struct ovs_list fport_list OVS_GUARDED;
 
     /* Secret for randomizing hash table. */
     uint32_t secret;

@@ -1736,7 +1736,7 @@ oxm_maskable_fields(void)
 struct nxm_field_index {
     struct hmap_node header_node; /* In nxm_header_map. */
     struct hmap_node name_node;   /* In nxm_name_map. */
-    struct list mf_node;          /* In mf_mf_map[nf.id]. */
+    struct ovs_list mf_node;      /* In mf_mf_map[nf.id]. */
     const struct nxm_field nf;
 };
 
@@ -1744,7 +1744,7 @@ struct nxm_field_index {
 
 static struct hmap nxm_header_map;
 static struct hmap nxm_name_map;
-static struct list nxm_mf_map[MFF_N_IDS];
+static struct ovs_list nxm_mf_map[MFF_N_IDS];
 
 static void
 nxm_init(void)

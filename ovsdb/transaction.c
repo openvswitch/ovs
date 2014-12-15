@@ -31,13 +31,13 @@
 
 struct ovsdb_txn {
     struct ovsdb *db;
-    struct list txn_tables;     /* Contains "struct ovsdb_txn_table"s. */
+    struct ovs_list txn_tables; /* Contains "struct ovsdb_txn_table"s. */
     struct ds comment;
 };
 
 /* A table modified by a transaction. */
 struct ovsdb_txn_table {
-    struct list node;           /* Element in ovsdb_txn's txn_tables list. */
+    struct ovs_list node;       /* Element in ovsdb_txn's txn_tables list. */
     struct ovsdb_table *table;
     struct hmap txn_rows;       /* Contains "struct ovsdb_txn_row"s. */
 

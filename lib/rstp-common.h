@@ -705,7 +705,7 @@ struct rstp_port {
 };
 
 struct rstp {
-    struct list node OVS_GUARDED_BY(rstp_mutex);   /* In rstp instances list */
+    struct ovs_list node OVS_GUARDED_BY(rstp_mutex);   /* In rstp instances list */
     char *name;     /* Bridge name. */
 
     /* Changes in last SM execution. */

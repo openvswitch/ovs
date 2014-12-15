@@ -1969,7 +1969,7 @@ ofputil_put_bands(uint16_t n_bands, const struct ofputil_meter_band *mb,
 
 /* Encode a meter stat for 'mc' and append it to 'replies'. */
 void
-ofputil_append_meter_config(struct list *replies,
+ofputil_append_meter_config(struct ovs_list *replies,
                             const struct ofputil_meter_config *mc)
 {
     struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
@@ -1987,7 +1987,7 @@ ofputil_append_meter_config(struct list *replies,
 
 /* Encode a meter stat for 'ms' and append it to 'replies'. */
 void
-ofputil_append_meter_stats(struct list *replies,
+ofputil_append_meter_stats(struct ovs_list *replies,
                            const struct ofputil_meter_stats *ms)
 {
     struct ofp13_meter_stats *reply;
@@ -2973,7 +2973,7 @@ unknown_to_zero(uint64_t count)
  * have been initialized with ofpmp_init(). */
 void
 ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
-                                struct list *replies)
+                                struct ovs_list *replies)
 {
     struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
     size_t start_ofs = ofpbuf_size(reply);
@@ -4054,7 +4054,7 @@ ofputil_encode_port_desc_stats_request(enum ofp_version ofp_version,
 
 void
 ofputil_append_port_desc_stats_reply(const struct ofputil_phy_port *pp,
-                                     struct list *replies)
+                                     struct ovs_list *replies)
 {
     struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
     size_t start_ofs = ofpbuf_size(reply);
@@ -4875,7 +4875,7 @@ put_table_instruction_features(
 
 void
 ofputil_append_table_features_reply(const struct ofputil_table_features *tf,
-                                    struct list *replies)
+                                    struct ovs_list *replies)
 {
     struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
     enum ofp_version version = ofpmp_version(replies);
@@ -5809,7 +5809,7 @@ ofputil_encode_flow_monitor_cancel(uint32_t id)
 }
 
 void
-ofputil_start_flow_update(struct list *replies)
+ofputil_start_flow_update(struct ovs_list *replies)
 {
     struct ofpbuf *msg;
 
@@ -5822,7 +5822,7 @@ ofputil_start_flow_update(struct list *replies)
 
 void
 ofputil_append_flow_update(const struct ofputil_flow_update *update,
-                           struct list *replies)
+                           struct ovs_list *replies)
 {
     enum ofp_version version = ofpmp_version(replies);
     struct nx_flow_update_header *nfuh;
@@ -6540,7 +6540,7 @@ ofputil_port_stats_to_ofp13(const struct ofputil_port_stats *ops,
 
 static void
 ofputil_append_ofp14_port_stats(const struct ofputil_port_stats *ops,
-                                struct list *replies)
+                                struct ovs_list *replies)
 {
     struct ofp14_port_stats_prop_ethernet *eth;
     struct ofp14_port_stats *ps14;
@@ -6575,7 +6575,7 @@ ofputil_append_ofp14_port_stats(const struct ofputil_port_stats *ops,
 
 /* Encode a ports stat for 'ops' and append it to 'replies'. */
 void
-ofputil_append_port_stat(struct list *replies,
+ofputil_append_port_stat(struct ovs_list *replies,
                          const struct ofputil_port_stats *ops)
 {
     switch (ofpmp_version(replies)) {
@@ -6869,7 +6869,7 @@ ofputil_decode_port_stats_request(const struct ofp_header *request,
 
 /* Frees all of the "struct ofputil_bucket"s in the 'buckets' list. */
 void
-ofputil_bucket_list_destroy(struct list *buckets)
+ofputil_bucket_list_destroy(struct ovs_list *buckets)
 {
     struct ofputil_bucket *bucket, *next_bucket;
 
@@ -6899,7 +6899,7 @@ ofputil_bucket_clone_data(const struct ofputil_bucket *bucket)
  * This allows all of 'src' or 'all of 'src' except 'skip' to
  * be cloned and appended to 'dest'. */
 void
-ofputil_bucket_clone_list(struct list *dest, const struct list *src,
+ofputil_bucket_clone_list(struct ovs_list *dest, const struct ovs_list *src,
                           const struct ofputil_bucket *skip)
 {
     struct ofputil_bucket *bucket;
@@ -6919,7 +6919,7 @@ ofputil_bucket_clone_list(struct list *dest, const struct list *src,
 /* Find a bucket in the list 'buckets' whose bucket id is 'bucket_id'
  * Returns the first bucket found or NULL if no buckets are found. */
 struct ofputil_bucket *
-ofputil_bucket_find(const struct list *buckets, uint32_t bucket_id)
+ofputil_bucket_find(const struct ovs_list *buckets, uint32_t bucket_id)
 {
     struct ofputil_bucket *bucket;
 
@@ -6939,7 +6939,7 @@ ofputil_bucket_find(const struct list *buckets, uint32_t bucket_id)
 /* Returns true if more than one bucket in the list 'buckets'
  * have the same bucket id. Returns false otherwise. */
 bool
-ofputil_bucket_check_duplicate_id(const struct list *buckets)
+ofputil_bucket_check_duplicate_id(const struct ovs_list *buckets)
 {
     struct ofputil_bucket *i, *j;
 
@@ -6960,7 +6960,7 @@ ofputil_bucket_check_duplicate_id(const struct list *buckets)
 /* Returns the bucket at the front of the list 'buckets'.
  * Undefined if 'buckets is empty. */
 struct ofputil_bucket *
-ofputil_bucket_list_front(const struct list *buckets)
+ofputil_bucket_list_front(const struct ovs_list *buckets)
 {
     static struct ofputil_bucket *bucket;
 
@@ -6972,7 +6972,7 @@ ofputil_bucket_list_front(const struct list *buckets)
 /* Returns the bucket at the back of the list 'buckets'.
  * Undefined if 'buckets is empty. */
 struct ofputil_bucket *
-ofputil_bucket_list_back(const struct list *buckets)
+ofputil_bucket_list_back(const struct ovs_list *buckets)
 {
     static struct ofputil_bucket *bucket;
 
@@ -7114,7 +7114,7 @@ ofputil_group_stats_to_ofp13(const struct ofputil_group_stats *gs,
  * replies already begun in 'replies' and appends it to the list.  'replies'
  * must have originally been initialized with ofpmp_init(). */
 void
-ofputil_append_group_stats(struct list *replies,
+ofputil_append_group_stats(struct ovs_list *replies,
                            const struct ofputil_group_stats *gs)
 {
     size_t bucket_counter_size;
@@ -7408,8 +7408,8 @@ ofputil_put_ofp15_bucket(const struct ofputil_bucket *bucket,
 
 static void
 ofputil_append_ofp11_group_desc_reply(const struct ofputil_group_desc *gds,
-                                      struct list *buckets,
-                                      struct list *replies,
+                                      struct ovs_list *buckets,
+                                      struct ovs_list *replies,
                                       enum ofp_version version)
 {
     struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
@@ -7432,8 +7432,8 @@ ofputil_append_ofp11_group_desc_reply(const struct ofputil_group_desc *gds,
 
 static void
 ofputil_append_ofp15_group_desc_reply(const struct ofputil_group_desc *gds,
-                                      struct list *buckets,
-                                      struct list *replies,
+                                      struct ovs_list *buckets,
+                                      struct ovs_list *replies,
                                       enum ofp_version version)
 {
     struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
@@ -7462,8 +7462,8 @@ ofputil_append_ofp15_group_desc_reply(const struct ofputil_group_desc *gds,
  * initialized with ofpmp_init(). */
 void
 ofputil_append_group_desc_reply(const struct ofputil_group_desc *gds,
-                                struct list *buckets,
-                                struct list *replies)
+                                struct ovs_list *buckets,
+                                struct ovs_list *replies)
 {
     enum ofp_version version = ofpmp_version(replies);
 
@@ -7488,7 +7488,7 @@ ofputil_append_group_desc_reply(const struct ofputil_group_desc *gds,
 
 static enum ofperr
 ofputil_pull_ofp11_buckets(struct ofpbuf *msg, size_t buckets_length,
-                           enum ofp_version version, struct list *buckets)
+                           enum ofp_version version, struct ovs_list *buckets)
 {
     struct ofp11_bucket *ob;
     uint32_t bucket_id = 0;
@@ -7586,7 +7586,7 @@ parse_ofp15_group_bucket_prop_watch(const struct ofpbuf *payload,
 
 static enum ofperr
 ofputil_pull_ofp15_buckets(struct ofpbuf *msg, size_t buckets_length,
-                           enum ofp_version version, struct list *buckets)
+                           enum ofp_version version, struct ovs_list *buckets)
 {
     struct ofp15_bucket *ob;
 
@@ -8415,7 +8415,7 @@ ofputil_queue_stats_to_ofp14(const struct ofputil_queue_stats *oqs,
 
 /* Encode a queue stat for 'oqs' and append it to 'replies'. */
 void
-ofputil_append_queue_stat(struct list *replies,
+ofputil_append_queue_stat(struct ovs_list *replies,
                           const struct ofputil_queue_stats *oqs)
 {
     switch (ofpmp_version(replies)) {

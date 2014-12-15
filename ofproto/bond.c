@@ -63,7 +63,7 @@ struct bond_entry {
     struct bond_slave *slave;   /* Assigned slave, NULL if unassigned. */
     uint64_t tx_bytes           /* Count of bytes recently transmitted. */
         OVS_GUARDED_BY(rwlock);
-    struct list list_node;      /* In bond_slave's 'entries' list. */
+    struct ovs_list list_node;  /* In bond_slave's 'entries' list. */
 
     /* Recirculation.
      *
@@ -77,7 +77,7 @@ struct bond_entry {
 /* A bond slave, that is, one of the links comprising a bond. */
 struct bond_slave {
     struct hmap_node hmap_node; /* In struct bond's slaves hmap. */
-    struct list list_node;      /* In struct bond's enabled_slaves list. */
+    struct ovs_list list_node;  /* In struct bond's enabled_slaves list. */
     struct bond *bond;          /* The bond that contains this slave. */
     void *aux;                  /* Client-provided handle for this slave. */
 
@@ -92,8 +92,8 @@ struct bond_slave {
     bool may_enable;            /* Client considers this slave bondable. */
 
     /* Rebalancing info.  Used only by bond_rebalance(). */
-    struct list bal_node;       /* In bond_rebalance()'s 'bals' list. */
-    struct list entries;        /* 'struct bond_entry's assigned here. */
+    struct ovs_list bal_node;   /* In bond_rebalance()'s 'bals' list. */
+    struct ovs_list entries;    /* 'struct bond_entry's assigned here. */
     uint64_t tx_bytes;          /* Sum across 'tx_bytes' of entries. */
 };
 
@@ -113,7 +113,7 @@ struct bond {
      * (To prevent the bond_slave from disappearing they must also hold
      * 'rwlock'.) */
     struct ovs_mutex mutex OVS_ACQ_AFTER(rwlock);
-    struct list enabled_slaves OVS_GUARDED; /* Contains struct bond_slaves. */
+    struct ovs_list enabled_slaves OVS_GUARDED; /* Contains struct bond_slaves. */
 
     /* Bonding info. */
     enum bond_mode balance;     /* Balancing mode, one of BM_*. */
@@ -968,13 +968,13 @@ bond_account(struct bond *bond, const struct flow *flow, uint16_t vlan,
 }
 
 static struct bond_slave *
-bond_slave_from_bal_node(struct list *bal) OVS_REQ_RDLOCK(rwlock)
+bond_slave_from_bal_node(struct ovs_list *bal) OVS_REQ_RDLOCK(rwlock)
 {
     return CONTAINER_OF(bal, struct bond_slave, bal_node);
 }
 
 static void
-log_bals(struct bond *bond, const struct list *bals)
+log_bals(struct bond *bond, const struct ovs_list *bals)
     OVS_REQ_RDLOCK(rwlock)
 {
     if (VLOG_IS_DBG_ENABLED()) {
@@ -1083,7 +1083,7 @@ choose_entry_to_migrate(const struct bond_slave *from, uint64_t to_tx_bytes)
 /* Inserts 'slave' into 'bals' so that descending order of 'tx_bytes' is
  * maintained. */
 static void
-insert_bal(struct list *bals, struct bond_slave *slave)
+insert_bal(struct ovs_list *bals, struct bond_slave *slave)
 {
     struct bond_slave *pos;
 
@@ -1098,7 +1098,7 @@ insert_bal(struct list *bals, struct bond_slave *slave)
 /* Removes 'slave' from its current list and then inserts it into 'bals' so
  * that descending order of 'tx_bytes' is maintained. */
 static void
-reinsert_bal(struct list *bals, struct bond_slave *slave)
+reinsert_bal(struct ovs_list *bals, struct bond_slave *slave)
 {
     list_remove(&slave->bal_node);
     insert_bal(bals, slave);
@@ -1115,7 +1115,7 @@ bond_rebalance(struct bond *bond)
 {
     struct bond_slave *slave;
     struct bond_entry *e;
-    struct list bals;
+    struct ovs_list bals;
     bool rebalanced = false;
     bool use_recirc;
 
@@ -1733,7 +1733,7 @@ lookup_bond_entry(const struct bond *bond, const struct flow *flow,
 static struct bond_slave *
 get_enabled_slave(struct bond *bond)
 {
-    struct list *node;
+    struct ovs_list *node;
 
     ovs_mutex_lock(&bond->mutex);
     if (list_is_empty(&bond->enabled_slaves)) {

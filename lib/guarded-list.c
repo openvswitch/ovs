@@ -51,7 +51,7 @@ guarded_list_is_empty(const struct guarded_list *list)
  * the list. */
 size_t
 guarded_list_push_back(struct guarded_list *list,
-                       struct list *node, size_t max)
+                       struct ovs_list *node, size_t max)
 {
     size_t retval = 0;
 
@@ -65,10 +65,10 @@ guarded_list_push_back(struct guarded_list *list,
     return retval;
 }
 
-struct list *
+struct ovs_list *
 guarded_list_pop_front(struct guarded_list *list)
 {
-    struct list *node = NULL;
+    struct ovs_list *node = NULL;
 
     ovs_mutex_lock(&list->mutex);
     if (list->n) {
@@ -81,7 +81,7 @@ guarded_list_pop_front(struct guarded_list *list)
 }
 
 size_t
-guarded_list_pop_all(struct guarded_list *list, struct list *elements)
+guarded_list_pop_all(struct guarded_list *list, struct ovs_list *elements)
 {
     size_t n;
 

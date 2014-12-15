@@ -95,7 +95,7 @@ struct rconn {
     char *target;               /* vconn name, passed to vconn_open(). */
     bool reliable;
 
-    struct list txq;            /* Contains "struct ofpbuf"s. */
+    struct ovs_list txq;        /* Contains "struct ofpbuf"s. */
 
     int backoff;
     int max_backoff;

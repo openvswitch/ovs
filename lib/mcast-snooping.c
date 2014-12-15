@@ -91,13 +91,13 @@ mcast_table_hash(const struct mcast_snooping *ms, ovs_be32 grp_ip4,
 }
 
 static struct mcast_group_bundle *
-mcast_group_bundle_from_lru_node(struct list *list)
+mcast_group_bundle_from_lru_node(struct ovs_list *list)
 {
     return CONTAINER_OF(list, struct mcast_group_bundle, bundle_node);
 }
 
 static struct mcast_group *
-mcast_group_from_lru_node(struct list *list)
+mcast_group_from_lru_node(struct ovs_list *list)
 {
     return CONTAINER_OF(list, struct mcast_group, group_node);
 }
@@ -443,7 +443,7 @@ mcast_mrouter_age(const struct mcast_snooping *ms OVS_UNUSED,
 }
 
 static struct mcast_mrouter_bundle *
-mcast_mrouter_from_lru_node(struct list *list)
+mcast_mrouter_from_lru_node(struct ovs_list *list)
 {
     return CONTAINER_OF(list, struct mcast_mrouter_bundle, mrouter_node);
 }
@@ -518,7 +518,7 @@ mcast_snooping_flush_mrouter(struct mcast_mrouter_bundle *mrouter)
 /* Flood ports. */
 
 static struct mcast_fport_bundle *
-mcast_fport_from_list_node(struct list *list)
+mcast_fport_from_list_node(struct ovs_list *list)
 {
     return CONTAINER_OF(list, struct mcast_fport_bundle, fport_node);
 }

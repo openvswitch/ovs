@@ -725,11 +725,11 @@ struct vtep_ctl_context {
 struct vtep_ctl_pswitch {
     const struct vteprec_physical_switch *ps_cfg;
     char *name;
-    struct list ports;          /* Contains "struct vteprec_physical_port"s. */
+    struct ovs_list ports;      /* Contains "struct vteprec_physical_port"s. */
 };
 
 struct vtep_ctl_port {
-    struct list ports_node;     /* In struct vtep_ctl_pswitch's 'ports' list. */
+    struct ovs_list ports_node; /* In struct vtep_ctl_pswitch's 'ports' list. */
     const struct vteprec_physical_port *port_cfg;
     struct vtep_ctl_pswitch *ps;
     struct shash bindings;      /* Maps from vlan to vtep_ctl_lswitch. */
@@ -749,12 +749,12 @@ struct vtep_ctl_mcast_mac {
     const struct vteprec_mcast_macs_remote *remote_cfg;
 
     const struct vteprec_physical_locator_set *ploc_set_cfg;
-    struct list locators;       /* Contains 'vtep_ctl_ploc's. */
+    struct ovs_list locators;   /* Contains 'vtep_ctl_ploc's. */
 };
 
 struct vtep_ctl_ploc {
-    struct list locators_node;  /* In struct vtep_ctl_ploc_set's 'locators'
-                                   list. */
+    struct ovs_list locators_node;  /* In struct vtep_ctl_ploc_set's 'locators'
+                                       list. */
     const struct vteprec_physical_locator *ploc_cfg;
 };
 

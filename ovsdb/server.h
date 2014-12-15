@@ -28,7 +28,7 @@ struct ovsdb_server;
  * (e.g. jsonrpc-server.c) embed this in a larger data structure.  */
 struct ovsdb_session {
     struct ovsdb_server *server;
-    struct list completions;    /* Completed triggers. */
+    struct ovs_list completions;/* Completed triggers. */
     struct hmap waiters;        /* "ovsdb_lock_waiter *"s by lock name. */
 };
 
@@ -46,7 +46,7 @@ struct ovsdb_lock {
     struct hmap_node hmap_node;  /* In ovsdb_server's "locks" hmap. */
     struct ovsdb_server *server; /* The containing server. */
     char *name;                  /* Unique name. */
-    struct list waiters;         /* Contains "struct ovsdb_lock_waiter"s. */
+    struct ovs_list waiters;     /* Contains "struct ovsdb_lock_waiter"s. */
 };
 
 struct ovsdb_lock_waiter *ovsdb_lock_get_owner(const struct ovsdb_lock *);
@@ -66,7 +66,7 @@ struct ovsdb_lock_waiter {
     char *lock_name;
 
     struct ovsdb_session *session;
-    struct list lock_node;      /* In ->lock->waiters's list. */
+    struct ovs_list lock_node;  /* In ->lock->waiters's list. */
 };
 
 struct ovsdb_session *ovsdb_lock_waiter_remove(struct ovsdb_lock_waiter *);

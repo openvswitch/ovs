@@ -102,7 +102,7 @@ struct ovsdb_jsonrpc_server {
 struct ovsdb_jsonrpc_remote {
     struct ovsdb_jsonrpc_server *server;
     struct pstream *listener;   /* Listener, if passive. */
-    struct list sessions;       /* List of "struct ovsdb_jsonrpc_session"s. */
+    struct ovs_list sessions;   /* List of "struct ovsdb_jsonrpc_session"s. */
     uint8_t dscp;
 };
 
@@ -364,7 +364,7 @@ ovsdb_jsonrpc_server_get_memory_usage(const struct ovsdb_jsonrpc_server *svr,
 /* JSON-RPC database server session. */
 
 struct ovsdb_jsonrpc_session {
-    struct list node;           /* Element in remote's sessions list. */
+    struct ovs_list node;       /* Element in remote's sessions list. */
     struct ovsdb_session up;
     struct ovsdb_jsonrpc_remote *remote;
 

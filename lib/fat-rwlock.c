@@ -30,7 +30,7 @@ struct fat_rwlock_slot {
      *
      * fat_rwlock_destroy() sets 'rwlock' to NULL to indicate that this
      * slot may be destroyed. */
-    struct list list_node;      /* In struct rwlock's 'threads' list. */
+    struct ovs_list list_node;  /* In struct rwlock's 'threads' list. */
     struct fat_rwlock *rwlock;  /* Owner. */
 
     /* Mutex.

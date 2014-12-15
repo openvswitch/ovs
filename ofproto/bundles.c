@@ -53,12 +53,12 @@ struct ofp_bundle {
     enum bundle_state state;
 
     /* List of 'struct bundle_message's */
-    struct list       msg_list;
+    struct ovs_list    msg_list;
 };
 
 struct bundle_message {
     struct ofp_header *msg;
-    struct list       node;  /* Element in 'struct ofp_bundles's msg_list */
+    struct ovs_list   node;  /* Element in 'struct ofp_bundles's msg_list */
 };
 
 static uint32_t

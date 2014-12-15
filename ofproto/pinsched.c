@@ -36,8 +36,8 @@
 
 struct pinqueue {
     struct hmap_node node;      /* In struct pinsched's 'queues' hmap. */
-    ofp_port_t port_no;           /* Port number. */
-    struct list packets;        /* Contains "struct ofpbuf"s. */
+    ofp_port_t port_no;         /* Port number. */
+    struct ovs_list packets;    /* Contains "struct ofpbuf"s. */
     int n;                      /* Number of packets in 'packets'. */
 };
 
@@ -183,7 +183,7 @@ get_token(struct pinsched *ps)
 
 void
 pinsched_send(struct pinsched *ps, ofp_port_t port_no,
-              struct ofpbuf *packet, struct list *txq)
+              struct ofpbuf *packet, struct ovs_list *txq)
 {
     list_init(txq);
     if (!ps) {
@@ -215,7 +215,7 @@ pinsched_send(struct pinsched *ps, ofp_port_t port_no,
 }
 
 void
-pinsched_run(struct pinsched *ps, struct list *txq)
+pinsched_run(struct pinsched *ps, struct ovs_list *txq)
 {
     list_init(txq);
     if (ps) {

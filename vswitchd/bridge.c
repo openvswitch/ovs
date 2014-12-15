@@ -74,7 +74,7 @@ struct iface {
      *
      * They are immutable: they never change between iface_create() and
      * iface_destroy(). */
-    struct list port_elem;      /* Element in struct port's "ifaces" list. */
+    struct ovs_list port_elem;  /* Element in struct port's "ifaces" list. */
     struct hmap_node name_node; /* In struct bridge's "iface_by_name" hmap. */
     struct hmap_node ofp_port_node; /* In struct bridge's "ifaces" hmap. */
     struct port *port;          /* Containing port. */
@@ -105,7 +105,7 @@ struct port {
 
     /* An ordinary bridge port has 1 interface.
      * A bridge port for bonding has at least 2 interfaces. */
-    struct list ifaces;         /* List of "struct iface"s. */
+    struct ovs_list ifaces;    /* List of "struct iface"s. */
 };
 
 struct bridge {

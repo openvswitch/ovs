@@ -48,7 +48,7 @@ struct mac_entry {
 
     /* The following are marked guarded to prevent users from iterating over or
      * accessing a mac_entry without hodling the parent mac_learning rwlock. */
-    struct list lru_node OVS_GUARDED; /* Element in 'lrus' list. */
+    struct ovs_list lru_node OVS_GUARDED; /* Element in 'lrus' list. */
 
     /* Learned port. */
     union {
@@ -74,7 +74,7 @@ static inline bool mac_entry_is_grat_arp_locked(const struct mac_entry *mac)
 /* MAC learning table. */
 struct mac_learning {
     struct hmap table;          /* Learning table. */
-    struct list lrus OVS_GUARDED; /* In-use entries, least recently used at the
+    struct ovs_list lrus OVS_GUARDED; /* In-use entries, least recently used at the
                                      front, most recently used at the back. */
     uint32_t secret;            /* Secret for randomizing hash table. */
     unsigned long *flood_vlans; /* Bitmap of learning disabled VLANs. */

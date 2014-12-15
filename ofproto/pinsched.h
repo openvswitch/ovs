@@ -20,7 +20,7 @@
 #include <stdint.h>
 #include "flow.h"
 
-struct list;
+struct ovs_list;
 struct ofpbuf;
 
 struct pinsched *pinsched_create(int rate_limit, int burst_limit);
@@ -29,8 +29,8 @@ void pinsched_get_limits(const struct pinsched *,
 void pinsched_set_limits(struct pinsched *, int rate_limit, int burst_limit);
 void pinsched_destroy(struct pinsched *);
 void pinsched_send(struct pinsched *, ofp_port_t port_no, struct ofpbuf *,
-                   struct list *txq);
-void pinsched_run(struct pinsched *, struct list *txq);
+                   struct ovs_list *txq);
+void pinsched_run(struct pinsched *, struct ovs_list *txq);
 void pinsched_wait(struct pinsched *);
 
 struct pinsched_stats {

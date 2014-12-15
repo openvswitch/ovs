@@ -27,13 +27,13 @@
 /* Sample list element. */
 struct element {
     int value;
-    struct list node;
+    struct ovs_list node;
 };
 
 /* Puts the 'n' values in 'values' into 'elements', and then puts those
  * elements in order into 'list'. */
 static void
-make_list(struct list *list, struct element elements[],
+make_list(struct ovs_list *list, struct element elements[],
           int values[], size_t n)
 {
     size_t i;
@@ -49,7 +49,7 @@ make_list(struct list *list, struct element elements[],
 /* Verifies that 'list' contains exactly the 'n' values in 'values', in the
  * specified order. */
 static void
-check_list(struct list *list, const int values[], size_t n)
+check_list(struct ovs_list *list, const int values[], size_t n)
 {
     struct element *e;
     size_t i;
@@ -81,7 +81,7 @@ check_list(struct list *list, const int values[], size_t n)
 #if 0
 /* Prints the values in 'list', plus 'name' as a title. */
 static void
-print_list(const char *name, struct list *list)
+print_list(const char *name, struct ovs_list *list)
 {
     struct element *e;
 
@@ -103,7 +103,7 @@ test_list_construction(void)
     for (n = 0; n <= MAX_ELEMS; n++) {
         struct element elements[MAX_ELEMS];
         int values[MAX_ELEMS];
-        struct list list;
+        struct ovs_list list;
 
         make_list(&list, elements, values, n);
         check_list(&list, values, n);
@@ -123,7 +123,7 @@ test_list_for_each_safe(void)
         for (pattern = 0; pattern < 1ul << n; pattern++) {
             struct element elements[MAX_ELEMS];
             int values[MAX_ELEMS];
-            struct list list;
+            struct ovs_list list;
             struct element *e, *next;
             size_t values_idx, n_remaining;
             int i;

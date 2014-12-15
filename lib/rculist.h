@@ -26,7 +26,8 @@
  * To be RCU-friendly, the struct rculist instances must be freed via
  * ovsrcu_postpone().
  *
- * The API is almost the same as for struct list, with the following exeptions:
+ * The API is almost the same as for struct ovs_list, with the following
+ * exeptions:
  *
  * - The 'prev' pointer may not be accessed by the user.
  * - The 'next' pointer should be accessed via rculist_next() by readers, and
@@ -42,7 +43,7 @@
  *   write operation to the list element, hopefully crashing the program if
  *   the list node was freed or re-used too early.
  *
- * The following functions are variations of the struct list functions with
+ * The following functions are variations of the struct ovs_list functions with
  * similar names, but are now restricted to the writer use:
  *
  * - rculist_back_protected()
@@ -57,7 +58,7 @@
 
 /* A non-existing mutex to make it more difficult for an user to accidentally
  * keep using the 'prev' pointer.  This may be helpful when porting code from
- * struct list to rculist. */
+ * struct ovs_list to rculist. */
 extern struct ovs_mutex rculist_fake_mutex;
 
 /* Doubly linked list head or element. */

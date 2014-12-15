@@ -50,8 +50,8 @@ VLOG_DEFINE_THIS_MODULE(rstp);
 
 struct ovs_mutex rstp_mutex = OVS_MUTEX_INITIALIZER;
 
-static struct list all_rstps__ = LIST_INITIALIZER(&all_rstps__);
-static struct list *const all_rstps OVS_GUARDED_BY(rstp_mutex) = &all_rstps__;
+static struct ovs_list all_rstps__ = LIST_INITIALIZER(&all_rstps__);
+static struct ovs_list *const all_rstps OVS_GUARDED_BY(rstp_mutex) = &all_rstps__;
 
 /* Internal use only. */
 static void rstp_set_bridge_address__(struct rstp *, rstp_identifier)

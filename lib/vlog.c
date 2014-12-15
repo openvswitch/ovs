@@ -75,7 +75,7 @@ VLOG_LEVELS
 BUILD_ASSERT_DECL(LOG_LOCAL0 == (16 << 3));
 
 /* The log modules. */
-struct list vlog_modules = LIST_INITIALIZER(&vlog_modules);
+struct ovs_list vlog_modules = LIST_INITIALIZER(&vlog_modules);
 
 /* Protects the 'pattern' in all "struct facility"s, so that a race between
  * changing and reading the pattern does not cause an access to freed

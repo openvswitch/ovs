@@ -789,7 +789,7 @@ struct vsctl_context {
 struct vsctl_bridge {
     struct ovsrec_bridge *br_cfg;
     char *name;
-    struct list ports;          /* Contains "struct vsctl_port"s. */
+    struct ovs_list ports;      /* Contains "struct vsctl_port"s. */
 
     /* VLAN ("fake") bridge support.
      *
@@ -802,14 +802,14 @@ struct vsctl_bridge {
 };
 
 struct vsctl_port {
-    struct list ports_node;     /* In struct vsctl_bridge's 'ports' list. */
-    struct list ifaces;         /* Contains "struct vsctl_iface"s. */
+    struct ovs_list ports_node;  /* In struct vsctl_bridge's 'ports' list. */
+    struct ovs_list ifaces;      /* Contains "struct vsctl_iface"s. */
     struct ovsrec_port *port_cfg;
     struct vsctl_bridge *bridge;
 };
 
 struct vsctl_iface {
-    struct list ifaces_node;     /* In struct vsctl_port's 'ifaces' list. */
+    struct ovs_list ifaces_node; /* In struct vsctl_port's 'ifaces' list. */
     struct ovsrec_interface *iface_cfg;
     struct vsctl_port *port;
 };

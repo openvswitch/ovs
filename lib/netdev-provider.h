@@ -57,7 +57,7 @@ struct netdev {
     int n_rxq;
     int ref_cnt;                        /* Times this devices was opened. */
     struct shash_node *node;            /* Pointer to element in global map. */
-    struct list saved_flags_list; /* Contains "struct netdev_saved_flags". */
+    struct ovs_list saved_flags_list; /* Contains "struct netdev_saved_flags". */
 };
 
 static void

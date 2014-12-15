@@ -42,7 +42,7 @@
 #include "ofp-errors.h"
 #include "util.h"
 
-struct list;
+struct ovs_list;
 
 /* Raw identifiers for OpenFlow messages.
  *
@@ -661,15 +661,15 @@ bool ofpmsg_is_stat_request(const struct ofp_header *);
  * within 64 kB doesn't need any special treatment, so you might as well use
  * the ofpraw_alloc_*() functions.
  *
- * These functions work with a "struct list" of "struct ofpbuf"s, each of
+ * These functions work with a "struct ovs_list" of "struct ofpbuf"s, each of
  * which represents one part of a multipart message. */
-void ofpmp_init(struct list *, const struct ofp_header *request);
-struct ofpbuf *ofpmp_reserve(struct list *, size_t len);
-void *ofpmp_append(struct list *, size_t len);
-void ofpmp_postappend(struct list *, size_t start_ofs);
+void ofpmp_init(struct ovs_list *, const struct ofp_header *request);
+struct ofpbuf *ofpmp_reserve(struct ovs_list *, size_t len);
+void *ofpmp_append(struct ovs_list *, size_t len);
+void ofpmp_postappend(struct ovs_list *, size_t start_ofs);
 
-enum ofp_version ofpmp_version(struct list *);
-enum ofpraw ofpmp_decode_raw(struct list *);
+enum ofp_version ofpmp_version(struct ovs_list *);
+enum ofpraw ofpmp_decode_raw(struct ovs_list *);
 
 /* Decoding multipart replies. */
 uint16_t ofpmp_flags(const struct ofp_header *);

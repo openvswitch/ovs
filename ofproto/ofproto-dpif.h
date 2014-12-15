@@ -134,7 +134,7 @@ bool group_dpif_lookup(struct ofproto_dpif *ofproto, uint32_t group_id,
                        struct group_dpif **group);
 
 void group_dpif_get_buckets(const struct group_dpif *group,
-                            const struct list **buckets);
+                            const struct ovs_list **buckets);
 enum ofp11_group_type group_dpif_get_type(const struct group_dpif *group);
 
 bool ofproto_has_vlan_splinters(const struct ofproto_dpif *);

@@ -49,7 +49,7 @@ mac_table_hash(const struct mac_learning *ml, const uint8_t mac[ETH_ADDR_LEN],
 }
 
 static struct mac_entry *
-mac_entry_from_lru_node(struct list *list)
+mac_entry_from_lru_node(struct ovs_list *list)
 {
     return CONTAINER_OF(list, struct mac_entry, lru_node);
 }

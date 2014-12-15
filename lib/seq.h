@@ -76,7 +76,7 @@
  * e.g.:
  *
  *    struct ovs_mutex mutex;
- *    struct list queue OVS_GUARDED_BY(mutex);
+ *    struct ovs_list queue OVS_GUARDED_BY(mutex);
  *    struct seq nonempty_seq;
  *
  * To add an element to the queue:

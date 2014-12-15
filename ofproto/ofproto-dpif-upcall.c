@@ -94,7 +94,7 @@ struct revalidator {
  *      them.
  */
 struct udpif {
-    struct list list_node;             /* In all_udpifs list. */
+    struct ovs_list list_node;         /* In all_udpifs list. */
 
     struct dpif *dpif;                 /* Datapath handle. */
     struct dpif_backer *backer;        /* Opaque dpif_backer pointer. */
@@ -237,7 +237,7 @@ struct ukey_op {
 };
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-static struct list all_udpifs = LIST_INITIALIZER(&all_udpifs);
+static struct ovs_list all_udpifs = LIST_INITIALIZER(&all_udpifs);
 
 static size_t recv_upcalls(struct handler *);
 static int process_upcall(struct udpif *, struct upcall *,

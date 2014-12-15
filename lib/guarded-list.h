@@ -24,7 +24,7 @@
 
 struct guarded_list {
     struct ovs_mutex mutex;
-    struct list list;
+    struct ovs_list list;
     size_t n;
 };
 
@@ -38,9 +38,9 @@ void guarded_list_destroy(struct guarded_list *);
 
 bool guarded_list_is_empty(const struct guarded_list *);
 
-size_t guarded_list_push_back(struct guarded_list *, struct list *,
+size_t guarded_list_push_back(struct guarded_list *, struct ovs_list *,
                               size_t max);
-struct list *guarded_list_pop_front(struct guarded_list *);
-size_t guarded_list_pop_all(struct guarded_list *, struct list *);
+struct ovs_list *guarded_list_pop_front(struct guarded_list *);
+size_t guarded_list_pop_all(struct guarded_list *, struct ovs_list *);
 
 #endif /* guarded-list.h */
