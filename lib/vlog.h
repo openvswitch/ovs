@@ -116,7 +116,7 @@ struct vlog_rate_limit {
  * messages per minute and a maximum burst size of BURST messages. */
 #define VLOG_RATE_LIMIT_INIT(RATE, BURST)                               \
         {                                                               \
-            TOKEN_BUCKET_INIT(RATE, SAT_MUL(BURST, VLOG_MSG_TOKENS)),   \
+            TOKEN_BUCKET_INIT(RATE, OVS_SAT_MUL(BURST, VLOG_MSG_TOKENS)),\
             0,                              /* first_dropped */         \
             0,                              /* last_dropped */          \
             0,                              /* n_dropped */             \

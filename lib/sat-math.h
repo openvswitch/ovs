@@ -18,6 +18,7 @@
 #define SAT_MATH_H 1
 
 #include <limits.h>
+#include "openvswitch/util.h"
 
 /* Saturating addition: overflow yields UINT_MAX. */
 static inline unsigned int
@@ -33,15 +34,10 @@ sat_sub(unsigned int x, unsigned int y)
     return x >= y ? x - y : 0;
 }
 
-/* Saturating multiplication of "unsigned int"s: overflow yields UINT_MAX. */
-#define SAT_MUL(X, Y)                                                   \
-    ((Y) == 0 ? 0                                                       \
-     : (X) <= UINT_MAX / (Y) ? (unsigned int) (X) * (unsigned int) (Y)  \
-     : UINT_MAX)
 static inline unsigned int
 sat_mul(unsigned int x, unsigned int y)
 {
-    return SAT_MUL(x, y);
+    return OVS_SAT_MUL(x, y);
 }
 
 #endif /* sat-math.h */

@@ -40,6 +40,12 @@ const char *ovs_get_program_version(void);
 #define OVS_STRINGIZE(ARG) OVS_STRINGIZE2(ARG)
 #define OVS_STRINGIZE2(ARG) #ARG
 
+/* Saturating multiplication of "unsigned int"s: overflow yields UINT_MAX. */
+#define OVS_SAT_MUL(X, Y)                                               \
+    ((Y) == 0 ? 0                                                       \
+     : (X) <= UINT_MAX / (Y) ? (unsigned int) (X) * (unsigned int) (Y)  \
+     : UINT_MAX)
+
 #ifdef __cplusplus
 }
 #endif
