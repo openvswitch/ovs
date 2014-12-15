@@ -749,10 +749,10 @@ uint32_t ofpacts_get_meter(const struct ofpact[], size_t ofpacts_len);
 void ofpacts_format(const struct ofpact[], size_t ofpacts_len, struct ds *);
 char *ofpacts_parse_actions(const char *, struct ofpbuf *ofpacts,
                             enum ofputil_protocol *usable_protocols)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 char *ofpacts_parse_instructions(const char *, struct ofpbuf *ofpacts,
                                  enum ofputil_protocol *usable_protocols)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 const char *ofpact_name(enum ofpact_type);
 
 /* Internal use by the helpers below. */

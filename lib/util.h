@@ -77,7 +77,7 @@
 #else
 #define ovs_assert(CONDITION) ((void) (CONDITION))
 #endif
-NO_RETURN void ovs_assert_failure(const char *, const char *, const char *);
+OVS_NO_RETURN void ovs_assert_failure(const char *, const char *, const char *);
 
 /* Casts 'pointer' to 'type' and issues a compiler warning if the cast changes
  * anything other than an outermost "const" or "volatile" qualifier.
@@ -271,11 +271,11 @@ extern "C" {
         ovs_set_program_name(name, OVS_PACKAGE_VERSION)
 
 const char *get_subprogram_name(void);
-void set_subprogram_name(const char *format, ...) PRINTF_FORMAT(1, 2);
+void set_subprogram_name(const char *format, ...) OVS_PRINTF_FORMAT(1, 2);
 
 void ovs_print_version(uint8_t min_ofp, uint8_t max_ofp);
 
-NO_RETURN void out_of_memory(void);
+OVS_NO_RETURN void out_of_memory(void);
 void *xmalloc(size_t) MALLOC_LIKE;
 void *xcalloc(size_t, size_t) MALLOC_LIKE;
 void *xzalloc(size_t) MALLOC_LIKE;
@@ -283,8 +283,8 @@ void *xrealloc(void *, size_t);
 void *xmemdup(const void *, size_t) MALLOC_LIKE;
 char *xmemdup0(const char *, size_t) MALLOC_LIKE;
 char *xstrdup(const char *) MALLOC_LIKE;
-char *xasprintf(const char *format, ...) PRINTF_FORMAT(1, 2) MALLOC_LIKE;
-char *xvasprintf(const char *format, va_list) PRINTF_FORMAT(1, 0) MALLOC_LIKE;
+char *xasprintf(const char *format, ...) OVS_PRINTF_FORMAT(1, 2) MALLOC_LIKE;
+char *xvasprintf(const char *format, va_list) OVS_PRINTF_FORMAT(1, 0) MALLOC_LIKE;
 void *x2nrealloc(void *p, size_t *n, size_t s);
 
 void *xmalloc_cacheline(size_t) MALLOC_LIKE;
@@ -294,17 +294,17 @@ void free_cacheline(void *);
 void ovs_strlcpy(char *dst, const char *src, size_t size);
 void ovs_strzcpy(char *dst, const char *src, size_t size);
 
-NO_RETURN void ovs_abort(int err_no, const char *format, ...)
-    PRINTF_FORMAT(2, 3);
-NO_RETURN void ovs_abort_valist(int err_no, const char *format, va_list)
-    PRINTF_FORMAT(2, 0);
-NO_RETURN void ovs_fatal(int err_no, const char *format, ...)
-    PRINTF_FORMAT(2, 3);
-NO_RETURN void ovs_fatal_valist(int err_no, const char *format, va_list)
-    PRINTF_FORMAT(2, 0);
-void ovs_error(int err_no, const char *format, ...) PRINTF_FORMAT(2, 3);
+OVS_NO_RETURN void ovs_abort(int err_no, const char *format, ...)
+    OVS_PRINTF_FORMAT(2, 3);
+OVS_NO_RETURN void ovs_abort_valist(int err_no, const char *format, va_list)
+    OVS_PRINTF_FORMAT(2, 0);
+OVS_NO_RETURN void ovs_fatal(int err_no, const char *format, ...)
+    OVS_PRINTF_FORMAT(2, 3);
+OVS_NO_RETURN void ovs_fatal_valist(int err_no, const char *format, va_list)
+    OVS_PRINTF_FORMAT(2, 0);
+void ovs_error(int err_no, const char *format, ...) OVS_PRINTF_FORMAT(2, 3);
 void ovs_error_valist(int err_no, const char *format, va_list)
-    PRINTF_FORMAT(2, 0);
+    OVS_PRINTF_FORMAT(2, 0);
 const char *ovs_retval_to_string(int);
 const char *ovs_strerror(int);
 void ovs_hex_dump(FILE *, const void *, size_t, uintptr_t offset, bool ascii);
@@ -314,7 +314,7 @@ bool str_to_long(const char *, int base, long *);
 bool str_to_llong(const char *, int base, long long *);
 bool str_to_uint(const char *, int base, unsigned int *);
 
-bool ovs_scan(const char *s, const char *format, ...) SCANF_FORMAT(2, 3);
+bool ovs_scan(const char *s, const char *format, ...) OVS_SCANF_FORMAT(2, 3);
 bool ovs_scan_len(const char *s, int *n, const char *format, ...);
 
 bool str_to_double(const char *, double *);

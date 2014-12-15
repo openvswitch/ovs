@@ -113,7 +113,7 @@ static int syslog_fd OVS_GUARDED_BY(pattern_rwlock) = -1;
 static void format_log_message(const struct vlog_module *, enum vlog_level,
                                const char *pattern,
                                const char *message, va_list, struct ds *)
-    PRINTF_FORMAT(4, 0);
+    OVS_PRINTF_FORMAT(4, 0);
 
 /* Searches the 'n_names' in 'names'.  Returns the index of a match for
  * 'target', or 'n_names' if no name matches. */

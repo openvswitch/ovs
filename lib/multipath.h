@@ -37,7 +37,7 @@ void multipath_execute(const struct ofpact_multipath *, struct flow *,
                        struct flow_wildcards *);
 
 char *multipath_parse(struct ofpact_multipath *, const char *)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 void multipath_format(const struct ofpact_multipath *, struct ds *);
 
 #endif /* multipath.h */

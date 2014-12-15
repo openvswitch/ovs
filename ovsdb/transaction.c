@@ -84,10 +84,10 @@ struct ovsdb_txn_row {
     unsigned long changed[];    /* Bits set to 1 for columns that changed. */
 };
 
-static struct ovsdb_error * WARN_UNUSED_RESULT
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 delete_garbage_row(struct ovsdb_txn *txn, struct ovsdb_txn_row *r);
 static void ovsdb_txn_row_prefree(struct ovsdb_txn_row *);
-static struct ovsdb_error * WARN_UNUSED_RESULT
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 for_each_txn_row(struct ovsdb_txn *txn,
                       struct ovsdb_error *(*)(struct ovsdb_txn *,
                                               struct ovsdb_txn_row *));
@@ -204,7 +204,7 @@ find_or_make_txn_row(struct ovsdb_txn *txn, const struct ovsdb_table *table,
     return txn_row;
 }
 
-static struct ovsdb_error * WARN_UNUSED_RESULT
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 ovsdb_txn_adjust_atom_refs(struct ovsdb_txn *txn, const struct ovsdb_row *r,
                            const struct ovsdb_column *c,
                            const struct ovsdb_base_type *base,
@@ -244,7 +244,7 @@ ovsdb_txn_adjust_atom_refs(struct ovsdb_txn *txn, const struct ovsdb_row *r,
     return NULL;
 }
 
-static struct ovsdb_error * WARN_UNUSED_RESULT
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 ovsdb_txn_adjust_row_refs(struct ovsdb_txn *txn, const struct ovsdb_row *r,
                           const struct ovsdb_column *column, int delta)
 {
@@ -260,7 +260,7 @@ ovsdb_txn_adjust_row_refs(struct ovsdb_txn *txn, const struct ovsdb_row *r,
     return error;
 }
 
-static struct ovsdb_error * WARN_UNUSED_RESULT
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 update_row_ref_count(struct ovsdb_txn *txn, struct ovsdb_txn_row *r)
 {
     struct ovsdb_table *table = r->table;
@@ -287,7 +287,7 @@ update_row_ref_count(struct ovsdb_txn *txn, struct ovsdb_txn_row *r)
     return NULL;
 }
 
-static struct ovsdb_error * WARN_UNUSED_RESULT
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 check_ref_count(struct ovsdb_txn *txn OVS_UNUSED, struct ovsdb_txn_row *r)
 {
     if (r->new || !r->n_refs) {
@@ -301,7 +301,7 @@ check_ref_count(struct ovsdb_txn *txn OVS_UNUSED, struct ovsdb_txn_row *r)
     }
 }
 
-static struct ovsdb_error * WARN_UNUSED_RESULT
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 delete_row_refs(struct ovsdb_txn *txn, const struct ovsdb_row *row,
                 const struct ovsdb_base_type *base,
                 const union ovsdb_atom *atoms, unsigned int n)
@@ -343,7 +343,7 @@ delete_row_refs(struct ovsdb_txn *txn, const struct ovsdb_row *row,
     return NULL;
 }
 
-static struct ovsdb_error * WARN_UNUSED_RESULT
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 delete_garbage_row(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
 {
     struct shash_node *node;
@@ -378,7 +378,7 @@ delete_garbage_row(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
     return NULL;
 }
 
-static struct ovsdb_error * WARN_UNUSED_RESULT
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 collect_garbage(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
 {
     if (txn_row->new && !txn_row->n_refs) {
@@ -387,7 +387,7 @@ collect_garbage(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
     return NULL;
 }
 
-static struct ovsdb_error * WARN_UNUSED_RESULT
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 update_ref_counts(struct ovsdb_txn *txn)
 {
     struct ovsdb_error *error;
@@ -462,7 +462,7 @@ add_weak_ref(struct ovsdb_txn *txn,
     list_push_back(&src->src_refs, &weak->src_node);
 }
 
-static struct ovsdb_error * WARN_UNUSED_RESULT
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
 {
     struct ovsdb_table *table;
@@ -569,7 +569,7 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
     return NULL;
 }
 
-static struct ovsdb_error * WARN_UNUSED_RESULT
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 determine_changes(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
 {
     struct ovsdb_table *table = txn_row->table;
@@ -603,7 +603,7 @@ determine_changes(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
     return NULL;
 }
 
-static struct ovsdb_error * WARN_UNUSED_RESULT
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 check_max_rows(struct ovsdb_txn *txn)
 {
     struct ovsdb_txn_table *t;
@@ -672,7 +672,7 @@ duplicate_index_row__(const struct ovsdb_column_set *index,
     }
 }
 
-static struct ovsdb_error * WARN_UNUSED_RESULT
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 duplicate_index_row(const struct ovsdb_column_set *index,
                     const struct ovsdb_row *a,
                     const struct ovsdb_row *b)
@@ -711,7 +711,7 @@ duplicate_index_row(const struct ovsdb_column_set *index,
     return error;
 }
 
-static struct ovsdb_error * WARN_UNUSED_RESULT
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 check_index_uniqueness(struct ovsdb_txn *txn OVS_UNUSED,
                        struct ovsdb_txn_row *txn_row)
 {
@@ -1013,7 +1013,7 @@ ovsdb_txn_table_destroy(struct ovsdb_txn_table *txn_table)
  * (Even though 'cb' is not allowed to delete some txn_rows, it can still
  * delete any actual row by clearing a txn_row's 'new' member.)
  */
-static struct ovsdb_error * WARN_UNUSED_RESULT
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 for_each_txn_row(struct ovsdb_txn *txn,
                  struct ovsdb_error *(*cb)(struct ovsdb_txn *,
                                            struct ovsdb_txn_row *))

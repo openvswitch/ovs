@@ -1139,7 +1139,7 @@ compare_ovsdb_jsonrpc_monitor_column(const void *a_, const void *b_)
     return a->column < b->column ? -1 : a->column > b->column;
 }
 
-static struct ovsdb_error * WARN_UNUSED_RESULT
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 ovsdb_jsonrpc_parse_monitor_request(struct ovsdb_jsonrpc_monitor_table *mt,
                                     const struct json *monitor_request,
                                     size_t *allocated_columns)

@@ -53,7 +53,7 @@ ovsdb_mutator_to_string(enum ovsdb_mutator mutator)
     return NULL;
 }
 
-static WARN_UNUSED_RESULT struct ovsdb_error *
+static OVS_WARN_UNUSED_RESULT struct ovsdb_error *
 type_mismatch(const struct ovsdb_mutation *m, const struct json *json)
 {
     struct ovsdb_error *error;
@@ -69,7 +69,7 @@ type_mismatch(const struct ovsdb_mutation *m, const struct json *json)
     return error;
 }
 
-static WARN_UNUSED_RESULT struct ovsdb_error *
+static OVS_WARN_UNUSED_RESULT struct ovsdb_error *
 ovsdb_mutation_from_json(const struct ovsdb_table_schema *ts,
                          const struct json *json,
                          struct ovsdb_symbol_table *symtab,

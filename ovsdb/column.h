@@ -53,7 +53,7 @@ void ovsdb_column_destroy(struct ovsdb_column *);
 struct ovsdb_error *ovsdb_column_from_json(const struct json *,
                                            const char *name,
                                            struct ovsdb_column **)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 struct json *ovsdb_column_to_json(const struct ovsdb_column *);
 
 /* An unordered set of distinct columns. */

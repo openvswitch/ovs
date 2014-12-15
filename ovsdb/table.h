@@ -44,7 +44,7 @@ void ovsdb_table_schema_destroy(struct ovsdb_table_schema *);
 struct ovsdb_error *ovsdb_table_schema_from_json(const struct json *,
                                                  const char *name,
                                                  struct ovsdb_table_schema **)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 struct json *ovsdb_table_schema_to_json(const struct ovsdb_table_schema *,
                                         bool default_is_root);
 

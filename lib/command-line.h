@@ -41,7 +41,7 @@ void proctitle_init(int argc, char **argv);
 #define proctitle_set setproctitle
 #else
 void proctitle_set(const char *, ...)
-    PRINTF_FORMAT(1, 2);
+    OVS_PRINTF_FORMAT(1, 2);
 #endif
 void proctitle_restore(void);
 

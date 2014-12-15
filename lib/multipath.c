@@ -139,7 +139,7 @@ multipath_algorithm(uint32_t hash, enum nx_mp_algorithm algorithm,
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string.*/
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 multipath_parse__(struct ofpact_multipath *mp, const char *s_, char *s)
 {
     char *save_ptr = NULL;
@@ -207,7 +207,7 @@ multipath_parse__(struct ofpact_multipath *mp, const char *s_, char *s)
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 multipath_parse(struct ofpact_multipath *mp, const char *s_)
 {
     char *s = xstrdup(s_);

@@ -39,27 +39,27 @@ enum ofputil_protocol;
 
 char *parse_ofp_str(struct ofputil_flow_mod *, int command, const char *str_,
                     enum ofputil_protocol *usable_protocols)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 
 char *parse_ofp_flow_mod_str(struct ofputil_flow_mod *, const char *string,
                              uint16_t command,
                              enum ofputil_protocol *usable_protocols)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 
 char *parse_ofp_table_mod(struct ofputil_table_mod *,
                           const char *table_id, const char *flow_miss_handling,
                           enum ofputil_protocol *usable_protocols)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 
 char *parse_ofp_flow_mod_file(const char *file_name, uint16_t command,
                               struct ofputil_flow_mod **fms, size_t *n_fms,
                               enum ofputil_protocol *usable_protocols)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 
 char *parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *,
                                        bool aggregate, const char *string,
                                        enum ofputil_protocol *usable_protocols)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 
 char *parse_ofp_exact_flow(struct flow *flow, struct flow *mask, const char *s,
                            const struct simap *portno_names);
@@ -67,31 +67,31 @@ char *parse_ofp_exact_flow(struct flow *flow, struct flow *mask, const char *s,
 char *parse_ofp_meter_mod_str(struct ofputil_meter_mod *, const char *string,
                               int command,
                               enum ofputil_protocol *usable_protocols)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 
 char *parse_flow_monitor_request(struct ofputil_flow_monitor_request *,
                                  const char *,
                                  enum ofputil_protocol *usable_protocols)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 
 char *parse_ofp_group_mod_file(const char *file_name, uint16_t command,
                                struct ofputil_group_mod **gms, size_t *n_gms,
                                enum ofputil_protocol *usable_protocols)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 
 char *parse_ofp_group_mod_str(struct ofputil_group_mod *, uint16_t command,
                               const char *string,
                               enum ofputil_protocol *usable_protocols)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 
 char *str_to_u8(const char *str, const char *name, uint8_t *valuep)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 char *str_to_u16(const char *str, const char *name, uint16_t *valuep)
-    WARN_UNUSED_RESULT;
-char *str_to_u32(const char *str, uint32_t *valuep) WARN_UNUSED_RESULT;
-char *str_to_u64(const char *str, uint64_t *valuep) WARN_UNUSED_RESULT;
-char *str_to_be64(const char *str, ovs_be64 *valuep) WARN_UNUSED_RESULT;
-char *str_to_mac(const char *str, uint8_t mac[ETH_ADDR_LEN]) WARN_UNUSED_RESULT;
-char *str_to_ip(const char *str, ovs_be32 *ip) WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
+char *str_to_u32(const char *str, uint32_t *valuep) OVS_WARN_UNUSED_RESULT;
+char *str_to_u64(const char *str, uint64_t *valuep) OVS_WARN_UNUSED_RESULT;
+char *str_to_be64(const char *str, ovs_be64 *valuep) OVS_WARN_UNUSED_RESULT;
+char *str_to_mac(const char *str, uint8_t mac[ETH_ADDR_LEN]) OVS_WARN_UNUSED_RESULT;
+char *str_to_ip(const char *str, ovs_be32 *ip) OVS_WARN_UNUSED_RESULT;
 
 #endif /* ofp-parse.h */

@@ -105,7 +105,7 @@ const struct ovsdb_type *ovsdb_base_type_get_enum_type(enum ovsdb_atomic_type);
 
 struct ovsdb_error *ovsdb_base_type_from_json(struct ovsdb_base_type *,
                                               const struct json *)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 struct json *ovsdb_base_type_to_json(const struct ovsdb_base_type *);
 
 static inline bool ovsdb_base_type_is_ref(const struct ovsdb_base_type *);
@@ -162,7 +162,7 @@ char *ovsdb_type_to_english(const struct ovsdb_type *);
 
 struct ovsdb_error *ovsdb_type_from_json(struct ovsdb_type *,
                                          const struct json *)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 struct json *ovsdb_type_to_json(const struct ovsdb_type *);
 
 /* Inline function implementations. */

@@ -43,9 +43,9 @@ struct nx_action_reg_move;
 
 void mf_format_subfield(const struct mf_subfield *, struct ds *);
 char *mf_parse_subfield__(struct mf_subfield *sf, const char **s)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 char *mf_parse_subfield(struct mf_subfield *, const char *s)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 
 enum ofperr nx_pull_match(struct ofpbuf *, unsigned int match_len,
                           struct match *,
@@ -87,7 +87,7 @@ int oxm_match_from_string(const char *, struct ofpbuf *);
 void nx_format_field_name(enum mf_field_id, enum ofp_version, struct ds *);
 
 char *nxm_parse_reg_move(struct ofpact_reg_move *, const char *)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 
 void nxm_format_reg_move(const struct ofpact_reg_move *, struct ds *);
 
@@ -100,7 +100,7 @@ void nxm_reg_load(const struct mf_subfield *, uint64_t src_data,
                   struct flow *, struct flow_wildcards *);
 
 char *nxm_parse_stack_action(struct ofpact_stack *, const char *)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 
 void nxm_format_stack_push(const struct ofpact_stack *, struct ds *);
 void nxm_format_stack_pop(const struct ofpact_stack *, struct ds *);

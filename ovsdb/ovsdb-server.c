@@ -97,7 +97,7 @@ static void close_db(struct db *db);
 static void parse_options(int *argc, char **argvp[],
                           struct sset *remotes, char **unixctl_pathp,
                           char **run_command);
-NO_RETURN static void usage(void);
+OVS_NO_RETURN static void usage(void);
 
 static char *reconfigure_remotes(struct ovsdb_jsonrpc_server *,
                                  const struct shash *all_dbs,
@@ -428,7 +428,7 @@ find_db(const struct shash *all_dbs, const char *db_name)
     return NULL;
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_db_column__(const struct shash *all_dbs,
                   const char *name_, char *name,
                   const struct db **dbp,
@@ -482,7 +482,7 @@ parse_db_column__(const struct shash *all_dbs,
 
 /* Returns NULL if successful, otherwise a malloc()'d string describing the
  * error. */
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_db_column(const struct shash *all_dbs,
                 const char *name_,
                 const struct db **dbp,
@@ -498,7 +498,7 @@ parse_db_column(const struct shash *all_dbs,
 
 /* Returns NULL if successful, otherwise a malloc()'d string describing the
  * error. */
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_db_string_column(const struct shash *all_dbs,
                        const char *name,
                        const struct db **dbp,

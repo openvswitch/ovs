@@ -328,7 +328,7 @@ static enum ofperr ofpact_pull_raw(struct ofpbuf *, enum ofp_version,
 static void *ofpact_put_raw(struct ofpbuf *, enum ofp_version,
                             enum ofp_raw_action_type, uint64_t arg);
 
-static char *WARN_UNUSED_RESULT ofpacts_parse(
+static char *OVS_WARN_UNUSED_RESULT ofpacts_parse(
     char *str, struct ofpbuf *ofpacts, enum ofputil_protocol *usable_protocols,
     bool allow_instructions);
 
@@ -411,7 +411,7 @@ encode_OUTPUT(const struct ofpact_output *output,
     }
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_OUTPUT(const char *arg, struct ofpbuf *ofpacts,
              enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -466,7 +466,7 @@ encode_GROUP(const struct ofpact_group *group,
     }
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_GROUP(char *arg, struct ofpbuf *ofpacts,
                     enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -529,7 +529,7 @@ encode_CONTROLLER(const struct ofpact_controller *controller,
     nac->reason = controller->reason;
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_CONTROLLER(char *arg, struct ofpbuf *ofpacts,
                   enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -658,7 +658,7 @@ encode_ENQUEUE(const struct ofpact_enqueue *enqueue,
     }
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_ENQUEUE(char *arg, struct ofpbuf *ofpacts,
               enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -815,7 +815,7 @@ encode_OUTPUT_REG(const struct ofpact_output_reg *output_reg,
     }
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_OUTPUT_REG(const char *arg, struct ofpbuf *ofpacts,
                  enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -1019,14 +1019,14 @@ encode_BUNDLE(const struct ofpact_bundle *bundle,
     }
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_BUNDLE(const char *arg, struct ofpbuf *ofpacts,
              enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
     return bundle_parse(arg, ofpacts);
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_bundle_load(const char *arg, struct ofpbuf *ofpacts)
 {
     return bundle_parse_load(arg, ofpacts);
@@ -1089,7 +1089,7 @@ encode_SET_VLAN_VID(const struct ofpact_vlan_vid *vlan_vid,
     }
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_set_vlan_vid(char *arg, struct ofpbuf *ofpacts, bool push_vlan_if_needed)
 {
     struct ofpact_vlan_vid *vlan_vid;
@@ -1110,7 +1110,7 @@ parse_set_vlan_vid(char *arg, struct ofpbuf *ofpacts, bool push_vlan_if_needed)
     return NULL;
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_SET_VLAN_VID(char *arg, struct ofpbuf *ofpacts,
                    enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -1175,7 +1175,7 @@ encode_SET_VLAN_PCP(const struct ofpact_vlan_pcp *vlan_pcp,
     }
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_set_vlan_pcp(char *arg, struct ofpbuf *ofpacts, bool push_vlan_if_needed)
 {
     struct ofpact_vlan_pcp *vlan_pcp;
@@ -1196,7 +1196,7 @@ parse_set_vlan_pcp(char *arg, struct ofpbuf *ofpacts, bool push_vlan_if_needed)
     return NULL;
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_SET_VLAN_PCP(char *arg, struct ofpbuf *ofpacts,
                    enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -1238,7 +1238,7 @@ encode_STRIP_VLAN(const struct ofpact_null *null OVS_UNUSED,
     }
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_STRIP_VLAN(char *arg OVS_UNUSED, struct ofpbuf *ofpacts,
                  enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -1246,7 +1246,7 @@ parse_STRIP_VLAN(char *arg OVS_UNUSED, struct ofpbuf *ofpacts,
     return NULL;
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_pop_vlan(struct ofpbuf *ofpacts)
 {
     ofpact_put_STRIP_VLAN(ofpacts)->ofpact.raw = OFPAT_RAW11_POP_VLAN;
@@ -1287,7 +1287,7 @@ encode_PUSH_VLAN(const struct ofpact_null *null OVS_UNUSED,
     }
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_PUSH_VLAN(char *arg, struct ofpbuf *ofpacts,
                 enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -1378,14 +1378,14 @@ encode_SET_ETH_DST(const struct ofpact_mac *mac,
 
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_SET_ETH_SRC(char *arg, struct ofpbuf *ofpacts,
                  enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
     return str_to_mac(arg, ofpact_put_SET_ETH_SRC(ofpacts)->mac);
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_SET_ETH_DST(char *arg, struct ofpbuf *ofpacts,
                  enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -1450,14 +1450,14 @@ encode_SET_IPV4_DST(const struct ofpact_ipv4 *ipv4,
                          out);
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_SET_IPV4_SRC(char *arg, struct ofpbuf *ofpacts,
                    enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
     return str_to_ip(arg, &ofpact_put_SET_IPV4_SRC(ofpacts)->ipv4);
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_SET_IPV4_DST(char *arg, struct ofpbuf *ofpacts,
                    enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -1501,7 +1501,7 @@ encode_SET_IP_DSCP(const struct ofpact_dscp *dscp,
     }
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_SET_IP_DSCP(char *arg, struct ofpbuf *ofpacts,
                  enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -1553,7 +1553,7 @@ encode_SET_IP_ECN(const struct ofpact_ecn *ip_ecn,
     }
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_SET_IP_ECN(char *arg, struct ofpbuf *ofpacts,
                  enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -1598,7 +1598,7 @@ encode_SET_IP_TTL(const struct ofpact_ip_ttl *ttl,
     }
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_SET_IP_TTL(char *arg, struct ofpbuf *ofpacts,
                   enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -1677,7 +1677,7 @@ encode_SET_L4_DST_PORT(const struct ofpact_l4_port *l4_port,
     encode_SET_L4_port(l4_port, ofp_version, OFPAT_RAW_SET_TP_DST, field, out);
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_SET_L4_SRC_PORT(char *arg, struct ofpbuf *ofpacts,
                       enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -1685,7 +1685,7 @@ parse_SET_L4_SRC_PORT(char *arg, struct ofpbuf *ofpacts,
                       &ofpact_put_SET_L4_SRC_PORT(ofpacts)->port);
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_SET_L4_DST_PORT(char *arg, struct ofpbuf *ofpacts,
                       enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -1972,7 +1972,7 @@ encode_REG_MOVE(const struct ofpact_reg_move *move,
     pad_ofpat(out, start_ofs);
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_REG_MOVE(const char *arg, struct ofpbuf *ofpacts,
                enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -2449,7 +2449,7 @@ encode_SET_FIELD(const struct ofpact_set_field *sf,
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 set_field_parse__(char *arg, struct ofpbuf *ofpacts,
                   enum ofputil_protocol *usable_protocols)
 {
@@ -2497,7 +2497,7 @@ set_field_parse__(char *arg, struct ofpbuf *ofpacts,
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_SET_FIELD(const char *arg, struct ofpbuf *ofpacts,
                 enum ofputil_protocol *usable_protocols)
 {
@@ -2507,7 +2507,7 @@ parse_SET_FIELD(const char *arg, struct ofpbuf *ofpacts,
     return error;
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_reg_load(char *arg, struct ofpbuf *ofpacts)
 {
     struct ofpact_set_field *sf = ofpact_put_reg_load(ofpacts);
@@ -2663,14 +2663,14 @@ encode_STACK_POP(const struct ofpact_stack *stack,
     encode_STACK_op(stack, put_NXAST_STACK_POP(out));
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_STACK_PUSH(char *arg, struct ofpbuf *ofpacts,
                  enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
     return nxm_parse_stack_action(ofpact_put_STACK_PUSH(ofpacts), arg);
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_STACK_POP(char *arg, struct ofpbuf *ofpacts,
                 enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -2805,7 +2805,7 @@ parse_noargs_dec_ttl(struct ofpbuf *ofpacts)
     ofpact_update_len(ofpacts, &ids->ofpact);
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_DEC_TTL(char *arg, struct ofpbuf *ofpacts,
               enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -2874,7 +2874,7 @@ encode_SET_MPLS_LABEL(const struct ofpact_mpls_label *label,
     }
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_SET_MPLS_LABEL(char *arg, struct ofpbuf *ofpacts,
                      enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -2913,7 +2913,7 @@ encode_SET_MPLS_TC(const struct ofpact_mpls_tc *tc,
     }
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_SET_MPLS_TC(char *arg, struct ofpbuf *ofpacts,
                   enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -2954,7 +2954,7 @@ encode_SET_MPLS_TTL(const struct ofpact_mpls_ttl *ttl,
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_SET_MPLS_TTL(char *arg, struct ofpbuf *ofpacts,
                    enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -2990,7 +2990,7 @@ encode_DEC_MPLS_TTL(const struct ofpact_null *null OVS_UNUSED,
     put_OFPAT_DEC_MPLS_TTL(out, ofp_version);
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_DEC_MPLS_TTL(char *arg OVS_UNUSED, struct ofpbuf *ofpacts,
                    enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -3027,7 +3027,7 @@ encode_PUSH_MPLS(const struct ofpact_push_mpls *push_mpls,
     put_OFPAT_PUSH_MPLS(out, ofp_version, push_mpls->ethertype);
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_PUSH_MPLS(char *arg, struct ofpbuf *ofpacts,
                 enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -3063,7 +3063,7 @@ encode_POP_MPLS(const struct ofpact_pop_mpls *pop_mpls,
     put_OFPAT_POP_MPLS(out, ofp_version, pop_mpls->ethertype);
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_POP_MPLS(char *arg, struct ofpbuf *ofpacts,
                     enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -3121,7 +3121,7 @@ encode_SET_TUNNEL(const struct ofpact_tunnel *tunnel,
     }
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_set_tunnel(char *arg, struct ofpbuf *ofpacts,
                  enum ofp_raw_action_type raw)
 {
@@ -3132,7 +3132,7 @@ parse_set_tunnel(char *arg, struct ofpbuf *ofpacts,
     return str_to_u64(arg, &tunnel->tun_id);
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_SET_TUNNEL(char *arg, struct ofpbuf *ofpacts,
                  enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -3164,7 +3164,7 @@ encode_SET_QUEUE(const struct ofpact_queue *queue,
     put_OFPAT_SET_QUEUE(out, ofp_version, queue->queue_id);
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_SET_QUEUE(char *arg, struct ofpbuf *ofpacts,
                 enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -3193,7 +3193,7 @@ encode_POP_QUEUE(const struct ofpact_null *null OVS_UNUSED,
     put_NXAST_POP_QUEUE(out);
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_POP_QUEUE(const char *arg OVS_UNUSED, struct ofpbuf *ofpacts,
                 enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -3263,7 +3263,7 @@ encode_FIN_TIMEOUT(const struct ofpact_fin_timeout *fin_timeout,
     naft->fin_hard_timeout = htons(fin_timeout->fin_hard_timeout);
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_FIN_TIMEOUT(char *arg, struct ofpbuf *ofpacts,
                   enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -3405,7 +3405,7 @@ encode_RESUBMIT(const struct ofpact_resubmit *resubmit,
     }
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_RESUBMIT(char *arg, struct ofpbuf *ofpacts,
                enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -3885,7 +3885,7 @@ encode_LEARN(const struct ofpact_learn *learn,
     pad_ofpat(out, start_ofs);
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_LEARN(char *arg, struct ofpbuf *ofpacts,
             enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -4005,7 +4005,7 @@ encode_MULTIPATH(const struct ofpact_multipath *mp,
     nam->dst = htonl(mf_nxm_header(mp->dst.field->id));
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_MULTIPATH(const char *arg, struct ofpbuf *ofpacts,
                 enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -4074,7 +4074,7 @@ encode_NOTE(const struct ofpact_note *note,
     nan->len = htons(ofpbuf_size(out) - start_ofs);
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_NOTE(const char *arg, struct ofpbuf *ofpacts,
            enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -4137,7 +4137,7 @@ encode_EXIT(const struct ofpact_null *null OVS_UNUSED,
     put_NXAST_EXIT(out);
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_EXIT(char *arg OVS_UNUSED, struct ofpbuf *ofpacts,
            enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -4212,7 +4212,7 @@ encode_SAMPLE(const struct ofpact_sample *sample,
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_SAMPLE(char *arg, struct ofpbuf *ofpacts,
              enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -4267,7 +4267,7 @@ encode_METER(const struct ofpact_meter *meter,
     }
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_METER(char *arg, struct ofpbuf *ofpacts,
             enum ofputil_protocol *usable_protocols)
 {
@@ -4293,7 +4293,7 @@ encode_CLEAR_ACTIONS(const struct ofpact_null *null OVS_UNUSED,
     }
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_CLEAR_ACTIONS(char *arg OVS_UNUSED, struct ofpbuf *ofpacts,
                     enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -4324,7 +4324,7 @@ encode_WRITE_ACTIONS(const struct ofpact_nest *actions,
     }
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_WRITE_ACTIONS(char *arg, struct ofpbuf *ofpacts,
                     enum ofputil_protocol *usable_protocols)
 {
@@ -4418,7 +4418,7 @@ encode_WRITE_METADATA(const struct ofpact_metadata *metadata,
     }
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_WRITE_METADATA(char *arg, struct ofpbuf *ofpacts,
                      enum ofputil_protocol *usable_protocols)
 {
@@ -4473,7 +4473,7 @@ encode_GOTO_TABLE(const struct ofpact_goto_table *goto_table,
     }
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_GOTO_TABLE(char *arg, struct ofpbuf *ofpacts,
                  enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
@@ -6065,7 +6065,7 @@ ofpact_pad(struct ofpbuf *ofpacts)
 
 
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 ofpact_parse(enum ofpact_type type, char *value, struct ofpbuf *ofpacts,
              enum ofputil_protocol *usable_protocols)
 {
@@ -6098,7 +6098,7 @@ ofpact_type_from_name(const char *name, enum ofpact_type *type)
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 ofpacts_parse__(char *str, struct ofpbuf *ofpacts,
                 enum ofputil_protocol *usable_protocols,
                 bool allow_instructions)
@@ -6183,7 +6183,7 @@ ofpacts_parse__(char *str, struct ofpbuf *ofpacts,
     return NULL;
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 ofpacts_parse(char *str, struct ofpbuf *ofpacts,
               enum ofputil_protocol *usable_protocols, bool allow_instructions)
 {
@@ -6196,7 +6196,7 @@ ofpacts_parse(char *str, struct ofpbuf *ofpacts,
     return error;
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 ofpacts_parse_copy(const char *s_, struct ofpbuf *ofpacts,
                    enum ofputil_protocol *usable_protocols,
                    bool allow_instructions)
@@ -6217,7 +6217,7 @@ ofpacts_parse_copy(const char *s_, struct ofpbuf *ofpacts,
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 ofpacts_parse_actions(const char *s, struct ofpbuf *ofpacts,
                       enum ofputil_protocol *usable_protocols)
 {
@@ -6229,7 +6229,7 @@ ofpacts_parse_actions(const char *s, struct ofpbuf *ofpacts,
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 ofpacts_parse_instructions(const char *s, struct ofpbuf *ofpacts,
                            enum ofputil_protocol *usable_protocols)
 {

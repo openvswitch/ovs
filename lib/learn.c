@@ -186,7 +186,7 @@ learn_mask(const struct ofpact_learn *learn, struct flow_wildcards *wc)
 
 /* Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 learn_parse_load_immediate(const char *s, struct ofpact_learn_spec *spec)
 {
     const char *full_s = s;
@@ -245,7 +245,7 @@ learn_parse_load_immediate(const char *s, struct ofpact_learn_spec *spec)
 
 /* Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 learn_parse_spec(const char *orig, char *name, char *value,
                  struct ofpact_learn_spec *spec)
 {
@@ -338,7 +338,7 @@ learn_parse_spec(const char *orig, char *name, char *value,
 
 /* Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 learn_parse__(char *orig, char *arg, struct ofpbuf *ofpacts)
 {
     struct ofpact_learn *learn;
@@ -413,7 +413,7 @@ learn_parse__(char *orig, char *arg, struct ofpbuf *ofpacts)
  * the action's arguments.
  *
  * Modifies 'arg'. */
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 learn_parse(char *arg, struct ofpbuf *ofpacts)
 {
     char *orig = xstrdup(arg);

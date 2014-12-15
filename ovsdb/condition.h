@@ -44,7 +44,7 @@ enum ovsdb_function {
 
 struct ovsdb_error *ovsdb_function_from_string(const char *,
                                                enum ovsdb_function *)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 const char *ovsdb_function_to_string(enum ovsdb_function);
 
 struct ovsdb_clause {
@@ -63,7 +63,7 @@ struct ovsdb_condition {
 struct ovsdb_error *ovsdb_condition_from_json(
     const struct ovsdb_table_schema *,
     const struct json *, struct ovsdb_symbol_table *,
-    struct ovsdb_condition *) WARN_UNUSED_RESULT;
+    struct ovsdb_condition *) OVS_WARN_UNUSED_RESULT;
 struct json *ovsdb_condition_to_json(const struct ovsdb_condition *);
 void ovsdb_condition_destroy(struct ovsdb_condition *);
 bool ovsdb_condition_evaluate(const struct ovsdb_row *,

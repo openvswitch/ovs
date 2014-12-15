@@ -26,22 +26,22 @@ struct ovsdb_schema;
 
 struct ovsdb_error *ovsdb_file_open(const char *file_name, bool read_only,
                                     struct ovsdb **, struct ovsdb_file **)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 
 struct ovsdb_error *ovsdb_file_open_as_schema(const char *file_name,
                                               const struct ovsdb_schema *,
                                               struct ovsdb **)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 
 struct ovsdb_error *ovsdb_file_save_copy(const char *file_name, int locking,
                                          const char *comment,
                                          const struct ovsdb *)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 
 struct ovsdb_error *ovsdb_file_compact(struct ovsdb_file *);
 
 struct ovsdb_error *ovsdb_file_read_schema(const char *file_name,
                                            struct ovsdb_schema **)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 
 #endif /* ovsdb/file.h */

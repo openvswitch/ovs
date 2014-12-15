@@ -41,7 +41,7 @@ void table_set_caption(struct table *, char *caption);
 void table_set_timestamp(struct table *, bool timestamp);
 
 void table_add_column(struct table *, const char *heading, ...)
-    PRINTF_FORMAT(2, 3);
+    OVS_PRINTF_FORMAT(2, 3);
 void table_add_row(struct table *);
 
 /* Table cells. */

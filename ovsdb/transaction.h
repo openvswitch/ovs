@@ -27,7 +27,7 @@ struct uuid;
 struct ovsdb_txn *ovsdb_txn_create(struct ovsdb *);
 void ovsdb_txn_abort(struct ovsdb_txn *);
 struct ovsdb_error *ovsdb_txn_commit(struct ovsdb_txn *, bool durable)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 
 struct ovsdb_row *ovsdb_txn_row_modify(struct ovsdb_txn *,
                                        const struct ovsdb_row *);

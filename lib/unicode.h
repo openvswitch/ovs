@@ -53,6 +53,6 @@ uc_is_surrogate(int c)
 int utf16_decode_surrogate_pair(int leading, int trailing);
 
 size_t utf8_length(const char *);
-char *utf8_validate(const char *, size_t *lengthp) WARN_UNUSED_RESULT;
+char *utf8_validate(const char *, size_t *lengthp) OVS_WARN_UNUSED_RESULT;
 
 #endif /* unicode.h */

@@ -4474,7 +4474,7 @@ trace_report(struct xlate_in *xin, const char *s, int recurse)
  *
  * On success, initializes '*ofprotop' and 'flow' and returns NULL.  On failure
  * returns a nonnull malloced error message. */
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_flow_and_packet(int argc, const char *argv[],
                       struct ofproto_dpif **ofprotop, struct flow *flow,
                       struct ofpbuf **packetp)

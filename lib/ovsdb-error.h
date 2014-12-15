@@ -21,25 +21,25 @@
 struct json;
 
 struct ovsdb_error *ovsdb_error(const char *tag, const char *details, ...)
-    PRINTF_FORMAT(2, 3)
-    WARN_UNUSED_RESULT;
+    OVS_PRINTF_FORMAT(2, 3)
+    OVS_WARN_UNUSED_RESULT;
 struct ovsdb_error *ovsdb_io_error(int error, const char *details, ...)
-    PRINTF_FORMAT(2, 3)
-    WARN_UNUSED_RESULT;
+    OVS_PRINTF_FORMAT(2, 3)
+    OVS_WARN_UNUSED_RESULT;
 struct ovsdb_error *ovsdb_syntax_error(const struct json *, const char *tag,
                                        const char *details, ...)
-    PRINTF_FORMAT(3, 4)
-    WARN_UNUSED_RESULT;
+    OVS_PRINTF_FORMAT(3, 4)
+    OVS_WARN_UNUSED_RESULT;
 
 struct ovsdb_error *ovsdb_wrap_error(struct ovsdb_error *error,
                                      const char *details, ...)
-    PRINTF_FORMAT(2, 3);
+    OVS_PRINTF_FORMAT(2, 3);
 
 struct ovsdb_error *ovsdb_internal_error(struct ovsdb_error *error,
                                          const char *file, int line,
                                          const char *details, ...)
-    PRINTF_FORMAT(4, 5)
-    WARN_UNUSED_RESULT;
+    OVS_PRINTF_FORMAT(4, 5)
+    OVS_WARN_UNUSED_RESULT;
 
 /* Returns a pointer to an ovsdb_error that represents an internal error for
  * the current file name and line number with MSG as the associated message.
@@ -57,7 +57,7 @@ struct ovsdb_error *ovsdb_internal_error(struct ovsdb_error *error,
 
 void ovsdb_error_destroy(struct ovsdb_error *);
 struct ovsdb_error *ovsdb_error_clone(const struct ovsdb_error *)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 
 char *ovsdb_error_to_string(const struct ovsdb_error *);
 struct json *ovsdb_error_to_json(const struct ovsdb_error *);

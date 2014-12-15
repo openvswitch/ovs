@@ -106,7 +106,7 @@ static size_t n_criteria, allocated_criteria;
 
 static const struct command *get_all_commands(void);
 
-NO_RETURN static void usage(void);
+OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[]);
 
 static bool recv_flow_stats_reply(struct vconn *, ovs_be32 send_xid,
@@ -395,7 +395,7 @@ ofctl_exit(struct unixctl_conn *conn, int argc OVS_UNUSED,
 }
 
 static void run(int retval, const char *message, ...)
-    PRINTF_FORMAT(2, 3);
+    OVS_PRINTF_FORMAT(2, 3);
 
 static void
 run(int retval, const char *message, ...)

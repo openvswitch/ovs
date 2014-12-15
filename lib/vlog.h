@@ -127,7 +127,7 @@ struct vlog_rate_limit {
 enum vlog_level vlog_get_level(const struct vlog_module *, enum vlog_facility);
 void vlog_set_levels(struct vlog_module *,
                      enum vlog_facility, enum vlog_level);
-char *vlog_set_levels_from_string(const char *) WARN_UNUSED_RESULT;
+char *vlog_set_levels_from_string(const char *) OVS_WARN_UNUSED_RESULT;
 void vlog_set_levels_from_string_assert(const char *);
 char *vlog_get_levels(void);
 bool vlog_is_enabled(const struct vlog_module *, enum vlog_level);
@@ -149,26 +149,26 @@ void vlog_enable_async(void);
 
 /* Functions for actual logging. */
 void vlog(const struct vlog_module *, enum vlog_level, const char *format, ...)
-    PRINTF_FORMAT (3, 4);
+    OVS_PRINTF_FORMAT (3, 4);
 void vlog_valist(const struct vlog_module *, enum vlog_level,
                  const char *, va_list)
-    PRINTF_FORMAT (3, 0);
+    OVS_PRINTF_FORMAT (3, 0);
 
-NO_RETURN void vlog_fatal(const struct vlog_module *, const char *format, ...)
-    PRINTF_FORMAT (2, 3);
-NO_RETURN void vlog_fatal_valist(const struct vlog_module *,
+OVS_NO_RETURN void vlog_fatal(const struct vlog_module *, const char *format, ...)
+    OVS_PRINTF_FORMAT (2, 3);
+OVS_NO_RETURN void vlog_fatal_valist(const struct vlog_module *,
                                  const char *format, va_list)
-    PRINTF_FORMAT (2, 0);
+    OVS_PRINTF_FORMAT (2, 0);
 
-NO_RETURN void vlog_abort(const struct vlog_module *, const char *format, ...)
-    PRINTF_FORMAT (2, 3);
-NO_RETURN void vlog_abort_valist(const struct vlog_module *,
+OVS_NO_RETURN void vlog_abort(const struct vlog_module *, const char *format, ...)
+    OVS_PRINTF_FORMAT (2, 3);
+OVS_NO_RETURN void vlog_abort_valist(const struct vlog_module *,
                                  const char *format, va_list)
-    PRINTF_FORMAT (2, 0);
+    OVS_PRINTF_FORMAT (2, 0);
 
 void vlog_rate_limit(const struct vlog_module *, enum vlog_level,
                      struct vlog_rate_limit *, const char *, ...)
-    PRINTF_FORMAT (4, 5);
+    OVS_PRINTF_FORMAT (4, 5);
 
 /* Creates and initializes a global instance of a module named MODULE, and
  * defines a static variable named THIS_MODULE that points to it, for use with

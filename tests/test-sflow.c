@@ -37,7 +37,7 @@
 #include "util.h"
 #include "vlog.h"
 
-NO_RETURN static void usage(void);
+OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[]);
 
 static unixctl_cb_func test_sflow_exit;

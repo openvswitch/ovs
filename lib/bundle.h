@@ -44,9 +44,9 @@ ofp_port_t bundle_execute(const struct ofpact_bundle *, const struct flow *,
                         void *aux);
 enum ofperr bundle_check(const struct ofpact_bundle *, ofp_port_t max_ports,
                          const struct flow *);
-char *bundle_parse(const char *, struct ofpbuf *ofpacts) WARN_UNUSED_RESULT;
+char *bundle_parse(const char *, struct ofpbuf *ofpacts) OVS_WARN_UNUSED_RESULT;
 char *bundle_parse_load(const char *, struct ofpbuf *ofpacts)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 void bundle_format(const struct ofpact_bundle *, struct ds *);
 
 #endif /* bundle.h */

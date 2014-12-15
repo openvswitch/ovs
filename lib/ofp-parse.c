@@ -46,7 +46,7 @@
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 str_to_u8(const char *str, const char *name, uint8_t *valuep)
 {
     int value;
@@ -64,7 +64,7 @@ str_to_u8(const char *str, const char *name, uint8_t *valuep)
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 str_to_u16(const char *str, const char *name, uint16_t *valuep)
 {
     int value;
@@ -80,7 +80,7 @@ str_to_u16(const char *str, const char *name, uint16_t *valuep)
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 str_to_u32(const char *str, uint32_t *valuep)
 {
     char *tail;
@@ -103,7 +103,7 @@ str_to_u32(const char *str, uint32_t *valuep)
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 str_to_u64(const char *str, uint64_t *valuep)
 {
     char *tail;
@@ -127,7 +127,7 @@ str_to_u64(const char *str, uint64_t *valuep)
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 str_to_be64(const char *str, ovs_be64 *valuep)
 {
     uint64_t value = 0;
@@ -144,7 +144,7 @@ str_to_be64(const char *str, ovs_be64 *valuep)
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 str_to_mac(const char *str, uint8_t mac[ETH_ADDR_LEN])
 {
     if (!ovs_scan(str, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))) {
@@ -157,7 +157,7 @@ str_to_mac(const char *str, uint8_t mac[ETH_ADDR_LEN])
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 str_to_ip(const char *str, ovs_be32 *ip)
 {
     struct in_addr in_addr;
@@ -213,7 +213,7 @@ parse_protocol(const char *name, const struct protocol **p_out)
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_field(const struct mf_field *mf, const char *s, struct match *match,
             enum ofputil_protocol *usable_protocols)
 {
@@ -241,7 +241,7 @@ extract_actions(char *s)
 }
 
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
                 enum ofputil_protocol *usable_protocols)
 {
@@ -489,7 +489,7 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
               enum ofputil_protocol *usable_protocols)
 {
@@ -506,7 +506,7 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
     return error;
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_ofp_meter_mod_str__(struct ofputil_meter_mod *mm, char *string,
                           struct ofpbuf *bands, int command,
                           enum ofputil_protocol *usable_protocols)
@@ -710,7 +710,7 @@ parse_ofp_meter_mod_str__(struct ofputil_meter_mod *mm, char *string,
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 parse_ofp_meter_mod_str(struct ofputil_meter_mod *mm, const char *str_,
                         int command, enum ofputil_protocol *usable_protocols)
 {
@@ -730,7 +730,7 @@ parse_ofp_meter_mod_str(struct ofputil_meter_mod *mm, const char *str_,
     return error;
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_flow_monitor_request__(struct ofputil_flow_monitor_request *fmr,
                              const char *str_, char *string,
                              enum ofputil_protocol *usable_protocols)
@@ -804,7 +804,7 @@ parse_flow_monitor_request__(struct ofputil_flow_monitor_request *fmr,
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 parse_flow_monitor_request(struct ofputil_flow_monitor_request *fmr,
                            const char *str_,
                            enum ofputil_protocol *usable_protocols)
@@ -821,7 +821,7 @@ parse_flow_monitor_request(struct ofputil_flow_monitor_request *fmr,
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 parse_ofp_flow_mod_str(struct ofputil_flow_mod *fm, const char *string,
                        uint16_t command,
                        enum ofputil_protocol *usable_protocols)
@@ -844,7 +844,7 @@ parse_ofp_flow_mod_str(struct ofputil_flow_mod *fm, const char *string,
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 parse_ofp_table_mod(struct ofputil_table_mod *tm, const char *table_id,
                     const char *flow_miss_handling,
                     enum ofputil_protocol *usable_protocols)
@@ -886,7 +886,7 @@ parse_ofp_table_mod(struct ofputil_table_mod *tm, const char *table_id,
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 parse_ofp_flow_mod_file(const char *file_name, uint16_t command,
                         struct ofputil_flow_mod **fms, size_t *n_fms,
                         enum ofputil_protocol *usable_protocols)
@@ -947,7 +947,7 @@ parse_ofp_flow_mod_file(const char *file_name, uint16_t command,
     return NULL;
 }
 
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *fsr,
                                  bool aggregate, const char *string,
                                  enum ofputil_protocol *usable_protocols)
@@ -1087,7 +1087,7 @@ exit:
     return error;
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_bucket_str(struct ofputil_bucket *bucket, char *str_,
                   enum ofputil_protocol *usable_protocols)
 {
@@ -1158,7 +1158,7 @@ parse_bucket_str(struct ofputil_bucket *bucket, char *str_,
     return NULL;
 }
 
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
                           char *string,
                           enum ofputil_protocol *usable_protocols)
@@ -1370,7 +1370,7 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
     return error;
 }
 
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 parse_ofp_group_mod_str(struct ofputil_group_mod *gm, uint16_t command,
                         const char *str_,
                         enum ofputil_protocol *usable_protocols)
@@ -1386,7 +1386,7 @@ parse_ofp_group_mod_str(struct ofputil_group_mod *gm, uint16_t command,
     return error;
 }
 
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 parse_ofp_group_mod_file(const char *file_name, uint16_t command,
                          struct ofputil_group_mod **gms, size_t *n_gms,
                          enum ofputil_protocol *usable_protocols)

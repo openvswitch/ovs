@@ -142,7 +142,7 @@ bundle_check(const struct ofpact_bundle *bundle, ofp_port_t max_ports,
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string.*/
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 bundle_parse__(const char *s, char **save_ptr,
                const char *fields, const char *basis, const char *algorithm,
                const char *slave_type, const char *dst,
@@ -222,7 +222,7 @@ bundle_parse__(const char *s, char **save_ptr,
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 bundle_parse(const char *s, struct ofpbuf *ofpacts)
 {
     char *fields, *basis, *algorithm, *slave_type, *slave_delim;
@@ -249,7 +249,7 @@ bundle_parse(const char *s, struct ofpbuf *ofpacts)
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string.*/
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 bundle_parse_load(const char *s, struct ofpbuf *ofpacts)
 {
     char *fields, *basis, *algorithm, *slave_type, *dst, *slave_delim;

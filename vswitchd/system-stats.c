@@ -531,7 +531,7 @@ static bool enabled;
 static bool started OVS_GUARDED_BY(mutex);
 static struct smap *system_stats OVS_GUARDED_BY(mutex);
 
-NO_RETURN static void *system_stats_thread_func(void *);
+OVS_NO_RETURN static void *system_stats_thread_func(void *);
 static void discard_stats(void);
 
 /* Enables or disables system stats collection, according to 'enable'. */

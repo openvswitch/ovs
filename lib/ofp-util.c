@@ -108,7 +108,7 @@ ofputil_pull_property(struct ofpbuf *msg, struct ofpbuf *property,
     return ofputil_pull_property__(msg, property, 8, typep);
 }
 
-static void PRINTF_FORMAT(2, 3)
+static void OVS_PRINTF_FORMAT(2, 3)
 log_property(bool loose, const char *message, ...)
 {
     enum vlog_level level = loose ? VLL_DBG : VLL_WARN;

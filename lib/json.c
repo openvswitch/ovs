@@ -117,7 +117,7 @@ static struct json *json_create(enum json_type type);
 static void json_parser_input(struct json_parser *, struct json_token *);
 
 static void json_error(struct json_parser *p, const char *format, ...)
-    PRINTF_FORMAT(2, 3);
+    OVS_PRINTF_FORMAT(2, 3);
 
 const char *
 json_type_to_string(enum json_type type)

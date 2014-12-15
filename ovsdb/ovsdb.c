@@ -103,7 +103,7 @@ ovsdb_schema_from_file(const char *file_name, struct ovsdb_schema **schemap)
     return NULL;
 }
 
-static struct ovsdb_error * WARN_UNUSED_RESULT
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 ovsdb_schema_check_ref_table(struct ovsdb_column *column,
                              const struct shash *tables,
                              const struct ovsdb_base_type *base,

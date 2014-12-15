@@ -247,7 +247,7 @@ parse_table(struct ovsdb_execution *x,
     return table;
 }
 
-static WARN_UNUSED_RESULT struct ovsdb_error *
+static OVS_WARN_UNUSED_RESULT struct ovsdb_error *
 parse_row(const struct json *json, const struct ovsdb_table *table,
           struct ovsdb_symbol_table *symtab,
           struct ovsdb_row **rowp, struct ovsdb_column_set *columns)

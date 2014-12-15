@@ -38,7 +38,7 @@ void learn_execute(const struct ofpact_learn *, const struct flow *,
                    struct ofputil_flow_mod *, struct ofpbuf *ofpacts);
 void learn_mask(const struct ofpact_learn *, struct flow_wildcards *);
 
-char *learn_parse(char *, struct ofpbuf *ofpacts) WARN_UNUSED_RESULT;
+char *learn_parse(char *, struct ofpbuf *ofpacts) OVS_WARN_UNUSED_RESULT;
 void learn_format(const struct ofpact_learn *, struct ds *);
 
 #endif /* learn.h */

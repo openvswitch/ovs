@@ -189,7 +189,7 @@ const char *ovsdb_idl_txn_status_to_string(enum ovsdb_idl_txn_status);
 
 struct ovsdb_idl_txn *ovsdb_idl_txn_create(struct ovsdb_idl *);
 void ovsdb_idl_txn_add_comment(struct ovsdb_idl_txn *, const char *, ...)
-    PRINTF_FORMAT (2, 3);
+    OVS_PRINTF_FORMAT (2, 3);
 void ovsdb_idl_txn_set_dry_run(struct ovsdb_idl_txn *);
 void ovsdb_idl_txn_increment(struct ovsdb_idl_txn *,
                              const struct ovsdb_idl_row *,

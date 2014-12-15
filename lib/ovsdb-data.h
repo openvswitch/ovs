@@ -85,14 +85,14 @@ struct ovsdb_error *ovsdb_atom_from_json(union ovsdb_atom *,
                                          const struct ovsdb_base_type *,
                                          const struct json *,
                                          struct ovsdb_symbol_table *)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 struct json *ovsdb_atom_to_json(const union ovsdb_atom *,
                                 enum ovsdb_atomic_type);
 
 char *ovsdb_atom_from_string(union ovsdb_atom *,
                              const struct ovsdb_base_type *, const char *,
                              struct ovsdb_symbol_table *)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 void ovsdb_atom_to_string(const union ovsdb_atom *, enum ovsdb_atomic_type,
                           struct ds *);
 void ovsdb_atom_to_bare(const union ovsdb_atom *, enum ovsdb_atomic_type,
@@ -100,7 +100,7 @@ void ovsdb_atom_to_bare(const union ovsdb_atom *, enum ovsdb_atomic_type,
 
 struct ovsdb_error *ovsdb_atom_check_constraints(
     const union ovsdb_atom *, const struct ovsdb_base_type *)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 
 /* An instance of an OVSDB type (given by struct ovsdb_type).
  *
@@ -142,7 +142,7 @@ void ovsdb_datum_swap(struct ovsdb_datum *, struct ovsdb_datum *);
 /* Checking and maintaining invariants. */
 struct ovsdb_error *ovsdb_datum_sort(struct ovsdb_datum *,
                                      enum ovsdb_atomic_type key_type)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 
 void ovsdb_datum_sort_assert(struct ovsdb_datum *,
                              enum ovsdb_atomic_type key_type);
@@ -153,21 +153,21 @@ size_t ovsdb_datum_sort_unique(struct ovsdb_datum *,
 
 struct ovsdb_error *ovsdb_datum_check_constraints(
     const struct ovsdb_datum *, const struct ovsdb_type *)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 
 /* Type conversion. */
 struct ovsdb_error *ovsdb_datum_from_json(struct ovsdb_datum *,
                                           const struct ovsdb_type *,
                                           const struct json *,
                                           struct ovsdb_symbol_table *)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 struct json *ovsdb_datum_to_json(const struct ovsdb_datum *,
                                  const struct ovsdb_type *);
 
 char *ovsdb_datum_from_string(struct ovsdb_datum *,
                               const struct ovsdb_type *, const char *,
                               struct ovsdb_symbol_table *)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 void ovsdb_datum_to_string(const struct ovsdb_datum *,
                            const struct ovsdb_type *, struct ds *);
 void ovsdb_datum_to_bare(const struct ovsdb_datum *,
@@ -255,7 +255,7 @@ struct ovsdb_symbol *ovsdb_symbol_table_insert(struct ovsdb_symbol_table *,
  *
  * Used by ovsdb_atom_from_string() and ovsdb_datum_from_string(). */
 
-char *ovsdb_token_parse(const char **, char **outp) WARN_UNUSED_RESULT;
+char *ovsdb_token_parse(const char **, char **outp) OVS_WARN_UNUSED_RESULT;
 bool ovsdb_token_is_delim(unsigned char);
 
 #endif /* ovsdb-data.h */

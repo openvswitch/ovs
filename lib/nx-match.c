@@ -1308,7 +1308,7 @@ oxm_match_from_string(const char *s, struct ofpbuf *b)
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 nxm_parse_reg_move(struct ofpact_reg_move *move, const char *s)
 {
     const char *full_s = s;
@@ -1410,7 +1410,7 @@ nxm_reg_load(const struct mf_subfield *dst, uint64_t src_data,
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 nxm_parse_stack_action(struct ofpact_stack *stack_action, const char *s)
 {
     char *error;
@@ -1560,7 +1560,7 @@ mf_parse_subfield_name(const char *name, int name_len, bool *wild)
  * bit indexes.  "..end" may be omitted to indicate a single bit.  "start..end"
  * may both be omitted (the [] are still required) to indicate an entire
  * field. */
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 mf_parse_subfield__(struct mf_subfield *sf, const char **sp)
 {
     const struct mf_field *field;
@@ -1626,7 +1626,7 @@ mf_parse_subfield__(struct mf_subfield *sf, const char **sp)
  * bit indexes.  "..end" may be omitted to indicate a single bit.  "start..end"
  * may both be omitted (the [] are still required) to indicate an entire
  * field.  */
-char * WARN_UNUSED_RESULT
+char * OVS_WARN_UNUSED_RESULT
 mf_parse_subfield(struct mf_subfield *sf, const char *s)
 {
     char *error = mf_parse_subfield__(sf, &s);

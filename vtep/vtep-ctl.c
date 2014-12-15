@@ -121,10 +121,10 @@ static struct table_style table_style = TABLE_STYLE_DEFAULT;
 static struct ovsdb_idl *the_idl;
 static struct ovsdb_idl_txn *the_idl_txn;
 
-NO_RETURN static void vtep_ctl_exit(int status);
-NO_RETURN static void vtep_ctl_fatal(const char *, ...) PRINTF_FORMAT(1, 2);
+OVS_NO_RETURN static void vtep_ctl_exit(int status);
+OVS_NO_RETURN static void vtep_ctl_fatal(const char *, ...) OVS_PRINTF_FORMAT(1, 2);
 static char *default_db(void);
-NO_RETURN static void usage(void);
+OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[], struct shash *local_options);
 static bool might_write_to_db(char **argv);
 
@@ -2586,7 +2586,7 @@ missing_operator_error(const char *arg, const char **allowed_operators,
  *
  * On success, returns NULL.  On failure, returned a malloc()'d string error
  * message and stores NULL into all of the nonnull output arguments. */
-static char * WARN_UNUSED_RESULT
+static char * OVS_WARN_UNUSED_RESULT
 parse_column_key_value(const char *arg,
                        const struct vtep_ctl_table_class *table,
                        const struct ovsdb_idl_column **columnp, char **keyp,

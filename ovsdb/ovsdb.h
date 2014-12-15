@@ -44,10 +44,10 @@ void ovsdb_schema_destroy(struct ovsdb_schema *);
 
 struct ovsdb_error *ovsdb_schema_from_file(const char *file_name,
                                            struct ovsdb_schema **)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 struct ovsdb_error *ovsdb_schema_from_json(struct json *,
                                            struct ovsdb_schema **)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 struct json *ovsdb_schema_to_json(const struct ovsdb_schema *);
 
 bool ovsdb_schema_equal(const struct ovsdb_schema *,

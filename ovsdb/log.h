@@ -31,17 +31,17 @@ enum ovsdb_log_open_mode {
 
 struct ovsdb_error *ovsdb_log_open(const char *name, enum ovsdb_log_open_mode,
                                    int locking, struct ovsdb_log **)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 void ovsdb_log_close(struct ovsdb_log *);
 
 struct ovsdb_error *ovsdb_log_read(struct ovsdb_log *, struct json **)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 void ovsdb_log_unread(struct ovsdb_log *);
 
 struct ovsdb_error *ovsdb_log_write(struct ovsdb_log *, struct json *)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 struct ovsdb_error *ovsdb_log_commit(struct ovsdb_log *)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 
 off_t ovsdb_log_get_offset(const struct ovsdb_log *);
 

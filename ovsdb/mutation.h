@@ -43,7 +43,7 @@ enum ovsdb_mutator {
 
 struct ovsdb_error *ovsdb_mutator_from_string(const char *,
                                               enum ovsdb_mutator *)
-    WARN_UNUSED_RESULT;
+    OVS_WARN_UNUSED_RESULT;
 const char *ovsdb_mutator_to_string(enum ovsdb_mutator);
 
 struct ovsdb_mutation {
@@ -63,10 +63,10 @@ struct ovsdb_mutation_set {
 struct ovsdb_error *ovsdb_mutation_set_from_json(
     const struct ovsdb_table_schema *,
     const struct json *, struct ovsdb_symbol_table *,
-    struct ovsdb_mutation_set *) WARN_UNUSED_RESULT;
+    struct ovsdb_mutation_set *) OVS_WARN_UNUSED_RESULT;
 struct json *ovsdb_mutation_set_to_json(const struct ovsdb_mutation_set *);
 void ovsdb_mutation_set_destroy(struct ovsdb_mutation_set *);
 struct ovsdb_error *ovsdb_mutation_set_execute(
-    struct ovsdb_row *, const struct ovsdb_mutation_set *) WARN_UNUSED_RESULT;
+    struct ovsdb_row *, const struct ovsdb_mutation_set *) OVS_WARN_UNUSED_RESULT;
 
 #endif /* ovsdb/mutation.h */

@@ -304,7 +304,7 @@ ovsdb_symbol_referenced(struct ovsdb_symbol *symbol,
     }
 }
 
-static struct ovsdb_error * WARN_UNUSED_RESULT
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 ovsdb_atom_parse_uuid(struct uuid *uuid, const struct json *json,
                       struct ovsdb_symbol_table *symtab,
                       const struct ovsdb_base_type *base)
@@ -343,7 +343,7 @@ ovsdb_atom_parse_uuid(struct uuid *uuid, const struct json *json,
     return error0;
 }
 
-static struct ovsdb_error * WARN_UNUSED_RESULT
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 ovsdb_atom_from_json__(union ovsdb_atom *atom,
                        const struct ovsdb_base_type *base,
                        const struct json *json,
