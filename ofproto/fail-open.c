@@ -32,7 +32,7 @@
 #include "poll-loop.h"
 #include "rconn.h"
 #include "timeval.h"
-#include "vconn.h"
+#include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(fail_open);

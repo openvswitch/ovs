@@ -32,7 +32,7 @@
 #include "sat-math.h"
 #include "timeval.h"
 #include "openvswitch/token-bucket.h"
-#include "vconn.h"
+#include "openvswitch/vconn.h"
 
 struct pinqueue {
     struct hmap_node node;      /* In struct pinsched's 'queues' hmap. */

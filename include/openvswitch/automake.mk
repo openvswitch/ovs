@@ -7,5 +7,6 @@ openvswitchinclude_HEADERS = \
 	include/openvswitch/types.h \
 	include/openvswitch/util.h \
 	include/openvswitch/version.h \
+	include/openvswitch/vconn.h \
 	include/openvswitch/vlog.h
 

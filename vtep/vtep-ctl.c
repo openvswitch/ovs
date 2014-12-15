@@ -47,7 +47,7 @@
 #include "table.h"
 #include "timeval.h"
 #include "util.h"
-#include "vconn.h"
+#include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(vtep_ctl);

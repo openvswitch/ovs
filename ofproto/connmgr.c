@@ -39,7 +39,7 @@
 #include "simap.h"
 #include "stream.h"
 #include "timeval.h"
-#include "vconn.h"
+#include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
 
 #include "bundles.h"

@@ -20,28 +20,11 @@
 /* Provider interface to vconns, which provide a virtual connection to an
  * OpenFlow device. */
 
-#include "vconn.h"
+#include "openvswitch/vconn.h"
 #include "util.h"
 #include "openflow/openflow-common.h"
 
 /* Active virtual connection to an OpenFlow device. */
-
-/* Active virtual connection to an OpenFlow device.
- *
- * This structure should be treated as opaque by vconn implementations. */
-struct vconn {
-    const struct vconn_class *class;
-    int state;
-    int error;
-
-    /* OpenFlow versions. */
-    uint32_t allowed_versions;  /* Bitmap of versions we will accept. */
-    uint32_t peer_versions;     /* Peer's bitmap of versions it will accept. */
-    enum ofp_version version;   /* Negotiated version (or 0). */
-    bool recv_any_version;      /* True to receive a message of any version. */
-
-    char *name;
-};
 
 void vconn_init(struct vconn *, const struct vconn_class *, int connect_status,
                 const char *name, uint32_t allowed_versions);
@@ -130,14 +113,7 @@ struct vconn_class {
     void (*wait)(struct vconn *vconn, enum vconn_wait_type type);
 };
 
-/* Passive virtual connection to an OpenFlow device.
- *
- * This structure should be treated as opaque by vconn implementations. */
-struct pvconn {
-    const struct pvconn_class *class;
-    char *name;
-    uint32_t allowed_versions;
-};
+/* Passive virtual connection to an OpenFlow device. */
 
 void pvconn_init(struct pvconn *pvconn, const struct pvconn_class *class,
                  const char *name, uint32_t allowed_versions);

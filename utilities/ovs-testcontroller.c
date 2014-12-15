@@ -40,7 +40,7 @@
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
-#include "vconn.h"
+#include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
 #include "socket-util.h"
 #include "ofp-util.h"

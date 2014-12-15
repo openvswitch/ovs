@@ -16,7 +16,7 @@
 
 #include <config.h>
 #undef NDEBUG
-#include "vconn.h"
+#include "openvswitch/vconn.h"
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>

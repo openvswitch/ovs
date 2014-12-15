@@ -45,7 +45,7 @@
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
-#include "vconn.h"
+#include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
 #include "lib/vswitch-idl.h"
 #include "lib/netdev-dpdk.h"

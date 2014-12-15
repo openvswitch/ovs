@@ -14,21 +14,36 @@
  * limitations under the License.
  */
 
-#ifndef VCONN_H
-#define VCONN_H 1
+#ifndef OPENVSWITCH_VCONN_H
+#define OPENVSWITCH_VCONN_H 1
 
 #include <stdbool.h>
-#include "openvswitch/types.h"
-#include "openflow/openflow.h"
+#include <openvswitch/list.h>
+#include <openvswitch/types.h>
+#include <openflow/openflow.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-struct ovs_list;
 struct ofpbuf;
-struct pvconn;
-struct vconn;
+struct vconn_class;
+struct pvconn_class;
+
+/* This structure should be treated as opaque by vconn implementations. */
+struct vconn {
+    const struct vconn_class *class;
+    int state;
+    int error;
+
+    /* OpenFlow versions. */
+    uint32_t allowed_versions;  /* Bitmap of versions we will accept. */
+    uint32_t peer_versions;     /* Peer's bitmap of versions it will accept. */
+    enum ofp_version version;   /* Negotiated version (or 0). */
+    bool recv_any_version;      /* True to receive a message of any version. */
+
+    char *name;
+};
 
 void vconn_usage(bool active, bool passive, bool bootstrap);
 
@@ -75,7 +90,14 @@ void vconn_connect_wait(struct vconn *);
 void vconn_recv_wait(struct vconn *);
 void vconn_send_wait(struct vconn *);
 
-/* Passive vconns: virtual listeners for incoming OpenFlow connections. */
+/* Passive vconns: virtual listeners for incoming OpenFlow connections.
+ *
+ * This structure should be treated as opaque by vconn implementations. */
+struct pvconn {
+    const struct pvconn_class *class;
+    char *name;
+    uint32_t allowed_versions;
+};
 int pvconn_verify_name(const char *name);
 int pvconn_open(const char *name, uint32_t allowed_versions, uint8_t dscp,
                 struct pvconn **pvconnp);
