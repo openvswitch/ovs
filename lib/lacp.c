@@ -132,7 +132,7 @@ struct slave {
 };
 
 static struct ovs_mutex mutex;
-static struct ovs_list all_lacps__ = LIST_INITIALIZER(&all_lacps__);
+static struct ovs_list all_lacps__ = OVS_LIST_INITIALIZER(&all_lacps__);
 static struct ovs_list *const all_lacps OVS_GUARDED_BY(mutex) = &all_lacps__;
 
 static void lacp_update_attached(struct lacp *) OVS_REQUIRES(mutex);

@@ -54,7 +54,7 @@ struct process {
 static int fds[2];
 
 /* All processes. */
-static struct ovs_list all_processes = LIST_INITIALIZER(&all_processes);
+static struct ovs_list all_processes = OVS_LIST_INITIALIZER(&all_processes);
 
 static void sigchld_handler(int signr OVS_UNUSED);
 

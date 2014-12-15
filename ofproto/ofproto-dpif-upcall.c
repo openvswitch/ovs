@@ -237,7 +237,7 @@ struct ukey_op {
 };
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-static struct ovs_list all_udpifs = LIST_INITIALIZER(&all_udpifs);
+static struct ovs_list all_udpifs = OVS_LIST_INITIALIZER(&all_udpifs);
 
 static size_t recv_upcalls(struct handler *);
 static int process_upcall(struct udpif *, struct upcall *,

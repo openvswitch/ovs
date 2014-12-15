@@ -38,7 +38,7 @@ static struct ovs_mutex rtbsd_mutex = OVS_MUTEX_INITIALIZER;
 static int notify_sock = -1;
 
 /* All registered notifiers. */
-static struct ovs_list all_notifiers = LIST_INITIALIZER(&all_notifiers);
+static struct ovs_list all_notifiers = OVS_LIST_INITIALIZER(&all_notifiers);
 
 static void rtbsd_report_change(const struct if_msghdr *)
     OVS_REQUIRES(rtbsd_mutex);

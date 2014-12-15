@@ -281,7 +281,7 @@ void vlog_usage(void);
         extern struct vlog_module VLM_##MODULE;                         \
         struct vlog_module VLM_##MODULE =                               \
         {                                                               \
-            LIST_INITIALIZER(&VLM_##MODULE.list),                       \
+            OVS_LIST_INITIALIZER(&VLM_##MODULE.list),                       \
             #MODULE,                                        /* name */  \
             { VLL_INFO, VLL_INFO, VLL_INFO },             /* levels */  \
             VLL_INFO,                                  /* min_level */  \

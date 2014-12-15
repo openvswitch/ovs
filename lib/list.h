@@ -21,14 +21,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include "util.h"
-
-/* Doubly linked list head or element. */
-struct ovs_list {
-    struct ovs_list *prev;     /* Previous list element. */
-    struct ovs_list *next;     /* Next list element. */
-};
-
-#define LIST_INITIALIZER(LIST) { LIST, LIST }
+#include "openvswitch/list.h"
 
 static inline void list_init(struct ovs_list *);
 static inline void list_poison(struct ovs_list *);

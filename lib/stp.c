@@ -150,7 +150,7 @@ struct stp {
 };
 
 static struct ovs_mutex mutex;
-static struct ovs_list all_stps__ = LIST_INITIALIZER(&all_stps__);
+static struct ovs_list all_stps__ = OVS_LIST_INITIALIZER(&all_stps__);
 static struct ovs_list *const all_stps OVS_GUARDED_BY(mutex) = &all_stps__;
 
 #define FOR_EACH_ENABLED_PORT(PORT, STP)                        \

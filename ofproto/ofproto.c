@@ -4329,7 +4329,7 @@ modify_flows__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
                const struct flow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct ovs_list dead_cookies = LIST_INITIALIZER(&dead_cookies);
+    struct ovs_list dead_cookies = OVS_LIST_INITIALIZER(&dead_cookies);
     enum nx_flow_update_event event;
     size_t i;
 
@@ -4510,7 +4510,7 @@ delete_flows__(const struct rule_collection *rules,
     OVS_REQUIRES(ofproto_mutex)
 {
     if (rules->n) {
-        struct ovs_list dead_cookies = LIST_INITIALIZER(&dead_cookies);
+        struct ovs_list dead_cookies = OVS_LIST_INITIALIZER(&dead_cookies);
         struct ofproto *ofproto = rules->rules[0]->ofproto;
         struct rule *rule, *next;
         size_t i;

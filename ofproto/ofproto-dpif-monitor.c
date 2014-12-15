@@ -69,7 +69,7 @@ static struct heap monitor_heap;
 
 /* guarded-list for storing the mports that need to send bfd/cfm control
  * packet soon. */
-static struct guarded_list send_soon = GUARDED_LIST_INITIALIZER(&send_soon);
+static struct guarded_list send_soon = GUARDED_OVS_LIST_INITIALIZER(&send_soon);
 
 /* The monitor thread id. */
 static pthread_t monitor_tid;

@@ -75,7 +75,7 @@ static inline const struct rculist *rculist_next(const struct rculist *);
 static inline struct rculist *rculist_next_protected(const struct rculist *);
 
 /* List initialization. */
-#define RCULIST_INITIALIZER(LIST) { LIST, OVSRCU_INITIALIZER(LIST) }
+#define RCUOVS_LIST_INITIALIZER(LIST) { LIST, OVSRCU_INITIALIZER(LIST) }
 
 static inline void rculist_init(struct rculist *list);
 static inline void rculist_poison(struct rculist *elem);

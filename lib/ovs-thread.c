@@ -621,14 +621,14 @@ static struct ovs_mutex key_mutex = OVS_MUTEX_INITIALIZER;
  * Together, 'inuse_keys' and 'free_keys' hold an ovsthread_key for every index
  * from 0 to n_keys - 1, inclusive. */
 static struct ovs_list inuse_keys OVS_GUARDED_BY(key_mutex)
-    = LIST_INITIALIZER(&inuse_keys);
+    = OVS_LIST_INITIALIZER(&inuse_keys);
 static struct ovs_list free_keys OVS_GUARDED_BY(key_mutex)
-    = LIST_INITIALIZER(&free_keys);
+    = OVS_LIST_INITIALIZER(&free_keys);
 static unsigned int n_keys OVS_GUARDED_BY(key_mutex);
 
 /* All existing struct ovsthread_key_slots. */
 static struct ovs_list slots_list OVS_GUARDED_BY(key_mutex)
-    = LIST_INITIALIZER(&slots_list);
+    = OVS_LIST_INITIALIZER(&slots_list);
 
 static void *
 clear_slot(struct ovsthread_key_slots *slots, unsigned int index)

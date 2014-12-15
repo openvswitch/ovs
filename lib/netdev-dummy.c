@@ -88,7 +88,7 @@ static struct ovs_mutex dummy_list_mutex = OVS_MUTEX_INITIALIZER;
 
 /* Contains all 'struct dummy_dev's. */
 static struct ovs_list dummy_list OVS_GUARDED_BY(dummy_list_mutex)
-    = LIST_INITIALIZER(&dummy_list);
+    = OVS_LIST_INITIALIZER(&dummy_list);
 
 struct netdev_dummy {
     struct netdev up;
