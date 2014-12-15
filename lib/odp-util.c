@@ -2037,8 +2037,8 @@ odp_ufid_from_string(const char *s_, ovs_u128 *ufid)
 void
 odp_format_ufid(const ovs_u128 *ufid, struct ds *ds)
 {
-    ds_put_format(ds, "ufid:%016"PRIx64"%016"PRIx64, ufid->u64.lo,
-                  ufid->u64.hi);
+    ds_put_format(ds, "ufid:%016"PRIx64"%016"PRIx64, ufid->u64.hi,
+                  ufid->u64.lo);
 }
 
 /* Appends to 'ds' a string representation of the 'key_len' bytes of
