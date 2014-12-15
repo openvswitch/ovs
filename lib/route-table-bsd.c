@@ -26,6 +26,8 @@
 #include <net/if_dl.h>
 #include <netinet/in.h>
 
+#include <errno.h>
+#include <poll.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -49,16 +51,21 @@ route_table_fallback_lookup(ovs_be32 ip, char name[], ovs_be32 *gw)
     struct sockaddr_in *sin;
     struct sockaddr *sa;
     static int seq;
-    int i, len, namelen, rtsock;
+    int i, namelen, rtsock;
+    ssize_t len;
     const pid_t pid = getpid();
     bool got_ifp = false;
+    unsigned int retry_count = 5;  /* arbitrary */
+
+    VLOG_DBG("looking route up for " IP_FMT " pid %" PRIuMAX,
+        IP_ARGS(ip), (uintmax_t)pid);
 
     rtsock = socket(PF_ROUTE, SOCK_RAW, 0);
     if (rtsock < 0)
         return false;
 
+retry:
     memset(&rtmsg, 0, sizeof(rtmsg));
-
     rtm->rtm_msglen = sizeof(struct rt_msghdr) + sizeof(struct sockaddr_in);
     rtm->rtm_version = RTM_VERSION;
     rtm->rtm_type = RTM_GET;
@@ -70,14 +77,52 @@ route_table_fallback_lookup(ovs_be32 ip, char name[], ovs_be32 *gw)
     sin->sin_family = AF_INET;
     sin->sin_addr.s_addr = ip;
 
-    if ((write(rtsock, (char *)&rtmsg, rtm->rtm_msglen)) < 0) {
+    len = write(rtsock, (char *)&rtmsg, rtm->rtm_msglen);
+    if (len == -1) {
+        if (errno == ENOBUFS && retry_count-- > 0) {
+            VLOG_INFO("Recoverable error writing to routing socket: %s",
+                      ovs_strerror(errno));
+            usleep(500 * 1000);  /* arbitrary */
+            goto retry;
+        }
+        VLOG_ERR("Error writing to routing socket: %s", ovs_strerror(errno));
+        close(rtsock);
+        return false;
+    }
+    if (len != rtm->rtm_msglen) {
+        VLOG_ERR("Short write to routing socket");
         close(rtsock);
         return false;
     }
 
-    VLOG_DBG("looking route up for " IP_FMT " pid %" PRIuMAX,
-        IP_ARGS(ip), (uintmax_t)pid);
     do {
+        struct pollfd pfd;
+        int ret;
+
+        memset(&pfd, 0, sizeof(pfd));
+        pfd.fd = rtsock;
+        pfd.events = POLLIN;
+        /*
+         * The timeout value below is somehow arbitrary.
+         * It's to detect the lost of routing messages due to
+         * buffer exhaustion etc.  The routing socket is not
+         * reliable.
+         */
+        ret = poll(&pfd, 1, 500);
+        if (ret == -1) {
+            VLOG_ERR("Error polling on routing socket: %s",
+                     ovs_strerror(errno));
+            close(rtsock);
+            return false;
+        }
+        if (ret == 0) {
+            if (retry_count-- > 0) {
+                VLOG_INFO("Timeout; resending routing message");
+                goto retry;
+            }
+            close(rtsock);
+            return false;
+        }
         len = read(rtsock, (char *)&rtmsg, sizeof(rtmsg));
         if (len > 0) {
             VLOG_DBG("got rtmsg pid %" PRIuMAX " seq %d",
@@ -86,10 +131,9 @@ route_table_fallback_lookup(ovs_be32 ip, char name[], ovs_be32 *gw)
         }
     } while (len > 0 && (rtmsg.rtm.rtm_seq != seq ||
         rtmsg.rtm.rtm_pid != pid));
-
     close(rtsock);
-
-    if (len < 0) {
+    if (len == -1) {
+        VLOG_ERR("Error reading from routing socket: %s", ovs_strerror(errno));
         return false;
     }
 
