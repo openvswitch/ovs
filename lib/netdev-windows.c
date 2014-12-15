@@ -28,7 +28,7 @@
 #include "poll-loop.h"
 #include "shash.h"
 #include "svec.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 #include "odp-netlink.h"
 #include "netlink-socket.h"
 #include "netlink.h"

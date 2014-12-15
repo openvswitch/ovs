@@ -45,7 +45,7 @@
 #include "stream-provider.h"
 #include "stream.h"
 #include "timeval.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 #ifdef _WIN32
 /* Ref: https://www.openssl.org/support/faq.html#PROG2

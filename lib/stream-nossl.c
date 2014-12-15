@@ -16,7 +16,7 @@
 
 #include <config.h>
 #include "stream-ssl.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(stream_nossl);
 

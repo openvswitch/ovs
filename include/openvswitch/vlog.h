@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef VLOG_H
-#define VLOG_H 1
+#ifndef OPENVSWITCH_VLOG_H
+#define OPENVSWITCH_VLOG_H 1
 
 /* Logging.
  *
@@ -30,12 +30,11 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <time.h>
-#include "compiler.h"
-#include "ovs-thread.h"
-#include "sat-math.h"
-#include "openvswitch/token-bucket.h"
-#include "util.h"
-#include "list.h"
+#include <openvswitch/compiler.h>
+#include <openvswitch/list.h>
+#include <openvswitch/thread.h>
+#include <openvswitch/token-bucket.h>
+#include <openvswitch/util.h>
 
 #ifdef  __cplusplus
 extern "C" {
@@ -89,11 +88,13 @@ struct vlog_module {
 /* Global list of all logging modules */
 extern struct ovs_list vlog_modules;
 
+void vlog_insert_module(struct ovs_list *);
+
 /* Creates and initializes a global instance of a module named MODULE. */
 #define VLOG_DEFINE_MODULE(MODULE)                                      \
         VLOG_DEFINE_MODULE__(MODULE)                                    \
         OVS_CONSTRUCTOR(init_##MODULE) {                                \
-                list_insert(&vlog_modules, &VLM_##MODULE.list);         \
+                vlog_insert_module(&VLM_##MODULE.list);                 \
         }                                                               \
 
 const char *vlog_get_module_name(const struct vlog_module *);
@@ -114,13 +115,13 @@ struct vlog_rate_limit {
 
 /* Initializer for a struct vlog_rate_limit, to set up a maximum rate of RATE
  * messages per minute and a maximum burst size of BURST messages. */
-#define VLOG_RATE_LIMIT_INIT(RATE, BURST)                               \
-        {                                                               \
-            TOKEN_BUCKET_INIT(RATE, OVS_SAT_MUL(BURST, VLOG_MSG_TOKENS)),\
-            0,                              /* first_dropped */         \
-            0,                              /* last_dropped */          \
-            0,                              /* n_dropped */             \
-            OVS_MUTEX_INITIALIZER           /* mutex */                 \
+#define VLOG_RATE_LIMIT_INIT(RATE, BURST)                                 \
+        {                                                                 \
+            TOKEN_BUCKET_INIT(RATE, OVS_SAT_MUL(BURST, VLOG_MSG_TOKENS)), \
+            0,                              /* first_dropped */           \
+            0,                              /* last_dropped */            \
+            0,                              /* n_dropped */               \
+            OVS_MUTEX_INITIALIZER           /* mutex */                   \
         }
 
 /* Configuring how each module logs messages. */
@@ -291,6 +292,5 @@ void vlog_usage(void);
 #ifdef  __cplusplus
 }
 #endif
-
 
 #endif /* vlog.h */

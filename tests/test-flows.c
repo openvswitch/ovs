@@ -30,7 +30,7 @@
 #include "pcap-file.h"
 #include "timeval.h"
 #include "util.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 static void
 test_flows_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)

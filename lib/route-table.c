@@ -31,7 +31,7 @@
 #include "ofpbuf.h"
 #include "ovs-router.h"
 #include "rtnetlink-link.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(route_table);
 

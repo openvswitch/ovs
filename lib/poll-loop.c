@@ -29,7 +29,7 @@
 #include "seq.h"
 #include "socket-util.h"
 #include "timeval.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 #include "hmap.h"
 #include "hash.h"
 

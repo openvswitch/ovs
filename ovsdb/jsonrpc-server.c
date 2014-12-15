@@ -37,7 +37,7 @@
 #include "timeval.h"
 #include "transaction.h"
 #include "trigger.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ovsdb_jsonrpc_server);
 

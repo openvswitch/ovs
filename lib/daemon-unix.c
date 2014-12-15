@@ -35,7 +35,7 @@
 #include "socket-util.h"
 #include "timeval.h"
 #include "util.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(daemon_unix);
 

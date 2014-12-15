@@ -33,7 +33,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "util.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(getopt_long);
 

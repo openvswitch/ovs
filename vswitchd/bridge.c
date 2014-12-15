@@ -60,7 +60,7 @@
 #include "vlandev.h"
 #include "lib/vswitch-idl.h"
 #include "xenserver.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 #include "sflow_api.h"
 #include "vlan-bitmap.h"
 #include "packets.h"

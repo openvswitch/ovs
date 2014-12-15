@@ -33,7 +33,7 @@
 #include "unaligned.h"
 #include "util.h"
 #include "vlan-bitmap.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 COVERAGE_DEFINE(mcast_snooping_learned);
 COVERAGE_DEFINE(mcast_snooping_expired);

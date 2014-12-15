@@ -23,7 +23,8 @@
 #include <unistd.h>
 #include "dynamic-string.h"
 #include "process.h"
-#include "vlog.h"
+#include "util.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(xenserver);
 

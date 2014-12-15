@@ -36,7 +36,7 @@
 #include "unaligned.h"
 #include "unixctl.h"
 #include "util.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 
 /* In seconds */

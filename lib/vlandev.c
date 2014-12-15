@@ -27,7 +27,7 @@
 #include "hash.h"
 #include "shash.h"
 #include "socket-util.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(vlandev);
 

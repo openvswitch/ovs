@@ -37,7 +37,7 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "util.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 #ifdef __linux__
 #include <linux/if_packet.h>
 #endif

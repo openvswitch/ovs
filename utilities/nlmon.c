@@ -29,7 +29,7 @@
 #include "poll-loop.h"
 #include "timeval.h"
 #include "util.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 static const struct nl_policy rtnlgrp_link_policy[] = {
     [IFLA_IFNAME] = { .type = NL_A_STRING, .optional = false },

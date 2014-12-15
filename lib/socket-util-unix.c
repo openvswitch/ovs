@@ -28,7 +28,7 @@
 #include "fatal-signal.h"
 #include "random.h"
 #include "util.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(socket_util_unix);
 

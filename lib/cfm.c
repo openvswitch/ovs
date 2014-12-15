@@ -36,7 +36,7 @@
 #include "timer.h"
 #include "timeval.h"
 #include "unixctl.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(cfm);
 

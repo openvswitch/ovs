@@ -36,7 +36,7 @@
 #include "stream-ssl.h"
 #include "timeval.h"
 #include "util.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 struct fake_pvconn {
     const char *type;

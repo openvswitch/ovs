@@ -25,6 +25,7 @@
 #include <unistd.h>
 #include "compiler.h"
 #include "hash.h"
+#include "list.h"
 #include "netdev-dpdk.h"
 #include "ovs-rcu.h"
 #include "poll-loop.h"
@@ -38,7 +39,7 @@
  * cut-and-paste.  Since "sparse" is just a checker, not a compiler, it
  * doesn't matter that we don't define them. */
 #else
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ovs_thread);
 

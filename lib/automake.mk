@@ -265,7 +265,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/vlandev.c \
 	lib/vlandev.h \
 	lib/vlog.c \
-	lib/vlog.h \
 	lib/vswitch-idl.c \
 	lib/vswitch-idl.h \
 	lib/vtep-idl.c \

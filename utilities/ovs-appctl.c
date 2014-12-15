@@ -31,7 +31,7 @@
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 static void usage(void);
 static const char *parse_command_line(int argc, char *argv[]);

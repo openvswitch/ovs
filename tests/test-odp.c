@@ -25,7 +25,7 @@
 #include "ofpbuf.h"
 #include "ovstest.h"
 #include "util.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 static int
 parse_keys(bool wc_keys)

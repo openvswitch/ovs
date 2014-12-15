@@ -27,7 +27,7 @@
 #include "command-line.h"
 #include "ovstest.h"
 #include "random.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 static void
 check_log_2_floor(uint32_t x, int n)

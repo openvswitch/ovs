@@ -28,11 +28,12 @@
 #include "byte-order.h"
 #include "connectivity.h"
 #include "ofpbuf.h"
+#include "ovs-atomic.h"
 #include "packets.h"
 #include "seq.h"
 #include "unixctl.h"
 #include "util.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(stp);
 

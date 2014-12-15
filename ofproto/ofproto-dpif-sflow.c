@@ -37,7 +37,7 @@
 #include "sflow_api.h"
 #include "socket-util.h"
 #include "timeval.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 #include "lib/odp-util.h"
 #include "ofproto-provider.h"
 #include "lacp.h"

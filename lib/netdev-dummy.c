@@ -40,7 +40,7 @@
 #include "timeval.h"
 #include "unixctl.h"
 #include "reconnect.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_dummy);
 

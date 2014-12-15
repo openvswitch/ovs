@@ -15,7 +15,7 @@
  */
 
 #include <config.h>
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
@@ -168,6 +168,11 @@ vlog_get_facility_val(const char *name)
         }
     }
     return i;
+}
+
+void vlog_insert_module(struct ovs_list *vlog)
+{
+    list_insert(&vlog_modules, vlog);
 }
 
 /* Returns the name for logging module 'module'. */

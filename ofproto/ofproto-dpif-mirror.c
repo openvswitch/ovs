@@ -22,7 +22,7 @@
 #include "hmapx.h"
 #include "ofproto.h"
 #include "vlan-bitmap.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif_mirror);
 

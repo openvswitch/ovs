@@ -37,7 +37,7 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "timeval.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(in_band);
 

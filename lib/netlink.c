@@ -26,7 +26,7 @@
 #include "ofpbuf.h"
 #include "timeval.h"
 #include "unaligned.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(netlink);
 

@@ -42,7 +42,7 @@
 #include "shash.h"
 #include "smap.h"
 #include "timeval.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(system_stats);
 

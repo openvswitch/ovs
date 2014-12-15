@@ -61,7 +61,7 @@
 #include "socket-util.h"
 #include "svec.h"
 #include "util.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_bsd);
 

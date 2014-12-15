@@ -30,7 +30,7 @@
 #include "signals.h"
 #include "socket-util.h"
 #include "util.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 #include "type-props.h"
 

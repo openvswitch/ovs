@@ -19,7 +19,9 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include "vlog.h"
+#include "util.h"
+#include "ovs-thread.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(daemon);
 

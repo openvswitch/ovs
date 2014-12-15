@@ -10,7 +10,7 @@
 #include "ofpbuf.h"
 #include "ovstest.h"
 #include "packets.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 #define MAX_PORTS 10
 

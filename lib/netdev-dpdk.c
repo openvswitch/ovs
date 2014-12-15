@@ -46,7 +46,7 @@
 #include "unaligned.h"
 #include "timeval.h"
 #include "unixctl.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(dpdk);
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);

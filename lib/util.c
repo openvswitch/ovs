@@ -33,7 +33,7 @@
 #include "ovs-rcu.h"
 #include "ovs-thread.h"
 #include "socket-util.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 #ifdef HAVE_PTHREAD_SET_NAME_NP
 #include <pthread_np.h>
 #endif

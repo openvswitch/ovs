@@ -37,7 +37,7 @@
 #include "poll-loop.h"
 #include "random.h"
 #include "util.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 #include "socket-util.h"
 
 VLOG_DEFINE_THIS_MODULE(vconn);

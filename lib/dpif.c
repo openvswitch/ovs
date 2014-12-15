@@ -47,7 +47,7 @@
 #include "tnl-ports.h"
 #include "util.h"
 #include "valgrind.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(dpif);
 

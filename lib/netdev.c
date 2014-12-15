@@ -42,7 +42,7 @@
 #include "smap.h"
 #include "sset.h"
 #include "svec.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev);
 

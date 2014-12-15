@@ -18,7 +18,7 @@
 #include <inttypes.h>
 
 #include "backtrace.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(backtrace);
 

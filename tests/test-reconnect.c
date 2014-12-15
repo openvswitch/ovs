@@ -26,7 +26,7 @@
 #include "ovstest.h"
 #include "svec.h"
 #include "util.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 static struct reconnect *reconnect;
 static int now;

@@ -40,7 +40,7 @@
 #include "packets.h"
 #include "timeval.h"
 #include "util.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 static struct dpctl_params dpctl_p;
 

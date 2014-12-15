@@ -60,7 +60,7 @@
 #include "unixctl.h"
 #include "util.h"
 #include "vconn.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 #include "meta-flow.h"
 #include "sort.h"
 

@@ -31,7 +31,7 @@
 #include "socket-util.h"
 #include "timeval.h"
 #include "util.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 #define DEFAULT_PORT 6630
 

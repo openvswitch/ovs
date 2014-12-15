@@ -26,7 +26,7 @@
 #include "process.h"
 #include "timeval.h"
 #include "util.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 struct test {
     const char *name;

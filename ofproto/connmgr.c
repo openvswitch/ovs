@@ -40,7 +40,7 @@
 #include "stream.h"
 #include "timeval.h"
 #include "vconn.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 #include "bundles.h"
 

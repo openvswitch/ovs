@@ -42,7 +42,7 @@
 #include "random.h"
 #include "unaligned.h"
 #include "type-props.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 #include "bitmap.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_util);

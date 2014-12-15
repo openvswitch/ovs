@@ -56,7 +56,7 @@
 #include "ovs-router.h"
 #include "tnl-ports.h"
 #include "tunnel.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 COVERAGE_DEFINE(xlate_actions);
 COVERAGE_DEFINE(xlate_actions_oversize);

@@ -71,7 +71,7 @@
 #include "sset.h"
 #include "timer.h"
 #include "unaligned.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_linux);
 

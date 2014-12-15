@@ -22,7 +22,7 @@
 #include "poll-loop.h"
 #include "seq.h"
 #include "timeval.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ovs_rcu);
 

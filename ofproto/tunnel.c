@@ -36,7 +36,7 @@
 #include "tnl-arp-cache.h"
 #include "tnl-ports.h"
 #include "tunnel.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 #include "unaligned.h"
 #include "ofproto-dpif.h"
 

@@ -29,7 +29,7 @@
 #include "ofp-errors.h"
 #include "ofp-util.h"
 #include "openflow/nicira-ext.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(bundle);
 

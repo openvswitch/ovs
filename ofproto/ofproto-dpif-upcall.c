@@ -38,7 +38,7 @@
 #include "poll-loop.h"
 #include "seq.h"
 #include "unixctl.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 #define MAX_QUEUE_LENGTH 512
 #define UPCALL_MAX_BATCH 64

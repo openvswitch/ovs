@@ -23,9 +23,9 @@
 #ifdef _WIN32
 #include <Wincrypt.h>
 #endif
-
+#include "util.h"
 #include "socket-util.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(entropy);
 

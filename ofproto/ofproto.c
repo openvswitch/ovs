@@ -57,7 +57,7 @@
 #include "timeval.h"
 #include "unaligned.h"
 #include "unixctl.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 #include "bundles.h"
 
 VLOG_DEFINE_THIS_MODULE(ofproto);

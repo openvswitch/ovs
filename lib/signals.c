@@ -25,7 +25,7 @@
 #include "socket-util.h"
 #include "type-props.h"
 #include "util.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(signals);
 

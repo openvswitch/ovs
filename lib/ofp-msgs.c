@@ -24,7 +24,7 @@
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
 #include "ovs-thread.h"
-#include "vlog.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_msgs);
 
