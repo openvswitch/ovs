@@ -80,20 +80,20 @@ static inline bool hmap_is_empty(const struct hmap *);
 
 /* Adjusting capacity. */
 void hmap_expand_at(struct hmap *, const char *where);
-#define hmap_expand(HMAP) hmap_expand_at(HMAP, SOURCE_LOCATOR)
+#define hmap_expand(HMAP) hmap_expand_at(HMAP, OVS_SOURCE_LOCATOR)
 
 void hmap_shrink_at(struct hmap *, const char *where);
-#define hmap_shrink(HMAP) hmap_shrink_at(HMAP, SOURCE_LOCATOR)
+#define hmap_shrink(HMAP) hmap_shrink_at(HMAP, OVS_SOURCE_LOCATOR)
 
 void hmap_reserve_at(struct hmap *, size_t capacity, const char *where);
 #define hmap_reserve(HMAP, CAPACITY) \
-    hmap_reserve_at(HMAP, CAPACITY, SOURCE_LOCATOR)
+    hmap_reserve_at(HMAP, CAPACITY, OVS_SOURCE_LOCATOR)
 
 /* Insertion and deletion. */
 static inline void hmap_insert_at(struct hmap *, struct hmap_node *,
                                   size_t hash, const char *where);
 #define hmap_insert(HMAP, NODE, HASH) \
-    hmap_insert_at(HMAP, NODE, HASH, SOURCE_LOCATOR)
+    hmap_insert_at(HMAP, NODE, HASH, OVS_SOURCE_LOCATOR)
 
 static inline void hmap_insert_fast(struct hmap *,
                                     struct hmap_node *, size_t hash);

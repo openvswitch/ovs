@@ -28,7 +28,7 @@ struct timer {
 
 long long int timer_msecs_until_expired(const struct timer *);
 void timer_wait_at(const struct timer *, const char *where);
-#define timer_wait(timer) timer_wait_at(timer, SOURCE_LOCATOR)
+#define timer_wait(timer) timer_wait_at(timer, OVS_SOURCE_LOCATOR)
 
 /* Causes 'timer' to expire when 'duration' milliseconds have passed.
  *

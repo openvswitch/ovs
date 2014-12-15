@@ -51,21 +51,21 @@ extern "C" {
  * caller would be more useful in log output.  See timer_wait_at() for an
  * example. */
 void poll_fd_wait_at(int fd, short int events, const char *where);
-#define poll_fd_wait(fd, events) poll_fd_wait_at(fd, events, SOURCE_LOCATOR)
+#define poll_fd_wait(fd, events) poll_fd_wait_at(fd, events, OVS_SOURCE_LOCATOR)
 
 #ifdef _WIN32
-#define poll_wevent_wait(wevent) poll_wevent_wait_at(wevent, SOURCE_LOCATOR)
+#define poll_wevent_wait(wevent) poll_wevent_wait_at(wevent, OVS_SOURCE_LOCATOR)
 #endif /* _WIN32 */
 
 void poll_timer_wait_at(long long int msec, const char *where);
-#define poll_timer_wait(msec) poll_timer_wait_at(msec, SOURCE_LOCATOR)
+#define poll_timer_wait(msec) poll_timer_wait_at(msec, OVS_SOURCE_LOCATOR)
 
 void poll_timer_wait_until_at(long long int msec, const char *where);
 #define poll_timer_wait_until(msec)             \
-    poll_timer_wait_until_at(msec, SOURCE_LOCATOR)
+    poll_timer_wait_until_at(msec, OVS_SOURCE_LOCATOR)
 
 void poll_immediate_wake_at(const char *where);
-#define poll_immediate_wake() poll_immediate_wake_at(SOURCE_LOCATOR)
+#define poll_immediate_wake() poll_immediate_wake_at(OVS_SOURCE_LOCATOR)
 
 /* Wait until an event occurs. */
 void poll_block(void);

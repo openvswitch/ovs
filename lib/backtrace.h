@@ -58,8 +58,8 @@
  * ??:0
  */
 
-#define log_backtrace() log_backtrace_at(NULL, SOURCE_LOCATOR);
-#define log_backtrace_msg(msg) log_backtrace_at(msg, SOURCE_LOCATOR);
+#define log_backtrace() log_backtrace_at(NULL, OVS_SOURCE_LOCATOR);
+#define log_backtrace_msg(msg) log_backtrace_at(msg, OVS_SOURCE_LOCATOR);
 
 #define BACKTRACE_MAX_FRAMES 31
 

@@ -66,12 +66,12 @@ void ovs_mutex_unlock(const struct ovs_mutex *mutex) OVS_RELEASES(mutex);
 void ovs_mutex_lock_at(const struct ovs_mutex *mutex, const char *where)
     OVS_ACQUIRES(mutex);
 #define ovs_mutex_lock(mutex) \
-        ovs_mutex_lock_at(mutex, SOURCE_LOCATOR)
+        ovs_mutex_lock_at(mutex, OVS_SOURCE_LOCATOR)
 
 int ovs_mutex_trylock_at(const struct ovs_mutex *mutex, const char *where)
     OVS_TRY_LOCK(0, mutex);
 #define ovs_mutex_trylock(mutex) \
-        ovs_mutex_trylock_at(mutex, SOURCE_LOCATOR)
+        ovs_mutex_trylock_at(mutex, OVS_SOURCE_LOCATOR)
 
 void ovs_mutex_cond_wait(pthread_cond_t *, const struct ovs_mutex *);
 
@@ -130,22 +130,22 @@ void xpthread_rwlockattr_setkind_np(pthread_rwlockattr_t *, int kind);
 void ovs_rwlock_wrlock_at(const struct ovs_rwlock *rwlock, const char *where)
     OVS_ACQ_WRLOCK(rwlock);
 #define ovs_rwlock_wrlock(rwlock) \
-        ovs_rwlock_wrlock_at(rwlock, SOURCE_LOCATOR)
+        ovs_rwlock_wrlock_at(rwlock, OVS_SOURCE_LOCATOR)
 
 int ovs_rwlock_trywrlock_at(const struct ovs_rwlock *rwlock, const char *where)
     OVS_TRY_WRLOCK(0, rwlock);
 #define ovs_rwlock_trywrlock(rwlock) \
-    ovs_rwlock_trywrlock_at(rwlock, SOURCE_LOCATOR)
+    ovs_rwlock_trywrlock_at(rwlock, OVS_SOURCE_LOCATOR)
 
 void ovs_rwlock_rdlock_at(const struct ovs_rwlock *rwlock, const char *where)
     OVS_ACQ_RDLOCK(rwlock);
 #define ovs_rwlock_rdlock(rwlock) \
-        ovs_rwlock_rdlock_at(rwlock, SOURCE_LOCATOR)
+        ovs_rwlock_rdlock_at(rwlock, OVS_SOURCE_LOCATOR)
 
 int ovs_rwlock_tryrdlock_at(const struct ovs_rwlock *rwlock, const char *where)
     OVS_TRY_RDLOCK(0, rwlock);
 #define ovs_rwlock_tryrdlock(rwlock) \
-        ovs_rwlock_tryrdlock_at(rwlock, SOURCE_LOCATOR)
+        ovs_rwlock_tryrdlock_at(rwlock, OVS_SOURCE_LOCATOR)
 
 /* ovs_barrier functions analogous to pthread_barrier_*() functions. */
 void ovs_barrier_init(struct ovs_barrier *, uint32_t count);
@@ -620,11 +620,11 @@ size_t ovs_thread_stats_next_bucket(const struct ovsthread_stats *, size_t);
 bool single_threaded(void);
 
 void assert_single_threaded_at(const char *where);
-#define assert_single_threaded() assert_single_threaded_at(SOURCE_LOCATOR)
+#define assert_single_threaded() assert_single_threaded_at(OVS_SOURCE_LOCATOR)
 
 #ifndef _WIN32
 pid_t xfork_at(const char *where);
-#define xfork() xfork_at(SOURCE_LOCATOR)
+#define xfork() xfork_at(OVS_SOURCE_LOCATOR)
 #endif
 
 void forbid_forking(const char *reason);

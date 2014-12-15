@@ -126,7 +126,7 @@ void seq_change(struct seq *);
 uint64_t seq_read(const struct seq *);
 
 void seq_wait_at(const struct seq *, uint64_t value, const char *where);
-#define seq_wait(seq, value) seq_wait_at(seq, value, SOURCE_LOCATOR)
+#define seq_wait(seq, value) seq_wait_at(seq, value, OVS_SOURCE_LOCATOR)
 
 /* For poll_block() internal use. */
 void seq_woke(void);
