@@ -31,7 +31,7 @@
 #include "rconn.h"
 #include "sat-math.h"
 #include "timeval.h"
-#include "token-bucket.h"
+#include "openvswitch/token-bucket.h"
 #include "vconn.h"
 
 struct pinqueue {

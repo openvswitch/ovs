@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef TOKEN_BUCKET_H
-#define TOKEN_BUCKET_H 1
+#ifndef OPENVSWITCH_TOKEN_BUCKET_H
+#define OPENVSWITCH_TOKEN_BUCKET_H 1
 
 #include <limits.h>
 #include <stdbool.h>

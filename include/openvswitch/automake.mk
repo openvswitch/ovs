@@ -2,6 +2,7 @@ openvswitchincludedir = $(includedir)/openvswitch
 openvswitchinclude_HEADERS = \
 	include/openvswitch/compiler.h \
 	include/openvswitch/thread.h \
+	include/openvswitch/token-bucket.h \
 	include/openvswitch/types.h \
 	include/openvswitch/util.h \
 	include/openvswitch/version.h

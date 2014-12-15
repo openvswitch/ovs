@@ -33,7 +33,7 @@
 #include "compiler.h"
 #include "ovs-thread.h"
 #include "sat-math.h"
-#include "token-bucket.h"
+#include "openvswitch/token-bucket.h"
 #include "util.h"
 #include "list.h"
 
