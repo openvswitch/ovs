@@ -543,6 +543,34 @@ typedef struct _SFLLACP_counters {
 
 #define SFL_CTR_LACP_XDR_SIZE 56
 
+/* Application resource counters */
+
+typedef struct _SFLAPPResources_counters {
+    uint32_t user_time;   /* in milliseconds */
+    uint32_t system_time; /* in milliseconds */
+    uint64_t mem_used;
+    uint64_t mem_max;
+    uint32_t fd_open;
+    uint32_t fd_max;
+    uint32_t conn_open;
+    uint32_t conn_max;
+} SFLAPPResources_counters;
+
+#define SFL_CTR_APP_RESOURCES_XDR_SIZE 40
+
+/* OVS datapath stats */
+
+typedef struct _SFLOVSDP_counters {
+    uint32_t n_hit;
+    uint32_t n_missed;
+    uint32_t n_lost;
+    uint32_t n_mask_hit;
+    uint32_t n_flows;
+    uint32_t n_masks;
+} SFLOVSDP_counters;
+
+#define SFL_CTR_OVSDP_XDR_SIZE 24
+
 /* Counters data */
 
 enum SFLCounters_type_tag {
@@ -554,7 +582,9 @@ enum SFLCounters_type_tag {
     SFLCOUNTERS_VLAN         = 5,
     SFLCOUNTERS_LACP         = 7,
     SFLCOUNTERS_OPENFLOWPORT = 1004,
-    SFLCOUNTERS_PORTNAME     = 1005
+    SFLCOUNTERS_PORTNAME     = 1005,
+    SFLCOUNTERS_APP_RESOURCES = 2203,
+    SFLCOUNTERS_OVSDP        = 2207
 };
 
 typedef union _SFLCounters_type {
@@ -566,6 +596,8 @@ typedef union _SFLCounters_type {
     SFLLACP_counters lacp;
     SFLOpenFlowPort ofPort;
     SFLPortName portName;
+    SFLAPPResources_counters appResources;
+    SFLOVSDP_counters ovsdp;
 } SFLCounters_type;
 
 typedef struct _SFLCounters_sample_element {
