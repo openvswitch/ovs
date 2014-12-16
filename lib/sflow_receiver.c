@@ -652,6 +652,8 @@ static int computeCountersSampleSize(SFLReceiver *receiver, SFL_COUNTERS_SAMPLE_
 	case SFLCOUNTERS_LACP: elemSiz = SFL_CTR_LACP_XDR_SIZE; break;
 	case SFLCOUNTERS_OPENFLOWPORT: elemSiz = SFL_CTR_OPENFLOWPORT_XDR_SIZE; break;
 	case SFLCOUNTERS_PORTNAME: elemSiz = stringEncodingLength(&elem->counterBlock.portName.portName); break;
+	case SFLCOUNTERS_APP_RESOURCES: elemSiz = SFL_CTR_APP_RESOURCES_XDR_SIZE; break;
+	case SFLCOUNTERS_OVSDP: elemSiz = SFL_CTR_OVSDP_XDR_SIZE; break;
 	default:
 	    sflError(receiver, "unexpected counters_tag");
 	    return -1;
@@ -773,6 +775,24 @@ int sfl_receiver_writeCountersSample(SFLReceiver *receiver, SFL_COUNTERS_SAMPLE_
 		break;
 	    case SFLCOUNTERS_PORTNAME:
 		putString(receiver, &elem->counterBlock.portName.portName);
+		break;
+	    case SFLCOUNTERS_APP_RESOURCES:
+		putNet32(receiver, elem->counterBlock.appResources.user_time);
+		putNet32(receiver, elem->counterBlock.appResources.system_time);
+		putNet64(receiver, elem->counterBlock.appResources.mem_used);
+		putNet64(receiver, elem->counterBlock.appResources.mem_max);
+		putNet32(receiver, elem->counterBlock.appResources.fd_open);
+		putNet32(receiver, elem->counterBlock.appResources.fd_max);
+		putNet32(receiver, elem->counterBlock.appResources.conn_open);
+		putNet32(receiver, elem->counterBlock.appResources.conn_max);
+		break;
+	    case SFLCOUNTERS_OVSDP:
+		putNet32(receiver, elem->counterBlock.ovsdp.n_hit);
+		putNet32(receiver, elem->counterBlock.ovsdp.n_missed);
+		putNet32(receiver, elem->counterBlock.ovsdp.n_lost);
+		putNet32(receiver, elem->counterBlock.ovsdp.n_mask_hit);
+		putNet32(receiver, elem->counterBlock.ovsdp.n_flows);
+		putNet32(receiver, elem->counterBlock.ovsdp.n_masks);
 		break;
 	    default:
 		sflError(receiver, "unexpected counters_tag");
