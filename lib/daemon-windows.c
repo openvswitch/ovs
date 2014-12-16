@@ -19,6 +19,7 @@
 #include "daemon-private.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include "ovs-thread.h"
 #include "poll-loop.h"
 #include "openvswitch/vlog.h"
 
