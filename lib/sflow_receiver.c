@@ -651,6 +651,8 @@ static int computeCountersSampleSize(SFLReceiver *receiver, SFL_COUNTERS_SAMPLE_
 	case SFLCOUNTERS_VLAN: elemSiz = sizeof(elem->counterBlock.vlan); break;
 	case SFLCOUNTERS_LACP: elemSiz = SFL_CTR_LACP_XDR_SIZE; break;
 	case SFLCOUNTERS_OPENFLOWPORT: elemSiz = SFL_CTR_OPENFLOWPORT_XDR_SIZE; break;
+	case SFLCOUNTERS_LACP: elemSiz = sizeof(elem->counterBlock.lacp); break;
+	case SFLCOUNTERS_OPENFLOWPORT: elemSiz = sizeof(&elem->counterBlock.ofPort); break;
 	case SFLCOUNTERS_PORTNAME: elemSiz = stringEncodingLength(&elem->counterBlock.portName.portName); break;
 	case SFLCOUNTERS_APP_RESOURCES: elemSiz = SFL_CTR_APP_RESOURCES_XDR_SIZE; break;
 	case SFLCOUNTERS_OVSDP: elemSiz = SFL_CTR_OVSDP_XDR_SIZE; break;
