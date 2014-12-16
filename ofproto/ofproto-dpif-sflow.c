@@ -168,14 +168,14 @@ dpif_sflow_find_port(const struct dpif_sflow *ds, odp_port_t odp_port)
 }
 
 /* Call to get the datapath stats. Modeled after the dpctl utility.
- *
- * It might be more efficient for this module to be given a handle it can use
- * to get these stats more efficiently, but this is only going to be called
- * once every 20-30 seconds.  Return number of datapaths found (normally expect
- * 1). */
+   It may be more efficient for this module to be given a handle
+   it can use to get these stats more efficiently,  but this is only
+   going to be called once every 20-30 seconds. Return number of
+   datapaths found (normally expect 1) */
+
 static int
 sflow_get_dp_stats(struct dpif_sflow *ds OVS_UNUSED,
-                   struct dpif_dp_stats *dp_totals)
+		   struct dpif_dp_stats *dp_totals)
 {
     struct sset types;
     const char *type;
@@ -184,64 +184,69 @@ sflow_get_dp_stats(struct dpif_sflow *ds OVS_UNUSED,
     memset(dp_totals, 0, sizeof *dp_totals);
     sset_init(&types);
     dp_enumerate_types(&types);
-    SSET_FOR_EACH (type, &types) {
-        struct sset names;
-        const char *name;
-        sset_init(&names);
-        if (dp_enumerate_names(type, &names) == 0) {
-            SSET_FOR_EACH (name, &names) {
-                struct dpif *dpif;
-                if (dpif_open(name, type, &dpif) == 0) {
-                    struct dpif_dp_stats dp_stats;
-                    if (dpif_get_dp_stats(dpif, &dp_stats) == 0) {
-                        count++;
-                        dp_totals->n_hit += dp_stats.n_hit;
-                        dp_totals->n_missed += dp_stats.n_missed;
-                        dp_totals->n_lost += dp_stats.n_lost;
-                        dp_totals->n_flows += dp_stats.n_flows;
-                        dp_totals->n_mask_hit += dp_stats.n_mask_hit;
-                        dp_totals->n_masks += dp_stats.n_masks;
-                    }
-                    dpif_close(dpif);
-                }
-            }
-            sset_destroy(&names);
-        }
+    SSET_FOR_EACH(type, &types) {
+	struct sset names;
+	const char *name;
+	sset_init(&names);
+	if (dp_enumerate_names(type, &names) == 0) {
+	    SSET_FOR_EACH(name, &names) {
+		struct dpif *dpif;
+		if (dpif_open(name, type, &dpif) == 0) {
+		    struct dpif_dp_stats dp_stats;
+		    if (dpif_get_dp_stats(dpif, &dp_stats) == 0) {
+			count++;
+			dp_totals->n_hit += dp_stats.n_hit;
+			dp_totals->n_missed += dp_stats.n_missed;
+			dp_totals->n_lost += dp_stats.n_lost;
+			dp_totals->n_flows += dp_stats.n_flows;
+			dp_totals->n_mask_hit += dp_stats.n_mask_hit;
+			dp_totals->n_masks += dp_stats.n_masks;
+		    }
+		    dpif_close(dpif);
+		}
+	    }
+	    sset_destroy(&names);
+	}
     }
     sset_destroy(&types);
     return count;
+}
+
+static uint32_t
+as_mS(const struct timeval *tv) {
+    time_t mS = (tv->tv_sec * 1000);
+    mS += (tv->tv_usec / 1000);
+    return (uint32_t)mS;
 }
 
 /* If there are multiple bridges defined then we need some
    minimal artibration to decide which one should send the
    global counters.  This function allows each sub-agent to
    ask if he should do it or not. */
-static bool
-sflow_global_counters_subid_test(uint32_t subid)
+static bool sflow_global_counters_subid_test(uint32_t subid)
     OVS_REQUIRES(mutex)
 {
     if (sflow_global_counters_subid == SFLOW_GC_SUBID_UNCLAIMED) {
-        /* The role is up for grabs. */
-        sflow_global_counters_subid = subid;
+	/* The role is up for grabs. */
+	sflow_global_counters_subid = subid;
     }
     return (sflow_global_counters_subid == subid);
 }
 
-static void
-sflow_global_counters_subid_clear(uint32_t subid)
+static void sflow_global_counters_subid_clear(uint32_t subid)
     OVS_REQUIRES(mutex)
 {
     if (sflow_global_counters_subid == subid) {
-        /* The sub-agent that was sending global counters
-           is going away, so reset to allow another
-           to take over. */
-        sflow_global_counters_subid = SFLOW_GC_SUBID_UNCLAIMED;
+	/* The sub-agent that was sending global counters
+	   is going away, so reset to allow another
+	   to take over. */
+	sflow_global_counters_subid = SFLOW_GC_SUBID_UNCLAIMED;
     }
 }
 
 static void
 sflow_agent_get_global_counters(void *ds_, SFLPoller *poller,
-                                SFL_COUNTERS_SAMPLE_TYPE *cs)
+				SFL_COUNTERS_SAMPLE_TYPE *cs)
     OVS_REQUIRES(mutex)
 {
     struct dpif_sflow *ds = ds_;
@@ -250,29 +255,27 @@ sflow_agent_get_global_counters(void *ds_, SFLPoller *poller,
     struct rusage usage;
 
     if (!sflow_global_counters_subid_test(poller->agent->subId)) {
-        /* Another sub-agent is currently responsible for this. */
-        return;
+	/* Another sub-agent is currently responsible for this. */
+	return;
     }
 
     /* datapath stats */
     if (sflow_get_dp_stats(ds, &dp_totals)) {
-        dp_elem.tag = SFLCOUNTERS_OVSDP;
-        dp_elem.counterBlock.ovsdp.n_hit = dp_totals.n_hit;
-        dp_elem.counterBlock.ovsdp.n_missed = dp_totals.n_missed;
-        dp_elem.counterBlock.ovsdp.n_lost = dp_totals.n_lost;
-        dp_elem.counterBlock.ovsdp.n_mask_hit = dp_totals.n_mask_hit;
-        dp_elem.counterBlock.ovsdp.n_flows = dp_totals.n_flows;
-        dp_elem.counterBlock.ovsdp.n_masks = dp_totals.n_masks;
-        SFLADD_ELEMENT(cs, &dp_elem);
+	dp_elem.tag = SFLCOUNTERS_OVSDP;
+	dp_elem.counterBlock.ovsdp.n_hit = (uint32_t)dp_totals.n_hit;
+	dp_elem.counterBlock.ovsdp.n_missed = (uint32_t)dp_totals.n_missed;
+	dp_elem.counterBlock.ovsdp.n_lost = (uint32_t)dp_totals.n_lost;
+	dp_elem.counterBlock.ovsdp.n_mask_hit = (uint32_t)dp_totals.n_mask_hit;
+	dp_elem.counterBlock.ovsdp.n_flows = (uint32_t)dp_totals.n_flows;
+	dp_elem.counterBlock.ovsdp.n_masks = (uint32_t)dp_totals.n_masks;
+	SFLADD_ELEMENT(cs, &dp_elem);
     }
 
     /* resource usage */
     getrusage(RUSAGE_SELF, &usage);
     res_elem.tag = SFLCOUNTERS_APP_RESOURCES;
-    res_elem.counterBlock.appResources.user_time
-        = timeval_to_msec(&usage.ru_utime);
-    res_elem.counterBlock.appResources.system_time
-        = timeval_to_msec(&usage.ru_stime);
+    res_elem.counterBlock.appResources.user_time = as_mS(&usage.ru_utime);
+    res_elem.counterBlock.appResources.system_time = as_mS(&usage.ru_stime);
     res_elem.counterBlock.appResources.mem_used = (usage.ru_maxrss * 1024);
     SFL_UNDEF_GAUGE(res_elem.counterBlock.appResources.mem_max);
     SFL_UNDEF_GAUGE(res_elem.counterBlock.appResources.fd_open);
@@ -687,7 +690,7 @@ dpif_sflow_set_options(struct dpif_sflow *ds,
     /* Create agent. */
     VLOG_INFO("creating sFlow agent %d", options->sub_id);
     if (ds->sflow_agent) {
-        sflow_global_counters_subid_clear(ds->sflow_agent->subId);
+	sflow_global_counters_subid_clear(ds->sflow_agent->subId);
         sfl_agent_release(ds->sflow_agent);
     }
     ds->sflow_agent = xcalloc(1, sizeof *ds->sflow_agent);
@@ -724,7 +727,7 @@ dpif_sflow_set_options(struct dpif_sflow *ds,
     /* Add a counter poller for the bridge so we can use it to send
        global counters such as datapath cache hit/miss stats. */
     poller = sfl_agent_addPoller(ds->sflow_agent, &dsi, ds,
-                                 sflow_agent_get_global_counters);
+				 sflow_agent_get_global_counters);
     sfl_poller_set_sFlowCpInterval(poller, ds->options->polling_interval);
     sfl_poller_set_sFlowCpReceiver(poller, RECEIVER_INDEX);
 
