@@ -634,6 +634,8 @@ xlate_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
               struct dpif_sflow **sflow, struct netflow **netflow,
               odp_port_t *odp_in_port)
 {
+    struct ofproto_dpif *recv_ofproto = NULL;
+    struct ofproto_dpif *recirc_ofproto = NULL;
     const struct xport *xport;
     int error = ENODEV;
 
@@ -655,6 +657,7 @@ xlate_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
     if (!xport) {
         goto exit;
     }
+    recv_ofproto = xport->xbridge->ofproto;
 
     if (vsp_adjust_flow(xport->xbridge->ofproto, flow)) {
         if (packet) {
@@ -667,20 +670,54 @@ xlate_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
     }
     error = 0;
 
+    /* When recirc_id is set in 'flow', checks whether the ofproto_dpif that
+     * corresponds to the recirc_id is same as the receiving bridge.  If they
+     * are the same, uses the 'recv_ofproto' and keeps the 'ofp_in_port' as
+     * assigned.  Otherwise, uses the 'recirc_ofproto' that owns recirc_id and
+     * assigns OFPP_NONE to 'ofp_in_port'.  Doing this is in that, the
+     * recirculated flow must be processced by the ofproto which originates
+     * the recirculation, and as bridges can only see their own ports, the
+     * in_port of the 'recv_ofproto' should not be passed to the
+     * 'recirc_ofproto'.
+     *
+     * Admittedly, setting the 'ofp_in_port' to OFPP_NONE limits the
+     * 'recirc_ofproto' from meaningfully matching on in_port of recirculated
+     * flow, and should be fixed in the near future.
+     *
+     * TODO: Restore the original patch port.
+     */
+    if (flow->recirc_id) {
+        recirc_ofproto = ofproto_dpif_recirc_get_ofproto(backer,
+                                                         flow->recirc_id);
+        /* Returns error if could not find recirculation bridge */
+        if (!recirc_ofproto) {
+            error = ENOENT;
+            goto exit;
+        }
+
+        if (recv_ofproto != recirc_ofproto) {
+            xport = NULL;
+            flow->in_port.ofp_port = OFPP_NONE;
+            if (odp_in_port) {
+                *odp_in_port = ODPP_NONE;
+            }
+        }
+    }
+
     if (ofproto) {
-        *ofproto = xport->xbridge->ofproto;
+        *ofproto = xport ? recv_ofproto : recirc_ofproto;
     }
 
     if (ipfix) {
-        *ipfix = dpif_ipfix_ref(xport->xbridge->ipfix);
+        *ipfix = xport ? dpif_ipfix_ref(xport->xbridge->ipfix) : NULL;
     }
 
     if (sflow) {
-        *sflow = dpif_sflow_ref(xport->xbridge->sflow);
+        *sflow = xport ? dpif_sflow_ref(xport->xbridge->sflow) : NULL;
     }
 
     if (netflow) {
-        *netflow = netflow_ref(xport->xbridge->netflow);
+        *netflow = xport ? netflow_ref(xport->xbridge->netflow) : NULL;
     }
 
 exit:
