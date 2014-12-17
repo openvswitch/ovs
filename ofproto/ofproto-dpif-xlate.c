@@ -980,18 +980,48 @@ static struct ofproto_dpif *
 xlate_lookup_ofproto_(const struct dpif_backer *backer, const struct flow *flow,
                       ofp_port_t *ofp_in_port, const struct xport **xportp)
 {
+    struct ofproto_dpif *recv_ofproto = NULL;
+    struct ofproto_dpif *recirc_ofproto = NULL;
     const struct xport *xport;
+    ofp_port_t in_port = OFPP_NONE;
 
     *xportp = xport = xlate_lookup_xport(backer, flow);
 
     if (xport) {
-        if (ofp_in_port) {
-            *ofp_in_port = xport->ofp_port;
-        }
-        return xport->xbridge->ofproto;
+        recv_ofproto = xport->xbridge->ofproto;
+        in_port = xport->ofp_port;
     }
 
-    return NULL;
+    /* When recirc_id is set in 'flow', checks whether the ofproto_dpif that
+     * corresponds to the recirc_id is same as the receiving bridge.  If they
+     * are the same, uses the 'recv_ofproto' and keeps the 'ofp_in_port' as
+     * assigned.  Otherwise, uses the 'recirc_ofproto' that owns recirc_id and
+     * assigns OFPP_NONE to 'ofp_in_port'.  Doing this is in that, the
+     * recirculated flow must be processced by the ofproto which originates
+     * the recirculation, and as bridges can only see their own ports, the
+     * in_port of the 'recv_ofproto' should not be passed to the
+     * 'recirc_ofproto'.
+     *
+     * Admittedly, setting the 'ofp_in_port' to OFPP_NONE limits the
+     * 'recirc_ofproto' from meaningfully matching on in_port of recirculated
+     * flow, and should be fixed in the near future.
+     *
+     * TODO: Restore the original patch port.
+     */
+    if (recv_ofproto && flow->recirc_id) {
+        recirc_ofproto = ofproto_dpif_recirc_get_ofproto(backer,
+                                                         flow->recirc_id);
+        if (recv_ofproto != recirc_ofproto) {
+            *xportp = xport = NULL;
+            in_port = OFPP_NONE;
+        }
+    }
+
+    if (ofp_in_port) {
+        *ofp_in_port = in_port;
+    }
+
+    return xport ? recv_ofproto : recirc_ofproto;
 }
 
 /* Given a datapath and flow metadata ('backer', and 'flow' respectively)
@@ -1012,9 +1042,7 @@ xlate_lookup_ofproto(const struct dpif_backer *backer, const struct flow *flow,
  * pointers until quiescing, for longer term use additional references must
  * be taken.
  *
- * '*ofp_in_port' is set to OFPP_NONE if 'flow''s in_port does not exist.
- *
- * Returns 0 if successful, ENODEV if the parsed flow has no associated ofport.
+ * Returns 0 if successful, ENODEV if the parsed flow has no associated ofproto.
  */
 int
 xlate_lookup(const struct dpif_backer *backer, const struct flow *flow,
@@ -1027,11 +1055,7 @@ xlate_lookup(const struct dpif_backer *backer, const struct flow *flow,
 
     ofproto = xlate_lookup_ofproto_(backer, flow, ofp_in_port, &xport);
 
-    if (ofp_in_port && !xport) {
-        *ofp_in_port = OFPP_NONE;
-    }
-
-    if (!xport) {
+    if (!ofproto) {
         return ENODEV;
     }
 
@@ -1040,16 +1064,17 @@ xlate_lookup(const struct dpif_backer *backer, const struct flow *flow,
     }
 
     if (ipfix) {
-        *ipfix = xport->xbridge->ipfix;
+        *ipfix = xport ? xport->xbridge->ipfix : NULL;
     }
 
     if (sflow) {
-        *sflow = xport->xbridge->sflow;
+        *sflow = xport ? xport->xbridge->sflow : NULL;
     }
 
     if (netflow) {
-        *netflow = xport->xbridge->netflow;
+        *netflow = xport ? xport->xbridge->netflow : NULL;
     }
+
     return 0;
 }
 

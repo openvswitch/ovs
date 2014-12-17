@@ -144,6 +144,64 @@ AT_CHECK([ovs-appctl dpif/dump-flows br1 |grep tcp > br1_flows.txt])
 AT_CHECK([test `grep in_port.4 br1_flows.txt |wc -l` -gt 24])
 AT_CHECK([test `grep in_port.5 br1_flows.txt |wc -l` -gt 24])
 AT_CHECK([test `grep in_port.6 br1_flows.txt |wc -l` -gt 24])
+
+OVS_VSWITCHD_STOP()
+AT_CLEANUP
+
+# Makes sure recirculation does not change the way packet is handled.
+AT_SETUP([ofproto-dpif, balance-tcp bonding, different recirc flow ])
+OVS_VSWITCHD_START(
+  [add-bond br0 bond0 p1 p2 bond_mode=balance-tcp lacp=active \
+       other-config:lacp-time=fast other-config:bond-rebalance-interval=0 -- \
+   set interface p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p1.sock ofport_request=1 -- \
+   set interface p2 type=dummy options:pstream=punix:$OVS_RUNDIR/p2.sock ofport_request=2 -- \
+   add-br br1 -- \
+   set bridge br1 other-config:hwaddr=aa:66:aa:66:00:00 -- \
+   set bridge br1 datapath-type=dummy other-config:datapath-id=1234 \
+       fail-mode=standalone -- \
+   add-bond br1 bond1 p3 p4 bond_mode=balance-tcp lacp=active \
+       other-config:lacp-time=fast other-config:bond-rebalance-interval=0 -- \
+   set interface p3 type=dummy options:stream=unix:$OVS_RUNDIR/p1.sock ofport_request=3 -- \
+   set interface p4 type=dummy options:stream=unix:$OVS_RUNDIR/p2.sock ofport_request=4 -- \
+   add-port br1 br1- -- set interface br1- type=patch options:peer=br1+ ofport_request=100 -- \
+   add-br br-int -- \
+   set bridge br-int other-config:hwaddr=aa:77:aa:77:00:00 -- \
+   set bridge br-int datapath-type=dummy other-config:datapath-id=1235 \
+       fail-mode=secure -- \
+   add-port br-int br1+ -- set interface br1+ type=patch options:peer=br1- ofport_request=101 -- \
+   add-port br-int p5 -- set interface p5 ofport_request=5 type=dummy
+])
+AT_CHECK([ovs-appctl netdev-dummy/set-admin-state up], 0, [OK
+])
+
+# The dl_vlan flow should not be ever matched,
+# since recirculation should not change the flow handling.
+AT_DATA([flows.txt], [dnl
+table=0 priority=1 in_port=5 actions=mod_vlan_vid:1,output(101)
+table=0 priority=2 in_port=5 dl_vlan=1 actions=drop
+])
+AT_CHECK([ovs-ofctl add-flows br-int flows.txt])
+
+# Sends a packet to trigger recirculation.
+# Should generate recirc_id(0x12d),dp_hash(0xc1261ba2/0xff).
+AT_CHECK([ovs-appctl netdev-dummy/receive p5 "in_port(5),eth(src=50:54:00:00:00:05,dst=50:54:00:00:01:00),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1)"])
+
+# Collects flow stats.
+AT_CHECK([ovs-appctl revalidator/purge], [0])
+
+# Checks the flow stats in br1, should only be one flow with non-zero
+# 'n_packets' from internal table.
+AT_CHECK([ovs-appctl bridge/dump-flows br1 | ofctl_strip | grep -- "n_packets" | grep -- "table_id" | sed -e 's/output:[[0-9]]\+/output/'], [0], [dnl
+table_id=254, n_packets=1, n_bytes=64, priority=20,recirc_id=0x12d,dp_hash=0xa2/0xff,actions=output
+])
+
+# Checks the flow stats in br-int, should be only one match.
+AT_CHECK([ovs-ofctl dump-flows br-int | ofctl_strip | sort], [0], [dnl
+ n_packets=1, n_bytes=60, priority=1,in_port=5 actions=mod_vlan_vid:1,output:101
+ priority=2,in_port=5,dl_vlan=1 actions=drop
+NXST_FLOW reply:
+])
+
 OVS_VSWITCHD_STOP()
 AT_CLEANUP
 

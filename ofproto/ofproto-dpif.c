@@ -251,6 +251,13 @@ COVERAGE_DEFINE(rev_flow_table);
 COVERAGE_DEFINE(rev_mac_learning);
 COVERAGE_DEFINE(rev_mcast_snooping);
 
+/* Stores mapping between 'recirc_id' and 'ofproto-dpif'. */
+struct dpif_backer_recirc_node {
+    struct cmap_node cmap_node;
+    struct ofproto_dpif *ofproto;
+    uint32_t recirc_id;
+};
+
 /* All datapaths of a given type share a single dpif backer instance. */
 struct dpif_backer {
     char *type;
@@ -269,6 +276,8 @@ struct dpif_backer {
 
     /* Recirculation. */
     struct recirc_id_pool *rid_pool;       /* Recirculation ID pool. */
+    struct cmap recirc_map;         /* Map of 'recirc_id's to 'ofproto's. */
+    struct ovs_mutex recirc_mutex;  /* Protects 'recirc_map'. */
     bool enable_recirc;   /* True if the datapath supports recirculation */
 
     /* True if the datapath supports unique flow identifiers */
@@ -844,6 +853,27 @@ dealloc(struct ofproto *ofproto_)
     free(ofproto);
 }
 
+/* Called when 'ofproto' is destructed.  Checks for and clears any
+ * recirc_id leak. */
+static void
+dpif_backer_recirc_clear_ofproto(struct dpif_backer *backer,
+                                 struct ofproto_dpif *ofproto)
+{
+    struct dpif_backer_recirc_node *node;
+
+    ovs_mutex_lock(&backer->recirc_mutex);
+    CMAP_FOR_EACH (node, cmap_node, &backer->recirc_map) {
+        if (node->ofproto == ofproto) {
+            VLOG_ERR("recirc_id %"PRIu32", not freed when ofproto (%s) "
+                     "is destructed", node->recirc_id, ofproto->up.name);
+            cmap_remove(&backer->recirc_map, &node->cmap_node,
+                        node->recirc_id);
+            free(node);
+        }
+    }
+    ovs_mutex_unlock(&backer->recirc_mutex);
+}
+
 static void
 close_dpif_backer(struct dpif_backer *backer)
 {
@@ -860,6 +890,8 @@ close_dpif_backer(struct dpif_backer *backer)
     hmap_destroy(&backer->odp_to_ofport_map);
     shash_find_and_delete(&all_dpif_backers, backer->type);
     recirc_id_pool_destroy(backer->rid_pool);
+    cmap_destroy(&backer->recirc_map);
+    ovs_mutex_destroy(&backer->recirc_mutex);
     free(backer->type);
     free(backer->dp_version_string);
     dpif_close(backer->dpif);
@@ -975,6 +1007,8 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     backer->masked_set_action = check_masked_set_action(backer);
     backer->enable_ufid = check_ufid(backer);
     backer->rid_pool = recirc_id_pool_create();
+    ovs_mutex_init(&backer->recirc_mutex);
+    cmap_init(&backer->recirc_map);
 
     backer->enable_tnl_push_pop = dpif_supports_tnl_push_pop(backer->dpif);
     atomic_count_init(&backer->tnl_count, 0);
@@ -1422,6 +1456,8 @@ destruct(struct ofproto *ofproto_)
         free(pin);
     }
     guarded_list_destroy(&ofproto->pins);
+
+    dpif_backer_recirc_clear_ofproto(ofproto->backer, ofproto);
 
     mbridge_unref(ofproto->mbridge);
 
@@ -5376,20 +5412,53 @@ odp_port_to_ofp_port(const struct ofproto_dpif *ofproto, odp_port_t odp_port)
     }
 }
 
+struct ofproto_dpif *
+ofproto_dpif_recirc_get_ofproto(const struct dpif_backer *backer,
+                                uint32_t recirc_id)
+{
+    struct dpif_backer_recirc_node *node;
+
+    node = CONTAINER_OF(cmap_find(&backer->recirc_map, recirc_id),
+                        struct dpif_backer_recirc_node, cmap_node);
+
+    return node ? node->ofproto : NULL;
+}
+
 uint32_t
 ofproto_dpif_alloc_recirc_id(struct ofproto_dpif *ofproto)
 {
     struct dpif_backer *backer = ofproto->backer;
+    uint32_t recirc_id = recirc_id_alloc(backer->rid_pool);
 
-    return  recirc_id_alloc(backer->rid_pool);
+    if (recirc_id) {
+        struct dpif_backer_recirc_node *node = xmalloc(sizeof *node);
+
+        node->recirc_id = recirc_id;
+        node->ofproto = ofproto;
+
+        ovs_mutex_lock(&backer->recirc_mutex);
+        cmap_insert(&backer->recirc_map, &node->cmap_node, node->recirc_id);
+        ovs_mutex_unlock(&backer->recirc_mutex);
+    }
+
+    return recirc_id;
 }
 
 void
 ofproto_dpif_free_recirc_id(struct ofproto_dpif *ofproto, uint32_t recirc_id)
 {
     struct dpif_backer *backer = ofproto->backer;
+    struct dpif_backer_recirc_node *node;
 
-    recirc_id_free(backer->rid_pool, recirc_id);
+    node = CONTAINER_OF(cmap_find(&backer->recirc_map, recirc_id),
+                        struct dpif_backer_recirc_node, cmap_node);
+    if (node) {
+        ovs_mutex_lock(&backer->recirc_mutex);
+        cmap_remove(&backer->recirc_map, &node->cmap_node, node->recirc_id);
+        ovs_mutex_unlock(&backer->recirc_mutex);
+        recirc_id_free(backer->rid_pool, node->recirc_id);
+        free(node);
+    }
 }
 
 int
