@@ -2017,15 +2017,11 @@ odp_ufid_from_string(const char *s_, ovs_u128 *ufid)
             return -EINVAL;
         }
 
-        if (!ovs_scan(s, "%"SCNx64, &ufid->u64.hi)) {
+        if (!ovs_scan(s, "%16"SCNx64"%16"SCNx64, &ufid->u64.hi,
+                      &ufid->u64.lo)) {
             return -EINVAL;
         }
-        s += 16;
-
-        if (!ovs_scan(s, "%"SCNx64, &ufid->u64.lo)) {
-            return -EINVAL;
-        }
-        s += 16;
+        s += n;
         s += strspn(s, delimiters);
 
         return s - s_;
