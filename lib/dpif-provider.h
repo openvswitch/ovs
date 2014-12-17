@@ -373,10 +373,6 @@ struct dpif_class {
     /* Get datapath version. Caller is responsible for freeing the string
      * returned.  */
     char *(*get_datapath_version)(void);
-
-    /* Returns whether 'dpif' supports unique flow identifiers for flow
-     * operations. */
-    bool (*get_ufid_support)(struct dpif *);
 };
 
 extern const struct dpif_class dpif_netlink_class;

@@ -75,6 +75,7 @@ BUILD_ASSERT_DECL(N_TABLES >= 2 && N_TABLES <= 255);
 
 size_t ofproto_dpif_get_max_mpls_depth(const struct ofproto_dpif *);
 bool ofproto_dpif_get_enable_recirc(const struct ofproto_dpif *);
+bool ofproto_dpif_get_enable_ufid(struct dpif_backer *backer);
 
 struct rule_dpif *rule_dpif_lookup(struct ofproto_dpif *, struct flow *,
                                    struct flow_wildcards *, bool take_ref,

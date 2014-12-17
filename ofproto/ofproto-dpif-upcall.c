@@ -430,6 +430,7 @@ udpif_start_threads(struct udpif *udpif, size_t n_handlers,
 {
     if (udpif && n_handlers && n_revalidators) {
         size_t i;
+        bool enable_ufid;
 
         udpif->n_handlers = n_handlers;
         udpif->n_revalidators = n_revalidators;
@@ -444,7 +445,8 @@ udpif_start_threads(struct udpif *udpif, size_t n_handlers,
                 "handler", udpif_upcall_handler, handler);
         }
 
-        atomic_init(&udpif->enable_ufid, dpif_get_enable_ufid(udpif->dpif));
+        enable_ufid = ofproto_dpif_get_enable_ufid(udpif->backer);
+        atomic_init(&udpif->enable_ufid, enable_ufid);
         dpif_enable_upcall(udpif->dpif);
 
         ovs_barrier_init(&udpif->reval_barrier, udpif->n_revalidators);
@@ -1673,7 +1675,8 @@ exit:
 }
 
 static void
-delete_op_init__(struct ukey_op *op, const struct dpif_flow *flow)
+delete_op_init__(struct udpif *udpif, struct ukey_op *op,
+                 const struct dpif_flow *flow)
 {
     op->ukey = NULL;
     op->dop.type = DPIF_OP_FLOW_DEL;
@@ -1681,10 +1684,11 @@ delete_op_init__(struct ukey_op *op, const struct dpif_flow *flow)
     op->dop.u.flow_del.key_len = flow->key_len;
     op->dop.u.flow_del.ufid = flow->ufid_present ? &flow->ufid : NULL;
     op->dop.u.flow_del.stats = &op->stats;
+    atomic_read_relaxed(&udpif->enable_ufid, &op->dop.u.flow_del.terse);
 }
 
 static void
-delete_op_init(struct ukey_op *op, struct udpif_key *ukey)
+delete_op_init(struct udpif *udpif, struct ukey_op *op, struct udpif_key *ukey)
 {
     op->ukey = ukey;
     op->dop.type = DPIF_OP_FLOW_DEL;
@@ -1692,6 +1696,7 @@ delete_op_init(struct ukey_op *op, struct udpif_key *ukey)
     op->dop.u.flow_del.key_len = ukey->key_len;
     op->dop.u.flow_del.ufid = ukey->ufid_present ? &ukey->ufid : NULL;
     op->dop.u.flow_del.stats = &op->stats;
+    atomic_read_relaxed(&udpif->enable_ufid, &op->dop.u.flow_del.terse);
 }
 
 static void
@@ -1858,7 +1863,7 @@ revalidate(struct revalidator *revalidator)
                 } else {
                     log_unexpected_flow(f, error);
                     if (error != ENOENT) {
-                        delete_op_init__(&ops[n_ops++], f);
+                        delete_op_init__(udpif, &ops[n_ops++], f);
                     }
                 }
                 continue;
@@ -1889,7 +1894,7 @@ revalidate(struct revalidator *revalidator)
             ukey->flow_exists = keep;
 
             if (!keep) {
-                delete_op_init(&ops[n_ops++], ukey);
+                delete_op_init(udpif, &ops[n_ops++], ukey);
             }
             ovs_mutex_unlock(&ukey->mutex);
         }
@@ -1958,7 +1963,7 @@ revalidator_sweep__(struct revalidator *revalidator, bool purge)
                                                        ukey)))) {
                 struct ukey_op *op = &ops[n_ops++];
 
-                delete_op_init(op, ukey);
+                delete_op_init(udpif, op, ukey);
                 if (n_ops == REVALIDATE_MAX_BATCH) {
                     push_ukey_ops(udpif, umap, ops, n_ops);
                     n_ops = 0;

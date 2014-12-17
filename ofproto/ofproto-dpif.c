@@ -271,6 +271,9 @@ struct dpif_backer {
     struct recirc_id_pool *rid_pool;       /* Recirculation ID pool. */
     bool enable_recirc;   /* True if the datapath supports recirculation */
 
+    /* True if the datapath supports unique flow identifiers */
+    bool enable_ufid;
+
     /* True if the datapath supports variable-length
      * OVS_USERSPACE_ATTR_USERDATA in OVS_ACTION_ATTR_USERSPACE actions.
      * False if the datapath supports only 8-byte (or shorter) userdata. */
@@ -371,6 +374,12 @@ bool
 ofproto_dpif_get_enable_recirc(const struct ofproto_dpif *ofproto)
 {
     return ofproto->backer->enable_recirc;
+}
+
+bool
+ofproto_dpif_get_enable_ufid(struct dpif_backer *backer)
+{
+    return backer->enable_ufid;
 }
 
 static struct ofport_dpif *get_ofp_port(const struct ofproto_dpif *ofproto,
@@ -866,6 +875,7 @@ struct odp_garbage {
 static bool check_variable_length_userdata(struct dpif_backer *backer);
 static size_t check_max_mpls_depth(struct dpif_backer *backer);
 static bool check_recirc(struct dpif_backer *backer);
+static bool check_ufid(struct dpif_backer *backer);
 static bool check_masked_set_action(struct dpif_backer *backer);
 
 static int
@@ -963,6 +973,7 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     backer->enable_recirc = check_recirc(backer);
     backer->max_mpls_depth = check_max_mpls_depth(backer);
     backer->masked_set_action = check_masked_set_action(backer);
+    backer->enable_ufid = check_ufid(backer);
     backer->rid_pool = recirc_id_pool_create();
 
     backer->enable_tnl_push_pop = dpif_supports_tnl_push_pop(backer->dpif);
@@ -1029,6 +1040,39 @@ check_recirc(struct dpif_backer *backer)
     }
 
     return enable_recirc;
+}
+
+/* Tests whether 'dpif' supports userspace flow ids. We can skip serializing
+ * some flow attributes for datapaths that support this feature.
+ *
+ * Returns true if 'dpif' supports UFID for flow operations.
+ * Returns false if  'dpif' does not support UFID. */
+static bool
+check_ufid(struct dpif_backer *backer)
+{
+    struct flow flow;
+    struct odputil_keybuf keybuf;
+    struct ofpbuf key;
+    ovs_u128 ufid;
+    bool enable_ufid;
+
+    memset(&flow, 0, sizeof flow);
+    flow.dl_type = htons(0x1234);
+
+    ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
+    odp_flow_key_from_flow(&key, &flow, NULL, 0, true);
+    dpif_flow_hash(backer->dpif, ofpbuf_data(&key), ofpbuf_size(&key), &ufid);
+
+    enable_ufid = dpif_probe_feature(backer->dpif, "UFID", &key, &ufid);
+
+    if (enable_ufid) {
+        VLOG_INFO("%s: Datapath supports userspace flow ids",
+                  dpif_name(backer->dpif));
+    } else {
+        VLOG_INFO("%s: Datapath does not support userspace flow ids",
+                  dpif_name(backer->dpif));
+    }
+    return enable_ufid;
 }
 
 /* Tests whether 'backer''s datapath supports variable-length

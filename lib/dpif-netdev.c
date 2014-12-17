@@ -1584,12 +1584,6 @@ get_dpif_flow_stats(const struct dp_netdev_flow *netdev_flow,
     }
 }
 
-static bool
-dpif_netdev_check_ufid(struct dpif *dpif OVS_UNUSED)
-{
-    return true;
-}
-
 /* Converts to the dpif_flow format, using 'key_buf' and 'mask_buf' for
  * storing the netlink-formatted key/mask. 'key_buf' may be the same as
  * 'mask_buf'. Actions will be returned without copying, by relying on RCU to
@@ -3254,7 +3248,6 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_enable_upcall,
     dpif_netdev_disable_upcall,
     dpif_netdev_get_datapath_version,
-    dpif_netdev_check_ufid,
 };
 
 static void

@@ -905,20 +905,6 @@ dpif_probe_feature(struct dpif *dpif, const char *name,
     return enable_feature;
 }
 
-/* Tests whether 'dpif' supports userspace flow ids. We can skip serializing
- * some flow attributes for datapaths that support this feature.
- *
- * Returns true if 'dpif' supports UFID for flow operations.
- * Returns false if  'dpif' does not support UFID. */
-bool
-dpif_get_enable_ufid(struct dpif *dpif)
-{
-    if (dpif->dpif_class->get_ufid_support) {
-        return dpif->dpif_class->get_ufid_support(dpif);
-    }
-    return false;
-}
-
 /* A dpif_operate() wrapper for performing a single DPIF_OP_FLOW_GET. */
 int
 dpif_flow_get(struct dpif *dpif,
@@ -987,6 +973,7 @@ dpif_flow_del(struct dpif *dpif,
     op.u.flow_del.key_len = key_len;
     op.u.flow_del.ufid = ufid;
     op.u.flow_del.stats = stats;
+    op.u.flow_del.terse = false;
 
     opp = &op;
     dpif_operate(dpif, &opp, 1);

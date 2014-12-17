@@ -138,8 +138,6 @@ static void dpif_netlink_flow_get_stats(const struct dpif_netlink_flow *,
                                         struct dpif_flow_stats *);
 static void dpif_netlink_flow_to_dpif_flow(struct dpif *, struct dpif_flow *,
                                            const struct dpif_netlink_flow *);
-static bool dpif_netlink_check_ufid__(struct dpif *dpif);
-static bool dpif_netlink_check_ufid(struct dpif *dpif);
 
 /* One of the dpif channels between the kernel and userspace. */
 struct dpif_channel {
@@ -190,11 +188,6 @@ struct dpif_netlink {
     /* Change notification. */
     struct nl_sock *port_notifier; /* vport multicast group subscriber. */
     bool refresh_channels;
-
-    /* If the datapath supports indexing flows using unique identifiers, then
-     * we can reduce the size of netlink messages by omitting fields like the
-     * flow key during flow operations. */
-    bool ufid_supported;
 };
 
 static void report_loss(struct dpif_netlink *, struct dpif_channel *,
@@ -311,7 +304,6 @@ open_dpif(const struct dpif_netlink_dp *dp, struct dpif **dpifp)
               dp->dp_ifindex, dp->dp_ifindex);
 
     dpif->dp_ifindex = dp->dp_ifindex;
-    dpif->ufid_supported = dpif_netlink_check_ufid__(&dpif->dpif);
     *dpifp = &dpif->dpif;
 
     return 0;
@@ -1329,8 +1321,7 @@ dpif_netlink_init_flow_del(struct dpif_netlink *dpif,
                            struct dpif_netlink_flow *request)
 {
     return dpif_netlink_init_flow_del__(dpif, del->key, del->key_len,
-                                        del->ufid, dpif->ufid_supported,
-                                        request);
+                                        del->ufid, del->terse, request);
 }
 
 struct dpif_netlink_flow_dump {
@@ -1728,40 +1719,6 @@ dpif_netlink_handler_uninit(struct dpif_handler *handler)
     close(handler->epoll_fd);
 }
 #endif
-
-/* Checks support for unique flow identifiers. */
-static bool
-dpif_netlink_check_ufid__(struct dpif *dpif_)
-{
-    struct flow flow;
-    struct odputil_keybuf keybuf;
-    struct ofpbuf key;
-    ovs_u128 ufid;
-
-    memset(&flow, 0, sizeof flow);
-    flow.dl_type = htons(0x1234);
-
-    ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
-    odp_flow_key_from_flow(&key, &flow, NULL, 0, true);
-    dpif_flow_hash(dpif_, ofpbuf_data(&key), ofpbuf_size(&key), &ufid);
-
-    return dpif_probe_feature(dpif_, "UFID", &key, &ufid);
-}
-
-static bool
-dpif_netlink_check_ufid(struct dpif *dpif_)
-{
-    const struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
-
-    if (dpif->ufid_supported) {
-        VLOG_INFO("%s: Datapath supports userspace flow ids",
-                  dpif_name(dpif_));
-    } else {
-        VLOG_INFO("%s: Datapath does not support userspace flow ids",
-                  dpif_name(dpif_));
-    }
-    return dpif->ufid_supported;
-}
 
 /* Synchronizes 'channels' in 'dpif->handlers'  with the set of vports
  * currently in 'dpif' in the kernel, by adding a new set of channels for
@@ -2319,7 +2276,6 @@ const struct dpif_class dpif_netlink_class = {
     NULL,                       /* enable_upcall */
     NULL,                       /* disable_upcall */
     dpif_netlink_get_datapath_version, /* get_datapath_version */
-    dpif_netlink_check_ufid,
 };
 
 static int

@@ -517,7 +517,6 @@ enum dpif_flow_put_flags {
 
 bool dpif_probe_feature(struct dpif *, const char *name,
                         const struct ofpbuf *key, const ovs_u128 *ufid);
-bool dpif_get_enable_ufid(struct dpif *);
 void dpif_flow_hash(const struct dpif *, const void *key, size_t key_len,
                     ovs_u128 *hash);
 int dpif_flow_flush(struct dpif *);
@@ -656,6 +655,8 @@ struct dpif_flow_del {
     const struct nlattr *key;       /* Flow to delete. */
     size_t key_len;                 /* Length of 'key' in bytes. */
     const ovs_u128 *ufid;           /* Unique identifier of flow to delete. */
+    bool terse;                     /* OK to skip sending/receiving full flow
+                                     * info? */
 
     /* Output. */
     struct dpif_flow_stats *stats;  /* Optional flow statistics. */
