@@ -68,7 +68,8 @@ add_port () {
         exit 1
     fi
 
-    if ovs_vsctl --may-exist add-br "$BRIDGE"; then :; else
+    if ovs_vsctl br-exists "$BRIDGE" || \
+        ovs_vsctl add-br "$BRIDGE"; then :; else
         echo >&2 "$UTIL: Failed to create bridge $BRIDGE"
         exit 1
     fi
