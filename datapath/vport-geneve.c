@@ -326,22 +326,25 @@ static void geneve_fix_segment(struct sk_buff *skb)
 
 static int handle_offloads(struct sk_buff *skb)
 {
-	if (skb_is_gso(skb))
+	if (skb_is_gso(skb)) {
+		if (skb_is_encapsulated(skb))
+			return -ENOSYS;
 		OVS_GSO_CB(skb)->fix_segment = geneve_fix_segment;
-	else if (skb->ip_summed != CHECKSUM_PARTIAL)
+	} else if (skb->ip_summed != CHECKSUM_PARTIAL) {
 		skb->ip_summed = CHECKSUM_NONE;
+	}
 	return 0;
 }
 #else
 static int handle_offloads(struct sk_buff *skb)
 {
-	if (skb->encapsulation && skb_is_gso(skb)) {
-		kfree_skb(skb);
-		return -ENOSYS;
-	}
-
 	if (skb_is_gso(skb)) {
-		int err = skb_unclone(skb, GFP_ATOMIC);
+		int err;
+
+		if (skb_is_encapsulated(skb))
+			return -ENOSYS;
+
+		err = skb_unclone(skb, GFP_ATOMIC);
 		if (unlikely(err))
 			return err;
 

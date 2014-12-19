@@ -169,6 +169,9 @@ static void vxlan_gso(struct sk_buff *skb)
 static int handle_offloads(struct sk_buff *skb)
 {
 	if (skb_is_gso(skb)) {
+		if (skb_is_encapsulated(skb))
+			return -ENOSYS;
+
 		OVS_GSO_CB(skb)->fix_segment = vxlan_gso;
 	} else {
 		if (skb->ip_summed != CHECKSUM_PARTIAL)

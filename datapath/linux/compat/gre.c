@@ -292,6 +292,11 @@ struct sk_buff *gre_handle_offloads(struct sk_buff *skb, bool gre_csum)
 	skb_reset_inner_headers(skb);
 
 	if (skb_is_gso(skb)) {
+		if (skb_is_encapsulated(skb)) {
+			err = -ENOSYS;
+			goto error;
+		}
+
 		if (gre_csum)
 			OVS_GSO_CB(skb)->fix_segment = gre_csum_fix;
 		else
