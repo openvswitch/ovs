@@ -1764,7 +1764,6 @@ static int __ovs_nla_copy_actions(const struct nlattr *attr,
 				  __be16 eth_type, __be16 vlan_tci, bool log)
 {
 	const struct nlattr *a;
-	bool out_tnl_port = false;
 	int rem, err;
 
 	if (depth >= SAMPLE_ACTION_DEPTH)
@@ -1807,7 +1806,6 @@ static int __ovs_nla_copy_actions(const struct nlattr *attr,
 		case OVS_ACTION_ATTR_OUTPUT:
 			if (nla_get_u32(a) >= DP_MAX_PORTS)
 				return -EINVAL;
-			out_tnl_port = false;
 
 			break;
 
@@ -1843,14 +1841,9 @@ static int __ovs_nla_copy_actions(const struct nlattr *attr,
 		case OVS_ACTION_ATTR_PUSH_MPLS: {
 			const struct ovs_action_push_mpls *mpls = nla_data(a);
 
-			/* Networking stack do not allow simultaneous Tunnel
-			 * and MPLS GSO.
-			 */
-			if (out_tnl_port)
-				return -EINVAL;
-
 			if (!eth_p_mpls(mpls->mpls_ethertype))
 				return -EINVAL;
+
 			/* Prohibit push MPLS other than to a white list
 			 * for packets that have a known tag order.
 			 */
@@ -1884,11 +1877,9 @@ static int __ovs_nla_copy_actions(const struct nlattr *attr,
 
 		case OVS_ACTION_ATTR_SET:
 			err = validate_set(a, key, sfa,
-					   &out_tnl_port, eth_type, log);
+					   &skip_copy, eth_type, log);
 			if (err)
 				return err;
-
-			skip_copy = out_tnl_port;
 			break;
 
 		case OVS_ACTION_ATTR_SAMPLE:
