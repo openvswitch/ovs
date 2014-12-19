@@ -296,6 +296,7 @@ static void upcall_uninit(struct upcall *);
 static upcall_callback upcall_cb;
 
 static atomic_bool enable_megaflows = ATOMIC_VAR_INIT(true);
+static atomic_bool enable_ufid = ATOMIC_VAR_INIT(true);
 
 struct udpif *
 udpif_create(struct dpif_backer *backer, struct dpif *dpif)
@@ -575,6 +576,15 @@ udpif_flush_all_datapaths(void)
     }
 }
 
+static bool
+udpif_use_ufid(struct udpif *udpif)
+{
+    bool enable;
+
+    atomic_read_relaxed(&enable_ufid, &enable);
+    return enable && ofproto_dpif_get_enable_ufid(udpif->backer);
+}
+
 
 static unsigned long
 udpif_get_n_flows(struct udpif *udpif)
@@ -744,7 +754,7 @@ udpif_revalidator(void *arg)
             if (!udpif->reval_exit) {
                 bool terse_dump;
 
-                atomic_read_relaxed(&udpif->enable_ufid, &terse_dump);
+                terse_dump = udpif_use_ufid(udpif);
                 udpif->dump = dpif_flow_dump_create(udpif->dpif, terse_dump);
             }
         }
@@ -1691,7 +1701,7 @@ delete_op_init__(struct udpif *udpif, struct ukey_op *op,
     op->dop.u.flow_del.ufid = flow->ufid_present ? &flow->ufid : NULL;
     op->dop.u.flow_del.pmd_id = flow->pmd_id;
     op->dop.u.flow_del.stats = &op->stats;
-    atomic_read_relaxed(&udpif->enable_ufid, &op->dop.u.flow_del.terse);
+    op->dop.u.flow_del.terse = udpif_use_ufid(udpif);
 }
 
 static void
@@ -1704,7 +1714,7 @@ delete_op_init(struct udpif *udpif, struct ukey_op *op, struct udpif_key *ukey)
     op->dop.u.flow_del.ufid = ukey->ufid_present ? &ukey->ufid : NULL;
     op->dop.u.flow_del.pmd_id = ukey->pmd_id;
     op->dop.u.flow_del.stats = &op->stats;
-    atomic_read_relaxed(&udpif->enable_ufid, &op->dop.u.flow_del.terse);
+    op->dop.u.flow_del.terse = udpif_use_ufid(udpif);
 }
 
 static void
@@ -2015,7 +2025,7 @@ upcall_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         size_t i;
 
         atomic_read_relaxed(&udpif->flow_limit, &flow_limit);
-        atomic_read_relaxed(&udpif->enable_ufid, &ufid_enabled);
+        ufid_enabled = udpif_use_ufid(udpif);
 
         ds_put_format(&ds, "%s:\n", dpif_name(udpif->dpif));
         ds_put_format(&ds, "\tflows         : (current %lu)"
@@ -2083,11 +2093,7 @@ static void
 upcall_unixctl_disable_ufid(struct unixctl_conn *conn, int argc OVS_UNUSED,
                            const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
-    struct udpif *udpif;
-
-    LIST_FOR_EACH (udpif, list_node, &all_udpifs) {
-        atomic_store(&udpif->enable_ufid, false);
-    }
+    atomic_store_relaxed(&enable_ufid, false);
     unixctl_command_reply(conn, "Datapath dumping tersely using UFID disabled");
 }
 
@@ -2099,12 +2105,9 @@ static void
 upcall_unixctl_enable_ufid(struct unixctl_conn *conn, int argc OVS_UNUSED,
                           const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
-    struct udpif *udpif;
-
-    LIST_FOR_EACH (udpif, list_node, &all_udpifs) {
-        atomic_store(&udpif->enable_ufid, true);
-    }
-    unixctl_command_reply(conn, "Datapath dumping tersely using UFID enabled");
+    atomic_store_relaxed(&enable_ufid, true);
+    unixctl_command_reply(conn, "Datapath dumping tersely using UFID enabled "
+                                "for supported datapaths");
 }
 
 /* Set the flow limit.
