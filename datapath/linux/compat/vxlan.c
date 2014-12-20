@@ -166,18 +166,9 @@ static void vxlan_gso(struct sk_buff *skb)
 	skb->ip_summed = CHECKSUM_NONE;
 }
 
-static int handle_offloads(struct sk_buff *skb)
+static struct sk_buff *handle_offloads(struct sk_buff *skb)
 {
-	if (skb_is_gso(skb)) {
-		if (skb_is_encapsulated(skb))
-			return -ENOSYS;
-
-		OVS_GSO_CB(skb)->fix_segment = vxlan_gso;
-	} else {
-		if (skb->ip_summed != CHECKSUM_PARTIAL)
-			skb->ip_summed = CHECKSUM_NONE;
-	}
-	return 0;
+	return ovs_iptunnel_handle_offloads(skb, false, vxlan_gso);
 }
 
 int vxlan_xmit_skb(struct vxlan_sock *vs,
@@ -226,9 +217,9 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 
 	vxlan_set_owner(vs->sock->sk, skb);
 
-	err = handle_offloads(skb);
-	if (err)
-		return err;
+	skb = handle_offloads(skb);
+	if (IS_ERR(skb))
+		return 0;
 
 	return iptunnel_xmit(vs->sock->sk, rt, skb, src, dst, IPPROTO_UDP,
 			     tos, ttl, df, false);

@@ -287,33 +287,15 @@ static void gre_csum_fix(struct sk_buff *skb)
 
 struct sk_buff *gre_handle_offloads(struct sk_buff *skb, bool gre_csum)
 {
-	int err;
+	gso_fix_segment_t fix_segment;
+
+	if (gre_csum)
+		fix_segment = gre_csum_fix;
+	else
+		fix_segment = NULL;
 
 	skb_reset_inner_headers(skb);
-
-	if (skb_is_gso(skb)) {
-		if (skb_is_encapsulated(skb)) {
-			err = -ENOSYS;
-			goto error;
-		}
-
-		if (gre_csum)
-			OVS_GSO_CB(skb)->fix_segment = gre_csum_fix;
-		else
-			OVS_GSO_CB(skb)->fix_segment = NULL;
-	} else {
-		if (skb->ip_summed == CHECKSUM_PARTIAL && gre_csum) {
-			err = skb_checksum_help(skb);
-			if (err)
-				goto error;
-
-		} else if (skb->ip_summed != CHECKSUM_PARTIAL)
-			skb->ip_summed = CHECKSUM_NONE;
-	}
-	return skb;
-error:
-	kfree_skb(skb);
-	return ERR_PTR(err);
+	return ovs_iptunnel_handle_offloads(skb, gre_csum, fix_segment);
 }
 
 static bool is_gre_gso(struct sk_buff *skb)

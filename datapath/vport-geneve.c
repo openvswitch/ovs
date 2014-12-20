@@ -324,36 +324,36 @@ static void geneve_fix_segment(struct sk_buff *skb)
 	udph->len = htons(skb->len - skb_transport_offset(skb));
 }
 
-static int handle_offloads(struct sk_buff *skb)
+static struct sk_buff *handle_offloads(struct sk_buff *skb)
 {
-	if (skb_is_gso(skb)) {
-		if (skb_is_encapsulated(skb))
-			return -ENOSYS;
-		OVS_GSO_CB(skb)->fix_segment = geneve_fix_segment;
-	} else if (skb->ip_summed != CHECKSUM_PARTIAL) {
-		skb->ip_summed = CHECKSUM_NONE;
-	}
-	return 0;
+	return ovs_iptunnel_handle_offloads(skb, false, geneve_fix_segment);
 }
 #else
-static int handle_offloads(struct sk_buff *skb)
-{
-	if (skb_is_gso(skb)) {
-		int err;
 
-		if (skb_is_encapsulated(skb))
-			return -ENOSYS;
+static struct sk_buff *handle_offloads(struct sk_buff *skb)
+{
+	int err = 0;
+
+	if (skb_is_gso(skb)) {
+
+		if (skb_is_encapsulated(skb)) {
+			err = -ENOSYS;
+			goto error;
+		}
 
 		err = skb_unclone(skb, GFP_ATOMIC);
 		if (unlikely(err))
-			return err;
+			goto error;
 
 		skb_shinfo(skb)->gso_type |= SKB_GSO_UDP_TUNNEL;
 	} else if (skb->ip_summed != CHECKSUM_PARTIAL)
 		skb->ip_summed = CHECKSUM_NONE;
 
 	skb->encapsulation = 1;
-	return 0;
+	return skb;
+error:
+	kfree_skb(skb);
+	return ERR_PTR(err);
 }
 #endif
 
@@ -420,9 +420,11 @@ static int geneve_send(struct vport *vport, struct sk_buff *skb)
 	geneve_build_header(vport, skb);
 
 	/* Offloading */
-	err = handle_offloads(skb);
-	if (err)
+	skb = handle_offloads(skb);
+	if (IS_ERR(skb)) {
+		err = 0;
 		goto err_free_rt;
+	}
 
 	df = tun_key->tun_flags & TUNNEL_DONT_FRAGMENT ? htons(IP_DF) : 0;
 
