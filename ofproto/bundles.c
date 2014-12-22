@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2013, 2014 Alexandru Copot <alex.mihai.c@gmail.com>, with support from IXIA.
  * Copyright (c) 2013, 2014 Daniel Baluta <dbaluta@ixiacom.com>
+ * Copyright (c) 2014 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -237,11 +238,12 @@ ofp_bundle_add_message(struct ofconn *ofconn, struct ofputil_bundle_add_msg *bad
 
         bundles = ofconn_get_bundles(ofconn);
         hmap_insert(bundles, &bundle->node, bundle_hash(badd->bundle_id));
-    }
-
-    if (bundle->state == BS_CLOSED) {
+    } else if (bundle->state == BS_CLOSED) {
         ofp_bundle_remove(ofconn, bundle);
         return OFPERR_OFPBFC_BUNDLE_CLOSED;
+    } else if (badd->flags != bundle->flags) {
+        ofp_bundle_remove(ofconn, bundle);
+        return OFPERR_OFPBFC_BAD_FLAGS;
     }
 
     bmsg = xmalloc(sizeof *bmsg);
