@@ -6126,6 +6126,11 @@ handle_bundle_control(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofpbuf *buf;
     struct ofputil_bundle_ctrl_msg reply;
 
+    error = reject_slave_controller(ofconn);
+    if (error) {
+        return error;
+    }
+
     error = ofputil_decode_bundle_ctrl(oh, &bctrl);
     if (error) {
         return error;
@@ -6172,6 +6177,11 @@ handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     enum ofperr error;
     struct ofputil_bundle_add_msg badd;
+
+    error = reject_slave_controller(ofconn);
+    if (error) {
+        return error;
+    }
 
     error = ofputil_decode_bundle_add(oh, &badd);
     if (error) {
