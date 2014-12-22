@@ -8509,6 +8509,9 @@ ofputil_decode_bundle_add(const struct ofp_header *oh,
     if (inner_len < sizeof(struct ofp_header) || inner_len > ofpbuf_size(&b)) {
         return OFPERR_OFPBFC_MSG_BAD_LEN;
     }
+    if (msg->msg->xid != oh->xid) {
+        return OFPERR_OFPBFC_MSG_BAD_XID;
+    }
 
     return 0;
 }

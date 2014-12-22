@@ -3210,6 +3210,16 @@ OFPT_BUNDLE_CONTROL (OF1.4) (xid=0x0):
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPT_BUNDLE_ADD_MESSAGE - verify xid])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 22 00 20 00 00 00 00 00 00 00 01 00 00 00 01 \
+02 00 00 08 00 00 00 01 00 00 00 00 00 00 00 00 \
+"], [0], [dnl
+OFPT_BUNDLE_ADD_MESSAGE (OF1.4) (xid=0x0): ***decode error: OFPBFC_MSG_BAD_XID***
+])
+AT_CLEANUP
+
 AT_SETUP([OFPT_BUNDLE_ADD_MESSAGE - OFPT_HELLO])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
