@@ -1298,6 +1298,7 @@ ofconn_destroy(struct ofconn *ofconn)
     }
 
     ofp_bundle_remove_all(ofconn);
+    hmap_destroy(&ofconn->bundles);
 
     hmap_destroy(&ofconn->monitors);
     list_remove(&ofconn->node);
