@@ -187,6 +187,8 @@ ofp_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
 {
     struct hmap *bundles;
     struct ofp_bundle *bundle;
+    enum ofperr error = 0;
+    struct bundle_message *msg;
 
     bundles = ofconn_get_bundles(ofconn);
     bundle = ofp_bundle_find(bundles, id);
@@ -195,13 +197,16 @@ ofp_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
         return OFPERR_OFPBFC_BAD_ID;
     }
     if (bundle->flags != flags) {
-        ofp_bundle_remove(ofconn, bundle);
-        return OFPERR_OFPBFC_BAD_FLAGS;
+        error = OFPERR_OFPBFC_BAD_FLAGS;
+    } else {
+        LIST_FOR_EACH (msg, node, &bundle->msg_list) {
+            /* XXX: actual commit */
+            error = OFPERR_OFPBFC_MSG_FAILED;
+        }
     }
 
-    /* XXX: actual commit */
-
-    return OFPERR_OFPBFC_MSG_UNSUP;
+    ofp_bundle_remove(ofconn, bundle);
+    return error;
 }
 
 enum ofperr

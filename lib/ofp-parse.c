@@ -22,7 +22,6 @@
 #include <errno.h>
 #include <stdlib.h>
 
-#include "bundle.h"
 #include "byte-order.h"
 #include "dynamic-string.h"
 #include "learn.h"
