@@ -72,7 +72,7 @@ static struct sk_buff *__build_header(struct sk_buff *skb,
 	tun_key = &OVS_CB(skb)->egress_tun_info->tunnel;
 	skb = gre_handle_offloads(skb, !!(tun_key->tun_flags & TUNNEL_CSUM));
 	if (IS_ERR(skb))
-		return NULL;
+		return skb;
 
 	tpi.flags = filter_tnl_flags(tun_key->tun_flags) | gre64_flag;
 
@@ -179,6 +179,7 @@ static int __send(struct vport *vport, struct sk_buff *skb,
 					     skb->vlan_proto,
 					     vlan_tx_tag_get(skb)))) {
 			err = -ENOMEM;
+			skb = NULL;
 			goto err_free_rt;
 		}
 		vlan_set_tci(skb, 0);
@@ -186,8 +187,9 @@ static int __send(struct vport *vport, struct sk_buff *skb,
 
 	/* Push Tunnel header. */
 	skb = __build_header(skb, tunnel_hlen, seq, gre64_flag);
-	if (unlikely(!skb)) {
-		err = 0;
+	if (IS_ERR(skb)) {
+		err = PTR_ERR(skb);
+		skb = NULL;
 		goto err_free_rt;
 	}
 
@@ -201,6 +203,7 @@ static int __send(struct vport *vport, struct sk_buff *skb,
 err_free_rt:
 	ip_rt_put(rt);
 error:
+	kfree_skb(skb);
 	return err;
 }
 
@@ -286,8 +289,10 @@ static int gre_send(struct vport *vport, struct sk_buff *skb)
 {
 	int hlen;
 
-	if (unlikely(!OVS_CB(skb)->egress_tun_info))
+	if (unlikely(!OVS_CB(skb)->egress_tun_info)) {
+		kfree_skb(skb);
 		return -EINVAL;
+	}
 
 	hlen = ip_gre_calc_hlen(OVS_CB(skb)->egress_tun_info->tunnel.tun_flags);
 
@@ -370,8 +375,10 @@ static int gre64_send(struct vport *vport, struct sk_buff *skb)
 		   GRE_HEADER_SECTION;		/* GRE SEQ */
 	__be32 seq;
 
-	if (unlikely(!OVS_CB(skb)->egress_tun_info))
+	if (unlikely(!OVS_CB(skb)->egress_tun_info)) {
+		kfree_skb(skb);
 		return -EINVAL;
+	}
 
 	if (OVS_CB(skb)->egress_tun_info->tunnel.tun_flags & TUNNEL_CSUM)
 		hlen += GRE_HEADER_SECTION;

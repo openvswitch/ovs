@@ -182,7 +182,9 @@ static int vxlan_tnl_send(struct vport *vport, struct sk_buff *skb)
 			     htonl(be64_to_cpu(tun_key->tun_id) << 8));
 	if (err < 0)
 		ip_rt_put(rt);
+	return err;
 error:
+	kfree_skb(skb);
 	return err;
 }
 

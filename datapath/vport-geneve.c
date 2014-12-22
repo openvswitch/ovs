@@ -368,8 +368,10 @@ static int geneve_send(struct vport *vport, struct sk_buff *skb)
 	int sent_len;
 	int err;
 
-	if (unlikely(!OVS_CB(skb)->egress_tun_info))
-		return -EINVAL;
+	if (unlikely(!OVS_CB(skb)->egress_tun_info)) {
+		err = -EINVAL;
+		goto error;
+	}
 
 	tun_key = &OVS_CB(skb)->egress_tun_info->tunnel;
 
@@ -406,6 +408,7 @@ static int geneve_send(struct vport *vport, struct sk_buff *skb)
 					     skb->vlan_proto,
 					     vlan_tx_tag_get(skb)))) {
 			err = -ENOMEM;
+			skb = NULL;
 			goto err_free_rt;
 		}
 		vlan_set_tci(skb, 0);
@@ -422,7 +425,8 @@ static int geneve_send(struct vport *vport, struct sk_buff *skb)
 	/* Offloading */
 	skb = handle_offloads(skb);
 	if (IS_ERR(skb)) {
-		err = 0;
+		err = PTR_ERR(skb);
+		skb = NULL;
 		goto err_free_rt;
 	}
 
@@ -439,6 +443,7 @@ static int geneve_send(struct vport *vport, struct sk_buff *skb)
 err_free_rt:
 	ip_rt_put(rt);
 error:
+	kfree_skb(skb);
 	return err;
 }
 

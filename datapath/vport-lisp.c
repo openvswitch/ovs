@@ -449,15 +449,17 @@ static int lisp_send(struct vport *vport, struct sk_buff *skb)
 	int sent_len;
 	int err;
 
-	if (unlikely(!OVS_CB(skb)->egress_tun_info))
-		return -EINVAL;
+	if (unlikely(!OVS_CB(skb)->egress_tun_info)) {
+		err = -EINVAL;
+		goto error;
+	}
 
 	tun_key = &OVS_CB(skb)->egress_tun_info->tunnel;
 
 	if (skb->protocol != htons(ETH_P_IP) &&
 	    skb->protocol != htons(ETH_P_IPV6)) {
-		kfree_skb(skb);
-		return 0;
+		err = 0;
+		goto error;
 	}
 
 	/* Route lookup */
@@ -500,7 +502,8 @@ static int lisp_send(struct vport *vport, struct sk_buff *skb)
 	/* Offloading */
 	skb = handle_offloads(skb);
 	if (IS_ERR(skb)) {
-		err = 0;
+		err = PTR_ERR(skb);
+		skb = NULL;
 		goto err_free_rt;
 	}
 
@@ -517,6 +520,7 @@ static int lisp_send(struct vport *vport, struct sk_buff *skb)
 err_free_rt:
 	ip_rt_put(rt);
 error:
+	kfree_skb(skb);
 	return err;
 }
 
