@@ -65,6 +65,15 @@ DEFINE_GUID(
     0x94, 0xc9, 0xf0, 0xd5, 0x25, 0xbb, 0xc1, 0x69
     );
 
+/* bfd4814c-9650-4de3-a536-1eedb9e9ba6a */
+DEFINE_GUID(
+    OVS_TUNNEL_FILTER_KEY,
+    0xbfd4814c,
+    0x9650,
+    0x4de3,
+    0xa5, 0x36, 0x1e, 0xed, 0xb9, 0xe9, 0xba, 0x6a
+    );
+
 /*
  * Callout driver global variables
  */
@@ -82,6 +91,7 @@ OvsTunnelAddFilter(PWSTR filterName,
                    USHORT remotePort,
                    FWP_DIRECTION direction,
                    UINT64 context,
+                   const GUID *filterKey,
                    const GUID *layerKey,
                    const GUID *calloutKey)
 {
@@ -93,6 +103,7 @@ OvsTunnelAddFilter(PWSTR filterName,
     UNREFERENCED_PARAMETER(remotePort);
     UNREFERENCED_PARAMETER(direction);
 
+    filter.filterKey = *filterKey;
     filter.layerKey = *layerKey;
     filter.displayData.name = (wchar_t*)filterName;
     filter.displayData.description = (wchar_t*)filterDesc;
@@ -130,6 +141,52 @@ OvsTunnelAddFilter(PWSTR filterName,
     return status;
 }
 
+NTSTATUS
+OvsTunnelRemoveFilter(const GUID *filterKey,
+                      const GUID *sublayerKey)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+    BOOLEAN inTransaction = FALSE;
+
+    do {
+        status = FwpmTransactionBegin(gEngineHandle, 0);
+        if (!NT_SUCCESS(status)) {
+            break;
+        }
+
+        inTransaction = TRUE;
+
+        /*
+         * We have to delete the filter first since it references the
+         * sublayer. If we tried to delete the sublayer first, it would fail
+         * with FWP_ERR_IN_USE.
+         */
+        status = FwpmFilterDeleteByKey(gEngineHandle,
+                                       filterKey);
+        if (!NT_SUCCESS(status)) {
+            break;
+        }
+
+        status = FwpmSubLayerDeleteByKey(gEngineHandle,
+                                         sublayerKey);
+        if (!NT_SUCCESS(status)) {
+            break;
+        }
+
+        status = FwpmTransactionCommit(gEngineHandle);
+        if (!NT_SUCCESS(status)){
+            break;
+        }
+
+        inTransaction = FALSE;
+    } while (inTransaction);
+
+    if (inTransaction) {
+        FwpmTransactionAbort(gEngineHandle);
+    }
+    return status;
+}
+
 /*
  * --------------------------------------------------------------------------
  * This function registers callouts and filters that intercept UDP traffic at
@@ -155,7 +212,7 @@ OvsTunnelRegisterDatagramDataCallouts(const GUID *layerKey,
     sCallout.classifyFn = OvsTunnelClassify;
     sCallout.notifyFn = OvsTunnelNotify;
 #if FLOW_CONTEXT
-    /* Currnetly we don't associate a context with the flow */
+    /* Currently we don't associate a context with the flow */
     sCallout.flowDeleteFn = OvsTunnelFlowDelete;
     sCallout.flags = FWP_CALLOUT_FLAG_CONDITIONAL_ON_FLOW;
 #endif
@@ -190,6 +247,7 @@ OvsTunnelRegisterDatagramDataCallouts(const GUID *layerKey,
                                 configNewDestPort,
                                 FWP_DIRECTION_INBOUND,
                                 0,
+                                &OVS_TUNNEL_FILTER_KEY,
                                 layerKey,
                                 calloutKey);
 
@@ -288,11 +346,12 @@ Exit:
 VOID
 OvsTunnelUnregisterCallouts(VOID)
 {
+    OvsTunnelRemoveFilter(&OVS_TUNNEL_FILTER_KEY,
+                          &OVS_TUNNEL_SUBLAYER);
     FwpmEngineClose(gEngineHandle);
     gEngineHandle = NULL;
     FwpsCalloutUnregisterById(gCalloutIdV4);
 }
-
 
 VOID
 OvsTunnelFilterUninitialize(PDRIVER_OBJECT driverObject)
