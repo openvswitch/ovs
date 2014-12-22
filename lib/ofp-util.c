@@ -8487,6 +8487,92 @@ ofputil_encode_bundle_ctrl_reply(const struct ofp_header *oh,
     return buf;
 }
 
+/* Return true for bundlable state change requests, false for other messages.
+ */
+static bool
+ofputil_is_bundlable(enum ofptype type)
+{
+    switch (type) {
+        /* Minimum required by OpenFlow 1.4. */
+    case OFPTYPE_PORT_MOD:
+    case OFPTYPE_FLOW_MOD:
+        return true;
+
+        /* Nice to have later. */
+    case OFPTYPE_FLOW_MOD_TABLE_ID:
+    case OFPTYPE_GROUP_MOD:
+    case OFPTYPE_TABLE_MOD:
+    case OFPTYPE_METER_MOD:
+    case OFPTYPE_PACKET_OUT:
+
+        /* Not to be bundlable. */
+    case OFPTYPE_ECHO_REQUEST:
+    case OFPTYPE_FEATURES_REQUEST:
+    case OFPTYPE_GET_CONFIG_REQUEST:
+    case OFPTYPE_SET_CONFIG:
+    case OFPTYPE_BARRIER_REQUEST:
+    case OFPTYPE_ROLE_REQUEST:
+    case OFPTYPE_ECHO_REPLY:
+    case OFPTYPE_SET_FLOW_FORMAT:
+    case OFPTYPE_SET_PACKET_IN_FORMAT:
+    case OFPTYPE_SET_CONTROLLER_ID:
+    case OFPTYPE_FLOW_AGE:
+    case OFPTYPE_FLOW_MONITOR_CANCEL:
+    case OFPTYPE_SET_ASYNC_CONFIG:
+    case OFPTYPE_GET_ASYNC_REQUEST:
+    case OFPTYPE_DESC_STATS_REQUEST:
+    case OFPTYPE_FLOW_STATS_REQUEST:
+    case OFPTYPE_AGGREGATE_STATS_REQUEST:
+    case OFPTYPE_TABLE_STATS_REQUEST:
+    case OFPTYPE_TABLE_FEATURES_STATS_REQUEST:
+    case OFPTYPE_PORT_STATS_REQUEST:
+    case OFPTYPE_QUEUE_STATS_REQUEST:
+    case OFPTYPE_PORT_DESC_STATS_REQUEST:
+    case OFPTYPE_FLOW_MONITOR_STATS_REQUEST:
+    case OFPTYPE_METER_STATS_REQUEST:
+    case OFPTYPE_METER_CONFIG_STATS_REQUEST:
+    case OFPTYPE_METER_FEATURES_STATS_REQUEST:
+    case OFPTYPE_GROUP_STATS_REQUEST:
+    case OFPTYPE_GROUP_DESC_STATS_REQUEST:
+    case OFPTYPE_GROUP_FEATURES_STATS_REQUEST:
+    case OFPTYPE_QUEUE_GET_CONFIG_REQUEST:
+    case OFPTYPE_BUNDLE_CONTROL:
+    case OFPTYPE_BUNDLE_ADD_MESSAGE:
+    case OFPTYPE_HELLO:
+    case OFPTYPE_ERROR:
+    case OFPTYPE_FEATURES_REPLY:
+    case OFPTYPE_GET_CONFIG_REPLY:
+    case OFPTYPE_PACKET_IN:
+    case OFPTYPE_FLOW_REMOVED:
+    case OFPTYPE_PORT_STATUS:
+    case OFPTYPE_BARRIER_REPLY:
+    case OFPTYPE_QUEUE_GET_CONFIG_REPLY:
+    case OFPTYPE_DESC_STATS_REPLY:
+    case OFPTYPE_FLOW_STATS_REPLY:
+    case OFPTYPE_QUEUE_STATS_REPLY:
+    case OFPTYPE_PORT_STATS_REPLY:
+    case OFPTYPE_TABLE_STATS_REPLY:
+    case OFPTYPE_AGGREGATE_STATS_REPLY:
+    case OFPTYPE_PORT_DESC_STATS_REPLY:
+    case OFPTYPE_ROLE_REPLY:
+    case OFPTYPE_FLOW_MONITOR_PAUSED:
+    case OFPTYPE_FLOW_MONITOR_RESUMED:
+    case OFPTYPE_FLOW_MONITOR_STATS_REPLY:
+    case OFPTYPE_GET_ASYNC_REPLY:
+    case OFPTYPE_GROUP_STATS_REPLY:
+    case OFPTYPE_GROUP_DESC_STATS_REPLY:
+    case OFPTYPE_GROUP_FEATURES_STATS_REPLY:
+    case OFPTYPE_METER_STATS_REPLY:
+    case OFPTYPE_METER_CONFIG_STATS_REPLY:
+    case OFPTYPE_METER_FEATURES_STATS_REPLY:
+    case OFPTYPE_TABLE_FEATURES_STATS_REPLY:
+    case OFPTYPE_ROLE_STATUS:
+        break;
+    }
+
+    return false;
+}
+
 enum ofperr
 ofputil_decode_bundle_add(const struct ofp_header *oh,
                           struct ofputil_bundle_add_msg *msg)
@@ -8495,6 +8581,8 @@ ofputil_decode_bundle_add(const struct ofp_header *oh,
     struct ofpbuf b;
     enum ofpraw raw;
     size_t inner_len;
+    enum ofperr error;
+    enum ofptype type;
 
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     raw = ofpraw_pull_assert(&b);
@@ -8511,6 +8599,18 @@ ofputil_decode_bundle_add(const struct ofp_header *oh,
     }
     if (msg->msg->xid != oh->xid) {
         return OFPERR_OFPBFC_MSG_BAD_XID;
+    }
+
+    /* Reject unbundlable messages. */
+    error = ofptype_decode(&type, msg->msg);
+    if (error) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "OFPT14_BUNDLE_ADD_MESSAGE contained "
+                     "message is unparsable (%s)", ofperr_get_name(error));
+        return OFPERR_OFPBFC_MSG_UNSUP; /* 'error' would be confusing. */
+    }
+
+    if (!ofputil_is_bundlable(type)) {
+        return OFPERR_OFPBFC_MSG_UNSUP;
     }
 
     return 0;

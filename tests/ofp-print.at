@@ -3220,16 +3220,49 @@ OFPT_BUNDLE_ADD_MESSAGE (OF1.4) (xid=0x0): ***decode error: OFPBFC_MSG_BAD_XID**
 ])
 AT_CLEANUP
 
-AT_SETUP([OFPT_BUNDLE_ADD_MESSAGE - OFPT_HELLO])
+AT_SETUP([OFPT_BUNDLE_ADD_MESSAGE - reject OFPT_HELLO])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
-05 22 00 20 00 00 00 00 \
-00 00 00 01 00 01 00 01 02 00 00 08 00 00 00 00 \
-00 00 00 00 00 00 00 00 \
+05 22 00 20 00 00 00 00 00 00 00 01 00 00 00 01 \
+02 00 00 10 00 00 00 00 00 00 00 00 00 00 00 00 \
 "], [0], [dnl
-OFPT_BUNDLE_ADD_MESSAGE (OF1.4) (xid=0x0):
+OFPT_BUNDLE_ADD_MESSAGE (OF1.4) (xid=0x0): ***decode error: OFPBFC_MSG_UNSUP***
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_BUNDLE_ADD_MESSAGE - FLOW_MOD])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 22 00 a0 00 00 00 02 00 00 00 01 00 00 00 01 \
+03 0e 00 90 00 00 00 02 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 01 00 00 00 00 00 ff ff \
+ff ff ff ff ff ff ff ff ff ff ff ff 00 00 00 00 \
+00 01 00 42 80 00 00 04 00 00 00 01 80 00 08 06 \
+50 54 00 00 00 06 80 00 06 06 50 54 00 00 00 05 \
+80 00 0a 02 08 06 80 00 0c 02 00 00 80 00 2a 02 \
+00 02 80 00 2c 04 c0 a8 00 02 80 00 2e 04 c0 a8 \
+00 01 00 00 00 00 00 00 00 04 00 18 00 00 00 00 \
+00 00 00 10 00 00 00 03 00 00 00 00 00 00 00 00 \
+"], [0], [dnl
+OFPT_BUNDLE_ADD_MESSAGE (OF1.4) (xid=0x2):
  bundle_id=0x1 flags=atomic
-OFPT_HELLO (OF1.1) (xid=0x0):
- version bitmap: 0x01, 0x02
+OFPT_FLOW_MOD (OF1.2) (xid=0x2): ADD table:1 priority=65535,arp,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,arp_spa=192.168.0.2,arp_tpa=192.168.0.1,arp_op=2 actions=output:3
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_BUNDLE_ADD_MESSAGE - PORT_MOD])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 22 00 38 00 00 00 03 00 00 00 01 00 00 00 01 \
+05 10 00 28 00 00 00 03 00 00 00 03 00 00 00 00 \
+50 54 00 00 00 01 00 00 00 00 00 01 00 00 00 01 \
+00 00 00 08 00 00 00 01
+"], [0], [dnl
+OFPT_BUNDLE_ADD_MESSAGE (OF1.4) (xid=0x3):
+ bundle_id=0x1 flags=atomic
+OFPT_PORT_MOD (OF1.4) (xid=0x3):port: 3: addr:50:54:00:00:00:01
+     config: PORT_DOWN
+     mask:   PORT_DOWN
+     advertise: 10MB-HD
 ])
 AT_CLEANUP
