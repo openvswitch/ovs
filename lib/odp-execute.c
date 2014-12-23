@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  * Copyright (c) 2013 Simon Horman
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,6 +19,7 @@
 #include "odp-execute.h"
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <netinet/icmp6.h>
 #include <netinet/ip6.h>
 #include <stdlib.h>
 #include <string.h>
@@ -182,6 +183,48 @@ set_arp(struct ofpbuf *packet, const struct ovs_key_arp *key,
 }
 
 static void
+odp_set_nd(struct ofpbuf *packet, const struct ovs_key_nd *key,
+           const struct ovs_key_nd *mask)
+{
+    const struct ovs_nd_msg *ns = ofpbuf_l4(packet);
+    const struct ovs_nd_opt *nd_opt = ofpbuf_get_nd_payload(packet);
+
+    if (OVS_LIKELY(ns && nd_opt)) {
+        int bytes_remain = ofpbuf_l4_size(packet) - sizeof(*ns);
+        ovs_be32 tgt_buf[4];
+        uint8_t sll_buf[ETH_ADDR_LEN] = {0};
+        uint8_t tll_buf[ETH_ADDR_LEN] = {0};
+
+        while (bytes_remain >= ND_OPT_LEN && nd_opt->nd_opt_len != 0) {
+            if (nd_opt->nd_opt_type == ND_OPT_SOURCE_LINKADDR
+                && nd_opt->nd_opt_len == 1) {
+                memcpy(sll_buf, nd_opt->nd_opt_data, ETH_ADDR_LEN);
+                ether_addr_copy_masked(sll_buf, key->nd_sll, mask->nd_sll);
+
+                /* A packet can only contain one SLL or TLL option */
+                break;
+            } else if (nd_opt->nd_opt_type == ND_OPT_TARGET_LINKADDR
+                       && nd_opt->nd_opt_len == 1) {
+                memcpy(tll_buf, nd_opt->nd_opt_data, ETH_ADDR_LEN);
+                ether_addr_copy_masked(tll_buf, key->nd_tll, mask->nd_tll);
+
+                /* A packet can only contain one SLL or TLL option */
+                break;
+            }
+
+            nd_opt += nd_opt->nd_opt_len;
+            bytes_remain -= nd_opt->nd_opt_len * ND_OPT_LEN;
+        }
+
+        packet_set_nd(packet,
+                      mask_ipv6_addr(ns->target.be32,
+                                     key->nd_target, mask->nd_target, tgt_buf),
+                      sll_buf,
+                      tll_buf);
+    }
+}
+
+static void
 odp_execute_set_action(struct dpif_packet *packet, const struct nlattr *a)
 {
     enum ovs_key_attr type = nl_attr_type(a);
@@ -259,6 +302,15 @@ odp_execute_set_action(struct dpif_packet *packet, const struct nlattr *a)
         set_arp(&packet->ofpbuf, nl_attr_get(a), NULL);
         break;
 
+    case OVS_KEY_ATTR_ND:
+        if (OVS_LIKELY(ofpbuf_get_nd_payload(&packet->ofpbuf))) {
+            const struct ovs_key_nd *nd_key
+                   = nl_attr_get_unspec(a, sizeof(struct ovs_key_nd));
+            packet_set_nd(&packet->ofpbuf, nd_key->nd_target,
+                          nd_key->nd_sll, nd_key->nd_tll);
+        }
+        break;
+
     case OVS_KEY_ATTR_DP_HASH:
         md->dp_hash = nl_attr_get_u32(a);
         dpif_packet_set_dp_hash(packet, md->dp_hash);
@@ -275,7 +327,6 @@ odp_execute_set_action(struct dpif_packet *packet, const struct nlattr *a)
     case OVS_KEY_ATTR_VLAN:
     case OVS_KEY_ATTR_ICMP:
     case OVS_KEY_ATTR_ICMPV6:
-    case OVS_KEY_ATTR_ND:
     case OVS_KEY_ATTR_TCP_FLAGS:
     case __OVS_KEY_ATTR_MAX:
     default:
@@ -348,6 +399,11 @@ odp_execute_masked_set_action(struct dpif_packet *packet,
                 get_mask(a, struct ovs_key_arp));
         break;
 
+    case OVS_KEY_ATTR_ND:
+        odp_set_nd(&packet->ofpbuf, nl_attr_get(a),
+                   get_mask(a, struct ovs_key_nd));
+        break;
+
     case OVS_KEY_ATTR_DP_HASH:
         md->dp_hash = nl_attr_get_u32(a)
             | (dpif_packet_get_dp_hash(packet) & ~*get_mask(a, uint32_t));
@@ -367,7 +423,6 @@ odp_execute_masked_set_action(struct dpif_packet *packet,
     case OVS_KEY_ATTR_VLAN:
     case OVS_KEY_ATTR_ICMP:
     case OVS_KEY_ATTR_ICMPV6:
-    case OVS_KEY_ATTR_ND:
     case OVS_KEY_ATTR_TCP_FLAGS:
     case __OVS_KEY_ATTR_MAX:
     default:

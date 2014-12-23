@@ -875,6 +875,58 @@ packet_set_sctp_port(struct ofpbuf *packet, ovs_be16 src, ovs_be16 dst)
     put_16aligned_be32(&sh->sctp_csum, old_csum ^ old_correct_csum ^ new_csum);
 }
 
+void
+packet_set_nd(struct ofpbuf *packet, const ovs_be32 target[4],
+              const uint8_t sll[ETH_ADDR_LEN],
+              const uint8_t tll[ETH_ADDR_LEN]) {
+    struct ovs_nd_msg *ns;
+    struct ovs_nd_opt *nd_opt;
+    int bytes_remain = ofpbuf_l4_size(packet);
+
+    if (OVS_UNLIKELY(bytes_remain < sizeof(*ns))) {
+        return;
+    }
+
+    ns = ofpbuf_l4(packet);
+    nd_opt = &ns->options[0];
+    bytes_remain -= sizeof(*ns);
+
+    if (memcmp(&ns->target, target, sizeof(ovs_be32[4]))) {
+        packet_set_ipv6_addr(packet, IPPROTO_ICMPV6,
+                             ns->target.be32,
+                             target, true);
+    }
+
+    while (bytes_remain >= ND_OPT_LEN && nd_opt->nd_opt_len != 0) {
+        if (nd_opt->nd_opt_type == ND_OPT_SOURCE_LINKADDR
+            && nd_opt->nd_opt_len == 1) {
+            if (memcmp(nd_opt->nd_opt_data, sll, ETH_ADDR_LEN)) {
+                ovs_be16 *csum = &(ns->icmph.icmp6_cksum);
+
+                *csum = recalc_csum48(*csum, nd_opt->nd_opt_data, sll);
+                memcpy(nd_opt->nd_opt_data, sll, ETH_ADDR_LEN);
+            }
+
+            /* A packet can only contain one SLL or TLL option */
+            break;
+        } else if (nd_opt->nd_opt_type == ND_OPT_TARGET_LINKADDR
+                   && nd_opt->nd_opt_len == 1) {
+            if (memcmp(nd_opt->nd_opt_data, tll, ETH_ADDR_LEN)) {
+                ovs_be16 *csum = &(ns->icmph.icmp6_cksum);
+
+                *csum = recalc_csum48(*csum, nd_opt->nd_opt_data, tll);
+                memcpy(nd_opt->nd_opt_data, tll, ETH_ADDR_LEN);
+            }
+
+            /* A packet can only contain one SLL or TLL option */
+            break;
+        }
+
+        nd_opt += nd_opt->nd_opt_len;
+        bytes_remain -= nd_opt->nd_opt_len * ND_OPT_LEN;
+    }
+}
+
 const char *
 packet_tcp_flag_to_string(uint32_t flag)
 {

@@ -82,6 +82,14 @@ ofp_packet_to_string(const void *data, size_t len)
         struct sctp_header *sh = ofpbuf_l4(&buf);
         ds_put_format(&ds, " sctp_csum:%"PRIx32,
                       ntohl(get_16aligned_be32(&sh->sctp_csum)));
+    } else if (flow.nw_proto == IPPROTO_ICMP && l4_size >= ICMP_HEADER_LEN) {
+        struct icmp_header *icmph = ofpbuf_l4(&buf);
+        ds_put_format(&ds, " icmp_csum:%"PRIx16,
+                      ntohs(icmph->icmp_csum));
+    } else if (flow.nw_proto == IPPROTO_ICMPV6 && l4_size >= ICMP6_HEADER_LEN) {
+        struct icmp6_header *icmp6h = ofpbuf_l4(&buf);
+        ds_put_format(&ds, " icmp6_csum:%"PRIx16,
+                      ntohs(icmp6h->icmp6_cksum));
     }
 
     ds_put_char(&ds, '\n');

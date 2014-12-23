@@ -113,6 +113,26 @@ recalc_csum32(ovs_be16 old_csum, ovs_be32 old_u32, ovs_be32 new_u32)
 }
 
 /* Returns the new checksum for a packet in which the checksum field previously
+ * contained 'old_csum' and in which a field that contained the 6 bytes at
+ * 'old_bytes' was changed to contain the 6 bytes at 'new_bytes'. */
+ovs_be16
+recalc_csum48(ovs_be16 old_csum, const void *old_bytes,
+              const void *new_bytes)
+{
+    ovs_be16 new_csum = old_csum;
+    const uint16_t *p16_old = old_bytes,
+                   *p16_new = new_bytes;
+    int i;
+
+    for (i = 0; i < 3; ++i) {
+        new_csum = recalc_csum16(new_csum, get_unaligned_be16(&p16_old[i]),
+                                 get_unaligned_be16(&p16_new[i]));
+    }
+
+    return new_csum;
+}
+
+/* Returns the new checksum for a packet in which the checksum field previously
  * contained 'old_csum' and in which a field that contained 'old_u32[4]' was
  * changed to contain 'new_u32[4]'. */
 ovs_be16

@@ -104,6 +104,7 @@ static inline const void *ofpbuf_get_tcp_payload(const struct ofpbuf *);
 static inline const void *ofpbuf_get_udp_payload(const struct ofpbuf *);
 static inline const void *ofpbuf_get_sctp_payload(const struct ofpbuf *);
 static inline const void *ofpbuf_get_icmp_payload(const struct ofpbuf *);
+static inline const void *ofpbuf_get_nd_payload(const struct ofpbuf *);
 
 void ofpbuf_use(struct ofpbuf *, void *, size_t);
 void ofpbuf_use_stack(struct ofpbuf *, void *, size_t);
@@ -372,6 +373,12 @@ static inline const void *ofpbuf_get_icmp_payload(const struct ofpbuf *b)
 {
     return OVS_LIKELY(ofpbuf_l4_size(b) >= ICMP_HEADER_LEN)
         ? (const char *)ofpbuf_l4(b) + ICMP_HEADER_LEN : NULL;
+}
+
+static inline const void *ofpbuf_get_nd_payload(const struct ofpbuf *b)
+{
+    return OVS_LIKELY(ofpbuf_l4_size(b) >= ND_MSG_LEN)
+        ? (const char *)ofpbuf_l4(b) + ND_MSG_LEN : NULL;
 }
 
 #ifdef DPDK_NETDEV
