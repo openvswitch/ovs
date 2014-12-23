@@ -59,6 +59,7 @@
 #include "ofproto-dpif-upcall.h"
 #include "ofproto-dpif-xlate.h"
 #include "poll-loop.h"
+#include "ovs-rcu.h"
 #include "ovs-router.h"
 #include "seq.h"
 #include "simap.h"
@@ -868,7 +869,7 @@ dpif_backer_recirc_clear_ofproto(struct dpif_backer *backer,
                      "is destructed", node->recirc_id, ofproto->up.name);
             cmap_remove(&backer->recirc_map, &node->cmap_node,
                         node->recirc_id);
-            free(node);
+            ovsrcu_postpone(free, node);
         }
     }
     ovs_mutex_unlock(&backer->recirc_mutex);
@@ -5457,7 +5458,9 @@ ofproto_dpif_free_recirc_id(struct ofproto_dpif *ofproto, uint32_t recirc_id)
         cmap_remove(&backer->recirc_map, &node->cmap_node, node->recirc_id);
         ovs_mutex_unlock(&backer->recirc_mutex);
         recirc_id_free(backer->rid_pool, node->recirc_id);
-        free(node);
+        /* RCU postpone the free, since other threads may be referring
+         * to 'node' at same time. */
+        ovsrcu_postpone(free, node);
     }
 }
 
