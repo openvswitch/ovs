@@ -240,8 +240,6 @@ AT_CHECK([ovs-ofctl add-flows br-int flows.txt])
 # Should generate recirc_id(0x12d),dp_hash(0xcf/0xff).
 AT_CHECK([ovs-appctl netdev-dummy/receive p5 "in_port(5),eth(src=50:54:00:00:00:05,dst=50:54:00:00:01:00),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no)"])
 
-ovs-appctl time/warp 5000 100
-
 # Forces revalidators to update all stats.
 AT_CHECK([ovs-appctl upcall/disable-megaflows], [0], [dnl
 megaflows disabled
