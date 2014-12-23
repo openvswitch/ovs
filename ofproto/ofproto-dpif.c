@@ -5458,6 +5458,13 @@ ofproto_dpif_free_recirc_id(struct ofproto_dpif *ofproto, uint32_t recirc_id)
         cmap_remove(&backer->recirc_map, &node->cmap_node, node->recirc_id);
         ovs_mutex_unlock(&backer->recirc_mutex);
         recirc_id_free(backer->rid_pool, node->recirc_id);
+
+        if (node->ofproto != ofproto) {
+            VLOG_ERR("recirc_id %"PRIu32", freed by incorrect ofproto (%s),"
+                     " expect ofproto (%s)", node->recirc_id, ofproto->up.name,
+                     node->ofproto->up.name);
+        }
+
         /* RCU postpone the free, since other threads may be referring
          * to 'node' at same time. */
         ovsrcu_postpone(free, node);
