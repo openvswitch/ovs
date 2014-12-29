@@ -526,8 +526,9 @@ udpif_upcall_handler(void *arg)
         if (!n_upcalls) {
             dpif_recv_wait(udpif->dpif, handler->handler_id);
             latch_wait(&udpif->exit_latch);
-            poll_block();
         } else {
+            poll_immediate_wake();
+
             handle_upcalls(handler, &misses, upcalls, n_upcalls);
 
             HMAP_FOR_EACH (miss, hmap_node, &misses) {
@@ -539,7 +540,7 @@ udpif_upcall_handler(void *arg)
                 ofpbuf_uninit(&upcalls[i].upcall_buf);
             }
         }
-        coverage_clear();
+        poll_block();
     }
     hmap_destroy(&misses);
 
