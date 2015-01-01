@@ -1313,6 +1313,11 @@ OVS_VSWITCHD_START
  x=0
  name=classifier
  while test $x -lt 254; do
+   if test $x = 253; then
+     goto=
+   else
+     goto=,goto_table
+   fi
    echo "
   table $x (\"$name\"):
     active=0, lookup=0, matched=0
@@ -1320,7 +1325,7 @@ OVS_VSWITCHD_START
     config=controller
     max_entries=1000000
     instructions (table miss and others):
-      instructions: apply_actions,clear_actions,write_actions,write_metadata,goto_table
+      instructions: apply_actions,clear_actions,write_actions,write_metadata$goto
       Write-Actions and Apply-Actions features:
         actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
         supported on Set-Field: metadata in_port_oxm eth_src eth_dst vlan_vid vlan_pcp mpls_label mpls_tc ip_src ip_dst ipv6_src ipv6_dst ip_dscp nw_ecn arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst
@@ -1389,16 +1394,23 @@ OVS_VSWITCHD_START
  while test $x -lt 254; do
    y=`expr $x + 1`
    if test $x = 253; then
-       next=254
+     next=
+     goto=
    else
-       next=$y-254
+     goto=,goto_table
+     if test $x = 252; then
+       next='
+      next tables: 253'
+     else
+       next="
+      next tables: $y-253"
+     fi
    fi
    echo "  table $x (\"$name\"):
     metadata: match=0xffffffffffffffff write=0xffffffffffffffff
     max_entries=1000000
-    instructions (table miss and others):
-      next tables: $next
-      instructions: meter,apply_actions,clear_actions,write_actions,write_metadata,goto_table
+    instructions (table miss and others):$next
+      instructions: meter,apply_actions,clear_actions,write_actions,write_metadata$goto
       Write-Actions and Apply-Actions features:
         actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
         supported on Set-Field: tun_id tun_src tun_dst metadata in_port in_port_oxm pkt_mark reg0 reg1 reg2 reg3 reg4 reg5 reg6 reg7 xreg0 xreg1 xreg2 xreg3 eth_src eth_dst vlan_tci vlan_vid vlan_pcp mpls_label mpls_tc ip_src ip_dst ipv6_src ipv6_dst nw_tos ip_dscp nw_ecn nw_ttl arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst

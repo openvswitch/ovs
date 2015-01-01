@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  * Copyright (c) 2010 Jean Tourrilhes - HP-Labs.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -2934,10 +2934,15 @@ query_tables(struct ofproto *ofproto,
         atomic_read_relaxed(&ofproto->tables[i].miss_config, &f->miss_config);
         f->max_entries = 1000000;
 
-        bitmap_set_multiple(f->nonmiss.next, i + 1,
-                            ofproto->n_tables - (i + 1), true);
+        bool more_tables = false;
+        for (int j = i + 1; j < ofproto->n_tables; j++) {
+            if (!(ofproto->tables[j].flags & OFTABLE_HIDDEN)) {
+                bitmap_set1(f->nonmiss.next, j);
+                more_tables = true;
+            }
+        }
         f->nonmiss.instructions = (1u << N_OVS_INSTRUCTIONS) - 1;
-        if (i == ofproto->n_tables - 1) {
+        if (!more_tables) {
             f->nonmiss.instructions &= ~(1u << OVSINST_OFPIT11_GOTO_TABLE);
         }
         f->nonmiss.write.ofpacts = (UINT64_C(1) << N_OFPACTS) - 1;
