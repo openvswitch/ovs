@@ -1,6 +1,6 @@
 # -*- autoconf -*-
 
-# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,7 +30,19 @@ AC_DEFUN([OVS_CHECK_COVERAGE],
       esac],
      [coverage=false])
    if $coverage; then
-     OVS_CFLAGS="$OVS_CFLAGS -O0 --coverage"
+     # Autoconf by default puts "-g -O2" in CFLAGS.  We need to remove the -O2
+     # option for coverage to be useful.  This does it without otherwise
+     # interfering with anything that the user might have put there.
+     old_CFLAGS=$CFLAGS
+     CFLAGS=
+     for option in $old_CFLAGS; do
+        case $option in
+            (-O2) ;;
+            (*) CFLAGS="$CFLAGS $option" ;;
+        esac
+     done
+
+     OVS_CFLAGS="$OVS_CFLAGS --coverage"
      OVS_LDFLAGS="$OVS_LDFLAGS --coverage"
    fi])
 
