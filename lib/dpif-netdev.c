@@ -1742,11 +1742,11 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
     ovs_refcount_init(&flow->ref_cnt);
     ovsrcu_set(&flow->actions, dp_netdev_actions_create(actions, actions_len));
 
-    cmap_insert(&pmd->flow_table,
-                CONST_CAST(struct cmap_node *, &flow->node),
-                dp_netdev_flow_hash(&flow->ufid));
     netdev_flow_key_init_masked(&flow->cr.flow, &match->flow, &mask);
     dpcls_insert(&pmd->cls, &flow->cr, &mask);
+
+    cmap_insert(&pmd->flow_table, CONST_CAST(struct cmap_node *, &flow->node),
+                dp_netdev_flow_hash(&flow->ufid));
 
     if (OVS_UNLIKELY(VLOG_IS_DBG_ENABLED())) {
         struct match match;
