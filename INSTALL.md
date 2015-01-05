@@ -562,6 +562,24 @@ test failures that you believe to represent bugs in Open vSwitch.
 Include the precise versions of Open vSwitch and Ryu in your bug
 report, plus any other information needed to reproduce the problem.
 
+Vagrant
+-------
+
+Requires: Vagrant and a compatible hypervisor
+
+A Vagrantfile is provided allowing to compile and provision the source
+tree as found locally in a virtual machine using the following commands:
+
+	vagrant up
+	vagrant ssh
+
+This will bring up w Fedora 20 VM by default, alternatively the
+`Vagrantfile.in` can be modified to use a different distribution box as
+base. Also, the VM can be reprovisioned at any time to recompile and
+reinstall OVS:
+
+	vagrant provision
+
 Continuous Integration with Travis-CI
 -------------------------------------
 

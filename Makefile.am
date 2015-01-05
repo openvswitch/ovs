@@ -103,7 +103,8 @@ EXTRA_DIST = \
 	build-aux/sodepends.pl \
 	build-aux/soexpand.pl \
 	$(MAN_FRAGMENTS) \
-	$(MAN_ROOTS)
+	$(MAN_ROOTS) \
+	Vagrantfile.in
 bin_PROGRAMS =
 sbin_PROGRAMS =
 bin_SCRIPTS =

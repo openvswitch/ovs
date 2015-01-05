@@ -65,3 +65,5 @@ tags
 _debian
 odp-netlink.h
 OvsDpInterface.h
+Vagrantfile
+/.vagrant/
