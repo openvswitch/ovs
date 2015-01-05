@@ -433,6 +433,7 @@ _FlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     RtlZeroMemory(&getOutput, sizeof(OvsFlowGetOutput));
     UINT32 keyAttrOffset = 0;
     UINT32 tunnelKeyAttrOffset = 0;
+    BOOLEAN ok;
 
     if (usrParamsCtx->inputLength > usrParamsCtx->outputLength) {
         /* Should not be the case.
@@ -506,8 +507,12 @@ _FlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
     /* Input already has all the attributes for the flow key.
      * Lets copy the values back. */
-    RtlCopyMemory(usrParamsCtx->outputBuffer, usrParamsCtx->inputBuffer,
-                  usrParamsCtx->inputLength);
+    ok = NlMsgPutTail(&nlBuf, (PCHAR)(usrParamsCtx->inputBuffer),
+                      usrParamsCtx->inputLength);
+    if (!ok) {
+        OVS_LOG_ERROR("Could not copy the data to the buffer tail");
+        goto done;
+    }
 
     rc = _MapFlowStatsToNlStats(&nlBuf, &((getOutput.info).stats));
     if (rc != STATUS_SUCCESS) {
