@@ -7,6 +7,8 @@ bugs so as to ensure that they can be fixed as quickly as possible.
 
 Please report bugs by sending email to bugs@openvswitch.org.  
 
+For reporting security vulnerabilities, please read SECURITY.md.
+
 The most important parts of your bug report are the following:
 
   * What you did that make the problem appear.

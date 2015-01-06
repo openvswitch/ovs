@@ -1,4 +1,4 @@
-# Copyright (C) 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+# Copyright (C) 2007-2015 Nicira, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -89,6 +89,7 @@ docs = \
 	README-lisp.md \
 	README-native-tunneling.md \
 	REPORTING-BUGS.md \
+	SECURITY.md \
 	TODO.md \
 	WHY-OVS.md
 EXTRA_DIST = \
