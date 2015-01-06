@@ -22,4 +22,12 @@ NTSTATUS OvsTunnelFilterInitialize(PDRIVER_OBJECT driverObject);
 
 VOID OvsTunnelFilterUninitialize(PDRIVER_OBJECT driverObject);
 
+NTSTATUS OvsTunnelEngineOpen(HANDLE *handle);
+
+VOID OvsTunnelEngineClose(HANDLE *handle);
+
+VOID OvsTunnelAddSystemProvider(HANDLE handle);
+
+VOID OvsTunnelRemoveSystemProvider(HANDLE handle);
+
 #endif /* __TUNNEL_INTF_H_ */

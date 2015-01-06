@@ -23,6 +23,7 @@
 
 #include "NetProto.h"
 #include "BufferMgmt.h"
+#include "TunnelIntf.h"
 #define OVS_MAX_VPORT_ARRAY_SIZE 1024
 #define OVS_MAX_PID_ARRAY_SIZE   1024
 

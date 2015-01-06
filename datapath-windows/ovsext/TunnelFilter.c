@@ -18,6 +18,11 @@
 
 #pragma warning(push)
 #pragma warning(disable:4201)       // unnamed struct/union
+#ifdef OVS_DBG_MOD
+#undef OVS_DBG_MOD
+#endif
+#define OVS_DBG_MOD OVS_DBG_TUNFLT
+#include "Debug.h"
 
 
 #include <fwpsk.h>
@@ -40,6 +45,23 @@
 #define INITGUID
 #include <guiddef.h>
 
+/* Infinite timeout */
+#define INFINITE                        0xFFFFFFFF
+
+/*
+ * The provider name should always match the provider string from the install
+ * file.
+ */
+#define OVS_TUNNEL_PROVIDER_NAME        L"Open vSwitch"
+
+/*
+ * The provider description should always contain the OVS service description
+ * string from the install file.
+ */
+#define OVS_TUNNEL_PROVIDER_DESC        L"Open vSwitch Extension tunnel provider"
+
+/* The session name isn't required but it's useful for diagnostics. */
+#define OVS_TUNNEL_SESSION_NAME         L"OVS tunnel session"
 
 /* Configurable parameters (addresses and ports are in host order) */
 UINT16   configNewDestPort = VXLAN_UDP_PORT;
@@ -65,6 +87,15 @@ DEFINE_GUID(
     0x94, 0xc9, 0xf0, 0xd5, 0x25, 0xbb, 0xc1, 0x69
     );
 
+/* 6fc957d7-14e7-47c7-812b-4668be994ba1 */
+DEFINE_GUID(
+    OVS_TUNNEL_PROVIDER_KEY,
+    0x6fc957d7,
+    0x14e7,
+    0x47c7,
+    0x81, 0x2b, 0x46, 0x68, 0xbe, 0x99, 0x4b, 0xa1
+    );
+
 /* bfd4814c-9650-4de3-a536-1eedb9e9ba6a */
 DEFINE_GUID(
     OVS_TUNNEL_FILTER_KEY,
@@ -79,11 +110,126 @@ DEFINE_GUID(
  */
 PDEVICE_OBJECT gDeviceObject;
 
-HANDLE gEngineHandle;
+HANDLE gEngineHandle = NULL;
 UINT32 gCalloutIdV4;
 
 
 /* Callout driver implementation */
+
+NTSTATUS
+OvsTunnelEngineOpen(HANDLE *handle)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+    FWPM_SESSION session = { 0 };
+
+    /* The session name isn't required but may be useful for diagnostics. */
+    session.displayData.name = OVS_TUNNEL_SESSION_NAME;
+    /*
+    * Set an infinite wait timeout, so we don't have to handle FWP_E_TIMEOUT
+    * errors while waiting to acquire the transaction lock.
+    */
+    session.txnWaitTimeoutInMSec = INFINITE;
+    session.flags = FWPM_SESSION_FLAG_DYNAMIC;
+
+    /* The authentication service should always be RPC_C_AUTHN_DEFAULT. */
+    status = FwpmEngineOpen(NULL,
+                            RPC_C_AUTHN_DEFAULT,
+                            NULL,
+                            &session,
+                            handle);
+    if (!NT_SUCCESS(status)) {
+        OVS_LOG_ERROR("Fail to open filtering engine session, status: %x.",
+                      status);
+    }
+
+    return status;
+}
+
+VOID
+OvsTunnelEngineClose(HANDLE *handle)
+{
+    if (*handle) {
+        FwpmEngineClose(*handle);
+        *handle = NULL;
+    }
+}
+
+VOID
+OvsTunnelAddSystemProvider(HANDLE handle)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+    BOOLEAN inTransaction = FALSE;
+    FWPM_PROVIDER provider = { 0 };
+
+    do {
+        status = FwpmTransactionBegin(handle, 0);
+        if (!NT_SUCCESS(status)) {
+            break;
+        }
+        inTransaction = TRUE;
+
+        memset(&provider, 0, sizeof(provider));
+        provider.providerKey = OVS_TUNNEL_PROVIDER_KEY;
+        provider.displayData.name = OVS_TUNNEL_PROVIDER_NAME;
+        provider.displayData.description = OVS_TUNNEL_PROVIDER_DESC;
+        /*
+        * Since we always want the provider to be present, it's easiest to add
+        * it as persistent object during driver load.
+        */
+        provider.flags = FWPM_PROVIDER_FLAG_PERSISTENT;
+
+        status = FwpmProviderAdd(handle,
+                                 &provider,
+                                 NULL);
+        if (!NT_SUCCESS(status)) {
+            OVS_LOG_ERROR("Fail to add WFP provider, status: %x.", status);
+            break;
+        }
+
+        status = FwpmTransactionCommit(handle);
+        if (!NT_SUCCESS(status)) {
+            break;
+        }
+
+        inTransaction = FALSE;
+    } while (inTransaction);
+
+    if (inTransaction){
+        FwpmTransactionAbort(handle);
+    }
+}
+
+VOID
+OvsTunnelRemoveSystemProvider(HANDLE handle)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+    BOOLEAN inTransaction = FALSE;
+
+    do {
+        status = FwpmTransactionBegin(handle, 0);
+        if (!NT_SUCCESS(status)) {
+            break;
+        }
+        inTransaction = TRUE;
+
+        status = FwpmProviderDeleteByKey(handle,
+                                         &OVS_TUNNEL_PROVIDER_KEY);
+        if (!NT_SUCCESS(status)) {
+            break;
+        }
+
+        status = FwpmTransactionCommit(handle);
+        if (!NT_SUCCESS(status)) {
+            break;
+        }
+
+        inTransaction = FALSE;
+    } while (inTransaction);
+
+    if (inTransaction){
+        FwpmTransactionAbort(handle);
+    }
+}
 
 NTSTATUS
 OvsTunnelAddFilter(PWSTR filterName,
@@ -278,16 +424,7 @@ OvsTunnelRegisterCallouts(VOID *deviceObject)
     BOOLEAN engineOpened = FALSE;
     BOOLEAN inTransaction = FALSE;
 
-    FWPM_SESSION session = {0};
-
-    session.flags = FWPM_SESSION_FLAG_DYNAMIC;
-
-    status = FwpmEngineOpen(NULL,
-                            RPC_C_AUTHN_WINNT,
-                            NULL,
-                            &session,
-                            &gEngineHandle);
-
+    status = OvsTunnelEngineOpen(&gEngineHandle);
     if (!NT_SUCCESS(status)) {
         goto Exit;
     }
@@ -307,13 +444,18 @@ OvsTunnelRegisterCallouts(VOID *deviceObject)
         L"Sub-Layer for use by Datagram-Data OVS callouts";
     OvsTunnelSubLayer.flags = 0;
     OvsTunnelSubLayer.weight = FWP_EMPTY; /* auto-weight */
+    /*
+     * Link all objects to the tunnel provider. When multiple providers are
+     * installed on a computer, this makes it easy to determine who added what.
+     */
+    OvsTunnelSubLayer.providerKey = (GUID*) &OVS_TUNNEL_PROVIDER_KEY;
 
     status = FwpmSubLayerAdd(gEngineHandle, &OvsTunnelSubLayer, NULL);
     if (!NT_SUCCESS(status)) {
         goto Exit;
     }
 
-    // In order to use this callout a socket must be opened
+    /* In order to use this callout a socket must be opened. */
     status = OvsTunnelRegisterDatagramDataCallouts(&FWPM_LAYER_DATAGRAM_DATA_V4,
                                                    &OVS_TUNNEL_CALLOUT_V4,
                                                    deviceObject,
@@ -335,8 +477,7 @@ Exit:
             FwpmTransactionAbort(gEngineHandle);
         }
         if (engineOpened) {
-            FwpmEngineClose(gEngineHandle);
-            gEngineHandle = NULL;
+            OvsTunnelEngineClose(&gEngineHandle);
         }
     }
 
@@ -348,9 +489,9 @@ OvsTunnelUnregisterCallouts(VOID)
 {
     OvsTunnelRemoveFilter(&OVS_TUNNEL_FILTER_KEY,
                           &OVS_TUNNEL_SUBLAYER);
-    FwpmEngineClose(gEngineHandle);
-    gEngineHandle = NULL;
     FwpsCalloutUnregisterById(gCalloutIdV4);
+    FwpmCalloutDeleteById(gEngineHandle, gCalloutIdV4);
+    OvsTunnelEngineClose(&gEngineHandle);
 }
 
 VOID

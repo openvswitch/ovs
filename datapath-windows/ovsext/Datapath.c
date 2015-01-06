@@ -353,19 +353,35 @@ PNDIS_SPIN_LOCK gOvsCtrlLock;
 VOID
 OvsInit()
 {
+    HANDLE handle = NULL;
+
     gOvsCtrlLock = &ovsCtrlLockObj;
     NdisAllocateSpinLock(gOvsCtrlLock);
     OvsInitEventQueue();
+
+    OvsTunnelEngineOpen(&handle);
+    if (handle) {
+        OvsTunnelAddSystemProvider(handle);
+    }
+    OvsTunnelEngineClose(&handle);
 }
 
 VOID
 OvsCleanup()
 {
+    HANDLE handle = NULL;
+
     OvsCleanupEventQueue();
     if (gOvsCtrlLock) {
         NdisFreeSpinLock(gOvsCtrlLock);
         gOvsCtrlLock = NULL;
     }
+
+    OvsTunnelEngineOpen(&handle);
+    if (handle) {
+        OvsTunnelRemoveSystemProvider(handle);
+    }
+    OvsTunnelEngineClose(&handle);
 }
 
 VOID

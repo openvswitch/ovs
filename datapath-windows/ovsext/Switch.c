@@ -26,7 +26,6 @@
 #include "Event.h"
 #include "Flow.h"
 #include "IpHelper.h"
-#include "TunnelIntf.h"
 #include "Oid.h"
 
 #ifdef OVS_DBG_MOD
