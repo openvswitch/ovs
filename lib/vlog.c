@@ -77,21 +77,21 @@ BUILD_ASSERT_DECL(LOG_LOCAL0 == (16 << 3));
 /* The log modules. */
 struct ovs_list vlog_modules = OVS_LIST_INITIALIZER(&vlog_modules);
 
-/* Protects the 'pattern' in all "struct facility"s, so that a race between
+/* Protects the 'pattern' in all "struct destination"s, so that a race between
  * changing and reading the pattern does not cause an access to freed
  * memory. */
 static struct ovs_rwlock pattern_rwlock = OVS_RWLOCK_INITIALIZER;
 
-/* Information about each facility. */
-struct facility {
+/* Information about each destination. */
+struct destination {
     const char *name;           /* Name. */
     char *pattern OVS_GUARDED_BY(pattern_rwlock); /* Current pattern. */
     bool default_pattern;       /* Whether current pattern is the default. */
 };
-static struct facility facilities[VLF_N_FACILITIES] = {
-#define VLOG_FACILITY(NAME, PATTERN) {#NAME, PATTERN, true},
-    VLOG_FACILITIES
-#undef VLOG_FACILITY
+static struct destination destinations[VLF_N_DESTINATIONS] = {
+#define VLOG_DESTINATION(NAME, PATTERN) {#NAME, PATTERN, true},
+    VLOG_DESTINATIONS
+#undef VLOG_DESTINATION
 };
 
 /* Sequence number for the message currently being composed. */
@@ -147,23 +147,23 @@ vlog_get_level_val(const char *name)
     return search_name_array(name, level_names, ARRAY_SIZE(level_names));
 }
 
-/* Returns the name for logging facility 'facility'. */
+/* Returns the name for logging destination 'destination'. */
 const char *
-vlog_get_facility_name(enum vlog_facility facility)
+vlog_get_destination_name(enum vlog_destination destination)
 {
-    assert(facility < VLF_N_FACILITIES);
-    return facilities[facility].name;
+    assert(destination < VLF_N_DESTINATIONS);
+    return destinations[destination].name;
 }
 
-/* Returns the logging facility named 'name', or VLF_N_FACILITIES if 'name' is
- * not the name of a logging facility. */
-enum vlog_facility
-vlog_get_facility_val(const char *name)
+/* Returns the logging destination named 'name', or VLF_N_DESTINATIONS if
+ * 'name' is not the name of a logging destination. */
+enum vlog_destination
+vlog_get_destination_val(const char *name)
 {
     size_t i;
 
-    for (i = 0; i < VLF_N_FACILITIES; i++) {
-        if (!strcasecmp(facilities[i].name, name)) {
+    for (i = 0; i < VLF_N_DESTINATIONS; i++) {
+        if (!strcasecmp(destinations[i].name, name)) {
             break;
         }
     }
@@ -198,23 +198,25 @@ vlog_module_from_name(const char *name)
     return NULL;
 }
 
-/* Returns the current logging level for the given 'module' and 'facility'. */
+/* Returns the current logging level for the given 'module' and
+ * 'destination'. */
 enum vlog_level
-vlog_get_level(const struct vlog_module *module, enum vlog_facility facility)
+vlog_get_level(const struct vlog_module *module,
+               enum vlog_destination destination)
 {
-    assert(facility < VLF_N_FACILITIES);
-    return module->levels[facility];
+    assert(destination < VLF_N_DESTINATIONS);
+    return module->levels[destination];
 }
 
 static void
 update_min_level(struct vlog_module *module) OVS_REQUIRES(&log_file_mutex)
 {
-    enum vlog_facility facility;
+    enum vlog_destination destination;
 
     module->min_level = VLL_OFF;
-    for (facility = 0; facility < VLF_N_FACILITIES; facility++) {
-        if (log_fd >= 0 || facility != VLF_FILE) {
-            enum vlog_level level = module->levels[facility];
+    for (destination = 0; destination < VLF_N_DESTINATIONS; destination++) {
+        if (log_fd >= 0 || destination != VLF_FILE) {
+            enum vlog_level level = module->levels[destination];
             if (level > module->min_level) {
                 module->min_level = level;
             }
@@ -223,47 +225,49 @@ update_min_level(struct vlog_module *module) OVS_REQUIRES(&log_file_mutex)
 }
 
 static void
-set_facility_level(enum vlog_facility facility, struct vlog_module *module,
-                   enum vlog_level level)
+set_destination_level(enum vlog_destination destination,
+                      struct vlog_module *module, enum vlog_level level)
 {
-    assert(facility >= 0 && facility < VLF_N_FACILITIES);
+    assert(destination >= 0 && destination < VLF_N_DESTINATIONS);
     assert(level < VLL_N_LEVELS);
 
     ovs_mutex_lock(&log_file_mutex);
     if (!module) {
         struct vlog_module *mp;
         LIST_FOR_EACH (mp, list, &vlog_modules) {
-            mp->levels[facility] = level;
+            mp->levels[destination] = level;
             update_min_level(mp);
         }
     } else {
-        module->levels[facility] = level;
+        module->levels[destination] = level;
         update_min_level(module);
     }
     ovs_mutex_unlock(&log_file_mutex);
 }
 
-/* Sets the logging level for the given 'module' and 'facility' to 'level'.  A
- * null 'module' or a 'facility' of VLF_ANY_FACILITY is treated as a wildcard
- * across all modules or facilities, respectively. */
+/* Sets the logging level for the given 'module' and 'destination' to 'level'.
+ * A null 'module' or a 'destination' of VLF_ANY_DESTINATION is treated as a
+ * wildcard across all modules or destinations, respectively. */
 void
-vlog_set_levels(struct vlog_module *module, enum vlog_facility facility,
+vlog_set_levels(struct vlog_module *module, enum vlog_destination destination,
                 enum vlog_level level)
 {
-    assert(facility < VLF_N_FACILITIES || facility == VLF_ANY_FACILITY);
-    if (facility == VLF_ANY_FACILITY) {
-        for (facility = 0; facility < VLF_N_FACILITIES; facility++) {
-            set_facility_level(facility, module, level);
+    assert(destination < VLF_N_DESTINATIONS ||
+           destination == VLF_ANY_DESTINATION);
+    if (destination == VLF_ANY_DESTINATION) {
+        for (destination = 0; destination < VLF_N_DESTINATIONS;
+             destination++) {
+            set_destination_level(destination, module, level);
         }
     } else {
-        set_facility_level(facility, module, level);
+        set_destination_level(destination, module, level);
     }
 }
 
 static void
-do_set_pattern(enum vlog_facility facility, const char *pattern)
+do_set_pattern(enum vlog_destination destination, const char *pattern)
 {
-    struct facility *f = &facilities[facility];
+    struct destination *f = &destinations[destination];
 
     ovs_rwlock_wrlock(&pattern_rwlock);
     if (!f->default_pattern) {
@@ -275,17 +279,19 @@ do_set_pattern(enum vlog_facility facility, const char *pattern)
     ovs_rwlock_unlock(&pattern_rwlock);
 }
 
-/* Sets the pattern for the given 'facility' to 'pattern'. */
+/* Sets the pattern for the given 'destination' to 'pattern'. */
 void
-vlog_set_pattern(enum vlog_facility facility, const char *pattern)
+vlog_set_pattern(enum vlog_destination destination, const char *pattern)
 {
-    assert(facility < VLF_N_FACILITIES || facility == VLF_ANY_FACILITY);
-    if (facility == VLF_ANY_FACILITY) {
-        for (facility = 0; facility < VLF_N_FACILITIES; facility++) {
-            do_set_pattern(facility, pattern);
+    assert(destination < VLF_N_DESTINATIONS ||
+           destination == VLF_ANY_DESTINATION);
+    if (destination == VLF_ANY_DESTINATION) {
+        for (destination = 0; destination < VLF_N_DESTINATIONS;
+             destination++) {
+            do_set_pattern(destination, pattern);
         }
     } else {
-        do_set_pattern(facility, pattern);
+        do_set_pattern(destination, pattern);
     }
 }
 
@@ -397,36 +403,36 @@ vlog_set_levels_from_string(const char *s_)
 
     word = strtok_r(s, " ,:\t", &save_ptr);
     if (word && !strcasecmp(word, "PATTERN")) {
-        enum vlog_facility facility;
+        enum vlog_destination destination;
 
         word = strtok_r(NULL, " ,:\t", &save_ptr);
         if (!word) {
-            msg = xstrdup("missing facility");
+            msg = xstrdup("missing destination");
             goto exit;
         }
 
-        facility = (!strcasecmp(word, "ANY")
-                    ? VLF_ANY_FACILITY
-                    : vlog_get_facility_val(word));
-        if (facility == VLF_N_FACILITIES) {
-            msg = xasprintf("unknown facility \"%s\"", word);
+        destination = (!strcasecmp(word, "ANY")
+                       ? VLF_ANY_DESTINATION
+                       : vlog_get_destination_val(word));
+        if (destination == VLF_N_DESTINATIONS) {
+            msg = xasprintf("unknown destination \"%s\"", word);
             goto exit;
         }
-        vlog_set_pattern(facility, save_ptr);
+        vlog_set_pattern(destination, save_ptr);
     } else {
         struct vlog_module *module = NULL;
         enum vlog_level level = VLL_N_LEVELS;
-        enum vlog_facility facility = VLF_N_FACILITIES;
+        enum vlog_destination destination = VLF_N_DESTINATIONS;
 
         for (; word != NULL; word = strtok_r(NULL, " ,:\t", &save_ptr)) {
             if (!strcasecmp(word, "ANY")) {
                 continue;
-            } else if (vlog_get_facility_val(word) != VLF_N_FACILITIES) {
-                if (facility != VLF_N_FACILITIES) {
-                    msg = xstrdup("cannot specify multiple facilities");
+            } else if (vlog_get_destination_val(word) != VLF_N_DESTINATIONS) {
+                if (destination != VLF_N_DESTINATIONS) {
+                    msg = xstrdup("cannot specify multiple destinations");
                     goto exit;
                 }
-                facility = vlog_get_facility_val(word);
+                destination = vlog_get_destination_val(word);
             } else if (vlog_get_level_val(word) != VLL_N_LEVELS) {
                 if (level != VLL_N_LEVELS) {
                     msg = xstrdup("cannot specify multiple levels");
@@ -440,18 +446,19 @@ vlog_set_levels_from_string(const char *s_)
                 }
                 module = vlog_module_from_name(word);
             } else {
-                msg = xasprintf("no facility, level, or module \"%s\"", word);
+                msg = xasprintf("no destination, level, or module \"%s\"",
+                                word);
                 goto exit;
             }
         }
 
-        if (facility == VLF_N_FACILITIES) {
-            facility = VLF_ANY_FACILITY;
+        if (destination == VLF_N_DESTINATIONS) {
+            destination = VLF_ANY_DESTINATION;
         }
         if (level == VLL_N_LEVELS) {
             level = VLL_DBG;
         }
-        vlog_set_levels(module, facility, level);
+        vlog_set_levels(module, destination, level);
     }
 
 exit:
@@ -480,7 +487,7 @@ vlog_set_verbosity(const char *arg)
             ovs_fatal(0, "processing \"%s\": %s", arg, msg);
         }
     } else {
-        vlog_set_levels(NULL, VLF_ANY_FACILITY, VLL_DBG);
+        vlog_set_levels(NULL, VLF_ANY_DESTINATION, VLL_DBG);
     }
 }
 
@@ -632,7 +639,7 @@ vlog_init(void)
         }
 
         unixctl_command_register(
-            "vlog/set", "{spec | PATTERN:facility:pattern}",
+            "vlog/set", "{spec | PATTERN:destination:pattern}",
             1, INT_MAX, vlog_unixctl_set, NULL);
         unixctl_command_register("vlog/list", "", 0, 0, vlog_unixctl_list,
                                  NULL);
@@ -879,8 +886,9 @@ vlog_valist(const struct vlog_module *module, enum vlog_level level,
 
         ovs_rwlock_rdlock(&pattern_rwlock);
         if (log_to_console) {
-            format_log_message(module, level, facilities[VLF_CONSOLE].pattern,
-                               message, args, &s);
+            format_log_message(module, level,
+                               destinations[VLF_CONSOLE].pattern, message,
+                               args, &s);
             ds_put_char(&s, '\n');
             fputs(ds_cstr(&s), stderr);
         }
@@ -890,7 +898,7 @@ vlog_valist(const struct vlog_module *module, enum vlog_level level,
             char *save_ptr = NULL;
             char *line;
 
-            format_log_message(module, level, facilities[VLF_SYSLOG].pattern,
+            format_log_message(module, level, destinations[VLF_SYSLOG].pattern,
                                message, args, &s);
             for (line = strtok_r(s.string, "\n", &save_ptr); line;
                  line = strtok_r(NULL, "\n", &save_ptr)) {
@@ -907,7 +915,7 @@ vlog_valist(const struct vlog_module *module, enum vlog_level level,
         }
 
         if (log_to_file) {
-            format_log_message(module, level, facilities[VLF_FILE].pattern,
+            format_log_message(module, level, destinations[VLF_FILE].pattern,
                                message, args, &s);
             ds_put_char(&s, '\n');
 
@@ -944,7 +952,7 @@ vlog(const struct vlog_module *module, enum vlog_level level,
 
 /* Logs 'message' to 'module' at maximum verbosity, then exits with a failure
  * exit code.  Always writes the message to stderr, even if the console
- * facility is disabled.
+ * destination is disabled.
  *
  * Choose this function instead of vlog_abort_valist() if the daemon monitoring
  * facility shouldn't automatically restart the current daemon.  */
@@ -964,7 +972,7 @@ vlog_fatal_valist(const struct vlog_module *module_,
 
 /* Logs 'message' to 'module' at maximum verbosity, then exits with a failure
  * exit code.  Always writes the message to stderr, even if the console
- * facility is disabled.
+ * destination is disabled.
  *
  * Choose this function instead of vlog_abort() if the daemon monitoring
  * facility shouldn't automatically restart the current daemon.  */
@@ -979,7 +987,7 @@ vlog_fatal(const struct vlog_module *module, const char *message, ...)
 }
 
 /* Logs 'message' to 'module' at maximum verbosity, then calls abort().  Always
- * writes the message to stderr, even if the console facility is disabled.
+ * writes the message to stderr, even if the console destination is disabled.
  *
  * Choose this function instead of vlog_fatal_valist() if the daemon monitoring
  * facility should automatically restart the current daemon.  */
@@ -998,7 +1006,7 @@ vlog_abort_valist(const struct vlog_module *module_,
 }
 
 /* Logs 'message' to 'module' at maximum verbosity, then calls abort().  Always
- * writes the message to stderr, even if the console facility is disabled.
+ * writes the message to stderr, even if the console destination is disabled.
  *
  * Choose this function instead of vlog_fatal() if the daemon monitoring
  * facility should automatically restart the current daemon.  */

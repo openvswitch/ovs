@@ -82,7 +82,7 @@ int
 main(int argc, char *argv[])
 {
     set_program_name(argv[0]);
-    vlog_set_levels(NULL, VLF_ANY_FACILITY, VLL_EMER);
+    vlog_set_levels(NULL, VLF_ANY_DESTINATION, VLL_EMER);
     parse_options(argc, argv);
     run_command(argc - optind, argv + optind, get_all_commands());
     return 0;

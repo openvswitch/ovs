@@ -84,7 +84,7 @@ Open vSwitch has several log levels.  The highest-severity log level is:
 .
 .IP "\fBoff\fR"
 No message is ever logged at this level, so setting a logging
-facility's log level to \fBoff\fR disables logging to that facility.
+destination's log level to \fBoff\fR disables logging to that destination.
 .
 .PP
 The following log levels, in order of descending severity, are
@@ -114,7 +114,7 @@ Lists the known logging modules and their current levels.
 .
 .IP "\fBvlog/set\fR [\fIspec\fR]"
 Sets logging levels.  Without any \fIspec\fR, sets the log level for
-every module and facility to \fBdbg\fR.  Otherwise, \fIspec\fR is a
+every module and destination to \fBdbg\fR.  Otherwise, \fIspec\fR is a
 list of words separated by spaces or commas or colons, up to one from
 each category below:
 .
@@ -150,9 +150,9 @@ will not take place unless the target application was invoked with the
 For compatibility with older versions of OVS, \fBany\fR is accepted as
 a word but has no effect.
 .
-.IP "\fBvlog/set PATTERN:\fIfacility\fB:\fIpattern\fR"
-Sets the log pattern for \fIfacility\fR to \fIpattern\fR.  Each time a
-message is logged to \fIfacility\fR, \fIpattern\fR determines the
+.IP "\fBvlog/set PATTERN:\fIdestination\fB:\fIpattern\fR"
+Sets the log pattern for \fIdestination\fR to \fIpattern\fR.  Each time a
+message is logged to \fIdestination\fR, \fIpattern\fR determines the
 message's formatting.  Most characters in \fIpattern\fR are copied
 literally to the log, but special escapes beginning with \fB%\fR are
 expanded as follows:

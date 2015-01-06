@@ -208,7 +208,7 @@ unixctl_server    info       info       info
 AT_CHECK([APPCTL -t test-unixctl.py vlog/set daemon:syslog:err])
 AT_CHECK([APPCTL -t test-unixctl.py vlog/set file:dbg])
 AT_CHECK([APPCTL -t test-unixctl.py vlog/set nonexistent], [0],
-  [no facility, level, or module "nonexistent"
+  [no destination, level, or module "nonexistent"
 ])
 AT_CHECK([APPCTL -t test-unixctl.py vlog/list], [0], [dnl
                  console    syslog    file
@@ -225,10 +225,10 @@ unixctl_server    info       info        dbg
 ])
 
 AT_CHECK([APPCTL -t test-unixctl.py vlog/set pattern], [0],
-  [Please supply a valid pattern and facility
+  [Please supply a valid pattern and destination
 ])
 AT_CHECK([APPCTL -t test-unixctl.py vlog/set pattern:nonexistent], [0],
-  [Facility nonexistent does not exist
+  [Destination nonexistent does not exist
 ])
 AT_CHECK([APPCTL -t test-unixctl.py vlog/set pattern:file:'I<3OVS|%m'])
 AT_CHECK([APPCTL -t test-unixctl.py log patterntest])

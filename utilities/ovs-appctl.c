@@ -95,7 +95,7 @@ Common commands:\n\
   vlog/set [SPEC]\n\
       Set log levels as detailed in SPEC, which may include:\n\
       A valid module name (all modules, by default)\n\
-      'syslog', 'console', 'file' (all facilities, by default))\n\
+      'syslog', 'console', 'file' (all destinations, by default))\n\
       'off', 'emer', 'err', 'warn', 'info', or 'dbg' ('dbg', bydefault)\n\
   vlog/reopen        Make the program reopen its log file\n\
 Other options:\n\

@@ -60,28 +60,29 @@ enum vlog_level {
 const char *vlog_get_level_name(enum vlog_level);
 enum vlog_level vlog_get_level_val(const char *name);
 
-/* Facilities that we can log to. */
-#define VLOG_FACILITIES                                                 \
-    VLOG_FACILITY(SYSLOG, "ovs|%05N|%c%T|%p|%m")                        \
-    VLOG_FACILITY(CONSOLE, "%D{%Y-%m-%dT%H:%M:%SZ}|%05N|%c%T|%p|%m")    \
-    VLOG_FACILITY(FILE, "%D{%Y-%m-%dT%H:%M:%S.###Z}|%05N|%c%T|%p|%m")
-enum vlog_facility {
-#define VLOG_FACILITY(NAME, PATTERN) VLF_##NAME,
-    VLOG_FACILITIES
-#undef VLOG_FACILITY
-    VLF_N_FACILITIES,
-    VLF_ANY_FACILITY = -1
+/* Destinations that we can log to. */
+#define VLOG_DESTINATIONS                                                 \
+    VLOG_DESTINATION(SYSLOG, "ovs|%05N|%c%T|%p|%m")                        \
+    VLOG_DESTINATION(CONSOLE, "%D{%Y-%m-%dT%H:%M:%SZ}|%05N|%c%T|%p|%m")    \
+    VLOG_DESTINATION(FILE, "%D{%Y-%m-%dT%H:%M:%S.###Z}|%05N|%c%T|%p|%m")
+enum vlog_destination {
+#define VLOG_DESTINATION(NAME, PATTERN) VLF_##NAME,
+    VLOG_DESTINATIONS
+#undef VLOG_DESTINATION
+    VLF_N_DESTINATIONS,
+    VLF_ANY_DESTINATION = -1
 };
 
-const char *vlog_get_facility_name(enum vlog_facility);
-enum vlog_facility vlog_get_facility_val(const char *name);
+const char *vlog_get_destination_name(enum vlog_destination);
+enum vlog_destination vlog_get_destination_val(const char *name);
 
 /* A log module. */
 struct vlog_module {
     struct ovs_list list;
     const char *name;             /* User-visible name. */
-    int levels[VLF_N_FACILITIES]; /* Minimum log level for each facility. */
-    int min_level;                /* Minimum log level for any facility. */
+    int levels[VLF_N_DESTINATIONS]; /* Minimum log level for each
+                                       destination. */
+    int min_level;                /* Minimum log level for any destination. */
     bool honor_rate_limits;       /* Set false to ignore rate limits. */
 };
 
@@ -125,9 +126,10 @@ struct vlog_rate_limit {
         }
 
 /* Configuring how each module logs messages. */
-enum vlog_level vlog_get_level(const struct vlog_module *, enum vlog_facility);
+enum vlog_level vlog_get_level(const struct vlog_module *,
+                               enum vlog_destination);
 void vlog_set_levels(struct vlog_module *,
-                     enum vlog_facility, enum vlog_level);
+                     enum vlog_destination, enum vlog_level);
 char *vlog_set_levels_from_string(const char *) OVS_WARN_UNUSED_RESULT;
 void vlog_set_levels_from_string_assert(const char *);
 char *vlog_get_levels(void);
@@ -136,8 +138,8 @@ bool vlog_should_drop(const struct vlog_module *, enum vlog_level,
                       struct vlog_rate_limit *);
 void vlog_set_verbosity(const char *arg);
 
-/* Configuring log facilities. */
-void vlog_set_pattern(enum vlog_facility, const char *pattern);
+/* Configuring log destinations. */
+void vlog_set_pattern(enum vlog_destination, const char *pattern);
 int vlog_set_log_file(const char *file_name);
 int vlog_reopen_log_file(void);
 

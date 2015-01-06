@@ -447,7 +447,7 @@ static void
 test_vconn_main(int argc, char *argv[])
 {
     set_program_name(argv[0]);
-    vlog_set_levels(NULL, VLF_ANY_FACILITY, VLL_EMER);
+    vlog_set_levels(NULL, VLF_ANY_DESTINATION, VLL_EMER);
     vlog_set_levels(NULL, VLF_CONSOLE, VLL_DBG);
     fatal_ignore_sigpipe();
 

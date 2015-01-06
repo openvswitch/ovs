@@ -168,7 +168,7 @@ main(int argc, char *argv[])
     set_program_name(argv[0]);
     fatal_ignore_sigpipe();
     vlog_set_levels(NULL, VLF_CONSOLE, VLL_WARN);
-    vlog_set_levels(&VLM_reconnect, VLF_ANY_FACILITY, VLL_WARN);
+    vlog_set_levels(&VLM_reconnect, VLF_ANY_DESTINATION, VLL_WARN);
     vteprec_init();
 
     /* Log our arguments.  This is often valuable for debugging systems. */

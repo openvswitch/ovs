@@ -45,7 +45,7 @@ main(int argc OVS_UNUSED, char *argv[])
     int error;
 
     set_program_name(argv[0]);
-    vlog_set_levels(NULL, VLF_ANY_FACILITY, VLL_DBG);
+    vlog_set_levels(NULL, VLF_ANY_DESTINATION, VLL_DBG);
 
     error = nl_sock_create(NETLINK_ROUTE, &sock);
     if (error) {

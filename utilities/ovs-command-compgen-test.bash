@@ -464,7 +464,7 @@ print_result "complex completion check - ofproto/trace" "$TEST_RESULT"
 
 
 # complex completion check - vlog/set
-# vlog/set {spec | PATTERN:facility:pattern}
+# vlog/set {spec | PATTERN:destination:pattern}
 # test non expandable arguments
 
 reset_globals
@@ -473,7 +473,7 @@ for i in loop_once; do
     # check the top level completion.
     COMP_OUTPUT="$(bash ovs-command-compgen.bash debug ovs-appctl vlog/set TAB 2>&1)"
     TMP="$(get_argument_expansion "$COMP_OUTPUT" | sed -e 's/[ \t]*$//')"
-    EXPECT="$(generate_expect_completions "PATTERN:facility:pattern" "")
+    EXPECT="$(generate_expect_completions "PATTERN:destination:pattern" "")
 $(generate_expect_completions "spec" "")"
     if [ "$TMP" != "$EXPECT" ]; then
         print_error "1" "$TMP" "$EXPECT"
@@ -494,7 +494,7 @@ $(generate_expect_completions "spec" "")"
     COMP_OUTPUT="$(bash ovs-command-compgen.bash debug ovs-appctl vlog/set abcd TAB 2>&1)"
     TMP="$(sed -e '/./,$!d' <<< "$COMP_OUTPUT")"
     EXPECT="Command format:
-vlog/set {spec | PATTERN:facility:pattern}"
+vlog/set {spec | PATTERN:destination:pattern}"
     if [ "$TMP" != "$EXPECT" ]; then
         print_error "3" "$TMP" "$EXPECT"
         TEST_RESULT=fail
