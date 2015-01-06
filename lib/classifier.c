@@ -34,6 +34,8 @@ struct trie_ctx;
 /* Ports trie depends on both ports sharing the same ovs_be32. */
 #define TP_PORTS_OFS32 (offsetof(struct flow, tp_src) / 4)
 BUILD_ASSERT_DECL(TP_PORTS_OFS32 == offsetof(struct flow, tp_dst) / 4);
+BUILD_ASSERT_DECL(TP_PORTS_OFS32 % 2 == 0);
+#define TP_PORTS_OFS64 (TP_PORTS_OFS32 / 2)
 
 static struct cls_match *
 cls_match_alloc(const struct cls_rule *rule)
@@ -240,7 +242,7 @@ classifier_init(struct classifier *cls, const uint8_t *flow_segments)
     cls->n_flow_segments = 0;
     if (flow_segments) {
         while (cls->n_flow_segments < CLS_MAX_INDICES
-               && *flow_segments < FLOW_U32S) {
+               && *flow_segments < FLOW_U64S) {
             cls->flow_segments[cls->n_flow_segments++] = *flow_segments++;
         }
     }
@@ -409,10 +411,9 @@ classifier_count(const struct classifier *cls)
 }
 
 static uint32_t
-hash_metadata(ovs_be64 metadata_)
+hash_metadata(ovs_be64 metadata)
 {
-    uint64_t metadata = (OVS_FORCE uint64_t) metadata_;
-    return hash_uint64(metadata);
+    return hash_uint64((OVS_FORCE uint64_t) metadata);
 }
 
 static struct cls_partition *
@@ -491,7 +492,7 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule)
     struct cls_match *new = cls_match_alloc(rule);
     struct cls_subtable *subtable;
     uint32_t ihash[CLS_MAX_INDICES];
-    uint8_t prev_be32ofs = 0;
+    uint8_t prev_be64ofs = 0;
     struct cls_match *head;
     size_t n_rules = 0;
     uint32_t basis;
@@ -508,11 +509,11 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule)
     /* Compute hashes in segments. */
     basis = 0;
     for (i = 0; i < subtable->n_indices; i++) {
-        ihash[i] = minimatch_hash_range(&rule->match, prev_be32ofs,
+        ihash[i] = minimatch_hash_range(&rule->match, prev_be64ofs,
                                         subtable->index_ofs[i], &basis);
-        prev_be32ofs = subtable->index_ofs[i];
+        prev_be64ofs = subtable->index_ofs[i];
     }
-    hash = minimatch_hash_range(&rule->match, prev_be32ofs, FLOW_U32S, &basis);
+    hash = minimatch_hash_range(&rule->match, prev_be64ofs, FLOW_U64S, &basis);
 
     head = find_equal(subtable, &rule->match.flow, hash);
     if (!head) {
@@ -674,7 +675,7 @@ classifier_remove(struct classifier *cls, const struct cls_rule *rule)
     struct cls_match *next;
     int i;
     uint32_t basis = 0, hash, ihash[CLS_MAX_INDICES];
-    uint8_t prev_be32ofs = 0;
+    uint8_t prev_be64ofs = 0;
     size_t n_rules;
 
     cls_match = rule->cls_match;
@@ -704,11 +705,11 @@ classifier_remove(struct classifier *cls, const struct cls_rule *rule)
     ovs_assert(subtable);
 
     for (i = 0; i < subtable->n_indices; i++) {
-        ihash[i] = minimatch_hash_range(&rule->match, prev_be32ofs,
+        ihash[i] = minimatch_hash_range(&rule->match, prev_be64ofs,
                                         subtable->index_ofs[i], &basis);
-        prev_be32ofs = subtable->index_ofs[i];
+        prev_be64ofs = subtable->index_ofs[i];
     }
-    hash = minimatch_hash_range(&rule->match, prev_be32ofs, FLOW_U32S, &basis);
+    hash = minimatch_hash_range(&rule->match, prev_be64ofs, FLOW_U64S, &basis);
 
     /* Head rule.  Check if 'next' is an identical, lower-priority rule that
      * will replace 'rule' in the data structures. */
@@ -943,7 +944,7 @@ classifier_rule_overlaps(const struct classifier *cls,
     /* Iterate subtables in the descending max priority order. */
     PVECTOR_FOR_EACH_PRIORITY (subtable, target->priority - 1, 2,
                                sizeof(struct cls_subtable), &cls->subtables) {
-        uint32_t storage[FLOW_U32S];
+        uint64_t storage[FLOW_U64S];
         struct minimask mask;
         const struct cls_rule *rule;
 
@@ -1148,7 +1149,7 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
     /* Check if the rest of the subtable's mask adds any bits,
      * and remove the last index if it doesn't. */
     if (index > 0) {
-        flow_wildcards_fold_minimask_range(&new, mask, prev, FLOW_U32S);
+        flow_wildcards_fold_minimask_range(&new, mask, prev, FLOW_U64S);
         if (flow_wildcards_equal(&new, &old)) {
             --index;
             *CONST_CAST(uint8_t *, &subtable->index_ofs[index]) = 0;
@@ -1227,9 +1228,10 @@ check_tries(struct trie_ctx trie_ctx[CLS_MAX_TRIES], unsigned int n_tries,
         if (field_plen[j]) {
             struct trie_ctx *ctx = &trie_ctx[j];
             uint8_t be32ofs = ctx->be32ofs;
+            uint8_t be64ofs = be32ofs / 2;
 
             /* Is the trie field within the current range of fields? */
-            if (be32ofs >= ofs.start && be32ofs < ofs.end) {
+            if (be64ofs >= ofs.start && be64ofs < ofs.end) {
                 /* On-demand trie lookup. */
                 if (!ctx->lookup_done) {
                     memset(&ctx->match_plens, 0, sizeof ctx->match_plens);
@@ -1281,12 +1283,12 @@ miniflow_and_mask_matches_flow(const struct miniflow *flow,
                                const struct minimask *mask,
                                const struct flow *target)
 {
-    const uint32_t *flowp = miniflow_get_u32_values(flow);
-    const uint32_t *maskp = miniflow_get_u32_values(&mask->masks);
+    const uint64_t *flowp = miniflow_get_values(flow);
+    const uint64_t *maskp = miniflow_get_values(&mask->masks);
     int idx;
 
     MAP_FOR_EACH_INDEX(idx, mask->masks.map) {
-        uint32_t diff = (*flowp++ ^ flow_u32_value(target, idx)) & *maskp++;
+        uint64_t diff = (*flowp++ ^ flow_u64_value(target, idx)) & *maskp++;
 
         if (diff) {
             return false;
@@ -1324,26 +1326,26 @@ miniflow_and_mask_matches_flow_wc(const struct miniflow *flow,
                                   const struct flow *target,
                                   struct flow_wildcards *wc)
 {
-    const uint32_t *flowp = miniflow_get_u32_values(flow);
-    const uint32_t *maskp = miniflow_get_u32_values(&mask->masks);
+    const uint64_t *flowp = miniflow_get_values(flow);
+    const uint64_t *maskp = miniflow_get_values(&mask->masks);
     int idx;
 
     MAP_FOR_EACH_INDEX(idx, mask->masks.map) {
-        uint32_t mask = *maskp++;
-        uint32_t diff = (*flowp++ ^ flow_u32_value(target, idx)) & mask;
+        uint64_t mask = *maskp++;
+        uint64_t diff = (*flowp++ ^ flow_u64_value(target, idx)) & mask;
 
         if (diff) {
             /* Only unwildcard if none of the differing bits is already
              * exact-matched. */
-            if (!(flow_u32_value(&wc->masks, idx) & diff)) {
+            if (!(flow_u64_value(&wc->masks, idx) & diff)) {
                 /* Keep one bit of the difference.  The selected bit may be
                  * different in big-endian v.s. little-endian systems. */
-                *flow_u32_lvalue(&wc->masks, idx) |= rightmost_1bit(diff);
+                *flow_u64_lvalue(&wc->masks, idx) |= rightmost_1bit(diff);
             }
             return false;
         }
         /* Fill in the bits that were looked at. */
-        *flow_u32_lvalue(&wc->masks, idx) |= mask;
+        *flow_u64_lvalue(&wc->masks, idx) |= mask;
     }
 
     return true;
@@ -1413,7 +1415,7 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
         }
         ofs.start = ofs.end;
     }
-    ofs.end = FLOW_U32S;
+    ofs.end = FLOW_U64S;
     /* Trie check for the final range. */
     if (check_tries(trie_ctx, n_tries, subtable->trie_plen, ofs, flow, wc)) {
         fill_range_wc(subtable, wc, ofs.start);
@@ -1438,7 +1440,7 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
 
         /* Unwildcard all bits in the mask upto the ports, as they were used
          * to determine there is no match. */
-        fill_range_wc(subtable, wc, TP_PORTS_OFS32);
+        fill_range_wc(subtable, wc, TP_PORTS_OFS64);
         return NULL;
     }
 
@@ -1727,12 +1729,11 @@ minimask_get_prefix_len(const struct minimask *minimask,
                         const struct mf_field *mf)
 {
     unsigned int n_bits = 0, mask_tz = 0; /* Non-zero when end of mask seen. */
-    uint8_t u32_ofs = mf->flow_be32ofs;
-    uint8_t u32_end = u32_ofs + mf->n_bytes / 4;
+    uint8_t be32_ofs = mf->flow_be32ofs;
+    uint8_t be32_end = be32_ofs + mf->n_bytes / 4;
 
-    for (; u32_ofs < u32_end; ++u32_ofs) {
-        uint32_t mask;
-        mask = ntohl((OVS_FORCE ovs_be32)minimask_get(minimask, u32_ofs));
+    for (; be32_ofs < be32_end; ++be32_ofs) {
+        uint32_t mask = ntohl(minimask_get_be32(minimask, be32_ofs));
 
         /* Validate mask, count the mask length. */
         if (mask_tz) {
@@ -1760,8 +1761,11 @@ minimask_get_prefix_len(const struct minimask *minimask,
 static const ovs_be32 *
 minimatch_get_prefix(const struct minimatch *match, const struct mf_field *mf)
 {
-    return miniflow_get_be32_values(&match->flow) +
-        count_1bits(match->flow.map & ((UINT64_C(1) << mf->flow_be32ofs) - 1));
+    return (OVS_FORCE const ovs_be32 *)
+        (miniflow_get_values(&match->flow)
+         + count_1bits(match->flow.map &
+                       ((UINT64_C(1) << mf->flow_be32ofs / 2) - 1)))
+        + (mf->flow_be32ofs & 1);
 }
 
 /* Insert rule in to the prefix tree.

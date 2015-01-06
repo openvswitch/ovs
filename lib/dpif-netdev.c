@@ -93,7 +93,7 @@ struct netdev_flow_key {
     uint32_t hash;       /* Hash function differs for different users. */
     uint32_t len;        /* Length of the following miniflow (incl. map). */
     struct miniflow mf;
-    uint32_t buf[FLOW_MAX_PACKET_U32S - MINI_N_INLINE];
+    uint64_t buf[FLOW_MAX_PACKET_U64S - MINI_N_INLINE];
 };
 
 /* Exact match cache for frequently used flows
@@ -1343,8 +1343,8 @@ static inline void
 netdev_flow_mask_init(struct netdev_flow_key *mask,
                       const struct match *match)
 {
-    const uint32_t *mask_u32 = (const uint32_t *) &match->wc.masks;
-    uint32_t *dst = mask->mf.inline_values;
+    const uint64_t *mask_u64 = (const uint64_t *) &match->wc.masks;
+    uint64_t *dst = mask->mf.inline_values;
     uint64_t map, mask_map = 0;
     uint32_t hash = 0;
     int n;
@@ -1356,10 +1356,10 @@ netdev_flow_mask_init(struct netdev_flow_key *mask,
         uint64_t rm1bit = rightmost_1bit(map);
         int i = raw_ctz(map);
 
-        if (mask_u32[i]) {
+        if (mask_u64[i]) {
             mask_map |= rm1bit;
-            *dst++ = mask_u32[i];
-            hash = hash_add(hash, mask_u32[i]);
+            *dst++ = mask_u64[i];
+            hash = hash_add64(hash, mask_u64[i]);
         }
         map -= rm1bit;
     }
@@ -1371,7 +1371,7 @@ netdev_flow_mask_init(struct netdev_flow_key *mask,
 
     n = dst - mask->mf.inline_values;
 
-    mask->hash = hash_finish(hash, n * 4);
+    mask->hash = hash_finish(hash, n * 8);
     mask->len = netdev_flow_key_size(n);
 }
 
@@ -1381,23 +1381,23 @@ netdev_flow_key_init_masked(struct netdev_flow_key *dst,
                             const struct flow *flow,
                             const struct netdev_flow_key *mask)
 {
-    uint32_t *dst_u32 = dst->mf.inline_values;
-    const uint32_t *mask_u32 = mask->mf.inline_values;
+    uint64_t *dst_u64 = dst->mf.inline_values;
+    const uint64_t *mask_u64 = mask->mf.inline_values;
     uint32_t hash = 0;
-    uint32_t value;
+    uint64_t value;
 
     dst->len = mask->len;
     dst->mf.values_inline = true;
     dst->mf.map = mask->mf.map;
 
     FLOW_FOR_EACH_IN_MAP(value, flow, mask->mf.map) {
-        *dst_u32 = value & *mask_u32++;
-        hash = hash_add(hash, *dst_u32++);
+        *dst_u64 = value & *mask_u64++;
+        hash = hash_add64(hash, *dst_u64++);
     }
-    dst->hash = hash_finish(hash, (dst_u32 - dst->mf.inline_values) * 4);
+    dst->hash = hash_finish(hash, (dst_u64 - dst->mf.inline_values) * 8);
 }
 
-/* Iterate through all netdev_flow_key u32 values specified by 'MAP' */
+/* Iterate through all netdev_flow_key u64 values specified by 'MAP' */
 #define NETDEV_FLOW_KEY_FOR_EACH_IN_MAP(VALUE, KEY, MAP)           \
     for (struct mf_for_each_in_map_aux aux__                       \
              = { (KEY)->mf.inline_values, (KEY)->mf.map, MAP };    \
@@ -1410,15 +1410,15 @@ static inline uint32_t
 netdev_flow_key_hash_in_mask(const struct netdev_flow_key *key,
                              const struct netdev_flow_key *mask)
 {
-    const uint32_t *p = mask->mf.inline_values;
+    const uint64_t *p = mask->mf.inline_values;
     uint32_t hash = 0;
-    uint32_t key_u32;
+    uint64_t key_u64;
 
-    NETDEV_FLOW_KEY_FOR_EACH_IN_MAP(key_u32, key, mask->mf.map) {
-        hash = hash_add(hash, key_u32 & *p++);
+    NETDEV_FLOW_KEY_FOR_EACH_IN_MAP(key_u64, key, mask->mf.map) {
+        hash = hash_add64(hash, key_u64 & *p++);
     }
 
-    return hash_finish(hash, (p - mask->mf.inline_values) * 4);
+    return hash_finish(hash, (p - mask->mf.inline_values) * 8);
 }
 
 static inline bool
@@ -3535,12 +3535,12 @@ static inline bool
 dpcls_rule_matches_key(const struct dpcls_rule *rule,
                        const struct netdev_flow_key *target)
 {
-    const uint32_t *keyp = rule->flow.mf.inline_values;
-    const uint32_t *maskp = rule->mask->mf.inline_values;
-    uint32_t target_u32;
+    const uint64_t *keyp = rule->flow.mf.inline_values;
+    const uint64_t *maskp = rule->mask->mf.inline_values;
+    uint64_t target_u64;
 
-    NETDEV_FLOW_KEY_FOR_EACH_IN_MAP(target_u32, target, rule->flow.mf.map) {
-        if (OVS_UNLIKELY((target_u32 & *maskp++) != *keyp++)) {
+    NETDEV_FLOW_KEY_FOR_EACH_IN_MAP(target_u64, target, rule->flow.mf.map) {
+        if (OVS_UNLIKELY((target_u64 & *maskp++) != *keyp++)) {
             return false;
         }
     }

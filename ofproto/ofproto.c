@@ -6701,7 +6701,7 @@ static void
 oftable_init(struct oftable *table)
 {
     memset(table, 0, sizeof *table);
-    classifier_init(&table->cls, flow_segment_u32s);
+    classifier_init(&table->cls, flow_segment_u64s);
     table->max_flows = UINT_MAX;
     atomic_init(&table->miss_config, OFPUTIL_TABLE_MISS_DEFAULT);
 

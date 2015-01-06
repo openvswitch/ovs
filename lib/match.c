@@ -870,7 +870,7 @@ match_format(const struct match *match, struct ds *s, int priority)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 28);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 29);
 
     if (priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%d,", priority);
@@ -1200,13 +1200,13 @@ bool
 minimatch_matches_flow(const struct minimatch *match,
                        const struct flow *target)
 {
-    const uint32_t *target_u32 = (const uint32_t *) target;
-    const uint32_t *flowp = miniflow_get_u32_values(&match->flow);
-    const uint32_t *maskp = miniflow_get_u32_values(&match->mask.masks);
+    const uint64_t *target_u64 = (const uint64_t *) target;
+    const uint64_t *flowp = miniflow_get_values(&match->flow);
+    const uint64_t *maskp = miniflow_get_values(&match->mask.masks);
     int idx;
 
     MAP_FOR_EACH_INDEX(idx, match->flow.map) {
-        if ((*flowp++ ^ target_u32[idx]) & *maskp++) {
+        if ((*flowp++ ^ target_u64[idx]) & *maskp++) {
             return false;
         }
     }

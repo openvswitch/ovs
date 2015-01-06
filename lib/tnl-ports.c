@@ -188,6 +188,6 @@ tnl_port_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
 void
 tnl_port_map_init(void)
 {
-    classifier_init(&cls, flow_segment_u32s);
+    classifier_init(&cls, flow_segment_u64s);
     unixctl_command_register("tnl/ports/show", "", 0, 0, tnl_port_show, NULL);
 }

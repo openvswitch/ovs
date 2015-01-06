@@ -1559,7 +1559,7 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
     struct dpif_flow_stats push;
     struct ofpbuf xout_actions;
     struct flow flow, dp_mask;
-    uint32_t *dp32, *xout32;
+    uint64_t *dp64, *xout64;
     ofp_port_t ofp_in_port;
     struct xlate_in xin;
     long long int last_used;
@@ -1659,10 +1659,10 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
      * mask in the kernel is more specific i.e. less wildcarded, than what
      * we've calculated here.  This guarantees we don't catch any packets we
      * shouldn't with the megaflow. */
-    dp32 = (uint32_t *) &dp_mask;
-    xout32 = (uint32_t *) &xout.wc.masks;
-    for (i = 0; i < FLOW_U32S; i++) {
-        if ((dp32[i] | xout32[i]) != dp32[i]) {
+    dp64 = (uint64_t *) &dp_mask;
+    xout64 = (uint64_t *) &xout.wc.masks;
+    for (i = 0; i < FLOW_U64S; i++) {
+        if ((dp64[i] | xout64[i]) != dp64[i]) {
             goto exit;
         }
     }
