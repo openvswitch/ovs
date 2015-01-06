@@ -92,6 +92,11 @@ static inline uint32_t hash_add(uint32_t hash, uint32_t data)
     return mhash_add(hash, data);
 }
 
+static inline uint32_t hash_add64(uint32_t hash, uint64_t data)
+{
+    return hash_add(hash_add(hash, data), data >> 32);
+}
+
 static inline uint32_t hash_finish(uint32_t hash, uint32_t final)
 {
     return mhash_finish(hash ^ final);
@@ -118,7 +123,14 @@ hash_words_inline(const uint32_t p[], size_t n_words, uint32_t basis)
 static inline uint32_t
 hash_words64_inline(const uint64_t p[], size_t n_words, uint32_t basis)
 {
-    return hash_words_inline((uint32_t *)p, n_words * 2, basis);
+    uint32_t hash;
+    size_t i;
+
+    hash = basis;
+    for (i = 0; i < n_words; i++) {
+        hash = hash_add64(hash, p[i]);
+    }
+    return hash_finish(hash, n_words * 8);
 }
 
 static inline uint32_t hash_pointer(const void *p, uint32_t basis)
@@ -139,15 +151,15 @@ static inline uint32_t hash_2words(uint32_t x, uint32_t y)
     return hash_finish(hash_add(hash_add(x, 0), y), 8);
 }
 
-static inline uint32_t hash_uint64(const uint64_t x)
-{
-    return hash_2words((uint32_t)(x >> 32), (uint32_t)x);
-}
-
 static inline uint32_t hash_uint64_basis(const uint64_t x,
                                          const uint32_t basis)
 {
-    return hash_3words((uint32_t)(x >> 32), (uint32_t)x, basis);
+    return hash_finish(hash_add64(basis, x), 8);
+}
+
+static inline uint32_t hash_uint64(const uint64_t x)
+{
+    return hash_uint64_basis(x, 0);
 }
 
 #else /* __SSE4_2__ && __x86_64__ */
@@ -156,6 +168,12 @@ static inline uint32_t hash_uint64_basis(const uint64_t x,
 static inline uint32_t hash_add(uint32_t hash, uint32_t data)
 {
     return _mm_crc32_u32(hash, data);
+}
+
+/* Add the halves of 'data' in the memory order. */
+static inline uint32_t hash_add64(uint32_t hash, uint64_t data)
+{
+    return _mm_crc32_u64(hash, data);
 }
 
 static inline uint32_t hash_finish(uint64_t hash, uint64_t final)
@@ -244,7 +262,7 @@ static inline uint32_t hash_uint64_basis(const uint64_t x,
                                          const uint32_t basis)
 {
     /* '23' chosen to mix bits enough for the test-hash to pass. */
-    return hash_finish(_mm_crc32_u64(basis, x), 23);
+    return hash_finish(hash_add64(basis, x), 23);
 }
 
 static inline uint32_t hash_uint64(const uint64_t x)

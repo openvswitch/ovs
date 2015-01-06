@@ -1367,8 +1367,7 @@ netdev_flow_mask_init(struct netdev_flow_key *mask,
     mask->mf.values_inline = true;
     mask->mf.map = mask_map;
 
-    hash = hash_add(hash, mask_map);
-    hash = hash_add(hash, mask_map >> 32);
+    hash = hash_add64(hash, mask_map);
 
     n = dst - mask->mf.inline_values;
 

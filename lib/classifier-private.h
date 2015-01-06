@@ -236,8 +236,7 @@ miniflow_hash(const struct miniflow *flow, uint32_t basis)
         }
         p++;
     }
-    hash = hash_add(hash, hash_map);
-    hash = hash_add(hash, hash_map >> 32);
+    hash = hash_add64(hash, hash_map);
 
     return hash_finish(hash, p - values);
 }
