@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009-2015 Nicira, Inc.
  * Copyright (c) 2010 Jean Tourrilhes - HP-Labs.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -2963,6 +2963,10 @@ query_tables(struct ofproto *ofproto,
 
             s->table_id = i;
             s->active_count = classifier_count(cls);
+            if (i == 0) {
+                s->active_count -= connmgr_count_hidden_rules(
+                    ofproto->connmgr);
+            }
         }
     } else {
         stats = NULL;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,5 +41,7 @@ bool in_band_run(struct in_band *);
 void in_band_wait(struct in_band *);
 
 bool in_band_must_output_to_local_port(const struct flow *);
+
+int in_band_count_rules(const struct in_band *);
 
 #endif /* in-band.h */

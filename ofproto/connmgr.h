@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -192,6 +192,8 @@ bool connmgr_has_in_band(struct connmgr *);
 
 /* Fail-open and in-band implementation. */
 void connmgr_flushed(struct connmgr *);
+
+int connmgr_count_hidden_rules(const struct connmgr *);
 
 /* A flow monitor managed by NXST_FLOW_MONITOR and related requests. */
 struct ofmonitor {

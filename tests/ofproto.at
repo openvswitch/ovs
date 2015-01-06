@@ -1306,6 +1306,58 @@ AT_CHECK([ovs-ofctl dump-tables br0], [0], [expout])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+dnl In-band and fail-open add "hidden rules" to table 0.  These rules shouldn't
+dnl be visible to OpenFlow.  This test checks that "dump-flows" and
+dnl "dump-tables" don't make them visible.
+AT_SETUP([ofproto - hidden rules not in table stats])
+# Use an IP address for a controller that won't actually exist: we
+# want to create in-band rules but we do not want to actually connect
+# to a controller (because that could mess about with our test).  The
+# Class E range 240.0.0.0 - 255.255.255.255 seems like a good choice.
+OVS_VSWITCHD_START([set-controller br0 tcp:240.0.0.1:6653])
+for i in 1 2 3 4 5; do ovs-appctl time/warp 1000; done
+
+# Check that no hidden flows are visible in OpenFlow.
+AT_CHECK([ovs-ofctl dump-flows br0], [0], [NXST_FLOW reply (xid=0x4):
+])
+
+# Check that some hidden flows related to 240.0.0.1 are actually in table 0.
+#
+# We discard flows that mention table_id because we only want table 0 flows,
+# which in OVS is implied by the absence of a table_id.
+AT_CHECK([ovs-appctl bridge/dump-flows br0], [0], [stdout])
+AT_CHECK([test `grep '240\.0\.0\.1' stdout | grep -v table_id= | wc -l` -gt 0])
+
+# Check that dump-tables doesn't count the hidden flows.
+(printf "OFPST_TABLE reply (xid=0x2):"
+ x=0
+ name=classifier
+ while test $x -lt 254; do
+   printf "
+  table %d (\"%s\"):
+    active=0, lookup=0, matched=0
+    max_entries=1000000
+    matching:
+      in_port: exact match or wildcard
+      eth_src: exact match or wildcard
+      eth_dst: exact match or wildcard
+      eth_type: exact match or wildcard
+      vlan_vid: exact match or wildcard
+      vlan_pcp: exact match or wildcard
+      ip_src: exact match or wildcard
+      ip_dst: exact match or wildcard
+      nw_proto: exact match or wildcard
+      nw_tos: exact match or wildcard
+      tcp_src: exact match or wildcard
+      tcp_dst: exact match or wildcard
+" $x $name
+   x=`expr $x + 1`
+   name=table$x
+ done) > expout
+AT_CHECK([ovs-ofctl dump-tables br0], [0], [expout])
+OVS_VSWITCHD_STOP(["/cannot find route for controller/d"])
+AT_CLEANUP
+
 AT_SETUP([ofproto - flow table configuration (OpenFlow 1.2)])
 OVS_VSWITCHD_START
 # Check the default configuration.

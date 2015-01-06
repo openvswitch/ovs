@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,6 +76,7 @@ struct fail_open {
     int last_disconn_secs;
     long long int next_bogus_packet_in;
     struct rconn_packet_counter *bogus_packet_counter;
+    bool fail_open_active;
 };
 
 static void fail_open_recover(struct fail_open *);
@@ -234,6 +235,15 @@ fail_open_flushed(struct fail_open *fo)
 
         ofpbuf_uninit(&ofpacts);
     }
+    fo->fail_open_active = open;
+}
+
+/* Returns the number of fail-open rules currently installed in the flow
+ * table. */
+int
+fail_open_count_rules(const struct fail_open *fo)
+{
+    return fo->fail_open_active != 0;
 }
 
 /* Creates and returns a new struct fail_open for 'ofproto' and 'mgr'. */
@@ -246,6 +256,7 @@ fail_open_create(struct ofproto *ofproto, struct connmgr *mgr)
     fo->last_disconn_secs = 0;
     fo->next_bogus_packet_in = LLONG_MAX;
     fo->bogus_packet_counter = rconn_packet_counter_create();
+    fo->fail_open_active = false;
     return fo;
 }
 

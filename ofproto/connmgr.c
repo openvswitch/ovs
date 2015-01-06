@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1979,6 +1979,23 @@ connmgr_flushed(struct connmgr *mgr)
 
         ofpbuf_uninit(&ofpacts);
     }
+}
+
+/* Returns the number of hidden rules created by the in-band and fail-open
+ * implementations in table 0.  (Subtracting this count from the number of
+ * rules in the table 0 classifier, as returned by classifier_count(), yields
+ * the number of flows that OVS should report via OpenFlow for table 0.) */
+int
+connmgr_count_hidden_rules(const struct connmgr *mgr)
+{
+    int n_hidden = 0;
+    if (mgr->in_band) {
+        n_hidden += in_band_count_rules(mgr->in_band);
+    }
+    if (mgr->fail_open) {
+        n_hidden += fail_open_count_rules(mgr->fail_open);
+    }
+    return n_hidden;
 }
 
 /* Creates a new ofservice for 'target' in 'mgr'.  Returns 0 if successful,

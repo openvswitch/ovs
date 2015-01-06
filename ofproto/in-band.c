@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -233,6 +233,14 @@ in_band_must_output_to_local_port(const struct flow *flow)
             && flow->nw_proto == IPPROTO_UDP
             && flow->tp_src == htons(DHCP_SERVER_PORT)
             && flow->tp_dst == htons(DHCP_CLIENT_PORT));
+}
+
+/* Returns the number of in-band rules currently installed in the flow
+ * table. */
+int
+in_band_count_rules(const struct in_band *ib)
+{
+    return hmap_count(&ib->rules);
 }
 
 static void

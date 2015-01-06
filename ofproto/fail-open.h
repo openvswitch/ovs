@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,5 +46,7 @@ bool fail_open_is_active(const struct fail_open *);
 void fail_open_run(struct fail_open *);
 void fail_open_maybe_recover(struct fail_open *) OVS_EXCLUDED(ofproto_mutex);
 void fail_open_flushed(struct fail_open *) OVS_EXCLUDED(ofproto_mutex);
+
+int fail_open_count_rules(const struct fail_open *);
 
 #endif /* fail-open.h */
