@@ -324,4 +324,9 @@ static inline void __skb_fill_page_desc(struct sk_buff *skb, int i,
 }
 #endif
 
+#ifndef HAVE_SKB_ENSURE_WRITABLE
+#define skb_ensure_writable rpl_skb_ensure_writable
+int skb_ensure_writable(struct sk_buff *skb, int write_len);
+#endif
+
 #endif
