@@ -299,7 +299,7 @@ static struct vxlan_sock *vxlan_socket_create(struct net *net, __be16 port,
 
 struct vxlan_sock *vxlan_sock_add(struct net *net, __be16 port,
 				  vxlan_rcv_t *rcv, void *data,
-				  bool no_share, bool ipv6)
+				  bool no_share, u32 flags)
 {
 	return vxlan_socket_create(net, port, rcv, data);
 }

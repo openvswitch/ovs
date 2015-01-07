@@ -53,7 +53,7 @@ struct vxlan_sock {
 
 struct vxlan_sock *vxlan_sock_add(struct net *net, __be16 port,
 				  vxlan_rcv_t *rcv, void *data,
-				  bool no_share, bool ipv6);
+				  bool no_share, u32 flags);
 
 void vxlan_sock_release(struct vxlan_sock *vs);
 
