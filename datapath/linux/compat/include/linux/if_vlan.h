@@ -5,9 +5,10 @@
 #include <linux/version.h>
 #include_next <linux/if_vlan.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0)
+#ifndef HAVE_VLAN_INSERT_TAG_SET_PROTO
 /*
- * The behavior of __vlan_put_tag() has changed over time:
+ * The behavior of __vlan_put_tag()/vlan_insert_tag_set_proto() has changed
+ * over time:
  *
  *      - In 2.6.26 and earlier, it adjusted both MAC and network header
  *        pointers.  (The latter didn't make any sense.)
@@ -16,13 +17,16 @@
  *
  *      - In 2.6.29 and later, it adjusts the MAC header pointer only.
  *
+ *      - In 3.19 and later, it was renamed to vlan_insert_tag_set_proto()
+ *
  * This is the version from 2.6.33.  We unconditionally substitute this version
  * to avoid the need to guess whether the version in the kernel tree is
  * acceptable.
  */
-#define __vlan_put_tag(skb, proto, tag)  rpl__vlan_put_tag(skb, tag)
-
-static inline struct sk_buff *rpl__vlan_put_tag(struct sk_buff *skb, u16 vlan_tci)
+#define vlan_insert_tag_set_proto(skb, proto, vlan_tci) \
+	rpl_vlan_insert_tag_set_proto(skb, vlan_tci)
+static inline struct sk_buff *rpl_vlan_insert_tag_set_proto(struct sk_buff *skb,
+							    u16 vlan_tci)
 {
 	struct vlan_ethhdr *veth;
 
@@ -46,7 +50,9 @@ static inline struct sk_buff *rpl__vlan_put_tag(struct sk_buff *skb, u16 vlan_tc
 
 	return skb;
 }
+#endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0)
 static inline struct sk_buff *rpl___vlan_hwaccel_put_tag(struct sk_buff *skb,
 						     __be16 vlan_proto,
 						     u16 vlan_tci)
@@ -55,7 +61,6 @@ static inline struct sk_buff *rpl___vlan_hwaccel_put_tag(struct sk_buff *skb,
 }
 
 #define __vlan_hwaccel_put_tag rpl___vlan_hwaccel_put_tag
-
 #endif
 
 /* All of these were introduced in a single commit preceding 2.6.33, so

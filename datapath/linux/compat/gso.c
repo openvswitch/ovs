@@ -110,8 +110,8 @@ int rpl_dev_queue_xmit(struct sk_buff *skb)
 				features &= ~(NETIF_F_TSO | NETIF_F_TSO6 |
 					      NETIF_F_UFO | NETIF_F_FSO);
 
-			skb = __vlan_put_tag(skb, skb->vlan_proto,
-					     vlan_tx_tag_get(skb));
+			skb = vlan_insert_tag_set_proto(skb, skb->vlan_proto,
+							vlan_tx_tag_get(skb));
 			if (unlikely(!skb))
 				return err;
 			vlan_set_tci(skb, 0);

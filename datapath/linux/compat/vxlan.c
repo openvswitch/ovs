@@ -193,9 +193,9 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 	}
 
 	if (vlan_tx_tag_present(skb)) {
-		if (unlikely(!__vlan_put_tag(skb,
-						skb->vlan_proto,
-						vlan_tx_tag_get(skb))))
+		if (unlikely(!vlan_insert_tag_set_proto(skb,
+							skb->vlan_proto,
+							vlan_tx_tag_get(skb))))
 			return -ENOMEM;
 
 		vlan_set_tci(skb, 0);
