@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -94,7 +94,14 @@ void nl_msg_push_string(struct ofpbuf *, uint16_t type, const char *value);
 struct nlmsghdr *nl_msg_next(struct ofpbuf *buffer, struct ofpbuf *msg);
 
 /* Sizes of various attribute types, in bytes, including the attribute header
- * and padding. */
+ * and padding.
+ *
+ * A minimum-size attribute is 4 bytes long: 4 bytes of header, no bytes of
+ * payload, no padding.
+ *
+ * A maximum-size attribute is 65536 bytes long: 4 bytes of header, 65531 bytes
+ * of payload, 1 byte of padding.  (Thus, NL_ATTR_SIZE() of a maximum length
+ * attribute payload does not fit in 16 bits.) */
 #define NL_ATTR_SIZE(PAYLOAD_SIZE) (NLA_HDRLEN + NLA_ALIGN(PAYLOAD_SIZE))
 #define NL_A_U8_SIZE   NL_ATTR_SIZE(sizeof(uint8_t))
 #define NL_A_U16_SIZE  NL_ATTR_SIZE(sizeof(uint16_t))

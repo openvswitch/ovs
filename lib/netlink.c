@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -214,7 +214,7 @@ nl_msg_put_unspec_uninit(struct ofpbuf *msg, uint16_t type, size_t size)
 {
     size_t total_size = NLA_HDRLEN + size;
     struct nlattr* nla = nl_msg_put_uninit(msg, total_size);
-    ovs_assert(NLA_ALIGN(total_size) <= UINT16_MAX);
+    ovs_assert(!nl_attr_oversized(size));
     nla->nla_len = total_size;
     nla->nla_type = type;
     return nla + 1;
@@ -488,7 +488,7 @@ nl_msg_next(struct ofpbuf *buffer, struct ofpbuf *msg)
 bool
 nl_attr_oversized(size_t payload_size)
 {
-    return NL_ATTR_SIZE(payload_size) > UINT16_MAX;
+    return payload_size > UINT16_MAX - NLA_HDRLEN;
 }
 
 /* Attributes. */
