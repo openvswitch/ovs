@@ -144,6 +144,9 @@ they have already been reviewed and applied), post the security
 advisory to appropriate mailing lists (ovs-announce, ovs-discuss), and
 post the security advisory on the Open vSwitch webpage.
 
+When the patch is applied to LTS (long-term support) branches, a new
+version should be released.
+
 The security advisory should be GPG-signed by a security team member
 with a key that is in a public web of trust.
 
