@@ -108,8 +108,7 @@ Steps 3a and 3b may proceed in parallel.
 
 The security team develops and obtains (private) reviews for patches
 that fix the vulnerability.  If necessary, the security team pulls in
-additional developers, who should be asked to maintain
-confidentiality.
+additional developers, who must agree to maintain confidentiality.
 
 
 Step 4: Embargoed Disclosure
