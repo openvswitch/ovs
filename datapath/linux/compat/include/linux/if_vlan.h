@@ -106,4 +106,33 @@ static inline void vlan_set_encap_proto(struct sk_buff *skb, struct vlan_hdr *vh
 		skb->protocol = htons(ETH_P_802_2);
 }
 #endif
+
+#ifndef HAVE___VLAN_INSERT_TAG
+/* Kernels which don't have __vlan_insert_tag() also don't have skb->vlan_proto
+ * so ignore the proto paramter.
+ */
+#define __vlan_insert_tag(skb, proto, tci) rpl_vlan_insert_tag(skb, tci)
+static inline int rpl_vlan_insert_tag(struct sk_buff *skb, u16 vlan_tci)
+{
+	struct vlan_ethhdr *veth;
+
+	if (skb_cow_head(skb, VLAN_HLEN) < 0)
+		return -ENOMEM;
+
+	veth = (struct vlan_ethhdr *)skb_push(skb, VLAN_HLEN);
+
+	/* Move the mac addresses to the beginning of the new header. */
+	memmove(skb->data, skb->data + VLAN_HLEN, 2 * ETH_ALEN);
+	skb->mac_header -= VLAN_HLEN;
+
+	/* first, the ethernet type */
+	veth->h_vlan_proto = htons(ETH_P_8021Q);
+
+	/* now, the TCI */
+	veth->h_vlan_TCI = htons(ETH_P_8021Q);
+
+	return 0;
+}
+#endif
+
 #endif	/* linux/if_vlan.h wrapper */
