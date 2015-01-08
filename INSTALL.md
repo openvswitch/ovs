@@ -579,7 +579,7 @@ report, plus any other information needed to reproduce the problem.
 Vagrant
 -------
 
-Requires: Vagrant and a compatible hypervisor
+Requires: Vagrant (version 1.7.0 or later) and a compatible hypervisor
 
 You must bootstrap and configure the sources (steps are in "Building
 and Installing Open vSwitch for Linux, FreeBSD or NetBSD" above) before
@@ -592,11 +592,24 @@ tree as found locally in a virtual machine using the following commands:
 	vagrant ssh
 
 This will bring up w Fedora 20 VM by default, alternatively the
-`Vagrantfile.in` can be modified to use a different distribution box as
-base. Also, the VM can be reprovisioned at any time to recompile and
-reinstall OVS:
+`Vagrantfile` can be modified to use a different distribution box as
+base. Also, the VM can be reprovisioned at any time:
 
 	vagrant provision
+
+OVS out-of-tree compilation environment can be set up with:
+
+	./boot.sh
+	vagrant provision --provision-with configure_ovs,build_ovs
+
+This will set up an out-of-tree build environment in /home/vagrant/build.
+The source code can be found in /vagrant.  Out-of-tree build is preferred
+to work around limitations of the sync file systems.
+
+To recompile and reinstall OVS using RPM:
+
+	./boot.sh
+	vagrant provision --provision-with configure_ovs,install_rpm
 
 Continuous Integration with Travis-CI
 -------------------------------------
