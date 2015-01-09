@@ -8,4 +8,4 @@ Description: OVSDB library of Open vSwitch
 Version: @VERSION@
 Libs: -L${libdir} -lovsdb
 Libs.private: @LIBS@
-Cflags: -I${includedir}/openvswitch
+Cflags: -I${includedir}
