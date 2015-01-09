@@ -10,6 +10,8 @@ yum -y install autoconf automake openssl-devel libtool \
                python-twisted-core python-zope-interface PyQt4 \
 	       desktop-file-utils groff graphviz rpmdevtools
 echo "search extra update built-in" >/etc/depmod.d/search_path.conf
+cd /vagrant
+./boot.sh
 SCRIPT
 
 $configure_ovs = <<SCRIPT
@@ -38,11 +40,8 @@ sudo systemctl status openvswitch
 SCRIPT
 
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
-  config.vm.define "fedora-20" do |fedora|
-    fedora.vm.box = "chef/fedora-20"
-    fedora.vm.provision :shell, inline: $bootstrap_fedora
-  end
-
+  config.vm.box = "chef/fedora-20"
+  config.vm.provision "bootstrap", type: "shell", inline: $bootstrap_fedora
   config.vm.provision "configure_ovs", type: "shell", inline: $configure_ovs, privileged: false
   config.vm.provision "build_ovs", type: "shell", inline: $build_ovs, privileged: false
   config.vm.provision "install_rpm", type: "shell", inline: $install_rpm, privileged: false
