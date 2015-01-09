@@ -1622,6 +1622,47 @@ A: Reconfiguring your bridge can change your bridge's datapath-id because
 
       ovs-vsctl set bridge br0 other-config:datapath-id=0123456789abcdef
 
+### Q: My controller is getting errors about "buffers".  What's going on?
+
+A: When a switch sends a packet to an OpenFlow controller using a
+   "packet-in" message, it can also keep a copy of that packet in a
+   "buffer", identified by a 32-bit integer "buffer_id".  There are
+   two advantages to buffering.  First, when the controller wants to
+   tell the switch to do something with the buffered packet (with a
+   "packet-out" OpenFlow request), it does not need to send another
+   copy of the packet back across the OpenFlow connection, which
+   reduces the bandwidth cost of the connection and improves latency.
+   This enables the second advantage: the switch can optionally send
+   only the first part of the packet to the controller (assuming that
+   the switch only needs to look at the first few bytes of the
+   packet), further reducing bandwidth and improving latency.
+
+   However, buffering introduces some issues of its own.  First, any
+   switch has limited resources, so if the controller does not use a
+   buffered packet, the switch has to decide how long to keep it
+   buffered.  When many packets are sent to a controller and buffered,
+   Open vSwitch can discard buffered packets that the controller has
+   not used after as little as 5 seconds.  This means that
+   controllers, if they make use of packet buffering, should use the
+   buffered packets promptly.  (This includes sending a "packet-out"
+   with no actions if the controller does not want to do anything with
+   a buffered packet, to clear the packet buffer and effectively
+   "drop" its packet.)
+
+   Second, packet buffers are one-time-use, meaning that a controller
+   cannot use a single packet buffer in two or more "packet-out"
+   commands.  Open vSwitch will respond with an error to the second
+   and subsequent "packet-out"s in such a case.
+
+   Finally, a common error early in controller development is to try
+   to use buffer_id 0 in a "packet-out" message as if 0 represented
+   "no buffered packet".  This is incorrect usage: the buffer_id with
+   this meaning is actually 0xffffffff.
+
+   ovs-vswitchd(8) describes some details of Open vSwitch packet
+   buffering that the OpenFlow specification requires implementations
+   to document.
+
 
 Development
 -----------
