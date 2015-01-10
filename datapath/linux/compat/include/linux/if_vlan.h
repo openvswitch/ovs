@@ -129,7 +129,7 @@ static inline int rpl_vlan_insert_tag(struct sk_buff *skb, u16 vlan_tci)
 	veth->h_vlan_proto = htons(ETH_P_8021Q);
 
 	/* now, the TCI */
-	veth->h_vlan_TCI = htons(ETH_P_8021Q);
+	veth->h_vlan_TCI = htons(vlan_tci);
 
 	return 0;
 }
