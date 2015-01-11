@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1352,11 +1352,13 @@ dpif_linux_execute(struct dpif *dpif_, struct dpif_execute *execute)
     return dpif_linux_execute__(dpif->dp_ifindex, execute);
 }
 
-#define MAX_OPS 50
-
-static void
+/* Executes, against 'dpif', up to the first 'n_ops' operations in 'ops'.
+ * Returns the number actually executed (at least 1, if 'n_ops' is
+ * positive). */
+static size_t
 dpif_linux_operate__(struct dpif_linux *dpif, struct dpif_op **ops, size_t n_ops)
 {
+    enum { MAX_OPS = 50 };
 
     struct op_auxdata {
         struct nl_transaction txn;
@@ -1371,13 +1373,12 @@ dpif_linux_operate__(struct dpif_linux *dpif, struct dpif_op **ops, size_t n_ops
     struct nl_transaction *txnsp[MAX_OPS];
     size_t i;
 
-    ovs_assert(n_ops <= MAX_OPS);
+    n_ops = MIN(n_ops, MAX_OPS);
     for (i = 0; i < n_ops; i++) {
         struct op_auxdata *aux = &auxes[i];
         struct dpif_op *op = ops[i];
         struct dpif_flow_put *put;
         struct dpif_flow_del *del;
-        struct dpif_execute *execute;
         struct dpif_linux_flow flow;
 
         ofpbuf_use_stub(&aux->request,
@@ -1409,9 +1410,25 @@ dpif_linux_operate__(struct dpif_linux *dpif, struct dpif_op **ops, size_t n_ops
             break;
 
         case DPIF_OP_EXECUTE:
-            execute = &op->u.execute;
-            dpif_linux_encode_execute(dpif->dp_ifindex, execute,
-                                      &aux->request);
+            /* Can't execute a packet that won't fit in a Netlink attribute. */
+            if (OVS_UNLIKELY(nl_attr_oversized(
+                                 ofpbuf_size(op->u.execute.packet)))) {
+                /* Report an error immediately if this is the first operation.
+                 * Otherwise the easiest thing to do is to postpone to the next
+                 * call (when this will be the first operation). */
+                if (i == 0) {
+                    VLOG_ERR_RL(&error_rl,
+                                "dropping oversized %"PRIu32"-byte packet",
+                                ofpbuf_size(op->u.execute.packet));
+                    op->error = ENOBUFS;
+                    return 1;
+                }
+                n_ops = i;
+            } else {
+                dpif_linux_encode_execute(dpif->dp_ifindex, &op->u.execute,
+                                          &aux->request);
+            }
+
             break;
 
         default:
@@ -1482,6 +1499,8 @@ dpif_linux_operate__(struct dpif_linux *dpif, struct dpif_op **ops, size_t n_ops
         ofpbuf_uninit(&aux->request);
         ofpbuf_uninit(&aux->reply);
     }
+
+    return n_ops;
 }
 
 static void
@@ -1490,8 +1509,7 @@ dpif_linux_operate(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops)
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
     while (n_ops > 0) {
-        size_t chunk = MIN(n_ops, MAX_OPS);
-        dpif_linux_operate__(dpif, ops, chunk);
+        size_t chunk = dpif_linux_operate__(dpif, ops, n_ops);
         ops += chunk;
         n_ops -= chunk;
     }
