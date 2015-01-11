@@ -46,7 +46,8 @@ void match_set_dp_hash(struct match *, uint32_t value);
 void match_set_dp_hash_masked(struct match *, uint32_t value, uint32_t mask);
 
 void match_set_recirc_id(struct match *, uint32_t value);
-void match_set_recirc_id_masked(struct match *, uint32_t value, uint32_t mask);
+
+void match_set_conj_id(struct match *, uint32_t value);
 
 void match_set_reg(struct match *, unsigned int reg_idx, uint32_t value);
 void match_set_reg_masked(struct match *, unsigned int reg_idx,

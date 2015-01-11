@@ -1141,6 +1141,13 @@ output group in the OpenFlow action set), then the value will be
 .IP
 This field was introduced in Open vSwitch 2.4 to conform with the
 OpenFlow 1.5 (draft) specification.
+.
+.IP \fBconj_id=\fIvalue\fR
+Matches the given 32-bit \fIvalue\fR against the conjunction ID.  This
+is used only with the \fBconjunction\fR action (see below).
+.IP
+This field was introduced in Open vSwitch 2.4.
+.
 .PP
 Defining IPv6 flows (those with \fBdl_type\fR equal to 0x86dd) requires
 support for NXM.  The following shorthand notations are available for
@@ -1783,6 +1790,209 @@ unaffected.  Any further actions, including those which may be in
 other tables, or different levels of the \fBresubmit\fR call stack,
 are ignored.  Actions in the action set is still executed (specify
 \fBclear_actions\fR before \fBexit\fR to discard them).
+.
+.IP "\fBconjunction(\fIid\fB, \fIk\fB/\fIn\fR\fB)\fR"
+An individual OpenFlow flow can match only a single value for each
+field.  However, situations often arise where one wants to match one
+of a set of values within a field or fields.  For matching a single
+field against a set, it is straightforward and efficient to add
+multiple flows to the flow table, one for each value in the set.  For
+example, one might use the following flows to send packets with IP
+source address \fIa\fR, \fIb\fR, \fIc\fR, or \fId\fR to the OpenFlow
+controller:
+.RS +1in
+.br
+\fBip,ip_src=\fIa\fB actions=controller\fR
+.br
+\fBip,ip_src=\fIb\fB actions=controller\fR
+.br
+\fBip,ip_src=\fIc\fB actions=controller\fR
+.br
+\fBip,ip_src=\fId\fB actions=controller\fR
+.br
+.RE
+.IP
+Similarly, these flows send packets with IP destination address
+\fIe\fR, \fIf\fR, \fIg\fR, or \fIh\fR to the OpenFlow controller:
+.RS +1in
+.br
+\fBip,ip_dst=\fIe\fB actions=controller\fR
+.br
+\fBip,ip_dst=\fIf\fB actions=controller\fR
+.br
+\fBip,ip_dst=\fIg\fB actions=controller\fR
+.br
+\fBip,ip_dst=\fIh\fB actions=controller\fR
+.br
+.RE
+.IP
+Installing all of the above flows in a single flow table yields a
+disjunctive effect: a packet is sent to the controller if \fBip_src\fR
+\[mo] {\fIa\fR,\fIb\fR,\fIc\fR,\fId\fR} or \fBip_dst\fR \[mo]
+{\fIe\fR,\fIf\fR,\fIg\fR,\fIh\fR} (or both).  (Pedantically, if both
+of the above sets of flows are present in the flow table, they should
+have different priorities, because OpenFlow says that the results are
+undefined when two flows with same priority can both match a single
+packet.)
+.IP
+Suppose, on the other hand, one wishes to match conjunctively, that
+is, to send a packet to the controller only if both \fBip_src\fR \[mo]
+{\fIa\fR,\fIb\fR,\fIc\fR,\fId\fR} and \fBip_dst\fR \[mo]
+{\fIe\fR,\fIf\fR,\fIg\fR,\fIh\fR}.  This requires 4 \[mu] 4 = 16
+flows, one for each possible pairing of \fBip_src\fR and \fBip_dst\fR.
+That is acceptable for our small example, but it does not gracefully
+extend to larger sets or greater numbers of dimensions.
+.IP
+The \fBconjunction\fR action is a solution for conjunctive matches
+that is built into Open vSwitch.  A \fBconjunction\fR action ties
+groups of individual OpenFlow flows into higher-level ``conjunctive
+flows''.  Each group corresponds to one dimension, and each flow
+within the group matches one possible value for the dimension.  A
+packet that matches one flow from each group matches the conjunctive
+flow.
+.IP
+To implement a conjunctive flow with \fBconjunction\fR, assign the
+conjunctive flow a 32-bit \fIid\fR, which must be unique within an
+OpenFlow table.  Assign each of the \fIn\fR \[>=] 2 dimensions a
+unique number from 1 to \fIn\fR; the ordering is unimportant.  Add one
+flow to the OpenFlow flow table for each possible value of each
+dimension with \fBconjunction(\fIid, \fIk\fB/\fIn\fB)\fR as the flow's
+actions, where \fIk\fR is the number assigned to the flow's dimension.
+Together, these flows specify the conjunctive flow's match condition.
+When the conjunctive match condition is met, Open vSwitch looks up one
+more flow that specifies the conjunctive flow's actions and receives
+its statistics.  This flow is found by setting \fBconj_id\fR to the
+specified \fIid\fR and then again searching the flow table.
+.IP
+The following flows provide an example.  Whenever the IP source is one
+of the values in the flows that match on the IP source (dimension 1 of
+2), \fIand\fR the IP destination is one of the values in the flows
+that match on IP destination (dimension 2 of 2), Open vSwitch searches
+for a flow that matches \fBconj_id\fR against the conjunction ID
+(1234), finding the first flow listed below.
+.RS +1in
+.br
+.B "conj_id=1234 actions=controller"
+.br
+.B "ip,ip_src=10.0.0.1 actions=conjunction(1234, 1/2)"
+.br
+.B "ip,ip_src=10.0.0.4 actions=conjunction(1234, 1/2)"
+.br
+.B "ip,ip_src=10.0.0.6 actions=conjunction(1234, 1/2)"
+.br
+.B "ip,ip_src=10.0.0.7 actions=conjunction(1234, 1/2)"
+.br
+.B "ip,ip_dst=10.0.0.2 actions=conjunction(1234, 2/2)"
+.br
+.B "ip,ip_dst=10.0.0.5 actions=conjunction(1234, 2/2)"
+.br
+.B "ip,ip_dst=10.0.0.7 actions=conjunction(1234, 2/2)"
+.br
+.B "ip,ip_dst=10.0.0.8 actions=conjunction(1234, 2/2)"
+.RE
+.IP
+Many subtleties exist:
+.RS
+.IP \(bu
+In the example above, every flow in a single dimension has the same
+form, that is, dimension 1 matches on \fBip_src\fR, dimension 2 on
+\fBip_dst\fR, but this is not a requirement.  Different flows within a
+dimension may match on different bits within a field (e.g. IP network
+prefixes of different lengths, or TCP/UDP port ranges as bitwise
+matches), or even on entirely different fields (e.g. to match packets
+for TCP source port 80 or TCP destination port 80).
+.IP \(bu
+The flows within a dimension can vary their matches across more than
+one field, e.g. to match only specific pairs of IP source and
+destination addresses or L4 port numbers.
+.IP \(bu
+A flow may have multiple \fBconjunction\fR actions, with different
+\fIid\fR values.  This is useful for multiple conjunctive flows with
+overlapping sets.  If one conjunctive flow matches packets with both
+\fBip_src\fR \[mo] {\fIa\fR,\fIb\fR} and \fBip_dst\fR \[mo]
+{\fId\fR,\fIe\fR} and a second conjunctive flow matches \fBip_src\fR
+\[mo] {\fIb\fR,\fIc\fR} and \fBip_dst\fR \[mo] {\fIf\fR,\fIg\fR}, for
+example, then the flow that matches \fBip_src=\fIb\fR would have two
+\fBconjunction\fR actions, one for each conjunctive flow.  The order
+of \fBconjunction\fR actions within a list of actions is not
+significant.
+.IP \(bu
+A flow with \fBconjunction\fR actions may not have any other actions.
+(It would not be useful.)
+.IP \(bu
+All of the flows that constitute a conjunctive flow with a given
+\fIid\fR must have the same priority.  (Flows with the same \fIid\fR
+but different priorities are currently treated as different
+conjunctive flows, that is, currently \fIid\fR values need only be
+unique within an OpenFlow table at a given priority.  This behavior
+isn't guaranteed to stay the same in later releases, so please use
+\fIid\fR values unique within an OpenFlow table.)
+.IP \(bu
+Conjunctive flows must not overlap with each other, at a given
+priority, that is, any given packet must be able to match at most one
+conjunctive flow at a given priority.  Overlapping conjunctive flows
+yield unpredictable results.
+.IP \(bu
+Following a conjunctive flow match, the search for the flow with
+\fBconj_id=\fIid\fR is done in the same general-purpose way as other flow
+table searches, so one can use flows with \fBconj_id=\fIid\fR to act
+differently depending on circumstances.  (One exception is that the
+search for the \fBconj_id=\fIid\fR flow itself ignores conjunctive flows,
+to avoid recursion.) If the search with \fBconj_id=\fIid\fR fails, Open
+vSwitch acts as if the conjunctive flow had not matched at all, and
+continues searching the flow table for other matching flows.
+.IP \(bu
+OpenFlow prerequisite checking occurs for the flow with
+\fBconj_id=\fIid\fR in the same way as any other flow, e.g. in an
+OpenFlow 1.1+ context, putting a \fBmod_nw_src\fR action into the
+example above would require adding an \fBip\fR match, like this:
+.RS +1in
+.br
+.B "conj_id=1234,ip actions=mod_nw_src:1.2.3.4,controller"
+.br
+.RE
+.IP \(bu
+OpenFlow prerequisite checking also occurs for the individual flows
+that comprise a conjunctive match in the same way as any other flow.
+.IP \(bu
+The flows that constitute a conjunctive flow do not have useful
+statistics.  They are never updated with byte or packet counts, and so
+on.  (For such a flow, therefore, the idle and hard timeouts work much
+the same way.)
+.IP \(bu
+Conjunctive flows can be a useful building block for negation, that
+is, inequality matches like \fBtcp_src\fR \[!=] 80.  To implement an
+inequality match, convert it to a pair of range matches, e.g. 0 \[<=]
+\fBtcp_src\ < 80 and 80 < \fBtcp_src\fR \[<=] 65535, then convert each
+of the range matches into a collection of bitwise matches as explained
+above in the description of \fBtcp_src\fR.
+.IP \(bu
+Sometimes there is a choice of which flows include a particular match.
+For example, suppose that we added an extra constraint to our example,
+to match on \fBip_src\fR \[mo] {\fIa\fR,\fIb\fR,\fIc\fR,\fId\fR} and
+\fBip_dst\fR \[mo] {\fIe\fR,\fIf\fR,\fIg\fR,\fIh\fR} and \fBtcp_dst\fR
+= \fIi\fR.  One way to implement this is to add the new constraint to
+the \fBconj_id\fR flow, like this:
+.RS +1in
+.br
+\fBconj_id=1234,tcp,tcp_dst=\fIi\fB actions=mod_nw_src:1.2.3.4,controller\fR
+.br
+.RE
+.IP
+\fIbut this is not recommended\fR because of the cost of the extra
+flow table lookup.  Instead, add the constraint to the individual
+flows, either in one of the dimensions or (slightly better) all of
+them.
+.IP \(bu
+A conjunctive match must have \fIn\fR \[>=] 2 dimensions (otherwise a
+conjunctive match is not necessary).  Open vSwitch enforces this.
+.IP \(bu
+Each dimension within a conjunctive match should ordinarily have more
+than one flow.  Open vSwitch does not enforce this.
+.RE
+.IP
+The \fBconjunction\fR action and \fBconj_id\fR field were introduced
+in Open vSwitch 2.4.
 .RE
 .
 .PP

@@ -1469,6 +1469,7 @@ OVS_VSWITCHD_START
     matching:
       dp_hash: arbitrary mask
       recirc_id: exact match or wildcard
+      conj_id: exact match or wildcard
       tun_id: arbitrary mask
       tun_src: arbitrary mask
       tun_dst: arbitrary mask
@@ -1546,7 +1547,7 @@ AT_CHECK(
 # Check that the configuration was updated.
 mv expout orig-expout
 sed 's/classifier/main/
-74s/1000000/1024/' < orig-expout > expout
+75s/1000000/1024/' < orig-expout > expout
 AT_CHECK([ovs-ofctl -O OpenFlow13 dump-table-features br0 | sed '/^$/d
 /^OFPST_TABLE_FEATURES/d'], [0], [expout])
 OVS_VSWITCHD_STOP

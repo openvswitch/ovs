@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 Nicira, Inc.
+ * Copyright (c) 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -103,7 +103,7 @@ tnl_port_map_insert(odp_port_t port, ovs_be32 ip_dst, ovs_be16 udp_port,
         ovs_refcount_init(&p->ref_cnt);
         strncpy(p->dev_name, dev_name, IFNAMSIZ);
 
-        classifier_insert(&cls, &p->cr);
+        classifier_insert(&cls, &p->cr, NULL, 0);
     }
     ovs_mutex_unlock(&mutex);
 }

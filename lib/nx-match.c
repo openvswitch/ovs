@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -817,7 +817,7 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 29);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 30);
 
     /* Metadata. */
     if (match->wc.masks.dp_hash) {
@@ -827,6 +827,10 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
 
     if (match->wc.masks.recirc_id) {
         nxm_put_32(b, MFF_RECIRC_ID, oxm, htonl(flow->recirc_id));
+    }
+
+    if (match->wc.masks.conj_id) {
+        nxm_put_32(b, MFF_CONJ_ID, oxm, htonl(flow->conj_id));
     }
 
     if (match->wc.masks.in_port.ofp_port) {

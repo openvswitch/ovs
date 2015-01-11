@@ -281,6 +281,9 @@ enum ofp_raw_action_type {
 
     /* NX1.0+(29): struct nx_action_sample. */
     NXAST_RAW_SAMPLE,
+
+    /* NX1.0+(34): struct nx_action_conjunction. */
+    NXAST_RAW_CONJUNCTION,
 };
 
 /* OpenFlow actions are always a multiple of 8 bytes in length. */
@@ -3898,6 +3901,89 @@ format_LEARN(const struct ofpact_learn *a, struct ds *s)
     learn_format(a, s);
 }
 
+/* Action structure for NXAST_CONJUNCTION. */
+struct nx_action_conjunction {
+    ovs_be16 type;                  /* OFPAT_VENDOR. */
+    ovs_be16 len;                   /* At least 16. */
+    ovs_be32 vendor;                /* NX_VENDOR_ID. */
+    ovs_be16 subtype;               /* See enum ofp_raw_action_type. */
+    uint8_t clause;
+    uint8_t n_clauses;
+    ovs_be32 id;
+};
+OFP_ASSERT(sizeof(struct nx_action_conjunction) == 16);
+
+static void
+add_conjunction(struct ofpbuf *out,
+                uint32_t id, uint8_t clause, uint8_t n_clauses)
+{
+    struct ofpact_conjunction *oc;
+
+    oc = ofpact_put_CONJUNCTION(out);
+    oc->id = id;
+    oc->clause = clause;
+    oc->n_clauses = n_clauses;
+}
+
+static enum ofperr
+decode_NXAST_RAW_CONJUNCTION(const struct nx_action_conjunction *nac,
+                             struct ofpbuf *out)
+{
+    if (nac->n_clauses < 2 || nac->n_clauses > 64
+        || nac->clause >= nac->n_clauses) {
+        return OFPERR_NXBAC_BAD_CONJUNCTION;
+    } else {
+        add_conjunction(out, ntohl(nac->id), nac->clause, nac->n_clauses);
+        return 0;
+    }
+}
+
+static void
+encode_CONJUNCTION(const struct ofpact_conjunction *oc,
+                   enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *out)
+{
+    struct nx_action_conjunction *nac = put_NXAST_CONJUNCTION(out);
+    nac->clause = oc->clause;
+    nac->n_clauses = oc->n_clauses;
+    nac->id = htonl(oc->id);
+}
+
+static void
+format_CONJUNCTION(const struct ofpact_conjunction *oc, struct ds *s)
+{
+    ds_put_format(s, "conjunction(%"PRIu32",%"PRIu8"/%"PRIu8")",
+                  oc->id, oc->clause + 1, oc->n_clauses);
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+parse_CONJUNCTION(const char *arg, struct ofpbuf *ofpacts,
+                  enum ofputil_protocol *usable_protocols OVS_UNUSED)
+{
+    uint8_t n_clauses;
+    uint8_t clause;
+    uint32_t id;
+    int n;
+
+    if (!ovs_scan(arg, "%"SCNi32" , %"SCNu8" / %"SCNu8" %n",
+                  &id, &clause, &n_clauses, &n) || n != strlen(arg)) {
+        return xstrdup("\"conjunction\" syntax is \"conjunction(id,i/n)\"");
+    }
+
+    if (n_clauses < 2) {
+        return xstrdup("conjunction must have at least 2 clauses");
+    } else if (n_clauses > 64) {
+        return xstrdup("conjunction must have at most 64 clauses");
+    } else if (clause < 1) {
+        return xstrdup("clause index must be positive");
+    } else if (clause > n_clauses) {
+        return xstrdup("clause index must be less than or equal to "
+                       "number of clauses");
+    }
+
+    add_conjunction(ofpacts, id, clause - 1, n_clauses);
+    return NULL;
+}
+
 /* Action structure for NXAST_MULTIPATH.
  *
  * This action performs the following steps in sequence:
@@ -4644,6 +4730,7 @@ ofpact_is_set_or_move_action(const struct ofpact *a)
     case OFPACT_GOTO_TABLE:
     case OFPACT_GROUP:
     case OFPACT_LEARN:
+    case OFPACT_CONJUNCTION:
     case OFPACT_METER:
     case OFPACT_MULTIPATH:
     case OFPACT_NOTE:
@@ -4710,6 +4797,7 @@ ofpact_is_allowed_in_actions_set(const struct ofpact *a)
     case OFPACT_EXIT:
     case OFPACT_FIN_TIMEOUT:
     case OFPACT_LEARN:
+    case OFPACT_CONJUNCTION:
     case OFPACT_MULTIPATH:
     case OFPACT_NOTE:
     case OFPACT_OUTPUT_REG:
@@ -4925,6 +5013,7 @@ ovs_instruction_type_from_ofpact_type(enum ofpact_type type)
     case OFPACT_FIN_TIMEOUT:
     case OFPACT_RESUBMIT:
     case OFPACT_LEARN:
+    case OFPACT_CONJUNCTION:
     case OFPACT_MULTIPATH:
     case OFPACT_NOTE:
     case OFPACT_EXIT:
@@ -5455,6 +5544,9 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
     case OFPACT_LEARN:
         return learn_check(ofpact_get_LEARN(a), flow);
 
+    case OFPACT_CONJUNCTION:
+        return 0;
+
     case OFPACT_MULTIPATH:
         return multipath_check(ofpact_get_MULTIPATH(a), flow);
 
@@ -5576,8 +5668,12 @@ ofpacts_check_consistency(struct ofpact ofpacts[], size_t ofpacts_len,
             : 0);
 }
 
-/* Verifies that the 'ofpacts_len' bytes of actions in 'ofpacts' are
- * in the appropriate order as defined by the OpenFlow spec. */
+/* Verifies that the 'ofpacts_len' bytes of actions in 'ofpacts' are in the
+ * appropriate order as defined by the OpenFlow spec and as required by Open
+ * vSwitch.
+ *
+ * 'allowed_ovsinsts' is a bitmap of OVSINST_* values, in which 1-bits indicate
+ * instructions that are allowed within 'ofpacts[]'. */
 static enum ofperr
 ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len,
                uint32_t allowed_ovsinsts)
@@ -5588,6 +5684,17 @@ ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len,
     inst = OVSINST_OFPIT13_METER;
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
         enum ovs_instruction_type next;
+
+        if (a->type == OFPACT_CONJUNCTION) {
+            OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
+                if (a->type != OFPACT_CONJUNCTION) {
+                    VLOG_WARN("when %s action is present, it must be the only "
+                              "kind of action used", ofpact_name(a->type));
+                    return OFPERR_NXBAC_BAD_CONJUNCTION;
+                }
+            }
+            return 0;
+        }
 
         next = ovs_instruction_type_from_ofpact_type(a->type);
         if (a > ofpacts
@@ -5887,6 +5994,7 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, ofp_port_t port)
     case OFPACT_FIN_TIMEOUT:
     case OFPACT_RESUBMIT:
     case OFPACT_LEARN:
+    case OFPACT_CONJUNCTION:
     case OFPACT_MULTIPATH:
     case OFPACT_NOTE:
     case OFPACT_EXIT:

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -86,6 +86,13 @@ match_set_recirc_id(struct match *match, uint32_t value)
 {
     match->flow.recirc_id = value;
     match->wc.masks.recirc_id = UINT32_MAX;
+}
+
+void
+match_set_conj_id(struct match *match, uint32_t value)
+{
+    match->flow.conj_id = value;
+    match->wc.masks.conj_id = UINT32_MAX;
 }
 
 void
@@ -870,7 +877,7 @@ match_format(const struct match *match, struct ds *s, int priority)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 29);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 30);
 
     if (priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%d,", priority);
@@ -886,6 +893,10 @@ match_format(const struct match *match, struct ds *s, int priority)
     if (f->dp_hash && wc->masks.dp_hash) {
         format_uint32_masked(s, "dp_hash", f->dp_hash,
                              wc->masks.dp_hash);
+    }
+
+    if (wc->masks.conj_id) {
+        ds_put_format(s, "conj_id=%"PRIu32",", f->conj_id);
     }
 
     if (wc->masks.skb_priority) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -229,6 +229,11 @@ enum ofperr {
     /* NX1.0-1.1(2,256), NX1.2+(11).  Must-be-zero action argument had nonzero
      * value. */
     OFPERR_NXBAC_MUST_BE_ZERO,
+
+    /* NX1.0-1.1(2,526), NX1.2+(15).  Conjunction action must be only action
+     * present.  conjunction(id, k/n) must satisfy 1 <= k <= n and 2 <= n <=
+     * 64. */
+    OFPERR_NXBAC_BAD_CONJUNCTION,
 
 /* ## --------------------- ## */
 /* ## OFPET_BAD_INSTRUCTION ## */

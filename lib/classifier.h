@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -255,6 +255,12 @@ struct classifier {
     bool publish;                   /* Make changes visible to lookups? */
 };
 
+struct cls_conjunction {
+    uint32_t id;
+    uint8_t clause;
+    uint8_t n_clauses;
+};
+
 /* A rule to be inserted to the classifier. */
 struct cls_rule {
     struct rculist node;         /* In struct cls_subtable 'rules_list'. */
@@ -269,6 +275,10 @@ void cls_rule_init_from_minimatch(struct cls_rule *, const struct minimatch *,
 void cls_rule_clone(struct cls_rule *, const struct cls_rule *);
 void cls_rule_move(struct cls_rule *dst, struct cls_rule *src);
 void cls_rule_destroy(struct cls_rule *);
+
+void cls_rule_set_conjunctions(struct cls_rule *,
+                               const struct cls_conjunction *, size_t n);
+
 bool cls_rule_equal(const struct cls_rule *, const struct cls_rule *);
 uint32_t cls_rule_hash(const struct cls_rule *, uint32_t basis);
 void cls_rule_format(const struct cls_rule *, struct ds *);
@@ -284,9 +294,12 @@ void classifier_destroy(struct classifier *);
 bool classifier_set_prefix_fields(struct classifier *,
                                   const enum mf_field_id *trie_fields,
                                   unsigned int n_trie_fields);
-void classifier_insert(struct classifier *, const struct cls_rule *);
+void classifier_insert(struct classifier *, const struct cls_rule *,
+                       const struct cls_conjunction *, size_t n_conjunctions);
 const struct cls_rule *classifier_replace(struct classifier *,
-                                          const struct cls_rule *);
+                                          const struct cls_rule *,
+                                          const struct cls_conjunction *,
+                                          size_t n_conjunctions);
 const struct cls_rule *classifier_remove(struct classifier *,
                                          const struct cls_rule *);
 static inline void classifier_defer(struct classifier *);

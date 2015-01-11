@@ -124,3 +124,164 @@ Datapath actions: 3
 ])
 OVS_VSWITCHD_STOP(["/'prefixes' with incompatible field: ipv6_label/d"])
 AT_CLEANUP
+
+AT_BANNER([conjunctive match])
+
+AT_SETUP([single conjunctive match])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], 1, 2, 3, 4, 5)
+AT_DATA([flows.txt], [dnl
+conj_id=1,actions=3
+priority=100,ip,ip_src=10.0.0.1,actions=conjunction(1,1/2)
+priority=100,ip,ip_src=10.0.0.4,actions=conjunction(1,1/2)
+priority=100,ip,ip_src=10.0.0.6,actions=conjunction(1,1/2)
+priority=100,ip,ip_src=10.0.0.7,actions=conjunction(1,1/2)
+priority=100,ip,ip_dst=10.0.0.2,actions=conjunction(1,2/2)
+priority=100,ip,ip_dst=10.0.0.5,actions=conjunction(1,2/2)
+priority=100,ip,ip_dst=10.0.0.7,actions=conjunction(1,2/2)
+priority=100,ip,ip_dst=10.0.0.8,actions=conjunction(1,2/2)
+priority=100,ip,ip_src=10.0.0.1,ip_dst=10.0.0.4,actions=4
+priority=100,ip,ip_src=10.0.0.3,ip_dst=10.0.0.5,actions=5
+
+priority=0 actions=2
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+for src in 0 1 2 3 4 5 6 7; do
+    for dst in 0 1 2 3 4 5 6 7; do
+        if test $src$dst = 14; then
+            out=4
+        elif test $src$dst = 35; then
+            out=5
+        else
+            out=2
+            case $src in [[1467]]) case $dst in [[2578]]) out=3 ;; esac ;; esac
+        fi
+        AT_CHECK([ovs-appctl ofproto/trace br0 "in_port=1,dl_type=0x0800,nw_src=10.0.0.$src,nw_dst=10.0.0.$dst"], [0], [stdout])
+        AT_CHECK_UNQUOTED([tail -1 stdout], [0], [Datapath actions: $out
+])
+    done
+done
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([multiple conjunctive match])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], 1, 2, 3, 4, 5)
+AT_DATA([flows.txt], [dnl
+conj_id=1,actions=1
+conj_id=2,actions=2
+conj_id=3,actions=3
+
+priority=5,ip,ip_src=20.0.0.0/8,actions=conjunction(1,1/2),conjunction(2,1/2)
+priority=5,ip,ip_src=10.1.0.0/16,actions=conjunction(1,1/2),conjunction(3,2/3)
+priority=5,ip,ip_src=10.2.0.0/16,actions=conjunction(1,1/2),conjunction(2,1/2)
+priority=5,ip,ip_src=10.1.3.0/24,actions=conjunction(1,1/2),conjunction(3,2/3)
+priority=5,ip,ip_src=10.1.4.5/32,actions=conjunction(1,1/2),conjunction(2,1/2)
+
+priority=5,ip,ip_dst=20.0.0.0/8,actions=conjunction(1,2/2)
+priority=5,ip,ip_dst=10.1.0.0/16,actions=conjunction(1,2/2)
+priority=5,ip,ip_dst=10.2.0.0/16,actions=conjunction(1,2/2)
+priority=5,ip,ip_dst=10.1.3.0/24,actions=conjunction(1,2/2)
+priority=5,ip,ip_dst=10.1.4.5/32,actions=conjunction(1,2/2)
+priority=5,ip,ip_dst=30.0.0.0/8,actions=conjunction(2,2/2),conjunction(3,1/3)
+priority=5,ip,ip_dst=40.5.0.0/16,actions=conjunction(2,2/2),conjunction(3,1/3)
+
+priority=5,tcp,tcp_dst=80,actions=conjunction(3,3/3)
+priority=5,tcp,tcp_dst=443,actions=conjunction(3,3/3)
+
+priority=5,tcp,tcp_src=80,actions=conjunction(3,3/3)
+priority=5,tcp,tcp_src=443,actions=conjunction(3,3/3)
+
+priority=0,actions=4
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+for a0 in \
+    '1 20.0.0.1' \
+    '2 10.1.0.1' \
+    '3 10.2.0.1' \
+    '4 10.1.3.1' \
+    '5 10.1.4.5' \
+    '6 1.2.3.4'
+do
+    for b0 in \
+        '1 20.0.0.1' \
+        '2 10.1.0.1' \
+        '3 10.2.0.1' \
+        '4 10.1.3.1' \
+        '5 10.1.4.5' \
+        '6 30.0.0.1' \
+        '7 40.5.0.1' \
+        '8 1.2.3.4'
+    do
+        for c0 in '1 80' '2 443' '3 8080'; do
+            for d0 in '1 80' '2 443' '3 8080'; do
+                set $a0; a=$1 ip_src=$2
+                set $b0; b=$1 ip_dst=$2
+                set $c0; c=$1 tcp_src=$2
+                set $d0; d=$1 tcp_dst=$2
+                case $a$b$c$d in
+                    [[12345]][[12345]]??) out=1 ;;
+                    [[135]][[67]]??) out=2 ;;
+                    [[24]][[67]][[12]]? | [[24]][[67]]?[[12]]) out=3 ;;
+                    *) out=4
+                esac
+                AT_CHECK([ovs-appctl ofproto/trace br0 "in_port=5,dl_type=0x0800,nw_proto=6,nw_src=$ip_src,nw_dst=$ip_dst,tcp_src=$tcp_src,tcp_dst=$tcp_dst"], [0], [stdout])
+                AT_CHECK_UNQUOTED([tail -1 stdout], [0], [Datapath actions: $out
+])
+            done
+        done
+    done
+done
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+# In conjunctive match, we can find some soft matches that turn out not to be a
+# real match.  Usually, that's the end of the road--there is no real match.
+# But if there is a flow identical to one of the flows that was a soft match,
+# except with a lower priority, then we have to try again with that lower
+# priority flow.  This test checks this special case.
+AT_SETUP([conjunctive match priority fallback])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], 1, 2, 3, 4, 5, 6, 7)
+AT_DATA([flows.txt], [dnl
+conj_id=1,actions=1
+conj_id=3,actions=3
+
+priority=5,ip,ip_src=10.0.0.1,actions=conjunction(1,1/2)
+priority=5,ip,ip_src=10.0.0.2,actions=conjunction(1,1/2)
+priority=5,ip,ip_dst=10.0.0.1,actions=conjunction(1,2/2)
+priority=5,ip,ip_dst=10.0.0.2,actions=conjunction(1,2/2)
+priority=5,ip,ip_dst=10.0.0.3,actions=conjunction(1,2/2)
+
+priority=4,ip,ip_src=10.0.0.3,ip_dst=10.0.0.2,actions=2
+
+priority=3,ip,ip_src=10.0.0.1,actions=conjunction(3,1/2)
+priority=3,ip,ip_src=10.0.0.3,actions=conjunction(3,1/2)
+priority=3,ip,ip_dst=10.0.0.2,actions=conjunction(3,2/2)
+priority=3,ip,ip_dst=10.0.0.3,actions=conjunction(3,2/2)
+priority=3,ip,ip_dst=10.0.0.4,actions=conjunction(3,2/2)
+
+priority=2,ip,ip_dst=10.0.0.1,actions=4
+
+priority=1,ip,ip_src=10.0.0.1,ip_dst=10.0.0.5,actions=5
+
+priority=0,actions=6
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+for src in 0 1 2 3; do
+    for dst in 0 1 2 3 4 5; do
+        case $src$dst in
+            [[12]][[123]]) out=1 ;;
+            32) out=2 ;;
+            [[13]][[234]]) out=3 ;;
+	    ?1) out=4 ;;
+            15) out=5 ;;
+            *) out=6
+        esac
+        AT_CHECK([ovs-appctl ofproto/trace br0 "in_port=7,dl_type=0x0800,nw_src=10.0.0.$src,nw_dst=10.0.0.$dst"], [0], [stdout])
+        AT_CHECK_UNQUOTED([tail -1 stdout], [0], [Datapath actions: $out
+])
+    done
+done
+OVS_VSWITCHD_STOP
+AT_CLEANUP

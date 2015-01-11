@@ -108,6 +108,8 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
         return !wc->masks.dp_hash;
     case MFF_RECIRC_ID:
         return !wc->masks.recirc_id;
+    case MFF_CONJ_ID:
+        return !wc->masks.conj_id;
     case MFF_TUN_SRC:
         return !wc->masks.tunnel.ip_src;
     case MFF_TUN_DST:
@@ -363,6 +365,7 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     switch (mf->id) {
     case MFF_DP_HASH:
     case MFF_RECIRC_ID:
+    case MFF_CONJ_ID:
     case MFF_TUN_ID:
     case MFF_TUN_SRC:
     case MFF_TUN_DST:
@@ -463,6 +466,9 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         break;
     case MFF_RECIRC_ID:
         value->be32 = htonl(flow->recirc_id);
+        break;
+    case MFF_CONJ_ID:
+        value->be32 = htonl(flow->conj_id);
         break;
     case MFF_TUN_ID:
         value->be64 = flow->tunnel.tun_id;
@@ -668,6 +674,9 @@ mf_set_value(const struct mf_field *mf,
         break;
     case MFF_RECIRC_ID:
         match_set_recirc_id(match, ntohl(value->be32));
+        break;
+    case MFF_CONJ_ID:
+        match_set_conj_id(match, ntohl(value->be32));
         break;
     case MFF_TUN_ID:
         match_set_tun_id(match, value->be64);
@@ -897,6 +906,9 @@ mf_set_flow_value(const struct mf_field *mf,
         break;
     case MFF_RECIRC_ID:
         flow->recirc_id = ntohl(value->be32);
+        break;
+    case MFF_CONJ_ID:
+        flow->conj_id = ntohl(value->be32);
         break;
     case MFF_TUN_ID:
         flow->tunnel.tun_id = value->be64;
@@ -1152,6 +1164,10 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
         match->flow.recirc_id = 0;
         match->wc.masks.recirc_id = 0;
         break;
+    case MFF_CONJ_ID:
+        match->flow.conj_id = 0;
+        match->wc.masks.conj_id = 0;
+        break;
     case MFF_TUN_ID:
         match_set_tun_id_masked(match, htonll(0), htonll(0));
         break;
@@ -1373,6 +1389,7 @@ mf_set(const struct mf_field *mf,
 
     switch (mf->id) {
     case MFF_RECIRC_ID:
+    case MFF_CONJ_ID:
     case MFF_IN_PORT:
     case MFF_IN_PORT_OXM:
     case MFF_ACTSET_OUTPUT:

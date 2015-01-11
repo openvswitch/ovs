@@ -68,7 +68,7 @@ struct cls_partition {
 /* Internal representation of a rule in a "struct cls_subtable". */
 struct cls_match {
     /* Accessed by everybody. */
-    struct rculist list; /* Identical, lower-priority rules. */
+    struct rculist list; /* Identical, lower-priority "cls_match"es. */
 
     /* Accessed only by writers. */
     struct cls_partition *partition;
@@ -80,6 +80,7 @@ struct cls_match {
     /* Accessed by all readers. */
     struct cmap_node cmap_node; /* Within struct cls_subtable 'rules'. */
     const struct cls_rule *cls_rule;
+    OVSRCU_TYPE(struct cls_conjunction_set *) conj_set;
     const struct miniflow flow; /* Matching rule. Mask is in the subtable. */
     /* 'flow' must be the last field. */
 };

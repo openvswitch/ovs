@@ -299,6 +299,20 @@ enum OVS_PACKED_ENUM mf_field_id {
      */
     MFF_RECIRC_ID,
 
+    /* "conj_id".
+     *
+     * ID for "conjunction" actions.  Please refer to ovs-ofctl(8)
+     * documentation of "conjunction" for details.
+     *
+     * Type: be32.
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: none.
+     * Access: read-only.
+     * NXM: NXM_NX_CONJ_ID(37) since v2.4.
+     * OXM: none. */
+    MFF_CONJ_ID,
+
     /* "tun_id" (aka "tunnel_id").
      *
      * The "key" or "tunnel ID" or "VNI" in a packet received via a keyed

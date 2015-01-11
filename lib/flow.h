@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ struct pkt_metadata;
 /* This sequence number should be incremented whenever anything involving flows
  * or the wildcarding of flows changes.  This will cause build assertion
  * failures in places which likely need to be updated. */
-#define FLOW_WC_SEQ 29
+#define FLOW_WC_SEQ 30
 
 /* Number of Open vSwitch extension 32-bit registers. */
 #define FLOW_N_REGS 8
@@ -105,8 +105,9 @@ struct flow {
                                  * computation is opaque to the user space. */
     union flow_in_port in_port; /* Input port.*/
     uint32_t recirc_id;         /* Must be exact match. */
+    uint32_t conj_id;           /* Conjunction ID. */
     ofp_port_t actset_output;   /* Output port in action set. */
-    ovs_be16 pad1;              /* Pad to 64 bits. */
+    uint8_t pad1[6];            /* Pad to 64 bits. */
 
     /* L2, Order the same as in the Ethernet header! (64-bit aligned) */
     uint8_t dl_dst[ETH_ADDR_LEN]; /* Ethernet destination address. */
@@ -154,8 +155,8 @@ BUILD_ASSERT_DECL(sizeof(struct flow) % sizeof(uint64_t) == 0);
 
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
 BUILD_ASSERT_DECL(offsetof(struct flow, igmp_group_ip4) + sizeof(uint32_t)
-                  == sizeof(struct flow_tnl) + 184
-                  && FLOW_WC_SEQ == 29);
+                  == sizeof(struct flow_tnl) + 192
+                  && FLOW_WC_SEQ == 30);
 
 /* Incremental points at which flow classification may be performed in
  * segments.

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -736,7 +736,7 @@ test_single_rule(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         tcls_init(&tcls);
 
         tcls_rule = tcls_insert(&tcls, rule);
-        classifier_insert(&cls, &rule->cls_rule);
+        classifier_insert(&cls, &rule->cls_rule, NULL, 0);
         compare_classifiers(&cls, &tcls);
         check_tables(&cls, 1, 1, 0);
 
@@ -773,7 +773,7 @@ test_rule_replacement(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         set_prefix_fields(&cls);
         tcls_init(&tcls);
         tcls_insert(&tcls, rule1);
-        classifier_insert(&cls, &rule1->cls_rule);
+        classifier_insert(&cls, &rule1->cls_rule, NULL, 0);
         compare_classifiers(&cls, &tcls);
         check_tables(&cls, 1, 1, 0);
         tcls_destroy(&tcls);
@@ -782,7 +782,8 @@ test_rule_replacement(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         tcls_insert(&tcls, rule2);
 
         assert(test_rule_from_cls_rule(
-                   classifier_replace(&cls, &rule2->cls_rule)) == rule1);
+                   classifier_replace(&cls, &rule2->cls_rule,
+                                      NULL, 0)) == rule1);
         ovsrcu_postpone(free_rule, rule1);
         compare_classifiers(&cls, &tcls);
         check_tables(&cls, 1, 1, 0);
@@ -897,7 +898,8 @@ test_many_rules_in_one_list (int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
                     tcls_rules[j] = tcls_insert(&tcls, rules[j]);
                     displaced_rule = test_rule_from_cls_rule(
-                        classifier_replace(&cls, &rules[j]->cls_rule));
+                        classifier_replace(&cls, &rules[j]->cls_rule,
+                                           NULL, 0));
                     if (pri_rules[pris[j]] >= 0) {
                         int k = pri_rules[pris[j]];
                         assert(displaced_rule != NULL);
@@ -1000,7 +1002,7 @@ test_many_rules_in_one_table(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
             rules[i] = make_rule(wcf, priority, value_pats[i]);
             tcls_rules[i] = tcls_insert(&tcls, rules[i]);
 
-            classifier_insert(&cls, &rules[i]->cls_rule);
+            classifier_insert(&cls, &rules[i]->cls_rule, NULL, 0);
             compare_classifiers(&cls, &tcls);
 
             check_tables(&cls, 1, i + 1, 0);
@@ -1059,7 +1061,7 @@ test_many_rules_in_n_tables(int n_tables)
             int value_pat = random_uint32() & ((1u << CLS_N_FIELDS) - 1);
             rule = make_rule(wcf, priority, value_pat);
             tcls_insert(&tcls, rule);
-            classifier_insert(&cls, &rule->cls_rule);
+            classifier_insert(&cls, &rule->cls_rule, NULL, 0);
             compare_classifiers(&cls, &tcls);
             check_tables(&cls, -1, i + 1, -1);
         }

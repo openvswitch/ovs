@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2635,7 +2635,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
 
     /* If 'struct flow' gets additional metadata, we'll need to zero it out
      * before traversing a patch port. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 29);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 30);
     memset(&flow_tnl, 0, sizeof flow_tnl);
 
     if (!xport) {
@@ -3742,6 +3742,7 @@ ofpact_needs_recirculation_after_mpls(const struct ofpact *a, struct xlate_ctx *
     case OFPACT_SET_TUNNEL:
     case OFPACT_SET_QUEUE:
     case OFPACT_POP_QUEUE:
+    case OFPACT_CONJUNCTION:
     case OFPACT_NOTE:
     case OFPACT_OUTPUT_REG:
     case OFPACT_EXIT:
@@ -4053,6 +4054,9 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         case OFPACT_LEARN:
             xlate_learn_action(ctx, ofpact_get_LEARN(a));
+            break;
+
+        case OFPACT_CONJUNCTION:
             break;
 
         case OFPACT_EXIT:

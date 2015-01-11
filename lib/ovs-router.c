@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 Nicira, Inc.
+ * Copyright (c) 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -118,7 +118,7 @@ ovs_router_insert__(uint8_t priority, ovs_be32 ip_dst, uint8_t plen,
     cls_rule_init(&p->cr, &match, priority); /* Longest prefix matches first. */
 
     ovs_mutex_lock(&mutex);
-    cr = classifier_replace(&cls, &p->cr);
+    cr = classifier_replace(&cls, &p->cr, NULL, 0);
     ovs_mutex_unlock(&mutex);
 
     if (cr) {
