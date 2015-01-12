@@ -23,25 +23,33 @@ What is a vulnerability?
 ------------------------
 
 All vulnerabilities are bugs, but not every bug is a vulnerability.
+Vulnerabilities compromise one or more of:
+
+    * Confidentiality (personal or corporate confidential data).
+    * Integrity (trustworthiness and correctness).
+    * Availability (uptime and service).
+
 Here are some examples of vulnerabilities to which one would expect to
 apply this process:
 
-    * A crafted packet that causes a kernel or userspace crash.
+    * A crafted packet that causes a kernel or userspace crash
+      (Availability).
 
     * A flow translation bug that misforwards traffic in a way likely
-      to hop over security boundaries.
+      to hop over security boundaries (Integrity).
 
     * An OpenFlow protocol bug that allows a controller to read
-      arbitrary files from the file system.
+      arbitrary files from the file system (Confidentiality).
 
     * Misuse of the OpenSSL library that allows bypassing certificate
-      checks.
+      checks (Integrity).
 
     * A bug (memory corruption, overflow, ...) that allows one to
       modify the behaviour of OVS through external configuration
-      interfaces such as OVSDB.
+      interfaces such as OVSDB (Integrity).
 
-    * Privileged information is exposed to unprivileged users.
+    * Privileged information is exposed to unprivileged users
+      (Confidentiality).
 
 If in doubt, please do use the vulnerability management process.  At
 worst, the response will be to report the bug through the usual
@@ -58,6 +66,9 @@ the report has been received.
 
 Please consider reporting the information mentioned in
 REPORTING-BUGS.md, where relevant.
+
+Reporters may ask for a GPG key while initiating contact with the
+security team to deliver more sensitive reports.
 
 The Linux kernel has its own vulnerability management process:
 https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/Documentation/SecurityBugs
@@ -132,11 +143,11 @@ vSwitch user who is interested and can be considered trustworthy
 enough could be included.  To become a downstream stakeholder, email
 the ovs-security mailing list.
 
-If the vulnerability is public, skip this step.
+If the vulnerability is already public, skip this step.
 
 
-Step 5: Full Disclosure
------------------------
+Step 5: Public Disclosure
+-------------------------
 
 When the embargo expires, push the (reviewed) patches to appropriate
 branches, post the patches to the ovs-dev mailing list (noting that
@@ -151,7 +162,7 @@ The security advisory should be GPG-signed by a security team member
 with a key that is in a public web of trust.
 
 
-Contact 
+Contact
 =======
 
 Report security vulnerabilities to the ovs-security mailing list:
