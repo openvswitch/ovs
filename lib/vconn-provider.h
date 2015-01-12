@@ -30,9 +30,9 @@ void vconn_init(struct vconn *, const struct vconn_class *, int connect_status,
                 const char *name, uint32_t allowed_versions);
 void vconn_free_data(struct vconn *vconn);
 static inline void vconn_assert_class(const struct vconn *vconn,
-                                      const struct vconn_class *class)
+                                      const struct vconn_class *vclass)
 {
-    ovs_assert(vconn->class == class);
+    ovs_assert(vconn->vclass == vclass);
 }
 
 struct vconn_class {
@@ -115,12 +115,12 @@ struct vconn_class {
 
 /* Passive virtual connection to an OpenFlow device. */
 
-void pvconn_init(struct pvconn *pvconn, const struct pvconn_class *class,
+void pvconn_init(struct pvconn *pvconn, const struct pvconn_class *pvclass,
                  const char *name, uint32_t allowed_versions);
 static inline void pvconn_assert_class(const struct pvconn *pvconn,
-                                       const struct pvconn_class *class)
+                                       const struct pvconn_class *pvclass)
 {
-    ovs_assert(pvconn->class == class);
+    ovs_assert(pvconn->pvclass == pvclass);
 }
 
 struct pvconn_class {

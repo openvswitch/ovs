@@ -32,7 +32,7 @@ struct pvconn_class;
 
 /* This structure should be treated as opaque by vconn implementations. */
 struct vconn {
-    const struct vconn_class *class;
+    const struct vconn_class *vclass;
     int state;
     int error;
 
@@ -94,7 +94,7 @@ void vconn_send_wait(struct vconn *);
  *
  * This structure should be treated as opaque by vconn implementations. */
 struct pvconn {
-    const struct pvconn_class *class;
+    const struct pvconn_class *pvclass;
     char *name;
     uint32_t allowed_versions;
 };

@@ -252,7 +252,7 @@ vconn_open(const char *name, uint32_t allowed_versions, uint8_t dscp,
     }
 
     /* Success. */
-    ovs_assert(vconn->state != VCS_CONNECTING || vconn->class->connect);
+    ovs_assert(vconn->state != VCS_CONNECTING || vconn->vclass->connect);
     *vconnp = vconn;
     return 0;
 
@@ -272,8 +272,8 @@ vconn_run(struct vconn *vconn)
         vconn_connect(vconn);
     }
 
-    if (vconn->class->run) {
-        (vconn->class->run)(vconn);
+    if (vconn->vclass->run) {
+        (vconn->vclass->run)(vconn);
     }
 }
 
@@ -288,8 +288,8 @@ vconn_run_wait(struct vconn *vconn)
         vconn_connect_wait(vconn);
     }
 
-    if (vconn->class->run_wait) {
-        (vconn->class->run_wait)(vconn);
+    if (vconn->vclass->run_wait) {
+        (vconn->vclass->run_wait)(vconn);
     }
 }
 
@@ -331,7 +331,7 @@ vconn_close(struct vconn *vconn)
 {
     if (vconn != NULL) {
         char *name = vconn->name;
-        (vconn->class->close)(vconn);
+        (vconn->vclass->close)(vconn);
         free(name);
     }
 }
@@ -394,7 +394,7 @@ vconn_set_recv_any_version(struct vconn *vconn)
 static void
 vcs_connecting(struct vconn *vconn)
 {
-    int retval = (vconn->class->connect)(vconn);
+    int retval = (vconn->vclass->connect)(vconn);
     ovs_assert(retval != EINPROGRESS);
     if (!retval) {
         vconn->state = VCS_SEND_HELLO;
@@ -637,7 +637,7 @@ vconn_recv(struct vconn *vconn, struct ofpbuf **msgp)
 static int
 do_recv(struct vconn *vconn, struct ofpbuf **msgp)
 {
-    int retval = (vconn->class->recv)(vconn, msgp);
+    int retval = (vconn->vclass->recv)(vconn, msgp);
     if (!retval) {
         COVERAGE_INC(vconn_received);
         if (VLOG_IS_DBG_ENABLED()) {
@@ -679,10 +679,10 @@ do_send(struct vconn *vconn, struct ofpbuf *msg)
     ofpmsg_update_length(msg);
     if (!VLOG_IS_DBG_ENABLED()) {
         COVERAGE_INC(vconn_sent);
-        retval = (vconn->class->send)(vconn, msg);
+        retval = (vconn->vclass->send)(vconn, msg);
     } else {
         char *s = ofp_to_string(ofpbuf_data(msg), ofpbuf_size(msg), 1);
-        retval = (vconn->class->send)(vconn, msg);
+        retval = (vconn->vclass->send)(vconn, msg);
         if (retval != EAGAIN) {
             VLOG_DBG_RL(&ofmsg_rl, "%s: sent (%s): %s",
                         vconn->name, ovs_strerror(retval), s);
@@ -925,7 +925,7 @@ vconn_wait(struct vconn *vconn, enum vconn_wait_type wait)
         poll_immediate_wake();
         return;
     }
-    (vconn->class->wait)(vconn, wait);
+    (vconn->vclass->wait)(vconn, wait);
 }
 
 void
@@ -1047,7 +1047,7 @@ pvconn_close(struct pvconn *pvconn)
 {
     if (pvconn != NULL) {
         char *name = pvconn->name;
-        (pvconn->class->close)(pvconn);
+        (pvconn->pvclass->close)(pvconn);
         free(name);
     }
 }
@@ -1065,12 +1065,12 @@ pvconn_close(struct pvconn *pvconn)
 int
 pvconn_accept(struct pvconn *pvconn, struct vconn **new_vconn)
 {
-    int retval = (pvconn->class->accept)(pvconn, new_vconn);
+    int retval = (pvconn->pvclass->accept)(pvconn, new_vconn);
     if (retval) {
         *new_vconn = NULL;
     } else {
         ovs_assert((*new_vconn)->state != VCS_CONNECTING
-                   || (*new_vconn)->class->connect);
+                   || (*new_vconn)->vclass->connect);
     }
     return retval;
 }
@@ -1078,7 +1078,7 @@ pvconn_accept(struct pvconn *pvconn, struct vconn **new_vconn)
 void
 pvconn_wait(struct pvconn *pvconn)
 {
-    (pvconn->class->wait)(pvconn);
+    (pvconn->pvclass->wait)(pvconn);
 }
 
 /* Initializes 'vconn' as a new vconn named 'name', implemented via 'class'.
@@ -1103,7 +1103,7 @@ vconn_init(struct vconn *vconn, const struct vconn_class *class,
            int connect_status, const char *name, uint32_t allowed_versions)
 {
     memset(vconn, 0, sizeof *vconn);
-    vconn->class = class;
+    vconn->vclass = class;
     vconn->state = (connect_status == EAGAIN ? VCS_CONNECTING
                     : !connect_status ? VCS_SEND_HELLO
                     : VCS_DISCONNECTED);
@@ -1117,7 +1117,7 @@ void
 pvconn_init(struct pvconn *pvconn, const struct pvconn_class *class,
             const char *name, uint32_t allowed_versions)
 {
-    pvconn->class = class;
+    pvconn->pvclass = class;
     pvconn->name = xstrdup(name);
     pvconn->allowed_versions = allowed_versions;
 }
