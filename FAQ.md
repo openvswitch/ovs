@@ -750,6 +750,26 @@ A: It's an expected behaviour.
        ovs-vsctl add-port br0 p1 -- \
            set interface p1 type=internal
 
+### Q: I want to add thousands of ports to an Open vSwitch bridge, but
+   it takes too long (minutes or hours) to do it with ovs-vsctl.  How
+   can I do it faster?
+
+A: If you add them one at a time with ovs-vsctl, it can take a long
+   time to add thousands of ports to an Open vSwitch bridge.  This is
+   because every invocation of ovs-vsctl first reads the current
+   configuration from OVSDB.  As the number of ports grows, this
+   starts to take an appreciable amount of time, and when it is
+   repeated thousands of times the total time becomes significant.
+
+   The solution is to add the ports in one invocation of ovs-vsctl (or
+   a small number of them).  For example, using bash:
+
+       ovs-vsctl add-br br0
+       cmds=; for i in {1..5000}; do cmds+=" -- add-port br0 p$i"; done
+       ovs-vsctl $cmds
+
+   takes seconds, not minutes or hours, in the OVS sandbox environment.
+
 Quality of Service (QoS)
 ------------------------
 
