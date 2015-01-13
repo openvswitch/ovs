@@ -1,13 +1,20 @@
 EXTRA_DIST += \
+	$(COMMON_MACROS_AT) \
 	$(TESTSUITE_AT) \
+	$(KMOD_TESTSUITE_AT) \
 	$(TESTSUITE) \
+	$(KMOD_TESTSUITE) \
 	tests/atlocal.in \
 	$(srcdir)/package.m4 \
 	$(srcdir)/tests/testsuite
-TESTSUITE_AT = \
-	tests/testsuite.at \
+
+COMMON_MACROS_AT = \
 	tests/ovsdb-macros.at \
 	tests/ovs-macros.at \
+	tests/ofproto-macros.at
+
+TESTSUITE_AT = \
+	tests/testsuite.at \
 	tests/library.at \
 	tests/heap.at \
 	tests/bundle.at \
@@ -45,7 +52,6 @@ TESTSUITE_AT = \
 	tests/ofproto-dpif.at \
 	tests/bridge.at \
 	tests/vlan-splinters.at \
-	tests/ofproto-macros.at \
 	tests/ofproto.at \
 	tests/ovsdb.at \
 	tests/ovsdb-log.at \
@@ -73,7 +79,14 @@ TESTSUITE_AT = \
 	tests/interface-reconfigure.at \
 	tests/vlog.at \
 	tests/vtep-ctl.at
+
+KMOD_TESTSUITE_AT = \
+	tests/kmod-testsuite.at \
+	tests/kmod-macros.at \
+	tests/kmod-traffic.at
+
 TESTSUITE = $(srcdir)/tests/testsuite
+KMOD_TESTSUITE = $(srcdir)/tests/kmod-testsuite
 DISTCLEANFILES += tests/atconfig tests/atlocal
 
 AUTOTEST_PATH = utilities:vswitchd:ovsdb:vtep:tests
@@ -168,11 +181,25 @@ check-ryu: all
 	$(AM_V_at)srcdir='$(srcdir)' $(SHELL) $(srcdir)/tests/run-ryu
 EXTRA_DIST += tests/run-ryu
 
+# Run kmod tests. Assume kernel modules has been installed or linked into the kernel
+check-kernel: all tests/atconfig tests/atlocal $(KMOD_TESTSUITE)
+	$(SHELL) '$(KMOD_TESTSUITE)' -C tests  AUTOTEST_PATH='$(AUTOTEST_PATH)' -d $(TESTSUITEFLAGS)
+
+# Testing the out of tree Kernel module
+check-kmod: all tests/atconfig tests/atlocal $(KMOD_TESTSUITE)
+	$(MAKE) modules_install
+	rmmod openvswitch
+	$(MAKE) check-kernel
+
 clean-local:
 	test ! -f '$(TESTSUITE)' || $(SHELL) '$(TESTSUITE)' -C tests --clean
 
 AUTOTEST = $(AUTOM4TE) --language=autotest
-$(TESTSUITE): package.m4 $(TESTSUITE_AT)
+$(TESTSUITE): package.m4 $(TESTSUITE_AT) $(COMMON_MACROS_AT)
+	$(AM_V_GEN)$(AUTOTEST) -I '$(srcdir)' -o $@.tmp $@.at
+	$(AM_V_at)mv $@.tmp $@
+
+$(KMOD_TESTSUITE): package.m4 $(KMOD_TESTSUITE_AT) $(COMMON_MACROS_AT)
 	$(AM_V_GEN)$(AUTOTEST) -I '$(srcdir)' -o $@.tmp $@.at
 	$(AM_V_at)mv $@.tmp $@
 

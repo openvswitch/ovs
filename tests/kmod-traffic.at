@@ -1,0 +1,16 @@
+AT_BANNER([kmod-sanity])
+
+AT_SETUP([kmod - ping between two ports])
+OVS_KMOD_VSWITCHD_START(
+   [set-fail-mode br0 standalone -- ])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+AT_CHECK([ip netns exec at_ns0 bash -c "ping -q -c 3 -i 0.3 -w 2 10.1.1.2 >/dev/null"])
+
+DEL_NAMESPACES(at_ns0, at_ns1)
+OVS_KMOD_VSWITCHD_STOP
+AT_CLEANUP

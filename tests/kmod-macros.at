@@ -1,0 +1,74 @@
+# OVS_KMOD_VSWITCHD_START([vsctl-args], [vsctl-output], [=override])
+#
+# Creates a database and starts ovsdb-server, starts ovs-vswitchd
+# connected to that database, calls ovs-vsctl to create a bridge named
+# br0 with predictable settings, passing 'vsctl-args' as additional
+# commands to ovs-vsctl.  If 'vsctl-args' causes ovs-vsctl to provide
+# output (e.g. because it includes "create" commands) then 'vsctl-output'
+# specifies the expected output after filtering through uuidfilt.pl.
+#
+m4_define([OVS_KMOD_VSWITCHD_START],
+  [ AT_CHECK([modprobe openvswitch])
+   _OVS_VSWITCHD_START([])
+   dnl Add bridges, ports, etc.
+   AT_CHECK([ovs-vsctl -- add-br br0 -- set bridge br0 protocols=[[OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13,OpenFlow14,OpenFlow15]] fail-mode=secure -- $1 m4_if([$2], [], [], [| ${PERL} $srcdir/uuidfilt.pl])], [0], [$2])
+])
+#
+#
+# OVS_KMOD_VSWITCHD_STOP([WHITELIST])
+#
+# Gracefully stops ovs-vswitchd and ovsdb-server, checking their log files
+# for messages with severity WARN or higher and signaling an error if any
+# is present.  The optional WHITELIST may contain shell-quoted "sed"
+# commands to delete any warnings that are actually expected, e.g.:
+#
+#   OVS_KMOD_VSWITCHD_STOP(["/expected error/d"])
+m4_define([OVS_KMOD_VSWITCHD_STOP],
+  [AT_CHECK([ovs-vsctl del-br br0])
+   OVS_SWITCHD_STOP([$1])
+   AT_CHECK([modprobe -r openvswitch])
+  ])
+
+# DEL_NAMESPACES(ns [, ns ... ])
+#
+# Delete namespaces from the running OS
+m4_define([DEL_NAMESPACES],
+   [m4_foreach([ns], [$@],
+               [ip netns del ns
+               ])
+   ]
+)
+#
+# ADD_NAMESPACES(ns [, ns ... ])
+#
+# Add new namespaces, if ns exists, the old one
+# will be remove before new ones are installed.
+m4_define([ADD_NAMESPACES],
+   [m4_foreach([ns], [$@],
+               [DEL_NAMESPACES(ns)
+                AT_CHECK([ip netns add ns])
+               ])
+   ]
+)
+
+# ADD_VETH([port], [namespace], [ovs-br], [ip_addr])
+#
+# Add a pair of veth ports. 'port' will be added to name space 'namespace',
+# and "ovs-'port'" will be added to ovs bridge 'ovs-br'.
+#
+# The 'port' in 'namespace' will be brought up with static IP address
+# with 'ip_addr' in CIDR notation.
+#
+# The existing 'port' or 'ovs-port' will be removed before new ones are added.
+#
+m4_define([ADD_VETH],
+    [ ovs-vsctl del-port $3 ovs-$1
+      ip netns exec $2 ip link del $1
+      AT_CHECK([ip link add $1 type veth peer name ovs-$1])
+      AT_CHECK([ip link set $1 netns $2])
+      AT_CHECK([ovs-vsctl add-port $3 ovs-$1])
+      AT_CHECK([ip link set dev ovs-$1 up])
+      AT_CHECK([ip netns exec $2 ip addr add $4 dev $1])
+      AT_CHECK([ip netns exec $2 ip link set dev $1 up])
+    ]
+)
