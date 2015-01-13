@@ -7,6 +7,7 @@ EXTRA_DIST += \
 TESTSUITE_AT = \
 	tests/testsuite.at \
 	tests/ovsdb-macros.at \
+	tests/ovs-macros.at \
 	tests/library.at \
 	tests/heap.at \
 	tests/bundle.at \
