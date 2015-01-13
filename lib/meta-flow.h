@@ -904,7 +904,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Maskable: bitwise.
      * Formatting: hexadecimal.
      * Prerequisites: IPv6.
-     * Access: read-only.
+     * Access: read/write.
      * NXM: NXM_NX_IPV6_LABEL(27) since v1.4.
      * OXM: OXM_OF_IPV6_FLABEL(28) since OF1.2 and v1.7.
      */

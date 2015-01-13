@@ -1017,7 +1017,7 @@ mf_set_flow_value(const struct mf_field *mf,
         break;
 
     case MFF_IPV6_LABEL:
-        flow->ipv6_label = value->be32 & ~htonl(IPV6_LABEL_MASK);
+        flow->ipv6_label = value->be32 & htonl(IPV6_LABEL_MASK);
         break;
 
     case MFF_IP_PROTO:
