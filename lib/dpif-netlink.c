@@ -1530,7 +1530,7 @@ dpif_netlink_encode_execute(int dp_ifindex, const struct dpif_execute *d_exec,
     nl_msg_put_unspec(buf, OVS_PACKET_ATTR_ACTIONS,
                       d_exec->actions, d_exec->actions_len);
     if (d_exec->probe) {
-        nl_msg_put_flag(buf, OVS_FLOW_ATTR_PROBE);
+        nl_msg_put_flag(buf, OVS_PACKET_ATTR_PROBE);
     }
 }
 
