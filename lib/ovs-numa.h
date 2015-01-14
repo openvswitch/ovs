@@ -147,7 +147,7 @@ ovs_numa_unpin_core(int core_id OVS_UNUSED)
 }
 
 static inline struct ovs_numa_dump *
-ovs_numa_dump_cores_on_numa(int numa_id)
+ovs_numa_dump_cores_on_numa(int numa_id OVS_UNUSED)
 {
     return NULL;
 }
