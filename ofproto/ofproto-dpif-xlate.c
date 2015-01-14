@@ -4056,8 +4056,15 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             xlate_learn_action(ctx, ofpact_get_LEARN(a));
             break;
 
-        case OFPACT_CONJUNCTION:
+        case OFPACT_CONJUNCTION: {
+            /* A flow with a "conjunction" action represents part of a special
+             * kind of "set membership match".  Such a flow should not actually
+             * get executed, but it could via, say, a "packet-out", even though
+             * that wouldn't be useful.  Log it to help debugging. */
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+            VLOG_INFO_RL(&rl, "executing no-op conjunction action");
             break;
+        }
 
         case OFPACT_EXIT:
             ctx->exit = true;
