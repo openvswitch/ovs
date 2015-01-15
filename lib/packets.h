@@ -518,7 +518,6 @@ struct icmp_header {
         } frag;
         ovs_16aligned_be32 gateway;
     } icmp_fields;
-    uint8_t icmp_data[0];
 };
 BUILD_ASSERT_DECL(ICMP_HEADER_LEN == sizeof(struct icmp_header));
 
@@ -643,7 +642,6 @@ struct icmp6_header {
     uint8_t icmp6_type;
     uint8_t icmp6_code;
     ovs_be16 icmp6_cksum;
-    uint8_t icmp6_data[0];
 };
 BUILD_ASSERT_DECL(ICMP6_HEADER_LEN == sizeof(struct icmp6_header));
 
