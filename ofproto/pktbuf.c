@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2015 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -183,7 +183,8 @@ pktbuf_retrieve(struct pktbuf *pb, uint32_t id, struct ofpbuf **bufferp,
     if (!pb) {
         VLOG_WARN_RL(&rl, "attempt to send buffered packet via connection "
                      "without buffers");
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BUFFER_UNKNOWN);
+        error = ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BUFFER_UNKNOWN);
+        goto error;
     }
 
     p = &pb->packets[id & PKTBUF_MASK];
