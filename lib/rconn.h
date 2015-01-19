@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,8 +69,6 @@ void rconn_recv_wait(struct rconn *);
 int rconn_send(struct rconn *, struct ofpbuf *, struct rconn_packet_counter *);
 int rconn_send_with_limit(struct rconn *, struct ofpbuf *,
                           struct rconn_packet_counter *, int queue_limit);
-unsigned int rconn_packets_sent(const struct rconn *);
-unsigned int rconn_packets_received(const struct rconn *);
 
 void rconn_add_monitor(struct rconn *, struct vconn *);
 

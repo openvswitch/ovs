@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,7 +102,6 @@ struct rconn {
     time_t backoff_deadline;
     time_t last_connected;
     time_t last_disconnected;
-    unsigned int packets_sent;
     unsigned int seqno;
     int last_error;
 
@@ -119,7 +118,6 @@ struct rconn {
 
     /* These values are simply for statistics reporting, not used directly by
      * anything internal to the rconn (or ofproto for that matter). */
-    unsigned int packets_received;
     unsigned int n_attempted_connections, n_successful_connections;
     time_t creation_time;
     unsigned long int total_time_connected;
@@ -262,12 +260,9 @@ rconn_create(int probe_interval, int max_backoff, uint8_t dscp,
     rc->last_disconnected = TIME_MIN;
     rc->seqno = 0;
 
-    rc->packets_sent = 0;
-
     rc->probably_admitted = false;
     rc->last_admitted = time_now();
 
-    rc->packets_received = 0;
     rc->n_attempted_connections = 0;
     rc->n_successful_connections = 0;
     rc->creation_time = time_now();
@@ -714,7 +709,6 @@ rconn_recv(struct rconn *rc)
                 rc->last_admitted = time_now();
             }
             rc->last_activity = time_now();
-            rc->packets_received++;
             if (rc->state == S_IDLE) {
                 state_transition(rc, S_ACTIVE);
             }
@@ -829,15 +823,6 @@ rconn_send_with_limit(struct rconn *rc, struct ofpbuf *b,
     ovs_mutex_unlock(&rc->mutex);
 
     return error;
-}
-
-/* Returns the total number of packets successfully sent on the underlying
- * vconn.  A packet is not counted as sent while it is still queued in the
- * rconn, only when it has been successfuly passed to the vconn.  */
-unsigned int
-rconn_packets_sent(const struct rconn *rc)
-{
-    return rc->packets_sent;
 }
 
 /* Adds 'vconn' to 'rc' as a monitoring connection, to which all messages sent
@@ -962,14 +947,6 @@ rconn_get_version(const struct rconn *rconn)
     ovs_mutex_unlock(&rconn->mutex);
 
     return version;
-}
-
-/* Returns the total number of packets successfully received by the underlying
- * vconn.  */
-unsigned int
-rconn_packets_received(const struct rconn *rc)
-{
-    return rc->packets_received;
 }
 
 /* Returns a string representing the internal state of 'rc'.  The caller must
@@ -1157,7 +1134,6 @@ try_send(struct rconn *rc)
         return retval;
     }
     COVERAGE_INC(rconn_sent);
-    rc->packets_sent++;
     if (counter) {
         rconn_packet_counter_dec(counter, n_bytes);
     }
