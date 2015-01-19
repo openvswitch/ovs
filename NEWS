@@ -3,7 +3,7 @@ Post-v2.3.0
    - New support for a "conjunctive match" OpenFlow extension, which
      allows constructing OpenFlow matches of the form "field1 in
      {a,b,c...} AND field2 in {d,e,f...}" and generalizations.  For details,
-     see documentation fo the "conjunction" action in ovs-ofctl(8).
+     see documentation for the "conjunction" action in ovs-ofctl(8).
    - Add bash command-line completion support for ovs-appctl/ovs-dpctl/
      ovs-ofctl/ovsdb-tool commands.  Please check
      utilities/ovs-command-compgen.INSTALL.md for how to use.
