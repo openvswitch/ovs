@@ -6,6 +6,7 @@
 /idltest.c
 /idltest.h
 /idltest.ovsidl
+/kmod-testsuite
 /ovstest
 /test-dpdkr
 /ovs-pki.log
