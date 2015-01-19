@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2012, 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,21 @@
 #include "openflow/openflow-common.h"
 
 /* Active virtual connection to an OpenFlow device. */
+
+/* This structure should be treated as opaque by vconn implementations. */
+struct vconn {
+    const struct vconn_class *vclass;
+    int state;
+    int error;
+
+    /* OpenFlow versions. */
+    uint32_t allowed_versions;  /* Bitmap of versions we will accept. */
+    uint32_t peer_versions;     /* Peer's bitmap of versions it will accept. */
+    enum ofp_version version;   /* Negotiated version (or 0). */
+    bool recv_any_version;      /* True to receive a message of any version. */
+
+    char *name;
+};
 
 void vconn_init(struct vconn *, const struct vconn_class *, int connect_status,
                 const char *name, uint32_t allowed_versions);
@@ -115,6 +130,12 @@ struct vconn_class {
 
 /* Passive virtual connection to an OpenFlow device. */
 
+/* This structure should be treated as opaque by vconn implementations. */
+struct pvconn {
+    const struct pvconn_class *pvclass;
+    char *name;
+    uint32_t allowed_versions;
+};
 void pvconn_init(struct pvconn *pvconn, const struct pvconn_class *pvclass,
                  const char *name, uint32_t allowed_versions);
 static inline void pvconn_assert_class(const struct pvconn *pvconn,
