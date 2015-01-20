@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -134,7 +134,7 @@ fd_send(struct stream *stream, const void *buffer, size_t n)
         }
 #endif
         if (error != EAGAIN) {
-            VLOG_DBG_RL(&rl, "recv: %s", sock_strerror(error));
+            VLOG_DBG_RL(&rl, "send: %s", sock_strerror(error));
         }
         return -error;
     }
