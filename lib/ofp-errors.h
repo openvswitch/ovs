@@ -106,6 +106,12 @@ enum ofperr {
     /* Expected: 0x0,3,5 in OF1.1 means both OFPBIC_BAD_EXPERIMENTER and
      * OFPBIC_BAD_EXP_TYPE. */
 
+    /* Expected: 0x0,1,5 in OF1.0 means both OFPBRC_EPERM and
+     * OFPBRC_IS_SLAVE. */
+
+    /* Expected: 0x0,1,5 in OF1.1 means both OFPBRC_EPERM and
+     * OFPBRC_IS_SLAVE. */
+
 /* ## ------------------ ## */
 /* ## OFPET_HELLO_FAILED ## */
 /* ## ------------------ ## */
@@ -154,7 +160,7 @@ enum ofperr {
      *   code defined the specification. ] */
     OFPERR_OFPBRC_BAD_TABLE_ID,
 
-    /* OF1.2+(1,10).  Denied because controller is slave. */
+    /* OF1.0-1.1(1,5), OF1.2+(1,10).  Denied because controller is slave. */
     OFPERR_OFPBRC_IS_SLAVE,
 
     /* NX1.0-1.1(1,514), OF1.2+(1,11).  Invalid port.  [ A non-standard error
