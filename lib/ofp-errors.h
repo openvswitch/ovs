@@ -45,7 +45,8 @@ struct ofpbuf;
 
 #define OFPERR_OFS (1 << 30)
 
-/* OpenFlow error codes.
+/* OpenFlow error codes
+ * --------------------
  *
  * The comments below are parsed by the extract-ofp-errors program at build
  * time and used to determine the mapping between "enum ofperr" constants and
@@ -71,7 +72,34 @@ struct ofpbuf;
  *   - Additional text is a human-readable description of the meaning of each
  *     error, used to explain the error to the user.  Any text enclosed in
  *     square brackets is omitted; this can be used to explain rationale for
- *     choice of error codes in the case where this is desirable. */
+ *     choice of error codes in the case where this is desirable.
+ *
+ *
+ * Expected duplications
+ * ---------------------
+ *
+ * Occasionally, in one version of OpenFlow a single named error can indicate
+ * two or more distinct errors, then a later version of OpenFlow splits those
+ * meanings into different error codes.  When that happens, both errors are
+ * assigned the same value in the earlier version.  That is ordinarily a
+ * mistake, so the build system reports an error.  When that happens, add the
+ * error message to the list of "Expected duplications" below to suppress the
+ * error.  In such a case, the named error defined earlier is how OVS
+ * interprets the earlier, merged form of the error.
+ *
+ * For example, OpenFlow 1.1 defined (3,5) as OFPBIC_UNSUP_EXP_INST, then
+ * OpenFlow 1.2 broke this error into OFPBIC_BAD_EXPERIMENTER as (3,5) and
+ * OFPBIC_BAD_EXT_TYPE as (3,6).  To allow the OVS code to report just a single
+ * error code, instead of protocol version dependent errors, this list of
+ * errors only lists the latter two errors, giving both of them the same code
+ * (3,5) for OpenFlow 1.1.  Then, when OVS serializes either error into
+ * OpenFlow 1.1, it uses the same code (3,5).  In the other direction, when OVS
+ * deserializes (3,5) from OpenFlow 1.1, it translates it into
+ * OFPBIC_BAD_EXPERIMENTER (because its definition precedes that of
+ * OFPBIC_BAD_EXT_TYPE below).  See the "encoding OFPBIC_* experimenter errors"
+ * and "decoding OFPBIC_* experimenter errors" tests in tests/ofp-errors.at for
+ * full details.
+ */
 enum ofperr {
 /* Expected duplications. */
 
