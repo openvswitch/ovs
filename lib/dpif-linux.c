@@ -484,6 +484,7 @@ destroy_all_channels(struct dpif_linux *dpif) OVS_REQ_WRLOCK(dpif->upcall_lock)
         vport_request.cmd = OVS_VPORT_CMD_SET;
         vport_request.dp_ifindex = dpif->dp_ifindex;
         vport_request.port_no = u32_to_odp(i);
+        vport_request.n_upcall_pids = 1;
         vport_request.upcall_pids = &upcall_pids;
         dpif_linux_vport_transact(&vport_request, NULL, NULL);
 
