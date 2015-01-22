@@ -130,4 +130,15 @@ static inline int rpl_genl_has_listeners(struct genl_family *family,
 
 #endif /* HAVE_GENL_HAS_LISTENERS */
 
+#ifndef HAVE_GENLMSG_PARSE
+static inline int genlmsg_parse(const struct nlmsghdr *nlh,
+				const struct genl_family *family,
+				struct nlattr *tb[], int maxtype,
+				const struct nla_policy *policy)
+{
+	return nlmsg_parse(nlh, family->hdrsize + GENL_HDRLEN, tb, maxtype,
+			   policy);
+}
+#endif
+
 #endif /* genetlink.h */
