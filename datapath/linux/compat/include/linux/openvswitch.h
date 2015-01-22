@@ -485,13 +485,14 @@ struct ovs_key_nd {
  * a wildcarded match. Omitting attribute is treated as wildcarding all
  * corresponding fields. Optional for all requests. If not present,
  * all flow key bits are exact match bits.
- * @OVS_FLOW_ATTR_UFID: A unique identifier for the flow. Causes the flow to
- * be indexed by this value rather than the %OVS_FLOW_ATTR_KEY%. Optional
- * for all requests. Present in notifications if the flow was created with a
- * UFID.
- * @OVS_FLOW_ATTR_UFID_FLAGS: A 32-bit value of OR'd OVS_UFID_F_* flags that
- * provide alternative semantics for flow installation and retrieval. Optional
- * for all requests.
+ * @OVS_FLOW_ATTR_UFID: A value between 1-16 octets specifying a unique
+ * identifier for the flow. Causes the flow to be indexed by this value rather
+ * than the value of the %OVS_FLOW_ATTR_KEY attribute. Optional for all
+ * requests. Present in notifications if the flow was created with this
+ * attribute.
+ * @OVS_FLOW_ATTR_UFID_FLAGS: A 32-bit value of OR'd %OVS_UFID_F_*
+ * flags that provide alternative semantics for flow installation and
+ * retrieval. Optional for all requests.
  *
  * These attributes follow the &struct ovs_header within the Generic Netlink
  * payload for %OVS_FLOW_* commands.
