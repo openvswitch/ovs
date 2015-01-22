@@ -2309,7 +2309,7 @@ bundle_destroy(struct ofbundle *bundle)
     }
 
     ofproto = bundle->ofproto;
-    mbridge_unregister_bundle(ofproto->mbridge, bundle->aux);
+    mbridge_unregister_bundle(ofproto->mbridge, bundle);
 
     ovs_rwlock_wrlock(&xlate_rwlock);
     xlate_bundle_remove(bundle);
