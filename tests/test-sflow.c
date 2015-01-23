@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  * Copyright (c) 2013 InMon Corp.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -647,7 +647,7 @@ test_sflow_main(int argc, char *argv[])
 
     sock = inet_open_passive(SOCK_DGRAM, target, 0, NULL, 0, true);
     if (sock < 0) {
-        ovs_fatal(0, "%s: failed to open (%s)", argv[1], ovs_strerror(-sock));
+        ovs_fatal(0, "%s: failed to open (%s)", target, ovs_strerror(-sock));
     }
 
     daemon_save_fd(STDOUT_FILENO);
