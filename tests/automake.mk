@@ -188,7 +188,7 @@ check-kernel: all tests/atconfig tests/atlocal $(KMOD_TESTSUITE)
 # Testing the out of tree Kernel module
 check-kmod: all tests/atconfig tests/atlocal $(KMOD_TESTSUITE)
 	$(MAKE) modules_install
-	rmmod openvswitch
+	modprobe -r openvswitch
 	$(MAKE) check-kernel
 
 clean-local:
