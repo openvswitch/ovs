@@ -40,6 +40,11 @@ LEVELS = {
     "emer": logging.CRITICAL,
     "off": logging.CRITICAL
 }
+FACILITIES = ['auth', 'authpriv', 'cron', 'daemon', 'ftp', 'kern', 'lpr',
+              'mail', 'news', 'syslog', 'user', 'uucp', 'local0', 'local1',
+              'local2', 'local3', 'local4', 'local5', 'local6', 'local7']
+syslog_facility = "daemon"
+syslog_handler = ''
 
 
 def get_level(level_str):
@@ -224,9 +229,7 @@ class Vlog:
                 if f == "console":
                     logger.addHandler(logging.StreamHandler(sys.stderr))
                 elif f == "syslog":
-                    logger.addHandler(logging.handlers.SysLogHandler(
-                        address="/dev/log",
-                        facility=logging.handlers.SysLogHandler.LOG_DAEMON))
+                    Vlog.add_syslog_handler()
                 elif f == "file" and Vlog.__log_file:
                     Vlog.__file_handler = logging.FileHandler(Vlog.__log_file)
                     logger.addHandler(Vlog.__file_handler)
@@ -281,6 +284,26 @@ class Vlog:
         Vlog.__log_patterns[destination] = pattern
 
     @staticmethod
+    def add_syslog_handler(facility=None):
+        global syslog_facility, syslog_handler
+
+        # If handler is already added and there is no change in 'facility',
+        # there is nothing to do.
+        if (not facility or facility == syslog_facility) and syslog_handler:
+            return
+
+        if facility:
+            syslog_facility = facility
+
+        logger = logging.getLogger('syslog')
+        if syslog_handler:
+            logger.removeHandler(syslog_handler)
+        syslog_handler = logging.handlers.SysLogHandler(address="/dev/log",
+                                                    facility=syslog_facility)
+        logger.addHandler(syslog_handler)
+        return
+
+    @staticmethod
     def set_levels_from_string(s):
         module = None
         level = None
@@ -298,6 +321,12 @@ class Vlog:
                     return "Destination %s does not exist" % words[1]
             except IndexError:
                 return "Please supply a valid pattern and destination"
+        elif words[0] == "FACILITY":
+            if words[1] in FACILITIES:
+                Vlog.add_syslog_handler(words[1])
+                return
+            else:
+                return "Facility %s is invalid" % words[1]
 
         for word in [w.lower() for w in words]:
             if word == "any":

@@ -54,6 +54,17 @@ Sets the maximum logging verbosity level, equivalent to
 Sets the log pattern for \fIdestination\fR to \fIpattern\fR.  Refer to
 \fBovs\-appctl\fR(8) for a description of the valid syntax for \fIpattern\fR.
 .
+.IP "\fB\-vFACILITY:\fIfacility\fR"
+.IQ "\fB\-\-verbose=FACILITY:\fIfacility\fR"
+Sets the RFC5424 facility of the log message. \fIfacility\fR can be one of
+\fBkern\fR, \fBuser\fR, \fBmail\fR, \fBdaemon\fR, \fBauth\fR, \fBsyslog\fR,
+\fBlpr\fR, \fBnews\fR, \fBuucp\fR, \fBclock\fR, \fBftp\fR, \fBntp\fR,
+\fBaudit\fR, \fBalert\fR, \fBclock2\fR, \fBlocal0\fR, \fBlocal1\fR,
+\fBlocal2\fR, \fBlocal3\fR, \fBlocal4\fR, \fBlocal5\fR, \fBlocal6\fR or
+\fBlocal7\fR. If this option is not specified, \fBdaemon\fR is used as
+the default for the local system syslog and \fBlocal0\fR is used while sending
+a message to the target provided via the \fB\-\-syslog\-target\fR option.
+.
 .TP
 \fB\-\-log\-file\fR[\fB=\fIfile\fR]
 Enables logging to a file.  If \fIfile\fR is specified, then it is

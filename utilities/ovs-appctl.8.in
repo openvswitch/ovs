@@ -254,6 +254,14 @@ The default pattern for console and file output is \fB%D{%Y-%m-%dT
 Daemons written in Python (e.g. \fBovs\-xapi\-sync\fR,
 \fBovs\-monitor\-ipsec) do not allow control over the log pattern.
 .
+.IP "\fBvlog/set\fR FACILITY:\fIfacility\fR"
+Sets the RFC5424 facility of the log message. \fIfacility\fR can be one of
+\fBkern\fR, \fBuser\fR, \fBmail\fR, \fBdaemon\fR, \fBauth\fR, \fBsyslog\fR,
+\fBlpr\fR, \fBnews\fR, \fBuucp\fR, \fBclock\fR, \fBftp\fR, \fBntp\fR,
+\fBaudit\fR, \fBalert\fR, \fBclock2\fR, \fBlocal0\fR, \fBlocal1\fR,
+\fBlocal2\fR, \fBlocal3\fR, \fBlocal4\fR, \fBlocal5\fR, \fBlocal6\fR or
+\fBlocal7\fR.
+.
 .IP "\fBvlog/reopen\fR"
 Causes the daemon to close and reopen its log file.  (This
 is useful after rotating log files, to cause a new log file to be

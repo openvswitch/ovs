@@ -110,6 +110,41 @@ static bool log_async OVS_GUARDED_BY(log_file_mutex);
 /* Syslog export configuration. */
 static int syslog_fd OVS_GUARDED_BY(pattern_rwlock) = -1;
 
+/* Log facility configuration. */
+static atomic_int log_facility = ATOMIC_VAR_INIT(0);
+
+/* Facility name and its value. */
+struct vlog_facility {
+    char *name;           /* Name. */
+    unsigned int value;   /* Facility associated with 'name'. */
+};
+static struct vlog_facility vlog_facilities[] = {
+    {"kern", LOG_KERN},
+    {"user", LOG_USER},
+    {"mail", LOG_MAIL},
+    {"daemon", LOG_DAEMON},
+    {"auth", LOG_AUTH},
+    {"syslog", LOG_SYSLOG},
+    {"lpr", LOG_LPR},
+    {"news", LOG_NEWS},
+    {"uucp", LOG_UUCP},
+    {"clock", LOG_CRON},
+    {"ftp", LOG_FTP},
+    {"ntp", 12<<3},
+    {"audit", 13<<3},
+    {"alert", 14<<3},
+    {"clock2", 15<<3},
+    {"local0", LOG_LOCAL0},
+    {"local1", LOG_LOCAL1},
+    {"local2", LOG_LOCAL2},
+    {"local3", LOG_LOCAL3},
+    {"local4", LOG_LOCAL4},
+    {"local5", LOG_LOCAL5},
+    {"local6", LOG_LOCAL6},
+    {"local7", LOG_LOCAL7}
+};
+static bool vlog_facility_exists(const char* facility, int *value);
+
 static void format_log_message(const struct vlog_module *, enum vlog_level,
                                const char *pattern,
                                const char *message, va_list, struct ds *)
@@ -419,6 +454,14 @@ vlog_set_levels_from_string(const char *s_)
             goto exit;
         }
         vlog_set_pattern(destination, save_ptr);
+    } else if (word && !strcasecmp(word, "FACILITY")) {
+        int value;
+
+        if (!vlog_facility_exists(save_ptr, &value)) {
+            msg = xstrdup("invalid facility");
+            goto exit;
+        }
+        atomic_store_explicit(&log_facility, value, memory_order_relaxed);
     } else {
         struct vlog_module *module = NULL;
         enum vlog_level level = VLL_N_LEVELS;
@@ -505,6 +548,22 @@ vlog_set_syslog_target(const char *target)
     }
     syslog_fd = new_fd;
     ovs_rwlock_unlock(&pattern_rwlock);
+}
+
+/* Returns 'false' if 'facility' is not a valid string. If 'facility'
+ * is a valid string, sets 'value' with the integer value of 'facility'
+ * and returns 'true'. */
+static bool
+vlog_facility_exists(const char* facility, int *value)
+{
+    size_t i;
+    for (i = 0; i < ARRAY_SIZE(vlog_facilities); i++) {
+        if (!strcasecmp(vlog_facilities[i].name, facility)) {
+            *value = vlog_facilities[i].value;
+            return true;
+        }
+    }
+    return false;
 }
 
 static void
@@ -614,6 +673,7 @@ vlog_init(void)
     if (ovsthread_once_start(&once)) {
         static char *program_name_copy;
         long long int now;
+        int facility;
 
         /* Do initialization work that needs to be done before any logging
          * occurs.  We want to keep this really minimal because any attempt to
@@ -625,7 +685,9 @@ vlog_init(void)
          * a pointer to the private copy to suppress memory leak warnings in
          * case openlog() does make its own copy.) */
         program_name_copy = program_name ? xstrdup(program_name) : NULL;
-        openlog(program_name_copy, LOG_NDELAY, LOG_DAEMON);
+        atomic_read_explicit(&log_facility, &facility, memory_order_relaxed);
+        openlog(program_name_copy, LOG_NDELAY,
+                facility ? facility : LOG_DAEMON);
         ovsthread_once_done(&once);
 
         /* Now do anything that we want to happen only once but doesn't have to
@@ -739,6 +801,7 @@ format_log_message(const struct vlog_module *module, enum vlog_level level,
     char tmp[128];
     va_list args;
     const char *p;
+    int facility;
 
     ds_clear(s);
     for (p = pattern; *p != '\0'; ) {
@@ -773,7 +836,10 @@ format_log_message(const struct vlog_module *module, enum vlog_level level,
             ds_put_cstr(s, program_name);
             break;
         case 'B':
-            ds_put_format(s, "%d", LOG_LOCAL0 + syslog_levels[level]);
+            atomic_read_explicit(&log_facility, &facility,
+                                 memory_order_relaxed);
+            facility = facility ? facility : LOG_LOCAL0;
+            ds_put_format(s, "%d", facility + syslog_levels[level]);
             break;
         case 'c':
             p = fetch_braces(p, "", tmp, sizeof tmp);
@@ -897,12 +963,15 @@ vlog_valist(const struct vlog_module *module, enum vlog_level level,
             int syslog_level = syslog_levels[level];
             char *save_ptr = NULL;
             char *line;
+            int facility;
 
             format_log_message(module, level, destinations[VLF_SYSLOG].pattern,
                                message, args, &s);
             for (line = strtok_r(s.string, "\n", &save_ptr); line;
                  line = strtok_r(NULL, "\n", &save_ptr)) {
-                syslog(syslog_level, "%s", line);
+                atomic_read_explicit(&log_facility, &facility,
+                                     memory_order_relaxed);
+                syslog(syslog_level|facility, "%s", line);
             }
 
             if (syslog_fd >= 0) {
