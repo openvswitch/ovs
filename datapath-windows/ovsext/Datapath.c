@@ -448,10 +448,8 @@ OvsCreateDeviceObject(NDIS_HANDLE ovsExtDriverHandle)
         if (ovsExt) {
             ovsExt->numberOpenInstance = 0;
         }
-    } else {
-        /* Initialize the associated data structures. */
-        OvsInit();
     }
+
     OVS_LOG_TRACE("DeviceObject: %p", gOvsDeviceObject);
     return status;
 }
@@ -474,7 +472,6 @@ OvsDeleteDeviceObject()
         gOvsDeviceHandle = NULL;
         gOvsDeviceObject = NULL;
     }
-    OvsCleanup();
 }
 
 POVS_OPEN_INSTANCE
