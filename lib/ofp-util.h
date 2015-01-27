@@ -1079,7 +1079,7 @@ int ofputil_decode_group_desc_reply(struct ofputil_group_desc *,
                                     struct ofpbuf *, enum ofp_version);
 
 void ofputil_append_group_desc_reply(const struct ofputil_group_desc *,
-                                     struct ovs_list *buckets,
+                                     const struct ovs_list *buckets,
                                      struct ovs_list *replies);
 
 struct ofputil_bundle_ctrl_msg {

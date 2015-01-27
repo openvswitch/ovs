@@ -7408,7 +7408,7 @@ ofputil_put_ofp15_bucket(const struct ofputil_bucket *bucket,
 
 static void
 ofputil_append_ofp11_group_desc_reply(const struct ofputil_group_desc *gds,
-                                      struct ovs_list *buckets,
+                                      const struct ovs_list *buckets,
                                       struct ovs_list *replies,
                                       enum ofp_version version)
 {
@@ -7432,7 +7432,7 @@ ofputil_append_ofp11_group_desc_reply(const struct ofputil_group_desc *gds,
 
 static void
 ofputil_append_ofp15_group_desc_reply(const struct ofputil_group_desc *gds,
-                                      struct ovs_list *buckets,
+                                      const struct ovs_list *buckets,
                                       struct ovs_list *replies,
                                       enum ofp_version version)
 {
@@ -7462,7 +7462,7 @@ ofputil_append_ofp15_group_desc_reply(const struct ofputil_group_desc *gds,
  * initialized with ofpmp_init(). */
 void
 ofputil_append_group_desc_reply(const struct ofputil_group_desc *gds,
-                                struct ovs_list *buckets,
+                                const struct ovs_list *buckets,
                                 struct ovs_list *replies)
 {
     enum ofp_version version = ofpmp_version(replies);
