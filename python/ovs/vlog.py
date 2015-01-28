@@ -292,12 +292,19 @@ class Vlog:
         if (not facility or facility == syslog_facility) and syslog_handler:
             return
 
+        logger = logging.getLogger('syslog')
+        # If there is no infrastructure to support python syslog, increase
+        # the logging severity level to avoid repeated errors.
+        if not os.path.isfile("/dev/log"):
+            logger.setLevel(logging.CRITICAL)
+            return
+
+        if syslog_handler:
+            logger.removeHandler(syslog_handler)
+
         if facility:
             syslog_facility = facility
 
-        logger = logging.getLogger('syslog')
-        if syslog_handler:
-            logger.removeHandler(syslog_handler)
         syslog_handler = logging.handlers.SysLogHandler(address="/dev/log",
                                                     facility=syslog_facility)
         logger.addHandler(syslog_handler)
