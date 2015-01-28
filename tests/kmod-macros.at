@@ -25,7 +25,7 @@ m4_define([OVS_KMOD_VSWITCHD_START],
 #   OVS_KMOD_VSWITCHD_STOP(["/expected error/d"])
 m4_define([OVS_KMOD_VSWITCHD_STOP],
   [AT_CHECK([ovs-vsctl del-br br0])
-   OVS_SWITCHD_STOP([$1])
+   OVS_VSWITCHD_STOP([$1])
    AT_CHECK([modprobe -r openvswitch])
   ])
 
