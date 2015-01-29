@@ -81,9 +81,27 @@ Using the DPDK with ovs-vswitchd:
    `default_hugepagesz=1GB hugepagesz=1G hugepages=1`
 
 2. Setup DPDK devices:
-   1. insert uio.ko: `modprobe uio`
-   2. insert igb_uio.ko: `insmod $DPDK_BUILD/kmod/igb_uio.ko`
-   3. Bind network device to igb_uio: `$DPDK_DIR/tools/dpdk_nic_bind.py --bind=igb_uio eth1`
+
+   DPDK devices can be setup using either the VFIO (for DPDK 1.7+) or UIO
+   modules. UIO requires inserting an out of tree driver igb_uio.ko that is
+   available in DPDK. Setup for both methods are described below.
+
+   * UIO:
+     1. insert uio.ko: `modprobe uio`
+     2. insert igb_uio.ko: `insmod $DPDK_BUILD/kmod/igb_uio.ko`
+     3. Bind network device to igb_uio:
+	    `$DPDK_DIR/tools/dpdk_nic_bind.py --bind=igb_uio eth1`
+
+   * VFIO:
+
+     VFIO needs to be supported in the kernel and the BIOS. More information
+     can be found in the [DPDK Linux GSG].
+
+     1. Insert vfio-pci.ko: `modprobe vfio-pci`
+     2. Set correct permissions on vfio device: `sudo /usr/bin/chmod a+x /dev/vfio`
+        and: `sudo /usr/bin/chmod 0666 /dev/vfio/*`
+     3. Bind network device to vfio-pci:
+	    `$DPDK_DIR/tools/dpdk_nic_bind.py --bind=vfio-pci eth1`
 
 3. Mount the hugetable filsystem
 
@@ -292,3 +310,4 @@ Please report problems to bugs@openvswitch.org.
 
 [INSTALL.userspace.md]:INSTALL.userspace.md
 [INSTALL.md]:INSTALL.md
+[DPDK Linux GSG]: http://www.dpdk.org/doc/guides/linux_gsg/build_dpdk.html#binding-and-unbinding-network-ports-to-from-the-igb-uioor-vfio-modules
