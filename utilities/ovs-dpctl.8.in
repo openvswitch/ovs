@@ -18,6 +18,13 @@ ovs\-dpctl \- administer Open vSwitch datapaths
 The \fBovs\-dpctl\fR program can create, modify, and delete Open vSwitch
 datapaths.  A single machine may host any number of datapaths.
 .PP
+This program works only with datapaths that are implemented outside of
+\fBovs\-vswitchd\fR itself, such as the Linux and Windows kernel-based
+datapaths.  To manage datapaths that are integrated into
+\fBovs\-vswitchd\fR, such as the userspace (\fBnetdev\fR) datapath,
+use \fBovs\-appctl\fR(8) to invoke the \fBdpctl/*\fR commands, which
+are documented in \fBovs\-vswitchd\fR(8).
+.PP
 A newly created datapath is associated with only one network device, a
 virtual network device sometimes called the datapath's ``local port''.
 A newly created datapath is not, however, associated with any of the
