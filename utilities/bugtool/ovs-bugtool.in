@@ -14,7 +14,7 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #
 # Copyright (c) 2005, 2007 XenSource Ltd.
-# Copyright (c) 2010, 2011, 2012, 2013 Nicira, Inc.
+# Copyright (c) 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
 
 #
 # To add new entries to the bugtool, you need to:
@@ -382,6 +382,35 @@ def main(argv=None):
     # Filter flags
     only_ovs_info = False
     collect_all_info = True
+
+    if '--help' in sys.argv:
+        print """\
+%(argv0)s: create status report bundles to assist in problem diagnosis
+usage: %(argv0)s OPTIONS
+
+By default, %(argv0)s prompts for permission to collect each form of status
+information and produces a .tar.gz file as output.
+
+The following options are available.
+  --help                     display this help message, then exit
+  -s, --silent               suppress most output to stdout
+
+Options for categories of data to collect:
+  --entries=CAP_A,CAP_B,...  set categories of data to collect
+  --all                      collect all categories
+  --ovs                      collect only directly OVS-related info
+  --log-days=DAYS            collect DAYS worth of old logs
+  -y, --yestoall             suppress prompts to confirm collection
+  --capabilities             print categories as XML on stdout, then exit
+
+Output options:
+  --output=FORMAT            set output format to one of tar tar.bz2 tar.gz zip
+  --outfile=FILE             write output to FILE
+  --outfd=FD                 write output to FD (requires --output=tar)
+  --unlimited                ignore default limits on sizes of data collected
+  --debug                    print ovs-bugtool debug info on stdout\
+""" % {'argv0': sys.argv[0]}
+        sys.exit(0)
 
     # we need access to privileged files, exit if we are not running as root
     if os.getuid() != 0:
