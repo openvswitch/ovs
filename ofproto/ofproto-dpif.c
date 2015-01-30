@@ -1894,6 +1894,7 @@ set_sflow(struct ofproto *ofproto_,
     struct dpif_sflow *ds = ofproto->sflow;
 
     if (sflow_options) {
+        uint32_t old_probability = ds ? dpif_sflow_get_probability(ds) : 0;
         if (!ds) {
             struct ofport_dpif *ofport;
 
@@ -1901,9 +1902,11 @@ set_sflow(struct ofproto *ofproto_,
             HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
                 dpif_sflow_add_port(ds, &ofport->up, ofport->odp_port);
             }
-            ofproto->backer->need_revalidate = REV_RECONFIGURE;
         }
         dpif_sflow_set_options(ds, sflow_options);
+        if (dpif_sflow_get_probability(ds) != old_probability) {
+            ofproto->backer->need_revalidate = REV_RECONFIGURE;
+        }
     } else {
         if (ds) {
             dpif_sflow_unref(ds);
