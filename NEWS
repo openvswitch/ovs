@@ -143,6 +143,7 @@ v2.1.0 - 19 Mar 2014
      * ovs-vswitchd now honors changes to the "ofport_request" column
        in the Interface table by changing the port's OpenFlow port
        number.
+     * The Open vSwitch software switch now supports OpenFlow groups.
    - ovs-vswitchd.conf.db.5 man page will contain graphviz/dot
      diagram only if graphviz package was installed at the build time.
    - Support for Linux kernels up to 3.11
