@@ -600,8 +600,8 @@ if [ "$1" = "debug" ]; then
     # next argument which is not input yet.  This hack is for
     # compromising the fact that bash cannot take unquoted
     # empty argument.
-    if [ "${COMP_WORDS[-1]}" = "TAB" ]; then
-        COMP_WORDS[${#COMP_WORDS[@]}-1]=""
+    if [ "${COMP_WORDS[$COMP_CWORD]}" = "TAB" ]; then
+        COMP_WORDS[$COMP_CWORD]=""
     fi
 
     _ovs_command_complete "debug"
