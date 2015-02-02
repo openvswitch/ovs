@@ -295,7 +295,7 @@ class Vlog:
         logger = logging.getLogger('syslog')
         # If there is no infrastructure to support python syslog, increase
         # the logging severity level to avoid repeated errors.
-        if not os.path.isfile("/dev/log"):
+        if not os.path.exists("/dev/log"):
             logger.setLevel(logging.CRITICAL)
             return
 
