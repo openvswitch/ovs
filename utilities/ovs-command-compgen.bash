@@ -151,8 +151,8 @@ find_possible_comps() {
 }
 
 # Given the subcommand format, and the current command line input,
-# finds all possible completions.
-subcmd_find_comp_based_on_input() {
+# finds keywords of all possible completions.
+subcmd_find_keyword_based_on_input() {
     local format="$1"
     local cmd_line=($2)
     local mult=
@@ -196,7 +196,7 @@ subcmd_find_comp_based_on_input() {
     done
     comps="$(find_possible_comps "$combs")"
 
-    echo "$(kwords_to_args "$comps")"
+    echo "$comps"
 }
 
 
@@ -345,6 +345,7 @@ arg_to_kwords() {
 kwords_to_args() {
     local possible_kwords=($@)
     local args=()
+    local printf_expand_once=
     local kword
 
     for kword in ${possible_kwords[@]}; do
@@ -406,6 +407,7 @@ parse_and_compgen() {
     local subcmd=${subcmd_line[0]}
     local target=
     local subcmd_format=
+    local comp_keywords=
     local comp_wordlist=
 
     if [ -n "$_APPCTL_TARGET" ]; then
@@ -416,14 +418,23 @@ parse_and_compgen() {
     subcmd_format="$($command $target list-commands 2>/dev/null | tail -n +2 | cut -c3- \
                      | awk -v opt=$subcmd '$1 == opt {print $0}' | tr -s ' ' )"
 
-    # Prints subcommand format.
-    printf_stderr "$(printf "\nCommand format:\n%s" "$subcmd_format")"
-
     # Finds the possible completions based on input argument.
-    comp_wordlist="$(subcmd_find_comp_based_on_input "$subcmd_format" \
+    comp_keyword="$(subcmd_find_keyword_based_on_input "$subcmd_format" \
                      "${subcmd_line[@]}")"
 
-    echo "$comp_wordlist"
+    # Prints subcommand format and expands the keywords if 'comp_keyword'
+    # is not empty.
+    if [ -n "$comp_keyword" ]; then
+        printf_stderr "$(printf "\nCommand format:\n%s" "$subcmd_format")"
+        comp_wordlist="$(kwords_to_args "$comp_keyword")"
+        # If there is no expanded completions, returns "NO_EXPAN" to
+        # distinguish from the case of no available completions.
+        if [ -z "$comp_wordlist" ]; then
+            echo "NO_EXPAN"
+        else
+            echo "$comp_wordlist"
+        fi
+    fi
 }
 
 
@@ -559,27 +570,28 @@ _ovs_command_complete() {
       _COMP_WORDLIST="$_COMP_WORDLIST none void no-op"
   fi
 
-  # Prints all available completions to stderr.  If there is only one matched
-  # completion, do nothing.
-  if [ -n "$_PRINTF_ENABLE" ] \
-      && [ -n "$(echo $_COMP_WORDLIST | tr ' ' '\n' | \
-                grep -- "^$cur")" ]; then
-      printf_stderr "\nAvailable completions:\n"
-  fi
-
-  # If there is no match between '$cur' and the '$_COMP_WORDLIST'
-  # prints a bash prompt since the 'complete' will not print it.
-  if [ -n "$_PRINTF_ENABLE" ] \
-      && [ -z "$(echo $_COMP_WORDLIST | tr ' ' '\n' | grep -- "^$cur")" ] \
-      && [ "$1" != "debug" ]; then
-      printf_stderr "\n$_BASH_PROMPT${COMP_WORDS[@]}"
+  if [ -n "$_PRINTF_ENABLE" ] && [ -n "$_COMP_WORDLIST" ]; then
+      if [ -n "$(echo $_COMP_WORDLIST | tr ' ' '\n' | sed -e '/NO_EXPAN/d' | grep -- "^$cur")" ]; then
+          printf_stderr "\nAvailable completions:\n"
+      else
+          if [ "$1" != "debug" ]; then
+              # If there is no match between '$cur' and the '$_COMP_WORDLIST'
+              # prints a bash prompt since the 'complete' will not print it.
+              printf_stderr "\n$_BASH_PROMPT${COMP_WORDS[@]}"
+          fi
+      fi
   fi
 
   if [ "$1" = "debug" ]; then
-      printf_stderr "$(echo $_COMP_WORDLIST | tr ' ' '\n' | sort -u | grep -- "$cur")\n"
+      printf_stderr "$(echo $_COMP_WORDLIST | tr ' ' '\n' | sort -u | sed -e '/NO_EXPAN/d' | grep -- "$cur")\n"
   else
-      COMPREPLY=( $(compgen -W "$(echo $_COMP_WORDLIST | tr ' ' '\n' \
-                                 | sort -u)" -- $cur) )
+      if [ -n "$_COMP_WORDLIST" ]; then
+          COMPREPLY=( $(compgen -W "$(echo $_COMP_WORDLIST | tr ' ' '\n' \
+                                 | sort -u | sed -e '/NO_EXPAN/d')" -- $cur) )
+      else
+          # If there is no completions, just complete on file path.
+          COMPREPLY=( $(compgen -o filenames -A file -- $cur) )
+      fi
   fi
 
   return 0

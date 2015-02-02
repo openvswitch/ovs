@@ -78,19 +78,6 @@ AT_CHECK_UNQUOTED([GET_AVAIL(${INPUT})],
 ${MATCH}
 ])])
 AT_CHECK([ovs-appctl --target ovs-ofctl exit])
-
-
-# check all ovs-appctl subcommand formats
-LIST=$(ovs-appctl list-commands | tail -n +2 | cut -c3- | cut -d ' ' -f1 | sort)
-for subcommand in $LIST; do
-    INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl $subcommand TAB 2>&1)"
-    MATCH=$(ovs-appctl list-commands | tail -n+2 | cut -c3- | grep -- "^$subcommand " | tr -s ' ')
-    AT_CHECK_UNQUOTED([GET_FORMAT(${INPUT})],
-[0], [dnl
-${MATCH}
-])
-done
-
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -123,8 +110,6 @@ p0
 INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl bfd/set-forwarding true TAB 2>&1)"
 AT_CHECK_UNQUOTED([echo "$INPUT" | sed -e '/./,$!d'],
 [0], [dnl
-Command format:
-bfd/set-forwarding [[interface]] normal|false|true
 ])
 
 
@@ -145,8 +130,6 @@ AT_CHECK_UNQUOTED([GET_AVAIL(${INPUT})], [0])
 INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl bfd/set-forwarding p1 false TAB 2>&1)"
 AT_CHECK_UNQUOTED([echo "$INPUT" | sed -e '/./,$!d'],
 [0], [dnl
-Command format:
-bfd/set-forwarding [[interface]] normal|false|true
 ])
 
 OVS_VSWITCHD_STOP
@@ -181,8 +164,6 @@ p1
 INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl lacp/show p1 TAB 2>&1)"
 AT_CHECK_UNQUOTED([echo "$INPUT" | sed -e '/./,$!d'],
 [0], [dnl
-Command format:
-lacp/show [[port]]
 ])
 
 OVS_VSWITCHD_STOP
@@ -244,8 +225,6 @@ AT_CHECK_UNQUOTED([GET_AVAIL(${INPUT})],
 INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl ofproto/trace ovs-dummy "in_port(123),mac(),ip,tcp" "ABSJDFLSDJFOIWEQR" TAB 2>&1)"
 AT_CHECK_UNQUOTED([echo "$INPUT" | sed -e '/./,$!d'],
 [0], [dnl
-Command format:
-ofproto/trace {[[dp_name]] odp_flow | bridge br_flow} [[-generate|packet]]
 ])
 
 
@@ -301,8 +280,6 @@ AT_CHECK_UNQUOTED([GET_AVAIL(${INPUT})], [0])
 INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl vlog/set abcd TAB 2>&1)"
 AT_CHECK_UNQUOTED([echo "$INPUT" | sed -e '/./,$!d'],
 [0], [dnl
-Command format:
-vlog/set {spec | PATTERN:destination:pattern}
 ])
 
 OVS_VSWITCHD_STOP
@@ -319,7 +296,6 @@ AT_CHECK_UNQUOTED([echo "$INPUT" | sed -e 's/[ \t]*$//' | sed -e '/./,$!d'], [0]
 INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl ERROR TAB 2>&1)"
 AT_CHECK_UNQUOTED([echo "$INPUT" | sed -e 's/[ \t]*$//' | sed -e '/./!d'],
 [0], [dnl
-Command format:
 ])
 
 
@@ -343,7 +319,6 @@ ${MATCH}
 INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl --target target_daemon ERROR SUBCMD TAB 2>&1)"
 AT_CHECK_UNQUOTED([echo "$INPUT" | sed -e 's/[ \t]*$//' | sed -e '/./!d'],
 [0], [dnl
-Command format:
 ])])
 
 
