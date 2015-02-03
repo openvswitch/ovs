@@ -82,7 +82,7 @@ static inline int rpl_vxlan_xmit_skb(struct vxlan_sock *vs,
                    struct rtable *rt, struct sk_buff *skb,
                    __be32 src, __be32 dst, __u8 tos, __u8 ttl, __be16 df,
                    __be16 src_port, __be16 dst_port,
-		   struct vxlan_metadata *md)
+		   struct vxlan_metadata *md, bool xnet)
 {
 	if (skb_is_gso(skb) && skb_is_encapsulated(skb)) {
 		kfree_skb(skb);
@@ -90,7 +90,7 @@ static inline int rpl_vxlan_xmit_skb(struct vxlan_sock *vs,
 	}
 
 	return vxlan_xmit_skb(vs, rt, skb, src, dst, tos, ttl, df,
-			      src_port, dst_port, md, false);
+			      src_port, dst_port, md, xnet);
 }
 
 #define vxlan_xmit_skb rpl_vxlan_xmit_skb
@@ -132,7 +132,7 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 		   struct rtable *rt, struct sk_buff *skb,
 		   __be32 src, __be32 dst, __u8 tos, __u8 ttl, __be16 df,
 		   __be16 src_port, __be16 dst_port,
-		   struct vxlan_metadata *md);
+		   struct vxlan_metadata *md, bool xnet);
 
 #define vxlan_src_port rpl_vxlan_src_port
 __be16 vxlan_src_port(__u16 port_min, __u16 port_max, struct sk_buff *skb);

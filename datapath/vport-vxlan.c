@@ -181,7 +181,7 @@ static int vxlan_tnl_send(struct vport *vport, struct sk_buff *skb)
 			     tun_key->ipv4_tos,
 			     tun_key->ipv4_ttl, df,
 			     src_port, dst_port,
-			     &md);
+			     &md, false);
 	if (err < 0)
 		ip_rt_put(rt);
 	return err;

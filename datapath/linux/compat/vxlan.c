@@ -227,7 +227,7 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 		   struct rtable *rt, struct sk_buff *skb,
 		   __be32 src, __be32 dst, __u8 tos, __u8 ttl, __be16 df,
 		   __be16 src_port, __be16 dst_port,
-		   struct vxlan_metadata *md)
+		   struct vxlan_metadata *md, bool xnet)
 {
 	struct vxlanhdr *vxh;
 	struct udphdr *uh;
@@ -280,7 +280,7 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 		return PTR_ERR(skb);
 
 	return iptunnel_xmit(vs->sock->sk, rt, skb, src, dst, IPPROTO_UDP,
-			     tos, ttl, df, false);
+			     tos, ttl, df, xnet);
 }
 
 static void rcu_free_vs(struct rcu_head *rcu)
