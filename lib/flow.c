@@ -672,21 +672,24 @@ miniflow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
                 miniflow_push_be32(mf, arp_tha[2], 0);
                 miniflow_push_be32(mf, tcp_flags,
                                    TCP_FLAGS_BE32(tcp->tcp_ctl));
-                miniflow_push_words(mf, tp_src, &tcp->tcp_src, 1);
+                miniflow_push_be16(mf, tp_src, tcp->tcp_src);
+                miniflow_push_be16(mf, tp_dst, tcp->tcp_dst);
                 miniflow_pad_to_64(mf, igmp_group_ip4);
             }
         } else if (OVS_LIKELY(nw_proto == IPPROTO_UDP)) {
             if (OVS_LIKELY(size >= UDP_HEADER_LEN)) {
                 const struct udp_header *udp = data;
 
-                miniflow_push_words(mf, tp_src, &udp->udp_src, 1);
+                miniflow_push_be16(mf, tp_src, udp->udp_src);
+                miniflow_push_be16(mf, tp_dst, udp->udp_dst);
                 miniflow_pad_to_64(mf, igmp_group_ip4);
             }
         } else if (OVS_LIKELY(nw_proto == IPPROTO_SCTP)) {
             if (OVS_LIKELY(size >= SCTP_HEADER_LEN)) {
                 const struct sctp_header *sctp = data;
 
-                miniflow_push_words(mf, tp_src, &sctp->sctp_src, 1);
+                miniflow_push_be16(mf, tp_src, sctp->sctp_src);
+                miniflow_push_be16(mf, tp_dst, sctp->sctp_dst);
                 miniflow_pad_to_64(mf, igmp_group_ip4);
             }
         } else if (OVS_LIKELY(nw_proto == IPPROTO_ICMP)) {
