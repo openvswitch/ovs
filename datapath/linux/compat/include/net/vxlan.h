@@ -7,9 +7,21 @@
 #include <net/gre.h>
 
 #include <linux/version.h>
+
 #ifdef USE_KERNEL_TUNNEL_API
 #include_next <net/vxlan.h>
+#endif
 
+#ifndef VXLAN_HLEN
+/* VXLAN header flags. */
+#define VXLAN_HF_VNI 0x08000000
+
+#define VXLAN_N_VID     (1u << 24)
+#define VXLAN_VID_MASK  (VXLAN_N_VID - 1)
+#define VXLAN_HLEN (sizeof(struct udphdr) + sizeof(struct vxlanhdr))
+#endif
+
+#ifdef USE_KERNEL_TUNNEL_API
 static inline int rpl_vxlan_xmit_skb(struct vxlan_sock *vs,
                    struct rtable *rt, struct sk_buff *skb,
                    __be32 src, __be32 dst, __u8 tos, __u8 ttl, __be16 df,
