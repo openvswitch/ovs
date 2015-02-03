@@ -15,43 +15,98 @@
 #ifndef VXLAN_HLEN
 /* VXLAN header flags. */
 #define VXLAN_HF_VNI 0x08000000
+#ifndef VXLAN_HF_GBP
+#define VXLAN_HF_GBP 0x80000000
+#endif
 
 #define VXLAN_N_VID     (1u << 24)
 #define VXLAN_VID_MASK  (VXLAN_N_VID - 1)
 #define VXLAN_HLEN (sizeof(struct udphdr) + sizeof(struct vxlanhdr))
 #endif
 
-#ifdef USE_KERNEL_TUNNEL_API
+#ifndef VXLAN_GBP_USED_BITS
+/*
+ * VXLAN Group Based Policy Extension:
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |1|-|-|-|1|-|-|-|R|D|R|R|A|R|R|R|        Group Policy ID        |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |                VXLAN Network Identifier (VNI) |   Reserved    |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ * D = Don't Learn bit. When set, this bit indicates that the egress
+ *     VTEP MUST NOT learn the source address of the encapsulated frame.
+ *
+ * A = Indicates that the group policy has already been applied to
+ *     this packet. Policies MUST NOT be applied by devices when the
+ *     A bit is set.
+ *
+ * [0] https://tools.ietf.org/html/draft-smith-vxlan-group-policy
+ */
+struct vxlanhdr_gbp {
+	__u8	vx_flags;
+#ifdef __LITTLE_ENDIAN_BITFIELD
+	__u8	reserved_flags1:3,
+		policy_applied:1,
+		reserved_flags2:2,
+		dont_learn:1,
+		reserved_flags3:1;
+#elif defined(__BIG_ENDIAN_BITFIELD)
+	__u8	reserved_flags1:1,
+		dont_learn:1,
+		reserved_flags2:2,
+		policy_applied:1,
+		reserved_flags3:3;
+#else
+#error	"Please fix <asm/byteorder.h>"
+#endif
+	__be16	policy_id;
+	__be32	vx_vni;
+};
+#define VXLAN_GBP_USED_BITS (VXLAN_HF_GBP | 0xFFFFFF)
+
+/* skb->mark mapping
+ *
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |R|R|R|R|R|R|R|R|R|D|R|R|A|R|R|R|        Group Policy ID        |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ */
+#define VXLAN_GBP_DONT_LEARN		(BIT(6) << 16)
+#define VXLAN_GBP_POLICY_APPLIED	(BIT(3) << 16)
+#define VXLAN_GBP_ID_MASK		(0xFFFF)
+
+#define VXLAN_F_GBP			0x800
+#endif
+
+#ifdef HAVE_VXLAN_METADATA
 static inline int rpl_vxlan_xmit_skb(struct vxlan_sock *vs,
                    struct rtable *rt, struct sk_buff *skb,
                    __be32 src, __be32 dst, __u8 tos, __u8 ttl, __be16 df,
-                   __be16 src_port, __be16 dst_port, __be32 vni)
+                   __be16 src_port, __be16 dst_port,
+		   struct vxlan_metadata *md)
 {
 	if (skb_is_gso(skb) && skb_is_encapsulated(skb)) {
 		kfree_skb(skb);
 		return -ENOSYS;
 	}
 
-#ifdef HAVE_VXLAN_XMIT_SKB_XNET_ARG
 	return vxlan_xmit_skb(vs, rt, skb, src, dst, tos, ttl, df,
-			      src_port, dst_port, vni, false);
-#else
-#ifndef HAVE_IPTUNNEL_XMIT_NET
-	return vxlan_xmit_skb(vs, rt, skb, src, dst, tos, ttl, df,
-			      src_port, dst_port, vni);
-#else
-	return vxlan_xmit_skb(NULL, vs, rt, skb, src, dst, tos, ttl, df,
-			      src_port, dst_port, vni);
-#endif
-
-#endif
+			      src_port, dst_port, md, false);
 }
 
 #define vxlan_xmit_skb rpl_vxlan_xmit_skb
-#else
+#else /* HAVE_VXLAN_METADATA */
 
-struct vxlan_sock;
-typedef void (vxlan_rcv_t)(struct vxlan_sock *vs, struct sk_buff *skb, __be32 key);
+struct vxlan_metadata {
+	__be32		vni;
+	u32		gbp;
+};
+
+#define vxlan_sock rpl_vxlan_sock
+struct rpl_vxlan_sock;
+
+#define vxlan_rcv_t rpl_vxlan_rcv_t
+typedef void (vxlan_rcv_t)(struct vxlan_sock *vh, struct sk_buff *skb,
+			   struct vxlan_metadata *md);
 
 /* per UDP socket information */
 struct vxlan_sock {
@@ -61,20 +116,26 @@ struct vxlan_sock {
 	struct work_struct del_work;
 	struct socket	 *sock;
 	struct rcu_head	  rcu;
+	u32		  flags;
 };
 
+#define vxlan_sock_add rpl_vxlan_sock_add
 struct vxlan_sock *vxlan_sock_add(struct net *net, __be16 port,
 				  vxlan_rcv_t *rcv, void *data,
 				  bool no_share, u32 flags);
 
+#define vxlan_sock_release rpl_vxlan_sock_release
 void vxlan_sock_release(struct vxlan_sock *vs);
 
+#define vxlan_xmit_skb rpl_vxlan_xmit_skb
 int vxlan_xmit_skb(struct vxlan_sock *vs,
 		   struct rtable *rt, struct sk_buff *skb,
 		   __be32 src, __be32 dst, __u8 tos, __u8 ttl, __be16 df,
-		   __be16 src_port, __be16 dst_port, __be32 vni);
+		   __be16 src_port, __be16 dst_port,
+		   struct vxlan_metadata *md);
 
+#define vxlan_src_port rpl_vxlan_src_port
 __be16 vxlan_src_port(__u16 port_min, __u16 port_max, struct sk_buff *skb);
 
-#endif /* 3.12 */
+#endif /* !HAVE_VXLAN_METADATA */
 #endif
