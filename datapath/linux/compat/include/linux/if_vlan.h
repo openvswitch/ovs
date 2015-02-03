@@ -135,4 +135,9 @@ static inline int rpl_vlan_insert_tag(struct sk_buff *skb, u16 vlan_tci)
 }
 #endif
 
+#ifndef skb_vlan_tag_present
+#define skb_vlan_tag_present(skb) vlan_tx_tag_present(skb)
+#define skb_vlan_tag_get(skb) vlan_tx_tag_get(skb)
+#endif
+
 #endif	/* linux/if_vlan.h wrapper */

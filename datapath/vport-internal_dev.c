@@ -254,10 +254,10 @@ static int internal_dev_recv(struct vport *vport, struct sk_buff *skb)
 	}
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
-	if (vlan_tx_tag_present(skb)) {
+	if (skb_vlan_tag_present(skb)) {
 		if (unlikely(!vlan_insert_tag_set_proto(skb,
 							skb->vlan_proto,
-							vlan_tx_tag_get(skb))))
+							skb_vlan_tag_get(skb))))
 			return 0;
 
 		if (skb->ip_summed == CHECKSUM_COMPLETE)

@@ -97,7 +97,7 @@ int rpl_dev_queue_xmit(struct sk_buff *skb)
 	if (skb->mac_len != skb_network_offset(skb) && !supports_mpls_gso())
 		mpls = true;
 
-	if (vlan_tx_tag_present(skb) && !dev_supports_vlan_tx(skb->dev))
+	if (skb_vlan_tag_present(skb) && !dev_supports_vlan_tx(skb->dev))
 		vlan = true;
 
 	if (vlan || mpls) {
@@ -111,7 +111,7 @@ int rpl_dev_queue_xmit(struct sk_buff *skb)
 					      NETIF_F_UFO | NETIF_F_FSO);
 
 			skb = vlan_insert_tag_set_proto(skb, skb->vlan_proto,
-							vlan_tx_tag_get(skb));
+							skb_vlan_tag_get(skb));
 			if (unlikely(!skb))
 				return err;
 			vlan_set_tci(skb, 0);

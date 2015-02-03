@@ -179,7 +179,7 @@ int skb_vlan_pop(struct sk_buff *skb)
 	__be16 vlan_proto;
 	int err;
 
-	if (likely(vlan_tx_tag_present(skb))) {
+	if (likely(skb_vlan_tag_present(skb))) {
 		skb->vlan_tci = 0;
 	} else {
 		if (unlikely((skb->protocol != htons(ETH_P_8021Q) &&
@@ -210,7 +210,7 @@ int skb_vlan_pop(struct sk_buff *skb)
 #ifndef HAVE_SKB_VLAN_PUSH
 int skb_vlan_push(struct sk_buff *skb, __be16 vlan_proto, u16 vlan_tci)
 {
-	if (vlan_tx_tag_present(skb)) {
+	if (skb_vlan_tag_present(skb)) {
 		unsigned int offset = skb->data - skb_mac_header(skb);
 		int err;
 
@@ -220,7 +220,7 @@ int skb_vlan_push(struct sk_buff *skb, __be16 vlan_proto, u16 vlan_tci)
 		 */
 		__skb_push(skb, offset);
 		err = __vlan_insert_tag(skb, skb->vlan_proto,
-					vlan_tx_tag_get(skb));
+					skb_vlan_tag_get(skb));
 		if (err)
 			return err;
 		skb->mac_len += VLAN_HLEN;

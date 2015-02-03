@@ -183,7 +183,7 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 
 	min_headroom = LL_RESERVED_SPACE(rt_dst(rt).dev) + rt_dst(rt).header_len
 			+ VXLAN_HLEN + sizeof(struct iphdr)
-			+ (vlan_tx_tag_present(skb) ? VLAN_HLEN : 0);
+			+ (skb_vlan_tag_present(skb) ? VLAN_HLEN : 0);
 
 	/* Need space for new headers (invalidates iph ptr) */
 	err = skb_cow_head(skb, min_headroom);
@@ -192,10 +192,10 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 		return err;
 	}
 
-	if (vlan_tx_tag_present(skb)) {
+	if (skb_vlan_tag_present(skb)) {
 		if (unlikely(!vlan_insert_tag_set_proto(skb,
 							skb->vlan_proto,
-							vlan_tx_tag_get(skb))))
+							skb_vlan_tag_get(skb))))
 			return -ENOMEM;
 
 		vlan_set_tci(skb, 0);
