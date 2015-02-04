@@ -5,6 +5,11 @@
 
 struct dpif_packet;
 
+/* Reserves cpu core 0 for all non-pmd threads.  Changing the value of this
+ * macro will allow pmd thread to be pinned on cpu core 0.  This may not be
+ * ideal since the core may be non-isolated. */
+#define NON_PMD_CORE_ID 0
+
 #ifdef DPDK_NETDEV
 
 #include <rte_config.h>

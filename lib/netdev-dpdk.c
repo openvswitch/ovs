@@ -1553,8 +1553,8 @@ pmd_thread_setaffinity_cpu(int cpu)
         VLOG_ERR("Thread affinity error %d",err);
         return err;
     }
-    /* lcore_id 0 is reseved for use by non pmd threads. */
-    ovs_assert(cpu);
+    /* NON_PMD_CORE_ID is reserved for use by non pmd threads. */
+    ovs_assert(cpu != NON_PMD_CORE_ID);
     RTE_PER_LCORE(_lcore_id) = cpu;
 
     return 0;
@@ -1563,13 +1563,13 @@ pmd_thread_setaffinity_cpu(int cpu)
 void
 thread_set_nonpmd(void)
 {
-    /* We have to use 0 to allow non pmd threads to perform certain DPDK
-     * operations, like rte_eth_dev_configure(). */
-    RTE_PER_LCORE(_lcore_id) = 0;
+    /* We have to use NON_PMD_CORE_ID to allow non-pmd threads to perform
+     * certain DPDK operations, like rte_eth_dev_configure(). */
+    RTE_PER_LCORE(_lcore_id) = NON_PMD_CORE_ID;
 }
 
 static bool
 thread_is_pmd(void)
 {
-    return rte_lcore_id() != 0;
+    return rte_lcore_id() != NON_PMD_CORE_ID;
 }

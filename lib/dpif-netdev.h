@@ -42,7 +42,6 @@ static inline void dp_packet_pad(struct ofpbuf *b)
 
 #define NR_QUEUE   1
 #define NR_PMD_THREADS 1
-#define NON_PMD_CORE_ID 0
 
 #ifdef  __cplusplus
 }
