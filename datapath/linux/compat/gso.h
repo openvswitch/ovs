@@ -2,7 +2,8 @@
 #define __LINUX_GSO_WRAPPER_H
 
 #include <linux/version.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0) || \
+	!defined USE_UPSTREAM_VXLAN
 
 #include <linux/netdevice.h>
 #include <linux/skbuff.h>
@@ -71,7 +72,7 @@ struct sk_buff *ovs_iptunnel_handle_offloads(struct sk_buff *skb,
 					     gso_fix_segment_t fix_segment);
 
 
-#endif /* 3.12 */
+#endif /* 3.12 || !USE_UPSTREAM_VXLAN */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0)
 #define ip_local_out rpl_ip_local_out

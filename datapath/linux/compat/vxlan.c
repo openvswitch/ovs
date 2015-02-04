@@ -18,6 +18,8 @@
  * This code is derived from kernel vxlan module.
  */
 
+#ifndef USE_UPSTREAM_VXLAN
+
 #include <linux/version.h>
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -58,13 +60,14 @@
 #include "datapath.h"
 #include "gso.h"
 #include "vlan.h"
-#ifndef USE_KERNEL_TUNNEL_API
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
 /* VXLAN protocol header */
 struct vxlanhdr {
 	__be32 vx_flags;
 	__be32 vx_vni;
 };
+#endif
 
 /* Callback from net/ipv4/udp.c to receive packets */
 static int vxlan_udp_encap_recv(struct sock *sk, struct sk_buff *skb)
@@ -369,4 +372,4 @@ void vxlan_sock_release(struct vxlan_sock *vs)
 	queue_work(system_wq, &vs->del_work);
 }
 
-#endif /* 3.12 */
+#endif /* !USE_UPSTREAM_VXLAN */
